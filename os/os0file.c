@@ -1454,8 +1454,6 @@ try_again:
 	int		create_flag;
 	ibool		retry;
 	const char*	mode_str	= NULL;
-	const char*	type_str	= NULL;
-	const char*	purpose_str	= NULL;
 
 try_again:
 	ut_a(name);
@@ -1475,37 +1473,16 @@ try_again:
 		ut_error;
 	}
 
-	if (type == OS_LOG_FILE) {
-		type_str = "LOG";
-	} else if (type == OS_DATA_FILE) {
-		type_str = "DATA";
-	} else {
-		ut_error;
-	}
+	ut_a(type == OS_LOG_FILE || type == OS_DATA_FILE);
 
-	if (purpose == OS_FILE_AIO) {
-		purpose_str = "AIO";
-	} else if (purpose == OS_FILE_NORMAL) {
-		purpose_str = "NORMAL";
-	} else {
-		ut_error;
-	}
+	ut_a(purpose == OS_FILE_AIO || purpose == OS_FILE_NORMAL);
 
-#if 0
-	ib_logger(ib_stream, "Opening file %s, mode %s, type %s, purpose %s\n",
-		name, mode_str, type_str, purpose_str);
-#endif
 #ifdef O_SYNC
 	/* We let O_SYNC only affect log files; note that we map O_DSYNC to
 	O_SYNC because the datasync options seemed to corrupt files in 2001
 	in both Linux and Solaris */
 	if (type == OS_LOG_FILE
 	    && srv_unix_file_flush_method == SRV_UNIX_O_DSYNC) {
-
-# if 0
-		ib_logger(ib_stream, "Using O_SYNC for file %s\n", name);
-# endif
-
 		create_flag = create_flag | O_SYNC;
 	}
 #endif /* O_SYNC */

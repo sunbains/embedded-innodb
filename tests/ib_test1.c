@@ -263,7 +263,6 @@ update_a_row(
 	while (err == DB_SUCCESS) {
 		const char*	c1;
 		ib_u32_t	c3;
-		ib_ulint_t	c1_len;
 		ib_ulint_t	data_len;
 		ib_col_meta_t	col_meta;
 
@@ -272,7 +271,7 @@ update_a_row(
 
 		/* Get the c1 column value. */
 		c1 = ib_col_get_value(old_tpl, 0);
-		c1_len = ib_col_get_meta(old_tpl, 0, &col_meta);
+		ib_col_get_meta(old_tpl, 0, &col_meta);
 
 		/* There are no SQL_NULL values in our test data. */
 		assert(c1 != NULL);

@@ -446,7 +446,8 @@ int main(int argc, char* argv[])
 	ib_err_t	err;
 	pthread_t*      pthreads;
 
-	ib_init();
+	err = ib_init();
+	assert(err == DB_SUCCESS);
 
 	test_configure();
 

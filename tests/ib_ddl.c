@@ -196,7 +196,6 @@ create_sec_index(
 {
 	ib_err_t	err;
 	ib_trx_t	ib_trx;
-	ib_id_t		index_id = 0;
 	ib_idx_sch_t	ib_idx_sch = NULL;
 	char		index_name[IB_MAX_TABLE_NAME_LEN];
 
@@ -218,7 +217,10 @@ create_sec_index(
 	err = ib_index_schema_add_col(ib_idx_sch, col_name, prefix_len);
 	assert(err == DB_SUCCESS);
 
+	ib_id_t		index_id = 0;
+
 	err = ib_index_create(ib_idx_sch, &index_id);
+	assert(index_id > 0);
 
 	if (ib_idx_sch != NULL) {
 		ib_index_schema_delete(ib_idx_sch);
@@ -298,7 +300,7 @@ open_sec_index_1(
 #ifdef __WIN__
 	sprintf(table_name, "%s/%s", dbname, name);
 #else
-	snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
+	snprintf(table_name, sizeof(table_name), "%.64s/%.64s", dbname, name);
 #endif
 
 	ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
@@ -309,7 +311,7 @@ open_sec_index_1(
 #ifdef __WIN__
 	sprintf(index_name, "%s_%s", table_name, "c1");
 #else
-	snprintf(index_name, sizeof(index_name), "%s_%s", table_name, "c1");
+	snprintf(index_name, sizeof(index_name), "%.64s_%.64s", table_name, "c1");
 #endif
 	err = open_sec_index(crsr, index_name);
 	assert(err == DB_SUCCESS);
@@ -317,7 +319,7 @@ open_sec_index_1(
 #ifdef __WIN__
 	sprintf(index_name, "%s_%s", table_name, "c2");
 #else
-	snprintf(index_name, sizeof(index_name), "%s_%s", table_name, "c2");
+	snprintf(index_name, sizeof(index_name), "%.64s_%.64s", table_name, "c2");
 #endif
 	err = open_sec_index(crsr, index_name);
 	assert(err == DB_SUCCESS);
@@ -325,7 +327,7 @@ open_sec_index_1(
 #ifdef __WIN__
 	sprintf(index_name, "%s_%s", table_name, "c3");
 #else
-	snprintf(index_name, sizeof(index_name), "%s_%s", table_name, "c3");
+	snprintf(index_name, sizeof(index_name), "%.64s_%.64s", table_name, "c3");
 #endif
 	err = open_sec_index(crsr, index_name);
 	assert(err == DB_SUCCESS);
@@ -352,7 +354,6 @@ test_create_temp_index(
 {
 	ib_err_t	err;
 	ib_trx_t	ib_trx;
-	ib_id_t		index_id = 0;
 	ib_idx_sch_t	ib_idx_sch = NULL;
 	char		index_name[IB_MAX_TABLE_NAME_LEN];
 	char		table_name[IB_MAX_TABLE_NAME_LEN];
@@ -371,7 +372,7 @@ test_create_temp_index(
 #ifdef __WIN__
 	sprintf(index_name, "%c%s_%s", TEMP_INDEX_PREFIX, table_name, col_name);
 #else
-	snprintf(index_name, sizeof(index_name), "%c%s_%s", TEMP_INDEX_PREFIX,
+	snprintf(index_name, sizeof(index_name), "%c%.64s_%.64s", TEMP_INDEX_PREFIX,
 		table_name, col_name);
 #endif
 	err = ib_index_schema_create(

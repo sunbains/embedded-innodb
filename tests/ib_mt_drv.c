@@ -258,7 +258,6 @@ static
 void
 drop_test_tables(void)
 {
-	ib_err_t	err;
 	int		i;
 
 	for (i = 0; i < num_tables; ++i) {
@@ -270,7 +269,8 @@ drop_test_tables(void)
 		args.isolation_level = isolation_level;
 		args.err_st = &ddl_op_errs[DDL_OP_TYPE_DROP];
 
-		err = tbl->ddl_fn[DDL_OP_TYPE_DROP](&args);
+		ib_err_t err = tbl->ddl_fn[DDL_OP_TYPE_DROP](&args);
+		assert(err == DB_SUCCESS);
 
 	}
 }

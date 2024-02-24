@@ -315,16 +315,15 @@ check_row(
 	int*		c1,
 	int*		c2)
 {
-	ib_ulint_t	data_len;
 	ib_col_meta_t	col_meta;
 
-	data_len = ib_col_get_meta(tpl, 0, &col_meta);
+	ib_col_get_meta(tpl, 0, &col_meta);
 	assert(col_meta.type == IB_INT);
 	assert(!(col_meta.attr & IB_COL_UNSIGNED));
 
 	read_col(tpl, 0, &col_meta, c1);
 
-	data_len = ib_col_get_meta(tpl, 1, &col_meta);
+	ib_col_get_meta(tpl, 1, &col_meta);
 	assert(col_meta.type == IB_INT);
 	assert(col_meta.attr & IB_COL_UNSIGNED);
 

@@ -290,7 +290,6 @@ update_random_rows(
 		const char*	first;
 		ib_ulint_t	data_len;
 		ib_col_meta_t	col_meta;
-		ib_ulint_t	first_len;
 		ib_tpl_t	old_tpl = NULL;
 		ib_tpl_t	new_tpl = NULL;
 
@@ -309,7 +308,7 @@ update_random_rows(
 
 		/* Get the first column value. */
 		first = ib_col_get_value(old_tpl, 0);
-		first_len = ib_col_get_meta(old_tpl, 0, &col_meta);
+		ib_col_get_meta(old_tpl, 0, &col_meta);
 
 		/* There are no SQL_NULL values in our test data. */
 		assert(first != NULL);
