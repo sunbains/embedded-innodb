@@ -106,7 +106,7 @@ page_cur_try_search_shortcut(
 	page_cur_t	cursor2;
 #endif
 	ibool		success		= FALSE;
-	const page_t*	page		= buf_block_get_frame(block);
+	page_t*		page		= buf_block_get_frame(block);
 	mem_heap_t*	heap		= NULL;
 	ulint		offsets_[REC_OFFS_NORMAL_SIZE];
 	ulint*		offsets		= offsets_;
@@ -266,7 +266,7 @@ page_cur_search_with_match(
 	ulint		up;
 	ulint		low;
 	ulint		mid;
-	const page_t*	page;
+	page_t*		page;
 	const page_dir_slot_t* slot;
 	const rec_t*	up_rec;
 	const rec_t*	low_rec;
@@ -313,10 +313,10 @@ page_cur_search_with_match(
 
 #ifdef PAGE_CUR_ADAPT
 	if (page_is_leaf(page)
-	    && (mode == PAGE_CUR_LE)
-	    && (page_header_get_field(page, PAGE_N_DIRECTION) > 3)
-	    && (page_header_get_ptr(page, PAGE_LAST_INSERT))
-	    && (page_header_get_field(page, PAGE_DIRECTION) == PAGE_RIGHT)) {
+	    && mode == PAGE_CUR_LE
+	    && page_header_get_field(page, PAGE_N_DIRECTION) > 3
+	    && page_header_get_ptr(page, PAGE_LAST_INSERT)
+	    && page_header_get_field(page, PAGE_DIRECTION) == PAGE_RIGHT) {
 
 		if (page_cur_try_search_shortcut(
 			    block, index, tuple,

@@ -220,9 +220,12 @@ page_header_get_offs(
 	__attribute__((nonnull, pure));
 
 /** Returns the pointer stored in the given header field, or NULL. */
-#define page_header_get_ptr(page, field)			\
-	(page_header_get_offs(page, field)			\
-	 ? page + page_header_get_offs(page, field) : NULL)
+UNIV_INLINE
+page_t*
+page_header_get_ptr(page_t* page, ulint field) {
+  return page_header_get_offs(page, field) ? page + page_header_get_offs(page, field) : NULL;
+}
+
 /** Sets the pointer stored in the given header field. */
 UNIV_INLINE
 void
