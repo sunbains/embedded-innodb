@@ -2526,8 +2526,6 @@ ib_create_primary_index(
 {
 	ib_err_t	err;
 	mem_heap_t*	heap;
-	const index_def_t*
-			index_def;
 	dict_table_t*	new_table = NULL;
 	ib_index_def_t*	ib_index_def = (ib_index_def_t*) ib_idx_sch;
 	trx_t*		usr_trx = ib_index_def->usr_trx;
@@ -2558,7 +2556,7 @@ ib_create_primary_index(
 	ut_a(!ib_vector_is_empty(ib_index_def->cols));
 
 	/* Set the CLUSTERED flag to TRUE. */
-	index_def = ib_copy_index_definition(ib_index_def, TRUE);
+	ib_copy_index_definition(ib_index_def, TRUE);
 
 	err = ib_trx_lock_table_with_retry(usr_trx, table, LOCK_X);
 
@@ -5326,7 +5324,7 @@ ib_table_lock(
 		return(DB_TABLE_NOT_FOUND);
 	}
 
-	ut_a(ib_lck_mode <= LOCK_NUM);
+	ut_a(ib_lck_mode <= (ib_lck_mode_t) LOCK_NUM);
 
 	heap = mem_heap_create(128);
 
@@ -5392,7 +5390,7 @@ ib_cursor_set_lock_mode(
 
 	UT_DBG_ENTER_FUNC;
 
-	ut_a(ib_lck_mode <= LOCK_NUM);
+	ut_a(ib_lck_mode <= (ib_lck_mode_t) LOCK_NUM);
 
 	if (ib_lck_mode == IB_LOCK_X) {
 		err = ib_cursor_lock(ib_crsr, IB_LOCK_IX);
@@ -6352,7 +6350,7 @@ ib_get_index_stat_n_diff_key_vals(ib_crsr_t ib_crsr, const char* index_name, ib_
 
 	*ncols = index->n_uniq;
 
-	*n_diff = (ib_int64_t*) malloc(sizeof(ib_int64_t) * index->n_uniq);
+	*n_diff = (ib_i64_t*) malloc(sizeof(ib_i64_t) * index->n_uniq);
 
 	dict_index_stat_mutex_enter(index);
 
