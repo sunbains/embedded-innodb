@@ -1,4 +1,4 @@
-This is the source of HailDB 2.3.0
+This is the source of InnoDB 2.3.0
 ==================================
 
 Requirements
@@ -43,4 +43,4 @@ Instructions for compiling and installing:
 Windows
 =======
 
-HailDB does not currently build on Windows. Although there is no real reason why support could not be continued.
+InnoDB does not currently build on Windows. Although there is no real reason why support could not be continued.
