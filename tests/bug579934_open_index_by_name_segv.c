@@ -15,8 +15,7 @@
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-/***********************************************************************
-Copyright (c) 2008 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -51,12 +50,10 @@ typedef struct row_t {
 } row_t;
 
 #define COL_LEN(n)	(sizeof(((row_t*)0)->n))
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -67,8 +64,7 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-CREATE TABLE T(
+/** CREATE TABLE T(
 	c1	VARCHAR(n),
 	c2	VARCHAR(n),
 	c3	INT,
@@ -76,7 +72,6 @@ CREATE TABLE T(
 static
 ib_err_t
 create_table(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name)			/*!< in: table name */
 {
@@ -147,12 +142,10 @@ create_table(
 
 	return(err);
 }
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 static
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	ib_trx_t	ib_trx,		/*!< in: transaction */

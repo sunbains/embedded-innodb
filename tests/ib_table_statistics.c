@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2008 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 Copyright (c) 2010 Stewart Smith
 
@@ -37,12 +36,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define DATABASE	"test"
 #define TABLE		"ib_table_statistics"
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -53,8 +50,7 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-CREATE TABLE T(
+/** CREATE TABLE T(
 	pk	INT,
         a       INT,
         b       INT,
@@ -65,7 +61,6 @@ CREATE TABLE T(
 static
 ib_err_t
 create_table_t2(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name)			/*!< in: table name */
 {
@@ -156,12 +151,10 @@ create_table_t2(
 	return(err);
 }
 
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 static
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	ib_trx_t	ib_trx,		/*!< in: transaction */
@@ -181,12 +174,10 @@ open_table(
 	return(err);
 }
 
-/*********************************************************************
-INSERT INTO T VALUE(int); */
+/** INSERT INTO T VALUE(int); */
 static
 ib_err_t
 insert_rows(
-/*===============*/
 	ib_crsr_t	crsr,
 	int start,
 	int count)

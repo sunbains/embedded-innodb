@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2008, 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008, 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2008, 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -50,22 +49,18 @@ typedef struct visitor_arg {
 	int		n_index_cols;
 } visitor_arg_t;
 
-/*********************************************************************
-Read a table's schema and print it. */
+/** Read a table's schema and print it. */
 static
 int
 visit_tables(
-/*=========*/
 	void*		arg,		/*!< in: callback argument */
 	const char*	name,		/*!< in: table name */
 	int		len);		/*!< in: table name length */
 
-/*********************************************************************
-Callback functions to list table nams. */
+/** Callback functions to list table nams. */
 static
 int
 visit_table_list(
-/*=============*/
 	void*		arg,		/*!< User callback arg */
 	const char*	name,		/*!< Table name */
 	ib_tbl_fmt_t	tbl_fmt,	/*!< Table type */
@@ -83,12 +78,10 @@ visit_table_list(
 	return(0);
 }
 
-/*********************************************************************
-Callback functions to traverse a table's schema. */
+/** Callback functions to traverse a table's schema. */
 static
 int
 visit_table(
-/*========*/
 	void*		arg,		/*!< User callback arg */
 	const char*	name,		/*!< Table name */
 	ib_tbl_fmt_t	tbl_fmt,	/*!< Table type */
@@ -120,12 +113,10 @@ visit_table(
 	return(0);
 }
 
-/*********************************************************************
-Callback functions to traverse a table's schema. */
+/** Callback functions to traverse a table's schema. */
 static
 int
 visit_table_col(
-/*============*/
 	void*		arg,		/*!< User callback arg */
 	const char*	name,		/*!< Column name */
 	ib_col_type_t	col_type,	/*!< Column type */
@@ -222,12 +213,10 @@ visit_table_col(
 	return(0);
 }
 
-/*********************************************************************
-Callback functions to traverse a table's schema. */
+/** Callback functions to traverse a table's schema. */
 static
 int
 visit_index(
-/*========*/
 	void*		arg,		/*!< User callback arg */
 	const char*	name,		/*!< Index name */
 	ib_bool_t	clustered,	/*!< True if clustered */
@@ -259,11 +248,9 @@ visit_index(
 	return(0);
 }
 
-/*********************************************************************
-Callback functions to traverse a table's schema. */
+/** Callback functions to traverse a table's schema. */
 int
 visit_index_col(
-/*============*/
 	void*		arg,		/*!< User callback arg */
 	const char*	name,		/*!< Column name */
 	ib_ulint_t	prefix_len)	/*!< Prefix length */
@@ -283,12 +270,10 @@ visit_index_col(
 	return(0);
 }
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -299,12 +284,10 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-Create a table using InnoDB's internal SQL parser. */
+/** Create a table using InnoDB's internal SQL parser. */
 static
 ib_err_t
 create_table(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name,			/*!< in: table name */
 	int		n)			/*!< in: table suffix */
@@ -387,12 +370,10 @@ static const ib_schema_visitor_t	table_visitor = {
 	NULL	
 };
 
-/*********************************************************************
-Read table names only. */
+/** Read table names only. */
 static
 int
 visit_tables_list(
-/*==============*/
 	void*		arg,
 	const char*	name,
 	int		len)
@@ -422,12 +403,10 @@ static const ib_schema_visitor_t	visitor = {
 	visit_index_col
 };
 
-/*********************************************************************
-Read a table's schema and print it. */
+/** Read a table's schema and print it. */
 static
 int
 visit_tables(
-/*=========*/
 	void*		arg,
 	const char*	name,
 	int		len)
@@ -448,13 +427,11 @@ visit_tables(
 	return(err == DB_SUCCESS ? 0 : -1);
 }
 
-/*********************************************************************
-Read the system tables  schema and print it.
+/** Read the system tables  schema and print it.
 @return	0 on success, nonzero on error */
 static
 int
 visit_sys_tables(void)
-/*==================*/
 {
 	ib_err_t	err;
 	visitor_arg_t	arg;
@@ -487,14 +464,12 @@ visit_sys_tables(void)
 	return(err == DB_SUCCESS ? 0 : -1);
 }
 
-/*********************************************************************
-Iterate over all the tables in the InnoDB data dictionary and print
+/** Iterate over all the tables in the InnoDB data dictionary and print
 their schemas.
 @return	DB_SUCCESS or error code */
 static
 ib_err_t
 print_entire_schema(void)
-/*=====================*/
 {
 	ib_err_t	err;
 	visitor_arg_t	arg;
@@ -518,13 +493,11 @@ print_entire_schema(void)
 	return(err);
 }
 
-/*********************************************************************
-Drop the table.
+/** Drop the table.
 @return	DB_SUCCESS or error code */
 static
 ib_err_t
 drop_table_n(
-/*=========*/
 	const char*	dbname,	/*!< in: database name */
 	const char*	name,	/*!< in: table to drop */
 	int		n)	/*!< in: count */

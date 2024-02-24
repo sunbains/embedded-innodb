@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 2006, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file buf/buf0buddy.c
+/** @file buf/buf0buddy.c
 Binary buddy allocator for compressed pages
 
 Created December 2006 by Marko Makela
@@ -45,13 +43,11 @@ static ulint buf_buddy_n_frames;
 Protected by buf_pool_mutex. */
 UNIV_INTERN buf_buddy_stat_t buf_buddy_stat[BUF_BUDDY_SIZES + 1];
 
-/**********************************************************************//**
-Get the offset of the buddy of a compressed page frame.
+/** Get the offset of the buddy of a compressed page frame.
 @return	the buddy relative of page */
 UNIV_INTERN
 void
 buf_buddy_var_init(void)
-/*====================*/
 {
 #ifdef UNIV_DEBUG
 	buf_buddy_n_frames = 0;
@@ -60,13 +56,11 @@ buf_buddy_var_init(void)
 	memset(buf_buddy_stat, 0x0, sizeof(buf_buddy_stat));
 }
 
-/**************************************************************************
-Get the offset of the buddy of a compressed page frame.
+/** Get the offset of the buddy of a compressed page frame.
 @return	the buddy relative of page */
 UNIV_INLINE
 byte*
 buf_buddy_get(
-/*==========*/
 	byte*	page,	/*!< in: compressed page */
 	ulint	size)	/*!< in: page size in bytes */
 {
@@ -82,12 +76,10 @@ buf_buddy_get(
 	}
 }
 
-/**********************************************************************//**
-Add a block to the head of the appropriate buddy free list. */
+/** Add a block to the head of the appropriate buddy free list. */
 UNIV_INLINE
 void
 buf_buddy_add_to_free(
-/*==================*/
 	buf_page_t*	bpage,	/*!< in,own: block to be freed */
 	ulint		i)	/*!< in: index of buf_pool->zip_free[] */
 {
@@ -108,12 +100,10 @@ buf_buddy_add_to_free(
 #endif /* UNIV_DEBUG_VALGRIND */
 }
 
-/**********************************************************************//**
-Remove a block from the appropriate buddy free list. */
+/** Remove a block from the appropriate buddy free list. */
 UNIV_INLINE
 void
 buf_buddy_remove_from_free(
-/*=======================*/
 	buf_page_t*	bpage,	/*!< in: block to be removed */
 	ulint		i)	/*!< in: index of buf_pool->zip_free[] */
 {
@@ -138,13 +128,11 @@ buf_buddy_remove_from_free(
 #endif /* UNIV_DEBUG_VALGRIND */
 }
 
-/**********************************************************************//**
-Try to allocate a block from buf_pool->zip_free[].
+/** Try to allocate a block from buf_pool->zip_free[].
 @return	allocated block, or NULL if buf_pool->zip_free[] was empty */
 static
 void*
 buf_buddy_alloc_zip(
-/*================*/
 	ulint	i)	/*!< in: index of buf_pool->zip_free[] */
 {
 	buf_page_t*	bpage;
@@ -191,12 +179,10 @@ buf_buddy_alloc_zip(
 	return(bpage);
 }
 
-/**********************************************************************//**
-Deallocate a buffer frame of UNIV_PAGE_SIZE. */
+/** Deallocate a buffer frame of UNIV_PAGE_SIZE. */
 static
 void
 buf_buddy_block_free(
-/*=================*/
 	void*	buf)	/*!< in: buffer frame to deallocate */
 {
 	const ulint	fold	= BUF_POOL_ZIP_FOLD_PTR(buf);
@@ -230,12 +216,10 @@ buf_buddy_block_free(
 	ut_d(buf_buddy_n_frames--);
 }
 
-/**********************************************************************//**
-Allocate a buffer block to the buddy allocator. */
+/** Allocate a buffer block to the buddy allocator. */
 static
 void
 buf_buddy_block_register(
-/*=====================*/
 	buf_block_t*	block)	/*!< in: buffer frame to allocate */
 {
 	const ulint	fold = BUF_POOL_ZIP_FOLD(block);
@@ -256,13 +240,11 @@ buf_buddy_block_register(
 	ut_d(buf_buddy_n_frames++);
 }
 
-/**********************************************************************//**
-Allocate a block from a bigger object.
+/** Allocate a block from a bigger object.
 @return	allocated block */
 static
 void*
 buf_buddy_alloc_from(
-/*=================*/
 	void*		buf,	/*!< in: a block that is free to use */
 	ulint		i,	/*!< in: index of buf_pool->zip_free[] */
 	ulint		j)	/*!< in: size of buf as an index
@@ -296,15 +278,13 @@ buf_buddy_alloc_from(
 	return(buf);
 }
 
-/**********************************************************************//**
-Allocate a block.  The thread calling this function must hold
+/** Allocate a block.  The thread calling this function must hold
 buf_pool_mutex and must not hold buf_pool_zip_mutex or any block->mutex.
 The buf_pool_mutex may only be released and reacquired if lru != NULL.
 @return	allocated block, possibly NULL if lru==NULL */
 UNIV_INTERN
 void*
 buf_buddy_alloc_low(
-/*================*/
 	ulint	i,	/*!< in: index of buf_pool->zip_free[],
 			or BUF_BUDDY_SIZES */
 	ibool*	lru)	/*!< in: pointer to a variable that will be assigned
@@ -356,13 +336,11 @@ func_exit:
 	return(block);
 }
 
-/**********************************************************************//**
-Try to relocate the control block of a compressed page.
+/** Try to relocate the control block of a compressed page.
 @return	TRUE if relocated */
 static
 ibool
 buf_buddy_relocate_block(
-/*=====================*/
 	buf_page_t*	bpage,	/*!< in: block to relocate */
 	buf_page_t*	dpage)	/*!< in: free block to relocate to */
 {
@@ -412,13 +390,11 @@ buf_buddy_relocate_block(
 	return(TRUE);
 }
 
-/**********************************************************************//**
-Try to relocate a block.
+/** Try to relocate a block.
 @return	TRUE if relocated */
 static
 ibool
 buf_buddy_relocate(
-/*===============*/
 	void*	src,	/*!< in: block to relocate */
 	void*	dst,	/*!< in: free block to relocate to */
 	ulint	i)	/*!< in: index of buf_pool->zip_free[] */
@@ -520,12 +496,10 @@ success:
 	return(FALSE);
 }
 
-/**********************************************************************//**
-Deallocate a block. */
+/** Deallocate a block. */
 UNIV_INTERN
 void
 buf_buddy_free_low(
-/*===============*/
 	void*	buf,	/*!< in: block to be freed, must not be
 			pointed to by the buffer pool */
 	ulint	i)	/*!< in: index of buf_pool->zip_free[],

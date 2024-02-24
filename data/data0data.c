@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/********************************************************************//**
-@file data/data0data.c
+/** @file data/data0data.c
 SQL data field and tuple
 
 Created 5/30/1994 Heikki Tuuri
@@ -53,12 +51,10 @@ UNIV_INTERN ulint	data_dummy;
 #endif /* UNIV_DEBUG */
 
 #ifndef UNIV_HOTBACKUP
-/*********************************************************************//**
-Reset dfield variables. */
+/** Reset dfield variables. */
 UNIV_INTERN
 void
 dfield_var_init(void)
-/*=================*/
 {
 #ifdef UNIV_DEBUG
 	data_error = 0;
@@ -68,13 +64,11 @@ dfield_var_init(void)
 #endif /* UNIV_DEBUG */
 }
 
-/*************************************************************************
-Tests if dfield data length and content is equal to the given.
+/** Tests if dfield data length and content is equal to the given.
 @return	TRUE if equal */
 UNIV_INTERN
 ibool
 dfield_data_is_binary_equal(
-/*========================*/
 	const dfield_t*	field,	/*!< in: field */
 	ulint		len,	/*!< in: data length or UNIV_SQL_NULL */
 	const byte*	data)	/*!< in: data */
@@ -97,14 +91,12 @@ dfield_data_is_binary_equal(
 	return(TRUE);
 }
 
-/************************************************************//**
-Compare two data tuples, respecting the collation of character fields.
+/** Compare two data tuples, respecting the collation of character fields.
 @return 1, 0 , -1 if tuple1 is greater, equal, less, respectively,
 than tuple2 */
 UNIV_INTERN
 int
 dtuple_coll_cmp(
-/*============*/
 	void*		cmp_ctx,/*!< in: client compare context */
 	const dtuple_t*	tuple1,	/*!< in: tuple 1 */
 	const dtuple_t*	tuple2)	/*!< in: tuple 2 */
@@ -140,13 +132,11 @@ dtuple_coll_cmp(
 	return(0);
 }
 
-/*********************************************************************//**
-Sets number of fields used in a tuple. Normally this is set in
+/** Sets number of fields used in a tuple. Normally this is set in
 dtuple_create, but if you want later to set it smaller, you can use this. */
 UNIV_INTERN
 void
 dtuple_set_n_fields(
-/*================*/
 	dtuple_t*	tuple,		/*!< in: tuple */
 	ulint		n_fields)	/*!< in: number of fields */
 {
@@ -156,13 +146,11 @@ dtuple_set_n_fields(
 	tuple->n_fields_cmp = n_fields;
 }
 
-/**********************************************************//**
-Checks that a data field is typed.
+/** Checks that a data field is typed.
 @return	TRUE if ok */
 static
 ibool
 dfield_check_typed_no_assert(
-/*=========================*/
 	const dfield_t*	field)	/*!< in: data field */
 {
 	if (dfield_get_type(field)->mtype > DATA_CLIENT
@@ -178,13 +166,11 @@ dfield_check_typed_no_assert(
 	return(TRUE);
 }
 
-/**********************************************************//**
-Checks that a data tuple is typed.
+/** Checks that a data tuple is typed.
 @return	TRUE if ok */
 UNIV_INTERN
 ibool
 dtuple_check_typed_no_assert(
-/*=========================*/
 	const dtuple_t*	tuple)	/*!< in: tuple */
 {
 	const dfield_t*	field;
@@ -216,13 +202,11 @@ dump:
 #endif /* !UNIV_HOTBACKUP */
 
 #ifdef UNIV_DEBUG
-/**********************************************************//**
-Checks that a data field is typed. Asserts an error if not.
+/** Checks that a data field is typed. Asserts an error if not.
 @return	TRUE if ok */
 UNIV_INTERN
 ibool
 dfield_check_typed(
-/*===============*/
 	const dfield_t*	field)	/*!< in: data field */
 {
 	if (dfield_get_type(field)->mtype > DATA_CLIENT
@@ -239,13 +223,11 @@ dfield_check_typed(
 	return(TRUE);
 }
 
-/**********************************************************//**
-Checks that a data tuple is typed. Asserts an error if not.
+/** Checks that a data tuple is typed. Asserts an error if not.
 @return	TRUE if ok */
 UNIV_INTERN
 ibool
 dtuple_check_typed(
-/*===============*/
 	const dtuple_t*	tuple)	/*!< in: tuple */
 {
 	const dfield_t*	field;
@@ -261,14 +243,12 @@ dtuple_check_typed(
 	return(TRUE);
 }
 
-/**********************************************************//**
-Validates the consistency of a tuple which must be complete, i.e,
+/** Validates the consistency of a tuple which must be complete, i.e,
 all fields must have been set.
 @return	TRUE if ok */
 UNIV_INTERN
 ibool
 dtuple_validate(
-/*============*/
 	const dtuple_t*	tuple)	/*!< in: tuple */
 {
 	const dfield_t*	field;
@@ -314,12 +294,10 @@ dtuple_validate(
 #endif /* UNIV_DEBUG */
 
 #ifndef UNIV_HOTBACKUP
-/*************************************************************//**
-Pretty prints a dfield value according to its data type. */
+/** Pretty prints a dfield value according to its data type. */
 UNIV_INTERN
 void
 dfield_print(
-/*=========*/
 	const dfield_t*	dfield)	/*!< in: dfield */
 {
 	const byte*	data;
@@ -356,13 +334,11 @@ dfield_print(
 	}
 }
 
-/*************************************************************//**
-Pretty prints a dfield value according to its data type. Also the hex string
+/** Pretty prints a dfield value according to its data type. Also the hex string
 is printed if a string contains non-printable characters. */
 UNIV_INTERN
 void
 dfield_print_also_hex(
-/*==================*/
 	const dfield_t*	dfield)	/*!< in: dfield */
 {
 	const byte*	data;
@@ -529,12 +505,10 @@ print_hex:
 	}
 }
 
-/*************************************************************//**
-Print a dfield value using ut_print_buf. */
+/** Print a dfield value using ut_print_buf. */
 static
 void
 dfield_print_raw(
-/*=============*/
 	ib_stream_t	ib_stream,	/*!< in: output stream */
 	const dfield_t*	dfield)		/*!< in: dfield */
 {
@@ -552,12 +526,10 @@ dfield_print_raw(
 	}
 }
 
-/**********************************************************//**
-The following function prints the contents of a tuple. */
+/** The following function prints the contents of a tuple. */
 UNIV_INTERN
 void
 dtuple_print(
-/*=========*/
 	ib_stream_t	ib_stream,	/*!< in: output stream */
 	const dtuple_t*	tuple)		/*!< in: tuple */
 {
@@ -579,8 +551,7 @@ dtuple_print(
 	ut_ad(dtuple_validate(tuple));
 }
 
-/**************************************************************//**
-Moves parts of long fields in entry to the big record vector so that
+/** Moves parts of long fields in entry to the big record vector so that
 the size of tuple drops below the maximum record size allowed in the
 database. Moves data only from those fields which are not necessary
 to determine uniquely the insertion place of the tuple in the index.
@@ -590,7 +561,6 @@ short fields in entry or the index is clustered */
 UNIV_INTERN
 big_rec_t*
 dtuple_convert_big_rec(
-/*===================*/
 	dict_index_t*	index,	/*!< in: index */
 	dtuple_t*	entry,	/*!< in/out: index entry */
 	ulint*		n_ext)	/*!< in/out: number of
@@ -755,14 +725,12 @@ skip_field:
 	return(vector);
 }
 
-/**************************************************************//**
-Puts back to entry the data stored in vector. Note that to ensure the
+/** Puts back to entry the data stored in vector. Note that to ensure the
 fields in entry can accommodate the data, vector must have been created
 from entry with dtuple_convert_big_rec. */
 UNIV_INTERN
 void
 dtuple_convert_back_big_rec(
-/*========================*/
 	dict_index_t*	index __attribute__((unused)),	/*!< in: index */
 	dtuple_t*	entry,	/*!< in: entry whose data was put to vector */
 	big_rec_t*	vector)	/*!< in, own: big rec vector; it is

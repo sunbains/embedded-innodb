@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 2007, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file lock/lock0iter.c
+/** @file lock/lock0iter.c
 Lock queue iterator. Can iterate over table and record
 lock queues.
 
@@ -33,8 +31,7 @@ Created July 16, 2007 Vasil Dimov
 #include "ut0dbg.h"
 #include "ut0lst.h"
 
-/*******************************************************************//**
-Initialize lock queue iterator so that it starts to iterate from
+/** Initialize lock queue iterator so that it starts to iterate from
 "lock". bit_no specifies the record number within the heap where the
 record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
 1. If the lock is a table lock, thus we have a table lock queue;
@@ -45,7 +42,6 @@ record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
 UNIV_INTERN
 void
 lock_queue_iterator_reset(
-/*======================*/
 	lock_queue_iterator_t*	iter,	/*!< out: iterator */
 	const lock_t*		lock,	/*!< in: lock to start from */
 	ulint			bit_no)	/*!< in: record number in the
@@ -72,15 +68,13 @@ lock_queue_iterator_reset(
 	}
 }
 
-/*******************************************************************//**
-Gets the previous lock in the lock queue, returns NULL if there are no
+/** Gets the previous lock in the lock queue, returns NULL if there are no
 more locks (i.e. the current lock is the first one). The iterator is
 receded (if not-NULL is returned).
 @return	previous lock or NULL */
 UNIV_INTERN
 const lock_t*
 lock_queue_iterator_get_prev(
-/*=========================*/
 	lock_queue_iterator_t*	iter)	/*!< in/out: iterator */
 {
 	const lock_t*	prev_lock;

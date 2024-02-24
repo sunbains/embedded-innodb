@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -37,13 +36,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 static int				api_sql_enter_func_enabled = 0;
 #define UT_DBG_ENTER_FUNC_ENABLED	api_sql_enter_func_enabled
 
-/*********************************************************************//**
-Function to parse ib_exec_sql() and ib_exec_ddl_sql() args.
+/** Function to parse ib_exec_sql() and ib_exec_ddl_sql() args.
 @return	own: info struct */
 static
 pars_info_t*
 ib_exec_vsql(
-/*=========*/
 	int		n_args,		/*!< in: no. of args */
 	va_list		ap)		/*!< in: arg list */
 {
@@ -149,15 +146,13 @@ ib_exec_vsql(
 	return(info);
 }
 
-/*********************************************************************//**
-Execute arbitrary SQL using InnoDB's internal parser. The statement
+/** Execute arbitrary SQL using InnoDB's internal parser. The statement
 is executed in a new transaction. Table name parameters must be prefixed
 with a '$' symbol and variables with ':'
 @return	DB_SUCCESS or error code */
 
 ib_err_t
 ib_exec_sql(
-/*========*/
 	const char*     sql,            /*!< in: sql to execute */
 	ib_ulint_t	n_args,         /*!< in: no. of args */
 	...)
@@ -201,15 +196,13 @@ ib_exec_sql(
 	return(err);
 }
 
-/*********************************************************************//**
-Execute arbitrary SQL using InnoDB's internal parser. The statement
+/** Execute arbitrary SQL using InnoDB's internal parser. The statement
 is executed in a background transaction. It will lock the data
 dictionary lock for the duration of the query.
 @return	DB_SUCCESS or error code */
 
 ib_err_t
 ib_exec_ddl_sql(
-/*============*/
 	const char*	sql,		/*!< in: sql to execute */
 	ib_ulint_t	n_args,		/*!< in: no. of args */
 	...)

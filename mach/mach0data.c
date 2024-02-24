@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/******************************************************************//**
-@file mach/mach0data.c
+/** @file mach/mach0data.c
 Utilities for converting data from the database file
 to the machine format.
 
@@ -30,13 +28,11 @@ Created 11/28/1995 Heikki Tuuri
 #include "mach0data.ic"
 #endif
 
-/*********************************************************//**
-Reads a ulint in a compressed form if the log record fully contains it.
+/** Reads a ulint in a compressed form if the log record fully contains it.
 @return	pointer to end of the stored field, NULL if not complete */
 UNIV_INTERN
 byte*
 mach_parse_compressed(
-/*==================*/
 	byte*	ptr,	/*!< in: pointer to buffer from where to read */
 	byte*	end_ptr,/*!< in: pointer to end of the buffer */
 	ulint*	val)	/*!< out: read value (< 2^32) */
@@ -93,13 +89,11 @@ mach_parse_compressed(
 	}
 }
 
-/*********************************************************//**
-Reads a dulint in a compressed form if the log record fully contains it.
+/** Reads a dulint in a compressed form if the log record fully contains it.
 @return	pointer to end of the stored field, NULL if not complete */
 UNIV_INTERN
 byte*
 mach_dulint_parse_compressed(
-/*=========================*/
 	byte*	ptr,	/*!< in: pointer to buffer from where to read */
 	byte*	end_ptr,/*!< in: pointer to end of the buffer */
 	dulint*	val)	/*!< out: read value */

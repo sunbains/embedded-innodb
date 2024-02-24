@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2008 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -75,8 +74,7 @@ typedef struct ib_cfg_var {
 } ib_cfg_var_t;
 /* @} */
 
-/*******************************************************************//**
-@file api/api0cfg.c
+/** @file api/api0cfg.c
 Assign src to dst according to type. If this is a string variable (char*)
 the string itself is not copied.
 ib_cfg_assign() @{
@@ -84,7 +82,6 @@ ib_cfg_assign() @{
 static
 ib_err_t
 ib_cfg_assign(
-/*==========*/
 	ib_cfg_type_t	type,	/*!< in: type of src and dst */
 	void*		dst,	/*!< out: destination */
 	const void*	src)	/*!< in: source */
@@ -128,15 +125,13 @@ ib_cfg_assign(
 }
 /* @} */
 
-/*******************************************************************//**
-A generic function used for ib_cfg_var_t::validate() to check a numeric
+/** A generic function used for ib_cfg_var_t::validate() to check a numeric
 type for min/max allowed value overflow.
 ib_cfg_var_validate_numeric() @{
 @return	DB_SUCCESS if value is in range */
 static
 ib_err_t
 ib_cfg_var_validate_numeric(
-/*========================*/
 	const struct ib_cfg_var* cfg_var,/*!< in/out: configuration variable to
 					check */
 	const void*		value)	/*!< in: value to check */
@@ -184,8 +179,7 @@ ib_cfg_var_validate_numeric(
 
 /* generic and specific ib_cfg_var_(set|get)_* functions @{ */
 
-/*******************************************************************//**
-A generic function used for ib_cfg_var_t::set() that stores the value
+/** A generic function used for ib_cfg_var_t::set() that stores the value
 of the configuration parameter in the location pointed by
 ib_cfg_var_t::tank. If this is a string variable (char*) then the string
 is not copied and a reference to "value" is made. It should not be freed
@@ -195,7 +189,6 @@ ib_cfg_var_set_generic() @{
 static
 ib_err_t
 ib_cfg_var_set_generic(
-/*===================*/
 	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
 					manipulate */
 	const void*		value)	/*!< in: value to set */
@@ -215,8 +208,7 @@ ib_cfg_var_set_generic(
 }
 /* @} */
 
-/*******************************************************************//**
-A generic function used for ib_cfg_var_t::get() that retrieves the value
+/** A generic function used for ib_cfg_var_t::get() that retrieves the value
 of the configuration parameter from the location pointed by
 ib_cfg_var_t::tank and stores it in "value". The variable is not copied
 to "value" even if it is a string variable (char*). Only a pointer to the
@@ -227,7 +219,6 @@ ib_cfg_var_get_generic() @{
 static
 ib_err_t
 ib_cfg_var_get_generic(
-/*===================*/
 	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
 						variable whose value to
 						retrieve */
@@ -238,14 +229,12 @@ ib_cfg_var_get_generic(
 }
 /* @} */
 
-/*******************************************************************//**
-Set the value of the config variable "adaptive_hash_index".
+/** Set the value of the config variable "adaptive_hash_index".
 ib_cfg_var_set_adaptive_hash_index() @{
 @return	DB_SUCCESS if set successfully */
 static
 ib_err_t
 ib_cfg_var_set_adaptive_hash_index(
-/*===============================*/
 	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
 					manipulate, must be
 					"adaptive_hash_index" */
@@ -261,14 +250,12 @@ ib_cfg_var_set_adaptive_hash_index(
 }
 /* @} */
 
-/*******************************************************************//**
-Retrieve the value of the config variable "adaptive_hash_index".
+/** Retrieve the value of the config variable "adaptive_hash_index".
 ib_cfg_var_get_adaptive_hash_index() @{
 @return	DB_SUCCESS if retrieved successfully */
 static
 ib_err_t
 ib_cfg_var_get_adaptive_hash_index(
-/*===============================*/
 	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
 						variable whose value to
 						retrieve, must be
@@ -286,14 +273,12 @@ ib_cfg_var_get_adaptive_hash_index(
 }
 /* @} */
 
-/*******************************************************************//**
-Set the value of the config variable "data_file_path".
+/** Set the value of the config variable "data_file_path".
 ib_cfg_var_set_data_file_path() @{
 @return	DB_SUCCESS if set successfully */
 static
 ib_err_t
 ib_cfg_var_set_data_file_path(
-/*==========================*/
 	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
 					manipulate, must be
 					"data_file_path" */
@@ -315,14 +300,12 @@ ib_cfg_var_set_data_file_path(
 }
 /* @} */
 
-/*******************************************************************//**
-Retrieve the value of the config variable "data_file_path".
+/** Retrieve the value of the config variable "data_file_path".
 ib_cfg_var_get_data_file_path() @{
 @return	DB_SUCCESS if retrieved successfully */
 static
 ib_err_t
 ib_cfg_var_get_data_file_path(
-/*==========================*/
 	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
 						variable whose value to
 						retrieve, must be
@@ -340,14 +323,12 @@ ib_cfg_var_get_data_file_path(
 }
 /* @} */
 
-/*******************************************************************//**
-Set the value of the config variable "file_format".
+/** Set the value of the config variable "file_format".
 ib_cfg_var_set_file_format() @{
 @return	DB_SUCCESS if set successfully */
 static
 ib_err_t
 ib_cfg_var_set_file_format(
-/*=======================*/
 	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
 					manipulate, must be "file_format" */
 	const void*		value)	/*!< in: value to set, must point to
@@ -370,14 +351,12 @@ ib_cfg_var_set_file_format(
 }
 /* @} */
 
-/*******************************************************************//**
-Retrieve the value of the config variable "file_format".
+/** Retrieve the value of the config variable "file_format".
 ib_cfg_var_get_file_format @{
 @return	DB_SUCCESS if retrieved successfully */
 static
 ib_err_t
 ib_cfg_var_get_file_format(
-/*=======================*/
 	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
 						variable whose value to
 						retrieve, must be
@@ -396,15 +375,13 @@ ib_cfg_var_get_file_format(
 }
 /* @} */
 
-/*******************************************************************//**
-Check the value of the config variable "data_home_dir". We need to ensure
+/** Check the value of the config variable "data_home_dir". We need to ensure
 that the value ends with a path separator.
 ib_cfg_var_validate_data_home_dir() @{
 @return	DB_SUCCESS if value is valid */
 static
 ib_err_t
 ib_cfg_var_validate_data_home_dir(
-/*==============================*/
 	const struct ib_cfg_var*cfg_var,/*!< in/out: configuration variable to
 					check, must be "data_home_dir" */
 	const void*		value)	/*!< in: value to check, must point to
@@ -432,14 +409,12 @@ ib_cfg_var_validate_data_home_dir(
 }
 /* @} */
 
-/*******************************************************************//**
-Set the value of the config variable "log_group_home_dir".
+/** Set the value of the config variable "log_group_home_dir".
 ib_cfg_var_set_log_group_home_dir @{
 @return	DB_SUCCESS if set successfully */
 static
 ib_err_t
 ib_cfg_var_set_log_group_home_dir(
-/*==============================*/
 	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
 					manipulate, must be
 					"log_group_home_dir" */
@@ -463,14 +438,12 @@ ib_cfg_var_set_log_group_home_dir(
 }
 /* @} */
 
-/*******************************************************************//**
-Set the value of the config variable "flush_method".
+/** Set the value of the config variable "flush_method".
 ib_cfg_var_set_flush_method@{
 @return	DB_SUCCESS if set successfully */
 static
 ib_err_t
 ib_cfg_var_set_flush_method(
-/*========================*/
 	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
 					manipulate, must be
 					"log_group_home_dir" */
@@ -541,14 +514,12 @@ ib_cfg_var_set_flush_method(
 	return(err);
 }
 /* @} */
-/*******************************************************************//**
-Retrieve the value of the config variable "log_group_home_dir".
+/** Retrieve the value of the config variable "log_group_home_dir".
 ib_cfg_var_get_log_group_home_dir() @{
 @return	DB_SUCCESS if retrieved successfully */
 static
 ib_err_t
 ib_cfg_var_get_log_group_home_dir(
-/*==============================*/
 	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
 						variable whose value to
 						retrieve, must be
@@ -566,14 +537,12 @@ ib_cfg_var_get_log_group_home_dir(
 }
 /* @} */
 
-/*******************************************************************//**
-Set the value of the config variable "lru_old_blocks_pct".
+/** Set the value of the config variable "lru_old_blocks_pct".
 ib_cfg_var_set_lru_old_blocks_pct() @{
 @return	DB_SUCCESS if set successfully */
 static
 ib_err_t
 ib_cfg_var_set_lru_old_blocks_pct(
-/*==============================*/
 	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
 					manipulate, must be
 					"lru_old_blocks_pct" */
@@ -614,14 +583,12 @@ ib_cfg_var_set_lru_old_blocks_pct(
 
 /* There is no ib_cfg_var_set_version() */
 
-/*******************************************************************//**
-Retrieve the value of the config variable "version".
+/** Retrieve the value of the config variable "version".
 ib_cfg_var_get_version() @{
 @return	DB_SUCCESS if retrieved successfully */
 static
 ib_err_t
 ib_cfg_var_get_version(
-/*===================*/
 	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
 						variable whose value to
 						retrieve, must be
@@ -1019,14 +986,12 @@ static ib_cfg_var_t	cfg_vars[UT_ARR_SIZE(cfg_vars_defaults)];
 
 /* public API functions and some auxiliary ones @{ */
 
-/*********************************************************************//**
-Lookup a variable name.
+/** Lookup a variable name.
 ib_cfg_lookup_var() @{
 @return	config variable instance if found else NULL */
 static
 ib_cfg_var_t*
 ib_cfg_lookup_var(
-/*==============*/
 	const char*	var)		/*!< in: variable name */
 {
 	ulint		i;
@@ -1045,15 +1010,13 @@ ib_cfg_lookup_var(
 }
 /* @} */
 
-/*********************************************************************//**
-Get the type of a configuration variable. Returns DB_SUCCESS if the
+/** Get the type of a configuration variable. Returns DB_SUCCESS if the
 variable with name "name" was found and "type" was set.
 ib_cfg_var_get_type() @{
 @return	DB_SUCCESS if successful */
 
 ib_err_t
 ib_cfg_var_get_type(
-/*================*/
 	const char*	name,		/*!< in: variable name */
 	ib_cfg_type_t*	type)		/*!< out: variable type */
 {
@@ -1077,8 +1040,7 @@ ib_cfg_var_get_type(
 }
 /* @} */
 
-/*********************************************************************//**
-Set a configuration variable. "ap" must contain one argument whose type
+/** Set a configuration variable. "ap" must contain one argument whose type
 depends on the type of the variable with the given "name". Returns
 DB_SUCCESS if the variable with name "name" was found and if its value
 was set.
@@ -1087,7 +1049,6 @@ ib_cfg_set_ap() @{
 static
 ib_err_t
 ib_cfg_set_ap(
-/*==========*/
 	const char*	name,		/*!< in: variable name */
 	va_list		ap)		/*!< in: variable value */
 {
@@ -1174,8 +1135,7 @@ ib_cfg_set_ap(
 }
 /* @} */
 
-/*********************************************************************//**
-Set a configuration variable. The second argument's type depends on the
+/** Set a configuration variable. The second argument's type depends on the
 type of the variable with the given "name". Returns DB_SUCCESS if the
 variable with name "name" was found and if its value was set. Strings
 are not copied, be sure not to destroy or modify your string after it
@@ -1188,7 +1148,6 @@ ib_cfg_set() @{
 
 ib_err_t
 ib_cfg_set(
-/*=======*/
 	const char*	name,		/*!< in: variable name */
 	...)				/*!< in: variable value */
 {
@@ -1205,8 +1164,7 @@ ib_cfg_set(
 }
 /* @} */
 
-/*********************************************************************//**
-Get the value of a configuration variable. The type of the returned value
+/** Get the value of a configuration variable. The type of the returned value
 depends on the type of the configuration variable. DB_SUCCESS is returned
 if the variable with name "name" was found and "value" was set. Strings
 are not copied and a reference to the internal storage is returned. Be
@@ -1217,7 +1175,6 @@ ib_cfg_get() @{
 
 ib_err_t
 ib_cfg_get(
-/*=======*/
 	const char*	name,		/*!< in: variable name */
 	void*		value)		/*!< out: pointer to the place to
 					store the retrieved value */
@@ -1241,8 +1198,7 @@ ib_cfg_get(
 }
 /* @} */
 
-/*********************************************************************//**
-Get a list of the names of all configuration variables.
+/** Get a list of the names of all configuration variables.
 The caller is responsible for free(3)ing the returned array of strings
 when it is not needed anymore and for not modifying the individual strings.
 ib_cfg_get_all() @{
@@ -1250,7 +1206,6 @@ ib_cfg_get_all() @{
 
 ib_err_t
 ib_cfg_get_all(
-/*===========*/
 	const char***	names,		/*!< out: pointer to array of strings */
 	ib_u32_t*	names_num)	/*!< out: number of strings returned */
 {
@@ -1271,14 +1226,12 @@ ib_cfg_get_all(
 }
 /* @} */
 
-/*********************************************************************//**
-Initialize the config system.
+/** Initialize the config system.
 ib_cfg_init() @{
 @return	DB_SUCCESS or error code */
 
 ib_err_t
 ib_cfg_init(void)
-/*=============*/
 {
 	/* Initialize the mutex that protects cfg_vars[]. */
 	os_fast_mutex_init(&cfg_vars_mutex);
@@ -1320,14 +1273,12 @@ ib_cfg_init(void)
 }
 /* @} */
 
-/*********************************************************************//**
-Shutdown the config system.
+/** Shutdown the config system.
 ib_cfg_shutdown() @{
 @return	DB_SUCCESS or error code */
 
 ib_err_t
 ib_cfg_shutdown(void)
-/*=================*/
 {
 	os_fast_mutex_lock(&cfg_vars_mutex);
 

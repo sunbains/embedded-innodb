@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -51,12 +50,10 @@ static const int N_RECS = 100;
 static const int C2_MAX_LEN = 256;
 static const int C3_MAX_LEN = 8192;
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -67,12 +64,10 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-CREATE TABLE T(c1 INT, c2 VARCHAR(n), c3 BLOB, PK(c1)); */
+/** CREATE TABLE T(c1 INT, c2 VARCHAR(n), c3 BLOB, PK(c1)); */
 static
 ib_err_t
 create_table(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name)			/*!< in: table name */
 {
@@ -134,12 +129,10 @@ create_table(
 	return(err);
 }
 
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 static
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	ib_trx_t	ib_trx,		/*!< in: transaction */
@@ -159,12 +152,10 @@ open_table(
 	return(err);
 }
 
-/*********************************************************************
-INSERT INTO T VALUE(N, RANDOM(n), RANDOM(n)); */
+/** INSERT INTO T VALUE(N, RANDOM(n), RANDOM(n)); */
 static
 ib_err_t
 insert_rows(
-/*========*/
 	ib_crsr_t	crsr,		/*!< in, out: cursor to use for write */
 	int		start,		/*!< in: in: start of c1 value */
 	int		count)		/*!< in: number of rows to insert */
@@ -222,12 +213,10 @@ insert_rows(
 }
 
 #ifndef __WIN__
-/*********************************************************************
-Set the runtime global options. */
+/** Set the runtime global options. */
 static
 void
 set_options(
-/*========*/
 	int		argc,
 	char*		argv[])
 {
@@ -249,7 +238,6 @@ set_options(
 static
 ib_err_t
 test_phase_I(void)
-/*==============*/
 {
 	int		i;
 	ib_err_t	err;
@@ -292,12 +280,10 @@ test_phase_I(void)
 	return(dups == N_TRX ? DB_DUPLICATE_KEY : DB_SUCCESS);
 }
 
-/*********************************************************************
-Restart the process with the same args. */
+/** Restart the process with the same args. */
 static
 void
 restart(
-/*====*/
 	int		argc,
 	char*		argv[])
 {

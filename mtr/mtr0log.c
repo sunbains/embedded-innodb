@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file mtr/mtr0log.c
+/** @file mtr/mtr0log.c
 Mini-transaction log routines
 
 Created 12/7/1995 Heikki Tuuri
@@ -37,12 +35,10 @@ Created 12/7/1995 Heikki Tuuri
 #ifndef UNIV_HOTBACKUP
 # include "dict0boot.h"
 
-/********************************************************//**
-Catenates n bytes to the mtr log. */
+/** Catenates n bytes to the mtr log. */
 UNIV_INTERN
 void
 mlog_catenate_string(
-/*=================*/
 	mtr_t*		mtr,	/*!< in: mtr */
 	const byte*	str,	/*!< in: string to write */
 	ulint		len)	/*!< in: string length */
@@ -59,14 +55,12 @@ mlog_catenate_string(
 	dyn_push_string(mlog, str, len);
 }
 
-/********************************************************//**
-Writes the initial part of a log record consisting of one-byte item
+/** Writes the initial part of a log record consisting of one-byte item
 type and four-byte space and page numbers. Also pushes info
 to the mtr memo that a buffer page has been modified. */
 UNIV_INTERN
 void
 mlog_write_initial_log_record(
-/*==========================*/
 	const byte*	ptr,	/*!< in: pointer to (inside) a buffer
 				frame holding the file page where
 				modification is made */
@@ -92,13 +86,11 @@ mlog_write_initial_log_record(
 }
 #endif /* !UNIV_HOTBACKUP */
 
-/********************************************************//**
-Parses an initial log record written by mlog_write_initial_log_record.
+/** Parses an initial log record written by mlog_write_initial_log_record.
 @return	parsed record end, NULL if not a complete record */
 UNIV_INTERN
 byte*
 mlog_parse_initial_log_record(
-/*==========================*/
 	byte*	ptr,	/*!< in: buffer */
 	byte*	end_ptr,/*!< in: buffer end */
 	byte*	type,	/*!< out: log record type: MLOG_1BYTE, ... */
@@ -132,13 +124,11 @@ mlog_parse_initial_log_record(
 	return(ptr);
 }
 
-/********************************************************//**
-Parses a log record written by mlog_write_ulint or mlog_write_dulint.
+/** Parses a log record written by mlog_write_ulint or mlog_write_dulint.
 @return	parsed record end, NULL if not a complete record or a corrupt record */
 UNIV_INTERN
 byte*
 mlog_parse_nbytes(
-/*==============*/
 	ulint	type,	/*!< in: log record type: MLOG_1BYTE, ... */
 	byte*	ptr,	/*!< in: buffer */
 	byte*	end_ptr,/*!< in: buffer end */
@@ -239,13 +229,11 @@ mlog_parse_nbytes(
 	return(ptr);
 }
 
-/********************************************************//**
-Writes 1 - 4 bytes to a file page buffered in the buffer pool.
+/** Writes 1 - 4 bytes to a file page buffered in the buffer pool.
 Writes the corresponding log record to the mini-transaction log. */
 UNIV_INTERN
 void
 mlog_write_ulint(
-/*=============*/
 	byte*	ptr,	/*!< in: pointer where to write */
 	ulint	val,	/*!< in: value to write */
 	byte	type,	/*!< in: MLOG_1BYTE, MLOG_2BYTES, MLOG_4BYTES */
@@ -285,13 +273,11 @@ mlog_write_ulint(
 	mlog_close(mtr, log_ptr);
 }
 
-/********************************************************//**
-Writes 8 bytes to a file page buffered in the buffer pool.
+/** Writes 8 bytes to a file page buffered in the buffer pool.
 Writes the corresponding log record to the mini-transaction log. */
 UNIV_INTERN
 void
 mlog_write_dulint(
-/*==============*/
 	byte*	ptr,	/*!< in: pointer where to write */
 	dulint	val,	/*!< in: value to write */
 	mtr_t*	mtr)	/*!< in: mini-transaction handle */
@@ -322,13 +308,11 @@ mlog_write_dulint(
 }
 
 #ifndef UNIV_HOTBACKUP
-/********************************************************//**
-Writes a string to a file page buffered in the buffer pool. Writes the
+/** Writes a string to a file page buffered in the buffer pool. Writes the
 corresponding log record to the mini-transaction log. */
 UNIV_INTERN
 void
 mlog_write_string(
-/*==============*/
 	byte*		ptr,	/*!< in: pointer where to write */
 	const byte*	str,	/*!< in: string to write */
 	ulint		len,	/*!< in: string length */
@@ -342,13 +326,11 @@ mlog_write_string(
 	mlog_log_string(ptr, len, mtr);
 }
 
-/********************************************************//**
-Logs a write of a string to a file page buffered in the buffer pool.
+/** Logs a write of a string to a file page buffered in the buffer pool.
 Writes the corresponding log record to the mini-transaction log. */
 UNIV_INTERN
 void
 mlog_log_string(
-/*============*/
 	byte*	ptr,	/*!< in: pointer written to */
 	ulint	len,	/*!< in: string length */
 	mtr_t*	mtr)	/*!< in: mini-transaction handle */
@@ -380,13 +362,11 @@ mlog_log_string(
 }
 #endif /* !UNIV_HOTBACKUP */
 
-/********************************************************//**
-Parses a log record written by mlog_write_string.
+/** Parses a log record written by mlog_write_string.
 @return	parsed record end, NULL if not a complete record */
 UNIV_INTERN
 byte*
 mlog_parse_string(
-/*==============*/
 	byte*	ptr,	/*!< in: buffer */
 	byte*	end_ptr,/*!< in: buffer end */
 	byte*	page,	/*!< in: page where to apply the log record, or NULL */
@@ -431,14 +411,12 @@ mlog_parse_string(
 }
 
 #ifndef UNIV_HOTBACKUP
-/********************************************************//**
-Opens a buffer for mlog, writes the initial log record and,
+/** Opens a buffer for mlog, writes the initial log record and,
 if needed, the field lengths of an index.
 @return	buffer, NULL if log mode MTR_LOG_NONE */
 UNIV_INTERN
 byte*
 mlog_open_and_write_index(
-/*======================*/
 	mtr_t*		mtr,	/*!< in: mtr */
 	const byte*	rec,	/*!< in: index record or page */
 	dict_index_t*	index,	/*!< in: record descriptor */
@@ -529,13 +507,11 @@ mlog_open_and_write_index(
 }
 #endif /* !UNIV_HOTBACKUP */
 
-/********************************************************//**
-Parses a log record written by mlog_open_and_write_index.
+/** Parses a log record written by mlog_open_and_write_index.
 @return	parsed record end, NULL if not a complete record */
 UNIV_INTERN
 byte*
 mlog_parse_index(
-/*=============*/
 	byte*		ptr,	/*!< in: buffer */
 	const byte*	end_ptr,/*!< in: buffer end */
 	ibool		comp,	/*!< in: TRUE=compact record format */

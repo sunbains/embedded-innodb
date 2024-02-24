@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -49,12 +48,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define DATABASE	"test"
 #define TABLE		"t"
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -65,8 +62,7 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-CREATE TABLE T(
+/** CREATE TABLE T(
 	C1	VARCHAR(10),
        	c2 	INT,
        	C3 	FLOAT,
@@ -76,7 +72,6 @@ CREATE TABLE T(
 static
 ib_err_t
 create_table(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name,			/*!< in: table name */
 	int		page_size)		/*!< in: page size */
@@ -175,12 +170,10 @@ create_table(
 	return(err);
 }
 
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 static
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	ib_trx_t	ib_trx,		/*!< in: transaction */
@@ -200,13 +193,11 @@ open_table(
 	return(err);
 }
 
-/*********************************************************************
-INSERT INTO T VALUE('xxxxaaaa', 1);
+/** INSERT INTO T VALUE('xxxxaaaa', 1);
 INSERT INTO T VALUE('xxxxbbbb', 2); */
 static
 void
 insert_rows(
-/*========*/
 	ib_crsr_t	crsr)		/*!< in, out: cursor to use for write */
 {
 	ib_tpl_t	tpl = NULL;

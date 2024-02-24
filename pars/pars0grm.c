@@ -2896,12 +2896,10 @@ yyreturnlab:
 
 #line 635 "pars0grm.y"
 
-/**********************************************************************
-Release any resources used by the parser. */
+/** Release any resources used by the parser. */
 UNIV_INTERN
 void
 pars_close(void)
-/*============*/
 {
 	pars_lexer_close();
 }

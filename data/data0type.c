@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file data/data0type.c
+/** @file data/data0type.c
 Data types
 
 Created 1/16/1996 Heikki Tuuri
@@ -38,25 +36,21 @@ charset-collation code for them. */
 
 UNIV_INTERN ulint	data_client_default_charset_coll;
 
-/*********************************************************************//**
-Reset dtype variables. */
+/** Reset dtype variables. */
 UNIV_INTERN
 void
 dtype_var_init(void)
-/*================*/
 {
 	data_client_default_charset_coll = 0;
 }
 
-/*************************************************************************
-Determine how many bytes the first n characters of the given string occupy.
+/** Determine how many bytes the first n characters of the given string occupy.
 If the string is shorter than n characters, returns the number of bytes
 the characters in the string occupy.
 @return	length of the prefix, in bytes */
 UNIV_INTERN
 ulint
 dtype_get_at_most_n_mbchars(
-/*========================*/
 	ulint		prtype,		/*!< in: precise type */
 	ulint		mbminlen,	/*!< in: minimum length of a
 					multi-byte character */
@@ -93,14 +87,12 @@ dtype_get_at_most_n_mbchars(
 }
 #endif /* UNIV_HOTBACKUP */
 
-/*********************************************************************//**
-Checks if a data main type is a string type. Also a BLOB is considered a
+/** Checks if a data main type is a string type. Also a BLOB is considered a
 string type.
 @return	TRUE if string type */
 UNIV_INTERN
 ibool
 dtype_is_string_type(
-/*=================*/
 	ulint	mtype)	/*!< in: InnoDB main data type code: DATA_CHAR, ... */
 {
 	if (mtype <= DATA_BLOB
@@ -113,15 +105,13 @@ dtype_is_string_type(
 	return(FALSE);
 }
 
-/*********************************************************************//**
-Checks if a type is a binary string type. Note that for tables created with
+/** Checks if a type is a binary string type. Note that for tables created with
 < 4.0.14, we do not know if a DATA_BLOB column is a BLOB or a TEXT column. For
 those DATA_BLOB columns this function currently returns FALSE.
 @return	TRUE if binary string type */
 UNIV_INTERN
 ibool
 dtype_is_binary_string_type(
-/*========================*/
 	ulint	mtype,	/*!< in: main data type */
 	ulint	prtype)	/*!< in: precise type */
 {
@@ -135,8 +125,7 @@ dtype_is_binary_string_type(
 	return(FALSE);
 }
 
-/*********************************************************************//**
-Checks if a type is a non-binary string type. That is, dtype_is_string_type is
+/** Checks if a type is a non-binary string type. That is, dtype_is_string_type is
 TRUE and dtype_is_binary_string_type is FALSE. Note that for tables created
 with < 4.0.14, we do not know if a DATA_BLOB column is a BLOB or a TEXT column.
 For those DATA_BLOB columns this function currently returns TRUE.
@@ -144,7 +133,6 @@ For those DATA_BLOB columns this function currently returns TRUE.
 UNIV_INTERN
 ibool
 dtype_is_non_binary_string_type(
-/*============================*/
 	ulint	mtype,	/*!< in: main data type */
 	ulint	prtype)	/*!< in: precise type */
 {
@@ -157,14 +145,12 @@ dtype_is_non_binary_string_type(
 	return(FALSE);
 }
 
-/*********************************************************************//**
-Forms a precise type from the < 4.1.2 format precise type plus the
+/** Forms a precise type from the < 4.1.2 format precise type plus the
 charset-collation code.
 @return precise type, including the charset-collation code */
 UNIV_INTERN
 ulint
 dtype_form_prtype(
-/*==============*/
 	ulint	old_prtype,	/*!< in: the user type code and the flags
 				DATA_BINARY_TYPE etc. */
 	ulint	charset_coll)	/*!< in: user charset-collation code */
@@ -175,13 +161,11 @@ dtype_form_prtype(
 	return(old_prtype + (charset_coll << 16));
 }
 
-/*********************************************************************//**
-Validates a data type structure.
+/** Validates a data type structure.
 @return	TRUE if ok */
 UNIV_INTERN
 ibool
 dtype_validate(
-/*===========*/
 	const dtype_t*	type)	/*!< in: type struct to validate */
 {
 	ut_a(type);
@@ -200,12 +184,10 @@ dtype_validate(
 }
 
 #ifndef UNIV_HOTBACKUP
-/*********************************************************************//**
-Prints a data type structure. */
+/** Prints a data type structure. */
 UNIV_INTERN
 void
 dtype_print(
-/*========*/
 	const dtype_t*	type)	/*!< in: type */
 {
 	ulint	mtype;

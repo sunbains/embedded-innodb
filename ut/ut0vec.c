@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 2006, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/*******************************************************************//**
-@file ut/ut0vec.c
+/** @file ut/ut0vec.c
 A vector of pointers to data items
 
 Created 4/6/2006 Osku Salerma
@@ -29,13 +27,11 @@ Created 4/6/2006 Osku Salerma
 #endif
 #include <string.h>
 
-/****************************************************************//**
-Create a new vector with the given initial size.
+/** Create a new vector with the given initial size.
 @return	vector */
 UNIV_INTERN
 ib_vector_t*
 ib_vector_create(
-/*=============*/
 	mem_heap_t*	heap,	/*!< in: heap */
 	ulint		size)	/*!< in: initial size */
 {
@@ -53,12 +49,10 @@ ib_vector_create(
 	return(vec);
 }
 
-/****************************************************************//**
-Push a new element to the vector, increasing its size if necessary. */
+/** Push a new element to the vector, increasing its size if necessary. */
 UNIV_INTERN
 void
 ib_vector_push(
-/*===========*/
 	ib_vector_t*	vec,	/*!< in: vector */
 	void*		elem)	/*!< in: data element */
 {

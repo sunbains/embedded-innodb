@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/ibuf0ibuf.ic
+/** @file include/ibuf0ibuf.ic
 Insert buffer
 
 Created 7/19/1997 Heikki Tuuri
@@ -63,15 +61,13 @@ struct ibuf_struct{
 	ulint		n_merged_recs;	/*!< number of records merged */
 };
 
-/************************************************************************//**
-Sets the free bit of the page in the ibuf bitmap. This is done in a separate
+/** Sets the free bit of the page in the ibuf bitmap. This is done in a separate
 mini-transaction, hence this operation does not restrict further work to only
 ibuf bitmap operations, which would result if the latch to the bitmap page
 were kept. */
 UNIV_INTERN
 void
 ibuf_set_free_bits_func(
-/*====================*/
 	buf_block_t*	block,	/*!< in: index page of a non-clustered index;
 				free bit is reset if page level is 0 */
 #ifdef UNIV_IBUF_DEBUG
@@ -86,13 +82,11 @@ ibuf_set_free_bits_func(
 # define ibuf_set_free_bits(b,v,max) ibuf_set_free_bits_func(b,v)
 #endif /* UNIV_IBUF_DEBUG */
 
-/**********************************************************************//**
-A basic partial test if an insert to the insert buffer could be possible and
+/** A basic partial test if an insert to the insert buffer could be possible and
 recommended. */
 UNIV_INLINE
 ibool
 ibuf_should_try(
-/*============*/
 	dict_index_t*	dict_index,		/*!< in: dict_index where
 						to insert */
 	ulint		ignore_sec_unique)	/*!< in: if != 0, we should
@@ -117,13 +111,11 @@ ibuf_should_try(
 	return(FALSE);
 }
 
-/***********************************************************************//**
-Checks if a page address is an ibuf bitmap page address.
+/** Checks if a page address is an ibuf bitmap page address.
 @return	TRUE if a bitmap page */
 UNIV_INLINE
 ibool
 ibuf_bitmap_page(
-/*=============*/
 	ulint	zip_size,/*!< in: compressed page size in bytes;
 			0 for uncompressed pages */
 	ulint	page_no)/*!< in: page number */
@@ -139,13 +131,11 @@ ibuf_bitmap_page(
 			     == FSP_IBUF_BITMAP_OFFSET));
 }
 
-/*********************************************************************//**
-Translates the free space on a page to a value in the ibuf bitmap.
+/** Translates the free space on a page to a value in the ibuf bitmap.
 @return	value for ibuf bitmap bits */
 UNIV_INLINE
 ulint
 ibuf_index_page_calc_free_bits(
-/*===========================*/
 	ulint	zip_size,	/*!< in: compressed page size in bytes;
 				0 for uncompressed pages */
 	ulint	max_ins_size)	/*!< in: maximum insert size after reorganize
@@ -175,13 +165,11 @@ ibuf_index_page_calc_free_bits(
 	return(n);
 }
 
-/*********************************************************************//**
-Translates the ibuf free bits to the free space on a page in bytes.
+/** Translates the ibuf free bits to the free space on a page in bytes.
 @return	maximum insert size after reorganize for the page */
 UNIV_INLINE
 ulint
 ibuf_index_page_calc_free_from_bits(
-/*================================*/
 	ulint	zip_size,/*!< in: compressed page size in bytes;
 			0 for uncompressed pages */
 	ulint	bits)	/*!< in: value for ibuf bitmap bits */
@@ -207,13 +195,11 @@ ibuf_index_page_calc_free_from_bits(
 }
 
 #ifdef  WITH_ZIP
-/*********************************************************************//**
-Translates the free space on a compressed page to a value in the ibuf bitmap.
+/** Translates the free space on a compressed page to a value in the ibuf bitmap.
 @return	value for ibuf bitmap bits */
 UNIV_INLINE
 ulint
 ibuf_index_page_calc_free_zip(
-/*==========================*/
 	ulint			zip_size,
 					/*!< in: compressed page size in bytes */
 	const buf_block_t*	block)	/*!< in: buffer block */
@@ -242,13 +228,11 @@ ibuf_index_page_calc_free_zip(
 }
 #endif /* WITH_ZIP */
 
-/*********************************************************************//**
-Translates the free space on a page to a value in the ibuf bitmap.
+/** Translates the free space on a page to a value in the ibuf bitmap.
 @return	value for ibuf bitmap bits */
 UNIV_INLINE
 ulint
 ibuf_index_page_calc_free(
-/*======================*/
 	ulint			zip_size,/*!< in: compressed page size in bytes;
 					0 for uncompressed pages */
 	const buf_block_t*	block)	/*!< in: buffer block */
@@ -272,8 +256,7 @@ ibuf_index_page_calc_free(
 #endif /* WITH_ZIP */
 }
 
-/************************************************************************//**
-Updates the free bits of an uncompressed page in the ibuf bitmap if
+/** Updates the free bits of an uncompressed page in the ibuf bitmap if
 there is not enough free on the page any more.  This is done in a
 separate mini-transaction, hence this operation does not restrict
 further work to only ibuf bitmap operations, which would result if the
@@ -288,7 +271,6 @@ recovery. */
 UNIV_INLINE
 void
 ibuf_update_free_bits_if_full(
-/*==========================*/
 	buf_block_t*	block,	/*!< in: index page to which we have added new
 				records; the free bits are updated if the
 				index is non-clustered and non-unique and

@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file os/os0proc.c
+/** @file os/os0proc.c
 The interface to the operating system
 process control primitives
 
@@ -52,19 +50,16 @@ UNIV_INTERN ibool os_use_large_pages;
 /* Large page size. This may be a boot-time option on some platforms */
 UNIV_INTERN ulint os_large_page_size;
 
-/****************************************************************//**
-Reset the variables. */
+/** Reset the variables. */
 UNIV_INTERN
 void
 os_proc_var_init(void)
-/*==================*/
 {
 	os_use_large_pages = 0;
 	os_large_page_size = 0;
 }
 
-/********************************************************************
-Converts the current process id to a number. It is not guaranteed that the
+/** Converts the current process id to a number. It is not guaranteed that the
 number is unique. In Linux returns the 'process number' of the current
 thread. That number is the same as one sees in 'top', for example. In Linux
 the thread id is not the same as one sees in 'top'.
@@ -72,7 +67,6 @@ the thread id is not the same as one sees in 'top'.
 UNIV_INTERN
 ulint
 os_proc_get_number(void)
-/*====================*/
 {
 #ifdef __WIN__
 	return((ulint)GetCurrentProcessId());
@@ -81,13 +75,11 @@ os_proc_get_number(void)
 #endif
 }
 
-/****************************************************************//**
-Allocates large pages memory.
+/** Allocates large pages memory.
 @return	allocated memory */
 UNIV_INTERN
 void*
 os_mem_alloc_large(
-/*===============*/
 	ulint*	n)			/*!< in/out: number of bytes */
 {
 	void*	ptr;
@@ -195,12 +187,10 @@ skip:
 	return(ptr);
 }
 
-/****************************************************************//**
-Frees large pages memory. */
+/** Frees large pages memory. */
 UNIV_INTERN
 void
 os_mem_free_large(
-/*==============*/
 	void	*ptr,			/*!< in: pointer returned by
 					os_mem_alloc_large() */
 	ulint	size)			/*!< in: size returned by

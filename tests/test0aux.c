@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2008 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
@@ -44,7 +43,6 @@ static const char data_file_path[] = "ibdata1:32M:autoextend";
 static
 void
 create_directory(
-/*=============*/
 	const char*	path)
 {
 #ifdef __WIN__
@@ -71,13 +69,11 @@ create_directory(
 #endif
 }
 
-/*****************************************************************
-Read a value from an integer column in an InnoDB tuple.
+/** Read a value from an integer column in an InnoDB tuple.
 @return	column value */
 
 ib_u64_t
 read_int_from_tuple(
-/*================*/
 	ib_tpl_t		tpl,		/*!< in: InnoDB tuple */
 	const ib_col_meta_t*	col_meta,	/*!< in: col meta data */
 	int			i)		/*!< in: column number */
@@ -118,12 +114,10 @@ read_int_from_tuple(
 	return(ival);
 }
 
-/*********************************************************************
-Print all columns in a tuple. */
+/** Print all columns in a tuple. */
 
 void
 print_int_col(
-/*==========*/
 	FILE*		stream,
 	const ib_tpl_t	tpl,
 	int		i,
@@ -195,12 +189,10 @@ print_int_col(
 	assert(err == DB_SUCCESS);
 }
 
-/**********************************************************************
-Print character array of give size or upto 256 chars */
+/** Print character array of give size or upto 256 chars */
 
 void
 print_char_array(
-/*=============*/
 	FILE*		stream,	/*!< in: stream to print to */
 	const char*	array,	/*!< in: char array */
 	int		len)	/*!< in: length of data */
@@ -213,12 +205,10 @@ print_char_array(
 	}
 }
 
-/*********************************************************************
-Print all columns in a tuple. */
+/** Print all columns in a tuple. */
 
 void
 print_tuple(
-/*========*/
 	FILE*		stream,
 	const ib_tpl_t	tpl)
 {
@@ -286,12 +276,10 @@ print_tuple(
 	fprintf(stream, "\n");
 }
 
-/*********************************************************************
-Setup the InnoDB configuration parameters. */
+/** Setup the InnoDB configuration parameters. */
 
 void
 test_configure(void)
-/*================*/
 {
 	ib_err_t	err;
 
@@ -368,12 +356,10 @@ test_configure(void)
 	}
 }
 
-/*********************************************************************
-Generate random text upto max size. */
+/** Generate random text upto max size. */
 
 int
 gen_rand_text(
-/*==========*/
 	char*		ptr,		/*!< in,out: text written here */
 	int		max_size)	/*!< in: max size of ptr */
 {
@@ -427,12 +413,10 @@ struct option ib_longopts[] = {
 	{NULL,			0,			NULL, 0}};
 #endif /* __WIN__ */
 
-/*********************************************************************
-Print usage. */
+/** Print usage. */
 
 void
 print_usage(
-/*========*/
 	const char*	progname)
 {
 	fprintf(stderr,
@@ -460,12 +444,10 @@ print_usage(
 		progname);
 }
 
-/*********************************************************************
-Set the runtime global options. */
+/** Set the runtime global options. */
 
 ib_err_t
 set_global_option(
-/*==============*/
 	int		opt,
 	const char*	arg)
 {
@@ -632,12 +614,10 @@ set_global_option(
 	return(err);
 }
 
-/*********************************************************************
-Print API version to stdout. */
+/** Print API version to stdout. */
 
 void
 print_version(void)
-/*===============*/
 {
 	ib_u64_t	version;
 
@@ -649,12 +629,10 @@ print_version(void)
 }
 
 
-/*********************************************************************
-Skip line. */
+/** Skip line. */
 static
 int
 config_skip_line(
-/*=============*/
 	FILE*		fp)
 {
 	int		ch;
@@ -664,12 +642,10 @@ config_skip_line(
 	return(ch);
 }
 
-/*********************************************************************
-Add an element to the config. */
+/** Add an element to the config. */
 static
 void
 config_add_elem(
-/*============*/
 	ib_config_t*		config,
 	const ib_string_t*	key,
 	const ib_string_t*	val)
@@ -712,15 +688,13 @@ config_add_elem(
 	++config->n_elems;
 }
 
-/*********************************************************************
-Parse an InnoDB config file, the file has a very simply format:
+/** Parse an InnoDB config file, the file has a very simply format:
 Lines beginning with '#' are ignored. Characters after '#' (inclusive)
 are also ignored.  Empty lines are also ignored. Variable syntax is:
   \s*var_name\s*=\s*value\s*\n */
 
 int
 config_parse_file(
-/*==============*/
 	const char*	filename,
 	ib_config_t*	config)
 {
@@ -817,12 +791,10 @@ config_parse_file(
 	return(0);
 }
 
-/*********************************************************************
-Print the elements. */
+/** Print the elements. */
 
 void
 config_print(
-/*=========*/
 	const ib_config_t*	config)
 {
 	ib_ulint_t	i;
@@ -842,12 +814,10 @@ config_print(
 	}
 }
 
-/*********************************************************************
-Free the the elements. */
+/** Free the the elements. */
 
 void
 config_free(
-/*=========*/
 	ib_config_t*	config)
 {
 	ib_ulint_t	i;
@@ -861,12 +831,10 @@ config_free(
 	memset(config, 0x0, sizeof(*config));
 }
 
-/*********************************************************************
-Drop the table. */
+/** Drop the table. */
 
 ib_err_t
 drop_table(
-/*=======*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name)			/*!< in: table to drop */
 {

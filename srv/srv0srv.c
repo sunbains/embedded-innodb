@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, 2009 Google Inc.
 Copyright (c) 2009, Percona Inc.
@@ -31,8 +30,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file srv/srv0srv.c
+/** @file srv/srv0srv.c
 The database server main program
 
 NOTE: SQL Server 7 uses something which the documentation
@@ -630,12 +628,10 @@ UNIV_INTERN int srv_panic_status = 0;
 UNIV_INTERN void* ib_panic_data = NULL;
 ib_panic_function_t ib_panic = NULL;
 
-/***********************************************************************
-Prints counters for work done by srv_master_thread. */
+/** Prints counters for work done by srv_master_thread. */
 static
 void
 srv_print_master_thread_info(
-/*=========================*/
 	ib_stream_t	stream)    /* in: output stream */
 {
 	ib_logger(stream, "srv_master_thread loops: %lu 1_second, %lu sleeps, "
@@ -647,12 +643,10 @@ srv_print_master_thread_info(
 		      srv_log_writes_and_flush);
 }
 
-/*********************************************************************//**
-Reset variables. */
+/** Reset variables. */
 UNIV_INTERN
 void
 srv_var_init(void)
-/*==============*/
 {
 #ifdef __NETWARE__
 	extern ibool panic_shutdown;
@@ -783,14 +777,12 @@ srv_var_init(void)
 	srv_fast_shutdown = IB_SHUTDOWN_NORMAL;
 }
 
-/*********************************************************************//**
-Accessor function to get pointer to n'th slot in the server thread
+/** Accessor function to get pointer to n'th slot in the server thread
 table.
 @return	pointer to the slot */
 static
 srv_slot_t*
 srv_table_get_nth_slot(
-/*===================*/
 	ulint	index)		/*!< in: index of the slot */
 {
 	ut_a(index < OS_THREAD_MAX_N);
@@ -798,13 +790,11 @@ srv_table_get_nth_slot(
 	return(srv_sys->threads + index);
 }
 
-/*********************************************************************//**
-Gets the number of threads in the system.
+/** Gets the number of threads in the system.
 @return	sum of srv_n_threads[] */
 UNIV_INTERN
 ulint
 srv_get_n_threads(void)
-/*===================*/
 {
 	ulint	i;
 	ulint	n_threads	= 0;
@@ -821,15 +811,13 @@ srv_get_n_threads(void)
 	return(n_threads);
 }
 
-/*********************************************************************//**
-Reserves a slot in the thread table for the current thread. Also creates the
+/** Reserves a slot in the thread table for the current thread. Also creates the
 thread local storage struct for the current thread. NOTE! The server mutex
 has to be reserved by the caller!
 @return	reserved slot index */
 static
 ulint
 srv_table_reserve_slot(
-/*===================*/
 	enum srv_thread_type	type)	/*!< in: type of the thread */
 {
 	srv_slot_t*	slot;
@@ -861,14 +849,12 @@ srv_table_reserve_slot(
 	return(i);
 }
 
-/*********************************************************************//**
-Suspends the calling thread to wait for the event in its thread slot.
+/** Suspends the calling thread to wait for the event in its thread slot.
 NOTE! The server mutex has to be reserved by the caller!
 @return	event for the calling thread to wait */
 static
 os_event_t
 srv_suspend_thread(void)
-/*====================*/
 {
 	srv_slot_t*		slot;
 	os_event_t		event;
@@ -905,15 +891,13 @@ srv_suspend_thread(void)
 	return(event);
 }
 
-/*********************************************************************//**
-Releases threads of the type given from suspension in the thread table.
+/** Releases threads of the type given from suspension in the thread table.
 NOTE! The server mutex has to be reserved by the caller!
 @return number of threads released: this may be less than n if not
 enough threads were suspended at the moment */
 UNIV_INTERN
 ulint
 srv_release_threads(
-/*================*/
 	enum srv_thread_type	type,	/*!< in: thread type */
 	ulint			n)	/*!< in: number of threads to release */
 {
@@ -957,13 +941,11 @@ srv_release_threads(
 	return(count);
 }
 
-/*********************************************************************//**
-Returns the calling thread type.
+/** Returns the calling thread type.
 @return	SRV_COM, ... */
 UNIV_INTERN
 enum srv_thread_type
 srv_get_thread_type(void)
-/*=====================*/
 {
 	ulint			slot_no;
 	srv_slot_t*		slot;
@@ -985,12 +967,10 @@ srv_get_thread_type(void)
 	return(type);
 }
 
-/*********************************************************************//**
-Initializes the server. */
+/** Initializes the server. */
 static
 void
 srv_init(void)
-/*==========*/
 {
 	srv_conc_slot_t*	conc_slot;
 	srv_slot_t*		slot;
@@ -1054,12 +1034,10 @@ srv_init(void)
 	}
 }
 
-/*********************************************************************//**
-Frees the data structures created in srv_init(). */
+/** Frees the data structures created in srv_init(). */
 UNIV_INTERN
 void
 srv_free(void)
-/*==========*/
 {
 	ulint		i;
 
@@ -1098,13 +1076,11 @@ srv_free(void)
 	srv_sys = NULL;
 }
 
-/*********************************************************************//**
-Initializes the synchronization primitives, memory system, and the thread
+/** Initializes the synchronization primitives, memory system, and the thread
 local storage. */
 UNIV_INTERN
 void
 srv_general_init(void)
-/*==================*/
 {
 	/* The order here is siginificant. */
 	/* Reset the system variables in the recovery module. */
@@ -1114,20 +1090,16 @@ srv_general_init(void)
 	thr_local_init();
 }
 
-/*======================= InnoDB Server FIFO queue =======================*/
 
 /* Maximum allowable purge history length.  <=0 means 'infinite'. */
 UNIV_INTERN ulong	srv_max_purge_lag		= 0;
 
-/*========================================================================*/
 
-/*********************************************************************//**
-Normalizes init parameter values to use units we use inside InnoDB.
+/** Normalizes init parameter values to use units we use inside InnoDB.
 @return	DB_SUCCESS or error code */
 static
 ulint
 srv_normalize_init_values(void)
-/*===========================*/
 {
 	ulint	n;
 	ulint	i;
@@ -1153,12 +1125,10 @@ srv_normalize_init_values(void)
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************//**
-Resets the variables of all the InnoDB modules. */
+/** Resets the variables of all the InnoDB modules. */
 UNIV_INTERN
 void
 srv_modules_var_init(void)
-/*======================*/
 {
 	/* The order here shouldn't matter. None of the functions
 	below should have any dependencies. */
@@ -1189,13 +1159,11 @@ srv_modules_var_init(void)
 	os_sync_var_init();
 }
 
-/*************************************************************************
-Boots the InnoDB server.
+/** Boots the InnoDB server.
 @return	DB_SUCCESS or error code */
 UNIV_INTERN
 ulint
 srv_boot(void)
-/*==========*/
 {
 	ulint	err;
 
@@ -1222,14 +1190,12 @@ srv_boot(void)
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************//**
-Reserves a slot in the thread table for the current user OS thread.
+/** Reserves a slot in the thread table for the current user OS thread.
 NOTE! The kernel mutex has to be reserved by the caller!
 @return	reserved slot */
 static
 srv_slot_t*
 srv_table_reserve_slot_for_user_thread(void)
-/*========================================*/
 {
 	srv_slot_t*	slot;
 	ulint		i;
@@ -1287,8 +1253,7 @@ srv_table_reserve_slot_for_user_thread(void)
 	return(slot);
 }
 
-/***************************************************************//**
-Puts a user OS thread to wait for a lock to be released. If an error
+/** Puts a user OS thread to wait for a lock to be released. If an error
 occurs during the wait trx->error_state associated with thr is
 != DB_SUCCESS when we return. DB_LOCK_WAIT_TIMEOUT and DB_DEADLOCK
 are possible errors. DB_DEADLOCK is returned if selective deadlock
@@ -1296,7 +1261,6 @@ resolution chose this transaction as a victim. */
 UNIV_INTERN
 void
 srv_suspend_user_thread(
-/*=====================*/
 	que_thr_t*	thr)	/*!< in: query thread associated with the user
 				OS thread */
 {
@@ -1448,13 +1412,11 @@ srv_suspend_user_thread(
 	}
 }
 
-/********************************************************************//**
-Releases a user OS thread waiting for a lock to be released, if the
+/** Releases a user OS thread waiting for a lock to be released, if the
 thread is already suspended. */
 UNIV_INTERN
 void
 srv_release_user_thread_if_suspended(
-/*==================================*/
 	que_thr_t*	thr)	/*!< in: query thread associated with the
 				user OS thread	 */
 {
@@ -1479,12 +1441,10 @@ srv_release_user_thread_if_suspended(
 	/* not found */
 }
 
-/******************************************************************//**
-Refreshes the values used to calculate per-second averages. */
+/** Refreshes the values used to calculate per-second averages. */
 static
 void
 srv_refresh_innodb_monitor_stats(void)
-/*==================================*/
 {
 	mutex_enter(&srv_innodb_monitor_mutex);
 
@@ -1507,14 +1467,12 @@ srv_refresh_innodb_monitor_stats(void)
 	mutex_exit(&srv_innodb_monitor_mutex);
 }
 
-/******************************************************************//**
-Outputs to a file the output of the InnoDB Monitor.
+/** Outputs to a file the output of the InnoDB Monitor.
 @return FALSE if not all information printed
 due to failure to obtain necessary mutex */
 UNIV_INTERN
 ibool
 srv_printf_innodb_monitor(
-/*======================*/
 	ib_stream_t	ib_stream,	/*!< in: output stream */
 	ibool		nowait,		/*!< in: whether to wait for
 					kernel mutex */
@@ -1718,12 +1676,10 @@ srv_printf_innodb_monitor(
 	return(ret);
 }
 
-/******************************************************************//**
-Function to pass InnoDB status variables to the client. */
+/** Function to pass InnoDB status variables to the client. */
 UNIV_INTERN
 void
 srv_export_innodb_status(void)
-/*==========================*/
 {
 	mutex_enter(&srv_innodb_monitor_mutex);
 
@@ -1802,13 +1758,11 @@ srv_export_innodb_status(void)
 	mutex_exit(&srv_innodb_monitor_mutex);
 }
 
-/*********************************************************************//**
-A thread which prints the info output by various InnoDB monitors.
+/** A thread which prints the info output by various InnoDB monitors.
 @return	a dummy parameter */
 UNIV_INTERN
 os_thread_ret_t
 srv_monitor_thread(
-/*===============*/
 	void*	arg __attribute__((unused)))
 			/*!< in: a dummy parameter required by
 			os_thread_create */
@@ -1960,13 +1914,11 @@ exit_func:
 	OS_THREAD_DUMMY_RETURN;
 }
 
-/*********************************************************************//**
-A thread which wakes up threads whose lock wait may have lasted too long.
+/** A thread which wakes up threads whose lock wait may have lasted too long.
 @return	a dummy parameter */
 UNIV_INTERN
 os_thread_ret_t
 srv_lock_timeout_thread(
-/*====================*/
 	void*	arg __attribute__((unused)))
 			/* in: a dummy parameter required by
 			os_thread_create */
@@ -2058,14 +2010,12 @@ exit_func:
 	OS_THREAD_DUMMY_RETURN;
 }
 
-/*********************************************************************//**
-A thread which prints warnings about semaphore waits which have lasted
+/** A thread which prints warnings about semaphore waits which have lasted
 too long. These can be used to track bugs which cause hangs.
 @return	a dummy parameter */
 UNIV_INTERN
 os_thread_ret_t
 srv_error_monitor_thread(
-/*=====================*/
 	void*	arg __attribute__((unused)))
 			/*!< in: a dummy parameter required by
 			os_thread_create */
@@ -2156,8 +2106,7 @@ loop:
 	OS_THREAD_DUMMY_RETURN;
 }
 
-/*******************************************************************//**
-Tells the InnoDB server that there has been activity in the database
+/** Tells the InnoDB server that there has been activity in the database
 and wakes up the master thread if it is suspended (not sleeping). Used
 in the client interface. Note that there is a small chance that the master
 thread stays suspended (we do not protect our operation with the kernel
@@ -2165,7 +2114,6 @@ mutex, for performace reasons). */
 UNIV_INTERN
 void
 srv_active_wake_master_thread(void)
-/*===============================*/
 {
 	srv_activity_count++;
 
@@ -2179,12 +2127,10 @@ srv_active_wake_master_thread(void)
 	}
 }
 
-/*******************************************************************//**
-Wakes up the master thread if it is suspended or being suspended. */
+/** Wakes up the master thread if it is suspended or being suspended. */
 UNIV_INTERN
 void
 srv_wake_master_thread(void)
-/*========================*/
 {
 	srv_activity_count++;
 
@@ -2195,15 +2141,13 @@ srv_wake_master_thread(void)
 	mutex_exit(&kernel_mutex);
 }
 
-/**********************************************************************
-The master thread is tasked to ensure that flush of log file happens
+/** The master thread is tasked to ensure that flush of log file happens
 once every second in the background. This is to ensure that not more
 than one second of trxs are lost in case of crash when
 innodb_flush_logs_at_trx_commit != 1 */
 static
 void
 srv_sync_log_buffer_in_background(void)
-/*===================================*/
 {
 	time_t	current_time = time(NULL);
 
@@ -2215,13 +2159,11 @@ srv_sync_log_buffer_in_background(void)
 	}
 }
 
-/*********************************************************************//**
-The master thread controlling the server.
+/** The master thread controlling the server.
 @return	a dummy parameter */
 UNIV_INTERN
 os_thread_ret_t
 srv_master_thread(
-/*==============*/
 	void*	arg __attribute__((unused)))
 			/*!< in: a dummy parameter required by
 			os_thread_create */
@@ -2258,9 +2200,7 @@ srv_master_thread(
 	mutex_exit(&kernel_mutex);
 
 loop:
-	/*****************************************************************/
-	/* ---- When there is database activity by users, we cycle in this
-	loop */
+	/* When there is database activity by users, we cycle in this loop */
 
 	srv_main_thread_op_info = "reserving kernel mutex";
 
@@ -2278,7 +2218,7 @@ loop:
 		goto suspend_thread;
 	}
 
-	/* ---- We run the following loop approximately once per second
+	/* We run the following loop approximately once per second
 	when there is database activity */
 
 	srv_last_log_flush_time = time(NULL);
@@ -2475,7 +2415,7 @@ loop:
 
 	mutex_enter(&kernel_mutex);
 
-	/* ---- When there is database activity, we jump from here back to
+	/* When there is database activity, we jump from here back to
 	the start of loop */
 
 	if (srv_activity_count != old_activity_count) {
@@ -2487,9 +2427,9 @@ loop:
 
 	/* If the database is quiet, we enter the background loop */
 
-	/*****************************************************************/
 background_loop:
-	/* ---- In this loop we run background operations when the server
+
+	/* In this loop we run background operations when the server
 	is quiet from user activity. Also in the case of a shutdown, we
 	loop here, flushing the buffer pool to the data files. */
 
@@ -2679,13 +2619,11 @@ suspend_thread:
 	OS_THREAD_DUMMY_RETURN;	/* Not reached, avoid compiler warning */
 }
 
-/**********************************************************************//**
-Enqueues a task to server task queue and releases a worker thread, if there
+/** Enqueues a task to server task queue and releases a worker thread, if there
 is a suspended one. */
 UNIV_INTERN
 void
 srv_que_task_enqueue_low(
-/*=====================*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	ut_ad(thr);

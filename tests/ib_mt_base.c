@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -17,8 +16,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 ************************************************************************/
 
-/**********************************************************************
-This is the base table class. In C++ terminology you can consider this
+/** This is the base table class. In C++ terminology you can consider this
 an abstract class that implements the generic functionality. The DDL
 and DML functions implemented in this class are:
 1) SELECT
@@ -51,11 +49,9 @@ register_test_table() in mt_drv.c
 #endif
 
 
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	ib_trx_t	ib_trx,		/*!< in: transaction */
@@ -71,12 +67,10 @@ open_table(
 }
 
 #if 0
-/**********************************************************************
-SELECT * from t */
+/** SELECT * from t */
 static
 ib_err_t
 select_base(
-/*========*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	ib_err_t	err;
@@ -147,11 +141,9 @@ err_exit:
 }
 #endif
 
-/**********************************************************************
-stub for SELECT * from t */
+/** stub for SELECT * from t */
 ib_err_t
 select_stub(
-/*========*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	(void)arg;
@@ -159,12 +151,10 @@ select_stub(
 	return(DB_SUCCESS);
 
 }
-/**********************************************************************
-DROP TABLE t */
+/** DROP TABLE t */
 static
 ib_err_t
 drop_base(
-/*======*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	ib_err_t	err;
@@ -197,12 +187,10 @@ drop_base(
 	return(err);
 }
 
-/**********************************************************************
-TRUNCATE TABLE t */
+/** TRUNCATE TABLE t */
 static
 ib_err_t
 truncate_base(
-/*==========*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	ib_err_t	err;
@@ -221,12 +209,10 @@ truncate_base(
 	return(err);
 }
 
-/**********************************************************************
-Function stub */
+/** Function stub */
 static
 ib_err_t
 update_base(
-/*========*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	(void)arg;
@@ -235,12 +221,10 @@ update_base(
 	return(DB_SUCCESS);
 }
 
-/**********************************************************************
-Function stub */
+/** Function stub */
 static
 ib_err_t
 insert_base(
-/*========*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	(void)arg;
@@ -249,12 +233,10 @@ insert_base(
 	return(DB_SUCCESS);
 }
 
-/**********************************************************************
-Function stub */
+/** Function stub */
 static
 ib_err_t
 delete_base(
-/*========*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	(void)arg;
@@ -263,12 +245,10 @@ delete_base(
 	return(DB_SUCCESS);
 }
 
-/**********************************************************************
-Function stub */
+/** Function stub */
 static
 ib_err_t
 create_base(
-/*========*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	(void)arg;
@@ -277,12 +257,10 @@ create_base(
 	return(DB_SUCCESS);
 }
 
-/**********************************************************************
-Function stub */
+/** Function stub */
 static
 ib_err_t
 alter_base(
-/*=======*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	(void)arg;
@@ -291,11 +269,9 @@ alter_base(
 	return(DB_SUCCESS);
 }
 
-/**********************************************************************
-Function to register this table class with mt_drv test suite */
+/** Function to register this table class with mt_drv test suite */
 void
 register_base_table(
-/*================*/
 	tbl_class_t*	tbl)	/*!< in/out: table class to register */
 {
 	assert(tbl != NULL);

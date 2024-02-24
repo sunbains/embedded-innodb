@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/********************************************************************//**
-@file rem/rem0rec.c
+/** @file rem/rem0rec.c
 Record manager
 
 Created 5/30/1994 Heikki Tuuri
@@ -141,23 +139,19 @@ end of some field (containing also <FIELD-END>).
 A record is a complete-field prefix of another record, if
 the corresponding canonical strings have the same property. */
 
-/***************************************************************//**
-Validates the consistency of an old-style physical record.
+/** Validates the consistency of an old-style physical record.
 @return	TRUE if ok */
 static
 ibool
 rec_validate_old(
-/*=============*/
 	const rec_t*	rec);	/*!< in: physical record */
 
-/******************************************************//**
-Determine how many of the first n columns in a compact
+/** Determine how many of the first n columns in a compact
 physical record are stored externally.
 @return	number of externally stored columns */
 UNIV_INTERN
 ulint
 rec_get_n_extern_new(
-/*=================*/
 	const rec_t*	rec,	/*!< in: compact physical record */
 	dict_index_t*	index,	/*!< in: record descriptor */
 	ulint		n)	/*!< in: number of columns to scan */
@@ -232,14 +226,12 @@ rec_get_n_extern_new(
 	return(n_extern);
 }
 
-/******************************************************//**
-Determine the offset to each field in a leaf-page record
+/** Determine the offset to each field in a leaf-page record
 in ROW_FORMAT=COMPACT.  This is a special case of
 rec_init_offsets() and rec_get_offsets_func(). */
 UNIV_INTERN
 void
 rec_init_offsets_comp_ordinary(
-/*===========================*/
 	const rec_t*		rec,	/*!< in: physical record in
 					ROW_FORMAT=COMPACT */
 	ulint			extra,	/*!< in: number of bytes to reserve
@@ -341,8 +333,7 @@ resolved:
 		= (rec - (lens + 1)) | REC_OFFS_COMPACT | any_ext;
 }
 
-/******************************************************//**
-The following function determines the offsets to each field in the
+/** The following function determines the offsets to each field in the
 record.	 The offsets are written to a previously allocated array of
 ulint, where rec_offs_n_fields(offsets) has been initialized to the
 number of fields in the record.	 The rest of the array will be
@@ -358,7 +349,6 @@ field i is being stored externally. */
 static
 void
 rec_init_offsets(
-/*=============*/
 	const rec_t*		rec,	/*!< in: physical record */
 	const dict_index_t*	index,	/*!< in: record descriptor */
 	ulint*			offsets)/*!< in/out: array of offsets;
@@ -512,14 +502,12 @@ resolved:
 	}
 }
 
-/******************************************************//**
-The following function determines the offsets to each field
+/** The following function determines the offsets to each field
 in the record.	It can reuse a previously returned array.
 @return	the new offsets */
 UNIV_INTERN
 ulint*
 rec_get_offsets_func(
-/*=================*/
 	const rec_t*		rec,	/*!< in: physical record */
 	const dict_index_t*	index,	/*!< in: record descriptor */
 	ulint*			offsets,/*!< in/out: array consisting of
@@ -584,13 +572,11 @@ rec_get_offsets_func(
 	return(offsets);
 }
 
-/******************************************************//**
-The following function determines the offsets to each field
+/** The following function determines the offsets to each field
 in the record.  It can reuse a previously allocated array. */
 UNIV_INTERN
 void
 rec_get_offsets_reverse(
-/*====================*/
 	const byte*		extra,	/*!< in: the extra bytes of a
 					compact record in reverse order,
 					excluding the fixed-size
@@ -706,14 +692,12 @@ resolved:
 		| REC_OFFS_COMPACT | any_ext;
 }
 
-/************************************************************//**
-The following function is used to get the offset to the nth
+/** The following function is used to get the offset to the nth
 data field in an old-style record.
 @return	offset to the field */
 UNIV_INTERN
 ulint
 rec_get_nth_field_offs_old(
-/*=======================*/
 	const rec_t*	rec,	/*!< in: record */
 	ulint		n,	/*!< in: index of the field */
 	ulint*		len)	/*!< out: length of the field;
@@ -760,13 +744,11 @@ rec_get_nth_field_offs_old(
 	return(os);
 }
 
-/**********************************************************//**
-Determines the size of a data tuple prefix in ROW_FORMAT=COMPACT.
+/** Determines the size of a data tuple prefix in ROW_FORMAT=COMPACT.
 @return	total size */
 UNIV_INTERN
 ulint
 rec_get_converted_size_comp_prefix(
-/*===============================*/
 	const dict_index_t*	index,	/*!< in: record descriptor;
 					dict_table_is_comp() is
 					assumed to hold, even if
@@ -843,13 +825,11 @@ rec_get_converted_size_comp_prefix(
 	return(extra_size + data_size);
 }
 
-/**********************************************************//**
-Determines the size of a data tuple in ROW_FORMAT=COMPACT.
+/** Determines the size of a data tuple in ROW_FORMAT=COMPACT.
 @return	total size */
 UNIV_INTERN
 ulint
 rec_get_converted_size_comp(
-/*========================*/
 	const dict_index_t*	index,	/*!< in: record descriptor;
 					dict_table_is_comp() is
 					assumed to hold, even if
@@ -891,12 +871,10 @@ rec_get_converted_size_comp(
 							 n_fields, extra));
 }
 
-/***********************************************************//**
-Sets the value of the ith field SQL null bit of an old-style record. */
+/** Sets the value of the ith field SQL null bit of an old-style record. */
 UNIV_INTERN
 void
 rec_set_nth_field_null_bit(
-/*=======================*/
 	rec_t*	rec,	/*!< in: record */
 	ulint	i,	/*!< in: ith field */
 	ibool	val)	/*!< in: value to set */
@@ -929,13 +907,11 @@ rec_set_nth_field_null_bit(
 	rec_2_set_field_end_info(rec, i, info);
 }
 
-/***********************************************************//**
-Sets an old-style record field to SQL null.
+/** Sets an old-style record field to SQL null.
 The physical size of the field is not changed. */
 UNIV_INTERN
 void
 rec_set_nth_field_sql_null(
-/*=======================*/
 	rec_t*	rec,	/*!< in: record */
 	ulint	n)	/*!< in: index of the field */
 {
@@ -948,14 +924,12 @@ rec_set_nth_field_sql_null(
 	rec_set_nth_field_null_bit(rec, n, TRUE);
 }
 
-/*********************************************************//**
-Builds an old-style physical record out of a data tuple and
+/** Builds an old-style physical record out of a data tuple and
 stores it beginning from the start of the given buffer.
 @return	pointer to the origin of physical record */
 static
 rec_t*
 rec_convert_dtuple_to_rec_old(
-/*==========================*/
 	byte*		buf,	/*!< in: start address of the physical record */
 	const dtuple_t*	dtuple,	/*!< in: data tuple */
 	ulint		n_ext)	/*!< in: number of externally stored columns */
@@ -1063,12 +1037,10 @@ rec_convert_dtuple_to_rec_old(
 	return(rec);
 }
 
-/*********************************************************//**
-Builds a ROW_FORMAT=COMPACT record out of a data tuple. */
+/** Builds a ROW_FORMAT=COMPACT record out of a data tuple. */
 UNIV_INTERN
 void
 rec_convert_dtuple_to_rec_comp(
-/*===========================*/
 	rec_t*			rec,	/*!< in: origin of record */
 	ulint			extra,	/*!< in: number of bytes to
 					reserve between the record
@@ -1195,14 +1167,12 @@ rec_convert_dtuple_to_rec_comp(
 	}
 }
 
-/*********************************************************//**
-Builds a new-style physical record out of a data tuple and
+/** Builds a new-style physical record out of a data tuple and
 stores it beginning from the start of the given buffer.
 @return	pointer to the origin of physical record */
 static
 rec_t*
 rec_convert_dtuple_to_rec_new(
-/*==========================*/
 	byte*			buf,	/*!< in: start address of
 					the physical record */
 	const dict_index_t*	index,	/*!< in: record descriptor */
@@ -1228,14 +1198,12 @@ rec_convert_dtuple_to_rec_new(
 	return(rec);
 }
 
-/*********************************************************//**
-Builds a physical record out of a data tuple and
+/** Builds a physical record out of a data tuple and
 stores it beginning from the start of the given buffer.
 @return	pointer to the origin of physical record */
 UNIV_INTERN
 rec_t*
 rec_convert_dtuple_to_rec(
-/*======================*/
 	byte*			buf,	/*!< in: start address of the
 					physical record */
 	const dict_index_t*	index,	/*!< in: record descriptor */
@@ -1282,13 +1250,11 @@ rec_convert_dtuple_to_rec(
 	return(rec);
 }
 
-/**************************************************************//**
-Copies the first n fields of a physical record to a data tuple. The fields
+/** Copies the first n fields of a physical record to a data tuple. The fields
 are copied to the memory heap. */
 UNIV_INTERN
 void
 rec_copy_prefix_to_dtuple(
-/*======================*/
 	dtuple_t*		tuple,		/*!< out: data tuple */
 	const rec_t*		rec,		/*!< in: physical record */
 	const dict_index_t*	index,		/*!< in: record descriptor */
@@ -1327,14 +1293,12 @@ rec_copy_prefix_to_dtuple(
 	}
 }
 
-/**************************************************************//**
-Copies the first n fields of an old-style physical record
+/** Copies the first n fields of an old-style physical record
 to a new physical record in a buffer.
 @return	own: copied record */
 static
 rec_t*
 rec_copy_prefix_to_buf_old(
-/*=======================*/
 	const rec_t*	rec,		/*!< in: physical record */
 	ulint		n_fields,	/*!< in: number of fields to copy */
 	ulint		area_end,	/*!< in: end of the prefix data */
@@ -1371,14 +1335,12 @@ rec_copy_prefix_to_buf_old(
 	return(copy_rec);
 }
 
-/**************************************************************//**
-Copies the first n fields of a physical record to a new physical record in
+/** Copies the first n fields of a physical record to a new physical record in
 a buffer.
 @return	own: copied record */
 UNIV_INTERN
 rec_t*
 rec_copy_prefix_to_buf(
-/*===================*/
 	const rec_t*		rec,		/*!< in: physical record */
 	const dict_index_t*	index,		/*!< in: record descriptor */
 	ulint			n_fields,	/*!< in: number of fields
@@ -1493,13 +1455,11 @@ rec_copy_prefix_to_buf(
 	return(*buf + (rec - (lens + 1)));
 }
 
-/***************************************************************//**
-Validates the consistency of an old-style physical record.
+/** Validates the consistency of an old-style physical record.
 @return	TRUE if ok */
 static
 ibool
 rec_validate_old(
-/*=============*/
 	const rec_t*	rec)	/*!< in: physical record */
 {
 	const byte*	data;
@@ -1551,13 +1511,11 @@ rec_validate_old(
 	return(TRUE);
 }
 
-/***************************************************************//**
-Validates the consistency of a physical record.
+/** Validates the consistency of a physical record.
 @return	TRUE if ok */
 UNIV_INTERN
 ibool
 rec_validate(
-/*=========*/
 	const rec_t*	rec,	/*!< in: physical record */
 	const ulint*	offsets)/*!< in: array returned by rec_get_offsets() */
 {
@@ -1616,12 +1574,10 @@ rec_validate(
 	return(TRUE);
 }
 
-/***************************************************************//**
-Prints an old-style physical record. */
+/** Prints an old-style physical record. */
 UNIV_INTERN
 void
 rec_print_old(
-/*==========*/
 	ib_stream_t	ib_stream,	/*!< in: stream where to print */
 	const rec_t*	rec)		/*!< in: physical record */
 {
@@ -1668,13 +1624,11 @@ rec_print_old(
 }
 
 #ifndef UNIV_HOTBACKUP
-/***************************************************************//**
-Prints a physical record in ROW_FORMAT=COMPACT.  Ignores the
+/** Prints a physical record in ROW_FORMAT=COMPACT.  Ignores the
 record header. */
 UNIV_INTERN
 void
 rec_print_comp(
-/*===========*/
 	ib_stream_t	ib_stream,	/*!< in: streamwhere to print */
 	const rec_t*	rec,		/*!< in: physical record */
 	const ulint*	offsets)	/*!< in: array returned by
@@ -1707,12 +1661,10 @@ rec_print_comp(
 	}
 }
 
-/***************************************************************//**
-Prints a physical record. */
+/** Prints a physical record. */
 UNIV_INTERN
 void
 rec_print_new(
-/*==========*/
 	ib_stream_t	ib_stream,	/*!< in: stream where to print */
 	const rec_t*	rec,		/*!< in: physical record */
 	const ulint*	offsets)	/*!< in: array returned by
@@ -1736,12 +1688,10 @@ rec_print_new(
 	rec_validate(rec, offsets);
 }
 
-/***************************************************************//**
-Prints a physical record. */
+/** Prints a physical record. */
 UNIV_INTERN
 void
 rec_print(
-/*======*/
 	ib_stream_t	ib_stream,	/*!< in: stream where to print */
 	const rec_t*	rec,		/*!< in: physical record */
 	dict_index_t*	index)		/*!< in: record descriptor */

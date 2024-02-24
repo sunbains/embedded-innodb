@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2008 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 Copyright (c) 2010 Stewart Smith.
 
@@ -54,12 +53,10 @@ static row_t in_rows[] = {
 
 #define COL_LEN(n)	(sizeof(((row_t*)0)->n))
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -70,8 +67,7 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-CREATE TABLE T(
+/** CREATE TABLE T(
 	c1	VARCHAR(n),
 	c2	VARCHAR(n),
 	c3	INT,
@@ -79,7 +75,6 @@ CREATE TABLE T(
 static
 ib_err_t
 create_table(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name)			/*!< in: table name */
 {
@@ -151,12 +146,10 @@ create_table(
 	return(err);
 }
 
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 static
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	ib_trx_t	ib_trx,		/*!< in: transaction */
@@ -176,12 +169,10 @@ open_table(
 	return(err);
 }
 
-/*********************************************************************
-INSERT INTO T VALUE('c1', 'c2', c3); */
+/** INSERT INTO T VALUE('c1', 'c2', c3); */
 static
 ib_err_t
 insert_rows(
-/*========*/
 	ib_crsr_t	crsr)		/*!< in, out: cursor to use for write */
 {
 	row_t*		row;
@@ -215,12 +206,10 @@ insert_rows(
 	return(err);
 }
 
-/*********************************************************************
-UPDATE T SET c3 = c3 + 100 WHERE c1 = 'a'; */
+/** UPDATE T SET c3 = c3 + 100 WHERE c1 = 'a'; */
 static
 ib_err_t
 update_a_row(
-/*=========*/
 	ib_crsr_t	crsr)
 {
 	ib_err_t	err;
@@ -323,12 +312,10 @@ update_a_row(
 	return(err);
 }
 
-/*********************************************************************
-DELETE RFOM T WHERE c1 = 'b' and c2 = 'z'; */
+/** DELETE RFOM T WHERE c1 = 'b' and c2 = 'z'; */
 static
 ib_err_t
 delete_a_row(
-/*=========*/
 	ib_crsr_t	crsr)
 {
 	ib_err_t	err;
@@ -363,12 +350,10 @@ delete_a_row(
 	return(err);
 }
 
-/*********************************************************************
-SELECT * FROM T; */
+/** SELECT * FROM T; */
 static
 ib_err_t
 do_query(
-/*=====*/
 	ib_crsr_t	crsr)
 {
 	ib_err_t	err;

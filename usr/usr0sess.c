@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file usr/usr0sess.c
+/** @file usr/usr0sess.c
 Sessions
 
 Created 6/25/1996 Heikki Tuuri
@@ -31,13 +29,11 @@ Created 6/25/1996 Heikki Tuuri
 
 #include "trx0trx.h"
 
-/*********************************************************************//**
-Opens a session.
+/** Opens a session.
 @return	own: session object */
 UNIV_INTERN
 sess_t*
 sess_open(void)
-/*===========*/
 {
 	sess_t*	sess;
 
@@ -54,12 +50,10 @@ sess_open(void)
 	return(sess);
 }
 
-/*********************************************************************//**
-Closes a session, freeing the memory occupied by it. */
+/** Closes a session, freeing the memory occupied by it. */
 UNIV_INTERN
 void
 sess_close(
-/*=======*/
 	sess_t*	sess)	/*!< in, own: session object */
 {
 	ut_ad(!mutex_own(&kernel_mutex));

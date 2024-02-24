@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file ha/hash0hash.c
+/** @file ha/hash0hash.c
 The simple hash table utility
 
 Created 5/20/1997 Heikki Tuuri
@@ -31,36 +29,30 @@ Created 5/20/1997 Heikki Tuuri
 #include "mem0mem.h"
 
 #ifndef UNIV_HOTBACKUP
-/************************************************************//**
-Reserves the mutex for a fold value in a hash table. */
+/** Reserves the mutex for a fold value in a hash table. */
 UNIV_INTERN
 void
 hash_mutex_enter(
-/*=============*/
 	hash_table_t*	table,	/*!< in: hash table */
 	ulint		fold)	/*!< in: fold */
 {
 	mutex_enter(hash_get_mutex(table, fold));
 }
 
-/************************************************************//**
-Releases the mutex for a fold value in a hash table. */
+/** Releases the mutex for a fold value in a hash table. */
 UNIV_INTERN
 void
 hash_mutex_exit(
-/*============*/
 	hash_table_t*	table,	/*!< in: hash table */
 	ulint		fold)	/*!< in: fold */
 {
 	mutex_exit(hash_get_mutex(table, fold));
 }
 
-/************************************************************//**
-Reserves all the mutexes of a hash table, in an ascending order. */
+/** Reserves all the mutexes of a hash table, in an ascending order. */
 UNIV_INTERN
 void
 hash_mutex_enter_all(
-/*=================*/
 	hash_table_t*	table)	/*!< in: hash table */
 {
 	ulint	i;
@@ -71,12 +63,10 @@ hash_mutex_enter_all(
 	}
 }
 
-/************************************************************//**
-Releases all the mutexes of a hash table. */
+/** Releases all the mutexes of a hash table. */
 UNIV_INTERN
 void
 hash_mutex_exit_all(
-/*================*/
 	hash_table_t*	table)	/*!< in: hash table */
 {
 	ulint	i;
@@ -88,14 +78,12 @@ hash_mutex_exit_all(
 }
 #endif /* !UNIV_HOTBACKUP */
 
-/*************************************************************//**
-Creates a hash table with >= n array cells. The actual number of cells is
+/** Creates a hash table with >= n array cells. The actual number of cells is
 chosen to be a prime number slightly bigger than n.
 @return	own: created table */
 UNIV_INTERN
 hash_table_t*
 hash_create(
-/*========*/
 	ulint	n)	/*!< in: number of array cells */
 {
 	hash_cell_t*	array;
@@ -127,12 +115,10 @@ hash_create(
 	return(table);
 }
 
-/*************************************************************//**
-Frees a hash table. */
+/** Frees a hash table. */
 UNIV_INTERN
 void
 hash_table_free(
-/*============*/
 	hash_table_t*	table)	/*!< in, own: hash table */
 {
 	ut_ad(table);
@@ -146,12 +132,10 @@ hash_table_free(
 }
 
 #ifndef UNIV_HOTBACKUP
-/*************************************************************//**
-Creates a mutex array to protect a hash table. */
+/** Creates a mutex array to protect a hash table. */
 UNIV_INTERN
 void
 hash_create_mutexes_func(
-/*=====================*/
 	hash_table_t*	table,		/*!< in: hash table */
 #ifdef UNIV_SYNC_DEBUG
 	ulint		sync_level,	/*!< in: latching order level of the
@@ -176,12 +160,10 @@ hash_create_mutexes_func(
 	table->n_mutexes = n_mutexes;
 }
 
-/*****************************************************************
-Frees a mutex array created with hash_create_mutexes_func(). */
+/** Frees a mutex array created with hash_create_mutexes_func(). */
 UNIV_INTERN
 void
 hash_free_mutexes_func(
-/*===================*/
 	hash_table_t*	table)		/*!< in,own: hash table */
 {
 	ulint	i;

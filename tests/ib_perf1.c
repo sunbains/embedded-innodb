@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2008 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -94,12 +93,10 @@ static ib_op_stats_t	ib_op_stats;
 /* Barrier to synchronize all threads */
 static  pthread_barrier_t barrier;
 
-/*********************************************************************
-Allocate memory. */
+/** Allocate memory. */
 static
 void
 ib_op_time_alloc(
-/*=============*/
 	ib_op_time_t*	ib_op_time,
 	int		n_threads)
 {
@@ -107,12 +104,10 @@ ib_op_time_alloc(
 	ib_op_time->time = (time_t*) malloc(sizeof(time_t) * n_threads);
 }
 
-/*********************************************************************
-Allocate memory for the global stats collector. */
+/** Allocate memory for the global stats collector. */
 static
 void
 ib_op_stats_alloc(
-/*==============*/
 	int		n_threads)
 {
 	int		ret;
@@ -127,24 +122,20 @@ ib_op_stats_alloc(
 	assert(ret == 0);
 }
 
-/*********************************************************************
-Inverse of ib_op_time_alloc() */
+/** Inverse of ib_op_time_alloc() */
 static
 void
 ib_op_time_free(
-/*=============*/
 	ib_op_time_t*	ib_op_time)
 {
 	free(ib_op_time->time);
 	memset(ib_op_time, 0x0, sizeof(*ib_op_time));
 }
 
-/*********************************************************************
-Free the global stats collector. */
+/** Free the global stats collector. */
 static
 void
 ib_op_stats_free(void)
-/*==================*/
 {
 	int		ret;
 
@@ -156,12 +147,10 @@ ib_op_stats_free(void)
 	assert(ret == 0);
 }
 
-/*********************************************************************
-Add timing info for operation. */
+/** Add timing info for operation. */
 static
 void
 ib_stats_collect(
-/*=============*/
 	ib_op_t		op,
 	time_t		elapsed_time)
 {
@@ -193,12 +182,10 @@ ib_stats_collect(
 	assert(ret == 0);
 }
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -209,12 +196,10 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-CREATE TABLE T (c1 INT, c2 INT, PRIMARY KEY(c1)); */
+/** CREATE TABLE T (c1 INT, c2 INT, PRIMARY KEY(c1)); */
 static
 ib_err_t
 create_table(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name)			/*!< in: table name */
 {
@@ -281,12 +266,10 @@ create_table(
 	return(err);
 }
 
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 static
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	ib_trx_t	ib_trx,		/*!< in: transaction */
@@ -306,12 +289,10 @@ open_table(
 	return(err);
 }
 
-/*********************************************************************
-INSERT INTO T VALUE(i, i); */
+/** INSERT INTO T VALUE(i, i); */
 static
 ib_err_t
 insert_rows(
-/*========*/
 	ib_crsr_t	crsr,		/*!< in, out: cursor to use for write */
 	ib_u32_t	start,		/*!< in: start of column value */
 	ib_u32_t	n_values)	/*!< in: no. of values to insert */
@@ -344,12 +325,10 @@ insert_rows(
 	return(err);
 }
 
-/*********************************************************************
-INSERT INTO T2 SELECT * FROM T2; */
+/** INSERT INTO T2 SELECT * FROM T2; */
 static
 ib_err_t
 copy_table(
-/*=======*/
 	ib_crsr_t	dst_crsr,	/*!< in, out: dest table */
 	ib_crsr_t	src_crsr,	/*!< in, out: source table */
 	ib_u32_t	n_values)	/*!< in: no. of rows to copy in a batch */
@@ -421,12 +400,10 @@ copy_table(
 	return(err);
 }
 
-/*********************************************************************
-SELECT COUNT(*) FROM T1, T2 WHERE T1.c1 = T2.c1; */
+/** SELECT COUNT(*) FROM T1, T2 WHERE T1.c1 = T2.c1; */
 static
 ib_err_t
 join_on_c1(
-/*=======*/
 	ib_crsr_t	t1_crsr,	/*!< in: table */
 	ib_crsr_t	t2_crsr,	/*!< in: table */
 	ib_u32_t*	count)		/*!< in: no. of rows that matched */
@@ -532,12 +509,10 @@ join_on_c1(
 	return(t1_err);
 }
 
-/*********************************************************************
-Run the test. */
+/** Run the test. */
 static
 void*
 worker_thread(
-/*==========*/
 	void*		arg)
 {
 	int		i;
@@ -682,24 +657,20 @@ worker_thread(
 	pthread_exit(0);
 }
 
-/*********************************************************************
-Callback for qsort(3). */
+/** Callback for qsort(3). */
 static
 int
 op_time_compare(
-/*============*/
 	const void*	p1,
 	const void*	p2)
 {
 	return(((int) (*(time_t*) p1 - *(time_t*) p2)));
 }
 
-/*********************************************************************
-Sort the elapsed time data and  print to stdout. */
+/** Sort the elapsed time data and  print to stdout. */
 static
 void
 print_data(
-/*=======*/
 	ib_op_time_t*	ib_op_time,
 	const char*	title)
 {
@@ -734,12 +705,10 @@ print_data(
 }
 
 #ifndef __WIN__
-/*********************************************************************
-Set the runtime global options. */
+/** Set the runtime global options. */
 static
 void
 set_options(
-/*========*/
 	int		argc,
 	char*		argv[])
 {
@@ -808,12 +777,10 @@ set_options(
 }
 #endif /* __WIN__ */
 
-/*********************************************************************
-Print the statistics. */
+/** Print the statistics. */
 static
 void
 print_stats(void)
-/*=============*/
 {
 	print_data(&ib_op_stats.insert, "op: insert");
 	print_data(&ib_op_stats.copy, "op: copy");

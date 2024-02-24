@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2008 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -45,12 +44,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define DATABASE	"test"
 #define TABLE		"t"
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -61,12 +58,10 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-CREATE TABLE T(c1 INT, PK(C1)); */
+/** CREATE TABLE T(c1 INT, PK(C1)); */
 static
 ib_err_t
 create_table(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name)			/*!< in: table name */
 {
@@ -122,12 +117,10 @@ create_table(
 	return(err);
 }
 
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 static
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	ib_trx_t	ib_trx,		/*!< in: transaction */
@@ -148,12 +141,10 @@ open_table(
 	return(err);
 }
 
-/*********************************************************************
-INSERT INTO T VALUES(0); ... 10 */
+/** INSERT INTO T VALUES(0); ... 10 */
 static
 ib_err_t
 insert_rows(
-/*========*/
 	ib_crsr_t	crsr)		/*!< in, out: cursor to use for write */
 {
 	int		i;
@@ -181,12 +172,10 @@ insert_rows(
 	return(err);
 }
 
-/*********************************************************************
-For all the select functions. */
+/** For all the select functions. */
 static
 ib_err_t
 iterate(
-/*====*/
 	ib_crsr_t	crsr,
 	void*		arg,
 	ib_err_t	(*selector)(const ib_tpl_t, void* arg))
@@ -235,7 +224,6 @@ iterate(
 static
 ib_err_t
 print_all(
-/*======*/
 	const ib_tpl_t	tpl,
 	void*		arg)
 {
@@ -249,7 +237,6 @@ print_all(
 static
 ib_err_t
 print_eq_5(
-/*=======*/
 	const ib_tpl_t	tpl,
 	void*		arg)
 {
@@ -272,7 +259,6 @@ print_eq_5(
 static
 ib_err_t
 print_lt_5(
-/*=======*/
 	const ib_tpl_t	tpl,
 	void*		arg)
 {
@@ -329,16 +315,14 @@ int main(int argc, char* argv[])
 	err = insert_rows(crsr);
 	assert(err == DB_SUCCESS);
 
-	/*==========================================*/
-	printf("SELECT * FROM T;\n");
+		printf("SELECT * FROM T;\n");
 	err = ib_cursor_first(crsr);
 	assert(err == DB_SUCCESS);
 
 	err = iterate(crsr, NULL, print_all);
 	assert(err == DB_SUCCESS);
 
-	/*==========================================*/
-	printf("SELECT * FROM T WHERE c1 = 5;\n");
+		printf("SELECT * FROM T WHERE c1 = 5;\n");
 	tpl = ib_clust_search_tuple_create(crsr);
 	assert(tpl != NULL);
 
@@ -352,8 +336,7 @@ int main(int argc, char* argv[])
 	err = iterate(crsr, NULL, print_eq_5);
 	assert(err == DB_SUCCESS);
 
-	/*==========================================*/
-	printf("SELECT * FROM T WHERE c1 > 5;\n");
+		printf("SELECT * FROM T WHERE c1 > 5;\n");
 
 	err = ib_cursor_moveto(crsr, tpl, IB_CUR_G, &ret);
 	assert(err == DB_SUCCESS);
@@ -362,16 +345,14 @@ int main(int argc, char* argv[])
 	err = iterate(crsr, NULL, print_all);
 	assert(err == DB_SUCCESS);
 
-	/*==========================================*/
-	printf("SELECT * FROM T WHERE c1 < 5;\n");
+		printf("SELECT * FROM T WHERE c1 < 5;\n");
 	err = ib_cursor_first(crsr);
 	assert(err == DB_SUCCESS);
 
 	err = iterate(crsr, NULL, print_lt_5);
 	assert(err == DB_SUCCESS);
 
-	/*==========================================*/
-	printf("SELECT * FROM T WHERE c1 >= 1 AND c1 < 5;\n");
+		printf("SELECT * FROM T WHERE c1 >= 1 AND c1 < 5;\n");
 	tpl = ib_clust_search_tuple_create(crsr);
 	assert(tpl != NULL);
 
@@ -385,8 +366,7 @@ int main(int argc, char* argv[])
 	err = iterate(crsr, NULL, print_lt_5);
 	assert(err == DB_SUCCESS);
 
-	/*==========================================*/
-	err = ib_cursor_close(crsr);
+        err = ib_cursor_close(crsr);
 	assert(err == DB_SUCCESS);
 	crsr = NULL;
 

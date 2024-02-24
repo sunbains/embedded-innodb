@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2008 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
@@ -37,12 +36,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef WIN32
 static int use_sys_malloc = 0;
 
-/*********************************************************************
-Get the runtime options. */
+/** Get the runtime options. */
 static
 void
 get_options(
-/*========*/
 	int		argc,
 	char*		argv[])
 {

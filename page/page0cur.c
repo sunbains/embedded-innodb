@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/********************************************************************//**
-@file page/page0cur.c
+/** @file page/page0cur.c
 The page cursor
 
 Created 10/4/1994 Heikki Tuuri
@@ -42,8 +40,7 @@ Created 10/4/1994 Heikki Tuuri
 static ulint	page_cur_short_succ	= 0;
 # endif /* UNIV_SEARCH_PERF_STAT */
 
-/*******************************************************************//**
-This is a linear congruential generator PRNG. Returns a pseudo random
+/** This is a linear congruential generator PRNG. Returns a pseudo random
 number between 0 and 2^64-1 inclusive. The formula and the constants
 being used are:
 X[n+1] = (a * X[n] + c) mod m
@@ -57,7 +54,6 @@ m = 18446744073709551616 (2^64)
 static
 ib_uint64_t
 page_cur_lcg_prng(void)
-/*===================*/
 {
 #define LCG_a	1103515245
 #define LCG_c	12345
@@ -76,13 +72,11 @@ page_cur_lcg_prng(void)
 	return(lcg_current);
 }
 
-/****************************************************************//**
-Tries a search shortcut based on the last insert.
+/** Tries a search shortcut based on the last insert.
 @return	TRUE on success */
 UNIV_INLINE
 ibool
 page_cur_try_search_shortcut(
-/*=========================*/
 	const buf_block_t*	block,	/*!< in: index page */
 	const dict_index_t*	index,	/*!< in: record descriptor */
 	const dtuple_t*		tuple,	/*!< in: data tuple */
@@ -195,15 +189,13 @@ exit_func:
 #endif
 
 #ifdef PAGE_CUR_LE_OR_EXTENDS
-/****************************************************************//**
-Checks if the nth field in a record is a character type field which extends
+/** Checks if the nth field in a record is a character type field which extends
 the nth field in tuple, i.e., the field is longer or equal in length and has
 common first characters.
 @return	TRUE if rec field extends tuple field */
 static
 ibool
 page_cur_rec_field_extends(
-/*=======================*/
 	const dtuple_t*	tuple,	/*!< in: data tuple */
 	const rec_t*	rec,	/*!< in: record */
 	const ulint*	offsets,/*!< in: array returned by rec_get_offsets() */
@@ -245,12 +237,10 @@ page_cur_rec_field_extends(
 }
 #endif /* PAGE_CUR_LE_OR_EXTENDS */
 
-/****************************************************************//**
-Searches the right position for a page cursor. */
+/** Searches the right position for a page cursor. */
 UNIV_INTERN
 void
 page_cur_search_with_match(
-/*=======================*/
 	const buf_block_t*	block,	/*!< in: buffer block */
 	const dict_index_t*	index,	/*!< in: record descriptor */
 	const dtuple_t*		tuple,	/*!< in: data tuple */
@@ -551,13 +541,11 @@ up_rec_match:
 	}
 }
 
-/***********************************************************//**
-Positions a page cursor on a randomly chosen user record on a page. If there
+/** Positions a page cursor on a randomly chosen user record on a page. If there
 are no user records, sets the cursor on the infimum record. */
 UNIV_INTERN
 void
 page_cur_open_on_rnd_user_rec(
-/*==========================*/
 	buf_block_t*	block,	/*!< in: page */
 	page_cur_t*	cursor)	/*!< out: page cursor */
 {
@@ -578,12 +566,10 @@ page_cur_open_on_rnd_user_rec(
 	} while (rnd--);
 }
 
-/***********************************************************//**
-Writes the log record of a record insert on a page. */
+/** Writes the log record of a record insert on a page. */
 static
 void
 page_cur_insert_rec_write_log(
-/*==========================*/
 	rec_t*		insert_rec,	/*!< in: inserted physical record */
 	ulint		rec_size,	/*!< in: insert_rec size */
 	rec_t*		cursor_rec,	/*!< in: record the
@@ -763,13 +749,11 @@ need_extra_info:
 # define page_cur_insert_rec_write_log(ins_rec,size,cur,index,mtr) ((void) 0)
 #endif /* !UNIV_HOTBACKUP */
 
-/***********************************************************//**
-Parses a log record of a record insert on a page.
+/** Parses a log record of a record insert on a page.
 @return	end of log record or NULL */
 UNIV_INTERN
 byte*
 page_cur_parse_insert_rec(
-/*======================*/
 	ibool		is_short,/*!< in: TRUE if short inserts */
 	byte*		ptr,	/*!< in: buffer */
 	byte*		end_ptr,/*!< in: buffer end */
@@ -954,15 +938,13 @@ page_cur_parse_insert_rec(
 	return(ptr + end_seg_len);
 }
 
-/***********************************************************//**
-Inserts a record next to page cursor on an uncompressed page.
+/** Inserts a record next to page cursor on an uncompressed page.
 Returns pointer to inserted record if succeed, i.e., enough
 space available, NULL otherwise. The cursor stays at the same position.
 @return	pointer to record if succeed, NULL otherwise */
 UNIV_INTERN
 rec_t*
 page_cur_insert_rec_low(
-/*====================*/
 	rec_t*		current_rec,/*!< in: pointer to current record after
 				which the new record is inserted */
 	dict_index_t*	index,	/*!< in: record descriptor */
@@ -1166,13 +1148,11 @@ use_heap:
 	return(insert_rec);
 }
 
-/***********************************************************//**
-Compresses or reorganizes a page after an optimistic insert.
+/** Compresses or reorganizes a page after an optimistic insert.
 @return	rec if succeed, NULL otherwise */
 static
 rec_t*
 page_cur_insert_rec_zip_reorg(
-/*==========================*/
 	rec_t**		current_rec,/*!< in/out: pointer to current record after
 				which the new record is inserted */
 	buf_block_t*	block,	/*!< in: buffer block */
@@ -1216,8 +1196,7 @@ page_cur_insert_rec_zip_reorg(
 	return(NULL);
 }
 
-/***********************************************************//**
-Inserts a record next to page cursor on a compressed and uncompressed
+/** Inserts a record next to page cursor on a compressed and uncompressed
 page. Returns pointer to inserted record if succeed, i.e.,
 enough space available, NULL otherwise.
 The cursor stays at the same position.
@@ -1225,7 +1204,6 @@ The cursor stays at the same position.
 UNIV_INTERN
 rec_t*
 page_cur_insert_rec_zip(
-/*====================*/
 	rec_t**		current_rec,/*!< in/out: pointer to current record after
 				which the new record is inserted */
 	buf_block_t*	block,	/*!< in: buffer block of *current_rec */
@@ -1514,14 +1492,12 @@ use_heap:
 }
 
 #ifndef UNIV_HOTBACKUP
-/**********************************************************//**
-Writes a log record of copying a record list end to a new created page.
+/** Writes a log record of copying a record list end to a new created page.
 @return 4-byte field where to write the log data length, or NULL if
 logging is disabled */
 UNIV_INLINE
 byte*
 page_copy_rec_list_to_created_page_write_log(
-/*=========================================*/
 	page_t*		page,	/*!< in: index page */
 	dict_index_t*	index,	/*!< in: record descriptor */
 	mtr_t*		mtr)	/*!< in: mtr */
@@ -1542,13 +1518,11 @@ page_copy_rec_list_to_created_page_write_log(
 }
 #endif /* !UNIV_HOTBACKUP */
 
-/**********************************************************//**
-Parses a log record of copying a record list end to a new created page.
+/** Parses a log record of copying a record list end to a new created page.
 @return	end of log record or NULL */
 UNIV_INTERN
 byte*
 page_parse_copy_rec_list_to_created_page(
-/*=====================================*/
 	byte*		ptr,	/*!< in: buffer */
 	byte*		end_ptr,/*!< in: buffer end */
 	buf_block_t*	block,	/*!< in: page or NULL */
@@ -1599,13 +1573,11 @@ page_parse_copy_rec_list_to_created_page(
 }
 
 #ifndef UNIV_HOTBACKUP
-/*************************************************************//**
-Copies records from page to a newly created page, from a given record onward,
+/** Copies records from page to a newly created page, from a given record onward,
 including that record. Infimum and supremum records are not copied. */
 UNIV_INTERN
 void
 page_copy_rec_list_end_to_created_page(
-/*===================================*/
 	page_t*		new_page,	/*!< in/out: index page to copy to */
 	rec_t*		rec,		/*!< in: first record to copy */
 	dict_index_t*	index,		/*!< in: record descriptor */
@@ -1772,12 +1744,10 @@ page_copy_rec_list_end_to_created_page(
 	mtr_set_log_mode(mtr, log_mode);
 }
 
-/***********************************************************//**
-Writes log record of a record delete on a page. */
+/** Writes log record of a record delete on a page. */
 UNIV_INLINE
 void
 page_cur_delete_rec_write_log(
-/*==========================*/
 	rec_t*		rec,	/*!< in: record to be deleted */
 	dict_index_t*	index,	/*!< in: record descriptor */
 	mtr_t*		mtr)	/*!< in: mini-transaction handle */
@@ -1806,13 +1776,11 @@ page_cur_delete_rec_write_log(
 # define page_cur_delete_rec_write_log(rec,index,mtr) ((void) 0)
 #endif /* !UNIV_HOTBACKUP */
 
-/***********************************************************//**
-Parses log record of a record delete on a page.
+/** Parses log record of a record delete on a page.
 @return	pointer to record end or NULL */
 UNIV_INTERN
 byte*
 page_cur_parse_delete_rec(
-/*======================*/
 	byte*		ptr,	/*!< in: buffer */
 	byte*		end_ptr,/*!< in: buffer end */
 	buf_block_t*	block,	/*!< in: page or NULL */
@@ -1855,13 +1823,11 @@ page_cur_parse_delete_rec(
 	return(ptr);
 }
 
-/***********************************************************//**
-Deletes a record at the page cursor. The cursor is moved to the next
+/** Deletes a record at the page cursor. The cursor is moved to the next
 record after the deleted one. */
 UNIV_INTERN
 void
 page_cur_delete_rec(
-/*================*/
 	page_cur_t*	cursor,	/*!< in/out: a page cursor */
 	dict_index_t*	index,	/*!< in: record descriptor */
 	const ulint*	offsets,/*!< in: rec_get_offsets(cursor->rec, index) */
@@ -1975,12 +1941,10 @@ page_cur_delete_rec(
 
 #ifdef UNIV_COMPILE_TEST_FUNCS
 
-/*******************************************************************//**
-Print the first n numbers, generated by page_cur_lcg_prng() to make sure
+/** Print the first n numbers, generated by page_cur_lcg_prng() to make sure
 (visually) that it works properly. */
 void
 test_page_cur_lcg_prng(
-/*===================*/
 	int	n)	/*!< in: print first n numbers */
 {
 	int			i;

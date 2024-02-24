@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 Copyright (c) 2010 Stewart Smith
 
@@ -37,12 +36,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define PRIMARY_INDEX_NAME "PRIMARY"
 #define SEC_INDEX_NAME "c2_idx"
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -53,12 +50,10 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-CREATE TABLE T(C1 INT, C2 INT, PK(C1), UNIQUE(C2)); */
+/** CREATE TABLE T(C1 INT, C2 INT, PK(C1), UNIQUE(C2)); */
 static
 ib_err_t
 create_table(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name)			/*!< in: table name */
 {
@@ -134,12 +129,10 @@ create_table(
 	return(err);
 }
 
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 static
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	ib_trx_t	ib_trx,		/*!< in: transaction */
@@ -160,12 +153,10 @@ open_table(
 	return(err);
 }
 
-/*********************************************************************
-INSERT INTO T VALUE(0, RANDOM(TEXT), RANDOM(TEXT)); ... 100 */
+/** INSERT INTO T VALUE(0, RANDOM(TEXT), RANDOM(TEXT)); ... 100 */
 static
 ib_err_t
 insert_rows(
-/*===============*/
 	ib_trx_t        trx,
 	ib_crsr_t	crsr)
 {

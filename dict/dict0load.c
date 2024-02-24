@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file dict/dict0load.c
+/** @file dict/dict0load.c
 Loads to the memory cache database object definitions
 from dictionary tables
 
@@ -40,13 +38,11 @@ Created 4/24/1996 Heikki Tuuri
 #include "srv0start.h"
 #include "srv0srv.h"
 
-/****************************************************************//**
-Compare the name of an index column.
+/** Compare the name of an index column.
 @return	TRUE if the i'th column of index is 'name'. */
 static
 ibool
 name_of_col_is(
-/*===========*/
 	const dict_table_t*	table,	/*!< in: table */
 	const dict_index_t*	index,	/*!< in: index */
 	ulint			i,	/*!< in: index field offset */
@@ -59,14 +55,12 @@ name_of_col_is(
 	return(strcmp(name, dict_table_get_col_name(table, tmp)) == 0);
 }
 
-/********************************************************************//**
-Finds the first table name in the given database.
+/** Finds the first table name in the given database.
 @return own: table name, NULL if does not exist; the caller must free
 the memory in the string! */
 UNIV_INTERN
 char*
 dict_get_first_table_name_in_db(
-/*============================*/
 	const char*	name)	/*!< in: database name which ends in '/' */
 {
 	dict_table_t*	sys_tables;
@@ -142,13 +136,11 @@ loop:
 	goto loop;
 }
 
-/********************************************************************//**
-Prints to the standard output information on all tables found in the data
+/** Prints to the standard output information on all tables found in the data
 dictionary system table. */
 UNIV_INTERN
 void
 dict_print(void)
-/*============*/
 {
 	dict_table_t*	sys_tables;
 	dict_index_t*	sys_index;
@@ -235,14 +227,12 @@ loop:
 	goto loop;
 }
 
-/********************************************************************//**
-Determine the flags of a table described in SYS_TABLES.
+/** Determine the flags of a table described in SYS_TABLES.
 @return compressed page size in kilobytes; or 0 if the tablespace is
 uncompressed, ULINT_UNDEFINED on error */
 static
 ulint
 dict_sys_tables_get_flags(
-/*======================*/
 	const rec_t*	rec)	/*!< in: a record of SYS_TABLES */
 {
 	const byte*	field;
@@ -297,8 +287,7 @@ dict_sys_tables_get_flags(
 	return(flags);
 }
 
-/********************************************************************//**
-In a crash recovery we already have all the tablespace objects created.
+/** In a crash recovery we already have all the tablespace objects created.
 This function compares the space id information in the InnoDB data dictionary
 to what we already read with fil_load_single_table_tablespaces().
 
@@ -308,7 +297,6 @@ We also scan the biggest space id, and store it to fil_system. */
 UNIV_INTERN
 void
 dict_check_tablespaces_and_store_max_id(
-/*====================================*/
 	ibool	in_crash_recovery)	/*!< in: are we doing a crash recovery */
 {
 	dict_table_t*	sys_tables;
@@ -453,12 +441,10 @@ loop:
 	goto loop;
 }
 
-/********************************************************************//**
-Loads definitions for table columns. */
+/** Loads definitions for table columns. */
 static
 void
 dict_load_columns(
-/*==============*/
 	dict_table_t*	table,	/*!< in: table */
 	mem_heap_t*	heap)	/*!< in: memory heap for temporary storage */
 {
@@ -559,12 +545,10 @@ dict_load_columns(
 	mtr_commit(&mtr);
 }
 
-/********************************************************************//**
-Loads definitions for index fields. */
+/** Loads definitions for index fields. */
 static
 void
 dict_load_fields(
-/*=============*/
 	dict_index_t*	index,	/*!< in: index whose fields to load */
 	mem_heap_t*	heap)	/*!< in: memory heap for temporary storage */
 {
@@ -660,15 +644,13 @@ next_rec:
 	mtr_commit(&mtr);
 }
 
-/********************************************************************//**
-Loads definitions for table indexes. Adds them to the data dictionary
+/** Loads definitions for table indexes. Adds them to the data dictionary
 cache.
 @return DB_SUCCESS if ok, DB_CORRUPTION if corruption of dictionary
 table or DB_UNSUPPORTED if table has unknown index type */
 static
 ulint
 dict_load_indexes(
-/*==============*/
 	dict_table_t*	table,	/*!< in: table */
 	mem_heap_t*	heap)	/*!< in: memory heap for temporary storage */
 {
@@ -833,8 +815,7 @@ func_exit:
 	return(error);
 }
 
-/********************************************************************//**
-Loads a table definition and also all its index definitions, and also
+/** Loads a table definition and also all its index definitions, and also
 the cluster definition if the table is a member in a cluster. Also loads
 all foreign key constraints where the foreign key is in the table or where
 a foreign key references columns in this table. Adds all these to the data
@@ -845,7 +826,6 @@ ibd_file_missing flag TRUE in the table object we return */
 UNIV_INTERN
 dict_table_t*
 dict_load_table(
-/*============*/
 	ib_recovery_t	recovery,/*!< in: recovery flag */
 	const char*	name)	/*!< in: table name in the
 				databasename/tablename format */
@@ -1073,13 +1053,11 @@ err_exit:
 	return(table);
 }
 
-/***********************************************************************//**
-Loads a table object based on the table id.
+/** Loads a table object based on the table id.
 @return	table; NULL if table does not exist */
 UNIV_INTERN
 dict_table_t*
 dict_load_table_on_id(
-/*==================*/
 	ib_recovery_t	recovery,	/*!< in: recovery flag */
 	dulint		table_id)	/*!< in: table id */
 {
@@ -1166,14 +1144,12 @@ dict_load_table_on_id(
 	return(table);
 }
 
-/********************************************************************//**
-This function is called when the database is booted. Loads system table
+/** This function is called when the database is booted. Loads system table
 index definitions except for the clustered index which is added to the
 dictionary cache at booting before calling this function. */
 UNIV_INTERN
 void
 dict_load_sys_table(
-/*================*/
 	dict_table_t*	table)	/*!< in: system table */
 {
 	mem_heap_t*	heap;
@@ -1187,12 +1163,10 @@ dict_load_sys_table(
 	mem_heap_free(heap);
 }
 
-/********************************************************************//**
-Loads foreign key constraint col names (also for the referenced table). */
+/** Loads foreign key constraint col names (also for the referenced table). */
 static
 void
 dict_load_foreign_cols(
-/*===================*/
 	const char*	id,	/*!< in: foreign constraint id as a
 				null-terminated string */
 	dict_foreign_t*	foreign)/*!< in: foreign constraint object */
@@ -1259,13 +1233,11 @@ dict_load_foreign_cols(
 	mtr_commit(&mtr);
 }
 
-/***********************************************************************//**
-Loads a foreign key constraint to the dictionary cache.
+/** Loads a foreign key constraint to the dictionary cache.
 @return	DB_SUCCESS or error code */
 static
 ulint
 dict_load_foreign(
-/*==============*/
 	const char*	id,	/*!< in: foreign constraint id as a
 				null-terminated string */
 	ibool		check_charsets)
@@ -1384,8 +1356,7 @@ dict_load_foreign(
 	return(dict_foreign_add_to_cache(foreign, check_charsets));
 }
 
-/***********************************************************************//**
-Loads foreign key constraints where the table is either the foreign key
+/** Loads foreign key constraints where the table is either the foreign key
 holder or where the table is referenced by a foreign key. Adds these
 constraints to the data dictionary. Note that we know that the dictionary
 cache already contains all constraints where the other relevant table is
@@ -1394,7 +1365,6 @@ already in the dictionary cache.
 UNIV_INTERN
 ulint
 dict_load_foreigns(
-/*===============*/
 	const char*	table_name,	/*!< in: table name */
 	ibool		check_charsets)	/*!< in: TRUE=check charset
 					compatibility */

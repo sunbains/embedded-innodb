@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file dyn/dyn0dyn.c
+/** @file dyn/dyn0dyn.c
 The dynamically allocated array
 
 Created 2/5/1996 Heikki Tuuri
@@ -28,13 +26,11 @@ Created 2/5/1996 Heikki Tuuri
 #include "dyn0dyn.ic"
 #endif
 
-/************************************************************//**
-Adds a new block to a dyn array.
+/** Adds a new block to a dyn array.
 @return	created block */
 UNIV_INTERN
 dyn_block_t*
 dyn_array_add_block(
-/*================*/
 	dyn_array_t*	arr)	/*!< in: dyn array */
 {
 	mem_heap_t*	heap;

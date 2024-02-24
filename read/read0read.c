@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file read/read0read.c
+/** @file read/read0read.c
 Cursor read
 
 Created 2/16/1997 Heikki Tuuri
@@ -137,13 +135,11 @@ TODO: proof this
 
 */
 
-/*********************************************************************//**
-Creates a read view object.
+/** Creates a read view object.
 @return	own: read view struct */
 UNIV_INLINE
 read_view_t*
 read_view_create_low(
-/*=================*/
 	ulint		n,	/*!< in: number of cells in the trx_ids array */
 	mem_heap_t*	heap)	/*!< in: memory heap from which allocated */
 {
@@ -157,8 +153,7 @@ read_view_create_low(
 	return(view);
 }
 
-/*********************************************************************//**
-Makes a copy of the oldest existing read view, with the exception that also
+/** Makes a copy of the oldest existing read view, with the exception that also
 the creating trx of the oldest view is set as not visible in the 'copied'
 view. Opens a new view if no views currently exist. The view must be closed
 with ..._close. This is used in purge.
@@ -166,7 +161,6 @@ with ..._close. This is used in purge.
 UNIV_INTERN
 read_view_t*
 read_view_oldest_copy_or_open_new(
-/*==============================*/
 	trx_id_t	cr_trx_id,	/*!< in: trx_id of creating
 					transaction, or ut_dulint_zero
 					used in purge */
@@ -243,14 +237,12 @@ read_view_oldest_copy_or_open_new(
 	return(view_copy);
 }
 
-/*********************************************************************//**
-Opens a read view where exactly the transactions serialized before this
+/** Opens a read view where exactly the transactions serialized before this
 point in time are seen in the view.
 @return	own: read view struct */
 UNIV_INTERN
 read_view_t*
 read_view_open_now(
-/*===============*/
 	trx_id_t	cr_trx_id,	/*!< in: trx_id of creating
 					transaction, or ut_dulint_zero
 					used in purge */
@@ -319,12 +311,10 @@ read_view_open_now(
 	return(view);
 }
 
-/*********************************************************************//**
-Closes a read view. */
+/** Closes a read view. */
 UNIV_INTERN
 void
 read_view_close(
-/*============*/
 	read_view_t*	view)	/*!< in: read view */
 {
 	ut_ad(mutex_own(&kernel_mutex));
@@ -332,13 +322,11 @@ read_view_close(
 	UT_LIST_REMOVE(view_list, trx_sys->view_list, view);
 }
 
-/*********************************************************************//**
-Closes a consistent read view for the client. This function is called at
+/** Closes a consistent read view for the client. This function is called at
 an SQL statement end if the trx isolation level is <= TRX_ISO_READ_COMMITTED. */
 UNIV_INTERN
 void
 read_view_close_for_read_committed(
-/*===============================*/
 	trx_t*	trx)		/*!< in: trx which has a read view */
 {
 	ut_a(trx->global_read_view);
@@ -355,12 +343,10 @@ read_view_close_for_read_committed(
 	mutex_exit(&kernel_mutex);
 }
 
-/*********************************************************************//**
-Prints a read view to ib_stream. */
+/** Prints a read view to ib_stream. */
 UNIV_INTERN
 void
 read_view_print(
-/*============*/
 	const read_view_t*	view)	/*!< in: read view */
 {
 	ulint	n_ids;
@@ -396,15 +382,13 @@ read_view_print(
 	}
 }
 
-/*********************************************************************//**
-Create a high-granularity consistent cursor view to be used
+/** Create a high-granularity consistent cursor view to be used
 in cursors. In this consistent read view modifications done by the
 creating transaction after the cursor is created or future transactions
 are not visible. */
 UNIV_INTERN
 cursor_view_t*
 read_cursor_view_create(
-/*====================*/
 	trx_t*	cr_trx)	/*!< in: trx where cursor view is created */
 {
 	cursor_view_t*	curview;
@@ -488,13 +472,11 @@ read_cursor_view_create(
 	return(curview);
 }
 
-/*********************************************************************//**
-Close a given consistent cursor view and restore global read view
+/** Close a given consistent cursor view and restore global read view
 back to a transaction read view. */
 UNIV_INTERN
 void
 read_cursor_view_close(
-/*===================*/
 	trx_t*		trx,	/*!< in: trx */
 	cursor_view_t*	curview)/*!< in: cursor view to be closed */
 {
@@ -516,14 +498,12 @@ read_cursor_view_close(
 	mem_heap_free(curview->heap);
 }
 
-/*********************************************************************//**
-This function sets a given consistent cursor view to a transaction
+/** This function sets a given consistent cursor view to a transaction
 read view if given consistent cursor view is not NULL. Otherwise, function
 restores a global read view to a transaction read view. */
 UNIV_INTERN
 void
 read_cursor_set(
-/*============*/
 	trx_t*		trx,	/*!< in: transaction where cursor is set */
 	cursor_view_t*	curview)/*!< in: consistent cursor view to be set */
 {

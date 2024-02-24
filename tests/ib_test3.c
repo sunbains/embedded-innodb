@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2008 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -49,12 +48,10 @@ TODO: Test limits, SQL_NULL and data mismatch handling.
 #define DATABASE	"test"
 #define TABLE		"t"
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -65,8 +62,7 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-CREATE TABLE T(
+/** CREATE TABLE T(
 	vchar	VARCHAR(128),
 	blob	VARCHAR(n),
 	count	INT,
@@ -74,7 +70,6 @@ CREATE TABLE T(
 static
 ib_err_t
 create_table(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name,			/*!< in: table name */
 	int		size)			/*!< in: int size in bits */
@@ -129,12 +124,10 @@ create_table(
 	return(err);
 }
 
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 static
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	int		size,		/*!< in: int size in bits */
@@ -158,13 +151,11 @@ open_table(
 	return(err);
 }
 
-/*********************************************************************
-INSERT INTO Tn VALUE(1, -1);
+/** INSERT INTO Tn VALUE(1, -1);
 INSERT INTO Tn VALUE(100, -100); */
 static
 ib_err_t
 insert(
-/*===*/
 	ib_crsr_t	crsr,		/*!< in, out: cursor to use for write */
 	int		size)		/*!< in: int size in bits */
 {
@@ -241,12 +232,10 @@ insert(
 	return(err);
 }
 
-/*********************************************************************
-Check int  columns in a tuple. */
+/** Check int  columns in a tuple. */
 static
 void
 read_col(
-/*==========*/
 	const ib_tpl_t	tpl,
 	int		i,
 	ib_col_meta_t*	col_meta,
@@ -318,12 +307,10 @@ read_col(
 	assert(err == DB_SUCCESS);
 }
 
-/*********************************************************************
-Check that the column value read matches what was written. */
+/** Check that the column value read matches what was written. */
 static
 void
 check_row(
-/*======*/
 	ib_tpl_t	tpl,
 	int*		c1,
 	int*		c2)
@@ -344,12 +331,10 @@ check_row(
 	read_col(tpl, 1, &col_meta, c2);
 }
 
-/*********************************************************************
-SELECT * FROM T; */
+/** SELECT * FROM T; */
 static
 ib_err_t
 read_rows(
-/*======*/
 	ib_crsr_t	crsr)
 {
 	ib_tpl_t	tpl;
@@ -398,12 +383,10 @@ read_rows(
 	return(err);
 }
 
-/*********************************************************************
-Drop the table. */
+/** Drop the table. */
 static
 ib_err_t
 drop_table_n(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name,			/*!< in: table to drop */
 	int		size)			/*!< in: int size in bits */

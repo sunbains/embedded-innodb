@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 2006, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file row/row0ext.c
+/** @file row/row0ext.c
 Caching of externally stored column prefixes
 
 Created September 2006 Marko Makela
@@ -31,12 +29,10 @@ Created September 2006 Marko Makela
 
 #include "btr0cur.h"
 
-/********************************************************************//**
-Fills the column prefix cache of an externally stored column. */
+/** Fills the column prefix cache of an externally stored column. */
 static
 void
 row_ext_cache_fill(
-/*===============*/
 	row_ext_t*	ext,	/*!< in/out: column prefix cache */
 	ulint		i,	/*!< in: index of ext->ext[] */
 	ulint		zip_size,/*!< compressed page size in bytes, or 0 */
@@ -67,13 +63,11 @@ row_ext_cache_fill(
 	}
 }
 
-/********************************************************************//**
-Creates a cache of column prefixes of externally stored columns.
+/** Creates a cache of column prefixes of externally stored columns.
 @return	own: column prefix cache */
 UNIV_INTERN
 row_ext_t*
 row_ext_create(
-/*===========*/
 	ulint		n_ext,	/*!< in: number of externally stored columns */
 	const ulint*	ext,	/*!< in: col_no's of externally stored columns
 				in the InnoDB table object, as reported by

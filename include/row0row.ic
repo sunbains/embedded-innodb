@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/row0row.ic
+/** @file include/row0row.ic
 General row routines
 
 Created 4/20/1996 Heikki Tuuri
@@ -27,13 +25,11 @@ Created 4/20/1996 Heikki Tuuri
 #include "rem0rec.h"
 #include "trx0undo.h"
 
-/*********************************************************************//**
-Reads the trx id field from a clustered index record.
+/** Reads the trx id field from a clustered index record.
 @return	value of the field */
 UNIV_INLINE
 trx_id_t
 row_get_rec_trx_id(
-/*===============*/
 	const rec_t*	rec,	/*!< in: record */
 	dict_index_t*	dict_index,	/*!< in: clustered index */
 	const ulint*	offsets)/*!< in: rec_get_offsets(rec, index) */
@@ -52,13 +48,11 @@ row_get_rec_trx_id(
 	return(trx_read_trx_id(rec + offset));
 }
 
-/*********************************************************************//**
-Reads the roll pointer field from a clustered index record.
+/** Reads the roll pointer field from a clustered index record.
 @return	value of the field */
 UNIV_INLINE
 roll_ptr_t
 row_get_rec_roll_ptr(
-/*=================*/
 	const rec_t*	rec,	/*!< in: record */
 	dict_index_t*	dict_index,	/*!< in: clustered index */
 	const ulint*	offsets)/*!< in: rec_get_offsets(rec, index) */
@@ -77,13 +71,11 @@ row_get_rec_roll_ptr(
 	return(trx_read_roll_ptr(rec + offset + DATA_TRX_ID_LEN));
 }
 
-/*******************************************************************//**
-Builds from a secondary index record a row reference with which we can
+/** Builds from a secondary index record a row reference with which we can
 search the clustered index record. */
 UNIV_INLINE
 void
 row_build_row_ref_fast(
-/*===================*/
 	dtuple_t*	ref,	/*!< in/out: typed data tuple where the
 				reference is built */
 	const ulint*	map,	/*!< in: array of field numbers in rec

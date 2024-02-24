@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/btr0cur.ic
+/** @file include/btr0cur.ic
 The index tree cursor
 
 Created 10/16/1994 Heikki Tuuri
@@ -27,97 +25,81 @@ Created 10/16/1994 Heikki Tuuri
 #include "btr0btr.h"
 
 #ifdef UNIV_DEBUG
-/*********************************************************//**
-Returns the page cursor component of a tree cursor.
+/** Returns the page cursor component of a tree cursor.
 @return	pointer to page cursor component */
 UNIV_INLINE
 page_cur_t*
 btr_cur_get_page_cur(
-/*=================*/
 	const btr_cur_t*	cursor)	/*!< in: tree cursor */
 {
 	return(&((btr_cur_t*) cursor)->page_cur);
 }
 #endif /* UNIV_DEBUG */
-/*********************************************************//**
-Returns the buffer block on which the tree cursor is positioned.
+/** Returns the buffer block on which the tree cursor is positioned.
 @return	pointer to buffer block */
 UNIV_INLINE
 buf_block_t*
 btr_cur_get_block(
-/*==============*/
 	btr_cur_t*	cursor)	/*!< in: tree cursor */
 {
 	return(page_cur_get_block(btr_cur_get_page_cur(cursor)));
 }
 
-/*********************************************************//**
-Returns the record pointer of a tree cursor.
+/** Returns the record pointer of a tree cursor.
 @return	pointer to record */
 UNIV_INLINE
 rec_t*
 btr_cur_get_rec(
-/*============*/
 	btr_cur_t*	cursor)	/*!< in: tree cursor */
 {
 	return(page_cur_get_rec(&(cursor->page_cur)));
 }
 
 #ifdef WITH_ZIP
-/*********************************************************//**
-Returns the compressed page on which the tree cursor is positioned.
+/** Returns the compressed page on which the tree cursor is positioned.
 @return	pointer to compressed page, or NULL if the page is not compressed */
 UNIV_INLINE
 page_zip_des_t*
 btr_cur_get_page_zip(
-/*=================*/
 	btr_cur_t*	cursor)	/*!< in: tree cursor */
 {
 	return(buf_block_get_page_zip(btr_cur_get_block(cursor)));
 }
 #endif /* WITH_ZIP */
 
-/*********************************************************//**
-Invalidates a tree cursor by setting record pointer to NULL. */
+/** Invalidates a tree cursor by setting record pointer to NULL. */
 UNIV_INLINE
 void
 btr_cur_invalidate(
-/*===============*/
 	btr_cur_t*	cursor)	/*!< in: tree cursor */
 {
 	page_cur_invalidate(&(cursor->page_cur));
 }
 
-/*********************************************************//**
-Returns the page of a tree cursor.
+/** Returns the page of a tree cursor.
 @return	pointer to page */
 UNIV_INLINE
 page_t*
 btr_cur_get_page(
-/*=============*/
 	btr_cur_t*	cursor)	/*!< in: tree cursor */
 {
 	return(page_align(page_cur_get_rec(&(cursor->page_cur))));
 }
 
-/*********************************************************//**
-Returns the index of a cursor.
+/** Returns the index of a cursor.
 @return	index */
 UNIV_INLINE
 dict_index_t*
 btr_cur_get_index(
-/*==============*/
 	btr_cur_t*	cursor)	/*!< in: B-tree cursor */
 {
 	return(cursor->index);
 }
 
-/*********************************************************//**
-Positions a tree cursor at a given record. */
+/** Positions a tree cursor at a given record. */
 UNIV_INLINE
 void
 btr_cur_position(
-/*=============*/
 	dict_index_t*	dict_index,	/*!< in: dict_index */
 	rec_t*		rec,	/*!< in: record in tree */
 	buf_block_t*	block,	/*!< in: buffer block of rec */
@@ -130,14 +112,12 @@ btr_cur_position(
 	cursor->index = dict_index;
 }
 
-/*********************************************************************//**
-Checks if compressing an index page where a btr cursor is placed makes
+/** Checks if compressing an index page where a btr cursor is placed makes
 sense.
 @return	TRUE if compression is recommended */
 UNIV_INLINE
 ibool
 btr_cur_compress_recommendation(
-/*============================*/
 	btr_cur_t*	cursor,	/*!< in: btr cursor */
 	mtr_t*		mtr)	/*!< in: mtr */
 {
@@ -164,14 +144,12 @@ btr_cur_compress_recommendation(
 	return(FALSE);
 }
 
-/*********************************************************************//**
-Checks if the record on which the cursor is placed can be deleted without
+/** Checks if the record on which the cursor is placed can be deleted without
 making tree compression necessary (or, recommended).
 @return	TRUE if can be deleted without recommended compression */
 UNIV_INLINE
 ibool
 btr_cur_can_delete_without_compress(
-/*================================*/
 	btr_cur_t*	cursor,	/*!< in: btr cursor */
 	ulint		rec_size,/*!< in: rec_get_size(btr_cur_get_rec(cursor))*/
 	mtr_t*		mtr)	/*!< in: mtr */

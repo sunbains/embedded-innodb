@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/********************************************************************//**
-@file mem/mem0mem.c
+/** @file mem/mem0mem.c
 The memory management
 
 Created 6/9/1994 Heikki Tuuri
@@ -89,26 +87,22 @@ After freeing, all the blocks in the heap are set to random bytes
 to help us discover errors which result from the use of
 buffers in an already freed heap. */
 
-/**********************************************************************//**
-Duplicates a NUL-terminated string, allocated from a memory heap.
+/** Duplicates a NUL-terminated string, allocated from a memory heap.
 @return	own: a copy of the string */
 UNIV_INTERN
 char*
 mem_heap_strdup(
-/*============*/
 	mem_heap_t*	heap,	/*!< in: memory heap where string is allocated */
 	const char*	str)	/*!< in: string to be copied */
 {
 	return(mem_heap_dup(heap, str, strlen(str) + 1));
 }
 
-/**********************************************************************//**
-Duplicate a block of data, allocated from a memory heap.
+/** Duplicate a block of data, allocated from a memory heap.
 @return	own: a copy of the data */
 UNIV_INTERN
 void*
 mem_heap_dup(
-/*=========*/
 	mem_heap_t*	heap,	/*!< in: memory heap where copy is allocated */
 	const void*	data,	/*!< in: data to be copied */
 	ulint		len)	/*!< in: length of data, in bytes */
@@ -116,13 +110,11 @@ mem_heap_dup(
 	return(memcpy(mem_heap_alloc(heap, len), data, len));
 }
 
-/**********************************************************************//**
-Concatenate two strings and return the result, using a memory heap.
+/** Concatenate two strings and return the result, using a memory heap.
 @return	own: the result */
 UNIV_INTERN
 char*
 mem_heap_strcat(
-/*============*/
 	mem_heap_t*	heap,	/*!< in: memory heap where string is allocated */
 	const char*	s1,	/*!< in: string 1 */
 	const char*	s2)	/*!< in: string 2 */
@@ -142,13 +134,11 @@ mem_heap_strcat(
 }
 
 
-/****************************************************************//**
-Helper function for mem_heap_printf.
+/** Helper function for mem_heap_printf.
 @return	length of formatted string, including terminating NUL */
 static
 ulint
 mem_heap_printf_low(
-/*================*/
 	char*		buf,	/*!< in/out: buffer to store formatted string
 				in, or NULL to just calculate length */
 	const char*	format,	/*!< in: format string */
@@ -251,8 +241,7 @@ mem_heap_printf_low(
 	return(len);
 }
 
-/****************************************************************//**
-A simple (s)printf replacement that dynamically allocates the space for the
+/** A simple (s)printf replacement that dynamically allocates the space for the
 formatted string from the given heap. This supports a very limited set of
 the printf syntax: types 's' and 'u' and length modifier 'l' (which is
 required for the 'u' type).
@@ -260,7 +249,6 @@ required for the 'u' type).
 UNIV_INTERN
 char*
 mem_heap_printf(
-/*============*/
 	mem_heap_t*	heap,	/*!< in: memory heap */
 	const char*	format,	/*!< in: format string */
 	...)
@@ -284,14 +272,12 @@ mem_heap_printf(
 	return(str);
 }
 
-/***************************************************************//**
-Creates a memory heap block where data can be allocated.
+/** Creates a memory heap block where data can be allocated.
 @return own: memory heap block, NULL if did not succeed (only possible
 for MEM_HEAP_BTR_SEARCH type heaps) */
 UNIV_INTERN
 mem_block_t*
 mem_heap_create_block(
-/*==================*/
 	mem_heap_t*	heap,	/*!< in: memory heap or NULL if first block
 				should be created */
 	ulint		n,	/*!< in: number of bytes needed for user data */
@@ -383,14 +369,12 @@ mem_heap_create_block(
 	return(block);
 }
 
-/***************************************************************//**
-Adds a new block to a memory heap.
+/** Adds a new block to a memory heap.
 @return created block, NULL if did not succeed (only possible for
 MEM_HEAP_BTR_SEARCH type heaps) */
 UNIV_INTERN
 mem_block_t*
 mem_heap_add_block(
-/*===============*/
 	mem_heap_t*	heap,	/*!< in: memory heap */
 	ulint		n)	/*!< in: number of bytes user needs */
 {
@@ -438,12 +422,10 @@ mem_heap_add_block(
 	return(new_block);
 }
 
-/******************************************************************//**
-Frees a block from a memory heap. */
+/** Frees a block from a memory heap. */
 UNIV_INTERN
 void
 mem_heap_block_free(
-/*================*/
 	mem_heap_t*	heap,	/*!< in: heap */
 	mem_block_t*	block)	/*!< in: block to free */
 {
@@ -499,12 +481,10 @@ mem_heap_block_free(
 }
 
 #ifndef UNIV_HOTBACKUP
-/******************************************************************//**
-Frees the free_block field from a memory heap. */
+/** Frees the free_block field from a memory heap. */
 UNIV_INTERN
 void
 mem_heap_free_block_free(
-/*=====================*/
 	mem_heap_t*	heap)	/*!< in: heap */
 {
 	if (UNIV_LIKELY_NULL(heap->free_block)) {
@@ -517,13 +497,11 @@ mem_heap_free_block_free(
 #endif /* !UNIV_HOTBACKUP */
 
 #ifdef UNIV_DEBUG
-/******************************************************************//**
-Goes through the list of all allocated mem blocks, checks their magic
+/** Goes through the list of all allocated mem blocks, checks their magic
 numbers, and reports possible corruption. */
 UNIV_INTERN
 ibool
 mem_heap_check(
-/*===========*/
 	mem_heap_t*	heap)	/*!< in: memory heap */
 {
 	ut_a(heap->magic_n == MEM_BLOCK_MAGIC_N);
@@ -533,8 +511,7 @@ mem_heap_check(
 #endif /* UNIV_DEBUG */
 
 #if defined UNIV_MEM_DEBUG || defined UNIV_DEBUG
-/*******************************************************************
-Checks a memory heap for consistency and prints the contents if requested.
+/** Checks a memory heap for consistency and prints the contents if requested.
 Outputs the sum of sizes of buffers given to the user (only in
 the debug version), the physical size of the heap and the number of
 blocks in the heap. In case of error returns 0 as sizes and number
@@ -542,7 +519,6 @@ of blocks. */
 
 void
 mem_heap_validate_or_print(
-/*=======================*/
 	mem_heap_t*	heap,	/*!< in: memory heap */
 	byte*		top __attribute__((unused)),
 				/*!< in: calculate and validate only until
@@ -707,12 +683,10 @@ completed:
 	*error = FALSE;
 }
 
-/******************************************************************
-Prints the contents of a memory heap. */
+/** Prints the contents of a memory heap. */
 static
 void
 mem_heap_print(
-/*===========*/
 	mem_heap_t*	heap)	/*!< in: memory heap */
 {
 	ibool	error;
@@ -732,13 +706,11 @@ mem_heap_print(
 	ut_a(!error);
 }
 
-/******************************************************************
-Validates the contents of a memory heap.
+/** Validates the contents of a memory heap.
 @return	TRUE if ok */
 
 ibool
 mem_heap_validate(
-/*==============*/
 	mem_heap_t*	heap)	/*!< in: memory heap */
 {
 	ibool	error;
@@ -761,12 +733,10 @@ mem_heap_validate(
 #endif /* UNIV_MEM_DEBUG || UNIV_DEBUG */
 
 #ifdef UNIV_DEBUG
-/******************************************************************
-Verify that the heap is not corrupt. */
+/** Verify that the heap is not corrupt. */
 UNIV_INTERN
 void
 mem_heap_verify(
-/*============*/
 	const mem_heap_t* heap)	/*!< in: heap to verify */
 {
 	mem_block_t*	block;

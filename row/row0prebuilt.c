@@ -1,6 +1,5 @@
 
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 
@@ -24,8 +23,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/*******************************************************
-Row select prebuilt structure function.
+/** Row select prebuilt structure function.
 
 Created 02/03/2009 Sunny Bains
 *******************************************************/
@@ -36,13 +34,11 @@ Created 02/03/2009 Sunny Bains
 #include "que0que.h"
 #include "row0merge.h"
 
-/************************************************************************
-Create a prebuilt struct for a user table handle.
+/** Create a prebuilt struct for a user table handle.
 @return	own: a prebuilt struct */
 UNIV_INTERN
 row_prebuilt_t*
 row_prebuilt_create(
-/*================*/
 	dict_table_t*	table)		/*!< in: Innobase table handle */
 {
 	ulint		sz;
@@ -101,12 +97,10 @@ row_prebuilt_create(
 	return(prebuilt);
 }
 
-/************************************************************************
-Free a prebuilt struct for a user table handle. */
+/** Free a prebuilt struct for a user table handle. */
 UNIV_INTERN
 void
 row_prebuilt_free(
-/*==============*/
 	row_prebuilt_t*	prebuilt,	/*!< in, own: prebuilt struct */
 	ibool		dict_locked)	/*!< in: TRUE if dict was locked */
 {
@@ -160,12 +154,10 @@ row_prebuilt_free(
 	mem_heap_free(prebuilt->heap);
 }
 
-/************************************************************************
-Reset a prebuilt struct for a user table handle. */
+/** Reset a prebuilt struct for a user table handle. */
 UNIV_INTERN
 void
 row_prebuilt_reset(
-/*===============*/
 	row_prebuilt_t*	prebuilt)	/*!< in/out: prebuilt struct */
 {
 	ut_a(prebuilt->magic_n == ROW_PREBUILT_ALLOCATED);
@@ -192,13 +184,11 @@ row_prebuilt_reset(
 	}
 }
 
-/*************************************************************************
-Updates the transaction pointers in query graphs stored in the prebuilt
+/** Updates the transaction pointers in query graphs stored in the prebuilt
 struct. */
 UNIV_INTERN
 void
 row_prebuilt_update_trx(
-/*====================*/
 	row_prebuilt_t*	prebuilt,	/*!< in/out: prebuilt struct handle */
 	trx_t*		trx)		/*!< in: transaction handle */
 {

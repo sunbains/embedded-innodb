@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 2006, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/*******************************************************************//**
-@file ut/ut0list.c
+/** @file ut/ut0list.c
 A double-linked list
 
 Created 4/26/2006 Osku Salerma
@@ -28,13 +26,11 @@ Created 4/26/2006 Osku Salerma
 #include "ut0list.ic"
 #endif
 
-/****************************************************************//**
-Create a new list.
+/** Create a new list.
 @return	list */
 UNIV_INTERN
 ib_list_t*
 ib_list_create(void)
-/*=================*/
 {
 	ib_list_t*	list = mem_alloc(sizeof(ib_list_t));
 
@@ -45,12 +41,10 @@ ib_list_create(void)
 	return(list);
 }
 
-/****************************************************************//**
-Free a list. */
+/** Free a list. */
 UNIV_INTERN
 void
 ib_list_free(
-/*=========*/
 	ib_list_t*	list)	/*!< in: list */
 {
 	ut_a(!list->is_heap_list);
@@ -62,13 +56,11 @@ ib_list_free(
 	mem_free(list);
 }
 
-/****************************************************************//**
-Add the data to the end of the list.
+/** Add the data to the end of the list.
 @return	new list node */
 UNIV_INTERN
 ib_list_node_t*
 ib_list_add_last(
-/*=============*/
 	ib_list_t*	list,	/*!< in: list */
 	void*		data,	/*!< in: data */
 	mem_heap_t*	heap)	/*!< in: memory heap to use */
@@ -76,13 +68,11 @@ ib_list_add_last(
 	return(ib_list_add_after(list, ib_list_get_last(list), data, heap));
 }
 
-/****************************************************************//**
-Add the data after the indicated node.
+/** Add the data after the indicated node.
 @return	new list node */
 UNIV_INTERN
 ib_list_node_t*
 ib_list_add_after(
-/*==============*/
 	ib_list_t*	list,		/*!< in: list */
 	ib_list_node_t*	prev_node,	/*!< in: node preceding new node (can
 					be NULL) */
@@ -130,12 +120,10 @@ ib_list_add_after(
 	return(node);
 }
 
-/****************************************************************//**
-Remove the node from the list. */
+/** Remove the node from the list. */
 UNIV_INTERN
 void
 ib_list_remove(
-/*===========*/
 	ib_list_t*	list,	/*!< in: list */
 	ib_list_node_t*	node)	/*!< in: node to remove */
 {

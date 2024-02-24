@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file row/row0vers.c
+/** @file row/row0vers.c
 Row versions
 
 Created 2/6/1997 Heikki Tuuri
@@ -46,15 +44,13 @@ Created 2/6/1997 Heikki Tuuri
 #include "read0read.h"
 #include "lock0lock.h"
 
-/*****************************************************************//**
-Finds out if an active transaction has inserted or modified a secondary
+/** Finds out if an active transaction has inserted or modified a secondary
 index record. NOTE: the kernel mutex is temporarily released in this
 function!
 @return NULL if committed, else the active transaction */
 UNIV_INTERN
 trx_t*
 row_vers_impl_x_locked_off_kernel(
-/*==============================*/
 	const rec_t*	rec,	/*!< in: record in a secondary index */
 	dict_index_t*	index,	/*!< in: the secondary index */
 	const ulint*	offsets)/*!< in: rec_get_offsets(rec, index) */
@@ -299,14 +295,12 @@ exit_func:
 	return(trx);
 }
 
-/*****************************************************************//**
-Finds out if we must preserve a delete marked earlier version of a clustered
+/** Finds out if we must preserve a delete marked earlier version of a clustered
 index record, because it is >= the purge view.
 @return	TRUE if earlier version should be preserved */
 UNIV_INTERN
 ibool
 row_vers_must_preserve_del_marked(
-/*==============================*/
 	trx_id_t	trx_id,	/*!< in: transaction id in the version */
 	mtr_t*		mtr)	/*!< in: mtr holding the latch on the
 				clustered index record; it will also
@@ -329,8 +323,7 @@ row_vers_must_preserve_del_marked(
 	return(FALSE);
 }
 
-/*****************************************************************//**
-Finds out if a version of the record, where the version >= the current
+/** Finds out if a version of the record, where the version >= the current
 purge view, should have ientry as its secondary index entry. We check
 if there is any not delete marked version of the record where the trx
 id >= purge view, and the secondary index entry and ientry are identified in
@@ -339,7 +332,6 @@ the alphabetical ordering; exactly in this case we return TRUE.
 UNIV_INTERN
 ibool
 row_vers_old_has_index_entry(
-/*=========================*/
 	ibool		also_curr,/*!< in: TRUE if also rec is included in the
 				versions to search; otherwise only versions
 				prior to it are searched */
@@ -474,15 +466,13 @@ row_vers_old_has_index_entry(
 	}
 }
 
-/*****************************************************************//**
-Constructs the version of a clustered index record which a consistent
+/** Constructs the version of a clustered index record which a consistent
 read should see. We assume that the trx id stored in rec is such that
 the consistent read should not see rec in its present version.
 @return	DB_SUCCESS or DB_MISSING_HISTORY */
 UNIV_INTERN
 ulint
 row_vers_build_for_consistent_read(
-/*===============================*/
 	const rec_t*	rec,	/*!< in: record in a clustered index; the
 				caller must have a latch on the page; this
 				latch locks the top of the stack of versions
@@ -607,14 +597,12 @@ row_vers_build_for_consistent_read(
 	return(err);
 }
 
-/*****************************************************************//**
-Constructs the last committed version of a clustered index record,
+/** Constructs the last committed version of a clustered index record,
 which should be seen by a semi-consistent read.
 @return	DB_SUCCESS or DB_MISSING_HISTORY */
 UNIV_INTERN
 ulint
 row_vers_build_for_semi_consistent_read(
-/*====================================*/
 	const rec_t*	rec,	/*!< in: record in a clustered index; the
 				caller must have a latch on the page; this
 				latch locks the top of the stack of versions

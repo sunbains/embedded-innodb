@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -73,12 +72,10 @@ get_all(void)
 	}
 }
 
-/*********************************************************************
-Function to test our simple config file parser. */
+/** Function to test our simple config file parser. */
 static
 void
 test_config_parser(void)
-/*====================*/
 {
 	ib_config_t	config;
 	const char*	filename = "test.conf";

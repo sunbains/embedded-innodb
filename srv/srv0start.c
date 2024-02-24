@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 Copyright (c) 2009, Percona Inc.
@@ -31,8 +30,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/********************************************************************//**
-@file srv/srv0start.c
+/** @file srv/srv0start.c
 Starts the InnoDB database server
 
 Created 2/16/1996 Heikki Tuuri
@@ -157,29 +155,25 @@ static	char**		srv_log_group_home_dirs = NULL;
 
 #endif /* !UNIV_HOTBACKUP */
 
-/****************************************************************//**
-All threads end up waiting for certain events. Put those events
+/** All threads end up waiting for certain events. Put those events
 to the signaled state. Then the threads will exit themselves in
 os_thread_event_wait(). 
 @return	TRUE if all threads exited. */
 static
 ibool
 srv_threads_shutdown(void);
-/*======================*/
 
 /** */
 #define SRV_N_PENDING_IOS_PER_THREAD	OS_AIO_N_PENDING_IOS_PER_THREAD
 #define SRV_MAX_N_PENDING_SYNC_IOS	100
 
 
-/*********************************************************************//**
-Convert a numeric string that optionally ends in G or M, to a number
+/** Convert a numeric string that optionally ends in G or M, to a number
 containing megabytes.
 @return	next character in string */
 static
 char*
 srv_parse_megabytes(
-/*================*/
 	char*	str,	/*!< in: string containing a quantity in bytes */
 	ulint*	megs)	/*!< out: the number in megabytes */
 {
@@ -206,14 +200,12 @@ srv_parse_megabytes(
 	return(str);
 }
 
-/*********************************************************************//**
-Adds a slash or a backslash to the end of a string if it is missing
+/** Adds a slash or a backslash to the end of a string if it is missing
 and the string is not empty.
 @return	string which has the separator if the string is not empty */
 static
 char*
 srv_add_path_separator_if_needed(
-/*=============================*/
 	char*	str)	/*!< in: null-terminated character string */
 {
 	char*	out_str;
@@ -230,13 +222,11 @@ srv_add_path_separator_if_needed(
 	return(out_str);
 }
 
-/*********************************************************************//**
-Reads the data files and their sizes from a character string.
+/** Reads the data files and their sizes from a character string.
 @return	TRUE if ok, FALSE on parse error */
 UNIV_INTERN
 ibool
 srv_parse_data_file_paths_and_sizes(
-/*================================*/
 	const char*	usr_str)/*!< in/out: the data file path string */
 {
 	char*	str;
@@ -436,13 +426,11 @@ srv_parse_data_file_paths_and_sizes(
 	return(TRUE);
 }
 
-/*********************************************************************//**
-Reads log group home directories from a character string.
+/** Reads log group home directories from a character string.
 @return	TRUE if ok, FALSE on parse error */
 UNIV_INTERN
 ibool
 srv_parse_log_group_home_dirs(
-/*==========================*/
 	const char*	usr_str)/*!< in: character string */
 {
 	ulint		i;
@@ -539,13 +527,11 @@ srv_parse_log_group_home_dirs(
 	return(TRUE);
 }
 
-/*********************************************************************//**
-Frees the memory allocated by srv_parse_data_file_paths_and_sizes()
+/** Frees the memory allocated by srv_parse_data_file_paths_and_sizes()
 and srv_parse_log_group_home_dirs(). */
 UNIV_INTERN
 void
 srv_free_paths_and_sizes(void)
-/*==========================*/
 {
 	if (srv_data_file_names != NULL) {
 		free(srv_data_file_names);
@@ -585,13 +571,11 @@ srv_free_paths_and_sizes(void)
 }
 
 #ifndef UNIV_HOTBACKUP
-/********************************************************************//**
-I/o-handler thread function.
+/** I/o-handler thread function.
 @return	OS_THREAD_DUMMY_RETURN */
 static
 os_thread_ret_t
 io_handler_thread(
-/*==============*/
 	void*	arg)	/*!< in: pointer to the number of the segment in
 			the aio array */
 {
@@ -625,12 +609,10 @@ io_handler_thread(
 }
 #endif /* !UNIV_HOTBACKUP */
 
-/*********************************************************************//**
-Normalizes a directory path for Windows: converts slashes to backslashes. */
+/** Normalizes a directory path for Windows: converts slashes to backslashes. */
 UNIV_INTERN
 void
 srv_normalize_path_for_win(
-/*=======================*/
 	char*	str __attribute__((unused)))	/*!< in/out: null-terminated
 						character string */
 {
@@ -645,39 +627,33 @@ srv_normalize_path_for_win(
 }
 
 #ifndef UNIV_HOTBACKUP
-/*********************************************************************//**
-Calculates the low 32 bits when a file size which is given as a number
+/** Calculates the low 32 bits when a file size which is given as a number
 database pages is converted to the number of bytes.
 @return	low 32 bytes of file size when expressed in bytes */
 static
 ulint
 srv_calc_low32(
-/*===========*/
 	ulint	file_size)	/*!< in: file size in database pages */
 {
 	return(0xFFFFFFFFUL & (file_size << UNIV_PAGE_SIZE_SHIFT));
 }
 
-/*********************************************************************//**
-Calculates the high 32 bits when a file size which is given as a number
+/** Calculates the high 32 bits when a file size which is given as a number
 database pages is converted to the number of bytes.
 @return	high 32 bytes of file size when expressed in bytes */
 static
 ulint
 srv_calc_high32(
-/*============*/
 	ulint	file_size)	/*!< in: file size in database pages */
 {
 	return(file_size >> (32 - UNIV_PAGE_SIZE_SHIFT));
 }
 
-/*********************************************************************//**
-Creates or opens the log files and closes them.
+/** Creates or opens the log files and closes them.
 @return	DB_SUCCESS or error code */
 static
 ulint
 open_or_create_log_file(
-/*====================*/
 	ibool	create_new_db,		/*!< in: TRUE if we should create a
 					new database */
 	ibool*	log_file_created,	/*!< out: TRUE if new log file
@@ -824,13 +800,11 @@ open_or_create_log_file(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************//**
-Creates or opens database data files and closes them.
+/** Creates or opens database data files and closes them.
 @return	DB_SUCCESS or error code */
 static
 ulint
 open_or_create_data_files(
-/*======================*/
 	ibool*		create_new_db,	/*!< out: TRUE if new database should be
 					created */
 #ifdef UNIV_LOG_ARCHIVE
@@ -1132,13 +1106,11 @@ skip_size_check:
 	return(DB_SUCCESS);
 }
 
-/****************************************************************//*
-Abort the startup process and shutdown the minimum set of sub-systems
+/** Abort the startup process and shutdown the minimum set of sub-systems
 required to create files and. */
 static
 void
 srv_startup_abort(
-/*==============*/
 	enum db_err	err)		/* in: Current error code */
 {
 	/* This is currently required to inform the master thread only. Once
@@ -1165,14 +1137,12 @@ srv_startup_abort(
 	buf_mem_free();
 }
 
-/****************************************************************//**
-Starts InnoDB and creates a new database if database files
+/** Starts InnoDB and creates a new database if database files
 are not found and the user wants.
 @return	DB_SUCCESS or error code */
 UNIV_INTERN
 ib_err_t
 innobase_start_or_create(void)
-/*===========================*/
 {
 	buf_pool_t*	ret;
 	ibool		create_new_db;
@@ -1938,13 +1908,11 @@ innobase_start_or_create(void)
 	return(DB_SUCCESS);
 }
 
-/****************************************************************//**
-Try to shutdown the InnoDB threads.
+/** Try to shutdown the InnoDB threads.
 @return	TRUE if all threads exited. */
 static
 ibool
 srv_threads_try_shutdown(
-/*=====================*/
 	os_event_t	lock_timeout_thread_event)
 {
 	/* Let the lock timeout thread exit */
@@ -1982,15 +1950,13 @@ srv_threads_try_shutdown(
 	return(FALSE);
 }
 
-/****************************************************************//**
-All threads end up waiting for certain events. Put those events
+/** All threads end up waiting for certain events. Put those events
 to the signaled state. Then the threads will exit themselves in
 os_thread_event_wait().
 @return	TRUE if all threads exited. */
 static
 ibool
 srv_threads_shutdown(void)
-/*======================*/
 {
 	ulint		i;
 
@@ -2011,13 +1977,11 @@ srv_threads_shutdown(void)
 	return(FALSE);
 }
 
-/****************************************************************//**
-Shuts down the InnoDB database.
+/** Shuts down the InnoDB database.
 @return	DB_SUCCESS or error code */
 UNIV_INTERN
 enum db_err
 innobase_shutdown(
-/*==============*/
 	ib_shutdown_t	shutdown)	/*!< in: shutdown flag */
 {
 #ifdef __NETWARE__

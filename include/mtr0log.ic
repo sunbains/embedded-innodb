@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/mtr0log.ic
+/** @file include/mtr0log.ic
 Mini-transaction logging routines
 
 Created 12/7/1995 Heikki Tuuri
@@ -29,13 +27,11 @@ Created 12/7/1995 Heikki Tuuri
 #include "fsp0types.h"
 #include "trx0sys.h"
 
-/********************************************************//**
-Opens a buffer to mlog. It must be closed with mlog_close.
+/** Opens a buffer to mlog. It must be closed with mlog_close.
 @return	buffer, NULL if log mode MTR_LOG_NONE */
 UNIV_INLINE
 byte*
 mlog_open(
-/*======*/
 	mtr_t*	mtr,	/*!< in: mtr */
 	ulint	size)	/*!< in: buffer size in bytes; MUST be
 			smaller than DYN_ARRAY_DATA_SIZE! */
@@ -54,12 +50,10 @@ mlog_open(
 	return(dyn_array_open(mlog, size));
 }
 
-/********************************************************//**
-Closes a buffer opened to mlog. */
+/** Closes a buffer opened to mlog. */
 UNIV_INLINE
 void
 mlog_close(
-/*=======*/
 	mtr_t*	mtr,	/*!< in: mtr */
 	byte*	ptr)	/*!< in: buffer space from ptr up was not used */
 {
@@ -73,12 +67,10 @@ mlog_close(
 }
 
 #ifndef UNIV_HOTBACKUP
-/********************************************************//**
-Catenates 1 - 4 bytes to the mtr log. The value is not compressed. */
+/** Catenates 1 - 4 bytes to the mtr log. The value is not compressed. */
 UNIV_INLINE
 void
 mlog_catenate_ulint(
-/*================*/
 	mtr_t*	mtr,	/*!< in: mtr */
 	ulint	val,	/*!< in: value to write */
 	ulint	type)	/*!< in: MLOG_1BYTE, MLOG_2BYTES, MLOG_4BYTES */
@@ -117,12 +109,10 @@ mlog_catenate_ulint(
 	}
 }
 
-/********************************************************//**
-Catenates a compressed ulint to mlog. */
+/** Catenates a compressed ulint to mlog. */
 UNIV_INLINE
 void
 mlog_catenate_ulint_compressed(
-/*===========================*/
 	mtr_t*	mtr,	/*!< in: mtr */
 	ulint	val)	/*!< in: value to write */
 {
@@ -141,12 +131,10 @@ mlog_catenate_ulint_compressed(
 	mlog_close(mtr, log_ptr);
 }
 
-/********************************************************//**
-Catenates a compressed dulint to mlog. */
+/** Catenates a compressed dulint to mlog. */
 UNIV_INLINE
 void
 mlog_catenate_dulint_compressed(
-/*============================*/
 	mtr_t*	mtr,	/*!< in: mtr */
 	dulint	val)	/*!< in: value to write */
 {
@@ -165,15 +153,13 @@ mlog_catenate_dulint_compressed(
 	mlog_close(mtr, log_ptr);
 }
 
-/********************************************************//**
-Writes the initial part of a log record (3..11 bytes).
+/** Writes the initial part of a log record (3..11 bytes).
 If the implementation of this function is changed, all
 size parameters to mlog_open() should be adjusted accordingly!
 @return	new value of log_ptr */
 UNIV_INLINE
 byte*
 mlog_write_initial_log_record_fast(
-/*===============================*/
 	const byte*	ptr,	/*!< in: pointer to (inside) a buffer
 				frame holding the file page where
 				modification is made */
@@ -244,13 +230,11 @@ mlog_write_initial_log_record_fast(
 	return(log_ptr);
 }
 
-/********************************************************//**
-Writes a log record about an .ibd file create/delete/rename.
+/** Writes a log record about an .ibd file create/delete/rename.
 @return	new value of log_ptr */
 UNIV_INLINE
 byte*
 mlog_write_initial_log_record_for_file_op(
-/*======================================*/
 	ulint	type,	/*!< in: MLOG_FILE_CREATE, MLOG_FILE_DELETE, or
 			MLOG_FILE_RENAME */
 	ulint	space_id,/*!< in: space id, if applicable */

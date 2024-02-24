@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/*****************************************************************//**
-@file ut/ut0dbg.c
+/** @file ut/ut0dbg.c
 Debug utilities for Innobase.
 
 Created 1/30/1994 Heikki Tuuri
@@ -47,12 +45,10 @@ UNIV_INTERN ibool panic_shutdown = FALSE;
 UNIV_INTERN ulint*	ut_dbg_null_ptr		= NULL;
 #endif
 
-/*************************************************************//**
-Report a failed assertion. */
+/** Report a failed assertion. */
 UNIV_INTERN
 void
 ut_dbg_assertion_failed(
-/*====================*/
 	const char* expr,	/*!< in: the failed assertion (optional) */
 	const char* file,	/*!< in: source file containing the assertion */
 	ulint line)		/*!< in: line number of the assertion */
@@ -88,12 +84,10 @@ ut_dbg_assertion_failed(
 }
 
 #ifdef __NETWARE__
-/*************************************************************//**
-Shut down InnoDB after assertion failure. */
+/** Shut down InnoDB after assertion failure. */
 UNIV_INTERN
 void
 ut_dbg_panic(void)
-/*==============*/
 {
 	if (!panic_shutdown) {
 		panic_shutdown = TRUE;
@@ -103,12 +97,10 @@ ut_dbg_panic(void)
 }
 #else /* __NETWARE__ */
 # if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
-/*************************************************************//**
-Stop a thread after assertion failure. */
+/** Stop a thread after assertion failure. */
 UNIV_INTERN
 void
 ut_dbg_stop_thread(
-/*===============*/
 	const char*	file,
 	ulint		line)
 {
@@ -143,12 +135,10 @@ ut_dbg_stop_thread(
 	} while (0)
 #endif /* timersub */
 
-/*******************************************************************//**
-Resets a speedo (records the current time in it). */
+/** Resets a speedo (records the current time in it). */
 UNIV_INTERN
 void
 speedo_reset(
-/*=========*/
 	speedo_t*	speedo)	/*!< out: speedo */
 {
 	gettimeofday(&speedo->tv, NULL);
@@ -156,13 +146,11 @@ speedo_reset(
 	getrusage(RUSAGE_SELF, &speedo->ru);
 }
 
-/*******************************************************************//**
-Shows the time elapsed and usage statistics since the last reset of a
+/** Shows the time elapsed and usage statistics since the last reset of a
 speedo. */
 UNIV_INTERN
 void
 speedo_show(
-/*========*/
 	const speedo_t*	speedo)	/*!< in: speedo */
 {
 	struct rusage	ru_now;

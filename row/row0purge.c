@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file row/row0purge.c
+/** @file row/row0purge.c
 Purge obsolete records
 
 Created 3/14/1997 Heikki Tuuri
@@ -43,13 +41,11 @@ Created 3/14/1997 Heikki Tuuri
 #include "row0vers.h"
 #include "log0log.h"
 
-/********************************************************************//**
-Creates a purge node to a query graph.
+/** Creates a purge node to a query graph.
 @return	own: purge node */
 UNIV_INTERN
 purge_node_t*
 row_purge_node_create(
-/*==================*/
 	que_thr_t*	parent,	/*!< in: parent node, i.e., a thr node */
 	mem_heap_t*	heap)	/*!< in: memory heap where created */
 {
@@ -67,14 +63,12 @@ row_purge_node_create(
 	return(node);
 }
 
-/***********************************************************//**
-Repositions the pcur in the purge node on the clustered index record,
+/** Repositions the pcur in the purge node on the clustered index record,
 if found.
 @return	TRUE if the record was found */
 static
 ibool
 row_purge_reposition_pcur(
-/*======================*/
 	ulint		mode,	/*!< in: latching mode */
 	purge_node_t*	node,	/*!< in: row purge node */
 	mtr_t*		mtr)	/*!< in: mtr */
@@ -98,14 +92,12 @@ row_purge_reposition_pcur(
 	return(found);
 }
 
-/***********************************************************//**
-Removes a delete marked clustered index record if possible.
+/** Removes a delete marked clustered index record if possible.
 @return TRUE if success, or if not found, or if modified after the
 delete marking */
 static
 ibool
 row_purge_remove_clust_if_poss_low(
-/*===============================*/
 	purge_node_t*	node,	/*!< in: row purge node */
 	ulint		mode)	/*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE */
 {
@@ -177,13 +169,11 @@ row_purge_remove_clust_if_poss_low(
 	return(success);
 }
 
-/***********************************************************//**
-Removes a clustered index record if it has not been modified after the delete
+/** Removes a clustered index record if it has not been modified after the delete
 marking. */
 static
 void
 row_purge_remove_clust_if_poss(
-/*===========================*/
 	purge_node_t*	node)	/*!< in: row purge node */
 {
 	ibool	success;
@@ -213,13 +203,11 @@ retry:
 	ut_a(success);
 }
 
-/***********************************************************//**
-Removes a secondary index entry if possible.
+/** Removes a secondary index entry if possible.
 @return	TRUE if success or if not found */
 static
 ibool
 row_purge_remove_sec_if_poss_low(
-/*=============================*/
 	purge_node_t*	node,	/*!< in: row purge node */
 	dict_index_t*	index,	/*!< in: index */
 	const dtuple_t*	entry,	/*!< in: index entry */
@@ -299,12 +287,10 @@ row_purge_remove_sec_if_poss_low(
 	return(success);
 }
 
-/***********************************************************//**
-Removes a secondary index entry if possible. */
+/** Removes a secondary index entry if possible. */
 static
 void
 row_purge_remove_sec_if_poss(
-/*=========================*/
 	purge_node_t*	node,	/*!< in: row purge node */
 	dict_index_t*	index,	/*!< in: index */
 	dtuple_t*	entry)	/*!< in: index entry */
@@ -339,12 +325,10 @@ retry:
 	ut_a(success);
 }
 
-/***********************************************************//**
-Purges a delete marking of a record. */
+/** Purges a delete marking of a record. */
 static
 void
 row_purge_del_mark(
-/*===============*/
 	purge_node_t*	node)	/*!< in: row purge node */
 {
 	mem_heap_t*	heap;
@@ -371,13 +355,11 @@ row_purge_del_mark(
 	row_purge_remove_clust_if_poss(node);
 }
 
-/***********************************************************//**
-Purges an update of an existing record. Also purges an update of a delete
+/** Purges an update of an existing record. Also purges an update of a delete
 marked record if that record contained an externally stored field. */
 static
 void
 row_purge_upd_exist_or_extern(
-/*==========================*/
 	purge_node_t*	node)	/*!< in: row purge node */
 {
 	mem_heap_t*	heap;
@@ -485,14 +467,12 @@ skip_secondaries:
 	}
 }
 
-/***********************************************************//**
-Parses the row reference and other info in a modify undo log record.
+/** Parses the row reference and other info in a modify undo log record.
 @return TRUE if purge operation required: NOTE that then the CALLER
 must unfreeze data dictionary! */
 static
 ibool
 row_purge_parse_undo_rec(
-/*=====================*/
 	purge_node_t*	node,	/*!< in: row undo node */
 	ibool*		updated_extern,
 				/*!< out: TRUE if an externally stored field
@@ -589,15 +569,13 @@ err_exit:
 	return(TRUE);
 }
 
-/***********************************************************//**
-Fetches an undo log record and does the purge for the recorded operation.
+/** Fetches an undo log record and does the purge for the recorded operation.
 If none left, or the current purge completed, returns the control to the
 parent node, which is always a query thread node.
 @return	DB_SUCCESS if operation successfully completed, else error code */
 static
 ulint
 row_purge(
-/*======*/
 	purge_node_t*	node,	/*!< in: row purge node */
 	que_thr_t*	thr)	/*!< in: query thread */
 {
@@ -666,14 +644,12 @@ row_purge(
 	return(DB_SUCCESS);
 }
 
-/***********************************************************//**
-Does the purge operation for a single undo log record. This is a high-level
+/** Does the purge operation for a single undo log record. This is a high-level
 function used in an SQL execution graph.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 row_purge_step(
-/*===========*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	purge_node_t*	node;

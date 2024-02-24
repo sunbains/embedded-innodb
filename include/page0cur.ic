@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/********************************************************************//**
-@file include/page0cur.ic
+/** @file include/page0cur.ic
 The page cursor
 
 Created 10/4/1994 Heikki Tuuri
@@ -27,13 +25,11 @@ Created 10/4/1994 Heikki Tuuri
 #include "buf0types.h"
 
 #ifdef UNIV_DEBUG
-/*********************************************************//**
-Gets pointer to the page frame where the cursor is positioned.
+/** Gets pointer to the page frame where the cursor is positioned.
 @return	page */
 UNIV_INLINE
 page_t*
 page_cur_get_page(
-/*==============*/
 	page_cur_t*	cur)	/*!< in: page cursor */
 {
 	ut_ad(cur);
@@ -42,13 +38,11 @@ page_cur_get_page(
 	return(page_align(cur->rec));
 }
 
-/*********************************************************//**
-Gets pointer to the buffer block where the cursor is positioned.
+/** Gets pointer to the buffer block where the cursor is positioned.
 @return	page */
 UNIV_INLINE
 buf_block_t*
 page_cur_get_block(
-/*===============*/
 	page_cur_t*	cur)	/*!< in: page cursor */
 {
 	ut_ad(cur);
@@ -56,25 +50,21 @@ page_cur_get_block(
 	return(cur->block);
 }
 
-/*********************************************************//**
-Gets pointer to the page frame where the cursor is positioned.
+/** Gets pointer to the page frame where the cursor is positioned.
 @return	page */
 UNIV_INLINE
 page_zip_des_t*
 page_cur_get_page_zip(
-/*==================*/
 	page_cur_t*	cur)	/*!< in: page cursor */
 {
 	return(buf_block_get_page_zip(page_cur_get_block(cur)));
 }
 
-/*********************************************************//**
-Gets the record where the cursor is positioned.
+/** Gets the record where the cursor is positioned.
 @return	record */
 UNIV_INLINE
 rec_t*
 page_cur_get_rec(
-/*=============*/
 	page_cur_t*	cur)	/*!< in: page cursor */
 {
 	ut_ad(cur);
@@ -84,13 +74,11 @@ page_cur_get_rec(
 }
 #endif /* UNIV_DEBUG */
 
-/*********************************************************//**
-Sets the cursor object to point before the first user record
+/** Sets the cursor object to point before the first user record
 on the page. */
 UNIV_INLINE
 void
 page_cur_set_before_first(
-/*======================*/
 	const buf_block_t*	block,	/*!< in: index page */
 	page_cur_t*		cur)	/*!< in: cursor */
 {
@@ -98,13 +86,11 @@ page_cur_set_before_first(
 	cur->rec = page_get_infimum_rec(buf_block_get_frame(cur->block));
 }
 
-/*********************************************************//**
-Sets the cursor object to point after the last user record on
+/** Sets the cursor object to point after the last user record on
 the page. */
 UNIV_INLINE
 void
 page_cur_set_after_last(
-/*====================*/
 	const buf_block_t*	block,	/*!< in: index page */
 	page_cur_t*		cur)	/*!< in: cursor */
 {
@@ -112,13 +98,11 @@ page_cur_set_after_last(
 	cur->rec = page_get_supremum_rec(buf_block_get_frame(cur->block));
 }
 
-/*********************************************************//**
-Returns TRUE if the cursor is before first user record on page.
+/** Returns TRUE if the cursor is before first user record on page.
 @return	TRUE if at start */
 UNIV_INLINE
 ibool
 page_cur_is_before_first(
-/*=====================*/
 	const page_cur_t*	cur)	/*!< in: cursor */
 {
 	ut_ad(cur);
@@ -126,13 +110,11 @@ page_cur_is_before_first(
 	return(page_rec_is_infimum(cur->rec));
 }
 
-/*********************************************************//**
-Returns TRUE if the cursor is after last user record.
+/** Returns TRUE if the cursor is after last user record.
 @return	TRUE if at end */
 UNIV_INLINE
 ibool
 page_cur_is_after_last(
-/*===================*/
 	const page_cur_t*	cur)	/*!< in: cursor */
 {
 	ut_ad(cur);
@@ -140,12 +122,10 @@ page_cur_is_after_last(
 	return(page_rec_is_supremum(cur->rec));
 }
 
-/**********************************************************//**
-Positions the cursor on the given record. */
+/** Positions the cursor on the given record. */
 UNIV_INLINE
 void
 page_cur_position(
-/*==============*/
 	const rec_t*		rec,	/*!< in: record on a page */
 	const buf_block_t*	block,	/*!< in: buffer block containing
 					the record */
@@ -158,12 +138,10 @@ page_cur_position(
 	cur->block = (buf_block_t*) block;
 }
 
-/**********************************************************//**
-Invalidates a page cursor by setting the record pointer NULL. */
+/** Invalidates a page cursor by setting the record pointer NULL. */
 UNIV_INLINE
 void
 page_cur_invalidate(
-/*================*/
 	page_cur_t*	cur)	/*!< out: page cursor */
 {
 	ut_ad(cur);
@@ -172,12 +150,10 @@ page_cur_invalidate(
 	cur->block = NULL;
 }
 
-/**********************************************************//**
-Moves the cursor to the next record on page. */
+/** Moves the cursor to the next record on page. */
 UNIV_INLINE
 void
 page_cur_move_to_next(
-/*==================*/
 	page_cur_t*	cur)	/*!< in/out: cursor; must not be after last */
 {
 	ut_ad(!page_cur_is_after_last(cur));
@@ -185,12 +161,10 @@ page_cur_move_to_next(
 	cur->rec = page_rec_get_next(cur->rec);
 }
 
-/**********************************************************//**
-Moves the cursor to the previous record on page. */
+/** Moves the cursor to the previous record on page. */
 UNIV_INLINE
 void
 page_cur_move_to_prev(
-/*==================*/
 	page_cur_t*	cur)	/*!< in/out: page cursor, not before first */
 {
 	ut_ad(!page_cur_is_before_first(cur));
@@ -199,13 +173,11 @@ page_cur_move_to_prev(
 }
 
 #ifndef UNIV_HOTBACKUP
-/****************************************************************//**
-Searches the right position for a page cursor.
+/** Searches the right position for a page cursor.
 @return	number of matched fields on the left */
 UNIV_INLINE
 ulint
 page_cur_search(
-/*============*/
 	const buf_block_t*	block,	/*!< in: buffer block */
 	const dict_index_t*	dict_index, /*!< in: record descriptor */
 	const dtuple_t*		tuple,	/*!< in: data tuple */
@@ -230,8 +202,7 @@ page_cur_search(
 	return(low_matched_fields);
 }
 
-/***********************************************************//**
-Inserts a record next to page cursor. Returns pointer to inserted record if
+/** Inserts a record next to page cursor. Returns pointer to inserted record if
 succeed, i.e., enough space available, NULL otherwise. The cursor stays at
 the same logical position, but the physical position may change if it is
 pointing to a compressed page that was reorganized.
@@ -239,7 +210,6 @@ pointing to a compressed page that was reorganized.
 UNIV_INLINE
 rec_t*
 page_cur_tuple_insert(
-/*==================*/
 	page_cur_t*	cursor,	/*!< in/out: a page cursor */
 	const dtuple_t*	tuple,	/*!< in: pointer to a data tuple */
 	dict_index_t*	dict_index,	/*!< in: record descriptor */
@@ -276,8 +246,7 @@ page_cur_tuple_insert(
 }
 #endif /* !UNIV_HOTBACKUP */
 
-/***********************************************************//**
-Inserts a record next to page cursor. Returns pointer to inserted record if
+/** Inserts a record next to page cursor. Returns pointer to inserted record if
 succeed, i.e., enough space available, NULL otherwise. The cursor stays at
 the same logical position, but the physical position may change if it is
 pointing to a compressed page that was reorganized.
@@ -285,7 +254,6 @@ pointing to a compressed page that was reorganized.
 UNIV_INLINE
 rec_t*
 page_cur_rec_insert(
-/*================*/
 	page_cur_t*	cursor,	/*!< in/out: a page cursor */
 	const rec_t*	rec,	/*!< in: record to insert */
 	dict_index_t*	dict_index,	/*!< in: record descriptor */

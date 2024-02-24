@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1998, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file eval/eval0proc.c
+/** @file eval/eval0proc.c
 Executes SQL stored procedures and their control structures
 
 Created 1/20/1998 Heikki Tuuri
@@ -29,13 +27,11 @@ Created 1/20/1998 Heikki Tuuri
 #include "eval0proc.ic"
 #endif
 
-/**********************************************************************//**
-Performs an execution step of an if-statement node.
+/** Performs an execution step of an if-statement node.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 if_step(
-/*====*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	if_node_t*	node;
@@ -105,13 +101,11 @@ if_step(
 	return(thr);
 }
 
-/**********************************************************************//**
-Performs an execution step of a while-statement node.
+/** Performs an execution step of a while-statement node.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 while_step(
-/*=======*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	while_node_t*	node;
@@ -141,13 +135,11 @@ while_step(
 	return(thr);
 }
 
-/**********************************************************************//**
-Performs an execution step of an assignment statement node.
+/** Performs an execution step of an assignment statement node.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 assign_step(
-/*========*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	assign_node_t*	node;
@@ -168,13 +160,11 @@ assign_step(
 	return(thr);
 }
 
-/**********************************************************************//**
-Performs an execution step of a for-loop node.
+/** Performs an execution step of a for-loop node.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 for_step(
-/*=====*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	for_node_t*	node;
@@ -230,13 +220,11 @@ for_step(
 	return(thr);
 }
 
-/**********************************************************************//**
-Performs an execution step of an exit statement node.
+/** Performs an execution step of an exit statement node.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 exit_step(
-/*======*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	exit_node_t*	node;
@@ -262,13 +250,11 @@ exit_step(
 	return(thr);
 }
 
-/**********************************************************************//**
-Performs an execution step of a return-statement node.
+/** Performs an execution step of a return-statement node.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 return_step(
-/*========*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	return_node_t*	node;

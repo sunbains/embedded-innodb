@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file thr/thr0loc.c
+/** @file thr/thr0loc.c
 The thread local storage
 
 Created 10/5/1995 Heikki Tuuri
@@ -71,13 +69,11 @@ struct thr_local_struct{
 /** The value of thr_local_struct::magic_n */
 #define THR_LOCAL_MAGIC_N	1231234
 
-/*******************************************************************//**
-Returns the local storage struct for a thread.
+/** Returns the local storage struct for a thread.
 @return	local storage */
 static
 thr_local_t*
 thr_local_get(
-/*==========*/
 	os_thread_id_t	id)	/*!< in: thread id of the thread */
 {
 	thr_local_t*	local;
@@ -107,13 +103,11 @@ try_again:
 	return(local);
 }
 
-/*******************************************************************//**
-Gets the slot number in the thread table of a thread.
+/** Gets the slot number in the thread table of a thread.
 @return	slot number */
 UNIV_INTERN
 ulint
 thr_local_get_slot_no(
-/*==================*/
 	os_thread_id_t	id)	/*!< in: thread id of the thread */
 {
 	ulint		slot_no;
@@ -130,12 +124,10 @@ thr_local_get_slot_no(
 	return(slot_no);
 }
 
-/*******************************************************************//**
-Sets the slot number in the thread table of a thread. */
+/** Sets the slot number in the thread table of a thread. */
 UNIV_INTERN
 void
 thr_local_set_slot_no(
-/*==================*/
 	os_thread_id_t	id,	/*!< in: thread id of the thread */
 	ulint		slot_no)/*!< in: slot number */
 {
@@ -150,14 +142,12 @@ thr_local_set_slot_no(
 	mutex_exit(&thr_local_mutex);
 }
 
-/*******************************************************************//**
-Returns pointer to the 'in_ibuf' field within the current thread local
+/** Returns pointer to the 'in_ibuf' field within the current thread local
 storage.
 @return	pointer to the in_ibuf field */
 UNIV_INTERN
 ibool*
 thr_local_get_in_ibuf_field(void)
-/*=============================*/
 {
 	thr_local_t*	local;
 
@@ -170,12 +160,10 @@ thr_local_get_in_ibuf_field(void)
 	return(&(local->in_ibuf));
 }
 
-/*******************************************************************//**
-Creates a local storage struct for the calling new thread. */
+/** Creates a local storage struct for the calling new thread. */
 UNIV_INTERN
 void
 thr_local_create(void)
-/*==================*/
 {
 	thr_local_t*	local;
 
@@ -200,12 +188,10 @@ thr_local_create(void)
 	mutex_exit(&thr_local_mutex);
 }
 
-/*******************************************************************//**
-Frees the local storage struct for the specified thread. */
+/** Frees the local storage struct for the specified thread. */
 UNIV_INTERN
 void
 thr_local_free(
-/*===========*/
 	os_thread_id_t	id)	/*!< in: thread id */
 {
 	thr_local_t*	local;
@@ -232,12 +218,10 @@ thr_local_free(
 	mem_free(local);
 }
 
-/****************************************************************//**
-Initializes the thread local storage module. */
+/** Initializes the thread local storage module. */
 UNIV_INTERN
 void
 thr_local_init(void)
-/*================*/
 {
 	ut_a(thr_local_hash == NULL);
 
@@ -246,12 +230,10 @@ thr_local_init(void)
 	mutex_create(&thr_local_mutex, SYNC_THR_LOCAL);
 }
 
-/********************************************************************
-Close the thread local storage module. */
+/** Close the thread local storage module. */
 UNIV_INTERN
 void
 thr_local_close(void)
-/*=================*/
 {
 	ulint		i;
 

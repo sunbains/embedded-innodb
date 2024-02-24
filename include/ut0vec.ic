@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 2006, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,32 +15,27 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/*******************************************************************//**
-@file include/ut0vec.ic
+/** @file include/ut0vec.ic
 A vector of pointers to data items
 
 Created 4/6/2006 Osku Salerma
 ************************************************************************/
 
-/****************************************************************//**
-Get number of elements in vector.
+/** Get number of elements in vector.
 @return	number of elements in vector */
 UNIV_INLINE
 ulint
 ib_vector_size(
-/*===========*/
 	const ib_vector_t*	vec)	/*!< in: vector */
 {
 	return(vec->used);
 }
 
-/****************************************************************//**
-Get n'th element.
+/** Get n'th element.
 @return	n'th element */
 UNIV_INLINE
 void*
 ib_vector_get(
-/*==========*/
 	ib_vector_t*	vec,	/*!< in: vector */
 	ulint		n)	/*!< in: element index to get */
 {
@@ -50,13 +44,11 @@ ib_vector_get(
 	return(vec->data[n]);
 }
 
-/****************************************************************//**
-Get n'th element as a const pointer.
+/** Get n'th element as a const pointer.
 @return	n'th element */
 UNIV_INLINE
 const void*
 ib_vector_get_const(
-/*================*/
 	const ib_vector_t*	vec,	/*!< in: vector */
 	ulint		n)	/*!< in: element index to get */
 {
@@ -65,13 +57,11 @@ ib_vector_get_const(
 	return(vec->data[n]);
 }
 
-/****************************************************************//**
-Set n'th element and return the previous value.
+/** Set n'th element and return the previous value.
 @return	n'th element */
 UNIV_INLINE
 void*
 ib_vector_set(
-/*==========*/
 	ib_vector_t*	vec,	/*!< in: vector */
 	ulint		n,	/*!< in: element index to set */
 	void*		p)	/*!< in: new value to set */
@@ -86,13 +76,11 @@ ib_vector_set(
 	return(prev);
 }
 
-/********************************************************************
-Remove the last element from the vector.
+/** Remove the last element from the vector.
 @return	last vector element */
 UNIV_INLINE
 void*
 ib_vector_pop(
-/*==========*/
 	ib_vector_t*    vec)    /*!< in/out: vector */
 {
 	void*           elem;
@@ -107,25 +95,21 @@ ib_vector_pop(
 	return(elem);
 }
 
-/****************************************************************//**
-Free the underlying heap of the vector. Note that vec is invalid
+/** Free the underlying heap of the vector. Note that vec is invalid
 after this call. */
 UNIV_INLINE
 void
 ib_vector_free(
-/*===========*/
 	ib_vector_t*    vec)    /*!< in, own: vector */
 {
 	mem_heap_free(vec->heap);
 }
 
-/****************************************************************//**
-Test whether a vector is empty or not.
+/** Test whether a vector is empty or not.
 @return	TRUE if empty */
 UNIV_INLINE
 ibool
 ib_vector_is_empty(
-/*===============*/
 	const ib_vector_t*	vec)	/*!< in: vector */
 {
 	return(ib_vector_size(vec) == 0);

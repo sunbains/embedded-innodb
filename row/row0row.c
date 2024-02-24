@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file row/row0row.c
+/** @file row/row0row.c
 General row routines
 
 Created 4/20/1996 Heikki Tuuri
@@ -47,14 +45,12 @@ Created 4/20/1996 Heikki Tuuri
 #include "read0read.h"
 #include "ut0mem.h"
 
-/*********************************************************************//**
-Gets the offset of trx id field, in bytes relative to the origin of
+/** Gets the offset of trx id field, in bytes relative to the origin of
 a clustered index record.
 @return	offset of DATA_TRX_ID */
 UNIV_INTERN
 ulint
 row_get_trx_id_offset(
-/*==================*/
 	const rec_t*	rec __attribute__((unused)),
 				/*!< in: record */
 	dict_index_t*	index,	/*!< in: clustered index */
@@ -76,8 +72,7 @@ row_get_trx_id_offset(
 	return(offset);
 }
 
-/*****************************************************************//**
-When an insert or purge to a table is performed, this function builds
+/** When an insert or purge to a table is performed, this function builds
 the entry to be inserted into or purged from an index on the table.
 @return index entry which should be inserted or purged, or NULL if the
 externally stored columns in the clustered index record are
@@ -85,7 +80,6 @@ unavailable and ext != NULL */
 UNIV_INTERN
 dtuple_t*
 row_build_index_entry(
-/*==================*/
 	const dtuple_t*	row,	/*!< in: row which should be
 				inserted or purged */
 	row_ext_t*	ext,	/*!< in: externally stored column prefixes,
@@ -170,14 +164,12 @@ row_build_index_entry(
 	return(entry);
 }
 
-/*******************************************************************//**
-An inverse function to row_build_index_entry. Builds a row from a
+/** An inverse function to row_build_index_entry. Builds a row from a
 record in a clustered index.
 @return	own: row built; see the NOTE below! */
 UNIV_INTERN
 dtuple_t*
 row_build(
-/*======*/
 	ulint			type,	/*!< in: ROW_COPY_POINTERS or
 					ROW_COPY_DATA; the latter
 					copies also the data fields to
@@ -313,14 +305,12 @@ row_build(
 	return(row);
 }
 
-/*******************************************************************//**
-Converts an index record to a typed data tuple.
+/** Converts an index record to a typed data tuple.
 @return index entry built; does not set info_bits, and the data fields
 in the entry will point directly to rec */
 UNIV_INTERN
 dtuple_t*
 row_rec_to_index_entry_low(
-/*=======================*/
 	const rec_t*		rec,	/*!< in: record in the index */
 	const dict_index_t*	index,	/*!< in: index */
 	const ulint*		offsets,/*!< in: rec_get_offsets(rec, index) */
@@ -371,14 +361,12 @@ row_rec_to_index_entry_low(
 	return(entry);
 }
 
-/*******************************************************************//**
-Converts an index record to a typed data tuple. NOTE that externally
+/** Converts an index record to a typed data tuple. NOTE that externally
 stored (often big) fields are NOT copied to heap.
 @return	own: index entry built; see the NOTE below! */
 UNIV_INTERN
 dtuple_t*
 row_rec_to_index_entry(
-/*===================*/
 	ulint			type,	/*!< in: ROW_COPY_DATA, or
 					ROW_COPY_POINTERS: the former
 					copies also the data fields to
@@ -423,14 +411,12 @@ row_rec_to_index_entry(
 	return(entry);
 }
 
-/*******************************************************************//**
-Builds from a secondary index record a row reference with which we can
+/** Builds from a secondary index record a row reference with which we can
 search the clustered index record.
 @return	own: row reference built; see the NOTE below! */
 UNIV_INTERN
 dtuple_t*
 row_build_row_ref(
-/*==============*/
 	ulint		type,	/*!< in: ROW_COPY_DATA, or ROW_COPY_POINTERS:
 				the former copies also the data fields to
 				heap, whereas the latter only places pointers
@@ -534,13 +520,11 @@ row_build_row_ref(
 	return(ref);
 }
 
-/*******************************************************************//**
-Builds from a secondary index record a row reference with which we can
+/** Builds from a secondary index record a row reference with which we can
 search the clustered index record. */
 UNIV_INTERN
 void
 row_build_row_ref_in_tuple(
-/*=======================*/
 	dtuple_t*		ref,	/*!< in/out: row reference built;
 					see the NOTE below! */
 	const rec_t*		rec,	/*!< in: record in the index;
@@ -647,13 +631,11 @@ notfound:
 	}
 }
 
-/***************************************************************//**
-Searches the clustered index record for a row, if we have the row reference.
+/** Searches the clustered index record for a row, if we have the row reference.
 @return	TRUE if found */
 UNIV_INTERN
 ibool
 row_search_on_row_ref(
-/*==================*/
 	btr_pcur_t*		pcur,	/*!< out: persistent cursor, which must
 					be closed by the caller */
 	ulint			mode,	/*!< in: BTR_MODIFY_LEAF, ... */
@@ -690,14 +672,12 @@ row_search_on_row_ref(
 	return(TRUE);
 }
 
-/*********************************************************************//**
-Fetches the clustered index record for a secondary index record. The latches
+/** Fetches the clustered index record for a secondary index record. The latches
 on the secondary index record are preserved.
 @return	record or NULL, if no record found */
 UNIV_INTERN
 rec_t*
 row_get_clust_rec(
-/*==============*/
 	ulint		mode,	/*!< in: BTR_MODIFY_LEAF, ... */
 	const rec_t*	rec,	/*!< in: record in a secondary index */
 	dict_index_t*	index,	/*!< in: secondary index */
@@ -732,13 +712,11 @@ row_get_clust_rec(
 	return(clust_rec);
 }
 
-/***************************************************************//**
-Searches an index record.
+/** Searches an index record.
 @return	TRUE if found */
 UNIV_INTERN
 ibool
 row_search_index_entry(
-/*===================*/
 	dict_index_t*	index,	/*!< in: index */
 	const dtuple_t*	entry,	/*!< in: index entry */
 	ulint		mode,	/*!< in: BTR_MODIFY_LEAF, ... */

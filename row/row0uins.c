@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file row/row0uins.c
+/** @file row/row0uins.c
 Fresh insert undo
 
 Created 2/25/1997 Heikki Tuuri
@@ -46,14 +44,12 @@ Created 2/25/1997 Heikki Tuuri
 #include "ibuf0ibuf.h"
 #include "log0log.h"
 
-/***************************************************************//**
-Removes a clustered index record. The pcur in node was positioned on the
+/** Removes a clustered index record. The pcur in node was positioned on the
 record, now it is detached.
 @return	DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
 static
 ulint
 row_undo_ins_remove_clust_rec(
-/*==========================*/
 	undo_node_t*	node)	/*!< in: undo node */
 {
 	btr_cur_t*	btr_cur;
@@ -132,13 +128,11 @@ retry:
 	return(err);
 }
 
-/***************************************************************//**
-Removes a secondary index entry if found.
+/** Removes a secondary index entry if found.
 @return	DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE */
 static
 ulint
 row_undo_ins_remove_sec_low(
-/*========================*/
 	ulint		mode,	/*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
 				depending on whether we wish optimistic or
 				pessimistic descent down the index tree */
@@ -195,14 +189,12 @@ row_undo_ins_remove_sec_low(
 	return(err);
 }
 
-/***************************************************************//**
-Removes a secondary index entry from the index if found. Tries first
+/** Removes a secondary index entry from the index if found. Tries first
 optimistic, then pessimistic descent down the tree.
 @return	DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
 static
 ulint
 row_undo_ins_remove_sec(
-/*====================*/
 	dict_index_t*	index,	/*!< in: index */
 	dtuple_t*	entry)	/*!< in: index entry to insert */
 {
@@ -238,12 +230,10 @@ retry:
 	return(err);
 }
 
-/***********************************************************//**
-Parses the row reference and other info in a fresh insert undo record. */
+/** Parses the row reference and other info in a fresh insert undo record. */
 static
 void
 row_undo_ins_parse_undo_rec(
-/*========================*/
 	ib_recovery_t	recovery,	/*!< in: recovery flag */
 	undo_node_t*	node)		/*!< in/out: row undo node */
 {
@@ -289,8 +279,7 @@ row_undo_ins_parse_undo_rec(
 	}
 }
 
-/***********************************************************//**
-Undoes a fresh insert of a row to a table. A fresh insert means that
+/** Undoes a fresh insert of a row to a table. A fresh insert means that
 the same clustered index unique key did not have any record, even delete
 marked, at the time of the insert.  InnoDB is eager in a rollback:
 if it figures out that an index record will be removed in the purge
@@ -299,7 +288,6 @@ anyway, it will remove it in the rollback.
 UNIV_INTERN
 ulint
 row_undo_ins(
-/*=========*/
 	undo_node_t*	node)	/*!< in: row undo node */
 {
 	ut_ad(node);

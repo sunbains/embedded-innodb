@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -178,8 +177,7 @@ static const ib_status_t status_vars[] = {
 
 	{ NULL, 0, 0}};
 
-/*********************************************************************//**
-Get a list of the names of all status variables.
+/** Get a list of the names of all status variables.
 The caller is responsible for free(3)ing the returned array of strings
 when it is not needed anymore and for not modifying the individual strings.
 ib_status_get_all() @{
@@ -187,7 +185,6 @@ ib_status_get_all() @{
 
 ib_err_t
 ib_status_get_all(
-/*===========*/
 	const char***	names,		/*!< out: pointer to array of strings */
 	ib_u32_t*	names_num)	/*!< out: number of strings returned */
 {
@@ -208,14 +205,12 @@ ib_status_get_all(
 }
 /* @} */
 
-/*******************************************************************//*
-Get the status variable that matches name.
+/** Get the status variable that matches name.
 
 @return DB_SUCCESS if found else DB_NOT_FOUND */
 static
 ib_err_t
 ib_status_lookup(
-/*=============*/
 	const char*	name,		/*!< in: Variable to lookup */
 	const ib_status_t** var)	/*!< out: pointer to entry */
 {
@@ -233,8 +228,7 @@ ib_status_lookup(
 	return(DB_NOT_FOUND);
 }
 
-/*******************************************************************//**
-Get the value of an INT status variable.
+/** Get the value of an INT status variable.
 @file api/api0status.c
 
 @return	DB_SUCCESS if found and type is INT,
@@ -243,7 +237,6 @@ Get the value of an INT status variable.
 
 ib_err_t
 ib_status_get_i64(
-/*==============*/
 	const char*	name,		/*!< in: Status variable name */
 	ib_i64_t*	dst)		/*!< out: Variable value */
 {

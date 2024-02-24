@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/*******************************************************************//**
-@file rem/rem0cmp.c
+/** @file rem/rem0cmp.c
 Comparison services for records
 
 Created 7/1/1994 Heikki Tuuri
@@ -53,8 +51,7 @@ where two records disagree only in the way that one
 has more fields than the other. */
 
 #ifdef UNIV_DEBUG
-/*************************************************************//**
-Used in debug checking of cmp_dtuple_... .
+/** Used in debug checking of cmp_dtuple_... .
 This function is used to compare a data tuple to a physical record. If
 dtuple has n fields then rec must have either m >= n fields, or it must
 differ from dtuple in some of the m fields rec has.
@@ -63,7 +60,6 @@ respectively, when only the common first fields are compared */
 static
 int
 cmp_debug_dtuple_rec_with_match(
-/*============================*/
 	void*		cmp_ctx,/*!< in: client compare context */
 	const dtuple_t*	dtuple,	/*!< in: data tuple */
 	const rec_t*	rec,	/*!< in: physical record which differs from
@@ -76,15 +72,13 @@ cmp_debug_dtuple_rec_with_match(
 				returns, contains the value for current
 				comparison */
 #endif /* UNIV_DEBUG */
-/*********************************************************************//**
-Transforms the character code so that it is ordered appropriately for the
+/** Transforms the character code so that it is ordered appropriately for the
 language. This is only used for the latin1 char set. The client does the
 comparisons for other char sets.
 @return	collation order position */
 UNIV_INLINE
 ulint
 cmp_collate(
-/*========*/
 	ulint	code)	/*!< in: code of a character stored in
 			database record */
 {
@@ -93,13 +87,11 @@ cmp_collate(
 	return(code);
 }
 
-/*************************************************************//**
-Returns TRUE if two columns are equal for comparison purposes.
+/** Returns TRUE if two columns are equal for comparison purposes.
 @return	TRUE if the columns are considered equal in comparisons */
 UNIV_INTERN
 ibool
 cmp_cols_are_equal(
-/*===============*/
 	const dict_col_t*	col1,	/*!< in: column 1 */
 	const dict_col_t*	col2,	/*!< in: column 2 */
 	ibool			check_charsets)
@@ -146,15 +138,13 @@ cmp_cols_are_equal(
 	return(col1->mtype != DATA_INT || col1->len == col2->len);
 }
 
-/*************************************************************//**
-Innobase uses this function to compare two data fields for which the
+/** Innobase uses this function to compare two data fields for which the
 data type is such that we must compare whole fields or call the client
 to do the comparison
 @return	1, 0, -1, if a is greater, equal, less than b, respectively */
 static
 int
 cmp_whole_field(
-/*============*/
 	void*		cmp_ctx,	/*!< in: client compare context */
 	ulint		mtype,		/*!< in: main type */
 	ib_u16_t	prtype,		/*!< in: precise type */
@@ -302,14 +292,12 @@ cmp_whole_field(
 	return(0);
 }
 
-/*************************************************************//**
-This function is used to compare two data fields for which we know the
+/** This function is used to compare two data fields for which we know the
 data type.
 @return	1, 0, -1, if data1 is greater, equal, less than data2, respectively */
 UNIV_INTERN
 int
 cmp_data_data_slow(
-/*===============*/
 	void*		cmp_ctx,/*!< in: client compare context */
 	ulint		mtype,	/*!< in: main type */
 	ulint		prtype,	/*!< in: precise type */
@@ -417,8 +405,7 @@ next_byte:
 	return(0);		/* Not reached */
 }
 
-/*************************************************************//**
-This function is used to compare a data tuple to a physical record.
+/** This function is used to compare a data tuple to a physical record.
 Only dtuple->n_fields_cmp first fields are taken into account for
 the data tuple! If we denote by n = n_fields_cmp, then rec must
 have either m >= n fields, or it must differ from dtuple in some of
@@ -431,7 +418,6 @@ the first externally stored field in rec */
 UNIV_INTERN
 int
 cmp_dtuple_rec_with_match(
-/*======================*/
 	void*		cmp_ctx,/*!< in: client compare context */
 	const dtuple_t*	dtuple,	/*!< in: data tuple */
 	const rec_t*	rec,	/*!< in: physical record which differs from
@@ -657,14 +643,12 @@ order_resolved:
 	return(ret);
 }
 
-/**************************************************************//**
-Compares a data tuple to a physical record.
+/** Compares a data tuple to a physical record.
 @see cmp_dtuple_rec_with_match
 @return 1, 0, -1, if dtuple is greater, equal, less than rec, respectively */
 UNIV_INTERN
 int
 cmp_dtuple_rec(
-/*===========*/
 	void*		cmp_ctx,/*!< in: client compare context */
 	const dtuple_t*	dtuple,	/*!< in: data tuple */
 	const rec_t*	rec,	/*!< in: physical record */
@@ -679,14 +663,12 @@ cmp_dtuple_rec(
 		&matched_fields, &matched_bytes));
 }
 
-/**************************************************************//**
-Checks if a dtuple is a prefix of a record. The last field in dtuple
+/** Checks if a dtuple is a prefix of a record. The last field in dtuple
 is allowed to be a prefix of the corresponding field in the record.
 @return	TRUE if prefix */
 UNIV_INTERN
 ibool
 cmp_dtuple_is_prefix_of_rec(
-/*========================*/
 	void*		cmp_ctx,/*!< in: client compare context */
 	const dtuple_t*	dtuple,	/*!< in: data tuple */
 	const rec_t*	rec,	/*!< in: physical record */
@@ -722,14 +704,12 @@ cmp_dtuple_is_prefix_of_rec(
 	return(FALSE);
 }
 
-/*************************************************************//**
-Compare two physical records that contain the same number of columns,
+/** Compare two physical records that contain the same number of columns,
 none of which are stored externally.
 @return	1, 0, -1 if rec1 is greater, equal, less, respectively, than rec2 */
 UNIV_INTERN
 int
 cmp_rec_rec_simple(
-/*===============*/
 	const rec_t*		rec1,	/*!< in: physical record */
 	const rec_t*		rec2,	/*!< in: physical record */
 	const ulint*		offsets1,/*!< in: rec_get_offsets(rec1, ...) */
@@ -874,15 +854,13 @@ next_field:
 	return(0);
 }
 
-/*************************************************************//**
-This function is used to compare two physical records. Only the common
+/** This function is used to compare two physical records. Only the common
 first fields are compared, and if an externally stored field is
 encountered, then 0 is returned.
 @return 1, 0, -1 if rec1 is greater, equal, less, respectively */
 UNIV_INTERN
 int
 cmp_rec_rec_with_match(
-/*===================*/
 	const rec_t*	rec1,	/*!< in: physical record */
 	const rec_t*	rec2,	/*!< in: physical record */
 	const ulint*	offsets1,/*!< in: rec_get_offsets(rec1, index) */
@@ -1113,8 +1091,7 @@ order_resolved:
 }
 
 #ifdef UNIV_DEBUG
-/*************************************************************//**
-Used in debug checking of cmp_dtuple_... .
+/** Used in debug checking of cmp_dtuple_... .
 This function is used to compare a data tuple to a physical record. If
 dtuple has n fields then rec must have either m >= n fields, or it must
 differ from dtuple in some of the m fields rec has. If encounters an
@@ -1124,7 +1101,6 @@ respectively, when only the common first fields are compared */
 static
 int
 cmp_debug_dtuple_rec_with_match(
-/*============================*/
 	void*		cmp_ctx,	/*!< in: client compare context */
 	const dtuple_t*	dtuple,	/*!< in: data tuple */
 	const rec_t*	rec,	/*!< in: physical record which differs from

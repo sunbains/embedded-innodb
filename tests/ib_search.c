@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2010 Innobase Oy. All rights reserved.
+/** Copyright (c) 2010 Innobase Oy. All rights reserved.
 Copyright (c) 2010 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -68,12 +67,10 @@ static row_t in_rows[] = {
 
 #define COL_LEN(n)	(sizeof(((row_t*)0)->n))
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -84,8 +81,7 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-CREATE TABLE T(
+/** CREATE TABLE T(
 	c1	VARCHAR(n),
 	c2	VARCHAR(n),
 	c3	INT,
@@ -93,7 +89,6 @@ CREATE TABLE T(
 static
 ib_err_t
 create_table(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name)			/*!< in: table name */
 {
@@ -165,12 +160,10 @@ create_table(
 	return(err);
 }
 
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 static
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	ib_trx_t	ib_trx,		/*!< in: transaction */
@@ -190,12 +183,10 @@ open_table(
 	return(err);
 }
 
-/*********************************************************************
-INSERT INTO T VALUE('c1', 'c2', c3); */
+/** INSERT INTO T VALUE('c1', 'c2', c3); */
 static
 ib_err_t
 insert_rows(
-/*========*/
 	ib_crsr_t	crsr)		/*!< in, out: cursor to use for write */
 {
 	row_t*		row;
@@ -225,12 +216,10 @@ insert_rows(
 	return(err);
 }
 
-/*********************************************************************
-SELECT * FROM T WHERE c1 = 'abc' AND c2 = 'def'; */
+/** SELECT * FROM T WHERE c1 = 'abc' AND c2 = 'def'; */
 static
 ib_err_t
 do_moveto1(
-/*=======*/
 	ib_crsr_t	crsr)
 {
 	ib_err_t	err;
@@ -267,12 +256,10 @@ do_moveto1(
 	return(err);
 }
 
-/*********************************************************************
-SELECT * FROM T WHERE c1 = 'abc' AND c2 = 'def'; */
+/** SELECT * FROM T WHERE c1 = 'abc' AND c2 = 'def'; */
 static
 ib_bool_t
 do_select1(
-/*=======*/
 	ib_tpl_t	tpl)
 {
 	print_tuple(stdout, tpl);
@@ -280,12 +267,10 @@ do_select1(
 	return(IB_FALSE);
 }
 
-/*********************************************************************
-SELECT * FROM T WHERE c1 = 'abc'; */
+/** SELECT * FROM T WHERE c1 = 'abc'; */
 static
 ib_err_t
 do_moveto2(
-/*=======*/
 	ib_crsr_t	crsr)
 {
 	ib_err_t	err;
@@ -318,12 +303,10 @@ do_moveto2(
 	return(err);
 }
 
-/*********************************************************************
-SELECT * FROM T WHERE c1 = 'abc'; */
+/** SELECT * FROM T WHERE c1 = 'abc'; */
 static
 ib_bool_t
 do_select2(
-/*=======*/
 	ib_tpl_t	tpl)
 {
 	const char*	c1;
@@ -342,12 +325,10 @@ do_select2(
 	return(IB_FALSE);
 }
 
-/*********************************************************************
-SELECT * FROM T WHERE c1 >= 'g%'; */
+/** SELECT * FROM T WHERE c1 >= 'g%'; */
 static
 ib_err_t
 do_moveto3(
-/*=======*/
 	ib_crsr_t	crsr)
 {
 	ib_err_t	err;
@@ -380,12 +361,10 @@ do_moveto3(
 	return(err);
 }
 
-/*********************************************************************
-SELECT * FROM T WHERE c1 >= 'g%'; */
+/** SELECT * FROM T WHERE c1 >= 'g%'; */
 static
 ib_bool_t
 do_select3(
-/*=======*/
 	ib_tpl_t	tpl)
 {
 	const char*	c1;
@@ -404,12 +383,10 @@ do_select3(
 	return(IB_FALSE);
 }
 
-/*********************************************************************
-SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'x%'; */
+/** SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'x%'; */
 static
 ib_err_t
 do_moveto4(
-/*=======*/
 	ib_crsr_t	crsr)
 {
 	ib_err_t	err;
@@ -446,12 +423,10 @@ do_moveto4(
 	return(err);
 }
 
-/*********************************************************************
-SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'x%'; */
+/** SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'x%'; */
 static
 ib_bool_t
 do_select4(
-/*=======*/
 	ib_tpl_t	tpl)
 {
 	const char*	c1;
@@ -473,12 +448,10 @@ do_select4(
 	return(IB_FALSE);
 }
 
-/*********************************************************************
-SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'z%'; */
+/** SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'z%'; */
 static
 ib_err_t
 do_moveto5(
-/*=======*/
 	ib_crsr_t	crsr)
 {
 	ib_err_t	err;
@@ -512,12 +485,10 @@ do_moveto5(
 	return(err);
 }
 
-/*********************************************************************
-SELECT * FROM T <start from moveto()>; */
+/** SELECT * FROM T <start from moveto()>; */
 static
 ib_err_t
 do_query(
-/*=====*/
 	ib_crsr_t	crsr,
 	ib_err_t	(*moveto)(ib_crsr_t),
 	ib_bool_t	(*select_func)(ib_tpl_t))

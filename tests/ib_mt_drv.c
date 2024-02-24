@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -17,8 +16,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 ************************************************************************/
 
-/**********************************************************************
-NOTE: This test is currently Unix centric and will not compile on Windows.
+/** NOTE: This test is currently Unix centric and will not compile on Windows.
 
 This module is a driver framework for running arbitrary DML and DDL
 statements on arbitrary number of tables using configurable number
@@ -147,11 +145,9 @@ static ib_ulint_t	page_size = 0;
 static op_err_t dml_op_errs[DML_OP_TYPE_MAX];
 static op_err_t ddl_op_errs[DDL_OP_TYPE_MAX];
 
-/**********************************************************************
-Update the error stats */
+/** Update the error stats */
 void
 update_err_stats(
-/*=============*/
 	op_err_t*	e,	/*!< in: error stat struct */
 	ib_err_t	err)	/*!< in: error code */
 {
@@ -164,12 +160,10 @@ update_err_stats(
 	pthread_mutex_unlock(&e->mutex);
 }
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -180,12 +174,10 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-Drop the database. */
+/** Drop the database. */
 static
 ib_err_t
 drop_database(
-/*==========*/
 	const char*	dbname)			/*!< in: db to drop */
 {
 	ib_err_t	err;
@@ -194,12 +186,10 @@ drop_database(
 	return(err);
 }
 
-/**********************************************************************
-Create test tables at startup */
+/** Create test tables at startup */
 static
 void
 create_test_table(
-/*==============*/
 	tbl_class_t*	tbl)	/*!< in: table to create */
 {
 	ib_err_t	err;
@@ -215,12 +205,10 @@ create_test_table(
 	assert(err == DB_SUCCESS);
 }
 
-/**********************************************************************
-Seed test table with initial data */
+/** Seed test table with initial data */
 static
 void
 seed_test_table(
-/*===========*/
 	tbl_class_t*	tbl)	/*!< in: table to populate */
 {
 	ib_err_t	err;
@@ -249,12 +237,10 @@ seed_test_table(
 	}
 }
 
-/**********************************************************************
-Create test tables and populate them with n_rows of data */
+/** Create test tables and populate them with n_rows of data */
 static
 void
 init_test_tables(void)
-/*==================*/
 {
 	int	i;
 
@@ -267,12 +253,10 @@ init_test_tables(void)
 	}
 }
 
-/**********************************************************************
-Drop test tables */
+/** Drop test tables */
 static
 void
 drop_test_tables(void)
-/*==================*/
 {
 	ib_err_t	err;
 	int		i;
@@ -291,13 +275,11 @@ drop_test_tables(void)
 	}
 }
 
-/**********************************************************************
-Depending on rollback_percent decides whether to commit or rollback a
+/** Depending on rollback_percent decides whether to commit or rollback a
 given transaction */
 static
 void
 commit_or_rollback(
-/*===============*/
 	ib_trx_t	trx,	/*!< in: trx to commit or rollback */
 	int		cnt,	/*!< in: trx counter */
 	ib_err_t	err)	/*!< in: err from last operation */
@@ -319,13 +301,11 @@ commit_or_rollback(
 	}
 }
 
-/**********************************************************************
-A DML worker thread that performs a randomly chosen DML operation on a
+/** A DML worker thread that performs a randomly chosen DML operation on a
 randomly chosen table */
 static
 void*
 dml_worker(
-/*=======*/
 	void*	dummy)	/*!< in: unused */
 {
 	ib_err_t	err;
@@ -378,13 +358,11 @@ dml_worker(
 	return(NULL);
 }
 
-/**********************************************************************
-A DDL worker thread that performs a randomly chosen DDL operation on a
+/** A DDL worker thread that performs a randomly chosen DDL operation on a
 randomly chosen table */
 static
 void*
 ddl_worker(
-/*=======*/
 	void*	dummy)	/*!< in: unused */
 {
 	cb_args_t	args;
@@ -433,12 +411,10 @@ ddl_worker(
 	return(NULL);
 }
 
-/**********************************************************************
-Create worker threads */
+/** Create worker threads */
 static
 void
 create_worker_threads(void)
-/*=======================*/
 {
 	int rc;
 	int i;
@@ -459,12 +435,10 @@ create_worker_threads(void)
 	}
 }
 
-/**********************************************************************
-Initialize the structure to hold error statistics */
+/** Initialize the structure to hold error statistics */
 static
 void
 init_err_op_struct(
-/*===============*/
 	op_err_t*	st)	/*!< in/out: struct to initialize */
 {
 	int rc;
@@ -473,12 +447,10 @@ init_err_op_struct(
 	assert(!rc);
 }
 
-/**********************************************************************
-Initialize statistic structures. */
+/** Initialize statistic structures. */
 static
 void
 init_stat_structs(void)
-/*===================*/
 {
 	int i;
 
@@ -491,12 +463,10 @@ init_stat_structs(void)
 	}
 }
 
-/**********************************************************************
-Free up the resources used in the test */
+/** Free up the resources used in the test */
 static
 void
 clean_up(void)
-/*==========*/
 {
 	int	i;
 
@@ -512,12 +482,10 @@ clean_up(void)
 	free(ddl_tid);
 }
 
-/**********************************************************************
-Print statistics at the end of the test */
+/** Print statistics at the end of the test */
 static
 void
 print_one_struct(
-/*=============*/
 	op_err_t*	st)
 {
 	int	i;
@@ -535,12 +503,10 @@ print_one_struct(
 	fprintf(stderr, "=========\n");
 }
 
-/**********************************************************************
-Print statistics at the end of the test */
+/** Print statistics at the end of the test */
 static
 void
 print_results(void)
-/*===============*/
 {
 	fprintf(stderr, "SELECT: ");
 	print_one_struct(&dml_op_errs[DML_OP_TYPE_SELECT]);
@@ -561,8 +527,7 @@ print_results(void)
 	print_one_struct(&ddl_op_errs[DDL_OP_TYPE_TRUNCATE]);
 }
 
-/**********************************************************************
-Register a table to be part of this driver. This is a bit of
+/** Register a table to be part of this driver. This is a bit of
 polymorphism using function pointers. Each table is first initialized
 to the base table which provides the generic functionality for some
 operations. The derived classes can decide to override this if they
@@ -571,7 +536,6 @@ driver. */
 static
 void
 register_test_tables(void)
-/*======================*/
 {
 	int	i;
 
@@ -591,14 +555,12 @@ register_test_tables(void)
 	assert(num_tables < NUM_TBLS);
 }
 
-/**********************************************************************
-Whatever checks we want to run after the test after all the worker
+/** Whatever checks we want to run after the test after all the worker
 threads have finished. For now I just call the select function to
 print the contents of the table */
 static
 void
 check_test_tables(void)
-/*======================*/
 {
 	int	i;
 	cb_args_t	args;

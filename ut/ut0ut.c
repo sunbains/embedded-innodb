@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 Copyright (c) 2009, Sun Microsystems, Inc.
 
@@ -23,8 +22,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/***************************************************************//**
-@file ut/ut0ut.c
+/** @file ut/ut0ut.c
 Various utilities for Innobase.
 
 Created 5/11/1994 Heikki Tuuri
@@ -50,20 +48,17 @@ Created 5/11/1994 Heikki Tuuri
 static	ibool	ut_always_false	= FALSE;
 
 #ifdef __WIN__
-/*****************************************************************//**
-NOTE: The Windows epoch starts from 1601/01/01 whereas the Unix
+/** NOTE: The Windows epoch starts from 1601/01/01 whereas the Unix
 epoch starts from 1970/1/1. For selection of constant see:
 http://support.microsoft.com/kb/167296/ */
 #define WIN_TO_UNIX_DELTA_USEC  ((ib_int64_t) 11644473600000000ULL)
 
 
-/*****************************************************************//**
-This is the Windows version of gettimeofday(2).
+/** This is the Windows version of gettimeofday(2).
 @return	0 if all OK else -1 */
 static
 int
 ut_gettimeofday(
-/*============*/
 	struct timeval*	tv,	/*!< out: Values are relative to Unix epoch */
 	void*		tz)	/*!< in: not used */
 {
@@ -101,15 +96,13 @@ reimplement this function. */
 #define	ut_gettimeofday		gettimeofday
 #endif
 
-/********************************************************//**
-Gets the high 32 bits in a ulint. That is makes a shift >> 32,
+/** Gets the high 32 bits in a ulint. That is makes a shift >> 32,
 but since there seem to be compiler bugs in both gcc and Visual C++,
 we do this by a special conversion.
 @return	a >> 32 */
 UNIV_INTERN
 ulint
 ut_get_high32(
-/*==========*/
 	ulint	a)	/*!< in: ulint */
 {
 	ib_int64_t	i;
@@ -121,21 +114,18 @@ ut_get_high32(
 	return((ulint)i);
 }
 
-/**********************************************************//**
-Returns system time. We do not specify the format of the time returned:
+/** Returns system time. We do not specify the format of the time returned:
 the only way to manipulate it is to use the function ut_difftime.
 @return	system time */
 UNIV_INTERN
 ib_time_t
 ut_time(void)
-/*=========*/
 {
 	return(time(NULL));
 }
 
 #ifndef UNIV_HOTBACKUP
-/**********************************************************//**
-Returns system time.
+/** Returns system time.
 Upon successful completion, the value 0 is returned; otherwise the
 value -1 is returned and the global variable errno is set to indicate the
 error.
@@ -143,7 +133,6 @@ error.
 UNIV_INTERN
 int
 ut_usectime(
-/*========*/
 	ulint*	sec,	/*!< out: seconds since the Epoch */
 	ulint*	ms)	/*!< out: microseconds since the Epoch+*sec */
 {
@@ -176,15 +165,13 @@ ut_usectime(
 	return(ret);
 }
 
-/**********************************************************//**
-Returns the number of microseconds since epoch. Similar to
+/** Returns the number of microseconds since epoch. Similar to
 time(3), the return value is also stored in *tloc, provided
 that tloc is non-NULL.
 @return	us since epoch */
 UNIV_INTERN
 ib_uint64_t
 ut_time_us(
-/*=======*/
 	ib_uint64_t*	tloc)	/*!< out: us since epoch, if non-NULL */
 {
 	struct timeval	tv;
@@ -201,15 +188,13 @@ ut_time_us(
 	return(us);
 }
 
-/**********************************************************//**
-Returns the number of milliseconds since some epoch.  The
+/** Returns the number of milliseconds since some epoch.  The
 value may wrap around.  It should only be used for heuristic
 purposes.
 @return	ms since epoch */
 UNIV_INTERN
 ulint
 ut_time_ms(void)
-/*============*/
 {
 	struct timeval	tv;
 
@@ -219,25 +204,21 @@ ut_time_ms(void)
 }
 #endif /* !UNIV_HOTBACKUP */
 
-/**********************************************************//**
-Returns the difference of two times in seconds.
+/** Returns the difference of two times in seconds.
 @return	time2 - time1 expressed in seconds */
 UNIV_INTERN
 double
 ut_difftime(
-/*========*/
 	ib_time_t	time2,	/*!< in: time */
 	ib_time_t	time1)	/*!< in: time */
 {
 	return(difftime(time2, time1));
 }
 
-/**********************************************************//**
-Prints a timestamp to a file. */
+/** Prints a timestamp to a file. */
 UNIV_INTERN
 void
 ut_print_timestamp(
-/*===============*/
 	ib_stream_t	ib_stream) /*!< in: file where to print */
 {
 #ifdef __WIN__
@@ -275,12 +256,10 @@ ut_print_timestamp(
 #endif
 }
 
-/**********************************************************//**
-Sprintfs a timestamp to a buffer, 13..14 chars plus terminating NUL. */
+/** Sprintfs a timestamp to a buffer, 13..14 chars plus terminating NUL. */
 UNIV_INTERN
 void
 ut_sprintf_timestamp(
-/*=================*/
 	char*	buf) /*!< in: buffer where to sprintf */
 {
 #ifdef __WIN__
@@ -319,13 +298,11 @@ ut_sprintf_timestamp(
 }
 
 #ifdef UNIV_HOTBACKUP
-/**********************************************************//**
-Sprintfs a timestamp to a buffer with no spaces and with ':' characters
+/** Sprintfs a timestamp to a buffer with no spaces and with ':' characters
 replaced by '_'. */
 UNIV_INTERN
 void
 ut_sprintf_timestamp_without_extra_chars(
-/*=====================================*/
 	char*	buf) /*!< in: buffer where to sprintf */
 {
 #ifdef __WIN__
@@ -363,12 +340,10 @@ ut_sprintf_timestamp_without_extra_chars(
 #endif
 }
 
-/**********************************************************//**
-Returns current year, month, day. */
+/** Returns current year, month, day. */
 UNIV_INTERN
 void
 ut_get_year_month_day(
-/*==================*/
 	ulint*	year,	/*!< out: current year */
 	ulint*	month,	/*!< out: month */
 	ulint*	day)	/*!< out: day */
@@ -402,14 +377,12 @@ ut_get_year_month_day(
 #endif /* UNIV_HOTBACKUP */
 
 #ifndef UNIV_HOTBACKUP
-/*************************************************************//**
-Runs an idle loop on CPU. The argument gives the desired delay
+/** Runs an idle loop on CPU. The argument gives the desired delay
 in microseconds on 100 MHz Pentium + Visual C++.
 @return	dummy value */
 UNIV_INTERN
 ulint
 ut_delay(
-/*=====*/
 	ulint	delay)	/*!< in: delay in microseconds on 100 MHz Pentium */
 {
 	ulint	i, j;
@@ -429,12 +402,10 @@ ut_delay(
 }
 #endif /* !UNIV_HOTBACKUP */
 
-/*************************************************************//**
-Prints the contents of a memory buffer in hex and ascii. */
+/** Prints the contents of a memory buffer in hex and ascii. */
 UNIV_INTERN
 void
 ut_print_buf(
-/*=========*/
 	ib_stream_t	ib_stream,	/*!< in: stream where to print */
 	const void*	buf,		/*!< in: memory buffer */
 	ulint		len)		/*!< in: length of the buffer */
@@ -462,13 +433,11 @@ ut_print_buf(
 	ib_logger(ib_stream, ";");
 }
 
-/*************************************************************//**
-Calculates fast the number rounded up to the nearest power of 2.
+/** Calculates fast the number rounded up to the nearest power of 2.
 @return	first power of 2 which is >= n */
 UNIV_INTERN
 ulint
 ut_2_power_up(
-/*==========*/
 	ulint	n)	/*!< in: number != 0 */
 {
 	ulint	res;
@@ -484,12 +453,10 @@ ut_2_power_up(
 	return(res);
 }
 
-/**********************************************************************//**
-Outputs a NUL-terminated file name, quoted with apostrophes. */
+/** Outputs a NUL-terminated file name, quoted with apostrophes. */
 UNIV_INTERN
 void
 ut_print_filename(
-/*==============*/
 	ib_stream_t	ib_stream,	/*!< in: output stream */
 	const char*	name)		/*!< in: name to print */
 {
@@ -510,15 +477,13 @@ done:
 	ib_logger(ib_stream, "'");
 }
 #ifndef UNIV_HOTBACKUP
-/**********************************************************************//**
-Outputs a fixed-length string, quoted as an SQL identifier.
+/** Outputs a fixed-length string, quoted as an SQL identifier.
 If the string contains a slash '/', the string will be
 output as two identifiers separated by a period (.),
 as in SQL database_name.identifier. */
 UNIV_INTERN
 void
 ut_print_name(
-/*==========*/
 	ib_stream_t	ib_stream,	/*!< in: output stream */
 	trx_t*		trx,		/*!< in: transaction */
 	ibool		table_id,	/*!< in: TRUE=print a table name,
@@ -528,15 +493,13 @@ ut_print_name(
 	ut_print_namel(ib_stream, name, strlen(name));
 }
 
-/**********************************************************************//**
-Outputs a fixed-length string, quoted as an SQL identifier.
+/** Outputs a fixed-length string, quoted as an SQL identifier.
 If the string contains a slash '/', the string will be
 output as two identifiers separated by a period (.),
 as in SQL database_name.identifier. */
 UNIV_INTERN
 void
 ut_print_namel(
-/*===========*/
 	ib_stream_t	ib_stream,	/*!< in: output stream */
 	const char*	name,		/*!< in: name to print */
 	ulint		namelen)	/*!< in: length of name */
@@ -555,15 +518,13 @@ ut_print_namel(
 
 #ifdef __WIN__
 # include <stdarg.h>
-/**********************************************************************//**
-A substitute for snprintf(3), formatted output conversion into
+/** A substitute for snprintf(3), formatted output conversion into
 a limited buffer.
 @return number of characters that would have been printed if the size
 were unlimited, not including the terminating '\0'. */
 UNIV_INTERN
 int
 ut_snprintf(
-/*========*/
 	char*		str,	/*!< out: string */
 	size_t		size,	/*!< in: str size */
 	const char*	fmt,	/*!< in: format */

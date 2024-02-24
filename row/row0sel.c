@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 
@@ -23,8 +22,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/***************************************************//**
-@file row/row0sel.c
+/** @file row/row0sel.c
 Select
 
 Created 12/19/1997 Heikki Tuuri
@@ -75,8 +73,7 @@ to que_run_threads: this is to allow canceling runaway queries */
 #define	SEL_EXHAUSTED	1
 #define SEL_RETRY	2
 
-/********************************************************************//**
-Returns TRUE if the user-defined column in a secondary index record
+/** Returns TRUE if the user-defined column in a secondary index record
 is alphabetically the same as the corresponding BLOB column in the clustered
 index record.
 NOTE: the comparison is NOT done as a binary comparison, but character
@@ -85,7 +82,6 @@ fields are compared with collation!
 static
 ibool
 row_sel_sec_rec_is_for_blob(
-/*========================*/
 	ulint		mtype,		/*!< in: main type */
 	ulint		prtype,		/*!< in: precise type */
 	ulint		mbminlen,	/*!< in: minimum length of a
@@ -128,8 +124,7 @@ row_sel_sec_rec_is_for_blob(
 		NULL, mtype, prtype, buf, len, sec_field, sec_len));
 }
 
-/********************************************************************//**
-Returns TRUE if the user-defined column values in a secondary index record
+/** Returns TRUE if the user-defined column values in a secondary index record
 are alphabetically the same as the corresponding columns in the clustered
 index record.
 NOTE: the comparison is NOT done as a binary comparison, but character
@@ -140,7 +135,6 @@ FALSE if not equal or if the clustered record has been marked for deletion */
 static
 ibool
 row_sel_sec_rec_is_for_clust_rec(
-/*=============================*/
 	const rec_t*	sec_rec,	/*!< in: secondary index record */
 	dict_index_t*	sec_index,	/*!< in: secondary index */
 	const rec_t*	clust_rec,	/*!< in: clustered index record;
@@ -241,13 +235,11 @@ func_exit:
 	return(is_equal);
 }
 
-/*********************************************************************//**
-Creates a select node struct.
+/** Creates a select node struct.
 @return	own: select node struct */
 UNIV_INTERN
 sel_node_t*
 sel_node_create(
-/*============*/
 	mem_heap_t*	heap)	/*!< in: memory heap where created */
 {
 	sel_node_t*	node;
@@ -261,13 +253,11 @@ sel_node_create(
 	return(node);
 }
 
-/*********************************************************************//**
-Frees the memory private to a select node when a query graph is freed,
+/** Frees the memory private to a select node when a query graph is freed,
 does not free the heap where the node was originally created. */
 UNIV_INTERN
 void
 sel_node_free_private(
-/*==================*/
 	sel_node_t*	node)	/*!< in: select node struct */
 {
 	ulint	i;
@@ -287,13 +277,11 @@ sel_node_free_private(
 	}
 }
 
-/*********************************************************************//**
-Evaluates the values in a select list. If there are aggregate functions,
+/** Evaluates the values in a select list. If there are aggregate functions,
 their argument value is added to the aggregate total. */
 UNIV_INLINE
 void
 sel_eval_select_list(
-/*=================*/
 	sel_node_t*	node)	/*!< in: select node */
 {
 	que_node_t*	exp;
@@ -307,13 +295,11 @@ sel_eval_select_list(
 	}
 }
 
-/*********************************************************************//**
-Assigns the values in the select list to the possible into-variables in
+/** Assigns the values in the select list to the possible into-variables in
 SELECT ... INTO ... */
 UNIV_INLINE
 void
 sel_assign_into_var_values(
-/*=======================*/
 	sym_node_t*	var,	/*!< in: first variable in a list of variables */
 	sel_node_t*	node)	/*!< in: select node */
 {
@@ -336,13 +322,11 @@ sel_assign_into_var_values(
 	}
 }
 
-/*********************************************************************//**
-Resets the aggregate value totals in the select list of an aggregate type
+/** Resets the aggregate value totals in the select list of an aggregate type
 query. */
 UNIV_INLINE
 void
 sel_reset_aggregate_vals(
-/*=====================*/
 	sel_node_t*	node)	/*!< in: select node */
 {
 	func_node_t*	func_node;
@@ -360,12 +344,10 @@ sel_reset_aggregate_vals(
 	node->aggregate_already_fetched = FALSE;
 }
 
-/*********************************************************************//**
-Copies the input variable values when an explicit cursor is opened. */
+/** Copies the input variable values when an explicit cursor is opened. */
 UNIV_INLINE
 void
 row_sel_copy_input_variable_vals(
-/*=============================*/
 	sel_node_t*	node)	/*!< in: select node */
 {
 	sym_node_t*	var;
@@ -381,12 +363,10 @@ row_sel_copy_input_variable_vals(
 	}
 }
 
-/*********************************************************************//**
-Fetches the column values from a record. */
+/** Fetches the column values from a record. */
 static
 void
 row_sel_fetch_columns(
-/*==================*/
 	dict_index_t*	index,	/*!< in: record index */
 	const rec_t*	rec,	/*!< in: record in a clustered or non-clustered
 				index; must be protected by a page latch */
@@ -456,12 +436,10 @@ row_sel_fetch_columns(
 	}
 }
 
-/*********************************************************************//**
-Allocates a prefetch buffer for a column when prefetch is first time done. */
+/** Allocates a prefetch buffer for a column when prefetch is first time done. */
 static
 void
 sel_col_prefetch_buf_alloc(
-/*=======================*/
 	sym_node_t*	column)	/*!< in: symbol table node for a column */
 {
 	sel_buf_t*	sel_buf;
@@ -480,13 +458,11 @@ sel_col_prefetch_buf_alloc(
 	}
 }
 
-/*********************************************************************//**
-Frees a prefetch buffer for a column, including the dynamically allocated
+/** Frees a prefetch buffer for a column, including the dynamically allocated
 memory for data stored there. */
 UNIV_INTERN
 void
 sel_col_prefetch_buf_free(
-/*======================*/
 	sel_buf_t*	prefetch_buf)	/*!< in, own: prefetch buffer */
 {
 	sel_buf_t*	sel_buf;
@@ -502,13 +478,11 @@ sel_col_prefetch_buf_free(
 	}
 }
 
-/*********************************************************************//**
-Pops the column values for a prefetched, cached row from the column prefetch
+/** Pops the column values for a prefetched, cached row from the column prefetch
 buffers and places them to the val fields in the column nodes. */
 static
 void
 sel_pop_prefetched_row(
-/*===================*/
 	plan_t*	plan)	/*!< in: plan node for a table */
 {
 	sym_node_t*	column;
@@ -564,13 +538,11 @@ next_col:
 	plan->first_prefetched++;
 }
 
-/*********************************************************************//**
-Pushes the column values for a prefetched, cached row to the column prefetch
+/** Pushes the column values for a prefetched, cached row to the column prefetch
 buffers from the val fields in the column nodes. */
 UNIV_INLINE
 void
 sel_push_prefetched_row(
-/*====================*/
 	plan_t*	plan)	/*!< in: plan node for a table */
 {
 	sym_node_t*	column;
@@ -636,14 +608,12 @@ next_col:
 	}
 }
 
-/*********************************************************************//**
-Tests the conditions which determine when the index segment we are searching
+/** Tests the conditions which determine when the index segment we are searching
 through has been exhausted.
 @return	TRUE if row passed the tests */
 UNIV_INLINE
 ibool
 row_sel_test_end_conds(
-/*===================*/
 	plan_t*	plan)	/*!< in: plan for the table; the column values must
 			already have been retrieved and the right sides of
 			comparisons evaluated */
@@ -674,13 +644,11 @@ row_sel_test_end_conds(
 	return(TRUE);
 }
 
-/*********************************************************************//**
-Tests the other conditions.
+/** Tests the other conditions.
 @return	TRUE if row passed the tests */
 UNIV_INLINE
 ibool
 row_sel_test_other_conds(
-/*=====================*/
 	plan_t*	plan)	/*!< in: plan for the table; the column values must
 			already have been retrieved */
 {
@@ -702,13 +670,11 @@ row_sel_test_other_conds(
 	return(TRUE);
 }
 
-/*********************************************************************//**
-Builds a previous version of a clustered index record for a consistent read
+/** Builds a previous version of a clustered index record for a consistent read
 @return	DB_SUCCESS or error code */
 static
 ulint
 row_sel_build_prev_vers(
-/*====================*/
 	read_view_t*	read_view,	/*!< in: read view */
 	dict_index_t*	index,		/*!< in: plan node for table */
 	const rec_t*	rec,		/*!< in: record in a clustered index */
@@ -737,14 +703,12 @@ row_sel_build_prev_vers(
 	return(err);
 }
 
-/*************************************************************************
-Retrieves the clustered index record corresponding to a record in a
+/** Retrieves the clustered index record corresponding to a record in a
 non-clustered index. Does the necessary locking.
 @return	DB_SUCCESS or error code */
 static
 ulint
 row_sel_get_clust_rec(
-/*==================*/
 	sel_node_t*	node,	/*!< in: select_node */
 	plan_t*		plan,	/*!< in: plan node for table */
 	rec_t*		rec,	/*!< in: record in a non-clustered index */
@@ -899,13 +863,11 @@ err_exit:
 	return(err);
 }
 
-/*********************************************************************//**
-Sets a lock on a record.
+/** Sets a lock on a record.
 @return	DB_SUCCESS or error code */
 UNIV_INLINE
 ulint
 sel_set_rec_lock(
-/*=============*/
 	const buf_block_t*	block,	/*!< in: buffer block of rec */
 	const rec_t*		rec,	/*!< in: record */
 	dict_index_t*		index,	/*!< in: index */
@@ -938,12 +900,10 @@ sel_set_rec_lock(
 	return(err);
 }
 
-/*********************************************************************//**
-Opens a pcur to a table index. */
+/** Opens a pcur to a table index. */
 static
 void
 row_sel_open_pcur(
-/*==============*/
 	plan_t*		plan,		/*!< in: table plan */
 	ibool		search_latch_locked,
 					/*!< in: TRUE if the thread currently
@@ -1013,8 +973,7 @@ row_sel_open_pcur(
 	plan->pcur_is_open = TRUE;
 }
 
-/*********************************************************************//**
-Restores a stored pcur position to a table index.
+/** Restores a stored pcur position to a table index.
 @return TRUE if the cursor should be moved to the next record after we
 return from this function (moved to the previous, in the case of a
 descending cursor) without processing again the current cursor
@@ -1022,7 +981,6 @@ record */
 static
 ibool
 row_sel_restore_pcur_pos(
-/*=====================*/
 	plan_t*		plan,	/*!< in: table plan */
 	mtr_t*		mtr)	/*!< in: mtr */
 {
@@ -1108,12 +1066,10 @@ row_sel_restore_pcur_pos(
 	return(TRUE);
 }
 
-/*********************************************************************//**
-Resets a plan cursor to a closed state. */
+/** Resets a plan cursor to a closed state. */
 UNIV_INLINE
 void
 plan_reset_cursor(
-/*==============*/
 	plan_t*	plan)	/*!< in: plan */
 {
 	plan->pcur_is_open = FALSE;
@@ -1122,14 +1078,12 @@ plan_reset_cursor(
 	plan->n_rows_prefetched = 0;
 }
 
-/*********************************************************************//**
-Tries to do a shortcut to fetch a clustered index record with a unique key,
+/** Tries to do a shortcut to fetch a clustered index record with a unique key,
 using the hash index if possible (not always).
 @return	SEL_FOUND, SEL_EXHAUSTED, SEL_RETRY */
 static
 ulint
 row_sel_try_search_shortcut(
-/*========================*/
 	sel_node_t*	node,	/*!< in: select node for a consistent read */
 	plan_t*		plan,	/*!< in: plan for a unique search in clustered
 				index */
@@ -1224,13 +1178,11 @@ func_exit:
 	return(ret);
 }
 
-/*********************************************************************//**
-Performs a select step.
+/** Performs a select step.
 @return	DB_SUCCESS or error code */
 static
 ulint
 row_sel(
-/*====*/
 	sel_node_t*	node,	/*!< in: select node */
 	que_thr_t*	thr)	/*!< in: query thread */
 {
@@ -1920,14 +1872,12 @@ func_exit:
 	return(err);
 }
 
-/**********************************************************************//**
-Performs a select step. This is a high-level function used in SQL execution
+/** Performs a select step. This is a high-level function used in SQL execution
 graphs.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 row_sel_step(
-/*=========*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	ulint		i_lock_mode;
@@ -2022,13 +1972,11 @@ row_sel_step(
 	return(thr);
 }
 
-/**********************************************************************//**
-Performs a fetch for a cursor.
+/** Performs a fetch for a cursor.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 fetch_step(
-/*=======*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	sel_node_t*	sel_node;
@@ -2085,13 +2033,11 @@ fetch_step(
 	return(thr);
 }
 
-/****************************************************************//**
-Sample callback function for fetch that prints each row.
+/** Sample callback function for fetch that prints each row.
 @return	always returns non-NULL */
 UNIV_INTERN
 void*
 row_fetch_print(
-/*============*/
 	void*	row,		/*!< in:  sel_node_t* */
 	void*	user_arg)	/*!< in:  not used */
 {
@@ -2129,15 +2075,13 @@ row_fetch_print(
 	return((void*)42);
 }
 
-/****************************************************************//**
-Callback function for fetch that stores an unsigned 4 byte integer to the
+/** Callback function for fetch that stores an unsigned 4 byte integer to the
 location pointed. The column's type must be DATA_INT, DATA_UNSIGNED, length
 = 4.
 @return	always returns NULL */
 UNIV_INTERN
 void*
 row_fetch_store_uint4(
-/*==================*/
 	void*	row,		/*!< in:  sel_node_t* */
 	void*	user_arg)	/*!< in:  data pointer */
 {
@@ -2159,13 +2103,11 @@ row_fetch_store_uint4(
 	return(NULL);
 }
 
-/***********************************************************//**
-Prints a row in a select result.
+/** Prints a row in a select result.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 row_printf_step(
-/*============*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	row_printf_node_t*	node;
@@ -2225,7 +2167,6 @@ row_printf_step(
 UNIV_INTERN
 void
 row_sel_prebuild_graph(
-/*===================*/
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt handle */
 {
 	sel_node_t*	node;
@@ -2245,14 +2186,12 @@ row_sel_prebuild_graph(
 	}
 }
 
-/*********************************************************************//**
-Retrieves the clustered index record corresponding to a record in a
+/** Retrieves the clustered index record corresponding to a record in a
 non-clustered index. Does the necessary locking.
 @return	DB_SUCCESS or error code */
 static
 ulint
 row_sel_get_clust_rec_with_prebuilt(
-/*================================*/
 	row_prebuilt_t*	prebuilt,/*!< in: prebuilt struct in the handle */
 	dict_index_t*	sec_index,/*!< in: secondary index where rec resides */
 	const rec_t*	rec,	/*!< in: record in a non-clustered index; if
@@ -2432,8 +2371,7 @@ err_exit:
 	return(err);
 }
 
-/********************************************************************//**
-Restores cursor position after it has been stored. We have to take into
+/** Restores cursor position after it has been stored. We have to take into
 account that the record cursor was positioned on may have been deleted.
 Then we may have to move the cursor one step up or down.
 @return TRUE if we may need to process the record the cursor is now
@@ -2441,7 +2379,6 @@ positioned on (i.e. we should not go to the next record yet) */
 static
 ibool
 row_sel_restore_position(
-/*=====================*/
 	ibool*		same_user_rec,	/*!< out: TRUE if we were able to restore
 					the cursor on a user record with the
 					same ordering prefix in in the
@@ -2500,61 +2437,51 @@ row_sel_restore_position(
 	return(TRUE);
 }
 
-/********************************************************************//**
-Reset the row cache. The memory is not freed only the stack pointers
+/** Reset the row cache. The memory is not freed only the stack pointers
 are reset. */
 UNIV_INLINE
 void
 row_sel_row_cache_reset(
-/*====================*/
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct */
 {
 	prebuilt->row_cache.first = 0;
 	prebuilt->row_cache.n_cached = 0;
 }
 
-/************************************************************************
-Check if there are any rows in the cache that can be popped. */
+/** Check if there are any rows in the cache that can be popped. */
 UNIV_INTERN
 ibool
 row_sel_row_cache_is_empty(
-/*=======================*/
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct */
 {
 	return(prebuilt->row_cache.n_cached == 0);
 }
 
-/************************************************************************
-Check if there is a fetch in progress. ie. at lease one row was cached
+/** Check if there is a fetch in progress. ie. at lease one row was cached
 and read from the cache. */
 UNIV_INTERN
 ibool
 row_sel_row_cache_fetch_in_progress(
-/*================================*/
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct */
 {
 	return(prebuilt->row_cache.first > 0
 	       && prebuilt->row_cache.first < prebuilt->row_cache.n_size);
 }
 
-/************************************************************************
-Check if row cache is full. */
+/** Check if row cache is full. */
 UNIV_INLINE
 ibool
 row_sel_row_cache_is_full(
-/*======================*/
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct */
 {
 	ut_a(prebuilt->row_cache.n_cached <= prebuilt->row_cache.n_size);
 	return(prebuilt->row_cache.n_cached == prebuilt->row_cache.n_size- 1);
 }
 
-/************************************************************************
-Reads the current row from the fetch cache. */
+/** Reads the current row from the fetch cache. */
 UNIV_INTERN
 const rec_t*
 row_sel_row_cache_get(
-/*==================*/
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct */
 {
 	ib_cached_row_t*	row;
@@ -2566,12 +2493,10 @@ row_sel_row_cache_get(
 	return(row->rec);
 }
 
-/************************************************************************
-Pops a cached row from the fetch cache. */
+/** Pops a cached row from the fetch cache. */
 UNIV_INTERN
 void
 row_sel_row_cache_next(
-/*===================*/
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct */
 {
 	if (!row_sel_row_cache_is_empty(prebuilt)) {
@@ -2584,12 +2509,10 @@ row_sel_row_cache_next(
 	}
 }
 
-/********************************************************************//**
-Add a record to the fetch cache. */
+/** Add a record to the fetch cache. */
 UNIV_INLINE
 void
 row_sel_row_cache_add(
-/*==================*/
 	row_prebuilt_t*	prebuilt,	/*!< in: prebuilt struct */
 	const rec_t*	rec,		/*!< in: record to push; must
 					be protected by a page latch */
@@ -2646,8 +2569,7 @@ row_sel_row_cache_add(
 	ut_a(row_cache->n_cached < row_cache->n_size);
 }
 
-/*********************************************************************//**
-Tries to do a shortcut to fetch a clustered index record with a unique key,
+/** Tries to do a shortcut to fetch a clustered index record with a unique key,
 using the hash index if possible (not always). We assume that the search
 mode is PAGE_CUR_GE, it is a consistent read, there is a read view in trx,
 btr search latch has been locked in S-mode.
@@ -2655,7 +2577,6 @@ btr search latch has been locked in S-mode.
 static
 ulint
 row_sel_try_search_shortcut_for_prebuilt(
-/*=====================================*/
 	const rec_t**	out_rec,/*!< out: record if found */
 	row_prebuilt_t*	prebuilt,/*!< in: prebuilt struct */
 	ulint**		offsets,/*!< in/out: for rec_get_offsets(*out_rec) */
@@ -2719,8 +2640,7 @@ row_sel_try_search_shortcut_for_prebuilt(
 	return(SEL_FOUND);
 }
 
-/***********************************************************************//**
-This can only be used when this session is using a READ COMMITTED isolation
+/** This can only be used when this session is using a READ COMMITTED isolation
 level. Before calling this function we must use trx_reset_new_rec_lock_info()
 and trx_register_new_rec_lock() to store the information which new record locks
 really were set. This function removes a newly set lock under prebuilt->pcur,
@@ -2732,7 +2652,6 @@ record locks we set.
 UNIV_INTERN
 int
 row_unlock_for_client(
-/*==================*/
 	row_prebuilt_t*	prebuilt,	/*!< in: prebuilt struct handle */
 	ibool		has_latches_on_recs)/*!< TRUE if called so that we have
 					the latches on the records under pcur
@@ -2812,8 +2731,7 @@ func_exit:
 	return(DB_SUCCESS);
 }
 
-/********************************************************************//**
-This function does several things, in fact too many things:
+/** This function does several things, in fact too many things:
 
  1. Moveto/Search for a record
  2. Next record
@@ -2830,7 +2748,6 @@ DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD */
 UNIV_INTERN
 enum db_err
 row_search_for_client(
-/*==================*/
 	ib_recovery_t	recovery,	/*!< in: recovery flag */
 	ib_srch_mode_t	mode,		/*!< in: search mode */
 	row_prebuilt_t*	prebuilt,	/*!< in: prebuilt struct for the

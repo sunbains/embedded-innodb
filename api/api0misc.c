@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2008 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 Copyright (c) 2010 Stewart Smith
 
@@ -48,14 +47,12 @@ void __cdecl _dosmaperr(unsigned long);
 /* The length was chosen arbitrarily and should be generous. */
 #define WIN_MAX_PATH	512
 
-/******************************************************************//**
-@file api/api0misc.c
+/** @file api/api0misc.c
 Create a temporary file in Windows.
 @return	file descriptor, or -1 */
 static
 int
 ib_win_create_tempfile(
-/*===================*/
 	const char*	prefix)		/*!< in: temp file prefix */
 {
 	ulint		ret;
@@ -113,12 +110,10 @@ ib_win_create_tempfile(
 }
 #endif
 
-/******************************************************************//**
-Create a temporary file. FIXME: This is a Q&D solution. */
+/** Create a temporary file. FIXME: This is a Q&D solution. */
 
 int
 ib_create_tempfile(
-/*===============*/
 	const char*	prefix)		/*!< in: temp filename prefix */
 {
 	int		fh = -1;
@@ -141,15 +136,13 @@ ib_create_tempfile(
 	return(fh);
 }
 
-/**********************************************************************//**
-Determines if the currently running transaction has been interrupted.
+/** Determines if the currently running transaction has been interrupted.
 @return	TRUE if interrupted */
 
 ib_trx_is_interrupted_handler_t ib_trx_is_interrupted = NULL;
 
 ibool
 trx_is_interrupted(
-/*===============*/
 	const trx_t*	trx)		/*!< in: transaction */
 {
 	if (trx->client_thd && ib_trx_is_interrupted != NULL)
@@ -159,13 +152,11 @@ trx_is_interrupted(
 	return(FALSE);
 }
 
-/****************************************************************//**
-Handles user errors and lock waits detected by the database engine.
+/** Handles user errors and lock waits detected by the database engine.
 @return	TRUE if it was a lock wait and we should continue running the query thread */
 
 ibool
 ib_handle_errors(
-/*=============*/
 	enum db_err*	new_err,/*!< out: possible new error encountered in
 				lock wait, or if no new error, the value
 				of trx->error_state at the entry of this
@@ -267,13 +258,11 @@ handle_new_error:
 	return(FALSE);
 }
 
-/*********************************************************************//**
-Sets a lock on a table.
+/** Sets a lock on a table.
 @return	error code or DB_SUCCESS */
 
 enum db_err
 ib_trx_lock_table_with_retry(
-/*=========================*/
 	trx_t*		trx,		/*!< in/out: transaction */
 	dict_table_t*	table,		/*!< in: table to lock */
 	enum lock_mode	mode)		/*!< in: LOCK_X or LOCK_S */
@@ -343,13 +332,11 @@ run_again:
 	return(err);
 }
 
-/*********************************************************************//**
-Updates the table modification counter and calculates new estimates
+/** Updates the table modification counter and calculates new estimates
 for table and index statistics if necessary. */
 
 void
 ib_update_statistics_if_needed(
-/*===========================*/
 	dict_table_t*	table)	/*!< in/out: table */
 {
 	ulint	counter;

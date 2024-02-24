@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 2007, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file ha/ha0storage.c
+/** @file ha/ha0storage.c
 Hash storage.
 Provides a data structure that stores chunks of data in
 its own storage, avoiding duplicates.
@@ -35,13 +33,11 @@ Created September 22, 2007 Vasil Dimov
 #include "ha0storage.ic"
 #endif
 
-/*******************************************************************//**
-Retrieves a data from a storage. If it is present, a pointer to the
+/** Retrieves a data from a storage. If it is present, a pointer to the
 stored copy of data is returned, otherwise NULL is returned. */
 static
 const void*
 ha_storage_get(
-/*===========*/
 	ha_storage_t*	storage,	/*!< in: hash storage */
 	const void*	data,		/*!< in: data to check for */
 	ulint		data_len)	/*!< in: data length */
@@ -74,8 +70,7 @@ ha_storage_get(
 	return(node->data);
 }
 
-/*******************************************************************//**
-Copies data into the storage and returns a pointer to the copy. If the
+/** Copies data into the storage and returns a pointer to the copy. If the
 same data chunk is already present, then pointer to it is returned.
 Data chunks are considered to be equal if len1 == len2 and
 memcmp(data1, data2, len1) == 0. If "data" is not present (and thus
@@ -86,7 +81,6 @@ To disable this behavior "memlim" can be set to 0, which stands for
 UNIV_INTERN
 const void*
 ha_storage_put_memlim(
-/*==================*/
 	ha_storage_t*	storage,	/*!< in/out: hash storage */
 	const void*	data,		/*!< in: data to store */
 	ulint		data_len,	/*!< in: data length */

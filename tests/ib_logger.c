@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2008 Innobase Oy. All rights reserved.
+/** Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -35,12 +34,10 @@ messages to stderr. It should simply startup and shutdown InnoDB. */
 #define DATABASE	"test"
 #define TABLE		"t"
 
-/*********************************************************************
-Just ignore all messages. */
+/** Just ignore all messages. */
 static
 int
 null_logger(
-/*========*/
 	FILE*		stream,
 	const char*	fmt,
 	...)

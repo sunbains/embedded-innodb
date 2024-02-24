@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -26,12 +25,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "test0aux.h"
 
-/*********************************************************************
-All attempts to create the table should fail */
+/** All attempts to create the table should fail */
 static
 void
 create_table(void)
-/*=============*/
 {
 	ib_err_t	err = DB_SUCCESS;
 	ib_tbl_sch_t	ib_tbl_sch = NULL;

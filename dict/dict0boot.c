@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file dict/dict0boot.c
+/** @file dict/dict0boot.c
 Data dictionary creation and booting
 
 Created 4/18/1996 Heikki Tuuri
@@ -40,13 +38,11 @@ Created 4/18/1996 Heikki Tuuri
 #include "log0recv.h"
 #include "os0file.h"
 
-/**********************************************************************//**
-Gets a pointer to the dictionary header and x-latches its page.
+/** Gets a pointer to the dictionary header and x-latches its page.
 @return	pointer to the dictionary header, page x-latched */
 UNIV_INTERN
 dict_hdr_t*
 dict_hdr_get(
-/*=========*/
 	mtr_t*	mtr)	/*!< in: mtr */
 {
 	buf_block_t*	block;
@@ -61,13 +57,11 @@ dict_hdr_get(
 	return(header);
 }
 
-/**********************************************************************//**
-Returns a new table, index, or tree id.
+/** Returns a new table, index, or tree id.
 @return	the new id */
 UNIV_INTERN
 dulint
 dict_hdr_get_new_id(
-/*================*/
 	ulint	type)	/*!< in: DICT_HDR_ROW_ID, ... */
 {
 	dict_hdr_t*	dict_hdr;
@@ -90,13 +84,11 @@ dict_hdr_get_new_id(
 	return(id);
 }
 
-/**********************************************************************//**
-Writes the current value of the row id counter to the dictionary header file
+/** Writes the current value of the row id counter to the dictionary header file
 page. */
 UNIV_INTERN
 void
 dict_hdr_flush_row_id(void)
-/*=======================*/
 {
 	dict_hdr_t*	dict_hdr;
 	dulint		id;
@@ -115,14 +107,12 @@ dict_hdr_flush_row_id(void)
 	mtr_commit(&mtr);
 }
 
-/*****************************************************************//**
-Creates the file page for the dictionary header. This function is
+/** Creates the file page for the dictionary header. This function is
 called only at the database creation.
 @return	TRUE if succeed */
 static
 ibool
 dict_hdr_create(
-/*============*/
 	mtr_t*	mtr)	/*!< in: mtr */
 {
 	buf_block_t*	block;
@@ -218,13 +208,11 @@ dict_hdr_create(
 	return(TRUE);
 }
 
-/*****************************************************************//**
-Initializes the data dictionary memory structures when the database is
+/** Initializes the data dictionary memory structures when the database is
 started. This function is also called when the data dictionary is created. */
 UNIV_INTERN
 void
 dict_boot(void)
-/*===========*/
 {
 	dict_table_t*	table;
 	dict_index_t*	index;
@@ -436,23 +424,19 @@ dict_boot(void)
 	mutex_exit(&(dict_sys->mutex));
 }
 
-/*****************************************************************//**
-Inserts the basic system table data into themselves in the database
+/** Inserts the basic system table data into themselves in the database
 creation. */
 static
 void
 dict_insert_initial_data(void)
-/*==========================*/
 {
 	/* Does nothing yet */
 }
 
-/*****************************************************************//**
-Creates and initializes the data dictionary at the database creation. */
+/** Creates and initializes the data dictionary at the database creation. */
 UNIV_INTERN
 void
 dict_create(void)
-/*=============*/
 {
 	mtr_t	mtr;
 

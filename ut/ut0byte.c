@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/***************************************************************//**
-@file ut/ut0byte.c
+/** @file ut/ut0byte.c
 Byte utilities
 
 Created 5/11/1994 Heikki Tuuri
@@ -38,12 +36,10 @@ UNIV_INTERN const dulint	ut_dulint_max	= {0xFFFFFFFFUL, 0xFFFFFFFFUL};
 #ifdef notdefined /* unused code */
 #include "ut0sort.h"
 
-/************************************************************//**
-Sort function for dulint arrays. */
+/** Sort function for dulint arrays. */
 UNIV_INTERN
 void
 ut_dulint_sort(
-/*===========*/
 	dulint*	arr,	/*!< in/out: array to be sorted */
 	dulint*	aux_arr,/*!< in/out: auxiliary array (same size as arr) */
 	ulint	low,	/*!< in: low bound of sort interval, inclusive */

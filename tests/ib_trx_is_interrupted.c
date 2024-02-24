@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 Copyright (c) 2010 Stewart Smith
 
@@ -39,12 +38,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define DATABASE	"test"
 #define TABLE		"ib_ddl"
 
-/*********************************************************************
-Create an InnoDB database (sub-directory). */
+/** Create an InnoDB database (sub-directory). */
 static
 ib_err_t
 create_database(
-/*============*/
 	const char*	name)
 {
 	ib_bool_t	err;
@@ -55,12 +52,10 @@ create_database(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************
-CREATE TABLE T(C1 INT, C2 VARCHAR(10), C3 BLOB); */
+/** CREATE TABLE T(C1 INT, C2 VARCHAR(10), C3 BLOB); */
 static
 ib_err_t
 create_table(
-/*=========*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name)			/*!< in: table name */
 {
@@ -118,12 +113,10 @@ create_table(
 	return(err);
 }
 
-/*********************************************************************
-Open a table and return a cursor for the table. */
+/** Open a table and return a cursor for the table. */
 static
 ib_err_t
 open_table(
-/*=======*/
 	const char*	dbname,		/*!< in: database name */
 	const char*	name,		/*!< in: table name */
 	ib_trx_t	ib_trx,		/*!< in: transaction */
@@ -144,12 +137,10 @@ open_table(
 	return(err);
 }
 
-/*********************************************************************
-INSERT INTO T VALUE(0, RANDOM(TEXT), RANDOM(TEXT)); ... 100 */
+/** INSERT INTO T VALUE(0, RANDOM(TEXT), RANDOM(TEXT)); ... 100 */
 static
 ib_err_t
 insert_random_rows(
-/*===============*/
 	ib_crsr_t	crsr)		/*!< in, out: cursor to use for write */
 {
 	ib_i32_t	i;
@@ -190,13 +181,11 @@ insert_random_rows(
 	return(err);
 }
 
-/*********************************************************************
-Create a secondary indexes on a table.
+/** Create a secondary indexes on a table.
 @return	DB_SUCCESS or error code */
 static
 ib_err_t
 create_sec_index(
-/*=============*/
 	const char*	table_name,	/*!< in: table name */
 	const char*	col_name,	/*!< in: column name */
 	int		prefix_len)	/*!< in: prefix index length */
@@ -248,12 +237,10 @@ create_sec_index(
 	return(err);
 }
 
-/*********************************************************************
-Create secondary indexes on T(C1), T(C2), T(C3). */
+/** Create secondary indexes on T(C1), T(C2), T(C3). */
 static
 ib_err_t
 create_sec_index_1(
-/*===============*/
 	const char*	dbname,			/*!< in: database name */
 	const char*	name)			/*!< in: table to drop */
 {
@@ -279,12 +266,10 @@ create_sec_index_1(
 	return(err);
 }
 
-/*********************************************************************
-Open the secondary index. */
+/** Open the secondary index. */
 static
 ib_err_t
 open_sec_index(
-/*===========*/
 	ib_crsr_t	crsr,		/*!< in: table cusor */
 	const char* 	index_name)	/*!< in: sec. index to open */
 {
@@ -299,12 +284,10 @@ open_sec_index(
 
 	return(err);
 }
-/*********************************************************************
-Open the secondary indexes on T(C1), T(C2), T(C3). */
+/** Open the secondary indexes on T(C1), T(C2), T(C3). */
 static
 ib_err_t
 open_sec_index_1(
-/*=============*/
 	const char*	dbname,		/*!< in: database name */
 	const char* 	name)		/*!< in: table name */
 {

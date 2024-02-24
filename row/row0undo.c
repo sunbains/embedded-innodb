@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file row/row0undo.c
+/** @file row/row0undo.c
 Row undo
 
 Created 1/8/1997 Heikki Tuuri
@@ -119,13 +117,11 @@ doing the purge. Similarly, during a rollback, a record can be removed
 if the stored roll ptr in the undo log points to a trx already (being) purged,
 or if the roll ptr is NULL, i.e., it was a fresh insert. */
 
-/********************************************************************//**
-Creates a row undo node to a query graph.
+/** Creates a row undo node to a query graph.
 @return	own: undo node */
 UNIV_INTERN
 undo_node_t*
 row_undo_node_create(
-/*=================*/
 	trx_t*		trx,	/*!< in: transaction */
 	que_thr_t*	parent,	/*!< in: parent node, i.e., a thr node */
 	mem_heap_t*	heap)	/*!< in: memory heap where created */
@@ -149,8 +145,7 @@ row_undo_node_create(
 	return(undo);
 }
 
-/***********************************************************//**
-Looks for the clustered index record when node has the row reference.
+/** Looks for the clustered index record when node has the row reference.
 The pcur in node is used in the search. If found, stores the row to node,
 and stores the position of pcur, and detaches it. The pcur must be closed
 by the caller in any case.
@@ -159,7 +154,6 @@ caller, regardless of the return value */
 UNIV_INTERN
 ibool
 row_undo_search_clust_to_pcur(
-/*==========================*/
 	undo_node_t*	node)	/*!< in: row undo node */
 {
 	dict_index_t*	clust_index;
@@ -222,15 +216,13 @@ row_undo_search_clust_to_pcur(
 	return(ret);
 }
 
-/***********************************************************//**
-Fetches an undo log record and does the undo for the recorded operation.
+/** Fetches an undo log record and does the undo for the recorded operation.
 If none left, or a partial rollback completed, returns control to the
 parent node, which is always a query thread node.
 @return	DB_SUCCESS if operation successfully completed, else error code */
 static
 ulint
 row_undo(
-/*=====*/
 	undo_node_t*	node,	/*!< in: row undo node */
 	que_thr_t*	thr)	/*!< in: query thread */
 {
@@ -325,14 +317,12 @@ row_undo(
 	return(err);
 }
 
-/***********************************************************//**
-Undoes a row operation in a table. This is a high-level function used
+/** Undoes a row operation in a table. This is a high-level function used
 in SQL execution graphs.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 row_undo_step(
-/*==========*/
 	que_thr_t*	thr)	/*!< in: query thread */
 {
 	ulint		err;

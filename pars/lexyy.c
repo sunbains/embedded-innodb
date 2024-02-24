@@ -702,8 +702,7 @@ static int yy_flex_debug = 0;
 #define YY_RESTORE_YY_MORE_OFFSET
 static char *yytext;
 #line 1 "pars0lex.l"
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -719,8 +718,7 @@ this program; if not, write to the Free Software Foundation, Inc., 59 Temple
 Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
-/******************************************************
-SQL parser lexical analyzer: input file for the GNU Flex lexer generator
+/** SQL parser lexical analyzer: input file for the GNU Flex lexer generator
 
 The InnoDB parser is frozen because MySQL takes care of SQL parsing.
 Therefore we normally keep the InnoDB parser C files as they are, and do
@@ -764,7 +762,6 @@ static char*	stringbuf; /* Start of buffer */
 static
 void
 string_append(
-/*==========*/
 	const char*	str,	/*!< in: string to be appended */
 	ulint		len)	/*!< in: length of the string */
 {
@@ -784,12 +781,10 @@ string_append(
 	stringbuf_len += len;
 }
 
-/*************************************************************************
-Reset the lexing variables. */
+/** Reset the lexing variables. */
 UNIV_INTERN
 void
 pars_lexer_var_init(void)
-/*=====================*/
 {
 	stringbuf_len = 0;
 	stringbuf_len_alloc = 0;
@@ -2873,12 +2868,10 @@ static void yyfree (void * ptr )
 
 
 
-/**********************************************************************
-Release any resources used by the lexer. */
+/** Release any resources used by the lexer. */
 UNIV_INTERN
 void
 pars_lexer_close(void)
-/*==================*/
 {
 	yylex_destroy();
 

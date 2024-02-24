@@ -1,5 +1,4 @@
-/***********************************************************************
-Copyright (c) 2009 Innobase Oy. All rights reserved.
+/** Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -17,8 +16,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 ************************************************************************/
 
-/**********************************************************************
-This is a derived table class that can be plugged into the mt_drv test
+/** This is a derived table class that can be plugged into the mt_drv test
 suite. This particular table class overrides following DML and DDL
 functions:
 1) UPDATE
@@ -60,13 +58,11 @@ CREATE TABLE t1
 #include <valgrind/memcheck.h>
 #endif
 
-/**********************************************************************
-CREATE TABLE t1...
+/** CREATE TABLE t1...
 @return DB_SUCCESS or error code */
 static
 ib_err_t
 create_t1(
-/*======*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	ib_trx_t	ib_trx;
@@ -151,14 +147,12 @@ create_t1(
 	return(err);
 }
 
-/**********************************************************************
-ALTER TABLE ...
+/** ALTER TABLE ...
 TODO: This should have FIC stuff. No-op for now.
 @return DB_SUCCESS or error code */
 static
 ib_err_t
 alter_t1(
-/*=====*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	(void)arg;
@@ -166,13 +160,11 @@ alter_t1(
 	return(DB_SUCCESS);
 }
 
-/**********************************************************************
-INSERT INTO t1 VALUES (<rand 1 char>, <rand 1 char>, 0, run_number, 0)
+/** INSERT INTO t1 VALUES (<rand 1 char>, <rand 1 char>, 0, run_number, 0)
 @return DB_SUCCESS or error code */
 static
 ib_err_t
 insert_t1(
-/*======*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	int		i;
@@ -254,14 +246,12 @@ insert_t1(
 	return(err);
 }
 
-/**********************************************************************
-UPDATE t1 SET score = score + 100 AND upd_run = run_number
+/** UPDATE t1 SET score = score + 100 AND upd_run = run_number
 WHERE first == 'a'
 @return DB_SUCCESS or error code */
 static
 ib_err_t
 update_t1(
-/*======*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	ib_err_t	err;
@@ -402,13 +392,11 @@ clean_exit:
 	return(err);
 }
 
-/**********************************************************************
-DELETE FROM t1 WHERE first == 'x' AND last == 'z'
+/** DELETE FROM t1 WHERE first == 'x' AND last == 'z'
 @return DB_SUCCESS or error code */
 static
 ib_err_t
 delete_t1(
-/*======*/
 	void*	arg)	/*!< in: arguments for callback */
 {
 	ib_err_t	err;
@@ -481,12 +469,10 @@ clean_exit:
 	return(err);
 }
 
-/**********************************************************************
-Function to register this table class with mt_drv test suite */
+/** Function to register this table class with mt_drv test suite */
 
 void
 register_t1_table(
-/*==============*/
 	tbl_class_t*	tbl)	/*!< in/out: table class to register */
 {
 	assert(tbl != NULL);
