@@ -19,7 +19,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.5 FATAL_ERROR)
 PROJECT (EMBEDDED_INNODB)
 
 # Set both LIBRARY_OUTPUT_PATH and EXECUTABLE_OUTPUT_PATH
-SET (LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
+SET (LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/lib)
 SET (EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
 IF(NOT DEFINED DISABLE-COMPRESSION)
@@ -203,7 +203,7 @@ SET(INNODB_SOURCES	btr/btr0btr.c btr/btr0cur.c btr/btr0pcur.c
 			trx/trx0roll.c trx/trx0rseg.c
 			trx/trx0sys.c trx/trx0trx.c trx/trx0undo.c
 			usr/usr0sess.c ut/ut0byte.c ut/ut0dbg.c ut/ut0mem.c
-			ut/ut0rnd.c ut/ut0ut.c ut/ut0vec.c ut/ut0list.c
+			ut/ut0rnd.c ut/ut0ut.c ut/ut0vec.c ut/ut0list.c ut/ut0rbt.c
 			ddl/ddl0ddl.c
 			api/api0api.c api/api0misc.c api/api0ucode.c
 			api/api0cfg.c api/api0status.c api/api0sql.c)
