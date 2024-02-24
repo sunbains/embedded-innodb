@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/row0umod.h
+/** @file include/row0umod.h
 Undo modify of a row
 
 Created 2/27/1997 Heikki Tuuri
@@ -34,13 +32,11 @@ Created 2/27/1997 Heikki Tuuri
 #include "row0types.h"
 #include "mtr0mtr.h"
 
-/***********************************************************//**
-Undoes a modify operation on a row of a table.
+/** Undoes a modify operation on a row of a table.
 @return	DB_SUCCESS or error code */
 UNIV_INTERN
 ulint
 row_undo_mod(
-/*=========*/
 	undo_node_t*	node,	/*!< in: row undo node */
 	que_thr_t*	thr);	/*!< in: query thread */
 

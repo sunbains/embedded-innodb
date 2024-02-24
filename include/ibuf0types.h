@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,12 +15,11 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/ibuf0types.h
+/** @file include/ibuf0types.h
 Insert buffer global types
 
-Created 7/29/1997 Heikki Tuuri
-*******************************************************/
+Created 7/29/1997 Heikki Tuuri */
+
 
 #ifndef ibuf0types_h
 #define ibuf0types_h

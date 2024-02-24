@@ -1,4 +1,4 @@
-/***********************************************************************
+/**
 Copyright (c) 2008, 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2008, 2009 Oracle. All rights reserved.
 
@@ -24,12 +24,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "innodb.h"
 #include <stdarg.h>
 
-/*********************************************************************//**
+/**
 Declare private functions that should not be visible in the public API
 below, outside of API_BEGIN_INCLUDE/API_END_INCLUDE.
 *************************************************************************/
 
-/*********************************************************************//**
+/**
 Execute arbitrary SQL using InnoDB's internal parser. The statement
 is executed in a new transaction. Table name parameters must be prefixed
 with a '$' symbol and variables with ':'
@@ -42,7 +42,7 @@ ib_exec_sql(
 	ib_ulint_t	n_args,         /*!< in: no. of args */
 	...);
 
-/*********************************************************************//**
+/**
 Execute arbitrary SQL using InnoDB's internal parser. The statement
 is executed in a background transaction. It will lock the data
 dictionary lock for the duration of the query.
@@ -55,7 +55,7 @@ ib_exec_ddl_sql(
 	ib_ulint_t	n_args,		/*!< in: no. of args */
 	...);
 
-/*********************************************************************//**
+/**
 Initialize the config system.
 @return	DB_SUCCESS or error code */
 
@@ -63,7 +63,7 @@ ib_err_t
 ib_cfg_init(void);
 /*==============*/
 
-/*********************************************************************//**
+/**
 Shutdown the config system.
 @return	DB_SUCCESS or error code */
 

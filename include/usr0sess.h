@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/usr0sess.h
+/** @file include/usr0sess.h
 Sessions
 
 Created 6/25/1996 Heikki Tuuri
@@ -36,19 +34,15 @@ Created 6/25/1996 Heikki Tuuri
 #include "data0data.h"
 #include "rem0rec.h"
 
-/*********************************************************************//**
-Opens a session.
+/** Opens a session.
 @return	own: session object */
 UNIV_INTERN
 sess_t*
 sess_open(void);
-/*============*/
-/*********************************************************************//**
-Closes a session, freeing the memory occupied by it. */
+/** Closes a session, freeing the memory occupied by it. */
 UNIV_INTERN
 void
 sess_close(
-/*=======*/
 	sess_t*		sess);		/*!< in, own: session object */
 
 /** The session handle. All fields are protected by the kernel mutex */

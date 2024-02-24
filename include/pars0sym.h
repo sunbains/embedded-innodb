@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/pars0sym.h
+/** @file include/pars0sym.h
 SQL parser symbol table
 
 Created 12/15/1997 Heikki Tuuri
@@ -33,79 +31,63 @@ Created 12/15/1997 Heikki Tuuri
 #include "pars0types.h"
 #include "row0types.h"
 
-/******************************************************************//**
-Creates a symbol table for a single stored procedure or query.
+/** Creates a symbol table for a single stored procedure or query.
 @return	own: symbol table */
 UNIV_INTERN
 sym_tab_t*
 sym_tab_create(
-/*===========*/
 	mem_heap_t*	heap);	/*!< in: memory heap where to create */
-/******************************************************************//**
-Frees the memory allocated dynamically AFTER parsing phase for variables
+/** Frees the memory allocated dynamically AFTER parsing phase for variables
 etc. in the symbol table. Does not free the mem heap where the table was
 originally created. Frees also SQL explicit cursor definitions. */
 UNIV_INTERN
 void
 sym_tab_free_private(
-/*=================*/
 	sym_tab_t*	sym_tab);	/*!< in, own: symbol table */
-/******************************************************************//**
-Adds an integer literal to a symbol table.
+/** Adds an integer literal to a symbol table.
 @return	symbol table node */
 UNIV_INTERN
 sym_node_t*
 sym_tab_add_int_lit(
-/*================*/
 	sym_tab_t*	sym_tab,	/*!< in: symbol table */
 	ulint		val);		/*!< in: integer value */
-/******************************************************************//**
-Adds an string literal to a symbol table.
+/** Adds an string literal to a symbol table.
 @return	symbol table node */
 UNIV_INTERN
 sym_node_t*
 sym_tab_add_str_lit(
-/*================*/
 	sym_tab_t*	sym_tab,	/*!< in: symbol table */
 	byte*		str,		/*!< in: string with no quotes around
 					it */
 	ulint		len);		/*!< in: string length */
-/******************************************************************//**
-Add a bound literal to a symbol table.
+/** Add a bound literal to a symbol table.
 @return	symbol table node */
 UNIV_INTERN
 sym_node_t*
 sym_tab_add_bound_lit(
-/*==================*/
 	sym_tab_t*	sym_tab,	/*!< in: symbol table */
 	const char*	name,		/*!< in: name of bound literal */
 	ulint*		lit_type);	/*!< out: type of literal (PARS_*_LIT) */
-/******************************************************************//**
-Adds an SQL null literal to a symbol table.
+/** Adds an SQL null literal to a symbol table.
 @return	symbol table node */
 UNIV_INTERN
 sym_node_t*
 sym_tab_add_null_lit(
-/*=================*/
 	sym_tab_t*	sym_tab);	/*!< in: symbol table */
-/******************************************************************//**
-Adds an identifier to a symbol table.
+/** Adds an identifier to a symbol table.
 @return	symbol table node */
 UNIV_INTERN
 sym_node_t*
 sym_tab_add_id(
-/*===========*/
 	sym_tab_t*	sym_tab,	/*!< in: symbol table */
 	byte*		name,		/*!< in: identifier name */
 	ulint		len);		/*!< in: identifier length */
 
-/******************************************************************//**
-Add a bound identifier to a symbol table.
+/** Add a bound identifier to a symbol table.
 @return	symbol table node */
 UNIV_INTERN
 sym_node_t*
 sym_tab_add_bound_id(
-/*===========*/
 	sym_tab_t*	sym_tab,	/*!< in: symbol table */
 	const char*	name);		/*!< in: name of bound id */
 

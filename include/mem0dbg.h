@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/mem0dbg.h
+/** @file include/mem0dbg.h
 The memory management: the debug code. This is not a compilation module,
 but is included in mem0mem.* !
 
@@ -55,8 +53,7 @@ check fields at the both ends of the field. */
 #endif
 
 #if defined UNIV_MEM_DEBUG || defined UNIV_DEBUG
-/***************************************************************//**
-Checks a memory heap for consistency and prints the contents if requested.
+/** Checks a memory heap for consistency and prints the contents if requested.
 Outputs the sum of sizes of buffers given to the user (only in
 the debug version), the physical size of the heap and the number of
 blocks in the heap. In case of error returns 0 as sizes and number
@@ -64,7 +61,6 @@ of blocks. */
 UNIV_INTERN
 void
 mem_heap_validate_or_print(
-/*=======================*/
 	mem_heap_t*	heap,	/*!< in: memory heap */
 	byte*		top,	/*!< in: calculate and validate only until
 				this top pointer in the heap is reached,
@@ -84,29 +80,24 @@ mem_heap_validate_or_print(
 	ulint*		n_blocks); /*!< out: number of blocks in the heap,
 				if a NULL pointer is passed as this
 				argument, it is ignored */
-/**************************************************************//**
-Validates the contents of a memory heap.
+/** Validates the contents of a memory heap.
 @return	TRUE if ok */
 UNIV_INTERN
 ibool
 mem_heap_validate(
-/*==============*/
 	mem_heap_t*   heap);	/*!< in: memory heap */
 #endif /* UNIV_MEM_DEBUG || UNIV_DEBUG */
 #ifdef UNIV_DEBUG
-/**************************************************************//**
-Checks that an object is a memory heap (or a block of it)
+/** Checks that an object is a memory heap (or a block of it)
 @return	TRUE if ok */
 UNIV_INTERN
 ibool
 mem_heap_check(
-/*===========*/
 	mem_heap_t*   heap);	/*!< in: memory heap */
 #endif /* UNIV_DEBUG */
-/************************************************************//**
-Validates the dynamic memory
+/** Validates the dynamic memory
 @return	TRUE if ok */
 UNIV_INTERN
 ibool
 mem_validate(void);
-/*===============*/
+

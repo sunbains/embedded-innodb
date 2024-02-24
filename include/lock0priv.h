@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 2007, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/lock0priv.h
+/** @file include/lock0priv.h
 Lock module internal structures and methods.
 
 Created July 12, 2007 Vasil Dimov
@@ -82,22 +80,18 @@ struct lock_struct {
 	} un_member;			/*!< lock details */
 };
 
-/*********************************************************************//**
-Gets the type of a lock.
+/** Gets the type of a lock.
 @return	LOCK_TABLE or LOCK_REC */
 UNIV_INLINE
 ulint
 lock_get_type_low(
-/*==============*/
 	const lock_t*	lock);	/*!< in: lock */
 
-/*********************************************************************//**
-Gets the previous record lock set on a record.
+/** Gets the previous record lock set on a record.
 @return	previous lock on the same record, NULL if none exists */
 UNIV_INTERN
 const lock_t*
 lock_rec_get_prev(
-/*==============*/
 	const lock_t*	in_lock,/*!< in: record lock */
 	ulint		heap_no);/*!< in: heap number of the record */
 

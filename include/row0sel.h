@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/row0sel.h
+/** @file include/row0sel.h
 Select
 
 Created 12/19/1997 Heikki Tuuri
@@ -38,102 +36,79 @@ Created 12/19/1997 Heikki Tuuri
 #include "read0read.h"
 #include "api0api.h"
 
-/*********************************************************************//**
-Creates a select node struct.
+/** Creates a select node struct.
 @return	own: select node struct */
 UNIV_INTERN
 sel_node_t*
 sel_node_create(
-/*============*/
 	mem_heap_t*	heap);	/*!< in: memory heap where created */
-/*********************************************************************//**
-Frees the memory private to a select node when a query graph is freed,
+/** Frees the memory private to a select node when a query graph is freed,
 does not free the heap where the node was originally created. */
 UNIV_INTERN
 void
 sel_node_free_private(
-/*==================*/
 	sel_node_t*	node);	/*!< in: select node struct */
-/*********************************************************************//**
-Frees a prefetch buffer for a column, including the dynamically allocated
+/** Frees a prefetch buffer for a column, including the dynamically allocated
 memory for data stored there. */
 UNIV_INTERN
 void
 sel_col_prefetch_buf_free(
-/*======================*/
 	sel_buf_t*	prefetch_buf);	/*!< in, own: prefetch buffer */
-/*********************************************************************//**
-Gets the plan node for the nth table in a join.
+/** Gets the plan node for the nth table in a join.
 @return	plan node */
 UNIV_INLINE
 plan_t*
 sel_node_get_nth_plan(
-/*==================*/
 	sel_node_t*	node,	/*!< in: select node */
 	ulint		i);	/*!< in: get ith plan node */
-/**********************************************************************//**
-Performs a select step. This is a high-level function used in SQL execution
+/** Performs a select step. This is a high-level function used in SQL execution
 graphs.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 row_sel_step(
-/*=========*/
 	que_thr_t*	thr);	/*!< in: query thread */
-/**********************************************************************//**
-Performs an execution step of an open or close cursor statement node.
+/** Performs an execution step of an open or close cursor statement node.
 @return	query thread to run next or NULL */
 UNIV_INLINE
 que_thr_t*
 open_step(
-/*======*/
 	que_thr_t*	thr);	/*!< in: query thread */
-/**********************************************************************//**
-Performs a fetch for a cursor.
+/** Performs a fetch for a cursor.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 fetch_step(
-/*=======*/
 	que_thr_t*	thr);	/*!< in: query thread */
-/****************************************************************//**
-Sample callback function for fetch that prints each row.
+/** Sample callback function for fetch that prints each row.
 @return	always returns non-NULL */
 UNIV_INTERN
 void*
 row_fetch_print(
-/*============*/
 	void*	row,		/*!< in:  sel_node_t* */
 	void*	user_arg);	/*!< in:  not used */
-/****************************************************************//**
-Callback function for fetch that stores an unsigned 4 byte integer to the
+/** Callback function for fetch that stores an unsigned 4 byte integer to the
 location pointed. The column's type must be DATA_INT, DATA_UNSIGNED, length
 = 4.
 @return	always returns NULL */
 UNIV_INTERN
 void*
 row_fetch_store_uint4(
-/*==================*/
 	void*	row,		/*!< in:  sel_node_t* */
 	void*	user_arg);	/*!< in:  data pointer */
-/***********************************************************//**
-Prints a row in a select result.
+/** Prints a row in a select result.
 @return	query thread to run next or NULL */
 UNIV_INTERN
 que_thr_t*
 row_printf_step(
-/*============*/
 	que_thr_t*	thr);	/*!< in: query thread */
-/***********************************************************************//**
-Builds a dummy query graph used in selects. */
+/** Builds a dummy query graph used in selects. */
 UNIV_INTERN
 void
 row_sel_prebuild_graph(
-/*===================*/
 	row_prebuilt_t*	prebuilt);/*!< in: prebuilt handle */
 
-/********************************************************************//**
-This function does several things, in fact too many things:
+/** This function does several things, in fact too many things:
 
  1. Moveto/Search for a record
  2. Next record
@@ -149,7 +124,6 @@ fetch next or fetch prev must not be tried to the cursor!
 UNIV_INTERN
 enum db_err
 row_search_for_client(
-/*==================*/
 	ib_recovery_t	recovery,	/*!< in: recovery flag */
 	ib_srch_mode_t	mode,		/*!< in: search mode */
 	row_prebuilt_t*	prebuilt,	/*!< in: prebuilt struct for the
@@ -166,31 +140,25 @@ row_search_for_client(
 				       	In opening of a cursor 'direction'
 				       	should be ROW_SEL_MOVETO */
 
-/**********************************************************************//**
-Reads the current row from the fetch cache.
+/** Reads the current row from the fetch cache.
 @return current row from the row cache. */
 UNIV_INTERN
 const rec_t*
 row_sel_row_cache_get(
-/*==================*/
 	row_prebuilt_t*	prebuilt);	/*!< in: prebuilt struct */
 
-/**********************************************************************//**
-Pops a cached row from the fetch cache.
+/** Pops a cached row from the fetch cache.
 @return	DB_SUCCESS if all OK else error code */
 UNIV_INTERN
 void
 row_sel_row_cache_next(
-/*===================*/
 	row_prebuilt_t*	prebuilt);	/*!< in: prebuilt struct */
 
-/**********************************************************************//**
-Check if there are any rows in the cache.
+/** Check if there are any rows in the cache.
 @return true if row cache is empty. */
 UNIV_INTERN
 ibool
 row_sel_row_cache_is_empty(
-/*=======================*/
 	row_prebuilt_t*	prebuilt);	/*!< in: prebuilt struct */
 
 /** A structure for caching column values for prefetched rows */

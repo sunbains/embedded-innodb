@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/srv0que.h
+/** @file include/srv0que.h
 Server query execution
 
 Created 6/5/1996 Heikki Tuuri
@@ -29,13 +27,11 @@ Created 6/5/1996 Heikki Tuuri
 #include "univ.i"
 #include "que0types.h"
 
-/**********************************************************************//**
-Enqueues a task to server task queue and releases a worker thread, if there
+/** Enqueues a task to server task queue and releases a worker thread, if there
 is a suspended one. */
 UNIV_INTERN
 void
 srv_que_task_enqueue_low(
-/*=====================*/
 	que_thr_t*	thr);	/*!< in: query thread */
 
 #endif

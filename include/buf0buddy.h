@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/*** 
 Copyright (c) 2006, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/buf0buddy.h
+/*** @file include/buf0buddy.h
 Binary buddy allocator for compressed pages
 
 Created December 2006 by Marko Makela
@@ -34,8 +32,7 @@ Created December 2006 by Marko Makela
 #include "univ.i"
 #include "buf0types.h"
 
-/**********************************************************************//**
-Allocate a block.  The thread calling this function must hold
+/*** Allocate a block.  The thread calling this function must hold
 buf_pool_mutex and must not hold buf_pool_zip_mutex or any
 block->mutex.  The buf_pool_mutex may only be released and reacquired
 if lru != NULL.  This function should only be used for allocating
@@ -47,7 +44,6 @@ buf_pool_mutex.
 UNIV_INLINE
 void*
 buf_buddy_alloc(
-/*============*/
 	ulint	size,	/*!< in: block size, up to UNIV_PAGE_SIZE */
 	ibool*	lru)	/*!< in: pointer to a variable that will be assigned
 			TRUE if storage was allocated from the LRU list
@@ -55,23 +51,19 @@ buf_buddy_alloc(
 			or NULL if the LRU list should not be used */
 	__attribute__((malloc));
 
-/**********************************************************************//**
-Release a block. */
+/*** Release a block. */
 UNIV_INLINE
 void
 buf_buddy_free(
-/*===========*/
 	void*	buf,	/*!< in: block to be freed, must not be
 			pointed to by the buffer pool */
 	ulint	size)	/*!< in: block size, up to UNIV_PAGE_SIZE */
 	__attribute__((nonnull));
 
-/**************************************************************************
-Get the offset of the buddy of a compressed page frame. */
+/*** Get the offset of the buddy of a compressed page frame. */
 UNIV_INTERN
 void
 buf_buddy_var_init(void);
-/*====================*/
 
 /** Statistics of buddy blocks of a given size. */
 struct buf_buddy_stat_struct {

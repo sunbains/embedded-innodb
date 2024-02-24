@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/******************************************************************//**
-@file include/ut0sort.h
+/** @file include/ut0sort.h
 Sort utility
 
 Created 11/9/1995 Heikki Tuuri
@@ -35,8 +33,7 @@ the macro. The sort algorithm is mergesort which has logarithmic
 worst case.
 */
 
-/*******************************************************************//**
-This macro expands to the body of a standard sort function.
+/** This macro expands to the body of a standard sort function.
 The sort function uses mergesort and must be defined separately
 for each type of array.
 Also the comparison function has to be defined individually

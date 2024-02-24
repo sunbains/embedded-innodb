@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/******************************************************************//**
-@file include/ut0lst.h
+/** @file include/ut0lst.h
 List utilities
 
 Created 9/10/1995 Heikki Tuuri
@@ -33,8 +31,7 @@ if a list is used in the database. Note that a single struct may belong
 to two or more lists, provided that the list are given different names.
 An example of the usage of the lists can be found in fil0fil.c. */
 
-/*******************************************************************//**
-This macro expands to the unnamed type definition of a struct which acts
+/** This macro expands to the unnamed type definition of a struct which acts
 as the two-way list base node. The base node contains pointers
 to both ends of the list and a count of nodes in the list (excluding
 the base node from the count).
@@ -46,8 +43,7 @@ struct {\
 	TYPE *	end;	/*!< pointer to list end, NULL if empty */\
 }\
 
-/*******************************************************************//**
-This macro expands to the unnamed type definition of a struct which
+/** This macro expands to the unnamed type definition of a struct which
 should be embedded in the nodes of the list, the node type must be a struct.
 This struct contains the pointers to next and previous nodes in the list.
 The name of the field in the node struct should be the name given
@@ -69,8 +65,7 @@ struct {\
 	TYPE *	next;	/*!< pointer to next node, NULL if end of list */\
 }\
 
-/*******************************************************************//**
-Initializes the base node of a two-way list.
+/** Initializes the base node of a two-way list.
 @param BASE	the list base node
 */
 #define UT_LIST_INIT(BASE)\
@@ -80,8 +75,7 @@ Initializes the base node of a two-way list.
 	(BASE).end   = NULL;\
 }\
 
-/*******************************************************************//**
-Adds the node as the first element in a two-way linked list.
+/** Adds the node as the first element in a two-way linked list.
 @param NAME	list name
 @param BASE	the base node (not a pointer to it)
 @param N	pointer to the node to be added to the list.
@@ -102,8 +96,7 @@ Adds the node as the first element in a two-way linked list.
 	}\
 }\
 
-/*******************************************************************//**
-Adds the node as the last element in a two-way linked list.
+/** Adds the node as the last element in a two-way linked list.
 @param NAME	list name
 @param BASE	the base node (not a pointer to it)
 @param N	pointer to the node to be added to the list
@@ -124,8 +117,7 @@ Adds the node as the last element in a two-way linked list.
 	}\
 }\
 
-/*******************************************************************//**
-Inserts a NODE2 after NODE1 in a list.
+/** Inserts a NODE2 after NODE1 in a list.
 @param NAME	list name
 @param BASE	the base node (not a pointer to it)
 @param NODE1	pointer to node after which NODE2 is inserted
@@ -161,8 +153,7 @@ Inserts a NODE2 after NODE1 in a list.
 # define UT_LIST_REMOVE_CLEAR(NAME, N) while (0)
 #endif
 
-/*******************************************************************//**
-Removes a node from a two-way linked list.
+/** Removes a node from a two-way linked list.
 @param NAME	list name
 @param BASE	the base node (not a pointer to it)
 @param N	pointer to the node to be removed from the list
@@ -185,46 +176,40 @@ do {									\
 	UT_LIST_REMOVE_CLEAR(NAME, N);					\
 } while (0)
 
-/********************************************************************//**
-Gets the next node in a two-way list.
+/** Gets the next node in a two-way list.
 @param NAME	list name
 @param N	pointer to a node
 @return		the successor of N in NAME, or NULL */
 #define UT_LIST_GET_NEXT(NAME, N)\
 	(((N)->NAME).next)
 
-/********************************************************************//**
-Gets the previous node in a two-way list.
+/** Gets the previous node in a two-way list.
 @param NAME	list name
 @param N	pointer to a node
 @return		the predecessor of N in NAME, or NULL */
 #define UT_LIST_GET_PREV(NAME, N)\
 	(((N)->NAME).prev)
 
-/********************************************************************//**
-Alternative macro to get the number of nodes in a two-way list, i.e.,
+/** Alternative macro to get the number of nodes in a two-way list, i.e.,
 its length.
 @param BASE	the base node (not a pointer to it).
 @return		the number of nodes in the list */
 #define UT_LIST_GET_LEN(BASE)\
 	(BASE).count
 
-/********************************************************************//**
-Gets the first node in a two-way list.
+/** Gets the first node in a two-way list.
 @param BASE	the base node (not a pointer to it)
 @return		first node, or NULL if the list is empty */
 #define UT_LIST_GET_FIRST(BASE)\
 	(BASE).start
 
-/********************************************************************//**
-Gets the last node in a two-way list.
+/** Gets the last node in a two-way list.
 @param BASE	the base node (not a pointer to it)
 @return		last node, or NULL if the list is empty */
 #define UT_LIST_GET_LAST(BASE)\
 	(BASE).end
 
-/********************************************************************//**
-Checks the consistency of a two-way list.
+/** Checks the consistency of a two-way list.
 @param NAME		the name of the list
 @param TYPE		node type
 @param BASE		base node (not a pointer to it)

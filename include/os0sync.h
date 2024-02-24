@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 
@@ -23,8 +22,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/os0sync.h
+/** @file include/os0sync.h
 The interface to the operating system
 synchronization primitives.
 
@@ -110,39 +108,30 @@ extern ulint		os_event_count;
 extern ulint		os_mutex_count;
 extern ulint		os_fast_mutex_count;
 
-/*********************************************************//**
-Initializes global event and OS 'slow' mutex lists. */
+/** Initializes global event and OS 'slow' mutex lists. */
 UNIV_INTERN
 void
 os_sync_init(void);
-/*==============*/
-/*********************************************************//**
-Frees created events and OS 'slow' mutexes. */
+/** Frees created events and OS 'slow' mutexes. */
 UNIV_INTERN
 void
 os_sync_free(void);
-/*==============*/
-/*********************************************************//**
-Creates an event semaphore, i.e., a semaphore which may just have two states:
+/** Creates an event semaphore, i.e., a semaphore which may just have two states:
 signaled and nonsignaled. The created event is manual reset: it must be reset
 explicitly by calling sync_os_reset_event.
 @return	the event handle */
 UNIV_INTERN
 os_event_t
 os_event_create(
-/*============*/
 	const char*	name);	/*!< in: the name of the event, if NULL
 				the event is created without a name */
-/**********************************************************//**
-Sets an event semaphore to the signaled state: lets waiting threads
+/** Sets an event semaphore to the signaled state: lets waiting threads
 proceed. */
 UNIV_INTERN
 void
 os_event_set(
-/*=========*/
 	os_event_t	event);	/*!< in: event to set */
-/**********************************************************//**
-Resets an event semaphore to the nonsignaled state. Waiting threads will
+/** Resets an event semaphore to the nonsignaled state. Waiting threads will
 stop to wait for the event.
 The return value should be passed to os_even_wait_low() if it is desired
 that this thread should not wait in case of an intervening call to
@@ -151,18 +140,14 @@ os_event_wait_low() call. See comments for os_event_wait_low(). */
 UNIV_INTERN
 ib_int64_t
 os_event_reset(
-/*===========*/
 	os_event_t	event);	/*!< in: event to reset */
-/**********************************************************//**
-Frees an event object. */
+/** Frees an event object. */
 UNIV_INTERN
 void
 os_event_free(
-/*==========*/
 	os_event_t	event);	/*!< in: event to free */
 
-/**********************************************************//**
-Waits for an event object until it is in the signaled state. If
+/** Waits for an event object until it is in the signaled state. If
 srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS this also exits the
 waiting thread when the event becomes signaled (or immediately if the
 event is already in the signaled state).
@@ -184,21 +169,18 @@ reset_sig_count. */
 UNIV_INTERN
 void
 os_event_wait_low(
-/*==============*/
 	os_event_t	event,		/*!< in: event to wait */
 	ib_int64_t	reset_sig_count);/*!< in: zero or the value
 					returned by previous call of
 					os_event_reset(). */
 
 #ifdef __WIN__
-/**********************************************************//**
-Waits for any event in an OS native event array. Returns if even a single
+/** Waits for any event in an OS native event array. Returns if even a single
 one is signaled or becomes signaled.
 @return	index of the event which was signaled */
 UNIV_INTERN
 ulint
 os_event_wait_multiple(
-/*===================*/
 	ulint			n,	/*!< in: number of events in the
 					array */
 	os_native_event_t*	native_event_array);
@@ -208,102 +190,78 @@ os_event_wait_multiple(
 
 #define os_event_wait(event) os_event_wait_low(event, 0)
 
-/************************************************************//**
-Waits for an event object until it is in the signaled state or
+/** Waits for an event object until it is in the signaled state or
 a timeout is exceeded. In Unix the timeout is always infinite.
 @return	0 if success, OS_SYNC_TIME_EXCEEDED if timeout was exceeded */
 UNIV_INTERN
 ulint
 os_event_wait_time(
-/*===============*/
 	os_event_t	event,	/*!< in: event to wait */
 	ulint		time);	/*!< in: timeout in microseconds, or
 				OS_SYNC_INFINITE_TIME */
-/*********************************************************//**
-Creates an operating system mutex semaphore. Because these are slow, the
+/** Creates an operating system mutex semaphore. Because these are slow, the
 mutex semaphore of InnoDB itself (mutex_t) should be used where possible.
 @return	the mutex handle */
 UNIV_INTERN
 os_mutex_t
 os_mutex_create(
-/*============*/
 	const char*	name);	/*!< in: the name of the mutex, if NULL
 				the mutex is created without a name */
-/**********************************************************//**
-Acquires ownership of a mutex semaphore. */
+/** Acquires ownership of a mutex semaphore. */
 UNIV_INTERN
 void
 os_mutex_enter(
-/*===========*/
 	os_mutex_t	mutex);	/*!< in: mutex to acquire */
-/**********************************************************//**
-Releases ownership of a mutex. */
+/** Releases ownership of a mutex. */
 UNIV_INTERN
 void
 os_mutex_exit(
-/*==========*/
 	os_mutex_t	mutex);	/*!< in: mutex to release */
-/**********************************************************//**
-Frees an mutex object. */
+/** Frees an mutex object. */
 UNIV_INTERN
 void
 os_mutex_free(
-/*==========*/
 	os_mutex_t	mutex);	/*!< in: mutex to free */
-/**********************************************************//**
-Acquires ownership of a fast mutex. Currently in Windows this is the same
+/** Acquires ownership of a fast mutex. Currently in Windows this is the same
 as os_fast_mutex_lock!
 @return	0 if success, != 0 if was reserved by another thread */
 UNIV_INLINE
 ulint
 os_fast_mutex_trylock(
-/*==================*/
 	os_fast_mutex_t*	fast_mutex);	/*!< in: mutex to acquire */
-/**********************************************************//**
-Releases ownership of a fast mutex. */
+/** Releases ownership of a fast mutex. */
 UNIV_INTERN
 void
 os_fast_mutex_unlock(
-/*=================*/
 	os_fast_mutex_t*	fast_mutex);	/*!< in: mutex to release */
-/*********************************************************//**
-Initializes an operating system fast mutex semaphore. */
+/** Initializes an operating system fast mutex semaphore. */
 UNIV_INTERN
 void
 os_fast_mutex_init(
-/*===============*/
 	os_fast_mutex_t*	fast_mutex);	/*!< in: fast mutex */
-/**********************************************************//**
-Acquires ownership of a fast mutex. */
+/** Acquires ownership of a fast mutex. */
 UNIV_INTERN
 void
 os_fast_mutex_lock(
-/*===============*/
 	os_fast_mutex_t*	fast_mutex);	/*!< in: mutex to acquire */
-/**********************************************************//**
-Frees an mutex object. */
+/** Frees an mutex object. */
 UNIV_INTERN
 void
 os_fast_mutex_free(
-/*===============*/
 	os_fast_mutex_t*	fast_mutex);	/*!< in: mutex to free */
-/*************************************************************
-Reset the variables. */
+/** Reset the variables. */
 UNIV_INTERN
 void
 os_sync_var_init(void);
-/*==================*/
 
-/**********************************************************//**
-Atomic compare-and-swap and increment for InnoDB. */
+/** Atomic compare-and-swap and increment for InnoDB. */
 
 #if defined(HAVE_IB_GCC_ATOMIC_BUILTINS) \
  && defined(IB_ATOMIC_MODE_GCC_ATOMIC_BUILTINS)
 
 #define HAVE_ATOMIC_BUILTINS
 
-/**********************************************************//**
-Returns true if swapped, ptr is pointer to target, old_val is value to
+/** Returns true if swapped, ptr is pointer to target, old_val is value to
 compare to, new_val is the value to swap in. */
 
 # define os_compare_and_swap(ptr, old_val, new_val) \
@@ -326,8 +284,7 @@ compare to, new_val is the value to swap in. */
 	"Mutexes use GCC atomic builtins, rw_locks do not"
 # endif /* HAVE_IB_ATOMIC_PTHREAD_T_GCC */
 
-/**********************************************************//**
-Returns the resulting value, ptr is pointer to target, amount is the
+/** Returns the resulting value, ptr is pointer to target, amount is the
 amount of increment. */
 
 # define os_atomic_increment(ptr, amount) \
@@ -339,8 +296,7 @@ amount of increment. */
 # define os_atomic_increment_ulint(ptr, amount) \
 	os_atomic_increment(ptr, amount)
 
-/**********************************************************//**
-Returns the old value of *ptr, atomically sets *ptr to new_val */
+/** Returns the old value of *ptr, atomically sets *ptr to new_val */
 
 # define os_atomic_test_and_set_byte(ptr, new_val) \
 	__sync_lock_test_and_set(ptr, new_val)
@@ -355,8 +311,7 @@ intrinsics and running on Solaris >= 10 use Solaris atomics */
 
 #include <atomic.h>
 
-/**********************************************************//**
-Returns true if swapped, ptr is pointer to target, old_val is value to
+/** Returns true if swapped, ptr is pointer to target, old_val is value to
 compare to, new_val is the value to swap in. */
 
 # define os_compare_and_swap_ulint(ptr, old_val, new_val) \
@@ -383,8 +338,7 @@ compare to, new_val is the value to swap in. */
 	"Mutexes use Solaris atomic functions, rw_locks do not"
 # endif /* HAVE_IB_ATOMIC_PTHREAD_T_SOLARIS */
 
-/**********************************************************//**
-Returns the resulting value, ptr is pointer to target, amount is the
+/** Returns the resulting value, ptr is pointer to target, amount is the
 amount of increment. */
 
 # define os_atomic_increment_lint(ptr, amount) \
@@ -393,8 +347,7 @@ amount of increment. */
 # define os_atomic_increment_ulint(ptr, amount) \
 	atomic_add_long_nv(ptr, amount)
 
-/**********************************************************//**
-Returns the old value of *ptr, atomically sets *ptr to new_val */
+/** Returns the old value of *ptr, atomically sets *ptr to new_val */
 
 # define os_atomic_test_and_set_byte(ptr, new_val) \
 	atomic_swap_uchar(ptr, new_val)
@@ -412,8 +365,7 @@ Returns the old value of *ptr, atomically sets *ptr to new_val */
 #  define win_xchg_and_add InterlockedExchangeAdd
 # endif
 
-/**********************************************************//**
-Returns true if swapped, ptr is pointer to target, old_val is value to
+/** Returns true if swapped, ptr is pointer to target, old_val is value to
 compare to, new_val is the value to swap in. */
 
 # define os_compare_and_swap_ulint(ptr, old_val, new_val) \
@@ -429,8 +381,7 @@ compare to, new_val is the value to swap in. */
 # define IB_ATOMICS_STARTUP_MSG \
 	"Mutexes and rw_locks use Windows interlocked functions"
 
-/**********************************************************//**
-Returns the resulting value, ptr is pointer to target, amount is the
+/** Returns the resulting value, ptr is pointer to target, amount is the
 amount of increment. */
 
 # define os_atomic_increment_lint(ptr, amount) \
@@ -439,8 +390,7 @@ amount of increment. */
 # define os_atomic_increment_ulint(ptr, amount) \
 	((ulint) (win_xchg_and_add(ptr, amount) + amount))
 
-/**********************************************************//**
-Returns the old value of *ptr, atomically sets *ptr to new_val.
+/** Returns the old value of *ptr, atomically sets *ptr to new_val.
 InterlockedExchange() operates on LONG, and the LONG will be
 clobbered */
 

@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/*****************************************************************//**
-@file include/ut0dbg.h
+/** @file include/ut0dbg.h
 Debug utilities for Innobase
 
 Created 1/30/1994 Heikki Tuuri
@@ -63,12 +61,10 @@ using this macro */
 		}					\
 	} while (0)
 
-/*************************************************************//**
-Report a failed assertion. */
+/** Report a failed assertion. */
 UNIV_INTERN
 void
 ut_dbg_assertion_failed(
-/*====================*/
 	const char* expr,	/*!< in: the failed assertion */
 	const char* file,	/*!< in: source file containing the assertion */
 	ulint line);		/*!< in: line number of the assertion */
@@ -100,12 +96,10 @@ extern ulint*	ut_dbg_null_ptr;
 will stop at the next ut_a() or ut_ad(). */
 extern ibool	ut_dbg_stop_threads;
 
-/*************************************************************//**
-Stop a thread after assertion failure. */
+/** Stop a thread after assertion failure. */
 UNIV_INTERN
 void
 ut_dbg_stop_thread(
-/*===============*/
 	const char*	file,
 	ulint		line);
 # endif
@@ -172,21 +166,17 @@ typedef struct speedo_struct {
 	struct timeval	tv;	/*!< gettimeofday() result */
 } speedo_t;
 
-/*******************************************************************//**
-Resets a speedo (records the current time in it). */
+/** Resets a speedo (records the current time in it). */
 UNIV_INTERN
 void
 speedo_reset(
-/*=========*/
 	speedo_t*	speedo);	/*!< out: speedo */
 
-/*******************************************************************//**
-Shows the time elapsed and usage statistics since the last reset of a
+/** Shows the time elapsed and usage statistics since the last reset of a
 speedo. */
 UNIV_INTERN
 void
 speedo_show(
-/*========*/
 	const speedo_t*	speedo);	/*!< in: speedo */
 
 #endif /* UNIV_COMPILE_TEST_FUNCS */

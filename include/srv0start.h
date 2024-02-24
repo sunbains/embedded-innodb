@@ -1,5 +1,4 @@
-/*****************************************************************************
-
+/** 
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -16,8 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/srv0start.h
+/** @file include/srv0start.h
 Starts the Innobase database server
 
 Created 10/10/1995 Heikki Tuuri
@@ -30,52 +28,40 @@ Created 10/10/1995 Heikki Tuuri
 #include "ut0byte.h"
 #include "api0api.h"
 
-/*********************************************************************//**
-Normalizes a directory path for Windows: converts slashes to backslashes. */
+/** Normalizes a directory path for Windows: converts slashes to backslashes. */
 UNIV_INTERN
 void
 srv_normalize_path_for_win(
-/*=======================*/
 	char*	str);	/*!< in/out: null-terminated character string */
-/*********************************************************************//**
-Reads the data files and their sizes from a character string.
+/** Reads the data files and their sizes from a character string.
 @return	TRUE if ok, FALSE on parse error */
 UNIV_INTERN
 ibool
 srv_parse_data_file_paths_and_sizes(
-/*================================*/
 	const char*	str);	/*!< in: the data file path string */
-/*********************************************************************//**
-Reads log group home directories from a character string.
+/** Reads log group home directories from a character string.
 @return	TRUE if ok, FALSE on parse error */
 UNIV_INTERN
 ibool
 srv_parse_log_group_home_dirs(
-/*==========================*/
 	const char*	str);	/*!< in: character string */
-/*********************************************************************//**
-Frees the memory allocated by srv_parse_data_file_paths_and_sizes()
+/** Frees the memory allocated by srv_parse_data_file_paths_and_sizes()
 and srv_parse_log_group_home_dirs(). */
 UNIV_INTERN
 void
 srv_free_paths_and_sizes(void);
-/*==========================*/
 #ifndef UNIV_HOTBACKUP
-/****************************************************************//**
-Starts Innobase and creates a new database if database files
+/** Starts Innobase and creates a new database if database files
 are not found and the user wants.
 @return	DB_SUCCESS or error code */
 UNIV_INTERN
 ib_err_t
 innobase_start_or_create(void);
-/*===========================*/
-/****************************************************************//**
-Shuts down the Innobase database.
+/** Shuts down the Innobase database.
 @return	DB_SUCCESS or error code */
 UNIV_INTERN
 enum db_err
 innobase_shutdown(
-/*==============*/
 	ib_shutdown_t	shutdown);	/*!< in: shutdown flag */
 
 /** Log sequence number at shutdown */
