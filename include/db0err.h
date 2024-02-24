@@ -26,6 +26,6 @@ Created 5/24/1996 Heikki Tuuri
 #ifndef db0err_h
 #define db0err_h
 
-#include "haildb.h"
+#include "innodb.h"
 
 #endif

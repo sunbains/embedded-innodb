@@ -20,7 +20,7 @@ AC_PREREQ(2.52)		dnl              Minimum Autoconf version required.
 ####################################
 # change version here. --> BOTH PLACES PLEASE!
 # note: can't put vars in AC_INIT
-AC_INIT([haildb],[2.3.2],[http://bugs.launchpad.net/haildb])
+AC_INIT([innodb],[2.3.2],[http://bugs.launchpad.net/innodb])
 
 MAJOR_VERSION=2
 MINOR_VERSION=3
@@ -56,10 +56,10 @@ AC_SUBST(IB_API_VERSION)
 
 PANDORA_REQUIRE_BISON
 
-# libhaildb versioning when linked with GNU ld.
+# libinnodb versioning when linked with GNU ld.
 if test "$lt_cv_prog_gnu_ld" = "yes"
 then
-  LD_VERSION_SCRIPT="-Wl,--version-script=\$(top_srcdir)/libhaildb.ver"
+  LD_VERSION_SCRIPT="-Wl,--version-script=\$(top_srcdir)/libinnodb.ver"
 fi
 AC_SUBST(LD_VERSION_SCRIPT)
 
@@ -449,7 +449,7 @@ AM_CONDITIONAL([HAVE_PTHREAD_BARRIER], [test "$HAVE_PTHREAD_BARRIER_INIT" = yes]
 AM_CPPFLAGS="${AM_CPPFLAGS} -I\$(top_srcdir)/include -I\$(top_builddir)/include"
 AM_CFLAGS="${AM_CFLAGS} ${NO_WERROR}"
 
-AC_CONFIG_FILES([ Makefile haildb.spec ])
+AC_CONFIG_FILES([ Makefile innodb.spec ])
 
 AC_OUTPUT
 

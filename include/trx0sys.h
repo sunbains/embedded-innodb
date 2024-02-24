@@ -383,15 +383,6 @@ trx_sys_read_pertable_file_format_id(
 				datafile */
 	ulint *format_id);	/*!< out: file format of the per-table
 				data file */
-/*****************************************************************//**
-Get the name representation of the file format from its id.
-@return	pointer to the name */
-UNIV_INTERN
-const char*
-trx_sys_file_format_id_to_name(
-/*===========================*/
-	const ulint	id);	/*!< in: id of the file format */
-
 #endif /* !UNIV_HOTBACKUP */
 /* The automatically created system rollback segment has this id */
 #define TRX_SYS_SYSTEM_RSEG_ID	0

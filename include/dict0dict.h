@@ -709,14 +709,6 @@ dict_index_add_to_cache(
 	ibool		strict);/*!< in: TRUE=refuse to create the index
 				if records could be too big to fit in
 				an B-tree page */
-/**********************************************************************//**
-Removes an index from the dictionary cache. */
-UNIV_INTERN
-void
-dict_index_remove_from_cache(
-/*=========================*/
-	dict_table_t*	table,	/*!< in/out: table */
-	dict_index_t*	index);	/*!< in, own: index */
 #endif /* !UNIV_HOTBACKUP */
 /********************************************************************//**
 Gets the number of fields in the internal representation of an index,
@@ -1064,14 +1056,6 @@ dict_tables_have_same_db(
 				dbname '/' tablename */
 	const char*	name2);	/*!< in: table name in the form
 				dbname '/' tablename */
-/*********************************************************************//**
-Removes an index from the cache */
-UNIV_INTERN
-void
-dict_index_remove_from_cache(
-/*=========================*/
-	dict_table_t*	table,	/*!< in/out: table */
-	dict_index_t*	index);	/*!< in, own: index */
 /**********************************************************************//**
 Get index by name
 @return	index, NULL if does not exist */
