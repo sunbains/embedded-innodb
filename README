@@ -11,21 +11,7 @@ Unix
 Instructions for compiling and installing:
 ------------------------------------------
 
-1. ./configure
-
-   If you want to disable support for compressed tables you can run
-   configure with the following command line argument:
-
-   ./configure --disable-compression
-
-   By default, support for compressed tables is enabled.
-
-   If you want to disable support for shared libraries you can run
-   configure with the following command line argument:
-
-   ./configure --disable-shared
-
-   By default, it will build both shared and static libraries
+1. cmake -G Ninja .
 
    The configure script attempts to select the optimal latching implementation
    for your configuration, if not explicitly set on the configure command line.
@@ -34,9 +20,9 @@ Instructions for compiling and installing:
 
     --with-atomic-ops=  one of [gcc_builtins|solaris|innodb]
 
-2. make
+2. ninja
 
-3. make install
+3. ninja install
 
 4. Enjoy!
 
