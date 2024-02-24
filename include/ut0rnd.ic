@@ -76,16 +76,11 @@ UNIV_INLINE
 ulint
 ut_rnd_gen_ulint(void)
 {
-	ulint	rnd;
-	ulint	n_bits;
-
-	n_bits = 8 * sizeof(ulint);
+	/* ulint n_bits = 8 * sizeof(ulint); */
 
 	ut_rnd_ulint_counter = UT_RND1 * ut_rnd_ulint_counter + UT_RND2;
 
-	rnd = ut_rnd_gen_next_ulint(ut_rnd_ulint_counter);
-
-	return(rnd);
+	return ut_rnd_gen_next_ulint(ut_rnd_ulint_counter);
 }
 
 /** Generates a random integer from a given interval.

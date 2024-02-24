@@ -920,9 +920,6 @@ btr_page_reorganize_low(
 
 	ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
 	ut_ad(!!page_is_comp(page) == dict_table_is_comp(dict_index->table));
-#ifdef UNIV_ZIP_DEBUG
-	ut_a(!page_zip || page_zip_validate(page_zip, page));
-#endif /* UNIV_ZIP_DEBUG */
 	data_size1 = page_get_data_size(page);
 	max_ins_size1 = page_get_max_insert_size_after_reorganize(page, 1);
 
@@ -983,7 +980,7 @@ btr_page_reorganize_low(
 
 		/* Restore the old page and exit. */
 
-#if defined UNIV_DEBUG || defined UNIV_ZIP_DEBUG
+#if defined UNIV_DEBUG
 		/* Check that the bytes that we skip are identical. */
 		ut_a(!memcmp(page, temp_page, PAGE_HEADER));
 		ut_a(!memcmp(PAGE_HEADER + PAGE_N_RECS + page,
@@ -992,16 +989,16 @@ btr_page_reorganize_low(
 		ut_a(!memcmp(UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + page,
 			     UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + temp_page,
 			     FIL_PAGE_DATA_END));
-#endif /* UNIV_DEBUG || UNIV_ZIP_DEBUG */
+#endif /* UNIV_DEBUG */
 
 		memcpy(PAGE_HEADER + page, PAGE_HEADER + temp_page,
 		       PAGE_N_RECS - PAGE_N_DIR_SLOTS);
 		memcpy(PAGE_DATA + page, PAGE_DATA + temp_page,
 		       UNIV_PAGE_SIZE - PAGE_DATA - FIL_PAGE_DATA_END);
 
-#if defined UNIV_DEBUG || defined UNIV_ZIP_DEBUG
+#if defined UNIV_DEBUG
 		ut_a(!memcmp(page, temp_page, UNIV_PAGE_SIZE));
-#endif /* UNIV_DEBUG || UNIV_ZIP_DEBUG */
+#endif /* UNIV_DEBUG */
 
 		goto func_exit;
 	}
@@ -1035,9 +1032,6 @@ btr_page_reorganize_low(
 	}
 
 func_exit:
-#ifdef UNIV_ZIP_DEBUG
-	ut_a(!page_zip || page_zip_validate(page_zip, page));
-#endif /* UNIV_ZIP_DEBUG */
 #ifndef UNIV_HOTBACKUP
 	buf_block_free(temp_block);
 #endif /* !UNIV_HOTBACKUP */
@@ -1104,9 +1098,6 @@ btr_page_empty(
 
 	ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
 	ut_ad(page_zip == buf_block_get_page_zip(block));
-#ifdef UNIV_ZIP_DEBUG
-	ut_a(!page_zip || page_zip_validate(page_zip, page));
-#endif /* UNIV_ZIP_DEBUG */
 
 	btr_search_drop_page_hash_index(block);
 
@@ -1159,9 +1150,6 @@ btr_root_raise_and_insert(
 	root = btr_cur_get_page(cursor);
 	root_block = btr_cur_get_block(cursor);
 	root_page_zip = buf_block_get_page_zip(root_block);
-#ifdef UNIV_ZIP_DEBUG
-	ut_a(!root_page_zip || page_zip_validate(root_page_zip, root));
-#endif /* UNIV_ZIP_DEBUG */
 	dict_index = btr_cur_get_index(cursor);
 #ifdef UNIV_BTR_DEBUG
 	if (!dict_index_is_ibuf(dict_index)) {
@@ -1834,7 +1822,6 @@ btr_page_split_and_insert(
 	buf_block_t*	left_block;
 	buf_block_t*	right_block;
 	buf_block_t*	insert_block;
-	page_t*		insert_page;
 	page_cur_t*	page_cursor;
 	rec_t*		first_rec;
 	byte*		buf = 0; /* remove warning */
@@ -2083,13 +2070,6 @@ insert_empty:
 		lock_update_split_right(right_block, left_block);
 	}
 
-#ifdef UNIV_ZIP_DEBUG
-	if (UNIV_LIKELY_NULL(page_zip)) {
-		ut_a(page_zip_validate(page_zip, page));
-		ut_a(page_zip_validate(new_page_zip, new_page));
-	}
-#endif /* UNIV_ZIP_DEBUG */
-
 	/* At this point, split_rec, move_limit and first_rec may point
 	to garbage on the old page. */
 
@@ -2102,8 +2082,6 @@ insert_empty:
 		insert_block = right_block;
 	}
 
-	insert_page = buf_block_get_frame(insert_block);
-
 	/* 7. Reposition the cursor for insert and try insertion */
 	page_cursor = btr_cur_get_page_cur(cursor);
 
@@ -2112,15 +2090,6 @@ insert_empty:
 
 	rec = page_cur_tuple_insert(page_cursor, tuple,
 				    cursor->index, n_ext, mtr);
-
-#ifdef UNIV_ZIP_DEBUG
-	{
-		page_zip_des_t*	insert_page_zip
-			= buf_block_get_page_zip(insert_block);
-		ut_a(!insert_page_zip
-		     || page_zip_validate(insert_page_zip, insert_page));
-	}
-#endif /* UNIV_ZIP_DEBUG */
 
 	if (UNIV_LIKELY(rec != NULL)) {
 
@@ -2444,9 +2413,6 @@ btr_lift_page_up(
 		ut_ad(btr_page_get_level(page, mtr) == page_level + 1);
 
 		btr_page_set_level(page, page_zip, page_level, mtr);
-#ifdef UNIV_ZIP_DEBUG
-		ut_a(!page_zip || page_zip_validate(page_zip, page));
-#endif /* UNIV_ZIP_DEBUG */
 	}
 
 	/* Free the file page */
@@ -2496,7 +2462,6 @@ btr_compress(
 	ulint		n_recs;
 	ulint		max_ins_size;
 	ulint		max_ins_size_reorg;
-	ulint		level;
 
 	block = btr_cur_get_block(cursor);
 	page = btr_cur_get_page(cursor);
@@ -2506,7 +2471,6 @@ btr_compress(
 	ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(dict_index),
 				MTR_MEMO_X_LOCK));
 	ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
-	level = btr_page_get_level(page, mtr);
 	space = dict_index_get_space(dict_index);
 	zip_size = dict_table_zip_size(dict_index->table);
 
@@ -2605,15 +2569,6 @@ err_exit:
 	}
 
 	merge_page_zip = buf_block_get_page_zip(merge_block);
-#ifdef UNIV_ZIP_DEBUG
-	if (UNIV_LIKELY_NULL(merge_page_zip)) {
-		const page_zip_des_t*	page_zip
-			= buf_block_get_page_zip(block);
-		ut_a(page_zip);
-		ut_a(page_zip_validate(merge_page_zip, merge_page));
-		ut_a(page_zip_validate(page_zip, page));
-	}
-#endif /* UNIV_ZIP_DEBUG */
 
 	/* Move records to the merge page */
 	if (is_left) {
@@ -2739,9 +2694,6 @@ err_exit:
 	}
 
 	ut_ad(page_validate(merge_page, dict_index));
-#ifdef UNIV_ZIP_DEBUG
-	ut_a(!merge_page_zip || page_zip_validate(merge_page_zip, merge_page));
-#endif /* UNIV_ZIP_DEBUG */
 
 	/* Free the file page */
 	btr_page_free(dict_index, block, mtr);
@@ -2903,14 +2855,6 @@ btr_discard_page(
 
 	/* Remove the page from the level list */
 	btr_level_list_remove(space, zip_size, page, mtr);
-#ifdef UNIV_ZIP_DEBUG
-	{
-		page_zip_des_t*	merge_page_zip
-			= buf_block_get_page_zip(merge_block);
-		ut_a(!merge_page_zip
-		     || page_zip_validate(merge_page_zip, merge_page));
-	}
-#endif /* UNIV_ZIP_DEBUG */
 
 	if (left_page_no != FIL_NULL) {
 		lock_update_discard(merge_block, PAGE_HEAP_NO_SUPREMUM,
@@ -3324,9 +3268,6 @@ btr_validate_level(
 	mem_heap_t*	heap	= mem_heap_create(256);
 	ulint*		offsets	= NULL;
 	ulint*		offsets2= NULL;
-#ifdef UNIV_ZIP_DEBUG
-	page_zip_des_t*	page_zip;
-#endif /* UNIV_ZIP_DEBUG */
 
 	mtr_start(&mtr);
 
@@ -3343,10 +3284,6 @@ btr_validate_level(
 
 		ut_a(space == buf_block_get_space(block));
 		ut_a(space == page_get_space_id(page));
-#ifdef UNIV_ZIP_DEBUG
-		page_zip = buf_block_get_page_zip(block);
-		ut_a(!page_zip || page_zip_validate(page_zip, page));
-#endif /* UNIV_ZIP_DEBUG */
 		ut_a(!page_is_leaf(page));
 
 		page_cur_set_before_first(block, &cursor);
@@ -3372,10 +3309,6 @@ loop:
 	offsets = offsets2 = NULL;
 	mtr_x_lock(dict_index_get_lock(dict_index), &mtr);
 
-#ifdef UNIV_ZIP_DEBUG
-	page_zip = buf_block_get_page_zip(block);
-	ut_a(!page_zip || page_zip_validate(page_zip, page));
-#endif /* UNIV_ZIP_DEBUG */
 
 	/* Check ordering etc. of records */
 

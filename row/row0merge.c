@@ -424,7 +424,6 @@ row_merge_dup_report(
 	ulint			n_fields= dict_index_get_n_fields(index);
 	mem_heap_t*		heap	= NULL;
 	ulint			offsets_[REC_OFFS_NORMAL_SIZE];
-	ulint*			offsets;
 	ulint			n_ext;
 
 	if (dup->n_dup++) {
@@ -441,8 +440,7 @@ row_merge_dup_report(
 	n_ext = dict_index_is_clust(index) ? dtuple_get_n_ext(tuple) : 0;
 
 	rec = rec_convert_dtuple_to_rec(buf, index, tuple, n_ext);
-	offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
-				  &heap);
+	rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
 
 	if (UNIV_LIKELY_NULL(heap)) {
 		mem_heap_free(heap);

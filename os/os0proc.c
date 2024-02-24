@@ -22,6 +22,8 @@ process control primitives
 Created 9/30/1995 Heikki Tuuri
 *******************************************************/
 
+#include "univ.i"
+
 #ifndef __WIN__
 #include <errno.h>
 #include <sys/types.h>
@@ -69,9 +71,9 @@ ulint
 os_proc_get_number(void)
 {
 #ifdef __WIN__
-	return((ulint)GetCurrentProcessId());
+	return (ulint)GetCurrentProcessId();
 #else
-	return((ulint)getpid());
+	return (ulint) getpid();
 #endif
 }
 

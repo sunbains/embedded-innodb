@@ -1805,10 +1805,11 @@ ddl_drop_all_temp_tables(
 	btr_pcur_t	pcur;
 	mtr_t		mtr;
 	mem_heap_t*	heap;
-	ibool		started;
 
 	trx = trx_allocate_for_background();
-	started = trx_start(trx, ULINT_UNDEFINED);
+
+	trx_start(trx, ULINT_UNDEFINED);
+
 	trx->op_info = "dropping temporary tables";
 	dict_lock_data_dictionary(trx);
 

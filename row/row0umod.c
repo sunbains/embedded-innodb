@@ -104,8 +104,7 @@ row_undo_mod_clust_low(
 	btr_cur = btr_pcur_get_btr_cur(pcur);
 
 	success = btr_pcur_restore_position(mode, pcur, mtr);
-
-	ut_ad(success);
+	ut_a(success);
 
 	if (mode == BTR_MODIFY_LEAF) {
 

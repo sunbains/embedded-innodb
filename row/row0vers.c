@@ -183,7 +183,7 @@ row_vers_impl_x_locked_off_kernel(
 			/* If the transaction is still active,
 			clust_rec must be a fresh insert, because no
 			previous version was found. */
-			ut_ad(err == DB_SUCCESS);
+			ut_a(err == DB_SUCCESS);
 
 			/* It was a freshly inserted version: there is an
 			implicit x-lock on rec */
