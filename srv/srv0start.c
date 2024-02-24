@@ -1863,7 +1863,7 @@ innobase_start_or_create(void)
 	if (srv_print_verbose_log) {
 		ut_print_timestamp(ib_stream);
 		ib_logger(ib_stream,
-			" HailDB %s started; "
+			" InnoDB %s started; "
 			"log sequence number %llu\n",
 			VERSION, srv_start_lsn);
 	}
