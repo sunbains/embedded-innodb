@@ -28,7 +28,7 @@ Created 4/26/2006 Osku Salerma
 
 /** Create a new list.
 @return	list */
-UNIV_INTERN
+
 ib_list_t*
 ib_list_create(void)
 {
@@ -42,7 +42,7 @@ ib_list_create(void)
 }
 
 /** Free a list. */
-UNIV_INTERN
+
 void
 ib_list_free(
 	ib_list_t*	list)	/*!< in: list */
@@ -58,7 +58,7 @@ ib_list_free(
 
 /** Add the data to the end of the list.
 @return	new list node */
-UNIV_INTERN
+
 ib_list_node_t*
 ib_list_add_last(
 	ib_list_t*	list,	/*!< in: list */
@@ -70,7 +70,7 @@ ib_list_add_last(
 
 /** Add the data after the indicated node.
 @return	new list node */
-UNIV_INTERN
+
 ib_list_node_t*
 ib_list_add_after(
 	ib_list_t*	list,		/*!< in: list */
@@ -121,7 +121,7 @@ ib_list_add_after(
 }
 
 /** Remove the node from the list. */
-UNIV_INTERN
+
 void
 ib_list_remove(
 	ib_list_t*	list,	/*!< in: list */

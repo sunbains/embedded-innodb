@@ -45,17 +45,17 @@ number is unique. In Linux returns the 'process number' of the current
 thread. That number is the same as one sees in 'top', for example. In Linux
 the thread id is not the same as one sees in 'top'.
 @return	process id as a number */
-UNIV_INTERN
+
 ulint
 os_proc_get_number(void);
 /** Allocates large pages memory.
 @return	allocated memory */
-UNIV_INTERN
+
 void*
 os_mem_alloc_large(
 	ulint*	n);			/*!< in/out: number of bytes */
 /** Frees large pages memory. */
-UNIV_INTERN
+
 void
 os_mem_free_large(
 	void	*ptr,			/*!< in: pointer returned by
@@ -63,7 +63,7 @@ os_mem_free_large(
 	ulint	size);			/*!< in: size returned by
 					os_mem_alloc_large() */
 /** Reset the variables. */
-UNIV_INTERN
+
 void
 os_proc_var_init(void);
 

@@ -782,7 +782,7 @@ string_append(
 }
 
 /** Reset the lexing variables. */
-UNIV_INTERN
+
 void
 pars_lexer_var_init(void)
 {
@@ -956,9 +956,9 @@ static int input (void );
 #ifndef YY_DECL
 #define YY_DECL_IS_OURS 1
 
-UNIV_INTERN int yylex (void);
+ int yylex (void);
 
-#define YY_DECL UNIV_INTERN int yylex (void)
+#define YY_DECL  int yylex (void)
 #endif /* !YY_DECL */
 
 /* Code executed at the beginning of each rule, after yytext and yyleng
@@ -2869,7 +2869,7 @@ static void yyfree (void * ptr )
 
 
 /** Release any resources used by the lexer. */
-UNIV_INTERN
+
 void
 pars_lexer_close(void)
 {

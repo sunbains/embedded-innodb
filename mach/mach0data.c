@@ -30,7 +30,7 @@ Created 11/28/1995 Heikki Tuuri
 
 /** Reads a ulint in a compressed form if the log record fully contains it.
 @return	pointer to end of the stored field, NULL if not complete */
-UNIV_INTERN
+
 byte*
 mach_parse_compressed(
 	byte*	ptr,	/*!< in: pointer to buffer from where to read */
@@ -91,7 +91,7 @@ mach_parse_compressed(
 
 /** Reads a dulint in a compressed form if the log record fully contains it.
 @return	pointer to end of the stored field, NULL if not complete */
-UNIV_INTERN
+
 byte*
 mach_dulint_parse_compressed(
 	byte*	ptr,	/*!< in: pointer to buffer from where to read */

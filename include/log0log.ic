@@ -47,7 +47,7 @@ log_release(void)
 #ifdef UNIV_LOG_DEBUG
 /** Checks by parsing that the catenated log segment for a single mtr is
 consistent. */
-UNIV_INTERN
+
 ibool
 log_check_log_recs(
 	const byte*	buf,		/*!< in: pointer to the start of

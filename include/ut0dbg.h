@@ -62,7 +62,7 @@ using this macro */
 	} while (0)
 
 /** Report a failed assertion. */
-UNIV_INTERN
+
 void
 ut_dbg_assertion_failed(
 	const char* expr,	/*!< in: the failed assertion */
@@ -97,7 +97,7 @@ will stop at the next ut_a() or ut_ad(). */
 extern ibool	ut_dbg_stop_threads;
 
 /** Stop a thread after assertion failure. */
-UNIV_INTERN
+
 void
 ut_dbg_stop_thread(
 	const char*	file,
@@ -167,14 +167,14 @@ typedef struct speedo_struct {
 } speedo_t;
 
 /** Resets a speedo (records the current time in it). */
-UNIV_INTERN
+
 void
 speedo_reset(
 	speedo_t*	speedo);	/*!< out: speedo */
 
 /** Shows the time elapsed and usage statistics since the last reset of a
 speedo. */
-UNIV_INTERN
+
 void
 speedo_show(
 	const speedo_t*	speedo);	/*!< in: speedo */

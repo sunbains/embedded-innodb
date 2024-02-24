@@ -29,7 +29,7 @@ Created 4/6/2006 Osku Salerma
 
 /** Create a new vector with the given initial size.
 @return	vector */
-UNIV_INTERN
+
 ib_vector_t*
 ib_vector_create(
 	mem_heap_t*	heap,	/*!< in: heap */
@@ -50,7 +50,7 @@ ib_vector_create(
 }
 
 /** Push a new element to the vector, increasing its size if necessary. */
-UNIV_INTERN
+
 void
 ib_vector_push(
 	ib_vector_t*	vec,	/*!< in: vector */

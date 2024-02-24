@@ -34,7 +34,7 @@ Created 12/21/1997 Heikki Tuuri
 /** Optimizes a select. Decides which indexes to tables to use. The tables
 are accessed in the order that they were written to the FROM part in the
 select statement. */
-UNIV_INTERN
+
 void
 opt_search_plan(
 	sel_node_t*	sel_node);	/*!< in: parsed select node */
@@ -44,7 +44,7 @@ already exist in the list. If the column is already in the list, puts a value
 indirection to point to the occurrence in the column list, except if the
 column occurrence we are looking at is in the column list, in which case
 nothing is done. */
-UNIV_INTERN
+
 void
 opt_find_all_cols(
 	ibool		copy_val,	/*!< in: if TRUE, new found columns are
@@ -55,7 +55,7 @@ opt_find_all_cols(
 	plan_t*		plan,		/*!< in: plan or NULL */
 	que_node_t*	exp);		/*!< in: expression or condition */
 /** Prints info of a query plan. */
-UNIV_INTERN
+
 void
 opt_print_query_plan(
 	sel_node_t*	sel_node);	/*!< in: select node */

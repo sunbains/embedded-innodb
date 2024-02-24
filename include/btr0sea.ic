@@ -26,7 +26,7 @@ Created 2/17/1996 Heikki Tuuri
 #include "buf0buf.h"
 
 /** Updates the search info. */
-UNIV_INTERN
+
 void
 btr_search_info_update_slow(
 	btr_search_t*	info,	/*!< in/out: search info */

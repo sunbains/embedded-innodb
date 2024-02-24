@@ -30,7 +30,7 @@ Created 5/20/1997 Heikki Tuuri
 
 #ifndef UNIV_HOTBACKUP
 /** Reserves the mutex for a fold value in a hash table. */
-UNIV_INTERN
+
 void
 hash_mutex_enter(
 	hash_table_t*	table,	/*!< in: hash table */
@@ -40,7 +40,7 @@ hash_mutex_enter(
 }
 
 /** Releases the mutex for a fold value in a hash table. */
-UNIV_INTERN
+
 void
 hash_mutex_exit(
 	hash_table_t*	table,	/*!< in: hash table */
@@ -50,7 +50,7 @@ hash_mutex_exit(
 }
 
 /** Reserves all the mutexes of a hash table, in an ascending order. */
-UNIV_INTERN
+
 void
 hash_mutex_enter_all(
 	hash_table_t*	table)	/*!< in: hash table */
@@ -64,7 +64,7 @@ hash_mutex_enter_all(
 }
 
 /** Releases all the mutexes of a hash table. */
-UNIV_INTERN
+
 void
 hash_mutex_exit_all(
 	hash_table_t*	table)	/*!< in: hash table */
@@ -81,7 +81,7 @@ hash_mutex_exit_all(
 /** Creates a hash table with >= n array cells. The actual number of cells is
 chosen to be a prime number slightly bigger than n.
 @return	own: created table */
-UNIV_INTERN
+
 hash_table_t*
 hash_create(
 	ulint	n)	/*!< in: number of array cells */
@@ -116,7 +116,7 @@ hash_create(
 }
 
 /** Frees a hash table. */
-UNIV_INTERN
+
 void
 hash_table_free(
 	hash_table_t*	table)	/*!< in, own: hash table */
@@ -133,7 +133,7 @@ hash_table_free(
 
 #ifndef UNIV_HOTBACKUP
 /** Creates a mutex array to protect a hash table. */
-UNIV_INTERN
+
 void
 hash_create_mutexes_func(
 	hash_table_t*	table,		/*!< in: hash table */
@@ -161,7 +161,7 @@ hash_create_mutexes_func(
 }
 
 /** Frees a mutex array created with hash_create_mutexes_func(). */
-UNIV_INTERN
+
 void
 hash_free_mutexes_func(
 	hash_table_t*	table)		/*!< in,own: hash table */

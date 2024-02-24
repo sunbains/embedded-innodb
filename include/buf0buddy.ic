@@ -35,7 +35,7 @@ Created December 2006 by Marko Makela
 buf_pool_mutex and must not hold buf_pool_zip_mutex or any block->mutex.
 The buf_pool_mutex may only be released and reacquired if lru != NULL.
 @return	allocated block, possibly NULL if lru==NULL */
-UNIV_INTERN
+
 void*
 buf_buddy_alloc_low(
 	ulint	i,	/*!< in: index of buf_pool->zip_free[],
@@ -47,7 +47,7 @@ buf_buddy_alloc_low(
 	__attribute__((malloc));
 
 /** Deallocate a block. */
-UNIV_INTERN
+
 void
 buf_buddy_free_low(
 	void*	buf,	/*!< in: block to be freed, must not be

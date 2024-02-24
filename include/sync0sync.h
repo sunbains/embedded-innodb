@@ -47,11 +47,11 @@ typedef byte lock_word_t;
 #endif
 
 /** Initializes the synchronization data structures. */
-UNIV_INTERN
+
 void
 sync_init(void);
 /** Frees the resources in synchronization data structures. */
-UNIV_INTERN
+
 void
 sync_close(void);
 /** Creates, or rather, initializes a mutex object to a specified memory
@@ -76,7 +76,7 @@ necessary only if the memory block containing it is freed. */
 location (which must be appropriately aligned). The mutex is initialized
 in the reset state. Explicit freeing of the mutex with mutex_free is
 necessary only if the memory block containing it is freed. */
-UNIV_INTERN
+
 void
 mutex_create_func(
 	mutex_t*	mutex,		/*!< in: pointer to memory */
@@ -94,7 +94,7 @@ mutex_create_func(
 /** Calling this function is obligatory only if the memory buffer containing
 the mutex is freed. Removes a mutex object from the mutex list. The mutex
 is checked to be in the reset state. */
-UNIV_INTERN
+
 void
 mutex_free(
 	mutex_t*	mutex);	/*!< in: mutex */
@@ -127,7 +127,7 @@ corresponding function. */
 directly. Tries to lock the mutex for the current thread. If the lock is not
 acquired immediately, returns with return value 1.
 @return	0 if succeed, 1 if not */
-UNIV_INTERN
+
 ulint
 mutex_enter_nowait_func(
 	mutex_t*	mutex,		/*!< in: pointer to mutex */
@@ -143,33 +143,33 @@ mutex_exit(
 /** Returns TRUE if no mutex or rw-lock is currently locked.
 Works only in the debug version.
 @return	TRUE if no mutexes and rw-locks reserved */
-UNIV_INTERN
+
 ibool
 sync_all_freed(void);
 #endif /* UNIV_SYNC_DEBUG */
 /*#####################################################################
 FUNCTION PROTOTYPES FOR DEBUGGING */
 /** Prints wait info of the sync system. */
-UNIV_INTERN
+
 void
 sync_print_wait_info(
 	ib_stream_t	ib_stream);	/*!< in: stream where to print */
 /** Prints info of the sync system. */
-UNIV_INTERN
+
 void
 sync_print(
 	ib_stream_t	ib_stream);	/*!< in: stream where to print */
 #ifdef UNIV_DEBUG
 /** Checks that the mutex has been initialized.
 @return	TRUE */
-UNIV_INTERN
+
 ibool
 mutex_validate(
 	const mutex_t*	mutex);	/*!< in: mutex */
 /** Checks that the current thread owns the mutex. Works only
 in the debug version.
 @return	TRUE if owns */
-UNIV_INTERN
+
 ibool
 mutex_own(
 	const mutex_t*	mutex)	/*!< in: mutex */
@@ -179,7 +179,7 @@ mutex_own(
 /** Adds a latch and its level in the thread level array. Allocates the memory
 for the array if called first time for this OS thread. Makes the checks
 against other latch levels stored in the array for this thread. */
-UNIV_INTERN
+
 void
 sync_thread_add_level(
 	void*	latch,	/*!< in: pointer to a mutex or an rw-lock */
@@ -189,26 +189,26 @@ sync_thread_add_level(
 @return TRUE if found in the array; it is no error if the latch is
 not found, as we presently are not able to determine the level for
 every latch reservation the program does */
-UNIV_INTERN
+
 ibool
 sync_thread_reset_level(
 	void*	latch);	/*!< in: pointer to a mutex or an rw-lock */
 /** Checks that the level array for the current thread is empty.
 @return	TRUE if empty */
-UNIV_INTERN
+
 ibool
 sync_thread_levels_empty(void);
 /** Checks if the level array for the current thread contains a
 mutex or rw-latch at the specified level.
 @return	a matching latch, or NULL if not found */
-UNIV_INTERN
+
 void*
 sync_thread_levels_contains(
 	ulint	level);			/*!< in: latching order level
 					(SYNC_DICT, ...)*/
 /** Checks if the level array for the current thread is empty.
 @return	a latch, or NULL if empty except the exceptions specified below */
-UNIV_INTERN
+
 void*
 sync_thread_levels_nonempty_gen(
 	ibool	dict_mutex_allowed);	/*!< in: TRUE if dictionary mutex is
@@ -217,7 +217,7 @@ sync_thread_levels_nonempty_gen(
 					allowed */
 #define sync_thread_levels_empty_gen(d) (!sync_thread_levels_nonempty_gen(d))
 /** Gets the debug information for a reserved mutex. */
-UNIV_INTERN
+
 void
 mutex_get_debug_info(
 	mutex_t*	mutex,		/*!< in: mutex */
@@ -227,7 +227,7 @@ mutex_get_debug_info(
 					the mutex */
 /** Counts currently reserved mutexes. Works only in the debug version.
 @return	number of reserved mutexes */
-UNIV_INTERN
+
 ulint
 mutex_n_reserved(void);
 #endif /* UNIV_SYNC_DEBUG */
@@ -247,7 +247,7 @@ mutex_get_waiters(
 	const mutex_t*	mutex);	/*!< in: mutex */
 #endif /* UNIV_SYNC_DEBUG */
 /** Reset variables. */
-UNIV_INTERN
+
 void
 sync_var_init(void);
 

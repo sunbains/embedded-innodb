@@ -144,7 +144,7 @@ ut_uint64_align_up(
 						&& ((D1).high == (D2).high))
 #ifdef notdefined
 /** Sort function for dulint arrays. */
-UNIV_INTERN
+
 void
 ut_dulint_sort(
 	dulint*	arr,	/*!< in/out: array to be sorted */

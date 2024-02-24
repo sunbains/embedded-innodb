@@ -276,7 +276,7 @@ func_exit:
 
 /** Creates an update node for a query graph.
 @return	own: update node */
-UNIV_INTERN
+
 upd_node_t*
 upd_node_create(
 	mem_heap_t*	heap)	/*!< in: mem heap where created */
@@ -316,7 +316,7 @@ upd_node_create(
 
 /** Updates the trx id and roll ptr field in a clustered index record in database
 recovery. */
-UNIV_INTERN
+
 void
 row_upd_rec_sys_fields_in_recovery(
 	rec_t*		rec,	/*!< in/out: record */
@@ -348,7 +348,7 @@ row_upd_rec_sys_fields_in_recovery(
 
 #ifndef UNIV_HOTBACKUP
 /** Sets the trx id or roll ptr field of a clustered index entry. */
-UNIV_INTERN
+
 void
 row_upd_index_entry_sys_field(
 	const dtuple_t*	entry,	/*!< in: index entry, where the memory buffers
@@ -382,7 +382,7 @@ row_upd_index_entry_sys_field(
 field to be updated is stored externally in rec or update.
 @return TRUE if the update changes the size of some field in index or
 the field is external in rec or update */
-UNIV_INTERN
+
 ibool
 row_upd_changes_field_size_or_external(
 	dict_index_t*	index,	/*!< in: index */
@@ -445,7 +445,7 @@ row_upd_changes_field_size_or_external(
 
 /** Replaces the new column values stored in the update vector to the record
 given. No field size changes are allowed. */
-UNIV_INTERN
+
 void
 row_upd_rec_in_place(
 	rec_t*		rec,	/*!< in/out: record where replaced */
@@ -490,7 +490,7 @@ row_upd_rec_in_place(
 /** Writes into the redo log the values of trx id and roll ptr and enough info
 to determine their positions within a clustered index record.
 @return	new pointer to mlog */
-UNIV_INTERN
+
 byte*
 row_upd_write_sys_vals_to_log(
 	dict_index_t*	index,	/*!< in: clustered index */
@@ -518,7 +518,7 @@ row_upd_write_sys_vals_to_log(
 
 /** Parses the log data of system field values.
 @return	log data end or NULL */
-UNIV_INTERN
+
 byte*
 row_upd_parse_sys_vals(
 	byte*		ptr,	/*!< in: buffer */
@@ -549,7 +549,7 @@ row_upd_parse_sys_vals(
 
 #ifndef UNIV_HOTBACKUP
 /** Writes to the redo log the new values of the fields occurring in the index. */
-UNIV_INTERN
+
 void
 row_upd_index_write_log(
 	const upd_t*	update,	/*!< in: update vector */
@@ -620,7 +620,7 @@ row_upd_index_write_log(
 
 /** Parses the log data written by row_upd_index_write_log.
 @return	log data end or NULL */
-UNIV_INTERN
+
 byte*
 row_upd_index_parse(
 	byte*		ptr,	/*!< in: buffer */
@@ -700,7 +700,7 @@ row_upd_index_parse(
 differ from a record that has the equal ordering fields. NOTE: we compare
 the fields as binary strings!
 @return	own: update vector of differing fields */
-UNIV_INTERN
+
 upd_t*
 row_upd_build_sec_rec_difference_binary(
 	dict_index_t*	index,	/*!< in: index */
@@ -768,7 +768,7 @@ trx id fields, which in an index entry differ from a record that has
 the equal ordering fields. NOTE: we compare the fields as binary strings!
 @return own: update vector of differing fields, excluding roll ptr and
 trx id */
-UNIV_INTERN
+
 upd_t*
 row_upd_build_difference_binary(
 	dict_index_t*	index,	/*!< in: clustered index */
@@ -960,7 +960,7 @@ row_upd_index_replace_new_col_val(
 
 /** Replaces the new column values stored in the update vector to the index entry
 given. */
-UNIV_INTERN
+
 void
 row_upd_index_replace_new_col_vals_index_pos(
 	dtuple_t*	entry,	/*!< in/out: index entry where replaced;
@@ -1012,7 +1012,7 @@ row_upd_index_replace_new_col_vals_index_pos(
 
 /** Replaces the new column values stored in the update vector to the index entry
 given. */
-UNIV_INTERN
+
 void
 row_upd_index_replace_new_col_vals(
 	dtuple_t*	entry,	/*!< in/out: index entry where replaced;
@@ -1054,7 +1054,7 @@ row_upd_index_replace_new_col_vals(
 }
 
 /** Replaces the new column values stored in the update vector. */
-UNIV_INTERN
+
 void
 row_upd_replace(
 	dtuple_t*		row,	/*!< in/out: row where replaced,
@@ -1140,7 +1140,7 @@ This function is fast if the update vector is short or the number of ordering
 fields in the index is small. Otherwise, this can be quadratic.
 NOTE: we compare the fields as binary strings!
 @return TRUE if update vector changes an ordering field in the index record */
-UNIV_INTERN
+
 ibool
 row_upd_changes_ord_field_binary(
 	const dtuple_t*	row,	/*!< in: old value of row, or NULL if the
@@ -1205,7 +1205,7 @@ row_upd_changes_ord_field_binary(
 NOTE: we compare the fields as binary strings!
 @return TRUE if update vector may change an ordering field in an index
 record */
-UNIV_INTERN
+
 ibool
 row_upd_changes_some_index_ord_field_binary(
 	const dict_table_t*	table,	/*!< in: table */
@@ -1998,7 +1998,7 @@ function_exit:
 /** Updates a row in a table. This is a high-level function used in SQL execution
 graphs.
 @return	query thread to run next or NULL */
-UNIV_INTERN
+
 que_thr_t*
 row_upd_step(
 	que_thr_t*	thr)	/*!< in: query thread */
@@ -2108,7 +2108,7 @@ error_handling:
 
 /** Creates an query graph node of 'update' type.
 @return	own: update node */
-UNIV_INTERN
+
 upd_node_t*
 row_create_update_node(
 	dict_table_t*	table,	/*!< in: table to update */

@@ -28,27 +28,27 @@ Created 02/03/2009 Sunny Bains
 
 /** Create a prebuilt struct for a user table handle.
 @return	own: a prebuilt struct */
-UNIV_INTERN
+
 row_prebuilt_t*
 row_prebuilt_create(
 	dict_table_t*	table);		/*!< in: Innobase table handle */
 
 /** Free a prebuilt struct for a user table handle. */
-UNIV_INTERN
+
 void
 row_prebuilt_free(
 	row_prebuilt_t*	prebuilt,	/*!< in, own: prebuilt struct */
 	ibool		dict_locked);	/*!< in: TRUE if dict was locked */
 
 /** Reset a prebuilt struct for a user table handle. */
-UNIV_INTERN
+
 void
 row_prebuilt_reset(
 	row_prebuilt_t*	prebuilt);	/*!< in/out: prebuilt struct */
 
 /** Updates the transaction pointers in query graphs stored in the prebuilt
 struct. */
-UNIV_INTERN
+
 void
 row_prebuilt_update_trx(
 	row_prebuilt_t*	prebuilt,	/*!< in/out: prebuilt struct handle */

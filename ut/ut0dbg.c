@@ -27,26 +27,26 @@ Created 1/30/1994 Heikki Tuuri
 #if defined(__GNUC__) && (__GNUC__ > 2)
 #else
 /** This is used to eliminate compiler warnings */
-UNIV_INTERN ulint	ut_dbg_zero	= 0;
+ ulint	ut_dbg_zero	= 0;
 #endif
 
 #if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
 /** If this is set to TRUE by ut_dbg_assertion_failed(), all threads
 will stop at the next ut_a() or ut_ad(). */
-UNIV_INTERN ibool	ut_dbg_stop_threads	= FALSE;
+ ibool	ut_dbg_stop_threads	= FALSE;
 #endif
 #ifdef __NETWARE__
 /** Flag for ignoring further assertion failures.  This is set to TRUE
 when on NetWare there happens an InnoDB assertion failure or other
 fatal error condition that requires an immediate shutdown. */
-UNIV_INTERN ibool panic_shutdown = FALSE;
+ ibool panic_shutdown = FALSE;
 #elif !defined(UT_DBG_USE_ABORT)
 /** A null pointer that will be dereferenced to trigger a memory trap */
-UNIV_INTERN ulint*	ut_dbg_null_ptr		= NULL;
+ ulint*	ut_dbg_null_ptr		= NULL;
 #endif
 
 /** Report a failed assertion. */
-UNIV_INTERN
+
 void
 ut_dbg_assertion_failed(
 	const char* expr,	/*!< in: the failed assertion (optional) */
@@ -85,7 +85,7 @@ ut_dbg_assertion_failed(
 
 #ifdef __NETWARE__
 /** Shut down InnoDB after assertion failure. */
-UNIV_INTERN
+
 void
 ut_dbg_panic(void)
 {
@@ -98,7 +98,7 @@ ut_dbg_panic(void)
 #else /* __NETWARE__ */
 # if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
 /** Stop a thread after assertion failure. */
-UNIV_INTERN
+
 void
 ut_dbg_stop_thread(
 	const char*	file,
@@ -136,7 +136,7 @@ ut_dbg_stop_thread(
 #endif /* timersub */
 
 /** Resets a speedo (records the current time in it). */
-UNIV_INTERN
+
 void
 speedo_reset(
 	speedo_t*	speedo)	/*!< out: speedo */
@@ -148,7 +148,7 @@ speedo_reset(
 
 /** Shows the time elapsed and usage statistics since the last reset of a
 speedo. */
-UNIV_INTERN
+
 void
 speedo_show(
 	const speedo_t*	speedo)	/*!< in: speedo */

@@ -40,14 +40,14 @@ of SQL execution in the UNIV_SQL_DEBUG version */
 extern ibool	que_trace_on;
 
 /** Adds a query graph to the session's list of graphs. */
-UNIV_INTERN
+
 void
 que_graph_publish(
 	que_t*	graph,	/*!< in: graph */
 	sess_t*	sess);	/*!< in: session */
 /** Creates a query graph fork node.
 @return	own: fork node */
-UNIV_INTERN
+
 que_fork_t*
 que_fork_create(
 	que_t*		graph,		/*!< in: graph, if NULL then this
@@ -74,19 +74,19 @@ que_node_set_parent(
 	que_node_t*	parent);/*!< in: parent */
 /** Creates a query graph thread node.
 @return	own: query thread node */
-UNIV_INTERN
+
 que_thr_t*
 que_thr_create(
 	que_fork_t*	parent,	/*!< in: parent node, i.e., a fork node */
 	mem_heap_t*	heap);	/*!< in: memory heap where created */
 /** Frees a query graph, but not the heap where it was created. Does not free
 explicit cursor declarations, they are freed in que_graph_free. */
-UNIV_INTERN
+
 void
 que_graph_free_recursive(
 	que_node_t*	node);	/*!< in: query graph node */
 /** Frees a query graph. */
-UNIV_INTERN
+
 void
 que_graph_free(
 	que_t*	graph);	/*!< in: query graph; we assume that the memory
@@ -98,14 +98,14 @@ que_graph_free(
 conditions are tested in the order (1) graph, (2) trx. The kernel mutex has
 to be reserved.
 @return	TRUE if stopped */
-UNIV_INTERN
+
 ibool
 que_thr_stop(
 	que_thr_t*	thr);	/*!< in: query thread */
 /** Moves a thread from another state to the QUE_THR_RUNNING state. Increments
 the n_active_thrs counters of the query graph and transaction if thr was
 not active. */
-UNIV_INTERN
+
 void
 que_thr_move_to_run_state_for_client(
 	que_thr_t*	thr,	/*!< in: an query thread */
@@ -113,19 +113,19 @@ que_thr_move_to_run_state_for_client(
 /** The query thread is stopped and made inactive, except in the case where
 it was put to the lock wait state in lock0lock.c, but the lock has already
 been granted or the transaction chosen as a victim in deadlock resolution. */
-UNIV_INTERN
+
 void
 que_thr_stop_client(
 	que_thr_t*	thr);	/*!< in: query thread */
 /** Run a query thread. Handles lock waits. */
-UNIV_INTERN
+
 void
 que_run_threads(
 	que_thr_t*	thr);	/*!< in: query thread */
 /** After signal handling is finished, returns control to a query graph error
 handling routine. (Currently, just returns the control to the root of the
 graph so that the graph can communicate an error message to the client.) */
-UNIV_INTERN
+
 void
 que_fork_error_handle(
 	trx_t*	trx,	/*!< in: trx */
@@ -135,7 +135,7 @@ que_fork_error_handle(
 a single worker thread to execute it. This function should be used to end
 the wait state of a query thread waiting for a lock or a stored procedure
 completion. */
-UNIV_INTERN
+
 void
 que_thr_end_wait(
 	que_thr_t*	thr,		/*!< in: query thread in the
@@ -148,7 +148,7 @@ que_thr_end_wait(
 					calling function can start running
 					a new query thread */
 /** Same as que_thr_end_wait, but no parameter next_thr available. */
-UNIV_INTERN
+
 void
 que_thr_end_wait_no_next_thr(
 	que_thr_t*	thr);		/*!< in: query thread in the
@@ -162,7 +162,7 @@ is returned.
 @return a query thread of the graph moved to QUE_THR_RUNNING state, or
 NULL; the query thread should be executed by que_run_threads by the
 caller */
-UNIV_INTERN
+
 que_thr_t*
 que_fork_start_command(
 	que_fork_t*	fork);	/*!< in: a query fork */
@@ -220,7 +220,7 @@ que_node_get_parent(
 /** Get the first containing loop node (e.g. while_node_t or for_node_t) for the
 given node, or NULL if the node is not within a loop.
 @return	containing loop node, or NULL. */
-UNIV_INTERN
+
 que_node_t*
 que_node_get_containing_loop_node(
 	que_node_t*	node);	/*!< in: node */
@@ -253,13 +253,13 @@ ibool
 que_graph_is_select(
 	que_t*		graph);		/*!< in: graph */
 /** Prints info of an SQL query graph node. */
-UNIV_INTERN
+
 void
 que_node_print_info(
 	que_node_t*	node);	/*!< in: query graph node */
 /** Evaluate the given SQL
 @return	error code or DB_SUCCESS */
-UNIV_INTERN
+
 ulint
 que_eval_sql(
 	pars_info_t*	info,	/*!< in: info struct, or NULL */
@@ -273,7 +273,7 @@ the n_active_thrs counters of the query graph and transaction if thr was
 not active.
 ***NOTE***: This is the only functions in which such a transition is
 allowed to happen! */
-UNIV_INTERN
+
 void
 que_thr_move_to_run_state(
 	que_thr_t*	thr);	/*!< in: an query thread */
@@ -282,13 +282,13 @@ que_thr_move_to_run_state(
 select, when there is no error or lock wait.
 
 TODO: Currently only called from row0merge, needs to be removed. */
-UNIV_INTERN
+
 void
 que_thr_stop_for_client_no_error(
 	que_thr_t*	thr,	/*!< in: query thread */
 	trx_t*		trx);	/*!< in: transaction */
 /** Reset the variables. */
-UNIV_INTERN
+
 void
 que_var_init(void);
 /* Query graph query thread node: the fields are protected by the kernel

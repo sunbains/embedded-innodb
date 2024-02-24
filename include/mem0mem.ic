@@ -26,7 +26,7 @@ Created 6/8/1994 Heikki Tuuri
 /** Creates a memory heap block where data can be allocated.
 @return own: memory heap block, NULL if did not succeed (only possible
 for MEM_HEAP_BTR_SEARCH type heaps) */
-UNIV_INTERN
+
 mem_block_t*
 mem_heap_create_block(
 	mem_heap_t*	heap,	/*!< in: memory heap or NULL if first block
@@ -37,14 +37,14 @@ mem_heap_create_block(
 	const char*	file_name,/*!< in: file name where created */
 	ulint		line);	/*!< in: line where created */
 /** Frees a block from a memory heap. */
-UNIV_INTERN
+
 void
 mem_heap_block_free(
 	mem_heap_t*	heap,	/*!< in: heap */
 	mem_block_t*	block);	/*!< in: block to free */
 #ifndef UNIV_HOTBACKUP
 /** Frees the free_block field from a memory heap. */
-UNIV_INTERN
+
 void
 mem_heap_free_block_free(
 	mem_heap_t*	heap);	/*!< in: heap */
@@ -52,7 +52,7 @@ mem_heap_free_block_free(
 /** Adds a new block to a memory heap.
 @return created block, NULL if did not succeed (only possible for
 MEM_HEAP_BTR_SEARCH type heaps) */
-UNIV_INTERN
+
 mem_block_t*
 mem_heap_add_block(
 	mem_heap_t*	heap,	/*!< in: memory heap */

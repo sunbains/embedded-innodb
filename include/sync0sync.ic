@@ -29,7 +29,7 @@ Created 9/5/1995 Heikki Tuuri
 *******************************************************/
 
 /** Sets the waiters field in a mutex. */
-UNIV_INTERN
+
 void
 mutex_set_waiters(
 	mutex_t*	mutex,	/*!< in: mutex */
@@ -37,7 +37,7 @@ mutex_set_waiters(
 /** Reserves a mutex for the current thread. If the mutex is reserved, the
 function spins a preset time (controlled by SYNC_SPIN_ROUNDS) waiting
 for the mutex before suspending the thread. */
-UNIV_INTERN
+
 void
 mutex_spin_wait(
 	mutex_t*	mutex,		/*!< in: pointer to mutex */
@@ -46,7 +46,7 @@ mutex_spin_wait(
 	ulint		line);		/*!< in: line where requested */
 #ifdef UNIV_SYNC_DEBUG
 /** Sets the debug information for a reserved mutex. */
-UNIV_INTERN
+
 void
 mutex_set_debug_info(
 	mutex_t*	mutex,		/*!< in: mutex */
@@ -54,7 +54,7 @@ mutex_set_debug_info(
 	ulint		line);		/*!< in: line where requested */
 #endif /* UNIV_SYNC_DEBUG */
 /** Releases the threads waiting in the primary wait array for this mutex. */
-UNIV_INTERN
+
 void
 mutex_signal_object(
 	mutex_t*	mutex);	/*!< in: mutex */

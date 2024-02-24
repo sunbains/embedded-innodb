@@ -35,12 +35,12 @@ Created 5/11/1994 Heikki Tuuri
 /*@}*/
 
 /** Seed value of ut_rnd_gen_ulint(). */
-UNIV_INTERN ulint	ut_rnd_ulint_counter = 65654363;
+ ulint	ut_rnd_ulint_counter = 65654363;
 
 /** Looks for a prime number slightly greater than the given argument.
 The prime is chosen so that it is not near any power of 2.
 @return	prime */
-UNIV_INTERN
+
 ulint
 ut_find_prime(
 	ulint	n)	/*!< in: positive number > 100 */

@@ -143,7 +143,7 @@ a field stored to another page: */
 #endif
 
 /** Sets the value of the ith field SQL null bit of an old-style record. */
-UNIV_INTERN
+
 void
 rec_set_nth_field_null_bit(
 	rec_t*	rec,	/*!< in: record */
@@ -151,7 +151,7 @@ rec_set_nth_field_null_bit(
 	ibool	val);	/*!< in: value to set */
 /** Sets an old-style record field to SQL null.
 The physical size of the field is not changed. */
-UNIV_INTERN
+
 void
 rec_set_nth_field_sql_null(
 	rec_t*	rec,	/*!< in: record */

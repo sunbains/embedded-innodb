@@ -32,7 +32,7 @@ Created 7/1/1994 Heikki Tuuri
 
 /** Returns TRUE if two columns are equal for comparison purposes.
 @return	TRUE if the columns are considered equal in comparisons */
-UNIV_INTERN
+
 ibool
 cmp_cols_are_equal(
 	const dict_col_t*	col1,	/*!< in: column 1 */
@@ -57,7 +57,7 @@ cmp_data_data(
 /** This function is used to compare two data fields for which we know the
 data type.
 @return	1, 0, -1, if data1 is greater, equal, less than data2, respectively */
-UNIV_INTERN
+
 int
 cmp_data_data_slow(
 	void*		cmp_ctx,/*!< in: client compare context */
@@ -89,7 +89,7 @@ made.
 @return 1, 0, -1, if dtuple is greater, equal, less than rec,
 respectively, when only the common first fields are compared, or until
 the first externally stored field in rec */
-UNIV_INTERN
+
 int
 cmp_dtuple_rec_with_match(
 	void*		cmp_ctx,/*!< in: client compare context */
@@ -109,7 +109,7 @@ cmp_dtuple_rec_with_match(
 /** Compares a data tuple to a physical record.
 @see cmp_dtuple_rec_with_match
 @return 1, 0, -1, if dtuple is greater, equal, less than rec, respectively */
-UNIV_INTERN
+
 int
 cmp_dtuple_rec(
 	void*		cmp_ctx,/*!< in: client compare context */
@@ -119,7 +119,7 @@ cmp_dtuple_rec(
 /** Checks if a dtuple is a prefix of a record. The last field in dtuple
 is allowed to be a prefix of the corresponding field in the record.
 @return	TRUE if prefix */
-UNIV_INTERN
+
 ibool
 cmp_dtuple_is_prefix_of_rec(
 	void*		cmp_ctx,/*!< in: client compare context */
@@ -129,7 +129,7 @@ cmp_dtuple_is_prefix_of_rec(
 /** Compare two physical records that contain the same number of columns,
 none of which are stored externally.
 @return	1, 0, -1 if rec1 is greater, equal, less, respectively, than rec2 */
-UNIV_INTERN
+
 int
 cmp_rec_rec_simple(
 	const rec_t*		rec1,	/*!< in: physical record */
@@ -141,7 +141,7 @@ cmp_rec_rec_simple(
 first fields are compared, and if an externally stored field is
 encountered, then 0 is returned.
 @return 1, 0, -1 if rec1 is greater, equal, less, respectively */
-UNIV_INTERN
+
 int
 cmp_rec_rec_with_match(
 	const rec_t*	rec1,	/*!< in: physical record */

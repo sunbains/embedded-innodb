@@ -34,7 +34,7 @@ Created 3/26/1996 Heikki Tuuri
 
 /** Looks for a rollback segment, based on the rollback segment id.
 @return	rollback segment */
-UNIV_INTERN
+
 trx_rseg_t*
 trx_rseg_get_on_id(
 	ulint	id)	/*!< in: rollback segment id */
@@ -55,7 +55,7 @@ trx_rseg_get_on_id(
 /** Creates a rollback segment header. This function is called only when
 a new rollback segment is created in the database.
 @return	page number of the created segment, FIL_NULL if fail */
-UNIV_INTERN
+
 ulint
 trx_rseg_header_create(
 	ulint	space,		/*!< in: space id */
@@ -126,7 +126,7 @@ trx_rseg_header_create(
 }
 
 /** Free's an instance of the rollback segment in memory. */
-UNIV_INTERN
+
 void
 trx_rseg_mem_free(
 	trx_rseg_t*	rseg)	/*!< in, own: instance to free */
@@ -243,7 +243,7 @@ trx_rseg_mem_create(
 
 /** Creates the memory copies for rollback segments and initializes the
 rseg list and array in trx_sys at a database startup. */
-UNIV_INTERN
+
 void
 trx_rseg_list_and_array_init(
 	ib_recovery_t	recovery,	/*!< in: recovery flag */

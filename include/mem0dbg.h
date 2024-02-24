@@ -58,7 +58,7 @@ Outputs the sum of sizes of buffers given to the user (only in
 the debug version), the physical size of the heap and the number of
 blocks in the heap. In case of error returns 0 as sizes and number
 of blocks. */
-UNIV_INTERN
+
 void
 mem_heap_validate_or_print(
 	mem_heap_t*	heap,	/*!< in: memory heap */
@@ -82,7 +82,7 @@ mem_heap_validate_or_print(
 				argument, it is ignored */
 /** Validates the contents of a memory heap.
 @return	TRUE if ok */
-UNIV_INTERN
+
 ibool
 mem_heap_validate(
 	mem_heap_t*   heap);	/*!< in: memory heap */
@@ -90,14 +90,14 @@ mem_heap_validate(
 #ifdef UNIV_DEBUG
 /** Checks that an object is a memory heap (or a block of it)
 @return	TRUE if ok */
-UNIV_INTERN
+
 ibool
 mem_heap_check(
 	mem_heap_t*   heap);	/*!< in: memory heap */
 #endif /* UNIV_DEBUG */
 /** Validates the dynamic memory
 @return	TRUE if ok */
-UNIV_INTERN
+
 ibool
 mem_validate(void);
 

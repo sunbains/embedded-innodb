@@ -31,7 +31,7 @@ Created 12/7/1995 Heikki Tuuri
 #ifndef UNIV_HOTBACKUP
 /** Writes 1 - 4 bytes to a file page buffered in the buffer pool.
 Writes the corresponding log record to the mini-transaction log. */
-UNIV_INTERN
+
 void
 mlog_write_ulint(
 	byte*	ptr,	/*!< in: pointer where to write */
@@ -40,7 +40,7 @@ mlog_write_ulint(
 	mtr_t*	mtr);	/*!< in: mini-transaction handle */
 /** Writes 8 bytes to a file page buffered in the buffer pool.
 Writes the corresponding log record to the mini-transaction log. */
-UNIV_INTERN
+
 void
 mlog_write_dulint(
 	byte*	ptr,	/*!< in: pointer where to write */
@@ -48,7 +48,7 @@ mlog_write_dulint(
 	mtr_t*	mtr);	/*!< in: mini-transaction handle */
 /** Writes a string to a file page buffered in the buffer pool. Writes the
 corresponding log record to the mini-transaction log. */
-UNIV_INTERN
+
 void
 mlog_write_string(
 	byte*		ptr,	/*!< in: pointer where to write */
@@ -57,7 +57,7 @@ mlog_write_string(
 	mtr_t*		mtr);	/*!< in: mini-transaction handle */
 /** Logs a write of a string to a file page buffered in the buffer pool.
 Writes the corresponding log record to the mini-transaction log. */
-UNIV_INTERN
+
 void
 mlog_log_string(
 	byte*	ptr,	/*!< in: pointer written to */
@@ -65,7 +65,7 @@ mlog_log_string(
 	mtr_t*	mtr);	/*!< in: mini-transaction handle */
 /** Writes initial part of a log record consisting of one-byte item
 type and four-byte space and page numbers. */
-UNIV_INTERN
+
 void
 mlog_write_initial_log_record(
 	const byte*	ptr,	/*!< in: pointer to (inside) a buffer
@@ -92,7 +92,7 @@ mlog_catenate_ulint(
 	ulint	val,	/*!< in: value to write */
 	ulint	type);	/*!< in: MLOG_1BYTE, MLOG_2BYTES, MLOG_4BYTES */
 /** Catenates n bytes to the mtr log. */
-UNIV_INTERN
+
 void
 mlog_catenate_string(
 	mtr_t*		mtr,	/*!< in: mtr */
@@ -144,7 +144,7 @@ mlog_write_initial_log_record_fast(
 #endif /* !UNIV_HOTBACKUP */
 /** Parses an initial log record written by mlog_write_initial_log_record.
 @return	parsed record end, NULL if not a complete record */
-UNIV_INTERN
+
 byte*
 mlog_parse_initial_log_record(
 	byte*	ptr,	/*!< in: buffer */
@@ -154,7 +154,7 @@ mlog_parse_initial_log_record(
 	ulint*	page_no);/*!< out: page number */
 /** Parses a log record written by mlog_write_ulint or mlog_write_dulint.
 @return	parsed record end, NULL if not a complete record */
-UNIV_INTERN
+
 byte*
 mlog_parse_nbytes(
 	ulint	type,	/*!< in: log record type: MLOG_1BYTE, ... */
@@ -164,7 +164,7 @@ mlog_parse_nbytes(
 	void*	page_zip);/*!< in/out: compressed page, or NULL */
 /** Parses a log record written by mlog_write_string.
 @return	parsed record end, NULL if not a complete record */
-UNIV_INTERN
+
 byte*
 mlog_parse_string(
 	byte*	ptr,	/*!< in: buffer */
@@ -178,7 +178,7 @@ if needed, the field lengths of an index.  Reserves space
 for further log entries.  The log entry must be closed with
 mtr_close().
 @return	buffer, NULL if log mode MTR_LOG_NONE */
-UNIV_INTERN
+
 byte*
 mlog_open_and_write_index(
 	mtr_t*		mtr,	/*!< in: mtr */
@@ -191,7 +191,7 @@ mlog_open_and_write_index(
 
 /** Parses a log record written by mlog_open_and_write_index.
 @return	parsed record end, NULL if not a complete record */
-UNIV_INTERN
+
 byte*
 mlog_parse_index(
 	byte*		ptr,	/*!< in: buffer */

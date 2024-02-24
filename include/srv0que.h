@@ -29,7 +29,7 @@ Created 6/5/1996 Heikki Tuuri
 
 /** Enqueues a task to server task queue and releases a worker thread, if there
 is a suspended one. */
-UNIV_INTERN
+
 void
 srv_que_task_enqueue_low(
 	que_thr_t*	thr);	/*!< in: query thread */

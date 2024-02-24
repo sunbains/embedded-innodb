@@ -33,7 +33,7 @@ Created 12/29/1997 Heikki Tuuri
 /** Free the buffer from global dynamic memory for a value of a que_node,
 if it has been allocated in the above function. The freeing for pushed
 column values is done in sel_col_prefetch_buf_free. */
-UNIV_INTERN
+
 void
 eval_node_free_val_buf(
 	que_node_t*	node);	/*!< in: query graph node */
@@ -81,7 +81,7 @@ eval_node_get_ibool_val(
 	que_node_t*	node);	/*!< in: query graph node */
 /** Evaluates a comparison node.
 @return	the result of the comparison */
-UNIV_INTERN
+
 ibool
 eval_cmp(
 	func_node_t*	cmp_node);	/*!< in: comparison node */

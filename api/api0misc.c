@@ -35,7 +35,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "lock0lock.h"
 
 /* If set then we rollback the transaction on DB_LOCK_WAIT_TIMEOUT error. */
-UNIV_INTERN ibool	ses_rollback_on_timeout	= FALSE;
+ ibool	ses_rollback_on_timeout	= FALSE;
 
 #ifdef __WIN__
 

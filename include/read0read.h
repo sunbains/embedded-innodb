@@ -35,7 +35,7 @@ Created 2/16/1997 Heikki Tuuri
 /** Opens a read view where exactly the transactions serialized before this
 point in time are seen in the view.
 @return	own: read view struct */
-UNIV_INTERN
+
 read_view_t*
 read_view_open_now(
 	trx_id_t	cr_trx_id,	/*!< in: trx_id of creating
@@ -46,7 +46,7 @@ read_view_open_now(
 /** Makes a copy of the oldest existing read view, or opens a new. The view
 must be closed with ..._close.
 @return	own: read view struct */
-UNIV_INTERN
+
 read_view_t*
 read_view_oldest_copy_or_open_new(
 	trx_id_t	cr_trx_id,	/*!< in: trx_id of creating
@@ -55,13 +55,13 @@ read_view_oldest_copy_or_open_new(
 	mem_heap_t*	heap);		/*!< in: memory heap from which
 					allocated */
 /** Closes a read view. */
-UNIV_INTERN
+
 void
 read_view_close(
 	read_view_t*	view);	/*!< in: read view */
 /** Closes a consistent read view for client. This function is called at an SQL
 statement end if the trx isolation level is <= TRX_ISO_READ_COMMITTED. */
-UNIV_INTERN
+
 void
 read_view_close_for_read_committed(
 	trx_t*	trx);	/*!< in: trx which has a read view */
@@ -73,20 +73,20 @@ read_view_sees_trx_id(
 	const read_view_t*	view,	/*!< in: read view */
 	trx_id_t		trx_id);/*!< in: trx id */
 /** Prints a read view to stderr. */
-UNIV_INTERN
+
 void
 read_view_print(
 	const read_view_t*	view);	/*!< in: read view */
 /** Create a consistent cursor view to be used in cursors. In this
 consistent read view modifications done by the creating transaction or future
 transactions are not visible. */
-UNIV_INTERN
+
 cursor_view_t*
 read_cursor_view_create(
 	trx_t*		cr_trx);/*!< in: trx where cursor view is created */
 /** Close a given consistent cursor view and restore global read view
 back to a transaction read view. */
-UNIV_INTERN
+
 void
 read_cursor_view_close(
 	trx_t*		trx,		/*!< in: trx */
@@ -94,7 +94,7 @@ read_cursor_view_close(
 /** This function sets a given consistent cursor view to a transaction
 read view if given consistent cursor view is not NULL. Otherwise, function
 restores a global read view to a transaction read view. */
-UNIV_INTERN
+
 void
 read_cursor_set(
 	trx_t*		trx,	/*!< in: transaction where cursor is set */

@@ -37,7 +37,7 @@ Created 2/6/1997 Heikki Tuuri
 index record. NOTE: the kernel mutex is temporarily released in this
 function!
 @return NULL if committed, else the active transaction */
-UNIV_INTERN
+
 trx_t*
 row_vers_impl_x_locked_off_kernel(
 	const rec_t*	rec,	/*!< in: record in a secondary index */
@@ -46,7 +46,7 @@ row_vers_impl_x_locked_off_kernel(
 /** Finds out if we must preserve a delete marked earlier version of a clustered
 index record, because it is >= the purge view.
 @return	TRUE if earlier version should be preserved */
-UNIV_INTERN
+
 ibool
 row_vers_must_preserve_del_marked(
 	trx_id_t	trx_id,	/*!< in: transaction id in the version */
@@ -59,7 +59,7 @@ if there is any not delete marked version of the record where the trx
 id >= purge view, and the secondary index entry == ientry; exactly in
 this case we return TRUE.
 @return	TRUE if earlier version should have */
-UNIV_INTERN
+
 ibool
 row_vers_old_has_index_entry(
 	ibool		also_curr,/*!< in: TRUE if also rec is included in the
@@ -75,7 +75,7 @@ row_vers_old_has_index_entry(
 read should see. We assume that the trx id stored in rec is such that
 the consistent read should not see rec in its present version.
 @return	DB_SUCCESS or DB_MISSING_HISTORY */
-UNIV_INTERN
+
 ulint
 row_vers_build_for_consistent_read(
 	const rec_t*	rec,	/*!< in: record in a clustered index; the
@@ -101,7 +101,7 @@ row_vers_build_for_consistent_read(
 /** Constructs the last committed version of a clustered index record,
 which should be seen by a semi-consistent read.
 @return	DB_SUCCESS or DB_MISSING_HISTORY */
-UNIV_INTERN
+
 ulint
 row_vers_build_for_semi_consistent_read(
 	const rec_t*	rec,	/*!< in: record in a clustered index; the

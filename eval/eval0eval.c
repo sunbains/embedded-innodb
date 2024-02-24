@@ -45,7 +45,7 @@ freed. If the node already has an allocated buffer, that buffer is freed
 here. NOTE that this is the only function where dynamic memory should be
 allocated for a query node val field.
 @return	pointer to allocated buffer */
-UNIV_INTERN
+
 byte*
 eval_node_alloc_val_buf(
 	que_node_t*	node,	/*!< in: query graph node; sets the val field
@@ -83,7 +83,7 @@ eval_node_alloc_val_buf(
 /** Free the buffer from global dynamic memory for a value of a que_node,
 if it has been allocated in the above function. The freeing for pushed
 column values is done in sel_col_prefetch_buf_free. */
-UNIV_INTERN
+
 void
 eval_node_free_val_buf(
 	que_node_t*	node)	/*!< in: query graph node */
@@ -107,7 +107,7 @@ eval_node_free_val_buf(
 
 /** Evaluates a comparison node.
 @return	the result of the comparison */
-UNIV_INTERN
+
 ibool
 eval_cmp(
 	func_node_t*	cmp_node)	/*!< in: comparison node */
@@ -753,7 +753,7 @@ eval_predefined(
 }
 
 /** Evaluates a function node. */
-UNIV_INTERN
+
 void
 eval_func(
 	func_node_t*	func_node)	/*!< in: function node */

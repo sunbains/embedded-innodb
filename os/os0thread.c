@@ -42,7 +42,7 @@ Created 9/8/1995 Heikki Tuuri
 
 /** Compares two thread ids for equality.
 @return	TRUE if equal */
-UNIV_INTERN
+
 ibool
 os_thread_eq(
 	os_thread_id_t	a,	/*!< in: OS thread or thread id */
@@ -66,7 +66,7 @@ os_thread_eq(
 /** Converts an OS thread id to a ulint. It is NOT guaranteed that the ulint is
 unique for the thread though!
 @return	thread identifier as a number */
-UNIV_INTERN
+
 ulint
 os_thread_pf(
 	os_thread_id_t	a)	/*!< in: OS thread identifier */
@@ -85,7 +85,7 @@ os_thread_pf(
 identifier in Unix is the thread handle itself. Note that in HP-UX
 pthread_t is a struct of 3 fields.
 @return	current thread identifier */
-UNIV_INTERN
+
 os_thread_id_t
 os_thread_get_curr_id(void)
 {
@@ -100,7 +100,7 @@ os_thread_get_curr_id(void)
 the function given. The start function takes a void* parameter
 and returns an ulint.
 @return	handle to the thread */
-UNIV_INTERN
+
 os_thread_t
 os_thread_create(
 #ifndef __WIN__
@@ -209,7 +209,7 @@ os_thread_create(
 }
 
 /** Exits the current thread. */
-UNIV_INTERN
+
 void
 os_thread_exit(
 	void*	exit_value)	/*!< in: exit value; in Windows this void*
@@ -240,7 +240,7 @@ os_thread_exit(
 
 /** Returns handle to the current thread.
 @return	current thread handle */
-UNIV_INTERN
+
 os_thread_t
 os_thread_get_curr(void)
 {
@@ -252,7 +252,7 @@ os_thread_get_curr(void)
 }
 
 /** Advises the os to give up remainder of the thread's time slice. */
-UNIV_INTERN
+
 void
 os_thread_yield(void)
 {
@@ -271,7 +271,7 @@ os_thread_yield(void)
 #endif /* !UNIV_HOTBACKUP */
 
 /** The thread sleeps at least the time given in microseconds. */
-UNIV_INTERN
+
 void
 os_thread_sleep(
 	ulint	tm)	/*!< in: time in microseconds */
@@ -292,7 +292,7 @@ os_thread_sleep(
 
 #ifndef UNIV_HOTBACKUP
 /** Sets a thread priority. */
-UNIV_INTERN
+
 void
 os_thread_set_priority(
 	os_thread_t	handle,	/*!< in: OS handle to the thread */
@@ -320,7 +320,7 @@ os_thread_set_priority(
 
 /** Gets a thread priority.
 @return	priority */
-UNIV_INTERN
+
 ulint
 os_thread_get_priority(
 	os_thread_t	handle __attribute__((unused)))
@@ -350,7 +350,7 @@ os_thread_get_priority(
 
 /** Gets the last operating system error code for the calling thread.
 @return	last error on Windows, 0 otherwise */
-UNIV_INTERN
+
 ulint
 os_thread_get_last_error(void)
 {

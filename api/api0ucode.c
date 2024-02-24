@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 /** @file api/api0ucode.c
 Determines the connection character set.
 @return	connection character set */
-UNIV_INTERN
+
 const charset_t*
 ib_ucode_get_connection_charset(void)
 {
@@ -37,7 +37,7 @@ ib_ucode_get_connection_charset(void)
 /** Determines the character set based on id.
 FIXME: If the id can't be found then what do we do, return some default ?
 @return	character set or NULL */
-UNIV_INTERN
+
 const charset_t*
 ib_ucode_get_charset(
 	ulint		id)		/*!< in: Charset-collation code */
@@ -46,7 +46,7 @@ ib_ucode_get_charset(
 }
 
 /** Get the variable length bounds of the given (multibyte) character set. */
-UNIV_INTERN
+
 void
 ib_ucode_get_charset_width(
 	const charset_t*cs,		/*!< in: Charset */
@@ -94,7 +94,7 @@ ib_utf8_strncasecmp(
 }
 
 /** Makes all characters in a NUL-terminated UTF-8 string lower case. */
-UNIV_INTERN
+
 void
 ib_utf8_casedown(
 	char*		a)		/*!< in/out: str to put in lower case */
@@ -112,7 +112,7 @@ ib_utf8_casedown(
 }
 
 /** Converts an identifier to a table name. */
-UNIV_INTERN
+
 void
 ib_utf8_convert_from_table_id(
 	const charset_t*cs,		/*!< in: the 'from' character set */
@@ -133,7 +133,7 @@ ib_utf8_convert_from_table_id(
 
 
 /** Converts an identifier to UTF-8. */
-UNIV_INTERN
+
 void
 ib_utf8_convert_from_id(
 	const charset_t*cs,		/*!< in: the 'from' character set */
@@ -156,7 +156,7 @@ ib_utf8_convert_from_id(
 
 /** Test whether a UTF-8 character is a space or not.
 @return	TRUE if isspace(c) */
-UNIV_INTERN
+
 int
 ib_utf8_isspace(
 	const charset_t*cs,		/*!< in: charset */
@@ -173,7 +173,7 @@ ib_utf8_isspace(
 /** This function is used to find the storage length in bytes of the
 characters that will fit into prefix_len bytes.
 @return	number of bytes required to copy the characters that will fit into prefix_len bytes. */
-UNIV_INTERN
+
 ulint
 ib_ucode_get_storage_size(
 	const charset_t*cs,		/*!< in: character set */

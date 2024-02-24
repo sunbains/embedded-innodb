@@ -38,19 +38,19 @@ Created 12/19/1997 Heikki Tuuri
 
 /** Creates a select node struct.
 @return	own: select node struct */
-UNIV_INTERN
+
 sel_node_t*
 sel_node_create(
 	mem_heap_t*	heap);	/*!< in: memory heap where created */
 /** Frees the memory private to a select node when a query graph is freed,
 does not free the heap where the node was originally created. */
-UNIV_INTERN
+
 void
 sel_node_free_private(
 	sel_node_t*	node);	/*!< in: select node struct */
 /** Frees a prefetch buffer for a column, including the dynamically allocated
 memory for data stored there. */
-UNIV_INTERN
+
 void
 sel_col_prefetch_buf_free(
 	sel_buf_t*	prefetch_buf);	/*!< in, own: prefetch buffer */
@@ -64,7 +64,7 @@ sel_node_get_nth_plan(
 /** Performs a select step. This is a high-level function used in SQL execution
 graphs.
 @return	query thread to run next or NULL */
-UNIV_INTERN
+
 que_thr_t*
 row_sel_step(
 	que_thr_t*	thr);	/*!< in: query thread */
@@ -76,13 +76,13 @@ open_step(
 	que_thr_t*	thr);	/*!< in: query thread */
 /** Performs a fetch for a cursor.
 @return	query thread to run next or NULL */
-UNIV_INTERN
+
 que_thr_t*
 fetch_step(
 	que_thr_t*	thr);	/*!< in: query thread */
 /** Sample callback function for fetch that prints each row.
 @return	always returns non-NULL */
-UNIV_INTERN
+
 void*
 row_fetch_print(
 	void*	row,		/*!< in:  sel_node_t* */
@@ -91,19 +91,19 @@ row_fetch_print(
 location pointed. The column's type must be DATA_INT, DATA_UNSIGNED, length
 = 4.
 @return	always returns NULL */
-UNIV_INTERN
+
 void*
 row_fetch_store_uint4(
 	void*	row,		/*!< in:  sel_node_t* */
 	void*	user_arg);	/*!< in:  data pointer */
 /** Prints a row in a select result.
 @return	query thread to run next or NULL */
-UNIV_INTERN
+
 que_thr_t*
 row_printf_step(
 	que_thr_t*	thr);	/*!< in: query thread */
 /** Builds a dummy query graph used in selects. */
-UNIV_INTERN
+
 void
 row_sel_prebuild_graph(
 	row_prebuilt_t*	prebuilt);/*!< in: prebuilt handle */
@@ -121,7 +121,7 @@ prev. NOTE that if we do a search with a full key value from a unique
 index (ROW_SEL_EXACT), then we will not store the cursor position and
 fetch next or fetch prev must not be tried to the cursor!
 @return	DB_SUCCESS, DB_RECORD_NOT_FOUND, DB_END_OF_INDEX, DB_DEADLOCK, DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD */
-UNIV_INTERN
+
 enum db_err
 row_search_for_client(
 	ib_recovery_t	recovery,	/*!< in: recovery flag */
@@ -142,21 +142,21 @@ row_search_for_client(
 
 /** Reads the current row from the fetch cache.
 @return current row from the row cache. */
-UNIV_INTERN
+
 const rec_t*
 row_sel_row_cache_get(
 	row_prebuilt_t*	prebuilt);	/*!< in: prebuilt struct */
 
 /** Pops a cached row from the fetch cache.
 @return	DB_SUCCESS if all OK else error code */
-UNIV_INTERN
+
 void
 row_sel_row_cache_next(
 	row_prebuilt_t*	prebuilt);	/*!< in: prebuilt struct */
 
 /** Check if there are any rows in the cache.
 @return true if row cache is empty. */
-UNIV_INTERN
+
 ibool
 row_sel_row_cache_is_empty(
 	row_prebuilt_t*	prebuilt);	/*!< in: prebuilt struct */

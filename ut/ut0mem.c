@@ -42,10 +42,10 @@ typedef struct ut_mem_block_struct ut_mem_block_t;
 /** The total amount of memory currently allocated from the operating
 system with os_mem_alloc_large() or malloc().  Does not count malloc()
 if srv_use_sys_malloc is set.  Protected by ut_list_mutex. */
-UNIV_INTERN ulint		ut_total_allocated_memory	= 0;
+ ulint		ut_total_allocated_memory	= 0;
 
 /** Mutex protecting ut_total_allocated_memory and ut_mem_block_list */
-UNIV_INTERN os_fast_mutex_t	ut_list_mutex;
+ os_fast_mutex_t	ut_list_mutex;
 
 /** Dynamically allocated memory block */
 struct ut_mem_block_struct{
@@ -71,7 +71,7 @@ ut_malloc_low() */
 static ulint*	ut_mem_null_ptr	= NULL;
 
 /** Reset the variables. */
-UNIV_INTERN
+
 void
 ut_mem_var_init(void)
 {
@@ -87,7 +87,7 @@ ut_mem_var_init(void)
 }
 
 /** Initializes the mem block list at database startup. */
-UNIV_INTERN
+
 void
 ut_mem_init(void)
 {
@@ -104,7 +104,7 @@ ut_mem_init(void)
 /** Allocates memory. Sets it also to zero if UNIV_SET_MEM_TO_ZERO is
 defined and set_to_zero is TRUE.
 @return	own: allocated memory */
-UNIV_INTERN
+
 void*
 ut_malloc_low(
 	ulint	n,		/*!< in: number of bytes to allocate */
@@ -245,7 +245,7 @@ retry:
 /** Allocates memory. Sets it also to zero if UNIV_SET_MEM_TO_ZERO is
 defined.
 @return	own: allocated memory */
-UNIV_INTERN
+
 void*
 ut_malloc(
 	ulint	n)	/*!< in: number of bytes to allocate */
@@ -262,7 +262,7 @@ ut_malloc(
 out. It cannot be used if we want to return an error message. Prints to
 ib_stream a message if fails.
 @return	TRUE if succeeded */
-UNIV_INTERN
+
 ibool
 ut_test_malloc(
 	ulint	n)	/*!< in: try to allocate this many bytes */
@@ -298,7 +298,7 @@ ut_test_malloc(
 #endif /* !UNIV_HOTBACKUP */
 
 /** Frees a memory block allocated with ut_malloc. */
-UNIV_INTERN
+
 void
 ut_free(
 	void* ptr)  /*!< in, own: memory block */
@@ -356,7 +356,7 @@ RETURN VALUE
        original	 block	is  left  untouched  - it is not freed or
        moved.
 @return	own: pointer to new mem block or NULL */
-UNIV_INTERN
+
 void*
 ut_realloc(
 	void*	ptr,	/*!< in: pointer to old block or NULL */
@@ -410,7 +410,7 @@ ut_realloc(
 }
 
 /** Frees in shutdown all allocated memory not freed yet. */
-UNIV_INTERN
+
 void
 ut_free_all_mem(void)
 {
@@ -449,7 +449,7 @@ ut_free_all_mem(void)
 dst, NUL-terminating the result. Returns strlen(src), so truncation
 occurred if the return value >= size.
 @return	strlen(src) */
-UNIV_INTERN
+
 ulint
 ut_strlcpy(
 	char*		dst,	/*!< in: destination buffer */
@@ -471,7 +471,7 @@ ut_strlcpy(
 /** Like ut_strlcpy, but if src doesn't fit in dst completely, copies the last
 (size - 1) bytes of src, not the first.
 @return	strlen(src) */
-UNIV_INTERN
+
 ulint
 ut_strlcpy_rev(
 	char*		dst,	/*!< in: destination buffer */
@@ -493,7 +493,7 @@ ut_strlcpy_rev(
 quotes will not be included; only embedded quotes will be escaped.
 See also ut_strlenq() and ut_memcpyq().
 @return	pointer to end of dest */
-UNIV_INTERN
+
 char*
 ut_strcpyq(
 	char*		dest,	/*!< in: output buffer */
@@ -513,7 +513,7 @@ ut_strcpyq(
 quotes will not be included; only embedded quotes will be escaped.
 See also ut_strlenq() and ut_strcpyq().
 @return	pointer to end of dest */
-UNIV_INTERN
+
 char*
 ut_memcpyq(
 	char*		dest,	/*!< in: output buffer */
@@ -536,7 +536,7 @@ ut_memcpyq(
 /** Return the number of times s2 occurs in s1. Overlapping instances of s2
 are only counted once.
 @return	the number of times s2 occurs in s1 */
-UNIV_INTERN
+
 ulint
 ut_strcount(
 	const char*	s1,	/*!< in: string to search in */
@@ -568,7 +568,7 @@ ut_strcount(
 /** Replace every occurrence of s1 in str with s2. Overlapping instances of s1
 are only replaced once.
 @return	own: modified string, must be freed with mem_free() */
-UNIV_INTERN
+
 char*
 ut_strreplace(
 	const char*	str,	/*!< in: string to operate on */

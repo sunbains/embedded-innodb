@@ -26,27 +26,27 @@ Created 6/8/1994 Heikki Tuuri
 extern ulint	mem_current_allocated_memory;
 
 /** Initializes an allocated memory field in the debug version. */
-UNIV_INTERN
+
 void
 mem_field_init(
 	byte*	buf,	/*!< in: memory field */
 	ulint	n);	/*!< in: how many bytes the user requested */
 /** Erases an allocated memory field in the debug version. */
-UNIV_INTERN
+
 void
 mem_field_erase(
 	byte*	buf,	/*!< in: memory field */
 	ulint	n);	/*!< in: how many bytes the user requested */
 /** Initializes a buffer to a random combination of hex BA and BE.
 Used to initialize allocated memory. */
-UNIV_INTERN
+
 void
 mem_init_buf(
 	byte*	buf,	/*!< in: pointer to buffer */
 	ulint	 n);	 /*!< in: length of buffer */
 /** Initializes a buffer to a random combination of hex DE and AD.
 Used to erase freed memory. */
-UNIV_INTERN
+
 void
 mem_erase_buf(
 	byte*	buf,	/*!< in: pointer to buffer */
@@ -54,7 +54,7 @@ mem_erase_buf(
 /** Inserts a created memory heap to the hash table of
 current allocated memory heaps.
 Initializes the hash table when first called. */
-UNIV_INTERN
+
 void
 mem_hash_insert(
 	mem_heap_t*	heap,	   /*!< in: the created heap */
@@ -67,7 +67,7 @@ the heap (not the total space occupied by the heap).
 Also validates the heap.
 NOTE: This function does not free the storage occupied by the
 heap itself, only the node in the list of heaps. */
-UNIV_INTERN
+
 void
 mem_hash_remove(
 	mem_heap_t*	heap,	   /*!< in: the heap to be freed */

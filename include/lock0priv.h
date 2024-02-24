@@ -89,7 +89,7 @@ lock_get_type_low(
 
 /** Gets the previous record lock set on a record.
 @return	previous lock on the same record, NULL if none exists */
-UNIV_INTERN
+
 const lock_t*
 lock_rec_get_prev(
 	const lock_t*	in_lock,/*!< in: record lock */

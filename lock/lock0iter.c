@@ -39,7 +39,7 @@ record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
    bit_no is calculated in this function by using
    lock_rec_find_set_bit(). There is exactly one bit set in the bitmap
    of a wait lock. */
-UNIV_INTERN
+
 void
 lock_queue_iterator_reset(
 	lock_queue_iterator_t*	iter,	/*!< out: iterator */
@@ -72,7 +72,7 @@ lock_queue_iterator_reset(
 more locks (i.e. the current lock is the first one). The iterator is
 receded (if not-NULL is returned).
 @return	previous lock or NULL */
-UNIV_INTERN
+
 const lock_t*
 lock_queue_iterator_get_prev(
 	lock_queue_iterator_t*	iter)	/*!< in/out: iterator */

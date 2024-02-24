@@ -48,7 +48,7 @@ Created 4/20/1996 Heikki Tuuri
 /** Gets the offset of trx id field, in bytes relative to the origin of
 a clustered index record.
 @return	offset of DATA_TRX_ID */
-UNIV_INTERN
+
 ulint
 row_get_trx_id_offset(
 	const rec_t*	rec __attribute__((unused)),
@@ -77,7 +77,7 @@ the entry to be inserted into or purged from an index on the table.
 @return index entry which should be inserted or purged, or NULL if the
 externally stored columns in the clustered index record are
 unavailable and ext != NULL */
-UNIV_INTERN
+
 dtuple_t*
 row_build_index_entry(
 	const dtuple_t*	row,	/*!< in: row which should be
@@ -167,7 +167,7 @@ row_build_index_entry(
 /** An inverse function to row_build_index_entry. Builds a row from a
 record in a clustered index.
 @return	own: row built; see the NOTE below! */
-UNIV_INTERN
+
 dtuple_t*
 row_build(
 	ulint			type,	/*!< in: ROW_COPY_POINTERS or
@@ -308,7 +308,7 @@ row_build(
 /** Converts an index record to a typed data tuple.
 @return index entry built; does not set info_bits, and the data fields
 in the entry will point directly to rec */
-UNIV_INTERN
+
 dtuple_t*
 row_rec_to_index_entry_low(
 	const rec_t*		rec,	/*!< in: record in the index */
@@ -364,7 +364,7 @@ row_rec_to_index_entry_low(
 /** Converts an index record to a typed data tuple. NOTE that externally
 stored (often big) fields are NOT copied to heap.
 @return	own: index entry built; see the NOTE below! */
-UNIV_INTERN
+
 dtuple_t*
 row_rec_to_index_entry(
 	ulint			type,	/*!< in: ROW_COPY_DATA, or
@@ -414,7 +414,7 @@ row_rec_to_index_entry(
 /** Builds from a secondary index record a row reference with which we can
 search the clustered index record.
 @return	own: row reference built; see the NOTE below! */
-UNIV_INTERN
+
 dtuple_t*
 row_build_row_ref(
 	ulint		type,	/*!< in: ROW_COPY_DATA, or ROW_COPY_POINTERS:
@@ -522,7 +522,7 @@ row_build_row_ref(
 
 /** Builds from a secondary index record a row reference with which we can
 search the clustered index record. */
-UNIV_INTERN
+
 void
 row_build_row_ref_in_tuple(
 	dtuple_t*		ref,	/*!< in/out: row reference built;
@@ -633,7 +633,7 @@ notfound:
 
 /** Searches the clustered index record for a row, if we have the row reference.
 @return	TRUE if found */
-UNIV_INTERN
+
 ibool
 row_search_on_row_ref(
 	btr_pcur_t*		pcur,	/*!< out: persistent cursor, which must
@@ -675,7 +675,7 @@ row_search_on_row_ref(
 /** Fetches the clustered index record for a secondary index record. The latches
 on the secondary index record are preserved.
 @return	record or NULL, if no record found */
-UNIV_INTERN
+
 rec_t*
 row_get_clust_rec(
 	ulint		mode,	/*!< in: BTR_MODIFY_LEAF, ... */
@@ -714,7 +714,7 @@ row_get_clust_rec(
 
 /** Searches an index record.
 @return	TRUE if found */
-UNIV_INTERN
+
 ibool
 row_search_index_entry(
 	dict_index_t*	index,	/*!< in: index */

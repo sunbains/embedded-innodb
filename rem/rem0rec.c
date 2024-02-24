@@ -149,7 +149,7 @@ rec_validate_old(
 /** Determine how many of the first n columns in a compact
 physical record are stored externally.
 @return	number of externally stored columns */
-UNIV_INTERN
+
 ulint
 rec_get_n_extern_new(
 	const rec_t*	rec,	/*!< in: compact physical record */
@@ -229,7 +229,7 @@ rec_get_n_extern_new(
 /** Determine the offset to each field in a leaf-page record
 in ROW_FORMAT=COMPACT.  This is a special case of
 rec_init_offsets() and rec_get_offsets_func(). */
-UNIV_INTERN
+
 void
 rec_init_offsets_comp_ordinary(
 	const rec_t*		rec,	/*!< in: physical record in
@@ -505,7 +505,7 @@ resolved:
 /** The following function determines the offsets to each field
 in the record.	It can reuse a previously returned array.
 @return	the new offsets */
-UNIV_INTERN
+
 ulint*
 rec_get_offsets_func(
 	const rec_t*		rec,	/*!< in: physical record */
@@ -574,7 +574,7 @@ rec_get_offsets_func(
 
 /** The following function determines the offsets to each field
 in the record.  It can reuse a previously allocated array. */
-UNIV_INTERN
+
 void
 rec_get_offsets_reverse(
 	const byte*		extra,	/*!< in: the extra bytes of a
@@ -695,7 +695,7 @@ resolved:
 /** The following function is used to get the offset to the nth
 data field in an old-style record.
 @return	offset to the field */
-UNIV_INTERN
+
 ulint
 rec_get_nth_field_offs_old(
 	const rec_t*	rec,	/*!< in: record */
@@ -746,7 +746,7 @@ rec_get_nth_field_offs_old(
 
 /** Determines the size of a data tuple prefix in ROW_FORMAT=COMPACT.
 @return	total size */
-UNIV_INTERN
+
 ulint
 rec_get_converted_size_comp_prefix(
 	const dict_index_t*	index,	/*!< in: record descriptor;
@@ -827,7 +827,7 @@ rec_get_converted_size_comp_prefix(
 
 /** Determines the size of a data tuple in ROW_FORMAT=COMPACT.
 @return	total size */
-UNIV_INTERN
+
 ulint
 rec_get_converted_size_comp(
 	const dict_index_t*	index,	/*!< in: record descriptor;
@@ -872,7 +872,7 @@ rec_get_converted_size_comp(
 }
 
 /** Sets the value of the ith field SQL null bit of an old-style record. */
-UNIV_INTERN
+
 void
 rec_set_nth_field_null_bit(
 	rec_t*	rec,	/*!< in: record */
@@ -909,7 +909,7 @@ rec_set_nth_field_null_bit(
 
 /** Sets an old-style record field to SQL null.
 The physical size of the field is not changed. */
-UNIV_INTERN
+
 void
 rec_set_nth_field_sql_null(
 	rec_t*	rec,	/*!< in: record */
@@ -1038,7 +1038,7 @@ rec_convert_dtuple_to_rec_old(
 }
 
 /** Builds a ROW_FORMAT=COMPACT record out of a data tuple. */
-UNIV_INTERN
+
 void
 rec_convert_dtuple_to_rec_comp(
 	rec_t*			rec,	/*!< in: origin of record */
@@ -1201,7 +1201,7 @@ rec_convert_dtuple_to_rec_new(
 /** Builds a physical record out of a data tuple and
 stores it beginning from the start of the given buffer.
 @return	pointer to the origin of physical record */
-UNIV_INTERN
+
 rec_t*
 rec_convert_dtuple_to_rec(
 	byte*			buf,	/*!< in: start address of the
@@ -1252,7 +1252,7 @@ rec_convert_dtuple_to_rec(
 
 /** Copies the first n fields of a physical record to a data tuple. The fields
 are copied to the memory heap. */
-UNIV_INTERN
+
 void
 rec_copy_prefix_to_dtuple(
 	dtuple_t*		tuple,		/*!< out: data tuple */
@@ -1338,7 +1338,7 @@ rec_copy_prefix_to_buf_old(
 /** Copies the first n fields of a physical record to a new physical record in
 a buffer.
 @return	own: copied record */
-UNIV_INTERN
+
 rec_t*
 rec_copy_prefix_to_buf(
 	const rec_t*		rec,		/*!< in: physical record */
@@ -1513,7 +1513,7 @@ rec_validate_old(
 
 /** Validates the consistency of a physical record.
 @return	TRUE if ok */
-UNIV_INTERN
+
 ibool
 rec_validate(
 	const rec_t*	rec,	/*!< in: physical record */
@@ -1575,7 +1575,7 @@ rec_validate(
 }
 
 /** Prints an old-style physical record. */
-UNIV_INTERN
+
 void
 rec_print_old(
 	ib_stream_t	ib_stream,	/*!< in: stream where to print */
@@ -1626,7 +1626,7 @@ rec_print_old(
 #ifndef UNIV_HOTBACKUP
 /** Prints a physical record in ROW_FORMAT=COMPACT.  Ignores the
 record header. */
-UNIV_INTERN
+
 void
 rec_print_comp(
 	ib_stream_t	ib_stream,	/*!< in: streamwhere to print */
@@ -1662,7 +1662,7 @@ rec_print_comp(
 }
 
 /** Prints a physical record. */
-UNIV_INTERN
+
 void
 rec_print_new(
 	ib_stream_t	ib_stream,	/*!< in: stream where to print */
@@ -1689,7 +1689,7 @@ rec_print_new(
 }
 
 /** Prints a physical record. */
-UNIV_INTERN
+
 void
 rec_print(
 	ib_stream_t	ib_stream,	/*!< in: stream where to print */

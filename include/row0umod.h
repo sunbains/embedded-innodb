@@ -34,7 +34,7 @@ Created 2/27/1997 Heikki Tuuri
 
 /** Undoes a modify operation on a row of a table.
 @return	DB_SUCCESS or error code */
-UNIV_INTERN
+
 ulint
 row_undo_mod(
 	undo_node_t*	node,	/*!< in: row undo node */

@@ -237,7 +237,7 @@ func_exit:
 
 /** Creates a select node struct.
 @return	own: select node struct */
-UNIV_INTERN
+
 sel_node_t*
 sel_node_create(
 	mem_heap_t*	heap)	/*!< in: memory heap where created */
@@ -255,7 +255,7 @@ sel_node_create(
 
 /** Frees the memory private to a select node when a query graph is freed,
 does not free the heap where the node was originally created. */
-UNIV_INTERN
+
 void
 sel_node_free_private(
 	sel_node_t*	node)	/*!< in: select node struct */
@@ -460,7 +460,7 @@ sel_col_prefetch_buf_alloc(
 
 /** Frees a prefetch buffer for a column, including the dynamically allocated
 memory for data stored there. */
-UNIV_INTERN
+
 void
 sel_col_prefetch_buf_free(
 	sel_buf_t*	prefetch_buf)	/*!< in, own: prefetch buffer */
@@ -1875,7 +1875,7 @@ func_exit:
 /** Performs a select step. This is a high-level function used in SQL execution
 graphs.
 @return	query thread to run next or NULL */
-UNIV_INTERN
+
 que_thr_t*
 row_sel_step(
 	que_thr_t*	thr)	/*!< in: query thread */
@@ -1974,7 +1974,7 @@ row_sel_step(
 
 /** Performs a fetch for a cursor.
 @return	query thread to run next or NULL */
-UNIV_INTERN
+
 que_thr_t*
 fetch_step(
 	que_thr_t*	thr)	/*!< in: query thread */
@@ -2035,7 +2035,7 @@ fetch_step(
 
 /** Sample callback function for fetch that prints each row.
 @return	always returns non-NULL */
-UNIV_INTERN
+
 void*
 row_fetch_print(
 	void*	row,		/*!< in:  sel_node_t* */
@@ -2079,7 +2079,7 @@ row_fetch_print(
 location pointed. The column's type must be DATA_INT, DATA_UNSIGNED, length
 = 4.
 @return	always returns NULL */
-UNIV_INTERN
+
 void*
 row_fetch_store_uint4(
 	void*	row,		/*!< in:  sel_node_t* */
@@ -2105,7 +2105,7 @@ row_fetch_store_uint4(
 
 /** Prints a row in a select result.
 @return	query thread to run next or NULL */
-UNIV_INTERN
+
 que_thr_t*
 row_printf_step(
 	que_thr_t*	thr)	/*!< in: query thread */
@@ -2164,7 +2164,7 @@ row_printf_step(
 	return(thr);
 }
 
-UNIV_INTERN
+
 void
 row_sel_prebuild_graph(
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt handle */
@@ -2449,7 +2449,7 @@ row_sel_row_cache_reset(
 }
 
 /** Check if there are any rows in the cache that can be popped. */
-UNIV_INTERN
+
 ibool
 row_sel_row_cache_is_empty(
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct */
@@ -2459,7 +2459,7 @@ row_sel_row_cache_is_empty(
 
 /** Check if there is a fetch in progress. ie. at lease one row was cached
 and read from the cache. */
-UNIV_INTERN
+
 ibool
 row_sel_row_cache_fetch_in_progress(
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct */
@@ -2479,7 +2479,7 @@ row_sel_row_cache_is_full(
 }
 
 /** Reads the current row from the fetch cache. */
-UNIV_INTERN
+
 const rec_t*
 row_sel_row_cache_get(
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct */
@@ -2494,7 +2494,7 @@ row_sel_row_cache_get(
 }
 
 /** Pops a cached row from the fetch cache. */
-UNIV_INTERN
+
 void
 row_sel_row_cache_next(
 	row_prebuilt_t*	prebuilt)	/*!< in: prebuilt struct */
@@ -2649,7 +2649,7 @@ in the case of an UPDATE or a DELETE statement, where the row lock is of the
 LOCK_X type. Thus, this implements a 'mini-rollback' that releases the latest
 record locks we set.
 @return	error code or DB_SUCCESS */
-UNIV_INTERN
+
 int
 row_unlock_for_client(
 	row_prebuilt_t*	prebuilt,	/*!< in: prebuilt struct handle */
@@ -2745,7 +2745,7 @@ index (ROW_SEL_EXACT), then we will not store the cursor position and
 fetch next or fetch prev must not be tried to the cursor!
 @return DB_SUCCESS, DB_RECORD_NOT_FOUND, DB_END_OF_INDEX, DB_DEADLOCK,
 DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD */
-UNIV_INTERN
+
 enum db_err
 row_search_for_client(
 	ib_recovery_t	recovery,	/*!< in: recovery flag */

@@ -74,12 +74,12 @@ is the maximum size for a single allocated buffer: */
 #define MEM_MAX_ALLOC_IN_BUF		(UNIV_PAGE_SIZE - 200)
 
 /** Initializes the memory system. */
-UNIV_INTERN
+
 void
 mem_init(
 	ulint	size);	/*!< in: common pool size in bytes */
 /** Closes the memory system. */
-UNIV_INTERN
+
 void
 mem_close(void);
 
@@ -232,7 +232,7 @@ mem_strdupl(
 
 /** Duplicates a NUL-terminated string, allocated from a memory heap.
 @return	own: a copy of the string */
-UNIV_INTERN
+
 char*
 mem_heap_strdup(
 	mem_heap_t*	heap,	/*!< in: memory heap where string is allocated */
@@ -249,7 +249,7 @@ mem_heap_strdupl(
 
 /** Concatenate two strings and return the result, using a memory heap.
 @return	own: the result */
-UNIV_INTERN
+
 char*
 mem_heap_strcat(
 	mem_heap_t*	heap,	/*!< in: memory heap where string is allocated */
@@ -258,7 +258,7 @@ mem_heap_strcat(
 
 /** Duplicate a block of data, allocated from a memory heap.
 @return	own: a copy of the data */
-UNIV_INTERN
+
 void*
 mem_heap_dup(
 	mem_heap_t*	heap,	/*!< in: memory heap where copy is allocated */
@@ -270,7 +270,7 @@ formatted string from the given heap. This supports a very limited set of
 the printf syntax: types 's' and 'u' and length modifier 'l' (which is
 required for the 'u' type).
 @return	heap-allocated formatted string */
-UNIV_INTERN
+
 char*
 mem_heap_printf(
 	mem_heap_t*	heap,	/*!< in: memory heap */
@@ -280,7 +280,7 @@ mem_heap_printf(
 #ifdef UNIV_DEBUG
 /** Goes through the list of all allocated mem blocks, checks their magic
 numbers, and reports possible corruption. */
-UNIV_INTERN
+
 void
 mem_heap_verify(
 	const mem_heap_t* heap);/*!< in: heap to verify */

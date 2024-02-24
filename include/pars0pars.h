@@ -95,13 +95,13 @@ yyparse(void);
 
 /** Parses an SQL string returning the query graph.
 @return	own: the query graph */
-UNIV_INTERN
+
 que_t*
 pars_sql(
 	pars_info_t*	info,	/*!< in: extra information, or NULL */
 	const char*	str);	/*!< in: SQL string */
 /** Retrieves characters to the lexical analyzer. */
-UNIV_INTERN
+
 void
 pars_get_lex_chars(
 	char*	buf,		/*!< in/out: buffer where to copy */
@@ -109,13 +109,13 @@ pars_get_lex_chars(
 	int	max_size);	/*!< in: maximum number of characters which fit
 				in the buffer */
 /** Called by yyparse on error. */
-UNIV_INTERN
+
 void
 yyerror(
 	const char*	s);	/*!< in: error message string */
 /** Parses a variable declaration.
 @return	own: symbol table node of type SYM_VAR */
-UNIV_INTERN
+
 sym_node_t*
 pars_variable_declaration(
 	sym_node_t*	node,	/*!< in: symbol table node allocated for the
@@ -123,14 +123,14 @@ pars_variable_declaration(
 	pars_res_word_t* type);	/*!< in: pointer to a type token */
 /** Parses a function expression.
 @return	own: function node in a query tree */
-UNIV_INTERN
+
 func_node_t*
 pars_func(
 	que_node_t*	res_word,/*!< in: function name reserved word */
 	que_node_t*	arg);	/*!< in: first argument in the argument list */
 /** Parses an operator expression.
 @return	own: function node in a query tree */
-UNIV_INTERN
+
 func_node_t*
 pars_op(
 	int		func,	/*!< in: operator token code */
@@ -139,7 +139,7 @@ pars_op(
 				operator */
 /** Parses an ORDER BY clause. Order by a single column only is supported.
 @return	own: order-by node in a query tree */
-UNIV_INTERN
+
 order_node_t*
 pars_order_by(
 	sym_node_t*	column,	/*!< in: column name */
@@ -147,14 +147,14 @@ pars_order_by(
 /** Parses a select list; creates a query graph node for the whole SELECT
 statement.
 @return	own: select node in a query tree */
-UNIV_INTERN
+
 sel_node_t*
 pars_select_list(
 	que_node_t*	select_list,	/*!< in: select list */
 	sym_node_t*	into_list);	/*!< in: variables list or NULL */
 /** Parses a cursor declaration.
 @return	sym_node */
-UNIV_INTERN
+
 que_node_t*
 pars_cursor_declaration(
 	sym_node_t*	sym_node,	/*!< in: cursor id node in the symbol
@@ -162,14 +162,14 @@ pars_cursor_declaration(
 	sel_node_t*	select_node);	/*!< in: select node */
 /** Parses a function declaration.
 @return	sym_node */
-UNIV_INTERN
+
 que_node_t*
 pars_function_declaration(
 	sym_node_t*	sym_node);	/*!< in: function id node in the symbol
 					table */
 /** Parses a select statement.
 @return	own: select node in a query tree */
-UNIV_INTERN
+
 sel_node_t*
 pars_select_statement(
 	sel_node_t*	select_node,	/*!< in: select node already containing
@@ -182,14 +182,14 @@ pars_select_statement(
 	order_node_t*	order_by);	/*!< in: NULL or an order-by node */
 /** Parses a column assignment in an update.
 @return	column assignment node */
-UNIV_INTERN
+
 col_assign_node_t*
 pars_column_assignment(
 	sym_node_t*	column,	/*!< in: column to assign */
 	que_node_t*	exp);	/*!< in: value to assign */
 /** Parses a delete or update statement start.
 @return	own: update node in a query tree */
-UNIV_INTERN
+
 upd_node_t*
 pars_update_statement_start(
 	ibool		is_delete,	/*!< in: TRUE if delete */
@@ -198,7 +198,7 @@ pars_update_statement_start(
 					if delete */
 /** Parses an update or delete statement.
 @return	own: update node in a query tree */
-UNIV_INTERN
+
 upd_node_t*
 pars_update_statement(
 	upd_node_t*	node,		/*!< in: update node */
@@ -207,7 +207,7 @@ pars_update_statement(
 	que_node_t*	search_cond);	/*!< in: search condition or NULL */
 /** Parses an insert statement.
 @return	own: update node in a query tree */
-UNIV_INTERN
+
 ins_node_t*
 pars_insert_statement(
 	sym_node_t*	table_sym,	/*!< in: table name node */
@@ -215,7 +215,7 @@ pars_insert_statement(
 	sel_node_t*	select);	/*!< in: select condition or NULL */
 /** Parses a procedure parameter declaration.
 @return	own: symbol table node of type SYM_VAR */
-UNIV_INTERN
+
 sym_node_t*
 pars_parameter_declaration(
 	sym_node_t*	node,	/*!< in: symbol table node allocated for the
@@ -225,14 +225,14 @@ pars_parameter_declaration(
 	pars_res_word_t* type);	/*!< in: pointer to a type token */
 /** Parses an elsif element.
 @return	elsif node */
-UNIV_INTERN
+
 elsif_node_t*
 pars_elsif_element(
 	que_node_t*	cond,		/*!< in: if-condition */
 	que_node_t*	stat_list);	/*!< in: statement list */
 /** Parses an if-statement.
 @return	if-statement node */
-UNIV_INTERN
+
 if_node_t*
 pars_if_statement(
 	que_node_t*	cond,		/*!< in: if-condition */
@@ -240,7 +240,7 @@ pars_if_statement(
 	que_node_t*	else_part);	/*!< in: else-part statement list */
 /** Parses a for-loop-statement.
 @return	for-statement node */
-UNIV_INTERN
+
 for_node_t*
 pars_for_statement(
 	sym_node_t*	loop_var,	/*!< in: loop variable */
@@ -249,31 +249,31 @@ pars_for_statement(
 	que_node_t*	stat_list);	/*!< in: statement list */
 /** Parses a while-statement.
 @return	while-statement node */
-UNIV_INTERN
+
 while_node_t*
 pars_while_statement(
 	que_node_t*	cond,		/*!< in: while-condition */
 	que_node_t*	stat_list);	/*!< in: statement list */
 /** Parses an exit statement.
 @return	exit statement node */
-UNIV_INTERN
+
 exit_node_t*
 pars_exit_statement(void);
 /** Parses a return-statement.
 @return	return-statement node */
-UNIV_INTERN
+
 return_node_t*
 pars_return_statement(void);
 /** Parses a procedure call.
 @return	function node */
-UNIV_INTERN
+
 func_node_t*
 pars_procedure_call(
 	que_node_t*	res_word,/*!< in: procedure name reserved word */
 	que_node_t*	args);	/*!< in: argument list */
 /** Parses an assignment statement.
 @return	assignment statement node */
-UNIV_INTERN
+
 assign_node_t*
 pars_assignment_statement(
 	sym_node_t*	var,	/*!< in: variable to assign */
@@ -281,7 +281,7 @@ pars_assignment_statement(
 /** Parses a fetch statement. into_list or user_func (but not both) must be
 non-NULL.
 @return	fetch statement node */
-UNIV_INTERN
+
 fetch_node_t*
 pars_fetch_statement(
 	sym_node_t*	cursor,		/*!< in: cursor node */
@@ -289,7 +289,7 @@ pars_fetch_statement(
 	sym_node_t*	user_func);	/*!< in: user function name, or NULL */
 /** Parses an open or close cursor statement.
 @return	fetch statement node */
-UNIV_INTERN
+
 open_node_t*
 pars_open_statement(
 	ulint		type,	/*!< in: ROW_SEL_OPEN_CURSOR
@@ -297,23 +297,23 @@ pars_open_statement(
 	sym_node_t*	cursor);	/*!< in: cursor node */
 /** Parses a row_printf-statement.
 @return	row_printf-statement node */
-UNIV_INTERN
+
 row_printf_node_t*
 pars_row_printf_statement(
 	sel_node_t*	sel_node);	/*!< in: select node */
 /** Parses a commit statement.
 @return	own: commit node struct */
-UNIV_INTERN
+
 commit_node_t*
 pars_commit_statement(void);
 /** Parses a rollback statement.
 @return	own: rollback node struct */
-UNIV_INTERN
+
 roll_node_t*
 pars_rollback_statement(void);
 /** Parses a column definition at a table creation.
 @return	column sym table node */
-UNIV_INTERN
+
 sym_node_t*
 pars_column_def(
 	sym_node_t*		sym_node,	/*!< in: column node in the
@@ -327,7 +327,7 @@ pars_column_def(
 						is of type NOT NULL. */
 /** Parses a table creation operation.
 @return	table create subgraph */
-UNIV_INTERN
+
 tab_node_t*
 pars_create_table(
 	sym_node_t*	table_sym,	/*!< in: table name node in the symbol
@@ -345,7 +345,7 @@ pars_create_table(
 					from disk */
 /** Parses an index creation operation.
 @return	index create subgraph */
-UNIV_INTERN
+
 ind_node_t*
 pars_create_index(
 	pars_res_word_t* unique_def,	/*!< in: not NULL if a unique index */
@@ -357,7 +357,7 @@ pars_create_index(
 	sym_node_t*	column_list);	/*!< in: list of column names */
 /** Parses a procedure definition.
 @return	query fork node */
-UNIV_INTERN
+
 que_fork_t*
 pars_procedure_definition(
 	sym_node_t*	sym_node,	/*!< in: procedure id node in the symbol
@@ -370,7 +370,7 @@ procedure, that is, the client issues a procedure call directly.
 In InnoDB, stored InnoDB procedures are invoked via the
 parsed procedure tree, not via InnoDB SQL, so this function is not used.
 @return	query graph */
-UNIV_INTERN
+
 que_fork_t*
 pars_stored_procedure_call(
 	sym_node_t*	sym_node);	/*!< in: stored procedure name */
@@ -378,7 +378,7 @@ pars_stored_procedure_call(
 above it and prepares the graph for running. The fork created is of
 type QUE_FORK_USER_INTERFACE.
 @return	query thread node to run */
-UNIV_INTERN
+
 que_thr_t*
 pars_complete_graph_for_exec(
 	que_node_t*	node,	/*!< in: root node for an incomplete
@@ -388,18 +388,18 @@ pars_complete_graph_for_exec(
 
 /** Create parser info struct.
 @return	own: info struct */
-UNIV_INTERN
+
 pars_info_t*
 pars_info_create(void);
 
 /** Free info struct and everything it contains. */
-UNIV_INTERN
+
 void
 pars_info_free(
 	pars_info_t*	info);	/*!< in, own: info struct */
 
 /** Add bound literal. */
-UNIV_INTERN
+
 void
 pars_info_add_literal(
 	pars_info_t*	info,		/*!< in: info struct */
@@ -412,7 +412,7 @@ pars_info_add_literal(
 
 /** Equivalent to pars_info_add_literal(info, name, str, strlen(str),
 DATA_VARCHAR, DATA_ENGLISH). */
-UNIV_INTERN
+
 void
 pars_info_add_str_literal(
 	pars_info_t*	info,		/*!< in: info struct */
@@ -427,7 +427,7 @@ pars_info_add_literal(info, name, buf, 4, DATA_INT, 0);
 
 except that the buffer is dynamically allocated from the info struct's
 heap. */
-UNIV_INTERN
+
 void
 pars_info_add_int4_literal(
 	pars_info_t*	info,		/*!< in: info struct */
@@ -442,7 +442,7 @@ pars_info_add_literal(info, name, buf, 8, DATA_INT, 0);
 
 except that the buffer is dynamically allocated from the info struct's
 heap. */
-UNIV_INTERN
+
 void
 pars_info_add_int8_literal(
 	pars_info_t*	info,		/*!< in: info struct */
@@ -457,14 +457,14 @@ pars_info_add_literal(info, name, buf, 8, DATA_BINARY, 0);
 
 except that the buffer is dynamically allocated from the info struct's
 heap. */
-UNIV_INTERN
+
 void
 pars_info_add_dulint_literal(
 	pars_info_t*	info,		/*!< in: info struct */
 	const char*	name,		/*!< in: name */
 	dulint		val);		/*!< in: value */
 /** Add user function. */
-UNIV_INTERN
+
 void
 pars_info_add_function(
 	pars_info_t*		info,	/*!< in: info struct */
@@ -473,7 +473,7 @@ pars_info_add_function(
 	void*			arg);	/*!< in: user-supplied argument */
 
 /** Add bound id. */
-UNIV_INTERN
+
 void
 pars_info_add_id(
 	pars_info_t*	info,		/*!< in: info struct */
@@ -482,7 +482,7 @@ pars_info_add_id(
 
 /** Get user function with the given name.
 @return	user func, or NULL if not found */
-UNIV_INTERN
+
 pars_user_func_t*
 pars_info_get_user_func(
 	pars_info_t*		info,	/*!< in: info struct */
@@ -490,7 +490,7 @@ pars_info_get_user_func(
 
 /** Get bound literal with the given name.
 @return	bound literal, or NULL if not found */
-UNIV_INTERN
+
 pars_bound_lit_t*
 pars_info_get_bound_lit(
 	pars_info_t*		info,	/*!< in: info struct */
@@ -498,29 +498,29 @@ pars_info_get_bound_lit(
 
 /** Get bound id with the given name.
 @return	bound id, or NULL if not found */
-UNIV_INTERN
+
 pars_bound_id_t*
 pars_info_get_bound_id(
 	pars_info_t*		info,	/*!< in: info struct */
 	const char*		name);	/*!< in: bound id name to find */
 
 /** Release any resources used by the parser and lexer. */
-UNIV_INTERN
+
 void
 pars_close(void);
 
 /** Reset and check parser variables. */
-UNIV_INTERN
+
 void
 pars_var_init(void);
 
 /** Reset the lexing variables. */
-UNIV_INTERN
+
 void
 pars_lexer_var_init(void);
 
 /** Release any resources used by the lexer. */
-UNIV_INTERN
+
 void
 pars_lexer_close(void);
 

@@ -33,21 +33,21 @@ Created 2/17/1996 Heikki Tuuri
 #include "ha0ha.h"
 
 /*** Creates and initializes the adaptive search system at a database start. */
-UNIV_INTERN
+
 void
 btr_search_sys_create(
 	ulint	hash_size);	/*!< in: hash index hash table size */
 /*** Frees the adaptive search system at a database shutdown. */
-UNIV_INTERN
+
 void
 btr_search_sys_free(void);
 
 /*** Disable the adaptive hash search system and empty the index. */
-UNIV_INTERN
+
 void
 btr_search_disable(void);
 /*** Enable the adaptive hash search system. */
-UNIV_INTERN
+
 void
 btr_search_enable(void);
 
@@ -59,14 +59,14 @@ btr_search_get_info(
 	dict_index_t*	index);	/*!< in: index */
 /*** Creates and initializes a search info struct.
 @return	own: search info struct */
-UNIV_INTERN
+
 btr_search_t*
 btr_search_info_create(
 	mem_heap_t*	heap);	/*!< in: heap where created */
 /*** Returns the value of ref_count. The value is protected by
 btr_search_latch.
 @return	ref_count value. */
-UNIV_INTERN
+
 ulint
 btr_search_info_get_ref_count(
 	btr_search_t*   info);	/*!< in: search info. */
@@ -81,7 +81,7 @@ of the index. Note that if mode is PAGE_CUR_LE, which is used in inserts,
 and the function returns TRUE, then cursor->up_match and cursor->low_match
 both have sensible values.
 @return	TRUE if succeeded */
-UNIV_INTERN
+
 ibool
 btr_search_guess_on_hash(
 	dict_index_t*	index,		/*!< in: index */
@@ -98,7 +98,7 @@ btr_search_guess_on_hash(
 then the hash index for page, if any, is dropped. If new_page is not hashed,
 and page is hashed, then a new hash index is built to new_page with the same
 parameters as page (this often happens when a page is split). */
-UNIV_INTERN
+
 void
 btr_search_move_or_delete_hash_entries(
 	buf_block_t*	new_block,	/*!< in: records are copied
@@ -109,7 +109,7 @@ btr_search_move_or_delete_hash_entries(
 					from this page */
 	dict_index_t*	index);		/*!< in: record descriptor */
 /*** Drops a page hash index. */
-UNIV_INTERN
+
 void
 btr_search_drop_page_hash_index(
 	buf_block_t*	block);	/*!< in: block containing index page,
@@ -118,7 +118,7 @@ btr_search_drop_page_hash_index(
 				block->buf_fix_count == 0 */
 /*** Drops a page hash index when a page is freed from a fseg to the file system.
 Drops possible hash index if the page happens to be in the buffer pool. */
-UNIV_INTERN
+
 void
 btr_search_drop_page_hash_when_freed(
 	ulint	space,		/*!< in: space id */
@@ -126,7 +126,7 @@ btr_search_drop_page_hash_when_freed(
 				or 0 for uncompressed pages */
 	ulint	page_no);	/*!< in: page number */
 /*** Updates the page hash index when a single record is inserted on a page. */
-UNIV_INTERN
+
 void
 btr_search_update_hash_node_on_insert(
 	btr_cur_t*	cursor);/*!< in: cursor which was positioned to the
@@ -134,7 +134,7 @@ btr_search_update_hash_node_on_insert(
 				and the new record has been inserted next
 				to the cursor */
 /*** Updates the page hash index when a single record is inserted on a page. */
-UNIV_INTERN
+
 void
 btr_search_update_hash_on_insert(
 	btr_cur_t*	cursor);/*!< in: cursor which was positioned to the
@@ -142,7 +142,7 @@ btr_search_update_hash_on_insert(
 				and the new record has been inserted next
 				to the cursor */
 /*** Updates the page hash index when a single record is deleted from a page. */
-UNIV_INTERN
+
 void
 btr_search_update_hash_on_delete(
 	btr_cur_t*	cursor);/*!< in: cursor which was positioned on the
@@ -150,15 +150,15 @@ btr_search_update_hash_on_delete(
 				the record is not yet deleted */
 /*** Validates the search system.
 @return	TRUE if ok */
-UNIV_INTERN
+
 ibool
 btr_search_validate(void);
 /*** Reset global configuration variables. */
-UNIV_INTERN
+
 void
 btr_search_var_init(void);
 /*** Closes the adaptive search system at a database shutdown. */
-UNIV_INTERN
+
 void
 btr_search_sys_close(void);
 

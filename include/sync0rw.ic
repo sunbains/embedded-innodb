@@ -32,7 +32,7 @@ Created 9/11/1995 Heikki Tuuri
 locked in exclusive mode, or there is an exclusive lock request waiting,
 the function spins a preset time (controlled by SYNC_SPIN_ROUNDS),
 waiting for the lock before suspending the thread. */
-UNIV_INTERN
+
 void
 rw_lock_s_lock_spin(
 	rw_lock_t*	lock,	/*!< in: pointer to rw-lock */
@@ -42,7 +42,7 @@ rw_lock_s_lock_spin(
 	ulint		line);	/*!< in: line where requested */
 #ifdef UNIV_SYNC_DEBUG
 /** Inserts the debug information for an rw-lock. */
-UNIV_INTERN
+
 void
 rw_lock_add_debug_info(
 	rw_lock_t*	lock,		/*!< in: rw-lock */
@@ -51,7 +51,7 @@ rw_lock_add_debug_info(
 	const char*	file_name,	/*!< in: file where requested */
 	ulint		line);		/*!< in: line where requested */
 /** Removes a debug information struct for an rw-lock. */
-UNIV_INTERN
+
 void
 rw_lock_remove_debug_info(
 	rw_lock_t*	lock,		/*!< in: rw-lock */

@@ -58,7 +58,7 @@ static ulint		trx_roll_progress_printed_pct;
 
 /** Rollback a transaction.
 @return	error code or DB_SUCCESS */
-UNIV_INTERN
+
 int
 trx_general_rollback(
 	trx_t*		trx,	/*!< in: transaction handle */
@@ -119,7 +119,7 @@ trx_general_rollback(
 
 /** Frees savepoint structs starting from savep, if savep == NULL then
 free all savepoints. */
-UNIV_INTERN
+
 void
 trx_roll_savepoints_free(
 	trx_t*			trx,	/*!< in: transaction handle */
@@ -149,7 +149,7 @@ trx_roll_savepoints_free(
 in crash recovery.
 @return TRUE if trx is an incomplete transaction that is being rolled
 back in crash recovery */
-UNIV_INTERN
+
 ibool
 trx_is_recv(
 	const trx_t*	trx)	/*!< in: transaction */
@@ -159,7 +159,7 @@ trx_is_recv(
 
 /** Returns a transaction savepoint taken at this point in time.
 @return	savepoint */
-UNIV_INTERN
+
 trx_savept_t
 trx_savept_take(
 	trx_t*	trx)	/*!< in: transaction */
@@ -295,7 +295,7 @@ trx_rollback_active(
 encountered in crash recovery.  If the transaction already was
 committed, then we clean up a possible insert undo log. If the
 transaction was not yet committed, then we roll it back. */
-UNIV_INTERN
+
 void
 trx_rollback_or_clean_recovered(
 	ibool	all)	/*!< in: FALSE=roll back dictionary transactions;
@@ -368,7 +368,7 @@ committed, then we clean up a possible insert undo log. If the
 transaction was not yet committed, then we roll it back.
 Note: this is done in a background thread.
 @return	a dummy parameter */
-UNIV_INTERN
+
 os_thread_ret_t
 trx_rollback_or_clean_all_recovered(
 	void*	arg __attribute__((unused)))
@@ -387,7 +387,7 @@ trx_rollback_or_clean_all_recovered(
 
 /** Creates an undo number array.
 @return	own: undo number array */
-UNIV_INTERN
+
 trx_undo_arr_t*
 trx_undo_arr_create(void)
 {
@@ -415,7 +415,7 @@ trx_undo_arr_create(void)
 }
 
 /** Frees an undo number array. */
-UNIV_INTERN
+
 void
 trx_undo_arr_free(
 	trx_undo_arr_t*	arr)	/*!< in: undo number array */
@@ -551,7 +551,7 @@ trx_undo_arr_get_biggest(
 }
 
 /** Tries truncate the undo logs. */
-UNIV_INTERN
+
 void
 trx_roll_try_truncate(
 	trx_t*	trx)	/*!< in/out: transaction */
@@ -641,7 +641,7 @@ undo numbers in the transaction. When the query thread finishes processing
 of this undo record, it must be released with trx_undo_rec_release.
 @return undo log record copied to heap, NULL if none left, or if the
 undo number of the top record would be less than the limit */
-UNIV_INTERN
+
 trx_undo_rec_t*
 trx_roll_pop_top_rec_of_trx(
 	trx_t*		trx,	/*!< in: transaction */
@@ -767,7 +767,7 @@ try_again:
 called if the query thread gets the undo log record not using the pop
 function above.
 @return	TRUE if succeeded */
-UNIV_INTERN
+
 ibool
 trx_undo_rec_reserve(
 	trx_t*		trx,	/*!< in/out: transaction */
@@ -785,7 +785,7 @@ trx_undo_rec_reserve(
 }
 
 /** Releases a reserved undo record. */
-UNIV_INTERN
+
 void
 trx_undo_rec_release(
 	trx_t*		trx,	/*!< in/out: transaction */
@@ -803,7 +803,7 @@ trx_undo_rec_release(
 }
 
 /** Starts a rollback operation. */
-UNIV_INTERN
+
 void
 trx_rollback(
 	trx_t*		trx,	/*!< in: transaction */
@@ -876,7 +876,7 @@ performed by executing this query graph like a query subprocedure call.
 The reply about the completion of the rollback will be sent by this
 graph.
 @return	own: the query graph */
-UNIV_INTERN
+
 que_t*
 trx_roll_graph_build(
 	trx_t*	trx)	/*!< in: trx handle */
@@ -956,7 +956,7 @@ trx_finish_partial_rollback_off_kernel(
 }
 
 /** Finishes a transaction rollback. */
-UNIV_INTERN
+
 void
 trx_finish_rollback_off_kernel(
 	que_t*		graph,	/*!< in: undo graph which can now be freed */
@@ -1023,7 +1023,7 @@ trx_finish_rollback_off_kernel(
 
 /** Creates a rollback command node struct.
 @return	own: rollback node struct */
-UNIV_INTERN
+
 roll_node_t*
 roll_node_create(
 	mem_heap_t*	heap)	/*!< in: mem heap where created */
@@ -1041,7 +1041,7 @@ roll_node_create(
 
 /** Performs an execution step for a rollback command node in a query graph.
 @return	query thread to run next, or NULL */
-UNIV_INTERN
+
 que_thr_t*
 trx_rollback_step(
 	que_thr_t*	thr)	/*!< in: query thread */

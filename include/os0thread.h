@@ -64,7 +64,7 @@ typedef void* (*os_posix_f_t) (void*);
 
 /** Compares two thread ids for equality.
 @return	TRUE if equal */
-UNIV_INTERN
+
 ibool
 os_thread_eq(
 	os_thread_id_t	a,	/*!< in: OS thread or thread id */
@@ -72,7 +72,7 @@ os_thread_eq(
 /** Converts an OS thread id to a ulint. It is NOT guaranteed that the ulint is
 unique for the thread though!
 @return	thread identifier as a number */
-UNIV_INTERN
+
 ulint
 os_thread_pf(
 	os_thread_id_t	a);	/*!< in: OS thread identifier */
@@ -82,7 +82,7 @@ and returns a ulint.
 NOTE: We count the number of threads in os_thread_exit(). A created
 thread should always use that to exit and not use return() to exit.
 @return	handle to the thread */
-UNIV_INTERN
+
 os_thread_t
 os_thread_create(
 #ifndef __WIN__
@@ -97,45 +97,45 @@ os_thread_create(
 						thread, or NULL */
 
 /** Exits the current thread. */
-UNIV_INTERN
+
 void
 os_thread_exit(
 	void*	exit_value);	/*!< in: exit value; in Windows this void*
 				is cast as a DWORD */
 /** Returns the thread identifier of current thread.
 @return	current thread identifier */
-UNIV_INTERN
+
 os_thread_id_t
 os_thread_get_curr_id(void);
 /** Returns handle to the current thread.
 @return	current thread handle */
-UNIV_INTERN
+
 os_thread_t
 os_thread_get_curr(void);
 /** Advises the os to give up remainder of the thread's time slice. */
-UNIV_INTERN
+
 void
 os_thread_yield(void);
 /** The thread sleeps at least the time given in microseconds. */
-UNIV_INTERN
+
 void
 os_thread_sleep(
 	ulint	tm);	/*!< in: time in microseconds */
 /** Gets a thread priority.
 @return	priority */
-UNIV_INTERN
+
 ulint
 os_thread_get_priority(
 	os_thread_t	handle);/*!< in: OS handle to the thread */
 /** Sets a thread priority. */
-UNIV_INTERN
+
 void
 os_thread_set_priority(
 	os_thread_t	handle,	/*!< in: OS handle to the thread */
 	ulint		pri);	/*!< in: priority: one of OS_PRIORITY_... */
 /** Gets the last operating system error code for the calling thread.
 @return	last error on Windows, 0 otherwise */
-UNIV_INTERN
+
 ulint
 os_thread_get_last_error(void);
 

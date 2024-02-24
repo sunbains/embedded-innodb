@@ -25,7 +25,7 @@ Created 8/18/1994 Heikki Tuuri
 #include "mem0mem.h"
 
 /** Deletes a hash node. */
-UNIV_INTERN
+
 void
 ha_delete_hash_node(
 	hash_table_t*	table,		/*!< in: hash table */

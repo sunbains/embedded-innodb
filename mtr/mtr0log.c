@@ -36,7 +36,7 @@ Created 12/7/1995 Heikki Tuuri
 # include "dict0boot.h"
 
 /** Catenates n bytes to the mtr log. */
-UNIV_INTERN
+
 void
 mlog_catenate_string(
 	mtr_t*		mtr,	/*!< in: mtr */
@@ -58,7 +58,7 @@ mlog_catenate_string(
 /** Writes the initial part of a log record consisting of one-byte item
 type and four-byte space and page numbers. Also pushes info
 to the mtr memo that a buffer page has been modified. */
-UNIV_INTERN
+
 void
 mlog_write_initial_log_record(
 	const byte*	ptr,	/*!< in: pointer to (inside) a buffer
@@ -88,7 +88,7 @@ mlog_write_initial_log_record(
 
 /** Parses an initial log record written by mlog_write_initial_log_record.
 @return	parsed record end, NULL if not a complete record */
-UNIV_INTERN
+
 byte*
 mlog_parse_initial_log_record(
 	byte*	ptr,	/*!< in: buffer */
@@ -126,7 +126,7 @@ mlog_parse_initial_log_record(
 
 /** Parses a log record written by mlog_write_ulint or mlog_write_dulint.
 @return	parsed record end, NULL if not a complete record or a corrupt record */
-UNIV_INTERN
+
 byte*
 mlog_parse_nbytes(
 	ulint	type,	/*!< in: log record type: MLOG_1BYTE, ... */
@@ -231,7 +231,7 @@ mlog_parse_nbytes(
 
 /** Writes 1 - 4 bytes to a file page buffered in the buffer pool.
 Writes the corresponding log record to the mini-transaction log. */
-UNIV_INTERN
+
 void
 mlog_write_ulint(
 	byte*	ptr,	/*!< in: pointer where to write */
@@ -275,7 +275,7 @@ mlog_write_ulint(
 
 /** Writes 8 bytes to a file page buffered in the buffer pool.
 Writes the corresponding log record to the mini-transaction log. */
-UNIV_INTERN
+
 void
 mlog_write_dulint(
 	byte*	ptr,	/*!< in: pointer where to write */
@@ -310,7 +310,7 @@ mlog_write_dulint(
 #ifndef UNIV_HOTBACKUP
 /** Writes a string to a file page buffered in the buffer pool. Writes the
 corresponding log record to the mini-transaction log. */
-UNIV_INTERN
+
 void
 mlog_write_string(
 	byte*		ptr,	/*!< in: pointer where to write */
@@ -328,7 +328,7 @@ mlog_write_string(
 
 /** Logs a write of a string to a file page buffered in the buffer pool.
 Writes the corresponding log record to the mini-transaction log. */
-UNIV_INTERN
+
 void
 mlog_log_string(
 	byte*	ptr,	/*!< in: pointer written to */
@@ -364,7 +364,7 @@ mlog_log_string(
 
 /** Parses a log record written by mlog_write_string.
 @return	parsed record end, NULL if not a complete record */
-UNIV_INTERN
+
 byte*
 mlog_parse_string(
 	byte*	ptr,	/*!< in: buffer */
@@ -414,7 +414,7 @@ mlog_parse_string(
 /** Opens a buffer for mlog, writes the initial log record and,
 if needed, the field lengths of an index.
 @return	buffer, NULL if log mode MTR_LOG_NONE */
-UNIV_INTERN
+
 byte*
 mlog_open_and_write_index(
 	mtr_t*		mtr,	/*!< in: mtr */
@@ -509,7 +509,7 @@ mlog_open_and_write_index(
 
 /** Parses a log record written by mlog_open_and_write_index.
 @return	parsed record end, NULL if not a complete record */
-UNIV_INTERN
+
 byte*
 mlog_parse_index(
 	byte*		ptr,	/*!< in: buffer */

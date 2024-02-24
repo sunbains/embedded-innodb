@@ -52,20 +52,20 @@ typedef struct ib_list_helper_struct ib_list_helper_t;
 /** Create a new list using mem_alloc. Lists created with this function must be
 freed with ib_list_free.
 @return	list */
-UNIV_INTERN
+
 ib_list_t*
 ib_list_create(void);
 
 
 /** Free a list. */
-UNIV_INTERN
+
 void
 ib_list_free(
 	ib_list_t*	list);	/*!< in: list */
 
 /** Add the data to the end of the list.
 @return	new list node */
-UNIV_INTERN
+
 ib_list_node_t*
 ib_list_add_last(
 	ib_list_t*	list,	/*!< in: list */
@@ -74,7 +74,7 @@ ib_list_add_last(
 
 /** Add the data after the indicated node.
 @return	new list node */
-UNIV_INTERN
+
 ib_list_node_t*
 ib_list_add_after(
 	ib_list_t*	list,		/*!< in: list */
@@ -84,7 +84,7 @@ ib_list_add_after(
 	mem_heap_t*	heap);		/*!< in: memory heap to use */
 
 /** Remove the node from the list. */
-UNIV_INTERN
+
 void
 ib_list_remove(
 	ib_list_t*	list,	/*!< in: list */

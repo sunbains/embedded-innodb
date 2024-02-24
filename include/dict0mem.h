@@ -113,7 +113,7 @@ ROW_FORMAT=REDUNDANT. */
 
 /** Creates a table memory object.
 @return	own: table object */
-UNIV_INTERN
+
 dict_table_t*
 dict_mem_table_create(
 	const char*	name,		/*!< in: table name */
@@ -124,12 +124,12 @@ dict_mem_table_create(
 	ulint		n_cols,		/*!< in: number of columns */
 	ulint		flags);		/*!< in: table flags */
 /** Free a table memory object. */
-UNIV_INTERN
+
 void
 dict_mem_table_free(
 	dict_table_t*	table);		/*!< in: table */
 /** Adds a column definition to a table. */
-UNIV_INTERN
+
 void
 dict_mem_table_add_col(
 	dict_table_t*	table,	/*!< in: table */
@@ -140,7 +140,7 @@ dict_mem_table_add_col(
 	ulint		len);	/*!< in: precision */
 /** Creates an index memory object.
 @return	own: index object */
-UNIV_INTERN
+
 dict_index_t*
 dict_mem_index_create(
 	const char*	table_name,	/*!< in: table name */
@@ -154,7 +154,7 @@ dict_mem_index_create(
 /** Adds a field definition to an index. NOTE: does not take a copy
 of the column name if the field is a column. The memory occupied
 by the column name may be released only after publishing the index. */
-UNIV_INTERN
+
 void
 dict_mem_index_add_field(
 	dict_index_t*	index,		/*!< in: index */
@@ -163,13 +163,13 @@ dict_mem_index_add_field(
 					in a column prefix index like
 					INDEX (textcol(25)) */
 /** Frees an index memory object. */
-UNIV_INTERN
+
 void
 dict_mem_index_free(
 	dict_index_t*	index);	/*!< in: index */
 /** Creates and initializes a foreign constraint memory object.
 @return	own: foreign constraint struct */
-UNIV_INTERN
+
 dict_foreign_t*
 dict_mem_foreign_create(void);
 

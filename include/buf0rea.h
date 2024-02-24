@@ -32,7 +32,7 @@ buffer buf_pool if it is not already there. Sets the io_fix flag and sets
 an exclusive lock on the buffer frame. The flag is cleared and the x-lock
 released by the i/o-handler thread.
 @return TRUE if page has been read in, FALSE in case of failure */
-UNIV_INTERN
+
 ibool
 buf_read_page(
 	ulint	space,	/*!< in: space id */
@@ -61,7 +61,7 @@ NOTE 3: the calling thread must want access to the page given: this rule is
 set to prevent unintended read-aheads performed by ibuf routines, a situation
 which could result in a deadlock if the OS does not support asynchronous io.
 @return	number of page read requests issued */
-UNIV_INTERN
+
 ulint
 buf_read_ahead_linear(
 	ulint	space,	/*!< in: space id */
@@ -71,7 +71,7 @@ buf_read_ahead_linear(
 /*** Issues read requests for pages which the ibuf module wants to read in, in
 order to contract the insert buffer tree. Technically, this function is like
 a read-ahead function. */
-UNIV_INTERN
+
 void
 buf_read_ibuf_merge_pages(
 	ibool		sync,		/*!< in: TRUE if the caller
@@ -94,7 +94,7 @@ buf_read_ibuf_merge_pages(
 	ulint		n_stored);	/*!< in: number of elements
 					in the arrays */
 /*** Issues read requests for pages which recovery wants to read in. */
-UNIV_INTERN
+
 void
 buf_read_recv_pages(
 	ibool		sync,		/*!< in: TRUE if the caller
