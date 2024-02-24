@@ -16,11 +16,11 @@
 ACLOCAL_AMFLAGS = -I m4 --force
 
 
-include_HEADERS = haildb.h
+include_HEADERS = innodb.h
 
-libhaildb_la_LDFLAGS	= -version-info $(IB_API_VERSION) $(LD_VERSION_SCRIPT)
+libinnodb_la_LDFLAGS	= -version-info $(IB_API_VERSION) $(LD_VERSION_SCRIPT)
 
-libhaildb_la_CFLAGS= \
+libinnodb_la_CFLAGS= \
         ${AM_CFLAGS} \
         ${CFLAG_VISIBILITY} \
         -DBUILDING_HAILDB
@@ -136,9 +136,9 @@ noinst_HEADERS		+= 						\
 			include/page0zip.h include/page0zip.ic
 endif
 
-lib_LTLIBRARIES		= libhaildb.la
+lib_LTLIBRARIES		= libinnodb.la
 
-libhaildb_la_SOURCES	=						\
+libinnodb_la_SOURCES	=						\
 			btr/btr0btr.c btr/btr0cur.c btr/btr0pcur.c	\
 			btr/btr0sea.c 					\
 			buf/buf0buf.c buf/buf0flu.c			\
@@ -181,7 +181,7 @@ libhaildb_la_SOURCES	=						\
 			api/api0misc.c api/api0cfg.c api/api0status.c	\
 			api/api0sql.c
 if WITH_ZIP
-libhaildb_la_SOURCES	+= buf/buf0buddy.c page/page0zip.c
+libinnodb_la_SOURCES	+= buf/buf0buddy.c page/page0zip.c
 endif
 
 EXTRA_DIST= \
@@ -195,7 +195,7 @@ EXTRA_DIST= \
 	    COPYING.Percona \
 	    COPYING.Sun_Microsystems \
 	    config.h.cmake \
-	    libhaildb.ver \
+	    libinnodb.ver \
 	    ${top_srcdir}/m4/*m4 \
 	    pars/make_bison.sh \
 	    pars/make_flex.sh \
@@ -249,7 +249,7 @@ TEST_EXECUTABLES=\
 	tests/ib_update
 
 TESTS_ENVIRONMENT= ${top_srcdir}/tests/run.sh
-LDADD = libhaildb.la libtest0aux.la
+LDADD = libinnodb.la libtest0aux.la
 
 check_PROGRAMS= ${TEST_EXECUTABLES}
 check_LTLIBRARIES=  libtest0aux.la

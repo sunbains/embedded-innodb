@@ -23,7 +23,7 @@ for valid page_size */
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "haildb.h"
+#include "innodb.h"
 
 #include "test0aux.h"
 
