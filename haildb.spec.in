@@ -1,0 +1,71 @@
+# substituted by autoconf
+%global version @HAILDB_FULL_VERSION@
+%global abi_ver @IB_API_VERSION@
+
+Name:           haildb
+Version:        %{version} 
+Release:        1%{?dist}
+Summary:        A relational database in shared library form
+
+Group:          Development/Libraries 
+# Original source and contributions from Percona are GNU GPLv2.
+# Additional contributions from Google and Sun Microsystems are BSD
+License:        GPLv2 and BSD
+URL:            http://haildb.com
+Source0:        http://launchpad.net/%{name}/2.0/release-2.0/+download/%{name}-%{version}.tar.gz
+BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+
+BuildRequires:  zlib-devel
+Provides:       haildb-abi(%{abi_ver})
+
+%description
+A relational database in shared library form. Not a SQL database, although 
+you can use this library as the storage backend for a SQL database.
+
+%package devel
+Summary:        Development headers and libraries
+Group:          Development/Libraries
+Requires:       %{name} = %{version}-%{release}
+
+%description devel
+Development headers and libraries for HailDB.
+
+
+%prep
+%setup -q
+
+%build
+%configure
+make %{?_smp_mflags}
+
+
+%install
+rm -rf %{buildroot}
+make install DESTDIR=%{buildroot}
+
+%clean
+rm -rf %{buildroot}
+
+%post -p /sbin/ldconfig
+%postun -p /sbin/ldconfig
+
+%files
+%defattr(-,root,root,-)
+%doc ChangeLog README 
+%doc COPYING COPYING.Google COPYING.Percona COPYING.Sun_Microsystems
+%{_libdir}/libhaildb.so.*
+%exclude %{_libdir}/libhaildb.la
+
+%files devel
+%defattr(-,root,root,-)
+%{_includedir}/haildb.h
+%{_libdir}/libhaildb.so
+
+
+%changelog
+* Tue Aug 03 2010 BJ Dierkes <wdierkes@rackspace.com> - %{version}-%{release}
+- Latest source version
+
+* Tue Aug 03 2010 BJ Dierkes <wdierkes@rackspace.com> - 2.0.0-1
+- Initial spec build
+

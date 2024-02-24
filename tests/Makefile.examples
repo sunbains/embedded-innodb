@@ -1,0 +1,70 @@
+# Copyright (C) 2009 Oracle/Innobase Oy
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+CC=gcc
+TOP=../../..
+AUX=test0aux.o
+CFLAGS=-g -Wall
+INC=-I$(TOP)/include/embedded_innodb-1.0 -I.
+LIB=-L$(TOP)/lib -linnodb -lpthread -lz -lm
+
+all:	ib_cfg ib_compressed ib_cursor ib_mt_stress ib_perf1 \
+	ib_status ib_test1 ib_test2 ib_test3 ib_test5 ib_types \
+	ib_update
+
+ib_cfg:	ib_cfg.o $(AUX)
+	$(CC) -o ib_cfg ib_cfg.o $(AUX) $(LIB)
+
+ib_compressed:	ib_compressed.o $(AUX)
+	$(CC) -o ib_compressed ib_compressed.o $(AUX) $(LIB)
+
+ib_cursor:	ib_cursor.o $(AUX)
+	$(CC) -o ib_cursor ib_cursor.o $(AUX) $(LIB)
+	
+ib_index:	ib_index.o $(AUX)
+	$(CC) -o ib_index ib_index.o $(AUX) $(LIB)
+
+ib_logger:	ib_logger.o $(AUX)
+	$(CC) -o ib_logger ib_logger.o $(AUX) $(LIB)
+
+ib_mt_stress: ib_mt_stress.o $(AUX)
+	$(CC) -o ib_mt_stress ib_mt_stress.o $(AUX) $(LIB)
+
+ib_perf1:	ib_perf1.o $(AUX)
+	$(CC) -o ib_perf1 ib_perf1.o $(AUX) $(LIB)
+
+ib_status:	ib_status.o $(AUX)
+	$(CC) -o ib_status ib_status.o $(AUX) $(LIB)
+
+ib_test1:	ib_test1.o $(AUX)
+	$(CC) -o ib_test1 ib_test1.o $(AUX) $(LIB)
+
+ib_test2:	ib_test2.o $(AUX)
+	$(CC) -o ib_test2 ib_test2.o $(AUX) $(LIB)
+
+ib_test3:	ib_test3.o $(AUX)
+	$(CC) -o ib_test3 ib_test3.o $(AUX) $(LIB)
+
+ib_test5:	ib_test5.o $(AUX)
+	$(CC) -o ib_test5 ib_test5.o $(AUX) $(LIB)
+
+ib_types:	ib_types.o $(AUX)
+	$(CC) -o ib_types ib_types.o $(AUX) $(LIB)
+
+ib_update:	ib_update.o $(AUX)
+	$(CC) -o ib_update ib_update.o $(AUX) $(LIB)
+
+.c.o:
+	$(CC) -c $(CFLAGS) $(INC) $<

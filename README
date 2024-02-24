@@ -1,0 +1,46 @@
+This is the source of HailDB 2.3.0
+==================================
+
+Requirements
+===============================================
+Zlib >= 1.2.x		Need the development header files and library
+
+Unix
+===============================================
+
+Instructions for compiling and installing:
+------------------------------------------
+
+1. ./configure
+
+   If you want to disable support for compressed tables you can run
+   configure with the following command line argument:
+
+   ./configure --disable-compression
+
+   By default, support for compressed tables is enabled.
+
+   If you want to disable support for shared libraries you can run
+   configure with the following command line argument:
+
+   ./configure --disable-shared
+
+   By default, it will build both shared and static libraries
+
+   The configure script attempts to select the optimal latching implementation
+   for your configuration, if not explicitly set on the configure command line.
+   If you need to force a particular selection you can use the following
+   command line argument to select:
+
+    --with-atomic-ops=  one of [gcc_builtins|solaris|innodb]
+
+2. make
+
+3. make install
+
+4. Enjoy!
+
+Windows
+=======
+
+HailDB does not currently build on Windows. Although there is no real reason why support could not be continued.

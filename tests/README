@@ -1,0 +1,66 @@
+# Copyright (C) 2009 Oracle/Innobase Oy
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+Requirements
+==============================================================================
+ZLib 1.2.3		http://www.zlib.net
+PThreads library	unix only
+CMake 2.6 or above	Windows only
+
+
+Build
+==============================================================================
+You may have to tweak the include and library paths in the Makefile.examples
+file for your installation. By default it looks in "../..".
+
+ * Unix
+   It should just be a matter of running:
+
+	make -f Makefile.examples
+
+ * Windows
+ 1. cmake -G <generator-name>
+   The generator could be one of the followings:
+	Visual Studio 7             = Generates Visual Studio .NET 2002 project files.
+	Visual Studio 7 .NET 2003   = Generates Visual Studio .NET 2003 project files
+	Visual Studio 8 2005        = Generates Visual Studio .NET 2005 project files
+	Visual Studio 8 2005 Win64  = Generates Visual Studio .NET 2005 Win64 project files.
+	Visual Studio 9 2008        = Generates Visual Studio 9 2008 project files.
+	Visual Studio 9 2008 Win64  = Generates Visual Studio 9 2008 Win64 project files
+
+2. start Visual Studio, and open solution file TESTS.sln
+
+3. build ALL_BUILD
+
+
+Running
+==============================================================================
+Once the examples are built, in order to run them it should just be a matter
+of invoking the binary. However, potential issues that you should be aware off
+are:
+
+  * Missing libraries
+    On Unix systems: You may need to set the LD_LIBRARY_PATH e.g.,
+    LD_LIBRARY_PATH=../../lib ./ib_test1
+
+    On Windows: You may need to set the PATH e.g.,
+    set PATH=%PATH%;../../lib
+
+Important
+==============================================================================
+Remember to delete all data and log files before running the examples. Some
+of the programs will fail on an assertion if the table already exists.
+
+

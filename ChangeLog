@@ -1,0 +1,613 @@
+2010-04-26	The InnoDB Team
+
+	* row/row0sel.c:
+	Fix Bug#52663 Lost update incrementing column value under
+	READ COMMITTED isolation level
+
+2010-04-22	The InnoDB Team
+
+	* include/dict0boot.h, dict/dict0boot.c:
+	Fix a bug that prevented the crash recovery of fast CREATE INDEX
+	from dropping partially created indexes.
+
+2010-04-21	The InnoDB Team
+
+	* btr/btr0btr.c:
+	Fix Bug#52964 Infinite loop in btr_page_split_and_insert()
+	in ROW_FORMAT=COMPRESSED
+
+2010-04-21	The InnoDB Team
+
+	* data/data0data.c:
+	Fix Bug#52745 Failing assertion: blob_no < page_zip->n_blobs
+
+2010-04-20	The InnoDB Team
+
+	* btr/btr0btr.c, include/univ.i:
+	Implement UNIV_BTR_AVOID_COPY, for avoiding writes when a B-tree
+	node is split at the first or last record.
+
+2010-04-15     The InnoDB Team
+
+	* trx/trx0rec.c:
+	Fix Bug#52746 InnoDB purge thread crashed with table containing
+	prefix indexed blobs
+
+
+2010-03-18	The InnoDB Team
+
+	* buf0buf.ic:
+	When comparing the time of the first access to a block against
+	innodb_old_blocks_time, use 32-bit arithmetics.  The comparison
+	was incorrect on 64-bit systems.
+
+2010-03-11	The InnoDB Team
+
+	* buf0buf.h, buf0buf.ic:
+	Fix and clarify the latching of some buf_block_t members.
+	Note that check_index_page_at_flush is not protected by any mutex.
+	Note and assert that lock_hash_val is protected by the rw-latch.
+
+2010-03-10	The InnoDB Team
+
+	* log/log0recv.c:
+	Remove a bogus assertion about page numbers exceeding 0x90000000
+	in the redo log.  Abort when encountering a corrupted redo log
+	record, unless innodb_force_recovery is set.
+	Merged by Stewart Smith from InnoDB tree
+
+2010-03-08	The InnoDB Team
+
+	* fil/fil0fil.c:
+	Fix ALTER TABLE ... IMPORT TABLESPACE of compressed tables.
+	Merged by Stewart Smith from InnoDB tree
+
+2010-09-21	Stewart Smith
+
+	* api/api0cfg.c:
+	Change file_io_threads to be a read-only configuration option.
+	It was ignored and replaced with
+	2 + read_file_io_threads + write_file_io_threads
+	anyway, so by setting it you'd just get a warning (or no action).
+	This represents a slight API change, as instead of DB_SUCCESS you'll
+	now get DB_READONLY if you try to set it.
+
+2010-02-11	The InnoDB Team
+
+	* api/api0api.c, include/api0api.h, innodb.h:
+	Add a transaction handle argument to ib_table_drop() and ib_index_drop()
+	This forces a change to the API version too.
+
+2010-02-11	The InnoDB Team
+
+	* api/api0api.c, tests/ib_dict.c:
+	Add an api function to check whether a transaction currently holds
+	a shared lock on the InnoDB data dictionary.
+
+2010-02-11	The InnoDB Team
+
+	* api/api0api.c, include/api0api.h, innodb.h, tests/ib_cfg.c:
+	Add an api function (ib_cfg_get_all()) to retrieve all
+	configuration variables.
+
+2010-02-11	The InnoDB Team
+
+	* include/mem0mem.h, include/mem0mem.ic, mem/mem0mem.c:
+	Fix Bug#49535 Available memory check slows down crash recovery tens
+	of times
+
+2010-02-10	The InnoDB Team
+
+	* api/api0api.c:
+	Normalize the table name arg specified by the client. On Windows we
+	convert the name to lower case (currently using tolower()).
+
+2010-02-09	The InnoDB Team
+
+	* Makefile.am, configure.in, m4/acx_pthread.m4, tests/Makefile.am:
+	Add a m4 macro to test for POSIX threads library.
+
+2010-02-09	The InnoDB Team
+
+	* buf/buf0buf.c:
+	Fix Bug#38901 InnoDB logs error repeatedly when trying to load page
+	into buffer pool
+
+2010-02-09	The InnoDB Team
+
+	* srv/srv0srv.c:
+	Let the master thread sleep if the amount of work to be done is
+	calibrated as taking less than a second.
+
+2010-02-04	The InnoDB Team
+
+	* api/api0api.c:
+	Check for reserved characters in DOS/Windows when validating
+	tablenames.
+
+2010-02-04	The InnoDB Team
+
+	* api/api0api.c, api/api0api.h:
+	Add IB_DECIMAL column type.
+
+2010-02-04	The InnoDB Team
+
+	* btr/btr0btr.c, btr/btr0cur.c, btr/btr0pcur.c, buf/buf0buf.c,
+	include/btr0btr.h, include/btr0cur.h, include/btr0pcur.h,
+	include/btr0pcur.ic, include/buf0buf.h, row/row0ins.c, row/row0sel.c:
+	Pass the file name and line number of the caller of the b-tree cursor
+	functions to the buffer pool requests, in order to make the latch
+	diagnostics more accurate.
+
+2010-02-03	The InnoDB Team
+
+	* lock/lock0lock.c:
+	Fix Bug#49001 SHOW INNODB STATUS deadlock info incorrect when deadlock
+	detection aborts
+
+2010-02-03	The InnoDB Team
+
+	* buf/buf0lru.c:
+	Fix Bug#35077 Very slow DROP TABLE (ALTER TABLE, OPTIMIZE TABLE) on
+	compressed tables
+
+2010-01-27	The InnoDB Team
+
+	* ddl/ddl0ddl.c, include/ddl0ddl.h, log/log0recv.c:
+	Drop temporary tables at startup.
+	This addresses the third aspect of
+	Bug#41609 Crash recovery does not work for InnoDB temporary tables.
+
+2010-01-21	The InnoDB Team
+
+	* buf/buf0buf.c:
+	Do not merge buffered inserts to compressed pages before the redo log
+	has been applied in crash recovery.
+
+2010-01-21	The InnoDB Team
+
+	* api/api0api.c, row/row0sel.c:
+	Fix the case where the search match mode is IB_EXACT_MATCH.
+
+2010-01-13	The InnoDB Team
+
+	* row/row0sel.c:
+	On the READ UNCOMMITTED isolation level, do not attempt to access a
+	clustered index record that has been marked for deletion.
+
+2010-01-13	The InnoDB Team
+
+	* buf/buf0buf.c:
+	When disabling the adaptive hash index, check the block state before
+	checking block->is_hashed, because the latter may be uninitialized
+	right after server startup.
+
+
+2009-12-15      The InnoDB Team
+
+	* api/api0api.c, include/api0api.h, innodb.h:
+	Remove API function that is a no-op (ib_table_schema_set_temp_dir).
+
+2009-12-02	The InnoDB Team
+
+	* srv/srv0start.c:
+	Display the zlib version number at startup.
+	InnoDB compressed tables use zlib, and the implementation depends
+	on the zlib function compressBound(), whose definition was slightly
+	changed in zlib version 1.2.3.1 in 2006. 
+
+2009-11-30	The InnoDB Team
+
+	* dict/dict0boot.c, dict/dict0crea.c, dict/dict0load.c,
+	dict/dict0mem.c, fil/fil0fil.c, include/dict0mem.h:
+	Fix the bogus warning messages for non-existing temporary
+	tables that were reported in
+	Bug#41609 Crash recovery does not work for InnoDB temporary tables.
+	The actual crash recovery bug was corrected on 2009-04-29.
+
+2009-11-19	The InnoDB Team
+
+	* btr/btr0btr.c:
+	Fix Bug#48469 when innodb tablespace is configured too small, crash
+	and corruption!
+
+2009-11-19	The InnoDB Team
+
+	* data/data0type.c:
+	Fix Bug#48526 Data type for float and double is incorrectly reported
+	in InnoDB table monitor
+
+2009-11-19	The InnoDB Team
+
+	* CMakeLists.txt:
+	Fix Bug#48317 cannot build innodb as static library
+
+2009-11-12	The InnoDB Team
+
+	* include/db0err.h, row/row0merge.c:
+	Allow CREATE INDEX to be interrupted.
+	Also, when CHECK TABLE is interrupted, report ER_QUERY_INTERRUPTED.
+
+2009-11-11	The InnoDB Team
+
+	* include/os0file.h, os/os0file.c:
+	Fix Bug#3139 Mysql crashes: "windows error 995" after several selects
+	on a large DB
+
+2009-11-07	The InnoDB Team
+
+	* row/row0sel.c:
+	Fix a bug in row fetch reported by JonMeredith:
+	http://forums.innodb.com/read.php?8,913,913#msg-913
+
+2009-11-06	The InnoDB Team
+
+	* row/row0sel.c
+	When doing a unique search there is no need to fetch the next N
+	records. This should speed up search a little too.
+
+2009-10-29	The InnoDB Team
+
+	* os/os0proc.c:
+	Fix Bug#48237 Error handling in os_mem_alloc_large appears to be
+	incorrect
+
+2009-10-29	The InnoDB Team
+
+	* buf/buf0buf.c, buf/buf0lru.c, include/buf0buf.h, include/buf0buf.ic:
+	Fix corruption of the buf_pool->LRU_old list and improve debug
+	assertions.
+
+2009-10-28	The InnoDB Team
+
+	* srv/srv0start.c:
+	Fix Bug#41490 After enlargement of InnoDB page size, the error message
+	become inaccurate
+
+2009-10-26	The InnoDB Team
+
+	* row/row0ins.c:
+	When allocating a data tuple, zero out the system fields in order to
+	avoid Valgrind warnings about uninitialized fields in
+	dtuple_validate().
+
+2009-10-15	The InnoDB Team
+
+	* include/page0page.ic:
+	Fix Bug#47058 Failure to compile on solaris 10u7 + spro cc/CC 5.10
+
+2009-10-15	The InnoDB Team
+	* srv/srv0start.c, srv/srv0srv.c, include/db0err.h:
+	Add a new error code, DB_FATAL. This code now replaces some of the
+	exit(3) calls during the startup phase.
+
+2009-10-13	The InnoDB Team
+
+	* buf/buf0flu.c:
+	Call fsync() on datafiles after a batch of pages is written to disk
+	even when skip_innodb_doublewrite is set.
+
+2009-10-05	The InnoDB Team
+
+	* buf/buf0buf.c:
+	Do not invalidate buffer pool while an LRU batch is active. Added code
+	to buf_pool_invalidate() to wait for the running batches to finish.
+
+2009-10-01	The InnoDB Team
+
+	* fsp/fsp0fsp.c, row/row0merge.c:
+	Clean up after a crash during DROP INDEX. When InnoDB crashes while
+	dropping an index, ensure that the index will be completely dropped
+	during crash recovery.
+
+2009-10-01	The InnoDB Team
+
+	* api/api0cfg.c, include/srv0srv.h, srv/srv0srv.c:
+	Introduce a new boolean config parameter "adaptive_flushing" which
+	can be set to OFF to disable the adaptive flushing.
+
+2009-09-28	The InnoDB Team
+
+	* btr/btr0btr.c, buf/buf0buf.c, include/page0page.h,
+	include/page0zip.h, page/page0cur.c, page/page0page.c,
+	page/page0zip.c:
+	Do not write to PAGE_INDEX_ID when restoring an uncompressed page
+	after a compression failure. The field should only be written
+	when creating a B-tree page. This fix addresses a race condition
+	in a debug assertion.
+
+2009-09-28	The InnoDB Team
+
+	* fil/fil0fil.c:
+	Try to prevent the reuse of tablespace identifiers after InnoDB
+	has crashed during table creation. Also, refuse to start if files
+	with duplicate tablespace identifiers are encountered.
+
+2009-09-25	The InnoDB Team
+
+	* include/os0file.h, os/os0file.c:
+	Fix Bug#47055 unconditional exit(1) on ERROR_WORKING_SET_QUOTA
+	1453 (0x5AD) for InnoDB backend
+
+2009-09-19	The InnoDB Team
+
+	* fsp/fsp0fsp.c:
+	Fix Bug#31183 Tablespace full problems not reported in error log,
+	error message unclear
+
+2009-09-17	The InnoDB Team
+
+	* api/api0api.c:
+	Fix memory leak reported by JonMeredith:
+	http://forums.innodb.com/read.php?8,821,821#msg-821
+
+2009-08-31	The InnoDB Team
+
+	* api/api0api.c:
+	Enforce NOT NULL column constraint during insert and update.
+
+2009-08-27	The InnoDB Team
+
+	* row/row0merge.c:
+	Fix a bug in the merge sort that can corrupt indexes in fast index
+	creation. Add some consistency checks. Check that the number of
+	records remains constant in every merge sort pass.
+
+2009-08-27	The InnoDB Team
+
+	* buf/buf0buf.c, buf/buf0lru.c, buf/buf0rea.c,
+	include/buf0buf.h, include/buf0buf.ic, include/buf0lru.h,
+	include/ut0ut.h, ut/ut0ut.c:
+	Make it possible to tune the buffer pool LRU eviction policy to be
+	more resistant against index scans. Introduce the settable global
+	variables lru_old_blocks_pct and lru_block_access_recency for
+	controlling the buffer pool eviction policy. The parameter
+	lru_old_blocks_pct (5..95) controls the desired amount of "old"
+	blocks in the LRU list. The default is 37, corresponding to the
+	old fixed ratio of 3/8. Each time a block is accessed, it will be
+	moved to the "new" blocks if its first access was at least
+	innodb_old_blocks_time milliseconds ago (default 0, meaning every
+	block). The idea is that in index scans, blocks will be accessed
+	a few times within lru_block_access_recency, and they will remain in
+	the "old" section of the LRU list. Thus, when lru_block_access_recency
+	is nonzero, blocks retrieved for one-time index scans will be more
+	likely candidates for eviction than blocks that are accessed in
+	random patterns.
+
+2009-08-03	The InnoDB Team
+
+	* api/api0api.c, include/api0api.h, innodb.h, tests/ib_dict.c:
+	Enable the VARBINARY column type
+
+2009-07-24	The InnoDB Team
+
+	* api/api0api.c, api/api0status.c, include/api0api.h, innodb.h:
+	Add a new function (ib_status_get_i64()) to the API that allows users
+	to read the InnoDB system variables.
+
+2009-08-11	The InnoDB Team
+
+	InnoDB Plugin 1.0.4 released
+
+2009-07-20	The InnoDB Team
+
+	* buf/buf0rea.c, include/srv0srv.h, srv/srv0srv.c:
+	Change the meaning of this parameter to signify the number of pages
+	that must be sequentially accessed for InnoDB to trigger a readahead
+	request.
+
+2009-07-16	The InnoDB Team
+
+	* include/univ.i:
+	Support inlining of functions and prefetch with Sun Studio.
+	These changes are based on contribution from Sun Microsystems Inc.
+	under a BSD license.
+
+2009-07-10	The InnoDB Team
+
+	* srv/srv0srv.c:
+	Change the defaults for:
+	sync_spin_loops: 20 -> 30
+	spin_wait_delay: 5 -> 6
+
+2009-07-08	The InnoDB Team
+
+	* srv/srv0srv.c, buf/buf0flu.c:
+	include/srv0srv.h, include/log0log.ic, include/buf0flu.h,
+	include/log0log.h:
+	Implement the adaptive flushing of dirty pages, which uses
+	a heuristics based flushing rate of dirty pages to avoid IO
+	bursts at checkpoint. 
+
+2009-07-07	The InnoDB Team
+
+	* srv/srv0srv.c, log/log0log.c, include/srv0srv.h:
+	Implement IO capacity tuning. The ibuf merge is also changed
+	from synchronous to asynchronous. These changes are based on
+	contribution from Google Inc. under a BSD license.
+
+2009-07-02	The InnoDB Team
+
+	* ddl/ddl0ddl.c:
+	Do not rollback the transaction if the table create fails. Let the
+	user handle the transaction rollback.
+
+2009-06-24	The InnoDB Team
+
+	Embedded InnoDB 1.0.3.5325 released
+
+2009-05-30	The InnoDB Team
+
+	* api/api0api.c:
+	Return a meaningful error code when creating a table if the table
+	name, supplied by the user, is not in 'database/table_name' format
+	instead of asserting.
+
+2009-05-29	The InnoDB Team
+
+	* api/api0api.c, configure.in:
+	Add a function to return the API version number. The version number
+	format is a 64 bit unsigned integer encoded as follows:
+	| 16 bits reserverd | 16 bits current | 16 bits revision | 16 bits age |
+
+	- If the library source code has changed at all since the last release,
+	then revision will be incremented (`c:r:a' becomes `c:r+1:a').
+	- If any interfaces have been added, removed, or changed since the last
+	update, current will be incremented, and revision will be set to 0.
+	- If any interfaces have been added (but not changed or removed) since
+	the last release, then age will be incremented.
+	- If any interfaces have been changed or removed since the last release,
+	then age will be set to 0.
+
+2009-05-28	The InnoDB Team
+
+	* fil/fil0fil.c, srv/srv0start.c:
+	Change ib_database_create() to create the database sub-directory
+	relative to the data_home_dir setting.
+
+2009-05-27	The InnoDB Team
+
+	* api/api0cfg.c, include/api0api.h:
+	Change the ib_cfg_set*() functions to return ib_err_t instead of
+	ib_bool_t.
+
+2009-05-26	The InnoDB Team
+
+	* api/api0api.c:
+	Fix a bug in the 1.0.0 release were INTs were stored incorrectly. The
+	sign flag was being set incorrectly when converting the value to the
+	storage format.
+
+2009-05-26	The InnoDB Team
+
+	* api/api0cfg.c:
+	Change the default value of "log_group_home_dir" from "log" to ".".
+
+2009-05-25	The InnoDB Team
+
+	* api/api0api.c, include/api0api.h:
+	Introduce two new types:
+	  - IB_CHAR_ANYCHARSET		- Fixed width column with any charset
+	  - IB_VARCHAR_ANYCHARSET	- Variable length column, any charset
+
+2009-05-20	The InnoDB Team
+
+	* api/api0api.c, include/api0api.h:
+	Add an API function to list all tables in the data dictionary
+
+2009-05-19	The InnoDB Team
+
+	* ddl/ddl0ddl.c, api/api0api.c:
+	Add a function to drop a database. All the tables are first dropped
+	and then the database. If the tables are in use then the referenced
+	tables will be put in a background drop queue. The tables in the
+	background drop queue will be dropped once the reference count for
+	that table reaches 0.
+
+2009-05-19	The InnoDB Team
+
+	* btr/btr0btr.c, btr/btr0cur.c, lock/lock0lock.c,
+	include/page0page.ic, include/lock0lock.h, include/dict0dict.h,
+	include/page0page.h, include/dict0dict.ic, ibuf/ibuf0ibuf.c,
+	page/page0zip.c, page/page0page.c:
+	Write updates of PAGE_MAX_TRX_ID to the redo log and add debug
+	assertions for checking that PAGE_MAX_TRX_ID is valid on leaf
+	pages of secondary indexes and the insert buffer B-tree. This bug
+	could cause failures in secondary index lookups in consistent
+	reads right after crash recovery.
+
+2009-05-18	The InnoDB Team
+
+	* btr/btr0cur.c:
+	Correctly estimate the space needed on the compressed page when
+	performing an update by delete-and-insert.
+
+2009-05-14	The InnoDB Team
+
+	* include/srv0srv.h, srv/srv0srv.c, api/api0cfg.c:
+	Remove unused variable.
+
+2009-05-13	The InnoDB Team
+
+	* dict/dict0dict.c:
+	Fix Bug#44320 InnoDB: missing DB_ROLL_PTR in Table Monitor COLUMNS
+	output
+
+2009-04-29	The InnoDB Team
+
+	* fil/fil0fil.c, include/fil0fil.h, include/mtr0mtr.h,
+	log/log0recv.c:
+	Fix Bug#41609 Crash recovery does not work for InnoDB temporary tables
+
+2009-04-23	The InnoDB Team
+
+	* api/api0api.c:
+	Fix a bug that prevented creation of compressed tables.
+
+2009-04-23	The InnoDB Team
+
+	* api/api0api.c, include/api0api.h:
+	Add a function to convert error codes to strings, similar to
+	strerror(3).
+
+2009-05-13	The InnoDB Team
+
+	* row/row0sel.c:
+	Add row caching when fetching rows with row_search_for_client(). This
+	change will fetch more than one row and cache it in the row_prebuilt_t
+	structure to reduce CPU and locking overhead. This port from the
+	plugin branch is different because in Embedded InnoDB we cache the
+	rows in InnoDB row format, in the plugin we cache the rows in the
+	MySQL row format.
+
+2009-05-13	The InnoDB Team
+
+	* api/api0api.c:
+	Make the insert row code more efficient, we do a shallow copy when
+	inserting rows and cache the dtuple_t instance in the query graph
+	rather than creating it for each insert.
+
+	Aggressive inlining of some frequently called API functions. The ones
+	that are called from within the API implementation.
+
+2009-05-12	The InnoDB Team
+
+	* api/api0api.c:
+	Add row caching when fetching rows with row_search_for_client()
+
+2009-05-12	The InnoDB Team
+
+	* api/api0cfg.c, tests/Makefile.am, tests/ib_cfg.c:
+	Fix a bug when retrieving a string configuration parameters with
+	ib_cfg_get(), reported in
+	http://forums.innodb.com/read.php?8,584,584#msg-584
+
+2009-05-06	The InnoDB Team
+
+	* innodb.h:
+	Remove the dependency on the config.h file generated by autoconf
+	and CMake. API code assumes C99 compiler to work out the integer
+	width. We make an exception for VisualStudio by using the __int8
+	etc. instead of the standard aliases uint8_t etc.
+
+2009-05-06	The InnoDB Team
+
+	* innodb.h:
+	Replace the public interface file api0api.h with innodb.h.
+
+2009-05-05	The InnoDB Team
+
+	* innodb.h api/api0api.c etc.:
+	Allow users to set a callback function and the output stream to print
+	the InnoDB error messages. Currently this callback function must be a
+	drop-in replacement for fprintf().
+
+2009-04-23	The InnoDB Team
+
+	* include/trx0types.h:
+	Define the logical type names trx_id_t, roll_ptr_t, and undo_no_t
+	and use them in place of dulint everywhere.
+
+2009-04-21	The InnoDB Team
+
+	Embedded InnoDB 1.0.0 released
