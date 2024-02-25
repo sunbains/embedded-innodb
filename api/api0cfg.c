@@ -21,56 +21,56 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <strings.h>
 #endif
 
-#include "univ.i"
 #include "api0api.h"
 #include "btr0sea.h"
 #include "buf0buf.h" /* for buf_pool */
 #include "buf0lru.h" /* for buf_LRU_* */
 #include "db0err.h"
 #include "log0recv.h"
+#include "os0sync.h"
 #include "srv0srv.h"
 #include "srv0start.h"
-#include "trx0sys.h"	/* for trx_sys_file_format_name_to_id() */
-#include "os0sync.h"
+#include "trx0sys.h" /* for trx_sys_file_format_name_to_id() */
+#include "univ.i"
 
-static	char*	srv_file_flush_method_str = NULL;
+static char *srv_file_flush_method_str = NULL;
 
 /* A point in the LRU list (expressed as a percent), all blocks from this
 point onwards (inclusive) are considered "old" blocks. */
-static ulint	lru_old_blocks_pct;
+static ulint lru_old_blocks_pct;
 
 /** We copy the argument passed to ib_cfg_set_text("data_file_path")
 because srv_parse_data_file_paths_and_sizes() parses it's input argument
 destructively. The copy is done using ut_malloc(). */
-static	char*	srv_data_file_paths_and_sizes = NULL;
+static char *srv_data_file_paths_and_sizes = NULL;
 
 /* enum ib_cfg_flag_t @{ */
 typedef enum ib_cfg_flag {
-	IB_CFG_FLAG_NONE = 0x1,
-	IB_CFG_FLAG_READONLY_AFTER_STARTUP = 0x2,/* can be modified only
-						 before innodb is started */
-	IB_CFG_FLAG_READONLY = 0x4		/* cannot be modified */
+  IB_CFG_FLAG_NONE = 0x1,
+  IB_CFG_FLAG_READONLY_AFTER_STARTUP = 0x2, /* can be modified only
+                                            before innodb is started */
+  IB_CFG_FLAG_READONLY = 0x4                /* cannot be modified */
 } ib_cfg_flag_t;
 /* @} */
 
 /* struct ib_cfg_var_t @{ */
 typedef struct ib_cfg_var {
-	const char*	name;	/* config var name */
-	ib_cfg_type_t	type;	/* config var type */
-	ib_cfg_flag_t	flag;	/* config var flag */
-	ib_uint64_t	min_val;/* minimum allowed value for numeric types,
-				ignored for other types */
-	ib_uint64_t	max_val;/* maximum allowed value for numeric types,
-				ignored for other types */
-	ib_err_t	(*validate)(const struct ib_cfg_var*, const void*); /*
-				function used to validate a new variable's
-				value when setting it */
-	ib_err_t	(*set)(struct ib_cfg_var*, const void*); /* function
-				used to set the variable's value */
-	ib_err_t	(*get)(const struct ib_cfg_var*, void*); /* function
-				used to get the variable's value */
-	void*		tank;	/* opaque storage that may be used by the
-				set() and get() functions */
+  const char *name;    /* config var name */
+  ib_cfg_type_t type;  /* config var type */
+  ib_cfg_flag_t flag;  /* config var flag */
+  ib_uint64_t min_val; /* minimum allowed value for numeric types,
+                       ignored for other types */
+  ib_uint64_t max_val; /* maximum allowed value for numeric types,
+                       ignored for other types */
+  ib_err_t (*validate)(const struct ib_cfg_var *, const void *); /*
+                     function used to validate a new variable's
+                     value when setting it */
+  ib_err_t (*set)(struct ib_cfg_var *, const void *);            /* function
+                                used to set the variable's value */
+  ib_err_t (*get)(const struct ib_cfg_var *, void *);            /* function
+                                used to get the variable's value */
+  void *tank; /* opaque storage that may be used by the
+              set() and get() functions */
 } ib_cfg_var_t;
 /* @} */
 
@@ -79,49 +79,47 @@ Assign src to dst according to type. If this is a string variable (char*)
 the string itself is not copied.
 ib_cfg_assign() @{
 @return	DB_SUCCESS if assigned (type is known) */
-static
-ib_err_t
-ib_cfg_assign(
-	ib_cfg_type_t	type,	/*!< in: type of src and dst */
-	void*		dst,	/*!< out: destination */
-	const void*	src)	/*!< in: source */
+static ib_err_t
+ib_cfg_assign(ib_cfg_type_t type, /*!< in: type of src and dst */
+              void *dst,          /*!< out: destination */
+              const void *src)    /*!< in: source */
 {
-	switch (type) {
-	case IB_CFG_IBOOL: {
+  switch (type) {
+  case IB_CFG_IBOOL: {
 
-		*(ib_bool_t*) dst = *(const ib_bool_t*) src;
-		return(DB_SUCCESS);
-	}
+    *(ib_bool_t *)dst = *(const ib_bool_t *)src;
+    return (DB_SUCCESS);
+  }
 
-	case IB_CFG_ULINT: {
+  case IB_CFG_ULINT: {
 
-		*(ulint*) dst = *(const ulint*) src;
-		return(DB_SUCCESS);
-	}
+    *(ulint *)dst = *(const ulint *)src;
+    return (DB_SUCCESS);
+  }
 
-	case IB_CFG_ULONG: {
+  case IB_CFG_ULONG: {
 
-		*(ulong*) dst = *(const ulong*) src;
-		return(DB_SUCCESS);
-	}
+    *(ulong *)dst = *(const ulong *)src;
+    return (DB_SUCCESS);
+  }
 
-	case IB_CFG_TEXT: {
+  case IB_CFG_TEXT: {
 
-		*(char**) dst = *(char**) src;
-		return(DB_SUCCESS);
-	}
+    *(char **)dst = *(char **)src;
+    return (DB_SUCCESS);
+  }
 
-	case IB_CFG_CB: {
+  case IB_CFG_CB: {
 
-		*(ib_cb_t*) dst = *(ib_cb_t*) src;
-		return(DB_SUCCESS);
-	}
-	/* do not add default: in order to produce a compilation
-	warning if new type is added which is not handled here */
-	}
+    *(ib_cb_t *)dst = *(ib_cb_t *)src;
+    return (DB_SUCCESS);
+  }
+    /* do not add default: in order to produce a compilation
+    warning if new type is added which is not handled here */
+  }
 
-	/* NOT REACHED */
-	return(DB_ERROR);
+  /* NOT REACHED */
+  return (DB_ERROR);
 }
 /* @} */
 
@@ -129,51 +127,47 @@ ib_cfg_assign(
 type for min/max allowed value overflow.
 ib_cfg_var_validate_numeric() @{
 @return	DB_SUCCESS if value is in range */
-static
-ib_err_t
-ib_cfg_var_validate_numeric(
-	const struct ib_cfg_var* cfg_var,/*!< in/out: configuration variable to
-					check */
-	const void*		value)	/*!< in: value to check */
+static ib_err_t ib_cfg_var_validate_numeric(
+    const struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+                                     check */
+    const void *value)                /*!< in: value to check */
 {
-	switch (cfg_var->type) {
+  switch (cfg_var->type) {
 
-	case IB_CFG_ULINT: {
-		ulint	v;
+  case IB_CFG_ULINT: {
+    ulint v;
 
-		v = *(ulint*) value;
+    v = *(ulint *)value;
 
-		if ((ulint) cfg_var->min_val <= v
-		    && v <= (ulint) cfg_var->max_val) {
+    if ((ulint)cfg_var->min_val <= v && v <= (ulint)cfg_var->max_val) {
 
-			return(DB_SUCCESS);
-		} else {
+      return (DB_SUCCESS);
+    } else {
 
-			return(DB_INVALID_INPUT);
-		}
-	}
+      return (DB_INVALID_INPUT);
+    }
+  }
 
-	case IB_CFG_ULONG: {
-		ulong	v;
+  case IB_CFG_ULONG: {
+    ulong v;
 
-		v = *(ulong*) value;
+    v = *(ulong *)value;
 
-		if ((ulong) cfg_var->min_val <= v
-		    && v <= (ulong) cfg_var->max_val) {
+    if ((ulong)cfg_var->min_val <= v && v <= (ulong)cfg_var->max_val) {
 
-			return(DB_SUCCESS);
-		} else {
+      return (DB_SUCCESS);
+    } else {
 
-			return(DB_INVALID_INPUT);
-		}
-	}
+      return (DB_INVALID_INPUT);
+    }
+  }
 
-	default:
-		ut_error;
-	}
+  default:
+    ut_error;
+  }
 
-	/* NOT REACHED */
-	return(DB_ERROR);
+  /* NOT REACHED */
+  return (DB_ERROR);
 }
 /* @} */
 
@@ -186,25 +180,23 @@ is not copied and a reference to "value" is made. It should not be freed
 or modified until InnoDB is running or a new value is set.
 ib_cfg_var_set_generic() @{
 @return	DB_SUCCESS if set successfully */
-static
-ib_err_t
-ib_cfg_var_set_generic(
-	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
-					manipulate */
-	const void*		value)	/*!< in: value to set */
+static ib_err_t
+ib_cfg_var_set_generic(struct ib_cfg_var *cfg_var, /*!< in/out: configuration
+                                                   variable to manipulate */
+                       const void *value)          /*!< in: value to set */
 {
-	ib_err_t	ret;
+  ib_err_t ret;
 
-	if (cfg_var->validate != NULL) {
-		ret = cfg_var->validate(cfg_var, value);
-		if (ret != DB_SUCCESS) {
-			return(ret);
-		}
-	}
+  if (cfg_var->validate != NULL) {
+    ret = cfg_var->validate(cfg_var, value);
+    if (ret != DB_SUCCESS) {
+      return (ret);
+    }
+  }
 
-	ret = ib_cfg_assign(cfg_var->type, cfg_var->tank, value);
+  ret = ib_cfg_assign(cfg_var->type, cfg_var->tank, value);
 
-	return(ret);
+  return (ret);
 }
 /* @} */
 
@@ -216,162 +208,147 @@ storage is written in "value". It should not be freed unless it was
 allocated by the user and set with ib_cfg_set().
 ib_cfg_var_get_generic() @{
 @return	DB_SUCCESS if retrieved successfully */
-static
-ib_err_t
-ib_cfg_var_get_generic(
-	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
-						variable whose value to
-						retrieve */
-	void*				value)	/*!< out: place to store
-						the retrieved value */
+static ib_err_t
+ib_cfg_var_get_generic(const struct ib_cfg_var *cfg_var, /*!< in: configuration
+                                                         variable whose value to
+                                                         retrieve */
+                       void *value) /*!< out: place to store
+                                    the retrieved value */
 {
-	return(ib_cfg_assign(cfg_var->type, value, cfg_var->tank));
+  return (ib_cfg_assign(cfg_var->type, value, cfg_var->tank));
 }
 /* @} */
 
 /** Set the value of the config variable "adaptive_hash_index".
 ib_cfg_var_set_adaptive_hash_index() @{
 @return	DB_SUCCESS if set successfully */
-static
-ib_err_t
-ib_cfg_var_set_adaptive_hash_index(
-	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
-					manipulate, must be
-					"adaptive_hash_index" */
-	const void*		value)	/*!< in: value to set, must point to
-					ib_bool_t variable */
+static ib_err_t ib_cfg_var_set_adaptive_hash_index(
+    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+                                manipulate, must be
+                                "adaptive_hash_index" */
+    const void *value)          /*!< in: value to set, must point to
+                                ib_bool_t variable */
 {
-	ut_a(strcasecmp(cfg_var->name, "adaptive_hash_index") == 0);
-	ut_a(cfg_var->type == IB_CFG_IBOOL);
+  ut_a(strcasecmp(cfg_var->name, "adaptive_hash_index") == 0);
+  ut_a(cfg_var->type == IB_CFG_IBOOL);
 
-	btr_search_enabled = !(*(const ib_bool_t*) value);
+  btr_search_enabled = !(*(const ib_bool_t *)value);
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 
 /** Retrieve the value of the config variable "adaptive_hash_index".
 ib_cfg_var_get_adaptive_hash_index() @{
 @return	DB_SUCCESS if retrieved successfully */
-static
-ib_err_t
-ib_cfg_var_get_adaptive_hash_index(
-	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
-						variable whose value to
-						retrieve, must be
-						"adaptive_hash_index" */
-	void*				value)	/*!< out: place to store
-						the retrieved value, must
-						point to ib_bool_t variable */
+static ib_err_t ib_cfg_var_get_adaptive_hash_index(
+    const struct ib_cfg_var *cfg_var, /*!< in: configuration
+                                      variable whose value to
+                                      retrieve, must be
+                                      "adaptive_hash_index" */
+    void *value)                      /*!< out: place to store
+                                      the retrieved value, must
+                                      point to ib_bool_t variable */
 {
-	ut_a(strcasecmp(cfg_var->name, "adaptive_hash_index") == 0);
-	ut_a(cfg_var->type == IB_CFG_IBOOL);
+  ut_a(strcasecmp(cfg_var->name, "adaptive_hash_index") == 0);
+  ut_a(cfg_var->type == IB_CFG_IBOOL);
 
-	*(ib_bool_t*) value = !btr_search_enabled;
+  *(ib_bool_t *)value = !btr_search_enabled;
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 
 /** Set the value of the config variable "data_file_path".
 ib_cfg_var_set_data_file_path() @{
 @return	DB_SUCCESS if set successfully */
-static
-ib_err_t
-ib_cfg_var_set_data_file_path(
-	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
-					manipulate, must be
-					"data_file_path" */
-	const void*		value)	/*!< in: value to set, must point to
-					char* variable */
+static ib_err_t ib_cfg_var_set_data_file_path(
+    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+                                manipulate, must be
+                                "data_file_path" */
+    const void *value)          /*!< in: value to set, must point to
+                                char* variable */
 {
-	const char*	value_str;
+  const char *value_str;
 
-	ut_a(strcasecmp(cfg_var->name, "data_file_path") == 0);
-	ut_a(cfg_var->type == IB_CFG_TEXT);
+  ut_a(strcasecmp(cfg_var->name, "data_file_path") == 0);
+  ut_a(cfg_var->type == IB_CFG_TEXT);
 
-	value_str = *(char**) value;
+  value_str = *(char **)value;
 
-	if (srv_parse_data_file_paths_and_sizes(value_str)) {
-		return(DB_SUCCESS);
-	} else {
-		return(DB_INVALID_INPUT);
-	}
+  if (srv_parse_data_file_paths_and_sizes(value_str)) {
+    return (DB_SUCCESS);
+  } else {
+    return (DB_INVALID_INPUT);
+  }
 }
 /* @} */
 
 /** Retrieve the value of the config variable "data_file_path".
 ib_cfg_var_get_data_file_path() @{
 @return	DB_SUCCESS if retrieved successfully */
-static
-ib_err_t
-ib_cfg_var_get_data_file_path(
-	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
-						variable whose value to
-						retrieve, must be
-						"data_file_path" */
-	void*				value)	/*!< out: place to store
-						the retrieved value, must
-						point to char* variable */
+static ib_err_t ib_cfg_var_get_data_file_path(
+    const struct ib_cfg_var *cfg_var, /*!< in: configuration
+                                      variable whose value to
+                                      retrieve, must be
+                                      "data_file_path" */
+    void *value)                      /*!< out: place to store
+                                      the retrieved value, must
+                                      point to char* variable */
 {
-	ut_a(strcasecmp(cfg_var->name, "data_file_path") == 0);
-	ut_a(cfg_var->type == IB_CFG_TEXT);
+  ut_a(strcasecmp(cfg_var->name, "data_file_path") == 0);
+  ut_a(cfg_var->type == IB_CFG_TEXT);
 
-	*(char**) value = srv_data_file_paths_and_sizes;
+  *(char **)value = srv_data_file_paths_and_sizes;
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 
 /** Set the value of the config variable "file_format".
 ib_cfg_var_set_file_format() @{
 @return	DB_SUCCESS if set successfully */
-static
-ib_err_t
-ib_cfg_var_set_file_format(
-	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
-					manipulate, must be "file_format" */
-	const void*		value)	/*!< in: value to set, must point to
-					char* variable */
+static ib_err_t ib_cfg_var_set_file_format(
+    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+                                manipulate, must be "file_format" */
+    const void *value)          /*!< in: value to set, must point to
+                                char* variable */
 {
-	ulint		format_id;
+  ulint format_id;
 
-	ut_a(strcasecmp(cfg_var->name, "file_format") == 0);
-	ut_a(cfg_var->type == IB_CFG_TEXT);
+  ut_a(strcasecmp(cfg_var->name, "file_format") == 0);
+  ut_a(cfg_var->type == IB_CFG_TEXT);
 
-	format_id = trx_sys_file_format_name_to_id(*(char**) value);
+  format_id = trx_sys_file_format_name_to_id(*(char **)value);
 
-	if (format_id > DICT_TF_FORMAT_MAX) {
-		return(DB_INVALID_INPUT);
-	}
+  if (format_id > DICT_TF_FORMAT_MAX) {
+    return (DB_INVALID_INPUT);
+  }
 
-	srv_file_format = format_id;
+  srv_file_format = format_id;
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 
 /** Retrieve the value of the config variable "file_format".
 ib_cfg_var_get_file_format @{
 @return	DB_SUCCESS if retrieved successfully */
-static
-ib_err_t
-ib_cfg_var_get_file_format(
-	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
-						variable whose value to
-						retrieve, must be
-						"file_format" */
-	void*				value)	/*!< out: place to store
-						the retrieved value, must
-						point to char* variable */
+static ib_err_t ib_cfg_var_get_file_format(
+    const struct ib_cfg_var *cfg_var, /*!< in: configuration
+                                      variable whose value to
+                                      retrieve, must be
+                                      "file_format" */
+    void *value)                      /*!< out: place to store
+                                      the retrieved value, must
+                                      point to char* variable */
 {
-	ut_a(strcasecmp(cfg_var->name, "file_format") == 0);
-	ut_a(cfg_var->type == IB_CFG_TEXT);
+  ut_a(strcasecmp(cfg_var->name, "file_format") == 0);
+  ut_a(cfg_var->type == IB_CFG_TEXT);
 
-	*(const char**) value = trx_sys_file_format_id_to_name(
-		srv_file_format);
+  *(const char **)value = trx_sys_file_format_id_to_name(srv_file_format);
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 
@@ -379,203 +356,192 @@ ib_cfg_var_get_file_format(
 that the value ends with a path separator.
 ib_cfg_var_validate_data_home_dir() @{
 @return	DB_SUCCESS if value is valid */
-static
-ib_err_t
-ib_cfg_var_validate_data_home_dir(
-	const struct ib_cfg_var*cfg_var,/*!< in/out: configuration variable to
-					check, must be "data_home_dir" */
-	const void*		value)	/*!< in: value to check, must point to
-					char* variable */
+static ib_err_t ib_cfg_var_validate_data_home_dir(
+    const struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+                                      check, must be "data_home_dir" */
+    const void *value)                /*!< in: value to check, must point to
+                                      char* variable */
 {
-	ulint		len;
-	char*		value_str;
+  ulint len;
+  char *value_str;
 
-	ut_a(strcasecmp(cfg_var->name, "data_home_dir") == 0);
-	ut_a(cfg_var->type == IB_CFG_TEXT);
+  ut_a(strcasecmp(cfg_var->name, "data_home_dir") == 0);
+  ut_a(cfg_var->type == IB_CFG_TEXT);
 
-	value_str = *(char**) value;
+  value_str = *(char **)value;
 
-	len = ut_strlen(value_str);
+  len = ut_strlen(value_str);
 
-	/* We simply require that this variable end in a path separator.
-	We will normalize it before use internally. */
-	if (len == 0
-	    || (value_str[len - 1] != '/' && value_str[len - 1] != '\\')) {
+  /* We simply require that this variable end in a path separator.
+  We will normalize it before use internally. */
+  if (len == 0 || (value_str[len - 1] != '/' && value_str[len - 1] != '\\')) {
 
-		return(DB_INVALID_INPUT);
-	}
+    return (DB_INVALID_INPUT);
+  }
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 
 /** Set the value of the config variable "log_group_home_dir".
 ib_cfg_var_set_log_group_home_dir @{
 @return	DB_SUCCESS if set successfully */
-static
-ib_err_t
-ib_cfg_var_set_log_group_home_dir(
-	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
-					manipulate, must be
-					"log_group_home_dir" */
-	const void*		value)	/*!< in: value to set, must point to
-					char* variable */
+static ib_err_t ib_cfg_var_set_log_group_home_dir(
+    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+                                manipulate, must be
+                                "log_group_home_dir" */
+    const void *value)          /*!< in: value to set, must point to
+                                char* variable */
 {
-	const char*	value_str;
+  const char *value_str;
 
-	ut_a(strcasecmp(cfg_var->name, "log_group_home_dir") == 0);
-	ut_a(cfg_var->type == IB_CFG_TEXT);
+  ut_a(strcasecmp(cfg_var->name, "log_group_home_dir") == 0);
+  ut_a(cfg_var->type == IB_CFG_TEXT);
 
-	ut_a(srv_log_group_home_dir == NULL);
+  ut_a(srv_log_group_home_dir == NULL);
 
-	value_str = *(char**) value;
+  value_str = *(char **)value;
 
-	if (srv_parse_log_group_home_dirs(value_str)) {
-		return(DB_SUCCESS);
-	} else {
-		return(DB_INVALID_INPUT);
-	}
+  if (srv_parse_log_group_home_dirs(value_str)) {
+    return (DB_SUCCESS);
+  } else {
+    return (DB_INVALID_INPUT);
+  }
 }
 /* @} */
 
 /** Set the value of the config variable "flush_method".
 ib_cfg_var_set_flush_method@{
 @return	DB_SUCCESS if set successfully */
-static
-ib_err_t
-ib_cfg_var_set_flush_method(
-	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
-					manipulate, must be
-					"log_group_home_dir" */
-	const void*		value)	/*!< in: value to set, must point to
-					char* variable */
+static ib_err_t ib_cfg_var_set_flush_method(
+    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+                                manipulate, must be
+                                "log_group_home_dir" */
+    const void *value)          /*!< in: value to set, must point to
+                                char* variable */
 {
-	const char*	value_str;
-	ib_err_t	err = DB_SUCCESS;
+  const char *value_str;
+  ib_err_t err = DB_SUCCESS;
 
-	ut_a(strcasecmp(cfg_var->name, "flush_method") == 0);
-	ut_a(cfg_var->type == IB_CFG_TEXT);
+  ut_a(strcasecmp(cfg_var->name, "flush_method") == 0);
+  ut_a(cfg_var->type == IB_CFG_TEXT);
 
-	value_str = *(const char**) value;
+  value_str = *(const char **)value;
 
-	os_aio_use_native_aio = FALSE;
+  os_aio_use_native_aio = FALSE;
 
 #ifndef __WIN__
-	if (0 == ut_strcmp(value_str, "fsync")) {
-		srv_unix_file_flush_method = SRV_UNIX_FSYNC;
-	} else if (0 == ut_strcmp(value_str, "O_DSYNC")) {
-		srv_unix_file_flush_method = SRV_UNIX_O_DSYNC;
-	} else if (0 == ut_strcmp(value_str, "O_DIRECT")) {
-		srv_unix_file_flush_method = SRV_UNIX_O_DIRECT;
-	} else if (0 == ut_strcmp(value_str, "littlesync")) {
-		srv_unix_file_flush_method = SRV_UNIX_LITTLESYNC;
-	} else if (0 == ut_strcmp(value_str, "nosync")) {
-		srv_unix_file_flush_method = SRV_UNIX_NOSYNC;
-	} else {
-		err = DB_INVALID_INPUT;
-	}
+  if (0 == ut_strcmp(value_str, "fsync")) {
+    srv_unix_file_flush_method = SRV_UNIX_FSYNC;
+  } else if (0 == ut_strcmp(value_str, "O_DSYNC")) {
+    srv_unix_file_flush_method = SRV_UNIX_O_DSYNC;
+  } else if (0 == ut_strcmp(value_str, "O_DIRECT")) {
+    srv_unix_file_flush_method = SRV_UNIX_O_DIRECT;
+  } else if (0 == ut_strcmp(value_str, "littlesync")) {
+    srv_unix_file_flush_method = SRV_UNIX_LITTLESYNC;
+  } else if (0 == ut_strcmp(value_str, "nosync")) {
+    srv_unix_file_flush_method = SRV_UNIX_NOSYNC;
+  } else {
+    err = DB_INVALID_INPUT;
+  }
 #else
-	if (0 == ut_strcmp(value_str, "normal")) {
-		srv_win_file_flush_method = SRV_WIN_IO_NORMAL;
-	} else if (0 == ut_strcmp(value_str, "unbuffered")) {
-		srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
-	} else if (0 == ut_strcmp(value_str, "async_unbuffered")) {
-		srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
-	} else {
-		err = DB_INVALID_INPUT;
-	}
+  if (0 == ut_strcmp(value_str, "normal")) {
+    srv_win_file_flush_method = SRV_WIN_IO_NORMAL;
+  } else if (0 == ut_strcmp(value_str, "unbuffered")) {
+    srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
+  } else if (0 == ut_strcmp(value_str, "async_unbuffered")) {
+    srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
+  } else {
+    err = DB_INVALID_INPUT;
+  }
 
-	if (err == DB_SUCCESS) {
-		switch (os_get_os_version()) {
-		case OS_WIN95:
-		case OS_WIN31:
-		case OS_WINNT:
-			/* On Win 95, 98, ME, Win32 subsystem for Windows
-			3.1, and NT use simulated aio. In NT Windows provides
-		       	async i/o, but when run in conjunction with InnoDB
-		       	Hot Backup, it seemed to corrupt the data files. */
-	
-			os_aio_use_native_aio = FALSE;
-			break;
-		default:
-			/* On Win 2000 and XP use async i/o */
-			os_aio_use_native_aio = TRUE;
-			break;
-		}
-	}
+  if (err == DB_SUCCESS) {
+    switch (os_get_os_version()) {
+    case OS_WIN95:
+    case OS_WIN31:
+    case OS_WINNT:
+      /* On Win 95, 98, ME, Win32 subsystem for Windows
+      3.1, and NT use simulated aio. In NT Windows provides
+      async i/o, but when run in conjunction with InnoDB
+      Hot Backup, it seemed to corrupt the data files. */
+
+      os_aio_use_native_aio = FALSE;
+      break;
+    default:
+      /* On Win 2000 and XP use async i/o */
+      os_aio_use_native_aio = TRUE;
+      break;
+    }
+  }
 #endif
 
-	if (err == DB_SUCCESS) {
-		*(const char**) cfg_var->tank = value_str;
-	} else {
-		*(const char**) cfg_var->tank = NULL;
-	}
+  if (err == DB_SUCCESS) {
+    *(const char **)cfg_var->tank = value_str;
+  } else {
+    *(const char **)cfg_var->tank = NULL;
+  }
 
-	return(err);
+  return (err);
 }
 /* @} */
 /** Retrieve the value of the config variable "log_group_home_dir".
 ib_cfg_var_get_log_group_home_dir() @{
 @return	DB_SUCCESS if retrieved successfully */
-static
-ib_err_t
-ib_cfg_var_get_log_group_home_dir(
-	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
-						variable whose value to
-						retrieve, must be
-						"log_group_home_dir" */
-	void*				value)	/*!< out: place to store
-						the retrieved value, must
-						point to char* variable */
+static ib_err_t ib_cfg_var_get_log_group_home_dir(
+    const struct ib_cfg_var *cfg_var, /*!< in: configuration
+                                      variable whose value to
+                                      retrieve, must be
+                                      "log_group_home_dir" */
+    void *value)                      /*!< out: place to store
+                                      the retrieved value, must
+                                      point to char* variable */
 {
-	ut_a(strcasecmp(cfg_var->name, "log_group_home_dir") == 0);
-	ut_a(cfg_var->type == IB_CFG_TEXT);
+  ut_a(strcasecmp(cfg_var->name, "log_group_home_dir") == 0);
+  ut_a(cfg_var->type == IB_CFG_TEXT);
 
-	*(const char**) value = NULL;
+  *(const char **)value = NULL;
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 
 /** Set the value of the config variable "lru_old_blocks_pct".
 ib_cfg_var_set_lru_old_blocks_pct() @{
 @return	DB_SUCCESS if set successfully */
-static
-ib_err_t
-ib_cfg_var_set_lru_old_blocks_pct(
-	struct ib_cfg_var*	cfg_var,/*!< in/out: configuration variable to
-					manipulate, must be
-					"lru_old_blocks_pct" */
-	const void*		value)	/*!< in: value to set, must point to
-					ulint variable */
+static ib_err_t ib_cfg_var_set_lru_old_blocks_pct(
+    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+                                manipulate, must be
+                                "lru_old_blocks_pct" */
+    const void *value)          /*!< in: value to set, must point to
+                                ulint variable */
 {
-	ibool	adjust_buf_pool;
+  ibool adjust_buf_pool;
 
-	ut_a(strcasecmp(cfg_var->name, "lru_old_blocks_pct") == 0);
-	ut_a(cfg_var->type == IB_CFG_ULINT);
+  ut_a(strcasecmp(cfg_var->name, "lru_old_blocks_pct") == 0);
+  ut_a(cfg_var->type == IB_CFG_ULINT);
 
-	if (cfg_var->validate != NULL) {
-		ib_err_t	ret;
+  if (cfg_var->validate != NULL) {
+    ib_err_t ret;
 
-		ret = cfg_var->validate(cfg_var, value);
+    ret = cfg_var->validate(cfg_var, value);
 
-		if (ret != DB_SUCCESS) {
-			return(ret);
-		}
-	}
+    if (ret != DB_SUCCESS) {
+      return (ret);
+    }
+  }
 
-	if (buf_pool != NULL) {
-		/* buffer pool has been created */
-		adjust_buf_pool = TRUE;
-	} else {
-		/* buffer pool not yet created, do not attempt to modify it */
-		adjust_buf_pool = FALSE;
-	}
+  if (buf_pool != NULL) {
+    /* buffer pool has been created */
+    adjust_buf_pool = TRUE;
+  } else {
+    /* buffer pool not yet created, do not attempt to modify it */
+    adjust_buf_pool = FALSE;
+  }
 
-	lru_old_blocks_pct = buf_LRU_old_ratio_update(
-		*(ulint*) value, adjust_buf_pool);
+  lru_old_blocks_pct =
+      buf_LRU_old_ratio_update(*(ulint *)value, adjust_buf_pool);
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 
@@ -586,23 +552,21 @@ ib_cfg_var_set_lru_old_blocks_pct(
 /** Retrieve the value of the config variable "version".
 ib_cfg_var_get_version() @{
 @return	DB_SUCCESS if retrieved successfully */
-static
-ib_err_t
-ib_cfg_var_get_version(
-	const struct ib_cfg_var*	cfg_var,/*!< in: configuration
-						variable whose value to
-						retrieve, must be
-						"version" */
-	void*				value)	/*!< out: place to store
-						the retrieved value, must
-						point to char* variable */
+static ib_err_t
+ib_cfg_var_get_version(const struct ib_cfg_var *cfg_var, /*!< in: configuration
+                                                         variable whose value to
+                                                         retrieve, must be
+                                                         "version" */
+                       void *value) /*!< out: place to store
+                                    the retrieved value, must
+                                    point to char* variable */
 {
-	ut_a(strcasecmp(cfg_var->name, "version") == 0);
-	ut_a(cfg_var->type == IB_CFG_TEXT);
+  ut_a(strcasecmp(cfg_var->name, "version") == 0);
+  ut_a(cfg_var->type == IB_CFG_TEXT);
 
-	*(const char**) value = VERSION;
+  *(const char **)value = VERSION;
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 
@@ -981,32 +945,30 @@ static const ib_cfg_var_t cfg_vars_defaults[] = {
 
 /** This mutex has to work even if the InnoDB latching infrastructure
 hasn't been initialized. */
-static os_fast_mutex_t	cfg_vars_mutex;
-static ib_cfg_var_t	cfg_vars[UT_ARR_SIZE(cfg_vars_defaults)];
+static os_fast_mutex_t cfg_vars_mutex;
+static ib_cfg_var_t cfg_vars[UT_ARR_SIZE(cfg_vars_defaults)];
 
 /* public API functions and some auxiliary ones @{ */
 
 /** Lookup a variable name.
 ib_cfg_lookup_var() @{
 @return	config variable instance if found else NULL */
-static
-ib_cfg_var_t*
-ib_cfg_lookup_var(
-	const char*	var)		/*!< in: variable name */
+static ib_cfg_var_t *
+ib_cfg_lookup_var(const char *var) /*!< in: variable name */
 {
-	ulint		i;
+  ulint i;
 
-	for (i = 0; i < UT_ARR_SIZE(cfg_vars); ++i) {
-		ib_cfg_var_t*	cfg_var;
+  for (i = 0; i < UT_ARR_SIZE(cfg_vars); ++i) {
+    ib_cfg_var_t *cfg_var;
 
-		cfg_var = &cfg_vars[i];
+    cfg_var = &cfg_vars[i];
 
-		if (strcasecmp(var, cfg_var->name) == 0) {
-			return(cfg_var);
-		}
-	}
+    if (strcasecmp(var, cfg_var->name) == 0) {
+      return (cfg_var);
+    }
+  }
 
-	return(NULL);
+  return (NULL);
 }
 /* @} */
 
@@ -1015,28 +977,26 @@ variable with name "name" was found and "type" was set.
 ib_cfg_var_get_type() @{
 @return	DB_SUCCESS if successful */
 
-ib_err_t
-ib_cfg_var_get_type(
-	const char*	name,		/*!< in: variable name */
-	ib_cfg_type_t*	type)		/*!< out: variable type */
+ib_err_t ib_cfg_var_get_type(const char *name,    /*!< in: variable name */
+                             ib_cfg_type_t *type) /*!< out: variable type */
 {
-	ib_cfg_var_t*	cfg_var;
-	ib_err_t	ret;
+  ib_cfg_var_t *cfg_var;
+  ib_err_t ret;
 
-	os_fast_mutex_lock(&cfg_vars_mutex);
+  os_fast_mutex_lock(&cfg_vars_mutex);
 
-	cfg_var = ib_cfg_lookup_var(name);
+  cfg_var = ib_cfg_lookup_var(name);
 
-	if (cfg_var != NULL) {
-		*type = cfg_var->type;
-		ret = DB_SUCCESS;
-	} else {
-		ret = DB_NOT_FOUND;
-	}
+  if (cfg_var != NULL) {
+    *type = cfg_var->type;
+    ret = DB_SUCCESS;
+  } else {
+    ret = DB_NOT_FOUND;
+  }
 
-	os_fast_mutex_unlock(&cfg_vars_mutex);
+  os_fast_mutex_unlock(&cfg_vars_mutex);
 
-	return(ret);
+  return (ret);
 }
 /* @} */
 
@@ -1046,92 +1006,89 @@ DB_SUCCESS if the variable with name "name" was found and if its value
 was set.
 ib_cfg_set_ap() @{
 @return	DB_SUCCESS if set */
-static
-ib_err_t
-ib_cfg_set_ap(
-	const char*	name,		/*!< in: variable name */
-	va_list		ap)		/*!< in: variable value */
+static ib_err_t ib_cfg_set_ap(const char *name, /*!< in: variable name */
+                              va_list ap)       /*!< in: variable value */
 {
-	ib_cfg_var_t*	cfg_var;
-	ib_err_t	ret = DB_NOT_FOUND;
+  ib_cfg_var_t *cfg_var;
+  ib_err_t ret = DB_NOT_FOUND;
 
-	os_fast_mutex_lock(&cfg_vars_mutex);
+  os_fast_mutex_lock(&cfg_vars_mutex);
 
-	cfg_var = ib_cfg_lookup_var(name);
+  cfg_var = ib_cfg_lookup_var(name);
 
-	if (cfg_var != NULL) {
+  if (cfg_var != NULL) {
 
-		/* check whether setting the variable is appropriate,
-		according to its flag */
-		if (cfg_var->flag & IB_CFG_FLAG_READONLY
-		    || (cfg_var->flag & IB_CFG_FLAG_READONLY_AFTER_STARTUP
-			&& srv_was_started)) {
+    /* check whether setting the variable is appropriate,
+    according to its flag */
+    if (cfg_var->flag & IB_CFG_FLAG_READONLY ||
+        (cfg_var->flag & IB_CFG_FLAG_READONLY_AFTER_STARTUP &&
+         srv_was_started)) {
 
-			ret = DB_READONLY;
-		} else {
+      ret = DB_READONLY;
+    } else {
 
-			/* Get the parameter according to its type and
-			call ::set() */
-			switch (cfg_var->type) {
-			case IB_CFG_IBOOL: {
-				ib_bool_t	value;
+      /* Get the parameter according to its type and
+      call ::set() */
+      switch (cfg_var->type) {
+      case IB_CFG_IBOOL: {
+        ib_bool_t value;
 
-				value = va_arg(ap, ib_bool_t);
+        value = va_arg(ap, ib_bool_t);
 
-				ret = cfg_var->set(cfg_var, &value);
+        ret = cfg_var->set(cfg_var, &value);
 
-				break;
-			}
+        break;
+      }
 
-			case IB_CFG_ULINT: {
-				ulint	value;
+      case IB_CFG_ULINT: {
+        ulint value;
 
-				value = va_arg(ap, ulint);
+        value = va_arg(ap, ulint);
 
-				ret = cfg_var->set(cfg_var, &value);
+        ret = cfg_var->set(cfg_var, &value);
 
-				break;
-			}
+        break;
+      }
 
-			case IB_CFG_ULONG: {
-				ulong	value;
+      case IB_CFG_ULONG: {
+        ulong value;
 
-				value = va_arg(ap, ulong);
+        value = va_arg(ap, ulong);
 
-				ret = cfg_var->set(cfg_var, &value);
+        ret = cfg_var->set(cfg_var, &value);
 
-				break;
-			}
+        break;
+      }
 
-			case IB_CFG_TEXT: {
-				const char*	value;
+      case IB_CFG_TEXT: {
+        const char *value;
 
-				value = va_arg(ap, const char*);
+        value = va_arg(ap, const char *);
 
-				ret = cfg_var->set(cfg_var, &value);
+        ret = cfg_var->set(cfg_var, &value);
 
-				break;
-			}
+        break;
+      }
 
-			case IB_CFG_CB: {
-				ib_cb_t	value;
+      case IB_CFG_CB: {
+        ib_cb_t value;
 
-				value = va_arg(ap, ib_cb_t);
+        value = va_arg(ap, ib_cb_t);
 
-				ret = cfg_var->set(cfg_var, &value);
+        ret = cfg_var->set(cfg_var, &value);
 
-				break;
-			}
-			/* do not add default: in order to produce a
-			compilation warning if new type is added which is
-			not handled here */
-			}
-		}
-	}
-	
-	os_fast_mutex_unlock(&cfg_vars_mutex);
+        break;
+      }
+        /* do not add default: in order to produce a
+        compilation warning if new type is added which is
+        not handled here */
+      }
+    }
+  }
 
-	return(ret);
+  os_fast_mutex_unlock(&cfg_vars_mutex);
+
+  return (ret);
 }
 /* @} */
 
@@ -1146,21 +1103,19 @@ config variable, then you are responsible to free the first string.
 ib_cfg_set() @{
 @return	DB_SUCCESS if set */
 
-ib_err_t
-ib_cfg_set(
-	const char*	name,		/*!< in: variable name */
-	...)				/*!< in: variable value */
+ib_err_t ib_cfg_set(const char *name, /*!< in: variable name */
+                    ...)              /*!< in: variable value */
 {
-	va_list		ap;
-	ib_bool_t	ret;
+  va_list ap;
+  ib_bool_t ret;
 
-	va_start(ap, name);
+  va_start(ap, name);
 
-	ret = ib_cfg_set_ap(name, ap);
+  ret = ib_cfg_set_ap(name, ap);
 
-	va_end(ap);
+  va_end(ap);
 
-	return(ret);
+  return (ret);
 }
 /* @} */
 
@@ -1173,28 +1128,26 @@ a crash.
 ib_cfg_get() @{
 @return	DB_SUCCESS if retrieved successfully */
 
-ib_err_t
-ib_cfg_get(
-	const char*	name,		/*!< in: variable name */
-	void*		value)		/*!< out: pointer to the place to
-					store the retrieved value */
+ib_err_t ib_cfg_get(const char *name, /*!< in: variable name */
+                    void *value)      /*!< out: pointer to the place to
+                                      store the retrieved value */
 {
-	ib_cfg_var_t*	cfg_var;
-	ib_err_t	ret;
+  ib_cfg_var_t *cfg_var;
+  ib_err_t ret;
 
-	os_fast_mutex_lock(&cfg_vars_mutex);
+  os_fast_mutex_lock(&cfg_vars_mutex);
 
-	cfg_var = ib_cfg_lookup_var(name);
+  cfg_var = ib_cfg_lookup_var(name);
 
-	if (cfg_var != NULL) {
-		ret = cfg_var->get(cfg_var, value);
-	} else {
-		ret = DB_NOT_FOUND;
-	}
+  if (cfg_var != NULL) {
+    ret = cfg_var->get(cfg_var, value);
+  } else {
+    ret = DB_NOT_FOUND;
+  }
 
-	os_fast_mutex_unlock(&cfg_vars_mutex);
+  os_fast_mutex_unlock(&cfg_vars_mutex);
 
-	return(ret);
+  return (ret);
 }
 /* @} */
 
@@ -1205,24 +1158,23 @@ ib_cfg_get_all() @{
 @return	DB_SUCCESS or error code */
 
 ib_err_t
-ib_cfg_get_all(
-	const char***	names,		/*!< out: pointer to array of strings */
-	ib_u32_t*	names_num)	/*!< out: number of strings returned */
+ib_cfg_get_all(const char ***names, /*!< out: pointer to array of strings */
+               ib_u32_t *names_num) /*!< out: number of strings returned */
 {
-	ib_u32_t	i;
+  ib_u32_t i;
 
-	*names_num = UT_ARR_SIZE(cfg_vars_defaults);
+  *names_num = UT_ARR_SIZE(cfg_vars_defaults);
 
-	*names = (const char**) malloc(*names_num * sizeof(const char*));
-	if (*names == NULL) {
-		return(DB_OUT_OF_MEMORY);
-	}
+  *names = (const char **)malloc(*names_num * sizeof(const char *));
+  if (*names == NULL) {
+    return (DB_OUT_OF_MEMORY);
+  }
 
-	for (i = 0; i < *names_num; i++) {
-		(*names)[i] = cfg_vars_defaults[i].name;
-	}
+  for (i = 0; i < *names_num; i++) {
+    (*names)[i] = cfg_vars_defaults[i].name;
+  }
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 
@@ -1230,46 +1182,45 @@ ib_cfg_get_all(
 ib_cfg_init() @{
 @return	DB_SUCCESS or error code */
 
-ib_err_t
-ib_cfg_init(void)
-{
-	/* Initialize the mutex that protects cfg_vars[]. */
-	os_fast_mutex_init(&cfg_vars_mutex);
+ib_err_t ib_cfg_init(void) {
+  /* Initialize the mutex that protects cfg_vars[]. */
+  os_fast_mutex_init(&cfg_vars_mutex);
 
-	ut_memcpy(cfg_vars, cfg_vars_defaults, sizeof(cfg_vars));
+  ut_memcpy(cfg_vars, cfg_vars_defaults, sizeof(cfg_vars));
 
-	/* Set the default options. */
-	srv_file_flush_method_str = NULL;
-	srv_unix_file_flush_method = SRV_UNIX_FSYNC;
-	srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
+  /* Set the default options. */
+  srv_file_flush_method_str = NULL;
+  srv_unix_file_flush_method = SRV_UNIX_FSYNC;
+  srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
 
-	os_aio_print_debug = FALSE;
-	os_aio_use_native_aio = FALSE;
+  os_aio_print_debug = FALSE;
+  os_aio_use_native_aio = FALSE;
 
-#define IB_CFG_SET(name, var)	\
-	if (ib_cfg_set(name, var) != DB_SUCCESS) ut_error
+#define IB_CFG_SET(name, var)                                                  \
+  if (ib_cfg_set(name, var) != DB_SUCCESS)                                     \
+  ut_error
 
-	IB_CFG_SET("additional_mem_pool_size", 4 * 1024 * 1024);
-	IB_CFG_SET("buffer_pool_size", 8 * 1024 * 1024);
-	IB_CFG_SET("data_file_path", "ibdata1:32M:autoextend");
-	IB_CFG_SET("data_home_dir", "./");
-	IB_CFG_SET("file_per_table", IB_TRUE);
+  IB_CFG_SET("additional_mem_pool_size", 4 * 1024 * 1024);
+  IB_CFG_SET("buffer_pool_size", 8 * 1024 * 1024);
+  IB_CFG_SET("data_file_path", "ibdata1:32M:autoextend");
+  IB_CFG_SET("data_home_dir", "./");
+  IB_CFG_SET("file_per_table", IB_TRUE);
 #ifndef __WIN__
-	IB_CFG_SET("flush_method", "fsync");
+  IB_CFG_SET("flush_method", "fsync");
 #endif
-	IB_CFG_SET("lock_wait_timeout", 60);
-	IB_CFG_SET("log_buffer_size", 384 * 1024);
-	IB_CFG_SET("log_file_size", 16 * 1024 * 1024);
-	IB_CFG_SET("log_files_in_group", 2);
-	IB_CFG_SET("log_group_home_dir", ".");
-	IB_CFG_SET("lru_old_blocks_pct", 3 * 100 / 8);
-	IB_CFG_SET("lru_block_access_recency", 0);
-	IB_CFG_SET("rollback_on_timeout", IB_TRUE);
-	IB_CFG_SET("read_io_threads", 4);
-	IB_CFG_SET("write_io_threads", 4);
+  IB_CFG_SET("lock_wait_timeout", 60);
+  IB_CFG_SET("log_buffer_size", 384 * 1024);
+  IB_CFG_SET("log_file_size", 16 * 1024 * 1024);
+  IB_CFG_SET("log_files_in_group", 2);
+  IB_CFG_SET("log_group_home_dir", ".");
+  IB_CFG_SET("lru_old_blocks_pct", 3 * 100 / 8);
+  IB_CFG_SET("lru_block_access_recency", 0);
+  IB_CFG_SET("rollback_on_timeout", IB_TRUE);
+  IB_CFG_SET("read_io_threads", 4);
+  IB_CFG_SET("write_io_threads", 4);
 #undef IB_CFG_SET
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 
@@ -1277,19 +1228,17 @@ ib_cfg_init(void)
 ib_cfg_shutdown() @{
 @return	DB_SUCCESS or error code */
 
-ib_err_t
-ib_cfg_shutdown(void)
-{
-	os_fast_mutex_lock(&cfg_vars_mutex);
+ib_err_t ib_cfg_shutdown(void) {
+  os_fast_mutex_lock(&cfg_vars_mutex);
 
-	/* TODO: Check for NULL values of allocated config variables. */
-	memset(cfg_vars, 0x0, sizeof(cfg_vars));
+  /* TODO: Check for NULL values of allocated config variables. */
+  memset(cfg_vars, 0x0, sizeof(cfg_vars));
 
-	os_fast_mutex_unlock(&cfg_vars_mutex);
+  os_fast_mutex_unlock(&cfg_vars_mutex);
 
-	os_fast_mutex_free(&cfg_vars_mutex);
+  os_fast_mutex_free(&cfg_vars_mutex);
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 /* @} */
 

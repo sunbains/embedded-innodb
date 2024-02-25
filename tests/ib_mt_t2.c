@@ -36,10 +36,10 @@ defined in mt_base.c:
 
 The table definition is:
 CREATE TABLE t2
-	(c1		INT PRIMARY KEY,
-	 score		INT,
-	 ins_run	INT,
-	 upd_run	INT)
+        (c1		INT PRIMARY KEY,
+         score		INT,
+         ins_run	INT,
+         upd_run	INT)
 ***********************************************************************/
 
 #include <assert.h>
@@ -62,421 +62,397 @@ static const int key_range = 100;
 
 /** CREATE TABLE t2...
 @return DB_SUCCESS or error code */
-static
-ib_err_t
-create_t2(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t create_t2(void *arg) /*!< in: arguments for callback */
 {
-	ib_trx_t	ib_trx;
-	ib_id_t		table_id = 0;
-	ib_err_t	err = DB_SUCCESS;
-	ib_err_t	err2 = DB_SUCCESS;
-	ib_tbl_sch_t	ib_tbl_sch = NULL;
-	ib_idx_sch_t	ib_idx_sch = NULL;
-	char		table_name[IB_MAX_TABLE_NAME_LEN];
-	cb_args_t*	cb_arg = (cb_args_t *)arg;
-	tbl_class_t*	tbl = cb_arg->tbl;
+  ib_trx_t ib_trx;
+  ib_id_t table_id = 0;
+  ib_err_t err = DB_SUCCESS;
+  ib_err_t err2 = DB_SUCCESS;
+  ib_tbl_sch_t ib_tbl_sch = NULL;
+  ib_idx_sch_t ib_idx_sch = NULL;
+  char table_name[IB_MAX_TABLE_NAME_LEN];
+  cb_args_t *cb_arg = (cb_args_t *)arg;
+  tbl_class_t *tbl = cb_arg->tbl;
 
-	snprintf(table_name, sizeof(table_name), "%s/%s",
-		 tbl->db_name, tbl->name);
+  snprintf(table_name, sizeof(table_name), "%s/%s", tbl->db_name, tbl->name);
 
-	/* Pass a table page size of 0, ie., use default page size. */
-	err = ib_table_schema_create(
-		table_name, &ib_tbl_sch, tbl->format, tbl->page_size);
+  /* Pass a table page size of 0, ie., use default page size. */
+  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl->format,
+                               tbl->page_size);
 
-	assert(err == DB_SUCCESS);
+  assert(err == DB_SUCCESS);
 
-	err = ib_table_schema_add_col(
-		ib_tbl_sch, "c1",
-		IB_INT, IB_COL_UNSIGNED, 0, 4);
+  err =
+      ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_UNSIGNED, 0, 4);
 
-	assert(err == DB_SUCCESS);
+  assert(err == DB_SUCCESS);
 
-	err = ib_table_schema_add_col(
-		ib_tbl_sch, "score",
-		IB_INT, IB_COL_UNSIGNED, 0, 4);
+  err = ib_table_schema_add_col(ib_tbl_sch, "score", IB_INT, IB_COL_UNSIGNED, 0,
+                                4);
 
-	assert(err == DB_SUCCESS);
+  assert(err == DB_SUCCESS);
 
-	/* These two columns are where we put the value of
-	run_number when doing INSERT or UPDATE */
-	err = ib_table_schema_add_col(
-		ib_tbl_sch, "ins_run",
-		IB_INT, IB_COL_UNSIGNED, 0, 4);
+  /* These two columns are where we put the value of
+  run_number when doing INSERT or UPDATE */
+  err = ib_table_schema_add_col(ib_tbl_sch, "ins_run", IB_INT, IB_COL_UNSIGNED,
+                                0, 4);
 
-	assert(err == DB_SUCCESS);
+  assert(err == DB_SUCCESS);
 
-	err = ib_table_schema_add_col(
-		ib_tbl_sch, "upd_run",
-		IB_INT, IB_COL_UNSIGNED, 0, 4);
+  err = ib_table_schema_add_col(ib_tbl_sch, "upd_run", IB_INT, IB_COL_UNSIGNED,
+                                0, 4);
 
-	assert(err == DB_SUCCESS);
+  assert(err == DB_SUCCESS);
 
-	err = ib_table_schema_add_index(ib_tbl_sch, "PK_index", &ib_idx_sch);
-	assert(err == DB_SUCCESS);
+  err = ib_table_schema_add_index(ib_tbl_sch, "PK_index", &ib_idx_sch);
+  assert(err == DB_SUCCESS);
 
-	/* Set prefix length to 0. */
-	err = ib_index_schema_add_col( ib_idx_sch, "c1", 0);
-	assert(err == DB_SUCCESS);
+  /* Set prefix length to 0. */
+  err = ib_index_schema_add_col(ib_idx_sch, "c1", 0);
+  assert(err == DB_SUCCESS);
 
-	err = ib_index_schema_set_clustered(ib_idx_sch);
-	assert(err == DB_SUCCESS);
+  err = ib_index_schema_set_clustered(ib_idx_sch);
+  assert(err == DB_SUCCESS);
 
-	/* create table */
-	ib_trx = ib_trx_begin(cb_arg->isolation_level);
-	err = ib_schema_lock_exclusive(ib_trx);
-	assert(err == DB_SUCCESS);
+  /* create table */
+  ib_trx = ib_trx_begin(cb_arg->isolation_level);
+  err = ib_schema_lock_exclusive(ib_trx);
+  assert(err == DB_SUCCESS);
 
-	err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
 
-	err2 = ib_trx_commit(ib_trx);
-	assert(err2 == DB_SUCCESS);
+  err2 = ib_trx_commit(ib_trx);
+  assert(err2 == DB_SUCCESS);
 
-	if (ib_tbl_sch != NULL) {
-		ib_table_schema_delete(ib_tbl_sch);
-	}
+  if (ib_tbl_sch != NULL) {
+    ib_table_schema_delete(ib_tbl_sch);
+  }
 
-	update_err_stats(cb_arg->err_st, err);
-	return(err);
+  update_err_stats(cb_arg->err_st, err);
+  return (err);
 }
 
 /** ALTER TABLE ...
 TODO: This should have FIC stuff. No-op for now.
 @return DB_SUCCESS or error code */
-static
-ib_err_t
-alter_t2(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t alter_t2(void *arg) /*!< in: arguments for callback */
 {
-	//fprintf(stderr, "t2: ALTER\n");
-	return(DB_SUCCESS);
+  // fprintf(stderr, "t2: ALTER\n");
+  return (DB_SUCCESS);
 }
 
 /** INSERT INTO t2 VALUES (<rand 1-100>, 0, run_number, 0)
 @return DB_SUCCESS or error code */
-static
-ib_err_t
-insert_t2(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t insert_t2(void *arg) /*!< in: arguments for callback */
 {
-	int		i;
-	ib_err_t	err;
+  int i;
+  ib_err_t err;
 
+  ib_crsr_t crsr = NULL;
+  ib_tpl_t tpl = NULL;
+  cb_args_t *cb_arg = (cb_args_t *)arg;
+  tbl_class_t *tbl = cb_arg->tbl;
 
-	ib_crsr_t	crsr = NULL;
-	ib_tpl_t	tpl = NULL;
-	cb_args_t*	cb_arg = (cb_args_t *)arg;
-	tbl_class_t*	tbl = cb_arg->tbl;
+  // fprintf(stderr, "t2: INSERT\n");
 
-	//fprintf(stderr, "t2: INSERT\n");
+  err = open_table(tbl->db_name, tbl->name, cb_arg->trx, &crsr);
+  if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
 
-	err = open_table(tbl->db_name, tbl->name, cb_arg->trx, &crsr);
-	if (err != DB_SUCCESS) {
-		goto err_exit;
-	}
+  err = ib_cursor_lock(crsr, IB_LOCK_IX);
+  if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
 
-	err = ib_cursor_lock(crsr, IB_LOCK_IX);
-	if (err != DB_SUCCESS) {
-		goto err_exit;
-	}
+  err = ib_cursor_set_lock_mode(crsr, IB_LOCK_X);
+  if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
 
-	err = ib_cursor_set_lock_mode(crsr, IB_LOCK_X);
-	if (err != DB_SUCCESS) {
-		goto err_exit;
-	}
+  tpl = ib_clust_read_tuple_create(crsr);
+  assert(tpl != NULL);
 
-	tpl = ib_clust_read_tuple_create(crsr);
-	assert(tpl != NULL);
+  for (i = 0; i < cb_arg->batch_size; ++i) {
 
-	for (i = 0; i < cb_arg->batch_size; ++i) {
+    int val = 0;
+    int zero = 0;
 
-		int		val = 0;
-		int		zero = 0;
+    val = random() % key_range;
+    err = ib_col_set_value(tpl, 0, &val, 4);
+    assert(err == DB_SUCCESS);
 
-		val = random() % key_range;
-		err = ib_col_set_value(tpl, 0, &val, 4);
-		assert(err == DB_SUCCESS);
+    err = ib_col_set_value(tpl, 1, &zero, 4);
+    assert(err == DB_SUCCESS);
 
-		err = ib_col_set_value(tpl, 1, &zero, 4);
-		assert(err == DB_SUCCESS);
+    err = ib_col_set_value(tpl, 2, &cb_arg->run_number, 4);
+    assert(err == DB_SUCCESS);
 
-		err = ib_col_set_value(tpl, 2, &cb_arg->run_number, 4);
-		assert(err == DB_SUCCESS);
+    err = ib_col_set_value(tpl, 3, &zero, 4);
+    assert(err == DB_SUCCESS);
 
-		err = ib_col_set_value(tpl, 3, &zero, 4);
-		assert(err == DB_SUCCESS);
+    err = ib_cursor_insert_row(crsr, tpl);
+    if (err != DB_SUCCESS) {
+      goto err_exit;
+    }
+    update_err_stats(cb_arg->err_st, err);
 
-		err = ib_cursor_insert_row(crsr, tpl);
-		if (err != DB_SUCCESS) {
-			goto err_exit;
-		}
-		update_err_stats(cb_arg->err_st, err);
+    tpl = ib_tuple_clear(tpl);
+    assert(tpl != NULL);
+  }
 
-		tpl = ib_tuple_clear(tpl);
-		assert(tpl != NULL);
-	}
-
-	goto clean_exit;
+  goto clean_exit;
 
 err_exit:
-	update_err_stats(cb_arg->err_st, err);
+  update_err_stats(cb_arg->err_st, err);
 
 clean_exit:
 
-	if (tpl != NULL) {
-		ib_tuple_delete(tpl);
-	}
+  if (tpl != NULL) {
+    ib_tuple_delete(tpl);
+  }
 
-	if (crsr != NULL) {
-		ib_err_t	err2;
+  if (crsr != NULL) {
+    ib_err_t err2;
 
-		err2 = ib_cursor_close(crsr);
-		assert(err2 == DB_SUCCESS);
-		crsr = NULL;
-	}
+    err2 = ib_cursor_close(crsr);
+    assert(err2 == DB_SUCCESS);
+    crsr = NULL;
+  }
 
-	return(err);
+  return (err);
 }
 
 /** UPDATE t2 SET score = score + 100 AND upd_run = run_number
 WHERE c1 == 5
 @return DB_SUCCESS or error code */
-static
-ib_err_t
-update_t2(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t update_t2(void *arg) /*!< in: arguments for callback */
 {
-	ib_err_t	err;
-	int		res = ~0;
-	int		five = 5;
-	ib_tpl_t	key_tpl = NULL;
-	ib_tpl_t	old_tpl = NULL;
-	ib_tpl_t	new_tpl = NULL;
-	ib_crsr_t	crsr = NULL;
-	cb_args_t*	cb_arg = (cb_args_t *)arg;
-	tbl_class_t*	tbl = cb_arg->tbl;
+  ib_err_t err;
+  int res = ~0;
+  int five = 5;
+  ib_tpl_t key_tpl = NULL;
+  ib_tpl_t old_tpl = NULL;
+  ib_tpl_t new_tpl = NULL;
+  ib_crsr_t crsr = NULL;
+  cb_args_t *cb_arg = (cb_args_t *)arg;
+  tbl_class_t *tbl = cb_arg->tbl;
 
+  // fprintf(stderr, "t2: UPDATE\n");
 
-	//fprintf(stderr, "t2: UPDATE\n");
+  err = open_table(tbl->db_name, tbl->name, cb_arg->trx, &crsr);
+  if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
 
-	err = open_table(tbl->db_name, tbl->name, cb_arg->trx, &crsr);
-	if (err != DB_SUCCESS) {
-		goto err_exit;
-	}
+  err = ib_cursor_lock(crsr, IB_LOCK_IX);
+  if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
 
-	err = ib_cursor_lock(crsr, IB_LOCK_IX);
-	if (err != DB_SUCCESS) {
-		goto err_exit;
-	}
+  err = ib_cursor_set_lock_mode(crsr, IB_LOCK_X);
+  if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
 
-	err = ib_cursor_set_lock_mode(crsr, IB_LOCK_X);
-	if (err != DB_SUCCESS) {
-		goto err_exit;
-	}
+  err = ib_cursor_set_lock_mode(crsr, IB_LOCK_X);
+  assert(err == DB_SUCCESS);
 
-	err = ib_cursor_set_lock_mode(crsr, IB_LOCK_X);
-	assert(err == DB_SUCCESS);
+  /* Create a tuple for searching an index. */
+  key_tpl = ib_sec_search_tuple_create(crsr);
+  assert(key_tpl != NULL);
 
-	/* Create a tuple for searching an index. */
-	key_tpl = ib_sec_search_tuple_create(crsr);
-	assert(key_tpl != NULL);
+  /* Set the value to look for. */
+  err = ib_col_set_value(key_tpl, 0, &five, 4);
+  assert(err == DB_SUCCESS);
 
-	/* Set the value to look for. */
-	err = ib_col_set_value(key_tpl, 0, &five, 4);
-	assert(err == DB_SUCCESS);
+  /* Search for the key using the cluster index (PK) */
+  err = ib_cursor_moveto(crsr, key_tpl, IB_CUR_GE, &res);
 
-	/* Search for the key using the cluster index (PK) */
-	err = ib_cursor_moveto(crsr, key_tpl, IB_CUR_GE, &res);
+  ib_tuple_delete(key_tpl);
 
-	ib_tuple_delete(key_tpl);
+  if (res != 0) {
+    goto clean_exit;
+  } else if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
 
-	if (res != 0) {
-		goto clean_exit;
-	} else if (err != DB_SUCCESS) {
-		goto err_exit;
-	}
+  /* Create the tuple instance that we will use to update the
+  table. old_tpl is used for reading the existing row and
+  new_tpl will contain the update row data. */
 
-	/* Create the tuple instance that we will use to update the
-	table. old_tpl is used for reading the existing row and
-	new_tpl will contain the update row data. */
-	
-	old_tpl = ib_clust_read_tuple_create(crsr);
-	assert(old_tpl != NULL);
+  old_tpl = ib_clust_read_tuple_create(crsr);
+  assert(old_tpl != NULL);
 
-	new_tpl = ib_clust_read_tuple_create(crsr);
-	assert(new_tpl != NULL);
+  new_tpl = ib_clust_read_tuple_create(crsr);
+  assert(new_tpl != NULL);
 
-	/* Iterate over the records while the first column matches "a". */
-	while (1) {
-		ib_u32_t	score;
-		ib_u32_t	val;
-		ib_ulint_t	data_len;
-		ib_col_meta_t	col_meta;
+  /* Iterate over the records while the first column matches "a". */
+  while (1) {
+    ib_u32_t score;
+    ib_u32_t val;
+    ib_ulint_t data_len;
+    ib_col_meta_t col_meta;
 
-		err = ib_cursor_read_row(crsr, old_tpl);
-		assert(err == DB_SUCCESS);
+    err = ib_cursor_read_row(crsr, old_tpl);
+    assert(err == DB_SUCCESS);
 
-		ib_col_get_meta(old_tpl, 0, &col_meta);
+    ib_col_get_meta(old_tpl, 0, &col_meta);
 
-		err = ib_tuple_read_u32(old_tpl, 0, &val);
-		assert(err == DB_SUCCESS);
+    err = ib_tuple_read_u32(old_tpl, 0, &val);
+    assert(err == DB_SUCCESS);
 
-		if (val != five) {
-			goto clean_exit;
-		}
+    if (val != five) {
+      goto clean_exit;
+    }
 
-		/* Copy the old contents to the new tuple. */
-		err = ib_tuple_copy(new_tpl, old_tpl);
+    /* Copy the old contents to the new tuple. */
+    err = ib_tuple_copy(new_tpl, old_tpl);
 
-		/* Update the score column in the new tuple. */
-		data_len = ib_col_get_meta(old_tpl, 1, &col_meta);
-		assert(data_len != IB_SQL_NULL);
-		err = ib_tuple_read_u32(old_tpl, 1, &score);
-		assert(err == DB_SUCCESS);
-		score += 100;
+    /* Update the score column in the new tuple. */
+    data_len = ib_col_get_meta(old_tpl, 1, &col_meta);
+    assert(data_len != IB_SQL_NULL);
+    err = ib_tuple_read_u32(old_tpl, 1, &score);
+    assert(err == DB_SUCCESS);
+    score += 100;
 
-		/* Set the updated value in the new tuple. */
-		err = ib_tuple_write_u32(new_tpl, 1, score);
-		assert(err == DB_SUCCESS);
+    /* Set the updated value in the new tuple. */
+    err = ib_tuple_write_u32(new_tpl, 1, score);
+    assert(err == DB_SUCCESS);
 
-		/* Set the updated value in the new tuple. */
-		err = ib_tuple_write_u32(new_tpl, 3, cb_arg->run_number);
-		assert(err == DB_SUCCESS);
+    /* Set the updated value in the new tuple. */
+    err = ib_tuple_write_u32(new_tpl, 3, cb_arg->run_number);
+    assert(err == DB_SUCCESS);
 
-		err = ib_cursor_update_row(crsr, old_tpl, new_tpl);
-		if (err != DB_SUCCESS) {
-			goto err_exit;
-		}
-		update_err_stats(cb_arg->err_st, err);
+    err = ib_cursor_update_row(crsr, old_tpl, new_tpl);
+    if (err != DB_SUCCESS) {
+      goto err_exit;
+    }
+    update_err_stats(cb_arg->err_st, err);
 
-		/* Move to the next record to update. */
-		err = ib_cursor_next(crsr);
-		if (err != DB_SUCCESS) {
-			goto err_exit;
-		}
+    /* Move to the next record to update. */
+    err = ib_cursor_next(crsr);
+    if (err != DB_SUCCESS) {
+      goto err_exit;
+    }
 
-		/* Reset the old and new tuple instances. */
-		old_tpl = ib_tuple_clear(old_tpl);
-		assert(old_tpl != NULL);
+    /* Reset the old and new tuple instances. */
+    old_tpl = ib_tuple_clear(old_tpl);
+    assert(old_tpl != NULL);
 
-		new_tpl = ib_tuple_clear(new_tpl);
-		assert(new_tpl != NULL);
-	}
+    new_tpl = ib_tuple_clear(new_tpl);
+    assert(new_tpl != NULL);
+  }
 
 err_exit:
-	update_err_stats(cb_arg->err_st, err);
+  update_err_stats(cb_arg->err_st, err);
 
 clean_exit:
-	if (old_tpl != NULL) {
-		ib_tuple_delete(old_tpl);
-	}
-	if (new_tpl != NULL) {
-		ib_tuple_delete(new_tpl);
-	}
+  if (old_tpl != NULL) {
+    ib_tuple_delete(old_tpl);
+  }
+  if (new_tpl != NULL) {
+    ib_tuple_delete(new_tpl);
+  }
 
-	if (crsr != NULL) {
-		ib_err_t	err2;
+  if (crsr != NULL) {
+    ib_err_t err2;
 
-		err2 = ib_cursor_close(crsr);
-		assert(err2 == DB_SUCCESS);
-		crsr = NULL;
-	}
+    err2 = ib_cursor_close(crsr);
+    assert(err2 == DB_SUCCESS);
+    crsr = NULL;
+  }
 
-	return(err);
+  return (err);
 }
 
 /** DELETE FROM t2 WHERE c1 == 9
 @return DB_SUCCESS or error code */
-static
-ib_err_t
-delete_t2(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t delete_t2(void *arg) /*!< in: arguments for callback */
 {
-	ib_err_t	err;
-	int		res = ~0;
-	int		nine = 9;
-	ib_tpl_t	key_tpl = NULL;
-	ib_crsr_t	crsr = NULL;
-	cb_args_t*	cb_arg = (cb_args_t *)arg;
-	tbl_class_t*	tbl = cb_arg->tbl;
+  ib_err_t err;
+  int res = ~0;
+  int nine = 9;
+  ib_tpl_t key_tpl = NULL;
+  ib_crsr_t crsr = NULL;
+  cb_args_t *cb_arg = (cb_args_t *)arg;
+  tbl_class_t *tbl = cb_arg->tbl;
 
-	//fprintf(stderr, "t2: DELETE\n");
+  // fprintf(stderr, "t2: DELETE\n");
 
-	err = open_table(tbl->db_name, tbl->name, cb_arg->trx, &crsr);
-	if (err != DB_SUCCESS) {
-		goto err_exit;
-	}
+  err = open_table(tbl->db_name, tbl->name, cb_arg->trx, &crsr);
+  if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
 
-	err = ib_cursor_lock(crsr, IB_LOCK_IX);
-	if (err != DB_SUCCESS) {
-		goto err_exit;
-	}
+  err = ib_cursor_lock(crsr, IB_LOCK_IX);
+  if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
 
-	err = ib_cursor_set_lock_mode(crsr, IB_LOCK_X);
-	if (err != DB_SUCCESS) {
-		goto err_exit;
-	}
+  err = ib_cursor_set_lock_mode(crsr, IB_LOCK_X);
+  if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
 
-	/* Create a tuple for searching an index. */
-	key_tpl = ib_sec_search_tuple_create(crsr);
-	assert(key_tpl != NULL);
+  /* Create a tuple for searching an index. */
+  key_tpl = ib_sec_search_tuple_create(crsr);
+  assert(key_tpl != NULL);
 
-	/* Set the value to delete. */
-	err = ib_col_set_value(key_tpl, 0, &nine, 4);
-	assert(err == DB_SUCCESS);
+  /* Set the value to delete. */
+  err = ib_col_set_value(key_tpl, 0, &nine, 4);
+  assert(err == DB_SUCCESS);
 
-	/* Search for the key using the cluster index (PK) */
-	err = ib_cursor_moveto(crsr, key_tpl, IB_CUR_GE, &res);
-	if (res != 0) {
-		goto clean_exit;
-	}
+  /* Search for the key using the cluster index (PK) */
+  err = ib_cursor_moveto(crsr, key_tpl, IB_CUR_GE, &res);
+  if (res != 0) {
+    goto clean_exit;
+  }
 
-	if (err != DB_SUCCESS) {
-		goto err_exit;
-	}
+  if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
 
-	/* InnoDB handles the updating of all secondary indexes. */
-	err = ib_cursor_delete_row(crsr);
-	if (err != DB_SUCCESS) {
-		goto err_exit;
-	}	
-	update_err_stats(cb_arg->err_st, err);
-	goto clean_exit;
+  /* InnoDB handles the updating of all secondary indexes. */
+  err = ib_cursor_delete_row(crsr);
+  if (err != DB_SUCCESS) {
+    goto err_exit;
+  }
+  update_err_stats(cb_arg->err_st, err);
+  goto clean_exit;
 
 err_exit:
-	update_err_stats(cb_arg->err_st, err);
+  update_err_stats(cb_arg->err_st, err);
 
 clean_exit:
 
-	if (key_tpl != NULL) {
-		ib_tuple_delete(key_tpl);
-	}
+  if (key_tpl != NULL) {
+    ib_tuple_delete(key_tpl);
+  }
 
-	if (crsr != NULL) {
-		ib_err_t	err2;
+  if (crsr != NULL) {
+    ib_err_t err2;
 
-		err2 = ib_cursor_close(crsr);
-		assert(err2 == DB_SUCCESS);
-		crsr = NULL;
-	}
+    err2 = ib_cursor_close(crsr);
+    assert(err2 == DB_SUCCESS);
+    crsr = NULL;
+  }
 
-	return(err);
+  return (err);
 }
 
 /** Function to register this table class with mt_drv test suite */
 
-void
-register_t2_table(
-	tbl_class_t*	tbl)	/*!< in/out: table class to register */
+void register_t2_table(tbl_class_t *tbl) /*!< in/out: table class to register */
 {
-	assert(tbl != NULL);
+  assert(tbl != NULL);
 
-	strcpy((char *)tbl->name, "t2");
+  strcpy((char *)tbl->name, "t2");
 
-	tbl->dml_fn[DML_OP_TYPE_INSERT] = insert_t2;
-	tbl->dml_fn[DML_OP_TYPE_UPDATE] = update_t2;
-	tbl->dml_fn[DML_OP_TYPE_DELETE] = delete_t2;
+  tbl->dml_fn[DML_OP_TYPE_INSERT] = insert_t2;
+  tbl->dml_fn[DML_OP_TYPE_UPDATE] = update_t2;
+  tbl->dml_fn[DML_OP_TYPE_DELETE] = delete_t2;
 
-	tbl->ddl_fn[DDL_OP_TYPE_CREATE] = create_t2;
-	tbl->ddl_fn[DDL_OP_TYPE_ALTER] = alter_t2;
+  tbl->ddl_fn[DDL_OP_TYPE_CREATE] = create_t2;
+  tbl->ddl_fn[DDL_OP_TYPE_ALTER] = alter_t2;
 }

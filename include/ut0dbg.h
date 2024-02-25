@@ -24,9 +24,9 @@ Created 1/30/1994 Heikki Tuuri
 #ifndef ut0dbg_h
 #define ut0dbg_h
 
-#include "os0thread.h"
-#include "univ.i"
 #include <stdlib.h>
+
+#include "os0thread.h"
 
 #if defined(__GNUC__) && (__GNUC__ > 2)
 /** Test if an assertion fails.

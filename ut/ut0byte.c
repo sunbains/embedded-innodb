@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -28,24 +28,22 @@ Created 5/11/1994 Heikki Tuuri
 #endif
 
 /** Zero value for a dulint */
- const dulint	ut_dulint_zero	= {0, 0};
+const dulint ut_dulint_zero = {0, 0};
 
 /** Maximum value for a dulint */
- const dulint	ut_dulint_max	= {0xFFFFFFFFUL, 0xFFFFFFFFUL};
+const dulint ut_dulint_max = {0xFFFFFFFFUL, 0xFFFFFFFFUL};
 
 #ifdef notdefined /* unused code */
 #include "ut0sort.h"
 
 /** Sort function for dulint arrays. */
 
-void
-ut_dulint_sort(
-	dulint*	arr,	/*!< in/out: array to be sorted */
-	dulint*	aux_arr,/*!< in/out: auxiliary array (same size as arr) */
-	ulint	low,	/*!< in: low bound of sort interval, inclusive */
-	ulint	high)	/*!< in: high bound of sort interval, noninclusive */
+void ut_dulint_sort(
+    dulint *arr,     /*!< in/out: array to be sorted */
+    dulint *aux_arr, /*!< in/out: auxiliary array (same size as arr) */
+    ulint low,       /*!< in: low bound of sort interval, inclusive */
+    ulint high)      /*!< in: high bound of sort interval, noninclusive */
 {
-	UT_SORT_FUNCTION_BODY(ut_dulint_sort, arr, aux_arr, low, high,
-			      ut_dulint_cmp);
+  UT_SORT_FUNCTION_BODY(ut_dulint_sort, arr, aux_arr, low, high, ut_dulint_cmp);
 }
 #endif /* notdefined */

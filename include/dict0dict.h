@@ -24,6 +24,8 @@ Created 1/8/1996 Heikki Tuuri
 #ifndef dict0dict_h
 #define dict0dict_h
 
+#include "univ.i"
+
 #include "data0data.h"
 #include "data0type.h"
 #include "dict0mem.h"
@@ -33,7 +35,6 @@ Created 1/8/1996 Heikki Tuuri
 #include "rem0types.h"
 #include "srv0srv.h"
 #include "trx0types.h"
-#include "univ.i"
 #include "ut0byte.h"
 #include "ut0lst.h"
 #include "ut0mem.h"

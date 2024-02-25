@@ -34,507 +34,473 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdarg.h>
 #include <string.h>
 
-
-#define DATABASE	"test"
-#define TABLE		"ib_ddl"
+#define DATABASE "test"
+#define TABLE "ib_ddl"
 
 /** Create an InnoDB database (sub-directory). */
-static
-ib_err_t
-create_database(
-	const char*	name)
-{
-	ib_bool_t	err;
+static ib_err_t create_database(const char *name) {
+  ib_bool_t err;
 
-	err = ib_database_create(name);
-	assert(err == IB_TRUE);
+  err = ib_database_create(name);
+  assert(err == IB_TRUE);
 
-	return(DB_SUCCESS);
+  return (DB_SUCCESS);
 }
 
 /** CREATE TABLE T(C1 INT, C2 VARCHAR(10), C3 BLOB); */
-static
-ib_err_t
-create_table(
-	const char*	dbname,			/*!< in: database name */
-	const char*	name)			/*!< in: table name */
+static ib_err_t create_table(const char *dbname, /*!< in: database name */
+                             const char *name)   /*!< in: table name */
 {
-	ib_trx_t	ib_trx;
-	ib_id_t		table_id = 0;
-	ib_err_t	err = DB_SUCCESS;
-	ib_tbl_sch_t	ib_tbl_sch = NULL;
-	char		table_name[IB_MAX_TABLE_NAME_LEN];
+  ib_trx_t ib_trx;
+  ib_id_t table_id = 0;
+  ib_err_t err = DB_SUCCESS;
+  ib_tbl_sch_t ib_tbl_sch = NULL;
+  char table_name[IB_MAX_TABLE_NAME_LEN];
 
 #ifdef __WIN__
-	sprintf(table_name, "%s/%s", dbname, name);
+  sprintf(table_name, "%s/%s", dbname, name);
 #else
-	snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
+  snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 #endif
 
-	/* Pass a table page size of 0, ie., use default page size. */
-	err = ib_table_schema_create(
-		table_name, &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  /* Pass a table page size of 0, ie., use default page size. */
+  err = ib_table_schema_create(table_name, &ib_tbl_sch, IB_TBL_COMPACT, 0);
 
-	assert(err == DB_SUCCESS);
+  assert(err == DB_SUCCESS);
 
-	err = ib_table_schema_add_col(
-		ib_tbl_sch, "c1", IB_INT, IB_COL_NONE, 0, sizeof(ib_i32_t));
+  err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_NONE, 0,
+                                sizeof(ib_i32_t));
 
-	assert(err == DB_SUCCESS);
+  assert(err == DB_SUCCESS);
 
-	err = ib_tbl_sch_add_varchar_col(ib_tbl_sch, "c2", 10);
-	assert(err == DB_SUCCESS);
+  err = ib_tbl_sch_add_varchar_col(ib_tbl_sch, "c2", 10);
+  assert(err == DB_SUCCESS);
 
-	err = ib_tbl_sch_add_blob_col(ib_tbl_sch, "c3");
-	assert(err == DB_SUCCESS);
+  err = ib_tbl_sch_add_blob_col(ib_tbl_sch, "c3");
+  assert(err == DB_SUCCESS);
 
-	/* create table */
-	ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-	ib_trx_set_client_data(ib_trx, "create_table");
-	err = ib_schema_lock_exclusive(ib_trx);
-	assert(err == DB_SUCCESS);
+  /* create table */
+  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx_set_client_data(ib_trx, "create_table");
+  err = ib_schema_lock_exclusive(ib_trx);
+  assert(err == DB_SUCCESS);
 
-	err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
+  err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
 
-	if (err == DB_SUCCESS) {
-		err = ib_trx_commit(ib_trx);
-	} else {
-		fprintf(stderr, "Table: %s create failed: %s\n",
-				table_name, ib_strerror(err));
+  if (err == DB_SUCCESS) {
+    err = ib_trx_commit(ib_trx);
+  } else {
+    fprintf(stderr, "Table: %s create failed: %s\n", table_name,
+            ib_strerror(err));
 
-		err = ib_trx_rollback(ib_trx);
-	}
-	assert(err == DB_SUCCESS);
+    err = ib_trx_rollback(ib_trx);
+  }
+  assert(err == DB_SUCCESS);
 
-	if (ib_tbl_sch != NULL) {
-		ib_table_schema_delete(ib_tbl_sch);
-	}
+  if (ib_tbl_sch != NULL) {
+    ib_table_schema_delete(ib_tbl_sch);
+  }
 
-	return(err);
+  return (err);
 }
 
 /** Open a table and return a cursor for the table. */
-static
-ib_err_t
-open_table(
-	const char*	dbname,		/*!< in: database name */
-	const char*	name,		/*!< in: table name */
-	ib_trx_t	ib_trx,		/*!< in: transaction */
-	ib_crsr_t*	crsr)		/*!< out: innodb cursor */
+static ib_err_t open_table(const char *dbname, /*!< in: database name */
+                           const char *name,   /*!< in: table name */
+                           ib_trx_t ib_trx,    /*!< in: transaction */
+                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
 {
-	ib_err_t	err = DB_SUCCESS;
-	char		table_name[IB_MAX_TABLE_NAME_LEN];
+  ib_err_t err = DB_SUCCESS;
+  char table_name[IB_MAX_TABLE_NAME_LEN];
 
 #ifdef __WIN__
-	sprintf(table_name, "%s/%s", dbname, name);
+  sprintf(table_name, "%s/%s", dbname, name);
 #else
-	snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
+  snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 #endif
 
-	err = ib_cursor_open_table(table_name, ib_trx, crsr);
-	assert(err == DB_SUCCESS);
+  err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  assert(err == DB_SUCCESS);
 
-	return(err);
+  return (err);
 }
 
 /** INSERT INTO T VALUE(0, RANDOM(TEXT), RANDOM(TEXT)); ... 100 */
-static
-ib_err_t
-insert_random_rows(
-	ib_crsr_t	crsr)		/*!< in, out: cursor to use for write */
+static ib_err_t
+insert_random_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 {
-	ib_i32_t	i;
-	ib_err_t	err;
-	ib_tpl_t	tpl;
-	char*		ptr = malloc(8192);
+  ib_i32_t i;
+  ib_err_t err;
+  ib_tpl_t tpl;
+  char *ptr = malloc(8192);
 
-	tpl = ib_clust_read_tuple_create(crsr);
-	assert(tpl != NULL);
+  tpl = ib_clust_read_tuple_create(crsr);
+  assert(tpl != NULL);
 
-	for (i = 0;  i < 100; ++i) {
-		int		l;
+  for (i = 0; i < 100; ++i) {
+    int l;
 
-		err = ib_tuple_write_i32(tpl, 0, i % 10);
-		assert(err == DB_SUCCESS);
+    err = ib_tuple_write_i32(tpl, 0, i % 10);
+    assert(err == DB_SUCCESS);
 
-		l = gen_rand_text(ptr, 10);
-		err = ib_col_set_value(tpl, 1, ptr, l);
-		assert(err == DB_SUCCESS);
+    l = gen_rand_text(ptr, 10);
+    err = ib_col_set_value(tpl, 1, ptr, l);
+    assert(err == DB_SUCCESS);
 
-		l = gen_rand_text(ptr, 8192);
-		err = ib_col_set_value(tpl, 2, ptr, l);
-		assert(err == DB_SUCCESS);
+    l = gen_rand_text(ptr, 8192);
+    err = ib_col_set_value(tpl, 2, ptr, l);
+    assert(err == DB_SUCCESS);
 
-		err = ib_cursor_insert_row(crsr, tpl);
-		assert(err == DB_SUCCESS);
+    err = ib_cursor_insert_row(crsr, tpl);
+    assert(err == DB_SUCCESS);
 
-		tpl = ib_tuple_clear(tpl);
-		assert(tpl != NULL);
-	}
+    tpl = ib_tuple_clear(tpl);
+    assert(tpl != NULL);
+  }
 
-	if (tpl != NULL) {
-		ib_tuple_delete(tpl);
-	}
+  if (tpl != NULL) {
+    ib_tuple_delete(tpl);
+  }
 
-	free(ptr);
+  free(ptr);
 
-	return(err);
+  return (err);
 }
 
 /** Create a secondary indexes on a table.
 @return	DB_SUCCESS or error code */
-static
-ib_err_t
-create_sec_index(
-	const char*	table_name,	/*!< in: table name */
-	const char*	col_name,	/*!< in: column name */
-	int		prefix_len)	/*!< in: prefix index length */
+static ib_err_t create_sec_index(const char *table_name, /*!< in: table name */
+                                 const char *col_name,   /*!< in: column name */
+                                 int prefix_len) /*!< in: prefix index length */
 
 {
-	ib_err_t	err;
-	ib_trx_t	ib_trx;
-	ib_id_t		index_id = 0;
-	ib_idx_sch_t	ib_idx_sch = NULL;
-	char		index_name[IB_MAX_TABLE_NAME_LEN];
+  ib_err_t err;
+  ib_trx_t ib_trx;
+  ib_id_t index_id = 0;
+  ib_idx_sch_t ib_idx_sch = NULL;
+  char index_name[IB_MAX_TABLE_NAME_LEN];
 
-	ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
 
-	/* also test when we don't set client_data */
+  /* also test when we don't set client_data */
 
-	if (strcmp(col_name, "c1") != 0)
-		ib_trx_set_client_data(ib_trx, col_name);
+  if (strcmp(col_name, "c1") != 0)
+    ib_trx_set_client_data(ib_trx, col_name);
 
-	err = ib_schema_lock_exclusive(ib_trx);
-	assert(err == DB_SUCCESS);
+  err = ib_schema_lock_exclusive(ib_trx);
+  assert(err == DB_SUCCESS);
 
 #ifdef __WIN__
-	sprintf(index_name, "%s_%s", table_name, col_name);
+  sprintf(index_name, "%s_%s", table_name, col_name);
 #else
-	snprintf(index_name, sizeof(index_name), "%s_%s", table_name, col_name);
+  snprintf(index_name, sizeof(index_name), "%s_%s", table_name, col_name);
 #endif
-	err = ib_index_schema_create(
-		ib_trx, index_name, table_name, &ib_idx_sch);
+  err = ib_index_schema_create(ib_trx, index_name, table_name, &ib_idx_sch);
 
-	assert(err == DB_SUCCESS);
+  assert(err == DB_SUCCESS);
 
-	err = ib_index_schema_add_col(ib_idx_sch, col_name, prefix_len);
-	assert(err == DB_SUCCESS);
+  err = ib_index_schema_add_col(ib_idx_sch, col_name, prefix_len);
+  assert(err == DB_SUCCESS);
 
-	err = ib_index_create(ib_idx_sch, &index_id);
+  err = ib_index_create(ib_idx_sch, &index_id);
 
-	if (ib_idx_sch != NULL) {
-		ib_index_schema_delete(ib_idx_sch);
-		ib_idx_sch = NULL;
-	}
+  if (ib_idx_sch != NULL) {
+    ib_index_schema_delete(ib_idx_sch);
+    ib_idx_sch = NULL;
+  }
 
-	if (err == DB_SUCCESS) {
-		err = ib_trx_commit(ib_trx);
-	} else {
-		err = ib_trx_rollback(ib_trx);
-	}
-	assert(err == DB_SUCCESS);
+  if (err == DB_SUCCESS) {
+    err = ib_trx_commit(ib_trx);
+  } else {
+    err = ib_trx_rollback(ib_trx);
+  }
+  assert(err == DB_SUCCESS);
 
-	return(err);
+  return (err);
 }
 
 /** Create secondary indexes on T(C1), T(C2), T(C3). */
-static
-ib_err_t
-create_sec_index_1(
-	const char*	dbname,			/*!< in: database name */
-	const char*	name)			/*!< in: table to drop */
+static ib_err_t create_sec_index_1(const char *dbname, /*!< in: database name */
+                                   const char *name)   /*!< in: table to drop */
 {
-	ib_err_t	err;
-	char		table_name[IB_MAX_TABLE_NAME_LEN];
+  ib_err_t err;
+  char table_name[IB_MAX_TABLE_NAME_LEN];
 
 #ifdef __WIN__
-	sprintf(table_name, "%s/%s", dbname, name);
+  sprintf(table_name, "%s/%s", dbname, name);
 #else
-	snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
+  snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 #endif
 
-	err = create_sec_index(table_name, "c1", 0);
+  err = create_sec_index(table_name, "c1", 0);
 
-	if (err == DB_SUCCESS) {
-		err = create_sec_index(table_name, "c2", 0);
-	}
+  if (err == DB_SUCCESS) {
+    err = create_sec_index(table_name, "c2", 0);
+  }
 
-	if (err == DB_SUCCESS) {
-		err = create_sec_index(table_name, "c3", 10);
-	}
+  if (err == DB_SUCCESS) {
+    err = create_sec_index(table_name, "c3", 10);
+  }
 
-	return(err);
+  return (err);
 }
 
 /** Open the secondary index. */
-static
-ib_err_t
-open_sec_index(
-	ib_crsr_t	crsr,		/*!< in: table cusor */
-	const char* 	index_name)	/*!< in: sec. index to open */
+static ib_err_t
+open_sec_index(ib_crsr_t crsr,         /*!< in: table cusor */
+               const char *index_name) /*!< in: sec. index to open */
 {
-	ib_err_t	err;
-	ib_crsr_t	idx_crsr;
+  ib_err_t err;
+  ib_crsr_t idx_crsr;
 
-	err = ib_cursor_open_index_using_name(crsr, index_name, &idx_crsr);
-	assert(err == DB_SUCCESS);
+  err = ib_cursor_open_index_using_name(crsr, index_name, &idx_crsr);
+  assert(err == DB_SUCCESS);
 
-	err = ib_cursor_close(idx_crsr);
-	assert(err == DB_SUCCESS);
+  err = ib_cursor_close(idx_crsr);
+  assert(err == DB_SUCCESS);
 
-	return(err);
+  return (err);
 }
 /** Open the secondary indexes on T(C1), T(C2), T(C3). */
-static
+static ib_err_t open_sec_index_1(const char *dbname, /*!< in: database name */
+                                 const char *name)   /*!< in: table name */
+{
+  ib_crsr_t crsr;
+  ib_trx_t ib_trx;
+  ib_err_t err = DB_SUCCESS;
+  char index_name[IB_MAX_TABLE_NAME_LEN];
+  char table_name[IB_MAX_TABLE_NAME_LEN];
+
+#ifdef __WIN__
+  sprintf(table_name, "%s/%s", dbname, name);
+#else
+  snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
+#endif
+
+  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx_set_client_data(ib_trx, "open_sec_index_1");
+
+  err = ib_cursor_open_table(table_name, ib_trx, &crsr);
+  assert(err == DB_SUCCESS);
+
+#ifdef __WIN__
+  sprintf(index_name, "%s_%s", table_name, "c1");
+#else
+  snprintf(index_name, sizeof(index_name), "%s_%s", table_name, "c1");
+#endif
+  err = open_sec_index(crsr, index_name);
+  assert(err == DB_SUCCESS);
+
+#ifdef __WIN__
+  sprintf(index_name, "%s_%s", table_name, "c2");
+#else
+  snprintf(index_name, sizeof(index_name), "%s_%s", table_name, "c2");
+#endif
+  err = open_sec_index(crsr, index_name);
+  assert(err == DB_SUCCESS);
+
+#ifdef __WIN__
+  sprintf(index_name, "%s_%s", table_name, "c3");
+#else
+  snprintf(index_name, sizeof(index_name), "%s_%s", table_name, "c3");
+#endif
+  err = open_sec_index(crsr, index_name);
+  assert(err == DB_SUCCESS);
+
+  err = ib_cursor_close(crsr);
+  assert(err == DB_SUCCESS);
+
+  err = ib_trx_commit(ib_trx);
+  assert(err == DB_SUCCESS);
+
+  return (err);
+}
+
+int killed_lock_wait = 0;
+
 ib_err_t
-open_sec_index_1(
-	const char*	dbname,		/*!< in: database name */
-	const char* 	name)		/*!< in: table name */
+test_kill_during_lock_wait(const char *dbname, /*!< in: database name */
+                           const char *name)   /*!< in: table name */
 {
-	ib_crsr_t	crsr;
-	ib_trx_t	ib_trx;
-	ib_err_t	err = DB_SUCCESS;
-	char		index_name[IB_MAX_TABLE_NAME_LEN];
-	char		table_name[IB_MAX_TABLE_NAME_LEN];
+  ib_trx_t locking_trx, kill_trx;
+  ib_crsr_t locking_cursor, kill_cursor;
+  ib_err_t err;
+  ib_tpl_t locking_tpl, kill_tpl;
+  char table_name[IB_MAX_TABLE_NAME_LEN];
 
 #ifdef __WIN__
-	sprintf(table_name, "%s/%s", dbname, name);
+  sprintf(table_name, "%s/%s", dbname, name);
 #else
-	snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
+  snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 #endif
 
-	ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-	ib_trx_set_client_data(ib_trx, "open_sec_index_1");
+  locking_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  assert(locking_trx);
 
-	err = ib_cursor_open_table(table_name, ib_trx, &crsr);
-	assert(err == DB_SUCCESS);
+  err = ib_cursor_open_table(table_name, locking_trx, &locking_cursor);
+  assert(err == DB_SUCCESS);
 
-#ifdef __WIN__
-	sprintf(index_name, "%s_%s", table_name, "c1");
-#else
-	snprintf(index_name, sizeof(index_name), "%s_%s", table_name, "c1");
-#endif
-	err = open_sec_index(crsr, index_name);
-	assert(err == DB_SUCCESS);
+  err = ib_cursor_set_lock_mode(locking_cursor, IB_LOCK_X);
+  assert(err == DB_SUCCESS);
 
-#ifdef __WIN__
-	sprintf(index_name, "%s_%s", table_name, "c2");
-#else
-	snprintf(index_name, sizeof(index_name), "%s_%s", table_name, "c2");
-#endif
-	err = open_sec_index(crsr, index_name);
-	assert(err == DB_SUCCESS);
+  locking_tpl = ib_clust_read_tuple_create(locking_cursor);
 
-#ifdef __WIN__
-	sprintf(index_name, "%s_%s", table_name, "c3");
-#else
-	snprintf(index_name, sizeof(index_name), "%s_%s", table_name, "c3");
-#endif
-	err = open_sec_index(crsr, index_name);
-	assert(err == DB_SUCCESS);
+  assert(err == DB_SUCCESS);
 
-	err = ib_cursor_close(crsr);
-	assert(err == DB_SUCCESS);
+  ib_cursor_first(locking_cursor);
 
-	err = ib_trx_commit(ib_trx);
-	assert(err == DB_SUCCESS);
+  int rows = 0;
+  while (err == DB_SUCCESS) {
+    err = ib_cursor_read_row(locking_cursor, locking_tpl);
+    ib_tuple_clear(locking_tpl);
+    ib_cursor_next(locking_cursor);
+    rows++;
+  }
+  printf("Read %d rows from table with IB_LOCK_X\n", rows - 1);
 
-	return(err);
+  ib_tuple_delete(locking_tpl);
+
+  /* All rows in the table are now locked */
+  /* We now start a new transaction and attempt to do the same
+     We should end up being aborted due to chk_thd_killed()
+     saying that this trx has been killed */
+
+  kill_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  assert(kill_trx);
+  ib_trx_set_client_data(kill_trx, "kill_in_lock_wait");
+
+  err = ib_cursor_open_table(table_name, kill_trx, &kill_cursor);
+  assert(err == DB_SUCCESS);
+
+  err = ib_cursor_set_lock_mode(kill_cursor, IB_LOCK_X);
+  assert(err == DB_SUCCESS);
+
+  kill_tpl = ib_clust_read_tuple_create(kill_cursor);
+  assert(err == DB_SUCCESS);
+
+  err = ib_cursor_first(kill_cursor);
+  assert(err == DB_LOCK_WAIT_TIMEOUT);
+  assert(killed_lock_wait == 1);
+
+  ib_tuple_delete(kill_tpl);
+
+  /* since we have DB_LOCK_WAIT_TIMEOUT, we release the already
+     rolled back transaction */
+  err = ib_cursor_close(kill_cursor);
+  assert(err == DB_SUCCESS);
+
+  err = ib_trx_release(kill_trx);
+  assert(err == DB_SUCCESS);
+
+  /* cleanup */
+
+  err = ib_cursor_close(locking_cursor);
+  assert(err == DB_SUCCESS);
+  err = ib_trx_commit(locking_trx);
+  assert(err == DB_SUCCESS);
+
+  return DB_SUCCESS;
 }
 
-int killed_lock_wait= 0;
+int check_thd_killed(void *data);
 
-ib_err_t test_kill_during_lock_wait(
-	const char*	dbname,		/*!< in: database name */
-	const char* 	name)		/*!< in: table name */
-{
-	ib_trx_t locking_trx, kill_trx;
-	ib_crsr_t locking_cursor, kill_cursor;
-	ib_err_t err;
-	ib_tpl_t locking_tpl, kill_tpl;
-	char		table_name[IB_MAX_TABLE_NAME_LEN];
+int not_killed_thds = 0;
+int killed_thds = 0;
 
-#ifdef __WIN__
-	sprintf(table_name, "%s/%s", dbname, name);
-#else
-	snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
+int check_thd_killed(void *data) {
+  char *thd_name = (char *)data;
 
-	locking_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-	assert(locking_trx);
+  printf("Checking if THD is KILLED: %s\n", thd_name);
 
-	err = ib_cursor_open_table(table_name, locking_trx, &locking_cursor);
-	assert(err == DB_SUCCESS);
+  assert(strcmp(thd_name, "c1") != 0);
 
-	err = ib_cursor_set_lock_mode(locking_cursor, IB_LOCK_X);
-	assert(err == DB_SUCCESS);
+  if (strcmp(thd_name, "c3") == 0) {
+    killed_thds++;
+    return 1;
+  }
 
-	locking_tpl = ib_clust_read_tuple_create(locking_cursor);
+  if (strcmp(thd_name, "kill_in_lock_wait") == 0) {
+    killed_lock_wait = 1;
+    killed_thds++;
+    return 1;
+  }
 
-	assert(err == DB_SUCCESS);
-
-	ib_cursor_first(locking_cursor);
-
-	int rows=0;
-	while(err == DB_SUCCESS)
-	{
-		err = ib_cursor_read_row(locking_cursor, locking_tpl);
-		ib_tuple_clear(locking_tpl);
-		ib_cursor_next(locking_cursor);
-		rows++;
-	}
-	printf("Read %d rows from table with IB_LOCK_X\n", rows-1);
-
-	ib_tuple_delete(locking_tpl);
-
-	/* All rows in the table are now locked */
-	/* We now start a new transaction and attempt to do the same
-	   We should end up being aborted due to chk_thd_killed()
-	   saying that this trx has been killed */
-
-	kill_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-	assert(kill_trx);
-	ib_trx_set_client_data(kill_trx, "kill_in_lock_wait");
-
-	err = ib_cursor_open_table(table_name, kill_trx, &kill_cursor);
-	assert(err == DB_SUCCESS);
-
-	err = ib_cursor_set_lock_mode(kill_cursor, IB_LOCK_X);
-	assert(err == DB_SUCCESS);
-
-	kill_tpl = ib_clust_read_tuple_create(kill_cursor);
-	assert(err == DB_SUCCESS);
-
-	err = ib_cursor_first(kill_cursor);
-	assert(err == DB_LOCK_WAIT_TIMEOUT);
-	assert(killed_lock_wait == 1);
-
-	ib_tuple_delete(kill_tpl);
-
-	/* since we have DB_LOCK_WAIT_TIMEOUT, we release the already
-	   rolled back transaction */
-	err = ib_cursor_close(kill_cursor);
-	assert(err == DB_SUCCESS);
-
-	err = ib_trx_release(kill_trx);
-	assert(err == DB_SUCCESS);
-
-	/* cleanup */
-
-	err = ib_cursor_close(locking_cursor);
-	assert(err == DB_SUCCESS);
-	err = ib_trx_commit(locking_trx);
-	assert(err == DB_SUCCESS);
-
-	return DB_SUCCESS;
+  not_killed_thds++;
+  return 0;
 }
 
-int check_thd_killed(void* data);
+int main(int argc, char **argv) {
+  ib_err_t err;
+  ib_crsr_t crsr;
+  ib_trx_t ib_trx;
+  ib_u64_t version;
 
-int not_killed_thds= 0;
-int killed_thds= 0;
+  (void)argc;
+  (void)argv;
 
-int check_thd_killed(void* data)
-{
-	char* thd_name= (char*)data;
+  version = ib_api_version();
+  printf("API: %d.%d.%d\n", (int)(version >> 32), /* Current version */
+         (int)((version >> 16)) & 0xffff,         /* Revisiion */
+         (int)(version & 0xffff));                /* Age */
 
-	printf("Checking if THD is KILLED: %s\n", thd_name);
+  err = ib_init();
+  assert(err == DB_SUCCESS);
 
-	assert(strcmp(thd_name, "c1") != 0);
+  test_configure();
 
-	if (strcmp(thd_name, "c3") == 0)
-	{
-		killed_thds++;
-		return 1;
-	}
+  err = ib_startup("barracuda");
+  assert(err == DB_SUCCESS);
 
-	if (strcmp(thd_name, "kill_in_lock_wait") == 0)
-	{
-		killed_lock_wait= 1;
-		killed_thds++;
-		return 1;
-	}
+  fprintf(stderr, "Set trx_is_interrupted handler\n");
 
+  ib_set_trx_is_interrupted_handler(check_thd_killed);
 
-	not_killed_thds++;
-	return 0;
-}
+  err = create_database(DATABASE);
+  assert(err == DB_SUCCESS);
 
-int
-main(int argc, char** argv)
-{
-	ib_err_t	err;
-	ib_crsr_t	crsr;
-	ib_trx_t	ib_trx;
-	ib_u64_t	version;
+  err = create_table(DATABASE, TABLE);
+  assert(err == DB_SUCCESS);
 
-	(void) argc;
-	(void) argv;
+  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  ib_trx_set_client_data(ib_trx, "main");
+  assert(ib_trx != NULL);
 
-	version = ib_api_version();
-	printf("API: %d.%d.%d\n",
-		(int) (version >> 32),			/* Current version */
-		(int) ((version >> 16)) & 0xffff,	/* Revisiion */
-	       	(int) (version & 0xffff));		/* Age */
+  err = open_table(DATABASE, TABLE, ib_trx, &crsr);
+  assert(err == DB_SUCCESS);
 
-	err = ib_init();
-	assert(err == DB_SUCCESS);
+  err = ib_cursor_lock(crsr, IB_LOCK_IX);
+  assert(err == DB_SUCCESS);
 
-	test_configure();
+  err = insert_random_rows(crsr);
+  assert(err == DB_SUCCESS);
 
-	err = ib_startup("barracuda");
-	assert(err == DB_SUCCESS);
+  err = ib_cursor_close(crsr);
+  assert(err == DB_SUCCESS);
+  crsr = NULL;
 
-	fprintf(stderr, "Set trx_is_interrupted handler\n");
+  err = ib_trx_commit(ib_trx);
+  assert(err == DB_SUCCESS);
 
-	ib_set_trx_is_interrupted_handler(check_thd_killed);
+  err = create_sec_index_1(DATABASE, TABLE);
+  assert(err == DB_SUCCESS);
 
-	err = create_database(DATABASE);
-	assert(err == DB_SUCCESS);
+  err = open_sec_index_1(DATABASE, TABLE);
+  assert(err == DB_SUCCESS);
 
-	err = create_table(DATABASE, TABLE);
-	assert(err == DB_SUCCESS);
+  err = test_kill_during_lock_wait(DATABASE, TABLE);
+  assert(err == DB_SUCCESS);
 
-	ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-	ib_trx_set_client_data(ib_trx, "main");
-	assert(ib_trx != NULL);
+  err = drop_table(DATABASE, TABLE);
+  assert(err == DB_SUCCESS);
 
-	err = open_table(DATABASE, TABLE, ib_trx, &crsr);
-	assert(err == DB_SUCCESS);
+  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  assert(err == DB_SUCCESS);
 
-	err = ib_cursor_lock(crsr, IB_LOCK_IX);
-	assert(err == DB_SUCCESS);
+  assert(killed_thds > 0);
+  assert(not_killed_thds > 0);
+  assert(killed_thds == 3); /* index creation *and* 2 for lock wait */
 
-	err = insert_random_rows(crsr);
-	assert(err == DB_SUCCESS);
+  printf("Killed %d and didn't kill %d\n", killed_thds, not_killed_thds);
 
-	err = ib_cursor_close(crsr);
-	assert(err == DB_SUCCESS);
-	crsr = NULL;
-
-	err = ib_trx_commit(ib_trx);
-	assert(err == DB_SUCCESS);
-
-	err = create_sec_index_1(DATABASE, TABLE);
-	assert(err == DB_SUCCESS);
-
-	err = open_sec_index_1(DATABASE, TABLE);
-	assert(err == DB_SUCCESS);
-
-	err = test_kill_during_lock_wait(DATABASE, TABLE);
-	assert(err == DB_SUCCESS);
-
-	err = drop_table(DATABASE, TABLE);
-	assert(err == DB_SUCCESS);
-
-	err = ib_shutdown(IB_SHUTDOWN_NORMAL);
-	assert(err == DB_SUCCESS);
-
-	assert(killed_thds > 0);
-	assert(not_killed_thds > 0);
-	assert(killed_thds == 3); /* index creation *and* 2 for lock wait */
-
-	printf("Killed %d and didn't kill %d\n", killed_thds, not_killed_thds);
-
-	return(0);
+  return (0);
 }

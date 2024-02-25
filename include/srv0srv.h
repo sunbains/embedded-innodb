@@ -343,53 +343,54 @@ enum srv_thread_type {
 @return	DB_SUCCESS or error code */
 
 ulint srv_boot(void);
-/** Frees the data structures created in srv_init(). */
 
+/** Frees the data structures created in srv_init(). */
 void srv_free(void);
+
 /** Initializes the synchronization primitives, memory system, and the thread
 local storage. */
-
 void srv_general_init(void);
+
 /** Gets the number of threads in the system.
 @return	sum of srv_n_threads[] */
-
 ulint srv_get_n_threads(void);
+
 /** Returns the calling thread type.
 @return	SRV_COM, ... */
-
 enum srv_thread_type srv_get_thread_type(void);
+
 /** Releases threads of the type given from suspension in the thread table.
 NOTE! The server mutex has to be reserved by the caller!
 @return number of threads released: this may be less than n if not
 enough threads were suspended at the moment */
-
 ulint srv_release_threads(enum srv_thread_type type, /*!< in: thread type */
                           ulint n); /*!< in: number of threads to release */
+
 /** The master thread controlling the server.
 @return	a dummy parameter */
-
 os_thread_ret_t srv_master_thread(void *arg); /*!< in: a dummy parameter
                                               required by os_thread_create */
+
 /** Tells the Innobase server that there has been activity in the database
 and wakes up the master thread if it is suspended (not sleeping). Used
 in the client interface. Note that there is a small chance that the master
 thread stays suspended (we do not protect our operation with the kernel
 mutex, for performace reasons). */
-
 void srv_active_wake_master_thread(void);
-/** Wakes up the master thread if it is suspended or being suspended. */
 
+/** Wakes up the master thread if it is suspended or being suspended. */
 void srv_wake_master_thread(void);
+
 /** Puts an OS thread to wait if there are too many concurrent threads
 (>= srv_thread_concurrency) inside InnoDB. The threads wait in a FIFO queue. */
-
 void srv_conc_enter_innodb(trx_t *trx); /*!< in: transaction object associated
                                         with the thread */
+
 /** This must be called when a thread exits InnoDB in a lock wait or at the
 end of an SQL statement. */
-
 void srv_conc_force_exit_innodb(trx_t *trx); /*!< in: transaction object
                                              associated with the thread */
+
 /** Puts a user OS thread to wait for a lock to be released. If an error
 occurs during the wait trx->error_state associated with thr is
 != DB_SUCCESS when we return. DB_LOCK_WAIT_TIMEOUT and DB_DEADLOCK
@@ -400,32 +401,32 @@ void srv_suspend_user_thread(que_thr_t *thr); /*!< in: query thread associated
                                               with the client OS thread */
 /** Releases a user OS thread waiting for a lock to be released, if the
 thread is already suspended. */
-
 void srv_release_user_thread_if_suspended(
     que_thr_t *thr); /*!< in: query thread associated with the
                      client OS thread	 */
+
 /** A thread which wakes up threads whose lock wait may have lasted too long.
 @return	a dummy parameter */
-
 os_thread_ret_t
 srv_lock_timeout_thread(void *arg); /*!< in: a dummy parameter required by
                                     os_thread_create */
+
 /** A thread which prints the info output by various InnoDB monitors.
 @return	a dummy parameter */
 
 os_thread_ret_t srv_monitor_thread(void *arg); /*!< in: a dummy parameter
                                                required by os_thread_create */
+
 /** A thread which prints warnings about semaphore waits which have lasted
 too long. These can be used to track bugs which cause hangs.
 @return	a dummy parameter */
-
 os_thread_ret_t
 srv_error_monitor_thread(void *arg); /*!< in: a dummy parameter required by
                                      os_thread_create */
+
 /** Outputs to a file the output of the InnoDB Monitor.
 @return FALSE if not all information printed
 due to failure to obtain necessary mutex */
-
 ibool srv_printf_innodb_monitor(
     ib_stream_t ib_stream, /*!< in: output stream */
     ibool nowait,          /*!< in: whether to wait for
@@ -436,15 +437,12 @@ ibool srv_printf_innodb_monitor(
                            the list of active transactions */
 
 /** Function to pass InnoDB status variables to client */
-
 void srv_export_innodb_status(void);
 
 /** Reset variables. */
-
 void srv_var_init(void);
 
 /** Resets the variables of all the InnoDB modules. */
-
 void srv_modules_var_init(void);
 
 /** In this structure we store status variables to be passed to the client. */

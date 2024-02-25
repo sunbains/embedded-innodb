@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -26,4 +26,3 @@ Created 12/13/1995 Heikki Tuuri
 #ifdef UNIV_NONINL
 #include "fut0fut.ic"
 #endif
-

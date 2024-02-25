@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -32,34 +32,30 @@ Created 6/25/1996 Heikki Tuuri
 /** Opens a session.
 @return	own: session object */
 
-sess_t*
-sess_open(void)
-{
-	sess_t*	sess;
+sess_t *sess_open(void) {
+  sess_t *sess;
 
-	ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&kernel_mutex));
 
-	sess = mem_alloc(sizeof(sess_t));
+  sess = mem_alloc(sizeof(sess_t));
 
-	sess->state = SESS_ACTIVE;
+  sess->state = SESS_ACTIVE;
 
-	sess->trx = trx_create(sess);
+  sess->trx = trx_create(sess);
 
-	UT_LIST_INIT(sess->graphs);
+  UT_LIST_INIT(sess->graphs);
 
-	return(sess);
+  return (sess);
 }
 
 /** Closes a session, freeing the memory occupied by it. */
 
-void
-sess_close(
-	sess_t*	sess)	/*!< in, own: session object */
+void sess_close(sess_t *sess) /*!< in, own: session object */
 {
-	ut_ad(!mutex_own(&kernel_mutex));
+  ut_ad(!mutex_own(&kernel_mutex));
 
-	ut_a(UT_LIST_GET_LEN(sess->graphs) == 0);
+  ut_a(UT_LIST_GET_LEN(sess->graphs) == 0);
 
-	trx_free_for_background(sess->trx);
-	mem_free(sess);
+  trx_free_for_background(sess->trx);
+  mem_free(sess);
 }

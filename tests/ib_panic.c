@@ -26,52 +26,49 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <stdarg.h>
 
-void srv_panic(int, char*, ...);
+void srv_panic(int, char *, ...);
 
-int panic_called= 0;
+int panic_called = 0;
 
-void db_panic(void* data, int er, char* msg, ...);
+void db_panic(void *data, int er, char *msg, ...);
 
-void db_panic(void* data, int er, char* msg, ...)
-{
-	va_list ap;
-	(void)data;
+void db_panic(void *data, int er, char *msg, ...) {
+  va_list ap;
+  (void)data;
 
-	va_start(ap, msg);
-	fprintf(stderr, "TEST PANIC HANDLER: %d ", er);
-	fprintf(stderr, msg, ap);
-	fprintf(stderr, "\n");
-	panic_called= 1;
-	va_end(ap);
+  va_start(ap, msg);
+  fprintf(stderr, "TEST PANIC HANDLER: %d ", er);
+  fprintf(stderr, msg, ap);
+  fprintf(stderr, "\n");
+  panic_called = 1;
+  va_end(ap);
 }
 
-int
-main(int argc, char** argv)
-{
-	ib_err_t	err;
+int main(int argc, char **argv) {
+  ib_err_t err;
 
-	(void)argc;
-	(void)argv;
+  (void)argc;
+  (void)argv;
 
-	err = ib_init();
-	assert(err == DB_SUCCESS);
+  err = ib_init();
+  assert(err == DB_SUCCESS);
 
-	test_configure();
+  test_configure();
 
-	err = ib_startup("barracuda");
-	assert(err == DB_SUCCESS);
+  err = ib_startup("barracuda");
+  assert(err == DB_SUCCESS);
 
-	fprintf(stderr, "Set panic handler\n");
+  fprintf(stderr, "Set panic handler\n");
 
-	ib_set_panic_handler(db_panic);
+  ib_set_panic_handler(db_panic);
 
-	fprintf(stderr, "Test panic\n");
+  fprintf(stderr, "Test panic\n");
 
-	ib_error_inject(1);
+  ib_error_inject(1);
 
-	err = ib_shutdown(IB_SHUTDOWN_NORMAL);
-	assert(err == DB_CORRUPTION);
-	assert(panic_called == 1);
+  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  assert(err == DB_CORRUPTION);
+  assert(panic_called == 1);
 
-	return(0);
+  return (0);
 }

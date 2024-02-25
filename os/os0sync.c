@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -27,116 +27,110 @@ Created 9/6/1995 Heikki Tuuri
 #include "os0sync.ic"
 #endif
 
-#include "ut0mem.h"
 #include "srv0start.h"
+#include "ut0mem.h"
 
 /* Type definition for an operating system mutex struct */
-struct os_mutex_struct{
-	os_event_t	event;	/*!< Used by sync0arr.c for queing threads */
-	void*		handle;	/*!< OS handle to mutex */
-	ulint		count;	/*!< we use this counter to check
-				that the same thread does not
-				recursively lock the mutex: we
-				do not assume that the OS mutex
-				supports recursive locking, though
-				NT seems to do that */
-	UT_LIST_NODE_T(os_mutex_str_t) os_mutex_list;
-				/* list of all 'slow' OS mutexes created */
+struct os_mutex_struct {
+  os_event_t event; /*!< Used by sync0arr.c for queing threads */
+  void *handle;     /*!< OS handle to mutex */
+  ulint count;      /*!< we use this counter to check
+                    that the same thread does not
+                    recursively lock the mutex: we
+                    do not assume that the OS mutex
+                    supports recursive locking, though
+                    NT seems to do that */
+  UT_LIST_NODE_T(os_mutex_str_t) os_mutex_list;
+  /* list of all 'slow' OS mutexes created */
 };
 
 /** Mutex protecting counts and the lists of OS mutexes and events */
- os_mutex_t	os_sync_mutex;
+os_mutex_t os_sync_mutex;
 /** TRUE if os_sync_mutex has been initialized */
-static ibool		os_sync_mutex_inited	= FALSE;
+static ibool os_sync_mutex_inited = FALSE;
 /** TRUE when os_sync_free() is being executed */
-static ibool		os_sync_free_called	= FALSE;
+static ibool os_sync_free_called = FALSE;
 
 /** This is incremented by 1 in os_thread_create and decremented by 1 in
 os_thread_exit */
- ulint	os_thread_count		= 0;
+ulint os_thread_count = 0;
 
 /** The list of all events created */
-static UT_LIST_BASE_NODE_T(os_event_struct_t)	os_event_list;
+static UT_LIST_BASE_NODE_T(os_event_struct_t) os_event_list;
 
 /** The list of all OS 'slow' mutexes */
-static UT_LIST_BASE_NODE_T(os_mutex_str_t)	os_mutex_list;
+static UT_LIST_BASE_NODE_T(os_mutex_str_t) os_mutex_list;
 
- ulint	os_event_count		= 0;
- ulint	os_mutex_count		= 0;
- ulint	os_fast_mutex_count	= 0;
+ulint os_event_count = 0;
+ulint os_mutex_count = 0;
+ulint os_fast_mutex_count = 0;
 
 /* Because a mutex is embedded inside an event and there is an
 event embedded inside a mutex, on free, this generates a recursive call.
 This version of the free event function doesn't acquire the global lock */
-static void os_event_free_internal(os_event_t	event);
+static void os_event_free_internal(os_event_t event);
 
 /** Reset the variables. */
 
-void
-os_sync_var_init(void)
-{
-	os_sync_mutex = NULL;
-	os_sync_mutex_inited = FALSE;
-	os_sync_free_called = FALSE;
-	os_thread_count = 0;
+void os_sync_var_init(void) {
+  os_sync_mutex = NULL;
+  os_sync_mutex_inited = FALSE;
+  os_sync_free_called = FALSE;
+  os_thread_count = 0;
 
-	memset(&os_event_list, 0x0, sizeof(os_event_list));
-	memset(&os_mutex_list, 0x0, sizeof(os_mutex_list));
+  memset(&os_event_list, 0x0, sizeof(os_event_list));
+  memset(&os_mutex_list, 0x0, sizeof(os_mutex_list));
 
-	os_event_count		= 0;
-	os_mutex_count		= 0;
-	os_fast_mutex_count	= 0;
+  os_event_count = 0;
+  os_mutex_count = 0;
+  os_fast_mutex_count = 0;
 }
 
 /** Initializes global event and OS 'slow' mutex lists. */
 
-void
-os_sync_init(void)
-{
-	UT_LIST_INIT(os_event_list);
-	UT_LIST_INIT(os_mutex_list);
+void os_sync_init(void) {
+  UT_LIST_INIT(os_event_list);
+  UT_LIST_INIT(os_mutex_list);
 
-	os_sync_mutex = NULL;
-	os_sync_mutex_inited = FALSE;
+  os_sync_mutex = NULL;
+  os_sync_mutex_inited = FALSE;
 
-	os_sync_mutex = os_mutex_create(NULL);
+  os_sync_mutex = os_mutex_create(NULL);
 
-	os_sync_mutex_inited = TRUE;
+  os_sync_mutex_inited = TRUE;
 }
 
 /** Frees created events and OS 'slow' mutexes. */
 
-void
-os_sync_free(void)
-{
-	os_event_t	event;
-	os_mutex_t	mutex;
+void os_sync_free(void) {
+  os_event_t event;
+  os_mutex_t mutex;
 
-	os_sync_free_called = TRUE;
-	event = UT_LIST_GET_FIRST(os_event_list);
+  os_sync_free_called = TRUE;
+  event = UT_LIST_GET_FIRST(os_event_list);
 
-	while (event) {
+  while (event) {
 
-		os_event_free(event);
+    os_event_free(event);
 
-		event = UT_LIST_GET_FIRST(os_event_list);
-	}
+    event = UT_LIST_GET_FIRST(os_event_list);
+  }
 
-	mutex = UT_LIST_GET_FIRST(os_mutex_list);
+  mutex = UT_LIST_GET_FIRST(os_mutex_list);
 
-	while (mutex) {
-		if (mutex == os_sync_mutex) {
-			/* Set the flag to FALSE so that we do not try to
-			reserve os_sync_mutex any more in remaining freeing
-			operations in shutdown */
-			os_sync_mutex_inited = FALSE;
-		}
+  while (mutex) {
+    if (mutex == os_sync_mutex) {
+      /* Set the flag to FALSE so that we do not try to
+      reserve os_sync_mutex any more in remaining freeing
+      operations in shutdown */
+      os_sync_mutex_inited = FALSE;
+    }
 
-		os_mutex_free(mutex);
+    os_mutex_free(mutex);
 
-		mutex = UT_LIST_GET_FIRST(os_mutex_list);
-	}
-	os_sync_free_called = FALSE;
+    mutex = UT_LIST_GET_FIRST(os_mutex_list);
+  }
+  os_sync_free_called = FALSE;
 }
 
 /** Creates an event semaphore, i.e., a semaphore which may just have two
@@ -145,90 +139,87 @@ must be reset explicitly by calling sync_os_reset_event.
 @return	the event handle */
 
 os_event_t
-os_event_create(
-	const char*	name)	/*!< in: the name of the event, if NULL
-				the event is created without a name */
+os_event_create(const char *name) /*!< in: the name of the event, if NULL
+                                  the event is created without a name */
 {
 #ifdef __WIN__
-	os_event_t event;
+  os_event_t event;
 
-	event = ut_malloc(sizeof(struct os_event_struct));
+  event = ut_malloc(sizeof(struct os_event_struct));
 
-	event->handle = CreateEvent(NULL, /* No security attributes */
-				    TRUE, /* Manual reset */
-				    FALSE, /* Initial state nonsignaled */
-				    (LPCTSTR) name);
-	if (!event->handle) {
-		ib_logger(ib_stream,
-			"InnoDB: Could not create a Windows event semaphore;"
-			" Windows error %lu\n",
-			(ulong) GetLastError());
-	}
-#else /* Unix */
-	os_event_t	event;
+  event->handle = CreateEvent(NULL,  /* No security attributes */
+                              TRUE,  /* Manual reset */
+                              FALSE, /* Initial state nonsignaled */
+                              (LPCTSTR)name);
+  if (!event->handle) {
+    ib_logger(ib_stream,
+              "InnoDB: Could not create a Windows event semaphore;"
+              " Windows error %lu\n",
+              (ulong)GetLastError());
+  }
+#else  /* Unix */
+  os_event_t event;
 
-	UT_NOT_USED(name);
+  UT_NOT_USED(name);
 
-	event = ut_malloc(sizeof(struct os_event_struct));
+  event = ut_malloc(sizeof(struct os_event_struct));
 
-	os_fast_mutex_init(&(event->os_mutex));
+  os_fast_mutex_init(&(event->os_mutex));
 
-	ut_a(0 == pthread_cond_init(&(event->cond_var), NULL));
+  ut_a(0 == pthread_cond_init(&(event->cond_var), NULL));
 
-	event->is_set = FALSE;
+  event->is_set = FALSE;
 
-	/* We return this value in os_event_reset(), which can then be
-	be used to pass to the os_event_wait_low(). The value of zero
-	is reserved in os_event_wait_low() for the case when the
-	caller does not want to pass any signal_count value. To
-	distinguish between the two cases we initialize signal_count
-	to 1 here. */
-	event->signal_count = 1;
+  /* We return this value in os_event_reset(), which can then be
+  be used to pass to the os_event_wait_low(). The value of zero
+  is reserved in os_event_wait_low() for the case when the
+  caller does not want to pass any signal_count value. To
+  distinguish between the two cases we initialize signal_count
+  to 1 here. */
+  event->signal_count = 1;
 #endif /* __WIN__ */
 
-	/* The os_sync_mutex can be NULL because during startup an event
-	can be created [ because it's embedded in the mutex/rwlock ] before
-	this module has been initialized */
-	if (os_sync_mutex != NULL) {
-		os_mutex_enter(os_sync_mutex);
-	}
+  /* The os_sync_mutex can be NULL because during startup an event
+  can be created [ because it's embedded in the mutex/rwlock ] before
+  this module has been initialized */
+  if (os_sync_mutex != NULL) {
+    os_mutex_enter(os_sync_mutex);
+  }
 
-	/* Put to the list of events */
-	UT_LIST_ADD_FIRST(os_event_list, os_event_list, event);
+  /* Put to the list of events */
+  UT_LIST_ADD_FIRST(os_event_list, os_event_list, event);
 
-	os_event_count++;
+  os_event_count++;
 
-	if (os_sync_mutex != NULL) {
-		os_mutex_exit(os_sync_mutex);
-	}
+  if (os_sync_mutex != NULL) {
+    os_mutex_exit(os_sync_mutex);
+  }
 
-	return(event);
+  return (event);
 }
 
 /** Sets an event semaphore to the signaled state: lets waiting threads
 proceed. */
 
-void
-os_event_set(
-	os_event_t	event)	/*!< in: event to set */
+void os_event_set(os_event_t event) /*!< in: event to set */
 {
 #ifdef __WIN__
-	ut_a(event);
-	ut_a(SetEvent(event->handle));
+  ut_a(event);
+  ut_a(SetEvent(event->handle));
 #else
-	ut_a(event);
+  ut_a(event);
 
-	os_fast_mutex_lock(&(event->os_mutex));
+  os_fast_mutex_lock(&(event->os_mutex));
 
-	if (event->is_set) {
-		/* Do nothing */
-	} else {
-		event->is_set = TRUE;
-		event->signal_count += 1;
-		ut_a(0 == pthread_cond_broadcast(&(event->cond_var)));
-	}
+  if (event->is_set) {
+    /* Do nothing */
+  } else {
+    event->is_set = TRUE;
+    event->signal_count += 1;
+    ut_a(0 == pthread_cond_broadcast(&(event->cond_var)));
+  }
 
-	os_fast_mutex_unlock(&(event->os_mutex));
+  os_fast_mutex_unlock(&(event->os_mutex));
 #endif
 }
 
@@ -240,88 +231,81 @@ os_event_set() between this os_event_reset() and the
 os_event_wait_low() call. See comments for os_event_wait_low().
 @return	current signal_count. */
 
-ib_int64_t
-os_event_reset(
-	os_event_t	event)	/*!< in: event to reset */
+ib_int64_t os_event_reset(os_event_t event) /*!< in: event to reset */
 {
-	ib_int64_t	ret = 0;
+  ib_int64_t ret = 0;
 
 #ifdef __WIN__
-	ut_a(event);
+  ut_a(event);
 
-	ut_a(ResetEvent(event->handle));
+  ut_a(ResetEvent(event->handle));
 #else
-	ut_a(event);
+  ut_a(event);
 
-	os_fast_mutex_lock(&(event->os_mutex));
+  os_fast_mutex_lock(&(event->os_mutex));
 
-	if (!event->is_set) {
-		/* Do nothing */
-	} else {
-		event->is_set = FALSE;
-	}
-	ret = event->signal_count;
+  if (!event->is_set) {
+    /* Do nothing */
+  } else {
+    event->is_set = FALSE;
+  }
+  ret = event->signal_count;
 
-	os_fast_mutex_unlock(&(event->os_mutex));
+  os_fast_mutex_unlock(&(event->os_mutex));
 #endif
-	return(ret);
+  return (ret);
 }
 
 /** Frees an event object, without acquiring the global lock. */
-static
-void
-os_event_free_internal(
-	os_event_t	event)	/*!< in: event to free */
+static void os_event_free_internal(os_event_t event) /*!< in: event to free */
 {
 #ifdef __WIN__
-	ut_a(event);
+  ut_a(event);
 
-	ut_a(CloseHandle(event->handle));
+  ut_a(CloseHandle(event->handle));
 #else
-	ut_a(event);
+  ut_a(event);
 
-	/* This is to avoid freeing the mutex twice */
-	os_fast_mutex_free(&(event->os_mutex));
+  /* This is to avoid freeing the mutex twice */
+  os_fast_mutex_free(&(event->os_mutex));
 
-	ut_a(0 == pthread_cond_destroy(&(event->cond_var)));
+  ut_a(0 == pthread_cond_destroy(&(event->cond_var)));
 #endif
-	/* Remove from the list of events */
+  /* Remove from the list of events */
 
-	UT_LIST_REMOVE(os_event_list, os_event_list, event);
+  UT_LIST_REMOVE(os_event_list, os_event_list, event);
 
-	os_event_count--;
+  os_event_count--;
 
-	ut_free(event);
+  ut_free(event);
 }
 
 /** Frees an event object. */
 
-void
-os_event_free(
-	os_event_t	event)	/*!< in: event to free */
+void os_event_free(os_event_t event) /*!< in: event to free */
 
 {
 #ifdef __WIN__
-	ut_a(event);
+  ut_a(event);
 
-	ut_a(CloseHandle(event->handle));
+  ut_a(CloseHandle(event->handle));
 #else
-	ut_a(event);
+  ut_a(event);
 
-	os_fast_mutex_free(&(event->os_mutex));
-	ut_a(0 == pthread_cond_destroy(&(event->cond_var)));
+  os_fast_mutex_free(&(event->os_mutex));
+  ut_a(0 == pthread_cond_destroy(&(event->cond_var)));
 #endif
-	/* Remove from the list of events */
+  /* Remove from the list of events */
 
-	os_mutex_enter(os_sync_mutex);
+  os_mutex_enter(os_sync_mutex);
 
-	UT_LIST_REMOVE(os_event_list, os_event_list, event);
+  UT_LIST_REMOVE(os_event_list, os_event_list, event);
 
-	os_event_count--;
+  os_event_count--;
 
-	os_mutex_exit(os_sync_mutex);
+  os_mutex_exit(os_sync_mutex);
 
-	ut_free(event);
+  ut_free(event);
 }
 
 /** Waits for an event object until it is in the signaled state. If
@@ -344,60 +328,57 @@ Where such a scenario is possible, to avoid infinite wait, the
 value returned by os_event_reset() should be passed in as
 reset_sig_count. */
 
-void
-os_event_wait_low(
-	os_event_t	event,		/*!< in: event to wait */
-	ib_int64_t	reset_sig_count)/*!< in: zero or the value
-					returned by previous call of
-					os_event_reset(). */
+void os_event_wait_low(os_event_t event,           /*!< in: event to wait */
+                       ib_int64_t reset_sig_count) /*!< in: zero or the value
+                                                   returned by previous call of
+                                                   os_event_reset(). */
 {
 #ifdef __WIN__
-	DWORD	err;
+  DWORD err;
 
-	ut_a(event);
+  ut_a(event);
 
-	UT_NOT_USED(reset_sig_count);
+  UT_NOT_USED(reset_sig_count);
 
-	/* Specify an infinite time limit for waiting */
-	err = WaitForSingleObject(event->handle, INFINITE);
+  /* Specify an infinite time limit for waiting */
+  err = WaitForSingleObject(event->handle, INFINITE);
 
-	ut_a(err == WAIT_OBJECT_0);
+  ut_a(err == WAIT_OBJECT_0);
 
-	if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
-		os_thread_exit(NULL);
-	}
+  if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
+    os_thread_exit(NULL);
+  }
 #else
-	ib_int64_t	old_signal_count;
+  ib_int64_t old_signal_count;
 
-	os_fast_mutex_lock(&(event->os_mutex));
+  os_fast_mutex_lock(&(event->os_mutex));
 
-	if (reset_sig_count) {
-		old_signal_count = reset_sig_count;
-	} else {
-		old_signal_count = event->signal_count;
-	}
+  if (reset_sig_count) {
+    old_signal_count = reset_sig_count;
+  } else {
+    old_signal_count = event->signal_count;
+  }
 
-	for (;;) {
-		if (event->is_set == TRUE
-		    || event->signal_count != old_signal_count) {
+  for (;;) {
+    if (event->is_set == TRUE || event->signal_count != old_signal_count) {
 
-			os_fast_mutex_unlock(&(event->os_mutex));
+      os_fast_mutex_unlock(&(event->os_mutex));
 
-			if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
+      if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
 
-				os_thread_exit(NULL);
-			}
-			/* Ok, we may return */
+        os_thread_exit(NULL);
+      }
+      /* Ok, we may return */
 
-			return;
-		}
+      return;
+    }
 
-		pthread_cond_wait(&(event->cond_var), &(event->os_mutex));
+    pthread_cond_wait(&(event->cond_var), &(event->os_mutex));
 
-		/* Solaris manual said that spurious wakeups may occur: we
-		have to check if the event really has been signaled after
-		we came here to wait */
-	}
+    /* Solaris manual said that spurious wakeups may occur: we
+    have to check if the event really has been signaled after
+    we came here to wait */
+  }
 #endif
 }
 
@@ -406,31 +387,29 @@ os_event_wait_low(
 one is signaled or becomes signaled.
 @return	index of the event which was signaled */
 
-ulint
-os_event_wait_multiple(
-	ulint			n,	/*!< in: number of events in the
-					array */
-	os_native_event_t*	native_event_array)
-					/*!< in: pointer to an array of event
-					handles */
+ulint os_event_wait_multiple(ulint n, /*!< in: number of events in the
+                                      array */
+                             os_native_event_t *native_event_array)
+/*!< in: pointer to an array of event
+handles */
 {
-	DWORD	index;
+  DWORD index;
 
-	ut_a(native_event_array);
-	ut_a(n > 0);
+  ut_a(native_event_array);
+  ut_a(n > 0);
 
-	index = WaitForMultipleObjects((DWORD) n, native_event_array,
-				       FALSE,	   /* Wait for any 1 event */
-				       INFINITE); /* Infinite wait time
-						  limit */
-	ut_a(index >= WAIT_OBJECT_0);	/* NOTE: Pointless comparison */
-	ut_a(index < WAIT_OBJECT_0 + n);
+  index = WaitForMultipleObjects((DWORD)n, native_event_array,
+                                 FALSE,     /* Wait for any 1 event */
+                                 INFINITE); /* Infinite wait time
+                                            limit */
+  ut_a(index >= WAIT_OBJECT_0);             /* NOTE: Pointless comparison */
+  ut_a(index < WAIT_OBJECT_0 + n);
 
-	if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
-		os_thread_exit(NULL);
-	}
+  if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
+    os_thread_exit(NULL);
+  }
 
-	return(index - WAIT_OBJECT_0);
+  return (index - WAIT_OBJECT_0);
 }
 #endif
 
@@ -439,221 +418,208 @@ mutex semaphore of InnoDB itself (mutex_t) should be used where possible.
 @return	the mutex handle */
 
 os_mutex_t
-os_mutex_create(
-	const char*	name)	/*!< in: the name of the mutex, if NULL
-				the mutex is created without a name */
+os_mutex_create(const char *name) /*!< in: the name of the mutex, if NULL
+                                  the mutex is created without a name */
 {
 #ifdef __WIN__
-	HANDLE		mutex;
-	os_mutex_t	mutex_str;
+  HANDLE mutex;
+  os_mutex_t mutex_str;
 
-	mutex = CreateMutex(NULL,	/* No security attributes */
-			    FALSE,		/* Initial state: no owner */
-			    (LPCTSTR) name);
-	ut_a(mutex);
+  mutex = CreateMutex(NULL,  /* No security attributes */
+                      FALSE, /* Initial state: no owner */
+                      (LPCTSTR)name);
+  ut_a(mutex);
 #else
-	os_fast_mutex_t*	mutex;
-	os_mutex_t		mutex_str;
+  os_fast_mutex_t *mutex;
+  os_mutex_t mutex_str;
 
-	UT_NOT_USED(name);
+  UT_NOT_USED(name);
 
-	mutex = ut_malloc(sizeof(os_fast_mutex_t));
+  mutex = ut_malloc(sizeof(os_fast_mutex_t));
 
-	os_fast_mutex_init(mutex);
+  os_fast_mutex_init(mutex);
 #endif
-	mutex_str = ut_malloc(sizeof(os_mutex_str_t));
+  mutex_str = ut_malloc(sizeof(os_mutex_str_t));
 
-	mutex_str->handle = mutex;
-	mutex_str->count = 0;
-	mutex_str->event = os_event_create(NULL);
+  mutex_str->handle = mutex;
+  mutex_str->count = 0;
+  mutex_str->event = os_event_create(NULL);
 
-	if (UNIV_LIKELY(os_sync_mutex_inited)) {
-		/* When creating os_sync_mutex itself we cannot reserve it */
-		os_mutex_enter(os_sync_mutex);
-	}
+  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+    /* When creating os_sync_mutex itself we cannot reserve it */
+    os_mutex_enter(os_sync_mutex);
+  }
 
-	UT_LIST_ADD_FIRST(os_mutex_list, os_mutex_list, mutex_str);
+  UT_LIST_ADD_FIRST(os_mutex_list, os_mutex_list, mutex_str);
 
-	os_mutex_count++;
+  os_mutex_count++;
 
-	if (UNIV_LIKELY(os_sync_mutex_inited)) {
-		os_mutex_exit(os_sync_mutex);
-	}
+  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+    os_mutex_exit(os_sync_mutex);
+  }
 
-	return(mutex_str);
+  return (mutex_str);
 }
 
 /** Acquires ownership of a mutex semaphore. */
 
-void
-os_mutex_enter(
-	os_mutex_t	mutex)	/*!< in: mutex to acquire */
+void os_mutex_enter(os_mutex_t mutex) /*!< in: mutex to acquire */
 {
 #ifdef __WIN__
-	DWORD	err;
+  DWORD err;
 
-	ut_a(mutex);
+  ut_a(mutex);
 
-	/* Specify infinite time limit for waiting */
-	err = WaitForSingleObject(mutex->handle, INFINITE);
+  /* Specify infinite time limit for waiting */
+  err = WaitForSingleObject(mutex->handle, INFINITE);
 
-	ut_a(err == WAIT_OBJECT_0);
+  ut_a(err == WAIT_OBJECT_0);
 
-	(mutex->count)++;
-	ut_a(mutex->count == 1);
+  (mutex->count)++;
+  ut_a(mutex->count == 1);
 #else
-	os_fast_mutex_lock(mutex->handle);
+  os_fast_mutex_lock(mutex->handle);
 
-	(mutex->count)++;
+  (mutex->count)++;
 
-	ut_a(mutex->count == 1);
+  ut_a(mutex->count == 1);
 #endif
 }
 
 /** Releases ownership of a mutex. */
 
-void
-os_mutex_exit(
-	os_mutex_t	mutex)	/*!< in: mutex to release */
+void os_mutex_exit(os_mutex_t mutex) /*!< in: mutex to release */
 {
-	ut_a(mutex);
+  ut_a(mutex);
 
-	ut_a(mutex->count == 1);
+  ut_a(mutex->count == 1);
 
-	(mutex->count)--;
+  (mutex->count)--;
 #ifdef __WIN__
-	ut_a(ReleaseMutex(mutex->handle));
+  ut_a(ReleaseMutex(mutex->handle));
 #else
-	os_fast_mutex_unlock(mutex->handle);
+  os_fast_mutex_unlock(mutex->handle);
 #endif
 }
 
 /** Frees a mutex object. */
 
-void
-os_mutex_free(
-	os_mutex_t	mutex)	/*!< in: mutex to free */
+void os_mutex_free(os_mutex_t mutex) /*!< in: mutex to free */
 {
-	ut_a(mutex);
+  ut_a(mutex);
 
-	if (UNIV_LIKELY(!os_sync_free_called)) {
-		os_event_free_internal(mutex->event);
-	}
+  if (UNIV_LIKELY(!os_sync_free_called)) {
+    os_event_free_internal(mutex->event);
+  }
 
-	if (UNIV_LIKELY(os_sync_mutex_inited)) {
-		os_mutex_enter(os_sync_mutex);
-	}
+  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+    os_mutex_enter(os_sync_mutex);
+  }
 
-	UT_LIST_REMOVE(os_mutex_list, os_mutex_list, mutex);
+  UT_LIST_REMOVE(os_mutex_list, os_mutex_list, mutex);
 
-	os_mutex_count--;
+  os_mutex_count--;
 
-	if (UNIV_LIKELY(os_sync_mutex_inited)) {
-		os_mutex_exit(os_sync_mutex);
-	}
+  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+    os_mutex_exit(os_sync_mutex);
+  }
 
 #ifdef __WIN__
-	ut_a(CloseHandle(mutex->handle));
+  ut_a(CloseHandle(mutex->handle));
 
-	ut_free(mutex);
+  ut_free(mutex);
 #else
-	os_fast_mutex_free(mutex->handle);
-	ut_free(mutex->handle);
-	ut_free(mutex);
+  os_fast_mutex_free(mutex->handle);
+  ut_free(mutex->handle);
+  ut_free(mutex);
 #endif
 }
 
 /** Initializes an operating system fast mutex semaphore. */
 
-void
-os_fast_mutex_init(
-	os_fast_mutex_t*	fast_mutex)	/*!< in: fast mutex */
+void os_fast_mutex_init(os_fast_mutex_t *fast_mutex) /*!< in: fast mutex */
 {
 #ifdef __WIN__
-	ut_a(fast_mutex);
+  ut_a(fast_mutex);
 
-	InitializeCriticalSection((LPCRITICAL_SECTION) fast_mutex);
+  InitializeCriticalSection((LPCRITICAL_SECTION)fast_mutex);
 #else
-	ut_a(0 == pthread_mutex_init(fast_mutex, NULL));
+  ut_a(0 == pthread_mutex_init(fast_mutex, NULL));
 #endif
-	if (UNIV_LIKELY(os_sync_mutex_inited)) {
-		/* When creating os_sync_mutex itself (in Unix) we cannot
-		reserve it */
+  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+    /* When creating os_sync_mutex itself (in Unix) we cannot
+    reserve it */
 
-		os_mutex_enter(os_sync_mutex);
-	}
+    os_mutex_enter(os_sync_mutex);
+  }
 
-	os_fast_mutex_count++;
+  os_fast_mutex_count++;
 
-	if (UNIV_LIKELY(os_sync_mutex_inited)) {
-		os_mutex_exit(os_sync_mutex);
-	}
+  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+    os_mutex_exit(os_sync_mutex);
+  }
 }
 
 /** Acquires ownership of a fast mutex. */
 
-void
-os_fast_mutex_lock(
-	os_fast_mutex_t*	fast_mutex)	/*!< in: mutex to acquire */
+void os_fast_mutex_lock(
+    os_fast_mutex_t *fast_mutex) /*!< in: mutex to acquire */
 {
 #ifdef __WIN__
-	EnterCriticalSection((LPCRITICAL_SECTION) fast_mutex);
+  EnterCriticalSection((LPCRITICAL_SECTION)fast_mutex);
 #else
-	pthread_mutex_lock(fast_mutex);
+  pthread_mutex_lock(fast_mutex);
 #endif
 }
 
 /** Releases ownership of a fast mutex. */
 
-void
-os_fast_mutex_unlock(
-	os_fast_mutex_t*	fast_mutex)	/*!< in: mutex to release */
+void os_fast_mutex_unlock(
+    os_fast_mutex_t *fast_mutex) /*!< in: mutex to release */
 {
 #ifdef __WIN__
-	LeaveCriticalSection(fast_mutex);
+  LeaveCriticalSection(fast_mutex);
 #else
-	pthread_mutex_unlock(fast_mutex);
+  pthread_mutex_unlock(fast_mutex);
 #endif
 }
 
 /** Frees a mutex object. */
 
-void
-os_fast_mutex_free(
-	os_fast_mutex_t*	fast_mutex)	/*!< in: mutex to free */
+void os_fast_mutex_free(os_fast_mutex_t *fast_mutex) /*!< in: mutex to free */
 {
 #ifdef __WIN__
-	ut_a(fast_mutex);
+  ut_a(fast_mutex);
 
-	DeleteCriticalSection((LPCRITICAL_SECTION) fast_mutex);
+  DeleteCriticalSection((LPCRITICAL_SECTION)fast_mutex);
 #else
-	int	ret;
+  int ret;
 
-	ret = pthread_mutex_destroy(fast_mutex);
+  ret = pthread_mutex_destroy(fast_mutex);
 
-	if (UNIV_UNLIKELY(ret != 0)) {
-		ut_print_timestamp(ib_stream);
-		ib_logger(ib_stream,
-			"  InnoDB: error: return value %lu when calling\n"
-			"InnoDB: pthread_mutex_destroy().\n", (ulint)ret);
-		ib_logger(ib_stream,
-			"InnoDB: Byte contents of the pthread mutex at %p:\n",
-			(void*) fast_mutex);
-		ut_print_buf(ib_stream, fast_mutex, sizeof(os_fast_mutex_t));
-		ib_logger(ib_stream, "\n");
-	}
+  if (UNIV_UNLIKELY(ret != 0)) {
+    ut_print_timestamp(ib_stream);
+    ib_logger(ib_stream,
+              "  InnoDB: error: return value %lu when calling\n"
+              "InnoDB: pthread_mutex_destroy().\n",
+              (ulint)ret);
+    ib_logger(ib_stream, "InnoDB: Byte contents of the pthread mutex at %p:\n",
+              (void *)fast_mutex);
+    ut_print_buf(ib_stream, fast_mutex, sizeof(os_fast_mutex_t));
+    ib_logger(ib_stream, "\n");
+  }
 #endif
-	if (UNIV_LIKELY(os_sync_mutex_inited)) {
-		/* When freeing the last mutexes, we have
-		already freed os_sync_mutex */
+  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+    /* When freeing the last mutexes, we have
+    already freed os_sync_mutex */
 
-		os_mutex_enter(os_sync_mutex);
-	}
+    os_mutex_enter(os_sync_mutex);
+  }
 
-	ut_ad(os_fast_mutex_count > 0);
-	os_fast_mutex_count--;
+  ut_ad(os_fast_mutex_count > 0);
+  os_fast_mutex_count--;
 
-	if (UNIV_LIKELY(os_sync_mutex_inited)) {
-		os_mutex_exit(os_sync_mutex);
-	}
+  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+    os_mutex_exit(os_sync_mutex);
+  }
 }

@@ -23,49 +23,45 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "test0aux.h"
 
-static void
-get_all(void)
-{
-	const char** var_names;
-	ib_u32_t num_status_var;
+static void get_all(void) {
+  const char **var_names;
+  ib_u32_t num_status_var;
 
-	OK(ib_status_get_all(&var_names, &num_status_var));
+  OK(ib_status_get_all(&var_names, &num_status_var));
 
-	assert(num_status_var > 1);
+  assert(num_status_var > 1);
 
-	const char**	ptr;
-	ib_i64_t	val;
+  const char **ptr;
+  ib_i64_t val;
 
-	for (ptr = var_names; *ptr ; ++ptr) {
-		ib_err_t	err;
+  for (ptr = var_names; *ptr; ++ptr) {
+    ib_err_t err;
 
-		err = ib_status_get_i64(*ptr, &val);
-		assert(err == DB_SUCCESS);
+    err = ib_status_get_i64(*ptr, &val);
+    assert(err == DB_SUCCESS);
 
-		printf("%s: %d\n", *ptr, (int) val);
-	}
+    printf("%s: %d\n", *ptr, (int)val);
+  }
 }
 
-int
-main(int argc, char** argv)
-{
-	ib_err_t	err;
+int main(int argc, char **argv) {
+  ib_err_t err;
 
-	(void)argc;
-	(void)argv;
+  (void)argc;
+  (void)argv;
 
-	err = ib_init();
-	assert(err == DB_SUCCESS);
+  err = ib_init();
+  assert(err == DB_SUCCESS);
 
-	test_configure();
+  test_configure();
 
-	err = ib_startup("barracuda");
-	assert(err == DB_SUCCESS);
+  err = ib_startup("barracuda");
+  assert(err == DB_SUCCESS);
 
-	get_all();
+  get_all();
 
-	err = ib_shutdown(IB_SHUTDOWN_NORMAL);
-	assert(err == DB_SUCCESS);
+  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  assert(err == DB_SUCCESS);
 
-	return(0);
+  return (0);
 }

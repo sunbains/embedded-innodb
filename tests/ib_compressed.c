@@ -31,89 +31,82 @@ for valid page_size */
 #ifdef DBNAME
 #undef DBNAME
 #endif /* DBNAME */
-#define DBNAME	"test"
+#define DBNAME "test"
 
 /* use a name that is not going to collide with names from other tests */
-#define TABLENAME	DBNAME "/t_compressed"
+#define TABLENAME DBNAME "/t_compressed"
 
-int
-main(int argc, char* argv[])
-{
-	ib_tbl_sch_t	ib_tbl_sch = NULL;
-	ib_id_t		table_id;
-	int		valid_page_sizes[] = {0, 1, 2, 4, 8, 16};
-	int		invalid_page_sizes[] = {3, 5, 6, 14, 17, 32, 128, 301};
-	size_t		i;
+int main(int argc, char *argv[]) {
+  ib_tbl_sch_t ib_tbl_sch = NULL;
+  ib_id_t table_id;
+  int valid_page_sizes[] = {0, 1, 2, 4, 8, 16};
+  int invalid_page_sizes[] = {3, 5, 6, 14, 17, 32, 128, 301};
+  size_t i;
 
-	(void)argc;
-	(void)argv;
+  (void)argc;
+  (void)argv;
 
-	OK(ib_init());
+  OK(ib_init());
 
-	test_configure();
+  test_configure();
 
-	OK(ib_startup("barracuda"));
+  OK(ib_startup("barracuda"));
 
-	OK(ib_cfg_set("file_per_table", IB_TRUE));
+  OK(ib_cfg_set("file_per_table", IB_TRUE));
 
-	OK(ib_database_create(DBNAME));
+  OK(ib_database_create(DBNAME));
 
-	for (i = 0;
-	     i < sizeof(valid_page_sizes) / sizeof(valid_page_sizes[0]);
-	     i++) {
+  for (i = 0; i < sizeof(valid_page_sizes) / sizeof(valid_page_sizes[0]); i++) {
 
-		ib_trx_t	ib_trx;
+    ib_trx_t ib_trx;
 
-		OK(ib_table_schema_create(TABLENAME, &ib_tbl_sch,
-					  IB_TBL_COMPRESSED,
-					  valid_page_sizes[i]));
+    OK(ib_table_schema_create(TABLENAME, &ib_tbl_sch, IB_TBL_COMPRESSED,
+                              valid_page_sizes[i]));
 
-		OK(ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT,
-					   IB_COL_UNSIGNED, 0 /* ignored */,
-					   sizeof(int)));
+    OK(ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_UNSIGNED,
+                               0 /* ignored */, sizeof(int)));
 
-		ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+    ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
 
-		OK(ib_schema_lock_exclusive(ib_trx));
+    OK(ib_schema_lock_exclusive(ib_trx));
 
-		OK(ib_table_create(ib_trx, ib_tbl_sch, &table_id));
+    OK(ib_table_create(ib_trx, ib_tbl_sch, &table_id));
 
-		OK(ib_trx_commit(ib_trx));
+    OK(ib_trx_commit(ib_trx));
 
-		ib_table_schema_delete(ib_tbl_sch);
+    ib_table_schema_delete(ib_tbl_sch);
 
-		ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+    ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
 
-		OK(ib_schema_lock_exclusive(ib_trx));
+    OK(ib_schema_lock_exclusive(ib_trx));
 
-		OK(ib_table_drop(ib_trx, TABLENAME));
+    OK(ib_table_drop(ib_trx, TABLENAME));
 
-		OK(ib_trx_commit(ib_trx));
-	}
+    OK(ib_trx_commit(ib_trx));
+  }
 
-	for (i = 0;
-	     i < sizeof(invalid_page_sizes) / sizeof(invalid_page_sizes[0]);
-	     i++) {
+  for (i = 0; i < sizeof(invalid_page_sizes) / sizeof(invalid_page_sizes[0]);
+       i++) {
 
-		ib_err_t	ib_err;
+    ib_err_t ib_err;
 
-		ib_err = ib_table_schema_create(TABLENAME, &ib_tbl_sch,
-						IB_TBL_COMPRESSED,
-						invalid_page_sizes[i]);
+    ib_err = ib_table_schema_create(TABLENAME, &ib_tbl_sch, IB_TBL_COMPRESSED,
+                                    invalid_page_sizes[i]);
 
-		if (ib_err == DB_SUCCESS) {
-			fprintf(stderr, "Creating a compressed table with "
-				"page size %d succeeded but should have "
-				"failed", invalid_page_sizes[i]);
-			exit(EXIT_FAILURE);
-		}
+    if (ib_err == DB_SUCCESS) {
+      fprintf(stderr,
+              "Creating a compressed table with "
+              "page size %d succeeded but should have "
+              "failed",
+              invalid_page_sizes[i]);
+      exit(EXIT_FAILURE);
+    }
+  }
 
-	}
+  /* ignore errors as there may be tables left over from other tests */
+  OK(ib_database_drop(DBNAME));
 
-	/* ignore errors as there may be tables left over from other tests */
-	OK(ib_database_drop(DBNAME));
+  OK(ib_shutdown(IB_SHUTDOWN_NORMAL));
 
-	OK(ib_shutdown(IB_SHUTDOWN_NORMAL));
-
-	return(EXIT_SUCCESS);
+  return (EXIT_SUCCESS);
 }

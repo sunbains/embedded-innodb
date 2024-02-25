@@ -33,12 +33,11 @@ Created 1/20/1994 Heikki Tuuri
 
 #include "univ.i"
 
-#ifndef UNIV_HOTBACKUP
-#include "os0sync.h" /* for HAVE_ATOMIC_BUILTINS */
-#endif               /* UNIV_HOTBACKUP */
-
 #include <ctype.h>
 #include <time.h>
+
+#include "ut0dbg.h"
+#include "os0sync.h"
 
 /** Index name prefix in fast index creation */
 #define TEMP_INDEX_PREFIX '\377'

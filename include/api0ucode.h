@@ -2,6 +2,8 @@
 
 #define INNOBASE_UNI0CODE_H
 
+#include "univ.i"
+
 /* Opaque type used by the Unicode implementation. */
 typedef struct charset_struct charset_t;
 

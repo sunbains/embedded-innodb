@@ -26,68 +26,64 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "test0aux.h"
 
 /** All attempts to create the table should fail */
-static
-void
-create_table(void)
-{
-	ib_err_t	err = DB_SUCCESS;
-	ib_tbl_sch_t	ib_tbl_sch = NULL;
+static void create_table(void) {
+  ib_err_t err = DB_SUCCESS;
+  ib_tbl_sch_t ib_tbl_sch = NULL;
 
-	err = ib_table_schema_create("", &ib_tbl_sch, IB_TBL_COMPACT, 0);
-	assert(err == DB_DATA_MISMATCH);
+  err = ib_table_schema_create("", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  assert(err == DB_DATA_MISMATCH);
 
-	err = ib_table_schema_create("a", &ib_tbl_sch, IB_TBL_COMPACT, 0);
-	assert(err == DB_DATA_MISMATCH);
+  err = ib_table_schema_create("a", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  assert(err == DB_DATA_MISMATCH);
 
-	err = ib_table_schema_create("ab", &ib_tbl_sch, IB_TBL_COMPACT, 0);
-	assert(err == DB_DATA_MISMATCH);
+  err = ib_table_schema_create("ab", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  assert(err == DB_DATA_MISMATCH);
 
-	err = ib_table_schema_create(".", &ib_tbl_sch, IB_TBL_COMPACT, 0);
-	assert(err == DB_DATA_MISMATCH);
+  err = ib_table_schema_create(".", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  assert(err == DB_DATA_MISMATCH);
 
-	err = ib_table_schema_create("./", &ib_tbl_sch, IB_TBL_COMPACT, 0);
-	assert(err == DB_DATA_MISMATCH);
+  err = ib_table_schema_create("./", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  assert(err == DB_DATA_MISMATCH);
 
-	err = ib_table_schema_create("../", &ib_tbl_sch, IB_TBL_COMPACT, 0);
-	assert(err == DB_DATA_MISMATCH);
+  err = ib_table_schema_create("../", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  assert(err == DB_DATA_MISMATCH);
 
-	err = ib_table_schema_create("/", &ib_tbl_sch, IB_TBL_COMPACT, 0);
-	assert(err == DB_DATA_MISMATCH);
+  err = ib_table_schema_create("/", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  assert(err == DB_DATA_MISMATCH);
 
-	err = ib_table_schema_create("/aaaaa", &ib_tbl_sch, IB_TBL_COMPACT, 0);
-	assert(err == DB_DATA_MISMATCH);
+  err = ib_table_schema_create("/aaaaa", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  assert(err == DB_DATA_MISMATCH);
 
-	err = ib_table_schema_create("/a/a", &ib_tbl_sch, IB_TBL_COMPACT, 0);
-	assert(err == DB_DATA_MISMATCH);
+  err = ib_table_schema_create("/a/a", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  assert(err == DB_DATA_MISMATCH);
 
-	err = ib_table_schema_create("abcdef/", &ib_tbl_sch, IB_TBL_COMPACT, 0);
-	assert(err == DB_DATA_MISMATCH);
+  err = ib_table_schema_create("abcdef/", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  assert(err == DB_DATA_MISMATCH);
 
-	err = ib_table_schema_create("a/b", &ib_tbl_sch, IB_TBL_COMPACT, 0);
-	assert(err == DB_SUCCESS);
+  err = ib_table_schema_create("a/b", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  assert(err == DB_SUCCESS);
 
-	ib_table_schema_delete(ib_tbl_sch);
+  ib_table_schema_delete(ib_tbl_sch);
 }
 
-int main(int argc, char* argv[])
-{
-	ib_err_t	err;
+int main(int argc, char *argv[]) {
+  ib_err_t err;
 
-	(void)argc;
-	(void)argv;
+  (void)argc;
+  (void)argv;
 
-	err = ib_init();
-	assert(err == DB_SUCCESS);
+  err = ib_init();
+  assert(err == DB_SUCCESS);
 
-	test_configure();
+  test_configure();
 
-	err = ib_startup("barracuda");
-	assert(err == DB_SUCCESS);
+  err = ib_startup("barracuda");
+  assert(err == DB_SUCCESS);
 
-	create_table();
+  create_table();
 
-	err = ib_shutdown(IB_SHUTDOWN_NORMAL);
-	assert(err == DB_SUCCESS);
+  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  assert(err == DB_SUCCESS);
 
-	return(EXIT_SUCCESS);
+  return (EXIT_SUCCESS);
 }

@@ -48,22 +48,19 @@ register_test_table() in mt_drv.c
 #include <valgrind/memcheck.h>
 #endif
 
-
 /** Open a table and return a cursor for the table. */
-ib_err_t
-open_table(
-	const char*	dbname,		/*!< in: database name */
-	const char*	name,		/*!< in: table name */
-	ib_trx_t	ib_trx,		/*!< in: transaction */
-	ib_crsr_t*	crsr)		/*!< out: innodb cursor */
+ib_err_t open_table(const char *dbname, /*!< in: database name */
+                    const char *name,   /*!< in: table name */
+                    ib_trx_t ib_trx,    /*!< in: transaction */
+                    ib_crsr_t *crsr)    /*!< out: innodb cursor */
 {
-	ib_err_t	err = DB_SUCCESS;
-	char		table_name[IB_MAX_TABLE_NAME_LEN];
+  ib_err_t err = DB_SUCCESS;
+  char table_name[IB_MAX_TABLE_NAME_LEN];
 
-	snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-	err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
+  err = ib_cursor_open_table(table_name, ib_trx, crsr);
 
-	return(err);
+  return (err);
 }
 
 #if 0
@@ -142,150 +139,122 @@ err_exit:
 #endif
 
 /** stub for SELECT * from t */
-ib_err_t
-select_stub(
-	void*	arg)	/*!< in: arguments for callback */
+ib_err_t select_stub(void *arg) /*!< in: arguments for callback */
 {
-	(void)arg;
-	//usleep(100000);
-	return(DB_SUCCESS);
-
+  (void)arg;
+  // usleep(100000);
+  return (DB_SUCCESS);
 }
 /** DROP TABLE t */
-static
-ib_err_t
-drop_base(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t drop_base(void *arg) /*!< in: arguments for callback */
 {
-	ib_err_t	err;
-	ib_trx_t	ib_trx;
-	char		table_name[IB_MAX_TABLE_NAME_LEN];
-	cb_args_t*	cb_arg = (cb_args_t *)arg;
-	tbl_class_t*	tbl = cb_arg->tbl;
+  ib_err_t err;
+  ib_trx_t ib_trx;
+  char table_name[IB_MAX_TABLE_NAME_LEN];
+  cb_args_t *cb_arg = (cb_args_t *)arg;
+  tbl_class_t *tbl = cb_arg->tbl;
 
-	//fprintf(stderr, "base: DROP\n");
-	snprintf(table_name, sizeof(table_name), "%s/%s",
-		 tbl->db_name, tbl->name);
+  // fprintf(stderr, "base: DROP\n");
+  snprintf(table_name, sizeof(table_name), "%s/%s", tbl->db_name, tbl->name);
 
-	ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-	assert(ib_trx != NULL);
+  ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
+  assert(ib_trx != NULL);
 
-	err = ib_schema_lock_exclusive(ib_trx);
-	assert(err == DB_SUCCESS);
+  err = ib_schema_lock_exclusive(ib_trx);
+  assert(err == DB_SUCCESS);
 
-	err = ib_table_drop(ib_trx, table_name);
-	/* We can get the DB_TABLESPACE_DELETED if the table is already
-	on the background delete queue. */
-	assert(err == DB_SUCCESS
-	       || err == DB_TABLE_NOT_FOUND
-	       || err == DB_TABLESPACE_DELETED);
+  err = ib_table_drop(ib_trx, table_name);
+  /* We can get the DB_TABLESPACE_DELETED if the table is already
+  on the background delete queue. */
+  assert(err == DB_SUCCESS || err == DB_TABLE_NOT_FOUND ||
+         err == DB_TABLESPACE_DELETED);
 
-	err = ib_trx_commit(ib_trx);
-	assert(err == DB_SUCCESS);
+  err = ib_trx_commit(ib_trx);
+  assert(err == DB_SUCCESS);
 
-	update_err_stats(cb_arg->err_st, err);
-	return(err);
+  update_err_stats(cb_arg->err_st, err);
+  return (err);
 }
 
 /** TRUNCATE TABLE t */
-static
-ib_err_t
-truncate_base(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t truncate_base(void *arg) /*!< in: arguments for callback */
 {
-	ib_err_t	err;
-	ib_id_t		table_id;
-	char		table_name[IB_MAX_TABLE_NAME_LEN];
-	cb_args_t*	cb_arg = (cb_args_t *)arg;
-	tbl_class_t*	tbl = cb_arg->tbl;
+  ib_err_t err;
+  ib_id_t table_id;
+  char table_name[IB_MAX_TABLE_NAME_LEN];
+  cb_args_t *cb_arg = (cb_args_t *)arg;
+  tbl_class_t *tbl = cb_arg->tbl;
 
-	//fprintf(stderr, "base: TRUNCATE\n");
-	snprintf(table_name, sizeof(table_name), "%s/%s",
-		 tbl->db_name, tbl->name);
+  // fprintf(stderr, "base: TRUNCATE\n");
+  snprintf(table_name, sizeof(table_name), "%s/%s", tbl->db_name, tbl->name);
 
-	err = ib_table_truncate(table_name, &table_id);
-	update_err_stats(cb_arg->err_st, err);
+  err = ib_table_truncate(table_name, &table_id);
+  update_err_stats(cb_arg->err_st, err);
 
-	return(err);
+  return (err);
 }
 
 /** Function stub */
-static
-ib_err_t
-update_base(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t update_base(void *arg) /*!< in: arguments for callback */
 {
-	(void)arg;
-	//fprintf(stderr, "base: UPDATE\n");
-	usleep(100000);
-	return(DB_SUCCESS);
+  (void)arg;
+  // fprintf(stderr, "base: UPDATE\n");
+  usleep(100000);
+  return (DB_SUCCESS);
 }
 
 /** Function stub */
-static
-ib_err_t
-insert_base(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t insert_base(void *arg) /*!< in: arguments for callback */
 {
-	(void)arg;
-	//fprintf(stderr, "base: INSERT\n");
-	usleep(100000);
-	return(DB_SUCCESS);
+  (void)arg;
+  // fprintf(stderr, "base: INSERT\n");
+  usleep(100000);
+  return (DB_SUCCESS);
 }
 
 /** Function stub */
-static
-ib_err_t
-delete_base(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t delete_base(void *arg) /*!< in: arguments for callback */
 {
-	(void)arg;
-	//fprintf(stderr, "base: DELETE\n");
-	usleep(100000);
-	return(DB_SUCCESS);
+  (void)arg;
+  // fprintf(stderr, "base: DELETE\n");
+  usleep(100000);
+  return (DB_SUCCESS);
 }
 
 /** Function stub */
-static
-ib_err_t
-create_base(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t create_base(void *arg) /*!< in: arguments for callback */
 {
-	(void)arg;
-	//fprintf(stderr, "base: CREATE\n");
-	usleep(100000);
-	return(DB_SUCCESS);
+  (void)arg;
+  // fprintf(stderr, "base: CREATE\n");
+  usleep(100000);
+  return (DB_SUCCESS);
 }
 
 /** Function stub */
-static
-ib_err_t
-alter_base(
-	void*	arg)	/*!< in: arguments for callback */
+static ib_err_t alter_base(void *arg) /*!< in: arguments for callback */
 {
-	(void)arg;
-	//fprintf(stderr, "base: ALTER\n");
-	usleep(100000);
-	return(DB_SUCCESS);
+  (void)arg;
+  // fprintf(stderr, "base: ALTER\n");
+  usleep(100000);
+  return (DB_SUCCESS);
 }
 
 /** Function to register this table class with mt_drv test suite */
-void
-register_base_table(
-	tbl_class_t*	tbl)	/*!< in/out: table class to register */
+void register_base_table(
+    tbl_class_t *tbl) /*!< in/out: table class to register */
 {
-	assert(tbl != NULL);
+  assert(tbl != NULL);
 
-	strcpy((char *)tbl->name, "dummy");
+  strcpy((char *)tbl->name, "dummy");
 
-	//tbl->dml_fn[DML_OP_TYPE_SELECT] = select_base;
-	tbl->dml_fn[DML_OP_TYPE_SELECT] = select_stub;
-	tbl->dml_fn[DML_OP_TYPE_UPDATE] = update_base;
-	tbl->dml_fn[DML_OP_TYPE_INSERT] = insert_base;
-	tbl->dml_fn[DML_OP_TYPE_DELETE] = delete_base;
+  // tbl->dml_fn[DML_OP_TYPE_SELECT] = select_base;
+  tbl->dml_fn[DML_OP_TYPE_SELECT] = select_stub;
+  tbl->dml_fn[DML_OP_TYPE_UPDATE] = update_base;
+  tbl->dml_fn[DML_OP_TYPE_INSERT] = insert_base;
+  tbl->dml_fn[DML_OP_TYPE_DELETE] = delete_base;
 
-	tbl->ddl_fn[DDL_OP_TYPE_CREATE] = create_base;
-	tbl->ddl_fn[DDL_OP_TYPE_DROP] = drop_base;
-	tbl->ddl_fn[DDL_OP_TYPE_ALTER] = alter_base;
-	tbl->ddl_fn[DDL_OP_TYPE_TRUNCATE] = truncate_base;
+  tbl->ddl_fn[DDL_OP_TYPE_CREATE] = create_base;
+  tbl->ddl_fn[DDL_OP_TYPE_DROP] = drop_base;
+  tbl->ddl_fn[DDL_OP_TYPE_ALTER] = alter_base;
+  tbl->ddl_fn[DDL_OP_TYPE_TRUNCATE] = truncate_base;
 }

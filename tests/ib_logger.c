@@ -31,42 +31,35 @@ messages to stderr. It should simply startup and shutdown InnoDB. */
 #include <valgrind/memcheck.h>
 #endif
 
-#define DATABASE	"test"
-#define TABLE		"t"
+#define DATABASE "test"
+#define TABLE "t"
 
 /** Just ignore all messages. */
-static
-int
-null_logger(
-	FILE*		stream,
-	const char*	fmt,
-	...)
-{
-	(void) stream;
-	(void) fmt;
+static int null_logger(FILE *stream, const char *fmt, ...) {
+  (void)stream;
+  (void)fmt;
 
-	return(0);
+  return (0);
 }
 
-int main(int argc, char* argv[])
-{
-	ib_err_t	err;
+int main(int argc, char *argv[]) {
+  ib_err_t err;
 
-	(void) argc;
-	(void) argv;
+  (void)argc;
+  (void)argv;
 
-	err = ib_init();
-	assert(err == DB_SUCCESS);
+  err = ib_init();
+  assert(err == DB_SUCCESS);
 
-	test_configure();
+  test_configure();
 
-	ib_logger_set(null_logger, NULL);
+  ib_logger_set(null_logger, NULL);
 
-	err = ib_startup("barracuda");
-	assert(err == DB_SUCCESS);
+  err = ib_startup("barracuda");
+  assert(err == DB_SUCCESS);
 
-	err = ib_shutdown(IB_SHUTDOWN_NORMAL);
-	assert(err == DB_SUCCESS);
+  err = ib_shutdown(IB_SHUTDOWN_NORMAL);
+  assert(err == DB_SUCCESS);
 
-	return(EXIT_SUCCESS);
+  return (EXIT_SUCCESS);
 }

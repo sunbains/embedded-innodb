@@ -8,9 +8,10 @@ Created 12 Oct 2008
 #ifndef ddl0ddl_h
 #define ddl0ddl_h
 
+#include "univ.i"
+
 #include "dict0types.h"
 #include "trx0types.h"
-#include "univ.i"
 
 /** Get the background drop list length. NOTE: the caller must own the kernel
 mutex!
