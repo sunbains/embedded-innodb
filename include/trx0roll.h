@@ -105,9 +105,8 @@ committed, then we clean up a possible insert undo log. If the
 transaction was not yet committed, then we roll it back.
 Note: this is done in a background thread.
 @return	a dummy parameter */
+void *trx_rollback_or_clean_all_recovered(void *arg __attribute__((unused)));
 
-os_thread_ret_t trx_rollback_or_clean_all_recovered(void *arg
-                                                    __attribute__((unused)));
 /*!< in: a dummy parameter required by
 os_thread_create */
 /** Finishes a transaction rollback. */
@@ -128,11 +127,12 @@ graph.
 @return	own: the query graph */
 
 que_t *trx_roll_graph_build(trx_t *trx); /*!< in: trx handle */
+
 /** Creates a rollback command node struct.
 @return	own: rollback node struct */
-
 roll_node_t *
 roll_node_create(mem_heap_t *heap); /*!< in: mem heap where created */
+
 /** Performs an execution step for a rollback command node in a query graph.
 @return	query thread to run next, or NULL */
 
@@ -140,7 +140,7 @@ que_thr_t *trx_rollback_step(que_thr_t *thr); /*!< in: query thread */
 /** Rollback a user transaction.
 @return	error code or DB_SUCCESS */
 
-int trx_general_rollback(
+db_err trx_general_rollback(
     trx_t *trx,            /*!< in: transaction handle */
     ibool partial,         /*!< in: TRUE if partial rollback requested */
     trx_savept_t *savept); /*!< in: pointer to savepoint undo number, if

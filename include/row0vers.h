@@ -73,7 +73,7 @@ read should see. We assume that the trx id stored in rec is such that
 the consistent read should not see rec in its present version.
 @return	DB_SUCCESS or DB_MISSING_HISTORY */
 
-ulint row_vers_build_for_consistent_read(
+db_err  row_vers_build_for_consistent_read(
     const rec_t *rec,         /*!< in: record in a clustered index; the
                               caller must have a latch on the page; this
                               latch locks the top of the stack of versions

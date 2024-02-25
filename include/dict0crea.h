@@ -1,4 +1,4 @@
-/**
+/*****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -33,32 +33,31 @@ Created 1/8/1996 Heikki Tuuri
 
 /** Creates a table create graph.
 @return	own: table create node */
-
 tab_node_t *
 tab_create_graph_create(dict_table_t *table, /*!< in: table to create, built as
                                              a memory data structure */
                         mem_heap_t *heap,    /*!< in: heap where created */
                         ibool commit); /*!< in: if TRUE commit transaction */
+
 /** Creates an index create graph.
 @return	own: index create node */
-
 ind_node_t *ind_create_graph_create(
     dict_index_t *index, /*!< in: index to create, built as a memory data
                          structure */
     mem_heap_t *heap,    /*!< in: heap where created */
     ibool commit);       /*!< in: TRUE if transaction should be commit */
+
 /** Creates a table. This is a high-level function used in SQL execution graphs.
 @return	query thread to run next or NULL */
-
 que_thr_t *dict_create_table_step(que_thr_t *thr); /*!< in: query thread */
+
 /** Creates an index. This is a high-level function used in SQL execution
 graphs.
 @return	query thread to run next or NULL */
-
 que_thr_t *dict_create_index_step(que_thr_t *thr); /*!< in: query thread */
+
 /** Truncates the index tree associated with a row in SYS_INDEXES table.
 @return	new root page number, or FIL_NULL on failure */
-
 ulint dict_truncate_index_tree(
     dict_table_t *table, /*!< in: the table the index belongs to */
     ulint space,         /*!< in: 0=truncate,
@@ -71,18 +70,19 @@ ulint dict_truncate_index_tree(
     mtr_t *mtr);         /*!< in: mtr having the latch
                          on the record page. The mtr may be
                          committed and restarted in this call. */
-/** Drops the index tree associated with a row in SYS_INDEXES table. */
 
+/** Drops the index tree associated with a row in SYS_INDEXES table. */
 void dict_drop_index_tree(
     rec_t *rec,  /*!< in/out: record in the clustered index
                  of SYS_INDEXES table */
     mtr_t *mtr); /*!< in: mtr having the latch on the record page */
+
 /** Creates the foreign key constraints system tables inside InnoDB
 at database creation or database start if they are not found or are
 not of the right form.
 @return	DB_SUCCESS or error code */
+db_err dict_create_or_check_foreign_constraint_tables(void);
 
-ulint dict_create_or_check_foreign_constraint_tables(void);
 /** Adds foreign key definitions to data dictionary tables in the database. We
 look at table->foreign_list, and also generate names to constraints that were
 not named by the user. A generated constraint has a name of the format
@@ -90,8 +90,7 @@ databasename/tablename_ibfk_NUMBER, where the numbers start from 1, and are
 given locally for this table, that is, the number is not global, as in the
 old format constraints < 4.0.18 it used to be.
 @return	error code or DB_SUCCESS */
-
-ulint dict_create_add_foreigns_to_dictionary(
+db_err dict_create_add_foreigns_to_dictionary(
     ulint start_id,      /*!< in: if we are actually doing ALTER TABLE
                         ADD CONSTRAINT, we want to generate constraint
                         numbers which are bigger than in the table so
@@ -104,7 +103,6 @@ ulint dict_create_add_foreigns_to_dictionary(
     trx_t *trx);         /*!< in: transaction */
 
 /* Table create node structure */
-
 struct tab_node_struct {
   que_common_t common; /*!< node type: QUE_NODE_TABLE_CREATE */
   dict_table_t *table; /*!< table to create, built as a memory data

@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -25,6 +25,7 @@ Created 5/30/1994 Heikki Tuuri
 #define ut0mem_h
 
 #include "univ.i"
+
 #include <string.h>
 #ifndef UNIV_HOTBACKUP
 #include "os0sync.h"
@@ -37,33 +38,6 @@ extern ulint ut_total_allocated_memory;
 /** Mutex protecting ut_total_allocated_memory and ut_mem_block_list */
 extern os_fast_mutex_t ut_list_mutex;
 #endif /* !UNIV_HOTBACKUP */
-
-/** Wrapper for memcpy(3).  Copy memory area when the source and
-target are not overlapping.
-* @param dest	in: copy to
-* @param sour	in: copy from
-* @param n	in: number of bytes to copy
-* @return	dest */
-UNIV_INLINE
-void *ut_memcpy(void *dest, const void *sour, ulint n);
-
-/** Wrapper for memmove(3).  Copy memory area when the source and
-target are overlapping.
-* @param dest	in: copy to
-* @param sour	in: copy from
-* @param n	in: number of bytes to copy
-* @return	dest */
-UNIV_INLINE
-void *ut_memmove(void *dest, const void *sour, ulint n);
-
-/** Wrapper for memcmp(3).  Compare memory areas.
-* @param str1	in: first memory block to compare
-* @param str2	in: second memory block to compare
-* @param n	in: number of bytes to compare
-* @return	negative, 0, or positive if str1 is smaller, equal,
-                or greater than str2, respectively. */
-UNIV_INLINE
-int ut_memcmp(const void *str1, const void *str2, ulint n);
 
 /** Initializes the mem block list at database startup. */
 
@@ -129,27 +103,6 @@ void *ut_realloc(void *ptr,   /*!< in: pointer to old block or NULL */
 void ut_free_all_mem(void);
 #endif /* !UNIV_HOTBACKUP */
 
-/** Wrapper for strcpy(3).  Copy a NUL-terminated string.
- * @param dest	in: copy to
- * @param sour	in: copy from
- * @return	dest */
-UNIV_INLINE
-char *ut_strcpy(char *dest, const char *sour);
-
-/** Wrapper for strlen(3).  Determine the length of a NUL-terminated string.
- * @param str	in: string
- * @return	length of the string in bytes, excluding the terminating NUL */
-UNIV_INLINE
-ulint ut_strlen(const char *str);
-
-/** Wrapper for strcmp(3).  Compare NUL-terminated strings.
-* @param str1	in: first string to compare
-* @param str2	in: second string to compare
-* @return	negative, 0, or positive if str1 is smaller, equal,
-                or greater than str2, respectively. */
-UNIV_INLINE
-int ut_strcmp(const char *str1, const char *str2);
-
 /** Copies up to size - 1 characters from the NUL-terminated string src to
 dst, NUL-terminating the result. Returns strlen(src), so truncation
 occurred if the return value >= size.
@@ -167,27 +120,27 @@ ulint ut_strlcpy_rev(char *dst,       /*!< in: destination buffer */
                      const char *src, /*!< in: source buffer */
                      ulint size);     /*!< in: size of destination buffer */
 
-/** Compute strlen(ut_strcpyq(str, q)).
+/** Compute strlen(strcpyq(str, q)).
 @return	length of the string when quoted */
 UNIV_INLINE
-ulint ut_strlenq(const char *str, /*!< in: null-terminated string */
+ulint strlenq(const char *str, /*!< in: null-terminated string */
                  char q);         /*!< in: the quote character */
 
 /** Make a quoted copy of a NUL-terminated string.	Leading and trailing
 quotes will not be included; only embedded quotes will be escaped.
-See also ut_strlenq() and ut_memcpyq().
+See also strlenq() and memcpyq().
 @return	pointer to end of dest */
 
-char *ut_strcpyq(char *dest,       /*!< in: output buffer */
+char *strcpyq(char *dest,       /*!< in: output buffer */
                  char q,           /*!< in: the quote character */
                  const char *src); /*!< in: null-terminated string */
 
 /** Make a quoted copy of a fixed-length string.  Leading and trailing
 quotes will not be included; only embedded quotes will be escaped.
-See also ut_strlenq() and ut_strcpyq().
+See also strlenq() and strcpyq().
 @return	pointer to end of dest */
 
-char *ut_memcpyq(char *dest,      /*!< in: output buffer */
+char *memcpyq(char *dest,      /*!< in: output buffer */
                  char q,          /*!< in: the quote character */
                  const char *src, /*!< in: string to be quoted */
                  ulint len);      /*!< in: length of src */

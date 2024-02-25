@@ -31,7 +31,6 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0xa.h"
 #include "univ.i"
 
-#ifndef UNIV_HOTBACKUP
 /** Builds a roll pointer.
 @return	roll pointer */
 UNIV_INLINE
@@ -53,7 +52,7 @@ void trx_undo_decode_roll_ptr(
 @return	TRUE if insert undo log */
 UNIV_INLINE
 ibool trx_undo_roll_ptr_is_insert(roll_ptr_t roll_ptr); /*!< in: roll pointer */
-#endif                                                  /* !UNIV_HOTBACKUP */
+
 /** Writes a roll ptr to an index page. In case that the size changes in
 some future version, this function should be used instead of
 mach_write_... */
@@ -68,7 +67,6 @@ mach_read_...
 UNIV_INLINE
 roll_ptr_t trx_read_roll_ptr(
     const byte *ptr); /*!< in: pointer to memory from where to read */
-#ifndef UNIV_HOTBACKUP
 /** Gets an undo log page and x-latches it.
 @return	pointer to page x-latched */
 UNIV_INLINE
@@ -145,6 +143,7 @@ trx_undo_rec_t *trx_undo_get_first_rec(
     ulint offset,   /*!< in: undo log header offset on page */
     ulint mode,     /*!< in: latching mode: RW_S_LATCH or RW_X_LATCH */
     mtr_t *mtr);    /*!< in: mtr */
+
 /** Tries to add a page to the undo log segment where the undo log is placed.
 @return	page number if success, else FIL_NULL */
 
@@ -176,34 +175,34 @@ void trx_undo_truncate_start(
                        pages; the header page is not
                        freed, but emptied, if all the
                        records there are < limit */
+
 /** Initializes the undo log lists for a rollback segment memory copy.
 This function is only called when the database is started or a new
 rollback segment created.
 @return	the combined size of undo log segments in pages */
-
 ulint trx_undo_lists_init(
     ib_recovery_t recovery, /*!< in: recovery flag */
     trx_rseg_t *rseg);      /*!< in: rollback segment memory object */
+
 /** Assigns an undo log for a transaction. A new undo log is created or a cached
 undo log reused.
 @return DB_SUCCESS if undo log assign successful, possible error codes
 are: DB_TOO_MANY_CONCURRENT_TRXS DB_OUT_OF_FILE_SPACE
 DB_OUT_OF_MEMORY */
-
-ulint trx_undo_assign_undo(
+db_err trx_undo_assign_undo(
     trx_t *trx,  /*!< in: transaction */
     ulint type); /*!< in: TRX_UNDO_INSERT or TRX_UNDO_UPDATE */
+
 /** Sets the state of the undo log segment at a transaction finish.
 @return	undo log segment header page, x-latched */
-
 page_t *trx_undo_set_state_at_finish(
     trx_rseg_t *rseg, /*!< in: rollback segment memory object */
     trx_t *trx,       /*!< in: transaction */
     trx_undo_t *undo, /*!< in: undo log memory copy */
     mtr_t *mtr);      /*!< in: mtr */
+
 /** Sets the state of the undo log segment at a transaction prepare.
 @return	undo log segment header page, x-latched */
-
 page_t *
 trx_undo_set_state_at_prepare(trx_t *trx,       /*!< in: transaction */
                               trx_undo_t *undo, /*!< in: undo log memory copy */
@@ -212,18 +211,17 @@ trx_undo_set_state_at_prepare(trx_t *trx,       /*!< in: transaction */
 /** Adds the update undo log header as the first in the history list, and
 frees the memory object, or puts it to the list of cached update undo log
 segments. */
-
 void trx_undo_update_cleanup(
     trx_t *trx,        /*!< in: trx owning the update undo log */
     page_t *undo_page, /*!< in: update undo log header page,
                        x-latched */
     mtr_t *mtr);       /*!< in: mtr */
+
 /** Frees or caches an insert undo log after a transaction commit or rollback.
 Knowledge of inserts is not needed after a commit or rollback, therefore
 the data can be discarded. */
-
 void trx_undo_insert_cleanup(trx_t *trx); /*!< in: transaction handle */
-#endif                                    /* !UNIV_HOTBACKUP */
+
 /** Parses the redo log entry of an undo log page initialization.
 @return	end of log record or NULL */
 
@@ -273,7 +271,6 @@ void trx_undo_mem_free(
   5 /* contains an undo log of an                                              \
     prepared transaction */
 
-#ifndef UNIV_HOTBACKUP
 /** Transaction undo log memory object; this is protected by the undo_mutex
 in the corresponding transaction object */
 
@@ -334,7 +331,6 @@ struct trx_undo_struct {
   /*!< undo log objects in the rollback
   segment are chained into lists */
 };
-#endif /* !UNIV_HOTBACKUP */
 
 /** The offset of the undo log page header on pages of the undo log */
 #define TRX_UNDO_PAGE_HDR FSEG_PAGE_DATA

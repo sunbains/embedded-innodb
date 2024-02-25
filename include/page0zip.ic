@@ -147,7 +147,6 @@ void page_zip_set_size(page_zip_des_t *page_zip, /*!< in/out: compressed page */
   ut_ad(page_zip_get_size(page_zip) == size);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Determine if a record is so big that it needs to be stored externally.
 @return	FALSE if the entire record can be stored locally on the page */
 UNIV_INLINE
@@ -158,7 +157,7 @@ ibool page_zip_rec_needs_ext(
                     ignored if zip_size == 0 */
     ulint zip_size) /*!< in: compressed page size in bytes, or 0 */
 {
-  ut_ad(rec_size > comp ? REC_N_NEW_EXTRA_BYTES : REC_N_OLD_EXTRA_BYTES);
+  ut_ad(rec_size > (comp ? REC_N_NEW_EXTRA_BYTES : REC_N_OLD_EXTRA_BYTES));
   ut_ad(ut_is_2pow(zip_size));
   ut_ad(comp || !zip_size);
 
@@ -185,7 +184,6 @@ ibool page_zip_rec_needs_ext(
 
   return (rec_size >= page_get_free_space_of_empty(comp) / 2);
 }
-#endif /* !UNIV_HOTBACKUP */
 
 #ifdef UNIV_DEBUG
 /** Validate a compressed page descriptor.
@@ -348,9 +346,7 @@ void page_zip_write_header(
   /* ut_ad(page_zip_validate(page_zip, str - pos)); */
 
   if (UNIV_LIKELY_NULL(mtr)) {
-#ifndef UNIV_HOTBACKUP
     page_zip_write_header_log(str, length, mtr);
-#endif /* !UNIV_HOTBACKUP */
   }
 }
 

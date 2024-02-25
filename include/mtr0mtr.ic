@@ -124,22 +124,17 @@ ibool mtr_memo_contains(mtr_t *mtr,         /*!< in: mtr */
                         const void *object, /*!< in: object to search */
                         ulint type)         /*!< in: type of object */
 {
-  mtr_memo_slot_t *slot;
-  dyn_array_t *memo;
-  ulint offset;
-
   ut_ad(mtr);
   ut_ad(mtr->magic_n == MTR_MAGIC_N);
   ut_ad(mtr->state == MTR_ACTIVE || mtr->state == MTR_COMMITTING);
 
-  memo = &(mtr->memo);
-
-  offset = dyn_array_get_data_size(memo);
+  auto memo = &(mtr->memo);
+  auto offset = dyn_array_get_data_size(memo);
 
   while (offset > 0) {
     offset -= sizeof(mtr_memo_slot_t);
 
-    slot = dyn_array_get_element(memo, offset);
+    auto slot = (mtr_memo_slot_t*) dyn_array_get_element(memo, offset);
 
     if ((object == slot->object) && (type == slot->type)) {
 

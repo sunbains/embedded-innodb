@@ -67,9 +67,9 @@ struct buf_buddy_stat_struct {
   /** Number of blocks allocated from the buddy system. */
   ulint used;
   /** Number of blocks relocated by the buddy system. */
-  ib_uint64_t relocated;
+  uint64_t relocated;
   /** Total duration of block relocations, in microseconds. */
-  ib_uint64_t relocated_usec;
+  uint64_t relocated_usec;
 };
 
 /** Statistics of buddy blocks of a given size. */

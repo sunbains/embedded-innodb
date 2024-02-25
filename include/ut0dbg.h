@@ -32,7 +32,7 @@ Created 1/30/1994 Heikki Tuuri
 /** Test if an assertion fails.
 @param EXPR	assertion expression
 @return		nonzero if EXPR holds, zero if not */
-#define UT_DBG_FAIL(EXPR) UNIV_UNLIKELY(!((ulint)(EXPR)))
+#define UT_DBG_FAIL(EXPR) UNIV_UNLIKELY(!((bool)(EXPR)))
 #else
 /** This is used to eliminate compiler warnings */
 extern ulint ut_dbg_zero;

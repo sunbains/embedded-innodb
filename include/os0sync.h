@@ -77,7 +77,7 @@ struct os_event_struct {
                             in the signaled state, i.e., a thread
                             does not stop if it tries to wait for
                             this event */
-  ib_int64_t signal_count;  /*!< this is incremented each time
+  int64_t signal_count;  /*!< this is incremented each time
                             the event becomes signaled */
   pthread_cond_t cond_var;  /*!< condition variable is used in
                             waiting for the event */
@@ -133,7 +133,7 @@ that this thread should not wait in case of an intervening call to
 os_event_set() between this os_event_reset() and the
 os_event_wait_low() call. See comments for os_event_wait_low(). */
 
-ib_int64_t os_event_reset(os_event_t event); /*!< in: event to reset */
+int64_t os_event_reset(os_event_t event); /*!< in: event to reset */
 /** Frees an event object. */
 
 void os_event_free(os_event_t event); /*!< in: event to free */
@@ -159,7 +159,7 @@ value returned by os_event_reset() should be passed in as
 reset_sig_count. */
 
 void os_event_wait_low(os_event_t event,            /*!< in: event to wait */
-                       ib_int64_t reset_sig_count); /*!< in: zero or the value
+                       int64_t reset_sig_count); /*!< in: zero or the value
                                                    returned by previous call of
                                                    os_event_reset(). */
 

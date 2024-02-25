@@ -29,7 +29,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "ut0byte.h"
 
 /** prepare trx_t::id for being printed via printf(3) */
-#define TRX_ID_PREP_PRINTF(id) (ib_uint64_t) ut_conv_dulint_to_longlong(id)
+#define TRX_ID_PREP_PRINTF(id) (uint64_t) ut_conv_dulint_to_longlong(id)
 
 /** printf(3) format used for printing TRX_ID_PRINTF_PREP() */
 #define TRX_ID_FMT "%llX"

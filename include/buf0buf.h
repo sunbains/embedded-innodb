@@ -142,7 +142,7 @@ ulint buf_pool_get_curr_size(void);
 zero if all modified pages have been flushed to disk.
 @return	oldest modification in pool, zero if none */
 UNIV_INLINE
-ib_uint64_t buf_pool_get_oldest_modification(void);
+uint64_t buf_pool_get_oldest_modification(void);
 /*** Allocates a buffer block.
 @return	own: the allocated block, in state BUF_BLOCK_MEMORY */
 UNIV_INLINE
@@ -179,7 +179,7 @@ page.
 ibool buf_page_optimistic_get(
     ulint rw_latch,           /*!< in: RW_S_LATCH, RW_X_LATCH */
     buf_block_t *block,       /*!< in: guessed block */
-    ib_uint64_t modify_clock, /*!< in: modify clock value if mode is
+    uint64_t modify_clock, /*!< in: modify clock value if mode is
                          ..._GUESS_ON_CLOCK */
     const char *file,         /*!< in: file name */
     ulint line,               /*!< in: line where called */
@@ -347,7 +347,7 @@ ibool buf_page_peek_if_search_hashed(ulint space,   /*!< in: space id */
 Returns zero if not file page or no modification occurred yet.
 @return	newest modification to page */
 UNIV_INLINE
-ib_uint64_t buf_page_get_newest_modification(
+uint64_t buf_page_get_newest_modification(
     const buf_page_t *bpage); /*!< in: block containing the
                               page frame */
 /*** Increments the modify clock of a frame by 1. The caller must (1) own the
@@ -359,7 +359,7 @@ void buf_block_modify_clock_inc(buf_block_t *block); /*!< in: block */
 or x-lock on the block.
 @return	value */
 UNIV_INLINE
-ib_uint64_t buf_block_get_modify_clock(buf_block_t *block); /*!< in: block */
+uint64_t buf_block_get_modify_clock(buf_block_t *block); /*!< in: block */
 #else /* !UNIV_HOTBACKUP */
 #define buf_block_modify_clock_inc(block) ((void)0)
 #endif /* !UNIV_HOTBACKUP */
@@ -689,7 +689,7 @@ buf_page_t *buf_page_init_for_read(
     ulint space,    /*!< in: space id */
     ulint zip_size, /*!< in: compressed page size, or 0 */
     ibool unzip,    /*!< in: TRUE=request uncompressed page */
-    ib_int64_t tablespace_version, /*!< in: prevents reading from a wrong
+    int64_t tablespace_version, /*!< in: prevents reading from a wrong
                         version of the tablespace in case we have done
                         DISCARD + IMPORT */
     ulint offset);                 /*!< in: page number */
@@ -808,12 +808,12 @@ struct buf_page_struct {
                        should hold: in_free_list
                        == (state == BUF_BLOCK_NOT_USED) */
 #endif                 /* UNIV_DEBUG */
-  ib_uint64_t newest_modification;
+  uint64_t newest_modification;
   /*!< log sequence number of
   the youngest modification to
   this block, zero if not
   modified */
-  ib_uint64_t oldest_modification;
+  uint64_t oldest_modification;
   /*!< log sequence number of
   the START of the log entry
   written of the oldest
@@ -910,7 +910,7 @@ struct buf_block_struct {
   /** @name Optimistic search field */
   /* @{ */
 
-  ib_uint64_t modify_clock; /*!< this clock is incremented every
+  uint64_t modify_clock; /*!< this clock is incremented every
                             time a pointer to a record on the
                             page may become obsolete; this is
                             used in the optimistic cursor

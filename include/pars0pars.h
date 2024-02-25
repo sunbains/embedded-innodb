@@ -99,9 +99,8 @@ que_t *pars_sql(pars_info_t *info, /*!< in: extra information, or NULL */
                 const char *str);  /*!< in: SQL string */
 /** Retrieves characters to the lexical analyzer. */
 
-void pars_get_lex_chars(
+int pars_get_lex_chars(
     char *buf,     /*!< in/out: buffer where to copy */
-    int *result,   /*!< out: number of characters copied or EOF */
     int max_size); /*!< in: maximum number of characters which fit
                    in the buffer */
 /** Called by yyparse on error. */
@@ -395,7 +394,7 @@ heap. */
 
 void pars_info_add_int8_literal(pars_info_t *info, /*!< in: info struct */
                                 const char *name,  /*!< in: name */
-                                ib_uint64_t val);  /*!< in: value */
+                                uint64_t val);  /*!< in: value */
 
 /** Equivalent to:
 
@@ -508,7 +507,7 @@ is also used for some non-functions like the assignment ':=' */
 struct func_node_struct {
   que_common_t common; /*!< type: QUE_NODE_FUNC */
   int func;            /*!< token code of the function name */
-  ulint class;         /*!< class of the function */
+  ulint func_class;         /*!< class of the function */
   que_node_t *args;    /*!< argument(s) of the function */
   UT_LIST_NODE_T(func_node_t) cond_list;
   /*!< list of comparison conditions; defined

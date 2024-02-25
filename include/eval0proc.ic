@@ -30,11 +30,9 @@ Created 1/20/1998 Heikki Tuuri
 UNIV_INLINE
 que_thr_t *proc_step(que_thr_t *thr) /*!< in: query thread */
 {
-  proc_node_t *node;
-
   ut_ad(thr);
 
-  node = thr->run_node;
+  auto node = (proc_node_t*) thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_PROC);
 
   if (thr->prev_node == que_node_get_parent(node)) {
@@ -53,7 +51,7 @@ que_thr_t *proc_step(que_thr_t *thr) /*!< in: query thread */
     thr->run_node = que_node_get_parent(node);
   }
 
-  return (thr);
+  return thr;
 }
 
 /** Performs an execution step of a procedure call node.
@@ -61,11 +59,9 @@ que_thr_t *proc_step(que_thr_t *thr) /*!< in: query thread */
 UNIV_INLINE
 que_thr_t *proc_eval_step(que_thr_t *thr) /*!< in: query thread */
 {
-  func_node_t *node;
-
   ut_ad(thr);
 
-  node = thr->run_node;
+  auto node = (func_node_t*) thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_FUNC);
 
   /* Evaluate the procedure */

@@ -212,7 +212,7 @@ bigger than 4000 bytes */
 struct os_file_stat_struct {
   char name[OS_FILE_MAX_PATH]; /*!< path to a file */
   os_file_type_t type;         /*!< file type */
-  ib_int64_t size;             /*!< file size */
+  int64_t size;             /*!< file size */
   time_t ctime;                /*!< creation time */
   time_t mtime;                /*!< modification time */
   time_t atime;                /*!< access time */
@@ -381,10 +381,10 @@ ibool os_file_get_size(
     ulint *size,       /*!< out: least significant 32 bits of file
                        size */
     ulint *size_high); /*!< out: most significant 32 bits of size */
-/** Gets file size as a 64-bit integer ib_int64_t.
+/** Gets file size as a 64-bit integer int64_t.
 @return	size in bytes, -1 if error */
 
-ib_int64_t
+int64_t
 os_file_get_size_as_iblonglong(os_file_t file); /*!< in: handle to a file */
 /** Write the specified number of zeros to a newly created file.
 @return	TRUE if success */

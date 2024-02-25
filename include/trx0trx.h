@@ -263,7 +263,7 @@ int trx_weight_cmp(
 /** Retrieves transacion's id, represented as unsigned long long.
 @return	transaction's id */
 UNIV_INLINE
-ib_uint64_t trx_get_id(const trx_t *trx); /*!< in: transaction */
+uint64_t trx_get_id(const trx_t *trx); /*!< in: transaction */
 
 /** Creates a transaction object for client. */
 
@@ -271,11 +271,11 @@ trx_t *trx_allocate_for_client(void *arg); /*!< in: pointer to client data */
 
 /** Does the transaction commit for client.
 @return	DB_SUCCESS or error number */
+db_err trx_commit(trx_t *trx); /*!< in: trx handle */
 
-ulint trx_commit(trx_t *trx); /*!< in: trx handle */
 /** Frees a transaction object for client. */
-
 void trx_free_for_client(trx_t *trx); /*!< in, own: trx object */
+
 /* Maximum length of a string that can be returned by
 trx_get_que_state_str(). */
 #define TRX_QUE_STATE_STR_MAX_LEN 12 /* "ROLLING BACK" */
@@ -399,7 +399,7 @@ struct trx_struct {
   trx_id_t no;            /*!< transaction serialization number ==
                           max trx id when the transaction is
                           moved to COMMITTED_IN_MEMORY state */
-  ib_uint64_t commit_lsn; /*!< lsn at the time of the commit */
+  uint64_t commit_lsn; /*!< lsn at the time of the commit */
   trx_id_t table_id;      /*!< Table to drop iff dict_operation
                           is TRUE, or ut_dulint_zero. */
   /*------------------------------*/

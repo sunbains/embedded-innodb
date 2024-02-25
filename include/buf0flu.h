@@ -56,7 +56,7 @@ void buf_flush_free_margin(void);
 void buf_flush_init_for_writing(
     byte *page,              /*!< in/out: page */
     void *page_zip_,         /*!< in/out: compressed page, or NULL */
-    ib_uint64_t newest_lsn); /*!< in: newest modification lsn
+    uint64_t newest_lsn); /*!< in: newest modification lsn
                              to the page */
 #ifndef UNIV_HOTBACKUP
 /*** This utility flushes dirty blocks from the end of the LRU list or
@@ -75,7 +75,7 @@ ulint buf_flush_batch(
     ulint min_n,               /*!< in: wished minimum mumber of blocks
                                flushed (it is not guaranteed that the
                                actual number is that big, though) */
-    ib_uint64_t lsn_limit);    /*!< in the case BUF_FLUSH_LIST all
+    uint64_t lsn_limit);    /*!< in the case BUF_FLUSH_LIST all
                                blocks whose oldest_modification is
                                smaller than this should be flushed
                                (if their number does not exceed
@@ -95,9 +95,9 @@ void buf_flush_note_modification(
 UNIV_INLINE
 void buf_flush_recv_note_modification(
     buf_block_t *block,    /*!< in: block which is modified */
-    ib_uint64_t start_lsn, /*!< in: start lsn of the first mtr in a
+    uint64_t start_lsn, /*!< in: start lsn of the first mtr in a
                            set of mtr's */
-    ib_uint64_t end_lsn);  /*!< in: end lsn of the last mtr in the
+    uint64_t end_lsn);  /*!< in: end lsn of the last mtr in the
                            set of mtr's */
 /*** Returns TRUE if the file page block is immediately suitable for
 replacement, i.e., transition FILE_PAGE => NOT_USED allowed.
@@ -117,7 +117,7 @@ dirty pages we have in the buffer pool but it is also a fucntion of
 how much redo the workload is generating and at what rate. */
 
 struct buf_flush_stat_struct {
-  ib_uint64_t redo; /*!< amount of redo generated. */
+  uint64_t redo; /*!< amount of redo generated. */
   ulint n_flushed;  /*!< number of pages flushed. */
 };
 

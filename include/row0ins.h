@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ Insert into a table
 Created 4/20/1996 Heikki Tuuri
 *******************************************************/
 
-#ifndef row0ins_h
-#define row0ins_h
+#pragma once
 
 #include "data0data.h"
 #include "dict0types.h"
@@ -36,8 +35,7 @@ which lock either the success or the failure of the constraint. NOTE that
 the caller must have a shared latch on dict_foreign_key_check_lock.
 @return DB_SUCCESS, DB_LOCK_WAIT, DB_NO_REFERENCED_ROW, or
 DB_ROW_IS_REFERENCED */
-
-ulint row_ins_check_foreign_constraint(
+db_err row_ins_check_foreign_constraint(
     ibool check_ref,         /*!< in: TRUE If we want to check that
                            the referenced table is ok, FALSE if we
                            want to check the foreign key table */
@@ -48,44 +46,43 @@ ulint row_ins_check_foreign_constraint(
                              table, else the referenced table */
     dtuple_t *entry,         /*!< in: index entry for index */
     que_thr_t *thr);         /*!< in: query thread */
+
 /** Creates an insert node struct.
 @return	own: insert node struct */
-
 ins_node_t *
 row_ins_node_create(ib_ins_mode_t ins_type, /*!< in: INS_VALUES, ... */
                     dict_table_t *table,    /*!< in: table where to insert */
                     mem_heap_t *heap);      /*!< in: mem heap where created */
+
 /** Sets a new row to insert for an INS_DIRECT node. This function is only used
 if we have constructed the row separately, which is a rare case; this
 function is quite slow. */
-
 void row_ins_node_set_new_row(
     ins_node_t *node, /*!< in: insert node */
     dtuple_t *row);   /*!< in: new row (or first row) for the node */
+
 /** Inserts an index entry to index. Tries first optimistic, then pessimistic
 descent down the tree. If the entry matches enough to a delete marked record,
 performs the insert by updating or delete unmarking the delete marked
 record.
 @return	DB_SUCCESS, DB_LOCK_WAIT, DB_DUPLICATE_KEY, or some other error code */
-
-ulint row_ins_index_entry(
+db_err row_ins_index_entry(
     dict_index_t *index, /*!< in: index */
     dtuple_t *entry,     /*!< in: index entry to insert */
     ulint n_ext,         /*!< in: number of externally stored columns */
     ibool foreign,       /*!< in: TRUE=check foreign key constraints */
     que_thr_t *thr);     /*!< in: query thread */
+
 /** Inserts a row to a table. This is a high-level function used in
 SQL execution graphs.
 @return	query thread to run next or NULL */
-
 que_thr_t *row_ins_step(que_thr_t *thr); /*!< in: query thread */
-/** Creates an entry template for each index of a table. */
 
+/** Creates an entry template for each index of a table. */
 void row_ins_node_create_entry_list(
     ins_node_t *node); /*!< in: row insert node */
 
 /* Insert node structure */
-
 struct ins_node_struct {
   que_common_t common;     /*!< node type: QUE_NODE_INSERT */
   ib_ins_mode_t ins_type;  /* INS_VALUES, INS_SEARCHED, or INS_DIRECT */
@@ -115,9 +112,3 @@ struct ins_node_struct {
 };
 
 #define INS_NODE_MAGIC_N 15849075
-
-#ifndef UNIV_NONINL
-#include "row0ins.ic"
-#endif
-
-#endif

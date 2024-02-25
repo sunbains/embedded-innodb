@@ -54,13 +54,13 @@ ulint ut_dulint_get_low(dulint d) /*!< in: dulint */
   return (d.low);
 }
 
-/** Converts a dulint (a struct of 2 ulints) to ib_int64_t, which is a 64-bit
+/** Converts a dulint (a struct of 2 ulints) to int64_t, which is a 64-bit
 integer type.
-@return	value in ib_int64_t type */
+@return	value in int64_t type */
 UNIV_INLINE
-ib_int64_t ut_conv_dulint_to_longlong(dulint d) /*!< in: dulint */
+int64_t ut_conv_dulint_to_longlong(dulint d) /*!< in: dulint */
 {
-  return ((ib_int64_t)d.low + (((ib_int64_t)d.high) << 32));
+  return ((int64_t)d.low + (((int64_t)d.high) << 32));
 }
 
 /** Tests if a dulint is zero.
@@ -167,27 +167,27 @@ dulint ut_dulint_align_up(dulint n,       /*!< in: number to be rounded */
   return (ut_dulint_align_down(ut_dulint_add(n, align_no - 1), align_no));
 }
 
-/** Rounds ib_uint64_t downward to a multiple of a power of 2.
+/** Rounds uint64_t downward to a multiple of a power of 2.
 @return	rounded value */
 UNIV_INLINE
-ib_uint64_t ut_uint64_align_down(ib_uint64_t n, /*!< in: number to be rounded */
+uint64_t ut_uint64_align_down(uint64_t n, /*!< in: number to be rounded */
                                  ulint align_no) /*!< in: align by this number
                                                  which must be a power of 2 */
 {
   ut_ad(align_no > 0);
   ut_ad(ut_is_2pow(align_no));
 
-  return (n & ~((ib_uint64_t)align_no - 1));
+  return (n & ~((uint64_t)align_no - 1));
 }
 
-/** Rounds ib_uint64_t upward to a multiple of a power of 2.
+/** Rounds uint64_t upward to a multiple of a power of 2.
 @return	rounded value */
 UNIV_INLINE
-ib_uint64_t ut_uint64_align_up(ib_uint64_t n,  /*!< in: number to be rounded */
+uint64_t ut_uint64_align_up(uint64_t n,  /*!< in: number to be rounded */
                                ulint align_no) /*!< in: align by this number
                                                which must be a power of 2 */
 {
-  ib_uint64_t align_1 = (ib_uint64_t)align_no - 1;
+  uint64_t align_1 = (uint64_t)align_no - 1;
 
   ut_ad(align_no > 0);
   ut_ad(ut_is_2pow(align_no));

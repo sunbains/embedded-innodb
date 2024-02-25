@@ -40,8 +40,7 @@ Created June 2005 by Marko Makela
 @return	size in bytes */
 UNIV_INLINE
 ulint page_zip_get_size(
-    const page_zip_des_t *page_zip) /*!< in: compressed page */
-    __attribute__((nonnull, pure));
+    const page_zip_des_t *page_zip); /*!< in: compressed page */
 /** Set the size of a compressed page in bytes. */
 UNIV_INLINE
 void page_zip_set_size(page_zip_des_t *page_zip, /*!< in/out: compressed page */
@@ -87,8 +86,7 @@ ibool page_zip_compress(
                              m_start, m_end, m_nonempty */
     const page_t *page,       /*!< in: uncompressed page */
     dict_index_t *index,      /*!< in: index of the B-tree node */
-    mtr_t *mtr)               /*!< in: mini-transaction, or NULL */
-    __attribute__((nonnull(1, 2, 3)));
+    mtr_t *mtr);               /*!< in: mini-transaction, or NULL */
 
 /** Decompress a page.  This function should tolerate errors on the compressed
 page.  Instead of letting assertions fail, it will return FALSE if an
@@ -99,11 +97,10 @@ ibool page_zip_decompress(
     page_zip_des_t *page_zip, /*!< in: data, ssize;
                              out: m_start, m_end, m_nonempty, n_blobs */
     page_t *page,             /*!< out: uncompressed page, may be trashed */
-    ibool all)                /*!< in: TRUE=decompress the whole page;
+    ibool all);               /*!< in: TRUE=decompress the whole page;
                               FALSE=verify but do not copy some
                               page header fields that should not change
                               after page creation */
-    __attribute__((nonnull(1, 2)));
 
 #ifdef UNIV_DEBUG
 /** Validate a compressed page descriptor.
@@ -121,15 +118,14 @@ ibool page_zip_simple_validate(
 ibool page_zip_validate_low(
     const page_zip_des_t *page_zip, /*!< in: compressed page */
     const page_t *page,             /*!< in: uncompressed page */
-    ibool sloppy)                   /*!< in: FALSE=strict,
+    ibool sloppy);                  /*!< in: FALSE=strict,
                                     TRUE=ignore the MIN_REC_FLAG */
-    __attribute__((nonnull));
+
 /** Check that the compressed and decompressed pages match. */
 
 ibool page_zip_validate(
     const page_zip_des_t *page_zip, /*!< in: compressed page */
-    const page_t *page)             /*!< in: uncompressed page */
-    __attribute__((nonnull));
+    const page_t *page);            /*!< in: uncompressed page */
 #endif /* UNIV_ZIP_DEBUG */
 
 /** Determine how big record can be inserted without recompressing the page.
@@ -138,8 +134,7 @@ whose insertion is guaranteed to succeed, or zero or negative */
 UNIV_INLINE
 lint page_zip_max_ins_size(
     const page_zip_des_t *page_zip, /*!< in: compressed page */
-    ibool is_clust)                 /*!< in: TRUE if clustered index */
-    __attribute__((nonnull, pure));
+    ibool is_clust);                /*!< in: TRUE if clustered index */
 
 /** Determine if enough space is available in the modification log.
 @return	TRUE if page_zip_write_rec() will succeed */
@@ -148,9 +143,8 @@ ibool page_zip_available(
     const page_zip_des_t *page_zip, /*!< in: compressed page */
     ibool is_clust,                 /*!< in: TRUE if clustered index */
     ulint length,                   /*!< in: combined size of the record */
-    ulint create)                   /*!< in: nonzero=add the record to
+    ulint create);                  /*!< in: nonzero=add the record to
                                     the heap */
-    __attribute__((nonnull, pure));
 
 /** Write data to the uncompressed header portion of a page.  The data must
 already have been written to the uncompressed page. */
@@ -159,8 +153,7 @@ void page_zip_write_header(
     page_zip_des_t *page_zip, /*!< in/out: compressed page */
     const byte *str,          /*!< in: address on the uncompressed page */
     ulint length,             /*!< in: length of the data */
-    mtr_t *mtr)               /*!< in: mini-transaction, or NULL */
-    __attribute__((nonnull(1, 2)));
+    mtr_t *mtr);              /*!< in: mini-transaction, or NULL */
 
 /** Write an entire record on the compressed page.  The data must already
 have been written to the uncompressed page. */
@@ -170,8 +163,7 @@ void page_zip_write_rec(
     const byte *rec,          /*!< in: record being written */
     dict_index_t *index,      /*!< in: the index the record belongs to */
     const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
-    ulint create)             /*!< in: nonzero=insert, zero=update */
-    __attribute__((nonnull));
+    ulint create);            /*!< in: nonzero=insert, zero=update */
 
 /** Parses a log record of writing a BLOB pointer of a record.
 @return	end of log record or NULL */
@@ -192,9 +184,8 @@ void page_zip_write_blob_ptr(
     dict_index_t *index,      /*!< in: index of the page */
     const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
     ulint n,                  /*!< in: column index */
-    mtr_t *mtr)               /*!< in: mini-transaction handle,
+    mtr_t *mtr);              /*!< in: mini-transaction handle,
                               or NULL if no logging is needed */
-    __attribute__((nonnull(1, 2, 3, 4)));
 
 /** Parses a log record of writing the node pointer of a record.
 @return	end of log record or NULL */
@@ -212,8 +203,7 @@ void page_zip_write_node_ptr(
     byte *rec,                /*!< in/out: record */
     ulint size,               /*!< in: data size of rec */
     ulint ptr,                /*!< in: node pointer */
-    mtr_t *mtr)               /*!< in: mini-transaction, or NULL */
-    __attribute__((nonnull(1, 2)));
+    mtr_t *mtr);              /*!< in: mini-transaction, or NULL */
 
 /** Write the trx_id and roll_ptr of a record on a B-tree leaf node page. */
 
@@ -223,8 +213,7 @@ void page_zip_write_trx_id_and_roll_ptr(
     const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
     ulint trx_id_col,         /*!< in: column number of TRX_ID in rec */
     trx_id_t trx_id,          /*!< in: transaction identifier */
-    roll_ptr_t roll_ptr)      /*!< in: roll_ptr */
-    __attribute__((nonnull));
+    roll_ptr_t roll_ptr);     /*!< in: roll_ptr */
 
 /** Write the "deleted" flag of a record on a compressed page.  The flag must
 already have been written on the uncompressed page. */
@@ -232,8 +221,7 @@ already have been written on the uncompressed page. */
 void page_zip_rec_set_deleted(
     page_zip_des_t *page_zip, /*!< in/out: compressed page */
     const byte *rec,          /*!< in: record on the uncompressed page */
-    ulint flag)               /*!< in: the deleted flag (nonzero=TRUE) */
-    __attribute__((nonnull));
+    ulint flag);              /*!< in: the deleted flag (nonzero=TRUE) */
 
 /** Write the "owned" flag of a record on a compressed page.  The n_owned field
 must already have been written on the uncompressed page. */
@@ -241,8 +229,7 @@ must already have been written on the uncompressed page. */
 void page_zip_rec_set_owned(
     page_zip_des_t *page_zip, /*!< in/out: compressed page */
     const byte *rec,          /*!< in: record on the uncompressed page */
-    ulint flag)               /*!< in: the owned flag (nonzero=TRUE) */
-    __attribute__((nonnull));
+    ulint flag);              /*!< in: the owned flag (nonzero=TRUE) */
 
 /** Insert a record to the dense page directory. */
 
@@ -261,16 +248,14 @@ void page_zip_dir_delete(
     byte *rec,                /*!< in: deleted record */
     dict_index_t *index,      /*!< in: index of rec */
     const ulint *offsets,     /*!< in: rec_get_offsets(rec) */
-    const byte *free)         /*!< in: previous start of the free list */
-    __attribute__((nonnull(1, 2, 3, 4)));
+    const byte *free);        /*!< in: previous start of the free list */
 
 /** Add a slot to the dense page directory. */
 
 void page_zip_dir_add_slot(
     page_zip_des_t *page_zip, /*!< in/out: compressed page */
-    ulint is_clustered)       /*!< in: nonzero for clustered index,
+    ulint is_clustered);      /*!< in: nonzero for clustered index,
                               zero for others */
-    __attribute__((nonnull));
 
 /** Parses a log record of writing to the header of a page.
 @return	end of log record or NULL */
@@ -291,8 +276,7 @@ void page_zip_write_header(
     page_zip_des_t *page_zip, /*!< in/out: compressed page */
     const byte *str,          /*!< in: address on the uncompressed page */
     ulint length,             /*!< in: length of the data */
-    mtr_t *mtr)               /*!< in: mini-transaction, or NULL */
-    __attribute__((nonnull(1, 2)));
+    mtr_t *mtr);              /*!< in: mini-transaction, or NULL */
 
 /** Reorganize and compress a page.  This is a low-level operation for
 compressed pages, to be used when page_zip_compress() fails.
@@ -311,8 +295,7 @@ ibool page_zip_reorganize(
                          out: data, n_blobs,
                          m_start, m_end, m_nonempty */
     dict_index_t *index, /*!< in: index of the B-tree node */
-    mtr_t *mtr)          /*!< in: mini-transaction */
-    __attribute__((nonnull));
+    mtr_t *mtr);         /*!< in: mini-transaction */
 #ifndef UNIV_HOTBACKUP
 /** Copy the records of a page byte for byte.  Do not copy the page header
 or trailer, except those B-tree header fields that are directly
@@ -327,8 +310,7 @@ void page_zip_copy_recs(
     const page_zip_des_t *src_zip, /*!< in: compressed page */
     const page_t *src,             /*!< in: page */
     dict_index_t *index,           /*!< in: index of the B-tree */
-    mtr_t *mtr)                    /*!< in: mini-transaction */
-    __attribute__((nonnull(1, 2, 3, 4)));
+    mtr_t *mtr);                    /*!< in: mini-transaction */
 #endif /* !UNIV_HOTBACKUP */
 
 /** Parses a log record of compressing an index page.
@@ -338,15 +320,13 @@ byte *
 page_zip_parse_compress(byte *ptr,                /*!< in: buffer */
                         byte *end_ptr,            /*!< in: buffer end */
                         page_t *page,             /*!< out: uncompressed page */
-                        page_zip_des_t *page_zip) /*!< out: compressed page */
-    __attribute__((nonnull(1, 2)));
+                        page_zip_des_t *page_zip);/*!< out: compressed page */
 
 /** Calculate the compressed page checksum.
 @return	page checksum */
 
 ulint page_zip_calc_checksum(const void *data, /*!< in: compressed page */
-                             ulint size) /*!< in: size of compressed page */
-    __attribute__((nonnull));
+                             ulint size); /*!< in: size of compressed page */
 /** Reset variables. */
 
 void page_zip_var_init(void);

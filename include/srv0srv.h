@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, 2009, Google Inc.
 Copyright (c) 2009, Percona Inc.
@@ -36,11 +36,10 @@ The server main program
 Created 10/10/1995 Heikki Tuuri
 *******************************************************/
 
-#ifndef srv0srv_h
-#define srv0srv_h
+#pragma once
 
 #include "univ.i"
-#ifndef UNIV_HOTBACKUP
+
 #include "api0api.h"
 #include "os0sync.h"
 #include "que0types.h"
@@ -52,6 +51,38 @@ extern const char *srv_main_thread_op_info;
 /* When this event is set the lock timeout and InnoDB monitor
 thread starts running */
 extern os_event_t srv_lock_timeout_thread_event;
+
+/** Alternatives for srv_force_recovery. Non-zero values are intended
+to help the user get a damaged database up so that he can dump intact
+tables and rows with SELECT INTO OUTFILE. The database must not otherwise
+be used with these options! A bigger number below means that all precautions
+of lower numbers are included.
+
+NOTE: The order below is important, the code uses <= and >= to check
+for recovery levels. */
+enum ib_recovery_t {
+  /** Stop on all the errors that are listed in the other options below */
+  IB_RECOVERY_DEFAULT,
+
+  /** let the server run even if it detects a corrupt page */
+  IB_RECOVERY_IGNORE_CORRUPT,
+
+  /** Prevent the main thread from running: if a crash would occur in purge, this prevents it */
+  IB_RECOVERY_NO_BACKGROUND,
+
+  /** Do not run trx rollback after recovery */
+  IB_RECOVERY_NO_TRX_UNDO,
+
+  /** Prevent also ibuf operations: if they would cause a crash, better not do them */
+  IB_RECOVERY_NO_IBUF_MERGE,
+
+  /** Do not look at undo logs when starting the database: InnoDB will treat even incomplete transactions as committed */
+  IB_RECOVERY_NO_UNDO_LOG_SCAN,
+
+  /** Do not do the log roll-forward in connection with recovery */
+  IB_RECOVERY_NO_LOG_REDO
+
+};
 
 /* If the last data file is auto-extended, we add this many pages to it
 at a time */
@@ -84,7 +115,6 @@ extern ulint srv_file_format;
 DICT_TF_FORMAT_MAX + 1 means no checking ie. FALSE.  The default is to
 set it to the highest format we support. */
 extern ulint srv_check_file_format_at_startup;
-#endif /* !UNIV_HOTBACKUP */
 
 extern ulint srv_n_data_files;
 extern ulint *srv_data_file_sizes;
@@ -92,7 +122,6 @@ extern ulint *srv_data_file_is_raw_partition;
 
 extern ibool srv_auto_extend_last_data_file;
 extern ulint srv_last_file_size_max;
-#ifndef UNIV_HOTBACKUP
 extern ulong srv_auto_extend_increment;
 
 extern ibool srv_created_new_raw;
@@ -128,7 +157,7 @@ is 5% of the max where max is srv_io_capacity.  */
 #ifdef UNIV_LOG_ARCHIVE
 extern ibool srv_log_archive_on;
 extern ibool srv_archive_recovery;
-extern ib_uint64_t srv_archive_recovery_limit_lsn;
+extern uint64_t srv_archive_recovery_limit_lsn;
 #endif /* UNIV_LOG_ARCHIVE */
 
 extern ulint srv_unix_file_flush_method;
@@ -138,7 +167,7 @@ extern ulint srv_max_n_open_files;
 
 extern ulint srv_max_dirty_pages_pct;
 
-extern ulint srv_force_recovery;
+extern ib_recovery_t srv_force_recovery;
 extern ulong srv_thread_concurrency;
 
 extern ulint srv_max_n_threads;
@@ -258,8 +287,6 @@ typedef struct export_var_struct export_struc;
 /** Status variables to be passed to MySQL */
 extern export_struc export_vars;
 
-#endif /* !UNIV_HOTBACKUP */
-
 /** Types of raw partitions in innodb_data_file_path */
 enum {
   SRV_NOT_RAW = 0, /*!< Not a raw partition */
@@ -287,62 +314,39 @@ enum {
   SRV_WIN_IO_UNBUFFERED  /*!< unbuffered I/O; this is the default */
 };
 
-/** Alternatives for srv_force_recovery. Non-zero values are intended
-to help the user get a damaged database up so that he can dump intact
-tables and rows with SELECT INTO OUTFILE. The database must not otherwise
-be used with these options! A bigger number below means that all precautions
-of lower numbers are included.
-
-NOTE: The order below is important, the code uses <= and >= to check
-for recovery levels. */
-typedef enum ib_recovery_enum {
-  IB_RECOVERY_DEFAULT, /*!< stop on all the errors that are
-                       listed in the other options below */
-
-  IB_RECOVERY_IGNORE_CORRUPT, /*!< let the server run even if it
-                              detects a corrupt page */
-
-  IB_RECOVERY_NO_BACKGROUND, /*!< prevent the main thread from
-                             running: if a crash would occur
-                             in purge, this prevents it */
-
-  IB_RECOVERY_NO_TRX_UNDO, /*!< do not run trx rollback after
-                           recovery */
-
-  IB_RECOVERY_NO_IBUF_MERGE, /*!< prevent also ibuf operations:
-                             if they would cause a crash, better
-                             not do them */
-
-  IB_RECOVERY_NO_UNDO_LOG_SCAN, /*!< do not look at undo logs when
-                                starting the database: InnoDB will
-                                treat even incomplete transactions
-                                as committed */
-
-  IB_RECOVERY_NO_LOG_REDO /*!< do not do the log roll-forward
-                          in connection with recovery */
-} ib_recovery_t;
-
-#ifndef UNIV_HOTBACKUP
 /** Types of threads existing in the system. */
 enum srv_thread_type {
-  SRV_COM = 1, /**< threads serving communication and queries */
-  SRV_CONSOLE, /**< thread serving console */
-  SRV_WORKER,  /**< threads serving parallelized queries and
-               queries released from lock wait */
+  SRV_NONE = 0,
+
+  /** Threads serving communication and queries */
+  SRV_COM = 1,
+
+  /** Thread serving console */
+  SRV_CONSOLE,
+
+  /** Threads serving parallelized queries and queries released from lock wait */
+  SRV_WORKER,
+
 #if 0
-	/* Utility threads */
-	SRV_BUFFER,	/**< thread flushing dirty buffer blocks */
-	SRV_RECOVERY,	/**< threads finishing a recovery */
-	SRV_INSERT,	/**< thread flushing the insert buffer to disk */
+  /* Utility threads */
+
+  /** thread flushing dirty buffer blocks */
+  SRV_BUFFER,
+
+  /** threads finishing a recovery */
+  SRV_RECOVERY,
+
+  /** thread flushing the insert buffer to disk */
+  SRV_INSERT,
 #endif
-  SRV_MASTER /**< the master thread, (whose type number must
-             be biggest) */
+
+  /** The master thread, (whose type number must be biggest) */
+  SRV_MASTER
 };
 
 /** Boots Innobase server.
 @return	DB_SUCCESS or error code */
-
-ulint srv_boot(void);
+db_err srv_boot(void);
 
 /** Frees the data structures created in srv_init(). */
 void srv_free(void);
@@ -486,7 +490,7 @@ struct export_var_struct {
   ulint innodb_pages_written;          /*!< buf_pool->stat.n_pages_written */
   ulint innodb_row_lock_waits;         /*!< srv_n_lock_wait_count */
   ulint innodb_row_lock_current_waits; /*!< srv_n_lock_wait_current_count */
-  ib_int64_t innodb_row_lock_time;     /*!< srv_n_lock_wait_time
+  int64_t innodb_row_lock_time;     /*!< srv_n_lock_wait_time
                                        / 1000 */
   ulint innodb_row_lock_time_avg;      /*!< srv_n_lock_wait_time
                                        / 1000
@@ -500,19 +504,4 @@ struct export_var_struct {
 };
 
 extern ulint srv_n_threads_active[];
-#else /* !UNIV_HOTBACKUP */
-#define srv_use_checksums TRUE
-#define srv_use_adaptive_hash_indexes FALSE
-#define srv_force_recovery 0UL
-#define srv_is_being_started 0
-#define srv_win_file_flush_method SRV_WIN_IO_UNBUFFERED
-#define srv_unix_file_flush_method SRV_UNIX_O_DSYNC
-#define srv_start_raw_disk_in_use 0
-#define srv_file_per_table 1
-#endif /* !UNIV_HOTBACKUP */
-
-extern void *ib_panic_data;
 typedef void (*ib_panic_function_t)(void *, int, char *, ...);
-void srv_panic(int panic_ib_error, char *fmt, ...);
-
-#endif

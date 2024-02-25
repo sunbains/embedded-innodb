@@ -83,9 +83,7 @@ trx_undo_rec_t *
 trx_undo_rec_copy(const trx_undo_rec_t *undo_rec, /*!< in: undo log record */
                   mem_heap_t *heap)               /*!< in: heap where copied */
 {
-  ulint len;
-
-  len = mach_read_from_2(undo_rec) - ut_align_offset(undo_rec, UNIV_PAGE_SIZE);
-  return (mem_heap_dup(heap, undo_rec, len));
+  auto len = mach_read_from_2(undo_rec) - ut_align_offset(undo_rec, UNIV_PAGE_SIZE);
+  return (trx_undo_rec_t*) mem_heap_dup(heap, undo_rec, len);
 }
 #endif /* !UNIV_HOTBACKUP */

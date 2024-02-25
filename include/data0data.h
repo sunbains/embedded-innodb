@@ -46,7 +46,7 @@ UNIV_INLINE
 void *dfield_get_data(const dfield_t *field); /*!< in: field */
 #else                                         /* UNIV_DEBUG */
 #define dfield_get_type(field) (&(field)->type)
-#define dfield_get_data(field) ((field)->data)
+#define dfield_get_data(field) (reinterpret_cast<byte*>((field)->data))
 #endif /* UNIV_DEBUG */
 /*** Sets the type struct of SQL data field. */
 UNIV_INLINE

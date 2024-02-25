@@ -39,6 +39,7 @@ Created 5/7/1996 Heikki Tuuri
 #ifdef UNIV_DEBUG
 extern ibool lock_print_waits;
 #endif /* UNIV_DEBUG */
+
 /* Buffer for storing information about the most recent deadlock error */
 extern ib_stream_t lock_latest_err_stream;
 
@@ -208,17 +209,16 @@ void lock_rec_restore_from_page_infimum(
                                 the infimum */
 /** Returns TRUE if there are explicit record locks on a page.
 @return	TRUE if there are explicit record locks on the page */
-
-ibool lock_rec_expl_exist_on_page(ulint space,    /*!< in: space id */
+bool lock_rec_expl_exist_on_page(ulint space,    /*!< in: space id */
                                   ulint page_no); /*!< in: page number */
+
 /** Checks if locks of other transactions prevent an immediate insert of
 a record. If they do, first tests if the query thread should anyway
 be suspended for some reason; if not, then puts the transaction and
 the query thread to the lock wait state and inserts a waiting request
 for a gap x-lock to the lock queue.
 @return	DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
-
-ulint lock_rec_insert_check_and_lock(
+db_err lock_rec_insert_check_and_lock(
     ulint flags,         /*!< in: if BTR_NO_LOCKING_FLAG bit is
                          set, does nothing */
     const rec_t *rec,    /*!< in: record after which to insert */
@@ -230,6 +230,7 @@ ulint lock_rec_insert_check_and_lock(
                         inserted record maybe should inherit
                         LOCK_GAP type locks from the successor
                         record */
+
 /** Checks if locks of other transactions prevent an immediate modify (update,
 delete mark, or delete unmark) of a clustered index record. If they do,
 first tests if the query thread should anyway be suspended for some
@@ -237,8 +238,7 @@ reason; if not, then puts the transaction and the query thread to the
 lock wait state and inserts a waiting request for a record x-lock to the
 lock queue.
 @return	DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
-
-ulint lock_clust_rec_modify_check_and_lock(
+db_err lock_clust_rec_modify_check_and_lock(
     ulint flags,              /*!< in: if BTR_NO_LOCKING_FLAG
                               bit is set, does nothing */
     const buf_block_t *block, /*!< in: buffer block of rec */
@@ -247,11 +247,11 @@ ulint lock_clust_rec_modify_check_and_lock(
     dict_index_t *index,      /*!< in: clustered index */
     const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
     que_thr_t *thr);          /*!< in: query thread */
+
 /** Checks if locks of other transactions prevent an immediate modify
 (delete mark or delete unmark) of a secondary index record.
 @return	DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
-
-ulint lock_sec_rec_modify_check_and_lock(
+db_err lock_sec_rec_modify_check_and_lock(
     ulint flags,         /*!< in: if BTR_NO_LOCKING_FLAG
                          bit is set, does nothing */
     buf_block_t *block,  /*!< in/out: buffer block of rec */
@@ -263,11 +263,11 @@ ulint lock_sec_rec_modify_check_and_lock(
     dict_index_t *index, /*!< in: secondary index */
     que_thr_t *thr,      /*!< in: query thread */
     mtr_t *mtr);         /*!< in/out: mini-transaction */
+
 /** Like the counterpart for a clustered index below, but now we read a
 secondary index record.
 @return	DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
-
-ulint lock_sec_rec_read_check_and_lock(
+db_err lock_sec_rec_read_check_and_lock(
     ulint flags,              /*!< in: if BTR_NO_LOCKING_FLAG
                               bit is set, does nothing */
     const buf_block_t *block, /*!< in: buffer block of rec */
@@ -285,6 +285,7 @@ ulint lock_sec_rec_read_check_and_lock(
     ulint gap_mode,           /*!< in: LOCK_ORDINARY, LOCK_GAP, or
                              LOCK_REC_NOT_GAP */
     que_thr_t *thr);          /*!< in: query thread */
+
 /** Checks if locks of other transactions prevent an immediate read, or passing
 over by a read cursor, of a clustered index record. If they do, first tests
 if the query thread should anyway be suspended for some reason; if not, then
@@ -292,8 +293,7 @@ puts the transaction and the query thread to the lock wait state and inserts a
 waiting request for a record lock to the lock queue. Sets the requested mode
 lock on the record.
 @return	DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
-
-ulint lock_clust_rec_read_check_and_lock(
+db_err lock_clust_rec_read_check_and_lock(
     ulint flags,              /*!< in: if BTR_NO_LOCKING_FLAG
                               bit is set, does nothing */
     const buf_block_t *block, /*!< in: buffer block of rec */
@@ -311,6 +311,7 @@ ulint lock_clust_rec_read_check_and_lock(
     ulint gap_mode,           /*!< in: LOCK_ORDINARY, LOCK_GAP, or
                              LOCK_REC_NOT_GAP */
     que_thr_t *thr);          /*!< in: query thread */
+
 /** Checks if locks of other transactions prevent an immediate read, or passing
 over by a read cursor, of a clustered index record. If they do, first tests
 if the query thread should anyway be suspended for some reason; if not, then
@@ -321,7 +322,7 @@ lock_clust_rec_read_check_and_lock() that does not require the parameter
 "offsets".
 @return	DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
 
-ulint lock_clust_rec_read_check_and_lock_alt(
+db_err lock_clust_rec_read_check_and_lock_alt(
     ulint flags,              /*!< in: if BTR_NO_LOCKING_FLAG
                               bit is set, does nothing */
     const buf_block_t *block, /*!< in: buffer block of rec */
@@ -367,7 +368,7 @@ ulint lock_sec_rec_cons_read_sees(
 be granted immediately, the query thread is put to wait.
 @return	DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
 
-ulint lock_table(
+db_err lock_table(
     ulint flags,         /*!< in: if BTR_NO_LOCKING_FLAG bit is set,
                          does nothing */
     dict_table_t *table, /*!< in: database table in dictionary cache */
@@ -499,7 +500,7 @@ ulint lock_get_type(const lock_t *lock); /*!< in: lock */
 /** Gets the id of the transaction owning a lock.
 @return	transaction id */
 
-ib_uint64_t lock_get_trx_id(const lock_t *lock); /*!< in: lock */
+uint64_t lock_get_trx_id(const lock_t *lock); /*!< in: lock */
 
 /** Gets the mode of a lock in a human readable string.
 The string should not be free()'d or modified.
@@ -516,7 +517,7 @@ const char *lock_get_type_str(const lock_t *lock); /*!< in: lock */
 /** Gets the id of the table on which the lock is.
 @return	id of the table */
 
-ib_uint64_t lock_get_table_id(const lock_t *lock); /*!< in: lock */
+uint64_t lock_get_table_id(const lock_t *lock); /*!< in: lock */
 
 /** Gets the name of the table on which the lock is.
 The string should not be free()'d or modified.

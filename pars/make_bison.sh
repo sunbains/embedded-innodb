@@ -17,16 +17,15 @@
 # generate parser files from bison input files.
 
 set -eu
-TMPFILE=pars0grm.tab.c
-OUTFILE=pars0grm.c
+OUTFILE=pars0grm
+TMPFILE=${OUTFILE}.tab
 
-bison -d pars0grm.y
-mv pars0grm.tab.h ../include/pars0grm.h
+bison -d ${OUTFILE}.y
+mv ${OUTFILE}.tab.h ../include/${OUTFILE}.h
 
 sed -e '
 s/'"$TMPFILE"'/'"$OUTFILE"'/;
 s/^\(\(YYSTYPE\|int\) yy\(char\|nerrs\)\)/static \1/;
-s/\(\(YYSTYPE\|int\) yy\(lval\|parse\)\)/ \1/;
-' < "$TMPFILE" > "$OUTFILE"
+' < "${TMPFILE}.c" > "${OUTFILE}.cc"
 
-rm "$TMPFILE"
+rm "${TMPFILE}.c"

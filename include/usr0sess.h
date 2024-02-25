@@ -21,15 +21,15 @@ Sessions
 Created 6/25/1996 Heikki Tuuri
 *******************************************************/
 
-#ifndef usr0sess_h
-#define usr0sess_h
+#pragma once
+
+#include "univ.i"
 
 #include "data0data.h"
 #include "que0types.h"
 #include "rem0rec.h"
 #include "srv0srv.h"
 #include "trx0types.h"
-#include "univ.i"
 #include "usr0types.h"
 #include "ut0byte.h"
 
@@ -60,8 +60,3 @@ struct sess_struct {
   2 /* session contains an error message                                       \
     which has not yet been communicated                                        \
     to the client */
-#ifndef UNIV_NONINL
-#include "usr0sess.ic"
-#endif
-
-#endif

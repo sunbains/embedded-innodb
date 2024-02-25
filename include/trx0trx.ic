@@ -44,9 +44,9 @@ const dict_index_t *trx_get_error_info(const trx_t *trx) /*!< in: trx object */
 /** Retrieves transacion's id, represented as unsigned long long.
 @return	transaction's id */
 UNIV_INLINE
-ib_uint64_t trx_get_id(const trx_t *trx) /*!< in: transaction */
+uint64_t trx_get_id(const trx_t *trx) /*!< in: transaction */
 {
-  return ((ib_uint64_t)ut_conv_dulint_to_longlong(trx->id));
+  return ((uint64_t)ut_conv_dulint_to_longlong(trx->id));
 }
 
 /** Retrieves transaction's que state in a human readable string. The string

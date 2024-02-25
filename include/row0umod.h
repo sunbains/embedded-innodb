@@ -21,8 +21,9 @@ Undo modify of a row
 Created 2/27/1997 Heikki Tuuri
 *******************************************************/
 
-#ifndef row0umod_h
-#define row0umod_h
+#pragma once
+
+#include "univ.i"
 
 #include "data0data.h"
 #include "dict0types.h"
@@ -30,16 +31,9 @@ Created 2/27/1997 Heikki Tuuri
 #include "que0types.h"
 #include "row0types.h"
 #include "trx0types.h"
-#include "univ.i"
 
 /** Undoes a modify operation on a row of a table.
+@param[in,out] node             Row undo node.
+@param[in,out] thr              Query thread.
 @return	DB_SUCCESS or error code */
-
-ulint row_undo_mod(undo_node_t *node, /*!< in: row undo node */
-                   que_thr_t *thr);   /*!< in: query thread */
-
-#ifndef UNIV_NONINL
-#include "row0umod.ic"
-#endif
-
-#endif
+db_err row_undo_mod(undo_node_t *node, que_thr_t *thr);

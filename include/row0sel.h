@@ -179,7 +179,7 @@ struct plan_struct {
                            for each field in the search
                            tuple */
   dtuple_t *tuple;         /*!< search tuple */
-  ulint mode;              /*!< search mode: PAGE_CUR_G, ... */
+  ib_srch_mode_t mode;     /*!< search mode: PAGE_CUR_G, ... */
   ulint n_exact_match;     /*!< number of first fields in
                            the search tuple which must be
                            exactly matched */
@@ -249,7 +249,7 @@ struct sel_node_struct {
   ibool set_x_locks;         /*!< TRUE if the cursor is for update or
                              delete, which means that a row x-lock
                              should be placed on the cursor row */
-  ulint row_lock_mode;       /*!< LOCK_X or LOCK_S */
+  lock_mode row_lock_mode;   /*!< LOCK_X or LOCK_S */
   ulint n_tables;            /*!< number of tables */
   ulint fetch_table;         /*!< number of the next table to access
                              in the join */

@@ -458,4 +458,16 @@ typedef void* os_thread_ret_t;
 #define STRUCT_FLD(name, value) value
 #endif
 
+template <typename T>
+constexpr auto to_int(T v) -> typename std::underlying_type<T>::type {
+  return static_cast<typename std::underlying_type<T>::type>(v);
+}
+
+/** Explicitly call the destructor, this is to get around Clang bug#12350.
+@param[in,out]  p               Instance on which to call the destructor */
+template <typename T>
+void call_destructor(T *p) {
+  p->~T();
+}
+
 #endif

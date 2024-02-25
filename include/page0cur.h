@@ -36,11 +36,12 @@ Created 10/4/1994 Heikki Tuuri
 
 /* Page cursor search modes; the values must be in this order! */
 
-#define PAGE_CUR_UNSUPP 0
-#define PAGE_CUR_G 1
-#define PAGE_CUR_GE 2
-#define PAGE_CUR_L 3
-#define PAGE_CUR_LE 4
+#define PAGE_CUR_UNSUPP         IB_CUR_UNSUPP
+#define PAGE_CUR_G              IB_CUR_G
+#define PAGE_CUR_GE             IB_CUR_GE
+#define PAGE_CUR_L              IB_CUR_L
+#define PAGE_CUR_LE             IB_CUR_LE
+
 /*#define PAGE_CUR_LE_OR_EXTENDS 5*/ /* This is a search mode used in
                                  "column LIKE 'abc%' ORDER BY column DESC";
                                  we have to find strings which are <= 'abc' or

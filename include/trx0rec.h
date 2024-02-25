@@ -46,27 +46,32 @@ trx_undo_rec_copy(const trx_undo_rec_t *undo_rec, /*!< in: undo log record */
 UNIV_INLINE
 ulint trx_undo_rec_get_type(
     const trx_undo_rec_t *undo_rec); /*!< in: undo log record */
+
 /** Reads from an undo log record the record compiler info.
 @return	compiler info */
 UNIV_INLINE
 ulint trx_undo_rec_get_cmpl_info(
     const trx_undo_rec_t *undo_rec); /*!< in: undo log record */
+
 /** Returns TRUE if an undo log record contains an extern storage field.
 @return	TRUE if extern */
 UNIV_INLINE
 ibool trx_undo_rec_get_extern_storage(
     const trx_undo_rec_t *undo_rec); /*!< in: undo log record */
+
 /** Reads the undo log record number.
 @return	undo no */
 UNIV_INLINE
 undo_no_t trx_undo_rec_get_undo_no(
     const trx_undo_rec_t *undo_rec); /*!< in: undo log record */
+
 /** Returns the start of the undo record data area.
 @return	offset to the data area */
 UNIV_INLINE
 ulint trx_undo_rec_get_offset(
     undo_no_t undo_no) /*!< in: undo no read from node */
     __attribute__((const));
+
 /* FIXME: From merge */
 /** Returns the start of the undo record data area. */
 #define trx_undo_rec_get_ptr(undo_rec, undo_no)                                \
@@ -166,7 +171,7 @@ the transaction and in consistent reads that must look to the history of this
 transaction.
 @return	DB_SUCCESS or error code */
 
-ulint trx_undo_report_row_operation(
+db_err trx_undo_report_row_operation(
     ulint flags,                 /*!< in: if BTR_NO_UNDO_LOG_FLAG bit is
                                  set, does nothing */
     ulint op_type,               /*!< in: TRX_UNDO_INSERT_OP or
@@ -187,6 +192,7 @@ ulint trx_undo_report_row_operation(
                                  inserted undo log record,
                                  ut_dulint_zero if BTR_NO_UNDO_LOG
                                  flag was specified */
+
 /** Copies an undo record to heap. This function can be called if we know that
 the undo log record exists.
 @return	own: copy of the record */
@@ -194,6 +200,7 @@ the undo log record exists.
 trx_undo_rec_t *trx_undo_get_undo_rec_low(
     roll_ptr_t roll_ptr, /*!< in: roll pointer to record */
     mem_heap_t *heap);   /*!< in: memory heap where copied */
+
 /** Copies an undo record to heap.
 
 NOTE: the caller must have latches on the clustered index page and
@@ -201,14 +208,14 @@ purge_view.
 
 @return DB_SUCCESS, or DB_MISSING_HISTORY if the undo log has been
 truncated and we cannot fetch the old version */
-
-ulint trx_undo_get_undo_rec(
+db_err trx_undo_get_undo_rec(
     roll_ptr_t roll_ptr,       /*!< in: roll pointer to record */
     trx_id_t trx_id,           /*!< in: id of the trx that generated
                                the roll pointer: it points to an
                                undo log of this transaction */
     trx_undo_rec_t **undo_rec, /*!< out, own: copy of the record */
     mem_heap_t *heap);         /*!< in: memory heap where copied */
+
 /** Build a previous version of a clustered index record. This function checks
 that the caller has a latch on the index page of the clustered index record
 and an s-latch on the purge_view. This guarantees that the stack of versions
@@ -216,8 +223,7 @@ is locked.
 @return DB_SUCCESS, or DB_MISSING_HISTORY if the previous version is
 earlier than purge_view, which means that it may have been removed,
 DB_ERROR if corrupted record */
-
-ulint trx_undo_prev_version_build(
+db_err trx_undo_prev_version_build(
     const rec_t *index_rec, /*!< in: clustered index record in the
                           index tree */
     mtr_t *index_mtr,       /*!< in: mtr which contains the latch to

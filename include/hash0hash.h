@@ -255,7 +255,7 @@ the heap. The fold value must be stored in the struct NODE in a field named
       } else {                                                                 \
         /* We have to look for the predecessor of the top                      \
         node */                                                                \
-        node111 = cell111->node;                                               \
+        node111 = (TYPE*) cell111->node;                                       \
                                                                                \
         while (top_node111 != HASH_GET_NEXT(NAME, node111)) {                  \
                                                                                \

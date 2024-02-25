@@ -142,7 +142,7 @@ void mach_write_to_8(byte *b,   /*!< in: pointer to 8 bytes where to store */
 bytes. We store the most significant byte to the lowest address. */
 UNIV_INLINE
 void mach_write_ull(byte *b, /*!< in: pointer to 8 bytes where to store */
-                    ib_uint64_t n); /*!< in: 64-bit integer to be stored */
+                    uint64_t n); /*!< in: 64-bit integer to be stored */
 /** The following function is used to fetch data from 8 consecutive
 bytes. The most significant byte is at the lowest address.
 @return	dulint integer */
@@ -153,7 +153,7 @@ dulint mach_read_from_8(const byte *b) /*!< in: pointer to 8 bytes */
 bytes. The most significant byte is at the lowest address.
 @return	64-bit integer */
 UNIV_INLINE
-ib_uint64_t mach_read_ull(const byte *b) /*!< in: pointer to 8 bytes */
+uint64_t mach_read_ull(const byte *b) /*!< in: pointer to 8 bytes */
     __attribute__((nonnull, pure));
 /** Writes a dulint in a compressed form (5..9 bytes).
 @return	size in bytes */
@@ -281,7 +281,7 @@ void mach_write_int_type(
 byte order. */
 UNIV_INLINE
 void mach_write_uint64(byte *dest,     /*!< out: where to write */
-                       ib_uint64_t n); /*!< in: where to read from */
+                       uint64_t n); /*!< in: where to read from */
 #endif                                 /* !UNIV_HOTBACKUP */
 
 #ifndef UNIV_NONINL

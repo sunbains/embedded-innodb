@@ -56,11 +56,11 @@ ulint ut_dulint_get_high(dulint d); /*!< in: dulint */
 @return	32 bits in ulint */
 UNIV_INLINE
 ulint ut_dulint_get_low(dulint d); /*!< in: dulint */
-/** Converts a dulint (a struct of 2 ulints) to ib_int64_t, which is a 64-bit
+/** Converts a dulint (a struct of 2 ulints) to int64_t, which is a 64-bit
 integer type.
-@return	value in ib_int64_t type */
+@return	value in int64_t type */
 UNIV_INLINE
-ib_int64_t ut_conv_dulint_to_longlong(dulint d); /*!< in: dulint */
+int64_t ut_conv_dulint_to_longlong(dulint d); /*!< in: dulint */
 /** Tests if a dulint is zero.
 @return	TRUE if zero */
 UNIV_INLINE
@@ -95,13 +95,13 @@ dulint ut_dulint_align_up(dulint n,        /*!< in: number to be rounded */
 /** Rounds a dulint downward to a multiple of a power of 2.
 @return	rounded value */
 UNIV_INLINE
-ib_uint64_t ut_uint64_align_down(ib_uint64_t n, /*!< in: number to be rounded */
+uint64_t ut_uint64_align_down(uint64_t n, /*!< in: number to be rounded */
                                  ulint align_no); /*!< in: align by this number
                                                   which must be a power of 2 */
-/** Rounds ib_uint64_t upward to a multiple of a power of 2.
+/** Rounds uint64_t upward to a multiple of a power of 2.
 @return	rounded value */
 UNIV_INLINE
-ib_uint64_t ut_uint64_align_up(ib_uint64_t n,   /*!< in: number to be rounded */
+uint64_t ut_uint64_align_up(uint64_t n,   /*!< in: number to be rounded */
                                ulint align_no); /*!< in: align by this number
                                                 which must be a power of 2 */
 /** Increments a dulint variable by 1. */

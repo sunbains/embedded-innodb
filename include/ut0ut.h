@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 Copyright (c) 2009, Sun Microsystems, Inc.
 
@@ -28,15 +28,13 @@ Various utilities
 Created 1/20/1994 Heikki Tuuri
 ***********************************************************************/
 
-#ifndef ut0ut_h
-#define ut0ut_h
-
-#include "univ.i"
+#pragma once
 
 #include <ctype.h>
 #include <time.h>
 
 #include "ut0dbg.h"
+#include "ut0logger.h"
 #include "os0sync.h"
 
 /** Index name prefix in fast index creation */
@@ -47,12 +45,12 @@ Created 1/20/1994 Heikki Tuuri
 /** Time stamp */
 typedef time_t ib_time_t;
 
-/* The first argument to the InnoDB error logging function. */
-typedef void *ib_stream_t;
-
-/** All log messages are written to this function. It should have the same
-behavior as fprintf(). */
-typedef int (*ib_logger_t)(ib_stream_t, const char *, ...);
+// FIXME: Use proper C++ streams
+#define ib_logger(s, f, ...) \
+  do { \
+    ut_a(s != nullptr); \
+    std::fprintf(s, f __VA_OPT__(,) __VA_ARGS__); \
+  } while (false)
 
 #ifndef UNIV_HOTBACKUP
 #if defined(HAVE_IB_PAUSE_INSTRUCTION)
@@ -84,7 +82,7 @@ if cond becomes true.
 @param max_wait_us	in: maximum delay to wait, in microseconds */
 #define UT_WAIT_FOR(cond, max_wait_us)                                         \
   do {                                                                         \
-    ib_uint64_t start_us;                                                      \
+    uint64_t start_us;                                                      \
     start_us = ut_time_us(NULL);                                               \
     while (!(cond) && ut_time_us(NULL) - start_us < (max_wait_us)) {           \
                                                                                \
@@ -196,8 +194,8 @@ time(3), the return value is also stored in *tloc, provided
 that tloc is non-NULL.
 @return	us since epoch */
 
-ib_uint64_t
-ut_time_us(ib_uint64_t *tloc); /*!< out: us since epoch, if non-NULL */
+uint64_t
+ut_time_us(uint64_t *tloc); /*!< out: us since epoch, if non-NULL */
 /** Returns the number of milliseconds since some epoch.  The
 value may wrap around.  It should only be used for heuristic
 purposes.
@@ -289,11 +287,9 @@ a limited buffer. */
 #define ut_snprintf snprintf
 #endif /* __WIN__ */
 
-extern ib_logger_t ib_logger;
-extern ib_stream_t ib_stream;
+// FIXME: Use logger
+#define ib_stream stderr 
 
 #ifndef UNIV_NONINL
 #include "ut0ut.ic"
-#endif
-
 #endif

@@ -49,39 +49,40 @@ Created 12/14/1997 Heikki Tuuri
 %option noyy_scan_string
 %option nounistd
 
-%option extra-type="que_node_t*"
-
 %{
 #define YYSTYPE que_node_t*
 
 #include "univ.i"
+
 #include "pars0pars.h"
 #include "pars0grm.h"
 #include "pars0sym.h"
 #include "mem0mem.h"
 #include "os0proc.h"
 
-#define malloc(A)	ut_malloc(A)
-#define free(A)		ut_free(A)
+#define malloc(A)      ut_malloc(A)
+#define free(A)        ut_free(A)
 #define realloc(P, A)	ut_realloc(P, A)
 #define exit(A) 	ut_error
 
-#define YY_INPUT(buf, result, max_size) pars_get_lex_chars(buf, &result, max_size)
+/* Note: We cast result from int to yy_size_t */
+#define YY_INPUT(buf, result, max_size) \
+        ((result) = pars_get_lex_chars(buf, max_size))
 
 /* String buffer for removing quotes */
 static ulint	stringbuf_len_alloc = 0; /* Allocated length */
 static ulint	stringbuf_len = 0; /* Current length */
 static char*	stringbuf; /* Start of buffer */
+
 /** Appends a string to the buffer. */
 static
 void
 string_append(
-/*==========*/
 	const char*	str,	/*!< in: string to be appended */
 	ulint		len)	/*!< in: length of the string */
 {
 	if (stringbuf == NULL) {
-		stringbuf = ut_malloc(1);
+		stringbuf = (char*) ut_malloc(1);
 		stringbuf_len_alloc = 1;
 	}
 
@@ -89,27 +90,21 @@ string_append(
 		while (stringbuf_len + len > stringbuf_len_alloc) {
 			stringbuf_len_alloc <<= 1;
 		}
-		stringbuf = ut_realloc(stringbuf, stringbuf_len_alloc);
+		stringbuf = (char*) ut_realloc(stringbuf, stringbuf_len_alloc);
 	}
 
 	memcpy(stringbuf + stringbuf_len, str, len);
 	stringbuf_len += len;
 }
 
-/*************************************************************************
-Reset the lexing variables. */
-UNIV_INTERN
-void
-pars_lexer_var_init(void)
-/*=====================*/
-{
-	stringbuf_len = 0;
-	stringbuf_len_alloc = 0;
+void pars_lexer_var_init() {
+  stringbuf_len = 0;
+  stringbuf_len_alloc = 0;
 
-	if (stringbuf != NULL) {
-		ut_free(stringbuf);
-		stringbuf = NULL;
-	}
+  if (stringbuf != NULL) {
+    ut_free(stringbuf);
+    stringbuf = NULL;
+  }
 }
 
 %}
@@ -561,7 +556,7 @@ In the state 'id', only two actions are possible (defined below). */
 {ID}		{
 			yylval = sym_tab_add_id(pars_sym_tab_global,
 							(byte*)yytext,
-							ut_strlen(yytext));
+							strlen(yytext));
 			return(PARS_ID_TOKEN);
 }
 
@@ -680,22 +675,12 @@ In the state 'id', only two actions are possible (defined below). */
 
 %%
 
-/* This definition is added here to get rid of a warning. */
-void yyset_extra(void* p) { }
-
-/**********************************************************************
-Release any resources used by the lexer. */
-UNIV_INTERN
-void
-pars_lexer_close(void)
-/*==================*/
-{
-	yylex_destroy();
-
-	if (stringbuf != NULL) {
-		ut_free(stringbuf);
-		stringbuf = NULL;
-	}
-
-	stringbuf_len_alloc = stringbuf_len = 0;
+/** Release any resources used by the lexer. */
+void pars_lexer_close() {
+  yylex_destroy();
+  if (stringbuf != nullptr) {
+    free(stringbuf);
+    stringbuf = nullptr;
+  }
+  stringbuf_len_alloc = stringbuf_len = 0;
 }

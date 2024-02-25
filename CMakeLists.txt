@@ -18,6 +18,9 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.5 FATAL_ERROR)
 
 PROJECT (EMBEDDED_INNODB)
 
+SET(CMAKE_CXX_STANDARD 23)
+SET(CMAKE_CXX_STANDARD_REQUIRED True)
+
 # Set both LIBRARY_OUTPUT_PATH and EXECUTABLE_OUTPUT_PATH
 SET (LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/lib)
 SET (EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
@@ -51,10 +54,6 @@ MESSAGE(STATUS "CMAKE_SOURCE_DIR: " ${CMAKE_SOURCE_DIR})
 MESSAGE(STATUS "CMAKE_SYSTEM: " ${CMAKE_SYSTEM})
 MESSAGE(STATUS "CMAKE_SYSTEM_PROCESSOR: " ${CMAKE_SYSTEM_PROCESSOR})
 MESSAGE(STATUS "UNIX: " ${UNIX})
-MESSAGE(STATUS "WIN32: " ${WIN32})
-
-MESSAGE(STATUS "WIN64: " ${WIN64})
-MESSAGE(STATUS "MSVC: " ${MSVC})
 
 SET(IB_LANG "english")
 
@@ -172,8 +171,8 @@ IF(CMAKE_SYSTEM_NAME MATCHES "Solaris")
     SET(HAVE_SOLARIS_ATOMICS TRUE)
   ENDIF(DEFINED HAVE_ATOMIC_CAS_ULONG
         AND DEFINED HAVE_ATOMIC_CAS_32
-	AND DEFINED HAVE_ATOMIC_CAS_64
-	AND DEFINED HAVE_ATOMIC_ADD_LONG)
+  AND DEFINED HAVE_ATOMIC_CAS_64
+  AND DEFINED HAVE_ATOMIC_ADD_LONG)
 
 ENDIF(CMAKE_SYSTEM_NAME MATCHES "Solaris")
 
@@ -183,118 +182,67 @@ SET(CMAKE_EXTRA_INCLUDE_FILES)
 
 # Include directories under innobase
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}
-		    ${CMAKE_SOURCE_DIR}/include)
+        ${CMAKE_SOURCE_DIR}/include)
 
-SET(INNODB_SOURCES	btr/btr0btr.c btr/btr0cur.c btr/btr0pcur.c
-			btr/btr0sea.c buf/buf0buf.c
-			buf/buf0flu.c buf/buf0lru.c buf/buf0rea.c
-			data/data0data.c data/data0type.c
-			dict/dict0boot.c dict/dict0crea.c dict/dict0dict.c
-			dict/dict0load.c dict/dict0mem.c
-			dyn/dyn0dyn.c
-			eval/eval0eval.c eval/eval0proc.c
-			fil/fil0fil.c
-			fsp/fsp0fsp.c
-			fut/fut0fut.c fut/fut0lst.c
-			ha/ha0ha.c ha/hash0hash.c ha/ha0storage.c
-			ibuf/ibuf0ibuf.c
-			pars/lexyy.c pars/pars0grm.c pars/pars0opt.c
-			pars/pars0pars.c pars/pars0sym.c
-			lock/lock0lock.c lock/lock0iter.c
-			log/log0log.c log/log0recv.c
-			mach/mach0data.c
-			mem/mem0mem.c
-			mtr/mtr0log.c mtr/mtr0mtr.c
-			os/os0file.c os/os0proc.c os/os0sync.c os/os0thread.c
-			page/page0cur.c page/page0page.c
-			que/que0que.c
-			read/read0read.c
-			rem/rem0cmp.c rem/rem0rec.c
-			row/row0ext.c row/row0ins.c row/row0merge.c
-			row/row0purge.c row/row0row.c row/row0prebuilt.c
-			row/row0sel.c row/row0uins.c row/row0umod.c
-			row/row0undo.c row/row0upd.c row/row0vers.c
-			srv/srv0que.c srv/srv0srv.c srv/srv0start.c
-			sync/sync0arr.c sync/sync0rw.c sync/sync0sync.c
-			thr/thr0loc.c
-			trx/trx0purge.c trx/trx0rec.c
-			trx/trx0roll.c trx/trx0rseg.c
-			trx/trx0sys.c trx/trx0trx.c trx/trx0undo.c
-			usr/usr0sess.c ut/ut0byte.c ut/ut0dbg.c ut/ut0mem.c
-			ut/ut0rnd.c ut/ut0ut.c ut/ut0vec.c ut/ut0list.c ut/ut0rbt.c
-			ddl/ddl0ddl.c
-			api/api0api.c api/api0misc.c api/api0ucode.c
-			api/api0cfg.c api/api0status.c api/api0sql.c)
+SET(INNODB_SOURCES  btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
+      btr/btr0sea.cc buf/buf0buf.cc
+      buf/buf0flu.cc buf/buf0lru.cc buf/buf0rea.cc
+      data/data0data.cc data/data0type.cc
+      dict/dict0boot.cc dict/dict0crea.cc dict/dict0dict.cc
+      dict/dict0load.cc dict/dict0mem.cc
+      dyn/dyn0dyn.cc
+      eval/eval0eval.cc eval/eval0proc.cc
+      fil/fil0fil.cc
+      fsp/fsp0fsp.cc
+      fut/fut0fut.cc fut/fut0lst.cc
+      ha/ha0ha.cc ha/hash0hash.cc ha/ha0storage.cc
+      ibuf/ibuf0ibuf.cc
+      pars/lexyy.cc pars/pars0grm.cc pars/pars0opt.cc
+      pars/pars0pars.cc pars/pars0sym.cc
+      lock/lock0lock.cc lock/lock0iter.cc
+      log/log0log.cc log/log0recv.cc
+      mach/mach0data.cc
+      mem/mem0mem.cc
+      mtr/mtr0log.cc mtr/mtr0mtr.cc
+      os/os0file.cc os/os0proc.cc os/os0sync.cc os/os0thread.cc
+      page/page0cur.cc page/page0page.cc
+      que/que0que.cc
+      read/read0read.cc
+      rem/rem0cmp.cc rem/rem0rec.cc
+      row/row0ext.cc row/row0ins.cc row/row0merge.cc
+      row/row0purge.cc row/row0row.cc row/row0prebuilt.cc
+      row/row0sel.cc row/row0uins.cc row/row0umod.cc
+      row/row0undo.cc row/row0upd.cc row/row0vers.cc
+      srv/srv0que.cc srv/srv0srv.cc srv/srv0start.cc
+      sync/sync0arr.cc sync/sync0rw.cc sync/sync0sync.cc
+      thr/thr0loc.cc
+      trx/trx0purge.cc trx/trx0rec.cc
+      trx/trx0roll.cc trx/trx0rseg.cc
+      trx/trx0sys.cc trx/trx0trx.cc trx/trx0undo.cc
+      usr/usr0sess.cc ut/ut0byte.cc ut/ut0dbg.cc ut/ut0mem.cc
+      ut/ut0rnd.cc ut/ut0ut.cc ut/ut0vec.cc ut/ut0list.cc ut/ut0rbt.cc
+      ddl/ddl0ddl.cc
+      api/api0api.cc api/api0misc.cc api/api0ucode.cc
+      api/api0cfg.cc api/api0status.cc api/api0sql.cc)
 
 IF(NOT DEFINED DISABLE-COMPRESSION)
-	SET(INNODB_SOURCES	${INNODB_SOURCES}
-				buf/buf0buddy.c page/page0zip.c)
+  SET(INNODB_SOURCES  ${INNODB_SOURCES} buf/buf0buddy.cc page/page0zip.cc)
 ENDIF(NOT DEFINED DISABLE-COMPRESSION)
 
-IF(DEFINED WIN32)
+IF(CMAKE_BUILD_TYPE MATCHES debug)
+  ADD_DEFINITIONS(-O0 -g -Wall -DUNIV_DEBUG)
+ELSEIF(CMAKE_BUILD_TYPE MATCHES release)
+  ADD_DEFINITIONS(-g -O0)
+ENDIF(CMAKE_BUILD_TYPE MATCHES debug)
 
-	ADD_DEFINITIONS("-D__WIN__ -D_WINDOWS -D_CRT_SECURE_NO_DEPRECATE")
-
-	# Check for 64 bit platform
-	IF(CMAKE_SIZEOF_VOID_P MATCHES 8)
-		SET(ARCH "amd64") 
-		ADD_DEFINITIONS("-D_WIN64")
-	ELSE(CMAKE_SIZEOF_VOID_P MATCHES 8)
-		SET(ARCH "x86")
-		ADD_DEFINITIONS("-D_WIN32")
-		# Enable Windows InterLocked functions on 32-bit Windows
-		ADD_DEFINITIONS(-DHAVE_WINDOWS_ATOMICS)
-	ENDIF(CMAKE_SIZEOF_VOID_P MATCHES 8)
-
-	SET(CMAKE_EXE_LINKER_FLAGS 
-		"${CMAKE_EXE_LINKER_FLAGS} /MAP /MAPINFO:EXPORTS")
-
-	SET(CMAKE_EXE_LINKER_FLAGS
-		"${CMAKE_EXE_LINKER_FLAGS} /STACK:1048576")
-
-	# Removing compiler optimizations for innodb/mem/* files
-	# on 64-bit Windows due to 64-bit compiler error, See MySQL
-	# Bug #19424, #36366, #34297
-	IF(ARCH MATCHES "amd64")
-		SET_SOURCE_FILES_PROPERTIES(mem/mem0mem.c 
-			PROPERTIES COMPILE_FLAGS -Od -Werror)
-	ENDIF(ARCH MATCHES "amd64")
-
-	# Windows we always build a DLL
-	ADD_LIBRARY(innodb SHARED ${INNODB_SOURCES} win/innodb.def)
-	IF(NOT DEFINED DISABLE-COMPRESSION)
-		ADD_DEPENDENCIES(innodb zlib)
-	ENDIF(NOT DEFINED DISABLE-COMPRESSION)
-ELSEIF(DEFINED UNIX)
-	IF(CMAKE_BUILD_TYPE MATCHES debug)
-		ADD_DEFINITIONS(-g -Wall -DUNIV_DEBUG)
-	ELSEIF(CMAKE_BUILD_TYPE MATCHES release)
-		ADD_DEFINITIONS(-O2)
-	ELSE(CMAKE_BUILD_TYPE MATCHES debug)
-		ADD_DEFINITIONS(-g -Wall)
-	ENDIF(CMAKE_BUILD_TYPE MATCHES debug)
-
-	IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
-
-		ADD_DEFINITIONS(-DUNIV_LINUX)
-
-	ELSEIF(CMAKE_SYSTEM_NAME MATCHES "Solaris"
-		OR CMAKE_SYSTEM_NAME MATCHES "SunOS")
-
-		ADD_DEFINITIONS(-DUNIV_SOLARIS)
-
-	ELSEIF(CMAKE_SYSTEM_NAME MATCHES "aix")
-
-		ADD_DEFINITIONS(-DUNIV_AIX)
-
-	ENDIF(CMAKE_SYSTEM_NAME MATCHES "Linux")
-	
-	# Static build for now
-	ADD_LIBRARY(innodb STATIC ${INNODB_SOURCES})
-ENDIF(DEFINED WIN32)
+IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
+  ADD_DEFINITIONS(-DUNIV_LINUX)
+  # Static build for now
+  ADD_LIBRARY(innodb STATIC ${INNODB_SOURCES})
+ENDIF(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
 IF(NOT DEFINED DISABLE-XA)
-	ADD_DEFINITIONS("-DWITH_XOPEN")
+  ADD_DEFINITIONS("-DWITH_XOPEN")
 ENDIF(NOT DEFINED DISABLE-XA)
 
 IF(NOT DEFINED DISABLE-COMPRESSION)
@@ -305,41 +253,41 @@ ENDIF(NOT DEFINED DISABLE-COMPRESSION)
 SUBDIRS(tests)
 #SUBDIRS(c++)
 
-CONFIGURE_FILE(	${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake
-		${CMAKE_CURRENT_BINARY_DIR}/include/ib0config.h)
+CONFIGURE_FILE(  ${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/include/ib0config.h)
 
 # List all install files and use CPack for packaging and installation
 SET(CMAKE_INSTALL_PREFIX package)
 
-INSTALL(FILES 	COPYING
-		COPYING.Google
-		COPYING.Percona
-		COPYING.Sun_Microsystems
-	DESTINATION .)
-INSTALL(FILES 	innodb.h
-	DESTINATION include)
-INSTALL(FILES 	tests/ib_cfg.c
-		tests/ib_compressed.c
-		tests/ib_cursor.c
-		tests/ib_index.c
-		tests/ib_logger.c
-		tests/ib_search.c
-		tests/ib_status.c
-		tests/ib_test1.c
-		tests/ib_test2.c
-		tests/ib_test3.c
-		tests/ib_test5.c
-		tests/ib_types.c
-		tests/ib_update.c
-		tests/test0aux.c
-		tests/test0aux.h
-		tests/README
-	DESTINATION examples)
-INSTALL(FILES 	tests/CMakeLists.examples
-	DESTINATION examples
-	RENAME CMakeLists.txt)
+INSTALL(FILES   COPYING
+    COPYING.Google
+    COPYING.Percona
+    COPYING.Sun_Microsystems
+  DESTINATION .)
+INSTALL(FILES   innodb.h
+  DESTINATION include)
+INSTALL(FILES   tests/ib_cfg.cc
+    tests/ib_compressed.cc
+    tests/ib_cursor.cc
+    tests/ib_index.cc
+    tests/ib_logger.cc
+    tests/ib_search.cc
+    tests/ib_status.cc
+    tests/ib_test1.cc
+    tests/ib_test2.cc
+    tests/ib_test3.cc
+    tests/ib_test5.cc
+    tests/ib_types.cc
+    tests/ib_update.cc
+    tests/test0aux.cc
+    tests/test0aux.h
+    tests/README
+  DESTINATION examples)
+INSTALL(FILES   tests/CMakeLists.examples
+  DESTINATION examples
+  RENAME CMakeLists.txt)
 INSTALL(TARGETS innodb
-	RUNTIME DESTINATION bin
-	LIBRARY DESTINATION lib
-	ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
 )

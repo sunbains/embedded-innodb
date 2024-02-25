@@ -58,9 +58,9 @@ ib_err_t innobase_start_or_create(void);
 enum db_err innobase_shutdown(ib_shutdown_t shutdown); /*!< in: shutdown flag */
 
 /** Log sequence number at shutdown */
-extern ib_uint64_t srv_shutdown_lsn;
+extern uint64_t srv_shutdown_lsn;
 /** Log sequence number immediately after startup */
-extern ib_uint64_t srv_start_lsn;
+extern uint64_t srv_start_lsn;
 
 #ifdef __NETWARE__
 void set_panic_flag_for_netware(void);

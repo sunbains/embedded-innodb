@@ -206,7 +206,7 @@ void que_node_print_info(que_node_t *node); /*!< in: query graph node */
 /** Evaluate the given SQL
 @return	error code or DB_SUCCESS */
 
-ulint que_eval_sql(pars_info_t *info, /*!< in: info struct, or NULL */
+db_err que_eval_sql(pars_info_t *info, /*!< in: info struct, or NULL */
                    const char *sql,   /*!< in: SQL string */
                    ibool reserve_dict_mutex,
                    /*!< in: if TRUE, acquire/release

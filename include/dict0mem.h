@@ -249,7 +249,7 @@ struct dict_index_struct {
   /*----------------------*/
   /** Statistics for query optimization */
   /* @{ */
-  ib_int64_t *stat_n_diff_key_vals;
+  int64_t *stat_n_diff_key_vals;
   /*!< approximate number of different
   key values for this index, for each
   n-column prefix where n <=
@@ -269,7 +269,7 @@ struct dict_index_struct {
                       responsible for comparing the column values.
                       This field is the argument for the callback
                       compare function. */
-  ib_uint64_t trx_id; /* id of the transaction that created this
+  uint64_t trx_id; /* id of the transaction that created this
                       index, or 0 if the index existed
                       when InnoDB was started up */
                       /* @} */
@@ -418,7 +418,7 @@ struct dict_table_struct {
   unsigned stat_initialized : 1; /*!< TRUE if statistics have
                      been calculated the first time
                      after database startup or table creation */
-  ib_int64_t stat_n_rows;
+  int64_t stat_n_rows;
   /*!< approximate number of rows in the table;
   we periodically calculate new estimates */
   ulint stat_clustered_index_size;
