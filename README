@@ -32,3 +32,7 @@ Windows
 =======
 
 InnoDB does not currently build on Windows. Although there is no real reason why support could not be continued.
+
+Resources:
+https://nivethan.dev/devlog/extending-a-c-project-with-zig.html
+https://zig.guide/working-with-c/abi/
