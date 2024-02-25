@@ -1,4 +1,4 @@
-This is the source of InnoDB 2.3.0
+This is the source of InnoDB 0.1
 ==================================
 
 Requirements
@@ -11,7 +11,7 @@ Unix
 Instructions for compiling and installing:
 ------------------------------------------
 
-1. cmake -G Ninja .
+1. CC="zig cc" cmake -G Ninja .
 
    The configure script attempts to select the optimal latching implementation
    for your configuration, if not explicitly set on the configure command line.
@@ -22,7 +22,7 @@ Instructions for compiling and installing:
 
 2. ninja
 
-3. ninja install
+3. #ninja install (not tested yet)
 
 4. Enjoy!
 
