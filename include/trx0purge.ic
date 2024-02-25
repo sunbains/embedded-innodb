@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -27,13 +27,11 @@ Created 3/26/1996 Heikki Tuuri
 address of its history list node.
 @return	file address of the log */
 UNIV_INLINE
-fil_addr_t
-trx_purge_get_log_from_hist(
-	fil_addr_t	node_addr)	/*!< in: file address of the history
-					list node of the log */
+fil_addr_t trx_purge_get_log_from_hist(
+    fil_addr_t node_addr) /*!< in: file address of the history
+                          list node of the log */
 {
-	node_addr.boffset -= TRX_UNDO_HISTORY_NODE;
+  node_addr.boffset -= TRX_UNDO_HISTORY_NODE;
 
-	return(node_addr);
+  return (node_addr);
 }
-
