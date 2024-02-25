@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -24,15 +24,12 @@ Created 6/5/1996 Heikki Tuuri
 #ifndef srv0que_h
 #define srv0que_h
 
-#include "univ.i"
 #include "que0types.h"
+#include "univ.i"
 
 /** Enqueues a task to server task queue and releases a worker thread, if there
 is a suspended one. */
 
-void
-srv_que_task_enqueue_low(
-	que_thr_t*	thr);	/*!< in: query thread */
+void srv_que_task_enqueue_low(que_thr_t *thr); /*!< in: query thread */
 
 #endif
-

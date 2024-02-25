@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -24,22 +24,19 @@ Created 2/27/1997 Heikki Tuuri
 #ifndef row0umod_h
 #define row0umod_h
 
-#include "univ.i"
 #include "data0data.h"
 #include "dict0types.h"
-#include "trx0types.h"
+#include "mtr0mtr.h"
 #include "que0types.h"
 #include "row0types.h"
-#include "mtr0mtr.h"
+#include "trx0types.h"
+#include "univ.i"
 
 /** Undoes a modify operation on a row of a table.
 @return	DB_SUCCESS or error code */
 
-ulint
-row_undo_mod(
-	undo_node_t*	node,	/*!< in: row undo node */
-	que_thr_t*	thr);	/*!< in: query thread */
-
+ulint row_undo_mod(undo_node_t *node, /*!< in: row undo node */
+                   que_thr_t *thr);   /*!< in: query thread */
 
 #ifndef UNIV_NONINL
 #include "row0umod.ic"

@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -24,13 +24,13 @@ Created 2/25/1997 Heikki Tuuri
 #ifndef row0uins_h
 #define row0uins_h
 
-#include "univ.i"
 #include "data0data.h"
 #include "dict0types.h"
-#include "trx0types.h"
+#include "mtr0mtr.h"
 #include "que0types.h"
 #include "row0types.h"
-#include "mtr0mtr.h"
+#include "trx0types.h"
+#include "univ.i"
 
 /** Undoes a fresh insert of a row to a table. A fresh insert means that
 the same clustered index unique key did not have any record, even delete
@@ -39,9 +39,7 @@ if it figures out that an index record will be removed in the purge
 anyway, it will remove it in the rollback.
 @return	DB_SUCCESS */
 
-ulint
-row_undo_ins(
-	undo_node_t*	node);	/*!< in: row undo node */
+ulint row_undo_ins(undo_node_t *node); /*!< in: row undo node */
 
 #ifndef UNIV_NONINL
 #include "row0uins.ic"

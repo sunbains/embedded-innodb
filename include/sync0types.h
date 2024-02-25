@@ -16,12 +16,12 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/sync0types.h
-Global types for sync
+/**************************************************/ /**
+ @file include/sync0types.h
+ Global types for sync
 
-Created 9/5/1995 Heikki Tuuri
-*******************************************************/
+ Created 9/5/1995 Heikki Tuuri
+ *******************************************************/
 
 #ifndef sync0types_h
 #define sync0types_h
@@ -29,6 +29,6 @@ Created 9/5/1995 Heikki Tuuri
 /** Rename mutex_t to avoid name space collision on some systems */
 #define mutex_t ib_mutex_t
 /** InnoDB mutex */
-typedef struct mutex_struct		mutex_t;
+typedef struct mutex_struct mutex_t;
 
 #endif

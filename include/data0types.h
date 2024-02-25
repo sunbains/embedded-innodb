@@ -16,21 +16,20 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/********************************************************************//**
-@file include/data0types.h
-Some type definitions
+/********************************************************************/ /**
+ @file include/data0types.h
+ Some type definitions
 
-Created 9/21/2000 Heikki Tuuri
-*************************************************************************/
+ Created 9/21/2000 Heikki Tuuri
+ *************************************************************************/
 
 #ifndef data0types_h
 #define data0types_h
 
 /* SQL data field struct */
-typedef struct dfield_struct	dfield_t;
+typedef struct dfield_struct dfield_t;
 
 /* SQL data tuple struct */
-typedef struct dtuple_struct	dtuple_t;
+typedef struct dtuple_struct dtuple_t;
 
 #endif
-

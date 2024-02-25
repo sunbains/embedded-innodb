@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -26,28 +26,28 @@ Created 6/9/1994 Heikki Tuuri
 check fields whose sizes are given below */
 
 #ifdef UNIV_MEM_DEBUG
-# ifndef UNIV_HOTBACKUP
+#ifndef UNIV_HOTBACKUP
 /* The mutex which protects in the debug version the hash table
 containing the list of live memory heaps, and also the global
 variables in mem0dbg.c. */
-extern mutex_t	mem_hash_mutex;
-# endif /* !UNIV_HOTBACKUP */
+extern mutex_t mem_hash_mutex;
+#endif /* !UNIV_HOTBACKUP */
 
-#define MEM_FIELD_HEADER_SIZE	ut_calc_align(2 * sizeof(ulint),\
-						UNIV_MEM_ALIGNMENT)
-#define MEM_FIELD_TRAILER_SIZE	sizeof(ulint)
+#define MEM_FIELD_HEADER_SIZE                                                  \
+  ut_calc_align(2 * sizeof(ulint), UNIV_MEM_ALIGNMENT)
+#define MEM_FIELD_TRAILER_SIZE sizeof(ulint)
 #else
-#define MEM_FIELD_HEADER_SIZE	0
+#define MEM_FIELD_HEADER_SIZE 0
 #endif
-
 
 /* Space needed when allocating for a user a field of
 length N. The space is allocated only in multiples of
 UNIV_MEM_ALIGNMENT. In the debug version there are also
 check fields at the both ends of the field. */
 #ifdef UNIV_MEM_DEBUG
-#define MEM_SPACE_NEEDED(N) ut_calc_align((N) + MEM_FIELD_HEADER_SIZE\
-		 + MEM_FIELD_TRAILER_SIZE, UNIV_MEM_ALIGNMENT)
+#define MEM_SPACE_NEEDED(N)                                                    \
+  ut_calc_align((N) + MEM_FIELD_HEADER_SIZE + MEM_FIELD_TRAILER_SIZE,          \
+                UNIV_MEM_ALIGNMENT)
 #else
 #define MEM_SPACE_NEEDED(N) ut_calc_align((N), UNIV_MEM_ALIGNMENT)
 #endif
@@ -59,45 +59,38 @@ the debug version), the physical size of the heap and the number of
 blocks in the heap. In case of error returns 0 as sizes and number
 of blocks. */
 
-void
-mem_heap_validate_or_print(
-	mem_heap_t*	heap,	/*!< in: memory heap */
-	byte*		top,	/*!< in: calculate and validate only until
-				this top pointer in the heap is reached,
-				if this pointer is NULL, ignored */
-	ibool		 print,	 /*!< in: if TRUE, prints the contents
-				of the heap; works only in
-				the debug version */
-	ibool*		 error,	 /*!< out: TRUE if error */
-	ulint*		us_size,/*!< out: allocated memory
-				(for the user) in the heap,
-				if a NULL pointer is passed as this
-				argument, it is ignored; in the
-				non-debug version this is always -1 */
-	ulint*		ph_size,/*!< out: physical size of the heap,
-				if a NULL pointer is passed as this
-				argument, it is ignored */
-	ulint*		n_blocks); /*!< out: number of blocks in the heap,
-				if a NULL pointer is passed as this
-				argument, it is ignored */
+void mem_heap_validate_or_print(
+    mem_heap_t *heap, /*!< in: memory heap */
+    byte *top,        /*!< in: calculate and validate only until
+                      this top pointer in the heap is reached,
+                      if this pointer is NULL, ignored */
+    ibool print,      /*!< in: if TRUE, prints the contents
+                     of the heap; works only in
+                     the debug version */
+    ibool *error,     /*!< out: TRUE if error */
+    ulint *us_size,   /*!< out: allocated memory
+                      (for the user) in the heap,
+                      if a NULL pointer is passed as this
+                      argument, it is ignored; in the
+                      non-debug version this is always -1 */
+    ulint *ph_size,   /*!< out: physical size of the heap,
+                      if a NULL pointer is passed as this
+                      argument, it is ignored */
+    ulint *n_blocks); /*!< out: number of blocks in the heap,
+                   if a NULL pointer is passed as this
+                   argument, it is ignored */
 /** Validates the contents of a memory heap.
 @return	TRUE if ok */
 
-ibool
-mem_heap_validate(
-	mem_heap_t*   heap);	/*!< in: memory heap */
-#endif /* UNIV_MEM_DEBUG || UNIV_DEBUG */
+ibool mem_heap_validate(mem_heap_t *heap); /*!< in: memory heap */
+#endif                                     /* UNIV_MEM_DEBUG || UNIV_DEBUG */
 #ifdef UNIV_DEBUG
 /** Checks that an object is a memory heap (or a block of it)
 @return	TRUE if ok */
 
-ibool
-mem_heap_check(
-	mem_heap_t*   heap);	/*!< in: memory heap */
-#endif /* UNIV_DEBUG */
+ibool mem_heap_check(mem_heap_t *heap); /*!< in: memory heap */
+#endif                                  /* UNIV_DEBUG */
 /** Validates the dynamic memory
 @return	TRUE if ok */
 
-ibool
-mem_validate(void);
-
+ibool mem_validate(void);

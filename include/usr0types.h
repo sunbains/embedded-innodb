@@ -16,16 +16,16 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/usr0types.h
-Users and sessions global types
+/**************************************************/ /**
+ @file include/usr0types.h
+ Users and sessions global types
 
-Created 6/25/1996 Heikki Tuuri
-*******************************************************/
+ Created 6/25/1996 Heikki Tuuri
+ *******************************************************/
 
 #ifndef usr0types_h
 #define usr0types_h
 
-typedef struct sess_struct	sess_t;
+typedef struct sess_struct sess_t;
 
 #endif

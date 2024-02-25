@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 2006, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -53,78 +53,66 @@ typedef struct ib_list_helper_struct ib_list_helper_t;
 freed with ib_list_free.
 @return	list */
 
-ib_list_t*
-ib_list_create(void);
-
+ib_list_t *ib_list_create(void);
 
 /** Free a list. */
 
-void
-ib_list_free(
-	ib_list_t*	list);	/*!< in: list */
+void ib_list_free(ib_list_t *list); /*!< in: list */
 
 /** Add the data to the end of the list.
 @return	new list node */
 
-ib_list_node_t*
-ib_list_add_last(
-	ib_list_t*	list,	/*!< in: list */
-	void*		data,	/*!< in: data */
-	mem_heap_t*	heap);	/*!< in: memory heap to use */
+ib_list_node_t *
+ib_list_add_last(ib_list_t *list,   /*!< in: list */
+                 void *data,        /*!< in: data */
+                 mem_heap_t *heap); /*!< in: memory heap to use */
 
 /** Add the data after the indicated node.
 @return	new list node */
 
-ib_list_node_t*
-ib_list_add_after(
-	ib_list_t*	list,		/*!< in: list */
-	ib_list_node_t*	prev_node,	/*!< in: node preceding new node (can
-					be NULL) */
-	void*		data,		/*!< in: data */
-	mem_heap_t*	heap);		/*!< in: memory heap to use */
+ib_list_node_t *
+ib_list_add_after(ib_list_t *list,           /*!< in: list */
+                  ib_list_node_t *prev_node, /*!< in: node preceding new node
+                                             (can be NULL) */
+                  void *data,                /*!< in: data */
+                  mem_heap_t *heap);         /*!< in: memory heap to use */
 
 /** Remove the node from the list. */
 
-void
-ib_list_remove(
-	ib_list_t*	list,	/*!< in: list */
-	ib_list_node_t*	node);	/*!< in: node to remove */
+void ib_list_remove(ib_list_t *list,       /*!< in: list */
+                    ib_list_node_t *node); /*!< in: node to remove */
 
 /** Get the first node in the list.
 @return	first node, or NULL */
 UNIV_INLINE
-ib_list_node_t*
-ib_list_get_first(
-	ib_list_t*	list);	/*!< in: list */
+ib_list_node_t *ib_list_get_first(ib_list_t *list); /*!< in: list */
 
 /** Get the last node in the list.
 @return	last node, or NULL */
 UNIV_INLINE
-ib_list_node_t*
-ib_list_get_last(
-	ib_list_t*	list);	/*!< in: list */
+ib_list_node_t *ib_list_get_last(ib_list_t *list); /*!< in: list */
 
 /* List. */
 struct ib_list_struct {
-	ib_list_node_t*		first;		/*!< first node */
-	ib_list_node_t*		last;		/*!< last node */
-	ibool			is_heap_list;	/*!< TRUE if this list was
-						allocated through a heap */
+  ib_list_node_t *first; /*!< first node */
+  ib_list_node_t *last;  /*!< last node */
+  ibool is_heap_list;    /*!< TRUE if this list was
+                         allocated through a heap */
 };
 
 /* A list node. */
 struct ib_list_node_struct {
-	ib_list_node_t*		prev;		/*!< previous node */
-	ib_list_node_t*		next;		/*!< next node */
-	void*			data;		/*!< user data */
+  ib_list_node_t *prev; /*!< previous node */
+  ib_list_node_t *next; /*!< next node */
+  void *data;           /*!< user data */
 };
 
 /* Quite often, the only additional piece of data you need is the per-item
 memory heap, so we have this generic struct available to use in those
 cases. */
 struct ib_list_helper_struct {
-	mem_heap_t*	heap;		/*!< memory heap */
-	void*		data;		/*!< user data */
+  mem_heap_t *heap; /*!< memory heap */
+  void *data;       /*!< user data */
 };
 
 #ifndef UNIV_NONINL

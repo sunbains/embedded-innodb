@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -27,15 +27,15 @@ Created 5/30/1994 Heikki Tuuri
 #include "univ.i"
 #include <string.h>
 #ifndef UNIV_HOTBACKUP
-# include "os0sync.h"
+#include "os0sync.h"
 
 /** The total amount of memory currently allocated from the operating
 system with os_mem_alloc_large() or malloc().  Does not count malloc()
 if srv_use_sys_malloc is set.  Protected by ut_list_mutex. */
-extern ulint		ut_total_allocated_memory;
+extern ulint ut_total_allocated_memory;
 
 /** Mutex protecting ut_total_allocated_memory and ut_mem_block_list */
-extern os_fast_mutex_t	ut_list_mutex;
+extern os_fast_mutex_t ut_list_mutex;
 #endif /* !UNIV_HOTBACKUP */
 
 /** Wrapper for memcpy(3).  Copy memory area when the source and
@@ -45,8 +45,7 @@ target are not overlapping.
 * @param n	in: number of bytes to copy
 * @return	dest */
 UNIV_INLINE
-void*
-ut_memcpy(void* dest, const void* sour, ulint n);
+void *ut_memcpy(void *dest, const void *sour, ulint n);
 
 /** Wrapper for memmove(3).  Copy memory area when the source and
 target are overlapping.
@@ -55,62 +54,51 @@ target are overlapping.
 * @param n	in: number of bytes to copy
 * @return	dest */
 UNIV_INLINE
-void*
-ut_memmove(void* dest, const void* sour, ulint n);
+void *ut_memmove(void *dest, const void *sour, ulint n);
 
 /** Wrapper for memcmp(3).  Compare memory areas.
 * @param str1	in: first memory block to compare
 * @param str2	in: second memory block to compare
 * @param n	in: number of bytes to compare
 * @return	negative, 0, or positive if str1 is smaller, equal,
-		or greater than str2, respectively. */
+                or greater than str2, respectively. */
 UNIV_INLINE
-int
-ut_memcmp(const void* str1, const void* str2, ulint n);
+int ut_memcmp(const void *str1, const void *str2, ulint n);
 
 /** Initializes the mem block list at database startup. */
 
-void
-ut_mem_init(void);
+void ut_mem_init(void);
 
 /** Allocates memory. Sets it also to zero if UNIV_SET_MEM_TO_ZERO is
 defined and set_to_zero is TRUE.
 @return	own: allocated memory */
 
-void*
-ut_malloc_low(
-	ulint	n,			/*!< in: number of bytes to allocate */
-	ibool	set_to_zero,		/*!< in: TRUE if allocated memory
-					should be set to zero if
-					UNIV_SET_MEM_TO_ZERO is defined */
-	ibool	assert_on_error);	/*!< in: if TRUE, we crash the
-					engine if the memory cannot be
-					allocated */
+void *ut_malloc_low(ulint n,           /*!< in: number of bytes to allocate */
+                    ibool set_to_zero, /*!< in: TRUE if allocated memory
+                                       should be set to zero if
+                                       UNIV_SET_MEM_TO_ZERO is defined */
+                    ibool assert_on_error); /*!< in: if TRUE, we crash the
+                                            engine if the memory cannot be
+                                            allocated */
 /** Allocates memory. Sets it also to zero if UNIV_SET_MEM_TO_ZERO is
 defined.
 @return	own: allocated memory */
 
-void*
-ut_malloc(
-	ulint	n);	/*!< in: number of bytes to allocate */
+void *ut_malloc(ulint n); /*!< in: number of bytes to allocate */
 #ifndef UNIV_HOTBACKUP
 /** Tests if malloc of n bytes would succeed. ut_malloc() asserts if memory runs
 out. It cannot be used if we want to return an error message. Prints to
 stderr a message if fails.
 @return	TRUE if succeeded */
 
-ibool
-ut_test_malloc(
-	ulint	n);	/*!< in: try to allocate this many bytes */
-#endif /* !UNIV_HOTBACKUP */
+ibool ut_test_malloc(ulint n); /*!< in: try to allocate this many bytes */
+#endif                         /* !UNIV_HOTBACKUP */
 /** Frees a memory block allocated with ut_malloc. */
 
-void
-ut_free(
-	void* ptr);  /*!< in, own: memory block */
+void ut_free(void *ptr); /*!< in, own: memory block */
 #ifndef UNIV_HOTBACKUP
-/** Implements realloc. This is needed by /pars/lexyy.c. Otherwise, you should not
-use this function because the allocation functions in mem0mem.h are the
+/** Implements realloc. This is needed by /pars/lexyy.c. Otherwise, you should
+not use this function because the allocation functions in mem0mem.h are the
 recommended ones in InnoDB.
 
 man realloc in Linux, 2004:
@@ -134,110 +122,90 @@ RETURN VALUE
        moved.
 @return	own: pointer to new mem block or NULL */
 
-void*
-ut_realloc(
-	void*	ptr,	/*!< in: pointer to old block or NULL */
-	ulint	size);	/*!< in: desired size */
+void *ut_realloc(void *ptr,   /*!< in: pointer to old block or NULL */
+                 ulint size); /*!< in: desired size */
 /** Frees in shutdown all allocated memory not freed yet. */
 
-void
-ut_free_all_mem(void);
+void ut_free_all_mem(void);
 #endif /* !UNIV_HOTBACKUP */
 
 /** Wrapper for strcpy(3).  Copy a NUL-terminated string.
-* @param dest	in: copy to
-* @param sour	in: copy from
-* @return	dest */
+ * @param dest	in: copy to
+ * @param sour	in: copy from
+ * @return	dest */
 UNIV_INLINE
-char*
-ut_strcpy(char* dest, const char* sour);
+char *ut_strcpy(char *dest, const char *sour);
 
 /** Wrapper for strlen(3).  Determine the length of a NUL-terminated string.
-* @param str	in: string
-* @return	length of the string in bytes, excluding the terminating NUL */
+ * @param str	in: string
+ * @return	length of the string in bytes, excluding the terminating NUL */
 UNIV_INLINE
-ulint
-ut_strlen(const char* str);
+ulint ut_strlen(const char *str);
 
 /** Wrapper for strcmp(3).  Compare NUL-terminated strings.
 * @param str1	in: first string to compare
 * @param str2	in: second string to compare
 * @return	negative, 0, or positive if str1 is smaller, equal,
-		or greater than str2, respectively. */
+                or greater than str2, respectively. */
 UNIV_INLINE
-int
-ut_strcmp(const char* str1, const char* str2);
+int ut_strcmp(const char *str1, const char *str2);
 
 /** Copies up to size - 1 characters from the NUL-terminated string src to
 dst, NUL-terminating the result. Returns strlen(src), so truncation
 occurred if the return value >= size.
 @return	strlen(src) */
 
-ulint
-ut_strlcpy(
-	char*		dst,	/*!< in: destination buffer */
-	const char*	src,	/*!< in: source buffer */
-	ulint		size);	/*!< in: size of destination buffer */
+ulint ut_strlcpy(char *dst,       /*!< in: destination buffer */
+                 const char *src, /*!< in: source buffer */
+                 ulint size);     /*!< in: size of destination buffer */
 
 /** Like ut_strlcpy, but if src doesn't fit in dst completely, copies the last
 (size - 1) bytes of src, not the first.
 @return	strlen(src) */
 
-ulint
-ut_strlcpy_rev(
-	char*		dst,	/*!< in: destination buffer */
-	const char*	src,	/*!< in: source buffer */
-	ulint		size);	/*!< in: size of destination buffer */
+ulint ut_strlcpy_rev(char *dst,       /*!< in: destination buffer */
+                     const char *src, /*!< in: source buffer */
+                     ulint size);     /*!< in: size of destination buffer */
 
 /** Compute strlen(ut_strcpyq(str, q)).
 @return	length of the string when quoted */
 UNIV_INLINE
-ulint
-ut_strlenq(
-	const char*	str,	/*!< in: null-terminated string */
-	char		q);	/*!< in: the quote character */
+ulint ut_strlenq(const char *str, /*!< in: null-terminated string */
+                 char q);         /*!< in: the quote character */
 
 /** Make a quoted copy of a NUL-terminated string.	Leading and trailing
 quotes will not be included; only embedded quotes will be escaped.
 See also ut_strlenq() and ut_memcpyq().
 @return	pointer to end of dest */
 
-char*
-ut_strcpyq(
-	char*		dest,	/*!< in: output buffer */
-	char		q,	/*!< in: the quote character */
-	const char*	src);	/*!< in: null-terminated string */
+char *ut_strcpyq(char *dest,       /*!< in: output buffer */
+                 char q,           /*!< in: the quote character */
+                 const char *src); /*!< in: null-terminated string */
 
 /** Make a quoted copy of a fixed-length string.  Leading and trailing
 quotes will not be included; only embedded quotes will be escaped.
 See also ut_strlenq() and ut_strcpyq().
 @return	pointer to end of dest */
 
-char*
-ut_memcpyq(
-	char*		dest,	/*!< in: output buffer */
-	char		q,	/*!< in: the quote character */
-	const char*	src,	/*!< in: string to be quoted */
-	ulint		len);	/*!< in: length of src */
+char *ut_memcpyq(char *dest,      /*!< in: output buffer */
+                 char q,          /*!< in: the quote character */
+                 const char *src, /*!< in: string to be quoted */
+                 ulint len);      /*!< in: length of src */
 
 /** Return the number of times s2 occurs in s1. Overlapping instances of s2
 are only counted once.
 @return	the number of times s2 occurs in s1 */
 
-ulint
-ut_strcount(
-	const char*	s1,	/*!< in: string to search in */
-	const char*	s2);	/*!< in: string to search for */
+ulint ut_strcount(const char *s1,  /*!< in: string to search in */
+                  const char *s2); /*!< in: string to search for */
 
 /** Replace every occurrence of s1 in str with s2. Overlapping instances of s1
 are only replaced once.
 @return	own: modified string, must be freed with mem_free() */
 
-char*
-ut_strreplace(
-	const char*	str,	/*!< in: string to operate on */
-	const char*	s1,	/*!< in: string to replace */
-	const char*	s2);	/*!< in: string to replace s1 with */
+char *ut_strreplace(const char *str, /*!< in: string to operate on */
+                    const char *s1,  /*!< in: string to replace */
+                    const char *s2); /*!< in: string to replace s1 with */
 
 /** Converts a raw binary data to a NUL-terminated hex string. The output is
 truncated if there is not enough space in "hex", make sure "hex_size" is at
@@ -245,12 +213,10 @@ least (2 * raw_size + 1) if you do not want this to happen. Returns the
 actual number of characters written to "hex" (including the NUL).
 @return	number of chars written */
 UNIV_INLINE
-ulint
-ut_raw_to_hex(
-	const void*	raw,		/*!< in: raw data */
-	ulint		raw_size,	/*!< in: "raw" length in bytes */
-	char*		hex,		/*!< out: hex string */
-	ulint		hex_size);	/*!< in: "hex" size in bytes */
+ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
+                    ulint raw_size,  /*!< in: "raw" length in bytes */
+                    char *hex,       /*!< out: hex string */
+                    ulint hex_size); /*!< in: "hex" size in bytes */
 
 /** Adds single quotes to the start and end of string and escapes any quotes
 by doubling them. Returns the number of bytes that were written to "buf"
@@ -258,17 +224,14 @@ by doubling them. Returns the number of bytes that were written to "buf"
 trailing bytes from "str" are discarded.
 @return	number of bytes that were written */
 UNIV_INLINE
-ulint
-ut_str_sql_format(
-	const char*	str,		/*!< in: string */
-	ulint		str_len,	/*!< in: string length in bytes */
-	char*		buf,		/*!< out: output buffer */
-	ulint		buf_size);	/*!< in: output buffer size
-					in bytes */
+ulint ut_str_sql_format(const char *str, /*!< in: string */
+                        ulint str_len,   /*!< in: string length in bytes */
+                        char *buf,       /*!< out: output buffer */
+                        ulint buf_size); /*!< in: output buffer size
+                                         in bytes */
 /** Reset the variables. */
 
-void
-ut_mem_var_init(void);
+void ut_mem_var_init(void);
 
 #ifndef UNIV_NONINL
 #include "ut0mem.ic"

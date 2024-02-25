@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -20,10 +20,9 @@ Insert buffer global types
 
 Created 7/29/1997 Heikki Tuuri */
 
-
 #ifndef ibuf0types_h
 #define ibuf0types_h
 
-typedef	struct ibuf_struct	ibuf_t;
+typedef struct ibuf_struct ibuf_t;
 
 #endif

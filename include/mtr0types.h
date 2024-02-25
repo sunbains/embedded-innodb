@@ -16,16 +16,16 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/mtr0types.h
-Mini-transaction buffer global types
+/**************************************************/ /**
+ @file include/mtr0types.h
+ Mini-transaction buffer global types
 
-Created 11/26/1995 Heikki Tuuri
-*******************************************************/
+ Created 11/26/1995 Heikki Tuuri
+ *******************************************************/
 
 #ifndef mtr0types_h
 #define mtr0types_h
 
-typedef struct mtr_struct	mtr_t;
+typedef struct mtr_struct mtr_t;
 
 #endif

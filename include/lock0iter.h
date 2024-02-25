@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 2007, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -24,15 +24,15 @@ Created July 16, 2007 Vasil Dimov
 #ifndef lock0iter_h
 #define lock0iter_h
 
-#include "univ.i"
 #include "lock0types.h"
+#include "univ.i"
 
 typedef struct lock_queue_iterator_struct {
-	const lock_t*	current_lock;
-	/* In case this is a record lock queue (not table lock queue)
-	then bit_no is the record number within the heap in which the
-	record is stored. */
-	ulint		bit_no;
+  const lock_t *current_lock;
+  /* In case this is a record lock queue (not table lock queue)
+  then bit_no is the record number within the heap in which the
+  record is stored. */
+  ulint bit_no;
 } lock_queue_iterator_t;
 
 /** Initialize lock queue iterator so that it starts to iterate from
@@ -44,20 +44,18 @@ record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
    lock_rec_find_set_bit(). There is exactly one bit set in the bitmap
    of a wait lock. */
 
-void
-lock_queue_iterator_reset(
-	lock_queue_iterator_t*	iter,	/*!< out: iterator */
-	const lock_t*		lock,	/*!< in: lock to start from */
-	ulint			bit_no);/*!< in: record number in the
-					heap */
+void lock_queue_iterator_reset(
+    lock_queue_iterator_t *iter, /*!< out: iterator */
+    const lock_t *lock,          /*!< in: lock to start from */
+    ulint bit_no);               /*!< in: record number in the
+                                 heap */
 
 /** Gets the previous lock in the lock queue, returns NULL if there are no
 more locks (i.e. the current lock is the first one). The iterator is
 receded (if not-NULL is returned).
 @return	previous lock or NULL */
 
-const lock_t*
-lock_queue_iterator_get_prev(
-	lock_queue_iterator_t*	iter);	/*!< in/out: iterator */
+const lock_t *lock_queue_iterator_get_prev(
+    lock_queue_iterator_t *iter); /*!< in/out: iterator */
 
 #endif /* lock0iter_h */

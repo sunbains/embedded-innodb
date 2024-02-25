@@ -1,4 +1,4 @@
-/** 
+/**
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -24,125 +24,132 @@ Created 1/30/1994 Heikki Tuuri
 #ifndef ut0dbg_h
 #define ut0dbg_h
 
+#include "os0thread.h"
 #include "univ.i"
 #include <stdlib.h>
-#include "os0thread.h"
 
 #if defined(__GNUC__) && (__GNUC__ > 2)
 /** Test if an assertion fails.
 @param EXPR	assertion expression
 @return		nonzero if EXPR holds, zero if not */
-# define UT_DBG_FAIL(EXPR) UNIV_UNLIKELY(!((ulint)(EXPR)))
+#define UT_DBG_FAIL(EXPR) UNIV_UNLIKELY(!((ulint)(EXPR)))
 #else
 /** This is used to eliminate compiler warnings */
-extern ulint	ut_dbg_zero;
+extern ulint ut_dbg_zero;
 /** Test if an assertion fails.
 @param EXPR	assertion expression
 @return		nonzero if EXPR holds, zero if not */
-# define UT_DBG_FAIL(EXPR) !((ulint)(EXPR) + ut_dbg_zero)
+#define UT_DBG_FAIL(EXPR) !((ulint)(EXPR) + ut_dbg_zero)
 #endif
 
 #if __STDC_VERSION__ < 199901L
-# if __GNUC__ >= 2
-#  define __func__ __FUNCTION__
-# else
-#  define __func__ "<unknown>"
-# endif
+#if __GNUC__ >= 2
+#define __func__ __FUNCTION__
+#else
+#define __func__ "<unknown>"
+#endif
 #endif
 
-#define UT_DBG_PRINT_FUNC	printf("%s\n", __func__)
+#define UT_DBG_PRINT_FUNC printf("%s\n", __func__)
 
 /* you must #define UT_DBG_ENTER_FUNC_ENABLED to something before
 using this macro */
-#define UT_DBG_ENTER_FUNC				\
-	do {						\
-		if (UT_DBG_ENTER_FUNC_ENABLED) {	\
-			UT_DBG_PRINT_FUNC;		\
-		}					\
-	} while (0)
+#define UT_DBG_ENTER_FUNC                                                      \
+  do {                                                                         \
+    if (UT_DBG_ENTER_FUNC_ENABLED) {                                           \
+      UT_DBG_PRINT_FUNC;                                                       \
+    }                                                                          \
+  } while (0)
 
 /** Report a failed assertion. */
 
-void
-ut_dbg_assertion_failed(
-	const char* expr,	/*!< in: the failed assertion */
-	const char* file,	/*!< in: source file containing the assertion */
-	ulint line);		/*!< in: line number of the assertion */
+void ut_dbg_assertion_failed(
+    const char *expr, /*!< in: the failed assertion */
+    const char *file, /*!< in: source file containing the assertion */
+    ulint line);      /*!< in: line number of the assertion */
 
 #ifdef __NETWARE__
 /** Flag for ignoring further assertion failures.  This is set to TRUE
 when on NetWare there happens an InnoDB assertion failure or other
 fatal error condition that requires an immediate shutdown. */
-extern ibool	panic_shutdown;
+extern ibool panic_shutdown;
 /* Abort the execution. */
 void ut_dbg_panic(void);
-# define UT_DBG_PANIC ut_dbg_panic()
+#define UT_DBG_PANIC ut_dbg_panic()
 /* Stop threads in ut_a(). */
-# define UT_DBG_STOP	do {} while (0)	/* We do not do this on NetWare */
-#else /* __NETWARE__ */
-# if defined(__WIN__) || defined(__INTEL_COMPILER)
-#  undef UT_DBG_USE_ABORT
-# elif defined(__GNUC__) && (__GNUC__ > 2)
-#  define UT_DBG_USE_ABORT
-# endif
+#define UT_DBG_STOP                                                            \
+  do {                                                                         \
+  } while (0) /* We do not do this on NetWare */
+#else         /* __NETWARE__ */
+#if defined(__WIN__) || defined(__INTEL_COMPILER)
+#undef UT_DBG_USE_ABORT
+#elif defined(__GNUC__) && (__GNUC__ > 2)
+#define UT_DBG_USE_ABORT
+#endif
 
-# ifndef UT_DBG_USE_ABORT
+#ifndef UT_DBG_USE_ABORT
 /** A null pointer that will be dereferenced to trigger a memory trap */
-extern ulint*	ut_dbg_null_ptr;
-# endif
+extern ulint *ut_dbg_null_ptr;
+#endif
 
-# if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
+#if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
 /** If this is set to TRUE by ut_dbg_assertion_failed(), all threads
 will stop at the next ut_a() or ut_ad(). */
-extern ibool	ut_dbg_stop_threads;
+extern ibool ut_dbg_stop_threads;
 
 /** Stop a thread after assertion failure. */
 
-void
-ut_dbg_stop_thread(
-	const char*	file,
-	ulint		line);
-# endif
+void ut_dbg_stop_thread(const char *file, ulint line);
+#endif
 
-# ifdef UT_DBG_USE_ABORT
+#ifdef UT_DBG_USE_ABORT
 /** Abort the execution. */
-#  define UT_DBG_PANIC abort()
+#define UT_DBG_PANIC abort()
 /** Stop threads (null operation) */
-#  define UT_DBG_STOP do {} while (0)
-# else /* UT_DBG_USE_ABORT */
+#define UT_DBG_STOP                                                            \
+  do {                                                                         \
+  } while (0)
+#else /* UT_DBG_USE_ABORT */
 /** Abort the execution. */
-#  define UT_DBG_PANIC					\
-	if (*(ut_dbg_null_ptr)) ut_dbg_null_ptr = NULL
+#define UT_DBG_PANIC                                                           \
+  if (*(ut_dbg_null_ptr))                                                      \
+  ut_dbg_null_ptr = NULL
 /** Stop threads in ut_a(). */
-#  define UT_DBG_STOP do						\
-	if (UNIV_UNLIKELY(ut_dbg_stop_threads)) {		\
-		ut_dbg_stop_thread(__FILE__, (ulint) __LINE__);	\
-	} while (0)
-# endif /* UT_DBG_USE_ABORT */
+#define UT_DBG_STOP                                                            \
+  do                                                                           \
+    if (UNIV_UNLIKELY(ut_dbg_stop_threads)) {                                  \
+      ut_dbg_stop_thread(__FILE__, (ulint)__LINE__);                           \
+    }                                                                          \
+  while (0)
+#endif /* UT_DBG_USE_ABORT */
 #endif /* __NETWARE__ */
 
 /** Abort execution if EXPR does not evaluate to nonzero.
 @param EXPR	assertion expression that should hold */
-#define ut_a(EXPR) do {						\
-	if (UT_DBG_FAIL(EXPR)) {				\
-		ut_dbg_assertion_failed(#EXPR,			\
-				__FILE__, (ulint) __LINE__);	\
-		UT_DBG_PANIC;					\
-	}							\
-	UT_DBG_STOP;						\
-} while (0)
+#define ut_a(EXPR)                                                             \
+  do {                                                                         \
+    if (UT_DBG_FAIL(EXPR)) {                                                   \
+      ut_dbg_assertion_failed(#EXPR, __FILE__, (ulint)__LINE__);               \
+      UT_DBG_PANIC;                                                            \
+    }                                                                          \
+    UT_DBG_STOP;                                                               \
+  } while (0)
 
 /** Abort execution. */
-#define ut_error do {						\
-	ut_dbg_assertion_failed(0, __FILE__, (ulint) __LINE__);	\
-	UT_DBG_PANIC;						\
-} while (0)
+#define ut_error                                                               \
+  do {                                                                         \
+    ut_dbg_assertion_failed(0, __FILE__, (ulint)__LINE__);                     \
+    UT_DBG_PANIC;                                                              \
+  } while (0)
 
 #ifdef UNIV_DEBUG
 /** Debug assertion. Does nothing unless UNIV_DEBUG is defined. */
-#define ut_ad(EXPR)	ut_a(EXPR)
+#define ut_ad(EXPR) ut_a(EXPR)
 /** Debug statement. Does nothing unless UNIV_DEBUG is defined. */
-#define ut_d(EXPR)	do {EXPR;} while (0)
+#define ut_d(EXPR)                                                             \
+  do {                                                                         \
+    EXPR;                                                                      \
+  } while (0)
 #else
 /** Debug assertion. Does nothing unless UNIV_DEBUG is defined. */
 #define ut_ad(EXPR)
@@ -152,32 +159,28 @@ ut_dbg_stop_thread(
 
 /** Silence warnings about an unused variable by doing a null assignment.
 @param A	the unused variable */
-#define UT_NOT_USED(A)	A = A
+#define UT_NOT_USED(A) A = A
 
 #ifdef UNIV_COMPILE_TEST_FUNCS
 
-#include <sys/types.h>
-#include <sys/time.h>
 #include <sys/resource.h>
+#include <sys/time.h>
+#include <sys/types.h>
 
 /** structure used for recording usage statistics */
 typedef struct speedo_struct {
-	struct rusage	ru;	/*!< getrusage() result */
-	struct timeval	tv;	/*!< gettimeofday() result */
+  struct rusage ru;  /*!< getrusage() result */
+  struct timeval tv; /*!< gettimeofday() result */
 } speedo_t;
 
 /** Resets a speedo (records the current time in it). */
 
-void
-speedo_reset(
-	speedo_t*	speedo);	/*!< out: speedo */
+void speedo_reset(speedo_t *speedo); /*!< out: speedo */
 
 /** Shows the time elapsed and usage statistics since the last reset of a
 speedo. */
 
-void
-speedo_show(
-	const speedo_t*	speedo);	/*!< in: speedo */
+void speedo_show(const speedo_t *speedo); /*!< in: speedo */
 
 #endif /* UNIV_COMPILE_TEST_FUNCS */
 

@@ -16,12 +16,12 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/**************************************************//**
-@file include/db0err.h
-Global error codes for the database
+/**************************************************/ /**
+ @file include/db0err.h
+ Global error codes for the database
 
-Created 5/24/1996 Heikki Tuuri
-*******************************************************/
+ Created 5/24/1996 Heikki Tuuri
+ *******************************************************/
 
 #ifndef db0err_h
 #define db0err_h
