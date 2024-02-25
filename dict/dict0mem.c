@@ -55,7 +55,7 @@ dict_mem_table_create(const char *name, /*!< in: table name */
   mem_heap_t *heap;
 
   ut_ad(name);
-  ut_a(!(flags & (~0 << DICT_TF2_BITS)));
+  ut_a(!(flags & (~0UL << DICT_TF2_BITS)));
 
   heap = mem_heap_create(DICT_HEAP_SIZE);
 

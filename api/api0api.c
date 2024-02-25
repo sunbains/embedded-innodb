@@ -408,7 +408,6 @@ ib_varchar_len(
 	return(len);
 }
 
-#endif
 
 /** Calculate the max row size of the columns in a cluster index.
 @return	max row length */
@@ -436,6 +435,7 @@ ulint ib_get_max_row_len(dict_index_t *cluster) /*!< in: cluster index */
 
   return (max_len);
 }
+#endif
 
 /** Read the colums from a rec into a tuple. */
 UNIV_INLINE
@@ -5593,6 +5593,7 @@ ib_err_t ib_schema_tables_iterate(
   return (err);
 }
 
+#if 0
 /** Convert and write an INT column value to an InnoDB tuple.
 @return	DB_SUCCESS or error */
 UNIV_INLINE
@@ -5623,6 +5624,7 @@ ib_err_t ib_tuple_write_int(ib_tpl_t ib_tpl,   /*!< upd: tuple to write to */
 
   return (ib_col_set_value(ib_tpl, col_no, value, type_len));
 }
+#endif
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.

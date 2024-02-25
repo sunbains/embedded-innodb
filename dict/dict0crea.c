@@ -91,13 +91,13 @@ dict_create_sys_tables_tuple(const dict_table_t *table, /*!< in: table */
   dfield = dtuple_get_nth_field(entry, 3 /*TYPE*/);
 
   ptr = mem_heap_alloc(heap, 4);
-  if (table->flags & (~DICT_TF_COMPACT & ~(~0 << DICT_TF_BITS))) {
+  if (table->flags & (~DICT_TF_COMPACT & ~(~0UL << DICT_TF_BITS))) {
     ut_a(table->flags & DICT_TF_COMPACT);
     ut_a(dict_table_get_format(table) >= DICT_TF_FORMAT_ZIP);
     ut_a((table->flags & DICT_TF_ZSSIZE_MASK) <=
          (DICT_TF_ZSSIZE_MAX << DICT_TF_ZSSIZE_SHIFT));
-    ut_a(!(table->flags & (~0 << DICT_TF2_BITS)));
-    mach_write_to_4(ptr, table->flags & ~(~0 << DICT_TF_BITS));
+    ut_a(!(table->flags & (~0UL << DICT_TF2_BITS)));
+    mach_write_to_4(ptr, table->flags & ~(~0UL << DICT_TF_BITS));
   } else {
     mach_write_to_4(ptr, DICT_TABLE_ORDINARY);
   }
@@ -261,7 +261,7 @@ dict_build_table_def_step(que_thr_t *thr,   /*!< in: query thread */
     ut_ad(!dict_table_zip_size(table) ||
           dict_table_get_format(table) >= DICT_TF_FORMAT_ZIP);
 
-    flags = table->flags & ~(~0 << DICT_TF_BITS);
+    flags = table->flags & ~(~0UL << DICT_TF_BITS);
     error = fil_create_new_single_table_tablespace(
         &space, path_or_name, is_path, flags == DICT_TF_COMPACT ? 0 : flags,
         FIL_IBD_FILE_INITIAL_SIZE);
@@ -279,7 +279,7 @@ dict_build_table_def_step(que_thr_t *thr,   /*!< in: query thread */
     mtr_commit(&mtr);
   } else {
     /* Create in the system tablespace: disallow new features */
-    table->flags &= (~0 << DICT_TF_BITS) | DICT_TF_COMPACT;
+    table->flags &= (~0UL << DICT_TF_BITS) | DICT_TF_COMPACT;
   }
 
   row = dict_create_sys_tables_tuple(table, node->heap);

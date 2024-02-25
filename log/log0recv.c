@@ -1972,7 +1972,6 @@ static ibool recv_parse_log_recs(
   ulint space;
   ulint page_no;
   byte *body;
-  ulint n_recs;
 
   ut_ad(mutex_own(&(log_sys->mutex)));
   ut_ad(recv_sys->parse_start_lsn != 0);
@@ -2065,7 +2064,6 @@ loop:
     are included within the buffer */
 
     total_len = 0;
-    n_recs = 0;
 
     for (;;) {
       len = recv_parse_log_rec(ptr, end_ptr, &type, &space, &page_no, &body);
@@ -2100,7 +2098,6 @@ loop:
 #endif /* UNIV_DEBUG */
 
       total_len += len;
-      n_recs++;
 
       ptr += len;
 

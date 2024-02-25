@@ -1026,7 +1026,7 @@ ulint trx_purge(void) {
   Also, srv_max_purge_lag <= 0 means 'infinity'. */
   if (srv_max_purge_lag > 0 && !UT_LIST_GET_LAST(trx_sys->view_list)) {
     float ratio = (float)trx_sys->rseg_history_len / srv_max_purge_lag;
-    if (ratio > ULINT_MAX / 10000) {
+    if (ratio > (float) ULINT_MAX / 10000) {
       /* Avoid overflow: maximum delay is 4295 seconds */
       srv_dml_needed_delay = ULINT_MAX;
     } else if (ratio > 1) {

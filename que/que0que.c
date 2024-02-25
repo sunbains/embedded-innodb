@@ -1177,13 +1177,11 @@ que_thr_t *que_thr_step(que_thr_t *thr) /*!< in: query thread */
 static void que_run_threads_low(que_thr_t *thr) /*!< in: query thread */
 {
   que_thr_t *next_thr;
-  ulint loop_count;
 
   ut_ad(thr->state == QUE_THR_RUNNING);
   ut_a(thr_get_trx(thr)->error_state == DB_SUCCESS);
   ut_ad(!mutex_own(&kernel_mutex));
 
-  loop_count = QUE_MAX_LOOPS_WITHOUT_CHECK;
 loop:
   /* Check that there is enough space in the log to accommodate
   possible log entries by this query step; if the operation can touch
@@ -1201,8 +1199,6 @@ loop:
 
   ut_a(!next_thr || (thr_get_trx(next_thr)->error_state == DB_SUCCESS));
 
-  loop_count++;
-
   if (next_thr != thr) {
     ut_a(next_thr == NULL);
 
@@ -1214,8 +1210,6 @@ loop:
 
       return;
     }
-
-    loop_count = QUE_MAX_LOOPS_WITHOUT_CHECK;
 
     thr = next_thr;
   }

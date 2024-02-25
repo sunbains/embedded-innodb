@@ -237,7 +237,7 @@ WHERE first == 'a'
 static ib_err_t update_t1(void *arg) /*!< in: arguments for callback */
 {
   ib_err_t err;
-  int res = ~0;
+  int res = ~0L;
   ib_tpl_t key_tpl = NULL;
   ib_tpl_t old_tpl = NULL;
   ib_tpl_t new_tpl = NULL;
@@ -378,7 +378,7 @@ clean_exit:
 static ib_err_t delete_t1(void *arg) /*!< in: arguments for callback */
 {
   ib_err_t err;
-  int res = ~0;
+  int res = ~0L;
   ib_tpl_t key_tpl = NULL;
   ib_crsr_t crsr = NULL;
   cb_args_t *cb_arg = (cb_args_t *)arg;

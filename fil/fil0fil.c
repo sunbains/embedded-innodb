@@ -1049,10 +1049,10 @@ ibool fil_space_create(
 
   /* The tablespace flags (FSP_SPACE_FLAGS) should be 0 for
   ROW_FORMAT=COMPACT
-  ((table->flags & ~(~0 << DICT_TF_BITS)) == DICT_TF_COMPACT) and
+  ((table->flags & ~(~0UL << DICT_TF_BITS)) == DICT_TF_COMPACT) and
   ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other
   format, the tablespace flags should equal
-  (table->flags & ~(~0 << DICT_TF_BITS)). */
+  (table->flags & ~(~0UL << DICT_TF_BITS)). */
   ut_a(flags != DICT_TF_COMPACT);
   ut_a(!(flags & (~0UL << DICT_TF_BITS)));
 
@@ -2454,10 +2454,10 @@ ulint fil_create_new_single_table_tablespace(
   ut_a(size >= FIL_IBD_FILE_INITIAL_SIZE);
   /* The tablespace flags (FSP_SPACE_FLAGS) should be 0 for
   ROW_FORMAT=COMPACT
-  ((table->flags & ~(~0 << DICT_TF_BITS)) == DICT_TF_COMPACT) and
+  ((table->flags & ~(~0UL << DICT_TF_BITS)) == DICT_TF_COMPACT) and
   ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other
   format, the tablespace flags should equal
-  (table->flags & ~(~0 << DICT_TF_BITS)). */
+  (table->flags & ~(~0UL << DICT_TF_BITS)). */
   ut_a(flags != DICT_TF_COMPACT);
   ut_a(!(flags & (~0UL << DICT_TF_BITS)));
 
@@ -2820,10 +2820,10 @@ ibool fil_open_single_table_tablespace(
 
   /* The tablespace flags (FSP_SPACE_FLAGS) should be 0 for
   ROW_FORMAT=COMPACT
-  ((table->flags & ~(~0 << DICT_TF_BITS)) == DICT_TF_COMPACT) and
+  ((table->flags & ~(~0UL << DICT_TF_BITS)) == DICT_TF_COMPACT) and
   ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other
   format, the tablespace flags should equal
-  (table->flags & ~(~0 << DICT_TF_BITS)). */
+  (table->flags & ~(~0UL << DICT_TF_BITS)). */
   ut_a(flags != DICT_TF_COMPACT);
   ut_a(!(flags & (~0UL << DICT_TF_BITS)));
 
@@ -2879,7 +2879,7 @@ ibool fil_open_single_table_tablespace(
   ut_free(buf2);
 
   if (UNIV_UNLIKELY(space_id != id ||
-                    space_flags != (flags & ~(~0 << DICT_TF_BITS)))) {
+                    space_flags != (flags & ~(~0UL << DICT_TF_BITS)))) {
     ut_print_timestamp(ib_stream);
 
     ib_logger(ib_stream, "  InnoDB: Error: tablespace id and flags in file ");

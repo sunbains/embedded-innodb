@@ -210,7 +210,7 @@ static ib_err_t update_random_rows(ib_crsr_t crsr) {
   ib_err_t err;
   int l;
   char *ptr;
-  int res = ~0;
+  int res = ~0L;
   ib_tpl_t key_tpl;
   ib_tpl_t old_tpl = NULL;
   ib_tpl_t new_tpl = NULL;

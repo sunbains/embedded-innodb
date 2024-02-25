@@ -1,5 +1,5 @@
 #ifndef _TEST0AUX_H
-#define TEST0AUX_H
+#define _TEST0AUX_H
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -573,7 +573,7 @@ static void process_row_batch(ib_crsr_t crsr,    /*!< in, out: cursor to use
 {
   int i;
   int key;
-  int res = ~0;
+  int res = ~0L;
   ib_crsr_t index_crsr;
   ib_err_t err = DB_SUCCESS;
 
@@ -720,7 +720,6 @@ static void *del_worker(void *dummy) /*!< in: unused */
 
 /** SELECT * FROM blobt3; */
 static ib_err_t do_query(ib_crsr_t crsr) {
-  int cnt;
   ib_err_t err;
   ib_tpl_t tpl;
 
@@ -730,12 +729,8 @@ static ib_err_t do_query(ib_crsr_t crsr) {
   err = ib_cursor_first(crsr);
   assert(err == DB_SUCCESS || err == DB_END_OF_INDEX);
 
-  cnt = 0;
   while (err == DB_SUCCESS) {
     err = ib_cursor_read_row(crsr, tpl);
-
-    ++cnt;
-    // print_tuple(stderr, tpl);
 
     assert(err == DB_SUCCESS || err == DB_END_OF_INDEX ||
            err == DB_RECORD_NOT_FOUND);
@@ -762,7 +757,6 @@ static ib_err_t do_query(ib_crsr_t crsr) {
     err = DB_SUCCESS;
   }
 
-  // fprintf(stderr, "rows read = %d\n", cnt);
   return (err);
 }
 

@@ -554,7 +554,6 @@ io_handler_thread(void *arg) /*!< in: pointer to the number of the segment in
                              the aio array */
 {
   ulint segment;
-  ulint i;
 
   segment = *((ulint *)arg);
 
@@ -562,7 +561,8 @@ io_handler_thread(void *arg) /*!< in: pointer to the number of the segment in
   ib_logger(ib_stream, "Io handler thread %lu starts, id %lu\n", segment,
             os_thread_pf(os_thread_get_curr_id()));
 #endif
-  for (i = 0;; i++) {
+
+  for (;;) {
     fil_aio_wait(segment);
 
     mutex_enter(&ios_mutex);

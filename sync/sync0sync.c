@@ -302,9 +302,9 @@ void mutex_create_func(
 
   /* NOTE! The very first mutexes are not put to the mutex list */
 
-  if ((mutex == &mutex_list_mutex)
+  if (mutex == &mutex_list_mutex
 #ifdef UNIV_SYNC_DEBUG
-      || (mutex == &sync_thread_mutex)
+      || mutex == &sync_thread_mutex
 #endif /* UNIV_SYNC_DEBUG */
   ) {
 

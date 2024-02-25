@@ -269,7 +269,7 @@ dict_sys_tables_get_flags(const rec_t *rec) /*!< in: a record of SYS_TABLES */
     return (ULINT_UNDEFINED);
   }
 
-  if (UNIV_UNLIKELY(flags & (~0 << DICT_TF_BITS))) {
+  if (UNIV_UNLIKELY(flags & (~0UL << DICT_TF_BITS))) {
     /* Some unused bits are set. */
     return (ULINT_UNDEFINED);
   }
@@ -915,7 +915,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
 
     flags2 = mach_read_from_4(field);
 
-    if (flags2 & (~0 << (DICT_TF2_BITS - DICT_TF2_SHIFT))) {
+    if (flags2 & (~0UL << (DICT_TF2_BITS - DICT_TF2_SHIFT))) {
       ut_print_timestamp(ib_logger);
       ib_logger(ib_stream, "  InnoDB: Warning: table ");
       ut_print_filename(ib_stream, name);
@@ -925,7 +925,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
                 " has unknown flags %lx.\n",
                 (ulong)flags2);
 
-      flags2 &= ~(~0 << (DICT_TF2_BITS - DICT_TF2_SHIFT));
+      flags2 &= ~(~0UL << (DICT_TF2_BITS - DICT_TF2_SHIFT));
     }
 
     flags |= flags2 << DICT_TF2_SHIFT;
@@ -952,7 +952,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
                 (ulong)space);
       /* Try to open the tablespace */
       if (!fil_open_single_table_tablespace(
-              TRUE, space, flags & ~(~0 << DICT_TF_BITS), name)) {
+              TRUE, space, flags & ~(~0UL << DICT_TF_BITS), name)) {
         /* We failed to find a sensible
         tablespace file */
 

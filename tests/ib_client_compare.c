@@ -185,7 +185,7 @@ insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 /** UPDATE T SET c3 = c3 + 100 WHERE c1 = 'a'; */
 static ib_err_t update_a_row(ib_crsr_t crsr) {
   ib_err_t err;
-  int res = ~0;
+  int res = ~0L;
   ib_tpl_t key_tpl;
   ib_tpl_t old_tpl = NULL;
   ib_tpl_t new_tpl = NULL;
@@ -287,7 +287,7 @@ static ib_err_t update_a_row(ib_crsr_t crsr) {
 /** DELETE RFOM T WHERE c1 = 'b' and c2 = 'z'; */
 static ib_err_t delete_a_row(ib_crsr_t crsr) {
   ib_err_t err;
-  int res = ~0;
+  int res = ~0L;
   ib_tpl_t key_tpl;
 
   /* Create a tuple for searching an index. */

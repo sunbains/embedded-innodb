@@ -199,7 +199,7 @@ insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 static ib_err_t do_moveto1(ib_crsr_t crsr) {
   ib_err_t err;
   ib_tpl_t key_tpl;
-  int res = ~0;
+  int res = ~0L;
 
   printf("SELECT * FROM T WHERE c1 = 'abc' AND c2 = 'def';\n");
 
@@ -242,7 +242,7 @@ static ib_bool_t do_select1(ib_tpl_t tpl) {
 static ib_err_t do_moveto2(ib_crsr_t crsr) {
   ib_err_t err;
   ib_tpl_t key_tpl;
-  int res = ~0;
+  int res = ~0L;
 
   printf("SELECT * FROM T WHERE c1 = 'abc';\n");
 
@@ -292,7 +292,7 @@ static ib_bool_t do_select2(ib_tpl_t tpl) {
 static ib_err_t do_moveto3(ib_crsr_t crsr) {
   ib_err_t err;
   ib_tpl_t key_tpl;
-  int res = ~0;
+  int res = ~0L;
 
   printf("SELECT * FROM T WHERE c1 >= 'g%%';\n");
 
@@ -342,7 +342,7 @@ static ib_bool_t do_select3(ib_tpl_t tpl) {
 static ib_err_t do_moveto4(ib_crsr_t crsr) {
   ib_err_t err;
   ib_tpl_t key_tpl;
-  int res = ~0;
+  int res = ~0L;
 
   printf("SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'x%%';\n");
 
@@ -399,7 +399,7 @@ static ib_bool_t do_select4(ib_tpl_t tpl) {
 static ib_err_t do_moveto5(ib_crsr_t crsr) {
   ib_err_t err;
   ib_tpl_t key_tpl;
-  int res = ~0;
+  int res = ~0L;
 
   printf("SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'z%%';\n");
 

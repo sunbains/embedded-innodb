@@ -1416,10 +1416,9 @@ static ibool rec_validate_old(const rec_t *rec) /*!< in: physical record */
 
     if (len != UNIV_SQL_NULL) {
       len_sum += len;
-      sum += *(data + len - 1); /* dereference the
-                                end of the field to
-                                cause a memory trap
-                                if possible */
+      /* dereference the end of the field to cause a memory trap if possible */
+      sum += *(data + len - 1);
+      (void) sum;
     } else {
       len_sum += rec_get_nth_field_size(rec, i);
     }
@@ -1470,10 +1469,9 @@ ibool rec_validate(
 
     if (len != UNIV_SQL_NULL) {
       len_sum += len;
-      sum += *(data + len - 1); /* dereference the
-                                end of the field to
-                                cause a memory trap
-                                if possible */
+      /* dereference the end of the field to cause a memory trap if possible */
+      sum += *(data + len - 1);
+      (void) sum;
     } else if (!rec_offs_comp(offsets)) {
       len_sum += rec_get_nth_field_size(rec, i);
     }

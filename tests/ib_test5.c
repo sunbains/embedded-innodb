@@ -223,7 +223,7 @@ static ib_err_t update_random_rows(ib_crsr_t crsr) {
   ib_i32_t c3;
   ib_err_t err;
   ib_i32_t key;
-  int res = ~0;
+  int res = ~0L;
   ib_crsr_t index_crsr;
   ib_tpl_t sec_key_tpl;
 

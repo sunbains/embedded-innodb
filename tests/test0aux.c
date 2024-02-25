@@ -428,7 +428,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 1: {
     ib_ulint_t size;
 
-    size = abs(strtoul(arg, NULL, 10));
+    size = strtoul(arg, NULL, 10);
     size *= 1024UL * 1024UL;
     err = ib_cfg_set_int("buffer_pool_size", size);
     assert(err == DB_SUCCESS);
@@ -437,7 +437,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 2: {
     ib_ulint_t size;
 
-    size = abs(strtoul(arg, NULL, 10));
+    size = strtoul(arg, NULL, 10);
     size *= 1024UL * 1024UL;
     err = ib_cfg_set_int("log_file_size", size);
     assert(err == DB_SUCCESS);
@@ -451,7 +451,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 4: {
     ib_ulint_t size;
 
-    size = abs(strtoul(arg, NULL, 10));
+    size = strtoul(arg, NULL, 10);
     err = ib_cfg_set_int("io_capacity", size);
     assert(err == DB_SUCCESS);
     break;
@@ -464,7 +464,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 6: {
     ib_ulint_t pct;
 
-    pct = abs(strtoul(arg, NULL, 10));
+    pct = strtoul(arg, NULL, 10);
     err = ib_cfg_set_int("lru_old_blocks_pct", pct);
     assert(err == DB_SUCCESS);
     break;
@@ -473,7 +473,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 7: {
     ib_ulint_t pct;
 
-    pct = abs(strtoul(arg, NULL, 10));
+    pct = strtoul(arg, NULL, 10);
     err = ib_cfg_set_int("lru_block_access_recency", pct);
     assert(err == DB_SUCCESS);
     break;
@@ -482,7 +482,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 8: {
     ib_ulint_t level;
 
-    level = abs(strtoul(arg, NULL, 10));
+    level = strtoul(arg, NULL, 10);
     err = ib_cfg_set_int("force_recovery", level);
     assert(err == DB_SUCCESS);
     break;
@@ -527,7 +527,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 15: {
     ib_ulint_t level;
 
-    level = abs(strtoul(arg, NULL, 10));
+    level = strtoul(arg, NULL, 10);
     err = ib_cfg_set_int("flush_log_at_trx_commit", level);
     assert(err == DB_SUCCESS);
     break;
@@ -542,7 +542,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 17: {
     ib_ulint_t threads;
 
-    threads = abs(strtoul(arg, NULL, 10));
+    threads = strtoul(arg, NULL, 10);
     err = ib_cfg_set_int("read_io_threads", threads);
     assert(err == DB_SUCCESS);
     break;
@@ -551,7 +551,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 18: {
     ib_ulint_t threads;
 
-    threads = abs(strtoul(arg, NULL, 10));
+    threads = strtoul(arg, NULL, 10);
     err = ib_cfg_set_int("write_io_threads", threads);
     assert(err == DB_SUCCESS);
     break;
@@ -560,7 +560,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 19: {
     ib_ulint_t n;
 
-    n = abs(strtoul(arg, NULL, 10));
+    n = strtoul(arg, NULL, 10);
     err = ib_cfg_set_int("open_files", n);
     assert(err == DB_SUCCESS);
     break;
@@ -569,7 +569,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 20: {
     ib_ulint_t secs;
 
-    secs = abs(strtoul(arg, NULL, 10));
+    secs = strtoul(arg, NULL, 10);
     err = ib_cfg_set_int("lock_wait_timeout", secs);
     assert(err == DB_SUCCESS);
     break;
