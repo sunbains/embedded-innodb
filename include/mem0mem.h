@@ -23,15 +23,13 @@ Created 6/9/1994 Heikki Tuuri
 
 #pragma once
 
-#include "univ.i"
+#include "innodb0types.h"
+#include "mach0data.h"
+#include "sync0sync.h"
 #include "ut0byte.h"
+#include "ut0lst.h"
 #include "ut0mem.h"
 #include "ut0rnd.h"
-#ifndef UNIV_HOTBACKUP
-#include "sync0sync.h"
-#endif /* UNIV_HOTBACKUP */
-#include "mach0data.h"
-#include "ut0lst.h"
 
 /* -------------------- MEMORY HEAPS ----------------------------- */
 
@@ -234,7 +232,6 @@ MEM_HEAP_BTR_SEARCH type heaps) */
 mem_block_t *mem_heap_add_block(mem_heap_t *heap, /*!< in: memory heap */
                                 ulint n); /*!< in: number of bytes user needs */
 
-
 inline void mem_block_set_len(mem_block_t *block, ulint len) {
   ut_ad(len > 0);
 
@@ -250,29 +247,24 @@ inline void mem_block_set_type(mem_block_t *block, ulint type) {
   block->type = type;
 }
 
-inline
-ulint mem_block_get_type(mem_block_t *block) { return (block->type); }
+inline ulint mem_block_get_type(mem_block_t *block) { return (block->type); }
 
-inline
-void mem_block_set_free(mem_block_t *block, ulint free_block) {
+inline void mem_block_set_free(mem_block_t *block, ulint free_block) {
   ut_ad(free_block > 0);
   ut_ad(free_block <= mem_block_get_len(block));
 
   block->free = free_block;
 }
 
-inline
-ulint mem_block_get_free(mem_block_t *block) { return (block->free); }
+inline ulint mem_block_get_free(mem_block_t *block) { return (block->free); }
 
-inline
-void mem_block_set_start(mem_block_t *block, ulint start) {
+inline void mem_block_set_start(mem_block_t *block, ulint start) {
   ut_ad(start > 0);
 
   block->start = start;
 }
 
-inline
-ulint mem_block_get_start(mem_block_t *block) { return (block->start); }
+inline ulint mem_block_get_start(mem_block_t *block) { return (block->start); }
 
 /** Allocates n bytes of memory from a memory heap.
 @return allocated storage, NULL if did not succeed (only possible for
@@ -281,7 +273,7 @@ MEM_HEAP_BTR_SEARCH type heaps)
 @param[in] n                    Number of bytes; if the heap is allowed
                                 to grow into the buffer pool, this must be
                                 <= MEM_MAX_ALLOC_IN_BUF */
-inline byte* mem_heap_alloc(mem_heap_t *heap, ulint n) {
+inline byte *mem_heap_alloc(mem_heap_t *heap, ulint n) {
   ut_ad(mem_heap_check(heap));
 
   auto block = UT_LIST_GET_LAST(heap->base);
@@ -291,7 +283,8 @@ inline byte* mem_heap_alloc(mem_heap_t *heap, ulint n) {
   /* Check if there is enough space in block. If not, create a new
   block to the heap */
 
-  if (mem_block_get_len(block) < mem_block_get_free(block) + MEM_SPACE_NEEDED(n)) {
+  if (mem_block_get_len(block) <
+      mem_block_get_free(block) + MEM_SPACE_NEEDED(n)) {
 
     block = mem_heap_add_block(heap, n);
 
@@ -302,7 +295,7 @@ inline byte* mem_heap_alloc(mem_heap_t *heap, ulint n) {
 
   auto free_sz = mem_block_get_free(block);
 
-  byte *ptr = (byte *) block + free_sz;
+  byte *ptr = (byte *)block + free_sz;
 
   mem_block_set_free(block, free_sz + MEM_SPACE_NEEDED(n));
 
@@ -314,7 +307,7 @@ inline byte* mem_heap_alloc(mem_heap_t *heap, ulint n) {
 
   /* Advance buf to point at the storage which will be given to the
   caller */
-  ptr = reinterpret_cast<byte *>(ptr)+ MEM_FIELD_HEADER_SIZE;
+  ptr = reinterpret_cast<byte *>(ptr) + MEM_FIELD_HEADER_SIZE;
 
 #endif
 
@@ -334,26 +327,24 @@ inline byte* mem_heap_alloc(mem_heap_t *heap, ulint n) {
                                 to grow into the buffer pool, this must be
                                 <= MEM_MAX_ALLOC_IN_BUF
 @return	allocated, zero-filled storage */
-inline byte* mem_heap_zalloc(mem_heap_t *heap, ulint n) {
+inline byte *mem_heap_zalloc(mem_heap_t *heap, ulint n) {
   ut_ad(heap != nullptr);
   ut_ad(!(heap->type & MEM_HEAP_BTR_SEARCH));
 
-  return (byte*) memset(mem_heap_alloc(heap, n), 0, n);
+  return (byte *)memset(mem_heap_alloc(heap, n), 0, n);
 }
-
 
 /** Frees the space in a memory heap exceeding the pointer given. The
 pointer must have been acquired from mem_heap_get_heap_top. The first
 memory block of the heap is not freed. */
-inline
-void mem_heap_free_heap_top(
-    mem_heap_t *heap, /*!< in: heap from which to free */
-    byte *old_top)    /*!< in: pointer to old top of heap */
+inline void
+mem_heap_free_heap_top(mem_heap_t *heap, /*!< in: heap from which to free */
+                       byte *old_top)    /*!< in: pointer to old top of heap */
 {
   mem_block_t *block;
   mem_block_t *prev_block;
 #ifdef UNIV_MEM_DEBUG
-  ibool error;
+  bool error;
   ulint total_size;
   ulint size;
 #endif
@@ -363,12 +354,12 @@ void mem_heap_free_heap_top(
 #ifdef UNIV_MEM_DEBUG
 
   /* Validate the heap and get its total allocated size */
-  mem_heap_validate_or_print(heap, NULL, FALSE, &error, &total_size, NULL,
+  mem_heap_validate_or_print(heap, NULL, false, &error, &total_size, NULL,
                              NULL);
   ut_a(!error);
 
   /* Get the size below top pointer */
-  mem_heap_validate_or_print(heap, old_top, FALSE, &error, &size, NULL, NULL);
+  mem_heap_validate_or_print(heap, old_top, false, &error, &size, NULL, NULL);
   ut_a(!error);
 
 #endif
@@ -423,8 +414,7 @@ void mem_heap_free_heap_top(
 }
 
 /** Empties a memory heap. The first memory block of the heap is not freed. */
-inline
-void mem_heap_empty(mem_heap_t *heap) /*!< in: heap to empty */
+inline void mem_heap_empty(mem_heap_t *heap) /*!< in: heap to empty */
 {
   mem_heap_free_heap_top(heap, (byte *)heap + mem_block_get_start(heap));
   if (heap->free_block) {
@@ -435,9 +425,8 @@ void mem_heap_empty(mem_heap_t *heap) /*!< in: heap to empty */
 /** Returns a pointer to the topmost element in a memory heap. The size of the
 element must be given.
 @return	pointer to the topmost element */
-inline
-void *mem_heap_get_top(mem_heap_t *heap, /*!< in: memory heap */
-                       ulint n)          /*!< in: size of the topmost element */
+inline void *mem_heap_get_top(mem_heap_t *heap, /*!< in: memory heap */
+                              ulint n) /*!< in: size of the topmost element */
 {
   mem_block_t *block;
   void *buf;
@@ -465,9 +454,8 @@ void *mem_heap_get_top(mem_heap_t *heap, /*!< in: memory heap */
 
 /** Frees the topmost element in a memory heap. The size of the element must be
 given. */
-inline
-void mem_heap_free_top(mem_heap_t *heap, /*!< in: memory heap */
-                       ulint n)          /*!< in: size of the topmost element */
+inline void mem_heap_free_top(mem_heap_t *heap, /*!< in: memory heap */
+                              ulint n) /*!< in: size of the topmost element */
 {
   mem_block_t *block;
 
@@ -506,8 +494,7 @@ memory heap. For debugging purposes, takes also the file name and line as
 argument.
 @return own: memory heap, NULL if did not succeed (only possible for
 MEM_HEAP_BTR_SEARCH type heaps) */
-inline
-mem_heap_t *
+inline mem_heap_t *
 mem_heap_create_func(ulint n,               /*!< in: desired start block size,
                                             this means that a single user buffer
                                             of size n will fit in the block,
@@ -546,11 +533,11 @@ mem_heap_create_func(ulint n,               /*!< in: desired start block size,
 /** NOTE: Use the corresponding macro instead of this function. Frees the space
 occupied by a memory heap. In the debug version erases the heap memory
 blocks. */
-inline
-void mem_heap_free_func(mem_heap_t *heap, /*!< in, own: heap to be freed */
-                        const char *file_name __attribute__((unused)),
-                        /*!< in: file name where freed */
-                        ulint line __attribute__((unused))) {
+inline void
+mem_heap_free_func(mem_heap_t *heap, /*!< in, own: heap to be freed */
+                   const char *file_name __attribute__((unused)),
+                   /*!< in: file name where freed */
+                   ulint line __attribute__((unused))) {
   mem_block_t *block;
   mem_block_t *prev_block;
 
@@ -587,12 +574,12 @@ Allocates a single buffer of memory from the dynamic memory of
 the C compiler. Is like malloc of C. The buffer must be freed
 with mem_free.
 @return	own: free storage */
-inline
-void *mem_alloc_func(ulint n,               /*!< in: desired number of bytes */
-                     ulint *size,           /*!< out: allocated size in bytes,
-                                            or NULL */
-                     const char *file_name, /*!< in: file name where created */
-                     ulint line)            /*!< in: line where created */
+inline void *
+mem_alloc_func(ulint n,               /*!< in: desired number of bytes */
+               ulint *size,           /*!< out: allocated size in bytes,
+                                      or NULL */
+               const char *file_name, /*!< in: file name where created */
+               ulint line)            /*!< in: line where created */
 {
   mem_heap_t *heap;
   void *buf;
@@ -604,7 +591,7 @@ void *mem_alloc_func(ulint n,               /*!< in: desired number of bytes */
   first block and thus we can calculate the pointer to the heap from
   the pointer to the buffer when we free the memory buffer. */
 
-  if (UNIV_LIKELY_NULL(size)) {
+  if (likely_null(size)) {
     /* Adjust the allocation to the actual size of the
     memory block. */
     ulint m = mem_block_get_len(heap) - mem_block_get_free(heap);
@@ -617,17 +604,18 @@ void *mem_alloc_func(ulint n,               /*!< in: desired number of bytes */
 
   buf = mem_heap_alloc(heap, n);
 
-  ut_a((byte *)heap == (byte *)buf - MEM_BLOCK_HEADER_SIZE - MEM_FIELD_HEADER_SIZE);
+  ut_a((byte *)heap ==
+       (byte *)buf - MEM_BLOCK_HEADER_SIZE - MEM_FIELD_HEADER_SIZE);
   return buf;
 }
 
 /** NOTE: Use the corresponding macro instead of this function. Frees a single
 buffer of storage from the dynamic memory of the C compiler. Similar to the
 free of C. */
-inline
-void mem_free_func(void *ptr,             /*!< in, own: buffer to be freed */
-                   const char *file_name, /*!< in: file name where created */
-                   ulint line)            /*!< in: line where created */
+inline void
+mem_free_func(void *ptr,             /*!< in, own: buffer to be freed */
+              const char *file_name, /*!< in: file name where created */
+              ulint line)            /*!< in: line where created */
 {
   mem_heap_t *heap;
 
@@ -637,8 +625,7 @@ void mem_free_func(void *ptr,             /*!< in, own: buffer to be freed */
 }
 
 /** Returns the space in bytes occupied by a memory heap. */
-inline
-ulint mem_heap_get_size(mem_heap_t *heap) /*!< in: heap */
+inline ulint mem_heap_get_size(mem_heap_t *heap) /*!< in: heap */
 {
   ulint size = 0;
 
@@ -655,8 +642,7 @@ ulint mem_heap_get_size(mem_heap_t *heap) /*!< in: heap */
 
 /** Duplicates a NUL-terminated string.
 @return	own: a copy of the string, must be deallocated with mem_free */
-inline
-char *mem_strdup(const char *str) /*!< in: string to be copied */
+inline char *mem_strdup(const char *str) /*!< in: string to be copied */
 {
   ulint len = strlen(str) + 1;
   return ((char *)memcpy(mem_alloc(len), str, len));
@@ -664,9 +650,8 @@ char *mem_strdup(const char *str) /*!< in: string to be copied */
 
 /** Makes a NUL-terminated copy of a nonterminated string.
 @return	own: a copy of the string, must be deallocated with mem_free */
-inline
-char *mem_strdupl(const char *str, /*!< in: string to be copied */
-                  ulint len)       /*!< in: length of str, in bytes */
+inline char *mem_strdupl(const char *str, /*!< in: string to be copied */
+                         ulint len)       /*!< in: length of str, in bytes */
 {
   char *s = (char *)mem_alloc(len + 1);
   s[len] = 0;
@@ -676,8 +661,7 @@ char *mem_strdupl(const char *str, /*!< in: string to be copied */
 /** Makes a NUL-terminated copy of a nonterminated string,
 allocated from a memory heap.
 @return	own: a copy of the string */
-inline
-char *mem_heap_strdupl(
+inline char *mem_heap_strdupl(
     mem_heap_t *heap, /*!< in: memory heap where string is allocated */
     const char *str,  /*!< in: string to be copied */
     ulint len)        /*!< in: length of str, in bytes */

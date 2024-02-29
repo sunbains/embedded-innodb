@@ -44,8 +44,7 @@ byte *eval_node_alloc_val_buf(
 
 /** Allocates a new buffer if needed.
 @return	pointer to buffer */
-UNIV_INLINE
-byte *eval_node_ensure_val_buf(
+inline byte *eval_node_ensure_val_buf(
     que_node_t *node, /*!< in: query graph node; sets the val field
                       data field to point to the new buffer, and
                       len field equal to size */
@@ -54,7 +53,7 @@ byte *eval_node_ensure_val_buf(
   auto dfield = que_node_get_val(node);
   dfield_set_len(dfield, size);
 
-  auto data = (byte*) dfield_get_data(dfield);
+  auto data = (byte *)dfield_get_data(dfield);
 
   if (!data || que_node_get_val_buf_size(node) < size) {
 
@@ -65,8 +64,7 @@ byte *eval_node_ensure_val_buf(
 }
 
 /** Evaluates a symbol table symbol. */
-UNIV_INLINE
-void eval_sym(sym_node_t *sym_node) /*!< in: symbol table node */
+inline void eval_sym(sym_node_t *sym_node) /*!< in: symbol table node */
 {
 
   ut_ad(que_node_get_type(sym_node) == QUE_NODE_SYMBOL);
@@ -81,8 +79,7 @@ void eval_sym(sym_node_t *sym_node) /*!< in: symbol table node */
 }
 
 /** Evaluates an expression. */
-UNIV_INLINE
-void eval_exp(que_node_t *exp_node) /*!< in: expression */
+inline void eval_exp(que_node_t *exp_node) /*!< in: expression */
 {
   if (que_node_get_type(exp_node) == QUE_NODE_SYMBOL) {
 
@@ -91,16 +88,15 @@ void eval_exp(que_node_t *exp_node) /*!< in: expression */
     return;
   }
 
-  eval_func((func_node_t*) exp_node);
+  eval_func((func_node_t *)exp_node);
 }
 
 /** Sets an integer value as the value of an expression node. */
-UNIV_INLINE
-void eval_node_set_int_val(que_node_t *node, /*!< in: expression node */
-                           lint val)         /*!< in: value to set */
+inline void eval_node_set_int_val(que_node_t *node, /*!< in: expression node */
+                                  lint val)         /*!< in: value to set */
 {
   auto dfield = que_node_get_val(node);
-  auto data = (byte*) dfield_get_data(dfield);
+  auto data = (byte *)dfield_get_data(dfield);
 
   if (data == NULL) {
     data = eval_node_alloc_val_buf(node, 4);
@@ -113,37 +109,36 @@ void eval_node_set_int_val(que_node_t *node, /*!< in: expression node */
 
 /** Gets an integer non-SQL null value from an expression node.
 @return	integer value */
-UNIV_INLINE
-lint eval_node_get_int_val(que_node_t *node) /*!< in: expression node */
+inline lint eval_node_get_int_val(que_node_t *node) /*!< in: expression node */
 {
   auto dfield = que_node_get_val(node);
 
   ut_ad(dfield_get_len(dfield) == 4);
 
-  return ((lint)mach_read_from_4((byte*)dfield_get_data(dfield)));
+  return ((lint)mach_read_from_4((byte *)dfield_get_data(dfield)));
 }
 
-/** Gets a iboolean value from a query node.
-@return	iboolean value */
-UNIV_INLINE
-ibool eval_node_get_ibool_val(que_node_t *node) /*!< in: query graph node */
+/** Gets a boolean value from a query node.
+@return	boolean value */
+inline bool
+eval_node_get_bool_val(que_node_t *node) /*!< in: query graph node */
 {
   auto dfield = que_node_get_val(node);
 
-  auto data = (byte*) dfield_get_data(dfield);
+  auto data = (byte *)dfield_get_data(dfield);
 
   ut_ad(data != NULL);
 
   return (mach_read_from_1(data));
 }
 
-/** Sets a iboolean value as the value of a function node. */
-UNIV_INLINE
-void eval_node_set_ibool_val(func_node_t *func_node, /*!< in: function node */
-                             ibool val)              /*!< in: value to set */
+/** Sets a boolean value as the value of a function node. */
+inline void
+eval_node_set_bool_val(func_node_t *func_node, /*!< in: function node */
+                       bool val)               /*!< in: value to set */
 {
   auto dfield = que_node_get_val(func_node);
-  auto data = (byte*) dfield_get_data(dfield);
+  auto data = (byte *)dfield_get_data(dfield);
 
   if (data == NULL) {
     /* Allocate 1 byte to hold the value */
@@ -158,8 +153,7 @@ void eval_node_set_ibool_val(func_node_t *func_node, /*!< in: function node */
 
 /** Copies a binary string value as the value of a query graph node. Allocates a
 new buffer if necessary. */
-UNIV_INLINE
-void eval_node_copy_and_alloc_val(
+inline void eval_node_copy_and_alloc_val(
     que_node_t *node, /*!< in: query graph node */
     const byte *str,  /*!< in: binary string */
     ulint len)        /*!< in: string length or UNIV_SQL_NULL */
@@ -170,17 +164,17 @@ void eval_node_copy_and_alloc_val(
     return;
   }
 
-  auto data = (byte*) eval_node_ensure_val_buf(node, len);
+  auto data = (byte *)eval_node_ensure_val_buf(node, len);
 
   memcpy(data, str, len);
 }
 
 /** Copies a query node value to another node. */
-UNIV_INLINE
-void eval_node_copy_val(que_node_t *node1, /*!< in: node to copy to */
-                        que_node_t *node2) /*!< in: node to copy from */
+inline void eval_node_copy_val(que_node_t *node1, /*!< in: node to copy to */
+                               que_node_t *node2) /*!< in: node to copy from */
 {
   auto dfield2 = que_node_get_val(node2);
 
-  eval_node_copy_and_alloc_val(node1, (byte*) dfield_get_data(dfield2), dfield_get_len(dfield2));
+  eval_node_copy_and_alloc_val(node1, (byte *)dfield_get_data(dfield2),
+                               dfield_get_len(dfield2));
 }

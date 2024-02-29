@@ -63,10 +63,10 @@ static int page_size = 0;
 
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }
@@ -174,7 +174,7 @@ insert_random_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
   ib_i32_t i;
   ib_err_t err;
   ib_tpl_t tpl;
-  char *ptr = (char*) malloc(8192);
+  char *ptr = (char *)malloc(8192);
 
   tpl = ib_clust_read_tuple_create(crsr);
   assert(tpl != NULL);
@@ -271,7 +271,7 @@ static ib_err_t update_random_rows(ib_crsr_t crsr) {
     assert(err == DB_SUCCESS);
 
     /* Get the first column value. */
-    first = static_cast<const char*>(ib_col_get_value(old_tpl, 0));
+    first = static_cast<const char *>(ib_col_get_value(old_tpl, 0));
     ib_col_get_meta(old_tpl, 0, &col_meta);
 
     /* There are no SQL_NULL values in our test data. */

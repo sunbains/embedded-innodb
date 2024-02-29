@@ -26,7 +26,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef dict0types_h
 #define dict0types_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 typedef struct dict_sys_struct dict_sys_t;
 typedef struct dict_col_struct dict_col_t;

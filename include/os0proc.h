@@ -25,7 +25,7 @@ Created 9/30/1995 Heikki Tuuri
 #ifndef os0proc_h
 #define os0proc_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 /* Required for HugeTLB support. */
 #ifdef UNIV_LINUX
@@ -36,7 +36,7 @@ Created 9/30/1995 Heikki Tuuri
 typedef void *os_process_t;
 typedef unsigned long int os_process_id_t;
 
-extern ibool os_use_large_pages;
+extern bool os_use_large_pages;
 /* Large page size. This may be a boot-time option on some platforms */
 extern ulint os_large_page_size;
 

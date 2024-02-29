@@ -26,7 +26,7 @@ Created September 22, 2007 Vasil Dimov
 #ifndef ha0storage_h
 #define ha0storage_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 /** This value is used by default by ha_storage_create(). More memory
 is allocated later when/if it is needed. */
@@ -42,8 +42,7 @@ typedef struct ha_storage_struct ha_storage_t;
 /** Creates a hash storage. If any of the parameters is 0, then a default
 value is used.
 @return	own: hash storage */
-UNIV_INLINE
-ha_storage_t *
+inline ha_storage_t *
 ha_storage_create(ulint initial_heap_bytes,  /*!< in: initial heap's size */
                   ulint initial_hash_cells); /*!< in: initial number of cells
                                              in the hash table */
@@ -96,19 +95,19 @@ Strings are considered to be equal if strcmp(str1, str2) == 0.
 /** Empties a hash storage, freeing memory occupied by data chunks.
 This invalidates any pointers previously returned by ha_storage_put().
 The hash storage is not invalidated itself and can be used again. */
-UNIV_INLINE
-void ha_storage_empty(ha_storage_t **storage); /*!< in/out: hash storage */
+inline void
+ha_storage_empty(ha_storage_t **storage); /*!< in/out: hash storage */
 
 /** Frees a hash storage and everything it contains, it cannot be used after
 this call.
 This invalidates any pointers previously returned by ha_storage_put(). */
-UNIV_INLINE
-void ha_storage_free(ha_storage_t *storage); /*!< in, own: hash storage */
+inline void
+ha_storage_free(ha_storage_t *storage); /*!< in, own: hash storage */
 
 /** Gets the size of the memory used by a storage.
 @return	bytes used */
-UNIV_INLINE
-ulint ha_storage_get_size(const ha_storage_t *storage); /*!< in: hash storage */
+inline ulint
+ha_storage_get_size(const ha_storage_t *storage); /*!< in: hash storage */
 
 #ifndef UNIV_NONINL
 #include "ha0storage.ic"

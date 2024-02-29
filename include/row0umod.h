@@ -23,7 +23,7 @@ Created 2/27/1997 Heikki Tuuri
 
 #pragma once
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "data0data.h"
 #include "dict0types.h"

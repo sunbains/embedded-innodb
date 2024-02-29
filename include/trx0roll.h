@@ -24,20 +24,20 @@ Created 3/26/1996 Heikki Tuuri
 #ifndef trx0roll_h
 #define trx0roll_h
 
+#include "innodb0types.h"
 #include "mtr0mtr.h"
 #include "trx0sys.h"
 #include "trx0trx.h"
 #include "trx0types.h"
-#include "univ.i"
 
 #define trx_roll_free_all_savepoints(s) trx_roll_savepoints_free((s), NULL)
 
 /** Determines if this transaction is rolling back an incomplete transaction
 in crash recovery.
-@return TRUE if trx is an incomplete transaction that is being rolled
+@return true if trx is an incomplete transaction that is being rolled
 back in crash recovery */
 
-ibool trx_is_recv(const trx_t *trx); /*!< in: transaction */
+bool trx_is_recv(const trx_t *trx); /*!< in: transaction */
 /** Returns a transaction savepoint taken at this point in time.
 @return	savepoint */
 
@@ -50,8 +50,7 @@ trx_undo_arr_t *trx_undo_arr_create(void);
 void trx_undo_arr_free(trx_undo_arr_t *arr); /*!< in: undo number array */
 /** Returns pointer to nth element in an undo number array.
 @return	pointer to the nth element */
-UNIV_INLINE
-trx_undo_inf_t *
+inline trx_undo_inf_t *
 trx_undo_arr_get_nth_info(trx_undo_arr_t *arr, /*!< in: undo number array */
                           ulint n);            /*!< in: position */
 /** Tries truncate the undo logs. */
@@ -73,9 +72,9 @@ trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(
 /** Reserves an undo log record for a query thread to undo. This should be
 called if the query thread gets the undo log record not using the pop
 function above.
-@return	TRUE if succeeded */
+@return	true if succeeded */
 
-ibool trx_undo_rec_reserve(
+bool trx_undo_rec_reserve(
     trx_t *trx,         /*!< in/out: transaction */
     undo_no_t undo_no); /*!< in: undo number of the record */
 /** Releases a reserved undo record. */
@@ -97,8 +96,8 @@ committed, then we clean up a possible insert undo log. If the
 transaction was not yet committed, then we roll it back. */
 
 void trx_rollback_or_clean_recovered(
-    ibool all); /*!< in: FALSE=roll back dictionary transactions;
-                TRUE=roll back all non-PREPARED transactions */
+    bool all); /*!< in: false=roll back dictionary transactions;
+                true=roll back all non-PREPARED transactions */
 /** Rollback or clean up any incomplete transactions which were
 encountered in crash recovery.  If the transaction already was
 committed, then we clean up a possible insert undo log. If the
@@ -142,7 +141,7 @@ que_thr_t *trx_rollback_step(que_thr_t *thr); /*!< in: query thread */
 
 db_err trx_general_rollback(
     trx_t *trx,            /*!< in: transaction handle */
-    ibool partial,         /*!< in: TRUE if partial rollback requested */
+    bool partial,          /*!< in: true if partial rollback requested */
     trx_savept_t *savept); /*!< in: pointer to savepoint undo number, if
                            partial rollback requested */
 
@@ -160,7 +159,7 @@ struct trx_undo_inf_struct {
   trx_id_t trx_no;   /*!< transaction number: not defined during
                      a rollback */
   undo_no_t undo_no; /*!< undo number of an undo record */
-  ibool in_use;      /*!< TRUE if the cell is in use */
+  bool in_use;       /*!< true if the cell is in use */
 };
 
 /** During a rollback and a purge, undo numbers of undo records currently being
@@ -185,8 +184,8 @@ enum roll_node_state {
 struct roll_node_struct {
   que_common_t common;        /*!< node type: QUE_NODE_ROLLBACK */
   enum roll_node_state state; /*!< node execution state */
-  ibool partial;              /*!< TRUE if we want a partial
-                              rollback */
+  bool partial;               /*!< true if we want a partial
+                               rollback */
   trx_savept_t savept;        /*!< savepoint to which to
                               roll back, in the case of a
                               partial rollback */

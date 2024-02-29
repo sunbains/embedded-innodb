@@ -24,7 +24,7 @@ Created 9/20/1997 Heikki Tuuri
 #ifndef log0recv_h
 #define log0recv_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "api0api.h"
 #include "buf0types.h"
@@ -33,33 +33,30 @@ Created 9/20/1997 Heikki Tuuri
 #include "srv0srv.h"
 #include "ut0byte.h"
 
-/** Returns TRUE if recovery is currently running.
+/** Returns true if recovery is currently running.
 @return	recv_recovery_on */
-UNIV_INLINE
-ibool recv_recovery_is_on(void);
+inline bool recv_recovery_is_on(void);
 
 #ifdef UNIV_LOG_ARCHIVE
-/** Returns TRUE if recovery from backup is currently running.
+/** Returns true if recovery from backup is currently running.
 @return	recv_recovery_from_backup_on */
-UNIV_INLINE
-ibool recv_recovery_from_backup_is_on(void);
+inline bool recv_recovery_from_backup_is_on(void);
 #endif /* UNIV_LOG_ARCHIVE */
 
 /** Applies the hashed log records to the page, if the page lsn is less than the
 lsn of a log record. This can be called when a buffer page has just been
 read in, or also for a page already in the buffer pool. */
 
-void recv_recover_page_func(
-    ibool just_read_in,
-/*!< in: TRUE if the i/o handler calls
-this for a freshly read page */
-    buf_block_t *block); /*!< in/out: buffer block */
+void recv_recover_page_func(bool just_read_in,
+                            /*!< in: true if the i/o handler calls
+                            this for a freshly read page */
+                            buf_block_t *block); /*!< in/out: buffer block */
 
 /** Wrapper for recv_recover_page_func().
 Applies the hashed log records to the page, if the page lsn is less than the
 lsn of a log record. This can be called when a buffer page has just been
 read in, or also for a page already in the buffer pool.
-@param jri	in: TRUE if just read in (the i/o handler calls this for
+@param jri	in: true if just read in (the i/o handler calls this for
 a freshly read page)
 @param block	in/out: the buffer block */
 #define recv_recover_page(jri, block) recv_recover_page_func(jri, block)
@@ -73,11 +70,11 @@ the recovery and free the resources used in it.
 db_err recv_recovery_from_checkpoint_start_func(
     ib_recovery_t recovery, /*!< in: recovery flag */
 #ifdef UNIV_LOG_ARCHIVE
-    ulint type,                   /*!< in: LOG_CHECKPOINT or
-                                  LOG_ARCHIVE */
+    ulint type,                /*!< in: LOG_CHECKPOINT or
+                               LOG_ARCHIVE */
     uint64_t limit_lsn,        /*!< in: recover up to this lsn
                                   if possible */
-#endif                            /* UNIV_LOG_ARCHIVE */
+#endif                         /* UNIV_LOG_ARCHIVE */
     uint64_t min_flushed_lsn,  /*!< in: min flushed lsn from
                                   data files */
     uint64_t max_flushed_lsn); /*!< in: max flushed lsn from
@@ -121,19 +118,19 @@ void recv_recovery_rollback_active(void);
 /** Scans log from a buffer and stores new log data to the parsing buffer.
 Parses and hashes the log records if new data found.  This function will
 apply log records automatically when the hash table becomes full.
-@return TRUE if limit_lsn has been reached, or not able to scan any
+@return true if limit_lsn has been reached, or not able to scan any
 more in this log group */
-ibool recv_scan_log_recs(
-    ib_recovery_t recovery,          /*!< in: recovery flag */
-    ulint available_memory,          /*!< in: we let the hash table of recs
-                                    to grow to this size, at the maximum */
-    ibool store_to_hash,             /*!< in: TRUE if the records should be
-                                     stored to the hash table; this is set
-                                     to FALSE if just debug checking is
-                                     needed */
-    const byte *buf,                 /*!< in: buffer containing a log
-                                     segment or garbage */
-    ulint len,                       /*!< in: buffer length */
+bool recv_scan_log_recs(
+    ib_recovery_t recovery,       /*!< in: recovery flag */
+    ulint available_memory,       /*!< in: we let the hash table of recs
+                                 to grow to this size, at the maximum */
+    bool store_to_hash,           /*!< in: true if the records should be
+                                   stored to the hash table; this is set
+                                   to false if just debug checking is
+                                   needed */
+    const byte *buf,              /*!< in: buffer containing a log
+                                  segment or garbage */
+    ulint len,                    /*!< in: buffer length */
     uint64_t start_lsn,           /*!< in: buffer start lsn */
     uint64_t *contiguous_lsn,     /*!< in/out: it is known that all log
                                      groups contain contiguous log data up
@@ -149,11 +146,11 @@ void recv_reset_logs(
                      which we add
                      LOG_BLOCK_HDR_SIZE */
 #ifdef UNIV_LOG_ARCHIVE
-    ulint arch_log_no,       /*!< in: next archived log file number */
-#endif                       /* UNIV_LOG_ARCHIVE */
-    ibool new_logs_created); /*!< in: TRUE if resetting logs
+    ulint arch_log_no,      /*!< in: next archived log file number */
+#endif                      /* UNIV_LOG_ARCHIVE */
+    bool new_logs_created); /*!< in: true if resetting logs
                            is done at the log creation;
-                           FALSE if it is done after
+                           false if it is done after
                            archive recovery */
 
 /** Creates the recovery system. */
@@ -172,8 +169,8 @@ void recv_sys_init(
 /** Empties the hash table of stored log records, applying them to appropriate
 pages. */
 void recv_apply_hashed_log_recs(
-    ibool allow_ibuf); /*!< in: if TRUE, also ibuf operations are
-                       allowed during the application; if FALSE,
+    bool allow_ibuf); /*!< in: if true, also ibuf operations are
+                       allowed during the application; if false,
                        no ibuf operations are allowed, and after
                        the application all file pages are flushed to
                        disk and invalidated in buffer pool: this
@@ -188,11 +185,11 @@ ulint recv_recovery_from_archive_start(
                                  data files */
     uint64_t limit_lsn,       /*!< in: recover up to this lsn if
                                  possible */
-    ulint first_log_no);         /*!< in: number of the first archived
-                                 log file to use in the recovery; the
-                                 file will be searched from
-                                 INNOBASE_LOG_ARCH_DIR specified in
-                                 server config file */
+    ulint first_log_no);      /*!< in: number of the first archived
+                              log file to use in the recovery; the
+                              file will be searched from
+                              INNOBASE_LOG_ARCH_DIR specified in
+                              server config file */
 
 /** Completes recovery from archive. */
 void recv_recovery_from_archive_finish(void);
@@ -212,10 +209,10 @@ struct recv_data_struct {
 typedef struct recv_struct recv_t;
 /** Stored log record struct */
 struct recv_struct {
-  byte type;             /*!< log record type */
-  ulint len;             /*!< log record body length in bytes */
-  recv_data_t *data;     /*!< chain of blocks containing the log record
-                         body */
+  byte type;          /*!< log record type */
+  ulint len;          /*!< log record body length in bytes */
+  recv_data_t *data;  /*!< chain of blocks containing the log record
+                      body */
   uint64_t start_lsn; /*!< start lsn of the log segment written by
                        the mtr which generated this log record: NOTE
                        that this is not necessarily the start lsn of
@@ -261,13 +258,13 @@ struct recv_sys_struct {
   mutex_t mutex; /*!< mutex protecting the fields apply_log_recs,
                  n_addrs, and the state field in each recv_addr
                  struct */
-  ibool apply_log_recs;
-  /*!< this is TRUE when log rec application to
+  bool apply_log_recs;
+  /*!< this is true when log rec application to
   pages is allowed; this flag tells the
   i/o-handler if it should do log record
   application */
-  ibool apply_batch_on;
-  /*!< this is TRUE when a log rec application
+  bool apply_batch_on;
+  /*!< this is true when a log rec application
   batch is running */
   uint64_t lsn; /*!< log sequence number */
   ulint last_log_buf_size;
@@ -300,8 +297,8 @@ struct recv_sys_struct {
   this lsn */
   uint64_t limit_lsn; /*!< recovery should be made at most
                        up to this lsn */
-  ibool found_corrupt_log;
-  /*!< this is set to TRUE if we during log
+  bool found_corrupt_log;
+  /*!< this is set to true if we during log
   scan find a corrupt log block, or a corrupt
   log record, or there is a log parsing
   buffer overflow */
@@ -320,32 +317,32 @@ struct recv_sys_struct {
 /** The recovery system */
 extern recv_sys_t *recv_sys;
 
-/** TRUE when applying redo log records during crash recovery; FALSE
-otherwise.  Note that this is FALSE while a background thread is
+/** true when applying redo log records during crash recovery; false
+otherwise.  Note that this is false while a background thread is
 rolling back incomplete transactions. */
-extern ibool recv_recovery_on;
-/** If the following is TRUE, the buffer pool file pages must be invalidated
-after recovery and no ibuf operations are allowed; this becomes TRUE if
+extern bool recv_recovery_on;
+/** If the following is true, the buffer pool file pages must be invalidated
+after recovery and no ibuf operations are allowed; this becomes true if
 the log record hash table becomes too full, and log records must be merged
 to file pages already before the recovery is finished: in this case no
 ibuf operations are allowed, as they could modify the pages read in the
 buffer pool before the pages have been recovered to the up-to-date state.
 
-TRUE means that recovery is running and no operations on the log files
+true means that recovery is running and no operations on the log files
 are allowed yet: the variable name is misleading. */
-extern ibool recv_no_ibuf_operations;
-/** TRUE when recv_init_crash_recovery() has been called. */
-extern ibool recv_needed_recovery;
+extern bool recv_no_ibuf_operations;
+/** true when recv_init_crash_recovery() has been called. */
+extern bool recv_needed_recovery;
 #ifdef UNIV_DEBUG
-/** TRUE if writing to the redo log (mtr_commit) is forbidden.
+/** true if writing to the redo log (mtr_commit) is forbidden.
 Protected by log_sys->mutex. */
-extern ibool recv_no_log_write;
+extern bool recv_no_log_write;
 #endif /* UNIV_DEBUG */
 
-/** TRUE if buf_page_is_corrupted() should check if the log sequence
-number (FIL_PAGE_LSN) is in the future.  Initially FALSE, and set by
+/** true if buf_page_is_corrupted() should check if the log sequence
+number (FIL_PAGE_LSN) is in the future.  Initially false, and set by
 recv_recovery_from_checkpoint_start_func(). */
-extern ibool recv_lsn_checks_on;
+extern bool recv_lsn_checks_on;
 extern ib_cb_t recv_pre_rollback_hook;
 /** Maximum page number encountered in the redo log */
 extern ulint recv_max_parsed_page_no;

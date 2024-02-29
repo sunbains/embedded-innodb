@@ -69,8 +69,8 @@ static int opt_invert_cmp_op(int op) /*!< in: operator */
 /** Checks if the value of an expression can be calculated BEFORE the nth table
 in a join is accessed. If this is the case, it can possibly be used in an
 index search for the nth table.
-@return	TRUE if already determined */
-static ibool opt_check_exp_determined_before(
+@return	true if already determined */
+static bool opt_check_exp_determined_before(
     que_node_t *exp,      /*!< in: expression */
     sel_node_t *sel_node, /*!< in: select node */
     ulint nth_table)      /*!< in: nth table will be accessed */
@@ -84,28 +84,28 @@ static ibool opt_check_exp_determined_before(
   ut_ad(exp && sel_node);
 
   if (que_node_get_type(exp) == QUE_NODE_FUNC) {
-    func_node = static_cast<func_node_t*>(exp);
+    func_node = static_cast<func_node_t *>(exp);
 
     arg = func_node->args;
 
     while (arg) {
       if (!opt_check_exp_determined_before(arg, sel_node, nth_table)) {
-        return (FALSE);
+        return (false);
       }
 
       arg = que_node_get_next(arg);
     }
 
-    return (TRUE);
+    return (true);
   }
 
   ut_a(que_node_get_type(exp) == QUE_NODE_SYMBOL);
 
-  sym_node = static_cast<sym_node_t*>(exp);
+  sym_node = static_cast<sym_node_t *>(exp);
 
   if (sym_node->token_type != SYM_COLUMN) {
 
-    return (TRUE);
+    return (true);
   }
 
   for (i = 0; i < nth_table; i++) {
@@ -114,11 +114,11 @@ static ibool opt_check_exp_determined_before(
 
     if (sym_node->table == table) {
 
-      return (TRUE);
+      return (true);
     }
   }
 
-  return (FALSE);
+  return (false);
 }
 
 /** Looks in a comparison condition if a column value is already restricted by
@@ -165,7 +165,7 @@ static que_node_t *opt_look_for_col_in_comparison_before(
   arg = search_cond->args;
 
   if (que_node_get_type(arg) == QUE_NODE_SYMBOL) {
-    sym_node = static_cast<sym_node_t*>(arg);
+    sym_node = static_cast<sym_node_t *>(arg);
 
     if ((sym_node->token_type == SYM_COLUMN) && (sym_node->table == table) &&
         (sym_node->col_no == col_no)) {
@@ -189,7 +189,7 @@ static que_node_t *opt_look_for_col_in_comparison_before(
   arg = que_node_get_next(arg);
 
   if (que_node_get_type(arg) == QUE_NODE_SYMBOL) {
-    sym_node = static_cast<sym_node_t*>(arg);
+    sym_node = static_cast<sym_node_t *>(arg);
 
     if ((sym_node->token_type == SYM_COLUMN) && (sym_node->table == table) &&
         (sym_node->col_no == col_no)) {
@@ -234,7 +234,7 @@ static que_node_t *opt_look_for_col_in_cond_before(
   ut_a(search_cond->func != PARS_NOT_TOKEN);
 
   if (search_cond->func == PARS_AND_TOKEN) {
-    new_cond = static_cast<func_node_t*>(search_cond->args);
+    new_cond = static_cast<func_node_t *>(search_cond->args);
 
     exp = opt_look_for_col_in_cond_before(cmp_type, col_no, new_cond, sel_node,
                                           nth_table, op);
@@ -243,7 +243,7 @@ static que_node_t *opt_look_for_col_in_cond_before(
       return (exp);
     }
 
-    new_cond = static_cast<func_node_t*>(que_node_get_next(new_cond));
+    new_cond = static_cast<func_node_t *>(que_node_get_next(new_cond));
 
     exp = opt_look_for_col_in_cond_before(cmp_type, col_no, new_cond, sel_node,
                                           nth_table, op);
@@ -310,8 +310,8 @@ opt_calc_index_goodness(dict_index_t *index,     /*!< in: index */
     col_no = dict_index_get_nth_col_no(index, j);
 
     exp = opt_look_for_col_in_cond_before(
-        OPT_EQUAL, col_no,
-	static_cast<func_node_t*>(sel_node->search_cond), sel_node, nth_table, &op);
+        OPT_EQUAL, col_no, static_cast<func_node_t *>(sel_node->search_cond),
+        sel_node, nth_table, &op);
     if (exp) {
       /* The value for this column is exactly known already
       at this stage of the join */
@@ -323,8 +323,9 @@ opt_calc_index_goodness(dict_index_t *index,     /*!< in: index */
       /* Look for non-equality comparisons */
 
       exp = opt_look_for_col_in_cond_before(
-       OPT_COMPARISON, col_no,
-       static_cast<func_node_t*>(sel_node->search_cond), sel_node, nth_table, &op);
+          OPT_COMPARISON, col_no,
+          static_cast<func_node_t *>(sel_node->search_cond), sel_node,
+          nth_table, &op);
 
       if (exp) {
         index_plan[j] = exp;
@@ -356,8 +357,8 @@ opt_calc_index_goodness(dict_index_t *index,     /*!< in: index */
 
 /** Calculates the number of matched fields based on an index goodness.
 @return	number of excatly or partially matched fields */
-UNIV_INLINE
-ulint opt_calc_n_fields_from_goodness(ulint goodness) /*!< in: goodness */
+inline ulint
+opt_calc_n_fields_from_goodness(ulint goodness) /*!< in: goodness */
 {
   return (((goodness % 1024) + 2) / 4);
 }
@@ -365,11 +366,10 @@ ulint opt_calc_n_fields_from_goodness(ulint goodness) /*!< in: goodness */
 /** Converts a comparison operator to the corresponding search mode PAGE_CUR_GE,
 ...
 @return	search mode */
-UNIV_INLINE
-ib_srch_mode_t opt_op_to_search_mode(
-    ibool asc, /*!< in: TRUE if the rows should be fetched in an
-               ascending order */
-    ulint op)  /*!< in: operator '=', PARS_GE_TOKEN, ... */
+inline ib_srch_mode_t
+opt_op_to_search_mode(bool asc, /*!< in: true if the rows should be fetched in
+                                 an ascending order */
+                      ulint op) /*!< in: operator '=', PARS_GE_TOKEN, ... */
 {
   if (op == '=') {
     if (asc) {
@@ -397,22 +397,22 @@ ib_srch_mode_t opt_op_to_search_mode(
 }
 
 /** Determines if a node is an argument node of a function node.
-@return	TRUE if is an argument */
-static ibool opt_is_arg(que_node_t *arg_node, /*!< in: possible argument node */
-                        func_node_t *func_node) /*!< in: function node */
+@return	true if is an argument */
+static bool opt_is_arg(que_node_t *arg_node, /*!< in: possible argument node */
+                       func_node_t *func_node) /*!< in: function node */
 {
   auto arg = func_node->args;
 
   while (arg) {
     if (arg == arg_node) {
 
-      return (TRUE);
+      return (true);
     }
 
     arg = que_node_get_next(arg);
   }
 
-  return (FALSE);
+  return (false);
 }
 
 /** Decides if the fetching of rows should be made in a descending order, and
@@ -484,8 +484,8 @@ opt_search_plan_for_table(sel_node_t *sel_node, /*!< in: parsed select node */
 
   plan->table = table;
   plan->asc = sel_node->asc;
-  plan->pcur_is_open = FALSE;
-  plan->cursor_at_end = FALSE;
+  plan->pcur_is_open = false;
+  plan->cursor_at_end = false;
 
   /* Calculate goodness for each index of the table */
 
@@ -521,9 +521,8 @@ opt_search_plan_for_table(sel_node_t *sel_node, /*!< in: parsed select node */
     plan->tuple = dtuple_create(pars_sym_tab_global->heap, n_fields);
     dict_index_copy_types(plan->tuple, plan->index, n_fields);
 
-    plan->tuple_exps =
-            reinterpret_cast<que_node_t**>(
-               mem_heap_alloc(pars_sym_tab_global->heap, n_fields * sizeof(void *)));
+    plan->tuple_exps = reinterpret_cast<que_node_t **>(
+        mem_heap_alloc(pars_sym_tab_global->heap, n_fields * sizeof(void *)));
 
     memcpy(plan->tuple_exps, best_index_plan, n_fields * sizeof(void *));
 
@@ -539,9 +538,9 @@ opt_search_plan_for_table(sel_node_t *sel_node, /*!< in: parsed select node */
   if (dict_index_is_clust(best_index) &&
       (plan->n_exact_match >= dict_index_get_n_unique(best_index))) {
 
-    plan->unique_search = TRUE;
+    plan->unique_search = true;
   } else {
-    plan->unique_search = FALSE;
+    plan->unique_search = false;
   }
 
   plan->old_vers_heap = NULL;
@@ -654,11 +653,11 @@ static void opt_find_test_conds(sel_node_t *sel_node, /*!< in: select node */
   }
 
   if (cond->func == PARS_AND_TOKEN) {
-    new_cond = static_cast<func_node_t*>(cond->args);
+    new_cond = static_cast<func_node_t *>(cond->args);
 
     opt_find_test_conds(sel_node, i, new_cond);
 
-    new_cond = static_cast<func_node_t*>(que_node_get_next(new_cond));
+    new_cond = static_cast<func_node_t *>(que_node_get_next(new_cond));
 
     opt_find_test_conds(sel_node, i, new_cond);
 
@@ -695,7 +694,7 @@ opt_normalize_cmp_conds(func_node_t *cond,   /*!< in: first in a list of
 
     if (que_node_get_type(arg2) == QUE_NODE_SYMBOL) {
 
-      sym_node = static_cast<sym_node_t*>(arg2);
+      sym_node = static_cast<sym_node_t *>(arg2);
 
       if (sym_node->token_type == SYM_COLUMN && sym_node->table == table) {
 
@@ -728,7 +727,8 @@ static void opt_determine_and_normalize_test_conds(
 
   /* Recursively go through the conjuncts and classify them */
 
-  opt_find_test_conds(sel_node, i, static_cast<func_node_t*>(sel_node->search_cond));
+  opt_find_test_conds(sel_node, i,
+                      static_cast<func_node_t *>(sel_node->search_cond));
 
   opt_normalize_cmp_conds(UT_LIST_GET_FIRST(plan->end_conds), plan->table);
 
@@ -743,8 +743,8 @@ column occurrence we are looking at is in the column list, in which case
 nothing is done. */
 
 void opt_find_all_cols(
-    ibool copy_val,            /*!< in: if TRUE, new found columns are
-                               added as columns to copy */
+    bool copy_val,             /*!< in: if true, new found columns are
+                                added as columns to copy */
     dict_index_t *index,       /*!< in: index of the table to use */
     sym_node_list_t *col_list, /*!< in: base node of a list where
                                to add new found columns */
@@ -764,7 +764,7 @@ void opt_find_all_cols(
   }
 
   if (que_node_get_type(exp) == QUE_NODE_FUNC) {
-    func_node = static_cast<func_node_t*>(exp);
+    func_node = static_cast<func_node_t *>(exp);
 
     arg = func_node->args;
 
@@ -778,7 +778,7 @@ void opt_find_all_cols(
 
   ut_a(que_node_get_type(exp) == QUE_NODE_SYMBOL);
 
-  sym_node = static_cast<sym_node_t*>(exp);
+  sym_node = static_cast<sym_node_t *>(exp);
 
   if (sym_node->token_type != SYM_COLUMN) {
 
@@ -833,7 +833,7 @@ void opt_find_all_cols(
 
     if (col_pos == ULINT_UNDEFINED) {
 
-      plan->must_get_clust = TRUE;
+      plan->must_get_clust = true;
     }
 
     sym_node->field_nos[SYM_SEC_FIELD_NO] = col_pos;
@@ -860,11 +860,11 @@ static void opt_find_copy_cols(
   ut_ad(que_node_get_type(search_cond) == QUE_NODE_FUNC);
 
   if (search_cond->func == PARS_AND_TOKEN) {
-    new_cond = static_cast<func_node_t*>(search_cond->args);
+    new_cond = static_cast<func_node_t *>(search_cond->args);
 
     opt_find_copy_cols(sel_node, i, new_cond);
 
-    new_cond = static_cast<func_node_t*>(que_node_get_next(new_cond));
+    new_cond = static_cast<func_node_t *>(que_node_get_next(new_cond));
 
     opt_find_copy_cols(sel_node, i, new_cond);
 
@@ -879,7 +879,7 @@ static void opt_find_copy_cols(
 
     plan = sel_node_get_nth_plan(sel_node, i);
 
-    opt_find_all_cols(TRUE, plan->index, &(plan->columns), plan, search_cond);
+    opt_find_all_cols(true, plan->index, &(plan->columns), plan, search_cond);
   }
 }
 
@@ -898,26 +898,27 @@ static void opt_classify_cols(sel_node_t *sel_node, /*!< in: select node */
   /* The final value of the following field will depend on the
   environment of the select statement: */
 
-  plan->must_get_clust = FALSE;
+  plan->must_get_clust = false;
 
   UT_LIST_INIT(plan->columns);
 
-  /* All select list columns should be copied: therefore TRUE as the
+  /* All select list columns should be copied: therefore true as the
   first argument */
 
   exp = sel_node->select_list;
 
   while (exp) {
-    opt_find_all_cols(TRUE, plan->index, &(plan->columns), plan, exp);
+    opt_find_all_cols(true, plan->index, &(plan->columns), plan, exp);
     exp = que_node_get_next(exp);
   }
 
-  opt_find_copy_cols(sel_node, i, static_cast<func_node_t*>(sel_node->search_cond));
+  opt_find_copy_cols(sel_node, i,
+                     static_cast<func_node_t *>(sel_node->search_cond));
 
   /* All remaining columns in the search condition are temporary
-  columns: therefore FALSE */
+  columns: therefore false */
 
-  opt_find_all_cols(FALSE, plan->index, &(plan->columns), plan,
+  opt_find_all_cols(false, plan->index, &(plan->columns), plan,
                     sel_node->search_cond);
 }
 
@@ -942,7 +943,7 @@ static void opt_clust_access(sel_node_t *sel_node, /*!< in: select node */
   /* The final value of the following field depends on the environment
   of the select statement: */
 
-  plan->no_prefetch = FALSE;
+  plan->no_prefetch = false;
 
   if (dict_index_is_clust(index)) {
     plan->clust_map = NULL;
@@ -963,7 +964,8 @@ static void opt_clust_access(sel_node_t *sel_node, /*!< in: select node */
 
   dict_index_copy_types(plan->clust_ref, clust_index, n_fields);
 
-  plan->clust_map = reinterpret_cast<ulint*>(mem_heap_alloc(heap, n_fields * sizeof(ulint)));
+  plan->clust_map =
+      reinterpret_cast<ulint *>(mem_heap_alloc(heap, n_fields * sizeof(ulint)));
 
   for (i = 0; i < n_fields; i++) {
     pos = dict_index_get_nth_field_pos(index, clust_index, i);
@@ -996,8 +998,8 @@ void opt_search_plan(sel_node_t *sel_node) /*!< in: parsed select node */
   order_node_t *order_by;
   ulint i;
 
-  sel_node->plans = reinterpret_cast<plan_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sel_node->n_tables * sizeof(plan_t)));
+  sel_node->plans = reinterpret_cast<plan_t *>(mem_heap_alloc(
+      pars_sym_tab_global->heap, sel_node->n_tables * sizeof(plan_t)));
 
   /* Analyze the search condition to find out what we know at each
   join stage about the conditions that the columns of a table should
@@ -1006,7 +1008,7 @@ void opt_search_plan(sel_node_t *sel_node) /*!< in: parsed select node */
   table_node = sel_node->table_list;
 
   if (sel_node->order_by == NULL) {
-    sel_node->asc = TRUE;
+    sel_node->asc = true;
   } else {
     order_by = sel_node->order_by;
 
@@ -1026,7 +1028,7 @@ void opt_search_plan(sel_node_t *sel_node) /*!< in: parsed select node */
 
     opt_determine_and_normalize_test_conds(sel_node, i);
 
-    table_node = static_cast<sym_node_t*>(que_node_get_next(table_node));
+    table_node = static_cast<sym_node_t *>(que_node_get_next(table_node));
   }
 
   table_node = sel_node->table_list;
@@ -1043,7 +1045,7 @@ void opt_search_plan(sel_node_t *sel_node) /*!< in: parsed select node */
 
     opt_clust_access(sel_node, i);
 
-    table_node = static_cast<sym_node_t*>(que_node_get_next(table_node));
+    table_node = static_cast<sym_node_t *>(que_node_get_next(table_node));
   }
 
   /* Check that the plan obeys a possible order-by clause: if not,

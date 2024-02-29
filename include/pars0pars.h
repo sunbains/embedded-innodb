@@ -24,11 +24,11 @@ Created 11/19/1996 Heikki Tuuri
 #ifndef pars0pars_h
 #define pars0pars_h
 
+#include "innodb0types.h"
 #include "pars0types.h"
 #include "que0types.h"
 #include "row0types.h"
 #include "trx0types.h"
-#include "univ.i"
 #include "usr0types.h"
 #include "ut0vec.h"
 
@@ -38,14 +38,14 @@ meaning of the return type also varies. See the individual use cases, e.g.
 the FETCH statement, for details on them. */
 typedef void *(*pars_user_func_cb_t)(void *arg, void *user_arg);
 
-/** If the following is set TRUE, the parser will emit debugging
+/** If the following is set true, the parser will emit debugging
 information */
 extern int yydebug;
 
 #ifdef UNIV_SQL_DEBUG
-/** If the following is set TRUE, the lexer will print the SQL string
+/** If the following is set true, the lexer will print the SQL string
 as it tokenizes it */
-extern ibool pars_print_lexed;
+extern bool pars_print_lexed;
 #endif /* UNIV_SQL_DEBUG */
 
 /* Global variable used while parsing a single procedure or query : the code is
@@ -99,10 +99,9 @@ que_t *pars_sql(pars_info_t *info, /*!< in: extra information, or NULL */
                 const char *str);  /*!< in: SQL string */
 /** Retrieves characters to the lexical analyzer. */
 
-int pars_get_lex_chars(
-    char *buf,     /*!< in/out: buffer where to copy */
-    int max_size); /*!< in: maximum number of characters which fit
-                   in the buffer */
+int pars_get_lex_chars(char *buf,     /*!< in/out: buffer where to copy */
+                       int max_size); /*!< in: maximum number of characters
+                                      which fit in the buffer */
 /** Called by yyparse on error. */
 
 void yyerror(const char *s); /*!< in: error message string */
@@ -174,7 +173,7 @@ pars_column_assignment(sym_node_t *column, /*!< in: column to assign */
 @return	own: update node in a query tree */
 
 upd_node_t *pars_update_statement_start(
-    ibool is_delete,                     /*!< in: TRUE if delete */
+    bool is_delete,                      /*!< in: true if delete */
     sym_node_t *table_sym,               /*!< in: table name node */
     col_assign_node_t *col_assign_list); /*!< in: column assignment list, NULL
                                      if delete */
@@ -394,7 +393,7 @@ heap. */
 
 void pars_info_add_int8_literal(pars_info_t *info, /*!< in: info struct */
                                 const char *name,  /*!< in: name */
-                                uint64_t val);  /*!< in: value */
+                                uint64_t val);     /*!< in: value */
 
 /** Equivalent to:
 
@@ -470,7 +469,7 @@ struct pars_info_struct {
   ib_vector_t *bound_ids;  /*!< bound ids, or NULL
                            (pars_bound_id_t*) */
 
-  ibool graph_owns_us; /*!< if TRUE (which is the default),
+  bool graph_owns_us; /*!< if true (which is the default),
                        que_graph_free() will free us */
 };
 
@@ -507,7 +506,7 @@ is also used for some non-functions like the assignment ':=' */
 struct func_node_struct {
   que_common_t common; /*!< type: QUE_NODE_FUNC */
   int func;            /*!< token code of the function name */
-  ulint func_class;         /*!< class of the function */
+  ulint func_class;    /*!< class of the function */
   que_node_t *args;    /*!< argument(s) of the function */
   UT_LIST_NODE_T(func_node_t) cond_list;
   /*!< list of comparison conditions; defined
@@ -522,7 +521,7 @@ struct func_node_struct {
 struct order_node_struct {
   que_common_t common; /*!< type: QUE_NODE_ORDER */
   sym_node_t *column;  /*!< order-by column */
-  ibool asc;           /*!< TRUE if ascending, FALSE if descending */
+  bool asc;            /*!< true if ascending, false if descending */
 };
 
 /** Procedure definition node */

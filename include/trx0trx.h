@@ -25,8 +25,8 @@ Created 3/26/1996 Heikki Tuuri
 #define trx0trx_h
 
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "trx0types.h"
-#include "univ.i"
 #ifndef UNIV_HOTBACKUP
 #include "lock0types.h"
 #include "mem0mem.h"
@@ -53,8 +53,8 @@ void trx_set_detailed_error(trx_t *trx,       /*!< in: transaction struct */
                             const char *msg); /*!< in: detailed error message */
 /** Retrieves the error_info field from a trx.
 @return	the error info */
-UNIV_INLINE
-const dict_index_t *trx_get_error_info(const trx_t *trx); /*!< in: trx object */
+inline const dict_index_t *
+trx_get_error_info(const trx_t *trx); /*!< in: trx object */
 /** Creates and initializes a transaction object.
 @return	own: the transaction */
 
@@ -84,24 +84,23 @@ undo log lists. */
 void trx_lists_init_at_db_start(
     ib_recovery_t recovery); /*!< in: recovery flag */
 /** Starts a new transaction.
-@return TRUE if success, FALSE if the rollback segment could not
+@return true if success, false if the rollback segment could not
 support this many transactions */
 
-ibool trx_start(trx_t *trx,     /*!< in: transaction */
-                ulint rseg_id); /*!< in: rollback segment id; if ULINT_UNDEFINED
-                               is passed, the system chooses the rollback
-                               segment automatically in a round-robin fashion */
+bool trx_start(trx_t *trx,     /*!< in: transaction */
+               ulint rseg_id); /*!< in: rollback segment id; if ULINT_UNDEFINED
+                              is passed, the system chooses the rollback
+                              segment automatically in a round-robin fashion */
 /** Starts a new transaction.
-@return	TRUE */
+@return	true */
 
-ibool trx_start_low(
+bool trx_start_low(
     trx_t *trx,     /*!< in: transaction */
     ulint rseg_id); /*!< in: rollback segment id; if ULINT_UNDEFINED
                    is passed, the system chooses the rollback segment
                    automatically in a round-robin fashion */
 /** Starts the transaction if it is not yet started. */
-UNIV_INLINE
-void trx_start_if_not_started(trx_t *trx); /*!< in: transaction */
+inline void trx_start_if_not_started(trx_t *trx); /*!< in: transaction */
 /** Commits a transaction. */
 
 void trx_commit_off_kernel(trx_t *trx); /*!< in: transaction */
@@ -130,7 +129,7 @@ trx_t *
 trx_get_trx_by_xid(XID *xid); /*!< in: X/Open XA transaction identification */
 #endif                        /* WITH_XOPEN */
 /** If required, flushes the log to disk if we called trx_commit_()
-with trx->flush_log_later == TRUE.
+with trx->flush_log_later == true.
 @return	0 or error number */
 
 ulint trx_commit_complete_(trx_t *trx); /*!< in: trx handle */
@@ -229,20 +228,18 @@ typedef enum trx_dict_op {
 
 /** Determine if a transaction is a dictionary operation.
 @return	dictionary operation mode */
-UNIV_INLINE
-enum trx_dict_op
+inline enum trx_dict_op
 trx_get_dict_operation(const trx_t *trx) /*!< in: transaction */
     __attribute__((pure));
 /** Flag a transaction a dictionary operation. */
-UNIV_INLINE
-void trx_set_dict_operation(trx_t *trx,           /*!< in/out: transaction */
-                            enum trx_dict_op op); /*!< in: operation, not
-                                                  TRX_DICT_OP_NONE */
+inline void trx_set_dict_operation(trx_t *trx, /*!< in/out: transaction */
+                                   enum trx_dict_op op); /*!< in: operation, not
+                                                         TRX_DICT_OP_NONE */
 
 /** Determines if the currently running transaction has been interrupted.
-@return	TRUE if interrupted */
+@return	true if interrupted */
 
-ibool trx_is_interrupted(const trx_t *trx); /*!< in: transaction */
+bool trx_is_interrupted(const trx_t *trx); /*!< in: transaction */
 
 /** Calculates the "weight" of a transaction. The weight of one transaction
 is estimated as the number of altered rows + the number of locked rows.
@@ -262,8 +259,7 @@ int trx_weight_cmp(
 
 /** Retrieves transacion's id, represented as unsigned long long.
 @return	transaction's id */
-UNIV_INLINE
-uint64_t trx_get_id(const trx_t *trx); /*!< in: transaction */
+inline uint64_t trx_get_id(const trx_t *trx); /*!< in: transaction */
 
 /** Creates a transaction object for client. */
 
@@ -283,8 +279,8 @@ trx_get_que_state_str(). */
 /** Retrieves transaction's que state in a human readable string. The string
 should not be free()'d or modified.
 @return	string in the data segment */
-UNIV_INLINE
-const char *trx_get_que_state_str(const trx_t *trx); /*!< in: transaction */
+inline const char *
+trx_get_que_state_str(const trx_t *trx); /*!< in: transaction */
 
 /** Reset global variables. */
 
@@ -325,21 +321,21 @@ struct trx_struct {
                          TRX_ACTIVE, TRX_COMMITTED_IN_MEMORY,
                          ... */
   ulint isolation_level; /* TRX_ISO_REPEATABLE_READ, ... */
-  ulint check_foreigns;  /* normally TRUE, but if the user
+  ulint check_foreigns;  /* normally true, but if the user
                          wants to suppress foreign key checks,
                          (in table imports, for example) we
-                         set this FALSE */
+                         set this false */
   ulint check_unique_secondary;
-  /*!< normally TRUE, but if the user
+  /*!< normally true, but if the user
   wants to speed up inserts by
   suppressing unique key checks
   for secondary indexes when we decide
   if we can use the insert buffer for
-  them, we set this FALSE */
+  them, we set this false */
 #ifdef WITH_XOPEN
   ulint support_xa;           /*!< normally we do the XA two-phase
                               commit steps, but by setting this to
-                              FALSE, one can save CPU time and about
+                              false, one can save CPU time and about
                               150 bytes in the undo log size as then
                               we skip XA steps */
   ulint flush_log_later;      /* In 2PC, we hold the
@@ -348,16 +344,16 @@ struct trx_struct {
                               defer flush of the logs to disk
                               until after we release the
                               mutex. */
-  ulint must_flush_log_later; /* this flag is set to TRUE in
+  ulint must_flush_log_later; /* this flag is set to true in
                          trx_commit_off_kernel() if
-                         flush_log_later was TRUE, and there
+                         flush_log_later was true, and there
                          were modifications by the transaction;
                          in that case we must flush the log
                          in trx_commit() */
 #endif                        /* WITH_XOPEN */
   ulint duplicates;           /*!< TRX_DUP_IGNORE | TRX_DUP_REPLACE */
   ulint has_search_latch;
-  /*!< TRUE if this trx has latched the
+  /*!< true if this trx has latched the
   search system latch in S-mode */
   ulint deadlock_mark;          /*!< a mark field used in deadlock
                                 checking algorithm.  */
@@ -365,7 +361,7 @@ struct trx_struct {
 
   /* Fields protected by the srv_conc_mutex. */
   ulint declared_to_be_inside_innodb;
-  /* this is TRUE if we have declared
+  /* this is true if we have declared
   this transaction in
   srv_conc_enter_innodb to be inside the
   InnoDB engine */
@@ -385,23 +381,23 @@ struct trx_struct {
   ulint que_state;        /*!< valid when conc_state
                           == TRX_ACTIVE: TRX_QUE_RUNNING,
                           TRX_QUE_LOCK_WAIT, ... */
-  ulint handling_signals; /* this is TRUE as long as the trx
+  ulint handling_signals; /* this is true as long as the trx
                          is handling signals */
   time_t start_time;      /*!< time the trx object was created
                           or the state last time became
                           TRX_ACTIVE */
   trx_id_t id;            /*!< transaction id */
 #ifdef WITH_XOPEN
-  XID xid;                /*!< X/Open XA transaction
-                          identification to identify a
-                          transaction branch */
-#endif                    /* WITH_XOPEN */
-  trx_id_t no;            /*!< transaction serialization number ==
-                          max trx id when the transaction is
-                          moved to COMMITTED_IN_MEMORY state */
+  XID xid;             /*!< X/Open XA transaction
+                       identification to identify a
+                       transaction branch */
+#endif                 /* WITH_XOPEN */
+  trx_id_t no;         /*!< transaction serialization number ==
+                       max trx id when the transaction is
+                       moved to COMMITTED_IN_MEMORY state */
   uint64_t commit_lsn; /*!< lsn at the time of the commit */
-  trx_id_t table_id;      /*!< Table to drop iff dict_operation
-                          is TRUE, or ut_dulint_zero. */
+  trx_id_t table_id;   /*!< Table to drop iff dict_operation
+                       is true, or ut_dulint_zero. */
   /*------------------------------*/
   void *client_thd;                /*!< Client thread handle corresponding
                                    to this trx, or NULL */
@@ -476,12 +472,12 @@ struct trx_struct {
                      TRX_QUE_LOCK_WAIT, this points to
                      the lock request, otherwise this is
                      NULL */
-  ibool was_chosen_as_deadlock_victim;
+  bool was_chosen_as_deadlock_victim;
   /*!< when the transaction decides to
-  wait for a lock, it sets this to FALSE;
+  wait for a lock, it sets this to false;
   if another transaction chooses this
   transaction as a victim in deadlock
-  resolution, it sets this to TRUE */
+  resolution, it sets this to true */
   time_t wait_started; /*!< lock wait started at this time */
   UT_LIST_BASE_NODE_T(que_thr_t)
   wait_thrs; /*!< query threads belonging to this

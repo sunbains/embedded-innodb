@@ -202,11 +202,11 @@ static int visit_table_col(void *arg,              /*!< User callback arg */
 }
 
 /** Callback functions to traverse a table's schema. */
-static int visit_index(void *arg,           /*!< User callback arg */
-                       const char *name,    /*!< Index name */
-                       ib_bool_t clustered, /*!< True if clustered */
-                       ib_bool_t unique,    /*!< True if unique */
-                       int n_cols)          /*!< No. of cols defined */
+static int visit_index(void *arg,        /*!< User callback arg */
+                       const char *name, /*!< Index name */
+                       bool clustered,   /*!< True if clustered */
+                       bool unique,      /*!< True if unique */
+                       int n_cols)       /*!< No. of cols defined */
 {
   const char *p;
   visitor_arg_t *visitor_arg = (visitor_arg_t *)arg;
@@ -251,10 +251,10 @@ int visit_index_col(void *arg,             /*!< User callback arg */
 
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }
@@ -338,7 +338,7 @@ static int visit_tables_list(void *arg, const char *name, int len)
 /*!< out: 0 on success, nonzero on error */
 {
   ib_err_t err;
-  char *ptr = new char [len + 1];
+  char *ptr = new char[len + 1];
   visitor_arg_t *visitor_arg = (visitor_arg_t *)arg;
 
   memset(ptr, 0x0, len + 1);
@@ -347,7 +347,7 @@ static int visit_tables_list(void *arg, const char *name, int len)
 
   err = ib_table_schema_visit(visitor_arg->ib_trx, ptr, &table_visitor, arg);
 
-  delete [] ptr;
+  delete[] ptr;
 
   return (err == DB_SUCCESS ? 0 : -1);
 }
@@ -361,7 +361,7 @@ static int visit_tables(void *arg, const char *name, int len)
 /*!< out: 0 on success, nonzero on error */
 {
   ib_err_t err;
-  char *ptr = new char [len + 1];
+  char *ptr = new char[len + 1];
   visitor_arg_t *visitor_arg = (visitor_arg_t *)arg;
 
   memset(ptr, 0x0, len + 1);
@@ -370,7 +370,7 @@ static int visit_tables(void *arg, const char *name, int len)
 
   err = ib_table_schema_visit(visitor_arg->ib_trx, ptr, &visitor, arg);
 
-  delete [] ptr;
+  delete[] ptr;
 
   return (err == DB_SUCCESS ? 0 : -1);
 }

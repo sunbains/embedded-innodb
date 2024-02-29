@@ -28,10 +28,10 @@ Created 3/14/1997 Heikki Tuuri
 #include "btr0types.h"
 #include "data0data.h"
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "que0types.h"
 #include "row0types.h"
 #include "trx0types.h"
-#include "univ.i"
 
 /** Creates a purge node to a query graph.
 @return	own: purge node */
@@ -60,10 +60,10 @@ struct purge_node_struct {
                               ... */
   btr_pcur_t pcur;             /*!< persistent cursor used in searching the
                                clustered index record */
-  ibool found_clust;           /* TRUE if the clustered index record
-                           determined by ref was found in the clustered
-                           index, and we were able to position pcur on
-                           it */
+  bool found_clust;            /* true if the clustered index record
+                            determined by ref was found in the clustered
+                            index, and we were able to position pcur on
+                            it */
   dict_table_t *table;         /*!< table where purge is done */
   ulint cmpl_info;             /* compiler analysis info of an update */
   upd_t *update;               /*!< update vector for a clustered index

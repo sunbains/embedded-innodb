@@ -138,7 +138,7 @@ void ib_utf8_convert_from_id(
 }
 
 /** Test whether a UTF-8 character is a space or not.
-@return	TRUE if isspace(c) */
+@return	true if isspace(c) */
 
 int ib_utf8_isspace(const charset_t *cs, /*!< in: charset */
                     char c)              /*!< in: character to test */

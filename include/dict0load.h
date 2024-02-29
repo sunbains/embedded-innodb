@@ -38,7 +38,7 @@ In a normal startup, we create the tablespace objects for every table in
 InnoDB's data dictionary, if the corresponding .ibd file exists.
 We also scan the biggest space id, and store it to fil_system. */
 void dict_check_tablespaces_and_store_max_id(
-    ibool in_crash_recovery); /*!< in: are we doing a crash recovery */
+    bool in_crash_recovery); /*!< in: are we doing a crash recovery */
 
 /** Finds the first table name in the given database.
 @return own: table name, NULL if does not exist; the caller must free
@@ -52,7 +52,7 @@ all foreign key constraints where the foreign key is in the table or where
 a foreign key references columns in this table.
 @return table, NULL if does not exist; if the table is stored in an
 .ibd file, but the file does not exist, then we set the
-ibd_file_missing flag TRUE in the table object we return */
+ibd_file_missing flag true in the table object we return */
 dict_table_t *
 dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
                 const char *name);      /*!< in: table name in the
@@ -76,8 +76,8 @@ cache already contains all constraints where the other relevant table is
 already in the dictionary cache.
 @return	DB_SUCCESS or error code */
 db_err dict_load_foreigns(const char *table_name, /*!< in: table name */
-                         ibool check_charsets);  /*!< in: TRUE=check charsets
-                                                 compatibility */
+                          bool check_charsets);   /*!< in: true=check charsets
+                                                   compatibility */
 
 /** Prints to the standard output information on all tables found in the data
 dictionary system table. */

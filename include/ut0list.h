@@ -84,20 +84,18 @@ void ib_list_remove(ib_list_t *list,       /*!< in: list */
 
 /** Get the first node in the list.
 @return	first node, or NULL */
-UNIV_INLINE
-ib_list_node_t *ib_list_get_first(ib_list_t *list); /*!< in: list */
+inline ib_list_node_t *ib_list_get_first(ib_list_t *list); /*!< in: list */
 
 /** Get the last node in the list.
 @return	last node, or NULL */
-UNIV_INLINE
-ib_list_node_t *ib_list_get_last(ib_list_t *list); /*!< in: list */
+inline ib_list_node_t *ib_list_get_last(ib_list_t *list); /*!< in: list */
 
 /* List. */
 struct ib_list_struct {
   ib_list_node_t *first; /*!< first node */
   ib_list_node_t *last;  /*!< last node */
-  ibool is_heap_list;    /*!< TRUE if this list was
-                         allocated through a heap */
+  bool is_heap_list;     /*!< true if this list was
+                          allocated through a heap */
 };
 
 /* A list node. */

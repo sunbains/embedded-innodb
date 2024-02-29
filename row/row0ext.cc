@@ -36,7 +36,7 @@ row_ext_cache_fill(row_ext_t *ext, /*!< in/out: column prefix cache */
                    ulint zip_size, /*!< compressed page size in bytes, or 0 */
                    const dfield_t *dfield) /*!< in: data field */
 {
-  auto field = (const byte*) dfield_get_data(dfield);
+  auto field = (const byte *)dfield_get_data(dfield);
   auto f_len = dfield_get_len(dfield);
   auto buf = ext->buf + i * REC_MAX_INDEX_COL_LEN;
 
@@ -44,9 +44,9 @@ row_ext_cache_fill(row_ext_t *ext, /*!< in/out: column prefix cache */
   ut_ad(dfield_is_ext(dfield));
   ut_a(f_len >= BTR_EXTERN_FIELD_REF_SIZE);
 
-  if (UNIV_UNLIKELY(!memcmp(field_ref_zero,
-                            field + f_len - BTR_EXTERN_FIELD_REF_SIZE,
-                            BTR_EXTERN_FIELD_REF_SIZE))) {
+  if (unlikely(!memcmp(field_ref_zero,
+                       field + f_len - BTR_EXTERN_FIELD_REF_SIZE,
+                       BTR_EXTERN_FIELD_REF_SIZE))) {
     /* The BLOB pointer is not set: we cannot fetch it */
     ext->len[i] = 0;
   } else {
@@ -61,8 +61,10 @@ row_ext_cache_fill(row_ext_t *ext, /*!< in/out: column prefix cache */
   }
 }
 
-row_ext_t *row_ext_create(ulint n_ext, const ulint *ext, const dtuple_t *tuple, ulint zip_size, mem_heap_t *heap) {
-  auto row_ext = reinterpret_cast<row_ext_t*>(mem_heap_alloc(heap, (sizeof(row_ext_t)) + (n_ext - 1) * sizeof(row_ext_t::len)));
+row_ext_t *row_ext_create(ulint n_ext, const ulint *ext, const dtuple_t *tuple,
+                          ulint zip_size, mem_heap_t *heap) {
+  auto row_ext = reinterpret_cast<row_ext_t *>(mem_heap_alloc(
+      heap, (sizeof(row_ext_t)) + (n_ext - 1) * sizeof(row_ext_t::len)));
 
   ut_ad(ut_is_2pow(zip_size));
   ut_ad(zip_size <= UNIV_PAGE_SIZE);

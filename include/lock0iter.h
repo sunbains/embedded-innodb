@@ -24,8 +24,8 @@ Created July 16, 2007 Vasil Dimov
 #ifndef lock0iter_h
 #define lock0iter_h
 
+#include "innodb0types.h"
 #include "lock0types.h"
-#include "univ.i"
 
 typedef struct lock_queue_iterator_struct {
   const lock_t *current_lock;

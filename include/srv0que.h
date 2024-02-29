@@ -24,8 +24,9 @@ Created 6/5/1996 Heikki Tuuri
 #ifndef srv0que_h
 #define srv0que_h
 
+#include "innodb0types.h"
+
 #include "que0types.h"
-#include "univ.i"
 
 /** Enqueues a task to server task queue and releases a worker thread, if there
 is a suspended one. */

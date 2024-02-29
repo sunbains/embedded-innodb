@@ -24,7 +24,7 @@ Created 11/5/1995 Heikki Tuuri
 #ifndef buf0lru_h
 #define buf0lru_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "buf0types.h"
 #include "ut0byte.h"
@@ -50,12 +50,12 @@ operations need new buffer blocks, and the i/o work done in flushing would be
 wasted. */
 
 void buf_LRU_try_free_flushed_blocks(void);
-/*** Returns TRUE if less than 25 % of the buffer pool is available. This can be
+/*** Returns true if less than 25 % of the buffer pool is available. This can be
 used in heuristics to prevent huge transactions eating up the whole buffer
 pool for their locks.
-@return	TRUE if less than 25 % of buffer pool left */
+@return	true if less than 25 % of buffer pool left */
 
-ibool buf_LRU_buf_pool_running_out(void);
+bool buf_LRU_buf_pool_running_out(void);
 
 /*#######################################################################
 These are low-level functions
@@ -93,16 +93,16 @@ BUF_LRU_NOT_FREED otherwise. */
 
 enum buf_lru_free_block_status
 buf_LRU_free_block(buf_page_t *bpage, /*!< in: block to be freed */
-                   ibool zip,         /*!< in: TRUE if should remove also the
-                                      compressed page of an uncompressed page */
-                   ibool *buf_pool_mutex_released);
+                   bool zip,          /*!< in: true if should remove also the
+                                       compressed page of an uncompressed page */
+                   bool *buf_pool_mutex_released);
 /*!< in: pointer to a variable that will
-be assigned TRUE if buf_pool_mutex
+be assigned true if buf_pool_mutex
 was temporarily released, or NULL */
 /*** Try to free a replaceable block.
-@return	TRUE if found and freed */
+@return	true if found and freed */
 
-ibool buf_LRU_search_and_free_block(
+bool buf_LRU_search_and_free_block(
     ulint n_iterations); /*!< in: how many times this has been called
                          repeatedly without result: a high value means
                          that we should search farther; if
@@ -132,7 +132,7 @@ void buf_LRU_block_free_non_file_page(
 /*** Adds a block to the LRU list. */
 
 void buf_LRU_add_block(buf_page_t *bpage, /*!< in: control block */
-                       ibool old); /*!< in: TRUE if should be put to the old
+                       bool old); /*!< in: true if should be put to the old
                                    blocks in the LRU list, else put to the
                                    start; if the LRU list is very short, added
                                    to the start regardless of this parameter */
@@ -140,8 +140,8 @@ void buf_LRU_add_block(buf_page_t *bpage, /*!< in: control block */
 
 void buf_unzip_LRU_add_block(
     buf_block_t *block, /*!< in: control block */
-    ibool old);         /*!< in: TRUE if should be put to the end
-                        of the list, else put to the start */
+    bool old);          /*!< in: true if should be put to the end
+                         of the list, else put to the start */
 /*** Moves a block to the start of the LRU list. */
 
 void buf_LRU_make_block_young(buf_page_t *bpage); /*!< in: control block */
@@ -154,9 +154,9 @@ void buf_LRU_make_block_old(buf_page_t *bpage); /*!< in: control block */
 ulint buf_LRU_old_ratio_update(
     ulint old_pct, /*!< in: Reserve this percentage of
                    the buffer pool for "old" blocks. */
-    ibool adjust); /*!< in: TRUE=adjust the LRU list;
-                   FALSE=just assign buf_LRU_old_ratio
-                   during the initialization of InnoDB */
+    bool adjust);  /*!< in: true=adjust the LRU list;
+                    false=just assign buf_LRU_old_ratio
+                    during the initialization of InnoDB */
 /*** Update the historical stats that we are collecting for LRU eviction
 policy at the end of each interval. */
 
@@ -166,9 +166,9 @@ void buf_LRU_stat_update(void);
 void buf_LRU_var_init(void);
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 /*** Validates the LRU list.
-@return	TRUE */
+@return	true */
 
-ibool buf_LRU_validate(void);
+bool buf_LRU_validate(void);
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 #if defined UNIV_DEBUG_PRINT || defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 /*** Prints the LRU list. */

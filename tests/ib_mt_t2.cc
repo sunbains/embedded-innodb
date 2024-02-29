@@ -74,7 +74,8 @@ static ib_err_t create_t2(void *arg) /*!< in: arguments for callback */
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
 
-  snprintf(table_name, sizeof(table_name), "%s/%s", tbl->m_db_name.c_str(), tbl->m_name.c_str());
+  snprintf(table_name, sizeof(table_name), "%s/%s", tbl->m_db_name.c_str(),
+           tbl->m_name.c_str());
 
   /* Pass a table page size of 0, ie., use default page size. */
   err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl->format,
@@ -155,7 +156,8 @@ static ib_err_t insert_t2(void *arg) /*!< in: arguments for callback */
 
   // fprintf(stderr, "t2: INSERT\n");
 
-  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx, &crsr);
+  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx,
+                   &crsr);
   if (err != DB_SUCCESS) {
     goto err_exit;
   }
@@ -240,7 +242,8 @@ static ib_err_t update_t2(void *arg) /*!< in: arguments for callback */
 
   // fprintf(stderr, "t2: UPDATE\n");
 
-  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx, &crsr);
+  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx,
+                   &crsr);
   if (err != DB_SUCCESS) {
     goto err_exit;
   }
@@ -380,7 +383,8 @@ static ib_err_t delete_t2(void *arg) /*!< in: arguments for callback */
 
   // fprintf(stderr, "t2: DELETE\n");
 
-  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx, &crsr);
+  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx,
+                   &crsr);
   if (err != DB_SUCCESS) {
     goto err_exit;
   }

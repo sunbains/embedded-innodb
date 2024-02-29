@@ -24,7 +24,7 @@ Created 2/16/1997 Heikki Tuuri
 #ifndef read0read_h
 #define read0read_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "read0types.h"
 #include "trx0trx.h"
@@ -60,10 +60,9 @@ statement end if the trx isolation level is <= TRX_ISO_READ_COMMITTED. */
 void read_view_close_for_read_committed(
     trx_t *trx); /*!< in: trx which has a read view */
 /** Checks if a read view sees the specified transaction.
-@return	TRUE if sees */
-UNIV_INLINE
-ibool read_view_sees_trx_id(const read_view_t *view, /*!< in: read view */
-                            trx_id_t trx_id);        /*!< in: trx id */
+@return	true if sees */
+inline bool read_view_sees_trx_id(const read_view_t *view, /*!< in: read view */
+                                  trx_id_t trx_id);        /*!< in: trx id */
 /** Prints a read view to stderr. */
 
 void read_view_print(const read_view_t *view); /*!< in: read view */

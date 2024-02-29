@@ -39,11 +39,11 @@ Created 4/24/1996 Heikki Tuuri
 #include "srv0start.h"
 
 /** Compare the name of an index column.
-@return	TRUE if the i'th column of index is 'name'. */
-static ibool name_of_col_is(const dict_table_t *table, /*!< in: table */
-                            const dict_index_t *index, /*!< in: index */
-                            ulint i,          /*!< in: index field offset */
-                            const char *name) /*!< in: name to compare to */
+@return	true if the i'th column of index is 'name'. */
+static bool name_of_col_is(const dict_table_t *table, /*!< in: table */
+                           const dict_index_t *index, /*!< in: index */
+                           ulint i,          /*!< in: index field offset */
+                           const char *name) /*!< in: name to compare to */
 {
   ulint tmp =
       dict_col_get_no(dict_field_get_col(dict_index_get_nth_field(index, i)));
@@ -157,7 +157,7 @@ void dict_print(void) {
   sys_tables = dict_table_get_low("SYS_TABLES");
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
 
-  btr_pcur_open_at_index_side(TRUE, sys_index, BTR_SEARCH_LEAF, &pcur, TRUE,
+  btr_pcur_open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, &pcur, true,
                               &mtr);
 loop:
   btr_pcur_move_to_next_user_rec(&pcur, &mtr);
@@ -205,7 +205,7 @@ loop:
       is no index */
 
       if (dict_table_get_first_index(table)) {
-        dict_update_statistics_low(table, TRUE);
+        dict_update_statistics_low(table, true);
       }
 
       dict_table_print_low(table);
@@ -235,14 +235,14 @@ dict_sys_tables_get_flags(const rec_t *rec) /*!< in: a record of SYS_TABLES */
 
   flags = mach_read_from_4(field);
 
-  if (UNIV_LIKELY(flags == DICT_TABLE_ORDINARY)) {
+  if (likely(flags == DICT_TABLE_ORDINARY)) {
     return (0);
   }
 
   field = rec_get_nth_field_old(rec, 4 /*N_COLS*/, &len);
   n_cols = mach_read_from_4(field);
 
-  if (UNIV_UNLIKELY(!(n_cols & 0x80000000UL))) {
+  if (unlikely(!(n_cols & 0x80000000UL))) {
     /* New file formats require ROW_FORMAT=COMPACT. */
     return (ULINT_UNDEFINED);
   }
@@ -263,13 +263,13 @@ dict_sys_tables_get_flags(const rec_t *rec) /*!< in: a record of SYS_TABLES */
     break;
   }
 
-  if (UNIV_UNLIKELY((flags & DICT_TF_ZSSIZE_MASK) >
-                    (DICT_TF_ZSSIZE_MAX << DICT_TF_ZSSIZE_SHIFT))) {
+  if (unlikely((flags & DICT_TF_ZSSIZE_MASK) >
+               (DICT_TF_ZSSIZE_MAX << DICT_TF_ZSSIZE_SHIFT))) {
     /* Unsupported compressed page size. */
     return (ULINT_UNDEFINED);
   }
 
-  if (UNIV_UNLIKELY(flags & (~0UL << DICT_TF_BITS))) {
+  if (unlikely(flags & (~0UL << DICT_TF_BITS))) {
     /* Some unused bits are set. */
     return (ULINT_UNDEFINED);
   }
@@ -286,7 +286,7 @@ InnoDB's data dictionary, if the corresponding .ibd file exists.
 We also scan the biggest space id, and store it to fil_system. */
 
 void dict_check_tablespaces_and_store_max_id(
-    ibool in_crash_recovery) /*!< in: are we doing a crash recovery */
+    bool in_crash_recovery) /*!< in: are we doing a crash recovery */
 {
   dict_table_t *sys_tables;
   dict_index_t *sys_index;
@@ -303,7 +303,7 @@ void dict_check_tablespaces_and_store_max_id(
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
   ut_a(!dict_table_is_comp(sys_tables));
 
-  btr_pcur_open_at_index_side(TRUE, sys_index, BTR_SEARCH_LEAF, &pcur, TRUE,
+  btr_pcur_open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, &pcur, true,
                               &mtr);
 loop:
   btr_pcur_move_to_next_user_rec(&pcur, &mtr);
@@ -387,7 +387,7 @@ loop:
       /* Check that the tablespace (the .ibd file) really
       exists; print a warning to the .err log if not.
       Do not print warnings for temporary tables. */
-      ibool is_temp;
+      bool is_temp;
 
       field = rec_get_nth_field_old(rec, 4, &len);
       if (0x80000000UL & mach_read_from_4(field)) {
@@ -403,16 +403,16 @@ loop:
         all such tables are non-temporary.  That is,
         do not suppress error printouts about
         temporary tables not being found. */
-        is_temp = FALSE;
+        is_temp = false;
       }
 
-      fil_space_for_table_exists_in_mem(space_id, name, is_temp, TRUE,
+      fil_space_for_table_exists_in_mem(space_id, name, is_temp, true,
                                         !is_temp);
     } else {
       /* It is a normal database startup: create the space
       object and check that the .ibd file exists. */
 
-      fil_open_single_table_tablespace(FALSE, space_id, flags, name);
+      fil_open_single_table_tablespace(false, space_id, flags, name);
     }
 
     mem_free(name);
@@ -461,7 +461,7 @@ static void dict_load_columns(
   tuple = dtuple_create(heap, 1);
   dfield = dtuple_get_nth_field(tuple, 0);
 
-  buf = (byte*) mem_heap_alloc(heap, 8);
+  buf = (byte *)mem_heap_alloc(heap, 8);
   mach_write_to_8(buf, table->id);
 
   dfield_set_data(dfield, buf, 8);
@@ -555,7 +555,7 @@ dict_load_fields(dict_index_t *index, /*!< in: index whose fields to load */
   tuple = dtuple_create(heap, 1);
   dfield = dtuple_get_nth_field(tuple, 0);
 
-  buf = (byte*) mem_heap_alloc(heap, 8);
+  buf = (byte *)mem_heap_alloc(heap, 8);
   mach_write_to_8(buf, index->id);
 
   dfield_set_data(dfield, buf, 8);
@@ -644,7 +644,7 @@ static ulint dict_load_indexes(
   ulint page_no;
   ulint n_fields;
   byte *buf;
-  ibool is_sys_table;
+  bool is_sys_table;
   dulint id;
   mtr_t mtr;
   ulint error = DB_SUCCESS;
@@ -653,9 +653,9 @@ static ulint dict_load_indexes(
 
   if ((ut_dulint_get_high(table->id) == 0) &&
       (ut_dulint_get_low(table->id) < DICT_HDR_FIRST_ID)) {
-    is_sys_table = TRUE;
+    is_sys_table = true;
   } else {
-    is_sys_table = FALSE;
+    is_sys_table = false;
   }
 
   mtr_start(&mtr);
@@ -667,7 +667,7 @@ static ulint dict_load_indexes(
   tuple = dtuple_create(heap, 1);
   dfield = dtuple_get_nth_field(tuple, 0);
 
-  buf = (byte*) mem_heap_alloc(heap, 8);
+  buf = (byte *)mem_heap_alloc(heap, 8);
   mach_write_to_8(buf, table->id);
 
   dfield_set_data(dfield, buf, 8);
@@ -741,9 +741,9 @@ static ulint dict_load_indexes(
                NULL == dict_table_get_first_index(table)) {
 
       ib_logger(ib_stream, "InnoDB: Error: trying to load index ");
-      ut_print_name(ib_stream, NULL, FALSE, name_buf);
+      ut_print_name(ib_stream, NULL, false, name_buf);
       ib_logger(ib_stream, " for table ");
-      ut_print_name(ib_stream, NULL, TRUE, table->name);
+      ut_print_name(ib_stream, NULL, true, table->name);
       ib_logger(ib_stream, "\nInnoDB: but the first index"
                            " is not clustered!\n");
 
@@ -763,13 +763,13 @@ static ulint dict_load_indexes(
       index->id = id;
 
       dict_load_fields(index, heap);
-      error = dict_index_add_to_cache(table, index, page_no, FALSE);
+      error = dict_index_add_to_cache(table, index, page_no, false);
       /* The data dictionary tables should never contain
       invalid index definitions.  If we ignored this error
       and simply did not load this index definition, the
       .frm file would disagree with the index definitions
       inside InnoDB. */
-      if (UNIV_UNLIKELY(error != DB_SUCCESS)) {
+      if (unlikely(error != DB_SUCCESS)) {
 
         goto func_exit;
       }
@@ -793,13 +793,13 @@ a foreign key references columns in this table. Adds all these to the data
 dictionary cache.
 @return table, NULL if does not exist; if the table is stored in an
 .ibd file, but the file does not exist, then we set the
-ibd_file_missing flag TRUE in the table object we return */
+ibd_file_missing flag true in the table object we return */
 
 dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
                               const char *name)       /*!< in: table name in the
                                                       databasename/tablename format */
 {
-  ibool ibd_file_missing = FALSE;
+  bool ibd_file_missing = false;
   dict_table_t *table;
   dict_table_t *sys_tables;
   btr_pcur_t pcur;
@@ -879,7 +879,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
       goto err_exit;
     } else
 #endif /* WITH_ZIP */
-      if (UNIV_UNLIKELY(flags == ULINT_UNDEFINED)) {
+      if (unlikely(flags == ULINT_UNDEFINED)) {
         field = rec_get_nth_field_old(rec, 5, &len);
         flags = mach_read_from_4(field);
 
@@ -936,11 +936,11 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
     /* The system tablespace is always available. */
   } else if (!fil_space_for_table_exists_in_mem(
                  space, name, (flags >> DICT_TF2_SHIFT) & DICT_TF2_TEMPORARY,
-                 FALSE, FALSE)) {
+                 false, false)) {
 
     if ((flags >> DICT_TF2_SHIFT) & DICT_TF2_TEMPORARY) {
       /* Do not bother to retry opening temporary tables. */
-      ibd_file_missing = TRUE;
+      ibd_file_missing = true;
     } else {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  InnoDB: error: space object of table");
@@ -952,11 +952,11 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
                 (ulong)space);
       /* Try to open the tablespace */
       if (!fil_open_single_table_tablespace(
-              TRUE, space, flags & ~(~0UL << DICT_TF_BITS), name)) {
+              true, space, flags & ~(~0UL << DICT_TF_BITS), name)) {
         /* We failed to find a sensible
         tablespace file */
 
-        ibd_file_missing = TRUE;
+        ibd_file_missing = true;
       }
     }
   }
@@ -986,7 +986,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
   clustered index. However we load the foreign key information only if
   all indexes were loaded. */
   if (err == DB_SUCCESS) {
-    err = dict_load_foreigns(table->name, TRUE);
+    err = dict_load_foreigns(table->name, true);
   } else if (recovery == IB_RECOVERY_DEFAULT) {
     dict_table_remove_from_cache(table);
     table = NULL;
@@ -1144,11 +1144,11 @@ static void dict_load_foreign_cols(
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
-  foreign->foreign_col_names =
-      (const char**) mem_heap_alloc(foreign->heap, foreign->n_fields * sizeof(void *));
+  foreign->foreign_col_names = (const char **)mem_heap_alloc(
+      foreign->heap, foreign->n_fields * sizeof(void *));
 
-  foreign->referenced_col_names =
-      (const char**) mem_heap_alloc(foreign->heap, foreign->n_fields * sizeof(void *));
+  foreign->referenced_col_names = (const char **)mem_heap_alloc(
+      foreign->heap, foreign->n_fields * sizeof(void *));
   mtr_start(&mtr);
 
   sys_foreign_cols = dict_table_get_low("SYS_FOREIGN_COLS");
@@ -1195,10 +1195,10 @@ static void dict_load_foreign_cols(
 
 /** Loads a foreign key constraint to the dictionary cache.
 @return	DB_SUCCESS or error code */
-static db_err dict_load_foreign(const char *id, /*!< in: foreign constraint id as
-                                               a null-terminated string */
-                               ibool check_charsets)
-/*!< in: TRUE=check charset compatibility */
+static db_err dict_load_foreign(const char *id, /*!< in: foreign constraint id
+                                               as a null-terminated string */
+                                bool check_charsets)
+/*!< in: true=check charset compatibility */
 {
   dict_foreign_t *foreign;
   dict_table_t *sys_foreign;
@@ -1309,7 +1309,7 @@ static db_err dict_load_foreign(const char *id, /*!< in: foreign constraint id a
   return (dict_foreign_add_to_cache(foreign, check_charsets));
 }
 
-db_err dict_load_foreigns(const char *table_name, ibool check_charsets) {
+db_err dict_load_foreigns(const char *table_name, bool check_charsets) {
   btr_pcur_t pcur;
   mem_heap_t *heap;
   dtuple_t *tuple;
@@ -1341,7 +1341,8 @@ db_err dict_load_foreigns(const char *table_name, ibool check_charsets) {
   /* Get the secondary index based on FOR_NAME from table
   SYS_FOREIGN */
 
-  sec_index = dict_table_get_next_index(dict_table_get_first_index(sys_foreign));
+  sec_index =
+      dict_table_get_next_index(dict_table_get_first_index(sys_foreign));
 
   db_err err;
 
@@ -1354,7 +1355,8 @@ start_load:
   dfield_set_data(dfield, table_name, strlen(table_name));
   dict_index_copy_types(tuple, sec_index, 1);
 
-  btr_pcur_open_on_user_rec(sec_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
+  btr_pcur_open_on_user_rec(sec_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF,
+                            &pcur, &mtr);
 loop:
   rec = btr_pcur_get_rec(&pcur);
 
@@ -1376,8 +1378,8 @@ loop:
 
   if (0 != cmp_data_data(NULL, dfield_get_type(dfield)->mtype,
                          dfield_get_type(dfield)->prtype,
-                         (const byte*)dfield_get_data(dfield), dfield_get_len(dfield), field,
-                         len)) {
+                         (const byte *)dfield_get_data(dfield),
+                         dfield_get_len(dfield), field, len)) {
 
     goto load_next_index;
   }

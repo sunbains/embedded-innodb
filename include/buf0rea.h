@@ -24,7 +24,7 @@ Created 11/5/1995 Heikki Tuuri
 #ifndef buf0rea_h
 #define buf0rea_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "buf0types.h"
 
@@ -32,9 +32,9 @@ Created 11/5/1995 Heikki Tuuri
 buffer buf_pool if it is not already there. Sets the io_fix flag and sets
 an exclusive lock on the buffer frame. The flag is cleared and the x-lock
 released by the i/o-handler thread.
-@return TRUE if page has been read in, FALSE in case of failure */
+@return true if page has been read in, false in case of failure */
 
-ibool buf_read_page(
+bool buf_read_page(
     ulint space,    /*!< in: space id */
     ulint zip_size, /*!< in: compressed page size in bytes, or 0 */
     ulint offset);  /*!< in: page number */
@@ -72,12 +72,12 @@ order to contract the insert buffer tree. Technically, this function is like
 a read-ahead function. */
 
 void buf_read_ibuf_merge_pages(
-    ibool sync,                       /*!< in: TRUE if the caller
-                                      wants this function to wait
-                                      for the highest address page
-                                      to get read in, before this
-                                      function returns */
-    const ulint *space_ids,           /*!< in: array of space ids */
+    bool sync,                     /*!< in: true if the caller
+                                    wants this function to wait
+                                    for the highest address page
+                                    to get read in, before this
+                                    function returns */
+    const ulint *space_ids,        /*!< in: array of space ids */
     const int64_t *space_versions, /*!< in: the spaces must have
                                      this version number
                                      (timestamp), otherwise we
@@ -85,19 +85,19 @@ void buf_read_ibuf_merge_pages(
                                      to cancel reads if DISCARD +
                                      IMPORT may have changed the
                                      tablespace size */
-    const ulint *page_nos,            /*!< in: array of page numbers
-                                      to read, with the highest page
-                                      number the last in the
-                                      array */
-    ulint n_stored);                  /*!< in: number of elements
-                                      in the arrays */
+    const ulint *page_nos,         /*!< in: array of page numbers
+                                   to read, with the highest page
+                                   number the last in the
+                                   array */
+    ulint n_stored);               /*!< in: number of elements
+                                   in the arrays */
 /*** Issues read requests for pages which recovery wants to read in. */
 
-void buf_read_recv_pages(ibool sync,            /*!< in: TRUE if the caller
-                                                wants this function to wait
-                                                for the highest address page
-                                                to get read in, before this
-                                                function returns */
+void buf_read_recv_pages(bool sync,             /*!< in: true if the caller
+                                                 wants this function to wait
+                                                 for the highest address page
+                                                 to get read in, before this
+                                                 function returns */
                          ulint space,           /*!< in: space id */
                          ulint zip_size,        /*!< in: compressed page size in
                                                 bytes, or 0 */

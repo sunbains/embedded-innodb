@@ -62,18 +62,18 @@ Completed by Sunny Bains and Marko Makela
 /** Set these in order ot enable debug printout. */
 /* @{ */
 /** Log the outcome of each row_merge_cmp() call, comparing records. */
-static ibool row_merge_print_cmp;
+static bool row_merge_print_cmp;
 /** Log each record read from temporary file. */
-static ibool row_merge_print_read;
+static bool row_merge_print_read;
 /** Log each record write to temporary file. */
-static ibool row_merge_print_write;
+static bool row_merge_print_write;
 /** Log each row_merge_blocks() call, merging two blocks of records to
 a bigger one. */
-static ibool row_merge_print_block;
+static bool row_merge_print_block;
 /** Log each block read from temporary file. */
-static ibool row_merge_print_block_read;
+static bool row_merge_print_block_read;
 /** Log each block read from temporary file. */
-static ibool row_merge_print_block_write;
+static bool row_merge_print_block_write;
 /* @} */
 #endif /* UNIV_DEBUG */
 
@@ -120,8 +120,8 @@ typedef struct row_merge_buf_struct row_merge_buf_t;
 
 /** Information about temporary files used in merge sort */
 struct merge_file_struct {
-  int fd;            /*!< file descriptor */
-  ulint offset;      /*!< file offset (end of file) */
+  int fd;         /*!< file descriptor */
+  ulint offset;   /*!< file offset (end of file) */
   uint64_t n_rec; /*!< number of records in the file */
 };
 
@@ -174,11 +174,12 @@ static row_merge_buf_t *row_merge_buf_create_low(
   ut_ad(max_tuples <= sizeof(row_merge_block_t));
   ut_ad(max_tuples < buf_size);
 
-  buf = reinterpret_cast<row_merge_buf_t*>(mem_heap_zalloc(heap, buf_size));
+  buf = reinterpret_cast<row_merge_buf_t *>(mem_heap_zalloc(heap, buf_size));
   buf->heap = heap;
   buf->index = index;
   buf->max_tuples = max_tuples;
-  buf->tuples = reinterpret_cast<const dfield_t**>(mem_heap_alloc(heap, 2 * max_tuples * sizeof *buf->tuples));
+  buf->tuples = reinterpret_cast<const dfield_t **>(
+      mem_heap_alloc(heap, 2 * max_tuples * sizeof *buf->tuples));
   buf->tmp_tuples = buf->tuples + max_tuples;
 
   return (buf);
@@ -189,10 +190,14 @@ static row_merge_buf_t *row_merge_buf_create_low(
 static row_merge_buf_t *
 row_merge_buf_create(dict_index_t *index) /*!< in: secondary index */
 {
-  auto max_tuples = sizeof(row_merge_block_t) / ut_max(1, dict_index_get_min_size(index));
-  auto buf_size = (sizeof(row_merge_buf_t)) + (max_tuples - 1) * sizeof row_merge_buf_t::tuples;
-  auto heap = static_cast<mem_heap_t*>(mem_heap_create(buf_size + sizeof(row_merge_block_t)));
-  auto row_merge_buf = row_merge_buf_create_low(heap, index, max_tuples, buf_size);
+  auto max_tuples =
+      sizeof(row_merge_block_t) / ut_max(1, dict_index_get_min_size(index));
+  auto buf_size = (sizeof(row_merge_buf_t)) +
+                  (max_tuples - 1) * sizeof row_merge_buf_t::tuples;
+  auto heap = static_cast<mem_heap_t *>(
+      mem_heap_create(buf_size + sizeof(row_merge_block_t)));
+  auto row_merge_buf =
+      row_merge_buf_create_low(heap, index, max_tuples, buf_size);
 
   return row_merge_buf;
 }
@@ -222,8 +227,8 @@ static void row_merge_buf_free(
 }
 
 /** Insert a data tuple into a sort buffer.
-@return	TRUE if added, FALSE if out of space */
-static ibool
+@return	true if added, false if out of space */
+static bool
 row_merge_buf_add(row_merge_buf_t *buf, /*!< in/out: sort buffer */
                   const dtuple_t *row,  /*!< in: row in clustered index */
                   const row_ext_t *ext) /*!< in: cache of externally stored
@@ -237,16 +242,17 @@ row_merge_buf_add(row_merge_buf_t *buf, /*!< in/out: sort buffer */
   dfield_t *field;
 
   if (buf->n_tuples >= buf->max_tuples) {
-    return (FALSE);
+    return (false);
   }
 
-  UNIV_PREFETCH_R(row->fields);
+  prefetch_r(row->fields);
 
   index = buf->index;
 
   n_fields = dict_index_get_n_fields(index);
 
-  auto entry = reinterpret_cast<dfield_t*>(mem_heap_alloc(buf->heap, n_fields * sizeof(dfield_t)));
+  auto entry = reinterpret_cast<dfield_t *>(
+      mem_heap_alloc(buf->heap, n_fields * sizeof(dfield_t)));
   buf->tuples[buf->n_tuples] = entry;
   field = entry;
 
@@ -270,11 +276,11 @@ row_merge_buf_add(row_merge_buf_t *buf, /*!< in/out: sort buffer */
     if (dfield_is_null(field)) {
       ut_ad(!(col->prtype & DATA_NOT_NULL));
       continue;
-    } else if (UNIV_LIKELY(!ext)) {
+    } else if (likely(!ext)) {
     } else if (dict_index_is_clust(index)) {
       /* Flag externally stored fields. */
       const byte *buf = row_ext_lookup(ext, col_no, &len);
-      if (UNIV_LIKELY_NULL(buf)) {
+      if (likely_null(buf)) {
         ut_a(buf != field_ref_zero);
         if (i < dict_index_get_n_unique(index)) {
           dfield_set_data(field, buf, len);
@@ -285,7 +291,7 @@ row_merge_buf_add(row_merge_buf_t *buf, /*!< in/out: sort buffer */
       }
     } else {
       const byte *buf = row_ext_lookup(ext, col_no, &len);
-      if (UNIV_LIKELY_NULL(buf)) {
+      if (likely_null(buf)) {
         ut_a(buf != field_ref_zero);
         dfield_set_data(field, buf, len);
       }
@@ -296,7 +302,7 @@ row_merge_buf_add(row_merge_buf_t *buf, /*!< in/out: sort buffer */
     if (ifield->prefix_len) {
       len = dtype_get_at_most_n_mbchars(col->prtype, col->mbminlen,
                                         col->mbmaxlen, ifield->prefix_len, len,
-                                        (char*) dfield_get_data(field));
+                                        (char *)dfield_get_data(field));
       dfield_set_len(field, len);
     }
 
@@ -348,7 +354,7 @@ row_merge_buf_add(row_merge_buf_t *buf, /*!< in/out: sort buffer */
 
   /* Reserve one byte for the end marker of row_merge_block_t. */
   if (buf->total_size + data_size >= sizeof(row_merge_block_t) - 1) {
-    return (FALSE);
+    return (false);
   }
 
   buf->total_size += data_size;
@@ -362,7 +368,7 @@ row_merge_buf_add(row_merge_buf_t *buf, /*!< in/out: sort buffer */
     dfield_dup(field++, buf->heap);
   } while (--n_fields);
 
-  return (TRUE);
+  return (true);
 }
 
 /** Structure for reporting duplicate records. */
@@ -406,7 +412,7 @@ static void row_merge_dup_report(
   rec = rec_convert_dtuple_to_rec(buf, index, tuple, n_ext);
   rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
 
-  if (UNIV_LIKELY_NULL(heap)) {
+  if (likely_null(heap)) {
     mem_heap_free(heap);
   }
 }
@@ -431,7 +437,7 @@ static int row_merge_tuple_cmp(
     cmp = cmp_dfield_dfield(cmp_ctx, a++, b++);
   } while (!cmp && --n_field);
 
-  if (UNIV_UNLIKELY(!cmp) && UNIV_LIKELY_NULL(dup)) {
+  if (unlikely(!cmp) && likely_null(dup)) {
     /* Report a duplicate value error if the tuples are
     logically equal.  NULL columns are logically inequal,
     although they are equal in the sorting order.  Find
@@ -573,8 +579,10 @@ row_merge_heap_create(const dict_index_t *index, /*!< in: record descriptor */
   ulint i = 1 + REC_OFFS_HEADER_SIZE + dict_index_get_n_fields(index);
   mem_heap_t *heap = mem_heap_create(2 * i * sizeof *offsets1);
 
-  *offsets1 = reinterpret_cast<ulint*>(mem_heap_alloc(heap, i * sizeof(*offsets1)));
-  *offsets2 = reinterpret_cast<ulint*>(mem_heap_alloc(heap, i * sizeof(*offsets2)));
+  *offsets1 =
+      reinterpret_cast<ulint *>(mem_heap_alloc(heap, i * sizeof(*offsets1)));
+  *offsets2 =
+      reinterpret_cast<ulint *>(mem_heap_alloc(heap, i * sizeof(*offsets2)));
 
   (*offsets1)[0] = (*offsets2)[0] = i;
   (*offsets1)[1] = (*offsets2)[1] = dict_index_get_n_fields(index);
@@ -591,7 +599,8 @@ static dict_index_t *row_merge_dict_table_get_index(
 {
   ulint i;
   dict_index_t *index;
-  auto column_names = static_cast<const char**>(mem_alloc(index_def->n_fields * sizeof(char*)));
+  auto column_names = static_cast<const char **>(
+      mem_alloc(index_def->n_fields * sizeof(char *)));
 
   for (i = 0; i < index_def->n_fields; ++i) {
     column_names[i] = index_def->fields[i].field_name;
@@ -606,13 +615,13 @@ static dict_index_t *row_merge_dict_table_get_index(
 }
 
 /** Read a merge block from the file system.
-@return	TRUE if request was successful, FALSE if fail */
-static ibool row_merge_read(int fd,       /*!< in: file descriptor */
-                            ulint offset, /*!< in: offset where to read */
-                            row_merge_block_t *buf) /*!< out: data */
+@return	true if request was successful, false if fail */
+static bool row_merge_read(int fd,       /*!< in: file descriptor */
+                           ulint offset, /*!< in: offset where to read */
+                           row_merge_block_t *buf) /*!< out: data */
 {
   uint64_t ofs = ((uint64_t)offset) * sizeof *buf;
-  ibool success;
+  bool success;
 
 #ifdef UNIV_DEBUG
   if (row_merge_print_block_read) {
@@ -623,19 +632,19 @@ static ibool row_merge_read(int fd,       /*!< in: file descriptor */
   success = os_file_read_no_error_handling(OS_FILE_FROM_FD(fd), buf,
                                            (ulint)(ofs & 0xFFFFFFFF),
                                            (ulint)(ofs >> 32), sizeof *buf);
-  if (UNIV_UNLIKELY(!success)) {
+  if (unlikely(!success)) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream, "  InnoDB: failed to read merge block at %lu\n", ofs);
   }
 
-  return (UNIV_LIKELY(success));
+  return (likely(success));
 }
 
 /** Read a merge block from the file system.
-@return	TRUE if request was successful, FALSE if fail */
-static ibool row_merge_write(int fd,          /*!< in: file descriptor */
-                             ulint offset,    /*!< in: offset where to write */
-                             const void *buf) /*!< in: data */
+@return	true if request was successful, false if fail */
+static bool row_merge_write(int fd,          /*!< in: file descriptor */
+                            ulint offset,    /*!< in: offset where to write */
+                            const void *buf) /*!< in: data */
 {
   uint64_t ofs = ((uint64_t)offset) * sizeof(row_merge_block_t);
 
@@ -645,9 +654,9 @@ static ibool row_merge_write(int fd,          /*!< in: file descriptor */
   }
 #endif /* UNIV_DEBUG */
 
-  return (UNIV_LIKELY(os_file_write(
-      "(merge)", OS_FILE_FROM_FD(fd), buf, (ulint)(ofs & 0xFFFFFFFF),
-      (ulint)(ofs >> 32), sizeof(row_merge_block_t))));
+  return (likely(os_file_write("(merge)", OS_FILE_FROM_FD(fd), buf,
+                               (ulint)(ofs & 0xFFFFFFFF), (ulint)(ofs >> 32),
+                               sizeof(row_merge_block_t))));
 }
 
 /** Read a merge record.
@@ -681,7 +690,7 @@ row_merge_read_rec(row_merge_block_t *block,  /*!< in/out: file buffer */
 
   extra_size = *b++;
 
-  if (UNIV_UNLIKELY(!extra_size)) {
+  if (unlikely(!extra_size)) {
     /* End of list */
     *mrec = NULL;
 #ifdef UNIV_DEBUG
@@ -696,7 +705,7 @@ row_merge_read_rec(row_merge_block_t *block,  /*!< in/out: file buffer */
   if (extra_size >= 0x80) {
     /* Read another byte of extra_size. */
 
-    if (UNIV_UNLIKELY(b >= block[1])) {
+    if (unlikely(b >= block[1])) {
       if (!row_merge_read(fd, ++(*foffs), block)) {
       err_exit:
         /* Signal I/O error. */
@@ -717,7 +726,7 @@ row_merge_read_rec(row_merge_block_t *block,  /*!< in/out: file buffer */
 
   /* Read the extra bytes. */
 
-  if (UNIV_UNLIKELY(b + extra_size >= block[1])) {
+  if (unlikely(b + extra_size >= block[1])) {
     /* The record spans two blocks.  Copy the entire record
     to the auxiliary buffer and handle this as a special
     case. */
@@ -766,7 +775,7 @@ row_merge_read_rec(row_merge_block_t *block,  /*!< in/out: file buffer */
 
   b += extra_size + data_size;
 
-  if (UNIV_LIKELY(b < block[1])) {
+  if (likely(b < block[1])) {
     /* The record fits entirely in the block.
     This is the normal case. */
     goto func_exit;
@@ -880,7 +889,7 @@ row_merge_write_rec(row_merge_block_t *block, /*!< in/out: file buffer */
 
   size = extra_size + (extra_size >= 0x80) + rec_offs_data_size(offsets);
 
-  if (UNIV_UNLIKELY(b + size >= block[1])) {
+  if (unlikely(b + size >= block[1])) {
     /* The record spans two blocks.
     Copy it to the temporary buffer first. */
     avail_size = block[1] - b;
@@ -992,13 +1001,13 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
     ulint n_index,                 /*!< in: number of indexes to create */
     row_merge_block_t *block)      /*!< in/out: file buffer */
 {
-  dict_index_t *clust_index;   /* Clustered index */
-  mem_heap_t *row_heap;        /* Heap memory to create
-                               clustered index records */
-  btr_pcur_t pcur;             /* Persistent cursor on the
-                               clustered index */
-  mtr_t mtr;                   /* Mini transaction */
-  db_err err = DB_SUCCESS;      /* Return code */
+  dict_index_t *clust_index; /* Clustered index */
+  mem_heap_t *row_heap;      /* Heap memory to create
+                             clustered index records */
+  btr_pcur_t pcur;           /* Persistent cursor on the
+                             clustered index */
+  mtr_t mtr;                 /* Mini transaction */
+  db_err err = DB_SUCCESS;   /* Return code */
   ulint i;
   ulint n_nonnull = 0;   /* number of columns
                          changed to NOT NULL */
@@ -1014,7 +1023,8 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
 
   /* Create and initialize memory for record buffers */
 
-  auto merge_buf = static_cast<row_merge_buf_t**>(mem_alloc(n_index * sizeof(row_merge_buf_t*)));
+  auto merge_buf = static_cast<row_merge_buf_t **>(
+      mem_alloc(n_index * sizeof(row_merge_buf_t *)));
 
   for (i = 0; i < n_index; i++) {
     merge_buf[i] = row_merge_buf_create(index[i]);
@@ -1027,10 +1037,10 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
 
   clust_index = dict_table_get_first_index(old_table);
 
-  btr_pcur_open_at_index_side(TRUE, clust_index, BTR_SEARCH_LEAF, &pcur, TRUE,
+  btr_pcur_open_at_index_side(true, clust_index, BTR_SEARCH_LEAF, &pcur, true,
                               &mtr);
 
-  if (UNIV_UNLIKELY(old_table != new_table)) {
+  if (unlikely(old_table != new_table)) {
     ulint n_cols = dict_table_get_n_cols(old_table);
 
     /* A primary key will be created.  Identify the
@@ -1041,7 +1051,7 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
 
     ut_a(n_cols == dict_table_get_n_cols(new_table));
 
-    nonnull = static_cast<ulint*>(mem_alloc(n_cols * sizeof *nonnull));
+    nonnull = static_cast<ulint *>(mem_alloc(n_cols * sizeof *nonnull));
 
     for (i = 0; i < n_cols; i++) {
       if (dict_table_get_nth_col(old_table, i)->prtype & DATA_NOT_NULL) {
@@ -1069,18 +1079,18 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
     ulint *offsets;
     dtuple_t *row = NULL;
     row_ext_t *ext;
-    ibool has_next = TRUE;
+    bool has_next = true;
 
     btr_pcur_move_to_next_on_page(&pcur);
 
     /* When switching pages, commit the mini-transaction
     in order to release the latch on the old page. */
 
-    merge_file_t* file{};
+    merge_file_t *file{};
     const dict_index_t *index{};
 
     if (btr_pcur_is_after_last_on_page(&pcur)) {
-      if (UNIV_UNLIKELY(trx_is_interrupted(trx))) {
+      if (unlikely(trx_is_interrupted(trx))) {
         i = 0;
         err = DB_INTERRUPTED;
         goto err_exit;
@@ -1095,7 +1105,7 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
 
     row_merge_buf_t *buf;
 
-    if (UNIV_LIKELY(has_next)) {
+    if (likely(has_next)) {
       rec = btr_pcur_get_rec(&pcur);
       offsets =
           rec_get_offsets(rec, clust_index, NULL, ULINT_UNDEFINED, &row_heap);
@@ -1112,7 +1122,7 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
       row = row_build(ROW_COPY_POINTERS, clust_index, rec, offsets, new_table,
                       &ext, row_heap);
 
-      if (UNIV_LIKELY_NULL(nonnull)) {
+      if (likely_null(nonnull)) {
         for (i = 0; i < n_nonnull; i++) {
           dfield_t *field = &row->fields[nonnull[i]];
           dtype_t *field_type = dfield_get_type(field);
@@ -1138,7 +1148,7 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
       buf = merge_buf[i];
       index = buf->index;
 
-      if (UNIV_LIKELY(row && row_merge_buf_add(buf, row, ext))) {
+      if (likely(row && row_merge_buf_add(buf, row, ext))) {
         file->n_rec++;
         continue;
       }
@@ -1180,12 +1190,12 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
       UNIV_MEM_INVALID(block[0], sizeof block[0]);
       merge_buf[i] = row_merge_buf_empty(buf);
 
-      if (UNIV_LIKELY(row != NULL)) {
+      if (likely(row != NULL)) {
         /* Try writing the record again, now
         that the buffer has been written out
         and emptied. */
 
-        if (UNIV_UNLIKELY(!row_merge_buf_add(buf, row, ext))) {
+        if (unlikely(!row_merge_buf_add(buf, row, ext))) {
           /* An empty buffer should have enough
           room for at least one record. */
           ut_error;
@@ -1197,7 +1207,7 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
 
     mem_heap_empty(row_heap);
 
-    if (UNIV_UNLIKELY(!has_next)) {
+    if (unlikely(!has_next)) {
       goto func_exit;
     }
   }
@@ -1207,7 +1217,7 @@ func_exit:
   mtr_commit(&mtr);
   mem_heap_free(row_heap);
 
-  if (UNIV_LIKELY_NULL(nonnull)) {
+  if (likely_null(nonnull)) {
     mem_free(nonnull);
   }
 
@@ -1229,12 +1239,12 @@ func_exit:
   do {                                                                         \
     b2 = row_merge_write_rec(&block[2], &buf[2], b2, of->fd, &of->offset,      \
                              mrec##N, offsets##N);                             \
-    if (UNIV_UNLIKELY(!b2 || ++of->n_rec > file->n_rec)) {                     \
+    if (unlikely(!b2 || ++of->n_rec > file->n_rec)) {                          \
       goto corrupt;                                                            \
     }                                                                          \
     b##N = row_merge_read_rec(&block[N], &buf[N], b##N, index, file->fd,       \
                               foffs##N, &mrec##N, offsets##N);                 \
-    if (UNIV_UNLIKELY(!b##N)) {                                                \
+    if (unlikely(!b##N)) {                                                     \
       if (mrec##N) {                                                           \
         goto corrupt;                                                          \
       }                                                                        \
@@ -1299,7 +1309,7 @@ row_merge_blocks(const dict_index_t *index, /*!< in: index being created */
                           &mrec0, offsets0);
   b1 = row_merge_read_rec(&block[1], &buf[1], b1, index, file->fd, foffs1,
                           &mrec1, offsets1);
-  if (UNIV_UNLIKELY(!b0 && mrec0) || UNIV_UNLIKELY(!b1 && mrec1)) {
+  if (unlikely(!b0 && mrec0) || unlikely(!b1 && mrec1)) {
 
     goto corrupt;
   }
@@ -1307,7 +1317,7 @@ row_merge_blocks(const dict_index_t *index, /*!< in: index being created */
   while (mrec0 && mrec1) {
     switch (row_merge_cmp(mrec0, mrec1, offsets0, offsets1, index)) {
     case 0:
-      if (UNIV_UNLIKELY(dict_index_is_unique(index))) {
+      if (unlikely(dict_index_is_unique(index))) {
         mem_heap_free(heap);
         return (DB_DUPLICATE_KEY);
       }
@@ -1345,8 +1355,8 @@ done1:
 }
 
 /** Copy a block of index entries.
-@return	TRUE on success, FALSE on failure */
-static __attribute__((nonnull)) ibool
+@return	true on success, false on failure */
+static __attribute__((nonnull)) bool
 row_merge_blocks_copy(const dict_index_t *index, /*!< in: index being created */
                       const merge_file_t *file,  /*!< in: input file */
                       row_merge_block_t *block,  /*!< in/out: 3 buffers */
@@ -1380,7 +1390,7 @@ row_merge_blocks_copy(const dict_index_t *index, /*!< in: index being created */
   if (!row_merge_read(file->fd, *foffs0, &block[0])) {
   corrupt:
     mem_heap_free(heap);
-    return (FALSE);
+    return (false);
   }
 
   b0 = block[0];
@@ -1388,7 +1398,7 @@ row_merge_blocks_copy(const dict_index_t *index, /*!< in: index being created */
 
   b0 = row_merge_read_rec(&block[0], &buf[0], b0, index, file->fd, foffs0,
                           &mrec0, offsets0);
-  if (UNIV_UNLIKELY(!b0 && mrec0)) {
+  if (unlikely(!b0 && mrec0)) {
 
     goto corrupt;
   }
@@ -1425,7 +1435,7 @@ row_merge(trx_t *trx,                /*!< in: transaction */
 {
   ulint foffs0;    /*!< first input offset */
   ulint foffs1;    /*!< second input offset */
-  db_err err;     /*!< error code */
+  db_err err;      /*!< error code */
   merge_file_t of; /*!< output file */
   const ulint ihalf = *half;
   /*!< half the input file */
@@ -1446,7 +1456,7 @@ row_merge(trx_t *trx,                /*!< in: transaction */
   for (; foffs0 < ihalf && foffs1 < file->offset; foffs0++, foffs1++) {
     ulint ahalf; /*!< arithmetic half the input file */
 
-    if (UNIV_UNLIKELY(trx_is_interrupted(trx))) {
+    if (unlikely(trx_is_interrupted(trx))) {
       return (DB_INTERRUPTED);
     }
 
@@ -1476,7 +1486,7 @@ row_merge(trx_t *trx,                /*!< in: transaction */
   /* Copy the last blocks, if there are any. */
 
   while (foffs0 < ihalf) {
-    if (UNIV_UNLIKELY(trx_is_interrupted(trx))) {
+    if (unlikely(trx_is_interrupted(trx))) {
       return (DB_INTERRUPTED);
     }
 
@@ -1488,7 +1498,7 @@ row_merge(trx_t *trx,                /*!< in: transaction */
   ut_ad(foffs0 == ihalf);
 
   while (foffs1 < file->offset) {
-    if (UNIV_UNLIKELY(trx_is_interrupted(trx))) {
+    if (unlikely(trx_is_interrupted(trx))) {
       return (DB_INTERRUPTED);
     }
 
@@ -1499,7 +1509,7 @@ row_merge(trx_t *trx,                /*!< in: transaction */
 
   ut_ad(foffs1 == file->offset);
 
-  if (UNIV_UNLIKELY(of.n_rec != file->n_rec)) {
+  if (unlikely(of.n_rec != file->n_rec)) {
     return (DB_CORRUPTION);
   }
 
@@ -1625,7 +1635,8 @@ static db_err row_merge_insert_index_tuples(
 
   {
     ulint i = 1 + REC_OFFS_HEADER_SIZE + dict_index_get_n_fields(index);
-    offsets = reinterpret_cast<ulint*>(mem_heap_alloc(graph_heap, i * sizeof *offsets));
+    offsets = reinterpret_cast<ulint *>(
+        mem_heap_alloc(graph_heap, i * sizeof *offsets));
     offsets[0] = i;
     offsets[1] = dict_index_get_n_fields(index);
   }
@@ -1641,7 +1652,7 @@ static db_err row_merge_insert_index_tuples(
       ulint n_ext;
 
       b = row_merge_read_rec(block, &buf, b, index, fd, &foffs, &mrec, offsets);
-      if (UNIV_UNLIKELY(!b)) {
+      if (unlikely(!b)) {
         /* End of list, or I/O error */
         if (mrec) {
           err = DB_CORRUPTION;
@@ -1652,7 +1663,7 @@ static db_err row_merge_insert_index_tuples(
       dtuple =
           row_rec_to_index_entry_low(mrec, index, offsets, &n_ext, tuple_heap);
 
-      if (UNIV_UNLIKELY(n_ext)) {
+      if (unlikely(n_ext)) {
         row_merge_copy_blobs(mrec, offsets, zip_size, dtuple, tuple_heap);
       }
 
@@ -1666,9 +1677,9 @@ static db_err row_merge_insert_index_tuples(
         thr->run_node = thr;
         thr->prev_node = thr->common.parent;
 
-        err = row_ins_index_entry(index, dtuple, 0, FALSE, thr);
+        err = row_ins_index_entry(index, dtuple, 0, false, thr);
 
-        if (UNIV_LIKELY(err == DB_SUCCESS)) {
+        if (likely(err == DB_SUCCESS)) {
 
           goto next_rec;
         }
@@ -1749,8 +1760,7 @@ static void row_merge_file_destroy(
 /** Determine the precise type of a column that is added to a tem
 if a column must be constrained NOT NULL.
 @return	col->prtype, possibly ORed with DATA_NOT_NULL */
-UNIV_INLINE
-ulint row_merge_col_prtype(
+inline ulint row_merge_col_prtype(
     const dict_col_t *col,              /*!< in: column */
     const char *col_name,               /*!< in: name of the column */
     const merge_index_def_t *index_def) /*!< in: the index definition
@@ -1789,7 +1799,8 @@ dict_table_t *row_merge_create_temporary_table(
   ulint i;
   dict_table_t *new_table = NULL;
   ulint n_cols = dict_table_get_n_user_cols(table);
-  db_err err;;
+  db_err err;
+  ;
   mem_heap_t *heap = mem_heap_create(1000);
 
   ut_ad(table_name);
@@ -1845,7 +1856,7 @@ db_err row_merge_rename_indexes(trx_t *trx, dict_table_t *table) {
 
   pars_info_add_dulint_literal(info, "tableid", table->id);
 
-  err = que_eval_sql(info, rename_indexes, FALSE, trx);
+  err = que_eval_sql(info, rename_indexes, false, trx);
 
   if (err == DB_SUCCESS) {
     dict_index_t *index = dict_table_get_first_index(table);
@@ -1862,7 +1873,8 @@ db_err row_merge_rename_indexes(trx_t *trx, dict_table_t *table) {
   return (err);
 }
 
-db_err row_merge_rename_tables(dict_table_t *old_table, dict_table_t *new_table, const char *tmp_name, trx_t *trx) {
+db_err row_merge_rename_tables(dict_table_t *old_table, dict_table_t *new_table,
+                               const char *tmp_name, trx_t *trx) {
   db_err err = DB_ERROR;
   pars_info_t *info;
   const char *old_name = old_table->name;
@@ -1892,7 +1904,7 @@ db_err row_merge_rename_tables(dict_table_t *old_table, dict_table_t *new_table,
                      "UPDATE SYS_TABLES SET NAME = :old_name\n"
                      " WHERE NAME = :new_name;\n"
                      "END;\n",
-                     FALSE, trx);
+                     false, trx);
 
   if (err != DB_SUCCESS) {
 
@@ -1902,19 +1914,19 @@ db_err row_merge_rename_tables(dict_table_t *old_table, dict_table_t *new_table,
   /* The following calls will also rename the .ibd data files if
   the tables are stored in a single-table tablespace */
 
-  if (!dict_table_rename_in_cache(old_table, tmp_name, FALSE) ||
-      !dict_table_rename_in_cache(new_table, old_name, FALSE)) {
+  if (!dict_table_rename_in_cache(old_table, tmp_name, false) ||
+      !dict_table_rename_in_cache(new_table, old_name, false)) {
 
     err = DB_ERROR;
     goto err_exit;
   }
 
-  err = dict_load_foreigns(old_name, TRUE);
+  err = dict_load_foreigns(old_name, true);
 
   if (err != DB_SUCCESS) {
   err_exit:
     trx->error_state = DB_SUCCESS;
-    trx_general_rollback(trx, FALSE, NULL);
+    trx_general_rollback(trx, false, NULL);
     trx->error_state = DB_SUCCESS;
   }
 
@@ -1975,7 +1987,7 @@ dict_index_t *row_merge_create_index(
 
 /** Check if a transaction can use an index. */
 
-ibool row_merge_is_index_usable(
+bool row_merge_is_index_usable(
     const trx_t *trx,          /*!< in: transaction */
     const dict_index_t *index) /*!< in: index to check */
 {
@@ -1992,7 +2004,7 @@ db_err row_merge_drop_table(trx_t *trx, dict_table_t *table) {
   /* There must be no open transactions on the table. */
   ut_a(table->n_handles_opened == 0);
 
-  err = ddl_drop_table(table->name, trx, FALSE);
+  err = ddl_drop_table(table->name, trx, false);
   trx_commit(trx);
 
   return (err);
@@ -2026,8 +2038,10 @@ db_err row_merge_build_indexes(
   /* Allocate memory for merge file data structure and initialize fields */
 
   auto block_size = 3 * sizeof(row_merge_block_t);
-  auto block = static_cast<row_merge_block_t*>(os_mem_alloc_large(&block_size));
-  auto merge_files = static_cast<merge_file_t*>(mem_alloc(n_indexes * sizeof(merge_file_t)));
+  auto block =
+      static_cast<row_merge_block_t *>(os_mem_alloc_large(&block_size));
+  auto merge_files =
+      static_cast<merge_file_t *>(mem_alloc(n_indexes * sizeof(merge_file_t)));
 
   for (i = 0; i < n_indexes; i++) {
 
@@ -2039,8 +2053,8 @@ db_err row_merge_build_indexes(
   /* Read clustered index of the table and create files for
   secondary index entries for merge sort */
 
-  err = row_merge_read_clustered_index(
-      trx, table, old_table, new_table, indexes, merge_files, n_indexes, block);
+  err = row_merge_read_clustered_index(trx, table, old_table, new_table,
+                                       indexes, merge_files, n_indexes, block);
 
   if (err != DB_SUCCESS) {
 
@@ -2051,10 +2065,13 @@ db_err row_merge_build_indexes(
   sorting and inserting. */
 
   for (i = 0; i < n_indexes; i++) {
-    err = row_merge_sort(trx, indexes[i], &merge_files[i], block, &tmpfd, table);
+    err =
+        row_merge_sort(trx, indexes[i], &merge_files[i], block, &tmpfd, table);
 
     if (err == DB_SUCCESS) {
-      err = row_merge_insert_index_tuples(trx, indexes[i], new_table, dict_table_zip_size(old_table), merge_files[i].fd, block);
+      err = row_merge_insert_index_tuples(trx, indexes[i], new_table,
+                                          dict_table_zip_size(old_table),
+                                          merge_files[i].fd, block);
     }
 
     /* Close the temporary file to free up space. */

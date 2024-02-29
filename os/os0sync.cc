@@ -50,11 +50,11 @@ struct os_mutex_struct {
 /** Mutex protecting counts and the lists of OS mutexes and events */
 os_mutex_t os_sync_mutex;
 
-/** TRUE if os_sync_mutex has been initialized */
-static ibool os_sync_mutex_inited = FALSE;
+/** true if os_sync_mutex has been initialized */
+static bool os_sync_mutex_inited = false;
 
-/** TRUE when os_sync_free() is being executed */
-static ibool os_sync_free_called = FALSE;
+/** true when os_sync_free() is being executed */
+static bool os_sync_free_called = false;
 
 /** This is incremented by 1 in os_thread_create and decremented by 1 in
 os_thread_exit */
@@ -77,8 +77,8 @@ static void os_event_free_internal(os_event_t event);
 
 void os_sync_var_init() {
   os_sync_mutex = nullptr;
-  os_sync_mutex_inited = FALSE;
-  os_sync_free_called = FALSE;
+  os_sync_mutex_inited = false;
+  os_sync_free_called = false;
   os_thread_count = 0;
 
   memset(&os_event_list, 0x0, sizeof(os_event_list));
@@ -94,17 +94,17 @@ void os_sync_init(void) {
   UT_LIST_INIT(os_mutex_list);
 
   os_sync_mutex = nullptr;
-  os_sync_mutex_inited = FALSE;
+  os_sync_mutex_inited = false;
 
   os_sync_mutex = os_mutex_create(nullptr);
 
-  os_sync_mutex_inited = TRUE;
+  os_sync_mutex_inited = true;
 }
 
 void os_sync_free(void) {
   os_mutex_t mutex;
 
-  os_sync_free_called = TRUE;
+  os_sync_free_called = true;
   auto event = UT_LIST_GET_FIRST(os_event_list);
 
   while (event) {
@@ -118,29 +118,30 @@ void os_sync_free(void) {
 
   while (mutex) {
     if (mutex == os_sync_mutex) {
-      /* Set the flag to FALSE so that we do not try to
+      /* Set the flag to false so that we do not try to
       reserve os_sync_mutex any more in remaining freeing
       operations in shutdown */
-      os_sync_mutex_inited = FALSE;
+      os_sync_mutex_inited = false;
     }
 
     os_mutex_free(mutex);
 
     mutex = UT_LIST_GET_FIRST(os_mutex_list);
   }
-  os_sync_free_called = FALSE;
+  os_sync_free_called = false;
 }
 
 os_event_t os_event_create(const char *name) {
   UT_NOT_USED(name);
 
-  auto event = static_cast<os_event_struct*>(ut_malloc(sizeof(os_event_struct)));
+  auto event =
+      static_cast<os_event_struct *>(ut_malloc(sizeof(os_event_struct)));
 
   os_fast_mutex_init(&event->os_mutex);
 
   ut_a(0 == pthread_cond_init(&(event->cond_var), nullptr));
 
-  event->is_set = FALSE;
+  event->is_set = false;
 
   /* We return this value in os_event_reset(), which can then be
   be used to pass to the os_event_wait_low(). The value of zero
@@ -175,7 +176,7 @@ void os_event_set(os_event_t event) {
   os_fast_mutex_lock(&(event->os_mutex));
 
   if (!event->is_set) {
-    event->is_set = TRUE;
+    event->is_set = true;
     event->signal_count += 1;
     ut_a(0 == pthread_cond_broadcast(&(event->cond_var)));
   }
@@ -191,7 +192,7 @@ int64_t os_event_reset(os_event_t event) {
   os_fast_mutex_lock(&(event->os_mutex));
 
   if (event->is_set) {
-    event->is_set = FALSE;
+    event->is_set = false;
   }
   ret = event->signal_count;
 
@@ -248,7 +249,7 @@ void os_event_wait_low(os_event_t event, int64_t reset_sig_count) {
   }
 
   for (;;) {
-    if (event->is_set == TRUE || event->signal_count != old_signal_count) {
+    if (event->is_set == true || event->signal_count != old_signal_count) {
 
       os_fast_mutex_unlock(&(event->os_mutex));
 
@@ -271,17 +272,19 @@ void os_event_wait_low(os_event_t event, int64_t reset_sig_count) {
 os_mutex_t os_mutex_create(const char *name) {
   UT_NOT_USED(name);
 
-  auto mutex = static_cast<os_fast_mutex_t*>(ut_malloc(sizeof(os_fast_mutex_t)));
+  auto mutex =
+      static_cast<os_fast_mutex_t *>(ut_malloc(sizeof(os_fast_mutex_t)));
 
   os_fast_mutex_init(mutex);
 
-  auto mutex_str = static_cast<os_mutex_str_t*>(ut_malloc(sizeof(os_mutex_str_t)));
+  auto mutex_str =
+      static_cast<os_mutex_str_t *>(ut_malloc(sizeof(os_mutex_str_t)));
 
   mutex_str->handle = mutex;
   mutex_str->count = 0;
   mutex_str->event = os_event_create(nullptr);
 
-  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+  if (likely(os_sync_mutex_inited)) {
     /* When creating os_sync_mutex itself we cannot reserve it */
     os_mutex_enter(os_sync_mutex);
   }
@@ -290,7 +293,7 @@ os_mutex_t os_mutex_create(const char *name) {
 
   os_mutex_count++;
 
-  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+  if (likely(os_sync_mutex_inited)) {
     os_mutex_exit(os_sync_mutex);
   }
 
@@ -298,7 +301,7 @@ os_mutex_t os_mutex_create(const char *name) {
 }
 
 void os_mutex_enter(os_mutex_t mutex) {
-  os_fast_mutex_lock(static_cast<os_fast_mutex_t*>(mutex->handle));
+  os_fast_mutex_lock(static_cast<os_fast_mutex_t *>(mutex->handle));
 
   ++mutex->count;
 
@@ -312,17 +315,17 @@ void os_mutex_exit(os_mutex_t mutex) {
 
   --mutex->count;
 
-  os_fast_mutex_unlock(static_cast<os_fast_mutex_t*>(mutex->handle));
+  os_fast_mutex_unlock(static_cast<os_fast_mutex_t *>(mutex->handle));
 }
 
 void os_mutex_free(os_mutex_t mutex) {
   ut_a(mutex);
 
-  if (UNIV_LIKELY(!os_sync_free_called)) {
+  if (likely(!os_sync_free_called)) {
     os_event_free_internal(mutex->event);
   }
 
-  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+  if (likely(os_sync_mutex_inited)) {
     os_mutex_enter(os_sync_mutex);
   }
 
@@ -330,11 +333,11 @@ void os_mutex_free(os_mutex_t mutex) {
 
   --os_mutex_count;
 
-  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+  if (likely(os_sync_mutex_inited)) {
     os_mutex_exit(os_sync_mutex);
   }
 
-  os_fast_mutex_free(static_cast<os_fast_mutex_t*>(mutex->handle));
+  os_fast_mutex_free(static_cast<os_fast_mutex_t *>(mutex->handle));
   ut_free(mutex->handle);
   ut_free(mutex);
 }
@@ -342,7 +345,7 @@ void os_mutex_free(os_mutex_t mutex) {
 void os_fast_mutex_init(os_fast_mutex_t *fast_mutex) {
   ut_a(0 == pthread_mutex_init(fast_mutex, nullptr));
 
-  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+  if (likely(os_sync_mutex_inited)) {
     /* When creating os_sync_mutex itself (in Unix) we cannot
     reserve it */
 
@@ -351,7 +354,7 @@ void os_fast_mutex_init(os_fast_mutex_t *fast_mutex) {
 
   os_fast_mutex_count++;
 
-  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+  if (likely(os_sync_mutex_inited)) {
     os_mutex_exit(os_sync_mutex);
   }
 }
@@ -367,7 +370,7 @@ void os_fast_mutex_unlock(os_fast_mutex_t *fast_mutex) {
 void os_fast_mutex_free(os_fast_mutex_t *fast_mutex) {
   auto ret = pthread_mutex_destroy(fast_mutex);
 
-  if (UNIV_UNLIKELY(ret != 0)) {
+  if (unlikely(ret != 0)) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
               "  InnoDB: error: return value %lu when calling\n"
@@ -379,7 +382,7 @@ void os_fast_mutex_free(os_fast_mutex_t *fast_mutex) {
     ib_logger(ib_stream, "\n");
   }
 
-  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+  if (likely(os_sync_mutex_inited)) {
     /* When freeing the last mutexes, we have
     already freed os_sync_mutex */
 
@@ -389,7 +392,7 @@ void os_fast_mutex_free(os_fast_mutex_t *fast_mutex) {
   ut_ad(os_fast_mutex_count > 0);
   --os_fast_mutex_count;
 
-  if (UNIV_LIKELY(os_sync_mutex_inited)) {
+  if (likely(os_sync_mutex_inited)) {
     os_mutex_exit(os_sync_mutex);
   }
 }

@@ -59,7 +59,7 @@ dict_mem_table_create(const char *name, /*!< in: table name */
 
   heap = mem_heap_create(DICT_HEAP_SIZE);
 
-  table = (dict_table_t*) mem_heap_zalloc(heap, sizeof(dict_table_t));
+  table = (dict_table_t *)mem_heap_zalloc(heap, sizeof(dict_table_t));
 
   table->heap = heap;
 
@@ -68,8 +68,8 @@ dict_mem_table_create(const char *name, /*!< in: table name */
   table->space = (unsigned int)space;
   table->n_cols = (unsigned int)(n_cols + DATA_N_SYS_COLS);
 
-  table->cols =
-      (dict_col_t*) mem_heap_alloc(heap, (n_cols + DATA_N_SYS_COLS) * sizeof(dict_col_t));
+  table->cols = (dict_col_t *)mem_heap_alloc(heap, (n_cols + DATA_N_SYS_COLS) *
+                                                       sizeof(dict_col_t));
 
   ut_d(table->magic_n = DICT_TABLE_MAGIC_N);
   return (table);
@@ -81,7 +81,7 @@ void dict_mem_table_free(dict_table_t *table) /*!< in: table */
 {
   ut_ad(table);
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
-  ut_d(table->cached = FALSE);
+  ut_d(table->cached = false);
 
   mem_heap_free(table->heap);
 }
@@ -119,7 +119,7 @@ dict_add_col_name(const char *col_names, /*!< in: existing column names, or
   new_len = strlen(name) + 1;
   total_len = old_len + new_len;
 
-  res = (char*) mem_heap_alloc(heap, total_len);
+  res = (char *)mem_heap_alloc(heap, total_len);
 
   if (old_len > 0) {
     memcpy(res, col_names, old_len);
@@ -154,12 +154,12 @@ void dict_mem_table_add_col(
   i = table->n_def++;
 
   if (name) {
-    if (UNIV_UNLIKELY(table->n_def == table->n_cols)) {
+    if (unlikely(table->n_def == table->n_cols)) {
       heap = table->heap;
     }
-    if (UNIV_LIKELY(i) && UNIV_UNLIKELY(!table->col_names)) {
+    if (likely(i) && unlikely(!table->col_names)) {
       /* All preceding column names are empty. */
-      auto s = (char*) mem_heap_zalloc(heap, table->n_def);
+      auto s = (char *)mem_heap_zalloc(heap, table->n_def);
       table->col_names = s;
     }
 
@@ -199,7 +199,7 @@ dict_mem_index_create(const char *table_name, /*!< in: table name */
   ut_ad(table_name && index_name);
 
   auto heap = mem_heap_create(DICT_HEAP_SIZE);
-  auto index = (dict_index_t*) mem_heap_zalloc(heap, sizeof(dict_index_t));
+  auto index = (dict_index_t *)mem_heap_zalloc(heap, sizeof(dict_index_t));
 
   index->heap = heap;
 
@@ -210,7 +210,8 @@ dict_mem_index_create(const char *table_name, /*!< in: table name */
   index->name = mem_heap_strdup(heap, index_name);
   index->table_name = table_name;
   index->n_fields = (unsigned int)n_fields;
-  index->fields = (dict_field_t*) mem_heap_alloc(heap, 1 + n_fields * sizeof(dict_field_t));
+  index->fields =
+      (dict_field_t *)mem_heap_alloc(heap, 1 + n_fields * sizeof(dict_field_t));
   /* The '1 +' above prevents allocation
   of an empty mem block */
 #ifdef UNIV_DEBUG
@@ -221,7 +222,8 @@ dict_mem_index_create(const char *table_name, /*!< in: table name */
 
 dict_foreign_t *dict_mem_foreign_create(void) {
   auto heap = mem_heap_create(100);
-  auto foreign = (dict_foreign_t*) mem_heap_zalloc(heap, sizeof(dict_foreign_t));
+  auto foreign =
+      (dict_foreign_t *)mem_heap_zalloc(heap, sizeof(dict_foreign_t));
 
   foreign->heap = heap;
 

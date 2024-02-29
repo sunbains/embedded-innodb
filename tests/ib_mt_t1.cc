@@ -72,7 +72,8 @@ static ib_err_t create_t1(void *arg) /*!< in: arguments for callback */
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
 
-  snprintf(table_name, sizeof(table_name), "%s/%s", tbl->m_db_name.c_str(), tbl->m_name.c_str());
+  snprintf(table_name, sizeof(table_name), "%s/%s", tbl->m_db_name.c_str(),
+           tbl->m_name.c_str());
 
   /* Pass a table page size of 0, ie., use default page size. */
   err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl->format,
@@ -158,14 +159,15 @@ static ib_err_t insert_t1(void *arg) /*!< in: arguments for callback */
   int zero = 0;
   ib_crsr_t crsr = NULL;
   ib_tpl_t tpl = NULL;
-  char *ptr = (char*) malloc(8192);
+  char *ptr = (char *)malloc(8192);
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
 
   // fprintf(stderr, "t1: INSERT\n");
   assert(sizeof(val) == 4);
 
-  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx, &crsr);
+  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx,
+                   &crsr);
   if (err == DB_SUCCESS) {
     err = ib_cursor_lock(crsr, IB_LOCK_IX);
   }
@@ -247,7 +249,8 @@ static ib_err_t update_t1(void *arg) /*!< in: arguments for callback */
 
   // fprintf(stderr, "t1: UPDATE\n");
 
-  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx, &crsr);
+  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx,
+                   &crsr);
   if (err != DB_SUCCESS) {
     goto err_exit;
   }
@@ -302,7 +305,7 @@ static ib_err_t update_t1(void *arg) /*!< in: arguments for callback */
     assert(err == DB_SUCCESS);
 
     /* Get the first column value. */
-    first = (const char*)ib_col_get_value(old_tpl, 0);
+    first = (const char *)ib_col_get_value(old_tpl, 0);
     ib_col_get_meta(old_tpl, 0, &col_meta);
 
     /* There are no SQL_NULL values in our test data. */
@@ -386,7 +389,8 @@ static ib_err_t delete_t1(void *arg) /*!< in: arguments for callback */
 
   // fprintf(stderr, "t1: DELETE\n");
 
-  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx, &crsr);
+  err = open_table(tbl->m_db_name.c_str(), tbl->m_name.c_str(), cb_arg->trx,
+                   &crsr);
   if (err != DB_SUCCESS) {
     goto err_exit;
   }

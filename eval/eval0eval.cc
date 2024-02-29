@@ -40,10 +40,11 @@ eval_node_alloc_val_buf */
 static byte eval_dummy;
 
 byte *eval_node_alloc_val_buf(que_node_t *node, ulint size) {
-  ut_ad(que_node_get_type(node) == QUE_NODE_SYMBOL || que_node_get_type(node) == QUE_NODE_FUNC);
+  ut_ad(que_node_get_type(node) == QUE_NODE_SYMBOL ||
+        que_node_get_type(node) == QUE_NODE_FUNC);
 
   auto dfield = que_node_get_val(node);
-  auto data = (byte*) dfield_get_data(dfield);
+  auto data = (byte *)dfield_get_data(dfield);
 
   if (data && data != &eval_dummy) {
     mem_free(data);
@@ -52,7 +53,7 @@ byte *eval_node_alloc_val_buf(que_node_t *node, ulint size) {
   if (size == 0) {
     data = &eval_dummy;
   } else {
-    data = (byte*) mem_alloc(size);
+    data = (byte *)mem_alloc(size);
   }
 
   que_node_set_val_buf_size(node, size);
@@ -63,11 +64,12 @@ byte *eval_node_alloc_val_buf(que_node_t *node, ulint size) {
 }
 
 void eval_node_free_val_buf(que_node_t *node) {
-  ut_ad(que_node_get_type(node) == QUE_NODE_SYMBOL || que_node_get_type(node) == QUE_NODE_FUNC);
+  ut_ad(que_node_get_type(node) == QUE_NODE_SYMBOL ||
+        que_node_get_type(node) == QUE_NODE_FUNC);
 
   auto dfield = que_node_get_val(node);
 
-  auto data = (byte*) dfield_get_data(dfield);
+  auto data = (byte *)dfield_get_data(dfield);
 
   if (que_node_get_val_buf_size(node) > 0) {
     ut_a(data);
@@ -76,66 +78,67 @@ void eval_node_free_val_buf(que_node_t *node) {
   }
 }
 
-ibool eval_cmp(func_node_t *cmp_node) {
+bool eval_cmp(func_node_t *cmp_node) {
   ut_ad(que_node_get_type(cmp_node) == QUE_NODE_FUNC);
 
   auto arg1 = cmp_node->args;
   auto arg2 = que_node_get_next(arg1);
-  auto res = cmp_dfield_dfield(NULL, que_node_get_val(arg1), que_node_get_val(arg2));
-  auto val = TRUE;
+  auto res =
+      cmp_dfield_dfield(NULL, que_node_get_val(arg1), que_node_get_val(arg2));
+  auto val = true;
   auto func = cmp_node->func;
 
   if (func == '=') {
     if (res != 0) {
-      val = FALSE;
+      val = false;
     }
   } else if (func == '<') {
     if (res != -1) {
-      val = FALSE;
+      val = false;
     }
   } else if (func == PARS_LE_TOKEN) {
     if (res == 1) {
-      val = FALSE;
+      val = false;
     }
   } else if (func == PARS_NE_TOKEN) {
     if (res == 0) {
-      val = FALSE;
+      val = false;
     }
   } else if (func == PARS_GE_TOKEN) {
     if (res == -1) {
-      val = FALSE;
+      val = false;
     }
   } else {
     ut_ad(func == '>');
 
     if (res != 1) {
-      val = FALSE;
+      val = false;
     }
   }
 
-  eval_node_set_ibool_val(cmp_node, val);
+  eval_node_set_bool_val(cmp_node, val);
 
   return (val);
 }
 
 /** Evaluates a logical operation node. */
-UNIV_INLINE
-void eval_logical(func_node_t *logical_node) /*!< in: logical operation node */
+inline void
+eval_logical(func_node_t *logical_node) /*!< in: logical operation node */
 {
   ut_ad(que_node_get_type(logical_node) == QUE_NODE_FUNC);
 
   auto arg1 = logical_node->args;
   auto arg2 = que_node_get_next(arg1); /* arg2 is NULL if func is 'NOT' */
 
-  auto val1 = eval_node_get_ibool_val(arg1);
+  auto val1 = eval_node_get_bool_val(arg1);
 
-  ibool val2{};
+  bool val2{};
 
   if (arg2) {
-    val2 = eval_node_get_ibool_val(arg2);
+    val2 = eval_node_get_bool_val(arg2);
   }
 
-  ibool val{};
+  bool val{};
   auto func = logical_node->func;
 
   if (func == PARS_AND_TOKEN) {
@@ -143,17 +146,17 @@ void eval_logical(func_node_t *logical_node) /*!< in: logical operation node */
   } else if (func == PARS_OR_TOKEN) {
     val = val1 | val2;
   } else if (func == PARS_NOT_TOKEN) {
-    val = TRUE - val1;
+    val = true - val1;
   } else {
     ut_error;
   }
 
-  eval_node_set_ibool_val(logical_node, val);
+  eval_node_set_bool_val(logical_node, val);
 }
 
 /** Evaluates an arithmetic operation node. */
-UNIV_INLINE
-void eval_arith(func_node_t *arith_node) /*!< in: arithmetic operation node */
+inline void
+eval_arith(func_node_t *arith_node) /*!< in: arithmetic operation node */
 {
   ut_ad(que_node_get_type(arith_node) == QUE_NODE_FUNC);
 
@@ -187,8 +190,8 @@ void eval_arith(func_node_t *arith_node) /*!< in: arithmetic operation node */
 }
 
 /** Evaluates an aggregate operation node. */
-UNIV_INLINE
-void eval_aggregate(func_node_t *node) /*!< in: aggregate operation node */
+inline void
+eval_aggregate(func_node_t *node) /*!< in: aggregate operation node */
 {
   que_node_t *arg;
   lint arg_val;
@@ -252,11 +255,11 @@ eval_predefined_2(func_node_t *func_node) /*!< in: predefined function node */
 
   } else if (func == PARS_ASSERT_TOKEN) {
 
-    if (!eval_node_get_ibool_val(arg1)) {
+    if (!eval_node_get_bool_val(arg1)) {
       ib_logger(ib_stream, "SQL assertion fails in a stored procedure!\n");
     }
 
-    ut_a(eval_node_get_ibool_val(arg1));
+    ut_a(eval_node_get_bool_val(arg1));
 
     /* This function, or more precisely, a debug procedure,
     returns no value */
@@ -295,10 +298,9 @@ eval_predefined_2(func_node_t *func_node) /*!< in: predefined function node */
 }
 
 /** Evaluates a notfound-function node. */
-UNIV_INLINE
-void eval_notfound(func_node_t *func_node) /*!< in: function node */
+inline void eval_notfound(func_node_t *func_node) /*!< in: function node */
 {
-  ibool ibool_val;
+  bool bool_val;
   sel_node_t *sel_node;
 
   auto arg1 = func_node->args;
@@ -307,13 +309,14 @@ void eval_notfound(func_node_t *func_node) /*!< in: function node */
 
   ut_ad(func_node->func == PARS_NOTFOUND_TOKEN);
 
-  auto cursor = (sym_node_t*) arg1;
+  auto cursor = (sym_node_t *)arg1;
 
   ut_ad(que_node_get_type(cursor) == QUE_NODE_SYMBOL);
 
   if (cursor->token_type == SYM_LIT) {
 
-    ut_ad(memcmp((byte*)dfield_get_data(que_node_get_val(cursor)), "SQL", 3) == 0);
+    ut_ad(memcmp((byte *)dfield_get_data(que_node_get_val(cursor)), "SQL", 3) ==
+          0);
 
     sel_node = cursor->sym_table->query_graph->last_sel_node;
   } else {
@@ -321,17 +324,16 @@ void eval_notfound(func_node_t *func_node) /*!< in: function node */
   }
 
   if (sel_node->state == SEL_NODE_NO_MORE_ROWS) {
-    ibool_val = TRUE;
+    bool_val = true;
   } else {
-    ibool_val = FALSE;
+    bool_val = false;
   }
 
-  eval_node_set_ibool_val(func_node, ibool_val);
+  eval_node_set_bool_val(func_node, bool_val);
 }
 
 /** Evaluates a substr-function node. */
-UNIV_INLINE
-void eval_substr(func_node_t *func_node) /*!< in: function node */
+inline void eval_substr(func_node_t *func_node) /*!< in: function node */
 {
   que_node_t *arg1;
   que_node_t *arg2;
@@ -348,7 +350,7 @@ void eval_substr(func_node_t *func_node) /*!< in: function node */
 
   arg3 = que_node_get_next(arg2);
 
-  str1 = (byte*)dfield_get_data(que_node_get_val(arg1));
+  str1 = (byte *)dfield_get_data(que_node_get_val(arg1));
 
   len1 = (ulint)eval_node_get_int_val(arg2);
   len2 = (ulint)eval_node_get_int_val(arg3);
@@ -378,8 +380,8 @@ static void eval_replstr(func_node_t *func_node) /*!< in: function node */
   arg3 = que_node_get_next(arg2);
   arg4 = que_node_get_next(arg3);
 
-  str1 = (byte*)dfield_get_data(que_node_get_val(arg1));
-  str2 = (byte*)dfield_get_data(que_node_get_val(arg2));
+  str1 = (byte *)dfield_get_data(que_node_get_val(arg1));
+  str2 = (byte *)dfield_get_data(que_node_get_val(arg2));
 
   len1 = (ulint)eval_node_get_int_val(arg3);
   len2 = (ulint)eval_node_get_int_val(arg4);
@@ -415,8 +417,8 @@ static void eval_instr(func_node_t *func_node) /*!< in: function node */
   dfield1 = que_node_get_val(arg1);
   dfield2 = que_node_get_val(arg2);
 
-  str1 = (byte*)dfield_get_data(dfield1);
-  str2 = (byte*)dfield_get_data(dfield2);
+  str1 = (byte *)dfield_get_data(dfield1);
+  str2 = (byte *)dfield_get_data(dfield2);
 
   len1 = dfield_get_len(dfield1);
   len2 = dfield_get_len(dfield2);
@@ -461,8 +463,8 @@ match_found:
 }
 
 /** Evaluates a predefined function node. */
-UNIV_INLINE
-void eval_binary_to_number(func_node_t *func_node) /*!< in: function node */
+inline void
+eval_binary_to_number(func_node_t *func_node) /*!< in: function node */
 {
   que_node_t *arg1;
   dfield_t *dfield;
@@ -475,7 +477,7 @@ void eval_binary_to_number(func_node_t *func_node) /*!< in: function node */
 
   dfield = que_node_get_val(arg1);
 
-  str1 = (byte*)dfield_get_data(dfield);
+  str1 = (byte *)dfield_get_data(dfield);
   len1 = dfield_get_len(dfield);
 
   if (len1 > 4) {
@@ -523,7 +525,7 @@ static void eval_concat(func_node_t *func_node) /*!< in: function node */
     dfield = que_node_get_val(arg);
     len1 = dfield_get_len(dfield);
 
-    memcpy(data + len, (byte*)dfield_get_data(dfield), len1);
+    memcpy(data + len, (byte *)dfield_get_data(dfield), len1);
 
     len += len1;
 
@@ -536,8 +538,7 @@ this function looks at the second argument which is the integer length in
 bytes, and converts the integer to a VARCHAR.
 If the first argument is of some other type, this function converts it to
 BINARY. */
-UNIV_INLINE
-void eval_to_binary(func_node_t *func_node) /*!< in: function node */
+inline void eval_to_binary(func_node_t *func_node) /*!< in: function node */
 {
   que_node_t *arg1;
   que_node_t *arg2;
@@ -548,7 +549,7 @@ void eval_to_binary(func_node_t *func_node) /*!< in: function node */
 
   arg1 = func_node->args;
 
-  str1 = (byte*)dfield_get_data(que_node_get_val(arg1));
+  str1 = (byte *)dfield_get_data(que_node_get_val(arg1));
 
   if (dtype_get_mtype(que_node_get_data_type(arg1)) != DATA_INT) {
 
@@ -576,8 +577,7 @@ void eval_to_binary(func_node_t *func_node) /*!< in: function node */
 }
 
 /** Evaluates a predefined function node. */
-UNIV_INLINE
-void eval_predefined(func_node_t *func_node) /*!< in: function node */
+inline void eval_predefined(func_node_t *func_node) /*!< in: function node */
 {
   que_node_t *arg1;
   lint int_val;
@@ -683,8 +683,9 @@ void eval_func(func_node_t *func_node) /*!< in: function node */
     /* The functions are not defined for SQL null argument
     values, except for eval_cmp and notfound */
 
-    if (dfield_is_null(que_node_get_val(arg)) && (func_class != PARS_FUNC_CMP) &&
-        (func != PARS_NOTFOUND_TOKEN) && (func != PARS_PRINTF_TOKEN)) {
+    if (dfield_is_null(que_node_get_val(arg)) &&
+        (func_class != PARS_FUNC_CMP) && (func != PARS_NOTFOUND_TOKEN) &&
+        (func != PARS_PRINTF_TOKEN)) {
       ut_error;
     }
 

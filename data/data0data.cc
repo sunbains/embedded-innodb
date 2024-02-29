@@ -63,29 +63,29 @@ void dfield_var_init(void) {
 }
 
 /** Tests if dfield data length and content is equal to the given.
-@return	TRUE if equal */
+@return	true if equal */
 
-ibool dfield_data_is_binary_equal(
+bool dfield_data_is_binary_equal(
     const dfield_t *field, /*!< in: field */
     ulint len,             /*!< in: data length or UNIV_SQL_NULL */
     const byte *data)      /*!< in: data */
 {
   if (len != dfield_get_len(field)) {
 
-    return (FALSE);
+    return (false);
   }
 
   if (len == UNIV_SQL_NULL) {
 
-    return (TRUE);
+    return (true);
   }
 
   if (0 != memcmp(dfield_get_data(field), data, len)) {
 
-    return (FALSE);
+    return (false);
   }
 
-  return (TRUE);
+  return (true);
 }
 
 /** Compare two data tuples, respecting the collation of character fields.
@@ -140,8 +140,8 @@ void dtuple_set_n_fields(dtuple_t *tuple, /*!< in: tuple */
 }
 
 /** Checks that a data field is typed.
-@return	TRUE if ok */
-static ibool
+@return	true if ok */
+static bool
 dfield_check_typed_no_assert(const dfield_t *field) /*!< in: data field */
 {
   if (dfield_get_type(field)->mtype > DATA_CLIENT ||
@@ -150,16 +150,16 @@ dfield_check_typed_no_assert(const dfield_t *field) /*!< in: data field */
     ib_logger(ib_stream, "InnoDB: Error: data field type %lu, len %lu\n",
               (ulong)dfield_get_type(field)->mtype,
               (ulong)dfield_get_len(field));
-    return (FALSE);
+    return (false);
   }
 
-  return (TRUE);
+  return (true);
 }
 
 /** Checks that a data tuple is typed.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool dtuple_check_typed_no_assert(const dtuple_t *tuple) /*!< in: tuple */
+bool dtuple_check_typed_no_assert(const dtuple_t *tuple) /*!< in: tuple */
 {
   const dfield_t *field;
   ulint i;
@@ -172,7 +172,7 @@ ibool dtuple_check_typed_no_assert(const dtuple_t *tuple) /*!< in: tuple */
     dtuple_print(ib_stream, tuple);
     ib_logger(ib_stream, "\n");
 
-    return (FALSE);
+    return (false);
   }
 
   for (i = 0; i < dtuple_get_n_fields(tuple); i++) {
@@ -184,15 +184,15 @@ ibool dtuple_check_typed_no_assert(const dtuple_t *tuple) /*!< in: tuple */
     }
   }
 
-  return (TRUE);
+  return (true);
 }
 #endif /* !UNIV_HOTBACKUP */
 
 #ifdef UNIV_DEBUG
 /** Checks that a data field is typed. Asserts an error if not.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool dfield_check_typed(const dfield_t *field) /*!< in: data field */
+bool dfield_check_typed(const dfield_t *field) /*!< in: data field */
 {
   if (dfield_get_type(field)->mtype > DATA_CLIENT ||
       dfield_get_type(field)->mtype < DATA_VARCHAR) {
@@ -204,13 +204,13 @@ ibool dfield_check_typed(const dfield_t *field) /*!< in: data field */
     ut_error;
   }
 
-  return (TRUE);
+  return (true);
 }
 
 /** Checks that a data tuple is typed. Asserts an error if not.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool dtuple_check_typed(const dtuple_t *tuple) /*!< in: tuple */
+bool dtuple_check_typed(const dtuple_t *tuple) /*!< in: tuple */
 {
   const dfield_t *field;
   ulint i;
@@ -222,14 +222,14 @@ ibool dtuple_check_typed(const dtuple_t *tuple) /*!< in: tuple */
     ut_a(dfield_check_typed(field));
   }
 
-  return (TRUE);
+  return (true);
 }
 
 /** Validates the consistency of a tuple which must be complete, i.e,
 all fields must have been set.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool dtuple_validate(const dtuple_t *tuple) /*!< in: tuple */
+bool dtuple_validate(const dtuple_t *tuple) /*!< in: tuple */
 {
   const dfield_t *field;
   ulint n_fields;
@@ -250,10 +250,10 @@ ibool dtuple_validate(const dtuple_t *tuple) /*!< in: tuple */
 
     if (!dfield_is_null(field)) {
 
-      auto data = static_cast<const byte*>(dfield_get_data(field));
+      auto data = static_cast<const byte *>(dfield_get_data(field));
 #ifndef UNIV_DEBUG_VALGRIND
       for (ulint j = 0; j < len; j++, ++data) {
-       	/* fool the compiler not to optimize out this code */
+        /* fool the compiler not to optimize out this code */
         data_dummy += *data;
       }
 #endif /* !UNIV_DEBUG_VALGRIND */
@@ -264,7 +264,7 @@ ibool dtuple_validate(const dtuple_t *tuple) /*!< in: tuple */
 
   ut_a(dtuple_check_typed(tuple));
 
-  return (TRUE);
+  return (true);
 }
 #endif /* UNIV_DEBUG */
 
@@ -276,7 +276,7 @@ void dfield_print(const dfield_t *dfield) /*!< in: dfield */
   ulint i;
 
   auto len = dfield_get_len(dfield);
-  auto data = (const byte*) dfield_get_data(dfield);
+  auto data = (const byte *)dfield_get_data(dfield);
 
   if (dfield_is_null(dfield)) {
     ib_logger(ib_stream, "NULL");
@@ -312,10 +312,10 @@ void dfield_print_also_hex(const dfield_t *dfield) /*!< in: dfield */
 {
   ulint prtype;
   ulint i;
-  ibool print_also_hex;
+  bool print_also_hex;
 
   auto len = dfield_get_len(dfield);
-  auto data = (const byte*) dfield_get_data(dfield);
+  auto data = (const byte *)dfield_get_data(dfield);
 
   if (dfield_is_null(dfield)) {
     ib_logger(ib_stream, "NULL");
@@ -427,13 +427,13 @@ void dfield_print_also_hex(const dfield_t *dfield) /*!< in: dfield */
 
   case DATA_CHAR:
   case DATA_VARCHAR:
-    print_also_hex = FALSE;
+    print_also_hex = false;
 
     for (i = 0; i < len; i++) {
       int c = *data++;
 
       if (!isprint(c)) {
-        print_also_hex = TRUE;
+        print_also_hex = true;
 
         ib_logger(ib_stream, "\\x%02x", (unsigned char)c);
       } else {
@@ -449,7 +449,7 @@ void dfield_print_also_hex(const dfield_t *dfield) /*!< in: dfield */
       break;
     }
 
-    data = (byte*) dfield_get_data(dfield);
+    data = (byte *)dfield_get_data(dfield);
     /* fall through */
 
   case DATA_BINARY:
@@ -476,7 +476,8 @@ static void dfield_print_raw(ib_stream_t ib_stream,  /*!< in: output stream */
     ulint print_len = ut_min(len, 1000);
     ut_print_buf(ib_stream, dfield_get_data(dfield), print_len);
     if (len != print_len) {
-      ib_logger(ib_stream, "(total %lu bytes%s)", (ulong)len, dfield_is_ext(dfield) ? ", external" : "");
+      ib_logger(ib_stream, "(total %lu bytes%s)", (ulong)len,
+                dfield_is_ext(dfield) ? ", external" : "");
     }
   } else {
     ib_logger(ib_stream, " SQL NULL");
@@ -528,7 +529,7 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, /*!< in: index */
   ulint local_len;
   ulint local_prefix_len;
 
-  if (UNIV_UNLIKELY(!dict_index_is_clust(index))) {
+  if (unlikely(!dict_index_is_clust(index))) {
     return (NULL);
   }
 
@@ -544,7 +545,7 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, /*!< in: index */
 
   size = rec_get_converted_size(index, entry, *n_ext);
 
-  if (UNIV_UNLIKELY(size > 1000000000)) {
+  if (unlikely(size > 1000000000)) {
     ib_logger(ib_stream, "InnoDB: Warning: tuple size very big: %lu\n",
               (ulong)size);
     ib_logger(ib_stream, "InnoDB: Tuple contents: ");
@@ -555,10 +556,11 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, /*!< in: index */
   heap = mem_heap_create(
       size + dtuple_get_n_fields(entry) * sizeof(big_rec_field_t) + 1000);
 
-  vector = (big_rec_t*) mem_heap_alloc(heap, sizeof(big_rec_t));
+  vector = (big_rec_t *)mem_heap_alloc(heap, sizeof(big_rec_t));
 
   vector->heap = heap;
-  vector->fields = (big_rec_field_t*) mem_heap_alloc(heap, dtuple_get_n_fields(entry) * sizeof(big_rec_field_t));
+  vector->fields = (big_rec_field_t *)mem_heap_alloc(
+      heap, dtuple_get_n_fields(entry) * sizeof(big_rec_field_t));
 
   /* Decide which fields to shorten: the algorithm is to look for
   a variable-length field that yields the biggest savings when
@@ -644,7 +646,7 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, /*!< in: index */
     b->data = (char *)dfield_get_data(dfield) + local_prefix_len;
 
     /* Allocate the locally stored part of the column. */
-    data = (byte*) mem_heap_alloc(heap, local_len);
+    data = (byte *)mem_heap_alloc(heap, local_len);
 
     /* Copy the local prefix. */
     memcpy(data, dfield_get_data(dfield), local_prefix_len);

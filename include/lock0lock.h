@@ -27,17 +27,17 @@ Created 5/7/1996 Heikki Tuuri
 #include "buf0types.h"
 #include "dict0types.h"
 #include "hash0hash.h"
+#include "innodb0types.h"
 #include "lock0types.h"
 #include "mtr0types.h"
 #include "que0types.h"
 #include "read0types.h"
 #include "rem0types.h"
 #include "trx0types.h"
-#include "univ.i"
 #include "ut0vec.h"
 
 #ifdef UNIV_DEBUG
-extern ibool lock_print_waits;
+extern bool lock_print_waits;
 #endif /* UNIV_DEBUG */
 
 /* Buffer for storing information about the most recent deadlock error */
@@ -57,15 +57,14 @@ void lock_sys_close(void);
 /** Checks if some transaction has an implicit x-lock on a record in a clustered
 index.
 @return	transaction which has the x-lock, or NULL */
-UNIV_INLINE
-trx_t *lock_clust_rec_some_has_impl(
+inline trx_t *lock_clust_rec_some_has_impl(
     const rec_t *rec,      /*!< in: user record */
     dict_index_t *index,   /*!< in: clustered index */
     const ulint *offsets); /*!< in: rec_get_offsets(rec, index) */
 /** Gets the heap_no of the smallest user record on a page.
 @return	heap_no of smallest user record, or PAGE_HEAP_NO_SUPREMUM */
-UNIV_INLINE
-ulint lock_get_min_heap_no(const buf_block_t *block); /*!< in: buffer block */
+inline ulint
+lock_get_min_heap_no(const buf_block_t *block); /*!< in: buffer block */
 /** Updates the lock table when we have reorganized a page. NOTE: we copy
 also the locks set on the infimum of the page; the infimum may carry
 locks if an update of a record is occurring on the page, and its locks
@@ -207,10 +206,10 @@ void lock_rec_restore_from_page_infimum(
                                 whose infimum stored the lock
                                 state; lock bits are reset on
                                 the infimum */
-/** Returns TRUE if there are explicit record locks on a page.
-@return	TRUE if there are explicit record locks on the page */
+/** Returns true if there are explicit record locks on a page.
+@return	true if there are explicit record locks on the page */
 bool lock_rec_expl_exist_on_page(ulint space,    /*!< in: space id */
-                                  ulint page_no); /*!< in: page number */
+                                 ulint page_no); /*!< in: page number */
 
 /** Checks if locks of other transactions prevent an immediate insert of
 a record. If they do, first tests if the query thread should anyway
@@ -226,10 +225,10 @@ db_err lock_rec_insert_check_and_lock(
     dict_index_t *index, /*!< in: index */
     que_thr_t *thr,      /*!< in: query thread */
     mtr_t *mtr,          /*!< in/out: mini-transaction */
-    ibool *inherit);     /*!< out: set to TRUE if the new
-                        inserted record maybe should inherit
-                        LOCK_GAP type locks from the successor
-                        record */
+    bool *inherit);      /*!< out: set to true if the new
+                         inserted record maybe should inherit
+                         LOCK_GAP type locks from the successor
+                         record */
 
 /** Checks if locks of other transactions prevent an immediate modify (update,
 delete mark, or delete unmark) of a clustered index record. If they do,
@@ -340,10 +339,10 @@ db_err lock_clust_rec_read_check_and_lock_alt(
                              LOCK_REC_NOT_GAP */
     que_thr_t *thr);          /*!< in: query thread */
 /** Checks that a record is seen in a consistent read.
-@return TRUE if sees, or FALSE if an earlier version of the record
+@return true if sees, or false if an earlier version of the record
 should be retrieved */
 
-ibool lock_clust_rec_cons_read_sees(
+bool lock_clust_rec_cons_read_sees(
     const rec_t *rec,     /*!< in: user record which should be read or
                           passed over by a read cursor */
     dict_index_t *index,  /*!< in: clustered index */
@@ -352,11 +351,11 @@ ibool lock_clust_rec_cons_read_sees(
 /** Checks that a non-clustered index record is seen in a consistent read.
 
 NOTE that a non-clustered index page contains so little information on
-its modifications that also in the case FALSE, the present version of
+its modifications that also in the case false, the present version of
 rec may be the right, but we must check this from the clustered index
 record.
 
-@return TRUE if certainly sees, or FALSE if an earlier version of the
+@return true if certainly sees, or false if an earlier version of the
 clustered index record might be needed */
 
 ulint lock_sec_rec_cons_read_sees(
@@ -368,12 +367,12 @@ ulint lock_sec_rec_cons_read_sees(
 be granted immediately, the query thread is put to wait.
 @return	DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
 
-db_err lock_table(
-    ulint flags,         /*!< in: if BTR_NO_LOCKING_FLAG bit is set,
-                         does nothing */
-    dict_table_t *table, /*!< in: database table in dictionary cache */
-    enum lock_mode mode, /*!< in: lock mode */
-    que_thr_t *thr);     /*!< in: query thread */
+db_err
+lock_table(ulint flags,         /*!< in: if BTR_NO_LOCKING_FLAG bit is set,
+                                does nothing */
+           dict_table_t *table, /*!< in: database table in dictionary cache */
+           enum lock_mode mode, /*!< in: lock mode */
+           que_thr_t *thr);     /*!< in: query thread */
 /** Removes a granted record lock of a transaction from the queue and grants
 locks to other transactions waiting in the queue if they now are entitled
 to a lock. */
@@ -395,29 +394,27 @@ void lock_cancel_waiting_and_release(
     lock_t *lock); /*!< in: waiting lock request */
 
 /** Removes locks on a table to be dropped or truncated.
-If remove_also_table_sx_locks is TRUE then table-level S and X locks are
+If remove_also_table_sx_locks is true then table-level S and X locks are
 also removed in addition to other table-level and record-level locks.
 No lock, that is going to be removed, is allowed to be a wait lock. */
 
 void lock_remove_all_on_table(
-    dict_table_t *table,               /*!< in: table to be dropped
-                                       or truncated */
-    ibool remove_also_table_sx_locks); /*!< in: also removes
+    dict_table_t *table,              /*!< in: table to be dropped
+                                      or truncated */
+    bool remove_also_table_sx_locks); /*!< in: also removes
                                    table S and X locks */
 
 /** Calculates the fold value of a page file address: used in inserting or
 searching for a lock in the hash table.
 @return	folded value */
-UNIV_INLINE
-ulint lock_rec_fold(ulint space,   /*!< in: space */
-                    ulint page_no) /*!< in: page number */
+inline ulint lock_rec_fold(ulint space,   /*!< in: space */
+                           ulint page_no) /*!< in: page number */
     __attribute__((const));
 /** Calculates the hash value of a page file address: used in inserting or
 searching for a lock in the hash table.
 @return	hashed value */
-UNIV_INLINE
-ulint lock_rec_hash(ulint space,    /*!< in: space */
-                    ulint page_no); /*!< in: page number */
+inline ulint lock_rec_hash(ulint space,    /*!< in: space */
+                           ulint page_no); /*!< in: page number */
 
 /** Looks for a set bit in a record lock bitmap. Returns ULINT_UNDEFINED,
 if none found.
@@ -441,28 +438,28 @@ dict_table_t *lock_get_src_table(
 /** Determine if the given table is exclusively "owned" by the given
 transaction, i.e., transaction holds LOCK_IX and possibly LOCK_AUTO_INC
 on the table.
-@return TRUE if table is only locked by trx, with LOCK_IX, and
+@return true if table is only locked by trx, with LOCK_IX, and
 possibly LOCK_AUTO_INC */
 
-ibool lock_is_table_exclusive(dict_table_t *table, /*!< in: table */
-                              trx_t *trx);         /*!< in: transaction */
+bool lock_is_table_exclusive(dict_table_t *table, /*!< in: table */
+                             trx_t *trx);         /*!< in: transaction */
 /** Checks if a lock request lock1 has to wait for request lock2.
-@return	TRUE if lock1 has to wait for lock2 to be removed */
+@return	true if lock1 has to wait for lock2 to be removed */
 
-ibool lock_has_to_wait(const lock_t *lock1,  /*!< in: waiting lock */
-                       const lock_t *lock2); /*!< in: another lock; NOTE that it
-                                             is assumed that this has a lock bit
-                                             set on the same record as in lock1
-                                             if the locks are record locks */
+bool lock_has_to_wait(const lock_t *lock1,  /*!< in: waiting lock */
+                      const lock_t *lock2); /*!< in: another lock; NOTE that it
+                                            is assumed that this has a lock bit
+                                            set on the same record as in lock1
+                                            if the locks are record locks */
 /** Checks that a transaction id is sensible, i.e., not in the future.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool lock_check_trx_id_sanity(
-    trx_id_t trx_id,         /*!< in: trx id */
-    const rec_t *rec,        /*!< in: user record */
-    dict_index_t *index,     /*!< in: clustered index */
-    const ulint *offsets,    /*!< in: rec_get_offsets(rec, index) */
-    ibool has_kernel_mutex); /*!< in: TRUE if the caller owns the
+bool lock_check_trx_id_sanity(
+    trx_id_t trx_id,        /*!< in: trx id */
+    const rec_t *rec,       /*!< in: user record */
+    dict_index_t *index,    /*!< in: clustered index */
+    const ulint *offsets,   /*!< in: rec_get_offsets(rec, index) */
+    bool has_kernel_mutex); /*!< in: true if the caller owns the
                            kernel mutex */
 /** Prints info of a table lock. */
 
@@ -473,13 +470,13 @@ void lock_table_print(ib_stream_t ib_stream, /*!< in: stream where to print */
 void lock_rec_print(ib_stream_t ib_stream, /*!< in: stream where to print */
                     const lock_t *lock);   /*!< in: record type lock */
 /** Prints info of locks for all transactions.
-@return FALSE if not able to obtain kernel mutex
+@return false if not able to obtain kernel mutex
 and exits without printing info */
 
-ibool lock_print_info_summary(
+bool lock_print_info_summary(
     ib_stream_t ib_stream, /*!< in: stream where to print */
-    ibool nowait);         /*!< in: whether to wait for the
-                           kernel mutex */
+    bool nowait);          /*!< in: whether to wait for the
+                            kernel mutex */
 /** >>>>>>> .merge-right.r6467
 Prints info of locks for each transaction. */
 

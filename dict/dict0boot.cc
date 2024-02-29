@@ -101,8 +101,8 @@ void dict_hdr_flush_row_id(void) {
 
 /** Creates the file page for the dictionary header. This function is
 called only at the database creation.
-@return	TRUE if succeed */
-static ibool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
+@return	true if succeed */
+static bool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
 {
   buf_block_t *block;
   dict_hdr_t *dict_header;
@@ -141,7 +141,7 @@ static ibool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
                             DICT_TABLES_ID, dict_ind_redundant, mtr);
   if (root_page_no == FIL_NULL) {
 
-    return (FALSE);
+    return (false);
   }
 
   mlog_write_ulint(dict_header + DICT_HDR_TABLES, root_page_no, MLOG_4BYTES,
@@ -151,7 +151,7 @@ static ibool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
                             dict_ind_redundant, mtr);
   if (root_page_no == FIL_NULL) {
 
-    return (FALSE);
+    return (false);
   }
 
   mlog_write_ulint(dict_header + DICT_HDR_TABLE_IDS, root_page_no, MLOG_4BYTES,
@@ -161,7 +161,7 @@ static ibool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
                             DICT_COLUMNS_ID, dict_ind_redundant, mtr);
   if (root_page_no == FIL_NULL) {
 
-    return (FALSE);
+    return (false);
   }
 
   mlog_write_ulint(dict_header + DICT_HDR_COLUMNS, root_page_no, MLOG_4BYTES,
@@ -171,7 +171,7 @@ static ibool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
                             DICT_INDEXES_ID, dict_ind_redundant, mtr);
   if (root_page_no == FIL_NULL) {
 
-    return (FALSE);
+    return (false);
   }
 
   mlog_write_ulint(dict_header + DICT_HDR_INDEXES, root_page_no, MLOG_4BYTES,
@@ -181,14 +181,14 @@ static ibool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
                             DICT_FIELDS_ID, dict_ind_redundant, mtr);
   if (root_page_no == FIL_NULL) {
 
-    return (FALSE);
+    return (false);
   }
 
   mlog_write_ulint(dict_header + DICT_HDR_FIELDS, root_page_no, MLOG_4BYTES,
                    mtr);
   /*--------------------------*/
 
-  return (TRUE);
+  return (true);
 }
 
 /** Initializes the data dictionary memory structures when the database is
@@ -264,7 +264,7 @@ void dict_boot(void) {
 
   error = dict_index_add_to_cache(
       table, index,
-      mtr_read_ulint(dict_hdr + DICT_HDR_TABLES, MLOG_4BYTES, &mtr), FALSE);
+      mtr_read_ulint(dict_hdr + DICT_HDR_TABLES, MLOG_4BYTES, &mtr), false);
   ut_a(error == DB_SUCCESS);
 
   /*-------------------------*/
@@ -275,7 +275,7 @@ void dict_boot(void) {
   index->id = DICT_TABLE_IDS_ID;
   error = dict_index_add_to_cache(
       table, index,
-      mtr_read_ulint(dict_hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES, &mtr), FALSE);
+      mtr_read_ulint(dict_hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES, &mtr), false);
   ut_a(error == DB_SUCCESS);
 
   /*-------------------------*/
@@ -304,7 +304,7 @@ void dict_boot(void) {
   index->id = DICT_COLUMNS_ID;
   error = dict_index_add_to_cache(
       table, index,
-      mtr_read_ulint(dict_hdr + DICT_HDR_COLUMNS, MLOG_4BYTES, &mtr), FALSE);
+      mtr_read_ulint(dict_hdr + DICT_HDR_COLUMNS, MLOG_4BYTES, &mtr), false);
   ut_a(error == DB_SUCCESS);
 
   /*-------------------------*/
@@ -346,7 +346,7 @@ void dict_boot(void) {
   index->id = DICT_INDEXES_ID;
   error = dict_index_add_to_cache(
       table, index,
-      mtr_read_ulint(dict_hdr + DICT_HDR_INDEXES, MLOG_4BYTES, &mtr), FALSE);
+      mtr_read_ulint(dict_hdr + DICT_HDR_INDEXES, MLOG_4BYTES, &mtr), false);
   ut_a(error == DB_SUCCESS);
 
   /*-------------------------*/
@@ -370,7 +370,7 @@ void dict_boot(void) {
   index->id = DICT_FIELDS_ID;
   error = dict_index_add_to_cache(
       table, index,
-      mtr_read_ulint(dict_hdr + DICT_HDR_FIELDS, MLOG_4BYTES, &mtr), FALSE);
+      mtr_read_ulint(dict_hdr + DICT_HDR_FIELDS, MLOG_4BYTES, &mtr), false);
   ut_a(error == DB_SUCCESS);
 
   mtr_commit(&mtr);

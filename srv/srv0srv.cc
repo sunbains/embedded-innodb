@@ -55,7 +55,7 @@ thread library. This might confuse NT though.
 Created 10/8/1995 Heikki Tuuri
 *******************************************************/
 
-#include "univ.i"
+#include "innodb0types.h"
 
 /* Dummy comment */
 #include "srv0srv.h"
@@ -91,7 +91,7 @@ Created 10/8/1995 Heikki Tuuri
 #define sess_lock_wait_timeout(t) (ses_lock_wait_timeout)
 ulint ses_lock_wait_timeout = 1024 * 1024 * 1024;
 
-ibool srv_lower_case_table_names = FALSE;
+bool srv_lower_case_table_names = false;
 
 /** The following counter is incremented whenever there is some user activity
 in the server */
@@ -104,9 +104,9 @@ ulint srv_fatal_semaphore_wait_threshold = 600;
 in microseconds, in order to reduce the lagging of the purge thread. */
 ulint srv_dml_needed_delay = 0;
 
-ibool srv_lock_timeout_active = FALSE;
-ibool srv_monitor_active = FALSE;
-ibool srv_error_monitor_active = FALSE;
+bool srv_lock_timeout_active = false;
+bool srv_monitor_active = false;
+bool srv_error_monitor_active = false;
 
 const char *srv_main_thread_op_info = "";
 
@@ -128,11 +128,11 @@ char *srv_arch_dir = nullptr;
 
 /** store to its own file each table created by an user; data
 dictionary tables are in the system tablespace 0 */
-ibool srv_file_per_table;
+bool srv_file_per_table;
 /** The file format to use on new *.ibd files. */
 ulint srv_file_format = 0;
 /** Whether to check file format during startup a value of
-DICT_TF_FORMAT_MAX + 1 means no checking ie. FALSE.  The default is to
+DICT_TF_FORMAT_MAX + 1 means no checking ie. false.  The default is to
 set it to the highest format we support. */
 ulint srv_check_file_format_at_startup = DICT_TF_FORMAT_MAX;
 
@@ -143,8 +143,8 @@ ulint srv_n_data_files = 0;
 /** Size in database pages */
 ulint *srv_data_file_sizes = nullptr;
 
-/** If TRUE, then we auto-extend the last data file */
-ibool srv_auto_extend_last_data_file = FALSE;
+/** If true, then we auto-extend the last data file */
+bool srv_auto_extend_last_data_file = false;
 /* if != 0, this tells the max size auto-extending may increase the
 last data file size */
 ulint srv_last_file_size_max = 0;
@@ -153,10 +153,10 @@ many pages to it at a time */
 ulong srv_auto_extend_increment = 8;
 ulint *srv_data_file_is_raw_partition = nullptr;
 
-/* If the following is TRUE we do not allow inserts etc. This protects
+/* If the following is true we do not allow inserts etc. This protects
 the user from forgetting the 'newraw' keyword. */
 
-ibool srv_created_new_raw = FALSE;
+bool srv_created_new_raw = false;
 
 ulint srv_n_log_files = ULINT_MAX;
 /** Size in database pages */
@@ -169,10 +169,10 @@ ulong srv_flush_log_at_trx_commit = 1;
 
 /** Try to flush dirty pages so as to avoid IO bursts at
 the checkpoints. */
-ibool srv_adaptive_flushing = TRUE;
+bool srv_adaptive_flushing = true;
 
 /** Use os/external memory allocator */
-ibool srv_use_sys_malloc = FALSE;
+bool srv_use_sys_malloc = false;
 
 /** Maximum number of times allowed to conditionally acquire
 mutex before switching to blocking wait on the mutex */
@@ -206,8 +206,8 @@ readahead request. */
 ulong srv_read_ahead_threshold = 56;
 
 #ifdef UNIV_LOG_ARCHIVE
-ibool srv_log_archive_on = FALSE;
-ibool srv_archive_recovery = 0;
+bool srv_log_archive_on = false;
+bool srv_archive_recovery = 0;
 uint64_t srv_archive_recovery_limit_lsn;
 #endif /* UNIV_LOG_ARCHIVE */
 
@@ -299,13 +299,13 @@ struct srv_conc_slot_struct {
   /** event to wait */
   os_event_t event;
 
-  /** TRUE if slot reserved */
-  ibool reserved;
+  /** true if slot reserved */
+  bool reserved;
 
-  /** TRUE when another thread has already set the event
+  /** true when another thread has already set the event
   and the thread in this slot is free to proceed; but
-  reserved may still be TRUE at that point */
-  ibool wait_ended;
+  reserved may still be true at that point */
+  bool wait_ended;
 
   /** queue node */
   UT_LIST_NODE_T(srv_conc_slot_t) srv_conc_queue;
@@ -320,17 +320,17 @@ static srv_conc_slot_t *srv_conc_slots;
 /*-----------------------*/
 ib_shutdown_t srv_fast_shutdown = IB_SHUTDOWN_NORMAL;
 
-/** Generate a innodb_status.<pid> file if this is TRUE. */
-ibool srv_innodb_status = FALSE;
+/** Generate a innodb_status.<pid> file if this is true. */
+bool srv_innodb_status = false;
 
 /* When estimating number of different key values in an index, sample
 this many index pages */
 unsigned long long srv_stats_sample_pages = 8;
 
-ibool srv_use_doublewrite_buf = TRUE;
-ibool srv_use_checksums = TRUE;
+bool srv_use_doublewrite_buf = true;
+bool srv_use_checksums = true;
 
-ibool srv_set_thread_priorities = TRUE;
+bool srv_set_thread_priorities = true;
 int srv_query_thread_priority = 0;
 
 /*-------------------------------------------*/
@@ -338,11 +338,11 @@ ulong srv_n_spin_wait_rounds = 30;
 ulong srv_spin_wait_delay = 6;
 
 #ifdef UNIV_DEBUG
-ibool srv_print_thread_releases = FALSE;
-ibool srv_print_lock_waits = FALSE;
-ibool srv_print_buf_io = FALSE;
-ibool srv_print_log_io = FALSE;
-ibool srv_print_latch_waits = FALSE;
+bool srv_print_thread_releases = false;
+bool srv_print_lock_waits = false;
+bool srv_print_buf_io = false;
+bool srv_print_log_io = false;
+bool srv_print_latch_waits = false;
 #endif /* UNIV_DEBUG */
 
 ulint srv_n_rows_inserted = 0;
@@ -362,11 +362,11 @@ ulint srv_n_lock_max_wait_time = 0;
 
 /** Set the following to 0 if you want InnoDB to write messages on
 ib_stream on startup/shutdown */
-ibool srv_print_verbose_log = TRUE;
-ibool srv_print_innodb_monitor = FALSE;
-ibool srv_print_innodb_lock_monitor = FALSE;
-ibool srv_print_innodb_tablespace_monitor = FALSE;
-ibool srv_print_innodb_table_monitor = FALSE;
+bool srv_print_verbose_log = true;
+bool srv_print_innodb_monitor = false;
+bool srv_print_innodb_lock_monitor = false;
+bool srv_print_innodb_tablespace_monitor = false;
+bool srv_print_innodb_table_monitor = false;
 
 static time_t srv_last_monitor_time;
 
@@ -630,7 +630,8 @@ byte srv_pad1[64];
 /** Mutex protecting the server, trx structs, query threads, and lock table */
 mutex_t *kernel_mutex_temp;
 
-/* padding to prevent other memory update hotspots from residing on the same memory cache line */
+/* padding to prevent other memory update hotspots from residing on the same
+ * memory cache line */
 byte srv_pad2[64];
 
 /* The following values give info about the activity going on in
@@ -648,8 +649,7 @@ ib_panic_function_t ib_panic = nullptr;
 
 /** Prints counters for work done by srv_master_thread.
 @param[in,out] stream           Output stream. */
-static void
-srv_print_master_thread_info(ib_stream_t stream) {
+static void srv_print_master_thread_info(ib_stream_t stream) {
   ib_logger(stream,
             "srv_master_thread loops: %lu 1_second, %lu sleeps, "
             "%lu 10_second, %lu background, %lu flush\n",
@@ -664,37 +664,37 @@ void srv_var_init() {
   srv_free_paths_and_sizes();
 
   ses_lock_wait_timeout = 1024 * 1024 * 1024;
-  srv_lower_case_table_names = FALSE;
+  srv_lower_case_table_names = false;
   srv_activity_count = 0;
   srv_fatal_semaphore_wait_threshold = 600;
   srv_dml_needed_delay = 0;
 
-  srv_monitor_active = FALSE;
-  srv_lock_timeout_active = FALSE;
+  srv_monitor_active = false;
+  srv_lock_timeout_active = false;
 
-  srv_error_monitor_active = FALSE;
+  srv_error_monitor_active = false;
   srv_main_thread_op_info = "";
 
-  srv_adaptive_flushing = TRUE;
+  srv_adaptive_flushing = true;
 
-  srv_use_sys_malloc = FALSE;
+  srv_use_sys_malloc = false;
 
 #ifdef UNIV_LOG_ARCHIVE
   srv_arch_dir = nullptr;
 #endif /* UNIV_LOG_ARCHIVE */
 
-  srv_file_per_table = FALSE;
+  srv_file_per_table = false;
   srv_file_format = 0;
   srv_check_file_format_at_startup = DICT_TF_FORMAT_MAX;
 
   srv_n_data_files = 0;
 
-  srv_auto_extend_last_data_file = FALSE;
+  srv_auto_extend_last_data_file = false;
   srv_last_file_size_max = 0;
   srv_auto_extend_increment = 8;
   srv_data_file_is_raw_partition = nullptr;
 
-  srv_created_new_raw = FALSE;
+  srv_created_new_raw = false;
 
   srv_n_log_files = ULINT_MAX;
   srv_log_file_size = ULINT_MAX;
@@ -711,7 +711,7 @@ void srv_var_init() {
   srv_n_file_io_threads = ULINT_MAX;
 
 #ifdef UNIV_LOG_ARCHIVE
-  srv_log_archive_on = FALSE;
+  srv_log_archive_on = false;
   srv_archive_recovery = 0;
   srv_archive_recovery_limit_lsn = 0;
 #endif /* UNIV_LOG_ARCHIVE */
@@ -761,12 +761,12 @@ void srv_var_init() {
 
   srv_conc_n_waiting_threads = 0;
 
-  srv_use_doublewrite_buf = TRUE;
-  srv_use_checksums = TRUE;
-  btr_search_enabled = TRUE;
-  srv_print_verbose_log = TRUE;
-  srv_innodb_status = FALSE;
-  ses_rollback_on_timeout = FALSE;
+  srv_use_doublewrite_buf = true;
+  srv_use_checksums = true;
+  btr_search_enabled = true;
+  srv_print_verbose_log = true;
+  srv_innodb_status = false;
+  ses_rollback_on_timeout = false;
 
   srv_start_lsn = 0;
   srv_shutdown_lsn = 0;
@@ -836,7 +836,7 @@ srv_table_reserve_slot(srv_thread_type type) /*!< in: type of the thread */
     slot = srv_table_get_nth_slot(i);
   }
 
-  ut_a(slot->in_use == FALSE);
+  ut_a(slot->in_use == false);
 
   slot->in_use = true;
   slot->suspended = false;
@@ -873,7 +873,7 @@ static os_event_t srv_suspend_thread(void) {
 
   auto event = slot->event;
 
-  slot->suspended = TRUE;
+  slot->suspended = true;
 
   ut_ad(srv_n_threads_active[type] > 0);
 
@@ -907,7 +907,7 @@ ulint srv_release_threads(srv_thread_type type, /*!< in: thread type */
 
     if (slot->in_use && slot->type == type && slot->suspended) {
 
-      slot->suspended = FALSE;
+      slot->suspended = false;
 
       srv_n_threads_active[type]++;
 
@@ -960,15 +960,16 @@ static void srv_init(void) {
   srv_conc_slot_t *conc_slot;
   srv_slot_t *slot;
 
-  srv_sys = static_cast<srv_sys_t*>(mem_alloc(sizeof(srv_sys_t)));
+  srv_sys = static_cast<srv_sys_t *>(mem_alloc(sizeof(srv_sys_t)));
 
-  kernel_mutex_temp = static_cast<mutex_t*>(mem_alloc(sizeof(mutex_t)));
+  kernel_mutex_temp = static_cast<mutex_t *>(mem_alloc(sizeof(mutex_t)));
 
   mutex_create(&kernel_mutex, SYNC_KERNEL);
 
   mutex_create(&srv_innodb_monitor_mutex, SYNC_NO_ORDER_CHECK);
 
-  srv_sys->threads = static_cast<srv_slot_t*>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
+  srv_sys->threads = static_cast<srv_slot_t *>(
+      mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
 
   for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
     slot = srv_table_get_nth_slot(i);
@@ -978,7 +979,8 @@ static void srv_init(void) {
     ut_a(slot->event);
   }
 
-  srv_client_table = static_cast<srv_slot_t*>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
+  srv_client_table = static_cast<srv_slot_t *>(
+      mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
 
   slot = srv_client_table;
 
@@ -1008,12 +1010,13 @@ static void srv_init(void) {
 
   UT_LIST_INIT(srv_conc_queue);
 
-  srv_conc_slots = static_cast<srv_conc_slot_t*>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_conc_slot_t)));
+  srv_conc_slots = static_cast<srv_conc_slot_t *>(
+      mem_alloc(OS_THREAD_MAX_N * sizeof(srv_conc_slot_t)));
 
   conc_slot = srv_conc_slots;
 
   for (ulint i = 0; i < OS_THREAD_MAX_N; ++i, ++conc_slot) {
-    conc_slot->reserved = FALSE;
+    conc_slot->reserved = false;
     conc_slot->event = os_event_create(nullptr);
     ut_a(conc_slot->event);
   }
@@ -1070,10 +1073,12 @@ static db_err srv_normalize_init_values(void) {
   auto n = srv_n_data_files;
 
   for (ulint i = 0; i < n; i++) {
-    srv_data_file_sizes[i] = srv_data_file_sizes[i] * ((1024 * 1024) / UNIV_PAGE_SIZE);
+    srv_data_file_sizes[i] =
+        srv_data_file_sizes[i] * ((1024 * 1024) / UNIV_PAGE_SIZE);
   }
 
-  srv_last_file_size_max = srv_last_file_size_max * ((1024 * 1024) / UNIV_PAGE_SIZE);
+  srv_last_file_size_max =
+      srv_last_file_size_max * ((1024 * 1024) / UNIV_PAGE_SIZE);
 
   srv_log_file_size = srv_log_file_curr_size / UNIV_PAGE_SIZE;
   srv_log_file_curr_size = srv_log_file_size * UNIV_PAGE_SIZE;
@@ -1219,7 +1224,7 @@ void srv_suspend_user_thread(que_thr_t *thr) {
 
   if (thr->state == QUE_THR_RUNNING) {
 
-    ut_ad(thr->is_active == TRUE);
+    ut_ad(thr->is_active == true);
 
     /* The lock has already been released or this transaction
     was chosen as a deadlock victim: no need to suspend */
@@ -1227,7 +1232,7 @@ void srv_suspend_user_thread(que_thr_t *thr) {
     if (trx->was_chosen_as_deadlock_victim) {
 
       trx->error_state = DB_DEADLOCK;
-      trx->was_chosen_as_deadlock_victim = FALSE;
+      trx->was_chosen_as_deadlock_victim = false;
     }
 
     mutex_exit(&kernel_mutex);
@@ -1235,7 +1240,7 @@ void srv_suspend_user_thread(que_thr_t *thr) {
     return;
   }
 
-  ut_ad(thr->is_active == FALSE);
+  ut_ad(thr->is_active == false);
 
   slot = srv_table_reserve_slot_for_user_thread();
 
@@ -1325,7 +1330,7 @@ void srv_suspend_user_thread(que_thr_t *thr) {
   if (trx->was_chosen_as_deadlock_victim) {
 
     trx->error_state = DB_DEADLOCK;
-    trx->was_chosen_as_deadlock_victim = FALSE;
+    trx->was_chosen_as_deadlock_victim = false;
   }
 
   mutex_exit(&kernel_mutex);
@@ -1343,7 +1348,7 @@ void srv_suspend_user_thread(que_thr_t *thr) {
   }
 }
 
-void srv_release_user_thread_if_suspended( que_thr_t *thr) {
+void srv_release_user_thread_if_suspended(que_thr_t *thr) {
   ut_ad(mutex_own(&kernel_mutex));
 
   for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
@@ -1385,11 +1390,12 @@ static void srv_refresh_innodb_monitor_stats() {
   mutex_exit(&srv_innodb_monitor_mutex);
 }
 
-ibool srv_printf_innodb_monitor( ib_stream_t ib_stream, ibool nowait, ulint *trx_start, ulint *trx_end) {
+bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
+                               ulint *trx_start, ulint *trx_end) {
   double time_elapsed;
   time_t current_time;
   ulint n_reserved;
-  ibool ret;
+  bool ret;
 
   mutex_enter(&srv_innodb_monitor_mutex);
 
@@ -1634,7 +1640,7 @@ void *srv_monitor_thread(void *arg __attribute__((unused))) {
   time_t last_tablespace_monitor_time;
   time_t last_monitor_time;
   ulint mutex_skipped;
-  ibool last_srv_print_monitor;
+  bool last_srv_print_monitor;
 
 #ifdef UNIV_DEBUG_THREAD_CREATION
   ib_logger(ib_stream, "Lock timeout thread starts, id %lu\n",
@@ -1648,7 +1654,7 @@ void *srv_monitor_thread(void *arg __attribute__((unused))) {
   mutex_skipped = 0;
   last_srv_print_monitor = srv_print_innodb_monitor;
 loop:
-  srv_monitor_active = TRUE;
+  srv_monitor_active = true;
 
   /* Wake up every 5 seconds to see if we need to print
   monitor information. */
@@ -1670,7 +1676,7 @@ loop:
       such as requested by sync_array_print_long_waits() */
       if (!last_srv_print_monitor) {
         mutex_skipped = 0;
-        last_srv_print_monitor = TRUE;
+        last_srv_print_monitor = true;
       }
 
       if (!srv_printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped),
@@ -1681,7 +1687,7 @@ loop:
         mutex_skipped = 0;
       }
     } else {
-      last_srv_print_monitor = FALSE;
+      last_srv_print_monitor = false;
     }
 
     if (srv_innodb_status) {
@@ -1748,12 +1754,12 @@ loop:
     goto loop;
   }
 
-  srv_monitor_active = FALSE;
+  srv_monitor_active = false;
 
   goto loop;
 
 exit_func:
-  srv_monitor_active = FALSE;
+  srv_monitor_active = false;
 
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit. */
@@ -1765,7 +1771,7 @@ exit_func:
 
 void *srv_lock_timeout_thread(void *arg __attribute__((unused))) {
   srv_slot_t *slot;
-  ibool some_waits;
+  bool some_waits;
   double wait_time;
   ulint i;
 
@@ -1775,11 +1781,11 @@ loop:
 
   os_thread_sleep(1000000);
 
-  srv_lock_timeout_active = TRUE;
+  srv_lock_timeout_active = true;
 
   mutex_enter(&kernel_mutex);
 
-  some_waits = FALSE;
+  some_waits = false;
 
   /* Check of all slots if a thread is waiting there, and if it
   has exceeded the time limit */
@@ -1792,14 +1798,16 @@ loop:
       trx_t *trx;
       ulong lock_wait_timeout;
 
-      some_waits = TRUE;
+      some_waits = true;
 
       wait_time = ut_difftime(ut_time(), slot->suspend_time);
 
       trx = thr_get_trx(slot->thr);
       lock_wait_timeout = sess_lock_wait_timeout(trx);
 
-      if (trx_is_interrupted(trx) || (lock_wait_timeout < 100000000 && (wait_time > (double)lock_wait_timeout || wait_time < 0))) {
+      if (trx_is_interrupted(trx) ||
+          (lock_wait_timeout < 100000000 &&
+           (wait_time > (double)lock_wait_timeout || wait_time < 0))) {
         /* Timeout exceeded or a wrap-around in system
         time counter: cancel the lock request queued
         by the transaction and release possible
@@ -1826,7 +1834,7 @@ loop:
     goto loop;
   }
 
-  srv_lock_timeout_active = FALSE;
+  srv_lock_timeout_active = false;
 
 #if 0
 	/* The following synchronisation is disabled, since
@@ -1836,7 +1844,7 @@ loop:
   goto loop;
 
 exit_func:
-  srv_lock_timeout_active = FALSE;
+  srv_lock_timeout_active = false;
 
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit. */
@@ -1859,7 +1867,7 @@ void *srv_error_monitor_thread(void *arg __attribute__((unused))) {
             os_thread_pf(os_thread_get_curr_id()));
 #endif
 loop:
-  srv_error_monitor_active = TRUE;
+  srv_error_monitor_active = true;
 
   /* Try to track a strange bug reported by Harald Fuchs and others,
   where the lsn seems to decrease at times */
@@ -1923,7 +1931,7 @@ loop:
     goto loop;
   }
 
-  srv_error_monitor_active = FALSE;
+  srv_error_monitor_active = false;
 
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit. */
@@ -1973,7 +1981,7 @@ static void srv_sync_log_buffer_in_background(void) {
 
   srv_main_thread_op_info = "flushing log";
   if (difftime(current_time, srv_last_log_flush_time) >= 1) {
-    log_buffer_sync_in_background(TRUE);
+    log_buffer_sync_in_background(true);
     srv_last_log_flush_time = current_time;
     srv_log_writes_and_flush++;
   }
@@ -1991,7 +1999,7 @@ void *srv_master_thread(void *arg __attribute__((unused))) {
   ulint n_ios_old;
   ulint n_ios_very_old;
   ulint n_pend_ios;
-  ibool skip_sleep = FALSE;
+  bool skip_sleep = false;
   ulint i;
 
 #ifdef UNIV_DEBUG_THREAD_CREATION
@@ -2086,14 +2094,14 @@ loop:
     if (n_pend_ios < SRV_PEND_IO_THRESHOLD &&
         (n_ios - n_ios_old < SRV_RECENT_IO_ACTIVITY)) {
       srv_main_thread_op_info = "doing insert buffer merge";
-      ibuf_contract_for_n_pages(FALSE, PCT_IO(5));
+      ibuf_contract_for_n_pages(false, PCT_IO(5));
 
       /* Flush logs if needed */
       srv_sync_log_buffer_in_background();
     }
 
-    if (UNIV_UNLIKELY(buf_get_modified_ratio_pct() >
-                      srv_max_buf_pool_modified_pct)) {
+    if (unlikely(buf_get_modified_ratio_pct() >
+                 srv_max_buf_pool_modified_pct)) {
 
       /* Try to keep the number of modified pages in the
       buffer pool under the limit wished by the user */
@@ -2107,7 +2115,7 @@ loop:
       to flush. Do not sleep 1 second during the next
       iteration of this loop. */
 
-      skip_sleep = TRUE;
+      skip_sleep = true;
     } else if (srv_adaptive_flushing) {
 
       /* Try to keep the rate of flushing of dirty
@@ -2122,7 +2130,7 @@ loop:
             buf_flush_batch(BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
 
         if (n_flush == PCT_IO(100)) {
-          skip_sleep = TRUE;
+          skip_sleep = true;
         }
       }
     }
@@ -2164,7 +2172,7 @@ loop:
   even if the server were active */
 
   srv_main_thread_op_info = "doing insert buffer merge";
-  ibuf_contract_for_n_pages(FALSE, PCT_IO(5));
+  ibuf_contract_for_n_pages(false, PCT_IO(5));
 
   /* Flush logs if needed */
   srv_sync_log_buffer_in_background();
@@ -2211,7 +2219,7 @@ loop:
 
   /* Make a new checkpoint about once in 10 seconds */
 
-  log_checkpoint(TRUE, FALSE);
+  log_checkpoint(true, false);
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
@@ -2286,7 +2294,7 @@ background_loop:
     dirty pages that will be flushed in the call to
     buf_flush_batch below. Otherwise, the system favors
     clean pages over cleanup throughput. */
-    n_bytes_merged = ibuf_contract_for_n_pages(FALSE, PCT_IO(100));
+    n_bytes_merged = ibuf_contract_for_n_pages(false, PCT_IO(100));
   }
 
   srv_main_thread_op_info = "reserving kernel mutex";
@@ -2328,7 +2336,7 @@ flush_loop:
 
   srv_main_thread_op_info = "making checkpoint";
 
-  log_checkpoint(TRUE, FALSE);
+  log_checkpoint(true, false);
 
   if (buf_get_modified_ratio_pct() > srv_max_buf_pool_modified_pct) {
 
@@ -2349,7 +2357,7 @@ flush_loop:
   /*
   srv_main_thread_op_info = "archiving log (if log archive is on)";
 
-  log_archive_do(FALSE, &n_bytes_archived);
+  log_archive_do(false, &n_bytes_archived);
   */
   n_bytes_archived = 0;
 
@@ -2367,7 +2375,9 @@ flush_loop:
 
       goto background_loop;
     }
-  } else if (n_tables_to_drop + n_pages_purged + n_bytes_merged + n_pages_flushed + n_bytes_archived != 0) {
+  } else if (n_tables_to_drop + n_pages_purged + n_bytes_merged +
+                 n_pages_flushed + n_bytes_archived !=
+             0) {
     /* In a 'slow' shutdown we run purge and the insert buffer
     merge to completion */
 
@@ -2436,7 +2446,10 @@ void srv_panic(int panic_ib_error, char *fmt, ...) {
     ib_panic(ib_panic_data, panic_ib_error, fmt, ap);
     return;
   } else {
-    ib_logger(ib_stream, "Database forced shutdown! " "(ib_err %d)", panic_ib_error);
+    ib_logger(ib_stream,
+              "Database forced shutdown! "
+              "(ib_err %d)",
+              panic_ib_error);
     ib_logger(ib_stream, fmt, ap);
     exit(-1);
   }

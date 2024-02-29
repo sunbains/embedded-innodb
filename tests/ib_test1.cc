@@ -60,10 +60,10 @@ static row_t in_rows[] = {{"a", "t", 1},  {"b", "u", 2}, {"c", "b", 3},
 
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }
@@ -242,7 +242,7 @@ static ib_err_t update_a_row(ib_crsr_t crsr) {
     assert(err == DB_SUCCESS);
 
     /* Get the c1 column value. */
-    c1 = static_cast<const char*>(ib_col_get_value(old_tpl, 0));
+    c1 = static_cast<const char *>(ib_col_get_value(old_tpl, 0));
     ib_col_get_meta(old_tpl, 0, &col_meta);
 
     /* There are no SQL_NULL values in our test data. */

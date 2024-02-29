@@ -217,12 +217,6 @@ enum db_err {
 #define UNIV_NO_IGNORE
 #endif /* __GNUC__ && __GNUC__ > 2 && !__INTEL_COMPILER */
 
-/* See comment about ib_bool_t as to why the two macros are unsigned long. */
-/** The boolean value of "true" used internally within InnoDB */
-#define IB_TRUE			0x1UL
-/** The boolean value of "false" used internally within InnoDB */
-#define IB_FALSE		0x0UL
-
 /* Basic types used by the InnoDB API. */
 /** All InnoDB error codes are represented by ib_err_t. See \ref db_err for
     a complete list of possible error codes.
@@ -234,10 +228,7 @@ typedef unsigned char           ib_byte_t;
 typedef unsigned long int       ib_ulint_t;
 /** Representation of a void* within InnoDB */
 typedef void*                   ib_opaque_t;
-/* Ideally we would like to have this as ib_byte_t, but we need to make it
-the same as the InnoDB internal ibool. */
-/** Representation of a "boolean" type within InnoDB */
-typedef ib_ulint_t              ib_bool_t;
+
 /** A character set pointer */
 typedef ib_opaque_t             ib_charset_t;
 
@@ -656,8 +647,8 @@ typedef int (*ib_schema_visitor_index_t) (
 					on failure (abort traversal) */
 	void*		arg,		/*!< User callback arg */
 	const char*	name,		/*!< Index name */
-	ib_bool_t	clustered,	/*!< True if clustered */
-	ib_bool_t	unique,		/*!< True if unique */
+	bool	clustered,	/*!< True if clustered */
+	bool	unique,		/*!< True if unique */
 	int		n_cols);	/*!< No. of cols defined */
 
 /** Index column visitor */
@@ -777,18 +768,18 @@ Set a text configuration variable.
 #define ib_cfg_set_text(name, value)	ib_cfg_set(name, value)
 
 /*! @def ib_cfg_set_bool_on(name)
-Set a boolean configuration variable to IB_TRUE.
+Set a boolean configuration variable to true.
 @ingroup config
 @param name is the config variable name
 @return DB_SUCCESS or error code */
-#define ib_cfg_set_bool_on(name)	ib_cfg_set(name, IB_TRUE)
+#define ib_cfg_set_bool_on(name)	ib_cfg_set(name, true)
 
 /*! @def ib_cfg_set_bool_off(name)
-Set a boolean configuration variable to IB_FALSE.
+Set a boolean configuration variable to false.
 @ingroup config
 @param name is the config variable name
 @return DB_SUCCESS or error code */
-#define ib_cfg_set_bool_off(name)	ib_cfg_set(name, IB_FALSE)
+#define ib_cfg_set_bool_off(name)	ib_cfg_set(name, false)
 
 /*! @def ib_cfg_set_callback(name, value)
 Set a generic ib_cb_t callback function.
@@ -959,7 +950,7 @@ It will also free the transaction handle.
 
 INNODB_API
 ib_err_t
-ib_trx_rollback(ib_trx_t	ib_trx) UNIV_NO_IGNORE;
+ib_trx_rollback(ib_trx_t ib_trx) UNIV_NO_IGNORE;
 
 /** Add columns to a table schema. Tables are created in InnoDB by first
 creating a table schema which is identified by a handle. Then you
@@ -1781,10 +1772,10 @@ ib_index_get_id(
 
 @ingroup ddl
 @param dbname is the name of the database to create
-@return	IB_TRUE on success */
+@return	true on success */
 
 INNODB_API
-ib_bool_t
+bool
 ib_database_create(
 	const char*	dbname) UNIV_NO_IGNORE;
 
@@ -1804,10 +1795,10 @@ ib_database_drop(
 
 @ingroup cursor
 @param ib_crsr is the cursor instance to check
-@return	IB_TRUE if positioned */
+@return	true if positioned */
 
 INNODB_API
-ib_bool_t
+bool
 ib_cursor_is_positioned(
 	const ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
 
@@ -1838,19 +1829,19 @@ user transaction.
 
 @ingroup ddl
 @param ib_trx is a transaction instance
-@return	TRUE if exclusive latch */
+@return	true if exclusive latch */
 
 INNODB_API
-ib_bool_t
+bool
 ib_schema_lock_is_exclusive(
 	const ib_trx_t	ib_trx) UNIV_NO_IGNORE;
 
 /** Checks if the data dictionary is latched in shared mode.
 @param ib_trx is a transaction instance
-@return	TRUE if shared latch */
+@return	true if shared latch */
 
 INNODB_API
-ib_bool_t
+bool
 ib_schema_lock_is_shared(
 	const ib_trx_t	ib_trx) UNIV_NO_IGNORE;
 

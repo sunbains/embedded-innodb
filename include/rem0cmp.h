@@ -27,29 +27,29 @@ Created 7/1/1994 Heikki Tuuri
 #include "data0data.h"
 #include "data0type.h"
 #include "dict0dict.h"
+#include "innodb0types.h"
 #include "rem0rec.h"
-#include "univ.i"
 
-/** Returns TRUE if two columns are equal for comparison purposes.
-@return	TRUE if the columns are considered equal in comparisons */
+/** Returns true if two columns are equal for comparison purposes.
+@return	true if the columns are considered equal in comparisons */
 
-ibool cmp_cols_are_equal(const dict_col_t *col1, /*!< in: column 1 */
-                         const dict_col_t *col2, /*!< in: column 2 */
-                         ibool check_charsets);
+bool cmp_cols_are_equal(const dict_col_t *col1, /*!< in: column 1 */
+                        const dict_col_t *col2, /*!< in: column 2 */
+                        bool check_charsets);
 /*!< in: whether to check charsets */
 /** This function is used to compare two data fields for which we know the
 data type.
 @return	1, 0, -1, if data1 is greater, equal, less than data2, respectively */
-UNIV_INLINE
-int cmp_data_data(void *cmp_ctx,     /*!< in: client compare context */
-                  ulint mtype,       /*!< in: main type */
-                  ulint prtype,      /*!< in: precise type */
-                  const byte *data1, /*!< in: data field (== a pointer to a
-                                     memory buffer) */
-                  ulint len1, /*!< in: data field length or UNIV_SQL_NULL */
-                  const byte *data2, /*!< in: data field (== a pointer to a
-                                     memory buffer) */
-                  ulint len2); /*!< in: data field length or UNIV_SQL_NULL */
+inline int
+cmp_data_data(void *cmp_ctx,     /*!< in: client compare context */
+              ulint mtype,       /*!< in: main type */
+              ulint prtype,      /*!< in: precise type */
+              const byte *data1, /*!< in: data field (== a pointer to a
+                                 memory buffer) */
+              ulint len1,        /*!< in: data field length or UNIV_SQL_NULL */
+              const byte *data2, /*!< in: data field (== a pointer to a
+                                 memory buffer) */
+              ulint len2);       /*!< in: data field length or UNIV_SQL_NULL */
 /** This function is used to compare two data fields for which we know the
 data type.
 @return	1, 0, -1, if data1 is greater, equal, less than data2, respectively */
@@ -68,8 +68,7 @@ int cmp_data_data_slow(
 has its data type field set.
 @return 1, 0, -1, if dfield1 is greater, equal, less than dfield2,
 respectively */
-UNIV_INLINE
-int cmp_dfield_dfield(
+inline int cmp_dfield_dfield(
     void *cmp_ctx,            /*!< in: client compare context */
     const dfield_t *dfield1,  /*!< in: data field; must have type field set */
     const dfield_t *dfield2); /*!< in: data field */
@@ -110,9 +109,9 @@ int cmp_dtuple_rec(
     const ulint *offsets);  /*!< in: array returned by rec_get_offsets() */
 /** Checks if a dtuple is a prefix of a record. The last field in dtuple
 is allowed to be a prefix of the corresponding field in the record.
-@return	TRUE if prefix */
+@return	true if prefix */
 
-ibool cmp_dtuple_is_prefix_of_rec(
+bool cmp_dtuple_is_prefix_of_rec(
     void *cmp_ctx,          /*!< in: client compare context */
     const dtuple_t *dtuple, /*!< in: data tuple */
     const rec_t *rec,       /*!< in: physical record */
@@ -150,12 +149,12 @@ int cmp_rec_rec_with_match(
 first fields are compared.
 @return 1, 0 , -1 if rec1 is greater, equal, less, respectively, than
 rec2; only the common first fields are compared */
-UNIV_INLINE
-int cmp_rec_rec(const rec_t *rec1,     /*!< in: physical record */
-                const rec_t *rec2,     /*!< in: physical record */
-                const ulint *offsets1, /*!< in: rec_get_offsets(rec1, index) */
-                const ulint *offsets2, /*!< in: rec_get_offsets(rec2, index) */
-                dict_index_t *index);  /*!< in: data dictionary index */
+inline int
+cmp_rec_rec(const rec_t *rec1,     /*!< in: physical record */
+            const rec_t *rec2,     /*!< in: physical record */
+            const ulint *offsets1, /*!< in: rec_get_offsets(rec1, index) */
+            const ulint *offsets2, /*!< in: rec_get_offsets(rec2, index) */
+            dict_index_t *index);  /*!< in: data dictionary index */
 
 #ifndef UNIV_NONINL
 #include "rem0cmp.ic"

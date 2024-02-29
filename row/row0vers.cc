@@ -123,7 +123,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(
   }
 
   if (!lock_check_trx_id_sanity(trx_id, clust_rec, clust_index, clust_offsets,
-                                TRUE)) {
+                                true)) {
     /* Corruption noticed: try to avoid a crash by returning */
     goto exit_func;
   }
@@ -164,7 +164,8 @@ trx_t *row_vers_impl_x_locked_off_kernel(
 
     heap2 = heap;
     heap = mem_heap_create(1024);
-    err = trx_undo_prev_version_build(clust_rec, &mtr, version, clust_index, clust_offsets, heap, &prev_version);
+    err = trx_undo_prev_version_build(clust_rec, &mtr, version, clust_index,
+                                      clust_offsets, heap, &prev_version);
     mem_heap_free(heap2); /* free version and clust_offsets */
 
     if (prev_version == NULL) {
@@ -291,9 +292,9 @@ exit_func:
 
 /** Finds out if we must preserve a delete marked earlier version of a clustered
 index record, because it is >= the purge view.
-@return	TRUE if earlier version should be preserved */
+@return	true if earlier version should be preserved */
 
-ibool row_vers_must_preserve_del_marked(
+bool row_vers_must_preserve_del_marked(
     trx_id_t trx_id, /*!< in: transaction id in the version */
     mtr_t *mtr)      /*!< in: mtr holding the latch on the
                      clustered index record; it will also
@@ -310,23 +311,23 @@ ibool row_vers_must_preserve_del_marked(
     /* A purge operation is not yet allowed to remove this
     delete marked record */
 
-    return (TRUE);
+    return (true);
   }
 
-  return (FALSE);
+  return (false);
 }
 
 /** Finds out if a version of the record, where the version >= the current
 purge view, should have ientry as its secondary index entry. We check
 if there is any not delete marked version of the record where the trx
 id >= purge view, and the secondary index entry and ientry are identified in
-the alphabetical ordering; exactly in this case we return TRUE.
-@return	TRUE if earlier version should have */
+the alphabetical ordering; exactly in this case we return true.
+@return	true if earlier version should have */
 
-ibool row_vers_old_has_index_entry(
-    ibool also_curr,        /*!< in: TRUE if also rec is included in the
-                          versions to search; otherwise only versions
-                          prior to it are searched */
+bool row_vers_old_has_index_entry(
+    bool also_curr,         /*!< in: true if also rec is included in the
+                           versions to search; otherwise only versions
+                           prior to it are searched */
     const rec_t *rec,       /*!< in: record in the clustered index; the
                             caller must have a latch on the page */
     mtr_t *mtr,             /*!< in: mtr holding the latch on rec; it will
@@ -395,7 +396,7 @@ ibool row_vers_old_has_index_entry(
 
       mem_heap_free(heap);
 
-      return (TRUE);
+      return (true);
     }
   }
 
@@ -404,7 +405,8 @@ ibool row_vers_old_has_index_entry(
   for (;;) {
     heap2 = heap;
     heap = mem_heap_create(1024);
-    err = trx_undo_prev_version_build(rec, mtr, version, clust_index, clust_offsets, heap, &prev_version);
+    err = trx_undo_prev_version_build(rec, mtr, version, clust_index,
+                                      clust_offsets, heap, &prev_version);
     mem_heap_free(heap2); /* free version and clust_offsets */
 
     if (err != DB_SUCCESS || !prev_version) {
@@ -412,7 +414,7 @@ ibool row_vers_old_has_index_entry(
 
       mem_heap_free(heap);
 
-      return (FALSE);
+      return (false);
     }
 
     clust_offsets = rec_get_offsets(prev_version, clust_index, NULL,
@@ -444,7 +446,7 @@ ibool row_vers_old_has_index_entry(
 
         mem_heap_free(heap);
 
-        return (TRUE);
+        return (true);
       }
     }
 
@@ -533,7 +535,8 @@ db_err row_vers_build_for_consistent_read(
       }
     }
 
-    err = trx_undo_prev_version_build(rec, mtr, version, index, *offsets, heap, &prev_version);
+    err = trx_undo_prev_version_build(rec, mtr, version, index, *offsets, heap,
+                                      &prev_version);
 
     if (heap2) {
       mem_heap_free(heap2); /* free version */
@@ -678,12 +681,13 @@ ulint row_vers_build_for_semi_consistent_read(
     heap2 = heap;
     heap = mem_heap_create(1024);
 
-    err = trx_undo_prev_version_build(rec, mtr, version, index, *offsets, heap, &prev_version);
+    err = trx_undo_prev_version_build(rec, mtr, version, index, *offsets, heap,
+                                      &prev_version);
     if (heap2) {
       mem_heap_free(heap2); /* free version */
     }
 
-    if (UNIV_UNLIKELY(err != DB_SUCCESS)) {
+    if (unlikely(err != DB_SUCCESS)) {
       break;
     }
 

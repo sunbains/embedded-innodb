@@ -23,17 +23,15 @@ Created 4/6/2006 Osku Salerma
 
 /** Get number of elements in vector.
 @return	number of elements in vector */
-UNIV_INLINE
-ulint ib_vector_size(const ib_vector_t *vec) /*!< in: vector */
+inline ulint ib_vector_size(const ib_vector_t *vec) /*!< in: vector */
 {
   return (vec->used);
 }
 
 /** Get n'th element.
 @return	n'th element */
-UNIV_INLINE
-void *ib_vector_get(ib_vector_t *vec, /*!< in: vector */
-                    ulint n)          /*!< in: element index to get */
+inline void *ib_vector_get(ib_vector_t *vec, /*!< in: vector */
+                           ulint n)          /*!< in: element index to get */
 {
   ut_a(n < ib_vector_size(vec));
 
@@ -42,9 +40,9 @@ void *ib_vector_get(ib_vector_t *vec, /*!< in: vector */
 
 /** Get n'th element as a const pointer.
 @return	n'th element */
-UNIV_INLINE
-const void *ib_vector_get_const(const ib_vector_t *vec, /*!< in: vector */
-                                ulint n) /*!< in: element index to get */
+inline const void *
+ib_vector_get_const(const ib_vector_t *vec, /*!< in: vector */
+                    ulint n)                /*!< in: element index to get */
 {
   ut_a(n < ib_vector_size(vec));
 
@@ -53,10 +51,9 @@ const void *ib_vector_get_const(const ib_vector_t *vec, /*!< in: vector */
 
 /** Set n'th element and return the previous value.
 @return	n'th element */
-UNIV_INLINE
-void *ib_vector_set(ib_vector_t *vec, /*!< in: vector */
-                    ulint n,          /*!< in: element index to set */
-                    void *p)          /*!< in: new value to set */
+inline void *ib_vector_set(ib_vector_t *vec, /*!< in: vector */
+                           ulint n,          /*!< in: element index to set */
+                           void *p)          /*!< in: new value to set */
 {
   void *prev;
 
@@ -70,8 +67,7 @@ void *ib_vector_set(ib_vector_t *vec, /*!< in: vector */
 
 /** Remove the last element from the vector.
 @return	last vector element */
-UNIV_INLINE
-void *ib_vector_pop(ib_vector_t *vec) /*!< in/out: vector */
+inline void *ib_vector_pop(ib_vector_t *vec) /*!< in/out: vector */
 {
   void *elem;
 
@@ -87,16 +83,14 @@ void *ib_vector_pop(ib_vector_t *vec) /*!< in/out: vector */
 
 /** Free the underlying heap of the vector. Note that vec is invalid
 after this call. */
-UNIV_INLINE
-void ib_vector_free(ib_vector_t *vec) /*!< in, own: vector */
+inline void ib_vector_free(ib_vector_t *vec) /*!< in, own: vector */
 {
   mem_heap_free(vec->heap);
 }
 
 /** Test whether a vector is empty or not.
-@return	TRUE if empty */
-UNIV_INLINE
-ibool ib_vector_is_empty(const ib_vector_t *vec) /*!< in: vector */
+@return	true if empty */
+inline bool ib_vector_is_empty(const ib_vector_t *vec) /*!< in: vector */
 {
   return (ib_vector_size(vec) == 0);
 }

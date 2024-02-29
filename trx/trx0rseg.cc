@@ -181,7 +181,7 @@ trx_rseg_mem_create(ib_recovery_t recovery, /*!< in: recovery flag */
 
   ut_ad(mutex_own(&kernel_mutex));
 
-  auto rseg = static_cast<trx_rseg_t*>(mem_alloc(sizeof(trx_rseg_t)));
+  auto rseg = static_cast<trx_rseg_t *>(mem_alloc(sizeof(trx_rseg_t)));
 
   rseg->id = id;
   rseg->space = space;

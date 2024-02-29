@@ -94,17 +94,17 @@ struct sync_cell_struct {
                            requested */
   os_thread_id_t thread;   /*!< thread id of this waiting
                            thread */
-  ibool waiting;           /*!< TRUE if the thread has already
-                           called sync_array_event_wait
-                           on this cell */
-  int64_t signal_count; /*!< We capture the signal_count
-                           of the wait_object when we
-                           reset the event. This value is
-                           then passed on to os_event_wait
-                           and we wait only if the event
-                           has not been signalled in the
-                           period between the reset and
-                           wait call. */
+  bool waiting;            /*!< true if the thread has already
+                            called sync_array_event_wait
+                            on this cell */
+  int64_t signal_count;    /*!< We capture the signal_count
+                              of the wait_object when we
+                              reset the event. This value is
+                              then passed on to os_event_wait
+                              and we wait only if the event
+                              has not been signalled in the
+                              period between the reset and
+                              wait call. */
   time_t reservation_time; /*!< time when the thread reserved
                           the wait cell */
 };
@@ -142,8 +142,8 @@ struct sync_array_struct {
 #ifdef UNIV_SYNC_DEBUG
 /** This function is called only in the debug version. Detects a deadlock
 of one or more threads because of waits of semaphores.
-@return	TRUE if deadlock detected */
-static ibool sync_array_detect_deadlock(
+@return	true if deadlock detected */
+static bool sync_array_detect_deadlock(
     sync_array_t *arr,  /*!< in: wait array; NOTE! the caller must
                         own the mutex to array */
     sync_cell_t *start, /*!< in: cell where recursive search started */
@@ -195,17 +195,17 @@ static void sync_array_exit(sync_array_t *arr) /*!< in: sync wait array */
   }
 }
 
-sync_array_t * sync_array_create(ulint n_cells, ulint protection) {
+sync_array_t *sync_array_create(ulint n_cells, ulint protection) {
   ut_a(n_cells > 0);
 
   /* Allocate memory for the data structures */
-  auto arr = static_cast<sync_array_t*>(ut_malloc(sizeof(sync_array_t)));
+  auto arr = static_cast<sync_array_t *>(ut_malloc(sizeof(sync_array_t)));
 
   memset(arr, 0x0, sizeof(*arr));
 
   auto sz = sizeof(sync_cell_t) * n_cells;
 
-  arr->array = static_cast<sync_cell_t*>(ut_malloc(sz));
+  arr->array = static_cast<sync_cell_t *>(ut_malloc(sz));
 
   memset(arr->array, 0x0, sz);
 
@@ -279,7 +279,8 @@ sync_cell_get_event(sync_cell_t *cell) /*!< in: non-empty sync array cell */
   }
 }
 
-void sync_array_reserve_cell(sync_array_t *arr, void *object, ulint type, const char *file, ulint line, ulint *index) {
+void sync_array_reserve_cell(sync_array_t *arr, void *object, ulint type,
+                             const char *file, ulint line, ulint *index) {
   sync_cell_t *cell;
   os_event_t event;
   ulint i;
@@ -297,13 +298,13 @@ void sync_array_reserve_cell(sync_array_t *arr, void *object, ulint type, const 
 
     if (cell->wait_object == nullptr) {
 
-      cell->waiting = FALSE;
+      cell->waiting = false;
       cell->wait_object = object;
 
       if (type == SYNC_MUTEX) {
-        cell->old_wait_mutex = static_cast<ib_mutex_t*>(object);
+        cell->old_wait_mutex = static_cast<ib_mutex_t *>(object);
       } else {
-        cell->old_wait_rw_lock = static_cast<rw_lock_t*>(object);
+        cell->old_wait_rw_lock = static_cast<rw_lock_t *>(object);
       }
 
       cell->request_type = type;
@@ -351,7 +352,7 @@ void sync_array_wait_event(sync_array_t *arr, ulint index) {
   ut_ad(os_thread_get_curr_id() == cell->thread);
 
   event = sync_cell_get_event(cell);
-  cell->waiting = TRUE;
+  cell->waiting = true;
 
 #ifdef UNIV_SYNC_DEBUG
 
@@ -362,7 +363,7 @@ void sync_array_wait_event(sync_array_t *arr, ulint index) {
 
   rw_lock_debug_mutex_enter();
 
-  if (TRUE == sync_array_detect_deadlock(arr, cell, cell, 0)) {
+  if (true == sync_array_detect_deadlock(arr, cell, cell, 0)) {
 
     ib_logger(ib_stream, "########################################\n");
     ut_error;
@@ -433,7 +434,8 @@ sync_array_cell_print(ib_stream_t ib_stream, /*!< in: stream where to print */
       auto thread_id = std::stoull(ss.str());
 
       ib_logger(ib_stream,
-                "a writer (thread id %lu) has reserved it in mode %s", (ulong)thread_id,
+                "a writer (thread id %lu) has reserved it in mode %s",
+                (ulong)thread_id,
                 writer == RW_LOCK_EX ? " exclusive\n" : " wait exclusive\n");
     }
 
@@ -442,12 +444,9 @@ sync_array_cell_print(ib_stream_t ib_stream, /*!< in: stream where to print */
               "lock_word: %lx\n"
               "Last time read locked in file %s line %lu\n"
               "Last time write locked in file %s line %lu\n",
-              (ulong)rw_lock_get_reader_count(rwlock),
-	      (ulong)rwlock->m_waiters,
-              (ulong)rwlock->m_lock_word.load(),
-	      rwlock->m_last_s_file_name,
-              (ulong)rwlock->m_last_s_line,
-	      rwlock->m_last_x_file_name,
+              (ulong)rw_lock_get_reader_count(rwlock), (ulong)rwlock->m_waiters,
+              (ulong)rwlock->m_lock_word.load(), rwlock->m_last_s_file_name,
+              (ulong)rwlock->m_last_s_line, rwlock->m_last_x_file_name,
               (ulong)rwlock->m_last_x_line);
   } else {
     ut_error;
@@ -482,8 +481,8 @@ sync_array_find_thread(sync_array_t *arr,     /*!< in: wait array */
 }
 
 /** Recursion step for deadlock detection.
-@return	TRUE if deadlock detected */
-static ibool sync_array_deadlock_step(
+@return	true if deadlock detected */
+static bool sync_array_deadlock_step(
     sync_array_t *arr,     /*!< in: wait array; NOTE! the caller must
                            own the mutex to array */
     sync_cell_t *start,    /*!< in: cell where recursive search
@@ -493,7 +492,7 @@ static ibool sync_array_deadlock_step(
     ulint depth)           /*!< in: recursion depth */
 {
   sync_cell_t *new;
-  ibool ret;
+  bool ret;
 
   depth++;
 
@@ -502,7 +501,7 @@ static ibool sync_array_deadlock_step(
     responsible of releasing the lock, and no deadlock can
     be detected. */
 
-    return FALSE;
+    return false;
   }
 
   new = sync_array_find_thread(arr, thread);
@@ -510,28 +509,28 @@ static ibool sync_array_deadlock_step(
   if (new == start) {
     /* Stop running of other threads */
 
-    ut_dbg_stop_threads = TRUE;
+    ut_dbg_stop_threads = true;
 
     /* Deadlock */
     ib_logger(ib_stream, "########################################\n"
                          "DEADLOCK of threads detected!\n");
 
-    return TRUE;
+    return true;
 
   } else if (new) {
     ret = sync_array_detect_deadlock(arr, start, new, depth);
 
     if (ret) {
-      return TRUE;
+      return true;
     }
   }
-  return FALSE;
+  return false;
 }
 
 /** This function is called only in the debug version. Detects a deadlock
 of one or more threads because of waits of semaphores.
-@return	TRUE if deadlock detected */
-static ibool sync_array_detect_deadlock(
+@return	true if deadlock detected */
+static bool sync_array_detect_deadlock(
     sync_array_t *arr,  /*!< in: wait array; NOTE! the caller must
                         own the mutex to array */
     sync_cell_t *start, /*!< in: cell where recursive search started */
@@ -541,7 +540,7 @@ static ibool sync_array_detect_deadlock(
   mutex_t *mutex;
   rw_lock_t *lock;
   os_thread_id_t thread;
-  ibool ret;
+  bool ret;
   rw_lock_debug_t *debug;
 
   ut_a(arr);
@@ -555,7 +554,7 @@ static ibool sync_array_detect_deadlock(
 
   if (!cell->waiting) {
 
-    return FALSE; /* No deadlock here */
+    return false; /* No deadlock here */
   }
 
   if (cell->request_type == SYNC_MUTEX) {
@@ -583,11 +582,11 @@ static ibool sync_array_detect_deadlock(
                   mutex->file_name, (ulong)mutex->line);
         sync_array_cell_print(ib_stream, cell);
 
-        return TRUE;
+        return true;
       }
     }
 
-    return FALSE; /* No deadlock */
+    return false; /* No deadlock */
 
   } else if (cell->request_type == RW_LOCK_EX ||
              cell->request_type == RW_LOCK_WAIT_EX) {
@@ -618,14 +617,14 @@ static ibool sync_array_detect_deadlock(
           ib_logger(ib_stream, "rw-lock %p ", (void *)lock);
           sync_array_cell_print(ib_stream, cell);
           rw_lock_debug_print(debug);
-          return TRUE;
+          return true;
         }
       }
 
       debug = UT_LIST_GET_NEXT(list, debug);
     }
 
-    return FALSE;
+    return false;
 
   } else if (cell->request_type == RW_LOCK_SHARED) {
 
@@ -653,19 +652,19 @@ static ibool sync_array_detect_deadlock(
       debug = UT_LIST_GET_NEXT(list, debug);
     }
 
-    return FALSE;
+    return false;
 
   } else {
     ut_error;
   }
 
-  return TRUE; /* Execution never reaches this line: for compiler
+  return true; /* Execution never reaches this line: for compiler
                  fooling only */
 }
 #endif /* UNIV_SYNC_DEBUG */
 
 /** Determines if we can wake up the thread waiting for a sempahore. */
-static ibool
+static bool
 sync_arr_cell_can_wake_up(sync_cell_t *cell) /*!< in: cell to search */
 {
   mutex_t *mutex;
@@ -673,43 +672,43 @@ sync_arr_cell_can_wake_up(sync_cell_t *cell) /*!< in: cell to search */
 
   if (cell->request_type == SYNC_MUTEX) {
 
-    mutex = static_cast<ib_mutex_t*>(cell->wait_object);
+    mutex = static_cast<ib_mutex_t *>(cell->wait_object);
 
     if (mutex_get_lock_word(mutex) == 0) {
 
-      return TRUE;
+      return true;
     }
 
   } else if (cell->request_type == RW_LOCK_EX) {
 
-    lock = static_cast<rw_lock_t*>(cell->wait_object);
+    lock = static_cast<rw_lock_t *>(cell->wait_object);
 
     if (lock->m_lock_word > 0) {
       /* Either unlocked or only read locked. */
 
-      return TRUE;
+      return true;
     }
 
   } else if (cell->request_type == RW_LOCK_WAIT_EX) {
 
-    lock = static_cast<rw_lock_t*>(cell->wait_object);
+    lock = static_cast<rw_lock_t *>(cell->wait_object);
 
     /* lock_word == 0 means all readers have left */
     if (lock->m_lock_word == 0) {
 
-      return TRUE;
+      return true;
     }
   } else if (cell->request_type == RW_LOCK_SHARED) {
-    lock = static_cast<rw_lock_t*>(cell->wait_object);
+    lock = static_cast<rw_lock_t *>(cell->wait_object);
 
     /* lock_word > 0 means no writer or reserved writer */
     if (lock->m_lock_word > 0) {
 
-      return TRUE;
+      return true;
     }
   }
 
-  return FALSE;
+  return false;
 }
 
 void sync_array_free_cell(sync_array_t *arr, ulint index) {
@@ -721,7 +720,7 @@ void sync_array_free_cell(sync_array_t *arr, ulint index) {
 
   ut_a(cell->wait_object != nullptr);
 
-  cell->waiting = FALSE;
+  cell->waiting = false;
   cell->wait_object = nullptr;
   cell->signal_count = 0;
 
@@ -777,15 +776,15 @@ void sync_arr_wake_threads_if_sema_free(void) {
 }
 
 /** Prints warnings of long semaphore waits to ib_stream.
-@return	TRUE if fatal semaphore wait threshold was exceeded */
+@return	true if fatal semaphore wait threshold was exceeded */
 
-ibool sync_array_print_long_waits(void) {
+bool sync_array_print_long_waits(void) {
   sync_cell_t *cell;
-  ibool old_val;
-  ibool noticed = FALSE;
+  bool old_val;
+  bool noticed = false;
   ulint i;
   ulint fatal_timeout = srv_fatal_semaphore_wait_threshold;
-  ibool fatal = FALSE;
+  bool fatal = false;
 
   for (i = 0; i < sync_primary_wait_array->n_cells; i++) {
 
@@ -795,12 +794,12 @@ ibool sync_array_print_long_waits(void) {
         difftime(time(nullptr), cell->reservation_time) > 240) {
       ib_logger(ib_stream, "InnoDB: Warning: a long semaphore wait:\n");
       sync_array_cell_print(ib_stream, cell);
-      noticed = TRUE;
+      noticed = true;
     }
 
     if (cell->wait_object != nullptr && cell->waiting &&
         difftime(time(nullptr), cell->reservation_time) > fatal_timeout) {
-      fatal = TRUE;
+      fatal = true;
     }
   }
 
@@ -819,13 +818,14 @@ ibool sync_array_print_long_waits(void) {
               (ulong)os_file_n_pending_preads,
               (ulong)os_file_n_pending_pwrites);
 
-    srv_print_innodb_monitor = TRUE;
+    srv_print_innodb_monitor = true;
     os_event_set(srv_lock_timeout_thread_event);
 
     os_thread_sleep(30000000);
 
     srv_print_innodb_monitor = old_val;
-    ib_logger(ib_stream, "InnoDB: ###### Diagnostic info printed to the standard error stream\n");
+    ib_logger(ib_stream, "InnoDB: ###### Diagnostic info printed to the "
+                         "standard error stream\n");
   }
 
   return fatal;

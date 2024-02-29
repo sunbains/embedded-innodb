@@ -24,7 +24,7 @@ Created 9/8/1995 Heikki Tuuri
 
 #pragma once
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include <pthread.h>
 
@@ -46,10 +46,10 @@ typedef pthread_t os_thread_t;
 typedef os_thread_t os_thread_id_t;
 
 /** Compares two thread ids for equality.
-@return	TRUE if equal */
+@return	true if equal */
 
-ibool os_thread_eq(os_thread_id_t a,  /*!< in: OS thread or thread id */
-                   os_thread_id_t b); /*!< in: OS thread or thread id */
+bool os_thread_eq(os_thread_id_t a,  /*!< in: OS thread or thread id */
+                  os_thread_id_t b); /*!< in: OS thread or thread id */
 
 /** Converts an OS thread id to a ulint. It is NOT guaranteed that the ulint is
 unique for the thread though!
@@ -66,7 +66,8 @@ thread should always use that to exit and not use return() to exit.
 @param[out] thread_id           The new thread ID.
 
 @return	handle to the thread. */
-os_thread_t os_thread_create(void *(*f)(void *), void *arg, os_thread_id_t *thread_id);
+os_thread_t os_thread_create(void *(*f)(void *), void *arg,
+                             os_thread_id_t *thread_id);
 
 /** Exits the current thread. */
 void os_thread_exit(void *exit_value);

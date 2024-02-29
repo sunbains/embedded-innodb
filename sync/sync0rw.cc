@@ -69,7 +69,7 @@ The other members of the lock obey the following rules to remain consistent:
 
 recursive:	This and the writer_thread field together control the
                 behaviour of recursive x-locking.
-                lock->m_recursive must be FALSE in following states:
+                lock->m_recursive must be false in following states:
                         1) The writer_thread contains garbage i.e.: the
                         lock has just been initialized.
                         2) The lock is not x-held and there is no
@@ -77,7 +77,7 @@ recursive:	This and the writer_thread field together control the
                         3) The lock is x-held or there is an x-waiter
                         waiting on WAIT_EX event but the 'pass' value
                         is non-zero.
-                lock->m_recursive is TRUE iff:
+                lock->m_recursive is true iff:
                         1) The lock is x-held or there is an x-waiter
                         waiting on WAIT_EX event and the 'pass' value
                         is zero.
@@ -85,7 +85,7 @@ recursive:	This and the writer_thread field together control the
                 has been updated with a memory ordering barrier.
                 It is unset before the lock_word has been incremented.
 writer_thread:	Is used only in recursive x-locking. Can only be safely
-                read iff lock->m_recursive flag is TRUE.
+                read iff lock->m_recursive flag is true.
                 This field is uninitialized at lock creation time and
                 is updated atomically when x-lock is acquired or when
                 move_ownership is called. A thread is only allowed to
@@ -172,8 +172,8 @@ mutex_t rw_lock_debug_mutex;
 it may wait for this event */
 os_event_t rw_lock_debug_event;
 
-/** This is set to TRUE, if there may be waiters for the event */
-ibool rw_lock_debug_waiters;
+/** This is set to true, if there may be waiters for the event */
+bool rw_lock_debug_waiters;
 
 /** Creates a debug info struct. */
 static rw_lock_debug_t *rw_lock_debug_create(void);
@@ -209,17 +209,14 @@ void rw_lock_var_init() {
 #endif /* UNIV_SYNC_DEBUG */
 }
 
-void rw_lock_create_func(
-    rw_lock_t *lock, /*!< in: pointer to memory */
+void rw_lock_create_func(rw_lock_t *lock, /*!< in: pointer to memory */
 #ifdef UNIV_DEBUG
 #ifdef UNIV_SYNC_DEBUG
-    ulint level,
+                         ulint level,
 #endif /* UNIV_SYNC_DEBUG */
-    const char *cmutex_name,
+                         const char *cmutex_name,
 #endif /* UNIV_DEBUG */
-    const char *cfile_name,
-    ulint cline)
-{
+                         const char *cfile_name, ulint cline) {
   /* If this is the very first time a synchronization object is
   created, then the following call initializes the sync system. */
 
@@ -289,8 +286,7 @@ void rw_lock_free(rw_lock_t *lock) {
 }
 
 #ifdef UNIV_DEBUG
-ibool rw_lock_validate(rw_lock_t *lock)
-{
+bool rw_lock_validate(rw_lock_t *lock) {
   ut_a(lock != nullptr);
 
   ulint waiters = rw_lock_get_waiters(lock);
@@ -300,11 +296,12 @@ ibool rw_lock_validate(rw_lock_t *lock)
   ut_a(waiters == 0 || waiters == 1);
   ut_a(lock_word > -X_LOCK_DECR || (-lock_word) % X_LOCK_DECR == 0);
 
-  return TRUE;
+  return true;
 }
 #endif /* UNIV_DEBUG */
 
-void rw_lock_s_lock_spin(rw_lock_t *lock, ulint pass, const char *file_name, ulint line) {
+void rw_lock_s_lock_spin(rw_lock_t *lock, ulint pass, const char *file_name,
+                         ulint line) {
   ulint i{};
   ulint index; /* index of the reserved wait cell */
 
@@ -335,7 +332,7 @@ lock_loop:
   }
 
   /* We try once again to obtain the lock */
-  if (TRUE == rw_lock_s_lock_low(lock, pass, file_name, line)) {
+  if (true == rw_lock_s_lock_low(lock, pass, file_name, line)) {
     rw_s_spin_round_count += i;
 
     return; /* Success */
@@ -354,7 +351,7 @@ lock_loop:
     signal is sent. This may lead to some unnecessary signals. */
     rw_lock_set_waiter_flag(lock);
 
-    if (TRUE == rw_lock_s_lock_low(lock, pass, file_name, line)) {
+    if (true == rw_lock_s_lock_low(lock, pass, file_name, line)) {
       sync_array_free_cell(sync_primary_wait_array, index);
       return; /* Success */
     }
@@ -381,7 +378,7 @@ lock_loop:
 void rw_lock_x_lock_move_ownership(rw_lock_t *lock) {
   ut_ad(rw_lock_is_locked(lock, RW_LOCK_EX));
 
-  rw_lock_set_writer_id_and_recursion_flag(lock, TRUE);
+  rw_lock_set_writer_id_and_recursion_flag(lock, true);
 }
 
 /** Function for the next writer to call. Waits for readers to exit.
@@ -391,15 +388,11 @@ The caller must have already decremented lock_word by X_LOCK_DECR.
                                 to another thread to unlock
 @param[in] file_name            File name where lock requested
 @param[in] line                 Line where requested */
-inline
-void rw_lock_x_lock_wait(
-    rw_lock_t *lock,
+inline void rw_lock_x_lock_wait(rw_lock_t *lock,
 #ifdef UNIV_SYNC_DEBUG
-    ulint pass,
+                                ulint pass,
 #endif /* UNIV_SYNC_DEBUG */
-    const char *file_name,
-    ulint line)
-{
+                                const char *file_name, ulint line) {
   ulint index;
   ulint i = 0;
 
@@ -420,7 +413,8 @@ void rw_lock_x_lock_wait(
 
     i = 0;
 
-    sync_array_reserve_cell(sync_primary_wait_array, lock, RW_LOCK_WAIT_EX, file_name, line, &index);
+    sync_array_reserve_cell(sync_primary_wait_array, lock, RW_LOCK_WAIT_EX,
+                            file_name, line, &index);
 
     /* Check lock_word to ensure wake-up isn't missed.*/
     if (lock->m_lock_word < 0) {
@@ -458,8 +452,8 @@ void rw_lock_x_lock_wait(
 @param[in] file_name       File name where lock requested
 @param[in] line            Line in filen_ame where requested
 @return	RW_LOCK_NOT_LOCKED if did not succeed, RW_LOCK_EX if success. */
-inline
-bool rw_lock_x_lock_low(rw_lock_t *lock, ulint pass, const char *file_name, ulint line) {
+inline bool rw_lock_x_lock_low(rw_lock_t *lock, ulint pass,
+                               const char *file_name, ulint line) {
   if (rw_lock_lock_word_decr(lock, X_LOCK_DECR)) {
 
     /* lock->m_recursive also tells us if the writer_thread
@@ -469,7 +463,7 @@ bool rw_lock_x_lock_low(rw_lock_t *lock, ulint pass, const char *file_name, ulin
     ut_a(!lock->m_recursive);
 
     /* Decrement occurred: we are writer or next-writer. */
-    rw_lock_set_writer_id_and_recursion_flag(lock, pass ? FALSE : TRUE);
+    rw_lock_set_writer_id_and_recursion_flag(lock, pass ? false : true);
 
     rw_lock_x_lock_wait(lock,
 #ifdef UNIV_SYNC_DEBUG
@@ -479,7 +473,8 @@ bool rw_lock_x_lock_low(rw_lock_t *lock, ulint pass, const char *file_name, ulin
 
   } else {
     /* Decrement failed: relock or failed lock */
-    if (!pass && lock->m_recursive && lock->m_writer_thread.load() == std::this_thread::get_id()) {
+    if (!pass && lock->m_recursive &&
+        lock->m_writer_thread.load() == std::this_thread::get_id()) {
       /* Relock */
       lock->m_lock_word -= X_LOCK_DECR;
     } else {
@@ -497,10 +492,11 @@ bool rw_lock_x_lock_low(rw_lock_t *lock, ulint pass, const char *file_name, ulin
   return true;
 }
 
-void rw_lock_x_lock_func(rw_lock_t *lock, ulint pass, const char *file_name, ulint line) {
+void rw_lock_x_lock_func(rw_lock_t *lock, ulint pass, const char *file_name,
+                         ulint line) {
   ulint i;
   ulint index;
-  ibool spinning{FALSE};
+  bool spinning{false};
 
   ut_ad(rw_lock_validate(lock));
 
@@ -516,7 +512,7 @@ lock_loop:
   } else {
 
     if (!spinning) {
-      spinning = TRUE;
+      spinning = true;
       rw_x_spin_wait_count++;
     }
 
@@ -584,7 +580,7 @@ loop:
 
   os_event_reset(rw_lock_debug_event);
 
-  rw_lock_debug_waiters = TRUE;
+  rw_lock_debug_waiters = true;
 
   if (0 == mutex_enter_nowait(&rw_lock_debug_mutex)) {
     return;
@@ -599,12 +595,13 @@ void rw_lock_debug_mutex_exit(void) {
   mutex_exit(&rw_lock_debug_mutex);
 
   if (rw_lock_debug_waiters) {
-    rw_lock_debug_waiters = FALSE;
+    rw_lock_debug_waiters = false;
     os_event_set(rw_lock_debug_event);
   }
 }
 
-void rw_lock_add_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type, const char *file_name, ulint line) {
+void rw_lock_add_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type,
+                            const char *file_name, ulint line) {
   ut_ad(lock);
   ut_ad(file_name);
 
@@ -659,7 +656,7 @@ void rw_lock_remove_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type) {
   ut_error;
 }
 
-ibool rw_lock_own(rw_lock_t *lock, ulint lock_type) {
+bool rw_lock_own(rw_lock_t *lock, ulint lock_type) {
   ut_ad(lock);
   ut_ad(rw_lock_validate(lock));
 
@@ -675,31 +672,31 @@ ibool rw_lock_own(rw_lock_t *lock, ulint lock_type) {
       rw_lock_debug_mutex_exit();
 
       /* Found! */
-      return TRUE;
+      return true;
     }
 
     info = UT_LIST_GET_NEXT(list, info);
   }
   rw_lock_debug_mutex_exit();
 
-  return FALSE;
+  return false;
 }
 
 #endif /* UNIV_SYNC_DEBUG */
 
-ibool rw_lock_is_locked(rw_lock_t *lock, ulint lock_type) {
-  ibool ret = FALSE;
+bool rw_lock_is_locked(rw_lock_t *lock, ulint lock_type) {
+  bool ret = false;
 
   ut_ad(lock);
   ut_ad(rw_lock_validate(lock));
 
   if (lock_type == RW_LOCK_SHARED) {
     if (rw_lock_get_reader_count(lock) > 0) {
-      ret = TRUE;
+      ret = true;
     }
   } else if (lock_type == RW_LOCK_EX) {
     if (rw_lock_get_writer(lock) == RW_LOCK_EX) {
-      ret = TRUE;
+      ret = true;
     }
   } else {
     ut_error;

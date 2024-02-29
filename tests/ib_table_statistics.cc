@@ -38,10 +38,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }

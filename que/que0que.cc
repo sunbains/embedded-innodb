@@ -47,9 +47,9 @@ Created 5/27/1996 Heikki Tuuri
 #define QUE_MAX_LOOPS_WITHOUT_CHECK 16
 
 #ifdef UNIV_DEBUG
-/* If the following flag is set TRUE, the module will print trace info
+/* If the following flag is set true, the module will print trace info
 of SQL execution in the UNIV_SQL_DEBUG version */
-ibool que_trace_on = FALSE;
+bool que_trace_on = false;
 #endif /* UNIV_DEBUG */
 
 /* Short introduction to query graphs
@@ -124,7 +124,7 @@ starts running again. */
 
 void que_var_init() {
 #ifdef UNIV_DEBUG
-  que_trace_on = FALSE;
+  que_trace_on = false;
 #endif /* UNIV_DEBUG */
 }
 
@@ -134,10 +134,12 @@ void que_graph_publish(que_t *graph, sess_t *sess) {
   UT_LIST_ADD_LAST(graphs, sess->graphs, graph);
 }
 
-que_fork_t * que_fork_create(que_t *graph, que_node_t *parent, ulint fork_type, mem_heap_t *heap) {
+que_fork_t *que_fork_create(que_t *graph, que_node_t *parent, ulint fork_type,
+                            mem_heap_t *heap) {
   ut_ad(heap);
 
-  auto fork = reinterpret_cast<que_fork_t*>(mem_heap_alloc(heap, sizeof(que_fork_t)));
+  auto fork =
+      reinterpret_cast<que_fork_t *>(mem_heap_alloc(heap, sizeof(que_fork_t)));
 
   fork->common.type = QUE_NODE_FORK;
   fork->n_active_thrs = 0;
@@ -168,7 +170,8 @@ que_fork_t * que_fork_create(que_t *graph, que_node_t *parent, ulint fork_type, 
 que_thr_t *que_thr_create(que_fork_t *parent, mem_heap_t *heap) {
   ut_ad(parent && heap);
 
-  auto thr = reinterpret_cast<que_thr_t*>(mem_heap_alloc(heap, sizeof(que_thr_t)));
+  auto thr =
+      reinterpret_cast<que_thr_t *>(mem_heap_alloc(heap, sizeof(que_thr_t)));
 
   thr->common.type = QUE_NODE_THR;
   thr->common.parent = parent;
@@ -179,7 +182,7 @@ que_thr_t *que_thr_create(que_fork_t *parent, mem_heap_t *heap) {
 
   thr->state = QUE_THR_COMMAND_WAIT;
 
-  thr->is_active = FALSE;
+  thr->is_active = false;
 
   thr->run_node = nullptr;
   thr->resource = 0;
@@ -191,7 +194,7 @@ que_thr_t *que_thr_create(que_fork_t *parent, mem_heap_t *heap) {
 }
 
 void que_thr_end_wait(que_thr_t *thr, que_thr_t **next_thr) {
-  ibool was_active;
+  bool was_active;
 
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(thr);
@@ -220,7 +223,7 @@ void que_thr_end_wait(que_thr_t *thr, que_thr_t **next_thr) {
 }
 
 void que_thr_end_wait_no_next_thr(que_thr_t *thr) {
-  ibool was_active;
+  bool was_active;
 
   ut_a(thr->state == QUE_THR_LOCK_WAIT);
   ut_ad(mutex_own(&kernel_mutex));
@@ -248,8 +251,7 @@ void que_thr_end_wait_no_next_thr(que_thr_t *thr) {
 
 /** Inits a query thread for a command.
 @param[in,out] thr              Query thread. */
-inline
-void que_thr_init_command(que_thr_t *thr) {
+inline void que_thr_init_command(que_thr_t *thr) {
   thr->run_node = thr;
   thr->prev_node = thr->common.parent;
 
@@ -330,7 +332,7 @@ que_thr_t *que_fork_start_command(que_fork_t *fork) {
   return thr;
 }
 
-void que_fork_error_handle( trx_t *trx __attribute__((unused)), que_t *fork) {
+void que_fork_error_handle(trx_t *trx __attribute__((unused)), que_t *fork) {
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(trx->sess->state == SESS_ERROR);
   ut_ad(UT_LIST_GET_LEN(trx->reply_signals) == 0);
@@ -359,23 +361,23 @@ void que_fork_error_handle( trx_t *trx __attribute__((unused)), que_t *fork) {
 }
 
 /** Tests if all the query threads in the same fork have a given state.
-@return TRUE if all the query threads in the same fork were in the
+@return true if all the query threads in the same fork were in the
 given state.
 @param[in,out] fork             Query fork.
 @param[in] state                The state to check for. */
-inline ibool que_fork_all_thrs_in_state(que_fork_t *fork, ulint state) {
+inline bool que_fork_all_thrs_in_state(que_fork_t *fork, ulint state) {
   auto thr_node = UT_LIST_GET_FIRST(fork->thrs);
 
   while (thr_node != nullptr) {
     if (thr_node->state != state) {
 
-      return FALSE;
+      return false;
     }
 
     thr_node = UT_LIST_GET_NEXT(thrs, thr_node);
   }
 
-  return TRUE;
+  return true;
 }
 
 /** Calls que_graph_free_recursive for statements in a statement list.
@@ -407,7 +409,7 @@ void que_graph_free_recursive(que_node_t *node) {
   switch (que_node_get_type(node)) {
 
   case QUE_NODE_FORK:
-    fork = static_cast<que_fork_t*>(node);
+    fork = static_cast<que_fork_t *>(node);
 
     thr = UT_LIST_GET_FIRST(fork->thrs);
 
@@ -420,7 +422,7 @@ void que_graph_free_recursive(que_node_t *node) {
     break;
   case QUE_NODE_THR:
 
-    thr = static_cast<que_thr_t*>(node);
+    thr = static_cast<que_thr_t *>(node);
 
     if (thr->magic_n != QUE_THR_MAGIC_N) {
       ib_logger(ib_stream,
@@ -437,21 +439,21 @@ void que_graph_free_recursive(que_node_t *node) {
     break;
   case QUE_NODE_UNDO:
 
-    undo = static_cast<undo_node_t*>(node);
+    undo = static_cast<undo_node_t *>(node);
 
     mem_heap_free(undo->heap);
 
     break;
   case QUE_NODE_SELECT:
 
-    sel = static_cast<sel_node_t*>(node);
+    sel = static_cast<sel_node_t *>(node);
 
     sel_node_free_private(sel);
 
     break;
   case QUE_NODE_INSERT:
 
-    ins = static_cast<ins_node_t*>(node);
+    ins = static_cast<ins_node_t *>(node);
 
     que_graph_free_recursive(ins->select);
 
@@ -459,7 +461,7 @@ void que_graph_free_recursive(que_node_t *node) {
 
     break;
   case QUE_NODE_PURGE:
-    purge = static_cast<purge_node_t*>(node);
+    purge = static_cast<purge_node_t *>(node);
 
     mem_heap_free(purge->heap);
 
@@ -467,7 +469,7 @@ void que_graph_free_recursive(que_node_t *node) {
 
   case QUE_NODE_UPDATE:
 
-    upd = static_cast<upd_node_t*>(node);
+    upd = static_cast<upd_node_t *>(node);
 
     if (upd->in_client_interface) {
 
@@ -486,7 +488,7 @@ void que_graph_free_recursive(que_node_t *node) {
 
     break;
   case QUE_NODE_CREATE_TABLE:
-    cre_tab = static_cast<tab_node_t*>(node);
+    cre_tab = static_cast<tab_node_t *>(node);
 
     que_graph_free_recursive(cre_tab->tab_def);
     que_graph_free_recursive(cre_tab->col_def);
@@ -496,7 +498,7 @@ void que_graph_free_recursive(que_node_t *node) {
 
     break;
   case QUE_NODE_CREATE_INDEX:
-    cre_ind = static_cast<ind_node_t*>(node);
+    cre_ind = static_cast<ind_node_t *>(node);
 
     que_graph_free_recursive(cre_ind->ind_def);
     que_graph_free_recursive(cre_ind->field_def);
@@ -573,8 +575,7 @@ void que_graph_free(que_t *graph) {
 @return	query thread to run next, or nullptr if none
 @param[in,out]                  Query thread where run_node must
                                 be the thread node itself */
-static que_thr_t *
-que_thr_node_step(que_thr_t *thr) {
+static que_thr_t *que_thr_node_step(que_thr_t *thr) {
   ut_ad(thr->run_node == thr);
 
   if (thr->prev_node == thr->common.parent) {
@@ -614,7 +615,7 @@ void que_thr_move_to_run_state(que_thr_t *thr) {
 
     ++trx->n_active_thrs;
 
-    thr->is_active = TRUE;
+    thr->is_active = true;
 
     ut_ad((thr->graph)->n_active_thrs == 1);
     ut_ad(trx->n_active_thrs == 1);
@@ -639,7 +640,7 @@ static void que_thr_dec_refer_count(
                           calling function can start running
                           a new query thread */
 {
-  auto fork = static_cast<que_fork_t*>(thr->common.parent);
+  auto fork = static_cast<que_fork_t *>(thr->common.parent);
   auto trx = thr_get_trx(thr);
 
   mutex_enter(&kernel_mutex);
@@ -684,7 +685,7 @@ static void que_thr_dec_refer_count(
   fork->n_active_thrs--;
   trx->n_active_thrs--;
 
-  thr->is_active = FALSE;
+  thr->is_active = false;
 
   if (trx->n_active_thrs > 0) {
 
@@ -705,7 +706,7 @@ static void que_thr_dec_refer_count(
       no roll_node in this graph */
 
       ut_ad(UT_LIST_GET_LEN(trx->signals) > 0);
-      ut_ad(trx->handling_signals == TRUE);
+      ut_ad(trx->handling_signals == true);
 
       trx_finish_rollback_off_kernel(fork, trx, next_thr);
       break;
@@ -739,8 +740,8 @@ static void que_thr_dec_refer_count(
   mutex_exit(&kernel_mutex);
 }
 
-ibool que_thr_stop(que_thr_t *thr) {
-  ibool ret = TRUE;
+bool que_thr_stop(que_thr_t *thr) {
+  bool ret = true;
 
   ut_ad(mutex_own(&kernel_mutex));
 
@@ -767,7 +768,7 @@ ibool que_thr_stop(que_thr_t *thr) {
   } else {
     ut_ad(graph->state == QUE_FORK_ACTIVE);
 
-    ret = FALSE;
+    ret = false;
   }
 
   return ret;
@@ -775,7 +776,7 @@ ibool que_thr_stop(que_thr_t *thr) {
 
 void que_thr_stop_for_client_no_error(que_thr_t *thr, trx_t *trx) {
   ut_ad(thr->state == QUE_THR_RUNNING);
-  ut_ad(thr->is_active == TRUE);
+  ut_ad(thr->is_active == true);
   ut_ad(trx->n_active_thrs == 1);
   ut_ad(thr->graph->n_active_thrs == 1);
 
@@ -788,7 +789,7 @@ void que_thr_stop_for_client_no_error(que_thr_t *thr, trx_t *trx) {
 
   thr->state = QUE_THR_COMPLETED;
 
-  thr->is_active = FALSE;
+  thr->is_active = false;
   (thr->graph)->n_active_thrs--;
 
   trx->n_active_thrs--;
@@ -806,7 +807,7 @@ void que_thr_move_to_run_state_for_client(que_thr_t *thr, trx_t *trx) {
 
     trx->n_active_thrs++;
 
-    thr->is_active = TRUE;
+    thr->is_active = true;
   }
 
   thr->state = QUE_THR_RUNNING;
@@ -833,11 +834,11 @@ void que_thr_stop_client(que_thr_t *thr) {
     }
   }
 
-  ut_ad(thr->is_active == TRUE);
+  ut_ad(thr->is_active == true);
   ut_ad(trx->n_active_thrs == 1);
   ut_ad(thr->graph->n_active_thrs == 1);
 
-  thr->is_active = FALSE;
+  thr->is_active = false;
   (thr->graph)->n_active_thrs--;
 
   trx->n_active_thrs--;
@@ -1126,7 +1127,8 @@ loop:
   mutex_exit(&kernel_mutex);
 }
 
-db_err que_eval_sql(pars_info_t *info, const char *sql, ibool reserve_dict_mutex, trx_t *trx) {
+db_err que_eval_sql(pars_info_t *info, const char *sql, bool reserve_dict_mutex,
+                    trx_t *trx) {
   que_thr_t *thr;
   que_t *graph;
 

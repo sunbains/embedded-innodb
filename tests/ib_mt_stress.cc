@@ -115,7 +115,7 @@ static char pre_str[][128] = {
 static int test_time = 1800;
 
 /* Flag used by worker threads to finish the run */
-static ib_bool_t test_running = IB_FALSE;
+static bool test_running = false;
 
 /* to hold statistics of a particular type of DML */
 typedef struct dml_op_struct {
@@ -217,10 +217,10 @@ print_random_data(void)
 
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }
@@ -671,7 +671,7 @@ static void *upd_worker(void *dummy) /*!< in: unused */
 
     commit_or_rollback(trx, cnt);
 
-    if (test_running == IB_FALSE) {
+    if (test_running == false) {
       break;
     }
   }
@@ -713,7 +713,7 @@ static void *del_worker(void *dummy) /*!< in: unused */
     crsr = NULL;
 
     commit_or_rollback(trx, cnt);
-  } while (test_running != IB_FALSE);
+  } while (test_running != false);
 
   return (NULL);
 }
@@ -807,7 +807,7 @@ void* dummy_worker(
 {
 	while (1) {
 		usleep(100000);
-		if (test_running == IB_FALSE) {
+		if (test_running == false) {
 			return(NULL);
 		}
 	}
@@ -1039,7 +1039,7 @@ int main(int argc, char *argv[]) {
   fprintf(stderr, "initial insertions = %d\n", cnt);
 
   /* start the test. */
-  test_running = IB_TRUE;
+  test_running = true;
   create_worker_threads();
 
   start_time = time(NULL);
@@ -1056,7 +1056,7 @@ int main(int argc, char *argv[]) {
   } while (test_time > 0);
 
   /* stop test and let workers exit */
-  test_running = IB_FALSE;
+  test_running = false;
   for (i = 0; i < NUM_THREADS; ++i) {
     pthread_join(tid[i], &res);
   }

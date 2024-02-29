@@ -24,12 +24,11 @@ Created 11/5/1995 Heikki Tuuri
 #ifndef buf0flu_h
 #define buf0flu_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
-#include "ut0byte.h"
-#ifndef UNIV_HOTBACKUP
 #include "buf0types.h"
 #include "mtr0types.h"
+#include "ut0byte.h"
 
 /*** Remove a block from the flush list of modified blocks. */
 
@@ -50,15 +49,13 @@ void buf_flush_write_complete(
 a margin of replaceable pages there. */
 
 void buf_flush_free_margin(void);
-#endif /* !UNIV_HOTBACKUP */
 /*** Initializes a page for writing to the tablespace. */
 
 void buf_flush_init_for_writing(
-    byte *page,              /*!< in/out: page */
-    void *page_zip_,         /*!< in/out: compressed page, or NULL */
+    byte *page,           /*!< in/out: page */
+    void *page_zip_,      /*!< in/out: compressed page, or NULL */
     uint64_t newest_lsn); /*!< in: newest modification lsn
                              to the page */
-#ifndef UNIV_HOTBACKUP
 /*** This utility flushes dirty blocks from the end of the LRU list or
 flush_list. NOTE 1: in the case of an LRU flush the calling thread may own
 latches to pages: to avoid deadlocks, this function must be written so that it
@@ -75,11 +72,11 @@ ulint buf_flush_batch(
     ulint min_n,               /*!< in: wished minimum mumber of blocks
                                flushed (it is not guaranteed that the
                                actual number is that big, though) */
-    uint64_t lsn_limit);    /*!< in the case BUF_FLUSH_LIST all
-                               blocks whose oldest_modification is
-                               smaller than this should be flushed
-                               (if their number does not exceed
-                               min_n), otherwise ignored */
+    uint64_t lsn_limit);       /*!< in the case BUF_FLUSH_LIST all
+                                  blocks whose oldest_modification is
+                                  smaller than this should be flushed
+                                  (if their number does not exceed
+                                  min_n), otherwise ignored */
 /*** Waits until a flush batch of the given type ends */
 
 void buf_flush_wait_batch_end(
@@ -87,23 +84,21 @@ void buf_flush_wait_batch_end(
 /*** This function should be called at a mini-transaction commit, if a page was
 modified in it. Puts the block to the list of modified blocks, if it not
 already in it. */
-UNIV_INLINE
-void buf_flush_note_modification(
+inline void buf_flush_note_modification(
     buf_block_t *block, /*!< in: block which is modified */
     mtr_t *mtr);        /*!< in: mtr */
 /*** This function should be called when recovery has modified a buffer page. */
-UNIV_INLINE
-void buf_flush_recv_note_modification(
-    buf_block_t *block,    /*!< in: block which is modified */
+inline void buf_flush_recv_note_modification(
+    buf_block_t *block, /*!< in: block which is modified */
     uint64_t start_lsn, /*!< in: start lsn of the first mtr in a
                            set of mtr's */
     uint64_t end_lsn);  /*!< in: end lsn of the last mtr in the
                            set of mtr's */
-/*** Returns TRUE if the file page block is immediately suitable for
+/*** Returns true if the file page block is immediately suitable for
 replacement, i.e., transition FILE_PAGE => NOT_USED allowed.
-@return	TRUE if can replace immediately */
+@return	true if can replace immediately */
 
-ibool buf_flush_ready_for_replace(
+bool buf_flush_ready_for_replace(
     buf_page_t *bpage); /*!< in: buffer control block, must be
                         buf_page_in_file(bpage) and in the LRU list */
 
@@ -117,8 +112,8 @@ dirty pages we have in the buffer pool but it is also a fucntion of
 how much redo the workload is generating and at what rate. */
 
 struct buf_flush_stat_struct {
-  uint64_t redo; /*!< amount of redo generated. */
-  ulint n_flushed;  /*!< number of pages flushed. */
+  uint64_t redo;   /*!< amount of redo generated. */
+  ulint n_flushed; /*!< number of pages flushed. */
 };
 
 /** Statistics for selecting flush rate of dirty pages. */
@@ -139,9 +134,9 @@ ulint buf_flush_get_desired_flush_rate(void);
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 /*** Validates the flush list.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool buf_flush_validate(void);
+bool buf_flush_validate(void);
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 
 /*** Initialize the red-black tree to speed up insertions into the flush_list
@@ -161,7 +156,6 @@ sweep). */
 #define BUF_FLUSH_FREE_BLOCK_MARGIN (5 + BUF_READ_AHEAD_AREA)
 /** Extra margin to apply above BUF_FLUSH_FREE_BLOCK_MARGIN */
 #define BUF_FLUSH_EXTRA_MARGIN (BUF_FLUSH_FREE_BLOCK_MARGIN / 4 + 100)
-#endif /* !UNIV_HOTBACKUP */
 
 #ifndef UNIV_NONINL
 #include "buf0flu.ic"

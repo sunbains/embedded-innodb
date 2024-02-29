@@ -61,7 +61,7 @@ static ulint trx_roll_progress_printed_pct;
 
 db_err trx_general_rollback(
     trx_t *trx,           /*!< in: transaction handle */
-    ibool partial,        /*!< in: TRUE if partial rollback requested */
+    bool partial,         /*!< in: true if partial rollback requested */
     trx_savept_t *savept) /*!< in: pointer to savepoint undo number, if
                           partial rollback requested */
 {
@@ -88,7 +88,8 @@ db_err trx_general_rollback(
 
   thr = pars_complete_graph_for_exec(roll_node, trx, heap);
 
-  ut_a(thr == que_fork_start_command(static_cast<que_fork_t*>(que_node_get_parent(thr))));
+  ut_a(thr == que_fork_start_command(
+                  static_cast<que_fork_t *>(que_node_get_parent(thr))));
 
   que_run_threads(thr);
 
@@ -146,10 +147,10 @@ void trx_roll_savepoints_free(
 
 /** Determines if this transaction is rolling back an incomplete transaction
 in crash recovery.
-@return TRUE if trx is an incomplete transaction that is being rolled
+@return true if trx is an incomplete transaction that is being rolled
 back in crash recovery */
 
-ibool trx_is_recv(const trx_t *trx) /*!< in: transaction */
+bool trx_is_recv(const trx_t *trx) /*!< in: transaction */
 {
   return trx == trx_roll_crash_recv_trx;
 }
@@ -178,7 +179,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
   dict_table_t *table;
   int64_t rows_to_undo;
   const char *unit = "";
-  ibool dictionary_locked = FALSE;
+  bool dictionary_locked = false;
 
   heap = mem_heap_create(512);
 
@@ -220,7 +221,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
 
   if (trx_get_dict_operation(trx) != TRX_DICT_OP_NONE) {
     dict_lock_data_dictionary(trx);
-    dictionary_locked = TRUE;
+    dictionary_locked = true;
   }
 
   que_run_threads(thr);
@@ -258,10 +259,10 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
       ulint err;
 
       ib_logger(ib_stream, "InnoDB: Table found: dropping table ");
-      ut_print_name(ib_stream, trx, TRUE, table->name);
+      ut_print_name(ib_stream, trx, true, table->name);
       ib_logger(ib_stream, " in recovery\n");
 
-      err = ddl_drop_table(table->name, trx, TRUE);
+      err = ddl_drop_table(table->name, trx, true);
       trx_commit(trx);
 
       ut_a(err == (int)DB_SUCCESS);
@@ -272,8 +273,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
     dict_unlock_data_dictionary(trx);
   }
 
-  ib_logger(ib_stream,
-            "\nInnoDB: Rolling back of trx id %lu completed\n",
+  ib_logger(ib_stream, "\nInnoDB: Rolling back of trx id %lu completed\n",
             TRX_ID_PREP_PRINTF(trx->id));
   mem_heap_free(heap);
 
@@ -286,8 +286,8 @@ committed, then we clean up a possible insert undo log. If the
 transaction was not yet committed, then we roll it back. */
 
 void trx_rollback_or_clean_recovered(
-    ibool all) /*!< in: FALSE=roll back dictionary transactions;
-               TRUE=roll back all non-PREPARED transactions */
+    bool all) /*!< in: false=roll back dictionary transactions;
+               true=roll back all non-PREPARED transactions */
 {
   trx_t *trx;
 
@@ -307,7 +307,8 @@ void trx_rollback_or_clean_recovered(
 loop:
   mutex_enter(&kernel_mutex);
 
-  for (trx = UT_LIST_GET_FIRST(trx_sys->trx_list); trx; trx = UT_LIST_GET_NEXT(trx_list, trx)) {
+  for (trx = UT_LIST_GET_FIRST(trx_sys->trx_list); trx;
+       trx = UT_LIST_GET_NEXT(trx_list, trx)) {
     if (!trx->is_recovered) {
       continue;
     }
@@ -345,7 +346,7 @@ leave_function:
 }
 
 void *trx_rollback_or_clean_all_recovered(void *arg __attribute__((unused))) {
-  trx_rollback_or_clean_recovered(TRUE);
+  trx_rollback_or_clean_recovered(true);
 
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit. */
@@ -357,9 +358,11 @@ void *trx_rollback_or_clean_all_recovered(void *arg __attribute__((unused))) {
 
 trx_undo_arr_t *trx_undo_arr_create() {
   auto heap = mem_heap_create(1024);
-  auto arr = reinterpret_cast<trx_undo_arr_t*>(mem_heap_alloc(heap, sizeof(trx_undo_arr_t)));
+  auto arr = reinterpret_cast<trx_undo_arr_t *>(
+      mem_heap_alloc(heap, sizeof(trx_undo_arr_t)));
 
-  arr->infos = reinterpret_cast<trx_undo_inf_t*>(mem_heap_alloc(heap, sizeof(trx_undo_inf_t) * UNIV_MAX_PARALLELISM));
+  arr->infos = reinterpret_cast<trx_undo_inf_t *>(
+      mem_heap_alloc(heap, sizeof(trx_undo_inf_t) * UNIV_MAX_PARALLELISM));
 
   arr->n_cells = UNIV_MAX_PARALLELISM;
   arr->n_used = 0;
@@ -367,7 +370,7 @@ trx_undo_arr_t *trx_undo_arr_create() {
   arr->heap = heap;
 
   for (ulint i = 0; i < UNIV_MAX_PARALLELISM; i++) {
-    trx_undo_arr_get_nth_info(arr, i)->in_use = FALSE;
+    trx_undo_arr_get_nth_info(arr, i)->in_use = false;
   }
 
   return arr;
@@ -383,9 +386,9 @@ void trx_undo_arr_free(trx_undo_arr_t *arr) /*!< in: undo number array */
 }
 
 /** Stores info of an undo log record to the array if it is not stored yet.
-@return	FALSE if the record already existed in the array */
-static ibool trx_undo_arr_store_info(trx_t *trx,        /*!< in: transaction */
-                                     undo_no_t undo_no) /*!< in: undo number */
+@return	false if the record already existed in the array */
+static bool trx_undo_arr_store_info(trx_t *trx,        /*!< in: transaction */
+                                    undo_no_t undo_no) /*!< in: undo number */
 {
   trx_undo_inf_t *cell;
   trx_undo_inf_t *stored_here;
@@ -406,7 +409,7 @@ static ibool trx_undo_arr_store_info(trx_t *trx,        /*!< in: transaction */
       if (!stored_here) {
         /* Not in use, we may store here */
         cell->undo_no = undo_no;
-        cell->in_use = TRUE;
+        cell->in_use = true;
 
         arr->n_used++;
 
@@ -418,14 +421,14 @@ static ibool trx_undo_arr_store_info(trx_t *trx,        /*!< in: transaction */
       if (0 == ut_dulint_cmp(cell->undo_no, undo_no)) {
 
         if (stored_here) {
-          stored_here->in_use = FALSE;
+          stored_here->in_use = false;
           ut_ad(arr->n_used > 0);
           arr->n_used--;
         }
 
         ut_ad(arr->n_used == n_used);
 
-        return FALSE;
+        return false;
       }
     }
 
@@ -433,7 +436,7 @@ static ibool trx_undo_arr_store_info(trx_t *trx,        /*!< in: transaction */
 
       ut_ad(arr->n_used == 1 + n_used);
 
-      return TRUE;
+      return true;
     }
   }
 }
@@ -451,7 +454,7 @@ trx_undo_arr_remove_info(trx_undo_arr_t *arr, /*!< in: undo number array */
 
     if (cell->in_use && 0 == ut_dulint_cmp(cell->undo_no, undo_no)) {
 
-      cell->in_use = FALSE;
+      cell->in_use = false;
 
       ut_a(arr->n_used > 0);
 
@@ -556,7 +559,7 @@ trx_roll_pop_top_rec(trx_t *trx,       /*!< in: transaction */
                                    undo->hdr_offset, mtr);
   if (prev_rec == nullptr) {
 
-    undo->empty = TRUE;
+    undo->empty = true;
   } else {
     prev_rec_page = page_align(prev_rec);
 
@@ -593,7 +596,7 @@ trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(
   trx_undo_rec_t *undo_rec;
   trx_undo_rec_t *undo_rec_copy;
   undo_no_t undo_no;
-  ibool is_insert;
+  bool is_insert;
   trx_rseg_t *rseg;
   ulint progress_pct;
   mtr_t mtr;
@@ -641,9 +644,9 @@ try_again:
   }
 
   if (undo == ins_undo) {
-    is_insert = TRUE;
+    is_insert = true;
   } else {
-    is_insert = FALSE;
+    is_insert = false;
   }
 
   *roll_ptr = trx_undo_build_roll_ptr(is_insert, (undo->rseg)->id,
@@ -697,8 +700,8 @@ try_again:
   return undo_rec_copy;
 }
 
-ibool trx_undo_rec_reserve( trx_t *trx, undo_no_t undo_no) {
-  ibool ret;
+bool trx_undo_rec_reserve(trx_t *trx, undo_no_t undo_no) {
+  bool ret;
 
   mutex_enter(&(trx->undo_mutex));
 
@@ -838,7 +841,8 @@ static void trx_finish_partial_rollback_off_kernel(
   trx->que_state = TRX_QUE_RUNNING;
 }
 
-void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx, que_thr_t **next_thr) {
+void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx,
+                                    que_thr_t **next_thr) {
   ut_ad(mutex_own(&kernel_mutex));
   ut_a(trx->undo_no_arr == nullptr || trx->undo_no_arr->n_used == 0);
 
@@ -888,13 +892,14 @@ void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx, que_thr_t **next_t
   }
 }
 
-roll_node_t * roll_node_create(mem_heap_t *heap) {
-  auto node = reinterpret_cast<roll_node_t*>(mem_heap_alloc(heap, sizeof(roll_node_t)));
+roll_node_t *roll_node_create(mem_heap_t *heap) {
+  auto node = reinterpret_cast<roll_node_t *>(
+      mem_heap_alloc(heap, sizeof(roll_node_t)));
 
   node->common.type = QUE_NODE_ROLLBACK;
   node->state = ROLL_NODE_SEND;
 
-  node->partial = FALSE;
+  node->partial = false;
 
   return node;
 }
@@ -902,7 +907,7 @@ roll_node_t * roll_node_create(mem_heap_t *heap) {
 que_thr_t *trx_rollback_step(que_thr_t *thr) {
   trx_savept_t *savept;
 
-  auto node = static_cast<roll_node_t*>(thr->run_node);
+  auto node = static_cast<roll_node_t *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_ROLLBACK);
 

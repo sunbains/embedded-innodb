@@ -27,50 +27,42 @@ Created 12/27/1996 Heikki Tuuri
 #include "btr0types.h"
 #include "data0data.h"
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "row0types.h"
 #include "trx0types.h"
-#include "univ.i"
 
-#ifndef UNIV_HOTBACKUP
 #include "btr0pcur.h"
 #include "pars0types.h"
 #include "que0types.h"
-#endif /* !UNIV_HOTBACKUP */
 
 /** Creates an update vector object.
 @return	own: update vector object */
-UNIV_INLINE
-upd_t *
+inline upd_t *
 upd_create(ulint n,           /*!< in: number of fields */
            mem_heap_t *heap); /*!< in: heap from which memory allocated */
 /** Returns the number of fields in the update vector == number of columns
 to be updated by an update vector.
 @return	number of fields */
-UNIV_INLINE
-ulint upd_get_n_fields(const upd_t *update); /*!< in: update vector */
+inline ulint upd_get_n_fields(const upd_t *update); /*!< in: update vector */
 #ifdef UNIV_DEBUG
 /** Returns the nth field of an update vector.
 @return	update vector field */
-UNIV_INLINE
-upd_field_t *
+inline upd_field_t *
 upd_get_nth_field(const upd_t *update, /*!< in: update vector */
                   ulint n); /*!< in: field position in update vector */
 #else
 #define upd_get_nth_field(update, n) ((update)->fields + (n))
 #endif
-#ifndef UNIV_HOTBACKUP
 /** Sets an index field number to be updated by an update vector field. */
-UNIV_INLINE
-void upd_field_set_field_no(
-    upd_field_t *upd_field, /*!< in: update vector field */
-    ulint field_no,         /*!< in: field number in a clustered
-                            index */
-    dict_index_t *index,    /*!< in: index */
-    trx_t *trx);            /*!< in: transaction */
+inline void
+upd_field_set_field_no(upd_field_t *upd_field, /*!< in: update vector field */
+                       ulint field_no,      /*!< in: field number in a clustered
+                                            index */
+                       dict_index_t *index, /*!< in: index */
+                       trx_t *trx);         /*!< in: transaction */
 /** Returns a field of an update vector by field_no.
 @return	update vector field, or NULL */
-UNIV_INLINE
-const upd_field_t *
+inline const upd_field_t *
 upd_get_field_by_field_no(const upd_t *update, /*!< in: update vector */
                           ulint no)            /*!< in: field_no */
     __attribute__((nonnull, pure));
@@ -87,8 +79,7 @@ byte *row_upd_write_sys_vals_to_log(
     mtr_t *mtr);         /*!< in: mtr */
 /** Updates the trx id and roll ptr field in a clustered index record when
 a row is updated or marked deleted. */
-UNIV_INLINE
-void row_upd_rec_sys_fields(
+inline void row_upd_rec_sys_fields(
     rec_t *rec,               /*!< in/out: record */
     page_zip_des_t *page_zip, /*!< in/out: compressed page whose
                              uncompressed part will be updated, or NULL */
@@ -121,16 +112,15 @@ void row_upd_index_write_log(
                          of free space; the buffer is closed
                          within this function */
     mtr_t *mtr);         /*!< in: mtr into whose log to write */
-/** Returns TRUE if row update changes size of some field in index or if some
+/** Returns true if row update changes size of some field in index or if some
 field to be updated is stored externally in rec or update.
-@return TRUE if the update changes the size of some field in index or
+@return true if the update changes the size of some field in index or
 the field is external in rec or update */
 
-ibool row_upd_changes_field_size_or_external(
+bool row_upd_changes_field_size_or_external(
     dict_index_t *index,  /*!< in: index */
     const ulint *offsets, /*!< in: rec_get_offsets(rec, index) */
     const upd_t *update); /*!< in: update vector */
-#endif                    /* !UNIV_HOTBACKUP */
 /** Replaces the new column values stored in the update vector to the record
 given. No field size changes are allowed. */
 
@@ -141,7 +131,6 @@ void row_upd_rec_in_place(
     const upd_t *update,       /*!< in: update vector */
     page_zip_des_t *page_zip); /*!< in: compressed page with enough space
                              available, or NULL */
-#ifndef UNIV_HOTBACKUP
 /** Builds an update vector from those fields which in a secondary index entry
 differ from a record that has the equal ordering fields. NOTE: we compare
 the fields as binary strings!
@@ -178,8 +167,8 @@ void row_upd_index_replace_new_col_vals_index_pos(
     const upd_t *update, /*!< in: an update vector built for the index so
                          that the field number in an upd_field is the
                          index position */
-    ibool order_only,
-    /*!< in: if TRUE, limit the replacement to
+    bool order_only,
+    /*!< in: if true, limit the replacement to
     ordering fields of index; note that this
     does not work for non-clustered indexes. */
     mem_heap_t *heap) /*!< in: memory heap for allocating and
@@ -219,9 +208,9 @@ void row_upd_replace(dtuple_t *row,   /*!< in/out: row where replaced,
 This function is fast if the update vector is short or the number of ordering
 fields in the index is small. Otherwise, this can be quadratic.
 NOTE: we compare the fields as binary strings!
-@return TRUE if update vector changes an ordering field in the index record */
+@return true if update vector changes an ordering field in the index record */
 
-ibool row_upd_changes_ord_field_binary(
+bool row_upd_changes_ord_field_binary(
     const dtuple_t *row,  /*!< in: old value of row, or NULL if the
                           row and the data values in update are not
                           known when this function is called, e.g., at
@@ -234,10 +223,10 @@ ibool row_upd_changes_ord_field_binary(
 This function is fast if the update vector is short or the number of ordering
 fields in the index is small. Otherwise, this can be quadratic.
 NOTE: we compare the fields as binary strings!
-@return TRUE if update vector may change an ordering field in an index
+@return true if update vector may change an ordering field in an index
 record */
 
-ibool row_upd_changes_some_index_ord_field_binary(
+bool row_upd_changes_some_index_ord_field_binary(
     const dict_table_t *table, /*!< in: table */
     const upd_t *update);      /*!< in: update vector for the row */
 /** Updates a row in a table. This is a high-level function used
@@ -245,7 +234,6 @@ in SQL execution graphs.
 @return	query thread to run next or NULL */
 
 que_thr_t *row_upd_step(que_thr_t *thr); /*!< in: query thread */
-#endif                                   /* !UNIV_HOTBACKUP */
 /** Parses the log data of system field values.
 @return	log data end or NULL */
 
@@ -288,7 +276,6 @@ struct upd_field_struct {
                           a secondary index record in btr0cur.c
                           this is the position in the secondary
                           index */
-#ifndef UNIV_HOTBACKUP
   unsigned orig_len : 16; /*!< original length of the locally
                           stored part of an externally stored
                           column, or 0 */
@@ -296,7 +283,6 @@ struct upd_field_struct {
                           value: it refers to column values and
                           constants in the symbol table of the
                           query graph */
-#endif                    /* !UNIV_HOTBACKUP */
   dfield_t new_val;       /*!< new value for the column */
 };
 
@@ -308,18 +294,17 @@ struct upd_struct {
   upd_field_t *fields; /*!< array of update fields */
 };
 
-#ifndef UNIV_HOTBACKUP
 /* Update node structure which also implements the delete operation
 of a row */
 
 struct upd_node_struct {
   que_common_t common; /*!< node type: QUE_NODE_UPDATE */
-  ibool is_delete;     /* TRUE if delete, FALSE if update */
-  ibool searched_update;
-  /* TRUE if searched update, FALSE if
+  bool is_delete;      /* true if delete, false if update */
+  bool searched_update;
+  /* true if searched update, false if
   positioned */
-  ibool in_client_interface;
-  /* TRUE if the update node was created
+  bool in_client_interface;
+  /* true if the update node was created
   for the client interface */
   dict_foreign_t *foreign;  /* NULL or pointer to a foreign key
                             constraint if this update node is used in
@@ -346,8 +331,8 @@ struct upd_node_struct {
   as the update vector */
   sym_node_list_t columns; /* symbol table nodes for the columns
                            to retrieve from the table */
-  ibool has_clust_rec_x_lock;
-  /* TRUE if the select which retrieves the
+  bool has_clust_rec_x_lock;
+  /* true if the select which retrieves the
   records to update already sets an x-lock on
   the clustered record; note that it must always
   set at least an s-lock */
@@ -384,7 +369,7 @@ struct upd_node_struct {
 #define UPD_NODE_SET_IX_LOCK                                                   \
   1 /* execution came to the node from                                         \
     a node above and if the field                                              \
-    has_clust_rec_x_lock is FALSE, we                                          \
+    has_clust_rec_x_lock is false, we                                          \
     should set an intention x-lock on                                          \
     the table */
 #define UPD_NODE_UPDATE_CLUSTERED                                              \
@@ -412,8 +397,6 @@ struct upd_node_struct {
 #define UPD_NODE_NO_SIZE_CHANGE                                                \
   2 /* no record field size will be                                            \
     changed in the update */
-
-#endif /* !UNIV_HOTBACKUP */
 
 #ifndef UNIV_NONINL
 #include "row0upd.ic"

@@ -96,7 +96,7 @@ dtuple_t *row_build_index_entry(
   entry_len = dict_index_get_n_fields(index);
   entry = dtuple_create(heap, entry_len);
 
-  if (UNIV_UNLIKELY(index->type & DICT_UNIVERSAL)) {
+  if (unlikely(index->type & DICT_UNIVERSAL)) {
     dtuple_set_n_fields_cmp(entry, entry_len);
     /* There may only be externally stored columns
     in a clustered index B-tree of a user table. */
@@ -122,11 +122,11 @@ dtuple_t *row_build_index_entry(
     dfield_copy(dfield, dfield2);
 
     if (dfield_is_null(dfield)) {
-    } else if (UNIV_LIKELY_NULL(ext)) {
+    } else if (likely_null(ext)) {
       /* See if the column is stored externally. */
       const byte *buf = row_ext_lookup(ext, col_no, &len);
-      if (UNIV_LIKELY_NULL(buf)) {
-        if (UNIV_UNLIKELY(buf == field_ref_zero)) {
+      if (likely_null(buf)) {
+        if (unlikely(buf == field_ref_zero)) {
           return (NULL);
         }
         dfield_set_data(dfield, buf, len);
@@ -142,7 +142,7 @@ dtuple_t *row_build_index_entry(
       ut_ad(col->ord_part);
       len = dtype_get_at_most_n_mbchars(col->prtype, col->mbminlen,
                                         col->mbmaxlen, ind_field->prefix_len,
-                                        len, (char*) dfield_get_data(dfield));
+                                        len, (char *)dfield_get_data(dfield));
       dfield_set_len(dfield, len);
     }
   }
@@ -232,7 +232,8 @@ dtuple_t *row_build(ulint type,                /*!< in: ROW_COPY_POINTERS or
   n_fields = rec_offs_n_fields(offsets);
   n_ext_cols = rec_offs_n_extern(offsets);
   if (n_ext_cols) {
-    ext_cols = reinterpret_cast<ulint*>(mem_heap_alloc(heap, n_ext_cols * sizeof(*ext_cols)));
+    ext_cols = reinterpret_cast<ulint *>(
+        mem_heap_alloc(heap, n_ext_cols * sizeof(*ext_cols)));
   }
 
   for (i = j = 0; i < n_fields; i++) {
@@ -251,7 +252,7 @@ dtuple_t *row_build(ulint type,                /*!< in: ROW_COPY_POINTERS or
     if (rec_offs_nth_extern(offsets, i)) {
       dfield_set_ext(dfield);
 
-      if (UNIV_LIKELY_NULL(col_table)) {
+      if (likely_null(col_table)) {
         ut_a(col_no < dict_table_get_n_cols(col_table));
         col = dict_table_get_nth_col(col_table, col_no);
       }
@@ -521,19 +522,19 @@ void row_build_row_ref_in_tuple(
   ut_a(rec);
   ut_ad(!dict_index_is_clust(index));
 
-  if (UNIV_UNLIKELY(!index->table)) {
+  if (unlikely(!index->table)) {
     ib_logger(ib_stream, "InnoDB: table ");
   notfound:
-    ut_print_name(ib_stream, trx, TRUE, index->table_name);
+    ut_print_name(ib_stream, trx, true, index->table_name);
     ib_logger(ib_stream, " for index ");
-    ut_print_name(ib_stream, trx, FALSE, index->name);
+    ut_print_name(ib_stream, trx, false, index->name);
     ib_logger(ib_stream, " not found\n");
     ut_error;
   }
 
   clust_index = dict_table_get_first_index(index->table);
 
-  if (UNIV_UNLIKELY(!clust_index)) {
+  if (unlikely(!clust_index)) {
     ib_logger(ib_stream, "InnoDB: clust index for table ");
     goto notfound;
   }
@@ -584,20 +585,20 @@ void row_build_row_ref_in_tuple(
   }
 
   ut_ad(dtuple_check_typed(ref));
-  if (UNIV_LIKELY_NULL(heap)) {
+  if (likely_null(heap)) {
     mem_heap_free(heap);
   }
 }
 
 /** Searches the clustered index record for a row, if we have the row reference.
-@return	TRUE if found */
+@return	true if found */
 
-ibool row_search_on_row_ref(btr_pcur_t *pcur, /*!< out: persistent cursor, which
+bool row_search_on_row_ref(btr_pcur_t *pcur, /*!< out: persistent cursor, which
                                               must be closed by the caller */
-                            ulint mode,       /*!< in: BTR_MODIFY_LEAF, ... */
-                            const dict_table_t *table, /*!< in: table */
-                            const dtuple_t *ref,       /*!< in: row reference */
-                            mtr_t *mtr)                /*!< in/out: mtr */
+                           ulint mode,       /*!< in: BTR_MODIFY_LEAF, ... */
+                           const dict_table_t *table, /*!< in: table */
+                           const dtuple_t *ref,       /*!< in: row reference */
+                           mtr_t *mtr)                /*!< in/out: mtr */
 {
   ulint low_match;
   rec_t *rec;
@@ -617,15 +618,15 @@ ibool row_search_on_row_ref(btr_pcur_t *pcur, /*!< out: persistent cursor, which
 
   if (page_rec_is_infimum(rec)) {
 
-    return (FALSE);
+    return (false);
   }
 
   if (low_match != dtuple_get_n_fields(ref)) {
 
-    return (FALSE);
+    return (false);
   }
 
-  return (TRUE);
+  return (true);
 }
 
 /** Fetches the clustered index record for a secondary index record. The latches
@@ -643,7 +644,7 @@ row_get_clust_rec(ulint mode,          /*!< in: BTR_MODIFY_LEAF, ... */
   dtuple_t *ref;
   dict_table_t *table;
   btr_pcur_t pcur;
-  ibool found;
+  bool found;
   rec_t *clust_rec;
 
   ut_ad(!dict_index_is_clust(index));
@@ -668,9 +669,9 @@ row_get_clust_rec(ulint mode,          /*!< in: BTR_MODIFY_LEAF, ... */
 }
 
 /** Searches an index record.
-@return	TRUE if found */
+@return	true if found */
 
-ibool row_search_index_entry(
+bool row_search_index_entry(
     dict_index_t *index,   /*!< in: index */
     const dtuple_t *entry, /*!< in: index entry */
     ulint mode,            /*!< in: BTR_MODIFY_LEAF, ... */

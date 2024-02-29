@@ -25,8 +25,8 @@ Created September 22, 2007 Vasil Dimov
 
 #include "ha0storage.h"
 #include "hash0hash.h"
+#include "innodb0types.h"
 #include "mem0mem.h"
-#include "univ.i"
 #include "ut0rnd.h"
 
 #ifdef UNIV_NONINL
@@ -43,7 +43,7 @@ ha_storage_get(ha_storage_t *storage, /*!< in: hash storage */
   ha_storage_node_t *node;
 
   /* avoid repetitive calls to ut_fold_binary() in the HASH_SEARCH macro */
-  auto fold = ut_fold_binary((const byte*) data, data_len);
+  auto fold = ut_fold_binary((const byte *)data, data_len);
 
 #define IS_FOUND                                                               \
   node->data_len == data_len &&memcmp(node->data, data, data_len) == 0
@@ -110,7 +110,7 @@ ha_storage_put_memlim(ha_storage_t *storage, /*!< in/out: hash storage */
   node->data = data_copy;
 
   /* avoid repetitive calls to ut_fold_binary() in the HASH_INSERT macro */
-  auto fold = ut_fold_binary((const byte*) data, data_len);
+  auto fold = ut_fold_binary((const byte *)data, data_len);
 
   HASH_INSERT(ha_storage_node_t, /* type used in the hash chain */
               next,              /* node->"next" */

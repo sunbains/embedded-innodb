@@ -5,16 +5,16 @@ the functions that don't have a proper home yet.
 (c) 2008 Oracle Corpn./Innobase Oy
 *******************************************************/
 
+#include "innodb0types.h"
 #include "os0file.h"
 #include "que0que.h"
 #include "trx0trx.h"
-#include "univ.i"
 
 /**
 Determines if the currently running transaction has been interrupted.
-@return	TRUE if interrupted */
+@return	true if interrupted */
 
-ibool trx_is_interrupted(const trx_t *trx); /*!< in: transaction */
+bool trx_is_interrupted(const trx_t *trx); /*!< in: transaction */
 
 /**
 Create a temporary file using the OS specific function. */
@@ -23,17 +23,17 @@ int ib_create_tempfile(const char *filename); /*!< in: temp filename prefix */
 
 /**
 Handles user errors and lock waits detected by the database engine.
-@return	TRUE if it was a lock wait and we should continue running the query
+@return	true if it was a lock wait and we should continue running the query
 thread */
 
-ibool ib_handle_errors(enum db_err *new_err,  /*!< out: possible new error
+bool ib_handle_errors(enum db_err *new_err,  /*!< out: possible new error
                                               encountered in lock wait, or if
                                               no new error, the value of
                                               trx->error_state at the entry of
                                               this  function */
-                       trx_t *trx,            /*!< in: transaction */
-                       que_thr_t *thr,        /*!< in: query thread */
-                       trx_savept_t *savept); /*!< in: savepoint or NULL */
+                      trx_t *trx,            /*!< in: transaction */
+                      que_thr_t *thr,        /*!< in: query thread */
+                      trx_savept_t *savept); /*!< in: savepoint or NULL */
 
 /**
 Sets a lock on a table.

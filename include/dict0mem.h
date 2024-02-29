@@ -27,15 +27,13 @@ Created 1/8/1996 Heikki Tuuri
 #include "btr0types.h"
 #include "data0type.h"
 #include "dict0types.h"
-#include "mem0mem.h"
-#include "rem0types.h"
-#include "univ.i"
-#ifndef UNIV_HOTBACKUP
-#include "lock0types.h"
-#include "que0types.h"
-#include "sync0rw.h"
-#endif /* !UNIV_HOTBACKUP */
 #include "hash0hash.h"
+#include "innodb0types.h"
+#include "lock0types.h"
+#include "mem0mem.h"
+#include "que0types.h"
+#include "rem0types.h"
+#include "sync0rw.h"
 #include "trx0types.h"
 #include "ut0byte.h"
 #include "ut0lst.h"
@@ -108,7 +106,7 @@ ROW_FORMAT=REDUNDANT. */
 /*!< Shift value for
 table->flags. */
 #define DICT_TF2_TEMPORARY                                                     \
-  1 /*!< TRUE for tables from                                                  \
+  1 /*!< true for tables from                                                  \
     CREATE TEMPORARY TABLE. */
 #define DICT_TF2_BITS (DICT_TF2_SHIFT + 1)
 /*!< Total number of bits
@@ -207,18 +205,16 @@ struct dict_field_struct {
 };
 
 /** Data structure for an index.  Most fields will be
-initialized to 0, NULL or FALSE in dict_mem_index_create(). */
+initialized to 0, NULL or false in dict_mem_index_create(). */
 struct dict_index_struct {
   dulint id;              /*!< id of the index */
   mem_heap_t *heap;       /*!< memory heap */
   const char *name;       /*!< index name */
   const char *table_name; /*!< table name */
   dict_table_t *table;    /*!< back pointer to table */
-#ifndef UNIV_HOTBACKUP
   unsigned space : 32;
   /*!< space where the index tree is placed */
   unsigned page : 32;          /*!< index tree root page number */
-#endif                         /* !UNIV_HOTBACKUP */
   unsigned type : 4;           /*!< index type (DICT_CLUSTERED, DICT_UNIQUE,
                                DICT_UNIVERSAL, DICT_IBUF) */
   unsigned trx_id_offset : 10; /*!< position of the trx id column
@@ -235,14 +231,13 @@ struct dict_index_struct {
   unsigned n_def : 10;      /*!< number of fields defined so far */
   unsigned n_fields : 10;   /*!< number of fields in the index */
   unsigned n_nullable : 10; /*!< number of nullable fields */
-  unsigned cached : 1;      /*!< TRUE if the index object is in the
+  unsigned cached : 1;      /*!< true if the index object is in the
                            dictionary cache */
   unsigned to_be_dropped : 1;
-  /*!< TRUE if this index is marked to be
+  /*!< true if this index is marked to be
   dropped in ha_innobase::prepare_drop_index(),
-  otherwise FALSE */
+  otherwise false */
   dict_field_t *fields; /*!< array of field descriptions */
-#ifndef UNIV_HOTBACKUP
   UT_LIST_NODE_T(dict_index_t)
   indexes;                   /*!< list of indexes of the table */
   btr_search_t *search_info; /*!< info used in optimistic searches */
@@ -262,18 +257,17 @@ struct dict_index_struct {
   ulint stat_n_leaf_pages;
   /*!< approximate number of leaf pages in the
   index tree */
-  rw_lock_t lock;     /* read-write lock protecting the upper levels
-                      of the index tree */
-  void *cmp_ctx;      /* Client compare context. For use defined
-                      column types and BLOBs the client is
-                      responsible for comparing the column values.
-                      This field is the argument for the callback
-                      compare function. */
+  rw_lock_t lock;  /* read-write lock protecting the upper levels
+                   of the index tree */
+  void *cmp_ctx;   /* Client compare context. For use defined
+                   column types and BLOBs the client is
+                   responsible for comparing the column values.
+                   This field is the argument for the callback
+                   compare function. */
   uint64_t trx_id; /* id of the transaction that created this
                       index, or 0 if the index existed
                       when InnoDB was started up */
-                      /* @} */
-#endif                /* !UNIV_HOTBACKUP */
+                   /* @} */
 #ifdef UNIV_DEBUG
   ulint magic_n; /*!< magic number */
 /** Value of dict_index_struct::magic_n */
@@ -283,7 +277,7 @@ struct dict_index_struct {
 
 /** Data structure for a foreign key constraint; an example:
 FOREIGN KEY (A, B) REFERENCES TABLE2 (C, D).  Most fields will be
-initialized to 0, NULL or FALSE in dict_mem_foreign_create(). */
+initialized to 0, NULL or false in dict_mem_foreign_create(). */
 struct dict_foreign_struct {
   mem_heap_t *heap;                  /*!< this object is allocated from
                                      this memory heap */
@@ -332,7 +326,7 @@ a foreign key constraint is enforced, therefore RESTRICT just means no flag */
 /* @} */
 
 /** Data structure for a database table.  Most fields will be
-initialized to 0, NULL or FALSE in dict_mem_table_create(). */
+initialized to 0, NULL or false in dict_mem_table_create(). */
 struct dict_table_struct {
   dulint id;                          /*!< id of the table */
   mem_heap_t *heap;                   /*!< memory heap */
@@ -348,16 +342,16 @@ struct dict_table_struct {
   table is placed */
   unsigned flags : DICT_TF2_BITS; /*!< DICT_TF_COMPACT, ... */
   unsigned ibd_file_missing : 1;
-  /*!< TRUE if this is in a single-table
+  /*!< true if this is in a single-table
   tablespace and the .ibd file is missing; then
   we must return in ha_innodb.cc an error if the
   user tries to query such an orphaned table */
   unsigned tablespace_discarded : 1;
-  /*!< this flag is set TRUE when the user
+  /*!< this flag is set true when the user
   calls DISCARD TABLESPACE on this
-  table, and reset to FALSE in IMPORT
+  table, and reset to false in IMPORT
   TABLESPACE */
-  unsigned cached : 1;  /*!< TRUE if the table object has been added
+  unsigned cached : 1;  /*!< true if the table object has been added
                        to the dictionary cache */
   unsigned n_def : 10;  /*!< number of columns defined so far */
   unsigned n_cols : 10; /*!< number of columns */
@@ -368,7 +362,6 @@ struct dict_table_struct {
   the string contains n_cols, it will be
   allocated from a temporary heap.  The final
   string will be allocated from table->heap. */
-#ifndef UNIV_HOTBACKUP
   hash_node_t name_hash; /*!< hash chain node */
   hash_node_t id_hash;   /*!< hash chain node */
   UT_LIST_BASE_NODE_T(dict_index_t)
@@ -396,7 +389,7 @@ struct dict_table_struct {
   locks; /*!< list of locks on the table */
 #ifdef UNIV_DEBUG
   /*----------------------*/
-  ibool does_not_fit_in_memory;
+  bool does_not_fit_in_memory;
   /*!< this field is used to specify in
   simulations tables which are so big
   that disk should be accessed: disk
@@ -404,18 +397,18 @@ struct dict_table_struct {
   thread to sleep for a while; NOTE that
   this flag is not stored to the data
   dictionary on disk, and the database
-  will forget about value TRUE if it has
+  will forget about value true if it has
   to reload the table definition from
   disk */
 #endif /* UNIV_DEBUG */
   /*----------------------*/
   unsigned big_rows : 1;
-  /*!< flag: TRUE if the maximum length of
+  /*!< flag: true if the maximum length of
   a single row exceeds BIG_ROW_SIZE;
   initialized in dict_table_add_to_cache() */
   /** Statistics for query optimization */
   /* @{ */
-  unsigned stat_initialized : 1; /*!< TRUE if statistics have
+  unsigned stat_initialized : 1; /*!< true if statistics have
                      been calculated the first time
                      after database startup or table creation */
   int64_t stat_n_rows;
@@ -439,7 +432,6 @@ struct dict_table_struct {
   this is only used for heuristics */
   /* @} */
   /*----------------------*/
-#endif /* !UNIV_HOTBACKUP */
 #ifdef UNIV_DEBUG
   ulint magic_n; /*!< magic number */
 /** Value of dict_table_struct::magic_n */

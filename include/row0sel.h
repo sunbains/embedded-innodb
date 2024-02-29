@@ -28,12 +28,12 @@ Created 12/19/1997 Heikki Tuuri
 #include "btr0pcur.h"
 #include "data0data.h"
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "pars0sym.h"
 #include "que0types.h"
 #include "read0read.h"
 #include "row0types.h"
 #include "trx0types.h"
-#include "univ.i"
 
 /** Creates a select node struct.
 @return	own: select node struct */
@@ -51,9 +51,8 @@ void sel_col_prefetch_buf_free(
     sel_buf_t *prefetch_buf); /*!< in, own: prefetch buffer */
 /** Gets the plan node for the nth table in a join.
 @return	plan node */
-UNIV_INLINE
-plan_t *sel_node_get_nth_plan(sel_node_t *node, /*!< in: select node */
-                              ulint i);         /*!< in: get ith plan node */
+inline plan_t *sel_node_get_nth_plan(sel_node_t *node, /*!< in: select node */
+                                     ulint i); /*!< in: get ith plan node */
 /** Performs a select step. This is a high-level function used in SQL execution
 graphs.
 @return	query thread to run next or NULL */
@@ -61,8 +60,7 @@ graphs.
 que_thr_t *row_sel_step(que_thr_t *thr); /*!< in: query thread */
 /** Performs an execution step of an open or close cursor statement node.
 @return	query thread to run next or NULL */
-UNIV_INLINE
-que_thr_t *open_step(que_thr_t *thr); /*!< in: query thread */
+inline que_thr_t *open_step(que_thr_t *thr); /*!< in: query thread */
 /** Performs a fetch for a cursor.
 @return	query thread to run next or NULL */
 
@@ -135,7 +133,7 @@ void row_sel_row_cache_next(
 /** Check if there are any rows in the cache.
 @return true if row cache is empty. */
 
-ibool row_sel_row_cache_is_empty(
+bool row_sel_row_cache_is_empty(
     row_prebuilt_t *prebuilt); /*!< in: prebuilt struct */
 
 /** A structure for caching column values for prefetched rows */
@@ -158,18 +156,18 @@ struct plan_struct {
   dict_index_t *index; /*!< table index used in the search */
   btr_pcur_t pcur;     /*!< persistent cursor used to search
                        the index */
-  ibool asc;           /*!< TRUE if cursor traveling upwards */
-  ibool pcur_is_open;  /*!< TRUE if pcur has been positioned
-                       and we can try to fetch new rows */
-  ibool cursor_at_end; /*!< TRUE if the cursor is open but
-                       we know that there are no more
-                       qualifying rows left to retrieve from
-                       the index tree; NOTE though, that
-                       there may still be unprocessed rows in
-                       the prefetch stack; always FALSE when
-                       pcur_is_open is FALSE */
-  ibool stored_cursor_rec_processed;
-  /*!< TRUE if the pcur position has been
+  bool asc;            /*!< true if cursor traveling upwards */
+  bool pcur_is_open;   /*!< true if pcur has been positioned
+                        and we can try to fetch new rows */
+  bool cursor_at_end;  /*!< true if the cursor is open but
+                        we know that there are no more
+                        qualifying rows left to retrieve from
+                        the index tree; NOTE though, that
+                        there may still be unprocessed rows in
+                        the prefetch stack; always false when
+                        pcur_is_open is false */
+  bool stored_cursor_rec_processed;
+  /*!< true if the pcur position has been
   stored and the record it is positioned
   on has already been processed */
   que_node_t **tuple_exps; /*!< array of expressions
@@ -183,8 +181,8 @@ struct plan_struct {
   ulint n_exact_match;     /*!< number of first fields in
                            the search tuple which must be
                            exactly matched */
-  ibool unique_search;     /*!< TRUE if we are searching an
-                           index record with a unique key */
+  bool unique_search;      /*!< true if we are searching an
+                            index record with a unique key */
   ulint n_rows_fetched;    /*!< number of rows fetched using pcur
                            after it was opened */
   ulint n_rows_prefetched; /*!< number of prefetched rows cached
@@ -192,7 +190,7 @@ struct plan_struct {
                          the same mtr saves CPU time */
   ulint first_prefetched;  /*!< index of the first cached row in
                           select buffer arrays for each column */
-  ibool no_prefetch;       /*!< no prefetch for this table */
+  bool no_prefetch;        /*!< no prefetch for this table */
   sym_node_list_t columns; /*!< symbol table nodes for the columns
                            to retrieve from the table */
   UT_LIST_BASE_NODE_T(func_node_t)
@@ -207,14 +205,14 @@ struct plan_struct {
   UT_LIST_BASE_NODE_T(func_node_t)
   other_conds;               /*!< the rest of search conditions we
                              can test at this table in a join */
-  ibool must_get_clust;      /*!< TRUE if index is a non-clustered
-                             index and we must also fetch the
-                             clustered index record; this is the
-                             case if the non-clustered record does
-                             not contain all the needed columns, or
-                             if this is a single-table explicit
-                             cursor, or a searched update or
-                             delete */
+  bool must_get_clust;       /*!< true if index is a non-clustered
+                              index and we must also fetch the
+                              clustered index record; this is the
+                              case if the non-clustered record does
+                              not contain all the needed columns, or
+                              if this is a single-table explicit
+                              cursor, or a searched update or
+                              delete */
   ulint *clust_map;          /*!< map telling how clust_ref is built
                              from the fields of a non-clustered
                              record */
@@ -244,11 +242,11 @@ struct sel_node_struct {
   que_node_t *select_list;   /*!< select list */
   sym_node_t *into_list;     /*!< variables list or NULL */
   sym_node_t *table_list;    /*!< table list */
-  ibool asc;                 /*!< TRUE if the rows should be fetched
-                             in an ascending order */
-  ibool set_x_locks;         /*!< TRUE if the cursor is for update or
-                             delete, which means that a row x-lock
-                             should be placed on the cursor row */
+  bool asc;                  /*!< true if the rows should be fetched
+                              in an ascending order */
+  bool set_x_locks;          /*!< true if the cursor is for update or
+                              delete, which means that a row x-lock
+                              should be placed on the cursor row */
   lock_mode row_lock_mode;   /*!< LOCK_X or LOCK_S */
   ulint n_tables;            /*!< number of tables */
   ulint fetch_table;         /*!< number of the next table to access
@@ -260,27 +258,27 @@ struct sel_node_struct {
   read_view_t *read_view;    /*!< if the query is a non-locking
                              consistent read, its read view is
                              placed here, otherwise NULL */
-  ibool consistent_read;     /*!< TRUE if the select is a consistent,
-                             non-locking read */
+  bool consistent_read;      /*!< true if the select is a consistent,
+                              non-locking read */
   order_node_t *order_by;    /*!< order by column definition, or
                              NULL */
-  ibool is_aggregate;        /*!< TRUE if the select list consists of
-                             aggregate functions */
-  ibool aggregate_already_fetched;
-  /*!< TRUE if the aggregate row has
+  bool is_aggregate;         /*!< true if the select list consists of
+                              aggregate functions */
+  bool aggregate_already_fetched;
+  /*!< true if the aggregate row has
   already been fetched for the current
   cursor */
-  ibool can_get_updated;       /*!< this is TRUE if the select
-                               is in a single-table explicit
-                               cursor which can get updated
-                               within the stored procedure,
-                               or in a searched update or
-                               delete; NOTE that to determine
-                               of an explicit cursor if it
-                               can get updated, the parser
-                               checks from a stored procedure
-                               if it contains positioned
-                               update or delete statements */
+  bool can_get_updated;        /*!< this is true if the select
+                                is in a single-table explicit
+                                cursor which can get updated
+                                within the stored procedure,
+                                or in a searched update or
+                                delete; NOTE that to determine
+                                of an explicit cursor if it
+                                can get updated, the parser
+                                checks from a stored procedure
+                                if it contains positioned
+                                update or delete statements */
   sym_node_t *explicit_cursor; /*!< not NULL if an explicit cursor */
   UT_LIST_BASE_NODE_T(sym_node_t)
   copy_variables; /*!< variables whose values we have to

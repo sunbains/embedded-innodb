@@ -32,10 +32,12 @@ Created 4/6/2006 Osku Salerma
 ib_vector_t *ib_vector_create(mem_heap_t *heap, ulint size) {
   ut_a(size > 0);
 
-  auto vec = reinterpret_cast<ib_vector_t*>(mem_heap_alloc(heap, sizeof(ib_vector_t)));
+  auto vec = reinterpret_cast<ib_vector_t *>(
+      mem_heap_alloc(heap, sizeof(ib_vector_t)));
 
   vec->heap = heap;
-  vec->data = reinterpret_cast<void**>(mem_heap_alloc(heap, sizeof(void *) * size));
+  vec->data =
+      reinterpret_cast<void **>(mem_heap_alloc(heap, sizeof(void *) * size));
   vec->used = 0;
   vec->total = size;
 
@@ -46,7 +48,8 @@ void ib_vector_push(ib_vector_t *vec, void *elem) {
   if (vec->used >= vec->total) {
     ulint new_total = vec->total * 2;
 
-    auto new_data = reinterpret_cast<void**>(mem_heap_alloc(vec->heap, sizeof(void *) * new_total));
+    auto new_data = reinterpret_cast<void **>(
+        mem_heap_alloc(vec->heap, sizeof(void *) * new_total));
     memcpy(new_data, vec->data, sizeof(void *) * vec->total);
 
     vec->data = new_data;

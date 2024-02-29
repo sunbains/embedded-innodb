@@ -24,61 +24,56 @@ Created 3/26/1996 Heikki Tuuri
 #ifndef trx0undo_h
 #define trx0undo_h
 
+#include "innodb0types.h"
 #include "mtr0mtr.h"
 #include "page0types.h"
 #include "trx0sys.h"
 #include "trx0types.h"
 #include "trx0xa.h"
-#include "univ.i"
 
 /** Builds a roll pointer.
 @return	roll pointer */
-UNIV_INLINE
-roll_ptr_t trx_undo_build_roll_ptr(
-    ibool is_insert, /*!< in: TRUE if insert undo log */
-    ulint rseg_id,   /*!< in: rollback segment id */
-    ulint page_no,   /*!< in: page number */
-    ulint offset);   /*!< in: offset of the undo entry within page */
+inline roll_ptr_t trx_undo_build_roll_ptr(
+    bool is_insert, /*!< in: true if insert undo log */
+    ulint rseg_id,  /*!< in: rollback segment id */
+    ulint page_no,  /*!< in: page number */
+    ulint offset);  /*!< in: offset of the undo entry within page */
 /** Decodes a roll pointer. */
-UNIV_INLINE
-void trx_undo_decode_roll_ptr(
-    roll_ptr_t roll_ptr, /*!< in: roll pointer */
-    ibool *is_insert,    /*!< out: TRUE if insert undo log */
-    ulint *rseg_id,      /*!< out: rollback segment id */
-    ulint *page_no,      /*!< out: page number */
-    ulint *offset);      /*!< out: offset of the undo
-                         entry within page */
-/** Returns TRUE if the roll pointer is of the insert type.
-@return	TRUE if insert undo log */
-UNIV_INLINE
-ibool trx_undo_roll_ptr_is_insert(roll_ptr_t roll_ptr); /*!< in: roll pointer */
+inline void
+trx_undo_decode_roll_ptr(roll_ptr_t roll_ptr, /*!< in: roll pointer */
+                         bool *is_insert, /*!< out: true if insert undo log */
+                         ulint *rseg_id,  /*!< out: rollback segment id */
+                         ulint *page_no,  /*!< out: page number */
+                         ulint *offset);  /*!< out: offset of the undo
+                                          entry within page */
+/** Returns true if the roll pointer is of the insert type.
+@return	true if insert undo log */
+inline bool
+trx_undo_roll_ptr_is_insert(roll_ptr_t roll_ptr); /*!< in: roll pointer */
 
 /** Writes a roll ptr to an index page. In case that the size changes in
 some future version, this function should be used instead of
 mach_write_... */
-UNIV_INLINE
-void trx_write_roll_ptr(byte *ptr,            /*!< in: pointer to memory where
-                                              written */
-                        roll_ptr_t roll_ptr); /*!< in: roll ptr */
+inline void trx_write_roll_ptr(byte *ptr, /*!< in: pointer to memory where
+                                          written */
+                               roll_ptr_t roll_ptr); /*!< in: roll ptr */
 /** Reads a roll ptr from an index page. In case that the roll ptr size
 changes in some future version, this function should be used instead of
 mach_read_...
 @return	roll ptr */
-UNIV_INLINE
-roll_ptr_t trx_read_roll_ptr(
+inline roll_ptr_t trx_read_roll_ptr(
     const byte *ptr); /*!< in: pointer to memory from where to read */
 /** Gets an undo log page and x-latches it.
 @return	pointer to page x-latched */
-UNIV_INLINE
-page_t *trx_undo_page_get(ulint space,    /*!< in: space where placed */
-                          ulint zip_size, /*!< in: compressed page size in bytes
-                                          or 0 for uncompressed pages */
-                          ulint page_no,  /*!< in: page number */
-                          mtr_t *mtr);    /*!< in: mtr */
+inline page_t *
+trx_undo_page_get(ulint space,    /*!< in: space where placed */
+                  ulint zip_size, /*!< in: compressed page size in bytes
+                                  or 0 for uncompressed pages */
+                  ulint page_no,  /*!< in: page number */
+                  mtr_t *mtr);    /*!< in: mtr */
 /** Gets an undo log page and s-latches it.
 @return	pointer to page s-latched */
-UNIV_INLINE
-page_t *
+inline page_t *
 trx_undo_page_get_s_latched(ulint space,    /*!< in: space where placed */
                             ulint zip_size, /*!< in: compressed page size in
                                             bytes or 0 for uncompressed pages */
@@ -87,32 +82,28 @@ trx_undo_page_get_s_latched(ulint space,    /*!< in: space where placed */
 /** Returns the previous undo record on the page in the specified log, or
 NULL if none exists.
 @return	pointer to record, NULL if none */
-UNIV_INLINE
-trx_undo_rec_t *trx_undo_page_get_prev_rec(
+inline trx_undo_rec_t *trx_undo_page_get_prev_rec(
     trx_undo_rec_t *rec, /*!< in: undo log record */
     ulint page_no,       /*!< in: undo log header page number */
     ulint offset);       /*!< in: undo log header offset on page */
 /** Returns the next undo log record on the page in the specified log, or
 NULL if none exists.
 @return	pointer to record, NULL if none */
-UNIV_INLINE
-trx_undo_rec_t *trx_undo_page_get_next_rec(
+inline trx_undo_rec_t *trx_undo_page_get_next_rec(
     trx_undo_rec_t *rec, /*!< in: undo log record */
     ulint page_no,       /*!< in: undo log header page number */
     ulint offset);       /*!< in: undo log header offset on page */
 /** Returns the last undo record on the page in the specified undo log, or
 NULL if none exists.
 @return	pointer to record, NULL if none */
-UNIV_INLINE
-trx_undo_rec_t *trx_undo_page_get_last_rec(
+inline trx_undo_rec_t *trx_undo_page_get_last_rec(
     page_t *undo_page, /*!< in: undo log page */
     ulint page_no,     /*!< in: undo log header page number */
     ulint offset);     /*!< in: undo log header offset on page */
 /** Returns the first undo record on the page in the specified undo log, or
 NULL if none exists.
 @return	pointer to record, NULL if none */
-UNIV_INLINE
-trx_undo_rec_t *trx_undo_page_get_first_rec(
+inline trx_undo_rec_t *trx_undo_page_get_first_rec(
     page_t *undo_page, /*!< in: undo log page */
     ulint page_no,     /*!< in: undo log header page number */
     ulint offset);     /*!< in: undo log header offset on page */
@@ -189,9 +180,9 @@ undo log reused.
 @return DB_SUCCESS if undo log assign successful, possible error codes
 are: DB_TOO_MANY_CONCURRENT_TRXS DB_OUT_OF_FILE_SPACE
 DB_OUT_OF_MEMORY */
-db_err trx_undo_assign_undo(
-    trx_t *trx,  /*!< in: transaction */
-    ulint type); /*!< in: TRX_UNDO_INSERT or TRX_UNDO_UPDATE */
+db_err
+trx_undo_assign_undo(trx_t *trx,  /*!< in: transaction */
+                     ulint type); /*!< in: TRX_UNDO_INSERT or TRX_UNDO_UPDATE */
 
 /** Sets the state of the undo log segment at a transaction finish.
 @return	undo log segment header page, x-latched */
@@ -282,24 +273,24 @@ struct trx_undo_struct {
                    TRX_UNDO_UPDATE */
   ulint state;     /*!< state of the corresponding undo log
                    segment */
-  ibool del_marks; /*!< relevant only in an update undo log:
-                   this is TRUE if the transaction may
-                   have delete marked records, because of
-                   a delete of a row or an update of an
-                   indexed field; purge is then
-                   necessary; also TRUE if the transaction
-                   has updated an externally stored
-                   field */
+  bool del_marks;  /*!< relevant only in an update undo log:
+                    this is true if the transaction may
+                    have delete marked records, because of
+                    a delete of a row or an update of an
+                    indexed field; purge is then
+                    necessary; also true if the transaction
+                    has updated an externally stored
+                    field */
   trx_id_t trx_id; /*!< id of the trx assigned to the undo
                    log */
 #ifdef WITH_XOPEN
-  XID xid;              /*!< X/Open XA transaction
-                        identification */
-#endif                  /* WITH_XOPEN */
-  ibool dict_operation; /*!< TRUE if a dict operation trx */
-  dulint table_id;      /*!< if a dict operation, then the table
-                        id */
-  trx_rseg_t *rseg;     /*!< rseg where the undo log belongs */
+  XID xid;             /*!< X/Open XA transaction
+                       identification */
+#endif                 /* WITH_XOPEN */
+  bool dict_operation; /*!< true if a dict operation trx */
+  dulint table_id;     /*!< if a dict operation, then the table
+                       id */
+  trx_rseg_t *rseg;    /*!< rseg where the undo log belongs */
   /*-----------------------------*/
   ulint space;        /*!< space id where the undo log
                       placed */
@@ -314,7 +305,7 @@ struct trx_undo_struct {
                       top_page_no during a rollback */
   ulint size;         /*!< current size in pages */
   /*-----------------------------*/
-  ulint empty;              /*!< TRUE if the stack of undo log
+  ulint empty;              /*!< true if the stack of undo log
                             records is currently empty */
   ulint top_page_no;        /*!< page number where the latest undo
                             log record was catenated; during
@@ -409,7 +400,7 @@ page of an update undo log segment. */
     is in a history list */
 #define TRX_UNDO_DEL_MARKS                                                     \
   16 /*!< Defined only in an update undo                                       \
-     log: TRUE if the transaction may have                                     \
+     log: true if the transaction may have                                     \
      done delete markings of records, and                                      \
      thus purge is necessary */
 #define TRX_UNDO_LOG_START                                                     \
@@ -420,11 +411,11 @@ page of an update undo log segment. */
      necessarily the same as this log                                          \
      header end offset */
 #define TRX_UNDO_XID_EXISTS                                                    \
-  20 /*!< TRUE if undo log header includes                                     \
+  20 /*!< true if undo log header includes                                     \
      X/Open XA transaction identification                                      \
      XID */
 #define TRX_UNDO_DICT_TRANS                                                    \
-  21 /*!< TRUE if the transaction is a table                                   \
+  21 /*!< true if the transaction is a table                                   \
      create, index create, or drop                                             \
      transaction: in recovery                                                  \
      the transaction cannot be rolled back                                     \
@@ -433,7 +424,7 @@ page of an update undo log segment. */
      table, if it still exists */
 #define TRX_UNDO_TABLE_ID                                                      \
   22 /*!< Id of the table if the preceding                                     \
-     field is TRUE */
+     field is true */
 #define TRX_UNDO_NEXT_LOG                                                      \
   30 /*!< Offset of the next undo log header                                   \
      on this page, 0 if none */

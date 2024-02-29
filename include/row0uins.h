@@ -23,7 +23,7 @@ Created 2/25/1997 Heikki Tuuri
 
 #pragma once
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "data0data.h"
 #include "dict0types.h"
@@ -37,6 +37,6 @@ the same clustered index unique key did not have any record, even delete
 marked, at the time of the insert.  InnoDB is eager in a rollback:
 if it figures out that an index record will be removed in the purge
 anyway, it will remove it in the rollback.
-@param[in,out] node             Row undo node that will undo the fresh insert.  
+@param[in,out] node             Row undo node that will undo the fresh insert.
 @return	DB_SUCCESS */
 db_err row_undo_ins(undo_node_t *node);

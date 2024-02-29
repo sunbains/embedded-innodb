@@ -48,10 +48,10 @@ static const int C3_MAX_LEN = 8192;
 
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }
@@ -170,7 +170,7 @@ insert_rows(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
     ib_tuple_delete(tpl);
   }
 
-  delete [] ptr;
+  delete[] ptr;
 
   if (err == DB_SUCCESS) {
     if (dups == count) {

@@ -24,7 +24,7 @@ Created 4/18/1996 Heikki Tuuri
 #ifndef dict0boot_h
 #define dict0boot_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "buf0buf.h"
 #include "dict0dict.h"
@@ -45,16 +45,13 @@ dict_hdr_t *dict_hdr_get(mtr_t *mtr); /*!< in: mtr */
 dulint dict_hdr_get_new_id(ulint type); /*!< in: DICT_HDR_ROW_ID, ... */
 /** Returns a new row id.
 @return	the new id */
-UNIV_INLINE
-dulint dict_sys_get_new_row_id(void);
+inline dulint dict_sys_get_new_row_id(void);
 /** Reads a row id from a record or other 6-byte stored form.
 @return	row id */
-UNIV_INLINE
-dulint dict_sys_read_row_id(byte *field); /*!< in: record field */
+inline dulint dict_sys_read_row_id(byte *field); /*!< in: record field */
 /** Writes a row id to a record or other 6-byte stored form. */
-UNIV_INLINE
-void dict_sys_write_row_id(byte *field,    /*!< in: record field */
-                           dulint row_id); /*!< in: row id */
+inline void dict_sys_write_row_id(byte *field,    /*!< in: record field */
+                                  dulint row_id); /*!< in: row id */
 /** Initializes the data dictionary memory structures when the database is
 started. This function is also called when the data dictionary is created. */
 

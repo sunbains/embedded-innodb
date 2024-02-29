@@ -63,7 +63,7 @@ with malloc.  Protected by ut_list_mutex. */
 static UT_LIST_BASE_NODE_T(ut_mem_block_t) ut_mem_block_list;
 
 /** Flag: has ut_mem_block_list been initialized? */
-static ibool ut_mem_block_list_inited = FALSE;
+static bool ut_mem_block_list_inited = false;
 
 /** A dummy pointer for generating a null pointer exception in
 ut_malloc_low() */
@@ -76,7 +76,7 @@ void ut_mem_var_init() {
 
   memset(&ut_list_mutex, 0x0, sizeof(ut_list_mutex));
 
-  ut_mem_block_list_inited = FALSE;
+  ut_mem_block_list_inited = false;
 
   ut_mem_null_ptr = nullptr;
 }
@@ -87,15 +87,15 @@ void ut_mem_init() {
   if (!ut_mem_block_list_inited) {
     os_fast_mutex_init(&ut_list_mutex);
     UT_LIST_INIT(ut_mem_block_list);
-    ut_mem_block_list_inited = TRUE;
+    ut_mem_block_list_inited = true;
   }
 }
 
-void *ut_malloc_low(ulint n, ibool set_to_zero, ibool assert_on_error) {
+void *ut_malloc_low(ulint n, bool set_to_zero, bool assert_on_error) {
   ulint retry_count;
   void *ret;
 
-  if (UNIV_LIKELY(srv_use_sys_malloc)) {
+  if (likely(srv_use_sys_malloc)) {
     ret = malloc(n);
     ut_a(ret || !assert_on_error);
 
@@ -197,9 +197,9 @@ retry:
   return ((void *)((byte *)ret + sizeof(ut_mem_block_t)));
 }
 
-void *ut_malloc(ulint n) { return (ut_malloc_low(n, TRUE, TRUE)); }
+void *ut_malloc(ulint n) { return (ut_malloc_low(n, true, true)); }
 
-ibool ut_test_malloc(ulint n) {
+bool ut_test_malloc(ulint n) {
   auto ret = malloc(n);
 
   if (ret == nullptr) {
@@ -217,12 +217,12 @@ ibool ut_test_malloc(ulint n) {
               " compiled the OS with\n"
               "InnoDB: a big enough maximum process size.\n",
               (ulong)n, (ulong)ut_total_allocated_memory, (int)errno);
-    return (FALSE);
+    return (false);
   }
 
   free(ret);
 
-  return (TRUE);
+  return (true);
 }
 
 void ut_free(void *ptr) {
@@ -230,7 +230,7 @@ void ut_free(void *ptr) {
 
   if (!ptr) {
     return;
-  } else if (UNIV_LIKELY(srv_use_sys_malloc)) {
+  } else if (likely(srv_use_sys_malloc)) {
     free(ptr);
     return;
   }
@@ -256,7 +256,7 @@ void *ut_realloc(void *ptr, ulint size) {
   ulint min_size;
   void *new_ptr;
 
-  if (UNIV_LIKELY(srv_use_sys_malloc)) {
+  if (likely(srv_use_sys_malloc)) {
     return (realloc(ptr, size));
   }
 
@@ -326,7 +326,7 @@ void ut_free_all_mem() {
               (ulong)ut_total_allocated_memory);
   }
 
-  ut_mem_block_list_inited = FALSE;
+  ut_mem_block_list_inited = false;
 }
 
 ulint ut_strlcpy(char *dst, const char *src, ulint size) {
@@ -455,7 +455,7 @@ void test_ut_str_sql_format() {
 
 #define CALL_AND_TEST(str, str_len, buf, buf_size, ret_expected, buf_expected) \
   do {                                                                         \
-    ibool ok = TRUE;                                                           \
+    bool ok = true;                                                            \
     memset(buf, 'x', 10);                                                      \
     buf[10] = '\0';                                                            \
     ib_logger(ib_stream, "TESTING \"%s\", %lu, %lu\n", str, (ulint)str_len,    \
@@ -464,12 +464,12 @@ void test_ut_str_sql_format() {
     if (ret != ret_expected) {                                                 \
       ib_logger(ib_stream, "expected ret %lu, got %lu\n", (ulint)ret_expected, \
                 ret);                                                          \
-      ok = FALSE;                                                              \
+      ok = false;                                                              \
     }                                                                          \
     if (strcmp((char *)buf, buf_expected) != 0) {                              \
       ib_logger(ib_stream, "expected buf \"%s\", got \"%s\"\n", buf_expected,  \
                 buf);                                                          \
-      ok = FALSE;                                                              \
+      ok = false;                                                              \
     }                                                                          \
     if (ok) {                                                                  \
       ib_logger(ib_stream, "OK: %lu, \"%s\"\n\n", (ulint)ret, buf);            \

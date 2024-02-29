@@ -24,7 +24,7 @@ Created 6/2/1994 Heikki Tuuri
 #ifndef btr0btr_h
 #define btr0btr_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "btr0types.h"
 #include "data0data.h"
@@ -32,7 +32,6 @@ Created 6/2/1994 Heikki Tuuri
 #include "mtr0mtr.h"
 #include "page0cur.h"
 
-#ifndef UNIV_HOTBACKUP
 /** Maximum record size which can be stored on a page, without using the
 special big record storage structure */
 #define BTR_PAGE_MAX_REC_SIZE (UNIV_PAGE_SIZE / 2 - 200)
@@ -85,46 +84,38 @@ the insert buffer to speed up inserts */
 page_t *btr_root_get(dict_index_t *index, /*!< in: index tree */
                      mtr_t *mtr);         /*!< in: mtr */
 /*** Gets a buffer page and declares its latching order level. */
-UNIV_INLINE
-buf_block_t *btr_block_get(ulint space,    /*!< in: space id */
-                           ulint zip_size, /*!< in: compressed page size in
-                                           bytes or 0 for uncompressed pages */
-                           ulint page_no,  /*!< in: page number */
-                           ulint mode,     /*!< in: latch mode */
-                           mtr_t *mtr);    /*!< in: mtr */
+inline buf_block_t *
+btr_block_get(ulint space,    /*!< in: space id */
+              ulint zip_size, /*!< in: compressed page size in
+                              bytes or 0 for uncompressed pages */
+              ulint page_no,  /*!< in: page number */
+              ulint mode,     /*!< in: latch mode */
+              mtr_t *mtr);    /*!< in: mtr */
 /*** Gets a buffer page and declares its latching order level. */
-UNIV_INLINE
-page_t *btr_page_get(ulint space,    /*!< in: space id */
-                     ulint zip_size, /*!< in: compressed page size in bytes
-                                     or 0 for uncompressed pages */
-                     ulint page_no,  /*!< in: page number */
-                     ulint mode,     /*!< in: latch mode */
-                     mtr_t *mtr);    /*!< in: mtr */
-#endif                               /* !UNIV_HOTBACKUP */
+inline page_t *btr_page_get(ulint space,    /*!< in: space id */
+                            ulint zip_size, /*!< in: compressed page size in
+                                            bytes or 0 for uncompressed pages */
+                            ulint page_no,  /*!< in: page number */
+                            ulint mode,     /*!< in: latch mode */
+                            mtr_t *mtr);    /*!< in: mtr */
 /*** Gets the index id field of a page.
 @return	index id */
-UNIV_INLINE
-dulint btr_page_get_index_id(const page_t *page); /*!< in: index page */
-#ifndef UNIV_HOTBACKUP
+inline dulint btr_page_get_index_id(const page_t *page); /*!< in: index page */
 /*** Gets the node level field in an index page.
 @return	level, leaf level == 0 */
-UNIV_INLINE
-ulint btr_page_get_level_low(const page_t *page); /*!< in: index page */
+inline ulint btr_page_get_level_low(const page_t *page); /*!< in: index page */
 /*** Gets the node level field in an index page.
 @return	level, leaf level == 0 */
-UNIV_INLINE
-ulint btr_page_get_level(const page_t *page, /*!< in: index page */
-                         mtr_t *mtr);        /*!< in: mini-transaction handle */
+inline ulint btr_page_get_level(const page_t *page, /*!< in: index page */
+                                mtr_t *mtr); /*!< in: mini-transaction handle */
 /*** Gets the next index page number.
 @return	next page number */
-UNIV_INLINE
-ulint btr_page_get_next(const page_t *page, /*!< in: index page */
-                        mtr_t *mtr);        /*!< in: mini-transaction handle */
+inline ulint btr_page_get_next(const page_t *page, /*!< in: index page */
+                               mtr_t *mtr); /*!< in: mini-transaction handle */
 /*** Gets the previous index page number.
 @return	prev page number */
-UNIV_INLINE
-ulint btr_page_get_prev(const page_t *page, /*!< in: index page */
-                        mtr_t *mtr);        /*!< in: mini-transaction handle */
+inline ulint btr_page_get_prev(const page_t *page, /*!< in: index page */
+                               mtr_t *mtr); /*!< in: mini-transaction handle */
 /*** Gets pointer to the previous user record in the tree. It is assumed
 that the caller has appropriate latches on the page and its neighbor.
 @return	previous user record, NULL if there is none */
@@ -142,19 +133,17 @@ btr_get_next_user_rec(rec_t *rec,  /*!< in: record on leaf level */
                       mtr_t *mtr); /*!< in: mtr holding a latch on the page, and
                                    if needed, also to the next page */
 /*** Releases the latch on a leaf page and bufferunfixes it. */
-UNIV_INLINE
-void btr_leaf_page_release(buf_block_t *block, /*!< in: buffer block */
-                           ulint latch_mode,   /*!< in: BTR_SEARCH_LEAF or
-                                               BTR_MODIFY_LEAF */
-                           mtr_t *mtr);        /*!< in: mtr */
+inline void btr_leaf_page_release(buf_block_t *block, /*!< in: buffer block */
+                                  ulint latch_mode, /*!< in: BTR_SEARCH_LEAF or
+                                                    BTR_MODIFY_LEAF */
+                                  mtr_t *mtr);      /*!< in: mtr */
 /*** Gets the child node file address in a node pointer.
 NOTE: the offsets array must contain all offsets for the record since
 we read the last field according to offsets and assume that it contains
 the child page number. In other words offsets must have been retrieved
 with rec_get_offsets(n_fields=ULINT_UNDEFINED).
 @return	child node address */
-UNIV_INLINE
-ulint btr_node_ptr_get_child_page_no(
+inline ulint btr_node_ptr_get_child_page_no(
     const rec_t *rec,      /*!< in: node pointer record */
     const ulint *offsets); /*!< in: array returned by rec_get_offsets() */
 /*** Creates the root node for a new index tree.
@@ -203,25 +192,25 @@ IMPORTANT: if btr_page_reorganize() is invoked on a compressed leaf
 page of a non-clustered index, the caller must update the insert
 buffer free bits in the same mini-transaction in such a way that the
 modification will be redo-logged.
-@return	TRUE on success, FALSE on failure */
+@return	true on success, false on failure */
 
-ibool btr_page_reorganize(buf_block_t *block, /*!< in: page to be reorganized */
-                          dict_index_t *index, /*!< in: record descriptor */
-                          mtr_t *mtr);         /*!< in: mtr */
+bool btr_page_reorganize(buf_block_t *block,  /*!< in: page to be reorganized */
+                         dict_index_t *index, /*!< in: record descriptor */
+                         mtr_t *mtr);         /*!< in: mtr */
 /*** Decides if the page should be split at the convergence point of
 inserts converging to left.
-@return	TRUE if split recommended */
+@return	true if split recommended */
 
-ibool btr_page_get_split_rec_to_left(
+bool btr_page_get_split_rec_to_left(
     btr_cur_t *cursor,  /*!< in: cursor at which to insert */
     rec_t **split_rec); /*!< out: if split recommended,
                      the first record on upper half page,
                      or NULL if tuple should be first */
 /*** Decides if the page should be split at the convergence point of
 inserts converging to right.
-@return	TRUE if split recommended */
+@return	true if split recommended */
 
-ibool btr_page_get_split_rec_to_right(
+bool btr_page_get_split_rec_to_right(
     btr_cur_t *cursor,  /*!< in: cursor at which to insert */
     rec_t **split_rec); /*!< out: if split recommended,
                      the first record on upper half page,
@@ -254,12 +243,10 @@ void btr_insert_on_non_leaf_level_func(
     mtr_t *mtr);         /*!< in: mtr */
 #define btr_insert_on_non_leaf_level(i, l, t, m)                               \
   btr_insert_on_non_leaf_level_func(i, l, t, __FILE__, __LINE__, m)
-#endif /* !UNIV_HOTBACKUP */
 /*** Sets a record as the predefined minimum record. */
 
 void btr_set_min_rec_mark(rec_t *rec,  /*!< in/out: record */
                           mtr_t *mtr); /*!< in: mtr */
-#ifndef UNIV_HOTBACKUP
 /*** Deletes on the upper level the node pointer to a page. */
 
 void btr_node_ptr_delete(
@@ -268,12 +255,12 @@ void btr_node_ptr_delete(
     mtr_t *mtr);         /*!< in: mtr */
 #ifdef UNIV_DEBUG
 /*** Checks that the node pointer to a page is appropriate.
-@return	TRUE */
+@return	true */
 
-ibool btr_check_node_ptr(dict_index_t *index, /*!< in: index tree */
-                         buf_block_t *block,  /*!< in: index page */
-                         mtr_t *mtr);         /*!< in: mtr */
-#endif                                        /* UNIV_DEBUG */
+bool btr_check_node_ptr(dict_index_t *index, /*!< in: index tree */
+                        buf_block_t *block,  /*!< in: index page */
+                        mtr_t *mtr);         /*!< in: mtr */
+#endif                                       /* UNIV_DEBUG */
 /*** Tries to merge the page first to the left immediate brother if such a
 brother exists, and the node pointers to the current page and to the
 brother reside on the same page. If the left brother does not satisfy these
@@ -282,13 +269,13 @@ level lifts the records of the page to the father page, thus reducing the
 tree height. It is assumed that mtr holds an x-latch on the tree and on the
 page. If cursor is on the leaf level, mtr must also hold x-latches to
 the brothers, if they exist.
-@return	TRUE on success */
+@return	true on success */
 
-ibool btr_compress(btr_cur_t *cursor, /*!< in: cursor on the page to merge or
+bool btr_compress(btr_cur_t *cursor, /*!< in: cursor on the page to merge or
                                       lift; the page must not be empty: in
                                       record delete use btr_discard_page if the
                                       page would become empty */
-                   mtr_t *mtr);       /*!< in: mtr */
+                  mtr_t *mtr);       /*!< in: mtr */
 /*** Discards a page from a B-tree. This is used to remove the last record from
 a B-tree page: the whole page must be removed at the same time. This cannot
 be used for the root page, which is allowed to be empty. */
@@ -296,7 +283,6 @@ be used for the root page, which is allowed to be empty. */
 void btr_discard_page(btr_cur_t *cursor, /*!< in: cursor on the page to discard:
                                          not on the root page */
                       mtr_t *mtr);       /*!< in: mtr */
-#endif                                   /* !UNIV_HOTBACKUP */
 /*** Parses the redo log record for setting an index record as the predefined
 minimum record.
 @return	end of log record or NULL */
@@ -316,7 +302,6 @@ byte *btr_parse_page_reorganize(
     dict_index_t *index, /*!< in: record descriptor */
     buf_block_t *block,  /*!< in: page to be reorganized, or NULL */
     mtr_t *mtr);         /*!< in: mtr or NULL */
-#ifndef UNIV_HOTBACKUP
 /*** Gets the number of pages in a B-tree.
 @return	number of pages */
 
@@ -360,22 +345,21 @@ void btr_print_index(dict_index_t *index, /*!< in: index */
 #endif                             /* UNIV_BTR_PRINT */
 /*** Checks the size and number of fields in a record based on the definition of
 the index.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool btr_index_rec_validate(const rec_t *rec,          /*!< in: index record */
-                             const dict_index_t *index, /*!< in: index */
-                             ibool dump_on_error); /*!< in: TRUE if the function
-                                                   should print hex dump of
-                                                   record and page on error */
+bool btr_index_rec_validate(const rec_t *rec,          /*!< in: index record */
+                            const dict_index_t *index, /*!< in: index */
+                            bool dump_on_error); /*!< in: true if the function
+                                                  should print hex dump of
+                                                  record and page on error */
 /*** Checks the consistency of an index tree.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool btr_validate_index(dict_index_t *index, /*!< in: index */
-                         trx_t *trx);         /*!< in: transaction or NULL */
+bool btr_validate_index(dict_index_t *index, /*!< in: index */
+                        trx_t *trx);         /*!< in: transaction or NULL */
 
 #define BTR_N_LEAF_PAGES 1
 #define BTR_TOTAL_SIZE 2
-#endif /* !UNIV_HOTBACKUP */
 
 #ifndef UNIV_NONINL
 #include "btr0btr.ic"

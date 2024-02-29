@@ -24,7 +24,7 @@ Created 9/10/1995 Heikki Tuuri
 #ifndef ut0lst_h
 #define ut0lst_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 /* This module implements the two-way linear list which should be used
 if a list is used in the database. Note that a single struct may belong
@@ -86,12 +86,12 @@ LRU_node_t. */
     ((BASE).count)++;                                                          \
     ((N)->NAME).next = (BASE).start;                                           \
     ((N)->NAME).prev = NULL;                                                   \
-    if (UNIV_LIKELY((BASE).start != NULL)) {                                   \
+    if (likely((BASE).start != NULL)) {                                        \
       ut_ad((BASE).start != (N));                                              \
       (((BASE).start)->NAME).prev = (N);                                       \
     }                                                                          \
     (BASE).start = (N);                                                        \
-    if (UNIV_UNLIKELY((BASE).end == NULL)) {                                   \
+    if (unlikely((BASE).end == NULL)) {                                        \
       (BASE).end = (N);                                                        \
     }                                                                          \
   }

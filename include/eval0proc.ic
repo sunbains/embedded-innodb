@@ -27,12 +27,11 @@ Created 1/20/1998 Heikki Tuuri
 
 /** Performs an execution step of a procedure node.
 @return	query thread to run next or NULL */
-UNIV_INLINE
-que_thr_t *proc_step(que_thr_t *thr) /*!< in: query thread */
+inline que_thr_t *proc_step(que_thr_t *thr) /*!< in: query thread */
 {
   ut_ad(thr);
 
-  auto node = (proc_node_t*) thr->run_node;
+  auto node = (proc_node_t *)thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_PROC);
 
   if (thr->prev_node == que_node_get_parent(node)) {
@@ -56,12 +55,11 @@ que_thr_t *proc_step(que_thr_t *thr) /*!< in: query thread */
 
 /** Performs an execution step of a procedure call node.
 @return	query thread to run next or NULL */
-UNIV_INLINE
-que_thr_t *proc_eval_step(que_thr_t *thr) /*!< in: query thread */
+inline que_thr_t *proc_eval_step(que_thr_t *thr) /*!< in: query thread */
 {
   ut_ad(thr);
 
-  auto node = (func_node_t*) thr->run_node;
+  auto node = (func_node_t *)thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_FUNC);
 
   /* Evaluate the procedure */

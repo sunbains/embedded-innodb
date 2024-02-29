@@ -26,12 +26,10 @@ Created 6/9/1994 Heikki Tuuri
 check fields whose sizes are given below */
 
 #ifdef UNIV_MEM_DEBUG
-#ifndef UNIV_HOTBACKUP
 /* The mutex which protects in the debug version the hash table
 containing the list of live memory heaps, and also the global
 variables in mem0dbg.c. */
 extern mutex_t mem_hash_mutex;
-#endif /* !UNIV_HOTBACKUP */
 
 #define MEM_FIELD_HEADER_SIZE                                                  \
   ut_calc_align(2 * sizeof(ulint), UNIV_MEM_ALIGNMENT)
@@ -64,10 +62,10 @@ void mem_heap_validate_or_print(
     byte *top,        /*!< in: calculate and validate only until
                       this top pointer in the heap is reached,
                       if this pointer is NULL, ignored */
-    ibool print,      /*!< in: if TRUE, prints the contents
-                     of the heap; works only in
-                     the debug version */
-    ibool *error,     /*!< out: TRUE if error */
+    bool print,       /*!< in: if true, prints the contents
+                      of the heap; works only in
+                      the debug version */
+    bool *error,      /*!< out: true if error */
     ulint *us_size,   /*!< out: allocated memory
                       (for the user) in the heap,
                       if a NULL pointer is passed as this
@@ -80,17 +78,17 @@ void mem_heap_validate_or_print(
                    if a NULL pointer is passed as this
                    argument, it is ignored */
 /** Validates the contents of a memory heap.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool mem_heap_validate(mem_heap_t *heap); /*!< in: memory heap */
-#endif                                     /* UNIV_MEM_DEBUG || UNIV_DEBUG */
+bool mem_heap_validate(mem_heap_t *heap); /*!< in: memory heap */
+#endif                                    /* UNIV_MEM_DEBUG || UNIV_DEBUG */
 #ifdef UNIV_DEBUG
 /** Checks that an object is a memory heap (or a block of it)
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool mem_heap_check(mem_heap_t *heap); /*!< in: memory heap */
-#endif                                  /* UNIV_DEBUG */
+bool mem_heap_check(mem_heap_t *heap); /*!< in: memory heap */
+#endif                                 /* UNIV_DEBUG */
 /** Validates the dynamic memory
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool mem_validate(void);
+bool mem_validate(void);

@@ -26,12 +26,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "buf0buf.h" /* for buf_pool */
 #include "buf0lru.h" /* for buf_LRU_* */
 #include "db0err.h"
+#include "innodb0types.h"
 #include "log0recv.h"
 #include "os0sync.h"
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "trx0sys.h" /* for trx_sys_file_format_name_to_id() */
-#include "univ.i"
 
 static char *srv_file_flush_method_str = NULL;
 
@@ -55,13 +55,13 @@ typedef enum ib_cfg_flag {
 
 /* struct ib_cfg_var_t @{ */
 typedef struct ib_cfg_var {
-  const char *name;    /* config var name */
-  ib_cfg_type_t type;  /* config var type */
-  ib_cfg_flag_t flag;  /* config var flag */
-  uint64_t min_val; /* minimum allowed value for numeric types,
-                       ignored for other types */
-  uint64_t max_val; /* maximum allowed value for numeric types,
-                       ignored for other types */
+  const char *name;   /* config var name */
+  ib_cfg_type_t type; /* config var type */
+  ib_cfg_flag_t flag; /* config var flag */
+  uint64_t min_val;   /* minimum allowed value for numeric types,
+                         ignored for other types */
+  uint64_t max_val;   /* maximum allowed value for numeric types,
+                         ignored for other types */
   ib_err_t (*validate)(const struct ib_cfg_var *, const void *); /*
                      function used to validate a new variable's
                      value when setting it */
@@ -87,7 +87,7 @@ ib_cfg_assign(ib_cfg_type_t type, /*!< in: type of src and dst */
   switch (type) {
   case IB_CFG_IBOOL: {
 
-    *(ib_bool_t *)dst = *(const ib_bool_t *)src;
+    *(bool *)dst = *(const bool *)src;
     return (DB_SUCCESS);
   }
 
@@ -227,12 +227,12 @@ static ib_err_t ib_cfg_var_set_adaptive_hash_index(
                                 manipulate, must be
                                 "adaptive_hash_index" */
     const void *value)          /*!< in: value to set, must point to
-                                ib_bool_t variable */
+                                bool variable */
 {
   ut_a(strcasecmp(cfg_var->name, "adaptive_hash_index") == 0);
   ut_a(cfg_var->type == IB_CFG_IBOOL);
 
-  btr_search_enabled = !(*(const ib_bool_t *)value);
+  btr_search_enabled = !(*(const bool *)value);
 
   return (DB_SUCCESS);
 }
@@ -248,12 +248,12 @@ static ib_err_t ib_cfg_var_get_adaptive_hash_index(
                                       "adaptive_hash_index" */
     void *value)                      /*!< out: place to store
                                       the retrieved value, must
-                                      point to ib_bool_t variable */
+                                      point to bool variable */
 {
   ut_a(strcasecmp(cfg_var->name, "adaptive_hash_index") == 0);
   ut_a(cfg_var->type == IB_CFG_IBOOL);
 
-  *(ib_bool_t *)value = !btr_search_enabled;
+  *(bool *)value = !btr_search_enabled;
 
   return (DB_SUCCESS);
 }
@@ -428,7 +428,7 @@ static ib_err_t ib_cfg_var_set_flush_method(
 
   value_str = *(const char **)value;
 
-  os_aio_use_native_aio = FALSE;
+  os_aio_use_native_aio = false;
 
 #ifndef __WIN__
   if (0 == strcmp(value_str, "fsync")) {
@@ -465,11 +465,11 @@ static ib_err_t ib_cfg_var_set_flush_method(
       async i/o, but when run in conjunction with InnoDB
       Hot Backup, it seemed to corrupt the data files. */
 
-      os_aio_use_native_aio = FALSE;
+      os_aio_use_native_aio = false;
       break;
     default:
       /* On Win 2000 and XP use async i/o */
-      os_aio_use_native_aio = TRUE;
+      os_aio_use_native_aio = true;
       break;
     }
   }
@@ -515,7 +515,7 @@ static ib_err_t ib_cfg_var_set_lru_old_blocks_pct(
     const void *value)          /*!< in: value to set, must point to
                                 ulint variable */
 {
-  ibool adjust_buf_pool;
+  bool adjust_buf_pool;
 
   ut_a(strcasecmp(cfg_var->name, "lru_old_blocks_pct") == 0);
   ut_a(cfg_var->type == IB_CFG_ULINT);
@@ -532,10 +532,10 @@ static ib_err_t ib_cfg_var_set_lru_old_blocks_pct(
 
   if (buf_pool != NULL) {
     /* buffer pool has been created */
-    adjust_buf_pool = TRUE;
+    adjust_buf_pool = true;
   } else {
     /* buffer pool not yet created, do not attempt to modify it */
-    adjust_buf_pool = FALSE;
+    adjust_buf_pool = false;
   }
 
   lru_old_blocks_pct =
@@ -946,7 +946,7 @@ static const ib_cfg_var_t cfg_vars_defaults[] = {
 /** This mutex has to work even if the InnoDB latching infrastructure
 hasn't been initialized. */
 static os_fast_mutex_t cfg_vars_mutex;
-static ib_cfg_var_t cfg_vars[UT_ARR_SIZE(cfg_vars_defaults)];
+static ib_cfg_var_t cfg_vars[std::size(cfg_vars_defaults)];
 
 /* public API functions and some auxiliary ones @{ */
 
@@ -958,7 +958,7 @@ ib_cfg_lookup_var(const char *var) /*!< in: variable name */
 {
   ulint i;
 
-  for (i = 0; i < UT_ARR_SIZE(cfg_vars); ++i) {
+  for (i = 0; i < std::size(cfg_vars); ++i) {
     ib_cfg_var_t *cfg_var;
 
     cfg_var = &cfg_vars[i];
@@ -1031,9 +1031,10 @@ static ib_err_t ib_cfg_set_ap(const char *name, /*!< in: variable name */
       call ::set() */
       switch (cfg_var->type) {
       case IB_CFG_IBOOL: {
-        ib_bool_t value;
+        bool value;
 
-        value = va_arg(ap, ib_bool_t);
+        /* Should be passing bool here, but va_arg only accepts int. */
+        value = va_arg(ap, int);
 
         ret = cfg_var->set(cfg_var, &value);
 
@@ -1162,7 +1163,7 @@ ib_cfg_get_all(const char ***names, /*!< out: pointer to array of strings */
 {
   ib_u32_t i;
 
-  *names_num = UT_ARR_SIZE(cfg_vars_defaults);
+  *names_num = std::size(cfg_vars_defaults);
 
   *names = (const char **)malloc(*names_num * sizeof(const char *));
   if (*names == NULL) {
@@ -1192,8 +1193,8 @@ ib_err_t ib_cfg_init(void) {
   srv_unix_file_flush_method = SRV_UNIX_FSYNC;
   srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
 
-  os_aio_print_debug = FALSE;
-  os_aio_use_native_aio = FALSE;
+  os_aio_print_debug = false;
+  os_aio_use_native_aio = false;
 
 #define IB_CFG_SET(name, var)                                                  \
   if (ib_cfg_set(name, var) != DB_SUCCESS)                                     \
@@ -1203,7 +1204,7 @@ ib_err_t ib_cfg_init(void) {
   IB_CFG_SET("buffer_pool_size", 8 * 1024 * 1024);
   IB_CFG_SET("data_file_path", "ibdata1:32M:autoextend");
   IB_CFG_SET("data_home_dir", "./");
-  IB_CFG_SET("file_per_table", IB_TRUE);
+  IB_CFG_SET("file_per_table", true);
 #ifndef __WIN__
   IB_CFG_SET("flush_method", "fsync");
 #endif
@@ -1214,7 +1215,7 @@ ib_err_t ib_cfg_init(void) {
   IB_CFG_SET("log_group_home_dir", ".");
   IB_CFG_SET("lru_old_blocks_pct", 3 * 100 / 8);
   IB_CFG_SET("lru_block_access_recency", 0);
-  IB_CFG_SET("rollback_on_timeout", IB_TRUE);
+  IB_CFG_SET("rollback_on_timeout", true);
   IB_CFG_SET("read_io_threads", 4);
   IB_CFG_SET("write_io_threads", 4);
 #undef IB_CFG_SET

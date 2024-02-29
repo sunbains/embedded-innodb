@@ -63,10 +63,10 @@ static pthread_barrier_t barrier;
 
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }
@@ -199,7 +199,7 @@ static void *worker_thread(void *arg) {
   ib_trx_t ib_trx;
   ib_crsr_t crsr1 = NULL;
   ib_crsr_t crsr2 = NULL;
-  ib_bool_t deadlock = IB_FALSE;
+  bool deadlock = false;
   int thread_id = *(int *)arg;
 
   free(arg);
@@ -269,7 +269,7 @@ static void *worker_thread(void *arg) {
   }
 
   if (err != DB_SUCCESS) {
-    deadlock = IB_TRUE;
+    deadlock = true;
   }
 
   err = ib_cursor_reset(crsr1);
@@ -446,7 +446,7 @@ int main(int argc, char *argv[]) {
 
   for (uint32_t i = 0; i < n_threads; ++i) {
     int retval;
-    int *ptr = (int*)malloc(sizeof(int));
+    int *ptr = (int *)malloc(sizeof(int));
 
     assert(ptr != NULL);
     *ptr = i;

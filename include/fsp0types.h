@@ -26,7 +26,7 @@ Created May 26, 2009 Vasil Dimov
 #ifndef fsp0types_h
 #define fsp0types_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "fil0fil.h" /* for FIL_PAGE_DATA */
 

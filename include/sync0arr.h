@@ -24,8 +24,8 @@ Created 9/5/1995 Heikki Tuuri
 #ifndef sync0arr_h
 #define sync0arr_h
 
+#include "innodb0types.h"
 #include "os0thread.h"
-#include "univ.i"
 #include "ut0lst.h"
 #include "ut0mem.h"
 
@@ -84,9 +84,9 @@ function should be called about every 1 second in the server. */
 
 void sync_arr_wake_threads_if_sema_free(void);
 /** Prints warnings of long semaphore waits to stderr.
-@return	TRUE if fatal semaphore wait threshold was exceeded */
+@return	true if fatal semaphore wait threshold was exceeded */
 
-ibool sync_array_print_long_waits(void);
+bool sync_array_print_long_waits(void);
 /** Validates the integrity of the wait array. Checks
 that the number of reserved cells equals the count variable. */
 

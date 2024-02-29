@@ -21,7 +21,7 @@ Debug utilities for Innobase.
 Created 1/30/1994 Heikki Tuuri
 **********************************************************************/
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "ut0dbg.h"
 
@@ -32,15 +32,15 @@ ulint ut_dbg_zero = 0;
 #endif
 
 #if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
-/** If this is set to TRUE by ut_dbg_assertion_failed(), all threads
+/** If this is set to true by ut_dbg_assertion_failed(), all threads
 will stop at the next ut_a() or ut_ad(). */
-ibool ut_dbg_stop_threads = FALSE;
+bool ut_dbg_stop_threads = false;
 #endif
 #ifdef __NETWARE__
-/** Flag for ignoring further assertion failures.  This is set to TRUE
+/** Flag for ignoring further assertion failures.  This is set to true
 when on NetWare there happens an InnoDB assertion failure or other
 fatal error condition that requires an immediate shutdown. */
-ibool panic_shutdown = FALSE;
+bool panic_shutdown = false;
 #elif !defined(UT_DBG_USE_ABORT)
 /** A null pointer that will be dereferenced to trigger a memory trap */
 ulint *ut_dbg_null_ptr = NULL;
@@ -78,7 +78,7 @@ void ut_dbg_assertion_failed(
             "InnoDB: the InnoDB website for details\n"
             "InnoDB: about forcing recovery.\n");
 #if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
-  ut_dbg_stop_threads = TRUE;
+  ut_dbg_stop_threads = true;
 #endif
 }
 
@@ -87,7 +87,7 @@ void ut_dbg_assertion_failed(
 
 void ut_dbg_panic(void) {
   if (!panic_shutdown) {
-    panic_shutdown = TRUE;
+    panic_shutdown = true;
     innobase_shutdown(IB_SHUTDOWN_NORMAL);
   }
   exit(1);

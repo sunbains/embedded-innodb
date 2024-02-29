@@ -70,8 +70,8 @@ in the buffer pool. Following is the size of that array. */
 #define BUF_LRU_DROP_SEARCH_HASH_SIZE 1024
 
 /** If we switch on the InnoDB monitor because there are too few available
-frames in the buffer pool, we set this to TRUE */
-static ibool buf_lru_switched_on_innodb_mon = FALSE;
+frames in the buffer pool, we set this to true */
+static bool buf_lru_switched_on_innodb_mon = false;
 
 /** These statistics are not 'of' LRU but 'for' LRU.  We keep count of I/O
 and page_zip_decompress() operations.  Based on the statistics,
@@ -130,8 +130,8 @@ static enum buf_page_state buf_LRU_block_remove_hashed_page(
     buf_page_t *bpage, /*!< in: block, must contain a file page and
                        be in a state where it can be freed; there
                        may or may not be a hash index to the page */
-    ibool zip);        /*!< in: TRUE if should remove also the
-                       compressed page of an uncompressed page */
+    bool zip);         /*!< in: true if should remove also the
+                        compressed page of an uncompressed page */
 /** Puts a file page whose has no hash index to the free list. */
 static void buf_LRU_block_free_hashed_page(
     buf_block_t *block); /*!< in: block, must contain a file page and
@@ -140,7 +140,7 @@ static void buf_LRU_block_free_hashed_page(
 /** Reset buffer LRU variables. */
 
 void buf_LRU_var_init(void) {
-  buf_lru_switched_on_innodb_mon = FALSE;
+  buf_lru_switched_on_innodb_mon = false;
 
   memset(buf_LRU_stat_arr, 0x0, sizeof(buf_LRU_stat_arr));
   buf_LRU_stat_arr_ind = 0;
@@ -150,9 +150,8 @@ void buf_LRU_var_init(void) {
 
 /** Determines if the unzip_LRU list should be used for evicting a victim
 instead of the general LRU list.
-@return	TRUE if should use unzip_LRU */
-UNIV_INLINE
-ibool buf_LRU_evict_from_unzip_LRU(void) {
+@return	true if should use unzip_LRU */
+inline bool buf_LRU_evict_from_unzip_LRU(void) {
   ulint io_avg;
   ulint unzip_avg;
 
@@ -160,7 +159,7 @@ ibool buf_LRU_evict_from_unzip_LRU(void) {
 
   /* If the unzip_LRU list is empty, we can only use the LRU. */
   if (UT_LIST_GET_LEN(buf_pool->unzip_LRU) == 0) {
-    return (FALSE);
+    return (false);
   }
 
   /* If unzip_LRU is at most 10% of the size of the LRU list,
@@ -168,13 +167,13 @@ ibool buf_LRU_evict_from_unzip_LRU(void) {
   decompressed pages in the buffer pool. */
   if (UT_LIST_GET_LEN(buf_pool->unzip_LRU) <=
       UT_LIST_GET_LEN(buf_pool->LRU) / 10) {
-    return (FALSE);
+    return (false);
   }
 
   /* If eviction hasn't started yet, we assume by default
   that a workload is disk bound. */
   if (buf_pool->freed_page_clock == 0) {
-    return (TRUE);
+    return (true);
   }
 
   /* Calculate the average over past intervals, and add the values
@@ -222,13 +221,13 @@ static void buf_LRU_drop_page_hash_for_tablespace(ulint id) /*!< in: space id */
 
   zip_size = fil_space_get_zip_size(id);
 
-  if (UNIV_UNLIKELY(zip_size == ULINT_UNDEFINED)) {
+  if (unlikely(zip_size == ULINT_UNDEFINED)) {
     /* Somehow, the tablespace does not exist.  Nothing to drop. */
     ut_ad(0);
     return;
   }
 
-  page_arr = (ulint*) ut_malloc(sizeof(ulint) * BUF_LRU_DROP_SEARCH_HASH_SIZE);
+  page_arr = (ulint *)ut_malloc(sizeof(ulint) * BUF_LRU_DROP_SEARCH_HASH_SIZE);
   buf_pool_mutex_enter();
 
 scan_again:
@@ -310,7 +309,7 @@ the data file(s) of that tablespace. */
 void buf_LRU_invalidate_tablespace(ulint id) /*!< in: space id */
 {
   buf_page_t *bpage;
-  ibool all_freed;
+  bool all_freed;
 
   /* Before we attempt to drop pages one by one we first
   attempt to drop page hash index entries in batches to make
@@ -323,13 +322,13 @@ void buf_LRU_invalidate_tablespace(ulint id) /*!< in: space id */
 scan_again:
   buf_pool_mutex_enter();
 
-  all_freed = TRUE;
+  all_freed = true;
 
   bpage = UT_LIST_GET_LAST(buf_pool->LRU);
 
   while (bpage != NULL) {
     buf_page_t *prev_bpage;
-    ibool prev_bpage_buf_fix = FALSE;
+    bool prev_bpage_buf_fix = false;
 
     ut_a(buf_page_in_file(bpage));
 
@@ -347,7 +346,7 @@ scan_again:
       yet; maybe the system is currently reading it
       in, or flushing the modifications to the file */
 
-      all_freed = FALSE;
+      all_freed = false;
     } else {
       mutex_t *block_mutex = buf_page_get_mutex(bpage);
       mutex_enter(block_mutex);
@@ -359,7 +358,7 @@ scan_again:
         currently reading it in, or flushing
         the modifications to the file */
 
-        all_freed = FALSE;
+        all_freed = false;
 
         goto next_page;
       }
@@ -375,7 +374,7 @@ scan_again:
         /* This is a compressed-only block
         descriptor.  Ensure that prev_bpage
         cannot be relocated when bpage is freed. */
-        if (UNIV_LIKELY(prev_bpage != NULL)) {
+        if (likely(prev_bpage != NULL)) {
           switch (buf_page_get_state(prev_bpage)) {
           case BUF_BLOCK_FILE_PAGE:
             /* Descriptors of uncompressed
@@ -395,7 +394,7 @@ scan_again:
             further mutexes. */
             ut_ad(&buf_pool_zip_mutex == block_mutex);
             ut_ad(mutex_own(block_mutex));
-            prev_bpage_buf_fix = TRUE;
+            prev_bpage_buf_fix = true;
             prev_bpage->buf_fix_count++;
             break;
           default:
@@ -427,7 +426,7 @@ scan_again:
 
       /* Remove from the LRU list. */
 
-      if (buf_LRU_block_remove_hashed_page(bpage, TRUE) != BUF_BLOCK_ZIP_FREE) {
+      if (buf_LRU_block_remove_hashed_page(bpage, true) != BUF_BLOCK_ZIP_FREE) {
         buf_LRU_block_free_hashed_page((buf_block_t *)bpage);
       } else {
         /* The block_mutex should have been
@@ -500,9 +499,8 @@ void buf_LRU_insert_zip_clean(
 
 /** Try to free an uncompressed page of a compressed block from the unzip
 LRU list.  The compressed page is preserved, and it need not be clean.
-@return	TRUE if freed */
-UNIV_INLINE
-ibool buf_LRU_free_from_unzip_LRU_list(
+@return	true if freed */
+inline bool buf_LRU_free_from_unzip_LRU_list(
     ulint n_iterations) /*!< in: how many times this has been called
                         repeatedly without result: a high value means
                         that we should search farther; we will search
@@ -521,15 +519,15 @@ ibool buf_LRU_free_from_unzip_LRU_list(
   unzip_LRU, we fall back to the regular LRU list.  We do this
   if we have done five iterations so far. */
 
-  if (UNIV_UNLIKELY(n_iterations >= 5) || !buf_LRU_evict_from_unzip_LRU()) {
+  if (unlikely(n_iterations >= 5) || !buf_LRU_evict_from_unzip_LRU()) {
 
-    return (FALSE);
+    return (false);
   }
 
   distance = 100 + (n_iterations * UT_LIST_GET_LEN(buf_pool->unzip_LRU)) / 5;
 
   for (block = UT_LIST_GET_LAST(buf_pool->unzip_LRU);
-       UNIV_LIKELY(block != NULL) && UNIV_LIKELY(distance > 0);
+       likely(block != NULL) && likely(distance > 0);
        block = UT_LIST_GET_PREV(unzip_LRU, block), distance--) {
 
     enum buf_lru_free_block_status freed;
@@ -539,17 +537,17 @@ ibool buf_LRU_free_from_unzip_LRU_list(
     ut_ad(block->page.in_LRU_list);
 
     mutex_enter(&block->mutex);
-    freed = buf_LRU_free_block(&block->page, FALSE, NULL);
+    freed = buf_LRU_free_block(&block->page, false, NULL);
     mutex_exit(&block->mutex);
 
     switch (freed) {
     case BUF_LRU_FREED:
-      return (TRUE);
+      return (true);
 
     case BUF_LRU_CANNOT_RELOCATE:
       /* If we failed to relocate, try
       regular LRU eviction. */
-      return (FALSE);
+      return (false);
 
     case BUF_LRU_NOT_FREED:
       /* The block was buffer-fixed or I/O-fixed.
@@ -562,13 +560,12 @@ ibool buf_LRU_free_from_unzip_LRU_list(
     ut_error;
   }
 
-  return (FALSE);
+  return (false);
 }
 
 /** Try to free a clean page from the common LRU list.
-@return	TRUE if freed */
-UNIV_INLINE
-ibool buf_LRU_free_from_common_LRU_list(
+@return	true if freed */
+inline bool buf_LRU_free_from_common_LRU_list(
     ulint n_iterations) /*!< in: how many times this has been called
                         repeatedly without result: a high value means
                         that we should search farther; if
@@ -584,7 +581,7 @@ ibool buf_LRU_free_from_common_LRU_list(
   distance = 100 + (n_iterations * buf_pool->curr_size) / 10;
 
   for (bpage = UT_LIST_GET_LAST(buf_pool->LRU);
-       UNIV_LIKELY(bpage != NULL) && UNIV_LIKELY(distance > 0);
+       likely(bpage != NULL) && likely(distance > 0);
        bpage = UT_LIST_GET_PREV(LRU, bpage), distance--) {
 
     enum buf_lru_free_block_status freed;
@@ -596,7 +593,7 @@ ibool buf_LRU_free_from_common_LRU_list(
 
     mutex_enter(block_mutex);
     accessed = buf_page_is_accessed(bpage);
-    freed = buf_LRU_free_block(bpage, TRUE, NULL);
+    freed = buf_LRU_free_block(bpage, true, NULL);
     mutex_exit(block_mutex);
 
     switch (freed) {
@@ -607,7 +604,7 @@ ibool buf_LRU_free_from_common_LRU_list(
       if (!accessed) {
         ++buf_pool->stat.n_ra_pages_evicted;
       }
-      return (TRUE);
+      return (true);
 
     case BUF_LRU_NOT_FREED:
       /* The block was dirty, buffer-fixed, or I/O-fixed.
@@ -625,13 +622,13 @@ ibool buf_LRU_free_from_common_LRU_list(
     ut_error;
   }
 
-  return (FALSE);
+  return (false);
 }
 
 /** Try to free a replaceable block.
-@return	TRUE if found and freed */
+@return	true if found and freed */
 
-ibool buf_LRU_search_and_free_block(
+bool buf_LRU_search_and_free_block(
     ulint n_iterations) /*!< in: how many times this has been called
                         repeatedly without result: a high value means
                         that we should search farther; if
@@ -641,7 +638,7 @@ ibool buf_LRU_search_and_free_block(
                         n_iterations < 5, then we will also search
                         n_iterations / 5 of the unzip_LRU list. */
 {
-  ibool freed = FALSE;
+  bool freed = false;
 
   buf_pool_mutex_enter();
 
@@ -685,13 +682,13 @@ void buf_LRU_try_free_flushed_blocks(void) {
   buf_pool_mutex_exit();
 }
 
-/** Returns TRUE if less than 25 % of the buffer pool is available. This can be
+/** Returns true if less than 25 % of the buffer pool is available. This can be
 used in heuristics to prevent huge transactions eating up the whole buffer
 pool for their locks.
-@return	TRUE if less than 25 % of buffer pool left */
+@return	true if less than 25 % of buffer pool left */
 
-ibool buf_LRU_buf_pool_running_out(void) {
-  ibool ret = FALSE;
+bool buf_LRU_buf_pool_running_out(void) {
+  bool ret = false;
 
   buf_pool_mutex_enter();
 
@@ -699,7 +696,7 @@ ibool buf_LRU_buf_pool_running_out(void) {
       UT_LIST_GET_LEN(buf_pool->free) + UT_LIST_GET_LEN(buf_pool->LRU) <
           buf_pool->curr_size / 4) {
 
-    ret = TRUE;
+    ret = true;
   }
 
   buf_pool_mutex_exit();
@@ -720,7 +717,7 @@ buf_block_t *buf_LRU_get_free_only(void) {
 
   if (block) {
     ut_ad(block->page.in_free_list);
-    ut_d(block->page.in_free_list = FALSE);
+    ut_d(block->page.in_free_list = false);
     ut_ad(!block->page.in_flush_list);
     ut_ad(!block->page.in_LRU_list);
     ut_a(!buf_page_in_file(&block->page));
@@ -747,10 +744,10 @@ buf_LRU_get_free_block(ulint zip_size) /*!< in: compressed page size in bytes,
                                        or 0 if uncompressed tablespace */
 {
   buf_block_t *block = NULL;
-  ibool freed;
+  bool freed;
   ulint n_iterations = 1;
-  ibool mon_value_was = FALSE;
-  ibool started_monitor = FALSE;
+  bool mon_value_was = false;
+  bool started_monitor = false;
 loop:
   buf_pool_mutex_enter();
 
@@ -801,8 +798,8 @@ loop:
                 "InnoDB: lock heap and hash index sizes.\n",
                 (ulong)(buf_pool->curr_size / (1024 * 1024 / UNIV_PAGE_SIZE)));
 
-      buf_lru_switched_on_innodb_mon = TRUE;
-      srv_print_innodb_monitor = TRUE;
+      buf_lru_switched_on_innodb_mon = true;
+      srv_print_innodb_monitor = true;
       os_event_set(srv_lock_timeout_thread_event);
     }
   } else if (buf_lru_switched_on_innodb_mon) {
@@ -812,8 +809,8 @@ loop:
     but may also surprise users if the user also switched on the
     monitor! */
 
-    buf_lru_switched_on_innodb_mon = FALSE;
-    srv_print_innodb_monitor = FALSE;
+    buf_lru_switched_on_innodb_mon = false;
+    srv_print_innodb_monitor = false;
   }
 
   /* If there is a block in the free list, take it */
@@ -826,10 +823,10 @@ loop:
         block->page.zip.m_end = block->page.zip.m_nonempty =
             block->page.zip.n_blobs = 0;
 
-    if (UNIV_UNLIKELY(zip_size)) {
-      ibool lru;
+    if (unlikely(zip_size)) {
+      bool lru;
       page_zip_set_size(&block->page.zip, zip_size);
-      block->page.zip.data = (page_zip_t*) buf_buddy_alloc(zip_size, &lru);
+      block->page.zip.data = (page_zip_t *)buf_buddy_alloc(zip_size, &lru);
       UNIV_MEM_DESC(block->page.zip.data, zip_size, block);
     } else {
       page_zip_set_size(&block->page.zip, 0);
@@ -883,8 +880,8 @@ loop:
               (ulong)os_n_file_writes, (ulong)os_n_fsyncs);
 
     mon_value_was = srv_print_innodb_monitor;
-    started_monitor = TRUE;
-    srv_print_innodb_monitor = TRUE;
+    started_monitor = true;
+    srv_print_innodb_monitor = true;
     os_event_set(srv_lock_timeout_thread_event);
   }
 
@@ -921,8 +918,7 @@ loop:
 
 /** Moves the LRU_old pointer so that the length of the old blocks list
 is inside the allowed limits. */
-UNIV_INLINE
-void buf_LRU_old_adjust_len(void) {
+inline void buf_LRU_old_adjust_len(void) {
   ulint old_len;
   ulint new_len;
 
@@ -969,13 +965,13 @@ void buf_LRU_old_adjust_len(void) {
       ut_a(!LRU_old->old);
 #endif /* UNIV_LRU_DEBUG */
       old_len = ++buf_pool->LRU_old_len;
-      buf_page_set_old(LRU_old, TRUE);
+      buf_page_set_old(LRU_old, true);
 
     } else if (old_len > new_len + BUF_LRU_OLD_TOLERANCE) {
 
       buf_pool->LRU_old = UT_LIST_GET_NEXT(LRU, LRU_old);
       old_len = --buf_pool->LRU_old_len;
-      buf_page_set_old(LRU_old, FALSE);
+      buf_page_set_old(LRU_old, false);
     } else {
       return;
     }
@@ -1000,7 +996,7 @@ static void buf_LRU_old_init(void) {
     ut_ad(buf_page_in_file(bpage));
     /* This loop temporarily violates the
     assertions of buf_page_set_old(). */
-    bpage->old = TRUE;
+    bpage->old = true;
   }
 
   buf_pool->LRU_old = UT_LIST_GET_FIRST(buf_pool->LRU);
@@ -1022,15 +1018,14 @@ static void buf_unzip_LRU_remove_block_if_needed(
     buf_block_t *block = (buf_block_t *)bpage;
 
     ut_ad(block->in_unzip_LRU_list);
-    ut_d(block->in_unzip_LRU_list = FALSE);
+    ut_d(block->in_unzip_LRU_list = false);
 
     UT_LIST_REMOVE(unzip_LRU, buf_pool->unzip_LRU, block);
   }
 }
 
 /** Removes a block from the LRU list. */
-UNIV_INLINE
-void buf_LRU_remove_block(buf_page_t *bpage) /*!< in: control block */
+inline void buf_LRU_remove_block(buf_page_t *bpage) /*!< in: control block */
 {
   ut_ad(buf_pool);
   ut_ad(bpage);
@@ -1043,7 +1038,7 @@ void buf_LRU_remove_block(buf_page_t *bpage) /*!< in: control block */
   /* If the LRU_old pointer is defined and points to just this block,
   move it backward one step */
 
-  if (UNIV_UNLIKELY(bpage == buf_pool->LRU_old)) {
+  if (unlikely(bpage == buf_pool->LRU_old)) {
 
     /* Below: the previous block is guaranteed to exist,
     because the LRU_old pointer is only allowed to differ
@@ -1057,14 +1052,14 @@ void buf_LRU_remove_block(buf_page_t *bpage) /*!< in: control block */
     ut_a(!prev_bpage->old);
 #endif /* UNIV_LRU_DEBUG */
     buf_pool->LRU_old = prev_bpage;
-    buf_page_set_old(prev_bpage, TRUE);
+    buf_page_set_old(prev_bpage, true);
 
     buf_pool->LRU_old_len++;
   }
 
   /* Remove the block from the LRU list */
   UT_LIST_REMOVE(LRU, buf_pool->LRU, bpage);
-  ut_d(bpage->in_LRU_list = FALSE);
+  ut_d(bpage->in_LRU_list = false);
 
   buf_unzip_LRU_remove_block_if_needed(bpage);
 
@@ -1076,7 +1071,7 @@ void buf_LRU_remove_block(buf_page_t *bpage) /*!< in: control block */
          bpage = UT_LIST_GET_NEXT(LRU, bpage)) {
       /* This loop temporarily violates the
       assertions of buf_page_set_old(). */
-      bpage->old = FALSE;
+      bpage->old = false;
     }
 
     buf_pool->LRU_old = NULL;
@@ -1099,10 +1094,9 @@ void buf_LRU_remove_block(buf_page_t *bpage) /*!< in: control block */
 
 /** Adds a block to the LRU list of decompressed zip pages. */
 
-void buf_unzip_LRU_add_block(
-    buf_block_t *block, /*!< in: control block */
-    ibool old)          /*!< in: TRUE if should be put to the end
-                        of the list, else put to the start */
+void buf_unzip_LRU_add_block(buf_block_t *block, /*!< in: control block */
+                             bool old) /*!< in: true if should be put to the end
+                                        of the list, else put to the start */
 {
   ut_ad(buf_pool);
   ut_ad(block);
@@ -1111,7 +1105,7 @@ void buf_unzip_LRU_add_block(
   ut_a(buf_page_belongs_to_unzip_LRU(&block->page));
 
   ut_ad(!block->in_unzip_LRU_list);
-  ut_d(block->in_unzip_LRU_list = TRUE);
+  ut_d(block->in_unzip_LRU_list = true);
 
   if (old) {
     UT_LIST_ADD_LAST(unzip_LRU, buf_pool->unzip_LRU, block);
@@ -1121,8 +1115,8 @@ void buf_unzip_LRU_add_block(
 }
 
 /** Adds a block to the LRU list end. */
-UNIV_INLINE
-void buf_LRU_add_block_to_end_low(buf_page_t *bpage) /*!< in: control block */
+inline void
+buf_LRU_add_block_to_end_low(buf_page_t *bpage) /*!< in: control block */
 {
   ut_ad(buf_pool);
   ut_ad(bpage);
@@ -1132,7 +1126,7 @@ void buf_LRU_add_block_to_end_low(buf_page_t *bpage) /*!< in: control block */
 
   ut_ad(!bpage->in_LRU_list);
   UT_LIST_ADD_LAST(LRU, buf_pool->LRU, bpage);
-  ut_d(bpage->in_LRU_list = TRUE);
+  ut_d(bpage->in_LRU_list = true);
 
   if (UT_LIST_GET_LEN(buf_pool->LRU) > BUF_LRU_OLD_MIN_LEN) {
 
@@ -1140,7 +1134,7 @@ void buf_LRU_add_block_to_end_low(buf_page_t *bpage) /*!< in: control block */
 
     /* Adjust the length of the old block list if necessary */
 
-    buf_page_set_old(bpage, TRUE);
+    buf_page_set_old(bpage, true);
     buf_pool->LRU_old_len++;
     buf_LRU_old_adjust_len();
 
@@ -1157,18 +1151,17 @@ void buf_LRU_add_block_to_end_low(buf_page_t *bpage) /*!< in: control block */
   /* If this is a zipped block with decompressed frame as well
   then put it on the unzip_LRU list */
   if (buf_page_belongs_to_unzip_LRU(bpage)) {
-    buf_unzip_LRU_add_block((buf_block_t *)bpage, TRUE);
+    buf_unzip_LRU_add_block((buf_block_t *)bpage, true);
   }
 }
 
 /** Adds a block to the LRU list. */
-UNIV_INLINE
-void buf_LRU_add_block_low(
-    buf_page_t *bpage, /*!< in: control block */
-    ibool old)         /*!< in: TRUE if should be put to the old blocks
-                       in the LRU list, else put to the start; if the
-                       LRU list is very short, the block is added to
-                       the start, regardless of this parameter */
+inline void
+buf_LRU_add_block_low(buf_page_t *bpage, /*!< in: control block */
+                      bool old) /*!< in: true if should be put to the old blocks
+                                 in the LRU list, else put to the start; if the
+                                 LRU list is very short, the block is added to
+                                 the start, regardless of this parameter */
 {
   ut_ad(buf_pool);
   ut_ad(bpage);
@@ -1196,7 +1189,7 @@ void buf_LRU_add_block_low(
     buf_pool->LRU_old_len++;
   }
 
-  ut_d(bpage->in_LRU_list = TRUE);
+  ut_d(bpage->in_LRU_list = true);
 
   if (UT_LIST_GET_LEN(buf_pool->LRU) > BUF_LRU_OLD_MIN_LEN) {
 
@@ -1227,7 +1220,7 @@ void buf_LRU_add_block_low(
 /** Adds a block to the LRU list. */
 
 void buf_LRU_add_block(buf_page_t *bpage, /*!< in: control block */
-                       ibool old) /*!< in: TRUE if should be put to the old
+                       bool old) /*!< in: true if should be put to the old
                                   blocks in the LRU list, else put to the start;
                                   if the LRU list is very short, the block is
                                   added to the start, regardless of this
@@ -1247,7 +1240,7 @@ void buf_LRU_make_block_young(buf_page_t *bpage) /*!< in: control block */
   }
 
   buf_LRU_remove_block(bpage);
-  buf_LRU_add_block_low(bpage, FALSE);
+  buf_LRU_add_block_low(bpage, false);
 }
 
 /** Moves a block to the end of the LRU list. */
@@ -1273,11 +1266,11 @@ BUF_LRU_NOT_FREED otherwise. */
 
 enum buf_lru_free_block_status
 buf_LRU_free_block(buf_page_t *bpage, /*!< in: block to be freed */
-                   ibool zip,         /*!< in: TRUE if should remove also the
-                                      compressed page of an uncompressed page */
-                   ibool *buf_pool_mutex_released)
+                   bool zip,          /*!< in: true if should remove also the
+                                       compressed page of an uncompressed page */
+                   bool *buf_pool_mutex_released)
 /*!< in: pointer to a variable that will
-be assigned TRUE if buf_pool_mutex
+be assigned true if buf_pool_mutex
 was temporarily released, or NULL */
 {
   buf_page_t *b = NULL;
@@ -1322,10 +1315,10 @@ was temporarily released, or NULL */
     from the LRU list), refuse to free bpage. */
   alloc:
     buf_pool_mutex_exit_forbid();
-    b = (buf_page_t*) buf_buddy_alloc(sizeof *b, NULL);
+    b = (buf_page_t *)buf_buddy_alloc(sizeof *b, NULL);
     buf_pool_mutex_exit_allow();
 
-    if (UNIV_UNLIKELY(!b)) {
+    if (unlikely(!b)) {
       return (BUF_LRU_CANNOT_RELOCATE);
     }
 
@@ -1373,7 +1366,7 @@ was temporarily released, or NULL */
       HASH_INSERT(buf_page_t, hash, buf_pool->page_hash, fold, b);
 
       /* Insert b where bpage was in the LRU list. */
-      if (UNIV_LIKELY(prev_b != NULL)) {
+      if (likely(prev_b != NULL)) {
         ulint lru_len;
 
         ut_ad(prev_b->in_LRU_list);
@@ -1384,7 +1377,7 @@ was temporarily released, or NULL */
 
         if (buf_page_is_old(b)) {
           buf_pool->LRU_old_len++;
-          if (UNIV_UNLIKELY(buf_pool->LRU_old == UT_LIST_GET_NEXT(LRU, b))) {
+          if (unlikely(buf_pool->LRU_old == UT_LIST_GET_NEXT(LRU, b))) {
 
             buf_pool->LRU_old = b;
           }
@@ -1409,7 +1402,7 @@ was temporarily released, or NULL */
         buf_page_set_old(b, buf_page_is_old(b));
 #endif /* UNIV_LRU_DEBUG */
       } else {
-        ut_d(b->in_LRU_list = FALSE);
+        ut_d(b->in_LRU_list = false);
         buf_LRU_add_block_low(b, buf_page_is_old(b));
       }
 
@@ -1431,7 +1424,7 @@ was temporarily released, or NULL */
     }
 
     if (buf_pool_mutex_released) {
-      *buf_pool_mutex_released = TRUE;
+      *buf_pool_mutex_released = true;
     }
 
     buf_pool_mutex_exit();
@@ -1457,7 +1450,7 @@ was temporarily released, or NULL */
 
       mach_write_to_4(
           b->zip.data + FIL_PAGE_SPACE_OR_CHKSUM,
-          UNIV_LIKELY(srv_use_checksums)
+          likely(srv_use_checksums)
               ? page_zip_calc_checksum(b->zip.data, page_zip_get_size(&b->zip))
               : BUF_NO_CHECKSUM_MAGIC);
     }
@@ -1534,7 +1527,7 @@ void buf_LRU_block_free_non_file_page(
   }
 
   UT_LIST_ADD_FIRST(list, buf_pool->free, (&block->page));
-  ut_d(block->page.in_free_list = TRUE);
+  ut_d(block->page.in_free_list = true);
 
   UNIV_MEM_ASSERT_AND_FREE(block->frame, UNIV_PAGE_SIZE);
 }
@@ -1552,8 +1545,8 @@ static enum buf_page_state buf_LRU_block_remove_hashed_page(
     buf_page_t *bpage, /*!< in: block, must contain a file page and
                        be in a state where it can be freed; there
                        may or may not be a hash index to the page */
-    ibool zip)         /*!< in: TRUE if should remove also the
-                       compressed page of an uncompressed page */
+    bool zip)          /*!< in: true if should remove also the
+                        compressed page of an uncompressed page */
 {
   const buf_page_t *hashed_bpage;
   ut_ad(bpage);
@@ -1580,7 +1573,7 @@ static enum buf_page_state buf_LRU_block_remove_hashed_page(
 
       ut_a(!zip || bpage->oldest_modification == 0);
 
-      switch (UNIV_EXPECT(fil_page_get_type(page), FIL_PAGE_INDEX)) {
+      switch (expect(fil_page_get_type(page), FIL_PAGE_INDEX)) {
       case FIL_PAGE_TYPE_ALLOCATED:
       case FIL_PAGE_INODE:
       case FIL_PAGE_IBUF_BITMAP:
@@ -1634,7 +1627,7 @@ static enum buf_page_state buf_LRU_block_remove_hashed_page(
 
   hashed_bpage = buf_page_hash_get(bpage->space, bpage->offset);
 
-  if (UNIV_UNLIKELY(bpage != hashed_bpage)) {
+  if (unlikely(bpage != hashed_bpage)) {
     ib_logger(ib_stream,
               "InnoDB: Error: page %lu %lu not found"
               " in the hash table\n",
@@ -1660,7 +1653,7 @@ static enum buf_page_state buf_LRU_block_remove_hashed_page(
 
   ut_ad(!bpage->in_zip_hash);
   ut_ad(bpage->in_page_hash);
-  ut_d(bpage->in_page_hash = FALSE);
+  ut_d(bpage->in_page_hash = false);
   HASH_DELETE(buf_page_t, hash, buf_pool->page_hash,
               buf_page_address_fold(bpage->space, bpage->offset), bpage);
   switch (buf_page_get_state(bpage)) {
@@ -1738,9 +1731,9 @@ static void buf_LRU_block_free_hashed_page(
 ulint buf_LRU_old_ratio_update(
     ulint old_pct, /*!< in: Reserve this percentage of
                    the buffer pool for "old" blocks. */
-    ibool adjust)  /*!< in: TRUE=adjust the LRU list;
-                   FALSE=just assign buf_LRU_old_ratio
-                   during the initialization of InnoDB */
+    bool adjust)   /*!< in: true=adjust the LRU list;
+                    false=just assign buf_LRU_old_ratio
+                    during the initialization of InnoDB */
 {
   ulint ratio;
 
@@ -1806,9 +1799,9 @@ func_exit:
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 /** Validates the LRU list.
-@return	TRUE */
+@return	true */
 
-ibool buf_LRU_validate(void) {
+bool buf_LRU_validate(void) {
   buf_page_t *bpage;
   buf_block_t *block;
   ulint old_len;
@@ -1894,7 +1887,7 @@ ibool buf_LRU_validate(void) {
   }
 
   buf_pool_mutex_exit();
-  return (TRUE);
+  return (true);
 }
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 

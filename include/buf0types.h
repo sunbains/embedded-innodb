@@ -25,7 +25,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef buf0types_h
 #define buf0types_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 /** Buffer page (uncompressed or compressed) */
 typedef struct buf_page_struct buf_page_t;

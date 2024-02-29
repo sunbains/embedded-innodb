@@ -155,7 +155,8 @@ static ib_err_t drop_base(void *arg) /*!< in: arguments for callback */
   tbl_class_t *tbl = cb_arg->tbl;
 
   // fprintf(stderr, "base: DROP\n");
-  snprintf(table_name, sizeof(table_name), "%s/%s", tbl->m_db_name.c_str(), tbl->m_name.c_str());
+  snprintf(table_name, sizeof(table_name), "%s/%s", tbl->m_db_name.c_str(),
+           tbl->m_name.c_str());
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
   assert(ib_trx != NULL);
@@ -186,7 +187,8 @@ static ib_err_t truncate_base(void *arg) /*!< in: arguments for callback */
   tbl_class_t *tbl = cb_arg->tbl;
 
   // fprintf(stderr, "base: TRUNCATE\n");
-  snprintf(table_name, sizeof(table_name), "%s/%s", tbl->m_db_name.c_str(), tbl->m_name.c_str());
+  snprintf(table_name, sizeof(table_name), "%s/%s", tbl->m_db_name.c_str(),
+           tbl->m_name.c_str());
 
   err = ib_table_truncate(table_name, &table_id);
   update_err_stats(cb_arg->err_st, err);

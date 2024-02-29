@@ -24,7 +24,7 @@ Created 1/20/1998 Heikki Tuuri
 #ifndef eval0proc_h
 #define eval0proc_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "pars0pars.h"
 #include "pars0sym.h"
@@ -32,8 +32,7 @@ Created 1/20/1998 Heikki Tuuri
 
 /** Performs an execution step of a procedure node.
 @return	query thread to run next or NULL */
-UNIV_INLINE
-que_thr_t *proc_step(que_thr_t *thr); /*!< in: query thread */
+inline que_thr_t *proc_step(que_thr_t *thr); /*!< in: query thread */
 /** Performs an execution step of an if-statement node.
 @return	query thread to run next or NULL */
 
@@ -52,8 +51,7 @@ que_thr_t *for_step(que_thr_t *thr); /*!< in: query thread */
 que_thr_t *assign_step(que_thr_t *thr); /*!< in: query thread */
 /** Performs an execution step of a procedure call node.
 @return	query thread to run next or NULL */
-UNIV_INLINE
-que_thr_t *proc_eval_step(que_thr_t *thr); /*!< in: query thread */
+inline que_thr_t *proc_eval_step(que_thr_t *thr); /*!< in: query thread */
 /** Performs an execution step of an exit statement node.
 @return	query thread to run next or NULL */
 

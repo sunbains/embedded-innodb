@@ -118,7 +118,7 @@ static int run_number = 1;
 #define incr_cur_run_number() (++run_number)
 
 /* Flag used by worker threads to finish the run */
-static ib_bool_t test_running = IB_FALSE;
+static bool test_running = false;
 
 /* These functions are defined in the corresponding modules where
 table classes are defined. Base class is defined in mt_base.c */
@@ -158,10 +158,10 @@ void update_err_stats(op_err_t *e, ib_err_t err) {
 
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }
@@ -485,7 +485,7 @@ static void register_test_tables(void) {
   /* Initialize all table classes as base table */
   for (i = 0; i < NUM_TBLS; ++i) {
     register_base_table(&tbl_array[i]);
-    tbl_array[i].m_db_name =  DATABASE;
+    tbl_array[i].m_db_name = DATABASE;
     tbl_array[i].format = tbl_format;
     tbl_array[i].page_size = page_size;
   }
@@ -517,7 +517,7 @@ static void check_test_tables(void) {
     args.tbl = tbl;
     args.trx = trx;
     args.isolation_level = isolation_level;
-    args.print_res = IB_TRUE;
+    args.print_res = true;
     args.run_number = get_cur_run_number();
     args.err_st = &dml_op_errs[DML_OP_TYPE_SELECT];
 
@@ -555,14 +555,14 @@ int main(int argc, char *argv[]) {
   init_test_tables();
 
   /* start the test. */
-  test_running = IB_TRUE;
+  test_running = true;
   create_worker_threads();
 
   /* sleep for test duration */
   sleep(test_time);
 
   /* stop test and let workers exit */
-  test_running = IB_FALSE;
+  test_running = false;
   for (i = 0; i < n_ddl_thr; ++i) {
     pthread_join(ddl_tid[i], &res);
   }

@@ -22,8 +22,8 @@ Created December 2006 by Marko Makela
 *******************************************************/
 
 #ifdef UNIV_MATERIALIZE
-#undef UNIV_INLINE
-#define UNIV_INLINE
+#undef inline
+#define inline
 #endif
 
 #include "buf0buddy.h"
@@ -37,10 +37,10 @@ The buf_pool_mutex may only be released and reacquired if lru != NULL.
 @return	allocated block, possibly NULL if lru==NULL */
 
 void *buf_buddy_alloc_low(
-    ulint i,    /*!< in: index of buf_pool->zip_free[],
-                or BUF_BUDDY_SIZES */
-    ibool *lru) /*!< in: pointer to a variable that will be assigned
-                TRUE if storage was allocated from the LRU list
+    ulint i,   /*!< in: index of buf_pool->zip_free[],
+               or BUF_BUDDY_SIZES */
+    bool *lru) /*!< in: pointer to a variable that will be assigned
+                true if storage was allocated from the LRU list
                 and buf_pool_mutex was temporarily released,
                 or NULL if the LRU list should not be used */
     __attribute__((malloc));
@@ -55,8 +55,7 @@ void buf_buddy_free_low(void *buf, /*!< in: block to be freed, must not be
 
 /** Get the index of buf_pool->zip_free[] for a given block size.
 @return	index of buf_pool->zip_free[], or BUF_BUDDY_SIZES */
-UNIV_INLINE
-ulint buf_buddy_get_slot(ulint size) /*!< in: block size */
+inline ulint buf_buddy_get_slot(ulint size) /*!< in: block size */
 {
   ulint i;
   ulint s;
@@ -77,13 +76,12 @@ control blocks must be properly initialized immediately after
 buf_buddy_alloc() has returned the memory, before releasing
 buf_pool_mutex.
 @return	allocated block, possibly NULL if lru == NULL */
-UNIV_INLINE
-void *
+inline void *
 buf_buddy_alloc(ulint size, /*!< in: block size, up to UNIV_PAGE_SIZE */
-                ibool *lru) /*!< in: pointer to a variable that will be assigned
-                            TRUE if storage was allocated from the LRU list
-                            and buf_pool_mutex was temporarily released,
-                            or NULL if the LRU list should not be used */
+                bool *lru)  /*!< in: pointer to a variable that will be assigned
+                             true if storage was allocated from the LRU list
+                             and buf_pool_mutex was temporarily released,
+                             or NULL if the LRU list should not be used */
 {
   ut_ad(buf_pool_mutex_own());
 
@@ -91,10 +89,10 @@ buf_buddy_alloc(ulint size, /*!< in: block size, up to UNIV_PAGE_SIZE */
 }
 
 /** Deallocate a block. */
-UNIV_INLINE
-void buf_buddy_free(void *buf,  /*!< in: block to be freed, must not be
-                                pointed to by the buffer pool */
-                    ulint size) /*!< in: block size, up to UNIV_PAGE_SIZE */
+inline void
+buf_buddy_free(void *buf,  /*!< in: block to be freed, must not be
+                           pointed to by the buffer pool */
+               ulint size) /*!< in: block size, up to UNIV_PAGE_SIZE */
 {
   ut_ad(buf_pool_mutex_own());
 
@@ -102,6 +100,6 @@ void buf_buddy_free(void *buf,  /*!< in: block to be freed, must not be
 }
 
 #ifdef UNIV_MATERIALIZE
-#undef UNIV_INLINE
-#define UNIV_INLINE UNIV_INLINE_ORIGINAL
+#undef inline
+#define inline inline_ORIGINAL
 #endif

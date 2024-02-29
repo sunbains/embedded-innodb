@@ -64,10 +64,10 @@ static row_t in_rows[] = {
 
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }
@@ -232,10 +232,10 @@ static ib_err_t do_moveto1(ib_crsr_t crsr) {
 }
 
 /** SELECT * FROM T WHERE c1 = 'abc' AND c2 = 'def'; */
-static ib_bool_t do_select1(ib_tpl_t tpl) {
+static bool do_select1(ib_tpl_t tpl) {
   print_tuple(stdout, tpl);
 
-  return (IB_FALSE);
+  return (false);
 }
 
 /** SELECT * FROM T WHERE c1 = 'abc'; */
@@ -271,10 +271,10 @@ static ib_err_t do_moveto2(ib_crsr_t crsr) {
 }
 
 /** SELECT * FROM T WHERE c1 = 'abc'; */
-static ib_bool_t do_select2(ib_tpl_t tpl) {
+static bool do_select2(ib_tpl_t tpl) {
   const char *c1;
 
-  c1 = (const char*)ib_col_get_value(tpl, 0);
+  c1 = (const char *)ib_col_get_value(tpl, 0);
 
   /* There are no SQL_NULL values in our test data. */
   assert(c1 != NULL);
@@ -282,10 +282,10 @@ static ib_bool_t do_select2(ib_tpl_t tpl) {
   if (strncmp(c1, "abc", 3) == 0) {
     print_tuple(stdout, tpl);
 
-    return (IB_TRUE);
+    return (true);
   }
 
-  return (IB_FALSE);
+  return (false);
 }
 
 /** SELECT * FROM T WHERE c1 >= 'g%'; */
@@ -321,10 +321,10 @@ static ib_err_t do_moveto3(ib_crsr_t crsr) {
 }
 
 /** SELECT * FROM T WHERE c1 >= 'g%'; */
-static ib_bool_t do_select3(ib_tpl_t tpl) {
+static bool do_select3(ib_tpl_t tpl) {
   const char *c1;
 
-  c1 = (const char*)ib_col_get_value(tpl, 0);
+  c1 = (const char *)ib_col_get_value(tpl, 0);
 
   /* There are no SQL_NULL values in our test data. */
   assert(c1 != NULL);
@@ -332,10 +332,10 @@ static ib_bool_t do_select3(ib_tpl_t tpl) {
   if (strncmp(c1, "g", 1) >= 0) {
     print_tuple(stdout, tpl);
 
-    return (IB_TRUE);
+    return (true);
   }
 
-  return (IB_FALSE);
+  return (false);
 }
 
 /** SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'x%'; */
@@ -375,12 +375,12 @@ static ib_err_t do_moveto4(ib_crsr_t crsr) {
 }
 
 /** SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'x%'; */
-static ib_bool_t do_select4(ib_tpl_t tpl) {
+static bool do_select4(ib_tpl_t tpl) {
   const char *c1;
   const char *c2;
 
-  c1 = (const char*)ib_col_get_value(tpl, 0);
-  c2 = (const char*)ib_col_get_value(tpl, 1);
+  c1 = (const char *)ib_col_get_value(tpl, 0);
+  c2 = (const char *)ib_col_get_value(tpl, 1);
 
   /* There are no SQL_NULL values in our test data. */
   assert(c1 != NULL);
@@ -389,10 +389,10 @@ static ib_bool_t do_select4(ib_tpl_t tpl) {
   if (strncmp(c1, "mno", 3) == 0 && strncmp(c2, "x", 1) >= 0) {
     print_tuple(stdout, tpl);
 
-    return (IB_TRUE);
+    return (true);
   }
 
-  return (IB_FALSE);
+  return (false);
 }
 
 /** SELECT * FROM T WHERE c1 = 'mno' AND c2 >= 'z%'; */
@@ -430,7 +430,7 @@ static ib_err_t do_moveto5(ib_crsr_t crsr) {
 
 /** SELECT * FROM T <start from moveto()>; */
 static ib_err_t do_query(ib_crsr_t crsr, ib_err_t (*moveto)(ib_crsr_t),
-                         ib_bool_t (*select_func)(ib_tpl_t)) {
+                         bool (*select_func)(ib_tpl_t)) {
   ib_err_t err;
   ib_tpl_t tpl = NULL;
 

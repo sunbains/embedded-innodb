@@ -27,15 +27,15 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "api0misc.h"
 #include "dict0dict.h"
 #include "dict0mem.h"
+#include "innodb0types.h"
 #include "lock0lock.h"
 #include "pars0pars.h"
 #include "row0sel.h"
 #include "srv0srv.h"
 #include "trx0roll.h"
-#include "univ.i"
 
 /* If set then we rollback the transaction on DB_LOCK_WAIT_TIMEOUT error. */
-ibool ses_rollback_on_timeout = FALSE;
+bool ses_rollback_on_timeout = false;
 
 #ifdef __WIN__
 
@@ -129,23 +129,23 @@ int ib_create_tempfile(const char *prefix) /*!< in: temp filename prefix */
 }
 
 /** Determines if the currently running transaction has been interrupted.
-@return	TRUE if interrupted */
+@return	true if interrupted */
 
 ib_trx_is_interrupted_handler_t ib_trx_is_interrupted = NULL;
 
-ibool trx_is_interrupted(const trx_t *trx) /*!< in: transaction */
+bool trx_is_interrupted(const trx_t *trx) /*!< in: transaction */
 {
   if (trx->client_thd && ib_trx_is_interrupted != NULL) {
     return (ib_trx_is_interrupted(trx->client_thd));
   }
-  return (FALSE);
+  return (false);
 }
 
 /** Handles user errors and lock waits detected by the database engine.
-@return	TRUE if it was a lock wait and we should continue running the query
+@return	true if it was a lock wait and we should continue running the query
 thread */
 
-ibool ib_handle_errors(
+bool ib_handle_errors(
     enum db_err *new_err, /*!< out: possible new error encountered in
                           lock wait, or if no new error, the value
                           of trx->error_state at the entry of this
@@ -166,7 +166,7 @@ handle_new_error:
   switch (err) {
   case DB_LOCK_WAIT_TIMEOUT:
     if (ses_rollback_on_timeout) {
-      trx_general_rollback(trx, FALSE, NULL);
+      trx_general_rollback(trx, false, NULL);
       break;
     }
     /* fall through */
@@ -182,7 +182,7 @@ handle_new_error:
       /* Roll back the latest, possibly incomplete
       insertion or update */
 
-      trx_general_rollback(trx, TRUE, savept);
+      trx_general_rollback(trx, true, savept);
     }
     break;
   case DB_LOCK_WAIT:
@@ -196,22 +196,22 @@ handle_new_error:
 
     *new_err = err;
 
-    return (TRUE); /* Operation needs to be retried. */
+    return (true); /* Operation needs to be retried. */
 
   case DB_DEADLOCK:
   case DB_LOCK_TABLE_FULL:
     /* Roll back the whole transaction; this resolution was added
     to version 3.23.43 */
 
-    trx_general_rollback(trx, FALSE, NULL);
+    trx_general_rollback(trx, false, NULL);
     break;
 
   case DB_MUST_GET_MORE_FILE_SPACE:
     log_fatal("InnoDB: The database cannot continue"
-                        " operation because of\n"
-                        "InnoDB: lack of space. You must add"
-                        " a new data file\n"
-                        "InnoDB: and restart the database.\n");
+              " operation because of\n"
+              "InnoDB: lack of space. You must add"
+              " a new data file\n"
+              "InnoDB: and restart the database.\n");
     break;
 
   case DB_CORRUPTION:
@@ -241,7 +241,7 @@ handle_new_error:
 
   trx->error_state = DB_SUCCESS;
 
-  return (FALSE);
+  return (false);
 }
 
 /** Sets a lock on a table.
@@ -270,7 +270,8 @@ ib_trx_lock_table_with_retry(trx_t *trx,          /*!< in/out: transaction */
   /* We use the select query graph as the dummy graph needed
   in the lock module call */
 
-  thr = que_fork_get_first_thr(static_cast<que_fork_t*>(que_node_get_parent(thr)));
+  thr = que_fork_get_first_thr(
+      static_cast<que_fork_t *>(que_node_get_parent(thr)));
   que_thr_move_to_run_state(thr);
 
 run_again:
@@ -281,13 +282,13 @@ run_again:
 
   trx->error_state = err;
 
-  if (UNIV_LIKELY(err == DB_SUCCESS)) {
+  if (likely(err == DB_SUCCESS)) {
     que_thr_stop_for_client_no_error(thr, trx);
   } else {
     que_thr_stop_client(thr);
 
     if (err != DB_QUE_THR_SUSPENDED) {
-      ibool was_lock_wait;
+      bool was_lock_wait;
 
       was_lock_wait = ib_handle_errors(&err, trx, thr, NULL);
 
@@ -299,7 +300,7 @@ run_again:
       que_node_t *parent;
 
       parent = que_node_get_parent(thr);
-      run_thr = que_fork_start_command(static_cast<que_fork_t*>(parent));
+      run_thr = que_fork_start_command(static_cast<que_fork_t *>(parent));
 
       ut_a(run_thr == thr);
 

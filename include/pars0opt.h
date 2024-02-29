@@ -24,7 +24,7 @@ Created 12/21/1997 Heikki Tuuri
 #ifndef pars0opt_h
 #define pars0opt_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "dict0types.h"
 #include "pars0sym.h"
@@ -45,8 +45,8 @@ column occurrence we are looking at is in the column list, in which case
 nothing is done. */
 
 void opt_find_all_cols(
-    ibool copy_val,            /*!< in: if TRUE, new found columns are
-                               added as columns to copy */
+    bool copy_val,             /*!< in: if true, new found columns are
+                                added as columns to copy */
     dict_index_t *index,       /*!< in: index to use */
     sym_node_list_t *col_list, /*!< in: base node of a list where
                                to add new found columns */

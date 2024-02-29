@@ -140,8 +140,8 @@ A record is a complete-field prefix of another record, if
 the corresponding canonical strings have the same property. */
 
 /** Validates the consistency of an old-style physical record.
-@return	TRUE if ok */
-static ibool rec_validate_old(const rec_t *rec); /*!< in: physical record */
+@return	true if ok */
+static bool rec_validate_old(const rec_t *rec); /*!< in: physical record */
 
 /** Determine how many of the first n columns in a compact
 physical record are stored externally.
@@ -180,7 +180,7 @@ ulint rec_get_n_extern_new(const rec_t *rec, /*!< in: compact physical record */
     if (!(dict_field_get_col(field)->prtype & DATA_NOT_NULL)) {
       /* nullable field => read the null flag */
 
-      if (UNIV_UNLIKELY(!(byte)null_mask)) {
+      if (unlikely(!(byte)null_mask)) {
         nulls--;
         null_mask = 1;
       }
@@ -193,7 +193,7 @@ ulint rec_get_n_extern_new(const rec_t *rec, /*!< in: compact physical record */
       null_mask <<= 1;
     }
 
-    if (UNIV_UNLIKELY(!field->fixed_len)) {
+    if (unlikely(!field->fixed_len)) {
       /* Variable-length field: read the length */
       const dict_col_t *col = dict_field_get_col(field);
       len = *lens--;
@@ -204,8 +204,7 @@ ulint rec_get_n_extern_new(const rec_t *rec, /*!< in: compact physical record */
       stored in one byte for 0..127.  The length
       will be encoded in two bytes when it is 128 or
       more, or when the field is stored externally. */
-      if (UNIV_UNLIKELY(col->len > 255) ||
-          UNIV_UNLIKELY(col->mtype == DATA_BLOB)) {
+      if (unlikely(col->len > 255) || unlikely(col->mtype == DATA_BLOB)) {
         if (len & 0x80) {
           /* 1exxxxxxx xxxxxxxx */
           if (len & 0x40) {
@@ -259,7 +258,7 @@ void rec_init_offsets_comp_ordinary(
     if (!(dict_field_get_col(field)->prtype & DATA_NOT_NULL)) {
       /* nullable field => read the null flag */
 
-      if (UNIV_UNLIKELY(!(byte)null_mask)) {
+      if (unlikely(!(byte)null_mask)) {
         nulls--;
         null_mask = 1;
       }
@@ -276,7 +275,7 @@ void rec_init_offsets_comp_ordinary(
       null_mask <<= 1;
     }
 
-    if (UNIV_UNLIKELY(!field->fixed_len)) {
+    if (unlikely(!field->fixed_len)) {
       /* Variable-length field: read the length */
       const dict_col_t *col = dict_field_get_col(field);
       len = *lens--;
@@ -287,15 +286,14 @@ void rec_init_offsets_comp_ordinary(
       stored in one byte for 0..127.  The length
       will be encoded in two bytes when it is 128 or
       more, or when the field is stored externally. */
-      if (UNIV_UNLIKELY(col->len > 255) ||
-          UNIV_UNLIKELY(col->mtype == DATA_BLOB)) {
+      if (unlikely(col->len > 255) || unlikely(col->mtype == DATA_BLOB)) {
         if (len & 0x80) {
           /* 1exxxxxxx xxxxxxxx */
           len <<= 8;
           len |= *lens--;
 
           offs += len & 0x3fff;
-          if (UNIV_UNLIKELY(len & 0x4000)) {
+          if (unlikely(len & 0x4000)) {
             ut_ad(dict_index_is_clust(index));
             any_ext = REC_OFFS_EXTERNAL;
             len = offs | REC_OFFS_EXTERNAL;
@@ -350,7 +348,7 @@ rec_init_offsets(const rec_t *rec,          /*!< in: physical record */
     ulint status = rec_get_status(rec);
     ulint n_node_ptr_field = ULINT_UNDEFINED;
 
-    switch (UNIV_EXPECT(status, REC_STATUS_ORDINARY)) {
+    switch (expect(status, REC_STATUS_ORDINARY)) {
     case REC_STATUS_INFIMUM:
     case REC_STATUS_SUPREMUM:
       /* the field is 8 bytes long */
@@ -374,7 +372,7 @@ rec_init_offsets(const rec_t *rec,          /*!< in: physical record */
     /* read the lengths of fields 0..n */
     do {
       ulint len;
-      if (UNIV_UNLIKELY(i == n_node_ptr_field)) {
+      if (unlikely(i == n_node_ptr_field)) {
         len = offs += 4;
         goto resolved;
       }
@@ -383,7 +381,7 @@ rec_init_offsets(const rec_t *rec,          /*!< in: physical record */
       if (!(dict_field_get_col(field)->prtype & DATA_NOT_NULL)) {
         /* nullable field => read the null flag */
 
-        if (UNIV_UNLIKELY(!(byte)null_mask)) {
+        if (unlikely(!(byte)null_mask)) {
           nulls--;
           null_mask = 1;
         }
@@ -400,7 +398,7 @@ rec_init_offsets(const rec_t *rec,          /*!< in: physical record */
         null_mask <<= 1;
       }
 
-      if (UNIV_UNLIKELY(!field->fixed_len)) {
+      if (unlikely(!field->fixed_len)) {
         /* Variable-length field: read the length */
         const dict_col_t *col = dict_field_get_col(field);
         len = *lens--;
@@ -413,8 +411,7 @@ rec_init_offsets(const rec_t *rec,          /*!< in: physical record */
         encoded in two bytes when it is 128 or
         more, or when the field is stored
         externally. */
-        if (UNIV_UNLIKELY(col->len > 255) ||
-            UNIV_UNLIKELY(col->mtype == DATA_BLOB)) {
+        if (unlikely(col->len > 255) || unlikely(col->mtype == DATA_BLOB)) {
           if (len & 0x80) {
             /* 1exxxxxxx xxxxxxxx */
 
@@ -504,7 +501,7 @@ rec_get_offsets_func(const rec_t *rec,          /*!< in: physical record */
   ut_ad(heap);
 
   if (dict_table_is_comp(index->table)) {
-    switch (UNIV_EXPECT(rec_get_status(rec), REC_STATUS_ORDINARY)) {
+    switch (expect(rec_get_status(rec), REC_STATUS_ORDINARY)) {
     case REC_STATUS_ORDINARY:
       n = dict_index_get_n_fields(index);
       break;
@@ -524,19 +521,19 @@ rec_get_offsets_func(const rec_t *rec,          /*!< in: physical record */
     n = rec_get_n_fields_old(rec);
   }
 
-  if (UNIV_UNLIKELY(n_fields < n)) {
+  if (unlikely(n_fields < n)) {
     n = n_fields;
   }
 
   size = n + (1 + REC_OFFS_HEADER_SIZE);
 
-  if (UNIV_UNLIKELY(!offsets) ||
-      UNIV_UNLIKELY(rec_offs_get_n_alloc(offsets) < size)) {
-    if (UNIV_UNLIKELY(!*heap)) {
+  if (unlikely(!offsets) || unlikely(rec_offs_get_n_alloc(offsets) < size)) {
+    if (unlikely(!*heap)) {
       *heap = mem_heap_create_func(size * sizeof(ulint), MEM_HEAP_DYNAMIC, file,
                                    line);
     }
-    offsets = reinterpret_cast<ulint*>(mem_heap_alloc(*heap, size * sizeof(ulint)));
+    offsets =
+        reinterpret_cast<ulint *>(mem_heap_alloc(*heap, size * sizeof(ulint)));
     rec_offs_set_n_alloc(offsets, size);
   }
 
@@ -574,7 +571,7 @@ void rec_get_offsets_reverse(
   ut_ad(offsets);
   ut_ad(dict_table_is_comp(index->table));
 
-  if (UNIV_UNLIKELY(node_ptr)) {
+  if (unlikely(node_ptr)) {
     n_node_ptr_field = dict_index_get_n_unique_in_tree(index);
     n = n_node_ptr_field + 1;
   } else {
@@ -594,7 +591,7 @@ void rec_get_offsets_reverse(
   /* read the lengths of fields 0..n */
   do {
     ulint len;
-    if (UNIV_UNLIKELY(i == n_node_ptr_field)) {
+    if (unlikely(i == n_node_ptr_field)) {
       len = offs += 4;
       goto resolved;
     }
@@ -603,7 +600,7 @@ void rec_get_offsets_reverse(
     if (!(dict_field_get_col(field)->prtype & DATA_NOT_NULL)) {
       /* nullable field => read the null flag */
 
-      if (UNIV_UNLIKELY(!(byte)null_mask)) {
+      if (unlikely(!(byte)null_mask)) {
         nulls++;
         null_mask = 1;
       }
@@ -620,7 +617,7 @@ void rec_get_offsets_reverse(
       null_mask <<= 1;
     }
 
-    if (UNIV_UNLIKELY(!field->fixed_len)) {
+    if (unlikely(!field->fixed_len)) {
       /* Variable-length field: read the length */
       const dict_col_t *col = dict_field_get_col(field);
       len = *lens++;
@@ -631,15 +628,14 @@ void rec_get_offsets_reverse(
       stored in one byte for 0..127.  The length
       will be encoded in two bytes when it is 128 or
       more, or when the field is stored externally. */
-      if (UNIV_UNLIKELY(col->len > 255) ||
-          UNIV_UNLIKELY(col->mtype == DATA_BLOB)) {
+      if (unlikely(col->len > 255) || unlikely(col->mtype == DATA_BLOB)) {
         if (len & 0x80) {
           /* 1exxxxxxx xxxxxxxx */
           len <<= 8;
           len |= *lens++;
 
           offs += len & 0x3fff;
-          if (UNIV_UNLIKELY(len & 0x4000)) {
+          if (unlikely(len & 0x4000)) {
             any_ext = REC_OFFS_EXTERNAL;
             len = offs | REC_OFFS_EXTERNAL;
           } else {
@@ -753,7 +749,8 @@ ulint rec_get_converted_size_comp_prefix(
       continue;
     }
 
-    ut_ad(len <= col->len || col->mtype == DATA_BLOB);
+    ut_ad(len <= col->len || col->mtype == DATA_BLOB ||
+          col->mtype == DATA_DECIMAL);
 
     /* If the maximum length of a variable-length field
     is up to 255 bytes, the actual length is always stored
@@ -781,7 +778,7 @@ ulint rec_get_converted_size_comp_prefix(
     data_size += len;
   }
 
-  if (UNIV_LIKELY_NULL(extra)) {
+  if (likely_null(extra)) {
     *extra = extra_size;
   }
 
@@ -806,7 +803,7 @@ ulint rec_get_converted_size_comp(
   ut_ad(fields);
   ut_ad(n_fields > 0);
 
-  switch (UNIV_EXPECT(status, REC_STATUS_ORDINARY)) {
+  switch (expect(status, REC_STATUS_ORDINARY)) {
   case REC_STATUS_ORDINARY:
     ut_ad(n_fields == dict_index_get_n_fields(index));
     size = 0;
@@ -820,7 +817,7 @@ ulint rec_get_converted_size_comp(
   case REC_STATUS_INFIMUM:
   case REC_STATUS_SUPREMUM:
     /* infimum or supremum record, 8 data bytes */
-    if (UNIV_LIKELY_NULL(extra)) {
+    if (likely_null(extra)) {
       *extra = REC_N_NEW_EXTRA_BYTES;
     }
     return (REC_N_NEW_EXTRA_BYTES + 8);
@@ -837,7 +834,7 @@ ulint rec_get_converted_size_comp(
 
 void rec_set_nth_field_null_bit(rec_t *rec, /*!< in: record */
                                 ulint i,    /*!< in: ith field */
-                                ibool val)  /*!< in: value to set */
+                                bool val)   /*!< in: value to set */
 {
   ulint info;
 
@@ -879,7 +876,7 @@ void rec_set_nth_field_sql_null(rec_t *rec, /*!< in: record */
 
   data_write_sql_null(rec + offset, rec_get_nth_field_size(rec, n));
 
-  rec_set_nth_field_null_bit(rec, n, TRUE);
+  rec_set_nth_field_null_bit(rec, n, true);
 }
 
 /** Builds an old-style physical record out of a data tuple and
@@ -928,7 +925,7 @@ static rec_t *rec_convert_dtuple_to_rec_old(
 
   if (!n_ext && data_size <= REC_1BYTE_OFFS_LIMIT) {
 
-    rec_set_1byte_offs_flag(rec, TRUE);
+    rec_set_1byte_offs_flag(rec, true);
 
     for (i = 0; i < n_fields; i++) {
 
@@ -953,7 +950,7 @@ static rec_t *rec_convert_dtuple_to_rec_old(
       rec_1_set_field_end_info(rec, i, ored_offset);
     }
   } else {
-    rec_set_1byte_offs_flag(rec, FALSE);
+    rec_set_1byte_offs_flag(rec, false);
 
     for (i = 0; i < n_fields; i++) {
 
@@ -1013,7 +1010,7 @@ void rec_convert_dtuple_to_rec_comp(
   ut_ad(extra == 0 || extra == REC_N_NEW_EXTRA_BYTES);
   ut_ad(n_fields > 0);
 
-  switch (UNIV_EXPECT(status, REC_STATUS_ORDINARY)) {
+  switch (expect(status, REC_STATUS_ORDINARY)) {
   case REC_STATUS_ORDINARY:
     ut_ad(n_fields <= dict_index_get_n_fields(index));
     n_node_ptr_field = ULINT_UNDEFINED;
@@ -1046,7 +1043,7 @@ void rec_convert_dtuple_to_rec_comp(
     type = dfield_get_type(field);
     len = dfield_get_len(field);
 
-    if (UNIV_UNLIKELY(i == n_node_ptr_field)) {
+    if (unlikely(i == n_node_ptr_field)) {
       ut_ad(dtype_get_prtype(type) & DATA_NOT_NULL);
       ut_ad(len == 4);
       memcpy(end, dfield_get_data(field), len);
@@ -1058,7 +1055,7 @@ void rec_convert_dtuple_to_rec_comp(
       /* nullable field */
       ut_ad(index->n_nullable > 0);
 
-      if (UNIV_UNLIKELY(!(byte)null_mask)) {
+      if (unlikely(!(byte)null_mask)) {
         nulls--;
         null_mask = 1;
       }
@@ -1094,7 +1091,8 @@ void rec_convert_dtuple_to_rec_comp(
       *lens-- = (byte)(len >> 8) | 0xc0;
       *lens-- = (byte)len;
     } else {
-      ut_ad(len <= dtype_get_len(type) || dtype_get_mtype(type) == DATA_BLOB);
+      ut_ad(len <= dtype_get_len(type) || dtype_get_mtype(type) == DATA_BLOB ||
+            dtype_get_mtype(type) == DATA_DECIMAL);
       if (len < 128 ||
           (dtype_get_len(type) < 256 && dtype_get_mtype(type) != DATA_BLOB)) {
 
@@ -1179,7 +1177,7 @@ rec_t *rec_convert_dtuple_to_rec(
             !rec_offs_nth_extern(offsets, i));
     }
 
-    if (UNIV_LIKELY_NULL(heap)) {
+    if (likely_null(heap)) {
       mem_heap_free(heap);
     }
   }
@@ -1256,7 +1254,7 @@ rec_copy_prefix_to_buf_old(const rec_t *rec, /*!< in: physical record */
       mem_free(*buf);
     }
 
-    *buf = static_cast<byte*>(mem_alloc2(prefix_len, buf_size));
+    *buf = static_cast<byte *>(mem_alloc2(prefix_len, buf_size));
   }
 
   memcpy(*buf, rec - area_start, prefix_len);
@@ -1289,7 +1287,7 @@ rec_copy_prefix_to_buf(const rec_t *rec,          /*!< in: physical record */
   ulint null_mask;
   ulint status;
 
-  UNIV_PREFETCH_RW(*buf);
+  prefetch_rw(*buf);
 
   if (!dict_table_is_comp(index->table)) {
     ut_ad(rec_validate_old(rec));
@@ -1317,7 +1315,7 @@ rec_copy_prefix_to_buf(const rec_t *rec,          /*!< in: physical record */
 
   nulls = rec - (REC_N_NEW_EXTRA_BYTES + 1);
   lens = nulls - UT_BITS_IN_BYTES(index->n_nullable);
-  UNIV_PREFETCH_R(lens);
+  prefetch_r(lens);
   prefix_len = 0;
   null_mask = 1;
 
@@ -1331,7 +1329,7 @@ rec_copy_prefix_to_buf(const rec_t *rec,          /*!< in: physical record */
 
     if (!(col->prtype & DATA_NOT_NULL)) {
       /* nullable field => read the null flag */
-      if (UNIV_UNLIKELY(!(byte)null_mask)) {
+      if (unlikely(!(byte)null_mask)) {
         nulls--;
         null_mask = 1;
       }
@@ -1361,14 +1359,14 @@ rec_copy_prefix_to_buf(const rec_t *rec,          /*!< in: physical record */
           len &= 0x3f;
           len <<= 8;
           len |= *lens--;
-          UNIV_PREFETCH_R(lens);
+          prefetch_r(lens);
         }
       }
       prefix_len += len;
     }
   }
 
-  UNIV_PREFETCH_R(rec + prefix_len);
+  prefetch_r(rec + prefix_len);
 
   prefix_len += rec - (lens + 1);
 
@@ -1377,7 +1375,7 @@ rec_copy_prefix_to_buf(const rec_t *rec,          /*!< in: physical record */
       mem_free(*buf);
     }
 
-    *buf = static_cast<byte*>(mem_alloc2(prefix_len, buf_size));
+    *buf = static_cast<byte *>(mem_alloc2(prefix_len, buf_size));
   }
 
   memcpy(*buf, lens + 1, prefix_len);
@@ -1386,8 +1384,8 @@ rec_copy_prefix_to_buf(const rec_t *rec,          /*!< in: physical record */
 }
 
 /** Validates the consistency of an old-style physical record.
-@return	TRUE if ok */
-static ibool rec_validate_old(const rec_t *rec) /*!< in: physical record */
+@return	true if ok */
+static bool rec_validate_old(const rec_t *rec) /*!< in: physical record */
 {
   const byte *data;
   ulint len;
@@ -1402,7 +1400,7 @@ static ibool rec_validate_old(const rec_t *rec) /*!< in: physical record */
   if ((n_fields == 0) || (n_fields > REC_MAX_N_FIELDS)) {
     ib_logger(ib_stream, "InnoDB: Error: record has %lu fields\n",
               (ulong)n_fields);
-    return (FALSE);
+    return (false);
   }
 
   for (i = 0; i < n_fields; i++) {
@@ -1411,14 +1409,14 @@ static ibool rec_validate_old(const rec_t *rec) /*!< in: physical record */
     if (!((len < UNIV_PAGE_SIZE) || (len == UNIV_SQL_NULL))) {
       ib_logger(ib_stream, "InnoDB: Error: record field %lu len %lu\n",
                 (ulong)i, (ulong)len);
-      return (FALSE);
+      return (false);
     }
 
     if (len != UNIV_SQL_NULL) {
       len_sum += len;
       /* dereference the end of the field to cause a memory trap if possible */
       sum += *(data + len - 1);
-      (void) sum;
+      (void)sum;
     } else {
       len_sum += rec_get_nth_field_size(rec, i);
     }
@@ -1427,16 +1425,16 @@ static ibool rec_validate_old(const rec_t *rec) /*!< in: physical record */
   if (len_sum != rec_get_data_size_old(rec)) {
     ib_logger(ib_stream, "InnoDB: Error: record len should be %lu, len %lu\n",
               (ulong)len_sum, rec_get_data_size_old(rec));
-    return (FALSE);
+    return (false);
   }
 
-  return (TRUE);
+  return (true);
 }
 
 /** Validates the consistency of a physical record.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool rec_validate(
+bool rec_validate(
     const rec_t *rec,     /*!< in: physical record */
     const ulint *offsets) /*!< in: array returned by rec_get_offsets() */
 {
@@ -1453,7 +1451,7 @@ ibool rec_validate(
   if ((n_fields == 0) || (n_fields > REC_MAX_N_FIELDS)) {
     ib_logger(ib_stream, "InnoDB: Error: record has %lu fields\n",
               (ulong)n_fields);
-    return (FALSE);
+    return (false);
   }
 
   ut_a(rec_offs_comp(offsets) || n_fields <= rec_get_n_fields_old(rec));
@@ -1464,14 +1462,14 @@ ibool rec_validate(
     if (!((len < UNIV_PAGE_SIZE) || (len == UNIV_SQL_NULL))) {
       ib_logger(ib_stream, "InnoDB: Error: record field %lu len %lu\n",
                 (ulong)i, (ulong)len);
-      return (FALSE);
+      return (false);
     }
 
     if (len != UNIV_SQL_NULL) {
       len_sum += len;
       /* dereference the end of the field to cause a memory trap if possible */
       sum += *(data + len - 1);
-      (void) sum;
+      (void)sum;
     } else if (!rec_offs_comp(offsets)) {
       len_sum += rec_get_nth_field_size(rec, i);
     }
@@ -1480,14 +1478,14 @@ ibool rec_validate(
   if (len_sum != rec_offs_data_size(offsets)) {
     ib_logger(ib_stream, "InnoDB: Error: record len should be %lu, len %lu\n",
               (ulong)len_sum, (ulong)rec_offs_data_size(offsets));
-    return (FALSE);
+    return (false);
   }
 
   if (!rec_offs_comp(offsets)) {
     ut_a(rec_validate_old(rec));
   }
 
-  return (TRUE);
+  return (true);
 }
 
 /** Prints an old-style physical record. */
@@ -1508,7 +1506,7 @@ void rec_print_old(ib_stream_t ib_stream, /*!< in: stream where to print */
             "PHYSICAL RECORD: n_fields %lu;"
             " %u-byte offsets; info bits %lu\n",
             (ulong)n, rec_get_1byte_offs_flag(rec) ? 1 : 2,
-            (ulong)rec_get_info_bits(rec, FALSE));
+            (ulong)rec_get_info_bits(rec, false));
 
   for (i = 0; i < n; i++) {
 
@@ -1591,7 +1589,7 @@ void rec_print_new(ib_stream_t ib_stream, /*!< in: stream where to print */
             "PHYSICAL RECORD: n_fields %lu;"
             " compact format; info bits %lu\n",
             (ulong)rec_offs_n_fields(offsets),
-            (ulong)rec_get_info_bits(rec, TRUE));
+            (ulong)rec_get_info_bits(rec, true));
 
   rec_print_comp(ib_stream, rec, offsets);
   rec_validate(rec, offsets);
@@ -1616,7 +1614,7 @@ void rec_print(ib_stream_t ib_stream, /*!< in: stream where to print */
     rec_print_new(
         ib_stream, rec,
         rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap));
-    if (UNIV_LIKELY_NULL(heap)) {
+    if (likely_null(heap)) {
       mem_heap_free(heap);
     }
   }

@@ -88,10 +88,10 @@ to help us discover errors which result from the use of
 buffers in an already freed heap. */
 
 char *mem_heap_strdup(mem_heap_t *heap, const char *str) {
-  return static_cast<char*>(mem_heap_dup(heap, str, strlen(str) + 1));
+  return static_cast<char *>(mem_heap_dup(heap, str, strlen(str) + 1));
 }
 
-void * mem_heap_dup(mem_heap_t *heap, const void *data, ulint len) {
+void *mem_heap_dup(mem_heap_t *heap, const void *data, ulint len) {
   return (memcpy(mem_heap_alloc(heap, len), data, len));
 }
 
@@ -99,7 +99,7 @@ char *mem_heap_strcat(mem_heap_t *heap, const char *s1, const char *s2) {
   auto s1_len = strlen(s1);
   auto s2_len = strlen(s2);
 
-  auto s = reinterpret_cast<char*>(mem_heap_alloc(heap, s1_len + s2_len + 1));
+  auto s = reinterpret_cast<char *>(mem_heap_alloc(heap, s1_len + s2_len + 1));
 
   memcpy(s, s1, s1_len);
   memcpy(s + s1_len, s2, s2_len);
@@ -122,7 +122,7 @@ mem_heap_printf_low(char *buf, /*!< in/out: buffer to store formatted string
   while (*format) {
 
     /* Does this format specifier have the 'l' length modifier. */
-    ibool is_long = FALSE;
+    bool is_long = false;
 
     /* Length of one parameter. */
     size_t plen;
@@ -140,7 +140,7 @@ mem_heap_printf_low(char *buf, /*!< in/out: buffer to store formatted string
     }
 
     if (*format == 'l') {
-      is_long = TRUE;
+      is_long = true;
       format++;
     }
 
@@ -225,7 +225,7 @@ char *mem_heap_printf(mem_heap_t *heap, const char *format, ...) {
   va_end(ap);
 
   /* Now create it for real. */
-  auto str = reinterpret_cast<char*>(mem_heap_alloc(heap, len));
+  auto str = reinterpret_cast<char *>(mem_heap_alloc(heap, len));
   va_start(ap, format);
   mem_heap_printf_low(str, format, ap);
   va_end(ap);
@@ -233,8 +233,8 @@ char *mem_heap_printf(mem_heap_t *heap, const char *format, ...) {
   return (str);
 }
 
-mem_block_t *
-mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const char *file_name, ulint line) {
+mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type,
+                                   const char *file_name, ulint line) {
   buf_block_t *buf_block = nullptr;
   mem_block_t *block;
   ulint len;
@@ -264,10 +264,10 @@ mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const char *file_na
       buffer pool, but must get the free block from
       the heap header free block field */
 
-      buf_block = reinterpret_cast<buf_block_t*>(heap->free_block);
+      buf_block = reinterpret_cast<buf_block_t *>(heap->free_block);
       heap->free_block = nullptr;
 
-      if (UNIV_UNLIKELY(buf_block == nullptr)) {
+      if (unlikely(buf_block == nullptr)) {
 
         return (nullptr);
       }
@@ -291,7 +291,7 @@ mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const char *file_na
   mem_block_set_free(block, MEM_BLOCK_HEADER_SIZE);
   mem_block_set_start(block, MEM_BLOCK_HEADER_SIZE);
 
-  if (UNIV_UNLIKELY(heap == nullptr)) {
+  if (unlikely(heap == nullptr)) {
     /* This is the first block of the heap. The field
     total_size should be initialized here */
     block->total_size = len;
@@ -355,7 +355,7 @@ mem_block_t *mem_heap_add_block(mem_heap_t *heap, ulint n) {
 }
 
 void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
-  auto buf_block = reinterpret_cast<buf_block_t*>(block->buf_block);
+  auto buf_block = reinterpret_cast<buf_block_t *>(block->buf_block);
 
   if (block->magic_n != MEM_BLOCK_MAGIC_N) {
     ut_error;
@@ -389,22 +389,25 @@ void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
 }
 
 void mem_heap_free_block_free(mem_heap_t *heap) {
-  if (UNIV_LIKELY_NULL(heap->free_block)) {
-    buf_block_free(static_cast<buf_block_t*>(heap->free_block));
+  if (likely_null(heap->free_block)) {
+    buf_block_free(static_cast<buf_block_t *>(heap->free_block));
     heap->free_block = nullptr;
   }
 }
 
 #ifdef UNIV_DEBUG
-ibool mem_heap_check(mem_heap_t *heap) {
+bool mem_heap_check(mem_heap_t *heap) {
   ut_a(heap->magic_n == MEM_BLOCK_MAGIC_N);
 
-  return (TRUE);
+  return (true);
 }
 #endif /* UNIV_DEBUG */
 
 #if defined UNIV_MEM_DEBUG || defined UNIV_DEBUG
-void mem_heap_validate_or_print(mem_heap_t *heap, byte *top __attribute__((unused)), ibool print, ibool *error, ulint *us_size, ulint *ph_size, ulint *n_blocks) {
+void mem_heap_validate_or_print(mem_heap_t *heap,
+                                byte *top __attribute__((unused)), bool print,
+                                bool *error, ulint *us_size, ulint *ph_size,
+                                ulint *n_blocks) {
   mem_block_t *block;
   ulint total_len = 0;
   ulint block_count = 0;
@@ -426,7 +429,7 @@ void mem_heap_validate_or_print(mem_heap_t *heap, byte *top __attribute__((unuse
   if (n_blocks != nullptr) {
     *n_blocks = 0;
   }
-  *error = TRUE;
+  *error = true;
 
   block = heap;
 
@@ -539,20 +542,20 @@ completed:
   if (n_blocks != nullptr) {
     *n_blocks = block_count;
   }
-  *error = FALSE;
+  *error = false;
 }
 
 /** Prints the contents of a memory heap. */
 static void mem_heap_print(mem_heap_t *heap) /*!< in: memory heap */
 {
-  ibool error;
+  bool error;
   ulint us_size;
   ulint phys_size;
   ulint n_blocks;
 
   ut_ad(mem_heap_check(heap));
 
-  mem_heap_validate_or_print(heap, nullptr, TRUE, &error, &us_size, &phys_size,
+  mem_heap_validate_or_print(heap, nullptr, true, &error, &us_size, &phys_size,
                              &n_blocks);
   ib_logger(ib_stream,
             "\nheap type: %lu; size: user size %lu;"
@@ -562,16 +565,15 @@ static void mem_heap_print(mem_heap_t *heap) /*!< in: memory heap */
   ut_a(!error);
 }
 
-ibool mem_heap_validate(mem_heap_t *heap)
-{
-  ibool error;
+bool mem_heap_validate(mem_heap_t *heap) {
+  bool error;
   ulint us_size;
   ulint phys_size;
   ulint n_blocks;
 
   ut_ad(mem_heap_check(heap));
 
-  mem_heap_validate_or_print(heap, nullptr, FALSE, &error, &us_size, &phys_size,
+  mem_heap_validate_or_print(heap, nullptr, false, &error, &us_size, &phys_size,
                              &n_blocks);
   if (error) {
     mem_heap_print(heap);
@@ -579,7 +581,7 @@ ibool mem_heap_validate(mem_heap_t *heap)
 
   ut_a(!error);
 
-  return (TRUE);
+  return (true);
 }
 #endif /* UNIV_MEM_DEBUG || UNIV_DEBUG */
 

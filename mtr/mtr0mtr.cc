@@ -42,7 +42,7 @@ inline void mtr_memo_slot_release(mtr_t *mtr, mtr_memo_slot_t *slot) {
   auto object = slot->object;
   auto type = slot->type;
 
-  if (UNIV_LIKELY(object != NULL)) {
+  if (likely(object != NULL)) {
     if (type <= MTR_MEMO_BUF_FIX) {
       buf_page_release((buf_block_t *)object, type, mtr);
     } else if (type == MTR_MEMO_S_LOCK) {
@@ -72,7 +72,8 @@ void mtr_memo_pop_all(mtr_t *mtr) {
 
   while (offset > 0) {
     offset -= sizeof(mtr_memo_slot_t);
-    auto slot = static_cast<mtr_memo_slot_t*>(dyn_array_get_element(memo, offset));
+    auto slot =
+        static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
 
     mtr_memo_slot_release(mtr, slot);
   }
@@ -133,7 +134,7 @@ static void mtr_log_reserve_and_write(mtr_t *mtr, ulint recovery) {
 }
 
 void mtr_commit(mtr_t *mtr) {
-  ibool write_log;
+  bool write_log;
 
   ut_ad(mtr);
   ut_ad(mtr->magic_n == MTR_MAGIC_N);
@@ -184,7 +185,7 @@ void mtr_rollback_to_savepoint(mtr_t *mtr, ulint savepoint) {
   while (offset > savepoint) {
     offset -= sizeof(mtr_memo_slot_t);
 
-    slot = static_cast<mtr_memo_slot_t*>(dyn_array_get_element(memo, offset));
+    slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
 
     ut_ad(slot->type != MTR_MEMO_MODIFY);
     mtr_memo_slot_release(mtr, slot);
@@ -202,7 +203,8 @@ void mtr_memo_release(mtr_t *mtr, void *object, ulint type) {
   while (offset > 0) {
     offset -= sizeof(mtr_memo_slot_t);
 
-    auto slot = static_cast<mtr_memo_slot_t*>(dyn_array_get_element(memo, offset));
+    auto slot =
+        static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
 
     if ((object == slot->object) && (type == slot->type)) {
 
@@ -213,7 +215,8 @@ void mtr_memo_release(mtr_t *mtr, void *object, ulint type) {
   }
 }
 
-ulint mtr_read_ulint(const byte *ptr, ulint type, mtr_t *mtr __attribute__((unused))) {
+ulint mtr_read_ulint(const byte *ptr, ulint type,
+                     mtr_t *mtr __attribute__((unused))) {
   ut_ad(mtr->state == MTR_ACTIVE);
   ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_S_FIX) ||
         mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));
@@ -235,8 +238,7 @@ dulint mtr_read_dulint(const byte *ptr, mtr_t *mtr __attribute__((unused))) {
 }
 
 #ifdef UNIV_DEBUG
-ibool mtr_memo_contains_page(mtr_t *mtr, const byte *ptr, ulint type)
-{
+bool mtr_memo_contains_page(mtr_t *mtr, const byte *ptr, ulint type) {
   return mtr_memo_contains(mtr, buf_block_align(ptr), type);
 }
 

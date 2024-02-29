@@ -50,10 +50,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }
@@ -99,21 +99,23 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 
   assert(err == DB_SUCCESS);
 
-  err =
-      ib_table_schema_add_col(ib_tbl_sch, "c2", IB_INT, IB_COL_NONE, 0, sizeof(ib_i32_t));
+  err = ib_table_schema_add_col(ib_tbl_sch, "c2", IB_INT, IB_COL_NONE, 0,
+                                sizeof(ib_i32_t));
+
+  assert(err == DB_SUCCESS);
+
+  err = ib_table_schema_add_col(ib_tbl_sch, "c3", IB_FLOAT, IB_COL_NONE, 0,
+                                sizeof(float));
+
+  assert(err == DB_SUCCESS);
+
+  err = ib_table_schema_add_col(ib_tbl_sch, "c4", IB_DOUBLE, IB_COL_NONE, 0,
+                                sizeof(double));
 
   assert(err == DB_SUCCESS);
 
   err =
-      ib_table_schema_add_col(ib_tbl_sch, "c3", IB_FLOAT, IB_COL_NONE, 0, sizeof(float));
-
-  assert(err == DB_SUCCESS);
-
-  err = ib_table_schema_add_col(ib_tbl_sch, "c4", IB_DOUBLE, IB_COL_NONE, 0, sizeof(double));
-
-  assert(err == DB_SUCCESS);
-
-  err = ib_table_schema_add_col(ib_tbl_sch, "c5", IB_DECIMAL, IB_COL_NONE, 0, 0);
+      ib_table_schema_add_col(ib_tbl_sch, "c5", IB_DECIMAL, IB_COL_NONE, 0, 0);
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_index(ib_tbl_sch, "c1", &ib_idx_sch);

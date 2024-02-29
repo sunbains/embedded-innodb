@@ -31,11 +31,11 @@ Created 9/5/1995 Heikki Tuuri
 #ifndef sync0sync_h
 #define sync0sync_h
 
+#include "innodb0types.h"
 #include "os0sync.h"
 #include "os0thread.h"
 #include "sync0arr.h"
 #include "sync0types.h"
-#include "univ.i"
 #include "ut0lst.h"
 #include "ut0mem.h"
 
@@ -105,10 +105,10 @@ corresponding function. */
 directly. Locks a mutex for the current thread. If the mutex is reserved
 the function spins a preset time (controlled by SYNC_SPIN_ROUNDS) waiting
 for the mutex before suspending the thread. */
-UNIV_INLINE
-void mutex_enter_func(mutex_t *mutex,        /*!< in: pointer to mutex */
-                      const char *file_name, /*!< in: file name where locked */
-                      ulint line);           /*!< in: line where locked */
+inline void
+mutex_enter_func(mutex_t *mutex,        /*!< in: pointer to mutex */
+                 const char *file_name, /*!< in: file name where locked */
+                 ulint line);           /*!< in: line where locked */
 /** NOTE! The following macro should be used in mutex locking, not the
 corresponding function. */
 
@@ -123,14 +123,13 @@ ulint mutex_enter_nowait_func(mutex_t *mutex, /*!< in: pointer to mutex */
                                                      mutex requested */
                               ulint line); /*!< in: line where requested */
 /** Unlocks a mutex owned by the current thread. */
-UNIV_INLINE
-void mutex_exit(mutex_t *mutex); /*!< in: pointer to mutex */
+inline void mutex_exit(mutex_t *mutex); /*!< in: pointer to mutex */
 #ifdef UNIV_SYNC_DEBUG
-/** Returns TRUE if no mutex or rw-lock is currently locked.
+/** Returns true if no mutex or rw-lock is currently locked.
 Works only in the debug version.
-@return	TRUE if no mutexes and rw-locks reserved */
+@return	true if no mutexes and rw-locks reserved */
 
-ibool sync_all_freed(void);
+bool sync_all_freed(void);
 #endif /* UNIV_SYNC_DEBUG */
 /*#####################################################################
 FUNCTION PROTOTYPES FOR DEBUGGING */
@@ -143,14 +142,14 @@ void sync_print_wait_info(
 void sync_print(ib_stream_t ib_stream); /*!< in: stream where to print */
 #ifdef UNIV_DEBUG
 /** Checks that the mutex has been initialized.
-@return	TRUE */
+@return	true */
 
-ibool mutex_validate(const mutex_t *mutex); /*!< in: mutex */
+bool mutex_validate(const mutex_t *mutex); /*!< in: mutex */
 /** Checks that the current thread owns the mutex. Works only
 in the debug version.
-@return	TRUE if owns */
+@return	true if owns */
 
-ibool mutex_own(const mutex_t *mutex) /*!< in: mutex */
+bool mutex_own(const mutex_t *mutex) /*!< in: mutex */
     __attribute__((warn_unused_result));
 #endif /* UNIV_DEBUG */
 #ifdef UNIV_SYNC_DEBUG
@@ -163,16 +162,16 @@ void sync_thread_add_level(
     ulint level); /*!< in: level in the latching order; if
                   SYNC_LEVEL_VARYING, nothing is done */
 /** Removes a latch from the thread level array if it is found there.
-@return TRUE if found in the array; it is no error if the latch is
+@return true if found in the array; it is no error if the latch is
 not found, as we presently are not able to determine the level for
 every latch reservation the program does */
 
-ibool sync_thread_reset_level(
+bool sync_thread_reset_level(
     void *latch); /*!< in: pointer to a mutex or an rw-lock */
 /** Checks that the level array for the current thread is empty.
-@return	TRUE if empty */
+@return	true if empty */
 
-ibool sync_thread_levels_empty(void);
+bool sync_thread_levels_empty(void);
 /** Checks if the level array for the current thread contains a
 mutex or rw-latch at the specified level.
 @return	a matching latch, or NULL if not found */
@@ -183,7 +182,7 @@ void *sync_thread_levels_contains(ulint level); /*!< in: latching order level
 @return	a latch, or NULL if empty except the exceptions specified below */
 
 void *sync_thread_levels_nonempty_gen(
-    ibool dict_mutex_allowed); /*!< in: TRUE if dictionary mutex is
+    bool dict_mutex_allowed); /*!< in: true if dictionary mutex is
                                allowed to be owned by the thread,
                                also purge_is_running mutex is
                                allowed */
@@ -203,15 +202,13 @@ ulint mutex_n_reserved(void);
 #endif /* UNIV_SYNC_DEBUG */
 /** NOT to be used outside this module except in debugging! Gets the value
 of the lock word. */
-UNIV_INLINE
-lock_word_t mutex_get_lock_word(const mutex_t *mutex); /*!< in: mutex */
+inline lock_word_t mutex_get_lock_word(const mutex_t *mutex); /*!< in: mutex */
 #ifdef UNIV_SYNC_DEBUG
 /** NOT to be used outside this module except in debugging! Gets the waiters
 field in a mutex.
 @return	value to set */
-UNIV_INLINE
-ulint mutex_get_waiters(const mutex_t *mutex); /*!< in: mutex */
-#endif                                         /* UNIV_SYNC_DEBUG */
+inline ulint mutex_get_waiters(const mutex_t *mutex); /*!< in: mutex */
+#endif                                                /* UNIV_SYNC_DEBUG */
 /** Reset variables. */
 
 void sync_var_init(void);
@@ -464,15 +461,15 @@ struct mutex_struct {
 #endif                 /* UNIV_DEBUG */
   ulong count_os_wait; /*!< count of os_wait */
 #ifdef UNIV_DEBUG
-  ulong count_using;           /*!< count of times mutex used */
-  ulong count_spin_loop;       /*!< count of spin loops */
-  ulong count_spin_rounds;     /*!< count of spin rounds */
-  ulong count_os_yield;        /*!< count of os_wait */
+  ulong count_using;        /*!< count of times mutex used */
+  ulong count_spin_loop;    /*!< count of spin loops */
+  ulong count_spin_rounds;  /*!< count of spin rounds */
+  ulong count_os_yield;     /*!< count of os_wait */
   uint64_t lspent_time;     /*!< mutex os_wait timer msec */
   uint64_t lmax_spent_time; /*!< mutex os_wait timer msec */
-  const char *cmutex_name;     /*!< mutex name */
-  ulint mutex_type;            /*!< 0=usual mutex, 1=rw_lock mutex */
-#endif                         /* UNIV_DEBUG */
+  const char *cmutex_name;  /*!< mutex name */
+  ulint mutex_type;         /*!< 0=usual mutex, 1=rw_lock mutex */
+#endif                      /* UNIV_DEBUG */
 };
 
 /** The global array of wait cells for implementation of the databases own
@@ -490,12 +487,12 @@ to 20 microseconds. */
 extern int64_t mutex_exit_count;
 
 #ifdef UNIV_SYNC_DEBUG
-/** Latching order checks start when this is set TRUE */
-extern ibool sync_order_checks_on;
+/** Latching order checks start when this is set true */
+extern bool sync_order_checks_on;
 #endif /* UNIV_SYNC_DEBUG */
 
-/** This variable is set to TRUE when sync_init is called */
-extern ibool sync_initialized;
+/** This variable is set to true when sync_init is called */
+extern bool sync_initialized;
 
 /** Global list of database mutexes (not OS mutexes) created. */
 typedef UT_LIST_BASE_NODE_T(mutex_t) ut_list_base_node_t;

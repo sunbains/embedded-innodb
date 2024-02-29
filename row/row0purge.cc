@@ -51,7 +51,8 @@ purge_node_t *row_purge_node_create(
   ut_ad(parent);
   ut_ad(heap);
 
-  auto node = reinterpret_cast<purge_node_t*>(mem_heap_alloc(heap, sizeof(purge_node_t)));
+  auto node = reinterpret_cast<purge_node_t *>(
+      mem_heap_alloc(heap, sizeof(purge_node_t)));
 
   node->common.type = QUE_NODE_PURGE;
   node->common.parent = parent;
@@ -63,13 +64,13 @@ purge_node_t *row_purge_node_create(
 
 /** Repositions the pcur in the purge node on the clustered index record,
 if found.
-@return	TRUE if the record was found */
-static ibool
+@return	true if the record was found */
+static bool
 row_purge_reposition_pcur(ulint mode,         /*!< in: latching mode */
                           purge_node_t *node, /*!< in: row purge node */
                           mtr_t *mtr)         /*!< in: mtr */
 {
-  ibool found;
+  bool found;
 
   if (node->found_clust) {
     found = btr_pcur_restore_position(mode, &(node->pcur), mtr);
@@ -89,16 +90,16 @@ row_purge_reposition_pcur(ulint mode,         /*!< in: latching mode */
 }
 
 /** Removes a delete marked clustered index record if possible.
-@return TRUE if success, or if not found, or if modified after the
+@return true if success, or if not found, or if modified after the
 delete marking */
-static ibool row_purge_remove_clust_if_poss_low(
+static bool row_purge_remove_clust_if_poss_low(
     purge_node_t *node, /*!< in: row purge node */
     ulint mode)         /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE */
 {
   dict_index_t *index;
   btr_pcur_t *pcur;
   btr_cur_t *btr_cur;
-  ibool success;
+  bool success;
   db_err err;
   mtr_t mtr;
   rec_t *rec;
@@ -120,7 +121,7 @@ static ibool row_purge_remove_clust_if_poss_low(
 
     btr_pcur_commit_specify_mtr(pcur, &mtr);
 
-    return (TRUE);
+    return (true);
   }
 
   rec = btr_pcur_get_rec(pcur);
@@ -130,16 +131,16 @@ static ibool row_purge_remove_clust_if_poss_low(
                row_get_rec_roll_ptr(rec, index,
                                     rec_get_offsets(rec, index, offsets_,
                                                     ULINT_UNDEFINED, &heap)))) {
-    if (UNIV_LIKELY_NULL(heap)) {
+    if (likely_null(heap)) {
       mem_heap_free(heap);
     }
     /* Someone else has modified the record later: do not remove */
     btr_pcur_commit_specify_mtr(pcur, &mtr);
 
-    return (TRUE);
+    return (true);
   }
 
-  if (UNIV_LIKELY_NULL(heap)) {
+  if (likely_null(heap)) {
     mem_heap_free(heap);
   }
 
@@ -147,12 +148,12 @@ static ibool row_purge_remove_clust_if_poss_low(
     success = btr_cur_optimistic_delete(btr_cur, &mtr);
   } else {
     ut_ad(mode == BTR_MODIFY_TREE);
-    btr_cur_pessimistic_delete(&err, FALSE, btr_cur, RB_NONE, &mtr);
+    btr_cur_pessimistic_delete(&err, false, btr_cur, RB_NONE, &mtr);
 
     if (err == DB_SUCCESS) {
-      success = TRUE;
+      success = true;
     } else if (err == DB_OUT_OF_FILE_SPACE) {
-      success = FALSE;
+      success = false;
     } else {
       ut_error;
     }
@@ -168,7 +169,7 @@ delete marking. */
 static void
 row_purge_remove_clust_if_poss(purge_node_t *node) /*!< in: row purge node */
 {
-  ibool success;
+  bool success;
   ulint n_tries = 0;
 
   /*	ib_logger(ib_stream, "Purge: Removing clustered record\n"); */
@@ -196,8 +197,8 @@ retry:
 }
 
 /** Removes a secondary index entry if possible.
-@return	TRUE if success or if not found */
-static ibool
+@return	true if success or if not found */
+static bool
 row_purge_remove_sec_if_poss_low(purge_node_t *node,  /*!< in: row purge node */
                                  dict_index_t *index, /*!< in: index */
                                  const dtuple_t *entry, /*!< in: index entry */
@@ -206,9 +207,9 @@ row_purge_remove_sec_if_poss_low(purge_node_t *node,  /*!< in: row purge node */
 {
   btr_pcur_t pcur;
   btr_cur_t *btr_cur;
-  ibool success;
-  ibool old_has = 0; /* remove warning */
-  ibool found;
+  bool success;
+  bool old_has = 0; /* remove warning */
+  bool found;
   db_err err;
   mtr_t mtr;
   mtr_t mtr_vers;
@@ -236,7 +237,7 @@ row_purge_remove_sec_if_poss_low(purge_node_t *node,  /*!< in: row purge node */
     btr_pcur_close(&pcur);
     mtr_commit(&mtr);
 
-    return (TRUE);
+    return (true);
   }
 
   btr_cur = btr_pcur_get_btr_cur(&pcur);
@@ -251,7 +252,7 @@ row_purge_remove_sec_if_poss_low(purge_node_t *node,  /*!< in: row purge node */
 
   if (success) {
     old_has = row_vers_old_has_index_entry(
-        TRUE, btr_pcur_get_rec(&(node->pcur)), &mtr_vers, index, entry);
+        true, btr_pcur_get_rec(&(node->pcur)), &mtr_vers, index, entry);
   }
 
   btr_pcur_commit_specify_mtr(&(node->pcur), &mtr_vers);
@@ -263,7 +264,7 @@ row_purge_remove_sec_if_poss_low(purge_node_t *node,  /*!< in: row purge node */
       success = btr_cur_optimistic_delete(btr_cur, &mtr);
     } else {
       ut_ad(mode == BTR_MODIFY_TREE);
-      btr_cur_pessimistic_delete(&err, FALSE, btr_cur, RB_NONE, &mtr);
+      btr_cur_pessimistic_delete(&err, false, btr_cur, RB_NONE, &mtr);
       success = err == DB_SUCCESS;
       ut_a(success || err == DB_OUT_OF_FILE_SPACE);
     }
@@ -281,7 +282,7 @@ row_purge_remove_sec_if_poss(purge_node_t *node,  /*!< in: row purge node */
                              dict_index_t *index, /*!< in: index */
                              dtuple_t *entry)     /*!< in: index entry */
 {
-  ibool success;
+  bool success;
   ulint n_tries = 0;
 
   /* ib_logger(ib_stream, "Purge: Removing secondary record\n"); */
@@ -346,7 +347,7 @@ row_purge_upd_exist_or_extern(purge_node_t *node) /*!< in: row purge node */
   mem_heap_t *heap;
   dtuple_t *entry;
   dict_index_t *index;
-  ibool is_insert;
+  bool is_insert;
   ulint rseg_id;
   ulint page_no;
   ulint offset;
@@ -441,12 +442,12 @@ skip_secondaries:
 }
 
 /** Parses the row reference and other info in a modify undo log record.
-@return TRUE if purge operation required: NOTE that then the CALLER
+@return true if purge operation required: NOTE that then the CALLER
 must unfreeze data dictionary! */
-static ibool
+static bool
 row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
-                         ibool *updated_extern,
-                         /*!< out: TRUE if an externally stored field
+                         bool *updated_extern,
+                         /*!< out: true if an externally stored field
                          was updated */
                          que_thr_t *thr) /*!< in: query thread */
 {
@@ -471,7 +472,7 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
 
   if (type == TRX_UNDO_UPD_DEL_REC && !(*updated_extern)) {
 
-    return (FALSE);
+    return (false);
   }
 
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
@@ -482,7 +483,7 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
 
     /* Purge requires no changes to indexes: we may return */
 
-    return (FALSE);
+    return (false);
   }
 
   /* Prevent DROP TABLE etc. from running when we are doing the purge
@@ -493,7 +494,8 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
   mutex_enter(&(dict_sys->mutex));
 
   // FIXME: srv_force_recovery should be passed in as an arg
-  node->table = dict_table_get_on_id_low(ib_recovery_t(srv_force_recovery), table_id);
+  node->table =
+      dict_table_get_on_id_low(ib_recovery_t(srv_force_recovery), table_id);
 
   mutex_exit(&(dict_sys->mutex));
 
@@ -501,7 +503,7 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
     /* The table has been dropped: no need to do purge */
   err_exit:
     dict_unfreeze_data_dictionary(trx);
-    return (FALSE);
+    return (false);
   }
 
   if (node->table->ibd_file_missing) {
@@ -533,7 +535,7 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
         ptr, clust_index, &node->row, type == TRX_UNDO_UPD_DEL_REC, node->heap);
   }
 
-  return (TRUE);
+  return (true);
 }
 
 /** Fetches an undo log record and does the purge for the recorded operation.
@@ -544,8 +546,8 @@ static ulint row_purge(purge_node_t *node, /*!< in: row purge node */
                        que_thr_t *thr)     /*!< in: query thread */
 {
   roll_ptr_t roll_ptr;
-  ibool purge_needed;
-  ibool updated_extern;
+  bool purge_needed;
+  bool updated_extern;
   trx_t *trx;
 
   ut_ad(node && thr);
@@ -565,10 +567,10 @@ static ulint row_purge(purge_node_t *node, /*!< in: row purge node */
   node->roll_ptr = roll_ptr;
 
   if (node->undo_rec == &trx_purge_dummy_rec) {
-    purge_needed = FALSE;
+    purge_needed = false;
   } else {
     purge_needed = row_purge_parse_undo_rec(node, &updated_extern, thr);
-    /* If purge_needed == TRUE, we must also remember to unfreeze
+    /* If purge_needed == true, we must also remember to unfreeze
     data dictionary! */
   }
 
@@ -577,7 +579,7 @@ static ulint row_purge(purge_node_t *node, /*!< in: row purge node */
 
     clust_index = dict_table_get_first_index(node->table);
 
-    node->found_clust = FALSE;
+    node->found_clust = false;
 
     node->index = dict_table_get_next_index(clust_index);
 
@@ -608,7 +610,7 @@ static ulint row_purge(purge_node_t *node, /*!< in: row purge node */
 que_thr_t *row_purge_step(que_thr_t *thr) {
   ut_ad(thr);
 
-  auto node = static_cast<purge_node_t*>(thr->run_node);
+  auto node = static_cast<purge_node_t *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_PURGE);
 

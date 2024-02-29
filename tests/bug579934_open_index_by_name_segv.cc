@@ -53,10 +53,10 @@ typedef struct row_t {
 #define COL_LEN(n) (sizeof(((row_t *)0)->n))
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }

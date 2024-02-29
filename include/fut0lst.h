@@ -24,7 +24,7 @@ Created 11/28/1995 Heikki Tuuri
 #ifndef fut0lst_h
 #define fut0lst_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "fil0fil.h"
 #include "mtr0mtr.h"
@@ -42,11 +42,9 @@ typedef byte flst_node_t;
 /* The physical size of a list node in bytes */
 #define FLST_NODE_SIZE (2 * FIL_ADDR_SIZE)
 
-#ifndef UNIV_HOTBACKUP
 /** Initializes a list base node. */
-UNIV_INLINE
-void flst_init(flst_base_node_t *base, /*!< in: pointer to base node */
-               mtr_t *mtr);            /*!< in: mini-transaction handle */
+inline void flst_init(flst_base_node_t *base, /*!< in: pointer to base node */
+                      mtr_t *mtr); /*!< in: mini-transaction handle */
 /** Adds a node as the last node in a list. */
 
 void flst_add_last(
@@ -100,49 +98,43 @@ void flst_truncate_end(
     mtr_t *mtr);            /*!< in: mini-transaction handle */
 /** Gets list length.
 @return	length */
-UNIV_INLINE
-ulint flst_get_len(
-    const flst_base_node_t *base, /*!< in: pointer to base node */
-    mtr_t *mtr);                  /*!< in: mini-transaction handle */
+inline ulint
+flst_get_len(const flst_base_node_t *base, /*!< in: pointer to base node */
+             mtr_t *mtr);                  /*!< in: mini-transaction handle */
 /** Gets list first node address.
 @return	file address */
-UNIV_INLINE
-fil_addr_t
+inline fil_addr_t
 flst_get_first(const flst_base_node_t *base, /*!< in: pointer to base node */
                mtr_t *mtr);                  /*!< in: mini-transaction handle */
 /** Gets list last node address.
 @return	file address */
-UNIV_INLINE
-fil_addr_t
+inline fil_addr_t
 flst_get_last(const flst_base_node_t *base, /*!< in: pointer to base node */
               mtr_t *mtr);                  /*!< in: mini-transaction handle */
 /** Gets list next node address.
 @return	file address */
-UNIV_INLINE
-fil_addr_t
+inline fil_addr_t
 flst_get_next_addr(const flst_node_t *node, /*!< in: pointer to node */
                    mtr_t *mtr);             /*!< in: mini-transaction handle */
 /** Gets list prev node address.
 @return	file address */
-UNIV_INLINE
-fil_addr_t
+inline fil_addr_t
 flst_get_prev_addr(const flst_node_t *node, /*!< in: pointer to node */
                    mtr_t *mtr);             /*!< in: mini-transaction handle */
 /** Writes a file address. */
-UNIV_INLINE
-void flst_write_addr(fil_faddr_t *faddr, /*!< in: pointer to file faddress */
-                     fil_addr_t addr,    /*!< in: file address */
-                     mtr_t *mtr);        /*!< in: mini-transaction handle */
+inline void
+flst_write_addr(fil_faddr_t *faddr, /*!< in: pointer to file faddress */
+                fil_addr_t addr,    /*!< in: file address */
+                mtr_t *mtr);        /*!< in: mini-transaction handle */
 /** Reads a file address.
 @return	file address */
-UNIV_INLINE
-fil_addr_t
+inline fil_addr_t
 flst_read_addr(const fil_faddr_t *faddr, /*!< in: pointer to file faddress */
                mtr_t *mtr);              /*!< in: mini-transaction handle */
 /** Validates a file-based list.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool flst_validate(
+bool flst_validate(
     const flst_base_node_t *base, /*!< in: pointer to base node of list */
     mtr_t *mtr1);                 /*!< in: mtr */
 /** Prints info of a file-based list. */
@@ -154,7 +146,5 @@ void flst_print(
 #ifndef UNIV_NONINL
 #include "fut0lst.ic"
 #endif
-
-#endif /* !UNIV_HOTBACKUP */
 
 #endif

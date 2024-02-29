@@ -27,7 +27,7 @@ Created 6/25/1996 Heikki Tuuri
 sess_t *sess_open() {
   ut_ad(mutex_own(&kernel_mutex));
 
-  auto sess = static_cast<sess_t*>(mem_alloc(sizeof(sess_t)));
+  auto sess = static_cast<sess_t *>(mem_alloc(sizeof(sess_t)));
 
   sess->state = SESS_ACTIVE;
 

@@ -26,8 +26,8 @@ Created 10/16/1994 Heikki Tuuri
 
 #include "btr0types.h"
 #include "dict0dict.h"
+#include "innodb0types.h"
 #include "page0cur.h"
-#include "univ.i"
 
 /* Mode flags for btr_cur operations; these can be ORed */
 #define BTR_NO_UNDO_LOG_FLAG 1 /* do no undo logging */
@@ -36,7 +36,6 @@ Created 10/16/1994 Heikki Tuuri
   4 /* sys fields will be found from the                                       \
     update vector or inserted entry */
 
-#ifndef UNIV_HOTBACKUP
 #include "ha0ha.h"
 #include "que0types.h"
 #include "row0types.h"
@@ -47,41 +46,36 @@ Created 10/16/1994 Heikki Tuuri
 #ifdef UNIV_DEBUG
 /*** Returns the page cursor component of a tree cursor.
 @return	pointer to page cursor component */
-UNIV_INLINE
-page_cur_t *
+inline page_cur_t *
 btr_cur_get_page_cur(const btr_cur_t *cursor); /*!< in: tree cursor */
 #else                                          /* UNIV_DEBUG */
 #define btr_cur_get_page_cur(cursor) (&(cursor)->page_cur)
 #endif /* UNIV_DEBUG */
 /*** Returns the buffer block on which the tree cursor is positioned.
 @return	pointer to buffer block */
-UNIV_INLINE
-buf_block_t *btr_cur_get_block(btr_cur_t *cursor); /*!< in: tree cursor */
+inline buf_block_t *
+btr_cur_get_block(btr_cur_t *cursor); /*!< in: tree cursor */
 /*** Returns the record pointer of a tree cursor.
 @return	pointer to record */
-UNIV_INLINE
-rec_t *btr_cur_get_rec(btr_cur_t *cursor); /*!< in: tree cursor */
+inline rec_t *btr_cur_get_rec(btr_cur_t *cursor); /*!< in: tree cursor */
 /*** Returns the compressed page on which the tree cursor is positioned.
 @return	pointer to compressed page, or NULL if the page is not compressed */
-UNIV_INLINE
-page_zip_des_t *btr_cur_get_page_zip(btr_cur_t *cursor); /*!< in: tree cursor */
+inline page_zip_des_t *
+btr_cur_get_page_zip(btr_cur_t *cursor); /*!< in: tree cursor */
 /*** Invalidates a tree cursor by setting record pointer to NULL. */
-UNIV_INLINE
-void btr_cur_invalidate(btr_cur_t *cursor); /*!< in: tree cursor */
+inline void btr_cur_invalidate(btr_cur_t *cursor); /*!< in: tree cursor */
 /*** Returns the page of a tree cursor.
 @return	pointer to page */
-UNIV_INLINE
-page_t *btr_cur_get_page(btr_cur_t *cursor); /*!< in: tree cursor */
+inline page_t *btr_cur_get_page(btr_cur_t *cursor); /*!< in: tree cursor */
 /*** Returns the index of a cursor.
 @return	index */
-UNIV_INLINE
-dict_index_t *btr_cur_get_index(btr_cur_t *cursor); /*!< in: B-tree cursor */
+inline dict_index_t *
+btr_cur_get_index(btr_cur_t *cursor); /*!< in: B-tree cursor */
 /*** Positions a tree cursor at a given record. */
-UNIV_INLINE
-void btr_cur_position(dict_index_t *index, /*!< in: index */
-                      rec_t *rec,          /*!< in: record in tree */
-                      buf_block_t *block,  /*!< in: buffer block of rec */
-                      btr_cur_t *cursor);  /*!< in: cursor */
+inline void btr_cur_position(dict_index_t *index, /*!< in: index */
+                             rec_t *rec,          /*!< in: record in tree */
+                             buf_block_t *block, /*!< in: buffer block of rec */
+                             btr_cur_t *cursor); /*!< in: cursor */
 /*** Searches an index tree and positions a tree cursor on a given level.
 NOTE: n_fields_cmp in tuple must be set so that it cannot be compared
 to node pointer page number fields on the upper levels of the tree!
@@ -123,8 +117,8 @@ void btr_cur_search_to_nth_level(
 /*** Opens a cursor at either end of an index. */
 
 void btr_cur_open_at_index_side_func(
-    ibool from_left,     /*!< in: TRUE if open to the low end,
-                         FALSE if to the high end */
+    bool from_left,      /*!< in: true if open to the low end,
+                          false if to the high end */
     dict_index_t *index, /*!< in: index */
     ulint latch_mode,    /*!< in: latch mode */
     btr_cur_t *cursor,   /*!< in: cursor */
@@ -197,17 +191,17 @@ db_err btr_cur_pessimistic_insert(
 
 /*** Updates a record when the update causes no size changes in its fields.
 @return	DB_SUCCESS or error number */
-db_err btr_cur_update_in_place(
-    ulint flags,         /*!< in: undo logging and locking flags */
-    btr_cur_t *cursor,   /*!< in: cursor on the record to update;
-                         cursor stays valid and positioned on the
-                         same record */
-    const upd_t *update, /*!< in: update vector */
-    ulint cmpl_info,     /*!< in: compiler info on secondary index
-                       updates */
-    que_thr_t *thr,      /*!< in: query thread */
-    mtr_t *mtr);         /*!< in: mtr; must be committed before
-                         latching any further pages */
+db_err
+btr_cur_update_in_place(ulint flags, /*!< in: undo logging and locking flags */
+                        btr_cur_t *cursor,   /*!< in: cursor on the record to
+                                             update;   cursor stays valid and
+                                             positioned on the   same record */
+                        const upd_t *update, /*!< in: update vector */
+                        ulint cmpl_info,     /*!< in: compiler info on secondary
+                                           index     updates */
+                        que_thr_t *thr,      /*!< in: query thread */
+                        mtr_t *mtr); /*!< in: mtr; must be committed before
+                                     latching any further pages */
 
 /*** Tries to update a record on a page in an index tree. It is assumed that mtr
 holds an x-latch on the page. The operation does not succeed if there is too
@@ -259,18 +253,17 @@ undo log record created.
 db_err btr_cur_del_mark_set_clust_rec(
     ulint flags,       /*!< in: undo logging and locking flags */
     btr_cur_t *cursor, /*!< in: cursor */
-    ibool val,         /*!< in: value to set */
+    bool val,          /*!< in: value to set */
     que_thr_t *thr,    /*!< in: query thread */
     mtr_t *mtr);       /*!< in: mtr */
 
-/*** Sets a secondary index record delete mark to TRUE or FALSE.
+/*** Sets a secondary index record delete mark to true or false.
 @return	DB_SUCCESS, DB_LOCK_WAIT, or error number */
-db_err btr_cur_del_mark_set_sec_rec(
-    ulint flags,       /*!< in: locking flag */
-    btr_cur_t *cursor, /*!< in: cursor */
-    ibool val,         /*!< in: value to set */
-    que_thr_t *thr,    /*!< in: query thread */
-    mtr_t *mtr);       /*!< in: mtr */
+db_err btr_cur_del_mark_set_sec_rec(ulint flags,       /*!< in: locking flag */
+                                    btr_cur_t *cursor, /*!< in: cursor */
+                                    bool val,          /*!< in: value to set */
+                                    que_thr_t *thr,    /*!< in: query thread */
+                                    mtr_t *mtr);       /*!< in: mtr */
 
 /*** Clear a secondary index record's delete mark.  This function is only
 used by the insert buffer insert merge mechanism. */
@@ -287,8 +280,8 @@ that mtr holds an x-latch on the tree and on the cursor page. To avoid
 deadlocks, mtr must also own x-latches to brothers of page, if those
 brothers exist. NOTE: it is assumed that the caller has reserved enough
 free extents so that the compression will always succeed if done!
-@return	TRUE if compression occurred */
-ibool btr_cur_compress_if_useful(
+@return	true if compression occurred */
+bool btr_cur_compress_if_useful(
     btr_cur_t *cursor, /*!< in: cursor on the page to compress;
                        cursor does not stay valid if compression
                        occurs */
@@ -297,14 +290,14 @@ ibool btr_cur_compress_if_useful(
 /*** Removes the record on which the tree cursor is positioned. It is assumed
 that the mtr has an x-latch on the page where the cursor is positioned,
 but no latch on the whole tree.
-@return	TRUE if success, i.e., the page did not become too empty */
-ibool btr_cur_optimistic_delete(
+@return	true if success, i.e., the page did not become too empty */
+bool btr_cur_optimistic_delete(
     btr_cur_t *cursor, /*!< in: cursor on the record to delete;
                        cursor stays valid: if deletion succeeds,
                        on function exit it points to the successor
                        of the deleted record */
     mtr_t *mtr);       /*!< in: mtr; if this function returns
-                       TRUE on a leaf page of a secondary
+                       true on a leaf page of a secondary
                        index, the mtr must be committed
                        before latching any further pages */
 
@@ -314,24 +307,23 @@ or if it is the only page on the level. It is assumed that mtr holds
 an x-latch on the tree and on the cursor page. To avoid deadlocks,
 mtr must also own x-latches to brothers of page, if those brothers
 exist.
-@return	TRUE if compression occurred */
-ibool btr_cur_pessimistic_delete(
-    db_err *err,                 /*!< out: DB_SUCCESS or DB_OUT_OF_FILE_SPACE;
-                                the latter may occur because we may have
-                                to update node pointers on upper levels,
-                                and in the case of variable length keys
-                                these may actually grow in size */
-    ibool has_reserved_extents, /*!< in: TRUE if the
+@return	true if compression occurred */
+bool btr_cur_pessimistic_delete(
+    db_err *err,               /*!< out: DB_SUCCESS or DB_OUT_OF_FILE_SPACE;
+                              the latter may occur because we may have
+                              to update node pointers on upper levels,
+                              and in the case of variable length keys
+                              these may actually grow in size */
+    bool has_reserved_extents, /*!< in: true if the
                   caller has already reserved enough free
                   extents so that he knows that the operation
                   will succeed */
-    btr_cur_t *cursor,          /*!< in: cursor on the record to delete;
-                                if compression does not occur, the cursor
-                                stays valid: it points to successor of
-                                deleted record on function exit */
-    enum trx_rb_ctx rb_ctx,     /*!< in: rollback context */
-    mtr_t *mtr);                /*!< in: mtr */
-#endif                          /* !UNIV_HOTBACKUP */
+    btr_cur_t *cursor,         /*!< in: cursor on the record to delete;
+                               if compression does not occur, the cursor
+                               stays valid: it points to successor of
+                               deleted record on function exit */
+    enum trx_rb_ctx rb_ctx,    /*!< in: rollback context */
+    mtr_t *mtr);               /*!< in: mtr */
 
 /*** Parses a redo log record of updating a record in-place.
 @return	end of log record or NULL */
@@ -341,7 +333,7 @@ byte *btr_cur_parse_update_in_place(
     page_t *page,             /*!< in/out: page or NULL */
     page_zip_des_t *page_zip, /*!< in/out: compressed page, or NULL */
 
-    dict_index_t *index);     /*!< in: index corresponding to page */
+    dict_index_t *index); /*!< in: index corresponding to page */
 /*** Parses the redo log record for delete marking or unmarking of a clustered
 index record.
 @return	end of log record or NULL */
@@ -361,7 +353,6 @@ byte *btr_cur_parse_del_mark_set_sec_rec(
     page_t *page,              /*!< in/out: page or NULL */
     page_zip_des_t *page_zip); /*!< in/out: compressed page, or NULL */
 
-#ifndef UNIV_HOTBACKUP
 /*** Estimates the number of rows in a given index range.
 @return	estimated number of rows */
 int64_t btr_estimate_n_rows_in_range(
@@ -646,7 +637,6 @@ extern ulint btr_cur_n_non_sea_old;
 srv_refresh_innodb_monitor_stats().  Referenced by
 srv_printf_innodb_monitor(). */
 extern ulint btr_cur_n_sea_old;
-#endif /* !UNIV_HOTBACKUP */
 
 #ifndef UNIV_NONINL
 #include "btr0cur.ic"

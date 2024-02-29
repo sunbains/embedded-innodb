@@ -26,9 +26,8 @@ Created 5/30/1994 Heikki Tuuri
 
 /** Compute strlen(strcpyq(str, q)).
 @return	length of the string when quoted */
-UNIV_INLINE
-ulint strlenq(const char *str, /*!< in: null-terminated string */
-                 char q)          /*!< in: the quote character */
+inline ulint strlenq(const char *str, /*!< in: null-terminated string */
+                     char q)          /*!< in: the quote character */
 {
   ulint len;
 
@@ -46,23 +45,22 @@ truncated if there is not enough space in "hex", make sure "hex_size" is at
 least (2 * raw_size + 1) if you do not want this to happen. Returns the
 actual number of characters written to "hex" (including the NUL).
 @return	number of chars written */
-UNIV_INLINE
-ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
-                    ulint raw_size,  /*!< in: "raw" length in bytes */
-                    char *hex,       /*!< out: hex string */
-                    ulint hex_size)  /*!< in: "hex" size in bytes */
+inline ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
+                           ulint raw_size,  /*!< in: "raw" length in bytes */
+                           char *hex,       /*!< out: hex string */
+                           ulint hex_size)  /*!< in: "hex" size in bytes */
 {
 
 #ifdef WORDS_BIGENDIAN
 
-#define MK_UINT16(a, b) (((ib_uint16_t)(a)) << 8 | (ib_uint16_t)(b))
+#define MK_UINT16(a, b) (((uint16_t)(a)) << 8 | (uint16_t)(b))
 
 #define UINT16_GET_A(u) ((unsigned char)((u) >> 8))
 #define UINT16_GET_B(u) ((unsigned char)((u)&0xFF))
 
 #else /* WORDS_BIGENDIAN */
 
-#define MK_UINT16(a, b) (((ib_uint16_t)(b)) << 8 | (ib_uint16_t)(a))
+#define MK_UINT16(a, b) (((uint16_t)(b)) << 8 | (uint16_t)(a))
 
 #define UINT16_GET_A(u) ((unsigned char)((u)&0xFF))
 #define UINT16_GET_B(u) ((unsigned char)((u) >> 8))
@@ -76,7 +74,7 @@ ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
       MK_UINT16(a, 'A'), MK_UINT16(a, 'B'), MK_UINT16(a, 'C'),                 \
       MK_UINT16(a, 'D'), MK_UINT16(a, 'E'), MK_UINT16(a, 'F')
 
-  static const ib_uint16_t hex_map[256] = {
+  static const uint16_t hex_map[256] = {
       MK_ALL_UINT16_WITH_A('0'), MK_ALL_UINT16_WITH_A('1'),
       MK_ALL_UINT16_WITH_A('2'), MK_ALL_UINT16_WITH_A('3'),
       MK_ALL_UINT16_WITH_A('4'), MK_ALL_UINT16_WITH_A('5'),
@@ -116,7 +114,7 @@ ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
 
   if (ut_align_offset(hex, 2) == 0) {
 
-    LOOP_READ_BYTES(*(ib_uint16_t *)hex = hex_map[*rawc]);
+    LOOP_READ_BYTES(*(uint16_t *)hex = hex_map[*rawc]);
   } else {
 
     LOOP_READ_BYTES(*hex = UINT16_GET_A(hex_map[*rawc]);
@@ -138,12 +136,11 @@ by doubling them. Returns the number of bytes that were written to "buf"
 (including the terminating NUL). If buf_size is too small then the
 trailing bytes from "str" are discarded.
 @return	number of bytes that were written */
-UNIV_INLINE
-ulint ut_str_sql_format(const char *str, /*!< in: string */
-                        ulint str_len,   /*!< in: string length in bytes */
-                        char *buf,       /*!< out: output buffer */
-                        ulint buf_size)  /*!< in: output buffer size
-                                         in bytes */
+inline ulint ut_str_sql_format(const char *str, /*!< in: string */
+                               ulint str_len, /*!< in: string length in bytes */
+                               char *buf,     /*!< out: output buffer */
+                               ulint buf_size) /*!< in: output buffer size
+                                               in bytes */
 {
   ulint str_i;
   ulint buf_i;
@@ -191,7 +188,7 @@ ulint ut_str_sql_format(const char *str, /*!< in: string */
     switch (ch) {
     case '\0':
 
-      if (UNIV_UNLIKELY(buf_size - buf_i < 4)) {
+      if (unlikely(buf_size - buf_i < 4)) {
 
         goto func_exit;
       }
@@ -203,7 +200,7 @@ ulint ut_str_sql_format(const char *str, /*!< in: string */
     case '\'':
     case '\\':
 
-      if (UNIV_UNLIKELY(buf_size - buf_i < 4)) {
+      if (unlikely(buf_size - buf_i < 4)) {
 
         goto func_exit;
       }

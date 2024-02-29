@@ -47,9 +47,9 @@ on 1/27/1998 */
 #include "eval0eval.h"
 
 #ifdef UNIV_SQL_DEBUG
-/** If the following is set TRUE, the lexer will print the SQL string
+/** If the following is set true, the lexer will print the SQL string
 as it tokenizes it */
-ibool pars_print_lexed = FALSE;
+bool pars_print_lexed = false;
 #endif /* UNIV_SQL_DEBUG */
 
 /* Global variable used while parsing a single procedure or query : the code is
@@ -98,7 +98,7 @@ ulint pars_star_denoter = PARS_STAR_DENOTER;
 
 void pars_var_init(void) {
 #ifdef UNIV_SQL_DEBUG
-  pars_print_lexed = FALSE;
+  pars_print_lexed = false;
 #endif /* UNIV_SQL_DEBUG */
 
   pars_lexer_var_init();
@@ -198,8 +198,8 @@ static func_node_t *
 pars_func_low(int func,        /*!< in: function token code */
               que_node_t *arg) /*!< in: first argument in the argument list */
 {
-  auto node = reinterpret_cast<func_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(func_node_t)));
+  auto node = reinterpret_cast<func_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(func_node_t)));
 
   node->common.type = QUE_NODE_FUNC;
   dfield_set_data(&(node->common.val), nullptr, 0);
@@ -230,8 +230,8 @@ pars_func(que_node_t *res_word, /*!< in: function name reserved word */
 
 func_node_t *pars_op(int func,         /*!< in: operator token code */
                      que_node_t *arg1, /*!< in: first argument */
-                     que_node_t *arg2) /*!< in: second argument or nullptr for an
-                                       unary operator */
+                     que_node_t *arg2) /*!< in: second argument or nullptr for
+                                       an unary operator */
 {
   que_node_list_add_last(nullptr, arg1);
 
@@ -249,18 +249,18 @@ order_node_t *pars_order_by(
     sym_node_t *column,   /*!< in: column name */
     pars_res_word_t *asc) /*!< in: &pars_asc_token or pars_desc_token */
 {
-  auto node = reinterpret_cast<order_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(order_node_t)));
+  auto node = reinterpret_cast<order_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(order_node_t)));
 
   node->common.type = QUE_NODE_ORDER;
 
   node->column = column;
 
   if (asc == &pars_asc_token) {
-    node->asc = TRUE;
+    node->asc = true;
   } else {
     ut_a(asc == &pars_desc_token);
-    node->asc = FALSE;
+    node->asc = false;
   }
 
   return (node);
@@ -268,18 +268,18 @@ order_node_t *pars_order_by(
 
 /** Determine if a data type is a built-in string data type of the InnoDB
 SQL parser.
-@return	TRUE if string data type */
-static ibool pars_is_string_type(ulint mtype) /*!< in: main data type */
+@return	true if string data type */
+static bool pars_is_string_type(ulint mtype) /*!< in: main data type */
 {
   switch (mtype) {
   case DATA_VARCHAR:
   case DATA_CHAR:
   case DATA_FIXBINARY:
   case DATA_BINARY:
-    return (TRUE);
+    return (true);
   }
 
-  return (FALSE);
+  return (false);
 }
 
 /** Resolves the data type of a function in an expression. The argument data
@@ -356,7 +356,7 @@ pars_resolve_func_data_type(func_node_t *node) /*!< in: function node */
   case PARS_NOT_TOKEN:
   case PARS_NOTFOUND_TOKEN:
 
-    /* We currently have no iboolean type: use integer type */
+    /* We currently have no boolean type: use integer type */
     dtype_set(que_node_get_data_type(node), DATA_INT, 0, 4);
     break;
 
@@ -387,7 +387,7 @@ static void pars_resolve_exp_variables_and_types(
   ut_a(exp_node);
 
   if (que_node_get_type(exp_node) == QUE_NODE_FUNC) {
-    func_node = reinterpret_cast<func_node_t*>(exp_node);
+    func_node = reinterpret_cast<func_node_t *>(exp_node);
 
     arg = func_node->args;
 
@@ -404,7 +404,7 @@ static void pars_resolve_exp_variables_and_types(
 
   ut_a(que_node_get_type(exp_node) == QUE_NODE_SYMBOL);
 
-  sym_node = reinterpret_cast<sym_node_t*>(exp_node);
+  sym_node = reinterpret_cast<sym_node_t *>(exp_node);
 
   if (sym_node->resolved) {
 
@@ -439,7 +439,7 @@ static void pars_resolve_exp_variables_and_types(
 
   ut_a(node);
 
-  sym_node->resolved = TRUE;
+  sym_node->resolved = true;
   sym_node->token_type = SYM_IMPLICIT_VAR;
   sym_node->alias = node;
   sym_node->indirection = node;
@@ -482,7 +482,7 @@ static void pars_resolve_exp_columns(
   ut_a(exp_node);
 
   if (que_node_get_type(exp_node) == QUE_NODE_FUNC) {
-    func_node = reinterpret_cast<func_node_t*>(exp_node);
+    func_node = reinterpret_cast<func_node_t *>(exp_node);
 
     arg = func_node->args;
 
@@ -497,7 +497,7 @@ static void pars_resolve_exp_columns(
 
   ut_a(que_node_get_type(exp_node) == QUE_NODE_SYMBOL);
 
-  sym_node = reinterpret_cast<sym_node_t*>(exp_node);
+  sym_node = reinterpret_cast<sym_node_t *>(exp_node);
 
   if (sym_node->resolved) {
 
@@ -521,7 +521,7 @@ static void pars_resolve_exp_columns(
       if ((sym_node->name_len == strlen(col_name)) &&
           (0 == memcmp(sym_node->name, col_name, sym_node->name_len))) {
         /* Found */
-        sym_node->resolved = TRUE;
+        sym_node->resolved = true;
         sym_node->token_type = SYM_COLUMN;
         sym_node->table = table;
         sym_node->col_no = i;
@@ -533,7 +533,7 @@ static void pars_resolve_exp_columns(
       }
     }
 
-    t_node = reinterpret_cast<sym_node_t*>(que_node_get_next(t_node));
+    t_node = reinterpret_cast<sym_node_t *>(que_node_get_next(t_node));
   }
 }
 
@@ -558,7 +558,7 @@ static void pars_retrieve_table_def(sym_node_t *sym_node) /*!< in: table node */
   ut_a(sym_node);
   ut_a(que_node_get_type(sym_node) == QUE_NODE_SYMBOL);
 
-  sym_node->resolved = TRUE;
+  sym_node->resolved = true;
   sym_node->token_type = SYM_TABLE;
 
   table_name = (const char *)sym_node->name;
@@ -584,7 +584,7 @@ static ulint pars_retrieve_table_list_defs(
 
     ++count;
 
-    sym_node = reinterpret_cast<sym_node_t*>(que_node_get_next(sym_node));
+    sym_node = reinterpret_cast<sym_node_t *>(que_node_get_next(sym_node));
   }
 
   return count;
@@ -617,7 +617,7 @@ pars_select_all_columns(sel_node_t *select_node) /*!< in: select node already
           que_node_list_add_last(select_node->select_list, col_node);
     }
 
-    table_node = reinterpret_cast<sym_node_t*>(que_node_get_next(table_node));
+    table_node = reinterpret_cast<sym_node_t *>(que_node_get_next(table_node));
   }
 }
 
@@ -660,7 +660,7 @@ pars_check_aggregate(sel_node_t *select_node) /*!< in: select node already
 
     if (que_node_get_type(exp_node) == QUE_NODE_FUNC) {
 
-      func_node = reinterpret_cast<func_node_t*>(exp_node);
+      func_node = reinterpret_cast<func_node_t *>(exp_node);
 
       if (func_node->func_class == PARS_FUNC_AGGREGATE) {
 
@@ -674,9 +674,9 @@ pars_check_aggregate(sel_node_t *select_node) /*!< in: select node already
   if (n_aggregate_nodes > 0) {
     ut_a(n_nodes == n_aggregate_nodes);
 
-    select_node->is_aggregate = TRUE;
+    select_node->is_aggregate = true;
   } else {
-    select_node->is_aggregate = FALSE;
+    select_node->is_aggregate = false;
   }
 }
 
@@ -725,22 +725,22 @@ sel_node_t *pars_select_statement(
   if (for_update) {
     ut_a(!lock_shared);
 
-    select_node->set_x_locks = TRUE;
+    select_node->set_x_locks = true;
     select_node->row_lock_mode = LOCK_X;
 
-    select_node->consistent_read = FALSE;
+    select_node->consistent_read = false;
     select_node->read_view = nullptr;
   } else if (lock_shared) {
-    select_node->set_x_locks = FALSE;
+    select_node->set_x_locks = false;
     select_node->row_lock_mode = LOCK_S;
 
-    select_node->consistent_read = FALSE;
+    select_node->consistent_read = false;
     select_node->read_view = nullptr;
   } else {
-    select_node->set_x_locks = FALSE;
+    select_node->set_x_locks = false;
     select_node->row_lock_mode = LOCK_S;
 
-    select_node->consistent_read = TRUE;
+    select_node->consistent_read = true;
   }
 
   select_node->order_by = order_by;
@@ -752,7 +752,7 @@ sel_node_t *pars_select_statement(
   /* The final value of the following fields depend on the environment
   where the select statement appears: */
 
-  select_node->can_get_updated = FALSE;
+  select_node->can_get_updated = false;
   select_node->explicit_cursor = nullptr;
 
   opt_search_plan(select_node);
@@ -768,7 +768,7 @@ pars_cursor_declaration(sym_node_t *sym_node,    /*!< in: cursor id node in the
                                                  symbol    table */
                         sel_node_t *select_node) /*!< in: select node */
 {
-  sym_node->resolved = TRUE;
+  sym_node->resolved = true;
   sym_node->token_type = SYM_CURSOR;
   sym_node->cursor_def = select_node;
 
@@ -785,7 +785,7 @@ que_node_t *
 pars_function_declaration(sym_node_t *sym_node) /*!< in: function id node in the
                                                 symbol table */
 {
-  sym_node->resolved = TRUE;
+  sym_node->resolved = true;
   sym_node->token_type = SYM_FUNCTION;
 
   /* Check that the function exists. */
@@ -798,7 +798,7 @@ pars_function_declaration(sym_node_t *sym_node) /*!< in: function id node in the
 @return	own: update node in a query tree */
 
 upd_node_t *pars_update_statement_start(
-    ibool is_delete,                    /*!< in: TRUE if delete */
+    bool is_delete,                     /*!< in: true if delete */
     sym_node_t *table_sym,              /*!< in: table name node */
     col_assign_node_t *col_assign_list) /*!< in: column assignment list, nullptr
                                      if delete */
@@ -822,8 +822,8 @@ col_assign_node_t *
 pars_column_assignment(sym_node_t *column, /*!< in: column to assign */
                        que_node_t *exp)    /*!< in: value to assign */
 {
-  auto node = reinterpret_cast<col_assign_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(col_assign_node_t)));
+  auto node = reinterpret_cast<col_assign_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(col_assign_node_t)));
 
   node->common.type = QUE_NODE_COL_ASSIGNMENT;
 
@@ -848,7 +848,8 @@ static void pars_process_assign_list(upd_node_t *node) /*!< in: update node */
   ulint i;
 
   table_sym = node->table_sym;
-  col_assign_list = reinterpret_cast<col_assign_node_t*>(node->col_assign_list);
+  col_assign_list =
+      reinterpret_cast<col_assign_node_t *>(node->col_assign_list);
   clust_index = dict_table_get_first_index(node->table);
 
   assign_node = col_assign_list;
@@ -868,13 +869,14 @@ static void pars_process_assign_list(upd_node_t *node) /*!< in: update node */
 #endif
 
     /* Add to the update node all the columns found in assignment
-    values as columns to copy: therefore, TRUE */
+    values as columns to copy: therefore, true */
 
-    opt_find_all_cols(TRUE, clust_index, &(node->columns), nullptr,
+    opt_find_all_cols(true, clust_index, &(node->columns), nullptr,
                       assign_node->val);
     n_assigns++;
 
-    assign_node = reinterpret_cast<col_assign_node_t*>(que_node_get_next(assign_node));
+    assign_node =
+        reinterpret_cast<col_assign_node_t *>(que_node_get_next(assign_node));
   }
 
   node->update = upd_create(n_assigns, pars_sym_tab_global->heap);
@@ -899,7 +901,8 @@ static void pars_process_assign_list(upd_node_t *node) /*!< in: update node */
       changes_field_size = 0;
     }
 
-    assign_node = reinterpret_cast<col_assign_node_t*>(que_node_get_next(assign_node));
+    assign_node =
+        reinterpret_cast<col_assign_node_t *>(que_node_get_next(assign_node));
   }
 
   /* Find out if the update can modify an ordering field in any index */
@@ -942,13 +945,13 @@ upd_node_t *pars_update_statement(
 
     sel_node = cursor_sym->alias->cursor_def;
 
-    node->searched_update = FALSE;
+    node->searched_update = false;
   } else {
     sel_node = pars_select_list(nullptr, nullptr);
 
     pars_select_statement(sel_node, table_sym, search_cond, nullptr,
                           &pars_share_token, nullptr);
-    node->searched_update = TRUE;
+    node->searched_update = true;
     sel_node->common.parent = node;
   }
 
@@ -964,29 +967,29 @@ upd_node_t *pars_update_statement(
   }
 
   if (node->searched_update) {
-    node->has_clust_rec_x_lock = TRUE;
-    sel_node->set_x_locks = TRUE;
+    node->has_clust_rec_x_lock = true;
+    sel_node->set_x_locks = true;
     sel_node->row_lock_mode = LOCK_X;
   } else {
     node->has_clust_rec_x_lock = sel_node->set_x_locks;
   }
 
   ut_a(sel_node->n_tables == 1);
-  ut_a(sel_node->consistent_read == FALSE);
+  ut_a(sel_node->consistent_read == false);
   ut_a(sel_node->order_by == nullptr);
-  ut_a(sel_node->is_aggregate == FALSE);
+  ut_a(sel_node->is_aggregate == false);
 
-  sel_node->can_get_updated = TRUE;
+  sel_node->can_get_updated = true;
 
   node->state = UPD_NODE_UPDATE_CLUSTERED;
 
   plan = sel_node_get_nth_plan(sel_node, 0);
 
-  plan->no_prefetch = TRUE;
+  plan->no_prefetch = true;
 
   if (!dict_index_is_clust(plan->index)) {
 
-    plan->must_get_clust = TRUE;
+    plan->must_get_clust = true;
 
     node->pcur = &(plan->clust_pcur);
   } else {
@@ -996,7 +999,8 @@ upd_node_t *pars_update_statement(
   return (node);
 }
 
-ins_node_t *pars_insert_statement(sym_node_t *table_sym, que_node_t *values_list, sel_node_t *select) {
+ins_node_t *pars_insert_statement(sym_node_t *table_sym,
+                                  que_node_t *values_list, sel_node_t *select) {
   ut_a(values_list || select);
   ut_a(!values_list || !select);
 
@@ -1010,8 +1014,10 @@ ins_node_t *pars_insert_statement(sym_node_t *table_sym, que_node_t *values_list
 
   pars_retrieve_table_def(table_sym);
 
-  auto node = reinterpret_cast<ins_node_t*>(row_ins_node_create(ins_type, table_sym->table, pars_sym_tab_global->heap));
-  auto row = dtuple_create(pars_sym_tab_global->heap, dict_table_get_n_cols(node->table));
+  auto node = reinterpret_cast<ins_node_t *>(row_ins_node_create(
+      ins_type, table_sym->table, pars_sym_tab_global->heap));
+  auto row = dtuple_create(pars_sym_tab_global->heap,
+                           dict_table_get_n_cols(node->table));
 
   dict_table_copy_types(row, table_sym->table);
 
@@ -1043,9 +1049,9 @@ static void pars_set_dfield_type(dfield_t *dfield,      /*!< in: dfield */
                                  pars_res_word_t *type, /*!< in: pointer to a
                                                         type token */
                                  ulint len,             /*!< in: length, or 0 */
-                                 ibool is_unsigned, /*!< in: if TRUE, column is
+                                 bool is_unsigned, /*!< in: if true, column is
                                                     UNSIGNED. */
-                                 ibool is_not_null) /*!< in: if TRUE, column is
+                                 bool is_not_null) /*!< in: if true, column is
                                                     NOT nullptr. */
 {
   ulint flags = 0;
@@ -1082,17 +1088,18 @@ static void pars_set_dfield_type(dfield_t *dfield,      /*!< in: dfield */
 }
 
 sym_node_t *pars_variable_declaration(sym_node_t *node, pars_res_word_t *type) {
-  node->resolved = TRUE;
+  node->resolved = true;
   node->token_type = SYM_VAR;
 
   node->param_type = PARS_NOT_PARAM;
 
-  pars_set_dfield_type(que_node_get_val(node), type, 0, FALSE, FALSE);
+  pars_set_dfield_type(que_node_get_val(node), type, 0, false, false);
 
   return (node);
 }
 
-sym_node_t *pars_parameter_declaration(sym_node_t *node, ulint param_type, pars_res_word_t *type) {
+sym_node_t *pars_parameter_declaration(sym_node_t *node, ulint param_type,
+                                       pars_res_word_t *type) {
   ut_a((param_type == PARS_INPUT) || (param_type == PARS_OUTPUT));
 
   pars_variable_declaration(node, type);
@@ -1108,19 +1115,18 @@ pars_set_parent_in_list(que_node_t *node_list, /*!< in: first node in a list */
                         que_node_t *parent) /*!< in: parent value to set in all
                                             nodes of the list */
 {
-  auto common = reinterpret_cast<que_common_t*>(node_list);
+  auto common = reinterpret_cast<que_common_t *>(node_list);
 
   while (common != nullptr) {
     common->parent = parent;
 
-    common = reinterpret_cast<que_common_t*>(que_node_get_next(common));
+    common = reinterpret_cast<que_common_t *>(que_node_get_next(common));
   }
 }
 
-elsif_node_t *
-pars_elsif_element(que_node_t *cond, que_node_t *stat_list) {
-  auto node = reinterpret_cast<elsif_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(elsif_node_t)));
+elsif_node_t *pars_elsif_element(que_node_t *cond, que_node_t *stat_list) {
+  auto node = reinterpret_cast<elsif_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(elsif_node_t)));
 
   node->common.type = QUE_NODE_ELSIF;
 
@@ -1133,12 +1139,12 @@ pars_elsif_element(que_node_t *cond, que_node_t *stat_list) {
   return (node);
 }
 
-if_node_t *
-pars_if_statement(que_node_t *cond, que_node_t *stat_list, que_node_t *else_part) {
+if_node_t *pars_if_statement(que_node_t *cond, que_node_t *stat_list,
+                             que_node_t *else_part) {
   elsif_node_t *elsif_node;
 
-  auto node = reinterpret_cast<if_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(if_node_t)));
+  auto node = reinterpret_cast<if_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(if_node_t)));
 
   node->common.type = QUE_NODE_IF;
 
@@ -1153,14 +1159,14 @@ pars_if_statement(que_node_t *cond, que_node_t *stat_list, que_node_t *else_part
     /* There is a list of elsif conditions */
 
     node->else_part = nullptr;
-    node->elsif_list = static_cast<elsif_node_t*>(else_part);
+    node->elsif_list = static_cast<elsif_node_t *>(else_part);
 
-    elsif_node = static_cast<elsif_node_t*>(else_part);
+    elsif_node = static_cast<elsif_node_t *>(else_part);
 
     while (elsif_node != nullptr) {
       pars_set_parent_in_list(elsif_node->stat_list, node);
 
-      elsif_node = static_cast<elsif_node_t*>(que_node_get_next(elsif_node));
+      elsif_node = static_cast<elsif_node_t *>(que_node_get_next(elsif_node));
     }
   } else {
     node->else_part = else_part;
@@ -1174,10 +1180,9 @@ pars_if_statement(que_node_t *cond, que_node_t *stat_list, que_node_t *else_part
   return node;
 }
 
-while_node_t *
-pars_while_statement(que_node_t *cond, que_node_t *stat_list) {
-  auto node = reinterpret_cast<while_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(while_node_t)));
+while_node_t *pars_while_statement(que_node_t *cond, que_node_t *stat_list) {
+  auto node = reinterpret_cast<while_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(while_node_t)));
 
   node->common.type = QUE_NODE_WHILE;
 
@@ -1192,14 +1197,12 @@ pars_while_statement(que_node_t *cond, que_node_t *stat_list) {
   return (node);
 }
 
-for_node_t *pars_for_statement(
-    sym_node_t *loop_var,
-    que_node_t *loop_start_limit,
-    que_node_t *loop_end_limit,
-    que_node_t *stat_list)
-{
-  auto node = reinterpret_cast<for_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(for_node_t)));
+for_node_t *pars_for_statement(sym_node_t *loop_var,
+                               que_node_t *loop_start_limit,
+                               que_node_t *loop_end_limit,
+                               que_node_t *stat_list) {
+  auto node = reinterpret_cast<for_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(for_node_t)));
 
   node->common.type = QUE_NODE_FOR;
 
@@ -1222,8 +1225,8 @@ for_node_t *pars_for_statement(
 }
 
 exit_node_t *pars_exit_statement(void) {
-  auto node = reinterpret_cast<exit_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(exit_node_t)));
+  auto node = reinterpret_cast<exit_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(exit_node_t)));
 
   node->common.type = QUE_NODE_EXIT;
 
@@ -1231,8 +1234,8 @@ exit_node_t *pars_exit_statement(void) {
 }
 
 return_node_t *pars_return_statement(void) {
-  auto node = reinterpret_cast<return_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(return_node_t)));
+  auto node = reinterpret_cast<return_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(return_node_t)));
 
   node->common.type = QUE_NODE_RETURN;
 
@@ -1246,8 +1249,8 @@ assign_node_t *
 pars_assignment_statement(sym_node_t *var, /*!< in: variable to assign */
                           que_node_t *val) /*!< in: value to assign */
 {
-  auto node = reinterpret_cast<assign_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(assign_node_t)));
+  auto node = reinterpret_cast<assign_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(assign_node_t)));
 
   node->common.type = QUE_NODE_ASSIGNMENT;
 
@@ -1293,8 +1296,8 @@ fetch_node_t *pars_fetch_statement(
   /* Logical XOR. */
   ut_a(!into_list != !user_func);
 
-  auto node = reinterpret_cast<fetch_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(fetch_node_t)));
+  auto node = reinterpret_cast<fetch_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(fetch_node_t)));
 
   node->common.type = QUE_NODE_FETCH;
 
@@ -1331,8 +1334,8 @@ fetch_node_t *pars_fetch_statement(
 open_node_t *pars_open_statement(ulint type, sym_node_t *cursor) {
   sym_node_t *cursor_decl;
 
-  auto node = reinterpret_cast<open_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(open_node_t)));
+  auto node = reinterpret_cast<open_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(open_node_t)));
 
   node->common.type = QUE_NODE_OPEN;
 
@@ -1348,9 +1351,9 @@ open_node_t *pars_open_statement(ulint type, sym_node_t *cursor) {
   return node;
 }
 
-row_printf_node_t * pars_row_printf_statement(sel_node_t *sel_node) {
-  auto node = reinterpret_cast<row_printf_node_t*>(
-    mem_heap_alloc(pars_sym_tab_global->heap, sizeof(row_printf_node_t)));
+row_printf_node_t *pars_row_printf_statement(sel_node_t *sel_node) {
+  auto node = reinterpret_cast<row_printf_node_t *>(
+      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(row_printf_node_t)));
 
   node->common.type = QUE_NODE_ROW_PRINTF;
 
@@ -1369,7 +1372,9 @@ roll_node_t *pars_rollback_statement(void) {
   return roll_node_create(pars_sym_tab_global->heap);
 }
 
-sym_node_t *pars_column_def(sym_node_t *sym_node, pars_res_word_t *type, sym_node_t *len, void *is_unsigned, void *is_not_null) {
+sym_node_t *pars_column_def(sym_node_t *sym_node, pars_res_word_t *type,
+                            sym_node_t *len, void *is_unsigned,
+                            void *is_not_null) {
   ulint len2;
 
   if (len) {
@@ -1418,7 +1423,7 @@ from disk */
 
 #ifdef UNIV_DEBUG
   if (not_fit_in_memory != nullptr) {
-    table->does_not_fit_in_memory = TRUE;
+    table->does_not_fit_in_memory = true;
   }
 #endif /* UNIV_DEBUG */
   column = column_defs;
@@ -1428,15 +1433,15 @@ from disk */
 
     dict_mem_table_add_col(table, table->heap, column->name, dtype->mtype,
                            dtype->prtype, dtype->len);
-    column->resolved = TRUE;
+    column->resolved = true;
     column->token_type = SYM_COLUMN;
 
-    column = static_cast<sym_node_t*>(que_node_get_next(column));
+    column = static_cast<sym_node_t *>(que_node_get_next(column));
   }
 
-  node = tab_create_graph_create(table, pars_sym_tab_global->heap, TRUE);
+  node = tab_create_graph_create(table, pars_sym_tab_global->heap, true);
 
-  table_sym->resolved = TRUE;
+  table_sym->resolved = true;
   table_sym->token_type = SYM_TABLE;
 
   return (node);
@@ -1479,24 +1484,26 @@ ind_node_t *pars_create_index(
   while (column) {
     dict_mem_index_add_field(index, column->name, 0);
 
-    column->resolved = TRUE;
+    column->resolved = true;
     column->token_type = SYM_COLUMN;
 
-    column = static_cast<sym_node_t*>(que_node_get_next(column));
+    column = static_cast<sym_node_t *>(que_node_get_next(column));
   }
 
-  node = ind_create_graph_create(index, pars_sym_tab_global->heap, TRUE);
+  node = ind_create_graph_create(index, pars_sym_tab_global->heap, true);
 
-  table_sym->resolved = TRUE;
+  table_sym->resolved = true;
   table_sym->token_type = SYM_TABLE;
 
-  index_sym->resolved = TRUE;
+  index_sym->resolved = true;
   index_sym->token_type = SYM_TABLE;
 
   return (node);
 }
 
-que_fork_t *pars_procedure_definition(sym_node_t *sym_node, sym_node_t *param_list, que_node_t *stat_list) {
+que_fork_t *pars_procedure_definition(sym_node_t *sym_node,
+                                      sym_node_t *param_list,
+                                      que_node_t *stat_list) {
   auto heap = pars_sym_tab_global->heap;
   auto fork = que_fork_create(nullptr, nullptr, QUE_FORK_PROCEDURE, heap);
 
@@ -1504,13 +1511,14 @@ que_fork_t *pars_procedure_definition(sym_node_t *sym_node, sym_node_t *param_li
 
   auto thr = que_thr_create(fork, heap);
 
-  auto node = reinterpret_cast<proc_node_t*>(mem_heap_alloc(heap, sizeof(proc_node_t)));
+  auto node = reinterpret_cast<proc_node_t *>(
+      mem_heap_alloc(heap, sizeof(proc_node_t)));
 
   node->common.type = QUE_NODE_PROC;
   node->common.parent = thr;
 
   sym_node->token_type = SYM_PROCEDURE_NAME;
-  sym_node->resolved = TRUE;
+  sym_node->resolved = true;
 
   node->proc_id = sym_node;
   node->param_list = param_list;
@@ -1542,7 +1550,8 @@ que_fork_t *pars_stored_procedure_call(sym_node_t *sym_node
 }
 
 int pars_get_lex_chars(char *buf, int max_size) {
-  auto len = pars_sym_tab_global->string_len - pars_sym_tab_global->next_char_pos;
+  auto len =
+      pars_sym_tab_global->string_len - pars_sym_tab_global->next_char_pos;
 
   if (len == 0) {
     return 0;
@@ -1552,7 +1561,9 @@ int pars_get_lex_chars(char *buf, int max_size) {
     len = max_size;
   }
 
-  memcpy(buf, pars_sym_tab_global->sql_string + pars_sym_tab_global->next_char_pos, len);
+  memcpy(buf,
+         pars_sym_tab_global->sql_string + pars_sym_tab_global->next_char_pos,
+         len);
 
   pars_sym_tab_global->next_char_pos += len;
 
@@ -1588,7 +1599,7 @@ que_t *pars_sql(pars_info_t *info, /*!< in: extra information, or nullptr */
 
   pars_sym_tab_global->string_len = strlen(str);
 
-  pars_sym_tab_global->sql_string = static_cast<char*>(
+  pars_sym_tab_global->sql_string = static_cast<char *>(
       mem_heap_dup(heap, str, pars_sym_tab_global->string_len + 1));
 
   pars_sym_tab_global->next_char_pos = 0;
@@ -1612,7 +1623,8 @@ que_t *pars_sql(pars_info_t *info, /*!< in: extra information, or nullptr */
   return (graph);
 }
 
-que_thr_t *pars_complete_graph_for_exec( que_node_t *node, trx_t *trx, mem_heap_t *heap) {
+que_thr_t *pars_complete_graph_for_exec(que_node_t *node, trx_t *trx,
+                                        mem_heap_t *heap) {
   auto fork = que_fork_create(nullptr, nullptr, QUE_FORK_USER_INTERFACE, heap);
 
   fork->trx = trx;
@@ -1630,26 +1642,27 @@ que_thr_t *pars_complete_graph_for_exec( que_node_t *node, trx_t *trx, mem_heap_
 
 pars_info_t *pars_info_create() {
   auto heap = mem_heap_create(512);
-  auto info = reinterpret_cast<pars_info_t*>(mem_heap_alloc(heap, sizeof(pars_info_t)));
+  auto info = reinterpret_cast<pars_info_t *>(
+      mem_heap_alloc(heap, sizeof(pars_info_t)));
 
   info->heap = heap;
   info->funcs = nullptr;
   info->bound_lits = nullptr;
   info->bound_ids = nullptr;
-  info->graph_owns_us = TRUE;
+  info->graph_owns_us = true;
 
   return info;
 }
 
-void pars_info_free(pars_info_t *info) {
-  mem_heap_free(info->heap);
-}
+void pars_info_free(pars_info_t *info) { mem_heap_free(info->heap); }
 
-void pars_info_add_literal(pars_info_t *info, const char *name, const void *address, ulint length, ulint type, ulint prtype) {
+void pars_info_add_literal(pars_info_t *info, const char *name,
+                           const void *address, ulint length, ulint type,
+                           ulint prtype) {
   ut_ad(!pars_info_get_bound_lit(info, name));
 
-  auto pbl = reinterpret_cast<pars_bound_lit_t*>(
-    mem_heap_alloc(info->heap, sizeof(pars_bound_lit_t)));
+  auto pbl = reinterpret_cast<pars_bound_lit_t *>(
+      mem_heap_alloc(info->heap, sizeof(pars_bound_lit_t)));
 
   pbl->name = name;
   pbl->address = address;
@@ -1664,8 +1677,10 @@ void pars_info_add_literal(pars_info_t *info, const char *name, const void *addr
   ib_vector_push(info->bound_lits, pbl);
 }
 
-void pars_info_add_str_literal(pars_info_t *info, const char *name, const char *str) {
-  pars_info_add_literal(info, name, str, strlen(str), DATA_VARCHAR, DATA_ENGLISH);
+void pars_info_add_str_literal(pars_info_t *info, const char *name,
+                               const char *str) {
+  pars_info_add_literal(info, name, str, strlen(str), DATA_VARCHAR,
+                        DATA_ENGLISH);
 }
 
 void pars_info_add_int4_literal(pars_info_t *info, const char *name, lint val) {
@@ -1675,14 +1690,16 @@ void pars_info_add_int4_literal(pars_info_t *info, const char *name, lint val) {
   pars_info_add_literal(info, name, buf, 4, DATA_INT, 0);
 }
 
-void pars_info_add_int8_literal(pars_info_t *info, const char *name, uint64_t val) {
+void pars_info_add_int8_literal(pars_info_t *info, const char *name,
+                                uint64_t val) {
   auto buf = mem_heap_alloc(info->heap, sizeof(val));
 
   mach_write_ull(buf, val);
   pars_info_add_literal(info, name, buf, sizeof(val), DATA_INT, 0);
 }
 
-void pars_info_add_dulint_literal(pars_info_t *info, const char *name, dulint val) {
+void pars_info_add_dulint_literal(pars_info_t *info, const char *name,
+                                  dulint val) {
   auto buf = mem_heap_alloc(info->heap, 8);
 
   mach_write_to_8(buf, val);
@@ -1690,11 +1707,12 @@ void pars_info_add_dulint_literal(pars_info_t *info, const char *name, dulint va
   pars_info_add_literal(info, name, buf, 8, DATA_FIXBINARY, 0);
 }
 
-void pars_info_add_function(pars_info_t *info, const char *name, pars_user_func_cb_t func, void *arg) {
+void pars_info_add_function(pars_info_t *info, const char *name,
+                            pars_user_func_cb_t func, void *arg) {
   ut_ad(!pars_info_get_user_func(info, name));
 
-  auto puf = reinterpret_cast<pars_user_func_t*>(
-    mem_heap_alloc(info->heap, sizeof(pars_user_func_t)));
+  auto puf = reinterpret_cast<pars_user_func_t *>(
+      mem_heap_alloc(info->heap, sizeof(pars_user_func_t)));
 
   puf->name = name;
   puf->func = func;
@@ -1710,8 +1728,8 @@ void pars_info_add_function(pars_info_t *info, const char *name, pars_user_func_
 void pars_info_add_id(pars_info_t *info, const char *name, const char *id) {
   ut_ad(!pars_info_get_bound_id(info, name));
 
-  auto bid = reinterpret_cast<pars_bound_id_t*>(
-    mem_heap_alloc(info->heap, sizeof(pars_bound_id_t)));
+  auto bid = reinterpret_cast<pars_bound_id_t *>(
+      mem_heap_alloc(info->heap, sizeof(pars_bound_id_t)));
 
   bid->name = name;
   bid->id = id;
@@ -1731,7 +1749,7 @@ pars_user_func_t *pars_info_get_user_func(pars_info_t *info, const char *name) {
   auto vec = info->funcs;
 
   for (ulint i = 0; i < ib_vector_size(vec); i++) {
-    auto puf = static_cast<pars_user_func_t*>(ib_vector_get(vec, i));
+    auto puf = static_cast<pars_user_func_t *>(ib_vector_get(vec, i));
 
     if (strcmp(puf->name, name) == 0) {
       return puf;
@@ -1749,7 +1767,7 @@ pars_bound_lit_t *pars_info_get_bound_lit(pars_info_t *info, const char *name) {
   auto vec = info->bound_lits;
 
   for (ulint i = 0; i < ib_vector_size(vec); i++) {
-    auto pbl = static_cast<pars_bound_lit_t*>(ib_vector_get(vec, i));
+    auto pbl = static_cast<pars_bound_lit_t *>(ib_vector_get(vec, i));
 
     if (strcmp(pbl->name, name) == 0) {
       return pbl;
@@ -1767,7 +1785,7 @@ pars_bound_id_t *pars_info_get_bound_id(pars_info_t *info, const char *name) {
   auto vec = info->bound_ids;
 
   for (ulint i = 0; i < ib_vector_size(vec); i++) {
-    auto bid = static_cast<pars_bound_id_t*>(ib_vector_get(vec, i));
+    auto bid = static_cast<pars_bound_id_t *>(ib_vector_get(vec, i));
 
     if (strcmp(bid->name, name) == 0) {
       return bid;

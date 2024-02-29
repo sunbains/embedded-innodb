@@ -402,9 +402,9 @@ void flst_truncate_end(
 }
 
 /** Validates a file-based list.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool flst_validate(
+bool flst_validate(
     const flst_base_node_t *base, /*!< in: pointer to base node of list */
     mtr_t *mtr1)                  /*!< in: mtr */
 {
@@ -460,7 +460,7 @@ ibool flst_validate(
 
   ut_a(fil_addr_is_null(node_addr));
 
-  return (TRUE);
+  return (true);
 }
 
 /** Prints info of a file-based list. */

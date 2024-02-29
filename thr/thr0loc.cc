@@ -60,8 +60,8 @@ struct thr_local_struct {
   os_thread_t handle; /*!< operating system handle to the thread */
   ulint slot_no;      /*!< the index of the slot in the thread table
                       for this thread */
-  ibool in_ibuf;      /*!< TRUE if the thread is doing an ibuf
-                      operation */
+  bool in_ibuf;       /*!< true if the thread is doing an ibuf
+                       operation */
   hash_node_t hash;   /*!< hash chain node */
   ulint magic_n;      /*!< magic number (THR_LOCAL_MAGIC_N) */
 };
@@ -84,7 +84,8 @@ try_again:
 
   local = nullptr;
 
-  HASH_SEARCH(hash, thr_local_hash, os_thread_pf(id), thr_local_t *, local, , os_thread_eq(local->id, id));
+  HASH_SEARCH(hash, thr_local_hash, os_thread_pf(id), thr_local_t *, local, ,
+              os_thread_eq(local->id, id));
 
   if (local == nullptr) {
     mutex_exit(&thr_local_mutex);
@@ -118,7 +119,7 @@ ulint thr_local_get_slot_no(
   return (slot_no);
 }
 
-void thr_local_set_slot_no( os_thread_id_t id, ulint slot_no) {
+void thr_local_set_slot_no(os_thread_id_t id, ulint slot_no) {
   thr_local_t *local;
 
   mutex_enter(&thr_local_mutex);
@@ -130,7 +131,7 @@ void thr_local_set_slot_no( os_thread_id_t id, ulint slot_no) {
   mutex_exit(&thr_local_mutex);
 }
 
-ibool *thr_local_get_in_ibuf_field(void) {
+bool *thr_local_get_in_ibuf_field(void) {
   thr_local_t *local;
 
   mutex_enter(&thr_local_mutex);
@@ -149,13 +150,13 @@ void thr_local_create(void) {
     thr_local_init();
   }
 
-  local = static_cast<thr_local_t*>(mem_alloc(sizeof(thr_local_t)));
+  local = static_cast<thr_local_t *>(mem_alloc(sizeof(thr_local_t)));
 
   local->id = os_thread_get_curr_id();
   local->handle = os_thread_get_curr();
   local->magic_n = THR_LOCAL_MAGIC_N;
 
-  local->in_ibuf = FALSE;
+  local->in_ibuf = false;
 
   mutex_enter(&thr_local_mutex);
 
@@ -204,12 +205,12 @@ void thr_local_close() {
   /* Free the hash elements. We don't remove them from the table
   because we are going to destroy the table anyway. */
   for (i = 0; i < hash_get_n_cells(thr_local_hash); i++) {
-    auto local = static_cast<thr_local_t*>(HASH_GET_FIRST(thr_local_hash, i));
+    auto local = static_cast<thr_local_t *>(HASH_GET_FIRST(thr_local_hash, i));
 
     while (local != nullptr) {
       thr_local_t *prev_local = local;
 
-      local = static_cast<thr_local_t*>(HASH_GET_NEXT(hash, prev_local));
+      local = static_cast<thr_local_t *>(HASH_GET_NEXT(hash, prev_local));
       ut_a(prev_local->magic_n == THR_LOCAL_MAGIC_N);
       mem_free(prev_local);
     }

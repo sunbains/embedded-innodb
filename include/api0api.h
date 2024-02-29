@@ -18,8 +18,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ************************************************************************/
 #pragma once
 
-#include "db0err.h"
-
 #include "innodb.h"
 
 #include <stdarg.h>
@@ -32,29 +30,26 @@ below, outside of API_BEGIN_INCLUDE/API_END_INCLUDE.
 /** Execute arbitrary SQL using InnoDB's internal parser. The statement
 is executed in a new transaction. Table name parameters must be prefixed
 with a '$' symbol and variables with ':'
+@param[in] sql                  SQL to execute
+@param[in] args                 Arguments for the SQL.
 @return	DB_SUCCESS or error code */
-ib_err_t ib_exec_sql(
-    const char *sql,   /*!< in: sql to execute */
-    ib_ulint_t n_args, /*!< in: no. of args */
-    ...);
+ib_err_t ib_exec_sql(const char *sql, ib_ulint_t n_args, ...);
 
 /** Execute arbitrary SQL using InnoDB's internal parser. The statement
 is executed in a background transaction. It will lock the data
 dictionary lock for the duration of the query.
+@param[in] sql                  SQL to execute
+@param[in] args                 Arguments to SQL
 @return	DB_SUCCESS or error code */
-ib_err_t ib_exec_ddl_sql(
-    /*============*/
-    const char *sql,   /*!< in: sql to execute */
-    ib_ulint_t n_args, /*!< in: no. of args */
-    ...);
+ib_err_t ib_exec_ddl_sql(const char *sql, ib_ulint_t n_args, ...);
 
 /** Initialize the config system.
 @return	DB_SUCCESS or error code */
-ib_err_t ib_cfg_init(void);
+ib_err_t ib_cfg_init();
 
 /** Shutdown the config system.
 @return	DB_SUCCESS or error code */
-ib_err_t ib_cfg_shutdown(void);
+ib_err_t ib_cfg_shutdown();
 
 extern int srv_panic_status;
 

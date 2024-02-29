@@ -76,8 +76,8 @@ static ulint buf_lru_flush_page_count = 0;
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 /** Validates the flush list.
-@return	TRUE if ok */
-static ibool buf_flush_validate_low(void);
+@return	true if ok */
+static bool buf_flush_validate_low(void);
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 
 /** Insert a block in the flush_rbt and returns a pointer to its
@@ -114,7 +114,7 @@ static void buf_flush_delete_from_flush_rbt(
 {
 
 #ifdef UNIV_DEBUG
-  ibool ret = FALSE;
+  bool ret = false;
 #endif /* UNIV_DEBUG */
 
   ut_ad(buf_pool_mutex_own());
@@ -207,7 +207,7 @@ void buf_flush_insert_into_flush_list(
 
   /* If we are in the recovery then we need to update the flush
   red-black tree as well. */
-  if (UNIV_LIKELY_NULL(buf_pool->flush_rbt)) {
+  if (likely_null(buf_pool->flush_rbt)) {
     buf_flush_insert_sorted_into_flush_list(block);
     return;
   }
@@ -217,7 +217,7 @@ void buf_flush_insert_into_flush_list(
   ut_ad(block->page.in_page_hash);
   ut_ad(!block->page.in_zip_hash);
   ut_ad(!block->page.in_flush_list);
-  ut_d(block->page.in_flush_list = TRUE);
+  ut_d(block->page.in_flush_list = true);
   UT_LIST_ADD_FIRST(list, buf_pool->flush_list, &block->page);
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
@@ -242,7 +242,7 @@ void buf_flush_insert_sorted_into_flush_list(
   ut_ad(block->page.in_page_hash);
   ut_ad(!block->page.in_zip_hash);
   ut_ad(!block->page.in_flush_list);
-  ut_d(block->page.in_flush_list = TRUE);
+  ut_d(block->page.in_flush_list = true);
 
   prev_b = NULL;
 
@@ -278,11 +278,11 @@ void buf_flush_insert_sorted_into_flush_list(
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 }
 
-/** Returns TRUE if the file page block is immediately suitable for replacement,
+/** Returns true if the file page block is immediately suitable for replacement,
 i.e., the transition FILE_PAGE => NOT_USED allowed.
-@return	TRUE if can replace immediately */
+@return	true if can replace immediately */
 
-ibool buf_flush_ready_for_replace(
+bool buf_flush_ready_for_replace(
     buf_page_t *bpage) /*!< in: buffer control block, must be
                        buf_page_in_file(bpage) and in the LRU list */
 {
@@ -290,7 +290,7 @@ ibool buf_flush_ready_for_replace(
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
   ut_ad(bpage->in_LRU_list);
 
-  if (UNIV_LIKELY(buf_page_in_file(bpage))) {
+  if (likely(buf_page_in_file(bpage))) {
 
     return (bpage->oldest_modification == 0 &&
             buf_page_get_io_fix(bpage) == BUF_IO_NONE &&
@@ -305,13 +305,12 @@ ibool buf_flush_ready_for_replace(
   ut_print_buf(ib_stream, bpage, sizeof(buf_page_t));
   ib_logger(ib_stream, "\n");
 
-  return (FALSE);
+  return (false);
 }
 
-/** Returns TRUE if the block is modified and ready for flushing.
-@return	TRUE if can flush immediately */
-UNIV_INLINE
-ibool buf_flush_ready_for_flush(
+/** Returns true if the block is modified and ready for flushing.
+@return	true if can flush immediately */
+inline bool buf_flush_ready_for_flush(
     buf_page_t *bpage,         /*!< in: buffer control block, must be
                                buf_page_in_file(bpage) */
     enum buf_flush flush_type) /*!< in: BUF_FLUSH_LRU or BUF_FLUSH_LIST */
@@ -327,7 +326,7 @@ ibool buf_flush_ready_for_flush(
 
     if (flush_type != BUF_FLUSH_LRU) {
 
-      return (TRUE);
+      return (true);
 
     } else if (bpage->buf_fix_count == 0) {
 
@@ -335,11 +334,11 @@ ibool buf_flush_ready_for_flush(
       we require the block not to be bufferfixed, and hence
       not latched. */
 
-      return (TRUE);
+      return (true);
     }
   }
 
-  return (FALSE);
+  return (false);
 }
 
 /** Remove a block from the flush list of modified blocks. */
@@ -372,13 +371,13 @@ void buf_flush_remove(
   }
 
   /* If the flush_rbt is active then delete from it as well. */
-  if (UNIV_LIKELY_NULL(buf_pool->flush_rbt)) {
+  if (likely_null(buf_pool->flush_rbt)) {
     buf_flush_delete_from_flush_rbt(bpage);
   }
 
   /* Must be done after we have removed it from the flush_rbt
   because we assert on in_flush_list in comparison function. */
-  ut_d(bpage->in_flush_list = FALSE);
+  ut_d(bpage->in_flush_list = false);
 
   bpage->oldest_modification = 0;
 
@@ -406,14 +405,14 @@ void buf_flush_relocate_on_flush_list(
 
   /* If recovery is active we must swap the control blocks in
   the flush_rbt as well. */
-  if (UNIV_LIKELY_NULL(buf_pool->flush_rbt)) {
+  if (likely_null(buf_pool->flush_rbt)) {
     buf_flush_delete_from_flush_rbt(bpage);
     prev_b = buf_flush_insert_in_flush_rbt(dpage);
   }
 
   /* Must be done after we have removed it from the flush_rbt
   because we assert on in_flush_list in comparison function. */
-  ut_d(bpage->in_flush_list = FALSE);
+  ut_d(bpage->in_flush_list = false);
 
   prev = UT_LIST_GET_PREV(list, bpage);
   UT_LIST_REMOVE(list, buf_pool->flush_list, bpage);
@@ -461,7 +460,7 @@ void buf_flush_write_complete(
   buf_pool->n_flush[flush_type]); */
 
   if ((buf_pool->n_flush[flush_type] == 0) &&
-      (buf_pool->init_flush[flush_type] == FALSE)) {
+      (buf_pool->init_flush[flush_type] == false)) {
 
     /* The running flush batch has ended */
 
@@ -528,10 +527,10 @@ static void buf_flush_buffered_writes(void) {
       continue;
     }
 
-    if (UNIV_UNLIKELY(memcmp(
-            block->frame + (FIL_PAGE_LSN + 4),
-            block->frame + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
-            4))) {
+    if (unlikely(memcmp(block->frame + (FIL_PAGE_LSN + 4),
+                        block->frame +
+                            (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
+                        4))) {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  InnoDB: ERROR: The page to be written"
                            " seems corrupt!\n"
@@ -543,7 +542,7 @@ static void buf_flush_buffered_writes(void) {
 
     if (!block->check_index_page_at_flush) {
     } else if (page_is_comp(block->frame)) {
-      if (UNIV_UNLIKELY(!page_simple_validate_new(block->frame))) {
+      if (unlikely(!page_simple_validate_new(block->frame))) {
       corrupted_page:
         buf_page_print(block->frame, 0);
 
@@ -561,7 +560,7 @@ static void buf_flush_buffered_writes(void) {
 
         ut_error;
       }
-    } else if (UNIV_UNLIKELY(!page_simple_validate_old(block->frame))) {
+    } else if (unlikely(!page_simple_validate_old(block->frame))) {
 
       goto corrupted_page;
     }
@@ -577,19 +576,18 @@ static void buf_flush_buffered_writes(void) {
   write_buf = trx_doublewrite->write_buf;
   i = 0;
 
-  fil_io(OS_FILE_WRITE, TRUE, TRX_SYS_SPACE, 0, trx_doublewrite->block1, 0, len,
+  fil_io(OS_FILE_WRITE, true, TRX_SYS_SPACE, 0, trx_doublewrite->block1, 0, len,
          (void *)write_buf, NULL);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
     const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
 
-    if (UNIV_LIKELY(!block->page.zip.data) &&
-        UNIV_LIKELY(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE) &&
-        UNIV_UNLIKELY(
-            memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4),
-                   write_buf + len2 +
-                       (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
-                   4))) {
+    if (likely(!block->page.zip.data) &&
+        likely(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE) &&
+        unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4),
+                        write_buf + len2 +
+                            (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
+                        4))) {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  InnoDB: ERROR: The page to be written"
                            " seems corrupt!\n"
@@ -609,19 +607,18 @@ static void buf_flush_buffered_writes(void) {
               TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE;
   ut_ad(i == TRX_SYS_DOUBLEWRITE_BLOCK_SIZE);
 
-  fil_io(OS_FILE_WRITE, TRUE, TRX_SYS_SPACE, 0, trx_doublewrite->block2, 0, len,
+  fil_io(OS_FILE_WRITE, true, TRX_SYS_SPACE, 0, trx_doublewrite->block2, 0, len,
          (void *)write_buf, NULL);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
     const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
 
-    if (UNIV_LIKELY(!block->page.zip.data) &&
-        UNIV_LIKELY(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE) &&
-        UNIV_UNLIKELY(
-            memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4),
-                   write_buf + len2 +
-                       (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
-                   4))) {
+    if (likely(!block->page.zip.data) &&
+        likely(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE) &&
+        unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4),
+                        write_buf + len2 +
+                            (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
+                        4))) {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  InnoDB: ERROR: The page to be"
                            " written seems corrupt!\n"
@@ -644,8 +641,8 @@ flush:
     const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
 
     ut_a(buf_page_in_file(&block->page));
-    if (UNIV_LIKELY_NULL(block->page.zip.data)) {
-      fil_io(OS_FILE_WRITE | OS_AIO_SIMULATED_WAKE_LATER, FALSE,
+    if (likely_null(block->page.zip.data)) {
+      fil_io(OS_FILE_WRITE | OS_AIO_SIMULATED_WAKE_LATER, false,
              buf_page_get_space(&block->page),
              buf_page_get_zip_size(&block->page),
              buf_page_get_page_no(&block->page), 0,
@@ -661,10 +658,10 @@ flush:
 
     ut_a(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
 
-    if (UNIV_UNLIKELY(memcmp(
-            block->frame + (FIL_PAGE_LSN + 4),
-            block->frame + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
-            4))) {
+    if (unlikely(memcmp(block->frame + (FIL_PAGE_LSN + 4),
+                        block->frame +
+                            (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
+                        4))) {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream,
                 "  InnoDB: ERROR: The page to be written"
@@ -680,7 +677,7 @@ flush:
                 (ulong)buf_block_get_state(block));
     }
 
-    fil_io(OS_FILE_WRITE | OS_AIO_SIMULATED_WAKE_LATER, FALSE,
+    fil_io(OS_FILE_WRITE | OS_AIO_SIMULATED_WAKE_LATER, false,
            buf_block_get_space(block), 0, buf_block_get_page_no(block), 0,
            UNIV_PAGE_SIZE, (void *)block->frame, (void *)block);
 
@@ -720,7 +717,7 @@ try_again:
 
   zip_size = buf_page_get_zip_size(bpage);
 
-  if (UNIV_UNLIKELY(zip_size)) {
+  if (unlikely(zip_size)) {
     /* Copy the compressed page and clear the rest. */
     memcpy(trx_doublewrite->write_buf +
                UNIV_PAGE_SIZE * trx_doublewrite->first_free,
@@ -755,21 +752,21 @@ try_again:
 /** Initializes a page for writing to the tablespace. */
 
 void buf_flush_init_for_writing(
-    byte *page,             /*!< in/out: page */
-    void *page_zip_,        /*!< in/out: compressed page, or NULL */
+    byte *page,          /*!< in/out: page */
+    void *page_zip_,     /*!< in/out: compressed page, or NULL */
     uint64_t newest_lsn) /*!< in: newest modification lsn
                             to the page */
 {
   ut_ad(page);
 
   if (page_zip_) {
-    auto page_zip = (page_zip_des_t*) page_zip_;
+    auto page_zip = (page_zip_des_t *)page_zip_;
     ulint zip_size = page_zip_get_size(page_zip);
     ut_ad(zip_size);
     ut_ad(ut_is_2pow(zip_size));
     ut_ad(zip_size <= UNIV_PAGE_SIZE);
 
-    switch (UNIV_EXPECT(fil_page_get_type(page), FIL_PAGE_INDEX)) {
+    switch (expect(fil_page_get_type(page), FIL_PAGE_INDEX)) {
     case FIL_PAGE_TYPE_ALLOCATED:
     case FIL_PAGE_INODE:
     case FIL_PAGE_IBUF_BITMAP:
@@ -832,7 +829,7 @@ buf_flush_write_block_low(buf_page_t *bpage) /*!< in: buffer block to write */
   ulint zip_size = buf_page_get_zip_size(bpage);
   page_t *frame = NULL;
 #ifdef UNIV_LOG_DEBUG
-  static ibool univ_log_debug_warned;
+  static bool univ_log_debug_warned;
 #endif /* UNIV_LOG_DEBUG */
 
   ut_ad(buf_page_in_file(bpage));
@@ -854,14 +851,14 @@ buf_flush_write_block_low(buf_page_t *bpage) /*!< in: buffer block to write */
 
 #ifdef UNIV_LOG_DEBUG
   if (!univ_log_debug_warned) {
-    univ_log_debug_warned = TRUE;
+    univ_log_debug_warned = true;
     ib_logger(ib_stream, "Warning: cannot force log to disk if"
                          " UNIV_LOG_DEBUG is defined!\n"
                          "Crash recovery will not work!\n");
   }
 #else
   /* Force the log to the disk before writing the modified block */
-  log_write_up_to(bpage->newest_modification, LOG_WAIT_ALL_GROUPS, TRUE);
+  log_write_up_to(bpage->newest_modification, LOG_WAIT_ALL_GROUPS, true);
 #endif
   switch (buf_page_get_state(bpage)) {
   case BUF_BLOCK_ZIP_FREE:
@@ -874,7 +871,7 @@ buf_flush_write_block_low(buf_page_t *bpage) /*!< in: buffer block to write */
     break;
   case BUF_BLOCK_ZIP_DIRTY:
     frame = bpage->zip.data;
-    if (UNIV_LIKELY(srv_use_checksums)) {
+    if (likely(srv_use_checksums)) {
       ut_a(mach_read_from_4(frame + FIL_PAGE_SPACE_OR_CHKSUM) ==
            page_zip_calc_checksum(frame, zip_size));
     }
@@ -894,7 +891,7 @@ buf_flush_write_block_low(buf_page_t *bpage) /*!< in: buffer block to write */
   }
 
   if (!srv_use_doublewrite_buf || !trx_doublewrite) {
-    fil_io(OS_FILE_WRITE | OS_AIO_SIMULATED_WAKE_LATER, FALSE,
+    fil_io(OS_FILE_WRITE | OS_AIO_SIMULATED_WAKE_LATER, false,
            buf_page_get_space(bpage), zip_size, buf_page_get_page_no(bpage), 0,
            zip_size ? zip_size : UNIV_PAGE_SIZE, frame, bpage);
   } else {
@@ -913,7 +910,7 @@ static void buf_flush_page(buf_page_t *bpage, /*!< in: buffer control block */
                                                       or BUF_FLUSH_LIST */
 {
   mutex_t *block_mutex;
-  ibool is_uncompressed;
+  bool is_uncompressed;
 
   ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
   ut_ad(buf_pool_mutex_own());
@@ -939,7 +936,7 @@ static void buf_flush_page(buf_page_t *bpage, /*!< in: buffer control block */
   ut_ad(is_uncompressed == (block_mutex != &buf_pool_zip_mutex));
 
   switch (flush_type) {
-    ibool is_s_latched;
+    bool is_s_latched;
   case BUF_FLUSH_LIST:
     /* If the simulated aio thread is not running, we must
     not wait for any latch, as we may end up in a deadlock:
@@ -1108,11 +1105,11 @@ ulint buf_flush_batch(
     ulint min_n,               /*!< in: wished minimum mumber of blocks
                                flushed (it is not guaranteed that the
                                actual number is that big, though) */
-    uint64_t lsn_limit)     /*!< in the case BUF_FLUSH_LIST all
-                               blocks whose oldest_modification is
-                               smaller than this should be flushed
-                               (if their number does not exceed
-                               min_n), otherwise ignored */
+    uint64_t lsn_limit)        /*!< in the case BUF_FLUSH_LIST all
+                                  blocks whose oldest_modification is
+                                  smaller than this should be flushed
+                                  (if their number does not exceed
+                                  min_n), otherwise ignored */
 {
   buf_page_t *bpage;
   ulint page_count = 0;
@@ -1121,12 +1118,12 @@ ulint buf_flush_batch(
 
   ut_ad((flush_type == BUF_FLUSH_LRU) || (flush_type == BUF_FLUSH_LIST));
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad((flush_type != BUF_FLUSH_LIST) || sync_thread_levels_empty_gen(TRUE));
+  ut_ad((flush_type != BUF_FLUSH_LIST) || sync_thread_levels_empty_gen(true));
 #endif /* UNIV_SYNC_DEBUG */
   buf_pool_mutex_enter();
 
   if ((buf_pool->n_flush[flush_type] > 0) ||
-      (buf_pool->init_flush[flush_type] == TRUE)) {
+      (buf_pool->init_flush[flush_type] == true)) {
 
     /* There is already a flush batch of the same type running */
 
@@ -1135,7 +1132,7 @@ ulint buf_flush_batch(
     return (ULINT_UNDEFINED);
   }
 
-  buf_pool->init_flush[flush_type] = TRUE;
+  buf_pool->init_flush[flush_type] = true;
 
   for (;;) {
   flush_next:
@@ -1170,7 +1167,7 @@ ulint buf_flush_batch(
 
     do {
       mutex_t *block_mutex = buf_page_get_mutex(bpage);
-      ibool ready;
+      bool ready;
 
       ut_a(buf_page_in_file(bpage));
 
@@ -1205,7 +1202,7 @@ ulint buf_flush_batch(
     break;
   }
 
-  buf_pool->init_flush[flush_type] = FALSE;
+  buf_pool->init_flush[flush_type] = false;
 
   if (buf_pool->n_flush[flush_type] == 0) {
 
@@ -1421,8 +1418,8 @@ ulint buf_flush_get_desired_flush_rate(void) {
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 /** Validates the flush list.
-@return	TRUE if ok */
-static ibool buf_flush_validate_low(void) {
+@return	true if ok */
+static bool buf_flush_validate_low(void) {
   buf_page_t *bpage;
   const ib_rbt_node_t *rnode = NULL;
 
@@ -1434,7 +1431,7 @@ static ibool buf_flush_validate_low(void) {
   /* If we are in recovery mode i.e.: flush_rbt != NULL
   then each block in the flush_list must also be present
   in the flush_rbt. */
-  if (UNIV_LIKELY_NULL(buf_pool->flush_rbt)) {
+  if (likely_null(buf_pool->flush_rbt)) {
     rnode = rbt_first(buf_pool->flush_rbt);
   }
 
@@ -1444,7 +1441,7 @@ static ibool buf_flush_validate_low(void) {
     ut_a(buf_page_in_file(bpage));
     ut_a(om > 0);
 
-    if (UNIV_LIKELY_NULL(buf_pool->flush_rbt)) {
+    if (likely_null(buf_pool->flush_rbt)) {
       ut_a(rnode);
       buf_page_t *rpage = *rbt_value(buf_page_t *, rnode);
       ut_a(rpage);
@@ -1461,14 +1458,14 @@ static ibool buf_flush_validate_low(void) {
   flush_rbt (if active) as well. */
   ut_a(rnode == NULL);
 
-  return (TRUE);
+  return (true);
 }
 
 /** Validates the flush list.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool buf_flush_validate(void) {
-  ibool ret;
+bool buf_flush_validate(void) {
+  bool ret;
 
   buf_pool_mutex_enter();
 

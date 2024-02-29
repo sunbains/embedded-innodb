@@ -22,14 +22,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "api0api.h"
 #include "api0ucode.h"
+#include "innodb0types.h"
 #include "srv0srv.h"
-#include "univ.i"
 
 /** InnoDB status variables types. */
 enum ib_status_type_t {
   IB_STATUS_UNDEF,
 
-  /** Boolean status variable, ibool */
+  /** Boolean status variable, bool */
   IB_STATUS_IBOOL,
 
   /** int64_t status variable */
@@ -167,7 +167,7 @@ static const ib_status_t status_vars[] = {
 ib_err_t ib_status_get_all(const char ***names, ib_u32_t *names_num) {
   ib_u32_t i;
 
-  *names_num = UT_ARR_SIZE(status_vars);
+  *names_num = std::size(status_vars);
 
   *names = (const char **)malloc(*names_num * sizeof(const char *));
   if (*names == nullptr) {
@@ -220,7 +220,7 @@ ib_err_t ib_status_get_i64(const char *name, ib_i64_t *dst) {
       break;
 
     case IB_STATUS_IBOOL:
-      *dst = *(ibool *)var->val;
+      *dst = *(bool *)var->val;
       break;
 
     case IB_STATUS_I64:

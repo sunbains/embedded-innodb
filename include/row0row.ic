@@ -27,8 +27,7 @@ Created 4/20/1996 Heikki Tuuri
 
 /** Reads the trx id field from a clustered index record.
 @return	value of the field */
-UNIV_INLINE
-trx_id_t
+inline trx_id_t
 row_get_rec_trx_id(const rec_t *rec,         /*!< in: record */
                    dict_index_t *dict_index, /*!< in: clustered index */
                    const ulint *offsets) /*!< in: rec_get_offsets(rec, index) */
@@ -49,8 +48,7 @@ row_get_rec_trx_id(const rec_t *rec,         /*!< in: record */
 
 /** Reads the roll pointer field from a clustered index record.
 @return	value of the field */
-UNIV_INLINE
-roll_ptr_t row_get_rec_roll_ptr(
+inline roll_ptr_t row_get_rec_roll_ptr(
     const rec_t *rec,         /*!< in: record */
     dict_index_t *dict_index, /*!< in: clustered index */
     const ulint *offsets)     /*!< in: rec_get_offsets(rec, index) */
@@ -71,8 +69,7 @@ roll_ptr_t row_get_rec_roll_ptr(
 
 /** Builds from a secondary index record a row reference with which we can
 search the clustered index record. */
-UNIV_INLINE
-void row_build_row_ref_fast(
+inline void row_build_row_ref_fast(
     dtuple_t *ref,        /*!< in/out: typed data tuple where the
                           reference is built */
     const ulint *map,     /*!< in: array of field numbers in rec

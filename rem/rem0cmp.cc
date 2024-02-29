@@ -74,21 +74,20 @@ static int cmp_debug_dtuple_rec_with_match(
 language. This is only used for the latin1 char set. The client does the
 comparisons for other char sets.
 @return	collation order position */
-UNIV_INLINE
-ulint cmp_collate(ulint code) /*!< in: code of a character stored in
-                              database record */
+inline ulint cmp_collate(ulint code) /*!< in: code of a character stored in
+                                     database record */
 {
   // return((ulint) srv_latin1_ordering[code]);
   /* FIXME: Default to ASCII */
   return code;
 }
 
-/** Returns TRUE if two columns are equal for comparison purposes.
-@return	TRUE if the columns are considered equal in comparisons */
+/** Returns true if two columns are equal for comparison purposes.
+@return	true if the columns are considered equal in comparisons */
 
-ibool cmp_cols_are_equal(const dict_col_t *col1, /*!< in: column 1 */
-                         const dict_col_t *col2, /*!< in: column 2 */
-                         ibool check_charsets)
+bool cmp_cols_are_equal(const dict_col_t *col1, /*!< in: column 1 */
+                        const dict_col_t *col2, /*!< in: column 2 */
+                        bool check_charsets)
 /*!< in: whether to check charsets */
 {
   if (dtype_is_non_binary_string_type(col1->mtype, col1->prtype) &&
@@ -99,9 +98,9 @@ ibool cmp_cols_are_equal(const dict_col_t *col1, /*!< in: column 1 */
 
     if (check_charsets) {
       return dtype_get_charset_coll(col1->prtype ==
-              dtype_get_charset_coll(col2->prtype));
+                                    dtype_get_charset_coll(col2->prtype));
     } else {
-      return TRUE;
+      return true;
     }
   }
 
@@ -110,12 +109,12 @@ ibool cmp_cols_are_equal(const dict_col_t *col1, /*!< in: column 1 */
 
     /* Both are binary string types: they can be compared */
 
-    return TRUE;
+    return true;
   }
 
   if (col1->mtype != col2->mtype) {
 
-    return FALSE;
+    return false;
   }
 
   if (col1->mtype == DATA_INT &&
@@ -125,7 +124,7 @@ ibool cmp_cols_are_equal(const dict_col_t *col1, /*!< in: column 1 */
     from a signed integer: in a signed integer we OR
     0x8000... to the value of positive integers. */
 
-    return FALSE;
+    return false;
   }
 
   return col1->mtype != DATA_INT || col1->len == col2->len;
@@ -287,7 +286,9 @@ static int cmp_whole_field(void *cmp_ctx,   /*!< in: client compare context */
   return 0;
 }
 
-int cmp_data_data_slow(void *cmp_ctx, ulint mtype, ulint prtype, const byte *data1, ulint len1, const byte *data2, ulint len2) {
+int cmp_data_data_slow(void *cmp_ctx, ulint mtype, ulint prtype,
+                       const byte *data1, ulint len1, const byte *data2,
+                       ulint len2) {
   ulint data1_byte;
   ulint data2_byte;
   ulint cur_bytes;
@@ -315,7 +316,8 @@ int cmp_data_data_slow(void *cmp_ctx, ulint mtype, ulint prtype, const byte *dat
            DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
 
     /* prtype is really a 16 unsigned type. */
-    return cmp_whole_field(cmp_ctx, mtype, (uint16_t) prtype, data1, (unsigned)len1, data2, (unsigned)len2);
+    return cmp_whole_field(cmp_ctx, mtype, (uint16_t)prtype, data1,
+                           (unsigned)len1, data2, (unsigned)len2);
   }
 
   /* Compare then the fields */
@@ -439,10 +441,10 @@ int cmp_dtuple_rec_with_match(
     ulint rec_info = rec_get_info_bits(rec, rec_offs_comp(offsets));
     ulint tup_info = dtuple_get_info_bits(dtuple);
 
-    if (UNIV_UNLIKELY(rec_info & REC_INFO_MIN_REC_FLAG)) {
+    if (unlikely(rec_info & REC_INFO_MIN_REC_FLAG)) {
       ret = !(tup_info & REC_INFO_MIN_REC_FLAG);
       goto order_resolved;
-    } else if (UNIV_UNLIKELY(tup_info & REC_INFO_MIN_REC_FLAG)) {
+    } else if (unlikely(tup_info & REC_INFO_MIN_REC_FLAG)) {
       ret = -1;
       goto order_resolved;
     }
@@ -473,7 +475,7 @@ int cmp_dtuple_rec_with_match(
     the predefined minimum record, or the field is externally
     stored */
 
-    if (UNIV_LIKELY(cur_bytes == 0)) {
+    if (likely(cur_bytes == 0)) {
       if (rec_offs_nth_extern(offsets, cur_field)) {
         /* We do not compare to an externally
         stored field */
@@ -507,7 +509,7 @@ int cmp_dtuple_rec_with_match(
              DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
 
       ret = cmp_whole_field(
-          cmp_ctx, mtype, prtype, (byte*)dfield_get_data(dtuple_field),
+          cmp_ctx, mtype, prtype, (byte *)dfield_get_data(dtuple_field),
           (unsigned)dtuple_f_len, rec_b_ptr, (unsigned)rec_f_len);
 
       if (ret != 0) {
@@ -526,7 +528,7 @@ int cmp_dtuple_rec_with_match(
     /* Compare then the fields */
 
     for (;;) {
-      if (UNIV_UNLIKELY(rec_f_len <= cur_bytes)) {
+      if (unlikely(rec_f_len <= cur_bytes)) {
         if (dtuple_f_len <= cur_bytes) {
 
           goto next_field;
@@ -543,7 +545,7 @@ int cmp_dtuple_rec_with_match(
         rec_byte = *rec_b_ptr;
       }
 
-      if (UNIV_UNLIKELY(dtuple_f_len <= cur_bytes)) {
+      if (unlikely(dtuple_f_len <= cur_bytes)) {
         dtuple_byte = dtype_get_pad_char(mtype, prtype);
 
         if (dtuple_byte == ULINT_UNDEFINED) {
@@ -571,7 +573,7 @@ int cmp_dtuple_rec_with_match(
       }
 
       ret = (int)(dtuple_byte - rec_byte);
-      if (UNIV_LIKELY(ret)) {
+      if (likely(ret)) {
         if (ret < 0) {
           ret = -1;
           goto order_resolved;
@@ -629,9 +631,9 @@ int cmp_dtuple_rec(
 
 /** Checks if a dtuple is a prefix of a record. The last field in dtuple
 is allowed to be a prefix of the corresponding field in the record.
-@return	TRUE if prefix */
+@return	true if prefix */
 
-ibool cmp_dtuple_is_prefix_of_rec(
+bool cmp_dtuple_is_prefix_of_rec(
     void *cmp_ctx,          /*!< in: client compare context */
     const dtuple_t *dtuple, /*!< in: data tuple */
     const rec_t *rec,       /*!< in: physical record */
@@ -646,7 +648,7 @@ ibool cmp_dtuple_is_prefix_of_rec(
 
   if (n_fields > rec_offs_n_fields(offsets)) {
 
-    return FALSE;
+    return false;
   }
 
   cmp_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets, &matched_fields,
@@ -654,16 +656,16 @@ ibool cmp_dtuple_is_prefix_of_rec(
 
   if (matched_fields == n_fields) {
 
-    return TRUE;
+    return true;
   }
 
   if (matched_fields == n_fields - 1 &&
       matched_bytes ==
           dfield_get_len(dtuple_get_nth_field(dtuple, n_fields - 1))) {
-    return TRUE;
+    return true;
   }
 
-  return FALSE;
+  return false;
 }
 
 /** Compare two physical records that contain the same number of columns,
@@ -865,7 +867,7 @@ int cmp_rec_rec_with_match(
     ulint mtype;
     uint16_t prtype;
 
-    if (UNIV_UNLIKELY(index->type & DICT_UNIVERSAL)) {
+    if (unlikely(index->type & DICT_UNIVERSAL)) {
       /* This is for the insert buffer B-tree. */
       mtype = DATA_BINARY;
       prtype = 0;
@@ -883,8 +885,7 @@ int cmp_rec_rec_with_match(
       if (cur_field == 0) {
         /* Test if rec is the predefined minimum
         record */
-        if (UNIV_UNLIKELY(rec_get_info_bits(rec1, comp) &
-                          REC_INFO_MIN_REC_FLAG)) {
+        if (unlikely(rec_get_info_bits(rec1, comp) & REC_INFO_MIN_REC_FLAG)) {
 
           if (!(rec_get_info_bits(rec2, comp) & REC_INFO_MIN_REC_FLAG)) {
             ret = -1;
@@ -892,8 +893,8 @@ int cmp_rec_rec_with_match(
 
           goto order_resolved;
 
-        } else if (UNIV_UNLIKELY(rec_get_info_bits(rec2, comp) &
-                                 REC_INFO_MIN_REC_FLAG)) {
+        } else if (unlikely(rec_get_info_bits(rec2, comp) &
+                            REC_INFO_MIN_REC_FLAG)) {
 
           ret = 1;
 
@@ -1075,15 +1076,15 @@ static int cmp_debug_dtuple_rec_with_match(
   cur_field = *matched_fields;
 
   if (cur_field == 0) {
-    if (UNIV_UNLIKELY(rec_get_info_bits(rec, rec_offs_comp(offsets)) &
-                      REC_INFO_MIN_REC_FLAG)) {
+    if (unlikely(rec_get_info_bits(rec, rec_offs_comp(offsets)) &
+                 REC_INFO_MIN_REC_FLAG)) {
 
       ret = !(dtuple_get_info_bits(dtuple) & REC_INFO_MIN_REC_FLAG);
 
       goto order_resolved;
     }
 
-    if (UNIV_UNLIKELY(dtuple_get_info_bits(dtuple) & REC_INFO_MIN_REC_FLAG)) {
+    if (unlikely(dtuple_get_info_bits(dtuple) & REC_INFO_MIN_REC_FLAG)) {
       ret = -1;
 
       goto order_resolved;
@@ -1105,7 +1106,7 @@ static int cmp_debug_dtuple_rec_with_match(
       prtype = type->prtype;
     }
 
-    dtuple_f_data = (byte*)dfield_get_data(dtuple_field);
+    dtuple_f_data = (byte *)dfield_get_data(dtuple_field);
     dtuple_f_len = dfield_get_len(dtuple_field);
 
     rec_f_data = rec_get_nth_field(rec, offsets, cur_field, &rec_f_len);

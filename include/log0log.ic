@@ -27,15 +27,13 @@ Created 12/9/1995 Heikki Tuuri
 #include "srv0srv.h"
 
 /** Acquire the log mutex. */
-UNIV_INLINE
-void log_acquire(void) {
+inline void log_acquire(void) {
   ut_ad(!mutex_own(&log_sys->mutex));
   mutex_enter(&log_sys->mutex);
 }
 
 /** Releases the log mutex. */
-UNIV_INLINE
-void log_release(void) {
+inline void log_release(void) {
   ut_ad(mutex_own(&log_sys->mutex));
   mutex_exit(&log_sys->mutex);
 }
@@ -44,32 +42,29 @@ void log_release(void) {
 /** Checks by parsing that the catenated log segment for a single mtr is
 consistent. */
 
-ibool log_check_log_recs(
-    const byte *buf,            /*!< in: pointer to the start of
-                                the log segment in the
-                                log_sys->buf log buffer */
-    ulint len,                  /*!< in: segment length in bytes */
-    uint64_t buf_start_lsn); /*!< in: buffer start lsn */
-#endif                          /* UNIV_LOG_DEBUG */
+bool log_check_log_recs(const byte *buf, /*!< in: pointer to the start of
+                                         the log segment in the
+                                         log_sys->buf log buffer */
+                        ulint len,       /*!< in: segment length in bytes */
+                        uint64_t buf_start_lsn); /*!< in: buffer start lsn */
+#endif                                           /* UNIV_LOG_DEBUG */
 
 /** Gets a log block flush bit.
-@return	TRUE if this block was the first to be written in a log flush */
-UNIV_INLINE
-ibool log_block_get_flush_bit(const byte *log_block) /*!< in: log block */
+@return	true if this block was the first to be written in a log flush */
+inline bool log_block_get_flush_bit(const byte *log_block) /*!< in: log block */
 {
   if (LOG_BLOCK_FLUSH_BIT_MASK &
       mach_read_from_4(log_block + LOG_BLOCK_HDR_NO)) {
 
-    return (TRUE);
+    return (true);
   }
 
-  return (FALSE);
+  return (false);
 }
 
 /** Sets the log block flush bit. */
-UNIV_INLINE
-void log_block_set_flush_bit(byte *log_block, /*!< in/out: log block */
-                             ibool val)       /*!< in: value to set */
+inline void log_block_set_flush_bit(byte *log_block, /*!< in/out: log block */
+                                    bool val)        /*!< in: value to set */
 {
   ulint field;
 
@@ -86,8 +81,7 @@ void log_block_set_flush_bit(byte *log_block, /*!< in/out: log block */
 
 /** Gets a log block number stored in the header.
 @return	log block number stored in the block header */
-UNIV_INLINE
-ulint log_block_get_hdr_no(const byte *log_block) /*!< in: log block */
+inline ulint log_block_get_hdr_no(const byte *log_block) /*!< in: log block */
 {
   return (~LOG_BLOCK_FLUSH_BIT_MASK &
           mach_read_from_4(log_block + LOG_BLOCK_HDR_NO));
@@ -95,10 +89,9 @@ ulint log_block_get_hdr_no(const byte *log_block) /*!< in: log block */
 
 /** Sets the log block number stored in the header; NOTE that this must be set
 before the flush bit! */
-UNIV_INLINE
-void log_block_set_hdr_no(byte *log_block, /*!< in/out: log block */
-                          ulint n) /*!< in: log block number: must be > 0 and
-                                   < LOG_BLOCK_FLUSH_BIT_MASK */
+inline void log_block_set_hdr_no(byte *log_block, /*!< in/out: log block */
+                                 ulint n) /*!< in: log block number: must be > 0
+                                          and < LOG_BLOCK_FLUSH_BIT_MASK */
 {
   ut_ad(n > 0);
   ut_ad(n < LOG_BLOCK_FLUSH_BIT_MASK);
@@ -108,16 +101,14 @@ void log_block_set_hdr_no(byte *log_block, /*!< in/out: log block */
 
 /** Gets a log block data length.
 @return	log block data length measured as a byte offset from the block start */
-UNIV_INLINE
-ulint log_block_get_data_len(const byte *log_block) /*!< in: log block */
+inline ulint log_block_get_data_len(const byte *log_block) /*!< in: log block */
 {
   return (mach_read_from_2(log_block + LOG_BLOCK_HDR_DATA_LEN));
 }
 
 /** Sets the log block data length. */
-UNIV_INLINE
-void log_block_set_data_len(byte *log_block, /*!< in/out: log block */
-                            ulint len)       /*!< in: data length */
+inline void log_block_set_data_len(byte *log_block, /*!< in/out: log block */
+                                   ulint len)       /*!< in: data length */
 {
   mach_write_to_2(log_block + LOG_BLOCK_HDR_DATA_LEN, len);
 }
@@ -125,40 +116,39 @@ void log_block_set_data_len(byte *log_block, /*!< in/out: log block */
 /** Gets a log block first mtr log record group offset.
 @return first mtr log record group byte offset from the block start, 0
 if none */
-UNIV_INLINE
-ulint log_block_get_first_rec_group(const byte *log_block) /*!< in: log block */
+inline ulint
+log_block_get_first_rec_group(const byte *log_block) /*!< in: log block */
 {
   return (mach_read_from_2(log_block + LOG_BLOCK_FIRST_REC_GROUP));
 }
 
 /** Sets the log block first mtr log record group offset. */
-UNIV_INLINE
-void log_block_set_first_rec_group(byte *log_block, /*!< in/out: log block */
-                                   ulint offset) /*!< in: offset, 0 if none */
+inline void
+log_block_set_first_rec_group(byte *log_block, /*!< in/out: log block */
+                              ulint offset)    /*!< in: offset, 0 if none */
 {
   mach_write_to_2(log_block + LOG_BLOCK_FIRST_REC_GROUP, offset);
 }
 
 /** Gets a log block checkpoint number field (4 lowest bytes).
 @return	checkpoint no (4 lowest bytes) */
-UNIV_INLINE
-ulint log_block_get_checkpoint_no(const byte *log_block) /*!< in: log block */
+inline ulint
+log_block_get_checkpoint_no(const byte *log_block) /*!< in: log block */
 {
   return (mach_read_from_4(log_block + LOG_BLOCK_CHECKPOINT_NO));
 }
 
 /** Sets a log block checkpoint number field (4 lowest bytes). */
-UNIV_INLINE
-void log_block_set_checkpoint_no(byte *log_block, /*!< in/out: log block */
-                                 uint64_t no)  /*!< in: checkpoint no */
+inline void
+log_block_set_checkpoint_no(byte *log_block, /*!< in/out: log block */
+                            uint64_t no)     /*!< in: checkpoint no */
 {
   mach_write_to_4(log_block + LOG_BLOCK_CHECKPOINT_NO, (ulint)no);
 }
 
 /** Converts a lsn to a log block number.
 @return	log block number, it is > 0 and <= 1G */
-UNIV_INLINE
-ulint log_block_convert_lsn_to_no(
+inline ulint log_block_convert_lsn_to_no(
     uint64_t lsn) /*!< in: lsn of a byte within the block */
 {
   return (((ulint)(lsn / OS_FILE_LOG_BLOCK_SIZE) & 0x3FFFFFFFUL) + 1);
@@ -166,8 +156,7 @@ ulint log_block_convert_lsn_to_no(
 
 /** Calculates the checksum for a log block.
 @return	checksum */
-UNIV_INLINE
-ulint log_block_calc_checksum(const byte *block) /*!< in: log block */
+inline ulint log_block_calc_checksum(const byte *block) /*!< in: log block */
 {
   ulint sum;
   ulint sh;
@@ -192,26 +181,24 @@ ulint log_block_calc_checksum(const byte *block) /*!< in: log block */
 
 /** Gets a log block checksum field value.
 @return	checksum */
-UNIV_INLINE
-ulint log_block_get_checksum(const byte *log_block) /*!< in: log block */
+inline ulint log_block_get_checksum(const byte *log_block) /*!< in: log block */
 {
   return (mach_read_from_4(log_block + OS_FILE_LOG_BLOCK_SIZE -
                            LOG_BLOCK_CHECKSUM));
 }
 
 /** Sets a log block checksum field value. */
-UNIV_INLINE
-void log_block_set_checksum(byte *log_block, /*!< in/out: log block */
-                            ulint checksum)  /*!< in: checksum */
+inline void log_block_set_checksum(byte *log_block, /*!< in/out: log block */
+                                   ulint checksum)  /*!< in: checksum */
 {
   mach_write_to_4(log_block + OS_FILE_LOG_BLOCK_SIZE - LOG_BLOCK_CHECKSUM,
                   checksum);
 }
 
 /** Initializes a log block in the log buffer. */
-UNIV_INLINE
-void log_block_init(byte *log_block, /*!< in: pointer to the log buffer */
-                    uint64_t lsn) /*!< in: lsn within the log block */
+inline void
+log_block_init(byte *log_block, /*!< in: pointer to the log buffer */
+               uint64_t lsn)    /*!< in: lsn within the log block */
 {
   ulint no;
 
@@ -227,10 +214,9 @@ void log_block_init(byte *log_block, /*!< in: pointer to the log buffer */
 
 /** Initializes a log block in the log buffer in the old format, where there
 was no checksum yet. */
-UNIV_INLINE
-void log_block_init_in_old_format(
+inline void log_block_init_in_old_format(
     byte *log_block, /*!< in: pointer to the log buffer */
-    uint64_t lsn) /*!< in: lsn within the log block */
+    uint64_t lsn)    /*!< in: lsn within the log block */
 {
   ulint no;
 
@@ -248,10 +234,9 @@ void log_block_init_in_old_format(
 /** Writes to the log the string given. The log must be released with
 log_release().
 @return	end lsn of the log record, zero if did not succeed */
-UNIV_INLINE
-uint64_t log_reserve_and_write_fast(
-    const void *str,        /*!< in: string */
-    ulint len,              /*!< in: string length */
+inline uint64_t log_reserve_and_write_fast(
+    const void *str,     /*!< in: string */
+    ulint len,           /*!< in: string length */
     uint64_t *start_lsn) /*!< out: start lsn of the log record */
 {
   ulint data_len;
@@ -323,8 +308,7 @@ uint64_t log_reserve_and_write_fast(
 
 /** Gets the current lsn.
 @return	current lsn */
-UNIV_INLINE
-uint64_t log_get_lsn(void) {
+inline uint64_t log_get_lsn(void) {
   uint64_t lsn;
 
   log_acquire();
@@ -339,15 +323,13 @@ uint64_t log_get_lsn(void) {
 /** Gets the log group capacity. It is OK to read the value without
 holding log_sys->mutex because it is constant.
 @return	log group capacity */
-UNIV_INLINE
-ulint log_get_capacity(void) { return (log_sys->log_group_capacity); }
+inline ulint log_get_capacity(void) { return (log_sys->log_group_capacity); }
 
 /** Checks if there is need for a log buffer flush or a new checkpoint, and does
 this if yes. Any database operation should call this when it has modified
 more than about 4 pages. NOTE that this function may only be called when the
 OS thread owns no synchronization objects except the dictionary mutex. */
-UNIV_INLINE
-void log_free_check(void) {
+inline void log_free_check(void) {
   /* ut_ad(sync_thread_levels_empty()); */
 
   if (log_sys->check_flush_or_checkpoint) {

@@ -27,9 +27,8 @@ Created 1/8/1996 Heikki Tuuri
 #include "rem0types.h"
 
 /** Gets the column data type. */
-UNIV_INLINE
-void dict_col_copy_type(const dict_col_t *col, /*!< in: column */
-                        dtype_t *type)         /*!< out: data type */
+inline void dict_col_copy_type(const dict_col_t *col, /*!< in: column */
+                               dtype_t *type)         /*!< out: data type */
 {
   ut_ad(col && type);
 
@@ -43,10 +42,10 @@ void dict_col_copy_type(const dict_col_t *col, /*!< in: column */
 
 #ifdef UNIV_DEBUG
 /** Assert that a column and a data type match.
-@return	TRUE */
-UNIV_INLINE
-ibool dict_col_type_assert_equal(const dict_col_t *col, /*!< in: column */
-                                 const dtype_t *type)   /*!< in: data type */
+@return	true */
+inline bool
+dict_col_type_assert_equal(const dict_col_t *col, /*!< in: column */
+                           const dtype_t *type)   /*!< in: data type */
 {
   ut_ad(col);
   ut_ad(type);
@@ -59,32 +58,30 @@ ibool dict_col_type_assert_equal(const dict_col_t *col, /*!< in: column */
   ut_ad(col->mbmaxlen == type->mbmaxlen);
 #endif /* !UNIV_HOTBACKUP */
 
-  return (TRUE);
+  return (true);
 }
 #endif /* UNIV_DEBUG */
 
 #ifndef UNIV_HOTBACKUP
 /** Returns the minimum size of the column.
 @return	minimum size */
-UNIV_INLINE
-ulint dict_col_get_min_size(const dict_col_t *col) /*!< in: column */
+inline ulint dict_col_get_min_size(const dict_col_t *col) /*!< in: column */
 {
   return (dtype_get_min_size_low(col->mtype, col->prtype, col->len,
                                  col->mbminlen, col->mbmaxlen));
 }
 /** Returns the maximum size of the column.
 @return	maximum size */
-UNIV_INLINE
-ulint dict_col_get_max_size(const dict_col_t *col) /*!< in: column */
+inline ulint dict_col_get_max_size(const dict_col_t *col) /*!< in: column */
 {
   return (dtype_get_max_size_low(col->mtype, col->len));
 }
 #endif /* !UNIV_HOTBACKUP */
 /** Returns the size of a fixed size column, 0 if not a fixed size column.
 @return	fixed size, or 0 */
-UNIV_INLINE
-ulint dict_col_get_fixed_size(const dict_col_t *col, /*!< in: column */
-                              ulint comp) /*!< in: nonzero=ROW_FORMAT=COMPACT */
+inline ulint
+dict_col_get_fixed_size(const dict_col_t *col, /*!< in: column */
+                        ulint comp) /*!< in: nonzero=ROW_FORMAT=COMPACT */
 {
   return (dtype_get_fixed_size_low(col->mtype, col->prtype, col->len,
                                    col->mbminlen, col->mbmaxlen, comp));
@@ -92,18 +89,16 @@ ulint dict_col_get_fixed_size(const dict_col_t *col, /*!< in: column */
 /** Returns the ROW_FORMAT=REDUNDANT stored SQL NULL size of a column.
 For fixed length types it is the fixed length of the type, otherwise 0.
 @return	SQL null storage size in ROW_FORMAT=REDUNDANT */
-UNIV_INLINE
-ulint dict_col_get_sql_null_size(
-    const dict_col_t *col, /*!< in: column */
-    ulint comp)            /*!< in: nonzero=ROW_FORMAT=COMPACT  */
+inline ulint
+dict_col_get_sql_null_size(const dict_col_t *col, /*!< in: column */
+                           ulint comp) /*!< in: nonzero=ROW_FORMAT=COMPACT  */
 {
   return (dict_col_get_fixed_size(col, comp));
 }
 
 /** Gets the column number.
 @return	col->ind, table column position (starting from 0) */
-UNIV_INLINE
-ulint dict_col_get_no(const dict_col_t *col) /*!< in: column */
+inline ulint dict_col_get_no(const dict_col_t *col) /*!< in: column */
 {
   ut_ad(col);
 
@@ -111,8 +106,7 @@ ulint dict_col_get_no(const dict_col_t *col) /*!< in: column */
 }
 
 /** Gets the column position in the clustered index. */
-UNIV_INLINE
-ulint dict_col_get_clust_pos(
+inline ulint dict_col_get_clust_pos(
     const dict_col_t *col,           /*!< in: table column */
     const dict_index_t *clust_index) /*!< in: clustered index */
 {
@@ -137,8 +131,7 @@ ulint dict_col_get_clust_pos(
 #ifdef UNIV_DEBUG
 /** Gets the first index on the table (the clustered index).
 @return	index, NULL if none exists */
-UNIV_INLINE
-dict_index_t *
+inline dict_index_t *
 dict_table_get_first_index(const dict_table_t *table) /*!< in: table */
 {
   ut_ad(table);
@@ -149,8 +142,7 @@ dict_table_get_first_index(const dict_table_t *table) /*!< in: table */
 
 /** Gets the next index on the table.
 @return	index, NULL if none left */
-UNIV_INLINE
-dict_index_t *
+inline dict_index_t *
 dict_table_get_next_index(const dict_index_t *index) /*!< in: index */
 {
   ut_ad(index);
@@ -163,42 +155,40 @@ dict_table_get_next_index(const dict_index_t *index) /*!< in: index */
 
 /** Check whether the index is the clustered index.
 @return	nonzero for clustered index, zero for other indexes */
-UNIV_INLINE
-ulint dict_index_is_clust(const dict_index_t *dict_index) /*!< in: dict_index */
+inline ulint
+dict_index_is_clust(const dict_index_t *dict_index) /*!< in: dict_index */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
 
-  return (UNIV_UNLIKELY(dict_index->type & DICT_CLUSTERED));
+  return (unlikely(dict_index->type & DICT_CLUSTERED));
 }
 /** Check whether the index is unique.
 @return	nonzero for unique index, zero for other indexes */
-UNIV_INLINE
-ulint dict_index_is_unique(
-    const dict_index_t *dict_index) /*!< in: dict_index */
+inline ulint
+dict_index_is_unique(const dict_index_t *dict_index) /*!< in: dict_index */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
 
-  return (UNIV_UNLIKELY(dict_index->type & DICT_UNIQUE));
+  return (unlikely(dict_index->type & DICT_UNIQUE));
 }
 
 /** Check whether the index is the insert buffer tree.
 @return	nonzero for insert buffer, zero for other indexes */
-UNIV_INLINE
-ulint dict_index_is_ibuf(const dict_index_t *dict_index) /*!< in: dict_index */
+inline ulint
+dict_index_is_ibuf(const dict_index_t *dict_index) /*!< in: dict_index */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
 
-  return (UNIV_UNLIKELY(dict_index->type & DICT_IBUF));
+  return (unlikely(dict_index->type & DICT_IBUF));
 }
 
 /** Check whether the index is a secondary index or the insert buffer tree.
 @return	nonzero for insert buffer, zero for other indexes */
-UNIV_INLINE
-ulint dict_index_is_sec_or_ibuf(
-    const dict_index_t *dict_index) /*!< in: dict_index */
+inline ulint
+dict_index_is_sec_or_ibuf(const dict_index_t *dict_index) /*!< in: dict_index */
 {
   ulint type;
 
@@ -207,14 +197,14 @@ ulint dict_index_is_sec_or_ibuf(
 
   type = dict_index->type;
 
-  return (UNIV_LIKELY(!(type & DICT_CLUSTERED) || (type & DICT_IBUF)));
+  return (likely(!(type & DICT_CLUSTERED) || (type & DICT_IBUF)));
 }
 
 /** Gets the number of user-defined columns in a table in the dictionary
 cache.
 @return	number of user-defined (e.g., not ROW_ID) columns of a table */
-UNIV_INLINE
-ulint dict_table_get_n_user_cols(const dict_table_t *table) /*!< in: table */
+inline ulint
+dict_table_get_n_user_cols(const dict_table_t *table) /*!< in: table */
 {
   ut_ad(table);
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
@@ -224,9 +214,9 @@ ulint dict_table_get_n_user_cols(const dict_table_t *table) /*!< in: table */
 
 /** Gets the number of system columns in a table in the dictionary cache.
 @return	number of system (e.g., ROW_ID) columns of a table */
-UNIV_INLINE
-ulint dict_table_get_n_sys_cols(const dict_table_t *table
-                                __attribute__((unused))) /*!< in: table */
+inline ulint
+dict_table_get_n_sys_cols(const dict_table_t *table
+                          __attribute__((unused))) /*!< in: table */
 {
   ut_ad(table);
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
@@ -238,8 +228,7 @@ ulint dict_table_get_n_sys_cols(const dict_table_t *table
 /** Gets the number of all columns (also system) in a table in the dictionary
 cache.
 @return	number of columns of a table */
-UNIV_INLINE
-ulint dict_table_get_n_cols(const dict_table_t *table) /*!< in: table */
+inline ulint dict_table_get_n_cols(const dict_table_t *table) /*!< in: table */
 {
   ut_ad(table);
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
@@ -250,9 +239,9 @@ ulint dict_table_get_n_cols(const dict_table_t *table) /*!< in: table */
 #ifdef UNIV_DEBUG
 /** Gets the nth column of a table.
 @return	pointer to column object */
-UNIV_INLINE
-dict_col_t *dict_table_get_nth_col(const dict_table_t *table, /*!< in: table */
-                                   ulint pos) /*!< in: position of column */
+inline dict_col_t *
+dict_table_get_nth_col(const dict_table_t *table, /*!< in: table */
+                       ulint pos)                 /*!< in: position of column */
 {
   ut_ad(table);
   ut_ad(pos < table->n_def);
@@ -263,9 +252,9 @@ dict_col_t *dict_table_get_nth_col(const dict_table_t *table, /*!< in: table */
 
 /** Gets the given system column of a table.
 @return	pointer to column object */
-UNIV_INLINE
-dict_col_t *dict_table_get_sys_col(const dict_table_t *table, /*!< in: table */
-                                   ulint sys) /*!< in: DATA_ROW_ID, ... */
+inline dict_col_t *
+dict_table_get_sys_col(const dict_table_t *table, /*!< in: table */
+                       ulint sys)                 /*!< in: DATA_ROW_ID, ... */
 {
   dict_col_t *col;
 
@@ -283,9 +272,9 @@ dict_col_t *dict_table_get_sys_col(const dict_table_t *table, /*!< in: table */
 
 /** Gets the given system column number of a table.
 @return	column number */
-UNIV_INLINE
-ulint dict_table_get_sys_col_no(const dict_table_t *table, /*!< in: table */
-                                ulint sys) /*!< in: DATA_ROW_ID, ... */
+inline ulint
+dict_table_get_sys_col_no(const dict_table_t *table, /*!< in: table */
+                          ulint sys) /*!< in: DATA_ROW_ID, ... */
 {
   ut_ad(table);
   ut_ad(sys < DATA_N_SYS_COLS);
@@ -295,23 +284,21 @@ ulint dict_table_get_sys_col_no(const dict_table_t *table, /*!< in: table */
 }
 
 /** Check whether the table uses the compact page format.
-@return	TRUE if table uses the compact page format */
-UNIV_INLINE
-ibool dict_table_is_comp(const dict_table_t *table) /*!< in: table */
+@return	true if table uses the compact page format */
+inline bool dict_table_is_comp(const dict_table_t *table) /*!< in: table */
 {
   ut_ad(table);
 
-#if DICT_TF_COMPACT != TRUE
+#if DICT_TF_COMPACT != true
 #error
 #endif
 
-  return (UNIV_LIKELY(table->flags & DICT_TF_COMPACT));
+  return (likely(table->flags & DICT_TF_COMPACT));
 }
 
 /** Determine the file format of a table.
 @return	file format version */
-UNIV_INLINE
-ulint dict_table_get_format(const dict_table_t *table) /*!< in: table */
+inline ulint dict_table_get_format(const dict_table_t *table) /*!< in: table */
 {
   ut_ad(table);
 
@@ -319,9 +306,8 @@ ulint dict_table_get_format(const dict_table_t *table) /*!< in: table */
 }
 
 /** Determine the file format of a table. */
-UNIV_INLINE
-void dict_table_set_format(dict_table_t *table, /*!< in/out: table */
-                           ulint format)        /*!< in: file format version */
+inline void dict_table_set_format(dict_table_t *table, /*!< in/out: table */
+                                  ulint format) /*!< in: file format version */
 {
   ut_ad(table);
 
@@ -331,12 +317,11 @@ void dict_table_set_format(dict_table_t *table, /*!< in/out: table */
 
 /** Extract the compressed page size from table flags.
 @return	compressed page size, or 0 if not compressed */
-UNIV_INLINE
-ulint dict_table_flags_to_zip_size(ulint flags) /*!< in: flags */
+inline ulint dict_table_flags_to_zip_size(ulint flags) /*!< in: flags */
 {
   ulint zip_size = flags & DICT_TF_ZSSIZE_MASK;
 
-  if (UNIV_UNLIKELY(zip_size)) {
+  if (unlikely(zip_size)) {
     zip_size = ((PAGE_ZIP_MIN_SIZE >> 1) << (zip_size >> DICT_TF_ZSSIZE_SHIFT));
 
     ut_ad(zip_size <= UNIV_PAGE_SIZE);
@@ -347,8 +332,7 @@ ulint dict_table_flags_to_zip_size(ulint flags) /*!< in: flags */
 
 /** Check whether the table uses the compressed compact page format.
 @return	compressed page size, or 0 if not compressed */
-UNIV_INLINE
-ulint dict_table_zip_size(const dict_table_t *table) /*!< in: table */
+inline ulint dict_table_zip_size(const dict_table_t *table) /*!< in: table */
 {
   ut_ad(table);
 
@@ -358,8 +342,7 @@ ulint dict_table_zip_size(const dict_table_t *table) /*!< in: table */
 /** Gets the number of fields in the internal representation of an index,
 including fields added by the dictionary system.
 @return	number of fields */
-UNIV_INLINE
-ulint dict_index_get_n_fields(
+inline ulint dict_index_get_n_fields(
     const dict_index_t *dict_index) /*!< in: an internal
                                       representation of index (in
                                       the dictionary cache) */
@@ -375,12 +358,11 @@ that uniquely determine the position of an index entry in the index, if
 we do not take multiversioning into account: in the B-tree use the value
 returned by dict_index_get_n_unique_in_tree.
 @return	number of fields */
-UNIV_INLINE
-ulint dict_index_get_n_unique(
-    const dict_index_t *dict_index) /*!< in: an internal
-                                      representation
-                                      of index (in the dictionary
-                                      cache) */
+inline ulint
+dict_index_get_n_unique(const dict_index_t *dict_index) /*!< in: an internal
+                                                          representation
+                                                          of index (in the
+                                                          dictionary cache) */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
@@ -393,8 +375,7 @@ ulint dict_index_get_n_unique(
 which uniquely determine the position of an index entry in the index, if
 we also take multiversioning into account.
 @return	number of fields */
-UNIV_INLINE
-ulint dict_index_get_n_unique_in_tree(
+inline ulint dict_index_get_n_unique_in_tree(
     const dict_index_t *dict_index) /*!< in: an internal
                                       representation
                                       of index (in the dictionary
@@ -417,8 +398,7 @@ internal representation of clustered indexes we add the row id to the ordering
 fields to make a clustered index unique, but this function returns the number of
 fields the user defined in the index as ordering fields.
 @return	number of fields */
-UNIV_INLINE
-ulint dict_index_get_n_ordering_defined_by_user(
+inline ulint dict_index_get_n_ordering_defined_by_user(
     const dict_index_t *dict_index) /*!< in: an internal
                                       representation of index
                                       (in the dictionary cache) */
@@ -429,8 +409,7 @@ ulint dict_index_get_n_ordering_defined_by_user(
 #ifdef UNIV_DEBUG
 /** Gets the nth field of an index.
 @return	pointer to field object */
-UNIV_INLINE
-dict_field_t *
+inline dict_field_t *
 dict_index_get_nth_field(const dict_index_t *index, /*!< in: index */
                          ulint pos) /*!< in: position of field */
 {
@@ -444,10 +423,9 @@ dict_index_get_nth_field(const dict_index_t *index, /*!< in: index */
 
 /** Returns the position of a system column in an index.
 @return	position, ULINT_UNDEFINED if not contained */
-UNIV_INLINE
-ulint dict_index_get_sys_col_pos(
-    const dict_index_t *dict_index, /*!< in: index */
-    ulint type)                     /*!< in: DATA_ROW_ID, ... */
+inline ulint
+dict_index_get_sys_col_pos(const dict_index_t *dict_index, /*!< in: index */
+                           ulint type) /*!< in: DATA_ROW_ID, ... */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
@@ -465,8 +443,7 @@ ulint dict_index_get_sys_col_pos(
 
 /** Gets the field column.
 @return	field->col, pointer to the table column */
-UNIV_INLINE
-const dict_col_t *
+inline const dict_col_t *
 dict_field_get_col(const dict_field_t *field) /*!< in: index field */
 {
   ut_ad(field);
@@ -476,8 +453,7 @@ dict_field_get_col(const dict_field_t *field) /*!< in: index field */
 
 /** Gets pointer to the nth column in an index.
 @return	column */
-UNIV_INLINE
-const dict_col_t *
+inline const dict_col_t *
 dict_index_get_nth_col(const dict_index_t *dict_index, /*!< in: index */
                        ulint pos) /*!< in: position of the field */
 {
@@ -486,10 +462,9 @@ dict_index_get_nth_col(const dict_index_t *dict_index, /*!< in: index */
 
 /** Gets the column number the nth field in an index.
 @return	column number */
-UNIV_INLINE
-ulint dict_index_get_nth_col_no(
-    const dict_index_t *dict_index, /*!< in: index */
-    ulint pos)                      /*!< in: position of the field */
+inline ulint
+dict_index_get_nth_col_no(const dict_index_t *dict_index, /*!< in: index */
+                          ulint pos) /*!< in: position of the field */
 {
   return (dict_col_get_no(dict_index_get_nth_col(dict_index, pos)));
 }
@@ -497,9 +472,8 @@ ulint dict_index_get_nth_col_no(
 #ifndef UNIV_HOTBACKUP
 /** Returns the minimum data size of an index record.
 @return	minimum data size in bytes */
-UNIV_INLINE
-ulint dict_index_get_min_size(
-    const dict_index_t *dict_index) /*!< in: dict_index */
+inline ulint
+dict_index_get_min_size(const dict_index_t *dict_index) /*!< in: dict_index */
 {
   ulint n = dict_index_get_n_fields(dict_index);
   ulint size = 0;
@@ -513,9 +487,8 @@ ulint dict_index_get_min_size(
 
 /** Gets the space id of the root of the index tree.
 @return	space id */
-UNIV_INLINE
-ulint dict_index_get_space(
-    const dict_index_t *dict_index) /*!< in: dict_index */
+inline ulint
+dict_index_get_space(const dict_index_t *dict_index) /*!< in: dict_index */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
@@ -524,9 +497,9 @@ ulint dict_index_get_space(
 }
 
 /** Sets the space id of the root of the index tree. */
-UNIV_INLINE
-void dict_index_set_space(dict_index_t *dict_index, /*!< in/out: dict_index */
-                          ulint space)              /*!< in: space id */
+inline void
+dict_index_set_space(dict_index_t *dict_index, /*!< in/out: dict_index */
+                     ulint space)              /*!< in: space id */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
@@ -536,8 +509,8 @@ void dict_index_set_space(dict_index_t *dict_index, /*!< in/out: dict_index */
 
 /** Gets the page number of the root of the index tree.
 @return	page number */
-UNIV_INLINE
-ulint dict_index_get_page(const dict_index_t *dict_index) /*!< in: dict_index */
+inline ulint
+dict_index_get_page(const dict_index_t *dict_index) /*!< in: dict_index */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
@@ -546,9 +519,9 @@ ulint dict_index_get_page(const dict_index_t *dict_index) /*!< in: dict_index */
 }
 
 /** Sets the page number of the root of index tree. */
-UNIV_INLINE
-void dict_index_set_page(dict_index_t *dict_index, /*!< in/out: dict_index */
-                         ulint page)               /*!< in: page number */
+inline void
+dict_index_set_page(dict_index_t *dict_index, /*!< in/out: dict_index */
+                    ulint page)               /*!< in: page number */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
@@ -558,8 +531,8 @@ void dict_index_set_page(dict_index_t *dict_index, /*!< in/out: dict_index */
 
 /** Gets the read-write lock of the index tree.
 @return	read-write lock */
-UNIV_INLINE
-rw_lock_t *dict_index_get_lock(dict_index_t *dict_index) /*!< in: dict_index */
+inline rw_lock_t *
+dict_index_get_lock(dict_index_t *dict_index) /*!< in: dict_index */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
@@ -571,13 +544,13 @@ rw_lock_t *dict_index_get_lock(dict_index_t *dict_index) /*!< in: dict_index */
 relevant only in the case of many consecutive inserts, as updates
 which make the records bigger might fragment the index.
 @return	number of free bytes on page, reserved for updates */
-UNIV_INLINE
-ulint dict_index_get_space_reserve(void) { return (UNIV_PAGE_SIZE / 16); }
+inline ulint dict_index_get_space_reserve(void) {
+  return (UNIV_PAGE_SIZE / 16);
+}
 
 /** Checks if a table is in the dictionary cache.
 @return	table, NULL if not found */
-UNIV_INLINE
-dict_table_t *
+inline dict_table_t *
 dict_table_check_if_in_cache_low(const char *table_name) /*!< in: table name */
 {
   dict_table_t *table;
@@ -597,8 +570,8 @@ dict_table_check_if_in_cache_low(const char *table_name) /*!< in: table name */
 /** Gets a table; loads it to the dictionary cache if necessary. A low-level
 function.
 @return	table, NULL if not found */
-UNIV_INLINE
-dict_table_t *dict_table_get_low(const char *table_name) /*!< in: table name */
+inline dict_table_t *
+dict_table_get_low(const char *table_name) /*!< in: table name */
 {
   dict_table_t *table;
 
@@ -609,8 +582,8 @@ dict_table_t *dict_table_get_low(const char *table_name) /*!< in: table name */
 
   if (table == NULL) {
     // FIXME: srv_force_recovery should be passed in as an arg
-    table = dict_load_table(
-      static_cast<ib_recovery_t>(srv_force_recovery), table_name);
+    table = dict_load_table(static_cast<ib_recovery_t>(srv_force_recovery),
+                            table_name);
   }
 
   ut_ad(!table || table->cached);
@@ -620,8 +593,7 @@ dict_table_t *dict_table_get_low(const char *table_name) /*!< in: table name */
 
 /** Returns a table object based on table id.
 @return	table, NULL if does not exist */
-UNIV_INLINE
-dict_table_t *
+inline dict_table_t *
 dict_table_get_on_id_low(ib_recovery_t recovery, /*!< in: recovery flag */
                          dulint table_id)        /*!< in: table id */
 {

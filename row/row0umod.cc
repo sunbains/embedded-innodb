@@ -40,7 +40,7 @@ Created 2/27/1997 Heikki Tuuri
 
 /* Considerations on undoing a modify operation.
 (1) Undoing a delete marking: all index records should be found. Some of
-them may have delete mark already FALSE, if the delete mark operation was
+them may have delete mark already false, if the delete mark operation was
 stopped underway, or if the undo operation ended prematurely because of a
 system crash.
 (2) Undoing an update of a delete unmarked record: the newer version of
@@ -57,9 +57,9 @@ modified or inserted by the same transaction, and its undo number is such
 that it should be undone in the same rollback.
 @param[in,out] node             Row undo node.
 @param[out] undo_no             The undo number.
-@return	TRUE if also previous modify or insert of this row should be undone */
-inline
-ibool row_undo_mod_undo_also_prev_vers(undo_node_t *node, undo_no_t *undo_no) {
+@return	true if also previous modify or insert of this row should be undone */
+inline bool row_undo_mod_undo_also_prev_vers(undo_node_t *node,
+                                             undo_no_t *undo_no) {
   trx_undo_rec_t *undo_rec;
   trx_t *trx;
 
@@ -68,7 +68,7 @@ ibool row_undo_mod_undo_also_prev_vers(undo_node_t *node, undo_no_t *undo_no) {
   if (0 != ut_dulint_cmp(node->new_trx_id, trx->id)) {
 
     *undo_no = ut_dulint_zero;
-    return FALSE;
+    return false;
   }
 
   undo_rec = trx_undo_get_undo_rec_low(node->new_roll_ptr, node->heap);
@@ -81,10 +81,12 @@ ibool row_undo_mod_undo_also_prev_vers(undo_node_t *node, undo_no_t *undo_no) {
 /** Undoes a modify in a clustered index record.
 @param[in,out] node             Row undo node.
 @param[in,out] thr              Query thread.
-@param[in,out] mtr              Must be committed before latching any further pages.
+@param[in,out] mtr              Must be committed before latching any further
+pages.
 @param[in] mode                 BTR_MODIFY_LEAF or BTR_MODIFY_TREE.
 @return	DB_SUCCESS, DB_FAIL, or error code: we may run out of file space */
-static db_err row_undo_mod_clust_low(undo_node_t *node, que_thr_t *thr, mtr_t *mtr, ulint mode) {
+static db_err row_undo_mod_clust_low(undo_node_t *node, que_thr_t *thr,
+                                     mtr_t *mtr, ulint mode) {
   auto pcur = &(node->pcur);
   auto btr_cur = btr_pcur_get_btr_cur(pcur);
   auto success = btr_pcur_restore_position(mode, pcur, mtr);
@@ -109,7 +111,7 @@ static db_err row_undo_mod_clust_low(undo_node_t *node, que_thr_t *thr, mtr_t *m
         &heap, &dummy_big_rec, node->update, node->cmpl_info, thr, mtr);
 
     ut_a(!dummy_big_rec);
-    if (UNIV_LIKELY_NULL(heap)) {
+    if (likely_null(heap)) {
       mem_heap_free(heap);
     }
   }
@@ -124,10 +126,12 @@ that would see the delete-marked record.  In other words, we
 roll back the insert by purging the record.
 @param[in,out] node             Row undo node.
 @param[in,out] thr              Query thread.
-@param[in,out] mtr              Must be committed before latching any further pages.
+@param[in,out] mtr              Must be committed before latching any further
+pages.
 @param[in] mode                 BTR_MODIFY_LEAF or BTR_MODIFY_TREE.
 @return	DB_SUCCESS, DB_FAIL, or error code: we may run out of file space */
-static db_err row_undo_mod_remove_clust_low(undo_node_t *node, que_thr_t *thr, mtr_t *mtr, ulint mode) {
+static db_err row_undo_mod_remove_clust_low(undo_node_t *node, que_thr_t *thr,
+                                            mtr_t *mtr, ulint mode) {
   db_err err;
 
   ut_ad(node->rec_type == TRX_UNDO_UPD_DEL_REC);
@@ -166,7 +170,7 @@ static db_err row_undo_mod_remove_clust_low(undo_node_t *node, que_thr_t *thr, m
     inherited externally stored fields */
 
     btr_cur_pessimistic_delete(
-        &err, FALSE, btr_cur,
+        &err, false, btr_cur,
         thr_is_recv(thr) ? RB_RECOVERY_PURGE_REC : RB_NONE, mtr);
 
     /* The delete operation may fail if we have little
@@ -261,11 +265,15 @@ static db_err row_undo_mod_clust(undo_node_t *node, que_thr_t *thr) {
 @param[in] entry                Index entry
 @param[in] mode                 latch mode BTR_MODIFY_LEAF or BTR_MODIFY_TREE
 @return	DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE */
-static db_err row_undo_mod_del_mark_or_remove_sec_low(undo_node_t *node, que_thr_t *thr, dict_index_t *index, dtuple_t *entry, ulint mode) {
+static db_err row_undo_mod_del_mark_or_remove_sec_low(undo_node_t *node,
+                                                      que_thr_t *thr,
+                                                      dict_index_t *index,
+                                                      dtuple_t *entry,
+                                                      ulint mode) {
   db_err err;
   mtr_t mtr;
-  ibool old_has;
-  ibool success;
+  bool old_has;
+  bool success;
   mtr_t mtr_vers;
   btr_pcur_t pcur;
 
@@ -299,13 +307,16 @@ static db_err row_undo_mod_del_mark_or_remove_sec_low(undo_node_t *node, que_thr
 
   mtr_start(&mtr_vers);
 
-  success = btr_pcur_restore_position(BTR_SEARCH_LEAF, &(node->pcur), &mtr_vers);
+  success =
+      btr_pcur_restore_position(BTR_SEARCH_LEAF, &(node->pcur), &mtr_vers);
   ut_a(success);
 
-  old_has = row_vers_old_has_index_entry(FALSE, btr_pcur_get_rec(&(node->pcur)), &mtr_vers, index, entry);
+  old_has = row_vers_old_has_index_entry(false, btr_pcur_get_rec(&(node->pcur)),
+                                         &mtr_vers, index, entry);
 
   if (old_has) {
-    err = btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, btr_cur, TRUE, thr, &mtr);
+    err = btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, btr_cur, true, thr,
+                                       &mtr);
     ut_ad(err == DB_SUCCESS);
   } else {
     /* Remove the index record */
@@ -327,7 +338,7 @@ static db_err row_undo_mod_del_mark_or_remove_sec_low(undo_node_t *node, que_thr
       record that contains externally stored
       columns. */
       ut_ad(!dict_index_is_clust(index));
-      btr_cur_pessimistic_delete(&err, FALSE, btr_cur, RB_NORMAL, &mtr);
+      btr_cur_pessimistic_delete(&err, false, btr_cur, RB_NORMAL, &mtr);
 
       /* The delete operation may fail if we have little
       file space left: TODO: easiest to crash the database
@@ -354,14 +365,19 @@ record through which we do the search is delete-marked.
 @param[in,out] index            index
 @param[in] entry                Index entry
 @return	DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
-static db_err row_undo_mod_del_mark_or_remove_sec(undo_node_t *node, que_thr_t *thr, dict_index_t *index, dtuple_t *entry) {
-  auto err = row_undo_mod_del_mark_or_remove_sec_low(node, thr, index, entry, BTR_MODIFY_LEAF);
+static db_err row_undo_mod_del_mark_or_remove_sec(undo_node_t *node,
+                                                  que_thr_t *thr,
+                                                  dict_index_t *index,
+                                                  dtuple_t *entry) {
+  auto err = row_undo_mod_del_mark_or_remove_sec_low(node, thr, index, entry,
+                                                     BTR_MODIFY_LEAF);
 
   if (err == DB_SUCCESS) {
 
     return err;
   } else {
-    return row_undo_mod_del_mark_or_remove_sec_low(node, thr, index, entry, BTR_MODIFY_TREE);
+    return row_undo_mod_del_mark_or_remove_sec_low(node, thr, index, entry,
+                                                   BTR_MODIFY_TREE);
   }
 }
 
@@ -369,12 +385,15 @@ static db_err row_undo_mod_del_mark_or_remove_sec(undo_node_t *node, que_thr_t *
 delete-marked at the moment, but it does not harm to unmark it anyway. We also
 need to update the fields of the secondary index record if we updated its
 fields but alphabetically they stayed the same, e.g., 'abc' -> 'aBc'.
-@param[in] mode                      Search mode: BTR_MODIFY_LEAF or BTR_MODIFY_TREE
+@param[in] mode                      Search mode: BTR_MODIFY_LEAF or
+BTR_MODIFY_TREE
 @param[in,out] thr,                  Query thread
-@param[in,out] index,                Secondary index in which to unmark the entry
+@param[in,out] index,                Secondary index in which to unmark the
+entry
 @param[in] entry                     Index entry to unmark.
 @return	DB_FAIL or DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
-static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t *thr, dict_index_t *index, const dtuple_t *entry) {
+static db_err row_undo_mod_del_unmark_sec_and_undo_update(
+    ulint mode, que_thr_t *thr, dict_index_t *index, const dtuple_t *entry) {
   mtr_t mtr;
   upd_t *update;
   btr_pcur_t pcur;
@@ -384,7 +403,7 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
   trx_t *trx = thr_get_trx(thr);
 
   /* Ignore indexes that are being created. */
-  if (UNIV_UNLIKELY(*index->name == TEMP_INDEX_PREFIX)) {
+  if (unlikely(*index->name == TEMP_INDEX_PREFIX)) {
 
     return DB_SUCCESS;
   }
@@ -392,7 +411,7 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
   log_free_check();
   mtr_start(&mtr);
 
-  if (UNIV_UNLIKELY(!row_search_index_entry(index, entry, mode, &pcur, &mtr))) {
+  if (unlikely(!row_search_index_entry(index, entry, mode, &pcur, &mtr))) {
     ib_logger(ib_stream, " error in sec index entry del undo in\n ");
     dict_index_name_print(ib_stream, trx, index);
     ib_logger(ib_stream, "\n tuple ");
@@ -401,15 +420,19 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
     rec_print(ib_stream, btr_pcur_get_rec(&pcur), index);
     ib_logger(ib_stream, "\n");
     trx_print(ib_stream, trx, 0);
-    ib_logger(ib_stream, "\nSubmit a detailed bug report, check the TBD website for details");
+    ib_logger(
+        ib_stream,
+        "\nSubmit a detailed bug report, check the TBD website for details");
   } else {
     auto btr_cur = btr_pcur_get_btr_cur(&pcur);
 
-    err = btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, btr_cur, FALSE, thr, &mtr);
+    err = btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, btr_cur, false, thr,
+                                       &mtr);
     ut_a(err == DB_SUCCESS);
     heap = mem_heap_create(100);
 
-    update = row_upd_build_sec_rec_difference_binary(index, entry, btr_cur_get_rec(btr_cur), trx, heap);
+    update = row_upd_build_sec_rec_difference_binary(
+        index, entry, btr_cur_get_rec(btr_cur), trx, heap);
 
     if (upd_get_n_fields(update) == 0) {
 
@@ -419,7 +442,8 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
       /* Try an optimistic updating of the record, keeping
       changes within the page */
 
-      err = btr_cur_optimistic_update(BTR_KEEP_SYS_FLAG | BTR_NO_LOCKING_FLAG, btr_cur, update, 0, thr, &mtr);
+      err = btr_cur_optimistic_update(BTR_KEEP_SYS_FLAG | BTR_NO_LOCKING_FLAG,
+                                      btr_cur, update, 0, thr, &mtr);
       switch (err) {
       case DB_OVERFLOW:
       case DB_UNDERFLOW:
@@ -428,11 +452,13 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
         break;
 
       default:
-	break;
+        break;
       }
     } else {
       ut_a(mode == BTR_MODIFY_TREE);
-      err = btr_cur_pessimistic_update(BTR_KEEP_SYS_FLAG | BTR_NO_LOCKING_FLAG, btr_cur, &heap, &dummy_big_rec, update, 0, thr, &mtr);
+      err = btr_cur_pessimistic_update(BTR_KEEP_SYS_FLAG | BTR_NO_LOCKING_FLAG,
+                                       btr_cur, &heap, &dummy_big_rec, update,
+                                       0, thr, &mtr);
       ut_a(!dummy_big_rec);
     }
 
@@ -462,7 +488,7 @@ static db_err row_undo_mod_upd_del_sec(undo_node_t *node, que_thr_t *thr) {
     index = node->index;
 
     entry = row_build_index_entry(node->row, node->ext, index, heap);
-    if (UNIV_UNLIKELY(!entry)) {
+    if (unlikely(!entry)) {
       /* The database must have crashed after
       inserting a clustered index record but before
       writing all the externally stored columns of
@@ -508,9 +534,11 @@ static db_err row_undo_mod_del_mark_sec(undo_node_t *node, que_thr_t *thr) {
 
     entry = row_build_index_entry(node->row, node->ext, index, heap);
     ut_a(entry);
-    err = row_undo_mod_del_unmark_sec_and_undo_update(BTR_MODIFY_LEAF, thr, index, entry);
+    err = row_undo_mod_del_unmark_sec_and_undo_update(BTR_MODIFY_LEAF, thr,
+                                                      index, entry);
     if (err == DB_FAIL) {
-      err = row_undo_mod_del_unmark_sec_and_undo_update(BTR_MODIFY_TREE, thr, index, entry);
+      err = row_undo_mod_del_unmark_sec_and_undo_update(BTR_MODIFY_TREE, thr,
+                                                        index, entry);
     }
 
     if (err != DB_SUCCESS) {
@@ -549,7 +577,8 @@ static db_err row_undo_mod_upd_exist_sec(undo_node_t *node, que_thr_t *thr) {
   while (node->index != nullptr) {
     index = node->index;
 
-    if (row_upd_changes_ord_field_binary(node->row, node->index, node->update)) {
+    if (row_upd_changes_ord_field_binary(node->row, node->index,
+                                         node->update)) {
 
       /* Build the newest version of the index entry */
       entry = row_build_index_entry(node->row, node->ext, index, heap);
@@ -578,12 +607,15 @@ static db_err row_undo_mod_upd_exist_sec(undo_node_t *node, que_thr_t *thr) {
       but alphabetically they stayed the same, e.g.,
       'abc' -> 'aBc'. */
       mem_heap_empty(heap);
-      entry = row_build_index_entry(node->undo_row, node->undo_ext, index, heap);
+      entry =
+          row_build_index_entry(node->undo_row, node->undo_ext, index, heap);
       ut_a(entry);
 
-      err = row_undo_mod_del_unmark_sec_and_undo_update(BTR_MODIFY_LEAF, thr, index, entry);
+      err = row_undo_mod_del_unmark_sec_and_undo_update(BTR_MODIFY_LEAF, thr,
+                                                        index, entry);
       if (err == DB_FAIL) {
-        err = row_undo_mod_del_unmark_sec_and_undo_update(BTR_MODIFY_TREE, thr, index, entry);
+        err = row_undo_mod_del_unmark_sec_and_undo_update(BTR_MODIFY_TREE, thr,
+                                                          index, entry);
       }
 
       if (err != DB_SUCCESS) {
@@ -605,8 +637,8 @@ static db_err row_undo_mod_upd_exist_sec(undo_node_t *node, que_thr_t *thr) {
 @param[in] recovery             Recovery flag.
 @param[in,out] node             Row undo node.
 @param[in,out] thr              Query thread. */
-static void
-row_undo_mod_parse_undo_rec(ib_recovery_t recovery, undo_node_t *node, que_thr_t *thr) {
+static void row_undo_mod_parse_undo_rec(ib_recovery_t recovery,
+                                        undo_node_t *node, que_thr_t *thr) {
   dict_index_t *clust_index;
   byte *ptr;
   undo_no_t undo_no;
@@ -616,7 +648,7 @@ row_undo_mod_parse_undo_rec(ib_recovery_t recovery, undo_node_t *node, que_thr_t
   ulint info_bits;
   ulint type;
   ulint cmpl_info;
-  ibool dummy_extern;
+  bool dummy_extern;
   trx_t *trx;
 
   ut_ad(node && thr);

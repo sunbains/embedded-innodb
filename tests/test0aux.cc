@@ -37,9 +37,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define COMMENT '#'
 
 namespace logger {
-int level = (int) Level::Debug;
-const char* Progname = "ib_test";
-}
+int level = (int)Level::Debug;
+const char *Progname = "ib_test";
+} // namespace logger
 
 /* Runtime config */
 static const char log_group_home_dir[] = "log";
@@ -108,7 +108,7 @@ read_int_from_tuple(ib_tpl_t tpl,                  /*!< in: InnoDB tuple */
     break;
   }
   default:
-    assert(IB_FALSE);
+    assert(false);
   }
 
   return (ival);
@@ -249,13 +249,13 @@ void print_tuple(FILE *stream, const ib_tpl_t tpl) {
       case IB_CHAR_ANYCHARSET: {
         const char *ptr;
 
-        ptr = static_cast<const char*>(ib_col_get_value(tpl, i));
+        ptr = static_cast<const char *>(ib_col_get_value(tpl, i));
         fprintf(stream, "%d:", (int)data_len);
         print_char_array(stream, ptr, (int)data_len);
         break;
       }
       default:
-        assert(IB_FALSE);
+        assert(false);
         break;
       }
     }
@@ -735,7 +735,7 @@ int config_parse_file(const char *filename, ib_config_t *config) {
       *str->ptr++ = ch;
     }
 
-    assert(str->len < (int) sizeof(name));
+    assert(str->len < (int)sizeof(name));
   }
 
   if (str->len > 0) {

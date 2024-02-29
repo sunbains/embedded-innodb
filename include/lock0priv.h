@@ -33,8 +33,8 @@ those functions in lock/ */
 
 #include "dict0types.h"
 #include "hash0hash.h"
+#include "innodb0types.h"
 #include "trx0types.h"
-#include "univ.i"
 #include "ut0lst.h"
 
 /** A table lock */
@@ -82,8 +82,7 @@ struct lock_struct {
 
 /** Gets the type of a lock.
 @return	LOCK_TABLE or LOCK_REC */
-UNIV_INLINE
-ulint lock_get_type_low(const lock_t *lock); /*!< in: lock */
+inline ulint lock_get_type_low(const lock_t *lock); /*!< in: lock */
 
 /** Gets the previous record lock set on a record.
 @return	previous lock on the same record, NULL if none exists */

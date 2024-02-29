@@ -25,10 +25,10 @@ Created 4/20/1996 Heikki Tuuri
 
 #include "data0data.h"
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "que0types.h"
 #include "row0types.h"
 #include "trx0types.h"
-#include "univ.i"
 
 /** Checks if foreign key constraint fails for an index entry. Sets shared locks
 which lock either the success or the failure of the constraint. NOTE that
@@ -36,13 +36,13 @@ the caller must have a shared latch on dict_foreign_key_check_lock.
 @return DB_SUCCESS, DB_LOCK_WAIT, DB_NO_REFERENCED_ROW, or
 DB_ROW_IS_REFERENCED */
 db_err row_ins_check_foreign_constraint(
-    ibool check_ref,         /*!< in: TRUE If we want to check that
-                           the referenced table is ok, FALSE if we
-                           want to check the foreign key table */
+    bool check_ref,          /*!< in: true If we want to check that
+                            the referenced table is ok, false if we
+                            want to check the foreign key table */
     dict_foreign_t *foreign, /*!< in: foreign constraint; NOTE that the
                              tables mentioned in it must be in the
                              dictionary cache if they exist at all */
-    dict_table_t *table,     /*!< in: if check_ref is TRUE, then the foreign
+    dict_table_t *table,     /*!< in: if check_ref is true, then the foreign
                              table, else the referenced table */
     dtuple_t *entry,         /*!< in: index entry for index */
     que_thr_t *thr);         /*!< in: query thread */
@@ -66,12 +66,12 @@ descent down the tree. If the entry matches enough to a delete marked record,
 performs the insert by updating or delete unmarking the delete marked
 record.
 @return	DB_SUCCESS, DB_LOCK_WAIT, DB_DUPLICATE_KEY, or some other error code */
-db_err row_ins_index_entry(
-    dict_index_t *index, /*!< in: index */
-    dtuple_t *entry,     /*!< in: index entry to insert */
-    ulint n_ext,         /*!< in: number of externally stored columns */
-    ibool foreign,       /*!< in: TRUE=check foreign key constraints */
-    que_thr_t *thr);     /*!< in: query thread */
+db_err
+row_ins_index_entry(dict_index_t *index, /*!< in: index */
+                    dtuple_t *entry,     /*!< in: index entry to insert */
+                    ulint n_ext, /*!< in: number of externally stored columns */
+                    bool foreign, /*!< in: true=check foreign key constraints */
+                    que_thr_t *thr); /*!< in: query thread */
 
 /** Inserts a row to a table. This is a high-level function used in
 SQL execution graphs.

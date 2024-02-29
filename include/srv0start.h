@@ -25,7 +25,7 @@ Created 10/10/1995 Heikki Tuuri
 #define srv0start_h
 
 #include "api0api.h"
-#include "univ.i"
+#include "innodb0types.h"
 #include "ut0byte.h"
 
 /** Normalizes a directory path for Windows: converts slashes to backslashes. */
@@ -33,20 +33,19 @@ Created 10/10/1995 Heikki Tuuri
 void srv_normalize_path_for_win(
     char *str); /*!< in/out: null-terminated character string */
 /** Reads the data files and their sizes from a character string.
-@return	TRUE if ok, FALSE on parse error */
+@return	true if ok, false on parse error */
 
-ibool srv_parse_data_file_paths_and_sizes(
+bool srv_parse_data_file_paths_and_sizes(
     const char *str); /*!< in: the data file path string */
 /** Reads log group home directories from a character string.
-@return	TRUE if ok, FALSE on parse error */
+@return	true if ok, false on parse error */
 
-ibool srv_parse_log_group_home_dirs(
+bool srv_parse_log_group_home_dirs(
     const char *str); /*!< in: character string */
 /** Frees the memory allocated by srv_parse_data_file_paths_and_sizes()
 and srv_parse_log_group_home_dirs(). */
 
 void srv_free_paths_and_sizes(void);
-#ifndef UNIV_HOTBACKUP
 /** Starts Innobase and creates a new database if database files
 are not found and the user wants.
 @return	DB_SUCCESS or error code */
@@ -67,20 +66,20 @@ void set_panic_flag_for_netware(void);
 #endif
 
 #ifdef HAVE_DARWIN_THREADS
-/** TRUE if the F_FULLFSYNC option is available */
-extern ibool srv_have_fullfsync;
+/** true if the F_FULLFSYNC option is available */
+extern bool srv_have_fullfsync;
 #endif
 
-/** TRUE if the server is being started */
-extern ibool srv_is_being_started;
-/** TRUE if the server was successfully started */
-extern ibool srv_was_started;
-/** TRUE if the server is being started, before rolling back any
+/** true if the server is being started */
+extern bool srv_is_being_started;
+/** true if the server was successfully started */
+extern bool srv_was_started;
+/** true if the server is being started, before rolling back any
 incomplete transactions */
-extern ibool srv_startup_is_before_trx_rollback_phase;
+extern bool srv_startup_is_before_trx_rollback_phase;
 
-/** TRUE if a raw partition is in use */
-extern ibool srv_start_raw_disk_in_use;
+/** true if a raw partition is in use */
+extern bool srv_start_raw_disk_in_use;
 
 /** Shutdown state */
 enum srv_shutdown_state {
@@ -102,7 +101,6 @@ enum srv_shutdown_state {
 /** At a shutdown this value climbs from SRV_SHUTDOWN_NONE to
 SRV_SHUTDOWN_CLEANUP and then to SRV_SHUTDOWN_LAST_PHASE, and so on */
 extern enum srv_shutdown_state srv_shutdown_state;
-#endif /* !UNIV_HOTBACKUP */
 
 /** Log 'spaces' have id's >= this */
 #define SRV_LOG_SPACE_FIRST_ID 0xFFFFFFF0UL

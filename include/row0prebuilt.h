@@ -36,7 +36,7 @@ row_prebuilt_create(dict_table_t *table); /*!< in: Innobase table handle */
 
 void row_prebuilt_free(
     row_prebuilt_t *prebuilt, /*!< in, own: prebuilt struct */
-    ibool dict_locked);       /*!< in: TRUE if dict was locked */
+    bool dict_locked);        /*!< in: true if dict was locked */
 
 /** Reset a prebuilt struct for a user table handle. */
 
@@ -99,14 +99,14 @@ struct row_prebuilt_struct {
                                ROW_PREBUILT_ALLOCATED when created,
                                or ROW_PREBUILT_FREED when the
                                struct has been freed */
-  unsigned sql_stat_start : 1; /* TRUE when we start processing of
+  unsigned sql_stat_start : 1; /* true when we start processing of
                               an SQL statement: we may have to set
                               an intention lock on the table,
                               create a consistent read view etc. */
   unsigned client_has_locked : 1;
-  /* this is set TRUE when a client
+  /* this is set true when a client
   calls explicit lock on this handle
-  with a lock flag, and set FALSE when
+  with a lock flag, and set false when
   with unlocked */
   unsigned clust_index_was_generated : 1;
   /* if the user did not define a
@@ -114,19 +114,19 @@ struct row_prebuilt_struct {
   automatically generated a clustered
   index where the ordering column is
   the row id: in this case this flag
-  is set to TRUE */
+  is set to true */
   unsigned need_to_access_clustered : 1;
   /* if we are fetching
   columns through a secondary index
   and at least one column is not in
   the secondary index, then this is
-  set to TRUE */
+  set to true */
   unsigned index_usable : 1;  /* caches the value of
                               row_merge_is_index_usable(trx,index) */
-  unsigned simple_select : 1; /* TRUE if plain select */
+  unsigned simple_select : 1; /* true if plain select */
   unsigned new_rec_locks : 2; /* normally 0; if
                               srv_locks_unsafe_for_binlog is
-                              TRUE or session is using READ
+                              true or session is using READ
                               COMMITTED isolation level, in a
                               cursor search, if we set a new
                               record lock on an index, this is

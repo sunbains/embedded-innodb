@@ -26,10 +26,10 @@ Created 1/8/1996 Heikki Tuuri
 
 #include "dict0dict.h"
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "mtr0mtr.h"
 #include "que0types.h"
 #include "row0types.h"
-#include "univ.i"
 
 /** Creates a table create graph.
 @return	own: table create node */
@@ -37,7 +37,7 @@ tab_node_t *
 tab_create_graph_create(dict_table_t *table, /*!< in: table to create, built as
                                              a memory data structure */
                         mem_heap_t *heap,    /*!< in: heap where created */
-                        ibool commit); /*!< in: if TRUE commit transaction */
+                        bool commit); /*!< in: if true commit transaction */
 
 /** Creates an index create graph.
 @return	own: index create node */
@@ -45,7 +45,7 @@ ind_node_t *ind_create_graph_create(
     dict_index_t *index, /*!< in: index to create, built as a memory data
                          structure */
     mem_heap_t *heap,    /*!< in: heap where created */
-    ibool commit);       /*!< in: TRUE if transaction should be commit */
+    bool commit);        /*!< in: true if transaction should be commit */
 
 /** Creates a table. This is a high-level function used in SQL execution graphs.
 @return	query thread to run next or NULL */

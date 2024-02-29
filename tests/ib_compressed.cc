@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
 
   OK(ib_startup("barracuda"));
 
-  OK(ib_cfg_set("file_per_table", IB_TRUE));
+  OK(ib_cfg_set("file_per_table", true));
 
   OK(ib_database_create(DBNAME));
 

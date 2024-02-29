@@ -27,8 +27,7 @@ Created September 2006 Marko Makela
 /** Looks up a column prefix of an externally stored column.
 @return column prefix, or NULL if the column is not stored externally,
 or pointer to field_ref_zero if the BLOB pointer is unset */
-UNIV_INLINE
-const byte *
+inline const byte *
 row_ext_lookup_ith(const row_ext_t *ext, /*!< in/out: column prefix cache */
                    ulint i,              /*!< in: index of ext->ext[] */
                    ulint *len)           /*!< out: length of prefix, in bytes,
@@ -40,7 +39,7 @@ row_ext_lookup_ith(const row_ext_t *ext, /*!< in/out: column prefix cache */
 
   *len = ext->len[i];
 
-  if (UNIV_UNLIKELY(*len == 0)) {
+  if (unlikely(*len == 0)) {
     /* The BLOB could not be fetched to the cache. */
     return (field_ref_zero);
   } else {
@@ -51,14 +50,14 @@ row_ext_lookup_ith(const row_ext_t *ext, /*!< in/out: column prefix cache */
 /** Looks up a column prefix of an externally stored column.
 @return column prefix, or NULL if the column is not stored externally,
 or pointer to field_ref_zero if the BLOB pointer is unset */
-UNIV_INLINE
-const byte *row_ext_lookup(const row_ext_t *ext, /*!< in: column prefix cache */
-                           ulint col,  /*!< in: column number in the InnoDB
-                                       table object, as reported by
-                                       dict_col_get_no(); NOT relative to the
-                                       records in the clustered index */
-                           ulint *len) /*!< out: length of prefix, in bytes,
-                                       at most REC_MAX_INDEX_COL_LEN */
+inline const byte *
+row_ext_lookup(const row_ext_t *ext, /*!< in: column prefix cache */
+               ulint col,            /*!< in: column number in the InnoDB
+                                     table object, as reported by
+                                     dict_col_get_no(); NOT relative to the
+                                     records in the clustered index */
+               ulint *len)           /*!< out: length of prefix, in bytes,
+                                     at most REC_MAX_INDEX_COL_LEN */
 {
   ulint i;
 

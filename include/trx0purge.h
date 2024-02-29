@@ -25,12 +25,12 @@ Created 3/26/1996 Heikki Tuuri
 #define trx0purge_h
 
 #include "fil0fil.h"
+#include "innodb0types.h"
 #include "mtr0mtr.h"
 #include "page0page.h"
 #include "que0types.h"
 #include "trx0sys.h"
 #include "trx0types.h"
-#include "univ.i"
 #include "usr0sess.h"
 
 /** The global data structure coordinating a purge */
@@ -43,17 +43,16 @@ extern trx_undo_rec_t trx_purge_dummy_rec;
 /** Calculates the file address of an undo log header when we have the file
 address of its history list node.
 @return	file address of the log */
-UNIV_INLINE
-fil_addr_t trx_purge_get_log_from_hist(
+inline fil_addr_t trx_purge_get_log_from_hist(
     fil_addr_t node_addr); /*!< in: file address of the history
                            list node of the log */
 /** Checks if trx_id is >= purge_view: then it is guaranteed that its update
 undo log still exists in the system.
-@return TRUE if is sure that it is preserved, also if the function
-returns FALSE, it is possible that the undo log still exists in the
+@return true if is sure that it is preserved, also if the function
+returns false, it is possible that the undo log still exists in the
 system */
 
-ibool trx_purge_update_undo_must_exist(
+bool trx_purge_update_undo_must_exist(
     trx_id_t trx_id); /*!< in: transaction id */
 /** Creates the global purge system control structure and inits the history
 mutex. */
@@ -127,11 +126,11 @@ struct trx_purge_struct {
   undo_no_t purge_undo_no; /*!< Purge has advanced past all records
                            whose undo number is less than this */
   /*-----------------------------*/
-  ibool next_stored; /*!< TRUE if the info of the next record
-                     to purge is stored below: if yes, then
-                     the transaction number and the undo
-                     number of the record are stored in
-                     purge_trx_no and purge_undo_no above */
+  bool next_stored;  /*!< true if the info of the next record
+                      to purge is stored below: if yes, then
+                      the transaction number and the undo
+                      number of the record are stored in
+                      purge_trx_no and purge_undo_no above */
   trx_rseg_t *rseg;  /*!< Rollback segment for the next undo
                      record to purge */
   ulint page_no;     /*!< Page number for the next undo

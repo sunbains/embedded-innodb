@@ -26,18 +26,18 @@ Created 5/27/1996 Heikki Tuuri
 
 #include "data0data.h"
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "pars0types.h"
 #include "que0types.h"
 #include "row0types.h"
 #include "srv0srv.h"
 #include "trx0roll.h"
 #include "trx0trx.h"
-#include "univ.i"
 #include "usr0types.h"
 
-/* If the following flag is set TRUE, the module will print trace info
+/* If the following flag is set true, the module will print trace info
 of SQL execution in the UNIV_SQL_DEBUG version */
-extern ibool que_trace_on;
+extern bool que_trace_on;
 
 /** Adds a query graph to the session's list of graphs. */
 
@@ -54,15 +54,13 @@ que_fork_create(que_t *graph,       /*!< in: graph, if NULL then this
                 ulint fork_type,    /*!< in: fork type */
                 mem_heap_t *heap);  /*!< in: memory heap where created */
 /** Gets the first thr in a fork. */
-UNIV_INLINE
-que_thr_t *que_fork_get_first_thr(que_fork_t *fork); /*!< in: query fork */
+inline que_thr_t *
+que_fork_get_first_thr(que_fork_t *fork); /*!< in: query fork */
 /** Gets the child node of the first thr in a fork. */
-UNIV_INLINE
-que_node_t *que_fork_get_child(que_fork_t *fork); /*!< in: query fork */
+inline que_node_t *que_fork_get_child(que_fork_t *fork); /*!< in: query fork */
 /** Sets the parent of a graph node. */
-UNIV_INLINE
-void que_node_set_parent(que_node_t *node,    /*!< in: graph node */
-                         que_node_t *parent); /*!< in: parent */
+inline void que_node_set_parent(que_node_t *node,    /*!< in: graph node */
+                                que_node_t *parent); /*!< in: parent */
 /** Creates a query graph thread node.
 @return	own: query thread node */
 
@@ -83,9 +81,9 @@ void que_graph_free(que_t *graph); /*!< in: query graph; we assume that the
 /** Stops a query thread if graph or trx is in a state requiring it. The
 conditions are tested in the order (1) graph, (2) trx. The kernel mutex has
 to be reserved.
-@return	TRUE if stopped */
+@return	true if stopped */
 
-ibool que_thr_stop(que_thr_t *thr); /*!< in: query thread */
+bool que_thr_stop(que_thr_t *thr); /*!< in: query thread */
 /** Moves a thread from another state to the QUE_THR_RUNNING state. Increments
 the n_active_thrs counters of the query graph and transaction if thr was
 not active. */
@@ -140,38 +138,30 @@ caller */
 
 que_thr_t *que_fork_start_command(que_fork_t *fork); /*!< in: a query fork */
 /** Gets the trx of a query thread. */
-UNIV_INLINE
-trx_t *thr_get_trx(que_thr_t *thr); /*!< in: query thread */
+inline trx_t *thr_get_trx(que_thr_t *thr); /*!< in: query thread */
 /** Determines if this thread is rolling back an incomplete transaction
 in crash recovery.
-@return TRUE if thr is rolling back an incomplete transaction in crash
+@return true if thr is rolling back an incomplete transaction in crash
 recovery */
-UNIV_INLINE
-ibool thr_is_recv(const que_thr_t *thr); /*!< in: query thread */
+inline bool thr_is_recv(const que_thr_t *thr); /*!< in: query thread */
 /** Gets the type of a graph node. */
-UNIV_INLINE
-ulint que_node_get_type(que_node_t *node); /*!< in: graph node */
+inline ulint que_node_get_type(que_node_t *node); /*!< in: graph node */
 /** Gets pointer to the value data type field of a graph node. */
-UNIV_INLINE
-dtype_t *que_node_get_data_type(que_node_t *node); /*!< in: graph node */
+inline dtype_t *que_node_get_data_type(que_node_t *node); /*!< in: graph node */
 /** Gets pointer to the value dfield of a graph node. */
-UNIV_INLINE
-dfield_t *que_node_get_val(que_node_t *node); /*!< in: graph node */
+inline dfield_t *que_node_get_val(que_node_t *node); /*!< in: graph node */
 /** Gets the value buffer size of a graph node.
 @return	val buffer size, not defined if val.data == NULL in node */
-UNIV_INLINE
-ulint que_node_get_val_buf_size(que_node_t *node); /*!< in: graph node */
+inline ulint que_node_get_val_buf_size(que_node_t *node); /*!< in: graph node */
 /** Sets the value buffer size of a graph node. */
-UNIV_INLINE
-void que_node_set_val_buf_size(que_node_t *node, /*!< in: graph node */
-                               ulint size);      /*!< in: size */
+inline void que_node_set_val_buf_size(que_node_t *node, /*!< in: graph node */
+                                      ulint size);      /*!< in: size */
 /** Gets the next list node in a list of query graph nodes. */
-UNIV_INLINE
-que_node_t *que_node_get_next(que_node_t *node); /*!< in: node in a list */
+inline que_node_t *
+que_node_get_next(que_node_t *node); /*!< in: node in a list */
 /** Gets the parent node of a query graph node.
 @return	parent node or NULL */
-UNIV_INLINE
-que_node_t *que_node_get_parent(que_node_t *node); /*!< in: node */
+inline que_node_t *que_node_get_parent(que_node_t *node); /*!< in: node */
 /** Get the first containing loop node (e.g. while_node_t or for_node_t) for the
 given node, or NULL if the node is not within a loop.
 @return	containing loop node, or NULL. */
@@ -180,26 +170,22 @@ que_node_t *
 que_node_get_containing_loop_node(que_node_t *node); /*!< in: node */
 /** Catenates a query graph node to a list of them, possible empty list.
 @return	one-way list of nodes */
-UNIV_INLINE
-que_node_t *
+inline que_node_t *
 que_node_list_add_last(que_node_t *node_list, /*!< in: node list, or NULL */
                        que_node_t *node);     /*!< in: node */
 /** Gets a query graph node list length.
 @return	length, for NULL list 0 */
-UNIV_INLINE
-ulint que_node_list_get_len(
-    que_node_t *node_list); /*!< in: node list, or NULL */
+inline ulint
+que_node_list_get_len(que_node_t *node_list); /*!< in: node list, or NULL */
 /** Checks if graph, trx, or session is in a state where the query thread should
 be stopped.
-@return TRUE if should be stopped; NOTE that if the peek is made
+@return true if should be stopped; NOTE that if the peek is made
 without reserving the kernel mutex, then another peek with the mutex
 reserved is necessary before deciding the actual stopping */
-UNIV_INLINE
-ibool que_thr_peek_stop(que_thr_t *thr); /*!< in: query thread */
-/** Returns TRUE if the query graph is for a SELECT statement.
-@return	TRUE if a select */
-UNIV_INLINE
-ibool que_graph_is_select(que_t *graph); /*!< in: graph */
+inline bool que_thr_peek_stop(que_thr_t *thr); /*!< in: query thread */
+/** Returns true if the query graph is for a SELECT statement.
+@return	true if a select */
+inline bool que_graph_is_select(que_t *graph); /*!< in: graph */
 /** Prints info of an SQL query graph node. */
 
 void que_node_print_info(que_node_t *node); /*!< in: query graph node */
@@ -207,11 +193,11 @@ void que_node_print_info(que_node_t *node); /*!< in: query graph node */
 @return	error code or DB_SUCCESS */
 
 db_err que_eval_sql(pars_info_t *info, /*!< in: info struct, or NULL */
-                   const char *sql,   /*!< in: SQL string */
-                   ibool reserve_dict_mutex,
-                   /*!< in: if TRUE, acquire/release
-                   dict_sys->mutex around call to pars_sql. */
-                   trx_t *trx); /*!< in: trx */
+                    const char *sql,   /*!< in: SQL string */
+                    bool reserve_dict_mutex,
+                    /*!< in: if true, acquire/release
+                    dict_sys->mutex around call to pars_sql. */
+                    trx_t *trx); /*!< in: trx */
 /** Moves a thread from another state to the QUE_THR_RUNNING state. Increments
 the n_active_thrs counters of the query graph and transaction if thr was
 not active.
@@ -239,11 +225,11 @@ struct que_thr_struct {
                        corruption */
   que_node_t *child;   /*!< graph child node */
   que_t *graph;        /*!< graph where this node belongs */
-  ibool is_active;     /*!< TRUE if the thread has been set
-                       to the run state in
-                       que_thr_move_to_run_state, but not
-                       deactivated in
-                       que_thr_dec_reference_count */
+  bool is_active;      /*!< true if the thread has been set
+                        to the run state in
+                        que_thr_move_to_run_state, but not
+                        deactivated in
+                        que_thr_dec_reference_count */
   ulint state;         /*!< state of the query thread */
   UT_LIST_NODE_T(que_thr_t)
   thrs; /*!< list of thread nodes of the fork
@@ -304,9 +290,9 @@ struct que_fork_struct {
                              first row, or after last row, depending
                              on cur_end; values 1...n mean a row
                              index */
-  ibool cur_on_row;          /*!< TRUE if cursor is on a row, i.e.,
-                             it is not before the first row or
-                             after the last row */
+  bool cur_on_row;           /*!< true if cursor is on a row, i.e.,
+                              it is not before the first row or
+                              after the last row */
   dulint n_inserts;          /*!< number of rows inserted */
   dulint n_updates;          /*!< number of rows updated */
   dulint n_deletes;          /*!< number of rows deleted */

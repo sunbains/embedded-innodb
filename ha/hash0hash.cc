@@ -77,14 +77,14 @@ chosen to be a prime number slightly bigger than n.
 hash_table_t *hash_create(ulint n) /*!< in: number of array cells */
 {
   auto prime = ut_find_prime(n);
-  auto table = (hash_table_t*) mem_alloc(sizeof(hash_table_t));
-  auto array = (hash_cell_t*) ut_malloc(sizeof(hash_cell_t) * prime);
+  auto table = (hash_table_t *)mem_alloc(sizeof(hash_table_t));
+  auto array = (hash_cell_t *)ut_malloc(sizeof(hash_cell_t) * prime);
 
   table->array = array;
   table->n_cells = prime;
 #ifndef UNIV_HOTBACKUP
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-  table->adaptive = FALSE;
+  table->adaptive = false;
 #endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
   table->n_mutexes = 0;
   table->mutexes = NULL;
@@ -132,7 +132,7 @@ void hash_create_mutexes_func(
   ut_a(n_mutexes > 0);
   ut_a(ut_is_2pow(n_mutexes));
 
-  table->mutexes = (mutex_t*) mem_alloc(n_mutexes * sizeof(mutex_t));
+  table->mutexes = (mutex_t *)mem_alloc(n_mutexes * sizeof(mutex_t));
 
   for (i = 0; i < n_mutexes; i++) {
     mutex_create(table->mutexes + i, sync_level);

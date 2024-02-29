@@ -57,7 +57,7 @@ ha_create_func(ulint n, /*!< in: number of array cells */
 
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
 #ifndef UNIV_HOTBACKUP
-  table->adaptive = TRUE;
+  table->adaptive = true;
 #endif /* !UNIV_HOTBACKUP */
 #endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
   /* Creating MEM_HEAP_BTR_SEARCH type heaps can potentially fail,
@@ -74,7 +74,7 @@ ha_create_func(ulint n, /*!< in: number of array cells */
 #ifndef UNIV_HOTBACKUP
   hash_create_mutexes(table, n_mutexes, mutex_level);
 
-  table->heaps = (mem_heap_t**) mem_alloc(n_mutexes * sizeof(void *));
+  table->heaps = (mem_heap_t **)mem_alloc(n_mutexes * sizeof(void *));
 
   for (i = 0; i < n_mutexes; i++) {
     table->heaps[i] = mem_heap_create_in_btr_search(4096);
@@ -118,9 +118,9 @@ void ha_clear(hash_table_t *table) /*!< in, own: hash table */
 /** Inserts an entry into a hash table. If an entry with the same fold number
 is found, its node is updated to point to the new data, and no new node
 is inserted.
-@return	TRUE if succeed, FALSE if no more memory could be allocated */
+@return	true if succeed, false if no more memory could be allocated */
 
-ibool ha_insert_for_fold_func(
+bool ha_insert_for_fold_func(
     hash_table_t *table, /*!< in: hash table */
     ulint fold,          /*!< in: folded value of data; if a node with
                          the same fold value already exists, it is
@@ -148,7 +148,7 @@ ibool ha_insert_for_fold_func(
 
   cell = hash_get_nth_cell(table, hash);
 
-  prev_node = (ha_node_t*) cell->node;
+  prev_node = (ha_node_t *)cell->node;
 
   while (prev_node != NULL) {
     if (prev_node->fold == fold) {
@@ -167,7 +167,7 @@ ibool ha_insert_for_fold_func(
 #endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
       prev_node->data = data;
 
-      return (TRUE);
+      return (true);
     }
 
     prev_node = prev_node->next;
@@ -175,7 +175,8 @@ ibool ha_insert_for_fold_func(
 
   /* We have to allocate a new chain node */
 
-  node = (ha_node_t*) mem_heap_alloc(hash_get_heap(table, fold), sizeof(ha_node_t));
+  node = (ha_node_t *)mem_heap_alloc(hash_get_heap(table, fold),
+                                     sizeof(ha_node_t));
 
   if (node == NULL) {
     /* It was a btr search type memory heap and at the moment
@@ -183,7 +184,7 @@ ibool ha_insert_for_fold_func(
 
     ut_ad(hash_get_heap(table, fold)->type & MEM_HEAP_BTR_SEARCH);
 
-    return (FALSE);
+    return (false);
   }
 
   ha_node_set_data(node, block, data);
@@ -200,13 +201,13 @@ ibool ha_insert_for_fold_func(
 
   node->next = NULL;
 
-  prev_node = (ha_node_t*) cell->node;
+  prev_node = (ha_node_t *)cell->node;
 
   if (prev_node == NULL) {
 
     cell->node = node;
 
-    return (TRUE);
+    return (true);
   }
 
   while (prev_node->next != NULL) {
@@ -216,7 +217,7 @@ ibool ha_insert_for_fold_func(
 
   prev_node->next = node;
 
-  return (TRUE);
+  return (true);
 }
 
 /** Deletes a hash node. */
@@ -324,15 +325,15 @@ void ha_remove_all_nodes_to_page(hash_table_t *table, /*!< in: hash table */
 }
 
 /** Validates a given range of the cells in hash table.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool ha_validate(hash_table_t *table, /*!< in: hash table */
-                  ulint start_index,   /*!< in: start index */
-                  ulint end_index)     /*!< in: end index */
+bool ha_validate(hash_table_t *table, /*!< in: hash table */
+                 ulint start_index,   /*!< in: start index */
+                 ulint end_index)     /*!< in: end index */
 {
   hash_cell_t *cell;
   ha_node_t *node;
-  ibool ok = TRUE;
+  bool ok = true;
   ulint i;
 
   ut_ad(table);
@@ -345,7 +346,7 @@ ibool ha_validate(hash_table_t *table, /*!< in: hash table */
 
     cell = hash_get_nth_cell(table, i);
 
-    node = (ha_node_t*) cell->node;
+    node = (ha_node_t *)cell->node;
 
     while (node) {
       if (hash_calc_hash(node->fold, table) != i) {
@@ -356,7 +357,7 @@ ibool ha_validate(hash_table_t *table, /*!< in: hash table */
                   "InnoDB: match the cell number %lu.\n",
                   (ulong)node->fold, (ulong)i);
 
-        ok = FALSE;
+        ok = false;
       }
 
       node = node->next;

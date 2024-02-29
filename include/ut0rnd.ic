@@ -37,17 +37,15 @@ Created 5/30/1994 Heikki Tuuri
 extern ulint ut_rnd_ulint_counter;
 
 /** This is used to set the random number seed. */
-UNIV_INLINE
-void ut_rnd_set_seed(ulint seed) /*!< in: seed */
+inline void ut_rnd_set_seed(ulint seed) /*!< in: seed */
 {
   ut_rnd_ulint_counter = seed;
 }
 
 /** The following function generates a series of 'random' ulint integers.
 @return	the next 'random' number */
-UNIV_INLINE
-ulint ut_rnd_gen_next_ulint(
-    ulint rnd) /*!< in: the previous random number value */
+inline ulint
+ut_rnd_gen_next_ulint(ulint rnd) /*!< in: the previous random number value */
 {
   ulint n_bits;
 
@@ -69,8 +67,7 @@ enumerate the value space of ulint integers in a pseudo random
 fashion. Note that the same integer is repeated always after
 2 to power 32 calls to the generator (if ulint is 32-bit).
 @return	the 'random' number */
-UNIV_INLINE
-ulint ut_rnd_gen_ulint(void) {
+inline ulint ut_rnd_gen_ulint(void) {
   /* ulint n_bits = 8 * sizeof(ulint); */
 
   ut_rnd_ulint_counter = UT_RND1 * ut_rnd_ulint_counter + UT_RND2;
@@ -80,10 +77,9 @@ ulint ut_rnd_gen_ulint(void) {
 
 /** Generates a random integer from a given interval.
 @return	the 'random' number */
-UNIV_INLINE
-ulint ut_rnd_interval(
-    ulint low,  /*!< in: low limit; can generate also this value */
-    ulint high) /*!< in: high limit; can generate also this value */
+inline ulint
+ut_rnd_interval(ulint low,  /*!< in: low limit; can generate also this value */
+                ulint high) /*!< in: high limit; can generate also this value */
 {
   ulint rnd;
 
@@ -99,29 +95,27 @@ ulint ut_rnd_interval(
   return (low + (rnd % (high - low + 1)));
 }
 
-/** Generates a random iboolean value.
+/** Generates a random boolean value.
 @return	the random value */
-UNIV_INLINE
-ibool ut_rnd_gen_ibool(void) {
+inline bool ut_rnd_gen_bool(void) {
   ulint x;
 
   x = ut_rnd_gen_ulint();
 
   if (((x >> 20) + (x >> 15)) & 1) {
 
-    return (TRUE);
+    return (true);
   }
 
-  return (FALSE);
+  return (false);
 }
 
 /** The following function generates a hash value for a ulint integer
 to a hash table of size table_size, which should be a prime
 or some random number for the hash table to work reliably.
 @return	hash value */
-UNIV_INLINE
-ulint ut_hash_ulint(ulint key,        /*!< in: value to be hashed */
-                    ulint table_size) /*!< in: hash table size */
+inline ulint ut_hash_ulint(ulint key,        /*!< in: value to be hashed */
+                           ulint table_size) /*!< in: hash table size */
 {
   ut_ad(table_size);
   key = key ^ UT_HASH_RANDOM_MASK2;
@@ -131,9 +125,8 @@ ulint ut_hash_ulint(ulint key,        /*!< in: value to be hashed */
 
 /** Folds a pair of ulints.
 @return	folded value */
-UNIV_INLINE
-ulint ut_fold_ulint_pair(ulint n1, /*!< in: ulint */
-                         ulint n2) /*!< in: ulint */
+inline ulint ut_fold_ulint_pair(ulint n1, /*!< in: ulint */
+                                ulint n2) /*!< in: ulint */
 {
   return (
       ((((n1 ^ n2 ^ UT_HASH_RANDOM_MASK2) << 8) + n1) ^ UT_HASH_RANDOM_MASK) +
@@ -142,16 +135,14 @@ ulint ut_fold_ulint_pair(ulint n1, /*!< in: ulint */
 
 /** Folds a dulint.
 @return	folded value */
-UNIV_INLINE
-ulint ut_fold_dulint(dulint d) /*!< in: dulint */
+inline ulint ut_fold_dulint(dulint d) /*!< in: dulint */
 {
   return (ut_fold_ulint_pair(ut_dulint_get_low(d), ut_dulint_get_high(d)));
 }
 
 /** Folds a character string ending in the null character.
 @return	folded value */
-UNIV_INLINE
-ulint ut_fold_string(const char *str) /*!< in: null-terminated string */
+inline ulint ut_fold_string(const char *str) /*!< in: null-terminated string */
 {
   ulint fold = 0;
 
@@ -167,9 +158,8 @@ ulint ut_fold_string(const char *str) /*!< in: null-terminated string */
 
 /** Folds a binary string.
 @return	folded value */
-UNIV_INLINE
-ulint ut_fold_binary(const byte *str, /*!< in: string of bytes */
-                     ulint len)       /*!< in: length */
+inline ulint ut_fold_binary(const byte *str, /*!< in: string of bytes */
+                            ulint len)       /*!< in: length */
 {
   const byte *str_end = str + len;
   ulint fold = 0;

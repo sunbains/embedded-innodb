@@ -27,6 +27,7 @@ Created 13/06/2005 Jan Lindstrom
 #include "btr0types.h"
 #include "data0data.h"
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "lock0types.h"
 #include "mtr0mtr.h"
 #include "que0types.h"
@@ -36,7 +37,6 @@ Created 13/06/2005 Jan Lindstrom
 #include "row0types.h"
 #include "srv0srv.h"
 #include "trx0types.h"
-#include "univ.i"
 
 /** Index field definition */
 struct merge_index_field_struct {
@@ -65,8 +65,8 @@ typedef struct merge_index_def_struct merge_index_def_t;
 @return	error code or DB_SUCCESS */
 
 db_err row_merge_lock_table(trx_t *trx,           /*!< in/out: transaction */
-                           dict_table_t *table,  /*!< in: table to lock */
-                           enum lock_mode mode); /*!< in: LOCK_X or LOCK_S */
+                            dict_table_t *table,  /*!< in: table to lock */
+                            enum lock_mode mode); /*!< in: LOCK_X or LOCK_S */
 /** Drop an index from the InnoDB system tables.  The data dictionary must
 have been locked exclusively by the caller, because the transaction
 will not be committed. */
@@ -93,13 +93,13 @@ have been locked exclusively by the caller, because the transaction
 will not be committed.
 @return	error code or DB_SUCCESS */
 
-db_err row_merge_rename_tables(
-    dict_table_t *old_table, /*!< in/out: old table, renamed to
-                             tmp_name */
-    dict_table_t *new_table, /*!< in/out: new table, renamed to
-                             old_table->name */
-    const char *tmp_name,    /*!< in: new name for old_table */
-    trx_t *trx);             /*!< in: transaction handle */
+db_err
+row_merge_rename_tables(dict_table_t *old_table, /*!< in/out: old table, renamed
+                                                 to tmp_name */
+                        dict_table_t *new_table, /*!< in/out: new table, renamed
+                                                 to old_table->name */
+                        const char *tmp_name, /*!< in: new name for old_table */
+                        trx_t *trx);          /*!< in: transaction handle */
 
 /** Create a temporary table for creating a primary key, using the definition
 of an existing table.
@@ -131,25 +131,25 @@ dict_index_t *row_merge_create_index(
     const merge_index_def_t *index_def);
 /*!< in: the index definition */
 /** Check if a transaction can use an index.
-@return	TRUE if index can be used by the transaction else FALSE */
+@return	true if index can be used by the transaction else false */
 
-ibool row_merge_is_index_usable(
+bool row_merge_is_index_usable(
     const trx_t *trx,           /*!< in: transaction */
     const dict_index_t *index); /*!< in: index to check */
 /** If there are views that refer to the old table name then we "attach" to
 the new instance of the table else we drop it immediately.
 @return	DB_SUCCESS or error code */
 
-db_err row_merge_drop_table(
-    trx_t *trx,           /*!< in: transaction */
-    dict_table_t *table); /*!< in: table instance to drop */
+db_err
+row_merge_drop_table(trx_t *trx,           /*!< in: transaction */
+                     dict_table_t *table); /*!< in: table instance to drop */
 
 /** Build indexes on a table by reading a clustered index,
 creating a temporary file containing index entries, merge sorting
 these index entries and inserting sorted index entries to indexes.
 @return	DB_SUCCESS or error code */
 
-db_err  row_merge_build_indexes(
+db_err row_merge_build_indexes(
     trx_t *trx,              /*!< in: transaction */
     dict_table_t *old_table, /*!< in: table where rows are
                              read from */

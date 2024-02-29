@@ -36,9 +36,9 @@ Created 12/15/1997 Heikki Tuuri
 #include "eval0eval.h"
 #include "row0sel.h"
 
-sym_tab_t * sym_tab_create(mem_heap_t *heap) {
-  auto sym_tab = reinterpret_cast<sym_tab_t*>(
-    mem_heap_alloc(heap, sizeof(sym_tab_t)));
+sym_tab_t *sym_tab_create(mem_heap_t *heap) {
+  auto sym_tab =
+      reinterpret_cast<sym_tab_t *>(mem_heap_alloc(heap, sizeof(sym_tab_t)));
 
   UT_LIST_INIT(sym_tab->sym_list);
   UT_LIST_INIT(sym_tab->func_node_list);
@@ -75,12 +75,12 @@ void sym_tab_free_private(sym_tab_t *sym_tab) {
 }
 
 sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, ulint val) {
-  auto node = reinterpret_cast<sym_node_t*>(
-    mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
+  auto node = reinterpret_cast<sym_node_t *>(
+      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
-  node->resolved = TRUE;
+  node->resolved = true;
   node->token_type = SYM_LIT;
 
   node->indirection = nullptr;
@@ -104,12 +104,12 @@ sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, ulint val) {
 }
 
 sym_node_t *sym_tab_add_str_lit(sym_tab_t *sym_tab, byte *str, ulint len) {
-  auto node = reinterpret_cast<sym_node_t*>(
-    mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
+  auto node = reinterpret_cast<sym_node_t *>(
+      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
-  node->resolved = TRUE;
+  node->resolved = true;
   node->token_type = SYM_LIT;
 
   node->indirection = nullptr;
@@ -138,16 +138,17 @@ sym_node_t *sym_tab_add_str_lit(sym_tab_t *sym_tab, byte *str, ulint len) {
   return (node);
 }
 
-sym_node_t * sym_tab_add_bound_lit(sym_tab_t *sym_tab, const char *name, ulint *lit_type) {
+sym_node_t *sym_tab_add_bound_lit(sym_tab_t *sym_tab, const char *name,
+                                  ulint *lit_type) {
   auto blit = pars_info_get_bound_lit(sym_tab->info, name);
   ut_a(blit != nullptr);
 
-  auto node = reinterpret_cast<sym_node_t*>(
-    mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
+  auto node = reinterpret_cast<sym_node_t *>(
+      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
-  node->resolved = TRUE;
+  node->resolved = true;
   node->token_type = SYM_LIT;
 
   node->indirection = nullptr;
@@ -203,12 +204,12 @@ sym_node_t * sym_tab_add_bound_lit(sym_tab_t *sym_tab, const char *name, ulint *
 }
 
 sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab) {
-  auto node = reinterpret_cast<sym_node_t*>(
-    mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
+  auto node = reinterpret_cast<sym_node_t *>(
+      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
-  node->resolved = TRUE;
+  node->resolved = true;
   node->token_type = SYM_LIT;
 
   node->indirection = nullptr;
@@ -229,12 +230,12 @@ sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab) {
 }
 
 sym_node_t *sym_tab_add_id(sym_tab_t *sym_tab, byte *name, ulint len) {
-  auto node = reinterpret_cast<sym_node_t*>(mem_heap_alloc(
-    sym_tab->heap, sizeof(sym_node_t)));
+  auto node = reinterpret_cast<sym_node_t *>(
+      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
-  node->resolved = FALSE;
+  node->resolved = false;
   node->indirection = nullptr;
 
   node->name = mem_heap_strdupl(sym_tab->heap, (char *)name, len);
@@ -257,12 +258,12 @@ sym_node_t *sym_tab_add_bound_id(sym_tab_t *sym_tab, const char *name) {
   auto bid = pars_info_get_bound_id(sym_tab->info, name);
   ut_a(bid);
 
-  auto node = reinterpret_cast<sym_node_t*>(
-    mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
+  auto node = reinterpret_cast<sym_node_t *>(
+      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
-  node->resolved = FALSE;
+  node->resolved = false;
   node->indirection = nullptr;
 
   node->name = mem_heap_strdup(sym_tab->heap, bid->id);

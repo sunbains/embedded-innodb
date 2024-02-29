@@ -33,8 +33,7 @@ void btr_search_info_update_slow(
 
 /** Returns search info for an index.
 @return	search info; search mutex reserved */
-UNIV_INLINE
-btr_search_t *
+inline btr_search_t *
 btr_search_get_info(dict_index_t *dict_index) /*!< in: dict_index */
 {
   ut_ad(dict_index);
@@ -43,8 +42,7 @@ btr_search_get_info(dict_index_t *dict_index) /*!< in: dict_index */
 }
 
 /** Updates the search info. */
-UNIV_INLINE
-void btr_search_info_update(
+inline void btr_search_info_update(
     dict_index_t *dict_index, /*!< in: dict_index of the cursor */
     btr_cur_t *cursor)        /*!< in: cursor which was just positioned */
 {

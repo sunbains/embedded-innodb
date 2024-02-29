@@ -140,18 +140,21 @@ TODO: proof this
 @param[in,out] heap             Memory heap to use for allocation.
 @return	own: read view struct */
 inline read_view_t *read_view_create_low(ulint n, mem_heap_t *heap) {
-  auto view = reinterpret_cast<read_view_t*>(mem_heap_alloc(heap, sizeof(read_view_t)));
+  auto view = reinterpret_cast<read_view_t *>(
+      mem_heap_alloc(heap, sizeof(read_view_t)));
 
   view->n_trx_ids = n;
-  view->trx_ids = reinterpret_cast<trx_id_t*>(mem_heap_alloc(heap, n * sizeof *view->trx_ids));
+  view->trx_ids = reinterpret_cast<trx_id_t *>(
+      mem_heap_alloc(heap, n * sizeof *view->trx_ids));
 
   return view;
 }
 
-read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *heap) {
+read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id,
+                                               mem_heap_t *heap) {
   read_view_t *old_view;
   read_view_t *view_copy;
-  ibool needs_insert = TRUE;
+  bool needs_insert = true;
   ulint insert_done = 0;
   ulint n;
   ulint i;
@@ -170,13 +173,13 @@ read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *h
   if (!ut_dulint_is_zero(old_view->creator_trx_id)) {
     n++;
   } else {
-    needs_insert = FALSE;
+    needs_insert = false;
   }
 
   view_copy = read_view_create_low(n, heap);
 
   /* Insert the id of the creator in the right place of the descending
-  array of ids, if needs_insert is TRUE: */
+  array of ids, if needs_insert is true: */
 
   i = 0;
   while (i < n) {
@@ -186,7 +189,7 @@ read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *h
                        read_view_get_nth_trx_id(old_view, i)) > 0)) {
 
       read_view_set_nth_trx_id(view_copy, i, old_view->creator_trx_id);
-      needs_insert = FALSE;
+      needs_insert = false;
       insert_done = 1;
     } else {
       read_view_set_nth_trx_id(
@@ -431,7 +434,7 @@ void read_cursor_set(trx_t *trx, cursor_view_t *curview) {
 
   mutex_enter(&kernel_mutex);
 
-  if (UNIV_LIKELY(curview != nullptr)) {
+  if (likely(curview != nullptr)) {
     trx->read_view = curview->read_view;
   } else {
     trx->read_view = trx->global_read_view;

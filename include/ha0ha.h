@@ -24,7 +24,7 @@ Created 8/18/1994 Heikki Tuuri
 #ifndef ha0ha_h
 #define ha0ha_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "buf0types.h"
 #include "hash0hash.h"
@@ -33,8 +33,7 @@ Created 8/18/1994 Heikki Tuuri
 /** Looks for an element in a hash table.
 @return pointer to the data of the first hash table node in chain
 having the fold number, NULL if not found */
-UNIV_INLINE
-void *ha_search_and_get_data(
+inline void *ha_search_and_get_data(
     hash_table_t *table, /*!< in: hash table */
     ulint fold);         /*!< in: folded value of the searched data */
 /** Looks for an element when we know the pointer to the data and updates
@@ -109,9 +108,9 @@ void ha_clear(hash_table_t *table); /*!< in, own: hash table */
 /** Inserts an entry into a hash table. If an entry with the same fold number
 is found, its node is updated to point to the new data, and no new node
 is inserted.
-@return	TRUE if succeed, FALSE if no more memory could be allocated */
+@return	true if succeed, false if no more memory could be allocated */
 
-ibool ha_insert_for_fold_func(
+bool ha_insert_for_fold_func(
     hash_table_t *table, /*!< in: hash table */
     ulint fold,          /*!< in: folded value of data; if a node with
                          the same fold value already exists, it is
@@ -127,7 +126,7 @@ ibool ha_insert_for_fold_func(
 Inserts an entry into a hash table. If an entry with the same fold number
 is found, its node is updated to point to the new data, and no new node
 is inserted.
-@return	TRUE if succeed, FALSE if no more memory could be allocated
+@return	true if succeed, false if no more memory could be allocated
 @param t	in: hash table
 @param f	in: folded value of data
 @param b	in: buffer block containing the data
@@ -138,7 +137,7 @@ is inserted.
 Inserts an entry into a hash table. If an entry with the same fold number
 is found, its node is updated to point to the new data, and no new node
 is inserted.
-@return	TRUE if succeed, FALSE if no more memory could be allocated
+@return	true if succeed, false if no more memory could be allocated
 @param t	in: hash table
 @param f	in: folded value of data
 @param b	ignored: buffer block containing the data
@@ -148,13 +147,11 @@ is inserted.
 
 /** Looks for an element when we know the pointer to the data and deletes
 it from the hash table if found.
-@return	TRUE if found */
-UNIV_INLINE
-ibool ha_search_and_delete_if_found(
+@return	true if found */
+inline bool ha_search_and_delete_if_found(
     hash_table_t *table, /*!< in: hash table */
     ulint fold,          /*!< in: folded value of the searched data */
     void *data);         /*!< in: pointer to the data */
-#ifndef UNIV_HOTBACKUP
 /** Removes from the chain determined by fold all nodes whose data pointer
 points to the page given. */
 
@@ -162,16 +159,15 @@ void ha_remove_all_nodes_to_page(hash_table_t *table, /*!< in: hash table */
                                  ulint fold,          /*!< in: fold value */
                                  const page_t *page); /*!< in: buffer page */
 /** Validates a given range of the cells in hash table.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool ha_validate(hash_table_t *table, /*!< in: hash table */
-                  ulint start_index,   /*!< in: start index */
-                  ulint end_index);    /*!< in: end index */
+bool ha_validate(hash_table_t *table, /*!< in: hash table */
+                 ulint start_index,   /*!< in: start index */
+                 ulint end_index);    /*!< in: end index */
 /** Prints info of a hash table. */
 
 void ha_print_info(ib_stream_t ib_stream, /*!< in: stream where to print */
                    hash_table_t *table);  /*!< in: hash table */
-#endif                                    /* !UNIV_HOTBACKUP */
 
 /** The hash table external chain node */
 typedef struct ha_node_struct ha_node_t;
@@ -186,20 +182,12 @@ struct ha_node_struct {
   ulint fold;         /*!< fold value for the data */
 };
 
-#ifndef UNIV_HOTBACKUP
 /** Assert that the current thread is holding the mutex protecting a
 hash bucket corresponding to a fold value.
 @param table	in: hash table
 @param fold	in: fold value */
 #define ASSERT_HASH_MUTEX_OWN(table, fold)                                     \
   ut_ad(!(table)->mutexes || mutex_own(hash_get_mutex(table, fold)))
-#else /* !UNIV_HOTBACKUP */
-/** Assert that the current thread is holding the mutex protecting a
-hash bucket corresponding to a fold value.
-@param table	in: hash table
-@param fold	in: fold value */
-#define ASSERT_HASH_MUTEX_OWN(table, fold) ((void)0)
-#endif /* !UNIV_HOTBACKUP */
 
 #ifndef UNIV_NONINL
 #include "ha0ha.ic"

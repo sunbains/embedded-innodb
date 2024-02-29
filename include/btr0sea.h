@@ -24,7 +24,7 @@ Created 2/17/1996 Heikki Tuuri
 #ifndef btr0sea_h
 #define btr0sea_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "btr0types.h"
 #include "dict0dict.h"
@@ -49,8 +49,7 @@ void btr_search_enable(void);
 
 /*** Returns search info for an index.
 @return	search info; search mutex reserved */
-UNIV_INLINE
-btr_search_t *btr_search_get_info(dict_index_t *index); /*!< in: index */
+inline btr_search_t *btr_search_get_info(dict_index_t *index); /*!< in: index */
 /*** Creates and initializes a search info struct.
 @return	own: search info struct */
 
@@ -63,17 +62,16 @@ btr_search_latch.
 ulint btr_search_info_get_ref_count(
     btr_search_t *info); /*!< in: search info. */
 /*** Updates the search info. */
-UNIV_INLINE
-void btr_search_info_update(
+inline void btr_search_info_update(
     dict_index_t *index, /*!< in: index of the cursor */
     btr_cur_t *cursor);  /*!< in: cursor which was just positioned */
 /*** Tries to guess the right search position based on the hash search info
 of the index. Note that if mode is PAGE_CUR_LE, which is used in inserts,
-and the function returns TRUE, then cursor->up_match and cursor->low_match
+and the function returns true, then cursor->up_match and cursor->low_match
 both have sensible values.
-@return	TRUE if succeeded */
+@return	true if succeeded */
 
-ibool btr_search_guess_on_hash(
+bool btr_search_guess_on_hash(
     dict_index_t *index,    /*!< in: index */
     btr_search_t *info,     /*!< in: index search info */
     const dtuple_t *tuple,  /*!< in: logical record */
@@ -134,9 +132,9 @@ void btr_search_update_hash_on_delete(
                         record to delete using btr_cur_search_...,
                         the record is not yet deleted */
 /*** Validates the search system.
-@return	TRUE if ok */
+@return	true if ok */
 
-ibool btr_search_validate(void);
+bool btr_search_validate(void);
 /*** Reset global configuration variables. */
 
 void btr_search_var_init(void);
@@ -166,11 +164,11 @@ struct btr_search_struct {
                            BTR_SEARCH_HASH_ANALYSIS, the hash
                            analysis starts; this is reset if no
                            success noticed */
-  ibool last_hash_succ;    /*!< TRUE if the last search would have
-                           succeeded, or did succeed, using the hash
-                           index; NOTE that the value here is not exact:
-                           it is not calculated for every search, and the
-                           calculation itself is not always accurate! */
+  bool last_hash_succ;     /*!< true if the last search would have
+                            succeeded, or did succeed, using the hash
+                            index; NOTE that the value here is not exact:
+                            it is not calculated for every search, and the
+                            calculation itself is not always accurate! */
   ulint n_hash_potential;
   /*!< number of consecutive searches
   which would have succeeded, or did succeed,
@@ -178,16 +176,16 @@ struct btr_search_struct {
   the range is 0 .. BTR_SEARCH_BUILD_LIMIT + 5 */
   /* @} */
   /*---------------------- @{ */
-  ulint n_fields;  /*!< recommended prefix length for hash search:
-                   number of full fields */
-  ulint n_bytes;   /*!< recommended prefix: number of bytes in
-                   an incomplete field
-                   @see BTR_PAGE_MAX_REC_SIZE */
-  ibool left_side; /*!< TRUE or FALSE, depending on whether
+  ulint n_fields; /*!< recommended prefix length for hash search:
+                  number of full fields */
+  ulint n_bytes;  /*!< recommended prefix: number of bytes in
+                  an incomplete field
+                  @see BTR_PAGE_MAX_REC_SIZE */
+  bool left_side; /*!< true or false, depending on whether
                    the leftmost record of several records with
                    the same prefix should be indexed in the
                    hash index */
-                   /*---------------------- @} */
+                  /*---------------------- @} */
 #ifdef UNIV_SEARCH_PERF_STAT
   ulint n_hash_succ; /*!< number of successful hash searches thus
                      far */

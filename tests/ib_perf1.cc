@@ -159,10 +159,10 @@ static void ib_stats_collect(ib_op_t op, time_t elapsed_time) {
 
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
-  ib_bool_t err;
+  bool err;
 
   err = ib_database_create(name);
-  assert(err == IB_TRUE);
+  assert(err == true);
 
   return (DB_SUCCESS);
 }
@@ -478,7 +478,7 @@ static void *worker_thread(void *arg) {
   ib_crsr_t src_crsr = NULL;
   ib_crsr_t dst_crsr = NULL;
   int *table_id = (int *)arg;
-  ib_bool_t positioned = IB_FALSE;
+  bool positioned = false;
 
   snprintf(table1, sizeof(table1), "T%d", *table_id);
   snprintf(table2, sizeof(table2), "T%d", *table_id + 1);
@@ -555,7 +555,7 @@ static void *worker_thread(void *arg) {
       err = ib_cursor_first(src_crsr);
       assert(err == DB_SUCCESS);
 
-      positioned = IB_TRUE;
+      positioned = true;
     }
 
     err = copy_table(dst_crsr, src_crsr, BATCH_SIZE);
@@ -755,7 +755,7 @@ int main(int argc, char *argv[]) {
 
   for (i = 0; i < (int)n_threads; ++i) {
     int retval;
-    int *ptr = (int*)malloc(sizeof(int));
+    int *ptr = (int *)malloc(sizeof(int));
 
     assert(ptr != NULL);
     *ptr = i * 2;

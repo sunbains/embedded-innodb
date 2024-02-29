@@ -36,7 +36,7 @@ que_thr_t *if_step(que_thr_t *thr) /*!< in: query thread */
 
   ut_ad(thr);
 
-  auto node = (if_node_t*) thr->run_node;
+  auto node = (if_node_t *)thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_IF);
 
   if (thr->prev_node == que_node_get_parent(node)) {
@@ -45,9 +45,9 @@ que_thr_t *if_step(que_thr_t *thr) /*!< in: query thread */
 
     eval_exp(node->cond);
 
-    if (eval_node_get_ibool_val(node->cond)) {
+    if (eval_node_get_bool_val(node->cond)) {
 
-      /* The condition evaluated to TRUE: start execution
+      /* The condition evaluated to true: start execution
       from the first statement in the statement list */
 
       thr->run_node = node->stat_list;
@@ -61,9 +61,9 @@ que_thr_t *if_step(que_thr_t *thr) /*!< in: query thread */
       for (;;) {
         eval_exp(elsif_node->cond);
 
-        if (eval_node_get_ibool_val(elsif_node->cond)) {
+        if (eval_node_get_bool_val(elsif_node->cond)) {
 
-          /* The condition evaluated to TRUE:
+          /* The condition evaluated to true:
           start execution from the first
           statement in the statement list */
 
@@ -72,7 +72,7 @@ que_thr_t *if_step(que_thr_t *thr) /*!< in: query thread */
           break;
         }
 
-        elsif_node = (elsif_node_t*) que_node_get_next(elsif_node);
+        elsif_node = (elsif_node_t *)que_node_get_next(elsif_node);
 
         if (elsif_node == NULL) {
           thr->run_node = NULL;
@@ -104,7 +104,7 @@ que_thr_t *while_step(que_thr_t *thr) /*!< in: query thread */
 {
   ut_ad(thr);
 
-  auto node = (while_node_t*) thr->run_node;
+  auto node = (while_node_t *)thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_WHILE);
 
   ut_ad((thr->prev_node == que_node_get_parent(node)) ||
@@ -114,9 +114,9 @@ que_thr_t *while_step(que_thr_t *thr) /*!< in: query thread */
 
   eval_exp(node->cond);
 
-  if (eval_node_get_ibool_val(node->cond)) {
+  if (eval_node_get_bool_val(node->cond)) {
 
-    /* The condition evaluated to TRUE: start execution
+    /* The condition evaluated to true: start execution
     from the first statement in the statement list */
 
     thr->run_node = node->stat_list;
@@ -134,7 +134,7 @@ que_thr_t *assign_step(que_thr_t *thr) /*!< in: query thread */
 {
   ut_ad(thr);
 
-  auto node = (assign_node_t*) thr->run_node;
+  auto node = (assign_node_t *)thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_ASSIGNMENT);
 
   /* Evaluate the value to assign */
@@ -158,7 +158,7 @@ que_thr_t *for_step(que_thr_t *thr) /*!< in: query thread */
 
   ut_ad(thr);
 
-  auto node = (for_node_t*) thr->run_node;
+  auto node = (for_node_t *)thr->run_node;
 
   ut_ad(que_node_get_type(node) == QUE_NODE_FOR);
 
@@ -213,7 +213,7 @@ que_thr_t *exit_step(que_thr_t *thr) /*!< in: query thread */
 
   ut_ad(thr);
 
-  auto node = (exit_node_t*) thr->run_node;
+  auto node = (exit_node_t *)thr->run_node;
 
   ut_ad(que_node_get_type(node) == QUE_NODE_EXIT);
 
@@ -240,7 +240,7 @@ que_thr_t *return_step(que_thr_t *thr) /*!< in: query thread */
 
   ut_ad(thr);
 
-  auto node = (return_node_t*) thr->run_node;
+  auto node = (return_node_t *)thr->run_node;
 
   ut_ad(que_node_get_type(node) == QUE_NODE_RETURN);
 

@@ -26,12 +26,12 @@ Created 2/6/1997 Heikki Tuuri
 
 #include "data0data.h"
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "mtr0mtr.h"
 #include "que0types.h"
 #include "read0types.h"
 #include "rem0types.h"
 #include "trx0types.h"
-#include "univ.i"
 
 /** Finds out if an active transaction has inserted or modified a secondary
 index record. NOTE: the kernel mutex is temporarily released in this
@@ -44,9 +44,9 @@ trx_t *row_vers_impl_x_locked_off_kernel(
     const ulint *offsets); /*!< in: rec_get_offsets(rec, index) */
 /** Finds out if we must preserve a delete marked earlier version of a clustered
 index record, because it is >= the purge view.
-@return	TRUE if earlier version should be preserved */
+@return	true if earlier version should be preserved */
 
-ibool row_vers_must_preserve_del_marked(
+bool row_vers_must_preserve_del_marked(
     trx_id_t trx_id, /*!< in: transaction id in the version */
     mtr_t *mtr);     /*!< in: mtr holding the latch on the
                      clustered index record; it will also
@@ -55,13 +55,13 @@ ibool row_vers_must_preserve_del_marked(
 purge view, should have ientry as its secondary index entry. We check
 if there is any not delete marked version of the record where the trx
 id >= purge view, and the secondary index entry == ientry; exactly in
-this case we return TRUE.
-@return	TRUE if earlier version should have */
+this case we return true.
+@return	true if earlier version should have */
 
-ibool row_vers_old_has_index_entry(
-    ibool also_curr,         /*!< in: TRUE if also rec is included in the
-                           versions to search; otherwise only versions
-                           prior to it are searched */
+bool row_vers_old_has_index_entry(
+    bool also_curr,          /*!< in: true if also rec is included in the
+                            versions to search; otherwise only versions
+                            prior to it are searched */
     const rec_t *rec,        /*!< in: record in the clustered index; the
                              caller must have a latch on the page */
     mtr_t *mtr,              /*!< in: mtr holding the latch on rec; it will
@@ -73,7 +73,7 @@ read should see. We assume that the trx id stored in rec is such that
 the consistent read should not see rec in its present version.
 @return	DB_SUCCESS or DB_MISSING_HISTORY */
 
-db_err  row_vers_build_for_consistent_read(
+db_err row_vers_build_for_consistent_read(
     const rec_t *rec,         /*!< in: record in a clustered index; the
                               caller must have a latch on the page; this
                               latch locks the top of the stack of versions

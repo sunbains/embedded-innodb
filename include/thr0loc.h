@@ -28,8 +28,8 @@ OS handle to the current thread, or its priority. */
 #ifndef thr0loc_h
 #define thr0loc_h
 
+#include "innodb0types.h"
 #include "os0thread.h"
-#include "univ.i"
 
 /** Initializes the thread local storage module. */
 
@@ -58,7 +58,7 @@ void thr_local_set_slot_no(
 storage.
 @return	pointer to the in_ibuf field */
 
-ibool *thr_local_get_in_ibuf_field(void);
+bool *thr_local_get_in_ibuf_field(void);
 
 #ifndef UNIV_NONINL
 #include "thr0loc.ic"

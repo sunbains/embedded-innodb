@@ -26,7 +26,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef btr0types_h
 #define btr0types_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "page0types.h"
 #include "rem0types.h"

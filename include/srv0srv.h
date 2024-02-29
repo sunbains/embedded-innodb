@@ -38,7 +38,7 @@ Created 10/10/1995 Heikki Tuuri
 
 #pragma once
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "api0api.h"
 #include "os0sync.h"
@@ -67,16 +67,19 @@ enum ib_recovery_t {
   /** let the server run even if it detects a corrupt page */
   IB_RECOVERY_IGNORE_CORRUPT,
 
-  /** Prevent the main thread from running: if a crash would occur in purge, this prevents it */
+  /** Prevent the main thread from running: if a crash would occur in purge,
+     this prevents it */
   IB_RECOVERY_NO_BACKGROUND,
 
   /** Do not run trx rollback after recovery */
   IB_RECOVERY_NO_TRX_UNDO,
 
-  /** Prevent also ibuf operations: if they would cause a crash, better not do them */
+  /** Prevent also ibuf operations: if they would cause a crash, better not do
+     them */
   IB_RECOVERY_NO_IBUF_MERGE,
 
-  /** Do not look at undo logs when starting the database: InnoDB will treat even incomplete transactions as committed */
+  /** Do not look at undo logs when starting the database: InnoDB will treat
+     even incomplete transactions as committed */
   IB_RECOVERY_NO_UNDO_LOG_SCAN,
 
   /** Do not do the log roll-forward in connection with recovery */
@@ -89,13 +92,13 @@ at a time */
 #define SRV_AUTO_EXTEND_INCREMENT                                              \
   (srv_auto_extend_increment * ((1024 * 1024) / UNIV_PAGE_SIZE))
 
-/* FIXME: This is set to TRUE if the user has requested it. */
-extern ibool srv_lower_case_table_names;
+/* FIXME: This is set to true if the user has requested it. */
+extern bool srv_lower_case_table_names;
 
 /* FIXME: This is a session variable. */
 extern ulint ses_lock_wait_timeout;
 /* FIXME: This is a session variable. */
-extern ibool ses_rollback_on_timeout;
+extern bool ses_rollback_on_timeout;
 
 /* Server parameters which are read from the initfile */
 
@@ -108,11 +111,11 @@ extern char *srv_arch_dir;
 
 /** store to its own file each table created by an user; data
 dictionary tables are in the system tablespace 0 */
-extern ibool srv_file_per_table;
+extern bool srv_file_per_table;
 /** The file format to use on new *.ibd files. */
 extern ulint srv_file_format;
 /** Whether to check file format during startup.  A value of
-DICT_TF_FORMAT_MAX + 1 means no checking ie. FALSE.  The default is to
+DICT_TF_FORMAT_MAX + 1 means no checking ie. false.  The default is to
 set it to the highest format we support. */
 extern ulint srv_check_file_format_at_startup;
 
@@ -120,11 +123,11 @@ extern ulint srv_n_data_files;
 extern ulint *srv_data_file_sizes;
 extern ulint *srv_data_file_is_raw_partition;
 
-extern ibool srv_auto_extend_last_data_file;
+extern bool srv_auto_extend_last_data_file;
 extern ulint srv_last_file_size_max;
 extern ulong srv_auto_extend_increment;
 
-extern ibool srv_created_new_raw;
+extern bool srv_created_new_raw;
 
 extern ulint srv_n_log_files;
 extern ulint srv_log_file_size;
@@ -132,9 +135,9 @@ extern ulint srv_log_file_curr_size;
 extern ulint srv_log_buffer_size;
 extern ulint srv_log_buffer_curr_size;
 extern ulong srv_flush_log_at_trx_commit;
-extern ibool srv_adaptive_flushing;
+extern bool srv_adaptive_flushing;
 
-extern ibool srv_use_sys_malloc;
+extern bool srv_use_sys_malloc;
 
 extern ulint srv_buf_pool_size;      /*!< requested size in bytes */
 extern ulint srv_buf_pool_old_size;  /*!< previously requested size */
@@ -155,8 +158,8 @@ is 5% of the max where max is srv_io_capacity.  */
 #define PCT_IO(p) ((ulong)(srv_io_capacity * ((double)p / 100.0)))
 
 #ifdef UNIV_LOG_ARCHIVE
-extern ibool srv_log_archive_on;
-extern ibool srv_archive_recovery;
+extern bool srv_log_archive_on;
+extern bool srv_archive_recovery;
 extern uint64_t srv_archive_recovery_limit_lsn;
 #endif /* UNIV_LOG_ARCHIVE */
 
@@ -176,14 +179,14 @@ extern ulint srv_conc_n_waiting_threads;
 
 extern ib_shutdown_t srv_fast_shutdown;
 
-extern ibool srv_innodb_status;
+extern bool srv_innodb_status;
 
 extern unsigned long long srv_stats_sample_pages;
 
-extern ibool srv_use_doublewrite_buf;
-extern ibool srv_use_checksums;
+extern bool srv_use_doublewrite_buf;
+extern bool srv_use_checksums;
 
-extern ibool srv_set_thread_priorities;
+extern bool srv_set_thread_priorities;
 extern int srv_query_thread_priority;
 
 extern ulong srv_max_buf_pool_modified_pct;
@@ -196,31 +199,31 @@ extern ulint srv_n_rows_updated;
 extern ulint srv_n_rows_deleted;
 extern ulint srv_n_rows_read;
 
-extern ibool srv_print_innodb_monitor;
-extern ibool srv_print_innodb_lock_monitor;
-extern ibool srv_print_innodb_tablespace_monitor;
-extern ibool srv_print_verbose_log;
-extern ibool srv_print_innodb_table_monitor;
+extern bool srv_print_innodb_monitor;
+extern bool srv_print_innodb_lock_monitor;
+extern bool srv_print_innodb_tablespace_monitor;
+extern bool srv_print_verbose_log;
+extern bool srv_print_innodb_table_monitor;
 
-extern ibool srv_lock_timeout_active;
-extern ibool srv_monitor_active;
-extern ibool srv_error_monitor_active;
+extern bool srv_lock_timeout_active;
+extern bool srv_monitor_active;
+extern bool srv_error_monitor_active;
 
 extern ulong srv_n_spin_wait_rounds;
 extern ulong srv_spin_wait_delay;
 
 #ifdef UNIV_DEBUG
-extern ibool srv_print_thread_releases;
-extern ibool srv_print_lock_waits;
-extern ibool srv_print_buf_io;
-extern ibool srv_print_log_io;
-extern ibool srv_print_latch_waits;
+extern bool srv_print_thread_releases;
+extern bool srv_print_lock_waits;
+extern bool srv_print_buf_io;
+extern bool srv_print_log_io;
+extern bool srv_print_latch_waits;
 #else /* UNIV_DEBUG */
-#define srv_print_thread_releases FALSE
-#define srv_print_lock_waits FALSE
-#define srv_print_buf_io FALSE
-#define srv_print_log_io FALSE
-#define srv_print_latch_waits FALSE
+#define srv_print_thread_releases false
+#define srv_print_lock_waits false
+#define srv_print_buf_io false
+#define srv_print_log_io false
+#define srv_print_latch_waits false
 #endif /* UNIV_DEBUG */
 
 extern ulint srv_activity_count;
@@ -324,7 +327,8 @@ enum srv_thread_type {
   /** Thread serving console */
   SRV_CONSOLE,
 
-  /** Threads serving parallelized queries and queries released from lock wait */
+  /** Threads serving parallelized queries and queries released from lock wait
+   */
   SRV_WORKER,
 
 #if 0
@@ -429,12 +433,12 @@ srv_error_monitor_thread(void *arg); /*!< in: a dummy parameter required by
                                      os_thread_create */
 
 /** Outputs to a file the output of the InnoDB Monitor.
-@return FALSE if not all information printed
+@return false if not all information printed
 due to failure to obtain necessary mutex */
-ibool srv_printf_innodb_monitor(
+bool srv_printf_innodb_monitor(
     ib_stream_t ib_stream, /*!< in: output stream */
-    ibool nowait,          /*!< in: whether to wait for
-                           kernel mutex */
+    bool nowait,           /*!< in: whether to wait for
+                            kernel mutex */
     ulint *trx_start,      /*!< out: file position of the start of
                            the list of active transactions */
     ulint *trx_end);       /*!< out: file position of the end of
@@ -476,7 +480,7 @@ struct export_var_struct {
   ulint innodb_buffer_pool_read_ahead_evicted; /*!< srv_read_ahead evicted*/
   ulint innodb_dblwr_pages_written;            /*!< srv_dblwr_pages_written */
   ulint innodb_dblwr_writes;                   /*!< srv_dblwr_writes */
-  ibool innodb_have_atomic_builtins;           /*!< HAVE_ATOMIC_BUILTINS */
+  bool innodb_have_atomic_builtins;            /*!< HAVE_ATOMIC_BUILTINS */
   ulint innodb_log_waits;                      /*!< srv_log_waits */
   ulint innodb_log_write_requests;             /*!< srv_log_write_requests */
   ulint innodb_log_writes;                     /*!< srv_log_writes */
@@ -490,8 +494,8 @@ struct export_var_struct {
   ulint innodb_pages_written;          /*!< buf_pool->stat.n_pages_written */
   ulint innodb_row_lock_waits;         /*!< srv_n_lock_wait_count */
   ulint innodb_row_lock_current_waits; /*!< srv_n_lock_wait_current_count */
-  int64_t innodb_row_lock_time;     /*!< srv_n_lock_wait_time
-                                       / 1000 */
+  int64_t innodb_row_lock_time;        /*!< srv_n_lock_wait_time
+                                          / 1000 */
   ulint innodb_row_lock_time_avg;      /*!< srv_n_lock_wait_time
                                        / 1000
                                        / srv_n_lock_wait_count */

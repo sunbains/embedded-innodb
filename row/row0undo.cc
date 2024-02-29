@@ -117,8 +117,10 @@ doing the purge. Similarly, during a rollback, a record can be removed
 if the stored roll ptr in the undo log points to a trx already (being) purged,
 or if the roll ptr is nullptr, i.e., it was a fresh insert. */
 
-undo_node_t *row_undo_node_create(trx_t *trx, que_thr_t *parent, mem_heap_t *heap) {
-  auto undo = reinterpret_cast<undo_node_t*>(mem_heap_alloc(heap, sizeof(undo_node_t)));
+undo_node_t *row_undo_node_create(trx_t *trx, que_thr_t *parent,
+                                  mem_heap_t *heap) {
+  auto undo = reinterpret_cast<undo_node_t *>(
+      mem_heap_alloc(heap, sizeof(undo_node_t)));
 
   undo->common.type = QUE_NODE_UNDO;
   undo->common.parent = parent;
@@ -133,8 +135,8 @@ undo_node_t *row_undo_node_create(trx_t *trx, que_thr_t *parent, mem_heap_t *hea
   return undo;
 }
 
-ibool row_undo_search_clust_to_pcur(undo_node_t *node) {
-  ibool ret;
+bool row_undo_search_clust_to_pcur(undo_node_t *node) {
+  bool ret;
   mem_heap_t *heap{};
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
@@ -146,14 +148,16 @@ ibool row_undo_search_clust_to_pcur(undo_node_t *node) {
 
   auto clust_index = dict_table_get_first_index(node->table);
 
-  auto found = row_search_on_row_ref(&(node->pcur), BTR_MODIFY_LEAF, node->table, node->ref, &mtr);
+  auto found = row_search_on_row_ref(&(node->pcur), BTR_MODIFY_LEAF,
+                                     node->table, node->ref, &mtr);
 
   auto rec = btr_pcur_get_rec(&(node->pcur));
 
   offsets = rec_get_offsets(rec, clust_index, offsets, ULINT_UNDEFINED, &heap);
 
   if (!found ||
-      0 != ut_dulint_cmp(node->roll_ptr, row_get_rec_roll_ptr(rec, clust_index, offsets))) {
+      0 != ut_dulint_cmp(node->roll_ptr,
+                         row_get_rec_roll_ptr(rec, clust_index, offsets))) {
 
     /* We must remove the reservation on the undo log record
     BEFORE releasing the latch on the clustered index page: this
@@ -163,7 +167,7 @@ ibool row_undo_search_clust_to_pcur(undo_node_t *node) {
     /* ib_logger(ib_stream,
             "--------------------undoing a previous version\n"); */
 
-    ret = FALSE;
+    ret = false;
   } else {
     node->row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr,
                           &node->ext, node->heap);
@@ -178,12 +182,12 @@ ibool row_undo_search_clust_to_pcur(undo_node_t *node) {
 
     btr_pcur_store_position(&(node->pcur), &mtr);
 
-    ret = TRUE;
+    ret = true;
   }
 
   btr_pcur_commit_specify_mtr(&(node->pcur), &mtr);
 
-  if (UNIV_LIKELY_NULL(heap)) {
+  if (likely_null(heap)) {
     mem_heap_free(heap);
   }
   return ret;
@@ -202,7 +206,8 @@ static db_err row_undo(undo_node_t *node, que_thr_t *thr) {
 
   if (node->state == UNDO_NODE_FETCH_NEXT) {
 
-    node->undo_rec = trx_roll_pop_top_rec_of_trx(trx, trx->roll_limit, &roll_ptr, node->heap);
+    node->undo_rec = trx_roll_pop_top_rec_of_trx(trx, trx->roll_limit,
+                                                 &roll_ptr, node->heap);
     if (!node->undo_rec) {
       /* Rollback completed for this query thread */
 
@@ -285,7 +290,7 @@ que_thr_t *row_undo_step(que_thr_t *thr) {
 
   auto trx = thr_get_trx(thr);
 
-  auto node = static_cast<undo_node_t*>(thr->run_node);
+  auto node = static_cast<undo_node_t *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_UNDO);
 

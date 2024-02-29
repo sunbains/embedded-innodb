@@ -35,7 +35,7 @@ Created 2/23/1996 Heikki Tuuri
 @return	own: persistent cursor */
 
 btr_pcur_t *btr_pcur_create(void) {
-  auto pcur = (btr_pcur_t*) mem_alloc(sizeof(btr_pcur_t));
+  auto pcur = (btr_pcur_t *)mem_alloc(sizeof(btr_pcur_t));
 
   pcur->btr_cur.index = NULL;
   btr_pcur_init(pcur);
@@ -98,7 +98,7 @@ void btr_pcur_store_position(btr_pcur_t *cursor, /*!< in: persistent cursor */
         mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
   ut_a(cursor->latch_mode != BTR_NO_LATCHES);
 
-  if (UNIV_UNLIKELY(page_get_n_recs(page) == 0)) {
+  if (unlikely(page_get_n_recs(page) == 0)) {
     /* It must be an empty index tree; NOTE that in this case
     we do not store the modify_clock, but always do a search
     if we restore the cursor position */
@@ -158,10 +158,10 @@ void btr_pcur_copy_stored_position(
 
   if (pcur_donate->old_rec_buf) {
 
-    pcur_receive->old_rec_buf = (byte*) mem_alloc(pcur_donate->buf_size);
+    pcur_receive->old_rec_buf = (byte *)mem_alloc(pcur_donate->buf_size);
 
     memcpy(pcur_receive->old_rec_buf, pcur_donate->old_rec_buf,
-              pcur_donate->buf_size);
+           pcur_donate->buf_size);
     pcur_receive->old_rec = pcur_receive->old_rec_buf +
                             (pcur_donate->old_rec - pcur_donate->old_rec_buf);
   }
@@ -180,11 +180,11 @@ infimum;
 GREATER than the user record which was the predecessor of the supremum.
 (4) cursor was positioned before the first or after the last in an empty tree:
 restores to before first or after the last in the tree.
-@return TRUE if the cursor position was stored when it was on a user
+@return true if the cursor position was stored when it was on a user
 record and it can be restored on a user record whose ordering fields
 are identical to the ones of the original user record */
 
-ibool btr_pcur_restore_position_func(
+bool btr_pcur_restore_position_func(
     ulint latch_mode,   /*!< in: BTR_SEARCH_LEAF, ... */
     btr_pcur_t *cursor, /*!< in: detached persistent cursor */
     const char *file,   /*!< in: file name */
@@ -202,9 +202,9 @@ ibool btr_pcur_restore_position_func(
 
   index = btr_cur_get_index(btr_pcur_get_btr_cur(cursor));
 
-  if (UNIV_UNLIKELY(cursor->old_stored != BTR_PCUR_OLD_STORED) ||
-      UNIV_UNLIKELY(cursor->pos_state != BTR_PCUR_WAS_POSITIONED &&
-                    cursor->pos_state != BTR_PCUR_IS_POSITIONED)) {
+  if (unlikely(cursor->old_stored != BTR_PCUR_OLD_STORED) ||
+      unlikely(cursor->pos_state != BTR_PCUR_WAS_POSITIONED &&
+               cursor->pos_state != BTR_PCUR_IS_POSITIONED)) {
     ut_print_buf(ib_stream, cursor, sizeof(btr_pcur_t));
     ib_logger(ib_stream, "\n");
     if (cursor->trx_if_known) {
@@ -214,8 +214,8 @@ ibool btr_pcur_restore_position_func(
     ut_error;
   }
 
-  if (UNIV_UNLIKELY(cursor->rel_pos == BTR_PCUR_AFTER_LAST_IN_TREE ||
-                    cursor->rel_pos == BTR_PCUR_BEFORE_FIRST_IN_TREE)) {
+  if (unlikely(cursor->rel_pos == BTR_PCUR_AFTER_LAST_IN_TREE ||
+               cursor->rel_pos == BTR_PCUR_BEFORE_FIRST_IN_TREE)) {
 
     /* In these cases we do not try an optimistic restoration,
     but always do a search */
@@ -226,19 +226,19 @@ ibool btr_pcur_restore_position_func(
 
     cursor->block_when_stored = btr_pcur_get_block(cursor);
 
-    return (FALSE);
+    return (false);
   }
 
   ut_a(cursor->old_rec);
   ut_a(cursor->old_n_fields);
 
-  if (UNIV_LIKELY(latch_mode == BTR_SEARCH_LEAF) ||
-      UNIV_LIKELY(latch_mode == BTR_MODIFY_LEAF)) {
+  if (likely(latch_mode == BTR_SEARCH_LEAF) ||
+      likely(latch_mode == BTR_MODIFY_LEAF)) {
     /* Try optimistic restoration */
 
-    if (UNIV_LIKELY(
-            buf_page_optimistic_get(latch_mode, cursor->block_when_stored,
-                                    cursor->modify_clock, file, line, mtr))) {
+    if (likely(buf_page_optimistic_get(latch_mode, cursor->block_when_stored,
+                                       cursor->modify_clock, file, line,
+                                       mtr))) {
       cursor->pos_state = BTR_PCUR_IS_POSITIONED;
 
       buf_block_dbg_add_level(btr_pcur_get_block(cursor), SYNC_TREE_NODE);
@@ -262,10 +262,10 @@ ibool btr_pcur_restore_position_func(
         ut_ad(!cmp_rec_rec(cursor->old_rec, rec, offsets1, offsets2, index));
         mem_heap_free(heap);
 #endif /* UNIV_DEBUG */
-        return (TRUE);
+        return (true);
       }
 
-      return (FALSE);
+      return (false);
     }
   }
 
@@ -279,7 +279,7 @@ ibool btr_pcur_restore_position_func(
   /* Save the old search mode of the cursor */
   old_mode = cursor->search_mode;
 
-  if (UNIV_LIKELY(cursor->rel_pos == BTR_PCUR_ON)) {
+  if (likely(cursor->rel_pos == BTR_PCUR_ON)) {
     mode = PAGE_CUR_LE;
   } else if (cursor->rel_pos == BTR_PCUR_AFTER) {
     mode = PAGE_CUR_G;
@@ -310,7 +310,7 @@ ibool btr_pcur_restore_position_func(
 
     mem_heap_free(heap);
 
-    return (TRUE);
+    return (true);
   }
 
   mem_heap_free(heap);
@@ -321,7 +321,7 @@ ibool btr_pcur_restore_position_func(
 
   btr_pcur_store_position(cursor, mtr);
 
-  return (FALSE);
+  return (false);
 }
 
 /** If the latch mode of the cursor is BTR_LEAF_SEARCH or BTR_LEAF_MODIFY,
@@ -385,7 +385,7 @@ void btr_pcur_move_to_next_page(
   ut_a(btr_page_get_prev(next_page, mtr) ==
        buf_block_get_page_no(btr_pcur_get_block(cursor)));
 #endif /* UNIV_BTR_DEBUG */
-  next_block->check_index_page_at_flush = TRUE;
+  next_block->check_index_page_at_flush = true;
 
   btr_leaf_page_release(btr_pcur_get_block(cursor), cursor->latch_mode, mtr);
 
@@ -479,7 +479,7 @@ BTR_MODIFY_LEAF. */
 void btr_pcur_open_on_user_rec_func(
     dict_index_t *index,   /*!< in: index */
     const dtuple_t *tuple, /*!< in: tuple on which search done */
-    ib_srch_mode_t mode,            /*!< in: PAGE_CUR_L, ... */
+    ib_srch_mode_t mode,   /*!< in: PAGE_CUR_L, ... */
     ulint latch_mode,      /*!< in: BTR_SEARCH_LEAF or
                            BTR_MODIFY_LEAF */
     btr_pcur_t *cursor,    /*!< in: memory buffer for persistent

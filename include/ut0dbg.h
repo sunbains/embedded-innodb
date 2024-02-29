@@ -32,7 +32,7 @@ Created 1/30/1994 Heikki Tuuri
 /** Test if an assertion fails.
 @param EXPR	assertion expression
 @return		nonzero if EXPR holds, zero if not */
-#define UT_DBG_FAIL(EXPR) UNIV_UNLIKELY(!((bool)(EXPR)))
+#define UT_DBG_FAIL(EXPR) unlikely(!((bool)(EXPR)))
 #else
 /** This is used to eliminate compiler warnings */
 extern ulint ut_dbg_zero;
@@ -69,10 +69,10 @@ void ut_dbg_assertion_failed(
     ulint line);      /*!< in: line number of the assertion */
 
 #ifdef __NETWARE__
-/** Flag for ignoring further assertion failures.  This is set to TRUE
+/** Flag for ignoring further assertion failures.  This is set to true
 when on NetWare there happens an InnoDB assertion failure or other
 fatal error condition that requires an immediate shutdown. */
-extern ibool panic_shutdown;
+extern bool panic_shutdown;
 /* Abort the execution. */
 void ut_dbg_panic(void);
 #define UT_DBG_PANIC ut_dbg_panic()
@@ -93,9 +93,9 @@ extern ulint *ut_dbg_null_ptr;
 #endif
 
 #if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
-/** If this is set to TRUE by ut_dbg_assertion_failed(), all threads
+/** If this is set to true by ut_dbg_assertion_failed(), all threads
 will stop at the next ut_a() or ut_ad(). */
-extern ibool ut_dbg_stop_threads;
+extern bool ut_dbg_stop_threads;
 
 /** Stop a thread after assertion failure. */
 
@@ -117,7 +117,7 @@ void ut_dbg_stop_thread(const char *file, ulint line);
 /** Stop threads in ut_a(). */
 #define UT_DBG_STOP                                                            \
   do                                                                           \
-    if (UNIV_UNLIKELY(ut_dbg_stop_threads)) {                                  \
+    if (unlikely(ut_dbg_stop_threads)) {                                       \
       ut_dbg_stop_thread(__FILE__, (ulint)__LINE__);                           \
     }                                                                          \
   while (0)

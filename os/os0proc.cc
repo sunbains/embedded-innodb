@@ -22,7 +22,7 @@ process control primitives
 Created 9/30/1995 Heikki Tuuri
 *******************************************************/
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #ifndef __WIN__
 #include <errno.h>
@@ -48,7 +48,7 @@ MAP_ANON but MAP_ANON is marked as deprecated */
 #define OS_MAP_ANON MAP_ANON
 #endif
 
-ibool os_use_large_pages;
+bool os_use_large_pages;
 /* Large page size. This may be a boot-time option on some platforms */
 ulint os_large_page_size;
 
@@ -156,7 +156,7 @@ skip:
   }
 #elif defined __NETWARE__ || !defined OS_MAP_ANON
   size = *n;
-  ptr = ut_malloc_low(size, TRUE, FALSE);
+  ptr = ut_malloc_low(size, true, false);
 #else
 #ifdef HAVE_GETPAGESIZE
   size = getpagesize();
@@ -168,7 +168,7 @@ skip:
   size = *n = ut_2pow_round(*n + (size - 1), size);
   ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | OS_MAP_ANON, -1,
              0);
-  if (UNIV_UNLIKELY(ptr == (void *)-1)) {
+  if (unlikely(ptr == (void *)-1)) {
     ib_logger(ib_stream,
               "InnoDB: mmap(%lu bytes) failed;"
               " errno %lu\n",

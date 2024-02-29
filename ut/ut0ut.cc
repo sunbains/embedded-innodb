@@ -28,7 +28,7 @@ Various utilities for Innobase.
 Created 5/11/1994 Heikki Tuuri
 ********************************************************************/
 
-#include <univ.i>
+#include <innodb0types.h>
 
 #include "ut0ut.h"
 
@@ -38,14 +38,14 @@ Created 5/11/1994 Heikki Tuuri
 
 #include <errno.h>
 
+#include "api0ucode.h"
+#include "trx0trx.h"
 #include <ctype.h>
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
-#include "api0ucode.h"
-#include "trx0trx.h"
 
-static ibool ut_always_false = FALSE;
+static bool ut_always_false = false;
 
 #include <sys/time.h>
 
@@ -124,7 +124,7 @@ void ut_print_timestamp(ib_stream_t ib_stream) {
 #ifdef HAVE_LOCALTIME_R
   localtime_r(&tm, &cal_tm);
   cal_tm_ptr = &cal_tm;
-#else /* HAVE_LOCALTIME_R */
+#else  /* HAVE_LOCALTIME_R */
   cal_tm_ptr = localtime(&tm);
 #endif /* HAVE_LOCALTIME_R */
 
@@ -143,7 +143,7 @@ void ut_sprintf_timestamp(char *buf) {
 #ifdef HAVE_LOCALTIME_R
   localtime_r(&tm, &cal_tm);
   cal_tm_ptr = &cal_tm;
-#else /* HAVE_LOCALTIME_R */
+#else  /* HAVE_LOCALTIME_R */
   cal_tm_ptr = localtime(&tm);
 #endif /* HAVE_LOCALTIME_R */
 
@@ -163,7 +163,7 @@ ulint ut_delay(ulint delay) {
   }
 
   if (ut_always_false) {
-    ut_always_false = (ibool)j;
+    ut_always_false = (bool)j;
   }
 
   return j;
@@ -224,7 +224,8 @@ done:
   ib_logger(ib_stream, "'");
 }
 
-void ut_print_name(ib_stream_t ib_stream, trx_t *trx, ibool table_id, const char *name) {
+void ut_print_name(ib_stream_t ib_stream, trx_t *trx, bool table_id,
+                   const char *name) {
   ut_print_namel(ib_stream, name, strlen(name));
 }
 

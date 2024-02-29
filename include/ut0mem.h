@@ -24,11 +24,10 @@ Created 5/30/1994 Heikki Tuuri
 #ifndef ut0mem_h
 #define ut0mem_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
-#include <string.h>
-#ifndef UNIV_HOTBACKUP
 #include "os0sync.h"
+#include <string.h>
 
 /** The total amount of memory currently allocated from the operating
 system with os_mem_alloc_large() or malloc().  Does not count malloc()
@@ -37,21 +36,20 @@ extern ulint ut_total_allocated_memory;
 
 /** Mutex protecting ut_total_allocated_memory and ut_mem_block_list */
 extern os_fast_mutex_t ut_list_mutex;
-#endif /* !UNIV_HOTBACKUP */
 
 /** Initializes the mem block list at database startup. */
 
 void ut_mem_init(void);
 
 /** Allocates memory. Sets it also to zero if UNIV_SET_MEM_TO_ZERO is
-defined and set_to_zero is TRUE.
+defined and set_to_zero is true.
 @return	own: allocated memory */
 
-void *ut_malloc_low(ulint n,           /*!< in: number of bytes to allocate */
-                    ibool set_to_zero, /*!< in: TRUE if allocated memory
+void *ut_malloc_low(ulint n,          /*!< in: number of bytes to allocate */
+                    bool set_to_zero, /*!< in: true if allocated memory
                                        should be set to zero if
                                        UNIV_SET_MEM_TO_ZERO is defined */
-                    ibool assert_on_error); /*!< in: if TRUE, we crash the
+                    bool assert_on_error); /*!< in: if true, we crash the
                                             engine if the memory cannot be
                                             allocated */
 /** Allocates memory. Sets it also to zero if UNIV_SET_MEM_TO_ZERO is
@@ -59,18 +57,15 @@ defined.
 @return	own: allocated memory */
 
 void *ut_malloc(ulint n); /*!< in: number of bytes to allocate */
-#ifndef UNIV_HOTBACKUP
 /** Tests if malloc of n bytes would succeed. ut_malloc() asserts if memory runs
 out. It cannot be used if we want to return an error message. Prints to
 stderr a message if fails.
-@return	TRUE if succeeded */
+@return	true if succeeded */
 
-ibool ut_test_malloc(ulint n); /*!< in: try to allocate this many bytes */
-#endif                         /* !UNIV_HOTBACKUP */
+bool ut_test_malloc(ulint n); /*!< in: try to allocate this many bytes */
 /** Frees a memory block allocated with ut_malloc. */
 
 void ut_free(void *ptr); /*!< in, own: memory block */
-#ifndef UNIV_HOTBACKUP
 /** Implements realloc. This is needed by /pars/lexyy.c. Otherwise, you should
 not use this function because the allocation functions in mem0mem.h are the
 recommended ones in InnoDB.
@@ -101,7 +96,6 @@ void *ut_realloc(void *ptr,   /*!< in: pointer to old block or NULL */
 /** Frees in shutdown all allocated memory not freed yet. */
 
 void ut_free_all_mem(void);
-#endif /* !UNIV_HOTBACKUP */
 
 /** Copies up to size - 1 characters from the NUL-terminated string src to
 dst, NUL-terminating the result. Returns strlen(src), so truncation
@@ -122,9 +116,8 @@ ulint ut_strlcpy_rev(char *dst,       /*!< in: destination buffer */
 
 /** Compute strlen(strcpyq(str, q)).
 @return	length of the string when quoted */
-UNIV_INLINE
-ulint strlenq(const char *str, /*!< in: null-terminated string */
-                 char q);         /*!< in: the quote character */
+inline ulint strlenq(const char *str, /*!< in: null-terminated string */
+                     char q);         /*!< in: the quote character */
 
 /** Make a quoted copy of a NUL-terminated string.	Leading and trailing
 quotes will not be included; only embedded quotes will be escaped.
@@ -132,8 +125,8 @@ See also strlenq() and memcpyq().
 @return	pointer to end of dest */
 
 char *strcpyq(char *dest,       /*!< in: output buffer */
-                 char q,           /*!< in: the quote character */
-                 const char *src); /*!< in: null-terminated string */
+              char q,           /*!< in: the quote character */
+              const char *src); /*!< in: null-terminated string */
 
 /** Make a quoted copy of a fixed-length string.  Leading and trailing
 quotes will not be included; only embedded quotes will be escaped.
@@ -141,9 +134,9 @@ See also strlenq() and strcpyq().
 @return	pointer to end of dest */
 
 char *memcpyq(char *dest,      /*!< in: output buffer */
-                 char q,          /*!< in: the quote character */
-                 const char *src, /*!< in: string to be quoted */
-                 ulint len);      /*!< in: length of src */
+              char q,          /*!< in: the quote character */
+              const char *src, /*!< in: string to be quoted */
+              ulint len);      /*!< in: length of src */
 
 /** Return the number of times s2 occurs in s1. Overlapping instances of s2
 are only counted once.
@@ -165,23 +158,21 @@ truncated if there is not enough space in "hex", make sure "hex_size" is at
 least (2 * raw_size + 1) if you do not want this to happen. Returns the
 actual number of characters written to "hex" (including the NUL).
 @return	number of chars written */
-UNIV_INLINE
-ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
-                    ulint raw_size,  /*!< in: "raw" length in bytes */
-                    char *hex,       /*!< out: hex string */
-                    ulint hex_size); /*!< in: "hex" size in bytes */
+inline ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
+                           ulint raw_size,  /*!< in: "raw" length in bytes */
+                           char *hex,       /*!< out: hex string */
+                           ulint hex_size); /*!< in: "hex" size in bytes */
 
 /** Adds single quotes to the start and end of string and escapes any quotes
 by doubling them. Returns the number of bytes that were written to "buf"
 (including the terminating NUL). If buf_size is too small then the
 trailing bytes from "str" are discarded.
 @return	number of bytes that were written */
-UNIV_INLINE
-ulint ut_str_sql_format(const char *str, /*!< in: string */
-                        ulint str_len,   /*!< in: string length in bytes */
-                        char *buf,       /*!< out: output buffer */
-                        ulint buf_size); /*!< in: output buffer size
-                                         in bytes */
+inline ulint ut_str_sql_format(const char *str, /*!< in: string */
+                               ulint str_len, /*!< in: string length in bytes */
+                               char *buf,     /*!< out: output buffer */
+                               ulint buf_size); /*!< in: output buffer size
+                                                in bytes */
 /** Reset the variables. */
 
 void ut_mem_var_init(void);

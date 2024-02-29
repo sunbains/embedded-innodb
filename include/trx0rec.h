@@ -26,50 +26,44 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "data0data.h"
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "mtr0mtr.h"
 #include "rem0types.h"
 #include "row0types.h"
 #include "trx0types.h"
-#include "univ.i"
 
 #ifndef UNIV_HOTBACKUP
 #include "que0types.h"
 
 /** Copies the undo record to the heap.
 @return	own: copy of undo log record */
-UNIV_INLINE
-trx_undo_rec_t *
+inline trx_undo_rec_t *
 trx_undo_rec_copy(const trx_undo_rec_t *undo_rec, /*!< in: undo log record */
                   mem_heap_t *heap);              /*!< in: heap where copied */
 /** Reads the undo log record type.
 @return	record type */
-UNIV_INLINE
-ulint trx_undo_rec_get_type(
+inline ulint trx_undo_rec_get_type(
     const trx_undo_rec_t *undo_rec); /*!< in: undo log record */
 
 /** Reads from an undo log record the record compiler info.
 @return	compiler info */
-UNIV_INLINE
-ulint trx_undo_rec_get_cmpl_info(
+inline ulint trx_undo_rec_get_cmpl_info(
     const trx_undo_rec_t *undo_rec); /*!< in: undo log record */
 
-/** Returns TRUE if an undo log record contains an extern storage field.
-@return	TRUE if extern */
-UNIV_INLINE
-ibool trx_undo_rec_get_extern_storage(
+/** Returns true if an undo log record contains an extern storage field.
+@return	true if extern */
+inline bool trx_undo_rec_get_extern_storage(
     const trx_undo_rec_t *undo_rec); /*!< in: undo log record */
 
 /** Reads the undo log record number.
 @return	undo no */
-UNIV_INLINE
-undo_no_t trx_undo_rec_get_undo_no(
+inline undo_no_t trx_undo_rec_get_undo_no(
     const trx_undo_rec_t *undo_rec); /*!< in: undo log record */
 
 /** Returns the start of the undo record data area.
 @return	offset to the data area */
-UNIV_INLINE
-ulint trx_undo_rec_get_offset(
-    undo_no_t undo_no) /*!< in: undo no read from node */
+inline ulint
+trx_undo_rec_get_offset(undo_no_t undo_no) /*!< in: undo no read from node */
     __attribute__((const));
 
 /* FIXME: From merge */
@@ -86,10 +80,10 @@ trx_undo_rec_get_pars(trx_undo_rec_t *undo_rec, /*!< in: undo log record */
                                                 TRX_UNDO_INSERT_REC, ... */
                       ulint *cmpl_info, /*!< out: compiler info, relevant only
                                         for update type records */
-                      ibool *updated_extern, /*!< out: TRUE if we updated an
+                      bool *updated_extern, /*!< out: true if we updated an
                                              externally stored fild */
-                      undo_no_t *undo_no,    /*!< out: undo log record number */
-                      dulint *table_id);     /*!< out: table id */
+                      undo_no_t *undo_no,   /*!< out: undo log record number */
+                      dulint *table_id);    /*!< out: table id */
 /** Builds a row reference from an undo log record.
 @return	pointer to remaining part of undo record */
 
@@ -160,9 +154,9 @@ byte *trx_undo_rec_get_partial_row(
                          record! */
     dict_index_t *index, /*!< in: clustered index */
     dtuple_t **row,      /*!< out, own: partial row */
-    ibool ignore_prefix, /*!< in: flag to indicate if we
-                  expect blob prefixes in undo. Used
-                  only in the assertion. */
+    bool ignore_prefix,  /*!< in: flag to indicate if we
+                   expect blob prefixes in undo. Used
+                   only in the assertion. */
     mem_heap_t *heap);   /*!< in: memory heap from which the memory
                          needed is allocated */
 /** Writes information to an undo log about an insert, update, or a delete

@@ -26,7 +26,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef pars0types_h
 #define pars0types_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 typedef struct pars_info_struct pars_info_t;
 typedef struct pars_user_func_struct pars_user_func_t;

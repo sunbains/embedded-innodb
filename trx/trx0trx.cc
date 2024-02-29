@@ -60,9 +60,7 @@ void trx_var_init(void) {
   trx_n_transactions = 0;
 }
 
-ibool trx_is_strict(trx_t *trx) {
-  return FALSE;
-}
+bool trx_is_strict(trx_t *trx) { return false; }
 
 void trx_set_detailed_error(trx_t *trx, const char *msg) {
   ut_strlcpy(trx->detailed_error, msg, sizeof(trx->detailed_error));
@@ -72,7 +70,7 @@ trx_t *trx_create(sess_t *sess) {
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(sess);
 
-  auto trx = static_cast<trx_t*>(mem_alloc(sizeof(trx_t)));
+  auto trx = static_cast<trx_t *>(mem_alloc(sizeof(trx_t)));
 
   trx->magic_n = TRX_MAGIC_N;
 
@@ -89,13 +87,13 @@ trx_t *trx_create(sess_t *sess) {
   trx->no = ut_dulint_max;
 
 #ifdef WITH_XOPEN
-  trx->support_xa = FALSE;
-  trx->flush_log_later = FALSE;
-  trx->must_flush_log_later = FALSE;
+  trx->support_xa = false;
+  trx->flush_log_later = false;
+  trx->must_flush_log_later = false;
 #endif /* WITH_XOPEN */
 
-  trx->check_foreigns = TRUE;
-  trx->check_unique_secondary = TRUE;
+  trx->check_foreigns = true;
+  trx->check_unique_secondary = true;
 
   trx->dict_operation = TRX_DICT_OP_NONE;
   trx->table_id = ut_dulint_zero;
@@ -125,7 +123,7 @@ trx_t *trx_create(sess_t *sess) {
   trx->que_state = TRX_QUE_RUNNING;
   trx->n_active_thrs = 0;
 
-  trx->handling_signals = FALSE;
+  trx->handling_signals = false;
 
   UT_LIST_INIT(trx->signals);
   UT_LIST_INIT(trx->reply_signals);
@@ -133,7 +131,7 @@ trx_t *trx_create(sess_t *sess) {
   trx->graph = nullptr;
 
   trx->wait_lock = nullptr;
-  trx->was_chosen_as_deadlock_victim = FALSE;
+  trx->was_chosen_as_deadlock_victim = false;
   UT_LIST_INIT(trx->wait_thrs);
 
   trx->lock_heap = mem_heap_create_in_buffer(256);
@@ -142,7 +140,7 @@ trx_t *trx_create(sess_t *sess) {
   UT_LIST_INIT(trx->trx_savepoints);
 
   trx->dict_operation_lock_mode = 0;
-  trx->has_search_latch = FALSE;
+  trx->has_search_latch = false;
   trx->search_latch_timeout = BTR_SEA_TIMEOUT;
 
   trx->global_read_view_heap = mem_heap_create(256);
@@ -198,7 +196,7 @@ void trx_search_latch_release_if_reserved(trx_t *trx) {
   if (trx->has_search_latch) {
     rw_lock_s_unlock(&btr_search_latch);
 
-    trx->has_search_latch = FALSE;
+    trx->has_search_latch = false;
   }
 }
 
@@ -341,7 +339,7 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 
       trx = trx_create(trx_dummy_sess);
 
-      trx->is_recovered = TRUE;
+      trx->is_recovered = true;
       trx->id = undo->trx_id;
 #ifdef WITH_XOPEN
       trx->xid = undo->xid;
@@ -416,7 +414,7 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
       if (nullptr == trx) {
         trx = trx_create(trx_dummy_sess);
 
-        trx->is_recovered = TRUE;
+        trx->is_recovered = true;
         trx->id = undo->trx_id;
 #ifdef WITH_XOPEN
         trx->xid = undo->xid;
@@ -491,8 +489,7 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 /** Assigns a rollback segment to a transaction in a round-robin fashion.
 Skips the SYSTEM rollback segment if another is available.
 @return	assigned rollback segment id */
-UNIV_INLINE
-ulint trx_assign_rseg(void) {
+inline ulint trx_assign_rseg(void) {
   trx_rseg_t *rseg = trx_sys->latest_rseg;
 
   ut_ad(mutex_own(&kernel_mutex));
@@ -519,9 +516,9 @@ loop:
 }
 
 /** Starts a new transaction.
-@return	TRUE */
+@return	true */
 
-ibool trx_start_low(
+bool trx_start_low(
     trx_t *trx,    /*!< in: transaction */
     ulint rseg_id) /*!< in: rollback segment id; if ULINT_UNDEFINED
                    is passed, the system chooses the rollback segment
@@ -538,7 +535,7 @@ ibool trx_start_low(
     trx->conc_state = TRX_ACTIVE;
     trx->start_time = time(nullptr);
 
-    return TRUE;
+    return true;
   }
 
   ut_ad(trx->conc_state != TRX_ACTIVE);
@@ -563,17 +560,17 @@ ibool trx_start_low(
   trx->start_time = time(nullptr);
 
 #ifdef WITH_XOPEN
-  trx->flush_log_later = FALSE;
-  trx->must_flush_log_later = FALSE;
+  trx->flush_log_later = false;
+  trx->must_flush_log_later = false;
 #endif /* WITH_XOPEN */
 
   UT_LIST_ADD_FIRST(trx_list, trx_sys->trx_list, trx);
 
-  return TRUE;
+  return true;
 }
 
-ibool trx_start(trx_t *trx, ulint rseg_id) {
-  ibool ret;
+bool trx_start(trx_t *trx, ulint rseg_id) {
+  bool ret;
 
   /* Update the info whether we should skip XA steps that eat CPU time
   For the duration of the transaction trx->support_xa is not reread
@@ -705,7 +702,7 @@ void trx_commit_off_kernel(trx_t *trx) {
   background thread. To avoid this race we unconditionally
   unset the is_recovered flag from the trx. */
 
-  trx->is_recovered = FALSE;
+  trx->is_recovered = false;
 
   lock_release_off_kernel(trx);
 
@@ -756,7 +753,7 @@ void trx_commit_off_kernel(trx_t *trx) {
 #ifdef WITH_XOPEN
     if (trx->flush_log_later) {
       /* Do nothing yet */
-      trx->must_flush_log_later = TRUE;
+      trx->must_flush_log_later = true;
     } else
 #endif /* WITH_XOPEN */
       if (srv_flush_log_at_trx_commit == 0) {
@@ -765,18 +762,18 @@ void trx_commit_off_kernel(trx_t *trx) {
         if (srv_unix_file_flush_method == SRV_UNIX_NOSYNC) {
           /* Write the log but do not flush it to disk */
 
-          log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, FALSE);
+          log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
         } else {
           /* Write the log to the log files AND flush
           them to disk */
 
-          log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, TRUE);
+          log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
         }
       } else if (srv_flush_log_at_trx_commit == 2) {
 
         /* Write the log but do not flush it to disk */
 
-        log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, FALSE);
+        log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
       } else {
         ut_error;
       }
@@ -947,8 +944,8 @@ static void trx_sig_reply_wait_to_suspended(trx_t *trx) /*!< in: transaction */
 
 /** Checks the compatibility of a new signal with the other signals in the
 queue.
-@return	TRUE if the signal can be queued */
-static ibool trx_sig_is_compatible(
+@return	true if the signal can be queued */
+static bool trx_sig_is_compatible(
     trx_t *trx,   /*!< in: trx handle */
     ulint type,   /*!< in: signal type */
     ulint sender) /*!< in: TRX_SIG_SELF or TRX_SIG_OTHER_SESS */
@@ -959,19 +956,19 @@ static ibool trx_sig_is_compatible(
 
   if (UT_LIST_GET_LEN(trx->signals) == 0) {
 
-    return TRUE;
+    return true;
   }
 
   if (sender == TRX_SIG_SELF) {
     if (type == TRX_SIG_ERROR_OCCURRED) {
 
-      return TRUE;
+      return true;
 
     } else if (type == TRX_SIG_BREAK_EXECUTION) {
 
-      return TRUE;
+      return true;
     } else {
-      return FALSE;
+      return false;
     }
   }
 
@@ -984,38 +981,39 @@ static ibool trx_sig_is_compatible(
 
       if (sig->type == TRX_SIG_TOTAL_ROLLBACK) {
 
-        return FALSE;
+        return false;
       }
 
       sig = UT_LIST_GET_NEXT(signals, sig);
     }
 
-    return TRUE;
+    return true;
 
   } else if (type == TRX_SIG_TOTAL_ROLLBACK) {
     while (sig != nullptr) {
 
       if (sig->type == TRX_SIG_COMMIT) {
 
-        return FALSE;
+        return false;
       }
 
       sig = UT_LIST_GET_NEXT(signals, sig);
     }
 
-    return TRUE;
+    return true;
 
   } else if (type == TRX_SIG_BREAK_EXECUTION) {
 
-    return TRUE;
+    return true;
   } else {
     ut_error;
 
-    return FALSE;
+    return false;
   }
 }
 
-void trx_sig_send(trx_t *trx, ulint type, ulint sender, que_thr_t *receiver_thr, trx_savept_t *savept, que_thr_t **next_thr) {
+void trx_sig_send(trx_t *trx, ulint type, ulint sender, que_thr_t *receiver_thr,
+                  trx_savept_t *savept, que_thr_t **next_thr) {
   trx_sig_t *sig;
   trx_t *receiver_trx;
 
@@ -1040,7 +1038,7 @@ void trx_sig_send(trx_t *trx, ulint type, ulint sender, que_thr_t *receiver_thr,
     /* It might be that the 'sig' slot is unused also in this
     case, but we choose the easy way of using mem_alloc */
 
-    sig = static_cast<trx_sig_t*>(mem_alloc(sizeof(trx_sig_t)));
+    sig = static_cast<trx_sig_t *>(mem_alloc(sizeof(trx_sig_t)));
   }
 
   UT_LIST_ADD_LAST(signals, trx->signals, sig);
@@ -1079,9 +1077,9 @@ void trx_sig_send(trx_t *trx, ulint type, ulint sender, que_thr_t *receiver_thr,
 
 void trx_end_signal_handling(trx_t *trx) {
   ut_ad(mutex_own(&kernel_mutex));
-  ut_ad(trx->handling_signals == TRUE);
+  ut_ad(trx->handling_signals == true);
 
-  trx->handling_signals = FALSE;
+  trx->handling_signals = false;
 
   trx->graph = trx->graph_before_signal_handling;
 
@@ -1140,10 +1138,10 @@ loop:
     return;
   }
 
-  if (trx->handling_signals == FALSE) {
+  if (trx->handling_signals == false) {
     trx->graph_before_signal_handling = trx->graph;
 
-    trx->handling_signals = TRUE;
+    trx->handling_signals = true;
   }
 
   sig = UT_LIST_GET_FIRST(trx->signals);
@@ -1218,7 +1216,8 @@ void trx_sig_remove(trx_t *trx, trx_sig_t *sig) {
 }
 
 commit_node_t *commit_node_create(mem_heap_t *heap) {
-  auto node = reinterpret_cast<commit_node_t*>(mem_heap_alloc(heap, sizeof(commit_node_t)));
+  auto node = reinterpret_cast<commit_node_t *>(
+      mem_heap_alloc(heap, sizeof(commit_node_t)));
 
   node->common.type = QUE_NODE_COMMIT;
   node->state = COMMIT_NODE_SEND;
@@ -1227,7 +1226,7 @@ commit_node_t *commit_node_create(mem_heap_t *heap) {
 }
 
 que_thr_t *trx_commit_step(que_thr_t *thr) {
-  auto node = static_cast<commit_node_t*>(thr->run_node);
+  auto node = static_cast<commit_node_t *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_COMMIT);
 
@@ -1246,7 +1245,8 @@ que_thr_t *trx_commit_step(que_thr_t *thr) {
 
     /* Send the commit signal to the transaction */
 
-    trx_sig_send(thr_get_trx(thr), TRX_SIG_COMMIT, TRX_SIG_SELF, thr, nullptr, &next_thr);
+    trx_sig_send(thr_get_trx(thr), TRX_SIG_COMMIT, TRX_SIG_SELF, thr, nullptr,
+                 &next_thr);
 
     mutex_exit(&kernel_mutex);
 
@@ -1298,23 +1298,23 @@ ulint trx_commit_flush_log(trx_t *trx) {
     if (srv_unix_file_flush_method == SRV_UNIX_NOSYNC) {
       /* Write the log but do not flush it to disk */
 
-      log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, FALSE);
+      log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
     } else {
       /* Write the log to the log files AND flush them to
       disk */
 
-      log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, TRUE);
+      log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
     }
   } else if (srv_flush_log_at_trx_commit == 2) {
 
     /* Write the log but do not flush it to disk */
 
-    log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, FALSE);
+    log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
   } else {
     ut_error;
   }
 
-  trx->must_flush_log_later = FALSE;
+  trx->must_flush_log_later = false;
 
   trx->op_info = "";
 
@@ -1336,7 +1336,7 @@ void trx_mark_sql_stat_end(trx_t *trx) /*!< in: trx handle */
 }
 
 void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
-  ibool newline;
+  bool newline;
 
   ib_logger(ib_stream, "TRANSACTION %lu", TRX_ID_PREP_PRINTF(trx->id));
 
@@ -1386,11 +1386,11 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
               (ulong)trx->client_n_tables_locked);
   }
 
-  newline = TRUE;
+  newline = true;
 
   switch (trx->que_state) {
   case TRX_QUE_RUNNING:
-    newline = FALSE;
+    newline = false;
     break;
   case TRX_QUE_LOCK_WAIT:
     ib_logger(ib_stream, "LOCK WAIT ");
@@ -1407,7 +1407,7 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
 
   if (0 < UT_LIST_GET_LEN(trx->trx_locks) ||
       mem_heap_get_size(trx->lock_heap) > 400) {
-    newline = TRUE;
+    newline = true;
 
     ib_logger(ib_stream,
               "%lu lock struct(s), heap size %lu,"
@@ -1418,12 +1418,12 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
   }
 
   if (trx->has_search_latch) {
-    newline = TRUE;
+    newline = true;
     ib_logger(ib_stream, ", holds adaptive hash latch");
   }
 
   if (!ut_dulint_is_zero(trx->undo_no)) {
-    newline = TRUE;
+    newline = true;
     ib_logger(ib_stream, ", undo log entries %lu",
               (ulong)ut_dulint_get_low(trx->undo_no));
   }
@@ -1515,18 +1515,18 @@ void trx_prepare_off_kernel(trx_t *trx) {
       if (srv_unix_file_flush_method == SRV_UNIX_NOSYNC) {
         /* Write the log but do not flush it to disk */
 
-        log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, FALSE);
+        log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
       } else {
         /* Write the log to the log files AND flush
         them to disk */
 
-        log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, TRUE);
+        log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
       }
     } else if (srv_flush_log_at_trx_commit == 2) {
 
       /* Write the log but do not flush it to disk */
 
-      log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, FALSE);
+      log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
     } else {
       ut_error;
     }
@@ -1617,7 +1617,7 @@ int trx_recover(XID *xid_list, ulint len) {
 }
 
 #ifdef WITH_XOPEN
-trx_t * trx_get_trx_by_xid(XID *xid) {
+trx_t *trx_get_trx_by_xid(XID *xid) {
   trx_t *trx;
 
   if (xid == nullptr) {

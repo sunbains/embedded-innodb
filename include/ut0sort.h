@@ -24,7 +24,7 @@ Created 11/9/1995 Heikki Tuuri
 #ifndef ut0sort_h
 #define ut0sort_h
 
-#include "univ.i"
+#include "innodb0types.h"
 
 /* This module gives a macro definition of the body of
 a standard sort function for an array of elements of any

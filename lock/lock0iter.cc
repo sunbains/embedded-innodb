@@ -25,9 +25,9 @@ Created July 16, 2007 Vasil Dimov
 #define LOCK_MODULE_IMPLEMENTATION
 
 #include "lock0iter.h"
+#include "innodb0types.h"
 #include "lock0lock.h"
 #include "lock0priv.h"
-#include "univ.i"
 #include "ut0dbg.h"
 #include "ut0lst.h"
 

@@ -27,13 +27,13 @@ Created 4/20/1996 Heikki Tuuri
 #include "btr0types.h"
 #include "data0data.h"
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "mtr0mtr.h"
 #include "que0types.h"
 #include "read0types.h"
 #include "rem0types.h"
 #include "row0types.h"
 #include "trx0types.h"
-#include "univ.i"
 
 /** Gets the offset of the trx id field, in bytes relative to the origin of
 a clustered index record.
@@ -45,15 +45,13 @@ ulint row_get_trx_id_offset(
     const ulint *offsets); /*!< in: rec_get_offsets(rec, index) */
 /** Reads the trx id field from a clustered index record.
 @return	value of the field */
-UNIV_INLINE
-trx_id_t row_get_rec_trx_id(
+inline trx_id_t row_get_rec_trx_id(
     const rec_t *rec,      /*!< in: record */
     dict_index_t *index,   /*!< in: clustered index */
     const ulint *offsets); /*!< in: rec_get_offsets(rec, index) */
 /** Reads the roll pointer field from a clustered index record.
 @return	value of the field */
-UNIV_INLINE
-roll_ptr_t row_get_rec_roll_ptr(
+inline roll_ptr_t row_get_rec_roll_ptr(
     const rec_t *rec,      /*!< in: record */
     dict_index_t *index,   /*!< in: clustered index */
     const ulint *offsets); /*!< in: rec_get_offsets(rec, index) */
@@ -186,8 +184,7 @@ void row_build_row_ref_in_tuple(
     trx_t *trx);               /*!< in: transaction */
 /** Builds from a secondary index record a row reference with which we can
 search the clustered index record. */
-UNIV_INLINE
-void row_build_row_ref_fast(
+inline void row_build_row_ref_fast(
     dtuple_t *ref,         /*!< in/out: typed data tuple where the
                            reference is built */
     const ulint *map,      /*!< in: array of field numbers in rec
@@ -199,14 +196,14 @@ void row_build_row_ref_fast(
     const ulint *offsets); /*!< in: array returned by rec_get_offsets() */
 /** Searches the clustered index record for a row, if we have the row
 reference.
-@return	TRUE if found */
+@return	true if found */
 
-ibool row_search_on_row_ref(btr_pcur_t *pcur, /*!< out: persistent cursor, which
+bool row_search_on_row_ref(btr_pcur_t *pcur, /*!< out: persistent cursor, which
                                               must be closed by the caller */
-                            ulint mode,       /*!< in: BTR_MODIFY_LEAF, ... */
-                            const dict_table_t *table, /*!< in: table */
-                            const dtuple_t *ref,       /*!< in: row reference */
-                            mtr_t *mtr);               /*!< in/out: mtr */
+                           ulint mode,       /*!< in: BTR_MODIFY_LEAF, ... */
+                           const dict_table_t *table, /*!< in: table */
+                           const dtuple_t *ref,       /*!< in: row reference */
+                           mtr_t *mtr);               /*!< in/out: mtr */
 /** Fetches the clustered index record for a secondary index record. The latches
 on the secondary index record are preserved.
 @return	record or NULL, if no record found */
@@ -218,9 +215,9 @@ row_get_clust_rec(ulint mode,          /*!< in: BTR_MODIFY_LEAF, ... */
                   dict_index_t **clust_index, /*!< out: clustered index */
                   mtr_t *mtr);                /*!< in: mtr */
 /** Searches an index record.
-@return	TRUE if found */
+@return	true if found */
 
-ibool row_search_index_entry(
+bool row_search_index_entry(
     dict_index_t *index,   /*!< in: index */
     const dtuple_t *entry, /*!< in: index entry */
     ulint mode,            /*!< in: BTR_MODIFY_LEAF, ... */

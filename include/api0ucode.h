@@ -2,7 +2,7 @@
 
 #define INNOBASE_UNI0CODE_H
 
-#include "univ.i"
+#include "innodb0types.h"
 
 /* Opaque type used by the Unicode implementation. */
 typedef struct charset_struct charset_t;
@@ -54,7 +54,7 @@ int ib_utf8_strncasecmp(const char *a, /*!< in: first string to compare */
 void ib_utf8_casedown(char *a); /*!< in/out: str to put in lower case */
 
 /** Test whether a UTF-8 character is a space or not.
-@return	TRUE if isspace(c) */
+@return	true if isspace(c) */
 
 int ib_utf8_isspace(const charset_t *cs, /*!< in: character set */
                     char c);             /*!< in: character to test */

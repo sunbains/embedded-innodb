@@ -25,11 +25,11 @@ Created December 2006 by Marko Makela
 #define buf0buddy_h
 
 #ifdef UNIV_MATERIALIZE
-#undef UNIV_INLINE
-#define UNIV_INLINE
+#undef inline
+#define inline
 #endif
 
-#include "univ.i"
+#include "innodb0types.h"
 
 #include "buf0types.h"
 
@@ -42,20 +42,19 @@ control blocks must be properly initialized immediately after
 buf_buddy_alloc() has returned the memory, before releasing
 buf_pool_mutex.
 @return	allocated block, possibly NULL if lru == NULL */
-UNIV_INLINE
-void *
+inline void *
 buf_buddy_alloc(ulint size, /*!< in: block size, up to UNIV_PAGE_SIZE */
-                ibool *lru) /*!< in: pointer to a variable that will be assigned
-                            TRUE if storage was allocated from the LRU list
-                            and buf_pool_mutex was temporarily released,
-                            or NULL if the LRU list should not be used */
+                bool *lru)  /*!< in: pointer to a variable that will be assigned
+                             true if storage was allocated from the LRU list
+                             and buf_pool_mutex was temporarily released,
+                             or NULL if the LRU list should not be used */
     __attribute__((malloc));
 
 /*** Release a block. */
-UNIV_INLINE
-void buf_buddy_free(void *buf,  /*!< in: block to be freed, must not be
-                                pointed to by the buffer pool */
-                    ulint size) /*!< in: block size, up to UNIV_PAGE_SIZE */
+inline void
+buf_buddy_free(void *buf,  /*!< in: block to be freed, must not be
+                           pointed to by the buffer pool */
+               ulint size) /*!< in: block size, up to UNIV_PAGE_SIZE */
     __attribute__((nonnull));
 
 /*** Get the offset of the buddy of a compressed page frame. */

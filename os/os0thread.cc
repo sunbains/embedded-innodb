@@ -26,22 +26,19 @@ Created 9/8/1995 Heikki Tuuri
 #include "os0sync.h"
 #include "srv0srv.h"
 
-ibool os_thread_eq(os_thread_id_t a, os_thread_id_t b) {
+bool os_thread_eq(os_thread_id_t a, os_thread_id_t b) {
   if (pthread_equal(a, b)) {
-    return TRUE;
+    return true;
   }
-  return FALSE;
+  return false;
 }
 
-ulint os_thread_pf(os_thread_id_t a) {
-  return (ulint)a;
-}
+ulint os_thread_pf(os_thread_id_t a) { return (ulint)a; }
 
-os_thread_id_t os_thread_get_curr_id() {
-  return pthread_self();
-}
+os_thread_id_t os_thread_get_curr_id() { return pthread_self(); }
 
-os_thread_t os_thread_create(void *(*f)(void *), void *arg, os_thread_id_t *thread_id) {
+os_thread_t os_thread_create(void *(*f)(void *), void *arg,
+                             os_thread_id_t *thread_id) {
   os_thread_t pthread;
   pthread_attr_t attr;
 
@@ -83,9 +80,7 @@ void os_thread_exit(void *exit_value) {
   pthread_exit(exit_value);
 }
 
-os_thread_t os_thread_get_curr() {
-  return pthread_self();
-}
+os_thread_t os_thread_get_curr() { return pthread_self(); }
 
 void os_thread_yield(void) {
 #if defined(HAVE_PTHREAD_YIELD_ZERO_ARG)
@@ -115,6 +110,4 @@ ulint os_thread_get_priority(os_thread_t handle __attribute__((unused))) {
   return 0;
 }
 
-ulint os_thread_get_last_error(void) {
-  return 0;
-}
+ulint os_thread_get_last_error(void) { return 0; }

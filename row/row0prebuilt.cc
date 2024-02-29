@@ -46,7 +46,8 @@ row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table handle */
   dict_index_t *clust_index;
 
   auto heap = mem_heap_create(128);
-  auto prebuilt = reinterpret_cast<row_prebuilt_t*>(mem_heap_zalloc(heap, sizeof(row_prebuilt_t)));
+  auto prebuilt = reinterpret_cast<row_prebuilt_t *>(
+      mem_heap_zalloc(heap, sizeof(row_prebuilt_t)));
 
   prebuilt->magic_n = ROW_PREBUILT_ALLOCATED;
   prebuilt->magic_n2 = ROW_PREBUILT_ALLOCATED;
@@ -55,7 +56,7 @@ row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table handle */
 
   prebuilt->table = table;
 
-  prebuilt->sql_stat_start = TRUE;
+  prebuilt->sql_stat_start = true;
 
   prebuilt->pcur = btr_pcur_create();
   prebuilt->clust_pcur = btr_pcur_create();
@@ -87,7 +88,8 @@ row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table handle */
 
   row_cache->heap = mem_heap_create(sz);
 
-  row_cache->ptr = reinterpret_cast<ib_cached_row_t*>(mem_heap_zalloc(row_cache->heap, sz));
+  row_cache->ptr =
+      reinterpret_cast<ib_cached_row_t *>(mem_heap_zalloc(row_cache->heap, sz));
 
   return (prebuilt);
 }
@@ -96,7 +98,7 @@ row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table handle */
 
 void row_prebuilt_free(
     row_prebuilt_t *prebuilt, /*!< in, own: prebuilt struct */
-    ibool dict_locked)        /*!< in: TRUE if dict was locked */
+    bool dict_locked)         /*!< in: true if dict was locked */
 {
   ulint i;
   ib_row_cache_t *row_cache;
@@ -108,7 +110,7 @@ void row_prebuilt_free(
               "InnoDB: table handle. Magic n %lu,"
               " magic n2 %lu, table name",
               (ulong)prebuilt->magic_n, (ulong)prebuilt->magic_n2);
-    ut_print_name(ib_stream, NULL, TRUE, prebuilt->table->name);
+    ut_print_name(ib_stream, NULL, true, prebuilt->table->name);
     ib_logger(ib_stream, "\n");
 
     ut_error;
@@ -155,13 +157,13 @@ void row_prebuilt_reset(
   ut_a(prebuilt->magic_n == ROW_PREBUILT_ALLOCATED);
   ut_a(prebuilt->magic_n2 == ROW_PREBUILT_ALLOCATED);
 
-  prebuilt->sql_stat_start = TRUE;
-  prebuilt->client_has_locked = FALSE;
-  prebuilt->need_to_access_clustered = FALSE;
+  prebuilt->sql_stat_start = true;
+  prebuilt->client_has_locked = false;
+  prebuilt->need_to_access_clustered = false;
 
-  prebuilt->index_usable = FALSE;
+  prebuilt->index_usable = false;
 
-  prebuilt->simple_select = FALSE;
+  prebuilt->simple_select = false;
   prebuilt->select_lock_type = LOCK_NONE;
 
   if (prebuilt->old_vers_heap) {
@@ -197,7 +199,7 @@ void row_prebuilt_update_trx(
               "InnoDB: Error: trying to use a corrupt\n"
               "InnoDB: table handle. Magic n %lu, table name",
               (ulong)prebuilt->magic_n);
-    ut_print_name(ib_stream, NULL, TRUE, prebuilt->table->name);
+    ut_print_name(ib_stream, NULL, true, prebuilt->table->name);
     ib_logger(ib_stream, "\n");
 
     ut_error;

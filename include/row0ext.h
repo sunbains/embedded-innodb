@@ -25,9 +25,9 @@ Created September 2006 Marko Makela
 #define row0ext_h
 
 #include "data0types.h"
+#include "innodb0types.h"
 #include "mem0mem.h"
 #include "row0types.h"
-#include "univ.i"
 
 /** Creates a cache of column prefixes of externally stored columns.
 @return	own: column prefix cache */
@@ -50,8 +50,7 @@ row_ext_t *row_ext_create(
 /** Looks up a column prefix of an externally stored column.
 @return column prefix, or NULL if the column is not stored externally,
 or pointer to field_ref_zero if the BLOB pointer is unset */
-UNIV_INLINE
-const byte *
+inline const byte *
 row_ext_lookup_ith(const row_ext_t *ext, /*!< in/out: column prefix cache */
                    ulint i,              /*!< in: index of ext->ext[] */
                    ulint *len);          /*!< out: length of prefix, in bytes,
@@ -59,14 +58,14 @@ row_ext_lookup_ith(const row_ext_t *ext, /*!< in/out: column prefix cache */
 /** Looks up a column prefix of an externally stored column.
 @return column prefix, or NULL if the column is not stored externally,
 or pointer to field_ref_zero if the BLOB pointer is unset */
-UNIV_INLINE
-const byte *row_ext_lookup(const row_ext_t *ext, /*!< in: column prefix cache */
-                           ulint col,   /*!< in: column number in the InnoDB
-                                        table object, as reported by
-                                        dict_col_get_no(); NOT relative to the
-                                        records in the clustered index */
-                           ulint *len); /*!< out: length of prefix, in bytes,
-                                        at most REC_MAX_INDEX_COL_LEN */
+inline const byte *
+row_ext_lookup(const row_ext_t *ext, /*!< in: column prefix cache */
+               ulint col,            /*!< in: column number in the InnoDB
+                                     table object, as reported by
+                                     dict_col_get_no(); NOT relative to the
+                                     records in the clustered index */
+               ulint *len);          /*!< out: length of prefix, in bytes,
+                                     at most REC_MAX_INDEX_COL_LEN */
 
 /** Prefixes of externally stored columns */
 struct row_ext_struct {

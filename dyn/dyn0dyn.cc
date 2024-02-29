@@ -45,7 +45,7 @@ dyn_block_t *dyn_array_add_block(dyn_array_t *arr) {
 
   auto heap = arr->heap;
 
-  block = (dyn_block_t*) mem_heap_alloc(heap, sizeof(dyn_block_t));
+  block = (dyn_block_t *)mem_heap_alloc(heap, sizeof(dyn_block_t));
 
   block->used = 0;
 

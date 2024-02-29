@@ -39,48 +39,48 @@ Created 2/16/1996 Heikki Tuuri
 #include "srv0start.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
+#include "btr0pcur.h"
+#include "btr0sea.h"
 #include "buf0buf.h"
+#include "buf0flu.h"
+#include "buf0rea.h"
 #include "data0data.h"
 #include "data0type.h"
+#include "dict0boot.h"
+#include "dict0crea.h"
 #include "dict0dict.h"
+#include "dict0load.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
 #include "ibuf0ibuf.h"
+#include "lock0lock.h"
 #include "log0log.h"
 #include "log0recv.h"
 #include "mem0mem.h"
 #include "mtr0mtr.h"
 #include "os0file.h"
+#include "os0proc.h"
+#include "os0sync.h"
 #include "os0thread.h"
 #include "page0cur.h"
 #include "page0page.h"
-#include "rem0rec.h"
-#include "srv0srv.h"
-#include "trx0sys.h"
-#include "trx0trx.h"
-#include "ut0mem.h"
-#include "btr0pcur.h"
-#include "btr0sea.h"
-#include "buf0flu.h"
-#include "buf0rea.h"
-#include "dict0boot.h"
-#include "dict0crea.h"
-#include "dict0load.h"
-#include "lock0lock.h"
-#include "os0proc.h"
-#include "os0sync.h"
 #include "pars0pars.h"
 #include "que0que.h"
 #include "rem0cmp.h"
+#include "rem0rec.h"
 #include "row0ins.h"
 #include "row0row.h"
 #include "row0sel.h"
 #include "row0upd.h"
+#include "srv0srv.h"
 #include "sync0sync.h"
 #include "thr0loc.h"
 #include "trx0purge.h"
 #include "trx0roll.h"
+#include "trx0sys.h"
+#include "trx0trx.h"
 #include "usr0sess.h"
+#include "ut0mem.h"
 #ifdef HAVE_ZIP
 #include "zlib.h" /* for ZLIB_VERSION */
 #endif            /* HAVE_ZIP */
@@ -98,22 +98,22 @@ uint64_t srv_shutdown_lsn;
 
 #ifdef HAVE_DARWIN_THREADS
 #include <sys/utsname.h>
-/** TRUE if the F_FULLFSYNC option is available */
-ibool srv_have_fullfsync = FALSE;
+/** true if the F_FULLFSYNC option is available */
+bool srv_have_fullfsync = false;
 #endif
 
-/** TRUE if a raw partition is in use */
-ibool srv_start_raw_disk_in_use = FALSE;
+/** true if a raw partition is in use */
+bool srv_start_raw_disk_in_use = false;
 
-/** TRUE if the server is being started, before rolling back any
+/** true if the server is being started, before rolling back any
 incomplete transactions */
-ibool srv_startup_is_before_trx_rollback_phase = FALSE;
-/** TRUE if the server is being started */
-ibool srv_is_being_started = FALSE;
-/** TRUE if the server was successfully started */
-ibool srv_was_started = FALSE;
-/** TRUE if innobase_start_or_create_for_mysql() has been called */
-static ibool srv_start_has_been_called = FALSE;
+bool srv_startup_is_before_trx_rollback_phase = false;
+/** true if the server is being started */
+bool srv_is_being_started = false;
+/** true if the server was successfully started */
+bool srv_was_started = false;
+/** true if innobase_start_or_create_for_mysql() has been called */
+static bool srv_start_has_been_called = false;
 
 /** At a shutdown this value climbs from SRV_SHUTDOWN_NONE to
 SRV_SHUTDOWN_CLEANUP and then to SRV_SHUTDOWN_LAST_PHASE, and so on */
@@ -153,8 +153,8 @@ static char **srv_log_group_home_dirs = nullptr;
 /** All threads end up waiting for certain events. Put those events
 to the signaled state. Then the threads will exit themselves in
 os_thread_event_wait().
-@return	TRUE if all threads exited. */
-static ibool srv_threads_shutdown(void);
+@return	true if all threads exited. */
+static bool srv_threads_shutdown(void);
 
 /** */
 #define SRV_N_PENDING_IOS_PER_THREAD OS_AIO_N_PENDING_IOS_PER_THREAD
@@ -197,10 +197,10 @@ and the string is not empty.
 @param[in] str                  Nul terminated char array.
 @return	string which has the separator if the string is not empty.
         The string is alloc'ed using malloc() and the caller is
-	responsible for freeing the string. */
+        responsible for freeing the string. */
 static char *srv_add_path_separator_if_needed(const char *str) {
   auto len = strlen(str);
-  auto out_str = static_cast<char*>(malloc(len + 2));
+  auto out_str = static_cast<char *>(malloc(len + 2));
 
   std::strcpy(out_str, str);
 
@@ -212,7 +212,7 @@ static char *srv_add_path_separator_if_needed(const char *str) {
   return out_str;
 }
 
-ibool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
+bool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
   char *str;
   char *path;
   ulint size;
@@ -224,11 +224,11 @@ ibool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
     data_path_buf = nullptr;
   }
 
-  data_path_buf = static_cast<char*>(malloc(strlen(usr_str) + 1));
+  data_path_buf = static_cast<char *>(malloc(strlen(usr_str) + 1));
   strcpy(data_path_buf, usr_str);
   str = data_path_buf;
 
-  srv_auto_extend_last_data_file = FALSE;
+  srv_auto_extend_last_data_file = false;
   srv_last_file_size_max = 0;
   if (srv_data_file_names != nullptr) {
     free(srv_data_file_names);
@@ -252,12 +252,14 @@ ibool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
   while (*str != '\0') {
     path = str;
 
-    while ((*str != ':' && *str != '\0') || (*str == ':' && (*(str + 1) == '\\' || *(str + 1) == '/' || *(str + 1) == ':'))) {
+    while ((*str != ':' && *str != '\0') ||
+           (*str == ':' &&
+            (*(str + 1) == '\\' || *(str + 1) == '/' || *(str + 1) == ':'))) {
       str++;
     }
 
     if (*str == '\0') {
-      return FALSE;
+      return false;
     }
 
     str++;
@@ -277,7 +279,7 @@ ibool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
 
       if (*str != '\0') {
 
-        return FALSE;
+        return false;
       }
     }
 
@@ -291,7 +293,7 @@ ibool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
     }
 
     if (size == 0) {
-      return FALSE;
+      return false;
     }
 
     i++;
@@ -300,7 +302,7 @@ ibool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
       str++;
     } else if (*str != '\0') {
 
-      return FALSE;
+      return false;
     }
   }
 
@@ -308,17 +310,19 @@ ibool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
     /* If data_file_path was defined it must contain
     at least one data file definition */
 
-    return FALSE;
+    return false;
   }
 
   ut_a(srv_data_file_names == nullptr);
-  srv_data_file_names = static_cast<char**>(malloc(i * sizeof(*srv_data_file_names)));
+  srv_data_file_names =
+      static_cast<char **>(malloc(i * sizeof(*srv_data_file_names)));
 
   ut_a(srv_data_file_sizes == nullptr);
-  srv_data_file_sizes = static_cast<ulint*>(malloc(i * sizeof(ulint)));
+  srv_data_file_sizes = static_cast<ulint *>(malloc(i * sizeof(ulint)));
 
   ut_a(srv_data_file_is_raw_partition == nullptr);
-  srv_data_file_is_raw_partition = static_cast<ulint*>(malloc(i * sizeof(ulint)));
+  srv_data_file_is_raw_partition =
+      static_cast<ulint *>(malloc(i * sizeof(ulint)));
 
   srv_n_data_files = i;
 
@@ -354,7 +358,7 @@ ibool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
 
     if (0 == strncmp(str, ":autoextend", (sizeof ":autoextend") - 1)) {
 
-      srv_auto_extend_last_data_file = TRUE;
+      srv_auto_extend_last_data_file = true;
 
       str += (sizeof ":autoextend") - 1;
 
@@ -367,13 +371,14 @@ ibool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
 
       if (*str != '\0') {
 
-        return FALSE;
+        return false;
       }
     }
 
     (srv_data_file_is_raw_partition)[i] = 0;
 
-    if (strlen(str) >= 6 && *str == 'n' && *(str + 1) == 'e' && *(str + 2) == 'w') {
+    if (strlen(str) >= 6 && *str == 'n' && *(str + 1) == 'e' &&
+        *(str + 2) == 'w') {
       str += 3;
       (srv_data_file_is_raw_partition)[i] = SRV_NEW_RAW;
     }
@@ -393,13 +398,13 @@ ibool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
     }
   }
 
-  return TRUE;
+  return true;
 }
 
 /** Reads log group home directories from a character string.
-@return	TRUE if ok, FALSE on parse error */
+@return	true if ok, false on parse error */
 
-ibool srv_parse_log_group_home_dirs(
+bool srv_parse_log_group_home_dirs(
     const char *usr_str) /*!< in: character string */
 {
   ulint i;
@@ -413,7 +418,7 @@ ibool srv_parse_log_group_home_dirs(
     log_path_buf = nullptr;
   }
 
-  log_path_buf = static_cast<char*>(malloc(strlen(usr_str) + 1));
+  log_path_buf = static_cast<char *>(malloc(strlen(usr_str) + 1));
 
   strcpy(log_path_buf, usr_str);
   str = log_path_buf;
@@ -448,7 +453,7 @@ ibool srv_parse_log_group_home_dirs(
       str++;
     } else if (*str != '\0') {
 
-      return FALSE;
+      return false;
     }
   }
 
@@ -456,12 +461,12 @@ ibool srv_parse_log_group_home_dirs(
     /* If log_group_home_dir was defined it must
     contain exactly one path definition. */
 
-    return FALSE;
+    return false;
   }
 
   /* Add sentinel element to the array. */
   n_bytes = (i + 1) * sizeof(*srv_log_group_home_dirs);
-  srv_log_group_home_dirs = static_cast<char**>(malloc(n_bytes));
+  srv_log_group_home_dirs = static_cast<char **>(malloc(n_bytes));
   memset(srv_log_group_home_dirs, 0x0, n_bytes);
 
   /* Then store the actual values to our array */
@@ -493,7 +498,7 @@ ibool srv_parse_log_group_home_dirs(
   ut_a(i > 0);
   ut_a(srv_log_group_home_dirs[i] == nullptr);
 
-  return TRUE;
+  return true;
 }
 
 /** Frees the memory allocated by srv_parse_data_file_paths_and_sizes()
@@ -602,39 +607,46 @@ srv_calc_high32(ulint file_size) /*!< in: file size in database pages */
 /** Creates or opens the log files and closes them.
 @return	DB_SUCCESS or error code */
 static db_err open_or_create_log_file(
-    ibool create_new_db,            /*!< in: TRUE if we should create a
+    bool create_new_db,            /*!< in: true if we should create a
                                     new database */
-    ibool *log_file_created,        /*!< out: TRUE if new log file
+    bool *log_file_created,        /*!< out: true if new log file
                                     created */
-    ibool log_file_has_been_opened, /*!< in: TRUE if a log file has been
+    bool log_file_has_been_opened, /*!< in: true if a log file has been
                                    opened before: then it is an error
                                    to try to create another log file */
-    ulint k,                        /*!< in: log group number */
-    ulint i)                        /*!< in: log file number in group */
+    ulint k,                       /*!< in: log group number */
+    ulint i)                       /*!< in: log file number in group */
 {
-  ibool ret;
+  bool ret;
   ulint size;
   ulint size_high;
   char name[10000];
 
   UT_NOT_USED(create_new_db);
 
-  *log_file_created = FALSE;
+  *log_file_created = false;
 
-  ut_a(strlen(srv_log_group_home_dirs[k]) < (sizeof name) - 10 - sizeof "ib_logfile");
+  ut_a(strlen(srv_log_group_home_dirs[k]) <
+       (sizeof name) - 10 - sizeof "ib_logfile");
 
-  ut_snprintf(name, sizeof(name), "%s%s%lu", srv_log_group_home_dirs[k], "ib_logfile", (ulong)i);
+  ut_snprintf(name, sizeof(name), "%s%s%lu", srv_log_group_home_dirs[k],
+              "ib_logfile", (ulong)i);
 
-  files[i] = os_file_create(name, OS_FILE_CREATE, OS_FILE_NORMAL, OS_LOG_FILE, &ret);
+  files[i] =
+      os_file_create(name, OS_FILE_CREATE, OS_FILE_NORMAL, OS_LOG_FILE, &ret);
 
-  if (ret == FALSE) {
-    if (os_file_get_last_error(FALSE) != OS_FILE_ALREADY_EXISTS) {
-      ib_logger(ib_stream, "InnoDB: Error in creating" " or opening %s\n", name);
+  if (ret == false) {
+    if (os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
+      ib_logger(ib_stream,
+                "InnoDB: Error in creating"
+                " or opening %s\n",
+                name);
 
       return DB_ERROR;
     }
 
-    files[i] = os_file_create(name, OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, &ret);
+    files[i] =
+        os_file_create(name, OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, &ret);
 
     if (!ret) {
       ib_logger(ib_stream, "InnoDB: Error in opening %s\n", name);
@@ -645,7 +657,8 @@ static db_err open_or_create_log_file(
     ret = os_file_get_size(files[i], &size, &size_high);
     ut_a(ret);
 
-    if (size != srv_calc_low32(srv_log_file_size) || size_high != srv_calc_high32(srv_log_file_size)) {
+    if (size != srv_calc_low32(srv_log_file_size) ||
+        size_high != srv_calc_high32(srv_log_file_size)) {
 
       ib_logger(ib_stream,
                 "InnoDB: Error: log file %s is"
@@ -658,7 +671,7 @@ static db_err open_or_create_log_file(
       return DB_ERROR;
     }
   } else {
-    *log_file_created = TRUE;
+    *log_file_created = true;
 
     ut_print_timestamp(ib_stream);
 
@@ -677,7 +690,8 @@ static db_err open_or_create_log_file(
     ib_logger(ib_stream, "InnoDB: Database physically writes the file"
                          " full: wait...\n");
 
-    ret = os_file_set_size(name, files[i], srv_calc_low32(srv_log_file_size), srv_calc_high32(srv_log_file_size));
+    ret = os_file_set_size(name, files[i], srv_calc_low32(srv_log_file_size),
+                           srv_calc_high32(srv_log_file_size));
     if (!ret) {
       ib_logger(ib_stream,
                 "InnoDB: Error in creating %s:"
@@ -701,7 +715,7 @@ static db_err open_or_create_log_file(
   ut_a(fil_validate());
 
   fil_node_create(name, srv_log_file_size, 2 * k + SRV_LOG_SPACE_FIRST_ID,
-                  FALSE);
+                  false);
 #ifdef UNIV_LOG_ARCHIVE
   /* If this is the first log group, create the file space object
   for archived logs.  */
@@ -719,7 +733,9 @@ static db_err open_or_create_log_file(
   }
 #endif /* UNIV_LOG_ARCHIVE */
   if (i == 0) {
-    log_group_init(k, srv_n_log_files, srv_log_file_size * UNIV_PAGE_SIZE, 2 * k + SRV_LOG_SPACE_FIRST_ID, SRV_LOG_SPACE_FIRST_ID + 1); /* dummy arch space id */
+    log_group_init(k, srv_n_log_files, srv_log_file_size * UNIV_PAGE_SIZE,
+                   2 * k + SRV_LOG_SPACE_FIRST_ID,
+                   SRV_LOG_SPACE_FIRST_ID + 1); /* dummy arch space id */
   }
 
   return DB_SUCCESS;
@@ -728,25 +744,25 @@ static db_err open_or_create_log_file(
 /** Creates or opens database data files and closes them.
 @return	DB_SUCCESS or error code */
 static db_err open_or_create_data_files(
-    ibool *create_new_db, /*!< out: TRUE if new database should be
+    bool *create_new_db, /*!< out: true if new database should be
                           created */
 #ifdef UNIV_LOG_ARCHIVE
-    ulint *min_arch_log_no,       /*!< out: min of archived log
-                                  numbers in data files */
-    ulint *max_arch_log_no,       /*!< out: max of archived log
-                                  numbers in data files */
-#endif                            /* UNIV_LOG_ARCHIVE */
+    ulint *min_arch_log_no,    /*!< out: min of archived log
+                               numbers in data files */
+    ulint *max_arch_log_no,    /*!< out: max of archived log
+                               numbers in data files */
+#endif                         /* UNIV_LOG_ARCHIVE */
     uint64_t *min_flushed_lsn, /*!< out: min of flushed lsn
                                   values in data files */
     uint64_t *max_flushed_lsn, /*!< out: max of flushed lsn
                                   values in data files */
-    ulint *sum_of_new_sizes)      /*!< out: sum of sizes of the
-                                 new files added */
+    ulint *sum_of_new_sizes)   /*!< out: sum of sizes of the
+                              new files added */
 {
-  ibool ret;
+  bool ret;
   ulint i;
-  ibool one_opened = FALSE;
-  ibool one_created = FALSE;
+  bool one_opened = false;
+  bool one_created = false;
   ulint size;
   ulint size_high;
   ulint rounded_size_pages;
@@ -763,7 +779,7 @@ static db_err open_or_create_data_files(
 
   *sum_of_new_sizes = 0;
 
-  *create_new_db = FALSE;
+  *create_new_db = false;
 
   /* Copy the path because we want to normalize it. */
   strcpy(home, srv_data_home);
@@ -773,7 +789,7 @@ static db_err open_or_create_data_files(
   srv_data_home variable. */
 
   for (i = 0; i < srv_n_data_files; i++) {
-    ibool is_absolute = FALSE;
+    bool is_absolute = false;
     const char *ptr = srv_data_file_names[i];
 
 #ifdef __WIN__
@@ -783,7 +799,7 @@ static db_err open_or_create_data_files(
          (*ptr >= 'A' && *ptr <= 'Z') && *(ptr + 1) == ':') ||
         *ptr == '\\' || *ptr == '/') {
 
-      is_absolute = TRUE;
+      is_absolute = true;
     }
 #else
     /* We assume Unix file paths here. */
@@ -795,8 +811,7 @@ static db_err open_or_create_data_files(
     are created relative to home. */
     if (!is_absolute) {
 
-      ut_a(strlen(home) + strlen(srv_data_file_names[i]) <
-           (sizeof name) - 1);
+      ut_a(strlen(home) + strlen(srv_data_file_names[i]) < (sizeof name) - 1);
 
       ut_snprintf(name, sizeof(name), "%s%s", home, srv_data_file_names[i]);
     } else {
@@ -808,18 +823,18 @@ static db_err open_or_create_data_files(
     if (srv_data_file_is_raw_partition[i] == 0) {
 
       /* First we try to create the file: if it already
-      exists, ret will get value FALSE */
+      exists, ret will get value false */
 
       files[i] = os_file_create(name, OS_FILE_CREATE, OS_FILE_NORMAL,
                                 OS_DATA_FILE, &ret);
 
-      if (ret == FALSE &&
-          os_file_get_last_error(FALSE) != OS_FILE_ALREADY_EXISTS
+      if (ret == false &&
+          os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS
 #ifdef UNIV_AIX
           /* AIX 5.1 after security patch ML7 may have
           errno set to 0 here, which causes our function
           to return 100; work around that AIX problem */
-          && os_file_get_last_error(FALSE) != 100
+          && os_file_get_last_error(false) != 100
 #endif
       ) {
         ib_logger(ib_stream,
@@ -833,8 +848,8 @@ static db_err open_or_create_data_files(
       /* The partition is opened, not created; then it is
       written over */
 
-      srv_start_raw_disk_in_use = TRUE;
-      srv_created_new_raw = TRUE;
+      srv_start_raw_disk_in_use = true;
+      srv_created_new_raw = true;
 
       files[i] = os_file_create(name, OS_FILE_OPEN_RAW, OS_FILE_NORMAL,
                                 OS_DATA_FILE, &ret);
@@ -844,14 +859,14 @@ static db_err open_or_create_data_files(
         return DB_ERROR;
       }
     } else if (srv_data_file_is_raw_partition[i] == SRV_OLD_RAW) {
-      srv_start_raw_disk_in_use = TRUE;
+      srv_start_raw_disk_in_use = true;
 
-      ret = FALSE;
+      ret = false;
     } else {
       ut_a(0);
     }
 
-    if (ret == FALSE) {
+    if (ret == false) {
       /* We open the data file */
 
       if (one_created) {
@@ -877,7 +892,7 @@ static db_err open_or_create_data_files(
 
       if (!ret) {
         ib_logger(ib_stream, "InnoDB: Error in opening %s\n", name);
-        os_file_get_last_error(TRUE);
+        os_file_get_last_error(true);
 
         return DB_ERROR;
       }
@@ -940,12 +955,12 @@ static db_err open_or_create_data_files(
                                            min_arch_log_no, max_arch_log_no,
 #endif /* UNIV_LOG_ARCHIVE */
                                            min_flushed_lsn, max_flushed_lsn);
-      one_opened = TRUE;
+      one_opened = true;
     } else {
       /* We created the data file and now write it full of
       zeros */
 
-      one_created = TRUE;
+      one_created = true;
 
       if (i > 0) {
         ut_print_timestamp(ib_stream);
@@ -960,7 +975,7 @@ static db_err open_or_create_data_files(
                   "InnoDB: a new database"
                   " to be created!\n",
                   name);
-        *create_new_db = TRUE;
+        *create_new_db = true;
       }
 
       ut_print_timestamp(ib_stream);
@@ -1016,7 +1031,8 @@ static void srv_startup_abort(enum db_err err) /* in: Current error code */
 
   /* For fatal errors we want to avoid writing to the data files. */
   if (err != DB_FATAL) {
-    logs_empty_and_mark_files_at_shutdown(srv_force_recovery, srv_fast_shutdown);
+    logs_empty_and_mark_files_at_shutdown(srv_force_recovery,
+                                          srv_fast_shutdown);
 
     fil_close_all_files();
   }
@@ -1035,10 +1051,10 @@ static void srv_startup_abort(enum db_err err) /* in: Current error code */
 
 ib_err_t innobase_start_or_create() {
   buf_pool_t *ret;
-  ibool create_new_db;
-  ibool log_file_created;
-  ibool log_created = FALSE;
-  ibool log_opened = FALSE;
+  bool create_new_db;
+  bool log_file_created;
+  bool log_created = false;
+  bool log_opened = false;
   uint64_t min_flushed_lsn;
   uint64_t max_flushed_lsn;
 #ifdef UNIV_LOG_ARCHIVE
@@ -1052,7 +1068,7 @@ ib_err_t innobase_start_or_create() {
   ulint i;
   ulint io_limit;
   mtr_t mtr;
-  ibool srv_file_per_table_original_value;
+  bool srv_file_per_table_original_value;
 
   // FIXME:
   ib_stream = stderr;
@@ -1063,7 +1079,7 @@ ib_err_t innobase_start_or_create() {
 #ifdef F_FULLFSYNC
   /* This executable has been compiled on Mac OS X 10.3 or later.
   Assume that F_FULLFSYNC is available at run-time. */
-  srv_have_fullfsync = TRUE;
+  srv_have_fullfsync = true;
 #else  /* F_FULLFSYNC */
   /* This executable has been compiled on Mac OS X 10.2
   or earlier.  Determine if the executable is running
@@ -1096,7 +1112,7 @@ ib_err_t innobase_start_or_create() {
   temporarily clear srv_file_per_table.  This is ok, because the
   server will not accept connections (which could modify
   file_per_table) until this function has returned. */
-  srv_file_per_table = FALSE;
+  srv_file_per_table = false;
 #ifdef UNIV_DEBUG
   ib_logger(ib_stream, "InnoDB: !!!!!!!! UNIV_DEBUG switched on !!!!!!!!!\n");
 #endif
@@ -1130,7 +1146,7 @@ ib_err_t innobase_start_or_create() {
             "InnoDB: !!!!!!!! UNIV_MEM_DEBUG switched on !!!!!!!!!\n");
 #endif
 
-  if (UNIV_LIKELY(srv_use_sys_malloc)) {
+  if (likely(srv_use_sys_malloc)) {
     ib_logger(ib_stream, "InnoDB: The InnoDB memory heap is disabled\n");
   }
 
@@ -1156,15 +1172,15 @@ ib_err_t innobase_start_or_create() {
                          " the process lifetime.\n");
   }
 
-  srv_start_has_been_called = TRUE;
+  srv_start_has_been_called = true;
 
 #ifdef UNIV_DEBUG
-  log_do_write = TRUE;
+  log_do_write = true;
 #endif /* UNIV_DEBUG */
-  /*	yydebug = TRUE; */
+  /*	yydebug = true; */
 
-  srv_is_being_started = TRUE;
-  srv_startup_is_before_trx_rollback_phase = TRUE;
+  srv_is_being_started = true;
+  srv_startup_is_before_trx_rollback_phase = true;
 
   /* Note that the call srv_boot() also changes the values of
   some variables to the units used by InnoDB internally */
@@ -1334,9 +1350,9 @@ ib_err_t innobase_start_or_create() {
       srv_startup_abort(err);
       return err;
     } else if (log_file_created) {
-      log_created = TRUE;
+      log_created = true;
     } else {
-      log_opened = TRUE;
+      log_opened = true;
     }
     if ((log_opened && create_new_db) || (log_opened && log_created)) {
       ib_logger(ib_stream, "InnoDB: Error: all log files must be"
@@ -1401,9 +1417,9 @@ ib_err_t innobase_start_or_create() {
 #ifdef UNIV_LOG_ARCHIVE
     /* Do not + 1 arch_log_no because we do not use log
     archiving */
-    recv_reset_logs(max_flushed_lsn, max_arch_log_no, TRUE);
+    recv_reset_logs(max_flushed_lsn, max_arch_log_no, true);
 #else
-    recv_reset_logs(max_flushed_lsn, TRUE);
+    recv_reset_logs(max_flushed_lsn, true);
 #endif /* UNIV_LOG_ARCHIVE */
 
     mutex_exit(&(log_sys->mutex));
@@ -1419,7 +1435,7 @@ ib_err_t innobase_start_or_create() {
 
     trx_sys_create(srv_force_recovery);
     dict_create();
-    srv_startup_is_before_trx_rollback_phase = FALSE;
+    srv_startup_is_before_trx_rollback_phase = false;
 
 #ifdef UNIV_LOG_ARCHIVE
   } else if (srv_archive_recovery) {
@@ -1436,7 +1452,7 @@ ib_err_t innobase_start_or_create() {
 
     dict_boot();
     trx_sys_init_at_db_start(srv_force_recovery);
-    srv_startup_is_before_trx_rollback_phase = FALSE;
+    srv_startup_is_before_trx_rollback_phase = false;
 
     /* Initialize the fsp free limit global variable in the log
     system */
@@ -1468,7 +1484,9 @@ ib_err_t innobase_start_or_create() {
     /* We always try to do a recovery, even if the database had
     been shut down normally: this is the normal startup path */
 
-    err = recv_recovery_from_checkpoint_start(srv_force_recovery, LOG_CHECKPOINT, IB_UINT64_T_MAX, min_flushed_lsn, max_flushed_lsn);
+    err = recv_recovery_from_checkpoint_start(srv_force_recovery,
+                                              LOG_CHECKPOINT, IB_UINT64_T_MAX,
+                                              min_flushed_lsn, max_flushed_lsn);
 
     if (err != DB_SUCCESS) {
       srv_startup_abort(err);
@@ -1512,7 +1530,7 @@ ib_err_t innobase_start_or_create() {
       dict_check_tablespaces_and_store_max_id(recv_needed_recovery);
     }
 
-    srv_startup_is_before_trx_rollback_phase = FALSE;
+    srv_startup_is_before_trx_rollback_phase = false;
     recv_recovery_rollback_active();
 
     /* It is possible that file_format tag has never
@@ -1543,14 +1561,14 @@ ib_err_t innobase_start_or_create() {
     ut_a(DB_SUCCESS == log_archive_noarchivelog());
   } else {
     // FIXME: ARCHIVE: Where is this defined ?
-    ibool start_archive;
+    bool start_archive;
 
     log_acquire();
 
-    start_archive = FALSE;
+    start_archive = false;
 
     if (log_sys->archiving_state == LOG_ARCH_OFF) {
-      start_archive = TRUE;
+      start_archive = true;
     }
 
     log_release();
@@ -1576,7 +1594,7 @@ ib_err_t innobase_start_or_create() {
   os_thread_create(&srv_monitor_thread, nullptr,
                    thread_ids + 4 + SRV_MAX_N_IO_THREADS);
 
-  srv_is_being_started = FALSE;
+  srv_is_being_started = false;
 
   if (trx_doublewrite == nullptr) {
     /* Create the doublewrite buffer to a new tablespace */
@@ -1599,7 +1617,7 @@ ib_err_t innobase_start_or_create() {
   os_thread_create(&srv_master_thread, nullptr,
                    thread_ids + (1 + SRV_MAX_N_IO_THREADS));
 #ifdef UNIV_DEBUG
-  /* buf_debug_prints = TRUE; */
+  /* buf_debug_prints = true; */
 #endif /* UNIV_DEBUG */
   sum_of_data_file_sizes = 0;
 
@@ -1755,14 +1773,14 @@ ib_err_t innobase_start_or_create() {
 
   srv_file_per_table = srv_file_per_table_original_value;
 
-  srv_was_started = TRUE;
+  srv_was_started = true;
 
   return DB_SUCCESS;
 }
 
 /** Try to shutdown the InnoDB threads.
-@return	TRUE if all threads exited. */
-static ibool srv_threads_try_shutdown(os_event_t lock_timeout_thread_event) {
+@return	true if all threads exited. */
+static bool srv_threads_try_shutdown(os_event_t lock_timeout_thread_event) {
   /* Let the lock timeout thread exit */
   os_event_set(lock_timeout_thread_event);
 
@@ -1788,21 +1806,21 @@ static ibool srv_threads_try_shutdown(os_event_t lock_timeout_thread_event) {
 
     os_thread_sleep(100000);
 
-    return TRUE;
+    return true;
   }
 
   os_mutex_exit(os_sync_mutex);
 
   os_thread_sleep(100000);
 
-  return FALSE;
+  return false;
 }
 
 /** All threads end up waiting for certain events. Put those events
 to the signaled state. Then the threads will exit themselves in
 os_thread_event_wait().
-@return	TRUE if all threads exited. */
-static ibool srv_threads_shutdown(void) {
+@return	true if all threads exited. */
+static bool srv_threads_shutdown(void) {
   ulint i;
 
   srv_shutdown_state = SRV_SHUTDOWN_EXIT_THREADS;
@@ -1811,7 +1829,7 @@ static ibool srv_threads_shutdown(void) {
 
     if (srv_threads_try_shutdown(srv_lock_timeout_thread_event)) {
 
-      return TRUE;
+      return true;
     }
   }
 
@@ -1820,7 +1838,7 @@ static ibool srv_threads_shutdown(void) {
             " had not exited at shutdown!\n",
             (ulong)os_thread_count);
 
-  return FALSE;
+  return false;
 }
 
 /** Shuts down the InnoDB database.
@@ -1937,8 +1955,8 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
               srv_shutdown_lsn);
   }
 
-  srv_was_started = FALSE;
-  srv_start_has_been_called = FALSE;
+  srv_was_started = false;
+  srv_start_has_been_called = false;
 
   srv_modules_var_init();
   srv_var_init();

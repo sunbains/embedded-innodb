@@ -25,8 +25,8 @@ Created 2/2/1994 Heikki Tuuri
 #define page0types_h
 
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "mtr0types.h"
-#include "univ.i"
 
 /** Eliminates a name collision on HP-UX */
 #define page_t ib_page_t
@@ -66,7 +66,7 @@ struct page_zip_des_struct {
   unsigned m_start : 16;   /*!< start offset of modification log */
 #endif                     /* UNIV_DEBUG */
   unsigned m_end : 16;     /*!< end offset of modification log */
-  unsigned m_nonempty : 1; /*!< TRUE if the modification log
+  unsigned m_nonempty : 1; /*!< true if the modification log
                            is not empty */
   unsigned n_blobs : 12;   /*!< number of externally stored
                            columns on the page; the maximum
@@ -103,7 +103,7 @@ already have been written on the uncompressed page. */
 void page_zip_rec_set_deleted(
     page_zip_des_t *page_zip, /*!< in/out: compressed page */
     const byte *rec,          /*!< in: record on the uncompressed page */
-    ulint flag)               /*!< in: the deleted flag (nonzero=TRUE) */
+    ulint flag)               /*!< in: the deleted flag (nonzero=true) */
     __attribute__((nonnull));
 
 /** Write the "owned" flag of a record on a compressed page.  The n_owned field
@@ -112,7 +112,7 @@ must already have been written on the uncompressed page. */
 void page_zip_rec_set_owned(
     page_zip_des_t *page_zip, /*!< in/out: compressed page */
     const byte *rec,          /*!< in: record on the uncompressed page */
-    ulint flag)               /*!< in: the owned flag (nonzero=TRUE) */
+    ulint flag)               /*!< in: the owned flag (nonzero=true) */
     __attribute__((nonnull));
 
 /** Shift the dense page directory when a record is deleted. */

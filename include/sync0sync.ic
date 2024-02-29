@@ -55,13 +55,12 @@ void mutex_signal_object(mutex_t *mutex); /*!< in: mutex */
 /** Performs an atomic test-and-set instruction to the lock_word field of a
 mutex.
 @return	the previous value of lock_word: 0 or 1 */
-UNIV_INLINE
-byte mutex_test_and_set(mutex_t *mutex) /*!< in: mutex */
+inline byte mutex_test_and_set(mutex_t *mutex) /*!< in: mutex */
 {
 #if defined(HAVE_ATOMIC_BUILTINS)
   return (os_atomic_test_and_set_byte(&mutex->lock_word, 1));
 #else
-  ibool ret;
+  bool ret;
 
   ret = os_fast_mutex_trylock(&(mutex->os_fast_mutex));
 
@@ -79,8 +78,7 @@ byte mutex_test_and_set(mutex_t *mutex) /*!< in: mutex */
 
 /** Performs a reset instruction to the lock_word field of a mutex. This
 instruction also serializes memory operations to the program order. */
-UNIV_INLINE
-void mutex_reset_lock_word(mutex_t *mutex) /*!< in: mutex */
+inline void mutex_reset_lock_word(mutex_t *mutex) /*!< in: mutex */
 {
 #if defined(HAVE_ATOMIC_BUILTINS)
   /* In theory __sync_lock_release should be used to release the lock.
@@ -95,8 +93,7 @@ void mutex_reset_lock_word(mutex_t *mutex) /*!< in: mutex */
 }
 
 /** Gets the value of the lock word. */
-UNIV_INLINE
-lock_word_t mutex_get_lock_word(const mutex_t *mutex) /*!< in: mutex */
+inline lock_word_t mutex_get_lock_word(const mutex_t *mutex) /*!< in: mutex */
 {
   ut_ad(mutex);
 
@@ -105,8 +102,7 @@ lock_word_t mutex_get_lock_word(const mutex_t *mutex) /*!< in: mutex */
 
 /** Gets the waiters field in a mutex.
 @return	value to set */
-UNIV_INLINE
-ulint mutex_get_waiters(const mutex_t *mutex) /*!< in: mutex */
+inline ulint mutex_get_waiters(const mutex_t *mutex) /*!< in: mutex */
 {
   const volatile ulint *ptr; /*!< declared volatile to ensure that
                              the value is read from memory */
@@ -119,8 +115,7 @@ ulint mutex_get_waiters(const mutex_t *mutex) /*!< in: mutex */
 }
 
 /** Unlocks a mutex owned by the current thread. */
-UNIV_INLINE
-void mutex_exit(mutex_t *mutex) /*!< in: pointer to mutex */
+inline void mutex_exit(mutex_t *mutex) /*!< in: pointer to mutex */
 {
   ut_ad(mutex_own(mutex));
 
@@ -156,10 +151,10 @@ void mutex_exit(mutex_t *mutex) /*!< in: pointer to mutex */
 /** Locks a mutex for the current thread. If the mutex is reserved, the function
 spins a preset time (controlled by SYNC_SPIN_ROUNDS), waiting for the mutex
 before suspending the thread. */
-UNIV_INLINE
-void mutex_enter_func(mutex_t *mutex,        /*!< in: pointer to mutex */
-                      const char *file_name, /*!< in: file name where locked */
-                      ulint line)            /*!< in: line where locked */
+inline void
+mutex_enter_func(mutex_t *mutex,        /*!< in: pointer to mutex */
+                 const char *file_name, /*!< in: file name where locked */
+                 ulint line)            /*!< in: line where locked */
 {
   ut_ad(mutex_validate(mutex));
   ut_ad(!mutex_own(mutex));

@@ -21,21 +21,19 @@ Recovery
 Created 9/20/1997 Heikki Tuuri
 *******************************************************/
 
-#include "univ.i"
+#include "innodb0types.h"
 
-/** Returns TRUE if recovery is currently running.
+/** Returns true if recovery is currently running.
 @return	recv_recovery_on */
-UNIV_INLINE
-ibool recv_recovery_is_on(void) { return (UNIV_UNLIKELY(recv_recovery_on)); }
+inline bool recv_recovery_is_on(void) { return (unlikely(recv_recovery_on)); }
 
 #ifdef UNIV_LOG_ARCHIVE
-/** TRUE when applying redo log records from an archived log file */
-extern ibool recv_recovery_from_backup_on;
+/** true when applying redo log records from an archived log file */
+extern bool recv_recovery_from_backup_on;
 
-/** Returns TRUE if recovery from backup is currently running.
+/** Returns true if recovery from backup is currently running.
 @return	recv_recovery_from_backup_on */
-UNIV_INLINE
-ibool recv_recovery_from_backup_is_on(void) {
+inline bool recv_recovery_from_backup_is_on(void) {
   return (recv_recovery_from_backup_on);
 }
 #endif /* UNIV_LOG_ARCHIVE */

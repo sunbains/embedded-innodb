@@ -72,7 +72,7 @@ void mlog_write_initial_log_record(
   log_ptr = mlog_open(mtr, 11);
 
   /* If no logging is requested, we may return now */
-  if (log_ptr == NULL) {
+  if (log_ptr == nullptr) {
 
     return;
   }
@@ -84,7 +84,7 @@ void mlog_write_initial_log_record(
 #endif /* !UNIV_HOTBACKUP */
 
 /** Parses an initial log record written by mlog_write_initial_log_record.
-@return	parsed record end, NULL if not a complete record */
+@return	parsed record end, nullptr if not a complete record */
 
 byte *mlog_parse_initial_log_record(
     byte *ptr,      /*!< in: buffer */
@@ -95,7 +95,7 @@ byte *mlog_parse_initial_log_record(
 {
   if (end_ptr < ptr + 1) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   *type = (byte)((ulint)*ptr & ~MLOG_SINGLE_REC_FLAG);
@@ -105,14 +105,14 @@ byte *mlog_parse_initial_log_record(
 
   if (end_ptr < ptr + 2) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   ptr = mach_parse_compressed(ptr, end_ptr, space);
 
-  if (ptr == NULL) {
+  if (ptr == nullptr) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   ptr = mach_parse_compressed(ptr, end_ptr, page_no);
@@ -121,14 +121,15 @@ byte *mlog_parse_initial_log_record(
 }
 
 /** Parses a log record written by mlog_write_ulint or mlog_write_dulint.
-@return	parsed record end, NULL if not a complete record or a corrupt record */
+@return	parsed record end, nullptr if not a complete record or a corrupt record
+*/
 
 byte *mlog_parse_nbytes(
     ulint type,     /*!< in: log record type: MLOG_1BYTE, ... */
     byte *ptr,      /*!< in: buffer */
     byte *end_ptr,  /*!< in: buffer end */
-    byte *page,     /*!< in: page where to apply the log record, or NULL */
-    void *page_zip) /*!< in/out: compressed page, or NULL */
+    byte *page,     /*!< in: page where to apply the log record, or nullptr */
+    void *page_zip) /*!< in/out: compressed page, or nullptr */
 {
   ulint offset;
   ulint val;
@@ -139,28 +140,28 @@ byte *mlog_parse_nbytes(
 
   if (end_ptr < ptr + 2) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   offset = mach_read_from_2(ptr);
   ptr += 2;
 
   if (offset >= UNIV_PAGE_SIZE) {
-    recv_sys->found_corrupt_log = TRUE;
+    recv_sys->found_corrupt_log = true;
 
-    return (NULL);
+    return (nullptr);
   }
 
   if (type == MLOG_8BYTES) {
     ptr = mach_dulint_parse_compressed(ptr, end_ptr, &dval);
 
-    if (ptr == NULL) {
+    if (ptr == nullptr) {
 
-      return (NULL);
+      return (nullptr);
     }
 
     if (page) {
-      if (UNIV_LIKELY_NULL(page_zip)) {
+      if (likely_null(page_zip)) {
         mach_write_to_8(((page_zip_des_t *)page_zip)->data + offset, dval);
       }
       mach_write_to_8(page + offset, dval);
@@ -171,29 +172,29 @@ byte *mlog_parse_nbytes(
 
   ptr = mach_parse_compressed(ptr, end_ptr, &val);
 
-  if (ptr == NULL) {
+  if (ptr == nullptr) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   switch (type) {
   case MLOG_1BYTE:
-    if (UNIV_UNLIKELY(val > 0xFFUL)) {
+    if (unlikely(val > 0xFFUL)) {
       goto corrupt;
     }
     if (page) {
-      if (UNIV_LIKELY_NULL(page_zip)) {
+      if (likely_null(page_zip)) {
         mach_write_to_1(((page_zip_des_t *)page_zip)->data + offset, val);
       }
       mach_write_to_1(page + offset, val);
     }
     break;
   case MLOG_2BYTES:
-    if (UNIV_UNLIKELY(val > 0xFFFFUL)) {
+    if (unlikely(val > 0xFFFFUL)) {
       goto corrupt;
     }
     if (page) {
-      if (UNIV_LIKELY_NULL(page_zip)) {
+      if (likely_null(page_zip)) {
         mach_write_to_2(((page_zip_des_t *)page_zip)->data + offset, val);
       }
       mach_write_to_2(page + offset, val);
@@ -201,7 +202,7 @@ byte *mlog_parse_nbytes(
     break;
   case MLOG_4BYTES:
     if (page) {
-      if (UNIV_LIKELY_NULL(page_zip)) {
+      if (likely_null(page_zip)) {
         mach_write_to_4(((page_zip_des_t *)page_zip)->data + offset, val);
       }
       mach_write_to_4(page + offset, val);
@@ -209,8 +210,8 @@ byte *mlog_parse_nbytes(
     break;
   default:
   corrupt:
-    recv_sys->found_corrupt_log = TRUE;
-    ptr = NULL;
+    recv_sys->found_corrupt_log = true;
+    ptr = nullptr;
   }
 
   return (ptr);
@@ -244,7 +245,7 @@ void mlog_write_ulint(
   log_ptr = mlog_open(mtr, 11 + 2 + 5);
 
   /* If no logging is requested, we may return now */
-  if (log_ptr == NULL) {
+  if (log_ptr == nullptr) {
 
     return;
   }
@@ -275,7 +276,7 @@ void mlog_write_dulint(byte *ptr,  /*!< in: pointer where to write */
   log_ptr = mlog_open(mtr, 11 + 2 + 9);
 
   /* If no logging is requested, we may return now */
-  if (log_ptr == NULL) {
+  if (log_ptr == nullptr) {
 
     return;
   }
@@ -322,7 +323,7 @@ void mlog_log_string(byte *ptr,  /*!< in: pointer written to */
   log_ptr = mlog_open(mtr, 30);
 
   /* If no logging is requested, we may return now */
-  if (log_ptr == NULL) {
+  if (log_ptr == nullptr) {
 
     return;
   }
@@ -342,43 +343,39 @@ void mlog_log_string(byte *ptr,  /*!< in: pointer written to */
 #endif /* !UNIV_HOTBACKUP */
 
 /** Parses a log record written by mlog_write_string.
-@return	parsed record end, NULL if not a complete record */
+@return	parsed record end, nullptr if not a complete record */
 
 byte *mlog_parse_string(
     byte *ptr,      /*!< in: buffer */
     byte *end_ptr,  /*!< in: buffer end */
-    byte *page,     /*!< in: page where to apply the log record, or NULL */
-    void *page_zip) /*!< in/out: compressed page, or NULL */
+    byte *page,     /*!< in: page where to apply the log record, or nullptr */
+    void *page_zip) /*!< in/out: compressed page, or nullptr */
 {
-  ulint offset;
-  ulint len;
-
   ut_a(!page || !page_zip || fil_page_get_type(page) != FIL_PAGE_INDEX);
 
   if (end_ptr < ptr + 4) {
 
-    return (NULL);
+    return (nullptr);
   }
 
-  offset = mach_read_from_2(ptr);
+  ulint offset = mach_read_from_2(ptr);
   ptr += 2;
-  len = mach_read_from_2(ptr);
+  ulint len = mach_read_from_2(ptr);
   ptr += 2;
 
-  if (UNIV_UNLIKELY(offset >= UNIV_PAGE_SIZE) ||
-      UNIV_UNLIKELY(len + offset) > UNIV_PAGE_SIZE) {
-    recv_sys->found_corrupt_log = TRUE;
+  if (offset >= UNIV_PAGE_SIZE || len + offset > UNIV_PAGE_SIZE) {
+    recv_sys->found_corrupt_log = true;
 
-    return (NULL);
+    return (nullptr);
   }
 
   if (end_ptr < ptr + len) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   if (page) {
-    if (UNIV_LIKELY_NULL(page_zip)) {
+    if (likely_null(page_zip)) {
       memcpy(((page_zip_des_t *)page_zip)->data + offset, ptr, len);
     }
     memcpy(page + offset, ptr, len);
@@ -390,7 +387,7 @@ byte *mlog_parse_string(
 #ifndef UNIV_HOTBACKUP
 /** Opens a buffer for mlog, writes the initial log record and,
 if needed, the field lengths of an index.
-@return	buffer, NULL if log mode MTR_LOG_NONE */
+@return	buffer, nullptr if log mode MTR_LOG_NONE */
 
 byte *mlog_open_and_write_index(
     mtr_t *mtr,          /*!< in: mtr */
@@ -398,7 +395,7 @@ byte *mlog_open_and_write_index(
     dict_index_t *index, /*!< in: record descriptor */
     byte type,           /*!< in: log item type */
     ulint size)          /*!< in: requested buffer size in bytes
-                         (if 0, calls mlog_close() and returns NULL) */
+                         (if 0, calls mlog_close() and returns nullptr) */
 {
   byte *log_ptr;
   const byte *log_start;
@@ -409,7 +406,7 @@ byte *mlog_open_and_write_index(
   if (!page_rec_is_comp(rec)) {
     log_start = log_ptr = mlog_open(mtr, 11 + size);
     if (!log_ptr) {
-      return (NULL); /* logging is disabled */
+      return (nullptr); /* logging is disabled */
     }
     log_ptr = mlog_write_initial_log_record_fast(rec, type, log_ptr, mtr);
     log_end = log_ptr + 11 + size;
@@ -425,7 +422,7 @@ byte *mlog_open_and_write_index(
     }
     log_start = log_ptr = mlog_open(mtr, alloc);
     if (!log_ptr) {
-      return (NULL); /* logging is disabled */
+      return (nullptr); /* logging is disabled */
     }
     log_end = log_ptr + alloc;
     log_ptr = mlog_write_initial_log_record_fast(rec, type, log_ptr, mtr);
@@ -460,7 +457,7 @@ byte *mlog_open_and_write_index(
         }
         log_start = log_ptr = mlog_open(mtr, alloc);
         if (!log_ptr) {
-          return (NULL); /* logging is disabled */
+          return (nullptr); /* logging is disabled */
         }
         log_end = log_ptr + alloc;
       }
@@ -470,7 +467,7 @@ byte *mlog_open_and_write_index(
   }
   if (size == 0) {
     mlog_close(mtr, log_ptr);
-    log_ptr = NULL;
+    log_ptr = nullptr;
   } else if (log_ptr + size > log_end) {
     mlog_close(mtr, log_ptr);
     log_ptr = mlog_open(mtr, size);
@@ -480,22 +477,22 @@ byte *mlog_open_and_write_index(
 #endif /* !UNIV_HOTBACKUP */
 
 /** Parses a log record written by mlog_open_and_write_index.
-@return	parsed record end, NULL if not a complete record */
+@return	parsed record end, nullptr if not a complete record */
 
 byte *mlog_parse_index(byte *ptr,           /*!< in: buffer */
                        const byte *end_ptr, /*!< in: buffer end */
-                       ibool comp, /*!< in: TRUE=compact record format */
+                       bool comp, /*!< in: true=compact record format */
                        dict_index_t **index) /*!< out, own: dummy index */
 {
   ulint i, n, n_uniq;
   dict_table_t *table;
   dict_index_t *ind;
 
-  ut_ad(comp == FALSE || comp == TRUE);
+  ut_ad(comp == false || comp == true);
 
   if (comp) {
     if (end_ptr < ptr + 4) {
-      return (NULL);
+      return (nullptr);
     }
     n = mach_read_from_2(ptr);
     ptr += 2;
@@ -503,7 +500,7 @@ byte *mlog_parse_index(byte *ptr,           /*!< in: buffer */
     ptr += 2;
     ut_ad(n_uniq <= n);
     if (end_ptr < ptr + n * 2) {
-      return (NULL);
+      return (nullptr);
     }
   } else {
     n = n_uniq = 1;
@@ -521,10 +518,10 @@ byte *mlog_parse_index(byte *ptr,           /*!< in: buffer */
     for (i = 0; i < n; i++) {
       ulint len = mach_read_from_2(ptr);
       ptr += 2;
-      /* The high-order bit of len is the NOT NULL flag;
+      /* The high-order bit of len is the NOT nullptr flag;
       the rest is 0 or 0x7fff for variable-length fields,
       and 1..0x7ffe for fixed-length fields. */
-      dict_mem_table_add_col(table, NULL, NULL,
+      dict_mem_table_add_col(table, nullptr, nullptr,
                              ((len + 1) & 0x7fff) <= 1 ? DATA_BINARY
                                                        : DATA_FIXBINARY,
                              len & 0x8000 ? DATA_NOT_NULL : 0, len & 0x7fff);
@@ -544,7 +541,7 @@ byte *mlog_parse_index(byte *ptr,           /*!< in: buffer */
     }
   }
   /* avoid ut_ad(index->cached) in dict_index_get_n_unique_in_tree */
-  ind->cached = TRUE;
+  ind->cached = true;
   *index = ind;
   return (ptr);
 }

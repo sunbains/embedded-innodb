@@ -75,7 +75,7 @@ static pars_info_t *ib_exec_vsql(int n_args, /*!< in: no. of args */
     case IB_INT: {
       byte *p;       /* dest buffer */
       ulint l;       /* length */
-      ulint s;       /* TRUE if signed integer */
+      ulint s;       /* true if signed integer */
       const char *n; /* literal name */
       ulint prtype;
 
@@ -95,16 +95,16 @@ static pars_info_t *ib_exec_vsql(int n_args, /*!< in: no. of args */
         break;
       }
       case 2: {
-        ib_uint16_t v;
+        uint16_t v;
 
         v = va_arg(ap, int);
         mach_write_int_type(p, (byte *)&v, l, s);
         break;
       }
       case 4: {
-        ib_uint32_t v;
+        uint32_t v;
 
-        v = va_arg(ap, ib_uint32_t);
+        v = va_arg(ap, uint32_t);
         mach_write_int_type(p, (byte *)&v, l, s);
         break;
       }
@@ -172,12 +172,12 @@ ib_err_t ib_exec_sql(const char *sql,   /*!< in: sql to execute */
 
   dict_mutex_enter();
   /* Note that we've already acquired the dictionary mutex. */
-  err = que_eval_sql(info, sql, FALSE, trx);
+  err = que_eval_sql(info, sql, false, trx);
   ut_a(err == DB_SUCCESS);
   dict_mutex_exit();
 
   if (err != DB_SUCCESS) {
-    trx_rollback(trx, FALSE, NULL);
+    trx_general_rollback(trx, false, NULL);
   } else {
     trx_commit(trx);
   }
@@ -222,14 +222,14 @@ ib_err_t ib_exec_ddl_sql(const char *sql,   /*!< in: sql to execute */
   ut_a(err == DB_SUCCESS);
 
   /* Note that we've already acquired the dictionary mutex by
-  setting reserve_dict_mutex to FALSE. */
-  err = que_eval_sql(info, sql, FALSE, trx);
+  setting reserve_dict_mutex to false. */
+  err = que_eval_sql(info, sql, false, trx);
   ut_a(err == DB_SUCCESS);
 
   ib_schema_unlock((ib_trx_t)trx);
 
   if (err != DB_SUCCESS) {
-    trx_rollback(trx, FALSE, NULL);
+    trx_general_rollback(trx, false, NULL);
   } else {
     trx_commit(trx);
   }

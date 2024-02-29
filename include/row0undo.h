@@ -27,12 +27,12 @@ Created 1/8/1997 Heikki Tuuri
 #include "btr0pcur.h"
 #include "btr0types.h"
 #include "dict0types.h"
+#include "innodb0types.h"
 #include "mtr0mtr.h"
 #include "que0types.h"
 #include "row0types.h"
 #include "trx0sys.h"
 #include "trx0types.h"
-#include "univ.i"
 
 /** Creates a row undo node to a query graph.
 @return	own: undo node */
@@ -45,11 +45,10 @@ undo_node_t *row_undo_node_create(
 The pcur in node is used in the search. If found, stores the row to node,
 and stores the position of pcur, and detaches it. The pcur must be closed
 by the caller in any case.
-@return TRUE if found; NOTE the node->pcur must be closed by the
+@return true if found; NOTE the node->pcur must be closed by the
 caller, regardless of the return value */
 
-ibool row_undo_search_clust_to_pcur(
-    undo_node_t *node); /*!< in: row undo node */
+bool row_undo_search_clust_to_pcur(undo_node_t *node); /*!< in: row undo node */
 /** Undoes a row operation in a table. This is a high-level function used
 in SQL execution graphs.
 @return	query thread to run next or NULL */

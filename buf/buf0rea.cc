@@ -57,19 +57,19 @@ static ulint buf_read_page_low(
     ulint *err,     /*!< out: DB_SUCCESS or DB_TABLESPACE_DELETED if we are
                     trying to read from a non-existent tablespace, or a
                     tablespace which is just now being dropped */
-    ibool sync,     /*!< in: TRUE if synchronous aio is desired */
+    bool sync,      /*!< in: true if synchronous aio is desired */
     ulint mode,     /*!< in: BUF_READ_IBUF_PAGES_ONLY, ...,
                     ORed to OS_AIO_SIMULATED_WAKE_LATER (see below
                     at read-ahead functions) */
     ulint space,    /*!< in: space id */
     ulint zip_size, /*!< in: compressed page size, or 0 */
-    ibool unzip,    /*!< in: TRUE=request uncompressed page */
+    bool unzip,     /*!< in: true=request uncompressed page */
     int64_t tablespace_version, /*!< in: if the space memory object has
                     this timestamp different from what we are giving here,
                     treat the tablespace as dropped; this is a timestamp we
                     use to stop dangling page reads from a tablespace
                     which we have DISCARDed + IMPORTed back */
-    ulint offset)                  /*!< in: page number */
+    ulint offset)               /*!< in: page number */
 {
   buf_page_t *bpage;
   ulint wake_later;
@@ -101,7 +101,7 @@ static ulint buf_read_page_low(
     syncronous i/o, to make sure they do not get involved in
     thread deadlocks. */
 
-    sync = TRUE;
+    sync = true;
   }
 
   /* The following call will also check if the tablespace does not exist
@@ -148,9 +148,9 @@ static ulint buf_read_page_low(
 buffer buf_pool if it is not already there. Sets the io_fix flag and sets
 an exclusive lock on the buffer frame. The flag is cleared and the x-lock
 released by the i/o-handler thread.
-@return TRUE if page has been read in, FALSE in case of failure */
+@return true if page has been read in, false in case of failure */
 
-ibool buf_read_page(
+bool buf_read_page(
     ulint space,    /*!< in: space id */
     ulint zip_size, /*!< in: compressed page size in bytes, or 0 */
     ulint offset)   /*!< in: page number */
@@ -162,10 +162,10 @@ ibool buf_read_page(
   tablespace_version = fil_space_get_version(space);
 
   /* We do the i/o in the synchronous aio mode to save thread
-  switches: hence TRUE */
+  switches: hence true */
 
-  count = buf_read_page_low(&err, TRUE, BUF_READ_ANY_PAGE, space, zip_size,
-                            FALSE, tablespace_version, offset);
+  count = buf_read_page_low(&err, true, BUF_READ_ANY_PAGE, space, zip_size,
+                            false, tablespace_version, offset);
   srv_buf_pool_reads += count;
   if (err == DB_TABLESPACE_DELETED) {
     ut_print_timestamp(ib_stream);
@@ -233,7 +233,7 @@ ulint buf_read_ahead_linear(
   const ulint buf_read_ahead_linear_area = BUF_READ_AHEAD_LINEAR_AREA;
   ulint threshold;
 
-  if (UNIV_UNLIKELY(srv_startup_is_before_trx_rollback_phase)) {
+  if (unlikely(srv_startup_is_before_trx_rollback_phase)) {
     /* No read-ahead to avoid thread deadlocks */
     return (0);
   }
@@ -412,12 +412,12 @@ ulint buf_read_ahead_linear(
 
   for (i = low; i < high; i++) {
     /* It is only sensible to do read-ahead in the non-sync
-    aio mode: hence FALSE as the first parameter */
+    aio mode: hence false as the first parameter */
 
     if (!ibuf_bitmap_page(zip_size, i)) {
-      count += buf_read_page_low(&err, FALSE,
+      count += buf_read_page_low(&err, false,
                                  ibuf_mode | OS_AIO_SIMULATED_WAKE_LATER, space,
-                                 zip_size, FALSE, tablespace_version, i);
+                                 zip_size, false, tablespace_version, i);
       if (err == DB_TABLESPACE_DELETED) {
         ut_print_timestamp(ib_stream);
         ib_logger(ib_stream,
@@ -460,12 +460,12 @@ order to contract the insert buffer tree. Technically, this function is like
 a read-ahead function. */
 
 void buf_read_ibuf_merge_pages(
-    ibool sync,                       /*!< in: TRUE if the caller
-                                      wants this function to wait
-                                      for the highest address page
-                                      to get read in, before this
-                                      function returns */
-    const ulint *space_ids,           /*!< in: array of space ids */
+    bool sync,                     /*!< in: true if the caller
+                                    wants this function to wait
+                                    for the highest address page
+                                    to get read in, before this
+                                    function returns */
+    const ulint *space_ids,        /*!< in: array of space ids */
     const int64_t *space_versions, /*!< in: the spaces must have
                                      this version number
                                      (timestamp), otherwise we
@@ -473,12 +473,12 @@ void buf_read_ibuf_merge_pages(
                                      to cancel reads if DISCARD +
                                      IMPORT may have changed the
                                      tablespace size */
-    const ulint *page_nos,            /*!< in: array of page numbers
-                                      to read, with the highest page
-                                      number the last in the
-                                      array */
-    ulint n_stored)                   /*!< in: number of elements
-                                      in the arrays */
+    const ulint *page_nos,         /*!< in: array of page numbers
+                                   to read, with the highest page
+                                   number the last in the
+                                   array */
+    ulint n_stored)                /*!< in: number of elements
+                                   in the arrays */
 {
   ulint i;
 
@@ -495,22 +495,22 @@ void buf_read_ibuf_merge_pages(
     ulint zip_size = fil_space_get_zip_size(space_ids[i]);
     ulint err;
 
-    if (UNIV_UNLIKELY(zip_size == ULINT_UNDEFINED)) {
+    if (unlikely(zip_size == ULINT_UNDEFINED)) {
 
       goto tablespace_deleted;
     }
 
     buf_read_page_low(&err, sync && (i + 1 == n_stored), BUF_READ_ANY_PAGE,
-                      space_ids[i], zip_size, TRUE, space_versions[i],
+                      space_ids[i], zip_size, true, space_versions[i],
                       page_nos[i]);
 
-    if (UNIV_UNLIKELY(err == DB_TABLESPACE_DELETED)) {
+    if (unlikely(err == DB_TABLESPACE_DELETED)) {
     tablespace_deleted:
       /* We have deleted or are deleting the single-table
       tablespace: remove the entries for that page */
 
       ibuf_merge_or_delete_for_page(NULL, space_ids[i], page_nos[i], zip_size,
-                                    FALSE);
+                                    false);
     }
   }
 
@@ -529,11 +529,11 @@ void buf_read_ibuf_merge_pages(
 
 /** Issues read requests for pages which recovery wants to read in. */
 
-void buf_read_recv_pages(ibool sync,            /*!< in: TRUE if the caller
-                                                wants this function to wait
-                                                for the highest address page
-                                                to get read in, before this
-                                                function returns */
+void buf_read_recv_pages(bool sync,             /*!< in: true if the caller
+                                                 wants this function to wait
+                                                 for the highest address page
+                                                 to get read in, before this
+                                                 function returns */
                          ulint space,           /*!< in: space id */
                          ulint zip_size,        /*!< in: compressed page size in
                                                 bytes, or 0 */
@@ -551,7 +551,7 @@ void buf_read_recv_pages(ibool sync,            /*!< in: TRUE if the caller
 
   zip_size = fil_space_get_zip_size(space);
 
-  if (UNIV_UNLIKELY(zip_size == ULINT_UNDEFINED)) {
+  if (unlikely(zip_size == ULINT_UNDEFINED)) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
 
@@ -564,7 +564,7 @@ void buf_read_recv_pages(ibool sync,            /*!< in: TRUE if the caller
 
     count = 0;
 
-    os_aio_print_debug = FALSE;
+    os_aio_print_debug = false;
 
     while (buf_pool->n_pend_reads >= recv_n_pool_free_frames / 2) {
 
@@ -584,19 +584,19 @@ void buf_read_recv_pages(ibool sync,            /*!< in: TRUE if the caller
                   (ulong)buf_pool->n_pend_reads,
                   (ulong)os_file_n_pending_preads);
 
-        os_aio_print_debug = TRUE;
+        os_aio_print_debug = true;
       }
     }
 
-    os_aio_print_debug = FALSE;
+    os_aio_print_debug = false;
 
     if ((i + 1 == n_stored) && sync) {
-      buf_read_page_low(&err, TRUE, BUF_READ_ANY_PAGE, space, zip_size, TRUE,
+      buf_read_page_low(&err, true, BUF_READ_ANY_PAGE, space, zip_size, true,
                         tablespace_version, page_nos[i]);
     } else {
-      buf_read_page_low(&err, FALSE,
+      buf_read_page_low(&err, false,
                         BUF_READ_ANY_PAGE | OS_AIO_SIMULATED_WAKE_LATER, space,
-                        zip_size, TRUE, tablespace_version, page_nos[i]);
+                        zip_size, true, tablespace_version, page_nos[i]);
     }
   }
 

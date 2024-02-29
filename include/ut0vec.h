@@ -24,8 +24,8 @@ Created 4/6/2006 Osku Salerma
 #ifndef IB_VECTOR_H
 #define IB_VECTOR_H
 
+#include "innodb0types.h"
 #include "mem0mem.h"
-#include "univ.i"
 
 /** An automatically resizing vector data type. */
 typedef struct ib_vector_struct ib_vector_t;
@@ -57,41 +57,35 @@ void ib_vector_push(ib_vector_t *vec, /*!< in: vector */
 
 /** Get the number of elements in the vector.
 @return	number of elements in vector */
-UNIV_INLINE
-ulint ib_vector_size(const ib_vector_t *vec); /*!< in: vector */
+inline ulint ib_vector_size(const ib_vector_t *vec); /*!< in: vector */
 
 /** Test whether a vector is empty or not.
-@return	TRUE if empty */
-UNIV_INLINE
-ibool ib_vector_is_empty(const ib_vector_t *vec); /*!< in: vector */
+@return	true if empty */
+inline bool ib_vector_is_empty(const ib_vector_t *vec); /*!< in: vector */
 
 /** Get the n'th element.
 @return	n'th element */
-UNIV_INLINE
-void *ib_vector_get(ib_vector_t *vec, /*!< in: vector */
-                    ulint n);         /*!< in: element index to get */
+inline void *ib_vector_get(ib_vector_t *vec, /*!< in: vector */
+                           ulint n);         /*!< in: element index to get */
 
 /** Get n'th element as a const pointer.
 @return	n'th element */
-UNIV_INLINE
-const void *ib_vector_get_const(const ib_vector_t *vec, /*!< in: vector */
-                                ulint n); /*!< in: element index to get */
+inline const void *
+ib_vector_get_const(const ib_vector_t *vec, /*!< in: vector */
+                    ulint n);               /*!< in: element index to get */
 
 /** Set the n'th element and return the previous value.
 @return	n'th element */
-UNIV_INLINE
-void *ib_vector_set(ib_vector_t *vec, /*!< in: vector */
-                    ulint n,          /*!< in: element index to set */
-                    void *p);         /*!< in: new value to set */
+inline void *ib_vector_set(ib_vector_t *vec, /*!< in: vector */
+                           ulint n,          /*!< in: element index to set */
+                           void *p);         /*!< in: new value to set */
 
 /** Remove the last element from the vector. */
-UNIV_INLINE
-void *ib_vector_pop(ib_vector_t *vec); /*!< in: vector */
+inline void *ib_vector_pop(ib_vector_t *vec); /*!< in: vector */
 
 /** Free the underlying heap of the vector. Note that vec is invalid
 after this call. */
-UNIV_INLINE
-void ib_vector_free(ib_vector_t *vec); /*!< in,own: vector */
+inline void ib_vector_free(ib_vector_t *vec); /*!< in,own: vector */
 
 /** An automatically resizing vector data type. */
 struct ib_vector_struct {

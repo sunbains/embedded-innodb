@@ -24,7 +24,7 @@ Created 2007-03-20 Sunny Bains
 #define INNOBASE_UT0RBT_H
 
 #if !defined(IB_RBT_TESTING)
-#include "univ.i"
+#include "innodb0types.h"
 #include "ut0mem.h"
 #else
 #include <assert.h>
@@ -37,9 +37,9 @@ Created 2007-03-20 Sunny Bains
 #define ulint unsigned long
 #define ut_a(c) assert(c)
 #define ut_error assert(0)
-#define ibool unsigned int
-#define TRUE 1
-#define FALSE 0
+#define bool unsigned int
+#define true 1
+#define false 0
 #endif
 
 /* Red black tree typedefs */
@@ -113,10 +113,10 @@ void rbt_free(ib_rbt_t *tree); /*!< in: rb tree to free */
 ib_rbt_t *rbt_create(size_t sizeof_value,     /*!< in: size in bytes */
                      ib_rbt_compare compare); /*!< in: comparator */
 /** Delete a node from the red black tree, identified by key.
-@return TRUE if success FALSE if not found */
+@return true if success false if not found */
 
-ibool rbt_delete(ib_rbt_t *tree,   /*!< in: rb tree */
-                 const void *key); /*!< in: key to delete */
+bool rbt_delete(ib_rbt_t *tree,   /*!< in: rb tree */
+                const void *key); /*!< in: key to delete */
 /** Remove a node from the rb tree, the node is not free'd, that is the
 callers responsibility.
 @return	the deleted node with the const. */
@@ -213,9 +213,9 @@ ulint rbt_merge_uniq_destructive(ib_rbt_t *dst,  /*!< in: dst rb tree */
                                  ib_rbt_t *src); /*!< in: src rb tree */
 /** Verify the integrity of the RB tree. For debugging. 0 failure else height
 of tree (in count of black nodes).
-@return	TRUE if OK FALSE if tree invalid. */
+@return	true if OK false if tree invalid. */
 
-ibool rbt_validate(const ib_rbt_t *tree); /*!< in: tree to validate */
+bool rbt_validate(const ib_rbt_t *tree); /*!< in: tree to validate */
 /** Iterate over the tree in depth first order. */
 
 void rbt_print(const ib_rbt_t *tree,     /*!< in: tree to traverse */
