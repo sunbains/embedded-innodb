@@ -132,29 +132,18 @@ void ibuf_update_free_bits_low(const buf_block_t *block, /*!< in: index page */
                                                          the latest operation
                                                          performed to the page */
                                mtr_t *mtr);              /*!< in/out: mtr */
-/** Updates the free bits for a compressed page to reflect the present
-state.  Does this in the mtr given, which means that the latching
-order rules virtually prevent any further operations for this OS
-thread until mtr is committed.  NOTE: The free bits in the insert
-buffer bitmap must never exceed the free space on a page.  It is safe
-to set the free bits in the same mini-transaction that updated the
-page. */
 
-void ibuf_update_free_bits_zip(buf_block_t *block, /*!< in/out: index page */
-                               mtr_t *mtr);        /*!< in/out: mtr */
 /** Updates the free bits for the two pages to reflect the present state.
 Does this in the mtr given, which means that the latching order rules
 virtually prevent any further operations until mtr is committed.
 NOTE: The free bits in the insert buffer bitmap must never exceed the
 free space on a page.  It is safe to set the free bits in the same
 mini-transaction that updated the pages. */
-
 void ibuf_update_free_bits_for_two_pages_low(
-    ulint zip_size,      /*!< in: compressed page size in bytes;
-                        0 for uncompressed pages */
     buf_block_t *block1, /*!< in: index page */
     buf_block_t *block2, /*!< in: index page */
     mtr_t *mtr);         /*!< in: mtr */
+
 /** A basic partial test if an insert to the insert buffer could be possible and
 recommended. */
 inline bool
@@ -173,15 +162,12 @@ that are executing an insert buffer routine.
 bool ibuf_inside(void);
 /** Checks if a page address is an ibuf bitmap page (level 3 page) address.
 @return	true if a bitmap page */
-inline bool ibuf_bitmap_page(ulint zip_size, /*!< in: compressed page size in
-                                             bytes; 0 for uncompressed pages */
-                             ulint page_no); /*!< in: page number */
+inline bool ibuf_bitmap_page(ulint page_no); /*!< in: page number */
+
 /** Checks if a page is a level 2 or 3 page in the ibuf hierarchy of pages.
 Must not be called when recv_no_ibuf_operations==true.
 @return	true if level 2 or level 3 page */
-
 bool ibuf_page(ulint space,    /*!< in: space id */
-               ulint zip_size, /*!< in: compressed page size in bytes, or 0 */
                ulint page_no,  /*!< in: page number */
                mtr_t *mtr);    /*!< in: mtr which will contain an x-latch to the
                                bitmap page if the page is not one of the fixed
@@ -200,7 +186,6 @@ or unique.
 bool ibuf_insert(const dtuple_t *entry, /*!< in: index entry to insert */
                  dict_index_t *index,   /*!< in: index where to insert */
                  ulint space,           /*!< in: space id where to insert */
-                 ulint zip_size, /*!< in: compressed page size in bytes, or 0 */
                  ulint page_no,  /*!< in: page number where to insert */
                  que_thr_t *thr); /*!< in: query thread */
 /** When an index page is read from a disk to the buffer pool, this function
@@ -216,8 +201,6 @@ void ibuf_merge_or_delete_for_page(
                               else NULL */
     ulint space,              /*!< in: space id of the index page */
     ulint page_no,            /*!< in: page number of the index page */
-    ulint zip_size,           /*!< in: compressed page size in bytes,
-                             or 0 */
     bool update_ibuf_bitmap); /*!< in: normally this is set
                    to true, but if we have deleted or are
                    deleting the tablespace, then we

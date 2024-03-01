@@ -281,7 +281,7 @@ void trx_purge_add_update_undo_to_history(
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
-  rseg_header = trx_rsegf_get(rseg->space, rseg->zip_size, rseg->page_no, mtr);
+  rseg_header = trx_rsegf_get(rseg->space, rseg->page_no, mtr);
 
   undo_header = undo_page + undo->hdr_offset;
   seg_header = undo_page + TRX_UNDO_SEG_HDR;
@@ -352,10 +352,9 @@ loop:
   mtr_start(&mtr);
   mutex_enter(&(rseg->mutex));
 
-  rseg_hdr = trx_rsegf_get(rseg->space, rseg->zip_size, rseg->page_no, &mtr);
+  rseg_hdr = trx_rsegf_get(rseg->space, rseg->page_no, &mtr);
 
-  undo_page =
-      trx_undo_page_get(rseg->space, rseg->zip_size, hdr_addr.page, &mtr);
+  undo_page = trx_undo_page_get(rseg->space, hdr_addr.page, &mtr);
   seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
   log_hdr = undo_page + hdr_addr.boffset;
 
@@ -448,7 +447,7 @@ static void trx_purge_truncate_rseg_history(
   mtr_start(&mtr);
   mutex_enter(&(rseg->mutex));
 
-  rseg_hdr = trx_rsegf_get(rseg->space, rseg->zip_size, rseg->page_no, &mtr);
+  rseg_hdr = trx_rsegf_get(rseg->space, rseg->page_no, &mtr);
 
   hdr_addr = trx_purge_get_log_from_hist(
       flst_get_last(rseg_hdr + TRX_RSEG_HISTORY, &mtr));
@@ -463,7 +462,7 @@ loop:
   }
 
   undo_page =
-      trx_undo_page_get(rseg->space, rseg->zip_size, hdr_addr.page, &mtr);
+      trx_undo_page_get(rseg->space, hdr_addr.page, &mtr);
 
   log_hdr = undo_page + hdr_addr.boffset;
 
@@ -514,7 +513,7 @@ loop:
   mtr_start(&mtr);
   mutex_enter(&(rseg->mutex));
 
-  rseg_hdr = trx_rsegf_get(rseg->space, rseg->zip_size, rseg->page_no, &mtr);
+  rseg_hdr = trx_rsegf_get(rseg->space, rseg->page_no, &mtr);
 
   hdr_addr = prev_hdr_addr;
 
@@ -596,8 +595,7 @@ static void trx_purge_rseg_get_next_history_log(
 
   mtr_start(&mtr);
 
-  undo_page = trx_undo_page_get_s_latched(rseg->space, rseg->zip_size,
-                                          rseg->last_page_no, &mtr);
+  undo_page = trx_undo_page_get_s_latched(rseg->space, rseg->last_page_no, &mtr);
   log_hdr = undo_page + rseg->last_offset;
 
   /* Increase the purge page count by one for every handled log */
@@ -648,8 +646,7 @@ static void trx_purge_rseg_get_next_history_log(
   /* Read the trx number and del marks from the previous log header */
   mtr_start(&mtr);
 
-  log_hdr = trx_undo_page_get_s_latched(rseg->space, rseg->zip_size,
-                                        prev_log_addr.page, &mtr) +
+  log_hdr = trx_undo_page_get_s_latched(rseg->space, prev_log_addr.page, &mtr) +
             prev_log_addr.boffset;
 
   trx_no = mach_read_from_8(log_hdr + TRX_UNDO_TRX_NO);
@@ -678,7 +675,6 @@ static void trx_purge_choose_next_log(void) {
   trx_rseg_t *min_rseg;
   trx_id_t min_trx_no;
   ulint space = 0; /* remove warning (??? bug ???) */
-  ulint zip_size = 0;
   ulint page_no = 0; /* remove warning (??? bug ???) */
   ulint offset = 0;  /* remove warning (??? bug ???) */
   mtr_t mtr;
@@ -703,7 +699,6 @@ static void trx_purge_choose_next_log(void) {
         min_rseg = rseg;
         min_trx_no = rseg->last_trx_no;
         space = rseg->space;
-        zip_size = rseg->zip_size;
         ut_a(space == 0); /* We assume in purge of
                           externally stored fields
                           that space id == 0 */
@@ -729,8 +724,7 @@ static void trx_purge_choose_next_log(void) {
 
     rec = &trx_purge_dummy_rec;
   } else {
-    rec = trx_undo_get_first_rec(space, zip_size, page_no, offset, RW_S_LATCH,
-                                 &mtr);
+    rec = trx_undo_get_first_rec(space, page_no, offset, RW_S_LATCH, &mtr);
     if (rec == NULL) {
       /* Undo log empty */
 
@@ -775,7 +769,6 @@ trx_purge_get_next_rec(mem_heap_t *heap) /*!< in: memory heap where copied */
   ulint offset;
   ulint page_no;
   ulint space;
-  ulint zip_size;
   ulint type;
   ulint cmpl_info;
   mtr_t mtr;
@@ -784,7 +777,6 @@ trx_purge_get_next_rec(mem_heap_t *heap) /*!< in: memory heap where copied */
   ut_ad(purge_sys->next_stored);
 
   space = purge_sys->rseg->space;
-  zip_size = purge_sys->rseg->zip_size;
   page_no = purge_sys->page_no;
   offset = purge_sys->offset;
 
@@ -803,7 +795,7 @@ trx_purge_get_next_rec(mem_heap_t *heap) /*!< in: memory heap where copied */
 
   mtr_start(&mtr);
 
-  undo_page = trx_undo_page_get_s_latched(space, zip_size, page_no, &mtr);
+  undo_page = trx_undo_page_get_s_latched(space, page_no, &mtr);
   rec = undo_page + offset;
 
   rec2 = rec;
@@ -852,7 +844,7 @@ trx_purge_get_next_rec(mem_heap_t *heap) /*!< in: memory heap where copied */
 
     mtr_start(&mtr);
 
-    undo_page = trx_undo_page_get_s_latched(space, zip_size, page_no, &mtr);
+    undo_page = trx_undo_page_get_s_latched(space, page_no, &mtr);
 
     rec = undo_page + offset;
   } else {

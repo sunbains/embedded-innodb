@@ -53,7 +53,6 @@ void buf_flush_free_margin(void);
 
 void buf_flush_init_for_writing(
     byte *page,           /*!< in/out: page */
-    void *page_zip_,      /*!< in/out: compressed page, or NULL */
     uint64_t newest_lsn); /*!< in: newest modification lsn
                              to the page */
 /*** This utility flushes dirty blocks from the end of the LRU list or

@@ -35,16 +35,12 @@ SET(API_VERSION_REVISION 0)
 # removed or changed
 SET(API_VERSION_AGE 0)
 
-add_compile_definitions(IB_API_VERSION_CURRENT=${API_VERSION})
-add_compile_definitions(IB_API_VERSION_REVISION=${API_VERSION_REVISION})
-add_compile_definitions(IB_API_VERSION_AGE=${API_VERSION_AGE})
-add_compile_definitions(IB_API_VERSION="${API_VERSION}:${API_VERSION_REVISION}:${API_VERSION_AGE}")
+ADD_COMPILE_DEFINITIONS(IB_API_VERSION_CURRENT=${API_VERSION})
+ADD_COMPILE_DEFINITIONS(IB_API_VERSION_REVISION=${API_VERSION_REVISION})
+ADD_COMPILE_DEFINITIONS(IB_API_VERSION_AGE=${API_VERSION_AGE})
+ADD_COMPILE_DEFINITIONS(IB_API_VERSION="${API_VERSION}:${API_VERSION_REVISION}:${API_VERSION_AGE}")
 
-add_compile_definitions(VERSION="0.1")
-
-IF(NOT DEFINED DISABLE-COMPRESSION)
-  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/zlib)
-ENDIF(NOT DEFINED DISABLE-COMPRESSION)
+ADD_COMPILE_DEFINITIONS(VERSION="0.1")
 
 # Print out CMake info
 MESSAGE(STATUS "CMAKE_GENERATOR: " ${CMAKE_GENERATOR})
@@ -194,7 +190,7 @@ SET(INNODB_SOURCES  btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       eval/eval0eval.cc eval/eval0proc.cc
       fil/fil0fil.cc
       fsp/fsp0fsp.cc
-      fut/fut0fut.cc fut/fut0lst.cc
+      fut/fut0lst.cc
       ha/ha0ha.cc ha/hash0hash.cc ha/ha0storage.cc
       ibuf/ibuf0ibuf.cc
       pars/lexyy.cc pars/pars0grm.cc pars/pars0opt.cc
@@ -225,10 +221,6 @@ SET(INNODB_SOURCES  btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       api/api0api.cc api/api0misc.cc api/api0ucode.cc
       api/api0cfg.cc api/api0status.cc api/api0sql.cc)
 
-IF(NOT DEFINED DISABLE-COMPRESSION)
-  SET(INNODB_SOURCES  ${INNODB_SOURCES} buf/buf0buddy.cc page/page0zip.cc)
-ENDIF(NOT DEFINED DISABLE-COMPRESSION)
-
 IF(CMAKE_BUILD_TYPE MATCHES debug)
   ADD_DEFINITIONS(-O0 -g -Wall -DUNIV_DEBUG -Werror)
 ELSEIF(CMAKE_BUILD_TYPE MATCHES release)
@@ -241,17 +233,14 @@ IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
   ADD_LIBRARY(innodb STATIC ${INNODB_SOURCES})
 ENDIF(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
-IF(NOT DEFINED DISABLE-XA)
+IF(NOT DISABLE_XA)
+  MESSAGE(STATUS "XA is enabled")
   ADD_DEFINITIONS("-DWITH_XOPEN")
-ENDIF(NOT DEFINED DISABLE-XA)
-
-IF(NOT DEFINED DISABLE-COMPRESSION)
-  ADD_DEFINITIONS("-DWITH_ZIP")
-  #SUBDIRS(zlib)
-ENDIF(NOT DEFINED DISABLE-COMPRESSION)
+ELSE(NOT DISABLE_XA)
+  MESSAGE(STATUS "XA is disabled")
+ENDIF(NOT DISABLE_XA)
 
 SUBDIRS(tests)
-#SUBDIRS(c++)
 
 CONFIGURE_FILE(  ${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/include/ib0config.h)
@@ -264,8 +253,10 @@ INSTALL(FILES   COPYING
     COPYING.Percona
     COPYING.Sun_Microsystems
   DESTINATION .)
+
 INSTALL(FILES   innodb.h
   DESTINATION include)
+
 INSTALL(FILES   tests/ib_cfg.cc
     tests/ib_compressed.cc
     tests/ib_cursor.cc
@@ -283,9 +274,11 @@ INSTALL(FILES   tests/ib_cfg.cc
     tests/test0aux.h
     tests/README
   DESTINATION examples)
+
 INSTALL(FILES   tests/CMakeLists.examples
   DESTINATION examples
   RENAME CMakeLists.txt)
+
 INSTALL(TARGETS innodb
   RUNTIME DESTINATION bin
   LIBRARY DESTINATION lib

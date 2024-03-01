@@ -21,9 +21,9 @@ Mini-transaction buffer
 Created 11/26/1995 Heikki Tuuri
 *******************************************************/
 
+#include "mach0data.h"
 #include "sync0rw.h"
 #include "sync0sync.h"
-#include "mach0data.h"
 
 /** Starts a mini-transaction and creates a mini-transaction handle
 and a buffer in the memory buffer given by the caller.

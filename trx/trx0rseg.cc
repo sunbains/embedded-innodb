@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -32,36 +32,19 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0purge.h"
 #include "trx0undo.h"
 
-/** Looks for a rollback segment, based on the rollback segment id.
-@return	rollback segment */
-
-trx_rseg_t *trx_rseg_get_on_id(ulint id) /*!< in: rollback segment id */
-{
-  trx_rseg_t *rseg;
-
-  rseg = UT_LIST_GET_FIRST(trx_sys->rseg_list);
-  ut_ad(rseg);
+trx_rseg_t *trx_rseg_get_on_id(ulint id) {
+  auto rseg = UT_LIST_GET_FIRST(trx_sys->rseg_list);
+  ut_ad(rseg != nullptr);
 
   while (rseg->id != id) {
     rseg = UT_LIST_GET_NEXT(rseg_list, rseg);
-    ut_ad(rseg);
+    ut_ad(rseg != nullptr);
   }
 
-  return (rseg);
+  return rseg;
 }
 
-/** Creates a rollback segment header. This function is called only when
-a new rollback segment is created in the database.
-@return	page number of the created segment, FIL_NULL if fail */
-
-ulint trx_rseg_header_create(
-    ulint space,    /*!< in: space id */
-    ulint zip_size, /*!< in: compressed page size in bytes
-                    or 0 for uncompressed pages */
-    ulint max_size, /*!< in: max size in pages */
-    ulint *slot_no, /*!< out: rseg id == slot number in trx sys */
-    mtr_t *mtr)     /*!< in: mtr */
-{
+ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t *mtr) {
   ulint page_no;
   trx_rsegf_t *rsegf;
   trx_sysf_t *sys_header;
@@ -70,8 +53,7 @@ ulint trx_rseg_header_create(
 
   ut_ad(mtr);
   ut_ad(mutex_own(&kernel_mutex));
-  ut_ad(mtr_memo_contains(mtr, fil_space_get_latch(space, NULL),
-                          MTR_MEMO_X_LOCK));
+  ut_ad(mtr_memo_contains(mtr, fil_space_get_latch(space), MTR_MEMO_X_LOCK));
   sys_header = trx_sysf_get(mtr);
 
   *slot_no = trx_sysf_rseg_find_free(mtr);
@@ -95,7 +77,7 @@ ulint trx_rseg_header_create(
   page_no = buf_block_get_page_no(block);
 
   /* Get the rollback segment file page */
-  rsegf = trx_rsegf_get_new(space, zip_size, page_no, mtr);
+  rsegf = trx_rsegf_get_new(space, page_no, mtr);
 
   /* Initialize max size field */
   mlog_write_ulint(rsegf + TRX_RSEG_MAX_SIZE, max_size, MLOG_4BYTES, mtr);
@@ -168,8 +150,6 @@ static trx_rseg_t *
 trx_rseg_mem_create(ib_recovery_t recovery, /*!< in: recovery flag */
                     ulint id,               /*!< in: rollback segment id */
                     ulint space,    /*!< in: space where the segment placed */
-                    ulint zip_size, /*!< in: compressed page size in bytes
-                                    or 0 for uncompressed pages */
                     ulint page_no, /*!< in: page number of the segment header */
                     mtr_t *mtr)    /*!< in: mtr */
 {
@@ -185,7 +165,6 @@ trx_rseg_mem_create(ib_recovery_t recovery, /*!< in: recovery flag */
 
   rseg->id = id;
   rseg->space = space;
-  rseg->zip_size = zip_size;
   rseg->page_no = page_no;
 
   mutex_create(&rseg->mutex, SYNC_RSEG);
@@ -194,7 +173,7 @@ trx_rseg_mem_create(ib_recovery_t recovery, /*!< in: recovery flag */
 
   trx_sys_set_nth_rseg(trx_sys, id, rseg);
 
-  rseg_header = trx_rsegf_get_new(space, zip_size, page_no, mtr);
+  rseg_header = trx_rsegf_get_new(space, page_no, mtr);
 
   rseg->max_size =
       mtr_read_ulint(rseg_header + TRX_RSEG_MAX_SIZE, MLOG_4BYTES, mtr);
@@ -217,7 +196,7 @@ trx_rseg_mem_create(ib_recovery_t recovery, /*!< in: recovery flag */
     rseg->last_offset = node_addr.boffset;
 
     undo_log_hdr =
-        trx_undo_page_get(rseg->space, rseg->zip_size, node_addr.page, mtr) +
+        trx_undo_page_get(rseg->space, node_addr.page, mtr) +
         node_addr.boffset;
 
     rseg->last_trx_no = mtr_read_dulint(undo_log_hdr + TRX_UNDO_TRX_NO, mtr);
@@ -230,37 +209,22 @@ trx_rseg_mem_create(ib_recovery_t recovery, /*!< in: recovery flag */
   return (rseg);
 }
 
-/** Creates the memory copies for rollback segments and initializes the
-rseg list and array in trx_sys at a database startup. */
-
-void trx_rseg_list_and_array_init(
-    ib_recovery_t recovery, /*!< in: recovery flag */
-    trx_sysf_t *sys_header, /*!< in: trx system header */
-    mtr_t *mtr)             /*!< in: mtr */
-{
-  ulint i;
-  ulint page_no;
-  ulint space;
-
+void trx_rseg_list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header, mtr_t *mtr) {
   UT_LIST_INIT(trx_sys->rseg_list);
 
   trx_sys->rseg_history_len = 0;
 
-  for (i = 0; i < TRX_SYS_N_RSEGS; i++) {
+  for (ulint i = 0; i < TRX_SYS_N_RSEGS; i++) {
 
-    page_no = trx_sysf_rseg_get_page_no(sys_header, i, mtr);
+    auto page_no = trx_sysf_rseg_get_page_no(sys_header, i, mtr);
 
     if (page_no == FIL_NULL) {
 
       trx_sys_set_nth_rseg(trx_sys, i, NULL);
     } else {
-      ulint zip_size;
+      auto space = trx_sysf_rseg_get_space(sys_header, i, mtr);
 
-      space = trx_sysf_rseg_get_space(sys_header, i, mtr);
-
-      zip_size = space ? fil_space_get_zip_size(space) : 0;
-
-      trx_rseg_mem_create(recovery, i, space, zip_size, page_no, mtr);
+      trx_rseg_mem_create(recovery, i, space, page_no, mtr);
     }
   }
 }

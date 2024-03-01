@@ -38,7 +38,6 @@ Created 10/25/1995 Heikki Tuuri
 #include "os0file.h"
 #include "os0sync.h"
 #include "page0page.h"
-#include "page0zip.h"
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "sync0sync.h"
@@ -361,23 +360,21 @@ calculating the byte offset within a space.
 @return DB_SUCCESS, or DB_TABLESPACE_DELETED if we are trying to do
 i/o on a tablespace which does not exist */
 inline ulint
-fil_read(bool sync,          /*!< in: true if synchronous aio is desired */
-         ulint space_id,     /*!< in: space id */
-         ulint zip_size,     /*!< in: compressed page size in bytes;
-                             0 for uncompressed pages */
-         ulint block_offset, /*!< in: offset in number of blocks */
-         ulint byte_offset,  /*!< in: remainder of offset in bytes; in aio
-                             this must be divisible by the OS block size */
-         ulint len,          /*!< in: how many bytes to read; this must not
-                             cross a file boundary; in aio this must be a
-                             block size multiple */
-         void *buf,          /*!< in/out: buffer where to store data read;
-                             in aio this must be appropriately aligned */
-         void *message)      /*!< in: message for aio handler if non-sync
-                             aio used, else ignored */
+fil_read(bool sync,      /*!< in: true if synchronous aio is desired */
+         ulint space_id, /*!< in: space id */
+         ulint, ulint block_offset, /*!< in: offset in number of blocks */
+         ulint byte_offset, /*!< in: remainder of offset in bytes; in aio
+                            this must be divisible by the OS block size */
+         ulint len,         /*!< in: how many bytes to read; this must not
+                            cross a file boundary; in aio this must be a
+                            block size multiple */
+         void *buf,         /*!< in/out: buffer where to store data read;
+                            in aio this must be appropriately aligned */
+         void *message)     /*!< in: message for aio handler if non-sync
+                            aio used, else ignored */
 {
-  return fil_io(OS_FILE_READ, sync, space_id, zip_size, block_offset,
-                byte_offset, len, buf, message);
+  return fil_io(OS_FILE_READ, sync, space_id, block_offset, byte_offset, len,
+                buf, message);
 }
 
 /** Writes data to a space from a buffer. Remember that the possible incomplete
@@ -386,23 +383,21 @@ calculating the byte offset within a space.
 @return DB_SUCCESS, or DB_TABLESPACE_DELETED if we are trying to do
 i/o on a tablespace which does not exist */
 inline db_err
-fil_write(bool sync,          /*!< in: true if synchronous aio is desired */
-          ulint space_id,     /*!< in: space id */
-          ulint zip_size,     /*!< in: compressed page size in bytes;
-                              0 for uncompressed pages */
-          ulint block_offset, /*!< in: offset in number of blocks */
-          ulint byte_offset,  /*!< in: remainder of offset in bytes; in aio
-                              this must be divisible by the OS block size */
-          ulint len,          /*!< in: how many bytes to write; this must
-                              not cross a file boundary; in aio this must
-                              be a block size multiple */
-          void *buf,          /*!< in: buffer from which to write; in aio
-                              this must be appropriately aligned */
-          void *message)      /*!< in: message for aio handler if non-sync
-                              aio used, else ignored */
+fil_write(bool sync,      /*!< in: true if synchronous aio is desired */
+          ulint space_id, /*!< in: space id */
+          ulint, ulint block_offset, /*!< in: offset in number of blocks */
+          ulint byte_offset, /*!< in: remainder of offset in bytes; in aio
+                             this must be divisible by the OS block size */
+          ulint len,         /*!< in: how many bytes to write; this must
+                             not cross a file boundary; in aio this must
+                             be a block size multiple */
+          void *buf,         /*!< in: buffer from which to write; in aio
+                             this must be appropriately aligned */
+          void *message)     /*!< in: message for aio handler if non-sync
+                             aio used, else ignored */
 {
-  return fil_io(OS_FILE_WRITE, sync, space_id, zip_size, block_offset,
-                byte_offset, len, buf, message);
+  return fil_io(OS_FILE_WRITE, sync, space_id, block_offset, byte_offset,
+                len, buf, message);
 }
 
 /** Returns the table space by a given id, nullptr if not found. */
@@ -455,24 +450,17 @@ int64_t fil_space_get_version(ulint id) {
   return version;
 }
 
-rw_lock_t *fil_space_get_latch(ulint id, ulint *flags) {
-  fil_space_t *space;
-
-  ut_ad(fil_system);
+rw_lock_t *fil_space_get_latch(ulint id) {
+  ut_ad(fil_system != nullptr);
 
   mutex_enter(&fil_system->mutex);
 
-  space = fil_space_get_by_id(id);
-
-  ut_a(space);
-
-  if (flags) {
-    *flags = space->flags;
-  }
+  auto space = fil_space_get_by_id(id);
+  ut_a(space != nullptr);
 
   mutex_exit(&fil_system->mutex);
 
-  return &(space->latch);
+  return &space->latch;
 }
 
 ulint fil_space_get_type(ulint id) {
@@ -684,11 +672,7 @@ fil_node_open_file(fil_node_t *node,     /*!< in: file node */
       size_bytes = ut_2pow_round(size_bytes, 1024 * 1024);
     }
 
-    if (!(flags & DICT_TF_ZSSIZE_MASK)) {
-      node->size = (ulint)(size_bytes / UNIV_PAGE_SIZE);
-    } else {
-      node->size = (ulint)(size_bytes / dict_table_flags_to_zip_size(flags));
-    }
+    node->size = (ulint)(size_bytes / UNIV_PAGE_SIZE);
 
     space->size += node->size;
   }
@@ -1231,15 +1215,11 @@ static bool fil_space_free(
 }
 
 ulint fil_space_get_size(ulint id) {
-  fil_node_t *node;
-  fil_space_t *space;
-  ulint size;
-
   ut_ad(fil_system);
 
   fil_mutex_enter_and_prepare_for_io(id);
 
-  space = fil_space_get_by_id(id);
+  auto space = fil_space_get_by_id(id);
 
   if (space == nullptr) {
     mutex_exit(&fil_system->mutex);
@@ -1252,7 +1232,7 @@ ulint fil_space_get_size(ulint id) {
 
     ut_a(1 == UT_LIST_GET_LEN(space->chain));
 
-    node = UT_LIST_GET_FIRST(space->chain);
+    auto node = UT_LIST_GET_FIRST(space->chain);
 
     /* It must be a single-table tablespace and we have not opened
     the file yet; the following calls will open it and update the
@@ -1262,7 +1242,7 @@ ulint fil_space_get_size(ulint id) {
     fil_node_complete_io(node, fil_system, OS_FILE_READ);
   }
 
-  size = space->size;
+  auto size = space->size;
 
   mutex_exit(&fil_system->mutex);
 
@@ -1270,19 +1250,16 @@ ulint fil_space_get_size(ulint id) {
 }
 
 ulint fil_space_get_flags(ulint id) {
-  fil_node_t *node;
-  fil_space_t *space;
-  ulint flags;
 
-  ut_ad(fil_system);
+  ut_ad(fil_system != nullptr);
 
-  if (unlikely(!id)) {
+  if (id == 0) {
     return 0;
   }
 
   fil_mutex_enter_and_prepare_for_io(id);
 
-  space = fil_space_get_by_id(id);
+  auto space = fil_space_get_by_id(id);
 
   if (space == nullptr) {
     mutex_exit(&fil_system->mutex);
@@ -1295,7 +1272,7 @@ ulint fil_space_get_flags(ulint id) {
 
     ut_a(1 == UT_LIST_GET_LEN(space->chain));
 
-    node = UT_LIST_GET_FIRST(space->chain);
+    auto node = UT_LIST_GET_FIRST(space->chain);
 
     /* It must be a single-table tablespace and we have not opened
     the file yet; the following calls will open it and update the
@@ -1305,33 +1282,15 @@ ulint fil_space_get_flags(ulint id) {
     fil_node_complete_io(node, fil_system, OS_FILE_READ);
   }
 
-  flags = space->flags;
+  auto flags = space->flags;
 
   mutex_exit(&fil_system->mutex);
 
   return flags;
 }
 
-ulint fil_space_get_zip_size(ulint id) {
-  ulint flags;
-
-  flags = fil_space_get_flags(id);
-
-  if (flags && flags != ULINT_UNDEFINED) {
-
-    return dict_table_flags_to_zip_size(flags);
-  }
-
-  return flags;
-}
-
 bool fil_check_adress_in_tablespace(ulint id, ulint page_no) {
-  if (fil_space_get_size(id) > page_no) {
-
-    return true;
-  }
-
-  return false;
+  return fil_space_get_size(id) > page_no;
 }
 
 void fil_init(ulint hash_size, ulint max_n_open) {
@@ -2318,29 +2277,12 @@ db_err fil_create_new_single_table_tablespace(ulint *space_id,
   fsp_header_init_fields(page, *space_id, flags);
   mach_write_to_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID, *space_id);
 
-  if (!(flags & DICT_TF_ZSSIZE_MASK)) {
-    buf_flush_init_for_writing(page, nullptr, 0);
-    ret = os_file_write(path, file, page, 0, 0, UNIV_PAGE_SIZE);
-  } else {
-    page_zip_des_t page_zip;
-    ulint zip_size;
-
-    zip_size = ((PAGE_ZIP_MIN_SIZE >> 1)
-                << ((flags & DICT_TF_ZSSIZE_MASK) >> DICT_TF_ZSSIZE_SHIFT));
-
-    page_zip_set_size(&page_zip, zip_size);
-    page_zip.data = page + UNIV_PAGE_SIZE;
-#ifdef UNIV_DEBUG
-    page_zip.m_start =
-#endif /* UNIV_DEBUG */
-        page_zip.m_end = page_zip.m_nonempty = page_zip.n_blobs = 0;
-    buf_flush_init_for_writing(page, &page_zip, 0);
-    ret = os_file_write(path, file, page_zip.data, 0, 0, zip_size);
-  }
+  buf_flush_init_for_writing(page, 0);
+  ret = os_file_write(path, file, page, 0, 0, UNIV_PAGE_SIZE);
 
   ut_free(buf2);
 
-  if (!ret) {
+  if (ret == 0) {
     ib_logger(ib_stream, "InnoDB: Error: could not write the first page"
                          " to tablespace ");
     ut_print_filename(ib_stream, path);
@@ -2394,9 +2336,7 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
   ulint space_id;
   int64_t file_size;
   int64_t offset;
-  ulint zip_size;
   bool success;
-  page_zip_des_t page_zip;
 
   filepath = fil_make_ibd_name(name, false);
 
@@ -2442,13 +2382,6 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
   }
 
   space_id = fsp_header_get_space_id(page);
-  zip_size = fsp_header_get_zip_size(page);
-
-  page_zip_des_init(&page_zip);
-  page_zip_set_size(&page_zip, zip_size);
-  if (zip_size) {
-    page_zip.data = page + UNIV_PAGE_SIZE;
-  }
 
   ut_print_timestamp(ib_stream);
   ib_logger(ib_stream,
@@ -2461,20 +2394,15 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
   ut_print_filename(ib_stream, filepath);
   ib_logger(ib_stream, ".\n");
 
-  ut_a(ut_is_2pow(zip_size));
-  ut_a(zip_size <= UNIV_PAGE_SIZE);
-
   /* Loop through all the pages in the tablespace and reset the lsn and
   the page checksum if necessary */
 
   file_size = os_file_get_size_as_iblonglong(file);
 
-  for (offset = 0; offset < file_size;
-       offset += zip_size ? zip_size : UNIV_PAGE_SIZE) {
+  for (offset = 0; offset < file_size; offset += UNIV_PAGE_SIZE) {
 
     success = os_file_read(file, page, (ulint)(offset & 0xFFFFFFFFUL),
-                           (ulint)(offset >> 32),
-                           zip_size ? zip_size : UNIV_PAGE_SIZE);
+                           (ulint)(offset >> 32), UNIV_PAGE_SIZE);
 
     if (!success) {
 
@@ -2484,18 +2412,10 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
     if (mach_read_ull(page + FIL_PAGE_LSN) > current_lsn) {
       /* We have to reset the lsn */
 
-      if (zip_size) {
-        memcpy(page_zip.data, page, zip_size);
-        buf_flush_init_for_writing(page, &page_zip, current_lsn);
-        success = os_file_write(filepath, file, page_zip.data,
-                                (ulint)offset & 0xFFFFFFFFUL,
-                                (ulint)(offset >> 32), zip_size);
-      } else {
-        buf_flush_init_for_writing(page, nullptr, current_lsn);
-        success =
-            os_file_write(filepath, file, page, (ulint)(offset & 0xFFFFFFFFUL),
-                          (ulint)(offset >> 32), UNIV_PAGE_SIZE);
-      }
+      buf_flush_init_for_writing(page, current_lsn);
+      success =
+          os_file_write(filepath, file, page, (ulint)(offset & 0xFFFFFFFFUL),
+                        (ulint)(offset >> 32), UNIV_PAGE_SIZE);
 
       if (!success) {
 
@@ -2512,8 +2432,7 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
   }
 
   /* We now update the flush_lsn stamp at the start of the file */
-  success =
-      os_file_read(file, page, 0, 0, zip_size ? zip_size : UNIV_PAGE_SIZE);
+  success = os_file_read(file, page, 0, 0, UNIV_PAGE_SIZE);
 
   if (!success) {
 
@@ -2522,8 +2441,8 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
 
   mach_write_ull(page + FIL_PAGE_FILE_FLUSH_LSN, current_lsn);
 
-  success = os_file_write(filepath, file, page, 0, 0,
-                          zip_size ? zip_size : UNIV_PAGE_SIZE);
+  success = os_file_write(filepath, file, page, 0, 0, UNIV_PAGE_SIZE);
+
   if (!success) {
 
     goto func_exit;
@@ -3233,10 +3152,7 @@ bool fil_extend_space_to_desired_size(ulint *actual_size, ulint space_id,
     return true;
   }
 
-  page_size = dict_table_flags_to_zip_size(space->flags);
-  if (!page_size) {
-    page_size = UNIV_PAGE_SIZE;
-  }
+  page_size = UNIV_PAGE_SIZE;
 
   node = UT_LIST_GET_LAST(space->chain);
 
@@ -3474,29 +3390,25 @@ fil_report_invalid_page_access(ulint block_offset,     /*!< in: block offset */
             (ulong)byte_offset, (ulong)len, (ulong)type);
 }
 
-db_err fil_io(ulint type, bool sync, ulint space_id, ulint zip_size,
-              ulint block_offset, ulint byte_offset, ulint len, void *buf,
-              void *message) {
+db_err fil_io(ulint type, bool sync, ulint space_id, ulint block_offset,
+              ulint byte_offset, ulint len, void *buf, void *message) {
   ulint mode;
   fil_space_t *space;
   fil_node_t *node;
   ulint offset_high;
   ulint offset_low;
   bool ret;
-  ulint is_log;
   ulint wake_later;
 
-  is_log = type & OS_FILE_LOG;
+  auto is_log = type & OS_FILE_LOG;
   type = type & ~OS_FILE_LOG;
 
   wake_later = type & OS_AIO_SIMULATED_WAKE_LATER;
   type = type & ~OS_AIO_SIMULATED_WAKE_LATER;
 
-  ut_ad(byte_offset < UNIV_PAGE_SIZE);
-  ut_ad(!zip_size || !byte_offset);
-  ut_ad(ut_is_2pow(zip_size));
-  ut_ad(buf);
   ut_ad(len > 0);
+  ut_ad(buf != nullptr);
+  ut_ad(byte_offset < UNIV_PAGE_SIZE);
 
   static_assert((1 << UNIV_PAGE_SIZE_SHIFT) == UNIV_PAGE_SIZE,
                 "error (1 << UNIV_PAGE_SIZE_SHIFT) != UNIV_PAGE_SIZE");
@@ -3505,16 +3417,16 @@ db_err fil_io(ulint type, bool sync, ulint space_id, ulint zip_size,
 #ifndef UNIV_LOG_DEBUG
   /* ibuf bitmap pages must be read in the sync aio mode: */
   ut_ad(recv_no_ibuf_operations || (type == OS_FILE_WRITE) ||
-        !ibuf_bitmap_page(zip_size, block_offset) || sync || is_log);
+        !ibuf_bitmap_page(block_offset) || sync || is_log);
   ut_ad(!ibuf_inside() || is_log || (type == OS_FILE_WRITE) ||
-        ibuf_page(space_id, zip_size, block_offset, nullptr));
+        ibuf_page(space_id, block_offset, nullptr));
 #endif /* UNIV_LOG_DEBUG */
   if (sync) {
     mode = OS_AIO_SYNC;
   } else if (is_log) {
     mode = OS_AIO_LOG;
   } else if (type == OS_FILE_READ && !recv_no_ibuf_operations &&
-             ibuf_page(space_id, zip_size, block_offset, nullptr)) {
+             ibuf_page(space_id, block_offset, nullptr)) {
     mode = OS_AIO_IBUF;
   } else {
     mode = OS_AIO_NORMAL;
@@ -3594,38 +3506,12 @@ db_err fil_io(ulint type, bool sync, ulint space_id, ulint zip_size,
 
   /* Calculate the low 32 bits and the high 32 bits of the file offset */
 
-  if (!zip_size) {
-    offset_high = (block_offset >> (32 - UNIV_PAGE_SIZE_SHIFT));
-    offset_low =
-        ((block_offset << UNIV_PAGE_SIZE_SHIFT) & 0xFFFFFFFFUL) + byte_offset;
+  offset_high = (block_offset >> (32 - UNIV_PAGE_SIZE_SHIFT));
+  offset_low =
+      ((block_offset << UNIV_PAGE_SIZE_SHIFT) & 0xFFFFFFFFUL) + byte_offset;
 
-    ut_a(node->size - block_offset >=
-         ((byte_offset + len + (UNIV_PAGE_SIZE - 1)) / UNIV_PAGE_SIZE));
-  } else {
-    ulint zip_size_shift;
-    switch (zip_size) {
-    case 1024:
-      zip_size_shift = 10;
-      break;
-    case 2048:
-      zip_size_shift = 11;
-      break;
-    case 4096:
-      zip_size_shift = 12;
-      break;
-    case 8192:
-      zip_size_shift = 13;
-      break;
-    case 16384:
-      zip_size_shift = 14;
-      break;
-    default:
-      ut_error;
-    }
-    offset_high = block_offset >> (32 - zip_size_shift);
-    offset_low = (block_offset << zip_size_shift & 0xFFFFFFFFUL) + byte_offset;
-    ut_a(node->size - block_offset >= (len + (zip_size - 1)) / zip_size);
-  }
+  ut_a(node->size - block_offset >=
+       ((byte_offset + len + (UNIV_PAGE_SIZE - 1)) / UNIV_PAGE_SIZE));
 
   /* Do aio */
 

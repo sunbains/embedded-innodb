@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -91,15 +91,18 @@ mlog_catenate_ulint_compressed(mtr_t *mtr, /*!< in: mtr */
 inline void
 mlog_catenate_dulint_compressed(mtr_t *mtr,  /*!< in: mtr */
                                 dulint val); /*!< in: value to write */
+
 /** Opens a buffer to mlog. It must be closed with mlog_close.
 @return	buffer, NULL if log mode MTR_LOG_NONE */
 inline byte *mlog_open(mtr_t *mtr,  /*!< in: mtr */
                        ulint size); /*!< in: buffer size in bytes; MUST be
                                     smaller than DYN_ARRAY_DATA_SIZE! */
+
 /** Closes a buffer opened to mlog. */
 inline void
 mlog_close(mtr_t *mtr, /*!< in: mtr */
            byte *ptr); /*!< in: buffer space from ptr up was not used */
+
 /** Writes the initial part of a log record (3..11 bytes).
 If the implementation of this function is changed, all
 size parameters to mlog_open() should be adjusted accordingly!
@@ -112,32 +115,31 @@ inline byte *mlog_write_initial_log_record_fast(
     byte *log_ptr,   /*!< in: pointer to mtr log which has
                      been opened */
     mtr_t *mtr);     /*!< in: mtr */
+
 /** Parses an initial log record written by mlog_write_initial_log_record.
 @return	parsed record end, NULL if not a complete record */
-
 byte *mlog_parse_initial_log_record(
     byte *ptr,       /*!< in: buffer */
     byte *end_ptr,   /*!< in: buffer end */
     byte *type,      /*!< out: log record type: MLOG_1BYTE, ... */
     ulint *space,    /*!< out: space id */
     ulint *page_no); /*!< out: page number */
+
 /** Parses a log record written by mlog_write_ulint or mlog_write_dulint.
 @return	parsed record end, NULL if not a complete record */
-
 byte *mlog_parse_nbytes(
     ulint type,      /*!< in: log record type: MLOG_1BYTE, ... */
     byte *ptr,       /*!< in: buffer */
     byte *end_ptr,   /*!< in: buffer end */
-    byte *page,      /*!< in: page where to apply the log record, or NULL */
-    void *page_zip); /*!< in/out: compressed page, or NULL */
+    byte *page);     /*!< in: page where to apply the log record, or NULL */
+
 /** Parses a log record written by mlog_write_string.
 @return	parsed record end, NULL if not a complete record */
 
 byte *mlog_parse_string(
     byte *ptr,       /*!< in: buffer */
     byte *end_ptr,   /*!< in: buffer end */
-    byte *page,      /*!< in: page where to apply the log record, or NULL */
-    void *page_zip); /*!< in/out: compressed page, or NULL */
+    byte *page);     /*!< in: page where to apply the log record, or NULL */
 
 /** Opens a buffer for mlog, writes the initial log record and,
 if needed, the field lengths of an index.  Reserves space

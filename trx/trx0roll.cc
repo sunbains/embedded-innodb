@@ -547,8 +547,7 @@ trx_roll_pop_top_rec(trx_t *trx,       /*!< in: transaction */
 
   ut_ad(mutex_own(&(trx->undo_mutex)));
 
-  undo_page = trx_undo_page_get_s_latched(undo->space, undo->zip_size,
-                                          undo->top_page_no, mtr);
+  undo_page = trx_undo_page_get_s_latched(undo->space, undo->top_page_no, mtr);
   offset = undo->top_offset;
 
   /*ib_logger(ib_stream, "Thread %lu undoing trx %lu undo record %lu\n",

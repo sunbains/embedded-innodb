@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -32,16 +32,12 @@ Created 3/26/1996 Heikki Tuuri
 @return	rollback segment header, page x-latched */
 inline trx_rsegf_t *
 trx_rsegf_get(ulint space,    /*!< in: space where placed */
-              ulint zip_size, /*!< in: compressed page size in
-                              bytes or 0 for uncompressed pages */
               ulint page_no,  /*!< in: page number of the header */
               mtr_t *mtr);    /*!< in: mtr */
 /** Gets a newly created rollback segment header.
 @return	rollback segment header, page x-latched */
 inline trx_rsegf_t *
 trx_rsegf_get_new(ulint space,    /*!< in: space where placed */
-                  ulint zip_size, /*!< in: compressed page size in bytes
-                                  or 0 for uncompressed pages */
                   ulint page_no,  /*!< in: page number of the header */
                   mtr_t *mtr);    /*!< in: mtr */
 /** Gets the file page number of the nth undo log slot.
@@ -71,8 +67,6 @@ a new rollback segment is created in the database.
 
 ulint trx_rseg_header_create(
     ulint space,    /*!< in: space id */
-    ulint zip_size, /*!< in: compressed page size in bytes
-                    or 0 for uncompressed pages */
     ulint max_size, /*!< in: max size in pages */
     ulint *slot_no, /*!< out: rseg id == slot number in trx sys */
     mtr_t *mtr);    /*!< in: mtr */
@@ -104,8 +98,6 @@ struct trx_rseg_struct {
                    rseg mutex */
   ulint space;     /*!< space where the rollback segment is
                    header is placed */
-  ulint zip_size;  /* compressed page size of space
-                  in bytes, or 0 for uncompressed spaces */
   ulint page_no;   /* page number of the rollback segment
                    header */
   ulint max_size;  /* maximum allowed size in pages */

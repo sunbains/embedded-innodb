@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -22,10 +22,6 @@ Created 11/28/1995 Heikki Tuuri
 ***********************************************************************/
 
 #include "fut0lst.h"
-
-#ifdef UNIV_NONINL
-#include "fut0lst.ic"
-#endif
 
 #include "buf0buf.h"
 #include "page0page.h"
@@ -88,9 +84,7 @@ void flst_add_last(
     if (last_addr.page == node_addr.page) {
       last_node = page_align(node) + last_addr.boffset;
     } else {
-      ulint zip_size = fil_space_get_zip_size(space);
-
-      last_node = fut_get_ptr(space, zip_size, last_addr, RW_X_LATCH, mtr);
+      last_node = fut_get_ptr(space, last_addr, RW_X_LATCH, mtr);
     }
 
     flst_insert_after(base, last_node, node, mtr);
@@ -127,9 +121,7 @@ void flst_add_first(
     if (first_addr.page == node_addr.page) {
       first_node = page_align(node) + first_addr.boffset;
     } else {
-      ulint zip_size = fil_space_get_zip_size(space);
-
-      first_node = fut_get_ptr(space, zip_size, first_addr, RW_X_LATCH, mtr);
+      first_node = fut_get_ptr(space, first_addr, RW_X_LATCH, mtr);
     }
 
     flst_insert_before(base, node, first_node, mtr);
@@ -173,9 +165,7 @@ void flst_insert_after(
 
   if (!fil_addr_is_null(node3_addr)) {
     /* Update prev field of node3 */
-    ulint zip_size = fil_space_get_zip_size(space);
-
-    node3 = fut_get_ptr(space, zip_size, node3_addr, RW_X_LATCH, mtr);
+    node3 = fut_get_ptr(space, node3_addr, RW_X_LATCH, mtr);
     flst_write_addr(node3 + FLST_PREV, node2_addr, mtr);
   } else {
     /* node1 was last in list: update last field in base */
@@ -223,9 +213,8 @@ void flst_insert_before(
   flst_write_addr(node2 + FLST_NEXT, node3_addr, mtr);
 
   if (!fil_addr_is_null(node1_addr)) {
-    ulint zip_size = fil_space_get_zip_size(space);
     /* Update next field of node1 */
-    node1 = fut_get_ptr(space, zip_size, node1_addr, RW_X_LATCH, mtr);
+    node1 = fut_get_ptr(space, node1_addr, RW_X_LATCH, mtr);
     flst_write_addr(node1 + FLST_NEXT, node2_addr, mtr);
   } else {
     /* node3 was first in list: update first field in base */
@@ -248,7 +237,6 @@ void flst_remove(
     mtr_t *mtr)             /*!< in: mini-transaction handle */
 {
   ulint space;
-  ulint zip_size;
   flst_node_t *node1;
   fil_addr_t node1_addr;
   fil_addr_t node2_addr;
@@ -261,7 +249,6 @@ void flst_remove(
   ut_ad(mtr_memo_contains_page(mtr, node2, MTR_MEMO_PAGE_X_FIX));
 
   buf_ptr_get_fsp_addr(node2, &space, &node2_addr);
-  zip_size = fil_space_get_zip_size(space);
 
   node1_addr = flst_get_prev_addr(node2, mtr);
   node3_addr = flst_get_next_addr(node2, mtr);
@@ -274,7 +261,7 @@ void flst_remove(
 
       node1 = page_align(node2) + node1_addr.boffset;
     } else {
-      node1 = fut_get_ptr(space, zip_size, node1_addr, RW_X_LATCH, mtr);
+      node1 = fut_get_ptr(space, node1_addr, RW_X_LATCH, mtr);
     }
 
     ut_ad(node1 != node2);
@@ -292,7 +279,7 @@ void flst_remove(
 
       node3 = page_align(node2) + node3_addr.boffset;
     } else {
-      node3 = fut_get_ptr(space, zip_size, node3_addr, RW_X_LATCH, mtr);
+      node3 = fut_get_ptr(space, node3_addr, RW_X_LATCH, mtr);
     }
 
     ut_ad(node2 != node3);
@@ -344,8 +331,7 @@ void flst_cut_end(
 
       node1 = page_align(node2) + node1_addr.boffset;
     } else {
-      node1 = fut_get_ptr(space, fil_space_get_zip_size(space), node1_addr,
-                          RW_X_LATCH, mtr);
+      node1 = fut_get_ptr(space, node1_addr, RW_X_LATCH, mtr);
     }
 
     flst_write_addr(node1 + FLST_NEXT, fil_addr_null, mtr);
@@ -363,15 +349,11 @@ void flst_cut_end(
   mlog_write_ulint(base + FLST_LEN, len - n_nodes, MLOG_4BYTES, mtr);
 }
 
-/** Cuts off the tail of the list, not including the given node. The number of
-nodes which will be removed must be provided by the caller, as this function
-does not measure the length of the tail. */
-
 void flst_truncate_end(
-    flst_base_node_t *base, /*!< in: pointer to base node of list */
-    flst_node_t *node2,     /*!< in: first node not to remove */
-    ulint n_nodes,          /*!< in: number of nodes to remove */
-    mtr_t *mtr)             /*!< in: mini-transaction handle */
+    flst_base_node_t *base,
+    flst_node_t *node2,
+    ulint n_nodes,
+    mtr_t *mtr)
 {
   fil_addr_t node2_addr;
   ulint len;
@@ -409,7 +391,6 @@ bool flst_validate(
     mtr_t *mtr1)                  /*!< in: mtr */
 {
   ulint space;
-  ulint zip_size;
   const flst_node_t *node;
   fil_addr_t node_addr;
   fil_addr_t base_addr;
@@ -429,7 +410,6 @@ bool flst_validate(
 
   /* Find out the space id */
   buf_ptr_get_fsp_addr(base, &space, &base_addr);
-  zip_size = fil_space_get_zip_size(space);
 
   len = flst_get_len(base, mtr1);
   node_addr = flst_get_first(base, mtr1);
@@ -437,7 +417,7 @@ bool flst_validate(
   for (i = 0; i < len; i++) {
     mtr_start(&mtr2);
 
-    node = fut_get_ptr(space, zip_size, node_addr, RW_X_LATCH, &mtr2);
+    node = fut_get_ptr(space, node_addr, RW_X_LATCH, &mtr2);
     node_addr = flst_get_next_addr(node, &mtr2);
 
     mtr_commit(&mtr2); /* Commit mtr2 each round to prevent buffer
@@ -451,7 +431,7 @@ bool flst_validate(
   for (i = 0; i < len; i++) {
     mtr_start(&mtr2);
 
-    node = fut_get_ptr(space, zip_size, node_addr, RW_X_LATCH, &mtr2);
+    node = fut_get_ptr(space, node_addr, RW_X_LATCH, &mtr2);
     node_addr = flst_get_prev_addr(node, &mtr2);
 
     mtr_commit(&mtr2); /* Commit mtr2 each round to prevent buffer

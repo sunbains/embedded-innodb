@@ -103,7 +103,7 @@ static bool row_purge_remove_clust_if_poss_low(
   db_err err;
   mtr_t mtr;
   rec_t *rec;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   rec_offs_init(offsets_);
 
@@ -323,11 +323,11 @@ static void row_purge_del_mark(purge_node_t *node) /*!< in: row purge node */
 
   heap = mem_heap_create(1024);
 
-  while (node->index != NULL) {
+  while (node->index != nullptr) {
     index = node->index;
 
     /* Build the index entry */
-    entry = row_build_index_entry(node->row, NULL, index, heap);
+    entry = row_build_index_entry(node->row, nullptr, index, heap);
     ut_a(entry);
     row_purge_remove_sec_if_poss(node, index, entry);
 
@@ -363,12 +363,12 @@ row_purge_upd_exist_or_extern(purge_node_t *node) /*!< in: row purge node */
 
   heap = mem_heap_create(1024);
 
-  while (node->index != NULL) {
+  while (node->index != nullptr) {
     index = node->index;
 
-    if (row_upd_changes_ord_field_binary(NULL, node->index, node->update)) {
+    if (row_upd_changes_ord_field_binary(nullptr, node->index, node->update)) {
       /* Build the older version of the index entry */
-      entry = row_build_index_entry(node->row, NULL, index, heap);
+      entry = row_build_index_entry(node->row, nullptr, index, heap);
       ut_a(entry);
       row_purge_remove_sec_if_poss(node, index, entry);
     }
@@ -435,7 +435,7 @@ skip_secondaries:
                                        data_field +
                                            dfield_get_len(&ufield->new_val) -
                                            BTR_EXTERN_FIELD_REF_SIZE,
-                                       NULL, NULL, NULL, 0, RB_NONE, &mtr);
+                                       nullptr, nullptr, 0, RB_NONE, &mtr);
       mtr_commit(&mtr);
     }
   }
@@ -476,7 +476,7 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
   }
 
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
-  node->table = NULL;
+  node->table = nullptr;
 
   if (type == TRX_UNDO_UPD_EXIST_REC && cmpl_info & UPD_NODE_NO_ORD_CHANGE &&
       !(*updated_extern)) {
@@ -499,7 +499,7 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
 
   mutex_exit(&(dict_sys->mutex));
 
-  if (node->table == NULL) {
+  if (node->table == nullptr) {
     /* The table has been dropped: no need to do purge */
   err_exit:
     dict_unfreeze_data_dictionary(trx);
@@ -509,14 +509,14 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
   if (node->table->ibd_file_missing) {
     /* We skip purge of missing .ibd files */
 
-    node->table = NULL;
+    node->table = nullptr;
 
     goto err_exit;
   }
 
   clust_index = dict_table_get_first_index(node->table);
 
-  if (clust_index == NULL) {
+  if (clust_index == nullptr) {
     /* The table was corrupt in the data dictionary */
 
     goto err_exit;

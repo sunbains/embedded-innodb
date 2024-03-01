@@ -53,11 +53,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 static ib_u32_t n_rows = 100;
 static ib_u32_t n_threads = 2;
 
-/* The page size for compressed tables, if this value is > 0 then
-we create compressed tables. It's set via the command line parameter
---page-size INT */
-static int page_size = 0;
-
 /* Barrier to synchronize all threads */
 static pthread_barrier_t barrier;
 
@@ -83,20 +78,10 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_tbl_fmt_t tbl_fmt = IB_TBL_COMPACT;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
-
-  if (page_size > 0) {
-    tbl_fmt = IB_TBL_COMPRESSED;
-
-    printf("Creating compressed table with page size %d\n", page_size);
-  }
 
   /* Pass a table page size of 0, ie., use default page size. */
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, page_size);
+  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
   assert(err == DB_SUCCESS);
 
@@ -360,7 +345,6 @@ static void set_options(int argc, char *argv[]) {
       break;
 
     case USER_OPT + 3:
-      page_size = strtoul(optarg, NULL, 10);
       break;
 
     default:

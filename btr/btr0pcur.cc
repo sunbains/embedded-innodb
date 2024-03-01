@@ -23,10 +23,6 @@ Created 2/23/1996 Heikki Tuuri
 
 #include "btr0pcur.h"
 
-#ifdef UNIV_NONINL
-#include "btr0pcur.ic"
-#endif
-
 #include "rem0cmp.h"
 #include "trx0trx.h"
 #include "ut0byte.h"
@@ -347,19 +343,9 @@ void btr_pcur_release_leaf(btr_pcur_t *cursor, /*!< in: persistent cursor */
   cursor->pos_state = BTR_PCUR_WAS_POSITIONED;
 }
 
-/** Moves the persistent cursor to the first record on the next page. Releases
-the latch on the current page, and bufferunfixes it. Note that there must not be
-modifications on the current page, as then the x-latch can be released only in
-mtr_commit. */
-
-void btr_pcur_move_to_next_page(
-    btr_pcur_t *cursor, /*!< in: persistent cursor; must be on the
-                        last record of the current page */
-    mtr_t *mtr)         /*!< in: mtr */
-{
+void btr_pcur_move_to_next_page( btr_pcur_t *cursor, mtr_t *mtr) {
   ulint next_page_no;
   ulint space;
-  ulint zip_size;
   page_t *page;
   buf_block_t *next_block;
   page_t *next_page;
@@ -373,12 +359,10 @@ void btr_pcur_move_to_next_page(
   page = btr_pcur_get_page(cursor);
   next_page_no = btr_page_get_next(page, mtr);
   space = buf_block_get_space(btr_pcur_get_block(cursor));
-  zip_size = buf_block_get_zip_size(btr_pcur_get_block(cursor));
 
   ut_ad(next_page_no != FIL_NULL);
 
-  next_block =
-      btr_block_get(space, zip_size, next_page_no, cursor->latch_mode, mtr);
+  next_block = btr_block_get(space, next_page_no, cursor->latch_mode, mtr);
   next_page = buf_block_get_frame(next_block);
 #ifdef UNIV_BTR_DEBUG
   ut_a(page_is_comp(next_page) == page_is_comp(page));
@@ -394,20 +378,7 @@ void btr_pcur_move_to_next_page(
   page_check_dir(next_page);
 }
 
-/** Moves the persistent cursor backward if it is on the first record of the
-page. Commits mtr. Note that to prevent a possible deadlock, the operation first
-stores the position of the cursor, commits mtr, acquires the necessary latches
-and restores the cursor position again before returning. The alphabetical
-position of the cursor is guaranteed to be sensible on return, but it may happen
-that the cursor is not positioned on the last record of any page, because the
-structure of the tree may have changed during the time when the cursor had no
-latches. */
-
-void btr_pcur_move_backward_from_page(
-    btr_pcur_t *cursor, /*!< in: persistent cursor, must be on the first
-                        record of the current page */
-    mtr_t *mtr)         /*!< in: mtr */
-{
+void btr_pcur_move_backward_from_page( btr_pcur_t *cursor, mtr_t *mtr) {
   ulint prev_page_no;
   page_t *page;
   buf_block_t *prev_block;

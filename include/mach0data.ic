@@ -746,4 +746,3 @@ inline void mach_write_int32(byte *dest, /*!< out: where to write */
 {
   mach_write_int_type(dest, (const byte *)&n, sizeof(n), false);
 }
-

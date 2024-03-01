@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -34,12 +34,7 @@ Created 12/7/1995 Heikki Tuuri
 
 #include "dict0boot.h"
 
-/** Catenates n bytes to the mtr log. */
-
-void mlog_catenate_string(mtr_t *mtr,      /*!< in: mtr */
-                          const byte *str, /*!< in: string to write */
-                          ulint len)       /*!< in: string length */
-{
+void mlog_catenate_string(mtr_t *mtr, const byte *str, ulint len) {
   dyn_array_t *mlog;
 
   if (mtr_get_log_mode(mtr) == MTR_LOG_NONE) {
@@ -52,17 +47,7 @@ void mlog_catenate_string(mtr_t *mtr,      /*!< in: mtr */
   dyn_push_string(mlog, str, len);
 }
 
-/** Writes the initial part of a log record consisting of one-byte item
-type and four-byte space and page numbers. Also pushes info
-to the mtr memo that a buffer page has been modified. */
-
-void mlog_write_initial_log_record(
-    const byte *ptr, /*!< in: pointer to (inside) a buffer
-                     frame holding the file page where
-                     modification is made */
-    byte type,       /*!< in: log item type: MLOG_1BYTE, ... */
-    mtr_t *mtr)      /*!< in: mini-transaction handle */
-{
+void mlog_write_initial_log_record(const byte *ptr, byte type, mtr_t *mtr) {
   byte *log_ptr;
 
   ut_ad(type <= MLOG_BIGGEST_TYPE);
@@ -81,16 +66,7 @@ void mlog_write_initial_log_record(
   mlog_close(mtr, log_ptr);
 }
 
-/** Parses an initial log record written by mlog_write_initial_log_record.
-@return	parsed record end, nullptr if not a complete record */
-
-byte *mlog_parse_initial_log_record(
-    byte *ptr,      /*!< in: buffer */
-    byte *end_ptr,  /*!< in: buffer end */
-    byte *type,     /*!< out: log record type: MLOG_1BYTE, ... */
-    ulint *space,   /*!< out: space id */
-    ulint *page_no) /*!< out: page number */
-{
+byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, byte *type, ulint *space, ulint *page_no) {
   if (end_ptr < ptr + 1) {
 
     return (nullptr);
@@ -118,30 +94,19 @@ byte *mlog_parse_initial_log_record(
   return (ptr);
 }
 
-/** Parses a log record written by mlog_write_ulint or mlog_write_dulint.
-@return	parsed record end, nullptr if not a complete record or a corrupt record
-*/
-
-byte *mlog_parse_nbytes(
-    ulint type,     /*!< in: log record type: MLOG_1BYTE, ... */
-    byte *ptr,      /*!< in: buffer */
-    byte *end_ptr,  /*!< in: buffer end */
-    byte *page,     /*!< in: page where to apply the log record, or nullptr */
-    void *page_zip) /*!< in/out: compressed page, or nullptr */
-{
-  ulint offset;
+byte *mlog_parse_nbytes(ulint type, byte *ptr, byte *end_ptr, byte *page) {
   ulint val;
   dulint dval;
 
   ut_a(type <= MLOG_8BYTES);
-  ut_a(!page || !page_zip || fil_page_get_type(page) != FIL_PAGE_INDEX);
+  ut_a(page == nullptr || fil_page_get_type(page) != FIL_PAGE_INDEX);
 
   if (end_ptr < ptr + 2) {
 
     return (nullptr);
   }
 
-  offset = mach_read_from_2(ptr);
+  auto offset = mach_read_from_2(ptr);
   ptr += 2;
 
   if (offset >= UNIV_PAGE_SIZE) {
@@ -158,10 +123,7 @@ byte *mlog_parse_nbytes(
       return (nullptr);
     }
 
-    if (page) {
-      if (likely_null(page_zip)) {
-        mach_write_to_8(((page_zip_des_t *)page_zip)->data + offset, dval);
-      }
+    if (page != nullptr) {
       mach_write_to_8(page + offset, dval);
     }
 
@@ -180,10 +142,7 @@ byte *mlog_parse_nbytes(
     if (unlikely(val > 0xFFUL)) {
       goto corrupt;
     }
-    if (page) {
-      if (likely_null(page_zip)) {
-        mach_write_to_1(((page_zip_des_t *)page_zip)->data + offset, val);
-      }
+    if (page != nullptr) {
       mach_write_to_1(page + offset, val);
     }
     break;
@@ -191,18 +150,12 @@ byte *mlog_parse_nbytes(
     if (unlikely(val > 0xFFFFUL)) {
       goto corrupt;
     }
-    if (page) {
-      if (likely_null(page_zip)) {
-        mach_write_to_2(((page_zip_des_t *)page_zip)->data + offset, val);
-      }
+    if (page != nullptr) {
       mach_write_to_2(page + offset, val);
     }
     break;
   case MLOG_4BYTES:
-    if (page) {
-      if (likely_null(page_zip)) {
-        mach_write_to_4(((page_zip_des_t *)page_zip)->data + offset, val);
-      }
+    if (page != nullptr) {
       mach_write_to_4(page + offset, val);
     }
     break;
@@ -215,15 +168,7 @@ byte *mlog_parse_nbytes(
   return (ptr);
 }
 
-/** Writes 1 - 4 bytes to a file page buffered in the buffer pool.
-Writes the corresponding log record to the mini-transaction log. */
-
-void mlog_write_ulint(
-    byte *ptr,  /*!< in: pointer where to write */
-    ulint val,  /*!< in: value to write */
-    byte type,  /*!< in: MLOG_1BYTE, MLOG_2BYTES, MLOG_4BYTES */
-    mtr_t *mtr) /*!< in: mini-transaction handle */
-{
+void mlog_write_ulint(byte *ptr, ulint val, byte type, mtr_t *mtr) {
   byte *log_ptr;
 
   switch (type) {
@@ -258,13 +203,7 @@ void mlog_write_ulint(
   mlog_close(mtr, log_ptr);
 }
 
-/** Writes 8 bytes to a file page buffered in the buffer pool.
-Writes the corresponding log record to the mini-transaction log. */
-
-void mlog_write_dulint(byte *ptr,  /*!< in: pointer where to write */
-                       dulint val, /*!< in: value to write */
-                       mtr_t *mtr) /*!< in: mini-transaction handle */
-{
+void mlog_write_dulint(byte *ptr, dulint val, mtr_t *mtr) {
   byte *log_ptr;
 
   ut_ad(ptr && mtr);
@@ -289,14 +228,7 @@ void mlog_write_dulint(byte *ptr,  /*!< in: pointer where to write */
   mlog_close(mtr, log_ptr);
 }
 
-/** Writes a string to a file page buffered in the buffer pool. Writes the
-corresponding log record to the mini-transaction log. */
-
-void mlog_write_string(byte *ptr,       /*!< in: pointer where to write */
-                       const byte *str, /*!< in: string to write */
-                       ulint len,       /*!< in: string length */
-                       mtr_t *mtr)      /*!< in: mini-transaction handle */
-{
+void mlog_write_string(byte *ptr, const byte *str, ulint len, mtr_t *mtr) {
   ut_ad(ptr && mtr);
   ut_a(len < UNIV_PAGE_SIZE);
 
@@ -305,13 +237,7 @@ void mlog_write_string(byte *ptr,       /*!< in: pointer where to write */
   mlog_log_string(ptr, len, mtr);
 }
 
-/** Logs a write of a string to a file page buffered in the buffer pool.
-Writes the corresponding log record to the mini-transaction log. */
-
-void mlog_log_string(byte *ptr,  /*!< in: pointer written to */
-                     ulint len,  /*!< in: string length */
-                     mtr_t *mtr) /*!< in: mini-transaction handle */
-{
+void mlog_log_string(byte *ptr, ulint len, mtr_t *mtr) {
   byte *log_ptr;
 
   ut_ad(ptr && mtr);
@@ -338,16 +264,8 @@ void mlog_log_string(byte *ptr,  /*!< in: pointer written to */
   mlog_catenate_string(mtr, ptr, len);
 }
 
-/** Parses a log record written by mlog_write_string.
-@return	parsed record end, nullptr if not a complete record */
-
-byte *mlog_parse_string(
-    byte *ptr,      /*!< in: buffer */
-    byte *end_ptr,  /*!< in: buffer end */
-    byte *page,     /*!< in: page where to apply the log record, or nullptr */
-    void *page_zip) /*!< in/out: compressed page, or nullptr */
-{
-  ut_a(!page || !page_zip || fil_page_get_type(page) != FIL_PAGE_INDEX);
+byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
+  ut_a(page == nullptr || fil_page_get_type(page) != FIL_PAGE_INDEX);
 
   if (end_ptr < ptr + 4) {
 
@@ -371,27 +289,13 @@ byte *mlog_parse_string(
   }
 
   if (page) {
-    if (likely_null(page_zip)) {
-      memcpy(((page_zip_des_t *)page_zip)->data + offset, ptr, len);
-    }
     memcpy(page + offset, ptr, len);
   }
 
   return (ptr + len);
 }
 
-/** Opens a buffer for mlog, writes the initial log record and,
-if needed, the field lengths of an index.
-@return	buffer, nullptr if log mode MTR_LOG_NONE */
-
-byte *mlog_open_and_write_index(
-    mtr_t *mtr,          /*!< in: mtr */
-    const byte *rec,     /*!< in: index record or page */
-    dict_index_t *index, /*!< in: record descriptor */
-    byte type,           /*!< in: log item type */
-    ulint size)          /*!< in: requested buffer size in bytes
-                         (if 0, calls mlog_close() and returns nullptr) */
-{
+byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, dict_index_t *index, byte type, ulint size) {
   byte *log_ptr;
   const byte *log_start;
   const byte *log_end;

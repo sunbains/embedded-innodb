@@ -99,7 +99,7 @@ inline uint64_t buf_pool_get_oldest_modification(void) {
 
   bpage = UT_LIST_GET_LAST(buf_pool->flush_list);
 
-  if (bpage == NULL) {
+  if (bpage == nullptr) {
     lsn = 0;
   } else {
     ut_ad(bpage->in_flush_list);
@@ -123,11 +123,6 @@ inline enum buf_page_state buf_page_get_state(
 
 #ifdef UNIV_DEBUG
   switch (state) {
-#ifdef WITH_ZIP
-  case BUF_BLOCK_ZIP_FREE:
-  case BUF_BLOCK_ZIP_PAGE:
-  case BUF_BLOCK_ZIP_DIRTY:
-#endif /* WITH_ZIP */
   case BUF_BLOCK_NOT_USED:
   case BUF_BLOCK_READY_FOR_USE:
   case BUF_BLOCK_FILE_PAGE:
@@ -157,17 +152,6 @@ buf_page_set_state(buf_page_t *bpage, /*!< in/out: pointer to control block */
   enum buf_page_state old_state = buf_page_get_state(bpage);
 
   switch (old_state) {
-#ifdef WITH_ZIP
-  case BUF_BLOCK_ZIP_FREE:
-    ut_error;
-    break;
-  case BUF_BLOCK_ZIP_PAGE:
-    ut_a(state == BUF_BLOCK_ZIP_DIRTY);
-    break;
-  case BUF_BLOCK_ZIP_DIRTY:
-    ut_a(state == BUF_BLOCK_ZIP_PAGE);
-    break;
-#endif /* WITH_ZIP */
   case BUF_BLOCK_NOT_USED:
     ut_a(state == BUF_BLOCK_READY_FOR_USE);
     break;
@@ -204,15 +188,6 @@ inline bool
 buf_page_in_file(const buf_page_t *bpage) /*!< in: pointer to control block */
 {
   switch (buf_page_get_state(bpage)) {
-#ifdef WITH_ZIP
-  case BUF_BLOCK_ZIP_FREE:
-    /* This is a free page in buf_pool->zip_free[].
-    Such pages should only be accessed by the buddy allocator. */
-    ut_error;
-    break;
-  case BUF_BLOCK_ZIP_PAGE:
-  case BUF_BLOCK_ZIP_DIRTY:
-#endif /* WITH_ZIP */
   case BUF_BLOCK_FILE_PAGE:
     return (true);
   case BUF_BLOCK_NOT_USED:
@@ -225,37 +200,12 @@ buf_page_in_file(const buf_page_t *bpage) /*!< in: pointer to control block */
   return (false);
 }
 
-#ifdef WITH_ZIP
-/** Determines if a block should be on unzip_LRU list.
-@return	true if block belongs to unzip_LRU */
-inline bool buf_page_belongs_to_unzip_LRU(
-    const buf_page_t *bpage) /*!< in: pointer to control block */
-{
-  ut_ad(buf_page_in_file(bpage));
-
-  return (bpage->zip.data && buf_page_get_state(bpage) == BUF_BLOCK_FILE_PAGE);
-}
-#endif /* WITH_ZIP */
-
 /** Gets the mutex of a block.
 @return	pointer to mutex protecting bpage */
 inline mutex_t *
 buf_page_get_mutex(const buf_page_t *bpage) /*!< in: pointer to control block */
 {
-#ifdef WITH_ZIP
-  switch (buf_page_get_state(bpage)) {
-  case BUF_BLOCK_ZIP_FREE:
-    ut_error;
-    return (NULL);
-  case BUF_BLOCK_ZIP_PAGE:
-  case BUF_BLOCK_ZIP_DIRTY:
-    return (&buf_pool_zip_mutex);
-  default:
-#endif /* WITH_ZIP */
-    return (&((buf_block_t *)bpage)->mutex);
-#ifdef WITH_ZIP
-  }
-#endif /* WITH_ZIP */
+  return (&((buf_block_t *)bpage)->mutex);
 }
 
 /** Get the flush type of a page.
@@ -376,7 +326,7 @@ inline void buf_page_set_old(buf_page_t *bpage, /*!< in/out: control block */
   ut_ad(bpage->in_LRU_list);
 
 #ifdef UNIV_LRU_DEBUG
-  ut_a((buf_pool->LRU_old_len == 0) == (buf_pool->LRU_old == NULL));
+  ut_a((buf_pool->LRU_old_len == 0) == (buf_pool->LRU_old == nullptr));
   /* If a block is flagged "old", the LRU_old list must exist. */
   ut_a(!old || buf_pool->LRU_old);
 
@@ -420,12 +370,12 @@ buf_page_set_accessed(buf_page_t *bpage, /*!< in/out: control block */
 }
 
 /** Gets the buf_block_t handle of a buffered file block if an uncompressed
-page frame exists, or NULL.
-@return	control block, or NULL */
+page frame exists, or nullptr.
+@return	control block, or nullptr */
 inline buf_block_t *
-buf_page_get_block(buf_page_t *bpage) /*!< in: control block, or NULL */
+buf_page_get_block(buf_page_t *bpage) /*!< in: control block, or nullptr */
 {
-  if (likely(bpage != NULL)) {
+  if (likely(bpage != nullptr)) {
     ut_ad(buf_page_in_file(bpage));
 
     if (buf_page_get_state(bpage) == BUF_BLOCK_FILE_PAGE) {
@@ -433,7 +383,7 @@ buf_page_get_block(buf_page_t *bpage) /*!< in: control block, or NULL */
     }
   }
 
-  return (NULL);
+  return (nullptr);
 }
 #ifdef UNIV_DEBUG
 /** Gets a pointer to the memory frame of a block.
@@ -444,11 +394,6 @@ inline buf_frame_t *buf_block_get_frame(
   ut_ad(block);
 
   switch (buf_block_get_state(block)) {
-#ifdef WITH_ZIP
-  case BUF_BLOCK_ZIP_FREE:
-  case BUF_BLOCK_ZIP_PAGE:
-  case BUF_BLOCK_ZIP_DIRTY:
-#endif /* WITH_ZIP */
   case BUF_BLOCK_NOT_USED:
     ut_error;
     break;
@@ -510,43 +455,6 @@ inline ulint buf_block_get_page_no(
   return (block->page.offset);
 }
 
-/** Gets the compressed page size of a block.
-@return	compressed page size, or 0 */
-inline ulint buf_page_get_zip_size(
-    const buf_page_t *bpage) /*!< in: pointer to the control block */
-{
-#ifdef WITH_ZIP
-  return (bpage->zip.ssize ? 512 << bpage->zip.ssize : 0);
-#else
-  return (0);
-#endif /* WITH_ZIP */
-}
-
-/** Gets the compressed page size of a block.
-@return	compressed page size, or 0 */
-inline ulint buf_block_get_zip_size(
-    const buf_block_t *block) /*!< in: pointer to the control block */
-{
-#ifdef WITH_ZIP
-  return (block->page.zip.ssize ? 512 << block->page.zip.ssize : 0);
-#else
-  return (0);
-#endif /* WITH_ZIP */
-}
-
-#ifdef WITH_ZIP
-#if defined UNIV_DEBUG || defined UNIV_ZIP_DEBUG
-/** Gets the compressed page descriptor corresponding to an uncompressed page
-if applicable.
-@return	compressed page descriptor, or NULL */
-inline const page_zip_des_t *
-buf_frame_get_page_zip(const byte *ptr) /*!< in: pointer to the page */
-{
-  return (buf_block_get_page_zip(buf_block_align(ptr)));
-}
-#endif /* UNIV_DEBUG || UNIV_ZIP_DEBUG */
-#endif /* WITH_ZIP */
-
 /** Gets the space id, page offset, and byte offset within page of a
 pointer pointing to a buffer frame containing a file page. */
 inline void
@@ -579,16 +487,13 @@ buf_block_get_lock_hash_val(const buf_block_t *block) /*!< in: block */
 /** Allocates a buffer block.
 @return	own: the allocated block, in state BUF_BLOCK_MEMORY */
 inline buf_block_t *
-buf_block_alloc(ulint zip_size) /*!< in: compressed page size in bytes,
-                                or 0 if uncompressed tablespace */
+buf_block_alloc()
 {
-  buf_block_t *block;
-
-  block = buf_LRU_get_free_block(zip_size);
+  auto block = buf_LRU_get_free_block();
 
   buf_block_set_state(block, BUF_BLOCK_MEMORY);
 
-  return (block);
+  return block;
 }
 
 /** Frees a buffer block which does not contain a file page. */
@@ -723,8 +628,8 @@ buf_block_buf_fix_dec(buf_block_t *block) /*!< in/out: block to bufferunfix */
 #endif
 }
 
-/** Returns the control block of a file page, NULL if not found.
-@return	block, NULL if not found */
+/** Returns the control block of a file page, nullptr if not found.
+@return	block, nullptr if not found */
 inline buf_page_t *
 buf_page_hash_get(ulint space,  /*!< in: space id */
                   ulint offset) /*!< in: offset of the page within space */
@@ -739,31 +644,22 @@ buf_page_hash_get(ulint space,  /*!< in: space id */
 
   fold = buf_page_address_fold(space, offset);
 
-#ifdef WITH_ZIP
-  HASH_SEARCH(hash, buf_pool->page_hash, fold, buf_page_t *, bpage,
-              ut_ad(bpage->in_page_hash && !bpage->in_zip_hash &&
-                    buf_page_in_file(bpage)),
-              bpage->space == space && bpage->offset == offset);
-#else
   HASH_SEARCH(hash, buf_pool->page_hash, fold, buf_page_t *, bpage,
               ut_ad(bpage->in_page_hash && buf_page_in_file(bpage)),
               bpage->space == space && bpage->offset == offset);
-#endif /* WITH_ZIP */
-  if (bpage) {
+
+  if (bpage != nullptr) {
     ut_a(buf_page_in_file(bpage));
     ut_ad(bpage->in_page_hash);
-#ifdef WITH_ZIP
-    ut_ad(!bpage->in_zip_hash);
-#endif /* WITH_ZIP */
     UNIV_MEM_ASSERT_RW(bpage, sizeof *bpage);
   }
 
   return (bpage);
 }
 
-/** Returns the control block of a file page, NULL if not found
+/** Returns the control block of a file page, nullptr if not found
 or an uncompressed page frame does not exist.
-@return	block, NULL if not found */
+@return	block, nullptr if not found */
 inline buf_block_t *
 buf_block_hash_get(ulint space,  /*!< in: space id */
                    ulint offset) /*!< in: offset of the page within space */
@@ -788,49 +684,8 @@ inline bool buf_page_peek(ulint space,  /*!< in: space id */
 
   buf_pool_mutex_exit();
 
-  return (bpage != NULL);
+  return (bpage != nullptr);
 }
-
-#ifdef WITH_ZIP
-/** Releases a compressed-only page acquired with buf_page_get_zip(). */
-inline void buf_page_release_zip(buf_page_t *bpage) /*!< in: buffer block */
-{
-  buf_block_t *block;
-
-  ut_ad(bpage);
-  ut_a(bpage->buf_fix_count > 0);
-
-  switch (buf_page_get_state(bpage)) {
-#ifdef WITH_ZIP
-  case BUF_BLOCK_ZIP_PAGE:
-  case BUF_BLOCK_ZIP_DIRTY:
-    mutex_enter(&buf_pool_zip_mutex);
-    bpage->buf_fix_count--;
-    mutex_exit(&buf_pool_zip_mutex);
-    return;
-#endif /* WITH_ZIP */
-  case BUF_BLOCK_FILE_PAGE:
-    block = (buf_block_t *)bpage;
-    mutex_enter(&block->mutex);
-#ifdef UNIV_SYNC_DEBUG
-    rw_lock_s_unlock(&block->debug_latch);
-#endif
-    bpage->buf_fix_count--;
-    mutex_exit(&block->mutex);
-    return;
-#ifdef WITH_ZIP
-  case BUF_BLOCK_ZIP_FREE:
-#endif /* WITH_ZIP */
-  case BUF_BLOCK_NOT_USED:
-  case BUF_BLOCK_READY_FOR_USE:
-  case BUF_BLOCK_MEMORY:
-  case BUF_BLOCK_REMOVE_HASH:
-    break;
-  }
-
-  ut_error;
-}
-#endif /* WITH_ZIP */
 
 /** Decrements the bufferfix count of a buffer control block and releases
 a latch, if specified. */

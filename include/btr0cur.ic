@@ -46,16 +46,6 @@ inline rec_t *btr_cur_get_rec(btr_cur_t *cursor) /*!< in: tree cursor */
   return (page_cur_get_rec(&(cursor->page_cur)));
 }
 
-#ifdef WITH_ZIP
-/** Returns the compressed page on which the tree cursor is positioned.
-@return	pointer to compressed page, or NULL if the page is not compressed */
-inline page_zip_des_t *
-btr_cur_get_page_zip(btr_cur_t *cursor) /*!< in: tree cursor */
-{
-  return (buf_block_get_page_zip(btr_cur_get_block(cursor)));
-}
-#endif /* WITH_ZIP */
-
 /** Invalidates a tree cursor by setting record pointer to NULL. */
 inline void btr_cur_invalidate(btr_cur_t *cursor) /*!< in: tree cursor */
 {

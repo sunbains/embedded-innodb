@@ -50,9 +50,9 @@ struct file_format_struct {
 typedef struct file_format_struct file_format_t;
 
 /** The transaction system */
-trx_sys_t *trx_sys = NULL;
+trx_sys_t *trx_sys = nullptr;
 /** The doublewrite buffer */
-trx_doublewrite_t *trx_doublewrite = NULL;
+trx_doublewrite_t *trx_doublewrite = nullptr;
 
 /** The following is set to true when we are upgrading from pre-4.1
 format data files to the multiple tablespaces format data files */
@@ -83,8 +83,8 @@ or create a table. */
 static file_format_t file_format_max;
 
 void trx_sys_var_init() {
-  trx_sys = NULL;
-  trx_doublewrite = NULL;
+  trx_sys = nullptr;
+  trx_doublewrite = nullptr;
 
   trx_doublewrite_must_reset_space_ids = false;
   trx_sys_multiple_tablespace_format = false;
@@ -93,7 +93,7 @@ void trx_sys_var_init() {
 }
 
 bool trx_doublewrite_page_inside(ulint page_no) {
-  if (trx_doublewrite == NULL) {
+  if (trx_doublewrite == nullptr) {
 
     return (false);
   }
@@ -231,7 +231,7 @@ start_again:
 
     buf_block_dbg_add_level(block2, SYNC_NO_ORDER_CHECK);
 
-    if (block2 == NULL) {
+    if (block2 == nullptr) {
       ib_logger(ib_stream, "InnoDB: Cannot create doublewrite buffer:"
                            " you must\n"
                            "InnoDB: increase your tablespace size.\n"
@@ -350,8 +350,8 @@ void trx_sys_doublewrite_init_or_restore_pages(
   /* Read the trx sys header to check if we are using the doublewrite
   buffer */
 
-  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, 0, TRX_SYS_PAGE_NO, 0,
-         UNIV_PAGE_SIZE, read_buf, NULL);
+  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, TRX_SYS_PAGE_NO, 0,
+         UNIV_PAGE_SIZE, read_buf, nullptr);
 
   doublewrite = read_buf + TRX_SYS_DOUBLEWRITE;
 
@@ -388,12 +388,12 @@ void trx_sys_doublewrite_init_or_restore_pages(
 
   /* Read the pages from the doublewrite buffer to memory */
 
-  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, 0, block1, 0,
-         TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE, buf, NULL);
+  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, block1, 0,
+         TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE, buf, nullptr);
 
-  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, 0, block2, 0,
+  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, block2, 0,
          TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE,
-         buf + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE, NULL);
+         buf + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE, nullptr);
 
   /* Check if any of these pages is half-written in data files, in the intended
    * position */
@@ -418,8 +418,8 @@ void trx_sys_doublewrite_init_or_restore_pages(
         source_page_no = block2 + i - TRX_SYS_DOUBLEWRITE_BLOCK_SIZE;
       }
 
-      fil_io(OS_FILE_WRITE, true, 0, 0, source_page_no, 0, UNIV_PAGE_SIZE, page,
-             NULL);
+      fil_io(OS_FILE_WRITE, true, 0, 0, source_page_no, UNIV_PAGE_SIZE, page,
+             nullptr);
       /* printf("Resetting space id in page %lu\n",
       source_page_no); */
     } else {
@@ -452,24 +452,13 @@ void trx_sys_doublewrite_init_or_restore_pages(
       /* It is an unwritten doublewrite buffer page:
       do nothing */
     } else {
-      ulint zip_size = fil_space_get_zip_size(space_id);
-
-#ifndef WITH_ZIP
-      if (zip_size > 0) {
-        log_datal("InnoDB: Warning: attempt to "
-                  "restore compressed table page, "
-                  "InnoDB not compiled\n"
-                  "InnoDB: with support for compressed "
-                  "tables.\n");
-      }
-#endif /* WITH_ZIP */
       /* Read in the actual page from the file */
-      fil_io(OS_FILE_READ, true, space_id, zip_size, page_no, 0,
-             zip_size ? zip_size : UNIV_PAGE_SIZE, read_buf, NULL);
+      fil_io(OS_FILE_READ, true, space_id, page_no, 0, UNIV_PAGE_SIZE,
+             read_buf, nullptr);
 
       /* Check if the page is corrupt */
 
-      if (unlikely(buf_page_is_corrupted(read_buf, zip_size))) {
+      if (unlikely(buf_page_is_corrupted(read_buf, 0))) {
 
         ib_logger(ib_stream,
                   "InnoDB: Warning: database page"
@@ -480,13 +469,13 @@ void trx_sys_doublewrite_init_or_restore_pages(
                   " the doublewrite buffer.\n",
                   (ulong)space_id, (ulong)page_no);
 
-        if (buf_page_is_corrupted(page, zip_size)) {
+        if (buf_page_is_corrupted(page, 0)) {
           ib_logger(ib_stream, "InnoDB: Dump of the page:\n");
-          buf_page_print(read_buf, zip_size);
+          buf_page_print(read_buf, 0);
           ib_logger(ib_stream, "InnoDB: Dump of"
                                " corresponding page"
                                " in doublewrite buffer:\n");
-          buf_page_print(page, zip_size);
+          buf_page_print(page, 0);
 
           ib_logger(ib_stream, "InnoDB: Also the page in the"
                                " doublewrite buffer"
@@ -504,8 +493,9 @@ void trx_sys_doublewrite_init_or_restore_pages(
         /* Write the good page from the doublewrite buffer to the intended
          * position */
 
-        fil_io(OS_FILE_WRITE, true, space_id, zip_size, page_no, 0,
-               zip_size ? zip_size : UNIV_PAGE_SIZE, page, NULL);
+        fil_io(OS_FILE_WRITE, true, space_id, page_no, 0, UNIV_PAGE_SIZE,
+               page, nullptr);
+
         ib_logger(ib_stream,
                   "InnoDB: Recovered the page from the doublewrite buffer.\n");
       }
@@ -520,18 +510,12 @@ leave_func:
   ut_free(unaligned_read_buf);
 }
 
-/** Checks that trx is in the trx list.
-@return	true if is in */
-
-bool trx_in_trx_list(trx_t *in_trx) /*!< in: trx */
-{
-  trx_t *trx;
-
+bool trx_in_trx_list(trx_t *in_trx) {
   ut_ad(mutex_own(&(kernel_mutex)));
 
-  trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  auto trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
 
-  while (trx != NULL) {
+  while (trx != nullptr) {
 
     if (trx == in_trx) {
 
@@ -604,7 +588,7 @@ static void trx_sysf_create(mtr_t *mtr) /*!< in: mtr */
   then enter the kernel: we must do it in this order to conform
   to the latching order rules. */
 
-  mtr_x_lock(fil_space_get_latch(TRX_SYS_SPACE, NULL), mtr);
+  mtr_x_lock(fil_space_get_latch(TRX_SYS_SPACE), mtr);
   mutex_enter(&kernel_mutex);
 
   /* Create the trx sys file block in a new allocated file segment */
@@ -649,7 +633,7 @@ static void trx_sysf_create(mtr_t *mtr) /*!< in: mtr */
                      page - sys_header);
 
   /* Create the first rollback segment in the SYSTEM tablespace */
-  page_no = trx_rseg_header_create(TRX_SYS_SPACE, 0, ULINT_MAX, &slot_no, mtr);
+  page_no = trx_rseg_header_create(TRX_SYS_SPACE, ULINT_MAX, &slot_no, mtr);
   ut_a(slot_no == TRX_SYS_SYSTEM_RSEG_ID);
   ut_a(page_no != FIL_NULL);
 
@@ -669,7 +653,7 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) /*!< in: recovery flag */
 
   mtr_start(&mtr);
 
-  ut_ad(trx_sys == NULL);
+  ut_ad(trx_sys == nullptr);
 
   mutex_enter(&kernel_mutex);
 
@@ -757,7 +741,7 @@ void trx_sys_create(ib_recovery_t recovery) {
 static bool
 trx_sys_file_format_max_write(ulint format_id,   /*!< in: file format id */
                               const char **name) /*!< out: max file format name,
-                                                 can be NULL */
+                                                 can be nullptr */
 {
   mtr_t mtr;
   byte *ptr;
@@ -816,7 +800,7 @@ static ulint trx_sys_file_format_max_read(void) {
     /* Either it has never been tagged, or garbage in it.
     Reset the tag in either case. */
     format_id = DICT_TF_FORMAT_51;
-    trx_sys_file_format_max_write(format_id, NULL);
+    trx_sys_file_format_max_write(format_id, nullptr);
   }
 
   return (format_id);
@@ -835,7 +819,7 @@ ulint trx_sys_file_format_name_to_id(const char *format_name) {
   char *endp;
   ulint format_id;
 
-  ut_a(format_name != NULL);
+  ut_a(format_name != nullptr);
 
   /* The format name can contain the format id itself instead of
   the name and we check for that. */
@@ -925,7 +909,7 @@ void trx_sys_file_format_tag_init() {
 
   /* If format_id is not set then set it to the minimum. */
   if (format_id == ULINT_UNDEFINED) {
-    trx_sys_file_format_max_set(DICT_TF_FORMAT_51, NULL);
+    trx_sys_file_format_max_set(DICT_TF_FORMAT_51, nullptr);
   }
 }
 
@@ -933,7 +917,7 @@ bool trx_sys_file_format_max_upgrade(const char **name, ulint format_id) {
   bool ret = false;
 
   ut_a(name);
-  ut_a(file_format_max.name != NULL);
+  ut_a(file_format_max.name != nullptr);
   ut_a(format_id <= DICT_TF_FORMAT_MAX);
 
   if (format_id > file_format_max.id) {
@@ -1098,7 +1082,7 @@ void trx_sys_close() {
   trx_rseg_t *rseg;
   read_view_t *view;
 
-  ut_ad(trx_sys != NULL);
+  ut_ad(trx_sys != nullptr);
 
   /* Check that all read views are closed except read view owned
   by a purge. */
@@ -1112,7 +1096,7 @@ void trx_sys_close() {
   }
 
   sess_close(trx_dummy_sess);
-  trx_dummy_sess = NULL;
+  trx_dummy_sess = nullptr;
 
   trx_purge_sys_close();
 
@@ -1125,25 +1109,25 @@ void trx_sys_close() {
 #endif /* UNIV_DO_FLUSH */
 
   /* Free the double write data structures. */
-  ut_a(trx_doublewrite != NULL);
+  ut_a(trx_doublewrite != nullptr);
   ut_free(trx_doublewrite->write_buf_unaligned);
-  trx_doublewrite->write_buf_unaligned = NULL;
+  trx_doublewrite->write_buf_unaligned = nullptr;
 
   mem_free(trx_doublewrite->buf_block_arr);
-  trx_doublewrite->buf_block_arr = NULL;
+  trx_doublewrite->buf_block_arr = nullptr;
 
   mutex_free(&trx_doublewrite->mutex);
 #ifdef UNIV_DEBUG
   memset(&trx_doublewrite->mutex, 0x0, sizeof(trx_doublewrite->mutex));
 #endif
   mem_free(trx_doublewrite);
-  trx_doublewrite = NULL;
+  trx_doublewrite = nullptr;
   /* End freeing of doublewrite buffer data structures. */
 
   /* There can't be any active transactions. */
   rseg = UT_LIST_GET_FIRST(trx_sys->rseg_list);
 
-  while (rseg != NULL) {
+  while (rseg != nullptr) {
     trx_rseg_t *prev_rseg = rseg;
 
     rseg = UT_LIST_GET_NEXT(rseg_list, prev_rseg);
@@ -1154,7 +1138,7 @@ void trx_sys_close() {
 
   view = UT_LIST_GET_FIRST(trx_sys->view_list);
 
-  while (view != NULL) {
+  while (view != nullptr) {
     read_view_t *prev_view = view;
 
     view = UT_LIST_GET_NEXT(view_list, prev_view);
@@ -1171,6 +1155,6 @@ void trx_sys_close() {
 
   mem_free(trx_sys);
 
-  trx_sys = NULL;
+  trx_sys = nullptr;
   mutex_exit(&kernel_mutex);
 }

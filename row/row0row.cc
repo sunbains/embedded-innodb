@@ -73,15 +73,15 @@ ulint row_get_trx_id_offset(
 
 /** When an insert or purge to a table is performed, this function builds
 the entry to be inserted into or purged from an index on the table.
-@return index entry which should be inserted or purged, or NULL if the
+@return index entry which should be inserted or purged, or nullptr if the
 externally stored columns in the clustered index record are
-unavailable and ext != NULL */
+unavailable and ext != nullptr */
 
 dtuple_t *row_build_index_entry(
     const dtuple_t *row, /*!< in: row which should be
                          inserted or purged */
     row_ext_t *ext,      /*!< in: externally stored column prefixes,
-                         or NULL */
+                         or nullptr */
     dict_index_t *index, /*!< in: index on the table */
     mem_heap_t *heap)    /*!< in: memory heap from which the memory for
                          the index entry is allocated */
@@ -107,7 +107,7 @@ dtuple_t *row_build_index_entry(
       /* Do not fetch externally stored columns to
       the clustered index.  Such columns are handled
       at a higher level. */
-      ext = NULL;
+      ext = nullptr;
     }
   }
 
@@ -127,7 +127,7 @@ dtuple_t *row_build_index_entry(
       const byte *buf = row_ext_lookup(ext, col_no, &len);
       if (likely_null(buf)) {
         if (unlikely(buf == field_ref_zero)) {
-          return (NULL);
+          return (nullptr);
         }
         dfield_set_data(dfield, buf, len);
       }
@@ -174,18 +174,18 @@ dtuple_t *row_build(ulint type,                /*!< in: ROW_COPY_POINTERS or
                                                s-latched and the latch held
                                                as long as the row dtuple is used! */
                     const ulint *offsets, /*!< in: rec_get_offsets(rec,index)
-                                          or NULL, in which case this function
+                                          or nullptr, in which case this function
                                           will invoke rec_get_offsets() */
                     const dict_table_t *col_table,
                     /*!< in: table, to check which
                     externally stored columns
                     occur in the ordering columns
-                    of an index, or NULL if
+                    of an index, or nullptr if
                     index->table should be
                     consulted instead */
                     row_ext_t **ext,  /*!< out, own: cache of
                                       externally stored column
-                                      prefixes, or NULL */
+                                      prefixes, or nullptr */
                     mem_heap_t *heap) /*!< in: memory heap from which
                                       the memory needed is allocated */
 {
@@ -193,13 +193,13 @@ dtuple_t *row_build(ulint type,                /*!< in: ROW_COPY_POINTERS or
   const dict_table_t *table;
   ulint n_fields;
   ulint n_ext_cols;
-  ulint *ext_cols = NULL; /* remove warning */
+  ulint *ext_cols = nullptr; /* remove warning */
   ulint len;
   ulint row_len;
   byte *buf;
   ulint i;
   ulint j;
-  mem_heap_t *tmp_heap = NULL;
+  mem_heap_t *tmp_heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   rec_offs_init(offsets_);
 
@@ -269,10 +269,9 @@ dtuple_t *row_build(ulint type,                /*!< in: ROW_COPY_POINTERS or
   ut_ad(dtuple_check_typed(row));
 
   if (j) {
-    *ext = row_ext_create(j, ext_cols, row, dict_table_zip_size(index->table),
-                          heap);
+    *ext = row_ext_create(j, ext_cols, row, heap);
   } else {
-    *ext = NULL;
+    *ext = nullptr;
   }
 
   if (tmp_heap) {
@@ -415,7 +414,7 @@ row_build_row_ref(ulint type, /*!< in: ROW_COPY_DATA, or ROW_COPY_POINTERS:
   byte *buf;
   ulint clust_col_prefix_len;
   ulint i;
-  mem_heap_t *tmp_heap = NULL;
+  mem_heap_t *tmp_heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
@@ -502,7 +501,7 @@ void row_build_row_ref_in_tuple(
                                reference is used! */
     const dict_index_t *index, /*!< in: secondary index */
     ulint *offsets,            /*!< in: rec_get_offsets(rec, index)
-                               or NULL */
+                               or nullptr */
     trx_t *trx)                /*!< in: transaction */
 {
   const dict_index_t *clust_index;
@@ -513,7 +512,7 @@ void row_build_row_ref_in_tuple(
   ulint pos;
   ulint clust_col_prefix_len;
   ulint i;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   rec_offs_init(offsets_);
 
@@ -629,17 +628,8 @@ bool row_search_on_row_ref(btr_pcur_t *pcur, /*!< out: persistent cursor, which
   return (true);
 }
 
-/** Fetches the clustered index record for a secondary index record. The latches
-on the secondary index record are preserved.
-@return	record or NULL, if no record found */
-
 rec_t *
-row_get_clust_rec(ulint mode,          /*!< in: BTR_MODIFY_LEAF, ... */
-                  const rec_t *rec,    /*!< in: record in a secondary index */
-                  dict_index_t *index, /*!< in: secondary index */
-                  dict_index_t **clust_index, /*!< out: clustered index */
-                  mtr_t *mtr)                 /*!< in: mtr */
-{
+row_get_clust_rec(ulint mode, const rec_t *rec, dict_index_t *index, dict_index_t **clust_index, mtr_t *mtr) {
   mem_heap_t *heap;
   dtuple_t *ref;
   dict_table_t *table;
@@ -657,7 +647,7 @@ row_get_clust_rec(ulint mode,          /*!< in: BTR_MODIFY_LEAF, ... */
 
   found = row_search_on_row_ref(&pcur, mode, table, ref, mtr);
 
-  clust_rec = found ? btr_pcur_get_rec(&pcur) : NULL;
+  clust_rec = found ? btr_pcur_get_rec(&pcur) : nullptr;
 
   mem_heap_free(heap);
 
@@ -668,17 +658,7 @@ row_get_clust_rec(ulint mode,          /*!< in: BTR_MODIFY_LEAF, ... */
   return (clust_rec);
 }
 
-/** Searches an index record.
-@return	true if found */
-
-bool row_search_index_entry(
-    dict_index_t *index,   /*!< in: index */
-    const dtuple_t *entry, /*!< in: index entry */
-    ulint mode,            /*!< in: BTR_MODIFY_LEAF, ... */
-    btr_pcur_t *pcur,      /*!< in/out: persistent cursor, which must
-                           be closed by the caller */
-    mtr_t *mtr)            /*!< in: mtr */
-{
+bool row_search_index_entry(dict_index_t *index, const dtuple_t *entry, ulint mode, btr_pcur_t *pcur, mtr_t *mtr) {
   ulint n_fields;
   ulint low_match;
   rec_t *rec;

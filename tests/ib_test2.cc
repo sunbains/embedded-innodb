@@ -50,11 +50,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define DATABASE "test"
 #define TABLE "ib_test2"
 
-/* The page size for compressed tables, if this value is > 0 then
-we create compressed tables. It's set via the command line parameter
---page-size INT */
-static int page_size = 0;
-
 /** Create an InnoDB database (sub-directory). */
 static ib_err_t create_database(const char *name) {
   bool err;
@@ -83,13 +78,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
-  if (page_size > 0) {
-    tbl_fmt = IB_TBL_COMPRESSED;
-
-    printf("Creating compressed table with page size %d\n", page_size);
-  }
-
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, page_size);
+  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
   assert(err == DB_SUCCESS);
 
@@ -312,23 +301,17 @@ static void set_options(int argc, char *argv[]) {
   }
 
   /* Add one of our options and a spot for the sentinel. */
-  size = sizeof(struct option) * (count + 2);
+  size = sizeof(struct option) * (count + 1);
   longopts = (struct option *)malloc(size);
   memset(longopts, 0x0, size);
   memcpy(longopts, ib_longopts, sizeof(struct option) * count);
 
-  /* Add the local parameter (page-size). */
-  longopts[count].name = "page-size";
-  longopts[count].has_arg = required_argument;
-  longopts[count].flag = NULL;
-  longopts[count].val = USER_OPT + 1;
   ++count;
 
   while ((opt = getopt_long(argc, argv, "", longopts, NULL)) != -1) {
     switch (opt) {
 
     case USER_OPT + 1:
-      page_size = strtoul(optarg, NULL, 10);
       break;
 
     default:

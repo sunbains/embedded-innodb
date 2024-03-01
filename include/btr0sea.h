@@ -105,11 +105,8 @@ void btr_search_drop_page_hash_index(
 /*** Drops a page hash index when a page is freed from a fseg to the file
 system. Drops possible hash index if the page happens to be in the buffer pool.
 */
-
 void btr_search_drop_page_hash_when_freed(
     ulint space,    /*!< in: space id */
-    ulint zip_size, /*!< in: compressed page size in bytes
-                    or 0 for uncompressed pages */
     ulint page_no); /*!< in: page number */
 /*** Updates the page hash index when a single record is inserted on a page. */
 

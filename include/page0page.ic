@@ -21,20 +21,15 @@ Index page routines
 Created 2/2/1994 Heikki Tuuri
 *******************************************************/
 
+#pragma once
+
 #include "mach0data.h"
+
 #ifdef UNIV_DEBUG
 #include "log0recv.h"
 #endif /* !UNIV_DEBUG */
-#include "rem0cmp.h"
 #include "mtr0log.h"
-#ifdef WITH_ZIP
-#include "page0zip.h"
-#endif /* WITH_ZIP */
-
-#ifdef UNIV_MATERIALIZE
-#undef inline
-#define inline
-#endif
+#include "rem0cmp.h"
 
 /** Gets the start of a page.
 @return	start of the page */
@@ -58,12 +53,9 @@ inline trx_id_t page_get_max_trx_id(const page_t *page) /*!< in: page */
 
 /** Sets the max trx id field value if trx_id is bigger than the previous
 value. */
-inline void page_update_max_trx_id(
-    buf_block_t *block,       /*!< in/out: page */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page whose
-                             uncompressed part will be updated, or NULL */
-    trx_id_t trx_id,          /*!< in: transaction id */
-    mtr_t *mtr)               /*!< in/out: mini-transaction */
+inline void page_update_max_trx_id(buf_block_t *block, /*!< in/out: page */
+                                   trx_id_t trx_id, /*!< in: transaction id */
+                                   mtr_t *mtr) /*!< in/out: mini-transaction */
 {
   ut_ad(block);
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
@@ -79,7 +71,7 @@ inline void page_update_max_trx_id(
   if (ut_dulint_cmp(page_get_max_trx_id(buf_block_get_frame(block)), trx_id) <
       0) {
 
-    page_set_max_trx_id(block, page_zip, trx_id, mtr);
+    page_set_max_trx_id(block, trx_id, mtr);
   }
 }
 
@@ -94,12 +86,9 @@ inline ulint page_header_get_field(const page_t *page, /*!< in: page */
 }
 
 /** Sets the given header field. */
-inline void page_header_set_field(
-    page_t *page,             /*!< in/out: page */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page whose
-                             uncompressed part will be updated, or NULL */
-    ulint field,              /*!< in: PAGE_N_DIR_SLOTS, ... */
-    ulint val)                /*!< in: value */
+inline void page_header_set_field(page_t *page, /*!< in/out: page */
+                                  ulint field, /*!< in: PAGE_N_DIR_SLOTS, ... */
+                                  ulint val)   /*!< in: value */
 {
   ut_ad(page);
   ut_ad(field <= PAGE_N_RECS);
@@ -107,11 +96,6 @@ inline void page_header_set_field(
   ut_ad(field != PAGE_N_HEAP || (val & 0x7fff) < UNIV_PAGE_SIZE);
 
   mach_write_to_2(page + PAGE_HEADER + field, val);
-#ifdef WITH_ZIP
-  if (likely_null(page_zip)) {
-    page_zip_write_header(page_zip, page + PAGE_HEADER + field, 2, NULL);
-  }
-#endif
 }
 
 /** Returns the offset stored in the given header field.
@@ -133,12 +117,9 @@ inline ulint page_header_get_offs(const page_t *page, /*!< in: page */
 }
 
 /** Sets the pointer stored in the given header field. */
-inline void page_header_set_ptr(
-    page_t *page,             /*!< in: page */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page whose
-                             uncompressed part will be updated, or NULL */
-    ulint field,              /*!< in: PAGE_FREE, ... */
-    const byte *ptr)          /*!< in: pointer or NULL*/
+inline void page_header_set_ptr(page_t *page, /*!< in: page */
+                                ulint field,     /*!< in: PAGE_FREE, ... */
+                                const byte *ptr) /*!< in: pointer or NULL*/
 {
   ulint offs;
 
@@ -154,31 +135,18 @@ inline void page_header_set_ptr(
 
   ut_ad((field != PAGE_HEAP_TOP) || offs);
 
-  page_header_set_field(page, page_zip, field, offs);
+  page_header_set_field(page, field, offs);
 }
 
 /** Resets the last insert info field in the page header. Writes to mlog
 about this operation. */
-inline void page_header_reset_last_insert(
-    page_t *page,             /*!< in/out: page */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page whose
-                             uncompressed part will be updated, or NULL */
-    mtr_t *mtr)               /*!< in: mtr */
+inline void page_header_reset_last_insert(page_t *page, /*!< in/out: page */
+                                          mtr_t *mtr) /*!< in: mtr */
 {
   ut_ad(page && mtr);
 
-#ifdef WITH_ZIP
-  if (likely_null(page_zip)) {
-    mach_write_to_2(page + (PAGE_HEADER + PAGE_LAST_INSERT), 0);
-    page_zip_write_header(page_zip, page + (PAGE_HEADER + PAGE_LAST_INSERT), 2,
-                          mtr);
-  } else {
-#endif /* WITH_ZIP */
-    mlog_write_ulint(page + (PAGE_HEADER + PAGE_LAST_INSERT), 0, MLOG_2BYTES,
-                     mtr);
-#ifdef WITH_ZIP
-  }
-#endif /* WITH_ZIP */
+  mlog_write_ulint(page + (PAGE_HEADER + PAGE_LAST_INSERT), 0, MLOG_2BYTES,
+                   mtr);
 }
 
 /** Determine whether the page is in new-style compact format.
@@ -397,13 +365,10 @@ inline ulint page_dir_get_n_slots(const page_t *page) /*!< in: index page */
   return (page_header_get_field(page, PAGE_N_DIR_SLOTS));
 }
 /** Sets the number of dir slots in directory. */
-inline void page_dir_set_n_slots(
-    page_t *page,             /*!< in/out: page */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page whose
-                             uncompressed part will be updated, or NULL */
-    ulint n_slots)            /*!< in: number of slots */
+inline void page_dir_set_n_slots(page_t *page, /*!< in/out: page */
+                                 ulint n_slots) /*!< in: number of slots */
 {
-  page_header_set_field(page, page_zip, PAGE_N_DIR_SLOTS, n_slots);
+  page_header_set_field(page, PAGE_N_DIR_SLOTS, n_slots);
 }
 
 /** Gets the number of records in the heap.
@@ -414,21 +379,13 @@ inline ulint page_dir_get_n_heap(const page_t *page) /*!< in: index page */
 }
 
 /** Sets the number of records in the heap. */
-inline void page_dir_set_n_heap(
-    page_t *page,             /*!< in/out: index page */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page whose
-                             uncompressed part will be updated, or NULL.
-                             Note that the size of the dense page directory
-                             in the compressed page trailer is
-                             n_heap * PAGE_ZIP_DIR_SLOT_SIZE. */
-    ulint n_heap)             /*!< in: number of records */
+inline void page_dir_set_n_heap(page_t *page, /*!< in/out: index page */
+                                ulint n_heap) /*!< in: number of records */
 {
   ut_ad(n_heap < 0x8000);
-  ut_ad(!page_zip ||
-        n_heap == (page_header_get_field(page, PAGE_N_HEAP) & 0x7fff) + 1);
 
   page_header_set_field(
-      page, page_zip, PAGE_N_HEAP,
+      page, PAGE_N_HEAP,
       n_heap | (0x8000 & page_header_get_field(page, PAGE_N_HEAP)));
 }
 
@@ -493,15 +450,13 @@ inline ulint page_dir_slot_get_n_owned(
 
 /** This is used to set the owned records field of a directory slot. */
 inline void page_dir_slot_set_n_owned(
-    page_dir_slot_t *slot,    /*!< in/out: directory slot */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page, or NULL */
-    ulint n)                  /*!< in: number of records owned by the slot */
+    page_dir_slot_t *slot,     /*!< in/out: directory slot */
+    ulint n) /*!< in: number of records owned by the slot */
 {
   rec_t *rec = (rec_t *)page_dir_slot_get_rec(slot);
   if (page_rec_is_comp(slot)) {
-    rec_set_n_owned_new(rec, page_zip, n);
+    rec_set_n_owned_new(rec, n);
   } else {
-    ut_ad(!page_zip);
     rec_set_n_owned_old(rec, n);
   }
 }
@@ -696,10 +651,7 @@ inline ulint page_get_data_size(const page_t *page) /*!< in: index page */
 
 /** Allocates a block of memory from the free list of an index page. */
 inline void
-page_mem_alloc_free(page_t *page,             /*!< in/out: index page */
-                    page_zip_des_t *page_zip, /*!< in/out: compressed page with
-                                             enough space available for
-                                             inserting the record, or NULL */
+page_mem_alloc_free(page_t *page, /*!< in/out: index page */
                     rec_t *next_rec, /*!< in: pointer to the new head of the
                                     free record list */
                     ulint need)      /*!< in: number of bytes allocated */
@@ -715,12 +667,12 @@ page_mem_alloc_free(page_t *page,             /*!< in/out: index page */
   ut_ad(next_rec == (next_offs ? page + next_offs : NULL));
 #endif
 
-  page_header_set_ptr(page, page_zip, PAGE_FREE, next_rec);
+  page_header_set_ptr(page, PAGE_FREE, next_rec);
 
   garbage = page_header_get_field(page, PAGE_GARBAGE);
   ut_ad(garbage >= need);
 
-  page_header_set_field(page, page_zip, PAGE_GARBAGE, garbage - need);
+  page_header_set_field(page, PAGE_GARBAGE, garbage - need);
 }
 
 /** Calculates free space if a page is emptied.
@@ -802,11 +754,10 @@ inline ulint page_get_max_insert_size_after_reorganize(
 
 /** Puts a record to free list. */
 inline void page_mem_free(
-    page_t *page,             /*!< in/out: index page */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page, or NULL */
-    rec_t *rec,               /*!< in: pointer to the (origin of) record */
-    dict_index_t *dict_index, /*!< in: index of rec */
-    const ulint *offsets)     /*!< in: array returned by rec_get_offsets() */
+    page_t *page,                 /*!< in/out: index page */
+    rec_t *rec,                   /*!< in: pointer to the (origin of) record */
+    dict_index_t *dict_index,     /*!< in: index of rec */
+    const ulint *offsets)         /*!< in: array returned by rec_get_offsets() */
 {
   rec_t *free_rec;
   ulint garbage;
@@ -815,53 +766,25 @@ inline void page_mem_free(
   free_rec = page_header_get_ptr(page, PAGE_FREE);
 
   page_rec_set_next(rec, free_rec);
-  page_header_set_ptr(page, page_zip, PAGE_FREE, rec);
+  page_header_set_ptr(page, PAGE_FREE, rec);
 
   garbage = page_header_get_field(page, PAGE_GARBAGE);
 
-  page_header_set_field(page, page_zip, PAGE_GARBAGE,
+  page_header_set_field(page, PAGE_GARBAGE,
                         garbage + rec_offs_size(offsets));
 
-#ifdef WITH_ZIP
-  if (likely_null(page_zip)) {
-    page_zip_dir_delete(page_zip, rec, dict_index, offsets, free_rec);
-  } else
-#endif /* WITH_ZIP */
-  {
-    page_header_set_field(page, page_zip, PAGE_N_RECS,
-                          page_get_n_recs(page) - 1);
-  }
+  page_header_set_field(page, PAGE_N_RECS, page_get_n_recs(page) - 1);
 }
 
-/** Determine if a record is so big that it needs to be stored externally.
-@return	false if the entire record can be stored locally on the page */
-inline bool page_rec_needs_ext(
-    ulint rec_size, /*!< in: length of the record in bytes */
-    ulint comp,     /*!< in: nonzero=compact format */
-    ulint n_fields, /*!< in: number of fields in the record;
-                    ignored if zip_size == 0 */
-    ulint zip_size) /*!< in: compressed page size in bytes, or 0 */
-{
+inline bool
+page_rec_needs_ext(ulint rec_size, ulint comp) {
   ut_ad(rec_size > (comp ? REC_N_NEW_EXTRA_BYTES : REC_N_OLD_EXTRA_BYTES));
-
-  ut_ad(ut_is_2pow(zip_size));
-  ut_ad(comp || !zip_size);
 
 #if UNIV_PAGE_SIZE > REC_MAX_DATA_SIZE
   if (unlikely(rec_size >= REC_MAX_DATA_SIZE)) {
     return (true);
   }
-#endif
+#endif /* UNIV_PAGE_SIZE > REC_MAX_DATA_SIZE */
 
-#ifdef WITH_ZIP
-  if (unlikely(zip_size)) {
-    return (page_zip_rec_needs_ext(rec_size, comp, n_fields, zip_size));
-  }
-#endif /* WITH_ZIP */
-
-  return (rec_size >= page_get_free_space_of_empty(comp) / 2);
+  return rec_size >= page_get_free_space_of_empty(comp) / 2;
 }
-#ifdef UNIV_MATERIALIZE
-#undef inline
-#define inline inline_ORIGINAL
-#endif

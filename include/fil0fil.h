@@ -167,12 +167,10 @@ memory cache */
 
 int64_t fil_space_get_version(ulint id); /*!< in: space id */
 /** Returns the latch of a file space.
+@param[in] id                   Tablespace ID
 @return	latch protecting storage allocation */
-
 rw_lock_t *
-fil_space_get_latch(ulint id,         /*!< in: space id */
-                    ulint *zip_size); /*!< out: compressed page size, or
-                                    0 for uncompressed tablespaces */
+fil_space_get_latch(ulint id);
 
 /** Returns the type of a file space.
 @return	FIL_TABLESPACE or FIL_LOG */
@@ -203,9 +201,9 @@ there is an error, prints an error message to the .err log.
 bool fil_space_create(
     const char *name, /*!< in: space name */
     ulint id,         /*!< in: space id */
-    ulint zip_size,   /*!< in: compressed page size, or
-                     0 for uncompressed tablespaces */
+    ulint flags,      /*!< in: Tablespace flags. */
     ulint purpose);   /*!< in: FIL_TABLESPACE, or FIL_LOG if log */
+
 /** Returns the size of the space in pages. The tablespace must be cached in the
 memory cache.
 @return	space size, 0 if space not found */
@@ -220,7 +218,7 @@ ulint fil_space_get_flags(ulint id); /*!< in: space id */
 is not compressed. The tablespace must be cached in the memory cache.
 @return	compressed page size, ULINT_UNDEFINED if space not found */
 
-ulint fil_space_get_zip_size(ulint id); /*!< in: space id */
+ulint fil_space_get_size(ulint id); /*!< in: space id */
 /** Checks if the pair space, page_no refers to an existing page in a tablespace
 file space. The tablespace must be cached in the memory cache.
 @return	true if the address is meaningful */
@@ -489,8 +487,6 @@ db_err fil_io(ulint type,         /*!< in: OS_FILE_READ or OS_FILE_WRITE,
                                  caution! */
               bool sync,          /*!< in: true if synchronous aio is desired */
               ulint space_id,     /*!< in: space id */
-              ulint zip_size,     /*!< in: compressed page size in bytes;
-                                  0 for uncompressed pages */
               ulint block_offset, /*!< in: offset in number of blocks */
               ulint byte_offset,  /*!< in: remainder of offset in bytes; in
                                   aio this must be divisible by the OS block

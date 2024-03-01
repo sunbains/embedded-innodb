@@ -43,7 +43,6 @@ dict_index_t *dict_ind_compact;
 #include "dict0mem.h"
 #include "mach0data.h"
 #include "page0page.h"
-#include "page0zip.h"
 #include "pars0pars.h"
 #include "pars0sym.h"
 #include "que0que.h"
@@ -992,7 +991,6 @@ static bool
 dict_index_too_big_for_tree(const dict_table_t *table,     /*!< in: table */
                             const dict_index_t *new_index) /*!< in: index */
 {
-  ulint zip_size;
   ulint comp;
   ulint i;
   /* maximum possible storage size of a record */
@@ -1003,33 +1001,14 @@ dict_index_too_big_for_tree(const dict_table_t *table,     /*!< in: table */
   ulint page_ptr_max;
 
   comp = dict_table_is_comp(table);
-  zip_size = dict_table_zip_size(table);
 
-  if (zip_size && zip_size < UNIV_PAGE_SIZE) {
-    /* On a compressed page, two records must fit in the
-    uncompressed page modification log.  On compressed
-    pages with zip_size == UNIV_PAGE_SIZE, this limit will
-    never be reached. */
-    ut_ad(comp);
-    /* The maximum allowed record size is the size of
-    an empty page, minus a byte for recoding the heap
-    number in the page modification log.  The maximum
-    allowed node pointer size is half that. */
-    page_rec_max = page_zip_empty_size(new_index->n_fields, zip_size) - 1;
-    page_ptr_max = page_rec_max / 2;
-    /* On a compressed page, there is a two-byte entry in
-    the dense page directory for every record.  But there
-    is no record header. */
-    rec_max_size = 2;
-  } else {
-    /* The maximum allowed record size is half a B-tree
-    page.  No additional sparse page directory entry will
-    be generated for the first few user records. */
-    page_rec_max = page_get_free_space_of_empty(comp) / 2;
-    page_ptr_max = page_rec_max;
-    /* Each record has a header. */
-    rec_max_size = comp ? REC_N_NEW_EXTRA_BYTES : REC_N_OLD_EXTRA_BYTES;
-  }
+  /* The maximum allowed record size is half a B-tree
+  page.  No additional sparse page directory entry will
+  be generated for the first few user records. */
+  page_rec_max = page_get_free_space_of_empty(comp) / 2;
+  page_ptr_max = page_rec_max;
+  /* Each record has a header. */
+  rec_max_size = comp ? REC_N_NEW_EXTRA_BYTES : REC_N_OLD_EXTRA_BYTES;
 
   if (comp) {
     /* Include the "null" flags in the
@@ -1402,12 +1381,12 @@ void dict_index_add_col(dict_index_t *index, const dict_table_t *table,
   if (field->fixed_len > DICT_MAX_INDEX_COL_LEN) {
     field->fixed_len = 0;
   }
-#if DICT_MAX_INDEX_COL_LEN != 768
+
   /* The comparison limit above must be constant.  If it were
   changed, the disk format of some fixed-length columns would
   change, which would be a disaster. */
-#error "DICT_MAX_INDEX_COL_LEN != 768"
-#endif
+  static_assert(DICT_MAX_INDEX_COL_LEN == 768,
+                "error DICT_MAX_INDEX_COL_LEN != 768");
 
   if (!(col->prtype & DATA_NOT_NULL)) {
     index->n_nullable++;

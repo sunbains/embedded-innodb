@@ -493,12 +493,7 @@ ib_read_tuple(const rec_t *rec,  /*!< in: Record to read */
     /* Fetch and copy any externally stored column. */
     if (rec_offs_nth_extern(offsets, i)) {
 
-      ulint zip_size;
-
-      zip_size = dict_table_zip_size(dindex->table);
-
-      data = btr_rec_copy_externally_stored_field(copy, offsets, zip_size, i,
-                                                  &len, tuple->heap);
+      data = btr_rec_copy_externally_stored_field(copy, offsets, i, &len, tuple->heap);
 
       ut_a(len != UNIV_SQL_NULL);
     }
@@ -1067,52 +1062,24 @@ void ib_table_schema_delete(
   mem_heap_free(table_def->heap);
 }
 
-/** Do some table page size validation. It should be set only
-when ib_tbl_fmt == IB_TBL_COMPRESSED. */
-static ib_err_t
-ib_table_schema_check(ib_tbl_fmt_t ib_tbl_fmt, /*!< in: table format */
-                      ib_ulint_t *page_size) /*!< in,out: page size requested */
-{
+static ib_err_t ib_table_schema_check(ib_tbl_fmt_t ib_tbl_fmt,
+                                      ib_ulint_t *page_size) {
   ib_err_t err = DB_SUCCESS;
 
   IB_CHECK_PANIC();
 
-#ifndef WITH_ZIP
-  if (ib_tbl_fmt == IB_TBL_COMPRESSED) {
-    return DB_UNSUPPORTED;
-  }
-#endif /* WITH_ZIP */
-  if (ib_tbl_fmt != IB_TBL_COMPRESSED) {
-    /* Page size set but table format is not set to compressed.
-    Reset to 0 since we ignore such values. */
-    *page_size = 0;
-  }
+  *page_size = 0;
 
   switch (*page_size) {
   case 0:
-    /* The page size value will be ignored for
-    uncompressed tables. */
-    if (ib_tbl_fmt == IB_TBL_COMPRESSED) {
-      /* Set to the system default of 8K page size.
-      Better to be conservative here. */
-      *page_size = 8;
-      /* Fall through. */
-    } else {
-      break;
-    }
-  case 1:
-  case 2:
+    /* The page size value will be ignored for uncompressed tables. */
+    /* Set to the system default of 8K page size.  Better to be conservative
+     * here. */
+    *page_size = 8;
+    break;
   case 4:
   case 8:
   case 16:
-    if (!srv_file_per_table) {
-      /* Compressed tables require file per table. */
-      err = DB_UNSUPPORTED;
-    } else if (srv_file_format < DICT_TF_FORMAT_ZIP) {
-      /* File format unsuitable for compressed tables. */
-      err = DB_UNSUPPORTED;
-    }
-    break;
   default:
     /* Unknown page size. */
     err = DB_UNSUPPORTED;
@@ -1225,32 +1192,27 @@ ib_table_name_check(const char *name) /*!< in: table name to check */
   return slash ? DB_SUCCESS : DB_DATA_MISMATCH;
 }
 
-/** Create a table schema.
-@return	DB_SUCCESS or err code */
-
-ib_err_t ib_table_schema_create(
-    const char *name,         /*!< in: table name to create */
-    ib_tbl_sch_t *ib_tbl_sch, /*!< out: schema instance */
-    ib_tbl_fmt_t ib_tbl_fmt,  /*!< in: table format */
-    ib_ulint_t page_size)     /*!< in: Page size or 0 for default */
-{
-  ib_err_t err = DB_SUCCESS;
-  mem_heap_t *heap = mem_heap_create(1024);
-
+ib_err_t ib_table_schema_create(const char *name, ib_tbl_sch_t *ib_tbl_sch,
+                                ib_tbl_fmt_t ib_tbl_fmt, ib_ulint_t page_size) {
   IB_CHECK_PANIC();
 
   UT_DBG_ENTER_FUNC;
 
-  err = ib_table_name_check(name);
+  auto err = ib_table_name_check(name);
 
   if (err != DB_SUCCESS) {
     return err;
   }
 
   err = ib_table_schema_check(ib_tbl_fmt, &page_size);
+
   if (err != DB_SUCCESS) {
     return err;
-  } else if (heap == nullptr) {
+  }
+
+  mem_heap_t *heap = mem_heap_create(1024);
+
+  if (heap == nullptr) {
     err = DB_OUT_OF_MEMORY;
   } else {
     ib_table_def_t *table_def;
@@ -1581,23 +1543,6 @@ static ulint ib_table_def_get_flags(
     /* Dynamic format implies a page size of 0. */
     flags = DICT_TF_COMPACT | DICT_TF_FORMAT_ZIP << DICT_TF_FORMAT_SHIFT;
     break;
-  case IB_TBL_COMPRESSED: { /* Compact row format and
-                            compressed page */
-    ulint i;
-    ulint j;
-
-    for (i = j = 1; i <= DICT_TF_ZSSIZE_MAX; ++i, j <<= 1) {
-
-      if (j == table_def->page_size) {
-        flags = i << DICT_TF_ZSSIZE_SHIFT | DICT_TF_COMPACT |
-                DICT_TF_FORMAT_ZIP << DICT_TF_FORMAT_SHIFT;
-        break;
-      }
-    }
-    ut_a(flags != 0);
-    ut_a(i <= DICT_TF_ZSSIZE_MAX);
-    break;
-  }
   default:
     ut_error;
   }
@@ -5102,17 +5047,6 @@ ib_table_get_format(const dict_table_t *table, /*!< in: table definition */
   case DICT_TF_COMPACT | DICT_TF_FORMAT_ZIP << DICT_TF_FORMAT_SHIFT:
     *tbl_fmt = IB_TBL_DYNAMIC;
     break;
-#if DICT_TF_FORMAT_MAX > DICT_TF_FORMAT_ZIP
-#error "missing case labels for DICT_TF_FORMAT_ZIP .. DICT_TF_FORMAT_MAX"
-#endif
-  default:
-    if (table->flags & DICT_TF_ZSSIZE_MASK) {
-      *tbl_fmt = IB_TBL_COMPRESSED;
-
-      *page_size =
-          ((PAGE_ZIP_MIN_SIZE >> 1)
-           << ((table->flags & DICT_TF_ZSSIZE_MASK) >> DICT_TF_ZSSIZE_SHIFT));
-    }
   }
 }
 
@@ -5582,8 +5516,6 @@ const char *ib_strerror(ib_err_t num) {
     return "Underflow";
   case DB_STRONG_FAIL:
     return "Failed, retry will not succeed";
-  case DB_ZIP_OVERFLOW:
-    return "Zip overflow";
   case DB_RECORD_NOT_FOUND:
     return "Record not found";
   case DB_END_OF_INDEX:

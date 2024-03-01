@@ -80,9 +80,7 @@ dict_create_sys_tables_tuple(const dict_table_t *table, /*!< in: table */
   /* 4: N_COLS ---------------------------*/
   dfield = dtuple_get_nth_field(entry, 2 /*N_COLS*/);
 
-#if DICT_TF_COMPACT != 1
-#error
-#endif
+  ut_a(DICT_TF_COMPACT);
 
   ptr = (byte *)mem_heap_alloc(heap, 4);
   mach_write_to_4(ptr, table->n_def | ((table->flags & DICT_TF_COMPACT) << 31));
@@ -94,9 +92,8 @@ dict_create_sys_tables_tuple(const dict_table_t *table, /*!< in: table */
   if (table->flags & (~DICT_TF_COMPACT & ~(~0UL << DICT_TF_BITS))) {
     ut_a(table->flags & DICT_TF_COMPACT);
     ut_a(dict_table_get_format(table) >= DICT_TF_FORMAT_ZIP);
-    ut_a((table->flags & DICT_TF_ZSSIZE_MASK) <=
-         (DICT_TF_ZSSIZE_MAX << DICT_TF_ZSSIZE_SHIFT));
     ut_a(!(table->flags & (~0UL << DICT_TF2_BITS)));
+
     mach_write_to_4(ptr, table->flags & ~(~0UL << DICT_TF_BITS));
   } else {
     mach_write_to_4(ptr, DICT_TABLE_ORDINARY);
@@ -258,8 +255,6 @@ dict_build_table_def_step(que_thr_t *thr,   /*!< in: query thread */
     }
 
     ut_ad(dict_table_get_format(table) <= DICT_TF_FORMAT_MAX);
-    ut_ad(!dict_table_zip_size(table) ||
-          dict_table_get_format(table) >= DICT_TF_FORMAT_ZIP);
 
     flags = table->flags & ~(~0UL << DICT_TF_BITS);
     err = fil_create_new_single_table_tablespace(
@@ -567,7 +562,6 @@ dict_create_index_tree_step(ind_node_t *node) /*!< in: index create node */
   dict_index_t *index;
   dict_table_t *sys_indexes;
   dtuple_t *search_tuple;
-  ulint zip_size;
   btr_pcur_t pcur;
   mtr_t mtr;
 
@@ -590,10 +584,9 @@ dict_create_index_tree_step(ind_node_t *node) /*!< in: index create node */
 
   btr_pcur_move_to_next_user_rec(&pcur, &mtr);
 
-  zip_size = dict_table_zip_size(index->table);
-
   node->page_no =
-      btr_create(index->type, index->space, zip_size, index->id, index, &mtr);
+      btr_create(index->type, index->space, index->id, index, &mtr);
+
   /* printf("Created a new index tree in space %lu root page %lu\n",
   index->space, index->page_no); */
 
@@ -611,16 +604,9 @@ dict_create_index_tree_step(ind_node_t *node) /*!< in: index create node */
   return DB_SUCCESS;
 }
 
-/** Drops the index tree associated with a row in SYS_INDEXES table. */
-
-void dict_drop_index_tree(
-    rec_t *rec, /*!< in/out: record in the clustered index
-                of SYS_INDEXES table */
-    mtr_t *mtr) /*!< in: mtr having the latch on the record page */
-{
+void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
   ulint root_page_no;
   ulint space;
-  ulint zip_size;
   const byte *ptr;
   ulint len;
 
@@ -643,9 +629,8 @@ void dict_drop_index_tree(
   ut_ad(len == 4);
 
   space = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
-  zip_size = fil_space_get_zip_size(space);
 
-  if (unlikely(zip_size == ULINT_UNDEFINED)) {
+  if (fil_space_get_flags(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
 
@@ -655,39 +640,22 @@ void dict_drop_index_tree(
   /* We free all the pages but the root page first; this operation
   may span several mini-transactions */
 
-  btr_free_but_not_root(space, zip_size, root_page_no);
+  btr_free_but_not_root(space, 0, root_page_no);
 
   /* Then we free the root page in the same mini-transaction where
   we write FIL_NULL to the appropriate field in the SYS_INDEXES
   record: this mini-transaction marks the B-tree totally freed */
 
-  /* printf("Dropping index tree in space %lu root page %lu\n", space,
-  root_page_no); */
-  btr_free_root(space, zip_size, root_page_no, mtr);
+  btr_free_root(space, root_page_no, mtr);
 
   page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL,
                                mtr);
 }
 
-/** Truncates the index tree associated with a row in SYS_INDEXES table.
-@return	new root page number, or FIL_NULL on failure */
-
-ulint dict_truncate_index_tree(
-    dict_table_t *table, /*!< in: the table the index belongs to */
-    ulint space,         /*!< in: 0=truncate,
-                         nonzero=create the index tree in the
-                         given tablespace */
-    btr_pcur_t *pcur,    /*!< in/out: persistent cursor pointing to
-                         record in the clustered index of
-                         SYS_INDEXES table. The cursor may be
-                         repositioned in this call. */
-    mtr_t *mtr)          /*!< in: mtr having the latch
-                         on the record page. The mtr may be
-                         committed and restarted in this call. */
-{
+ulint dict_truncate_index_tree(dict_table_t *table, ulint space,
+                               btr_pcur_t *pcur, mtr_t *mtr) {
   ulint root_page_no;
   bool drop = !space;
-  ulint zip_size;
   ulint type;
   dulint index_id;
   rec_t *rec;
@@ -723,9 +691,7 @@ ulint dict_truncate_index_tree(
     space = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
   }
 
-  zip_size = fil_space_get_zip_size(space);
-
-  if (unlikely(zip_size == ULINT_UNDEFINED)) {
+  if (fil_space_get_flags(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
 
@@ -734,6 +700,7 @@ ulint dict_truncate_index_tree(
               "  InnoDB: Trying to TRUNCATE"
               " a missing .ibd file of table %s!\n",
               table->name);
+
     return FIL_NULL;
   }
 
@@ -753,16 +720,17 @@ ulint dict_truncate_index_tree(
   /* We free all the pages but the root page first; this operation
   may span several mini-transactions */
 
-  btr_free_but_not_root(space, zip_size, root_page_no);
+  btr_free_but_not_root(space, 0, root_page_no);
 
   /* Then we free the root page in the same mini-transaction where
   we create the b-tree and write its new root page number to the
   appropriate field in the SYS_INDEXES record: this mini-transaction
   marks the B-tree totally truncated */
 
-  btr_page_get(space, zip_size, root_page_no, RW_X_LATCH, mtr);
+  btr_page_get(space, root_page_no, RW_X_LATCH, mtr);
 
-  btr_free_root(space, zip_size, root_page_no, mtr);
+  btr_free_root(space, root_page_no, mtr);
+
 create:
   /* We will temporarily write FIL_NULL to the PAGE_NO field
   in SYS_INDEXES, so that the database will not get into an
@@ -784,7 +752,7 @@ create:
   for (index = UT_LIST_GET_FIRST(table->indexes); index;
        index = UT_LIST_GET_NEXT(indexes, index)) {
     if (!ut_dulint_cmp(index->id, index_id)) {
-      root_page_no = btr_create(type, space, zip_size, index_id, index, mtr);
+      root_page_no = btr_create(type, space, index_id, index, mtr);
       index->page = (unsigned int)root_page_no;
       return root_page_no;
     }

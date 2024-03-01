@@ -75,11 +75,6 @@ Create four type of worker threads (total threads being NUM_THREADS)
 #define DATABASE "test"
 #define TABLE "blobt3"
 
-/* The page size for compressed tables, if this value is > 0 then
-we create compressed tables. It's set via the command line parameter
---page-size INT */
-static int page_size = 0;
-
 /* Total number of worker threads for SEL, UPD, INS and DEL */
 #define NUM_THREADS 64
 static pthread_t tid[NUM_THREADS];
@@ -257,14 +252,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
-  if (page_size > 0) {
-    tbl_fmt = IB_TBL_COMPRESSED;
-
-    printf("Creating compressed table with page size %d\n", page_size);
-  }
-
   /* Pass a table page size of 0, ie., use default page size. */
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, page_size);
+  err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
   assert(err == DB_SUCCESS);
 
@@ -954,7 +943,6 @@ static void set_options(int argc, char *argv[]) {
     switch (opt) {
 
     case USER_OPT + 1:
-      page_size = strtoul(optarg, NULL, 10);
       break;
 
     default:

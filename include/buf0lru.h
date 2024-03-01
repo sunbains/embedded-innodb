@@ -73,10 +73,6 @@ what guarantees that it will not try to read in pages after this operation has
 completed? */
 
 void buf_LRU_invalidate_tablespace(ulint id); /*!< in: space id */
-/*** Insert a compressed block into buf_pool->zip_clean in the LRU order. */
-
-void buf_LRU_insert_zip_clean(
-    buf_page_t *bpage); /*!< in: pointer to the block in question */
 
 /*** Try to free a block.  If bpage is a descriptor of a compressed-only
 page, the descriptor object will be freed as well.
@@ -91,10 +87,8 @@ buf_page_get_mutex() may be held when calling this function.
 @return BUF_LRU_FREED if freed, BUF_LRU_CANNOT_RELOCATE or
 BUF_LRU_NOT_FREED otherwise. */
 
-enum buf_lru_free_block_status
+buf_lru_free_block_status
 buf_LRU_free_block(buf_page_t *bpage, /*!< in: block to be freed */
-                   bool zip,          /*!< in: true if should remove also the
-                                       compressed page of an uncompressed page */
                    bool *buf_pool_mutex_released);
 /*!< in: pointer to a variable that will
 be assigned true if buf_pool_mutex
@@ -108,22 +102,20 @@ bool buf_LRU_search_and_free_block(
                          that we should search farther; if
                          n_iterations < 10, then we search
                          n_iterations / 10 * buf_pool->curr_size
-                         pages from the end of the LRU list; if
-                         n_iterations < 5, then we will also search
-                         n_iterations / 5 of the unzip_LRU list. */
+                         pages from the end of the LRU list */
+
 /*** Returns a free block from the buf_pool.  The block is taken off the
 free list.  If it is empty, returns NULL.
 @return	a free control block, or NULL if the buf_block->free list is empty */
 
 buf_block_t *buf_LRU_get_free_only(void);
+
 /*** Returns a free block from the buf_pool. The block is taken off the
 free list. If it is empty, blocks are moved from the end of the
 LRU list to the free list.
 @return	the free control block, in state BUF_BLOCK_READY_FOR_USE */
-
 buf_block_t *
-buf_LRU_get_free_block(ulint zip_size); /*!< in: compressed page size in bytes,
-                                        or 0 if uncompressed tablespace */
+buf_LRU_get_free_block();
 
 /*** Puts a block back to the free list. */
 
@@ -136,12 +128,6 @@ void buf_LRU_add_block(buf_page_t *bpage, /*!< in: control block */
                                    blocks in the LRU list, else put to the
                                    start; if the LRU list is very short, added
                                    to the start regardless of this parameter */
-/*** Adds a block to the LRU list of decompressed zip pages. */
-
-void buf_unzip_LRU_add_block(
-    buf_block_t *block, /*!< in: control block */
-    bool old);          /*!< in: true if should be put to the end
-                         of the list, else put to the start */
 /*** Moves a block to the start of the LRU list. */
 
 void buf_LRU_make_block_young(buf_page_t *bpage); /*!< in: control block */
@@ -208,11 +194,11 @@ extern ulint buf_LRU_old_threshold_ms;
 /** @brief Statistics for selecting the LRU list for eviction.
 
 These statistics are not 'of' LRU but 'for' LRU.  We keep count of I/O
-and page_zip_decompress() operations.  Based on the statistics we decide
-if we want to evict from buf_pool->unzip_LRU or buf_pool->LRU. */
+operations.  Based on the statistics we decide if we want to evict
+from buf_pool->LRU. */
 struct buf_LRU_stat_struct {
-  ulint io;    /**< Counter of buffer pool I/O operations. */
-  ulint unzip; /**< Counter of page_zip_decompress operations. */
+  /** Counter of buffer pool I/O operations. */
+  ulint io;
 };
 
 /** Statistics for selecting the LRU list for eviction. */
@@ -228,8 +214,6 @@ extern buf_LRU_stat_t buf_LRU_stat_sum;
 
 /*** Increments the I/O counter in buf_LRU_stat_cur. */
 #define buf_LRU_stat_inc_io() buf_LRU_stat_cur.io++
-/*** Increments the page_zip_decompress() counter in buf_LRU_stat_cur. */
-#define buf_LRU_stat_inc_unzip() buf_LRU_stat_cur.unzip++
 
 #ifndef UNIV_NONINL
 #include "buf0lru.ic"

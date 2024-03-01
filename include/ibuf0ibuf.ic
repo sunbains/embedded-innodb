@@ -21,11 +21,8 @@ Insert buffer
 Created 7/19/1997 Heikki Tuuri
 *******************************************************/
 
-#include "page0page.h"
-#ifdef WITH_ZIP
-#include "page0zip.h"
-#endif /* WITH_ZIP */
 #include "buf0lru.h"
+#include "page0page.h"
 
 /** Counter for ibuf_should_try() */
 extern ulint ibuf_flush_count;
@@ -107,38 +104,18 @@ inline bool ibuf_should_try(dict_index_t *dict_index, /*!< in: dict_index where
 
 /** Checks if a page address is an ibuf bitmap page address.
 @return	true if a bitmap page */
-inline bool ibuf_bitmap_page(ulint zip_size, /*!< in: compressed page size in
-                                             bytes; 0 for uncompressed pages */
-                             ulint page_no)  /*!< in: page number */
+inline bool ibuf_bitmap_page(ulint page_no) /*!< in: page number */
 {
-  ut_ad(ut_is_2pow(zip_size));
-
-  if (!zip_size) {
-    return (
-        unlikely((page_no & (UNIV_PAGE_SIZE - 1)) == FSP_IBUF_BITMAP_OFFSET));
-  }
-
-  return (unlikely((page_no & (zip_size - 1)) == FSP_IBUF_BITMAP_OFFSET));
+  return unlikely((page_no & (UNIV_PAGE_SIZE - 1)) == FSP_IBUF_BITMAP_OFFSET);
 }
 
 /** Translates the free space on a page to a value in the ibuf bitmap.
 @return	value for ibuf bitmap bits */
 inline ulint ibuf_index_page_calc_free_bits(
-    ulint zip_size,     /*!< in: compressed page size in bytes;
-                        0 for uncompressed pages */
-    ulint max_ins_size) /*!< in: maximum insert size after reorganize
-                        for the page */
+    ulint, ulint max_ins_size) /*!< in: maximum insert size after reorganize
+                               for the page */
 {
-  ulint n;
-  ut_ad(ut_is_2pow(zip_size));
-  ut_ad(!zip_size || zip_size > IBUF_PAGE_SIZE_PER_FREE_SPACE);
-  ut_ad(zip_size <= UNIV_PAGE_SIZE);
-
-  if (zip_size) {
-    n = max_ins_size / (zip_size / IBUF_PAGE_SIZE_PER_FREE_SPACE);
-  } else {
-    n = max_ins_size / (UNIV_PAGE_SIZE / IBUF_PAGE_SIZE_PER_FREE_SPACE);
-  }
+  auto n = max_ins_size / (UNIV_PAGE_SIZE / IBUF_PAGE_SIZE_PER_FREE_SPACE);
 
   if (n == 3) {
     n = 2;
@@ -154,85 +131,27 @@ inline ulint ibuf_index_page_calc_free_bits(
 /** Translates the ibuf free bits to the free space on a page in bytes.
 @return	maximum insert size after reorganize for the page */
 inline ulint ibuf_index_page_calc_free_from_bits(
-    ulint zip_size, /*!< in: compressed page size in bytes;
-                   0 for uncompressed pages */
-    ulint bits)     /*!< in: value for ibuf bitmap bits */
+    ulint bits) /*!< in: value for ibuf bitmap bits */
 {
   ut_ad(bits < 4);
-  ut_ad(ut_is_2pow(zip_size));
-  ut_ad(!zip_size || zip_size > IBUF_PAGE_SIZE_PER_FREE_SPACE);
-  ut_ad(zip_size <= UNIV_PAGE_SIZE);
-
-  if (zip_size) {
-    if (bits == 3) {
-      return (4 * zip_size / IBUF_PAGE_SIZE_PER_FREE_SPACE);
-    }
-
-    return (bits * zip_size / IBUF_PAGE_SIZE_PER_FREE_SPACE);
-  }
 
   if (bits == 3) {
     return (4 * UNIV_PAGE_SIZE / IBUF_PAGE_SIZE_PER_FREE_SPACE);
+  } else {
+    return (bits * (UNIV_PAGE_SIZE / IBUF_PAGE_SIZE_PER_FREE_SPACE));
   }
-
-  return (bits * (UNIV_PAGE_SIZE / IBUF_PAGE_SIZE_PER_FREE_SPACE));
 }
-
-#ifdef WITH_ZIP
-/** Translates the free space on a compressed page to a value in the ibuf
-bitmap.
-@return	value for ibuf bitmap bits */
-inline ulint
-ibuf_index_page_calc_free_zip(ulint zip_size,
-                              /*!< in: compressed page size in bytes */
-                              const buf_block_t *block) /*!< in: buffer block */
-{
-  ulint max_ins_size;
-  const page_zip_des_t *page_zip;
-  lint zip_max_ins;
-
-  ut_ad(zip_size == buf_block_get_zip_size(block));
-  ut_ad(zip_size);
-
-  max_ins_size =
-      page_get_max_insert_size_after_reorganize(buf_block_get_frame(block), 1);
-
-  page_zip = buf_block_get_page_zip(block);
-  zip_max_ins = page_zip_max_ins_size(page_zip, false /* not clustered */);
-
-  if (unlikely(zip_max_ins < 0)) {
-    return (0);
-  } else if (likely(max_ins_size > (ulint)zip_max_ins)) {
-    max_ins_size = (ulint)zip_max_ins;
-  }
-
-  return (ibuf_index_page_calc_free_bits(zip_size, max_ins_size));
-}
-#endif /* WITH_ZIP */
 
 /** Translates the free space on a page to a value in the ibuf bitmap.
 @return	value for ibuf bitmap bits */
 inline ulint
-ibuf_index_page_calc_free(ulint zip_size, /*!< in: compressed page size in
-                                         bytes; 0 for uncompressed pages */
+ibuf_index_page_calc_free(ulint,
                           const buf_block_t *block) /*!< in: buffer block */
 {
-#ifdef WITH_ZIP
-  ut_ad(zip_size == buf_block_get_zip_size(block));
+  auto max_ins_size =
+      page_get_max_insert_size_after_reorganize(buf_block_get_frame(block), 1);
 
-  if (zip_size == 0) {
-#endif /* WITH_ZIP */
-    ulint max_ins_size;
-
-    max_ins_size = page_get_max_insert_size_after_reorganize(
-        buf_block_get_frame(block), 1);
-
-    return (ibuf_index_page_calc_free_bits(0, max_ins_size));
-#ifdef WITH_ZIP
-  } else {
-    return (ibuf_index_page_calc_free_zip(zip_size, block));
-  }
-#endif /* WITH_ZIP */
+  return ibuf_index_page_calc_free_bits(0, max_ins_size);
 }
 
 /** Updates the free bits of an uncompressed page in the ibuf bitmap if
@@ -260,12 +179,9 @@ inline void ibuf_update_free_bits_if_full(
                        used in the latest operation, if known, or
                        ULINT_UNDEFINED */
 {
-  ulint before;
   ulint after;
 
-  ut_ad(!buf_block_get_page_zip(block));
-
-  before = ibuf_index_page_calc_free_bits(0, max_ins_size);
+  auto before = ibuf_index_page_calc_free_bits(0, max_ins_size);
 
   if (max_ins_size >= increase) {
 

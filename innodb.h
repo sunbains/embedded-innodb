@@ -169,9 +169,6 @@ enum db_err {
 	/** Failure to insert a secondary index entry to the insert buffer */
 	DB_STRONG_FAIL,			
 
-	/** Failure trying to compress a page */
-	DB_ZIP_OVERFLOW,		
-
 	/** Record not found */
 	DB_RECORD_NOT_FOUND = 1500,
 
@@ -393,9 +390,6 @@ typedef enum {
 
 	IB_TBL_DYNAMIC,			/*!< Compact row format. BLOB prefixes
 					are not stored in the clustered index */
-
-	IB_TBL_COMPRESSED		/*!< Similar to dynamic format but
-					with pages compressed */
 } ib_tbl_fmt_t;
 
 /** @enum ib_col_attr_t InnoDB column attributes */

@@ -53,9 +53,6 @@ in addition to the data and the offsets */
 #define REC_STATUS_INFIMUM 2
 #define REC_STATUS_SUPREMUM 3
 
-/* The following four constants are needed in page0zip.c in order to
-efficiently compress and decompress pages. */
-
 /* The offset of heap_no in a compact record */
 #define REC_NEW_HEAP_NO 4
 /* The shift of heap_no in a compact record.
@@ -133,7 +130,6 @@ rec_get_n_owned_new(const rec_t *rec); /*!< in: new-style physical record */
 /** The following function is used to set the number of owned records. */
 inline void rec_set_n_owned_new(
     rec_t *rec,               /*!< in/out: new-style physical record */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page, or NULL */
     ulint n_owned);           /*!< in: the number of owned */
 /** The following function is used to retrieve the info bits of
 a record.
@@ -182,7 +178,6 @@ rec_set_deleted_flag_old(rec_t *rec,  /*!< in: old-style physical record */
 /** The following function is used to set the deleted bit. */
 inline void rec_set_deleted_flag_new(
     rec_t *rec,               /*!< in/out: new-style physical record */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page, or NULL */
     ulint flag);              /*!< in: nonzero if delete marked */
 /** The following function tells if a new-style record is a node pointer.
 @return	true if node pointer */

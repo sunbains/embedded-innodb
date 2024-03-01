@@ -272,7 +272,7 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type,
         return (nullptr);
       }
     } else {
-      buf_block = buf_block_alloc(0);
+      buf_block = buf_block_alloc();
     }
 
     block = (mem_block_t *)buf_block->frame;

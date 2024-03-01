@@ -73,7 +73,6 @@ typedef byte fseg_header_t;
 description takes less than 1 byte; a descriptor page is repeated every
 this many file pages */
 /* #define XDES_DESCRIBED_PER_PAGE		UNIV_PAGE_SIZE */
-/* This has been replaced with either UNIV_PAGE_SIZE or page_zip->size. */
 
 /** @name The space low address page map
 The pages at FSP_XDES_OFFSET and FSP_IBUF_BITMAP_OFFSET are repeated

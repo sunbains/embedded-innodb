@@ -375,15 +375,12 @@ static byte *trx_undo_page_fetch_ext(
     byte *ext_buf,     /*!< in: a buffer of
                        REC_MAX_INDEX_COL_LEN
                        + BTR_EXTERN_FIELD_REF_SIZE */
-    ulint zip_size,    /*!< compressed page size in bytes,
-                       or 0 for uncompressed BLOB  */
     const byte *field, /*!< in: an externally stored column */
     ulint *len)        /*!< in: length of field;
                        out: used length of ext_buf */
 {
   /* Fetch the BLOB. */
-  ulint ext_len = btr_copy_externally_stored_field_prefix(
-      ext_buf, REC_MAX_INDEX_COL_LEN, zip_size, field, *len);
+  ulint ext_len = btr_copy_externally_stored_field_prefix(ext_buf, REC_MAX_INDEX_COL_LEN, field, *len);
   /* BLOBs should always be nonempty. */
   ut_a(ext_len);
   /* Append the BLOB pointer to the prefix. */
@@ -403,8 +400,6 @@ static byte *trx_undo_page_report_modify_ext(
                         + BTR_EXTERN_FIELD_REF_SIZE,
                         or nullptr when should not fetch
                         a longer prefix */
-    ulint zip_size,     /*!< compressed page size in bytes,
-                        or 0 for uncompressed BLOB  */
     const byte **field, /*!< in/out: the locally stored part of
                         the externally stored column */
     ulint *len)         /*!< in/out: length of field, in bytes */
@@ -418,7 +413,7 @@ static byte *trx_undo_page_report_modify_ext(
 
     ptr += mach_write_compressed(ptr, *len);
 
-    *field = trx_undo_page_fetch_ext(ext_buf, zip_size, *field, len);
+    *field = trx_undo_page_fetch_ext(ext_buf, *field, len);
 
     ptr += mach_write_compressed(ptr, *len);
   } else {
@@ -601,7 +596,7 @@ static ulint trx_undo_page_report_modify(
                     flen < REC_MAX_INDEX_COL_LEN
                 ? ext_buf
                 : nullptr,
-            dict_table_zip_size(table), &field, &flen);
+            &field, &flen);
 
         /* Notify purge that it eventually has to
         free the old externally stored field */
@@ -678,7 +673,7 @@ static ulint trx_undo_page_report_modify(
               ptr,
               flen < REC_MAX_INDEX_COL_LEN && !ignore_prefix ? ext_buf
                                                              : nullptr,
-              dict_table_zip_size(table), &field, &flen);
+              &field, &flen);
         } else {
           ptr += mach_write_compressed(ptr, flen);
         }
@@ -1024,7 +1019,7 @@ db_err trx_undo_report_row_operation(ulint flags, ulint op_type, que_thr_t *thr,
     ulint offset;
 
     undo_block =
-        buf_page_get_gen(undo->space, undo->zip_size, page_no, RW_X_LATCH,
+        buf_page_get_gen(undo->space, 0, page_no, RW_X_LATCH,
                          undo->guess_block, BUF_GET, __FILE__, __LINE__, &mtr);
     buf_block_dbg_add_level(undo_block, SYNC_TRX_UNDO_PAGE);
 
@@ -1115,8 +1110,7 @@ trx_undo_rec_t *trx_undo_get_undo_rec_low(roll_ptr_t roll_ptr,
 
   mtr_start(&mtr);
 
-  undo_page =
-      trx_undo_page_get_s_latched(rseg->space, rseg->zip_size, page_no, &mtr);
+  undo_page = trx_undo_page_get_s_latched(rseg->space, page_no, &mtr);
 
   undo_rec = trx_undo_rec_copy(undo_page + offset, heap);
 
@@ -1315,7 +1309,7 @@ db_err trx_undo_prev_version_build(const rec_t *index_rec,
     buf = mem_heap_alloc(heap, rec_offs_size(offsets));
     *old_vers = rec_copy(buf, rec, offsets);
     rec_offs_make_valid(*old_vers, index, offsets);
-    row_upd_rec_in_place(*old_vers, index, offsets, update, nullptr);
+    row_upd_rec_in_place(*old_vers, index, offsets, update);
   }
 
   return DB_SUCCESS;

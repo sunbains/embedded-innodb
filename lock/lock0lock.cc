@@ -347,12 +347,10 @@ static bool lock_validate(void);
 
 /** Validates the record lock queues on a page.
 @return	true if ok */
-static bool
-lock_rec_validate_page(ulint space,    /*!< in: space id */
-                       ulint zip_size, /*!< in: compressed page size in bytes
-                                      or 0 for uncompressed pages */
-                       ulint page_no); /*!< in: page number */
-#endif                                 /* UNIV_DEBUG */
+static bool lock_rec_validate_page(ulint space, /*!< in: space id */
+                                   ulint,
+                                   ulint page_no); /*!< in: page number */
+#endif                                             /* UNIV_DEBUG */
 
 /* The lock system */
 lock_sys_t *lock_sys = nullptr;
@@ -2292,10 +2290,9 @@ void lock_move_reorganize_page(
   mem_heap_free(heap);
 
 #ifdef UNIV_DEBUG_LOCK_VALIDATE
-  ut_ad(lock_rec_validate_page(buf_block_get_space(block),
-                               buf_block_get_zip_size(block),
+  ut_ad(lock_rec_validate_page(buf_block_get_space(block), 0,
                                buf_block_get_page_no(block)));
-#endif
+#endif /* UNIV_DEBUG_LOCK_VALIDATE */
 }
 
 /** Moves the explicit locks on user records to another page if a record
@@ -2372,13 +2369,11 @@ void lock_move_rec_list_end(
   lock_mutex_exit_kernel();
 
 #ifdef UNIV_DEBUG_LOCK_VALIDATE
-  ut_ad(lock_rec_validate_page(buf_block_get_space(block),
-                               buf_block_get_zip_size(block),
+  ut_ad(lock_rec_validate_page(buf_block_get_space(block), 0,
                                buf_block_get_page_no(block)));
-  ut_ad(lock_rec_validate_page(buf_block_get_space(new_block),
-                               buf_block_get_zip_size(block),
+  ut_ad(lock_rec_validate_page(buf_block_get_space(new_block), 0,
                                buf_block_get_page_no(new_block)));
-#endif
+#endif /* UNIV_DEBUG_LOCK_VALIDATE */
 }
 
 /** Moves the explicit locks on user records to another page if a record
@@ -2472,10 +2467,9 @@ void lock_move_rec_list_start(
   lock_mutex_exit_kernel();
 
 #ifdef UNIV_DEBUG_LOCK_VALIDATE
-  ut_ad(lock_rec_validate_page(buf_block_get_space(block),
-                               buf_block_get_zip_size(block),
+  ut_ad(lock_rec_validate_page(buf_block_get_space(block), 0,
                                buf_block_get_page_no(block)));
-#endif
+#endif /* UNIV_DEBUG_LOCK_VALIDATE */
 }
 
 /** Updates the lock table when a page is split to the right. */
@@ -3938,10 +3932,10 @@ loop:
   if (lock_get_type_low(lock) == LOCK_REC) {
     if (load_page_first) {
       ulint space = lock->un_member.rec_lock.space;
-      ulint zip_size = fil_space_get_zip_size(space);
+      ulint size = fil_space_get_flags(space);
       ulint page_no = lock->un_member.rec_lock.page_no;
 
-      if (unlikely(zip_size == ULINT_UNDEFINED)) {
+      if (unlikely(size == ULINT_UNDEFINED)) {
 
         /* It is a single table tablespace and
         the .ibd file is missing (TRUNCATE
@@ -3960,7 +3954,7 @@ loop:
 
       mtr_start(&mtr);
 
-      buf_page_get_with_no_latch(space, zip_size, page_no, &mtr);
+      buf_page_get_with_no_latch(space, 0, page_no, &mtr);
 
       mtr_commit(&mtr);
 
@@ -4175,11 +4169,8 @@ static bool lock_rec_queue_validate(
 
 /** Validates the record lock queues on a page.
 @return	true if ok */
-static bool
-lock_rec_validate_page(ulint space,    /*!< in: space id */
-                       ulint zip_size, /*!< in: compressed page size in bytes
-                                      or 0 for uncompressed pages */
-                       ulint page_no)  /*!< in: page number */
+static bool lock_rec_validate_page(ulint space,          /*!< in: space id */
+                                   ulint, ulint page_no) /*!< in: page number */
 {
   dict_index_t *index;
   buf_block_t *block;
@@ -4199,8 +4190,7 @@ lock_rec_validate_page(ulint space,    /*!< in: space id */
 
   mtr_start(&mtr);
 
-  ut_ad(zip_size != ULINT_UNDEFINED);
-  block = buf_page_get(space, zip_size, page_no, RW_X_LATCH, &mtr);
+  block = buf_page_get(space, 0, page_no, RW_X_LATCH, &mtr);
   buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
 
   page = block->frame;
@@ -4335,7 +4325,7 @@ static bool lock_validate(void) {
 
       lock_mutex_exit_kernel();
 
-      lock_rec_validate_page(space, fil_space_get_zip_size(space), page_no);
+      lock_rec_validate_page(space, fil_space_get_size(space), page_no);
 
       lock_mutex_enter_kernel();
 
@@ -4404,8 +4394,7 @@ db_err lock_rec_insert_check_and_lock(
 
     if (!dict_index_is_clust(index)) {
       /* Update the page max trx id field */
-      page_update_max_trx_id(block, buf_block_get_page_zip(block), trx->id,
-                             mtr);
+      page_update_max_trx_id(block, trx->id, mtr);
     }
 
     *inherit = false;
@@ -4440,7 +4429,7 @@ db_err lock_rec_insert_check_and_lock(
 
   if ((err == DB_SUCCESS) && !dict_index_is_clust(index)) {
     /* Update the page max trx id field */
-    page_update_max_trx_id(block, buf_block_get_page_zip(block), trx->id, mtr);
+    page_update_max_trx_id(block, trx->id, mtr);
   }
 
 #ifdef UNIV_DEBUG
@@ -4612,8 +4601,7 @@ db_err lock_sec_rec_modify_check_and_lock(
 
   if (err == DB_SUCCESS) {
     /* Update the page max trx id field */
-    page_update_max_trx_id(block, buf_block_get_page_zip(block),
-                           thr_get_trx(thr)->id, mtr);
+    page_update_max_trx_id(block, thr_get_trx(thr)->id, mtr);
   }
 
   return err;

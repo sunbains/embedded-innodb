@@ -1,4 +1,4 @@
-/***
+/****************************************************************************
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -86,15 +86,11 @@ page_t *btr_root_get(dict_index_t *index, /*!< in: index tree */
 /*** Gets a buffer page and declares its latching order level. */
 inline buf_block_t *
 btr_block_get(ulint space,    /*!< in: space id */
-              ulint zip_size, /*!< in: compressed page size in
-                              bytes or 0 for uncompressed pages */
               ulint page_no,  /*!< in: page number */
               ulint mode,     /*!< in: latch mode */
               mtr_t *mtr);    /*!< in: mtr */
 /*** Gets a buffer page and declares its latching order level. */
 inline page_t *btr_page_get(ulint space,    /*!< in: space id */
-                            ulint zip_size, /*!< in: compressed page size in
-                                            bytes or 0 for uncompressed pages */
                             ulint page_no,  /*!< in: page number */
                             ulint mode,     /*!< in: latch mode */
                             mtr_t *mtr);    /*!< in: mtr */
@@ -146,13 +142,11 @@ with rec_get_offsets(n_fields=ULINT_UNDEFINED).
 inline ulint btr_node_ptr_get_child_page_no(
     const rec_t *rec,      /*!< in: node pointer record */
     const ulint *offsets); /*!< in: array returned by rec_get_offsets() */
+
 /*** Creates the root node for a new index tree.
 @return	page number of the created root, FIL_NULL if did not succeed */
-
 ulint btr_create(ulint type,          /*!< in: type of the index */
                  ulint space,         /*!< in: space where created */
-                 ulint zip_size,      /*!< in: compressed page size in bytes
-                                     or 0 for uncompressed pages */
                  dulint index_id,     /*!< in: index id */
                  dict_index_t *index, /*!< in: index */
                  mtr_t *mtr);         /*!< in: mini-transaction handle */
@@ -161,14 +155,11 @@ by calling btr_free_root. */
 
 void btr_free_but_not_root(
     ulint space,         /*!< in: space where created */
-    ulint zip_size,      /*!< in: compressed page size in
-                         bytes      or 0 for uncompressed pages */
+    ulint,
     ulint root_page_no); /*!< in: root page number */
 /*** Frees the B-tree root page. Other tree MUST already have been freed. */
 
 void btr_free_root(ulint space,        /*!< in: space where created */
-                   ulint zip_size,     /*!< in: compressed page size in bytes
-                                       or 0 for uncompressed pages */
                    ulint root_page_no, /*!< in: root page number */
                    mtr_t *mtr); /*!< in: a mini-transaction which has already
                                 been started */

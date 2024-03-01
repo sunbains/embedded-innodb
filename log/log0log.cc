@@ -1058,7 +1058,6 @@ log_group_file_header_flush(log_group_t *group, /*!< in: log group */
     srv_os_log_pending_writes++;
 
     fil_io(OS_FILE_WRITE | OS_FILE_LOG, true, group->space_id,
-           0, // FIXME: ARCHIVE: Zip size ?
            dest_offset / UNIV_PAGE_SIZE, dest_offset % UNIV_PAGE_SIZE,
            OS_FILE_LOG_BLOCK_SIZE, buf, group);
 
@@ -1161,7 +1160,7 @@ loop:
 
     srv_os_log_pending_writes++;
 
-    fil_io(OS_FILE_WRITE | OS_FILE_LOG, true, group->space_id, 0,
+    fil_io(OS_FILE_WRITE | OS_FILE_LOG, true, group->space_id,
            next_offset / UNIV_PAGE_SIZE, next_offset % UNIV_PAGE_SIZE,
            write_len, buf, group);
 
@@ -1660,7 +1659,7 @@ static void log_group_checkpoint(log_group_t *group) /*!< in: log group */
     added with 1, as we want to distinguish between a normal log
     file write and a checkpoint field write */
 
-    fil_io(OS_FILE_WRITE | OS_FILE_LOG, false, group->space_id, 0,
+    fil_io(OS_FILE_WRITE | OS_FILE_LOG, false, group->space_id,
            write_offset / UNIV_PAGE_SIZE, write_offset % UNIV_PAGE_SIZE,
            OS_FILE_LOG_BLOCK_SIZE, buf, ((byte *)group + 1));
 
@@ -1726,7 +1725,7 @@ void log_group_read_checkpoint_info(
 
   log_sys->n_log_ios++;
 
-  fil_io(OS_FILE_READ | OS_FILE_LOG, true, group->space_id, 0,
+  fil_io(OS_FILE_READ | OS_FILE_LOG, true, group->space_id,
          field / UNIV_PAGE_SIZE, field % UNIV_PAGE_SIZE, OS_FILE_LOG_BLOCK_SIZE,
          log_sys->checkpoint_buf, NULL);
 }
@@ -1995,7 +1994,7 @@ loop:
 
   log_sys->n_log_ios++;
 
-  fil_io(OS_FILE_READ | OS_FILE_LOG, sync, group->space_id, 0,
+  fil_io(OS_FILE_READ | OS_FILE_LOG, sync, group->space_id,
          source_offset / UNIV_PAGE_SIZE, source_offset % UNIV_PAGE_SIZE, len,
          buf, NULL);
 
@@ -2049,7 +2048,6 @@ static void log_group_archive_file_header_write(
   log_sys->n_log_ios++;
 
   fil_io(OS_FILE_WRITE | OS_FILE_LOG, true, group->archive_space_id,
-         0, /* FIXME: ARCHIVE Zip size */
          dest_offset / UNIV_PAGE_SIZE, dest_offset % UNIV_PAGE_SIZE,
          2 * OS_FILE_LOG_BLOCK_SIZE, buf, &log_archive_io);
 }
@@ -2077,7 +2075,6 @@ static void log_group_archive_completed_header_write(
   log_sys->n_log_ios++;
 
   fil_io(OS_FILE_WRITE | OS_FILE_LOG, true, group->archive_space_id,
-         0, /* FIXME: ARCHIVE Zip size */
          dest_offset / UNIV_PAGE_SIZE, dest_offset % UNIV_PAGE_SIZE,
          OS_FILE_LOG_BLOCK_SIZE, buf + LOG_FILE_ARCH_COMPLETED,
          &log_archive_io);
@@ -2192,7 +2189,6 @@ loop:
   log_sys->n_log_ios++;
 
   fil_io(OS_FILE_WRITE | OS_FILE_LOG, false, group->archive_space_id,
-         0, // FIXME: ARCHIVE: Zip size
          next_offset / UNIV_PAGE_SIZE, next_offset % UNIV_PAGE_SIZE,
          ut_calc_align(len, OS_FILE_LOG_BLOCK_SIZE), buf, &log_archive_io);
 

@@ -57,6 +57,7 @@ enum buf_io_fix {
   BUF_IO_WRITE     /**< write pending */
 };
 
+#if 0
 /** Parameters of binary buddy system for compressed pages (buf0buddy.h) */
 /* @{ */
 #if UNIV_WORD_SIZE <= 4 /* 32-bit system */
@@ -78,5 +79,6 @@ the underlying memory is aligned by this amount:
 this must be equal to UNIV_PAGE_SIZE */
 #define BUF_BUDDY_HIGH (BUF_BUDDY_LOW << BUF_BUDDY_SIZES)
 /* @} */
+#endif
 
 #endif

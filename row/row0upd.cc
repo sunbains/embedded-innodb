@@ -290,27 +290,21 @@ upd_node_t *upd_node_create(mem_heap_t *heap) {
   return node;
 }
 
-void row_upd_rec_sys_fields_in_recovery(rec_t *rec, page_zip_des_t *page_zip,
-                                        const ulint *offsets, ulint pos,
+void row_upd_rec_sys_fields_in_recovery(rec_t *rec, const ulint *offsets, ulint pos,
                                         trx_id_t trx_id, roll_ptr_t roll_ptr) {
   ut_ad(rec_offs_validate(rec, nullptr, offsets));
 
-  if (likely_null(page_zip)) {
-    page_zip_write_trx_id_and_roll_ptr(page_zip, rec, offsets, pos, trx_id,
-                                       roll_ptr);
-  } else {
-    byte *field;
-    ulint len;
+  byte *field;
+  ulint len;
 
-    field = rec_get_nth_field(rec, offsets, pos, &len);
-    ut_ad(len == DATA_TRX_ID_LEN);
+  field = rec_get_nth_field(rec, offsets, pos, &len);
+  ut_ad(len == DATA_TRX_ID_LEN);
 
-    static_assert(DATA_TRX_ID + 1 == DATA_ROLL_PTR,
-                  "error DATA_TRX_ID + 1 != DATA_ROLL_PTR");
+  static_assert(DATA_TRX_ID + 1 == DATA_ROLL_PTR,
+                "error DATA_TRX_ID + 1 != DATA_ROLL_PTR");
 
-    trx_write_trx_id(field, trx_id);
-    trx_write_roll_ptr(field + DATA_TRX_ID_LEN, roll_ptr);
-  }
+  trx_write_trx_id(field, trx_id);
+  trx_write_roll_ptr(field + DATA_TRX_ID_LEN, roll_ptr);
 }
 
 void row_upd_index_entry_sys_field(const dtuple_t *entry, dict_index_t *index,
@@ -382,7 +376,7 @@ bool row_upd_changes_field_size_or_external(dict_index_t *index,
 }
 
 void row_upd_rec_in_place(rec_t *rec, dict_index_t *index, const ulint *offsets,
-                          const upd_t *update, page_zip_des_t *page_zip) {
+                          const upd_t *update) {
   const upd_field_t *upd_field;
   const dfield_t *new_val;
   ulint n_fields;
@@ -406,10 +400,6 @@ void row_upd_rec_in_place(rec_t *rec, dict_index_t *index, const ulint *offsets,
 
     rec_set_nth_field(rec, offsets, upd_field->field_no,
                       dfield_get_data(new_val), dfield_get_len(new_val));
-  }
-
-  if (likely_null(page_zip)) {
-    page_zip_write_rec(page_zip, rec, index, offsets, 0);
   }
 }
 
@@ -703,17 +693,13 @@ row_upd_ext_fetch(const byte *data, /*!< in: 'internally' stored part of the
                                     field containing also the reference to
                                     the external part */
                   ulint local_len,  /*!< in: length of data, in bytes */
-                  ulint zip_size,   /*!< in: nonzero=compressed BLOB
-                                    page size, zero for uncompressed
-                                    BLOBs */
                   ulint *len,       /*!< in: length of prefix to fetch;
                                     out: fetched length of the prefix */
                   mem_heap_t *heap) /*!< in: heap where to allocate */
 {
   byte *buf = mem_heap_alloc(heap, *len);
 
-  *len = btr_copy_externally_stored_field_prefix(buf, *len, zip_size, data,
-                                                 local_len);
+  *len = btr_copy_externally_stored_field_prefix(buf, *len, data, local_len);
   /* We should never update records containing a half-deleted BLOB. */
   ut_a(*len);
 
@@ -728,10 +714,8 @@ static void row_upd_index_replace_new_col_val(
     const dict_field_t *field, /*!< in: index field */
     const dict_col_t *col,     /*!< in: field->col */
     const upd_field_t *uf,     /*!< in: update field */
-    mem_heap_t *heap,          /*!< in: memory heap for allocating
-                               and copying the new value */
-    ulint zip_size)            /*!< in: compressed page
-                               size of the table, or 0 */
+    mem_heap_t *heap)          /*!< in: memory heap for allocating
+                                and copying the new value */
 {
   dfield_copy_data(dfield, &uf->new_val);
 
@@ -751,7 +735,7 @@ static void row_upd_index_replace_new_col_val(
 
       len = field->prefix_len;
 
-      data = row_upd_ext_fetch(data, l, zip_size, &len, heap);
+      data = row_upd_ext_fetch(data, l, &len, heap);
     }
 
     len =
@@ -806,7 +790,6 @@ void row_upd_index_replace_new_col_vals_index_pos(dtuple_t *entry,
                                                   bool order_only,
                                                   mem_heap_t *heap) {
   ulint n_fields;
-  const ulint zip_size = dict_table_zip_size(index->table);
 
   ut_ad(index);
 
@@ -829,7 +812,7 @@ void row_upd_index_replace_new_col_vals_index_pos(dtuple_t *entry,
 
     if (uf) {
       row_upd_index_replace_new_col_val(dtuple_get_nth_field(entry, i), field,
-                                        col, uf, heap, zip_size);
+                                        col, uf, heap);
     }
   }
 }
@@ -837,7 +820,6 @@ void row_upd_index_replace_new_col_vals_index_pos(dtuple_t *entry,
 void row_upd_index_replace_new_col_vals(dtuple_t *entry, dict_index_t *index,
                                         const upd_t *update, mem_heap_t *heap) {
   const dict_index_t *clust_index = dict_table_get_first_index(index->table);
-  const ulint zip_size = dict_table_zip_size(index->table);
 
   dtuple_set_info_bits(entry, update->info_bits);
 
@@ -853,7 +835,7 @@ void row_upd_index_replace_new_col_vals(dtuple_t *entry, dict_index_t *index,
 
     if (uf) {
       row_upd_index_replace_new_col_val(dtuple_get_nth_field(entry, i), field,
-                                        col, uf, heap, zip_size);
+                                        col, uf, heap);
     }
   }
 }
@@ -916,8 +898,7 @@ void row_upd_replace(dtuple_t *row, row_ext_t **ext, const dict_index_t *index,
   }
 
   if (n_ext_cols) {
-    *ext = row_ext_create(n_ext_cols, ext_cols, row, dict_table_zip_size(table),
-                          heap);
+    *ext = row_ext_create(n_ext_cols, ext_cols, row, heap);
   } else {
     *ext = nullptr;
   }
@@ -1278,8 +1259,7 @@ static db_err row_upd_clust_rec_by_insert(
     rec = btr_cur_get_rec(btr_cur);
     index = dict_table_get_first_index(table);
     offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
-    btr_cur_mark_extern_inherited_fields(btr_cur_get_page_zip(btr_cur), rec,
-                                         index, offsets, node->update, mtr);
+    btr_cur_mark_extern_inherited_fields(rec, index, offsets, node->update, mtr);
 
     if (check_ref) {
       /* NOTE that the following call loses the position of pcur ! */

@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 2006, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ Caching of externally stored column prefixes
 Created September 2006 Marko Makela
 *******************************************************/
 
-#ifndef row0ext_h
-#define row0ext_h
+#pragma once
 
 #include "data0types.h"
 #include "innodb0types.h"
@@ -44,7 +43,6 @@ row_ext_t *row_ext_create(
                            the clustered index record must be
                            covered by a lock or a page latch
                            to prevent deletion (rollback or purge). */
-    ulint zip_size,        /*!< compressed page size in bytes, or 0 */
     mem_heap_t *heap);     /*!< in: heap where created */
 
 /** Looks up a column prefix of an externally stored column.
@@ -77,6 +75,4 @@ struct row_ext_struct {
 
 #ifndef UNIV_NONINL
 #include "row0ext.ic"
-#endif
-
 #endif

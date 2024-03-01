@@ -344,12 +344,6 @@ row_merge_buf_add(row_merge_buf_t *buf, /*!< in/out: sort buffer */
   of extra_size. */
   data_size += (extra_size + 1) + ((extra_size + 1) >= 0x80);
 
-  /* The following assertion may fail if row_merge_block_t is
-  declared very small and a PRIMARY KEY is being created with
-  many prefix columns.  In that case, the record may exceed the
-  page_zip_rec_needs_ext() limit.  However, no further columns
-  will be moved to external storage until the record is inserted
-  to the clustered index B-tree. */
   ut_ad(data_size < sizeof(row_merge_block_t));
 
   /* Reserve one byte for the end marker of row_merge_block_t. */
@@ -1563,7 +1557,6 @@ row_merge_sort(trx_t *trx,                /*!< in: transaction */
 static void row_merge_copy_blobs(
     const mrec_t *mrec,   /*!< in: merge record */
     const ulint *offsets, /*!< in: offsets of mrec */
-    ulint zip_size,       /*!< in: compressed page size in bytes, or 0 */
     dtuple_t *tuple,      /*!< in/out: data tuple */
     mem_heap_t *heap)     /*!< in/out: memory heap */
 {
@@ -1586,8 +1579,7 @@ static void row_merge_copy_blobs(
     be freed between the time the BLOB pointers are read
     (row_merge_read_clustered_index()) and dereferenced
     (below). */
-    data = btr_rec_copy_externally_stored_field(mrec, offsets, zip_size, i,
-                                                &len, heap);
+    data = btr_rec_copy_externally_stored_field(mrec, offsets, i, &len, heap);
 
     dfield_set_data(field, data, len);
   }
@@ -1600,8 +1592,6 @@ static db_err row_merge_insert_index_tuples(
     trx_t *trx,               /*!< in: transaction */
     dict_index_t *index,      /*!< in: index */
     dict_table_t *table,      /*!< in: new table */
-    ulint zip_size,           /*!< in: compressed page size of
-                              the old table, or 0 if uncompressed */
     int fd,                   /*!< in: file descriptor */
     row_merge_block_t *block) /*!< in/out: file buffer */
 {
@@ -1664,7 +1654,7 @@ static db_err row_merge_insert_index_tuples(
           row_rec_to_index_entry_low(mrec, index, offsets, &n_ext, tuple_heap);
 
       if (unlikely(n_ext)) {
-        row_merge_copy_blobs(mrec, offsets, zip_size, dtuple, tuple_heap);
+        row_merge_copy_blobs(mrec, offsets, dtuple, tuple_heap);
       }
 
       node->row = dtuple;
@@ -2069,9 +2059,7 @@ db_err row_merge_build_indexes(
         row_merge_sort(trx, indexes[i], &merge_files[i], block, &tmpfd, table);
 
     if (err == DB_SUCCESS) {
-      err = row_merge_insert_index_tuples(trx, indexes[i], new_table,
-                                          dict_table_zip_size(old_table),
-                                          merge_files[i].fd, block);
+      err = row_merge_insert_index_tuples(trx, indexes[i], new_table, merge_files[i].fd, block);
     }
 
     /* Close the temporary file to free up space. */

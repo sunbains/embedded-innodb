@@ -54,20 +54,17 @@ Created 10/4/1994 Heikki Tuuri
 /** Gets pointer to the page frame where the cursor is positioned.
 @return	page */
 inline page_t *page_cur_get_page(page_cur_t *cur); /*!< in: page cursor */
+
 /** Gets pointer to the buffer block where the cursor is positioned.
 @return	page */
 inline buf_block_t *page_cur_get_block(page_cur_t *cur); /*!< in: page cursor */
-/** Gets pointer to the page frame where the cursor is positioned.
-@return	page */
-inline page_zip_des_t *
-page_cur_get_page_zip(page_cur_t *cur); /*!< in: page cursor */
+
 /** Gets the record where the cursor is positioned.
 @return	record */
 inline rec_t *page_cur_get_rec(page_cur_t *cur); /*!< in: page cursor */
 #else                                            /* UNIV_DEBUG */
 #define page_cur_get_page(cur) page_align((cur)->rec)
 #define page_cur_get_block(cur) (cur)->block
-#define page_cur_get_page_zip(cur) buf_block_get_page_zip((cur)->block)
 #define page_cur_get_rec(cur) (cur)->rec
 #endif /* UNIV_DEBUG */
 /** Sets the cursor object to point before the first user record
@@ -133,20 +130,7 @@ rec_t *page_cur_insert_rec_low(
     const rec_t *rec,    /*!< in: pointer to a physical record */
     ulint *offsets,      /*!< in/out: rec_get_offsets(rec, index) */
     mtr_t *mtr);         /*!< in: mini-transaction handle, or NULL */
-/** Inserts a record next to page cursor on a compressed and uncompressed
-page. Returns pointer to inserted record if succeed, i.e.,
-enough space available, NULL otherwise.
-The cursor stays at the same position.
-@return	pointer to record if succeed, NULL otherwise */
 
-rec_t *page_cur_insert_rec_zip(
-    rec_t **current_rec, /*!< in/out: pointer to current record after
-                     which the new record is inserted */
-    buf_block_t *block,  /*!< in: buffer block of *current_rec */
-    dict_index_t *index, /*!< in: record descriptor */
-    const rec_t *rec,    /*!< in: pointer to a physical record */
-    ulint *offsets,      /*!< in/out: rec_get_offsets(rec, index) */
-    mtr_t *mtr);         /*!< in: mini-transaction handle, or NULL */
 /** Copies records from page to a newly created page, from a given record
 onward, including that record. Infimum and supremum records are not copied. */
 

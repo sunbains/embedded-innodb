@@ -1,4 +1,4 @@
-/***
+/****************************************************************************
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,20 +21,23 @@ The index tree cursor
 Created 10/16/1994 Heikki Tuuri
 *******************************************************/
 
-#ifndef btr0cur_h
-#define btr0cur_h
+#pragma once
 
 #include "btr0types.h"
 #include "dict0dict.h"
 #include "innodb0types.h"
 #include "page0cur.h"
 
-/* Mode flags for btr_cur operations; these can be ORed */
-#define BTR_NO_UNDO_LOG_FLAG 1 /* do no undo logging */
-#define BTR_NO_LOCKING_FLAG 2  /* do no record lock checking */
-#define BTR_KEEP_SYS_FLAG                                                      \
-  4 /* sys fields will be found from the                                       \
-    update vector or inserted entry */
+/** Mode flags for btr_cur operations; these can be ORed */
+
+/** Do no undo logging */
+constexpr ulint BTR_NO_UNDO_LOG_FLAG = 1;
+
+/** Do no record lock checking */
+constexpr ulint BTR_NO_LOCKING_FLAG = 2;
+
+/** Sys fields will be found from the   update vector or inserted entry */
+constexpr ulint BTR_KEEP_SYS_FLAG = 4;
 
 #include "ha0ha.h"
 #include "que0types.h"
@@ -55,13 +58,6 @@ btr_cur_get_page_cur(const btr_cur_t *cursor); /*!< in: tree cursor */
 @return	pointer to buffer block */
 inline buf_block_t *
 btr_cur_get_block(btr_cur_t *cursor); /*!< in: tree cursor */
-/*** Returns the record pointer of a tree cursor.
-@return	pointer to record */
-inline rec_t *btr_cur_get_rec(btr_cur_t *cursor); /*!< in: tree cursor */
-/*** Returns the compressed page on which the tree cursor is positioned.
-@return	pointer to compressed page, or NULL if the page is not compressed */
-inline page_zip_des_t *
-btr_cur_get_page_zip(btr_cur_t *cursor); /*!< in: tree cursor */
 /*** Invalidates a tree cursor by setting record pointer to NULL. */
 inline void btr_cur_invalidate(btr_cur_t *cursor); /*!< in: tree cursor */
 /*** Returns the page of a tree cursor.
@@ -269,28 +265,12 @@ db_err btr_cur_del_mark_set_sec_rec(ulint flags,       /*!< in: locking flag */
 used by the insert buffer insert merge mechanism. */
 void btr_cur_del_unmark_for_ibuf(
     rec_t *rec,               /*!< in/out: record to delete unmark */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page
-                              corresponding to rec, or NULL
-                              when the tablespace is
-                              uncompressed */
     mtr_t *mtr);              /*!< in: mtr */
-
-/*** Tries to compress a page of the tree if it seems useful. It is assumed
-that mtr holds an x-latch on the tree and on the cursor page. To avoid
-deadlocks, mtr must also own x-latches to brothers of page, if those
-brothers exist. NOTE: it is assumed that the caller has reserved enough
-free extents so that the compression will always succeed if done!
-@return	true if compression occurred */
-bool btr_cur_compress_if_useful(
-    btr_cur_t *cursor, /*!< in: cursor on the page to compress;
-                       cursor does not stay valid if compression
-                       occurs */
-    mtr_t *mtr);       /*!< in: mtr */
 
 /*** Removes the record on which the tree cursor is positioned. It is assumed
 that the mtr has an x-latch on the page where the cursor is positioned,
 but no latch on the whole tree.
-@return	true if success, i.e., the page did not become too empty */
+@return true on success. */
 bool btr_cur_optimistic_delete(
     btr_cur_t *cursor, /*!< in: cursor on the record to delete;
                        cursor stays valid: if deletion succeeds,
@@ -308,7 +288,7 @@ an x-latch on the tree and on the cursor page. To avoid deadlocks,
 mtr must also own x-latches to brothers of page, if those brothers
 exist.
 @return	true if compression occurred */
-bool btr_cur_pessimistic_delete(
+void btr_cur_pessimistic_delete(
     db_err *err,               /*!< out: DB_SUCCESS or DB_OUT_OF_FILE_SPACE;
                               the latter may occur because we may have
                               to update node pointers on upper levels,
@@ -331,9 +311,8 @@ byte *btr_cur_parse_update_in_place(
     byte *ptr,                /*!< in: buffer */
     byte *end_ptr,            /*!< in: buffer end */
     page_t *page,             /*!< in/out: page or NULL */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page, or NULL */
-
     dict_index_t *index); /*!< in: index corresponding to page */
+
 /*** Parses the redo log record for delete marking or unmarking of a clustered
 index record.
 @return	end of log record or NULL */
@@ -341,7 +320,6 @@ byte *btr_cur_parse_del_mark_set_clust_rec(
     byte *ptr,                /*!< in: buffer */
     byte *end_ptr,            /*!< in: buffer end */
     page_t *page,             /*!< in/out: page or NULL */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page, or NULL */
     dict_index_t *index);     /*!< in: index corresponding to page */
 
 /*** Parses the redo log record for delete marking or unmarking of a secondary
@@ -350,8 +328,7 @@ index record.
 byte *btr_cur_parse_del_mark_set_sec_rec(
     byte *ptr,                 /*!< in: buffer */
     byte *end_ptr,             /*!< in: buffer end */
-    page_t *page,              /*!< in/out: page or NULL */
-    page_zip_des_t *page_zip); /*!< in/out: compressed page, or NULL */
+    page_t *page);              /*!< in/out: page or NULL */
 
 /*** Estimates the number of rows in a given index range.
 @return	estimated number of rows */
@@ -373,8 +350,6 @@ is transferred to the updated record which is inserted elsewhere in the
 index tree. In purge only the owner of externally stored field is allowed
 to free the field. */
 void btr_cur_mark_extern_inherited_fields(
-    page_zip_des_t *page_zip, /*!< in/out: compressed page whose uncompressed
-                             part will be updated, or NULL */
     rec_t *rec,               /*!< in/out: record in a clustered index */
     dict_index_t *index,      /*!< in: index of the page */
     const ulint *offsets,     /*!< in: array returned by rec_get_offsets() */
@@ -426,12 +401,9 @@ void btr_free_externally_stored_field(
                               an undo log page, not an index
                               page) */
     byte *field_ref,          /*!< in/out: field reference */
-    const rec_t *rec,         /*!< in: record containing field_ref, for
-                              page_zip_write_blob_ptr(), or NULL */
+    const rec_t *rec,         /*!< in: record containing field_ref or NULL */
     const ulint *offsets,     /*!< in: rec_get_offsets(rec, index),
                               or NULL */
-    page_zip_des_t *page_zip, /*!< in: compressed page corresponding
-                              to rec, or NULL if rec == NULL */
     ulint i,                  /*!< in: field number of field_ref;
                               ignored if rec == NULL */
     enum trx_rb_ctx rb_ctx,   /*!< in: rollback context */
@@ -446,8 +418,6 @@ or has been deleted */
 ulint btr_copy_externally_stored_field_prefix(
     byte *buf,        /*!< out: the field, or a prefix of it */
     ulint len,        /*!< in: length of buf, in bytes */
-    ulint zip_size,   /*!< in: nonzero=compressed BLOB page size,
-                     zero for uncompressed BLOBs */
     const byte *data, /*!< in: 'internally' stored part of the
                       field containing also the reference to
                       the external part; must be protected by
@@ -460,8 +430,6 @@ byte *btr_rec_copy_externally_stored_field(
     const rec_t *rec,     /*!< in: record in a clustered index;
                           must be protected by a lock or a page latch */
     const ulint *offsets, /*!< in: array returned by rec_get_offsets() */
-    ulint zip_size,       /*!< in: nonzero=compressed BLOB page size,
-                         zero for uncompressed BLOBs */
     ulint no,             /*!< in: field number */
     ulint *len,           /*!< out: length of the field */
     mem_heap_t *heap);    /*!< in: mem heap */
@@ -640,6 +608,4 @@ extern ulint btr_cur_n_sea_old;
 
 #ifndef UNIV_NONINL
 #include "btr0cur.ic"
-#endif
-
 #endif

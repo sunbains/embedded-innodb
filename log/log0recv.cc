@@ -39,7 +39,6 @@ Created 9/20/1997 Heikki Tuuri
 #include "mtr0log.h"
 #include "mtr0mtr.h"
 #include "page0cur.h"
-#include "page0zip.h"
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "sync0sync.h"
@@ -666,7 +665,6 @@ static byte *recv_parse_or_apply_log_rec_body(
 {
   dict_index_t *index = nullptr;
   page_t *page;
-  page_zip_des_t *page_zip;
 #ifdef UNIV_DEBUG
   ulint page_type;
 #endif /* UNIV_DEBUG */
@@ -675,11 +673,9 @@ static byte *recv_parse_or_apply_log_rec_body(
 
   if (block) {
     page = block->frame;
-    page_zip = buf_block_get_page_zip(block);
     ut_d(page_type = fil_page_get_type(page));
   } else {
     page = nullptr;
-    page_zip = nullptr;
     ut_d(page_type = FIL_PAGE_TYPE_ALLOCATED);
   }
 
@@ -748,7 +744,7 @@ static byte *recv_parse_or_apply_log_rec_body(
       }
     }
 #endif /* UNIV_DEBUG */
-    ptr = mlog_parse_nbytes(type, ptr, end_ptr, page, page_zip);
+    ptr = mlog_parse_nbytes(type, ptr, end_ptr, page);
     break;
   case MLOG_REC_INSERT:
   case MLOG_COMP_REC_INSERT:
@@ -770,8 +766,7 @@ static byte *recv_parse_or_apply_log_rec_body(
              ptr, end_ptr, type == MLOG_COMP_REC_CLUST_DELETE_MARK, &index))) {
       ut_a(!page ||
            (bool)!!page_is_comp(page) == dict_table_is_comp(index->table));
-      ptr = btr_cur_parse_del_mark_set_clust_rec(ptr, end_ptr, page, page_zip,
-                                                 index);
+      ptr = btr_cur_parse_del_mark_set_clust_rec(ptr, end_ptr, page, index);
     }
     break;
   case MLOG_COMP_REC_SEC_DELETE_MARK:
@@ -779,7 +774,6 @@ static byte *recv_parse_or_apply_log_rec_body(
     /* This log record type is obsolete, but we process it for
     backward compatibility with v5.0.3 and v5.0.4. */
     ut_a(!page || page_is_comp(page));
-    ut_a(!page_zip);
     ptr = mlog_parse_index(ptr, end_ptr, true, &index);
     if (!ptr) {
       break;
@@ -787,7 +781,7 @@ static byte *recv_parse_or_apply_log_rec_body(
     /* Fall through */
   case MLOG_REC_SEC_DELETE_MARK:
     ut_ad(!page || page_type == FIL_PAGE_INDEX);
-    ptr = btr_cur_parse_del_mark_set_sec_rec(ptr, end_ptr, page, page_zip);
+    ptr = btr_cur_parse_del_mark_set_sec_rec(ptr, end_ptr, page);
     break;
   case MLOG_REC_UPDATE_IN_PLACE:
   case MLOG_COMP_REC_UPDATE_IN_PLACE:
@@ -798,7 +792,7 @@ static byte *recv_parse_or_apply_log_rec_body(
              ptr, end_ptr, type == MLOG_COMP_REC_UPDATE_IN_PLACE, &index))) {
       ut_a(!page ||
            (bool)!!page_is_comp(page) == dict_table_is_comp(index->table));
-      ptr = btr_cur_parse_update_in_place(ptr, end_ptr, page, page_zip, index);
+      ptr = btr_cur_parse_update_in_place(ptr, end_ptr, page, index);
     }
     break;
   case MLOG_LIST_END_DELETE:
@@ -845,7 +839,6 @@ static byte *recv_parse_or_apply_log_rec_body(
   case MLOG_PAGE_CREATE:
   case MLOG_COMP_PAGE_CREATE:
     /* Allow anything in page_type when creating a page. */
-    ut_a(!page_zip);
     ptr = page_parse_create(ptr, end_ptr, type == MLOG_COMP_PAGE_CREATE, block,
                             mtr);
     break;
@@ -873,11 +866,7 @@ static byte *recv_parse_or_apply_log_rec_body(
   case MLOG_REC_MIN_MARK:
   case MLOG_COMP_REC_MIN_MARK:
     ut_ad(!page || page_type == FIL_PAGE_INDEX);
-    /* On a compressed page, MLOG_COMP_REC_MIN_MARK
-    will be followed by MLOG_COMP_REC_DELETE
-    or MLOG_ZIP_WRITE_HEADER(FIL_PAGE_PREV, FIL_NULL)
-    in the same mini-transaction. */
-    ut_a(type == MLOG_COMP_REC_MIN_MARK || !page_zip);
+    ut_a(type == MLOG_COMP_REC_MIN_MARK);
     ptr = btr_parse_set_min_rec_mark(ptr, end_ptr,
                                      type == MLOG_COMP_REC_MIN_MARK, page, mtr);
     break;
@@ -902,7 +891,7 @@ static byte *recv_parse_or_apply_log_rec_body(
     break;
   case MLOG_WRITE_STRING:
     ut_ad(!page || page_type != FIL_PAGE_TYPE_ALLOCATED);
-    ptr = mlog_parse_string(ptr, end_ptr, page, page_zip);
+    ptr = mlog_parse_string(ptr, end_ptr, page);
     break;
   case MLOG_FILE_CREATE:
   case MLOG_FILE_RENAME:
@@ -911,20 +900,10 @@ static byte *recv_parse_or_apply_log_rec_body(
     ptr = fil_op_log_parse_or_replay(ptr, end_ptr, type, 0, 0);
     break;
   case MLOG_ZIP_WRITE_NODE_PTR:
-    ut_ad(!page || page_type == FIL_PAGE_INDEX);
-    ptr = page_zip_parse_write_node_ptr(ptr, end_ptr, page, page_zip);
-    break;
   case MLOG_ZIP_WRITE_BLOB_PTR:
-    ut_ad(!page || page_type == FIL_PAGE_INDEX);
-    ptr = page_zip_parse_write_blob_ptr(ptr, end_ptr, page, page_zip);
-    break;
   case MLOG_ZIP_WRITE_HEADER:
-    ut_ad(!page || page_type == FIL_PAGE_INDEX);
-    ptr = page_zip_parse_write_header(ptr, end_ptr, page, page_zip);
-    break;
   case MLOG_ZIP_PAGE_COMPRESS:
-    /* Allow anything in page_type when creating a page. */
-    ptr = page_zip_parse_compress(ptr, end_ptr, page, page_zip);
+    ut_error;
     break;
   default:
     ptr = nullptr;
@@ -1093,7 +1072,6 @@ recv_data_copy_to_buf(byte *buf, /*!< in: buffer of length at least recv->len */
 
 void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
   page_t *page;
-  page_zip_des_t *page_zip;
   recv_addr_t *recv_addr;
   recv_t *recv;
   byte *buf;
@@ -1135,7 +1113,6 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
   mtr_set_log_mode(&mtr, MTR_LOG_NONE);
 
   page = block->frame;
-  page_zip = buf_block_get_page_zip(block);
 
   if (just_read_in) {
     /* Move the ownership of the x-latch on the page to
@@ -1188,10 +1165,6 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
 
       memset(FIL_PAGE_LSN + page, 0, 8);
       memset(UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + page, 0, 8);
-
-      if (page_zip) {
-        memset(FIL_PAGE_LSN + page_zip->data, 0, 8);
-      }
     }
 
     if (recv->start_lsn >= page_lsn) {
@@ -1222,10 +1195,6 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
       mach_write_ull(FIL_PAGE_LSN + page, end_lsn);
       mach_write_ull(UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + page,
                      end_lsn);
-
-      if (page_zip) {
-        mach_write_ull(FIL_PAGE_LSN + page_zip->data, end_lsn);
-      }
     }
 
     if (recv->len > RECV_DATA_BLOCK_SIZE) {
@@ -1234,16 +1203,6 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
 
     recv = UT_LIST_GET_NEXT(rec_list, recv);
   }
-
-#ifdef UNIV_ZIP_DEBUG
-  if (fil_page_get_type(page) == FIL_PAGE_INDEX) {
-    page_zip_des_t *page_zip = buf_block_get_page_zip(block);
-
-    if (page_zip) {
-      ut_a(page_zip_validate_low(page_zip, page, false));
-    }
-  }
-#endif /* UNIV_ZIP_DEBUG */
 
   mutex_enter(&(recv_sys->mutex));
 
@@ -1275,10 +1234,8 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
 /** Reads in pages which have hashed log records, from an area around a given
 page number.
 @return	number of pages found */
-static ulint recv_read_in_area(
-    ulint space,    /*!< in: space */
-    ulint zip_size, /*!< in: compressed page size in bytes, or 0 */
-    ulint page_no)  /*!< in: page number */
+static ulint recv_read_in_area(ulint space,          /*!< in: space */
+                               ulint, ulint page_no) /*!< in: page number */
 {
   recv_addr_t *recv_addr;
   ulint page_nos[RECV_READ_AHEAD_AREA];
@@ -1309,10 +1266,8 @@ static ulint recv_read_in_area(
     }
   }
 
-  buf_read_recv_pages(false, space, zip_size, page_nos, n);
-  /*
-  ib_logger(ib_stream, "Recv pages at %lu n %lu\n", page_nos[0], n);
-  */
+  buf_read_recv_pages(false, space, page_nos, n);
+
   return n;
 }
 
@@ -1363,7 +1318,6 @@ loop:
 
     while (recv_addr) {
       ulint space = recv_addr->space;
-      ulint zip_size = fil_space_get_zip_size(space);
       ulint page_no = recv_addr->page_no;
 
       if (recv_addr->state == RECV_NOT_PROCESSED) {
@@ -1383,13 +1337,13 @@ loop:
 
           mtr_start(&mtr);
 
-          block = buf_page_get(space, zip_size, page_no, RW_X_LATCH, &mtr);
+          block = buf_page_get(space, 0, page_no, RW_X_LATCH, &mtr);
           buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
 
           recv_recover_page(false, block);
           mtr_commit(&mtr);
         } else {
-          recv_read_in_area(space, zip_size, page_no);
+          recv_read_in_area(space, 0, page_no);
         }
 
         mutex_enter(&(recv_sys->mutex));
@@ -2183,7 +2137,7 @@ static void recv_recover_from_ibbackup(
   /* Read the first log file header to print a note if this is
   a recovery from a restored InnoDB Hot Backup */
 
-  fil_io(OS_FILE_READ | OS_FILE_LOG, true, max_cp_group->space_id, 0, 0, 0,
+  fil_io(OS_FILE_READ | OS_FILE_LOG, true, max_cp_group->space_id, 0, 0,
          LOG_FILE_HDR_SIZE, log_hdr_buf, max_cp_group);
 
   if (0 == memcmp(log_hdr_buf + LOG_FILE_WAS_CREATED_BY_HOT_BACKUP,
@@ -2203,7 +2157,7 @@ static void recv_recover_from_ibbackup(
 
     memset(log_hdr_buf + LOG_FILE_WAS_CREATED_BY_HOT_BACKUP, ' ', 4);
     /* Write to the log file to wipe over the label */
-    fil_io(OS_FILE_WRITE | OS_FILE_LOG, true, max_cp_group->space_id, 0, 0, 0,
+    fil_io(OS_FILE_WRITE | OS_FILE_LOG, true, max_cp_group->space_id, 0, 0,
            OS_FILE_LOG_BLOCK_SIZE, log_hdr_buf, max_cp_group);
   }
 }
@@ -2758,13 +2712,11 @@ try_open_again:
 
   fil_node_create(name, 1 + file_size / UNIV_PAGE_SIZE, group->archive_space_id,
                   false);
-#if RECV_SCAN_SIZE < LOG_FILE_HDR_SIZE
-#error "RECV_SCAN_SIZE < LOG_FILE_HDR_SIZE"
-#endif
+
+  static_assert(RECV_SCAN_SIZE >= LOG_FILE_HDR_SIZE, "error RECV_SCAN_SIZE < LOG_FILE_HDR_SIZE");
 
   /* Read the archive file header */
   fil_io(OS_FILE_READ | OS_FILE_LOG, true, group->archive_space_id,
-         0, // FIXME: ARCHIVE: Zip size
          0, 0, LOG_FILE_HDR_SIZE, buf, nullptr);
 
   /* Check if the archive file header is consistent */
@@ -2832,7 +2784,6 @@ try_open_again:
 #endif /* UNIV_DEBUG */
 
     fil_io(OS_FILE_READ | OS_FILE_LOG, true, group->archive_space_id,
-           0, // FIXME: ARCHIVE: Zip size
            read_offset / UNIV_PAGE_SIZE, read_offset % UNIV_PAGE_SIZE, len, buf,
            nullptr);
 

@@ -28,15 +28,13 @@ Created 3/26/1996 Heikki Tuuri
 @return	rollback segment header, page x-latched */
 inline trx_rsegf_t *
 trx_rsegf_get(ulint space,    /*!< in: space where placed */
-              ulint zip_size, /*!< in: compressed page size in
-                              bytes or 0 for uncompressed pages */
               ulint page_no,  /*!< in: page number of the header */
               mtr_t *mtr)     /*!< in: mtr */
 {
   buf_block_t *block;
   trx_rsegf_t *header;
 
-  block = buf_page_get(space, zip_size, page_no, RW_X_LATCH, mtr);
+  block = buf_page_get(space, 0, page_no, RW_X_LATCH, mtr);
   buf_block_dbg_add_level(block, SYNC_RSEG_HEADER);
 
   header = TRX_RSEG + buf_block_get_frame(block);
@@ -48,15 +46,13 @@ trx_rsegf_get(ulint space,    /*!< in: space where placed */
 @return	rollback segment header, page x-latched */
 inline trx_rsegf_t *
 trx_rsegf_get_new(ulint space,    /*!< in: space where placed */
-                  ulint zip_size, /*!< in: compressed page size in bytes
-                                  or 0 for uncompressed pages */
                   ulint page_no,  /*!< in: page number of the header */
                   mtr_t *mtr)     /*!< in: mtr */
 {
   buf_block_t *block;
   trx_rsegf_t *header;
 
-  block = buf_page_get(space, zip_size, page_no, RW_X_LATCH, mtr);
+  block = buf_page_get(space, 0, page_no, RW_X_LATCH, mtr);
   buf_block_dbg_add_level(block, SYNC_RSEG_HEADER_NEW);
 
   header = TRX_RSEG + buf_block_get_frame(block);

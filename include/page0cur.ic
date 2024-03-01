@@ -44,14 +44,6 @@ inline buf_block_t *page_cur_get_block(page_cur_t *cur) /*!< in: page cursor */
   return (cur->block);
 }
 
-/** Gets pointer to the page frame where the cursor is positioned.
-@return	page */
-inline page_zip_des_t *
-page_cur_get_page_zip(page_cur_t *cur) /*!< in: page cursor */
-{
-  return (buf_block_get_page_zip(page_cur_get_block(cur)));
-}
-
 /** Gets the record where the cursor is positioned.
 @return	record */
 inline rec_t *page_cur_get_rec(page_cur_t *cur) /*!< in: page cursor */
@@ -189,15 +181,7 @@ inline rec_t *page_cur_tuple_insert(
                                   dict_index, tuple, n_ext);
   offsets = rec_get_offsets(rec, dict_index, NULL, ULINT_UNDEFINED, &heap);
 
-#ifdef WITH_ZIP
-  if (buf_block_get_page_zip(cursor->block)) {
-    rec = page_cur_insert_rec_zip(&cursor->rec, cursor->block, dict_index, rec,
-                                  offsets, mtr);
-  } else
-#endif /* WITH_ZIP */
-  {
-    rec = page_cur_insert_rec_low(cursor->rec, dict_index, rec, offsets, mtr);
-  }
+  rec = page_cur_insert_rec_low(cursor->rec, dict_index, rec, offsets, mtr);
 
   mem_heap_free(heap);
   return (rec);
@@ -215,14 +199,5 @@ page_cur_rec_insert(page_cur_t *cursor,       /*!< in/out: a page cursor */
                     ulint *offsets, /*!< in/out: rec_get_offsets(rec, index) */
                     mtr_t *mtr)     /*!< in: mini-transaction handle, or NULL */
 {
-#ifdef WITH_ZIP
-  if (buf_block_get_page_zip(cursor->block)) {
-    return (page_cur_insert_rec_zip(&cursor->rec, cursor->block, dict_index,
-                                    rec, offsets, mtr));
-  } else
-#endif /* WITH_ZIP */
-  {
-    return (
-        page_cur_insert_rec_low(cursor->rec, dict_index, rec, offsets, mtr));
-  }
+  return page_cur_insert_rec_low(cursor->rec, dict_index, rec, offsets, mtr);
 }

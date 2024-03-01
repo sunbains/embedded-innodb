@@ -29,13 +29,12 @@ Created September 2006 Marko Makela
 
 #include "btr0cur.h"
 
-/** Fills the column prefix cache of an externally stored column. */
+/** Fills the column prefix cache of an externally stored column.
+@param[in,out] ext              Column prefix cache
+@param[in] i                    Index of ext->extp[]
+@paramp[in] dfield              Data field. */
 static void
-row_ext_cache_fill(row_ext_t *ext, /*!< in/out: column prefix cache */
-                   ulint i,        /*!< in: index of ext->ext[] */
-                   ulint zip_size, /*!< compressed page size in bytes, or 0 */
-                   const dfield_t *dfield) /*!< in: data field */
-{
+row_ext_cache_fill(row_ext_t *ext, ulint i, const dfield_t *dfield) {
   auto field = (const byte *)dfield_get_data(dfield);
   auto f_len = dfield_get_len(dfield);
   auto buf = ext->buf + i * REC_MAX_INDEX_COL_LEN;
@@ -57,17 +56,14 @@ row_ext_cache_fill(row_ext_t *ext, /*!< in/out: column prefix cache */
     crashed during the execution of
     btr_free_externally_stored_field(). */
     ext->len[i] = btr_copy_externally_stored_field_prefix(
-        buf, REC_MAX_INDEX_COL_LEN, zip_size, field, f_len);
+        buf, REC_MAX_INDEX_COL_LEN, field, f_len);
   }
 }
 
 row_ext_t *row_ext_create(ulint n_ext, const ulint *ext, const dtuple_t *tuple,
-                          ulint zip_size, mem_heap_t *heap) {
+                          mem_heap_t *heap) {
   auto row_ext = reinterpret_cast<row_ext_t *>(mem_heap_alloc(
       heap, (sizeof(row_ext_t)) + (n_ext - 1) * sizeof(row_ext_t::len)));
-
-  ut_ad(ut_is_2pow(zip_size));
-  ut_ad(zip_size <= UNIV_PAGE_SIZE);
 
   row_ext->n_ext = n_ext;
   row_ext->ext = ext;
@@ -81,7 +77,7 @@ row_ext_t *row_ext_create(ulint n_ext, const ulint *ext, const dtuple_t *tuple,
   /* Fetch the BLOB prefixes */
   for (ulint i = 0; i < n_ext; i++) {
     auto dfield = dtuple_get_nth_field(tuple, ext[i]);
-    row_ext_cache_fill(row_ext, i, zip_size, dfield);
+    row_ext_cache_fill(row_ext, i, dfield);
   }
 
   return row_ext;

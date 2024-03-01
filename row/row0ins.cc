@@ -203,7 +203,6 @@ static db_err row_ins_sec_index_entry_by_modify(
     switch (err) {
     case DB_OVERFLOW:
     case DB_UNDERFLOW:
-    case DB_ZIP_OVERFLOW:
       err = DB_FAIL;
       break;
     default:
@@ -279,7 +278,6 @@ static db_err row_ins_clust_index_entry_by_modify(
     switch (err) {
     case DB_OVERFLOW:
     case DB_UNDERFLOW:
-    case DB_ZIP_OVERFLOW:
       err = DB_FAIL;
       break;
     default:

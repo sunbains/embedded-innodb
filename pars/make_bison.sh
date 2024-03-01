@@ -24,8 +24,9 @@ set - eu OUTFILE = pars0grm TMPFILE =
         ${OUTFILE}.h
 
             sed -
-    e ' s / ' "$TMPFILE" ' / ' "$OUTFILE"' / ;
-s / ^\(\(YYSTYPE\| int\) yy\(char\| nerrs\)\) / static \1 / ;
+    e ' s / ' "$TMPFILE" ' / ' "$OUTFILE"' / ; s /
+        ^\(\(YYSTYPE\| int\) yy\(char\| nerrs\)\) / static \1 /
+    ;
 ' < "${TMPFILE}.c" > "${OUTFILE}.cc"
 
     rm "${TMPFILE}.c"

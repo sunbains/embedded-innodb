@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -28,6 +28,7 @@ Created 1/20/1994 Heikki Tuuri
 
 /** Pair of ulint integers. */
 typedef struct dulint_struct dulint;
+
 /** Type definition for a 64-bit unsigned integer, which works also
 in 32-bit machines. NOTE! Access the fields only with the accessor
 functions. This definition appears here only for the compiler to

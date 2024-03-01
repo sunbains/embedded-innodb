@@ -81,8 +81,6 @@ byte *row_upd_write_sys_vals_to_log(
 a row is updated or marked deleted. */
 inline void row_upd_rec_sys_fields(
     rec_t *rec,               /*!< in/out: record */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page whose
-                             uncompressed part will be updated, or NULL */
     dict_index_t *index,      /*!< in: clustered index */
     const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
     trx_t *trx,               /*!< in: transaction */
@@ -121,16 +119,15 @@ bool row_upd_changes_field_size_or_external(
     dict_index_t *index,  /*!< in: index */
     const ulint *offsets, /*!< in: rec_get_offsets(rec, index) */
     const upd_t *update); /*!< in: update vector */
+
 /** Replaces the new column values stored in the update vector to the record
 given. No field size changes are allowed. */
-
 void row_upd_rec_in_place(
     rec_t *rec,                /*!< in/out: record where replaced */
     dict_index_t *index,       /*!< in: the index the record belongs to */
     const ulint *offsets,      /*!< in: array returned by rec_get_offsets() */
-    const upd_t *update,       /*!< in: update vector */
-    page_zip_des_t *page_zip); /*!< in: compressed page with enough space
-                             available, or NULL */
+    const upd_t *update);      /*!< in: update vector */
+
 /** Builds an update vector from those fields which in a secondary index entry
 differ from a record that has the equal ordering fields. NOTE: we compare
 the fields as binary strings!
@@ -247,7 +244,6 @@ database recovery. */
 
 void row_upd_rec_sys_fields_in_recovery(
     rec_t *rec,               /*!< in/out: record */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page, or NULL */
     const ulint *offsets,     /*!< in: array returned by rec_get_offsets() */
     ulint pos,                /*!< in: TRX_ID position in rec */
     trx_id_t trx_id,          /*!< in: transaction id */

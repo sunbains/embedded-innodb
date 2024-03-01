@@ -256,17 +256,11 @@ dict_sys_tables_get_flags(const rec_t *rec) /*!< in: a record of SYS_TABLES */
     return (ULINT_UNDEFINED);
 
   case DICT_TF_FORMAT_ZIP << DICT_TF_FORMAT_SHIFT | DICT_TF_COMPACT:
-#if DICT_TF_FORMAT_MAX > DICT_TF_FORMAT_ZIP
-#error "missing case labels for DICT_TF_FORMAT_ZIP .. DICT_TF_FORMAT_MAX"
-#endif
+    static_assert(DICT_TF_FORMAT_MAX <= DICT_TF_FORMAT_ZIP,
+                  "error missing case labels for DICT_TF_FORMAT_ZIP .. "
+                  "DICT_TF_FORMAT_MAX");
     /* We support this format. */
     break;
-  }
-
-  if (unlikely((flags & DICT_TF_ZSSIZE_MASK) >
-               (DICT_TF_ZSSIZE_MAX << DICT_TF_ZSSIZE_SHIFT))) {
-    /* Unsupported compressed page size. */
-    return (ULINT_UNDEFINED);
   }
 
   if (unlikely(flags & (~0UL << DICT_TF_BITS))) {
@@ -277,17 +271,7 @@ dict_sys_tables_get_flags(const rec_t *rec) /*!< in: a record of SYS_TABLES */
   return (flags);
 }
 
-/** In a crash recovery we already have all the tablespace objects created.
-This function compares the space id information in the InnoDB data dictionary
-to what we already read with fil_load_single_table_tablespaces().
-
-In a normal startup, we create the tablespace objects for every table in
-InnoDB's data dictionary, if the corresponding .ibd file exists.
-We also scan the biggest space id, and store it to fil_system. */
-
-void dict_check_tablespaces_and_store_max_id(
-    bool in_crash_recovery) /*!< in: are we doing a crash recovery */
-{
+void dict_check_tablespaces_and_store_max_id(bool in_crash_recovery) {
   dict_table_t *sys_tables;
   dict_index_t *sys_index;
   btr_pcur_t pcur;
@@ -341,36 +325,22 @@ loop:
     name = mem_strdupl((char *)field, len);
 
     flags = dict_sys_tables_get_flags(rec);
-#ifndef WITH_ZIP
-    if (flags & DICT_TF_FORMAT_ZIP) {
+    if (flags == ULINT_UNDEFINED) {
+
       field = rec_get_nth_field_old(rec, 5, &len);
       flags = mach_read_from_4(field);
 
-      ib_logger(ib_stream, "InnoDB: Error: Table ");
+      ut_print_timestamp(ib_stream);
+      ib_logger(ib_stream, "  InnoDB: Error: table ");
       ut_print_filename(ib_stream, name);
       ib_logger(ib_stream,
-                " in InnoDB data dictionary is a compressed\n"
-                "InnoDB: table (%lx). But InnoDB not compiled "
-                "with support for compressed tables.\n",
+                "\n"
+                "InnoDB: in InnoDB data dictionary"
+                " has unknown type %lx.\n",
                 (ulong)flags);
-    } else
-#endif /* WITH_ZIP */
-      if (flags == ULINT_UNDEFINED) {
 
-        field = rec_get_nth_field_old(rec, 5, &len);
-        flags = mach_read_from_4(field);
-
-        ut_print_timestamp(ib_stream);
-        ib_logger(ib_stream, "  InnoDB: Error: table ");
-        ut_print_filename(ib_stream, name);
-        ib_logger(ib_stream,
-                  "\n"
-                  "InnoDB: in InnoDB data dictionary"
-                  " has unknown type %lx.\n",
-                  (ulong)flags);
-
-        goto loop;
-      }
+      goto loop;
+    }
 
     field = rec_get_nth_field_old(rec, 9, &len);
     ut_a(len == 4);
@@ -863,36 +833,20 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
   if (space != 0) {
     flags = dict_sys_tables_get_flags(rec);
 
-#ifndef WITH_ZIP
-    if (flags & DICT_TF_FORMAT_ZIP) {
+    if (unlikely(flags == ULINT_UNDEFINED)) {
       field = rec_get_nth_field_old(rec, 5, &len);
       flags = mach_read_from_4(field);
 
-      ib_logger(ib_stream, "InnoDB: Error: Table ");
+      ut_print_timestamp(ib_stream);
+      ib_logger(ib_stream, "  InnoDB: Error: table ");
       ut_print_filename(ib_stream, name);
       ib_logger(ib_stream,
-                " in InnoDB data dictionary is a compressed\n"
-                "InnoDB: table (%lx). But InnoDB not compiled "
-                "with support for compressed tables.\n",
+                "\n"
+                "InnoDB: in InnoDB data dictionary"
+                " has unknown type %lx.\n",
                 (ulong)flags);
-
       goto err_exit;
-    } else
-#endif /* WITH_ZIP */
-      if (unlikely(flags == ULINT_UNDEFINED)) {
-        field = rec_get_nth_field_old(rec, 5, &len);
-        flags = mach_read_from_4(field);
-
-        ut_print_timestamp(ib_stream);
-        ib_logger(ib_stream, "  InnoDB: Error: table ");
-        ut_print_filename(ib_stream, name);
-        ib_logger(ib_stream,
-                  "\n"
-                  "InnoDB: in InnoDB data dictionary"
-                  " has unknown type %lx.\n",
-                  (ulong)flags);
-        goto err_exit;
-      }
+    }
 
   } else {
     flags = 0;

@@ -91,10 +91,10 @@ before hash index building is started */
 
 /** Builds a hash index on a page with the given parameters. If the page already
 has a hash index with different parameters, the old hash index is removed.
-If index is non-NULL, this function checks if n_fields and n_bytes are
+If index is non-nullptr, this function checks if n_fields and n_bytes are
 sensible values, and does not build a hash index if not. */
 static void btr_search_build_page_hash_index(
-    dict_index_t *index, /*!< in: index for which to build, or NULL if
+    dict_index_t *index, /*!< in: index for which to build, or nullptr if
                          not known */
     buf_block_t *block,  /*!< in: index page, s- or x-latched */
     ulint n_fields,      /*!< in: hash this many full fields */
@@ -128,12 +128,12 @@ static void btr_search_check_free_space_in_heap(void) {
   the latch: this is ok, because we will not guarantee that there will
   be enough free space in the hash table. */
 
-  if (heap->free_block == NULL) {
-    buf_block_t *block = buf_block_alloc(0);
+  if (heap->free_block == nullptr) {
+    buf_block_t *block = buf_block_alloc();
 
     rw_lock_x_lock(&btr_search_latch);
 
-    if (heap->free_block == NULL) {
+    if (heap->free_block == nullptr) {
       heap->free_block = block;
     } else {
       buf_block_free(block);
@@ -153,9 +153,9 @@ void btr_search_var_init(void) {
   btr_search_n_hash_fail = 0;
 #endif /* UNIV_SEARCH_PERF_STAT */
 
-  btr_search_latch_temp = NULL;
+  btr_search_latch_temp = nullptr;
 
-  btr_search_sys = NULL;
+  btr_search_sys = nullptr;
 }
 
 /** Creates and initializes the adaptive search system at a database start. */
@@ -180,7 +180,7 @@ void btr_search_sys_create(
 
 void btr_search_sys_close(void) {
   /* This can happen if we abort during the startup phase. */
-  if (btr_search_sys == NULL) {
+  if (btr_search_sys == nullptr) {
     return;
   }
 
@@ -193,10 +193,10 @@ void btr_search_sys_close(void) {
   memset(&btr_search_enabled_mutex, 0x0, sizeof(btr_search_enabled_mutex));
 
   mem_free(btr_search_latch_temp);
-  btr_search_latch_temp = NULL;
+  btr_search_latch_temp = nullptr;
 
   mem_free(btr_search_sys);
-  btr_search_sys = NULL;
+  btr_search_sys = nullptr;
 }
 
 /** Disable the adaptive hash search system and empty the index. */
@@ -245,7 +245,7 @@ btr_search_info_create(mem_heap_t *heap) /*!< in: heap where created */
 #endif /* UNIV_DEBUG */
 
   info->ref_count = 0;
-  info->root_guess = NULL;
+  info->root_guess = nullptr;
 
   info->hash_analysis = 0;
   info->n_hash_potential = 0;
@@ -513,7 +513,7 @@ static void btr_search_update_hash_ref(
       (block->curr_n_fields == info->n_fields) &&
       (block->curr_n_bytes == info->n_bytes) &&
       (block->curr_left_side == info->left_side)) {
-    mem_heap_t *heap = NULL;
+    mem_heap_t *heap = nullptr;
     ulint offsets_[REC_OFFS_NORMAL_SIZE];
     rec_offs_init(offsets_);
 
@@ -635,7 +635,7 @@ btr_search_check_guess(btr_cur_t *cursor, /*!< in: guessed cursor position */
   ulint match;
   ulint bytes;
   int cmp;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   bool success = false;
@@ -1028,8 +1028,8 @@ retry:
 
   prev_fold = 0;
 
-  heap = NULL;
-  offsets = NULL;
+  heap = nullptr;
+  offsets = nullptr;
 
   while (!page_rec_is_supremum(rec)) {
     offsets =
@@ -1087,7 +1087,7 @@ retry:
   index->search_info->ref_count--;
 
   block->is_hashed = false;
-  block->index = NULL;
+  block->index = nullptr;
 
 cleanup:
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
@@ -1118,8 +1118,6 @@ Drops possible hash index if the page happens to be in the buffer pool. */
 
 void btr_search_drop_page_hash_when_freed(
     ulint space,    /*!< in: space id */
-    ulint zip_size, /*!< in: compressed page size in bytes
-                    or 0 for uncompressed pages */
     ulint page_no)  /*!< in: page number */
 {
   buf_block_t *block;
@@ -1137,15 +1135,15 @@ void btr_search_drop_page_hash_when_freed(
   get here. Therefore we can acquire the s-latch to the page without
   having to fear a deadlock. */
 
-  block = buf_page_get_gen(space, zip_size, page_no, RW_S_LATCH, NULL,
+  block = buf_page_get_gen(space, 0, page_no, RW_S_LATCH, nullptr,
                            BUF_GET_IF_IN_POOL, __FILE__, __LINE__, &mtr);
   /* Because the buffer pool mutex was released by
   buf_page_peek_if_search_hashed(), it is possible that the
   block was removed from the buffer pool by another thread
   before buf_page_get_gen() got a chance to acquire the buffer
-  pool mutex again.  Thus, we must check for a NULL return. */
+  pool mutex again.  Thus, we must check for a nullptr return. */
 
-  if (likely(block != NULL)) {
+  if (likely(block != nullptr)) {
 
     buf_block_dbg_add_level(block, SYNC_TREE_NODE_FROM_HASH);
 
@@ -1157,7 +1155,7 @@ void btr_search_drop_page_hash_when_freed(
 
 /** Builds a hash index on a page with the given parameters. If the page already
 has a hash index with different parameters, the old hash index is removed.
-If index is non-NULL, this function checks if n_fields and n_bytes are
+If index is non-nullptr, this function checks if n_fields and n_bytes are
 sensible values, and does not build a hash index if not. */
 static void btr_search_build_page_hash_index(
     dict_index_t *index, /*!< in: index for which to build */
@@ -1179,7 +1177,7 @@ static void btr_search_build_page_hash_index(
   ulint *folds;
   rec_t **recs;
   ulint i;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
@@ -1420,7 +1418,7 @@ void btr_search_update_hash_on_delete(
   ulint fold;
   dulint index_id;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   rec_offs_init(offsets_);
 
   rec = btr_cur_get_rec(cursor);
@@ -1525,7 +1523,7 @@ void btr_search_update_hash_on_insert(
   ulint n_bytes;
   bool left_side;
   bool locked = false;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
@@ -1659,7 +1657,7 @@ bool btr_search_validate(void) {
   bool ok = true;
   ulint i;
   ulint cell_count;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
 
@@ -1687,7 +1685,7 @@ bool btr_search_validate(void) {
 
     node = (ha_node_t *)hash_get_nth_cell(btr_search_sys->hash_index, i)->node;
 
-    for (; node != NULL; node = node->next) {
+    for (; node != nullptr; node = node->next) {
       const buf_block_t *block = buf_block_align((const byte *)node->data);
       const buf_block_t *hash_block;
 
@@ -1701,7 +1699,7 @@ bool btr_search_validate(void) {
         hash_block = buf_block_hash_get(buf_block_get_space(block),
                                         buf_block_get_page_no(block));
       } else {
-        hash_block = NULL;
+        hash_block = nullptr;
       }
 
       if (hash_block) {

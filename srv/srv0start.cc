@@ -766,8 +766,8 @@ static db_err open_or_create_data_files(
   ulint size;
   ulint size_high;
   ulint rounded_size_pages;
-  char name[10000];
-  char home[10000];
+  char name[PATH_MAX];
+  char home[1024];
 
   if (srv_n_data_files >= 1000) {
     ib_logger(ib_stream,
@@ -813,7 +813,8 @@ static db_err open_or_create_data_files(
 
       ut_a(strlen(home) + strlen(srv_data_file_names[i]) < (sizeof name) - 1);
 
-      ut_snprintf(name, sizeof(name), "%s%s", home, srv_data_file_names[i]);
+      ut_snprintf(name, sizeof(name), "%.1024s%.1024s", home,
+                  srv_data_file_names[i]);
     } else {
       ut_a(strlen(home) < (sizeof name) - 1);
 

@@ -447,7 +447,6 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(
       switch (err) {
       case DB_OVERFLOW:
       case DB_UNDERFLOW:
-      case DB_ZIP_OVERFLOW:
         err = DB_FAIL;
         break;
 

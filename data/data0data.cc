@@ -30,7 +30,6 @@ Created 5/30/1994 Heikki Tuuri
 #include "btr0cur.h"
 #include "dict0dict.h"
 #include "page0page.h"
-#include "page0zip.h"
 #include "rem0cmp.h"
 #include "rem0rec.h"
 
@@ -564,9 +563,7 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, /*!< in: index */
   n_fields = 0;
 
   while (page_rec_needs_ext(rec_get_converted_size(index, entry, *n_ext),
-                            dict_table_is_comp(index->table),
-                            dict_index_get_n_fields(index),
-                            dict_table_zip_size(index->table))) {
+                            dict_table_is_comp(index->table))) {
     ulint i;
     ulint longest = 0;
     ulint longest_i = ULINT_MAX;
@@ -647,14 +644,6 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, /*!< in: index */
     memcpy(data, dfield_get_data(dfield), local_prefix_len);
     /* Clear the extern field reference (BLOB pointer). */
     memset(data + local_prefix_len, 0, BTR_EXTERN_FIELD_REF_SIZE);
-#if 0
-		/* The following would fail the Valgrind checks in
-		page_cur_insert_rec_low() and page_cur_insert_rec_zip().
-		The BLOB pointers in the record will be initialized after
-		the record and the BLOBs have been written. */
-		UNIV_MEM_ALLOC(data + local_prefix_len,
-			       BTR_EXTERN_FIELD_REF_SIZE);
-#endif
 
     dfield_set_data(dfield, data, local_len);
     dfield_set_ext(dfield);

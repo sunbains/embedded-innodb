@@ -94,14 +94,12 @@ static bool row_sel_sec_rec_is_for_blob(
                              against deletion (rollback or purge) */
     ulint clust_len,         /*!< in: length of clust_field */
     const byte *sec_field,   /*!< in: column in secondary index */
-    ulint sec_len,           /*!< in: length of sec_field */
-    ulint zip_size)          /*!< in: compressed page size, or 0 */
+    ulint sec_len)           /*!< in: length of sec_field */
 {
   ulint len;
   byte buf[DICT_MAX_INDEX_COL_LEN];
 
-  len = btr_copy_externally_stored_field_prefix(buf, sizeof buf, zip_size,
-                                                clust_field, clust_len);
+  len = btr_copy_externally_stored_field_prefix(buf, sizeof buf, clust_field, clust_len);
 
   if (unlikely(len == 0)) {
     /* The BLOB was being deleted as the server crashed.
@@ -198,8 +196,7 @@ static bool row_sel_sec_rec_is_for_clust_rec(
       if (rec_offs_nth_extern(clust_offs, clust_pos) && len < sec_len) {
         if (!row_sel_sec_rec_is_for_blob(
                 col->mtype, col->prtype, col->mbminlen, col->mbmaxlen,
-                clust_field, clust_len, sec_field, sec_len,
-                dict_table_zip_size(clust_index->table))) {
+                clust_field, clust_len, sec_field, sec_len)) {
           goto inequal;
         }
 
@@ -372,7 +369,7 @@ static void row_sel_fetch_columns(
         heap = mem_heap_create(1);
 
         data = btr_rec_copy_externally_stored_field(
-            rec, offsets, dict_table_zip_size(index->table), field_no, &len,
+            rec, offsets, field_no, &len,
             heap);
 
         ut_a(len != UNIV_SQL_NULL);

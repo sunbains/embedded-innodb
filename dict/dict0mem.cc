@@ -23,41 +23,19 @@ Created 1/8/1996 Heikki Tuuri
 
 #include "dict0mem.h"
 
-#ifdef UNIV_NONINL
-#include "dict0mem.ic"
-#endif
-
-#include "data0type.h"
 #include "dict0dict.h"
-#include "mach0data.h"
-#include "rem0rec.h"
-#include "lock0lock.h"
+#include "lock0types.h"
 
-#define DICT_HEAP_SIZE                                                         \
-  100 /*!< initial memory heap size when                                       \
-      creating a table or index object */
-
-/** Creates a table memory object.
-@return	own: table object */
+/** initial memory heap size when creating a table or index object */
+constexpr ulint DICT_HEAP_SIZE=  100;
 
 dict_table_t *
-dict_mem_table_create(const char *name, /*!< in: table name */
-                      ulint space,  /*!< in: space where the clustered index of
-                                    the table is placed; this parameter is
-                                    ignored if the table is made a member of
-                                    a cluster */
-                      ulint n_cols, /*!< in: number of columns */
-                      ulint flags)  /*!< in: table flags */
-{
-  dict_table_t *table;
-  mem_heap_t *heap;
-
-  ut_ad(name);
+dict_mem_table_create(const char *name, ulint space, ulint n_cols, ulint flags) {
+  ut_ad(name != nullptr);
   ut_a(!(flags & (~0UL << DICT_TF2_BITS)));
 
-  heap = mem_heap_create(DICT_HEAP_SIZE);
-
-  table = (dict_table_t *)mem_heap_zalloc(heap, sizeof(dict_table_t));
+  auto heap = mem_heap_create(DICT_HEAP_SIZE);
+  auto table = (dict_table_t *)mem_heap_zalloc(heap, sizeof(dict_table_t));
 
   table->heap = heap;
 
@@ -70,13 +48,10 @@ dict_mem_table_create(const char *name, /*!< in: table name */
                                                        sizeof(dict_col_t));
 
   ut_d(table->magic_n = DICT_TABLE_MAGIC_N);
-  return (table);
+  return table;
 }
 
-/** Free a table memory object. */
-
-void dict_mem_table_free(dict_table_t *table) /*!< in: table */
-{
+void dict_mem_table_free(dict_table_t *table) {
   ut_ad(table);
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
   ut_d(table->cached = false);
@@ -85,27 +60,22 @@ void dict_mem_table_free(dict_table_t *table) /*!< in: table */
 }
 
 /** Append 'name' to 'col_names'.  @see dict_table_t::col_names
+@param[in] col_names            Existing column names or nullptr
+@param[in] cols                 Number of existing columns
+@param[in] name                 New column name
+@param[in,out] heap             Heap for allocation.
 @return	new column names array */
 static const char *
-dict_add_col_name(const char *col_names, /*!< in: existing column names, or
-                                         NULL */
-                  ulint cols,            /*!< in: number of existing columns */
-                  const char *name,      /*!< in: new column name */
-                  mem_heap_t *heap)      /*!< in: heap */
-{
-  ulint old_len;
-  ulint new_len;
-  ulint total_len;
-  char *res;
-
+dict_add_col_name(const char *col_names, ulint cols, const char *name, mem_heap_t *heap) {
   ut_ad(!cols == !col_names);
 
-  /* Find out length of existing array. */
-  if (col_names) {
-    const char *s = col_names;
-    ulint i;
+  ulint old_len;
 
-    for (i = 0; i < cols; i++) {
+  /* Find out length of existing array. */
+  if (col_names != nullptr) {
+    auto s = col_names;
+
+    for (ulint i = 0; i < cols; i++) {
       s += strlen(s) + 1;
     }
 
@@ -114,55 +84,39 @@ dict_add_col_name(const char *col_names, /*!< in: existing column names, or
     old_len = 0;
   }
 
-  new_len = strlen(name) + 1;
-  total_len = old_len + new_len;
-
-  res = (char *)mem_heap_alloc(heap, total_len);
+  auto new_len = strlen(name) + 1;
+  auto total_len = old_len + new_len;
+  auto ptr = (char *)mem_heap_alloc(heap, total_len);
 
   if (old_len > 0) {
-    memcpy(res, col_names, old_len);
+    memcpy(ptr, col_names, old_len);
   }
 
-  memcpy(res + old_len, name, new_len);
+  memcpy(ptr + old_len, name, new_len);
 
-  return (res);
+  return ptr;
 }
 
-/** Adds a column definition to a table. */
-
-void dict_mem_table_add_col(
-    dict_table_t *table, /*!< in: table */
-    mem_heap_t *heap,    /*!< in: temporary memory heap, or NULL */
-    const char *name,    /*!< in: column name, or NULL */
-    ulint mtype,         /*!< in: main datatype */
-    ulint prtype,        /*!< in: precise type */
-    ulint len)           /*!< in: precision */
-{
-  dict_col_t *col;
-  ulint mbminlen;
-  ulint mbmaxlen;
-  ulint i;
-
-  ut_ad(table);
+void dict_mem_table_add_col( dict_table_t *table, mem_heap_t *heap, const char *name, ulint mtype, ulint prtype, ulint len) {
+  ut_ad(table != nullptr);
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
   ut_ad(!heap == !name);
 
-  i = table->n_def++;
+  auto i = table->n_def++;
 
-  if (name) {
-    if (unlikely(table->n_def == table->n_cols)) {
+  if (name != nullptr) {
+    if (table->n_def == table->n_cols) {
       heap = table->heap;
     }
-    if (likely(i) && unlikely(!table->col_names)) {
+    if (i > 0 && !table->col_names) {
       /* All preceding column names are empty. */
-      auto s = (char *)mem_heap_zalloc(heap, table->n_def);
-      table->col_names = s;
+      table->col_names = (char *)mem_heap_zalloc(heap, table->n_def);
     }
 
     table->col_names = dict_add_col_name(table->col_names, i, name, heap);
   }
 
-  col = dict_table_get_nth_col(table, i);
+  auto col = dict_table_get_nth_col(table, i);
 
   col->ind = (unsigned int)i;
   col->ord_part = 0;
@@ -171,26 +125,18 @@ void dict_mem_table_add_col(
   col->prtype = (unsigned int)prtype;
   col->len = (unsigned int)len;
 
+  ulint mbminlen;
+  ulint mbmaxlen;
+
   dtype_get_mblen(mtype, prtype, &mbminlen, &mbmaxlen);
 
   col->mbminlen = (unsigned int)mbminlen;
   col->mbmaxlen = (unsigned int)mbmaxlen;
 }
 
-/** Creates an index memory object.
-@return	own: index object */
-
-dict_index_t *
-dict_mem_index_create(const char *table_name, /*!< in: table name */
-                      const char *index_name, /*!< in: index name */
-                      ulint space,    /*!< in: space where the index tree is
-                                      placed, ignored if the index is of
-                                      the clustered type */
-                      ulint type,     /*!< in: DICT_UNIQUE,
-                                      DICT_CLUSTERED, ... ORed */
-                      ulint n_fields) /*!< in: number of fields */
-{
-  ut_ad(table_name && index_name);
+dict_index_t * dict_mem_index_create(const char *table_name, const char *index_name, ulint space, ulint type, ulint n_fields) {
+  ut_ad(table_name != nullptr);
+  ut_ad(index_name != nullptr);
 
   auto heap = mem_heap_create(DICT_HEAP_SIZE);
   auto index = (dict_index_t *)mem_heap_zalloc(heap, sizeof(dict_index_t));
@@ -202,14 +148,16 @@ dict_mem_index_create(const char *table_name, /*!< in: table name */
   index->name = mem_heap_strdup(heap, index_name);
   index->table_name = table_name;
   index->n_fields = (unsigned int)n_fields;
-  index->fields =
-      (dict_field_t *)mem_heap_alloc(heap, 1 + n_fields * sizeof(dict_field_t));
-  /* The '1 +' above prevents allocation
-  of an empty mem block */
+
+  index->fields = (dict_field_t *)mem_heap_alloc(heap, 1 + n_fields * sizeof(dict_field_t));
+
+  /* The '1 +' above prevents allocation of an empty mem block */
+
 #ifdef UNIV_DEBUG
   index->magic_n = DICT_INDEX_MAGIC_N;
 #endif /* UNIV_DEBUG */
-  return (index);
+
+  return index;
 }
 
 dict_foreign_t *dict_mem_foreign_create(void) {
@@ -222,34 +170,20 @@ dict_foreign_t *dict_mem_foreign_create(void) {
   return foreign;
 }
 
-/** Adds a field definition to an index. NOTE: does not take a copy
-of the column name if the field is a column. The memory occupied
-by the column name may be released only after publishing the index. */
-
-void dict_mem_index_add_field(dict_index_t *index, /*!< in: index */
-                              const char *name,    /*!< in: column name */
-                              ulint prefix_len) /*!< in: 0 or the column prefix
-                                                length in a column prefix index
-                                                like INDEX (textcol(25)) */
-{
-  dict_field_t *field;
-
-  ut_ad(index);
+void dict_mem_index_add_field(dict_index_t *index, const char *name, ulint prefix_len) {
+  ut_ad(index != nullptr);
   ut_ad(index->magic_n == DICT_INDEX_MAGIC_N);
 
   index->n_def++;
 
-  field = dict_index_get_nth_field(index, index->n_def - 1);
+  auto field = dict_index_get_nth_field(index, index->n_def - 1);
 
   field->name = name;
   field->prefix_len = (unsigned int)prefix_len;
 }
 
-/** Frees an index memory object. */
-
-void dict_mem_index_free(dict_index_t *index) /*!< in: index */
-{
-  ut_ad(index);
+void dict_mem_index_free(dict_index_t *index) {
+  ut_ad(index != nullptr);
   ut_ad(index->magic_n == DICT_INDEX_MAGIC_N);
 
   mem_heap_free(index->heap);

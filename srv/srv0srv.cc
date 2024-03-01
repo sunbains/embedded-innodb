@@ -63,7 +63,6 @@ Created 10/8/1995 Heikki Tuuri
 #include "api0ucode.h"
 #include "btr0cur.h"
 #include "btr0sea.h"
-#include "buf0buddy.h"
 #include "buf0flu.h"
 #include "buf0lru.h"
 #include "ddl0ddl.h"
@@ -75,7 +74,6 @@ Created 10/8/1995 Heikki Tuuri
 #include "mem0mem.h"
 #include "os0proc.h"
 #include "os0sync.h"
-#include "page0zip.h"
 #include "pars0pars.h"
 #include "que0que.h"
 #include "srv0que.h"
@@ -1101,7 +1099,6 @@ void srv_modules_var_init() {
   que_var_init();
   trx_purge_var_init();
   pars_var_init();
-  page_zip_var_init();
   os_proc_var_init();
   os_file_var_init();
   sync_var_init();
@@ -1114,7 +1111,6 @@ void srv_modules_var_init() {
   dtype_var_init();
   buf_var_init();
   buf_LRU_var_init();
-  buf_buddy_var_init();
   btr_cur_var_init();
   btr_search_var_init();
   ut_mem_var_init();
