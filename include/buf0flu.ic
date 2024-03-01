@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,7 +21,6 @@ The database buffer pool flush algorithm
 Created 11/5/1995 Heikki Tuuri
 *******************************************************/
 
-#ifndef UNIV_HOTBACKUP
 #include "buf0buf.h"
 #include "mtr0mtr.h"
 
@@ -104,4 +103,3 @@ inline void buf_flush_recv_note_modification(
 
   buf_pool_mutex_exit();
 }
-#endif /* !UNIV_HOTBACKUP */

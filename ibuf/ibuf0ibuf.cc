@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -34,8 +34,6 @@ Created 7/19/1997 Heikki Tuuri
 #ifdef UNIV_NONINL
 #include "ibuf0ibuf.ic"
 #endif
-
-#ifndef UNIV_HOTBACKUP
 
 #include "btr0btr.h"
 #include "btr0cur.h"
@@ -488,7 +486,6 @@ void ibuf_init_at_db_start(void) {
 
   ibuf->index = dict_table_get_first_index(table);
 }
-#endif /* !UNIV_HOTBACKUP */
 /** Initializes an ibuf bitmap page. */
 
 void ibuf_bitmap_page_init(buf_block_t *block, /*!< in: bitmap page */
@@ -515,9 +512,7 @@ void ibuf_bitmap_page_init(buf_block_t *block, /*!< in: bitmap page */
 
   /* The remaining area (up to the page trailer) is uninitialized. */
 
-#ifndef UNIV_HOTBACKUP
   mlog_write_initial_log_record(page, MLOG_IBUF_BITMAP_INIT, mtr);
-#endif /* !UNIV_HOTBACKUP */
 }
 
 /** Parses a redo log record of an ibuf bitmap page init.
@@ -537,7 +532,6 @@ byte *ibuf_parse_bitmap_init(byte *ptr, /*!< in: buffer */
 
   return (ptr);
 }
-#ifndef UNIV_HOTBACKUP
 /** Gets the desired bits for a given page from a bitmap page.
 @return	value of bits */
 inline ulint
@@ -3320,4 +3314,3 @@ void ibuf_print(ib_stream_t ib_stream) /*!< in: stream where to print */
 
   mutex_exit(&ibuf_mutex);
 }
-#endif /* !UNIV_HOTBACKUP */

@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -61,7 +61,6 @@ mlog_close(mtr_t *mtr, /*!< in: mtr */
   dyn_array_close(mlog, ptr);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Catenates 1 - 4 bytes to the mtr log. The value is not compressed. */
 inline void
 mlog_catenate_ulint(mtr_t *mtr, /*!< in: mtr */
@@ -239,4 +238,3 @@ inline byte *mlog_write_initial_log_record_for_file_op(
 
   return (log_ptr);
 }
-#endif /* !UNIV_HOTBACKUP */

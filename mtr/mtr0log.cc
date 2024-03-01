@@ -32,7 +32,6 @@ Created 12/7/1995 Heikki Tuuri
 #include "log0recv.h"
 #include "page0page.h"
 
-#ifndef UNIV_HOTBACKUP
 #include "dict0boot.h"
 
 /** Catenates n bytes to the mtr log. */
@@ -81,7 +80,6 @@ void mlog_write_initial_log_record(
 
   mlog_close(mtr, log_ptr);
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Parses an initial log record written by mlog_write_initial_log_record.
 @return	parsed record end, nullptr if not a complete record */
@@ -291,7 +289,6 @@ void mlog_write_dulint(byte *ptr,  /*!< in: pointer where to write */
   mlog_close(mtr, log_ptr);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Writes a string to a file page buffered in the buffer pool. Writes the
 corresponding log record to the mini-transaction log. */
 
@@ -340,7 +337,6 @@ void mlog_log_string(byte *ptr,  /*!< in: pointer written to */
 
   mlog_catenate_string(mtr, ptr, len);
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Parses a log record written by mlog_write_string.
 @return	parsed record end, nullptr if not a complete record */
@@ -384,7 +380,6 @@ byte *mlog_parse_string(
   return (ptr + len);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Opens a buffer for mlog, writes the initial log record and,
 if needed, the field lengths of an index.
 @return	buffer, nullptr if log mode MTR_LOG_NONE */
@@ -474,7 +469,6 @@ byte *mlog_open_and_write_index(
   }
   return (log_ptr);
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Parses a log record written by mlog_open_and_write_index.
 @return	parsed record end, nullptr if not a complete record */

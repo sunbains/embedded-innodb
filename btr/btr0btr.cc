@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -30,7 +30,6 @@ Created 6/2/1994 Heikki Tuuri
 #include "fsp0fsp.h"
 #include "page0page.h"
 
-#ifndef UNIV_HOTBACKUP
 #include "btr0cur.h"
 #include "btr0pcur.h"
 #include "btr0sea.h"
@@ -822,7 +821,6 @@ void btr_free_root(ulint space,        /*!< in: space where created */
   while (!fseg_free_step(header, mtr))
     ;
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Reorganizes an index page. */
 static bool
@@ -851,34 +849,25 @@ btr_page_reorganize_low(bool recovery,      /*!< in: true if called in recovery:
   data_size1 = page_get_data_size(page);
   max_ins_size1 = page_get_max_insert_size_after_reorganize(page, 1);
 
-#ifndef UNIV_HOTBACKUP
   /* Write the log record */
   mlog_open_and_write_index(
       mtr, page, dict_index,
       page_is_comp(page) ? MLOG_COMP_PAGE_REORGANIZE : MLOG_PAGE_REORGANIZE, 0);
-#endif /* !UNIV_HOTBACKUP */
 
   /* Turn logging off */
   log_mode = mtr_set_log_mode(mtr, MTR_LOG_NONE);
 
-#ifndef UNIV_HOTBACKUP
   temp_block = buf_block_alloc(0);
-#else  /* !UNIV_HOTBACKUP */
-  ut_ad(block == back_block1);
-  temp_block = back_block2;
-#endif /* !UNIV_HOTBACKUP */
   temp_page = temp_block->frame;
 
   /* Copy the old page to temporary space */
   buf_frame_copy(temp_page, page);
 
-#ifndef UNIV_HOTBACKUP
   if (likely(!recovery)) {
     btr_search_drop_page_hash_index(block);
   }
 
   block->check_index_page_at_flush = true;
-#endif /* !UNIV_HOTBACKUP */
 
   /* Recreate the page: note that global data on page (possible
   segment headers, next page-field, etc.) is preserved intact */
@@ -929,12 +918,10 @@ btr_page_reorganize_low(bool recovery,      /*!< in: true if called in recovery:
     goto func_exit;
   }
 
-#ifndef UNIV_HOTBACKUP
   if (likely(!recovery)) {
     /* Update the record lock bitmaps */
     lock_move_reorganize_page(block, temp_block);
   }
-#endif /* !UNIV_HOTBACKUP */
 
   data_size2 = page_get_data_size(page);
   max_ins_size2 = page_get_max_insert_size_after_reorganize(page, 1);
@@ -957,9 +944,7 @@ btr_page_reorganize_low(bool recovery,      /*!< in: true if called in recovery:
   }
 
 func_exit:
-#ifndef UNIV_HOTBACKUP
   buf_block_free(temp_block);
-#endif /* !UNIV_HOTBACKUP */
 
   /* Restore logging mode */
   mtr_set_log_mode(mtr, log_mode);
@@ -967,7 +952,6 @@ func_exit:
   return (success);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Reorganizes an index page.
 IMPORTANT: if btr_page_reorganize() is invoked on a compressed leaf
 page of a non-clustered index, the caller must update the insert
@@ -981,7 +965,6 @@ bool btr_page_reorganize(buf_block_t *block, /*!< in: page to be reorganized */
 {
   return (btr_page_reorganize_low(false, block, dict_index, mtr));
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Parses a redo log record of reorganizing a page.
 @return	end of log record or NULL */
@@ -1005,7 +988,6 @@ byte *btr_parse_page_reorganize(
   return (ptr);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Empties an index page.  @see btr_page_create(). */
 static void
 btr_page_empty(buf_block_t *block,       /*!< in: page to be emptied */
@@ -2064,9 +2046,6 @@ inline void btr_set_min_rec_mark_log(
   /* Write rec offset as a 2-byte ulint */
   mlog_catenate_ulint(mtr, page_offset(rec), MLOG_2BYTES);
 }
-#else /* !UNIV_HOTBACKUP */
-#define btr_set_min_rec_mark_log(rec, comp, mtr) ((void)0)
-#endif /* !UNIV_HOTBACKUP */
 
 /** Parses the redo log record for setting an index record as the predefined
 minimum record.
@@ -2119,7 +2098,6 @@ void btr_set_min_rec_mark(rec_t *rec, /*!< in: record */
   }
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Deletes on the upper level the node pointer to a page. */
 
 void btr_node_ptr_delete(
@@ -3344,4 +3322,3 @@ bool btr_validate_index(dict_index_t *dict_index, /*!< in: index */
 
   return (true);
 }
-#endif /* !UNIV_HOTBACKUP */

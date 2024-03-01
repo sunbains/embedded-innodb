@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 
@@ -499,13 +499,11 @@ spin_loop:
   if (i == SYNC_SPIN_ROUNDS) {
 #ifdef UNIV_DEBUG
     mutex->count_os_yield++;
-#ifndef UNIV_HOTBACKUP
     if (timed_mutexes && timer_started == 0) {
       ut_usectime(&sec, &ms);
       lstart_time = (int64_t)sec * 1000000 + ms;
       timer_started = 1;
     }
-#endif /* UNIV_HOTBACKUP */
 #endif /* UNIV_DEBUG */
     os_thread_yield();
   }
@@ -600,13 +598,11 @@ spin_loop:
   mutex->count_os_wait++;
 #ifdef UNIV_DEBUG
   /* !!!!! Sometimes os_wait can be called without os_thread_yield */
-#ifndef UNIV_HOTBACKUP
   if (timed_mutexes == 1 && timer_started == 0) {
     ut_usectime(&sec, &ms);
     lstart_time = (int64_t)sec * 1000000 + ms;
     timer_started = 1;
   }
-#endif /* UNIV_HOTBACKUP */
 #endif /* UNIV_DEBUG */
 
   sync_array_wait_event(sync_primary_wait_array, index);

@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 
@@ -37,13 +37,11 @@ Created 11/5/1995 Heikki Tuuri
 #include "btr0btr.h"
 #include "fil0fil.h"
 #include "mem0mem.h"
-#ifndef UNIV_HOTBACKUP
 #include "btr0sea.h"
 #include "ibuf0ibuf.h"
 #include "lock0lock.h"
 #include "log0log.h"
 #include "trx0undo.h"
-#endif /* !UNIV_HOTBACKUP */
 #include "buf0buddy.h"
 #include "dict0dict.h"
 #include "log0recv.h"
@@ -237,7 +235,6 @@ that the whole area may be needed in the near future, and issue
 the read requests for the whole area.
 */
 
-#ifndef UNIV_HOTBACKUP
 /** Value in microseconds */
 static const int WAIT_FOR_READ = 5000;
 /** Number of attemtps made to read in a page in the buffer pool */
@@ -275,7 +272,6 @@ struct buf_chunk_struct {
                        was allocated for the frames */
   buf_block_t *blocks; /*!< array of buffer control blocks */
 };
-#endif /* !UNIV_HOTBACKUP */
 
 /** Reset the buffer variables. */
 
@@ -360,7 +356,6 @@ bool buf_page_is_corrupted(const byte *read_buf, /*!< in: a database page */
     return (true);
   }
 
-#ifndef UNIV_HOTBACKUP
   if (recv_lsn_checks_on) {
     uint64_t current_lsn;
 
@@ -384,7 +379,6 @@ bool buf_page_is_corrupted(const byte *read_buf, /*!< in: a database page */
                 (long long unsigned int)current_lsn);
     }
   }
-#endif
 
   /* If we use checksums validation, make additional check before
   returning true to ensure that the checksum is not equal to
@@ -436,9 +430,7 @@ void buf_page_print(const byte *read_buf, /*!< in: a database page */
                     ulint zip_size)       /*!< in: compressed page size, or
                                   0 for uncompressed pages */
 {
-#ifndef UNIV_HOTBACKUP
   dict_index_t *index;
-#endif /* !UNIV_HOTBACKUP */
   ulint checksum;
   ulint old_checksum;
   ulint size = zip_size;
@@ -540,7 +532,6 @@ void buf_page_print(const byte *read_buf, /*!< in: a database page */
       (ulong)mach_read_from_4(read_buf + FIL_PAGE_OFFSET),
       (ulong)mach_read_from_4(read_buf + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID));
 
-#ifndef UNIV_HOTBACKUP
   if (mach_read_from_2(read_buf + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
       TRX_UNDO_INSERT) {
     ib_logger(ib_stream, "InnoDB: Page may be an insert undo log page\n");
@@ -548,7 +539,6 @@ void buf_page_print(const byte *read_buf, /*!< in: a database page */
                               TRX_UNDO_PAGE_TYPE) == TRX_UNDO_UPDATE) {
     ib_logger(ib_stream, "InnoDB: Page may be an update undo log page\n");
   }
-#endif /* !UNIV_HOTBACKUP */
 
   switch (fil_page_get_type(read_buf)) {
   case FIL_PAGE_INDEX:
@@ -557,14 +547,12 @@ void buf_page_print(const byte *read_buf, /*!< in: a database page */
               " index id is %lu %lu\n",
               (ulong)ut_dulint_get_high(btr_page_get_index_id(read_buf)),
               (ulong)ut_dulint_get_low(btr_page_get_index_id(read_buf)));
-#ifndef UNIV_HOTBACKUP
     index = dict_index_find_on_id_low(btr_page_get_index_id(read_buf));
     if (index) {
       ib_logger(ib_stream, "InnoDB: (");
       dict_index_name_print(ib_stream, NULL, index);
       ib_logger(ib_stream, ")\n");
     }
-#endif /* !UNIV_HOTBACKUP */
     break;
   case FIL_PAGE_INODE:
     ib_logger(ib_stream, "InnoDB: Page may be an 'inode' page\n");
@@ -601,7 +589,6 @@ void buf_page_print(const byte *read_buf, /*!< in: a database page */
   }
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Initializes a buffer control block when the buf_pool is created. */
 static void
 buf_block_init(buf_block_t *block, /*!< in: pointer to control block */
@@ -1726,7 +1713,6 @@ inline void buf_block_init_low(buf_block_t *block) /*!< in: block to init */
   block->n_bytes = 0;
   block->left_side = true;
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Decompress a block.
 @return	true if successful */
@@ -1785,7 +1771,6 @@ bool buf_zip_decompress(buf_block_t *block, /*!< in/out: block */
   return (false);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Gets the block to whose frame the pointer is pointing to.
 @return	pointer to block, never NULL */
 
@@ -3796,30 +3781,3 @@ ulint buf_get_free_list_len(void) {
 
   return (len);
 }
-#else  /* !UNIV_HOTBACKUP */
-/** Inits a page to the buffer buf_pool, for use in ibbackup --restore. */
-
-void buf_page_init_for_backup_restore(
-    ulint space,        /*!< in: space id */
-    ulint offset,       /*!< in: offset of the page within space
-                        in units of a page */
-    ulint zip_size,     /*!< in: compressed page size in bytes
-                       or 0 for uncompressed pages */
-    buf_block_t *block) /*!< in: block to init */
-{
-  block->page.state = BUF_BLOCK_FILE_PAGE;
-  block->page.space = space;
-  block->page.offset = offset;
-
-  page_zip_des_init(&block->page.zip);
-
-  /* We assume that block->page.data has been allocated
-  with zip_size == UNIV_PAGE_SIZE. */
-  ut_ad(zip_size <= UNIV_PAGE_SIZE);
-  ut_ad(ut_is_2pow(zip_size));
-  page_zip_set_size(&block->page.zip, zip_size);
-  if (zip_size) {
-    block->page.zip.data = block->frame + UNIV_PAGE_SIZE;
-  }
-}
-#endif /* !UNIV_HOTBACKUP */

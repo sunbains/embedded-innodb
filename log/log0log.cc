@@ -34,7 +34,6 @@ Created 12/9/1995 Heikki Tuuri
 #include "log0log.ic"
 #endif
 
-#ifndef UNIV_HOTBACKUP
 #include "buf0buf.h"
 #include "buf0flu.h"
 #include "dict0boot.h"
@@ -517,7 +516,6 @@ log_group_calc_lsn_offset(uint64_t lsn, /*!< in: lsn, must be within 4 GB of
 
   return log_group_calc_real_offset((ulint)offset, group);
 }
-#endif /* !UNIV_HOTBACKUP */
 
 #ifdef UNIV_DEBUG
 bool log_debug_writes = false;
@@ -558,7 +556,6 @@ ulint log_calc_where_lsn_is(
   return file_no;
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Sets the field values in group to correspond to a given lsn. For this
 function to work, the values must already be correctly initialized to correspond
 to some lsn, for instance, a checkpoint lsn. */
@@ -1670,9 +1667,7 @@ static void log_group_checkpoint(log_group_t *group) /*!< in: log group */
     ut_ad(((ulint)group & 0x1UL) == 0);
   }
 }
-#endif /* !UNIV_HOTBACKUP */
 
-#ifdef UNIV_HOTBACKUP
 /** Writes info to a buffer of a log group when log files are created in
 backup restoration. */
 
@@ -1719,9 +1714,7 @@ void log_reset_first_header_and_checkpoint(
   allocated size in the tablespace, but unfortunately we do not
   know it here */
 }
-#endif /* UNIV_HOTBACKUP */
 
-#ifndef UNIV_HOTBACKUP
 /** Reads a checkpoint info from a log group header to log_sys->checkpoint_buf.
  */
 
@@ -3128,4 +3121,3 @@ void log_mem_free(void) {
     log_sys = NULL;
   }
 }
-#endif /* !UNIV_HOTBACKUP */

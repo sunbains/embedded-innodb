@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -26,8 +26,6 @@ Created 1/16/1996 Heikki Tuuri
 #ifdef UNIV_NONINL
 #include "data0type.ic"
 #endif
-
-#ifndef UNIV_HOTBACKUP
 
 /* At the database startup we store the default-charset collation number of
 this installation to this global variable. If we have < 4.1.2 format
@@ -78,7 +76,6 @@ ulint dtype_get_at_most_n_mbchars(
 
   return (data_len);
 }
-#endif /* UNIV_HOTBACKUP */
 
 /** Checks if a data main type is a string type. Also a BLOB is considered a
 string type.
@@ -158,14 +155,11 @@ bool dtype_validate(const dtype_t *type) /*!< in: type struct to validate */
     ut_a((type->prtype & DATA_CLIENT_TYPE_MASK) < DATA_N_SYS_COLS);
   }
 
-#ifndef UNIV_HOTBACKUP
   ut_a(type->mbminlen <= type->mbmaxlen);
-#endif /* !UNIV_HOTBACKUP */
 
   return (true);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Prints a data type structure. */
 
 void dtype_print(const dtype_t *type) /*!< in: type */
@@ -264,4 +258,3 @@ void dtype_print(const dtype_t *type) /*!< in: type */
 
   ib_logger(ib_stream, " len %lu", (ulong)len);
 }
-#endif /* !UNIV_HOTBACKUP */

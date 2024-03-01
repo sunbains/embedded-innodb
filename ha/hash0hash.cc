@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -28,7 +28,6 @@ Created 5/20/1997 Heikki Tuuri
 
 #include "mem0mem.h"
 
-#ifndef UNIV_HOTBACKUP
 /** Reserves the mutex for a fold value in a hash table. */
 
 void hash_mutex_enter(hash_table_t *table, /*!< in: hash table */
@@ -68,7 +67,6 @@ void hash_mutex_exit_all(hash_table_t *table) /*!< in: hash table */
     mutex_exit(table->mutexes + i);
   }
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Creates a hash table with >= n array cells. The actual number of cells is
 chosen to be a prime number slightly bigger than n.
@@ -82,14 +80,12 @@ hash_table_t *hash_create(ulint n) /*!< in: number of array cells */
 
   table->array = array;
   table->n_cells = prime;
-#ifndef UNIV_HOTBACKUP
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
   table->adaptive = false;
 #endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
   table->n_mutexes = 0;
   table->mutexes = NULL;
   table->heaps = NULL;
-#endif /* !UNIV_HOTBACKUP */
   table->heap = NULL;
   ut_d(table->magic_n = HASH_TABLE_MAGIC_N);
 
@@ -105,15 +101,12 @@ void hash_table_free(hash_table_t *table) /*!< in, own: hash table */
 {
   ut_ad(table);
   ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
-#ifndef UNIV_HOTBACKUP
   ut_a(table->mutexes == NULL);
-#endif /* !UNIV_HOTBACKUP */
 
   ut_free(table->array);
   mem_free(table);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Creates a mutex array to protect a hash table. */
 
 void hash_create_mutexes_func(
@@ -156,4 +149,3 @@ void hash_free_mutexes_func(hash_table_t *table) /*!< in,own: hash table */
 
   mem_free(table->mutexes);
 }
-#endif /* !UNIV_HOTBACKUP */

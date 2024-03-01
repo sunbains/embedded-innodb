@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -422,7 +422,6 @@ inline dulint mach_dulint_read_much_compressed(
 
   return (ut_dulint_create(high, low));
 }
-#ifndef UNIV_HOTBACKUP
 /** Reads a double. It is stored in a little-endian format.
 @return	double read */
 inline double
@@ -748,4 +747,3 @@ inline void mach_write_int32(byte *dest, /*!< out: where to write */
   mach_write_int_type(dest, (const byte *)&n, sizeof(n), false);
 }
 
-#endif /* !UNIV_HOTBACKUP */

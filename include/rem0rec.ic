@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -1257,7 +1257,6 @@ inline ulint rec_get_converted_size(
   return (data_size + extra_size);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Folds a prefix of a physical record to a ulint. Folds only existing fields,
 that is, checks that we do not run out of the record.
 @return	the folded value */
@@ -1316,4 +1315,3 @@ inline ulint rec_fold(const rec_t *rec,     /*!< in: the physical record */
 
   return (fold);
 }
-#endif /* !UNIV_HOTBACKUP */

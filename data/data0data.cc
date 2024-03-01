@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -27,7 +27,6 @@ Created 5/30/1994 Heikki Tuuri
 #include "data0data.ic"
 #endif
 
-#ifndef UNIV_HOTBACKUP
 #include "btr0cur.h"
 #include "dict0dict.h"
 #include "page0page.h"
@@ -36,7 +35,6 @@ Created 5/30/1994 Heikki Tuuri
 #include "rem0rec.h"
 
 #include <ctype.h>
-#endif /* !UNIV_HOTBACKUP */
 
 #ifdef UNIV_DEBUG
 /** Dummy variable to catch access to uninitialized fields.  In the
@@ -50,7 +48,6 @@ ulint data_dummy;
 #endif /* !UNIV_DEBUG_VALGRIND */
 #endif /* UNIV_DEBUG */
 
-#ifndef UNIV_HOTBACKUP
 /** Reset dfield variables. */
 
 void dfield_var_init(void) {
@@ -186,7 +183,6 @@ bool dtuple_check_typed_no_assert(const dtuple_t *tuple) /*!< in: tuple */
 
   return (true);
 }
-#endif /* !UNIV_HOTBACKUP */
 
 #ifdef UNIV_DEBUG
 /** Checks that a data field is typed. Asserts an error if not.
@@ -268,7 +264,6 @@ bool dtuple_validate(const dtuple_t *tuple) /*!< in: tuple */
 }
 #endif /* UNIV_DEBUG */
 
-#ifndef UNIV_HOTBACKUP
 /** Pretty prints a dfield value according to its data type. */
 
 void dfield_print(const dfield_t *dfield) /*!< in: dfield */
@@ -705,4 +700,3 @@ void dtuple_convert_back_big_rec(
 
   mem_heap_free(vector->heap);
 }
-#endif /* !UNIV_HOTBACKUP */

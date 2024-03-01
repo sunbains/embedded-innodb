@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,10 +21,8 @@ Mini-transaction buffer
 Created 11/26/1995 Heikki Tuuri
 *******************************************************/
 
-#ifndef UNIV_HOTBACKUP
 #include "sync0rw.h"
 #include "sync0sync.h"
-#endif /* !UNIV_HOTBACKUP */
 #include "mach0data.h"
 
 /** Starts a mini-transaction and creates a mini-transaction handle
@@ -84,7 +82,6 @@ inline ulint mtr_set_savepoint(mtr_t *mtr) /*!< in: mtr */
   return (dyn_array_get_data_size(memo));
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Releases the (index tree) s-latch stored in an mtr memo after a
 savepoint. */
 inline void
@@ -141,7 +138,6 @@ inline bool mtr_memo_contains(mtr_t *mtr,         /*!< in: mtr */
   return (false);
 }
 #endif /* UNIV_DEBUG */
-#endif /* !UNIV_HOTBACKUP */
 
 /** Gets the logging mode of a mini-transaction.
 @return	logging mode: MTR_LOG_NONE, ... */
@@ -180,7 +176,6 @@ mtr_set_log_mode(mtr_t *mtr, /*!< in: mtr */
   return (old_mode);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Locks a lock in s-mode. */
 inline void mtr_s_lock_func(rw_lock_t *lock,  /*!< in: rw-lock */
                             const char *file, /*!< in: file name */
@@ -208,4 +203,3 @@ inline void mtr_x_lock_func(rw_lock_t *lock,  /*!< in: rw-lock */
 
   mtr_memo_push(mtr, lock, MTR_MEMO_X_LOCK);
 }
-#endif /* !UNIV_HOTBACKUP */

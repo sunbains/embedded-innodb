@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -25,9 +25,7 @@ Created 2/2/1994 Heikki Tuuri
 #ifdef UNIV_DEBUG
 #include "log0recv.h"
 #endif /* !UNIV_DEBUG */
-#ifndef UNIV_HOTBACKUP
 #include "rem0cmp.h"
-#endif /* !UNIV_HOTBACKUP */
 #include "mtr0log.h"
 #ifdef WITH_ZIP
 #include "page0zip.h"
@@ -159,7 +157,6 @@ inline void page_header_set_ptr(
   page_header_set_field(page, page_zip, field, offs);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Resets the last insert info field in the page header. Writes to mlog
 about this operation. */
 inline void page_header_reset_last_insert(
@@ -183,7 +180,6 @@ inline void page_header_reset_last_insert(
   }
 #endif /* WITH_ZIP */
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Determine whether the page is in new-style compact format.
 @return nonzero if the page is in compact format, zero if it is in
@@ -326,7 +322,6 @@ inline bool page_rec_is_infimum(const rec_t *rec) /*!< in: record */
   return (page_rec_is_infimum_low(page_offset(rec)));
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Compares a data tuple to a physical record. Differs from the function
 cmp_dtuple_rec_with_match in the way that the record must reside on an
 index page, and also page infimum and supremum records can be given in
@@ -370,7 +365,6 @@ inline int page_cmp_dtuple_rec_with_match(
   return (cmp_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets,
                                     matched_fields, matched_bytes));
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Gets the page number.
 @return	page number */

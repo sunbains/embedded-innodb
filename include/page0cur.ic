@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -141,7 +141,6 @@ inline void page_cur_move_to_prev(
   cur->rec = page_rec_get_prev(cur->rec);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Searches the right position for a page cursor.
 @return	number of matched fields on the left */
 inline ulint
@@ -203,7 +202,6 @@ inline rec_t *page_cur_tuple_insert(
   mem_heap_free(heap);
   return (rec);
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Inserts a record next to page cursor. Returns pointer to inserted record if
 succeed, i.e., enough space available, NULL otherwise. The cursor stays at

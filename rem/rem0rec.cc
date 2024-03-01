@@ -1534,7 +1534,6 @@ void rec_print_old(ib_stream_t ib_stream, /*!< in: stream where to print */
   rec_validate_old(rec);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Prints a physical record in ROW_FORMAT=COMPACT.  Ignores the
 record header. */
 
@@ -1619,4 +1618,3 @@ void rec_print(ib_stream_t ib_stream, /*!< in: stream where to print */
     }
   }
 }
-#endif /* !UNIV_HOTBACKUP */

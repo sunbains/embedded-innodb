@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -33,9 +33,6 @@ Created 11/29/1995 Heikki Tuuri
 #include "page0page.h"
 #include "page0zip.h"
 #include "ut0byte.h"
-#ifdef UNIV_HOTBACKUP
-#include "fut0lst.h"
-#else /* UNIV_HOTBACKUP */
 #include "btr0btr.h"
 #include "btr0sea.h"
 #include "dict0boot.h"
@@ -44,7 +41,6 @@ Created 11/29/1995 Heikki Tuuri
 #include "log0log.h"
 #include "srv0srv.h"
 #include "sync0sync.h"
-#endif /* UNIV_HOTBACKUP */
 #include "dict0mem.h"
 
 #define FSP_HEADER_OFFSET                                                      \
@@ -242,7 +238,6 @@ in the extent */
 /* Offset of the descriptor array on a descriptor page */
 #define XDES_ARR_OFFSET (FSP_HEADER_OFFSET + FSP_HEADER_SIZE)
 
-#ifndef UNIV_HOTBACKUP
 /* Flag to indicate if we have printed the tablespace full error. */
 static bool fsp_tbs_full_error_printed = false;
 
@@ -315,7 +310,6 @@ static ulint fseg_alloc_free_page_low(
                           direction they go alphabetically: FSP_DOWN,
                           FSP_UP, FSP_NO_DIR */
     mtr_t *mtr);             /*!< in: mtr handle */
-#endif                       /* !UNIV_HOTBACKUP */
 
 /** Reads the file space size stored in the header page.
 @return	tablespace size stored in the space header */
@@ -326,7 +320,6 @@ ulint fsp_get_size_low(
   return (mach_read_from_4(page + FSP_HEADER_OFFSET + FSP_SIZE));
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Gets a pointer to the space header and x-locks its page.
 @return	pointer to the space header, page x-locked */
 inline fsp_header_t *
@@ -701,7 +694,6 @@ inline ulint xdes_get_offset(xdes_t *descr) /*!< in: extent descriptor */
           ((page_offset(descr) - XDES_ARR_OFFSET) / XDES_SIZE) *
               FSP_EXTENT_SIZE);
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Inits a file page whose prior contents should be ignored. */
 static void
@@ -710,9 +702,7 @@ fsp_init_file_page_low(buf_block_t *block) /*!< in: pointer to a page */
   page_t *page = buf_block_get_frame(block);
   page_zip_des_t *page_zip = buf_block_get_page_zip(block);
 
-#ifndef UNIV_HOTBACKUP
   block->check_index_page_at_flush = false;
-#endif /* !UNIV_HOTBACKUP */
 
   if (likely_null(page_zip)) {
     memset(page, 0, UNIV_PAGE_SIZE);
@@ -734,7 +724,6 @@ fsp_init_file_page_low(buf_block_t *block) /*!< in: pointer to a page */
   memset(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM, 0, 8);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Inits a file page whose prior contents should be ignored. */
 static void fsp_init_file_page(buf_block_t *block, /*!< in: pointer to a page */
                                mtr_t *mtr)         /*!< in: mtr */
@@ -744,7 +733,6 @@ static void fsp_init_file_page(buf_block_t *block, /*!< in: pointer to a page */
   mlog_write_initial_log_record(buf_block_get_frame(block), MLOG_INIT_FILE_PAGE,
                                 mtr);
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Parses a redo log record of a file page init.
 @return	end of log record or NULL */
@@ -788,7 +776,6 @@ void fsp_header_init_fields(
   mach_write_to_4(FSP_HEADER_OFFSET + FSP_SPACE_FLAGS + page, flags);
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Initializes the space header of a new created space and creates also the
 insert buffer tree root if space == 0. */
 
@@ -844,7 +831,6 @@ void fsp_header_init(ulint space, /*!< in: space id */
     fsp_fill_free_list(true, space, header, mtr);
   }
 }
-#endif /* !UNIV_HOTBACKUP */
 
 /** Reads the space id from the first page of a tablespace.
 @return	space id, ULINT UNDEFINED if error */
@@ -893,7 +879,6 @@ ulint fsp_header_get_zip_size(
   return (dict_table_flags_to_zip_size(flags));
 }
 
-#ifndef UNIV_HOTBACKUP
 /** Increases the space size field of a space. */
 
 void fsp_header_inc_size(ulint space,    /*!< in: space id */
@@ -3800,4 +3785,3 @@ void fsp_print(ulint space) /*!< in: space id */
 
   ib_logger(ib_stream, "NUMBER of file segments: %lu\n", (ulong)n_segs);
 }
-#endif /* !UNIV_HOTBACKUP */

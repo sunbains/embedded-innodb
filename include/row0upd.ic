@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -22,12 +22,10 @@ Created 12/27/1996 Heikki Tuuri
 *******************************************************/
 
 #include "mtr0log.h"
-#ifndef UNIV_HOTBACKUP
 #include "btr0sea.h"
 #include "row0row.h"
 #include "trx0trx.h"
 #include "trx0undo.h"
-#endif /* !UNIV_HOTBACKUP */
 #ifdef WITH_ZIP
 #include "page0zip.h"
 #endif /* WITH_ZIP */
@@ -73,7 +71,6 @@ upd_get_nth_field(const upd_t *update, /*!< in: update vector */
 }
 #endif /* UNIV_DEBUG */
 
-#ifndef UNIV_HOTBACKUP
 /** Sets an index field number to be updated by an update vector field. */
 inline void
 upd_field_set_field_no(upd_field_t *upd_field, /*!< in: update vector field */
@@ -161,4 +158,3 @@ inline void row_upd_rec_sys_fields(
   }
 #endif /* WITH_ZIP */
 }
-#endif /* !UNIV_HOTBACKUP */
