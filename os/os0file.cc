@@ -1,4 +1,4 @@
-/**
+/**********************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2009, Percona Inc.
 
@@ -585,11 +585,11 @@ next_file:
   info->size = (off_t)statinfo.st_size;
 
   if (S_ISDIR(statinfo.st_mode)) {
-    info->type = OS_FILE_TYPE_DIR;
+    info->type = DIRECTORY;
   } else if (S_ISLNK(statinfo.st_mode)) {
-    info->type = OS_FILE_TYPE_LINK;
+    info->type = SYM_LINK;
   } else if (S_ISREG(statinfo.st_mode)) {
-    info->type = OS_FILE_TYPE_FILE;
+    info->type = REGULAR_FILE;
   } else {
     info->type = OS_FILE_TYPE_UNKNOWN;
   }
@@ -1014,11 +1014,13 @@ bool os_file_flush(os_file_t file) {
   engineer. */
 
   if (!srv_have_fullfsync) {
+
     /* If we are not on an operating system that supports this,
     then fall back to a plain fsync. */
-
     ret = os_file_fsync(file);
+
   } else {
+
     ret = fcntl(file, F_FULLFSYNC, nullptr);
 
     if (ret) {
@@ -1287,11 +1289,11 @@ bool os_file_status(const char *path, bool *exists, os_file_type_t *type) {
   }
 
   if (S_ISDIR(statinfo.st_mode)) {
-    *type = OS_FILE_TYPE_DIR;
+    *type = DIRECTORY;
   } else if (S_ISLNK(statinfo.st_mode)) {
-    *type = OS_FILE_TYPE_LINK;
+    *type = SYM_LINK;
   } else if (S_ISREG(statinfo.st_mode)) {
-    *type = OS_FILE_TYPE_FILE;
+    *type = REGULAR_FILE;
   } else {
     *type = OS_FILE_TYPE_UNKNOWN;
   }
@@ -1320,11 +1322,11 @@ bool os_file_get_status(const char *path, os_file_stat_t *stat_info) {
   }
 
   if (S_ISDIR(statinfo.st_mode)) {
-    stat_info->type = OS_FILE_TYPE_DIR;
+    stat_info->type = DIRECTORY;
   } else if (S_ISLNK(statinfo.st_mode)) {
-    stat_info->type = OS_FILE_TYPE_LINK;
+    stat_info->type = SYM_LINK;
   } else if (S_ISREG(statinfo.st_mode)) {
-    stat_info->type = OS_FILE_TYPE_FILE;
+    stat_info->type = REGULAR_FILE;
   } else {
     stat_info->type = OS_FILE_TYPE_UNKNOWN;
   }

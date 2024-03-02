@@ -1569,9 +1569,8 @@ static void log_group_checkpoint(log_group_t *group) /*!< in: log group */
   ulint i;
 
   ut_ad(mutex_own(&(log_sys->mutex)));
-#if LOG_CHECKPOINT_SIZE > OS_FILE_LOG_BLOCK_SIZE
-#error "LOG_CHECKPOINT_SIZE > OS_FILE_LOG_BLOCK_SIZE"
-#endif
+
+  static_assert(LOG_CHECKPOINT_SIZE <= OS_FILE_LOG_BLOCK_SIZE, "error LOG_CHECKPOINT_SIZE > OS_FILE_LOG_BLOCK_SIZE");
 
   buf = group->checkpoint_buf;
 

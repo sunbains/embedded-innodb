@@ -37,82 +37,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 /* If set then we rollback the transaction on DB_LOCK_WAIT_TIMEOUT error. */
 bool ses_rollback_on_timeout = false;
 
-#ifdef __WIN__
-
-#include <io.h>
-
-/* Required for mapping file system errors */
-void __cdecl _dosmaperr(unsigned long);
-
-/* The length was chosen arbitrarily and should be generous. */
-#define WIN_MAX_PATH 512
-
-/** @file api/api0misc.c
-Create a temporary file in Windows.
-@return	file descriptor, or -1 */
-static int
-ib_win_create_tempfile(const char *prefix) /*!< in: temp file prefix */
-{
-  ulint ret;
-  TCHAR path[WIN_MAX_PATH];
-  TCHAR tempname[WIN_MAX_PATH];
-
-  int fh = -1;
-
-  ret = GetTempPath(sizeof(path), path);
-
-  if (ret > sizeof(path) || ret == 0) {
-    _dosmaperr(GetLastError());
-  } else if (!GetTempFileName(path, prefix, 0, tempname)) {
-    _dosmaperr(GetLastError());
-  } else {
-    HANDLE handle;
-
-    /* Create the actual file with the relevant attributes. */
-    handle =
-        CreateFile(tempname, GENERIC_READ | GENERIC_WRITE | DELETE,
-                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
-                   CREATE_ALWAYS,
-                   FILE_ATTRIBUTE_NORMAL | FILE_FLAG_DELETE_ON_CLOSE |
-                       FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_SEQUENTIAL_SCAN,
-                   NULL);
-
-    if (handle == INVALID_HANDLE_VALUE) {
-      _dosmaperr(GetLastError());
-    } else {
-      do {
-        DWORD oserr;
-
-        fh = _open_osfhandle((intptr_t)handle, 0);
-
-        /* We need to map the Windows OS error
-        number (if any) to errno. */
-        oserr = GetLastError();
-        if (oserr) {
-          _dosmaperr(oserr);
-        }
-      } while (fh == -1 && errno == EINTR);
-
-      if (fh == -1) {
-        _dosmaperr(GetLastError());
-        CloseHandle(handle);
-      }
-    }
-  }
-
-  return (fh);
-}
-#endif
-
 /** Create a temporary file. FIXME: This is a Q&D solution. */
-
 int ib_create_tempfile(const char *prefix) /*!< in: temp filename prefix */
 {
   int fh = -1;
-
-#ifdef __WIN__
-  fh = ib_win_create_tempfile(prefix);
-#else
   FILE *file;
 
   (void)prefix;
@@ -123,9 +51,8 @@ int ib_create_tempfile(const char *prefix) /*!< in: temp filename prefix */
     fh = dup(fileno(file));
     fclose(file);
   }
-#endif
 
-  return (fh);
+  return fh;
 }
 
 /** Determines if the currently running transaction has been interrupted.

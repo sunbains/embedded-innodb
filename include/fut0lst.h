@@ -25,151 +25,112 @@ Created 11/28/1995 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#include "fil0fil.h"
+// #include "fil0fil.h"
 #include "mtr0mtr.h"
 #include "buf0buf.h"
 #include "fut0fut.h"
 #include "mtr0log.h"
 
+struct fil_addr_t;
+
 /* The C 'types' of base node and list node: these should be used to
 write self-documenting code. Of course, the sizeof macro cannot be
 applied to these types! */
 
-typedef byte flst_base_node_t;
-typedef byte flst_node_t;
+using flst_node_t = byte;
+using flst_base_node_t = byte;
 
 /** The physical size of a list base node in bytes */
 constexpr ulint FLST_BASE_NODE_SIZE = 4 + 2 * FIL_ADDR_SIZE;
 
+/* We define the field offsets of a node for the list */
+/** 6-byte address of the previous list element; the page part of address is FIL_NULL, if no previous element */
+constexpr ulint FLST_PREV = 0;
+
+/* 6-byte address of the next list element; the page part of address is FIL_NULL, if no next element */
+constexpr auto FLST_NEXT = FIL_ADDR_SIZE;
+
+/* We define the field offsets of a base node for the list */
+
+/** 32-bit list length field */
+constexpr ulint FLST_LEN = 0;
+
+/** 6-byte address of the first element of the list; undefined if empty list */
+constexpr ulint FLST_FIRST = 4;
+
+/** 6-byte address of the last element of the list; undefined if empty list */
+constexpr ulint FLST_LAST = 4 + FIL_ADDR_SIZE;
+
 /** The physical size of a list node in bytes */
 constexpr ulint FLST_NODE_SIZE = 2 * FIL_ADDR_SIZE;
 
-/** Initializes a list base node. */
-inline void flst_init(flst_base_node_t *base, /*!< in: pointer to base node */
-                      mtr_t *mtr); /*!< in: mini-transaction handle */
 /** Adds a node as the last node in a list. */
-
 void flst_add_last(
-    flst_base_node_t *base, /*!< in: pointer to base node of list */
-    flst_node_t *node,      /*!< in: node to add */
-    mtr_t *mtr);            /*!< in: mini-transaction handle */
+    flst_base_node_t *base, /** in: pointer to base node of list */
+    flst_node_t *node,      /** in: node to add */
+    mtr_t *mtr);            /** in: mini-transaction handle */
+
 /** Adds a node as the first node in a list. */
-
 void flst_add_first(
-    flst_base_node_t *base, /*!< in: pointer to base node of list */
-    flst_node_t *node,      /*!< in: node to add */
-    mtr_t *mtr);            /*!< in: mini-transaction handle */
+    flst_base_node_t *base, /** in: pointer to base node of list */
+    flst_node_t *node,      /** in: node to add */
+    mtr_t *mtr);            /** in: mini-transaction handle */
+
 /** Inserts a node after another in a list. */
-
 void flst_insert_after(
-    flst_base_node_t *base, /*!< in: pointer to base node of list */
-    flst_node_t *node1,     /*!< in: node to insert after */
-    flst_node_t *node2,     /*!< in: node to add */
-    mtr_t *mtr);            /*!< in: mini-transaction handle */
+    flst_base_node_t *base, /** in: pointer to base node of list */
+    flst_node_t *node1,     /** in: node to insert after */
+    flst_node_t *node2,     /** in: node to add */
+    mtr_t *mtr);            /** in: mini-transaction handle */
+
 /** Inserts a node before another in a list. */
-
 void flst_insert_before(
-    flst_base_node_t *base, /*!< in: pointer to base node of list */
-    flst_node_t *node2,     /*!< in: node to insert */
-    flst_node_t *node3,     /*!< in: node to insert before */
-    mtr_t *mtr);            /*!< in: mini-transaction handle */
-/** Removes a node. */
+    flst_base_node_t *base, /** in: pointer to base node of list */
+    flst_node_t *node2,     /** in: node to insert */
+    flst_node_t *node3,     /** in: node to insert before */
+    mtr_t *mtr);            /** in: mini-transaction handle */
 
+/** Removes a node. */
 void flst_remove(
-    flst_base_node_t *base, /*!< in: pointer to base node of list */
-    flst_node_t *node2,     /*!< in: node to remove */
-    mtr_t *mtr);            /*!< in: mini-transaction handle */
+    flst_base_node_t *base, /** in: pointer to base node of list */
+    flst_node_t *node2,     /** in: node to remove */
+    mtr_t *mtr);            /** in: mini-transaction handle */
+
 /** Cuts off the tail of the list, including the node given. The number of
 nodes which will be removed must be provided by the caller, as this function
 does not measure the length of the tail. */
-
 void flst_cut_end(
-    flst_base_node_t *base, /*!< in: pointer to base node of list */
-    flst_node_t *node2,     /*!< in: first node to remove */
-    ulint n_nodes,          /*!< in: number of nodes to remove,
+    flst_base_node_t *base, /** in: pointer to base node of list */
+    flst_node_t *node2,     /** in: first node to remove */
+    ulint n_nodes,          /** in: number of nodes to remove,
                             must be >= 1 */
-    mtr_t *mtr);            /*!< in: mini-transaction handle */
+    mtr_t *mtr);            /** in: mini-transaction handle */
+
 /** Cuts off the tail of the list, not including the given node. The number of
 nodes which will be removed must be provided by the caller, as this function
 does not measure the length of the tail. */
-
 void flst_truncate_end(
-    flst_base_node_t *base, /*!< in: pointer to base node of list */
-    flst_node_t *node2,     /*!< in: first node not to remove */
-    ulint n_nodes,          /*!< in: number of nodes to remove */
-    mtr_t *mtr);            /*!< in: mini-transaction handle */
-/** Gets list length.
-@return	length */
-inline ulint
-flst_get_len(const flst_base_node_t *base, /*!< in: pointer to base node */
-             mtr_t *mtr);                  /*!< in: mini-transaction handle */
-/** Gets list first node address.
-@return	file address */
-inline fil_addr_t
-flst_get_first(const flst_base_node_t *base, /*!< in: pointer to base node */
-               mtr_t *mtr);                  /*!< in: mini-transaction handle */
-/** Gets list last node address.
-@return	file address */
-inline fil_addr_t
-flst_get_last(const flst_base_node_t *base, /*!< in: pointer to base node */
-              mtr_t *mtr);                  /*!< in: mini-transaction handle */
-/** Gets list next node address.
-@return	file address */
-inline fil_addr_t
-flst_get_next_addr(const flst_node_t *node, /*!< in: pointer to node */
-                   mtr_t *mtr);             /*!< in: mini-transaction handle */
-/** Gets list prev node address.
-@return	file address */
-inline fil_addr_t
-flst_get_prev_addr(const flst_node_t *node, /*!< in: pointer to node */
-                   mtr_t *mtr);             /*!< in: mini-transaction handle */
-/** Writes a file address. */
-inline void
-flst_write_addr(fil_faddr_t *faddr, /*!< in: pointer to file faddress */
-                fil_addr_t addr,    /*!< in: file address */
-                mtr_t *mtr);        /*!< in: mini-transaction handle */
-/** Reads a file address.
-@return	file address */
-inline fil_addr_t
-flst_read_addr(const fil_faddr_t *faddr, /*!< in: pointer to file faddress */
-               mtr_t *mtr);              /*!< in: mini-transaction handle */
+    flst_base_node_t *base, /** in: pointer to base node of list */
+    flst_node_t *node2,     /** in: first node not to remove */
+    ulint n_nodes,          /** in: number of nodes to remove */
+    mtr_t *mtr);            /** in: mini-transaction handle */
+
 /** Validates a file-based list.
 @return	true if ok */
-
 bool flst_validate(
-    const flst_base_node_t *base, /*!< in: pointer to base node of list */
-    mtr_t *mtr1);                 /*!< in: mtr */
+    const flst_base_node_t *base, /** in: pointer to base node of list */
+    mtr_t *mtr1);                 /** in: mtr */
+
 /** Prints info of a file-based list. */
-
 void flst_print(
-    const flst_base_node_t *base, /*!< in: pointer to base node of list */
-    mtr_t *mtr);                  /*!< in: mtr */
-
-/* We define the field offsets of a node for the list */
-#define FLST_PREV                                                              \
-  0 /* 6-byte address of the previous list element;                            \
-    the page part of address is FIL_NULL, if no                                \
-    previous element */
-#define FLST_NEXT                                                              \
-  FIL_ADDR_SIZE /* 6-byte address of the next                                  \
-        list element; the page part of address                                 \
-        is FIL_NULL, if no next element */
-
-/* We define the field offsets of a base node for the list */
-#define FLST_LEN 0 /* 32-bit list length field */
-#define FLST_FIRST                                                             \
-  4 /* 6-byte address of the first element                                     \
-    of the list; undefined if empty list */
-#define FLST_LAST                                                              \
-  (4 + FIL_ADDR_SIZE) /* 6-byte address of the                                 \
-          last element of the list; undefined                                  \
-          if empty list */
+    const flst_base_node_t *base, /** in: pointer to base node of list */
+    mtr_t *mtr);                  /** in: mtr */
 
 /** Writes a file address. */
 inline void
-flst_write_addr(fil_faddr_t *faddr, /*!< in: pointer to file faddress */
-                fil_addr_t addr,    /*!< in: file address */
-                mtr_t *mtr)         /*!< in: mini-transaction handle */
+flst_write_addr(fil_faddr_t *faddr, /** in: pointer to file faddress */
+                fil_addr_t addr,    /** in: file address */
+                mtr_t *mtr)         /** in: mini-transaction handle */
 {
   ut_ad(faddr && mtr);
   ut_ad(mtr_memo_contains_page(mtr, faddr, MTR_MEMO_PAGE_X_FIX));
@@ -181,11 +142,11 @@ flst_write_addr(fil_faddr_t *faddr, /*!< in: pointer to file faddress */
 }
 
 /** Reads a file address.
+@param[in] faddr                Pointer to file faddress
+@param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
 inline fil_addr_t
-flst_read_addr(const fil_faddr_t *faddr, /*!< in: pointer to file faddress */
-               mtr_t *mtr)               /*!< in: mini-transaction handle */
-{
+flst_read_addr(const fil_faddr_t *faddr, mtr_t *mtr) {
   fil_addr_t addr;
 
   ut_ad(faddr && mtr);
@@ -194,13 +155,14 @@ flst_read_addr(const fil_faddr_t *faddr, /*!< in: pointer to file faddress */
   addr.boffset = mtr_read_ulint(faddr + FIL_ADDR_BYTE, MLOG_2BYTES, mtr);
   ut_a(addr.page == FIL_NULL || addr.boffset >= FIL_PAGE_DATA);
   ut_a(ut_align_offset(faddr, UNIV_PAGE_SIZE) >= FIL_PAGE_DATA);
-  return (addr);
+
+  return addr;
 }
 
-/** Initializes a list base node. */
-inline void flst_init(flst_base_node_t *base, /*!< in: pointer to base node */
-                      mtr_t *mtr) /*!< in: mini-transaction handle */
-{
+/** Initializes a list base node.
+@param[in] base                 Pointer to the base node
+@param[in,out] mtr              Mini-transaction that covers the operation. */
+inline void flst_init(flst_base_node_t *base, mtr_t *mtr) {
   ut_ad(mtr_memo_contains_page(mtr, base, MTR_MEMO_PAGE_X_FIX));
 
   mlog_write_ulint(base + FLST_LEN, 0, MLOG_4BYTES, mtr);
@@ -209,46 +171,46 @@ inline void flst_init(flst_base_node_t *base, /*!< in: pointer to base node */
 }
 
 /** Gets list length.
+@param[in] base                 Pointer to base node
+@param[in,out] mtr              Mini-transaction that covers the operation.
 @return	length */
 inline ulint
-flst_get_len(const flst_base_node_t *base, /*!< in: pointer to base node */
-             mtr_t *mtr)                   /*!< in: mini-transaction handle */
-{
-  return (mtr_read_ulint(base + FLST_LEN, MLOG_4BYTES, mtr));
+flst_get_len(const flst_base_node_t *base, mtr_t *mtr) {
+  return mtr_read_ulint(base + FLST_LEN, MLOG_4BYTES, mtr);
 }
 
 /** Gets list first node address.
+@param[in] base                 Pointer to the base node
+@param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
 inline fil_addr_t
-flst_get_first(const flst_base_node_t *base, /*!< in: pointer to base node */
-               mtr_t *mtr)                   /*!< in: mini-transaction handle */
-{
-  return (flst_read_addr(base + FLST_FIRST, mtr));
+flst_get_first(const flst_base_node_t *base, mtr_t *mtr) {
+  return flst_read_addr(base + FLST_FIRST, mtr);
 }
 
 /** Gets list last node address.
+@param[in] base                 Pointer to the base node
+@param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
 inline fil_addr_t
-flst_get_last(const flst_base_node_t *base, /*!< in: pointer to base node */
-              mtr_t *mtr)                   /*!< in: mini-transaction handle */
-{
-  return (flst_read_addr(base + FLST_LAST, mtr));
+flst_get_last(const flst_base_node_t *base, mtr_t *mtr) {
+  return flst_read_addr(base + FLST_LAST, mtr);
 }
 
 /** Gets list next node address.
+@param[in] node                 Pointer to the node
+@param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
 inline fil_addr_t
-flst_get_next_addr(const flst_node_t *node, /*!< in: pointer to node */
-                   mtr_t *mtr)              /*!< in: mini-transaction handle */
-{
-  return (flst_read_addr(node + FLST_NEXT, mtr));
+flst_get_next_addr(const flst_node_t *node, mtr_t *mtr) {
+  return flst_read_addr(node + FLST_NEXT, mtr);
 }
 
 /** Gets list prev node address.
+@param[in] node                 Pointer to the node node
+@param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
 inline fil_addr_t
-flst_get_prev_addr(const flst_node_t *node, /*!< in: pointer to node */
-                   mtr_t *mtr)              /*!< in: mini-transaction handle */
-{
-  return (flst_read_addr(node + FLST_PREV, mtr));
+flst_get_prev_addr(const flst_node_t *node, mtr_t *mtr) {
+  return flst_read_addr(node + FLST_PREV, mtr);
 }

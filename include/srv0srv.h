@@ -164,7 +164,6 @@ extern uint64_t srv_archive_recovery_limit_lsn;
 #endif /* UNIV_LOG_ARCHIVE */
 
 extern ulint srv_unix_file_flush_method;
-extern ulint srv_win_file_flush_method;
 
 extern ulint srv_max_n_open_files;
 
@@ -309,12 +308,6 @@ enum {
   SRV_UNIX_NOSYNC,     /*!< do not flush after writing */
   SRV_UNIX_O_DIRECT    /*!< invoke os_file_set_nocache() on
                        data files */
-};
-
-/** Alternatives for file i/o in Windows */
-enum {
-  SRV_WIN_IO_NORMAL = 1, /*!< buffered I/O */
-  SRV_WIN_IO_UNBUFFERED  /*!< unbuffered I/O; this is the default */
 };
 
 /** Types of threads existing in the system. */

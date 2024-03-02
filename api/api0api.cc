@@ -1089,17 +1089,6 @@ static ib_err_t ib_table_schema_check(ib_tbl_fmt_t ib_tbl_fmt,
   return err;
 }
 
-#ifdef __WIN__
-/** Convert a string to lower case. */
-static void ib_to_lower_case(char *ptr) /*!< string to convert to lower case */
-{
-  while (*ptr) {
-    *ptr = tolower(*ptr);
-    ++ptr;
-  }
-}
-#endif /* __WIN__ */
-
 /** Normalizes a table name string. A normalized name consists of the
 database name catenated to '/' and table name. An example:
 test/mytable. On Windows normalization puts both the database name and the
@@ -1144,9 +1133,6 @@ ib_normalize_table_name(char *norm_name,  /*!< out: normalized name as a
     memcpy(norm_name, db_name, strlen(name) + 1 - (db_name - name));
 
     norm_name[table_name - db_name - 1] = '/';
-#ifdef __WIN__
-    ib_to_lower_case(norm_name);
-#endif
   } else {
     strcpy(norm_name, name);
   }
@@ -1169,18 +1155,6 @@ ib_table_name_check(const char *name) /*!< in: table name to check */
   }
 
   for (; *name; ++name) {
-#ifdef __WIN__
-    /* Check for reserved characters in DOS filenames. */
-    switch (*name) {
-    case ':':
-    case '|':
-    case '"':
-    case '*':
-    case '<':
-    case '>':
-      return DB_DATA_MISMATCH;
-    }
-#endif /* __WIN__ */
     if (*name == '/') {
       if (slash) {
         return DB_DATA_MISMATCH;
@@ -4608,9 +4582,6 @@ ib_err_t ib_database_drop(const char *dbname) /*!< in: database name to drop */
   ptr = (char *)mem_alloc(len + 2);
   memset(ptr, 0x0, len + 2);
   strcpy(ptr, dbname);
-#ifdef __WIN__
-  ib_to_lower_case(ptr);
-#endif /* __WIN__ */
 
   ib_trx = ib_trx_begin(IB_TRX_SERIALIZABLE);
 

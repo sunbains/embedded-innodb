@@ -24,12 +24,12 @@ Created 9/30/1995 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#ifndef __WIN__
 #include <errno.h>
 #include <sys/types.h>
+#include <sys/mman.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 #endif
 
 #include "os0proc.h"
@@ -66,11 +66,7 @@ the thread id is not the same as one sees in 'top'.
 @return	process id as a number */
 
 ulint os_proc_get_number(void) {
-#ifdef __WIN__
-  return (ulint)GetCurrentProcessId();
-#else
   return (ulint)getpid();
-#endif
 }
 
 /** Allocates large pages memory.
@@ -132,37 +128,12 @@ void *os_mem_alloc_large(ulint *n) /*!< in/out: number of bytes */
 skip:
 #endif /* HAVE_LARGE_PAGES && UNIV_LINUX */
 
-#ifdef __WIN__
-  SYSTEM_INFO system_info;
-  GetSystemInfo(&system_info);
-
-  /* Align block size to system page size */
-  ut_ad(ut_is_2pow(system_info.dwPageSize));
-  /* system_info.dwPageSize is only 32-bit. Casting to ulint is required
-  on 64-bit Windows. */
-  size = *n = ut_2pow_round(*n + (system_info.dwPageSize - 1),
-                            (ulint)system_info.dwPageSize);
-  ptr = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-  if (!ptr) {
-    ib_logger(ib_stream,
-              "InnoDB: VirtualAlloc(%lu bytes) failed;"
-              " Windows error %lu\n",
-              (ulong)size, (ulong)GetLastError());
-  } else {
-    os_fast_mutex_lock(&ut_list_mutex);
-    ut_total_allocated_memory += size;
-    os_fast_mutex_unlock(&ut_list_mutex);
-    UNIV_MEM_ALLOC(ptr, size);
-  }
-#elif defined __NETWARE__ || !defined OS_MAP_ANON
-  size = *n;
-  ptr = ut_malloc_low(size, true, false);
-#else
 #ifdef HAVE_GETPAGESIZE
   size = getpagesize();
 #else
   size = UNIV_PAGE_SIZE;
-#endif
+#endif /* HAVE_GETPAGESiZE */
+
   /* Align block size to system page size */
   ut_ad(ut_is_2pow(size));
   size = *n = ut_2pow_round(*n + (size - 1), size);
@@ -180,17 +151,10 @@ skip:
     os_fast_mutex_unlock(&ut_list_mutex);
     UNIV_MEM_ALLOC(ptr, size);
   }
-#endif
   return (ptr);
 }
 
-/** Frees large pages memory. */
-
-void os_mem_free_large(void *ptr,  /*!< in: pointer returned by
-                                   os_mem_alloc_large() */
-                       ulint size) /*!< in: size returned by
-                                   os_mem_alloc_large() */
-{
+void os_mem_free_large(void *ptr, ulint size) {
   os_fast_mutex_lock(&ut_list_mutex);
   ut_a(ut_total_allocated_memory >= size);
   os_fast_mutex_unlock(&ut_list_mutex);
@@ -205,24 +169,6 @@ void os_mem_free_large(void *ptr,  /*!< in: pointer returned by
     return;
   }
 #endif /* HAVE_LARGE_PAGES && UNIV_LINUX */
-#ifdef __WIN__
-  /* When RELEASE memory, the size parameter must be 0.
-  Do not use MEM_RELEASE with MEM_DECOMMIT. */
-  if (!VirtualFree(ptr, 0, MEM_RELEASE)) {
-    ib_logger(ib_stream,
-              "InnoDB: VirtualFree(%p, %lu) failed;"
-              " Windows error %lu\n",
-              ptr, (ulong)size, (ulong)GetLastError());
-  } else {
-    os_fast_mutex_lock(&ut_list_mutex);
-    ut_a(ut_total_allocated_memory >= size);
-    ut_total_allocated_memory -= size;
-    os_fast_mutex_unlock(&ut_list_mutex);
-    UNIV_MEM_FREE(ptr, size);
-  }
-#elif defined __NETWARE__ || !defined OS_MAP_ANON
-  ut_free(ptr);
-#else
   if (munmap(ptr, size)) {
     ib_logger(ib_stream,
               "InnoDB: munmap(%p, %lu) failed;"
@@ -235,5 +181,4 @@ void os_mem_free_large(void *ptr,  /*!< in: pointer returned by
     os_fast_mutex_unlock(&ut_list_mutex);
     UNIV_MEM_FREE(ptr, size);
   }
-#endif
 }

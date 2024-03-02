@@ -2322,14 +2322,10 @@ dict_scan_table_name(const charset_t *cs,  /*!< in: the character set of ptr */
   memcpy(ref, database_name, database_name_len);
   ref[database_name_len] = '/';
   memcpy(ref + database_name_len + 1, table_name, table_name_len + 1);
-#ifndef __WIN__
   if (srv_lower_case_table_names) {
-#endif /* !__WIN__ */
     /* The table name is always put to lower case on Windows. */
     ib_utf8_casedown(ref);
-#ifndef __WIN__
   }
-#endif /* !__WIN__ */
 
   *success = true;
   *ref_name = ref;

@@ -210,7 +210,6 @@ uint64_t srv_archive_recovery_limit_lsn;
 #endif /* UNIV_LOG_ARCHIVE */
 
 ulint srv_unix_file_flush_method = SRV_UNIX_FSYNC;
-ulint srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
 
 ulint srv_max_n_open_files = 300;
 
@@ -715,7 +714,6 @@ void srv_var_init() {
 #endif /* UNIV_LOG_ARCHIVE */
 
   srv_unix_file_flush_method = SRV_UNIX_FSYNC;
-  srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
 
   srv_max_n_open_files = 300;
 

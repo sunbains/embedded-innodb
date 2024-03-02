@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ Starts the Innobase database server
 Created 10/10/1995 Heikki Tuuri
 *******************************************************/
 
-#ifndef srv0start_h
-#define srv0start_h
+#pragma once
 
 #include "api0api.h"
 #include "innodb0types.h"
@@ -30,40 +29,34 @@ Created 10/10/1995 Heikki Tuuri
 
 /** Normalizes a directory path for Windows: converts slashes to backslashes. */
 
-void srv_normalize_path_for_win(
-    char *str); /*!< in/out: null-terminated character string */
 /** Reads the data files and their sizes from a character string.
 @return	true if ok, false on parse error */
-
 bool srv_parse_data_file_paths_and_sizes(
-    const char *str); /*!< in: the data file path string */
+    const char *str); /** in: the data file path string */
+
 /** Reads log group home directories from a character string.
 @return	true if ok, false on parse error */
-
 bool srv_parse_log_group_home_dirs(
-    const char *str); /*!< in: character string */
+    const char *str); /** in: character string */
+
 /** Frees the memory allocated by srv_parse_data_file_paths_and_sizes()
 and srv_parse_log_group_home_dirs(). */
-
 void srv_free_paths_and_sizes(void);
+
 /** Starts Innobase and creates a new database if database files
 are not found and the user wants.
 @return	DB_SUCCESS or error code */
-
 ib_err_t innobase_start_or_create(void);
+
 /** Shuts down the Innobase database.
 @return	DB_SUCCESS or error code */
-
-enum db_err innobase_shutdown(ib_shutdown_t shutdown); /*!< in: shutdown flag */
+enum db_err innobase_shutdown(ib_shutdown_t shutdown); /** in: shutdown flag */
 
 /** Log sequence number at shutdown */
 extern uint64_t srv_shutdown_lsn;
+
 /** Log sequence number immediately after startup */
 extern uint64_t srv_start_lsn;
-
-#ifdef __NETWARE__
-void set_panic_flag_for_netware(void);
-#endif
 
 #ifdef HAVE_DARWIN_THREADS
 /** true if the F_FULLFSYNC option is available */
@@ -72,8 +65,10 @@ extern bool srv_have_fullfsync;
 
 /** true if the server is being started */
 extern bool srv_is_being_started;
+
 /** true if the server was successfully started */
 extern bool srv_was_started;
+
 /** true if the server is being started, before rolling back any
 incomplete transactions */
 extern bool srv_startup_is_before_trx_rollback_phase;
@@ -83,26 +78,23 @@ extern bool srv_start_raw_disk_in_use;
 
 /** Shutdown state */
 enum srv_shutdown_state {
-  SRV_SHUTDOWN_NONE = 0,    /*!< Database running normally */
-  SRV_SHUTDOWN_CLEANUP,     /*!< Cleaning up in
-                            logs_empty_and_mark_files_at_shutdown() */
-  SRV_SHUTDOWN_LAST_PHASE,  /*!< Last phase after ensuring that
-                            the buffer pool can be freed: flush
-                            all file spaces and close all files */
-  SRV_SHUTDOWN_EXIT_THREADS /*!< Exit all threads */
-};
+  /** Database running normally */
+  SRV_SHUTDOWN_NONE = 0,
 
-#ifdef __WIN__
-#define SRV_PATH_SEPARATOR '\\'
-#else
-#define SRV_PATH_SEPARATOR '/'
-#endif
+  /** Cleaning up in logs_empty_and_mark_files_at_shutdown() */
+  SRV_SHUTDOWN_CLEANUP, 
+
+  /** Last phase after ensuring that the buffer pool can be freed:
+  flush all file spaces and close all files */
+  SRV_SHUTDOWN_LAST_PHASE,
+
+  /** Exit all threads */
+  SRV_SHUTDOWN_EXIT_THREADS
+};
 
 /** At a shutdown this value climbs from SRV_SHUTDOWN_NONE to
 SRV_SHUTDOWN_CLEANUP and then to SRV_SHUTDOWN_LAST_PHASE, and so on */
-extern enum srv_shutdown_state srv_shutdown_state;
+extern srv_shutdown_state srv_shutdown_state;
 
 /** Log 'spaces' have id's >= this */
-#define SRV_LOG_SPACE_FIRST_ID 0xFFFFFFF0UL
-
-#endif
+constexpr ulint SRV_LOG_SPACE_FIRST_ID = 0xFFFFFFF0UL;

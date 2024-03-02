@@ -123,6 +123,8 @@ constexpr auto to_int(T v) -> typename std::underlying_type<T>::type {
 @param[in,out]  p               Instance on which to call the destructor */
 template <typename T> void call_destructor(T *p) { p->~T(); }
 
+constexpr const char SRV_PATH_SEPARATOR  = '/';
+
 #include "innodb0valgrind.h"
 #include "ut0dbg.h"
 #include "ut0ut.h"

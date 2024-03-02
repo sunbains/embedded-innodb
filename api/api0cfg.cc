@@ -430,7 +430,6 @@ static ib_err_t ib_cfg_var_set_flush_method(
 
   os_aio_use_native_aio = false;
 
-#ifndef __WIN__
   if (0 == strcmp(value_str, "fsync")) {
     srv_unix_file_flush_method = SRV_UNIX_FSYNC;
   } else if (0 == strcmp(value_str, "O_DSYNC")) {
@@ -444,36 +443,6 @@ static ib_err_t ib_cfg_var_set_flush_method(
   } else {
     err = DB_INVALID_INPUT;
   }
-#else
-  if (0 == strcmp(value_str, "normal")) {
-    srv_win_file_flush_method = SRV_WIN_IO_NORMAL;
-  } else if (0 == strcmp(value_str, "unbuffered")) {
-    srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
-  } else if (0 == strcmp(value_str, "async_unbuffered")) {
-    srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
-  } else {
-    err = DB_INVALID_INPUT;
-  }
-
-  if (err == DB_SUCCESS) {
-    switch (os_get_os_version()) {
-    case OS_WIN95:
-    case OS_WIN31:
-    case OS_WINNT:
-      /* On Win 95, 98, ME, Win32 subsystem for Windows
-      3.1, and NT use simulated aio. In NT Windows provides
-      async i/o, but when run in conjunction with InnoDB
-      Hot Backup, it seemed to corrupt the data files. */
-
-      os_aio_use_native_aio = false;
-      break;
-    default:
-      /* On Win 2000 and XP use async i/o */
-      os_aio_use_native_aio = true;
-      break;
-    }
-  }
-#endif
 
   if (err == DB_SUCCESS) {
     *(const char **)cfg_var->tank = value_str;
@@ -1191,7 +1160,6 @@ ib_err_t ib_cfg_init(void) {
   /* Set the default options. */
   srv_file_flush_method_str = NULL;
   srv_unix_file_flush_method = SRV_UNIX_FSYNC;
-  srv_win_file_flush_method = SRV_WIN_IO_UNBUFFERED;
 
   os_aio_print_debug = false;
   os_aio_use_native_aio = false;
@@ -1205,9 +1173,7 @@ ib_err_t ib_cfg_init(void) {
   IB_CFG_SET("data_file_path", "ibdata1:32M:autoextend");
   IB_CFG_SET("data_home_dir", "./");
   IB_CFG_SET("file_per_table", true);
-#ifndef __WIN__
   IB_CFG_SET("flush_method", "fsync");
-#endif
   IB_CFG_SET("lock_wait_timeout", 60);
   IB_CFG_SET("log_buffer_size", 384 * 1024);
   IB_CFG_SET("log_file_size", 16 * 1024 * 1024);

@@ -486,8 +486,6 @@ bool srv_parse_log_group_home_dirs(
       str++;
     }
 
-    srv_normalize_path_for_win(path);
-
     /* Note that this memory is malloc() and so must be freed. */
     srv_log_group_home_dirs[i] = srv_add_path_separator_if_needed(path);
 
@@ -568,22 +566,6 @@ void *io_handler_thread(void *arg) {
   os_thread_exit(nullptr);
 
   return nullptr;
-}
-
-/** Normalizes a directory path for Windows: converts slashes to backslashes. */
-
-void srv_normalize_path_for_win(
-    char *str __attribute__((unused))) /*!< in/out: null-terminated
-                                       character string */
-{
-#ifdef __WIN__
-  for (; *str; str++) {
-
-    if (*str == '/') {
-      *str = '\\';
-    }
-  }
-#endif
 }
 
 /** Calculates the low 32 bits when a file size which is given as a number
@@ -783,7 +765,6 @@ static db_err open_or_create_data_files(
 
   /* Copy the path because we want to normalize it. */
   strcpy(home, srv_data_home);
-  srv_normalize_path_for_win(home);
 
   /* We require that the user have a trailing '/' when setting the
   srv_data_home variable. */
@@ -792,20 +773,8 @@ static db_err open_or_create_data_files(
     bool is_absolute = false;
     const char *ptr = srv_data_file_names[i];
 
-#ifdef __WIN__
-    /* We are not using isalpha() here because of locale
-    dependent issues. */
-    if (((*ptr >= 'a' && *ptr <= 'z') ||
-         (*ptr >= 'A' && *ptr <= 'Z') && *(ptr + 1) == ':') ||
-        *ptr == '\\' || *ptr == '/') {
-
-      is_absolute = true;
-    }
-#else
     /* We assume Unix file paths here. */
     is_absolute = (*ptr == '/');
-#endif
-    srv_normalize_path_for_win(srv_data_file_names[i]);
 
     /* If the name is not absolute then the system files
     are created relative to home. */
@@ -1260,7 +1229,6 @@ ib_err_t innobase_start_or_create() {
   sum_of_new_sizes = 0;
 
   for (i = 0; i < srv_n_data_files; i++) {
-#ifndef __WIN__
     if (sizeof(off_t) < 5 && srv_data_file_sizes[i] >= 262144) {
       ib_logger(ib_stream, "InnoDB: Error: file size must be < 4 GB"
                            " with this binary\n"
@@ -1269,7 +1237,6 @@ ib_err_t innobase_start_or_create() {
 
       return DB_ERROR;
     }
-#endif
     sum_of_new_sizes += srv_data_file_sizes[i];
   }
 
@@ -1338,7 +1305,6 @@ ib_err_t innobase_start_or_create() {
   }
 
 #ifdef UNIV_LOG_ARCHIVE
-  srv_normalize_path_for_win(srv_arch_dir);
   srv_arch_dir = srv_add_path_separator_if_needed(srv_arch_dir);
 #endif /* UNIV_LOG_ARCHIVE */
 

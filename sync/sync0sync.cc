@@ -29,13 +29,10 @@ Created 9/5/1995 Heikki Tuuri
 *******************************************************/
 
 #include "sync0sync.h"
-#ifdef UNIV_NONINL
-#include "sync0sync.ic"
-#endif
 
 #include "buf0buf.h"
 #include "buf0types.h"
-#include "os0sync.h" /* for HAVE_ATOMIC_BUILTINS */
+#include "os0sync.h"
 #include "srv0srv.h"
 #include "sync0rw.h"
 
@@ -1215,8 +1212,7 @@ bool sync_thread_reset_level(
 #endif /* UNIV_SYNC_DEBUG */
 
 /** Initializes the synchronization data structures. */
-
-void sync_init(void) {
+void sync_init() {
 #ifdef UNIV_SYNC_DEBUG
   sync_thread_t *thread_slot;
   ulint i;
@@ -1231,21 +1227,24 @@ void sync_init(void) {
 
   sync_primary_wait_array =
       sync_array_create(OS_THREAD_MAX_N, SYNC_ARRAY_OS_MUTEX);
+
 #ifdef UNIV_SYNC_DEBUG
   /* Create the thread latch level array where the latch levels
   are stored for each OS thread */
 
   sync_thread_level_arrays = ut_malloc(OS_THREAD_MAX_N * sizeof(sync_thread_t));
+
   for (i = 0; i < OS_THREAD_MAX_N; i++) {
 
     thread_slot = sync_thread_level_arrays_get_nth(i);
     thread_slot->levels = NULL;
   }
 #endif /* UNIV_SYNC_DEBUG */
-  /* Init the mutex list and create the mutex to protect it. */
 
+  /* Init the mutex list and create the mutex to protect it. */
   UT_LIST_INIT(mutex_list);
   mutex_create(&mutex_list_mutex, SYNC_NO_ORDER_CHECK);
+
 #ifdef UNIV_SYNC_DEBUG
   mutex_create(&sync_thread_mutex, SYNC_NO_ORDER_CHECK);
 #endif /* UNIV_SYNC_DEBUG */
@@ -1285,6 +1284,7 @@ void sync_close(void) {
   }
 
   mutex_free(&mutex_list_mutex);
+
 #ifdef UNIV_SYNC_DEBUG
   mutex_free(&sync_thread_mutex);
   sync_order_checks_on = false;
@@ -1292,6 +1292,7 @@ void sync_close(void) {
   /* Switch latching order checks on in sync0sync.c */
   sync_order_checks_on = false;
 #endif /* UNIV_SYNC_DEBUG */
+
   sync_initialized = false;
 }
 
@@ -1303,7 +1304,7 @@ void sync_print_wait_info(
 #ifdef UNIV_SYNC_DEBUG
   ib_logger(ib_stream, "Mutex exits %lu, rws exits %lu, rwx exits %lu\n",
             mutex_exit_count, rw_s_exit_count, rw_x_exit_count);
-#endif
+#endif /* UNIV_SYNC_DEBUG */
 
   ib_logger(ib_stream,
             "Mutex spin waits %lu, rounds %lu, OS waits %lu\n"
@@ -1325,7 +1326,6 @@ void sync_print_wait_info(
 }
 
 /** Prints info of the sync system. */
-
 void sync_print(ib_stream_t ib_stream) /*!< in: stream where to print */
 {
 #ifdef UNIV_SYNC_DEBUG

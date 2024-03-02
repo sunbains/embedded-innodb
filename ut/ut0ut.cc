@@ -32,10 +32,6 @@ Created 5/11/1994 Heikki Tuuri
 
 #include "ut0ut.h"
 
-#ifdef UNIV_NONINL
-#include "ut0ut.ic"
-#endif
-
 #include <errno.h>
 
 #include "api0ucode.h"
