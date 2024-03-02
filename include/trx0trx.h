@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,13 +21,11 @@ The transaction
 Created 3/26/1996 Heikki Tuuri
 *******************************************************/
 
-#ifndef trx0trx_h
-#define trx0trx_h
+#pragma once
 
 #include "dict0types.h"
 #include "innodb0types.h"
 #include "trx0types.h"
-#ifndef UNIV_HOTBACKUP
 #include "lock0types.h"
 #include "mem0mem.h"
 #include "que0types.h"
@@ -641,7 +639,4 @@ struct commit_node_struct {
 
 #ifndef UNIV_NONINL
 #include "trx0trx.ic"
-#endif
-#endif /* !UNIV_HOTBACKUP */
-
 #endif

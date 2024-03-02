@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ Transaction undo log record
 Created 3/26/1996 Heikki Tuuri
 *******************************************************/
 
-#ifndef trx0rec_h
-#define trx0rec_h
+#pragma once
 
 #include "data0data.h"
 #include "dict0types.h"
@@ -32,7 +31,6 @@ Created 3/26/1996 Heikki Tuuri
 #include "row0types.h"
 #include "trx0types.h"
 
-#ifndef UNIV_HOTBACKUP
 #include "que0types.h"
 
 /** Copies the undo record to the heap.
@@ -230,7 +228,6 @@ db_err trx_undo_prev_version_build(
     rec_t **old_vers);      /*!< out, own: previous version, or NULL if
                           rec is the first inserted version, or if
                           history data has been deleted */
-#endif                      /* !UNIV_HOTBACKUP */
 /** Parses a redo log record of adding an undo log record.
 @return	end of log record or NULL */
 
@@ -244,8 +241,6 @@ byte *trx_undo_parse_erase_page_end(byte *ptr,     /*!< in: buffer */
                                     byte *end_ptr, /*!< in: buffer end */
                                     page_t *page,  /*!< in: page or NULL */
                                     mtr_t *mtr);   /*!< in: mtr or NULL */
-
-#ifndef UNIV_HOTBACKUP
 
 /* Types of an undo log record: these have to be smaller than 16, as the
 compilation info multiplied by 16 is ORed to this value in an undo log
@@ -278,7 +273,3 @@ record */
 #ifndef UNIV_NONINL
 #include "trx0rec.ic"
 #endif
-
-#endif /* !UNIV_HOTBACKUP */
-
-#endif /* trx0rec_h */
