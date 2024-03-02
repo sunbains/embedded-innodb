@@ -4,7 +4,7 @@ The long term plan is to convert it incrementally to Zig. Starting with the test
 
 So far only lightly tested on Ubuntu 23.10.
 
-Instructions for compiling and installing:
+Instructions for compiling and installing, setup to compile with C++ 23.
 
 1. cmake -G Ninja -DCMAKE_BUILD_TYPE=(debug|Release) .
 
