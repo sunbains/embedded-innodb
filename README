@@ -2,10 +2,7 @@ This is the source of InnoDB 0.1
 
 The long term plan is to convert it incrementally to Zig. Starting with the tests.
 
-Requirements
-Zlib >= 1.2.x		Need the development header files and library
-
-Unix
+So far only lightly tested on Ubuntu 23.10.
 
 Instructions for compiling and installing:
 
