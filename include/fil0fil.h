@@ -132,15 +132,9 @@ constexpr ulint FIL_PAGE_UNDO_LOG = 2;
 /** Index node */
 constexpr ulint FIL_PAGE_INODE = 3;
 
-/** Insert buffer free list */
-constexpr ulint FIL_PAGE_IBUF_FREE_LIST = 4;
-
 /* File page types introduced in InnoDB 5.1.7 */
 /** Freshly allocated page */
 constexpr ulint FIL_PAGE_TYPE_ALLOCATED = 0;
-
-/** Insert buffer bitmap */
-constexpr ulint FIL_PAGE_IBUF_BITMAP = 5;
 
 /** System page */
 constexpr ulint FIL_PAGE_TYPE_SYS = 6;
@@ -520,8 +514,8 @@ db_err fil_io(ulint type,         /** in: OS_FILE_READ or OS_FILE_WRITE,
                                  because i/os are not actually handled until
                                  all have been posted: use with great
                                  caution! */
-              bool sync,          /** in: true if synchronous aio is desired */
-              ulint space_id,     /** in: space id */
+              bool sync,         /** in: true if synchronous aio is desired */
+              space_id_t space_id,/** in: space id */
               ulint block_offset, /** in: offset in number of blocks */
               ulint byte_offset,  /** in: remainder of offset in bytes; in
                                   aio this must be divisible by the OS block

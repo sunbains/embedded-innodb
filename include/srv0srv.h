@@ -74,10 +74,6 @@ enum ib_recovery_t {
   /** Do not run trx rollback after recovery */
   IB_RECOVERY_NO_TRX_UNDO,
 
-  /** Prevent also ibuf operations: if they would cause a crash, better not do
-     them */
-  IB_RECOVERY_NO_IBUF_MERGE,
-
   /** Do not look at undo logs when starting the database: InnoDB will treat
      even incomplete transactions as committed */
   IB_RECOVERY_NO_UNDO_LOG_SCAN,

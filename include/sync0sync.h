@@ -339,12 +339,6 @@ constexpr ulint SYNC_DICT_OPERATION =  1001;
 constexpr ulint SYNC_DICT =  1000;
 constexpr ulint SYNC_DICT_AUTOINC_MUTEX =  999;
 constexpr ulint SYNC_DICT_HEADER =  995;
-constexpr ulint SYNC_IBUF_HEADER =  914;
-constexpr ulint SYNC_IBUF_PESS_INSERT_MUTEX =  912;
-
-/** ibuf mutex is really below SYNC_FSP_PAGE: we assign a value this high
-only to make the program to pass the debug checks */
-constexpr ulint SYNC_IBUF_MUTEX =  910;
 
 /*-------------------------------*/
 constexpr ulint SYNC_INDEX_TREE =  900;
@@ -365,11 +359,6 @@ constexpr ulint SYNC_FSP_PAGE =  395;
 /*------------------------------------- Insert buffer headers */
 
 /*------------------------------------- ibuf_mutex */
-
-/*------------------------------------- Insert buffer tree */
-
-constexpr ulint SYNC_IBUF_BITMAP_MUTEX =  351;
-constexpr ulint SYNC_IBUF_BITMAP =  350;
 
 /*-------------------------------*/
 

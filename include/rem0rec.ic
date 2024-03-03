@@ -1218,8 +1218,7 @@ inline ulint rec_get_converted_size(
   ut_ad(dtuple);
   ut_ad(dtuple_check_typed(dtuple));
 
-  ut_ad(dict_index->type & DICT_UNIVERSAL ||
-        dtuple_get_n_fields(dtuple) ==
+  ut_ad(dtuple_get_n_fields(dtuple) ==
             (((dtuple_get_info_bits(dtuple) & REC_NEW_STATUS_MASK) ==
               REC_STATUS_NODE_PTR)
                  ? dict_index_get_n_unique_in_tree(dict_index) + 1

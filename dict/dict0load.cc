@@ -255,9 +255,9 @@ dict_sys_tables_get_flags(const rec_t *rec) /*!< in: a record of SYS_TABLES */
     or DICT_TF_FORMAT_MASK should be nonzero. */
     return (ULINT_UNDEFINED);
 
-  case DICT_TF_FORMAT_ZIP << DICT_TF_FORMAT_SHIFT | DICT_TF_COMPACT:
-    static_assert(DICT_TF_FORMAT_MAX <= DICT_TF_FORMAT_ZIP,
-                  "error missing case labels for DICT_TF_FORMAT_ZIP .. "
+  case DICT_TF_FORMAT_V1 << DICT_TF_FORMAT_SHIFT | DICT_TF_COMPACT:
+    static_assert(DICT_TF_FORMAT_MAX <= DICT_TF_FORMAT_V1,
+                  "error missing case labels for DICT_TF_FORMAT_V1 .. "
                   "DICT_TF_FORMAT_MAX");
     /* We support this format. */
     break;

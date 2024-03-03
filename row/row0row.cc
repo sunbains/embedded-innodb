@@ -96,19 +96,12 @@ dtuple_t *row_build_index_entry(
   entry_len = dict_index_get_n_fields(index);
   entry = dtuple_create(heap, entry_len);
 
-  if (unlikely(index->type & DICT_UNIVERSAL)) {
-    dtuple_set_n_fields_cmp(entry, entry_len);
-    /* There may only be externally stored columns
-    in a clustered index B-tree of a user table. */
-    ut_a(!ext);
-  } else {
-    dtuple_set_n_fields_cmp(entry, dict_index_get_n_unique_in_tree(index));
-    if (dict_index_is_clust(index)) {
-      /* Do not fetch externally stored columns to
-      the clustered index.  Such columns are handled
-      at a higher level. */
-      ext = nullptr;
-    }
+  dtuple_set_n_fields_cmp(entry, dict_index_get_n_unique_in_tree(index));
+  if (dict_index_is_clust(index)) {
+    /* Do not fetch externally stored columns to
+    the clustered index.  Such columns are handled
+    at a higher level. */
+    ext = nullptr;
   }
 
   for (i = 0; i < entry_len; i++) {

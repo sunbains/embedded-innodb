@@ -192,7 +192,6 @@ SET(INNODB_SOURCES  btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       fsp/fsp0fsp.cc
       fut/fut0lst.cc
       ha/ha0ha.cc ha/hash0hash.cc ha/ha0storage.cc
-      ibuf/ibuf0ibuf.cc
       pars/lexyy.cc pars/pars0grm.cc pars/pars0opt.cc
       pars/pars0pars.cc pars/pars0sym.cc
       lock/lock0lock.cc lock/lock0iter.cc

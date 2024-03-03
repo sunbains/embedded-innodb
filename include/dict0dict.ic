@@ -166,30 +166,15 @@ dict_index_is_unique(const dict_index_t *dict_index) /*!< in: dict_index */
   return (unlikely(dict_index->type & DICT_UNIQUE));
 }
 
-/** Check whether the index is the insert buffer tree.
-@return	nonzero for insert buffer, zero for other indexes */
-inline ulint
-dict_index_is_ibuf(const dict_index_t *dict_index) /*!< in: dict_index */
+/** Check whether the index is a secondary index tree.
+@return	nonzero zero for other indexes */
+inline bool
+dict_index_is_sec(const dict_index_t *dict_index) /*!< in: dict_index */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
 
-  return (unlikely(dict_index->type & DICT_IBUF));
-}
-
-/** Check whether the index is a secondary index or the insert buffer tree.
-@return	nonzero for insert buffer, zero for other indexes */
-inline ulint
-dict_index_is_sec_or_ibuf(const dict_index_t *dict_index) /*!< in: dict_index */
-{
-  ulint type;
-
-  ut_ad(dict_index);
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
-
-  type = dict_index->type;
-
-  return (likely(!(type & DICT_CLUSTERED) || (type & DICT_IBUF)));
+  return likely(!(dict_index->type & DICT_CLUSTERED));
 }
 
 /** Gets the number of user-defined columns in a table in the dictionary
@@ -394,16 +379,17 @@ dict_index_get_sys_col_pos(const dict_index_t *dict_index, /*!< in: index */
 {
   ut_ad(dict_index);
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
-  ut_ad(!(dict_index->type & DICT_UNIVERSAL));
 
   if (dict_index_is_clust(dict_index)) {
 
-    return (dict_col_get_clust_pos(
-        dict_table_get_sys_col(dict_index->table, type), dict_index));
-  }
+    return dict_col_get_clust_pos(
+        dict_table_get_sys_col(dict_index->table, type), dict_index);
 
-  return (dict_index_get_nth_col_pos(
-      dict_index, dict_table_get_sys_col_no(dict_index->table, type)));
+  } else {
+
+    return dict_index_get_nth_col_pos(
+        dict_index, dict_table_get_sys_col_no(dict_index->table, type));
+  }
 }
 
 /** Gets the field column.

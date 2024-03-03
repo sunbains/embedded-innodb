@@ -264,12 +264,7 @@ page_create_low(buf_block_t *block, /*!< in: a buffer block where the
   dict_index_t *index;
   ulint *offsets;
 
-  ut_ad(block);
-
-  static_assert(PAGE_BTR_IBUF_FREE_LIST + FLST_BASE_NODE_SIZE <= PAGE_DATA,
-                "PAGE_BTR_IBUF_FREE_LIST + FLST_BASE_NODE_SIZE > PAGE_DATA");
-  static_assert(PAGE_BTR_IBUF_FREE_LIST_NODE + FLST_NODE_SIZE <= PAGE_DATA,
-                "PAGE_BTR_IBUF_FREE_LIST_NODE + FLST_NODE_SIZE > PAGE_DATA");
+  ut_ad(block != nullptr);
 
   /* The infimum and supremum records use a dummy index. */
   if (likely(comp)) {
@@ -476,7 +471,7 @@ rec_t *page_copy_rec_list_end(buf_block_t *new_block, buf_block_t *block,
     page_copy_rec_list_end_no_locks(new_block, block, rec, index, mtr);
   }
 
-  if (dict_index_is_sec_or_ibuf(index) && page_is_leaf(page)) {
+  if (dict_index_is_sec(index) && page_is_leaf(page)) {
     page_update_max_trx_id(new_block, page_get_max_trx_id(page), mtr);
   }
 
@@ -528,7 +523,7 @@ rec_t *page_copy_rec_list_start(buf_block_t *new_block, buf_block_t *block,
     mem_heap_free(heap);
   }
 
-  if (dict_index_is_sec_or_ibuf(index) && page_is_leaf(page_align(rec))) {
+  if (dict_index_is_sec(index) && page_is_leaf(page_align(rec))) {
     page_update_max_trx_id(new_block, page_get_max_trx_id(page_align(rec)), mtr);
   }
 

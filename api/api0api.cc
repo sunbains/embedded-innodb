@@ -1515,7 +1515,7 @@ static ulint ib_table_def_get_flags(
     break;
   case IB_TBL_DYNAMIC: /* The dynamic row format */
     /* Dynamic format implies a page size of 0. */
-    flags = DICT_TF_COMPACT | DICT_TF_FORMAT_ZIP << DICT_TF_FORMAT_SHIFT;
+    flags = DICT_TF_COMPACT | DICT_TF_FORMAT_V1 << DICT_TF_FORMAT_SHIFT;
     break;
   default:
     ut_error;
@@ -5015,7 +5015,7 @@ ib_table_get_format(const dict_table_t *table, /*!< in: table definition */
   case DICT_TF_COMPACT: /* The compact row format */
     *tbl_fmt = IB_TBL_COMPACT;
     break;
-  case DICT_TF_COMPACT | DICT_TF_FORMAT_ZIP << DICT_TF_FORMAT_SHIFT:
+  case DICT_TF_COMPACT | DICT_TF_FORMAT_V1 << DICT_TF_FORMAT_SHIFT:
     *tbl_fmt = IB_TBL_DYNAMIC;
     break;
   }

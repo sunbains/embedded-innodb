@@ -1017,7 +1017,6 @@ void sync_thread_add_level(void *latch, ulint level) {
   case SYNC_SEARCH_SYS_CONF:
   case SYNC_TRX_LOCK_HEAP:
   case SYNC_KERNEL:
-  case SYNC_IBUF_BITMAP_MUTEX:
   case SYNC_RSEG:
   case SYNC_TRX_UNDO:
   case SYNC_PURGE_LATCH:
@@ -1051,16 +1050,6 @@ void sync_thread_add_level(void *latch, ulint level) {
       ut_a(sync_thread_levels_g(array, SYNC_REC_LOCK, true));
     }
     break;
-  case SYNC_IBUF_BITMAP:
-    /* Either the thread must own the master mutex to all
-    the bitmap pages, or it is allowed to latch only ONE
-    bitmap page. */
-    if (sync_thread_levels_contain(array, SYNC_IBUF_BITMAP_MUTEX)) {
-      ut_a(sync_thread_levels_g(array, SYNC_IBUF_BITMAP - 1, true));
-    } else {
-      ut_a(sync_thread_levels_g(array, SYNC_IBUF_BITMAP, true));
-    }
-    break;
   case SYNC_FSP_PAGE:
     ut_a(sync_thread_levels_contain(array, SYNC_FSP));
     break;
@@ -1087,28 +1076,14 @@ void sync_thread_add_level(void *latch, ulint level) {
          sync_thread_levels_g(array, SYNC_TREE_NODE - 1, true));
     break;
   case SYNC_TREE_NODE_NEW:
-    ut_a(sync_thread_levels_contain(array, SYNC_FSP_PAGE) ||
-         sync_thread_levels_contain(array, SYNC_IBUF_MUTEX));
+    ut_a(sync_thread_levels_contain(array, SYNC_FSP_PAGE));
     break;
   case SYNC_INDEX_TREE:
-    if (sync_thread_levels_contain(array, SYNC_IBUF_MUTEX) &&
-        sync_thread_levels_contain(array, SYNC_FSP)) {
+    if (sync_thread_levels_contain(array, SYNC_FSP)) {
       ut_a(sync_thread_levels_g(array, SYNC_FSP_PAGE - 1, true));
     } else {
       ut_a(sync_thread_levels_g(array, SYNC_TREE_NODE - 1, true));
     }
-    break;
-  case SYNC_IBUF_MUTEX:
-    ut_a(sync_thread_levels_g(array, SYNC_FSP_PAGE - 1, true));
-    break;
-  case SYNC_IBUF_PESS_INSERT_MUTEX:
-    ut_a(sync_thread_levels_g(array, SYNC_FSP - 1, true));
-    ut_a(!sync_thread_levels_contain(array, SYNC_IBUF_MUTEX));
-    break;
-  case SYNC_IBUF_HEADER:
-    ut_a(sync_thread_levels_g(array, SYNC_FSP - 1, true));
-    ut_a(!sync_thread_levels_contain(array, SYNC_IBUF_MUTEX));
-    ut_a(!sync_thread_levels_contain(array, SYNC_IBUF_PESS_INSERT_MUTEX));
     break;
   case SYNC_DICT:
 #ifdef UNIV_DEBUG

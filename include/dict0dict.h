@@ -354,15 +354,10 @@ inline ulint dict_index_is_clust(const dict_index_t *index) /*!< in: index */
 inline ulint dict_index_is_unique(const dict_index_t *index) /*!< in: index */
     __attribute__((pure));
 
-/** Check whether the index is the insert buffer tree.
-@return	nonzero for insert buffer, zero for other indexes */
-inline ulint dict_index_is_ibuf(const dict_index_t *index) /*!< in: index */
-    __attribute__((pure));
-
-/** Check whether the index is a secondary index or the insert buffer tree.
-@return	nonzero for insert buffer, zero for other indexes */
-inline ulint
-dict_index_is_sec_or_ibuf(const dict_index_t *index) /*!< in: index */
+/** Check whether the index is a secondary index tree.
+@return	true if it's a secondary index. */
+inline bool
+dict_index_is_sec(const dict_index_t *index) /*!< in: index */
     __attribute__((pure));
 
 /** Gets the number of user-defined columns in a table in the dictionary

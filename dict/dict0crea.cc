@@ -91,7 +91,7 @@ dict_create_sys_tables_tuple(const dict_table_t *table, /*!< in: table */
   ptr = (byte *)mem_heap_alloc(heap, 4);
   if (table->flags & (~DICT_TF_COMPACT & ~(~0UL << DICT_TF_BITS))) {
     ut_a(table->flags & DICT_TF_COMPACT);
-    ut_a(dict_table_get_format(table) >= DICT_TF_FORMAT_ZIP);
+    ut_a(dict_table_get_format(table) >= DICT_TF_FORMAT_V1);
     ut_a(!(table->flags & (~0UL << DICT_TF2_BITS)));
 
     mach_write_to_4(ptr, table->flags & ~(~0UL << DICT_TF_BITS));

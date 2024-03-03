@@ -57,7 +57,6 @@ Created 10/8/1995 Heikki Tuuri
 
 #include "innodb0types.h"
 
-/* Dummy comment */
 #include "srv0srv.h"
 
 #include "api0ucode.h"
@@ -68,7 +67,6 @@ Created 10/8/1995 Heikki Tuuri
 #include "ddl0ddl.h"
 #include "dict0boot.h"
 #include "dict0load.h"
-#include "ibuf0ibuf.h"
 #include "lock0lock.h"
 #include "log0recv.h"
 #include "mem0mem.h"
@@ -1102,7 +1100,6 @@ void srv_modules_var_init() {
   sync_var_init();
   log_var_init();
   lock_var_init();
-  ibuf_var_init();
   fil_var_init();
   dict_var_init();
   dfield_var_init();
@@ -1478,16 +1475,15 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
                        "--------\n");
   os_aio_print(ib_stream);
 
-  ib_logger(ib_stream, "-------------------------------------\n"
-                       "INSERT BUFFER AND ADAPTIVE HASH INDEX\n"
-                       "-------------------------------------\n");
-  ibuf_print(ib_stream);
-
+  ib_logger(ib_stream, "-------------------\n"
+                       "ADAPTIVE HASH INDEX\n"
+                       "-------------------\n");
   ha_print_info(ib_stream, btr_search_sys->hash_index);
 
   ib_logger(ib_stream, "%.2f hash searches/s, %.2f non-hash searches/s\n",
             (btr_cur_n_sea - btr_cur_n_sea_old) / time_elapsed,
             (btr_cur_n_non_sea - btr_cur_n_non_sea_old) / time_elapsed);
+
   btr_cur_n_sea_old = btr_cur_n_sea;
   btr_cur_n_non_sea_old = btr_cur_n_non_sea;
 
@@ -1530,12 +1526,14 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
 #else
   ib_logger(ib_stream, "Main thread id %lu, state: %s\n",
             (ulong)srv_main_thread_id, srv_main_thread_op_info);
-#endif
+#endif /* UNIV_LINUX */
+
   ib_logger(ib_stream,
             "Number of rows inserted " ULINTPF ", updated " ULINTPF
             ", deleted " ULINTPF ", read " ULINTPF "\n",
             srv_n_rows_inserted, srv_n_rows_updated, srv_n_rows_deleted,
             srv_n_rows_read);
+
   ib_logger(ib_stream,
             "%.2f inserts/s, %.2f updates/s,"
             " %.2f deletes/s, %.2f reads/s\n",
@@ -1545,8 +1543,11 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
             (srv_n_rows_read - srv_n_rows_read_old) / time_elapsed);
 
   srv_n_rows_inserted_old = srv_n_rows_inserted;
+
   srv_n_rows_updated_old = srv_n_rows_updated;
+
   srv_n_rows_deleted_old = srv_n_rows_deleted;
+
   srv_n_rows_read_old = srv_n_rows_read;
 
   ib_logger(ib_stream, "----------------------------\n"
@@ -2088,7 +2089,6 @@ loop:
     if (n_pend_ios < SRV_PEND_IO_THRESHOLD &&
         (n_ios - n_ios_old < SRV_RECENT_IO_ACTIVITY)) {
       srv_main_thread_op_info = "doing insert buffer merge";
-      ibuf_contract_for_n_pages(false, PCT_IO(5));
 
       /* Flush logs if needed */
       srv_sync_log_buffer_in_background();
@@ -2166,7 +2166,6 @@ loop:
   even if the server were active */
 
   srv_main_thread_op_info = "doing insert buffer merge";
-  ibuf_contract_for_n_pages(false, PCT_IO(5));
 
   /* Flush logs if needed */
   srv_sync_log_buffer_in_background();
@@ -2283,21 +2282,17 @@ background_loop:
 
   if (srv_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > 0) {
     n_bytes_merged = 0;
-  } else {
-    /* This should do an amount of IO similar to the number of
-    dirty pages that will be flushed in the call to
-    buf_flush_batch below. Otherwise, the system favors
-    clean pages over cleanup throughput. */
-    n_bytes_merged = ibuf_contract_for_n_pages(false, PCT_IO(100));
   }
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
   mutex_enter(&kernel_mutex);
+
   if (srv_activity_count != old_activity_count) {
     mutex_exit(&kernel_mutex);
     goto loop;
   }
+
   mutex_exit(&kernel_mutex);
 
 flush_loop:

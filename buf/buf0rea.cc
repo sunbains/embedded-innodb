@@ -29,7 +29,7 @@ Created 11/5/1995 Heikki Tuuri
 #include "buf0buf.h"
 #include "buf0flu.h"
 #include "buf0lru.h"
-#include "ibuf0ibuf.h"
+
 #include "log0recv.h"
 #include "os0file.h"
 #include "srv0srv.h"
@@ -58,8 +58,7 @@ static ulint buf_read_page_low(
                 trying to read from a non-existent tablespace, or a
                 tablespace which is just now being dropped */
     bool sync,   /*!< in: true if synchronous aio is desired */
-    ulint mode,  /*!< in: BUF_READ_IBUF_PAGES_ONLY, ...,
-                 ORed to OS_AIO_SIMULATED_WAKE_LATER (see below
+    ulint mode,  /*!< in: ..., ORed to OS_AIO_SIMULATED_WAKE_LATER (see below
                  at read-ahead functions) */
     ulint space, /*!< in: space id */
     ulint, bool,
@@ -92,13 +91,11 @@ static ulint buf_read_page_low(
     return (0);
   }
 
-  if (ibuf_bitmap_page(offset) || trx_sys_hdr_page(space, offset)) {
+  if (trx_sys_hdr_page(space, offset)) {
 
     /* Trx sys header is so low in the latching order that we play
     safe and do not leave the i/o-completion to an asynchronous
-    i/o-thread. Ibuf bitmap pages must always be read with
-    syncronous i/o, to make sure they do not get involved in
-    thread deadlocks. */
+    i/o-thread. */
 
     sync = true;
   }
@@ -170,7 +167,6 @@ bool buf_read_page(ulint space, ulint offset) {
 }
 
 ulint buf_read_ahead_linear(ulint space, ulint offset) {
-  int64_t tablespace_version;
   buf_page_t *bpage;
   buf_frame_t *frame;
   buf_page_t *pred_bpage = nullptr;
@@ -180,8 +176,6 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
   int asc_or_desc;
   ulint new_offset;
   ulint fail_count;
-  ulint ibuf_mode;
-  ulint low, high;
   db_err err;
   ulint i;
   const ulint buf_read_ahead_linear_area = BUF_READ_AHEAD_LINEAR_AREA;
@@ -192,29 +186,20 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
     return (0);
   }
 
-  low = (offset / buf_read_ahead_linear_area) * buf_read_ahead_linear_area;
-  high = (offset / buf_read_ahead_linear_area + 1) * buf_read_ahead_linear_area;
+  auto low = (offset / buf_read_ahead_linear_area) * buf_read_ahead_linear_area;
+  auto high = (offset / buf_read_ahead_linear_area + 1) * buf_read_ahead_linear_area;
 
   if ((offset != low) && (offset != high - 1)) {
     /* This is not a border page of the area: return */
 
-    return (0);
-  }
-
-  if (ibuf_bitmap_page(offset) || trx_sys_hdr_page(space, offset)) {
-
-    /* If it is an ibuf bitmap page or trx sys hdr, we do
-    no read-ahead, as that could break the ibuf page access
-    order */
-
-    return (0);
+    return 0;
   }
 
   /* Remember the tablespace version before we ask te tablespace size
   below: if DISCARD + IMPORT changes the actual .ibd file meanwhile, we
   do not try to read outside the bounds of the tablespace! */
 
-  tablespace_version = fil_space_get_version(space);
+  auto tablespace_version = fil_space_get_version(space);
 
   buf_pool_mutex_enter();
 
@@ -326,7 +311,7 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
   } else {
     /* Successor or predecessor not in the right order */
 
-    return (0);
+    return 0;
   }
 
   low = (new_offset / buf_read_ahead_linear_area) * buf_read_ahead_linear_area;
@@ -336,49 +321,30 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
   if ((new_offset != low) && (new_offset != high - 1)) {
     /* This is not a border page of the area: return */
 
-    return (0);
+    return 0;
   }
 
   if (high > fil_space_get_size(space)) {
     /* The area is not whole, return */
 
-    return (0);
-  }
-
-  /* If we got this far, read-ahead can be sensible: do it */
-
-  if (ibuf_inside()) {
-    ibuf_mode = BUF_READ_IBUF_PAGES_ONLY;
-  } else {
-    ibuf_mode = BUF_READ_ANY_PAGE;
+    return 0;
   }
 
   count = 0;
-
-  /* Since Windows XP seems to schedule the i/o handler thread
-  very eagerly, and consequently it does not wait for the
-  full read batch to be posted, we use special heuristics here */
-
-  os_aio_simulated_put_read_threads_to_sleep();
 
   for (i = low; i < high; i++) {
     /* It is only sensible to do read-ahead in the non-sync
     aio mode: hence false as the first parameter */
 
-    if (!ibuf_bitmap_page(i)) {
-      count += buf_read_page_low(&err, false,
-                                 ibuf_mode | OS_AIO_SIMULATED_WAKE_LATER, space,
-                                 0, false, tablespace_version, i);
-      if (err == DB_TABLESPACE_DELETED) {
-        ut_print_timestamp(ib_stream);
-        ib_logger(ib_stream,
-                  "  InnoDB: Warning: in"
-                  " linear readahead trying to access\n"
-                  "InnoDB: tablespace %lu page %lu,\n"
-                  "InnoDB: but the tablespace does not"
-                  " exist or is just being dropped.\n",
+    count += buf_read_page_low(&err, false,
+      OS_AIO_SIMULATED_WAKE_LATER, space, 0, false, tablespace_version, i);
+
+    if (err == DB_TABLESPACE_DELETED) {
+      ut_print_timestamp(ib_stream);
+      ib_logger(ib_stream,
+                "Lnear readahead trying to access tablespace %lu page %lu,but the tablespace does not"
+                " exist or is just being dropped.",
                   (ulong)space, (ulong)i);
-      }
     }
   }
 
@@ -404,50 +370,6 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
 
   buf_pool->stat.n_ra_pages_read += count;
   return (count);
-}
-
-void buf_read_ibuf_merge_pages(bool sync, const ulint *space_ids,
-                               const int64_t *space_versions,
-                               const ulint *page_nos, ulint n_stored) {
-  ut_ad(!ibuf_inside());
-
-#ifdef UNIV_IBUF_DEBUG
-  ut_a(n_stored < UNIV_PAGE_SIZE);
-#endif /* UNIV_IBUF_DEBUG */
-
-  while (buf_pool->n_pend_reads >
-         buf_pool->curr_size / BUF_READ_AHEAD_PEND_LIMIT) {
-    os_thread_sleep(500000);
-  }
-
-  for (ulint i = 0; i < n_stored; i++) {
-    db_err err;
-
-    if (fil_space_get_size(space_ids[i]) != ULINT_UNDEFINED) {
-      buf_read_page_low(&err, sync && (i + 1 == n_stored), BUF_READ_ANY_PAGE,
-                        space_ids[i], 0, 0, space_versions[i], page_nos[i]);
-    } else {
-      err = DB_TABLESPACE_DELETED;
-    }
-
-    if (err == DB_TABLESPACE_DELETED) {
-      /* We have deleted or are deleting the single-table tablespace: remove the
-       * entries for that page */
-      ibuf_merge_or_delete_for_page(nullptr, space_ids[i], page_nos[i], false);
-    }
-  }
-
-  os_aio_simulated_wake_handler_threads();
-
-  /* Flush pages from the end of the LRU list if necessary */
-  buf_flush_free_margin();
-
-#ifdef UNIV_DEBUG
-  if (buf_debug_prints) {
-    ib_logger(ib_stream, "Ibuf merge read-ahead space %lu pages %lu\n",
-              (ulong)space_ids[0], (ulong)n_stored);
-  }
-#endif /* UNIV_DEBUG */
 }
 
 void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_stored) {

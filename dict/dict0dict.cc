@@ -32,7 +32,7 @@ dict_index_t *dict_ind_redundant;
 /** dummy index for ROW_FORMAT=COMPACT supremum and infimum records */
 dict_index_t *dict_ind_compact;
 
-#include "api0ucode.h" /* ib_utf8_strcasecmp() */
+#include "api0ucode.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "btr0sea.h"
@@ -1144,11 +1144,7 @@ db_err dict_index_add_to_cache(dict_table_t *table, dict_index_t *index,
     return DB_TOO_BIG_RECORD;
   }
 
-  if (unlikely(index->type & DICT_UNIVERSAL)) {
-    n_ord = new_index->n_fields;
-  } else {
-    n_ord = new_index->n_uniq;
-  }
+  n_ord = new_index->n_uniq;
 
   switch (dict_table_get_format(table)) {
   case DICT_TF_FORMAT_51:
@@ -1158,7 +1154,7 @@ db_err dict_index_add_to_cache(dict_table_t *table, dict_index_t *index,
     the undo log record size. */
     goto undo_size_ok;
 
-  case DICT_TF_FORMAT_ZIP:
+  case DICT_TF_FORMAT_V1:
     /* In ROW_FORMAT=DYNAMIC and ROW_FORMAT=COMPRESSED,
     column prefix indexes require that prefixes of
     externally stored columns are written to the undo log.
@@ -1168,9 +1164,7 @@ db_err dict_index_add_to_cache(dict_table_t *table, dict_index_t *index,
     checked for below. */
     break;
 
-#if DICT_TF_FORMAT_ZIP != DICT_TF_FORMAT_MAX
-#error "DICT_TF_FORMAT_ZIP != DICT_TF_FORMAT_MAX"
-#endif
+    static_assert(DICT_TF_FORMAT_V1 == DICT_TF_FORMAT_MAX, "error DICT_TF_FORMAT_V1 != DICT_TF_FORMAT_MAX");
   }
 
   for (i = 0; i < n_ord; i++) {
@@ -1226,19 +1220,16 @@ undo_size_ok:
   new_index->page = page_no;
   rw_lock_create(&new_index->lock, SYNC_INDEX_TREE);
 
-  if (!unlikely(new_index->type & DICT_UNIVERSAL)) {
+  new_index->stat_n_diff_key_vals = (int64_t *)mem_heap_alloc(
+      new_index->heap,
+      (1 + dict_index_get_n_unique(new_index)) * sizeof(int64_t));
 
-    new_index->stat_n_diff_key_vals = (int64_t *)mem_heap_alloc(
-        new_index->heap,
-        (1 + dict_index_get_n_unique(new_index)) * sizeof(int64_t));
+  /* Give some sensible values to stat_n_... in case we do
+  not calculate statistics quickly enough */
 
-    /* Give some sensible values to stat_n_... in case we do
-    not calculate statistics quickly enough */
+  for (i = 0; i <= dict_index_get_n_unique(new_index); i++) {
 
-    for (i = 0; i <= dict_index_get_n_unique(new_index); i++) {
-
-      new_index->stat_n_diff_key_vals[i] = 100;
-    }
+    new_index->stat_n_diff_key_vals[i] = 100;
   }
 
   dict_sys->size += mem_heap_get_size(new_index->heap);
@@ -1414,12 +1405,6 @@ static void dict_index_copy(dict_index_t *index1, /*!< in: index to copy to */
 
 void dict_index_copy_types(dtuple_t *tuple, const dict_index_t *index,
                            ulint n_fields) {
-  if (unlikely(index->type & DICT_UNIVERSAL)) {
-    dtuple_set_types_binary(tuple, n_fields);
-
-    return;
-  }
-
   for (ulint i = 0; i < n_fields; i++) {
     const dict_field_t *ifield;
     dtype_t *dfield_type;
@@ -1476,12 +1461,7 @@ static dict_index_t *dict_index_build_internal_clust(
   /* Copy the fields of index */
   dict_index_copy(new_index, index, table, 0, index->n_fields);
 
-  if (unlikely(index->type & DICT_UNIVERSAL)) {
-    /* No fixed number of fields determines an entry uniquely */
-
-    new_index->n_uniq = REC_MAX_N_FIELDS;
-
-  } else if (dict_index_is_unique(index)) {
+  if (dict_index_is_unique(index)) {
     /* Only the fields defined so far are needed to identify
     the index entry uniquely */
 
@@ -1493,46 +1473,46 @@ static dict_index_t *dict_index_build_internal_clust(
 
   new_index->trx_id_offset = 0;
 
-  if (!dict_index_is_ibuf(index)) {
-    /* Add system columns, trx id first */
+  /* Add system columns, trx id first */
 
-    trx_id_pos = new_index->n_def;
+  trx_id_pos = new_index->n_def;
 
-    static_assert(DATA_ROW_ID == 0, "error DATA_ROW_ID != 0");
-    static_assert(DATA_TRX_ID == 1, "error DATA_TRX_ID != 1");
-    static_assert(DATA_ROLL_PTR == 2, "error DATA_ROLL_PTR != 2");
+  static_assert(DATA_ROW_ID == 0, "error DATA_ROW_ID != 0");
+  static_assert(DATA_TRX_ID == 1, "error DATA_TRX_ID != 1");
+  static_assert(DATA_ROLL_PTR == 2, "error DATA_ROLL_PTR != 2");
 
-    if (!dict_index_is_unique(index)) {
-      dict_index_add_col(new_index, table,
-                         dict_table_get_sys_col(table, DATA_ROW_ID), 0);
-      trx_id_pos++;
+  if (!dict_index_is_unique(index)) {
+
+    dict_index_add_col(
+      new_index, table, dict_table_get_sys_col(table, DATA_ROW_ID), 0);
+     ++trx_id_pos;
+  }
+
+
+  dict_index_add_col(new_index, table,
+                     dict_table_get_sys_col(table, DATA_TRX_ID), 0);
+
+  dict_index_add_col(new_index, table,
+                     dict_table_get_sys_col(table, DATA_ROLL_PTR), 0);
+
+  for (i = 0; i < trx_id_pos; i++) {
+
+    fixed_size = dict_col_get_fixed_size(dict_index_get_nth_col(new_index, i),
+                                         dict_table_is_comp(table));
+
+    if (fixed_size == 0) {
+      new_index->trx_id_offset = 0;
+
+      break;
     }
 
-    dict_index_add_col(new_index, table,
-                       dict_table_get_sys_col(table, DATA_TRX_ID), 0);
+    if (dict_index_get_nth_field(new_index, i)->prefix_len > 0) {
+      new_index->trx_id_offset = 0;
 
-    dict_index_add_col(new_index, table,
-                       dict_table_get_sys_col(table, DATA_ROLL_PTR), 0);
-
-    for (i = 0; i < trx_id_pos; i++) {
-
-      fixed_size = dict_col_get_fixed_size(dict_index_get_nth_col(new_index, i),
-                                           dict_table_is_comp(table));
-
-      if (fixed_size == 0) {
-        new_index->trx_id_offset = 0;
-
-        break;
-      }
-
-      if (dict_index_get_nth_field(new_index, i)->prefix_len > 0) {
-        new_index->trx_id_offset = 0;
-
-        break;
-      }
-
-      new_index->trx_id_offset += (unsigned int)fixed_size;
+      break;
     }
+
+    new_index->trx_id_offset += (unsigned int)fixed_size;
   }
 
   /* Remember the table columns already contained in new_index */
@@ -1552,8 +1532,7 @@ static dict_index_t *dict_index_build_internal_clust(
     }
   }
 
-  /* Add to new_index non-system columns of table not yet included
-  there */
+  /* Add to new_index non-system columns of table not yet included there */
   for (i = 0; i + DATA_N_SYS_COLS < (ulint)table->n_cols; i++) {
 
     dict_col_t *col = dict_table_get_nth_col(table, i);
@@ -1566,7 +1545,7 @@ static dict_index_t *dict_index_build_internal_clust(
 
   mem_free(indexed);
 
-  ut_ad(dict_index_is_ibuf(index) || (UT_LIST_GET_LEN(table->indexes) == 0));
+  ut_ad(UT_LIST_GET_LEN(table->indexes) == 0);
 
   new_index->cached = true;
 
@@ -1597,7 +1576,6 @@ static dict_index_t *dict_index_build_internal_non_clust(
 
   ut_ad(clust_index);
   ut_ad(dict_index_is_clust(clust_index));
-  ut_ad(!(clust_index->type & DICT_UNIVERSAL));
 
   /* Create a new index */
   new_index =
@@ -3222,24 +3200,8 @@ dtuple_t *dict_index_build_node_ptr(const dict_index_t *index, const rec_t *rec,
                                     ulint level) {
   dtuple_t *tuple;
   dfield_t *field;
-  ulint n_unique;
 
-  if (unlikely(index->type & DICT_UNIVERSAL)) {
-    /* In a universal index tree, we take the whole record as
-    the node pointer if the record is on the leaf level,
-    on non-leaf levels we remove the last field, which
-    contains the page number of the child page */
-
-    ut_a(!dict_table_is_comp(index->table));
-    n_unique = rec_get_n_fields_old(rec);
-
-    if (level > 0) {
-      ut_a(n_unique > 1);
-      n_unique--;
-    }
-  } else {
-    n_unique = dict_index_get_n_unique_in_tree(index);
-  }
+  auto n_unique = dict_index_get_n_unique_in_tree(index);
 
   tuple = dtuple_create(heap, n_unique + 1);
 
@@ -3275,16 +3237,9 @@ dtuple_t *dict_index_build_node_ptr(const dict_index_t *index, const rec_t *rec,
 rec_t *dict_index_copy_rec_order_prefix(const dict_index_t *index,
                                         const rec_t *rec, ulint *n_fields,
                                         byte **buf, ulint *buf_size) {
-  ulint n;
-
   prefetch_r(rec);
 
-  if (unlikely(index->type & DICT_UNIVERSAL)) {
-    ut_a(!dict_table_is_comp(index->table));
-    n = rec_get_n_fields_old(rec);
-  } else {
-    n = dict_index_get_n_unique_in_tree(index);
-  }
+  auto n = dict_index_get_n_unique_in_tree(index);
 
   *n_fields = n;
   return rec_copy_prefix_to_buf(rec, index, n, buf, buf_size);
@@ -3371,7 +3326,7 @@ void dict_update_statistics_low(dict_table_t *table,
   /* If we have set a high innodb_force_recovery level, do not calculate
   statistics, as a badly corrupted index can cause a crash in it. */
 
-  if (srv_force_recovery >= IB_RECOVERY_NO_IBUF_MERGE) {
+  if (srv_force_recovery > IB_RECOVERY_NO_TRX_UNDO) {
 
     return;
   }

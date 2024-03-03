@@ -204,9 +204,7 @@ holds an x-latch on the page. The operation does not succeed if there is too
 little space on the page or if the update would result in too empty a page,
 so that tree compression is recommended.
 @return DB_SUCCESS, or DB_OVERFLOW if the updated record does not fit,
-DB_UNDERFLOW if the page would become too empty, or DB_ZIP_OVERFLOW if
-there is not enough space left on the compressed page */
-
+DB_UNDERFLOW if the page would become too empty. */
 db_err btr_cur_optimistic_update(
     ulint flags,         /*!< in: undo logging and locking flags */
     btr_cur_t *cursor,   /*!< in: cursor on the record to update;
@@ -260,12 +258,6 @@ db_err btr_cur_del_mark_set_sec_rec(ulint flags,       /*!< in: locking flag */
                                     bool val,          /*!< in: value to set */
                                     que_thr_t *thr,    /*!< in: query thread */
                                     mtr_t *mtr);       /*!< in: mtr */
-
-/*** Clear a secondary index record's delete mark.  This function is only
-used by the insert buffer insert merge mechanism. */
-void btr_cur_del_unmark_for_ibuf(
-    rec_t *rec,               /*!< in/out: record to delete unmark */
-    mtr_t *mtr);              /*!< in: mtr */
 
 /*** Removes the record on which the tree cursor is positioned. It is assumed
 that the mtr has an x-latch on the page where the cursor is positioned,
@@ -477,8 +469,6 @@ enum btr_cur_method {
                          hash_node, and might be necessary to
                          update */
   BTR_CUR_BINARY,        /*!< success using the binary search */
-  BTR_CUR_INSERT_TO_IBUF /*!< performed the intended insert to
-                         the insert buffer */
 };
 
 /** The tree cursor: the definition appears here only for the compiler

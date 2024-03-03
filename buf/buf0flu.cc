@@ -31,7 +31,6 @@ Created 11/11/1995 Heikki Tuuri
 #include "buf0lru.h"
 #include "buf0rea.h"
 #include "fil0fil.h"
-#include "ibuf0ibuf.h"
 #include "log0log.h"
 #include "os0file.h"
 #include "page0page.h"
@@ -753,10 +752,6 @@ buf_flush_write_block_low(buf_page_t *bpage) /*!< in: buffer block to write */
   ut_ad(!mutex_own(buf_page_get_mutex(bpage)));
   ut_ad(buf_page_get_io_fix(bpage) == BUF_IO_WRITE);
   ut_ad(bpage->oldest_modification != 0);
-
-#ifdef UNIV_IBUF_COUNT_DEBUG
-  ut_a(ibuf_count_get(bpage->space, bpage->offset) == 0);
-#endif
   ut_ad(bpage->newest_modification != 0);
 
 #ifdef UNIV_LOG_DEBUG

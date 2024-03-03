@@ -172,7 +172,7 @@ inline byte *mlog_write_initial_log_record_fast(
   the doublewrite buffer is located in pages
   FSP_EXTENT_SIZE, ..., 3 * FSP_EXTENT_SIZE - 1 in the
   system tablespace */
-  if (space == TRX_SYS_SPACE && offset >= FSP_EXTENT_SIZE &&
+  if (space == SYS_TABLESPACE && offset >= FSP_EXTENT_SIZE &&
       offset < 3 * FSP_EXTENT_SIZE) {
     if (trx_doublewrite_buf_is_being_created) {
       /* Do nothing: we only come to this branch in an

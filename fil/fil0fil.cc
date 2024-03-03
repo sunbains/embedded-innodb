@@ -29,7 +29,6 @@ Created 10/25/1995 Heikki Tuuri
 #include "dict0dict.h"
 #include "fsp0fsp.h"
 #include "hash0hash.h"
-#include "ibuf0ibuf.h"
 #include "log0recv.h"
 #include "mach0data.h"
 #include "mem0mem.h"
@@ -181,9 +180,6 @@ struct fil_space_t {
   stop temporarily posting of new i/o requests on the file */
   bool stop_ios;
 
-  /** we set this true when we start deleting a single-table tablespace */
-  bool stop_ibuf_merges;
-
   /** this is set to true when we start deleting a single-table tablespace
   and its file; when this flag is set no further i/o or flush requests can
   be placed on this space, though there may be such requests still being
@@ -211,11 +207,6 @@ struct fil_space_t {
   /** this is positive when flushing the tablespace to disk; dropping of
   the tablespace is forbidden if this is positive */
   ulint n_pending_flushes;
-
-  /** this is positive when merging insert buffer entries to a page so that
-  we may need to access the ibuf bitmap page in the tablespade: dropping of
-  the tablespace is forbidden if this is positive */
-  ulint n_pending_ibuf_merges;
 
   /** hash chain node */
   hash_node_t hash;
@@ -1092,7 +1083,6 @@ try_again:
   }
 
   space->stop_ios = false;
-  space->stop_ibuf_merges = false;
   space->is_being_deleted = false;
   space->purpose = purpose;
   space->size = 0;
@@ -1101,7 +1091,6 @@ try_again:
   space->n_reserved_extents = 0;
 
   space->n_pending_flushes = 0;
-  space->n_pending_ibuf_merges = 0;
 
   UT_LIST_INIT(space->chain);
   space->magic_n = FIL_SPACE_MAGIC_N;
@@ -1456,15 +1445,11 @@ static db_err fil_write_lsn_and_arch_no_to_file(
   auto buf1 = (byte *)mem_alloc(2 * UNIV_PAGE_SIZE);
   auto buf = (byte *)ut_align(buf1, UNIV_PAGE_SIZE);
 
-  fil_read(true, 0, 0, sum_of_sizes, 0, UNIV_PAGE_SIZE, buf, nullptr);
+  fil_read(true, 0, SYS_TABLESPACE, sum_of_sizes, 0, UNIV_PAGE_SIZE, buf, nullptr);
 
   mach_write_ull(buf + FIL_PAGE_FILE_FLUSH_LSN, lsn);
-#ifdef UNIV_LOG_ARCHIVE
-  // FIXME: ARCHIVE: We still haven't decided where this will go
-  // mach_write_to_4(buf + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID, arch_log_no);
-#endif
 
-  fil_write(true, 0, 0, sum_of_sizes, 0, UNIV_PAGE_SIZE, buf, nullptr);
+  fil_write(true, 0, SYS_TABLESPACE, sum_of_sizes, 0, UNIV_PAGE_SIZE, buf, nullptr);
 
   mem_free(buf1);
 
@@ -1567,52 +1552,6 @@ void fil_read_flushed_lsn_and_arch_log_no(
     *max_arch_log_no = arch_log_no;
   }
 #endif /* UNIV_LOG_ARCHIVE */
-}
-
-bool fil_inc_pending_ibuf_merges(ulint id) {
-  fil_space_t *space;
-
-  mutex_enter(&fil_system->mutex);
-
-  space = fil_space_get_by_id(id);
-
-  if (space == nullptr) {
-    ib_logger(ib_stream,
-              "InnoDB: Error: trying to do ibuf merge to a"
-              " dropped tablespace %lu\n",
-              (ulong)id);
-  }
-
-  if (space == nullptr || space->stop_ibuf_merges) {
-    mutex_exit(&fil_system->mutex);
-
-    return true;
-  }
-
-  space->n_pending_ibuf_merges++;
-
-  mutex_exit(&fil_system->mutex);
-
-  return false;
-}
-
-void fil_decr_pending_ibuf_merges(ulint id) {
-  mutex_enter(&fil_system->mutex);
-
-  auto space = fil_space_get_by_id(id);
-
-  if (space == nullptr) {
-    ib_logger(ib_stream,
-              "InnoDB: Error: decrementing ibuf merge of a"
-              " dropped tablespace %lu\n",
-              (ulong)id);
-  }
-
-  if (space != nullptr) {
-    space->n_pending_ibuf_merges--;
-  }
-
-  mutex_exit(&fil_system->mutex);
 }
 
 /** Creates the database directory for a table if it does not exist yet. */
@@ -1837,81 +1776,43 @@ bool fil_delete_tablespace(ulint id) {
   bool success;
   fil_space_t *space;
   fil_node_t *node;
-  ulint count = 0;
   char *path;
 
   ut_a(id != 0);
-stop_ibuf_merges:
-  mutex_enter(&fil_system->mutex);
 
-  space = fil_space_get_by_id(id);
+  ulint count{};
 
-  if (space != nullptr) {
-    space->stop_ibuf_merges = true;
+  for (;;) {
+    mutex_enter(&fil_system->mutex);
 
-    if (space->n_pending_ibuf_merges == 0) {
-      mutex_exit(&fil_system->mutex);
+    space = fil_space_get_by_id(id);
 
-      count = 0;
-
-      goto try_again;
-    } else {
-      if (count > 5000) {
-        ut_print_timestamp(ib_stream);
-        ib_logger(ib_stream, "  InnoDB: Warning: trying to"
-                             " delete tablespace ");
-        ut_print_filename(ib_stream, space->name);
-        ib_logger(ib_stream,
-                  ",\n"
-                  "InnoDB: but there are %lu pending"
-                  " ibuf merges on it.\n"
-                  "InnoDB: Loop %lu.\n",
-                  (ulong)space->n_pending_ibuf_merges, (ulong)count);
-      }
+    if (space == nullptr) {
+      ut_print_timestamp(ib_stream);
+      ib_logger(ib_stream,
+                "  InnoDB: Error: cannot delete tablespace %lu\n"
+                "InnoDB: because it is not found in the"
+                " tablespace memory cache.\n",
+                (ulong)id);
 
       mutex_exit(&fil_system->mutex);
 
-      os_thread_sleep(20000);
-      count++;
-
-      goto stop_ibuf_merges;
+      return false;
     }
-  }
 
-  mutex_exit(&fil_system->mutex);
-  count = 0;
+    space->is_being_deleted = true;
 
-try_again:
-  mutex_enter(&fil_system->mutex);
+    ut_a(UT_LIST_GET_LEN(space->chain) == 1);
+    node = UT_LIST_GET_FIRST(space->chain);
 
-  space = fil_space_get_by_id(id);
+    if (space->n_pending_flushes == 0 && node->n_pending == 0) {
+      break;
+    }
 
-  if (space == nullptr) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  InnoDB: Error: cannot delete tablespace %lu\n"
-              "InnoDB: because it is not found in the"
-              " tablespace memory cache.\n",
-              (ulong)id);
-
-    mutex_exit(&fil_system->mutex);
-
-    return false;
-  }
-
-  ut_a(space);
-  ut_a(space->n_pending_ibuf_merges == 0);
-
-  space->is_being_deleted = true;
-
-  ut_a(UT_LIST_GET_LEN(space->chain) == 1);
-  node = UT_LIST_GET_FIRST(space->chain);
-
-  if (space->n_pending_flushes > 0 || node->n_pending > 0) {
     if (count > 1000) {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  InnoDB: Warning: trying to"
-                           " delete tablespace ");
+                             " delete tablespace ");
       ut_print_filename(ib_stream, space->name);
       ib_logger(ib_stream,
                 ",\n"
@@ -1921,23 +1822,24 @@ try_again:
                 (ulong)space->n_pending_flushes, (ulong)node->n_pending,
                 (ulong)count);
     }
+
     mutex_exit(&fil_system->mutex);
+
     os_thread_sleep(20000);
-
-    count++;
-
-    goto try_again;
+ 
+    ++count;
   }
 
   path = mem_strdup(space->name);
 
   mutex_exit(&fil_system->mutex);
-  /* Invalidate in the buffer pool all pages belonging to the
-  tablespace. Since we have set space->is_being_deleted = true, readahead
-  or ibuf merge can no longer read more pages of this tablespace to the
-  buffer pool. Thus we can clean the tablespace out of the buffer pool
-  completely and permanently. The flag is_being_deleted also prevents
-  fil_flush() from being applied to this tablespace. */
+
+  /* Invalidate in the buffer pool all pages belonging to the tablespace.
+  Since we have set space->is_being_deleted = true, readahead can no longer
+  read more pages of this tablespace to the buffer pool. Thus we can clean
+  the tablespace out of the buffer pool completely and permanently. The flag
+  is_being_deleted also prevents fil_flush() from being applied to this
+  tablespace. */
 
   buf_LRU_invalidate_tablespace(id);
 
@@ -1987,10 +1889,6 @@ bool fil_discard_tablespace(ulint id) {
               " insert buffer entries for this tablespace.\n",
               (ulong)id);
   }
-
-  /* Remove all insert buffer entries for the tablespace */
-
-  ibuf_delete_for_discarded_space(id);
 
   return success;
 }
@@ -3409,20 +3307,12 @@ fil_report_invalid_page_access(ulint block_offset,     /** in: block offset */
             (ulong)byte_offset, (ulong)len, (ulong)type);
 }
 
-db_err fil_io(ulint type, bool sync, ulint space_id, ulint block_offset,
+db_err fil_io(ulint type, bool sync, space_id_t space_id, ulint block_offset,
               ulint byte_offset, ulint len, void *buf, void *message) {
-  ulint mode;
-  fil_space_t *space;
-  fil_node_t *node;
-  ulint offset_high;
-  ulint offset_low;
-  bool ret;
-  ulint wake_later;
-
-  auto is_log = type & OS_FILE_LOG;
+  bool is_log = (type & OS_FILE_LOG) > 0;
   type = type & ~OS_FILE_LOG;
 
-  wake_later = type & OS_AIO_SIMULATED_WAKE_LATER;
+  auto wake_later = type & OS_AIO_SIMULATED_WAKE_LATER;
   type = type & ~OS_AIO_SIMULATED_WAKE_LATER;
 
   ut_ad(len > 0);
@@ -3433,20 +3323,13 @@ db_err fil_io(ulint type, bool sync, ulint space_id, ulint block_offset,
                 "error (1 << UNIV_PAGE_SIZE_SHIFT) != UNIV_PAGE_SIZE");
 
   ut_ad(fil_validate());
-#ifndef UNIV_LOG_DEBUG
-  /* ibuf bitmap pages must be read in the sync aio mode: */
-  ut_ad(recv_no_ibuf_operations || (type == OS_FILE_WRITE) ||
-        !ibuf_bitmap_page(block_offset) || sync || is_log);
-  ut_ad(!ibuf_inside() || is_log || (type == OS_FILE_WRITE) ||
-        ibuf_page(space_id, block_offset, nullptr));
-#endif /* UNIV_LOG_DEBUG */
+
+  ulint mode;
+
   if (sync) {
     mode = OS_AIO_SYNC;
   } else if (is_log) {
     mode = OS_AIO_LOG;
-  } else if (type == OS_FILE_READ && !recv_no_ibuf_operations &&
-             ibuf_page(space_id, block_offset, nullptr)) {
-    mode = OS_AIO_IBUF;
   } else {
     mode = OS_AIO_NORMAL;
   }
@@ -3462,7 +3345,7 @@ db_err fil_io(ulint type, bool sync, ulint space_id, ulint block_offset,
 
   fil_mutex_enter_and_prepare_for_io(space_id);
 
-  space = fil_space_get_by_id(space_id);
+  auto space = fil_space_get_by_id(space_id);
 
   if (!space) {
     mutex_exit(&fil_system->mutex);
@@ -3478,9 +3361,9 @@ db_err fil_io(ulint type, bool sync, ulint space_id, ulint block_offset,
     return DB_TABLESPACE_DELETED;
   }
 
-  ut_ad((mode != OS_AIO_IBUF) || (space->purpose == FIL_TABLESPACE));
+  ut_ad(is_log == (space->purpose == FIL_LOG));
 
-  node = UT_LIST_GET_FIRST(space->chain);
+  auto node = UT_LIST_GET_FIRST(space->chain);
 
   for (;;) {
     if (unlikely(node == nullptr)) {
@@ -3525,9 +3408,8 @@ db_err fil_io(ulint type, bool sync, ulint space_id, ulint block_offset,
 
   /* Calculate the low 32 bits and the high 32 bits of the file offset */
 
-  offset_high = (block_offset >> (32 - UNIV_PAGE_SIZE_SHIFT));
-  offset_low =
-      ((block_offset << UNIV_PAGE_SIZE_SHIFT) & 0xFFFFFFFFUL) + byte_offset;
+  auto offset_high = (block_offset >> (32 - UNIV_PAGE_SIZE_SHIFT));
+  auto offset_low = ((block_offset << UNIV_PAGE_SIZE_SHIFT) & 0xFFFFFFFFUL) + byte_offset;
 
   ut_a(node->size - block_offset >=
        ((byte_offset + len + (UNIV_PAGE_SIZE - 1)) / UNIV_PAGE_SIZE));
@@ -3538,8 +3420,8 @@ db_err fil_io(ulint type, bool sync, ulint space_id, ulint block_offset,
   ut_a((len % OS_FILE_LOG_BLOCK_SIZE) == 0);
 
   /* Queue the aio request */
-  ret = os_aio(type, mode | wake_later, node->name, node->handle, buf,
-               offset_low, offset_high, len, node, message);
+  auto ret = os_aio(type, mode | wake_later, node->name, node->handle, buf,
+		    offset_low, offset_high, len, node, message);
   ut_a(ret);
 
   if (mode == OS_AIO_SYNC) {

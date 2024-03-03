@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -34,7 +34,6 @@ Created 9/20/1997 Heikki Tuuri
 #include "buf0rea.h"
 #include "ddl0ddl.h"
 #include "fil0fil.h"
-#include "ibuf0ibuf.h"
 #include "mem0mem.h"
 #include "mtr0log.h"
 #include "mtr0mtr.h"
@@ -90,17 +89,6 @@ we know that the server was not cleanly shutdown. We must then initialize
 the crash recovery environment before attempting to store these entries in
 the log hash table. */
 static bool recv_log_scan_is_startup_type;
-
-/** If the following is true, the buffer pool file pages must be invalidated
-after recovery and no ibuf operations are allowed; this becomes true if
-the log record hash table becomes too full, and log records must be merged
-to file pages already before the recovery is finished: in this case no
-ibuf operations are allowed, as they could modify the pages read in the
-buffer pool before the pages have been recovered to the up-to-date state.
-
-true means that recovery is running and no operations on the log files
-are allowed yet: the variable name is misleading. */
-bool recv_no_ibuf_operations;
 
 /** true when the redo log is being backed up */
 #define recv_is_making_a_backup false
@@ -158,8 +146,6 @@ void recv_sys_var_init(void) {
   recv_lsn_checks_on = false;
 
   recv_log_scan_is_startup_type = false;
-
-  recv_no_ibuf_operations = false;
 
   recv_scan_print_counter = 0;
 
@@ -710,36 +696,18 @@ static byte *recv_parse_or_apply_log_rec_body(
         redo log been written with something
         older than InnoDB Plugin 1.0.4. */
         ut_ad(offs == FIL_PAGE_TYPE ||
-              offs == IBUF_TREE_SEG_HEADER + IBUF_HEADER + FSEG_HDR_OFFSET ||
-              offs == PAGE_BTR_IBUF_FREE_LIST + PAGE_HEADER + FIL_ADDR_BYTE ||
-              offs == PAGE_BTR_IBUF_FREE_LIST + PAGE_HEADER + FIL_ADDR_BYTE +
-                          FIL_ADDR_SIZE ||
               offs == PAGE_BTR_SEG_LEAF + PAGE_HEADER + FSEG_HDR_OFFSET ||
-              offs == PAGE_BTR_SEG_TOP + PAGE_HEADER + FSEG_HDR_OFFSET ||
-              offs == PAGE_BTR_IBUF_FREE_LIST_NODE + PAGE_HEADER +
-                          FIL_ADDR_BYTE + 0 /*FLST_PREV*/
-              || offs == PAGE_BTR_IBUF_FREE_LIST_NODE + PAGE_HEADER +
-                             FIL_ADDR_BYTE + FIL_ADDR_SIZE /*FLST_NEXT*/);
+              offs == PAGE_BTR_SEG_TOP + PAGE_HEADER + FSEG_HDR_OFFSET);
         break;
       case MLOG_4BYTES:
         /* Note that this can fail when the
         redo log been written with something
         older than InnoDB Plugin 1.0.4. */
         ut_ad(
-            0 || offs == IBUF_TREE_SEG_HEADER + IBUF_HEADER + FSEG_HDR_SPACE ||
-            offs == IBUF_TREE_SEG_HEADER + IBUF_HEADER + FSEG_HDR_PAGE_NO ||
-            offs == PAGE_BTR_IBUF_FREE_LIST + PAGE_HEADER /* flst_init */
-            || offs == PAGE_BTR_IBUF_FREE_LIST + PAGE_HEADER + FIL_ADDR_PAGE ||
-            offs == PAGE_BTR_IBUF_FREE_LIST + PAGE_HEADER + FIL_ADDR_PAGE +
-                        FIL_ADDR_SIZE ||
             offs == PAGE_BTR_SEG_LEAF + PAGE_HEADER + FSEG_HDR_PAGE_NO ||
             offs == PAGE_BTR_SEG_LEAF + PAGE_HEADER + FSEG_HDR_SPACE ||
             offs == PAGE_BTR_SEG_TOP + PAGE_HEADER + FSEG_HDR_PAGE_NO ||
-            offs == PAGE_BTR_SEG_TOP + PAGE_HEADER + FSEG_HDR_SPACE ||
-            offs == PAGE_BTR_IBUF_FREE_LIST_NODE + PAGE_HEADER + FIL_ADDR_PAGE +
-                        0 /*FLST_PREV*/
-            || offs == PAGE_BTR_IBUF_FREE_LIST_NODE + PAGE_HEADER +
-                           FIL_ADDR_PAGE + FIL_ADDR_SIZE /*FLST_NEXT*/);
+            offs == PAGE_BTR_SEG_TOP + PAGE_HEADER + FSEG_HDR_SPACE);
         break;
       }
     }
@@ -881,10 +849,6 @@ static byte *recv_parse_or_apply_log_rec_body(
       ptr = page_cur_parse_delete_rec(ptr, end_ptr, block, index, mtr);
     }
     break;
-  case MLOG_IBUF_BITMAP_INIT:
-    /* Allow anything in page_type when creating a page. */
-    ptr = ibuf_parse_bitmap_init(ptr, end_ptr, block, mtr);
-    break;
   case MLOG_INIT_FILE_PAGE:
     /* Allow anything in page_type when creating a page. */
     ptr = fsp_parse_init_file_page(ptr, end_ptr, block);
@@ -898,12 +862,6 @@ static byte *recv_parse_or_apply_log_rec_body(
   case MLOG_FILE_DELETE:
   case MLOG_FILE_CREATE2:
     ptr = fil_op_log_parse_or_replay(ptr, end_ptr, type, 0, 0);
-    break;
-  case MLOG_ZIP_WRITE_NODE_PTR:
-  case MLOG_ZIP_WRITE_BLOB_PTR:
-  case MLOG_ZIP_WRITE_HEADER:
-  case MLOG_ZIP_PAGE_COMPRESS:
-    ut_error;
     break;
   default:
     ptr = nullptr;
@@ -1271,20 +1229,7 @@ static ulint recv_read_in_area(ulint space,          /*!< in: space */
   return n;
 }
 
-/** Empties the hash table of stored log records, applying them to appropriate
-pages. */
-
-void recv_apply_hashed_log_recs(
-    bool allow_ibuf) /*!< in: if true, also ibuf operations are
-                      allowed during the application; if false,
-                      no ibuf operations are allowed, and after
-                      the application all file pages are flushed to
-                      disk and invalidated in buffer pool: this
-                      alternative means that no new log records
-                      can be generated during the application;
-                      the caller must in this case own the log
-                      mutex */
-{
+void recv_apply_hashed_log_recs() {
   recv_addr_t *recv_addr;
   ulint i;
   ulint n_pages;
@@ -1300,12 +1245,6 @@ loop:
     os_thread_sleep(500000);
 
     goto loop;
-  }
-
-  ut_ad((!allow_ibuf) == mutex_own(&log_sys->mutex));
-
-  if (!allow_ibuf) {
-    recv_no_ibuf_operations = true;
   }
 
   recv_sys->apply_log_recs = true;
@@ -1377,27 +1316,22 @@ loop:
     ib_logger(ib_stream, "\n");
   }
 
-  if (!allow_ibuf) {
-    /* Flush all the file pages to disk and invalidate them in
-    the buffer pool */
+  /* Flush all the file pages to disk and invalidate them in the buffer pool */
 
-    ut_d(recv_no_log_write = true);
-    mutex_exit(&(recv_sys->mutex));
-    mutex_exit(&(log_sys->mutex));
+  ut_d(recv_no_log_write = true);
+  mutex_exit(&(recv_sys->mutex));
+  mutex_exit(&(log_sys->mutex));
 
-    n_pages = buf_flush_batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
-    ut_a(n_pages != ULINT_UNDEFINED);
+  n_pages = buf_flush_batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
+  ut_a(n_pages != ULINT_UNDEFINED);
 
-    buf_flush_wait_batch_end(BUF_FLUSH_LIST);
+  buf_flush_wait_batch_end(BUF_FLUSH_LIST);
 
-    buf_pool_invalidate();
+  buf_pool_invalidate();
 
-    mutex_enter(&(log_sys->mutex));
-    mutex_enter(&(recv_sys->mutex));
-    ut_d(recv_no_log_write = false);
-
-    recv_no_ibuf_operations = false;
-  }
+  mutex_enter(&(log_sys->mutex));
+  mutex_enter(&(recv_sys->mutex));
+  ut_d(recv_no_log_write = false);
 
   recv_sys->apply_log_recs = false;
   recv_sys->apply_batch_on = false;
@@ -2032,13 +1966,9 @@ bool recv_scan_log_recs(ib_recovery_t recovery, ulint available_memory,
 
     if (store_to_hash && mem_heap_get_size(recv_sys->heap) > available_memory) {
 
-      /* Hash table of log records has grown too big:
-      empty it; false means no ibuf operations
-      allowed, as we cannot add new records to the
-      log yet: they would be produced by ibuf
-      operations */
+      /* Hash table of log records has grown too big: empty it. */
 
-      recv_apply_hashed_log_recs(false);
+      recv_apply_hashed_log_recs();
     }
 
     if (recv_sys->recovered_offset > RECV_PARSING_BUF_SIZE / 4) {
@@ -2491,16 +2421,12 @@ db_err recv_recovery_from_checkpoint_start_func(ib_recovery_t recovery,
 #undef LIMIT_LSN
 }
 
-/** Completes recovery from a checkpoint. */
-
-void recv_recovery_from_checkpoint_finish(
-    ib_recovery_t recovery) /*!< in: recovery flag */
-{
+void recv_recovery_from_checkpoint_finish(ib_recovery_t recovery) {
   /* Apply the hashed log records to the respective file pages */
 
   if (recovery < IB_RECOVERY_NO_LOG_REDO) {
 
-    recv_apply_hashed_log_recs(true);
+    recv_apply_hashed_log_recs();
   }
 
 #ifdef UNIV_DEBUG
@@ -2530,7 +2456,8 @@ void recv_recovery_from_checkpoint_finish(
 
 #ifndef UNIV_LOG_DEBUG
   recv_sys_debug_free();
-#endif
+#endif /* UNIV_LOG_DEBUG */
+
   /* Roll back any recovered data dictionary transactions, so
   that the data dictionary tables will be free of any locks.
   The data dictionary latch should guarantee that there is at
@@ -2538,9 +2465,7 @@ void recv_recovery_from_checkpoint_finish(
   trx_rollback_or_clean_recovered(false);
 }
 
-/** Initiates the rollback of active transactions. */
-
-void recv_recovery_rollback_active(void) {
+void recv_recovery_rollback_active() {
   int i;
 
   /* This is required to set the compare context before recovery, also

@@ -38,7 +38,6 @@ Created 11/5/1995 Heikki Tuuri
 #include "btr0sea.h"
 #include "dict0dict.h"
 #include "fil0fil.h"
-#include "ibuf0ibuf.h"
 #include "lock0lock.h"
 #include "log0log.h"
 #include "log0recv.h"
@@ -446,15 +445,8 @@ void buf_page_print(const byte *read_buf, ulint) {
   case FIL_PAGE_INODE:
     ib_logger(ib_stream, "InnoDB: Page may be an 'inode' page\n");
     break;
-  case FIL_PAGE_IBUF_FREE_LIST:
-    ib_logger(ib_stream, "InnoDB: Page may be an insert buffer free "
-                         "list page\n");
-    break;
   case FIL_PAGE_TYPE_ALLOCATED:
     ib_logger(ib_stream, "InnoDB: Page may be a freshly allocated page\n");
-    break;
-  case FIL_PAGE_IBUF_BITMAP:
-    ib_logger(ib_stream, "InnoDB: Page may be an insert buffer bitmap page\n");
     break;
   case FIL_PAGE_TYPE_SYS:
     ib_logger(ib_stream, "InnoDB: Page may be a system page\n");
@@ -813,71 +805,6 @@ void buf_pool_drop_hash_index(void) {
       }
     }
   } while (released_search_latch);
-}
-
-void buf_relocate(buf_page_t *bpage, buf_page_t *dpage) {
-  buf_page_t *b;
-  ulint fold;
-
-  ut_ad(buf_pool_mutex_own());
-  ut_ad(mutex_own(buf_page_get_mutex(bpage)));
-  ut_a(buf_page_get_io_fix(bpage) == BUF_IO_NONE);
-  ut_a(bpage->buf_fix_count == 0);
-  ut_ad(bpage->in_LRU_list);
-  ut_ad(bpage->in_page_hash);
-  ut_ad(bpage == buf_page_hash_get(bpage->space, bpage->offset));
-#ifdef UNIV_DEBUG
-  switch (buf_page_get_state(bpage)) {
-  case BUF_BLOCK_NOT_USED:
-  case BUF_BLOCK_READY_FOR_USE:
-  case BUF_BLOCK_FILE_PAGE:
-  case BUF_BLOCK_MEMORY:
-  case BUF_BLOCK_REMOVE_HASH:
-    ut_error;
-    break;
-  }
-#endif /* UNIV_DEBUG */
-
-  memcpy(dpage, bpage, sizeof *dpage);
-
-  ut_d(bpage->in_LRU_list = false);
-  ut_d(bpage->in_page_hash = false);
-
-  /* relocate buf_pool->LRU */
-  b = UT_LIST_GET_PREV(LRU, bpage);
-  UT_LIST_REMOVE(LRU, buf_pool->LRU, bpage);
-
-  if (b) {
-    UT_LIST_INSERT_AFTER(LRU, buf_pool->LRU, b, dpage);
-  } else {
-    UT_LIST_ADD_FIRST(LRU, buf_pool->LRU, dpage);
-  }
-
-  if (unlikely(buf_pool->LRU_old == bpage)) {
-    buf_pool->LRU_old = dpage;
-#ifdef UNIV_LRU_DEBUG
-    /* buf_pool->LRU_old must be the first item in the LRU list
-    whose "old" flag is set. */
-    ut_a(buf_pool->LRU_old->old);
-    ut_a(!UT_LIST_GET_PREV(LRU, buf_pool->LRU_old) ||
-         !UT_LIST_GET_PREV(LRU, buf_pool->LRU_old)->old);
-    ut_a(!UT_LIST_GET_NEXT(LRU, buf_pool->LRU_old) ||
-         UT_LIST_GET_NEXT(LRU, buf_pool->LRU_old)->old);
-  } else {
-    /* Check that the "old" flag is consistent in
-    the block and its neighbours. */
-    buf_page_set_old(dpage, buf_page_is_old(dpage));
-#endif /* UNIV_LRU_DEBUG */
-  }
-
-  ut_d(UT_LIST_VALIDATE(LRU, buf_page_t, buf_pool->LRU,
-                        ut_ad(ut_list_node_313->in_LRU_list)));
-
-  /* relocate buf_pool->page_hash */
-  fold = buf_page_address_fold(bpage->space, bpage->offset);
-
-  HASH_DELETE(buf_page_t, hash, buf_pool->page_hash, fold, bpage);
-  HASH_INSERT(buf_page_t, hash, buf_pool->page_hash, fold, dpage);
 }
 
 #if 0
@@ -1422,11 +1349,8 @@ buf_block_t *buf_page_get_gen(ulint space, ulint, ulint offset, ulint rw_latch,
   ut_ad((mode == BUF_GET) || (mode == BUF_GET_IF_IN_POOL) ||
         (mode == BUF_GET_NO_LATCH));
 
-#ifndef UNIV_LOG_DEBUG
-  ut_ad(!ibuf_inside() || ibuf_page(space, offset, nullptr));
-#endif /* UNIV_LOG_DEBUG */
+  ++buf_pool->stat.n_page_gets;
 
-  buf_pool->stat.n_page_gets++;
 loop:
   buf_pool_mutex_enter();
 
@@ -1590,11 +1514,7 @@ loop:
     buf_read_ahead_linear(space, offset);
   }
 
-#ifdef UNIV_IBUF_COUNT_DEBUG
-  ut_a(ibuf_count_get(buf_block_get_space(block),
-                      buf_block_get_page_no(block)) == 0);
-#endif
-  return (block);
+  return block;
 }
 
 /** This is the general function used to get optimistic access to a database
@@ -1639,9 +1559,6 @@ bool buf_page_optimistic_get(
 
   access_time = buf_page_is_accessed(&block->page);
   buf_page_set_accessed_make_young(&block->page, access_time);
-
-  ut_ad(!ibuf_inside() || ibuf_page(buf_block_get_space(block),
-                                    buf_block_get_page_no(block), nullptr));
 
   if (rw_latch == RW_S_LATCH) {
     success = rw_lock_s_lock_nowait(&(block->lock), file, line);
@@ -1693,13 +1610,9 @@ bool buf_page_optimistic_get(
     buf_read_ahead_linear(buf_block_get_space(block), buf_block_get_page_no(block));
   }
 
-#ifdef UNIV_IBUF_COUNT_DEBUG
-  ut_a(ibuf_count_get(buf_block_get_space(block),
-                      buf_block_get_page_no(block)) == 0);
-#endif
-  buf_pool->stat.n_page_gets++;
+  ++buf_pool->stat.n_page_gets;
 
-  return (true);
+  return true;
 }
 
 /** This is used to get access to a known database page, when no waiting can be
@@ -1759,8 +1672,6 @@ bool buf_page_get_known_nowait(
     buf_pool_mutex_exit();
   }
 
-  ut_ad(!ibuf_inside() || (mode == BUF_KEEP_OLD));
-
   if (rw_latch == RW_S_LATCH) {
     success = rw_lock_s_lock_nowait(&(block->lock), file, line);
     fix_type = MTR_MEMO_PAGE_S_FIX;
@@ -1788,14 +1699,9 @@ bool buf_page_get_known_nowait(
   ut_a(block->page.file_page_was_freed == false);
 #endif
 
-#ifdef UNIV_IBUF_COUNT_DEBUG
-  ut_a((mode == BUF_KEEP_OLD) ||
-       (ibuf_count_get(buf_block_get_space(block),
-                       buf_block_get_page_no(block)) == 0));
-#endif
-  buf_pool->stat.n_page_gets++;
+  ++buf_pool->stat.n_page_gets;
 
-  return (true);
+  return true;
 }
 
 /** Given a tablespace id and page number tries to get that page. If the
@@ -1870,12 +1776,7 @@ buf_page_try_get_func(ulint space_id,   /*!< in: tablespace id */
 
   buf_pool->stat.n_page_gets++;
 
-#ifdef UNIV_IBUF_COUNT_DEBUG
-  ut_a(ibuf_count_get(buf_block_get_space(block),
-                      buf_block_get_page_no(block)) == 0);
-#endif
-
-  return (block);
+  return block;
 }
 
 /** Initialize some fields of a control block. */
@@ -1954,7 +1855,6 @@ static void buf_page_init(ulint space,  /*!< in: space id */
 buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, ulint space, ulint,
                                    bool, int64_t tablespace_version,
                                    ulint offset) {
-  mtr_t mtr;
   buf_block_t *block;
   buf_page_t *bpage = nullptr;
 
@@ -1962,23 +1862,7 @@ buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, ulint space, ulint,
 
   *err = DB_SUCCESS;
 
-  if (mode == BUF_READ_IBUF_PAGES_ONLY) {
-    /* It is a read-ahead within an ibuf routine */
-
-    ut_ad(!ibuf_bitmap_page(offset));
-    ut_ad(ibuf_inside());
-
-    mtr_start(&mtr);
-
-    if (!recv_no_ibuf_operations && !ibuf_page(space, offset, &mtr)) {
-
-      mtr_commit(&mtr);
-
-      return (nullptr);
-    }
-  } else {
-    ut_ad(mode == BUF_READ_ANY_PAGE);
-  }
+  ut_ad(mode == BUF_READ_ANY_PAGE);
 
   block = buf_LRU_get_free_block();
   ut_ad(block != nullptr);
@@ -2037,13 +1921,8 @@ buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, ulint space, ulint,
 func_exit:
   buf_pool_mutex_exit();
 
-  if (mode == BUF_READ_IBUF_PAGES_ONLY) {
-
-    mtr_commit(&mtr);
-  }
-
-  ut_ad(!bpage || buf_page_in_file(bpage));
-  return (bpage);
+  ut_ad(bpage == nullptr || buf_page_in_file(bpage));
+  return bpage;
 }
 
 buf_block_t *buf_page_create(ulint space, ulint offset, ulint, mtr_t *mtr) {
@@ -2062,9 +1941,6 @@ buf_block_t *buf_page_create(ulint space, ulint offset, ulint, mtr_t *mtr) {
   block = (buf_block_t *)buf_page_hash_get(space, offset);
 
   if (block && buf_page_in_file(&block->page)) {
-#ifdef UNIV_IBUF_COUNT_DEBUG
-    ut_a(ibuf_count_get(space, offset) == 0);
-#endif
 #ifdef UNIV_DEBUG_FILE_ACCESSES
     block->page.file_page_was_freed = false;
 #endif /* UNIV_DEBUG_FILE_ACCESSES */
@@ -2109,8 +1985,6 @@ buf_block_t *buf_page_create(ulint space, ulint offset, ulint, mtr_t *mtr) {
   /* Delete possible entries for the page from the insert buffer:
   such can exist if the page belonged to an index which was dropped */
 
-  ibuf_merge_or_delete_for_page(nullptr, space, offset, true);
-
   /* Flush pages from the end of the LRU list if necessary */
   buf_flush_free_margin();
 
@@ -2131,11 +2005,8 @@ buf_block_t *buf_page_create(ulint space, ulint offset, ulint, mtr_t *mtr) {
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
   ut_a(++buf_dbg_counter % 357 || buf_validate());
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
-#ifdef UNIV_IBUF_COUNT_DEBUG
-  ut_a(ibuf_count_get(buf_block_get_space(block),
-                      buf_block_get_page_no(block)) == 0);
-#endif
-  return (block);
+
+  return block;
 }
 
 void buf_page_io_complete(buf_page_t *bpage) {
@@ -2238,24 +2109,11 @@ void buf_page_io_complete(buf_page_t *bpage) {
       /* Pages must be uncompressed for crash recovery. */
       recv_recover_page(true, (buf_block_t *)bpage);
     }
-
-    if (!recv_no_ibuf_operations) {
-      ibuf_merge_or_delete_for_page((buf_block_t *)bpage, bpage->space,
-                                    bpage->offset, true);
-    }
   }
 
   buf_pool_mutex_enter();
   mutex_enter(buf_page_get_mutex(bpage));
 
-#ifdef UNIV_IBUF_COUNT_DEBUG
-  if (io_type == BUF_IO_WRITE) {
-    /* For BUF_IO_READ of compressed-only blocks, the
-    buffered operations will be merged by buf_page_get_gen()
-    after the block has been uncompressed. */
-    ut_a(ibuf_count_get(bpage->space, bpage->offset) == 0);
-  }
-#endif
   /* Because this thread which does the unlocking is not the same that
   did the locking, we use a pass value != 0 in unlock, which simply
   removes the newest lock debug record, without checking the thread
@@ -2265,10 +2123,6 @@ void buf_page_io_complete(buf_page_t *bpage) {
 
   switch (io_type) {
   case BUF_IO_READ:
-    /* NOTE that the call to ibuf may have moved the ownership of
-    the x-latch to this OS thread: do not let this confuse you in
-    debugging! */
-
     ut_ad(buf_pool->n_pend_reads > 0);
 
     --buf_pool->n_pend_reads;
@@ -2395,11 +2249,6 @@ bool buf_validate(void) {
         ut_a(buf_page_hash_get(buf_block_get_space(block),
                                buf_block_get_page_no(block)) == &block->page);
 
-#ifdef UNIV_IBUF_COUNT_DEBUG
-        ut_a(buf_page_get_io_fix(&block->page) == BUF_IO_READ ||
-             !ibuf_count_get(buf_block_get_space(block),
-                             buf_block_get_page_no(block)));
-#endif
         switch (buf_page_get_io_fix(&block->page)) {
         case BUF_IO_NONE:
           break;

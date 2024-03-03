@@ -100,14 +100,6 @@ a B-tree: defined only on the root page of a
 B-tree, but not in the root of an ibuf tree */
 constexpr ulint PAGE_BTR_SEG_LEAF = 36l;
 
-/** In the place of PAGE_BTR_SEG_LEAF and _TOP
-there is a free list base node if the page is
-the root page of an ibuf tree, and at the same
-place is the free list node if the page is in
-a free list */
-constexpr auto PAGE_BTR_IBUF_FREE_LIST = PAGE_BTR_SEG_LEAF;
-constexpr auto PAGE_BTR_IBUF_FREE_LIST_NODE = PAGE_BTR_SEG_LEAF;
-
 /** file segment header for the non-leaf pages
 in a B-tree: defined only on the root page of
 a B-tree, but not in the root of an ibuf

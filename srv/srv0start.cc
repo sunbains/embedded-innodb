@@ -52,7 +52,6 @@ Created 2/16/1996 Heikki Tuuri
 #include "dict0load.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
-#include "ibuf0ibuf.h"
 #include "lock0lock.h"
 #include "log0log.h"
 #include "log0recv.h"
@@ -81,9 +80,6 @@ Created 2/16/1996 Heikki Tuuri
 #include "trx0trx.h"
 #include "usr0sess.h"
 #include "ut0mem.h"
-#ifdef HAVE_ZIP
-#include "zlib.h" /* for ZLIB_VERSION */
-#endif            /* HAVE_ZIP */
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -93,6 +89,7 @@ Created 2/16/1996 Heikki Tuuri
 
 /* Log sequence number immediately after startup */
 uint64_t srv_start_lsn;
+
 /** Log sequence number at shutdown */
 uint64_t srv_shutdown_lsn;
 
@@ -100,7 +97,7 @@ uint64_t srv_shutdown_lsn;
 #include <sys/utsname.h>
 /** true if the F_FULLFSYNC option is available */
 bool srv_have_fullfsync = false;
-#endif
+#endif /* HAVE_DARWIN_THREADS */
 
 /** true if a raw partition is in use */
 bool srv_start_raw_disk_in_use = false;
@@ -108,10 +105,13 @@ bool srv_start_raw_disk_in_use = false;
 /** true if the server is being started, before rolling back any
 incomplete transactions */
 bool srv_startup_is_before_trx_rollback_phase = false;
+
 /** true if the server is being started */
 bool srv_is_being_started = false;
+
 /** true if the server was successfully started */
 bool srv_was_started = false;
+
 /** true if innobase_start_or_create_for_mysql() has been called */
 static bool srv_start_has_been_called = false;
 
@@ -124,24 +124,26 @@ static os_file_t files[1000];
 
 /** Mutex protecting the ios count */
 static mutex_t ios_mutex;
+
 /** Count of I/O operations in io_handler_thread() */
 static ulint ios;
 
 /** io_handler_thread parameters for thread identification */
 static ulint n[SRV_MAX_N_IO_THREADS + 6];
+
 /** io_handler_thread identifiers */
 static os_thread_id_t thread_ids[SRV_MAX_N_IO_THREADS + 6];
 
-/* The value passed to srv_parse_data_file_paths_and_sizes() is copied to
+/** The value passed to srv_parse_data_file_paths_and_sizes() is copied to
 this variable. Since the function does a destructive read. */
 static char *data_path_buf;
 
-/* The value passed to srv_parse_log_group_home_dirs() is copied to
+/** The value passed to srv_parse_log_group_home_dirs() is copied to
 this variable. Since the function does a destructive read. */
 static char *log_path_buf;
 
-/* We use this mutex to test the return value of pthread_mutex_trylock
-   on successful locking. HP-UX does NOT return 0, though Linux et al do. */
+/**We use this mutex to test the return value of pthread_mutex_trylock
+on successful locking. HP-UX does NOT return 0, though Linux et al do. */
 static os_fast_mutex_t srv_os_test_mutex;
 
 /** The system data file names */
@@ -156,9 +158,8 @@ os_thread_event_wait().
 @return	true if all threads exited. */
 static bool srv_threads_shutdown(void);
 
-/** */
 #define SRV_N_PENDING_IOS_PER_THREAD OS_AIO_N_PENDING_IOS_PER_THREAD
-#define SRV_MAX_N_PENDING_SYNC_IOS 100
+constexpr ulint SRV_MAX_N_PENDING_SYNC_IOS = 100;
 
 /** Convert a numeric string that optionally ends in G or M, to a number
 containing megabytes.
@@ -1087,16 +1088,6 @@ ib_err_t innobase_start_or_create() {
   ib_logger(ib_stream, "InnoDB: !!!!!!!! UNIV_DEBUG switched on !!!!!!!!!\n");
 #endif
 
-#ifdef UNIV_IBUF_DEBUG
-  ib_logger(ib_stream,
-            "InnoDB: !!!!!!!! UNIV_IBUF_DEBUG switched on !!!!!!!!!\n"
-#ifdef UNIV_IBUF_COUNT_DEBUG
-            "InnoDB: !!!!!!!! UNIV_IBUF_COUNT_DEBUG switched on !!!!!!!!!\n"
-            "InnoDB: Crash recovery will fail with UNIV_IBUF_COUNT_DEBUG\n"
-#endif
-  );
-#endif
-
 #ifdef UNIV_SYNC_DEBUG
   ib_logger(ib_stream,
             "InnoDB: !!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!\n");
@@ -1120,18 +1111,7 @@ ib_err_t innobase_start_or_create() {
     ib_logger(ib_stream, "InnoDB: The InnoDB memory heap is disabled\n");
   }
 
-  ib_logger(ib_stream, "InnoDB: " IB_ATOMICS_STARTUP_MSG
-#ifdef HAVE_ZIP
-                       "\nInnoDB: Compressed tables use zlib " ZLIB_VERSION
-#ifdef UNIV_ZIP_DEBUG
-                       " with validation"
-#endif /* UNIV_ZIP_DEBUG */
-#ifdef UNIV_ZIP_COPY
-                       " and extra copying"
-#endif /* UNIV_ZIP_COPY */
-
-#endif /* HAVE_ZIP */
-                       "\n");
+  ib_logger(ib_stream, "InnoDB: " IB_ATOMICS_STARTUP_MSG "\n");
 
   /* Print an error message if someone tries to start up InnoDB a
   second time while it's already in state running. */
@@ -1406,17 +1386,16 @@ ib_err_t innobase_start_or_create() {
 
 #ifdef UNIV_LOG_ARCHIVE
   } else if (srv_archive_recovery) {
-    ib_logger(ib_stream, "InnoDB: Starting archive"
-                         " recovery from a backup...\n");
+
+    ib_logger(ib_stream, "InnoDB: Starting archive recovery from a backup...\n");
+
     err = recv_recovery_from_archive_start(
         min_flushed_lsn, srv_archive_recovery_limit_lsn, min_arch_log_no);
+
     if (err != DB_SUCCESS) {
 
       return DB_ERROR;
     }
-    /* Since ibuf init is in dict_boot, and ibuf is needed
-    in any disk i/o, first call dict_boot */
-
     dict_boot();
     trx_sys_init_at_db_start(srv_force_recovery);
     srv_startup_is_before_trx_rollback_phase = false;
@@ -1477,13 +1456,9 @@ ib_err_t innobase_start_or_create() {
     are initialized in trx_sys_init_at_db_start(). */
 
     recv_recovery_from_checkpoint_finish(srv_force_recovery);
-    if (srv_force_recovery < IB_RECOVERY_NO_IBUF_MERGE) {
-      /* The following call is necessary for the insert
-      buffer to work with multiple tablespaces. We must
-      know the mapping between space id's and .ibd file
-      names.
 
-      In a crash recovery, we check that the info in data
+    if (srv_force_recovery <= IB_RECOVERY_NO_TRX_UNDO) {
+      /* In a crash recovery, we check that the info in data
       dictionary is consistent with what we already know
       about space id's from the call of
       fil_load_single_table_tablespaces().
@@ -1709,8 +1684,6 @@ ib_err_t innobase_start_or_create() {
 
       if (0 == strcmp(srv_main_thread_op_info, "waiting for server activity")) {
 
-        ut_a(ibuf_is_empty());
-
         break;
       }
     }
@@ -1727,15 +1700,6 @@ ib_err_t innobase_start_or_create() {
                          " downgrade, check\n"
                          "InnoDB: the InnoDB website for details\n"
                          "InnoDB: for instructions.\n");
-  }
-
-  if (srv_force_recovery == IB_RECOVERY_DEFAULT) {
-    /* In the insert buffer we may have even bigger tablespace
-    id's, because we may have dropped those tablespaces, but
-    insert buffer merge has not had time to clean the records from
-    the ibuf tree. */
-
-    ibuf_update_max_tablespace_id();
   }
 
   srv_file_per_table = srv_file_per_table_original_value;
@@ -1860,7 +1824,6 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
   and closing the data dictionary.  */
   btr_search_disable();
 
-  ibuf_close();
   log_shutdown();
   lock_sys_close();
   thr_local_close();

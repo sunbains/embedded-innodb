@@ -864,19 +864,10 @@ int cmp_rec_rec_with_match(
 
   while ((cur_field < rec1_n_fields) && (cur_field < rec2_n_fields)) {
 
-    ulint mtype;
-    uint16_t prtype;
+    const dict_col_t *col = dict_index_get_nth_col(index, cur_field);
 
-    if (unlikely(index->type & DICT_UNIVERSAL)) {
-      /* This is for the insert buffer B-tree. */
-      mtype = DATA_BINARY;
-      prtype = 0;
-    } else {
-      const dict_col_t *col = dict_index_get_nth_col(index, cur_field);
-
-      mtype = col->mtype;
-      prtype = col->prtype;
-    }
+    auto mtype = col->mtype;
+    uint16_t prtype = col->prtype;
 
     rec1_b_ptr = rec_get_nth_field(rec1, offsets1, cur_field, &rec1_f_len);
     rec2_b_ptr = rec_get_nth_field(rec2, offsets2, cur_field, &rec2_f_len);

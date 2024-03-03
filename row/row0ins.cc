@@ -42,8 +42,8 @@ Created 4/20/1996 Heikki Tuuri
 #include "trx0undo.h"
 #include "usr0sess.h"
 
-#define ROW_INS_PREV 1
-#define ROW_INS_NEXT 2
+constexpr ulint ROW_INS_PREV = 1;
+constexpr ulint ROW_INS_NEXT = 2;
 
 ins_node_t *row_ins_node_create(ib_ins_mode_t ins_type, dict_table_t *table,
                                 mem_heap_t *heap) {
@@ -1815,15 +1815,6 @@ static db_err row_ins_index_entry_low(
                               mode | BTR_INSERT | ignore_sec_unique, &cursor, 0,
                               __FILE__, __LINE__, &mtr);
 
-  if (cursor.flag == BTR_CUR_INSERT_TO_IBUF) {
-    /* The insertion was made to the insert buffer already during
-    the search: we are done */
-
-    err = DB_SUCCESS;
-
-    goto function_exit;
-  }
-
 #ifdef UNIV_DEBUG
   {
     page_t *page = btr_cur_get_page(&cursor);
@@ -1832,7 +1823,7 @@ static db_err row_ins_index_entry_low(
     ut_ad(page_rec_is_supremum(first_rec) ||
           rec_get_n_fields(first_rec, index) == dtuple_get_n_fields(entry));
   }
-#endif
+#endif /* UNIV_DEBUG */
 
   n_unique = dict_index_get_n_unique(index);
 

@@ -125,6 +125,9 @@ template <typename T> void call_destructor(T *p) { p->~T(); }
 
 constexpr const char SRV_PATH_SEPARATOR  = '/';
 
+using page_no_t = ulint;
+using space_id_t = ulint;
+
 #include "innodb0valgrind.h"
 #include "ut0dbg.h"
 #include "ut0ut.h"

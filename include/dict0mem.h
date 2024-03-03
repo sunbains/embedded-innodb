@@ -46,17 +46,11 @@ constexpr ulint DICT_TF_BITS = 6;
 combination of types */
 /* @{ */
 
-/** clustered index */
+/** Clustered index */
 constexpr ulint DICT_CLUSTERED = 1;
 
-/** unique index */
+/** Unique index */
 constexpr ulint DICT_UNIQUE = 2;
-
-/** index which can contain records from any other index */
-constexpr ulint DICT_UNIVERSAL = 4;
-
-/** insert buffer tree */
-constexpr ulint DICT_IBUF = 8;
 
 /* @} */
 
@@ -87,11 +81,11 @@ constexpr ulint DICT_TF_FORMAT_MASK =
 /** InnoDBL up to 0.1 */
 constexpr ulint DICT_TF_FORMAT_51 = 0;
 
-/** InnoDB 0.1: compressed tables, new BLOB treatment */
-constexpr ulint DICT_TF_FORMAT_ZIP = 1;
+/** InnoDB 0.1: new BLOB treatment */
+constexpr ulint DICT_TF_FORMAT_V1 = 1;
 
 /** Maximum supported file format */
-constexpr ulint DICT_TF_FORMAT_MAX = DICT_TF_FORMAT_ZIP;
+constexpr ulint DICT_TF_FORMAT_MAX = DICT_TF_FORMAT_V1;
 
 /* @} */
 
@@ -241,7 +235,7 @@ struct dict_index_struct {
   /** index tree root page number */
   unsigned page : 32;
 
-  /** index type (DICT_CLUSTERED, DICT_UNIQUE, DICT_UNIVERSAL, DICT_IBUF) */
+  /** index type (DICT_CLUSTERED, DICT_UNIQUE, DICT_UNIVERSAL) */
   unsigned type : 4;
 
   /* position of the trx id column in a clustered index

@@ -27,7 +27,7 @@ Created 2/25/1997 Heikki Tuuri
 #include "dict0boot.h"
 #include "dict0crea.h"
 #include "dict0dict.h"
-#include "ibuf0ibuf.h"
+
 #include "log0log.h"
 #include "mach0data.h"
 #include "que0que.h"

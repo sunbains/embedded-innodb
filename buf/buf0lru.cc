@@ -34,7 +34,6 @@ Created 11/5/1995 Heikki Tuuri
 #include "buf0rea.h"
 #include "fil0fil.h"
 #include "hash0hash.h"
-#include "ibuf0ibuf.h"
 #include "log0recv.h"
 #include "os0file.h"
 #include "os0sync.h"
@@ -952,10 +951,6 @@ buf_lru_free_block_status buf_LRU_free_block(buf_page_t *bpage, bool *buf_pool_m
     /* Do not free buffer-fixed or I/O-fixed blocks. */
     return BUF_LRU_NOT_FREED;
   }
-
-#ifdef UNIV_IBUF_COUNT_DEBUG
-  ut_a(ibuf_count_get(bpage->space, bpage->offset) == 0);
-#endif /* UNIV_IBUF_COUNT_DEBUG */
 
   if (bpage->oldest_modification > 0) {
     return BUF_LRU_NOT_FREED;

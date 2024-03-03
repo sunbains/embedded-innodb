@@ -77,10 +77,7 @@ extern ulint srv_buf_pool_write_requests; /*!< variable to count write request
 
 The enumeration values must be 0..7. */
 enum buf_page_state {
-  BUF_BLOCK_NOT_USED,      /*!< is in the free list;
-                           must be after the BUF_BLOCK_ZIP_
-                           constants for compressed-only pages
-                           @see buf_block_state_valid() */
+  BUF_BLOCK_NOT_USED,      /*!< is in the free list */
   BUF_BLOCK_READY_FOR_USE, /*!< when buf_LRU_get_free_block
                            returns a block, it is in this state */
   BUF_BLOCK_FILE_PAGE,     /*!< contains a buffered file page */
@@ -105,22 +102,11 @@ void buf_mem_free(void);
 /*** Drops the adaptive hash index.  To prevent a livelock, this function
 is only to be called while holding btr_search_latch and while
 btr_search_enabled == false. */
-
 void buf_pool_drop_hash_index(void);
 
-/*** Relocate a buffer control block.  Relocates the block on the LRU list
-and in buf_pool->page_hash.  Does not relocate bpage->list.
-The caller must take care of relocating bpage->list. */
-
-void buf_relocate(
-    buf_page_t *bpage, /*!< in/out: control block being relocated;
-                       buf_page_get_state(bpage) must be
-                       BUF_BLOCK_ZIP_DIRTY or BUF_BLOCK_ZIP_PAGE */
-    buf_page_t *dpage) /*!< in/out: destination control block */
-    __attribute__((nonnull));
 /*** Resizes the buffer pool. */
-
 void buf_pool_resize(void);
+
 /*** Gets the current size of buffer buf_pool in bytes.
 @return	size in bytes */
 inline ulint buf_pool_get_curr_size(void);
@@ -569,7 +555,7 @@ and the lock released later.
 @return	pointer to the block or NULL */
 buf_page_t *buf_page_init_for_read(
     db_err *err, /*!< out: DB_SUCCESS or DB_TABLESPACE_DELETED */
-    ulint mode,  /*!< in: BUF_READ_IBUF_PAGES_ONLY, ... */
+    ulint mode,  /*!< in: BUF_READ_ANY_PAGE, ... */
     ulint space, /*!< in: space id */
     ulint, bool, int64_t tablespace_version, /*!< in: prevents reading from a
                                      wrong version of the tablespace in case we
@@ -666,8 +652,7 @@ struct buf_page_struct {
 
 #ifdef UNIV_DEBUG
   /*!< true if in buf_pool->flush_list; when buf_pool_mutex is free, the
-   * following should hold: in_flush_list == (state == BUF_BLOCK_FILE_PAGE ||
-   * state == BUF_BLOCK_ZIP_DIRTY) */
+   * following should hold: in_flush_list == (state == BUF_BLOCK_FILE_PAGE) */
   bool in_flush_list;
 
   /*!< true if in buf_pool->free; when buf_pool_mutex is free, the following

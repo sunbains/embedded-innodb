@@ -572,17 +572,10 @@ ulint trx_sysf_rseg_find_free(mtr_t *mtr) /*!< in: mtr */
 }
 
 /** Creates the file page for the transaction system. This function is called
-only at the database creation, before trx_sys_init. */
-static void trx_sysf_create(mtr_t *mtr) /*!< in: mtr */
-{
-  trx_sysf_t *sys_header;
-  ulint slot_no;
-  buf_block_t *block;
-  page_t *page;
-  ulint page_no;
-  ulint i;
-
-  ut_ad(mtr);
+only at the database creation, before trx_sys_init.
+@param[in,out] mtr              Mini-transaction covering the operation. */
+static void trx_sysf_create(mtr_t *mtr) {
+  ut_ad(mtr != nullptr);
 
   /* Note that below we first reserve the file space x-latch, and
   then enter the kernel: we must do it in this order to conform
@@ -592,12 +585,13 @@ static void trx_sysf_create(mtr_t *mtr) /*!< in: mtr */
   mutex_enter(&kernel_mutex);
 
   /* Create the trx sys file block in a new allocated file segment */
-  block = fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER, mtr);
+  auto block = fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER, mtr);
+
   buf_block_dbg_add_level(block, SYNC_TRX_SYS_HEADER);
 
   ut_a(buf_block_get_page_no(block) == TRX_SYS_PAGE_NO);
 
-  page = buf_block_get_frame(block);
+  auto page = buf_block_get_frame(block);
 
   mlog_write_ulint(page + FIL_PAGE_TYPE, FIL_PAGE_TYPE_TRX_SYS, MLOG_2BYTES,
                    mtr);
@@ -609,14 +603,14 @@ static void trx_sysf_create(mtr_t *mtr) /*!< in: mtr */
   mlog_write_ulint(page + TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_MAGIC, 0,
                    MLOG_4BYTES, mtr);
 
-  sys_header = trx_sysf_get(mtr);
+  auto sys_header = trx_sysf_get(mtr);
 
   /* Start counting transaction ids from number 1 up */
   mlog_write_dulint(sys_header + TRX_SYS_TRX_ID_STORE, ut_dulint_create(0, 1),
                     mtr);
 
   /* Reset the rollback segment slots */
-  for (i = 0; i < TRX_SYS_N_RSEGS; i++) {
+  for (ulint i = 0; i < TRX_SYS_N_RSEGS; i++) {
 
     trx_sysf_rseg_set_space(sys_header, i, ULINT_UNDEFINED, mtr);
     trx_sysf_rseg_set_page_no(sys_header, i, FIL_NULL, mtr);
@@ -633,18 +627,16 @@ static void trx_sysf_create(mtr_t *mtr) /*!< in: mtr */
                      page - sys_header);
 
   /* Create the first rollback segment in the SYSTEM tablespace */
-  page_no = trx_rseg_header_create(TRX_SYS_SPACE, ULINT_MAX, &slot_no, mtr);
+  ulint slot_no;
+  auto page_no = trx_rseg_header_create(TRX_SYS_SPACE, ULINT_MAX, &slot_no, mtr);
+
   ut_a(slot_no == TRX_SYS_SYSTEM_RSEG_ID);
   ut_a(page_no != FIL_NULL);
 
   mutex_exit(&kernel_mutex);
 }
 
-/** Creates and initializes the central memory structures for the transaction
-system. This is called when the database is started. */
-
-void trx_sys_init_at_db_start(ib_recovery_t recovery) /*!< in: recovery flag */
-{
+void trx_sys_init_at_db_start(ib_recovery_t recovery) {
   trx_sysf_t *sys_header;
   int64_t rows_to_undo = 0;
   const char *unit = "";

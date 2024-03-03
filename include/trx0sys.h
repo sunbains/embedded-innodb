@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,14 +21,17 @@ Transaction system
 Created 3/26/1996 Heikki Tuuri
 *******************************************************/
 
-#ifndef trx0sys_h
-#define trx0sys_h
+#pragma once
 
 #include "innodb0types.h"
 
+// FIXME: This dependency needs to be fixed in mtr0log.ic
+/** Set to true when the doublewrite buffer is being created */
+extern bool trx_doublewrite_buf_is_being_created;
+
 #include "buf0buf.h"
 #include "fil0fil.h"
-#include "fsp0types.h"
+#include "fsp0fsp.h"
 #include "mem0mem.h"
 #include "mtr0mtr.h"
 #include "page0types.h"
@@ -38,19 +41,120 @@ Created 3/26/1996 Heikki Tuuri
 #include "ut0byte.h"
 #include "ut0lst.h"
 
+
+/** The automatically created system rollback segment has this id */
+constexpr ulint TRX_SYS_SYSTEM_RSEG_ID = 0;
+
+/** The transaction system tablespace.
+Space id and page no where the trx system file copy resides */
+constexpr auto TRX_SYS_SPACE = SYS_TABLESPACE;
+
+/** Page numnber of the transaction system meta data. */
+constexpr auto TRX_SYS_PAGE_NO = FSP_TRX_SYS_PAGE_NO;
+
+/** The offset of the transaction system header on the page */
+constexpr auto TRX_SYS = FSEG_PAGE_DATA;
+
+/** Transaction system header */
+/*@{ */
+
+/** The maximum trx id or trx number modulo TRX_SYS_TRX_ID_UPDATE_MARGIN
+written to a file page by any transaction; the assignment of transaction
+ids continues from this number rounded up by TRX_SYS_TRX_ID_UPDATE_MARGIN
+plus TRX_SYS_TRX_ID_UPDATE_MARGIN when the database is started */
+constexpr ulint TRX_SYS_TRX_ID_STORE = 0;
+
+/** segment header for the tablespace segment the trx system is created into */
+constexpr ulint TRX_SYS_FSEG_HEADER = 8;
+
+/** The start of the array of rollback segment specification slots */
+constexpr ulint TRX_SYS_RSEGS = 8 + FSEG_HEADER_SIZE;
+
+/*@} */
+
+/** Maximum number of rollback segments: the number of segment
+specification slots in the transaction system array; rollback segment
+id must fit in one byte, therefore 256; each slot is currently 8 bytes
+in size */
+constexpr ulint TRX_SYS_N_RSEGS = 256;
+
+static_assert(UNIV_PAGE_SIZE >= 4096, "error UNIV_PAGE_SIZE < 4096");
+
+/** Doublewrite buffer */
+/* @{ */
+/** The offset of the doublewrite buffer header on the trx system header page */
+constexpr ulint TRX_SYS_DOUBLEWRITE = UNIV_PAGE_SIZE - 200;
+
+/** fseg header of the fseg containing the doublewrite buffer */
+constexpr ulint TRX_SYS_DOUBLEWRITE_FSEG = 0;
+
+/** 4-byte magic number which shows if we already have created the
+doublewrite buffer */
+constexpr auto TRX_SYS_DOUBLEWRITE_MAGIC = FSEG_HEADER_SIZE;
+
+/** Page number of the first page in the first sequence of 64
+(= FSP_EXTENT_SIZE) consecutive pages in the doublewrite buffer */
+constexpr auto TRX_SYS_DOUBLEWRITE_BLOCK1 = 4 + FSEG_HEADER_SIZE;
+
+/** Page number of the first page in the second sequence of 64
+consecutive pages in the doublewrite buffer */
+constexpr auto TRX_SYS_DOUBLEWRITE_BLOCK2  = 8 + FSEG_HEADER_SIZE;
+
+/** We repeat TRX_SYS_DOUBLEWRITE_MAGIC, TRX_SYS_DOUBLEWRITE_BLOCK1,
+TRX_SYS_DOUBLEWRITE_BLOCK2 so that if the trx sys header is half-written
+to disk, we still may be able to recover the information */
+constexpr auto TRX_SYS_DOUBLEWRITE_REPEAT = 12;
+
+/** If this is not yet set to TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N,
+we must reset the doublewrite buffer, because starting from 4.1.x the
+space id of a data page is stored into
+FIL_PAGE_ARCH_LOG_NO_OR_SPACE_NO. */
+constexpr auto TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED  = 24 + FSEG_HEADER_SIZE;
+
+/** Contents of TRX_SYS_DOUBLEWRITE_MAGIC */
+constexpr ulint TRX_SYS_DOUBLEWRITE_MAGIC_N  = 536853855;
+
+/** Contents of TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED */
+constexpr ulint TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N = 1783657386;
+
+/** Size of the doublewrite block in pages */
+constexpr auto TRX_SYS_DOUBLEWRITE_BLOCK_SIZE = FSP_EXTENT_SIZE;
+
+/* @} */
+
+/** File format tag */
+/* @{ */
+
+/** The offset of the file format tag on the trx system header page
+(TRX_SYS_PAGE_NO of TRX_SYS_SPACE) */
+constexpr auto TRX_SYS_FILE_FORMAT_TAG = UNIV_PAGE_SIZE - 16;
+
+/** Contents of TRX_SYS_FILE_FORMAT_TAG when valid.  The file format
+identifier is added to this constant. */
+constexpr ulint TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW  = 3645922177UL;
+
+/** Contents of TRX_SYS_FILE_FORMAT_TAG+4 when valid */
+constexpr ulint TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH = 2745987765UL;
+
+/* @} */
+
+/** When a trx id which is zero modulo this number (which must be a power of
+two) is assigned, the field TRX_SYS_TRX_ID_STORE on the transaction system
+page is updated */
+constexpr ulint TRX_SYS_TRX_ID_WRITE_MARGIN = 256;
+
 /** The transaction system */
 extern trx_sys_t *trx_sys;
-
-/** Doublewrite system */
-extern trx_doublewrite_t *trx_doublewrite;
 
 /** The following is set to true when we are upgrading from pre-4.1
 format data files to the multiple tablespaces format data files */
 extern bool trx_doublewrite_must_reset_space_ids;
 
-/** Set to true when the doublewrite buffer is being created */
-extern bool trx_doublewrite_buf_is_being_created;
+/** Doublewrite system */
+extern trx_doublewrite_t *trx_doublewrite;
 
+/** Doublewrite system */
+extern trx_doublewrite_t *trx_doublewrite;
 /** The following is true when we are using the database in the
 post-4.1 format, i.e., we have successfully upgraded, or have created
 a new database installation */
@@ -59,7 +163,7 @@ extern bool trx_sys_multiple_tablespace_format;
 /** Creates the doublewrite buffer to a new InnoDB installation. The header of
 the doublewrite buffer is placed on the trx system header page. */
 
-enum db_err trx_sys_create_doublewrite_buf(void);
+db_err trx_sys_create_doublewrite_buf();
 
 /** At a database startup initializes the doublewrite buffer memory structure if
 we already have a doublewrite buffer created in the data files. If we are
@@ -68,81 +172,81 @@ function performs the necessary update operations. If we are in a crash
 recovery, this function uses a possible doublewrite buffer to restore
 half-written pages in the data files. */
 void trx_sys_doublewrite_init_or_restore_pages(
-    bool restore_corrupt_pages); /*!< in: true=restore pages */
+    bool restore_corrupt_pages); /** in: true=restore pages */
 
 /** Marks the trx sys header when we have successfully upgraded to the >= 4.1.x
 multiple tablespace format. */
-void trx_sys_mark_upgraded_to_multiple_tablespaces(void);
+void trx_sys_mark_upgraded_to_multiple_tablespaces();
 
 /** Determines if a page number is located inside the doublewrite buffer.
 @return true if the location is inside the two blocks of the
 doublewrite buffer */
-bool trx_doublewrite_page_inside(ulint page_no); /*!< in: page number */
+bool trx_doublewrite_page_inside(ulint page_no); /** in: page number */
 
 /** Checks if a page address is the trx sys header page.
 @return	true if trx sys header page */
-inline bool trx_sys_hdr_page(ulint space,    /*!< in: space */
-                             ulint page_no); /*!< in: page number */
+inline bool trx_sys_hdr_page(ulint space,    /** in: space */
+                             ulint page_no); /** in: page number */
 
 /** Creates and initializes the central memory structures for the transaction
 system. This is called when the database is started. */
-void trx_sys_init_at_db_start(ib_recovery_t recovery); /*!< in: recovery flag */
+void trx_sys_init_at_db_start(ib_recovery_t recovery); /** in: recovery flag */
 
 /** Creates and initializes the transaction system at the database creation. */
-void trx_sys_create(ib_recovery_t recovery); /*!< in: recovery flag */
+void trx_sys_create(ib_recovery_t recovery); /** in: recovery flag */
 
 /** Looks for a free slot for a rollback segment in the trx system file copy.
 @return	slot index or ULINT_UNDEFINED if not found */
-ulint trx_sysf_rseg_find_free(mtr_t *mtr); /*!< in: mtr */
+ulint trx_sysf_rseg_find_free(mtr_t *mtr); /** in: mtr */
 
 /** Gets the pointer in the nth slot of the rseg array.
 @return	pointer to rseg object, NULL if slot not in use */
-inline trx_rseg_t *trx_sys_get_nth_rseg(trx_sys_t *sys, /*!< in: trx system */
-                                        ulint n); /*!< in: index of slot */
+inline trx_rseg_t *trx_sys_get_nth_rseg(trx_sys_t *sys, /** in: trx system */
+                                        ulint n); /** in: index of slot */
 
 /** Sets the pointer in the nth slot of the rseg array. */
 inline void
-trx_sys_set_nth_rseg(trx_sys_t *sys,    /*!< in: trx system */
-                     ulint n,           /*!< in: index of slot */
-                     trx_rseg_t *rseg); /*!< in: pointer to rseg object,
+trx_sys_set_nth_rseg(trx_sys_t *sys,    /** in: trx system */
+                     ulint n,           /** in: index of slot */
+                     trx_rseg_t *rseg); /** in: pointer to rseg object,
                                         NULL if slot not in use */
 
 /** Gets a pointer to the transaction system file copy and x-locks its page.
 @return	pointer to system file copy, page x-locked */
-inline trx_sysf_t *trx_sysf_get(mtr_t *mtr); /*!< in: mtr */
+inline trx_sysf_t *trx_sysf_get(mtr_t *mtr); /** in: mtr */
 
 /** Gets the space of the nth rollback segment slot in the trx system
 file copy.
 @return	space id */
 inline ulint
-trx_sysf_rseg_get_space(trx_sysf_t *sys_header, /*!< in: trx sys file copy */
-                        ulint i,     /*!< in: slot index == rseg id */
-                        mtr_t *mtr); /*!< in: mtr */
+trx_sysf_rseg_get_space(trx_sysf_t *sys_header, /** in: trx sys file copy */
+                        ulint i,     /** in: slot index == rseg id */
+                        mtr_t *mtr); /** in: mtr */
 
 /** Gets the page number of the nth rollback segment slot in the trx system
 file copy.
 @return	page number, FIL_NULL if slot unused */
 inline ulint
-trx_sysf_rseg_get_page_no(trx_sysf_t *sys_header, /*!< in: trx sys file copy */
-                          ulint i,     /*!< in: slot index == rseg id */
-                          mtr_t *mtr); /*!< in: mtr */
+trx_sysf_rseg_get_page_no(trx_sysf_t *sys_header, /** in: trx sys file copy */
+                          ulint i,     /** in: slot index == rseg id */
+                          mtr_t *mtr); /** in: mtr */
 
 /** Sets the space id of the nth rollback segment slot in the trx system
 file copy. */
 inline void
-trx_sysf_rseg_set_space(trx_sysf_t *sys_header, /*!< in: trx sys file copy */
-                        ulint i,     /*!< in: slot index == rseg id */
-                        ulint space, /*!< in: space id */
-                        mtr_t *mtr); /*!< in: mtr */
+trx_sysf_rseg_set_space(trx_sysf_t *sys_header, /** in: trx sys file copy */
+                        ulint i,     /** in: slot index == rseg id */
+                        ulint space, /** in: space id */
+                        mtr_t *mtr); /** in: mtr */
 
 /** Sets the page number of the nth rollback segment slot in the trx system
 file copy. */
 inline void
-trx_sysf_rseg_set_page_no(trx_sysf_t *sys_header, /*!< in: trx sys file copy */
-                          ulint i,       /*!< in: slot index == rseg id */
-                          ulint page_no, /*!< in: page number, FIL_NULL if
+trx_sysf_rseg_set_page_no(trx_sysf_t *sys_header, /** in: trx sys file copy */
+                          ulint i,       /** in: slot index == rseg id */
+                          ulint page_no, /** in: page number, FIL_NULL if
                                          the slot is reset to unused */
-                          mtr_t *mtr);   /*!< in: mtr */
+                          mtr_t *mtr);   /** in: mtr */
 
 /** Allocates a new transaction id.
 @return	new, allocated trx id */
@@ -156,19 +260,19 @@ inline trx_id_t trx_sys_get_new_trx_no(void);
 some future version, this function should be used instead of
 mach_write_... */
 inline void
-trx_write_trx_id(byte *ptr,    /*!< in: pointer to memory where written */
-                 trx_id_t id); /*!< in: id */
+trx_write_trx_id(byte *ptr,    /** in: pointer to memory where written */
+                 trx_id_t id); /** in: id */
 
 /** Reads a trx id from an index page. In case that the id size changes in
 some future version, this function should be used instead of
 mach_read_...
 @return	id */
 inline trx_id_t trx_read_trx_id(
-    const byte *ptr); /*!< in: pointer to memory from where to read */
+    const byte *ptr); /** in: pointer to memory from where to read */
 
 /** Looks for the trx handle with the given id in trx_list.
 @return	the trx handle or NULL if not found */
-inline trx_t *trx_get_on_id(trx_id_t trx_id); /*!< in: trx id to search for */
+inline trx_t *trx_get_on_id(trx_id_t trx_id); /** in: trx id to search for */
 
 /** Returns the minumum trx id in trx list. This is the smallest id for which
 the trx can possibly be active. (But, you must look at the trx->conc_state to
@@ -180,11 +284,11 @@ inline trx_id_t trx_list_get_min_trx_id(void);
 /** Checks if a transaction with the given id is active.
 @return	true if active */
 inline bool
-trx_is_active(trx_id_t trx_id); /*!< in: trx id of the transaction */
+trx_is_active(trx_id_t trx_id); /** in: trx id of the transaction */
 
 /** Checks that trx is in the trx list.
 @return	true if is in */
-bool trx_in_trx_list(trx_t *in_trx); /*!< in: trx */
+bool trx_in_trx_list(trx_t *in_trx); /** in: trx */
 /** Initializes the tablespace tag system. */
 
 void trx_sys_file_format_init(void);
@@ -207,19 +311,19 @@ void trx_sys_close(void);
 /** Get the name representation of the file format from its id.
 @return	pointer to the name */
 const char *trx_sys_file_format_id_to_name(
-    const ulint id); /*!< in: id of the file format */
+    const ulint id); /** in: id of the file format */
 
 /** Validate the file format name and return its corresponding id.
 @return	valid file format id or DICT_TF_FORMAT_MAX + 1 */
 ulint trx_sys_file_format_name_to_id(
-    const char *format_name); /*!< in: pointer to file format name */
+    const char *format_name); /** in: pointer to file format name */
 
 /** Set the file format id unconditionally except if it's already the
 same value.
 @return	true if value updated */
 bool trx_sys_file_format_max_set(
-    ulint format_id,    /*!< in: file format id */
-    const char **name); /*!< out: max file format name or
+    ulint format_id,    /** in: file format id */
+    const char **name); /** out: max file format name or
                         NULL if not needed. */
 
 /** Get the name representation of the file format from its id.
@@ -229,15 +333,15 @@ const char *trx_sys_file_format_max_get(void);
 /** Check for the max file format tag stored on disk.
 @return	DB_SUCCESS or error code */
 db_err trx_sys_file_format_max_check(
-    ulint max_format_id); /*!< in: the max format id to check */
+    ulint max_format_id); /** in: the max format id to check */
 
 /** Update the file format tag in the system tablespace only if the given
 format id is greater than the known max id.
 @return	true if format_id was bigger than the known max id */
 
 bool trx_sys_file_format_max_upgrade(
-    const char **name, /*!< out: max file format name */
-    ulint format_id);  /*!< in: file format identifier */
+    const char **name, /** out: max file format name */
+    ulint format_id);  /** in: file format identifier */
 
 /** Reset the variables. */
 void trx_sys_var_init(void);
@@ -248,186 +352,70 @@ may be ULINT_UNDEFINED signalling that the format id was not present
 in the data file.
 @return true if call succeeds */
 bool trx_sys_read_file_format_id(
-    const char *pathname, /*!< in: pathname of the first system
+    const char *pathname, /** in: pathname of the first system
                           table space file */
-    ulint *format_id);    /*!< out: file format of the system table
+    ulint *format_id);    /** out: file format of the system table
                           space */
 
 /** Reads the file format id from the given per-table data file.
 @return true if call succeeds */
 bool trx_sys_read_pertable_file_format_id(
-    const char *pathname, /*!< in: pathname of a per-table
+    const char *pathname, /** in: pathname of a per-table
                           datafile */
-    ulint *format_id);    /*!< out: file format of the per-table
+    ulint *format_id);    /** out: file format of the per-table
                           data file */
-
-/* The automatically created system rollback segment has this id */
-#define TRX_SYS_SYSTEM_RSEG_ID 0
-
-/* Space id and page no where the trx system file copy resides */
-#define TRX_SYS_SPACE 0 /* the SYSTEM tablespace */
-#include "fsp0fsp.h"
-#define TRX_SYS_PAGE_NO FSP_TRX_SYS_PAGE_NO
-
-/* The offset of the transaction system header on the page */
-#define TRX_SYS FSEG_PAGE_DATA
-
-/** Transaction system header */
-/*------------------------------------------------------------- @{ */
-#define TRX_SYS_TRX_ID_STORE                                                   \
-  0 /*!< the maximum trx id or trx                                             \
-    number modulo                                                              \
-    TRX_SYS_TRX_ID_UPDATE_MARGIN                                               \
-    written to a file page by any                                              \
-    transaction; the assignment of                                             \
-    transaction ids continues from                                             \
-    this number rounded up by                                                  \
-    TRX_SYS_TRX_ID_UPDATE_MARGIN                                               \
-    plus                                                                       \
-    TRX_SYS_TRX_ID_UPDATE_MARGIN                                               \
-    when the database is                                                       \
-    started */
-#define TRX_SYS_FSEG_HEADER                                                    \
-  8 /*!< segment header for the                                                \
-    tablespace segment the trx                                                 \
-    system is created into */
-#define TRX_SYS_RSEGS (8 + FSEG_HEADER_SIZE)
-/*!< the start of the array of
-rollback segment specification
-slots */
-/*------------------------------------------------------------- @} */
-
-/** Maximum number of rollback segments: the number of segment
-specification slots in the transaction system array; rollback segment
-id must fit in one byte, therefore 256; each slot is currently 8 bytes
-in size */
-constexpr ulint TRX_SYS_N_RSEGS = 256;
-
-static_assert(UNIV_PAGE_SIZE >= 4096, "error UNIV_PAGE_SIZE < 4096");
-
-/** Doublewrite buffer */
-/* @{ */
-/** The offset of the doublewrite buffer header on the trx system header page */
-#define TRX_SYS_DOUBLEWRITE (UNIV_PAGE_SIZE - 200)
-/*-------------------------------------------------------------*/
-#define TRX_SYS_DOUBLEWRITE_FSEG                                               \
-  0 /*!< fseg header of the fseg                                               \
-    containing the doublewrite                                                 \
-    buffer */
-#define TRX_SYS_DOUBLEWRITE_MAGIC FSEG_HEADER_SIZE
-/*!< 4-byte magic number which
-shows if we already have
-created the doublewrite
-buffer */
-#define TRX_SYS_DOUBLEWRITE_BLOCK1 (4 + FSEG_HEADER_SIZE)
-/*!< page number of the
-first page in the first
-sequence of 64
-(= FSP_EXTENT_SIZE) consecutive
-pages in the doublewrite
-buffer */
-#define TRX_SYS_DOUBLEWRITE_BLOCK2 (8 + FSEG_HEADER_SIZE)
-/*!< page number of the
-first page in the second
-sequence of 64 consecutive
-pages in the doublewrite
-buffer */
-#define TRX_SYS_DOUBLEWRITE_REPEAT                                             \
-  12 /*!< we repeat                                                            \
-     TRX_SYS_DOUBLEWRITE_MAGIC,                                                \
-     TRX_SYS_DOUBLEWRITE_BLOCK1,                                               \
-     TRX_SYS_DOUBLEWRITE_BLOCK2                                                \
-     so that if the trx sys                                                    \
-     header is half-written                                                    \
-     to disk, we still may                                                     \
-     be able to recover the                                                    \
-     information */
-/** If this is not yet set to TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N,
-we must reset the doublewrite buffer, because starting from 4.1.x the
-space id of a data page is stored into
-FIL_PAGE_ARCH_LOG_NO_OR_SPACE_NO. */
-#define TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED (24 + FSEG_HEADER_SIZE)
-
-/*-------------------------------------------------------------*/
-/** Contents of TRX_SYS_DOUBLEWRITE_MAGIC */
-#define TRX_SYS_DOUBLEWRITE_MAGIC_N 536853855
-/** Contents of TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED */
-#define TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N 1783657386
-
-/** Size of the doublewrite block in pages */
-#define TRX_SYS_DOUBLEWRITE_BLOCK_SIZE FSP_EXTENT_SIZE
-/* @} */
-
-/** File format tag */
-/* @{ */
-/** The offset of the file format tag on the trx system header page
-(TRX_SYS_PAGE_NO of TRX_SYS_SPACE) */
-#define TRX_SYS_FILE_FORMAT_TAG (UNIV_PAGE_SIZE - 16)
-
-/** Contents of TRX_SYS_FILE_FORMAT_TAG when valid.  The file format
-identifier is added to this constant. */
-#define TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW 3645922177UL
-/** Contents of TRX_SYS_FILE_FORMAT_TAG+4 when valid */
-#define TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH 2745987765UL
-/* @} */
 
 /** Doublewrite control struct */
 struct trx_doublewrite_struct {
-  mutex_t mutex;    /*!< mutex protecting the first_free field and
+  mutex_t mutex;    /** mutex protecting the first_free field and
                     write_buf */
-  ulint block1;     /*!< the page number of the first
+  ulint block1;     /** the page number of the first
                     doublewrite block (64 pages) */
-  ulint block2;     /*!< page number of the second block */
-  ulint first_free; /*!< first free position in write_buf measured
+  ulint block2;     /** page number of the second block */
+  ulint first_free; /** first free position in write_buf measured
                     in units of UNIV_PAGE_SIZE */
-  byte *write_buf;  /*!< write buffer used in writing to the
+  byte *write_buf;  /** write buffer used in writing to the
                     doublewrite buffer, aligned to an
                     address divisible by UNIV_PAGE_SIZE
                     (which is required by Windows aio) */
   byte *write_buf_unaligned;
-  /*!< pointer to write_buf, but unaligned */
-  buf_page_t **buf_block_arr; /*!< array to store pointers to the buffer
+  /** pointer to write_buf, but unaligned */
+  buf_page_t **buf_block_arr; /** array to store pointers to the buffer
                               blocks which have been cached to write_buf */
 };
 
 /** The transaction system central memory data structure; protected by the
 kernel mutex */
 struct trx_sys_struct {
-  trx_id_t max_trx_id; /*!< The smallest number not yet
-                       assigned as a transaction id or
-                       transaction number */
-  UT_LIST_BASE_NODE_T(trx_t) trx_list;
-  /*!< List of active and committed in
-  memory transactions, sorted on trx id,
-  biggest first */
-  UT_LIST_BASE_NODE_T(trx_t) client_trx_list;
-  /*!< List of transactions created
-  for users */
-  UT_LIST_BASE_NODE_T(trx_rseg_t) rseg_list;
-  /*!< List of rollback segment
-  objects */
-  trx_rseg_t *latest_rseg; /*!< Latest rollback segment in the
-                           round-robin assignment of rollback
-                           segments to transactions */
-  trx_rseg_t *rseg_array[TRX_SYS_N_RSEGS];
-  /*!< Pointer array to rollback
-  segments; NULL if slot not in use */
-  ulint rseg_history_len; /*!< Length of the TRX_RSEG_HISTORY
-                         list (update undo logs for committed
-                         transactions), protected by
-                         rseg->mutex */
-  UT_LIST_BASE_NODE_T(read_view_t) view_list;
-  /*!< List of read views sorted
-  on trx no, biggest first */
-};
+  /** The smallest number not yet assigned as a transaction
+  id or transaction number */
+  trx_id_t max_trx_id;
 
-/** When a trx id which is zero modulo this number (which must be a power of
-two) is assigned, the field TRX_SYS_TRX_ID_STORE on the transaction system
-page is updated */
-#define TRX_SYS_TRX_ID_WRITE_MARGIN 256
+  /** List of active and committed in memory transactions,
+  sorted on trx id, biggest first */
+  UT_LIST_BASE_NODE_T(trx_t) trx_list;
+
+  /** List of transactions created for users */
+  UT_LIST_BASE_NODE_T(trx_t) client_trx_list;
+
+  /** List of rollback segment objects */
+  UT_LIST_BASE_NODE_T(trx_rseg_t) rseg_list;
+
+  /** Latest rollback segment in the round-robin assignment
+  of rollback segments to transactions */
+  trx_rseg_t *latest_rseg;
+
+  /** Pointer array to rollback segments; NULL if slot not in use */
+  trx_rseg_t *rseg_array[TRX_SYS_N_RSEGS];
+
+  /** Length of the TRX_RSEG_HISTORY list (update undo logs for
+  committed transactions), protected by rseg->mutex */
+  ulint rseg_history_len;
+
+  /** List of read views sorted on trx no, biggest first */
+  UT_LIST_BASE_NODE_T(read_view_t) view_list;
+};
 
 #ifndef UNIV_NONINL
 #include "trx0sys.ic"
-#endif
-
 #endif

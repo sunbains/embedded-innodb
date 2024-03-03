@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -31,7 +31,6 @@ Created 4/18/1996 Heikki Tuuri
 #include "buf0flu.h"
 #include "dict0crea.h"
 #include "dict0load.h"
-#include "ibuf0ibuf.h"
 #include "log0recv.h"
 #include "os0file.h"
 #include "srv0srv.h"
@@ -191,28 +190,21 @@ static bool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
   return (true);
 }
 
-/** Initializes the data dictionary memory structures when the database is
-started. This function is also called when the data dictionary is created. */
-
-void dict_boot(void) {
+void dict_boot() {
   dict_table_t *table;
-  dict_index_t *index;
-  dict_hdr_t *dict_hdr;
-  mem_heap_t *heap;
   mtr_t mtr;
-  ulint error;
 
   mtr_start(&mtr);
 
   /* Create the hash tables etc. */
   dict_init();
 
-  heap = mem_heap_create(450);
+  auto heap = mem_heap_create(450);
 
   mutex_enter(&(dict_sys->mutex));
 
   /* Get the dictionary header */
-  dict_hdr = dict_hdr_get(&mtr);
+  auto dict_hdr = dict_hdr_get(&mtr);
 
   /* Because we only write new row ids to disk-based data structure
   (dictionary header) when it is divisible by
@@ -255,17 +247,16 @@ void dict_boot(void) {
   dict_sys->sys_tables = table;
   mem_heap_empty(heap);
 
-  index = dict_mem_index_create("SYS_TABLES", "CLUST_IND", DICT_HDR_SPACE,
-                                DICT_UNIQUE | DICT_CLUSTERED, 1);
+  auto index = dict_mem_index_create("SYS_TABLES", "CLUST_IND", DICT_HDR_SPACE, DICT_UNIQUE | DICT_CLUSTERED, 1);
 
   dict_mem_index_add_field(index, "NAME", 0);
 
   index->id = DICT_TABLES_ID;
 
-  error = dict_index_add_to_cache(
+  auto err = dict_index_add_to_cache(
       table, index,
       mtr_read_ulint(dict_hdr + DICT_HDR_TABLES, MLOG_4BYTES, &mtr), false);
-  ut_a(error == DB_SUCCESS);
+  ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
   index = dict_mem_index_create("SYS_TABLES", "ID_IND", DICT_HDR_SPACE,
@@ -273,10 +264,10 @@ void dict_boot(void) {
   dict_mem_index_add_field(index, "ID", 0);
 
   index->id = DICT_TABLE_IDS_ID;
-  error = dict_index_add_to_cache(
+  err = dict_index_add_to_cache(
       table, index,
       mtr_read_ulint(dict_hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES, &mtr), false);
-  ut_a(error == DB_SUCCESS);
+  ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
   table = dict_mem_table_create("SYS_COLUMNS", DICT_HDR_SPACE, 7, 0);
@@ -302,10 +293,10 @@ void dict_boot(void) {
   dict_mem_index_add_field(index, "POS", 0);
 
   index->id = DICT_COLUMNS_ID;
-  error = dict_index_add_to_cache(
+  err = dict_index_add_to_cache(
       table, index,
       mtr_read_ulint(dict_hdr + DICT_HDR_COLUMNS, MLOG_4BYTES, &mtr), false);
-  ut_a(error == DB_SUCCESS);
+  ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
   table = dict_mem_table_create("SYS_INDEXES", DICT_HDR_SPACE, 7, 0);
@@ -319,18 +310,14 @@ void dict_boot(void) {
   dict_mem_table_add_col(table, heap, "PAGE_NO", DATA_INT, 0, 4);
 
   /* The '+ 2' below comes from the fields DB_TRX_ID, DB_ROLL_PTR */
-#if DICT_SYS_INDEXES_PAGE_NO_FIELD != 6 + 2
-#error "DICT_SYS_INDEXES_PAGE_NO_FIELD != 6 + 2"
-#endif
-#if DICT_SYS_INDEXES_SPACE_NO_FIELD != 5 + 2
-#error "DICT_SYS_INDEXES_SPACE_NO_FIELD != 5 + 2"
-#endif
-#if DICT_SYS_INDEXES_TYPE_FIELD != 4 + 2
-#error "DICT_SYS_INDEXES_TYPE_FIELD != 4 + 2"
-#endif
-#if DICT_SYS_INDEXES_NAME_FIELD != 2 + 2
-#error "DICT_SYS_INDEXES_NAME_FIELD != 2 + 2"
-#endif
+
+  static_assert(DICT_SYS_INDEXES_PAGE_NO_FIELD == 6 + 2, "error DICT_SYS_INDEXES_PAGE_NO_FIELD != 6 + 2");
+
+  static_assert(DICT_SYS_INDEXES_SPACE_NO_FIELD == 5 + 2, "rror DICT_SYS_INDEXES_SPACE_NO_FIELD != 5 + 2");
+
+  static_assert(DICT_SYS_INDEXES_TYPE_FIELD == 4 + 2, "error DICT_SYS_INDEXES_TYPE_FIELD != 4 + 2");
+
+  static_assert(DICT_SYS_INDEXES_NAME_FIELD == 2 + 2, "error DICT_SYS_INDEXES_NAME_FIELD != 2 + 2");
 
   table->id = DICT_INDEXES_ID;
   dict_table_add_to_cache(table, heap);
@@ -344,10 +331,10 @@ void dict_boot(void) {
   dict_mem_index_add_field(index, "ID", 0);
 
   index->id = DICT_INDEXES_ID;
-  error = dict_index_add_to_cache(
+  err = dict_index_add_to_cache(
       table, index,
       mtr_read_ulint(dict_hdr + DICT_HDR_INDEXES, MLOG_4BYTES, &mtr), false);
-  ut_a(error == DB_SUCCESS);
+  ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
   table = dict_mem_table_create("SYS_FIELDS", DICT_HDR_SPACE, 3, 0);
@@ -368,17 +355,13 @@ void dict_boot(void) {
   dict_mem_index_add_field(index, "POS", 0);
 
   index->id = DICT_FIELDS_ID;
-  error = dict_index_add_to_cache(
+  err = dict_index_add_to_cache(
       table, index,
       mtr_read_ulint(dict_hdr + DICT_HDR_FIELDS, MLOG_4BYTES, &mtr), false);
-  ut_a(error == DB_SUCCESS);
+  ut_a(err == DB_SUCCESS);
 
   mtr_commit(&mtr);
   /*-------------------------*/
-
-  /* Initialize the insert buffer table and index for each tablespace */
-
-  ibuf_init_at_db_start();
 
   /* Load definitions of other indexes on system tables */
 
@@ -395,9 +378,7 @@ creation. */
 static void dict_insert_initial_data(void) { /* Does nothing yet */
 }
 
-/** Creates and initializes the data dictionary at the database creation. */
-
-void dict_create(void) {
+void dict_create() {
   mtr_t mtr;
 
   mtr_start(&mtr);

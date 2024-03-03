@@ -1181,49 +1181,25 @@ loop:
   }
 }
 
-/** This function is called, e.g., when a transaction wants to commit. It checks
-that the log has been written to the log file up to the last log entry written
-by the transaction. If there is a flush running, it waits and checks if the
-flush flushed enough. If not, starts a new flush. */
-
-void log_write_up_to(uint64_t lsn, /*!< in: log sequence number up to which
-                                      the log should be written,
-                                      IB_UINT64_T_MAX if not specified */
-                     ulint wait,   /*!< in: LOG_NO_WAIT, LOG_WAIT_ONE_GROUP,
-                                   or LOG_WAIT_ALL_GROUPS */
-                     bool flush_to_disk)
-/*!< in: true if we want the written log
-also to be flushed to disk */
-{
+void log_write_up_to(uint64_t lsn,ulint wait, bool flush_to_disk) {
   log_group_t *group;
   ulint start_offset;
   ulint end_offset;
   ulint area_start;
   ulint area_end;
+  ulint unlock;
+
 #ifdef UNIV_DEBUG
   ulint loop_count = 0;
 #endif /* UNIV_DEBUG */
-  ulint unlock;
 
-  if (recv_no_ibuf_operations) {
-    /* Recovery is running and no operations on the log files are
-    allowed yet (the variable name .._no_ibuf_.. is misleading) */
-
-    return;
-  }
 
 loop:
 #ifdef UNIV_DEBUG
   loop_count++;
 
   ut_ad(loop_count < 5);
-
-#if 0
-	if (loop_count > 2) {
-		ib_logger(ib_stream, "Log loop count %lu\n", loop_count);
-	}
-#endif
-#endif
+#endif /* UNIV_DEBUG */
 
   log_acquire();
   ut_ad(!recv_no_log_write);
@@ -1478,7 +1454,7 @@ bool log_preflush_pool_modified_pages(
     and we could not make a new checkpoint on the basis of the
     info on the buffer pool only. */
 
-    recv_apply_hashed_log_recs(true);
+    recv_apply_hashed_log_recs();
   }
 
   n_pages = buf_flush_batch(BUF_FLUSH_LIST, ULINT_MAX, new_oldest);
@@ -1745,26 +1721,11 @@ void log_groups_write_checkpoint_info(void) {
   }
 }
 
-/** Makes a checkpoint. Note that this function does not flush dirty
-blocks from the buffer pool: it only checks what is lsn of the oldest
-modification in the pool, and writes information about the lsn in
-log files. Use log_make_checkpoint_at to flush also the pool.
-@return	true if success, false if a checkpoint write was already running */
-
-bool log_checkpoint(
-    bool sync,         /*!< in: true if synchronous operation is
-                        desired */
-    bool write_always) /*!< in: the function normally checks if the
-                        the new checkpoint would have a greater
-                        lsn than the previous one: if not, then no
-                        physical write is done; by setting this
-                        parameter true, a physical write will always be
-                        made to log files */
-{
+bool log_checkpoint(bool sync, bool write_always) {
   uint64_t oldest_lsn;
 
   if (recv_recovery_is_on()) {
-    recv_apply_hashed_log_recs(true);
+    recv_apply_hashed_log_recs();
   }
 
   if (srv_unix_file_flush_method != SRV_UNIX_NOSYNC) {

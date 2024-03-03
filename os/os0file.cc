@@ -1814,14 +1814,6 @@ try_again:
     } else {
       array = os_aio_write_array;
     }
-  } else if (mode == OS_AIO_IBUF) {
-    ut_ad(type == OS_FILE_READ);
-    /* Reduce probability of deadlock bugs in connection with ibuf:
-    do not let the ibuf i/o handler sleep */
-
-    wake_later = false;
-
-    array = os_aio_ibuf_array;
   } else if (mode == OS_AIO_LOG) {
 
     array = os_aio_log_array;

@@ -449,10 +449,10 @@ inline ulint buf_page_get_page_no(
 inline ulint buf_block_get_page_no(
     const buf_block_t *block) /*!< in: pointer to the control block */
 {
-  ut_ad(block);
+  ut_ad(block != nullptr);
   ut_a(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
 
-  return (block->page.offset);
+  return block->page.offset;
 }
 
 /** Gets the space id, page offset, and byte offset within page of a

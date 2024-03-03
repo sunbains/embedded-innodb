@@ -138,9 +138,6 @@ constexpr ulint OS_AIO_NORMAL =  21 ;
 
 /** Normal asynchronous i/o not for ibuf pages or ibuf bitmap pages */
 
-/** Asynchronous i/o for ibuf pages or ibuf bitmap pages */
-constexpr ulint OS_AIO_IBUF =  22;
-
 /** Asynchronous i/o for the log */
 constexpr ulint OS_AIO_LOG =  23;
 

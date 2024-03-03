@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -119,9 +119,6 @@ For 1 - 8 bytes, the flag value must give the length also! @{ */
              record as the                                                     \
              predefined minimum                                                \
              record */
-#define MLOG_IBUF_BITMAP_INIT                                                  \
-  ((byte)27) /*!< initialize an                                                \
-             ibuf bitmap page */
 /*#define	MLOG_FULL_PAGE	((byte)28)	full contents of a page */
 #ifdef UNIV_LOG_LSN_DEBUG
 #define MLOG_LSN ((byte)28) /* current LSN */
@@ -201,18 +198,6 @@ page */
 #define MLOG_FILE_CREATE2                                                      \
   ((byte)47) /*!< log record about creating                                    \
              an .ibd file, with format */
-#define MLOG_ZIP_WRITE_NODE_PTR                                                \
-  ((byte)48) /*!< write the node pointer of                                    \
-             a record on a compressed                                          \
-             non-leaf B-tree page */
-#define MLOG_ZIP_WRITE_BLOB_PTR                                                \
-  ((byte)49) /*!< write the BLOB pointer                                       \
-             of an externally stored column                                    \
-             on a compressed page */
-#define MLOG_ZIP_WRITE_HEADER                                                  \
-  ((byte)50)                              /*!< write to compressed page        \
-                                          header */
-#define MLOG_ZIP_PAGE_COMPRESS ((byte)51) /*!< compress an index page */
 #define MLOG_BIGGEST_TYPE                                                      \
   ((byte)51) /*!< biggest value (used in                                       \
              assertions) */

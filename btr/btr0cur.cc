@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 
@@ -52,7 +52,6 @@ Created 10/16/1994 Heikki Tuuri
 #include "btr0btr.h"
 #include "btr0sea.h"
 #include "buf0lru.h"
-#include "ibuf0ibuf.h"
 #include "lock0lock.h"
 #include "mtr0log.h"
 #include "page0page.h"
@@ -318,7 +317,6 @@ void btr_cur_search_to_nth_level(
   ulint page_mode;
   ulint insert_planned;
   ulint estimate;
-  ulint ignore_sec_unique;
   ulint root_height = 0; /* remove warning */
 #ifdef BTR_CUR_ADAPT
   btr_search_t *info;
@@ -332,7 +330,6 @@ void btr_cur_search_to_nth_level(
 
   ut_ad(level == 0 || mode == PAGE_CUR_LE);
   ut_ad(dict_index_check_search_tuple(dict_index, tuple));
-  ut_ad(!dict_index_is_ibuf(dict_index) || ibuf_inside());
   ut_ad(dtuple_check_typed(tuple));
 
 #ifdef UNIV_DEBUG
@@ -341,7 +338,6 @@ void btr_cur_search_to_nth_level(
 #endif
   insert_planned = latch_mode & BTR_INSERT;
   estimate = latch_mode & BTR_ESTIMATE;
-  ignore_sec_unique = latch_mode & BTR_IGNORE_SEC_UNIQUE;
   latch_mode =
       latch_mode & ~(BTR_INSERT | BTR_ESTIMATE | BTR_IGNORE_SEC_UNIQUE);
 
@@ -387,8 +383,7 @@ void btr_cur_search_to_nth_level(
 #endif /* BTR_CUR_ADAPT */
   btr_cur_n_non_sea++;
 
-  /* If the hash search did not succeed, do binary search down the
-  tree */
+  /* If the hash search did not succeed, do binary search down the tree */
 
   if (has_search_latch) {
     /* Release possible search latch to obey latching order */
@@ -458,38 +453,17 @@ void btr_cur_search_to_nth_level(
     if (height == 0 && latch_mode <= BTR_MODIFY_LEAF) {
 
       rw_latch = latch_mode;
-
-      if (insert_planned && ibuf_should_try(dict_index, ignore_sec_unique)) {
-
-        /* Try insert to the insert buffer if the
-        page is not in the buffer pool */
-
-        buf_mode = BUF_GET_IF_IN_POOL;
-      }
     }
 
   retry_page_get:
     block = buf_page_get_gen(space, 0, page_no, rw_latch, guess, buf_mode, file,
                              line, mtr);
     if (block == nullptr) {
-      /* This must be a search to perform an insert;
-      try insert to the insert buffer */
 
-      ut_ad(buf_mode == BUF_GET_IF_IN_POOL);
-      ut_ad(insert_planned);
       ut_ad(cursor->thr);
+      ut_ad(insert_planned);
 
-      if (ibuf_insert(tuple, dict_index, space, page_no, cursor->thr)) {
-        /* Insertion to the insert buffer succeeded */
-        cursor->flag = BTR_CUR_INSERT_TO_IBUF;
-        if (likely_null(heap)) {
-          mem_heap_free(heap);
-        }
-        goto func_exit;
-      }
-
-      /* Insert to the insert buffer did not succeed:
-      retry page get */
+      /* Insert to the insert buffer did not succeed: retry page get */
 
       buf_mode = BUF_GET;
 
@@ -600,7 +574,6 @@ void btr_cur_search_to_nth_level(
     ut_ad(cursor->low_match != ULINT_UNDEFINED || mode != PAGE_CUR_LE);
   }
 
-func_exit:
   if (has_search_latch) {
 
     rw_lock_s_lock(&btr_search_latch);
@@ -874,7 +847,7 @@ inline db_err btr_cur_ins_lock_and_undo(
     return err;
   }
 
-  if (dict_index_is_clust(dict_index) && !dict_index_is_ibuf(dict_index)) {
+  if (dict_index_is_clust(dict_index)) {
 
     err = trx_undo_report_row_operation(flags, TRX_UNDO_INSERT_OP, thr,
                                         dict_index, entry, nullptr, 0, nullptr,
@@ -1053,25 +1026,6 @@ db_err btr_cur_optimistic_insert(ulint flags, btr_cur_t *cursor,
   if (!(flags & BTR_NO_LOCKING_FLAG) && inherit) {
 
     lock_update_insert(block, *rec);
-  }
-
-  if (leaf && !dict_index_is_clust(dict_index)) {
-    /* Update the free bits of the B-tree page in the
-    insert buffer bitmap. */
-
-    /* The free bits in the insert buffer bitmap must
-    never exceed the free space on a page.  It is safe to
-    decrement or reset the bits in the bitmap in a
-    mini-transaction that is committed before the
-    mini-transaction that affects the free space. */
-
-    /* It is unsafe to increment the bits in a separately
-    committed mini-transaction, because in crash recovery,
-    the free bits could momentarily be set too high. */
-
-    /* Decrement the bits in a separate mini-transaction. */
-    ibuf_update_free_bits_if_full(block, max_size,
-                                  rec_size + PAGE_DIR_SLOT_SIZE);
   }
 
   *big_rec = big_rec_vec;
@@ -1379,7 +1333,6 @@ db_err btr_cur_update_in_place(ulint flags, btr_cur_t *cursor,
   dict_index = cursor->index;
   ut_ad(!!page_rec_is_comp(rec) == dict_table_is_comp(dict_index->table));
   /* The insert buffer tree should never be updated in place. */
-  ut_ad(!dict_index_is_ibuf(dict_index));
 
   trx = thr_get_trx(thr);
   offsets = rec_get_offsets(rec, dict_index, offsets, ULINT_UNDEFINED, &heap);
@@ -1475,8 +1428,6 @@ db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor,
   index = cursor->index;
   ut_ad(!!page_rec_is_comp(rec) == dict_table_is_comp(index->table));
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
-  /* The insert buffer tree should never be updated in place. */
-  ut_ad(!dict_index_is_ibuf(index));
 
   heap = mem_heap_create(1024);
   offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED, &heap);
@@ -1677,9 +1628,6 @@ db_err btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
   ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(index), MTR_MEMO_X_LOCK));
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
 
-  /* The insert buffer tree should never be updated in place. */
-  ut_ad(!dict_index_is_ibuf(index));
-
   auto optim_err =
       btr_cur_optimistic_update(flags, cursor, update, cmpl_info, thr, mtr);
 
@@ -1817,11 +1765,6 @@ db_err btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
     goto return_after_reservations;
   } else {
     ut_a(optim_err != DB_UNDERFLOW);
-
-    /* Out of space: reset the free bits. */
-    if (!dict_index_is_clust(index) && page_is_leaf(page)) {
-      ibuf_reset_free_bits(block);
-    }
   }
 
   /* Was the record to be updated positioned as the first user
@@ -1838,13 +1781,11 @@ db_err btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
   ut_a(err == DB_SUCCESS);
   ut_a(dummy_big_rec == nullptr);
 
-  if (dict_index_is_sec_or_ibuf(index)) {
+  if (dict_index_is_sec(index)) {
     /* Update PAGE_MAX_TRX_ID in the index page header.
     It was not updated by btr_cur_pessimistic_insert()
     because of BTR_NO_LOCKING_FLAG. */
-    buf_block_t *rec_block;
-
-    rec_block = btr_cur_get_block(cursor);
+    auto rec_block = btr_cur_get_block(cursor);
 
     page_update_max_trx_id(rec_block, trx->id, mtr);
   }
@@ -2132,15 +2073,6 @@ db_err btr_cur_del_mark_set_sec_rec(ulint flags, btr_cur_t *cursor, bool val,
   return DB_SUCCESS;
 }
 
-void btr_cur_del_unmark_for_ibuf(rec_t *rec, mtr_t *mtr) {
-  /* We do not need to reserve btr_search_latch, as the page has just
-  been read to the buffer pool and there cannot be a hash index to it. */
-
-  btr_rec_set_deleted_flag(rec, false);
-
-  btr_cur_del_mark_set_sec_rec_log(rec, false, mtr);
-}
-
 bool btr_cur_optimistic_delete(btr_cur_t *cursor, mtr_t *mtr) {
   mem_heap_t *heap{};
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
@@ -2161,23 +2093,16 @@ bool btr_cur_optimistic_delete(btr_cur_t *cursor, mtr_t *mtr) {
   bool deleted{};
 
   if (!rec_offs_any_extern(offsets) && btr_cur_can_delete_without_compress(cursor, rec_offs_size(offsets), mtr)) {
-    ulint max_ins{};
     auto page = buf_block_get_frame(block);
 
     lock_update_delete(block, rec);
 
     btr_search_update_hash_on_delete(cursor);
 
-    max_ins = page_get_max_insert_size_after_reorganize(page, 1);
+    page_get_max_insert_size_after_reorganize(page, 1);
 
     page_cur_delete_rec(btr_cur_get_page_cur(cursor), cursor->index, offsets, mtr);
 
-    if (dict_index_is_clust(cursor->index) || dict_index_is_ibuf(cursor->index) || !page_is_leaf(page)) {
-      /* The insert buffer does not handle inserts to clustered indexes, to
-      non-leaf pages of secondary index B-trees, or to the insert buffer. */
-    } else {
-      ibuf_update_free_bits_low(block, max_ins, mtr);
-    }
     deleted = true;
   }
 

@@ -23,93 +23,90 @@ File space management types
 Created May 26, 2009 Vasil Dimov
 *******************************************************/
 
-#ifndef fsp0types_h
-#define fsp0types_h
-
+#pragma once
 #include "innodb0types.h"
 
-#include "fil0fil.h" /* for FIL_PAGE_DATA */
+#include "fil0fil.h"
 
-/** @name Flags for inserting records in order
-If records are inserted in order, there are the following
-flags to tell this (their type is made byte for the compiler
-to warn if direction and hint parameters are switched in
+constexpr space_id_t SYS_TABLESPACE = 0;
+
+/** @name Flags for inserting records in order If records are inserted in
+order, there are the following flags to tell this (their type is made byte
+for the compiler to warn if direction and hint parameters are switched in
 fseg_alloc_free_page) */
 /* @{ */
-#define FSP_UP ((byte)111)     /*!< alphabetically upwards */
-#define FSP_DOWN ((byte)112)   /*!< alphabetically downwards */
-#define FSP_NO_DIR ((byte)113) /*!< no order */
+
+/** Alphabetically upwards */
+constexpr byte FSP_UP = 111;
+
+/** Alphabetically downwards */
+constexpr byte FSP_DOWN = 112;
+
+/** No order */
+constexpr byte FSP_NO_DIR = 113;
+
 /* @} */
 
 /** File space extent size (one megabyte) in pages */
-#define FSP_EXTENT_SIZE (1 << (20 - UNIV_PAGE_SIZE_SHIFT))
+constexpr ulint FSP_EXTENT_SIZE = 1 << (20 - UNIV_PAGE_SIZE_SHIFT);
 
-/** On a page of any file segment, data may be put starting from this
-offset */
-#define FSEG_PAGE_DATA FIL_PAGE_DATA
+/** On a page of any file segment, data may be put starting from this offset */
+constexpr auto FSEG_PAGE_DATA = FIL_PAGE_DATA;
 
 /** @name File segment header
 The file segment header points to the inode describing the file segment. */
 /* @{ */
 /** Data type for file segment header */
-typedef byte fseg_header_t;
+using fseg_header_t = byte;;
 
-#define FSEG_HDR_SPACE 0   /*!< space id of the inode */
-#define FSEG_HDR_PAGE_NO 4 /*!< page number of the inode */
-#define FSEG_HDR_OFFSET 8  /*!< byte offset of the inode */
+/** Space id of the inode */
+constexpr ulint FSEG_HDR_SPACE =  0;
 
-#define FSEG_HEADER_SIZE                                                       \
-  10 /*!< Length of the file system                                            \
-     header, in bytes */
+/** Page number of the inode */
+constexpr ulint FSEG_HDR_PAGE_NO =  4;
+
+/** Byte offset of the inode */
+constexpr ulint FSEG_HDR_OFFSET =  8;
+
+/** Length of the file system header, in bytes */
+constexpr ulint FSEG_HEADER_SIZE =  10;
+
 /* @} */
 
 /** Flags for fsp_reserve_free_extents @{ */
-#define FSP_NORMAL 1000000
-#define FSP_UNDO 2000000
-#define FSP_CLEANING 3000000
+constexpr ulint FSP_NORMAL = 1000000;
+constexpr ulint FSP_UNDO = 2000000;
+constexpr ulint FSP_CLEANING = 3000000;
 /* @} */
 
-/* Number of pages described in a single descriptor page: currently each page
+/** Number of pages described in a single descriptor page: currently each page
 description takes less than 1 byte; a descriptor page is repeated every
 this many file pages */
-/* #define XDES_DESCRIBED_PER_PAGE		UNIV_PAGE_SIZE */
+// constexpr auto XDES_DESCRIBED_PER_PAGE = UNIV_PAGE_SIZE;
 
 /** @name The space low address page map
-The pages at FSP_XDES_OFFSET and FSP_IBUF_BITMAP_OFFSET are repeated
-every XDES_DESCRIBED_PER_PAGE pages in every tablespace. */
+The pages at FSP_XDES_OFFSET is repeated every XDES_DESCRIBED_PER_PAGE pages
+in every tablespace. */
+
 /* @{ */
-/*--------------------------------------*/
-#define FSP_XDES_OFFSET 0        /* !< extent descriptor */
-#define FSP_IBUF_BITMAP_OFFSET 1 /* !< insert buffer bitmap */
-                                 /* The ibuf bitmap pages are the ones whose
-                                 page number is the number above plus a
-                                 multiple of XDES_DESCRIBED_PER_PAGE */
+/** extent descriptor */
+constexpr ulint FSP_XDES_OFFSET =  0;
 
-#define FSP_FIRST_INODE_PAGE_NO 2 /*!< in every tablespace */
-                                  /* The following pages exist
-                                  in the system tablespace (space 0). */
-#define FSP_IBUF_HEADER_PAGE_NO                                                \
-  3 /*!< insert buffer                                                         \
-    header page, in                                                            \
-    tablespace 0 */
-#define FSP_IBUF_TREE_ROOT_PAGE_NO                                             \
-  4 /*!< insert buffer                                                         \
-    B-tree root page in                                                        \
-    tablespace 0 */
-    /* The ibuf tree root page number in
-    tablespace 0; its fseg inode is on the page
-    number FSP_FIRST_INODE_PAGE_NO */
-#define FSP_TRX_SYS_PAGE_NO                                                    \
-  5 /*!< transaction                                                           \
-    system header, in                                                          \
-    tablespace 0 */
-#define FSP_FIRST_RSEG_PAGE_NO                                                 \
-  6 /*!< first rollback segment                                                \
-    page, in tablespace 0 */
-#define FSP_DICT_HDR_PAGE_NO                                                   \
-  7 /*!< data dictionary header                                                \
-    page, in tablespace 0 */
-/*--------------------------------------*/
+/** The number of reserved pages in a fragment extent. */
+constexpr ulint FSP_XDES_RESERVED = 0;
+
+/** In every tablespace */
+constexpr ulint FSP_FIRST_INODE_PAGE_NO =  1;
+
+/* The following pages exist in the system tablespace SYS_TABLESPACE. */
+
+/** Transaction system header, in tablespace SYS_TABLESPACE */
+constexpr page_no_t FSP_TRX_SYS_PAGE_NO =  2;
+
+/** First rollback segment page, in tablespace SYS_TABLESPACWE */
+constexpr page_no_t FSP_FIRST_RSEG_PAGE_NO =  3;
+
+/** data dictionary header  page, in tablespace SYS_TABLESPACE */
+constexpr page_no_t FSP_DICT_HDR_PAGE_NO =  4;
+
 /* @} */
-
-#endif /* fsp0types_h */

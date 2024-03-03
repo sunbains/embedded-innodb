@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -76,13 +76,13 @@ void dict_create(void);
   10 /* the ids for tables etc. start                                          \
      from this number, except for basic                                        \
      system tables and their above defined                                     \
-     indexes; ibuf tables and indexes are                                      \
-     assigned as the id the number                                             \
-     DICT_IBUF_ID_MIN plus the space id */
-#define DICT_IBUF_ID_MIN ut_dulint_create(0xFFFFFFFFUL, 0)
+     indexes. */
+
+/* System table IDs start from this. */
+#define DICT_SYS_ID_MIN ut_dulint_create(0xFFFFFFFFUL, SYS_TABLESPACE)
 
 /* The offset of the dictionary header on the page */
-#define DICT_HDR FSEG_PAGE_DATA
+constexpr auto DICT_HDR  = FSEG_PAGE_DATA;
 
 /*-------------------------------------------------------------*/
 /* Dictionary header offsets */

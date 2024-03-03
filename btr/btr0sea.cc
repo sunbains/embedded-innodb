@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 
@@ -308,13 +308,6 @@ static void btr_search_info_update_hash(
 
   index = cursor->index;
 
-  if (dict_index_is_ibuf(index)) {
-    /* So many deletes are performed on an insert buffer tree
-    that we do not consider a hash index useful on it: */
-
-    return;
-  }
-
   n_unique = dict_index_get_n_unique_in_tree(index);
 
   if (info->n_hash_potential == 0) {
@@ -507,7 +500,6 @@ static void btr_search_update_hash_ref(
   }
 
   ut_a(block->index == cursor->index);
-  ut_a(!dict_index_is_ibuf(cursor->index));
 
   if ((info->n_hash_potential > 0) &&
       (block->curr_n_fields == info->n_fields) &&
@@ -1000,7 +992,6 @@ retry:
   n_fields = block->curr_n_fields;
   n_bytes = block->curr_n_bytes;
   index = block->index;
-  ut_a(!dict_index_is_ibuf(index));
 
   /* NOTE: The fields of block must not be accessed after
   releasing btr_search_latch, as the index page might only
@@ -1183,7 +1174,6 @@ static void btr_search_build_page_hash_index(
   rec_offs_init(offsets_);
 
   ut_ad(index);
-  ut_a(!dict_index_is_ibuf(index));
 
   table = btr_search_sys->hash_index;
   page = buf_block_get_frame(block);
@@ -1366,8 +1356,7 @@ void btr_search_move_or_delete_hash_entries(
 #endif /* UNIV_SYNC_DEBUG */
   ut_a(!new_block->is_hashed || new_block->index == index);
   ut_a(!block->is_hashed || block->index == index);
-  ut_a(!(new_block->is_hashed || block->is_hashed) ||
-       !dict_index_is_ibuf(index));
+  ut_a(!(new_block->is_hashed || block->is_hashed));
 
   rw_lock_s_lock(&btr_search_latch);
 
@@ -1436,7 +1425,6 @@ void btr_search_update_hash_on_delete(
 
   ut_a(block->index == cursor->index);
   ut_a(block->curr_n_fields + block->curr_n_bytes > 0);
-  ut_a(!dict_index_is_ibuf(cursor->index));
 
   table = btr_search_sys->hash_index;
 
@@ -1481,7 +1469,6 @@ void btr_search_update_hash_node_on_insert(
   }
 
   ut_a(block->index == cursor->index);
-  ut_a(!dict_index_is_ibuf(cursor->index));
 
   rw_lock_x_lock(&btr_search_latch);
 
@@ -1546,7 +1533,6 @@ void btr_search_update_hash_on_insert(
   }
 
   ut_a(block->index == cursor->index);
-  ut_a(!dict_index_is_ibuf(cursor->index));
 
   index_id = cursor->index->id;
 
@@ -1717,8 +1703,6 @@ bool btr_search_validate(void) {
 
         ut_a(buf_block_get_state(block) == BUF_BLOCK_REMOVE_HASH);
       }
-
-      ut_a(!dict_index_is_ibuf(block->index));
 
       offsets = rec_get_offsets(
           (const rec_t *)node->data, block->index, offsets,
