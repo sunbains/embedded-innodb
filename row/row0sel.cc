@@ -39,7 +39,7 @@ Created 12/19/1997 Heikki Tuuri
 #include "api0ucode.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
-#include "btr0sea.h"
+
 #include "buf0lru.h"
 #include "dict0boot.h"
 #include "dict0dict.h"
@@ -1027,9 +1027,6 @@ static ulint row_sel_try_search_shortcut(
   ut_ad(node->read_view);
   ut_ad(plan->unique_search);
   ut_ad(!plan->must_get_clust);
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&btr_search_latch, RW_LOCK_SHARED));
-#endif /* UNIV_SYNC_DEBUG */
 
   row_sel_open_pcur(plan, true, mtr);
 
@@ -1190,22 +1187,6 @@ table_loop:
 
   if (consistent_read && plan->unique_search && !plan->pcur_is_open &&
       !plan->must_get_clust && !plan->table->big_rows) {
-    if (!search_latch_locked) {
-      rw_lock_s_lock(&btr_search_latch);
-
-      search_latch_locked = true;
-    } else if (rw_lock_get_writer(&btr_search_latch) == RW_LOCK_WAIT_EX) {
-
-      /* There is an x-latch request waiting: release the
-      s-latch for a moment; as an s-latch here is often
-      kept for some 10 searches before being released,
-      a waiting x-latch request would block other threads
-      from acquiring an s-latch for a long time, lowering
-      performance significantly in multiprocessors. */
-
-      rw_lock_s_unlock(&btr_search_latch);
-      rw_lock_s_lock(&btr_search_latch);
-    }
 
     found_flag = row_sel_try_search_shortcut(node, plan, &mtr);
 
@@ -1224,12 +1205,6 @@ table_loop:
 
     mtr_commit(&mtr);
     mtr_start(&mtr);
-  }
-
-  if (search_latch_locked) {
-    rw_lock_s_unlock(&btr_search_latch);
-
-    search_latch_locked = false;
   }
 
   if (!plan->pcur_is_open) {
@@ -1766,9 +1741,6 @@ lock_wait_or_error:
 #endif /* UNIV_SYNC_DEBUG */
 
 func_exit:
-  if (search_latch_locked) {
-    rw_lock_s_unlock(&btr_search_latch);
-  }
   if (likely_null(heap)) {
     mem_heap_free(heap);
   }
@@ -2679,24 +2651,6 @@ enum db_err row_search_for_client(
 	}
 #endif
 
-  /*-------------------------------------------------------------*/
-  /* PHASE 0: Release a possible s-latch we are holding on the
-  adaptive hash index latch if there is someone waiting behind */
-
-  if (rw_lock_get_writer(&btr_search_latch) != RW_LOCK_NOT_LOCKED &&
-      trx->has_search_latch) {
-
-    /* There is an x-latch request on the adaptive hash index:
-    release the s-latch to reduce starvation and wait for
-    BTR_SEA_TIMEOUT rounds before trying to keep it again over
-    calls from the client */
-
-    rw_lock_s_unlock(&btr_search_latch);
-    trx->has_search_latch = false;
-
-    trx->search_latch_timeout = BTR_SEA_TIMEOUT;
-  }
-
   /* Reset the new record lock info if session is using a
   READ COMMITED isolation level. Then we are able to remove
   the record locks set here on an individual row. */
@@ -2809,18 +2763,9 @@ enum db_err row_search_for_client(
       and if we try that, we can deadlock on the adaptive
       hash index semaphore! */
 
-#ifndef UNIV_SEARCH_DEBUG
-      if (!trx->has_search_latch) {
-        rw_lock_s_lock(&btr_search_latch);
-        trx->has_search_latch = true;
-      }
-#endif
       switch (row_sel_try_search_shortcut_for_prebuilt(&rec, prebuilt, &offsets,
                                                        &heap, &mtr)) {
       case SEL_FOUND:
-#ifdef UNIV_SEARCH_DEBUG
-        ut_a(0 == cmp_dtuple_rec(cmp_ctx, search_tuple, rec, offsets));
-#endif
         /* When searching for an exact match we don't
         position the persistent cursor therefore we
         must read in the record found into the
@@ -2843,7 +2788,7 @@ enum db_err row_search_for_client(
 
         prebuilt->result = 0;
         err = DB_SUCCESS;
-        goto release_search_latch_if_needed;
+        goto func_exit;
 
       case SEL_EXHAUSTED:
         mtr_commit(&mtr);
@@ -2853,17 +2798,6 @@ enum db_err row_search_for_client(
         */
 
         err = DB_RECORD_NOT_FOUND;
-      release_search_latch_if_needed:
-        if (trx->search_latch_timeout > 0 && trx->has_search_latch) {
-
-          trx->search_latch_timeout--;
-
-          rw_lock_s_unlock(&btr_search_latch);
-          trx->has_search_latch = false;
-        }
-
-        /* NOTE that we do NOT store the cursor
-        position */
         goto func_exit;
 
       case SEL_RETRY:
@@ -2880,11 +2814,6 @@ enum db_err row_search_for_client(
 
   /*-------------------------------------------------------------*/
   /* PHASE 3: Open or restore index cursor position */
-
-  if (trx->has_search_latch) {
-    rw_lock_s_unlock(&btr_search_latch);
-    trx->has_search_latch = false;
-  }
 
   ut_a(trx->conc_state != TRX_NOT_STARTED);
 

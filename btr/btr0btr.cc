@@ -31,7 +31,7 @@ Created 6/2/1994 Heikki Tuuri
 #include "page0page.h"
 #include "btr0cur.h"
 #include "btr0pcur.h"
-#include "btr0sea.h"
+
 #include "lock0lock.h"
 #include "rem0cmp.h"
 #include "trx0trx.h"
@@ -566,8 +566,6 @@ top_loop:
 void btr_free_root(ulint space, ulint root_page_no, mtr_t *mtr) {
   auto block = btr_block_get(space, root_page_no, RW_X_LATCH, mtr);
 
-  btr_search_drop_page_hash_index(block);
-
   auto header = buf_block_get_frame(block) + PAGE_HEADER + PAGE_BTR_SEG_TOP;
 
 #ifdef UNIV_BTR_DEBUG
@@ -617,10 +615,6 @@ btr_page_reorganize_low(bool recovery,      /*!< in: true if called in recovery:
 
   /* Copy the old page to temporary space */
   buf_frame_copy(temp_page, page);
-
-  if (likely(!recovery)) {
-    btr_search_drop_page_hash_index(block);
-  }
 
   block->check_index_page_at_flush = true;
 
@@ -723,8 +717,6 @@ static void btr_page_empty(buf_block_t *block, dict_index_t *dict_index,
   auto page = buf_block_get_frame(block);
 
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
-
-  btr_search_drop_page_hash_index(block);
 
   /* Recreate the page: note that global data on page (possible
   segment headers, next page-field, etc.) is preserved intact */
@@ -1678,8 +1670,6 @@ btr_lift_page_up(dict_index_t *dict_index, /*!< in: index tree */
     mem_heap_free(heap);
   }
 
-  btr_search_drop_page_hash_index(block);
-
   /* Make the father empty */
   btr_page_empty(father_block, dict_index, page_level, mtr);
 
@@ -1817,8 +1807,6 @@ bool btr_compress(btr_cur_t *cursor, mtr_t *mtr) {
       goto err_exit;
     }
 
-    btr_search_drop_page_hash_index(block);
-
     /* Remove the page from the level list */
     btr_level_list_remove(space, 0, page, mtr);
 
@@ -1829,8 +1817,6 @@ bool btr_compress(btr_cur_t *cursor, mtr_t *mtr) {
         merge_block, block, page_get_infimum_rec(page), cursor->index, mtr);
 
     ut_a(orig_succ == nullptr);
-
-    btr_search_drop_page_hash_index(block);
 
     /* Remove the page from the level list */
     btr_level_list_remove(space, 0, page, mtr);
@@ -1881,7 +1867,6 @@ static void btr_discard_only_page_on_level(
     ut_a(btr_page_get_next(page, mtr) == FIL_NULL);
 
     ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
-    btr_search_drop_page_hash_index(block);
 
     btr_page_get_father(dict_index, block, mtr, &cursor);
     father = btr_cur_get_block(&cursor);
@@ -1958,7 +1943,6 @@ void btr_discard_page(btr_cur_t *cursor, mtr_t *mtr) {
 
   page = buf_block_get_frame(block);
   ut_a(page_is_comp(merge_page) == page_is_comp(page));
-  btr_search_drop_page_hash_index(block);
 
   if (left_page_no == FIL_NULL && !page_is_leaf(page)) {
 

@@ -28,7 +28,7 @@ Created 11/5/1995 Heikki Tuuri
 #endif
 
 #include "btr0btr.h"
-#include "btr0sea.h"
+
 #include "buf0buf.h"
 #include "buf0flu.h"
 #include "buf0rea.h"
@@ -130,24 +130,6 @@ void buf_LRU_var_init() {
   memset(&buf_LRU_stat_sum, 0x0, sizeof(buf_LRU_stat_sum));
 }
 
-/** Attempts to drop page hash index on a batch of pages belonging to a
-particular space id. */
-static void
-buf_LRU_drop_page_hash_batch(ulint space_id, /*!< in: space id */
-                             ulint,
-                             const ulint *arr, /*!< in: array of page_no */
-                             ulint count) /*!< in: number of entries in array */
-{
-  ulint i;
-
-  ut_ad(arr != nullptr);
-  ut_ad(count <= BUF_LRU_DROP_SEARCH_HASH_SIZE);
-
-  for (i = 0; i < count; ++i) {
-    btr_search_drop_page_hash_when_freed(space_id, arr[i]);
-  }
-}
-
 /** When doing a DROP TABLE/DISCARD TABLESPACE we have to drop all page
 hash index entries belonging to that table. This function tries to
 do that in batch. Note that this is a 'best effort' attempt and does
@@ -200,7 +182,6 @@ scan_again:
       obey the latching order. */
       buf_pool_mutex_exit();
 
-      buf_LRU_drop_page_hash_batch(id, 0, page_arr, num_entries);
       num_entries = 0;
       buf_pool_mutex_enter();
     } else {
@@ -230,7 +211,6 @@ scan_again:
   buf_pool_mutex_exit();
 
   /* Drop any remaining batch of search hashed pages. */
-  buf_LRU_drop_page_hash_batch(id, 0, page_arr, num_entries);
   ut_free(page_arr);
 }
 
@@ -318,14 +298,11 @@ scan_again:
 
         buf_pool_mutex_exit();
 
-        auto page_no = buf_page_get_page_no(bpage);
-
         mutex_exit(block_mutex);
 
         /* Note that the following call will acquire
         an S-latch on the page */
 
-        btr_search_drop_page_hash_when_freed(id, page_no);
         goto scan_again;
       }
 
@@ -971,8 +948,6 @@ buf_lru_free_block_status buf_LRU_free_block(buf_page_t *bpage, bool *buf_pool_m
     order to avoid bogus Valgrind warnings.*/
 
     UNIV_MEM_VALID(((buf_block_t *)bpage)->frame, UNIV_PAGE_SIZE);
-
-    btr_search_drop_page_hash_index((buf_block_t *)bpage);
 
     UNIV_MEM_INVALID(((buf_block_t *)bpage)->frame, UNIV_PAGE_SIZE);
 

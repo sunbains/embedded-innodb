@@ -21,14 +21,12 @@ File space management
 Created 11/29/1995 Heikki Tuuri
 ***********************************************************************/
 
-#include "fsp0fsp.h"
-
 #include "btr0btr.h"
-#include "btr0sea.h"
 #include "buf0buf.h"
 #include "dict0boot.h"
 #include "dict0mem.h"
 #include "fil0fil.h"
+#include "fsp0fsp.h"
 #include "fut0fut.h"
 #include "log0log.h"
 #include "mtr0log.h"
@@ -2400,8 +2398,6 @@ fseg_free_page_low(fseg_inode_t *seg_inode, /*!< in: segment inode */
   /* Drop search system page hash index if the page is found in
   the pool and is hashed */
 
-  btr_search_drop_page_hash_when_freed(space, page);
-
   descr = xdes_get_descriptor(space, page, mtr);
 
   ut_a(descr);
@@ -2530,32 +2526,15 @@ static void fseg_free_extent(fseg_inode_t *seg_inode, /*!< in: segment inode */
                              ulint page, /*!< in: a page in the extent */
                              mtr_t *mtr)        /*!< in: mtr handle */
 {
-  ulint first_page_in_extent;
-  xdes_t *descr;
-  ulint not_full_n_used;
-  ulint descr_n_used;
-  ulint i;
+  ut_ad(mtr != nullptr);
+  ut_ad(seg_inode != nullptr);
 
-  ut_ad(seg_inode && mtr);
-
-  descr = xdes_get_descriptor(space, page, mtr);
+  auto descr = xdes_get_descriptor(space, page, mtr);
 
   ut_a(xdes_get_state(descr, mtr) == XDES_FSEG);
   ut_a(0 == ut_dulint_cmp(mtr_read_dulint(descr + XDES_ID, mtr),
                           mtr_read_dulint(seg_inode + FSEG_ID, mtr)));
   ut_ad(mach_read_from_4(seg_inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);
-
-  first_page_in_extent = page - (page % FSP_EXTENT_SIZE);
-
-  for (i = 0; i < FSP_EXTENT_SIZE; i++) {
-    if (false == xdes_get_bit(descr, XDES_FREE_BIT, i, mtr)) {
-
-      /* Drop search system page hash index if the page is
-      found in the pool and is hashed */
-
-      btr_search_drop_page_hash_when_freed(space, first_page_in_extent + i);
-    }
-  }
 
   if (xdes_is_full(descr, mtr)) {
     flst_remove(seg_inode + FSEG_FULL, descr + XDES_FLST_NODE, mtr);
@@ -2564,11 +2543,13 @@ static void fseg_free_extent(fseg_inode_t *seg_inode, /*!< in: segment inode */
   } else {
     flst_remove(seg_inode + FSEG_NOT_FULL, descr + XDES_FLST_NODE, mtr);
 
-    not_full_n_used =
+    auto not_full_n_used =
         mtr_read_ulint(seg_inode + FSEG_NOT_FULL_N_USED, MLOG_4BYTES, mtr);
 
-    descr_n_used = xdes_get_n_used(descr, mtr);
+    auto descr_n_used = xdes_get_n_used(descr, mtr);
+
     ut_a(not_full_n_used >= descr_n_used);
+
     mlog_write_ulint(seg_inode + FSEG_NOT_FULL_N_USED,
                      not_full_n_used - descr_n_used, MLOG_4BYTES, mtr);
   }

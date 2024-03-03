@@ -50,7 +50,6 @@ Created 10/16/1994 Heikki Tuuri
 #endif
 
 #include "btr0btr.h"
-#include "btr0sea.h"
 #include "buf0lru.h"
 #include "lock0lock.h"
 #include "mtr0log.h"
@@ -72,13 +71,16 @@ bool btr_cur_print_record_ops = false;
 
 /** Number of searches down the B-tree in btr_cur_search_to_nth_level(). */
 ulint btr_cur_n_non_sea = 0;
+
 /** Number of successful adaptive hash index lookups in
 btr_cur_search_to_nth_level(). */
 ulint btr_cur_n_sea = 0;
+
 /** Old value of btr_cur_n_non_sea.  Copied by
 srv_refresh_innodb_monitor_stats().  Referenced by
 srv_printf_innodb_monitor(). */
 ulint btr_cur_n_non_sea_old = 0;
+
 /** Old value of btr_cur_n_sea.  Copied by
 srv_refresh_innodb_monitor_stats().  Referenced by
 srv_printf_innodb_monitor(). */
@@ -262,49 +264,9 @@ btr_cur_latch_leaves(page_t *page,         /*!< in: leaf page where the search
   ut_error;
 }
 
-/** Searches an index tree and positions a tree cursor on a given level.
-NOTE: n_fields_cmp in tuple must be set so that it cannot be compared
-to node pointer page number fields on the upper levels of the tree!
-Note that if mode is PAGE_CUR_LE, which is used in inserts, then
-cursor->up_match and cursor->low_match both will have sensible values.
-If mode is PAGE_CUR_GE, then up_match will a have a sensible value.
-
-If mode is PAGE_CUR_LE , cursor is left at the place where an insert of the
-search tuple should be performed in the B-tree. InnoDB does an insert
-immediately after the cursor. Thus, the cursor may end up on a user record,
-or on a page infimum record. */
-
-void btr_cur_search_to_nth_level(
-    dict_index_t *dict_index, /*!< in: index */
-    ulint level,              /*!< in: the tree level of search */
-    const dtuple_t *tuple,    /*!< in: data tuple; NOTE: n_fields_cmp in
-                              tuple must be set so that it cannot get
-                              compared to the node ptr page number field! */
-    ulint mode,               /*!< in: PAGE_CUR_L, ...;
-                              Inserts should always be made using
-                              PAGE_CUR_LE to search the position! */
-    ulint latch_mode,         /*!< in: BTR_SEARCH_LEAF, ..., ORed with
-                          BTR_INSERT and BTR_ESTIMATE;
-                          cursor->left_block is used to store a pointer
-                          to the left neighbor page, in the cases
-                          BTR_SEARCH_PREV and BTR_MODIFY_PREV;
-                          NOTE that if has_search_latch
-                          is != 0, we maybe do not have a latch set
-                          on the cursor page, we assume
-                          the caller uses his search latch
-                          to protect the record! */
-    btr_cur_t *cursor,        /*!< in/out: tree cursor; the cursor page is
-                              s- or x-latched, but see also above! */
-    ulint has_search_latch,   /*!< in: info on the latch mode the
-                     caller currently has on btr_search_latch:
-                     RW_S_LATCH, or 0 */
-    const char *file,         /*!< in: file name */
-    ulint line,               /*!< in: line where called */
-    mtr_t *mtr)               /*!< in: mtr */
-{
+void btr_cur_search_to_nth_level(dict_index_t *dict_index, ulint level, const dtuple_t *tuple, ulint mode, ulint latch_mode, btr_cur_t *cursor, ulint has_search_latch, const char *file, ulint line, mtr_t *mtr) {
   page_cur_t *page_cursor;
   page_t *page;
-  buf_block_t *guess;
   rec_t *node_ptr;
   ulint page_no;
   ulint space;
@@ -318,9 +280,6 @@ void btr_cur_search_to_nth_level(
   ulint insert_planned;
   ulint estimate;
   ulint root_height = 0; /* remove warning */
-#ifdef BTR_CUR_ADAPT
-  btr_search_t *info;
-#endif
   mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
@@ -346,49 +305,7 @@ void btr_cur_search_to_nth_level(
   cursor->flag = BTR_CUR_BINARY;
   cursor->index = dict_index;
 
-#ifndef BTR_CUR_ADAPT
-  guess = nullptr;
-#else
-  info = btr_search_get_info(dict_index);
-
-  guess = info->root_guess;
-
-#ifdef BTR_CUR_HASH_ADAPT
-
-#ifdef UNIV_SEARCH_PERF_STAT
-  info->n_searches++;
-#endif
-  if (rw_lock_get_writer(&btr_search_latch) == RW_LOCK_NOT_LOCKED &&
-      latch_mode <= BTR_MODIFY_LEAF && info->last_hash_succ && !estimate
-#ifdef PAGE_CUR_LE_OR_EXTENDS
-      && mode != PAGE_CUR_LE_OR_EXTENDS
-#endif /* PAGE_CUR_LE_OR_EXTENDS */
-      /* If !has_search_latch, we do a dirty read of
-      btr_search_enabled below, and btr_search_guess_on_hash()
-      will have to check it again. */
-      && likely(btr_search_enabled) &&
-      btr_search_guess_on_hash(dict_index, info, tuple, mode, latch_mode,
-                               cursor, has_search_latch, mtr)) {
-
-    /* Search using the hash index succeeded */
-
-    ut_ad(cursor->up_match != ULINT_UNDEFINED || mode != PAGE_CUR_GE);
-    ut_ad(cursor->up_match != ULINT_UNDEFINED || mode != PAGE_CUR_LE);
-    ut_ad(cursor->low_match != ULINT_UNDEFINED || mode != PAGE_CUR_LE);
-    btr_cur_n_sea++;
-
-    return;
-  }
-#endif /* BTR_CUR_HASH_ADAPT */
-#endif /* BTR_CUR_ADAPT */
   btr_cur_n_non_sea++;
-
-  /* If the hash search did not succeed, do binary search down the tree */
-
-  if (has_search_latch) {
-    /* Release possible search latch to obey latching order */
-    rw_lock_s_unlock(&btr_search_latch);
-  }
 
   /* Store the position of the tree latch we push to mtr so that we
   know how to release it when we have latched leaf node(s) */
@@ -456,7 +373,7 @@ void btr_cur_search_to_nth_level(
     }
 
   retry_page_get:
-    block = buf_page_get_gen(space, 0, page_no, rw_latch, guess, buf_mode, file,
+    block = buf_page_get_gen(space, 0, page_no, rw_latch, nullptr, buf_mode, file,
                              line, mtr);
     if (block == nullptr) {
 
@@ -487,11 +404,6 @@ void btr_cur_search_to_nth_level(
       height = btr_page_get_level(page, mtr);
       root_height = height;
       cursor->tree_height = root_height + 1;
-#ifdef BTR_CUR_ADAPT
-      if (block != guess) {
-        info->root_guess = block;
-      }
-#endif
     }
 
     if (height == 0) {
@@ -540,8 +452,6 @@ void btr_cur_search_to_nth_level(
 
     height--;
 
-    guess = nullptr;
-
     node_ptr = page_cur_get_rec(page_cursor);
     offsets = rec_get_offsets(node_ptr, cursor->index, offsets, ULINT_UNDEFINED,
                               &heap);
@@ -559,24 +469,9 @@ void btr_cur_search_to_nth_level(
     cursor->up_match = up_match;
     cursor->up_bytes = up_bytes;
 
-#ifdef BTR_CUR_ADAPT
-    /* We do a dirty read of btr_search_enabled here.  We
-    will properly check btr_search_enabled again in
-    btr_search_build_page_hash_index() before building a
-    page hash index, while holding btr_search_latch. */
-    if (likely(btr_search_enabled)) {
-
-      btr_search_info_update(dict_index, cursor);
-    }
-#endif
     ut_ad(cursor->up_match != ULINT_UNDEFINED || mode != PAGE_CUR_GE);
     ut_ad(cursor->up_match != ULINT_UNDEFINED || mode != PAGE_CUR_LE);
     ut_ad(cursor->low_match != ULINT_UNDEFINED || mode != PAGE_CUR_LE);
-  }
-
-  if (has_search_latch) {
-
-    rw_lock_s_lock(&btr_search_latch);
   }
 }
 
@@ -1015,14 +910,6 @@ db_err btr_cur_optimistic_insert(ulint flags, btr_cur_t *cursor,
     }
   }
 
-#ifdef BTR_CUR_HASH_ADAPT
-  if (!reorg && leaf && (cursor->flag == BTR_CUR_HASH)) {
-    btr_search_update_hash_node_on_insert(cursor);
-  } else {
-    btr_search_update_hash_on_insert(cursor);
-  }
-#endif /* BTR_CUR_HASH_ADAPT */
-
   if (!(flags & BTR_NO_LOCKING_FLAG) && inherit) {
 
     lock_update_insert(block, *rec);
@@ -1129,9 +1016,6 @@ db_err btr_cur_pessimistic_insert(ulint flags, btr_cur_t *cursor,
 
   ut_ad(page_rec_get_next(btr_cur_get_rec(cursor)) == *rec);
 
-#ifdef BTR_CUR_ADAPT
-  btr_search_update_hash_on_insert(cursor);
-#endif
   if (!(flags & BTR_NO_LOCKING_FLAG)) {
 
     lock_update_insert(btr_cur_get_block(cursor), *rec);
@@ -1297,9 +1181,6 @@ byte *btr_cur_parse_update_in_place(byte *ptr, byte *end_ptr, page_t *page, dict
   ut_a((bool)!!page_is_comp(page) == dict_table_is_comp(dict_index->table));
   rec = page + rec_offset;
 
-  /* We do not need to reserve btr_search_latch, as the page is only
-  being recovered, and there cannot be a hash index to it. */
-
   offsets = rec_get_offsets(rec, dict_index, nullptr, ULINT_UNDEFINED, &heap);
 
   if (!(flags & BTR_KEEP_SYS_FLAG)) {
@@ -1363,13 +1244,9 @@ db_err btr_cur_update_in_place(ulint flags, btr_cur_t *cursor,
     NOT call it if index is secondary */
 
     if (!dict_index_is_clust(dict_index) ||
+
         row_upd_changes_ord_field_binary(nullptr, dict_index, update)) {
-
-      /* Remove possible hash index pointer to this record */
-      btr_search_update_hash_on_delete(cursor);
     }
-
-    rw_lock_x_lock(&btr_search_latch);
   }
 
   if (!(flags & BTR_KEEP_SYS_FLAG)) {
@@ -1380,10 +1257,6 @@ db_err btr_cur_update_in_place(ulint flags, btr_cur_t *cursor,
       rec_get_deleted_flag(rec, page_is_comp(buf_block_get_frame(block)));
 
   row_upd_rec_in_place(rec, dict_index, offsets, update);
-
-  if (block->is_hashed) {
-    rw_lock_x_unlock(&btr_search_latch);
-  }
 
   btr_cur_update_in_place_log(flags, rec, dict_index, update, trx, roll_ptr,
                               mtr);
@@ -1526,8 +1399,6 @@ db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor,
   btr_cur_pessimistic_update). */
 
   lock_rec_store_on_page_infimum(block, rec);
-
-  btr_search_update_hash_on_delete(cursor);
 
   /* The call to row_rec_to_index_entry(ROW_COPY_DATA, ...) above
   invokes rec_offs_make_valid() to point to the copied record that
@@ -1740,8 +1611,6 @@ db_err btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
 
   lock_rec_store_on_page_infimum(block, rec);
 
-  btr_search_update_hash_on_delete(cursor);
-
   page_cursor = btr_cur_get_page_cur(cursor);
 
   page_cur_delete_rec(page_cursor, index, offsets, mtr);
@@ -1895,10 +1764,6 @@ byte *btr_cur_parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_t *pag
   if (page) {
     auto rec = page + offset;
 
-    /* We do not need to reserve btr_search_latch, as the page
-    is only being recovered, and there cannot be a hash index to
-    it. */
-
     btr_rec_set_deleted_flag(rec, val);
 
     if (!(flags & BTR_KEEP_SYS_FLAG)) {
@@ -1954,22 +1819,12 @@ db_err btr_cur_del_mark_set_clust_rec(ulint flags, btr_cur_t *cursor, bool val,
                                         nullptr, nullptr, 0, rec, &roll_ptr);
 
     if (err == DB_SUCCESS) {
-      auto block = btr_cur_get_block(cursor);
-
-      if (block->is_hashed) {
-        rw_lock_x_lock(&btr_search_latch);
-      }
-
       btr_rec_set_deleted_flag(rec, val);
 
       auto trx = thr_get_trx(thr);
 
       if (!(flags & BTR_KEEP_SYS_FLAG)) {
         row_upd_rec_sys_fields(rec, index, offsets, trx, roll_ptr);
-      }
-
-      if (block->is_hashed) {
-        rw_lock_x_unlock(&btr_search_latch);
       }
 
       btr_cur_del_mark_set_clust_rec_log(flags, rec, index, val, trx, roll_ptr,
@@ -2026,10 +1881,6 @@ byte *btr_cur_parse_del_mark_set_sec_rec(byte *ptr, byte *end_ptr, page_t *page)
   if (page != nullptr) {
     auto rec = page + offset;
 
-    /* We do not need to reserve btr_search_latch, as the page
-    is only being recovered, and there cannot be a hash index to
-    it. */
-
     btr_rec_set_deleted_flag(rec, val);
   }
 
@@ -2039,7 +1890,6 @@ byte *btr_cur_parse_del_mark_set_sec_rec(byte *ptr, byte *end_ptr, page_t *page)
 db_err btr_cur_del_mark_set_sec_rec(ulint flags, btr_cur_t *cursor, bool val,
                                     que_thr_t *thr, mtr_t *mtr) {
   auto rec = btr_cur_get_rec(cursor);
-  auto block = btr_cur_get_block(cursor);
 
 #ifdef UNIV_DEBUG
   if (btr_cur_print_record_ops && thr) {
@@ -2058,15 +1908,7 @@ db_err btr_cur_del_mark_set_sec_rec(ulint flags, btr_cur_t *cursor, bool val,
 
   ut_ad(!!page_rec_is_comp(rec) == dict_table_is_comp(cursor->index->table));
 
-  if (block->is_hashed) {
-    rw_lock_x_lock(&btr_search_latch);
-  }
-
   btr_rec_set_deleted_flag(rec, val);
-
-  if (block->is_hashed) {
-    rw_lock_x_unlock(&btr_search_latch);
-  }
 
   btr_cur_del_mark_set_sec_rec_log(rec, val, mtr);
 
@@ -2096,8 +1938,6 @@ bool btr_cur_optimistic_delete(btr_cur_t *cursor, mtr_t *mtr) {
     auto page = buf_block_get_frame(block);
 
     lock_update_delete(block, rec);
-
-    btr_search_update_hash_on_delete(cursor);
 
     page_get_max_insert_size_after_reorganize(page, 1);
 
@@ -2191,8 +2031,6 @@ void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents,
         btr_insert_on_non_leaf_level(index, level + 1, node_ptr, mtr);
       }
     }
-
-    btr_search_update_hash_on_delete(cursor);
 
     page_cur_delete_rec(btr_cur_get_page_cur(cursor), index, offsets, mtr);
 

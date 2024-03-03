@@ -35,7 +35,7 @@ dict_index_t *dict_ind_compact;
 #include "api0ucode.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
-#include "btr0sea.h"
+
 #include "buf0buf.h"
 #include "data0type.h"
 #include "dict0boot.h"
@@ -1212,8 +1212,6 @@ undo_size_ok:
   new_index->table = table;
   new_index->table_name = table->name;
 
-  new_index->search_info = btr_search_info_create(new_index->heap);
-
   new_index->stat_index_size = 1;
   new_index->stat_n_leaf_pages = 1;
 
@@ -1240,64 +1238,18 @@ undo_size_ok:
 }
 
 void dict_index_remove_from_cache(dict_table_t *table, dict_index_t *index) {
-  ulint size;
-  ulint retries = 0;
-  btr_search_t *info;
-
-  ut_ad(table && index);
+  ut_ad(table != nullptr);
+  ut_ad(index != nullptr);
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
   ut_ad(index->magic_n == DICT_INDEX_MAGIC_N);
   ut_ad(mutex_own(&(dict_sys->mutex)));
-
-  /* We always create search info whether or not adaptive
-  hash index is enabled or not. */
-  info = index->search_info;
-  ut_ad(info);
-
-  /* We are not allowed to free the in-memory index struct
-  dict_index_t until all entries in the adaptive hash index
-  that point to any of the page belonging to his b-tree index
-  are dropped. This is so because dropping of these entries
-  require access to dict_index_t struct. To avoid such scenario
-  We keep a count of number of such pages in the search_info and
-  only free the dict_index_t struct when this count drops to
-  zero. */
-
-  for (;;) {
-    ulint ref_count = btr_search_info_get_ref_count(info);
-    if (ref_count == 0 || srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
-      break;
-    }
-
-    /* Sleep for 10ms before trying again. */
-    os_thread_sleep(10000);
-    ++retries;
-
-    if (retries % 500 == 0) {
-      /* No luck after 5 seconds of wait. */
-      ib_logger(ib_stream,
-                "InnoDB: Error: Waited for"
-                " %lu secs for hash index"
-                " ref_count (%lu) to drop"
-                " to 0.\n"
-                "index: \"%s\""
-                " table: \"%s\"\n",
-                retries / 100, ref_count, index->name, table->name);
-    }
-
-    /* To avoid a hang here we commit suicide if the
-    ref_count doesn't drop to zero in 600 seconds. */
-    if (retries >= 60000) {
-      ut_error;
-    }
-  }
 
   rw_lock_free(&index->lock);
 
   /* Remove the index from the list of indexes of the table */
   UT_LIST_REMOVE(indexes, table->indexes, index);
 
-  size = mem_heap_get_size(index->heap);
+  auto size = mem_heap_get_size(index->heap);
 
   ut_ad(dict_sys->size >= size);
 
@@ -1312,17 +1264,14 @@ index.
 static bool dict_index_find_cols(dict_table_t *table, /*!< in: table */
                                  dict_index_t *index) /*!< in: index */
 {
-  ulint i;
-
   ut_ad(table && index);
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
-  for (i = 0; i < index->n_fields; i++) {
-    ulint j;
-    dict_field_t *field = dict_index_get_nth_field(index, i);
+  for (ulint i = 0; i < index->n_fields; i++) {
+    auto field = dict_index_get_nth_field(index, i);
 
-    for (j = 0; j < table->n_cols; j++) {
+    for (ulint j = 0; j < table->n_cols; j++) {
       if (!strcmp(dict_table_get_col_name(table, j), field->name)) {
         field->col = dict_table_get_nth_col(table, j);
 

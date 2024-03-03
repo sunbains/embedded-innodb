@@ -21,7 +21,7 @@ Update of a row
 Created 12/27/1996 Heikki Tuuri
 *******************************************************/
 
-#include "btr0sea.h"
+
 #include "mtr0log.h"
 #include "row0row.h"
 #include "trx0trx.h"

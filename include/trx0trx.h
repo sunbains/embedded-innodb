@@ -42,9 +42,6 @@ extern sess_t *trx_dummy_sess;
 the kernel mutex */
 extern ulint trx_n_transactions;
 
-/** Releases the search latch if trx has reserved it. */
-
-void trx_search_latch_release_if_reserved(trx_t *trx); /*!< in: transaction */
 /** Set detailed error message for the transaction. */
 
 void trx_set_detailed_error(trx_t *trx,       /*!< in: transaction struct */
@@ -350,9 +347,6 @@ struct trx_struct {
                          in trx_commit() */
 #endif                        /* WITH_XOPEN */
   ulint duplicates;           /*!< TRX_DUP_IGNORE | TRX_DUP_REPLACE */
-  ulint has_search_latch;
-  /*!< true if this trx has latched the
-  search system latch in S-mode */
   ulint deadlock_mark;          /*!< a mark field used in deadlock
                                 checking algorithm.  */
   trx_dict_op_t dict_operation; /**< @see enum trx_dict_op */
@@ -413,16 +407,6 @@ struct trx_struct {
   /*!< how many tables the current SQL
   statement uses, except those
   in consistent read */
-  ulint search_latch_timeout;
-  /*!< If we notice that someone is
-  waiting for our S-lock on the search
-  latch to be released, we wait in
-  row0sel.c for BTR_SEA_TIMEOUT new
-  searches until we try to keep
-  the search latch again over
-  calls from the client; this is intended
-  to reduce contention on the search
-  latch */
   /*------------------------------*/
   UT_LIST_NODE_T(trx_t)
   trx_list; /*!< list of transactions */

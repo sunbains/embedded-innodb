@@ -40,7 +40,7 @@ Created 2/16/1996 Heikki Tuuri
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "btr0pcur.h"
-#include "btr0sea.h"
+
 #include "buf0buf.h"
 #include "buf0flu.h"
 #include "buf0rea.h"
@@ -1819,10 +1819,6 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
   }
 
   srv_threads_shutdown();
-
-  /* This must be disabled before closing the buffer pool
-  and closing the data dictionary.  */
-  btr_search_disable();
 
   log_shutdown();
   lock_sys_close();

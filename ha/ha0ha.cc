@@ -30,7 +30,7 @@ Created 8/22/1994 Heikki Tuuri
 #include "buf0buf.h"
 #endif /* UNIV_DEBUG */
 #ifdef UNIV_SYNC_DEBUG
-#include "btr0sea.h"
+
 #endif /* UNIV_SYNC_DEBUG */
 #include "page0page.h"
 

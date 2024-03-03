@@ -22,16 +22,17 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #endif
 
 #include "api0api.h"
-#include "btr0sea.h"
-#include "buf0buf.h" /* for buf_pool */
-#include "buf0lru.h" /* for buf_LRU_* */
+
+#include "buf0buf.h"
+#include "buf0lru.h"
 #include "db0err.h"
+#include "dict0mem.h"
 #include "innodb0types.h"
 #include "log0recv.h"
 #include "os0sync.h"
 #include "srv0srv.h"
 #include "srv0start.h"
-#include "trx0sys.h" /* for trx_sys_file_format_name_to_id() */
+#include "trx0sys.h"
 
 static char *srv_file_flush_method_str = NULL;
 
@@ -216,46 +217,6 @@ ib_cfg_var_get_generic(const struct ib_cfg_var *cfg_var, /*!< in: configuration
                                     the retrieved value */
 {
   return (ib_cfg_assign(cfg_var->type, value, cfg_var->tank));
-}
-/* @} */
-
-/** Set the value of the config variable "adaptive_hash_index".
-ib_cfg_var_set_adaptive_hash_index() @{
-@return	DB_SUCCESS if set successfully */
-static ib_err_t ib_cfg_var_set_adaptive_hash_index(
-    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
-                                manipulate, must be
-                                "adaptive_hash_index" */
-    const void *value)          /*!< in: value to set, must point to
-                                bool variable */
-{
-  ut_a(strcasecmp(cfg_var->name, "adaptive_hash_index") == 0);
-  ut_a(cfg_var->type == IB_CFG_IBOOL);
-
-  btr_search_enabled = !(*(const bool *)value);
-
-  return (DB_SUCCESS);
-}
-/* @} */
-
-/** Retrieve the value of the config variable "adaptive_hash_index".
-ib_cfg_var_get_adaptive_hash_index() @{
-@return	DB_SUCCESS if retrieved successfully */
-static ib_err_t ib_cfg_var_get_adaptive_hash_index(
-    const struct ib_cfg_var *cfg_var, /*!< in: configuration
-                                      variable whose value to
-                                      retrieve, must be
-                                      "adaptive_hash_index" */
-    void *value)                      /*!< out: place to store
-                                      the retrieved value, must
-                                      point to bool variable */
-{
-  ut_a(strcasecmp(cfg_var->name, "adaptive_hash_index") == 0);
-  ut_a(cfg_var->type == IB_CFG_IBOOL);
-
-  *(bool *)value = !btr_search_enabled;
-
-  return (DB_SUCCESS);
 }
 /* @} */
 
@@ -543,16 +504,6 @@ ib_cfg_var_get_version(const struct ib_cfg_var *cfg_var, /*!< in: configuration
 
 /* cfg_vars_defaults[] @{ */
 static const ib_cfg_var_t cfg_vars_defaults[] = {
-	{STRUCT_FLD(name,	"adaptive_hash_index"),
-	 STRUCT_FLD(type,	IB_CFG_IBOOL),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_adaptive_hash_index),
-	 STRUCT_FLD(get,	ib_cfg_var_get_adaptive_hash_index),
-	 STRUCT_FLD(tank,	NULL)},
-
 	{STRUCT_FLD(name,	"adaptive_flushing"),
 	 STRUCT_FLD(type,	IB_CFG_IBOOL),
 	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),

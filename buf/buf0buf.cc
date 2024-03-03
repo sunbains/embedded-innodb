@@ -35,7 +35,7 @@ Created 11/5/1995 Heikki Tuuri
 #endif
 
 #include "btr0btr.h"
-#include "btr0sea.h"
+
 #include "dict0dict.h"
 #include "fil0fil.h"
 #include "lock0lock.h"
@@ -661,21 +661,16 @@ buf_pool_t *buf_pool_init() {
 
   buf_pool->last_printout_time = ut_time();
 
-  /* 2. Initialize flushing fields
-  -------------------------------- */
+  /* 2. Initialize flushing fields */
 
   for (i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
     buf_pool->no_flush[i] = os_event_create(nullptr);
   }
 
-  /* 3. Initialize LRU fields
-  --------------------------- */
+  /* 3. Initialize LRU fields */
   /* All fields are initialized by mem_zalloc(). */
 
   buf_pool_mutex_exit();
-
-  btr_search_sys_create(buf_pool->curr_size * UNIV_PAGE_SIZE / sizeof(void *) /
-                        64);
 
   /* 4. Initialize the buddy allocator fields */
   /* All fields are initialized by mem_zalloc(). */
@@ -683,13 +678,7 @@ buf_pool_t *buf_pool_init() {
   return (buf_pool);
 }
 
-/** Prepares the buffer pool for shutdown. */
-
-void buf_close(void) {
-  ulint i;
-
-  btr_search_sys_close();
-
+void buf_close() {
   /* This can happen if we abort during the startup phase. */
   if (buf_pool == nullptr) {
     return;
@@ -698,16 +687,13 @@ void buf_close(void) {
   hash_table_free(buf_pool->page_hash);
   buf_pool->page_hash = nullptr;
 
-  for (i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
+  for (ulint i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
     os_event_free(buf_pool->no_flush[i]);
     buf_pool->no_flush[i] = nullptr;
   }
 }
 
-/** Frees the buffer pool at shutdown.  This must not be invoked before
-freeing all mutexes. */
-
-void buf_mem_free(void) {
+void buf_mem_free() {
   if (buf_pool != nullptr) {
     buf_chunk_t *chunk;
     buf_chunk_t *chunks;
@@ -729,358 +715,11 @@ void buf_mem_free(void) {
   }
 }
 
-/** Drops the adaptive hash index.  To prevent a livelock, this function
-is only to be called while holding btr_search_latch and while
-btr_search_enabled == false. */
-
-void buf_pool_drop_hash_index(void) {
-  bool released_search_latch;
-
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&btr_search_latch, RW_LOCK_EX));
-#endif /* UNIV_SYNC_DEBUG */
-  ut_ad(!btr_search_enabled);
-
-  do {
-    buf_chunk_t *chunks = buf_pool->chunks;
-    buf_chunk_t *chunk = chunks + buf_pool->n_chunks;
-
-    released_search_latch = false;
-
-    while (--chunk >= chunks) {
-      buf_block_t *block = chunk->blocks;
-      ulint i = chunk->size;
-
-      for (; i--; block++) {
-        /* block->is_hashed cannot be modified
-        when we have an x-latch on btr_search_latch;
-        see the comment in buf0buf.h */
-
-        if (buf_block_get_state(block) != BUF_BLOCK_FILE_PAGE ||
-            !block->is_hashed) {
-          continue;
-        }
-
-        /* To follow the latching order, we
-        have to release btr_search_latch
-        before acquiring block->latch. */
-        rw_lock_x_unlock(&btr_search_latch);
-        /* When we release the search latch,
-        we must rescan all blocks, because
-        some may become hashed again. */
-        released_search_latch = true;
-
-        rw_lock_x_lock(&block->lock);
-
-        /* This should be guaranteed by the
-        callers, which will be holding
-        btr_search_enabled_mutex. */
-        ut_ad(!btr_search_enabled);
-
-        /* Because we did not buffer-fix the
-        block by calling buf_block_get_gen(),
-        it is possible that the block has been
-        allocated for some other use after
-        btr_search_latch was released above.
-        We do not care which file page the
-        block is mapped to.  All we want to do
-        is to drop any hash entries referring
-        to the page. */
-
-        /* It is possible that
-        block->page.state != BUF_FILE_PAGE.
-        Even that does not matter, because
-        btr_search_drop_page_hash_index() will
-        check block->is_hashed before doing
-        anything.  block->is_hashed can only
-        be set on uncompressed file pages. */
-
-        btr_search_drop_page_hash_index(block);
-
-        rw_lock_x_unlock(&block->lock);
-
-        rw_lock_x_lock(&btr_search_latch);
-
-        ut_ad(!btr_search_enabled);
-      }
-    }
-  } while (released_search_latch);
+void buf_pool_drop_hash_index() {
+  ut_error;
 }
 
-#if 0
-/** Shrinks the buffer pool. */
-static
-void
-buf_pool_shrink(
-  ulint  chunk_size)  /*!< in: number of pages to remove */
-{
-  buf_chunk_t*  chunks;
-  buf_chunk_t*  chunk;
-  ulint    max_size;
-  ulint    max_free_size;
-  buf_chunk_t*  max_chunk;
-  buf_chunk_t*  max_free_chunk;
-
-  ut_ad(!buf_pool_mutex_own());
-
-try_again:
-  btr_search_disable(); /* Empty the adaptive hash index again */
-  buf_pool_mutex_enter();
-
-shrink_again:
-  if (buf_pool->n_chunks <= 1) {
-
-    /* Cannot shrink if there is only one chunk */
-    goto func_done;
-  }
-
-  /* Search for the largest free chunk
-  not larger than the size difference */
-  chunks = buf_pool->chunks;
-  chunk = chunks + buf_pool->n_chunks;
-  max_size = max_free_size = 0;
-  max_chunk = max_free_chunk = nullptr;
-
-  while (--chunk >= chunks) {
-    if (chunk->size <= chunk_size
-        && chunk->size > max_free_size) {
-      if (chunk->size > max_size) {
-        max_size = chunk->size;
-        max_chunk = chunk;
-      }
-
-      if (buf_chunk_all_free(chunk)) {
-        max_free_size = chunk->size;
-        max_free_chunk = chunk;
-      }
-    }
-  }
-
-  if (!max_free_size) {
-
-    ulint    dirty  = 0;
-    ulint    nonfree  = 0;
-    buf_block_t*  block;
-    buf_block_t*  bend;
-
-    /* Cannot shrink: try again later
-    (do not assign srv_buf_pool_old_size) */
-    if (!max_chunk) {
-
-      goto func_exit;
-    }
-
-    block = max_chunk->blocks;
-    bend = block + max_chunk->size;
-
-    /* Move the blocks of chunk to the end of the
-    LRU list and try to flush them. */
-    for (; block < bend; block++) {
-      switch (buf_block_get_state(block)) {
-      case BUF_BLOCK_NOT_USED:
-        continue;
-      case BUF_BLOCK_FILE_PAGE:
-        break;
-      default:
-        nonfree++;
-        continue;
-      }
-
-      mutex_enter(&block->mutex);
-      /* The following calls will temporarily
-      release block->mutex and buf_pool_mutex.
-      Therefore, we have to always retry,
-      even if !dirty && !nonfree. */
-
-      if (!buf_flush_ready_for_replace(&block->page)) {
-
-        buf_LRU_make_block_old(&block->page);
-        dirty++;
-      } else if (buf_LRU_free_block(&block->page, true, nullptr)
-           != BUF_LRU_FREED) {
-        nonfree++;
-      }
-
-      mutex_exit(&block->mutex);
-    }
-
-    buf_pool_mutex_exit();
-
-    /* Request for a flush of the chunk if it helps.
-    Do not flush if there are non-free blocks, since
-    flushing will not make the chunk freeable. */
-    if (nonfree) {
-      /* Avoid busy-waiting. */
-      os_thread_sleep(100000);
-    } else if (dirty
-         && buf_flush_batch(BUF_FLUSH_LRU, dirty, 0)
-         == ULINT_UNDEFINED) {
-
-      buf_flush_wait_batch_end(BUF_FLUSH_LRU);
-    }
-
-    goto try_again;
-  }
-
-  max_size = max_free_size;
-  max_chunk = max_free_chunk;
-
-  srv_buf_pool_old_size = srv_buf_pool_size;
-
-  /* Rewrite buf_pool->chunks.  Copy everything but max_chunk. */
-  chunks = mem_alloc((buf_pool->n_chunks - 1) * sizeof *chunks);
-  memcpy(chunks, buf_pool->chunks,
-         (max_chunk - buf_pool->chunks) * sizeof *chunks);
-  memcpy(chunks + (max_chunk - buf_pool->chunks),
-         max_chunk + 1,
-         buf_pool->chunks + buf_pool->n_chunks
-         - (max_chunk + 1));
-  ut_a(buf_pool->curr_size > max_chunk->size);
-  buf_pool->curr_size -= max_chunk->size;
-  srv_buf_pool_curr_size = buf_pool->curr_size * UNIV_PAGE_SIZE;
-  chunk_size -= max_chunk->size;
-  buf_chunk_free(max_chunk);
-  mem_free(buf_pool->chunks);
-  buf_pool->chunks = chunks;
-  buf_pool->n_chunks--;
-
-  /* Allow a slack of one megabyte. */
-  if (chunk_size > 1048576 / UNIV_PAGE_SIZE) {
-
-    goto shrink_again;
-  }
-
-func_done:
-  srv_buf_pool_old_size = srv_buf_pool_size;
-func_exit:
-  buf_pool_mutex_exit();
-  btr_search_enable();
-}
-
-/** Rebuild buf_pool->page_hash. */
-static
-void
-buf_pool_page_hash_rebuild(void)
-{
-  ulint    i;
-  ulint    n_chunks;
-  buf_chunk_t*  chunk;
-  hash_table_t*  page_hash;
-  buf_page_t*  b;
-
-  buf_pool_mutex_enter();
-
-  /* Free, create, and populate the hash table. */
-  hash_table_free(buf_pool->page_hash);
-  buf_pool->page_hash = page_hash = hash_create(2 * buf_pool->curr_size);
-
-  /* Insert the uncompressed file pages to buf_pool->page_hash. */
-
-  chunk = buf_pool->chunks;
-  n_chunks = buf_pool->n_chunks;
-
-  for (i = 0; i < n_chunks; i++, chunk++) {
-    ulint    j;
-    buf_block_t*  block = chunk->blocks;
-
-    for (j = 0; j < chunk->size; j++, block++) {
-      if (buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE) {
-        ut_ad(block->page.in_page_hash);
-
-        HASH_INSERT(buf_page_t, hash, page_hash,
-              buf_page_address_fold(
-                block->page.space,
-                block->page.offset),
-              &block->page);
-      }
-    }
-  }
-
-  for (b = UT_LIST_GET_FIRST(buf_pool->flush_list); b;
-       b = UT_LIST_GET_NEXT(list, b)) {
-    ut_ad(b->in_flush_list);
-    ut_ad(b->in_LRU_list);
-    ut_ad(b->in_page_hash);
-
-    switch (buf_page_get_state(b)) {
-    case BUF_BLOCK_FILE_PAGE:
-      /* uncompressed page */
-      break;
-    case BUF_BLOCK_NOT_USED:
-    case BUF_BLOCK_READY_FOR_USE:
-    case BUF_BLOCK_MEMORY:
-    case BUF_BLOCK_REMOVE_HASH:
-      ut_error;
-      break;
-    }
-  }
-
-  buf_pool_mutex_exit();
-}
-
-/** Resizes the buffer pool. */
-
-void
-buf_pool_resize(void)
-{
-  buf_pool_mutex_enter();
-
-  if (srv_buf_pool_old_size == srv_buf_pool_size) {
-
-    buf_pool_mutex_exit();
-    return;
-  }
-
-  if (srv_buf_pool_curr_size + 1048576 > srv_buf_pool_size) {
-
-    buf_pool_mutex_exit();
-
-    /* Disable adaptive hash indexes and empty the index
-    in order to free up memory in the buffer pool chunks. */
-    buf_pool_shrink((srv_buf_pool_curr_size - srv_buf_pool_size)
-        / UNIV_PAGE_SIZE);
-  } else if (srv_buf_pool_curr_size + 1048576 < srv_buf_pool_size) {
-
-    /* Enlarge the buffer pool by at least one megabyte */
-
-    ulint    mem_size
-      = srv_buf_pool_size - srv_buf_pool_curr_size;
-    buf_chunk_t*  chunks;
-    buf_chunk_t*  chunk;
-
-    chunks = mem_alloc((buf_pool->n_chunks + 1) * sizeof *chunks);
-
-    memcpy(chunks, buf_pool->chunks, buf_pool->n_chunks
-           * sizeof *chunks);
-
-    chunk = &chunks[buf_pool->n_chunks];
-
-    if (!buf_chunk_init(chunk, mem_size)) {
-      mem_free(chunks);
-    } else {
-      buf_pool->curr_size += chunk->size;
-      srv_buf_pool_curr_size = buf_pool->curr_size
-        * UNIV_PAGE_SIZE;
-      mem_free(buf_pool->chunks);
-      buf_pool->chunks = chunks;
-      buf_pool->n_chunks++;
-    }
-
-    srv_buf_pool_old_size = srv_buf_pool_size;
-    buf_pool_mutex_exit();
-  }
-
-  buf_pool_page_hash_rebuild();
-}
-#endif /* 0 */
-
-/** Moves a page to the start of the buffer pool LRU list. This high-level
-function can be used to prevent an important page from slipping out of
-the buffer pool. */
-
-void buf_page_make_young(
-    buf_page_t *bpage) /*!< in: buffer block of a file page */
-{
+void buf_page_make_young(buf_page_t *bpage) {
   buf_pool_mutex_enter();
 
   ut_a(buf_page_in_file(bpage));
@@ -1116,17 +755,10 @@ static void buf_page_set_accessed_make_young(
   }
 }
 
-/** Resets the check_index_page_at_flush field of a page if found in the buffer
-pool. */
-
-void buf_reset_check_index_page_at_flush(ulint space,  /*!< in: space id */
-                                         ulint offset) /*!< in: page number */
-{
-  buf_block_t *block;
-
+void buf_reset_check_index_page_at_flush(space_id_t space, ulint offset) {
   buf_pool_mutex_enter();
 
-  block = (buf_block_t *)buf_page_hash_get(space, offset);
+  auto block = (buf_block_t *)buf_page_hash_get(space, offset);
 
   if (block && buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE) {
     block->check_index_page_at_flush = false;
@@ -1135,20 +767,12 @@ void buf_reset_check_index_page_at_flush(ulint space,  /*!< in: space id */
   buf_pool_mutex_exit();
 }
 
-/** Returns the current state of is_hashed of a page. false if the page is
-not in the pool. NOTE that this operation does not fix the page in the
-pool if it is found there.
-@return  true if page hash index is built in search system */
-
-bool buf_page_peek_if_search_hashed(ulint space,  /*!< in: space id */
-                                    ulint offset) /*!< in: page number */
-{
-  buf_block_t *block;
-  bool is_hashed;
-
+bool buf_page_peek_if_search_hashed(space_id_t space, ulint offset) {
   buf_pool_mutex_enter();
 
-  block = (buf_block_t *)buf_page_hash_get(space, offset);
+  auto block = (buf_block_t *)buf_page_hash_get(space, offset);
+
+  bool is_hashed;
 
   if (!block || buf_block_get_state(block) != BUF_BLOCK_FILE_PAGE) {
     is_hashed = false;
@@ -1158,19 +782,12 @@ bool buf_page_peek_if_search_hashed(ulint space,  /*!< in: space id */
 
   buf_pool_mutex_exit();
 
-  return (is_hashed);
+  return is_hashed;
 }
 
 #ifdef UNIV_DEBUG_FILE_ACCESSES
-/** Sets file_page_was_freed true if the page is found in the buffer pool.
-This function should be called when we free a file page and want the
-debug version to check that it is not accessed any more unless
-reallocated.
-@return  control block if found in page hash table, otherwise nullptr */
-
 buf_page_t *
-buf_page_set_file_page_was_freed(ulint space,  /*!< in: space id */
-                                 ulint offset) /*!< in: page number */
+buf_page_set_file_page_was_freed(space_id_t space, ulint offset)
 {
   buf_page_t *bpage;
 
@@ -1194,7 +811,7 @@ reallocated.
 @return  control block if found in page hash table, otherwise nullptr */
 
 buf_page_t *
-buf_page_reset_file_page_was_freed(ulint space,  /*!< in: space id */
+buf_page_reset_file_page_was_freed(space_id_t space,  /*!< in: space id */
                                    ulint offset) /*!< in: page number */
 {
   buf_page_t *bpage;
@@ -1332,7 +949,7 @@ buf_block_is_uncompressed(const buf_block_t *block) /*!< in: pointer to block,
   return (buf_pointer_is_block_field((void *)block));
 }
 
-buf_block_t *buf_page_get_gen(ulint space, ulint, ulint offset, ulint rw_latch,
+buf_block_t *buf_page_get_gen(space_id_t space, ulint, ulint offset, ulint rw_latch,
                               buf_block_t *guess, ulint mode, const char *file,
                               ulint line, mtr_t *mtr) {
   buf_block_t *block;
@@ -1796,7 +1413,7 @@ inline void buf_page_init_low(buf_page_t *bpage) /*!< in: block to init */
 }
 
 /** Inits a page to the buffer buf_pool. */
-static void buf_page_init(ulint space,  /*!< in: space id */
+static void buf_page_init(space_id_t space,  /*!< in: space id */
                           ulint offset, /*!< in: offset of the page within space
                                         in units of a page */
                           buf_block_t *block) /*!< in: block to init */
@@ -1852,7 +1469,7 @@ static void buf_page_init(ulint space,  /*!< in: space id */
               buf_page_address_fold(space, offset), &block->page);
 }
 
-buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, ulint space, ulint,
+buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, space_id_t space, ulint,
                                    bool, int64_t tablespace_version,
                                    ulint offset) {
   buf_block_t *block;
@@ -1925,7 +1542,7 @@ func_exit:
   return bpage;
 }
 
-buf_block_t *buf_page_create(ulint space, ulint offset, ulint, mtr_t *mtr) {
+buf_block_t *buf_page_create(space_id_t space, ulint offset, ulint, mtr_t *mtr) {
   buf_frame_t *frame;
   buf_block_t *block;
   buf_block_t *free_block = nullptr;

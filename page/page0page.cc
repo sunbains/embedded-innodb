@@ -24,7 +24,7 @@ Created 2/2/1994 Heikki Tuuri
 #include "page0page.h"
 
 #include "btr0btr.h"
-#include "btr0sea.h"
+
 #include "buf0buf.h"
 #include "fut0lst.h"
 #include "lock0lock.h"
@@ -178,12 +178,7 @@ static bool page_dir_slot_check(page_dir_slot_t *slot) /*!< in: slot */
 }
 
 void page_set_max_trx_id(buf_block_t *block, trx_id_t trx_id, mtr_t *mtr) {
-  page_t *page = buf_block_get_frame(block);
-  const bool is_hashed = block->is_hashed;
-
-  if (is_hashed) {
-    rw_lock_x_lock(&btr_search_latch);
-  }
+  auto page = buf_block_get_frame(block);
 
   ut_ad(!mtr || mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
 
@@ -195,10 +190,6 @@ void page_set_max_trx_id(buf_block_t *block, trx_id_t trx_id, mtr_t *mtr) {
     mlog_write_dulint(page + (PAGE_HEADER + PAGE_MAX_TRX_ID), trx_id, mtr);
   } else {
     mach_write_to_8(page + (PAGE_HEADER + PAGE_MAX_TRX_ID), trx_id);
-  }
-
-  if (is_hashed) {
-    rw_lock_x_unlock(&btr_search_latch);
   }
 }
 
@@ -479,8 +470,6 @@ rec_t *page_copy_rec_list_end(buf_block_t *new_block, buf_block_t *block,
 
   lock_move_rec_list_end(new_block, block, rec);
 
-  btr_search_move_or_delete_hash_entries(new_block, block, index);
-
   return ret;
 }
 
@@ -530,8 +519,6 @@ rec_t *page_copy_rec_list_start(buf_block_t *new_block, buf_block_t *block,
   /* Update the lock table and possible hash index */
 
   lock_move_rec_list_start(new_block, block, rec, ret);
-
-  btr_search_move_or_delete_hash_entries(new_block, block, index);
 
   return ret;
 }

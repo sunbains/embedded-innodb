@@ -28,7 +28,7 @@ Created 3/26/1996 Heikki Tuuri
 #endif
 
 #include "api0ucode.h"
-#include "btr0sea.h"
+
 #include "lock0lock.h"
 #include "log0log.h"
 #include "os0proc.h"
@@ -140,8 +140,6 @@ trx_t *trx_create(sess_t *sess) {
   UT_LIST_INIT(trx->trx_savepoints);
 
   trx->dict_operation_lock_mode = 0;
-  trx->has_search_latch = false;
-  trx->search_latch_timeout = BTR_SEA_TIMEOUT;
 
   trx->global_read_view_heap = mem_heap_create(256);
   trx->global_read_view = nullptr;
@@ -192,14 +190,6 @@ trx_t *trx_allocate_for_background(void) {
   return trx;
 }
 
-void trx_search_latch_release_if_reserved(trx_t *trx) {
-  if (trx->has_search_latch) {
-    rw_lock_s_unlock(&btr_search_latch);
-
-    trx->has_search_latch = false;
-  }
-}
-
 /** Frees a transaction object. */
 static void trx_free(trx_t *trx) /*!< in, own: trx object */
 {
@@ -241,8 +231,6 @@ static void trx_free(trx_t *trx) /*!< in, own: trx object */
 
   ut_a(trx->wait_lock == nullptr);
   ut_a(UT_LIST_GET_LEN(trx->wait_thrs) == 0);
-
-  ut_a(!trx->has_search_latch);
 
   ut_a(trx->dict_operation_lock_mode == 0);
 
@@ -1415,11 +1403,6 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
               (ulong)UT_LIST_GET_LEN(trx->trx_locks),
               (ulong)mem_heap_get_size(trx->lock_heap),
               (ulong)lock_number_of_rows_locked(trx));
-  }
-
-  if (trx->has_search_latch) {
-    newline = true;
-    ib_logger(ib_stream, ", holds adaptive hash latch");
   }
 
   if (!ut_dulint_is_zero(trx->undo_no)) {

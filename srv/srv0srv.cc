@@ -61,7 +61,7 @@ Created 10/8/1995 Heikki Tuuri
 
 #include "api0ucode.h"
 #include "btr0cur.h"
-#include "btr0sea.h"
+
 #include "buf0flu.h"
 #include "buf0lru.h"
 #include "ddl0ddl.h"
@@ -757,7 +757,6 @@ void srv_var_init() {
 
   srv_use_doublewrite_buf = true;
   srv_use_checksums = true;
-  btr_search_enabled = true;
   srv_print_verbose_log = true;
   srv_innodb_status = false;
   ses_rollback_on_timeout = false;
@@ -1107,7 +1106,6 @@ void srv_modules_var_init() {
   buf_var_init();
   buf_LRU_var_init();
   btr_cur_var_init();
-  btr_search_var_init();
   ut_mem_var_init();
   os_sync_var_init();
 }
@@ -1474,11 +1472,6 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
                        "FILE I/O\n"
                        "--------\n");
   os_aio_print(ib_stream);
-
-  ib_logger(ib_stream, "-------------------\n"
-                       "ADAPTIVE HASH INDEX\n"
-                       "-------------------\n");
-  ha_print_info(ib_stream, btr_search_sys->hash_index);
 
   ib_logger(ib_stream, "%.2f hash searches/s, %.2f non-hash searches/s\n",
             (btr_cur_n_sea - btr_cur_n_sea_old) / time_elapsed,
