@@ -334,7 +334,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
       ib_logger(ib_stream,
                 "  InnoDB: Warning: Client is"
                 " trying to drop table (%lu) ",
-                (ulint)table->id.low);
+                (ulint)table->id);
       ut_print_name(ib_stream, trx, true, table->name);
       ib_logger(ib_stream, "\n"
                            "InnoDB: though there are still"
@@ -760,7 +760,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   dict_index_t *sys_index;
   btr_pcur_t pcur;
   mtr_t mtr;
-  dulint new_id;
+  uint64_t new_id;
   ulint recreate_space = 0;
   pars_info_t *info = nullptr;
 
@@ -995,8 +995,8 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   info = pars_info_create();
 
   pars_info_add_int4_literal(info, "space", (lint)table->space);
-  pars_info_add_dulint_literal(info, "old_id", table->id);
-  pars_info_add_dulint_literal(info, "new_id", new_id);
+  pars_info_add_uint64_literal(info, "old_id", table->id);
+  pars_info_add_uint64_literal(info, "new_id", new_id);
 
   err = que_eval_sql(info,
                      "PROCEDURE RENUMBER_TABLESPACE_PROC () IS\n"
@@ -1066,7 +1066,7 @@ db_err ddl_drop_index(dict_table_t *table, dict_index_t *index, trx_t *trx) {
 
   ut_ad(index && table && trx);
 
-  pars_info_add_dulint_literal(info, "indexid", index->id);
+  pars_info_add_uint64_literal(info, "indexid", index->id);
 
   trx_start_if_not_started(trx);
   trx->op_info = "dropping index";
@@ -1597,7 +1597,7 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
     ulint len;
     const byte *field;
     dict_table_t *table;
-    dulint table_id;
+    uint64_t table_id;
 
     btr_pcur_move_to_next_user_rec(&pcur, &mtr);
 

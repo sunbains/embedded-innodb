@@ -59,7 +59,7 @@ const char *dict_remove_db_name(const char *name); /*!< in: table name in the
 
 dict_table_t *
 dict_table_get_on_id(ib_recovery_t recovery, /*!< in: recovery flag */
-                     dulint table_id,        /*!< in: table id */
+                     uint64_t table_id,        /*!< in: table id */
                      trx_t *trx);            /*!< in: transaction handle */
 /** Decrements the count of open handles to a table. */
 
@@ -153,7 +153,7 @@ DISCARD TABLESPACE. */
 
 void dict_table_change_id_in_cache(
     dict_table_t *table, /*!< in/out: table object already in cache */
-    dulint new_id);      /*!< in: new id to set */
+    uint64_t new_id);      /*!< in: new id to set */
 
 /** Adds a foreign key constraint object to the dictionary cache. May free
 the object if there already is an object with the same identifier in.
@@ -243,13 +243,13 @@ dict_table_t *dict_table_get(const char *table_name, /*!< in: table name */
 @return	table, NULL if does not exist */
 dict_table_t *dict_table_get_using_id(
     ib_recovery_t recovery, /*!< in: recovery flag */
-    dulint table_id,        /*!< in: table id */
+    uint64_t table_id,        /*!< in: table id */
     bool ref_count);        /*!< in: increment open handle count if true */
 
 /** Returns a index object, based on table and index id, and memoryfixes it.
 @return	index, NULL if does not exist */
 dict_index_t *dict_index_get_on_id_low(dict_table_t *table, /*!< in: table */
-                                       dulint index_id);    /*!< in: index id */
+                                       uint64_t index_id);    /*!< in: index id */
 
 /** Checks if a table is in the dictionary cache.
 @return	table, NULL if not found */
@@ -266,7 +266,7 @@ dict_table_get_low(const char *table_name); /*!< in: table name */
 @return	table, NULL if does not exist */
 inline dict_table_t *
 dict_table_get_on_id_low(ib_recovery_t recovery, /*!< in: recovery flag */
-                         dulint table_id);       /*!< in: table id */
+                         uint64_t table_id);       /*!< in: table id */
 
 /** Find an index that is equivalent to the one passed in and is not marked
 for deletion.
@@ -435,7 +435,7 @@ void dict_table_copy_types(dtuple_t *tuple, /*!< in/out: data tuple */
 the dictionary mutex: this function is for emergency purposes like
 printing info of a corrupt database page!
 @return	index or NULL if not found from cache */
-dict_index_t *dict_index_find_on_id_low(dulint id); /*!< in: index id */
+dict_index_t *dict_index_find_on_id_low(uint64_t id); /*!< in: index id */
 
 /** Adds an index to the dictionary cache.
 @return	DB_SUCCESS, DB_TOO_BIG_RECORD, or DB_CORRUPTION */
@@ -559,12 +559,12 @@ dict_field_get_col(const dict_field_t *field); /*!< in: index field */
 Assumes that dict_sys->mutex is already being held.
 @return	index, NULL if not found */
 dict_index_t *
-dict_index_get_if_in_cache_low(dulint index_id); /*!< in: index id */
+dict_index_get_if_in_cache_low(uint64_t index_id); /*!< in: index id */
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 /** Returns an index object if it is found in the dictionary cache.
 @return	index, NULL if not found */
-dict_index_t *dict_index_get_if_in_cache(dulint index_id); /*!< in: index id */
+dict_index_t *dict_index_get_if_in_cache(uint64_t index_id); /*!< in: index id */
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 
 #ifdef UNIV_DEBUG
@@ -721,7 +721,7 @@ struct dict_sys_struct {
                                and DROP TABLE, as well as reading
                                the dictionary data for a table from
                                system tables */
-  dulint row_id;               /*!< the next row id to assign;
+  uint64_t row_id;               /*!< the next row id to assign;
                                NOTE that at a checkpoint this
                                must be written to the dict system
                                header and flushed to a file; in

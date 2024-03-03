@@ -21,8 +21,7 @@ Database object creation
 Created 1/8/1996 Heikki Tuuri
 *******************************************************/
 
-#ifndef dict0crea_h
-#define dict0crea_h
+#pragma once
 
 #include "dict0dict.h"
 #include "dict0types.h"
@@ -124,11 +123,11 @@ struct tab_node_struct {
 };
 
 /* Table create node states */
-#define TABLE_BUILD_TABLE_DEF 1
-#define TABLE_BUILD_COL_DEF 2
-#define TABLE_COMMIT_WORK 3
-#define TABLE_ADD_TO_CACHE 4
-#define TABLE_COMPLETED 5
+constexpr ulint TABLE_BUILD_TABLE_DEF = 1;
+constexpr ulint TABLE_BUILD_COL_DEF = 2;
+constexpr ulint TABLE_COMMIT_WORK = 3;
+constexpr ulint TABLE_ADD_TO_CACHE = 4;
+constexpr ulint TABLE_COMPLETED = 5;
 
 /* Index create node struct */
 
@@ -156,14 +155,8 @@ struct ind_node_struct {
 };
 
 /* Index create node states */
-#define INDEX_BUILD_INDEX_DEF 1
-#define INDEX_BUILD_FIELD_DEF 2
-#define INDEX_CREATE_INDEX_TREE 3
-#define INDEX_COMMIT_WORK 4
-#define INDEX_ADD_TO_CACHE 5
-
-#ifndef UNIV_NONINL
-#include "dict0crea.ic"
-#endif
-
-#endif
+constexpr ulint INDEX_BUILD_INDEX_DEF = 1;
+constexpr ulint INDEX_BUILD_FIELD_DEF = 2;
+constexpr ulint INDEX_CREATE_INDEX_TREE = 3;
+constexpr ulint INDEX_COMMIT_WORK = 4;
+constexpr ulint INDEX_ADD_TO_CACHE = 5;

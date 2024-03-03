@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -440,7 +440,7 @@ bool lock_check_trx_id_sanity(trx_id_t trx_id, const rec_t *rec,
   /* A sanity check: the trx_id in rec must be smaller than the global
   trx id counter */
 
-  if (ut_dulint_cmp(trx_id, trx_sys->max_trx_id) >= 0) {
+  if (trx_id >= trx_sys->max_trx_id) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream, "  InnoDB: Error: transaction id associated"
                          " with record\n");
@@ -497,9 +497,9 @@ ulint lock_sec_rec_cons_read_sees(const rec_t *rec, const read_view_t *view) {
   }
 
   max_trx_id = page_get_max_trx_id(page_align(rec));
-  ut_ad(!ut_dulint_is_zero(max_trx_id));
+  ut_ad(max_trx_id > 0);
 
-  return ut_dulint_cmp(max_trx_id, view->up_limit_id) < 0;
+  return max_trx_id < view->up_limit_id;
 }
 
 void lock_sys_create(ulint n_cells) {
@@ -1349,9 +1349,7 @@ static trx_t *lock_sec_rec_some_has_impl_off_kernel(
   max trx id to the log, and therefore during recovery, this value
   for a page may be incorrect. */
 
-  if (!(ut_dulint_cmp(page_get_max_trx_id(page), trx_list_get_min_trx_id()) >=
-        0) &&
-      !recv_recovery_is_on()) {
+  if (page_get_max_trx_id(page) < trx_list_get_min_trx_id() && !recv_recovery_is_on()) {
 
     return nullptr;
   }
@@ -1579,7 +1577,7 @@ lock_rec_enqueue_waiting(ulint type_mode,          /*!< in: lock mode this
 #ifdef UNIV_DEBUG
   if (lock_print_waits) {
     ib_logger(ib_stream, "Lock wait for trx %lu in index ",
-              (ulong)ut_dulint_get_low(trx->id));
+              (ulong)trx->id);
     ut_print_name(ib_stream, trx, false, index->name);
   }
 #endif /* UNIV_DEBUG */
@@ -1893,7 +1891,7 @@ static void lock_grant(lock_t *lock) /*!< in/out: waiting lock request */
 #ifdef UNIV_DEBUG
   if (lock_print_waits) {
     ib_logger(ib_stream, "Lock wait for trx %lu ends\n",
-              (ulong)ut_dulint_get_low(lock->trx->id));
+              (ulong)lock->trx->id);
   }
 #endif /* UNIV_DEBUG */
 
@@ -4274,7 +4272,7 @@ function_exit:
 static bool lock_validate(void) {
   lock_t *lock;
   trx_t *trx;
-  dulint limit;
+  uint64_t limit;
   ulint space;
   ulint page_no;
   ulint i;
@@ -4300,7 +4298,7 @@ static bool lock_validate(void) {
 
   for (i = 0; i < hash_get_n_cells(lock_sys->rec_hash); i++) {
 
-    limit = ut_dulint_zero;
+    limit = 0;
 
     for (;;) {
       lock = (lock_t *)HASH_GET_FIRST(lock_sys->rec_hash, i);
@@ -4311,7 +4309,7 @@ static bool lock_validate(void) {
         space = lock->un_member.rec_lock.space;
         page_no = lock->un_member.rec_lock.page_no;
 
-        if (ut_dulint_cmp(ut_dulint_create(space, page_no), limit) >= 0) {
+        if ((uint64_t((space) << 32) | page_no) >= limit) {
           break;
         }
 
@@ -4329,7 +4327,7 @@ static bool lock_validate(void) {
 
       lock_mutex_enter_kernel();
 
-      limit = ut_dulint_create(space, page_no + 1);
+      limit = ((uint64_t(space) << 32) | page_no) + 1;
     }
   }
 
@@ -4339,26 +4337,7 @@ static bool lock_validate(void) {
 }
 #endif /* UNIV_DEBUG */
 
-/** Checks if locks of other transactions prevent an immediate insert of
-a record. If they do, first tests if the query thread should anyway
-be suspended for some reason; if not, then puts the transaction and
-the query thread to the lock wait state and inserts a waiting request
-for a gap x-lock to the lock queue.
-@return	DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED */
-
-db_err lock_rec_insert_check_and_lock(
-    ulint flags,         /*!< in: if BTR_NO_LOCKING_FLAG bit is
-                         set, does nothing */
-    const rec_t *rec,    /*!< in: record after which to insert */
-    buf_block_t *block,  /*!< in/out: buffer block of rec */
-    dict_index_t *index, /*!< in: index */
-    que_thr_t *thr,      /*!< in: query thread */
-    mtr_t *mtr,          /*!< in/out: mini-transaction */
-    bool *inherit)       /*!< out: set to true if the new
-                          inserted record maybe should inherit
-                          LOCK_GAP type locks from the successor
-                          record */
-{
+db_err lock_rec_insert_check_and_lock(ulint flags, const rec_t *rec, buf_block_t *block, dict_index_t *index, que_thr_t *thr, mtr_t *mtr, bool *inherit) {
   const rec_t *next_rec;
   trx_t *trx;
   lock_t *lock;
@@ -4657,10 +4636,7 @@ db_err lock_sec_rec_read_check_and_lock(
   if the max trx id for the page >= min trx id for the trx list or a
   database recovery is running. */
 
-  if (((ut_dulint_cmp(page_get_max_trx_id(block->frame),
-                      trx_list_get_min_trx_id()) >= 0) ||
-       recv_recovery_is_on()) &&
-      !page_rec_is_supremum(rec)) {
+  if ((page_get_max_trx_id(block->frame) >= trx_list_get_min_trx_id() || recv_recovery_is_on()) && !page_rec_is_supremum(rec)) {
 
     lock_rec_convert_impl_to_expl(block, rec, index, offsets);
   }
@@ -4880,7 +4856,7 @@ uint64_t lock_get_table_id(const lock_t *lock) /*!< in: lock */
 
   table = lock_get_table(lock);
 
-  return (uint64_t)ut_conv_dulint_to_longlong(table->id);
+  return table->id;
 }
 
 /** Gets the name of the table on which the lock is.

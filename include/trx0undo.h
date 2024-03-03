@@ -282,7 +282,7 @@ struct trx_undo_struct {
                        identification */
 #endif                 /* WITH_XOPEN */
   bool dict_operation; /*!< true if a dict operation trx */
-  dulint table_id;     /*!< if a dict operation, then the table
+  uint64_t table_id;     /*!< if a dict operation, then the table
                        id */
   trx_rseg_t *rseg;    /*!< rseg where the undo log belongs */
   /*-----------------------------*/

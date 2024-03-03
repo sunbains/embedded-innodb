@@ -396,7 +396,7 @@ void btr_cur_search_to_nth_level(dict_index_t *dict_index, ulint level, const dt
       buf_block_dbg_add_level(block, SYNC_TREE_NODE);
     }
 
-    ut_ad(0 == ut_dulint_cmp(dict_index->id, btr_page_get_index_id(page)));
+    ut_ad(dict_index->id == btr_page_get_index_id(page));
 
     if (unlikely(height == ULINT_UNDEFINED)) {
       /* We are in the root node */
@@ -527,7 +527,7 @@ void btr_cur_open_at_index_side_func(
                                   BUF_GET, file, line, mtr);
     auto page = buf_block_get_frame(block);
 
-    ut_ad(0 == ut_dulint_cmp(dict_index->id, btr_page_get_index_id(page)));
+    ut_ad(dict_index->id == btr_page_get_index_id(page));
 
     block->check_index_page_at_flush = true;
 
@@ -632,7 +632,7 @@ void btr_cur_open_at_rnd_pos_func(
     block = buf_page_get_gen(space, 0, page_no, RW_NO_LATCH, nullptr, BUF_GET,
                              file, line, mtr);
     page = buf_block_get_frame(block);
-    ut_ad(0 == ut_dulint_cmp(dict_index->id, btr_page_get_index_id(page)));
+    ut_ad(dict_index->id == btr_page_get_index_id(page));
 
     if (height == ULINT_UNDEFINED) {
       /* We are in the root node */
@@ -1202,7 +1202,7 @@ db_err btr_cur_update_in_place(ulint flags, btr_cur_t *cursor,
   buf_block_t *block;
   db_err err;
   rec_t *rec;
-  roll_ptr_t roll_ptr = ut_dulint_zero;
+  roll_ptr_t roll_ptr{};
   trx_t *trx;
   ulint was_delete_marked;
   mem_heap_t *heap = nullptr;

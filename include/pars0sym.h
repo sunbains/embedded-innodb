@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ SQL parser symbol table
 Created 12/15/1997 Heikki Tuuri
 *******************************************************/
 
-#ifndef pars0sym_h
-#define pars0sym_h
+#pragma once
 
 #include "dict0types.h"
 #include "innodb0types.h"
@@ -35,47 +34,47 @@ Created 12/15/1997 Heikki Tuuri
 @return	own: symbol table */
 
 sym_tab_t *
-sym_tab_create(mem_heap_t *heap); /*!< in: memory heap where to create */
+sym_tab_create(mem_heap_t *heap); /** in: memory heap where to create */
 /** Frees the memory allocated dynamically AFTER parsing phase for variables
 etc. in the symbol table. Does not free the mem heap where the table was
 originally created. Frees also SQL explicit cursor definitions. */
 
-void sym_tab_free_private(sym_tab_t *sym_tab); /*!< in, own: symbol table */
+void sym_tab_free_private(sym_tab_t *sym_tab); /** in, own: symbol table */
 /** Adds an integer literal to a symbol table.
 @return	symbol table node */
 
-sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, /*!< in: symbol table */
-                                ulint val);         /*!< in: integer value */
+sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, /** in: symbol table */
+                                ulint val);         /** in: integer value */
 /** Adds an string literal to a symbol table.
 @return	symbol table node */
 
-sym_node_t *sym_tab_add_str_lit(sym_tab_t *sym_tab, /*!< in: symbol table */
-                                byte *str, /*!< in: string with no quotes around
+sym_node_t *sym_tab_add_str_lit(sym_tab_t *sym_tab, /** in: symbol table */
+                                byte *str, /** in: string with no quotes around
                                            it */
-                                ulint len); /*!< in: string length */
+                                ulint len); /** in: string length */
 /** Add a bound literal to a symbol table.
 @return	symbol table node */
 
 sym_node_t *sym_tab_add_bound_lit(
-    sym_tab_t *sym_tab, /*!< in: symbol table */
-    const char *name,   /*!< in: name of bound literal */
-    ulint *lit_type);   /*!< out: type of literal (PARS_*_LIT) */
+    sym_tab_t *sym_tab, /** in: symbol table */
+    const char *name,   /** in: name of bound literal */
+    ulint *lit_type);   /** out: type of literal (PARS_*_LIT) */
 /** Adds an SQL null literal to a symbol table.
 @return	symbol table node */
 
-sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab); /*!< in: symbol table */
+sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab); /** in: symbol table */
 /** Adds an identifier to a symbol table.
 @return	symbol table node */
 
-sym_node_t *sym_tab_add_id(sym_tab_t *sym_tab, /*!< in: symbol table */
-                           byte *name,         /*!< in: identifier name */
-                           ulint len);         /*!< in: identifier length */
+sym_node_t *sym_tab_add_id(sym_tab_t *sym_tab, /** in: symbol table */
+                           byte *name,         /** in: identifier name */
+                           ulint len);         /** in: identifier length */
 
 /** Add a bound identifier to a symbol table.
 @return	symbol table node */
 
-sym_node_t *sym_tab_add_bound_id(sym_tab_t *sym_tab, /*!< in: symbol table */
-                                 const char *name); /*!< in: name of bound id */
+sym_node_t *sym_tab_add_bound_id(sym_tab_t *sym_tab, /** in: symbol table */
+                                 const char *name); /** in: name of bound id */
 
 /** Index of sym_node_struct::field_nos corresponding to the clustered index */
 #define SYM_CLUST_FIELD_NO 0
@@ -84,22 +83,22 @@ sym_node_t *sym_tab_add_bound_id(sym_tab_t *sym_tab, /*!< in: symbol table */
 
 /** Types of a symbol table node */
 enum sym_tab_entry {
-  SYM_VAR = 91,       /*!< declared parameter or local
+  SYM_VAR = 91,       /** declared parameter or local
                       variable of a procedure */
-  SYM_IMPLICIT_VAR,   /*!< storage for a intermediate result
+  SYM_IMPLICIT_VAR,   /** storage for a intermediate result
                       of a calculation */
-  SYM_LIT,            /*!< literal */
-  SYM_TABLE,          /*!< database table name */
-  SYM_COLUMN,         /*!< database table name */
-  SYM_CURSOR,         /*!< named cursor */
-  SYM_PROCEDURE_NAME, /*!< stored procedure name */
-  SYM_INDEX,          /*!< database index name */
-  SYM_FUNCTION        /*!< user function name */
+  SYM_LIT,            /** literal */
+  SYM_TABLE,          /** database table name */
+  SYM_COLUMN,         /** database table name */
+  SYM_CURSOR,         /** named cursor */
+  SYM_PROCEDURE_NAME, /** stored procedure name */
+  SYM_INDEX,          /** database index name */
+  SYM_FUNCTION        /** user function name */
 };
 
 /** Symbol table node */
 struct sym_node_struct {
-  que_common_t common; /*!< node type:
+  que_common_t common; /** node type:
                        QUE_NODE_SYMBOL */
   /* NOTE: if the data field in 'common.val' is not NULL and the symbol
   table node is not for a temporary column, the memory for the value has
@@ -119,26 +118,26 @@ struct sym_node_struct {
   TODO: It would be cleaner to make 'indirection' a boolean field and
   always use 'alias' to refer to the primary node. */
 
-  sym_node_t *indirection; /*!< pointer to
+  sym_node_t *indirection; /** pointer to
                            another symbol table
                            node which contains
                            the value for this
                            node, NULL otherwise */
-  sym_node_t *alias;       /*!< pointer to
+  sym_node_t *alias;       /** pointer to
                            another symbol table
                            node for which this
                            node is an alias,
                            NULL otherwise */
   UT_LIST_NODE_T(sym_node_t)
-  col_var_list;                  /*!< list of table
+  col_var_list;                  /** list of table
                                  columns or a list of
                                  input variables for an
                                  explicit cursor */
-  bool copy_val;                 /*!< true if a column
+  bool copy_val;                 /** true if a column
                                   and its value should
                                   be copied to dynamic
                                   memory when fetched */
-  ulint field_nos[2];            /*!< if a column, in
+  ulint field_nos[2];            /** if a column, in
                                  the position
                                  SYM_CLUST_FIELD_NO is
                                  the field number in the
@@ -150,65 +149,60 @@ struct sym_node_struct {
                                  use first; if not found
                                  from the index, then
                                  ULINT_UNDEFINED */
-  bool resolved;                 /*!< true if the
+  bool resolved;                 /** true if the
                                   meaning of a variable
                                   or a column has been
                                   resolved; for literals
                                   this is always true */
-  enum sym_tab_entry token_type; /*!< type of the
+  enum sym_tab_entry token_type; /** type of the
                                  parsed token */
-  const char *name;              /*!< name of an id */
-  ulint name_len;                /*!< id name length */
-  dict_table_t *table;           /*!< table definition
+  const char *name;              /** name of an id */
+  ulint name_len;                /** id name length */
+  dict_table_t *table;           /** table definition
                                  if a table id or a
                                  column id */
-  ulint col_no;                  /*!< column number if a
+  ulint col_no;                  /** column number if a
                                  column */
-  sel_buf_t *prefetch_buf;       /*!< NULL, or a buffer
+  sel_buf_t *prefetch_buf;       /** NULL, or a buffer
                                  for cached column
                                  values for prefetched
                                  rows */
-  sel_node_t *cursor_def;        /*!< cursor definition
+  sel_node_t *cursor_def;        /** cursor definition
                                  select node if a
                                  named cursor */
-  ulint param_type;              /*!< PARS_INPUT,
+  ulint param_type;              /** PARS_INPUT,
                                  PARS_OUTPUT, or
                                  PARS_NOT_PARAM if not a
                                  procedure parameter */
-  sym_tab_t *sym_table;          /*!< back pointer to
+  sym_tab_t *sym_table;          /** back pointer to
                                  the symbol table */
   UT_LIST_NODE_T(sym_node_t)
-  sym_list; /*!< list of symbol
+  sym_list; /** list of symbol
             nodes */
 };
 
 /** Symbol table */
 struct sym_tab_struct {
   que_t *query_graph;
-  /*!< query graph generated by the
+  /** query graph generated by the
   parser */
   const char *sql_string;
-  /*!< SQL string to parse */
+  /** SQL string to parse */
   size_t string_len;
-  /*!< SQL string length */
+  /** SQL string length */
   int next_char_pos;
-  /*!< position of the next character in
+  /** position of the next character in
   sql_string to give to the lexical
   analyzer */
-  pars_info_t *info; /*!< extra information, or NULL */
+  pars_info_t *info; /** extra information, or NULL */
   sym_node_list_t sym_list;
-  /*!< list of symbol nodes in the symbol
+  /** list of symbol nodes in the symbol
   table */
   UT_LIST_BASE_NODE_T(func_node_t)
   func_node_list;
-  /*!< list of function nodes in the
+  /** list of function nodes in the
   parsed query graph */
-  mem_heap_t *heap; /*!< memory heap from which we can
+  mem_heap_t *heap; /** memory heap from which we can
                     allocate space */
 };
 
-#ifndef UNIV_NONINL
-#include "pars0sym.ic"
-#endif
-
-#endif

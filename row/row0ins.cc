@@ -61,7 +61,7 @@ ins_node_t *row_ins_node_create(ib_ins_mode_t ins_type, dict_table_t *table,
 
   node->select = NULL;
 
-  node->trx_id = ut_dulint_zero;
+  node->trx_id = 0;
 
   node->entry_sys_heap = mem_heap_create(128);
 
@@ -157,7 +157,7 @@ void row_ins_node_set_new_row(ins_node_t *node, dtuple_t *row) {
   /* As we allocated a new trx id buf, the trx id should be written
   there again: */
 
-  node->trx_id = ut_dulint_zero;
+  node->trx_id = 0;
 }
 
 /** Does an insert operation by updating a delete-marked existing record
@@ -2033,7 +2033,7 @@ row_ins_index_entry_step(ins_node_t *node, /*!< in: row insert node */
 inline void
 row_ins_alloc_row_id_step(ins_node_t *node) /*!< in: row insert node */
 {
-  dulint row_id;
+  uint64_t row_id;
 
   ut_ad(node->state == INS_NODE_ALLOC_ROW_ID);
 
@@ -2198,7 +2198,7 @@ que_thr_t *row_ins_step(que_thr_t *thr) {
     /* It may be that the current session has not yet started
     its transaction, or it has been committed: */
 
-    if (UT_DULINT_EQ(trx->id, node->trx_id)) {
+    if (trx->id == node->trx_id) {
       /* No need to do IX-locking */
 
       goto same_trx;

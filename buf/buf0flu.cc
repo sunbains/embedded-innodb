@@ -709,9 +709,9 @@ void buf_flush_init_for_writing(byte *page, uint64_t newest_lsn) {
   ut_ad(page != nullptr);
 
   /* Write the newest modification lsn to the page header and trailer */
-  mach_write_ull(page + FIL_PAGE_LSN, newest_lsn);
+  mach_write_to_8(page + FIL_PAGE_LSN, newest_lsn);
 
-  mach_write_ull(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM,
+  mach_write_to_8(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM,
                  newest_lsn);
 
   /* Store the new formula checksum */

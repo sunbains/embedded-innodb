@@ -427,7 +427,7 @@ inline ulint rec_fold(const rec_t *rec,     /*!< in: the physical record */
                                             fields to fold */
                       ulint n_bytes,        /*!< in: number of bytes to fold
                                             in an incomplete last field */
-                      dulint tree_id)       /*!< in: index tree id */
+                      uint64_t tree_id)       /*!< in: index tree id */
     __attribute__((pure));
 /** Builds a ROW_FORMAT=COMPACT record out of a data tuple. */
 

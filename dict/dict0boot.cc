@@ -52,25 +52,18 @@ dict_hdr_t *dict_hdr_get(mtr_t *mtr) /*!< in: mtr */
   return (header);
 }
 
-/** Returns a new table, index, or tree id.
-@return	the new id */
-
-dulint dict_hdr_get_new_id(ulint type) /*!< in: DICT_HDR_ROW_ID, ... */
-{
-  dict_hdr_t *dict_hdr;
-  dulint id;
-  mtr_t mtr;
-
+uint64_t dict_hdr_get_new_id(ulint type) {
   ut_ad((type == DICT_HDR_TABLE_ID) || (type == DICT_HDR_INDEX_ID));
+
+  mtr_t mtr;
 
   mtr_start(&mtr);
 
-  dict_hdr = dict_hdr_get(&mtr);
+  auto dict_hdr = dict_hdr_get(&mtr);
 
-  id = mtr_read_dulint(dict_hdr + type, &mtr);
-  id = ut_dulint_add(id, 1);
+  auto id = mtr_read_uint64(dict_hdr + type, &mtr) + 1;
 
-  mlog_write_dulint(dict_hdr + type, id, &mtr);
+  mlog_write_uint64(dict_hdr + type, id, &mtr);
 
   mtr_commit(&mtr);
 
@@ -82,7 +75,7 @@ page. */
 
 void dict_hdr_flush_row_id(void) {
   dict_hdr_t *dict_hdr;
-  dulint id;
+  uint64_t id;
   mtr_t mtr;
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
@@ -93,7 +86,7 @@ void dict_hdr_flush_row_id(void) {
 
   dict_hdr = dict_hdr_get(&mtr);
 
-  mlog_write_dulint(dict_hdr + DICT_HDR_ROW_ID, id, &mtr);
+  mlog_write_uint64(dict_hdr + DICT_HDR_ROW_ID, id, &mtr);
 
   mtr_commit(&mtr);
 }
@@ -119,18 +112,14 @@ static bool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
 
   /* Start counting row, table, index, and tree ids from
   DICT_HDR_FIRST_ID */
-  mlog_write_dulint(dict_header + DICT_HDR_ROW_ID,
-                    ut_dulint_create(0, DICT_HDR_FIRST_ID), mtr);
+  mlog_write_uint64(dict_header + DICT_HDR_ROW_ID, DICT_HDR_FIRST_ID, mtr);
 
-  mlog_write_dulint(dict_header + DICT_HDR_TABLE_ID,
-                    ut_dulint_create(0, DICT_HDR_FIRST_ID), mtr);
+  mlog_write_uint64(dict_header + DICT_HDR_TABLE_ID, DICT_HDR_FIRST_ID, mtr);
 
-  mlog_write_dulint(dict_header + DICT_HDR_INDEX_ID,
-                    ut_dulint_create(0, DICT_HDR_FIRST_ID), mtr);
+  mlog_write_uint64(dict_header + DICT_HDR_INDEX_ID, DICT_HDR_FIRST_ID, mtr);
 
   /* Obsolete, but we must initialize it to 0 anyway. */
-  mlog_write_dulint(dict_header + DICT_HDR_MIX_ID,
-                    ut_dulint_create(0, DICT_HDR_FIRST_ID), mtr);
+  mlog_write_uint64(dict_header + DICT_HDR_MIX_ID, DICT_HDR_FIRST_ID, mtr);
 
   /* Create the B-tree roots for the clustered indexes of the basic
   system tables */
@@ -216,10 +205,9 @@ void dict_boot() {
   ..._MARGIN, it will immediately be updated to the disk-based
   header. */
 
-  dict_sys->row_id = ut_dulint_add(
-      ut_dulint_align_up(mtr_read_dulint(dict_hdr + DICT_HDR_ROW_ID, &mtr),
-                         DICT_HDR_ROW_ID_WRITE_MARGIN),
-      DICT_HDR_ROW_ID_WRITE_MARGIN);
+  dict_sys->row_id = 
+    ut_uint64_align_up(mtr_read_uint64(dict_hdr + DICT_HDR_ROW_ID, &mtr), DICT_HDR_ROW_ID_WRITE_MARGIN) 
+	  +  DICT_HDR_ROW_ID_WRITE_MARGIN;
 
   /* Insert into the dictionary cache the descriptions of the basic
   system tables */

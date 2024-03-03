@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -230,7 +230,7 @@ ulint mtr_read_ulint(const byte *ptr, ulint type,
   }
 }
 
-dulint mtr_read_dulint(const byte *ptr, mtr_t *mtr __attribute__((unused))) {
+uint64_t mtr_read_uint64(const byte *ptr, mtr_t *mtr __attribute__((unused))) {
   ut_ad(mtr->state == MTR_ACTIVE);
   ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_S_FIX) ||
         mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));

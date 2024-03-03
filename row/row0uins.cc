@@ -56,7 +56,7 @@ static db_err row_undo_ins_remove_clust_rec(undo_node_t *node) {
       btr_pcur_restore_position(BTR_MODIFY_LEAF, &(node->pcur), &mtr);
   ut_a(success);
 
-  if (ut_dulint_cmp(node->table->id, DICT_INDEXES_ID) == 0) {
+  if (node->table->id ==DICT_INDEXES_ID) {
     ut_ad(node->trx->dict_operation_lock_mode == RW_X_LATCH);
 
     /* Drop the index tree associated with the row in
@@ -215,7 +215,7 @@ static void row_undo_ins_parse_undo_rec(ib_recovery_t recovery,
                                         undo_node_t *node) {
   ulint type;
   ulint dummy;
-  dulint table_id;
+  uint64_t table_id;
   undo_no_t undo_no;
   bool dummy_extern;
 

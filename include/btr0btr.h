@@ -96,7 +96,7 @@ inline page_t *btr_page_get(ulint space,    /*!< in: space id */
                             mtr_t *mtr);    /*!< in: mtr */
 /*** Gets the index id field of a page.
 @return	index id */
-inline dulint btr_page_get_index_id(const page_t *page); /*!< in: index page */
+inline uint64_t btr_page_get_index_id(const page_t *page); /*!< in: index page */
 /*** Gets the node level field in an index page.
 @return	level, leaf level == 0 */
 inline ulint btr_page_get_level_low(const page_t *page); /*!< in: index page */
@@ -147,7 +147,7 @@ inline ulint btr_node_ptr_get_child_page_no(
 @return	page number of the created root, FIL_NULL if did not succeed */
 ulint btr_create(ulint type,          /*!< in: type of the index */
                  ulint space,         /*!< in: space where created */
-                 dulint index_id,     /*!< in: index id */
+                 uint64_t index_id,     /*!< in: index id */
                  dict_index_t *index, /*!< in: index */
                  mtr_t *mtr);         /*!< in: mini-transaction handle */
 /*** Frees a B-tree except the root page, which MUST be freed after this

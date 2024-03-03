@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -202,7 +202,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(
     prev_trx_id must have already committed for the trx_id
     to be able to modify the row. Therefore, prev_trx_id
     cannot hold any implicit lock. */
-    if (vers_del && 0 != ut_dulint_cmp(trx_id, prev_trx_id)) {
+    if (vers_del && trx_id != prev_trx_id) {
 
       mutex_enter(&kernel_mutex);
       break;
@@ -273,7 +273,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(
       break;
     }
 
-    if (0 != ut_dulint_cmp(trx_id, prev_trx_id)) {
+    if (trx_id != prev_trx_id) {
       /* The versions modified by the trx_id transaction end
       to prev_version: no implicit x-lock */
 
@@ -514,15 +514,14 @@ db_err row_vers_build_for_consistent_read(
     the record we see this record only in the case when
     undo_no of the record is < undo_no in the view. */
 
-    if (view->type == VIEW_HIGH_GRANULARITY &&
-        ut_dulint_cmp(view->creator_trx_id, trx_id) == 0) {
+    if (view->type == VIEW_HIGH_GRANULARITY && view->creator_trx_id == trx_id) {
 
       roll_ptr = row_get_rec_roll_ptr(version, index, *offsets);
       undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap);
       undo_no = trx_undo_rec_get_undo_no(undo_rec);
       mem_heap_empty(heap);
 
-      if (ut_dulint_cmp(view->undo_no, undo_no) > 0) {
+      if (view->undo_no > undo_no) {
         /* The view already sees this version: we can
         copy it to in_heap and return */
 
@@ -608,7 +607,7 @@ ulint row_vers_build_for_semi_consistent_read(
   mem_heap_t *heap = NULL;
   byte *buf;
   ulint err;
-  trx_id_t rec_trx_id = ut_dulint_zero;
+  trx_id_t rec_trx_id = 0;
 
   ut_ad(dict_index_is_clust(index));
   ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_X_FIX) ||
@@ -659,7 +658,7 @@ ulint row_vers_build_for_semi_consistent_read(
       rolled back and the transaction is removed from
       the global list of transactions. */
 
-      if (!ut_dulint_cmp(rec_trx_id, version_trx_id)) {
+      if (rec_trx_id == version_trx_id) {
         /* The transaction was committed while
         we searched for earlier versions.
         Return the current version as a

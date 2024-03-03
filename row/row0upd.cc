@@ -308,7 +308,7 @@ void row_upd_rec_sys_fields_in_recovery(rec_t *rec, const ulint *offsets, ulint 
 }
 
 void row_upd_index_entry_sys_field(const dtuple_t *entry, dict_index_t *index,
-                                   ulint type, dulint val) {
+                                   ulint type, uint64_t val) {
   ut_ad(dict_index_is_clust(index));
 
   auto pos = dict_index_get_sys_col_pos(index, type);
@@ -415,7 +415,7 @@ byte *row_upd_write_sys_vals_to_log(dict_index_t *index, trx_t *trx,
   trx_write_roll_ptr(log_ptr, roll_ptr);
   log_ptr += DATA_ROLL_PTR_LEN;
 
-  log_ptr += mach_dulint_write_compressed(log_ptr, trx->id);
+  log_ptr += mach_uint64_write_compressed(log_ptr, trx->id);
 
   return log_ptr;
 }
@@ -437,7 +437,7 @@ byte *row_upd_parse_sys_vals(byte *ptr, byte *end_ptr, ulint *pos,
   *roll_ptr = trx_read_roll_ptr(ptr);
   ptr += DATA_ROLL_PTR_LEN;
 
-  ptr = mach_dulint_parse_compressed(ptr, end_ptr, trx_id);
+  ptr = mach_uint64_parse_compressed(ptr, end_ptr, trx_id);
 
   return ptr;
 }
@@ -1507,7 +1507,7 @@ static db_err row_upd_clust_step(upd_node_t *node, /*!< in: row update node */
   then we have to free the file segments of the index tree associated
   with the index */
 
-  if (node->is_delete && ut_dulint_cmp(node->table->id, DICT_INDEXES_ID) == 0) {
+  if (node->is_delete && node->table->id == DICT_INDEXES_ID) {
 
     dict_drop_index_tree(btr_pcur_get_rec(pcur), mtr);
 

@@ -50,21 +50,19 @@ of the whole LRU list length, except that the tolerance defined below
 is allowed. Note that the tolerance must be small enough such that for
 even the BUF_LRU_OLD_MIN_LEN long LRU list, the LRU_old pointer is not
 allowed to point to either end of the LRU list. */
-
-#define BUF_LRU_OLD_TOLERANCE 20
+constexpr ulint BUF_LRU_OLD_TOLERANCE = 20;
 
 /** The minimum amount of non-old blocks when the LRU_old list exists
 (that is, when there are more than BUF_LRU_OLD_MIN_LEN blocks).
 @see buf_LRU_old_adjust_len */
-#define BUF_LRU_NON_OLD_MIN_LEN 5
-#if BUF_LRU_NON_OLD_MIN_LEN >= BUF_LRU_OLD_MIN_LEN
-#error "BUF_LRU_NON_OLD_MIN_LEN >= BUF_LRU_OLD_MIN_LEN"
-#endif
+constexpr ulint BUF_LRU_NON_OLD_MIN_LEN = 5;
+
+static_assert(BUF_LRU_NON_OLD_MIN_LEN < BUF_LRU_OLD_MIN_LEN, "error BUF_LRU_NON_OLD_MIN_LEN >= BUF_LRU_OLD_MIN_LEN");
 
 /** When dropping the search hash index entries before deleting an ibd
 file, we build a local array of pages belonging to that tablespace
 in the buffer pool. Following is the size of that array. */
-#define BUF_LRU_DROP_SEARCH_HASH_SIZE 1024
+constexpr ulint BUF_LRU_DROP_SEARCH_HASH_SIZE = 1024;
 
 /** If we switch on the InnoDB monitor because there are too few available
 frames in the buffer pool, we set this to true */
@@ -75,11 +73,12 @@ static bool buf_lru_switched_on_innodb_mon = false;
 /** Number of intervals for which we keep the history of these stats.
 Each interval is 1 second, defined by the rate at which
 srv_error_monitor_thread() calls buf_LRU_stat_update(). */
-#define BUF_LRU_STAT_N_INTERVAL 50
+constexpr ulint BUF_LRU_STAT_N_INTERVAL = 50;
 
 /** Sampled values buf_LRU_stat_cur.
 Protected by buf_pool_mutex.  Updated by buf_LRU_stat_update(). */
 static buf_LRU_stat_t buf_LRU_stat_arr[BUF_LRU_STAT_N_INTERVAL];
+
 /** Cursor to buf_LRU_stat_arr[] that is updated in a round-robin fashion. */
 static ulint buf_LRU_stat_arr_ind;
 
@@ -1271,7 +1270,7 @@ void buf_LRU_print(void) {
                 "\ntype %lu"
                 " index id %lu\n",
                 (ulong)fil_page_get_type(frame),
-                (ulong)ut_dulint_get_low(btr_page_get_index_id(frame)));
+                (ulong)btr_page_get_index_id(frame));
       break;
 
     default:

@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -22,12 +22,10 @@ Created 2/5/1996 Heikki Tuuri
 *******************************************************/
 
 #include "dyn0dyn.h"
+
 #ifdef UNIV_NONINL
 #include "dyn0dyn.ic"
 #endif
-
-/** Adds a new block to a dyn array.
-@return	created block */
 
 dyn_block_t *dyn_array_add_block(dyn_array_t *arr) {
   ut_ad(arr);
@@ -41,6 +39,7 @@ dyn_block_t *dyn_array_add_block(dyn_array_t *arr) {
   }
 
   auto block = dyn_array_get_last_block(arr);
+
   block->used = block->used | DYN_BLOCK_FULL_FLAG;
 
   auto heap = arr->heap;

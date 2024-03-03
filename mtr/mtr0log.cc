@@ -96,7 +96,7 @@ byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, byte *type, ulint 
 
 byte *mlog_parse_nbytes(ulint type, byte *ptr, byte *end_ptr, byte *page) {
   ulint val;
-  dulint dval;
+  uint64_t dval;
 
   ut_a(type <= MLOG_8BYTES);
   ut_a(page == nullptr || fil_page_get_type(page) != FIL_PAGE_INDEX);
@@ -116,7 +116,7 @@ byte *mlog_parse_nbytes(ulint type, byte *ptr, byte *end_ptr, byte *page) {
   }
 
   if (type == MLOG_8BYTES) {
-    ptr = mach_dulint_parse_compressed(ptr, end_ptr, &dval);
+    ptr = mach_uint64_parse_compressed(ptr, end_ptr, &dval);
 
     if (ptr == nullptr) {
 
@@ -203,7 +203,7 @@ void mlog_write_ulint(byte *ptr, ulint val, byte type, mtr_t *mtr) {
   mlog_close(mtr, log_ptr);
 }
 
-void mlog_write_dulint(byte *ptr, dulint val, mtr_t *mtr) {
+void mlog_write_uint64(byte *ptr, uint64_t val, mtr_t *mtr) {
   byte *log_ptr;
 
   ut_ad(ptr && mtr);
@@ -223,7 +223,7 @@ void mlog_write_dulint(byte *ptr, dulint val, mtr_t *mtr) {
   mach_write_to_2(log_ptr, page_offset(ptr));
   log_ptr += 2;
 
-  log_ptr += mach_dulint_write_compressed(log_ptr, val);
+  log_ptr += mach_uint64_write_compressed(log_ptr, val);
 
   mlog_close(mtr, log_ptr);
 }

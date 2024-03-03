@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -126,11 +126,8 @@ static bool row_purge_remove_clust_if_poss_low(
 
   rec = btr_pcur_get_rec(pcur);
 
-  if (0 != ut_dulint_cmp(
-               node->roll_ptr,
-               row_get_rec_roll_ptr(rec, index,
-                                    rec_get_offsets(rec, index, offsets_,
-                                                    ULINT_UNDEFINED, &heap)))) {
+  if (node->roll_ptr != row_get_rec_roll_ptr(rec, index, rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap))) {
+
     if (likely_null(heap)) {
       mem_heap_free(heap);
     }
@@ -455,7 +452,7 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
   byte *ptr;
   trx_t *trx;
   undo_no_t undo_no;
-  dulint table_id;
+  uint64_t table_id;
   trx_id_t trx_id;
   roll_ptr_t roll_ptr;
   ulint info_bits;

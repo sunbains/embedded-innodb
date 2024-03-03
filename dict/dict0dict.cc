@@ -165,7 +165,7 @@ void dict_mutex_enter(void) { mutex_enter(&(dict_sys->mutex)); }
 
 /** Get the mutex that protects index->stat_n_diff_key_vals[] */
 #define GET_INDEX_STAT_MUTEX(index)                                            \
-  (&dict_index_stat_mutex[ut_fold_dulint(index->id) %                          \
+  (&dict_index_stat_mutex[ut_uint64_fold(index->id) %                          \
                           DICT_INDEX_STAT_MUTEX_SIZE])
 
 void dict_index_stat_mutex_enter(const dict_index_t *index) {
@@ -254,15 +254,13 @@ int dict_table_get_col_no(const dict_table_t *table, const char *name) {
   return -1;
 }
 
-dict_index_t *dict_index_get_on_id_low(dict_table_t *table, dulint id) {
+dict_index_t *dict_index_get_on_id_low(dict_table_t *table, uint64_t id) {
   dict_index_t *dict_index;
 
   dict_index = dict_table_get_first_index(table);
 
   while (dict_index) {
-    if (0 == ut_dulint_cmp(id, dict_index->id)) {
-      /* Found */
-
+    if (id == dict_index->id) {
       return dict_index;
     }
 
@@ -361,11 +359,11 @@ ulint dict_index_get_nth_field_pos(const dict_index_t *dict_index,
   return ULINT_UNDEFINED;
 }
 
-dict_table_t *dict_table_get_on_id(ib_recovery_t recovery, dulint table_id,
+dict_table_t *dict_table_get_on_id(ib_recovery_t recovery, uint64_t table_id,
                                    trx_t *trx) {
   dict_table_t *table;
 
-  if (ut_dulint_cmp(table_id, DICT_FIELDS_ID) <= 0 ||
+  if (table_id <= DICT_FIELDS_ID ||
       trx->dict_operation_lock_mode == RW_X_LATCH) {
     /* It is a system table which will always exist in the table
     cache: we avoid acquiring the dictionary mutex, because
@@ -463,7 +461,7 @@ dict_table_t *dict_table_get(const char *table_name, bool ref_count) {
   return table;
 }
 
-dict_table_t *dict_table_get_using_id(ib_recovery_t recovery, dulint table_id,
+dict_table_t *dict_table_get_using_id(ib_recovery_t recovery, uint64_t table_id,
                                       bool ref_count) {
   dict_table_t *table;
 
@@ -523,7 +521,7 @@ void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap) {
   table->cached = true;
 
   fold = ut_fold_string(table->name);
-  id_fold = ut_fold_dulint(table->id);
+  id_fold = ut_uint64_fold(table->id);
 
   row_len = 0;
   for (i = 0; i < table->n_def; i++) {
@@ -562,7 +560,7 @@ void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap) {
     dict_table_t *table2;
     HASH_SEARCH(id_hash, dict_sys->table_id_hash, id_fold, dict_table_t *,
                 table2, ut_ad(table2->cached),
-                ut_dulint_cmp(table2->id, table->id) == 0);
+                table2->id == table->id);
     ut_a(table2 == nullptr);
 
 #ifdef UNIV_DEBUG
@@ -584,18 +582,14 @@ void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap) {
   dict_sys->size += mem_heap_get_size(table->heap);
 }
 
-dict_index_t *dict_index_find_on_id_low(dulint id) {
-  dict_table_t *table;
-  dict_index_t *dict_index;
+dict_index_t *dict_index_find_on_id_low(uint64_t id) {
+  auto table = UT_LIST_GET_FIRST(dict_sys->table_LRU);
 
-  table = UT_LIST_GET_FIRST(dict_sys->table_LRU);
+  while (table != nullptr) {
+    auto dict_index = dict_table_get_first_index(table);
 
-  while (table) {
-    dict_index = dict_table_get_first_index(table);
-
-    while (dict_index) {
-      if (0 == ut_dulint_cmp(id, dict_index->id)) {
-        /* Found */
+    while (dict_index != nullptr) {
+      if (id == dict_index->id) {
 
         return dict_index;
       }
@@ -805,7 +799,7 @@ DISCARD TABLESPACE. */
 
 void dict_table_change_id_in_cache(
     dict_table_t *table, /*!< in/out: table object already in cache */
-    dulint new_id)       /*!< in: new id to set */
+    uint64_t new_id)       /*!< in: new id to set */
 {
   ut_ad(table);
   ut_ad(mutex_own(&(dict_sys->mutex)));
@@ -814,12 +808,12 @@ void dict_table_change_id_in_cache(
   /* Remove the table from the hash table of id's */
 
   HASH_DELETE(dict_table_t, id_hash, dict_sys->table_id_hash,
-              ut_fold_dulint(table->id), table);
+              ut_uint64_fold(table->id), table);
   table->id = new_id;
 
   /* Add the table back to the hash table */
   HASH_INSERT(dict_table_t, id_hash, dict_sys->table_id_hash,
-              ut_fold_dulint(table->id), table);
+              ut_uint64_fold(table->id), table);
 }
 
 void dict_table_remove_from_cache(dict_table_t *table) {
@@ -862,7 +856,7 @@ void dict_table_remove_from_cache(dict_table_t *table) {
   HASH_DELETE(dict_table_t, name_hash, dict_sys->table_hash,
               ut_fold_string(table->name), table);
   HASH_DELETE(dict_table_t, id_hash, dict_sys->table_id_hash,
-              ut_fold_dulint(table->id), table);
+              ut_uint64_fold(table->id), table);
 
   /* Remove table from LRU list of tables */
   UT_LIST_REMOVE(table_LRU, dict_sys->table_LRU, table);
@@ -1810,7 +1804,7 @@ dict_index_t *dict_table_get_index_by_max_id(dict_table_t *table,
       if (i == n_cols) {
         /* We found a matching index, select the index with the higher id*/
 
-        if (!found || ut_dulint_cmp(index->id, found->id) > 0) {
+        if (!found || index->id > found->id) {
 
           found = index;
         }
@@ -3110,14 +3104,14 @@ syntax_error:
   return DB_CANNOT_DROP_CONSTRAINT;
 }
 
-dict_index_t *dict_index_get_if_in_cache_low(dulint index_id) {
+dict_index_t *dict_index_get_if_in_cache_low(uint64_t index_id) {
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
   return dict_index_find_on_id_low(index_id);
 }
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
-dict_index_t *dict_index_get_if_in_cache(dulint index_id) {
+dict_index_t *dict_index_get_if_in_cache(uint64_t index_id) {
   dict_index_t *index;
 
   if (dict_sys == nullptr) {
@@ -3395,8 +3389,8 @@ void dict_table_print_low(dict_table_t *table) {
             "TABLE: name %s, id %lu %lu, flags %lx, columns %lu,"
             " indexes %lu, appr.rows %lu\n"
             "  COLUMNS: ",
-            table->name, (ulong)ut_dulint_get_high(table->id),
-            (ulong)ut_dulint_get_low(table->id), (ulong)table->flags,
+            table->name, (ulong)table->id,
+            (ulong)table->id, (ulong)table->flags,
             (ulong)table->n_cols, (ulong)UT_LIST_GET_LEN(table->indexes),
             (ulong)table->stat_n_rows);
 
@@ -3469,8 +3463,8 @@ static void dict_index_print_low(dict_index_t *index) /*!< in: index */
             "   root page %lu, appr.key vals %lu,"
             " leaf pages %lu, size pages %lu\n"
             "   FIELDS: ",
-            index->name, (ulong)ut_dulint_get_high(index->id),
-            (ulong)ut_dulint_get_low(index->id),
+            index->name, (ulong)index->id,
+            (ulong)index->id,
             (ulong)index->n_user_defined_cols, (ulong)index->n_fields,
             (ulong)index->n_uniq, (ulong)index->type, (ulong)index->page,
             (ulong)n_vals, (ulong)index->stat_n_leaf_pages,
@@ -3748,17 +3742,14 @@ void dict_table_replace_index_in_foreign_list(dict_table_t *table,
   }
 }
 
-dict_index_t *dict_table_get_index_on_name_and_min_id(dict_table_t *table,
-                                                      const char *name) {
-  dict_index_t *index;
-  dict_index_t *min_index; /* Index with matching name and min(id) */
-
-  min_index = nullptr;
-  index = dict_table_get_first_index(table);
+dict_index_t *dict_table_get_index_on_name_and_min_id(dict_table_t *table, const char *name) {
+  /* Index with matching name and min(id) */
+  dict_index_t *min_index = nullptr;
+  auto index = dict_table_get_first_index(table);
 
   while (index != nullptr) {
     if (strcmp(index->name, name) == 0) {
-      if (!min_index || ut_dulint_cmp(index->id, min_index->id) < 0) {
+      if (min_index == nullptr || index->id < min_index->id) {
 
         min_index = index;
       }

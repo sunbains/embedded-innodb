@@ -475,7 +475,7 @@ btr_page_get_father(dict_index_t *dict_index, /*!< in: b-tree index */
   mem_heap_free(heap);
 }
 
-ulint btr_create(ulint type, ulint space, dulint index_id, dict_index_t *dict_index, mtr_t *mtr) {
+ulint btr_create(ulint type, ulint space, uint64_t index_id, dict_index_t *dict_index, mtr_t *mtr) {
   auto block = fseg_create(space, 0, PAGE_HEADER + PAGE_BTR_SEG_TOP, mtr);
 
   if (block == nullptr) {
@@ -631,11 +631,11 @@ btr_page_reorganize_low(bool recovery,      /*!< in: true if called in recovery:
 
   if (dict_index_is_sec(dict_index) && page_is_leaf(page)) {
 
-    trx_id_t max_trx_id = page_get_max_trx_id(temp_page);
+    auto max_trx_id = page_get_max_trx_id(temp_page);
 
     page_set_max_trx_id(block, max_trx_id, mtr);
 
-    ut_ad(!ut_dulint_is_zero(max_trx_id) || recovery);
+    ut_ad(max_trx_id > 0 || recovery);
  }
 
   if (likely(!recovery)) {
@@ -1891,7 +1891,7 @@ static void btr_discard_only_page_on_level(
 #endif /* UNIV_BTR_DEBUG */
 
   if (dict_index_is_sec(dict_index) && page_is_leaf(buf_block_get_frame(block))) {
-    ut_a(!ut_dulint_is_zero(max_trx_id));
+    ut_a(max_trx_id > 0);
     page_set_max_trx_id(block, max_trx_id, mtr);
   }
 

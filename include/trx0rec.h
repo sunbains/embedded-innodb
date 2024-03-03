@@ -81,7 +81,7 @@ trx_undo_rec_get_pars(trx_undo_rec_t *undo_rec, /*!< in: undo log record */
                       bool *updated_extern, /*!< out: true if we updated an
                                              externally stored fild */
                       undo_no_t *undo_no,   /*!< out: undo log record number */
-                      dulint *table_id);    /*!< out: table id */
+                      uint64_t *table_id);    /*!< out: table id */
 /** Builds a row reference from an undo log record.
 @return	pointer to remaining part of undo record */
 
@@ -181,8 +181,7 @@ db_err trx_undo_report_row_operation(
                                  marking, the record in the clustered
                                  index, otherwise NULL */
     roll_ptr_t *roll_ptr);       /*!< out: rollback pointer to the
-                                 inserted undo log record,
-                                 ut_dulint_zero if BTR_NO_UNDO_LOG
+                                 inserted undo log record, 0 if BTR_NO_UNDO_LOG
                                  flag was specified */
 
 /** Copies an undo record to heap. This function can be called if we know that

@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under

@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 2007, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -31,21 +31,7 @@ Created July 16, 2007 Vasil Dimov
 #include "ut0dbg.h"
 #include "ut0lst.h"
 
-/** Initialize lock queue iterator so that it starts to iterate from
-"lock". bit_no specifies the record number within the heap where the
-record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
-1. If the lock is a table lock, thus we have a table lock queue;
-2. If the lock is a record lock and it is a wait lock. In this case
-   bit_no is calculated in this function by using
-   lock_rec_find_set_bit(). There is exactly one bit set in the bitmap
-   of a wait lock. */
-
-void lock_queue_iterator_reset(
-    lock_queue_iterator_t *iter, /*!< out: iterator */
-    const lock_t *lock,          /*!< in: lock to start from */
-    ulint bit_no)                /*!< in: record number in the
-                                 heap */
-{
+void lock_queue_iterator_reset(lock_queue_iterator_t *iter, const lock_t *lock, ulint bit_no) {
   iter->current_lock = lock;
 
   if (bit_no != ULINT_UNDEFINED) {
@@ -67,14 +53,7 @@ void lock_queue_iterator_reset(
   }
 }
 
-/** Gets the previous lock in the lock queue, returns NULL if there are no
-more locks (i.e. the current lock is the first one). The iterator is
-receded (if not-NULL is returned).
-@return	previous lock or NULL */
-
-const lock_t *lock_queue_iterator_get_prev(
-    lock_queue_iterator_t *iter) /*!< in/out: iterator */
-{
+const lock_t *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter) {
   const lock_t *prev_lock;
 
   switch (lock_get_type_low(iter->current_lock)) {

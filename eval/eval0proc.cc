@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1998, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -27,11 +27,7 @@ Created 1/20/1998 Heikki Tuuri
 #include "eval0proc.ic"
 #endif
 
-/** Performs an execution step of an if-statement node.
-@return	query thread to run next or NULL */
-
-que_thr_t *if_step(que_thr_t *thr) /*!< in: query thread */
-{
+que_thr_t *if_step(que_thr_t *thr) {
   elsif_node_t *elsif_node;
 
   ut_ad(thr);

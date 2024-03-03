@@ -567,9 +567,9 @@ recv_find_max_checkpoint(log_group_t **max_group, /*!< out: max group */
 
       group->state = LOG_GROUP_OK;
 
-      group->lsn = mach_read_ull(buf + LOG_CHECKPOINT_LSN);
+      group->lsn = mach_read_from_8(buf + LOG_CHECKPOINT_LSN);
       group->lsn_offset = mach_read_from_4(buf + LOG_CHECKPOINT_OFFSET);
-      checkpoint_no = mach_read_ull(buf + LOG_CHECKPOINT_NO);
+      checkpoint_no = mach_read_from_8(buf + LOG_CHECKPOINT_NO);
 
 #ifdef UNIV_DEBUG
       if (log_debug_writes) {
@@ -1088,7 +1088,7 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
   buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
 
   /* Read the newest modification lsn from the page */
-  page_lsn = mach_read_ull(page + FIL_PAGE_LSN);
+  page_lsn = mach_read_from_8(page + FIL_PAGE_LSN);
 
   /* It may be that the page has been modified in the buffer
   pool: read the newest modification lsn there */
@@ -1150,8 +1150,8 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
                                        &mtr);
 
       end_lsn = recv->start_lsn + recv->len;
-      mach_write_ull(FIL_PAGE_LSN + page, end_lsn);
-      mach_write_ull(UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + page,
+      mach_write_to_8(FIL_PAGE_LSN + page, end_lsn);
+      mach_write_to_8(UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + page,
                      end_lsn);
     }
 
@@ -1389,7 +1389,7 @@ recv_parse_log_rec(byte *ptr,      /*!< in: pointer to a buffer */
 
 #ifdef UNIV_LOG_LSN_DEBUG
   if (*type == MLOG_LSN) {
-    uint64_t lsn = (uint64_t)*space << 32 | *page_no;
+    uint64_t lsn = uint64_t(*space) << 32 | *page_no;
 #ifdef UNIV_LOG_DEBUG
     ut_a(lsn == log_sys->old_lsn);
 #else  /* UNIV_LOG_DEBUG */
@@ -2212,8 +2212,8 @@ db_err recv_recovery_from_checkpoint_start_func(ib_recovery_t recovery,
 
   buf = log_sys->checkpoint_buf;
 
-  checkpoint_lsn = mach_read_ull(buf + LOG_CHECKPOINT_LSN);
-  checkpoint_no = mach_read_ull(buf + LOG_CHECKPOINT_NO);
+  checkpoint_lsn = mach_read_from_8(buf + LOG_CHECKPOINT_LSN);
+  checkpoint_no = mach_read_from_8(buf + LOG_CHECKPOINT_NO);
 
   recv_recover_from_ibbackup(max_cp_group);
 
@@ -2660,8 +2660,8 @@ try_open_again:
     return true;
   }
 
-  start_lsn = mach_read_ull(buf + LOG_FILE_START_LSN);
-  file_end_lsn = mach_read_ull(buf + LOG_FILE_END_LSN);
+  start_lsn = mach_read_from_8(buf + LOG_FILE_START_LSN);
+  file_end_lsn = mach_read_from_8(buf + LOG_FILE_END_LSN);
 
   if (!recv_sys->scanned_lsn) {
 

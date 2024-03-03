@@ -304,7 +304,6 @@ is printed if a string contains non-printable characters. */
 
 void dfield_print_also_hex(const dfield_t *dfield) /*!< in: dfield */
 {
-  ulint prtype;
   ulint i;
   bool print_also_hex;
 
@@ -317,10 +316,10 @@ void dfield_print_also_hex(const dfield_t *dfield) /*!< in: dfield */
     return;
   }
 
-  prtype = dtype_get_prtype(dfield_get_type(dfield));
+  auto prtype = dtype_get_prtype(dfield_get_type(dfield));
 
+  uint64_t id;
   switch (dtype_get_mtype(dfield_get_type(dfield))) {
-    dulint id;
   case DATA_INT:
     switch (len) {
       ulint val;
@@ -370,19 +369,19 @@ void dfield_print_also_hex(const dfield_t *dfield) /*!< in: dfield */
 
     case 6:
       id = mach_read_from_6(data);
-      ib_logger(ib_stream, "{%lu %lu}", ut_dulint_get_high(id),
-                ut_dulint_get_low(id));
+      ib_logger(ib_stream, "{%lu %lu}", id,
+                id);
       break;
 
     case 7:
       id = mach_read_from_7(data);
-      ib_logger(ib_stream, "{%lu %lu}", ut_dulint_get_high(id),
-                ut_dulint_get_low(id));
+      ib_logger(ib_stream, "{%lu %lu}", id,
+                id);
       break;
     case 8:
       id = mach_read_from_8(data);
-      ib_logger(ib_stream, "{%lu %lu}", ut_dulint_get_high(id),
-                ut_dulint_get_low(id));
+      ib_logger(ib_stream, "{%lu %lu}", id,
+                id);
       break;
     default:
       goto print_hex;
@@ -400,22 +399,22 @@ void dfield_print_also_hex(const dfield_t *dfield) /*!< in: dfield */
     case DATA_ROLL_PTR:
       id = mach_read_from_7(data);
 
-      ib_logger(ib_stream, "roll_ptr {%lu %lu}", ut_dulint_get_high(id),
-                ut_dulint_get_low(id));
+      ib_logger(ib_stream, "roll_ptr {%lu %lu}", id,
+                id);
       break;
 
     case DATA_ROW_ID:
       id = mach_read_from_6(data);
 
-      ib_logger(ib_stream, "row_id {%lu %lu}", ut_dulint_get_high(id),
-                ut_dulint_get_low(id));
+      ib_logger(ib_stream, "row_id {%lu %lu}", id,
+                id);
       break;
 
     default:
-      id = mach_dulint_read_compressed(data);
+      id = mach_uint64_read_compressed(data);
 
-      ib_logger(ib_stream, "mix_id {%lu %lu}", ut_dulint_get_high(id),
-                ut_dulint_get_low(id));
+      ib_logger(ib_stream, "mix_id {%lu %lu}", id,
+                id);
     }
     break;
 

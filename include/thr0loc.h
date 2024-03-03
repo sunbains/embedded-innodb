@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -25,43 +25,34 @@ Created 10/5/1995 Heikki Tuuri
 a capability useful in some situations like storing the
 OS handle to the current thread, or its priority. */
 
-#ifndef thr0loc_h
-#define thr0loc_h
+#pragma once
 
 #include "innodb0types.h"
 #include "os0thread.h"
 
 /** Initializes the thread local storage module. */
+void thr_local_init();
 
-void thr_local_init(void);
 /** Close the thread local storage module. */
+void thr_local_close();
 
-void thr_local_close(void);
 /** Creates a local storage struct for the calling new thread. */
+void thr_local_create();
 
-void thr_local_create(void);
 /** Frees the local storage struct for the specified thread. */
-
 void thr_local_free(os_thread_id_t id); /*!< in: thread id */
+
 /** Gets the slot number in the thread table of a thread.
 @return	slot number */
-
 ulint thr_local_get_slot_no(
     os_thread_id_t id); /*!< in: thread id of the thread */
-/** Sets in the local storage the slot number in the thread table of a thread.
- */
 
+/** Sets in the local storage the slot number in the thread table of a thread.  */
 void thr_local_set_slot_no(
     os_thread_id_t id, /*!< in: thread id of the thread */
     ulint slot_no);    /*!< in: slot number */
+
 /** Returns pointer to the 'in_ibuf' field within the current thread local
 storage.
 @return	pointer to the in_ibuf field */
-
-bool *thr_local_get_in_ibuf_field(void);
-
-#ifndef UNIV_NONINL
-#include "thr0loc.ic"
-#endif
-
-#endif
+bool *thr_local_get_in_ibuf_field();

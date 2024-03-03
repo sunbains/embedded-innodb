@@ -358,9 +358,7 @@ dict_create_sys_indexes_tuple(const dict_index_t *index, /*!< in: index */
   dfield_set_data(dfield, ptr, 4);
   /* 7: SPACE --------------------------*/
 
-#if DICT_SYS_INDEXES_SPACE_NO_FIELD != 7
-#error "DICT_SYS_INDEXES_SPACE_NO_FIELD != 7"
-#endif
+  static_assert(DICT_SYS_INDEXES_SPACE_NO_FIELD == 7, "error DICT_SYS_INDEXES_SPACE_NO_FIELD != 7");
 
   dfield = dtuple_get_nth_field(entry, 5 /*SPACE*/);
 
@@ -370,9 +368,7 @@ dict_create_sys_indexes_tuple(const dict_index_t *index, /*!< in: index */
   dfield_set_data(dfield, ptr, 4);
   /* 8: PAGE_NO --------------------------*/
 
-#if DICT_SYS_INDEXES_PAGE_NO_FIELD != 8
-#error "DICT_SYS_INDEXES_PAGE_NO_FIELD != 8"
-#endif
+  static_assert(DICT_SYS_INDEXES_PAGE_NO_FIELD == 8, "error DICT_SYS_INDEXES_PAGE_NO_FIELD != 8");
 
   dfield = dtuple_get_nth_field(entry, 6 /*PAGE_NO*/);
 
@@ -532,7 +528,7 @@ dict_build_index_def_step(que_thr_t *thr,   /*!< in: query thread */
   row_ins_node_set_new_row(node->ind_def, row);
 
   /* Note that the index was created by this transaction. */
-  index->trx_id = (uint64_t)ut_conv_dulint_to_longlong(trx->id);
+  index->trx_id = trx->id;
 
   return DB_SUCCESS;
 }
@@ -657,7 +653,7 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space,
   ulint root_page_no;
   bool drop = !space;
   ulint type;
-  dulint index_id;
+  uint64_t index_id;
   rec_t *rec;
   const byte *ptr;
   ulint len;
@@ -751,7 +747,7 @@ create:
   /* Find the index corresponding to this SYS_INDEXES record. */
   for (index = UT_LIST_GET_FIRST(table->indexes); index;
        index = UT_LIST_GET_NEXT(indexes, index)) {
-    if (!ut_dulint_cmp(index->id, index_id)) {
+    if (index->id == index_id) {
       root_page_no = btr_create(type, space, index_id, index, mtr);
       index->page = (unsigned int)root_page_no;
       return root_page_no;
@@ -762,7 +758,7 @@ create:
   ib_logger(ib_stream,
             "  InnoDB: Index %lu %lu of table %s is missing\n"
             "InnoDB: from the data dictionary during TRUNCATE!\n",
-            ut_dulint_get_high(index_id), ut_dulint_get_low(index_id),
+            index_id, index_id,
             table->name);
 
   return FIL_NULL;
@@ -1006,7 +1002,7 @@ que_thr_t *dict_create_index_step(que_thr_t *thr) /*!< in: query thread */
 
   if (node->state == INDEX_ADD_TO_CACHE) {
 
-    dulint index_id = node->index->id;
+    uint64_t index_id = node->index->id;
 
     err = (db_err)dict_index_add_to_cache(node->table, node->index, FIL_NULL,
                                           true);

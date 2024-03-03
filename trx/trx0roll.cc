@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -200,7 +200,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
   ut_a(thr == que_fork_start_command(fork));
 
   trx_roll_crash_recv_trx = trx;
-  trx_roll_max_undo_no = ut_conv_dulint_to_longlong(trx->undo_no);
+  trx_roll_max_undo_no = trx->undo_no;
   trx_roll_progress_printed_pct = 0;
   rows_to_undo = trx_roll_max_undo_no;
 
@@ -233,7 +233,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
     mutex_exit(&kernel_mutex);
 
     ib_logger(ib_stream, "InnoDB: Waiting for rollback of trx id %lu to end\n",
-              (ulong)ut_dulint_get_low(trx->id));
+              (ulong)trx->id);
     os_thread_sleep(100000);
 
     mutex_enter(&kernel_mutex);
@@ -241,8 +241,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
 
   mutex_exit(&kernel_mutex);
 
-  if (trx_get_dict_operation(trx) != TRX_DICT_OP_NONE &&
-      !ut_dulint_is_zero(trx->table_id)) {
+  if (trx_get_dict_operation(trx) != TRX_DICT_OP_NONE && trx->table_id != 0) {
 
     /* If the transaction was for a dictionary operation, we
     drop the relevant table, if it still exists */
@@ -250,8 +249,8 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
     ib_logger(ib_stream,
               "InnoDB: Dropping table with id %lu %lu"
               " in recovery if it exists\n",
-              (ulong)ut_dulint_get_high(trx->table_id),
-              (ulong)ut_dulint_get_low(trx->table_id));
+              (ulong)trx->table_id,
+              (ulong)trx->table_id);
 
     table = dict_table_get_on_id_low(recovery, trx->table_id);
 
@@ -418,7 +417,7 @@ static bool trx_undo_arr_store_info(trx_t *trx,        /*!< in: transaction */
     } else {
       n++;
 
-      if (0 == ut_dulint_cmp(cell->undo_no, undo_no)) {
+      if (cell->undo_no == undo_no) {
 
         if (stored_here) {
           stored_here->in_use = false;
@@ -452,7 +451,7 @@ trx_undo_arr_remove_info(trx_undo_arr_t *arr, /*!< in: undo number array */
   for (i = 0;; i++) {
     cell = trx_undo_arr_get_nth_info(arr, i);
 
-    if (cell->in_use && 0 == ut_dulint_cmp(cell->undo_no, undo_no)) {
+    if (cell->in_use && cell->undo_no == undo_no) {
 
       cell->in_use = false;
 
@@ -466,7 +465,7 @@ trx_undo_arr_remove_info(trx_undo_arr_t *arr, /*!< in: undo number array */
 }
 
 /** Gets the biggest undo number in an array.
-@return	biggest value, ut_dulint_zero if the array is empty */
+@return	biggest value, 0 if the array is empty */
 static undo_no_t
 trx_undo_arr_get_biggest(trx_undo_arr_t *arr) /*!< in: undo number array */
 {
@@ -478,14 +477,14 @@ trx_undo_arr_get_biggest(trx_undo_arr_t *arr) /*!< in: undo number array */
 
   n = 0;
   n_used = arr->n_used;
-  biggest = ut_dulint_zero;
+  biggest = 0;
 
   for (i = 0;; i++) {
     cell = trx_undo_arr_get_nth_info(arr, i);
 
     if (cell->in_use) {
       n++;
-      if (ut_dulint_cmp(cell->undo_no, biggest) > 0) {
+      if (cell->undo_no > biggest) {
 
         biggest = cell->undo_no;
       }
@@ -497,13 +496,9 @@ trx_undo_arr_get_biggest(trx_undo_arr_t *arr) /*!< in: undo number array */
   }
 }
 
-/** Tries truncate the undo logs. */
-
-void trx_roll_try_truncate(trx_t *trx) /*!< in/out: transaction */
-{
+void trx_roll_try_truncate(trx_t *trx) {
   trx_undo_arr_t *arr;
   undo_no_t limit;
-  undo_no_t biggest;
 
   ut_ad(mutex_own(&(trx->undo_mutex)));
   ut_ad(mutex_own(&((trx->rseg)->mutex)));
@@ -515,11 +510,11 @@ void trx_roll_try_truncate(trx_t *trx) /*!< in/out: transaction */
   limit = trx->undo_no;
 
   if (arr->n_used > 0) {
-    biggest = trx_undo_arr_get_biggest(arr);
+    auto biggest = trx_undo_arr_get_biggest(arr);
 
-    if (ut_dulint_cmp(biggest, limit) >= 0) {
+    if (biggest >= limit) {
 
-      limit = ut_dulint_add(biggest, 1);
+      limit = biggest + 1;
     }
   }
 
@@ -551,8 +546,8 @@ trx_roll_pop_top_rec(trx_t *trx,       /*!< in: transaction */
   offset = undo->top_offset;
 
   /*ib_logger(ib_stream, "Thread %lu undoing trx %lu undo record %lu\n",
-  os_thread_get_curr_id(), ut_dulint_get_low(trx->id),
-  ut_dulint_get_low(undo->top_undo_no)); */
+  os_thread_get_curr_id(), trx->id,
+  undo->top_undo_no); */
 
   prev_rec = trx_undo_get_prev_rec(undo_page + offset, undo->hdr_page_no,
                                    undo->hdr_offset, mtr);
@@ -619,13 +614,13 @@ try_again:
     undo = upd_undo;
   } else if (!upd_undo || upd_undo->empty) {
     undo = ins_undo;
-  } else if (ut_dulint_cmp(upd_undo->top_undo_no, ins_undo->top_undo_no) > 0) {
+  } else if (upd_undo->top_undo_no > ins_undo->top_undo_no) {
     undo = upd_undo;
   } else {
     undo = ins_undo;
   }
 
-  if (!undo || undo->empty || (ut_dulint_cmp(limit, undo->top_undo_no) > 0)) {
+  if (!undo || undo->empty || limit >undo->top_undo_no) {
 
     if ((trx->undo_no_arr)->n_used == 0) {
       /* Rollback is ending */
@@ -656,15 +651,15 @@ try_again:
 
   undo_no = trx_undo_rec_get_undo_no(undo_rec);
 
-  ut_ad(ut_dulint_cmp(ut_dulint_add(undo_no, 1), trx->undo_no) == 0);
+  ut_ad(undo_no + 1 == trx->undo_no);
 
   /* We print rollback progress info if we are in a crash recovery
   and the transaction has at least 1000 row operations to undo. */
 
   if (trx == trx_roll_crash_recv_trx && trx_roll_max_undo_no > 1000) {
 
-    progress_pct = 100 - (ulint)((ut_conv_dulint_to_longlong(undo_no) * 100) /
-                                 trx_roll_max_undo_no);
+    progress_pct = 100 - (ulint)((undo_no * 100) / trx_roll_max_undo_no);
+
     if (progress_pct != trx_roll_progress_printed_pct) {
       if (trx_roll_progress_printed_pct == 0) {
         ib_logger(ib_stream,
@@ -733,7 +728,7 @@ void trx_rollback(trx_t *trx, trx_sig_t *sig, que_thr_t **next_thr) {
 
   if (sig->type == TRX_SIG_TOTAL_ROLLBACK) {
 
-    trx->roll_limit = ut_dulint_zero;
+    trx->roll_limit = 0;
 
   } else if (sig->type == TRX_SIG_ROLLBACK_TO_SAVEPT) {
 
@@ -746,7 +741,7 @@ void trx_rollback(trx_t *trx, trx_sig_t *sig, que_thr_t **next_thr) {
     ut_error;
   }
 
-  ut_a(ut_dulint_cmp(trx->roll_limit, trx->undo_no) <= 0);
+  ut_a(trx->roll_limit <= trx->undo_no);
 
   trx->pages_undone = 0;
 
@@ -866,7 +861,7 @@ void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx,
 #ifdef UNIV_DEBUG
   if (lock_print_waits) {
     ib_logger(ib_stream, "Trx %lu rollback finished\n",
-              (ulong)ut_dulint_get_low(trx->id));
+              (ulong)trx->id);
   }
 #endif /* UNIV_DEBUG */
 

@@ -540,7 +540,7 @@ void trx_sys_flush_max_trx_id(void) {
 
   sys_header = trx_sysf_get(&mtr);
 
-  mlog_write_dulint(sys_header + TRX_SYS_TRX_ID_STORE, trx_sys->max_trx_id,
+  mlog_write_uint64(sys_header + TRX_SYS_TRX_ID_STORE, trx_sys->max_trx_id,
                     &mtr);
   mtr_commit(&mtr);
 }
@@ -606,8 +606,7 @@ static void trx_sysf_create(mtr_t *mtr) {
   auto sys_header = trx_sysf_get(mtr);
 
   /* Start counting transaction ids from number 1 up */
-  mlog_write_dulint(sys_header + TRX_SYS_TRX_ID_STORE, ut_dulint_create(0, 1),
-                    mtr);
+  mlog_write_uint64(sys_header + TRX_SYS_TRX_ID_STORE, 1, mtr);
 
   /* Reset the rollback segment slots */
   for (ulint i = 0; i < TRX_SYS_N_RSEGS; i++) {
@@ -664,11 +663,7 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
   to the disk-based header! Thus trx id values will not overlap when
   the database is repeatedly started! */
 
-  trx_sys->max_trx_id = ut_dulint_add(
-      ut_dulint_align_up(
-          mtr_read_dulint(sys_header + TRX_SYS_TRX_ID_STORE, &mtr),
-          TRX_SYS_TRX_ID_WRITE_MARGIN),
-      2 * TRX_SYS_TRX_ID_WRITE_MARGIN);
+  trx_sys->max_trx_id = ut_uint64_align_up(mtr_read_uint64(sys_header + TRX_SYS_TRX_ID_STORE, &mtr), TRX_SYS_TRX_ID_WRITE_MARGIN) + 2 * TRX_SYS_TRX_ID_WRITE_MARGIN;
 
   UT_LIST_INIT(trx_sys->client_trx_list);
 
@@ -681,7 +676,7 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
     for (;;) {
 
       if (trx->conc_state != TRX_PREPARED) {
-        rows_to_undo += ut_conv_dulint_to_longlong(trx->undo_no);
+        rows_to_undo += trx->undo_no;
       }
 
       trx = UT_LIST_GET_NEXT(trx_list, trx);
@@ -754,9 +749,9 @@ trx_sys_file_format_max_write(ulint format_id,   /*!< in: file format id */
     *name = file_format_max.name;
   }
 
-  mlog_write_dulint(
+  mlog_write_uint64(
       ptr,
-      ut_dulint_create(TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH, tag_value_low),
+      (uint64_t(TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH) << 32) | tag_value_low,
       &mtr);
 
   mtr_commit(&mtr);
@@ -771,7 +766,7 @@ static ulint trx_sys_file_format_max_read(void) {
   const byte *ptr;
   const buf_block_t *block;
   ulint format_id;
-  dulint file_format_id;
+  uint64_t file_format_id;
 
   /* Since this is called during the startup phase it's safe to
   read the value without a covering mutex. */
@@ -784,9 +779,9 @@ static ulint trx_sys_file_format_max_read(void) {
 
   mtr_commit(&mtr);
 
-  format_id = file_format_id.low - TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW;
+  format_id = file_format_id - TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW;
 
-  if (file_format_id.high != TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH ||
+  if (file_format_id != TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH ||
       format_id >= FILE_FORMAT_NAME_N) {
 
     /* Either it has never been tagged, or garbage in it.
@@ -943,7 +938,7 @@ bool trx_sys_read_file_format_id(const char *pathname, ulint *format_id) {
   auto page = static_cast<page_t *>(ut_align(buf, UNIV_PAGE_SIZE));
 
   const byte *ptr;
-  dulint file_format_id;
+  uint64_t file_format_id;
 
   *format_id = ULINT_UNDEFINED;
 
@@ -990,9 +985,9 @@ bool trx_sys_read_file_format_id(const char *pathname, ulint *format_id) {
   ptr = page + TRX_SYS_FILE_FORMAT_TAG;
   file_format_id = mach_read_from_8(ptr);
 
-  *format_id = file_format_id.low - TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW;
+  *format_id = file_format_id - TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW;
 
-  if (file_format_id.high != TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH ||
+  if (file_format_id != TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH ||
       *format_id >= FILE_FORMAT_NAME_N) {
 
     /* Either it has never been tagged, or garbage in it. */

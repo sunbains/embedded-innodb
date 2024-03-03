@@ -274,13 +274,13 @@ ib_open_table_by_id(ib_id_t tid, /*!< in: table id to lookup */
                     bool locked) /*!< in: true if own dict mutex */
 {
   dict_table_t *table;
-  dulint table_id;
+  uint64_t table_id;
 
   UT_DBG_ENTER_FUNC;
 
-  /* We only return the lower 32 bits of the dulint. */
+  /* We only return the lower 32 bits of the uint64_t. */
   ut_a(tid < 0xFFFFFFFFULL);
-  table_id = ut_dulint_create(0, (ulint)tid);
+  table_id = tid;
 
   if (!locked) {
     dict_mutex_enter();
@@ -2022,7 +2022,7 @@ ib_table_get_id_low(const char *table_name, /*!< in: table to find */
   table = ib_lookup_table_by_name(table_name);
 
   if (table != nullptr) {
-    *table_id = ut_conv_dulint_to_longlong(table->id);
+    *table_id = table->id;
 
     err = DB_SUCCESS;
   }
@@ -2130,7 +2130,7 @@ ib_err_t ib_table_create(ib_trx_t ib_trx, /*!< in/out: transaction */
   the data dictionary is in. */
 
   if (err == DB_SUCCESS) {
-    *id = ut_dulint_get_low(table->id);
+    *id = table->id;
   }
 
   if (table != nullptr) {
@@ -2331,12 +2331,12 @@ static ib_err_t ib_create_secondary_index(
   if (dict_index != nullptr && err == DB_SUCCESS) {
     /* We only support 32 bit table and index ids. Because
     we need to pack the table id into the index id. */
-    ut_a(ut_dulint_get_high(table->id) == 0);
-    ut_a(ut_dulint_get_high(dict_index->id) == 0);
+    ut_a(table->id == 0);
+    ut_a(dict_index->id == 0);
 
-    *index_id = ut_dulint_get_low(table->id);
+    *index_id = table->id;
     *index_id <<= 32;
-    *index_id |= ut_dulint_get_low(dict_index->id);
+    *index_id |= dict_index->id;
 
     trx_commit(ddl_trx);
   } else if (ddl_trx != nullptr) {
@@ -2410,11 +2410,10 @@ ib_err_t ib_index_drop(ib_trx_t ib_trx, ib_id_t index_id) {
     return DB_TABLE_NOT_FOUND;
   }
 
-  /* We use only the lower 32 bits of the dulint. */
+  /* We use only the lower 32 bits of the uint64_t. */
   index_id &= 0xFFFFFFFFULL;
 
-  dict_index =
-      dict_index_get_on_id_low(table, ut_dulint_create(0, (ulint)index_id));
+  dict_index = dict_index_get_on_id_low(table, index_id);
 
   if (dict_index != nullptr) {
     err = ddl_drop_index(table, dict_index, (trx_t *)ib_trx);
@@ -2437,7 +2436,7 @@ static ib_err_t ib_create_cursor(ib_crsr_t *ib_crsr,  /*!< out: InnoDB cursor */
   mem_heap_t *heap;
   ib_cursor_t *cursor;
   ib_err_t err = DB_SUCCESS;
-  dulint id = ut_dulint_create(0, (ulint)index_id);
+  uint64_t id = index_id;
 
   IB_CHECK_PANIC();
 
@@ -2557,7 +2556,7 @@ ib_err_t ib_cursor_open_index_using_id(
     return DB_TABLE_NOT_FOUND;
   }
 
-  /* We only return the lower 32 bits of the dulint. */
+  /* We only return the lower 32 bits of the uint64_t. */
   err = ib_create_cursor(ib_crsr, table, index_id & 0xFFFFFFFFULL,
                          (trx_t *)ib_trx);
 
@@ -2612,7 +2611,7 @@ ib_err_t ib_cursor_open_index_using_name(ib_crsr_t ib_open_crsr,
   /* Traverse the user defined indexes. */
   while (dict_index != nullptr) {
     if (strcmp(dict_index->name, index_name) == 0) {
-      index_id = ut_conv_dulint_to_longlong(dict_index->id);
+      index_id = dict_index->id;
     }
     dict_index = UT_LIST_GET_NEXT(indexes, dict_index);
   }
@@ -4421,7 +4420,7 @@ ib_err_t ib_cursor_truncate(ib_crsr_t *ib_crsr, ib_id_t *table_id) {
     err = ddl_truncate_table(table, trx);
 
     if (err == DB_SUCCESS) {
-      *table_id = ut_conv_dulint_to_longlong(table->id);
+      *table_id = table->id;
     }
   }
 
@@ -4528,12 +4527,12 @@ ib_err_t ib_index_get_id(const char *table_name, const char *index_name,
     if (dict_index != nullptr) {
       /* We only support 32 bit table and index ids. Because
       we need to pack the table id into the index id. */
-      ut_a(ut_dulint_get_high(table->id) == 0);
-      ut_a(ut_dulint_get_high(dict_index->id) == 0);
+      ut_a(table->id == 0);
+      ut_a(dict_index->id == 0);
 
-      *index_id = ut_dulint_get_low(table->id);
+      *index_id = table->id;
       *index_id <<= 32;
-      *index_id |= ut_dulint_get_low(dict_index->id);
+      *index_id |= dict_index->id;
 
       err = DB_SUCCESS;
     }

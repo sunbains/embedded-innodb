@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ Simple SQL optimizer
 Created 12/21/1997 Heikki Tuuri
 *******************************************************/
 
-#ifndef pars0opt_h
-#define pars0opt_h
+#pragma once
 
 #include "innodb0types.h"
 
@@ -35,15 +34,14 @@ Created 12/21/1997 Heikki Tuuri
 /** Optimizes a select. Decides which indexes to tables to use. The tables
 are accessed in the order that they were written to the FROM part in the
 select statement. */
-
 void opt_search_plan(sel_node_t *sel_node); /*!< in: parsed select node */
+
 /** Looks for occurrences of the columns of the table in the query subgraph and
 adds them to the list of columns if an occurrence of the same column does not
 already exist in the list. If the column is already in the list, puts a value
 indirection to point to the occurrence in the column list, except if the
 column occurrence we are looking at is in the column list, in which case
 nothing is done. */
-
 void opt_find_all_cols(
     bool copy_val,             /*!< in: if true, new found columns are
                                 added as columns to copy */
@@ -52,12 +50,6 @@ void opt_find_all_cols(
                                to add new found columns */
     plan_t *plan,              /*!< in: plan or NULL */
     que_node_t *exp);          /*!< in: expression or condition */
+
 /** Prints info of a query plan. */
-
 void opt_print_query_plan(sel_node_t *sel_node); /*!< in: select node */
-
-#ifndef UNIV_NONINL
-#include "pars0opt.ic"
-#endif
-
-#endif

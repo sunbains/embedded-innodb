@@ -170,7 +170,7 @@ read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id,
 
   n = old_view->n_trx_ids;
 
-  if (!ut_dulint_is_zero(old_view->creator_trx_id)) {
+  if (old_view->creator_trx_id > 0) {
     n++;
   } else {
     needs_insert = false;
@@ -185,8 +185,7 @@ read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id,
   while (i < n) {
     if (needs_insert &&
         (i >= old_view->n_trx_ids ||
-         ut_dulint_cmp(old_view->creator_trx_id,
-                       read_view_get_nth_trx_id(old_view, i)) > 0)) {
+         old_view->creator_trx_id > read_view_get_nth_trx_id(old_view, i))) {
 
       read_view_set_nth_trx_id(view_copy, i, old_view->creator_trx_id);
       needs_insert = false;
@@ -226,7 +225,7 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
 
   view->creator_trx_id = cr_trx_id;
   view->type = VIEW_NORMAL;
-  view->undo_no = ut_dulint_zero;
+  view->undo_no = 0;
 
   /* No future transactions should be visible in the view */
 
@@ -240,7 +239,7 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
 
   while (trx) {
     ut_ad(trx->magic_n == TRX_MAGIC_N);
-    if (ut_dulint_cmp(trx->id, cr_trx_id) != 0 &&
+    if (trx->id != cr_trx_id &&
         (trx->conc_state == TRX_ACTIVE || trx->conc_state == TRX_PREPARED)) {
 
       read_view_set_nth_trx_id(view, n, trx->id);
@@ -250,10 +249,9 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
       /* NOTE that a transaction whose trx number is <
       trx_sys->max_trx_id can still be active, if it is
       in the middle of its commit! Note that when a
-      transaction starts, we initialize trx->no to
-      ut_dulint_max. */
+      transaction starts, we initialize trx->no to LSN_MAX. */
 
-      if (ut_dulint_cmp(view->low_limit_no, trx->no) > 0) {
+      if (view->low_limit_no > trx->no) {
 
         view->low_limit_no = trx->no;
       }
@@ -303,15 +301,15 @@ void read_view_print(const read_view_t *view) {
 
   if (view->type == VIEW_HIGH_GRANULARITY) {
     ib_logger(ib_stream, "High-granularity read view undo_n:o %lu %lu\n",
-              (ulong)ut_dulint_get_high(view->undo_no),
-              (ulong)ut_dulint_get_low(view->undo_no));
+              (ulong)view->undo_no,
+              (ulong)view->undo_no);
   } else {
     ib_logger(ib_stream, "Normal read view\n");
   }
 
   ib_logger(ib_stream, "Read view low limit trx n:o %lu %lu\n",
-            (ulong)ut_dulint_get_high(view->low_limit_no),
-            (ulong)ut_dulint_get_low(view->low_limit_no));
+            (ulong)view->low_limit_no,
+            (ulong)view->low_limit_no);
 
   ib_logger(ib_stream, "Read view up limit trx id %lu\n",
             TRX_ID_PREP_PRINTF(view->up_limit_id));
@@ -383,9 +381,9 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
       trx_sys->max_trx_id can still be active, if it is
       in the middle of its commit! Note that when a
       transaction starts, we initialize trx->no to
-      ut_dulint_max. */
+      LSN_MAX. */
 
-      if (ut_dulint_cmp(view->low_limit_no, trx->no) > 0) {
+      if (view->low_limit_no > trx->no) {
 
         view->low_limit_no = trx->no;
       }

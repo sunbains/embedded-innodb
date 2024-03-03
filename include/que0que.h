@@ -293,9 +293,9 @@ struct que_fork_struct {
   bool cur_on_row;           /*!< true if cursor is on a row, i.e.,
                               it is not before the first row or
                               after the last row */
-  dulint n_inserts;          /*!< number of rows inserted */
-  dulint n_updates;          /*!< number of rows updated */
-  dulint n_deletes;          /*!< number of rows deleted */
+  uint64_t n_inserts;          /*!< number of rows inserted */
+  uint64_t n_updates;          /*!< number of rows updated */
+  uint64_t n_deletes;          /*!< number of rows deleted */
   sel_node_t *last_sel_node; /*!< last executed select node, or NULL
                              if none */
   UT_LIST_NODE_T(que_fork_t)

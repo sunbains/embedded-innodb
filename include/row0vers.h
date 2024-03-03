@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ Row versions
 Created 2/6/1997 Heikki Tuuri
 *******************************************************/
 
-#ifndef row0vers_h
-#define row0vers_h
+#pragma once
 
 #include "data0data.h"
 #include "dict0types.h"
@@ -36,28 +35,27 @@ Created 2/6/1997 Heikki Tuuri
 /** Finds out if an active transaction has inserted or modified a secondary
 index record. NOTE: the kernel mutex is temporarily released in this
 function!
-@return NULL if committed, else the active transaction */
-
+@return nullptr if committed, else the active transaction */
 trx_t *row_vers_impl_x_locked_off_kernel(
     const rec_t *rec,      /*!< in: record in a secondary index */
     dict_index_t *index,   /*!< in: the secondary index */
     const ulint *offsets); /*!< in: rec_get_offsets(rec, index) */
+
 /** Finds out if we must preserve a delete marked earlier version of a clustered
 index record, because it is >= the purge view.
 @return	true if earlier version should be preserved */
-
 bool row_vers_must_preserve_del_marked(
     trx_id_t trx_id, /*!< in: transaction id in the version */
     mtr_t *mtr);     /*!< in: mtr holding the latch on the
                      clustered index record; it will also
                      hold the latch on purge_view */
+
 /** Finds out if a version of the record, where the version >= the current
 purge view, should have ientry as its secondary index entry. We check
 if there is any not delete marked version of the record where the trx
 id >= purge view, and the secondary index entry == ientry; exactly in
 this case we return true.
 @return	true if earlier version should have */
-
 bool row_vers_old_has_index_entry(
     bool also_curr,          /*!< in: true if also rec is included in the
                             versions to search; otherwise only versions
@@ -68,11 +66,11 @@ bool row_vers_old_has_index_entry(
                              also hold the latch on purge_view */
     dict_index_t *index,     /*!< in: the secondary index */
     const dtuple_t *ientry); /*!< in: the secondary index entry */
+
 /** Constructs the version of a clustered index record which a consistent
 read should see. We assume that the trx id stored in rec is such that
 the consistent read should not see rec in its present version.
 @return	DB_SUCCESS or DB_MISSING_HISTORY */
-
 db_err row_vers_build_for_consistent_read(
     const rec_t *rec,         /*!< in: record in a clustered index; the
                               caller must have a latch on the page; this
@@ -90,14 +88,13 @@ db_err row_vers_build_for_consistent_read(
                               *old_vers is allocated; memory for possible
                               intermediate versions is allocated and freed
                               locally within the function */
-    rec_t **old_vers);        /*!< out, own: old version, or NULL if the
+    rec_t **old_vers);        /*!< out, own: old version, or nullptr if the
                             record does not exist in the view, that is,
                             it was freshly inserted afterwards */
 
 /** Constructs the last committed version of a clustered index record,
 which should be seen by a semi-consistent read.
 @return	DB_SUCCESS or DB_MISSING_HISTORY */
-
 ulint row_vers_build_for_semi_consistent_read(
     const rec_t *rec,         /*!< in: record in a clustered index; the
                               caller must have a latch on the page; this
@@ -113,12 +110,7 @@ ulint row_vers_build_for_semi_consistent_read(
                               *old_vers is allocated; memory for possible
                               intermediate versions is allocated and freed
                               locally within the function */
-    const rec_t **old_vers);  /*!< out: rec, old version, or NULL if the
-                            record does not exist in the view, that is,
+    const rec_t **old_vers);  /*!< out: rec, old version, or nullptr if the
+                              record does not exist in the view, that is,
                             it was freshly inserted afterwards */
 
-#ifndef UNIV_NONINL
-#include "row0vers.ic"
-#endif
-
-#endif

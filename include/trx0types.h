@@ -29,10 +29,10 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "ut0byte.h"
 
 /** prepare trx_t::id for being printed via printf(3) */
-#define TRX_ID_PREP_PRINTF(id) (uint64_t) ut_conv_dulint_to_longlong(id)
+#define TRX_ID_PREP_PRINTF(id) id
 
 /** printf(3) format used for printing TRX_ID_PRINTF_PREP() */
-#define TRX_ID_FMT "%llX"
+#define TRX_ID_FMT "%lX"
 
 /** maximum length that a formatted trx_t::id could take, not including
 the terminating NUL character. */
@@ -82,11 +82,11 @@ enum trx_rb_ctx {
 };
 
 /** Transaction identifier (DB_TRX_ID, DATA_TRX_ID) */
-typedef dulint trx_id_t;
+typedef uint64_t trx_id_t;
 /** Rollback pointer (DB_ROLL_PTR, DATA_ROLL_PTR) */
-typedef dulint roll_ptr_t;
+typedef uint64_t roll_ptr_t;
 /** Undo number */
-typedef dulint undo_no_t;
+typedef uint64_t undo_no_t;
 
 /** Transaction savepoint */
 typedef struct trx_savept_struct trx_savept_t;

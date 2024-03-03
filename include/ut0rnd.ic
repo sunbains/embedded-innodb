@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -133,11 +133,11 @@ inline ulint ut_fold_ulint_pair(ulint n1, /*!< in: ulint */
       n2);
 }
 
-/** Folds a dulint.
+/** Folds a uint64_t integer.
 @return	folded value */
-inline ulint ut_fold_dulint(dulint d) /*!< in: dulint */
+inline ulint ut_uint64_fold(uint64_t d) /*!< in: uint64_t */
 {
-  return (ut_fold_ulint_pair(ut_dulint_get_low(d), ut_dulint_get_high(d)));
+  return ut_fold_ulint_pair(ulint(d) & UINT32_MASK, ulint(d >> 32));
 }
 
 /** Folds a character string ending in the null character.

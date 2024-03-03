@@ -83,8 +83,8 @@ trx_t *trx_create(sess_t *sess) {
 
   trx->isolation_level = TRX_ISO_REPEATABLE_READ;
 
-  trx->id = ut_dulint_zero;
-  trx->no = ut_dulint_max;
+  trx->id = 0;
+  trx->no = LSN_MAX;
 
 #ifdef WITH_XOPEN
   trx->support_xa = false;
@@ -96,7 +96,7 @@ trx_t *trx_create(sess_t *sess) {
   trx->check_unique_secondary = true;
 
   trx->dict_operation = TRX_DICT_OP_NONE;
-  trx->table_id = ut_dulint_zero;
+  trx->table_id = 0;
 
   trx->client_thd = nullptr;
   trx->client_query_str = nullptr;
@@ -109,8 +109,8 @@ trx_t *trx_create(sess_t *sess) {
 
   trx->rseg = nullptr;
 
-  trx->undo_no = ut_dulint_zero;
-  trx->last_sql_stat_start.least_undo_no = ut_dulint_zero;
+  trx->undo_no = 0;
+  trx->last_sql_stat_start.least_undo_no = 0;
   trx->insert_undo = nullptr;
   trx->update_undo = nullptr;
   trx->undo_no_arr = nullptr;
@@ -279,16 +279,14 @@ start. This function is used at the database startup to insert incomplete
 transactions to the list. */
 static void trx_list_insert_ordered(trx_t *trx) /*!< in: trx handle */
 {
-  trx_t *trx2;
-
   ut_ad(mutex_own(&kernel_mutex));
 
-  trx2 = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  auto trx2 = UT_LIST_GET_FIRST(trx_sys->trx_list);
 
   while (trx2 != nullptr) {
-    if (ut_dulint_cmp(trx->id, trx2->id) >= 0) {
+    if (trx->id >= trx2->id) {
 
-      ut_ad(ut_dulint_cmp(trx->id, trx2->id) == 1);
+      ut_ad(trx->id + 1 == trx2->id);
       break;
     }
     trx2 = UT_LIST_GET_NEXT(trx_list, trx2);
@@ -374,10 +372,9 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
       } else {
         trx->conc_state = TRX_ACTIVE;
 
-        /* A running transaction always has the number
-        field inited to ut_dulint_max */
+        /* A running transaction always has the number field inited to LSN_MAX */
 
-        trx->no = ut_dulint_max;
+        trx->no = LSN_MAX;
       }
 
       if (undo->dict_operation) {
@@ -386,7 +383,7 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
       }
 
       if (!undo->empty) {
-        trx->undo_no = ut_dulint_add(undo->top_undo_no, 1);
+        trx->undo_no = undo->top_undo_no + 1;
       }
 
       trx_list_insert_ordered(trx);
@@ -443,11 +440,9 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
         } else {
           trx->conc_state = TRX_ACTIVE;
 
-          /* A running transaction always has
-          the number field inited to
-          ut_dulint_max */
+          /* A running transaction always has the number field inited to LSN_MAX */
 
-          trx->no = ut_dulint_max;
+          trx->no = LSN_MAX;
         }
 
         trx->rseg = rseg;
@@ -461,10 +456,9 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 
       trx->update_undo = undo;
 
-      if ((!undo->empty) &&
-          (ut_dulint_cmp(undo->top_undo_no, trx->undo_no) >= 0)) {
+      if (!undo->empty && undo->top_undo_no >= trx->undo_no) {
 
-        trx->undo_no = ut_dulint_add(undo->top_undo_no, 1);
+        trx->undo_no = undo->top_undo_no + 1;
       }
 
       undo = UT_LIST_GET_NEXT(undo_list, undo);
@@ -519,7 +513,7 @@ bool trx_start_low(
   ut_ad(trx->magic_n == TRX_MAGIC_N);
 
   if (trx->is_purge) {
-    trx->id = ut_dulint_zero;
+    trx->id = 0;
     trx->conc_state = TRX_ACTIVE;
     trx->start_time = time(nullptr);
 
@@ -537,10 +531,9 @@ bool trx_start_low(
 
   trx->id = trx_sys_get_new_trx_id();
 
-  /* The initial value for trx->no: ut_dulint_max is used in
-  read_view_open_now: */
+  /* The initial value for trx->no: LSN_MAX is used in read_view_open_now: */
 
-  trx->no = ut_dulint_max;
+  trx->no = LSN_MAX;
 
   trx->rseg = rseg;
 
@@ -778,8 +771,8 @@ void trx_commit_off_kernel(trx_t *trx) {
 
   trx->conc_state = TRX_NOT_STARTED;
   trx->rseg = nullptr;
-  trx->undo_no = ut_dulint_zero;
-  trx->last_sql_stat_start.least_undo_no = ut_dulint_zero;
+  trx->undo_no = 0;
+  trx->last_sql_stat_start.least_undo_no = 0;
   trx->client_query_str = nullptr;
 
   ut_ad(UT_LIST_GET_LEN(trx->wait_thrs) == 0);
@@ -796,8 +789,8 @@ void trx_cleanup_at_db_startup(trx_t *trx) {
 
   trx->conc_state = TRX_NOT_STARTED;
   trx->rseg = nullptr;
-  trx->undo_no = ut_dulint_zero;
-  trx->last_sql_stat_start.least_undo_no = ut_dulint_zero;
+  trx->undo_no = 0;
+  trx->last_sql_stat_start.least_undo_no = 0;
 
   UT_LIST_REMOVE(trx_list, trx_sys->trx_list, trx);
 }
@@ -1317,7 +1310,7 @@ void trx_mark_sql_stat_end(trx_t *trx) /*!< in: trx handle */
   ut_a(trx);
 
   if (trx->conc_state == TRX_NOT_STARTED) {
-    trx->undo_no = ut_dulint_zero;
+    trx->undo_no = 0;
   }
 
   trx->last_sql_stat_start.least_undo_no = trx->undo_no;
@@ -1405,10 +1398,10 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
               (ulong)lock_number_of_rows_locked(trx));
   }
 
-  if (!ut_dulint_is_zero(trx->undo_no)) {
+  if (trx->undo_no > 0) {
     newline = true;
     ib_logger(ib_stream, ", undo log entries %lu",
-              (ulong)ut_dulint_get_low(trx->undo_no));
+              (ulong)trx->undo_no);
   }
 
   if (newline) {
@@ -1419,7 +1412,7 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
 int trx_weight_cmp(const trx_t *a, const trx_t *b) {
   /* We compare the number of altered/locked rows. */
 
-  return ut_dulint_cmp(TRX_WEIGHT(a), TRX_WEIGHT(b));
+  return TRX_WEIGHT(a) - TRX_WEIGHT(b);
 }
 
 void trx_prepare_off_kernel(trx_t *trx) {
@@ -1574,7 +1567,7 @@ int trx_recover(XID *xid_list, ulint len) {
       ib_logger(ib_stream,
                 "  InnoDB: Transaction contains changes"
                 " to %lu rows\n",
-                (ulong)ut_conv_dulint_to_longlong(trx->undo_no));
+                (ulong)trx->undo_no);
 
       count++;
 

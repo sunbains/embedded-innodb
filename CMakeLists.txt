@@ -18,6 +18,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.5 FATAL_ERROR)
 
 PROJECT (EMBEDDED_INNODB)
 
+SET(CMAKE_BUILD_TYPE debug)
 SET(CMAKE_CXX_STANDARD 23)
 SET(CMAKE_CXX_STANDARD_REQUIRED True)
 
@@ -208,13 +209,13 @@ SET(INNODB_SOURCES  btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       row/row0purge.cc row/row0row.cc row/row0prebuilt.cc
       row/row0sel.cc row/row0uins.cc row/row0umod.cc
       row/row0undo.cc row/row0upd.cc row/row0vers.cc
-      srv/srv0que.cc srv/srv0srv.cc srv/srv0start.cc
+      srv/srv0srv.cc srv/srv0start.cc
       sync/sync0arr.cc sync/sync0rw.cc sync/sync0sync.cc
       thr/thr0loc.cc
       trx/trx0purge.cc trx/trx0rec.cc
       trx/trx0roll.cc trx/trx0rseg.cc
       trx/trx0sys.cc trx/trx0trx.cc trx/trx0undo.cc
-      usr/usr0sess.cc ut/ut0byte.cc ut/ut0dbg.cc ut/ut0mem.cc
+      usr/usr0sess.cc ut/ut0dbg.cc ut/ut0mem.cc
       ut/ut0rnd.cc ut/ut0ut.cc ut/ut0vec.cc ut/ut0list.cc ut/ut0rbt.cc
       ddl/ddl0ddl.cc
       api/api0api.cc api/api0misc.cc api/api0ucode.cc

@@ -21,132 +21,67 @@ Utilities for byte operations
 Created 1/20/1994 Heikki Tuuri
 ***********************************************************************/
 
-#ifndef ut0byte_h
-#define ut0byte_h
+#pragma once
 
 #include "innodb0types.h"
 
-/** Pair of ulint integers. */
-typedef struct dulint_struct dulint;
+[[nodiscard]] inline uint64_t ut_uint64_align_down(uint64_t n, ulint align_no) {
+  ut_ad(align_no > 0);
+  ut_ad(ut_is_2pow(align_no));
 
-/** Type definition for a 64-bit unsigned integer, which works also
-in 32-bit machines. NOTE! Access the fields only with the accessor
-functions. This definition appears here only for the compiler to
-know the size of a dulint. */
-struct dulint_struct {
-  ulint high; /*!< most significant 32 bits */
-  ulint low;  /*!< least significant 32 bits */
-};
+  return n & ~((uint64_t)align_no - 1);
+}
 
-/** Zero value for a dulint */
-extern const dulint ut_dulint_zero;
+[[nodiscard]] inline uint64_t ut_uint64_align_up(uint64_t n, ulint align_no) {
+  const uint64_t align_1 = (uint64_t)align_no - 1;
 
-/** Maximum value for a dulint */
-extern const dulint ut_dulint_max;
+  ut_ad(align_no > 0);
+  ut_ad(ut_is_2pow(align_no));
 
-/** Creates a 64-bit dulint out of two ulints.
-@return	created dulint */
-inline dulint ut_dulint_create(ulint high, /*!< in: high-order 32 bits */
-                               ulint low); /*!< in: low-order 32 bits */
-/** Gets the high-order 32 bits of a dulint.
-@return	32 bits in ulint */
-inline ulint ut_dulint_get_high(dulint d); /*!< in: dulint */
-/** Gets the low-order 32 bits of a dulint.
-@return	32 bits in ulint */
-inline ulint ut_dulint_get_low(dulint d); /*!< in: dulint */
-/** Converts a dulint (a struct of 2 ulints) to int64_t, which is a 64-bit
-integer type.
-@return	value in int64_t type */
-inline int64_t ut_conv_dulint_to_longlong(dulint d); /*!< in: dulint */
-/** Tests if a dulint is zero.
-@return	true if zero */
-inline bool ut_dulint_is_zero(dulint a); /*!< in: dulint */
-/** Compares two dulints.
-@return	-1 if a < b, 0 if a == b, 1 if a > b */
-inline int ut_dulint_cmp(dulint a,  /*!< in: dulint */
-                         dulint b); /*!< in: dulint */
-/** Adds a ulint to a dulint.
-@return	sum a + b */
-inline dulint ut_dulint_add(dulint a, /*!< in: dulint */
-                            ulint b); /*!< in: ulint */
-/** Subtracts a ulint from a dulint.
-@return	a - b */
-inline dulint ut_dulint_subtract(dulint a, /*!< in: dulint */
-                                 ulint b); /*!< in: ulint, b <= a */
-/** Rounds a dulint downward to a multiple of a power of 2.
-@return	rounded value */
-inline dulint
-ut_dulint_align_down(dulint n,        /*!< in: number to be rounded */
-                     ulint align_no); /*!< in: align by this number which
-                                      must be a power of 2 */
-/** Rounds a dulint upward to a multiple of a power of 2.
-@return	rounded value */
-inline dulint ut_dulint_align_up(dulint n, /*!< in: number to be rounded */
-                                 ulint align_no); /*!< in: align by this number
-                                                  which must be a power of 2 */
-/** Rounds a dulint downward to a multiple of a power of 2.
-@return	rounded value */
-inline uint64_t
-ut_uint64_align_down(uint64_t n,      /*!< in: number to be rounded */
-                     ulint align_no); /*!< in: align by this number
-                                      which must be a power of 2 */
-/** Rounds uint64_t upward to a multiple of a power of 2.
-@return	rounded value */
-inline uint64_t
-ut_uint64_align_up(uint64_t n,      /*!< in: number to be rounded */
-                   ulint align_no); /*!< in: align by this number
-                                    which must be a power of 2 */
-/** Increments a dulint variable by 1. */
-#define UT_DULINT_INC(D)                                                       \
-  {                                                                            \
-    if ((D).low == 0xFFFFFFFFUL) {                                             \
-      (D).high = (D).high + 1;                                                 \
-      (D).low = 0;                                                             \
-    } else {                                                                   \
-      (D).low = (D).low + 1;                                                   \
-    }                                                                          \
+  return (n + align_1) & ~align_1;
+}
+
+[[nodiscard]] inline void *ut_align(const void *ptr, ulint align_no) {
+  ut_ad(align_no > 0);
+  ut_ad(((align_no - 1) & align_no) == 0);
+  ut_ad(ptr);
+
+  ut_ad(sizeof(void *) == sizeof(ulint));
+
+  return (void *)((((ulint)ptr) + align_no - 1) & ~(align_no - 1));
+}
+
+[[nodiscard]] inline void *ut_align_down(const void *ptr, ulint align_no) {
+  ut_ad(align_no > 0);
+  ut_ad(((align_no - 1) & align_no) == 0);
+  ut_ad(ptr);
+
+  ut_ad(sizeof(void *) == sizeof(ulint));
+
+  return (void *)((((ulint)ptr)) & ~(align_no - 1));
+}
+
+[[nodiscard]] inline ulint ut_align_offset(const void *ptr, ulint align_no) {
+  ut_ad(align_no > 0);
+  ut_ad(((align_no - 1) & align_no) == 0);
+  ut_ad(ptr);
+
+  ut_ad(sizeof(void *) == sizeof(ulint));
+
+  return (ulint(ptr)) & (align_no - 1);
+}
+
+[[nodiscard]] inline bool ut_bit_get_nth(ulint a, ulint n) {
+  ut_ad(n < 8 * sizeof(ulint));
+  return (1 & (a >> n)) != 0;
+}
+
+[[nodiscard]] inline ulint ut_bit_set_nth(ulint a, ulint n, bool val) {
+  ut_ad(n < 8 * sizeof(ulint));
+
+  if (val) {
+    return (ulint(1) << n) | a;
+  } else {
+    return ~(ulint(1) << n) & a;
   }
-/** Tests if two dulints are equal. */
-#define UT_DULINT_EQ(D1, D2)                                                   \
-  (((D1).low == (D2).low) && ((D1).high == (D2).high))
-#ifdef notdefined
-/** Sort function for dulint arrays. */
-
-void ut_dulint_sort(
-    dulint *arr,     /*!< in/out: array to be sorted */
-    dulint *aux_arr, /*!< in/out: auxiliary array (same size as arr) */
-    ulint low,       /*!< in: low bound of sort interval, inclusive */
-    ulint high);     /*!< in: high bound of sort interval, noninclusive */
-#endif               /* notdefined */
-
-/** The following function rounds up a pointer to the nearest aligned address.
-@return	aligned pointer */
-inline void *ut_align(const void *ptr, /*!< in: pointer */
-                      ulint align_no); /*!< in: align by this number */
-/** The following function rounds down a pointer to the nearest
-aligned address.
-@return	aligned pointer */
-inline void *ut_align_down(const void *ptr, /*!< in: pointer */
-                           ulint align_no)  /*!< in: align by this number */
-    __attribute__((const));
-/** The following function computes the offset of a pointer from the nearest
-aligned address.
-@return	distance from aligned pointer */
-inline ulint ut_align_offset(const void *ptr, /*!< in: pointer */
-                             ulint align_no)  /*!< in: align by this number */
-    __attribute__((const));
-/** Gets the nth bit of a ulint.
-@return	true if nth bit is 1; 0th bit is defined to be the least significant */
-inline bool ut_bit_get_nth(ulint a,  /*!< in: ulint */
-                           ulint n); /*!< in: nth bit requested */
-/** Sets the nth bit of a ulint.
-@return	the ulint with the bit set as requested */
-inline ulint ut_bit_set_nth(ulint a,   /*!< in: ulint */
-                            ulint n,   /*!< in: nth bit requested */
-                            bool val); /*!< in: value for the bit to set */
-
-#ifndef UNIV_NONINL
-#include "ut0byte.ic"
-#endif
-
-#endif
+}

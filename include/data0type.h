@@ -127,7 +127,7 @@ const ulint DATA_CLIENT_TYPE_MASK = 255;
 NOTE: the values must run from 0 up in the order given! All codes must
 be less than 256 */
 
-/* Row id: a dulint */
+/* Row id: a uint64_t */
 const ulint DATA_ROW_ID = 0;
 
 /** Stored length for row id */

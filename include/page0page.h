@@ -73,7 +73,7 @@ constexpr ulint PAGE_N_DIRECTION = 14;
 constexpr ulint PAGE_N_RECS = 16;
 
 /* highest id of a trx which may have modified
-a record on the page; a dulint; defined only
+a record on the page; a uint64_t; defined only
 in secondary indexes and in the insert buffer
 tree; NOTE: this may be modified only
 when the thread has an x-latch to the page,
@@ -703,11 +703,10 @@ inline void page_update_max_trx_id(buf_block_t *block, /*!< in/out: page */
   true for the dummy indexes constructed during redo log
   application).  In that case, PAGE_MAX_TRX_ID is unused,
   and trx_id is usually zero. */
-  ut_ad(!ut_dulint_is_zero(trx_id) || recv_recovery_is_on());
+  ut_ad(trx_id > 0 || recv_recovery_is_on());
   ut_ad(page_is_leaf(buf_block_get_frame(block)));
 
-  if (ut_dulint_cmp(page_get_max_trx_id(buf_block_get_frame(block)), trx_id) <
-      0) {
+  if (page_get_max_trx_id(buf_block_get_frame(block)) < trx_id) {
 
     page_set_max_trx_id(block, trx_id, mtr);
   }

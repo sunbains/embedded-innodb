@@ -205,7 +205,7 @@ inline trx_t *trx_get_on_id(trx_id_t trx_id) /*!< in: trx id to search for */
   trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
 
   while (trx != NULL) {
-    if (0 == ut_dulint_cmp(trx_id, trx->id)) {
+    if (trx_id == trx->id) {
 
       return (trx);
     }
@@ -244,12 +244,12 @@ inline bool trx_is_active(trx_id_t trx_id) /*!< in: trx id of the transaction */
 
   ut_ad(mutex_own(&(kernel_mutex)));
 
-  if (ut_dulint_cmp(trx_id, trx_list_get_min_trx_id()) < 0) {
+  if (trx_id < trx_list_get_min_trx_id()) {
 
     return (false);
   }
 
-  if (ut_dulint_cmp(trx_id, trx_sys->max_trx_id) >= 0) {
+  if (trx_id >= trx_sys->max_trx_id) {
 
     /* There must be corruption: we return true because this
     function is only called by lock_clust_rec_some_has_impl()
@@ -260,8 +260,7 @@ inline bool trx_is_active(trx_id_t trx_id) /*!< in: trx id of the transaction */
   }
 
   trx = trx_get_on_id(trx_id);
-  if (trx &&
-      (trx->conc_state == TRX_ACTIVE || trx->conc_state == TRX_PREPARED)) {
+  if (trx && (trx->conc_state == TRX_ACTIVE || trx->conc_state == TRX_PREPARED)) {
 
     return (true);
   }
@@ -283,7 +282,7 @@ inline trx_id_t trx_sys_get_new_trx_id(void) {
   Thus trx id values will not overlap when the database is
   repeatedly started! */
 
-  if (ut_dulint_get_low(trx_sys->max_trx_id) % TRX_SYS_TRX_ID_WRITE_MARGIN ==
+  if (trx_sys->max_trx_id % TRX_SYS_TRX_ID_WRITE_MARGIN ==
       0) {
 
     trx_sys_flush_max_trx_id();
@@ -291,9 +290,9 @@ inline trx_id_t trx_sys_get_new_trx_id(void) {
 
   id = trx_sys->max_trx_id;
 
-  UT_DULINT_INC(trx_sys->max_trx_id);
+  ++trx_sys->max_trx_id;
 
-  return (id);
+  return id;
 }
 
 /** Allocates a new transaction number.

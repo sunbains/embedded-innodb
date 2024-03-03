@@ -449,7 +449,7 @@ static void dict_load_columns(
 
     field = rec_get_nth_field_old(rec, 0, &len);
     ut_ad(len == 8);
-    ut_a(ut_dulint_cmp(table->id, mach_read_from_8(field)) == 0);
+    ut_a(table->id == mach_read_from_8(field));
 
     field = rec_get_nth_field_old(rec, 1, &len);
     ut_ad(len == 4);
@@ -614,19 +614,13 @@ static ulint dict_load_indexes(
   ulint page_no;
   ulint n_fields;
   byte *buf;
-  bool is_sys_table;
-  dulint id;
+  uint64_t id;
   mtr_t mtr;
   ulint error = DB_SUCCESS;
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
-  if ((ut_dulint_get_high(table->id) == 0) &&
-      (ut_dulint_get_low(table->id) < DICT_HDR_FIRST_ID)) {
-    is_sys_table = true;
-  } else {
-    is_sys_table = false;
-  }
+  auto is_sys_table = table->id < DICT_HDR_FIRST_ID;
 
   mtr_start(&mtr);
 
@@ -979,7 +973,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
 
 dict_table_t *
 dict_load_table_on_id(ib_recovery_t recovery, /*!< in: recovery flag */
-                      dulint table_id)        /*!< in: table id */
+                      uint64_t table_id)        /*!< in: table id */
 {
   byte id_buf[8];
   btr_pcur_t pcur;
@@ -1041,7 +1035,7 @@ dict_load_table_on_id(ib_recovery_t recovery, /*!< in: recovery flag */
   ut_ad(len == 8);
 
   /* Check if the table id in record is the one searched for */
-  if (ut_dulint_cmp(table_id, mach_read_from_8(field)) != 0) {
+  if (table_id != mach_read_from_8(field)) {
 
     btr_pcur_close(&pcur);
     mtr_commit(&mtr);

@@ -1,4 +1,4 @@
-/***
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ The database buffer pool LRU replacement algorithm
 Created 11/5/1995 Heikki Tuuri
 *******************************************************/
 
-#ifndef buf0lru_h
-#define buf0lru_h
+#pragma once
 
 #include "innodb0types.h"
 
@@ -62,7 +61,9 @@ These are low-level functions
 #########################################################################*/
 
 /** Minimum LRU list length for which the LRU_old pointer is defined */
-#define BUF_LRU_OLD_MIN_LEN 512 /* 8 megabytes of 16k pages */
+
+/* 8 megabytes of 16k pages */
+constexpr ulint BUF_LRU_OLD_MIN_LEN = 512;
 
 /** Maximum LRU list search length in buf_flush_LRU_recommendation() */
 #define BUF_LRU_FREE_SEARCH_LEN (5 + 2 * BUF_READ_AHEAD_AREA)
@@ -166,29 +167,30 @@ void buf_LRU_print(void);
 /** Reserve this much/BUF_LRU_OLD_RATIO_DIV of the buffer pool for
 "old" blocks.  Protected by buf_pool_mutex. */
 extern ulint buf_LRU_old_ratio;
+
 /** The denominator of buf_LRU_old_ratio. */
-#define BUF_LRU_OLD_RATIO_DIV 1024
+constexpr ulint BUF_LRU_OLD_RATIO_DIV = 1024;
+
 /** Maximum value of buf_LRU_old_ratio.
 @see buf_LRU_old_adjust_len
 @see buf_LRU_old_ratio_update */
-#define BUF_LRU_OLD_RATIO_MAX BUF_LRU_OLD_RATIO_DIV
+constexpr ulint BUF_LRU_OLD_RATIO_MAX = BUF_LRU_OLD_RATIO_DIV;
+
 /** Minimum value of buf_LRU_old_ratio.
 @see buf_LRU_old_adjust_len
 @see buf_LRU_old_ratio_update
 The minimum must exceed
 (BUF_LRU_OLD_TOLERANCE + 5) * BUF_LRU_OLD_RATIO_DIV / BUF_LRU_OLD_MIN_LEN. */
-#define BUF_LRU_OLD_RATIO_MIN 51
+constexpr ulint BUF_LRU_OLD_RATIO_MIN = 51;
 
-#if BUF_LRU_OLD_RATIO_MIN >= BUF_LRU_OLD_RATIO_MAX
-#error "BUF_LRU_OLD_RATIO_MIN >= BUF_LRU_OLD_RATIO_MAX"
-#endif
-#if BUF_LRU_OLD_RATIO_MAX > BUF_LRU_OLD_RATIO_DIV
-#error "BUF_LRU_OLD_RATIO_MAX > BUF_LRU_OLD_RATIO_DIV"
-#endif
+static_assert(BUF_LRU_OLD_RATIO_MIN < BUF_LRU_OLD_RATIO_MAX, "BUF_LRU_OLD_RATIO_MIN >= BUF_LRU_OLD_RATIO_MAX");
+
+static_assert(BUF_LRU_OLD_RATIO_MAX <= BUF_LRU_OLD_RATIO_DIV, "error BUF_LRU_OLD_RATIO_MAX > BUF_LRU_OLD_RATIO_DIV");
 
 /** Move blocks to "new" LRU list only if the first access was at
 least this many milliseconds ago.  Not protected by any mutex or latch. */
 extern ulint buf_LRU_old_threshold_ms;
+
 /* @} */
 
 /** @brief Statistics for selecting the LRU list for eviction.
@@ -212,11 +214,7 @@ extern buf_LRU_stat_t buf_LRU_stat_cur;
 Updated by buf_LRU_stat_update().  Protected by buf_pool_mutex. */
 extern buf_LRU_stat_t buf_LRU_stat_sum;
 
+// FIXME: Move it to where it's used
 /*** Increments the I/O counter in buf_LRU_stat_cur. */
-#define buf_LRU_stat_inc_io() buf_LRU_stat_cur.io++
+#define buf_LRU_stat_inc_io() (++buf_LRU_stat_cur.io)
 
-#ifndef UNIV_NONINL
-#include "buf0lru.ic"
-#endif
-
-#endif

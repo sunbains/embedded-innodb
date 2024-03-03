@@ -65,9 +65,9 @@ inline bool row_undo_mod_undo_also_prev_vers(undo_node_t *node,
 
   trx = node->trx;
 
-  if (0 != ut_dulint_cmp(node->new_trx_id, trx->id)) {
+  if (node->new_trx_id != trx->id) {
 
-    *undo_no = ut_dulint_zero;
+    *undo_no = 0;
     return false;
   }
 
@@ -75,7 +75,7 @@ inline bool row_undo_mod_undo_also_prev_vers(undo_node_t *node,
 
   *undo_no = trx_undo_rec_get_undo_no(undo_rec);
 
-  return ut_dulint_cmp(trx->roll_limit, *undo_no) <= 0;
+  return trx->roll_limit <= *undo_no;
 }
 
 /** Undoes a modify in a clustered index record.
@@ -641,7 +641,7 @@ static void row_undo_mod_parse_undo_rec(ib_recovery_t recovery,
   dict_index_t *clust_index;
   byte *ptr;
   undo_no_t undo_no;
-  dulint table_id;
+  uint64_t table_id;
   trx_id_t trx_id;
   roll_ptr_t roll_ptr;
   ulint info_bits;

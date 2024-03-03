@@ -199,7 +199,7 @@ trx_rseg_mem_create(ib_recovery_t recovery, /*!< in: recovery flag */
         trx_undo_page_get(rseg->space, node_addr.page, mtr) +
         node_addr.boffset;
 
-    rseg->last_trx_no = mtr_read_dulint(undo_log_hdr + TRX_UNDO_TRX_NO, mtr);
+    rseg->last_trx_no = mtr_read_uint64(undo_log_hdr + TRX_UNDO_TRX_NO, mtr);
     rseg->last_del_marks =
         mtr_read_ulint(undo_log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES, mtr);
   } else {

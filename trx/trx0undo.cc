@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -409,7 +409,7 @@ inline void trx_undo_header_create_log(
 {
   mlog_write_initial_log_record(undo_page, MLOG_UNDO_HDR_CREATE, mtr);
 
-  mlog_catenate_dulint_compressed(mtr, trx_id);
+  mlog_catenate_uint64_compressed(mtr, trx_id);
 }
 
 /** Creates a new undo log header in file. NOTE that this function has its own
@@ -570,7 +570,7 @@ inline void trx_undo_insert_header_reuse_log(
 {
   mlog_write_initial_log_record(undo_page, MLOG_UNDO_HDR_REUSE, mtr);
 
-  mlog_catenate_dulint_compressed(mtr, trx_id);
+  mlog_catenate_uint64_compressed(mtr, trx_id);
 }
 
 /** Parses the redo log entry of an undo log page header create or reuse.
@@ -585,7 +585,7 @@ byte *trx_undo_parse_page_header(
 {
   trx_id_t trx_id;
 
-  ptr = mach_dulint_parse_compressed(ptr, end_ptr, &trx_id);
+  ptr = mach_uint64_parse_compressed(ptr, end_ptr, &trx_id);
 
   if (ptr == nullptr) {
 
@@ -916,9 +916,8 @@ void trx_undo_truncate_end(
         break;
       }
 
-      if (ut_dulint_cmp(trx_undo_rec_get_undo_no(rec), limit) >= 0) {
-        /* Truncate at least this record off, maybe
-        more */
+      if (trx_undo_rec_get_undo_no(rec) >= limit) {
+        /* Truncate at least this record off, maybe more */
         trunc_here = rec;
       } else {
         goto function_exit;
@@ -950,7 +949,7 @@ void trx_undo_truncate_start(trx_rseg_t *rseg, ulint space, ulint hdr_page_no,
 
   ut_ad(mutex_own(&(rseg->mutex)));
 
-  if (ut_dulint_is_zero(limit)) {
+  if (limit == 0) {
 
     return;
   }
@@ -971,7 +970,7 @@ loop:
   undo_page = page_align(rec);
 
   last_rec = trx_undo_page_get_last_rec(undo_page, hdr_page_no, hdr_offset);
-  if (ut_dulint_cmp(trx_undo_rec_get_undo_no(last_rec), limit) >= 0) {
+  if (trx_undo_rec_get_undo_no(last_rec) >= limit) {
 
     mtr_commit(&mtr);
 
@@ -1074,7 +1073,7 @@ static trx_undo_t *trx_undo_mem_create_at_db_start(
 
   undo_header = undo_page + offset;
 
-  trx_id = mtr_read_dulint(undo_header + TRX_UNDO_TRX_ID, mtr);
+  trx_id = mtr_read_uint64(undo_header + TRX_UNDO_TRX_ID, mtr);
 
 #ifdef WITH_XOPEN
   xid_exists =
@@ -1104,7 +1103,7 @@ static trx_undo_t *trx_undo_mem_create_at_db_start(
   undo->dict_operation =
       mtr_read_ulint(undo_header + TRX_UNDO_DICT_TRANS, MLOG_1BYTE, mtr);
 
-  undo->table_id = mtr_read_dulint(undo_header + TRX_UNDO_TABLE_ID, mtr);
+  undo->table_id = mtr_read_uint64(undo_header + TRX_UNDO_TABLE_ID, mtr);
   undo->state = state;
   undo->size = flst_get_len(seg_header + TRX_UNDO_PAGE_LIST, mtr);
 
@@ -1443,7 +1442,7 @@ trx_undo_mark_as_dict_operation(trx_t *trx, /*!< in: dict op transaction */
     ut_error;
   case TRX_DICT_OP_INDEX:
     /* Do not discard the table on recovery. */
-    undo->table_id = ut_dulint_zero;
+    undo->table_id = 0;
     break;
   case TRX_DICT_OP_TABLE:
     undo->table_id = trx->table_id;
@@ -1453,7 +1452,7 @@ trx_undo_mark_as_dict_operation(trx_t *trx, /*!< in: dict op transaction */
   mlog_write_ulint(hdr_page + undo->hdr_offset + TRX_UNDO_DICT_TRANS, true,
                    MLOG_1BYTE, mtr);
 
-  mlog_write_dulint(hdr_page + undo->hdr_offset + TRX_UNDO_TABLE_ID,
+  mlog_write_uint64(hdr_page + undo->hdr_offset + TRX_UNDO_TABLE_ID,
                     undo->table_id, mtr);
 
   undo->dict_operation = true;

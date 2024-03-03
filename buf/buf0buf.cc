@@ -323,7 +323,7 @@ bool buf_page_is_corrupted(const byte *read_buf, ulint) {
     uint64_t current_lsn;
 
     if (log_peek_lsn(&current_lsn) &&
-        current_lsn < mach_read_ull(read_buf + FIL_PAGE_LSN)) {
+        current_lsn < mach_read_from_8(read_buf + FIL_PAGE_LSN)) {
       ut_print_timestamp(ib_stream);
 
       ib_logger(ib_stream,
@@ -338,7 +338,7 @@ bool buf_page_is_corrupted(const byte *read_buf, ulint) {
                 "InnoDB: the InnoDB website for details\n"
                 "InnoDB: for more information.\n",
                 (ulong)mach_read_from_4(read_buf + FIL_PAGE_OFFSET),
-                (long long unsigned int)mach_read_ull(read_buf + FIL_PAGE_LSN),
+                (long long unsigned int)mach_read_from_8(read_buf + FIL_PAGE_LSN),
                 (long long unsigned int)current_lsn);
     }
   }
@@ -432,9 +432,8 @@ void buf_page_print(const byte *read_buf, ulint) {
   case FIL_PAGE_INDEX:
     ib_logger(ib_stream,
               "InnoDB: Page may be an index page where"
-              " index id is %lu %lu\n",
-              (ulong)ut_dulint_get_high(btr_page_get_index_id(read_buf)),
-              (ulong)ut_dulint_get_low(btr_page_get_index_id(read_buf)));
+              " index id is  %lu\n",
+              (uint64_t)btr_page_get_index_id(read_buf));
     index = dict_index_find_on_id_low(btr_page_get_index_id(read_buf));
     if (index) {
       ib_logger(ib_stream, "InnoDB: (");
@@ -1955,7 +1954,7 @@ void buf_print(void) {
   ulint size;
   ulint i;
   ulint j;
-  dulint id;
+  uint64_t id;
   ulint n_found;
   buf_chunk_t *chunk;
   dict_index_t *index;
@@ -1964,7 +1963,7 @@ void buf_print(void) {
 
   size = buf_pool->curr_size;
 
-  auto index_ids = static_cast<dulint *>(mem_alloc(sizeof(dulint) * size));
+  auto index_ids = static_cast<uint64_t *>(mem_alloc(sizeof(uint64_t) * size));
   auto counts = static_cast<ulint *>(mem_alloc(sizeof(ulint) * size));
 
   buf_pool_mutex_enter();
@@ -2012,7 +2011,7 @@ void buf_print(void) {
 
         while (j < n_found) {
 
-          if (ut_dulint_cmp(index_ids[j], id) == 0) {
+          if (index_ids[j] == id) {
             counts[j]++;
 
             break;
@@ -2035,7 +2034,7 @@ void buf_print(void) {
     index = dict_index_get_if_in_cache(index_ids[i]);
 
     ib_logger(ib_stream, "Block count for index %lu in buffer is about %lu",
-              (ulong)ut_dulint_get_low(index_ids[i]), (ulong)counts[i]);
+              (ulong)index_ids[i], (ulong)counts[i]);
 
     if (index) {
       ib_logger(ib_stream, " ");

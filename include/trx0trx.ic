@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -44,7 +44,7 @@ trx_get_error_info(const trx_t *trx) /*!< in: trx object */
 @return	transaction's id */
 inline uint64_t trx_get_id(const trx_t *trx) /*!< in: transaction */
 {
-  return ((uint64_t)ut_conv_dulint_to_longlong(trx->id));
+  return trx->id;
 }
 
 /** Retrieves transaction's que state in a human readable string. The string

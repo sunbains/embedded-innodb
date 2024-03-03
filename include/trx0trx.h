@@ -240,8 +240,7 @@ bool trx_is_interrupted(const trx_t *trx); /*!< in: transaction */
 is estimated as the number of altered rows + the number of locked rows.
 @param t	transaction
 @return		transaction weight */
-#define TRX_WEIGHT(t)                                                          \
-  ut_dulint_add((t)->undo_no, UT_LIST_GET_LEN((t)->trx_locks))
+#define TRX_WEIGHT(t) ((t)->undo_no + UT_LIST_GET_LEN((t)->trx_locks))
 
 /** Compares the "weight" (or size) of two transactions. Transactions that
 have edited non-transactional tables are considered heavier than ones
@@ -389,7 +388,7 @@ struct trx_struct {
                        moved to COMMITTED_IN_MEMORY state */
   uint64_t commit_lsn; /*!< lsn at the time of the commit */
   trx_id_t table_id;   /*!< Table to drop iff dict_operation
-                       is true, or ut_dulint_zero. */
+                       is true, or 0. */
   /*------------------------------*/
   void *client_thd;                /*!< Client thread handle corresponding
                                    to this trx, or NULL */

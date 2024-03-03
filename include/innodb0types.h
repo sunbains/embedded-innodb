@@ -61,6 +61,7 @@ constexpr uint32_t ULINT32_UNDEFINED = std::numeric_limits<uint32_t>::max();
 constexpr ulint ULINT_MAX = ((ulint)(-2));
 constexpr uint64_t IB_UINT64_T_MAX = std::numeric_limits<uint64_t>::max();
 constexpr uint64_t IB_ULONGLONG_MAX = std::numeric_limits<uint64_t>::max();
+constexpr uint32_t UINT32_MASK = std::numeric_limits<uint32_t>::max();
 
 /** The following number as the length of a logical field means that the field
 has the SQL NULL as its value. NOTE that because we assume that the length
@@ -127,6 +128,9 @@ constexpr const char SRV_PATH_SEPARATOR  = '/';
 
 using page_no_t = ulint;
 using space_id_t = ulint;
+using lsn_t = uint64_t;
+
+constexpr auto LSN_MAX = std::numeric_limits<lsn_t>::max();
 
 #include "innodb0valgrind.h"
 #include "ut0dbg.h"

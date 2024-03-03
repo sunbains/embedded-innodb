@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ Purge obsolete records
 Created 3/14/1997 Heikki Tuuri
 *******************************************************/
 
-#ifndef row0purge_h
-#define row0purge_h
+#pragma once
 
 #include "btr0pcur.h"
 #include "btr0types.h"
@@ -35,53 +34,63 @@ Created 3/14/1997 Heikki Tuuri
 
 /** Creates a purge node to a query graph.
 @return	own: purge node */
-
 purge_node_t *row_purge_node_create(
-    que_thr_t *parent, /*!< in: parent node, i.e., a thr node */
-    mem_heap_t *heap); /*!< in: memory heap where created */
+    que_thr_t *parent, /** in: parent node, i.e., a thr node */
+    mem_heap_t *heap); /** in: memory heap where created */
+
 /** Does the purge operation for a single undo log record. This is a high-level
 function used in an SQL execution graph.
-@return	query thread to run next or NULL */
-
-que_thr_t *row_purge_step(que_thr_t *thr); /*!< in: query thread */
+@return	query thread to run next or nullptr */
+que_thr_t *row_purge_step(que_thr_t *thr); /** in: query thread */
 
 /* Purge node structure */
 
 struct purge_node_struct {
-  que_common_t common; /*!< node type: QUE_NODE_PURGE */
+  /** node type: QUE_NODE_PURGE */
+  que_common_t common;
+
   /*----------------------*/
   /* Local storage for this graph node */
-  roll_ptr_t roll_ptr;         /* roll pointer to undo log record */
-  trx_undo_rec_t *undo_rec;    /* undo log record */
-  trx_undo_inf_t *reservation; /* reservation for the undo log record in
-                           the purge array */
-  undo_no_t undo_no;           /* undo number of the record */
-  ulint rec_type;              /* undo log record type: TRX_UNDO_INSERT_REC,
-                              ... */
-  btr_pcur_t pcur;             /*!< persistent cursor used in searching the
-                               clustered index record */
-  bool found_clust;            /* true if the clustered index record
-                            determined by ref was found in the clustered
-                            index, and we were able to position pcur on
-                            it */
-  dict_table_t *table;         /*!< table where purge is done */
-  ulint cmpl_info;             /* compiler analysis info of an update */
-  upd_t *update;               /*!< update vector for a clustered index
-                               record */
-  dtuple_t *ref;               /*!< NULL, or row reference to the next row to
-                               handle */
-  dtuple_t *row;               /*!< NULL, or a copy (also fields copied to
-                               heap) of the indexed fields of the row to
-                               handle */
-  dict_index_t *index;         /*!< NULL, or the next index whose record should
-                               be handled */
-  mem_heap_t *heap;            /*!< memory heap used as auxiliary storage for
-                               row; this must be emptied after a successful
-                               purge of a row */
+
+  /** roll pointer to undo log record */
+  roll_ptr_t roll_ptr;
+
+  /** undo log record */
+  trx_undo_rec_t *undo_rec;
+
+  /** reservation for the undo log record in the purge array */
+  trx_undo_inf_t *reservation;
+
+  /** undo number of the record */
+  undo_no_t undo_no;
+
+  /* undo log record type: TRX_UNDO_INSERT_REC, ... */
+  ulint rec_type;
+
+  /** persistent cursor used in searching the clustered index record */
+  btr_pcur_t pcur;
+
+  /* true if the clustered index record determined by ref was found in the clustered index, and we were able to position pcur on it */
+  bool found_clust;
+
+  /** table where purge is done */
+  dict_table_t *table;
+
+  /* compiler analysis info of an update */
+  ulint cmpl_info;
+
+  /** update vector for a clustered index record */
+  upd_t *update;
+
+  /** nullptr, or row reference to the next row to handle */
+  dtuple_t *ref;
+
+  /** nullptr, or a copy (also fields copied to heap) of the indexed fields of the row to handle */
+  dtuple_t *row;
+
+  /** nullptr, or the next index whose record should be handled */
+  dict_index_t *index;
+
+  /** memory heap used as auxiliary storage for row; this must be emptied after a successful purge of a row */
+  mem_heap_t *heap;
 };
-
-#ifndef UNIV_NONINL
-#include "row0purge.ic"
-#endif
-
-#endif

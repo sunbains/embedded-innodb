@@ -215,7 +215,7 @@ struct dict_field_struct {
 initialized to 0, NULL or false in dict_mem_index_create(). */
 struct dict_index_struct {
   /** Id of the index */
-  dulint id;
+  uint64_t id;
 
   /** memory heap */
   mem_heap_t *heap;
@@ -392,7 +392,7 @@ constexpr ulint DICT_TABLE_MAGIC_N = 76333786;
 initialized to 0, NULL or false in dict_mem_table_create(). */
 struct dict_table_struct {
   /** Id of the table */
-  dulint id;
+  uint64_t id;
 
   /** Memory heap */
   mem_heap_t *heap;

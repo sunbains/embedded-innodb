@@ -252,7 +252,7 @@ ulint mtr_read_ulint(
 /** Reads 8 bytes from a file page buffered in the buffer pool.
 @return	value read */
 
-dulint mtr_read_dulint(const byte *ptr, /*!< in: pointer from where to read */
+uint64_t mtr_read_uint64(const byte *ptr, /*!< in: pointer from where to read */
                        mtr_t *mtr);     /*!< in: mini-transaction handle */
 /** This macro locks an rw-lock in s-mode. */
 #define mtr_s_lock(B, MTR) mtr_s_lock_func((B), __FILE__, __LINE__, (MTR))

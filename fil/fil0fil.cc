@@ -1447,7 +1447,7 @@ static db_err fil_write_lsn_and_arch_no_to_file(
 
   fil_read(true, 0, SYS_TABLESPACE, sum_of_sizes, 0, UNIV_PAGE_SIZE, buf, nullptr);
 
-  mach_write_ull(buf + FIL_PAGE_FILE_FLUSH_LSN, lsn);
+  mach_write_to_8(buf + FIL_PAGE_FILE_FLUSH_LSN, lsn);
 
   fil_write(true, 0, SYS_TABLESPACE, sum_of_sizes, 0, UNIV_PAGE_SIZE, buf, nullptr);
 
@@ -1520,7 +1520,7 @@ void fil_read_flushed_lsn_and_arch_log_no(
 
   os_file_read(data_file, buf, 0, 0, UNIV_PAGE_SIZE);
 
-  flushed_lsn = mach_read_ull(buf + FIL_PAGE_FILE_FLUSH_LSN);
+  flushed_lsn = mach_read_from_8(buf + FIL_PAGE_FILE_FLUSH_LSN);
 #ifdef UNIV_LOG_ARCHIVE
   // FIXME: ARCHIVE: We still haven't decided where this will go
   // arch_log_no = mach_read_from_4(buf + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID);
@@ -2294,7 +2294,7 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
 
   /* We have to read the file flush lsn from the header of the file */
 
-  flush_lsn = mach_read_ull(page + FIL_PAGE_FILE_FLUSH_LSN);
+  flush_lsn = mach_read_from_8(page + FIL_PAGE_FILE_FLUSH_LSN);
 
   if (current_lsn >= flush_lsn) {
     /* Ok */
@@ -2331,7 +2331,7 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
       goto func_exit;
     }
 
-    if (mach_read_ull(page + FIL_PAGE_LSN) > current_lsn) {
+    if (mach_read_from_8(page + FIL_PAGE_LSN) > current_lsn) {
       /* We have to reset the lsn */
 
       buf_flush_init_for_writing(page, current_lsn);
@@ -2361,7 +2361,7 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
     goto func_exit;
   }
 
-  mach_write_ull(page + FIL_PAGE_FILE_FLUSH_LSN, current_lsn);
+  mach_write_to_8(page + FIL_PAGE_FILE_FLUSH_LSN, current_lsn);
 
   success = os_file_write(filepath, file, page, 0, 0, UNIV_PAGE_SIZE);
 

@@ -22,8 +22,7 @@ from dictionary tables
 Created 4/24/1996 Heikki Tuuri
 *******************************************************/
 
-#ifndef dict0load_h
-#define dict0load_h
+#pragma once
 
 #include "dict0types.h"
 #include "mem0mem.h"
@@ -62,7 +61,7 @@ dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
 @return	table; NULL if table does not exist */
 dict_table_t *
 dict_load_table_on_id(ib_recovery_t recovery, /*!< in: recovery flag */
-                      dulint table_id);       /*!< in: table id */
+                      uint64_t table_id);       /*!< in: table id */
 
 /** This function is called when the database is booted.
 Loads system table index definitions except for the clustered index which
@@ -83,8 +82,3 @@ db_err dict_load_foreigns(const char *table_name, /*!< in: table name */
 dictionary system table. */
 void dict_print();
 
-#ifndef UNIV_NONINL
-#include "dict0load.ic"
-#endif
-
-#endif

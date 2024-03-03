@@ -205,9 +205,11 @@ static ulint trx_undo_page_report_insert(
   ptr += 2;
 
   /* Store first some general parameters to the undo log */
-  *ptr++ = TRX_UNDO_INSERT_REC;
-  ptr += mach_dulint_write_much_compressed(ptr, trx->undo_no);
-  ptr += mach_dulint_write_much_compressed(ptr, index->table->id);
+  *ptr = TRX_UNDO_INSERT_REC;
+  ++ptr;
+
+  ptr += mach_uint64_write_much_compressed(ptr, trx->undo_no);
+  ptr += mach_uint64_write_much_compressed(ptr, index->table->id);
   /*----------------------------------------*/
   /* Store then the fields required to uniquely determine the record
   to be inserted in the clustered index */
@@ -240,7 +242,7 @@ static ulint trx_undo_page_report_insert(
 
 byte *trx_undo_rec_get_pars(trx_undo_rec_t *undo_rec, ulint *type,
                             ulint *cmpl_info, bool *updated_extern,
-                            undo_no_t *undo_no, dulint *table_id) {
+                            undo_no_t *undo_no, uint64_t *table_id) {
   byte *ptr;
   ulint type_cmpl;
 
@@ -259,11 +261,11 @@ byte *trx_undo_rec_get_pars(trx_undo_rec_t *undo_rec, ulint *type,
   *type = type_cmpl & (TRX_UNDO_CMPL_INFO_MULT - 1);
   *cmpl_info = type_cmpl / TRX_UNDO_CMPL_INFO_MULT;
 
-  *undo_no = mach_dulint_read_much_compressed(ptr);
-  ptr += mach_dulint_get_much_compressed_size(*undo_no);
+  *undo_no = mach_uint64_read_much_compressed(ptr);
+  ptr += mach_uint64_get_much_compressed_size(*undo_no);
 
-  *table_id = mach_dulint_read_much_compressed(ptr);
-  ptr += mach_dulint_get_much_compressed_size(*table_id);
+  *table_id = mach_uint64_read_much_compressed(ptr);
+  ptr += mach_uint64_get_much_compressed_size(*table_id);
 
   return ptr;
 }
@@ -497,9 +499,9 @@ static ulint trx_undo_page_report_modify(
   type_cmpl_ptr = ptr;
 
   *ptr++ = (byte)type_cmpl;
-  ptr += mach_dulint_write_much_compressed(ptr, trx->undo_no);
+  ptr += mach_uint64_write_much_compressed(ptr, trx->undo_no);
 
-  ptr += mach_dulint_write_much_compressed(ptr, table->id);
+  ptr += mach_uint64_write_much_compressed(ptr, table->id);
 
   /*----------------------------------------*/
   /* Store the state of the info bits */
@@ -518,15 +520,18 @@ static ulint trx_undo_page_report_modify(
   by some other trx as it must have committed by now for us to
   allow an over-write. */
   if (ignore_prefix) {
-    ignore_prefix = ut_dulint_cmp(trx_id, trx->id) != 0;
+    ignore_prefix = trx_id != trx->id;
   }
-  ptr += mach_dulint_write_compressed(ptr, trx_id);
+
+  ptr += mach_uint64_write_compressed(ptr, trx_id);
 
   field = rec_get_nth_field(
       rec, offsets, dict_index_get_sys_col_pos(index, DATA_ROLL_PTR), &flen);
   ut_ad(flen == DATA_ROLL_PTR_LEN);
 
-  ptr += mach_dulint_write_compressed(ptr, trx_read_roll_ptr(field));
+  const auto roll_ptr = trx_read_roll_ptr(field);
+
+  ptr += mach_uint64_write_compressed(ptr, roll_ptr);
 
   /*----------------------------------------*/
   /* Store then the fields required to uniquely determine the
@@ -721,11 +726,11 @@ byte *trx_undo_update_rec_get_sys_cols(byte *ptr, trx_id_t *trx_id,
 
   /* Read the values of the system columns */
 
-  *trx_id = mach_dulint_read_compressed(ptr);
-  ptr += mach_dulint_get_compressed_size(*trx_id);
+  *trx_id = mach_uint64_read_compressed(ptr);
+  ptr += mach_uint64_get_compressed_size(*trx_id);
 
-  *roll_ptr = mach_dulint_read_compressed(ptr);
-  ptr += mach_dulint_get_compressed_size(*roll_ptr);
+  *roll_ptr = mach_uint64_read_compressed(ptr);
+  ptr += mach_uint64_get_compressed_size(*roll_ptr);
 
   return ptr;
 }
@@ -851,25 +856,21 @@ byte *trx_undo_update_rec_get_update(byte *ptr, dict_index_t *index, ulint type,
   return ptr;
 }
 
-byte *trx_undo_rec_get_partial_row(byte *ptr, dict_index_t *index,
-                                   dtuple_t **row, bool ignore_prefix,
-                                   mem_heap_t *heap) {
-  const byte *end_ptr;
-  ulint row_len;
-
+byte *trx_undo_rec_get_partial_row(byte *ptr, dict_index_t *index, dtuple_t **row, bool ignore_prefix, mem_heap_t *heap) {
   ut_ad(index);
   ut_ad(ptr);
   ut_ad(row);
   ut_ad(heap);
   ut_ad(dict_index_is_clust(index));
 
-  row_len = dict_table_get_n_cols(index->table);
+  auto row_len = dict_table_get_n_cols(index->table);
 
   *row = dtuple_create(heap, row_len);
 
   dict_table_copy_types(*row, index->table);
 
-  end_ptr = ptr + mach_read_from_2(ptr);
+  auto end_ptr = ptr + mach_read_from_2(ptr);
+
   ptr += 2;
 
   while (ptr != end_ptr) {
@@ -884,6 +885,7 @@ byte *trx_undo_rec_get_partial_row(byte *ptr, dict_index_t *index,
     ptr = trx_undo_update_rec_get_field_no(ptr, &field_no);
 
     col = dict_index_get_nth_col(index, field_no);
+
     col_no = dict_col_get_no(col);
 
     ptr = trx_undo_rec_get_col_val(ptr, &field, &len, &orig_len);
@@ -960,7 +962,7 @@ db_err trx_undo_report_row_operation(ulint flags, ulint op_type, que_thr_t *thr,
 
   if (flags & BTR_NO_UNDO_LOG_FLAG) {
 
-    *roll_ptr = ut_dulint_zero;
+    *roll_ptr = 0;
 
     return DB_SUCCESS;
   }
@@ -1053,7 +1055,7 @@ db_err trx_undo_report_row_operation(ulint flags, ulint op_type, que_thr_t *thr,
       undo->top_undo_no = trx->undo_no;
       undo->guess_block = undo_block;
 
-      UT_DULINT_INC(trx->undo_no);
+      ++trx->undo_no;
 
       mutex_exit(&trx->undo_mutex);
 
@@ -1148,7 +1150,7 @@ db_err trx_undo_prev_version_build(const rec_t *index_rec,
   trx_id_t rec_trx_id;
   ulint type;
   undo_no_t undo_no;
-  dulint table_id;
+  uint64_t table_id;
   trx_id_t trx_id;
   roll_ptr_t roll_ptr;
   roll_ptr_t old_roll_ptr;
@@ -1235,7 +1237,7 @@ db_err trx_undo_prev_version_build(const rec_t *index_rec,
   ptr = trx_undo_update_rec_get_update(ptr, index, type, trx_id, roll_ptr,
                                        info_bits, nullptr, heap, &update);
 
-  if (ut_dulint_cmp(table_id, index->table->id) != 0) {
+  if (table_id != index->table->id) {
     ptr = nullptr;
 
     ib_logger(ib_stream,
@@ -1256,15 +1258,14 @@ db_err trx_undo_prev_version_build(const rec_t *index_rec,
     ib_logger(ib_stream,
               "InnoDB: table %s, index %s, n_uniq %lu\n"
               "InnoDB: undo rec address %p, type %lu cmpl_info %lu\n"
-              "InnoDB: undo rec table id %lu %lu,"
-              " index table id %lu %lu\n"
+              "InnoDB: undo rec table id %lu,"
+              " index table id %lu\n"
               "InnoDB: dump of 150 bytes in undo rec: ",
               index->table_name, index->name,
               (ulong)dict_index_get_n_unique(index), undo_rec, (ulong)type,
-              (ulong)cmpl_info, (ulong)ut_dulint_get_high(table_id),
-              (ulong)ut_dulint_get_low(table_id),
-              (ulong)ut_dulint_get_high(index->table->id),
-              (ulong)ut_dulint_get_low(index->table->id));
+              (ulong)cmpl_info,
+              (ulong)table_id,
+              (ulong)index->table->id);
     ut_print_buf(ib_stream, undo_rec, 150);
     ib_logger(ib_stream, "\nInnoDB: index record ");
     rec_print(ib_stream, index_rec, index);
@@ -1273,13 +1274,10 @@ db_err trx_undo_prev_version_build(const rec_t *index_rec,
     ib_logger(ib_stream,
               "\n"
               "InnoDB: Record trx id %lu, update rec trx id %lu\n"
-              "InnoDB: Roll ptr in rec %lu %lu, in update rec"
-              " %lu %lu\n",
+              "InnoDB: Roll ptr in rec %lu, in update rec %lu\n",
               TRX_ID_PREP_PRINTF(rec_trx_id), TRX_ID_PREP_PRINTF(trx_id),
-              (ulong)ut_dulint_get_high(old_roll_ptr),
-              (ulong)ut_dulint_get_low(old_roll_ptr),
-              (ulong)ut_dulint_get_high(roll_ptr),
-              (ulong)ut_dulint_get_low(roll_ptr));
+              (ulong)old_roll_ptr,
+              (ulong)roll_ptr);
 
     trx_purge_sys_print();
     return DB_ERROR;

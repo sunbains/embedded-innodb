@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -24,103 +24,87 @@ Created 11/28/1995 Heikki Tuuri
 
 #include "mach0data.h"
 
-#ifdef UNIV_NONINL
-#include "mach0data.ic"
-#endif
-
-/** Reads a ulint in a compressed form if the log record fully contains it.
-@return	pointer to end of the stored field, NULL if not complete */
-
-byte *mach_parse_compressed(
-    byte *ptr,     /*!< in: pointer to buffer from where to read */
-    byte *end_ptr, /*!< in: pointer to end of the buffer */
-    ulint *val)    /*!< out: read value (< 2^32) */
-{
-  ulint flag;
-
-  ut_ad(ptr && end_ptr && val);
-
+byte *mach_parse_compressed(byte *ptr, byte *end_ptr, ulint *v) {
   if (ptr >= end_ptr) {
 
-    return (NULL);
+    return nullptr;
   }
 
-  flag = mach_read_from_1(ptr);
+  auto flag = mach_read_from_1(ptr);
 
   if (flag < 0x80UL) {
-    *val = flag;
+
+    *v = flag;
+
     return (ptr + 1);
 
   } else if (flag < 0xC0UL) {
+
     if (end_ptr < ptr + 2) {
-      return (NULL);
+
+      return nullptr;
     }
 
-    *val = mach_read_from_2(ptr) & 0x7FFFUL;
+    *v = mach_read_from_2(ptr) & 0x7FFFUL;
 
     return (ptr + 2);
 
   } else if (flag < 0xE0UL) {
+
     if (end_ptr < ptr + 3) {
-      return (NULL);
+
+      return nullptr;
     }
 
-    *val = mach_read_from_3(ptr) & 0x3FFFFFUL;
+    *v = mach_read_from_3(ptr) & 0x3FFFFFUL;
 
     return (ptr + 3);
+
   } else if (flag < 0xF0UL) {
+
     if (end_ptr < ptr + 4) {
-      return (NULL);
+
+      return nullptr;
     }
 
-    *val = mach_read_from_4(ptr) & 0x1FFFFFFFUL;
+    *v = mach_read_from_4(ptr) & 0x1FFFFFFFUL;
 
     return (ptr + 4);
+
   } else {
+
     ut_ad(flag == 0xF0UL);
 
     if (end_ptr < ptr + 5) {
-      return (NULL);
+
+      return nullptr;
     }
 
-    *val = mach_read_from_4(ptr + 1);
-    return (ptr + 5);
+    *v = mach_read_from_4(ptr + 1);
+
+    return ptr + 5;
   }
 }
 
-/** Reads a dulint in a compressed form if the log record fully contains it.
-@return	pointer to end of the stored field, NULL if not complete */
-
-byte *mach_dulint_parse_compressed(
-    byte *ptr,     /*!< in: pointer to buffer from where to read */
-    byte *end_ptr, /*!< in: pointer to end of the buffer */
-    dulint *val)   /*!< out: read value */
-{
-  ulint high;
-  ulint low;
-  ulint size;
-
-  ut_ad(ptr && end_ptr && val);
-
+byte *mach_uint64_parse_compressed(byte *ptr, byte *end_ptr, uint64_t *v) {
   if (end_ptr < ptr + 5) {
 
-    return (NULL);
+    return nullptr;
   }
 
-  high = mach_read_compressed(ptr);
-
-  size = mach_get_compressed_size(high);
+  auto high = mach_read_compressed(ptr);
+  auto size = mach_get_compressed_size(high);
 
   ptr += size;
 
   if (end_ptr < ptr + 4) {
 
-    return (NULL);
+    return nullptr;
   }
 
-  low = mach_read_from_4(ptr);
+  auto low = mach_read_from_4(ptr);
 
-  *val = ut_dulint_create(high, low);
+  *v = (uint64_t(high) << 32) | low;
 
-  return (ptr + 4);
+  return ptr + 4;
 }

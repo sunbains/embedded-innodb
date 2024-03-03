@@ -1248,7 +1248,7 @@ inline ulint rec_fold(const rec_t *rec,     /*!< in: the physical record */
                                             fields to fold */
                       ulint n_bytes,        /*!< in: number of bytes to fold
                                             in an incomplete last field */
-                      dulint tree_id)       /*!< in: index tree id */
+                      uint64_t tree_id)       /*!< in: index tree id */
 {
   ulint i;
   const byte *data;
@@ -1272,7 +1272,7 @@ inline ulint rec_fold(const rec_t *rec,     /*!< in: the physical record */
     n_bytes = 0;
   }
 
-  fold = ut_fold_dulint(tree_id);
+  fold = ut_uint64_fold(tree_id);
 
   for (i = 0; i < n_fields; i++) {
     data = rec_get_nth_field(rec, offsets, i, &len);
