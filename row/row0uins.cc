@@ -240,7 +240,7 @@ static void row_undo_ins_parse_undo_rec(ib_recovery_t recovery,
       ptr = trx_undo_rec_get_row_ref(ptr, clust_index, &node->ref, node->heap);
     } else {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: table ");
+      ib_logger(ib_stream, "  table ");
       ut_print_name(ib_stream, node->trx, true, node->table->name);
       ib_logger(ib_stream, " has no indexes, "
                            "ignoring the table\n");

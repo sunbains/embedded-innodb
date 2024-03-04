@@ -286,9 +286,7 @@ byte *trx_undo_parse_page_init(byte *ptr,     /*!< in: buffer */
                                page_t *page,  /*!< in: page or nullptr */
                                mtr_t *mtr)    /*!< in: mtr or nullptr */
 {
-  ulint type;
-
-  ptr = mach_parse_compressed(ptr, end_ptr, &type);
+  auto type = mach_parse_compressed(ptr, end_ptr);
 
   if (ptr == nullptr) {
 
@@ -347,9 +345,9 @@ trx_undo_seg_create(trx_rseg_t *rseg
 
   if (slot_no == ULINT_UNDEFINED) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  InnoDB: Warning: cannot find a free slot for"
+    ib_logger(ib_stream, "  Warning: cannot find a free slot for"
                          " an undo log. Do you have too\n"
-                         "InnoDB: many active transactions"
+                         "many active transactions"
                          " running concurrently?\n");
 
     return DB_TOO_MANY_CONCURRENT_TRXS;
@@ -1056,7 +1054,7 @@ static trx_undo_t *trx_undo_mem_create_at_db_start(
 #endif /* WITH_XOPEN */
 
   if (id >= TRX_RSEG_N_SLOTS) {
-    ib_logger(ib_stream, "InnoDB: Error: undo->id is %lu\n", (ulong)id);
+    ib_logger(ib_stream, "Error: undo->id is %lu\n", (ulong)id);
     ut_error;
   }
 
@@ -1207,7 +1205,7 @@ static trx_undo_t *trx_undo_mem_create(
   ut_ad(mutex_own(&(rseg->mutex)));
 
   if (id >= TRX_RSEG_N_SLOTS) {
-    ib_logger(ib_stream, "InnoDB: Error: undo->id is %lu\n", (ulong)id);
+    ib_logger(ib_stream, "Error: undo->id is %lu\n", (ulong)id);
     ut_error;
   }
 
@@ -1257,7 +1255,7 @@ static void trx_undo_mem_init_for_reuse(
   ut_ad(mutex_own(&((undo->rseg)->mutex)));
 
   if (unlikely(undo->id >= TRX_RSEG_N_SLOTS)) {
-    ib_logger(ib_stream, "InnoDB: Error: undo->id is %lu\n", (ulong)undo->id);
+    ib_logger(ib_stream, "Error: undo->id is %lu\n", (ulong)undo->id);
 
     ut_error;
   }
@@ -1277,7 +1275,7 @@ static void trx_undo_mem_init_for_reuse(
 
 void trx_undo_mem_free(trx_undo_t *undo) {
   if (undo->id >= TRX_RSEG_N_SLOTS) {
-    ib_logger(ib_stream, "InnoDB: Error: undo->id is %lu\n", (ulong)undo->id);
+    ib_logger(ib_stream, "Error: undo->id is %lu\n", (ulong)undo->id);
     ut_error;
   }
 
@@ -1390,7 +1388,7 @@ static trx_undo_t *trx_undo_reuse_cached(
   ut_ad(undo->size == 1);
 
   if (undo->id >= TRX_RSEG_N_SLOTS) {
-    ib_logger(ib_stream, "InnoDB: Error: undo->id is %lu\n", (ulong)undo->id);
+    ib_logger(ib_stream, "Error: undo->id is %lu\n", (ulong)undo->id);
     ut_error;
   }
 
@@ -1531,7 +1529,7 @@ page_t *trx_undo_set_state_at_finish(trx_rseg_t *rseg,
   ut_ad(mutex_own(&rseg->mutex));
 
   if (undo->id >= TRX_RSEG_N_SLOTS) {
-    ib_logger(ib_stream, "InnoDB: Error: undo->id is %lu\n", (ulong)undo->id);
+    ib_logger(ib_stream, "Error: undo->id is %lu\n", (ulong)undo->id);
     ut_error;
   }
 
@@ -1581,7 +1579,7 @@ page_t *trx_undo_set_state_at_prepare(trx_t *trx, trx_undo_t *undo,
   ut_ad(trx && undo && mtr);
 
   if (undo->id >= TRX_RSEG_N_SLOTS) {
-    ib_logger(ib_stream, "InnoDB: Error: undo->id is %lu\n", (ulong)undo->id);
+    ib_logger(ib_stream, "Error: undo->id is %lu\n", (ulong)undo->id);
     ut_error;
   }
 

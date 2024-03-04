@@ -106,8 +106,8 @@ void row_prebuilt_free(
   if (prebuilt->magic_n != ROW_PREBUILT_ALLOCATED ||
       prebuilt->magic_n2 != ROW_PREBUILT_ALLOCATED) {
     ib_logger(ib_stream,
-              "InnoDB: Error: trying to free a corrupt\n"
-              "InnoDB: table handle. Magic n %lu,"
+              "Error: trying to free a corrupt\n"
+              "table handle. Magic n %lu,"
               " magic n2 %lu, table name",
               (ulong)prebuilt->magic_n, (ulong)prebuilt->magic_n2);
     ut_print_name(ib_stream, NULL, true, prebuilt->table->name);
@@ -189,15 +189,15 @@ void row_prebuilt_update_trx(
 
   if (trx->magic_n != TRX_MAGIC_N) {
     ib_logger(ib_stream,
-              "InnoDB: Error: trying to use a corrupt\n"
-              "InnoDB: trx handle. Magic n %lu\n",
+              "Error: trying to use a corrupt\n"
+              "trx handle. Magic n %lu\n",
               (ulong)trx->magic_n);
 
     ut_error;
   } else if (prebuilt->magic_n != ROW_PREBUILT_ALLOCATED) {
     ib_logger(ib_stream,
-              "InnoDB: Error: trying to use a corrupt\n"
-              "InnoDB: table handle. Magic n %lu, table name",
+              "Error: trying to use a corrupt\n"
+              "table handle. Magic n %lu, table name",
               (ulong)prebuilt->magic_n);
     ut_print_name(ib_stream, NULL, true, prebuilt->table->name);
     ib_logger(ib_stream, "\n");

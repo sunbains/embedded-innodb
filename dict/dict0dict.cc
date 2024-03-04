@@ -626,11 +626,11 @@ bool dict_table_rename_in_cache(dict_table_t *table, const char *new_name,
                 ut_ad(table2->cached), (strcmp(table2->name, new_name) == 0));
     if (likely_null(table2)) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: Error: dictionary cache"
+      ib_logger(ib_stream, "  Error: dictionary cache"
                            " already contains a table ");
       ut_print_name(ib_stream, nullptr, true, new_name);
       ib_logger(ib_stream, "\n"
-                           "InnoDB: cannot rename table ");
+                           "cannot rename table ");
       ut_print_name(ib_stream, nullptr, true, old_name);
       ib_logger(ib_stream, "\n");
       return false;
@@ -643,7 +643,7 @@ bool dict_table_rename_in_cache(dict_table_t *table, const char *new_name,
   if (table->space != 0) {
     if (table->dir_path_of_temp_table != nullptr) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: Error: trying to rename a"
+      ib_logger(ib_stream, "  Error: trying to rename a"
                            " TEMPORARY TABLE ");
       ut_print_name(ib_stream, nullptr, true, old_name);
       ib_logger(ib_stream, " (");
@@ -1275,7 +1275,7 @@ static bool dict_index_find_cols(dict_table_t *table, /*!< in: table */
 
 #ifdef UNIV_DEBUG
     /* It is an error not to find a matching column. */
-    ib_logger(ib_stream, "InnoDB: Error: no matching column for ");
+    ib_logger(ib_stream, "Error: no matching column for ");
     ut_print_name(ib_stream, nullptr, false, field->name);
     ib_logger(ib_stream, " in ");
     dict_index_name_print(ib_stream, nullptr, index);
@@ -2496,7 +2496,7 @@ keys are found. */
                              &referenced_table_name);
   if (!success) {
     ib_logger(ib_stream,
-              "InnoDB: Error: could not find"
+              "Error: could not find"
               " the table being ALTERED in:\n%s\n",
               sql_string);
 
@@ -3257,10 +3257,10 @@ void dict_update_statistics_low(dict_table_t *table,
   if (table->ibd_file_missing) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: cannot calculate statistics for table %s\n"
-              "InnoDB: because the .ibd file is missing.  For help,"
+              "  cannot calculate statistics for table %s\n"
+              "because the .ibd file is missing.  For help,"
               " please refer to\n"
-              "InnoDB: InnoDB website for details\n",
+              "InnoDB website for details\n",
               table->name);
 
     return;

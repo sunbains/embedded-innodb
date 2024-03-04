@@ -134,29 +134,29 @@ handle_new_error:
     break;
 
   case DB_MUST_GET_MORE_FILE_SPACE:
-    log_fatal("InnoDB: The database cannot continue"
+    log_fatal("The database cannot continue"
               " operation because of\n"
-              "InnoDB: lack of space. You must add"
+              "lack of space. You must add"
               " a new data file\n"
-              "InnoDB: and restart the database.\n");
+              "and restart the database.\n");
     break;
 
   case DB_CORRUPTION:
-    ib_logger(ib_stream, "InnoDB: We detected index corruption"
+    ib_logger(ib_stream, "We detected index corruption"
                          " in an InnoDB type table.\n"
-                         "InnoDB: You have to dump + drop + reimport"
+                         "You have to dump + drop + reimport"
                          " the table or, in\n"
-                         "InnoDB: a case of widespread corruption,"
+                         "a case of widespread corruption,"
                          " dump all InnoDB\n"
-                         "InnoDB: tables and recreate the"
+                         "tables and recreate the"
                          " whole InnoDB tablespace.\n"
-                         "InnoDB: If the server crashes"
+                         "If the server crashes"
                          " after the startup or when\n"
-                         "InnoDB: you dump the tables, check the \n"
-                         "InnoDB: InnoDB website for help.\n");
+                         "you dump the tables, check the \n"
+                         "InnoDB website for help.\n");
     break;
   default:
-    ib_logger(ib_stream, "InnoDB: unknown error code %lu\n", (ulong)err);
+    ib_logger(ib_stream, "unknown error code %lu\n", (ulong)err);
     ut_error;
   }
 

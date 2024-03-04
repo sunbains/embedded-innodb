@@ -271,7 +271,7 @@ void trx_purge_add_update_undo_to_history(trx_t *trx, page_t *undo_page, mtr_t *
     /* The undo log segment will not be reused */
 
     if (undo->id >= TRX_RSEG_N_SLOTS) {
-      ib_logger(ib_stream, "InnoDB: Error: undo->id is %lu\n", (ulong)undo->id);
+      ib_logger(ib_stream, "Error: undo->id is %lu\n", (ulong)undo->id);
       ut_error;
     }
 
@@ -608,12 +608,12 @@ static void trx_purge_rseg_get_next_history_log(
     if (trx_sys->rseg_history_len > 20000) {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream,
-                "  InnoDB: Warning: purge reached the"
+                "  Warning: purge reached the"
                 " head of the history list,\n"
-                "InnoDB: but its length is still"
+                "but its length is still"
                 " reported as %lu! Make a detailed bug\n"
-                "InnoDB: report, and submit it.\n"
-                "InnoDB: Check the InnoDB website for "
+                "report, and submit it.\n"
+                "Check the InnoDB website for "
                 "details\n",
                 (ulong)trx_sys->rseg_history_len);
     }
@@ -1029,15 +1029,15 @@ ulint trx_purge() {
 /** Prints information of the purge system to ib_stream. */
 
 void trx_purge_sys_print(void) {
-  ib_logger(ib_stream, "InnoDB: Purge system view:\n");
+  ib_logger(ib_stream, "Purge system view:\n");
   read_view_print(purge_sys->view);
 
-  ib_logger(ib_stream, "InnoDB: Purge trx n:o %lu undo n:o %lu\n",
+  ib_logger(ib_stream, "Purge trx n:o %lu undo n:o %lu\n",
             TRX_ID_PREP_PRINTF(purge_sys->purge_trx_no),
             TRX_ID_PREP_PRINTF(purge_sys->purge_undo_no));
   ib_logger(ib_stream,
-            "InnoDB: Purge next stored %lu, page_no %lu, offset %lu,\n"
-            "InnoDB: Purge hdr_page_no %lu, hdr_offset %lu\n",
+            "Purge next stored %lu, page_no %lu, offset %lu,\n"
+            "Purge hdr_page_no %lu, hdr_offset %lu\n",
             (ulong)purge_sys->next_stored, (ulong)purge_sys->page_no,
             (ulong)purge_sys->offset, (ulong)purge_sys->hdr_page_no,
             (ulong)purge_sys->hdr_offset);

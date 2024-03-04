@@ -729,7 +729,7 @@ ulint fsp_header_get_space_id( const page_t *page) {
 
   if (id != fsp_id) {
     ib_logger(ib_stream,
-              "InnoDB: Error: space id in fsp header %lu,"
+              "Error: space id in fsp header %lu,"
               " but in the page header %lu\n",
               (ulong)fsp_id, (ulong)id);
 
@@ -854,7 +854,7 @@ static bool fsp_try_extend_data_file(
     to reset the flag to false as dealing with this
     error requires server restart. */
     if (fsp_tbs_full_error_printed == false) {
-      ib_logger(ib_stream, "InnoDB: Error: Data file(s) ran"
+      ib_logger(ib_stream, "Error: Data file(s) ran"
                            " out of space.\n"
                            "Please add another data file or"
                            " use \'autoextend\' for the last"
@@ -875,7 +875,7 @@ static bool fsp_try_extend_data_file(
       if (srv_last_file_size_max < srv_data_file_sizes[srv_n_data_files - 1]) {
 
         ib_logger(ib_stream,
-                  "InnoDB: Error: Last data file size"
+                  "Error: Last data file size"
                   " is %lu, max size allowed %lu\n",
                   (ulong)srv_data_file_sizes[srv_n_data_files - 1],
                   (ulong)srv_last_file_size_max);
@@ -1158,9 +1158,9 @@ static ulint fsp_alloc_free_page(
     ut_a(space != 0);
     if (page_no >= FSP_EXTENT_SIZE) {
       ib_logger(ib_stream,
-                "InnoDB: Error: trying to extend a"
+                "Error: trying to extend a"
                 " single-table tablespace %lu\n"
-                "InnoDB: by single page(s) though the"
+                "by single page(s) though the"
                 " space size %lu. Page no %lu.\n",
                 (ulong)space, (ulong)space_size, (ulong)page_no);
       return (FIL_NULL);
@@ -1226,10 +1226,10 @@ static void fsp_free_page(ulint space,       /*!< in: space id */
 
   if (state != XDES_FREE_FRAG && state != XDES_FULL_FRAG) {
     ib_logger(ib_stream,
-              "InnoDB: Error: File space extent descriptor"
+              "Error: File space extent descriptor"
               " of page %lu has state %lu\n",
               (ulong)page, (ulong)state);
-    ib_logger(ib_stream, "InnoDB: Dump of descriptor: ");
+    ib_logger(ib_stream, "Dump of descriptor: ");
     ut_print_buf(ib_stream, ((byte *)descr) - 50, 200);
     ib_logger(ib_stream, "\n");
 
@@ -1245,9 +1245,9 @@ static void fsp_free_page(ulint space,       /*!< in: space id */
 
   if (xdes_get_bit(descr, XDES_FREE_BIT, page % FSP_EXTENT_SIZE, mtr)) {
     ib_logger(ib_stream,
-              "InnoDB: Error: File space extent descriptor"
+              "Error: File space extent descriptor"
               " of page %lu says it is free\n"
-              "InnoDB: Dump of descriptor: ",
+              "Dump of descriptor: ",
               (ulong)page);
     ut_print_buf(ib_stream, ((byte *)descr) - 50, 200);
     ib_logger(ib_stream, "\n");
@@ -2402,24 +2402,24 @@ fseg_free_page_low(fseg_inode_t *seg_inode, /*!< in: segment inode */
 
   ut_a(descr);
   if (xdes_get_bit(descr, XDES_FREE_BIT, page % FSP_EXTENT_SIZE, mtr)) {
-    ib_logger(ib_stream, "InnoDB: Dump of the tablespace extent descriptor: ");
+    ib_logger(ib_stream, "Dump of the tablespace extent descriptor: ");
     ut_print_buf(ib_stream, descr, 40);
 
     ib_logger(ib_stream,
               "\n"
-              "InnoDB: Serious error! InnoDB is trying to"
+              "Serious error! InnoDB is trying to"
               " free page %lu\n"
-              "InnoDB: though it is already marked as free"
+              "though it is already marked as free"
               " in the tablespace!\n"
-              "InnoDB: The tablespace free space info is corrupt.\n"
-              "InnoDB: You may need to dump your"
+              "The tablespace free space info is corrupt.\n"
+              "You may need to dump your"
               " InnoDB tables and recreate the whole\n"
-              "InnoDB: database!\n",
+              "database!\n",
               (ulong)page);
   crash:
-    ib_logger(ib_stream, "InnoDB: Please refer to\n"
-                         "InnoDB: the InnoDB website for details"
-                         "InnoDB: about forcing recovery.\n");
+    ib_logger(ib_stream, "Please refer to\n"
+                         "the InnoDB website for details"
+                         "about forcing recovery.\n");
     ut_error;
   }
 
@@ -2447,18 +2447,18 @@ fseg_free_page_low(fseg_inode_t *seg_inode, /*!< in: segment inode */
   seg_id = mtr_read_uint64(seg_inode + FSEG_ID, mtr);
 
   if (descr_id != seg_id) {
-    ib_logger(ib_stream, "InnoDB: Dump of the tablespace extent descriptor: ");
+    ib_logger(ib_stream, "Dump of the tablespace extent descriptor: ");
     ut_print_buf(ib_stream, descr, 40);
-    ib_logger(ib_stream, "\nInnoDB: Dump of the segment inode: ");
+    ib_logger(ib_stream, "\nDump of the segment inode: ");
     ut_print_buf(ib_stream, seg_inode, 40);
     ib_logger(ib_stream, "\n");
 
     ib_logger(ib_stream,
-              "InnoDB: Serious error: InnoDB is trying to"
+              "Serious error: InnoDB is trying to"
               " free space %lu page %lu,\n"
-              "InnoDB: which does not belong to"
+              "which does not belong to"
               " segment %lu %lu but belongs\n"
-              "InnoDB: to segment %lu %lu.\n",
+              "to segment %lu %lu.\n",
               (ulong)space, (ulong)page, (ulong)descr_id,
               (ulong)descr_id,
               (ulong)seg_id,

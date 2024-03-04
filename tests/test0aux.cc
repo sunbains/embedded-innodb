@@ -335,7 +335,7 @@ void test_configure(void) {
   err = ib_cfg_set_text("data_file_path", data_file_path);
 
   if (err != DB_SUCCESS) {
-    fprintf(stderr, "InnoDB: syntax error in data_file_path\n");
+    fprintf(stderr, "syntax error in data_file_path\n");
     exit(1);
   }
 }

@@ -422,7 +422,7 @@ byte *row_upd_write_sys_vals_to_log(dict_index_t *index, trx_t *trx,
 
 byte *row_upd_parse_sys_vals(byte *ptr, byte *end_ptr, ulint *pos,
                              trx_id_t *trx_id, roll_ptr_t *roll_ptr) {
-  ptr = mach_parse_compressed(ptr, end_ptr, pos);
+  *pos = static_cast<ulint>(mach_parse_compressed(ptr, end_ptr));
 
   if (ptr == nullptr) {
 
@@ -516,7 +516,7 @@ byte *row_upd_index_parse(byte *ptr, byte *end_ptr, mem_heap_t *heap,
 
   info_bits = mach_read_from_1(ptr);
   ptr++;
-  ptr = mach_parse_compressed(ptr, end_ptr, &n_fields);
+  n_fields = mach_parse_compressed(ptr, end_ptr);
 
   if (ptr == nullptr) {
 
@@ -531,7 +531,7 @@ byte *row_upd_index_parse(byte *ptr, byte *end_ptr, mem_heap_t *heap,
     upd_field = upd_get_nth_field(update, i);
     new_val = &(upd_field->new_val);
 
-    ptr = mach_parse_compressed(ptr, end_ptr, &field_no);
+    field_no = mach_parse_compressed(ptr, end_ptr);
 
     if (ptr == nullptr) {
 
@@ -540,7 +540,7 @@ byte *row_upd_index_parse(byte *ptr, byte *end_ptr, mem_heap_t *heap,
 
     upd_field->field_no = field_no;
 
-    ptr = mach_parse_compressed(ptr, end_ptr, &len);
+    len = mach_parse_compressed(ptr, end_ptr);
 
     if (ptr == nullptr) {
 
@@ -1133,19 +1133,19 @@ row_upd_sec_index_entry(upd_node_t *node, /*!< in: row update node */
   rec = btr_cur_get_rec(btr_cur);
 
   if (unlikely(!found)) {
-    ib_logger(ib_stream, "InnoDB: error in sec index entry update in\n"
-                         "InnoDB: ");
+    ib_logger(ib_stream, "error in sec index entry update in\n"
+                         "");
     dict_index_name_print(ib_stream, trx, index);
-    ib_logger(ib_stream, "\nInnoDB: tuple ");
+    ib_logger(ib_stream, "\ntuple ");
     dtuple_print(ib_stream, entry);
-    ib_logger(ib_stream, "\nInnoDB: record ");
+    ib_logger(ib_stream, "\nrecord ");
     rec_print(ib_stream, rec, index);
     ib_logger(ib_stream, "\n");
 
     trx_print(ib_stream, trx, 0);
 
     ib_logger(ib_stream, "\n"
-                         "InnoDB: Submit a detailed bug report, check the"
+                         "Submit a detailed bug report, check the"
                          "InnoDB website for details");
   } else {
     /* Delete mark the old index record; it can already be

@@ -142,7 +142,6 @@ void mtr_commit(mtr_t *mtr) {
   ut_d(mtr->state = MTR_COMMITTING);
 
   /* This is a dirty read, for debugging. */
-  ut_ad(!recv_no_log_write);
   write_log = mtr->modifications && mtr->n_log_recs;
 
   if (write_log) {

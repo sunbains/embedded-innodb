@@ -91,7 +91,7 @@ void *os_mem_alloc_large(ulint *n) /*!< in/out: number of bytes */
   shmid = shmget(IPC_PRIVATE, (size_t)size, SHM_HUGETLB | SHM_R | SHM_W);
   if (shmid < 0) {
     ib_logger(ib_stream,
-              "InnoDB: HugeTLB: Warning: Failed to allocate"
+              "HugeTLB: Warning: Failed to allocate"
               " %lu bytes. errno %d\n",
               size, errno);
     ptr = NULL;
@@ -99,7 +99,7 @@ void *os_mem_alloc_large(ulint *n) /*!< in/out: number of bytes */
     ptr = shmat(shmid, NULL, 0);
     if (ptr == (void *)-1) {
       ib_logger(ib_stream,
-                "InnoDB: HugeTLB: Warning: Failed to"
+                "HugeTLB: Warning: Failed to"
                 " attach shared memory segment, errno %d\n",
                 errno);
       ptr = NULL;
@@ -141,7 +141,7 @@ skip:
              0);
   if (unlikely(ptr == (void *)-1)) {
     ib_logger(ib_stream,
-              "InnoDB: mmap(%lu bytes) failed;"
+              "mmap(%lu bytes) failed;"
               " errno %lu\n",
               (ulong)size, (ulong)errno);
     ptr = NULL;
@@ -171,7 +171,7 @@ void os_mem_free_large(void *ptr, ulint size) {
 #endif /* HAVE_LARGE_PAGES && UNIV_LINUX */
   if (munmap(ptr, size)) {
     ib_logger(ib_stream,
-              "InnoDB: munmap(%p, %lu) failed;"
+              "munmap(%p, %lu) failed;"
               " errno %lu\n",
               ptr, (ulong)size, (ulong)errno);
   } else {

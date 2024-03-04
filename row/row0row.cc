@@ -515,7 +515,7 @@ void row_build_row_ref_in_tuple(
   ut_ad(!dict_index_is_clust(index));
 
   if (unlikely(!index->table)) {
-    ib_logger(ib_stream, "InnoDB: table ");
+    ib_logger(ib_stream, "table ");
   notfound:
     ut_print_name(ib_stream, trx, true, index->table_name);
     ib_logger(ib_stream, " for index ");
@@ -527,7 +527,7 @@ void row_build_row_ref_in_tuple(
   clust_index = dict_table_get_first_index(index->table);
 
   if (unlikely(!clust_index)) {
-    ib_logger(ib_stream, "InnoDB: clust index for table ");
+    ib_logger(ib_stream, "clust index for table ");
     goto notfound;
   }
 

@@ -669,7 +669,6 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr,
                                 buf_block_t *block, dict_index_t *index,
                                 mtr_t *mtr) {
   ulint origin_offset;
-  ulint end_seg_len;
   ulint mismatch_index;
   page_t *page;
   rec_t *cursor_rec;
@@ -710,7 +709,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr,
     }
   }
 
-  ptr = mach_parse_compressed(ptr, end_ptr, &end_seg_len);
+  auto end_seg_len = mach_parse_compressed(ptr, end_ptr);
 
   if (ptr == nullptr) {
 
@@ -734,7 +733,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr,
     info_and_status_bits = mach_read_from_1(ptr);
     ptr++;
 
-    ptr = mach_parse_compressed(ptr, end_ptr, &origin_offset);
+    origin_offset = mach_parse_compressed(ptr, end_ptr);
 
     if (ptr == nullptr) {
 
@@ -743,7 +742,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr,
 
     ut_a(origin_offset < UNIV_PAGE_SIZE);
 
-    ptr = mach_parse_compressed(ptr, end_ptr, &mismatch_index);
+    mismatch_index = mach_parse_compressed(ptr, end_ptr);
 
     if (ptr == nullptr) {
 

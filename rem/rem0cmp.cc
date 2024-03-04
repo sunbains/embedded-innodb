@@ -238,9 +238,9 @@ static int cmp_whole_field(void *cmp_ctx,   /*!< in: client compare context */
     if (prtype & DATA_BINARY_TYPE) {
 
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: Error: comparing a binary BLOB"
+      ib_logger(ib_stream, "  Error: comparing a binary BLOB"
                            " with a character set sensitive\n"
-                           "InnoDB: comparison!\n");
+                           "comparison!\n");
     }
     /* fall through */
   case DATA_VARCLIENT:
@@ -279,7 +279,7 @@ static int cmp_whole_field(void *cmp_ctx,   /*!< in: client compare context */
     return ib_client_compare(&ib_col_meta, a, a_length, b, b_length);
   }
   default:
-    ib_logger(ib_stream, "InnoDB: unknown type number %lu\n", (ulong)mtype);
+    ib_logger(ib_stream, "unknown type number %lu\n", (ulong)mtype);
     ut_error;
   }
 

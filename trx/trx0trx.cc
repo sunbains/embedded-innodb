@@ -199,9 +199,9 @@ static void trx_free(trx_t *trx) /*!< in, own: trx object */
 
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: Error: Client is freeing a trx instance\n"
-              "InnoDB: though trx->n_client_tables_in_use is %lu\n"
-              "InnoDB: and trx->client_n_tables_locked is %lu.\n",
+              "  Error: Client is freeing a trx instance\n"
+              "though trx->n_client_tables_in_use is %lu\n"
+              "and trx->client_n_tables_locked is %lu.\n",
               (ulong)trx->n_client_tables_in_use,
               (ulong)trx->client_n_tables_locked);
 
@@ -286,7 +286,7 @@ static void trx_list_insert_ordered(trx_t *trx) /*!< in: trx handle */
   while (trx2 != nullptr) {
     if (trx->id >= trx2->id) {
 
-      ut_ad(trx->id + 1 == trx2->id);
+      ut_ad(trx->id > trx2->id);
       break;
     }
     trx2 = UT_LIST_GET_NEXT(trx_list, trx2);
@@ -306,24 +306,21 @@ static void trx_list_insert_ordered(trx_t *trx) /*!< in: trx handle */
 }
 
 void trx_lists_init_at_db_start(ib_recovery_t recovery) {
-  trx_rseg_t *rseg;
-  trx_undo_t *undo;
-  trx_t *trx;
-
   ut_ad(mutex_own(&kernel_mutex));
+
   UT_LIST_INIT(trx_sys->trx_list);
 
   /* Look from the rollback segments if there exist undo logs for
   transactions */
 
-  rseg = UT_LIST_GET_FIRST(trx_sys->rseg_list);
+  auto rseg = UT_LIST_GET_FIRST(trx_sys->rseg_list);
 
   while (rseg != nullptr) {
-    undo = UT_LIST_GET_FIRST(rseg->insert_undo_list);
+    auto undo = UT_LIST_GET_FIRST(rseg->insert_undo_list);
 
     while (undo != nullptr) {
 
-      trx = trx_create(trx_dummy_sess);
+      auto trx = trx_create(trx_dummy_sess);
 
       trx->is_recovered = true;
       trx->id = undo->trx_id;
@@ -335,25 +332,19 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 
       if (undo->state != TRX_UNDO_ACTIVE) {
 
-        /* Prepared transactions are left in
-        the prepared state waiting for a
-        commit or abort decision from the client. */
+        /* Prepared transactions are left in the prepared state waiting for a commit or abort decision from the client. */
 
         if (undo->state == TRX_UNDO_PREPARED) {
 
           ib_logger(ib_stream,
-                    "InnoDB: Transaction %lu was in the XA prepared state.\n",
+                    "Transaction %lu was in the XA prepared state.\n",
                     TRX_ID_PREP_PRINTF(trx->id));
 
           if (recovery == IB_RECOVERY_DEFAULT) {
 
             trx->conc_state = TRX_PREPARED;
           } else {
-            ib_logger(ib_stream, "InnoDB: Since"
-                                 " force_recovery"
-                                 " > 0, we will do a"
-                                 " rollback"
-                                 " anyway.\n");
+            ib_logger(ib_stream, "Since force_recovery > 0, we will do a rollback anyway.\n");
 
             trx->conc_state = TRX_ACTIVE;
           }
@@ -394,7 +385,7 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
     undo = UT_LIST_GET_FIRST(rseg->update_undo_list);
 
     while (undo != nullptr) {
-      trx = trx_get_on_id(undo->trx_id);
+      auto trx = trx_get_on_id(undo->trx_id);
 
       if (nullptr == trx) {
         trx = trx_create(trx_dummy_sess);
@@ -414,14 +405,14 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 
           if (undo->state == TRX_UNDO_PREPARED) {
             ib_logger(ib_stream,
-                      "InnoDB: Transaction %lu was in the XA prepared state.\n",
+                      "Transaction %lu was in the XA prepared state.\n",
                       TRX_ID_PREP_PRINTF(trx->id));
 
             if (recovery == IB_RECOVERY_DEFAULT) {
 
               trx->conc_state = TRX_PREPARED;
             } else {
-              ib_logger(ib_stream, "InnoDB: Since"
+              ib_logger(ib_stream, "Since"
                                    " force_recovery"
                                    " > 0, we will"
                                    " do a rollback"
@@ -1553,19 +1544,19 @@ int trx_recover(XID *xid_list, ulint len) {
 
       if (count == 0) {
         ut_print_timestamp(ib_stream);
-        ib_logger(ib_stream, "  InnoDB: Starting recovery for"
+        ib_logger(ib_stream, "  Starting recovery for"
                              " XA transactions...\n");
       }
 
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream,
-                "  InnoDB: Transaction %lu in"
+                "  Transaction %lu in"
                 " prepared state after recovery\n",
                 TRX_ID_PREP_PRINTF(trx->id));
 
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream,
-                "  InnoDB: Transaction contains changes"
+                "  Transaction contains changes"
                 " to %lu rows\n",
                 (ulong)trx->undo_no);
 
@@ -1584,7 +1575,7 @@ int trx_recover(XID *xid_list, ulint len) {
   if (count > 0) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: %lu transactions in prepared state"
+              "  %lu transactions in prepared state"
               " after recovery\n",
               (ulong)count);
   }

@@ -179,7 +179,7 @@ inline ulint btr_node_ptr_get_child_page_no(
 
   if (unlikely(page_no == 0)) {
     ib_logger(ib_stream,
-              "InnoDB: a nonsensical page number 0"
+              "a nonsensical page number 0"
               " in a node ptr record at offset %lu\n",
               (ulong)page_offset(rec));
     buf_page_print(page_align(rec), 0);

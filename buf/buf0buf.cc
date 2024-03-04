@@ -327,16 +327,16 @@ bool buf_page_is_corrupted(const byte *read_buf, ulint) {
       ut_print_timestamp(ib_stream);
 
       ib_logger(ib_stream,
-                "  InnoDB: Error: page %lu log sequence number"
+                "  Error: page %lu log sequence number"
                 " %llu\n"
-                "InnoDB: is in the future! Current system "
+                "is in the future! Current system "
                 "log sequence number %llu.\n"
-                "InnoDB: Your database may be corrupt or "
+                "Your database may be corrupt or "
                 "you may have copied the InnoDB\n"
-                "InnoDB: tablespace but not the InnoDB "
+                "tablespace but not the InnoDB "
                 "log files. See\n"
-                "InnoDB: the InnoDB website for details\n"
-                "InnoDB: for more information.\n",
+                "the InnoDB website for details\n"
+                "for more information.\n",
                 (ulong)mach_read_from_4(read_buf + FIL_PAGE_OFFSET),
                 (long long unsigned int)mach_read_from_8(read_buf + FIL_PAGE_LSN),
                 (long long unsigned int)current_lsn);
@@ -387,10 +387,10 @@ void buf_page_print(const byte *read_buf, ulint) {
   auto size = UNIV_PAGE_SIZE;
 
   ut_print_timestamp(ib_stream);
-  ib_logger(ib_stream, "  InnoDB: Page dump in ascii and hex (%lu bytes):\n",
+  ib_logger(ib_stream, "  Page dump in ascii and hex (%lu bytes):\n",
             (ulong)size);
   ut_print_buf(ib_stream, read_buf, size);
-  ib_logger(ib_stream, "\nInnoDB: End of page dump\n");
+  ib_logger(ib_stream, "\nEnd of page dump\n");
 
   auto checksum = srv_use_checksums ? buf_calc_page_new_checksum(read_buf)
                                     : BUF_NO_CHECKSUM_MAGIC;
@@ -400,14 +400,14 @@ void buf_page_print(const byte *read_buf, ulint) {
   ut_print_timestamp(ib_stream);
   ib_logger(
       ib_stream,
-      "  InnoDB: Page checksum %lu, prior-to-4.0.14-form"
+      "  Page checksum %lu, prior-to-4.0.14-form"
       " checksum %lu\n"
-      "InnoDB: stored checksum %lu, prior-to-4.0.14-form"
+      "stored checksum %lu, prior-to-4.0.14-form"
       " stored checksum %lu\n"
-      "InnoDB: Page lsn %lu %lu, low 4 bytes of lsn"
+      "Page lsn %lu %lu, low 4 bytes of lsn"
       " at page end %lu\n"
-      "InnoDB: Page number (if stored to page already) %lu,\n"
-      "InnoDB: space id (if created with >= v4.1.1"
+      "Page number (if stored to page already) %lu,\n"
+      "space id (if created with >= v4.1.1"
       " and stored already) %lu\n",
       (ulong)checksum, (ulong)old_checksum,
       (ulong)mach_read_from_4(read_buf + FIL_PAGE_SPACE_OR_CHKSUM),
@@ -422,49 +422,49 @@ void buf_page_print(const byte *read_buf, ulint) {
 
   if (mach_read_from_2(read_buf + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
       TRX_UNDO_INSERT) {
-    ib_logger(ib_stream, "InnoDB: Page may be an insert undo log page\n");
+    ib_logger(ib_stream, "Page may be an insert undo log page\n");
   } else if (mach_read_from_2(read_buf + TRX_UNDO_PAGE_HDR +
                               TRX_UNDO_PAGE_TYPE) == TRX_UNDO_UPDATE) {
-    ib_logger(ib_stream, "InnoDB: Page may be an update undo log page\n");
+    ib_logger(ib_stream, "Page may be an update undo log page\n");
   }
 
   switch (fil_page_get_type(read_buf)) {
   case FIL_PAGE_INDEX:
     ib_logger(ib_stream,
-              "InnoDB: Page may be an index page where"
+              "Page may be an index page where"
               " index id is  %lu\n",
               (uint64_t)btr_page_get_index_id(read_buf));
     index = dict_index_find_on_id_low(btr_page_get_index_id(read_buf));
     if (index) {
-      ib_logger(ib_stream, "InnoDB: (");
+      ib_logger(ib_stream, "(");
       dict_index_name_print(ib_stream, nullptr, index);
       ib_logger(ib_stream, ")\n");
     }
     break;
   case FIL_PAGE_INODE:
-    ib_logger(ib_stream, "InnoDB: Page may be an 'inode' page\n");
+    ib_logger(ib_stream, "Page may be an 'inode' page\n");
     break;
   case FIL_PAGE_TYPE_ALLOCATED:
-    ib_logger(ib_stream, "InnoDB: Page may be a freshly allocated page\n");
+    ib_logger(ib_stream, "Page may be a freshly allocated page\n");
     break;
   case FIL_PAGE_TYPE_SYS:
-    ib_logger(ib_stream, "InnoDB: Page may be a system page\n");
+    ib_logger(ib_stream, "Page may be a system page\n");
     break;
   case FIL_PAGE_TYPE_TRX_SYS:
-    ib_logger(ib_stream, "InnoDB: Page may be a transaction system page\n");
+    ib_logger(ib_stream, "Page may be a transaction system page\n");
     break;
   case FIL_PAGE_TYPE_FSP_HDR:
-    ib_logger(ib_stream, "InnoDB: Page may be a file space header page\n");
+    ib_logger(ib_stream, "Page may be a file space header page\n");
     break;
   case FIL_PAGE_TYPE_XDES:
-    ib_logger(ib_stream, "InnoDB: Page may be an extent descriptor page\n");
+    ib_logger(ib_stream, "Page may be an extent descriptor page\n");
     break;
   case FIL_PAGE_TYPE_BLOB:
-    ib_logger(ib_stream, "InnoDB: Page may be a BLOB page\n");
+    ib_logger(ib_stream, "Page may be a BLOB page\n");
     break;
   case FIL_PAGE_TYPE_ZBLOB:
   case FIL_PAGE_TYPE_ZBLOB2:
-    ib_logger(ib_stream, "InnoDB: Page may be a compressed BLOB page\n");
+    ib_logger(ib_stream, "Page may be a compressed BLOB page\n");
     break;
   }
 }
@@ -669,12 +669,18 @@ buf_pool_t *buf_pool_init() {
   /* 3. Initialize LRU fields */
   /* All fields are initialized by mem_zalloc(). */
 
+  /* Initialize red-black tree for fast insertions into the
+  flush_list during recovery process.
+  As this initialization is done while holding the buffer pool
+  mutex we perform it before acquiring recv_sys->mutex. */
+  buf_flush_init_flush_rbt();
+
   buf_pool_mutex_exit();
 
   /* 4. Initialize the buddy allocator fields */
   /* All fields are initialized by mem_zalloc(). */
 
-  return (buf_pool);
+  return buf_pool;
 }
 
 void buf_close() {
@@ -1011,19 +1017,19 @@ loop:
       ++retries;
     } else {
       ib_logger(ib_stream,
-                "InnoDB: Error: Unable"
+                "Error: Unable"
                 " to read tablespace %lu page no"
                 " %lu into the buffer pool after"
                 " %lu attempts\n"
-                "InnoDB: The most probable cause"
+                "The most probable cause"
                 " of this error may be that the"
                 " table has been corrupted.\n"
-                "InnoDB: You can try to fix this"
+                "You can try to fix this"
                 " problem by using"
                 " innodb_force_recovery.\n"
-                "InnoDB: Please see reference manual"
+                "Please see reference manual"
                 " for more details.\n"
-                "InnoDB: Aborting...\n",
+                "Aborting...\n",
                 space, offset, BUF_PAGE_READ_MAX_RETRIES);
 
       ut_error;
@@ -1445,7 +1451,7 @@ static void buf_page_init(space_id_t space,  /*!< in: space id */
 
   if (likely_null(hash_page)) {
     ib_logger(ib_stream,
-              "InnoDB: Error: page %lu %lu already found"
+              "Error: page %lu %lu already found"
               " in the hash table: %p, %p\n",
               (ulong)space, (ulong)offset, (const void *)hash_page,
               (const void *)block);
@@ -1653,8 +1659,8 @@ void buf_page_io_complete(buf_page_t *bpage) {
 
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream,
-                "  InnoDB: Error: reading page %lu\n"
-                "InnoDB: which is in the"
+                "  Error: reading page %lu\n"
+                "which is in the"
                 " doublewrite buffer!\n",
                 (ulong)bpage->offset);
     } else if (!read_space_id && !read_page_no) {
@@ -1668,9 +1674,9 @@ void buf_page_io_complete(buf_page_t *bpage) {
 
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream,
-                "  InnoDB: Error: space id and page n:o"
+                "  Error: space id and page n:o"
                 " stored in the page\n"
-                "InnoDB: read in are %lu:%lu,"
+                "read in are %lu:%lu,"
                 " should be %lu:%lu!\n",
                 (ulong)read_space_id, (ulong)read_page_no, (ulong)bpage->space,
                 (ulong)bpage->offset);
@@ -1681,47 +1687,47 @@ void buf_page_io_complete(buf_page_t *bpage) {
 
     if (buf_page_is_corrupted(frame, 0)) {
       ib_logger(ib_stream,
-                "InnoDB: Database page corruption on disk"
+                "Database page corruption on disk"
                 " or a failed\n"
-                "InnoDB: file read of page %lu.\n"
-                "InnoDB: You may have to recover"
+                "file read of page %lu.\n"
+                "You may have to recover"
                 " from a backup.\n",
                 (ulong)bpage->offset);
       buf_page_print(frame, 0);
       ib_logger(ib_stream,
-                "InnoDB: Database page corruption on disk"
+                "Database page corruption on disk"
                 " or a failed\n"
-                "InnoDB: file read of page %lu.\n"
-                "InnoDB: You may have to recover"
+                "file read of page %lu.\n"
+                "You may have to recover"
                 " from a backup.\n",
                 (ulong)bpage->offset);
-      ib_logger(ib_stream, "InnoDB: It is also possible that"
+      ib_logger(ib_stream, "It is also possible that"
                            " your operating\n"
-                           "InnoDB: system has corrupted its"
+                           "system has corrupted its"
                            " own file cache\n"
-                           "InnoDB: and rebooting your computer"
+                           "and rebooting your computer"
                            " removes the\n"
-                           "InnoDB: error.\n"
-                           "InnoDB: If the corrupt page is an index page\n"
-                           "InnoDB: you can also try to"
+                           "error.\n"
+                           "If the corrupt page is an index page\n"
+                           "you can also try to"
                            " fix the corruption\n"
-                           "InnoDB: by dumping, dropping,"
+                           "by dumping, dropping,"
                            " and reimporting\n"
-                           "InnoDB: the corrupt table."
+                           "the corrupt table."
                            " You can use CHECK\n"
-                           "InnoDB: TABLE to scan your"
+                           "TABLE to scan your"
                            " table for corruption.\n"
-                           "InnoDB: See also"
+                           "See also"
                            " the InnoDB website for details\n"
-                           "InnoDB: about forcing recovery.\n");
+                           "about forcing recovery.\n");
 
       if (srv_force_recovery < IB_RECOVERY_IGNORE_CORRUPT) {
         log_fatal(
-            "InnoDB: Ending processing because of a corrupt database page.");
+            "Ending processing because of a corrupt database page.");
       }
     }
 
-    if (recv_recovery_is_on()) {
+    if (recv_recovery_on) {
       /* Pages must be uncompressed for crash recovery. */
       recv_recover_page(true, (buf_block_t *)bpage);
     }
@@ -1777,13 +1783,7 @@ void buf_page_io_complete(buf_page_t *bpage) {
   buf_pool_mutex_exit();
 }
 
-/** Invalidates the file pages in the buffer pool when an archive recovery is
-completed. All the file pages buffered must be in a replaceable state when
-this function is called: not latched and not modified. */
-
-void buf_pool_invalidate(void) {
-  bool freed;
-
+void buf_pool_invalidate() {
   buf_pool_mutex_enter();
 
   for (auto i = (ulint)BUF_FLUSH_LRU; i < (ulint)BUF_FLUSH_N_TYPES; i++) {
@@ -1810,10 +1810,8 @@ void buf_pool_invalidate(void) {
 
   ut_ad(buf_all_freed());
 
-  freed = true;
-
-  while (freed) {
-    freed = buf_LRU_search_and_free_block(100);
+  while (buf_LRU_search_and_free_block(100)) {
+   ;
   }
 
   buf_pool_mutex_enter();
@@ -1832,10 +1830,7 @@ void buf_pool_invalidate(void) {
 }
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
-/** Validates the buffer buf_pool data structure.
-@return  true */
-
-bool buf_validate(void) {
+bool buf_validate() {
   buf_chunk_t *chunk;
   ulint n_single_flush = 0;
   ulint n_lru_flush = 0;
@@ -2205,31 +2200,21 @@ void buf_print_io(ib_stream_t ib_stream) {
   buf_pool_mutex_exit();
 }
 
-/** Refreshes the statistics used to print per-second averages. */
-
-void buf_refresh_io_stats(void) {
+void buf_refresh_io_stats() {
   buf_pool->last_printout_time = time(nullptr);
   buf_pool->old_stat = buf_pool->stat;
 }
 
-/** Asserts that all file pages in the buffer are in a replaceable state.
-@return  true */
-
-bool buf_all_freed(void) {
-  buf_chunk_t *chunk;
-  ulint i;
-
-  ut_ad(buf_pool);
-
+bool buf_all_freed() {
   buf_pool_mutex_enter();
 
-  chunk = buf_pool->chunks;
+  auto chunk = buf_pool->chunks;
 
-  for (i = buf_pool->n_chunks; i--; chunk++) {
+  for (ulint i = buf_pool->n_chunks; i--; chunk++) {
 
-    const buf_block_t *block = buf_chunk_not_freed(chunk);
+    const auto block = buf_chunk_not_freed(chunk);
 
-    if (likely_null(block)) {
+    if (block != nullptr) {
       ib_logger(ib_stream, "Page %lu %lu still fixed or dirty\n",
                 (ulong)block->page.space, (ulong)block->page.offset);
       ut_error;
@@ -2238,14 +2223,10 @@ bool buf_all_freed(void) {
 
   buf_pool_mutex_exit();
 
-  return (true);
+  return true;
 }
 
-/** Checks that there currently are no pending i/o-operations for the buffer
-pool.
-@return  true if there is no pending i/o */
-
-bool buf_pool_check_no_pending_io(void) {
+bool buf_pool_check_no_pending_io() {
   bool ret;
 
   buf_pool_mutex_enter();
@@ -2260,20 +2241,15 @@ bool buf_pool_check_no_pending_io(void) {
 
   buf_pool_mutex_exit();
 
-  return (ret);
+  return ret;
 }
 
-/** Gets the current length of the free list of buffer blocks.
-@return  length of the free list */
-
-ulint buf_get_free_list_len(void) {
-  ulint len;
-
+ulint buf_get_free_list_len() {
   buf_pool_mutex_enter();
 
-  len = UT_LIST_GET_LEN(buf_pool->free);
+  auto len = UT_LIST_GET_LEN(buf_pool->free);
 
   buf_pool_mutex_exit();
 
-  return (len);
+  return len;
 }

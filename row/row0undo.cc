@@ -299,11 +299,11 @@ que_thr_t *row_undo_step(que_thr_t *thr) {
   if (err != DB_SUCCESS) {
     /* SQL error detected */
 
-    ib_logger(ib_stream, "InnoDB: Fatal error %lu in rollback.\n", (ulong)err);
+    ib_logger(ib_stream, "Fatal error %lu in rollback.\n", (ulong)err);
 
     if (err == DB_OUT_OF_FILE_SPACE) {
-      log_fatal("InnoDB: Error 13 means out of tablespace.\n"
-                "InnoDB: Consider increasing your tablespace.\n");
+      log_fatal("Error 13 means out of tablespace.\n"
+                "Consider increasing your tablespace.\n");
     }
 
     ut_error;

@@ -67,7 +67,7 @@ int ut_usectime(ulint *sec, ulint *ms) {
     if (ret == -1) {
       errno_gettimeofday = errno;
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: gettimeofday(): %s\n",
+      ib_logger(ib_stream, "  gettimeofday(): %s\n",
                 strerror(errno_gettimeofday));
       os_thread_sleep(100000); /* 0.1 sec */
       errno = errno_gettimeofday;

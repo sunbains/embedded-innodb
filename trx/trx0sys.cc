@@ -209,16 +209,16 @@ start_again:
     mtr_commit(&mtr);
     trx_doublewrite_buf_is_being_created = false;
   } else {
-    ib_logger(ib_stream, "InnoDB: Doublewrite buffer not found:"
+    ib_logger(ib_stream, "Doublewrite buffer not found:"
                          " creating new\n");
 
     if (buf_pool_get_curr_size() <
         ((2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2 + 100) *
          UNIV_PAGE_SIZE)) {
-      ib_logger(ib_stream, "InnoDB: Cannot create doublewrite buffer:"
+      ib_logger(ib_stream, "Cannot create doublewrite buffer:"
                            " you must\n"
-                           "InnoDB: increase your buffer pool size.\n"
-                           "InnoDB: Cannot continue operation.\n");
+                           "increase your buffer pool size.\n"
+                           "Cannot continue operation.\n");
 
       return (DB_FATAL);
     }
@@ -232,10 +232,10 @@ start_again:
     buf_block_dbg_add_level(block2, SYNC_NO_ORDER_CHECK);
 
     if (block2 == nullptr) {
-      ib_logger(ib_stream, "InnoDB: Cannot create doublewrite buffer:"
+      ib_logger(ib_stream, "Cannot create doublewrite buffer:"
                            " you must\n"
-                           "InnoDB: increase your tablespace size.\n"
-                           "InnoDB: Cannot continue operation.\n");
+                           "increase your tablespace size.\n"
+                           "Cannot continue operation.\n");
 
       /* We need to exit without committing the mtr to
       prevent its modifications to the database getting
@@ -253,11 +253,11 @@ start_again:
       page_no =
           fseg_alloc_free_page(fseg_header, prev_page_no + 1, FSP_UP, &mtr);
       if (page_no == FIL_NULL) {
-        ib_logger(ib_stream, "InnoDB: Cannot create doublewrite"
+        ib_logger(ib_stream, "Cannot create doublewrite"
                              " buffer: you must\n"
-                             "InnoDB: increase your"
+                             "increase your"
                              " tablespace size.\n"
-                             "InnoDB: Cannot continue operation.\n");
+                             "Cannot continue operation.\n");
 
         return (DB_FATAL);
       }
@@ -310,7 +310,7 @@ start_again:
     /* Flush the modified pages to disk and make a checkpoint */
     log_make_checkpoint_at(IB_UINT64_T_MAX, true);
 
-    ib_logger(ib_stream, "InnoDB: Doublewrite buffer created\n");
+    ib_logger(ib_stream, "Doublewrite buffer created\n");
 
     trx_sys_multiple_tablespace_format = true;
 
@@ -381,7 +381,7 @@ void trx_sys_doublewrite_init_or_restore_pages(
     trx_doublewrite_must_reset_space_ids = true;
 
     ib_logger(ib_stream,
-              "InnoDB: Resetting space id's in the doublewrite buffer\n");
+              "Resetting space id's in the doublewrite buffer\n");
   } else {
     trx_sys_multiple_tablespace_format = true;
   }
@@ -436,9 +436,9 @@ void trx_sys_doublewrite_init_or_restore_pages(
 
     } else if (!fil_check_adress_in_tablespace(space_id, page_no)) {
       ib_logger(ib_stream,
-                "InnoDB: Warning: a page in the"
+                "Warning: a page in the"
                 " doublewrite buffer is not within space\n"
-                "InnoDB: bounds; space id %lu"
+                "bounds; space id %lu"
                 " page number %lu, page %lu in"
                 " doublewrite buf.\n",
                 (ulong)space_id, (ulong)page_no, (ulong)i);
@@ -461,31 +461,31 @@ void trx_sys_doublewrite_init_or_restore_pages(
       if (unlikely(buf_page_is_corrupted(read_buf, 0))) {
 
         ib_logger(ib_stream,
-                  "InnoDB: Warning: database page"
+                  "Warning: database page"
                   " corruption or a failed\n"
-                  "InnoDB: file read of"
+                  "file read of"
                   " space %lu page %lu.\n"
-                  "InnoDB: Trying to recover it from"
+                  "Trying to recover it from"
                   " the doublewrite buffer.\n",
                   (ulong)space_id, (ulong)page_no);
 
         if (buf_page_is_corrupted(page, 0)) {
-          ib_logger(ib_stream, "InnoDB: Dump of the page:\n");
+          ib_logger(ib_stream, "Dump of the page:\n");
           buf_page_print(read_buf, 0);
-          ib_logger(ib_stream, "InnoDB: Dump of"
+          ib_logger(ib_stream, "Dump of"
                                " corresponding page"
                                " in doublewrite buffer:\n");
           buf_page_print(page, 0);
 
-          ib_logger(ib_stream, "InnoDB: Also the page in the"
+          ib_logger(ib_stream, "Also the page in the"
                                " doublewrite buffer"
                                " is corrupt.\n"
-                               "InnoDB: Cannot continue"
+                               "Cannot continue"
                                " operation.\n"
-                               "InnoDB: You can try to"
+                               "You can try to"
                                " recover the database\n"
-                               "InnoDB: with the option:\n"
-                               "InnoDB: "
+                               "with the option:\n"
+                               ""
                                "force_recovery=6\n");
           log_fatal("Corrupt page");
         }
@@ -497,7 +497,7 @@ void trx_sys_doublewrite_init_or_restore_pages(
                page, nullptr);
 
         ib_logger(ib_stream,
-                  "InnoDB: Recovered the page from the doublewrite buffer.\n");
+                  "Recovered the page from the doublewrite buffer.\n");
       }
     }
 
@@ -692,13 +692,13 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
     }
 
     ib_logger(ib_stream,
-              "InnoDB: %lu transaction(s) which must be"
+              "%lu transaction(s) which must be"
               " rolled back or cleaned up\n"
-              "InnoDB: in total %lu%s row operations to undo\n",
+              "in total %lu%s row operations to undo\n",
               (ulong)UT_LIST_GET_LEN(trx_sys->trx_list), (ulong)rows_to_undo,
               unit);
 
-    ib_logger(ib_stream, "InnoDB: Trx id counter is %lu\n",
+    ib_logger(ib_stream, "Trx id counter is %lu\n",
               TRX_ID_PREP_PRINTF(trx_sys->max_trx_id));
   }
 
@@ -845,7 +845,7 @@ db_err trx_sys_file_format_max_check(ulint max_format_id) {
   format_id = trx_sys_file_format_max_read();
 
   ut_print_timestamp(ib_stream);
-  ib_logger(ib_stream, "  InnoDB: highest supported file format is %s.\n",
+  ib_logger(ib_stream, "  highest supported file format is %s.\n",
             trx_sys_file_format_id_to_name(DICT_TF_FORMAT_MAX));
 
   if (format_id > DICT_TF_FORMAT_MAX) {
@@ -854,7 +854,7 @@ db_err trx_sys_file_format_max_check(ulint max_format_id) {
 
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: %s: the system tablespace is in a file "
+              "  %s: the system tablespace is in a file "
               "format that this version doesn't support - %s\n",
               ((max_format_id <= DICT_TF_FORMAT_MAX) ? "Error" : "Warning"),
               trx_sys_file_format_id_to_name(format_id));
@@ -1076,9 +1076,9 @@ void trx_sys_close() {
 
   if (UT_LIST_GET_LEN(trx_sys->view_list) > 1) {
     ib_logger(ib_stream,
-              "InnoDB: Error: all read views were not closed"
+              "Error: all read views were not closed"
               " before shutdown:\n"
-              "InnoDB: %lu read views open \n",
+              "%lu read views open \n",
               UT_LIST_GET_LEN(trx_sys->view_list) - 1);
   }
 

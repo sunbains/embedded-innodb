@@ -82,16 +82,16 @@ byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, byte *type, ulint 
     return (nullptr);
   }
 
-  ptr = mach_parse_compressed(ptr, end_ptr, space);
+  *space = static_cast<space_id_t>(mach_parse_compressed(ptr, end_ptr));
 
   if (ptr == nullptr) {
 
     return (nullptr);
   }
 
-  ptr = mach_parse_compressed(ptr, end_ptr, page_no);
+  *page_no = static_cast<page_no_t>(mach_parse_compressed(ptr, end_ptr));
 
-  return (ptr);
+  return ptr;
 }
 
 byte *mlog_parse_nbytes(ulint type, byte *ptr, byte *end_ptr, byte *page) {
@@ -99,7 +99,6 @@ byte *mlog_parse_nbytes(ulint type, byte *ptr, byte *end_ptr, byte *page) {
   uint64_t dval;
 
   ut_a(type <= MLOG_8BYTES);
-  ut_a(page == nullptr || fil_page_get_type(page) != FIL_PAGE_INDEX);
 
   if (end_ptr < ptr + 2) {
 
@@ -130,7 +129,7 @@ byte *mlog_parse_nbytes(ulint type, byte *ptr, byte *end_ptr, byte *page) {
     return (ptr);
   }
 
-  ptr = mach_parse_compressed(ptr, end_ptr, &val);
+  val = mach_parse_compressed(ptr, end_ptr);
 
   if (ptr == nullptr) {
 

@@ -802,7 +802,7 @@ db_err btr_cur_optimistic_insert(ulint flags, btr_cur_t *cursor,
   dict_index = cursor->index;
 
   if (!dtuple_check_typed_no_assert(entry)) {
-    ib_logger(ib_stream, "InnoDB: Error in a tuple to insert into ");
+    ib_logger(ib_stream, "Error in a tuple to insert into ");
     dict_index_name_print(ib_stream, thr_get_trx(thr), dict_index);
   }
 
@@ -901,11 +901,11 @@ db_err btr_cur_optimistic_insert(ulint flags, btr_cur_t *cursor,
     *rec = page_cur_tuple_insert(page_cursor, entry, dict_index, n_ext, mtr);
 
     if (unlikely(!*rec)) {
-      ib_logger(ib_stream, "InnoDB: Error: cannot insert tuple ");
+      ib_logger(ib_stream, "Error: cannot insert tuple ");
       dtuple_print(ib_stream, entry);
       ib_logger(ib_stream, " into ");
       dict_index_name_print(ib_stream, thr_get_trx(thr), dict_index);
-      ib_logger(ib_stream, "\nInnoDB: max insert size %lu\n", (ulong)max_size);
+      ib_logger(ib_stream, "\nmax insert size %lu\n", (ulong)max_size);
       ut_error;
     }
   }
@@ -2842,7 +2842,7 @@ btr_check_blob_fil_page_type(ulint space_id,     /*!< in: space id */
 
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: FIL_PAGE_TYPE=%lu"
+              "  FIL_PAGE_TYPE=%lu"
               " on BLOB %s space %lu page %lu flags %lx\n",
               (ulong)type, read ? "read" : "purge", (ulong)space_id,
               (ulong)page_no, (ulong)flags);

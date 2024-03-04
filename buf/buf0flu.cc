@@ -165,21 +165,14 @@ static int buf_flush_block_cmp(const void *p1, /*!< in: block1 */
   return (ret ? ret : (int)(b2->offset - b1->offset));
 }
 
-/** Initialize the red-black tree to speed up insertions into the flush_list
-during recovery process. Should be called at the start of recovery
-process before any page has been read/written. */
-
-void buf_flush_init_flush_rbt(void) {
-  buf_pool_mutex_enter();
+void buf_flush_init_flush_rbt() {
+  ut_ad(buf_pool_mutex_own());
 
   /* Create red black tree for speedy insertions in flush list. */
   buf_pool->flush_rbt = rbt_create(sizeof(buf_page_t *), buf_flush_block_cmp);
-  buf_pool_mutex_exit();
 }
 
-/** Frees up the red-black tree. */
-
-void buf_flush_free_flush_rbt(void) {
+void buf_flush_free_flush_rbt() {
   buf_pool_mutex_enter();
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
@@ -192,11 +185,7 @@ void buf_flush_free_flush_rbt(void) {
   buf_pool_mutex_exit();
 }
 
-/** Inserts a modified block into the flush list. */
-
-void buf_flush_insert_into_flush_list(
-    buf_block_t *block) /*!< in/out: block which is modified */
-{
+void buf_flush_insert_into_flush_list(buf_block_t *block) {
   ut_ad(buf_pool_mutex_own());
   ut_ad((UT_LIST_GET_FIRST(buf_pool->flush_list) == nullptr) ||
         (UT_LIST_GET_FIRST(buf_pool->flush_list)->oldest_modification <=
@@ -204,7 +193,7 @@ void buf_flush_insert_into_flush_list(
 
   /* If we are in the recovery then we need to update the flush
   red-black tree as well. */
-  if (likely_null(buf_pool->flush_rbt)) {
+  if (buf_pool->flush_rbt != nullptr) {
     buf_flush_insert_sorted_into_flush_list(block);
     return;
   }
@@ -221,16 +210,7 @@ void buf_flush_insert_into_flush_list(
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 }
 
-/** Inserts a modified block into the flush list in the right sorted position.
-This function is used by recovery, because there the modifications do not
-necessarily come in the order of lsn's. */
-
-void buf_flush_insert_sorted_into_flush_list(
-    buf_block_t *block) /*!< in/out: block which is modified */
-{
-  buf_page_t *prev_b;
-  buf_page_t *b;
-
+void buf_flush_insert_sorted_into_flush_list(buf_block_t *block) {
   ut_ad(buf_pool_mutex_own());
   ut_ad(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
 
@@ -239,7 +219,7 @@ void buf_flush_insert_sorted_into_flush_list(
   ut_ad(!block->page.in_flush_list);
   ut_d(block->page.in_flush_list = true);
 
-  prev_b = nullptr;
+  buf_page_t* prev_b{};
 
   /* For the most part when this function is called the flush_rbt
   should not be nullptr. In a very rare boundary case it is possible
@@ -247,15 +227,15 @@ void buf_flush_insert_sorted_into_flush_list(
   before the last page was hooked up in the flush_list by the
   io-handler thread. In that case we'll  just do a simple
   linear search in the else block. */
-  if (buf_pool->flush_rbt) {
+  if (buf_pool->flush_rbt != nullptr) {
 
     prev_b = buf_flush_insert_in_flush_rbt(&block->page);
 
   } else {
 
-    b = UT_LIST_GET_FIRST(buf_pool->flush_list);
+    auto b = UT_LIST_GET_FIRST(buf_pool->flush_list);
 
-    while (b && b->oldest_modification > block->page.oldest_modification) {
+    while (b != nullptr && b->oldest_modification > block->page.oldest_modification) {
       ut_ad(b->in_flush_list);
       prev_b = b;
       b = UT_LIST_GET_NEXT(list, b);
@@ -294,7 +274,7 @@ bool buf_flush_ready_for_replace(
 
   ut_print_timestamp(ib_stream);
   ib_logger(ib_stream,
-            "  InnoDB: Error: buffer block state %lu"
+            "  Error: buffer block state %lu"
             " in the LRU list!\n",
             (ulong)buf_page_get_state(bpage));
   ut_print_buf(ib_stream, bpage, sizeof(buf_page_t));
@@ -518,11 +498,11 @@ static void buf_flush_buffered_writes(void) {
                             (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
                         4))) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: ERROR: The page to be written"
+      ib_logger(ib_stream, "  ERROR: The page to be written"
                            " seems corrupt!\n"
-                           "InnoDB: The lsn fields do not match!"
+                           "The lsn fields do not match!"
                            " Noticed in the buffer pool\n"
-                           "InnoDB: before posting to the"
+                           "before posting to the"
                            " doublewrite buffer.\n");
     }
 
@@ -534,13 +514,13 @@ static void buf_flush_buffered_writes(void) {
 
         ut_print_timestamp(ib_stream);
         ib_logger(ib_stream,
-                  "  InnoDB: Apparent corruption of an"
+                  "  Apparent corruption of an"
                   " index page n:o %lu in space %lu\n"
-                  "InnoDB: to be written to data file."
+                  "to be written to data file."
                   " We intentionally crash server\n"
-                  "InnoDB: to prevent corrupt data"
+                  "to prevent corrupt data"
                   " from ending up in data\n"
-                  "InnoDB: files.\n",
+                  "files.\n",
                   (ulong)buf_block_get_page_no(block),
                   (ulong)buf_block_get_space(block));
 
@@ -574,9 +554,9 @@ static void buf_flush_buffered_writes(void) {
                             (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
                         4))) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: ERROR: The page to be written"
+      ib_logger(ib_stream, "  ERROR: The page to be written"
                            " seems corrupt!\n"
-                           "InnoDB: The lsn fields do not match!"
+                           "The lsn fields do not match!"
                            " Noticed in the doublewrite block1.\n");
     }
   }
@@ -604,9 +584,9 @@ static void buf_flush_buffered_writes(void) {
                             (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
                         4))) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: ERROR: The page to be"
+      ib_logger(ib_stream, "  ERROR: The page to be"
                            " written seems corrupt!\n"
-                           "InnoDB: The lsn fields do not match!"
+                           "The lsn fields do not match!"
                            " Noticed in"
                            " the doublewrite block2.\n");
     }
@@ -634,13 +614,13 @@ flush:
                         4))) {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream,
-                "  InnoDB: ERROR: The page to be written"
+                "  ERROR: The page to be written"
                 " seems corrupt!\n"
-                "InnoDB: The lsn fields do not match!"
+                "The lsn fields do not match!"
                 " Noticed in the buffer pool\n"
-                "InnoDB: after posting and flushing"
+                "after posting and flushing"
                 " the doublewrite buffer.\n"
-                "InnoDB: Page buf fix count %lu,"
+                "Page buf fix count %lu,"
                 " io fix %lu, state %lu\n",
                 (ulong)block->page.buf_fix_count,
                 (ulong)buf_block_get_io_fix(block),
@@ -1299,19 +1279,18 @@ ulint buf_flush_get_desired_flush_rate(void) {
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 /** Validates the flush list.
 @return	true if ok */
-static bool buf_flush_validate_low(void) {
-  buf_page_t *bpage;
-  const ib_rbt_node_t *rnode = nullptr;
+static bool buf_flush_validate_low() {
+  const ib_rbt_node_t *rnode{};
 
   UT_LIST_VALIDATE(list, buf_page_t, buf_pool->flush_list,
                    ut_ad(ut_list_node_313->in_flush_list));
 
-  bpage = UT_LIST_GET_FIRST(buf_pool->flush_list);
+  auto bpage = UT_LIST_GET_FIRST(buf_pool->flush_list);
 
   /* If we are in recovery mode i.e.: flush_rbt != nullptr
   then each block in the flush_list must also be present
   in the flush_rbt. */
-  if (likely_null(buf_pool->flush_rbt)) {
+  if (buf_pool->flush_rbt != nullptr) {
     rnode = rbt_first(buf_pool->flush_rbt);
   }
 
@@ -1321,11 +1300,14 @@ static bool buf_flush_validate_low(void) {
     ut_a(buf_page_in_file(bpage));
     ut_a(om > 0);
 
-    if (likely_null(buf_pool->flush_rbt)) {
-      ut_a(rnode);
-      buf_page_t *rpage = *rbt_value(buf_page_t *, rnode);
-      ut_a(rpage);
+    if (buf_pool->flush_rbt != nullptr) {
+      ut_a(rnode != nullptr);
+
+      auto rpage = *rbt_value(buf_page_t *, rnode);
+
+      ut_a(rpage != nullptr);
       ut_a(rpage == bpage);
+
       rnode = rbt_next(buf_pool->flush_rbt, rnode);
     }
 

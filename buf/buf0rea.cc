@@ -84,7 +84,7 @@ static ulint buf_read_page_low(
         offset < trx_doublewrite->block2 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE))) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: Warning: trying to read"
+              "  Warning: trying to read"
               " doublewrite buffer page %lu\n",
               (ulong)offset);
 
@@ -150,9 +150,9 @@ bool buf_read_page(ulint space, ulint offset) {
   if (err == DB_TABLESPACE_DELETED) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: Error: trying to access"
+              "  Error: trying to access"
               " tablespace %lu page no. %lu,\n"
-              "InnoDB: but the tablespace does not exist"
+              "but the tablespace does not exist"
               " or is just being dropped.\n",
               (ulong)space, (ulong)offset);
   }
@@ -398,11 +398,11 @@ void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_
 
       if (count > 1000) {
         ib_logger(ib_stream,
-                  "InnoDB: Error: InnoDB has waited for"
+                  "Error: InnoDB has waited for"
                   " 10 seconds for pending\n"
-                  "InnoDB: reads to the buffer pool to"
+                  "reads to the buffer pool to"
                   " be finished.\n"
-                  "InnoDB: Number of pending reads %lu,"
+                  "Number of pending reads %lu,"
                   " pending pread calls %lu\n",
                   (ulong)buf_pool->n_pend_reads,
                   (ulong)os_file_n_pending_preads);

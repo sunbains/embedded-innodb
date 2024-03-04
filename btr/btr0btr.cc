@@ -400,17 +400,17 @@ static ulint *btr_page_get_father_node_ptr_func(
 
   if (unlikely(btr_node_ptr_get_child_page_no(node_ptr, offsets) != page_no)) {
     rec_t *print_rec;
-    ib_logger(ib_stream, "InnoDB: Dump of the child page:\n");
+    ib_logger(ib_stream, "Dump of the child page:\n");
     buf_page_print(page_align(user_rec), 0);
-    ib_logger(ib_stream, "InnoDB: Dump of the parent page:\n");
+    ib_logger(ib_stream, "Dump of the parent page:\n");
     buf_page_print(page_align(node_ptr), 0);
-    ib_logger(ib_stream, "InnoDB: Corruption of an index tree: table ");
+    ib_logger(ib_stream, "Corruption of an index tree: table ");
     ut_print_name(ib_stream, nullptr, true, dict_index->table_name);
     ib_logger(ib_stream, ", index ");
     ut_print_name(ib_stream, nullptr, false, dict_index->name);
     ib_logger(ib_stream,
               ",\n"
-              "InnoDB: father ptr page no %lu, child page no %lu\n",
+              "father ptr page no %lu, child page no %lu\n",
               (ulong)btr_node_ptr_get_child_page_no(node_ptr, offsets),
               (ulong)page_no);
     print_rec = page_rec_get_next(page_get_infimum_rec(page_align(user_rec)));
@@ -421,12 +421,12 @@ static ulint *btr_page_get_father_node_ptr_func(
         rec_get_offsets(node_ptr, dict_index, offsets, ULINT_UNDEFINED, &heap);
     page_rec_print(node_ptr, offsets);
 
-    ib_logger(ib_stream, "InnoDB: You should dump + drop + reimport the table"
+    ib_logger(ib_stream, "You should dump + drop + reimport the table"
                          " to fix the\n"
-                         "InnoDB: corruption. If the crash happens at "
+                         "corruption. If the crash happens at "
                          "the database startup, see\n"
-                         "InnoDB: InnoDB website for details about\n"
-                         "InnoDB: forcing recovery. "
+                         "InnoDB website for details about\n"
+                         "forcing recovery. "
                          "Then dump + drop + reimport.\n");
 
     ut_error;
@@ -651,11 +651,11 @@ btr_page_reorganize_low(bool recovery,      /*!< in: true if called in recovery:
     buf_page_print(page, 0);
     buf_page_print(temp_page, 0);
     ib_logger(ib_stream,
-              "InnoDB: Error: page old data size %lu"
+              "Error: page old data size %lu"
               " new data size %lu\n"
-              "InnoDB: Error: page old max ins size %lu"
+              "Error: page old max ins size %lu"
               " new max ins size %lu\n"
-              "InnoDB: Submit a detailed bug report, "
+              "Submit a detailed bug report, "
               "check the InnoDB website for details",
               (unsigned long)data_size1, (unsigned long)data_size2,
               (unsigned long)max_ins_size1, (unsigned long)max_ins_size2);
@@ -2125,7 +2125,7 @@ btr_index_rec_validate_report(const page_t *page, /*!< in: index page */
                               const rec_t *rec,   /*!< in: index record */
                               const dict_index_t *dict_index) /*!< in: index */
 {
-  ib_logger(ib_stream, "InnoDB: Record in ");
+  ib_logger(ib_stream, "Record in ");
   dict_index_name_print(ib_stream, nullptr, dict_index);
   ib_logger(ib_stream, ", page %lu, at offset %lu\n", page_get_page_no(page),
             (ulint)page_offset(rec));
@@ -2155,7 +2155,7 @@ bool btr_index_rec_validate(const rec_t *rec, /*!< in: index record */
   if (unlikely((bool)!!page_is_comp(page) !=
                dict_table_is_comp(dict_index->table))) {
     btr_index_rec_validate_report(page, rec, dict_index);
-    ib_logger(ib_stream, "InnoDB: compact flag=%lu, should be %lu\n",
+    ib_logger(ib_stream, "compact flag=%lu, should be %lu\n",
               (ulong) !!page_is_comp(page),
               (ulong)dict_table_is_comp(dict_index->table));
 
@@ -2166,13 +2166,13 @@ bool btr_index_rec_validate(const rec_t *rec, /*!< in: index record */
 
   if (!page_is_comp(page) && unlikely(rec_get_n_fields_old(rec) != n)) {
     btr_index_rec_validate_report(page, rec, dict_index);
-    ib_logger(ib_stream, "InnoDB: has %lu fields, should have %lu\n",
+    ib_logger(ib_stream, "has %lu fields, should have %lu\n",
               (ulong)rec_get_n_fields_old(rec), (ulong)n);
 
     if (dump_on_error) {
       buf_page_print(page, 0);
 
-      ib_logger(ib_stream, "InnoDB: corrupt record ");
+      ib_logger(ib_stream, "corrupt record ");
       rec_print_old(ib_stream, rec);
       ib_logger(ib_stream, "\n");
     }
@@ -2201,14 +2201,14 @@ bool btr_index_rec_validate(const rec_t *rec, /*!< in: index record */
 
       btr_index_rec_validate_report(page, rec, dict_index);
       ib_logger(ib_stream,
-                "InnoDB: field %lu len is %lu,"
+                "field %lu len is %lu,"
                 " should be %lu\n",
                 (ulong)i, (ulong)len, (ulong)fixed_size);
 
       if (dump_on_error) {
         buf_page_print(page, 0);
 
-        ib_logger(ib_stream, "InnoDB: corrupt record ");
+        ib_logger(ib_stream, "corrupt record ");
         rec_print_new(ib_stream, rec, offsets);
         ib_logger(ib_stream, "\n");
       }
@@ -2260,7 +2260,7 @@ btr_validate_report1(dict_index_t *dict_index, /*!< in: index */
                      ulint level,              /*!< in: B-tree level */
                      const buf_block_t *block) /*!< in: index page */
 {
-  ib_logger(ib_stream, "InnoDB: Error in page %lu of ",
+  ib_logger(ib_stream, "Error in page %lu of ",
             buf_block_get_page_no(block));
   dict_index_name_print(ib_stream, nullptr, dict_index);
   if (level) {
@@ -2276,7 +2276,7 @@ btr_validate_report2(const dict_index_t *dict_index, /*!< in: index */
                      const buf_block_t *block1, /*!< in: first index page */
                      const buf_block_t *block2) /*!< in: second index page */
 {
-  ib_logger(ib_stream, "InnoDB: Error in pages %lu and %lu of ",
+  ib_logger(ib_stream, "Error in pages %lu and %lu of ",
             buf_block_get_page_no(block1), buf_block_get_page_no(block2));
   dict_index_name_print(ib_stream, nullptr, dict_index);
   if (level) {
@@ -2379,7 +2379,7 @@ loop:
     if (unlikely(btr_page_get_prev(right_page, &mtr) !=
                  page_get_page_no(page))) {
       btr_validate_report2(dict_index, level, block, right_block);
-      ib_logger(ib_stream, "InnoDB: broken FIL_PAGE_NEXT"
+      ib_logger(ib_stream, "broken FIL_PAGE_NEXT"
                            " or FIL_PAGE_PREV links\n");
       buf_page_print(page, 0);
       buf_page_print(right_page, 0);
@@ -2389,7 +2389,7 @@ loop:
 
     if (unlikely(page_is_comp(right_page) != page_is_comp(page))) {
       btr_validate_report2(dict_index, level, block, right_block);
-      ib_logger(ib_stream, "InnoDB: 'compact' flag mismatch\n");
+      ib_logger(ib_stream, "'compact' flag mismatch\n");
       buf_page_print(page, 0);
       buf_page_print(right_page, 0);
 
@@ -2408,17 +2408,17 @@ loop:
 
       btr_validate_report2(dict_index, level, block, right_block);
 
-      ib_logger(ib_stream, "InnoDB: records in wrong order"
+      ib_logger(ib_stream, "records in wrong order"
                            " on adjacent pages\n");
 
       buf_page_print(page, 0);
       buf_page_print(right_page, 0);
 
-      ib_logger(ib_stream, "InnoDB: record ");
+      ib_logger(ib_stream, "record ");
       rec = page_rec_get_prev(page_get_supremum_rec(page));
       rec_print(ib_stream, rec, dict_index);
       ib_logger(ib_stream, "\n");
-      ib_logger(ib_stream, "InnoDB: record ");
+      ib_logger(ib_stream, "record ");
       rec = page_rec_get_next(page_get_infimum_rec(right_page));
       rec_print(ib_stream, rec, dict_index);
       ib_logger(ib_stream, "\n");
@@ -2454,21 +2454,21 @@ loop:
 
       btr_validate_report1(dict_index, level, block);
 
-      ib_logger(ib_stream, "InnoDB: node pointer to the page is wrong\n");
+      ib_logger(ib_stream, "node pointer to the page is wrong\n");
 
       buf_page_print(father_page, 0);
       buf_page_print(page, 0);
 
-      ib_logger(ib_stream, "InnoDB: node ptr ");
+      ib_logger(ib_stream, "node ptr ");
       rec_print(ib_stream, node_ptr, dict_index);
 
       rec = btr_cur_get_rec(&node_cur);
       ib_logger(ib_stream,
                 "\n"
-                "InnoDB: node ptr child page n:o %lu\n",
+                "node ptr child page n:o %lu\n",
                 (ulong)btr_node_ptr_get_child_page_no(rec, offsets));
 
-      ib_logger(ib_stream, "InnoDB: record on page ");
+      ib_logger(ib_stream, "record on page ");
       rec_print_new(ib_stream, rec, offsets);
       ib_logger(ib_stream, "\n");
       ret = false;
@@ -2490,11 +2490,11 @@ loop:
         buf_page_print(father_page, 0);
         buf_page_print(page, 0);
 
-        ib_logger(ib_stream, "InnoDB: Error: node ptrs differ"
+        ib_logger(ib_stream, "Error: node ptrs differ"
                              " on levels > 0\n"
-                             "InnoDB: node ptr ");
+                             "node ptr ");
         rec_print_new(ib_stream, node_ptr, offsets);
-        ib_logger(ib_stream, "InnoDB: first rec ");
+        ib_logger(ib_stream, "first rec ");
         rec_print(ib_stream, first_rec, dict_index);
         ib_logger(ib_stream, "\n");
         ret = false;
@@ -2520,7 +2520,7 @@ loop:
 
         if (btr_cur_get_rec(&right_node_cur) != right_node_ptr) {
           ret = false;
-          ib_logger(ib_stream, "InnoDB: node pointer to"
+          ib_logger(ib_stream, "node pointer to"
                                " the right page is wrong\n");
 
           btr_validate_report1(dict_index, level, block);
@@ -2535,7 +2535,7 @@ loop:
         if (btr_cur_get_rec(&right_node_cur) !=
             page_rec_get_next(page_get_infimum_rec(right_father_page))) {
           ret = false;
-          ib_logger(ib_stream, "InnoDB: node pointer 2 to"
+          ib_logger(ib_stream, "node pointer 2 to"
                                " the right page is wrong\n");
 
           btr_validate_report1(dict_index, level, block);
@@ -2550,7 +2550,7 @@ loop:
             btr_page_get_next(father_page, &mtr)) {
 
           ret = false;
-          ib_logger(ib_stream, "InnoDB: node pointer 3 to"
+          ib_logger(ib_stream, "node pointer 3 to"
                                " the right page is wrong\n");
 
           btr_validate_report1(dict_index, level, block);

@@ -53,7 +53,7 @@ os_thread_t os_thread_create(void *(*f)(void *), void *arg,
   auto ret = pthread_create(&pthread, &attr, f, arg);
 
   if (ret != 0) {
-    log_fatal("InnoDB: Error: pthread_create returned %d\n", ret);
+    log_fatal("Error: pthread_create returned %d\n", ret);
   }
 
   if (srv_set_thread_priorities) {

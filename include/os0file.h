@@ -81,8 +81,6 @@ whole block gets written. This should be true even in most cases of a crash:
 if this fails for a log block, then it is equivalent to a media failure in the
 log. */
 
-constexpr ulint OS_FILE_LOG_BLOCK_SIZE = 512;
-
 /** Options for file_create @{ */
 constexpr ulint OS_FILE_OPEN =  51;
 constexpr ulint OS_FILE_CREATE =  52;

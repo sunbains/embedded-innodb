@@ -211,7 +211,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
 
   ut_print_timestamp(ib_stream);
   ib_logger(ib_stream,
-            "  InnoDB: Rolling back trx with id %lu, %lu%s rows to undo\n",
+            "  Rolling back trx with id %lu, %lu%s rows to undo\n",
             TRX_ID_PREP_PRINTF(trx->id), (ulong)rows_to_undo, unit);
   mutex_exit(&kernel_mutex);
 
@@ -232,7 +232,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
 
     mutex_exit(&kernel_mutex);
 
-    ib_logger(ib_stream, "InnoDB: Waiting for rollback of trx id %lu to end\n",
+    ib_logger(ib_stream, "Waiting for rollback of trx id %lu to end\n",
               (ulong)trx->id);
     os_thread_sleep(100000);
 
@@ -247,7 +247,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
     drop the relevant table, if it still exists */
 
     ib_logger(ib_stream,
-              "InnoDB: Dropping table with id %lu %lu"
+              "Dropping table with id %lu %lu"
               " in recovery if it exists\n",
               (ulong)trx->table_id,
               (ulong)trx->table_id);
@@ -257,7 +257,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
     if (table) {
       ulint err;
 
-      ib_logger(ib_stream, "InnoDB: Table found: dropping table ");
+      ib_logger(ib_stream, "Table found: dropping table ");
       ut_print_name(ib_stream, trx, true, table->name);
       ib_logger(ib_stream, " in recovery\n");
 
@@ -272,7 +272,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
     dict_unlock_data_dictionary(trx);
   }
 
-  ib_logger(ib_stream, "\nInnoDB: Rolling back of trx id %lu completed\n",
+  ib_logger(ib_stream, "\nRolling back of trx id %lu completed\n",
             TRX_ID_PREP_PRINTF(trx->id));
   mem_heap_free(heap);
 
@@ -297,7 +297,7 @@ void trx_rollback_or_clean_recovered(
   }
 
   if (all) {
-    ib_logger(ib_stream, "InnoDB: Starting in background the rollback"
+    ib_logger(ib_stream, "Starting in background the rollback"
                          " of uncommitted transactions\n");
   }
 
@@ -319,7 +319,7 @@ loop:
 
     case TRX_COMMITTED_IN_MEMORY:
       mutex_exit(&kernel_mutex);
-      ib_logger(ib_stream, "InnoDB: Cleaning up trx with id %lu\n",
+      ib_logger(ib_stream, "Cleaning up trx with id %lu\n",
                 TRX_ID_PREP_PRINTF(trx->id));
       trx_cleanup_at_db_startup(trx);
       goto loop;
@@ -336,7 +336,7 @@ loop:
 
   if (all) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  InnoDB: Rollback of non-prepared"
+    ib_logger(ib_stream, "  Rollback of non-prepared"
                          " transactions completed\n");
   }
 
@@ -663,7 +663,7 @@ try_again:
     if (progress_pct != trx_roll_progress_printed_pct) {
       if (trx_roll_progress_printed_pct == 0) {
         ib_logger(ib_stream,
-                  "\nInnoDB: Progress in percents:"
+                  "\nProgress in percents:"
                   " %lu",
                   (ulong)progress_pct);
       } else {

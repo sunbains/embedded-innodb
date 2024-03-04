@@ -364,30 +364,30 @@ ulint buf_get_n_pending_ios(void);
 /*** Prints info of the buffer i/o. */
 
 void buf_print_io(ib_stream_t ib_stream); /*!< in: file where to print */
+
 /*** Returns the ratio in percents of modified pages in the buffer pool /
 database pages in the buffer pool.
 @return	modified page percentage ratio */
-
 ulint buf_get_modified_ratio_pct(void);
-/*** Refreshes the statistics used to print per-second averages. */
 
+/*** Refreshes the statistics used to print per-second averages. */
 void buf_refresh_io_stats(void);
+
 /*** Asserts that all file pages in the buffer are in a replaceable state.
 @return	true */
+bool buf_all_freed();
 
-bool buf_all_freed(void);
 /*** Checks that there currently are no pending i/o-operations for the buffer
 pool.
 @return	true if there is no pending i/o */
-
 bool buf_pool_check_no_pending_io(void);
+
 /*** Invalidates the file pages in the buffer pool when an archive recovery is
 completed. All the file pages buffered must be in a replaceable state when
 this function is called: not latched and not modified. */
-
 void buf_pool_invalidate(void);
-/*** Reset the buffer variables. */
 
+/*** Reset the buffer variables. */
 void buf_var_init(void);
 
 /* --------------------------- LOWER LEVEL ROUTINES ------------------------- */

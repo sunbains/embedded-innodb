@@ -792,7 +792,7 @@ sync_thread_levels_g(sync_level_t *arr, /*!< in: pointer to level array for an
         mutex = slot->latch;
 
         ib_logger(ib_stream,
-                  "InnoDB: sync levels should be"
+                  "sync levels should be"
                   " > %lu but a level is %lu\n",
                   (ulong)limit, (ulong)slot->level);
 
@@ -808,7 +808,7 @@ sync_thread_levels_g(sync_level_t *arr, /*!< in: pointer to level array for an
             mutex_get_debug_info(mutex, &file_name, &line, &thread_id);
 
             ib_logger(ib_stream,
-                      "InnoDB: Locked mutex:"
+                      "Locked mutex:"
                       " addr %p thread %ld"
                       " file %s line %ld\n",
                       (void *)mutex, os_thread_pf(thread_id), file_name,
@@ -1028,7 +1028,7 @@ void sync_thread_add_level(void *latch, ulint level) {
   case SYNC_TRX_I_S_LAST_READ:
     if (!sync_thread_levels_g(array, level, true)) {
       ib_logger(ib_stream,
-                "InnoDB: sync_thread_levels_g(array, %lu)"
+                "sync_thread_levels_g(array, %lu)"
                 " does not hold!\n",
                 level);
       ut_error;

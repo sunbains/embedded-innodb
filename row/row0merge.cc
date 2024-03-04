@@ -628,7 +628,7 @@ static bool row_merge_read(int fd,       /*!< in: file descriptor */
                                            (ulint)(ofs >> 32), sizeof *buf);
   if (unlikely(!success)) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  InnoDB: failed to read merge block at %lu\n", ofs);
+    ib_logger(ib_stream, "  failed to read merge block at %lu\n", ofs);
   }
 
   return (likely(success));

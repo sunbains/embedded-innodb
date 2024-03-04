@@ -442,16 +442,16 @@ bool lock_check_trx_id_sanity(trx_id_t trx_id, const rec_t *rec,
 
   if (trx_id >= trx_sys->max_trx_id) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  InnoDB: Error: transaction id associated"
+    ib_logger(ib_stream, "  Error: transaction id associated"
                          " with record\n");
     rec_print_new(ib_stream, rec, offsets);
-    ib_logger(ib_stream, "InnoDB: in ");
+    ib_logger(ib_stream, "in ");
     dict_index_name_print(ib_stream, nullptr, index);
     ib_logger(ib_stream,
               "\n"
-              "InnoDB: is %lu which is higher than the"
+              "is %lu which is higher than the"
               " global trx id counter %lu\n"
-              "InnoDB: The table is corrupt. You have to do"
+              "The table is corrupt. You have to do"
               " dump + drop + reimport.\n",
               TRX_ID_PREP_PRINTF(trx_id),
               TRX_ID_PREP_PRINTF(trx_sys->max_trx_id));
@@ -492,7 +492,7 @@ ulint lock_sec_rec_cons_read_sees(const rec_t *rec, const read_view_t *view) {
   system latch. To obey the latching order we must NOT reserve the
   kernel mutex here! */
 
-  if (recv_recovery_is_on()) {
+  if (recv_recovery_on) {
     return false;
   }
 
@@ -1349,7 +1349,8 @@ static trx_t *lock_sec_rec_some_has_impl_off_kernel(
   max trx id to the log, and therefore during recovery, this value
   for a page may be incorrect. */
 
-  if (page_get_max_trx_id(page) < trx_list_get_min_trx_id() && !recv_recovery_is_on()) {
+  if (page_get_max_trx_id(page) < trx_list_get_min_trx_id()
+      && !recv_recovery_on) {
 
     return nullptr;
   }
@@ -1369,24 +1370,15 @@ static trx_t *lock_sec_rec_some_has_impl_off_kernel(
   return row_vers_impl_x_locked_off_kernel(rec, index, offsets);
 }
 
-/** Return approximate number or record locks (bits set in the bitmap) for
-this transaction. Since delete-marked records may be removed, the
-record count will not be precise. */
+ulint lock_number_of_rows_locked(trx_t *trx) {
+  ulint n_records{};
+  auto lock = UT_LIST_GET_FIRST(trx->trx_locks);
 
-ulint lock_number_of_rows_locked(trx_t *trx) /*!< in: transaction */
-{
-  lock_t *lock;
-  ulint n_records = 0;
-  ulint n_bits;
-  ulint n_bit;
-
-  lock = UT_LIST_GET_FIRST(trx->trx_locks);
-
-  while (lock) {
+  while (lock != nullptr) {
     if (lock_get_type_low(lock) == LOCK_REC) {
-      n_bits = lock_rec_get_n_bits(lock);
+      auto n_bits = lock_rec_get_n_bits(lock);
 
-      for (n_bit = 0; n_bit < n_bits; n_bit++) {
+      for (ulint n_bit = 0; n_bit < n_bits; n_bit++) {
         if (lock_rec_get_nth_bit(lock, n_bit)) {
           n_records++;
         }
@@ -1537,12 +1529,12 @@ lock_rec_enqueue_waiting(ulint type_mode,          /*!< in: lock mode this
   case TRX_DICT_OP_TABLE:
   case TRX_DICT_OP_INDEX:
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  InnoDB: Error: a record lock wait happens"
+    ib_logger(ib_stream, "  Error: a record lock wait happens"
                          " in a dictionary operation!\n"
-                         "InnoDB: ");
+                         "");
     dict_index_name_print(ib_stream, trx, index);
     ib_logger(ib_stream, ".\n"
-                         "InnoDB: Submit a detailed bug report "
+                         "Submit a detailed bug report "
                          "check the InnoDB website for details");
   }
 
@@ -3194,12 +3186,12 @@ lock_table_enqueue_waiting(ulint mode,          /*!< in: lock mode this
   case TRX_DICT_OP_TABLE:
   case TRX_DICT_OP_INDEX:
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  InnoDB: Error: a table lock wait happens"
+    ib_logger(ib_stream, "  Error: a table lock wait happens"
                          " in a dictionary operation!\n"
-                         "InnoDB: Table name ");
+                         "Table name ");
     ut_print_name(ib_stream, trx, true, table->name);
     ib_logger(ib_stream, ".\n"
-                         "InnoDB: Submit a detailed bug report, "
+                         "Submit a detailed bug report, "
                          "check the InnoDB website for details");
   }
 
@@ -3431,7 +3423,7 @@ void lock_rec_unlock(
     mutex_exit(&kernel_mutex);
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: Error: unlock row could not"
+              "  Error: unlock row could not"
               " find a %lu mode lock on the record\n",
               (ulong)lock_mode);
 
@@ -4636,7 +4628,9 @@ db_err lock_sec_rec_read_check_and_lock(
   if the max trx id for the page >= min trx id for the trx list or a
   database recovery is running. */
 
-  if ((page_get_max_trx_id(block->frame) >= trx_list_get_min_trx_id() || recv_recovery_is_on()) && !page_rec_is_supremum(rec)) {
+  if ((page_get_max_trx_id(block->frame) >= trx_list_get_min_trx_id()
+       || recv_recovery_on)
+      && !page_rec_is_supremum(rec)) {
 
     lock_rec_convert_impl_to_expl(block, rec, index, offsets);
   }

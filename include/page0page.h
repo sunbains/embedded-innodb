@@ -703,7 +703,7 @@ inline void page_update_max_trx_id(buf_block_t *block, /*!< in/out: page */
   true for the dummy indexes constructed during redo log
   application).  In that case, PAGE_MAX_TRX_ID is unused,
   and trx_id is usually zero. */
-  ut_ad(trx_id > 0 || recv_recovery_is_on());
+  ut_ad(trx_id > 0 || recv_recovery_on);
   ut_ad(page_is_leaf(buf_block_get_frame(block)));
 
   if (page_get_max_trx_id(buf_block_get_frame(block)) < trx_id) {
@@ -1125,9 +1125,9 @@ page_rec_get_next_low(const rec_t *rec, /*!< in: pointer to record */
 
   if (unlikely(offs >= UNIV_PAGE_SIZE)) {
     ib_logger(ib_stream,
-              "InnoDB: Next record offset is nonsensical %lu"
+              "Next record offset is nonsensical %lu"
               " in record at offset %lu\n"
-              "InnoDB: rec address %p, space id %lu, page %lu\n",
+              "rec address %p, space id %lu, page %lu\n",
               (ulong)offs, (ulong)page_offset(rec), (void *)rec,
               (ulong)page_get_space_id(page), (ulong)page_get_page_no(page));
     buf_page_print(page, 0);

@@ -621,7 +621,7 @@ static db_err open_or_create_log_file(
   if (ret == false) {
     if (os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
       ib_logger(ib_stream,
-                "InnoDB: Error in creating"
+                "Error in creating"
                 " or opening %s\n",
                 name);
 
@@ -632,7 +632,7 @@ static db_err open_or_create_log_file(
         os_file_create(name, OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, &ret);
 
     if (!ret) {
-      ib_logger(ib_stream, "InnoDB: Error in opening %s\n", name);
+      ib_logger(ib_stream, "Error in opening %s\n", name);
 
       return DB_ERROR;
     }
@@ -644,9 +644,9 @@ static db_err open_or_create_log_file(
         size_high != srv_calc_high32(srv_log_file_size)) {
 
       ib_logger(ib_stream,
-                "InnoDB: Error: log file %s is"
+                "Error: log file %s is"
                 " of different size %lu %lu bytes\n"
-                "InnoDB: than the configured %lu %lu bytes!\n",
+                "than the configured %lu %lu bytes!\n",
                 name, (ulong)size_high, (ulong)size,
                 (ulong)srv_calc_high32(srv_log_file_size),
                 (ulong)srv_calc_low32(srv_log_file_size));
@@ -659,7 +659,7 @@ static db_err open_or_create_log_file(
     ut_print_timestamp(ib_stream);
 
     ib_logger(ib_stream,
-              "  InnoDB: Log file %s did not exist:"
+              "  Log file %s did not exist:"
               " new to be created\n",
               name);
     if (log_file_has_been_opened) {
@@ -667,17 +667,17 @@ static db_err open_or_create_log_file(
       return DB_ERROR;
     }
 
-    ib_logger(ib_stream, "InnoDB: Setting log file %s size to %lu MB\n", name,
+    ib_logger(ib_stream, "Setting log file %s size to %lu MB\n", name,
               (ulong)srv_log_file_size >> (20 - UNIV_PAGE_SIZE_SHIFT));
 
-    ib_logger(ib_stream, "InnoDB: Database physically writes the file"
+    ib_logger(ib_stream, "Database physically writes the file"
                          " full: wait...\n");
 
     ret = os_file_set_size(name, files[i], srv_calc_low32(srv_log_file_size),
                            srv_calc_high32(srv_log_file_size));
     if (!ret) {
       ib_logger(ib_stream,
-                "InnoDB: Error in creating %s:"
+                "Error in creating %s:"
                 " probably out of disk space\n",
                 name);
 
@@ -754,8 +754,8 @@ static db_err open_or_create_data_files(
 
   if (srv_n_data_files >= 1000) {
     ib_logger(ib_stream,
-              "InnoDB: can only have < 1000 data files\n"
-              "InnoDB: you have defined %lu\n",
+              "can only have < 1000 data files\n"
+              "you have defined %lu\n",
               (ulong)srv_n_data_files);
     return DB_ERROR;
   }
@@ -809,7 +809,7 @@ static db_err open_or_create_data_files(
 #endif
       ) {
         ib_logger(ib_stream,
-                  "InnoDB: Error in creating"
+                  "Error in creating"
                   " or opening %s\n",
                   name);
 
@@ -825,7 +825,7 @@ static db_err open_or_create_data_files(
       files[i] = os_file_create(name, OS_FILE_OPEN_RAW, OS_FILE_NORMAL,
                                 OS_DATA_FILE, &ret);
       if (!ret) {
-        ib_logger(ib_stream, "InnoDB: Error in opening %s\n", name);
+        ib_logger(ib_stream, "Error in opening %s\n", name);
 
         return DB_ERROR;
       }
@@ -841,10 +841,10 @@ static db_err open_or_create_data_files(
       /* We open the data file */
 
       if (one_created) {
-        ib_logger(ib_stream, "InnoDB: Error: data files can only"
+        ib_logger(ib_stream, "Error: data files can only"
                              " be added at the end\n");
         ib_logger(ib_stream,
-                  "InnoDB: of a tablespace, but"
+                  "of a tablespace, but"
                   " data file %s existed beforehand.\n",
                   name);
         return DB_ERROR;
@@ -862,7 +862,7 @@ static db_err open_or_create_data_files(
       }
 
       if (!ret) {
-        ib_logger(ib_stream, "InnoDB: Error in opening %s\n", name);
+        ib_logger(ib_stream, "Error in opening %s\n", name);
         os_file_get_last_error(true);
 
         return DB_ERROR;
@@ -887,13 +887,13 @@ static db_err open_or_create_data_files(
              srv_last_file_size_max < rounded_size_pages)) {
 
           ib_logger(ib_stream,
-                    "InnoDB: Error: auto-extending"
+                    "Error: auto-extending"
                     " data file %s is"
                     " of a different size\n"
-                    "InnoDB: %lu pages (rounded"
+                    "%lu pages (rounded"
                     " down to MB) than the "
                     "configured\n"
-                    "InnoDB: initial %lu pages,"
+                    "initial %lu pages,"
                     " max %lu (relevant if"
                     " non-zero) pages!\n",
                     name, (ulong)rounded_size_pages,
@@ -909,11 +909,11 @@ static db_err open_or_create_data_files(
       if (rounded_size_pages != srv_data_file_sizes[i]) {
 
         ib_logger(ib_stream,
-                  "InnoDB: Error: data file %s"
+                  "Error: data file %s"
                   " is of a different size\n"
-                  "InnoDB: %lu pages"
+                  "%lu pages"
                   " (rounded down to MB)\n"
-                  "InnoDB: than the configured "
+                  "than the configured "
                   "%lu pages!\n",
                   name, (ulong)rounded_size_pages,
                   (ulong)srv_data_file_sizes[i]);
@@ -936,24 +936,24 @@ static db_err open_or_create_data_files(
       if (i > 0) {
         ut_print_timestamp(ib_stream);
         ib_logger(ib_stream,
-                  "  InnoDB: Data file %s did not"
+                  "  Data file %s did not"
                   " exist: new to be created\n",
                   name);
       } else {
         ib_logger(ib_stream,
-                  "InnoDB: The first specified"
+                  "The first specified"
                   " data file %s did not exist:\n"
-                  "InnoDB: a new database"
+                  "a new database"
                   " to be created!\n",
                   name);
         *create_new_db = true;
       }
 
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: Setting file %s size to %lu MB\n", name,
+      ib_logger(ib_stream, "  Setting file %s size to %lu MB\n", name,
                 (ulong)(srv_data_file_sizes[i] >> (20 - UNIV_PAGE_SIZE_SHIFT)));
 
-      ib_logger(ib_stream, "InnoDB: Database physically writes the"
+      ib_logger(ib_stream, "Database physically writes the"
                            " file full: wait...\n");
 
       ret = os_file_set_size(name, files[i],
@@ -962,7 +962,7 @@ static db_err open_or_create_data_files(
 
       if (!ret) {
         ib_logger(ib_stream,
-                  "InnoDB: Error in creating %s:"
+                  "Error in creating %s:"
                   " probably out of disk space\n",
                   name);
 
@@ -1057,25 +1057,25 @@ ib_err_t innobase_start_or_create() {
   on Mac OS X 10.3 or later. */
   struct utsname utsname;
   if (uname(&utsname)) {
-    ib_logger(ib_stream, "InnoDB: cannot determine Mac OS X version!\n");
+    ib_logger(ib_stream, "cannot determine Mac OS X version!\n");
   } else {
     srv_have_fullfsync = strcmp(utsname.release, "7.") >= 0;
   }
   if (!srv_have_fullfsync) {
-    ib_logger(ib_stream, "InnoDB: On Mac OS X, fsync() may be"
+    ib_logger(ib_stream, "On Mac OS X, fsync() may be"
                          " broken on internal drives,\n"
-                         "InnoDB: making transactions unsafe!\n");
+                         "making transactions unsafe!\n");
   }
 #endif /* F_FULLFSYNC */
 #endif /* HAVE_DARWIN_THREADS */
 
   if (sizeof(ulint) != sizeof(void *)) {
     ib_logger(ib_stream,
-              "InnoDB: Error: size of InnoDB's ulint is %lu,"
+              "Error: size of InnoDB's ulint is %lu,"
               " but size of void* is %lu.\n"
-              "InnoDB: The sizes should be the same"
+              "The sizes should be the same"
               " so that on a 64-bit platform you can\n"
-              "InnoDB: allocate more than 4 GB of memory.",
+              "allocate more than 4 GB of memory.",
               (ulong)sizeof(ulint), (ulong)sizeof(void *));
   }
 
@@ -1085,40 +1085,40 @@ ib_err_t innobase_start_or_create() {
   file_per_table) until this function has returned. */
   srv_file_per_table = false;
 #ifdef UNIV_DEBUG
-  ib_logger(ib_stream, "InnoDB: !!!!!!!! UNIV_DEBUG switched on !!!!!!!!!\n");
+  ib_logger(ib_stream, "!!!!!!!! UNIV_DEBUG switched on !!!!!!!!!\n");
 #endif
 
 #ifdef UNIV_SYNC_DEBUG
   ib_logger(ib_stream,
-            "InnoDB: !!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!\n");
+            "!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!\n");
 #endif
 
 #ifdef UNIV_SEARCH_DEBUG
   ib_logger(ib_stream,
-            "InnoDB: !!!!!!!! UNIV_SEARCH_DEBUG switched on !!!!!!!!!\n");
+            "!!!!!!!! UNIV_SEARCH_DEBUG switched on !!!!!!!!!\n");
 #endif
 
 #ifdef UNIV_LOG_LSN_DEBUG
   ib_logger(ib_stream,
-            "InnoDB: !!!!!!!! UNIV_LOG_LSN_DEBUG switched on !!!!!!!!!\n");
+            "!!!!!!!! UNIV_LOG_LSN_DEBUG switched on !!!!!!!!!\n");
 #endif /* UNIV_LOG_LSN_DEBUG */
 #ifdef UNIV_MEM_DEBUG
   ib_logger(ib_stream,
-            "InnoDB: !!!!!!!! UNIV_MEM_DEBUG switched on !!!!!!!!!\n");
+            "!!!!!!!! UNIV_MEM_DEBUG switched on !!!!!!!!!\n");
 #endif
 
   if (likely(srv_use_sys_malloc)) {
-    ib_logger(ib_stream, "InnoDB: The InnoDB memory heap is disabled\n");
+    ib_logger(ib_stream, "The InnoDB memory heap is disabled\n");
   }
 
-  ib_logger(ib_stream, "InnoDB: " IB_ATOMICS_STARTUP_MSG "\n");
+  ib_logger(ib_stream, "" IB_ATOMICS_STARTUP_MSG "\n");
 
   /* Print an error message if someone tries to start up InnoDB a
   second time while it's already in state running. */
   if (srv_was_started && srv_start_has_been_called) {
-    ib_logger(ib_stream, "InnoDB: Error: startup called second time"
+    ib_logger(ib_stream, "Error: startup called second time"
                          " during the process lifetime.\n"
-                         "InnoDB: more than once during"
+                         "more than once during"
                          " the process lifetime.\n");
   }
 
@@ -1136,7 +1136,7 @@ ib_err_t innobase_start_or_create() {
   some variables to the units used by InnoDB internally */
 
   /* Set the maximum number of threads which can wait for a semaphore
-  inside InnoDB: this is the 'sync wait array' size, as well as the
+  inside this is the 'sync wait array' size, as well as the
   maximum number of threads that can wait in the 'srv_conc array' for
   their time to enter InnoDB. */
 
@@ -1183,7 +1183,7 @@ ib_err_t innobase_start_or_create() {
   if (srv_buf_pool_size <= 5 * 1024 * 1024) {
 
     ib_logger(ib_stream,
-              "InnoDB: Warning: Small buffer pool size "
+              "Warning: Small buffer pool size "
               "(%luM), the flst_validate() debug function "
               "can cause a deadlock if the buffer pool fills up.\n",
               srv_buf_pool_size / 1024 / 1024);
@@ -1192,7 +1192,7 @@ ib_err_t innobase_start_or_create() {
 
 #ifdef UNIV_LOG_ARCHIVE
   if (0 != strcmp(srv_log_group_home_dirs[0], srv_arch_dir)) {
-    ib_logger(ib_stream, "InnoDB: Error: you must set the log group"
+    ib_logger(ib_stream, "Error: you must set the log group"
                          " home dir same as log arch dir.\n");
 
     return DB_ERROR;
@@ -1200,7 +1200,7 @@ ib_err_t innobase_start_or_create() {
 #endif /* UNIV_LOG_ARCHIVE */
 
   if (srv_n_log_files * srv_log_file_size >= 262144) {
-    ib_logger(ib_stream, "InnoDB: Error: combined size of log files"
+    ib_logger(ib_stream, "Error: combined size of log files"
                          " must be < 4 GB\n");
 
     return DB_ERROR;
@@ -1210,9 +1210,9 @@ ib_err_t innobase_start_or_create() {
 
   for (i = 0; i < srv_n_data_files; i++) {
     if (sizeof(off_t) < 5 && srv_data_file_sizes[i] >= 262144) {
-      ib_logger(ib_stream, "InnoDB: Error: file size must be < 4 GB"
+      ib_logger(ib_stream, "Error: file size must be < 4 GB"
                            " with this binary\n"
-                           "InnoDB: and operating system combination,"
+                           "and operating system combination,"
                            " in some OS's < 2 GB\n");
 
       return DB_ERROR;
@@ -1221,7 +1221,7 @@ ib_err_t innobase_start_or_create() {
   }
 
   if (sum_of_new_sizes < 10485760 / UNIV_PAGE_SIZE) {
-    ib_logger(ib_stream, "InnoDB: Error: tablespace size must be"
+    ib_logger(ib_stream, "Error: tablespace size must be"
                          " at least 10 MB\n");
 
     return DB_ERROR;
@@ -1239,7 +1239,7 @@ ib_err_t innobase_start_or_create() {
     fil_close();
     os_aio_close();
 
-    ib_logger(ib_stream, "InnoDB: Fatal error: cannot allocate the memory"
+    ib_logger(ib_stream, "Fatal error: cannot allocate the memory"
                          " for the buffer pool\n");
 
     return DB_ERROR;
@@ -1265,18 +1265,18 @@ ib_err_t innobase_start_or_create() {
                                   &min_flushed_lsn, &max_flushed_lsn,
                                   &sum_of_new_sizes);
   if (err != DB_SUCCESS) {
-    ib_logger(ib_stream, "InnoDB: Could not open or create data files.\n"
-                         "InnoDB: If you tried to add new data files,"
+    ib_logger(ib_stream, "Could not open or create data files.\n"
+                         "If you tried to add new data files,"
                          " and it failed here,\n"
-                         "InnoDB: you should now set data_file_path"
+                         "you should now set data_file_path"
                          " back\n"
-                         "InnoDB: to what it was, and remove the"
+                         "to what it was, and remove the"
                          " new ibdata files InnoDB created\n"
-                         "InnoDB: in this failed attempt. InnoDB only wrote"
+                         "in this failed attempt. InnoDB only wrote"
                          " those files full of\n"
-                         "InnoDB: zeros, but did not yet use them in any way."
+                         "zeros, but did not yet use them in any way."
                          " But be careful: do not\n"
-                         "InnoDB: remove old data files"
+                         "remove old data files"
                          " which contain your precious data!\n");
 
     srv_startup_abort(err);
@@ -1302,17 +1302,17 @@ ib_err_t innobase_start_or_create() {
       log_opened = true;
     }
     if ((log_opened && create_new_db) || (log_opened && log_created)) {
-      ib_logger(ib_stream, "InnoDB: Error: all log files must be"
+      ib_logger(ib_stream, "Error: all log files must be"
                            " created at the same time.\n"
-                           "InnoDB: All log files must be"
+                           "All log files must be"
                            " created also in database creation.\n"
-                           "InnoDB: If you want bigger or smaller"
+                           "If you want bigger or smaller"
                            " log files, shut down the\n"
-                           "InnoDB: database and make sure there"
+                           "database and make sure there"
                            " were no errors in shutdown.\n"
-                           "InnoDB: Then delete the existing log files."
+                           "Then delete the existing log files."
                            " Reconfigure InnoDB\n"
-                           "InnoDB: and start the database again.\n");
+                           "and start the database again.\n");
 
       srv_startup_abort(DB_ERROR);
       return DB_ERROR;
@@ -1334,26 +1334,26 @@ ib_err_t innobase_start_or_create() {
         || max_arch_log_no != min_arch_log_no
 #endif /* UNIV_LOG_ARCHIVE */
     ) {
-      ib_logger(ib_stream, "InnoDB: Cannot initialize created"
+      ib_logger(ib_stream, "Cannot initialize created"
                            " log files because\n"
-                           "InnoDB: data files were not in sync"
+                           "data files were not in sync"
                            " with each other\n"
-                           "InnoDB: or the data files are corrupt.\n");
+                           "or the data files are corrupt.\n");
 
       srv_startup_abort(DB_ERROR);
       return DB_ERROR;
     }
 
     if (max_flushed_lsn < (uint64_t)1000) {
-      ib_logger(ib_stream, "InnoDB: Cannot initialize created"
+      ib_logger(ib_stream, "Cannot initialize created"
                            " log files because\n"
-                           "InnoDB: data files are corrupt,"
+                           "data files are corrupt,"
                            " or new data files were\n"
-                           "InnoDB: created when the database"
+                           "created when the database"
                            " was started previous\n"
-                           "InnoDB: time but the database"
+                           "time but the database"
                            " was not shut down\n"
-                           "InnoDB: normally after that.\n");
+                           "normally after that.\n");
 
       srv_startup_abort(DB_ERROR);
       return DB_ERROR;
@@ -1387,7 +1387,7 @@ ib_err_t innobase_start_or_create() {
 #ifdef UNIV_LOG_ARCHIVE
   } else if (srv_archive_recovery) {
 
-    ib_logger(ib_stream, "InnoDB: Starting archive recovery from a backup...\n");
+    ib_logger(ib_stream, "Starting archive recovery from a backup...\n");
 
     err = recv_recovery_from_archive_start(
         min_flushed_lsn, srv_archive_recovery_limit_lsn, min_arch_log_no);
@@ -1573,9 +1573,9 @@ ib_err_t innobase_start_or_create() {
       sum_of_data_file_sizes != tablespace_size_in_header) {
 
     ib_logger(ib_stream,
-              "InnoDB: Error: tablespace size"
+              "Error: tablespace size"
               " stored in header is %lu pages, but\n"
-              "InnoDB: the sum of data file sizes is %lu pages\n",
+              "the sum of data file sizes is %lu pages\n",
               (ulong)tablespace_size_in_header, (ulong)sum_of_data_file_sizes);
 
     if (srv_force_recovery == IB_RECOVERY_DEFAULT &&
@@ -1583,15 +1583,15 @@ ib_err_t innobase_start_or_create() {
       /* This is a fatal error, the tail of a tablespace is
       missing */
 
-      ib_logger(ib_stream, "InnoDB: Cannot start InnoDB."
+      ib_logger(ib_stream, "Cannot start InnoDB."
                            " The tail of the system tablespace is\n"
-                           "InnoDB: missing. Have you set the"
+                           "missing. Have you set the"
                            " data_file_path in an\n"
-                           "InnoDB: inappropriate way, removing"
+                           "inappropriate way, removing"
                            " ibdata files from there?\n"
-                           "InnoDB: You can set force_recovery=1"
+                           "You can set force_recovery=1"
                            " to force\n"
-                           "InnoDB: a startup if you are trying"
+                           "a startup if you are trying"
                            " to recover a badly corrupt database.\n");
 
       srv_startup_abort(DB_ERROR);
@@ -1603,23 +1603,23 @@ ib_err_t innobase_start_or_create() {
       sum_of_data_file_sizes < tablespace_size_in_header) {
 
     ib_logger(ib_stream,
-              "InnoDB: Error: tablespace size stored in header"
+              "Error: tablespace size stored in header"
               " is %lu pages, but\n"
-              "InnoDB: the sum of data file sizes"
+              "the sum of data file sizes"
               " is only %lu pages\n",
               (ulong)tablespace_size_in_header, (ulong)sum_of_data_file_sizes);
 
     if (srv_force_recovery == IB_RECOVERY_DEFAULT) {
 
-      ib_logger(ib_stream, "InnoDB: Cannot start InnoDB. The tail of"
+      ib_logger(ib_stream, "Cannot start InnoDB. The tail of"
                            " the system tablespace is\n"
-                           "InnoDB: missing. Have you set "
+                           "missing. Have you set "
                            " data_file_path in an\n"
-                           "InnoDB: inappropriate way, removing"
+                           "inappropriate way, removing"
                            " ibdata files from there?\n"
-                           "InnoDB: You can set force_recovery=1"
+                           "You can set force_recovery=1"
                            " in to force\n"
-                           "InnoDB: a startup if you are trying to"
+                           "a startup if you are trying to"
                            " recover a badly corrupt database.\n");
 
       srv_startup_abort(DB_ERROR);
@@ -1631,9 +1631,9 @@ ib_err_t innobase_start_or_create() {
   os_fast_mutex_init(&srv_os_test_mutex);
 
   if (0 != os_fast_mutex_trylock(&srv_os_test_mutex)) {
-    ib_logger(ib_stream, "InnoDB: Error: pthread_mutex_trylock returns"
+    ib_logger(ib_stream, "Error: pthread_mutex_trylock returns"
                          " an unexpected value on\n"
-                         "InnoDB: success! Cannot continue.\n");
+                         "success! Cannot continue.\n");
 
     srv_startup_abort(DB_ERROR);
     return DB_ERROR;
@@ -1656,7 +1656,7 @@ ib_err_t innobase_start_or_create() {
   }
 
   if (srv_force_recovery != IB_RECOVERY_DEFAULT) {
-    ib_logger(ib_stream, "InnoDB: !!! force_recovery is set to %lu !!!\n",
+    ib_logger(ib_stream, "!!! force_recovery is set to %lu !!!\n",
               (ulong)srv_force_recovery);
   }
 
@@ -1674,11 +1674,11 @@ ib_err_t innobase_start_or_create() {
     4.1.1. It is essential that the insert buffer is emptied
     here! */
 
-    ib_logger(ib_stream, "InnoDB: You are upgrading to an"
+    ib_logger(ib_stream, "You are upgrading to an"
                          " InnoDB version which allows multiple\n"
-                         "InnoDB: tablespaces. Wait that purge"
+                         "tablespaces. Wait that purge"
                          " and insert buffer merge run to\n"
-                         "InnoDB: completion...\n");
+                         "completion...\n");
     for (;;) {
       os_thread_sleep(1000000);
 
@@ -1687,19 +1687,19 @@ ib_err_t innobase_start_or_create() {
         break;
       }
     }
-    ib_logger(ib_stream, "InnoDB: Full purge and insert buffer merge"
+    ib_logger(ib_stream, "Full purge and insert buffer merge"
                          " completed.\n");
 
     trx_sys_mark_upgraded_to_multiple_tablespaces();
 
-    ib_logger(ib_stream, "InnoDB: You have now successfully upgraded"
+    ib_logger(ib_stream, "You have now successfully upgraded"
                          " to the multiple tablespaces\n"
-                         "InnoDB: format. You should NOT DOWNGRADE"
+                         "format. You should NOT DOWNGRADE"
                          " to an earlier version of\n"
-                         "InnoDB: InnoDB! But if you absolutely need to"
+                         "InnoDB! But if you absolutely need to"
                          " downgrade, check\n"
-                         "InnoDB: the InnoDB website for details\n"
-                         "InnoDB: for instructions.\n");
+                         "the InnoDB website for details\n"
+                         "for instructions.\n");
   }
 
   srv_file_per_table = srv_file_per_table_original_value;
@@ -1765,7 +1765,7 @@ static bool srv_threads_shutdown(void) {
   }
 
   ib_logger(ib_stream,
-            "InnoDB: Warning: %lu threads created by InnoDB"
+            "Warning: %lu threads created by InnoDB"
             " had not exited at shutdown!\n",
             (ulong)os_thread_count);
 
@@ -1780,9 +1780,9 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
   if (!srv_was_started) {
     if (srv_is_being_started) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: Warning: shutting down"
+      ib_logger(ib_stream, "  Warning: shutting down"
                            " a not properly started\n"
-                           "InnoDB: or created database!\n");
+                           "or created database!\n");
     }
 
     ut_free_all_mem();
@@ -1801,7 +1801,7 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
 
   if (shutdown == IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  InnoDB: User has requested a very fast shutdown"
+    ib_logger(ib_stream, "  User has requested a very fast shutdown"
                          " without flushing "
                          "the InnoDB buffer pool to data files."
                          " At the next startup "
@@ -1861,9 +1861,9 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
   if (os_thread_count != 0 || os_event_count != 0 || os_mutex_count != 0 ||
       os_fast_mutex_count != 0) {
     ib_logger(ib_stream,
-              "InnoDB: Warning: some resources were not"
+              "Warning: some resources were not"
               " cleaned up in shutdown:\n"
-              "InnoDB: threads %lu, events %lu,"
+              "threads %lu, events %lu,"
               " os_mutexes %lu, os_fast_mutexes %lu\n",
               (ulong)os_thread_count, (ulong)os_event_count,
               (ulong)os_mutex_count, (ulong)os_fast_mutex_count);
@@ -1876,7 +1876,7 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
   if (srv_print_verbose_log) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: Shutdown completed;"
+              "  Shutdown completed;"
               " log sequence number %lu\n",
               srv_shutdown_lsn);
   }

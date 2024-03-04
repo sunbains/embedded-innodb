@@ -123,23 +123,23 @@ retry:
       ut_print_timestamp(ib_stream);
 
       ib_logger(ib_stream,
-                "  InnoDB: Error: cannot allocate"
+                "  Error: cannot allocate"
                 " %lu bytes of\n"
-                "InnoDB: memory with malloc!"
+                "memory with malloc!"
                 " Total allocated memory\n"
-                "InnoDB: by InnoDB %lu bytes."
+                "by InnoDB %lu bytes."
                 " Operating system errno: %lu\n"
-                "InnoDB: Check if you should"
+                "Check if you should"
                 " increase the swap file or\n"
-                "InnoDB: ulimits of your operating system.\n"
-                "InnoDB: On FreeBSD check you"
+                "ulimits of your operating system.\n"
+                "On FreeBSD check you"
                 " have compiled the OS with\n"
-                "InnoDB: a big enough maximum process size.\n"
-                "InnoDB: Note that in most 32-bit"
+                "a big enough maximum process size.\n"
+                "Note that in most 32-bit"
                 " computers the process\n"
-                "InnoDB: memory space is limited"
+                "memory space is limited"
                 " to 2 GB or 4 GB.\n"
-                "InnoDB: We keep retrying"
+                "We keep retrying"
                 " the allocation for 60 seconds...\n",
                 (ulong)n, (ulong)ut_total_allocated_memory, (ulong)errno);
     }
@@ -166,9 +166,9 @@ retry:
     if (assert_on_error) {
       ut_print_timestamp(ib_stream);
 
-      ib_logger(ib_stream, "  InnoDB: We now intentionally"
+      ib_logger(ib_stream, "  We now intentionally"
                            " generate a seg fault so that\n"
-                           "InnoDB: on Linux we get a stack trace.\n");
+                           "on Linux we get a stack trace.\n");
 
       if (*ut_mem_null_ptr) {
         ut_mem_null_ptr = 0;
@@ -205,17 +205,17 @@ bool ut_test_malloc(ulint n) {
   if (ret == nullptr) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: Error: cannot allocate"
+              "  Error: cannot allocate"
               " %lu bytes of memory for\n"
-              "InnoDB: a BLOB with malloc! Total allocated memory\n"
-              "InnoDB: by InnoDB %lu bytes."
+              "a BLOB with malloc! Total allocated memory\n"
+              "by InnoDB %lu bytes."
               " Operating system errno: %d\n"
-              "InnoDB: Check if you should increase"
+              "Check if you should increase"
               " the swap file or\n"
-              "InnoDB: ulimits of your operating system.\n"
-              "InnoDB: On FreeBSD check you have"
+              "ulimits of your operating system.\n"
+              "On FreeBSD check you have"
               " compiled the OS with\n"
-              "InnoDB: a big enough maximum process size.\n",
+              "a big enough maximum process size.\n",
               (ulong)n, (ulong)ut_total_allocated_memory, (int)errno);
     return (false);
   }
@@ -321,7 +321,7 @@ void ut_free_all_mem() {
 
   if (ut_total_allocated_memory != 0) {
     ib_logger(ib_stream,
-              "InnoDB: Warning: after shutdown"
+              "Warning: after shutdown"
               " total allocated memory is %lu\n",
               (ulong)ut_total_allocated_memory);
   }

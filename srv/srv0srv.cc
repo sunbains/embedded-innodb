@@ -1114,7 +1114,7 @@ db_err srv_boot() {
   recv_sys_var_init();
 
   /* Transform the init parameter values given by the user to
-  use units we use inside InnoDB: */
+  use units we use inside */
 
   auto err = srv_normalize_init_values();
 
@@ -1151,13 +1151,13 @@ static srv_slot_t *srv_table_reserve_slot_for_user_thread(void) {
       ut_print_timestamp(ib_stream);
 
       ib_logger(ib_stream,
-                "  InnoDB: There appear to be %lu user"
+                "  There appear to be %lu user"
                 " threads currently waiting\n"
-                "InnoDB: inside InnoDB, which is the"
+                "inside InnoDB, which is the"
                 " upper limit. Cannot continue operation.\n"
-                "InnoDB: We intentionally generate"
+                "We intentionally generate"
                 " a seg fault to print a stack trace\n"
-                "InnoDB: on Linux. But first we print"
+                "on Linux. But first we print"
                 " a list of waiting threads.\n",
                 (ulong)i);
 
@@ -1865,10 +1865,10 @@ loop:
   if (new_lsn < old_lsn) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: Error: old log sequence number %lu"
+              "  Error: old log sequence number %lu"
               " was greater\n"
-              "InnoDB: than the new log sequence number %lu!\n"
-              "InnoDB: Please submit a bug report, "
+              "than the new log sequence number %lu!\n"
+              "Please submit a bug report, "
               "check the InnoDB website for details",
               old_lsn, new_lsn);
   }
@@ -1900,9 +1900,9 @@ loop:
     if (fatal_cnt > 10) {
 
       ib_logger(ib_stream,
-                "InnoDB: Error: semaphore wait has lasted"
+                "Error: semaphore wait has lasted"
                 " > %lu seconds\n"
-                "InnoDB: We intentionally crash the server,"
+                "We intentionally crash the server,"
                 " because it appears to be hung.\n",
                 (ulong)srv_fatal_semaphore_wait_threshold);
 

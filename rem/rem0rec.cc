@@ -1398,7 +1398,7 @@ static bool rec_validate_old(const rec_t *rec) /*!< in: physical record */
   n_fields = rec_get_n_fields_old(rec);
 
   if ((n_fields == 0) || (n_fields > REC_MAX_N_FIELDS)) {
-    ib_logger(ib_stream, "InnoDB: Error: record has %lu fields\n",
+    ib_logger(ib_stream, "Error: record has %lu fields\n",
               (ulong)n_fields);
     return (false);
   }
@@ -1407,7 +1407,7 @@ static bool rec_validate_old(const rec_t *rec) /*!< in: physical record */
     data = rec_get_nth_field_old(rec, i, &len);
 
     if (!((len < UNIV_PAGE_SIZE) || (len == UNIV_SQL_NULL))) {
-      ib_logger(ib_stream, "InnoDB: Error: record field %lu len %lu\n",
+      ib_logger(ib_stream, "Error: record field %lu len %lu\n",
                 (ulong)i, (ulong)len);
       return (false);
     }
@@ -1423,7 +1423,7 @@ static bool rec_validate_old(const rec_t *rec) /*!< in: physical record */
   }
 
   if (len_sum != rec_get_data_size_old(rec)) {
-    ib_logger(ib_stream, "InnoDB: Error: record len should be %lu, len %lu\n",
+    ib_logger(ib_stream, "Error: record len should be %lu, len %lu\n",
               (ulong)len_sum, rec_get_data_size_old(rec));
     return (false);
   }
@@ -1449,7 +1449,7 @@ bool rec_validate(
   n_fields = rec_offs_n_fields(offsets);
 
   if ((n_fields == 0) || (n_fields > REC_MAX_N_FIELDS)) {
-    ib_logger(ib_stream, "InnoDB: Error: record has %lu fields\n",
+    ib_logger(ib_stream, "Error: record has %lu fields\n",
               (ulong)n_fields);
     return (false);
   }
@@ -1460,7 +1460,7 @@ bool rec_validate(
     data = rec_get_nth_field(rec, offsets, i, &len);
 
     if (!((len < UNIV_PAGE_SIZE) || (len == UNIV_SQL_NULL))) {
-      ib_logger(ib_stream, "InnoDB: Error: record field %lu len %lu\n",
+      ib_logger(ib_stream, "Error: record field %lu len %lu\n",
                 (ulong)i, (ulong)len);
       return (false);
     }
@@ -1476,7 +1476,7 @@ bool rec_validate(
   }
 
   if (len_sum != rec_offs_data_size(offsets)) {
-    ib_logger(ib_stream, "InnoDB: Error: record len should be %lu, len %lu\n",
+    ib_logger(ib_stream, "Error: record len should be %lu, len %lu\n",
               (ulong)len_sum, (ulong)rec_offs_data_size(offsets));
     return (false);
   }

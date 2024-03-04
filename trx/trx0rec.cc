@@ -812,21 +812,21 @@ byte *trx_undo_update_rec_get_update(byte *ptr, dict_index_t *index, ulint type,
 
     if (field_no >= dict_index_get_n_fields(index)) {
       ib_logger(ib_stream,
-                "InnoDB: Error: trying to access"
+                "Error: trying to access"
                 " update undo rec field %lu in ",
                 (ulong)field_no);
       dict_index_name_print(ib_stream, trx, index);
       ib_logger(ib_stream,
                 "\n"
-                "InnoDB: but index has only %lu fields\n"
-                "InnoDB: Submit a detailed bug report, "
+                "but index has only %lu fields\n"
+                "Submit a detailed bug report, "
                 "check the InnoDB website for details\n"
-                "InnoDB: Run also CHECK TABLE ",
+                "Run also CHECK TABLE ",
                 (ulong)dict_index_get_n_fields(index));
       ut_print_name(ib_stream, trx, true, index->table_name);
       ib_logger(ib_stream,
                 "\n"
-                "InnoDB: n_fields = %lu, i = %lu, ptr %p\n",
+                "n_fields = %lu, i = %lu, ptr %p\n",
                 (ulong)n_fields, (ulong)i, ptr);
       return nullptr;
     }
@@ -1169,14 +1169,14 @@ db_err trx_undo_prev_version_build(const rec_t *index_rec,
 
   if (!dict_index_is_clust(index)) {
     ib_logger(ib_stream,
-              "InnoDB: Error: trying to access"
+              "Error: trying to access"
               " update undo rec for non-clustered index %s\n"
-              "InnoDB: Submit a detailed bug report, "
+              "Submit a detailed bug report, "
               "check the InnoDB website for details\n"
-              "InnoDB: index record ",
+              "index record ",
               index->name);
     rec_print(ib_stream, index_rec, index);
-    ib_logger(ib_stream, "\nInnoDB: record version ");
+    ib_logger(ib_stream, "\nrecord version ");
     rec_print_new(ib_stream, rec, offsets);
     ib_logger(ib_stream, "\n");
     return DB_ERROR;
@@ -1241,13 +1241,13 @@ db_err trx_undo_prev_version_build(const rec_t *index_rec,
     ptr = nullptr;
 
     ib_logger(ib_stream,
-              "InnoDB: Error: trying to access update undo rec"
+              "Error: trying to access update undo rec"
               " for table %s\n"
-              "InnoDB: but the table id in the"
+              "but the table id in the"
               " undo record is wrong\n"
-              "InnoDB: Submit a detailed bug report, "
+              "Submit a detailed bug report, "
               "check InnoDB website for details\n"
-              "InnoDB: Run also CHECK TABLE %s\n",
+              "Run also CHECK TABLE %s\n",
               index->table_name, index->table_name);
   }
 
@@ -1256,25 +1256,25 @@ db_err trx_undo_prev_version_build(const rec_t *index_rec,
     should catch an elusive bug in row_vers_old_has_index_entry */
 
     ib_logger(ib_stream,
-              "InnoDB: table %s, index %s, n_uniq %lu\n"
-              "InnoDB: undo rec address %p, type %lu cmpl_info %lu\n"
-              "InnoDB: undo rec table id %lu,"
+              "table %s, index %s, n_uniq %lu\n"
+              "undo rec address %p, type %lu cmpl_info %lu\n"
+              "undo rec table id %lu,"
               " index table id %lu\n"
-              "InnoDB: dump of 150 bytes in undo rec: ",
+              "dump of 150 bytes in undo rec: ",
               index->table_name, index->name,
               (ulong)dict_index_get_n_unique(index), undo_rec, (ulong)type,
               (ulong)cmpl_info,
               (ulong)table_id,
               (ulong)index->table->id);
     ut_print_buf(ib_stream, undo_rec, 150);
-    ib_logger(ib_stream, "\nInnoDB: index record ");
+    ib_logger(ib_stream, "\nindex record ");
     rec_print(ib_stream, index_rec, index);
-    ib_logger(ib_stream, "\nInnoDB: record version ");
+    ib_logger(ib_stream, "\nrecord version ");
     rec_print_new(ib_stream, rec, offsets);
     ib_logger(ib_stream,
               "\n"
-              "InnoDB: Record trx id %lu, update rec trx id %lu\n"
-              "InnoDB: Roll ptr in rec %lu, in update rec %lu\n",
+              "Record trx id %lu, update rec trx id %lu\n"
+              "Roll ptr in rec %lu, in update rec %lu\n",
               TRX_ID_PREP_PRINTF(rec_trx_id), TRX_ID_PREP_PRINTF(trx_id),
               (ulong)old_roll_ptr,
               (ulong)roll_ptr);

@@ -978,7 +978,7 @@ static void opt_clust_access(sel_node_t *sel_node, /*!< in: select node */
     if (dict_index_get_nth_field(index, pos)->prefix_len != 0 ||
         dict_index_get_nth_field(clust_index, i)->prefix_len != 0) {
       ib_logger(ib_stream,
-                "InnoDB: Error in pars0opt.c:"
+                "Error in pars0opt.c:"
                 " table %s has prefix_len != 0\n",
                 index->table_name);
     }

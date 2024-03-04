@@ -654,7 +654,7 @@ ib_err_t ib_startup(const char *format) {
     if (db_format.id > DICT_TF_FORMAT_MAX) {
       err = DB_UNSUPPORTED;
 
-      ib_logger(ib_stream, "InnoDB: format '%s' unknown.", format);
+      ib_logger(ib_stream, "format '%s' unknown.", format);
     }
   }
 
@@ -4953,7 +4953,7 @@ ib_err_t ib_savepoint_rollback(ib_trx_t ib_trx, const void *name,
 
   if (trx->conc_state == TRX_NOT_STARTED) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  InnoDB: Error: transaction trying to rollback a  "
+    ib_logger(ib_stream, "  Error: transaction trying to rollback a  "
                          "savepoint ");
     ut_print_name(ib_stream, trx, false,
                   name != nullptr ? (char *)name : "(null)");

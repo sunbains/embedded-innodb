@@ -335,9 +335,9 @@ bool ha_validate(hash_table_t *table, /*!< in: hash table */
       if (hash_calc_hash(node->fold, table) != i) {
         ut_print_timestamp(ib_stream);
         ib_logger(ib_stream,
-                  "InnoDB: Error: hash table node"
+                  "Error: hash table node"
                   " fold value %lu does not\n"
-                  "InnoDB: match the cell number %lu.\n",
+                  "match the cell number %lu.\n",
                   (ulong)node->fold, (ulong)i);
 
         ok = false;

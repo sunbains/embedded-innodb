@@ -40,24 +40,24 @@ void ut_dbg_assertion_failed(const char *expr, const char *file, ulint line) {
   ut_print_timestamp(ib_stream);
 
   ib_logger(ib_stream,
-            "  InnoDB: Assertion failure in thread %lu"
+            "  Assertion failure in thread %lu"
             " in file %s line %lu\n",
             os_thread_pf(os_thread_get_curr_id()), file, line);
 
   if (expr) {
-    ib_logger(ib_stream, "InnoDB: Failing assertion: %s\n", expr);
+    ib_logger(ib_stream, "Failing assertion: %s\n", expr);
   }
 
   ib_logger(ib_stream,
-            "InnoDB: We intentionally generate a memory trap.\n"
-            "InnoDB: Submit a detailed bug report, "
+            "We intentionally generate a memory trap.\n"
+            "Submit a detailed bug report, "
             "check the InnoDB website for details\n"
-            "InnoDB: If you get repeated assertion failures"
+            "If you get repeated assertion failures"
             " or crashes, even\n"
-            "InnoDB: immediately after the server startup, there may be\n"
-            "InnoDB: corruption in the InnoDB tablespace. Please refer to\n"
-            "InnoDB: the InnoDB website for details\n"
-            "InnoDB: about forcing recovery.\n");
+            "immediately after the server startup, there may be\n"
+            "corruption in the InnoDB tablespace. Please refer to\n"
+            "the InnoDB website for details\n"
+            "about forcing recovery.\n");
 #if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
   ut_dbg_stop_threads = true;
 #endif /* UNIV_SYNC_DEBUG || !UT_DBG_USE_ABORT */
@@ -65,7 +65,7 @@ void ut_dbg_assertion_failed(const char *expr, const char *file, ulint line) {
 
 #if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
 void ut_dbg_stop_thread(const char *file, ulint line) {
-  ib_logger(ib_stream, "InnoDB: Thread %lu stopped in file %s line %lu\n",
+  ib_logger(ib_stream, "Thread %lu stopped in file %s line %lu\n",
             os_thread_pf(os_thread_get_curr_id()), file, line);
   os_thread_sleep(1000000000);
 }

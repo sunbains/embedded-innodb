@@ -673,7 +673,7 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space,
 
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: Trying to TRUNCATE"
+              "  Trying to TRUNCATE"
               " a missing index of table %s!\n",
               table->name);
     drop = false;
@@ -693,7 +693,7 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space,
 
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: Trying to TRUNCATE"
+              "  Trying to TRUNCATE"
               " a missing .ibd file of table %s!\n",
               table->name);
 
@@ -756,8 +756,8 @@ create:
 
   ut_print_timestamp(ib_stream);
   ib_logger(ib_stream,
-            "  InnoDB: Index %lu %lu of table %s is missing\n"
-            "InnoDB: from the data dictionary during TRUNCATE!\n",
+            "  Index %lu %lu of table %s is missing\n"
+            "from the data dictionary during TRUNCATE!\n",
             index_id, index_id,
             table->name);
 
@@ -1108,14 +1108,14 @@ db_err dict_create_or_check_foreign_constraint_tables() {
   dict_lock_data_dictionary(trx);
 
   if (table1) {
-    ib_logger(ib_stream, "InnoDB: dropping incompletely created"
+    ib_logger(ib_stream, "dropping incompletely created"
                          " SYS_FOREIGN table\n");
     ddl_drop_table("SYS_FOREIGN", trx, true);
     trx_commit(trx);
   }
 
   if (table2) {
-    ib_logger(ib_stream, "InnoDB: dropping incompletely created"
+    ib_logger(ib_stream, "dropping incompletely created"
                          " SYS_FOREIGN_COLS table\n");
     ddl_drop_table("SYS_FOREIGN_COLS", trx, true);
     trx_commit(trx);
@@ -1124,7 +1124,7 @@ db_err dict_create_or_check_foreign_constraint_tables() {
   trx_start_if_not_started(trx);
 
   ib_logger(ib_stream,
-            "InnoDB: Creating foreign key constraint system tables\n");
+            "Creating foreign key constraint system tables\n");
 
   /* NOTE: in dict_load_foreigns we use the fact that
   there are 2 secondary indexes on SYS_FOREIGN, and they
@@ -1157,13 +1157,13 @@ db_err dict_create_or_check_foreign_constraint_tables() {
                      false, trx);
 
   if (err != DB_SUCCESS) {
-    ib_logger(ib_stream, "InnoDB: error %lu in creation\n", (ulong)err);
+    ib_logger(ib_stream, "error %lu in creation\n", (ulong)err);
 
     ut_a(err == DB_OUT_OF_FILE_SPACE || err == DB_TOO_MANY_CONCURRENT_TRXS);
 
-    ib_logger(ib_stream, "InnoDB: creation failed\n"
-                         "InnoDB: tablespace is full\n"
-                         "InnoDB: dropping incompletely created"
+    ib_logger(ib_stream, "creation failed\n"
+                         "tablespace is full\n"
+                         "dropping incompletely created"
                          " SYS_FOREIGN tables\n");
 
     ddl_drop_table("SYS_FOREIGN", trx, true);
@@ -1181,7 +1181,7 @@ db_err dict_create_or_check_foreign_constraint_tables() {
   trx_free_for_client(trx);
 
   if (err == DB_SUCCESS) {
-    ib_logger(ib_stream, "InnoDB: Foreign key constraint system tables"
+    ib_logger(ib_stream, "Foreign key constraint system tables"
                          " created\n");
   }
 
@@ -1228,8 +1228,8 @@ dict_foreign_eval_sql(pars_info_t *info,   /*!< in: info struct, or nullptr */
 
   if (err != DB_SUCCESS) {
     ib_logger(ib_stream,
-              "InnoDB: Foreign key constraint creation failed:\n"
-              "InnoDB: internal error number %lu\n",
+              "Foreign key constraint creation failed:\n"
+              "internal error number %lu\n",
               (ulong)err);
 
     mutex_enter(&dict_foreign_err_mutex);
@@ -1356,7 +1356,7 @@ db_err dict_create_add_foreigns_to_dictionary(ulint start_id,
   if (nullptr == dict_table_get_low("SYS_FOREIGN")) {
     ib_logger(
         ib_stream,
-        "InnoDB: table SYS_FOREIGN not found in internal data dictionary\n");
+        "table SYS_FOREIGN not found in internal data dictionary\n");
 
     return DB_ERROR;
   }

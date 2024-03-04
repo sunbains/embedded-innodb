@@ -143,7 +143,7 @@ dfield_check_typed_no_assert(const dfield_t *field) /*!< in: data field */
   if (dfield_get_type(field)->mtype > DATA_CLIENT ||
       dfield_get_type(field)->mtype < DATA_VARCHAR) {
 
-    ib_logger(ib_stream, "InnoDB: Error: data field type %lu, len %lu\n",
+    ib_logger(ib_stream, "Error: data field type %lu, len %lu\n",
               (ulong)dfield_get_type(field)->mtype,
               (ulong)dfield_get_len(field));
     return (false);
@@ -161,10 +161,10 @@ bool dtuple_check_typed_no_assert(const dtuple_t *tuple) /*!< in: tuple */
   ulint i;
 
   if (dtuple_get_n_fields(tuple) > REC_MAX_N_FIELDS) {
-    ib_logger(ib_stream, "InnoDB: Error: index entry has %lu fields\n",
+    ib_logger(ib_stream, "Error: index entry has %lu fields\n",
               (ulong)dtuple_get_n_fields(tuple));
   dump:
-    ib_logger(ib_stream, "InnoDB: Tuple contents: ");
+    ib_logger(ib_stream, "Tuple contents: ");
     dtuple_print(ib_stream, tuple);
     ib_logger(ib_stream, "\n");
 
@@ -192,7 +192,7 @@ bool dfield_check_typed(const dfield_t *field) /*!< in: data field */
   if (dfield_get_type(field)->mtype > DATA_CLIENT ||
       dfield_get_type(field)->mtype < DATA_VARCHAR) {
 
-    ib_logger(ib_stream, "InnoDB: Error: data field type %lu, len %lu\n",
+    ib_logger(ib_stream, "Error: data field type %lu, len %lu\n",
               (ulong)dfield_get_type(field)->mtype,
               (ulong)dfield_get_len(field));
 
@@ -539,9 +539,9 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, /*!< in: index */
   size = rec_get_converted_size(index, entry, *n_ext);
 
   if (unlikely(size > 1000000000)) {
-    ib_logger(ib_stream, "InnoDB: Warning: tuple size very big: %lu\n",
+    ib_logger(ib_stream, "Warning: tuple size very big: %lu\n",
               (ulong)size);
-    ib_logger(ib_stream, "InnoDB: Tuple contents: ");
+    ib_logger(ib_stream, "Tuple contents: ");
     dtuple_print(ib_stream, entry);
     ib_logger(ib_stream, "\n");
   }

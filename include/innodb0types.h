@@ -132,6 +132,8 @@ using lsn_t = uint64_t;
 
 constexpr auto LSN_MAX = std::numeric_limits<lsn_t>::max();
 
+constexpr ulint IB_FILE_BLOCK_SIZE = 512;
+
 #include "innodb0valgrind.h"
 #include "ut0dbg.h"
 #include "ut0ut.h"

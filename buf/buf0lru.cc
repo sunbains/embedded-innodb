@@ -500,17 +500,17 @@ loop:
     ut_print_timestamp(ib_stream);
 
     ib_logger(ib_stream,
-              "  InnoDB: ERROR: over 95 percent of the buffer pool"
+              "  ERROR: over 95 percent of the buffer pool"
               " is occupied by\n"
-              "InnoDB: lock heaps or the adaptive hash index!"
+              "lock heaps or the adaptive hash index!"
               " Check that your\n"
-              "InnoDB: transactions do not set too many row locks.\n"
-              "InnoDB: Your buffer pool size is %lu MB."
+              "transactions do not set too many row locks.\n"
+              "Your buffer pool size is %lu MB."
               " Maybe you should make\n"
-              "InnoDB: the buffer pool bigger?\n"
-              "InnoDB: We intentionally generate a seg fault"
+              "the buffer pool bigger?\n"
+              "We intentionally generate a seg fault"
               " to print a stack trace\n"
-              "InnoDB: on Linux!\n",
+              "on Linux!\n",
               (ulong)(buf_pool->curr_size / (1024 * 1024 / UNIV_PAGE_SIZE)));
 
     ut_error;
@@ -527,18 +527,18 @@ loop:
 
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream,
-                "  InnoDB: WARNING: over 67 percent of"
+                "  WARNING: over 67 percent of"
                 " the buffer pool is occupied by\n"
-                "InnoDB: lock heaps or the adaptive"
+                "lock heaps or the adaptive"
                 " hash index! Check that your\n"
-                "InnoDB: transactions do not set too many"
+                "transactions do not set too many"
                 " row locks.\n"
-                "InnoDB: Your buffer pool size is %lu MB."
+                "Your buffer pool size is %lu MB."
                 " Maybe you should make\n"
-                "InnoDB: the buffer pool bigger?\n"
-                "InnoDB: Starting the InnoDB Monitor to print"
+                "the buffer pool bigger?\n"
+                "Starting the InnoDB Monitor to print"
                 " diagnostics, including\n"
-                "InnoDB: lock heap and hash index sizes.\n",
+                "lock heap and hash index sizes.\n",
                 (ulong)(buf_pool->curr_size / (1024 * 1024 / UNIV_PAGE_SIZE)));
 
       buf_lru_switched_on_innodb_mon = true;
@@ -584,25 +584,25 @@ loop:
   if (n_iterations > 30) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: Warning: difficult to find free blocks in\n"
-              "InnoDB: the buffer pool (%lu search iterations)!"
+              "  Warning: difficult to find free blocks in\n"
+              "the buffer pool (%lu search iterations)!"
               " Consider\n"
-              "InnoDB: increasing the buffer pool size.\n"
-              "InnoDB: It is also possible that"
+              "increasing the buffer pool size.\n"
+              "It is also possible that"
               " in your Unix version\n"
-              "InnoDB: fsync is very slow, or"
+              "fsync is very slow, or"
               " completely frozen inside\n"
-              "InnoDB: the OS kernel. Then upgrading to"
+              "the OS kernel. Then upgrading to"
               " a newer version\n"
-              "InnoDB: of your operating system may help."
+              "of your operating system may help."
               " Look at the\n"
-              "InnoDB: number of fsyncs in diagnostic info below.\n"
-              "InnoDB: Pending flushes (fsync) log: %lu;"
+              "number of fsyncs in diagnostic info below.\n"
+              "Pending flushes (fsync) log: %lu;"
               " buffer pool: %lu\n"
-              "InnoDB: %lu OS file reads, %lu OS file writes,"
+              "%lu OS file reads, %lu OS file writes,"
               " %lu OS fsyncs\n"
-              "InnoDB: Starting InnoDB Monitor to print further\n"
-              "InnoDB: diagnostics to the standard output.\n",
+              "Starting InnoDB Monitor to print further\n"
+              "diagnostics to the standard output.\n",
               (ulong)n_iterations, (ulong)fil_n_pending_log_flushes,
               (ulong)fil_n_pending_tablespace_flushes, (ulong)os_n_file_reads,
               (ulong)os_n_file_writes, (ulong)os_n_fsyncs);
@@ -1035,12 +1035,12 @@ static buf_page_state buf_LRU_block_remove_hashed_page(buf_page_t *bpage) {
 
   if (unlikely(bpage != hashed_bpage)) {
     ib_logger(ib_stream,
-              "InnoDB: Error: page %lu %lu not found"
+              "Error: page %lu %lu not found"
               " in the hash table\n",
               (ulong)bpage->space, (ulong)bpage->offset);
     if (hashed_bpage) {
       ib_logger(ib_stream,
-                "InnoDB: In hash table we find block"
+                "In hash table we find block"
                 " %p of %lu %lu which is not %p\n",
                 (const void *)hashed_bpage, (ulong)hashed_bpage->space,
                 (ulong)hashed_bpage->offset, (const void *)bpage);

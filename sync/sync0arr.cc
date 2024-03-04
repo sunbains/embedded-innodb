@@ -792,7 +792,7 @@ bool sync_array_print_long_waits(void) {
 
     if (cell->wait_object != nullptr && cell->waiting &&
         difftime(time(nullptr), cell->reservation_time) > 240) {
-      ib_logger(ib_stream, "InnoDB: Warning: a long semaphore wait:\n");
+      ib_logger(ib_stream, "Warning: a long semaphore wait:\n");
       sync_array_cell_print(ib_stream, cell);
       noticed = true;
     }
@@ -804,7 +804,7 @@ bool sync_array_print_long_waits(void) {
   }
 
   if (noticed) {
-    ib_logger(ib_stream, "InnoDB: ###### Starts InnoDB Monitor"
+    ib_logger(ib_stream, "###### Starts InnoDB Monitor"
                          " for 30 secs to print diagnostic info:\n");
     old_val = srv_print_innodb_monitor;
 
@@ -814,7 +814,7 @@ bool sync_array_print_long_waits(void) {
     call hanging inside the operating system, let us print right
     now the values of pending calls of these. */
 
-    ib_logger(ib_stream, "InnoDB: Pending preads %lu, pwrites %lu\n",
+    ib_logger(ib_stream, "Pending preads %lu, pwrites %lu\n",
               (ulong)os_file_n_pending_preads,
               (ulong)os_file_n_pending_pwrites);
 
@@ -824,7 +824,7 @@ bool sync_array_print_long_waits(void) {
     os_thread_sleep(30000000);
 
     srv_print_innodb_monitor = old_val;
-    ib_logger(ib_stream, "InnoDB: ###### Diagnostic info printed to the "
+    ib_logger(ib_stream, "###### Diagnostic info printed to the "
                          "standard error stream\n");
   }
 

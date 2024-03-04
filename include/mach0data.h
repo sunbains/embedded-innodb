@@ -733,11 +733,12 @@ inline void mach_write_int32(byte *b, int32_t v) {
   mach_write_int_type(b, reinterpret_cast<const byte *>(&v), sizeof(v), false);
 }
 
+// FIXME: Make ptr into const byte*& and fix the callers.
 /** Reads a ulint in a compressed form if the log record fully contains it.
-@param[in] ptr                  Pointer from where you want to read
+@param[in,out] ptr              Pointer from where you want to read
 @param[in] end_ptr              Pointer to end of the buffer
-@return	pointer to end of the stored field, NULL if not complete */
-[[nodiscard]] byte *mach_parse_compressed(byte *ptr, byte *end_ptr, ulint *v);
+@return	value read, on error ptr will set to nullptr. */
+[[nodiscard]] uint32_t mach_parse_compressed(byte *&ptr, const byte *end_ptr);
 
 /** Reads a 64 bit integer in a compressed form if the log record fully contains it.
 @param[in] ptr                  Pointer from where you want to read

@@ -448,7 +448,7 @@ void mem_heap_validate_or_print(mem_heap_t *heap,
         (mem_block_get_len(block) > UNIV_PAGE_SIZE)) {
 
       ib_logger(ib_stream,
-                "InnoDB: Error: mem block %p"
+                "Error: mem block %p"
                 " length %lu > UNIV_PAGE_SIZE\n",
                 (void *)block, (ulong)mem_block_get_len(block));
       /* error */
@@ -490,9 +490,9 @@ void mem_heap_validate_or_print(mem_heap_t *heap,
         /* error */
 
         ib_logger(ib_stream,
-                  "InnoDB: Error: block %lx mem"
+                  "Error: block %lx mem"
                   " field %lx len %lu\n"
-                  "InnoDB: header check field is"
+                  "header check field is"
                   " %lx but trailer %lx\n",
                   (ulint)block, (ulint)field, len, check_field,
                   mem_field_trailer_get_check(user_field));
@@ -516,9 +516,9 @@ void mem_heap_validate_or_print(mem_heap_t *heap,
       /* error */
 
       ib_logger(ib_stream,
-                "InnoDB: Error: block %lx end of"
+                "Error: block %lx end of"
                 " mem fields %lx\n"
-                "InnoDB: but block free at %lx\n",
+                "but block free at %lx\n",
                 (ulint)block, (ulint)field,
                 (ulint)((byte *)block + mem_block_get_free(block)));
 

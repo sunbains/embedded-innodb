@@ -373,10 +373,10 @@ void os_fast_mutex_free(os_fast_mutex_t *fast_mutex) {
   if (unlikely(ret != 0)) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: error: return value %lu when calling\n"
-              "InnoDB: pthread_mutex_destroy().\n",
+              "  error: return value %lu when calling\n"
+              "pthread_mutex_destroy().\n",
               (ulint)ret);
-    ib_logger(ib_stream, "InnoDB: Byte contents of the pthread mutex at %p:\n",
+    ib_logger(ib_stream, "Byte contents of the pthread mutex at %p:\n",
               (void *)fast_mutex);
     ut_print_buf(ib_stream, fast_mutex, sizeof(os_fast_mutex_t));
     ib_logger(ib_stream, "\n");

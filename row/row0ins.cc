@@ -851,15 +851,15 @@ static db_err row_ins_foreign_check_on_constraint(
             dict_index_get_n_unique(clust_index)) {
 
       ib_logger(ib_stream,
-                "InnoDB: error in cascade of a foreign key op\nInnoDB: ");
+                "error in cascade of a foreign key op\n");
       dict_index_name_print(ib_stream, trx, index);
 
-      ib_logger(ib_stream, "\nInnoDB: record ");
+      ib_logger(ib_stream, "\nrecord ");
       rec_print(ib_stream, rec, index);
-      ib_logger(ib_stream, "\nInnoDB: clustered record ");
+      ib_logger(ib_stream, "\nclustered record ");
       rec_print(ib_stream, clust_rec, clust_index);
       ib_logger(ib_stream, "\n"
-                           "InnoDB: Submit a detailed bug report, check the "
+                           "Submit a detailed bug report, check the "
                            "TBD website for details");
 
       err = DB_SUCCESS;
@@ -973,9 +973,9 @@ static db_err row_ins_foreign_check_on_constraint(
 
   if (foreign->foreign_table->n_foreign_key_checks_running == 0) {
     ib_logger(ib_stream,
-              "InnoDB: error: table %s has the counter 0"
+              "error: table %s has the counter 0"
               " though there is\n"
-              "InnoDB: a FOREIGN KEY check running on it.\n",
+              "a FOREIGN KEY check running on it.\n",
               foreign->foreign_table->name);
   }
 

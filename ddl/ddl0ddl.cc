@@ -130,7 +130,7 @@ already_dropped:
   UT_LIST_REMOVE(ddl_drop_list, ddl_drop_list, drop);
 
   ut_print_timestamp(ib_stream);
-  ib_logger(ib_stream, "  InnoDB: Dropped table ");
+  ib_logger(ib_stream, "  Dropped table ");
   ut_print_name(ib_stream, nullptr, true, drop->table_name);
   ib_logger(ib_stream, " in background drop queue.\n");
 
@@ -193,7 +193,7 @@ ddl_add_table_to_background_drop_list(const char *name) /*!< in: table name */
 
   UT_LIST_ADD_LAST(ddl_drop_list, ddl_drop_list, drop);
 
-  /*	ib_logger(ib_stream, "InnoDB: Adding table ");
+  /*	ib_logger(ib_stream, "Adding table ");
   ut_print_name(ib_stream, trx, true, drop->table_name);
   ib_logger(ib_stream, " to background drop list\n"); */
 
@@ -215,10 +215,10 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
 
   if (srv_created_new_raw) {
     ib_logger(ib_stream,
-              "InnoDB: A new raw disk partition was initialized:\n"
-              "InnoDB: we do not allow database modifications"
+              "A new raw disk partition was initialized:\n"
+              "we do not allow database modifications"
               " by the user.\n"
-              "InnoDB: Shut down the server and edit your config file "
+              "Shut down the server and edit your config file "
               "so that newraw is replaced with raw.\n");
 
     return DB_ERROR;
@@ -278,14 +278,14 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     err = DB_TABLE_NOT_FOUND;
     ut_print_timestamp(ib_stream);
 
-    ib_logger(ib_stream, "  InnoDB: Error: table ");
+    ib_logger(ib_stream, "  Error: table ");
     ut_print_name(ib_stream, trx, true, name);
     ib_logger(ib_stream,
               " does not exist in the InnoDB internal\n"
-              "InnoDB: data dictionary though the client is"
+              "data dictionary though the client is"
               " trying to drop it.\n"
-              "InnoDB: You can look for further help on the\n"
-              "InnoDB: InnoDB website. Check the site for details\n");
+              "You can look for further help on the\n"
+              "InnoDB website. Check the site for details\n");
     goto func_exit;
   }
 
@@ -332,14 +332,14 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     if (added) {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream,
-                "  InnoDB: Warning: Client is"
+                "  Warning: Client is"
                 " trying to drop table (%lu) ",
                 (ulint)table->id);
       ut_print_name(ib_stream, trx, true, table->name);
       ib_logger(ib_stream, "\n"
-                           "InnoDB: though there are still"
+                           "though there are still"
                            " open handles to it.\n"
-                           "InnoDB: Adding the table to the"
+                           "Adding the table to the"
                            " background drop queue.\n");
 
       /* We return DB_SUCCESS though the drop will
@@ -368,12 +368,12 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
 
     if (added) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: You are trying to drop table ");
+      ib_logger(ib_stream, "  You are trying to drop table ");
       ut_print_name(ib_stream, trx, true, table_name);
       ib_logger(ib_stream, "\n"
-                           "InnoDB: though there is a"
+                           "though there is a"
                            " foreign key check running on it.\n"
-                           "InnoDB: Adding the table to"
+                           "Adding the table to"
                            " the background drop queue.\n");
 
       /* We return DB_SUCCESS though the drop will
@@ -475,7 +475,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
   if (err != DB_SUCCESS) {
 
     if (err != DB_OUT_OF_FILE_SPACE) {
-      ib_logger(ib_stream, "InnoDB: Error: unexpected err: %d", err);
+      ib_logger(ib_stream, "Error: unexpected err: %d", err);
       ut_error;
     }
 
@@ -510,7 +510,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     // FIXME: srv_force_recovery should be passed in as an arg
     if (dict_load_table(srv_force_recovery, name) != nullptr) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: Error: not able to remove table ");
+      ib_logger(ib_stream, "  Error: not able to remove table ");
       ut_print_name(ib_stream, trx, true, name);
       ib_logger(ib_stream, " from the dictionary cache!\n");
       err = DB_ERROR;
@@ -524,21 +524,21 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
                                              false, true)) {
         err = DB_SUCCESS;
 
-        ib_logger(ib_stream, "InnoDB: We removed now the InnoDB"
+        ib_logger(ib_stream, "We removed now the InnoDB"
                              " internal data dictionary entry\n"
-                             "InnoDB: of table ");
+                             "of table ");
         ut_print_name(ib_stream, trx, true, name);
         ib_logger(ib_stream, ".\n");
       } else if (!fil_delete_tablespace(space_id)) {
-        ib_logger(ib_stream, "InnoDB: We removed now the InnoDB"
+        ib_logger(ib_stream, "We removed now the InnoDB"
                              " internal data dictionary entry\n"
-                             "InnoDB: of table ");
+                             "of table ");
         ut_print_name(ib_stream, trx, true, name);
         ib_logger(ib_stream, ".\n");
 
         ut_print_timestamp(ib_stream);
         ib_logger(ib_stream,
-                  "  InnoDB: Error: not able to"
+                  "  Error: not able to"
                   " delete tablespace %lu of table ",
                   (ulong)space_id);
         ut_print_name(ib_stream, trx, true, name);
@@ -582,10 +582,10 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
   ut_ad(trx->dict_operation_lock_mode == RW_X_LATCH);
 
   if (srv_created_new_raw) {
-    ib_logger(ib_stream, "InnoDB: A new raw disk partition was initialized:\n"
-                         "InnoDB: we do not allow database modifications"
+    ib_logger(ib_stream, "A new raw disk partition was initialized:\n"
+                         "we do not allow database modifications"
                          " by the user.\n"
-                         "InnoDB: Shut down the database and edit your config "
+                         "Shut down the database and edit your config "
                          "file so that newraw is replaced with raw.\n");
   err_exit:
     dict_mem_table_free(table);
@@ -597,7 +597,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
     meaning regardless of the database name.  Thus, we need to
     ignore the database name prefix in the comparisons. */
   } else if (strchr(table->name, '/') == nullptr) {
-    ib_logger(ib_stream, "  InnoDB: Error: table ");
+    ib_logger(ib_stream, "  Error: table ");
     ut_print_name(ib_stream, trx, true, table->name);
     ib_logger(ib_stream, "not prefixed with a database name and '/'\n");
     goto err_exit;
@@ -684,7 +684,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
   switch (err) {
   case DB_OUT_OF_FILE_SPACE:
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  InnoDB: Warning: cannot create table ");
+    ib_logger(ib_stream, "  Warning: cannot create table ");
     ut_print_name(ib_stream, trx, true, table->name);
     ib_logger(ib_stream, " because tablespace full\n");
 
@@ -696,12 +696,12 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
 
   case DB_DUPLICATE_KEY:
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  InnoDB: Error: table ");
+    ib_logger(ib_stream, "  Error: table ");
     ut_print_name(ib_stream, trx, true, table->name);
     ib_logger(ib_stream, " already exists in InnoDB internal\n"
-                         "InnoDB: data dictionary.\n"
-                         "InnoDB: You can look for further help on\n"
-                         "InnoDB: the InnoDB website\n");
+                         "data dictionary.\n"
+                         "You can look for further help on\n"
+                         "the InnoDB website\n");
 
     /* We may also get err == DB_ERROR if the .ibd file for the
     table already exists */
@@ -803,10 +803,10 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   a new tablespace identifier to the truncated tablespace. */
 
   if (srv_created_new_raw) {
-    ib_logger(ib_stream, "InnoDB: A new raw disk partition was initialized:\n"
-                         "InnoDB: we do not allow database modifications"
+    ib_logger(ib_stream, "A new raw disk partition was initialized:\n"
+                         "we do not allow database modifications"
                          " by the user.\n"
-                         "InnoDB: Shut down server and edit config file so "
+                         "Shut down server and edit config file so "
                          "that newraw is replaced with raw.\n");
 
     return DB_ERROR;
@@ -845,7 +845,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     ib_logger(ib_stream, "  Cannot truncate table ");
     ut_print_name(ib_stream, trx, true, table->name);
     ib_logger(ib_stream, " by DROP+CREATE\n"
-                         "InnoDB: because it is referenced by ");
+                         "because it is referenced by ");
     ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
     ib_logger(ib_stream, "\n");
     mutex_exit(&dict_foreign_err_mutex);
@@ -862,10 +862,10 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
 
   if (table->n_foreign_key_checks_running > 0) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  InnoDB: Cannot truncate table ");
+    ib_logger(ib_stream, "  Cannot truncate table ");
     ut_print_name(ib_stream, trx, true, table->name);
     ib_logger(ib_stream, " by DROP+CREATE\n"
-                         "InnoDB: because there is a foreign key check"
+                         "because there is a foreign key check"
                          " running on it.\n");
     err = DB_ERROR;
 
@@ -893,7 +893,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
           DB_SUCCESS) {
         ut_print_timestamp(ib_stream);
         ib_logger(ib_stream,
-                  "  InnoDB: TRUNCATE TABLE %s failed to"
+                  "  TRUNCATE TABLE %s failed to"
                   " create a new tablespace\n",
                   table->name);
         table->ibd_file_missing = 1;
@@ -1019,10 +1019,10 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     trx->error_state = DB_SUCCESS;
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream,
-              "  InnoDB: Unable to assign a new identifier to table ");
+              "  Unable to assign a new identifier to table ");
     ut_print_name(ib_stream, trx, true, table->name);
     ib_logger(ib_stream, "\n"
-                         "InnoDB: after truncating it.  Background processes"
+                         "after truncating it.  Background processes"
                          " may corrupt the table!\n");
     err = DB_ERROR;
   } else {
@@ -1150,11 +1150,11 @@ db_err ddl_rename_table(const char *old_name, const char *new_name,
 
   if (srv_created_new_raw || srv_force_recovery != IB_RECOVERY_DEFAULT) {
     ib_logger(ib_stream,
-              "InnoDB: A new raw disk partition was initialized or\n"
-              "InnoDB: innodb_force_recovery is on: we do not allow\n"
-              "InnoDB: database modifications by the user. Shut down\n"
-              "InnoDB: the server and ensure that newraw is replaced\n"
-              "InnoDB: with raw, and innodb_force_... is removed.\n");
+              "A new raw disk partition was initialized or\n"
+              "innodb_force_recovery is on: we do not allow\n"
+              "database modifications by the user. Shut down\n"
+              "the server and ensure that newraw is replaced\n"
+              "with raw, and innodb_force_... is removed.\n");
 
     goto func_exit;
   }
@@ -1282,18 +1282,18 @@ db_err ddl_rename_table(const char *old_name, const char *new_name,
   if (err != DB_SUCCESS) {
     if (err == DB_DUPLICATE_KEY) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: Error; possible reasons:\n"
-                           "InnoDB: 1) Table rename would cause"
+      ib_logger(ib_stream, "  Error; possible reasons:\n"
+                           "1) Table rename would cause"
                            " two FOREIGN KEY constraints\n"
-                           "InnoDB: to have the same internal name"
+                           "to have the same internal name"
                            " in case-insensitive comparison.\n"
                            " trying to rename table.\n"
-                           "InnoDB: If table ");
+                           "If table ");
       ut_print_name(ib_stream, trx, true, new_name);
       ib_logger(ib_stream, " is a temporary table, then it can be that\n"
-                           "InnoDB: there are still queries running"
+                           "there are still queries running"
                            " on the table, and it will be\n"
-                           "InnoDB: dropped automatically when"
+                           "dropped automatically when"
                            " the queries end.\n");
     }
     trx->error_state = DB_SUCCESS;
@@ -1320,13 +1320,13 @@ db_err ddl_rename_table(const char *old_name, const char *new_name,
 
       ut_print_timestamp(ib_stream);
 
-      ib_logger(ib_stream, "  InnoDB: Error: in RENAME TABLE"
+      ib_logger(ib_stream, "  Error: in RENAME TABLE"
                            " table ");
       ut_print_name(ib_stream, trx, true, new_name);
       ib_logger(ib_stream, "\n"
-                           "InnoDB: is referenced in"
+                           "is referenced in"
                            " foreign key constraints\n"
-                           "InnoDB: which are not compatible"
+                           "which are not compatible"
                            " with the new table definition.\n");
 
       ret = dict_table_rename_in_cache(table, old_name, false);
@@ -1362,11 +1362,11 @@ db_err ddl_rename_index(const char *table_name, const char *old_name,
 
   if (srv_created_new_raw || srv_force_recovery != IB_RECOVERY_DEFAULT) {
     ib_logger(ib_stream,
-              "InnoDB: A new raw disk partition was initialized or\n"
-              "InnoDB: innodb_force_recovery is on: we do not allow\n"
-              "InnoDB: database modifications by the user. Shut down\n"
-              "InnoDB: the server and ensure that newraw is replaced\n"
-              "InnoDB: with raw, and innodb_force_... is removed.\n");
+              "A new raw disk partition was initialized or\n"
+              "innodb_force_recovery is on: we do not allow\n"
+              "database modifications by the user. Shut down\n"
+              "the server and ensure that newraw is replaced\n"
+              "with raw, and innodb_force_... is removed.\n");
 
     goto func_exit;
   }
@@ -1518,11 +1518,11 @@ loop:
       dict_unlock_data_dictionary(trx);
 
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: Warning: The client is trying to"
+      ib_logger(ib_stream, "  Warning: The client is trying to"
                            " drop database ");
       ut_print_name(ib_stream, trx, true, name);
       ib_logger(ib_stream, "\n"
-                           "InnoDB: though there are still"
+                           "though there are still"
                            " open handles to table ");
       ut_print_name(ib_stream, trx, true, table_name);
       ib_logger(ib_stream, ".\n");
@@ -1537,7 +1537,7 @@ loop:
     err = ddl_drop_table(table_name, trx, true);
 
     if (err != DB_SUCCESS) {
-      ib_logger(ib_stream, "InnoDB: DROP DATABASE ");
+      ib_logger(ib_stream, "DROP DATABASE ");
       ut_print_name(ib_stream, trx, true, name);
       ib_logger(ib_stream, " failed with error %lu for table ", (ulint)err);
       ut_print_name(ib_stream, trx, true, table_name);
@@ -1555,7 +1555,7 @@ loop:
     err = ddl_drop_all_foreign_keys_in_db(name, trx);
 
     if (err != DB_SUCCESS) {
-      ib_logger(ib_stream, "InnoDB: DROP DATABASE ");
+      ib_logger(ib_stream, "DROP DATABASE ");
       ut_print_name(ib_stream, trx, true, name);
       ib_logger(ib_stream,
                 " failed with error %d while "

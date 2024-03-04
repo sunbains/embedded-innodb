@@ -197,7 +197,7 @@ loop:
     mem_free(table_name);
 
     if (table == NULL) {
-      ib_logger(ib_stream, "InnoDB: Failed to load table ");
+      ib_logger(ib_stream, "Failed to load table ");
       ut_print_namel(ib_stream, (char *)field, len);
       ib_logger(ib_stream, "\n");
     } else {
@@ -331,11 +331,11 @@ loop:
       flags = mach_read_from_4(field);
 
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: Error: table ");
+      ib_logger(ib_stream, "  Error: table ");
       ut_print_filename(ib_stream, name);
       ib_logger(ib_stream,
                 "\n"
-                "InnoDB: in InnoDB data dictionary"
+                "in InnoDB data dictionary"
                 " has unknown type %lx.\n",
                 (ulong)flags);
 
@@ -685,7 +685,7 @@ static ulint dict_load_indexes(
     if (type & ~(DICT_CLUSTERED | DICT_UNIQUE)) {
 
       ib_logger(ib_stream,
-                "InnoDB: Error: unknown type %lu"
+                "Error: unknown type %lu"
                 " of index %s of table %s\n",
                 (ulong)type, name_buf, table->name);
 
@@ -694,9 +694,9 @@ static ulint dict_load_indexes(
     } else if (page_no == FIL_NULL) {
 
       ib_logger(ib_stream,
-                "InnoDB: Error: trying to load index %s"
+                "Error: trying to load index %s"
                 " for table %s\n"
-                "InnoDB: but the index tree has been freed!\n",
+                "but the index tree has been freed!\n",
                 name_buf, table->name);
 
       error = DB_CORRUPTION;
@@ -704,11 +704,11 @@ static ulint dict_load_indexes(
     } else if ((type & DICT_CLUSTERED) == 0 &&
                NULL == dict_table_get_first_index(table)) {
 
-      ib_logger(ib_stream, "InnoDB: Error: trying to load index ");
+      ib_logger(ib_stream, "Error: trying to load index ");
       ut_print_name(ib_stream, NULL, false, name_buf);
       ib_logger(ib_stream, " for table ");
       ut_print_name(ib_stream, NULL, true, table->name);
-      ib_logger(ib_stream, "\nInnoDB: but the first index"
+      ib_logger(ib_stream, "\nbut the first index"
                            " is not clustered!\n");
 
       error = DB_CORRUPTION;
@@ -832,11 +832,11 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
       flags = mach_read_from_4(field);
 
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: Error: table ");
+      ib_logger(ib_stream, "  Error: table ");
       ut_print_filename(ib_stream, name);
       ib_logger(ib_stream,
                 "\n"
-                "InnoDB: in InnoDB data dictionary"
+                "in InnoDB data dictionary"
                 " has unknown type %lx.\n",
                 (ulong)flags);
       goto err_exit;
@@ -865,11 +865,11 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
 
     if (flags2 & (~0UL << (DICT_TF2_BITS - DICT_TF2_SHIFT))) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: Warning: table ");
+      ib_logger(ib_stream, "  Warning: table ");
       ut_print_filename(ib_stream, name);
       ib_logger(ib_stream,
                 "\n"
-                "InnoDB: in InnoDB data dictionary"
+                "in InnoDB data dictionary"
                 " has unknown flags %lx.\n",
                 (ulong)flags2);
 
@@ -891,11 +891,11 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
       ibd_file_missing = true;
     } else {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  InnoDB: error: space object of table");
+      ib_logger(ib_stream, "  error: space object of table");
       ut_print_filename(ib_stream, name);
       ib_logger(ib_stream,
                 ",\n"
-                "InnoDB: space id %lu did not exist in memory."
+                "space id %lu did not exist in memory."
                 " Retrying an open.\n",
                 (ulong)space);
       /* Try to open the tablespace */
@@ -947,17 +947,17 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
 		ut_print_timestamp(ib_stream);
 
 		ib_logger(ib_stream,
-			"  InnoDB: Error: could not make a foreign key"
+			"  Error: could not make a foreign key"
 			" definition to match\n"
-			"InnoDB: the foreign key table"
+			"the foreign key table"
 			" or the referenced table!\n"
-			"InnoDB: The data dictionary of InnoDB is corrupt."
+			"The data dictionary of InnoDB is corrupt."
 			" You may need to drop\n"
-			"InnoDB: and recreate the foreign key table"
+			"and recreate the foreign key table"
 			" or the referenced table.\n"
-			"InnoDB: Submit a detailed bug report"
+			"Submit a detailed bug report"
 			" check the InnoDB website for details"
-			"InnoDB: Latest foreign key error printout:\n%s\n",
+			"Latest foreign key error printout:\n%s\n",
 			dict_foreign_err_buf);
 
 		mutex_exit(&dict_foreign_err_mutex);
@@ -1184,7 +1184,7 @@ static db_err dict_load_foreign(const char *id, /*!< in: foreign constraint id
   if (!btr_pcur_is_on_user_rec(&pcur) || rec_get_deleted_flag(rec, 0)) {
     /* Not found */
 
-    ib_logger(ib_stream, "InnoDB: Error A: cannot load foreign constraint %s\n",
+    ib_logger(ib_stream, "Error A: cannot load foreign constraint %s\n",
               id);
 
     btr_pcur_close(&pcur);
@@ -1199,7 +1199,7 @@ static db_err dict_load_foreign(const char *id, /*!< in: foreign constraint id
   /* Check if the id in record is the searched one */
   if (len != strlen(id) || memcmp(id, field, len) != 0) {
 
-    ib_logger(ib_stream, "InnoDB: Error B: cannot load foreign constraint %s\n",
+    ib_logger(ib_stream, "Error B: cannot load foreign constraint %s\n",
               id);
 
     btr_pcur_close(&pcur);
@@ -1277,7 +1277,7 @@ db_err dict_load_foreigns(const char *table_name, bool check_charsets) {
   if (sys_foreign == NULL) {
     /* No foreign keys defined yet in this database */
 
-    ib_logger(ib_stream, "InnoDB: Error: no foreign key system tables"
+    ib_logger(ib_stream, "Error: no foreign key system tables"
                          " in the database\n");
 
     return (DB_ERROR);
