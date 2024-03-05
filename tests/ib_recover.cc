@@ -99,7 +99,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   assert(err == DB_SUCCESS);
 
   err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
-  assert(err == DB_SUCCESS || err == DB_TABLE_IS_BEING_USED);
+  assert(err == DB_SUCCESS || err == DB_TABLE_EXISTS);
 
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);

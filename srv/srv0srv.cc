@@ -1344,9 +1344,6 @@ static void srv_refresh_innodb_monitor_stats() {
 
   os_aio_refresh_stats();
 
-  btr_cur_n_sea_old = btr_cur_n_sea;
-  btr_cur_n_non_sea_old = btr_cur_n_non_sea;
-
   log_refresh_stats();
 
   buf_refresh_io_stats();
@@ -1452,13 +1449,6 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
                        "FILE I/O\n"
                        "--------\n");
   os_aio_print(ib_stream);
-
-  ib_logger(ib_stream, "%.2f hash searches/s, %.2f non-hash searches/s\n",
-            (btr_cur_n_sea - btr_cur_n_sea_old) / time_elapsed,
-            (btr_cur_n_non_sea - btr_cur_n_non_sea_old) / time_elapsed);
-
-  btr_cur_n_sea_old = btr_cur_n_sea;
-  btr_cur_n_non_sea_old = btr_cur_n_non_sea;
 
   ib_logger(ib_stream, "---\n"
                        "LOG\n"

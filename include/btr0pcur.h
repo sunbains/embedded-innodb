@@ -944,8 +944,8 @@ inline void btr_pcur_close(btr_pcur_t *cursor) /*!< in: persistent cursor */
     cursor->old_rec_buf = NULL;
   }
 
-  cursor->btr_cur.page_cur.rec = NULL;
-  cursor->btr_cur.page_cur.block = NULL;
+  cursor->btr_cur.m_page_cur.rec = NULL;
+  cursor->btr_cur.m_page_cur.block = NULL;
   cursor->old_rec = NULL;
   cursor->old_stored = BTR_PCUR_OLD_NOT_STORED;
 

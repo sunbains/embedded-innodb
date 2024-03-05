@@ -182,8 +182,8 @@ static db_err row_ins_sec_index_entry_by_modify(
 
   rec = btr_cur_get_rec(cursor);
 
-  ut_ad(!dict_index_is_clust(cursor->index));
-  ut_ad(rec_get_deleted_flag(rec, dict_table_is_comp(cursor->index->table)));
+  ut_ad(!dict_index_is_clust(cursor->m_index));
+  ut_ad(rec_get_deleted_flag(rec, dict_table_is_comp(cursor->m_index->table)));
 
   /* We know that in the alphabetical ordering, entry and rec are
   identified. But in their binary form there may be differences if
@@ -192,7 +192,7 @@ static db_err row_ins_sec_index_entry_by_modify(
 
   heap = mem_heap_create(1024);
 
-  update = row_upd_build_sec_rec_difference_binary(cursor->index, entry, rec,
+  update = row_upd_build_sec_rec_difference_binary(cursor->m_index, entry, rec,
                                                    thr_get_trx(thr), heap);
   if (mode == BTR_MODIFY_LEAF) {
     /* Try an optimistic updating of the record, keeping changes
@@ -250,13 +250,13 @@ static db_err row_ins_clust_index_entry_by_modify(
   upd_t *update;
   db_err err;
 
-  ut_ad(dict_index_is_clust(cursor->index));
+  ut_ad(dict_index_is_clust(cursor->m_index));
 
   *big_rec = NULL;
 
   rec = btr_cur_get_rec(cursor);
 
-  ut_ad(rec_get_deleted_flag(rec, dict_table_is_comp(cursor->index->table)));
+  ut_ad(rec_get_deleted_flag(rec, dict_table_is_comp(cursor->m_index->table)));
 
   if (!*heap) {
     *heap = mem_heap_create(1024);
@@ -266,7 +266,7 @@ static db_err row_ins_clust_index_entry_by_modify(
   NOTE that this vector may NOT contain system columns trx_id or
   roll_ptr */
 
-  update = row_upd_build_difference_binary(cursor->index, entry, rec,
+  update = row_upd_build_difference_binary(cursor->m_index, entry, rec,
                                            thr_get_trx(thr), *heap);
 
   if (mode == BTR_MODIFY_LEAF) {
@@ -818,7 +818,7 @@ static db_err row_ins_foreign_check_on_constraint(
     goto nonstandard_exit_func;
   }
 
-  index = btr_pcur_get_btr_cur(pcur)->index;
+  index = btr_pcur_get_btr_cur(pcur)->m_index;
 
   ut_a(index == foreign->foreign_index);
 
@@ -1624,8 +1624,8 @@ row_ins_duplicate_error_in_clust(btr_cur_t *cursor, /*!< in: B-tree cursor */
 
   UT_NOT_USED(mtr);
 
-  ut_a(dict_index_is_clust(cursor->index));
-  ut_ad(dict_index_is_unique(cursor->index));
+  ut_a(dict_index_is_clust(cursor->m_index));
+  ut_ad(dict_index_is_unique(cursor->m_index));
 
   /* NOTE: For unique non-clustered indexes there may be any number
   of delete marked records with the same value for the non-clustered
@@ -1640,7 +1640,7 @@ row_ins_duplicate_error_in_clust(btr_cur_t *cursor, /*!< in: B-tree cursor */
   user records on the leaf level. So, even if low_match would suggest
   that a duplicate key violation may occur, this may not be the case. */
 
-  n_unique = dict_index_get_n_unique(cursor->index);
+  n_unique = dict_index_get_n_unique(cursor->m_index);
 
   if (cursor->low_match >= n_unique) {
 
@@ -1648,7 +1648,7 @@ row_ins_duplicate_error_in_clust(btr_cur_t *cursor, /*!< in: B-tree cursor */
 
     if (!page_rec_is_infimum(rec)) {
       offsets =
-          rec_get_offsets(rec, cursor->index, offsets, ULINT_UNDEFINED, &heap);
+          rec_get_offsets(rec, cursor->m_index, offsets, ULINT_UNDEFINED, &heap);
 
       /* We set a lock on the possible duplicate: this
       is needed in logical logging, we need to make
@@ -1664,20 +1664,20 @@ row_ins_duplicate_error_in_clust(btr_cur_t *cursor, /*!< in: B-tree cursor */
 
         err = row_ins_set_exclusive_rec_lock(LOCK_REC_NOT_GAP,
                                              btr_cur_get_block(cursor), rec,
-                                             cursor->index, offsets, thr);
+                                             cursor->m_index, offsets, thr);
       } else {
 
         err = row_ins_set_shared_rec_lock(LOCK_REC_NOT_GAP,
                                           btr_cur_get_block(cursor), rec,
-                                          cursor->index, offsets, thr);
+                                          cursor->m_index, offsets, thr);
       }
 
       if (err != DB_SUCCESS) {
         goto func_exit;
       }
 
-      if (row_ins_dupl_error_with_rec(rec, entry, cursor->index, offsets)) {
-        trx->error_info = cursor->index;
+      if (row_ins_dupl_error_with_rec(rec, entry, cursor->m_index, offsets)) {
+        trx->error_info = cursor->m_index;
         err = DB_DUPLICATE_KEY;
         goto func_exit;
       }
@@ -1690,7 +1690,7 @@ row_ins_duplicate_error_in_clust(btr_cur_t *cursor, /*!< in: B-tree cursor */
 
     if (!page_rec_is_supremum(rec)) {
       offsets =
-          rec_get_offsets(rec, cursor->index, offsets, ULINT_UNDEFINED, &heap);
+          rec_get_offsets(rec, cursor->m_index, offsets, ULINT_UNDEFINED, &heap);
 
       if (trx->duplicates & TRX_DUP_IGNORE) {
 
@@ -1701,26 +1701,26 @@ row_ins_duplicate_error_in_clust(btr_cur_t *cursor, /*!< in: B-tree cursor */
 
         err = row_ins_set_exclusive_rec_lock(LOCK_REC_NOT_GAP,
                                              btr_cur_get_block(cursor), rec,
-                                             cursor->index, offsets, thr);
+                                             cursor->m_index, offsets, thr);
       } else {
 
         err = row_ins_set_shared_rec_lock(LOCK_REC_NOT_GAP,
                                           btr_cur_get_block(cursor), rec,
-                                          cursor->index, offsets, thr);
+                                          cursor->m_index, offsets, thr);
       }
 
       if (err != DB_SUCCESS) {
         goto func_exit;
       }
 
-      if (row_ins_dupl_error_with_rec(rec, entry, cursor->index, offsets)) {
-        trx->error_info = cursor->index;
+      if (row_ins_dupl_error_with_rec(rec, entry, cursor->m_index, offsets)) {
+        trx->error_info = cursor->m_index;
         err = DB_DUPLICATE_KEY;
         goto func_exit;
       }
     }
 
-    ut_a(!dict_index_is_clust(cursor->index));
+    ut_a(!dict_index_is_clust(cursor->m_index));
     /* This should never happen */
   }
 
@@ -1752,7 +1752,7 @@ inline ulint row_ins_must_modify(btr_cur_t *cursor) /*!< in: B-tree cursor */
   node pointers contain index->n_unique first fields, and in the case
   of a secondary index, all fields of the index. */
 
-  enough_match = dict_index_get_n_unique_in_tree(cursor->index);
+  enough_match = dict_index_get_n_unique_in_tree(cursor->m_index);
 
   if (cursor->low_match >= enough_match) {
 

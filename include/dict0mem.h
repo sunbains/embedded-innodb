@@ -273,9 +273,6 @@ struct dict_index_struct {
   /* List of indexes of the table */
   UT_LIST_NODE_T(dict_index_t) indexes;
 
-  /** info used in optimistic searches */
-  btr_search_t *search_info;
-
   /** Statistics for query optimization */
 
   /* @{ */

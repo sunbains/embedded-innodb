@@ -330,7 +330,9 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   assert(err == DB_SUCCESS);
 
   err = ib_table_create(ib_trx, ib_tbl_sch, &table_id);
-  assert(err == DB_SUCCESS);
+
+  /* We assume it's the same table. */
+  assert(err == DB_SUCCESS || err == DB_TABLE_EXISTS);
 
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
@@ -913,7 +915,6 @@ static void print_results(void) {
   print_one_struct(&ins_stats);
 }
 
-#ifndef __WIN__
 /** Set the runtime global options. */
 static void set_options(int argc, char *argv[]) {
   int opt;
@@ -958,7 +959,6 @@ static void set_options(int argc, char *argv[]) {
 
   free(longopts);
 }
-#endif /* __WIN__ */
 
 int main(int argc, char *argv[]) {
   int i;
@@ -978,12 +978,9 @@ int main(int argc, char *argv[]) {
 
   test_configure();
 
-#ifndef __WIN__
   set_options(argc, argv);
-#endif /* __WIN__ */
 
   gen_random_data();
-  // print_random_data();
 
   init_stat_structs();
 

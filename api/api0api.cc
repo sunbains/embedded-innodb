@@ -2031,7 +2031,7 @@ ib_table_get_id_low(const char *table_name, /*!< in: table to find */
 }
 
 /** Create a table. If the table exists in the database then this function
-will return DB_TABLE_IS_BEING_USED and id will contain that tables id.
+will return DB_TABLE_EXISTS and id will contain that tables id.
 @return	DB_SUCCESS or err code */
 
 ib_err_t ib_table_create(ib_trx_t ib_trx, /*!< in/out: transaction */
@@ -2062,7 +2062,7 @@ ib_err_t ib_table_create(ib_trx_t ib_trx, /*!< in/out: transaction */
   err = ib_table_get_id_low(table_def->name, id);
 
   if (err == DB_SUCCESS) {
-    return DB_TABLE_IS_BEING_USED;
+    return DB_TABLE_EXISTS;
   }
 
   *id = 0;
@@ -3132,7 +3132,7 @@ static ib_err_t ib_execute_update_query_graph(
   /* This is a short term solution to fix the purge lag. */
   ib_delay_dml_if_needed();
 
-  ut_a(dict_index_is_clust(pcur->btr_cur.index));
+  ut_a(dict_index_is_clust(pcur->btr_cur.m_index));
   btr_pcur_copy_stored_position(node->pcur, pcur);
 
   ut_a(node->pcur->rel_pos == BTR_PCUR_ON);
@@ -5444,7 +5444,7 @@ const char *ib_strerror(ib_err_t num) {
     return "Table not found";
   case DB_MUST_GET_MORE_FILE_SPACE:
     return "More file space needed";
-  case DB_TABLE_IS_BEING_USED:
+  case DB_TABLE_EXISTS:
     return "Table is being used";
   case DB_TOO_BIG_RECORD:
     return "Record too big";

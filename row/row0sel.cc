@@ -679,7 +679,7 @@ row_sel_get_clust_rec(sel_node_t *node, /*!< in: select_node */
 
   *out_rec = NULL;
 
-  offsets = rec_get_offsets(rec, btr_pcur_get_btr_cur(&plan->pcur)->index,
+  offsets = rec_get_offsets(rec, btr_pcur_get_btr_cur(&plan->pcur)->m_index,
                             offsets, ULINT_UNDEFINED, &heap);
 
   row_build_row_ref_fast(plan->clust_ref, plan->clust_map, rec, offsets);

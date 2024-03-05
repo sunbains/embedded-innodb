@@ -33,7 +33,7 @@ Created 2/23/1996 Heikki Tuuri
 btr_pcur_t *btr_pcur_create(void) {
   auto pcur = (btr_pcur_t *)mem_alloc(sizeof(btr_pcur_t));
 
-  pcur->btr_cur.index = NULL;
+  pcur->btr_cur.m_index = NULL;
   btr_pcur_init(pcur);
 
   return (pcur);
@@ -50,7 +50,7 @@ void btr_pcur_free(btr_pcur_t *cursor) /*!< in, own: persistent cursor */
     cursor->old_rec_buf = NULL;
   }
 
-  cursor->btr_cur.page_cur.rec = NULL;
+  cursor->btr_cur.m_page_cur.rec = NULL;
   cursor->old_rec = NULL;
   cursor->old_n_fields = 0;
   cursor->old_stored = BTR_PCUR_OLD_NOT_STORED;
