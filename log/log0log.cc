@@ -1745,7 +1745,7 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery,
 
   srv_shutdown_state = SRV_SHUTDOWN_CLEANUP;
 
-  do {
+  for (;;) {
     os_thread_sleep(100000);
 
     mutex_enter(&kernel_mutex);
@@ -1852,7 +1852,10 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery,
     completely flushed to disk! (We do not call fil_write... if the
     'very fast' shutdown is enabled.) */
 
-  } while (!buf_all_freed());
+    if (buf_all_freed()) {
+      break;
+    }
+  }
 
   srv_shutdown_state = SRV_SHUTDOWN_LAST_PHASE;
 
