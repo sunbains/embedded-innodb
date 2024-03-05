@@ -636,7 +636,7 @@ void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
   /* We free all the pages but the root page first; this operation
   may span several mini-transactions */
 
-  btr_free_but_not_root(space, 0, root_page_no);
+  btr_free_but_not_root(space, root_page_no);
 
   /* Then we free the root page in the same mini-transaction where
   we write FIL_NULL to the appropriate field in the SYS_INDEXES
@@ -716,7 +716,7 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space,
   /* We free all the pages but the root page first; this operation
   may span several mini-transactions */
 
-  btr_free_but_not_root(space, 0, root_page_no);
+  btr_free_but_not_root(space, root_page_no);
 
   /* Then we free the root page in the same mini-transaction where
   we create the b-tree and write its new root page number to the

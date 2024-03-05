@@ -521,7 +521,7 @@ ulint btr_create(ulint type, ulint space, uint64_t index_id, dict_index_t *dict_
   return (page_no);
 }
 
-void btr_free_but_not_root(ulint space, ulint, ulint root_page_no) {
+void btr_free_but_not_root(ulint space, ulint root_page_no) {
   bool finished;
   page_t *root;
   mtr_t mtr;
