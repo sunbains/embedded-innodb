@@ -118,10 +118,6 @@ because srv_parse_log_group_home_dirs() parses it's input argument
 destructively. The copy is done using ut_malloc(). */
 char *srv_log_group_home_dir = nullptr;
 
-#ifdef UNIV_LOG_ARCHIVE
-char *srv_arch_dir = nullptr;
-#endif /* UNIV_LOG_ARCHIVE */
-
 /** store to its own file each table created by an user; data
 dictionary tables are in the system tablespace 0 */
 bool srv_file_per_table;
@@ -200,12 +196,6 @@ ulint srv_n_write_io_threads = ULINT_MAX;
 in the buffer cache and accessed sequentially for InnoDB to trigger a
 readahead request. */
 ulong srv_read_ahead_threshold = 56;
-
-#ifdef UNIV_LOG_ARCHIVE
-bool srv_log_archive_on = false;
-bool srv_archive_recovery = 0;
-uint64_t srv_archive_recovery_limit_lsn;
-#endif /* UNIV_LOG_ARCHIVE */
 
 ulint srv_unix_file_flush_method = SRV_UNIX_FSYNC;
 
@@ -674,10 +664,6 @@ void srv_var_init() {
 
   srv_use_sys_malloc = false;
 
-#ifdef UNIV_LOG_ARCHIVE
-  srv_arch_dir = nullptr;
-#endif /* UNIV_LOG_ARCHIVE */
-
   srv_file_per_table = false;
   srv_file_format = 0;
   srv_check_file_format_at_startup = DICT_TF_FORMAT_MAX;
@@ -704,12 +690,6 @@ void srv_var_init() {
   srv_mem_pool_size = ULINT_MAX;
   srv_lock_table_size = ULINT_MAX;
   srv_n_file_io_threads = ULINT_MAX;
-
-#ifdef UNIV_LOG_ARCHIVE
-  srv_log_archive_on = false;
-  srv_archive_recovery = 0;
-  srv_archive_recovery_limit_lsn = 0;
-#endif /* UNIV_LOG_ARCHIVE */
 
   srv_unix_file_flush_method = SRV_UNIX_FSYNC;
 

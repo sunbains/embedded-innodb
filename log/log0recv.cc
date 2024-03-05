@@ -922,10 +922,6 @@ recv_add_to_hash_table(byte type,          /*!< in: log record type */
     HASH_INSERT(recv_addr_t, addr_hash, recv_sys->addr_hash,
                 recv_fold(space, page_no), recv_addr);
     recv_sys->n_addrs++;
-#if 0
-		ib_logger(ib_stream, "Inserting log rec for space %lu, page %lu\n",
-			  space, page_no);
-#endif
   }
 
   UT_LIST_ADD_LAST(rec_list, recv_addr->rec_list, recv);
@@ -1770,12 +1766,7 @@ bool recv_scan_log_recs(ib_recovery_t recovery, ulint available_memory,
 
   do {
     no = log_block_get_hdr_no(log_block);
-    /*
-    ib_logger(ib_stream, "Log block header no %lu\n", no);
 
-    ib_logger(ib_stream, "Scanned lsn no %lu\n",
-    log_block_convert_lsn_to_no(scanned_lsn));
-    */
     if (no != log_block_convert_lsn_to_no(scanned_lsn) ||
         !log_block_checksum_is_ok_or_old_format(log_block)) {
 

@@ -200,16 +200,6 @@ ulint fil_space_get_type(ulint id);
 @param[in] is_raw              true if a raw device or a raw disk partition */
 void fil_node_create(const char *name, ulint size, ulint id, bool is_raw);
 
-#ifdef UNIV_LOG_ARCHIVE
-/** Drops files from the start of a file space, so that its size is cut by
-the amount given.
-@param[in] id                   Tablespace ID
-@param[in] trunc_len            Truncate by this much; it is an error if this
-                                does not equal to the combined size of some
-                                initial files in the space */
-void fil_space_truncate_start(ulint id, ulint trunc_len);
-#endif /* UNIV_LOG_ARCHIVE */
-
 /** Creates a space memory object and puts it to the 'fil system' hash table. If
 there is an error, prints an error message to the .err log.
 @param[in] name                 Tablespace name
@@ -271,9 +261,8 @@ void fil_set_max_space_id_if_bigger(ulint max_id);
 /** Writes the flushed lsn and the latest archived log number to the page
 header of the first page of each data file in the system tablespace.
 @param[in] lsn                  LSN to write.
-@param[in] arch_log_no          Latest archived log file number.
 @return	DB_SUCCESS or error number */
-db_err fil_write_flushed_lsn_to_data_files(uint64_t lsn, ulint arch_log_no);
+db_err fil_write_flushed_lsn_to_data_files(lsn_t lsn);
 
 /** Reads the flushed lsn and arch no fields from a data file at database
 startup.
@@ -286,10 +275,6 @@ startup.
 @param[out] max_flushed_lsn      Maximum flushed LSN */
 void fil_read_flushed_lsn_and_arch_log_no(os_file_t data_file,
                                           bool one_read_already,
-#ifdef UNIV_LOG_ARCHIVE
-                                          ulint *min_arch_log_no,
-                                          ulint *max_arch_log_no,
-#endif /* UNIV_LOG_ARCHIVE */
                                           uint64_t *min_flushed_lsn,
                                           uint64_t *max_flushed_lsn);
 

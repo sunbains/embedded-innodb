@@ -133,17 +133,13 @@ void innobase_log_init(void);
 void log_group_init(ulint id,                /** in: group id */
                     ulint n_files,           /** in: number of log files */
                     ulint file_size,         /** in: log file size in bytes */
-                    ulint space_id,          /** in: space id of the file space
+                    ulint space_id);          /** in: space id of the file space
                                              which contains the log files of this
                                              group */
-                    ulint archive_space_id); /** in: space id of the file space
-                                             which contains some archived log
-                                             files for this group; currently,
-                                             only for the first log group this
-                                             is used */
-/** Completes an i/o to a log file. */
 
+/** Completes an i/o to a log file. */
 void log_io_complete(log_group_t *group); /** in: log group */
+
 /** This function is called, e.g., when a transaction wants to commit. It checks
 that the log has been written to the log file up to the last log entry written
 by the transaction. If there is a flush running, it waits and checks if the

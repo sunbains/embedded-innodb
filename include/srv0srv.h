@@ -101,10 +101,6 @@ extern bool ses_rollback_on_timeout;
 extern char *srv_data_home;
 extern char *srv_log_group_home_dir;
 
-#ifdef UNIV_LOG_ARCHIVE
-extern char *srv_arch_dir;
-#endif /* UNIV_LOG_ARCHIVE */
-
 /** store to its own file each table created by an user; data
 dictionary tables are in the system tablespace 0 */
 extern bool srv_file_per_table;
@@ -152,12 +148,6 @@ extern ulong srv_io_capacity;
 capacity. PCT_IO(5) -> returns the number of IO operations that
 is 5% of the max where max is srv_io_capacity.  */
 #define PCT_IO(p) ((ulong)(srv_io_capacity * ((double)p / 100.0)))
-
-#ifdef UNIV_LOG_ARCHIVE
-extern bool srv_log_archive_on;
-extern bool srv_archive_recovery;
-extern uint64_t srv_archive_recovery_limit_lsn;
-#endif /* UNIV_LOG_ARCHIVE */
 
 extern ulint srv_unix_file_flush_method;
 

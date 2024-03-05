@@ -950,31 +950,6 @@ static void fil_node_free(
   mem_free(node);
 }
 
-#ifdef UNIV_LOG_ARCHIVE
-void fil_space_truncate_start(ulint id, ulint trunc_len) {
-  fil_node_t *node;
-  fil_space_t *space;
-
-  mutex_enter(&fil_system->mutex);
-
-  space = fil_space_get_by_id(id);
-
-  ut_a(space);
-
-  while (trunc_len > 0) {
-    node = UT_LIST_GET_FIRST(space->chain);
-
-    ut_a(node->size * UNIV_PAGE_SIZE <= trunc_len);
-
-    trunc_len -= node->size * UNIV_PAGE_SIZE;
-
-    fil_node_free(node, fil_system, space);
-  }
-
-  mutex_exit(&fil_system->mutex);
-}
-#endif /* UNIV_LOG_ARCHIVE */
-
 bool fil_space_create(const char *name, ulint id, ulint flags, ulint purpose) {
   fil_space_t *space;
 
@@ -1438,9 +1413,7 @@ which is uncompressed. */
 static db_err fil_write_lsn_and_arch_no_to_file(
     ulint sum_of_sizes, /** in: combined size of previous files
                         in space, in database pages */
-    uint64_t lsn,       /** in: lsn to write */
-    ulint arch_log_no __attribute__((unused)))
-/** in: archived log number to write */
+    lsn_t lsn)       /** in: lsn to write */
 {
   auto buf1 = (byte *)mem_alloc(2 * UNIV_PAGE_SIZE);
   auto buf = (byte *)ut_align(buf1, UNIV_PAGE_SIZE);
@@ -1456,7 +1429,7 @@ static db_err fil_write_lsn_and_arch_no_to_file(
   return DB_SUCCESS;
 }
 
-db_err fil_write_flushed_lsn_to_data_files(uint64_t lsn, ulint arch_log_no) {
+db_err fil_write_flushed_lsn_to_data_files(lsn_t lsn) {
   fil_node_t *node;
   ulint sum_of_sizes;
 
@@ -1478,8 +1451,7 @@ db_err fil_write_flushed_lsn_to_data_files(uint64_t lsn, ulint arch_log_no) {
       while (node) {
         mutex_exit(&fil_system->mutex);
 
-        auto err =
-            fil_write_lsn_and_arch_no_to_file(sum_of_sizes, lsn, arch_log_no);
+        auto err = fil_write_lsn_and_arch_no_to_file(sum_of_sizes, lsn);
 
         if (err != DB_SUCCESS) {
 
@@ -1502,39 +1474,24 @@ db_err fil_write_flushed_lsn_to_data_files(uint64_t lsn, ulint arch_log_no) {
 
 void fil_read_flushed_lsn_and_arch_log_no(
     os_file_t data_file, bool one_read_already,
-#ifdef UNIV_LOG_ARCHIVE
-    ulint *min_arch_log_no,    /** in/out: */
-    ulint *max_arch_log_no,    /** in/out: */
-#endif                         /* UNIV_LOG_ARCHIVE */
-    uint64_t *min_flushed_lsn, /** in/out: */
-    uint64_t *max_flushed_lsn) /** in/out: */
+    lsn_t *min_flushed_lsn, /** in/out: */
+    lsn_t *max_flushed_lsn) /** in/out: */
 {
   uint64_t flushed_lsn;
-#ifdef UNIV_LOG_ARCHIVE
-  ulint arch_log_no = 0;
-#endif
-
   auto buf2 = (byte *)ut_malloc(2 * UNIV_PAGE_SIZE);
+
   /* Align the memory for a possible read from a raw device */
   auto buf = (byte *)ut_align(buf2, UNIV_PAGE_SIZE);
 
   os_file_read(data_file, buf, 0, 0, UNIV_PAGE_SIZE);
 
   flushed_lsn = mach_read_from_8(buf + FIL_PAGE_FILE_FLUSH_LSN);
-#ifdef UNIV_LOG_ARCHIVE
-  // FIXME: ARCHIVE: We still haven't decided where this will go
-  // arch_log_no = mach_read_from_4(buf + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID);
-#endif
 
   ut_free(buf2);
 
   if (!one_read_already) {
     *min_flushed_lsn = flushed_lsn;
     *max_flushed_lsn = flushed_lsn;
-#ifdef UNIV_LOG_ARCHIVE
-    *min_arch_log_no = arch_log_no;
-    *max_arch_log_no = arch_log_no;
-#endif /* UNIV_LOG_ARCHIVE */
     return;
   }
 
@@ -1544,14 +1501,6 @@ void fil_read_flushed_lsn_and_arch_log_no(
   if (*max_flushed_lsn < flushed_lsn) {
     *max_flushed_lsn = flushed_lsn;
   }
-#ifdef UNIV_LOG_ARCHIVE
-  if (*min_arch_log_no > arch_log_no) {
-    *min_arch_log_no = arch_log_no;
-  }
-  if (*max_arch_log_no < arch_log_no) {
-    *max_arch_log_no = arch_log_no;
-  }
-#endif /* UNIV_LOG_ARCHIVE */
 }
 
 /** Creates the database directory for a table if it does not exist yet. */

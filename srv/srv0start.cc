@@ -689,36 +689,19 @@ static db_err open_or_create_log_file(
   ut_a(ret);
 
   if (i == 0) {
-    /* Create in memory the file space object
-    which is for this log group */
+    /* Create in memory the file space object which is for this log group */
 
     fil_space_create(name, 2 * k + SRV_LOG_SPACE_FIRST_ID, 0, FIL_LOG);
   }
 
   ut_a(fil_validate());
 
-  fil_node_create(name, srv_log_file_size, 2 * k + SRV_LOG_SPACE_FIRST_ID,
-                  false);
-#ifdef UNIV_LOG_ARCHIVE
-  /* If this is the first log group, create the file space object
-  for archived logs.  */
+  fil_node_create(name, srv_log_file_size, 2 * k + SRV_LOG_SPACE_FIRST_ID, false);
 
-  if (k == 0 && i == 0) {
-    // FIXME: ARCHIVE: Where is this defined  ?
-    ulint arch_space_id;
-
-    arch_space_id = 2 * k + 1 + SRV_LOG_SPACE_FIRST_ID;
-
-    fil_space_create("arch_log_space", arch_space_id, 0, FIL_LOG);
-  } else {
-    // FIXME: ARCHIVE: Where is this defined ?
-    // arch_space_id = ULINT_UNDEFINED;
-  }
-#endif /* UNIV_LOG_ARCHIVE */
   if (i == 0) {
     log_group_init(k, srv_n_log_files, srv_log_file_size * UNIV_PAGE_SIZE,
-                   2 * k + SRV_LOG_SPACE_FIRST_ID,
-                   SRV_LOG_SPACE_FIRST_ID + 1); /* dummy arch space id */
+                   2 * k + SRV_LOG_SPACE_FIRST_ID);
+                   
   }
 
   return DB_SUCCESS;
@@ -729,12 +712,6 @@ static db_err open_or_create_log_file(
 static db_err open_or_create_data_files(
     bool *create_new_db, /*!< out: true if new database should be
                           created */
-#ifdef UNIV_LOG_ARCHIVE
-    ulint *min_arch_log_no,    /*!< out: min of archived log
-                               numbers in data files */
-    ulint *max_arch_log_no,    /*!< out: max of archived log
-                               numbers in data files */
-#endif                         /* UNIV_LOG_ARCHIVE */
     uint64_t *min_flushed_lsn, /*!< out: min of flushed lsn
                                   values in data files */
     uint64_t *max_flushed_lsn, /*!< out: max of flushed lsn
@@ -921,11 +898,7 @@ static db_err open_or_create_data_files(
         return DB_ERROR;
       }
     skip_size_check:
-      fil_read_flushed_lsn_and_arch_log_no(files[i], one_opened,
-#ifdef UNIV_LOG_ARCHIVE
-                                           min_arch_log_no, max_arch_log_no,
-#endif /* UNIV_LOG_ARCHIVE */
-                                           min_flushed_lsn, max_flushed_lsn);
+      fil_read_flushed_lsn_and_arch_log_no(files[i], one_opened, min_flushed_lsn, max_flushed_lsn);
       one_opened = true;
     } else {
       /* We created the data file and now write it full of
@@ -1028,10 +1001,6 @@ ib_err_t innobase_start_or_create() {
   bool log_opened = false;
   uint64_t min_flushed_lsn;
   uint64_t max_flushed_lsn;
-#ifdef UNIV_LOG_ARCHIVE
-  ulint min_arch_log_no;
-  ulint max_arch_log_no;
-#endif /* UNIV_LOG_ARCHIVE */
   ulint sum_of_new_sizes;
   ulint sum_of_data_file_sizes;
   ulint tablespace_size_in_header;
@@ -1190,15 +1159,6 @@ ib_err_t innobase_start_or_create() {
   }
 #endif
 
-#ifdef UNIV_LOG_ARCHIVE
-  if (0 != strcmp(srv_log_group_home_dirs[0], srv_arch_dir)) {
-    ib_logger(ib_stream, "Error: you must set the log group"
-                         " home dir same as log arch dir.\n");
-
-    return DB_ERROR;
-  }
-#endif /* UNIV_LOG_ARCHIVE */
-
   if (srv_n_log_files * srv_log_file_size >= 262144) {
     ib_logger(ib_stream, "Error: combined size of log files"
                          " must be < 4 GB\n");
@@ -1259,9 +1219,6 @@ ib_err_t innobase_start_or_create() {
   }
 
   err = open_or_create_data_files(&create_new_db,
-#ifdef UNIV_LOG_ARCHIVE
-                                  &min_arch_log_no, &max_arch_log_no,
-#endif /* UNIV_LOG_ARCHIVE */
                                   &min_flushed_lsn, &max_flushed_lsn,
                                   &sum_of_new_sizes);
   if (err != DB_SUCCESS) {
@@ -1283,10 +1240,6 @@ ib_err_t innobase_start_or_create() {
 
     return err;
   }
-
-#ifdef UNIV_LOG_ARCHIVE
-  srv_arch_dir = srv_add_path_separator_if_needed(srv_arch_dir);
-#endif /* UNIV_LOG_ARCHIVE */
 
   for (i = 0; i < srv_n_log_files; i++) {
 
@@ -1324,16 +1277,8 @@ ib_err_t innobase_start_or_create() {
 
   fil_open_log_and_system_tablespace_files();
 
-  if (log_created && !create_new_db
-#ifdef UNIV_LOG_ARCHIVE
-      && !srv_archive_recovery
-#endif /* UNIV_LOG_ARCHIVE */
-  ) {
-    if (max_flushed_lsn != min_flushed_lsn
-#ifdef UNIV_LOG_ARCHIVE
-        || max_arch_log_no != min_arch_log_no
-#endif /* UNIV_LOG_ARCHIVE */
-    ) {
+  if (log_created && !create_new_db) {
+    if (max_flushed_lsn != min_flushed_lsn) {
       ib_logger(ib_stream, "Cannot initialize created"
                            " log files because\n"
                            "data files were not in sync"
@@ -1361,13 +1306,7 @@ ib_err_t innobase_start_or_create() {
 
     mutex_enter(&(log_sys->mutex));
 
-#ifdef UNIV_LOG_ARCHIVE
-    /* Do not + 1 arch_log_no because we do not use log
-    archiving */
-    recv_reset_logs(max_flushed_lsn, max_arch_log_no, true);
-#else
     recv_reset_logs(max_flushed_lsn, true);
-#endif /* UNIV_LOG_ARCHIVE */
 
     mutex_exit(&(log_sys->mutex));
   }
@@ -1383,29 +1322,6 @@ ib_err_t innobase_start_or_create() {
     trx_sys_create(srv_force_recovery);
     dict_create();
     srv_startup_is_before_trx_rollback_phase = false;
-
-#ifdef UNIV_LOG_ARCHIVE
-  } else if (srv_archive_recovery) {
-
-    ib_logger(ib_stream, "Starting archive recovery from a backup...\n");
-
-    err = recv_recovery_from_archive_start(
-        min_flushed_lsn, srv_archive_recovery_limit_lsn, min_arch_log_no);
-
-    if (err != DB_SUCCESS) {
-
-      return DB_ERROR;
-    }
-    dict_boot();
-    trx_sys_init_at_db_start(srv_force_recovery);
-    srv_startup_is_before_trx_rollback_phase = false;
-
-    /* Initialize the fsp free limit global variable in the log
-    system */
-    fsp_header_get_free_limit();
-
-    recv_recovery_from_archive_finish();
-#endif /* UNIV_LOG_ARCHIVE */
   } else {
 
     /* Check if we support the max format that is stamped
@@ -1497,29 +1413,6 @@ ib_err_t innobase_start_or_create() {
 
     log_buffer_flush_to_disk();
   }
-
-#ifdef UNIV_LOG_ARCHIVE
-  if (!srv_log_archive_on) {
-    ut_a(DB_SUCCESS == log_archive_noarchivelog());
-  } else {
-    // FIXME: ARCHIVE: Where is this defined ?
-    bool start_archive;
-
-    log_acquire();
-
-    start_archive = false;
-
-    if (log_sys->archiving_state == LOG_ARCH_OFF) {
-      start_archive = true;
-    }
-
-    log_release();
-
-    if (start_archive) {
-      ut_a(DB_SUCCESS == log_archive_archivelog());
-    }
-  }
-#endif /* UNIV_LOG_ARCHIVE */
 
   /* ib_logger(ib_stream, "Max allowed record size %lu\n",
   page_get_free_space_of_empty() / 2); */
@@ -1847,10 +1740,7 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
   /* This variable should come from the user and should not be
   malloced by InnoDB. */
   srv_data_home = nullptr;
-#ifdef UNIV_LOG_ARCHIVE
-  free(srv_arch_dir);
-  srv_arch_dir = nullptr;
-#endif /* UNIV_LOG_ARCHIVE */
+
   /* This variable should come from the user and should not be
   malloced by InnoDB. */
 
