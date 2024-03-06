@@ -1,4 +1,4 @@
-This is the source of InnoDB 0.1
+This is the source of Embedded InnoDB 0.1
 
 The long term plan is to convert it incrementally to Zig. Starting with the tests.
 
