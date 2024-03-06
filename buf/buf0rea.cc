@@ -104,7 +104,8 @@ static ulint buf_read_page_low(
   or is being dropped; if we succeed in initing the page in the buffer
   pool for read, then DISCARD cannot proceed until the read has
   completed */
-  bpage = buf_page_init_for_read(err, mode, space, tablespace_version, offset);
+  bpage = buf_page_init_for_read(err, mode, space, 0, false, tablespace_version,
+                                 offset);
   if (bpage == nullptr) {
 
     return (0);

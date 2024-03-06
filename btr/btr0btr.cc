@@ -151,7 +151,7 @@ rec_t * btr_get_prev_user_rec(rec_t *rec, mtr_t *mtr) {
   if (prev_page_no != FIL_NULL) {
 
     auto space = page_get_space_id(page);
-    auto prev_block = buf_page_get_with_no_latch(space, prev_page_no, mtr);
+    auto prev_block = buf_page_get_with_no_latch(space, 0, prev_page_no, mtr);
     auto prev_page = buf_block_get_frame(prev_block);
 
     /* The caller must already have a latch to the brother */
@@ -188,7 +188,7 @@ rec_t * btr_get_next_user_rec(rec_t *rec, mtr_t *mtr) {
 
   if (next_page_no != FIL_NULL) {
     auto space = page_get_space_id(page);
-    auto next_block = buf_page_get_with_no_latch(space, next_page_no, mtr);
+    auto next_block = buf_page_get_with_no_latch(space, 0, next_page_no, mtr);
 
     next_page = buf_block_get_frame(next_block);
     /* The caller must already have a latch to the brother */
@@ -251,7 +251,8 @@ buf_block_t *btr_page_alloc(dict_index_t *dict_index, ulint hint_page_no,
     return (nullptr);
   }
 
-  auto new_block = buf_page_get(dict_index_get_space(dict_index), new_page_no, RW_X_LATCH, mtr);
+  auto new_block = buf_page_get(dict_index_get_space(dict_index), 0,
+                                new_page_no, RW_X_LATCH, mtr);
 
   buf_block_dbg_add_level(new_block, SYNC_TREE_NODE_NEW);
 

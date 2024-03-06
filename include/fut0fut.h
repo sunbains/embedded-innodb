@@ -32,19 +32,22 @@ Created 12/13/1995 Heikki Tuuri
 
 /** Gets a pointer to a file address and latches the page.
 @return pointer to a byte in a frame; the file page in the frame is
-bufferfixed and latched.
-@param[in] space_id             Tablespace ID.
-@param[in] add                  File address
-@param[in,out] rw_latch         RW_S_LATCH, RW_X_LATCH
-@param[in,out] mtr              Mini-transaction. */
-inline byte *fut_get_ptr(space_id_t space, fil_addr_t addr, ulint rw_latch, mtr_t *mtr) {
+bufferfixed and latched */
+inline byte *fut_get_ptr(ulint space,     /*!< in: space id */
+                         fil_addr_t addr, /*!< in: file address */
+                         ulint rw_latch,  /*!< in: RW_S_LATCH, RW_X_LATCH */
+                         mtr_t *mtr)      /*!< in: mtr handle */
+{
+  buf_block_t *block;
+  byte *ptr;
+
   ut_ad(addr.boffset < UNIV_PAGE_SIZE);
   ut_ad((rw_latch == RW_S_LATCH) || (rw_latch == RW_X_LATCH));
 
-  auto block = buf_page_get(space, addr.page, rw_latch, mtr);
-  auto ptr = buf_block_get_frame(block) + addr.boffset;
+  block = buf_page_get(space, 0, addr.page, rw_latch, mtr);
+  ptr = buf_block_get_frame(block) + addr.boffset;
 
   buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
 
-  return ptr;
+  return (ptr);
 }

@@ -1,4 +1,4 @@
-/****************************************************************************
+/**
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -22,55 +22,63 @@ Place, Suite 330, Boston, MA 02111-1307 USA
  Created 11/17/1995 Heikki Tuuri
  *******************************************************/
 
-#pragma once
+#ifndef buf0types_h
+#define buf0types_h
 
 #include "innodb0types.h"
 
 /** Buffer page (uncompressed or compressed) */
-struct buf_page_t;
-
+typedef struct buf_page_struct buf_page_t;
 /** Buffer block for which an uncompressed page exists */
-struct buf_block_t;
-
+typedef struct buf_block_struct buf_block_t;
 /** Buffer pool chunk comprising buf_block_t */
-struct buf_chunk_t;
-
+typedef struct buf_chunk_struct buf_chunk_t;
 /** Buffer pool comprising buf_chunk_t */
-struct buf_pool_t;
-
+typedef struct buf_pool_struct buf_pool_t;
 /** Buffer pool statistics struct */
-struct buf_pool_stat_t;
+typedef struct buf_pool_stat_struct buf_pool_stat_t;
 
 /** A buffer frame. @see page_t */
-using buf_frame_t = byte;
+typedef byte buf_frame_t;
 
-/** 
- * Flags for flush types 
- */
+/** Flags for flush types */
 enum buf_flush {
-  /** Flush via the LRU list */
-  BUF_FLUSH_LRU = 0,
-
-   /** Flush a single page */
-  BUF_FLUSH_SINGLE_PAGE,
-
-  /** Flush via the flush list of dirty blocks */
-  BUF_FLUSH_LIST,
-
-  /** Index of last element + 1  */
-  BUF_FLUSH_N_TYPES
+  BUF_FLUSH_LRU = 0,     /*!< flush via the LRU list */
+  BUF_FLUSH_SINGLE_PAGE, /*!< flush a single page */
+  BUF_FLUSH_LIST,        /*!< flush via the flush list
+                         of dirty blocks */
+  BUF_FLUSH_N_TYPES      /*!< index of last element + 1  */
 };
 
-/** 
- * Flags for io_fix types 
- */
+/** Flags for io_fix types */
 enum buf_io_fix {
-  /** No pending I/O */
-  BUF_IO_NONE = 0,
-
-  /** Read pending */
-  BUF_IO_READ,
-
-  /** write pending */
-  BUF_IO_WRITE
+  BUF_IO_NONE = 0, /**< no pending I/O */
+  BUF_IO_READ,     /**< read pending */
+  BUF_IO_WRITE     /**< write pending */
 };
+
+#if 0
+/** Parameters of binary buddy system for compressed pages (buf0buddy.h) */
+/* @{ */
+#if UNIV_WORD_SIZE <= 4 /* 32-bit system */
+/** Base-2 logarithm of the smallest buddy block size */
+#define BUF_BUDDY_LOW_SHIFT 6
+#else /* 64-bit system */
+/** Base-2 logarithm of the smallest buddy block size */
+#define BUF_BUDDY_LOW_SHIFT 7
+#endif
+#define BUF_BUDDY_LOW (1 << BUF_BUDDY_LOW_SHIFT)
+/*!< minimum block size in the binary
+buddy system; must be at least
+sizeof(buf_page_t) */
+#define BUF_BUDDY_SIZES (UNIV_PAGE_SIZE_SHIFT - BUF_BUDDY_LOW_SHIFT)
+/*!< number of buddy sizes */
+
+/** twice the maximum block size of the buddy system;
+the underlying memory is aligned by this amount:
+this must be equal to UNIV_PAGE_SIZE */
+#define BUF_BUDDY_HIGH (BUF_BUDDY_LOW << BUF_BUDDY_SIZES)
+/* @} */
+#endif
+
+#endif

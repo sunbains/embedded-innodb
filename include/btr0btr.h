@@ -333,7 +333,7 @@ constexpr ulint BTR_MAX_NODE_LEVEL = 50;
 @param[in] mode                 Latch mode
 @param[in,out] mtr              Mini-transaction. */ 
 inline buf_block_t *btr_block_get( space_id_t space, page_no_t page_no, ulint mode, mtr_t *mtr) {
-  auto block = buf_page_get(space, page_no, mode, mtr);
+  auto block = buf_page_get(space, 0, page_no, mode, mtr);
 
   if (mode != RW_NO_LATCH) {
 

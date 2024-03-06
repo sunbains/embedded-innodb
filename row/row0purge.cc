@@ -422,7 +422,7 @@ skip_secondaries:
       /* We assume in purge of externally stored fields
       that the space id of the undo log record is 0! */
 
-      block = buf_page_get(SYS_TABLESPACE, page_no, RW_X_LATCH, &mtr);
+      block = buf_page_get(0, 0, page_no, RW_X_LATCH, &mtr);
       buf_block_dbg_add_level(block, SYNC_TRX_UNDO_PAGE);
 
       data_field = buf_block_get_frame(block) + offset + internal_offset;
