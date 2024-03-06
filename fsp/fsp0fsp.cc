@@ -634,10 +634,10 @@ fsp_init_file_page_low(buf_block_t *block) /*!< in: pointer to a page */
   memset(page, 0, UNIV_PAGE_SIZE);
   mach_write_to_4(page + FIL_PAGE_OFFSET, buf_block_get_page_no(block));
   memset(page + FIL_PAGE_LSN, 0, 8);
-  mach_write_to_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID,
+  mach_write_to_4(page + FIL_PAGE_SPACE_ID,
                   buf_block_get_space(block));
   memset(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM, 0, 8);
-  mach_write_to_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID,
+  mach_write_to_4(page + FIL_PAGE_SPACE_ID,
                   buf_block_get_space(block));
 }
 
@@ -689,7 +689,7 @@ void fsp_header_init(ulint space, ulint size, mtr_t *mtr) {
 
   mtr_x_lock(fil_space_get_latch(space), mtr);
 
-  auto block = buf_page_create(space, 0, 0, mtr);
+  auto block = buf_page_create(space, 0, mtr);
   buf_page_get(space, 0, 0, RW_X_LATCH, mtr);
   buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
@@ -725,7 +725,7 @@ void fsp_header_init(ulint space, ulint size, mtr_t *mtr) {
 
 ulint fsp_header_get_space_id( const page_t *page) {
   auto fsp_id = mach_read_from_4(FSP_HEADER_OFFSET + page + FSP_SPACE_ID);
-  auto id = mach_read_from_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID);
+  auto id = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
 
   if (id != fsp_id) {
     ib_logger(ib_stream,
@@ -999,7 +999,7 @@ fsp_fill_free_list(bool init_space, space_id_t space, fsp_header_t *header, mtr_
       the prior contents of the pages should be ignored. */
 
       if (i > 0) {
-        block = buf_page_create(space, i, 0, mtr);
+        block = buf_page_create(space, i, mtr);
 
         buf_page_get(space, 0, i, RW_X_LATCH, mtr);
 
@@ -1192,7 +1192,7 @@ static ulint fsp_alloc_free_page(
   be obtained immediately with buf_page_get without need for a disk
   read. */
 
-  buf_page_create(space, page_no, 0, mtr);
+  buf_page_create(space, page_no, mtr);
 
   block = buf_page_get(space, 0, page_no, RW_X_LATCH, mtr);
   buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
@@ -2079,7 +2079,7 @@ static ulint fseg_alloc_free_page_low(space_id_t space, fseg_inode_t *seg_inode,
     can be obtained immediately with buf_page_get without need
     for a disk read */
 
-    auto block = buf_page_create(space, ret_page, 0, mtr);
+    auto block = buf_page_create(space, ret_page, mtr);
 
     buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
@@ -2505,15 +2505,15 @@ void fseg_free_page(fseg_header_t *seg_header, ulint space, ulint page, mtr_t *m
 
   fseg_free_page_low(seg_inode, space, page, mtr);
 
-#ifdef UNIV_DEBUG_FILE_ACCESSES
+#ifdef UNIV_DEBUG
   buf_page_set_file_page_was_freed(space, page);
 #endif
 }
 
 /** Frees an extent of a segment to the space free list. */
 static void fseg_free_extent(fseg_inode_t *seg_inode, /*!< in: segment inode */
-                             ulint space,             /*!< in: space id */
-                             ulint page, /*!< in: a page in the extent */
+                             space_id_t space,             /*!< in: space id */
+                             page_no_t page, /*!< in: a page in the extent */
                              mtr_t *mtr)        /*!< in: mtr handle */
 {
   ut_ad(mtr != nullptr);
@@ -2545,12 +2545,14 @@ static void fseg_free_extent(fseg_inode_t *seg_inode, /*!< in: segment inode */
 
   fsp_free_extent(space, page, mtr);
 
-#ifdef UNIV_DEBUG_FILE_ACCESSES
-  for (i = 0; i < FSP_EXTENT_SIZE; i++) {
+#ifdef UNIV_DEBUG
+  const auto first_page_in_extent = page - (page % FSP_EXTENT_SIZE);
+
+  for (ulint i = 0; i < FSP_EXTENT_SIZE; i++) {
 
     buf_page_set_file_page_was_freed(space, first_page_in_extent + i);
   }
-#endif
+#endif /* UNIV_DEBUG */
 }
 
 bool fseg_free_step(fseg_header_t *header, mtr_t *mtr) {

@@ -2146,7 +2146,7 @@ db_err fil_create_new_single_table_tablespace(ulint *space_id,
   memset(page, '\0', UNIV_PAGE_SIZE);
 
   fsp_header_init_fields(page, *space_id, flags);
-  mach_write_to_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID, *space_id);
+  mach_write_to_4(page + FIL_PAGE_SPACE_ID, *space_id);
 
   buf_flush_init_for_writing(page, 0);
   ret = os_file_write(path, file, page, 0, 0, UNIV_PAGE_SIZE);

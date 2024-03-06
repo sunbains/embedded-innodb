@@ -31,6 +31,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "fsp0fsp.h"
 #include "lock0lock.h"
 #include "mach0data.h"
+#include "os0proc.h"
 #include "pars0pars.h"
 #include "que0que.h"
 #include "row0undo.h"

@@ -61,7 +61,7 @@ Created 10/16/1994 Heikki Tuuri
 #include "row0upd.h"
 #include "srv0srv.h"
 #include "trx0rec.h"
-#include "trx0roll.h" /* trx_is_recv() */
+#include "trx0roll.h"
 
 #ifdef UNIV_DEBUG
 /** If the following is set to true, this module prints a lot of
@@ -351,7 +351,7 @@ void btr_cur_search_to_nth_level(dict_index_t *dict_index, ulint level, const dt
     }
 
   retry_page_get:
-    block = buf_page_get_gen(space, 0, page_no, rw_latch, nullptr, buf_mode, file,
+    block = buf_page_get_gen(space, page_no, rw_latch, nullptr, buf_mode, file,
                              line, mtr);
     if (block == nullptr) {
 
@@ -501,7 +501,7 @@ void btr_cur_open_at_index_side_func(
   height = ULINT_UNDEFINED;
 
   for (;;) {
-    auto block = buf_page_get_gen(space, 0, page_no, RW_NO_LATCH, nullptr,
+    auto block = buf_page_get_gen(space, page_no, RW_NO_LATCH, nullptr,
                                   BUF_GET, file, line, mtr);
     auto page = buf_block_get_frame(block);
 
@@ -607,7 +607,7 @@ void btr_cur_open_at_rnd_pos_func(
     buf_block_t *block;
     page_t *page;
 
-    block = buf_page_get_gen(space, 0, page_no, RW_NO_LATCH, nullptr, BUF_GET,
+    block = buf_page_get_gen(space, page_no, RW_NO_LATCH, nullptr, BUF_GET,
                              file, line, mtr);
     page = buf_block_get_frame(block);
     ut_ad(dict_index->id == btr_page_get_index_id(page));

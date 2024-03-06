@@ -36,8 +36,8 @@ Created 11/11/1995 Heikki Tuuri
 #include "page0page.h"
 #include "srv0srv.h"
 #include "trx0sys.h"
-#include "ut0byte.h"
 #include "ut0lst.h"
+#include "ut0rbt.h"
 
 /** These statistics are generated for heuristics used in estimating the
 rate at which we should flush the dirty blocks to avoid bursty IO
@@ -253,14 +253,7 @@ void buf_flush_insert_sorted_into_flush_list(buf_block_t *block) {
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 }
 
-/** Returns true if the file page block is immediately suitable for replacement,
-i.e., the transition FILE_PAGE => NOT_USED allowed.
-@return	true if can replace immediately */
-
-bool buf_flush_ready_for_replace(
-    buf_page_t *bpage) /*!< in: buffer control block, must be
-                       buf_page_in_file(bpage) and in the LRU list */
-{
+bool buf_flush_ready_for_replace(buf_page_t *bpage) {
   ut_ad(buf_pool_mutex_own());
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
   ut_ad(bpage->in_LRU_list);

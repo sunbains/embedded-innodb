@@ -27,11 +27,10 @@ Created 6/2/1994 Heikki Tuuri
 #include "btr0btr.ic"
 #endif
 
-#include "fsp0fsp.h"
-#include "page0page.h"
 #include "btr0cur.h"
 #include "btr0pcur.h"
-
+#include "fsp0fsp.h"
+#include "page0page.h"
 #include "lock0lock.h"
 #include "rem0cmp.h"
 #include "trx0trx.h"

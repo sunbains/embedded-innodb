@@ -376,7 +376,7 @@ void trx_sys_doublewrite_init_or_restore_pages(
     multiple tablespaces are supported. We must reset the space id
     field in the pages in the doublewrite buffer because starting
     from this version the space id is stored to
-    FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID. */
+    FIL_PAGE_SPACE_ID. */
 
     trx_doublewrite_must_reset_space_ids = true;
 
@@ -407,7 +407,7 @@ void trx_sys_doublewrite_init_or_restore_pages(
     if (trx_doublewrite_must_reset_space_ids) {
 
       space_id = 0;
-      mach_write_to_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID, 0);
+      mach_write_to_4(page + FIL_PAGE_SPACE_ID, 0);
       /* We do not need to calculate new checksums for the
       pages because the field .._SPACE_ID does not affect
       them. Write the page back to where we read it from. */
@@ -423,7 +423,7 @@ void trx_sys_doublewrite_init_or_restore_pages(
       /* printf("Resetting space id in page %lu\n",
       source_page_no); */
     } else {
-      space_id = mach_read_from_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID);
+      space_id = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
     }
 
     if (!restore_corrupt_pages) {
@@ -458,7 +458,7 @@ void trx_sys_doublewrite_init_or_restore_pages(
 
       /* Check if the page is corrupt */
 
-      if (unlikely(buf_page_is_corrupted(read_buf, 0))) {
+      if (unlikely(buf_page_is_corrupted(read_buf))) {
 
         ib_logger(ib_stream,
                   "Warning: database page"
@@ -469,7 +469,7 @@ void trx_sys_doublewrite_init_or_restore_pages(
                   " the doublewrite buffer.\n",
                   (ulong)space_id, (ulong)page_no);
 
-        if (buf_page_is_corrupted(page, 0)) {
+        if (buf_page_is_corrupted(page)) {
           ib_logger(ib_stream, "Dump of the page:\n");
           buf_page_print(read_buf, 0);
           ib_logger(ib_stream, "Dump of"
