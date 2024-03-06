@@ -1020,9 +1020,7 @@ db_err trx_undo_report_row_operation(ulint flags, ulint op_type, que_thr_t *thr,
     page_t *undo_page;
     ulint offset;
 
-    undo_block =
-        buf_page_get_gen(undo->space, 0, page_no, RW_X_LATCH,
-                         undo->guess_block, BUF_GET, __FILE__, __LINE__, &mtr);
+    undo_block = buf_page_get_gen(undo->space, page_no, RW_X_LATCH, undo->guess_block, BUF_GET, __FILE__, __LINE__, &mtr);
     buf_block_dbg_add_level(undo_block, SYNC_TRX_UNDO_PAGE);
 
     undo_page = buf_block_get_frame(undo_block);

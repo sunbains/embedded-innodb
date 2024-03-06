@@ -302,7 +302,7 @@ static ulint fseg_alloc_free_page_low(
 inline fsp_header_t *fsp_get_space_header(ulint id, /*!< in: space id */
                                           mtr_t *mtr) /*!< in: mtr */
 {
-  auto block = buf_page_get(id, 0, 0, RW_X_LATCH, mtr);
+  auto block = buf_page_get(id, 0, RW_X_LATCH, mtr);
   auto header = FSP_HEADER_OFFSET + buf_block_get_frame(block);
   buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
@@ -556,7 +556,7 @@ inline xdes_t *xdes_get_descriptor_with_space_hdr(
   } else {
     buf_block_t *block;
 
-    block = buf_page_get(space, 0, descr_page_no, RW_X_LATCH, mtr);
+    block = buf_page_get(space, descr_page_no, RW_X_LATCH, mtr);
     buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
     descr_page = buf_block_get_frame(block);
@@ -583,7 +583,7 @@ static xdes_t *xdes_get_descriptor(
   buf_block_t *block;
   fsp_header_t *sp_header;
 
-  block = buf_page_get(space, 0, 0, RW_X_LATCH, mtr);
+  block = buf_page_get(space, 0, RW_X_LATCH, mtr);
   buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
   sp_header = FSP_HEADER_OFFSET + buf_block_get_frame(block);
@@ -634,10 +634,10 @@ fsp_init_file_page_low(buf_block_t *block) /*!< in: pointer to a page */
   memset(page, 0, UNIV_PAGE_SIZE);
   mach_write_to_4(page + FIL_PAGE_OFFSET, buf_block_get_page_no(block));
   memset(page + FIL_PAGE_LSN, 0, 8);
-  mach_write_to_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID,
+  mach_write_to_4(page + FIL_PAGE_SPACE_ID,
                   buf_block_get_space(block));
   memset(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM, 0, 8);
-  mach_write_to_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID,
+  mach_write_to_4(page + FIL_PAGE_SPACE_ID,
                   buf_block_get_space(block));
 }
 
@@ -689,8 +689,8 @@ void fsp_header_init(ulint space, ulint size, mtr_t *mtr) {
 
   mtr_x_lock(fil_space_get_latch(space), mtr);
 
-  auto block = buf_page_create(space, 0, 0, mtr);
-  buf_page_get(space, 0, 0, RW_X_LATCH, mtr);
+  auto block = buf_page_create(space, 0, mtr);
+  buf_page_get(space, 0, RW_X_LATCH, mtr);
   buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
   /* The prior contents of the file page should be ignored */
@@ -725,7 +725,7 @@ void fsp_header_init(ulint space, ulint size, mtr_t *mtr) {
 
 ulint fsp_header_get_space_id( const page_t *page) {
   auto fsp_id = mach_read_from_4(FSP_HEADER_OFFSET + page + FSP_SPACE_ID);
-  auto id = mach_read_from_4(page + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID);
+  auto id = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
 
   if (id != fsp_id) {
     ib_logger(ib_stream,
@@ -999,9 +999,9 @@ fsp_fill_free_list(bool init_space, space_id_t space, fsp_header_t *header, mtr_
       the prior contents of the pages should be ignored. */
 
       if (i > 0) {
-        block = buf_page_create(space, i, 0, mtr);
+        block = buf_page_create(space, i, mtr);
 
-        buf_page_get(space, 0, i, RW_X_LATCH, mtr);
+        buf_page_get(space, i, RW_X_LATCH, mtr);
 
         buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
@@ -1192,9 +1192,9 @@ static ulint fsp_alloc_free_page(
   be obtained immediately with buf_page_get without need for a disk
   read. */
 
-  buf_page_create(space, page_no, 0, mtr);
+  buf_page_create(space, page_no, mtr);
 
-  block = buf_page_get(space, 0, page_no, RW_X_LATCH, mtr);
+  block = buf_page_get(space, page_no, RW_X_LATCH, mtr);
   buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
   /* Prior contents of the page should be ignored */
@@ -1396,7 +1396,7 @@ fsp_alloc_seg_inode_page(fsp_header_t *space_header, /*!< in: space header */
     return (false);
   }
 
-  block = buf_page_get(space, 0, page_no, RW_X_LATCH, mtr);
+  block = buf_page_get(space, page_no, RW_X_LATCH, mtr);
   buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
   block->check_index_page_at_flush = false;
@@ -1445,7 +1445,7 @@ fsp_alloc_seg_inode(fsp_header_t *space_header, /*!< in: space header */
 
   page_no = flst_get_first(space_header + FSP_SEG_INODES_FREE, mtr).page;
 
-  block = buf_page_get(page_get_space_id(page_align(space_header)), 0, page_no,
+  block = buf_page_get(page_get_space_id(page_align(space_header)), page_no,
                        RW_X_LATCH, mtr);
   buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
@@ -1658,7 +1658,7 @@ buf_block_t *fseg_create_general(space_id_t space_id, page_no_t page_no, ulint b
   fseg_header_t *header{};
 
   if (page_no != 0) {
-    block = buf_page_get(space_id, 0, page_no, RW_X_LATCH, mtr);
+    block = buf_page_get(space_id, page_no, RW_X_LATCH, mtr);
     header = byte_offset + buf_block_get_frame(block);
   }
 
@@ -1707,7 +1707,7 @@ buf_block_t *fseg_create_general(space_id_t space_id, page_no_t page_no, ulint b
 
       if (unlikely(page_no != FIL_NULL)) {
 
-        block = buf_page_get(space_id, 0, page_no, RW_X_LATCH, mtr);
+        block = buf_page_get(space_id, page_no, RW_X_LATCH, mtr);
 
         header = byte_offset + buf_block_get_frame(block);
 
@@ -2079,11 +2079,11 @@ static ulint fseg_alloc_free_page_low(space_id_t space, fseg_inode_t *seg_inode,
     can be obtained immediately with buf_page_get without need
     for a disk read */
 
-    auto block = buf_page_create(space, ret_page, 0, mtr);
+    auto block = buf_page_create(space, ret_page, mtr);
 
     buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
-    if (block != buf_page_get(space, 0, ret_page, RW_X_LATCH, mtr)) {
+    if (block != buf_page_get(space, ret_page, RW_X_LATCH, mtr)) {
       ut_error;
     }
 

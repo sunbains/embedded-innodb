@@ -38,6 +38,7 @@ Completed by Sunny Bains and Marko Makela
 #include "mach0data.h"
 #include "mem0mem.h"
 #include "os0file.h"
+#include "os0proc.h"
 #include "pars0pars.h"
 #include "read0read.h"
 #include "rem0cmp.h"

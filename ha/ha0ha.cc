@@ -53,9 +53,6 @@ ha_create_func(ulint n, /*!< in: number of array cells */
   ut_ad(ut_is_2pow(n_mutexes));
   table = hash_create(n);
 
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-  table->adaptive = true;
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
   /* Creating MEM_HEAP_BTR_SEARCH type heaps can potentially fail,
   but in practise it never should in this case, hence the asserts. */
 
@@ -118,9 +115,6 @@ bool ha_insert_for_fold_func(
                          the same fold value already exists, it is
                          updated to point to the same data, and no new
                          node is created! */
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-    buf_block_t *block, /*!< in: buffer block containing the data */
-#endif                  /* UNIV_AHI_DEBUG || UNIV_DEBUG */
     void *data)         /*!< in: data, must not be NULL */
 {
   hash_cell_t *cell;
@@ -131,9 +125,6 @@ bool ha_insert_for_fold_func(
   ut_ad(data);
   ut_ad(table);
   ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-  ut_a(block->frame == page_align(data));
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
   ASSERT_HASH_MUTEX_OWN(table, fold);
 
   hash = hash_calc_hash(fold, table);
@@ -144,17 +135,6 @@ bool ha_insert_for_fold_func(
 
   while (prev_node != NULL) {
     if (prev_node->fold == fold) {
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-      if (table->adaptive) {
-        buf_block_t *prev_block = prev_node->block;
-        ut_a(prev_block->frame == page_align(prev_node->data));
-        ut_a(prev_block->n_pointers > 0);
-        prev_block->n_pointers--;
-        block->n_pointers++;
-      }
-
-      prev_node->block = block;
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
       prev_node->data = data;
 
       return (true);
@@ -177,13 +157,7 @@ bool ha_insert_for_fold_func(
     return (false);
   }
 
-  ha_node_set_data(node, block, data);
-
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-  if (table->adaptive) {
-    block->n_pointers++;
-  }
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
+  ha_node_set_data(node, data);
 
   node->fold = fold;
 
@@ -215,13 +189,6 @@ void ha_delete_hash_node(hash_table_t *table, /*!< in: hash table */
 {
   ut_ad(table);
   ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-  if (table->adaptive) {
-    ut_a(del_node->block->frame = page_align(del_node->data));
-    ut_a(del_node->block->n_pointers > 0);
-    del_node->block->n_pointers--;
-  }
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
 
   HASH_DELETE_AND_COMPACT(ha_node_t, next, table, del_node);
 }
@@ -233,9 +200,6 @@ void ha_search_and_update_if_found_func(
     hash_table_t *table, /*!< in/out: hash table */
     ulint fold,          /*!< in: folded value of the searched data */
     void *data,          /*!< in: pointer to the data */
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-    buf_block_t *new_block, /*!< in: block containing new_data */
-#endif                      /* UNIV_AHI_DEBUG || UNIV_DEBUG */
     void *new_data)         /*!< in: new pointer to the data */
 {
   ha_node_t *node;
@@ -243,22 +207,10 @@ void ha_search_and_update_if_found_func(
   ut_ad(table);
   ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
   ASSERT_HASH_MUTEX_OWN(table, fold);
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-  ut_a(new_block->frame == page_align(new_data));
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
 
   node = ha_search_with_data(table, fold, data);
 
   if (node) {
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-    if (table->adaptive) {
-      ut_a(node->block->n_pointers > 0);
-      node->block->n_pointers--;
-      new_block->n_pointers++;
-    }
-
-    node->block = new_block;
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
     node->data = new_data;
   }
 }

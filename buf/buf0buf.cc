@@ -28,20 +28,19 @@ The database buffer buf_pool
 Created 11/5/1995 Heikki Tuuri
 *******************************************************/
 
-#include "buf0buf.h"
-
-#ifdef UNIV_NONINL
-#include "buf0buf.ic"
-#endif
 
 #include "btr0btr.h"
-
+#include "buf0buf.h"
+#include "buf0flu.h"
+#include "buf0lru.h"
+#include "buf0rea.h"
 #include "dict0dict.h"
 #include "fil0fil.h"
 #include "lock0lock.h"
 #include "log0log.h"
 #include "log0recv.h"
 #include "mem0mem.h"
+#include "os0proc.h"
 #include "srv0srv.h"
 #include "trx0undo.h"
 
@@ -210,7 +209,8 @@ the read requests for the whole area.
 */
 
 /** Value in microseconds */
-static const int WAIT_FOR_READ = 5000;
+constexpr int WAIT_FOR_READ = 5000;
+
 /** Number of attemtps made to read in a page in the buffer pool */
 static const ulint BUF_PAGE_READ_MAX_RETRIES = 100;
 
@@ -222,31 +222,91 @@ read-write lock in them */
 mutex_t buf_pool_mutex;
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
-static ulint buf_dbg_counter = 0; /*!< This is used to insert validation
-                                     operations in excution in the
-                                     debug version */
+/** This is used to insert validation operations in excution
+in the debug version */
+static ulint buf_dbg_counter = 0;
+
 /** Flag to forbid the release of the buffer pool mutex.
 Protected by buf_pool_mutex. */
 ulint buf_pool_mutex_exit_forbidden = 0;
+
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
+
 #ifdef UNIV_DEBUG
+
 /** If this is set true, the program prints info whenever
 read-ahead or flush occurs */
 bool buf_debug_prints = false;
 #endif /* UNIV_DEBUG */
 
-/** A chunk of buffers.  The buffer pool is allocated in chunks. */
-struct buf_chunk_struct {
-  ulint mem_size;      /*!< allocated size of the chunk */
-  ulint size;          /*!< size of frames[] and blocks[] */
-  void *mem;           /*!< pointer to the memory area which
-                       was allocated for the frames */
-  buf_block_t *blocks; /*!< array of buffer control blocks */
+/** A chunk of buffers. The buffer pool is allocated in chunks. */
+struct buf_chunk_t {
+  /** Allocated size of the chunk */
+  ulint mem_size;
+
+  /** Size of frames[] and blocks[] */
+  ulint size;
+
+  /** Pointer to the memory area which was allocated
+  for the frames */
+  void *mem;
+
+  /** Array of buffer control blocks */
+  buf_block_t *blocks;
 };
 
-/** Reset the buffer variables. */
+/**
+ * Checks if a block should be moved to the start of the LRU
+ * list if there is a danger of dropping from the buffer pool.
+ * NOTE: This function does not reserve the buffer pool mutex.
+ *
+ * @param bpage The block to make younger.
+ * @return True if the block should be made younger, false otherwise.
+ */
+inline bool buf_page_peek_if_too_old(const buf_page_t *bpage) {
+  if (unlikely(buf_pool->freed_page_clock == 0)) {
+    /* If eviction has not started yet, do not update the
+    statistics or move blocks in the LRU list. This is either
+    the warm-up phase or an in-memory workload. */
+    return false;
+  } else if (buf_LRU_old_threshold_ms && bpage->old) {
+    auto access_time = buf_page_is_accessed(bpage);
 
-void buf_var_init(void) {
+    if (access_time > 0 && ((uint32_t)(ut_time_ms() - access_time)) >= buf_LRU_old_threshold_ms) {
+      return true;
+    }
+
+    buf_pool->stat.n_pages_not_made_young++;
+    return false;
+  } else {
+    /* FIXME: bpage->freed_page_clock is 31 bits */
+    return (buf_pool->freed_page_clock & ((1UL << 31) - 1)) >
+           ((ulint)bpage->freed_page_clock +
+            (buf_pool->curr_size * (BUF_LRU_OLD_RATIO_DIV - buf_LRU_old_ratio) /
+             (BUF_LRU_OLD_RATIO_DIV * 4)));
+  }
+}
+
+/**
+ * @brief Frees a buffer block which does not contain a file page.
+ *
+ * @param block Pointer to the buffer block to be freed.
+ */
+inline void buf_block_free(buf_block_t *block) {
+  buf_pool_mutex_enter();
+
+  mutex_enter(&block->mutex);
+
+  ut_a(buf_block_get_state(block) != BUF_BLOCK_FILE_PAGE);
+
+  buf_LRU_block_free_non_file_page(block);
+
+  mutex_exit(&block->mutex);
+
+  buf_pool_mutex_exit();
+}
+
+void buf_var_init() {
   buf_pool = nullptr;
   memset(&buf_pool_mutex, 0x0, sizeof(buf_pool_mutex));
 
@@ -260,15 +320,7 @@ void buf_var_init(void) {
 #endif /* UNIV_DEBUG */
 }
 
-/** Calculates a page checksum which is stored to the page when it is written
-to a file. Note that we must be careful to calculate the same value on
-32-bit and 64-bit architectures.
-@return  checksum */
-
-ulint buf_calc_page_new_checksum(const byte *page) /*!< in: buffer page */
-{
-  ulint checksum;
-
+ulint buf_calc_page_new_checksum(const byte *page) {
   /* Since the field FIL_PAGE_FILE_FLUSH_LSN, and in versions <= 4.1.x
   ..._ARCH_LOG_NO, are written outside the buffer pool to the first
   pages of data files, we have to skip them in the page checksum
@@ -277,36 +329,25 @@ ulint buf_calc_page_new_checksum(const byte *page) /*!< in: buffer page */
   checksum is stored, and also the last 8 bytes of page because
   there we store the old formula checksum. */
 
-  checksum =
+  auto  checksum =
       ut_fold_binary(page + FIL_PAGE_OFFSET,
                      FIL_PAGE_FILE_FLUSH_LSN - FIL_PAGE_OFFSET) +
       ut_fold_binary(page + FIL_PAGE_DATA, UNIV_PAGE_SIZE - FIL_PAGE_DATA -
                                                FIL_PAGE_END_LSN_OLD_CHKSUM);
-  checksum = checksum & 0xFFFFFFFFUL;
+  checksum &= 0xFFFFFFFFUL;
 
-  return (checksum);
+  return checksum;
 }
 
-/** In versions < 4.0.14 and < 4.1.1 there was a bug that the checksum only
-looked at the first few bytes of the page. This calculates that old
-checksum.
-NOTE: we must first store the new formula checksum to
-FIL_PAGE_SPACE_OR_CHKSUM before calculating and storing this old checksum
-because this takes that field as an input!
-@return  checksum */
+ulint buf_calc_page_old_checksum(const byte *page) {
+  auto checksum = ut_fold_binary(page, FIL_PAGE_FILE_FLUSH_LSN);
 
-ulint buf_calc_page_old_checksum(const byte *page) /*!< in: buffer page */
-{
-  ulint checksum;
+  checksum &= 0xFFFFFFFFUL;
 
-  checksum = ut_fold_binary(page, FIL_PAGE_FILE_FLUSH_LSN);
-
-  checksum = checksum & 0xFFFFFFFFUL;
-
-  return (checksum);
+  return checksum;
 }
 
-bool buf_page_is_corrupted(const byte *read_buf, ulint) {
+bool buf_page_is_corrupted(const byte *read_buf) {
   ulint checksum_field;
   ulint old_checksum_field;
 
@@ -418,7 +459,7 @@ void buf_page_print(const byte *read_buf, ulint) {
       (ulong)mach_read_from_4(read_buf + UNIV_PAGE_SIZE -
                               FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
       (ulong)mach_read_from_4(read_buf + FIL_PAGE_OFFSET),
-      (ulong)mach_read_from_4(read_buf + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID));
+      (ulong)mach_read_from_4(read_buf + FIL_PAGE_SPACE_ID));
 
   if (mach_read_from_2(read_buf + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
       TRX_UNDO_INSERT) {
@@ -497,9 +538,6 @@ buf_block_init(buf_block_t *block, /*!< in: pointer to control block */
   block->page.in_free_list = false;
   block->page.in_LRU_list = false;
 #endif /* UNIV_DEBUG */
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-  block->n_pointers = 0;
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
 
   mutex_create(&block->mutex, SYNC_BUF_BLOCK);
 
@@ -889,7 +927,7 @@ buf_block_t *buf_block_align(const byte *ptr) {
       case BUF_BLOCK_REMOVE_HASH:
         /* buf_LRU_block_remove_hashed_page()
         will overwrite the FIL_PAGE_OFFSET and
-        FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID with
+        FIL_PAGE_SPACE_ID with
         0xff and set the state to
         BUF_BLOCK_REMOVE_HASH. */
         ut_ad(page_get_space_id(page_align(ptr)) == 0xffffffff);
@@ -954,7 +992,7 @@ buf_block_is_uncompressed(const buf_block_t *block) /*!< in: pointer to block,
   return (buf_pointer_is_block_field((void *)block));
 }
 
-buf_block_t *buf_page_get_gen(space_id_t space, ulint, ulint offset, ulint rw_latch,
+buf_block_t *buf_page_get_gen(space_id_t space, ulint offset, ulint rw_latch,
                               buf_block_t *guess, ulint mode, const char *file,
                               ulint line, mtr_t *mtr) {
   buf_block_t *block;
@@ -1474,9 +1512,7 @@ static void buf_page_init(space_id_t space,  /*!< in: space id */
               buf_page_address_fold(space, offset), &block->page);
 }
 
-buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, space_id_t space, ulint,
-                                   bool, int64_t tablespace_version,
-                                   ulint offset) {
+buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, space_id_t space, int64_t tablespace_version, page_no_t offset) {
   buf_block_t *block;
   buf_page_t *bpage = nullptr;
 
@@ -1547,7 +1583,34 @@ func_exit:
   return bpage;
 }
 
-buf_block_t *buf_page_create(space_id_t space, ulint offset, ulint, mtr_t *mtr) {
+void buf_page_release(buf_block_t* block, ulint rw_latch, mtr_t* mtr) {
+  ut_a(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
+  ut_a(block->page.buf_fix_count > 0);
+
+  if (rw_latch == RW_X_LATCH && mtr->modifications) {
+    buf_pool_mutex_enter();
+    buf_flush_note_modification(block, mtr);
+    buf_pool_mutex_exit();
+  }
+
+  mutex_enter(&block->mutex);
+
+#ifdef UNIV_SYNC_DEBUG
+  rw_lock_s_unlock(&(block->debug_latch));
+#endif /* UNIV_SYNC_DEBUG */
+
+  block->page.buf_fix_count--;
+
+  mutex_exit(&block->mutex);
+
+  if (rw_latch == RW_S_LATCH) {
+    rw_lock_s_unlock(&(block->lock));
+  } else if (rw_latch == RW_X_LATCH) {
+    rw_lock_x_unlock(&(block->lock));
+  }
+}
+
+buf_block_t *buf_page_create(space_id_t space, page_no_t offset, mtr_t *mtr) {
   buf_frame_t *frame;
   buf_block_t *block;
   buf_block_t *free_block = nullptr;
@@ -1572,7 +1635,7 @@ buf_block_t *buf_page_create(space_id_t space, ulint offset, ulint, mtr_t *mtr) 
 
     buf_block_free(free_block);
 
-    return (buf_page_get_with_no_latch(space, 0, offset, mtr));
+    return (buf_page_get_with_no_latch(space, offset, mtr));
   }
 
   /* If we get here, the page was not in buf_pool: init it there */
@@ -1652,7 +1715,7 @@ void buf_page_io_complete(buf_page_t *bpage) {
     should be the same as in block. */
     auto read_page_no = mach_read_from_4(frame + FIL_PAGE_OFFSET);
     auto read_space_id =
-        mach_read_from_4(frame + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID);
+        mach_read_from_4(frame + FIL_PAGE_SPACE_ID);
 
     if (bpage->space == TRX_SYS_SPACE &&
         trx_doublewrite_page_inside(bpage->offset)) {
@@ -1685,7 +1748,7 @@ void buf_page_io_complete(buf_page_t *bpage) {
     /* From version 3.23.38 up we store the page checksum
     to the 4 first bytes of the page end lsn field */
 
-    if (buf_page_is_corrupted(frame, 0)) {
+    if (buf_page_is_corrupted(frame)) {
       ib_logger(ib_stream,
                 "Database page corruption on disk"
                 " or a failed\n"

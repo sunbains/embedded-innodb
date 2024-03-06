@@ -973,9 +973,6 @@ void buf_LRU_block_free_non_file_page(buf_block_t *block) {
     ut_error;
   }
 
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-  ut_a(block->n_pointers == 0);
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
 
   ut_ad(!block->page.in_free_list);
   ut_ad(!block->page.in_flush_list);
@@ -991,7 +988,7 @@ void buf_LRU_block_free_non_file_page(buf_block_t *block) {
 #else
   /* Wipe page_no and space_id */
   memset(block->frame + FIL_PAGE_OFFSET, 0xfe, 4);
-  memset(block->frame + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID, 0xfe, 4);
+  memset(block->frame + FIL_PAGE_SPACE_ID, 0xfe, 4);
 #endif /* UNIV_DEBUG */
 
   UT_LIST_ADD_FIRST(list, buf_pool->free, (&block->page));
@@ -1066,7 +1063,7 @@ static buf_page_state buf_LRU_block_remove_hashed_page(buf_page_t *bpage) {
   switch (buf_page_get_state(bpage)) {
   case BUF_BLOCK_FILE_PAGE:
     memset(((buf_block_t *)bpage)->frame + FIL_PAGE_OFFSET, 0xff, 4);
-    memset(((buf_block_t *)bpage)->frame + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID,
+    memset(((buf_block_t *)bpage)->frame + FIL_PAGE_SPACE_ID,
            0xff, 4);
 
     UNIV_MEM_INVALID(((buf_block_t *)bpage)->frame, UNIV_PAGE_SIZE);

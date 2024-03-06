@@ -1227,7 +1227,7 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
 
           mtr_start(&mtr);
 
-          auto block = buf_page_get(space, 0, page_no, RW_X_LATCH, &mtr);
+          auto block = buf_page_get(space, page_no, RW_X_LATCH, &mtr);
           buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
 
           recv_recover_page(false, block);

@@ -351,8 +351,8 @@ void btr_cur_search_to_nth_level(dict_index_t *dict_index, ulint level, const dt
     }
 
   retry_page_get:
-    block = buf_page_get_gen(space, 0, page_no, rw_latch, nullptr, buf_mode, file,
-                             line, mtr);
+    block = buf_page_get_gen(space, page_no, rw_latch, nullptr, buf_mode, file, line, mtr);
+
     if (block == nullptr) {
 
       ut_ad(cursor->thr);
@@ -501,8 +501,7 @@ void btr_cur_open_at_index_side_func(
   height = ULINT_UNDEFINED;
 
   for (;;) {
-    auto block = buf_page_get_gen(space, 0, page_no, RW_NO_LATCH, nullptr,
-                                  BUF_GET, file, line, mtr);
+    auto block = buf_page_get_gen(space, page_no, RW_NO_LATCH, nullptr, BUF_GET, file, line, mtr);
     auto page = buf_block_get_frame(block);
 
     ut_ad(dict_index->id == btr_page_get_index_id(page));
@@ -604,12 +603,9 @@ void btr_cur_open_at_rnd_pos_func(
   height = ULINT_UNDEFINED;
 
   for (;;) {
-    buf_block_t *block;
-    page_t *page;
+    auto block = buf_page_get_gen(space, page_no, RW_NO_LATCH, nullptr, BUF_GET, file, line, mtr);
+    auto page = buf_block_get_frame(block);
 
-    block = buf_page_get_gen(space, 0, page_no, RW_NO_LATCH, nullptr, BUF_GET,
-                             file, line, mtr);
-    page = buf_block_get_frame(block);
     ut_ad(dict_index->id == btr_page_get_index_id(page));
 
     if (height == ULINT_UNDEFINED) {
@@ -1433,7 +1429,7 @@ static void btr_cur_pess_upd_restore_supremum(
 
   ut_ad(prev_page_no != FIL_NULL);
 
-  auto prev_block = buf_page_get_with_no_latch(space, 0, prev_page_no, mtr);
+  auto prev_block = buf_page_get_with_no_latch(space, prev_page_no, mtr);
 
 #ifdef UNIV_BTR_DEBUG
   ut_a(btr_page_get_next(prev_block->frame, mtr) == page_get_page_no(page));
@@ -2726,8 +2722,7 @@ db_err btr_store_big_rec_extern_fields(dict_index_t *index,
       auto page = buf_block_get_frame(block);
 
       if (prev_page_no != FIL_NULL) {
-        auto prev_block =
-            buf_page_get(space_id, 0, prev_page_no, RW_X_LATCH, &mtr);
+        auto prev_block = buf_page_get(space_id, prev_page_no, RW_X_LATCH, &mtr);
 
         buf_block_dbg_add_level(prev_block, SYNC_EXTERN_STORAGE);
 
@@ -2761,7 +2756,7 @@ db_err btr_store_big_rec_extern_fields(dict_index_t *index,
 
       extern_len -= store_len;
 
-      rec_block = buf_page_get(space_id, 0, rec_page_no, RW_X_LATCH, &mtr);
+      rec_block = buf_page_get(space_id, rec_page_no, RW_X_LATCH, &mtr);
 
       buf_block_dbg_add_level(rec_block, SYNC_NO_ORDER_CHECK);
 
@@ -2881,8 +2876,7 @@ void btr_free_externally_stored_field(dict_index_t *index, byte *field_ref,
 
 #ifdef UNIV_SYNC_DEBUG
     auto rec_block =
-        buf_page_get(page_get_space_id(page_align(field_ref)), 0,
-                     page_get_page_no(page_align(field_ref)), RW_X_LATCH, &mtr);
+        buf_page_get(page_get_space_id(page_align(field_ref)), page_get_page_no(page_align(field_ref)), RW_X_LATCH, &mtr);
     buf_block_dbg_add_level(rec_block, SYNC_NO_ORDER_CHECK);
 #endif /* UNIV_SYNC_DEBUG */
 
@@ -2904,7 +2898,7 @@ void btr_free_externally_stored_field(dict_index_t *index, byte *field_ref,
       return;
     }
 
-    ext_block = buf_page_get(space_id, 0, page_no, RW_X_LATCH, &mtr);
+    ext_block = buf_page_get(space_id, page_no, RW_X_LATCH, &mtr);
     buf_block_dbg_add_level(ext_block, SYNC_EXTERN_STORAGE);
     page = buf_block_get_frame(ext_block);
 
@@ -3024,7 +3018,7 @@ static ulint btr_copy_blob_prefix(
 
     mtr_start(&mtr);
 
-    block = buf_page_get(space_id, 0, page_no, RW_S_LATCH, &mtr);
+    block = buf_page_get(space_id, page_no, RW_S_LATCH, &mtr);
     buf_block_dbg_add_level(block, SYNC_EXTERN_STORAGE);
     page = buf_block_get_frame(block);
 

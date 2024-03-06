@@ -3944,7 +3944,7 @@ loop:
 
       mtr_start(&mtr);
 
-      buf_page_get_with_no_latch(space, 0, page_no, &mtr);
+      buf_page_get_with_no_latch(space, page_no, &mtr);
 
       mtr_commit(&mtr);
 
@@ -4163,7 +4163,6 @@ static bool lock_rec_validate_page(ulint space,          /*!< in: space id */
                                    ulint, ulint page_no) /*!< in: page number */
 {
   dict_index_t *index;
-  buf_block_t *block;
   const page_t *page;
   lock_t *lock;
   const rec_t *rec;
@@ -4180,7 +4179,8 @@ static bool lock_rec_validate_page(ulint space,          /*!< in: space id */
 
   mtr_start(&mtr);
 
-  block = buf_page_get(space, 0, page_no, RW_X_LATCH, &mtr);
+  auto block = buf_page_get(space, page_no, RW_X_LATCH, &mtr);
+
   buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
 
   page = block->frame;

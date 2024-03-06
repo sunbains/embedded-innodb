@@ -36,8 +36,8 @@ Created 11/11/1995 Heikki Tuuri
 #include "page0page.h"
 #include "srv0srv.h"
 #include "trx0sys.h"
-#include "ut0byte.h"
 #include "ut0lst.h"
+#include "ut0rbt.h"
 
 /** These statistics are generated for heuristics used in estimating the
 rate at which we should flush the dirty blocks to avoid bursty IO
@@ -183,6 +183,34 @@ void buf_flush_free_flush_rbt() {
   buf_pool->flush_rbt = nullptr;
 
   buf_pool_mutex_exit();
+}
+
+void buf_flush_note_modification(buf_block_t *block, mtr_t *mtr) {
+  ut_ad(block);
+  ut_ad(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
+  ut_ad(block->page.buf_fix_count > 0);
+#ifdef UNIV_SYNC_DEBUG
+  ut_ad(rw_lock_own(&(block->lock), RW_LOCK_EX));
+#endif /* UNIV_SYNC_DEBUG */
+  ut_ad(buf_pool_mutex_own());
+
+  ut_ad(mtr->start_lsn != 0);
+  ut_ad(mtr->modifications);
+  ut_ad(block->page.newest_modification <= mtr->end_lsn);
+
+  block->page.newest_modification = mtr->end_lsn;
+
+  if (!block->page.oldest_modification) {
+
+    block->page.oldest_modification = mtr->start_lsn;
+    ut_ad(block->page.oldest_modification != 0);
+
+    buf_flush_insert_into_flush_list(block);
+  } else {
+    ut_ad(block->page.oldest_modification <= mtr->start_lsn);
+  }
+
+  ++srv_buf_pool_write_requests;
 }
 
 void buf_flush_insert_into_flush_list(buf_block_t *block) {
