@@ -182,15 +182,20 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
 
   if (unlikely(srv_startup_is_before_trx_rollback_phase)) {
     /* No read-ahead to avoid thread deadlocks */
-    return (0);
+    return 0;
   }
 
   auto low = (offset / buf_read_ahead_linear_area) * buf_read_ahead_linear_area;
   auto high = (offset / buf_read_ahead_linear_area + 1) * buf_read_ahead_linear_area;
 
-  if ((offset != low) && (offset != high - 1)) {
+  if (offset != low && offset != high - 1) {
     /* This is not a border page of the area: return */
 
+    return 0;
+  }
+
+  if (trx_sys_hdr_page(space, offset)) {
+    /* Don't do a read-ahead in the system area. Being cautious. */
     return 0;
   }
 
@@ -206,14 +211,13 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
     buf_pool_mutex_exit();
     /* The area is not whole, return */
 
-    return (0);
+    return 0;
   }
 
-  if (buf_pool->n_pend_reads >
-      buf_pool->curr_size / BUF_READ_AHEAD_PEND_LIMIT) {
+  if (buf_pool->n_pend_reads > buf_pool->curr_size / BUF_READ_AHEAD_PEND_LIMIT) {
     buf_pool_mutex_exit();
 
-    return (0);
+    return 0;
   }
 
   /* Check that almost all pages in the area have been accessed; if
@@ -235,21 +239,19 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
   for (i = low; i < high; i++) {
     bpage = buf_page_hash_get(space, i);
 
-    if ((bpage == nullptr) || !buf_page_is_accessed(bpage)) {
+    if (bpage == nullptr || !buf_page_is_accessed(bpage)) {
       /* Not accessed */
       fail_count++;
 
-    } else if (pred_bpage) {
-      /* Note that buf_page_is_accessed() returns
-      the time of the first access.  If some blocks
-      of the extent existed in the buffer pool at
-      the time of a linear access pattern, the first
-      access times may be nonmonotonic, even though
-      the latest access times were linear.  The
-      threshold (srv_read_ahead_factor) should help
-      a little against this. */
-      int res = ut_ulint_cmp(buf_page_is_accessed(bpage),
-                             buf_page_is_accessed(pred_bpage));
+    } else if (pred_bpage != nullptr) {
+      /* Note that buf_page_is_accessed() returns the time of the first
+      access.  If some blocks of the extent existed in the buffer pool
+      at the time of a linear access pattern, the first access times
+      may be nonmonotonic, even though the latest access times were
+      linear.  The threshold (srv_read_ahead_factor) should help a
+      little against this. */
+      int res = ut_ulint_cmp(buf_page_is_accessed(bpage), buf_page_is_accessed(pred_bpage));
+
       /* Accesses not in the right order */
       if (res != 0 && res != asc_or_desc) {
         fail_count++;
@@ -259,10 +261,10 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
     if (fail_count > threshold) {
       /* Too many failures: return */
       buf_pool_mutex_exit();
-      return (0);
+      return 0;
     }
 
-    if (bpage && buf_page_is_accessed(bpage)) {
+    if (bpage != nullptr && buf_page_is_accessed(bpage)) {
       pred_bpage = bpage;
     }
   }
@@ -298,12 +300,12 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
 
   buf_pool_mutex_exit();
 
-  if ((offset == low) && (succ_offset == offset + 1)) {
+  if (offset == low && succ_offset == offset + 1) {
 
     /* This is ok, we can continue */
     new_offset = pred_offset;
 
-  } else if ((offset == high - 1) && (pred_offset == offset - 1)) {
+  } else if (offset == high - 1 && pred_offset == offset - 1) {
 
     /* This is ok, we can continue */
     new_offset = succ_offset;
@@ -314,16 +316,15 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
   }
 
   low = (new_offset / buf_read_ahead_linear_area) * buf_read_ahead_linear_area;
-  high = (new_offset / buf_read_ahead_linear_area + 1) *
-         buf_read_ahead_linear_area;
+  high = (new_offset / buf_read_ahead_linear_area + 1) * buf_read_ahead_linear_area;
 
-  if ((new_offset != low) && (new_offset != high - 1)) {
+  if (new_offset != low && new_offset != high - 1) {
     /* This is not a border page of the area: return */
 
     return 0;
-  }
 
-  if (high > fil_space_get_size(space)) {
+  } else if (high > fil_space_get_size(space)) {
+
     /* The area is not whole, return */
 
     return 0;
@@ -336,7 +337,7 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
     aio mode: hence false as the first parameter */
 
     count += buf_read_page_low(&err, false,
-      OS_AIO_SIMULATED_WAKE_LATER, space, 0, false, tablespace_version, i);
+      OS_AIO_SIMULATED_WAKE_LATER | BUF_READ_ANY_PAGE, space, 0, false, tablespace_version, i);
 
     if (err == DB_TABLESPACE_DELETED) {
       ut_print_timestamp(ib_stream);
@@ -357,18 +358,17 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
   buf_flush_free_margin();
 
 #ifdef UNIV_DEBUG
-  if (buf_debug_prints && (count > 0)) {
-    ib_logger(ib_stream, "LINEAR read-ahead space %lu offset %lu pages %lu\n",
-              (ulong)space, (ulong)offset, (ulong)count);
+  if (buf_debug_prints && count > 0) {
+    ib_logger(ib_stream, "LINEAR read-ahead space %lu offset %lu pages %lu\n", (ulong)space, (ulong)offset, (ulong)count);
   }
 #endif /* UNIV_DEBUG */
 
-  /* Read ahead is considered one I/O operation for the purpose of
-  LRU policy decision. */
+  /* Read ahead is considered one I/O operation for the purpose of LRU policy decision. */
   buf_LRU_stat_inc_io();
 
   buf_pool->stat.n_ra_pages_read += count;
-  return (count);
+
+  return count;
 }
 
 void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_stored) {
