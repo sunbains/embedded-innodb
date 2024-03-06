@@ -80,9 +80,6 @@ hash_table_t *hash_create(ulint n) /*!< in: number of array cells */
 
   table->array = array;
   table->n_cells = prime;
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-  table->adaptive = false;
-#endif /* UNIV_AHI_DEBUG || UNIV_DEBUG */
   table->n_mutexes = 0;
   table->mutexes = NULL;
   table->heaps = NULL;

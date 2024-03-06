@@ -327,10 +327,6 @@ struct hash_cell_struct {
 
 /* The hash table structure */
 struct hash_table_struct {
-#if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
-  bool adaptive;      /* true if this is the hash table of the
-                      adaptive hash index */
-#endif                /* UNIV_AHI_DEBUG || UNIV_DEBUG */
   ulint n_cells;      /* number of cells in the hash table */
   hash_cell_t *array; /*!< pointer to cell array */
   ulint n_mutexes;    /* if mutexes != NULL, then the number of
