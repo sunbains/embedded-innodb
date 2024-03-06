@@ -1,4 +1,4 @@
-/***
+/****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ The database buffer pool flush algorithm
 Created 11/5/1995 Heikki Tuuri
 *******************************************************/
 
-#ifndef buf0flu_h
-#define buf0flu_h
+#pragma once
 
 #include "innodb0types.h"
 
@@ -156,8 +155,85 @@ sweep). */
 /** Extra margin to apply above BUF_FLUSH_FREE_BLOCK_MARGIN */
 #define BUF_FLUSH_EXTRA_MARGIN (BUF_FLUSH_FREE_BLOCK_MARGIN / 4 + 100)
 
-#ifndef UNIV_NONINL
-#include "buf0flu.ic"
-#endif
+#include "buf0buf.h"
+#include "mtr0mtr.h"
 
-#endif
+/** Inserts a modified block into the flush list. */
+
+void buf_flush_insert_into_flush_list(
+    buf_block_t *block); /*!< in/out: block which is modified */
+/** Inserts a modified block into the flush list in the right sorted position.
+This function is used by recovery, because there the modifications do not
+necessarily come in the order of lsn's. */
+
+void buf_flush_insert_sorted_into_flush_list(
+    buf_block_t *block); /*!< in/out: block which is modified */
+
+/** This function should be called at a mini-transaction commit, if a page was
+modified in it. Puts the block to the list of modified blocks, if it is not
+already in it. */
+inline void buf_flush_note_modification(
+    buf_block_t *block, /*!< in: block which is modified */
+    mtr_t *mtr)         /*!< in: mtr */
+{
+  ut_ad(block);
+  ut_ad(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
+  ut_ad(block->page.buf_fix_count > 0);
+#ifdef UNIV_SYNC_DEBUG
+  ut_ad(rw_lock_own(&(block->lock), RW_LOCK_EX));
+#endif /* UNIV_SYNC_DEBUG */
+  ut_ad(buf_pool_mutex_own());
+
+  ut_ad(mtr->start_lsn != 0);
+  ut_ad(mtr->modifications);
+  ut_ad(block->page.newest_modification <= mtr->end_lsn);
+
+  block->page.newest_modification = mtr->end_lsn;
+
+  if (!block->page.oldest_modification) {
+
+    block->page.oldest_modification = mtr->start_lsn;
+    ut_ad(block->page.oldest_modification != 0);
+
+    buf_flush_insert_into_flush_list(block);
+  } else {
+    ut_ad(block->page.oldest_modification <= mtr->start_lsn);
+  }
+
+  ++srv_buf_pool_write_requests;
+}
+
+/** This function should be called when recovery has modified a buffer page. */
+inline void buf_flush_recv_note_modification(
+    buf_block_t *block, /*!< in: block which is modified */
+    uint64_t start_lsn, /*!< in: start lsn of the first mtr in a
+                           set of mtr's */
+    uint64_t end_lsn)   /*!< in: end lsn of the last mtr in the
+                           set of mtr's */
+{
+  ut_ad(block);
+  ut_ad(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
+  ut_ad(block->page.buf_fix_count > 0);
+#ifdef UNIV_SYNC_DEBUG
+  ut_ad(rw_lock_own(&(block->lock), RW_LOCK_EX));
+#endif /* UNIV_SYNC_DEBUG */
+
+  buf_pool_mutex_enter();
+
+  ut_ad(block->page.newest_modification <= end_lsn);
+
+  block->page.newest_modification = end_lsn;
+
+  if (!block->page.oldest_modification) {
+
+    block->page.oldest_modification = start_lsn;
+
+    ut_ad(block->page.oldest_modification != 0);
+
+    buf_flush_insert_sorted_into_flush_list(block);
+  } else {
+    ut_ad(block->page.oldest_modification <= start_lsn);
+  }
+
+  buf_pool_mutex_exit();
+}
