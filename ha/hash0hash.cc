@@ -22,58 +22,31 @@ Created 5/20/1997 Heikki Tuuri
 *******************************************************/
 
 #include "hash0hash.h"
-#ifdef UNIV_NONINL
-#include "hash0hash.ic"
-#endif
-
 #include "mem0mem.h"
 
-/** Reserves the mutex for a fold value in a hash table. */
-
-void hash_mutex_enter(hash_table_t *table, /*!< in: hash table */
-                      ulint fold)          /*!< in: fold */
-{
+void hash_mutex_enter(hash_table_t *table, ulint fold) {
   mutex_enter(hash_get_mutex(table, fold));
 }
 
-/** Releases the mutex for a fold value in a hash table. */
-
-void hash_mutex_exit(hash_table_t *table, /*!< in: hash table */
-                     ulint fold)          /*!< in: fold */
-{
+void hash_mutex_exit(hash_table_t *table, ulint fold) {
   mutex_exit(hash_get_mutex(table, fold));
 }
 
-/** Reserves all the mutexes of a hash table, in an ascending order. */
-
-void hash_mutex_enter_all(hash_table_t *table) /*!< in: hash table */
-{
-  ulint i;
-
-  for (i = 0; i < table->n_mutexes; i++) {
+void hash_mutex_enter_all(hash_table_t *table) {
+  for (ulint i = 0; i < table->n_mutexes; i++) {
 
     mutex_enter(table->mutexes + i);
   }
 }
 
-/** Releases all the mutexes of a hash table. */
-
-void hash_mutex_exit_all(hash_table_t *table) /*!< in: hash table */
-{
-  ulint i;
-
-  for (i = 0; i < table->n_mutexes; i++) {
+void hash_mutex_exit_all(hash_table_t *table) {
+  for (ulint i = 0; i < table->n_mutexes; i++) {
 
     mutex_exit(table->mutexes + i);
   }
 }
 
-/** Creates a hash table with >= n array cells. The actual number of cells is
-chosen to be a prime number slightly bigger than n.
-@return	own: created table */
-
-hash_table_t *hash_create(ulint n) /*!< in: number of array cells */
-{
+hash_table_t *hash_create(ulint n) {
   auto prime = ut_find_prime(n);
   auto table = (hash_table_t *)mem_alloc(sizeof(hash_table_t));
   auto array = (hash_cell_t *)ut_malloc(sizeof(hash_cell_t) * prime);
@@ -89,14 +62,10 @@ hash_table_t *hash_create(ulint n) /*!< in: number of array cells */
   /* Initialize the cell array */
   hash_table_clear(table);
 
-  return (table);
+  return table;
 }
 
-/** Frees a hash table. */
-
-void hash_table_free(hash_table_t *table) /*!< in, own: hash table */
-{
-  ut_ad(table);
+void hash_table_free(hash_table_t *table) {
   ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
   ut_a(table->mutexes == NULL);
 
@@ -104,44 +73,32 @@ void hash_table_free(hash_table_t *table) /*!< in, own: hash table */
   mem_free(table);
 }
 
-/** Creates a mutex array to protect a hash table. */
-
 void hash_create_mutexes_func(
-    hash_table_t *table, /*!< in: hash table */
+    hash_table_t *table,
 #ifdef UNIV_SYNC_DEBUG
-    ulint sync_level, /*!< in: latching order level of the
-                      mutexes: used in the debug version */
-#endif                /* UNIV_SYNC_DEBUG */
-    ulint n_mutexes)  /*!< in: number of mutexes, must be a
-                      power of 2 */
-{
-  ulint i;
+    ulint sync_level,
+#endif /* UNIV_SYNC_DEBUG */
+    ulint n_mutexes) {
 
-  ut_ad(table);
-  ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
   ut_a(n_mutexes > 0);
   ut_a(ut_is_2pow(n_mutexes));
+  ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
 
   table->mutexes = (mutex_t *)mem_alloc(n_mutexes * sizeof(mutex_t));
 
-  for (i = 0; i < n_mutexes; i++) {
+  for (ulint i = 0; i < n_mutexes; i++) {
     mutex_create(table->mutexes + i, sync_level);
   }
 
   table->n_mutexes = n_mutexes;
 }
 
-/** Frees a mutex array created with hash_create_mutexes_func(). */
-
-void hash_free_mutexes_func(hash_table_t *table) /*!< in,own: hash table */
-{
-  ulint i;
-
-  for (i = 0; i < table->n_mutexes; i++) {
+void hash_free_mutexes_func(hash_table_t *table) {
+  for (ulint i = 0; i < table->n_mutexes; i++) {
     mutex_free(&table->mutexes[i]);
 #ifdef UNIV_DEBUG
     memset(&table->mutexes[i], 0x0, sizeof(table->mutexes[i]));
-#endif
+#endif /* UNIV_DEBUG */
   }
 
   mem_free(table->mutexes);

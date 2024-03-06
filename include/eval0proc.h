@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1998, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,48 +21,86 @@ Executes SQL stored procedures and their control structures
 Created 1/20/1998 Heikki Tuuri
 *******************************************************/
 
-#ifndef eval0proc_h
-#define eval0proc_h
+#pragma once
 
 #include "innodb0types.h"
 
 #include "pars0pars.h"
 #include "pars0sym.h"
 #include "que0types.h"
+#include "eval0eval.h"
+#include "que0que.h"
+
+/** Performs an execution step of an if-statement node.
+@param[in,out] thr              Query thread.
+@return        query thread to run next or nullptr */
+que_thr_t *if_step(que_thr_t *thr);
+
+/** Performs an execution step of a while-statement node.
+@param[in,out] thr              Query thread.
+@return        query thread to run next or nullptr */
+que_thr_t *while_step(que_thr_t *thr);
+
+/** Performs an execution step of a for-loop node.
+@param[in,out] thr              Query thread.
+@return        query thread to run next or nullptr */
+que_thr_t *for_step(que_thr_t *thr);
+
+/** Performs an execution step of an assignment statement node.
+@param[in,out] thr              Query thread.
+@return        query thread to run next or nullptr */
+que_thr_t *assign_step(que_thr_t *thr);
+
+/** Performs an execution step of an exit statement node.
+@param[in,out] thr              Query thread.
+@return        query thread to run next or nullptr */
+que_thr_t *exit_step(que_thr_t *thr);
+
+/** Performs an execution step of a return-statement node.
+@param[in,out] thr              Query thread.
+@return        query thread to run next or nullptr */
+que_thr_t *return_step(que_thr_t *thr);
 
 /** Performs an execution step of a procedure node.
-@return	query thread to run next or NULL */
-inline que_thr_t *proc_step(que_thr_t *thr); /*!< in: query thread */
-/** Performs an execution step of an if-statement node.
-@return	query thread to run next or NULL */
+@param[in,out] thr              Query thread.
+@return        query thread to run next or nullptr */
+inline que_thr_t *proc_step(que_thr_t *thr) {
+  auto node = reinterpret_cast<proc_node_t *>(thr->run_node);
 
-que_thr_t *if_step(que_thr_t *thr); /*!< in: query thread */
-/** Performs an execution step of a while-statement node.
-@return	query thread to run next or NULL */
+  ut_ad(que_node_get_type(node) == QUE_NODE_PROC);
 
-que_thr_t *while_step(que_thr_t *thr); /*!< in: query thread */
-/** Performs an execution step of a for-loop node.
-@return	query thread to run next or NULL */
+  if (thr->prev_node == que_node_get_parent(node)) {
+    /* Start execution from the first statement in the statement list */
 
-que_thr_t *for_step(que_thr_t *thr); /*!< in: query thread */
-/** Performs an execution step of an assignment statement node.
-@return	query thread to run next or NULL */
+    thr->run_node = node->stat_list;
+  } else {
+    /* Move to the next statement */
+    ut_ad(que_node_get_next(thr->prev_node) == nullptr);
 
-que_thr_t *assign_step(que_thr_t *thr); /*!< in: query thread */
+    thr->run_node = nullptr;
+  }
+
+  if (thr->run_node == nullptr) {
+    thr->run_node = que_node_get_parent(node);
+  }
+
+  return thr;
+}
+
 /** Performs an execution step of a procedure call node.
-@return	query thread to run next or NULL */
-inline que_thr_t *proc_eval_step(que_thr_t *thr); /*!< in: query thread */
-/** Performs an execution step of an exit statement node.
-@return	query thread to run next or NULL */
+@param[in,out] thr              Query thread.
+@return        query thread to run next or nullptr */
+inline que_thr_t *proc_eval_step(que_thr_t *thr) /*!< in: query thread */
+{
+  auto node = reinterpret_cast<func_node_t *>(thr->run_node);
 
-que_thr_t *exit_step(que_thr_t *thr); /*!< in: query thread */
-/** Performs an execution step of a return-statement node.
-@return	query thread to run next or NULL */
+  ut_ad(que_node_get_type(node) == QUE_NODE_FUNC);
 
-que_thr_t *return_step(que_thr_t *thr); /*!< in: query thread */
+  /* Evaluate the procedure */
 
-#ifndef UNIV_NONINL
-#include "eval0proc.ic"
-#endif
+  eval_exp(node);
 
-#endif
+  thr->run_node = que_node_get_parent(node);
+
+  return thr;
+}

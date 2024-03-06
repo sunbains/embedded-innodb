@@ -24,10 +24,6 @@ Created 12/29/1997 Heikki Tuuri
 
 #include "eval0eval.h"
 
-#ifdef UNIV_NONINL
-#include "eval0eval.ic"
-#endif
-
 #include "data0data.h"
 #include "row0sel.h"
 

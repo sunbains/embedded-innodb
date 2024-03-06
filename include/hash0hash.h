@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,18 +21,18 @@ The simple hash table utility
 Created 5/20/1997 Heikki Tuuri
 *******************************************************/
 
-#ifndef hash0hash_h
-#define hash0hash_h
+#pragma once
 
 #include "innodb0types.h"
 
 #include "mem0mem.h"
+#include "ut0rnd.h"
 #include "sync0sync.h"
 
-typedef struct hash_table_struct hash_table_t;
-typedef struct hash_cell_struct hash_cell_t;
+struct hash_table_t;
+struct hash_cell_t;
 
-typedef void *hash_node_t;
+using hash_node_t = void*;
 
 /* To avoid symbol name clashes. */
 #define hash_create ib_hash_create
@@ -40,10 +40,9 @@ typedef void *hash_node_t;
 /** Creates a hash table with >= n array cells. The actual number
 of cells is chosen to be a prime number slightly bigger than n.
 @return	own: created table */
-
 hash_table_t *hash_create(ulint n); /*!< in: number of array cells */
-/** Creates a mutex array to protect a hash table. */
 
+/** Creates a mutex array to protect a hash table. */
 void hash_create_mutexes_func(
     hash_table_t *table, /*!< in: hash table */
 #ifdef UNIV_SYNC_DEBUG
@@ -51,24 +50,25 @@ void hash_create_mutexes_func(
                       mutexes: used in the debug version */
 #endif                /* UNIV_SYNC_DEBUG */
     ulint n_mutexes); /*!< in: number of mutexes */
+
 #ifdef UNIV_SYNC_DEBUG
+
 #define hash_create_mutexes(t, n, level) hash_create_mutexes_func(t, level, n)
+
 #else /* UNIV_SYNC_DEBUG */
+
 #define hash_create_mutexes(t, n, level) hash_create_mutexes_func(t, n)
+
 #endif /* UNIV_SYNC_DEBUG */
 
 /** Frees a mutex array created with hash_create_mutexes_func(). */
-
 void hash_free_mutexes_func(hash_table_t *table); /*!< in,own: hash table */
+
 #define hash_free_mutexes(t) hash_free_mutexes_func(t)
 
 /** Frees a hash table. */
-
 void hash_table_free(hash_table_t *table); /*!< in, own: hash table */
-/** Calculates the hash value from a folded value.
-@return	hashed value */
-inline ulint hash_calc_hash(ulint fold,           /*!< in: folded value */
-                            hash_table_t *table); /*!< in: hash table */
+
 /** Assert that the mutex for the table in a hash operation is owned. */
 #define HASH_ASSERT_OWNED(TABLE, FOLD)                                         \
   ut_ad(!(TABLE)->mutexes || mutex_own(hash_get_mutex(TABLE, FOLD)));
@@ -82,16 +82,16 @@ inline ulint hash_calc_hash(ulint fold,           /*!< in: folded value */
                                                                                \
     HASH_ASSERT_OWNED(TABLE, FOLD)                                             \
                                                                                \
-    (DATA)->NAME = NULL;                                                       \
+    (DATA)->NAME = nullptr;                                                       \
                                                                                \
     cell3333 = hash_get_nth_cell(TABLE, hash_calc_hash(FOLD, TABLE));          \
                                                                                \
-    if (cell3333->node == NULL) {                                              \
+    if (cell3333->node == nullptr) {                                              \
       cell3333->node = DATA;                                                   \
     } else {                                                                   \
       struct3333 = (TYPE *)cell3333->node;                                     \
                                                                                \
-      while (struct3333->NAME != NULL) {                                       \
+      while (struct3333->NAME != nullptr) {                                       \
                                                                                \
         struct3333 = (TYPE *)struct3333->NAME;                                 \
       }                                                                        \
@@ -140,12 +140,12 @@ inline ulint hash_calc_hash(ulint fold,           /*!< in: folded value */
     HASH_INVALIDATE(DATA, NAME);                                               \
   } while (0)
 
-/** Gets the first struct in a hash chain, NULL if none. */
+/** Gets the first struct in a hash chain, nullptr if none. */
 
 #define HASH_GET_FIRST(TABLE, HASH_VAL)                                        \
   (hash_get_nth_cell(TABLE, HASH_VAL)->node)
 
-/** Gets the next struct in a hash chain, NULL if none. */
+/** Gets the next struct in a hash chain, nullptr if none. */
 
 #define HASH_GET_NEXT(NAME, DATA) ((DATA)->NAME)
 
@@ -158,7 +158,7 @@ inline ulint hash_calc_hash(ulint fold,           /*!< in: folded value */
     (DATA) = (TYPE)HASH_GET_FIRST(TABLE, hash_calc_hash(FOLD, TABLE));         \
     HASH_ASSERT_VALID(DATA);                                                   \
                                                                                \
-    while ((DATA) != NULL) {                                                   \
+    while ((DATA) != nullptr) {                                                   \
       ASSERTION;                                                               \
       if (TEST) {                                                              \
         break;                                                                 \
@@ -177,7 +177,7 @@ inline ulint hash_calc_hash(ulint fold,           /*!< in: folded value */
     for (i3333 = (TABLE)->n_cells; i3333--;) {                                 \
       (DATA) = (TYPE)HASH_GET_FIRST(TABLE, i3333);                             \
                                                                                \
-      while ((DATA) != NULL) {                                                 \
+      while ((DATA) != nullptr) {                                                 \
         HASH_ASSERT_VALID(DATA);                                               \
         ASSERTION;                                                             \
                                                                                \
@@ -188,24 +188,12 @@ inline ulint hash_calc_hash(ulint fold,           /*!< in: folded value */
         (DATA) = (TYPE)HASH_GET_NEXT(NAME, DATA);                              \
       }                                                                        \
                                                                                \
-      if ((DATA) != NULL) {                                                    \
+      if ((DATA) != nullptr) {                                                    \
         break;                                                                 \
       }                                                                        \
     }                                                                          \
   } while (0)
 
-/** Gets the nth cell in a hash table.
-@return	pointer to cell */
-inline hash_cell_t *
-hash_get_nth_cell(hash_table_t *table, /*!< in: hash table */
-                  ulint n);            /*!< in: cell index */
-
-/** Clears a hash table so that all the cells become empty. */
-inline void hash_table_clear(hash_table_t *table); /*!< in/out: hash table */
-
-/** Returns the number of cells in a hash table.
-@return	number of cells */
-inline ulint hash_get_n_cells(hash_table_t *table); /*!< in: table */
 /** Deletes a struct which is stored in the heap of the hash table, and compacts
 the heap. The fold value must be stored in the struct NODE in a field named
 'fold'. */
@@ -286,66 +274,160 @@ the heap. The fold value must be stored in the struct NODE in a field named
     }                                                                          \
   } while (0)
 
-/** Gets the mutex index for a fold value in a hash table.
-@return	mutex number */
-inline ulint hash_get_mutex_no(hash_table_t *table, /*!< in: hash table */
-                               ulint fold);         /*!< in: fold */
-/** Gets the nth heap in a hash table.
-@return	mem heap */
-inline mem_heap_t *hash_get_nth_heap(hash_table_t *table, /*!< in: hash table */
-                                     ulint i); /*!< in: index of the heap */
-/** Gets the heap for a fold value in a hash table.
-@return	mem heap */
-inline mem_heap_t *hash_get_heap(hash_table_t *table, /*!< in: hash table */
-                                 ulint fold);         /*!< in: fold */
-/** Gets the nth mutex in a hash table.
-@return	mutex */
-inline mutex_t *hash_get_nth_mutex(hash_table_t *table, /*!< in: hash table */
-                                   ulint i); /*!< in: index of the mutex */
-/** Gets the mutex for a fold value in a hash table.
-@return	mutex */
-inline mutex_t *hash_get_mutex(hash_table_t *table, /*!< in: hash table */
-                               ulint fold);         /*!< in: fold */
 /** Reserves the mutex for a fold value in a hash table. */
-
 void hash_mutex_enter(hash_table_t *table, /*!< in: hash table */
                       ulint fold);         /*!< in: fold */
-/** Releases the mutex for a fold value in a hash table. */
 
+/** Releases the mutex for a fold value in a hash table. */
 void hash_mutex_exit(hash_table_t *table, /*!< in: hash table */
                      ulint fold);         /*!< in: fold */
+
 /** Reserves all the mutexes of a hash table, in an ascending order. */
-
 void hash_mutex_enter_all(hash_table_t *table); /*!< in: hash table */
-/** Releases all the mutexes of a hash table. */
 
+/** Releases all the mutexes of a hash table. */
 void hash_mutex_exit_all(hash_table_t *table); /*!< in: hash table */
 
-struct hash_cell_struct {
-  void *node; /*!< hash chain node, NULL if none */
+struct hash_cell_t {
+  /** Hash chain node, nullptr if none */
+   hash_node_t node;
 };
 
+constexpr ulint HASH_TABLE_MAGIC_N = 76561114;
+
 /* The hash table structure */
-struct hash_table_struct {
-  ulint n_cells;      /* number of cells in the hash table */
-  hash_cell_t *array; /*!< pointer to cell array */
-  ulint n_mutexes;    /* if mutexes != NULL, then the number of
-                    mutexes, must be a power of 2 */
-  mutex_t *mutexes;   /* NULL, or an array of mutexes used to
-                      protect segments of the hash table */
-  mem_heap_t **heaps; /*!< if this is non-NULL, hash chain nodes for
-                      external chaining can be allocated from these
-                      memory heaps; there are then n_mutexes many of
-                      these heaps */
+struct hash_table_t {
+  /** Number of cells in the hash table */
+  ulint n_cells;
+
+  /** Pointer to cell array */
+  hash_cell_t *array;
+
+  /** If mutexes != nullptr, then the number of mutexes,
+  must be a power of 2 */
+  ulint n_mutexes;
+
+  /* nullptr, or an array of mutexes used to protect
+  segments of the hash table */
+  mutex_t *mutexes;
+
+  /** If this is non-nullptr, hash chain nodes for external
+  chaining can be allocated from these memory heaps; there
+  are then n_mutexes many of these heaps */
+  mem_heap_t **heaps;
+
   mem_heap_t *heap;
+
 #ifdef UNIV_DEBUG
   ulint magic_n;
-#define HASH_TABLE_MAGIC_N 76561114
 #endif /* UNIV_DEBUG */
 };
 
-#ifndef UNIV_NONINL
-#include "hash0hash.ic"
-#endif
+/** Gets the nth cell in a hash table.
+@return	pointer to cell */
+inline hash_cell_t *
+hash_get_nth_cell(hash_table_t *table, /*!< in: hash table */
+                  ulint n)             /*!< in: cell index */
+{
+  ut_ad(table);
+  ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
+  ut_ad(n < table->n_cells);
 
-#endif
+  return (table->array + n);
+}
+
+/** Clears a hash table so that all the cells become empty. */
+inline void hash_table_clear(hash_table_t *table) /*!< in/out: hash table */
+{
+  ut_ad(table);
+  ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
+  memset(table->array, 0x0, table->n_cells * sizeof(*table->array));
+}
+
+/** Returns the number of cells in a hash table.
+@return	number of cells */
+inline ulint hash_get_n_cells(hash_table_t *table) /*!< in: table */
+{
+  ut_ad(table);
+  ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
+  return (table->n_cells);
+}
+
+/** Calculates the hash value from a folded value.
+@return	hashed value */
+inline ulint hash_calc_hash(ulint fold,          /*!< in: folded value */
+                            hash_table_t *table) /*!< in: hash table */
+{
+  ut_ad(table);
+  ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
+  return (ut_hash_ulint(fold, table->n_cells));
+}
+
+/** Gets the mutex index for a fold value in a hash table.
+@return	mutex number */
+inline ulint hash_get_mutex_no(hash_table_t *table, /*!< in: hash table */
+                               ulint fold)          /*!< in: fold */
+{
+  ut_ad(table);
+  ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
+  ut_ad(ut_is_2pow(table->n_mutexes));
+  return (ut_2pow_remainder(hash_calc_hash(fold, table), table->n_mutexes));
+}
+
+/** Gets the nth heap in a hash table.
+@return	mem heap */
+inline mem_heap_t *hash_get_nth_heap(hash_table_t *table, /*!< in: hash table */
+                                     ulint i) /*!< in: index of the heap */
+{
+  ut_ad(table);
+  ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
+  ut_ad(i < table->n_mutexes);
+
+  return (table->heaps[i]);
+}
+
+/** Gets the heap for a fold value in a hash table.
+@return	mem heap */
+inline mem_heap_t *hash_get_heap(hash_table_t *table, /*!< in: hash table */
+                                 ulint fold)          /*!< in: fold */
+{
+  ulint i;
+
+  ut_ad(table);
+  ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
+
+  if (table->heap) {
+    return (table->heap);
+  }
+
+  i = hash_get_mutex_no(table, fold);
+
+  return (hash_get_nth_heap(table, i));
+}
+
+/** Gets the nth mutex in a hash table.
+@return	mutex */
+inline mutex_t *hash_get_nth_mutex(hash_table_t *table, /*!< in: hash table */
+                                   ulint i) /*!< in: index of the mutex */
+{
+  ut_ad(table);
+  ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
+  ut_ad(i < table->n_mutexes);
+
+  return (table->mutexes + i);
+}
+
+/** Gets the mutex for a fold value in a hash table.
+@return	mutex */
+inline mutex_t *hash_get_mutex(hash_table_t *table, /*!< in: hash table */
+                               ulint fold)          /*!< in: fold */
+{
+  ulint i;
+
+  ut_ad(table);
+  ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
+
+  i = hash_get_mutex_no(table, fold);
+
+  return (hash_get_nth_mutex(table, i));
+}
