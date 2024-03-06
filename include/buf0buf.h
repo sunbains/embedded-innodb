@@ -120,11 +120,6 @@ void buf_close();
 freeing all mutexes. */
 void buf_mem_free();
 
-/*** Drops the adaptive hash index.  To prevent a livelock, this function
-is only to be called while holding btr_search_latch and while
-btr_search_enabled == false. */
-void buf_pool_drop_hash_index();
-
 /*** Resizes the buffer pool. */
 void buf_pool_resize();
 
@@ -680,9 +675,8 @@ struct buf_block_t {
 
 /** @brief The buffer pool statistics structure. */
 struct buf_pool_stat_t {
-  /** number of page gets performed; also successful searches
-  through the adaptive hash index are counted as page gets;
-  this field is NOT protected by the buffer pool mutex */
+  /** number of page gets performed; this field is NOT protected
+  by the buffer pool mutex */
   ulint n_page_gets;
 
   /** number read operations */

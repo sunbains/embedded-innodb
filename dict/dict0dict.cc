@@ -23,12 +23,9 @@ Created 1/8/1996 Heikki Tuuri
 
 #include "dict0dict.h"
 
-#ifdef UNIV_NONINL
-#include "dict0dict.ic"
-#endif
-
 /** dummy index for ROW_FORMAT=REDUNDANT supremum and infimum records */
 dict_index_t *dict_ind_redundant;
+
 /** dummy index for ROW_FORMAT=COMPACT supremum and infimum records */
 dict_index_t *dict_ind_compact;
 

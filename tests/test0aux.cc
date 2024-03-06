@@ -402,7 +402,6 @@ void print_usage(const char *progname) {
           "usage: %s "
           "[--ib-buffer-pool-size size in mb]\n"
           "[--ib-log-file-size size in mb]\n"
-          "[--ib-disable-ahi]\n"
           "[--ib-io-capacity number of records]\n"
           "[--ib-use-sys-malloc]\n"
           "[--ib-lru-old-ratio as %% e.g. 38]\n"
@@ -448,12 +447,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     assert(err == DB_SUCCESS);
     break;
   }
-  case 3:
-    err = ib_cfg_set_bool_off("adaptive_hash_index");
-    assert(err == DB_SUCCESS);
-    break;
-
-  case 4: {
+  case 3: {
     ib_ulint_t size;
 
     size = strtoul(arg, NULL, 10);
@@ -461,12 +455,12 @@ ib_err_t set_global_option(int opt, const char *arg) {
     assert(err == DB_SUCCESS);
     break;
   }
-  case 5:
+  case 4:
     err = ib_cfg_set_bool_on("use_sys_malloc");
     assert(err == DB_SUCCESS);
     break;
 
-  case 6: {
+  case 5: {
     ib_ulint_t pct;
 
     pct = strtoul(arg, NULL, 10);
@@ -475,7 +469,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
 
-  case 7: {
+  case 6: {
     ib_ulint_t pct;
 
     pct = strtoul(arg, NULL, 10);
@@ -484,7 +478,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
 
-  case 8: {
+  case 7: {
     ib_ulint_t level;
 
     level = strtoul(arg, NULL, 10);
@@ -493,43 +487,43 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
 
-  case 9: {
+  case 8: {
     err = ib_cfg_set_text("log_group_home_dir", arg);
     assert(err == DB_SUCCESS);
     break;
   }
 
-  case 10: {
+  case 9: {
     err = ib_cfg_set_text("data_home_dir", arg);
     assert(err == DB_SUCCESS);
     break;
   }
 
-  case 11: {
+  case 10: {
     err = ib_cfg_set_text("data_file_path", arg);
     assert(err == DB_SUCCESS);
     break;
   }
 
-  case 12: {
+  case 11: {
     err = ib_cfg_set_bool_off("doublewrite");
     assert(err == DB_SUCCESS);
     break;
   }
 
-  case 13: {
+  case 12: {
     err = ib_cfg_set_bool_off("checksum");
     assert(err == DB_SUCCESS);
     break;
   }
 
-  case 14: {
+  case 13: {
     err = ib_cfg_set_bool_off("file_per_table");
     assert(err == DB_SUCCESS);
     break;
   }
 
-  case 15: {
+  case 14: {
     ib_ulint_t level;
 
     level = strtoul(arg, NULL, 10);
@@ -538,13 +532,13 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
 
-  case 16: {
+  case 15: {
     err = ib_cfg_set_int("flush_method", arg);
     assert(err == DB_SUCCESS);
     break;
   }
 
-  case 17: {
+  case 16: {
     ib_ulint_t threads;
 
     threads = strtoul(arg, NULL, 10);
@@ -553,7 +547,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
 
-  case 18: {
+  case 17: {
     ib_ulint_t threads;
 
     threads = strtoul(arg, NULL, 10);
@@ -562,7 +556,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
 
-  case 19: {
+  case 18: {
     ib_ulint_t n;
 
     n = strtoul(arg, NULL, 10);
@@ -571,7 +565,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
 
-  case 20: {
+  case 19: {
     ib_ulint_t secs;
 
     secs = strtoul(arg, NULL, 10);

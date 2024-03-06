@@ -500,17 +500,10 @@ loop:
     ut_print_timestamp(ib_stream);
 
     ib_logger(ib_stream,
-              "  ERROR: over 95 percent of the buffer pool"
-              " is occupied by\n"
-              "lock heaps or the adaptive hash index!"
-              " Check that your\n"
-              "transactions do not set too many row locks.\n"
-              "Your buffer pool size is %lu MB."
-              " Maybe you should make\n"
-              "the buffer pool bigger?\n"
-              "We intentionally generate a seg fault"
-              " to print a stack trace\n"
-              "on Linux!\n",
+              "  ERROR: over 95 percent of the buffer pool is occupied by lock heaps!"
+              " Check that your transactions do not set too many row locks."
+              " Your buffer pool size is %lu MB. Maybe you should make the buffer pool bigger?"
+              " We intentionally generate a seg fault to print a stack trace on Linux!\n",
               (ulong)(buf_pool->curr_size / (1024 * 1024 / UNIV_PAGE_SIZE)));
 
     ut_error;
@@ -522,23 +515,15 @@ loop:
     if (!buf_lru_switched_on_innodb_mon) {
 
       /* Over 67 % of the buffer pool is occupied by lock
-      heaps or the adaptive hash index. This may be a memory
-      leak! */
+      heaps. This may be a memory leak! */
 
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream,
-                "  WARNING: over 67 percent of"
-                " the buffer pool is occupied by\n"
-                "lock heaps or the adaptive"
-                " hash index! Check that your\n"
-                "transactions do not set too many"
-                " row locks.\n"
-                "Your buffer pool size is %lu MB."
-                " Maybe you should make\n"
-                "the buffer pool bigger?\n"
-                "Starting the InnoDB Monitor to print"
-                " diagnostics, including\n"
-                "lock heap and hash index sizes.\n",
+                "  WARNING: over 67 percent of the buffer pool is occupied by"
+                " lock heaps! Check that your transactions do not set too many"
+                " row locks. Your buffer pool size is %lu MB.Maybe you should"
+		" make the buffer pool bigger? Starting the InnoDB Monitor to"
+	        " print diagnostics, including lock heap and hash index sizes",
                 (ulong)(buf_pool->curr_size / (1024 * 1024 / UNIV_PAGE_SIZE)));
 
       buf_lru_switched_on_innodb_mon = true;
@@ -940,8 +925,7 @@ buf_lru_free_block_status buf_LRU_free_block(buf_page_t *bpage, bool *buf_pool_m
     buf_pool_mutex_exit();
     mutex_exit(block_mutex);
 
-    /* Remove possible adaptive hash index on the page.
-    The page was declared uninitialized by
+    /* The page was declared uninitialized by
     buf_LRU_block_remove_hashed_page().  We need to flag
     the contents of the page valid (which it still is) in
     order to avoid bogus Valgrind warnings.*/
@@ -1148,10 +1132,7 @@ void buf_LRU_stat_update() {
 }
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
-/** Validates the LRU list.
-@return	true */
-
-bool buf_LRU_validate(void) {
+bool buf_LRU_validate() {
   buf_page_t *bpage;
   ulint old_len;
   ulint new_len;
