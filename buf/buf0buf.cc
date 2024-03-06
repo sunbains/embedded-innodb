@@ -558,7 +558,6 @@ buf_block_init(buf_block_t *block, /*!< in: pointer to control block */
 #endif /* UNIV_DEBUG */
 
   block->check_index_page_at_flush = false;
-  block->index = nullptr;
 
 #ifdef UNIV_DEBUG
   block->page.in_page_hash = false;
@@ -901,8 +900,6 @@ buf_page_reset_file_page_was_freed(space_id_t space,  /*!< in: space id */
 inline void buf_block_init_low(buf_block_t *block) /*!< in: block to init */
 {
   block->check_index_page_at_flush = false;
-  block->index = nullptr;
-
   block->n_hash_helps = 0;
   block->is_hashed = false;
   block->n_fields = 1;

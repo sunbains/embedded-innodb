@@ -1,4 +1,4 @@
-/***
+/****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -659,8 +659,6 @@ struct buf_block_t {
   /** true or false in hash indexing */
   bool curr_left_side;
 
-  /** Index for which the adaptive hash index has been created. */
-  dict_index_t *index;
   /* @} */
 
 #ifdef UNIV_SYNC_DEBUG
