@@ -31,7 +31,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "rem0types.h"
 
 /** Persistent cursor */
-typedef struct btr_pcur_struct btr_pcur_t;
+struct btr_pcur_t;
 
 /** B-tree cursor */
 struct btr_cur_t;
