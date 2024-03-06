@@ -129,6 +129,43 @@ two) is assigned, the field DICT_HDR_ROW_ID on the dictionary header page is
 updated */
 constexpr ulint DICT_HDR_ROW_ID_WRITE_MARGIN = 256;
 
-#ifndef UNIV_NONINL
-#include "dict0boot.ic"
-#endif
+/** Writes the current value of the row id counter to the dictionary header file
+page. */
+void dict_hdr_flush_row_id();
+
+/** Returns a new row id.
+@return	the new id */
+inline uint64_t dict_sys_get_new_row_id(void) {
+  mutex_enter(&(dict_sys->mutex));
+
+  auto id = dict_sys->row_id;
+
+  if (0 == (id % DICT_HDR_ROW_ID_WRITE_MARGIN)) {
+
+    dict_hdr_flush_row_id();
+  }
+
+  ++dict_sys->row_id;
+
+  mutex_exit(&dict_sys->mutex);
+
+  return id;
+}
+
+/** Reads a row id from a record or other 6-byte stored form.
+@return	row id */
+inline uint64_t dict_sys_read_row_id(byte *field) /*!< in: record field */
+{
+  static_assert(DATA_ROW_ID_LEN == 6, "error DATA_ROW_ID_LEN != 6");
+
+  return mach_read_from_6(field);
+}
+
+/** Writes a row id to a record or other 6-byte stored form. */
+inline void dict_sys_write_row_id(byte *field,   /*!< in: record field */
+                                  uint64_t row_id) /*!< in: row id */
+{
+  static_assert(DATA_ROW_ID_LEN == 6, "error DATA_ROW_ID_LEN != 6");
+
+  mach_write_to_6(field, row_id);
+}

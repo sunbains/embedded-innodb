@@ -23,10 +23,6 @@ Created 4/18/1996 Heikki Tuuri
 
 #include "dict0boot.h"
 
-#ifdef UNIV_NONINL
-#include "dict0boot.ic"
-#endif
-
 #include "btr0btr.h"
 #include "buf0flu.h"
 #include "dict0crea.h"

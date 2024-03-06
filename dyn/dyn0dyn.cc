@@ -23,10 +23,6 @@ Created 2/5/1996 Heikki Tuuri
 
 #include "dyn0dyn.h"
 
-#ifdef UNIV_NONINL
-#include "dyn0dyn.ic"
-#endif
-
 dyn_block_t *dyn_array_add_block(dyn_array_t *arr) {
   ut_ad(arr);
   ut_ad(arr->magic_n == DYN_BLOCK_MAGIC_N);
