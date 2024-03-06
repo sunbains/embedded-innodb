@@ -1794,11 +1794,6 @@ loop:
 
   srv_lock_timeout_active = false;
 
-#if 0
-	/* The following synchronisation is disabled, since
-	the InnoDB monitor output is to be updated every 15 seconds. */
-	os_event_wait(srv_lock_timeout_thread_event);
-#endif
   goto loop;
 
 exit_func:
