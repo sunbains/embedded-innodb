@@ -39,7 +39,6 @@ constexpr ulint BTR_NO_LOCKING_FLAG = 2;
 /** Sys fields will be found from the   update vector or inserted entry */
 constexpr ulint BTR_KEEP_SYS_FLAG = 4;
 
-#include "ha0ha.h"
 #include "que0types.h"
 #include "row0types.h"
 
