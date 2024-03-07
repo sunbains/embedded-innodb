@@ -37,6 +37,7 @@ Created 12/9/1995 Heikki Tuuri
 #include "mem0mem.h"
 #include "srv0start.h"
 #include "sync0rw.h"
+#include "trx0sys.h"
 
 /*
 General philosophy of InnoDB redo-logs:

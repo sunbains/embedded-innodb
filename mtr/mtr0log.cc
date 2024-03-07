@@ -28,11 +28,11 @@ Created 12/7/1995 Heikki Tuuri
 #endif
 
 #include "buf0buf.h"
+#include "dict0boot.h"
 #include "dict0dict.h"
 #include "log0recv.h"
 #include "page0page.h"
-
-#include "dict0boot.h"
+#include "trx0sys.h"
 
 void mlog_catenate_string(mtr_t *mtr, const byte *str, ulint len) {
   dyn_array_t *mlog;
@@ -441,4 +441,67 @@ byte *mlog_parse_index(byte *ptr,           /*!< in: buffer */
   ind->cached = true;
   *index = ind;
   return (ptr);
+}
+
+byte *mlog_write_initial_log_record_fast(const byte *ptr, byte type, byte *log_ptr, mtr_t *mtr) {
+#ifdef UNIV_DEBUG
+  buf_block_t *block;
+#endif /* UNIV_DEBUG */
+  const byte *page;
+  ulint space;
+  ulint offset;
+
+  ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(type <= MLOG_BIGGEST_TYPE);
+  ut_ad(ptr && log_ptr);
+
+  page = (const byte *)ut_align_down(ptr, UNIV_PAGE_SIZE);
+  space = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
+  offset = mach_read_from_4(page + FIL_PAGE_OFFSET);
+
+  /* check whether the page is in the doublewrite buffer;
+  the doublewrite buffer is located in pages
+  FSP_EXTENT_SIZE, ..., 3 * FSP_EXTENT_SIZE - 1 in the
+  system tablespace */
+  if (space == SYS_TABLESPACE && offset >= FSP_EXTENT_SIZE &&
+      offset < 3 * FSP_EXTENT_SIZE) {
+    if (trx_doublewrite_buf_is_being_created) {
+      /* Do nothing: we only come to this branch in an
+      InnoDB database creation. We do not redo log
+      anything for the doublewrite buffer pages. */
+      return (log_ptr);
+    } else {
+      ib_logger(ib_stream,
+                "Error: trying to redo log a record of type "
+                "%d on page %lu of space %lu in the "
+                "doublewrite buffer, continuing anyway.\n"
+                "Please post a bug report to "
+                "bugs.mysql.com.\n",
+                type, offset, space);
+    }
+  }
+
+  mach_write_to_1(log_ptr, type);
+  log_ptr++;
+  log_ptr += mach_write_compressed(log_ptr, space);
+  log_ptr += mach_write_compressed(log_ptr, offset);
+
+  mtr->n_log_recs++;
+
+#ifdef UNIV_LOG_DEBUG
+  ib_logger(ib_stream,
+            "Adding to mtr log record type %lu space %lu page no %lu\n",
+            (ulong)type, space, offset);
+#endif
+
+#ifdef UNIV_DEBUG
+  /* We now assume that all x-latched pages have been modified! */
+  block = (buf_block_t *)buf_block_align(ptr);
+
+  if (!mtr_memo_contains(mtr, block, MTR_MEMO_MODIFY)) {
+
+    mtr_memo_push(mtr, block, MTR_MEMO_MODIFY);
+  }
+#endif
+  return (log_ptr);
 }

@@ -460,9 +460,7 @@ void row_upd_index_write_log(const upd_t *update, byte *log_ptr, mtr_t *mtr) {
 
   for (i = 0; i < n_fields; i++) {
 
-#if MLOG_BUF_MARGIN <= 30
-#error "MLOG_BUF_MARGIN <= 30"
-#endif
+    static_assert(MLOG_BUF_MARGIN > 30, "error MLOG_BUF_MARGIN <= 30");
 
     if (log_ptr + 30 > buf_end) {
       mlog_close(mtr, log_ptr);
