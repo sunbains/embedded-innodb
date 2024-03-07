@@ -23,14 +23,9 @@ Created 10/4/1994 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#include "page0cur.h"
-
-#ifdef UNIV_NONINL
-#include "page0cur.ic"
-#endif
-
 #include "log0recv.h"
 #include "mtr0log.h"
+#include "page0cur.h"
 #include "rem0cmp.h"
 #include "ut0ut.h"
 

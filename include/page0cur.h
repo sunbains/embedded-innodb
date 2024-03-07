@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ The page cursor
 Created 10/4/1994 Heikki Tuuri
 *************************************************************************/
 
-#ifndef page0cur_h
-#define page0cur_h
+#pragma once
 
 #include "innodb0types.h"
 
@@ -36,194 +35,355 @@ Created 10/4/1994 Heikki Tuuri
 
 /* Page cursor search modes; the values must be in this order! */
 
-#define PAGE_CUR_UNSUPP IB_CUR_UNSUPP
-#define PAGE_CUR_G IB_CUR_G
-#define PAGE_CUR_GE IB_CUR_GE
-#define PAGE_CUR_L IB_CUR_L
-#define PAGE_CUR_LE IB_CUR_LE
+constexpr auto PAGE_CUR_UNSUPP = IB_CUR_UNSUPP;
+constexpr auto PAGE_CUR_G = IB_CUR_G;
+constexpr auto PAGE_CUR_GE = IB_CUR_GE;
+constexpr auto PAGE_CUR_L = IB_CUR_L;
+constexpr auto PAGE_CUR_LE = IB_CUR_LE;
 
-/*#define PAGE_CUR_LE_OR_EXTENDS 5*/ /* This is a search mode used in
-                                 "column LIKE 'abc%' ORDER BY column DESC";
-                                 we have to find strings which are <= 'abc' or
-                                 which extend it */
+/* This is a search mode used in:
+ "column LIKE 'abc%' ORDER BY column DESC";
+ we have to find strings which are <= 'abc' or which extend it */
+/* constexpr auto PAGE_CUR_LE_OR_EXTENDS = 5; * */
+
 #ifdef UNIV_SEARCH_DEBUG
-#define PAGE_CUR_DBG 6 /* As PAGE_CUR_LE, but skips search shortcut */
-#endif                 /* UNIV_SEARCH_DEBUG */
+/** As PAGE_CUR_LE, but skips search shortcut */
+constexpr auto PAGE_CUR_DBG = 6;
+#endif/* UNIV_SEARCH_DEBUG */
+
+
+/**
+ * @brief Inserts a record next to page cursor on an uncompressed page.
+ * Returns pointer to inserted record if succeed, i.e., enough
+ * space available, NULL otherwise. The cursor stays at the same position.
+ * 
+ * @param current_rec Pointer to current record after which the new record is inserted.
+ * @param index Record descriptor.
+ * @param rec Pointer to a physical record.
+ * @param offsets In/out: rec_get_offsets(rec, index).
+ * @param mtr Mini-transaction handle, or NULL.
+ * @return Pointer to record if succeed, NULL otherwise.
+ */
+rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const rec_t *rec, ulint *offsets, mtr_t *mtr);
+
+/**
+ * @brief Copies records from page to a newly created page, from a given record
+ * onward, including that record. Infimum and supremum records are not copied.
+ * 
+ * @param new_page In/out: Index page to copy to.
+ * @param rec First record to copy.
+ * @param index Record descriptor.
+ * @param mtr MTR.
+ */
+void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, dict_index_t *index, mtr_t *mtr);
+
+/**
+ * @brief Deletes a record at the page cursor. The cursor is moved to the
+ * next record after the deleted one.
+ * 
+ * @param cursor In/out: A page cursor.
+ * @param index Record descriptor.
+ * @param offsets In: rec_get_offsets(cursor->rec, index).
+ * @param mtr Mini-transaction handle.
+ */
+void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *offsets, mtr_t *mtr);
+
+/**
+ * @brief Searches the right position for a page cursor.
+ * 
+ * @param block In: Buffer block.
+ * @param index In: Record descriptor.
+ * @param tuple In: Data tuple.
+ * @param mode In: PAGE_CUR_L, PAGE_CUR_LE, PAGE_CUR_G, or PAGE_CUR_GE.
+ * @param iup_matched_fields In/out: Already matched fields in upper limit record.
+ * @param iup_matched_bytes In/out: Already matched bytes in a field not yet completely matched.
+ * @param ilow_matched_fields In/out: Already matched fields in lower limit record.
+ * @param ilow_matched_bytes In/out: Already matched bytes in a field not yet completely matched.
+ * @param cursor Out: Page cursor.
+ */
+void page_cur_search_with_match(
+  const buf_block_t *block,
+  const dict_index_t *index,
+  const dtuple_t *tuple,
+  ulint mode,
+  ulint *iup_matched_fields,
+  ulint *iup_matched_bytes,
+  ulint *ilow_matched_fields,
+  ulint *ilow_matched_bytes,
+  page_cur_t *cursor);
+
+/**
+ * @brief Positions a page cursor on a randomly chosen user record on a page. If there
+ * are no user records, sets the cursor on the infimum record.
+ * 
+ * @param block In: Page.
+ * @param cursor Out: Page cursor.
+ */
+void page_cur_open_on_rnd_user_rec(buf_block_t *block, page_cur_t *cursor);
+
+/**
+ * @brief Parses a log record of a record insert on a page.
+ * 
+ * @param is_short In: True if short inserts.
+ * @param ptr In: Buffer.
+ * @param end_ptr In: Buffer end.
+ * @param block In: Page or NULL.
+ * @param index In: Record descriptor.
+ * @param mtr In: MTR or NULL.
+ * @return End of log record or NULL.
+ */
+byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr);
+
+/**
+ * @brief Parses a log record of copying a record list end to a new created page.
+ * 
+ * @param ptr In: Buffer.
+ * @param end_ptr In: Buffer end.
+ * @param block In: Page or NULL.
+ * @param index In: Record descriptor.
+ * @param mtr In: MTR or NULL.
+ * @return End of log record or NULL.
+ */
+byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr);
+
+/**
+ * @brief Parses log record of a record delete on a page.
+ * 
+ * @param ptr In: Buffer.
+ * @param end_ptr In: Buffer end.
+ * @param block In: Page or NULL.
+ * @param index In: Record descriptor.
+ * @param mtr In: MTR or NULL.
+ * @return Pointer to record end or NULL.
+ */
+byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr);
+
+/** Index page cursor */
+struct page_cur_struct {
+  /** Pointer to a record on page */
+  byte *rec;
+
+  /** Pointer to the block containing rec */
+  buf_block_t *block;
+};
+
 
 #ifdef UNIV_DEBUG
-/** Gets pointer to the page frame where the cursor is positioned.
-@return	page */
-inline page_t *page_cur_get_page(page_cur_t *cur); /*!< in: page cursor */
+/**
+ * @brief Gets pointer to the page frame where the cursor is positioned.
+ * 
+ * @param cur In: Page cursor.
+ * @return Page.
+ */
+inline page_t* page_cur_get_page(page_cur_t* cur) {
+  ut_ad(page_align(cur->rec) == cur->block->frame);
 
-/** Gets pointer to the buffer block where the cursor is positioned.
-@return	page */
-inline buf_block_t *page_cur_get_block(page_cur_t *cur); /*!< in: page cursor */
+  return page_align(cur->rec);
+}
 
-/** Gets the record where the cursor is positioned.
-@return	record */
-inline rec_t *page_cur_get_rec(page_cur_t *cur); /*!< in: page cursor */
-#else                                            /* UNIV_DEBUG */
+/**
+ * @brief Gets pointer to the buffer block where the cursor is positioned.
+ * 
+ * @param cur In: Page cursor.
+ * @return Buffer block.
+ */
+inline buf_block_t* page_cur_get_block(page_cur_t* cur) {
+  ut_ad(page_align(cur->rec) == cur->block->frame);
+
+  return cur->block;
+}
+
+/**
+ * @brief Gets the record where the cursor is positioned.
+ * 
+ * @param cur In: Page cursor.
+ * @return Record.
+ */
+inline rec_t* page_cur_get_rec(page_cur_t* cur) {
+  ut_ad(page_align(cur->rec) == cur->block->frame);
+
+  return cur->rec;
+}
+#else
 #define page_cur_get_page(cur) page_align((cur)->rec)
 #define page_cur_get_block(cur) (cur)->block
 #define page_cur_get_rec(cur) (cur)->rec
 #endif /* UNIV_DEBUG */
-/** Sets the cursor object to point before the first user record
-on the page. */
-inline void
-page_cur_set_before_first(const buf_block_t *block, /*!< in: index page */
-                          page_cur_t *cur);         /*!< in: cursor */
-/** Sets the cursor object to point after the last user record on
-the page. */
-inline void
-page_cur_set_after_last(const buf_block_t *block, /*!< in: index page */
-                        page_cur_t *cur);         /*!< in: cursor */
-/** Returns true if the cursor is before first user record on page.
-@return	true if at start */
-inline bool page_cur_is_before_first(const page_cur_t *cur); /*!< in: cursor */
-/** Returns true if the cursor is after last user record.
-@return	true if at end */
-inline bool page_cur_is_after_last(const page_cur_t *cur); /*!< in: cursor */
-/** Positions the cursor on the given record. */
-inline void page_cur_position(const rec_t *rec, /*!< in: record on a page */
-                              const buf_block_t *block, /*!< in: buffer block
-                                                        containing the record */
-                              page_cur_t *cur);         /*!< out: page cursor */
-/** Invalidates a page cursor by setting the record pointer NULL. */
-inline void page_cur_invalidate(page_cur_t *cur); /*!< out: page cursor */
-/** Moves the cursor to the next record on page. */
-inline void page_cur_move_to_next(
-    page_cur_t *cur); /*!< in/out: cursor; must not be after last */
-/** Moves the cursor to the previous record on page. */
-inline void
-page_cur_move_to_prev(page_cur_t *cur); /*!< in/out: cursor; not before first */
-/** Inserts a record next to page cursor. Returns pointer to inserted record if
-succeed, i.e., enough space available, NULL otherwise. The cursor stays at
-the same logical position, but the physical position may change if it is
-pointing to a compressed page that was reorganized.
-@return	pointer to record if succeed, NULL otherwise */
-inline rec_t *page_cur_tuple_insert(
-    page_cur_t *cursor,    /*!< in/out: a page cursor */
-    const dtuple_t *tuple, /*!< in: pointer to a data tuple */
-    dict_index_t *index,   /*!< in: record descriptor */
-    ulint n_ext,           /*!< in: number of externally stored columns */
-    mtr_t *mtr);           /*!< in: mini-transaction handle, or NULL */
-/** Inserts a record next to page cursor. Returns pointer to inserted record if
-succeed, i.e., enough space available, NULL otherwise. The cursor stays at
-the same logical position, but the physical position may change if it is
-pointing to a compressed page that was reorganized.
-@return	pointer to record if succeed, NULL otherwise */
-inline rec_t *
-page_cur_rec_insert(page_cur_t *cursor,  /*!< in/out: a page cursor */
-                    const rec_t *rec,    /*!< in: record to insert */
-                    dict_index_t *index, /*!< in: record descriptor */
-                    ulint *offsets, /*!< in/out: rec_get_offsets(rec, index) */
-                    mtr_t *mtr);    /*!< in: mini-transaction handle, or NULL */
-/** Inserts a record next to page cursor on an uncompressed page.
-Returns pointer to inserted record if succeed, i.e., enough
-space available, NULL otherwise. The cursor stays at the same position.
-@return	pointer to record if succeed, NULL otherwise */
 
-rec_t *page_cur_insert_rec_low(
-    rec_t *current_rec,  /*!< in: pointer to current record after
-                     which the new record is inserted */
-    dict_index_t *index, /*!< in: record descriptor */
-    const rec_t *rec,    /*!< in: pointer to a physical record */
-    ulint *offsets,      /*!< in/out: rec_get_offsets(rec, index) */
-    mtr_t *mtr);         /*!< in: mini-transaction handle, or NULL */
+/**
+ * @brief Sets the cursor object to point before the first user record on the page.
+ * 
+ * @param block In: Index page.
+ * @param cur In: Cursor.
+ */
+inline void page_cur_set_before_first(buf_block_t *block, page_cur_t *cur) {
+  cur->block = block;
+  cur->rec = page_get_infimum_rec(buf_block_get_frame(cur->block));
+}
 
-/** Copies records from page to a newly created page, from a given record
-onward, including that record. Infimum and supremum records are not copied. */
+/**
+ * @brief Sets the cursor object to point before the first user record on the page.
+ * 
+ * @param block In: Index page.
+ * @param cur In: Cursor.
+ */
+inline void page_cur_set_before_first(const buf_block_t *block, page_cur_t *cur) {
+  page_cur_set_before_first(const_cast<buf_block_t*>(block), cur);
+}
 
-void page_copy_rec_list_end_to_created_page(
-    page_t *new_page,    /*!< in/out: index page to copy to */
-    rec_t *rec,          /*!< in: first record to copy */
-    dict_index_t *index, /*!< in: record descriptor */
-    mtr_t *mtr);         /*!< in: mtr */
-/** Deletes a record at the page cursor. The cursor is moved to the
-next record after the deleted one. */
+/**
+ * @brief Sets the cursor object to point after the last user record on the page.
+ * 
+ * @param block In: Index page.
+ * @param cur In: Cursor.
+ */
+inline void page_cur_set_after_last(buf_block_t *block, page_cur_t *cur) {
+  cur->block = block;
+  cur->rec = page_get_supremum_rec(buf_block_get_frame(cur->block));
+}
+/**
+ * @brief Sets the cursor object to point after the last user record on the page.
+ * 
+ * @param block In: Index page.
+ * @param cur In: Cursor.
+ */
+inline void page_cur_set_after_last(const buf_block_t *block, page_cur_t *cur) {
+  cur->block = const_cast<buf_block_t *>(block);
+  cur->rec = page_get_supremum_rec(buf_block_get_frame(cur->block));
+}
 
-void page_cur_delete_rec(
-    page_cur_t *cursor,   /*!< in/out: a page cursor */
-    dict_index_t *index,  /*!< in: record descriptor */
-    const ulint *offsets, /*!< in: rec_get_offsets(cursor->rec, index) */
-    mtr_t *mtr);          /*!< in: mini-transaction handle */
-/** Searches the right position for a page cursor.
-@return	number of matched fields on the left */
-inline ulint
-page_cur_search(const buf_block_t *block,  /*!< in: buffer block */
-                const dict_index_t *index, /*!< in: record descriptor */
-                const dtuple_t *tuple,     /*!< in: data tuple */
-                ulint mode,                /*!< in: PAGE_CUR_L,
-                                           PAGE_CUR_LE, PAGE_CUR_G, or
-                                           PAGE_CUR_GE */
-                page_cur_t *cursor);       /*!< out: page cursor */
-/** Searches the right position for a page cursor. */
+/**
+ * @brief Returns true if the cursor is before the first user record on the page.
+ * 
+ * @param cur In: Cursor.
+ * @return True if at start.
+ */
+inline bool page_cur_is_before_first(const page_cur_t *cur) {
+  ut_ad(page_align(cur->rec) == cur->block->frame);
+  return page_rec_is_infimum(cur->rec);
+}
 
-void page_cur_search_with_match(
-    const buf_block_t *block,  /*!< in: buffer block */
-    const dict_index_t *index, /*!< in: record descriptor */
-    const dtuple_t *tuple,     /*!< in: data tuple */
-    ulint mode,                /*!< in: PAGE_CUR_L,
-                               PAGE_CUR_LE, PAGE_CUR_G, or
-                               PAGE_CUR_GE */
-    ulint *iup_matched_fields,
-    /*!< in/out: already matched
-    fields in upper limit record */
-    ulint *iup_matched_bytes,
-    /*!< in/out: already matched
-    bytes in a field not yet
-    completely matched */
-    ulint *ilow_matched_fields,
-    /*!< in/out: already matched
-    fields in lower limit record */
-    ulint *ilow_matched_bytes,
-    /*!< in/out: already matched
-    bytes in a field not yet
-    completely matched */
-    page_cur_t *cursor); /*!< out: page cursor */
-/** Positions a page cursor on a randomly chosen user record on a page. If there
-are no user records, sets the cursor on the infimum record. */
+/**
+ * @brief Returns true if the cursor is after the last user record.
+ * 
+ * @param cur In: Cursor.
+ * @return True if at end.
+ */
+inline bool page_cur_is_after_last(const page_cur_t *cur) {
+  ut_ad(page_align(cur->rec) == cur->block->frame);
+  return page_rec_is_supremum(cur->rec);
+}
 
-void page_cur_open_on_rnd_user_rec(buf_block_t *block,  /*!< in: page */
-                                   page_cur_t *cursor); /*!< out: page cursor */
-/** Parses a log record of a record insert on a page.
-@return	end of log record or NULL */
+/**
+ * @brief Positions the cursor on the given record.
+ * 
+ * @param rec In: Record on a page.
+ * @param block In: Buffer block containing the record.
+ * @param cur Out: Page cursor.
+ */
+inline void page_cur_position(const rec_t *rec, const buf_block_t *block, page_cur_t *cur) {
+  ut_ad(page_align(rec) == block->frame);
 
-byte *
-page_cur_parse_insert_rec(bool is_short,       /*!< in: true if short inserts */
-                          byte *ptr,           /*!< in: buffer */
-                          byte *end_ptr,       /*!< in: buffer end */
-                          buf_block_t *block,  /*!< in: page or NULL */
-                          dict_index_t *index, /*!< in: record descriptor */
-                          mtr_t *mtr);         /*!< in: mtr or NULL */
-/** Parses a log record of copying a record list end to a new created page.
-@return	end of log record or NULL */
+  cur->rec = (rec_t *)rec;
+  cur->block = (buf_block_t *)block;
+}
 
-byte *page_parse_copy_rec_list_to_created_page(
-    byte *ptr,           /*!< in: buffer */
-    byte *end_ptr,       /*!< in: buffer end */
-    buf_block_t *block,  /*!< in: page or NULL */
-    dict_index_t *index, /*!< in: record descriptor */
-    mtr_t *mtr);         /*!< in: mtr or NULL */
-/** Parses log record of a record delete on a page.
-@return	pointer to record end or NULL */
+/**
+ * @brief Invalidates a page cursor by setting the record pointer NULL.
+ * 
+ * @param cur Out: Page cursor.
+ */
+inline void page_cur_invalidate(page_cur_t *cur) {
+  cur->rec = nullptr;
+  cur->block = nullptr;
+}
 
-byte *
-page_cur_parse_delete_rec(byte *ptr,           /*!< in: buffer */
-                          byte *end_ptr,       /*!< in: buffer end */
-                          buf_block_t *block,  /*!< in: page or NULL */
-                          dict_index_t *index, /*!< in: record descriptor */
-                          mtr_t *mtr);         /*!< in: mtr or NULL */
+/**
+ * @brief Moves the cursor to the next record on the page.
+ * 
+ * @param cur In/Out: Cursor; must not be after last.
+ */
+inline void page_cur_move_to_next(page_cur_t *cur) {
+  ut_ad(!page_cur_is_after_last(cur));
 
-/** Index page cursor */
+  cur->rec = page_rec_get_next(cur->rec);
+}
 
-struct page_cur_struct {
-  byte *rec;          /*!< pointer to a record on page */
-  buf_block_t *block; /*!< pointer to the block containing rec */
-};
+/**
+ * @brief Moves the cursor to the previous record on the page.
+ * 
+ * @param cur In/Out: Cursor; must not be before the first.
+ */
+inline void page_cur_move_to_prev(page_cur_t *cur) {
+  ut_ad(!page_cur_is_before_first(cur));
 
-#ifndef UNIV_NONINL
-#include "page0cur.ic"
-#endif
+  cur->rec = page_rec_get_prev(cur->rec);
+}
 
-#endif
+/**
+ * @brief Searches the right position for a page cursor.
+ * 
+ * @param block In: Buffer block.
+ * @param dict_index In: Record descriptor.
+ * @param tuple In: Data tuple.
+ * @param mode In: Search mode (PAGE_CUR_L, PAGE_CUR_LE, PAGE_CUR_G, or PAGE_CUR_GE).
+ * @param cursor Out: Page cursor.
+ * @return Number of matched fields on the left.
+ */
+inline ulint page_cur_search(const buf_block_t *block, const dict_index_t *dict_index, const dtuple_t *tuple, ulint mode, page_cur_t *cursor) {
+  ulint low_matched_fields = 0;
+  ulint low_matched_bytes = 0;
+  ulint up_matched_fields = 0;
+  ulint up_matched_bytes = 0;
+
+  ut_ad(dtuple_check_typed(tuple));
+
+  page_cur_search_with_match(block, dict_index, tuple, mode, &up_matched_fields, &up_matched_bytes, &low_matched_fields, &low_matched_bytes, cursor);
+
+  return low_matched_fields;
+}
+
+/**
+ * @brief Inserts a record next to the page cursor.
+ * Returns a pointer to the inserted record if successful (i.e., enough space available),
+ * NULL otherwise. The cursor stays at the same logical position, but the physical position
+ * may change if it is pointing to a compressed page that was reorganized.
+ * 
+ * @param cursor In/Out: Page cursor.
+ * @param tuple In: Pointer to a data tuple.
+ * @param dict_index In: Record descriptor.
+ * @param n_ext In: Number of externally stored columns.
+ * @param mtr In: Mini-transaction handle, or NULL.
+ * @return Pointer to the inserted record if successful, NULL otherwise.
+ */
+inline rec_t *page_cur_tuple_insert(page_cur_t *cursor, const dtuple_t *tuple,
+                                    dict_index_t *dict_index, ulint n_ext, mtr_t *mtr) {
+  ulint size = rec_get_converted_size(dict_index, tuple, n_ext);
+
+  auto heap = mem_heap_create(size + (4 + REC_OFFS_HEADER_SIZE + dtuple_get_n_fields(tuple)) * sizeof(ulint));
+  auto rec = rec_convert_dtuple_to_rec((byte *)mem_heap_alloc(heap, size), dict_index, tuple, n_ext);
+  auto offsets = rec_get_offsets(rec, dict_index, NULL, ULINT_UNDEFINED, &heap);
+
+  rec = page_cur_insert_rec_low(cursor->rec, dict_index, rec, offsets, mtr);
+
+  mem_heap_free(heap);
+
+  return rec;
+}
+
+/**
+ * @brief Inserts a record next to the page cursor.
+ * Returns a pointer to the inserted record if successful (i.e., enough space available),
+ * NULL otherwise. The cursor stays at the same logical position, but the physical position
+ * may change if it is pointing to a compressed page that was reorganized.
+ * 
+ * @param cursor In/Out: Page cursor.
+ * @param rec In: Record to insert.
+ * @param dict_index In: Record descriptor.
+ * @param offsets In/Out: Offsets of the record.
+ * @param mtr In: Mini-transaction handle, or NULL.
+ * @return Pointer to the inserted record if successful, NULL otherwise.
+ */
+inline rec_t* page_cur_rec_insert(page_cur_t* cursor, const rec_t* rec, dict_index_t* dict_index, ulint* offsets, mtr_t* mtr) {
+  return page_cur_insert_rec_low(cursor->rec, dict_index, rec, offsets, mtr);
+}
