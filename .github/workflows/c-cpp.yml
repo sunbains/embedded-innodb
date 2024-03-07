@@ -14,9 +14,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: cmake
-      run: cmake -G Ninja .
-    - name: ninja
-      run: ninja
-    - name: test
-      run: mkdir db; cd db; ../bin/ib_test5
+      run: cmake -G "Unix Makefiles" .
+    - name: make
+      run: make
+  
     
