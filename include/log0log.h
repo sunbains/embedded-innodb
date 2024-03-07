@@ -431,6 +431,8 @@ lsn_t log_reserve_and_open(ulint len);
  */
 void log_write_low(byte *str, ulint str_len);
 
+void NewFunction(ulint &str_len, byte *&str);
+
 /**
  * @brief Closes the log.
  *
