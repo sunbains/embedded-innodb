@@ -566,7 +566,7 @@ constexpr ulint LOCK_WAIT = 256;
 
 /** This flag denotes an ordinary next-key lock in contrast to
 LOCK_GAP or LOCK_REC_NOT_GAP */
-constexpr ulint LOCK_ORDINARY = 0
+constexpr ulint LOCK_ORDINARY = 0;
 
 /** When this bit is set, it means that the lock holds only on the
 gap before the record; for instance, an x-lock on the gap does not

@@ -302,7 +302,7 @@ void sync_array_reserve_cell(sync_array_t *arr, void *object, ulint type,
       cell->wait_object = object;
 
       if (type == SYNC_MUTEX) {
-        cell->old_wait_mutex = static_cast<ib_mutex_t *>(object);
+        cell->old_wait_mutex = static_cast<mutex_t *>(object);
       } else {
         cell->old_wait_rw_lock = static_cast<rw_lock_t *>(object);
       }
@@ -672,7 +672,7 @@ sync_arr_cell_can_wake_up(sync_cell_t *cell) /*!< in: cell to search */
 
   if (cell->request_type == SYNC_MUTEX) {
 
-    mutex = static_cast<ib_mutex_t *>(cell->wait_object);
+    mutex = static_cast<mutex_t *>(cell->wait_object);
 
     if (mutex_get_lock_word(mutex) == 0) {
 
