@@ -299,18 +299,6 @@ inline byte *mem_heap_alloc(mem_heap_t *heap, ulint n) {
 
   mem_block_set_free(block, free_sz + MEM_SPACE_NEEDED(n));
 
-#ifdef UNIV_MEM_DEBUG
-  UNIV_MEM_ALLOC(buf, n + MEM_FIELD_HEADER_SIZE + MEM_FIELD_TRAILER_SIZE);
-
-  /* In the debug version write debugging info to the field */
-  mem_field_init((byte *)buf, n);
-
-  /* Advance buf to point at the storage which will be given to the
-  caller */
-  ptr = reinterpret_cast<byte *>(ptr) + MEM_FIELD_HEADER_SIZE;
-
-#endif
-
 #ifdef UNIV_SET_MEM_TO_ZERO
   UNIV_MEM_ALLOC(ptr, n);
   memset(ptr, '\0', n);
@@ -341,30 +329,10 @@ inline void
 mem_heap_free_heap_top(mem_heap_t *heap, /*!< in: heap from which to free */
                        byte *old_top)    /*!< in: pointer to old top of heap */
 {
-  mem_block_t *block;
   mem_block_t *prev_block;
-#ifdef UNIV_MEM_DEBUG
-  bool error;
-  ulint total_size;
-  ulint size;
-#endif
-
   ut_ad(mem_heap_check(heap));
 
-#ifdef UNIV_MEM_DEBUG
-
-  /* Validate the heap and get its total allocated size */
-  mem_heap_validate_or_print(heap, NULL, false, &error, &total_size, NULL,
-                             NULL);
-  ut_a(!error);
-
-  /* Get the size below top pointer */
-  mem_heap_validate_or_print(heap, old_top, false, &error, &size, NULL, NULL);
-  ut_a(!error);
-
-#endif
-
-  block = UT_LIST_GET_LAST(heap->base);
+  auto block = UT_LIST_GET_LAST(heap->base);
 
   while (block != NULL) {
     if (((byte *)block + mem_block_get_free(block) >= old_top) &&
@@ -389,19 +357,7 @@ mem_heap_free_heap_top(mem_heap_t *heap, /*!< in: heap from which to free */
   /* Set the free field of block */
   mem_block_set_free(block, old_top - (byte *)block);
 
-#ifdef UNIV_MEM_DEBUG
-  ut_ad(mem_block_get_start(block) <= mem_block_get_free(block));
-
-  /* In the debug version erase block from top up */
-  mem_erase_buf(old_top, (byte *)block + block->len - old_top);
-
-  /* Update allocated memory count */
-  mutex_enter(&mem_hash_mutex);
-  mem_current_allocated_memory -= (total_size - size);
-  mutex_exit(&mem_hash_mutex);
-#else  /* UNIV_MEM_DEBUG */
   UNIV_MEM_ASSERT_W(old_top, (byte *)block + block->len - old_top);
-#endif /* UNIV_MEM_DEBUG */
   UNIV_MEM_ALLOC(old_top, (byte *)block + block->len - old_top);
 
   /* If free == start, we may free the block if it is not the first
@@ -428,28 +384,13 @@ element must be given.
 inline void *mem_heap_get_top(mem_heap_t *heap, /*!< in: memory heap */
                               ulint n) /*!< in: size of the topmost element */
 {
-  mem_block_t *block;
-  void *buf;
 
   ut_ad(mem_heap_check(heap));
 
-  block = UT_LIST_GET_LAST(heap->base);
+  auto block = UT_LIST_GET_LAST(heap->base);
+  auto buf = (byte *)block + mem_block_get_free(block) - MEM_SPACE_NEEDED(n);
 
-  buf = (byte *)block + mem_block_get_free(block) - MEM_SPACE_NEEDED(n);
-
-#ifdef UNIV_MEM_DEBUG
-  ut_ad(mem_block_get_start(block) <= (ulint)((byte *)buf - (byte *)block));
-
-  /* In the debug version, advance buf to point at the storage which
-  was given to the caller in the allocation*/
-
-  buf = (byte *)buf + MEM_FIELD_HEADER_SIZE;
-
-  /* Check that the field lengths agree */
-  ut_ad(n == (ulint)mem_field_header_get_len(buf));
-#endif
-
-  return (buf);
+  return buf;
 }
 
 /** Frees the topmost element in a memory heap. The size of the element must be
@@ -466,16 +407,8 @@ inline void mem_heap_free_top(mem_heap_t *heap, /*!< in: memory heap */
   /* Subtract the free field of block */
   mem_block_set_free(block, mem_block_get_free(block) - MEM_SPACE_NEEDED(n));
   UNIV_MEM_ASSERT_W((byte *)block + mem_block_get_free(block), n);
-#ifdef UNIV_MEM_DEBUG
 
-  ut_ad(mem_block_get_start(block) <= mem_block_get_free(block));
-
-  /* In the debug version check the consistency, and erase field */
-  mem_field_erase((byte *)block + mem_block_get_free(block), n);
-#endif
-
-  /* If free == start, we may free the block if it is not the first
-  one */
+  /* If free == start, we may free the block if it is not the first one */
 
   if ((heap != block) &&
       (mem_block_get_free(block) == mem_block_get_start(block))) {
@@ -521,13 +454,7 @@ mem_heap_create_func(ulint n,               /*!< in: desired start block size,
   /* Add the created block itself as the first block in the list */
   UT_LIST_ADD_FIRST(list, block->base, block);
 
-#ifdef UNIV_MEM_DEBUG
-
-  mem_hash_insert(block, file_name, line);
-
-#endif
-
-  return (block);
+  return block;
 }
 
 /** NOTE: Use the corresponding macro instead of this function. Frees the space
@@ -545,14 +472,6 @@ mem_heap_free_func(mem_heap_t *heap, /*!< in, own: heap to be freed */
 
   block = UT_LIST_GET_LAST(heap->base);
 
-#ifdef UNIV_MEM_DEBUG
-
-  /* In the debug version remove the heap from the hash table of heaps
-  and check its consistency */
-
-  mem_hash_remove(heap, file_name, line);
-
-#endif
   if (heap->free_block) {
     mem_heap_free_block_free(heap);
   }
@@ -595,17 +514,13 @@ mem_alloc_func(ulint n,               /*!< in: desired number of bytes */
     /* Adjust the allocation to the actual size of the
     memory block. */
     ulint m = mem_block_get_len(heap) - mem_block_get_free(heap);
-#ifdef UNIV_MEM_DEBUG
-    m -= MEM_FIELD_HEADER_SIZE + MEM_FIELD_TRAILER_SIZE;
-#endif /* UNIV_MEM_DEBUG */
     ut_ad(m >= n);
     *size = n = m;
   }
 
   buf = mem_heap_alloc(heap, n);
 
-  ut_a((byte *)heap ==
-       (byte *)buf - MEM_BLOCK_HEADER_SIZE - MEM_FIELD_HEADER_SIZE);
+  ut_a((byte *)heap == (byte *)buf - MEM_BLOCK_HEADER_SIZE);
   return buf;
 }
 
@@ -617,10 +532,8 @@ mem_free_func(void *ptr,             /*!< in, own: buffer to be freed */
               const char *file_name, /*!< in: file name where created */
               ulint line)            /*!< in: line where created */
 {
-  mem_heap_t *heap;
+  auto heap = (mem_heap_t *)((byte *)ptr - MEM_BLOCK_HEADER_SIZE);
 
-  heap = (mem_heap_t *)((byte *)ptr - MEM_BLOCK_HEADER_SIZE -
-                        MEM_FIELD_HEADER_SIZE);
   mem_heap_free_func(heap, file_name, line);
 }
 

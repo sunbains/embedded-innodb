@@ -371,14 +371,7 @@ void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
   block->magic_n = MEM_FREED_BLOCK_MAGIC_N;
 
   if (!srv_use_sys_malloc) {
-#ifdef UNIV_MEM_DEBUG
-    /* In the debug version we set the memory to a random
-    combination of hex 0xDE and 0xAD. */
-
-    mem_erase_buf((byte *)block, len);
-#else  /* UNIV_MEM_DEBUG */
     UNIV_MEM_ASSERT_AND_FREE(block, len);
-#endif /* UNIV_MEM_DEBUG */
   }
   if (type == MEM_HEAP_DYNAMIC || len < UNIV_PAGE_SIZE / 2) {
 
@@ -401,9 +394,7 @@ bool mem_heap_check(mem_heap_t *heap) {
 
   return (true);
 }
-#endif /* UNIV_DEBUG */
 
-#if defined UNIV_MEM_DEBUG || defined UNIV_DEBUG
 void mem_heap_validate_or_print(mem_heap_t *heap,
                                 byte *top __attribute__((unused)), bool print,
                                 bool *error, ulint *us_size, ulint *ph_size,
@@ -412,12 +403,6 @@ void mem_heap_validate_or_print(mem_heap_t *heap,
   ulint total_len = 0;
   ulint block_count = 0;
   ulint phys_len = 0;
-#ifdef UNIV_MEM_DEBUG
-  ulint len;
-  byte *field;
-  byte *user_field;
-  ulint check_field;
-#endif /* UNIV_MEM_DEBUG */
 
   /* Pessimistically, we set the parameters to error values */
   if (us_size != nullptr) {
@@ -456,83 +441,9 @@ void mem_heap_validate_or_print(mem_heap_t *heap,
       return;
     }
 
-#ifdef UNIV_MEM_DEBUG
-    /* We can trace the fields of the block only in the debug
-    version */
-    if (print) {
-      ib_logger(ib_stream, " Block %ld:", block_count);
-    }
-
-    field = (byte *)block + mem_block_get_start(block);
-
-    if (top && (field == top)) {
-
-      goto completed;
-    }
-
-    while (field < (byte *)block + mem_block_get_free(block)) {
-
-      /* Calculate the pointer to the storage
-      which was given to the user */
-
-      user_field = field + MEM_FIELD_HEADER_SIZE;
-
-      len = mem_field_header_get_len(user_field);
-
-      if (print) {
-        ut_print_buf(ib_stream, user_field, len);
-      }
-
-      total_len += len;
-      check_field = mem_field_header_get_check(user_field);
-
-      if (check_field != mem_field_trailer_get_check(user_field)) {
-        /* error */
-
-        ib_logger(ib_stream,
-                  "Error: block %lx mem"
-                  " field %lx len %lu\n"
-                  "header check field is"
-                  " %lx but trailer %lx\n",
-                  (ulint)block, (ulint)field, len, check_field,
-                  mem_field_trailer_get_check(user_field));
-
-        return;
-      }
-
-      /* Move to next field */
-      field = field + MEM_SPACE_NEEDED(len);
-
-      if (top && (field == top)) {
-
-        goto completed;
-      }
-    }
-
-    /* At the end check that we have arrived to the first free
-    position */
-
-    if (field != (byte *)block + mem_block_get_free(block)) {
-      /* error */
-
-      ib_logger(ib_stream,
-                "Error: block %lx end of"
-                " mem fields %lx\n"
-                "but block free at %lx\n",
-                (ulint)block, (ulint)field,
-                (ulint)((byte *)block + mem_block_get_free(block)));
-
-      return;
-    }
-
-#endif
-
     block = UT_LIST_GET_NEXT(list, block);
     block_count++;
   }
-#ifdef UNIV_MEM_DEBUG
-completed:
-#endif
   if (us_size != nullptr) {
     *us_size = total_len;
   }
@@ -583,7 +494,7 @@ bool mem_heap_validate(mem_heap_t *heap) {
 
   return (true);
 }
-#endif /* UNIV_MEM_DEBUG || UNIV_DEBUG */
+#endif /* UNIV_DEBUG */
 
 #ifdef UNIV_DEBUG
 void mem_heap_verify(const mem_heap_t *heap) {

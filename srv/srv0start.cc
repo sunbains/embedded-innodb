@@ -1071,10 +1071,6 @@ ib_err_t innobase_start_or_create() {
   ib_logger(ib_stream,
             "!!!!!!!! UNIV_LOG_LSN_DEBUG switched on !!!!!!!!!\n");
 #endif /* UNIV_LOG_LSN_DEBUG */
-#ifdef UNIV_MEM_DEBUG
-  ib_logger(ib_stream,
-            "!!!!!!!! UNIV_MEM_DEBUG switched on !!!!!!!!!\n");
-#endif
 
   if (likely(srv_use_sys_malloc)) {
     ib_logger(ib_stream, "The InnoDB memory heap is disabled\n");
