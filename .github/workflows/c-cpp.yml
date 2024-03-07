@@ -17,5 +17,4 @@ jobs:
       run: cmake -G "Unix Makefiles" .
     - name: make
       run: make
-  
     
