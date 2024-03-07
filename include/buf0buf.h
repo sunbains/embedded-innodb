@@ -33,7 +33,6 @@ Created 11/5/1995 Heikki Tuuri
 #include "sync0rw.h"
 
 struct fil_addr_t;
-typedef struct mtr_struct mtr_t;
 typedef struct ib_rbt_struct ib_rbt_t;
 
 /*** Returns a free block from the buf_pool. The block is taken off the

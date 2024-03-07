@@ -21,6 +21,8 @@ The dynamically allocated array
 Created 2/5/1996 Heikki Tuuri
 *******************************************************/
 
+#pragma once
+
 #include "innodb0types.h"
 #include "mem0mem.h"
 #include "ut0lst.h"

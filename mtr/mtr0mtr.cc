@@ -23,16 +23,12 @@ Created 11/26/1995 Heikki Tuuri
 
 #include "mtr0mtr.h"
 
-#ifdef UNIV_NONINL
-#include "mtr0mtr.ic"
-#endif
-
 #include "buf0buf.h"
 #include "log0log.h"
 #include "mtr0log.h"
 #include "page0types.h"
-
 #include "log0recv.h"
+
 /** Releases the item in the slot given.
 @param[in,out] mtr              Release slot in this mtr.
 @param[in] slot                 Slot to release. */
@@ -134,15 +130,13 @@ static void mtr_log_reserve_and_write(mtr_t *mtr, ulint recovery) {
 }
 
 void mtr_commit(mtr_t *mtr) {
-  bool write_log;
-
   ut_ad(mtr);
   ut_ad(mtr->magic_n == MTR_MAGIC_N);
   ut_ad(mtr->state == MTR_ACTIVE);
   ut_d(mtr->state = MTR_COMMITTING);
 
   /* This is a dirty read, for debugging. */
-  write_log = mtr->modifications && mtr->n_log_recs;
+  auto write_log = mtr->modifications && mtr->n_log_recs;
 
   if (write_log) {
     mtr_log_reserve_and_write(mtr, srv_force_recovery);
