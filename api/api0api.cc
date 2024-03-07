@@ -2326,8 +2326,8 @@ static ib_err_t ib_create_secondary_index(
   if (dict_index != nullptr && err == DB_SUCCESS) {
     /* We only support 32 bit table and index ids. Because
     we need to pack the table id into the index id. */
-    ut_a(table->id == 0);
-    ut_a(dict_index->id == 0);
+    ut_a((table->id & 0xFFFFFFFF00000000) == 0);
+    ut_a((dict_index->id & 0xFFFFFFFF00000000) == 0);
 
     *index_id = table->id;
     *index_id <<= 32;
