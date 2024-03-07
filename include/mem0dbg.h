@@ -41,23 +41,24 @@ the debug version), the physical size of the heap and the number of
 blocks in the heap. In case of error returns 0 as sizes and number
 of blocks. */
 void mem_heap_validate_or_print(
-    mem_heap_t *heap, /*!< in: memory heap */
-    byte *top,        /*!< in: calculate and validate only until
+  mem_heap_t *heap, /*!< in: memory heap */
+  byte *top,        /*!< in: calculate and validate only until
                       this top pointer in the heap is reached,
                       if this pointer is NULL, ignored */
-    bool print,       /*!< in: if true, prints the contents
+  bool print,       /*!< in: if true, prints the contents
                       of the heap; works only in
                       the debug version */
-    bool *error,      /*!< out: true if error */
-    ulint *us_size,   /*!< out: allocated memory
+  bool *error,      /*!< out: true if error */
+  ulint *us_size,   /*!< out: allocated memory
                       (for the user) in the heap,
                       if a NULL pointer is passed as this
                       argument, it is ignored; in the
                       non-debug version this is always -1 */
-    ulint *ph_size,   /*!< out: physical size of the heap,
+  ulint *ph_size,   /*!< out: physical size of the heap,
                       if a NULL pointer is passed as this
                       argument, it is ignored */
-    ulint *n_blocks); /*!< out: number of blocks in the heap,
+  ulint *n_blocks
+); /*!< out: number of blocks in the heap,
                    if a NULL pointer is passed as this
                    argument, it is ignored */
 
@@ -73,4 +74,4 @@ bool mem_heap_check(mem_heap_t *heap); /*!< in: memory heap */
 @return	true if ok */
 bool mem_validate();
 
-#endif  /* UNIV_DEBUG */
+#endif /* UNIV_DEBUG */

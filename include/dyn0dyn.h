@@ -78,7 +78,7 @@ dyn_block_t *dyn_array_add_block(dyn_array_t *arr);
 /** Gets the first block in a dyn array.
 @param[in,out] arr              Dynamic array.
 @return first block in the instance. */
-inline dyn_block_t * dyn_array_get_first_block(dyn_array_t *arr) {
+inline dyn_block_t *dyn_array_get_first_block(dyn_array_t *arr) {
   return arr;
 }
 
@@ -98,7 +98,7 @@ inline dyn_block_t *dyn_array_get_last_block(dyn_array_t *arr) {
 @param[in,out] arr             Dynamic array
 @param[in,out] block           Block in the dynamic array
 @return	pointer to next, nullptr if end of list */
-inline dyn_block_t * dyn_array_get_next_block(dyn_array_t *arr, dyn_block_t *block) {
+inline dyn_block_t *dyn_array_get_next_block(dyn_array_t *arr, dyn_block_t *block) {
   if (arr->heap == nullptr) {
 
     ut_ad(arr == block);
@@ -128,7 +128,7 @@ inline byte *dyn_block_get_data(dyn_block_t *block) {
 @param[in,out] arr              pointer to a memory buffer of size
                                 sizeof(dyn_array_t)
 @return	initialized dyn array */
-inline dyn_array_t * dyn_array_create(dyn_array_t *arr) {
+inline dyn_array_t *dyn_array_create(dyn_array_t *arr) {
   static_assert(DYN_ARRAY_DATA_SIZE < DYN_BLOCK_FULL_FLAG, "error DYN_ARRAY_DATA_SIZE >= DYN_BLOCK_FULL_FLAG");
 
   arr->heap = nullptr;
@@ -192,7 +192,7 @@ dyn_array_close.
 @param[in] size                 Size in bytes of the buffer; MUST be smaller
                                 than DYN_ARRAY_DATA_SIZE!
 @return	pointer to the buffer */
-inline byte * dyn_array_open(dyn_array_t *arr, ulint size) {
+inline byte *dyn_array_open(dyn_array_t *arr, ulint size) {
   ut_ad(size);
   ut_ad(size <= DYN_ARRAY_DATA_SIZE);
   ut_ad(arr->magic_n == DYN_BLOCK_MAGIC_N);

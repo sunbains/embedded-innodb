@@ -146,12 +146,13 @@ fields are read from the header. The object is inserted to the rseg
 list of the trx system object and a pointer is inserted in the rseg
 array in the trx system object.
 @return	own: rollback segment object */
-static trx_rseg_t *
-trx_rseg_mem_create(ib_recovery_t recovery, /*!< in: recovery flag */
-                    ulint id,               /*!< in: rollback segment id */
-                    ulint space,    /*!< in: space where the segment placed */
-                    ulint page_no, /*!< in: page number of the segment header */
-                    mtr_t *mtr)    /*!< in: mtr */
+static trx_rseg_t *trx_rseg_mem_create(
+  ib_recovery_t recovery, /*!< in: recovery flag */
+  ulint id,               /*!< in: rollback segment id */
+  ulint space,            /*!< in: space where the segment placed */
+  ulint page_no,          /*!< in: page number of the segment header */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   trx_rsegf_t *rseg_header;
   trx_ulogf_t *undo_log_hdr;
@@ -175,33 +176,26 @@ trx_rseg_mem_create(ib_recovery_t recovery, /*!< in: recovery flag */
 
   rseg_header = trx_rsegf_get_new(space, page_no, mtr);
 
-  rseg->max_size =
-      mtr_read_ulint(rseg_header + TRX_RSEG_MAX_SIZE, MLOG_4BYTES, mtr);
+  rseg->max_size = mtr_read_ulint(rseg_header + TRX_RSEG_MAX_SIZE, MLOG_4BYTES, mtr);
 
   /* Initialize the undo log lists according to the rseg header */
 
   sum_of_undo_sizes = trx_undo_lists_init(recovery, rseg);
 
-  rseg->curr_size =
-      mtr_read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, mtr) +
-      1 + sum_of_undo_sizes;
+  rseg->curr_size = mtr_read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, mtr) + 1 + sum_of_undo_sizes;
 
   len = flst_get_len(rseg_header + TRX_RSEG_HISTORY, mtr);
   if (len > 0) {
     trx_sys->rseg_history_len += len;
 
-    node_addr = trx_purge_get_log_from_hist(
-        flst_get_last(rseg_header + TRX_RSEG_HISTORY, mtr));
+    node_addr = trx_purge_get_log_from_hist(flst_get_last(rseg_header + TRX_RSEG_HISTORY, mtr));
     rseg->last_page_no = node_addr.page;
     rseg->last_offset = node_addr.boffset;
 
-    undo_log_hdr =
-        trx_undo_page_get(rseg->space, node_addr.page, mtr) +
-        node_addr.boffset;
+    undo_log_hdr = trx_undo_page_get(rseg->space, node_addr.page, mtr) + node_addr.boffset;
 
     rseg->last_trx_no = mtr_read_uint64(undo_log_hdr + TRX_UNDO_TRX_NO, mtr);
-    rseg->last_del_marks =
-        mtr_read_ulint(undo_log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES, mtr);
+    rseg->last_del_marks = mtr_read_ulint(undo_log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES, mtr);
   } else {
     rseg->last_page_no = FIL_NULL;
   }

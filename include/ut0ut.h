@@ -46,10 +46,10 @@ Created 1/20/1994 Heikki Tuuri
 typedef time_t ib_time_t;
 
 // FIXME: Use proper C++ streams
-#define ib_logger(s, f, ...)                                                   \
-  do {                                                                         \
-    ut_a(s != nullptr);                                                        \
-    std::fprintf(s, f __VA_OPT__(, ) __VA_ARGS__);                             \
+#define ib_logger(s, f, ...)                       \
+  do {                                             \
+    ut_a(s != nullptr);                            \
+    std::fprintf(s, f __VA_OPT__(, ) __VA_ARGS__); \
   } while (false)
 
 #if defined(HAVE_IB_PAUSE_INSTRUCTION)
@@ -67,14 +67,14 @@ to memory). */
 if cond becomes true.
 @param cond		in: condition to wait for; evaluated every 2 ms
 @param max_wait_us	in: maximum delay to wait, in microseconds */
-#define UT_WAIT_FOR(cond, max_wait_us)                                         \
-  do {                                                                         \
-    uint64_t start_us;                                                         \
-    start_us = ut_time_us(NULL);                                               \
-    while (!(cond) && ut_time_us(NULL) - start_us < (max_wait_us)) {           \
-                                                                               \
-      os_thread_sleep(2000 /* 2 ms */);                                        \
-    }                                                                          \
+#define UT_WAIT_FOR(cond, max_wait_us)                               \
+  do {                                                               \
+    uint64_t start_us;                                               \
+    start_us = ut_time_us(NULL);                                     \
+    while (!(cond) && ut_time_us(NULL) - start_us < (max_wait_us)) { \
+                                                                     \
+      os_thread_sleep(2000 /* 2 ms */);                              \
+    }                                                                \
   } while (0)
 
 /** Gets the high 32 bits in a ulint. That is makes a shift >> 32,
@@ -85,8 +85,10 @@ ulint ut_get_high32(ulint a); /*!< in: ulint */
 
 /** Calculates the minimum of two ulints.
 @return	minimum */
-ulint ut_min(ulint n1,  /*!< in: first number */
-             ulint n2); /*!< in: second number */
+ulint ut_min(
+  ulint n1, /*!< in: first number */
+  ulint n2
+); /*!< in: second number */
 
 /** Determines if a number is zero or a power of two.
 @param n	in: number
@@ -122,8 +124,7 @@ when m is a power of two.  In other words, rounds n up to m * k.
 /** Calculates fast the number rounded up to the nearest power of 2.
 @return        first power of 2 which is >= n */
 ulint ut_2_power_up(ulint n) /*!< in: number != 0 */
-    __attribute__((const));
-
+  __attribute__((const));
 
 /** Determine how many bytes (groups of 8 bits) are needed to
 store the given number of bits.
@@ -141,8 +142,10 @@ Upon successful completion, the value 0 is returned; otherwise the
 value -1 is returned and the global variable errno is set to indicate the
 error.
 @return	0 on success, -1 otherwise */
-int ut_usectime(ulint *sec, /*!< out: seconds since the Epoch */
-                ulint *ms); /*!< out: microseconds since the Epoch+*sec */
+int ut_usectime(
+  ulint *sec, /*!< out: seconds since the Epoch */
+  ulint *ms
+); /*!< out: microseconds since the Epoch+*sec */
 
 /** Returns the number of microseconds since epoch. Similar to
 time(3), the return value is also stored in *tloc, provided
@@ -158,8 +161,10 @@ ulint ut_time_ms(void);
 
 /** Returns the difference of two times in seconds.
 @return	time2 - time1 expressed in seconds */
-double ut_difftime(ib_time_t time2,  /*!< in: time */
-                   ib_time_t time1); /*!< in: time */
+double ut_difftime(
+  ib_time_t time2, /*!< in: time */
+  ib_time_t time1
+); /*!< in: time */
 
 /** Prints a timestamp to a file. */
 void ut_print_timestamp(ib_stream_t ib_stream); /*!< in: file where to print */
@@ -170,17 +175,20 @@ void ut_sprintf_timestamp(char *buf); /*!< in: buffer where to sprintf */
 /** Runs an idle loop on CPU. The argument gives the desired delay
 in microseconds on 100 MHz Pentium + Visual C++.
 @return	dummy value */
-ulint ut_delay(
-    ulint delay); /*!< in: delay in microseconds on 100 MHz Pentium */
+ulint ut_delay(ulint delay); /*!< in: delay in microseconds on 100 MHz Pentium */
 
 /** Prints the contents of a memory buffer in hex and ascii. */
-void ut_print_buf(ib_stream_t ib_stream, /*!< in: file where to print */
-                  const void *buf,       /*!< in: memory buffer */
-                  ulint len);            /*!< in: length of the buffer */
+void ut_print_buf(
+  ib_stream_t ib_stream, /*!< in: file where to print */
+  const void *buf,       /*!< in: memory buffer */
+  ulint len
+); /*!< in: length of the buffer */
 
 /** Outputs a NUL-terminated file name, quoted with apostrophes. */
-void ut_print_filename(ib_stream_t ib_stream, /*!< in: output stream */
-                       const char *name);     /*!< in: name to print */
+void ut_print_filename(
+  ib_stream_t ib_stream, /*!< in: output stream */
+  const char *name
+); /*!< in: name to print */
 
 /* Forward declaration of transaction handle */
 struct trx_struct;
@@ -189,19 +197,23 @@ struct trx_struct;
 If the string contains a slash '/', the string will be
 output as two identifiers separated by a period (.),
 as in SQL database_name.identifier. */
-void ut_print_name(ib_stream_t ib_stream,  /*!< in: output stream */
-                   struct trx_struct *trx, /*!< in: transaction */
-                   bool table_id,          /*!< in: true=print a table name,
+void ut_print_name(
+  ib_stream_t ib_stream,  /*!< in: output stream */
+  struct trx_struct *trx, /*!< in: transaction */
+  bool table_id,          /*!< in: true=print a table name,
                                             false=print other identifier */
-                   const char *name);      /*!< in: name to print */
+  const char *name
+); /*!< in: name to print */
 
 /** Outputs a fixed-length string, quoted as an SQL identifier.
 If the string contains a slash '/', the string will be
 output as two identifiers separated by a period (.),
 as in SQL database_name.identifier. */
-void ut_print_namel(ib_stream_t ib_stream, /*!< in: output stream */
-                    const char *name,      /*!< in: name to print */
-                    ulint namelen);        /*!< in: length of name */
+void ut_print_namel(
+  ib_stream_t ib_stream, /*!< in: output stream */
+  const char *name,      /*!< in: name to print */
+  ulint namelen
+); /*!< in: length of name */
 
 /** A wrapper for snprintf(3), formatted output conversion into
 a limited buffer. */
@@ -212,28 +224,33 @@ a limited buffer. */
 
 /** Calculates the minimum of two ulints.
 @return	minimum */
-inline ulint ut_min(ulint n1, /*!< in: first number */
-                    ulint n2) /*!< in: second number */
+inline ulint ut_min(
+  ulint n1, /*!< in: first number */
+  ulint n2
+) /*!< in: second number */
 {
   return ((n1 <= n2) ? n1 : n2);
 }
 
 /** Calculates the maximum of two ulints.
 @return	maximum */
-inline ulint ut_max(ulint n1, /*!< in: first number */
-                    ulint n2) /*!< in: second number */
+inline ulint ut_max(
+  ulint n1, /*!< in: first number */
+  ulint n2
+) /*!< in: second number */
 {
   return ((n1 <= n2) ? n2 : n1);
 }
 
 /** Calculates minimum of two ulint-pairs. */
-inline void
-ut_pair_min(ulint *a, /*!< out: more significant part of minimum */
-            ulint *b, /*!< out: less significant part of minimum */
-            ulint a1, /*!< in: more significant part of first pair */
-            ulint b1, /*!< in: less significant part of first pair */
-            ulint a2, /*!< in: more significant part of second pair */
-            ulint b2) /*!< in: less significant part of second pair */
+inline void ut_pair_min(
+  ulint *a, /*!< out: more significant part of minimum */
+  ulint *b, /*!< out: less significant part of minimum */
+  ulint a1, /*!< in: more significant part of first pair */
+  ulint b1, /*!< in: less significant part of first pair */
+  ulint a2, /*!< in: more significant part of second pair */
+  ulint b2
+) /*!< in: less significant part of second pair */
 {
   if (a1 == a2) {
     *a = a1;
@@ -249,8 +266,10 @@ ut_pair_min(ulint *a, /*!< out: more significant part of minimum */
 
 /** Compares two ulints.
 @return	1 if a > b, 0 if a == b, -1 if a < b */
-inline int ut_ulint_cmp(ulint a, /*!< in: ulint */
-                        ulint b) /*!< in: ulint */
+inline int ut_ulint_cmp(
+  ulint a, /*!< in: ulint */
+  ulint b
+) /*!< in: ulint */
 {
   if (a < b) {
     return (-1);
@@ -263,11 +282,12 @@ inline int ut_ulint_cmp(ulint a, /*!< in: ulint */
 
 /** Compares two pairs of ulints.
 @return	-1 if a < b, 0 if a == b, 1 if a > b */
-inline int
-ut_pair_cmp(ulint a1, /*!< in: more significant part of first pair */
-            ulint a2, /*!< in: less significant part of first pair */
-            ulint b1, /*!< in: more significant part of second pair */
-            ulint b2) /*!< in: less significant part of second pair */
+inline int ut_pair_cmp(
+  ulint a1, /*!< in: more significant part of first pair */
+  ulint a2, /*!< in: less significant part of first pair */
+  ulint b1, /*!< in: more significant part of second pair */
+  ulint b2
+) /*!< in: less significant part of second pair */
 {
   if (a1 > b1) {
     return (1);

@@ -42,7 +42,7 @@ struct mutex_t {
 
   /** Level in the global latching order */
   ulint level;
-#endif /* UNIV_SYNC_DEBUG */ 
+#endif /* UNIV_SYNC_DEBUG */
 
   /** File name where mutex created */
   const char *cfile_name;
@@ -85,5 +85,5 @@ struct mutex_t {
 
   /** 0=usual mutex, 1=rw_lock mutex */
   ulint mutex_type;
-#endif  /* UNIV_DEBUG */
+#endif /* UNIV_DEBUG */
 };

@@ -218,9 +218,10 @@ void os_file_var_init() {
 
 /** Returns a pointer to the nth slot in the aio array.
 @return	pointer to slot */
-static os_aio_slot_t *
-os_aio_array_get_nth_slot(os_aio_array_t *array, /*!< in: aio array */
-                          ulint index)           /*!< in: index of the slot */
+static os_aio_slot_t *os_aio_array_get_nth_slot(
+  os_aio_array_t *array, /*!< in: aio array */
+  ulint index
+) /*!< in: index of the slot */
 {
   ut_a(index < array->n_slots);
 
@@ -228,8 +229,7 @@ os_aio_array_get_nth_slot(os_aio_array_t *array, /*!< in: aio array */
 }
 
 /** Frees an aio wait array. */
-static void
-os_aio_array_free(os_aio_array_t *array) /*!< in, own: array to free */
+static void os_aio_array_free(os_aio_array_t *array) /*!< in, own: array to free */
 {
   os_mutex_free(array->mutex);
   os_event_free(array->not_full);
@@ -281,35 +281,52 @@ ulint os_file_get_last_error(bool report_all_errors) {
   if (report_all_errors || (err != ENOSPC && err != EEXIST)) {
 
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  Operating system error number %lu"
-              " in a file operation.\n",
-              (ulong)err);
+    ib_logger(
+      ib_stream,
+      "  Operating system error number %lu"
+      " in a file operation.\n",
+      (ulong)err
+    );
 
     if (err == ENOENT) {
-      ib_logger(ib_stream, "The error means the system"
-                           " cannot find the path specified.\n");
+      ib_logger(
+        ib_stream,
+        "The error means the system"
+        " cannot find the path specified.\n"
+      );
 
       if (srv_is_being_started) {
-        ib_logger(ib_stream, "If you are installing InnoDB,"
-                             " remember that you must create\n"
-                             "directories yourself, InnoDB"
-                             " does not create them.\n");
+        ib_logger(
+          ib_stream,
+          "If you are installing InnoDB,"
+          " remember that you must create\n"
+          "directories yourself, InnoDB"
+          " does not create them.\n"
+        );
       }
     } else if (err == EACCES) {
-      ib_logger(ib_stream, "The error means your application "
-                           "does not have the access rights to\n"
-                           "the directory.\n");
+      ib_logger(
+        ib_stream,
+        "The error means your application "
+        "does not have the access rights to\n"
+        "the directory.\n"
+      );
     } else {
       if (strerror((int)err) != nullptr) {
-        ib_logger(ib_stream,
-                  "Error number %lu"
-                  " means '%s'.\n",
-                  err, strerror((int)err));
+        ib_logger(
+          ib_stream,
+          "Error number %lu"
+          " means '%s'.\n",
+          err,
+          strerror((int)err)
+        );
       }
 
-      ib_logger(ib_stream, ""
-                           "Check InnoDB website for details\n");
+      ib_logger(
+        ib_stream,
+        ""
+        "Check InnoDB website for details\n"
+      );
     }
   }
 
@@ -331,9 +348,10 @@ Conditionally exits (calling exit(3)) based on should_exit value and the
 error type
 @return	true if we should retry the operation */
 static bool os_file_handle_error_cond_exit(
-    const char *name,      /*!< in: name of a file or nullptr */
-    const char *operation, /*!< in: operation */
-    bool should_exit)      /*!< in: call exit(3) if unknown error
+  const char *name,      /*!< in: name of a file or nullptr */
+  const char *operation, /*!< in: operation */
+  bool should_exit
+) /*!< in: call exit(3) if unknown error
                             and this parameter is true */
 {
   ulint err;
@@ -350,15 +368,20 @@ static bool os_file_handle_error_cond_exit(
 
     if (name) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream,
-                "  Encountered a problem with"
-                " file %s\n",
-                name);
+      ib_logger(
+        ib_stream,
+        "  Encountered a problem with"
+        " file %s\n",
+        name
+      );
     }
 
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  Disk is full. Try to clean the disk"
-                         " to free space.\n");
+    ib_logger(
+      ib_stream,
+      "  Disk is full. Try to clean the disk"
+      " to free space.\n"
+    );
 
     os_has_said_disk_full = true;
 
@@ -398,9 +421,10 @@ static bool os_file_handle_error_cond_exit(
 
 /** Does error handling when a file operation fails.
 @return	true if we should retry the operation */
-static bool
-os_file_handle_error(const char *name, /*!< in: name of a file or nullptr */
-                     const char *operation) /*!< in: operation */
+static bool os_file_handle_error(
+  const char *name, /*!< in: name of a file or nullptr */
+  const char *operation
+) /*!< in: operation */
 {
   /* exit in case of unknown error */
   return os_file_handle_error_cond_exit(name, operation, true);
@@ -409,8 +433,9 @@ os_file_handle_error(const char *name, /*!< in: name of a file or nullptr */
 /** Does error handling when a file operation fails.
 @return	true if we should retry the operation */
 static bool os_file_handle_error_no_exit(
-    const char *name,      /*!< in: name of a file or nullptr */
-    const char *operation) /*!< in: operation */
+  const char *name, /*!< in: name of a file or nullptr */
+  const char *operation
+) /*!< in: operation */
 {
   /* don't exit in case of unknown error */
   return os_file_handle_error_cond_exit(name, operation, false);
@@ -434,10 +459,13 @@ static int os_file_lock(int fd, const char *name) {
     ib_logger(ib_stream, "Unable to lock %s, error: %d\n", name, errno);
 
     if (errno == EAGAIN || errno == EACCES) {
-      ib_logger(ib_stream, "Check that you do not already have"
-                           " another instance of your application is\n"
-                           "using the same InnoDB data"
-                           " or log files.\n");
+      ib_logger(
+        ib_stream,
+        "Check that you do not already have"
+        " another instance of your application is\n"
+        "using the same InnoDB data"
+        " or log files.\n"
+      );
     }
 
     return -1;
@@ -467,10 +495,12 @@ FILE *os_file_create_tmpfile() {
 
   if (file == nullptr) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  Error: unable to create temporary file;"
-              " errno: %d\n",
-              errno);
+    ib_logger(
+      ib_stream,
+      "  Error: unable to create temporary file;"
+      " errno: %d\n",
+      errno
+    );
     if (fd >= 0) {
       close(fd);
     }
@@ -501,8 +531,7 @@ int os_file_closedir(os_file_dir_t dir) {
   return ret;
 }
 
-int os_file_readdir_next_file(const char *dirname, os_file_dir_t dir,
-                              os_file_stat_t *info) {
+int os_file_readdir_next_file(const char *dirname, os_file_dir_t dir, os_file_stat_t *info) {
   ulint len;
   struct dirent *ent;
   int ret;
@@ -520,8 +549,7 @@ next_file:
   ret = readdir_r(dir, (struct dirent *)dirent_buf, &ent);
 
   if (ret != 0) {
-    ib_logger(ib_stream, "cannot read directory %s, error %lu\n",
-              dirname, (ulong)ret);
+    ib_logger(ib_stream, "cannot read directory %s, error %lu\n", dirname, (ulong)ret);
 
     return -1;
   }
@@ -612,8 +640,7 @@ bool os_file_create_directory(const char *pathname, bool fail_if_exists) {
   return true;
 }
 
-os_file_t os_file_create_simple(const char *name, ulint create_mode,
-                                ulint access_type, bool *success) {
+os_file_t os_file_create_simple(const char *name, ulint create_mode, ulint access_type, bool *success) {
   os_file_t file;
   int create_flag;
   bool retry;
@@ -651,8 +678,7 @@ try_again:
   if (file == -1) {
     *success = false;
 
-    retry = os_file_handle_error(name, create_mode == OS_FILE_OPEN ? "open"
-                                                                   : "create");
+    retry = os_file_handle_error(name, create_mode == OS_FILE_OPEN ? "open" : "create");
     if (retry) {
       goto try_again;
     }
@@ -669,10 +695,7 @@ try_again:
   return file;
 }
 
-os_file_t os_file_create_simple_no_error_handling(const char *name,
-                                                  ulint create_mode,
-                                                  ulint access_type,
-                                                  bool *success) {
+os_file_t os_file_create_simple_no_error_handling(const char *name, ulint create_mode, ulint access_type, bool *success) {
   os_file_t file;
   int create_flag;
 
@@ -712,28 +735,33 @@ os_file_t os_file_create_simple_no_error_handling(const char *name,
   return file;
 }
 
-void os_file_set_nocache(int fd, const char *file_name,
-                         const char *operation_name) {
+void os_file_set_nocache(int fd, const char *file_name, const char *operation_name) {
 #if defined(O_DIRECT)
   if (fcntl(fd, F_SETFL, O_DIRECT) == -1) {
     int errno_save;
     errno_save = (int)errno;
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  Failed to set O_DIRECT "
-              "on file %s: %s: %s, continuing anyway\n",
-              file_name, operation_name, strerror(errno_save));
+    ib_logger(
+      ib_stream,
+      "  Failed to set O_DIRECT "
+      "on file %s: %s: %s, continuing anyway\n",
+      file_name,
+      operation_name,
+      strerror(errno_save)
+    );
     if (errno_save == EINVAL) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  O_DIRECT is known to result in "
-                           "'Invalid argument' on Linux on tmpfs.");
+      ib_logger(
+        ib_stream,
+        "  O_DIRECT is known to result in "
+        "'Invalid argument' on Linux on tmpfs."
+      );
     }
   }
 #endif /* O_DIRECT */
 }
 
-os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose,
-                         ulint type, bool *success) {
+os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, ulint type, bool *success) {
   os_file_t file;
   int create_flag;
   bool retry;
@@ -742,8 +770,7 @@ os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose,
 try_again:
   ut_a(name);
 
-  if (create_mode == OS_FILE_OPEN || create_mode == OS_FILE_OPEN_RAW ||
-      create_mode == OS_FILE_OPEN_RETRY) {
+  if (create_mode == OS_FILE_OPEN || create_mode == OS_FILE_OPEN_RAW || create_mode == OS_FILE_OPEN_RETRY) {
     mode_str = "OPEN";
     create_flag = O_RDWR;
   } else if (create_mode == OS_FILE_CREATE) {
@@ -779,11 +806,9 @@ try_again:
     be critical to the whole instance. Do not crash the server in
     case of unknown errors. */
     if (srv_file_per_table) {
-      retry = os_file_handle_error_no_exit(
-          name, create_mode == OS_FILE_CREATE ? "create" : "open");
+      retry = os_file_handle_error_no_exit(name, create_mode == OS_FILE_CREATE ? "create" : "open");
     } else {
-      retry = os_file_handle_error(
-          name, create_mode == OS_FILE_CREATE ? "create" : "open");
+      retry = os_file_handle_error(name, create_mode == OS_FILE_CREATE ? "create" : "open");
     }
 
     if (retry) {
@@ -896,16 +921,14 @@ int64_t os_file_get_size_as_iblonglong(os_file_t file) {
   return (((int64_t)size_high) << 32) + (int64_t)size;
 }
 
-bool os_file_set_size(const char *name, os_file_t file, ulint size,
-                      ulint size_high) {
+bool os_file_set_size(const char *name, os_file_t file, ulint size, ulint size_high) {
   ut_a(size == (size & 0xFFFFFFFF));
 
   off_t current_size{};
   off_t desired_size = (off_t)size + (((off_t)size_high) << 32);
 
   /* Write up to 1 megabyte at a time. */
-  auto buf_size =
-      ut_min(64, (ulint)(desired_size / UNIV_PAGE_SIZE)) * UNIV_PAGE_SIZE;
+  auto buf_size = ut_min(64, (ulint)(desired_size / UNIV_PAGE_SIZE)) * UNIV_PAGE_SIZE;
   auto buf2 = static_cast<byte *>(ut_malloc(buf_size + UNIV_PAGE_SIZE));
 
   /* Align the buffer for possible raw i/o */
@@ -929,8 +952,7 @@ bool os_file_set_size(const char *name, os_file_t file, ulint size,
       n_bytes = buf_size;
     }
 
-    ret = os_file_write(name, file, buf, (ulint)(current_size & 0xFFFFFFFF),
-                        (ulint)(current_size >> 32), n_bytes);
+    ret = os_file_write(name, file, buf, (ulint)(current_size & 0xFFFFFFFF), (ulint)(current_size >> 32), n_bytes);
 
     if (!ret) {
       ut_free(buf2);
@@ -938,11 +960,9 @@ bool os_file_set_size(const char *name, os_file_t file, ulint size,
     }
 
     /* Print about progress for each 100 MB written */
-    if ((off_t)(current_size + n_bytes) / (off_t)(100 * 1024 * 1024) !=
-        current_size / (off_t)(100 * 1024 * 1024)) {
+    if ((off_t)(current_size + n_bytes) / (off_t)(100 * 1024 * 1024) != current_size / (off_t)(100 * 1024 * 1024)) {
 
-      ib_logger(ib_stream, " %lu00",
-                (ulong)((current_size + n_bytes) / (off_t)(100 * 1024 * 1024)));
+      ib_logger(ib_stream, " %lu00", (ulong)((current_size + n_bytes) / (off_t)(100 * 1024 * 1024)));
     }
 
     current_size += n_bytes;
@@ -1047,8 +1067,7 @@ bool os_file_flush(os_file_t file) {
 
   ut_print_timestamp(ib_stream);
 
-  ib_logger(ib_stream,
-            "  Error: the OS said file flush did not succeed\n");
+  ib_logger(ib_stream, "  Error: the OS said file flush did not succeed\n");
 
   os_file_handle_error(nullptr, "flush");
 
@@ -1061,12 +1080,14 @@ bool os_file_flush(os_file_t file) {
 
 /** Does a synchronous read operation in Posix.
 @return	number of bytes read, -1 if error */
-static ssize_t os_file_pread(os_file_t file, /*!< in: handle to a file */
-                             void *buf,      /*!< in: buffer where to read */
-                             ulint n,        /*!< in: number of bytes to read */
-                             ulint offset, /*!< in: least significant 32 bits of
+static ssize_t os_file_pread(
+  os_file_t file, /*!< in: handle to a file */
+  void *buf,      /*!< in: buffer where to read */
+  ulint n,        /*!< in: number of bytes to read */
+  ulint offset,   /*!< in: least significant 32 bits of
                                            file offset from where to read */
-                             ulint offset_high) /*!< in: most significant 32
+  ulint offset_high
+) /*!< in: most significant 32
                                            bits of offset */
 {
   off_t offs;
@@ -1107,13 +1128,14 @@ static ssize_t os_file_pread(os_file_t file, /*!< in: handle to a file */
 
 /** Does a synchronous write operation in Posix.
 @return	number of bytes written, -1 if error */
-static ssize_t
-os_file_pwrite(os_file_t file,    /*!< in: handle to a file */
-               const void *buf,   /*!< in: buffer from where to write */
-               ulint n,           /*!< in: number of bytes to write */
-               ulint offset,      /*!< in: least significant 32 bits of file
+static ssize_t os_file_pwrite(
+  os_file_t file,  /*!< in: handle to a file */
+  const void *buf, /*!< in: buffer from where to write */
+  ulint n,         /*!< in: number of bytes to write */
+  ulint offset,    /*!< in: least significant 32 bits of file
                                   offset where to write */
-               ulint offset_high) /*!< in: most significant 32 bits of
+  ulint offset_high
+) /*!< in: most significant 32 bits of
                              offset */
 {
   ssize_t ret;
@@ -1130,8 +1152,11 @@ os_file_pwrite(os_file_t file,    /*!< in: handle to a file */
     offs = (off_t)offset;
 
     if (offset_high > 0) {
-      ib_logger(ib_stream, "Error: file write"
-                           " at offset > 4 GB\n");
+      ib_logger(
+        ib_stream,
+        "Error: file write"
+        " at offset > 4 GB\n"
+      );
     }
   }
 
@@ -1150,9 +1175,7 @@ os_file_pwrite(os_file_t file,    /*!< in: handle to a file */
   os_mutex_exit(os_file_count_mutex);
 
 #ifdef UNIV_DO_FLUSH
-  if (srv_unix_file_flush_method != SRV_UNIX_LITTLESYNC &&
-      srv_unix_file_flush_method != SRV_UNIX_NOSYNC &&
-      !os_do_not_call_flush_at_each_write) {
+  if (srv_unix_file_flush_method != SRV_UNIX_LITTLESYNC && srv_unix_file_flush_method != SRV_UNIX_NOSYNC && !os_do_not_call_flush_at_each_write) {
 
     /* Always do fsync to reduce the probability that when
     the OS crashes, a database page is only partially
@@ -1165,8 +1188,7 @@ os_file_pwrite(os_file_t file,    /*!< in: handle to a file */
   return ret;
 }
 
-bool os_file_read(os_file_t file, void *buf, ulint offset, ulint offset_high,
-                  ulint n) {
+bool os_file_read(os_file_t file, void *buf, ulint offset, ulint offset_high, ulint n) {
   bool retry;
   ssize_t ret;
 
@@ -1180,28 +1202,34 @@ try_again:
     return true;
   }
 
-  ib_logger(ib_stream,
-            "Error: tried to read %lu bytes at offset %lu %lu.\n"
-            "Was only able to read %ld.\n",
-            (ulong)n, (ulong)offset_high, (ulong)offset, (long)ret);
+  ib_logger(
+    ib_stream,
+    "Error: tried to read %lu bytes at offset %lu %lu.\n"
+    "Was only able to read %ld.\n",
+    (ulong)n,
+    (ulong)offset_high,
+    (ulong)offset,
+    (long)ret
+  );
   retry = os_file_handle_error(nullptr, "read");
 
   if (retry) {
     goto try_again;
   }
 
-  ib_logger(ib_stream,
-            "Fatal error: cannot read from file."
-            " OS error number %lu.\n",
-            (ulong)errno);
+  ib_logger(
+    ib_stream,
+    "Fatal error: cannot read from file."
+    " OS error number %lu.\n",
+    (ulong)errno
+  );
 
   ut_error;
 
   return false;
 }
 
-bool os_file_read_no_error_handling(os_file_t file, void *buf, ulint offset,
-                                    ulint offset_high, ulint n) {
+bool os_file_read_no_error_handling(os_file_t file, void *buf, ulint offset, ulint offset_high, ulint n) {
   bool retry;
   ssize_t ret;
 
@@ -1235,8 +1263,7 @@ void os_file_read_string(FILE *file, char *str, ulint size) {
   str[flen] = '\0';
 }
 
-bool os_file_write(const char *name, os_file_t file, const void *buf,
-                   ulint offset, ulint offset_high, ulint n) {
+bool os_file_write(const char *name, os_file_t file, const void *buf, ulint offset, ulint offset_high, ulint n) {
   auto ret = os_file_pwrite(file, buf, n, offset, offset_high);
 
   if ((ulint)ret == n) {
@@ -1246,24 +1273,33 @@ bool os_file_write(const char *name, os_file_t file, const void *buf,
   if (!os_has_said_disk_full) {
     ut_print_timestamp(ib_stream);
 
-    ib_logger(ib_stream,
-              "  Error: Write to file %s failed"
-              " at offset %lu %lu.\n"
-              "%lu bytes should have been written,"
-              " only %ld were written.\n"
-              "Operating system error number %lu.\n"
-              "Check that your OS and file system"
-              " support files of this size.\n"
-              "Check also that the disk is not full"
-              " or a disk quota exceeded.\n",
-              name, offset_high, offset, n, (long int)ret, (ulint)errno);
+    ib_logger(
+      ib_stream,
+      "  Error: Write to file %s failed"
+      " at offset %lu %lu.\n"
+      "%lu bytes should have been written,"
+      " only %ld were written.\n"
+      "Operating system error number %lu.\n"
+      "Check that your OS and file system"
+      " support files of this size.\n"
+      "Check also that the disk is not full"
+      " or a disk quota exceeded.\n",
+      name,
+      offset_high,
+      offset,
+      n,
+      (long int)ret,
+      (ulint)errno
+    );
     if (strerror(errno) != nullptr) {
-      ib_logger(ib_stream, "Error number %lu means '%s'.\n",
-                (ulint)errno, strerror(errno));
+      ib_logger(ib_stream, "Error number %lu means '%s'.\n", (ulint)errno, strerror(errno));
     }
 
-    ib_logger(ib_stream, ""
-                         "Check InnoDB website for details\n");
+    ib_logger(
+      ib_stream,
+      ""
+      "Check InnoDB website for details\n"
+    );
 
     os_has_said_disk_full = true;
   }
@@ -1396,8 +1432,7 @@ bool os_file_create_subdirs_if_needed(const char *path) {
   bool subdir_exists;
   auto subdir = os_file_dirname(path);
 
-  if (strlen(subdir) == 1 &&
-      (*subdir == SRV_PATH_SEPARATOR || *subdir == '.')) {
+  if (strlen(subdir) == 1 && (*subdir == SRV_PATH_SEPARATOR || *subdir == '.')) {
     /* subdir is root or cwd, nothing to do */
     mem_free(subdir);
 
@@ -1425,9 +1460,10 @@ bool os_file_create_subdirs_if_needed(const char *path) {
 /** Creates an aio wait array.
 @return	own: aio array */
 static os_aio_array_t *os_aio_array_create(
-    ulint n,          /*!< in: maximum number of pending aio operations
+  ulint n, /*!< in: maximum number of pending aio operations
                       allowed; n must be divisible by n_segments */
-    ulint n_segments) /*!< in: number of segments in the aio array */
+  ulint n_segments
+) /*!< in: number of segments in the aio array */
 {
   ut_a(n > 0);
   ut_a(n_segments > 0);
@@ -1443,8 +1479,7 @@ static os_aio_array_t *os_aio_array_create(
   array->n_slots = n;
   array->n_segments = n_segments;
   array->n_reserved = 0;
-  array->slots =
-      static_cast<os_aio_slot_t *>(ut_malloc(n * sizeof(os_aio_slot_t)));
+  array->slots = static_cast<os_aio_slot_t *>(ut_malloc(n * sizeof(os_aio_slot_t)));
 
   for (ulint i = 0; i < n; i++) {
     auto slot = os_aio_array_get_nth_slot(array, i);
@@ -1456,8 +1491,7 @@ static os_aio_array_t *os_aio_array_create(
   return array;
 }
 
-void os_aio_init(ulint n_per_seg, ulint n_read_segs, ulint n_write_segs,
-                 ulint n_slots_sync) {
+void os_aio_init(ulint n_per_seg, ulint n_read_segs, ulint n_write_segs, ulint n_slots_sync) {
   ulint n_segments = 2 + n_read_segs + n_write_segs;
 
   ut_ad(n_segments >= 4);
@@ -1484,8 +1518,7 @@ void os_aio_init(ulint n_per_seg, ulint n_read_segs, ulint n_write_segs,
     srv_io_thread_function[i] = "read thread";
   }
 
-  os_aio_write_array =
-      os_aio_array_create(n_write_segs * n_per_seg, n_write_segs);
+  os_aio_write_array = os_aio_array_create(n_write_segs * n_per_seg, n_write_segs);
   for (ulint i = 2 + n_read_segs; i < n_segments; i++) {
     ut_a(i < SRV_MAX_N_IO_THREADS);
     srv_io_thread_function[i] = "write thread";
@@ -1497,8 +1530,7 @@ void os_aio_init(ulint n_per_seg, ulint n_read_segs, ulint n_write_segs,
 
   os_aio_validate();
 
-  os_aio_segment_wait_events =
-      static_cast<os_event_t *>(ut_malloc(n_segments * sizeof(void *)));
+  os_aio_segment_wait_events = static_cast<os_event_t *>(ut_malloc(n_segments * sizeof(void *)));
 
   for (ulint i = 0; i < n_segments; i++) {
     os_aio_segment_wait_events[i] = os_event_create(nullptr);
@@ -1529,8 +1561,9 @@ void os_aio_wait_until_no_pending_writes() {
 @return segment number (which is the number used by, for example,
 i/o-handler threads) */
 static ulint os_aio_get_segment_no_from_slot(
-    os_aio_array_t *array, /*!< in: aio wait array */
-    os_aio_slot_t *slot)   /*!< in: slot in this array */
+  os_aio_array_t *array, /*!< in: aio wait array */
+  os_aio_slot_t *slot
+) /*!< in: slot in this array */
 {
   ulint segment;
   ulint seg_len;
@@ -1558,8 +1591,9 @@ static ulint os_aio_get_segment_no_from_slot(
 /** Calculates local segment number and aio array from global segment number.
 @return	local segment number within the aio array */
 static ulint os_aio_get_array_and_local_segment(
-    os_aio_array_t **array, /*!< out: aio wait array */
-    ulint global_segment)   /*!< in: global segment number */
+  os_aio_array_t **array, /*!< out: aio wait array */
+  ulint global_segment
+) /*!< in: global segment number */
 {
   ulint segment;
 
@@ -1590,22 +1624,23 @@ static ulint os_aio_get_array_and_local_segment(
 not_full-event becomes signaled.
 @return	pointer to slot */
 static os_aio_slot_t *os_aio_array_reserve_slot(
-    ulint type,            /*!< in: OS_FILE_READ or OS_FILE_WRITE */
-    os_aio_array_t *array, /*!< in: aio array */
-    fil_node_t *message1,  /*!< in: message to be passed along with
+  ulint type,            /*!< in: OS_FILE_READ or OS_FILE_WRITE */
+  os_aio_array_t *array, /*!< in: aio array */
+  fil_node_t *message1,  /*!< in: message to be passed along with
                           the aio operation */
-    void *message2,        /*!< in: message to be passed along with
+  void *message2,        /*!< in: message to be passed along with
                           the aio operation */
-    os_file_t file,        /*!< in: file handle */
-    const char *name,      /*!< in: name of the file or path as a
+  os_file_t file,        /*!< in: file handle */
+  const char *name,      /*!< in: name of the file or path as a
                            null-terminated string */
-    void *buf,             /*!< in: buffer where to read or from which
+  void *buf,             /*!< in: buffer where to read or from which
                            to write */
-    ulint offset,          /*!< in: least significant 32 bits of file
+  ulint offset,          /*!< in: least significant 32 bits of file
                            offset */
-    ulint offset_high,     /*!< in: most significant 32 bits of
+  ulint offset_high,     /*!< in: most significant 32 bits of
                       offset */
-    ulint len)             /*!< in: length of the block to read or write */
+  ulint len
+) /*!< in: length of the block to read or write */
 {
   os_aio_slot_t *slot;
   ulint i;
@@ -1687,9 +1722,10 @@ found:
 }
 
 /** Frees a slot in the aio array. */
-static void
-os_aio_array_free_slot(os_aio_array_t *array, /*!< in: aio array */
-                       os_aio_slot_t *slot)   /*!< in: pointer to slot */
+static void os_aio_array_free_slot(
+  os_aio_array_t *array, /*!< in: aio array */
+  os_aio_slot_t *slot
+) /*!< in: pointer to slot */
 {
   ut_ad(array);
   ut_ad(slot);
@@ -1714,8 +1750,7 @@ os_aio_array_free_slot(os_aio_array_t *array, /*!< in: aio array */
 }
 
 /** Wakes up a simulated aio i/o-handler thread if it has something to do. */
-static void os_aio_simulated_wake_handler_thread(
-    ulint global_segment) /*!< in: the number of the segment in the aio
+static void os_aio_simulated_wake_handler_thread(ulint global_segment) /*!< in: the number of the segment in the aio
                           arrays */
 {
   os_aio_array_t *array;
@@ -1771,9 +1806,10 @@ void os_aio_simulated_wake_handler_threads(void) {
 
 void os_aio_simulated_put_read_threads_to_sleep() {}
 
-bool os_aio(ulint type, ulint mode, const char *name, os_file_t file, void *buf,
-            ulint offset, ulint offset_high, ulint n, fil_node_t *message1,
-            void *message2) {
+bool os_aio(
+  ulint type, ulint mode, const char *name, os_file_t file, void *buf, ulint offset, ulint offset_high, ulint n,
+  fil_node_t *message1, void *message2
+) {
   os_aio_array_t *array;
   os_aio_slot_t *slot;
   ulint err = 0;
@@ -1824,20 +1860,17 @@ try_again:
     ut_error;
   }
 
-  slot = os_aio_array_reserve_slot(type, array, message1, message2, file, name,
-                                   buf, offset, offset_high, n);
+  slot = os_aio_array_reserve_slot(type, array, message1, message2, file, name, buf, offset, offset_high, n);
   if (type == OS_FILE_READ) {
     if (!os_aio_use_native_aio) {
       if (!wake_later) {
-        os_aio_simulated_wake_handler_thread(
-            os_aio_get_segment_no_from_slot(array, slot));
+        os_aio_simulated_wake_handler_thread(os_aio_get_segment_no_from_slot(array, slot));
       }
     }
   } else if (type == OS_FILE_WRITE) {
     if (!os_aio_use_native_aio) {
       if (!wake_later) {
-        os_aio_simulated_wake_handler_thread(
-            os_aio_get_segment_no_from_slot(array, slot));
+        os_aio_simulated_wake_handler_thread(os_aio_get_segment_no_from_slot(array, slot));
       }
     }
   } else {
@@ -1851,8 +1884,7 @@ try_again:
 
   os_aio_array_free_slot(array, slot);
 
-  retry = os_file_handle_error(name,
-                               type == OS_FILE_READ ? "aio read" : "aio write");
+  retry = os_file_handle_error(name, type == OS_FILE_READ ? "aio read" : "aio write");
   if (retry) {
 
     goto try_again;
@@ -1861,8 +1893,7 @@ try_again:
   return false;
 }
 
-bool os_aio_simulated_handle(ulint global_segment, fil_node_t **message1,
-                             void **message2, ulint *type) {
+bool os_aio_simulated_handle(ulint global_segment, fil_node_t **message1, void **message2, ulint *type) {
   os_aio_array_t *array;
   ulint segment;
   os_aio_slot_t *slot;
@@ -1917,10 +1948,12 @@ restart:
     if (slot->reserved && slot->io_already_done) {
 
       if (os_aio_print_debug) {
-        ib_logger(ib_stream,
-                  "i/o for slot %lu"
-                  " already done, returning\n",
-                  (ulong)i);
+        ib_logger(
+          ib_stream,
+          "i/o for slot %lu"
+          " already done, returning\n",
+          (ulong)i
+        );
       }
 
       ret = true;
@@ -1944,8 +1977,7 @@ restart:
     if (slot->reserved) {
       age = (ulint)difftime(time(nullptr), slot->reservation_time);
 
-      if ((age >= 2 && age > biggest_age) ||
-          (age >= 2 && age == biggest_age && slot->offset < lowest_offset)) {
+      if ((age >= 2 && age > biggest_age) || (age >= 2 && age == biggest_age && slot->offset < lowest_offset)) {
 
         /* Found an i/o request */
         consecutive_ios[0] = slot;
@@ -1998,8 +2030,7 @@ consecutive_loop:
     if (slot2->reserved && slot2 != slot &&
         slot2->offset == slot->offset + slot->len
         /* check that sum does not wrap over */
-        && slot->offset + slot->len > slot->offset &&
-        slot2->offset_high == slot->offset_high && slot2->type == slot->type &&
+        && slot->offset + slot->len > slot->offset && slot2->offset_high == slot->offset_high && slot2->type == slot->type &&
         slot2->file == slot->file) {
 
       /* Found a consecutive i/o request */
@@ -2055,8 +2086,7 @@ consecutive_loop:
 
     for (i = 0; i < n_consecutive; i++) {
 
-      memcpy(combined_buf + offs, consecutive_ios[i]->buf,
-             consecutive_ios[i]->len);
+      memcpy(combined_buf + offs, consecutive_ios[i]->buf, consecutive_ios[i]->len);
       offs += consecutive_ios[i]->len;
     }
   }
@@ -2064,20 +2094,22 @@ consecutive_loop:
   os_set_io_thread_op_info(global_segment, "doing file i/o");
 
   if (os_aio_print_debug) {
-    ib_logger(ib_stream,
-              "doing i/o of type %lu at offset %lu %lu,"
-              " length %lu\n",
-              (ulong)slot->type, (ulong)slot->offset_high, (ulong)slot->offset,
-              (ulong)total_len);
+    ib_logger(
+      ib_stream,
+      "doing i/o of type %lu at offset %lu %lu,"
+      " length %lu\n",
+      (ulong)slot->type,
+      (ulong)slot->offset_high,
+      (ulong)slot->offset,
+      (ulong)total_len
+    );
   }
 
   /* Do the i/o with ordinary, synchronous i/o functions: */
   if (slot->type == OS_FILE_WRITE) {
-    ret = os_file_write(slot->name, slot->file, combined_buf, slot->offset,
-                        slot->offset_high, total_len);
+    ret = os_file_write(slot->name, slot->file, combined_buf, slot->offset, slot->offset_high, total_len);
   } else {
-    ret = os_file_read(slot->file, combined_buf, slot->offset,
-                       slot->offset_high, total_len);
+    ret = os_file_read(slot->file, combined_buf, slot->offset, slot->offset_high, total_len);
   }
 
   ut_a(ret);
@@ -2089,8 +2121,7 @@ consecutive_loop:
 
     for (i = 0; i < n_consecutive; i++) {
 
-      memcpy(consecutive_ios[i]->buf, combined_buf + offs,
-             consecutive_ios[i]->len);
+      memcpy(consecutive_ios[i]->buf, combined_buf + offs, consecutive_ios[i]->len);
       offs += consecutive_ios[i]->len;
     }
   }
@@ -2142,10 +2173,12 @@ recommended_sleep:
   os_event_wait(os_aio_segment_wait_events[global_segment]);
 
   if (os_aio_print_debug) {
-    ib_logger(ib_stream,
-              "i/o handler thread for i/o"
-              " segment %lu wakes up\n",
-              (ulong)global_segment);
+    ib_logger(
+      ib_stream,
+      "i/o handler thread for i/o"
+      " segment %lu wakes up\n",
+      (ulong)global_segment
+    );
   }
 
   goto restart;
@@ -2153,8 +2186,7 @@ recommended_sleep:
 
 /** Validates the consistency of an aio array.
 @return	true if ok */
-static bool
-os_aio_array_validate(os_aio_array_t *array) /*!< in: aio wait array */
+static bool os_aio_array_validate(os_aio_array_t *array) /*!< in: aio wait array */
 {
   os_aio_slot_t *slot;
   ulint n_reserved = 0;
@@ -2203,8 +2235,7 @@ void os_aio_print(ib_stream_t ib_stream) {
   ulint i;
 
   for (i = 0; i < srv_n_file_io_threads; i++) {
-    ib_logger(ib_stream, "I/O thread %lu state: %s (%s)", (ulong)i,
-              srv_io_thread_op_info[i], srv_io_thread_function[i]);
+    ib_logger(ib_stream, "I/O thread %lu state: %s (%s)", (ulong)i, srv_io_thread_op_info[i], srv_io_thread_function[i]);
 
     if (os_aio_segment_wait_events[i]->is_set) {
       ib_logger(ib_stream, " ev set");
@@ -2274,33 +2305,38 @@ loop:
   current_time = time(nullptr);
   time_elapsed = 0.001 + difftime(current_time, os_last_printout);
 
-  ib_logger(ib_stream,
-            "Pending flushes (fsync) log: %lu; buffer pool: %lu\n"
-            "%lu OS file reads, %lu OS file writes, %lu OS fsyncs\n",
-            (ulong)fil_n_pending_log_flushes,
-            (ulong)fil_n_pending_tablespace_flushes, (ulong)os_n_file_reads,
-            (ulong)os_n_file_writes, (ulong)os_n_fsyncs);
+  ib_logger(
+    ib_stream,
+    "Pending flushes (fsync) log: %lu; buffer pool: %lu\n"
+    "%lu OS file reads, %lu OS file writes, %lu OS fsyncs\n",
+    (ulong)fil_n_pending_log_flushes,
+    (ulong)fil_n_pending_tablespace_flushes,
+    (ulong)os_n_file_reads,
+    (ulong)os_n_file_writes,
+    (ulong)os_n_fsyncs
+  );
 
   if (os_file_n_pending_preads != 0 || os_file_n_pending_pwrites != 0) {
-    ib_logger(ib_stream, "%lu pending preads, %lu pending pwrites\n",
-              (ulong)os_file_n_pending_preads,
-              (ulong)os_file_n_pending_pwrites);
+    ib_logger(
+      ib_stream, "%lu pending preads, %lu pending pwrites\n", (ulong)os_file_n_pending_preads, (ulong)os_file_n_pending_pwrites
+    );
   }
 
   if (os_n_file_reads == os_n_file_reads_old) {
     avg_bytes_read = 0.0;
   } else {
-    avg_bytes_read = (double)os_bytes_read_since_printout /
-                     (os_n_file_reads - os_n_file_reads_old);
+    avg_bytes_read = (double)os_bytes_read_since_printout / (os_n_file_reads - os_n_file_reads_old);
   }
 
-  ib_logger(ib_stream,
-            "%.2f reads/s, %lu avg bytes/read,"
-            " %.2f writes/s, %.2f fsyncs/s\n",
-            (os_n_file_reads - os_n_file_reads_old) / time_elapsed,
-            (ulong)avg_bytes_read,
-            (os_n_file_writes - os_n_file_writes_old) / time_elapsed,
-            (os_n_fsyncs - os_n_fsyncs_old) / time_elapsed);
+  ib_logger(
+    ib_stream,
+    "%.2f reads/s, %lu avg bytes/read,"
+    " %.2f writes/s, %.2f fsyncs/s\n",
+    (os_n_file_reads - os_n_file_reads_old) / time_elapsed,
+    (ulong)avg_bytes_read,
+    (os_n_file_writes - os_n_file_writes_old) / time_elapsed,
+    (os_n_fsyncs - os_n_fsyncs_old) / time_elapsed
+  );
 
   os_n_file_reads_old = os_n_file_reads;
   os_n_file_writes_old = os_n_file_writes;

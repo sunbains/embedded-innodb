@@ -29,26 +29,26 @@ Created 02/03/2009 Sunny Bains
 /** Create a prebuilt struct for a user table handle.
 @return	own: a prebuilt struct */
 
-row_prebuilt_t *
-row_prebuilt_create(dict_table_t *table); /*!< in: Innobase table handle */
+row_prebuilt_t *row_prebuilt_create(dict_table_t *table); /*!< in: Innobase table handle */
 
 /** Free a prebuilt struct for a user table handle. */
 
 void row_prebuilt_free(
-    row_prebuilt_t *prebuilt, /*!< in, own: prebuilt struct */
-    bool dict_locked);        /*!< in: true if dict was locked */
+  row_prebuilt_t *prebuilt, /*!< in, own: prebuilt struct */
+  bool dict_locked
+); /*!< in: true if dict was locked */
 
 /** Reset a prebuilt struct for a user table handle. */
 
-void row_prebuilt_reset(
-    row_prebuilt_t *prebuilt); /*!< in/out: prebuilt struct */
+void row_prebuilt_reset(row_prebuilt_t *prebuilt); /*!< in/out: prebuilt struct */
 
 /** Updates the transaction pointers in query graphs stored in the prebuilt
 struct. */
 
 void row_prebuilt_update_trx(
-    row_prebuilt_t *prebuilt, /*!< in/out: prebuilt struct handle */
-    trx_t *trx);              /*!< in: transaction handle */
+  row_prebuilt_t *prebuilt, /*!< in/out: prebuilt struct handle */
+  trx_t *trx
+); /*!< in: transaction handle */
 
 #define FETCH_CACHE_SIZE 16
 /* After fetching this many rows, we start caching them in fetch_cache */

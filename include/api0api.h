@@ -53,9 +53,9 @@ ib_err_t ib_cfg_shutdown();
 
 extern int srv_panic_status;
 
-#define IB_CHECK_PANIC()                                                       \
-  do {                                                                         \
-    if (srv_panic_status) {                                                    \
-      return DB_PANIC;                                                         \
-    }                                                                          \
+#define IB_CHECK_PANIC()    \
+  do {                      \
+    if (srv_panic_status) { \
+      return DB_PANIC;      \
+    }                       \
   } while (0)

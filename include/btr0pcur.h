@@ -37,7 +37,7 @@ Created 2/23/1996 Heikki Tuuri
 /* Relative positions for a stored cursor position */
 constexpr ulint BTR_PCUR_ON = 1;
 constexpr ulint BTR_PCUR_BEFORE = 2;
-constexpr ulint BTR_PCUR_AFTER  = 3;
+constexpr ulint BTR_PCUR_AFTER = 3;
 
 /* Note that if the tree is not empty, btr_pcur_store_position does not
 use the following, but only uses the above three alternatives, where the
@@ -69,12 +69,9 @@ void btr_pcur_free(btr_pcur_t *cursor);
  * @param pcur_receive The persistent cursor which will receive the position information.
  * @param pcur_donate The persistent cursor from which the position information is copied.
  */
-void btr_pcur_copy_stored_position(
-  btr_pcur_t *pcur_receive,
-  btr_pcur_t *pcur_donate);
+void btr_pcur_copy_stored_position(btr_pcur_t *pcur_receive, btr_pcur_t *pcur_donate);
 
-#define btr_pcur_open(i, t, md, l, c, m)  \
-  btr_pcur_open_func(i, t, md, l, c, __FILE__, __LINE__, m)
+#define btr_pcur_open(i, t, md, l, c, m) btr_pcur_open_func(i, t, md, l, c, __FILE__, __LINE__, m)
 
 #define btr_pcur_open_with_no_init(ix, t, md, l, cur, has, m) \
   btr_pcur_open_with_no_init_func(ix, t, md, l, cur, has, __FILE__, __LINE__, m)
@@ -96,13 +93,14 @@ void btr_pcur_copy_stored_position(
  * @param line The line number where the function is called.
  * @param mtr The mtr (mini-transaction) object.
  */
-void btr_pcur_open_on_user_rec_func(dict_index_t *index, const dtuple_t *tuple, ib_srch_mode_t mode, ulint latch_mode, btr_pcur_t *cursor, const char *file, ulint line, mtr_t *mtr);
+void btr_pcur_open_on_user_rec_func(
+  dict_index_t *index, const dtuple_t *tuple, ib_srch_mode_t mode, ulint latch_mode, btr_pcur_t *cursor, const char *file,
+  ulint line, mtr_t *mtr
+);
 
-#define btr_pcur_open_on_user_rec(i, t, md, l, c, m) \
-  btr_pcur_open_on_user_rec_func(i, t, md, l, c, __FILE__, __LINE__, m)
+#define btr_pcur_open_on_user_rec(i, t, md, l, c, m) btr_pcur_open_on_user_rec_func(i, t, md, l, c, __FILE__, __LINE__, m)
 
-#define btr_pcur_open_at_rnd_pos(i, l, c, m) \
-  btr_pcur_open_at_rnd_pos_func(i, l, c, __FILE__, __LINE__, m)
+#define btr_pcur_open_at_rnd_pos(i, l, c, m) btr_pcur_open_at_rnd_pos_func(i, l, c, __FILE__, __LINE__, m)
 
 /**
  * @brief Stores the position of the cursor.
@@ -144,8 +142,7 @@ void btr_pcur_store_position(btr_pcur_t *cursor, mtr_t *mtr);
  */
 bool btr_pcur_restore_position_func(ulint latch_mode, btr_pcur_t *cursor, const char *file, ulint line, mtr_t *mtr);
 
-#define btr_pcur_restore_position(l, cur, mtr) \
-  btr_pcur_restore_position_func(l, cur, __FILE__, __LINE__, mtr)
+#define btr_pcur_restore_position(l, cur, mtr) btr_pcur_restore_position_func(l, cur, __FILE__, __LINE__, mtr)
 
 /**
  * @brief Releases the page latch and bufferfix reserved by the cursorif the latch mode is BTR_LEAF_SEARCH or BTR_LEAF_MODIFY.
@@ -185,7 +182,7 @@ void btr_pcur_move_to_next_page(btr_pcur_t *cursor, mtr_t *mtr);
 void btr_pcur_move_backward_from_page(btr_pcur_t *cursor, mtr_t *mtr);
 
 #ifndef UNIV_DEBUG
-#define btr_pcur_get_btr_cur(cursor) (&(cursor)->btr_cur) 
+#define btr_pcur_get_btr_cur(cursor) (&(cursor)->btr_cur)
 #define btr_pcur_get_page_cur(cursor) (&(cursor)->btr_cur.page_cur)
 #endif /* !UNIV_DEBUG */
 
@@ -277,8 +274,7 @@ inline ulint btr_pcur_get_rel_pos(const btr_pcur_t *cursor) {
   ut_ad(cursor);
   ut_ad(cursor->old_rec);
   ut_ad(cursor->old_stored == BTR_PCUR_OLD_STORED);
-  ut_ad(cursor->pos_state == BTR_PCUR_WAS_POSITIONED ||
-        cursor->pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(cursor->pos_state == BTR_PCUR_WAS_POSITIONED || cursor->pos_state == BTR_PCUR_IS_POSITIONED);
 
   return cursor->rel_pos;
 }
@@ -333,7 +329,7 @@ inline page_cur_t *btr_pcur_get_page_cur(const btr_pcur_t *cursor) {
  * @param cursor The persistent cursor.
  * @return Pointer to the page.
  */
-inline page_t* btr_pcur_get_page(btr_pcur_t* cursor) {
+inline page_t *btr_pcur_get_page(btr_pcur_t *cursor) {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
 
   return btr_cur_get_page(btr_pcur_get_btr_cur(cursor));
@@ -345,7 +341,7 @@ inline page_t* btr_pcur_get_page(btr_pcur_t* cursor) {
  * @param cursor The persistent cursor.
  * @return Pointer to the block.
  */
-inline buf_block_t* btr_pcur_get_block(btr_pcur_t* cursor) {
+inline buf_block_t *btr_pcur_get_block(btr_pcur_t *cursor) {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
 
   return btr_cur_get_block(btr_pcur_get_btr_cur(cursor));
@@ -357,7 +353,7 @@ inline buf_block_t* btr_pcur_get_block(btr_pcur_t* cursor) {
  * @param cursor The persistent cursor.
  * @return Pointer to the record.
  */
-inline rec_t* btr_pcur_get_rec(btr_pcur_t* cursor) {
+inline rec_t *btr_pcur_get_rec(btr_pcur_t *cursor) {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
 
@@ -370,8 +366,8 @@ inline rec_t* btr_pcur_get_rec(btr_pcur_t* cursor) {
  * @param cursor The memory buffer for persistent cursor.
  * @return Number of matched fields at the cursor or to the right if search mode was PAGE_CUR_GE, otherwise undefined.
  */
-inline ulint btr_pcur_get_up_match(btr_pcur_t* cursor) {
-  btr_cur_t* btr_cursor;
+inline ulint btr_pcur_get_up_match(btr_pcur_t *cursor) {
+  btr_cur_t *btr_cursor;
 
   ut_ad((cursor->pos_state == BTR_PCUR_WAS_POSITIONED) || (cursor->pos_state == BTR_PCUR_IS_POSITIONED));
 
@@ -388,8 +384,8 @@ inline ulint btr_pcur_get_up_match(btr_pcur_t* cursor) {
  * @param cursor The memory buffer for persistent cursor.
  * @return Number of matched fields at the cursor or to the right if search mode was PAGE_CUR_LE, otherwise undefined.
  */
-inline ulint btr_pcur_get_low_match(btr_pcur_t* cursor) {
-  btr_cur_t* btr_cursor;
+inline ulint btr_pcur_get_low_match(btr_pcur_t *cursor) {
+  btr_cur_t *btr_cursor;
 
   /**
    * @note The cursor must be either in the BTR_PCUR_WAS_POSITIONED or BTR_PCUR_IS_POSITIONED state.
@@ -412,7 +408,7 @@ inline ulint btr_pcur_get_low_match(btr_pcur_t* cursor) {
  * @param cursor The persistent cursor.
  * @return True if the cursor is after the last user record, false otherwise.
  */
-inline bool btr_pcur_is_after_last_on_page(const btr_pcur_t* cursor) {
+inline bool btr_pcur_is_after_last_on_page(const btr_pcur_t *cursor) {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
 
@@ -425,7 +421,7 @@ inline bool btr_pcur_is_after_last_on_page(const btr_pcur_t* cursor) {
  * @param cursor The persistent cursor.
  * @return True if the cursor is before the first user record, false otherwise.
  */
-inline bool btr_pcur_is_before_first_on_page(const btr_pcur_t* cursor) {
+inline bool btr_pcur_is_before_first_on_page(const btr_pcur_t *cursor) {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
 
@@ -438,7 +434,7 @@ inline bool btr_pcur_is_before_first_on_page(const btr_pcur_t* cursor) {
  * @param cursor The persistent cursor.
  * @return True if the cursor is on a user record, false otherwise.
  */
-inline bool btr_pcur_is_on_user_rec(const btr_pcur_t* cursor) {
+inline bool btr_pcur_is_on_user_rec(const btr_pcur_t *cursor) {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
 
@@ -456,7 +452,7 @@ inline bool btr_pcur_is_on_user_rec(const btr_pcur_t* cursor) {
  * @param mtr The mtr.
  * @return True if the cursor is before the first user record in the index tree, false otherwise.
  */
-inline bool btr_pcur_is_before_first_in_tree(btr_pcur_t* cursor, mtr_t* mtr) {
+inline bool btr_pcur_is_before_first_in_tree(btr_pcur_t *cursor, mtr_t *mtr) {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
 
@@ -474,7 +470,7 @@ inline bool btr_pcur_is_before_first_in_tree(btr_pcur_t* cursor, mtr_t* mtr) {
  * @param mtr The mtr.
  * @return True if the cursor is after the last user record in the index tree, false otherwise.
  */
-inline bool btr_pcur_is_after_last_in_tree(btr_pcur_t* cursor, mtr_t* mtr) {
+inline bool btr_pcur_is_after_last_in_tree(btr_pcur_t *cursor, mtr_t *mtr) {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
 
@@ -490,7 +486,7 @@ inline bool btr_pcur_is_after_last_in_tree(btr_pcur_t* cursor, mtr_t* mtr) {
  * 
  * @param cursor The persistent cursor.
  */
-inline void btr_pcur_move_to_next_on_page(btr_pcur_t* cursor) {
+inline void btr_pcur_move_to_next_on_page(btr_pcur_t *cursor) {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
 
@@ -504,7 +500,7 @@ inline void btr_pcur_move_to_next_on_page(btr_pcur_t* cursor) {
  * 
  * @param cursor The persistent cursor.
  */
-inline void btr_pcur_move_to_prev_on_page(btr_pcur_t* cursor) {
+inline void btr_pcur_move_to_prev_on_page(btr_pcur_t *cursor) {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
 
@@ -519,7 +515,7 @@ inline void btr_pcur_move_to_prev_on_page(btr_pcur_t* cursor) {
  * @param cursor The persistent cursor.
  * @param mtr The mtr.
  */
-inline void btr_pcur_move_to_last_on_page(btr_pcur_t* cursor, mtr_t* mtr) {
+inline void btr_pcur_move_to_last_on_page(btr_pcur_t *cursor, mtr_t *mtr) {
   UT_NOT_USED(mtr);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
 
@@ -535,7 +531,7 @@ inline void btr_pcur_move_to_last_on_page(btr_pcur_t* cursor, mtr_t* mtr) {
  * @param mtr The mtr.
  * @return True if the cursor moved forward, ending on a user record.
  */
-inline bool btr_pcur_move_to_next_user_rec(btr_pcur_t* cursor, mtr_t* mtr) {
+inline bool btr_pcur_move_to_next_user_rec(btr_pcur_t *cursor, mtr_t *mtr) {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
 
@@ -564,8 +560,9 @@ inline bool btr_pcur_move_to_next_user_rec(btr_pcur_t* cursor, mtr_t* mtr) {
  * @return True if the cursor moved backward, ending on a user record.
  */
 inline bool btr_pcur_move_to_prev_user_rec(
-    btr_pcur_t* cursor, /*!< in: persistent cursor; NOTE that the function may release the page latch */
-    mtr_t* mtr)         /*!< in: mtr */
+  btr_pcur_t *cursor, /*!< in: persistent cursor; NOTE that the function may release the page latch */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   ut_ad(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
@@ -581,7 +578,7 @@ inline bool btr_pcur_move_to_prev_user_rec(
     } else {
       btr_pcur_move_to_prev_on_page(cursor);
     }
-  
+
     if (btr_pcur_is_on_user_rec(cursor)) {
       return true;
     }
@@ -619,7 +616,6 @@ inline bool btr_pcur_move_to_next(btr_pcur_t *cursor, mtr_t *mtr) {
   return true;
 }
 
-
 /**
  * Moves the persistent cursor to the previous record in the tree. If no
  * records are left, the cursor stays 'before first in tree'.
@@ -651,7 +647,6 @@ inline bool btr_pcur_move_to_prev(btr_pcur_t *cursor, mtr_t *mtr) {
   return true;
 }
 
-
 /**
  * Commits the mtr and sets the pcur latch mode to BTR_NO_LATCHES,
  * that is, the cursor becomes detached. If there have been modifications
@@ -672,8 +667,6 @@ inline void btr_pcur_commit_specify_mtr(btr_pcur_t *pcur, mtr_t *mtr) {
   pcur->pos_state = BTR_PCUR_WAS_POSITIONED;
 }
 
-
-
 /**
  * Sets the persistent cursor latch mode to BTR_NO_LATCHES.
  *
@@ -687,7 +680,6 @@ inline void btr_pcur_detach(btr_pcur_t *pcur) {
   pcur->pos_state = BTR_PCUR_WAS_POSITIONED;
 }
 
-
 /**
  * Tests if a cursor is detached, that is the latch mode is BTR_NO_LATCHES.
  *
@@ -697,7 +689,6 @@ inline void btr_pcur_detach(btr_pcur_t *pcur) {
 inline bool btr_pcur_is_detached(btr_pcur_t *pcur) {
   return pcur->latch_mode == BTR_NO_LATCHES;
 }
-
 
 /**
  * @brief Initializes the persistent cursor.
@@ -728,7 +719,10 @@ inline void btr_pcur_init(btr_pcur_t *pcur) {
  * @param line The line where called.
  * @param mtr The mtr.
  */
-inline void btr_pcur_open_func(dict_index_t *dict_index, const dtuple_t *tuple, ib_srch_mode_t mode, ulint latch_mode, btr_pcur_t *cursor, const char *file, ulint line, mtr_t *mtr) {
+inline void btr_pcur_open_func(
+  dict_index_t *dict_index, const dtuple_t *tuple, ib_srch_mode_t mode, ulint latch_mode, btr_pcur_t *cursor, const char *file,
+  ulint line, mtr_t *mtr
+) {
   btr_cur_t *btr_cursor;
 
   /* Initialize the cursor */
@@ -739,8 +733,7 @@ inline void btr_pcur_open_func(dict_index_t *dict_index, const dtuple_t *tuple, 
 
   /* Search with the tree cursor */
   btr_cursor = btr_pcur_get_btr_cur(cursor);
-  btr_cur_search_to_nth_level(dict_index, 0, tuple, mode, latch_mode,
-                              btr_cursor, 0, file, line, mtr);
+  btr_cur_search_to_nth_level(dict_index, 0, tuple, mode, latch_mode, btr_cursor, 0, file, line, mtr);
   cursor->pos_state = BTR_PCUR_IS_POSITIONED;
   cursor->trx_if_known = NULL;
 }
@@ -758,8 +751,10 @@ inline void btr_pcur_open_func(dict_index_t *dict_index, const dtuple_t *tuple, 
  * @param line The line where called.
  * @param mtr The mtr.
  */
-inline void btr_pcur_open_with_no_init_func(dict_index_t *dict_index, const dtuple_t *tuple, ib_srch_mode_t mode, ulint latch_mode,
-                                            btr_pcur_t *cursor, ulint has_search_latch, const char *file, ulint line, mtr_t *mtr) {
+inline void btr_pcur_open_with_no_init_func(
+  dict_index_t *dict_index, const dtuple_t *tuple, ib_srch_mode_t mode, ulint latch_mode, btr_pcur_t *cursor,
+  ulint has_search_latch, const char *file, ulint line, mtr_t *mtr
+) {
   btr_cur_t *btr_cursor;
 
   cursor->latch_mode = latch_mode;
@@ -783,7 +778,9 @@ inline void btr_pcur_open_with_no_init_func(dict_index_t *dict_index, const dtup
  * @param do_init True if the cursor should be initialized.
  * @param mtr The mtr.
  */
-inline void btr_pcur_open_at_index_side(bool from_left, dict_index_t *dict_index, ulint latch_mode, btr_pcur_t *pcur, bool do_init, mtr_t *mtr) {
+inline void btr_pcur_open_at_index_side(
+  bool from_left, dict_index_t *dict_index, ulint latch_mode, btr_pcur_t *pcur, bool do_init, mtr_t *mtr
+) {
   pcur->latch_mode = latch_mode;
 
   if (from_left) {
@@ -802,7 +799,6 @@ inline void btr_pcur_open_at_index_side(bool from_left, dict_index_t *dict_index
   pcur->trx_if_known = NULL;
 }
 
-
 /**
  * @brief Positions a cursor at a randomly chosen position within a B-tree.
  *
@@ -813,7 +809,9 @@ inline void btr_pcur_open_at_index_side(bool from_left, dict_index_t *dict_index
  * @param line The line where called.
  * @param mtr The mtr.
  */
-inline void btr_pcur_open_at_rnd_pos_func(dict_index_t *dict_index, ulint latch_mode, btr_pcur_t *cursor, const char *file, ulint line, mtr_t *mtr) {
+inline void btr_pcur_open_at_rnd_pos_func(
+  dict_index_t *dict_index, ulint latch_mode, btr_pcur_t *cursor, const char *file, ulint line, mtr_t *mtr
+) {
   cursor->latch_mode = latch_mode;
   cursor->search_mode = PAGE_CUR_G;
 
@@ -845,4 +843,3 @@ inline void btr_pcur_close(btr_pcur_t *cursor) {
   cursor->pos_state = BTR_PCUR_NOT_POSITIONED;
   cursor->trx_if_known = NULL;
 }
-

@@ -66,16 +66,13 @@ a new database installation */
 bool trx_sys_multiple_tablespace_format = false;
 
 /** List of animal names representing file format. */
-static const char *file_format_name_map[] = {
-    "Antelope", "Barracuda", "Cheetah", "Dragon",   "Elk",      "Fox",
-    "Gazelle",  "Hornet",    "Impala",  "Jaguar",   "Kangaroo", "Leopard",
-    "Moose",    "Nautilus",  "Ocelot",  "Porpoise", "Quail",    "Rabbit",
-    "Shark",    "Tiger",     "Urchin",  "Viper",    "Whale",    "Xenops",
-    "Yak",      "Zebra"};
+static const char *file_format_name_map[] = {"Antelope", "Barracuda", "Cheetah", "Dragon",   "Elk",     "Fox",   "Gazelle",
+                                             "Hornet",   "Impala",    "Jaguar",  "Kangaroo", "Leopard", "Moose", "Nautilus",
+                                             "Ocelot",   "Porpoise",  "Quail",   "Rabbit",   "Shark",   "Tiger", "Urchin",
+                                             "Viper",    "Whale",     "Xenops",  "Yak",      "Zebra"};
 
 /** The number of elements in the file format name array. */
-static const ulint FILE_FORMAT_NAME_N =
-    sizeof(file_format_name_map) / sizeof(file_format_name_map[0]);
+static const ulint FILE_FORMAT_NAME_N = sizeof(file_format_name_map) / sizeof(file_format_name_map[0]);
 
 /** This is used to track the maximum file format id known to InnoDB. It's
 updated via SET GLOBAL file_format_check = 'x' or when we open
@@ -98,13 +95,11 @@ bool trx_doublewrite_page_inside(ulint page_no) {
     return (false);
   }
 
-  if (page_no >= trx_doublewrite->block1 &&
-      page_no < trx_doublewrite->block1 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) {
+  if (page_no >= trx_doublewrite->block1 && page_no < trx_doublewrite->block1 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) {
     return (true);
   }
 
-  if (page_no >= trx_doublewrite->block2 &&
-      page_no < trx_doublewrite->block2 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) {
+  if (page_no >= trx_doublewrite->block2 && page_no < trx_doublewrite->block2 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) {
     return (true);
   }
 
@@ -112,12 +107,10 @@ bool trx_doublewrite_page_inside(ulint page_no) {
 }
 
 /** Creates or initialializes the doublewrite buffer at a database start. */
-static void
-trx_doublewrite_init(byte *doublewrite) /*!< in: pointer to the doublewrite buf
+static void trx_doublewrite_init(byte *doublewrite) /*!< in: pointer to the doublewrite buf
                                         header on trx sys page */
 {
-  trx_doublewrite =
-      static_cast<trx_doublewrite_t *>(mem_alloc(sizeof(trx_doublewrite_t)));
+  trx_doublewrite = static_cast<trx_doublewrite_t *>(mem_alloc(sizeof(trx_doublewrite_t)));
 
   /* Since we now start to use the doublewrite buffer, no need to call
   fsync() after every write to a data file */
@@ -129,20 +122,15 @@ trx_doublewrite_init(byte *doublewrite) /*!< in: pointer to the doublewrite buf
 
   trx_doublewrite->first_free = 0;
 
-  trx_doublewrite->block1 =
-      mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_BLOCK1);
+  trx_doublewrite->block1 = mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_BLOCK1);
 
-  trx_doublewrite->block2 =
-      mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_BLOCK2);
+  trx_doublewrite->block2 = mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_BLOCK2);
 
-  trx_doublewrite->write_buf_unaligned = static_cast<byte *>(
-      ut_malloc((1 + 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) * UNIV_PAGE_SIZE));
+  trx_doublewrite->write_buf_unaligned = static_cast<byte *>(ut_malloc((1 + 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) * UNIV_PAGE_SIZE));
 
-  trx_doublewrite->write_buf = static_cast<byte *>(
-      ut_align(trx_doublewrite->write_buf_unaligned, UNIV_PAGE_SIZE));
+  trx_doublewrite->write_buf = static_cast<byte *>(ut_align(trx_doublewrite->write_buf_unaligned, UNIV_PAGE_SIZE));
 
-  trx_doublewrite->buf_block_arr = static_cast<buf_page_t **>(
-      mem_alloc(2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * sizeof(void *)));
+  trx_doublewrite->buf_block_arr = static_cast<buf_page_t **>(mem_alloc(2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * sizeof(void *)));
 }
 
 void trx_sys_mark_upgraded_to_multiple_tablespaces() {
@@ -161,8 +149,7 @@ void trx_sys_mark_upgraded_to_multiple_tablespaces() {
 
   doublewrite = buf_block_get_frame(block) + TRX_SYS_DOUBLEWRITE;
 
-  mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED,
-                   TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N, MLOG_4BYTES, &mtr);
+  mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED, TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N, MLOG_4BYTES, &mtr);
   mtr_commit(&mtr);
 
   /* Flush the modified pages to disk and make a checkpoint */
@@ -199,8 +186,7 @@ start_again:
 
   doublewrite = buf_block_get_frame(block) + TRX_SYS_DOUBLEWRITE;
 
-  if (mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_MAGIC) ==
-      TRX_SYS_DOUBLEWRITE_MAGIC_N) {
+  if (mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_MAGIC) == TRX_SYS_DOUBLEWRITE_MAGIC_N) {
     /* The doublewrite buffer has already been created:
     just read in some numbers */
 
@@ -209,22 +195,25 @@ start_again:
     mtr_commit(&mtr);
     trx_doublewrite_buf_is_being_created = false;
   } else {
-    ib_logger(ib_stream, "Doublewrite buffer not found:"
-                         " creating new\n");
+    ib_logger(
+      ib_stream,
+      "Doublewrite buffer not found:"
+      " creating new\n"
+    );
 
-    if (buf_pool_get_curr_size() <
-        ((2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2 + 100) *
-         UNIV_PAGE_SIZE)) {
-      ib_logger(ib_stream, "Cannot create doublewrite buffer:"
-                           " you must\n"
-                           "increase your buffer pool size.\n"
-                           "Cannot continue operation.\n");
+    if (buf_pool_get_curr_size() < ((2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2 + 100) * UNIV_PAGE_SIZE)) {
+      ib_logger(
+        ib_stream,
+        "Cannot create doublewrite buffer:"
+        " you must\n"
+        "increase your buffer pool size.\n"
+        "Cannot continue operation.\n"
+      );
 
       return (DB_FATAL);
     }
 
-    block2 = fseg_create(TRX_SYS_SPACE, TRX_SYS_PAGE_NO,
-                         TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_FSEG, &mtr);
+    block2 = fseg_create(TRX_SYS_SPACE, TRX_SYS_PAGE_NO, TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_FSEG, &mtr);
 
     /* fseg_create acquires a second latch on the page,
     therefore we must declare it: */
@@ -232,10 +221,13 @@ start_again:
     buf_block_dbg_add_level(block2, SYNC_NO_ORDER_CHECK);
 
     if (block2 == nullptr) {
-      ib_logger(ib_stream, "Cannot create doublewrite buffer:"
-                           " you must\n"
-                           "increase your tablespace size.\n"
-                           "Cannot continue operation.\n");
+      ib_logger(
+        ib_stream,
+        "Cannot create doublewrite buffer:"
+        " you must\n"
+        "increase your tablespace size.\n"
+        "Cannot continue operation.\n"
+      );
 
       /* We need to exit without committing the mtr to
       prevent its modifications to the database getting
@@ -244,20 +236,20 @@ start_again:
       return (DB_FATAL);
     }
 
-    fseg_header = buf_block_get_frame(block) + TRX_SYS_DOUBLEWRITE +
-                  TRX_SYS_DOUBLEWRITE_FSEG;
+    fseg_header = buf_block_get_frame(block) + TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_FSEG;
     prev_page_no = 0;
 
-    for (i = 0; i < 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2;
-         i++) {
-      page_no =
-          fseg_alloc_free_page(fseg_header, prev_page_no + 1, FSP_UP, &mtr);
+    for (i = 0; i < 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2; i++) {
+      page_no = fseg_alloc_free_page(fseg_header, prev_page_no + 1, FSP_UP, &mtr);
       if (page_no == FIL_NULL) {
-        ib_logger(ib_stream, "Cannot create doublewrite"
-                             " buffer: you must\n"
-                             "increase your"
-                             " tablespace size.\n"
-                             "Cannot continue operation.\n");
+        ib_logger(
+          ib_stream,
+          "Cannot create doublewrite"
+          " buffer: you must\n"
+          "increase your"
+          " tablespace size.\n"
+          "Cannot continue operation.\n"
+        );
 
         return (DB_FATAL);
       }
@@ -278,18 +270,12 @@ start_again:
 
       if (i == FSP_EXTENT_SIZE / 2) {
         ut_a(page_no == FSP_EXTENT_SIZE);
-        mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_BLOCK1, page_no,
-                         MLOG_4BYTES, &mtr);
-        mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_REPEAT +
-                             TRX_SYS_DOUBLEWRITE_BLOCK1,
-                         page_no, MLOG_4BYTES, &mtr);
+        mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_BLOCK1, page_no, MLOG_4BYTES, &mtr);
+        mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_REPEAT + TRX_SYS_DOUBLEWRITE_BLOCK1, page_no, MLOG_4BYTES, &mtr);
       } else if (i == FSP_EXTENT_SIZE / 2 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) {
         ut_a(page_no == 2 * FSP_EXTENT_SIZE);
-        mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_BLOCK2, page_no,
-                         MLOG_4BYTES, &mtr);
-        mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_REPEAT +
-                             TRX_SYS_DOUBLEWRITE_BLOCK2,
-                         page_no, MLOG_4BYTES, &mtr);
+        mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_BLOCK2, page_no, MLOG_4BYTES, &mtr);
+        mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_REPEAT + TRX_SYS_DOUBLEWRITE_BLOCK2, page_no, MLOG_4BYTES, &mtr);
       } else if (i > FSP_EXTENT_SIZE / 2) {
         ut_a(page_no == prev_page_no + 1);
       }
@@ -297,14 +283,12 @@ start_again:
       prev_page_no = page_no;
     }
 
-    mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_MAGIC,
-                     TRX_SYS_DOUBLEWRITE_MAGIC_N, MLOG_4BYTES, &mtr);
-    mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_MAGIC +
-                         TRX_SYS_DOUBLEWRITE_REPEAT,
-                     TRX_SYS_DOUBLEWRITE_MAGIC_N, MLOG_4BYTES, &mtr);
+    mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_MAGIC, TRX_SYS_DOUBLEWRITE_MAGIC_N, MLOG_4BYTES, &mtr);
+    mlog_write_ulint(
+      doublewrite + TRX_SYS_DOUBLEWRITE_MAGIC + TRX_SYS_DOUBLEWRITE_REPEAT, TRX_SYS_DOUBLEWRITE_MAGIC_N, MLOG_4BYTES, &mtr
+    );
 
-    mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED,
-                     TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N, MLOG_4BYTES, &mtr);
+    mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED, TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N, MLOG_4BYTES, &mtr);
     mtr_commit(&mtr);
 
     /* Flush the modified pages to disk and make a checkpoint */
@@ -327,8 +311,7 @@ function performs the necessary update operations. If we are in a crash
 recovery, this function uses a possible doublewrite buffer to restore
 half-written pages in the data files. */
 
-void trx_sys_doublewrite_init_or_restore_pages(
-    bool restore_corrupt_pages) /*!< in: true=restore pages */
+void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< in: true=restore pages */
 {
   byte *buf;
   byte *read_buf;
@@ -350,13 +333,11 @@ void trx_sys_doublewrite_init_or_restore_pages(
   /* Read the trx sys header to check if we are using the doublewrite
   buffer */
 
-  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, TRX_SYS_PAGE_NO, 0,
-         UNIV_PAGE_SIZE, read_buf, nullptr);
+  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, TRX_SYS_PAGE_NO, 0, UNIV_PAGE_SIZE, read_buf, nullptr);
 
   doublewrite = read_buf + TRX_SYS_DOUBLEWRITE;
 
-  if (mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_MAGIC) ==
-      TRX_SYS_DOUBLEWRITE_MAGIC_N) {
+  if (mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_MAGIC) == TRX_SYS_DOUBLEWRITE_MAGIC_N) {
     /* The doublewrite buffer has been created */
 
     trx_doublewrite_init(doublewrite);
@@ -369,8 +350,7 @@ void trx_sys_doublewrite_init_or_restore_pages(
     goto leave_func;
   }
 
-  if (mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED) !=
-      TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N) {
+  if (mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED) != TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N) {
 
     /* We are upgrading from a version < 4.1.x to a version where
     multiple tablespaces are supported. We must reset the space id
@@ -380,20 +360,25 @@ void trx_sys_doublewrite_init_or_restore_pages(
 
     trx_doublewrite_must_reset_space_ids = true;
 
-    ib_logger(ib_stream,
-              "Resetting space id's in the doublewrite buffer\n");
+    ib_logger(ib_stream, "Resetting space id's in the doublewrite buffer\n");
   } else {
     trx_sys_multiple_tablespace_format = true;
   }
 
   /* Read the pages from the doublewrite buffer to memory */
 
-  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, block1, 0,
-         TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE, buf, nullptr);
+  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, block1, 0, TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE, buf, nullptr);
 
-  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, block2, 0,
-         TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE,
-         buf + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE, nullptr);
+  fil_io(
+    OS_FILE_READ,
+    true,
+    TRX_SYS_SPACE,
+    block2,
+    0,
+    TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE,
+    buf + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE,
+    nullptr
+  );
 
   /* Check if any of these pages is half-written in data files, in the intended
    * position */
@@ -418,8 +403,7 @@ void trx_sys_doublewrite_init_or_restore_pages(
         source_page_no = block2 + i - TRX_SYS_DOUBLEWRITE_BLOCK_SIZE;
       }
 
-      fil_io(OS_FILE_WRITE, true, 0, 0, source_page_no, UNIV_PAGE_SIZE, page,
-             nullptr);
+      fil_io(OS_FILE_WRITE, true, 0, 0, source_page_no, UNIV_PAGE_SIZE, page, nullptr);
       /* printf("Resetting space id in page %lu\n",
       source_page_no); */
     } else {
@@ -435,69 +419,75 @@ void trx_sys_doublewrite_init_or_restore_pages(
       and this page once belonged to it: do nothing */
 
     } else if (!fil_check_adress_in_tablespace(space_id, page_no)) {
-      ib_logger(ib_stream,
-                "Warning: a page in the"
-                " doublewrite buffer is not within space\n"
-                "bounds; space id %lu"
-                " page number %lu, page %lu in"
-                " doublewrite buf.\n",
-                (ulong)space_id, (ulong)page_no, (ulong)i);
+      ib_logger(
+        ib_stream,
+        "Warning: a page in the"
+        " doublewrite buffer is not within space\n"
+        "bounds; space id %lu"
+        " page number %lu, page %lu in"
+        " doublewrite buf.\n",
+        (ulong)space_id,
+        (ulong)page_no,
+        (ulong)i
+      );
 
-    } else if (space_id == TRX_SYS_SPACE &&
-               ((page_no >= block1 &&
-                 page_no < block1 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) ||
-                (page_no >= block2 &&
-                 page_no < (block2 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE)))) {
+    } else if (space_id == TRX_SYS_SPACE && ((page_no >= block1 && page_no < block1 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) || (page_no >= block2 && page_no < (block2 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE)))) {
 
       /* It is an unwritten doublewrite buffer page:
       do nothing */
     } else {
       /* Read in the actual page from the file */
-      fil_io(OS_FILE_READ, true, space_id, page_no, 0, UNIV_PAGE_SIZE,
-             read_buf, nullptr);
+      fil_io(OS_FILE_READ, true, space_id, page_no, 0, UNIV_PAGE_SIZE, read_buf, nullptr);
 
       /* Check if the page is corrupt */
 
       if (unlikely(buf_page_is_corrupted(read_buf))) {
 
-        ib_logger(ib_stream,
-                  "Warning: database page"
-                  " corruption or a failed\n"
-                  "file read of"
-                  " space %lu page %lu.\n"
-                  "Trying to recover it from"
-                  " the doublewrite buffer.\n",
-                  (ulong)space_id, (ulong)page_no);
+        ib_logger(
+          ib_stream,
+          "Warning: database page"
+          " corruption or a failed\n"
+          "file read of"
+          " space %lu page %lu.\n"
+          "Trying to recover it from"
+          " the doublewrite buffer.\n",
+          (ulong)space_id,
+          (ulong)page_no
+        );
 
         if (buf_page_is_corrupted(page)) {
           ib_logger(ib_stream, "Dump of the page:\n");
           buf_page_print(read_buf, 0);
-          ib_logger(ib_stream, "Dump of"
-                               " corresponding page"
-                               " in doublewrite buffer:\n");
+          ib_logger(
+            ib_stream,
+            "Dump of"
+            " corresponding page"
+            " in doublewrite buffer:\n"
+          );
           buf_page_print(page, 0);
 
-          ib_logger(ib_stream, "Also the page in the"
-                               " doublewrite buffer"
-                               " is corrupt.\n"
-                               "Cannot continue"
-                               " operation.\n"
-                               "You can try to"
-                               " recover the database\n"
-                               "with the option:\n"
-                               ""
-                               "force_recovery=6\n");
+          ib_logger(
+            ib_stream,
+            "Also the page in the"
+            " doublewrite buffer"
+            " is corrupt.\n"
+            "Cannot continue"
+            " operation.\n"
+            "You can try to"
+            " recover the database\n"
+            "with the option:\n"
+            ""
+            "force_recovery=6\n"
+          );
           log_fatal("Corrupt page");
         }
 
         /* Write the good page from the doublewrite buffer to the intended
          * position */
 
-        fil_io(OS_FILE_WRITE, true, space_id, page_no, 0, UNIV_PAGE_SIZE,
-               page, nullptr);
+        fil_io(OS_FILE_WRITE, true, space_id, page_no, 0, UNIV_PAGE_SIZE, page, nullptr);
 
-        ib_logger(ib_stream,
-                  "Recovered the page from the doublewrite buffer.\n");
+        ib_logger(ib_stream, "Recovered the page from the doublewrite buffer.\n");
       }
     }
 
@@ -540,8 +530,7 @@ void trx_sys_flush_max_trx_id(void) {
 
   sys_header = trx_sysf_get(&mtr);
 
-  mlog_write_uint64(sys_header + TRX_SYS_TRX_ID_STORE, trx_sys->max_trx_id,
-                    &mtr);
+  mlog_write_uint64(sys_header + TRX_SYS_TRX_ID_STORE, trx_sys->max_trx_id, &mtr);
   mtr_commit(&mtr);
 }
 
@@ -593,15 +582,13 @@ static void trx_sysf_create(mtr_t *mtr) {
 
   auto page = buf_block_get_frame(block);
 
-  mlog_write_ulint(page + FIL_PAGE_TYPE, FIL_PAGE_TYPE_TRX_SYS, MLOG_2BYTES,
-                   mtr);
+  mlog_write_ulint(page + FIL_PAGE_TYPE, FIL_PAGE_TYPE_TRX_SYS, MLOG_2BYTES, mtr);
 
   /* Reset the doublewrite buffer magic number to zero so that we
   know that the doublewrite buffer has not yet been created (this
   suppresses a Valgrind warning) */
 
-  mlog_write_ulint(page + TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_MAGIC, 0,
-                   MLOG_4BYTES, mtr);
+  mlog_write_ulint(page + TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_MAGIC, 0, MLOG_4BYTES, mtr);
 
   auto sys_header = trx_sysf_get(mtr);
 
@@ -617,13 +604,11 @@ static void trx_sysf_create(mtr_t *mtr) {
 
   /* The remaining area (up to the page trailer) is uninitialized.
   Silence Valgrind warnings about it. */
-  UNIV_MEM_VALID(sys_header +
-                     (TRX_SYS_RSEGS + TRX_SYS_N_RSEGS * TRX_SYS_RSEG_SLOT_SIZE +
-                      TRX_SYS_RSEG_SPACE),
-                 (UNIV_PAGE_SIZE - FIL_PAGE_DATA_END -
-                  (TRX_SYS_RSEGS + TRX_SYS_N_RSEGS * TRX_SYS_RSEG_SLOT_SIZE +
-                   TRX_SYS_RSEG_SPACE)) +
-                     page - sys_header);
+  UNIV_MEM_VALID(
+    sys_header + (TRX_SYS_RSEGS + TRX_SYS_N_RSEGS * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE),
+    (UNIV_PAGE_SIZE - FIL_PAGE_DATA_END - (TRX_SYS_RSEGS + TRX_SYS_N_RSEGS * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE)) + page -
+      sys_header
+  );
 
   /* Create the first rollback segment in the SYSTEM tablespace */
   ulint slot_no;
@@ -663,7 +648,8 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
   to the disk-based header! Thus trx id values will not overlap when
   the database is repeatedly started! */
 
-  trx_sys->max_trx_id = ut_uint64_align_up(mtr_read_uint64(sys_header + TRX_SYS_TRX_ID_STORE, &mtr), TRX_SYS_TRX_ID_WRITE_MARGIN) + 2 * TRX_SYS_TRX_ID_WRITE_MARGIN;
+  trx_sys->max_trx_id = ut_uint64_align_up(mtr_read_uint64(sys_header + TRX_SYS_TRX_ID_STORE, &mtr), TRX_SYS_TRX_ID_WRITE_MARGIN) +
+                        2 * TRX_SYS_TRX_ID_WRITE_MARGIN;
 
   UT_LIST_INIT(trx_sys->client_trx_list);
 
@@ -691,15 +677,17 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
       rows_to_undo = rows_to_undo / 1000000;
     }
 
-    ib_logger(ib_stream,
-              "%lu transaction(s) which must be"
-              " rolled back or cleaned up\n"
-              "in total %lu%s row operations to undo\n",
-              (ulong)UT_LIST_GET_LEN(trx_sys->trx_list), (ulong)rows_to_undo,
-              unit);
+    ib_logger(
+      ib_stream,
+      "%lu transaction(s) which must be"
+      " rolled back or cleaned up\n"
+      "in total %lu%s row operations to undo\n",
+      (ulong)UT_LIST_GET_LEN(trx_sys->trx_list),
+      (ulong)rows_to_undo,
+      unit
+    );
 
-    ib_logger(ib_stream, "Trx id counter is %lu\n",
-              TRX_ID_PREP_PRINTF(trx_sys->max_trx_id));
+    ib_logger(ib_stream, "Trx id counter is %lu\n", TRX_ID_PREP_PRINTF(trx_sys->max_trx_id));
   }
 
   UT_LIST_INIT(trx_sys->view_list);
@@ -725,9 +713,10 @@ void trx_sys_create(ib_recovery_t recovery) {
 
 /** Update the file format tag.
 @return	always true */
-static bool
-trx_sys_file_format_max_write(ulint format_id,   /*!< in: file format id */
-                              const char **name) /*!< out: max file format name,
+static bool trx_sys_file_format_max_write(
+  ulint format_id, /*!< in: file format id */
+  const char **name
+) /*!< out: max file format name,
                                                  can be nullptr */
 {
   mtr_t mtr;
@@ -749,10 +738,7 @@ trx_sys_file_format_max_write(ulint format_id,   /*!< in: file format id */
     *name = file_format_max.name;
   }
 
-  mlog_write_uint64(
-      ptr,
-      (uint64_t(TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH) << 32) | tag_value_low,
-      &mtr);
+  mlog_write_uint64(ptr, (uint64_t(TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH) << 32) | tag_value_low, &mtr);
 
   mtr_commit(&mtr);
 
@@ -781,8 +767,7 @@ static ulint trx_sys_file_format_max_read(void) {
 
   format_id = file_format_id - TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW;
 
-  if (file_format_id != TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH ||
-      format_id >= FILE_FORMAT_NAME_N) {
+  if (file_format_id != TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH || format_id >= FILE_FORMAT_NAME_N) {
 
     /* Either it has never been tagged, or garbage in it.
     Reset the tag in either case. */
@@ -845,19 +830,20 @@ db_err trx_sys_file_format_max_check(ulint max_format_id) {
   format_id = trx_sys_file_format_max_read();
 
   ut_print_timestamp(ib_stream);
-  ib_logger(ib_stream, "  highest supported file format is %s.\n",
-            trx_sys_file_format_id_to_name(DICT_TF_FORMAT_MAX));
+  ib_logger(ib_stream, "  highest supported file format is %s.\n", trx_sys_file_format_id_to_name(DICT_TF_FORMAT_MAX));
 
   if (format_id > DICT_TF_FORMAT_MAX) {
 
     ut_a(format_id < FILE_FORMAT_NAME_N);
 
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  %s: the system tablespace is in a file "
-              "format that this version doesn't support - %s\n",
-              ((max_format_id <= DICT_TF_FORMAT_MAX) ? "Error" : "Warning"),
-              trx_sys_file_format_id_to_name(format_id));
+    ib_logger(
+      ib_stream,
+      "  %s: the system tablespace is in a file "
+      "format that this version doesn't support - %s\n",
+      ((max_format_id <= DICT_TF_FORMAT_MAX) ? "Error" : "Warning"),
+      trx_sys_file_format_id_to_name(format_id)
+    );
 
     if (max_format_id <= DICT_TF_FORMAT_MAX) {
       return (DB_ERROR);
@@ -915,7 +901,9 @@ bool trx_sys_file_format_max_upgrade(const char **name, ulint format_id) {
   return (ret);
 }
 
-const char *trx_sys_file_format_max_get() { return (file_format_max.name); }
+const char *trx_sys_file_format_max_get() {
+  return (file_format_max.name);
+}
 
 void trx_sys_file_format_init(void) {
   /* We don't need a mutex here, as this function should only
@@ -942,8 +930,7 @@ bool trx_sys_read_file_format_id(const char *pathname, ulint *format_id) {
 
   *format_id = ULINT_UNDEFINED;
 
-  file = os_file_create_simple_no_error_handling(pathname, OS_FILE_OPEN,
-                                                 OS_FILE_READ_ONLY, &success);
+  file = os_file_create_simple_no_error_handling(pathname, OS_FILE_OPEN, OS_FILE_READ_ONLY, &success);
 
   if (!success) {
     /* The following call prints an error message */
@@ -952,18 +939,18 @@ bool trx_sys_read_file_format_id(const char *pathname, ulint *format_id) {
     ut_print_timestamp(ib_stream);
 
     ib_logger(
-        ib_stream,
-        "  ibbackup: Error: trying to read system tablespace file format,\n"
-        "  ibbackup: but could not open the tablespace file %s!\n",
-        pathname);
+      ib_stream,
+      "  ibbackup: Error: trying to read system tablespace file format,\n"
+      "  ibbackup: but could not open the tablespace file %s!\n",
+      pathname
+    );
 
     return (false);
   }
 
   /* Read the page on which file format is stored */
 
-  success = os_file_read_no_error_handling(
-      file, page, TRX_SYS_PAGE_NO * UNIV_PAGE_SIZE, 0, UNIV_PAGE_SIZE);
+  success = os_file_read_no_error_handling(file, page, TRX_SYS_PAGE_NO * UNIV_PAGE_SIZE, 0, UNIV_PAGE_SIZE);
 
   if (!success) {
     /* The following call prints an error message */
@@ -972,10 +959,11 @@ bool trx_sys_read_file_format_id(const char *pathname, ulint *format_id) {
     ut_print_timestamp(ib_stream);
 
     ib_logger(
-        ib_stream,
-        "  ibbackup: Error: trying to read system table space file format,\n"
-        "  ibbackup: but failed to read the tablespace file %s!\n",
-        pathname);
+      ib_stream,
+      "  ibbackup: Error: trying to read system table space file format,\n"
+      "  ibbackup: but failed to read the tablespace file %s!\n",
+      pathname
+    );
     os_file_close(file);
     return (false);
   }
@@ -987,8 +975,7 @@ bool trx_sys_read_file_format_id(const char *pathname, ulint *format_id) {
 
   *format_id = file_format_id - TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW;
 
-  if (file_format_id != TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH ||
-      *format_id >= FILE_FORMAT_NAME_N) {
+  if (file_format_id != TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH || *format_id >= FILE_FORMAT_NAME_N) {
 
     /* Either it has never been tagged, or garbage in it. */
     *format_id = ULINT_UNDEFINED;
@@ -999,8 +986,7 @@ bool trx_sys_read_file_format_id(const char *pathname, ulint *format_id) {
   return (true);
 }
 
-bool trx_sys_read_pertable_file_format_id(const char *pathname,
-                                          ulint *format_id) {
+bool trx_sys_read_pertable_file_format_id(const char *pathname, ulint *format_id) {
   os_file_t file;
   bool success;
 
@@ -1015,18 +1001,19 @@ bool trx_sys_read_pertable_file_format_id(const char *pathname,
 
   *format_id = ULINT_UNDEFINED;
 
-  file = os_file_create_simple_no_error_handling(pathname, OS_FILE_OPEN,
-                                                 OS_FILE_READ_ONLY, &success);
+  file = os_file_create_simple_no_error_handling(pathname, OS_FILE_OPEN, OS_FILE_READ_ONLY, &success);
   if (!success) {
     /* The following call prints an error message */
     os_file_get_last_error(true);
 
     ut_print_timestamp(ib_stream);
 
-    ib_logger(ib_stream,
-              "  ibbackup: Error: trying to read per-table tablespace format,\n"
-              "  ibbackup: but could not open the tablespace file %s!\n",
-              pathname);
+    ib_logger(
+      ib_stream,
+      "  ibbackup: Error: trying to read per-table tablespace format,\n"
+      "  ibbackup: but could not open the tablespace file %s!\n",
+      pathname
+    );
     return (false);
   }
 
@@ -1039,10 +1026,12 @@ bool trx_sys_read_pertable_file_format_id(const char *pathname,
 
     ut_print_timestamp(ib_stream);
 
-    ib_logger(ib_stream,
-              "  ibbackup: Error: trying to per-table data file format,\n"
-              "  ibbackup: but failed to read the tablespace file %s!\n",
-              pathname);
+    ib_logger(
+      ib_stream,
+      "  ibbackup: Error: trying to per-table data file format,\n"
+      "  ibbackup: but failed to read the tablespace file %s!\n",
+      pathname
+    );
     os_file_close(file);
     return (false);
   }
@@ -1075,11 +1064,13 @@ void trx_sys_close() {
   by a purge. */
 
   if (UT_LIST_GET_LEN(trx_sys->view_list) > 1) {
-    ib_logger(ib_stream,
-              "Error: all read views were not closed"
-              " before shutdown:\n"
-              "%lu read views open \n",
-              UT_LIST_GET_LEN(trx_sys->view_list) - 1);
+    ib_logger(
+      ib_stream,
+      "Error: all read views were not closed"
+      " before shutdown:\n"
+      "%lu read views open \n",
+      UT_LIST_GET_LEN(trx_sys->view_list) - 1
+    );
   }
 
   sess_close(trx_dummy_sess);

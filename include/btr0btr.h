@@ -28,11 +28,10 @@ Created 6/2/1994 Heikki Tuuri
 #include "btr0types.h"
 #include "data0data.h"
 #include "dict0dict.h"
-#include "mtr0mtr.h"
-#include "page0cur.h"
 #include "mach0data.h"
 #include "mtr0log.h"
 #include "mtr0mtr.h"
+#include "page0cur.h"
 
 /** Maximum record size which can be stored on a page, without using the
 special big record storage structure */
@@ -97,7 +96,7 @@ that the caller has appropriate latches on the page and its neighbor.
 @param[in,out] rec              Record on leaf level
 @param[in,out] mtr              Mini-tranaction.
 @return	previous user record, NULL if there is none */
-rec_t * btr_get_prev_user_rec(rec_t *rec, mtr_t *mtr);
+rec_t *btr_get_prev_user_rec(rec_t *rec, mtr_t *mtr);
 
 /** Gets pointer to the next user record in the tree. It is assumed
 that the caller has appropriate latches on the page and its neighbor.
@@ -105,7 +104,7 @@ that the caller has appropriate latches on the page and its neighbor.
 @param[in,out] mtr              holding a latch on the page, and if needed,
                                 also to the next page
 @return	next user record, NULL if there is none */
-rec_t * btr_get_next_user_rec(rec_t *rec, mtr_t *mtr);
+rec_t *btr_get_next_user_rec(rec_t *rec, mtr_t *mtr);
 
 /** Creates the root node for a new index tree.
 @param[in] type                 type of the index
@@ -197,8 +196,7 @@ that mtr holds an x-latch on the tree.
 @param[in,out] mtr              Mini-transaction. */
 void btr_insert_on_non_leaf_level_func(dict_index_t *index, ulint level, dtuple_t *tuple, const char *file, ulint line, mtr_t *mtr);
 
-#define btr_insert_on_non_leaf_level(i, l, t, m) \
-  btr_insert_on_non_leaf_level_func(i, l, t, __FILE__, __LINE__, m)
+#define btr_insert_on_non_leaf_level(i, l, t, m) btr_insert_on_non_leaf_level_func(i, l, t, __FILE__, __LINE__, m)
 
 /** Sets a record as the predefined minimum record.
 @param[in,out] rec              Record
@@ -251,7 +249,7 @@ minimum record.
 @param[in,out] page             Page or NULL
 @param[in,out] mtr              Mini-transaction or nullptr
 @return	end of log record or NULL */
-byte * btr_parse_set_min_rec_mark(byte *ptr, byte *end_ptr, ulint comp, page_t *page, mtr_t *mtr);
+byte *btr_parse_set_min_rec_mark(byte *ptr, byte *end_ptr, ulint comp, page_t *page, mtr_t *mtr);
 
 /** Parses a redo log record of reorganizing a page.
 @param[in,out] ptr              Buffer
@@ -302,7 +300,7 @@ void btr_print_size(dict_index_t *index); /** in: index tree */
 /** Prints directories and other info of all nodes in the index.
 @param[in] index                Index
 @param[in] width                Print this many entries from start and end */
-void btr_print_index(dict_index_t* index, ulint width);
+void btr_print_index(dict_index_t *index, ulint width);
 #endif /* UNIV_BTR_PRINT */
 
 /** Checks the size and number of fields in a record based on the definition of
@@ -331,8 +329,8 @@ constexpr ulint BTR_MAX_NODE_LEVEL = 50;
 @param[in] space                Space id
 @param[in] page_no              Page number
 @param[in] mode                 Latch mode
-@param[in,out] mtr              Mini-transaction. */ 
-inline buf_block_t *btr_block_get( space_id_t space, page_no_t page_no, ulint mode, mtr_t *mtr) {
+@param[in,out] mtr              Mini-transaction. */
+inline buf_block_t *btr_block_get(space_id_t space, page_no_t page_no, ulint mode, mtr_t *mtr) {
   auto block = buf_page_get(space, 0, page_no, mode, mtr);
 
   if (mode != RW_NO_LATCH) {
@@ -347,10 +345,9 @@ inline buf_block_t *btr_block_get( space_id_t space, page_no_t page_no, ulint mo
 @param[in] space                Space id
 @param[in] page_no              Page number
 @param[in] mode                 Latch mode
-@param[in,out] mtr              Mini-transaction. */ 
-inline page_t *btr_page_get(space_id_t space, page_no_t page_no, ulint mode, mtr_t *mtr)
-{
-  return buf_block_get_frame(btr_block_get(space,  page_no, mode, mtr));
+@param[in,out] mtr              Mini-transaction. */
+inline page_t *btr_page_get(space_id_t space, page_no_t page_no, ulint mode, mtr_t *mtr) {
+  return buf_block_get_frame(btr_block_get(space, page_no, mode, mtr));
 }
 
 /** Sets the index id field of a page.
@@ -399,7 +396,7 @@ inline void btr_page_set_level(page_t *page, ulint level, mtr_t *mtr) {
 /** Gets the next index page number.
 @param[in] page                 Index page
 @return	next page number */
-inline ulint btr_page_get_next(const page_t *page, mtr_t* mtr) {
+inline ulint btr_page_get_next(const page_t *page, mtr_t *mtr) {
   ut_ad(mtr_memo_contains_page(mtr, page, MTR_MEMO_PAGE_X_FIX) || mtr_memo_contains_page(mtr, page, MTR_MEMO_PAGE_S_FIX));
 
   return mach_read_from_4(page + FIL_PAGE_NEXT);
@@ -415,8 +412,8 @@ inline void btr_page_set_next(page_t *page, ulint next, mtr_t *mtr) {
 
 /** Gets the previous index page number.
 @param[in] page                 Index page
-@return	prev page number */ inline ulint
-btr_page_get_prev(const page_t *page, mtr_t*) {
+@return	prev page number */
+inline ulint btr_page_get_prev(const page_t *page, mtr_t *) {
   return mach_read_from_4(page + FIL_PAGE_PREV);
 }
 
@@ -436,7 +433,7 @@ with rec_get_offsets(n_fields=ULINT_UNDEFINED).
 @param[in] rec,                 Node pointer record 
 @param[in] offsets              Array returned by rec_get_offsets()
 @return	child node address */
-inline ulint btr_node_ptr_get_child_page_no( const rec_t *rec, const ulint *offsets) {
+inline ulint btr_node_ptr_get_child_page_no(const rec_t *rec, const ulint *offsets) {
   ut_ad(!rec_offs_comp(offsets) || rec_get_node_ptr_flag(rec));
 
   ulint len;
@@ -449,9 +446,7 @@ inline ulint btr_node_ptr_get_child_page_no( const rec_t *rec, const ulint *offs
   page_no_t page_no = mach_read_from_4(field);
 
   if (unlikely(page_no == 0)) {
-    ib_logger(ib_stream,
-              "a nonsensical page number 0 in a node ptr record at offset %lun",
-	      (ulong)page_offset(rec));
+    ib_logger(ib_stream, "a nonsensical page number 0 in a node ptr record at offset %lun", (ulong)page_offset(rec));
     buf_page_print(page_align(rec), 0);
   }
 
@@ -466,7 +461,5 @@ inline void btr_leaf_page_release(buf_block_t *block, ulint latch_mode, mtr_t *m
   ut_ad(!mtr_memo_contains(mtr, block, MTR_MEMO_MODIFY));
   ut_ad(latch_mode == BTR_SEARCH_LEAF || latch_mode == BTR_MODIFY_LEAF);
 
-  mtr_memo_release(mtr, block,
-                   latch_mode == BTR_SEARCH_LEAF ? MTR_MEMO_PAGE_S_FIX
-                                                 : MTR_MEMO_PAGE_X_FIX);
+  mtr_memo_release(mtr, block, latch_mode == BTR_SEARCH_LEAF ? MTR_MEMO_PAGE_S_FIX : MTR_MEMO_PAGE_X_FIX);
 }

@@ -49,9 +49,8 @@ constexpr ulint BTR_KEEP_SYS_FLAG = 4;
 
 /*** Returns the page cursor component of a tree cursor.
 @return	pointer to page cursor component */
-inline page_cur_t *
-btr_cur_get_page_cur(const btr_cur_t *cursor); /*!< in: tree cursor */
-#else                                          /* UNIV_DEBUG */
+inline page_cur_t *btr_cur_get_page_cur(const btr_cur_t *cursor); /*!< in: tree cursor */
+#else                                                             /* UNIV_DEBUG */
 #define btr_cur_get_page_cur(cursor) (&(cursor)->m_page_cur)
 #endif /* UNIV_DEBUG */
 
@@ -95,19 +94,14 @@ btr_cur_get_page_cur(const btr_cur_t *cursor); /*!< in: tree cursor */
  * @param mtr                The mini-transaction handle.
  */
 void btr_cur_search_to_nth_level(
-    dict_index_t* index, 
-    ulint level, 
-    const dtuple_t* tuple, 
-    ulint mode, 
-    ulint latch_mode, 
-    btr_cur_t* cursor, 
-    ulint has_search_latch, 
-    const char* file, 
-    ulint line, 
-    mtr_t* mtr);
+  dict_index_t *index, ulint level, const dtuple_t *tuple, ulint mode, ulint latch_mode, btr_cur_t *cursor, ulint has_search_latch,
+  const char *file, ulint line, mtr_t *mtr
+);
 
- 
-void btr_cur_search_to_nth_level( dict_index_t *index, ulint level, const dtuple_t *tuple, ulint mode, ulint latch_mode, btr_cur_t *cursor, ulint has_search_latch, const char *file, ulint line, mtr_t *mtr);
+void btr_cur_search_to_nth_level(
+  dict_index_t *index, ulint level, const dtuple_t *tuple, ulint mode, ulint latch_mode, btr_cur_t *cursor, ulint has_search_latch,
+  const char *file, ulint line, mtr_t *mtr
+);
 
 /**
  * Opens a cursor at either end of an index.
@@ -121,16 +115,10 @@ void btr_cur_search_to_nth_level( dict_index_t *index, ulint level, const dtuple
  * @param mtr         the mini-transaction handle
  */
 void btr_cur_open_at_index_side_func(
-    bool from_left,
-    dict_index_t *index,
-    ulint latch_mode,
-    btr_cur_t *cursor,
-    const char *file,
-    ulint line,
-    mtr_t *mtr);
+  bool from_left, dict_index_t *index, ulint latch_mode, btr_cur_t *cursor, const char *file, ulint line, mtr_t *mtr
+);
 
-#define btr_cur_open_at_index_side(f, i, l, c, m) \
-    btr_cur_open_at_index_side_func(f, i, l, c, __FILE__, __LINE__, m)
+#define btr_cur_open_at_index_side(f, i, l, c, m) btr_cur_open_at_index_side_func(f, i, l, c, __FILE__, __LINE__, m)
 
 /**
  * Positions a cursor at a randomly chosen position within a B-tree.
@@ -142,12 +130,11 @@ void btr_cur_open_at_index_side_func(
  * @param line       The line number where the function is called.
  * @param mtr        The mini-transaction handle.
  */
-void btr_cur_open_at_rnd_pos_func(dict_index_t *index, ulint latch_mode,
-                                  btr_cur_t *cursor, const char *file,
-                                  ulint line, mtr_t *mtr);
+void btr_cur_open_at_rnd_pos_func(
+  dict_index_t *index, ulint latch_mode, btr_cur_t *cursor, const char *file, ulint line, mtr_t *mtr
+);
 
-#define btr_cur_open_at_rnd_pos(i, l, c, m) \
-    btr_cur_open_at_rnd_pos_func(i, l, c, __FILE__, __LINE__, m)
+#define btr_cur_open_at_rnd_pos(i, l, c, m) btr_cur_open_at_rnd_pos_func(i, l, c, __FILE__, __LINE__, m)
 
 /**
  * Tries to perform an insert to a page in an index tree, next to cursor.
@@ -172,14 +159,8 @@ void btr_cur_open_at_rnd_pos_func(dict_index_t *index, ulint latch_mode,
  * @return              DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number
  */
 db_err btr_cur_optimistic_insert(
-    ulint flags,
-    btr_cur_t *cursor,
-    dtuple_t *entry,
-    rec_t **rec,
-    big_rec_t **big_rec,
-    ulint n_ext,
-    que_thr_t *thr,
-    mtr_t *mtr);
+  ulint flags, btr_cur_t *cursor, dtuple_t *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
+);
 
 /**
  * Performs an insert on a page of an index tree. It is assumed that mtr holds an x-latch
@@ -200,14 +181,8 @@ db_err btr_cur_optimistic_insert(
  * @return          DB_SUCCESS or error number
  */
 db_err btr_cur_pessimistic_insert(
-    ulint flags,
-    btr_cur_t *cursor,
-    dtuple_t *entry,
-    rec_t **rec,
-    big_rec_t **big_rec,
-    ulint n_ext,
-    que_thr_t *thr,
-    mtr_t *mtr);
+  ulint flags, btr_cur_t *cursor, dtuple_t *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
+);
 
 /**
  * Updates a record when the update causes no size changes in its fields.
@@ -221,13 +196,7 @@ db_err btr_cur_pessimistic_insert(
  *
  * @return  DB_SUCCESS or error number
  */
-db_err btr_cur_update_in_place(
-    ulint flags,
-    btr_cur_t *cursor,
-    const upd_t *update,
-    ulint cmpl_info,
-    que_thr_t *thr,
-    mtr_t *mtr);
+db_err btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, const upd_t *update, ulint cmpl_info, que_thr_t *thr, mtr_t *mtr);
 
 /**
  * Tries to update a record on a page in an index tree. It is assumed that mtr
@@ -247,13 +216,7 @@ db_err btr_cur_update_in_place(
  * @return          DB_SUCCESS, or DB_OVERFLOW if the updated record does not fit,
  *                  DB_UNDERFLOW if the page would become too empty.
  */
-db_err btr_cur_optimistic_update(
-    ulint flags,
-    btr_cur_t *cursor,
-    const upd_t *update,
-    ulint cmpl_info,
-    que_thr_t *thr,
-    mtr_t *mtr);
+db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor, const upd_t *update, ulint cmpl_info, que_thr_t *thr, mtr_t *mtr);
 
 /**
  * Performs an update of a record on a page of a tree. It is assumed that mtr holds an x-latch
@@ -273,14 +236,9 @@ db_err btr_cur_optimistic_update(
  * @return              DB_SUCCESS or error code
  */
 db_err btr_cur_pessimistic_update(
-    ulint flags,
-    btr_cur_t *cursor,
-    mem_heap_t **heap,
-    big_rec_t **big_rec,
-    const upd_t *update,
-    ulint cmpl_info,
-    que_thr_t *thr,
-    mtr_t *mtr);
+  ulint flags, btr_cur_t *cursor, mem_heap_t **heap, big_rec_t **big_rec, const upd_t *update, ulint cmpl_info, que_thr_t *thr,
+  mtr_t *mtr
+);
 
 /**
  * Marks a clustered index record deleted. Writes an undo log record to undo log on this delete marking.
@@ -295,12 +253,7 @@ db_err btr_cur_pessimistic_update(
  *
  * @return        DB_SUCCESS, DB_LOCK_WAIT, or error number
  */
-db_err btr_cur_del_mark_set_clust_rec(
-    ulint flags,
-    btr_cur_t *cursor,
-    bool val,
-    que_thr_t *thr,
-    mtr_t *mtr);
+db_err btr_cur_del_mark_set_clust_rec(ulint flags, btr_cur_t *cursor, bool val, que_thr_t *thr, mtr_t *mtr);
 
 /**
  * Sets a secondary index record delete mark to true or false.
@@ -346,12 +299,7 @@ bool btr_cur_optimistic_delete(btr_cur_t *cursor, mtr_t *mtr);
  *
  * @return                     true if compression occurred
  */
-void btr_cur_pessimistic_delete(
-    db_err *err,
-    bool has_reserved_extents,
-    btr_cur_t *cursor,
-    enum trx_rb_ctx rb_ctx,
-    mtr_t *mtr);
+void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents, btr_cur_t *cursor, enum trx_rb_ctx rb_ctx, mtr_t *mtr);
 
 /**
  * Parses a redo log record of updating a record in-place.
@@ -399,9 +347,7 @@ byte *btr_cur_parse_del_mark_set_sec_rec(byte *ptr, byte *end_ptr, page_t *page)
  *
  * @return         estimated number of rows
  */
-int64_t btr_estimate_n_rows_in_range(dict_index_t *index, const dtuple_t *tuple1,
-                                     ulint mode1, const dtuple_t *tuple2,
-                                     ulint mode2);
+int64_t btr_estimate_n_rows_in_range(dict_index_t *index, const dtuple_t *tuple1, ulint mode1, const dtuple_t *tuple2, ulint mode2);
 
 /**
  * Estimates the number of different key values in a given index, for each n-column prefix of the index
@@ -409,8 +355,7 @@ int64_t btr_estimate_n_rows_in_range(dict_index_t *index, const dtuple_t *tuple1
  *
  * @param index in: index
  */
-void btr_estimate_number_of_different_key_vals(
-    dict_index_t *index);
+void btr_estimate_number_of_different_key_vals(dict_index_t *index);
 
 /**
  * Marks not updated extern fields as not-owned by this record. The ownership
@@ -424,12 +369,7 @@ void btr_estimate_number_of_different_key_vals(
  * @param update   in: update entry
  * @param mtr      in: mtr
  */
-void btr_cur_mark_extern_inherited_fields(
-    rec_t *rec,
-    dict_index_t *index,
-    const ulint *offsets,
-    const upd_t *update,
-    mtr_t *mtr);
+void btr_cur_mark_extern_inherited_fields(rec_t *rec, dict_index_t *index, const ulint *offsets, const upd_t *update, mtr_t *mtr);
 
 /**
  * The complement of the previous function: in an update entry may inherit
@@ -446,7 +386,7 @@ void btr_cur_mark_dtuple_inherited_extern(dtuple_t *entry, const upd_t *update);
  *
  * @param entry in/out: clustered index entry
  */
-void btr_cur_unmark_dtuple_extern_fields( dtuple_t *entry);
+void btr_cur_unmark_dtuple_extern_fields(dtuple_t *entry);
 
 /**
  * Stores the fields in big_rec_vec to the tablespace and puts pointers to them in rec.
@@ -464,12 +404,8 @@ void btr_cur_unmark_dtuple_extern_fields( dtuple_t *entry);
  * @return              DB_SUCCESS or error
  */
 db_err btr_store_big_rec_extern_fields(
-    dict_index_t *index,
-    buf_block_t *rec_block,
-    rec_t *rec,
-    const ulint *offsets,
-    big_rec_t *big_rec_vec,
-    mtr_t *local_mtr);
+  dict_index_t *index, buf_block_t *rec_block, rec_t *rec, const ulint *offsets, big_rec_t *big_rec_vec, mtr_t *local_mtr
+);
 
 /**
  * Frees the space in an externally stored field to the file space management if the field in data is owned the externally stored field,
@@ -484,13 +420,8 @@ db_err btr_store_big_rec_extern_fields(
  * @param local_mtr  in: mtr containing the latch to data an an X-latch to the index tree
  */
 void btr_free_externally_stored_field(
-    dict_index_t *index,
-    byte *field_ref,
-    const rec_t *rec,
-    const ulint *offsets,
-    ulint i,
-    enum trx_rb_ctx rb_ctx,
-    mtr_t *local_mtr);
+  dict_index_t *index, byte *field_ref, const rec_t *rec, const ulint *offsets, ulint i, enum trx_rb_ctx rb_ctx, mtr_t *local_mtr
+);
 
 /**
  * Copies the prefix of an externally stored field of a record. The clustered index record must be protected by a lock or a page latch.
@@ -502,7 +433,7 @@ void btr_free_externally_stored_field(
  *
  * @return the length of the copied field, or 0 if the column was being or has been deleted
  */
-ulint btr_copy_externally_stored_field_prefix( byte *buf, ulint len, const byte *data, ulint local_len);
+ulint btr_copy_externally_stored_field_prefix(byte *buf, ulint len, const byte *data, ulint local_len);
 
 /**
  * Copies an externally stored field of a record to mem heap.
@@ -515,12 +446,7 @@ ulint btr_copy_externally_stored_field_prefix( byte *buf, ulint len, const byte 
  *
  * @return the field copied to heap
  */
-byte *btr_rec_copy_externally_stored_field(
-    const rec_t *rec,
-    const ulint *offsets,
-    ulint no,
-    ulint *len,
-    mem_heap_t *heap);
+byte *btr_rec_copy_externally_stored_field(const rec_t *rec, const ulint *offsets, ulint no, ulint *len, mem_heap_t *heap);
 
 /**
  * Flags the data tuple fields that are marked as extern storage in the update vector.
@@ -532,10 +458,7 @@ byte *btr_rec_copy_externally_stored_field(
  *
  * @return          number of flagged external columns
  */
-ulint btr_push_update_extern_fields(
-    dtuple_t *tuple,
-    const upd_t *update,
-    mem_heap_t *heap);
+ulint btr_push_update_extern_fields(dtuple_t *tuple, const upd_t *update, mem_heap_t *heap);
 
 /*** Reset global configuration variables. */
 void btr_cur_var_init();
@@ -551,12 +474,12 @@ constexpr ulint BTR_CUR_PAGE_LOW_FILL_LIMIT = UNIV_PAGE_SIZE / 2;
  * Each slot contains data on a single level of the tree.
  */
 struct btr_path_t {
-    /** Index of the record where the page cursor stopped on this level
+  /** Index of the record where the page cursor stopped on this level
     (index in alphabetical order); value ULINT_UNDEFINED denotes array end */
-    ulint nth_rec; 
+  ulint nth_rec;
 
-    /** Number of records on the page */
-    ulint n_recs;
+  /** Number of records on the page */
+  ulint n_recs;
 };
 
 /** Size of path array (in slots) */
@@ -566,78 +489,78 @@ constexpr ulint BTR_PATH_ARRAY_N_SLOTS = 250;
  * Values for the flag documenting the used search method.
  */
 enum btr_cur_method {
-    /** Successful shortcut using the hash index. */
-    BTR_CUR_HASH = 1,
+  /** Successful shortcut using the hash index. */
+  BTR_CUR_HASH = 1,
 
-    /** Failure using hash, success using binary search: the misleading
+  /** Failure using hash, success using binary search: the misleading
     hash reference is stored in the field hash_node, and might be
     necessary to update. */
-    BTR_CUR_HASH_FAIL,
+  BTR_CUR_HASH_FAIL,
 
-    /** Success using the binary search. */
-    BTR_CUR_BINARY
+  /** Success using the binary search. */
+  BTR_CUR_BINARY
 };
 
 /** The tree cursor: the definition appears here only for the compiler
 to know struct size! */
 struct btr_cur_t {
-    /** index where positioned */
-    dict_index_t *m_index;
-    
-    /** page cursor */
-    page_cur_t m_page_cur;
-    
-    /*!< this field is used to store a pointer to the left neighbor page, in the
+  /** index where positioned */
+  dict_index_t *m_index;
+
+  /** page cursor */
+  page_cur_t m_page_cur;
+
+  /*!< this field is used to store a pointer to the left neighbor page, in the
      * cases BTR_SEARCH_PREV and BTR_MODIFY_PREV */
-    buf_block_t *left_block;
-    
-    /** this field is only used when btr_cur_search_to_nth_level is called for an
+  buf_block_t *left_block;
+
+  /** this field is only used when btr_cur_search_to_nth_level is called for an
      * index entry insertion: the calling query thread is passed here to be used
      * in the insert buffer */
-    que_thr_t *thr;
-    
-    /** Search method used */
-    enum btr_cur_method flag;
-    
-    /*!< Tree height if the search is done for a pessimistic insert or update
+  que_thr_t *thr;
+
+  /** Search method used */
+  enum btr_cur_method flag;
+
+  /*!< Tree height if the search is done for a pessimistic insert or update
      * operation */
-    ulint tree_height;
-    
-    /*!< If the search mode was PAGE_CUR_LE, the number of matched fields to the
+  ulint tree_height;
+
+  /*!< If the search mode was PAGE_CUR_LE, the number of matched fields to the
      * the first user record to the right of the cursor record after
      * btr_cur_search_to_nth_level; for the mode PAGE_CUR_GE, the matched fields
      * to the first user record AT THE CURSOR or to the right of it; NOTE that the
      * up_match and low_match values may exceed the correct values for comparison
      * to the adjacent user record if that record is on a different leaf page!
      * (See the note in row_ins_duplicate_key.) */
-    ulint up_match;
-    
-    /** number of matched bytes to the right at the time cursor positioned; only
+  ulint up_match;
+
+  /** number of matched bytes to the right at the time cursor positioned; only
      * used internally in searches: not defined after the search */
-    ulint up_bytes;
-    
-    /** if search mode was PAGE_CUR_LE, the number of matched fields to the first
+  ulint up_bytes;
+
+  /** if search mode was PAGE_CUR_LE, the number of matched fields to the first
      * user record AT THE CURSOR or to the left of it after
      * btr_cur_search_to_nth_level; NOT defined for PAGE_CUR_GE or any other search
      * modes; see also the NOTE in up_match! */
-    ulint low_match;
-    
-    /** number of matched bytes to the right at the time cursor positioned; only
+  ulint low_match;
+
+  /** number of matched bytes to the right at the time cursor positioned; only
      * used internally in searches: not defined after the search */
-    ulint low_bytes;
-    
-    /** prefix length used in a hash search if hash_node != NULL */
-    ulint n_fields;
-    
-    /** hash prefix bytes if hash_node != NULL */
-    ulint n_bytes;
-    
-    /** fold value used in the search if flag is BTR_CUR_HASH */
-    ulint fold;
-    
-    /** in estimating the number of rows in range, we store in this array
+  ulint low_bytes;
+
+  /** prefix length used in a hash search if hash_node != NULL */
+  ulint n_fields;
+
+  /** hash prefix bytes if hash_node != NULL */
+  ulint n_bytes;
+
+  /** fold value used in the search if flag is BTR_CUR_HASH */
+  ulint fold;
+
+  /** in estimating the number of rows in range, we store in this array
      * information of the path through the tree */
-    btr_path_t *path_arr;
+  btr_path_t *path_arr;
 };
 
 /** If pessimistic delete fails because of lack of file space, there
@@ -689,8 +612,8 @@ constexpr ulint BTR_EXTERN_INHERITED_FLAG = 64;
  * @param cursor The tree cursor.
  * @return Pointer to the page cursor component.
  */
-inline page_cur_t* btr_cur_get_page_cur(const btr_cur_t* cursor) {
-    return &((btr_cur_t*)cursor)->m_page_cur;
+inline page_cur_t *btr_cur_get_page_cur(const btr_cur_t *cursor) {
+  return &((btr_cur_t *)cursor)->m_page_cur;
 }
 #endif /* UNIV_DEBUG */
 
@@ -699,8 +622,8 @@ inline page_cur_t* btr_cur_get_page_cur(const btr_cur_t* cursor) {
  * @param cursor The tree cursor.
  * @return Pointer to the buffer block.
  */
-inline buf_block_t* btr_cur_get_block(btr_cur_t* cursor) {
-    return page_cur_get_block(btr_cur_get_page_cur(cursor));
+inline buf_block_t *btr_cur_get_block(btr_cur_t *cursor) {
+  return page_cur_get_block(btr_cur_get_page_cur(cursor));
 }
 
 /**
@@ -708,16 +631,16 @@ inline buf_block_t* btr_cur_get_block(btr_cur_t* cursor) {
  * @param cursor The tree cursor.
  * @return Pointer to the record.
  */
-inline rec_t* btr_cur_get_rec(btr_cur_t* cursor) {
-    return page_cur_get_rec(&(cursor->m_page_cur));
+inline rec_t *btr_cur_get_rec(btr_cur_t *cursor) {
+  return page_cur_get_rec(&(cursor->m_page_cur));
 }
 
 /**
  * Invalidates a tree cursor by setting the record pointer to NULL.
  * @param cursor The tree cursor.
  */
-inline void btr_cur_invalidate(btr_cur_t* cursor) {
-    page_cur_invalidate(&(cursor->m_page_cur));
+inline void btr_cur_invalidate(btr_cur_t *cursor) {
+  page_cur_invalidate(&(cursor->m_page_cur));
 }
 
 /**
@@ -725,8 +648,8 @@ inline void btr_cur_invalidate(btr_cur_t* cursor) {
  * @param cursor The tree cursor.
  * @return Pointer to the page.
  */
-inline page_t* btr_cur_get_page(btr_cur_t* cursor) {
-    return page_align(page_cur_get_rec(&(cursor->m_page_cur)));
+inline page_t *btr_cur_get_page(btr_cur_t *cursor) {
+  return page_align(page_cur_get_rec(&(cursor->m_page_cur)));
 }
 
 /**
@@ -734,8 +657,8 @@ inline page_t* btr_cur_get_page(btr_cur_t* cursor) {
  * @param cursor The B-tree cursor.
  * @return The index.
  */
-inline dict_index_t* btr_cur_get_index(btr_cur_t* cursor) {
-    return cursor->m_index;
+inline dict_index_t *btr_cur_get_index(btr_cur_t *cursor) {
+  return cursor->m_index;
 }
 
 /**
@@ -745,12 +668,12 @@ inline dict_index_t* btr_cur_get_index(btr_cur_t* cursor) {
  * @param block The buffer block of the record.
  * @param cursor The output cursor.
  */
-inline void btr_cur_position(dict_index_t* dict_index, rec_t* rec, buf_block_t* block, btr_cur_t* cursor) {
-    ut_ad(page_align(rec) == block->frame);
+inline void btr_cur_position(dict_index_t *dict_index, rec_t *rec, buf_block_t *block, btr_cur_t *cursor) {
+  ut_ad(page_align(rec) == block->frame);
 
-    page_cur_position(rec, block, btr_cur_get_page_cur(cursor));
+  page_cur_position(rec, block, btr_cur_get_page_cur(cursor));
 
-    cursor->m_index = dict_index;
+  cursor->m_index = dict_index;
 }
 
 /**
@@ -759,22 +682,20 @@ inline void btr_cur_position(dict_index_t* dict_index, rec_t* rec, buf_block_t* 
  * @param mtr The minit-transaction
  * @return True if merge is recommended.
  */
-inline bool btr_cur_compress_recommendation(btr_cur_t* cursor, mtr_t* mtr) {
-    ut_ad(mtr_memo_contains(mtr, btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
+inline bool btr_cur_compress_recommendation(btr_cur_t *cursor, mtr_t *mtr) {
+  ut_ad(mtr_memo_contains(mtr, btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
 
-    auto page = btr_cur_get_page(cursor);
+  auto page = btr_cur_get_page(cursor);
 
-    if (page_get_data_size(page) < BTR_CUR_PAGE_LOW_FILL_LIMIT ||
-        (btr_page_get_next(page, mtr) == FIL_NULL &&
-         btr_page_get_prev(page, mtr) == FIL_NULL)) {
+  if (page_get_data_size(page) < BTR_CUR_PAGE_LOW_FILL_LIMIT || (btr_page_get_next(page, mtr) == FIL_NULL && btr_page_get_prev(page, mtr) == FIL_NULL)) {
 
-        // The page fillfactor has dropped below a predefined minimum value
-        // OR the level in the B-tree contains just one page: we recommend
-        // merge if this is not the root page.
-        return dict_index_get_page(cursor->m_index) != page_get_page_no(page);
-    } else {
-        return false;
-    }
+    // The page fillfactor has dropped below a predefined minimum value
+    // OR the level in the B-tree contains just one page: we recommend
+    // merge if this is not the root page.
+    return dict_index_get_page(cursor->m_index) != page_get_page_no(page);
+  } else {
+    return false;
+  }
 }
 
 /**
@@ -785,22 +706,19 @@ inline bool btr_cur_compress_recommendation(btr_cur_t* cursor, mtr_t* mtr) {
  * @param mtr The mini-transaction
  * @return True if the record can be deleted without recommended merging.
  */
-inline bool btr_cur_delete_will_underflow(btr_cur_t* cursor, ulint rec_size, mtr_t* mtr) {
-    ut_ad(mtr_memo_contains(mtr, btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
+inline bool btr_cur_delete_will_underflow(btr_cur_t *cursor, ulint rec_size, mtr_t *mtr) {
+  ut_ad(mtr_memo_contains(mtr, btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
 
-    auto page = btr_cur_get_page(cursor);
+  auto page = btr_cur_get_page(cursor);
 
-    if ((page_get_data_size(page) - rec_size < BTR_CUR_PAGE_LOW_FILL_LIMIT) ||
-        (btr_page_get_next(page, mtr) == FIL_NULL &&
-         btr_page_get_prev(page, mtr) == FIL_NULL) ||
-        page_get_n_recs(page) < 2) {
+  if ((page_get_data_size(page) - rec_size < BTR_CUR_PAGE_LOW_FILL_LIMIT) || (btr_page_get_next(page, mtr) == FIL_NULL && btr_page_get_prev(page, mtr) == FIL_NULL) || page_get_n_recs(page) < 2) {
 
-        // The page fillfactor will drop below a predefined minimum value,
-        // OR the level in the B-tree contains just one page,
-        // OR the page will become empty: we recommend merge if this is
-        // not the root page.
-        return dict_index_get_page(cursor->m_index) == page_get_page_no(page);
-    } else {
-        return true;
-    }
+    // The page fillfactor will drop below a predefined minimum value,
+    // OR the level in the B-tree contains just one page,
+    // OR the page will become empty: we recommend merge if this is
+    // not the root page.
+    return dict_index_get_page(cursor->m_index) == page_get_page_no(page);
+  } else {
+    return true;
+  }
 }

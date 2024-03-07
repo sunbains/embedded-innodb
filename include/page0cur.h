@@ -49,8 +49,7 @@ constexpr auto PAGE_CUR_LE = IB_CUR_LE;
 #ifdef UNIV_SEARCH_DEBUG
 /** As PAGE_CUR_LE, but skips search shortcut */
 constexpr auto PAGE_CUR_DBG = 6;
-#endif/* UNIV_SEARCH_DEBUG */
-
+#endif /* UNIV_SEARCH_DEBUG */
 
 /**
  * @brief Inserts a record next to page cursor on an uncompressed page.
@@ -102,15 +101,9 @@ void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *o
  * @param cursor Out: Page cursor.
  */
 void page_cur_search_with_match(
-  const buf_block_t *block,
-  const dict_index_t *index,
-  const dtuple_t *tuple,
-  ulint mode,
-  ulint *iup_matched_fields,
-  ulint *iup_matched_bytes,
-  ulint *ilow_matched_fields,
-  ulint *ilow_matched_bytes,
-  page_cur_t *cursor);
+  const buf_block_t *block, const dict_index_t *index, const dtuple_t *tuple, ulint mode, ulint *iup_matched_fields,
+  ulint *iup_matched_bytes, ulint *ilow_matched_fields, ulint *ilow_matched_bytes, page_cur_t *cursor
+);
 
 /**
  * @brief Positions a page cursor on a randomly chosen user record on a page. If there
@@ -167,7 +160,6 @@ struct page_cur_struct {
   buf_block_t *block;
 };
 
-
 #ifdef UNIV_DEBUG
 /**
  * @brief Gets pointer to the page frame where the cursor is positioned.
@@ -175,7 +167,7 @@ struct page_cur_struct {
  * @param cur In: Page cursor.
  * @return Page.
  */
-inline page_t* page_cur_get_page(page_cur_t* cur) {
+inline page_t *page_cur_get_page(page_cur_t *cur) {
   ut_ad(page_align(cur->rec) == cur->block->frame);
 
   return page_align(cur->rec);
@@ -187,7 +179,7 @@ inline page_t* page_cur_get_page(page_cur_t* cur) {
  * @param cur In: Page cursor.
  * @return Buffer block.
  */
-inline buf_block_t* page_cur_get_block(page_cur_t* cur) {
+inline buf_block_t *page_cur_get_block(page_cur_t *cur) {
   ut_ad(page_align(cur->rec) == cur->block->frame);
 
   return cur->block;
@@ -199,7 +191,7 @@ inline buf_block_t* page_cur_get_block(page_cur_t* cur) {
  * @param cur In: Page cursor.
  * @return Record.
  */
-inline rec_t* page_cur_get_rec(page_cur_t* cur) {
+inline rec_t *page_cur_get_rec(page_cur_t *cur) {
   ut_ad(page_align(cur->rec) == cur->block->frame);
 
   return cur->rec;
@@ -228,7 +220,7 @@ inline void page_cur_set_before_first(buf_block_t *block, page_cur_t *cur) {
  * @param cur In: Cursor.
  */
 inline void page_cur_set_before_first(const buf_block_t *block, page_cur_t *cur) {
-  page_cur_set_before_first(const_cast<buf_block_t*>(block), cur);
+  page_cur_set_before_first(const_cast<buf_block_t *>(block), cur);
 }
 
 /**
@@ -241,6 +233,7 @@ inline void page_cur_set_after_last(buf_block_t *block, page_cur_t *cur) {
   cur->block = block;
   cur->rec = page_get_supremum_rec(buf_block_get_frame(cur->block));
 }
+
 /**
  * @brief Sets the cursor object to point after the last user record on the page.
  * 
@@ -330,7 +323,9 @@ inline void page_cur_move_to_prev(page_cur_t *cur) {
  * @param cursor Out: Page cursor.
  * @return Number of matched fields on the left.
  */
-inline ulint page_cur_search(const buf_block_t *block, const dict_index_t *dict_index, const dtuple_t *tuple, ulint mode, page_cur_t *cursor) {
+inline ulint page_cur_search(
+  const buf_block_t *block, const dict_index_t *dict_index, const dtuple_t *tuple, ulint mode, page_cur_t *cursor
+) {
   ulint low_matched_fields = 0;
   ulint low_matched_bytes = 0;
   ulint up_matched_fields = 0;
@@ -338,7 +333,9 @@ inline ulint page_cur_search(const buf_block_t *block, const dict_index_t *dict_
 
   ut_ad(dtuple_check_typed(tuple));
 
-  page_cur_search_with_match(block, dict_index, tuple, mode, &up_matched_fields, &up_matched_bytes, &low_matched_fields, &low_matched_bytes, cursor);
+  page_cur_search_with_match(
+    block, dict_index, tuple, mode, &up_matched_fields, &up_matched_bytes, &low_matched_fields, &low_matched_bytes, cursor
+  );
 
   return low_matched_fields;
 }
@@ -356,8 +353,7 @@ inline ulint page_cur_search(const buf_block_t *block, const dict_index_t *dict_
  * @param mtr In: Mini-transaction handle, or NULL.
  * @return Pointer to the inserted record if successful, NULL otherwise.
  */
-inline rec_t *page_cur_tuple_insert(page_cur_t *cursor, const dtuple_t *tuple,
-                                    dict_index_t *dict_index, ulint n_ext, mtr_t *mtr) {
+inline rec_t *page_cur_tuple_insert(page_cur_t *cursor, const dtuple_t *tuple, dict_index_t *dict_index, ulint n_ext, mtr_t *mtr) {
   ulint size = rec_get_converted_size(dict_index, tuple, n_ext);
 
   auto heap = mem_heap_create(size + (4 + REC_OFFS_HEADER_SIZE + dtuple_get_n_fields(tuple)) * sizeof(ulint));
@@ -384,6 +380,6 @@ inline rec_t *page_cur_tuple_insert(page_cur_t *cursor, const dtuple_t *tuple,
  * @param mtr In: Mini-transaction handle, or NULL.
  * @return Pointer to the inserted record if successful, NULL otherwise.
  */
-inline rec_t* page_cur_rec_insert(page_cur_t* cursor, const rec_t* rec, dict_index_t* dict_index, ulint* offsets, mtr_t* mtr) {
+inline rec_t *page_cur_rec_insert(page_cur_t *cursor, const rec_t *rec, dict_index_t *dict_index, ulint *offsets, mtr_t *mtr) {
   return page_cur_insert_rec_low(cursor->rec, dict_index, rec, offsets, mtr);
 }

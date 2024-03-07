@@ -31,13 +31,11 @@ Created 10/10/1995 Heikki Tuuri
 
 /** Reads the data files and their sizes from a character string.
 @return	true if ok, false on parse error */
-bool srv_parse_data_file_paths_and_sizes(
-    const char *str); /** in: the data file path string */
+bool srv_parse_data_file_paths_and_sizes(const char *str); /** in: the data file path string */
 
 /** Reads log group home directories from a character string.
 @return	true if ok, false on parse error */
-bool srv_parse_log_group_home_dirs(
-    const char *str); /** in: character string */
+bool srv_parse_log_group_home_dirs(const char *str); /** in: character string */
 
 /** Frees the memory allocated by srv_parse_data_file_paths_and_sizes()
 and srv_parse_log_group_home_dirs(). */
@@ -82,7 +80,7 @@ enum srv_shutdown_state {
   SRV_SHUTDOWN_NONE = 0,
 
   /** Cleaning up in logs_empty_and_mark_files_at_shutdown() */
-  SRV_SHUTDOWN_CLEANUP, 
+  SRV_SHUTDOWN_CLEANUP,
 
   /** Last phase after ensuring that the buffer pool can be freed:
   flush all file spaces and close all files */

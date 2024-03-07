@@ -34,8 +34,8 @@ set - eu
 #flex assigns a pointer to an int in one place without a cast, resulting in
 #a warning on Win64.Add the cast.Also define some symbols as static.
             sed -
-        e ' s / ' "$TMPFILE" ' / ' "$OUTFILE"' / ; s /\<register\> * //;
-                s /\(int offset = \)\((yy_c_buf_p) - (yytext_ptr)\);
+        e ' s / ' "$TMPFILE" ' / ' "$OUTFILE"' / ; s /\<register\> * //; s /\(
+            int offset = \)\((yy_c_buf_p) - (yytext_ptr)\);
 /\1(int)(\2);
 / ;
 s /\(void yy\(restart\| _\(delete\| flush\) _buffer\)\) / static \1 / ;

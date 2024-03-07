@@ -147,9 +147,11 @@ static bool rec_validate_old(const rec_t *rec); /*!< in: physical record */
 physical record are stored externally.
 @return	number of externally stored columns */
 
-ulint rec_get_n_extern_new(const rec_t *rec, /*!< in: compact physical record */
-                           dict_index_t *index, /*!< in: record descriptor */
-                           ulint n) /*!< in: number of columns to scan */
+ulint rec_get_n_extern_new(
+  const rec_t *rec,    /*!< in: compact physical record */
+  dict_index_t *index, /*!< in: record descriptor */
+  ulint n
+) /*!< in: number of columns to scan */
 {
   const byte *nulls;
   const byte *lens;
@@ -224,14 +226,15 @@ in ROW_FORMAT=COMPACT.  This is a special case of
 rec_init_offsets() and rec_get_offsets_func(). */
 
 void rec_init_offsets_comp_ordinary(
-    const rec_t *rec,          /*!< in: physical record in
+  const rec_t *rec,          /*!< in: physical record in
                                ROW_FORMAT=COMPACT */
-    ulint extra,               /*!< in: number of bytes to reserve
+  ulint extra,               /*!< in: number of bytes to reserve
                                between the record header and
                                the data payload
                                (usually REC_N_NEW_EXTRA_BYTES) */
-    const dict_index_t *index, /*!< in: record descriptor */
-    ulint *offsets)            /*!< in/out: array of offsets;
+  const dict_index_t *index, /*!< in: record descriptor */
+  ulint *offsets
+) /*!< in/out: array of offsets;
                                in: n=rec_offs_n_fields(offsets) */
 {
   ulint i = 0;
@@ -329,10 +332,11 @@ fields 1..n_fields+1.  When the high-order bit of the offset at [i+1]
 is set (REC_OFFS_SQL_NULL), the field i is NULL.  When the second
 high-order bit of the offset at [i+1] is set (REC_OFFS_EXTERNAL), the
 field i is being stored externally. */
-static void
-rec_init_offsets(const rec_t *rec,          /*!< in: physical record */
-                 const dict_index_t *index, /*!< in: record descriptor */
-                 ulint *offsets)            /*!< in/out: array of offsets;
+static void rec_init_offsets(
+  const rec_t *rec,          /*!< in: physical record */
+  const dict_index_t *index, /*!< in: record descriptor */
+  ulint *offsets
+) /*!< in/out: array of offsets;
                                             in: n=rec_offs_n_fields(offsets) */
 {
   ulint i = 0;
@@ -349,19 +353,18 @@ rec_init_offsets(const rec_t *rec,          /*!< in: physical record */
     ulint n_node_ptr_field = ULINT_UNDEFINED;
 
     switch (expect(status, REC_STATUS_ORDINARY)) {
-    case REC_STATUS_INFIMUM:
-    case REC_STATUS_SUPREMUM:
-      /* the field is 8 bytes long */
-      rec_offs_base(offsets)[0] = REC_N_NEW_EXTRA_BYTES | REC_OFFS_COMPACT;
-      rec_offs_base(offsets)[1] = 8;
-      return;
-    case REC_STATUS_NODE_PTR:
-      n_node_ptr_field = dict_index_get_n_unique_in_tree(index);
-      break;
-    case REC_STATUS_ORDINARY:
-      rec_init_offsets_comp_ordinary(rec, REC_N_NEW_EXTRA_BYTES, index,
-                                     offsets);
-      return;
+      case REC_STATUS_INFIMUM:
+      case REC_STATUS_SUPREMUM:
+        /* the field is 8 bytes long */
+        rec_offs_base(offsets)[0] = REC_N_NEW_EXTRA_BYTES | REC_OFFS_COMPACT;
+        rec_offs_base(offsets)[1] = 8;
+        return;
+      case REC_STATUS_NODE_PTR:
+        n_node_ptr_field = dict_index_get_n_unique_in_tree(index);
+        break;
+      case REC_STATUS_ORDINARY:
+        rec_init_offsets_comp_ordinary(rec, REC_N_NEW_EXTRA_BYTES, index, offsets);
+        return;
     }
 
     nulls = rec - (REC_N_NEW_EXTRA_BYTES + 1);
@@ -479,19 +482,20 @@ rec_init_offsets(const rec_t *rec,          /*!< in: physical record */
 in the record.	It can reuse a previously returned array.
 @return	the new offsets */
 
-ulint *
-rec_get_offsets_func(const rec_t *rec,          /*!< in: physical record */
-                     const dict_index_t *index, /*!< in: record descriptor */
-                     ulint *offsets,            /*!< in/out: array consisting of
+ulint *rec_get_offsets_func(
+  const rec_t *rec,          /*!< in: physical record */
+  const dict_index_t *index, /*!< in: record descriptor */
+  ulint *offsets,            /*!< in/out: array consisting of
                                                 offsets[0] allocated elements,
                                                 or an array from rec_get_offsets(),
                                                 or NULL */
-                     ulint n_fields,            /*!< in: maximum number of
+  ulint n_fields,            /*!< in: maximum number of
                                                initialized fields
                                                 (ULINT_UNDEFINED if all fields) */
-                     mem_heap_t **heap,         /*!< in/out: memory heap */
-                     const char *file, /*!< in: file name where called */
-                     ulint line)       /*!< in: line number where called */
+  mem_heap_t **heap,         /*!< in/out: memory heap */
+  const char *file,          /*!< in: file name where called */
+  ulint line
+) /*!< in: line number where called */
 {
   ulint n;
   ulint size;
@@ -502,20 +506,20 @@ rec_get_offsets_func(const rec_t *rec,          /*!< in: physical record */
 
   if (dict_table_is_comp(index->table)) {
     switch (expect(rec_get_status(rec), REC_STATUS_ORDINARY)) {
-    case REC_STATUS_ORDINARY:
-      n = dict_index_get_n_fields(index);
-      break;
-    case REC_STATUS_NODE_PTR:
-      n = dict_index_get_n_unique_in_tree(index) + 1;
-      break;
-    case REC_STATUS_INFIMUM:
-    case REC_STATUS_SUPREMUM:
-      /* infimum or supremum record */
-      n = 1;
-      break;
-    default:
-      ut_error;
-      return (NULL);
+      case REC_STATUS_ORDINARY:
+        n = dict_index_get_n_fields(index);
+        break;
+      case REC_STATUS_NODE_PTR:
+        n = dict_index_get_n_unique_in_tree(index) + 1;
+        break;
+      case REC_STATUS_INFIMUM:
+      case REC_STATUS_SUPREMUM:
+        /* infimum or supremum record */
+        n = 1;
+        break;
+      default:
+        ut_error;
+        return (NULL);
     }
   } else {
     n = rec_get_n_fields_old(rec);
@@ -529,11 +533,9 @@ rec_get_offsets_func(const rec_t *rec,          /*!< in: physical record */
 
   if (unlikely(!offsets) || unlikely(rec_offs_get_n_alloc(offsets) < size)) {
     if (unlikely(!*heap)) {
-      *heap = mem_heap_create_func(size * sizeof(ulint), MEM_HEAP_DYNAMIC, file,
-                                   line);
+      *heap = mem_heap_create_func(size * sizeof(ulint), MEM_HEAP_DYNAMIC, file, line);
     }
-    offsets =
-        reinterpret_cast<ulint *>(mem_heap_alloc(*heap, size * sizeof(ulint)));
+    offsets = reinterpret_cast<ulint *>(mem_heap_alloc(*heap, size * sizeof(ulint)));
     rec_offs_set_n_alloc(offsets, size);
   }
 
@@ -546,14 +548,15 @@ rec_get_offsets_func(const rec_t *rec,          /*!< in: physical record */
 in the record.  It can reuse a previously allocated array. */
 
 void rec_get_offsets_reverse(
-    const byte *extra,         /*!< in: the extra bytes of a
+  const byte *extra,         /*!< in: the extra bytes of a
                                compact record in reverse order,
                                excluding the fixed-size
                                REC_N_NEW_EXTRA_BYTES */
-    const dict_index_t *index, /*!< in: record descriptor */
-    ulint node_ptr,            /*!< in: nonzero=node pointer,
+  const dict_index_t *index, /*!< in: record descriptor */
+  ulint node_ptr,            /*!< in: nonzero=node pointer,
                               0=leaf node */
-    ulint *offsets)            /*!< in/out: array consisting of
+  ulint *offsets
+) /*!< in/out: array consisting of
                                offsets[0] allocated elements */
 {
   ulint n;
@@ -655,17 +658,18 @@ void rec_get_offsets_reverse(
   } while (++i < rec_offs_n_fields(offsets));
 
   ut_ad(lens >= extra);
-  *rec_offs_base(offsets) =
-      (lens - extra + REC_N_NEW_EXTRA_BYTES) | REC_OFFS_COMPACT | any_ext;
+  *rec_offs_base(offsets) = (lens - extra + REC_N_NEW_EXTRA_BYTES) | REC_OFFS_COMPACT | any_ext;
 }
 
 /** The following function is used to get the offset to the nth
 data field in an old-style record.
 @return	offset to the field */
 
-ulint rec_get_nth_field_offs_old(const rec_t *rec, /*!< in: record */
-                                 ulint n,    /*!< in: index of the field */
-                                 ulint *len) /*!< out: length of the field;
+ulint rec_get_nth_field_offs_old(
+  const rec_t *rec, /*!< in: record */
+  ulint n,          /*!< in: index of the field */
+  ulint *len
+) /*!< out: length of the field;
                                              UNIV_SQL_NULL if SQL null */
 {
   ulint os;
@@ -712,13 +716,14 @@ ulint rec_get_nth_field_offs_old(const rec_t *rec, /*!< in: record */
 @return	total size */
 
 ulint rec_get_converted_size_comp_prefix(
-    const dict_index_t *index, /*!< in: record descriptor;
+  const dict_index_t *index, /*!< in: record descriptor;
                                dict_table_is_comp() is
                                assumed to hold, even if
                                it does not */
-    const dfield_t *fields,    /*!< in: array of data fields */
-    ulint n_fields,            /*!< in: number of data fields */
-    ulint *extra)              /*!< out: extra size */
+  const dfield_t *fields,    /*!< in: array of data fields */
+  ulint n_fields,            /*!< in: number of data fields */
+  ulint *extra
+) /*!< out: extra size */
 {
   ulint extra_size;
   ulint data_size;
@@ -749,8 +754,7 @@ ulint rec_get_converted_size_comp_prefix(
       continue;
     }
 
-    ut_ad(len <= col->len || col->mtype == DATA_BLOB ||
-          col->mtype == DATA_DECIMAL);
+    ut_ad(len <= col->len || col->mtype == DATA_BLOB || col->mtype == DATA_DECIMAL);
 
     /* If the maximum length of a variable-length field
     is up to 255 bytes, the actual length is always stored
@@ -789,14 +793,15 @@ ulint rec_get_converted_size_comp_prefix(
 @return	total size */
 
 ulint rec_get_converted_size_comp(
-    const dict_index_t *index, /*!< in: record descriptor;
+  const dict_index_t *index, /*!< in: record descriptor;
                                dict_table_is_comp() is
                                assumed to hold, even if
                                it does not */
-    ulint status,              /*!< in: status bits of the record */
-    const dfield_t *fields,    /*!< in: array of data fields */
-    ulint n_fields,            /*!< in: number of data fields */
-    ulint *extra)              /*!< out: extra size */
+  ulint status,              /*!< in: status bits of the record */
+  const dfield_t *fields,    /*!< in: array of data fields */
+  ulint n_fields,            /*!< in: number of data fields */
+  ulint *extra
+) /*!< out: extra size */
 {
   ulint size;
   ut_ad(index);
@@ -804,37 +809,38 @@ ulint rec_get_converted_size_comp(
   ut_ad(n_fields > 0);
 
   switch (expect(status, REC_STATUS_ORDINARY)) {
-  case REC_STATUS_ORDINARY:
-    ut_ad(n_fields == dict_index_get_n_fields(index));
-    size = 0;
-    break;
-  case REC_STATUS_NODE_PTR:
-    n_fields--;
-    ut_ad(n_fields == dict_index_get_n_unique_in_tree(index));
-    ut_ad(dfield_get_len(&fields[n_fields]) == REC_NODE_PTR_SIZE);
-    size = REC_NODE_PTR_SIZE; /* child page number */
-    break;
-  case REC_STATUS_INFIMUM:
-  case REC_STATUS_SUPREMUM:
-    /* infimum or supremum record, 8 data bytes */
-    if (likely_null(extra)) {
-      *extra = REC_N_NEW_EXTRA_BYTES;
-    }
-    return (REC_N_NEW_EXTRA_BYTES + 8);
-  default:
-    ut_error;
-    return (ULINT_UNDEFINED);
+    case REC_STATUS_ORDINARY:
+      ut_ad(n_fields == dict_index_get_n_fields(index));
+      size = 0;
+      break;
+    case REC_STATUS_NODE_PTR:
+      n_fields--;
+      ut_ad(n_fields == dict_index_get_n_unique_in_tree(index));
+      ut_ad(dfield_get_len(&fields[n_fields]) == REC_NODE_PTR_SIZE);
+      size = REC_NODE_PTR_SIZE; /* child page number */
+      break;
+    case REC_STATUS_INFIMUM:
+    case REC_STATUS_SUPREMUM:
+      /* infimum or supremum record, 8 data bytes */
+      if (likely_null(extra)) {
+        *extra = REC_N_NEW_EXTRA_BYTES;
+      }
+      return (REC_N_NEW_EXTRA_BYTES + 8);
+    default:
+      ut_error;
+      return (ULINT_UNDEFINED);
   }
 
-  return (size +
-          rec_get_converted_size_comp_prefix(index, fields, n_fields, extra));
+  return (size + rec_get_converted_size_comp_prefix(index, fields, n_fields, extra));
 }
 
 /** Sets the value of the ith field SQL null bit of an old-style record. */
 
-void rec_set_nth_field_null_bit(rec_t *rec, /*!< in: record */
-                                ulint i,    /*!< in: ith field */
-                                bool val)   /*!< in: value to set */
+void rec_set_nth_field_null_bit(
+  rec_t *rec, /*!< in: record */
+  ulint i,    /*!< in: ith field */
+  bool val
+) /*!< in: value to set */
 {
   ulint info;
 
@@ -867,8 +873,10 @@ void rec_set_nth_field_null_bit(rec_t *rec, /*!< in: record */
 /** Sets an old-style record field to SQL null.
 The physical size of the field is not changed. */
 
-void rec_set_nth_field_sql_null(rec_t *rec, /*!< in: record */
-                                ulint n)    /*!< in: index of the field */
+void rec_set_nth_field_sql_null(
+  rec_t *rec, /*!< in: record */
+  ulint n
+) /*!< in: index of the field */
 {
   ulint offset;
 
@@ -883,9 +891,10 @@ void rec_set_nth_field_sql_null(rec_t *rec, /*!< in: record */
 stores it beginning from the start of the given buffer.
 @return	pointer to the origin of physical record */
 static rec_t *rec_convert_dtuple_to_rec_old(
-    byte *buf,              /*!< in: start address of the physical record */
-    const dtuple_t *dtuple, /*!< in: data tuple */
-    ulint n_ext)            /*!< in: number of externally stored columns */
+  byte *buf,              /*!< in: start address of the physical record */
+  const dtuple_t *dtuple, /*!< in: data tuple */
+  ulint n_ext
+) /*!< in: number of externally stored columns */
 {
   const dfield_t *field;
   ulint n_fields;
@@ -986,15 +995,16 @@ static rec_t *rec_convert_dtuple_to_rec_old(
 /** Builds a ROW_FORMAT=COMPACT record out of a data tuple. */
 
 void rec_convert_dtuple_to_rec_comp(
-    rec_t *rec,                /*!< in: origin of record */
-    ulint extra,               /*!< in: number of bytes to
+  rec_t *rec,                /*!< in: origin of record */
+  ulint extra,               /*!< in: number of bytes to
                                reserve between the record
                                header and the data payload
                                (normally REC_N_NEW_EXTRA_BYTES) */
-    const dict_index_t *index, /*!< in: record descriptor */
-    ulint status,              /*!< in: status bits of the record */
-    const dfield_t *fields,    /*!< in: array of data fields */
-    ulint n_fields)            /*!< in: number of data fields */
+  const dict_index_t *index, /*!< in: record descriptor */
+  ulint status,              /*!< in: status bits of the record */
+  const dfield_t *fields,    /*!< in: array of data fields */
+  ulint n_fields
+) /*!< in: number of data fields */
 {
   const dfield_t *field;
   const dtype_t *type;
@@ -1011,22 +1021,22 @@ void rec_convert_dtuple_to_rec_comp(
   ut_ad(n_fields > 0);
 
   switch (expect(status, REC_STATUS_ORDINARY)) {
-  case REC_STATUS_ORDINARY:
-    ut_ad(n_fields <= dict_index_get_n_fields(index));
-    n_node_ptr_field = ULINT_UNDEFINED;
-    break;
-  case REC_STATUS_NODE_PTR:
-    ut_ad(n_fields == dict_index_get_n_unique_in_tree(index) + 1);
-    n_node_ptr_field = n_fields - 1;
-    break;
-  case REC_STATUS_INFIMUM:
-  case REC_STATUS_SUPREMUM:
-    ut_ad(n_fields == 1);
-    n_node_ptr_field = ULINT_UNDEFINED;
-    break;
-  default:
-    ut_error;
-    return;
+    case REC_STATUS_ORDINARY:
+      ut_ad(n_fields <= dict_index_get_n_fields(index));
+      n_node_ptr_field = ULINT_UNDEFINED;
+      break;
+    case REC_STATUS_NODE_PTR:
+      ut_ad(n_fields == dict_index_get_n_unique_in_tree(index) + 1);
+      n_node_ptr_field = n_fields - 1;
+      break;
+    case REC_STATUS_INFIMUM:
+    case REC_STATUS_SUPREMUM:
+      ut_ad(n_fields == 1);
+      n_node_ptr_field = ULINT_UNDEFINED;
+      break;
+    default:
+      ut_error;
+      return;
   }
 
   end = rec;
@@ -1091,10 +1101,8 @@ void rec_convert_dtuple_to_rec_comp(
       *lens-- = (byte)(len >> 8) | 0xc0;
       *lens-- = (byte)len;
     } else {
-      ut_ad(len <= dtype_get_len(type) || dtype_get_mtype(type) == DATA_BLOB ||
-            dtype_get_mtype(type) == DATA_DECIMAL);
-      if (len < 128 ||
-          (dtype_get_len(type) < 256 && dtype_get_mtype(type) != DATA_BLOB)) {
+      ut_ad(len <= dtype_get_len(type) || dtype_get_mtype(type) == DATA_BLOB || dtype_get_mtype(type) == DATA_DECIMAL);
+      if (len < 128 || (dtype_get_len(type) < 256 && dtype_get_mtype(type) != DATA_BLOB)) {
 
         *lens-- = (byte)len;
       } else {
@@ -1113,22 +1121,21 @@ void rec_convert_dtuple_to_rec_comp(
 stores it beginning from the start of the given buffer.
 @return	pointer to the origin of physical record */
 static rec_t *rec_convert_dtuple_to_rec_new(
-    byte *buf,                 /*!< in: start address of
+  byte *buf,                 /*!< in: start address of
                                the physical record */
-    const dict_index_t *index, /*!< in: record descriptor */
-    const dtuple_t *dtuple)    /*!< in: data tuple */
+  const dict_index_t *index, /*!< in: record descriptor */
+  const dtuple_t *dtuple
+) /*!< in: data tuple */
 {
   ulint extra_size;
   ulint status;
   rec_t *rec;
 
   status = dtuple_get_info_bits(dtuple) & REC_NEW_STATUS_MASK;
-  rec_get_converted_size_comp(index, status, dtuple->fields, dtuple->n_fields,
-                              &extra_size);
+  rec_get_converted_size_comp(index, status, dtuple->fields, dtuple->n_fields, &extra_size);
   rec = buf + extra_size;
 
-  rec_convert_dtuple_to_rec_comp(rec, REC_N_NEW_EXTRA_BYTES, index, status,
-                                 dtuple->fields, dtuple->n_fields);
+  rec_convert_dtuple_to_rec_comp(rec, REC_N_NEW_EXTRA_BYTES, index, status, dtuple->fields, dtuple->n_fields);
 
   /* Set the info bits of the record */
   rec_set_info_and_status_bits(rec, dtuple_get_info_bits(dtuple));
@@ -1141,11 +1148,12 @@ stores it beginning from the start of the given buffer.
 @return	pointer to the origin of physical record */
 
 rec_t *rec_convert_dtuple_to_rec(
-    byte *buf,                 /*!< in: start address of the
+  byte *buf,                 /*!< in: start address of the
                                physical record */
-    const dict_index_t *index, /*!< in: record descriptor */
-    const dtuple_t *dtuple,    /*!< in: data tuple */
-    ulint n_ext)               /*!< in: number of
+  const dict_index_t *index, /*!< in: record descriptor */
+  const dtuple_t *dtuple,    /*!< in: data tuple */
+  ulint n_ext
+) /*!< in: number of
                                externally stored columns */
 {
   rec_t *rec;
@@ -1173,8 +1181,7 @@ rec_t *rec_convert_dtuple_to_rec(
     ut_ad(dtuple_get_n_fields(dtuple) == rec_offs_n_fields(offsets));
 
     for (i = 0; i < rec_offs_n_fields(offsets); i++) {
-      ut_ad(!dfield_is_ext(dtuple_get_nth_field(dtuple, i)) ==
-            !rec_offs_nth_extern(offsets, i));
+      ut_ad(!dfield_is_ext(dtuple_get_nth_field(dtuple, i)) == !rec_offs_nth_extern(offsets, i));
     }
 
     if (likely_null(heap)) {
@@ -1189,12 +1196,13 @@ rec_t *rec_convert_dtuple_to_rec(
 are copied to the memory heap. */
 
 void rec_copy_prefix_to_dtuple(
-    dtuple_t *tuple,           /*!< out: data tuple */
-    const rec_t *rec,          /*!< in: physical record */
-    const dict_index_t *index, /*!< in: record descriptor */
-    ulint n_fields,            /*!< in: number of fields
+  dtuple_t *tuple,           /*!< out: data tuple */
+  const rec_t *rec,          /*!< in: physical record */
+  const dict_index_t *index, /*!< in: record descriptor */
+  ulint n_fields,            /*!< in: number of fields
                                to copy */
-    mem_heap_t *heap)          /*!< in: memory heap */
+  mem_heap_t *heap
+) /*!< in: memory heap */
 {
   ulint i;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
@@ -1206,8 +1214,7 @@ void rec_copy_prefix_to_dtuple(
   ut_ad(rec_validate(rec, offsets));
   ut_ad(dtuple_check_typed(tuple));
 
-  dtuple_set_info_bits(
-      tuple, rec_get_info_bits(rec, dict_table_is_comp(index->table)));
+  dtuple_set_info_bits(tuple, rec_get_info_bits(rec, dict_table_is_comp(index->table)));
 
   for (i = 0; i < n_fields; i++) {
     dfield_t *field;
@@ -1229,13 +1236,14 @@ void rec_copy_prefix_to_dtuple(
 /** Copies the first n fields of an old-style physical record
 to a new physical record in a buffer.
 @return	own: copied record */
-static rec_t *
-rec_copy_prefix_to_buf_old(const rec_t *rec, /*!< in: physical record */
-                           ulint n_fields,  /*!< in: number of fields to copy */
-                           ulint area_end,  /*!< in: end of the prefix data */
-                           byte **buf,      /*!< in/out: memory buffer for
+static rec_t *rec_copy_prefix_to_buf_old(
+  const rec_t *rec, /*!< in: physical record */
+  ulint n_fields,   /*!< in: number of fields to copy */
+  ulint area_end,   /*!< in: end of the prefix data */
+  byte **buf,       /*!< in/out: memory buffer for
                                             the copied prefix, or NULL */
-                           ulint *buf_size) /*!< in/out: buffer size */
+  ulint *buf_size
+) /*!< in/out: buffer size */
 {
   rec_t *copy_rec;
   ulint area_start;
@@ -1270,15 +1278,16 @@ rec_copy_prefix_to_buf_old(const rec_t *rec, /*!< in: physical record */
 a buffer.
 @return	own: copied record */
 
-rec_t *
-rec_copy_prefix_to_buf(const rec_t *rec,          /*!< in: physical record */
-                       const dict_index_t *index, /*!< in: record descriptor */
-                       ulint n_fields,            /*!< in: number of fields
+rec_t *rec_copy_prefix_to_buf(
+  const rec_t *rec,          /*!< in: physical record */
+  const dict_index_t *index, /*!< in: record descriptor */
+  ulint n_fields,            /*!< in: number of fields
                                                   to copy */
-                       byte **buf,                /*!< in/out: memory buffer
+  byte **buf,                /*!< in/out: memory buffer
                                                   for the copied prefix,
                                                   or NULL */
-                       ulint *buf_size)           /*!< in/out: buffer size */
+  ulint *buf_size
+) /*!< in/out: buffer size */
 {
   const byte *nulls;
   const byte *lens;
@@ -1291,26 +1300,25 @@ rec_copy_prefix_to_buf(const rec_t *rec,          /*!< in: physical record */
 
   if (!dict_table_is_comp(index->table)) {
     ut_ad(rec_validate_old(rec));
-    return (rec_copy_prefix_to_buf_old(
-        rec, n_fields, rec_get_field_start_offs(rec, n_fields), buf, buf_size));
+    return (rec_copy_prefix_to_buf_old(rec, n_fields, rec_get_field_start_offs(rec, n_fields), buf, buf_size));
   }
 
   status = rec_get_status(rec);
 
   switch (status) {
-  case REC_STATUS_ORDINARY:
-    ut_ad(n_fields <= dict_index_get_n_fields(index));
-    break;
-  case REC_STATUS_NODE_PTR:
-    /* it doesn't make sense to copy the child page number field */
-    ut_ad(n_fields <= dict_index_get_n_unique_in_tree(index));
-    break;
-  case REC_STATUS_INFIMUM:
-  case REC_STATUS_SUPREMUM:
-    /* infimum or supremum record: no sense to copy anything */
-  default:
-    ut_error;
-    return (NULL);
+    case REC_STATUS_ORDINARY:
+      ut_ad(n_fields <= dict_index_get_n_fields(index));
+      break;
+    case REC_STATUS_NODE_PTR:
+      /* it doesn't make sense to copy the child page number field */
+      ut_ad(n_fields <= dict_index_get_n_unique_in_tree(index));
+      break;
+    case REC_STATUS_INFIMUM:
+    case REC_STATUS_SUPREMUM:
+      /* infimum or supremum record: no sense to copy anything */
+    default:
+      ut_error;
+      return (NULL);
   }
 
   nulls = rec - (REC_N_NEW_EXTRA_BYTES + 1);
@@ -1398,8 +1406,7 @@ static bool rec_validate_old(const rec_t *rec) /*!< in: physical record */
   n_fields = rec_get_n_fields_old(rec);
 
   if ((n_fields == 0) || (n_fields > REC_MAX_N_FIELDS)) {
-    ib_logger(ib_stream, "Error: record has %lu fields\n",
-              (ulong)n_fields);
+    ib_logger(ib_stream, "Error: record has %lu fields\n", (ulong)n_fields);
     return (false);
   }
 
@@ -1407,8 +1414,7 @@ static bool rec_validate_old(const rec_t *rec) /*!< in: physical record */
     data = rec_get_nth_field_old(rec, i, &len);
 
     if (!((len < UNIV_PAGE_SIZE) || (len == UNIV_SQL_NULL))) {
-      ib_logger(ib_stream, "Error: record field %lu len %lu\n",
-                (ulong)i, (ulong)len);
+      ib_logger(ib_stream, "Error: record field %lu len %lu\n", (ulong)i, (ulong)len);
       return (false);
     }
 
@@ -1423,8 +1429,7 @@ static bool rec_validate_old(const rec_t *rec) /*!< in: physical record */
   }
 
   if (len_sum != rec_get_data_size_old(rec)) {
-    ib_logger(ib_stream, "Error: record len should be %lu, len %lu\n",
-              (ulong)len_sum, rec_get_data_size_old(rec));
+    ib_logger(ib_stream, "Error: record len should be %lu, len %lu\n", (ulong)len_sum, rec_get_data_size_old(rec));
     return (false);
   }
 
@@ -1435,8 +1440,9 @@ static bool rec_validate_old(const rec_t *rec) /*!< in: physical record */
 @return	true if ok */
 
 bool rec_validate(
-    const rec_t *rec,     /*!< in: physical record */
-    const ulint *offsets) /*!< in: array returned by rec_get_offsets() */
+  const rec_t *rec, /*!< in: physical record */
+  const ulint *offsets
+) /*!< in: array returned by rec_get_offsets() */
 {
   const byte *data;
   ulint len;
@@ -1449,8 +1455,7 @@ bool rec_validate(
   n_fields = rec_offs_n_fields(offsets);
 
   if ((n_fields == 0) || (n_fields > REC_MAX_N_FIELDS)) {
-    ib_logger(ib_stream, "Error: record has %lu fields\n",
-              (ulong)n_fields);
+    ib_logger(ib_stream, "Error: record has %lu fields\n", (ulong)n_fields);
     return (false);
   }
 
@@ -1460,8 +1465,7 @@ bool rec_validate(
     data = rec_get_nth_field(rec, offsets, i, &len);
 
     if (!((len < UNIV_PAGE_SIZE) || (len == UNIV_SQL_NULL))) {
-      ib_logger(ib_stream, "Error: record field %lu len %lu\n",
-                (ulong)i, (ulong)len);
+      ib_logger(ib_stream, "Error: record field %lu len %lu\n", (ulong)i, (ulong)len);
       return (false);
     }
 
@@ -1476,8 +1480,7 @@ bool rec_validate(
   }
 
   if (len_sum != rec_offs_data_size(offsets)) {
-    ib_logger(ib_stream, "Error: record len should be %lu, len %lu\n",
-              (ulong)len_sum, (ulong)rec_offs_data_size(offsets));
+    ib_logger(ib_stream, "Error: record len should be %lu, len %lu\n", (ulong)len_sum, (ulong)rec_offs_data_size(offsets));
     return (false);
   }
 
@@ -1490,8 +1493,10 @@ bool rec_validate(
 
 /** Prints an old-style physical record. */
 
-void rec_print_old(ib_stream_t ib_stream, /*!< in: stream where to print */
-                   const rec_t *rec)      /*!< in: physical record */
+void rec_print_old(
+  ib_stream_t ib_stream, /*!< in: stream where to print */
+  const rec_t *rec
+) /*!< in: physical record */
 {
   const byte *data;
   ulint len;
@@ -1502,11 +1507,14 @@ void rec_print_old(ib_stream_t ib_stream, /*!< in: stream where to print */
 
   n = rec_get_n_fields_old(rec);
 
-  ib_logger(ib_stream,
-            "PHYSICAL RECORD: n_fields %lu;"
-            " %u-byte offsets; info bits %lu\n",
-            (ulong)n, rec_get_1byte_offs_flag(rec) ? 1 : 2,
-            (ulong)rec_get_info_bits(rec, false));
+  ib_logger(
+    ib_stream,
+    "PHYSICAL RECORD: n_fields %lu;"
+    " %u-byte offsets; info bits %lu\n",
+    (ulong)n,
+    rec_get_1byte_offs_flag(rec) ? 1 : 2,
+    (ulong)rec_get_info_bits(rec, false)
+  );
 
   for (i = 0; i < n; i++) {
 
@@ -1524,8 +1532,7 @@ void rec_print_old(ib_stream_t ib_stream, /*!< in: stream where to print */
         ib_logger(ib_stream, " (total %lu bytes)", (ulong)len);
       }
     } else {
-      ib_logger(ib_stream, " SQL NULL, size %lu ",
-                rec_get_nth_field_size(rec, i));
+      ib_logger(ib_stream, " SQL NULL, size %lu ", rec_get_nth_field_size(rec, i));
     }
 
     ib_logger(ib_stream, ";\n");
@@ -1537,9 +1544,11 @@ void rec_print_old(ib_stream_t ib_stream, /*!< in: stream where to print */
 /** Prints a physical record in ROW_FORMAT=COMPACT.  Ignores the
 record header. */
 
-void rec_print_comp(ib_stream_t ib_stream, /*!< in: streamwhere to print */
-                    const rec_t *rec,      /*!< in: physical record */
-                    const ulint *offsets)  /*!< in: array returned by
+void rec_print_comp(
+  ib_stream_t ib_stream, /*!< in: streamwhere to print */
+  const rec_t *rec,      /*!< in: physical record */
+  const ulint *offsets
+) /*!< in: array returned by
                                            rec_get_offsets() */
 {
   ulint i;
@@ -1570,9 +1579,11 @@ void rec_print_comp(ib_stream_t ib_stream, /*!< in: streamwhere to print */
 
 /** Prints a physical record. */
 
-void rec_print_new(ib_stream_t ib_stream, /*!< in: stream where to print */
-                   const rec_t *rec,      /*!< in: physical record */
-                   const ulint *offsets)  /*!< in: array returned by
+void rec_print_new(
+  ib_stream_t ib_stream, /*!< in: stream where to print */
+  const rec_t *rec,      /*!< in: physical record */
+  const ulint *offsets
+) /*!< in: array returned by
                                           rec_get_offsets() */
 {
   ut_ad(rec);
@@ -1584,11 +1595,13 @@ void rec_print_new(ib_stream_t ib_stream, /*!< in: stream where to print */
     return;
   }
 
-  ib_logger(ib_stream,
-            "PHYSICAL RECORD: n_fields %lu;"
-            " compact format; info bits %lu\n",
-            (ulong)rec_offs_n_fields(offsets),
-            (ulong)rec_get_info_bits(rec, true));
+  ib_logger(
+    ib_stream,
+    "PHYSICAL RECORD: n_fields %lu;"
+    " compact format; info bits %lu\n",
+    (ulong)rec_offs_n_fields(offsets),
+    (ulong)rec_get_info_bits(rec, true)
+  );
 
   rec_print_comp(ib_stream, rec, offsets);
   rec_validate(rec, offsets);
@@ -1596,9 +1609,11 @@ void rec_print_new(ib_stream_t ib_stream, /*!< in: stream where to print */
 
 /** Prints a physical record. */
 
-void rec_print(ib_stream_t ib_stream, /*!< in: stream where to print */
-               const rec_t *rec,      /*!< in: physical record */
-               dict_index_t *index)   /*!< in: record descriptor */
+void rec_print(
+  ib_stream_t ib_stream, /*!< in: stream where to print */
+  const rec_t *rec,      /*!< in: physical record */
+  dict_index_t *index
+) /*!< in: record descriptor */
 {
   ut_ad(index);
 
@@ -1610,9 +1625,7 @@ void rec_print(ib_stream_t ib_stream, /*!< in: stream where to print */
     ulint offsets_[REC_OFFS_NORMAL_SIZE];
     rec_offs_init(offsets_);
 
-    rec_print_new(
-        ib_stream, rec,
-        rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap));
+    rec_print_new(ib_stream, rec, rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap));
     if (likely_null(heap)) {
       mem_heap_free(heap);
     }

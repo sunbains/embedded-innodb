@@ -33,8 +33,7 @@ Created September 2006 Marko Makela
 @param[in,out] ext              Column prefix cache
 @param[in] i                    Index of ext->extp[]
 @paramp[in] dfield              Data field. */
-static void
-row_ext_cache_fill(row_ext_t *ext, ulint i, const dfield_t *dfield) {
+static void row_ext_cache_fill(row_ext_t *ext, ulint i, const dfield_t *dfield) {
   auto field = (const byte *)dfield_get_data(dfield);
   auto f_len = dfield_get_len(dfield);
   auto buf = ext->buf + i * REC_MAX_INDEX_COL_LEN;
@@ -43,9 +42,7 @@ row_ext_cache_fill(row_ext_t *ext, ulint i, const dfield_t *dfield) {
   ut_ad(dfield_is_ext(dfield));
   ut_a(f_len >= BTR_EXTERN_FIELD_REF_SIZE);
 
-  if (unlikely(!memcmp(field_ref_zero,
-                       field + f_len - BTR_EXTERN_FIELD_REF_SIZE,
-                       BTR_EXTERN_FIELD_REF_SIZE))) {
+  if (unlikely(!memcmp(field_ref_zero, field + f_len - BTR_EXTERN_FIELD_REF_SIZE, BTR_EXTERN_FIELD_REF_SIZE))) {
     /* The BLOB pointer is not set: we cannot fetch it */
     ext->len[i] = 0;
   } else {
@@ -55,15 +52,12 @@ row_ext_cache_fill(row_ext_t *ext, ulint i, const dfield_t *dfield) {
     access a half-deleted BLOB if the server previously
     crashed during the execution of
     btr_free_externally_stored_field(). */
-    ext->len[i] = btr_copy_externally_stored_field_prefix(
-        buf, REC_MAX_INDEX_COL_LEN, field, f_len);
+    ext->len[i] = btr_copy_externally_stored_field_prefix(buf, REC_MAX_INDEX_COL_LEN, field, f_len);
   }
 }
 
-row_ext_t *row_ext_create(ulint n_ext, const ulint *ext, const dtuple_t *tuple,
-                          mem_heap_t *heap) {
-  auto row_ext = reinterpret_cast<row_ext_t *>(mem_heap_alloc(
-      heap, (sizeof(row_ext_t)) + (n_ext - 1) * sizeof(row_ext_t::len)));
+row_ext_t *row_ext_create(ulint n_ext, const ulint *ext, const dtuple_t *tuple, mem_heap_t *heap) {
+  auto row_ext = reinterpret_cast<row_ext_t *>(mem_heap_alloc(heap, (sizeof(row_ext_t)) + (n_ext - 1) * sizeof(row_ext_t::len)));
 
   row_ext->n_ext = n_ext;
   row_ext->ext = ext;

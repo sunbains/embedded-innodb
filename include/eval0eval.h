@@ -27,11 +27,11 @@ Created 12/29/1997 Heikki Tuuri
 #include "innodb0types.h"
 
 #include "eval0eval.h"
+#include "pars0grm.h"
 #include "pars0pars.h"
 #include "pars0sym.h"
-#include "que0types.h"
-#include "pars0grm.h"
 #include "que0que.h"
+#include "que0types.h"
 #include "rem0cmp.h"
 
 /** Evaluates a function node. */
@@ -45,10 +45,11 @@ allocated for a query node val field.
 @return	pointer to allocated buffer */
 
 byte *eval_node_alloc_val_buf(
-    que_node_t *node, /*!< in: query graph node; sets the val field
+  que_node_t *node, /*!< in: query graph node; sets the val field
                       data field to point to the new buffer, and
                       len field equal to size */
-    ulint size);      /*!< in: buffer size */
+  ulint size
+); /*!< in: buffer size */
 
 /** Free the buffer from global dynamic memory for a value of a que_node,
 if it has been allocated in the above function. The freeing for pushed
@@ -69,18 +70,20 @@ here. NOTE that this is the only function where dynamic memory should be
 allocated for a query node val field.
 @return	pointer to allocated buffer */
 byte *eval_node_alloc_val_buf(
-    que_node_t *node, /*!< in: query graph node; sets the val field
+  que_node_t *node, /*!< in: query graph node; sets the val field
                       data field to point to the new buffer, and
                       len field equal to size */
-    ulint size);      /*!< in: buffer size */
+  ulint size
+); /*!< in: buffer size */
 
 /** Allocates a new buffer if needed.
 @return	pointer to buffer */
 inline byte *eval_node_ensure_val_buf(
-    que_node_t *node, /*!< in: query graph node; sets the val field
+  que_node_t *node, /*!< in: query graph node; sets the val field
                       data field to point to the new buffer, and
                       len field equal to size */
-    ulint size)       /*!< in: buffer size */
+  ulint size
+) /*!< in: buffer size */
 {
   auto dfield = que_node_get_val(node);
   dfield_set_len(dfield, size);
@@ -105,8 +108,7 @@ inline void eval_sym(sym_node_t *sym_node) /*!< in: symbol table node */
     /* The symbol table node is an alias for a variable or a
     column */
 
-    dfield_copy_data(que_node_get_val(sym_node),
-                     que_node_get_val(sym_node->indirection));
+    dfield_copy_data(que_node_get_val(sym_node), que_node_get_val(sym_node->indirection));
   }
 }
 
@@ -124,8 +126,10 @@ inline void eval_exp(que_node_t *exp_node) /*!< in: expression */
 }
 
 /** Sets an integer value as the value of an expression node. */
-inline void eval_node_set_int_val(que_node_t *node, /*!< in: expression node */
-                                  lint val)         /*!< in: value to set */
+inline void eval_node_set_int_val(
+  que_node_t *node, /*!< in: expression node */
+  lint val
+) /*!< in: value to set */
 {
   auto dfield = que_node_get_val(node);
   auto data = (byte *)dfield_get_data(dfield);
@@ -152,8 +156,7 @@ inline lint eval_node_get_int_val(que_node_t *node) /*!< in: expression node */
 
 /** Gets a boolean value from a query node.
 @return	boolean value */
-inline bool
-eval_node_get_bool_val(que_node_t *node) /*!< in: query graph node */
+inline bool eval_node_get_bool_val(que_node_t *node) /*!< in: query graph node */
 {
   auto dfield = que_node_get_val(node);
 
@@ -165,9 +168,10 @@ eval_node_get_bool_val(que_node_t *node) /*!< in: query graph node */
 }
 
 /** Sets a boolean value as the value of a function node. */
-inline void
-eval_node_set_bool_val(func_node_t *func_node, /*!< in: function node */
-                       bool val)               /*!< in: value to set */
+inline void eval_node_set_bool_val(
+  func_node_t *func_node, /*!< in: function node */
+  bool val
+) /*!< in: value to set */
 {
   auto dfield = que_node_get_val(func_node);
   auto data = (byte *)dfield_get_data(dfield);
@@ -186,9 +190,10 @@ eval_node_set_bool_val(func_node_t *func_node, /*!< in: function node */
 /** Copies a binary string value as the value of a query graph node. Allocates a
 new buffer if necessary. */
 inline void eval_node_copy_and_alloc_val(
-    que_node_t *node, /*!< in: query graph node */
-    const byte *str,  /*!< in: binary string */
-    ulint len)        /*!< in: string length or UNIV_SQL_NULL */
+  que_node_t *node, /*!< in: query graph node */
+  const byte *str,  /*!< in: binary string */
+  ulint len
+) /*!< in: string length or UNIV_SQL_NULL */
 {
   if (len == UNIV_SQL_NULL) {
     dfield_set_len(que_node_get_val(node), len);
@@ -202,11 +207,12 @@ inline void eval_node_copy_and_alloc_val(
 }
 
 /** Copies a query node value to another node. */
-inline void eval_node_copy_val(que_node_t *node1, /*!< in: node to copy to */
-                               que_node_t *node2) /*!< in: node to copy from */
+inline void eval_node_copy_val(
+  que_node_t *node1, /*!< in: node to copy to */
+  que_node_t *node2
+) /*!< in: node to copy from */
 {
   auto dfield2 = que_node_get_val(node2);
 
-  eval_node_copy_and_alloc_val(node1, (byte *)dfield_get_data(dfield2),
-                               dfield_get_len(dfield2));
+  eval_node_copy_and_alloc_val(node1, (byte *)dfield_get_data(dfield2), dfield_get_len(dfield2));
 }

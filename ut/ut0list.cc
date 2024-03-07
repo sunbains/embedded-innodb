@@ -46,15 +46,12 @@ void ib_list_free(ib_list_t *list) {
   mem_free(list);
 }
 
-ib_list_node_t *ib_list_add_last(ib_list_t *list, void *data,
-                                 mem_heap_t *heap) {
+ib_list_node_t *ib_list_add_last(ib_list_t *list, void *data, mem_heap_t *heap) {
   return ib_list_add_after(list, ib_list_get_last(list), data, heap);
 }
 
-ib_list_node_t *ib_list_add_after(ib_list_t *list, ib_list_node_t *prev_node,
-                                  void *data, mem_heap_t *heap) {
-  auto node = reinterpret_cast<ib_list_node_t *>(
-      mem_heap_alloc(heap, sizeof(ib_list_node_t)));
+ib_list_node_t *ib_list_add_after(ib_list_t *list, ib_list_node_t *prev_node, void *data, mem_heap_t *heap) {
+  auto node = reinterpret_cast<ib_list_node_t *>(mem_heap_alloc(heap, sizeof(ib_list_node_t)));
 
   node->data = data;
 

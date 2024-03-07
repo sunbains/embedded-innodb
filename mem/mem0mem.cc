@@ -26,9 +26,9 @@ Created 6/9/1994 Heikki Tuuri
 #include "mem0mem.ic"
 #endif
 
+#include <stdarg.h>
 #include "buf0buf.h"
 #include "srv0srv.h"
-#include <stdarg.h>
 
 /*
                         THE MEMORY MANAGEMENT
@@ -111,11 +111,12 @@ char *mem_heap_strcat(mem_heap_t *heap, const char *s1, const char *s2) {
 
 /** Helper function for mem_heap_printf.
 @return	length of formatted string, including terminating NUL */
-static ulint
-mem_heap_printf_low(char *buf, /*!< in/out: buffer to store formatted string
+static ulint mem_heap_printf_low(
+  char *buf,          /*!< in/out: buffer to store formatted string
                                in, or nullptr to just calculate length */
-                    const char *format, /*!< in: format string */
-                    va_list ap)         /*!< in: arguments */
+  const char *format, /*!< in: format string */
+  va_list ap
+) /*!< in: arguments */
 {
   ulint len = 0;
 
@@ -145,62 +146,62 @@ mem_heap_printf_low(char *buf, /*!< in/out: buffer to store formatted string
     }
 
     switch (*format++) {
-    case 's':
-      /* string */
-      {
-        char *s = va_arg(ap, char *);
+      case 's':
+        /* string */
+        {
+          char *s = va_arg(ap, char *);
 
-        /* "%ls" is a non-sensical format specifier. */
+          /* "%ls" is a non-sensical format specifier. */
+          ut_a(!is_long);
+
+          plen = strlen(s);
+          len += plen;
+
+          if (buf) {
+            memcpy(buf, s, plen);
+            buf += plen;
+          }
+        }
+
+        break;
+
+      case 'u':
+        /* unsigned int */
+        {
+          char tmp[32];
+          unsigned long val;
+
+          /* We only support 'long' values for now. */
+          ut_a(is_long);
+
+          val = va_arg(ap, unsigned long);
+
+          plen = sprintf(tmp, "%lu", val);
+          len += plen;
+
+          if (buf) {
+            memcpy(buf, tmp, plen);
+            buf += plen;
+          }
+        }
+
+        break;
+
+      case '%':
+
+        /* "%l%" is a non-sensical format specifier. */
         ut_a(!is_long);
 
-        plen = strlen(s);
-        len += plen;
+        len++;
 
         if (buf) {
-          memcpy(buf, s, plen);
-          buf += plen;
+          *buf++ = '%';
         }
-      }
 
-      break;
+        break;
 
-    case 'u':
-      /* unsigned int */
-      {
-        char tmp[32];
-        unsigned long val;
-
-        /* We only support 'long' values for now. */
-        ut_a(is_long);
-
-        val = va_arg(ap, unsigned long);
-
-        plen = sprintf(tmp, "%lu", val);
-        len += plen;
-
-        if (buf) {
-          memcpy(buf, tmp, plen);
-          buf += plen;
-        }
-      }
-
-      break;
-
-    case '%':
-
-      /* "%l%" is a non-sensical format specifier. */
-      ut_a(!is_long);
-
-      len++;
-
-      if (buf) {
-        *buf++ = '%';
-      }
-
-      break;
-
-    default:
-      ut_error;
+      default:
+        ut_error;
     }
   }
 
@@ -233,14 +234,12 @@ char *mem_heap_printf(mem_heap_t *heap, const char *format, ...) {
   return (str);
 }
 
-mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type,
-                                   const char *file_name, ulint line) {
+mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const char *file_name, ulint line) {
   buf_block_t *buf_block = nullptr;
   mem_block_t *block;
   ulint len;
 
-  ut_ad((type == MEM_HEAP_DYNAMIC) || (type == MEM_HEAP_BUFFER) ||
-        (type == MEM_HEAP_BUFFER + MEM_HEAP_BTR_SEARCH));
+  ut_ad((type == MEM_HEAP_DYNAMIC) || (type == MEM_HEAP_BUFFER) || (type == MEM_HEAP_BUFFER + MEM_HEAP_BTR_SEARCH));
 
   if (heap && heap->magic_n != MEM_BLOCK_MAGIC_N) {
     ut_error;
@@ -340,8 +339,7 @@ mem_block_t *mem_heap_add_block(mem_heap_t *heap, ulint n) {
     new_size = n;
   }
 
-  new_block = mem_heap_create_block(heap, new_size, heap->type, heap->file_name,
-                                    heap->line);
+  new_block = mem_heap_create_block(heap, new_size, heap->type, heap->file_name, heap->line);
   if (new_block == nullptr) {
 
     return (nullptr);
@@ -395,10 +393,9 @@ bool mem_heap_check(mem_heap_t *heap) {
   return (true);
 }
 
-void mem_heap_validate_or_print(mem_heap_t *heap,
-                                byte *top __attribute__((unused)), bool print,
-                                bool *error, ulint *us_size, ulint *ph_size,
-                                ulint *n_blocks) {
+void mem_heap_validate_or_print(
+  mem_heap_t *heap, byte *top __attribute__((unused)), bool print, bool *error, ulint *us_size, ulint *ph_size, ulint *n_blocks
+) {
   mem_block_t *block;
   ulint total_len = 0;
   ulint block_count = 0;
@@ -429,13 +426,15 @@ void mem_heap_validate_or_print(mem_heap_t *heap,
   while (block != nullptr) {
     phys_len += mem_block_get_len(block);
 
-    if ((block->type == MEM_HEAP_BUFFER) &&
-        (mem_block_get_len(block) > UNIV_PAGE_SIZE)) {
+    if ((block->type == MEM_HEAP_BUFFER) && (mem_block_get_len(block) > UNIV_PAGE_SIZE)) {
 
-      ib_logger(ib_stream,
-                "Error: mem block %p"
-                " length %lu > UNIV_PAGE_SIZE\n",
-                (void *)block, (ulong)mem_block_get_len(block));
+      ib_logger(
+        ib_stream,
+        "Error: mem block %p"
+        " length %lu > UNIV_PAGE_SIZE\n",
+        (void *)block,
+        (ulong)mem_block_get_len(block)
+      );
       /* error */
 
       return;
@@ -466,13 +465,16 @@ static void mem_heap_print(mem_heap_t *heap) /*!< in: memory heap */
 
   ut_ad(mem_heap_check(heap));
 
-  mem_heap_validate_or_print(heap, nullptr, true, &error, &us_size, &phys_size,
-                             &n_blocks);
-  ib_logger(ib_stream,
-            "\nheap type: %lu; size: user size %lu;"
-            " physical size %lu; blocks %lu.\n",
-            (ulong)heap->type, (ulong)us_size, (ulong)phys_size,
-            (ulong)n_blocks);
+  mem_heap_validate_or_print(heap, nullptr, true, &error, &us_size, &phys_size, &n_blocks);
+  ib_logger(
+    ib_stream,
+    "\nheap type: %lu; size: user size %lu;"
+    " physical size %lu; blocks %lu.\n",
+    (ulong)heap->type,
+    (ulong)us_size,
+    (ulong)phys_size,
+    (ulong)n_blocks
+  );
   ut_a(!error);
 }
 
@@ -484,8 +486,7 @@ bool mem_heap_validate(mem_heap_t *heap) {
 
   ut_ad(mem_heap_check(heap));
 
-  mem_heap_validate_or_print(heap, nullptr, false, &error, &us_size, &phys_size,
-                             &n_blocks);
+  mem_heap_validate_or_print(heap, nullptr, false, &error, &us_size, &phys_size, &n_blocks);
   if (error) {
     mem_heap_print(heap);
   }

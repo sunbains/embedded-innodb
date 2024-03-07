@@ -25,8 +25,10 @@ Created 12/19/1997 Heikki Tuuri
 
 /** Gets the plan node for the nth table in a join.
 @return	plan node */
-inline plan_t *sel_node_get_nth_plan(sel_node_t *node, /*!< in: select node */
-                                     ulint i) /*!< in: get ith plan node */
+inline plan_t *sel_node_get_nth_plan(
+  sel_node_t *node, /*!< in: select node */
+  ulint i
+) /*!< in: get ith plan node */
 {
   ut_ad(i < node->n_tables);
 

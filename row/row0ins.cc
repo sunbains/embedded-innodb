@@ -45,10 +45,8 @@ Created 4/20/1996 Heikki Tuuri
 constexpr ulint ROW_INS_PREV = 1;
 constexpr ulint ROW_INS_NEXT = 2;
 
-ins_node_t *row_ins_node_create(ib_ins_mode_t ins_type, dict_table_t *table,
-                                mem_heap_t *heap) {
-  auto node =
-      reinterpret_cast<ins_node_t *>(mem_heap_alloc(heap, sizeof(ins_node_t)));
+ins_node_t *row_ins_node_create(ib_ins_mode_t ins_type, dict_table_t *table, mem_heap_t *heap) {
+  auto node = reinterpret_cast<ins_node_t *>(mem_heap_alloc(heap, sizeof(ins_node_t)));
 
   node->common.type = QUE_NODE_INSERT;
 
@@ -78,8 +76,7 @@ void row_ins_node_create_entry_list(ins_node_t *node) {
   auto index = dict_table_get_first_index(node->table);
 
   while (index != NULL) {
-    auto entry =
-        row_build_index_entry(node->row, NULL, index, node->entry_sys_heap);
+    auto entry = row_build_index_entry(node->row, NULL, index, node->entry_sys_heap);
 
     UT_LIST_ADD_LAST(tuple_list, node->entry_list, entry);
 
@@ -165,13 +162,14 @@ in the index. This situation can occur if the delete-marked record is
 kept in the index for consistent reads.
 @return	DB_SUCCESS or error code */
 static db_err row_ins_sec_index_entry_by_modify(
-    ulint mode,            /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
+  ulint mode,            /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
                            depending on whether mtr holds just a leaf
                            latch or also a tree latch */
-    btr_cur_t *cursor,     /*!< in: B-tree cursor */
-    const dtuple_t *entry, /*!< in: index entry to insert */
-    que_thr_t *thr,        /*!< in: query thread */
-    mtr_t *mtr)            /*!< in: mtr; must be committed before
+  btr_cur_t *cursor,     /*!< in: B-tree cursor */
+  const dtuple_t *entry, /*!< in: index entry to insert */
+  que_thr_t *thr,        /*!< in: query thread */
+  mtr_t *mtr
+) /*!< in: mtr; must be committed before
                            latching any further pages */
 {
   big_rec_t *dummy_big_rec;
@@ -192,21 +190,19 @@ static db_err row_ins_sec_index_entry_by_modify(
 
   heap = mem_heap_create(1024);
 
-  update = row_upd_build_sec_rec_difference_binary(cursor->m_index, entry, rec,
-                                                   thr_get_trx(thr), heap);
+  update = row_upd_build_sec_rec_difference_binary(cursor->m_index, entry, rec, thr_get_trx(thr), heap);
   if (mode == BTR_MODIFY_LEAF) {
     /* Try an optimistic updating of the record, keeping changes
     within the page */
 
-    err = btr_cur_optimistic_update(BTR_KEEP_SYS_FLAG, cursor, update, 0, thr,
-                                    mtr);
+    err = btr_cur_optimistic_update(BTR_KEEP_SYS_FLAG, cursor, update, 0, thr, mtr);
     switch (err) {
-    case DB_OVERFLOW:
-    case DB_UNDERFLOW:
-      err = DB_FAIL;
-      break;
-    default:
-      break;
+      case DB_OVERFLOW:
+      case DB_UNDERFLOW:
+        err = DB_FAIL;
+        break;
+      default:
+        break;
     }
   } else {
     ut_a(mode == BTR_MODIFY_TREE);
@@ -218,8 +214,7 @@ static db_err row_ins_sec_index_entry_by_modify(
       goto func_exit;
     }
 
-    err = btr_cur_pessimistic_update(BTR_KEEP_SYS_FLAG, cursor, &heap,
-                                     &dummy_big_rec, update, 0, thr, mtr);
+    err = btr_cur_pessimistic_update(BTR_KEEP_SYS_FLAG, cursor, &heap, &dummy_big_rec, update, 0, thr, mtr);
     ut_ad(!dummy_big_rec);
   }
 func_exit:
@@ -233,17 +228,18 @@ existing record in the index. This situation can occur if the delete marked
 record is kept in the index for consistent reads.
 @return	DB_SUCCESS, DB_FAIL, or error code */
 static db_err row_ins_clust_index_entry_by_modify(
-    ulint mode,            /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
+  ulint mode,            /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
                            depending on whether mtr holds just a leaf
                            latch or also a tree latch */
-    btr_cur_t *cursor,     /*!< in: B-tree cursor */
-    mem_heap_t **heap,     /*!< in/out: pointer to memory heap, or NULL */
-    big_rec_t **big_rec,   /*!< out: possible big rec vector of fields
+  btr_cur_t *cursor,     /*!< in: B-tree cursor */
+  mem_heap_t **heap,     /*!< in/out: pointer to memory heap, or NULL */
+  big_rec_t **big_rec,   /*!< out: possible big rec vector of fields
                            which have to be stored externally by the
                            caller */
-    const dtuple_t *entry, /*!< in: index entry to insert */
-    que_thr_t *thr,        /*!< in: query thread */
-    mtr_t *mtr)            /*!< in: mtr; must be committed before
+  const dtuple_t *entry, /*!< in: index entry to insert */
+  que_thr_t *thr,        /*!< in: query thread */
+  mtr_t *mtr
+) /*!< in: mtr; must be committed before
                            latching any further pages */
 {
   rec_t *rec;
@@ -266,8 +262,7 @@ static db_err row_ins_clust_index_entry_by_modify(
   NOTE that this vector may NOT contain system columns trx_id or
   roll_ptr */
 
-  update = row_upd_build_difference_binary(cursor->m_index, entry, rec,
-                                           thr_get_trx(thr), *heap);
+  update = row_upd_build_difference_binary(cursor->m_index, entry, rec, thr_get_trx(thr), *heap);
 
   if (mode == BTR_MODIFY_LEAF) {
     /* Try optimistic updating of the record, keeping changes
@@ -276,12 +271,12 @@ static db_err row_ins_clust_index_entry_by_modify(
     err = btr_cur_optimistic_update(0, cursor, update, 0, thr, mtr);
 
     switch (err) {
-    case DB_OVERFLOW:
-    case DB_UNDERFLOW:
-      err = DB_FAIL;
-      break;
-    default:
-      break;
+      case DB_OVERFLOW:
+      case DB_UNDERFLOW:
+        err = DB_FAIL;
+        break;
+      default:
+        break;
     }
   } else {
     ut_a(mode == BTR_MODIFY_TREE);
@@ -289,8 +284,7 @@ static db_err row_ins_clust_index_entry_by_modify(
 
       return DB_LOCK_TABLE_FULL;
     }
-    err = btr_cur_pessimistic_update(0, cursor, heap, big_rec, update, 0, thr,
-                                     mtr);
+    err = btr_cur_pessimistic_update(0, cursor, heap, big_rec, update, 0, thr, mtr);
   }
 
   return err;
@@ -300,8 +294,9 @@ static db_err row_ins_clust_index_entry_by_modify(
 updates (not DELETE, but UPDATE) table.
 @return	true if an ancestor updates table */
 static bool row_ins_cascade_ancestor_updates_table(
-    que_node_t *node,    /*!< in: node in a query graph */
-    dict_table_t *table) /*!< in: table */
+  que_node_t *node, /*!< in: node in a query graph */
+  dict_table_t *table
+) /*!< in: table */
 {
   que_node_t *parent;
   upd_node_t *upd_node;
@@ -328,8 +323,7 @@ static bool row_ins_cascade_ancestor_updates_table(
 /** Returns the number of ancestor UPDATE or DELETE nodes of a
 cascaded update/delete node.
 @return	number of ancestors */
-static ulint
-row_ins_cascade_n_ancestors(que_node_t *node) /*!< in: node in a query graph */
+static ulint row_ins_cascade_n_ancestors(que_node_t *node) /*!< in: node in a query graph */
 {
   que_node_t *parent;
   ulint n_ancestors = 0;
@@ -354,11 +348,12 @@ can also be 0 if no foreign key fields changed; the returned value is
 ULINT_UNDEFINED if the column type in the child table is too short to
 fit the new value in the parent table: that means the update fails */
 static ulint row_ins_cascade_calc_update_vec(
-    upd_node_t *node,        /*!< in: update node of the parent
+  upd_node_t *node,        /*!< in: update node of the parent
                              table */
-    dict_foreign_t *foreign, /*!< in: foreign key constraint whose
+  dict_foreign_t *foreign, /*!< in: foreign key constraint whose
                              type is != 0 */
-    mem_heap_t *heap)        /*!< in: memory heap to use as
+  mem_heap_t *heap
+) /*!< in: memory heap to use as
                              temporary storage */
 {
   upd_node_t *cascade = node->cascade_node;
@@ -400,8 +395,7 @@ static ulint row_ins_cascade_calc_update_vec(
 
   for (i = 0; i < foreign->n_fields; i++) {
 
-    parent_field_no = dict_table_get_nth_col_pos(
-        parent_table, dict_index_get_nth_col_no(parent_index, i));
+    parent_field_no = dict_table_get_nth_col_pos(parent_table, dict_index_get_nth_col_no(parent_index, i));
 
     for (j = 0; j < parent_update->n_fields; j++) {
       parent_ufield = parent_update->fields + j;
@@ -420,8 +414,7 @@ static ulint row_ins_cascade_calc_update_vec(
 
         ufield = update->fields + n_fields_updated;
 
-        ufield->field_no =
-            dict_table_get_nth_col_pos(table, dict_col_get_no(col));
+        ufield->field_no = dict_table_get_nth_col_pos(table, dict_col_get_no(col));
         ufield->exp = NULL;
 
         ufield->new_val = parent_ufield->new_val;
@@ -443,8 +436,8 @@ static ulint row_ins_cascade_calc_update_vec(
 
         if (!dfield_is_null(&ufield->new_val) &&
             dtype_get_at_most_n_mbchars(
-                col->prtype, col->mbminlen, col->mbmaxlen, col->len, ufield_len,
-                (const char *)dfield_get_data(&ufield->new_val)) < ufield_len) {
+                col->prtype, col->mbminlen, col->mbmaxlen, col->len, ufield_len, (const char*)dfield_get_data(&ufield->new_val)
+            ) < ufield_len) {
 
           return ULINT_UNDEFINED;
         }
@@ -465,39 +458,36 @@ static ulint row_ins_cascade_calc_update_vec(
 
           char *pad_start;
           const char *pad_end;
-          auto padded_data =
-              reinterpret_cast<char *>(mem_heap_alloc(heap, min_size));
+          auto padded_data = reinterpret_cast<char *>(mem_heap_alloc(heap, min_size));
 
           pad_start = padded_data + ufield_len;
           pad_end = padded_data + min_size;
 
-          memcpy(padded_data, dfield_get_data(&ufield->new_val),
-                 dfield_get_len(&ufield->new_val));
+          memcpy(padded_data, dfield_get_data(&ufield->new_val), dfield_get_len(&ufield->new_val));
 
           switch (expect(col->mbminlen, 1)) {
-          default:
-            ut_error;
-            return ULINT_UNDEFINED;
-          case 1:
-            if (unlikely(dtype_get_charset_coll(col->prtype) ==
-                         DATA_CLIENT_BINARY_CHARSET_COLL)) {
-              /* Do not pad BINARY
-              columns. */
+            default:
+              ut_error;
               return ULINT_UNDEFINED;
-            }
+            case 1:
+              if (unlikely(dtype_get_charset_coll(col->prtype) == DATA_CLIENT_BINARY_CHARSET_COLL)) {
+                /* Do not pad BINARY
+              columns. */
+                return ULINT_UNDEFINED;
+              }
 
-            /* space=0x20 */
-            memset(pad_start, 0x20, pad_end - pad_start);
-            break;
-          case 2:
-            /* space=0x0020 */
-            ut_a(!(ufield_len % 2));
-            ut_a(!(min_size % 2));
-            do {
-              *pad_start++ = 0x00;
-              *pad_start++ = 0x20;
-            } while (pad_start < pad_end);
-            break;
+              /* space=0x20 */
+              memset(pad_start, 0x20, pad_end - pad_start);
+              break;
+            case 2:
+              /* space=0x0020 */
+              ut_a(!(ufield_len % 2));
+              ut_a(!(min_size % 2));
+              do {
+                *pad_start++ = 0x00;
+                *pad_start++ = 0x20;
+              } while (pad_start < pad_end);
+              break;
           }
 
           dfield_set_data(&ufield->new_val, padded_data, min_size);
@@ -515,27 +505,28 @@ static ulint row_ins_cascade_calc_update_vec(
 
 /** Set detailed error message associated with foreign key errors for
 the given transaction. */
-static void
-row_ins_set_detailed(trx_t *trx,              /*!< in: transaction */
-                     dict_foreign_t *foreign) /*!< in: foreign key constraint */
+static void row_ins_set_detailed(
+  trx_t *trx, /*!< in: transaction */
+  dict_foreign_t *foreign
+) /*!< in: foreign key constraint */
 {
   ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
-  dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign,
-                                                  false);
+  dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign, false);
   trx_set_detailed_error(trx, "foreign key error");
 }
 
 /** Reports a foreign key error associated with an update or a delete of a
 parent table index entry. */
 static void row_ins_foreign_report_err(
-    const char *errstr,      /*!< in: error string from the viewpoint
+  const char *errstr,      /*!< in: error string from the viewpoint
                              of the parent table */
-    que_thr_t *thr,          /*!< in: query thread whose run_node
+  que_thr_t *thr,          /*!< in: query thread whose run_node
                              is an update node */
-    dict_foreign_t *foreign, /*!< in: foreign key constraint */
-    const rec_t *rec,        /*!< in: a matching index record in the
+  dict_foreign_t *foreign, /*!< in: foreign key constraint */
+  const rec_t *rec,        /*!< in: a matching index record in the
                              child table */
-    const dtuple_t *entry)   /*!< in: index entry in the parent
+  const dtuple_t *entry
+) /*!< in: index entry in the parent
                              table */
 {
   trx_t *trx = thr_get_trx(thr);
@@ -550,8 +541,7 @@ static void row_ins_foreign_report_err(
   ib_logger(ib_stream, "Foreign key constraint fails for table ");
   ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
   ib_logger(ib_stream, ":\n");
-  dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign,
-                                                  true);
+  dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign, true);
   ib_logger(ib_stream, "\n%s", errstr);
   ib_logger(ib_stream, " in parent table, in index ");
   ut_print_name(ib_stream, trx, false, foreign->referenced_index->name);
@@ -578,12 +568,13 @@ static void row_ins_foreign_report_err(
 entry to a child table. Note that the adding may be the result of an update,
 too. */
 static void row_ins_foreign_report_add_err(
-    trx_t *trx,              /*!< in: transaction */
-    dict_foreign_t *foreign, /*!< in: foreign key constraint */
-    const rec_t *rec,        /*!< in: a record in the parent table:
+  trx_t *trx,              /*!< in: transaction */
+  dict_foreign_t *foreign, /*!< in: foreign key constraint */
+  const rec_t *rec,        /*!< in: a record in the parent table:
                              it does not match entry because we
                              have an error! */
-    const dtuple_t *entry)   /*!< in: index entry to insert in the
+  const dtuple_t *entry
+) /*!< in: index entry to insert in the
                              child table */
 {
   row_ins_set_detailed(trx, foreign);
@@ -595,8 +586,7 @@ static void row_ins_foreign_report_add_err(
   ib_logger(ib_stream, "Foreign key constraint fails for table ");
   ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
   ib_logger(ib_stream, ":\n");
-  dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign,
-                                                  true);
+  dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign, true);
   ib_logger(ib_stream, "\nTrying to add in child table, in index ");
   ut_print_name(ib_stream, trx, false, foreign->foreign_index->name);
   if (entry) {
@@ -628,10 +618,11 @@ static void row_ins_foreign_report_add_err(
 /** Does a cascaded delete or set null in a foreign key operation.
 @return	error code or DB_SUCCESS */
 static db_err row_update_cascade_client(
-    que_thr_t *thr,      /*!< in: query thread */
-    upd_node_t *node,    /*!< in: update node used in the cascade
+  que_thr_t *thr,   /*!< in: query thread */
+  upd_node_t *node, /*!< in: update node used in the cascade
                          or set null operation */
-    dict_table_t *table) /*!< in: table where we do the operation */
+  dict_table_t *table
+) /*!< in: table where we do the operation */
 {
   auto trx = thr_get_trx(thr);
 
@@ -693,15 +684,16 @@ updated and the constraint had an ON DELETE or ON UPDATE condition which was not
 RESTRICT.
 @return	DB_SUCCESS, DB_LOCK_WAIT, or error code */
 static db_err row_ins_foreign_check_on_constraint(
-    que_thr_t *thr,          /*!< in: query thread whose run_node
+  que_thr_t *thr,          /*!< in: query thread whose run_node
                              is an update node */
-    dict_foreign_t *foreign, /*!< in: foreign key constraint whose
+  dict_foreign_t *foreign, /*!< in: foreign key constraint whose
                              type is != 0 */
-    btr_pcur_t *pcur,        /*!< in: cursor placed on a matching
+  btr_pcur_t *pcur,        /*!< in: cursor placed on a matching
                              index record in the child table */
-    dtuple_t *entry,         /*!< in: index entry in the parent
+  dtuple_t *entry,         /*!< in: index entry in the parent
                              table */
-    mtr_t *mtr)              /*!< in: mtr holding the latch of pcur
+  mtr_t *mtr
+) /*!< in: mtr holding the latch of pcur
                              page */
 {
   upd_node_t *node;
@@ -730,23 +722,17 @@ static db_err row_ins_foreign_check_on_constraint(
 
   node = static_cast<upd_node_t *>(thr->run_node);
 
-  if (node->is_delete &&
-      0 == (foreign->type & (DICT_FOREIGN_ON_DELETE_CASCADE |
-                             DICT_FOREIGN_ON_DELETE_SET_NULL))) {
+  if (node->is_delete && 0 == (foreign->type & (DICT_FOREIGN_ON_DELETE_CASCADE | DICT_FOREIGN_ON_DELETE_SET_NULL))) {
 
-    row_ins_foreign_report_err("Trying to delete", thr, foreign,
-                               btr_pcur_get_rec(pcur), entry);
+    row_ins_foreign_report_err("Trying to delete", thr, foreign, btr_pcur_get_rec(pcur), entry);
 
     return DB_ROW_IS_REFERENCED;
   }
 
-  if (!node->is_delete &&
-      0 == (foreign->type & (DICT_FOREIGN_ON_UPDATE_CASCADE |
-                             DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
+  if (!node->is_delete && 0 == (foreign->type & (DICT_FOREIGN_ON_UPDATE_CASCADE | DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
     /* This is an UPDATE */
 
-    row_ins_foreign_report_err("Trying to update", thr, foreign,
-                               btr_pcur_get_rec(pcur), entry);
+    row_ins_foreign_report_err("Trying to update", thr, foreign, btr_pcur_get_rec(pcur), entry);
 
     return DB_ROW_IS_REFERENCED;
   }
@@ -793,18 +779,22 @@ static db_err row_ins_foreign_check_on_constraint(
   table may still be incomplete, and we must avoid seeing the indexes
   of the parent table in an inconsistent state! */
 
-  if (!cascade->is_delete &&
-      row_ins_cascade_ancestor_updates_table(cascade, table)) {
+  if (!cascade->is_delete && row_ins_cascade_ancestor_updates_table(cascade, table)) {
 
     /* We do not know if this would break foreign key
     constraints, but play safe and return an error */
 
     err = DB_ROW_IS_REFERENCED;
 
-    row_ins_foreign_report_err("Trying an update, possibly causing a cyclic"
-                               " cascaded update\n"
-                               "in the child table,",
-                               thr, foreign, btr_pcur_get_rec(pcur), entry);
+    row_ins_foreign_report_err(
+      "Trying an update, possibly causing a cyclic"
+      " cascaded update\n"
+      "in the child table,",
+      thr,
+      foreign,
+      btr_pcur_get_rec(pcur),
+      entry
+    );
 
     goto nonstandard_exit_func;
   }
@@ -812,8 +802,7 @@ static db_err row_ins_foreign_check_on_constraint(
   if (row_ins_cascade_n_ancestors(cascade) >= 15) {
     err = DB_ROW_IS_REFERENCED;
 
-    row_ins_foreign_report_err("Trying a too deep cascaded delete or update\n",
-                               thr, foreign, btr_pcur_get_rec(pcur), entry);
+    row_ins_foreign_report_err("Trying a too deep cascaded delete or update\n", thr, foreign, btr_pcur_get_rec(pcur), entry);
 
     goto nonstandard_exit_func;
   }
@@ -840,27 +829,26 @@ static db_err row_ins_foreign_check_on_constraint(
     tmp_heap = mem_heap_create(256);
 
     ref = row_build_row_ref(ROW_COPY_POINTERS, index, rec, tmp_heap);
-    btr_pcur_open_with_no_init(clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF,
-                               cascade->pcur, 0, mtr);
+    btr_pcur_open_with_no_init(clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, cascade->pcur, 0, mtr);
 
     clust_rec = btr_pcur_get_rec(cascade->pcur);
     clust_block = btr_pcur_get_block(cascade->pcur);
 
-    if (!page_rec_is_user_rec(clust_rec) ||
-        btr_pcur_get_low_match(cascade->pcur) <
-            dict_index_get_n_unique(clust_index)) {
+    if (!page_rec_is_user_rec(clust_rec) || btr_pcur_get_low_match(cascade->pcur) < dict_index_get_n_unique(clust_index)) {
 
-      ib_logger(ib_stream,
-                "error in cascade of a foreign key op\n");
+      ib_logger(ib_stream, "error in cascade of a foreign key op\n");
       dict_index_name_print(ib_stream, trx, index);
 
       ib_logger(ib_stream, "\nrecord ");
       rec_print(ib_stream, rec, index);
       ib_logger(ib_stream, "\nclustered record ");
       rec_print(ib_stream, clust_rec, clust_index);
-      ib_logger(ib_stream, "\n"
-                           "Submit a detailed bug report, check the "
-                           "TBD website for details");
+      ib_logger(
+        ib_stream,
+        "\n"
+        "Submit a detailed bug report, check the "
+        "TBD website for details"
+      );
 
       err = DB_SUCCESS;
 
@@ -877,8 +865,7 @@ static db_err row_ins_foreign_check_on_constraint(
     we already have a normal shared lock on the appropriate
     gap if the search criterion was not unique */
 
-    err = lock_clust_rec_read_check_and_lock_alt(
-        0, clust_block, clust_rec, clust_index, LOCK_X, LOCK_REC_NOT_GAP, thr);
+    err = lock_clust_rec_read_check_and_lock_alt(0, clust_block, clust_rec, clust_index, LOCK_X, LOCK_REC_NOT_GAP, thr);
   }
 
   if (err != DB_SUCCESS) {
@@ -895,8 +882,7 @@ static db_err row_ins_foreign_check_on_constraint(
     goto nonstandard_exit_func;
   }
 
-  if ((node->is_delete && (foreign->type & DICT_FOREIGN_ON_DELETE_SET_NULL)) ||
-      (!node->is_delete && (foreign->type & DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
+  if ((node->is_delete && (foreign->type & DICT_FOREIGN_ON_DELETE_SET_NULL)) || (!node->is_delete && (foreign->type & DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
 
     /* Build the appropriate update vector which sets
     foreign->n_fields first fields in rec to SQL NULL */
@@ -909,8 +895,7 @@ static db_err row_ins_foreign_check_on_constraint(
     for (i = 0; i < foreign->n_fields; i++) {
       auto ufield = &update->fields[i];
 
-      ufield->field_no = dict_table_get_nth_col_pos(
-          table, dict_index_get_nth_col_no(index, i));
+      ufield->field_no = dict_table_get_nth_col_pos(table, dict_index_get_nth_col_no(index, i));
       ufield->orig_len = 0;
       ufield->exp = NULL;
       dfield_set_null(&ufield->new_val);
@@ -929,13 +914,18 @@ static db_err row_ins_foreign_check_on_constraint(
     if (n_to_update == ULINT_UNDEFINED) {
       err = DB_ROW_IS_REFERENCED;
 
-      row_ins_foreign_report_err("Trying a cascaded update where the"
-                                 " updated value in the child\n"
-                                 "table would not fit in the length"
-                                 " of the column, or the value would\n"
-                                 "be NULL and the column is"
-                                 " declared as not NULL in the child table,",
-                                 thr, foreign, btr_pcur_get_rec(pcur), entry);
+      row_ins_foreign_report_err(
+        "Trying a cascaded update where the"
+        " updated value in the child\n"
+        "table would not fit in the length"
+        " of the column, or the value would\n"
+        "be NULL and the column is"
+        " declared as not NULL in the child table,",
+        thr,
+        foreign,
+        btr_pcur_get_rec(pcur),
+        entry
+      );
 
       goto nonstandard_exit_func;
     }
@@ -972,11 +962,13 @@ static db_err row_ins_foreign_check_on_constraint(
   err = row_update_cascade_client(thr, cascade, foreign->foreign_table);
 
   if (foreign->foreign_table->n_foreign_key_checks_running == 0) {
-    ib_logger(ib_stream,
-              "error: table %s has the counter 0"
-              " though there is\n"
-              "a FOREIGN KEY check running on it.\n",
-              foreign->foreign_table->name);
+    ib_logger(
+      ib_stream,
+      "error: table %s has the counter 0"
+      " though there is\n"
+      "a FOREIGN KEY check running on it.\n",
+      foreign->foreign_table->name
+    );
   }
 
   /* Release the data dictionary latch for a while, so that we do not
@@ -1027,24 +1019,23 @@ nonstandard_exit_func:
 records and also in checking foreign key constraints.
 @return	DB_SUCCESS or error code */
 static db_err row_ins_set_shared_rec_lock(
-    ulint type,               /*!< in: LOCK_ORDINARY, LOCK_GAP, or
+  ulint type,               /*!< in: LOCK_ORDINARY, LOCK_GAP, or
                               LOCK_REC_NOT_GAP type lock */
-    const buf_block_t *block, /*!< in: buffer block of rec */
-    const rec_t *rec,         /*!< in: record */
-    dict_index_t *index,      /*!< in: index */
-    const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
-    que_thr_t *thr)           /*!< in: query thread */
+  const buf_block_t *block, /*!< in: buffer block of rec */
+  const rec_t *rec,         /*!< in: record */
+  dict_index_t *index,      /*!< in: index */
+  const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
+  que_thr_t *thr
+) /*!< in: query thread */
 {
   db_err err;
 
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   if (dict_index_is_clust(index)) {
-    err = lock_clust_rec_read_check_and_lock(0, block, rec, index, offsets,
-                                             LOCK_S, type, thr);
+    err = lock_clust_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_S, type, thr);
   } else {
-    err = lock_sec_rec_read_check_and_lock(0, block, rec, index, offsets,
-                                           LOCK_S, type, thr);
+    err = lock_sec_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_S, type, thr);
   }
 
   return err;
@@ -1054,32 +1045,31 @@ static db_err row_ins_set_shared_rec_lock(
 records
 @return	DB_SUCCESS or error code */
 static db_err row_ins_set_exclusive_rec_lock(
-    ulint type,               /*!< in: LOCK_ORDINARY, LOCK_GAP, or
+  ulint type,               /*!< in: LOCK_ORDINARY, LOCK_GAP, or
                               LOCK_REC_NOT_GAP type lock */
-    const buf_block_t *block, /*!< in: buffer block of rec */
-    const rec_t *rec,         /*!< in: record */
-    dict_index_t *index,      /*!< in: index */
-    const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
-    que_thr_t *thr)           /*!< in: query thread */
+  const buf_block_t *block, /*!< in: buffer block of rec */
+  const rec_t *rec,         /*!< in: record */
+  dict_index_t *index,      /*!< in: index */
+  const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
+  que_thr_t *thr
+) /*!< in: query thread */
 {
   db_err err;
 
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   if (dict_index_is_clust(index)) {
-    err = lock_clust_rec_read_check_and_lock(0, block, rec, index, offsets,
-                                             LOCK_X, type, thr);
+    err = lock_clust_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_X, type, thr);
   } else {
-    err = lock_sec_rec_read_check_and_lock(0, block, rec, index, offsets,
-                                           LOCK_X, type, thr);
+    err = lock_sec_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_X, type, thr);
   }
 
   return err;
 }
 
-db_err row_ins_check_foreign_constraint(bool check_ref, dict_foreign_t *foreign,
-                                        dict_table_t *table, dtuple_t *entry,
-                                        que_thr_t *thr) {
+db_err row_ins_check_foreign_constraint(
+  bool check_ref, dict_foreign_t *foreign, dict_table_t *table, dtuple_t *entry, que_thr_t *thr
+) {
   upd_node_t *upd_node;
   dict_table_t *check_table;
   dict_index_t *check_index;
@@ -1163,16 +1153,18 @@ run_again:
       ib_logger(ib_stream, "Foreign key constraint fails for table ");
       ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
       ib_logger(ib_stream, ":\n");
-      dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign,
-                                                      true);
+      dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign, true);
       ib_logger(ib_stream, "\nTrying to add to index ");
       ut_print_name(ib_stream, trx, false, foreign->foreign_index->name);
       ib_logger(ib_stream, " tuple:\n");
       dtuple_print(ib_stream, entry);
       ib_logger(ib_stream, "\nBut the parent table ");
       ut_print_name(ib_stream, trx, true, foreign->referenced_table_name);
-      ib_logger(ib_stream, "\nor its .ibd file does"
-                           " not currently exist!\n");
+      ib_logger(
+        ib_stream,
+        "\nor its .ibd file does"
+        " not currently exist!\n"
+      );
       mutex_exit(&dict_foreign_err_mutex);
 
       err = DB_NO_REFERENCED_ROW;
@@ -1217,13 +1209,11 @@ run_again:
       goto next_rec;
     }
 
-    offsets =
-        rec_get_offsets(rec, check_index, offsets, ULINT_UNDEFINED, &heap);
+    offsets = rec_get_offsets(rec, check_index, offsets, ULINT_UNDEFINED, &heap);
 
     if (page_rec_is_supremum(rec)) {
 
-      err = row_ins_set_shared_rec_lock(LOCK_ORDINARY, block, rec, check_index,
-                                        offsets, thr);
+      err = row_ins_set_shared_rec_lock(LOCK_ORDINARY, block, rec, check_index, offsets, thr);
 
       if (err != DB_SUCCESS) {
 
@@ -1237,8 +1227,7 @@ run_again:
 
     if (cmp == 0) {
       if (rec_get_deleted_flag(rec, rec_offs_comp(offsets))) {
-        err = row_ins_set_shared_rec_lock(LOCK_ORDINARY, block, rec,
-                                          check_index, offsets, thr);
+        err = row_ins_set_shared_rec_lock(LOCK_ORDINARY, block, rec, check_index, offsets, thr);
         if (err != DB_SUCCESS) {
 
           break;
@@ -1248,8 +1237,7 @@ run_again:
         a record because we can allow inserts
         into gaps */
 
-        err = row_ins_set_shared_rec_lock(LOCK_REC_NOT_GAP, block, rec,
-                                          check_index, offsets, thr);
+        err = row_ins_set_shared_rec_lock(LOCK_REC_NOT_GAP, block, rec, check_index, offsets, thr);
 
         if (err != DB_SUCCESS) {
 
@@ -1265,8 +1253,7 @@ run_again:
           condition: check them in a separate
           function */
 
-          err = row_ins_foreign_check_on_constraint(thr, foreign, &pcur, entry,
-                                                    &mtr);
+          err = row_ins_foreign_check_on_constraint(thr, foreign, &pcur, entry, &mtr);
           if (err != DB_SUCCESS) {
             /* Since reporting a plain
             "duplicate key" error
@@ -1292,8 +1279,7 @@ run_again:
           different block */
           block = btr_pcur_get_block(&pcur);
         } else {
-          row_ins_foreign_report_err("Trying to delete or update", thr, foreign,
-                                     rec, entry);
+          row_ins_foreign_report_err("Trying to delete or update", thr, foreign, rec, entry);
 
           err = DB_ROW_IS_REFERENCED;
           break;
@@ -1302,8 +1288,7 @@ run_again:
     }
 
     if (cmp < 0) {
-      err = row_ins_set_shared_rec_lock(LOCK_GAP, block, rec, check_index,
-                                        offsets, thr);
+      err = row_ins_set_shared_rec_lock(LOCK_GAP, block, rec, check_index, offsets, thr);
       if (err != DB_SUCCESS) {
 
         break;
@@ -1373,10 +1358,11 @@ sets shared locks which lock either the success or the failure of
 a constraint.
 @return	DB_SUCCESS or error code */
 static db_err row_ins_check_foreign_constraints(
-    dict_table_t *table, /*!< in: table */
-    dict_index_t *index, /*!< in: index */
-    dtuple_t *entry,     /*!< in: index entry for index */
-    que_thr_t *thr)      /*!< in: query thread */
+  dict_table_t *table, /*!< in: table */
+  dict_index_t *index, /*!< in: index */
+  dtuple_t *entry,     /*!< in: index entry for index */
+  que_thr_t *thr
+) /*!< in: query thread */
 {
   dict_foreign_t *foreign;
   db_err err;
@@ -1443,12 +1429,13 @@ static db_err row_ins_check_foreign_constraints(
 insert.
 @return	true if error */
 static bool row_ins_dupl_error_with_rec(
-    const rec_t *rec,      /*!< in: user record; NOTE that we assume
+  const rec_t *rec,      /*!< in: user record; NOTE that we assume
                            that the caller already has a record lock on
                            the record! */
-    const dtuple_t *entry, /*!< in: entry to insert */
-    dict_index_t *index,   /*!< in: index */
-    const ulint *offsets)  /*!< in: rec_get_offsets(rec, index) */
+  const dtuple_t *entry, /*!< in: entry to insert */
+  dict_index_t *index,   /*!< in: index */
+  const ulint *offsets
+) /*!< in: rec_get_offsets(rec, index) */
 {
   ulint matched_fields;
   ulint matched_bytes;
@@ -1462,8 +1449,7 @@ static bool row_ins_dupl_error_with_rec(
   matched_fields = 0;
   matched_bytes = 0;
 
-  cmp_dtuple_rec_with_match(index->cmp_ctx, entry, rec, offsets,
-                            &matched_fields, &matched_bytes);
+  cmp_dtuple_rec_with_match(index->cmp_ctx, entry, rec, offsets, &matched_fields, &matched_bytes);
 
   if (matched_fields < n_unique) {
 
@@ -1491,9 +1477,10 @@ whether a uniqueness violation has occurred for the key value of the entry.
 Set shared locks on possible duplicate records.
 @return	DB_SUCCESS, DB_DUPLICATE_KEY, or DB_LOCK_WAIT */
 static db_err row_ins_scan_sec_index_for_duplicate(
-    dict_index_t *index, /*!< in: non-clustered unique index */
-    dtuple_t *entry,     /*!< in: index entry */
-    que_thr_t *thr)      /*!< in: query thread */
+  dict_index_t *index, /*!< in: non-clustered unique index */
+  dtuple_t *entry,     /*!< in: index entry */
+  que_thr_t *thr
+) /*!< in: query thread */
 {
   ulint n_unique;
   ulint i;
@@ -1553,12 +1540,10 @@ static db_err row_ins_scan_sec_index_for_duplicate(
       duplicates ( REPLACE, LOAD DATAFILE REPLACE,
       INSERT ON DUPLICATE KEY UPDATE). */
 
-      err = row_ins_set_exclusive_rec_lock(LOCK_ORDINARY, block, rec, index,
-                                           offsets, thr);
+      err = row_ins_set_exclusive_rec_lock(LOCK_ORDINARY, block, rec, index, offsets, thr);
     } else {
 
-      err = row_ins_set_shared_rec_lock(LOCK_ORDINARY, block, rec, index,
-                                        offsets, thr);
+      err = row_ins_set_shared_rec_lock(LOCK_ORDINARY, block, rec, index, offsets, thr);
     }
 
     if (err != DB_SUCCESS) {
@@ -1607,11 +1592,12 @@ for a clustered index!
 @return DB_SUCCESS if no error, DB_DUPLICATE_KEY if error,
 DB_LOCK_WAIT if we have to wait for a lock on a possible duplicate
 record */
-static db_err
-row_ins_duplicate_error_in_clust(btr_cur_t *cursor, /*!< in: B-tree cursor */
-                                 dtuple_t *entry,   /*!< in: entry to insert */
-                                 que_thr_t *thr,    /*!< in: query thread */
-                                 mtr_t *mtr)        /*!< in: mtr */
+static db_err row_ins_duplicate_error_in_clust(
+  btr_cur_t *cursor, /*!< in: B-tree cursor */
+  dtuple_t *entry,   /*!< in: entry to insert */
+  que_thr_t *thr,    /*!< in: query thread */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   db_err err;
   rec_t *rec;
@@ -1647,8 +1633,7 @@ row_ins_duplicate_error_in_clust(btr_cur_t *cursor, /*!< in: B-tree cursor */
     rec = btr_cur_get_rec(cursor);
 
     if (!page_rec_is_infimum(rec)) {
-      offsets =
-          rec_get_offsets(rec, cursor->m_index, offsets, ULINT_UNDEFINED, &heap);
+      offsets = rec_get_offsets(rec, cursor->m_index, offsets, ULINT_UNDEFINED, &heap);
 
       /* We set a lock on the possible duplicate: this
       is needed in logical logging, we need to make
@@ -1662,14 +1647,10 @@ row_ins_duplicate_error_in_clust(btr_cur_t *cursor, /*!< in: B-tree cursor */
         duplicates ( REPLACE, LOAD DATAFILE REPLACE,
         INSERT ON DUPLICATE KEY UPDATE). */
 
-        err = row_ins_set_exclusive_rec_lock(LOCK_REC_NOT_GAP,
-                                             btr_cur_get_block(cursor), rec,
-                                             cursor->m_index, offsets, thr);
+        err = row_ins_set_exclusive_rec_lock(LOCK_REC_NOT_GAP, btr_cur_get_block(cursor), rec, cursor->m_index, offsets, thr);
       } else {
 
-        err = row_ins_set_shared_rec_lock(LOCK_REC_NOT_GAP,
-                                          btr_cur_get_block(cursor), rec,
-                                          cursor->m_index, offsets, thr);
+        err = row_ins_set_shared_rec_lock(LOCK_REC_NOT_GAP, btr_cur_get_block(cursor), rec, cursor->m_index, offsets, thr);
       }
 
       if (err != DB_SUCCESS) {
@@ -1689,8 +1670,7 @@ row_ins_duplicate_error_in_clust(btr_cur_t *cursor, /*!< in: B-tree cursor */
     rec = page_rec_get_next(btr_cur_get_rec(cursor));
 
     if (!page_rec_is_supremum(rec)) {
-      offsets =
-          rec_get_offsets(rec, cursor->m_index, offsets, ULINT_UNDEFINED, &heap);
+      offsets = rec_get_offsets(rec, cursor->m_index, offsets, ULINT_UNDEFINED, &heap);
 
       if (trx->duplicates & TRX_DUP_IGNORE) {
 
@@ -1699,14 +1679,10 @@ row_ins_duplicate_error_in_clust(btr_cur_t *cursor, /*!< in: B-tree cursor */
         duplicates ( REPLACE, LOAD DATAFILE REPLACE,
         INSERT ON DUPLICATE KEY UPDATE). */
 
-        err = row_ins_set_exclusive_rec_lock(LOCK_REC_NOT_GAP,
-                                             btr_cur_get_block(cursor), rec,
-                                             cursor->m_index, offsets, thr);
+        err = row_ins_set_exclusive_rec_lock(LOCK_REC_NOT_GAP, btr_cur_get_block(cursor), rec, cursor->m_index, offsets, thr);
       } else {
 
-        err = row_ins_set_shared_rec_lock(LOCK_REC_NOT_GAP,
-                                          btr_cur_get_block(cursor), rec,
-                                          cursor->m_index, offsets, thr);
+        err = row_ins_set_shared_rec_lock(LOCK_REC_NOT_GAP, btr_cur_get_block(cursor), rec, cursor->m_index, offsets, thr);
       }
 
       if (err != DB_SUCCESS) {
@@ -1778,13 +1754,14 @@ It is then unmarked. Otherwise, the entry is just inserted to the index.
 @return DB_SUCCESS, DB_LOCK_WAIT, DB_FAIL if pessimistic retry needed,
 or error code */
 static db_err row_ins_index_entry_low(
-    ulint mode,          /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
+  ulint mode,          /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
                          depending on whether we wish optimistic or
                          pessimistic descent down the index tree */
-    dict_index_t *index, /*!< in: index */
-    dtuple_t *entry,     /*!< in: index entry to insert */
-    ulint n_ext,         /*!< in: number of externally stored columns */
-    que_thr_t *thr)      /*!< in: query thread */
+  dict_index_t *index, /*!< in: index */
+  dtuple_t *entry,     /*!< in: index entry to insert */
+  ulint n_ext,         /*!< in: number of externally stored columns */
+  que_thr_t *thr
+) /*!< in: query thread */
 {
   btr_cur_t cursor;
   ulint ignore_sec_unique = 0;
@@ -1811,24 +1788,22 @@ static db_err row_ins_index_entry_low(
     ignore_sec_unique = BTR_IGNORE_SEC_UNIQUE;
   }
 
-  btr_cur_search_to_nth_level(index, 0, entry, PAGE_CUR_LE,
-                              mode | BTR_INSERT | ignore_sec_unique, &cursor, 0,
-                              __FILE__, __LINE__, &mtr);
+  btr_cur_search_to_nth_level(
+    index, 0, entry, PAGE_CUR_LE, mode | BTR_INSERT | ignore_sec_unique, &cursor, 0, __FILE__, __LINE__, &mtr
+  );
 
 #ifdef UNIV_DEBUG
   {
     page_t *page = btr_cur_get_page(&cursor);
     rec_t *first_rec = page_rec_get_next(page_get_infimum_rec(page));
 
-    ut_ad(page_rec_is_supremum(first_rec) ||
-          rec_get_n_fields(first_rec, index) == dtuple_get_n_fields(entry));
+    ut_ad(page_rec_is_supremum(first_rec) || rec_get_n_fields(first_rec, index) == dtuple_get_n_fields(entry));
   }
 #endif /* UNIV_DEBUG */
 
   n_unique = dict_index_get_n_unique(index);
 
-  if (dict_index_is_unique(index) &&
-      (cursor.up_match >= n_unique || cursor.low_match >= n_unique)) {
+  if (dict_index_is_unique(index) && (cursor.up_match >= n_unique || cursor.low_match >= n_unique)) {
 
     if (dict_index_is_clust(index)) {
       /* Note that the following may return also
@@ -1856,9 +1831,7 @@ static db_err row_ins_index_entry_low(
       transaction. Let us now reposition the cursor and
       continue the insertion. */
 
-      btr_cur_search_to_nth_level(index, 0, entry, PAGE_CUR_LE,
-                                  mode | BTR_INSERT, &cursor, 0, __FILE__,
-                                  __LINE__, &mtr);
+      btr_cur_search_to_nth_level(index, 0, entry, PAGE_CUR_LE, mode | BTR_INSERT, &cursor, 0, __FILE__, __LINE__, &mtr);
     }
   }
 
@@ -1876,16 +1849,14 @@ static db_err row_ins_index_entry_low(
     }
 
     if (dict_index_is_clust(index)) {
-      err = row_ins_clust_index_entry_by_modify(mode, &cursor, &heap, &big_rec,
-                                                entry, thr, &mtr);
+      err = row_ins_clust_index_entry_by_modify(mode, &cursor, &heap, &big_rec, entry, thr, &mtr);
     } else {
       ut_ad(!n_ext);
       err = row_ins_sec_index_entry_by_modify(mode, &cursor, entry, thr, &mtr);
     }
   } else {
     if (mode == BTR_MODIFY_LEAF) {
-      err = btr_cur_optimistic_insert(0, &cursor, entry, &insert_rec, &big_rec,
-                                      n_ext, thr, &mtr);
+      err = btr_cur_optimistic_insert(0, &cursor, entry, &insert_rec, &big_rec, n_ext, thr, &mtr);
     } else {
       ut_a(mode == BTR_MODIFY_TREE);
       if (buf_LRU_buf_pool_running_out()) {
@@ -1894,8 +1865,7 @@ static db_err row_ins_index_entry_low(
 
         goto function_exit;
       }
-      err = btr_cur_pessimistic_insert(0, &cursor, entry, &insert_rec, &big_rec,
-                                       n_ext, thr, &mtr);
+      err = btr_cur_pessimistic_insert(0, &cursor, entry, &insert_rec, &big_rec, n_ext, thr, &mtr);
     }
   }
 
@@ -1907,13 +1877,11 @@ function_exit:
     ulint *offsets;
     mtr_start(&mtr);
 
-    btr_cur_search_to_nth_level(index, 0, entry, PAGE_CUR_LE, BTR_MODIFY_TREE,
-                                &cursor, 0, __FILE__, __LINE__, &mtr);
+    btr_cur_search_to_nth_level(index, 0, entry, PAGE_CUR_LE, BTR_MODIFY_TREE, &cursor, 0, __FILE__, __LINE__, &mtr);
     rec = btr_cur_get_rec(&cursor);
     offsets = rec_get_offsets(rec, index, NULL, ULINT_UNDEFINED, &heap);
 
-    err = btr_store_big_rec_extern_fields(index, btr_cur_get_block(&cursor),
-                                          rec, offsets, big_rec, &mtr);
+    err = btr_store_big_rec_extern_fields(index, btr_cur_get_block(&cursor), rec, offsets, big_rec, &mtr);
 
     if (modify) {
       dtuple_big_rec_free(big_rec);
@@ -1930,8 +1898,7 @@ function_exit:
   return err;
 }
 
-db_err row_ins_index_entry(dict_index_t *index, dtuple_t *entry, ulint n_ext,
-                           bool foreign, que_thr_t *thr) {
+db_err row_ins_index_entry(dict_index_t *index, dtuple_t *entry, ulint n_ext, bool foreign, que_thr_t *thr) {
   db_err err;
 
   if (foreign && UT_LIST_GET_FIRST(index->table->foreign_list)) {
@@ -1962,10 +1929,11 @@ db_err row_ins_index_entry(dict_index_t *index, dtuple_t *entry, ulint n_ext,
 
 /** Sets the values of the dtuple fields in entry from the values of appropriate
 columns in row. */
-static void
-row_ins_index_entry_set_vals(dict_index_t *index, /*!< in: index */
-                             dtuple_t *entry, /*!< in: index entry to make */
-                             const dtuple_t *row) /*!< in: row */
+static void row_ins_index_entry_set_vals(
+  dict_index_t *index, /*!< in: index */
+  dtuple_t *entry,     /*!< in: index entry to make */
+  const dtuple_t *row
+) /*!< in: row */
 {
   ulint n_fields;
   ulint i;
@@ -1986,16 +1954,15 @@ row_ins_index_entry_set_vals(dict_index_t *index, /*!< in: index */
     len = dfield_get_len(row_field);
 
     /* Check column prefix indexes */
-    if (ind_field->prefix_len > 0 &&
-        dfield_get_len(row_field) != UNIV_SQL_NULL) {
+    if (ind_field->prefix_len > 0 && dfield_get_len(row_field) != UNIV_SQL_NULL) {
 
       const dict_col_t *col;
 
       col = dict_field_get_col(ind_field);
 
       len = dtype_get_at_most_n_mbchars(
-          col->prtype, col->mbminlen, col->mbmaxlen, ind_field->prefix_len, len,
-          (char *)dfield_get_data(row_field));
+        col->prtype, col->mbminlen, col->mbmaxlen, ind_field->prefix_len, len, (char *)dfield_get_data(row_field)
+      );
 
       ut_ad(!dfield_is_ext(row_field));
     }
@@ -2012,9 +1979,10 @@ row_ins_index_entry_set_vals(dict_index_t *index, /*!< in: index */
 /** Inserts a single index entry to the table.
 @return DB_SUCCESS if operation successfully completed, else error
 code or DB_LOCK_WAIT */
-static ulint
-row_ins_index_entry_step(ins_node_t *node, /*!< in: row insert node */
-                         que_thr_t *thr)   /*!< in: query thread */
+static ulint row_ins_index_entry_step(
+  ins_node_t *node, /*!< in: row insert node */
+  que_thr_t *thr
+) /*!< in: query thread */
 {
   ulint err;
 
@@ -2030,8 +1998,7 @@ row_ins_index_entry_step(ins_node_t *node, /*!< in: row insert node */
 }
 
 /** Allocates a row id for row and inits the node->index field. */
-inline void
-row_ins_alloc_row_id_step(ins_node_t *node) /*!< in: row insert node */
+inline void row_ins_alloc_row_id_step(ins_node_t *node) /*!< in: row insert node */
 {
   uint64_t row_id;
 
@@ -2052,8 +2019,7 @@ row_ins_alloc_row_id_step(ins_node_t *node) /*!< in: row insert node */
 }
 
 /** Gets a row to insert from the values list. */
-inline void
-row_ins_get_row_from_values(ins_node_t *node) /*!< in: row insert node */
+inline void row_ins_get_row_from_values(ins_node_t *node) /*!< in: row insert node */
 {
   ulint i;
   dtuple_t *row;
@@ -2082,8 +2048,7 @@ row_ins_get_row_from_values(ins_node_t *node) /*!< in: row insert node */
 }
 
 /** Gets a row to insert from the select list. */
-inline void
-row_ins_get_row_from_select(ins_node_t *node) /*!< in: row insert node */
+inline void row_ins_get_row_from_select(ins_node_t *node) /*!< in: row insert node */
 {
   ulint i;
   dtuple_t *row;
@@ -2112,8 +2077,10 @@ row_ins_get_row_from_select(ins_node_t *node) /*!< in: row insert node */
 /** Inserts a row to a table.
 @return DB_SUCCESS if operation successfully completed, else error
 code or DB_LOCK_WAIT */
-static ulint row_ins(ins_node_t *node, /*!< in: row insert node */
-                     que_thr_t *thr)   /*!< in: query thread */
+static ulint row_ins(
+  ins_node_t *node, /*!< in: row insert node */
+  que_thr_t *thr
+) /*!< in: query thread */
 {
   ulint err;
 

@@ -36,8 +36,7 @@ eval_node_alloc_val_buf */
 static byte eval_dummy;
 
 byte *eval_node_alloc_val_buf(que_node_t *node, ulint size) {
-  ut_ad(que_node_get_type(node) == QUE_NODE_SYMBOL ||
-        que_node_get_type(node) == QUE_NODE_FUNC);
+  ut_ad(que_node_get_type(node) == QUE_NODE_SYMBOL || que_node_get_type(node) == QUE_NODE_FUNC);
 
   auto dfield = que_node_get_val(node);
   auto data = (byte *)dfield_get_data(dfield);
@@ -60,8 +59,7 @@ byte *eval_node_alloc_val_buf(que_node_t *node, ulint size) {
 }
 
 void eval_node_free_val_buf(que_node_t *node) {
-  ut_ad(que_node_get_type(node) == QUE_NODE_SYMBOL ||
-        que_node_get_type(node) == QUE_NODE_FUNC);
+  ut_ad(que_node_get_type(node) == QUE_NODE_SYMBOL || que_node_get_type(node) == QUE_NODE_FUNC);
 
   auto dfield = que_node_get_val(node);
 
@@ -79,8 +77,7 @@ bool eval_cmp(func_node_t *cmp_node) {
 
   auto arg1 = cmp_node->args;
   auto arg2 = que_node_get_next(arg1);
-  auto res =
-      cmp_dfield_dfield(NULL, que_node_get_val(arg1), que_node_get_val(arg2));
+  auto res = cmp_dfield_dfield(NULL, que_node_get_val(arg1), que_node_get_val(arg2));
   auto val = true;
   auto func = cmp_node->func;
 
@@ -118,8 +115,7 @@ bool eval_cmp(func_node_t *cmp_node) {
 }
 
 /** Evaluates a logical operation node. */
-inline void
-eval_logical(func_node_t *logical_node) /*!< in: logical operation node */
+inline void eval_logical(func_node_t *logical_node) /*!< in: logical operation node */
 {
   ut_ad(que_node_get_type(logical_node) == QUE_NODE_FUNC);
 
@@ -151,8 +147,7 @@ eval_logical(func_node_t *logical_node) /*!< in: logical operation node */
 }
 
 /** Evaluates an arithmetic operation node. */
-inline void
-eval_arith(func_node_t *arith_node) /*!< in: arithmetic operation node */
+inline void eval_arith(func_node_t *arith_node) /*!< in: arithmetic operation node */
 {
   ut_ad(que_node_get_type(arith_node) == QUE_NODE_FUNC);
 
@@ -186,8 +181,7 @@ eval_arith(func_node_t *arith_node) /*!< in: arithmetic operation node */
 }
 
 /** Evaluates an aggregate operation node. */
-inline void
-eval_aggregate(func_node_t *node) /*!< in: aggregate operation node */
+inline void eval_aggregate(func_node_t *node) /*!< in: aggregate operation node */
 {
   que_node_t *arg;
   lint arg_val;
@@ -214,8 +208,7 @@ eval_aggregate(func_node_t *node) /*!< in: aggregate operation node */
 
 /** Evaluates a predefined function node where the function is not relevant
 in benchmarks. */
-static void
-eval_predefined_2(func_node_t *func_node) /*!< in: predefined function node */
+static void eval_predefined_2(func_node_t *func_node) /*!< in: predefined function node */
 {
   que_node_t *arg;
   que_node_t *arg1;
@@ -311,8 +304,7 @@ inline void eval_notfound(func_node_t *func_node) /*!< in: function node */
 
   if (cursor->token_type == SYM_LIT) {
 
-    ut_ad(memcmp((byte *)dfield_get_data(que_node_get_val(cursor)), "SQL", 3) ==
-          0);
+    ut_ad(memcmp((byte *)dfield_get_data(que_node_get_val(cursor)), "SQL", 3) == 0);
 
     sel_node = cursor->sym_table->query_graph->last_sel_node;
   } else {
@@ -382,8 +374,7 @@ static void eval_replstr(func_node_t *func_node) /*!< in: function node */
   len1 = (ulint)eval_node_get_int_val(arg3);
   len2 = (ulint)eval_node_get_int_val(arg4);
 
-  if ((dfield_get_len(que_node_get_val(arg1)) < len1 + len2) ||
-      (dfield_get_len(que_node_get_val(arg2)) < len2)) {
+  if ((dfield_get_len(que_node_get_val(arg1)) < len1 + len2) || (dfield_get_len(que_node_get_val(arg2)) < len2)) {
 
     ut_error;
   }
@@ -459,8 +450,7 @@ match_found:
 }
 
 /** Evaluates a predefined function node. */
-inline void
-eval_binary_to_number(func_node_t *func_node) /*!< in: function node */
+inline void eval_binary_to_number(func_node_t *func_node) /*!< in: function node */
 {
   que_node_t *arg1;
   dfield_t *dfield;
@@ -679,9 +669,7 @@ void eval_func(func_node_t *func_node) /*!< in: function node */
     /* The functions are not defined for SQL null argument
     values, except for eval_cmp and notfound */
 
-    if (dfield_is_null(que_node_get_val(arg)) &&
-        (func_class != PARS_FUNC_CMP) && (func != PARS_NOTFOUND_TOKEN) &&
-        (func != PARS_PRINTF_TOKEN)) {
+    if (dfield_is_null(que_node_get_val(arg)) && (func_class != PARS_FUNC_CMP) && (func != PARS_NOTFOUND_TOKEN) && (func != PARS_PRINTF_TOKEN)) {
       ut_error;
     }
 

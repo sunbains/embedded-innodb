@@ -34,12 +34,12 @@ Created 5/11/1994 Heikki Tuuri
 
 #include <errno.h>
 
-#include "api0ucode.h"
-#include "trx0trx.h"
 #include <ctype.h>
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
+#include "api0ucode.h"
+#include "trx0trx.h"
 
 static bool ut_always_false = false;
 
@@ -53,7 +53,9 @@ ulint ut_get_high32(ulint a) {
   return (ulint)i;
 }
 
-ib_time_t ut_time() { return time(nullptr); }
+ib_time_t ut_time() {
+  return time(nullptr);
+}
 
 int ut_usectime(ulint *sec, ulint *ms) {
   int ret;
@@ -67,8 +69,7 @@ int ut_usectime(ulint *sec, ulint *ms) {
     if (ret == -1) {
       errno_gettimeofday = errno;
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  gettimeofday(): %s\n",
-                strerror(errno_gettimeofday));
+      ib_logger(ib_stream, "  gettimeofday(): %s\n", strerror(errno_gettimeofday));
       os_thread_sleep(100000); /* 0.1 sec */
       errno = errno_gettimeofday;
     } else {
@@ -124,9 +125,16 @@ void ut_print_timestamp(ib_stream_t ib_stream) {
   cal_tm_ptr = localtime(&tm);
 #endif /* HAVE_LOCALTIME_R */
 
-  ib_logger(ib_stream, "%02d%02d%02d %2d:%02d:%02d", cal_tm_ptr->tm_year % 100,
-            cal_tm_ptr->tm_mon + 1, cal_tm_ptr->tm_mday, cal_tm_ptr->tm_hour,
-            cal_tm_ptr->tm_min, cal_tm_ptr->tm_sec);
+  ib_logger(
+    ib_stream,
+    "%02d%02d%02d %2d:%02d:%02d",
+    cal_tm_ptr->tm_year % 100,
+    cal_tm_ptr->tm_mon + 1,
+    cal_tm_ptr->tm_mday,
+    cal_tm_ptr->tm_hour,
+    cal_tm_ptr->tm_min,
+    cal_tm_ptr->tm_sec
+  );
 }
 
 void ut_sprintf_timestamp(char *buf) {
@@ -143,9 +151,16 @@ void ut_sprintf_timestamp(char *buf) {
   cal_tm_ptr = localtime(&tm);
 #endif /* HAVE_LOCALTIME_R */
 
-  sprintf(buf, "%02d%02d%02d %2d:%02d:%02d", cal_tm_ptr->tm_year % 100,
-          cal_tm_ptr->tm_mon + 1, cal_tm_ptr->tm_mday, cal_tm_ptr->tm_hour,
-          cal_tm_ptr->tm_min, cal_tm_ptr->tm_sec);
+  sprintf(
+    buf,
+    "%02d%02d%02d %2d:%02d:%02d",
+    cal_tm_ptr->tm_year % 100,
+    cal_tm_ptr->tm_mon + 1,
+    cal_tm_ptr->tm_mday,
+    cal_tm_ptr->tm_hour,
+    cal_tm_ptr->tm_min,
+    cal_tm_ptr->tm_sec
+  );
 }
 
 ulint ut_delay(ulint delay) {
@@ -207,21 +222,20 @@ void ut_print_filename(ib_stream_t ib_stream, const char *name) {
   for (;;) {
     int c = *name++;
     switch (c) {
-    case 0:
-      goto done;
-    case '\'':
-      ib_logger(ib_stream, "%c", c);
-      /* fall through */
-    default:
-      ib_logger(ib_stream, "%c", c);
+      case 0:
+        goto done;
+      case '\'':
+        ib_logger(ib_stream, "%c", c);
+        /* fall through */
+      default:
+        ib_logger(ib_stream, "%c", c);
     }
   }
 done:
   ib_logger(ib_stream, "'");
 }
 
-void ut_print_name(ib_stream_t ib_stream, trx_t *trx, bool table_id,
-                   const char *name) {
+void ut_print_name(ib_stream_t ib_stream, trx_t *trx, bool table_id, const char *name) {
   ut_print_namel(ib_stream, name, strlen(name));
 }
 

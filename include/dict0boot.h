@@ -51,8 +51,10 @@ inline uint64_t dict_sys_get_new_row_id(void);
 inline uint64_t dict_sys_read_row_id(byte *field); /*!< in: record field */
 
 /** Writes a row id to a record or other 6-byte stored form. */
-inline void dict_sys_write_row_id(byte *field,    /*!< in: record field */
-                                  uint64_t row_id); /*!< in: row id */
+inline void dict_sys_write_row_id(
+  byte *field, /*!< in: record field */
+  uint64_t row_id
+); /*!< in: row id */
 
 /** Initializes the data dictionary memory structures when the database is
 started. This function is also called when the data dictionary is created. */
@@ -66,22 +68,22 @@ void dict_create();
 #define DICT_HDR_PAGE_NO FSP_DICT_HDR_PAGE_NO
 
 /* The ids for the basic system tables and their indexes */
-constexpr ulint DICT_TABLES_ID  = 1;
-constexpr ulint DICT_COLUMNS_ID  = 2;
-constexpr ulint DICT_INDEXES_ID  = 3;
-constexpr ulint DICT_FIELDS_ID  = 4;
+constexpr ulint DICT_TABLES_ID = 1;
+constexpr ulint DICT_COLUMNS_ID = 2;
+constexpr ulint DICT_INDEXES_ID = 3;
+constexpr ulint DICT_FIELDS_ID = 4;
 
 /** The following is a secondary index on SYS_TABLES */
-constexpr ulint DICT_TABLE_IDS_ID  = 5;
+constexpr ulint DICT_TABLE_IDS_ID = 5;
 
 /** The ids for tables etc. start from this number, except for basic system tables and their above defined indexes. */
 constexpr ulint DICT_HDR_FIRST_ID = 10;
 
 /* System table IDs start from this. */
-constexpr uint64_t DICT_SYS_ID_MIN  = (0xFFFFFFFFUL << 32) | SYS_TABLESPACE;
+constexpr uint64_t DICT_SYS_ID_MIN = (0xFFFFFFFFUL << 32) | SYS_TABLESPACE;
 
 /* The offset of the dictionary header on the page */
-constexpr auto DICT_HDR  = FSEG_PAGE_DATA;
+constexpr auto DICT_HDR = FSEG_PAGE_DATA;
 
 /*-------------------------------------------------------------*/
 /* Dictionary header offsets */
@@ -162,8 +164,10 @@ inline uint64_t dict_sys_read_row_id(byte *field) /*!< in: record field */
 }
 
 /** Writes a row id to a record or other 6-byte stored form. */
-inline void dict_sys_write_row_id(byte *field,   /*!< in: record field */
-                                  uint64_t row_id) /*!< in: row id */
+inline void dict_sys_write_row_id(
+  byte *field, /*!< in: record field */
+  uint64_t row_id
+) /*!< in: row id */
 {
   static_assert(DATA_ROW_ID_LEN == 6, "error DATA_ROW_ID_LEN != 6");
 

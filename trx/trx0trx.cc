@@ -60,7 +60,9 @@ void trx_var_init(void) {
   trx_n_transactions = 0;
 }
 
-bool trx_is_strict(trx_t *trx) { return false; }
+bool trx_is_strict(trx_t *trx) {
+  return false;
+}
 
 void trx_set_detailed_error(trx_t *trx, const char *msg) {
   ut_strlcpy(trx->detailed_error, msg, sizeof(trx->detailed_error));
@@ -198,12 +200,14 @@ static void trx_free(trx_t *trx) /*!< in, own: trx object */
   if (trx->n_client_tables_in_use != 0 || trx->client_n_tables_locked != 0) {
 
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  Error: Client is freeing a trx instance\n"
-              "though trx->n_client_tables_in_use is %lu\n"
-              "and trx->client_n_tables_locked is %lu.\n",
-              (ulong)trx->n_client_tables_in_use,
-              (ulong)trx->client_n_tables_locked);
+    ib_logger(
+      ib_stream,
+      "  Error: Client is freeing a trx instance\n"
+      "though trx->n_client_tables_in_use is %lu\n"
+      "and trx->client_n_tables_locked is %lu.\n",
+      (ulong)trx->n_client_tables_in_use,
+      (ulong)trx->client_n_tables_locked
+    );
 
     trx_print(ib_stream, trx, 600);
 
@@ -336,9 +340,7 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 
         if (undo->state == TRX_UNDO_PREPARED) {
 
-          ib_logger(ib_stream,
-                    "Transaction %lu was in the XA prepared state.\n",
-                    TRX_ID_PREP_PRINTF(trx->id));
+          ib_logger(ib_stream, "Transaction %lu was in the XA prepared state.\n", TRX_ID_PREP_PRINTF(trx->id));
 
           if (recovery == IB_RECOVERY_DEFAULT) {
 
@@ -404,19 +406,20 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
           the client. */
 
           if (undo->state == TRX_UNDO_PREPARED) {
-            ib_logger(ib_stream,
-                      "Transaction %lu was in the XA prepared state.\n",
-                      TRX_ID_PREP_PRINTF(trx->id));
+            ib_logger(ib_stream, "Transaction %lu was in the XA prepared state.\n", TRX_ID_PREP_PRINTF(trx->id));
 
             if (recovery == IB_RECOVERY_DEFAULT) {
 
               trx->conc_state = TRX_PREPARED;
             } else {
-              ib_logger(ib_stream, "Since"
-                                   " force_recovery"
-                                   " > 0, we will"
-                                   " do a rollback"
-                                   " anyway.\n");
+              ib_logger(
+                ib_stream,
+                "Since"
+                " force_recovery"
+                " > 0, we will"
+                " do a rollback"
+                " anyway.\n"
+              );
 
               trx->conc_state = TRX_ACTIVE;
             }
@@ -478,8 +481,7 @@ loop:
   /* If it is the SYSTEM rollback segment, and there exist others, skip
   it */
 
-  if ((rseg->id == TRX_SYS_SYSTEM_RSEG_ID) &&
-      (UT_LIST_GET_LEN(trx_sys->rseg_list) > 1)) {
+  if ((rseg->id == TRX_SYS_SYSTEM_RSEG_ID) && (UT_LIST_GET_LEN(trx_sys->rseg_list) > 1)) {
     goto loop;
   }
 
@@ -492,8 +494,9 @@ loop:
 @return	true */
 
 bool trx_start_low(
-    trx_t *trx,    /*!< in: transaction */
-    ulint rseg_id) /*!< in: rollback segment id; if ULINT_UNDEFINED
+  trx_t *trx, /*!< in: transaction */
+  ulint rseg_id
+) /*!< in: rollback segment id; if ULINT_UNDEFINED
                    is passed, the system chooses the rollback segment
                    automatically in a round-robin fashion */
 {
@@ -808,8 +811,9 @@ read_view_t *trx_assign_read_view(trx_t *trx) {
 /** Commits a transaction. NOTE that the kernel mutex is temporarily released.
  */
 static void trx_handle_commit_sig_off_kernel(
-    trx_t *trx,           /*!< in: transaction */
-    que_thr_t **next_thr) /*!< in/out: next query thread to run;
+  trx_t *trx, /*!< in: transaction */
+  que_thr_t **next_thr
+) /*!< in/out: next query thread to run;
                           if the value which is passed in is
                           a pointer to a nullptr pointer, then the
                           calling function can start running
@@ -867,8 +871,7 @@ void trx_end_lock_wait(trx_t *trx) {
 
 /** Moves the query threads in the lock wait list to the SUSPENDED state and
 puts the transaction to the TRX_QUE_RUNNING state. */
-static void trx_lock_wait_to_suspended(
-    trx_t *trx) /*!< in: transaction in the TRX_QUE_LOCK_WAIT state */
+static void trx_lock_wait_to_suspended(trx_t *trx) /*!< in: transaction in the TRX_QUE_LOCK_WAIT state */
 {
   que_thr_t *thr;
 
@@ -918,9 +921,10 @@ static void trx_sig_reply_wait_to_suspended(trx_t *trx) /*!< in: transaction */
 queue.
 @return	true if the signal can be queued */
 static bool trx_sig_is_compatible(
-    trx_t *trx,   /*!< in: trx handle */
-    ulint type,   /*!< in: signal type */
-    ulint sender) /*!< in: TRX_SIG_SELF or TRX_SIG_OTHER_SESS */
+  trx_t *trx, /*!< in: trx handle */
+  ulint type, /*!< in: signal type */
+  ulint sender
+) /*!< in: TRX_SIG_SELF or TRX_SIG_OTHER_SESS */
 {
   trx_sig_t *sig;
 
@@ -984,8 +988,7 @@ static bool trx_sig_is_compatible(
   }
 }
 
-void trx_sig_send(trx_t *trx, ulint type, ulint sender, que_thr_t *receiver_thr,
-                  trx_savept_t *savept, que_thr_t **next_thr) {
+void trx_sig_send(trx_t *trx, ulint type, ulint sender, que_thr_t *receiver_thr, trx_savept_t *savept, que_thr_t **next_thr) {
   trx_sig_t *sig;
   trx_t *receiver_trx;
 
@@ -1123,8 +1126,7 @@ loop:
 
     trx_handle_commit_sig_off_kernel(trx, next_thr);
 
-  } else if ((type == TRX_SIG_TOTAL_ROLLBACK) ||
-             (type == TRX_SIG_ROLLBACK_TO_SAVEPT)) {
+  } else if ((type == TRX_SIG_TOTAL_ROLLBACK) || (type == TRX_SIG_ROLLBACK_TO_SAVEPT)) {
 
     trx_rollback(trx, sig, next_thr);
 
@@ -1188,8 +1190,7 @@ void trx_sig_remove(trx_t *trx, trx_sig_t *sig) {
 }
 
 commit_node_t *commit_node_create(mem_heap_t *heap) {
-  auto node = reinterpret_cast<commit_node_t *>(
-      mem_heap_alloc(heap, sizeof(commit_node_t)));
+  auto node = reinterpret_cast<commit_node_t *>(mem_heap_alloc(heap, sizeof(commit_node_t)));
 
   node->common.type = QUE_NODE_COMMIT;
   node->state = COMMIT_NODE_SEND;
@@ -1217,8 +1218,7 @@ que_thr_t *trx_commit_step(que_thr_t *thr) {
 
     /* Send the commit signal to the transaction */
 
-    trx_sig_send(thr_get_trx(thr), TRX_SIG_COMMIT, TRX_SIG_SELF, thr, nullptr,
-                 &next_thr);
+    trx_sig_send(thr_get_trx(thr), TRX_SIG_COMMIT, TRX_SIG_SELF, thr, nullptr, &next_thr);
 
     mutex_exit(&kernel_mutex);
 
@@ -1313,29 +1313,26 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
   ib_logger(ib_stream, "TRANSACTION %lu", TRX_ID_PREP_PRINTF(trx->id));
 
   switch (trx->conc_state) {
-  case TRX_NOT_STARTED:
-    ib_logger(ib_stream, ", not started");
-    break;
-  case TRX_ACTIVE:
-    ib_logger(ib_stream, ", ACTIVE %lu sec",
-              (ulong)difftime(time(nullptr), trx->start_time));
-    break;
-  case TRX_PREPARED:
-    ib_logger(ib_stream, ", ACTIVE (PREPARED) %lu sec",
-              (ulong)difftime(time(nullptr), trx->start_time));
-    break;
-  case TRX_COMMITTED_IN_MEMORY:
-    ib_logger(ib_stream, ", COMMITTED IN MEMORY");
-    break;
-  default:
-    ib_logger(ib_stream, " state %lu", (ulong)trx->conc_state);
+    case TRX_NOT_STARTED:
+      ib_logger(ib_stream, ", not started");
+      break;
+    case TRX_ACTIVE:
+      ib_logger(ib_stream, ", ACTIVE %lu sec", (ulong)difftime(time(nullptr), trx->start_time));
+      break;
+    case TRX_PREPARED:
+      ib_logger(ib_stream, ", ACTIVE (PREPARED) %lu sec", (ulong)difftime(time(nullptr), trx->start_time));
+      break;
+    case TRX_COMMITTED_IN_MEMORY:
+      ib_logger(ib_stream, ", COMMITTED IN MEMORY");
+      break;
+    default:
+      ib_logger(ib_stream, " state %lu", (ulong)trx->conc_state);
   }
 
 #ifdef UNIV_LINUX
   ib_logger(ib_stream, ", process no %lu", trx->client_process_no);
 #endif
-  ib_logger(ib_stream, ", OS thread id %lu",
-            (ulong)os_thread_pf(trx->client_thread_id));
+  ib_logger(ib_stream, ", OS thread id %lu", (ulong)os_thread_pf(trx->client_thread_id));
 
   if (*trx->op_info) {
     ib_logger(ib_stream, " %s", trx->op_info);
@@ -1353,46 +1350,46 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
 
   if (trx->n_client_tables_in_use > 0 || trx->client_n_tables_locked > 0) {
 
-    ib_logger(ib_stream, "Client tables in use %lu, locked %lu\n",
-              (ulong)trx->n_client_tables_in_use,
-              (ulong)trx->client_n_tables_locked);
+    ib_logger(
+      ib_stream, "Client tables in use %lu, locked %lu\n", (ulong)trx->n_client_tables_in_use, (ulong)trx->client_n_tables_locked
+    );
   }
 
   newline = true;
 
   switch (trx->que_state) {
-  case TRX_QUE_RUNNING:
-    newline = false;
-    break;
-  case TRX_QUE_LOCK_WAIT:
-    ib_logger(ib_stream, "LOCK WAIT ");
-    break;
-  case TRX_QUE_ROLLING_BACK:
-    ib_logger(ib_stream, "ROLLING BACK ");
-    break;
-  case TRX_QUE_COMMITTING:
-    ib_logger(ib_stream, "COMMITTING ");
-    break;
-  default:
-    ib_logger(ib_stream, "que state %lu ", (ulong)trx->que_state);
+    case TRX_QUE_RUNNING:
+      newline = false;
+      break;
+    case TRX_QUE_LOCK_WAIT:
+      ib_logger(ib_stream, "LOCK WAIT ");
+      break;
+    case TRX_QUE_ROLLING_BACK:
+      ib_logger(ib_stream, "ROLLING BACK ");
+      break;
+    case TRX_QUE_COMMITTING:
+      ib_logger(ib_stream, "COMMITTING ");
+      break;
+    default:
+      ib_logger(ib_stream, "que state %lu ", (ulong)trx->que_state);
   }
 
-  if (0 < UT_LIST_GET_LEN(trx->trx_locks) ||
-      mem_heap_get_size(trx->lock_heap) > 400) {
+  if (0 < UT_LIST_GET_LEN(trx->trx_locks) || mem_heap_get_size(trx->lock_heap) > 400) {
     newline = true;
 
-    ib_logger(ib_stream,
-              "%lu lock struct(s), heap size %lu,"
-              " %lu row lock(s)",
-              (ulong)UT_LIST_GET_LEN(trx->trx_locks),
-              (ulong)mem_heap_get_size(trx->lock_heap),
-              (ulong)lock_number_of_rows_locked(trx));
+    ib_logger(
+      ib_stream,
+      "%lu lock struct(s), heap size %lu,"
+      " %lu row lock(s)",
+      (ulong)UT_LIST_GET_LEN(trx->trx_locks),
+      (ulong)mem_heap_get_size(trx->lock_heap),
+      (ulong)lock_number_of_rows_locked(trx)
+    );
   }
 
   if (trx->undo_no > 0) {
     newline = true;
-    ib_logger(ib_stream, ", undo log entries %lu",
-              (ulong)trx->undo_no);
+    ib_logger(ib_stream, ", undo log entries %lu", (ulong)trx->undo_no);
   }
 
   if (newline) {
@@ -1544,21 +1541,28 @@ int trx_recover(XID *xid_list, ulint len) {
 
       if (count == 0) {
         ut_print_timestamp(ib_stream);
-        ib_logger(ib_stream, "  Starting recovery for"
-                             " XA transactions...\n");
+        ib_logger(
+          ib_stream,
+          "  Starting recovery for"
+          " XA transactions...\n"
+        );
       }
 
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream,
-                "  Transaction %lu in"
-                " prepared state after recovery\n",
-                TRX_ID_PREP_PRINTF(trx->id));
+      ib_logger(
+        ib_stream,
+        "  Transaction %lu in"
+        " prepared state after recovery\n",
+        TRX_ID_PREP_PRINTF(trx->id)
+      );
 
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream,
-                "  Transaction contains changes"
-                " to %lu rows\n",
-                (ulong)trx->undo_no);
+      ib_logger(
+        ib_stream,
+        "  Transaction contains changes"
+        " to %lu rows\n",
+        (ulong)trx->undo_no
+      );
 
       count++;
 
@@ -1574,10 +1578,12 @@ int trx_recover(XID *xid_list, ulint len) {
 
   if (count > 0) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  %lu transactions in prepared state"
-              " after recovery\n",
-              (ulong)count);
+    ib_logger(
+      ib_stream,
+      "  %lu transactions in prepared state"
+      " after recovery\n",
+      (ulong)count
+    );
   }
 
   return (int)count;
@@ -1602,10 +1608,8 @@ trx_t *trx_get_trx_by_xid(XID *xid) {
     of gtrid_lenght+bqual_length bytes should be
     the same */
 
-    if (xid->gtrid_length == trx->xid.gtrid_length &&
-        xid->bqual_length == trx->xid.bqual_length &&
-        memcmp(xid->data, trx->xid.data,
-               xid->gtrid_length + xid->bqual_length) == 0) {
+    if (xid->gtrid_length == trx->xid.gtrid_length && xid->bqual_length == trx->xid.bqual_length &&
+        memcmp(xid->data, trx->xid.data, xid->gtrid_length + xid->bqual_length) == 0) {
       break;
     }
 

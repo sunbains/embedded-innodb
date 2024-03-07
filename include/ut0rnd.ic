@@ -44,8 +44,7 @@ inline void ut_rnd_set_seed(ulint seed) /*!< in: seed */
 
 /** The following function generates a series of 'random' ulint integers.
 @return	the next 'random' number */
-inline ulint
-ut_rnd_gen_next_ulint(ulint rnd) /*!< in: the previous random number value */
+inline ulint ut_rnd_gen_next_ulint(ulint rnd) /*!< in: the previous random number value */
 {
   ulint n_bits;
 
@@ -77,9 +76,10 @@ inline ulint ut_rnd_gen_ulint(void) {
 
 /** Generates a random integer from a given interval.
 @return	the 'random' number */
-inline ulint
-ut_rnd_interval(ulint low,  /*!< in: low limit; can generate also this value */
-                ulint high) /*!< in: high limit; can generate also this value */
+inline ulint ut_rnd_interval(
+  ulint low, /*!< in: low limit; can generate also this value */
+  ulint high
+) /*!< in: high limit; can generate also this value */
 {
   ulint rnd;
 
@@ -114,8 +114,10 @@ inline bool ut_rnd_gen_bool(void) {
 to a hash table of size table_size, which should be a prime
 or some random number for the hash table to work reliably.
 @return	hash value */
-inline ulint ut_hash_ulint(ulint key,        /*!< in: value to be hashed */
-                           ulint table_size) /*!< in: hash table size */
+inline ulint ut_hash_ulint(
+  ulint key, /*!< in: value to be hashed */
+  ulint table_size
+) /*!< in: hash table size */
 {
   ut_ad(table_size);
   key = key ^ UT_HASH_RANDOM_MASK2;
@@ -125,12 +127,12 @@ inline ulint ut_hash_ulint(ulint key,        /*!< in: value to be hashed */
 
 /** Folds a pair of ulints.
 @return	folded value */
-inline ulint ut_fold_ulint_pair(ulint n1, /*!< in: ulint */
-                                ulint n2) /*!< in: ulint */
+inline ulint ut_fold_ulint_pair(
+  ulint n1, /*!< in: ulint */
+  ulint n2
+) /*!< in: ulint */
 {
-  return (
-      ((((n1 ^ n2 ^ UT_HASH_RANDOM_MASK2) << 8) + n1) ^ UT_HASH_RANDOM_MASK) +
-      n2);
+  return (((((n1 ^ n2 ^ UT_HASH_RANDOM_MASK2) << 8) + n1) ^ UT_HASH_RANDOM_MASK) + n2);
 }
 
 /** Folds a uint64_t integer.
@@ -158,8 +160,10 @@ inline ulint ut_fold_string(const char *str) /*!< in: null-terminated string */
 
 /** Folds a binary string.
 @return	folded value */
-inline ulint ut_fold_binary(const byte *str, /*!< in: string of bytes */
-                            ulint len)       /*!< in: length */
+inline ulint ut_fold_binary(
+  const byte *str, /*!< in: string of bytes */
+  ulint len
+) /*!< in: length */
 {
   const byte *str_end = str + len;
   ulint fold = 0;

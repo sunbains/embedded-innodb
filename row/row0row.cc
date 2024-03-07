@@ -50,10 +50,11 @@ a clustered index record.
 @return	offset of DATA_TRX_ID */
 
 ulint row_get_trx_id_offset(
-    const rec_t *rec __attribute__((unused)),
-    /*!< in: record */
-    dict_index_t *index,  /*!< in: clustered index */
-    const ulint *offsets) /*!< in: rec_get_offsets(rec, index) */
+  const rec_t *rec __attribute__((unused)),
+  /*!< in: record */
+  dict_index_t *index, /*!< in: clustered index */
+  const ulint *offsets
+) /*!< in: rec_get_offsets(rec, index) */
 {
   ulint pos;
   ulint offset;
@@ -78,12 +79,13 @@ externally stored columns in the clustered index record are
 unavailable and ext != nullptr */
 
 dtuple_t *row_build_index_entry(
-    const dtuple_t *row, /*!< in: row which should be
+  const dtuple_t *row, /*!< in: row which should be
                          inserted or purged */
-    row_ext_t *ext,      /*!< in: externally stored column prefixes,
+  row_ext_t *ext,      /*!< in: externally stored column prefixes,
                          or nullptr */
-    dict_index_t *index, /*!< in: index on the table */
-    mem_heap_t *heap)    /*!< in: memory heap from which the memory for
+  dict_index_t *index, /*!< in: index on the table */
+  mem_heap_t *heap
+) /*!< in: memory heap from which the memory for
                          the index entry is allocated */
 {
   dtuple_t *entry;
@@ -133,9 +135,9 @@ dtuple_t *row_build_index_entry(
     /* If a column prefix index, take only the prefix */
     if (ind_field->prefix_len > 0 && !dfield_is_null(dfield)) {
       ut_ad(col->ord_part);
-      len = dtype_get_at_most_n_mbchars(col->prtype, col->mbminlen,
-                                        col->mbmaxlen, ind_field->prefix_len,
-                                        len, (char *)dfield_get_data(dfield));
+      len = dtype_get_at_most_n_mbchars(
+        col->prtype, col->mbminlen, col->mbmaxlen, ind_field->prefix_len, len, (char *)dfield_get_data(dfield)
+      );
       dfield_set_len(dfield, len);
     }
   }
@@ -149,15 +151,16 @@ dtuple_t *row_build_index_entry(
 record in a clustered index.
 @return	own: row built; see the NOTE below! */
 
-dtuple_t *row_build(ulint type,                /*!< in: ROW_COPY_POINTERS or
+dtuple_t *row_build(
+  ulint type,                /*!< in: ROW_COPY_POINTERS or
                                                ROW_COPY_DATA; the latter
                                                copies also the data fields to
                                                heap while the first only
                                                places pointers to data fields
                                                on the index page, and thus is
                                                more efficient */
-                    const dict_index_t *index, /*!< in: clustered index */
-                    const rec_t *rec,          /*!< in: record in the clustered
+  const dict_index_t *index, /*!< in: clustered index */
+  const rec_t *rec,          /*!< in: record in the clustered
                                                index; NOTE: in the case
                                                ROW_COPY_POINTERS the data
                                                fields in the row will point
@@ -166,20 +169,21 @@ dtuple_t *row_build(ulint type,                /*!< in: ROW_COPY_POINTERS or
                                                this record must be at least
                                                s-latched and the latch held
                                                as long as the row dtuple is used! */
-                    const ulint *offsets, /*!< in: rec_get_offsets(rec,index)
+  const ulint *offsets,      /*!< in: rec_get_offsets(rec,index)
                                           or nullptr, in which case this function
                                           will invoke rec_get_offsets() */
-                    const dict_table_t *col_table,
-                    /*!< in: table, to check which
+  const dict_table_t *col_table,
+  /*!< in: table, to check which
                     externally stored columns
                     occur in the ordering columns
                     of an index, or nullptr if
                     index->table should be
                     consulted instead */
-                    row_ext_t **ext,  /*!< out, own: cache of
+  row_ext_t **ext, /*!< out, own: cache of
                                       externally stored column
                                       prefixes, or nullptr */
-                    mem_heap_t *heap) /*!< in: memory heap from which
+  mem_heap_t *heap
+) /*!< in: memory heap from which
                                       the memory needed is allocated */
 {
   dtuple_t *row;
@@ -225,8 +229,7 @@ dtuple_t *row_build(ulint type,                /*!< in: ROW_COPY_POINTERS or
   n_fields = rec_offs_n_fields(offsets);
   n_ext_cols = rec_offs_n_extern(offsets);
   if (n_ext_cols) {
-    ext_cols = reinterpret_cast<ulint *>(
-        mem_heap_alloc(heap, n_ext_cols * sizeof(*ext_cols)));
+    ext_cols = reinterpret_cast<ulint *>(mem_heap_alloc(heap, n_ext_cols * sizeof(*ext_cols)));
   }
 
   for (i = j = 0; i < n_fields; i++) {
@@ -279,12 +282,13 @@ dtuple_t *row_build(ulint type,                /*!< in: ROW_COPY_POINTERS or
 in the entry will point directly to rec */
 
 dtuple_t *row_rec_to_index_entry_low(
-    const rec_t *rec,          /*!< in: record in the index */
-    const dict_index_t *index, /*!< in: index */
-    const ulint *offsets,      /*!< in: rec_get_offsets(rec, index) */
-    ulint *n_ext,              /*!< out: number of externally
+  const rec_t *rec,          /*!< in: record in the index */
+  const dict_index_t *index, /*!< in: index */
+  const ulint *offsets,      /*!< in: rec_get_offsets(rec, index) */
+  ulint *n_ext,              /*!< out: number of externally
                                stored columns */
-    mem_heap_t *heap)          /*!< in: memory heap from which
+  mem_heap_t *heap
+) /*!< in: memory heap from which
                                the memory needed is allocated */
 {
   dtuple_t *entry;
@@ -332,14 +336,14 @@ dtuple_t *row_rec_to_index_entry_low(
 stored (often big) fields are NOT copied to heap.
 @return	own: index entry built; see the NOTE below! */
 
-dtuple_t *
-row_rec_to_index_entry(ulint type,                /*!< in: ROW_COPY_DATA, or
+dtuple_t *row_rec_to_index_entry(
+  ulint type,                /*!< in: ROW_COPY_DATA, or
                                                   ROW_COPY_POINTERS: the former
                                                   copies also the data fields to
                                                   heap as the latter only places
                                                   pointers to data fields on the
                                                   index page */
-                       const rec_t *rec,          /*!< in: record in the index;
+  const rec_t *rec,          /*!< in: record in the index;
                                                   NOTE: in the case
                                                   ROW_COPY_POINTERS the data
                                                   fields in the row will point
@@ -348,11 +352,12 @@ row_rec_to_index_entry(ulint type,                /*!< in: ROW_COPY_DATA, or
                                                   this record must be at least
                                                   s-latched and the latch held
                                                   as long as the dtuple is used! */
-                       const dict_index_t *index, /*!< in: index */
-                       ulint *offsets,   /*!< in/out: rec_get_offsets(rec) */
-                       ulint *n_ext,     /*!< out: number of externally
+  const dict_index_t *index, /*!< in: index */
+  ulint *offsets,            /*!< in/out: rec_get_offsets(rec) */
+  ulint *n_ext,              /*!< out: number of externally
                                          stored columns */
-                       mem_heap_t *heap) /*!< in: memory heap from which
+  mem_heap_t *heap
+) /*!< in: memory heap from which
                                          the memory needed is allocated */
 {
   dtuple_t *entry;
@@ -380,20 +385,21 @@ row_rec_to_index_entry(ulint type,                /*!< in: ROW_COPY_DATA, or
 search the clustered index record.
 @return	own: row reference built; see the NOTE below! */
 
-dtuple_t *
-row_build_row_ref(ulint type, /*!< in: ROW_COPY_DATA, or ROW_COPY_POINTERS:
+dtuple_t *row_build_row_ref(
+  ulint type,          /*!< in: ROW_COPY_DATA, or ROW_COPY_POINTERS:
                               the former copies also the data fields to
                               heap, whereas the latter only places pointers
                               to data fields on the index page */
-                  dict_index_t *index, /*!< in: secondary index */
-                  const rec_t *rec,    /*!< in: record in the index;
+  dict_index_t *index, /*!< in: secondary index */
+  const rec_t *rec,    /*!< in: record in the index;
                                        NOTE: in the case ROW_COPY_POINTERS
                                        the data fields in the row will point
                                        directly into this record, therefore,
                                        the buffer page of this record must be
                                        at least s-latched and the latch held
                                        as long as the row reference is used! */
-                  mem_heap_t *heap) /*!< in: memory heap from which the memory
+  mem_heap_t *heap
+) /*!< in: memory heap from which the memory
                                     needed is allocated */
 {
   dict_table_t *table;
@@ -462,10 +468,10 @@ row_build_row_ref(ulint type, /*!< in: ROW_COPY_DATA, or ROW_COPY_POINTERS:
 
         const dtype_t *dtype = dfield_get_type(dfield);
 
-        dfield_set_len(dfield,
-                       dtype_get_at_most_n_mbchars(
-                           dtype->prtype, dtype->mbminlen, dtype->mbmaxlen,
-                           clust_col_prefix_len, len, (char *)field));
+        dfield_set_len(
+          dfield,
+          dtype_get_at_most_n_mbchars(dtype->prtype, dtype->mbminlen, dtype->mbmaxlen, clust_col_prefix_len, len, (char *)field)
+        );
       }
     }
   }
@@ -482,9 +488,9 @@ row_build_row_ref(ulint type, /*!< in: ROW_COPY_DATA, or ROW_COPY_POINTERS:
 search the clustered index record. */
 
 void row_build_row_ref_in_tuple(
-    dtuple_t *ref,             /*!< in/out: row reference built;
+  dtuple_t *ref,             /*!< in/out: row reference built;
                                see the NOTE below! */
-    const rec_t *rec,          /*!< in: record in the index;
+  const rec_t *rec,          /*!< in: record in the index;
                                NOTE: the data fields in ref
                                will point directly into this
                                record, therefore, the buffer
@@ -492,10 +498,11 @@ void row_build_row_ref_in_tuple(
                                least s-latched and the latch
                                held as long as the row
                                reference is used! */
-    const dict_index_t *index, /*!< in: secondary index */
-    ulint *offsets,            /*!< in: rec_get_offsets(rec, index)
+  const dict_index_t *index, /*!< in: secondary index */
+  ulint *offsets,            /*!< in: rec_get_offsets(rec, index)
                                or nullptr */
-    trx_t *trx)                /*!< in: transaction */
+  trx_t *trx
+) /*!< in: transaction */
 {
   const dict_index_t *clust_index;
   dfield_t *dfield;
@@ -568,10 +575,10 @@ void row_build_row_ref_in_tuple(
 
         const dtype_t *dtype = dfield_get_type(dfield);
 
-        dfield_set_len(dfield,
-                       dtype_get_at_most_n_mbchars(
-                           dtype->prtype, dtype->mbminlen, dtype->mbmaxlen,
-                           clust_col_prefix_len, len, (char *)field));
+        dfield_set_len(
+          dfield,
+          dtype_get_at_most_n_mbchars(dtype->prtype, dtype->mbminlen, dtype->mbmaxlen, clust_col_prefix_len, len, (char *)field)
+        );
       }
     }
   }
@@ -585,12 +592,14 @@ void row_build_row_ref_in_tuple(
 /** Searches the clustered index record for a row, if we have the row reference.
 @return	true if found */
 
-bool row_search_on_row_ref(btr_pcur_t *pcur, /*!< out: persistent cursor, which
+bool row_search_on_row_ref(
+  btr_pcur_t *pcur,          /*!< out: persistent cursor, which
                                               must be closed by the caller */
-                           ulint mode,       /*!< in: BTR_MODIFY_LEAF, ... */
-                           const dict_table_t *table, /*!< in: table */
-                           const dtuple_t *ref,       /*!< in: row reference */
-                           mtr_t *mtr)                /*!< in/out: mtr */
+  ulint mode,                /*!< in: BTR_MODIFY_LEAF, ... */
+  const dict_table_t *table, /*!< in: table */
+  const dtuple_t *ref,       /*!< in: row reference */
+  mtr_t *mtr
+) /*!< in/out: mtr */
 {
   ulint low_match;
   rec_t *rec;
@@ -621,8 +630,7 @@ bool row_search_on_row_ref(btr_pcur_t *pcur, /*!< out: persistent cursor, which
   return (true);
 }
 
-rec_t *
-row_get_clust_rec(ulint mode, const rec_t *rec, dict_index_t *index, dict_index_t **clust_index, mtr_t *mtr) {
+rec_t *row_get_clust_rec(ulint mode, const rec_t *rec, dict_index_t *index, dict_index_t **clust_index, mtr_t *mtr) {
   mem_heap_t *heap;
   dtuple_t *ref;
   dict_table_t *table;

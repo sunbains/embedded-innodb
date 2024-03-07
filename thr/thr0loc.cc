@@ -71,8 +71,7 @@ struct thr_local_struct {
 
 /** Returns the local storage struct for a thread.
 @return	local storage */
-static thr_local_t *
-thr_local_get(os_thread_id_t id) /*!< in: thread id of the thread */
+static thr_local_t *thr_local_get(os_thread_id_t id) /*!< in: thread id of the thread */
 {
   thr_local_t *local;
 
@@ -84,8 +83,7 @@ try_again:
 
   local = nullptr;
 
-  HASH_SEARCH(hash, thr_local_hash, os_thread_pf(id), thr_local_t *, local, ,
-              os_thread_eq(local->id, id));
+  HASH_SEARCH(hash, thr_local_hash, os_thread_pf(id), thr_local_t *, local, , os_thread_eq(local->id, id));
 
   if (local == nullptr) {
     mutex_exit(&thr_local_mutex);
@@ -102,8 +100,7 @@ try_again:
   return (local);
 }
 
-ulint thr_local_get_slot_no(
-    os_thread_id_t id) /*!< in: thread id of the thread */
+ulint thr_local_get_slot_no(os_thread_id_t id) /*!< in: thread id of the thread */
 {
   ulint slot_no;
   thr_local_t *local;
@@ -160,8 +157,7 @@ void thr_local_create(void) {
 
   mutex_enter(&thr_local_mutex);
 
-  HASH_INSERT(thr_local_t, hash, thr_local_hash,
-              os_thread_pf(os_thread_get_curr_id()), local);
+  HASH_INSERT(thr_local_t, hash, thr_local_hash, os_thread_pf(os_thread_get_curr_id()), local);
 
   mutex_exit(&thr_local_mutex);
 }
@@ -172,8 +168,7 @@ void thr_local_free(os_thread_id_t id) /*!< in: thread id */
 
   mutex_enter(&thr_local_mutex);
 
-  HASH_SEARCH(hash, thr_local_hash, os_thread_pf(id), thr_local_t *, local, ,
-              os_thread_eq(local->id, id));
+  HASH_SEARCH(hash, thr_local_hash, os_thread_pf(id), thr_local_t *, local, , os_thread_eq(local->id, id));
   if (local == nullptr) {
     mutex_exit(&thr_local_mutex);
 

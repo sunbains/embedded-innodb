@@ -25,9 +25,9 @@ Created 11/26/1995 Heikki Tuuri
 
 #include "buf0buf.h"
 #include "log0log.h"
+#include "log0recv.h"
 #include "mtr0log.h"
 #include "page0types.h"
-#include "log0recv.h"
 
 /** Releases the item in the slot given.
 @param[in,out] mtr              Release slot in this mtr.
@@ -68,8 +68,7 @@ void mtr_memo_pop_all(mtr_t *mtr) {
 
   while (offset > 0) {
     offset -= sizeof(mtr_memo_slot_t);
-    auto slot =
-        static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
+    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
 
     mtr_memo_slot_release(mtr, slot);
   }
@@ -97,8 +96,7 @@ static void mtr_log_reserve_and_write(mtr_t *mtr, ulint recovery) {
 
     log_acquire();
 
-    mtr->end_lsn = log_reserve_and_write_fast(
-        first_data, dyn_block_get_used(mlog), &mtr->start_lsn);
+    mtr->end_lsn = log_reserve_and_write_fast(first_data, dyn_block_get_used(mlog), &mtr->start_lsn);
 
     if (mtr->end_lsn != 0) {
       /* We were able to successfully write to the log. */
@@ -196,8 +194,7 @@ void mtr_memo_release(mtr_t *mtr, void *object, ulint type) {
   while (offset > 0) {
     offset -= sizeof(mtr_memo_slot_t);
 
-    auto slot =
-        static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
+    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
 
     if ((object == slot->object) && (type == slot->type)) {
 
@@ -208,11 +205,9 @@ void mtr_memo_release(mtr_t *mtr, void *object, ulint type) {
   }
 }
 
-ulint mtr_read_ulint(const byte *ptr, ulint type,
-                     mtr_t *mtr __attribute__((unused))) {
+ulint mtr_read_ulint(const byte *ptr, ulint type, mtr_t *mtr __attribute__((unused))) {
   ut_ad(mtr->state == MTR_ACTIVE);
-  ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_S_FIX) ||
-        mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_S_FIX) || mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));
   if (type == MLOG_1BYTE) {
     return mach_read_from_1(ptr);
   } else if (type == MLOG_2BYTES) {
@@ -225,8 +220,7 @@ ulint mtr_read_ulint(const byte *ptr, ulint type,
 
 uint64_t mtr_read_uint64(const byte *ptr, mtr_t *mtr __attribute__((unused))) {
   ut_ad(mtr->state == MTR_ACTIVE);
-  ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_S_FIX) ||
-        mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_S_FIX) || mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));
   return mach_read_from_8(ptr);
 }
 
@@ -236,10 +230,12 @@ bool mtr_memo_contains_page(mtr_t *mtr, const byte *ptr, ulint type) {
 }
 
 void mtr_print(mtr_t *mtr) {
-  ib_logger(ib_stream,
-            "Mini-transaction handle: memo size %lu bytes"
-            " log size %lu bytes\n",
-            (ulong)dyn_array_get_data_size(&(mtr->memo)),
-            (ulong)dyn_array_get_data_size(&(mtr->log)));
+  ib_logger(
+    ib_stream,
+    "Mini-transaction handle: memo size %lu bytes"
+    " log size %lu bytes\n",
+    (ulong)dyn_array_get_data_size(&(mtr->memo)),
+    (ulong)dyn_array_get_data_size(&(mtr->log))
+  );
 }
 #endif /* UNIV_DEBUG */

@@ -36,8 +36,7 @@ inline void ut_rnd_set_seed(ulint seed); /*!< in: seed */
 
 /** The following function generates a series of 'random' ulint integers.
 @return	the next 'random' number */
-inline ulint
-ut_rnd_gen_next_ulint(ulint rnd); /*!< in: the previous random number value */
+inline ulint ut_rnd_gen_next_ulint(ulint rnd); /*!< in: the previous random number value */
 
 /** The following function generates 'random' ulint integers which
 enumerate the value space (let there be N of them) of ulint integers
@@ -49,8 +48,9 @@ inline ulint ut_rnd_gen_ulint(void);
 /** Generates a random integer from a given interval.
 @return	the 'random' number */
 inline ulint ut_rnd_interval(
-    ulint low,   /*!< in: low limit; can generate also this value */
-    ulint high); /*!< in: high limit; can generate also this value */
+  ulint low, /*!< in: low limit; can generate also this value */
+  ulint high
+); /*!< in: high limit; can generate also this value */
 
 /** Generates a random boolean value.
 @return	the random value */
@@ -60,36 +60,42 @@ inline bool ut_rnd_gen_bool(void);
 to a hash table of size table_size, which should be a prime or some
 random number to work reliably.
 @return	hash value */
-inline ulint ut_hash_ulint(ulint key,         /*!< in: value to be hashed */
-                           ulint table_size); /*!< in: hash table size */
+inline ulint ut_hash_ulint(
+  ulint key, /*!< in: value to be hashed */
+  ulint table_size
+); /*!< in: hash table size */
 
 /** Folds a pair of ulints.
 @return	folded value */
-inline ulint ut_fold_ulint_pair(ulint n1, /*!< in: ulint */
-                                ulint n2) /*!< in: ulint */
-    __attribute__((const));
+inline ulint ut_fold_ulint_pair(
+  ulint n1, /*!< in: ulint */
+  ulint n2
+) /*!< in: ulint */
+  __attribute__((const));
 
 /** Folds a uint64_t.
 @return	folded value */
 inline ulint ut_uint64_fold(uint64_t d) /*!< in: uint64_t */
-    __attribute__((const));
+  __attribute__((const));
 
 /** Folds a character string ending in the null character.
 @return	folded value */
 inline ulint ut_fold_string(const char *str) /*!< in: null-terminated string */
-    __attribute__((pure));
+  __attribute__((pure));
 
 /** Folds a binary string.
 @return	folded value */
-inline ulint ut_fold_binary(const byte *str, /*!< in: string of bytes */
-                            ulint len)       /*!< in: length */
-    __attribute__((pure));
+inline ulint ut_fold_binary(
+  const byte *str, /*!< in: string of bytes */
+  ulint len
+) /*!< in: length */
+  __attribute__((pure));
 
 /** Looks for a prime number slightly greater than the given argument.
 The prime is chosen so that it is not near any power of 2.
 @return	prime */
 ulint ut_find_prime(ulint n) /*!< in: positive number > 100 */
-    __attribute__((const));
+  __attribute__((const));
 
 #ifndef UNIV_NONINL
 #include "ut0rnd.ic"

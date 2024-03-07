@@ -26,8 +26,10 @@ Created 5/30/1994 Heikki Tuuri
 
 /** Compute strlen(strcpyq(str, q)).
 @return	length of the string when quoted */
-inline ulint strlenq(const char *str, /*!< in: null-terminated string */
-                     char q)          /*!< in: the quote character */
+inline ulint strlenq(
+  const char *str, /*!< in: null-terminated string */
+  char q
+) /*!< in: the quote character */
 {
   ulint len;
 
@@ -45,10 +47,12 @@ truncated if there is not enough space in "hex", make sure "hex_size" is at
 least (2 * raw_size + 1) if you do not want this to happen. Returns the
 actual number of characters written to "hex" (including the NUL).
 @return	number of chars written */
-inline ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
-                           ulint raw_size,  /*!< in: "raw" length in bytes */
-                           char *hex,       /*!< out: hex string */
-                           ulint hex_size)  /*!< in: "hex" size in bytes */
+inline ulint ut_raw_to_hex(
+  const void *raw, /*!< in: raw data */
+  ulint raw_size,  /*!< in: "raw" length in bytes */
+  char *hex,       /*!< out: hex string */
+  ulint hex_size
+) /*!< in: "hex" size in bytes */
 {
 
 #ifdef WORDS_BIGENDIAN
@@ -67,22 +71,28 @@ inline ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
 
 #endif /* WORDS_BIGENDIAN */
 
-#define MK_ALL_UINT16_WITH_A(a)                                                \
-  MK_UINT16(a, '0'), MK_UINT16(a, '1'), MK_UINT16(a, '2'), MK_UINT16(a, '3'),  \
-      MK_UINT16(a, '4'), MK_UINT16(a, '5'), MK_UINT16(a, '6'),                 \
-      MK_UINT16(a, '7'), MK_UINT16(a, '8'), MK_UINT16(a, '9'),                 \
-      MK_UINT16(a, 'A'), MK_UINT16(a, 'B'), MK_UINT16(a, 'C'),                 \
-      MK_UINT16(a, 'D'), MK_UINT16(a, 'E'), MK_UINT16(a, 'F')
+#define MK_ALL_UINT16_WITH_A(a)                                                                                       \
+  MK_UINT16(a, '0'), MK_UINT16(a, '1'), MK_UINT16(a, '2'), MK_UINT16(a, '3'), MK_UINT16(a, '4'), MK_UINT16(a, '5'),   \
+    MK_UINT16(a, '6'), MK_UINT16(a, '7'), MK_UINT16(a, '8'), MK_UINT16(a, '9'), MK_UINT16(a, 'A'), MK_UINT16(a, 'B'), \
+    MK_UINT16(a, 'C'), MK_UINT16(a, 'D'), MK_UINT16(a, 'E'), MK_UINT16(a, 'F')
 
   static const uint16_t hex_map[256] = {
-      MK_ALL_UINT16_WITH_A('0'), MK_ALL_UINT16_WITH_A('1'),
-      MK_ALL_UINT16_WITH_A('2'), MK_ALL_UINT16_WITH_A('3'),
-      MK_ALL_UINT16_WITH_A('4'), MK_ALL_UINT16_WITH_A('5'),
-      MK_ALL_UINT16_WITH_A('6'), MK_ALL_UINT16_WITH_A('7'),
-      MK_ALL_UINT16_WITH_A('8'), MK_ALL_UINT16_WITH_A('9'),
-      MK_ALL_UINT16_WITH_A('A'), MK_ALL_UINT16_WITH_A('B'),
-      MK_ALL_UINT16_WITH_A('C'), MK_ALL_UINT16_WITH_A('D'),
-      MK_ALL_UINT16_WITH_A('E'), MK_ALL_UINT16_WITH_A('F')};
+    MK_ALL_UINT16_WITH_A('0'),
+    MK_ALL_UINT16_WITH_A('1'),
+    MK_ALL_UINT16_WITH_A('2'),
+    MK_ALL_UINT16_WITH_A('3'),
+    MK_ALL_UINT16_WITH_A('4'),
+    MK_ALL_UINT16_WITH_A('5'),
+    MK_ALL_UINT16_WITH_A('6'),
+    MK_ALL_UINT16_WITH_A('7'),
+    MK_ALL_UINT16_WITH_A('8'),
+    MK_ALL_UINT16_WITH_A('9'),
+    MK_ALL_UINT16_WITH_A('A'),
+    MK_ALL_UINT16_WITH_A('B'),
+    MK_ALL_UINT16_WITH_A('C'),
+    MK_ALL_UINT16_WITH_A('D'),
+    MK_ALL_UINT16_WITH_A('E'),
+    MK_ALL_UINT16_WITH_A('F')};
   const unsigned char *rawc;
   ulint read_bytes;
   ulint write_bytes;
@@ -105,11 +115,11 @@ inline ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
     write_bytes = 2 * raw_size + 1;
   }
 
-#define LOOP_READ_BYTES(ASSIGN)                                                \
-  for (i = 0; i < read_bytes; i++) {                                           \
-    ASSIGN;                                                                    \
-    hex += 2;                                                                  \
-    rawc++;                                                                    \
+#define LOOP_READ_BYTES(ASSIGN)      \
+  for (i = 0; i < read_bytes; i++) { \
+    ASSIGN;                          \
+    hex += 2;                        \
+    rawc++;                          \
   }
 
   if (ut_align_offset(hex, 2) == 0) {
@@ -117,8 +127,7 @@ inline ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
     LOOP_READ_BYTES(*(uint16_t *)hex = hex_map[*rawc]);
   } else {
 
-    LOOP_READ_BYTES(*hex = UINT16_GET_A(hex_map[*rawc]);
-                    *(hex + 1) = UINT16_GET_B(hex_map[*rawc]));
+    LOOP_READ_BYTES(*hex = UINT16_GET_A(hex_map[*rawc]); *(hex + 1) = UINT16_GET_B(hex_map[*rawc]));
   }
 
   if (hex_size <= 2 * raw_size && hex_size % 2 == 0) {
@@ -136,10 +145,12 @@ by doubling them. Returns the number of bytes that were written to "buf"
 (including the terminating NUL). If buf_size is too small then the
 trailing bytes from "str" are discarded.
 @return	number of bytes that were written */
-inline ulint ut_str_sql_format(const char *str, /*!< in: string */
-                               ulint str_len, /*!< in: string length in bytes */
-                               char *buf,     /*!< out: output buffer */
-                               ulint buf_size) /*!< in: output buffer size
+inline ulint ut_str_sql_format(
+  const char *str, /*!< in: string */
+  ulint str_len,   /*!< in: string length in bytes */
+  char *buf,       /*!< out: output buffer */
+  ulint buf_size
+) /*!< in: output buffer size
                                                in bytes */
 {
   ulint str_i;
@@ -148,25 +159,25 @@ inline ulint ut_str_sql_format(const char *str, /*!< in: string */
   buf_i = 0;
 
   switch (buf_size) {
-  case 3:
+    case 3:
 
-    if (str_len == 0) {
+      if (str_len == 0) {
 
-      buf[buf_i] = '\'';
+        buf[buf_i] = '\'';
+        buf_i++;
+        buf[buf_i] = '\'';
+        buf_i++;
+      }
+      /* FALLTHROUGH */
+    case 2:
+    case 1:
+
+      buf[buf_i] = '\0';
       buf_i++;
-      buf[buf_i] = '\'';
-      buf_i++;
-    }
-    /* FALLTHROUGH */
-  case 2:
-  case 1:
+      /* FALLTHROUGH */
+    case 0:
 
-    buf[buf_i] = '\0';
-    buf_i++;
-    /* FALLTHROUGH */
-  case 0:
-
-    return (buf_i);
+      return (buf_i);
   }
 
   /* buf_size >= 4 */
@@ -186,31 +197,31 @@ inline ulint ut_str_sql_format(const char *str, /*!< in: string */
     ch = str[str_i];
 
     switch (ch) {
-    case '\0':
+      case '\0':
 
-      if (unlikely(buf_size - buf_i < 4)) {
+        if (unlikely(buf_size - buf_i < 4)) {
 
-        goto func_exit;
-      }
-      buf[buf_i] = '\\';
-      buf_i++;
-      buf[buf_i] = '0';
-      buf_i++;
-      break;
-    case '\'':
-    case '\\':
+          goto func_exit;
+        }
+        buf[buf_i] = '\\';
+        buf_i++;
+        buf[buf_i] = '0';
+        buf_i++;
+        break;
+      case '\'':
+      case '\\':
 
-      if (unlikely(buf_size - buf_i < 4)) {
+        if (unlikely(buf_size - buf_i < 4)) {
 
-        goto func_exit;
-      }
-      buf[buf_i] = ch;
-      buf_i++;
-      /* FALLTHROUGH */
-    default:
+          goto func_exit;
+        }
+        buf[buf_i] = ch;
+        buf_i++;
+        /* FALLTHROUGH */
+      default:
 
-      buf[buf_i] = ch;
-      buf_i++;
+        buf[buf_i] = ch;
+        buf_i++;
     }
   }
 

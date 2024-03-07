@@ -144,18 +144,20 @@ struct sync_array_struct {
 of one or more threads because of waits of semaphores.
 @return	true if deadlock detected */
 static bool sync_array_detect_deadlock(
-    sync_array_t *arr,  /*!< in: wait array; NOTE! the caller must
+  sync_array_t *arr,  /*!< in: wait array; NOTE! the caller must
                         own the mutex to array */
-    sync_cell_t *start, /*!< in: cell where recursive search started */
-    sync_cell_t *cell,  /*!< in: cell to search */
-    ulint depth);       /*!< in: recursion depth */
-#endif                  /* UNIV_SYNC_DEBUG */
+  sync_cell_t *start, /*!< in: cell where recursive search started */
+  sync_cell_t *cell,  /*!< in: cell to search */
+  ulint depth
+);     /*!< in: recursion depth */
+#endif /* UNIV_SYNC_DEBUG */
 
 /** Gets the nth cell in array.
 @return	cell */
-static sync_cell_t *
-sync_array_get_nth_cell(sync_array_t *arr, /*!< in: sync array */
-                        ulint n)           /*!< in: index */
+static sync_cell_t *sync_array_get_nth_cell(
+  sync_array_t *arr, /*!< in: sync array */
+  ulint n
+) /*!< in: index */
 {
   ut_a(arr);
   ut_a(n < arr->n_cells);
@@ -265,8 +267,7 @@ void sync_array_validate(sync_array_t *arr) {
 }
 
 /** Returns the event that the thread owning the cell waits for. */
-static os_event_t
-sync_cell_get_event(sync_cell_t *cell) /*!< in: non-empty sync array cell */
+static os_event_t sync_cell_get_event(sync_cell_t *cell) /*!< in: non-empty sync array cell */
 {
   ulint type = cell->request_type;
 
@@ -279,8 +280,7 @@ sync_cell_get_event(sync_cell_t *cell) /*!< in: non-empty sync array cell */
   }
 }
 
-void sync_array_reserve_cell(sync_array_t *arr, void *object, ulint type,
-                             const char *file, ulint line, ulint *index) {
+void sync_array_reserve_cell(sync_array_t *arr, void *object, ulint type, const char *file, ulint line, ulint *index) {
   sync_cell_t *cell;
   os_event_t event;
   ulint i;
@@ -379,9 +379,10 @@ void sync_array_wait_event(sync_array_t *arr, ulint index) {
 }
 
 /** Reports info of a wait array cell. */
-static void
-sync_array_cell_print(ib_stream_t ib_stream, /*!< in: stream where to print */
-                      sync_cell_t *cell)     /*!< in: sync cell */
+static void sync_array_cell_print(
+  ib_stream_t ib_stream, /*!< in: stream where to print */
+  sync_cell_t *cell
+) /*!< in: sync cell */
 {
   mutex_t *mutex;
   rw_lock_t *rwlock;
@@ -390,39 +391,48 @@ sync_array_cell_print(ib_stream_t ib_stream, /*!< in: stream where to print */
 
   type = cell->request_type;
 
-  ib_logger(ib_stream,
-            "--Thread %lu has waited at %s line %lu"
-            " for %.2f seconds the semaphore:\n",
-            (ulong)os_thread_pf(cell->thread), cell->file, (ulong)cell->line,
-            difftime(time(nullptr), cell->reservation_time));
+  ib_logger(
+    ib_stream,
+    "--Thread %lu has waited at %s line %lu"
+    " for %.2f seconds the semaphore:\n",
+    (ulong)os_thread_pf(cell->thread),
+    cell->file,
+    (ulong)cell->line,
+    difftime(time(nullptr), cell->reservation_time)
+  );
 
   if (type == SYNC_MUTEX) {
     /* We use old_wait_mutex in case the cell has already
     been freed meanwhile */
     mutex = cell->old_wait_mutex;
 
-    ib_logger(ib_stream,
-              "Mutex at %p created file %s line %lu, lock var %lu\n"
+    ib_logger(
+      ib_stream,
+      "Mutex at %p created file %s line %lu, lock var %lu\n"
 #ifdef UNIV_SYNC_DEBUG
-              "Last time reserved in file %s line %lu, "
+      "Last time reserved in file %s line %lu, "
 #endif /* UNIV_SYNC_DEBUG */
-              "waiters flag %lu\n",
-              (void *)mutex, mutex->cfile_name, (ulong)mutex->cline,
-              (ulong)mutex->lock_word,
+      "waiters flag %lu\n",
+      (void *)mutex,
+      mutex->cfile_name,
+      (ulong)mutex->cline,
+      (ulong)mutex->lock_word,
 #ifdef UNIV_SYNC_DEBUG
-              mutex->file_name, (ulong)mutex->line,
+      mutex->file_name,
+      (ulong)mutex->line,
 #endif /* UNIV_SYNC_DEBUG */
-              (ulong)mutex->waiters);
+      (ulong)mutex->waiters
+    );
 
-  } else if (type == RW_LOCK_EX || type == RW_LOCK_WAIT_EX ||
-             type == RW_LOCK_SHARED) {
+  } else if (type == RW_LOCK_EX || type == RW_LOCK_WAIT_EX || type == RW_LOCK_SHARED) {
 
     ib_logger(ib_stream, "%s", type == RW_LOCK_EX ? "X-lock on" : "S-lock on");
 
     rwlock = cell->old_wait_rw_lock;
 
-    ib_logger(ib_stream, " RW-latch at %p created in file %s line %lu\n",
-              (void *)rwlock, rwlock->m_cfile_name, (ulong)rwlock->m_cline);
+    ib_logger(
+      ib_stream, " RW-latch at %p created in file %s line %lu\n", (void *)rwlock, rwlock->m_cfile_name, (ulong)rwlock->m_cline
+    );
 
     writer = rw_lock_get_writer(rwlock);
 
@@ -433,21 +443,28 @@ sync_array_cell_print(ib_stream_t ib_stream, /*!< in: stream where to print */
 
       auto thread_id = std::stoull(ss.str());
 
-      ib_logger(ib_stream,
-                "a writer (thread id %lu) has reserved it in mode %s",
-                (ulong)thread_id,
-                writer == RW_LOCK_EX ? " exclusive\n" : " wait exclusive\n");
+      ib_logger(
+        ib_stream,
+        "a writer (thread id %lu) has reserved it in mode %s",
+        (ulong)thread_id,
+        writer == RW_LOCK_EX ? " exclusive\n" : " wait exclusive\n"
+      );
     }
 
-    ib_logger(ib_stream,
-              "number of readers %lu, waiters flag %lu, "
-              "lock_word: %lx\n"
-              "Last time read locked in file %s line %lu\n"
-              "Last time write locked in file %s line %lu\n",
-              (ulong)rw_lock_get_reader_count(rwlock), (ulong)rwlock->m_waiters,
-              (ulong)rwlock->m_lock_word.load(), rwlock->m_last_s_file_name,
-              (ulong)rwlock->m_last_s_line, rwlock->m_last_x_file_name,
-              (ulong)rwlock->m_last_x_line);
+    ib_logger(
+      ib_stream,
+      "number of readers %lu, waiters flag %lu, "
+      "lock_word: %lx\n"
+      "Last time read locked in file %s line %lu\n"
+      "Last time write locked in file %s line %lu\n",
+      (ulong)rw_lock_get_reader_count(rwlock),
+      (ulong)rwlock->m_waiters,
+      (ulong)rwlock->m_lock_word.load(),
+      rwlock->m_last_s_file_name,
+      (ulong)rwlock->m_last_s_line,
+      rwlock->m_last_x_file_name,
+      (ulong)rwlock->m_last_x_line
+    );
   } else {
     ut_error;
   }
@@ -460,9 +477,10 @@ sync_array_cell_print(ib_stream_t ib_stream, /*!< in: stream where to print */
 #ifdef UNIV_SYNC_DEBUG
 /** Looks for a cell with the given thread id.
 @return	pointer to cell or nullptr if not found */
-static sync_cell_t *
-sync_array_find_thread(sync_array_t *arr,     /*!< in: wait array */
-                       os_thread_id_t thread) /*!< in: thread id */
+static sync_cell_t *sync_array_find_thread(
+  sync_array_t *arr, /*!< in: wait array */
+  os_thread_id_t thread
+) /*!< in: thread id */
 {
   ulint i;
   sync_cell_t *cell;
@@ -483,13 +501,14 @@ sync_array_find_thread(sync_array_t *arr,     /*!< in: wait array */
 /** Recursion step for deadlock detection.
 @return	true if deadlock detected */
 static bool sync_array_deadlock_step(
-    sync_array_t *arr,     /*!< in: wait array; NOTE! the caller must
+  sync_array_t *arr,     /*!< in: wait array; NOTE! the caller must
                            own the mutex to array */
-    sync_cell_t *start,    /*!< in: cell where recursive search
+  sync_cell_t *start,    /*!< in: cell where recursive search
                            started */
-    os_thread_id_t thread, /*!< in: thread to look at */
-    ulint pass,            /*!< in: pass value */
-    ulint depth)           /*!< in: recursion depth */
+  os_thread_id_t thread, /*!< in: thread to look at */
+  ulint pass,            /*!< in: pass value */
+  ulint depth
+) /*!< in: recursion depth */
 {
   sync_cell_t *new;
   bool ret;
@@ -512,8 +531,11 @@ static bool sync_array_deadlock_step(
     ut_dbg_stop_threads = true;
 
     /* Deadlock */
-    ib_logger(ib_stream, "########################################\n"
-                         "DEADLOCK of threads detected!\n");
+    ib_logger(
+      ib_stream,
+      "########################################\n"
+      "DEADLOCK of threads detected!\n"
+    );
 
     return true;
 
@@ -531,11 +553,12 @@ static bool sync_array_deadlock_step(
 of one or more threads because of waits of semaphores.
 @return	true if deadlock detected */
 static bool sync_array_detect_deadlock(
-    sync_array_t *arr,  /*!< in: wait array; NOTE! the caller must
+  sync_array_t *arr,  /*!< in: wait array; NOTE! the caller must
                         own the mutex to array */
-    sync_cell_t *start, /*!< in: cell where recursive search started */
-    sync_cell_t *cell,  /*!< in: cell to search */
-    ulint depth)        /*!< in: recursion depth */
+  sync_cell_t *start, /*!< in: cell where recursive search started */
+  sync_cell_t *cell,  /*!< in: cell to search */
+  ulint depth
+) /*!< in: recursion depth */
 {
   mutex_t *mutex;
   rw_lock_t *lock;
@@ -575,11 +598,15 @@ static bool sync_array_detect_deadlock(
 
       ret = sync_array_deadlock_step(arr, start, thread, 0, depth);
       if (ret) {
-        ib_logger(ib_stream,
-                  "Mutex %p owned by thread %lu file %s "
-                  "line %lu\n",
-                  mutex, (ulong)os_thread_pf(mutex->thread_id),
-                  mutex->file_name, (ulong)mutex->line);
+        ib_logger(
+          ib_stream,
+          "Mutex %p owned by thread %lu file %s "
+          "line %lu\n",
+          mutex,
+          (ulong)os_thread_pf(mutex->thread_id),
+          mutex->file_name,
+          (ulong)mutex->line
+        );
         sync_array_cell_print(ib_stream, cell);
 
         return true;
@@ -588,8 +615,7 @@ static bool sync_array_detect_deadlock(
 
     return false; /* No deadlock */
 
-  } else if (cell->request_type == RW_LOCK_EX ||
-             cell->request_type == RW_LOCK_WAIT_EX) {
+  } else if (cell->request_type == RW_LOCK_EX || cell->request_type == RW_LOCK_WAIT_EX) {
 
     lock = cell->wait_object;
 
@@ -599,11 +625,8 @@ static bool sync_array_detect_deadlock(
 
       thread = debug->thread_id;
 
-      if (((debug->lock_type == RW_LOCK_EX) &&
-           !os_thread_eq(thread, cell->thread)) ||
-          ((debug->lock_type == RW_LOCK_WAIT_EX) &&
-           !os_thread_eq(thread, cell->thread)) ||
-          (debug->lock_type == RW_LOCK_SHARED)) {
+      if (((debug->lock_type == RW_LOCK_EX) && !os_thread_eq(thread, cell->thread)) ||
+          ((debug->lock_type == RW_LOCK_WAIT_EX) && !os_thread_eq(thread, cell->thread)) || (debug->lock_type == RW_LOCK_SHARED)) {
 
         /* The (wait) x-lock request can block
         infinitely only if someone (can be also cell
@@ -635,8 +658,7 @@ static bool sync_array_detect_deadlock(
 
       thread = debug->thread_id;
 
-      if ((debug->lock_type == RW_LOCK_EX) ||
-          (debug->lock_type == RW_LOCK_WAIT_EX)) {
+      if ((debug->lock_type == RW_LOCK_EX) || (debug->lock_type == RW_LOCK_WAIT_EX)) {
 
         /* The s-lock request can block infinitely
         only if someone (can also be cell thread) is
@@ -664,8 +686,7 @@ static bool sync_array_detect_deadlock(
 #endif /* UNIV_SYNC_DEBUG */
 
 /** Determines if we can wake up the thread waiting for a sempahore. */
-static bool
-sync_arr_cell_can_wake_up(sync_cell_t *cell) /*!< in: cell to search */
+static bool sync_arr_cell_can_wake_up(sync_cell_t *cell) /*!< in: cell to search */
 {
   mutex_t *mutex;
   rw_lock_t *lock;
@@ -790,22 +811,23 @@ bool sync_array_print_long_waits(void) {
 
     cell = sync_array_get_nth_cell(sync_primary_wait_array, i);
 
-    if (cell->wait_object != nullptr && cell->waiting &&
-        difftime(time(nullptr), cell->reservation_time) > 240) {
+    if (cell->wait_object != nullptr && cell->waiting && difftime(time(nullptr), cell->reservation_time) > 240) {
       ib_logger(ib_stream, "Warning: a long semaphore wait:\n");
       sync_array_cell_print(ib_stream, cell);
       noticed = true;
     }
 
-    if (cell->wait_object != nullptr && cell->waiting &&
-        difftime(time(nullptr), cell->reservation_time) > fatal_timeout) {
+    if (cell->wait_object != nullptr && cell->waiting && difftime(time(nullptr), cell->reservation_time) > fatal_timeout) {
       fatal = true;
     }
   }
 
   if (noticed) {
-    ib_logger(ib_stream, "###### Starts InnoDB Monitor"
-                         " for 30 secs to print diagnostic info:\n");
+    ib_logger(
+      ib_stream,
+      "###### Starts InnoDB Monitor"
+      " for 30 secs to print diagnostic info:\n"
+    );
     old_val = srv_print_innodb_monitor;
 
     /* If some crucial semaphore is reserved, then also the InnoDB
@@ -814,9 +836,7 @@ bool sync_array_print_long_waits(void) {
     call hanging inside the operating system, let us print right
     now the values of pending calls of these. */
 
-    ib_logger(ib_stream, "Pending preads %lu, pwrites %lu\n",
-              (ulong)os_file_n_pending_preads,
-              (ulong)os_file_n_pending_pwrites);
+    ib_logger(ib_stream, "Pending preads %lu, pwrites %lu\n", (ulong)os_file_n_pending_preads, (ulong)os_file_n_pending_pwrites);
 
     srv_print_innodb_monitor = true;
     os_event_set(srv_lock_timeout_thread_event);
@@ -824,25 +844,27 @@ bool sync_array_print_long_waits(void) {
     os_thread_sleep(30000000);
 
     srv_print_innodb_monitor = old_val;
-    ib_logger(ib_stream, "###### Diagnostic info printed to the "
-                         "standard error stream\n");
+    ib_logger(
+      ib_stream,
+      "###### Diagnostic info printed to the "
+      "standard error stream\n"
+    );
   }
 
   return fatal;
 }
 
 /** Prints info of the wait array. */
-static void
-sync_array_output_info(ib_stream_t ib_stream, /*!< in: stream where to print */
-                       sync_array_t *arr)     /*!< in: wait array; NOTE! caller
+static void sync_array_output_info(
+  ib_stream_t ib_stream, /*!< in: stream where to print */
+  sync_array_t *arr
+) /*!< in: wait array; NOTE! caller
                                               must own the mutex */
 {
   ulint count;
   ulint i;
 
-  ib_logger(ib_stream,
-            "OS WAIT ARRAY INFO: reservation count %ld, signal count %ld\n",
-            (long)arr->res_count, (long)arr->sg_count);
+  ib_logger(ib_stream, "OS WAIT ARRAY INFO: reservation count %ld, signal count %ld\n", (long)arr->res_count, (long)arr->sg_count);
   i = 0;
   count = 0;
 

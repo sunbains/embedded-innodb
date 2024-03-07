@@ -5,7 +5,7 @@
 
 /* Logging modes for a mini-transaction */
 
- /** Default mode: log all operations modifying disk-based data */
+/** Default mode: log all operations modifying disk-based data */
 constexpr ulint MTR_LOG_ALL = 21;
 
 /**
@@ -56,88 +56,88 @@ enum mlog_type_t : byte {
   MLOG_REC_INSERT = 9,
 
   /** Mark clustered index record deleted */
-  MLOG_REC_CLUST_DELETE_MARK =  10,
+  MLOG_REC_CLUST_DELETE_MARK = 10,
 
   /** Mark secondary index record deleted */
-  MLOG_REC_SEC_DELETE_MARK =  11,
+  MLOG_REC_SEC_DELETE_MARK = 11,
 
   /** Update of a record, preserves record field sizes */
-  MLOG_REC_UPDATE_IN_PLACE =  13,
+  MLOG_REC_UPDATE_IN_PLACE = 13,
 
   /** Delete a record from a page */
-  MLOG_REC_DELETE =  14,
+  MLOG_REC_DELETE = 14,
 
   /** Delete record list end on index page */
-  MLOG_LIST_END_DELETE =  15,
+  MLOG_LIST_END_DELETE = 15,
 
   /** Delete record list start on index page */
-  MLOG_LIST_START_DELETE =  16,
+  MLOG_LIST_START_DELETE = 16,
 
   /** Copy record list end to a new created index page */
-  MLOG_LIST_END_COPY_CREATED =  17,
+  MLOG_LIST_END_COPY_CREATED = 17,
 
   /** Reorganize an index page in ROW_FORMAT=REDUNDANT */
-  MLOG_PAGE_REORGANIZE =  18,
+  MLOG_PAGE_REORGANIZE = 18,
 
   /** Create an index page */
-  MLOG_PAGE_CREATE =  19,
+  MLOG_PAGE_CREATE = 19,
 
   /** Insert entry in an undo log */
-  MLOG_UNDO_INSERT =  20,
+  MLOG_UNDO_INSERT = 20,
 
   /** Erase an undo log page end */
-  MLOG_UNDO_ERASE_END =  21,
+  MLOG_UNDO_ERASE_END = 21,
 
   /** Initialize a page in an undo log */
-  MLOG_UNDO_INIT =  22,
+  MLOG_UNDO_INIT = 22,
 
   /** Discard an update undo log header */
-  MLOG_UNDO_HDR_DISCARD =  23,
+  MLOG_UNDO_HDR_DISCARD = 23,
 
   /** Reuse an insert undo log header */
-  MLOG_UNDO_HDR_REUSE =  24,
+  MLOG_UNDO_HDR_REUSE = 24,
 
   /** Create an undo log header */
-  MLOG_UNDO_HDR_CREATE =  25,
+  MLOG_UNDO_HDR_CREATE = 25,
 
   /** Mark an index record as the predefined minimum record */
-  MLOG_REC_MIN_MARK =  26,
+  MLOG_REC_MIN_MARK = 26,
 
   /** Full contents of a page */
-  MLOG_FULL_PAGE = 	28,
+  MLOG_FULL_PAGE = 28,
 
   /** This means that a file page is taken into use and the prior
    * contents of the page should be ignored: in recovery we must
    * not trust the lsn values stored to the file page */
-  MLOG_INIT_FILE_PAGE =  29,
+  MLOG_INIT_FILE_PAGE = 29,
 
   /** Write a string to a page */
-  MLOG_WRITE_STRING =  30,
+  MLOG_WRITE_STRING = 30,
 
   /** If a single mtr writes several log records, this
    * log record ends the sequence of these records */
-  MLOG_MULTI_REC_END =  31,
+  MLOG_MULTI_REC_END = 31,
 
   /** Dummy log record used to pad a log block full */
-  MLOG_DUMMY_RECORD =  32,
+  MLOG_DUMMY_RECORD = 32,
 
   /** Log record about an .ibd file creation */
-  MLOG_FILE_CREATE =  33,
+  MLOG_FILE_CREATE = 33,
 
   /** Log record about an .ibd file rename */
-  MLOG_FILE_RENAME =  34,
+  MLOG_FILE_RENAME = 34,
 
   /** Log record about an .ibd file deletion */
-  MLOG_FILE_DELETE =  35,
+  MLOG_FILE_DELETE = 35,
 
   /** Mark a compact index record as the predefined minimum record */
-  MLOG_COMP_REC_MIN_MARK =  36,
+  MLOG_COMP_REC_MIN_MARK = 36,
 
   /** Create a compact index page */
-  MLOG_COMP_PAGE_CREATE =  37,
+  MLOG_COMP_PAGE_CREATE = 37,
 
   /** Compact record insert */
-  MLOG_COMP_REC_INSERT =  38,
+  MLOG_COMP_REC_INSERT = 38,
 
   /*!< mark compact clustered index record deleted */
   MLOG_COMP_REC_CLUST_DELETE_MARK = 39,
@@ -145,22 +145,22 @@ enum mlog_type_t : byte {
   /** Mark compact secondary index record deleted; this log
    * record type is redundant, as MLOG_REC_SEC_DELETE_MARK
    * is independent of the record format. */
-  MLOG_COMP_REC_SEC_DELETE_MARK =  40,
+  MLOG_COMP_REC_SEC_DELETE_MARK = 40,
 
   /** Update of a compact record, preserves record field sizes */
-  MLOG_COMP_REC_UPDATE_IN_PLACE =  41,
+  MLOG_COMP_REC_UPDATE_IN_PLACE = 41,
 
   /** Delete a compact record from a page */
-  MLOG_COMP_REC_DELETE =  42,
+  MLOG_COMP_REC_DELETE = 42,
 
   /** Delete compact record list end on index page */
-  MLOG_COMP_LIST_END_DELETE =  43,
+  MLOG_COMP_LIST_END_DELETE = 43,
 
   /** Delete compact record list start on index page */
-  MLOG_COMP_LIST_START_DELETE =  44,
+  MLOG_COMP_LIST_START_DELETE = 44,
 
   /** Copy compact record list end to a new created index page */
-  MLOG_COMP_LIST_END_COPY_CREATED =  45,
+  MLOG_COMP_LIST_END_COPY_CREATED = 45,
 
   /** Reorganize an index page */
   MLOG_COMP_PAGE_REORGANIZE = 46,
@@ -170,13 +170,13 @@ enum mlog_type_t : byte {
 
 #ifdef UNIV_LOG_LSN_DEBUG
   /** Current LSN */
-  MLOG_LSN =  88,
+  MLOG_LSN = 88,
 
   /** Biggest value (used in assertions) */
-  MLOG_BIGGEST_TYPE  = 48,
+  MLOG_BIGGEST_TYPE = 48,
 #else
   /** Biggest value (used in assertions) */
-  MLOG_BIGGEST_TYPE  = 47,
+  MLOG_BIGGEST_TYPE = 47,
 #endif /* UNIV_LOG_LSN_DEBUG */
 
   /** If the mtr contains only one log record for one page,

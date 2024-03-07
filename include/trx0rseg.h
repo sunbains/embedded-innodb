@@ -30,33 +30,38 @@ Created 3/26/1996 Heikki Tuuri
 
 /** Gets a rollback segment header.
 @return	rollback segment header, page x-latched */
-inline trx_rsegf_t *
-trx_rsegf_get(ulint space,    /*!< in: space where placed */
-              ulint page_no,  /*!< in: page number of the header */
-              mtr_t *mtr);    /*!< in: mtr */
+inline trx_rsegf_t *trx_rsegf_get(
+  ulint space,   /*!< in: space where placed */
+  ulint page_no, /*!< in: page number of the header */
+  mtr_t *mtr
+); /*!< in: mtr */
 /** Gets a newly created rollback segment header.
 @return	rollback segment header, page x-latched */
-inline trx_rsegf_t *
-trx_rsegf_get_new(ulint space,    /*!< in: space where placed */
-                  ulint page_no,  /*!< in: page number of the header */
-                  mtr_t *mtr);    /*!< in: mtr */
+inline trx_rsegf_t *trx_rsegf_get_new(
+  ulint space,   /*!< in: space where placed */
+  ulint page_no, /*!< in: page number of the header */
+  mtr_t *mtr
+); /*!< in: mtr */
 /** Gets the file page number of the nth undo log slot.
 @return	page number of the undo log segment */
-inline ulint
-trx_rsegf_get_nth_undo(trx_rsegf_t *rsegf, /*!< in: rollback segment header */
-                       ulint n,            /*!< in: index of slot */
-                       mtr_t *mtr);        /*!< in: mtr */
+inline ulint trx_rsegf_get_nth_undo(
+  trx_rsegf_t *rsegf, /*!< in: rollback segment header */
+  ulint n,            /*!< in: index of slot */
+  mtr_t *mtr
+); /*!< in: mtr */
 /** Sets the file page number of the nth undo log slot. */
 inline void trx_rsegf_set_nth_undo(
-    trx_rsegf_t *rsegf, /*!< in: rollback segment header */
-    ulint n,            /*!< in: index of slot */
-    ulint page_no,      /*!< in: page number of the undo log segment */
-    mtr_t *mtr);        /*!< in: mtr */
+  trx_rsegf_t *rsegf, /*!< in: rollback segment header */
+  ulint n,            /*!< in: index of slot */
+  ulint page_no,      /*!< in: page number of the undo log segment */
+  mtr_t *mtr
+); /*!< in: mtr */
 /** Looks for a free slot for an undo log segment.
 @return	slot index or ULINT_UNDEFINED if not found */
-inline ulint
-trx_rsegf_undo_find_free(trx_rsegf_t *rsegf, /*!< in: rollback segment header */
-                         mtr_t *mtr);        /*!< in: mtr */
+inline ulint trx_rsegf_undo_find_free(
+  trx_rsegf_t *rsegf, /*!< in: rollback segment header */
+  mtr_t *mtr
+); /*!< in: mtr */
 /** Looks for a rollback segment, based on the rollback segment id.
 @return	rollback segment */
 
@@ -66,17 +71,19 @@ a new rollback segment is created in the database.
 @return	page number of the created segment, FIL_NULL if fail */
 
 ulint trx_rseg_header_create(
-    ulint space,    /*!< in: space id */
-    ulint max_size, /*!< in: max size in pages */
-    ulint *slot_no, /*!< out: rseg id == slot number in trx sys */
-    mtr_t *mtr);    /*!< in: mtr */
+  ulint space,    /*!< in: space id */
+  ulint max_size, /*!< in: max size in pages */
+  ulint *slot_no, /*!< out: rseg id == slot number in trx sys */
+  mtr_t *mtr
+); /*!< in: mtr */
 /** Creates the memory copies for rollback segments and initializes the
 rseg list and array in trx_sys at a database startup. */
 
 void trx_rseg_list_and_array_init(
-    ib_recovery_t recovery, /*!< in: recovery flag */
-    trx_sysf_t *sys_header, /*!< in: trx system header */
-    mtr_t *mtr);            /*!< in: mtr */
+  ib_recovery_t recovery, /*!< in: recovery flag */
+  trx_sysf_t *sys_header, /*!< in: trx system header */
+  mtr_t *mtr
+); /*!< in: mtr */
 /** Free's an instance of the rollback segment in memory. */
 
 void trx_rseg_mem_free(trx_rseg_t *rseg); /*!< in, own: instance to free */
@@ -134,7 +141,7 @@ struct trx_rseg_struct {
 
 /* Undo log segment slot in a rollback segment header */
 /*-------------------------------------------------------------*/
-#define TRX_RSEG_SLOT_PAGE_NO                                                  \
+#define TRX_RSEG_SLOT_PAGE_NO \
   0 /* Page number of the header page of                                       \
     an undo log segment */
 /*-------------------------------------------------------------*/
@@ -146,13 +153,13 @@ struct trx_rseg_struct {
 
 /* Transaction rollback segment header */
 /*-------------------------------------------------------------*/
-#define TRX_RSEG_MAX_SIZE                                                      \
+#define TRX_RSEG_MAX_SIZE \
   0 /* Maximum allowed size for rollback                                       \
     segment in pages */
-#define TRX_RSEG_HISTORY_SIZE                                                  \
+#define TRX_RSEG_HISTORY_SIZE \
   4 /* Number of file pages occupied                                           \
     by the logs in the history list */
-#define TRX_RSEG_HISTORY                                                       \
+#define TRX_RSEG_HISTORY \
   8 /* The update undo logs for committed                                      \
     transactions */
 #define TRX_RSEG_FSEG_HEADER (8 + FLST_BASE_NODE_SIZE)

@@ -26,8 +26,8 @@ Created 5/30/1994 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#include "os0sync.h"
 #include <string.h>
+#include "os0sync.h"
 
 /** The total amount of memory currently allocated from the operating
 system with os_mem_alloc_large() or malloc().  Does not count malloc()
@@ -45,11 +45,13 @@ void ut_mem_init(void);
 defined and set_to_zero is true.
 @return	own: allocated memory */
 
-void *ut_malloc_low(ulint n,          /*!< in: number of bytes to allocate */
-                    bool set_to_zero, /*!< in: true if allocated memory
+void *ut_malloc_low(
+  ulint n,          /*!< in: number of bytes to allocate */
+  bool set_to_zero, /*!< in: true if allocated memory
                                        should be set to zero if
                                        UNIV_SET_MEM_TO_ZERO is defined */
-                    bool assert_on_error); /*!< in: if true, we crash the
+  bool assert_on_error
+); /*!< in: if true, we crash the
                                             engine if the memory cannot be
                                             allocated */
 /** Allocates memory. Sets it also to zero if UNIV_SET_MEM_TO_ZERO is
@@ -91,8 +93,10 @@ RETURN VALUE
        moved.
 @return	own: pointer to new mem block or NULL */
 
-void *ut_realloc(void *ptr,   /*!< in: pointer to old block or NULL */
-                 ulint size); /*!< in: desired size */
+void *ut_realloc(
+  void *ptr, /*!< in: pointer to old block or NULL */
+  ulint size
+); /*!< in: desired size */
 /** Frees in shutdown all allocated memory not freed yet. */
 
 void ut_free_all_mem(void);
@@ -102,76 +106,94 @@ dst, NUL-terminating the result. Returns strlen(src), so truncation
 occurred if the return value >= size.
 @return	strlen(src) */
 
-ulint ut_strlcpy(char *dst,       /*!< in: destination buffer */
-                 const char *src, /*!< in: source buffer */
-                 ulint size);     /*!< in: size of destination buffer */
+ulint ut_strlcpy(
+  char *dst,       /*!< in: destination buffer */
+  const char *src, /*!< in: source buffer */
+  ulint size
+); /*!< in: size of destination buffer */
 
 /** Like ut_strlcpy, but if src doesn't fit in dst completely, copies the last
 (size - 1) bytes of src, not the first.
 @return	strlen(src) */
 
-ulint ut_strlcpy_rev(char *dst,       /*!< in: destination buffer */
-                     const char *src, /*!< in: source buffer */
-                     ulint size);     /*!< in: size of destination buffer */
+ulint ut_strlcpy_rev(
+  char *dst,       /*!< in: destination buffer */
+  const char *src, /*!< in: source buffer */
+  ulint size
+); /*!< in: size of destination buffer */
 
 /** Compute strlen(strcpyq(str, q)).
 @return	length of the string when quoted */
-inline ulint strlenq(const char *str, /*!< in: null-terminated string */
-                     char q);         /*!< in: the quote character */
+inline ulint strlenq(
+  const char *str, /*!< in: null-terminated string */
+  char q
+); /*!< in: the quote character */
 
 /** Make a quoted copy of a NUL-terminated string.	Leading and trailing
 quotes will not be included; only embedded quotes will be escaped.
 See also strlenq() and memcpyq().
 @return	pointer to end of dest */
 
-char *strcpyq(char *dest,       /*!< in: output buffer */
-              char q,           /*!< in: the quote character */
-              const char *src); /*!< in: null-terminated string */
+char *strcpyq(
+  char *dest, /*!< in: output buffer */
+  char q,     /*!< in: the quote character */
+  const char *src
+); /*!< in: null-terminated string */
 
 /** Make a quoted copy of a fixed-length string.  Leading and trailing
 quotes will not be included; only embedded quotes will be escaped.
 See also strlenq() and strcpyq().
 @return	pointer to end of dest */
 
-char *memcpyq(char *dest,      /*!< in: output buffer */
-              char q,          /*!< in: the quote character */
-              const char *src, /*!< in: string to be quoted */
-              ulint len);      /*!< in: length of src */
+char *memcpyq(
+  char *dest,      /*!< in: output buffer */
+  char q,          /*!< in: the quote character */
+  const char *src, /*!< in: string to be quoted */
+  ulint len
+); /*!< in: length of src */
 
 /** Return the number of times s2 occurs in s1. Overlapping instances of s2
 are only counted once.
 @return	the number of times s2 occurs in s1 */
 
-ulint ut_strcount(const char *s1,  /*!< in: string to search in */
-                  const char *s2); /*!< in: string to search for */
+ulint ut_strcount(
+  const char *s1, /*!< in: string to search in */
+  const char *s2
+); /*!< in: string to search for */
 
 /** Replace every occurrence of s1 in str with s2. Overlapping instances of s1
 are only replaced once.
 @return	own: modified string, must be freed with mem_free() */
 
-char *ut_strreplace(const char *str, /*!< in: string to operate on */
-                    const char *s1,  /*!< in: string to replace */
-                    const char *s2); /*!< in: string to replace s1 with */
+char *ut_strreplace(
+  const char *str, /*!< in: string to operate on */
+  const char *s1,  /*!< in: string to replace */
+  const char *s2
+); /*!< in: string to replace s1 with */
 
 /** Converts a raw binary data to a NUL-terminated hex string. The output is
 truncated if there is not enough space in "hex", make sure "hex_size" is at
 least (2 * raw_size + 1) if you do not want this to happen. Returns the
 actual number of characters written to "hex" (including the NUL).
 @return	number of chars written */
-inline ulint ut_raw_to_hex(const void *raw, /*!< in: raw data */
-                           ulint raw_size,  /*!< in: "raw" length in bytes */
-                           char *hex,       /*!< out: hex string */
-                           ulint hex_size); /*!< in: "hex" size in bytes */
+inline ulint ut_raw_to_hex(
+  const void *raw, /*!< in: raw data */
+  ulint raw_size,  /*!< in: "raw" length in bytes */
+  char *hex,       /*!< out: hex string */
+  ulint hex_size
+); /*!< in: "hex" size in bytes */
 
 /** Adds single quotes to the start and end of string and escapes any quotes
 by doubling them. Returns the number of bytes that were written to "buf"
 (including the terminating NUL). If buf_size is too small then the
 trailing bytes from "str" are discarded.
 @return	number of bytes that were written */
-inline ulint ut_str_sql_format(const char *str, /*!< in: string */
-                               ulint str_len, /*!< in: string length in bytes */
-                               char *buf,     /*!< out: output buffer */
-                               ulint buf_size); /*!< in: output buffer size
+inline ulint ut_str_sql_format(
+  const char *str, /*!< in: string */
+  ulint str_len,   /*!< in: string length in bytes */
+  char *buf,       /*!< out: output buffer */
+  ulint buf_size
+); /*!< in: output buffer size
                                                 in bytes */
 /** Reset the variables. */
 

@@ -16,8 +16,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 ************************************************************************/
 #include "api0ucode.h"
-#include "ut0mem.h"
 #include <ctype.h>
+#include "ut0mem.h"
 #ifdef HAVE_STRINGS_H
 #include <strings.h>
 #endif
@@ -26,14 +26,15 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 Determines the connection character set.
 @return	connection character set */
 
-const charset_t *ib_ucode_get_connection_charset(void) { return (NULL); }
+const charset_t *ib_ucode_get_connection_charset(void) {
+  return (NULL);
+}
 
 /** Determines the character set based on id.
 FIXME: If the id can't be found then what do we do, return some default ?
 @return	character set or NULL */
 
-const charset_t *
-ib_ucode_get_charset(ulint id) /*!< in: Charset-collation code */
+const charset_t *ib_ucode_get_charset(ulint id) /*!< in: Charset-collation code */
 {
   return (NULL);
 }
@@ -41,9 +42,10 @@ ib_ucode_get_charset(ulint id) /*!< in: Charset-collation code */
 /** Get the variable length bounds of the given (multibyte) character set. */
 
 void ib_ucode_get_charset_width(
-    const charset_t *cs, /*!< in: Charset */
-    ulint *mbminlen,     /*!< out: min len of a char (in bytes) */
-    ulint *mbmaxlen)     /*!< out: max len of a char (in bytes) */
+  const charset_t *cs, /*!< in: Charset */
+  ulint *mbminlen,     /*!< out: min len of a char (in bytes) */
+  ulint *mbmaxlen
+) /*!< out: max len of a char (in bytes) */
 {
   *mbminlen = *mbmaxlen = 0;
 
@@ -57,8 +59,10 @@ void ib_ucode_get_charset_width(
 /** Compare two strings ignoring case.
 @return	0 if equal */
 
-int ib_utf8_strcasecmp(const char *p1, /*!< in: string to compare */
-                       const char *p2) /*!< in: string to compare */
+int ib_utf8_strcasecmp(
+  const char *p1, /*!< in: string to compare */
+  const char *p2
+) /*!< in: string to compare */
 {
   /* FIXME: Call the UTF-8 comparison function. */
   /* FIXME: This should take cs as the parameter. */
@@ -68,9 +72,11 @@ int ib_utf8_strcasecmp(const char *p1, /*!< in: string to compare */
 /** Compare two strings ignoring case.
 @return	0 if equal */
 
-int ib_utf8_strncasecmp(const char *p1, /*!< in: string to compare */
-                        const char *p2, /*!< in: string to compare */
-                        ulint len)      /*!< in: length of string */
+int ib_utf8_strncasecmp(
+  const char *p1, /*!< in: string to compare */
+  const char *p2, /*!< in: string to compare */
+  ulint len
+) /*!< in: length of string */
 {
   /* FIXME: Call the UTF-8 comparison function. */
   /* FIXME: This should take cs as the parameter. */
@@ -100,10 +106,11 @@ void ib_utf8_casedown(char *a) /*!< in/out: str to put in lower case */
 /** Converts an identifier to a table name. */
 
 void ib_utf8_convert_from_table_id(
-    const charset_t *cs, /*!< in: the 'from' character set */
-    char *to,            /*!< out: converted identifier */
-    const char *from,    /*!< in: identifier to convert */
-    ulint len)           /*!< in: length of 'to', in bytes;
+  const charset_t *cs, /*!< in: the 'from' character set */
+  char *to,            /*!< out: converted identifier */
+  const char *from,    /*!< in: identifier to convert */
+  ulint len
+) /*!< in: length of 'to', in bytes;
                          should be at least
                          5 * strlen(to) + 1 */
 {
@@ -119,10 +126,11 @@ void ib_utf8_convert_from_table_id(
 /** Converts an identifier to UTF-8. */
 
 void ib_utf8_convert_from_id(
-    const charset_t *cs, /*!< in: the 'from' character set */
-    char *to,            /*!< out: converted identifier */
-    const char *from,    /*!< in: identifier to convert */
-    ulint len)           /*!< in: length of 'to', in bytes;
+  const charset_t *cs, /*!< in: the 'from' character set */
+  char *to,            /*!< out: converted identifier */
+  const char *from,    /*!< in: identifier to convert */
+  ulint len
+) /*!< in: length of 'to', in bytes;
                          should be at least
                          3 * strlen(to) + 1 */
 {
@@ -140,8 +148,10 @@ void ib_utf8_convert_from_id(
 /** Test whether a UTF-8 character is a space or not.
 @return	true if isspace(c) */
 
-int ib_utf8_isspace(const charset_t *cs, /*!< in: charset */
-                    char c)              /*!< in: character to test */
+int ib_utf8_isspace(
+  const charset_t *cs, /*!< in: charset */
+  char c
+) /*!< in: character to test */
 {
   /* FIXME: Call the equivalent UTF-8 function. */
   /* FIXME: Do we really need this function?  This is needed by
@@ -157,10 +167,11 @@ characters that will fit into prefix_len bytes.
 prefix_len bytes. */
 
 ulint ib_ucode_get_storage_size(
-    const charset_t *cs, /*!< in: character set */
-    ulint prefix_len,    /*!< in: prefix length in bytes */
-    ulint str_len,       /*!< in: length of the string in bytes */
-    const char *str)     /*!< in: character string */
+  const charset_t *cs, /*!< in: character set */
+  ulint prefix_len,    /*!< in: prefix length in bytes */
+  ulint str_len,       /*!< in: length of the string in bytes */
+  const char *str
+) /*!< in: character string */
 {
   /* FIXME: Do we really need this function?  Can't we assume
   that all strings are UTF-8?  (We still may want to support

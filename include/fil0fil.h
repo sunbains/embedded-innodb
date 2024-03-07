@@ -128,10 +128,9 @@ startup.
 @param[out] max_arch_log_no      Maximum log number
 @param[out] min_flushed_lsn      Minimum flushed LSN.
 @param[out] max_flushed_lsn      Maximum flushed LSN */
-void fil_read_flushed_lsn_and_arch_log_no(os_file_t data_file,
-                                          bool one_read_already,
-                                          uint64_t *min_flushed_lsn,
-                                          uint64_t *max_flushed_lsn);
+void fil_read_flushed_lsn_and_arch_log_no(
+  os_file_t data_file, bool one_read_already, uint64_t *min_flushed_lsn, uint64_t *max_flushed_lsn
+);
 
 /** Increments the count of pending insert buffer page merges, if space is not
 being deleted.
@@ -166,8 +165,7 @@ contained between ptr and end_ptr
                                 not replayed
 @param[in] log_flags            redo log flags (stored in the page number
                                 parameter) */
-byte *fil_op_log_parse_or_replay(byte *ptr, byte *end_ptr, ulint type,
-                                 ulint space_id, ulint log_flags);
+byte *fil_op_log_parse_or_replay(byte *ptr, byte *end_ptr, ulint type, ulint space_id, ulint log_flags);
 
 /** Deletes a single-table tablespace. The tablespace must be cached in the
 memory cache.
@@ -200,8 +198,7 @@ tablespace memory cache.
                                 databasename/tablename format of InnoDB
 
 @return	true if success */
-bool fil_rename_tablespace(const char *old_name, ulint id,
-                           const char *new_name);
+bool fil_rename_tablespace(const char *old_name, ulint id, const char *new_name);
 
 /** Creates a new single-table tablespace in a database directory.
 The datadir is the current directory of a running program. We can
@@ -220,10 +217,7 @@ we place in the configured TEMP dir of the application.
 @param[in] size);               The initial size of the tablespace file
                                 in pages, must be >= FIL_IBD_FILE_INITIAL_SIZE
 @return	DB_SUCCESS or error code */
-db_err fil_create_new_single_table_tablespace(ulint *space_id,
-                                              const char *tablename,
-                                              bool is_temp, ulint flags,
-                                              ulint size);
+db_err fil_create_new_single_table_tablespace(ulint *space_id, const char *tablename, bool is_temp, ulint flags, ulint size);
 
 /** Tries to open a single-table tablespace and optionally checks the space id
 is right in it. If does not succeed, prints an error message to the .err log.
@@ -236,16 +230,17 @@ tablespace open, but closes it after we have looked at the space id in it.
 
 @return	true if success */
 bool fil_open_single_table_tablespace(
-    bool check_space_id, /** in: should we check that the space
+  bool check_space_id, /** in: should we check that the space
                           id in the file is right; we assume
                           that this function runs much faster
                           if no check is made, since accessing
                           the file inode probably is much
                           faster (the OS caches them) than
                           accessing the first page of the file */
-    ulint id,            /** in: space id */
-    ulint flags,         /** in: tablespace flags */
-    const char *name);   /** in: table name in the
+  ulint id,            /** in: space id */
+  ulint flags,         /** in: tablespace flags */
+  const char *name
+); /** in: table name in the
                          databasename/tablename format */
 
 /** It is possible, though very improbable, that the lsn's in the tablespace to
@@ -258,9 +253,10 @@ first page of the .ibd file, and we can determine whether we need to reset the
 lsn's just by looking at that flush lsn.
 @return	true if success */
 bool fil_reset_too_high_lsns(
-    const char *name,      /** in: table name in the
+  const char *name, /** in: table name in the
                            databasename/tablename format */
-    uint64_t current_lsn); /** in: reset lsn's if the lsn stamped
+  uint64_t current_lsn
+); /** in: reset lsn's if the lsn stamped
                               to FIL_PAGE_FILE_FLUSH_LSN in the
                               first page is too high */
 
@@ -271,8 +267,7 @@ we know into which file we should look to check the contents of a page stored
 in the doublewrite buffer, also to know where to apply log records where the
 space id is != 0.
 @return	DB_SUCCESS or error number */
-db_err fil_load_single_table_tablespaces(
-    ib_recovery_t recovery); /** in: recovery flag */
+db_err fil_load_single_table_tablespaces(ib_recovery_t recovery); /** in: recovery flag */
 
 /** If we need crash recovery, and we have called
 fil_load_single_table_tablespaces() and dict_load_single_table_tablespaces(),
@@ -285,8 +280,9 @@ void fil_print_orphaned_tablespaces(void);
 cache, or is being deleted there.
 @return	true if does not exist or is being deleted */
 bool fil_tablespace_deleted_or_being_deleted_in_mem(
-    ulint id,         /** in: space id */
-    int64_t version); /** in: tablespace_version should be this; if
+  ulint id, /** in: space id */
+  int64_t version
+); /** in: tablespace_version should be this; if
                         you pass -1 as the value of this, then this
                         parameter is ignored */
 
@@ -299,44 +295,48 @@ cache. Note that if we have not done a crash recovery at the database startup,
 there may be many tablespaces which are not yet in the memory cache.
 @return	true if a matching tablespace exists in the memory cache */
 bool fil_space_for_table_exists_in_mem(
-    ulint id,         /** in: space id */
-    const char *name, /** in: table name in the standard
+  ulint id,         /** in: space id */
+  const char *name, /** in: table name in the standard
                       'databasename/tablename' format or
                       the dir path to a temp table */
-    bool is_temp,     /** in: true if created with CREATE
+  bool is_temp,     /** in: true if created with CREATE
                        TEMPORARY TABLE */
-    bool mark_space,  /** in: in crash recovery, at database
+  bool mark_space,  /** in: in crash recovery, at database
                        startup we mark all spaces which have
                        an associated table in the InnoDB
                        data dictionary, so that
                        we can print a warning about orphaned
                        tablespaces */
-    bool print_error_if_does_not_exist);
+  bool print_error_if_does_not_exist
+);
 
 /** Tries to extend a data file so that it would accommodate the number of pages
 given. The tablespace must be cached in the memory cache. If the space is big
 enough already, does nothing.
 @return	true if success */
 bool fil_extend_space_to_desired_size(
-    ulint *actual_size,       /** out: size of the space after extension;
+  ulint *actual_size, /** out: size of the space after extension;
                               if we ran out of disk space this may be lower
                               than the desired size */
-    ulint space_id,           /** in: space id */
-    ulint size_after_extend); /** in: desired size in pages after the
+  ulint space_id,     /** in: space id */
+  ulint size_after_extend
+); /** in: desired size in pages after the
                            extension; if the current space size is bigger
                            than this already, the function does nothing */
 
 /** Tries to reserve free extents in a file space.
 @return	true if succeed */
 bool fil_space_reserve_free_extents(
-    ulint id,            /** in: space id */
-    ulint n_free_now,    /** in: number of free extents now */
-    ulint n_to_reserve); /** in: how many one wants to reserve */
+  ulint id,         /** in: space id */
+  ulint n_free_now, /** in: number of free extents now */
+  ulint n_to_reserve
+); /** in: how many one wants to reserve */
 
 /** Releases free extents in a file space. */
 void fil_space_release_free_extents(
-    ulint id,          /** in: space id */
-    ulint n_reserved); /** in: how many one reserved */
+  ulint id, /** in: space id */
+  ulint n_reserved
+); /** in: how many one reserved */
 
 /** Gets the number of reserved extents. If the database is silent, this number
 should be zero. */
@@ -345,7 +345,8 @@ ulint fil_space_get_n_reserved_extents(ulint id); /** in: space id */
 /** Reads or writes data. This operation is asynchronous (aio).
 @return DB_SUCCESS, or DB_TABLESPACE_DELETED if we are trying to do
 i/o on a tablespace which does not exist */
-db_err fil_io(ulint type,         /** in: OS_FILE_READ or OS_FILE_WRITE,
+db_err fil_io(
+  ulint type,          /** in: OS_FILE_READ or OS_FILE_WRITE,
                                  ORed to OS_FILE_LOG, if a log i/o
                                  and ORed to OS_AIO_SIMULATED_WAKE_LATER
                                  if simulated aio and we want to post a
@@ -354,19 +355,20 @@ db_err fil_io(ulint type,         /** in: OS_FILE_READ or OS_FILE_WRITE,
                                  because i/os are not actually handled until
                                  all have been posted: use with great
                                  caution! */
-              bool sync,         /** in: true if synchronous aio is desired */
-              space_id_t space_id,/** in: space id */
-              ulint block_offset, /** in: offset in number of blocks */
-              ulint byte_offset,  /** in: remainder of offset in bytes; in
+  bool sync,           /** in: true if synchronous aio is desired */
+  space_id_t space_id, /** in: space id */
+  ulint block_offset,  /** in: offset in number of blocks */
+  ulint byte_offset,   /** in: remainder of offset in bytes; in
                                   aio this must be divisible by the OS block
                                   size */
-              ulint len,          /** in: how many bytes to read or write; this
+  ulint len,           /** in: how many bytes to read or write; this
                                   must not cross a file boundary; in aio this
                                   must be a block size multiple */
-              void *buf,          /** in/out: buffer where to store read data
+  void *buf,           /** in/out: buffer where to store read data
                                   or from where to write; in aio this must be
                                   appropriately aligned */
-              void *message);     /** in: message for aio handler if non-sync
+  void *message
+); /** in: message for aio handler if non-sync
                                   aio used, else ignored */
 
 /** Waits for an aio operation to complete. This function is used to write the
@@ -402,8 +404,10 @@ ulint fil_page_get_prev(const byte *page); /** in: file page */
 ulint fil_page_get_next(const byte *page); /** in: file page */
 
 /** Sets the file page type. */
-void fil_page_set_type(byte *page,  /** in/out: file page */
-                       ulint type); /** in: type */
+void fil_page_set_type(
+  byte *page, /** in/out: file page */
+  ulint type
+); /** in: type */
 
 /** Gets the file page type.
 @return type; NOTE that if the type has not been written to page, the
@@ -420,4 +424,3 @@ bool fil_rmdir(const char *dbname); /** in: database name */
 /** Create the underlying directory where the database .ibd files are stored.
 @return	true on success */
 bool fil_mkdir(const char *dbname); /** in: database name */
-

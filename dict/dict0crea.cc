@@ -46,9 +46,10 @@ Created 1/8/1996 Heikki Tuuri
 /** Based on a table object, this function builds the entry to be inserted
 in the SYS_TABLES system table.
 @return	the tuple which should be inserted */
-static dtuple_t *
-dict_create_sys_tables_tuple(const dict_table_t *table, /*!< in: table */
-                             mem_heap_t *heap) /*!< in: memory heap from
+static dtuple_t *dict_create_sys_tables_tuple(
+  const dict_table_t *table, /*!< in: table */
+  mem_heap_t *heap
+) /*!< in: memory heap from
                                                which the memory for the built
                                                tuple is allocated */
 {
@@ -133,10 +134,11 @@ dict_create_sys_tables_tuple(const dict_table_t *table, /*!< in: table */
 /** Based on a table object, this function builds the entry to be inserted
 in the SYS_COLUMNS system table.
 @return	the tuple which should be inserted */
-static dtuple_t *
-dict_create_sys_columns_tuple(const dict_table_t *table, /*!< in: table */
-                              ulint i,          /*!< in: column number */
-                              mem_heap_t *heap) /*!< in: memory heap from
+static dtuple_t *dict_create_sys_columns_tuple(
+  const dict_table_t *table, /*!< in: table */
+  ulint i,                   /*!< in: column number */
+  mem_heap_t *heap
+) /*!< in: memory heap from
                                                 which the memory for the built
                                                 tuple is allocated */
 {
@@ -212,9 +214,10 @@ dict_create_sys_columns_tuple(const dict_table_t *table, /*!< in: table */
 
 /** Builds a table definition to insert.
 @return	DB_SUCCESS or error code */
-static db_err
-dict_build_table_def_step(que_thr_t *thr,   /*!< in: query thread */
-                          tab_node_t *node) /*!< in: table create node */
+static db_err dict_build_table_def_step(
+  que_thr_t *thr, /*!< in: query thread */
+  tab_node_t *node
+) /*!< in: table create node */
 {
   dict_table_t *table;
   dtuple_t *row;
@@ -258,8 +261,8 @@ dict_build_table_def_step(que_thr_t *thr,   /*!< in: query thread */
 
     flags = table->flags & ~(~0UL << DICT_TF_BITS);
     err = fil_create_new_single_table_tablespace(
-        &space, path_or_name, is_path, flags == DICT_TF_COMPACT ? 0 : flags,
-        FIL_IBD_FILE_INITIAL_SIZE);
+      &space, path_or_name, is_path, flags == DICT_TF_COMPACT ? 0 : flags, FIL_IBD_FILE_INITIAL_SIZE
+    );
     table->space = (unsigned int)space;
 
     if (err != DB_SUCCESS) {
@@ -286,8 +289,7 @@ dict_build_table_def_step(que_thr_t *thr,   /*!< in: query thread */
 
 /** Builds a column definition to insert.
 @return	DB_SUCCESS */
-static ulint
-dict_build_col_def_step(tab_node_t *node) /*!< in: table create node */
+static ulint dict_build_col_def_step(tab_node_t *node) /*!< in: table create node */
 {
   dtuple_t *row;
 
@@ -300,9 +302,10 @@ dict_build_col_def_step(tab_node_t *node) /*!< in: table create node */
 /** Based on an index object, this function builds the entry to be inserted
 in the SYS_INDEXES system table.
 @return	the tuple which should be inserted */
-static dtuple_t *
-dict_create_sys_indexes_tuple(const dict_index_t *index, /*!< in: index */
-                              mem_heap_t *heap) /*!< in: memory heap from
+static dtuple_t *dict_create_sys_indexes_tuple(
+  const dict_index_t *index, /*!< in: index */
+  mem_heap_t *heap
+) /*!< in: memory heap from
                                                 which the memory for the built
                                                 tuple is allocated */
 {
@@ -384,10 +387,11 @@ dict_create_sys_indexes_tuple(const dict_index_t *index, /*!< in: index */
 /** Based on an index object, this function builds the entry to be inserted
 in the SYS_FIELDS system table.
 @return	the tuple which should be inserted */
-static dtuple_t *
-dict_create_sys_fields_tuple(const dict_index_t *index, /*!< in: index */
-                             ulint i,                   /*!< in: field number */
-                             mem_heap_t *heap) /*!< in: memory heap from
+static dtuple_t *dict_create_sys_fields_tuple(
+  const dict_index_t *index, /*!< in: index */
+  ulint i,                   /*!< in: field number */
+  mem_heap_t *heap
+) /*!< in: memory heap from
                                                which the memory for the built
                                                tuple is allocated */
 {
@@ -458,9 +462,10 @@ dict_create_sys_fields_tuple(const dict_index_t *index, /*!< in: index */
 index tree root page number, if such a tree is created.
 @return	the tuple for search */
 static dtuple_t *dict_create_search_tuple(
-    const dtuple_t *tuple, /*!< in: the tuple inserted in the SYS_INDEXES
+  const dtuple_t *tuple, /*!< in: the tuple inserted in the SYS_INDEXES
                            table */
-    mem_heap_t *heap)      /*!< in: memory heap from which the memory for
+  mem_heap_t *heap
+) /*!< in: memory heap from which the memory for
                            the built tuple is allocated */
 {
   dtuple_t *search_tuple;
@@ -488,9 +493,10 @@ static dtuple_t *dict_create_search_tuple(
 
 /** Builds an index definition row to insert.
 @return	DB_SUCCESS or error code */
-static ulint
-dict_build_index_def_step(que_thr_t *thr,   /*!< in: query thread */
-                          ind_node_t *node) /*!< in: index create node */
+static ulint dict_build_index_def_step(
+  que_thr_t *thr, /*!< in: query thread */
+  ind_node_t *node
+) /*!< in: index create node */
 {
   dict_table_t *table;
   dict_index_t *index;
@@ -535,8 +541,7 @@ dict_build_index_def_step(que_thr_t *thr,   /*!< in: query thread */
 
 /** Builds a field definition row to insert.
 @return	DB_SUCCESS */
-static ulint
-dict_build_field_def_step(ind_node_t *node) /*!< in: index create node */
+static ulint dict_build_field_def_step(ind_node_t *node) /*!< in: index create node */
 {
   dict_index_t *index;
   dtuple_t *row;
@@ -552,8 +557,7 @@ dict_build_field_def_step(ind_node_t *node) /*!< in: index create node */
 
 /** Creates an index tree for the index if it is not a member of a cluster.
 @return	DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
-static ulint
-dict_create_index_tree_step(ind_node_t *node) /*!< in: index create node */
+static ulint dict_create_index_tree_step(ind_node_t *node) /*!< in: index create node */
 {
   dict_index_t *index;
   dict_table_t *sys_indexes;
@@ -575,20 +579,16 @@ dict_create_index_tree_step(ind_node_t *node) /*!< in: index create node */
 
   search_tuple = dict_create_search_tuple(node->ind_row, node->heap);
 
-  btr_pcur_open(UT_LIST_GET_FIRST(sys_indexes->indexes), search_tuple,
-                PAGE_CUR_L, BTR_MODIFY_LEAF, &pcur, &mtr);
+  btr_pcur_open(UT_LIST_GET_FIRST(sys_indexes->indexes), search_tuple, PAGE_CUR_L, BTR_MODIFY_LEAF, &pcur, &mtr);
 
   btr_pcur_move_to_next_user_rec(&pcur, &mtr);
 
-  node->page_no =
-      btr_create(index->type, index->space, index->id, index, &mtr);
+  node->page_no = btr_create(index->type, index->space, index->id, index, &mtr);
 
   /* printf("Created a new index tree in space %lu root page %lu\n",
   index->space, index->page_no); */
 
-  page_rec_write_index_page_no(btr_pcur_get_rec(&pcur),
-                               DICT_SYS_INDEXES_PAGE_NO_FIELD, node->page_no,
-                               &mtr);
+  page_rec_write_index_page_no(btr_pcur_get_rec(&pcur), DICT_SYS_INDEXES_PAGE_NO_FIELD, node->page_no, &mtr);
   btr_pcur_close(&pcur);
   mtr_commit(&mtr);
 
@@ -644,12 +644,10 @@ void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
 
   btr_free_root(space, root_page_no, mtr);
 
-  page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL,
-                               mtr);
+  page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
 }
 
-ulint dict_truncate_index_tree(dict_table_t *table, ulint space,
-                               btr_pcur_t *pcur, mtr_t *mtr) {
+ulint dict_truncate_index_tree(dict_table_t *table, ulint space, btr_pcur_t *pcur, mtr_t *mtr) {
   ulint root_page_no;
   bool drop = !space;
   ulint type;
@@ -672,10 +670,12 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space,
     /* The tree has been freed. */
 
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  Trying to TRUNCATE"
-              " a missing index of table %s!\n",
-              table->name);
+    ib_logger(
+      ib_stream,
+      "  Trying to TRUNCATE"
+      " a missing index of table %s!\n",
+      table->name
+    );
     drop = false;
   }
 
@@ -692,10 +692,12 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space,
     missing: do nothing */
 
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  Trying to TRUNCATE"
-              " a missing .ibd file of table %s!\n",
-              table->name);
+    ib_logger(
+      ib_stream,
+      "  Trying to TRUNCATE"
+      " a missing .ibd file of table %s!\n",
+      table->name
+    );
 
     return FIL_NULL;
   }
@@ -732,8 +734,7 @@ create:
   in SYS_INDEXES, so that the database will not get into an
   inconsistent state in case it crashes between the mtr_commit()
   below and the following mtr_commit() call. */
-  page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL,
-                               mtr);
+  page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
 
   /* We will need to commit the mini-transaction in order to avoid
   deadlocks in the btr_create() call, because otherwise we would
@@ -745,8 +746,7 @@ create:
   btr_pcur_restore_position(BTR_MODIFY_LEAF, pcur, mtr);
 
   /* Find the index corresponding to this SYS_INDEXES record. */
-  for (index = UT_LIST_GET_FIRST(table->indexes); index;
-       index = UT_LIST_GET_NEXT(indexes, index)) {
+  for (index = UT_LIST_GET_FIRST(table->indexes); index; index = UT_LIST_GET_NEXT(indexes, index)) {
     if (index->id == index_id) {
       root_page_no = btr_create(type, space, index_id, index, mtr);
       index->page = (unsigned int)root_page_no;
@@ -755,11 +755,14 @@ create:
   }
 
   ut_print_timestamp(ib_stream);
-  ib_logger(ib_stream,
-            "  Index %lu %lu of table %s is missing\n"
-            "from the data dictionary during TRUNCATE!\n",
-            index_id, index_id,
-            table->name);
+  ib_logger(
+    ib_stream,
+    "  Index %lu %lu of table %s is missing\n"
+    "from the data dictionary during TRUNCATE!\n",
+    index_id,
+    index_id,
+    table->name
+  );
 
   return FIL_NULL;
 }
@@ -767,11 +770,12 @@ create:
 /** Creates a table create graph.
 @return	own: table create node */
 
-tab_node_t *
-tab_create_graph_create(dict_table_t *table, /*!< in: table to create, built as
+tab_node_t *tab_create_graph_create(
+  dict_table_t *table, /*!< in: table to create, built as
                                              a memory data structure */
-                        mem_heap_t *heap,    /*!< in: heap where created */
-                        bool commit) /*!< in: if true commit transaction */
+  mem_heap_t *heap,    /*!< in: heap where created */
+  bool commit
+) /*!< in: if true commit transaction */
 {
   tab_node_t *node;
 
@@ -804,10 +808,11 @@ tab_create_graph_create(dict_table_t *table, /*!< in: table to create, built as
 @return	own: index create node */
 
 ind_node_t *ind_create_graph_create(
-    dict_index_t *index, /*!< in: index to create, built as a memory data
+  dict_index_t *index, /*!< in: index to create, built as a memory data
                          structure */
-    mem_heap_t *heap,    /*!< in: heap where created */
-    bool commit)         /*!< in: true if transaction should be commit */
+  mem_heap_t *heap,    /*!< in: heap where created */
+  bool commit
+) /*!< in: true if transaction should be commit */
 {
   ind_node_t *node;
 
@@ -1004,8 +1009,7 @@ que_thr_t *dict_create_index_step(que_thr_t *thr) /*!< in: query thread */
 
     uint64_t index_id = node->index->id;
 
-    err = (db_err)dict_index_add_to_cache(node->table, node->index, FIL_NULL,
-                                          true);
+    err = (db_err)dict_index_add_to_cache(node->table, node->index, FIL_NULL, true);
 
     node->index = dict_index_get_if_in_cache_low(index_id);
     ut_a(!node->index == (err != DB_SUCCESS));
@@ -1078,8 +1082,7 @@ db_err dict_create_or_check_foreign_constraint_tables() {
   table1 = dict_table_get_low("SYS_FOREIGN");
   table2 = dict_table_get_low("SYS_FOREIGN_COLS");
 
-  if (table1 && table2 && UT_LIST_GET_LEN(table1->indexes) == 3 &&
-      UT_LIST_GET_LEN(table2->indexes) == 1) {
+  if (table1 && table2 && UT_LIST_GET_LEN(table1->indexes) == 3 && UT_LIST_GET_LEN(table2->indexes) == 1) {
 
     /* Foreign constraint system tables have already been
     created, and they are ok */
@@ -1108,23 +1111,28 @@ db_err dict_create_or_check_foreign_constraint_tables() {
   dict_lock_data_dictionary(trx);
 
   if (table1) {
-    ib_logger(ib_stream, "dropping incompletely created"
-                         " SYS_FOREIGN table\n");
+    ib_logger(
+      ib_stream,
+      "dropping incompletely created"
+      " SYS_FOREIGN table\n"
+    );
     ddl_drop_table("SYS_FOREIGN", trx, true);
     trx_commit(trx);
   }
 
   if (table2) {
-    ib_logger(ib_stream, "dropping incompletely created"
-                         " SYS_FOREIGN_COLS table\n");
+    ib_logger(
+      ib_stream,
+      "dropping incompletely created"
+      " SYS_FOREIGN_COLS table\n"
+    );
     ddl_drop_table("SYS_FOREIGN_COLS", trx, true);
     trx_commit(trx);
   }
 
   trx_start_if_not_started(trx);
 
-  ib_logger(ib_stream,
-            "Creating foreign key constraint system tables\n");
+  ib_logger(ib_stream, "Creating foreign key constraint system tables\n");
 
   /* NOTE: in dict_load_foreigns we use the fact that
   there are 2 secondary indexes on SYS_FOREIGN, and they
@@ -1136,35 +1144,41 @@ db_err dict_create_or_check_foreign_constraint_tables() {
   VARBINARY, like in other InnoDB system tables, to get a clean
   design. */
 
-  err = que_eval_sql(nullptr,
-                     "PROCEDURE CREATE_FOREIGN_SYS_TABLES_PROC () IS\n"
-                     "BEGIN\n"
-                     "CREATE TABLE\n"
-                     "SYS_FOREIGN(ID CHAR, FOR_NAME CHAR,"
-                     " REF_NAME CHAR, N_COLS INT);\n"
-                     "CREATE UNIQUE CLUSTERED INDEX ID_IND"
-                     " ON SYS_FOREIGN (ID);\n"
-                     "CREATE INDEX FOR_IND"
-                     " ON SYS_FOREIGN (FOR_NAME);\n"
-                     "CREATE INDEX REF_IND"
-                     " ON SYS_FOREIGN (REF_NAME);\n"
-                     "CREATE TABLE\n"
-                     "SYS_FOREIGN_COLS(ID CHAR, POS INT,"
-                     " FOR_COL_NAME CHAR, REF_COL_NAME CHAR);\n"
-                     "CREATE UNIQUE CLUSTERED INDEX ID_IND"
-                     " ON SYS_FOREIGN_COLS (ID, POS);\n"
-                     "END;\n",
-                     false, trx);
+  err = que_eval_sql(
+    nullptr,
+    "PROCEDURE CREATE_FOREIGN_SYS_TABLES_PROC () IS\n"
+    "BEGIN\n"
+    "CREATE TABLE\n"
+    "SYS_FOREIGN(ID CHAR, FOR_NAME CHAR,"
+    " REF_NAME CHAR, N_COLS INT);\n"
+    "CREATE UNIQUE CLUSTERED INDEX ID_IND"
+    " ON SYS_FOREIGN (ID);\n"
+    "CREATE INDEX FOR_IND"
+    " ON SYS_FOREIGN (FOR_NAME);\n"
+    "CREATE INDEX REF_IND"
+    " ON SYS_FOREIGN (REF_NAME);\n"
+    "CREATE TABLE\n"
+    "SYS_FOREIGN_COLS(ID CHAR, POS INT,"
+    " FOR_COL_NAME CHAR, REF_COL_NAME CHAR);\n"
+    "CREATE UNIQUE CLUSTERED INDEX ID_IND"
+    " ON SYS_FOREIGN_COLS (ID, POS);\n"
+    "END;\n",
+    false,
+    trx
+  );
 
   if (err != DB_SUCCESS) {
     ib_logger(ib_stream, "error %lu in creation\n", (ulong)err);
 
     ut_a(err == DB_OUT_OF_FILE_SPACE || err == DB_TOO_MANY_CONCURRENT_TRXS);
 
-    ib_logger(ib_stream, "creation failed\n"
-                         "tablespace is full\n"
-                         "dropping incompletely created"
-                         " SYS_FOREIGN tables\n");
+    ib_logger(
+      ib_stream,
+      "creation failed\n"
+      "tablespace is full\n"
+      "dropping incompletely created"
+      " SYS_FOREIGN tables\n"
+    );
 
     ddl_drop_table("SYS_FOREIGN", trx, true);
     ddl_drop_table("SYS_FOREIGN_COLS", trx, true);
@@ -1181,8 +1195,11 @@ db_err dict_create_or_check_foreign_constraint_tables() {
   trx_free_for_client(trx);
 
   if (err == DB_SUCCESS) {
-    ib_logger(ib_stream, "Foreign key constraint system tables"
-                         " created\n");
+    ib_logger(
+      ib_stream,
+      "Foreign key constraint system tables"
+      " created\n"
+    );
   }
 
   return err;
@@ -1190,12 +1207,13 @@ db_err dict_create_or_check_foreign_constraint_tables() {
 
 /** Evaluate the given foreign key SQL statement.
 @return	error code or DB_SUCCESS */
-static db_err
-dict_foreign_eval_sql(pars_info_t *info,   /*!< in: info struct, or nullptr */
-                      const char *sql,     /*!< in: SQL string to evaluate */
-                      dict_table_t *table, /*!< in: table */
-                      dict_foreign_t *foreign, /*!< in: foreign */
-                      trx_t *trx)              /*!< in: transaction */
+static db_err dict_foreign_eval_sql(
+  pars_info_t *info,       /*!< in: info struct, or nullptr */
+  const char *sql,         /*!< in: SQL string to evaluate */
+  dict_table_t *table,     /*!< in: table */
+  dict_foreign_t *foreign, /*!< in: foreign */
+  trx_t *trx
+) /*!< in: transaction */
 {
   trx_start_if_not_started(trx);
 
@@ -1204,22 +1222,23 @@ dict_foreign_eval_sql(pars_info_t *info,   /*!< in: info struct, or nullptr */
   if (err == DB_DUPLICATE_KEY) {
     mutex_enter(&dict_foreign_err_mutex);
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              " Error in foreign key constraint creation for table ");
+    ib_logger(ib_stream, " Error in foreign key constraint creation for table ");
     ut_print_name(ib_stream, trx, true, table->name);
     ib_logger(ib_stream, ".\nA foreign key constraint of name ");
     ut_print_name(ib_stream, trx, true, foreign->id);
-    ib_logger(ib_stream,
-              "\nalready exists."
-              " (Note that internally InnoDB adds 'databasename'\n"
-              "in front of the user-defined constraint name.)\n"
-              "Note that InnoDB's FOREIGN KEY system tables store\n"
-              "constraint names as case-insensitive, with the\n"
-              "standard latin1_swedish_ci collation. If you\n"
-              "create tables or databases whose names differ only in\n"
-              "the character case, then collisions in constraint\n"
-              "names can occur. Workaround: name your constraints\n"
-              "explicitly with unique names.\n");
+    ib_logger(
+      ib_stream,
+      "\nalready exists."
+      " (Note that internally InnoDB adds 'databasename'\n"
+      "in front of the user-defined constraint name.)\n"
+      "Note that InnoDB's FOREIGN KEY system tables store\n"
+      "constraint names as case-insensitive, with the\n"
+      "standard latin1_swedish_ci collation. If you\n"
+      "create tables or databases whose names differ only in\n"
+      "the character case, then collisions in constraint\n"
+      "names can occur. Workaround: name your constraints\n"
+      "explicitly with unique names.\n"
+    );
 
     mutex_exit(&dict_foreign_err_mutex);
 
@@ -1227,19 +1246,27 @@ dict_foreign_eval_sql(pars_info_t *info,   /*!< in: info struct, or nullptr */
   }
 
   if (err != DB_SUCCESS) {
-    ib_logger(ib_stream,
-              "Foreign key constraint creation failed:\n"
-              "internal error number %lu\n",
-              (ulong)err);
+    ib_logger(
+      ib_stream,
+      "Foreign key constraint creation failed:\n"
+      "internal error number %lu\n",
+      (ulong)err
+    );
 
     mutex_enter(&dict_foreign_err_mutex);
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, " Internal error in foreign key constraint creation"
-                         " for table ");
+    ib_logger(
+      ib_stream,
+      " Internal error in foreign key constraint creation"
+      " for table "
+    );
     ut_print_name(ib_stream, trx, true, table->name);
-    ib_logger(ib_stream, ".\n"
-                         "See the .err log in the datadir for more "
-                         "information.\n");
+    ib_logger(
+      ib_stream,
+      ".\n"
+      "See the .err log in the datadir for more "
+      "information.\n"
+    );
     mutex_exit(&dict_foreign_err_mutex);
 
     return err;
@@ -1252,10 +1279,11 @@ dict_foreign_eval_sql(pars_info_t *info,   /*!< in: info struct, or nullptr */
 the database.
 @return	error code or DB_SUCCESS */
 static db_err dict_create_add_foreign_field_to_dictionary(
-    ulint field_nr,          /*!< in: foreign field number */
-    dict_table_t *table,     /*!< in: table */
-    dict_foreign_t *foreign, /*!< in: foreign */
-    trx_t *trx)              /*!< in: transaction */
+  ulint field_nr,          /*!< in: foreign field number */
+  dict_table_t *table,     /*!< in: table */
+  dict_foreign_t *foreign, /*!< in: foreign */
+  trx_t *trx
+) /*!< in: transaction */
 {
   pars_info_t *info = pars_info_create();
 
@@ -1263,19 +1291,21 @@ static db_err dict_create_add_foreign_field_to_dictionary(
 
   pars_info_add_int4_literal(info, "pos", field_nr);
 
-  pars_info_add_str_literal(info, "for_col_name",
-                            foreign->foreign_col_names[field_nr]);
+  pars_info_add_str_literal(info, "for_col_name", foreign->foreign_col_names[field_nr]);
 
-  pars_info_add_str_literal(info, "ref_col_name",
-                            foreign->referenced_col_names[field_nr]);
+  pars_info_add_str_literal(info, "ref_col_name", foreign->referenced_col_names[field_nr]);
 
-  return dict_foreign_eval_sql(info,
-                               "PROCEDURE P () IS\n"
-                               "BEGIN\n"
-                               "INSERT INTO SYS_FOREIGN_COLS VALUES"
-                               "(:id, :pos, :for_col_name, :ref_col_name);\n"
-                               "END;\n",
-                               table, foreign, trx);
+  return dict_foreign_eval_sql(
+    info,
+    "PROCEDURE P () IS\n"
+    "BEGIN\n"
+    "INSERT INTO SYS_FOREIGN_COLS VALUES"
+    "(:id, :pos, :for_col_name, :ref_col_name);\n"
+    "END;\n",
+    table,
+    foreign,
+    trx
+  );
 }
 
 /** Add a single foreign key definition to the data dictionary tables in the
@@ -1286,11 +1316,12 @@ are given locally for this table, that is, the number is not global, as in
 the old format constraints < 4.0.18 it used to be.
 @return	error code or DB_SUCCESS */
 static db_err dict_create_add_foreign_to_dictionary(
-    ulint *id_nr,            /*!< in/out: number to use in id generation;
+  ulint *id_nr,            /*!< in/out: number to use in id generation;
                              incremented if used */
-    dict_table_t *table,     /*!< in: table */
-    dict_foreign_t *foreign, /*!< in: foreign */
-    trx_t *trx)              /*!< in: transaction */
+  dict_table_t *table,     /*!< in: table */
+  dict_foreign_t *foreign, /*!< in: foreign */
+  trx_t *trx
+) /*!< in: transaction */
 {
   ulint i;
 
@@ -1311,16 +1342,19 @@ static db_err dict_create_add_foreign_to_dictionary(
 
   pars_info_add_str_literal(info, "ref_name", foreign->referenced_table_name);
 
-  pars_info_add_int4_literal(info, "n_cols",
-                             foreign->n_fields + (foreign->type << 24));
+  pars_info_add_int4_literal(info, "n_cols", foreign->n_fields + (foreign->type << 24));
 
-  auto err = dict_foreign_eval_sql(info,
-                                   "PROCEDURE P () IS\n"
-                                   "BEGIN\n"
-                                   "INSERT INTO SYS_FOREIGN VALUES"
-                                   "(:id, :for_name, :ref_name, :n_cols);\n"
-                                   "END;\n",
-                                   table, foreign, trx);
+  auto err = dict_foreign_eval_sql(
+    info,
+    "PROCEDURE P () IS\n"
+    "BEGIN\n"
+    "INSERT INTO SYS_FOREIGN VALUES"
+    "(:id, :for_name, :ref_name, :n_cols);\n"
+    "END;\n",
+    table,
+    foreign,
+    trx
+  );
 
   if (err != DB_SUCCESS) {
 
@@ -1336,36 +1370,35 @@ static db_err dict_create_add_foreign_to_dictionary(
     }
   }
 
-  err = dict_foreign_eval_sql(nullptr,
-                              "PROCEDURE P () IS\n"
-                              "BEGIN\n"
-                              "COMMIT WORK;\n"
-                              "END;\n",
-                              table, foreign, trx);
+  err = dict_foreign_eval_sql(
+    nullptr,
+    "PROCEDURE P () IS\n"
+    "BEGIN\n"
+    "COMMIT WORK;\n"
+    "END;\n",
+    table,
+    foreign,
+    trx
+  );
 
   return err;
 }
 
-db_err dict_create_add_foreigns_to_dictionary(ulint start_id,
-                                              dict_table_t *table, trx_t *trx) {
+db_err dict_create_add_foreigns_to_dictionary(ulint start_id, dict_table_t *table, trx_t *trx) {
   dict_foreign_t *foreign;
   ulint number = start_id + 1;
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
   if (nullptr == dict_table_get_low("SYS_FOREIGN")) {
-    ib_logger(
-        ib_stream,
-        "table SYS_FOREIGN not found in internal data dictionary\n");
+    ib_logger(ib_stream, "table SYS_FOREIGN not found in internal data dictionary\n");
 
     return DB_ERROR;
   }
 
-  for (foreign = UT_LIST_GET_FIRST(table->foreign_list); foreign;
-       foreign = UT_LIST_GET_NEXT(foreign_list, foreign)) {
+  for (foreign = UT_LIST_GET_FIRST(table->foreign_list); foreign; foreign = UT_LIST_GET_NEXT(foreign_list, foreign)) {
 
-    auto err =
-        dict_create_add_foreign_to_dictionary(&number, table, foreign, trx);
+    auto err = dict_create_add_foreign_to_dictionary(&number, table, foreign, trx);
 
     if (err != DB_SUCCESS) {
 

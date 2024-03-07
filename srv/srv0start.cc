@@ -164,9 +164,10 @@ constexpr ulint SRV_MAX_N_PENDING_SYNC_IOS = 100;
 /** Convert a numeric string that optionally ends in G or M, to a number
 containing megabytes.
 @return	next character in string */
-static char *
-srv_parse_megabytes(char *str, /*!< in: string containing a quantity in bytes */
-                    ulint *megs) /*!< out: the number in megabytes */
+static char *srv_parse_megabytes(
+  char *str, /*!< in: string containing a quantity in bytes */
+  ulint *megs
+) /*!< out: the number in megabytes */
 {
   char *endp;
   ulint size;
@@ -176,17 +177,17 @@ srv_parse_megabytes(char *str, /*!< in: string containing a quantity in bytes */
   str = endp;
 
   switch (*str) {
-  case 'G':
-  case 'g':
-    size *= 1024;
-    /* fall through */
-  case 'M':
-  case 'm':
-    str++;
-    break;
-  default:
-    size /= 1024 * 1024;
-    break;
+    case 'G':
+    case 'g':
+      size *= 1024;
+      /* fall through */
+    case 'M':
+    case 'm':
+      str++;
+      break;
+    default:
+      size /= 1024 * 1024;
+      break;
   }
 
   *megs = size;
@@ -253,9 +254,7 @@ bool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
   while (*str != '\0') {
     path = str;
 
-    while ((*str != ':' && *str != '\0') ||
-           (*str == ':' &&
-            (*(str + 1) == '\\' || *(str + 1) == '/' || *(str + 1) == ':'))) {
+    while ((*str != ':' && *str != '\0') || (*str == ':' && (*(str + 1) == '\\' || *(str + 1) == '/' || *(str + 1) == ':'))) {
       str++;
     }
 
@@ -284,8 +283,7 @@ bool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
       }
     }
 
-    if (strlen(str) >= 6 && *str == 'n' && *(str + 1) == 'e' &&
-        *(str + 2) == 'w') {
+    if (strlen(str) >= 6 && *str == 'n' && *(str + 1) == 'e' && *(str + 2) == 'w') {
       str += 3;
     }
 
@@ -315,15 +313,13 @@ bool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
   }
 
   ut_a(srv_data_file_names == nullptr);
-  srv_data_file_names =
-      static_cast<char **>(malloc(i * sizeof(*srv_data_file_names)));
+  srv_data_file_names = static_cast<char **>(malloc(i * sizeof(*srv_data_file_names)));
 
   ut_a(srv_data_file_sizes == nullptr);
   srv_data_file_sizes = static_cast<ulint *>(malloc(i * sizeof(ulint)));
 
   ut_a(srv_data_file_is_raw_partition == nullptr);
-  srv_data_file_is_raw_partition =
-      static_cast<ulint *>(malloc(i * sizeof(ulint)));
+  srv_data_file_is_raw_partition = static_cast<ulint *>(malloc(i * sizeof(ulint)));
 
   srv_n_data_files = i;
 
@@ -340,9 +336,7 @@ bool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
     a Windows raw partition may have a specification like
     \\.\C::1Gnewraw or \\.\PHYSICALDRIVE2:1Gnewraw */
 
-    while ((*str != ':' && *str != '\0') ||
-           (*str == ':' &&
-            (*(str + 1) == '\\' || *(str + 1) == '/' || *(str + 1) == ':'))) {
+    while ((*str != ':' && *str != '\0') || (*str == ':' && (*(str + 1) == '\\' || *(str + 1) == '/' || *(str + 1) == ':'))) {
       str++;
     }
 
@@ -378,8 +372,7 @@ bool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
 
     (srv_data_file_is_raw_partition)[i] = 0;
 
-    if (strlen(str) >= 6 && *str == 'n' && *(str + 1) == 'e' &&
-        *(str + 2) == 'w') {
+    if (strlen(str) >= 6 && *str == 'n' && *(str + 1) == 'e' && *(str + 2) == 'w') {
       str += 3;
       (srv_data_file_is_raw_partition)[i] = SRV_NEW_RAW;
     }
@@ -405,8 +398,7 @@ bool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
 /** Reads log group home directories from a character string.
 @return	true if ok, false on parse error */
 
-bool srv_parse_log_group_home_dirs(
-    const char *usr_str) /*!< in: character string */
+bool srv_parse_log_group_home_dirs(const char *usr_str) /*!< in: character string */
 {
   ulint i;
   char *str;
@@ -545,8 +537,7 @@ void *io_handler_thread(void *arg) {
   auto segment = *((ulint *)arg);
 
 #ifdef UNIV_DEBUG_THREAD_CREATION
-  ib_logger(ib_stream, "Io handler thread %lu starts, id %lu\n", segment,
-            os_thread_pf(os_thread_get_curr_id()));
+  ib_logger(ib_stream, "Io handler thread %lu starts, id %lu\n", segment, os_thread_pf(os_thread_get_curr_id()));
 #endif
 
   for (;;) {
@@ -572,8 +563,7 @@ void *io_handler_thread(void *arg) {
 /** Calculates the low 32 bits when a file size which is given as a number
 database pages is converted to the number of bytes.
 @return	low 32 bytes of file size when expressed in bytes */
-static ulint
-srv_calc_low32(ulint file_size) /*!< in: file size in database pages */
+static ulint srv_calc_low32(ulint file_size) /*!< in: file size in database pages */
 {
   return 0xFFFFFFFFUL & (file_size << UNIV_PAGE_SIZE_SHIFT);
 }
@@ -581,8 +571,7 @@ srv_calc_low32(ulint file_size) /*!< in: file size in database pages */
 /** Calculates the high 32 bits when a file size which is given as a number
 database pages is converted to the number of bytes.
 @return	high 32 bytes of file size when expressed in bytes */
-static ulint
-srv_calc_high32(ulint file_size) /*!< in: file size in database pages */
+static ulint srv_calc_high32(ulint file_size) /*!< in: file size in database pages */
 {
   return file_size >> (32 - UNIV_PAGE_SIZE_SHIFT);
 }
@@ -590,15 +579,16 @@ srv_calc_high32(ulint file_size) /*!< in: file size in database pages */
 /** Creates or opens the log files and closes them.
 @return	DB_SUCCESS or error code */
 static db_err open_or_create_log_file(
-    bool create_new_db,            /*!< in: true if we should create a
+  bool create_new_db,            /*!< in: true if we should create a
                                     new database */
-    bool *log_file_created,        /*!< out: true if new log file
+  bool *log_file_created,        /*!< out: true if new log file
                                     created */
-    bool log_file_has_been_opened, /*!< in: true if a log file has been
+  bool log_file_has_been_opened, /*!< in: true if a log file has been
                                    opened before: then it is an error
                                    to try to create another log file */
-    ulint k,                       /*!< in: log group number */
-    ulint i)                       /*!< in: log file number in group */
+  ulint k,                       /*!< in: log group number */
+  ulint i
+) /*!< in: log file number in group */
 {
   bool ret;
   ulint size;
@@ -609,27 +599,25 @@ static db_err open_or_create_log_file(
 
   *log_file_created = false;
 
-  ut_a(strlen(srv_log_group_home_dirs[k]) <
-       (sizeof name) - 10 - sizeof "ib_logfile");
+  ut_a(strlen(srv_log_group_home_dirs[k]) < (sizeof name) - 10 - sizeof "ib_logfile");
 
-  ut_snprintf(name, sizeof(name), "%s%s%lu", srv_log_group_home_dirs[k],
-              "ib_logfile", (ulong)i);
+  ut_snprintf(name, sizeof(name), "%s%s%lu", srv_log_group_home_dirs[k], "ib_logfile", (ulong)i);
 
-  files[i] =
-      os_file_create(name, OS_FILE_CREATE, OS_FILE_NORMAL, OS_LOG_FILE, &ret);
+  files[i] = os_file_create(name, OS_FILE_CREATE, OS_FILE_NORMAL, OS_LOG_FILE, &ret);
 
   if (ret == false) {
     if (os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
-      ib_logger(ib_stream,
-                "Error in creating"
-                " or opening %s\n",
-                name);
+      ib_logger(
+        ib_stream,
+        "Error in creating"
+        " or opening %s\n",
+        name
+      );
 
       return DB_ERROR;
     }
 
-    files[i] =
-        os_file_create(name, OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, &ret);
+    files[i] = os_file_create(name, OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, &ret);
 
     if (!ret) {
       ib_logger(ib_stream, "Error in opening %s\n", name);
@@ -640,16 +628,19 @@ static db_err open_or_create_log_file(
     ret = os_file_get_size(files[i], &size, &size_high);
     ut_a(ret);
 
-    if (size != srv_calc_low32(srv_log_file_size) ||
-        size_high != srv_calc_high32(srv_log_file_size)) {
+    if (size != srv_calc_low32(srv_log_file_size) || size_high != srv_calc_high32(srv_log_file_size)) {
 
-      ib_logger(ib_stream,
-                "Error: log file %s is"
-                " of different size %lu %lu bytes\n"
-                "than the configured %lu %lu bytes!\n",
-                name, (ulong)size_high, (ulong)size,
-                (ulong)srv_calc_high32(srv_log_file_size),
-                (ulong)srv_calc_low32(srv_log_file_size));
+      ib_logger(
+        ib_stream,
+        "Error: log file %s is"
+        " of different size %lu %lu bytes\n"
+        "than the configured %lu %lu bytes!\n",
+        name,
+        (ulong)size_high,
+        (ulong)size,
+        (ulong)srv_calc_high32(srv_log_file_size),
+        (ulong)srv_calc_low32(srv_log_file_size)
+      );
 
       return DB_ERROR;
     }
@@ -658,28 +649,33 @@ static db_err open_or_create_log_file(
 
     ut_print_timestamp(ib_stream);
 
-    ib_logger(ib_stream,
-              "  Log file %s did not exist:"
-              " new to be created\n",
-              name);
+    ib_logger(
+      ib_stream,
+      "  Log file %s did not exist:"
+      " new to be created\n",
+      name
+    );
     if (log_file_has_been_opened) {
 
       return DB_ERROR;
     }
 
-    ib_logger(ib_stream, "Setting log file %s size to %lu MB\n", name,
-              (ulong)srv_log_file_size >> (20 - UNIV_PAGE_SIZE_SHIFT));
+    ib_logger(ib_stream, "Setting log file %s size to %lu MB\n", name, (ulong)srv_log_file_size >> (20 - UNIV_PAGE_SIZE_SHIFT));
 
-    ib_logger(ib_stream, "Database physically writes the file"
-                         " full: wait...\n");
+    ib_logger(
+      ib_stream,
+      "Database physically writes the file"
+      " full: wait...\n"
+    );
 
-    ret = os_file_set_size(name, files[i], srv_calc_low32(srv_log_file_size),
-                           srv_calc_high32(srv_log_file_size));
+    ret = os_file_set_size(name, files[i], srv_calc_low32(srv_log_file_size), srv_calc_high32(srv_log_file_size));
     if (!ret) {
-      ib_logger(ib_stream,
-                "Error in creating %s:"
-                " probably out of disk space\n",
-                name);
+      ib_logger(
+        ib_stream,
+        "Error in creating %s:"
+        " probably out of disk space\n",
+        name
+      );
 
       return DB_ERROR;
     }
@@ -699,9 +695,7 @@ static db_err open_or_create_log_file(
   fil_node_create(name, srv_log_file_size, 2 * k + SRV_LOG_SPACE_FIRST_ID, false);
 
   if (i == 0) {
-    log_group_init(k, srv_n_log_files, srv_log_file_size * UNIV_PAGE_SIZE,
-                   2 * k + SRV_LOG_SPACE_FIRST_ID);
-                   
+    log_group_init(k, srv_n_log_files, srv_log_file_size * UNIV_PAGE_SIZE, 2 * k + SRV_LOG_SPACE_FIRST_ID);
   }
 
   return DB_SUCCESS;
@@ -710,13 +704,14 @@ static db_err open_or_create_log_file(
 /** Creates or opens database data files and closes them.
 @return	DB_SUCCESS or error code */
 static db_err open_or_create_data_files(
-    bool *create_new_db, /*!< out: true if new database should be
+  bool *create_new_db,       /*!< out: true if new database should be
                           created */
-    uint64_t *min_flushed_lsn, /*!< out: min of flushed lsn
+  uint64_t *min_flushed_lsn, /*!< out: min of flushed lsn
                                   values in data files */
-    uint64_t *max_flushed_lsn, /*!< out: max of flushed lsn
+  uint64_t *max_flushed_lsn, /*!< out: max of flushed lsn
                                   values in data files */
-    ulint *sum_of_new_sizes)   /*!< out: sum of sizes of the
+  ulint *sum_of_new_sizes
+) /*!< out: sum of sizes of the
                               new files added */
 {
   bool ret;
@@ -730,10 +725,12 @@ static db_err open_or_create_data_files(
   char home[1024];
 
   if (srv_n_data_files >= 1000) {
-    ib_logger(ib_stream,
-              "can only have < 1000 data files\n"
-              "you have defined %lu\n",
-              (ulong)srv_n_data_files);
+    ib_logger(
+      ib_stream,
+      "can only have < 1000 data files\n"
+      "you have defined %lu\n",
+      (ulong)srv_n_data_files
+    );
     return DB_ERROR;
   }
 
@@ -760,8 +757,7 @@ static db_err open_or_create_data_files(
 
       ut_a(strlen(home) + strlen(srv_data_file_names[i]) < (sizeof name) - 1);
 
-      ut_snprintf(name, sizeof(name), "%.1024s%.1024s", home,
-                  srv_data_file_names[i]);
+      ut_snprintf(name, sizeof(name), "%.1024s%.1024s", home, srv_data_file_names[i]);
     } else {
       ut_a(strlen(home) < (sizeof name) - 1);
 
@@ -773,22 +769,24 @@ static db_err open_or_create_data_files(
       /* First we try to create the file: if it already
       exists, ret will get value false */
 
-      files[i] = os_file_create(name, OS_FILE_CREATE, OS_FILE_NORMAL,
-                                OS_DATA_FILE, &ret);
+      files[i] = os_file_create(name, OS_FILE_CREATE, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
 
-      if (ret == false &&
-          os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS
+      if (
+        ret == false &&
+        os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS
 #ifdef UNIV_AIX
-          /* AIX 5.1 after security patch ML7 may have
+        /* AIX 5.1 after security patch ML7 may have
           errno set to 0 here, which causes our function
           to return 100; work around that AIX problem */
-          && os_file_get_last_error(false) != 100
+        && os_file_get_last_error(false) != 100
 #endif
       ) {
-        ib_logger(ib_stream,
-                  "Error in creating"
-                  " or opening %s\n",
-                  name);
+        ib_logger(
+          ib_stream,
+          "Error in creating"
+          " or opening %s\n",
+          name
+        );
 
         return DB_ERROR;
       }
@@ -799,8 +797,7 @@ static db_err open_or_create_data_files(
       srv_start_raw_disk_in_use = true;
       srv_created_new_raw = true;
 
-      files[i] = os_file_create(name, OS_FILE_OPEN_RAW, OS_FILE_NORMAL,
-                                OS_DATA_FILE, &ret);
+      files[i] = os_file_create(name, OS_FILE_OPEN_RAW, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
       if (!ret) {
         ib_logger(ib_stream, "Error in opening %s\n", name);
 
@@ -818,24 +815,26 @@ static db_err open_or_create_data_files(
       /* We open the data file */
 
       if (one_created) {
-        ib_logger(ib_stream, "Error: data files can only"
-                             " be added at the end\n");
-        ib_logger(ib_stream,
-                  "of a tablespace, but"
-                  " data file %s existed beforehand.\n",
-                  name);
+        ib_logger(
+          ib_stream,
+          "Error: data files can only"
+          " be added at the end\n"
+        );
+        ib_logger(
+          ib_stream,
+          "of a tablespace, but"
+          " data file %s existed beforehand.\n",
+          name
+        );
         return DB_ERROR;
       }
 
       if (srv_data_file_is_raw_partition[i] == SRV_OLD_RAW) {
-        files[i] = os_file_create(name, OS_FILE_OPEN_RAW, OS_FILE_NORMAL,
-                                  OS_DATA_FILE, &ret);
+        files[i] = os_file_create(name, OS_FILE_OPEN_RAW, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
       } else if (i == 0) {
-        files[i] = os_file_create(name, OS_FILE_OPEN_RETRY, OS_FILE_NORMAL,
-                                  OS_DATA_FILE, &ret);
+        files[i] = os_file_create(name, OS_FILE_OPEN_RETRY, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
       } else {
-        files[i] = os_file_create(name, OS_FILE_OPEN, OS_FILE_NORMAL,
-                                  OS_DATA_FILE, &ret);
+        files[i] = os_file_create(name, OS_FILE_OPEN, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
       }
 
       if (!ret) {
@@ -854,28 +853,28 @@ static db_err open_or_create_data_files(
       ut_a(ret);
       /* Round size downward to megabytes */
 
-      rounded_size_pages = (size / (1024 * 1024) + 4096 * size_high)
-                           << (20 - UNIV_PAGE_SIZE_SHIFT);
+      rounded_size_pages = (size / (1024 * 1024) + 4096 * size_high) << (20 - UNIV_PAGE_SIZE_SHIFT);
 
       if (i == srv_n_data_files - 1 && srv_auto_extend_last_data_file) {
 
-        if (srv_data_file_sizes[i] > rounded_size_pages ||
-            (srv_last_file_size_max > 0 &&
-             srv_last_file_size_max < rounded_size_pages)) {
+        if (srv_data_file_sizes[i] > rounded_size_pages || (srv_last_file_size_max > 0 && srv_last_file_size_max < rounded_size_pages)) {
 
-          ib_logger(ib_stream,
-                    "Error: auto-extending"
-                    " data file %s is"
-                    " of a different size\n"
-                    "%lu pages (rounded"
-                    " down to MB) than the "
-                    "configured\n"
-                    "initial %lu pages,"
-                    " max %lu (relevant if"
-                    " non-zero) pages!\n",
-                    name, (ulong)rounded_size_pages,
-                    (ulong)srv_data_file_sizes[i],
-                    (ulong)srv_last_file_size_max);
+          ib_logger(
+            ib_stream,
+            "Error: auto-extending"
+            " data file %s is"
+            " of a different size\n"
+            "%lu pages (rounded"
+            " down to MB) than the "
+            "configured\n"
+            "initial %lu pages,"
+            " max %lu (relevant if"
+            " non-zero) pages!\n",
+            name,
+            (ulong)rounded_size_pages,
+            (ulong)srv_data_file_sizes[i],
+            (ulong)srv_last_file_size_max
+          );
 
           return DB_ERROR;
         }
@@ -885,15 +884,18 @@ static db_err open_or_create_data_files(
 
       if (rounded_size_pages != srv_data_file_sizes[i]) {
 
-        ib_logger(ib_stream,
-                  "Error: data file %s"
-                  " is of a different size\n"
-                  "%lu pages"
-                  " (rounded down to MB)\n"
-                  "than the configured "
-                  "%lu pages!\n",
-                  name, (ulong)rounded_size_pages,
-                  (ulong)srv_data_file_sizes[i]);
+        ib_logger(
+          ib_stream,
+          "Error: data file %s"
+          " is of a different size\n"
+          "%lu pages"
+          " (rounded down to MB)\n"
+          "than the configured "
+          "%lu pages!\n",
+          name,
+          (ulong)rounded_size_pages,
+          (ulong)srv_data_file_sizes[i]
+        );
 
         return DB_ERROR;
       }
@@ -908,36 +910,44 @@ static db_err open_or_create_data_files(
 
       if (i > 0) {
         ut_print_timestamp(ib_stream);
-        ib_logger(ib_stream,
-                  "  Data file %s did not"
-                  " exist: new to be created\n",
-                  name);
+        ib_logger(
+          ib_stream,
+          "  Data file %s did not"
+          " exist: new to be created\n",
+          name
+        );
       } else {
-        ib_logger(ib_stream,
-                  "The first specified"
-                  " data file %s did not exist:\n"
-                  "a new database"
-                  " to be created!\n",
-                  name);
+        ib_logger(
+          ib_stream,
+          "The first specified"
+          " data file %s did not exist:\n"
+          "a new database"
+          " to be created!\n",
+          name
+        );
         *create_new_db = true;
       }
 
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  Setting file %s size to %lu MB\n", name,
-                (ulong)(srv_data_file_sizes[i] >> (20 - UNIV_PAGE_SIZE_SHIFT)));
+      ib_logger(
+        ib_stream, "  Setting file %s size to %lu MB\n", name, (ulong)(srv_data_file_sizes[i] >> (20 - UNIV_PAGE_SIZE_SHIFT))
+      );
 
-      ib_logger(ib_stream, "Database physically writes the"
-                           " file full: wait...\n");
+      ib_logger(
+        ib_stream,
+        "Database physically writes the"
+        " file full: wait...\n"
+      );
 
-      ret = os_file_set_size(name, files[i],
-                             srv_calc_low32(srv_data_file_sizes[i]),
-                             srv_calc_high32(srv_data_file_sizes[i]));
+      ret = os_file_set_size(name, files[i], srv_calc_low32(srv_data_file_sizes[i]), srv_calc_high32(srv_data_file_sizes[i]));
 
       if (!ret) {
-        ib_logger(ib_stream,
-                  "Error in creating %s:"
-                  " probably out of disk space\n",
-                  name);
+        ib_logger(
+          ib_stream,
+          "Error in creating %s:"
+          " probably out of disk space\n",
+          name
+        );
 
         return DB_ERROR;
       }
@@ -954,8 +964,7 @@ static db_err open_or_create_data_files(
 
     ut_a(fil_validate());
 
-    fil_node_create(name, srv_data_file_sizes[i], 0,
-                    srv_data_file_is_raw_partition[i] != 0);
+    fil_node_create(name, srv_data_file_sizes[i], 0, srv_data_file_is_raw_partition[i] != 0);
   }
 
   ios = 0;
@@ -975,8 +984,7 @@ static void srv_startup_abort(enum db_err err) /* in: Current error code */
 
   /* For fatal errors we want to avoid writing to the data files. */
   if (err != DB_FATAL) {
-    logs_empty_and_mark_files_at_shutdown(srv_force_recovery,
-                                          srv_fast_shutdown);
+    logs_empty_and_mark_files_at_shutdown(srv_force_recovery, srv_fast_shutdown);
 
     fil_close_all_files();
   }
@@ -1031,21 +1039,27 @@ ib_err_t innobase_start_or_create() {
     srv_have_fullfsync = strcmp(utsname.release, "7.") >= 0;
   }
   if (!srv_have_fullfsync) {
-    ib_logger(ib_stream, "On Mac OS X, fsync() may be"
-                         " broken on internal drives,\n"
-                         "making transactions unsafe!\n");
+    ib_logger(
+      ib_stream,
+      "On Mac OS X, fsync() may be"
+      " broken on internal drives,\n"
+      "making transactions unsafe!\n"
+    );
   }
 #endif /* F_FULLFSYNC */
 #endif /* HAVE_DARWIN_THREADS */
 
   if (sizeof(ulint) != sizeof(void *)) {
-    ib_logger(ib_stream,
-              "Error: size of InnoDB's ulint is %lu,"
-              " but size of void* is %lu.\n"
-              "The sizes should be the same"
-              " so that on a 64-bit platform you can\n"
-              "allocate more than 4 GB of memory.",
-              (ulong)sizeof(ulint), (ulong)sizeof(void *));
+    ib_logger(
+      ib_stream,
+      "Error: size of InnoDB's ulint is %lu,"
+      " but size of void* is %lu.\n"
+      "The sizes should be the same"
+      " so that on a 64-bit platform you can\n"
+      "allocate more than 4 GB of memory.",
+      (ulong)sizeof(ulint),
+      (ulong)sizeof(void *)
+    );
   }
 
   /* System tables are created in tablespace 0.  Thus, we must
@@ -1058,18 +1072,15 @@ ib_err_t innobase_start_or_create() {
 #endif
 
 #ifdef UNIV_SYNC_DEBUG
-  ib_logger(ib_stream,
-            "!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!\n");
+  ib_logger(ib_stream, "!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!\n");
 #endif
 
 #ifdef UNIV_SEARCH_DEBUG
-  ib_logger(ib_stream,
-            "!!!!!!!! UNIV_SEARCH_DEBUG switched on !!!!!!!!!\n");
+  ib_logger(ib_stream, "!!!!!!!! UNIV_SEARCH_DEBUG switched on !!!!!!!!!\n");
 #endif
 
 #ifdef UNIV_LOG_LSN_DEBUG
-  ib_logger(ib_stream,
-            "!!!!!!!! UNIV_LOG_LSN_DEBUG switched on !!!!!!!!!\n");
+  ib_logger(ib_stream, "!!!!!!!! UNIV_LOG_LSN_DEBUG switched on !!!!!!!!!\n");
 #endif /* UNIV_LOG_LSN_DEBUG */
 
   if (likely(srv_use_sys_malloc)) {
@@ -1081,10 +1092,13 @@ ib_err_t innobase_start_or_create() {
   /* Print an error message if someone tries to start up InnoDB a
   second time while it's already in state running. */
   if (srv_was_started && srv_start_has_been_called) {
-    ib_logger(ib_stream, "Error: startup called second time"
-                         " during the process lifetime.\n"
-                         "more than once during"
-                         " the process lifetime.\n");
+    ib_logger(
+      ib_stream,
+      "Error: startup called second time"
+      " during the process lifetime.\n"
+      "more than once during"
+      " the process lifetime.\n"
+    );
   }
 
   srv_start_has_been_called = true;
@@ -1147,17 +1161,22 @@ ib_err_t innobase_start_or_create() {
 
   if (srv_buf_pool_size <= 5 * 1024 * 1024) {
 
-    ib_logger(ib_stream,
-              "Warning: Small buffer pool size "
-              "(%luM), the flst_validate() debug function "
-              "can cause a deadlock if the buffer pool fills up.\n",
-              srv_buf_pool_size / 1024 / 1024);
+    ib_logger(
+      ib_stream,
+      "Warning: Small buffer pool size "
+      "(%luM), the flst_validate() debug function "
+      "can cause a deadlock if the buffer pool fills up.\n",
+      srv_buf_pool_size / 1024 / 1024
+    );
   }
 #endif
 
   if (srv_n_log_files * srv_log_file_size >= 262144) {
-    ib_logger(ib_stream, "Error: combined size of log files"
-                         " must be < 4 GB\n");
+    ib_logger(
+      ib_stream,
+      "Error: combined size of log files"
+      " must be < 4 GB\n"
+    );
 
     return DB_ERROR;
   }
@@ -1166,10 +1185,13 @@ ib_err_t innobase_start_or_create() {
 
   for (i = 0; i < srv_n_data_files; i++) {
     if (sizeof(off_t) < 5 && srv_data_file_sizes[i] >= 262144) {
-      ib_logger(ib_stream, "Error: file size must be < 4 GB"
-                           " with this binary\n"
-                           "and operating system combination,"
-                           " in some OS's < 2 GB\n");
+      ib_logger(
+        ib_stream,
+        "Error: file size must be < 4 GB"
+        " with this binary\n"
+        "and operating system combination,"
+        " in some OS's < 2 GB\n"
+      );
 
       return DB_ERROR;
     }
@@ -1177,14 +1199,16 @@ ib_err_t innobase_start_or_create() {
   }
 
   if (sum_of_new_sizes < 10485760 / UNIV_PAGE_SIZE) {
-    ib_logger(ib_stream, "Error: tablespace size must be"
-                         " at least 10 MB\n");
+    ib_logger(
+      ib_stream,
+      "Error: tablespace size must be"
+      " at least 10 MB\n"
+    );
 
     return DB_ERROR;
   }
 
-  os_aio_init(io_limit, srv_n_read_io_threads, srv_n_write_io_threads,
-              SRV_MAX_N_PENDING_SYNC_IOS);
+  os_aio_init(io_limit, srv_n_read_io_threads, srv_n_write_io_threads, SRV_MAX_N_PENDING_SYNC_IOS);
 
   fil_init(srv_file_per_table ? 50000 : 5000, srv_max_n_open_files);
 
@@ -1195,8 +1219,11 @@ ib_err_t innobase_start_or_create() {
     fil_close();
     os_aio_close();
 
-    ib_logger(ib_stream, "Fatal error: cannot allocate the memory"
-                         " for the buffer pool\n");
+    ib_logger(
+      ib_stream,
+      "Fatal error: cannot allocate the memory"
+      " for the buffer pool\n"
+    );
 
     return DB_ERROR;
   }
@@ -1214,23 +1241,24 @@ ib_err_t innobase_start_or_create() {
     os_thread_create(io_handler_thread, n + i, thread_ids + i);
   }
 
-  err = open_or_create_data_files(&create_new_db,
-                                  &min_flushed_lsn, &max_flushed_lsn,
-                                  &sum_of_new_sizes);
+  err = open_or_create_data_files(&create_new_db, &min_flushed_lsn, &max_flushed_lsn, &sum_of_new_sizes);
   if (err != DB_SUCCESS) {
-    ib_logger(ib_stream, "Could not open or create data files.\n"
-                         "If you tried to add new data files,"
-                         " and it failed here,\n"
-                         "you should now set data_file_path"
-                         " back\n"
-                         "to what it was, and remove the"
-                         " new ibdata files InnoDB created\n"
-                         "in this failed attempt. InnoDB only wrote"
-                         " those files full of\n"
-                         "zeros, but did not yet use them in any way."
-                         " But be careful: do not\n"
-                         "remove old data files"
-                         " which contain your precious data!\n");
+    ib_logger(
+      ib_stream,
+      "Could not open or create data files.\n"
+      "If you tried to add new data files,"
+      " and it failed here,\n"
+      "you should now set data_file_path"
+      " back\n"
+      "to what it was, and remove the"
+      " new ibdata files InnoDB created\n"
+      "in this failed attempt. InnoDB only wrote"
+      " those files full of\n"
+      "zeros, but did not yet use them in any way."
+      " But be careful: do not\n"
+      "remove old data files"
+      " which contain your precious data!\n"
+    );
 
     srv_startup_abort(err);
 
@@ -1239,8 +1267,7 @@ ib_err_t innobase_start_or_create() {
 
   for (i = 0; i < srv_n_log_files; i++) {
 
-    err = open_or_create_log_file(create_new_db, &log_file_created, log_opened,
-                                  0, i);
+    err = open_or_create_log_file(create_new_db, &log_file_created, log_opened, 0, i);
 
     if (err != DB_SUCCESS) {
       srv_startup_abort(err);
@@ -1251,17 +1278,20 @@ ib_err_t innobase_start_or_create() {
       log_opened = true;
     }
     if ((log_opened && create_new_db) || (log_opened && log_created)) {
-      ib_logger(ib_stream, "Error: all log files must be"
-                           " created at the same time.\n"
-                           "All log files must be"
-                           " created also in database creation.\n"
-                           "If you want bigger or smaller"
-                           " log files, shut down the\n"
-                           "database and make sure there"
-                           " were no errors in shutdown.\n"
-                           "Then delete the existing log files."
-                           " Reconfigure InnoDB\n"
-                           "and start the database again.\n");
+      ib_logger(
+        ib_stream,
+        "Error: all log files must be"
+        " created at the same time.\n"
+        "All log files must be"
+        " created also in database creation.\n"
+        "If you want bigger or smaller"
+        " log files, shut down the\n"
+        "database and make sure there"
+        " were no errors in shutdown.\n"
+        "Then delete the existing log files."
+        " Reconfigure InnoDB\n"
+        "and start the database again.\n"
+      );
 
       srv_startup_abort(DB_ERROR);
       return DB_ERROR;
@@ -1275,26 +1305,32 @@ ib_err_t innobase_start_or_create() {
 
   if (log_created && !create_new_db) {
     if (max_flushed_lsn != min_flushed_lsn) {
-      ib_logger(ib_stream, "Cannot initialize created"
-                           " log files because\n"
-                           "data files were not in sync"
-                           " with each other\n"
-                           "or the data files are corrupt.\n");
+      ib_logger(
+        ib_stream,
+        "Cannot initialize created"
+        " log files because\n"
+        "data files were not in sync"
+        " with each other\n"
+        "or the data files are corrupt.\n"
+      );
 
       srv_startup_abort(DB_ERROR);
       return DB_ERROR;
     }
 
     if (max_flushed_lsn < (uint64_t)1000) {
-      ib_logger(ib_stream, "Cannot initialize created"
-                           " log files because\n"
-                           "data files are corrupt,"
-                           " or new data files were\n"
-                           "created when the database"
-                           " was started previous\n"
-                           "time but the database"
-                           " was not shut down\n"
-                           "normally after that.\n");
+      ib_logger(
+        ib_stream,
+        "Cannot initialize created"
+        " log files because\n"
+        "data files are corrupt,"
+        " or new data files were\n"
+        "created when the database"
+        " was started previous\n"
+        "time but the database"
+        " was not shut down\n"
+        "normally after that.\n"
+      );
 
       srv_startup_abort(DB_ERROR);
       return DB_ERROR;
@@ -1342,9 +1378,8 @@ ib_err_t innobase_start_or_create() {
     /* We always try to do a recovery, even if the database had
     been shut down normally: this is the normal startup path */
 
-    err = recv_recovery_from_checkpoint_start(srv_force_recovery,
-                                              LOG_CHECKPOINT, IB_UINT64_T_MAX,
-                                              min_flushed_lsn, max_flushed_lsn);
+    err =
+      recv_recovery_from_checkpoint_start(srv_force_recovery, LOG_CHECKPOINT, IB_UINT64_T_MAX, min_flushed_lsn, max_flushed_lsn);
 
     if (err != DB_SUCCESS) {
       srv_startup_abort(err);
@@ -1414,16 +1449,13 @@ ib_err_t innobase_start_or_create() {
   page_get_free_space_of_empty() / 2); */
 
   /* Create the thread which watches the timeouts for lock waits */
-  os_thread_create(&srv_lock_timeout_thread, nullptr,
-                   thread_ids + 2 + SRV_MAX_N_IO_THREADS);
+  os_thread_create(&srv_lock_timeout_thread, nullptr, thread_ids + 2 + SRV_MAX_N_IO_THREADS);
 
   /* Create the thread which warns of long semaphore waits */
-  os_thread_create(&srv_error_monitor_thread, nullptr,
-                   thread_ids + 3 + SRV_MAX_N_IO_THREADS);
+  os_thread_create(&srv_error_monitor_thread, nullptr, thread_ids + 3 + SRV_MAX_N_IO_THREADS);
 
   /* Create the thread which prints InnoDB monitor info */
-  os_thread_create(&srv_monitor_thread, nullptr,
-                   thread_ids + 4 + SRV_MAX_N_IO_THREADS);
+  os_thread_create(&srv_monitor_thread, nullptr, thread_ids + 4 + SRV_MAX_N_IO_THREADS);
 
   srv_is_being_started = false;
 
@@ -1445,8 +1477,7 @@ ib_err_t innobase_start_or_create() {
   /* Create the master thread which does purge and other utility
   operations */
 
-  os_thread_create(&srv_master_thread, nullptr,
-                   thread_ids + (1 + SRV_MAX_N_IO_THREADS));
+  os_thread_create(&srv_master_thread, nullptr, thread_ids + (1 + SRV_MAX_N_IO_THREADS));
 #ifdef UNIV_DEBUG
   /* buf_debug_prints = true; */
 #endif /* UNIV_DEBUG */
@@ -1458,58 +1489,67 @@ ib_err_t innobase_start_or_create() {
 
   tablespace_size_in_header = fsp_header_get_tablespace_size();
 
-  if (!srv_auto_extend_last_data_file &&
-      sum_of_data_file_sizes != tablespace_size_in_header) {
+  if (!srv_auto_extend_last_data_file && sum_of_data_file_sizes != tablespace_size_in_header) {
 
-    ib_logger(ib_stream,
-              "Error: tablespace size"
-              " stored in header is %lu pages, but\n"
-              "the sum of data file sizes is %lu pages\n",
-              (ulong)tablespace_size_in_header, (ulong)sum_of_data_file_sizes);
+    ib_logger(
+      ib_stream,
+      "Error: tablespace size"
+      " stored in header is %lu pages, but\n"
+      "the sum of data file sizes is %lu pages\n",
+      (ulong)tablespace_size_in_header,
+      (ulong)sum_of_data_file_sizes
+    );
 
-    if (srv_force_recovery == IB_RECOVERY_DEFAULT &&
-        sum_of_data_file_sizes < tablespace_size_in_header) {
+    if (srv_force_recovery == IB_RECOVERY_DEFAULT && sum_of_data_file_sizes < tablespace_size_in_header) {
       /* This is a fatal error, the tail of a tablespace is
       missing */
 
-      ib_logger(ib_stream, "Cannot start InnoDB."
-                           " The tail of the system tablespace is\n"
-                           "missing. Have you set the"
-                           " data_file_path in an\n"
-                           "inappropriate way, removing"
-                           " ibdata files from there?\n"
-                           "You can set force_recovery=1"
-                           " to force\n"
-                           "a startup if you are trying"
-                           " to recover a badly corrupt database.\n");
+      ib_logger(
+        ib_stream,
+        "Cannot start InnoDB."
+        " The tail of the system tablespace is\n"
+        "missing. Have you set the"
+        " data_file_path in an\n"
+        "inappropriate way, removing"
+        " ibdata files from there?\n"
+        "You can set force_recovery=1"
+        " to force\n"
+        "a startup if you are trying"
+        " to recover a badly corrupt database.\n"
+      );
 
       srv_startup_abort(DB_ERROR);
       return DB_ERROR;
     }
   }
 
-  if (srv_auto_extend_last_data_file &&
-      sum_of_data_file_sizes < tablespace_size_in_header) {
+  if (srv_auto_extend_last_data_file && sum_of_data_file_sizes < tablespace_size_in_header) {
 
-    ib_logger(ib_stream,
-              "Error: tablespace size stored in header"
-              " is %lu pages, but\n"
-              "the sum of data file sizes"
-              " is only %lu pages\n",
-              (ulong)tablespace_size_in_header, (ulong)sum_of_data_file_sizes);
+    ib_logger(
+      ib_stream,
+      "Error: tablespace size stored in header"
+      " is %lu pages, but\n"
+      "the sum of data file sizes"
+      " is only %lu pages\n",
+      (ulong)tablespace_size_in_header,
+      (ulong)sum_of_data_file_sizes
+    );
 
     if (srv_force_recovery == IB_RECOVERY_DEFAULT) {
 
-      ib_logger(ib_stream, "Cannot start InnoDB. The tail of"
-                           " the system tablespace is\n"
-                           "missing. Have you set "
-                           " data_file_path in an\n"
-                           "inappropriate way, removing"
-                           " ibdata files from there?\n"
-                           "You can set force_recovery=1"
-                           " in to force\n"
-                           "a startup if you are trying to"
-                           " recover a badly corrupt database.\n");
+      ib_logger(
+        ib_stream,
+        "Cannot start InnoDB. The tail of"
+        " the system tablespace is\n"
+        "missing. Have you set "
+        " data_file_path in an\n"
+        "inappropriate way, removing"
+        " ibdata files from there?\n"
+        "You can set force_recovery=1"
+        " in to force\n"
+        "a startup if you are trying to"
+        " recover a badly corrupt database.\n"
+      );
 
       srv_startup_abort(DB_ERROR);
       return DB_ERROR;
@@ -1520,9 +1560,12 @@ ib_err_t innobase_start_or_create() {
   os_fast_mutex_init(&srv_os_test_mutex);
 
   if (0 != os_fast_mutex_trylock(&srv_os_test_mutex)) {
-    ib_logger(ib_stream, "Error: pthread_mutex_trylock returns"
-                         " an unexpected value on\n"
-                         "success! Cannot continue.\n");
+    ib_logger(
+      ib_stream,
+      "Error: pthread_mutex_trylock returns"
+      " an unexpected value on\n"
+      "success! Cannot continue.\n"
+    );
 
     srv_startup_abort(DB_ERROR);
     return DB_ERROR;
@@ -1538,15 +1581,17 @@ ib_err_t innobase_start_or_create() {
 
   if (srv_print_verbose_log) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              " InnoDB %s started; "
-              "log sequence number %lu\n",
-              VERSION, srv_start_lsn);
+    ib_logger(
+      ib_stream,
+      " InnoDB %s started; "
+      "log sequence number %lu\n",
+      VERSION,
+      srv_start_lsn
+    );
   }
 
   if (srv_force_recovery != IB_RECOVERY_DEFAULT) {
-    ib_logger(ib_stream, "!!! force_recovery is set to %lu !!!\n",
-              (ulong)srv_force_recovery);
+    ib_logger(ib_stream, "!!! force_recovery is set to %lu !!!\n", (ulong)srv_force_recovery);
   }
 
   if (trx_doublewrite_must_reset_space_ids) {
@@ -1563,11 +1608,14 @@ ib_err_t innobase_start_or_create() {
     4.1.1. It is essential that the insert buffer is emptied
     here! */
 
-    ib_logger(ib_stream, "You are upgrading to an"
-                         " InnoDB version which allows multiple\n"
-                         "tablespaces. Wait that purge"
-                         " and insert buffer merge run to\n"
-                         "completion...\n");
+    ib_logger(
+      ib_stream,
+      "You are upgrading to an"
+      " InnoDB version which allows multiple\n"
+      "tablespaces. Wait that purge"
+      " and insert buffer merge run to\n"
+      "completion...\n"
+    );
     for (;;) {
       os_thread_sleep(1000000);
 
@@ -1576,19 +1624,25 @@ ib_err_t innobase_start_or_create() {
         break;
       }
     }
-    ib_logger(ib_stream, "Full purge and insert buffer merge"
-                         " completed.\n");
+    ib_logger(
+      ib_stream,
+      "Full purge and insert buffer merge"
+      " completed.\n"
+    );
 
     trx_sys_mark_upgraded_to_multiple_tablespaces();
 
-    ib_logger(ib_stream, "You have now successfully upgraded"
-                         " to the multiple tablespaces\n"
-                         "format. You should NOT DOWNGRADE"
-                         " to an earlier version of\n"
-                         "InnoDB! But if you absolutely need to"
-                         " downgrade, check\n"
-                         "the InnoDB website for details\n"
-                         "for instructions.\n");
+    ib_logger(
+      ib_stream,
+      "You have now successfully upgraded"
+      " to the multiple tablespaces\n"
+      "format. You should NOT DOWNGRADE"
+      " to an earlier version of\n"
+      "InnoDB! But if you absolutely need to"
+      " downgrade, check\n"
+      "the InnoDB website for details\n"
+      "for instructions.\n"
+    );
   }
 
   srv_file_per_table = srv_file_per_table_original_value;
@@ -1653,10 +1707,12 @@ static bool srv_threads_shutdown(void) {
     }
   }
 
-  ib_logger(ib_stream,
-            "Warning: %lu threads created by InnoDB"
-            " had not exited at shutdown!\n",
-            (ulong)os_thread_count);
+  ib_logger(
+    ib_stream,
+    "Warning: %lu threads created by InnoDB"
+    " had not exited at shutdown!\n",
+    (ulong)os_thread_count
+  );
 
   return false;
 }
@@ -1669,9 +1725,12 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
   if (!srv_was_started) {
     if (srv_is_being_started) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  Warning: shutting down"
-                           " a not properly started\n"
-                           "or created database!\n");
+      ib_logger(
+        ib_stream,
+        "  Warning: shutting down"
+        " a not properly started\n"
+        "or created database!\n"
+      );
     }
 
     ut_free_all_mem();
@@ -1690,11 +1749,14 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
 
   if (shutdown == IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  User has requested a very fast shutdown"
-                         " without flushing "
-                         "the InnoDB buffer pool to data files."
-                         " At the next startup "
-                         "InnoDB will do a crash recovery!\n");
+    ib_logger(
+      ib_stream,
+      "  User has requested a very fast shutdown"
+      " without flushing "
+      "the InnoDB buffer pool to data files."
+      " At the next startup "
+      "InnoDB will do a crash recovery!\n"
+    );
   }
 
   logs_empty_and_mark_files_at_shutdown(srv_force_recovery, shutdown);
@@ -1744,15 +1806,18 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
 
   ut_free_all_mem();
 
-  if (os_thread_count != 0 || os_event_count != 0 || os_mutex_count != 0 ||
-      os_fast_mutex_count != 0) {
-    ib_logger(ib_stream,
-              "Warning: some resources were not"
-              " cleaned up in shutdown:\n"
-              "threads %lu, events %lu,"
-              " os_mutexes %lu, os_fast_mutexes %lu\n",
-              (ulong)os_thread_count, (ulong)os_event_count,
-              (ulong)os_mutex_count, (ulong)os_fast_mutex_count);
+  if (os_thread_count != 0 || os_event_count != 0 || os_mutex_count != 0 || os_fast_mutex_count != 0) {
+    ib_logger(
+      ib_stream,
+      "Warning: some resources were not"
+      " cleaned up in shutdown:\n"
+      "threads %lu, events %lu,"
+      " os_mutexes %lu, os_fast_mutexes %lu\n",
+      (ulong)os_thread_count,
+      (ulong)os_event_count,
+      (ulong)os_mutex_count,
+      (ulong)os_fast_mutex_count
+    );
   }
 
   if (lock_latest_err_stream) {
@@ -1761,10 +1826,12 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
 
   if (srv_print_verbose_log) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  Shutdown completed;"
-              " log sequence number %lu\n",
-              srv_shutdown_lsn);
+    ib_logger(
+      ib_stream,
+      "  Shutdown completed;"
+      " log sequence number %lu\n",
+      srv_shutdown_lsn
+    );
   }
 
   srv_was_started = false;

@@ -26,10 +26,11 @@ Created 3/26/1996 Heikki Tuuri
 
 /** Gets a rollback segment header.
 @return	rollback segment header, page x-latched */
-inline trx_rsegf_t *
-trx_rsegf_get(ulint space,    /*!< in: space where placed */
-              ulint page_no,  /*!< in: page number of the header */
-              mtr_t *mtr)     /*!< in: mtr */
+inline trx_rsegf_t *trx_rsegf_get(
+  ulint space,   /*!< in: space where placed */
+  ulint page_no, /*!< in: page number of the header */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   buf_block_t *block;
   trx_rsegf_t *header;
@@ -44,10 +45,11 @@ trx_rsegf_get(ulint space,    /*!< in: space where placed */
 
 /** Gets a newly created rollback segment header.
 @return	rollback segment header, page x-latched */
-inline trx_rsegf_t *
-trx_rsegf_get_new(ulint space,    /*!< in: space where placed */
-                  ulint page_no,  /*!< in: page number of the header */
-                  mtr_t *mtr)     /*!< in: mtr */
+inline trx_rsegf_t *trx_rsegf_get_new(
+  ulint space,   /*!< in: space where placed */
+  ulint page_no, /*!< in: page number of the header */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   buf_block_t *block;
   trx_rsegf_t *header;
@@ -62,43 +64,42 @@ trx_rsegf_get_new(ulint space,    /*!< in: space where placed */
 
 /** Gets the file page number of the nth undo log slot.
 @return	page number of the undo log segment */
-inline ulint
-trx_rsegf_get_nth_undo(trx_rsegf_t *rsegf, /*!< in: rollback segment header */
-                       ulint n,            /*!< in: index of slot */
-                       mtr_t *mtr)         /*!< in: mtr */
+inline ulint trx_rsegf_get_nth_undo(
+  trx_rsegf_t *rsegf, /*!< in: rollback segment header */
+  ulint n,            /*!< in: index of slot */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   if (unlikely(n >= TRX_RSEG_N_SLOTS)) {
-    ib_logger(ib_stream, "Error: trying to get slot %lu of rseg\n",
-              (ulong)n);
+    ib_logger(ib_stream, "Error: trying to get slot %lu of rseg\n", (ulong)n);
     ut_error;
   }
 
-  return (mtr_read_ulint(rsegf + TRX_RSEG_UNDO_SLOTS + n * TRX_RSEG_SLOT_SIZE,
-                         MLOG_4BYTES, mtr));
+  return (mtr_read_ulint(rsegf + TRX_RSEG_UNDO_SLOTS + n * TRX_RSEG_SLOT_SIZE, MLOG_4BYTES, mtr));
 }
 
 /** Sets the file page number of the nth undo log slot. */
 inline void trx_rsegf_set_nth_undo(
-    trx_rsegf_t *rsegf, /*!< in: rollback segment header */
-    ulint n,            /*!< in: index of slot */
-    ulint page_no,      /*!< in: page number of the undo log segment */
-    mtr_t *mtr)         /*!< in: mtr */
+  trx_rsegf_t *rsegf, /*!< in: rollback segment header */
+  ulint n,            /*!< in: index of slot */
+  ulint page_no,      /*!< in: page number of the undo log segment */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   if (unlikely(n >= TRX_RSEG_N_SLOTS)) {
-    ib_logger(ib_stream, "Error: trying to set slot %lu of rseg\n",
-              (ulong)n);
+    ib_logger(ib_stream, "Error: trying to set slot %lu of rseg\n", (ulong)n);
     ut_error;
   }
 
-  mlog_write_ulint(rsegf + TRX_RSEG_UNDO_SLOTS + n * TRX_RSEG_SLOT_SIZE,
-                   page_no, MLOG_4BYTES, mtr);
+  mlog_write_ulint(rsegf + TRX_RSEG_UNDO_SLOTS + n * TRX_RSEG_SLOT_SIZE, page_no, MLOG_4BYTES, mtr);
 }
 
 /** Looks for a free slot for an undo log segment.
 @return	slot index or ULINT_UNDEFINED if not found */
-inline ulint
-trx_rsegf_undo_find_free(trx_rsegf_t *rsegf, /*!< in: rollback segment header */
-                         mtr_t *mtr)         /*!< in: mtr */
+inline ulint trx_rsegf_undo_find_free(
+  trx_rsegf_t *rsegf, /*!< in: rollback segment header */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   ulint i;
   ulint page_no;

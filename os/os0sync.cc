@@ -134,8 +134,7 @@ void os_sync_free(void) {
 os_event_t os_event_create(const char *name) {
   UT_NOT_USED(name);
 
-  auto event =
-      static_cast<os_event_struct *>(ut_malloc(sizeof(os_event_struct)));
+  auto event = static_cast<os_event_struct *>(ut_malloc(sizeof(os_event_struct)));
 
   os_fast_mutex_init(&event->os_mutex);
 
@@ -272,13 +271,11 @@ void os_event_wait_low(os_event_t event, int64_t reset_sig_count) {
 os_mutex_t os_mutex_create(const char *name) {
   UT_NOT_USED(name);
 
-  auto mutex =
-      static_cast<os_fast_mutex_t *>(ut_malloc(sizeof(os_fast_mutex_t)));
+  auto mutex = static_cast<os_fast_mutex_t *>(ut_malloc(sizeof(os_fast_mutex_t)));
 
   os_fast_mutex_init(mutex);
 
-  auto mutex_str =
-      static_cast<os_mutex_str_t *>(ut_malloc(sizeof(os_mutex_str_t)));
+  auto mutex_str = static_cast<os_mutex_str_t *>(ut_malloc(sizeof(os_mutex_str_t)));
 
   mutex_str->handle = mutex;
   mutex_str->count = 0;
@@ -372,12 +369,13 @@ void os_fast_mutex_free(os_fast_mutex_t *fast_mutex) {
 
   if (unlikely(ret != 0)) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  error: return value %lu when calling\n"
-              "pthread_mutex_destroy().\n",
-              (ulint)ret);
-    ib_logger(ib_stream, "Byte contents of the pthread mutex at %p:\n",
-              (void *)fast_mutex);
+    ib_logger(
+      ib_stream,
+      "  error: return value %lu when calling\n"
+      "pthread_mutex_destroy().\n",
+      (ulint)ret
+    );
+    ib_logger(ib_stream, "Byte contents of the pthread mutex at %p:\n", (void *)fast_mutex);
     ut_print_buf(ib_stream, fast_mutex, sizeof(os_fast_mutex_t));
     ib_logger(ib_stream, "\n");
   }

@@ -88,17 +88,17 @@ buf_page_get_mutex() may be held when calling this function.
 @return BUF_LRU_FREED if freed, BUF_LRU_CANNOT_RELOCATE or
 BUF_LRU_NOT_FREED otherwise. */
 
-buf_lru_free_block_status
-buf_LRU_free_block(buf_page_t *bpage, /*!< in: block to be freed */
-                   bool *buf_pool_mutex_released);
+buf_lru_free_block_status buf_LRU_free_block(
+  buf_page_t *bpage, /*!< in: block to be freed */
+  bool *buf_pool_mutex_released
+);
 /*!< in: pointer to a variable that will
 be assigned true if buf_pool_mutex
 was temporarily released, or NULL */
 /*** Try to free a replaceable block.
 @return	true if found and freed */
 
-bool buf_LRU_search_and_free_block(
-    ulint n_iterations); /*!< in: how many times this has been called
+bool buf_LRU_search_and_free_block(ulint n_iterations); /*!< in: how many times this has been called
                          repeatedly without result: a high value means
                          that we should search farther; if
                          n_iterations < 10, then we search
@@ -115,17 +115,17 @@ buf_block_t *buf_LRU_get_free_only(void);
 free list. If it is empty, blocks are moved from the end of the
 LRU list to the free list.
 @return	the free control block, in state BUF_BLOCK_READY_FOR_USE */
-buf_block_t *
-buf_LRU_get_free_block();
+buf_block_t *buf_LRU_get_free_block();
 
 /*** Puts a block back to the free list. */
 
-void buf_LRU_block_free_non_file_page(
-    buf_block_t *block); /*!< in: block, must not contain a file page */
+void buf_LRU_block_free_non_file_page(buf_block_t *block); /*!< in: block, must not contain a file page */
 /*** Adds a block to the LRU list. */
 
-void buf_LRU_add_block(buf_page_t *bpage, /*!< in: control block */
-                       bool old); /*!< in: true if should be put to the old
+void buf_LRU_add_block(
+  buf_page_t *bpage, /*!< in: control block */
+  bool old
+); /*!< in: true if should be put to the old
                                    blocks in the LRU list, else put to the
                                    start; if the LRU list is very short, added
                                    to the start regardless of this parameter */
@@ -139,9 +139,10 @@ void buf_LRU_make_block_old(buf_page_t *bpage); /*!< in: control block */
 @return	updated old_pct */
 
 ulint buf_LRU_old_ratio_update(
-    ulint old_pct, /*!< in: Reserve this percentage of
+  ulint old_pct, /*!< in: Reserve this percentage of
                    the buffer pool for "old" blocks. */
-    bool adjust);  /*!< in: true=adjust the LRU list;
+  bool adjust
+); /*!< in: true=adjust the LRU list;
                     false=just assign buf_LRU_old_ratio
                     during the initialization of InnoDB */
 /*** Update the historical stats that we are collecting for LRU eviction
@@ -217,4 +218,3 @@ extern buf_LRU_stat_t buf_LRU_stat_sum;
 // FIXME: Move it to where it's used
 /*** Increments the I/O counter in buf_LRU_stat_cur. */
 #define buf_LRU_stat_inc_io() (++buf_LRU_stat_cur.io)
-

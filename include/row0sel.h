@@ -38,8 +38,7 @@ Created 12/19/1997 Heikki Tuuri
 /** Creates a select node struct.
 @return	own: select node struct */
 
-sel_node_t *
-sel_node_create(mem_heap_t *heap); /*!< in: memory heap where created */
+sel_node_t *sel_node_create(mem_heap_t *heap); /*!< in: memory heap where created */
 /** Frees the memory private to a select node when a query graph is freed,
 does not free the heap where the node was originally created. */
 
@@ -47,12 +46,13 @@ void sel_node_free_private(sel_node_t *node); /*!< in: select node struct */
 /** Frees a prefetch buffer for a column, including the dynamically allocated
 memory for data stored there. */
 
-void sel_col_prefetch_buf_free(
-    sel_buf_t *prefetch_buf); /*!< in, own: prefetch buffer */
+void sel_col_prefetch_buf_free(sel_buf_t *prefetch_buf); /*!< in, own: prefetch buffer */
 /** Gets the plan node for the nth table in a join.
 @return	plan node */
-inline plan_t *sel_node_get_nth_plan(sel_node_t *node, /*!< in: select node */
-                                     ulint i); /*!< in: get ith plan node */
+inline plan_t *sel_node_get_nth_plan(
+  sel_node_t *node, /*!< in: select node */
+  ulint i
+); /*!< in: get ith plan node */
 /** Performs a select step. This is a high-level function used in SQL execution
 graphs.
 @return	query thread to run next or NULL */
@@ -68,23 +68,26 @@ que_thr_t *fetch_step(que_thr_t *thr); /*!< in: query thread */
 /** Sample callback function for fetch that prints each row.
 @return	always returns non-NULL */
 
-void *row_fetch_print(void *row,       /*!< in:  sel_node_t* */
-                      void *user_arg); /*!< in:  not used */
+void *row_fetch_print(
+  void *row, /*!< in:  sel_node_t* */
+  void *user_arg
+); /*!< in:  not used */
 /** Callback function for fetch that stores an unsigned 4 byte integer to the
 location pointed. The column's type must be DATA_INT, DATA_UNSIGNED, length
 = 4.
 @return	always returns NULL */
 
-void *row_fetch_store_uint4(void *row,       /*!< in:  sel_node_t* */
-                            void *user_arg); /*!< in:  data pointer */
+void *row_fetch_store_uint4(
+  void *row, /*!< in:  sel_node_t* */
+  void *user_arg
+); /*!< in:  data pointer */
 /** Prints a row in a select result.
 @return	query thread to run next or NULL */
 
 que_thr_t *row_printf_step(que_thr_t *thr); /*!< in: query thread */
 /** Builds a dummy query graph used in selects. */
 
-void row_sel_prebuild_graph(
-    row_prebuilt_t *prebuilt); /*!< in: prebuilt handle */
+void row_sel_prebuild_graph(row_prebuilt_t *prebuilt); /*!< in: prebuilt handle */
 
 /** This function does several things, in fact too many things:
 
@@ -102,17 +105,18 @@ fetch next or fetch prev must not be tried to the cursor!
 DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD */
 
 enum db_err row_search_for_client(
-    ib_recovery_t recovery,   /*!< in: recovery flag */
-    ib_srch_mode_t mode,      /*!< in: search mode */
-    row_prebuilt_t *prebuilt, /*!< in: prebuilt struct for the
+  ib_recovery_t recovery,   /*!< in: recovery flag */
+  ib_srch_mode_t mode,      /*!< in: search mode */
+  row_prebuilt_t *prebuilt, /*!< in: prebuilt struct for the
                               table handle; this contains the info
                               of search_tuple, index; if search
                               tuple contains 0 fields then we
                               position the cursor at the start or
                               the end of the index, depending on
                               'mode' */
-    ib_match_t match_mode,    /*!< in: mode for matching the key */
-    ib_cur_op_t direction);   /*!< in: cursor operation, NOTE: if this
+  ib_match_t match_mode,    /*!< in: mode for matching the key */
+  ib_cur_op_t direction
+); /*!< in: cursor operation, NOTE: if this
                               is != ROW_SEL_MOVETO, then prebuilt
                               must have a pcur with stored position!
                               In opening of a cursor 'direction'
@@ -121,20 +125,17 @@ enum db_err row_search_for_client(
 /** Reads the current row from the fetch cache.
 @return current row from the row cache. */
 
-const rec_t *
-row_sel_row_cache_get(row_prebuilt_t *prebuilt); /*!< in: prebuilt struct */
+const rec_t *row_sel_row_cache_get(row_prebuilt_t *prebuilt); /*!< in: prebuilt struct */
 
 /** Pops a cached row from the fetch cache.
 @return	DB_SUCCESS if all OK else error code */
 
-void row_sel_row_cache_next(
-    row_prebuilt_t *prebuilt); /*!< in: prebuilt struct */
+void row_sel_row_cache_next(row_prebuilt_t *prebuilt); /*!< in: prebuilt struct */
 
 /** Check if there are any rows in the cache.
 @return true if row cache is empty. */
 
-bool row_sel_row_cache_is_empty(
-    row_prebuilt_t *prebuilt); /*!< in: prebuilt struct */
+bool row_sel_row_cache_is_empty(row_prebuilt_t *prebuilt); /*!< in: prebuilt struct */
 
 /** A structure for caching column values for prefetched rows */
 struct sel_buf_struct {

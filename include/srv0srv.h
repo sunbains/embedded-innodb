@@ -85,8 +85,7 @@ enum ib_recovery_t {
 
 /* If the last data file is auto-extended, we add this many pages to it
 at a time */
-#define SRV_AUTO_EXTEND_INCREMENT                                              \
-  (srv_auto_extend_increment * ((1024 * 1024) / UNIV_PAGE_SIZE))
+#define SRV_AUTO_EXTEND_INCREMENT (srv_auto_extend_increment * ((1024 * 1024) / UNIV_PAGE_SIZE))
 
 /* FIXME: This is set to true if the user has requested it. */
 extern bool srv_lower_case_table_names;
@@ -350,8 +349,10 @@ enum srv_thread_type srv_get_thread_type(void);
 NOTE! The server mutex has to be reserved by the caller!
 @return number of threads released: this may be less than n if not
 enough threads were suspended at the moment */
-ulint srv_release_threads(enum srv_thread_type type, /*!< in: thread type */
-                          ulint n); /*!< in: number of threads to release */
+ulint srv_release_threads(
+  enum srv_thread_type type, /*!< in: thread type */
+  ulint n
+); /*!< in: number of threads to release */
 
 /** The master thread controlling the server.
 @return	a dummy parameter */
@@ -388,14 +389,12 @@ void srv_suspend_user_thread(que_thr_t *thr); /*!< in: query thread associated
                                               with the client OS thread */
 /** Releases a user OS thread waiting for a lock to be released, if the
 thread is already suspended. */
-void srv_release_user_thread_if_suspended(
-    que_thr_t *thr); /*!< in: query thread associated with the
+void srv_release_user_thread_if_suspended(que_thr_t *thr); /*!< in: query thread associated with the
                      client OS thread	 */
 
 /** A thread which wakes up threads whose lock wait may have lasted too long.
 @return	a dummy parameter */
-os_thread_ret_t
-srv_lock_timeout_thread(void *arg); /*!< in: a dummy parameter required by
+os_thread_ret_t srv_lock_timeout_thread(void *arg); /*!< in: a dummy parameter required by
                                     os_thread_create */
 
 /** A thread which prints the info output by various InnoDB monitors.
@@ -407,20 +406,20 @@ os_thread_ret_t srv_monitor_thread(void *arg); /*!< in: a dummy parameter
 /** A thread which prints warnings about semaphore waits which have lasted
 too long. These can be used to track bugs which cause hangs.
 @return	a dummy parameter */
-os_thread_ret_t
-srv_error_monitor_thread(void *arg); /*!< in: a dummy parameter required by
+os_thread_ret_t srv_error_monitor_thread(void *arg); /*!< in: a dummy parameter required by
                                      os_thread_create */
 
 /** Outputs to a file the output of the InnoDB Monitor.
 @return false if not all information printed
 due to failure to obtain necessary mutex */
 bool srv_printf_innodb_monitor(
-    ib_stream_t ib_stream, /*!< in: output stream */
-    bool nowait,           /*!< in: whether to wait for
+  ib_stream_t ib_stream, /*!< in: output stream */
+  bool nowait,           /*!< in: whether to wait for
                             kernel mutex */
-    ulint *trx_start,      /*!< out: file position of the start of
+  ulint *trx_start,      /*!< out: file position of the start of
                            the list of active transactions */
-    ulint *trx_end);       /*!< out: file position of the end of
+  ulint *trx_end
+); /*!< out: file position of the end of
                            the list of active transactions */
 
 /** Function to pass InnoDB status variables to client */
@@ -448,14 +447,14 @@ struct export_var_struct {
   ulint innodb_buffer_pool_pages_misc;  /*!< Miscellanous pages */
   ulint innodb_buffer_pool_pages_free;  /*!< Free pages */
 #ifdef UNIV_DEBUG
-  ulint innodb_buffer_pool_pages_latched;  /*!< Latched pages */
-#endif                                     /* UNIV_DEBUG */
-  ulint innodb_buffer_pool_read_requests;  /*!< buf_pool->stat.n_page_gets */
-  ulint innodb_buffer_pool_reads;          /*!< srv_buf_pool_reads */
-  ulint innodb_buffer_pool_wait_free;      /*!< srv_buf_pool_wait_free */
-  ulint innodb_buffer_pool_pages_flushed;  /*!< srv_buf_pool_flushed */
-  ulint innodb_buffer_pool_write_requests; /*!< srv_buf_pool_write_requests */
-  ulint innodb_buffer_pool_read_ahead;     /*!< srv_read_ahead */
+  ulint innodb_buffer_pool_pages_latched;      /*!< Latched pages */
+#endif                                         /* UNIV_DEBUG */
+  ulint innodb_buffer_pool_read_requests;      /*!< buf_pool->stat.n_page_gets */
+  ulint innodb_buffer_pool_reads;              /*!< srv_buf_pool_reads */
+  ulint innodb_buffer_pool_wait_free;          /*!< srv_buf_pool_wait_free */
+  ulint innodb_buffer_pool_pages_flushed;      /*!< srv_buf_pool_flushed */
+  ulint innodb_buffer_pool_write_requests;     /*!< srv_buf_pool_write_requests */
+  ulint innodb_buffer_pool_read_ahead;         /*!< srv_read_ahead */
   ulint innodb_buffer_pool_read_ahead_evicted; /*!< srv_read_ahead evicted*/
   ulint innodb_dblwr_pages_written;            /*!< srv_dblwr_pages_written */
   ulint innodb_dblwr_writes;                   /*!< srv_dblwr_writes */
@@ -468,22 +467,22 @@ struct export_var_struct {
   ulint innodb_os_log_pending_writes;          /*!< srv_os_log_pending_writes */
   ulint innodb_os_log_pending_fsyncs;          /*!< fil_n_pending_log_flushes */
   ulint innodb_page_size;                      /*!< UNIV_PAGE_SIZE */
-  ulint innodb_pages_created;          /*!< buf_pool->stat.n_pages_created */
-  ulint innodb_pages_read;             /*!< buf_pool->stat.n_pages_read */
-  ulint innodb_pages_written;          /*!< buf_pool->stat.n_pages_written */
-  ulint innodb_row_lock_waits;         /*!< srv_n_lock_wait_count */
-  ulint innodb_row_lock_current_waits; /*!< srv_n_lock_wait_current_count */
-  int64_t innodb_row_lock_time;        /*!< srv_n_lock_wait_time
+  ulint innodb_pages_created;                  /*!< buf_pool->stat.n_pages_created */
+  ulint innodb_pages_read;                     /*!< buf_pool->stat.n_pages_read */
+  ulint innodb_pages_written;                  /*!< buf_pool->stat.n_pages_written */
+  ulint innodb_row_lock_waits;                 /*!< srv_n_lock_wait_count */
+  ulint innodb_row_lock_current_waits;         /*!< srv_n_lock_wait_current_count */
+  int64_t innodb_row_lock_time;                /*!< srv_n_lock_wait_time
                                           / 1000 */
-  ulint innodb_row_lock_time_avg;      /*!< srv_n_lock_wait_time
+  ulint innodb_row_lock_time_avg;              /*!< srv_n_lock_wait_time
                                        / 1000
                                        / srv_n_lock_wait_count */
-  ulint innodb_row_lock_time_max;      /*!< srv_n_lock_max_wait_time
+  ulint innodb_row_lock_time_max;              /*!< srv_n_lock_max_wait_time
                                        / 1000 */
-  ulint innodb_rows_read;              /*!< srv_n_rows_read */
-  ulint innodb_rows_inserted;          /*!< srv_n_rows_inserted */
-  ulint innodb_rows_updated;           /*!< srv_n_rows_updated */
-  ulint innodb_rows_deleted;           /*!< srv_n_rows_deleted */
+  ulint innodb_rows_read;                      /*!< srv_n_rows_read */
+  ulint innodb_rows_inserted;                  /*!< srv_n_rows_inserted */
+  ulint innodb_rows_updated;                   /*!< srv_n_rows_updated */
+  ulint innodb_rows_deleted;                   /*!< srv_n_rows_deleted */
 };
 
 extern ulint srv_n_threads_active[];

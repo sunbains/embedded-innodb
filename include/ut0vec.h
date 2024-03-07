@@ -47,13 +47,17 @@ typedef struct ib_vector_struct ib_vector_t;
 /** Create a new vector with the given initial size.
 @return	vector */
 
-ib_vector_t *ib_vector_create(mem_heap_t *heap, /*!< in: heap */
-                              ulint size);      /*!< in: initial size */
+ib_vector_t *ib_vector_create(
+  mem_heap_t *heap, /*!< in: heap */
+  ulint size
+); /*!< in: initial size */
 
 /** Push a new element to the vector, increasing its size if necessary. */
 
-void ib_vector_push(ib_vector_t *vec, /*!< in: vector */
-                    void *elem);      /*!< in: data element */
+void ib_vector_push(
+  ib_vector_t *vec, /*!< in: vector */
+  void *elem
+); /*!< in: data element */
 
 /** Get the number of elements in the vector.
 @return	number of elements in vector */
@@ -65,20 +69,25 @@ inline bool ib_vector_is_empty(const ib_vector_t *vec); /*!< in: vector */
 
 /** Get the n'th element.
 @return	n'th element */
-inline void *ib_vector_get(ib_vector_t *vec, /*!< in: vector */
-                           ulint n);         /*!< in: element index to get */
+inline void *ib_vector_get(
+  ib_vector_t *vec, /*!< in: vector */
+  ulint n
+); /*!< in: element index to get */
 
 /** Get n'th element as a const pointer.
 @return	n'th element */
-inline const void *
-ib_vector_get_const(const ib_vector_t *vec, /*!< in: vector */
-                    ulint n);               /*!< in: element index to get */
+inline const void *ib_vector_get_const(
+  const ib_vector_t *vec, /*!< in: vector */
+  ulint n
+); /*!< in: element index to get */
 
 /** Set the n'th element and return the previous value.
 @return	n'th element */
-inline void *ib_vector_set(ib_vector_t *vec, /*!< in: vector */
-                           ulint n,          /*!< in: element index to set */
-                           void *p);         /*!< in: new value to set */
+inline void *ib_vector_set(
+  ib_vector_t *vec, /*!< in: vector */
+  ulint n,          /*!< in: element index to set */
+  void *p
+); /*!< in: new value to set */
 
 /** Remove the last element from the vector. */
 inline void *ib_vector_pop(ib_vector_t *vec); /*!< in: vector */

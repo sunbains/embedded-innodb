@@ -134,12 +134,10 @@ void que_graph_publish(que_t *graph, sess_t *sess) {
   UT_LIST_ADD_LAST(graphs, sess->graphs, graph);
 }
 
-que_fork_t *que_fork_create(que_t *graph, que_node_t *parent, ulint fork_type,
-                            mem_heap_t *heap) {
+que_fork_t *que_fork_create(que_t *graph, que_node_t *parent, ulint fork_type, mem_heap_t *heap) {
   ut_ad(heap);
 
-  auto fork =
-      reinterpret_cast<que_fork_t *>(mem_heap_alloc(heap, sizeof(que_fork_t)));
+  auto fork = reinterpret_cast<que_fork_t *>(mem_heap_alloc(heap, sizeof(que_fork_t)));
 
   fork->common.type = QUE_NODE_FORK;
   fork->n_active_thrs = 0;
@@ -170,8 +168,7 @@ que_fork_t *que_fork_create(que_t *graph, que_node_t *parent, ulint fork_type,
 que_thr_t *que_thr_create(que_fork_t *parent, mem_heap_t *heap) {
   ut_ad(parent && heap);
 
-  auto thr =
-      reinterpret_cast<que_thr_t *>(mem_heap_alloc(heap, sizeof(que_thr_t)));
+  auto thr = reinterpret_cast<que_thr_t *>(mem_heap_alloc(heap, sizeof(que_thr_t)));
 
   thr->common.type = QUE_NODE_THR;
   thr->common.parent = parent;
@@ -198,9 +195,7 @@ void que_thr_end_wait(que_thr_t *thr, que_thr_t **next_thr) {
 
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(thr);
-  ut_ad((thr->state == QUE_THR_LOCK_WAIT) ||
-        (thr->state == QUE_THR_PROCEDURE_WAIT) ||
-        (thr->state == QUE_THR_SIG_REPLY_WAIT));
+  ut_ad((thr->state == QUE_THR_LOCK_WAIT) || (thr->state == QUE_THR_PROCEDURE_WAIT) || (thr->state == QUE_THR_SIG_REPLY_WAIT));
   ut_ad(thr->run_node);
 
   thr->prev_node = thr->run_node;
@@ -228,9 +223,7 @@ void que_thr_end_wait_no_next_thr(que_thr_t *thr) {
   ut_a(thr->state == QUE_THR_LOCK_WAIT);
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(thr);
-  ut_ad((thr->state == QUE_THR_LOCK_WAIT) ||
-        (thr->state == QUE_THR_PROCEDURE_WAIT) ||
-        (thr->state == QUE_THR_SIG_REPLY_WAIT));
+  ut_ad((thr->state == QUE_THR_LOCK_WAIT) || (thr->state == QUE_THR_PROCEDURE_WAIT) || (thr->state == QUE_THR_SIG_REPLY_WAIT));
 
   was_active = thr->is_active;
 
@@ -285,34 +278,34 @@ que_thr_t *que_fork_start_command(que_fork_t *fork) {
   threads are ready to run. */
   while (thr != nullptr) {
     switch (thr->state) {
-    case QUE_THR_COMMAND_WAIT:
+      case QUE_THR_COMMAND_WAIT:
 
-      /* We have to send the initial message to query thread
+        /* We have to send the initial message to query thread
       to start it */
 
-      que_thr_init_command(thr);
+        que_thr_init_command(thr);
 
-      return thr;
+        return thr;
 
-    case QUE_THR_SUSPENDED:
-      /* In this case the execution of the thread was
+      case QUE_THR_SUSPENDED:
+        /* In this case the execution of the thread was
       suspended: no initial message is needed because
       execution can continue from where it was left */
-      if (!suspended_thr) {
-        suspended_thr = thr;
-      }
+        if (!suspended_thr) {
+          suspended_thr = thr;
+        }
 
-      break;
+        break;
 
-    case QUE_THR_COMPLETED:
-      if (!completed_thr) {
-        completed_thr = thr;
-      }
+      case QUE_THR_COMPLETED:
+        if (!completed_thr) {
+          completed_thr = thr;
+        }
 
-      break;
+        break;
 
-    case QUE_THR_LOCK_WAIT:
-      ut_error;
+      case QUE_THR_LOCK_WAIT:
+        ut_error;
     }
 
     thr = UT_LIST_GET_NEXT(thrs, thr);
@@ -408,146 +401,147 @@ void que_graph_free_recursive(que_node_t *node) {
 
   switch (que_node_get_type(node)) {
 
-  case QUE_NODE_FORK:
-    fork = static_cast<que_fork_t *>(node);
+    case QUE_NODE_FORK:
+      fork = static_cast<que_fork_t *>(node);
 
-    thr = UT_LIST_GET_FIRST(fork->thrs);
+      thr = UT_LIST_GET_FIRST(fork->thrs);
 
-    while (thr) {
-      que_graph_free_recursive(thr);
+      while (thr) {
+        que_graph_free_recursive(thr);
 
-      thr = UT_LIST_GET_NEXT(thrs, thr);
-    }
+        thr = UT_LIST_GET_NEXT(thrs, thr);
+      }
 
-    break;
-  case QUE_NODE_THR:
+      break;
+    case QUE_NODE_THR:
 
-    thr = static_cast<que_thr_t *>(node);
+      thr = static_cast<que_thr_t *>(node);
 
-    if (thr->magic_n != QUE_THR_MAGIC_N) {
-      ib_logger(ib_stream,
-                "que_thr struct appears corrupt;"
-                " magic n %lu\n",
-                (unsigned long)thr->magic_n);
+      if (thr->magic_n != QUE_THR_MAGIC_N) {
+        ib_logger(
+          ib_stream,
+          "que_thr struct appears corrupt;"
+          " magic n %lu\n",
+          (unsigned long)thr->magic_n
+        );
+        ut_error;
+      }
+
+      thr->magic_n = QUE_THR_MAGIC_FREED;
+
+      que_graph_free_recursive(thr->child);
+
+      break;
+    case QUE_NODE_UNDO:
+
+      undo = static_cast<undo_node_t *>(node);
+
+      mem_heap_free(undo->heap);
+
+      break;
+    case QUE_NODE_SELECT:
+
+      sel = static_cast<sel_node_t *>(node);
+
+      sel_node_free_private(sel);
+
+      break;
+    case QUE_NODE_INSERT:
+
+      ins = static_cast<ins_node_t *>(node);
+
+      que_graph_free_recursive(ins->select);
+
+      mem_heap_free(ins->entry_sys_heap);
+
+      break;
+    case QUE_NODE_PURGE:
+      purge = static_cast<purge_node_t *>(node);
+
+      mem_heap_free(purge->heap);
+
+      break;
+
+    case QUE_NODE_UPDATE:
+
+      upd = static_cast<upd_node_t *>(node);
+
+      if (upd->in_client_interface) {
+
+        btr_pcur_free(upd->pcur);
+      }
+
+      que_graph_free_recursive(upd->cascade_node);
+
+      if (upd->cascade_heap) {
+        mem_heap_free(upd->cascade_heap);
+      }
+
+      que_graph_free_recursive(upd->select);
+
+      mem_heap_free(upd->heap);
+
+      break;
+    case QUE_NODE_CREATE_TABLE:
+      cre_tab = static_cast<tab_node_t *>(node);
+
+      que_graph_free_recursive(cre_tab->tab_def);
+      que_graph_free_recursive(cre_tab->col_def);
+      que_graph_free_recursive(cre_tab->commit_node);
+
+      mem_heap_free(cre_tab->heap);
+
+      break;
+    case QUE_NODE_CREATE_INDEX:
+      cre_ind = static_cast<ind_node_t *>(node);
+
+      que_graph_free_recursive(cre_ind->ind_def);
+      que_graph_free_recursive(cre_ind->field_def);
+      que_graph_free_recursive(cre_ind->commit_node);
+
+      mem_heap_free(cre_ind->heap);
+
+      break;
+    case QUE_NODE_PROC:
+      que_graph_free_stat_list(((proc_node_t *)node)->stat_list);
+
+      break;
+    case QUE_NODE_IF:
+      que_graph_free_stat_list(((if_node_t *)node)->stat_list);
+      que_graph_free_stat_list(((if_node_t *)node)->else_part);
+      que_graph_free_stat_list(((if_node_t *)node)->elsif_list);
+
+      break;
+    case QUE_NODE_ELSIF:
+      que_graph_free_stat_list(((elsif_node_t *)node)->stat_list);
+
+      break;
+    case QUE_NODE_WHILE:
+      que_graph_free_stat_list(((while_node_t *)node)->stat_list);
+
+      break;
+    case QUE_NODE_FOR:
+      que_graph_free_stat_list(((for_node_t *)node)->stat_list);
+
+      break;
+
+    case QUE_NODE_ASSIGNMENT:
+    case QUE_NODE_EXIT:
+    case QUE_NODE_RETURN:
+    case QUE_NODE_COMMIT:
+    case QUE_NODE_ROLLBACK:
+    case QUE_NODE_LOCK:
+    case QUE_NODE_FUNC:
+    case QUE_NODE_ORDER:
+    case QUE_NODE_ROW_PRINTF:
+    case QUE_NODE_OPEN:
+    case QUE_NODE_FETCH:
+      /* No need to do anything */
+
+      break;
+    default:
+      ib_logger(ib_stream, "que_node struct appears corrupt; type %lu\n", (unsigned long)que_node_get_type(node));
       ut_error;
-    }
-
-    thr->magic_n = QUE_THR_MAGIC_FREED;
-
-    que_graph_free_recursive(thr->child);
-
-    break;
-  case QUE_NODE_UNDO:
-
-    undo = static_cast<undo_node_t *>(node);
-
-    mem_heap_free(undo->heap);
-
-    break;
-  case QUE_NODE_SELECT:
-
-    sel = static_cast<sel_node_t *>(node);
-
-    sel_node_free_private(sel);
-
-    break;
-  case QUE_NODE_INSERT:
-
-    ins = static_cast<ins_node_t *>(node);
-
-    que_graph_free_recursive(ins->select);
-
-    mem_heap_free(ins->entry_sys_heap);
-
-    break;
-  case QUE_NODE_PURGE:
-    purge = static_cast<purge_node_t *>(node);
-
-    mem_heap_free(purge->heap);
-
-    break;
-
-  case QUE_NODE_UPDATE:
-
-    upd = static_cast<upd_node_t *>(node);
-
-    if (upd->in_client_interface) {
-
-      btr_pcur_free(upd->pcur);
-    }
-
-    que_graph_free_recursive(upd->cascade_node);
-
-    if (upd->cascade_heap) {
-      mem_heap_free(upd->cascade_heap);
-    }
-
-    que_graph_free_recursive(upd->select);
-
-    mem_heap_free(upd->heap);
-
-    break;
-  case QUE_NODE_CREATE_TABLE:
-    cre_tab = static_cast<tab_node_t *>(node);
-
-    que_graph_free_recursive(cre_tab->tab_def);
-    que_graph_free_recursive(cre_tab->col_def);
-    que_graph_free_recursive(cre_tab->commit_node);
-
-    mem_heap_free(cre_tab->heap);
-
-    break;
-  case QUE_NODE_CREATE_INDEX:
-    cre_ind = static_cast<ind_node_t *>(node);
-
-    que_graph_free_recursive(cre_ind->ind_def);
-    que_graph_free_recursive(cre_ind->field_def);
-    que_graph_free_recursive(cre_ind->commit_node);
-
-    mem_heap_free(cre_ind->heap);
-
-    break;
-  case QUE_NODE_PROC:
-    que_graph_free_stat_list(((proc_node_t *)node)->stat_list);
-
-    break;
-  case QUE_NODE_IF:
-    que_graph_free_stat_list(((if_node_t *)node)->stat_list);
-    que_graph_free_stat_list(((if_node_t *)node)->else_part);
-    que_graph_free_stat_list(((if_node_t *)node)->elsif_list);
-
-    break;
-  case QUE_NODE_ELSIF:
-    que_graph_free_stat_list(((elsif_node_t *)node)->stat_list);
-
-    break;
-  case QUE_NODE_WHILE:
-    que_graph_free_stat_list(((while_node_t *)node)->stat_list);
-
-    break;
-  case QUE_NODE_FOR:
-    que_graph_free_stat_list(((for_node_t *)node)->stat_list);
-
-    break;
-
-  case QUE_NODE_ASSIGNMENT:
-  case QUE_NODE_EXIT:
-  case QUE_NODE_RETURN:
-  case QUE_NODE_COMMIT:
-  case QUE_NODE_ROLLBACK:
-  case QUE_NODE_LOCK:
-  case QUE_NODE_FUNC:
-  case QUE_NODE_ORDER:
-  case QUE_NODE_ROW_PRINTF:
-  case QUE_NODE_OPEN:
-  case QUE_NODE_FETCH:
-    /* No need to do anything */
-
-    break;
-  default:
-    ib_logger(ib_stream, "que_node struct appears corrupt; type %lu\n",
-              (unsigned long)que_node_get_type(node));
-    ut_error;
   }
 }
 
@@ -633,8 +627,9 @@ count can be decremented and this function may only be called from inside
 que_run_threads or que_thr_check_if_switch! These restrictions exist to make
 the rollback code easier to maintain. */
 static void que_thr_dec_refer_count(
-    que_thr_t *thr,       /*!< in: query thread */
-    que_thr_t **next_thr) /*!< in/out: next query thread to run;
+  que_thr_t *thr, /*!< in: query thread */
+  que_thr_t **next_thr
+) /*!< in/out: next query thread to run;
                           if the value which is passed in is
                           a pointer to a nullptr pointer, then the
                           calling function can start running
@@ -701,25 +696,25 @@ static void que_thr_dec_refer_count(
   if (que_fork_all_thrs_in_state(fork, QUE_THR_COMPLETED)) {
 
     switch (fork_type) {
-    case QUE_FORK_ROLLBACK:
-      /* This is really the undo graph used in rollback,
+      case QUE_FORK_ROLLBACK:
+        /* This is really the undo graph used in rollback,
       no roll_node in this graph */
 
-      ut_ad(UT_LIST_GET_LEN(trx->signals) > 0);
-      ut_ad(trx->handling_signals == true);
+        ut_ad(UT_LIST_GET_LEN(trx->signals) > 0);
+        ut_ad(trx->handling_signals == true);
 
-      trx_finish_rollback_off_kernel(fork, trx, next_thr);
-      break;
+        trx_finish_rollback_off_kernel(fork, trx, next_thr);
+        break;
 
-    case QUE_FORK_PURGE:
-    case QUE_FORK_RECOVERY:
-    case QUE_FORK_USER_INTERFACE:
+      case QUE_FORK_PURGE:
+      case QUE_FORK_RECOVERY:
+      case QUE_FORK_USER_INTERFACE:
 
-      /* Do nothing */
-      break;
+        /* Do nothing */
+        break;
 
-    default:
-      ut_error; /* not used */
+      default:
+        ut_error; /* not used */
     }
   }
 
@@ -756,13 +751,11 @@ bool que_thr_stop(que_thr_t *thr) {
     UT_LIST_ADD_FIRST(trx_thrs, trx->wait_thrs, thr);
     thr->state = QUE_THR_LOCK_WAIT;
 
-  } else if (trx->error_state != DB_SUCCESS &&
-             trx->error_state != DB_LOCK_WAIT) {
+  } else if (trx->error_state != DB_SUCCESS && trx->error_state != DB_LOCK_WAIT) {
 
     thr->state = QUE_THR_COMPLETED;
 
-  } else if (UT_LIST_GET_LEN(trx->signals) > 0 &&
-             graph->fork_type != QUE_FORK_ROLLBACK) {
+  } else if (UT_LIST_GET_LEN(trx->signals) > 0 && graph->fork_type != QUE_FORK_ROLLBACK) {
 
     thr->state = QUE_THR_SUSPENDED;
   } else {
@@ -781,8 +774,7 @@ void que_thr_stop_for_client_no_error(que_thr_t *thr, trx_t *trx) {
   ut_ad(thr->graph->n_active_thrs == 1);
 
   if (thr->magic_n != QUE_THR_MAGIC_N) {
-    ib_logger(ib_stream, "que_thr struct appears corrupt; magic n %lu\n",
-              (unsigned long)thr->magic_n);
+    ib_logger(ib_stream, "que_thr struct appears corrupt; magic n %lu\n", (unsigned long)thr->magic_n);
 
     ut_error;
   }
@@ -797,8 +789,7 @@ void que_thr_stop_for_client_no_error(que_thr_t *thr, trx_t *trx) {
 
 void que_thr_move_to_run_state_for_client(que_thr_t *thr, trx_t *trx) {
   if (thr->magic_n != QUE_THR_MAGIC_N) {
-    ib_logger(ib_stream, "que_thr struct appears corrupt; magic n %lu\n",
-              (unsigned long)thr->magic_n);
+    ib_logger(ib_stream, "que_thr struct appears corrupt; magic n %lu\n", (unsigned long)thr->magic_n);
 
     ut_error;
   } else if (!thr->is_active) {
@@ -920,8 +911,7 @@ void que_node_print_info(que_node_t *node) {
     str = "UNKNOWN NODE TYPE";
   }
 
-  ib_logger(ib_stream, "Node type %lu: %s, address %p\n", (ulong)type, str,
-            (void *)node);
+  ib_logger(ib_stream, "Node type %lu: %s, address %p\n", (ulong)type, str, (void *)node);
 }
 
 /** Performs an execution step on a query thread.
@@ -948,8 +938,7 @@ inline que_thr_t *que_thr_step(que_thr_t *thr) {
   }
 #endif /* UNIV_DEBUG */
   if (type & QUE_NODE_CONTROL_STAT) {
-    if (thr->prev_node != que_node_get_parent(node) &&
-        que_node_get_next(thr->prev_node)) {
+    if (thr->prev_node != que_node_get_parent(node) && que_node_get_next(thr->prev_node)) {
 
       /* The control statements, like WHILE, always pass the
       control to the next child statement if there is any
@@ -1088,47 +1077,46 @@ loop:
 
   switch (thr->state) {
 
-  case QUE_THR_RUNNING:
-    /* There probably was a lock wait, but it already ended
+    case QUE_THR_RUNNING:
+      /* There probably was a lock wait, but it already ended
     before we came here: continue running thr */
 
-    mutex_exit(&kernel_mutex);
+      mutex_exit(&kernel_mutex);
 
-    goto loop;
+      goto loop;
 
-  case QUE_THR_LOCK_WAIT:
-    mutex_exit(&kernel_mutex);
+    case QUE_THR_LOCK_WAIT:
+      mutex_exit(&kernel_mutex);
 
-    /* The ..._user_... function works also for InnoDB's
+      /* The ..._user_... function works also for InnoDB's
     internal threads. Let us wait that the lock wait ends. */
 
-    srv_suspend_user_thread(thr);
+      srv_suspend_user_thread(thr);
 
-    if (thr_get_trx(thr)->error_state != DB_SUCCESS) {
-      /* thr was chosen as a deadlock victim or there was
+      if (thr_get_trx(thr)->error_state != DB_SUCCESS) {
+        /* thr was chosen as a deadlock victim or there was
       a lock wait timeout */
 
-      que_thr_dec_refer_count(thr, nullptr);
+        que_thr_dec_refer_count(thr, nullptr);
 
-      return;
-    }
+        return;
+      }
 
-    goto loop;
+      goto loop;
 
-  case QUE_THR_COMPLETED:
-  case QUE_THR_COMMAND_WAIT:
-    /* Do nothing */
-    break;
+    case QUE_THR_COMPLETED:
+    case QUE_THR_COMMAND_WAIT:
+      /* Do nothing */
+      break;
 
-  default:
-    ut_error;
+    default:
+      ut_error;
   }
 
   mutex_exit(&kernel_mutex);
 }
 
-db_err que_eval_sql(pars_info_t *info, const char *sql, bool reserve_dict_mutex,
-                    trx_t *trx) {
+db_err que_eval_sql(pars_info_t *info, const char *sql, bool reserve_dict_mutex, trx_t *trx) {
   que_thr_t *thr;
   que_t *graph;
 

@@ -64,6 +64,7 @@ typedef struct roll_node_struct roll_node_t;
 typedef struct commit_node_struct commit_node_t;
 /** SAVEPOINT command node in a query graph */
 typedef struct trx_named_savept_struct trx_named_savept_t;
+
 /* @} */
 
 /** Rollback contexts */
@@ -90,6 +91,7 @@ typedef uint64_t undo_no_t;
 
 /** Transaction savepoint */
 typedef struct trx_savept_struct trx_savept_t;
+
 /** Transaction savepoint */
 struct trx_savept_struct {
   undo_no_t least_undo_no; /*!< least undo number to undo */

@@ -36,42 +36,46 @@ the caller must have a shared latch on dict_foreign_key_check_lock.
 @return DB_SUCCESS, DB_LOCK_WAIT, DB_NO_REFERENCED_ROW, or
 DB_ROW_IS_REFERENCED */
 db_err row_ins_check_foreign_constraint(
-    bool check_ref,          /*!< in: true If we want to check that
+  bool check_ref,          /*!< in: true If we want to check that
                             the referenced table is ok, false if we
                             want to check the foreign key table */
-    dict_foreign_t *foreign, /*!< in: foreign constraint; NOTE that the
+  dict_foreign_t *foreign, /*!< in: foreign constraint; NOTE that the
                              tables mentioned in it must be in the
                              dictionary cache if they exist at all */
-    dict_table_t *table,     /*!< in: if check_ref is true, then the foreign
+  dict_table_t *table,     /*!< in: if check_ref is true, then the foreign
                              table, else the referenced table */
-    dtuple_t *entry,         /*!< in: index entry for index */
-    que_thr_t *thr);         /*!< in: query thread */
+  dtuple_t *entry,         /*!< in: index entry for index */
+  que_thr_t *thr
+); /*!< in: query thread */
 
 /** Creates an insert node struct.
 @return	own: insert node struct */
-ins_node_t *
-row_ins_node_create(ib_ins_mode_t ins_type, /*!< in: INS_VALUES, ... */
-                    dict_table_t *table,    /*!< in: table where to insert */
-                    mem_heap_t *heap);      /*!< in: mem heap where created */
+ins_node_t *row_ins_node_create(
+  ib_ins_mode_t ins_type, /*!< in: INS_VALUES, ... */
+  dict_table_t *table,    /*!< in: table where to insert */
+  mem_heap_t *heap
+); /*!< in: mem heap where created */
 
 /** Sets a new row to insert for an INS_DIRECT node. This function is only used
 if we have constructed the row separately, which is a rare case; this
 function is quite slow. */
 void row_ins_node_set_new_row(
-    ins_node_t *node, /*!< in: insert node */
-    dtuple_t *row);   /*!< in: new row (or first row) for the node */
+  ins_node_t *node, /*!< in: insert node */
+  dtuple_t *row
+); /*!< in: new row (or first row) for the node */
 
 /** Inserts an index entry to index. Tries first optimistic, then pessimistic
 descent down the tree. If the entry matches enough to a delete marked record,
 performs the insert by updating or delete unmarking the delete marked
 record.
 @return	DB_SUCCESS, DB_LOCK_WAIT, DB_DUPLICATE_KEY, or some other error code */
-db_err
-row_ins_index_entry(dict_index_t *index, /*!< in: index */
-                    dtuple_t *entry,     /*!< in: index entry to insert */
-                    ulint n_ext, /*!< in: number of externally stored columns */
-                    bool foreign, /*!< in: true=check foreign key constraints */
-                    que_thr_t *thr); /*!< in: query thread */
+db_err row_ins_index_entry(
+  dict_index_t *index, /*!< in: index */
+  dtuple_t *entry,     /*!< in: index entry to insert */
+  ulint n_ext,         /*!< in: number of externally stored columns */
+  bool foreign,        /*!< in: true=check foreign key constraints */
+  que_thr_t *thr
+); /*!< in: query thread */
 
 /** Inserts a row to a table. This is a high-level function used in
 SQL execution graphs.
@@ -79,8 +83,7 @@ SQL execution graphs.
 que_thr_t *row_ins_step(que_thr_t *thr); /*!< in: query thread */
 
 /** Creates an entry template for each index of a table. */
-void row_ins_node_create_entry_list(
-    ins_node_t *node); /*!< in: row insert node */
+void row_ins_node_create_entry_list(ins_node_t *node); /*!< in: row insert node */
 
 /* Insert node structure */
 struct ins_node_struct {

@@ -23,6 +23,7 @@ Created 12 Oct 2008.
 that the table handler can drop the table in background when there are no
 queries to it any more. Protected by the kernel mutex. */
 typedef struct ddl_drop_struct ddl_drop_t;
+
 struct ddl_drop_struct {
   char *table_name;
   UT_LIST_NODE_T(ddl_drop_t) ddl_drop_list;
@@ -44,8 +45,7 @@ Furhermore, the call to the drop table must be non-blocking. Therefore
 we do the drop table as a background operation, which is taken care of by
 the master thread in srv0srv.c.
 @return	error code or DB_SUCCESS */
-static db_err
-ddl_drop_table_in_background(const char *name) /*!< in: table name */
+static db_err ddl_drop_table_in_background(const char *name) /*!< in: table name */
 {
   bool started;
 
@@ -161,8 +161,7 @@ ALTER TABLE may call drop table even if the table has running queries on
 it. Also, if there are running foreign key checks on the table, we drop the
 table lazily.
 @return	true if the table was not yet in the drop list, and was added there */
-static bool
-ddl_add_table_to_background_drop_list(const char *name) /*!< in: table name */
+static bool ddl_add_table_to_background_drop_list(const char *name) /*!< in: table name */
 {
   mutex_enter(&kernel_mutex);
 
@@ -214,12 +213,14 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
   ut_a(name != nullptr);
 
   if (srv_created_new_raw) {
-    ib_logger(ib_stream,
-              "A new raw disk partition was initialized:\n"
-              "we do not allow database modifications"
-              " by the user.\n"
-              "Shut down the server and edit your config file "
-              "so that newraw is replaced with raw.\n");
+    ib_logger(
+      ib_stream,
+      "A new raw disk partition was initialized:\n"
+      "we do not allow database modifications"
+      " by the user.\n"
+      "Shut down the server and edit your config file "
+      "so that newraw is replaced with raw.\n"
+    );
 
     return DB_ERROR;
   }
@@ -235,27 +236,20 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
   table_name++;
   namelen = strlen(table_name) + 1;
 
-  if (namelen == sizeof S_innodb_monitor &&
-      !memcmp(table_name, S_innodb_monitor, sizeof S_innodb_monitor)) {
+  if (namelen == sizeof S_innodb_monitor && !memcmp(table_name, S_innodb_monitor, sizeof S_innodb_monitor)) {
 
     /* Table name equals "innodb_monitor":
     stop monitor prints */
 
     srv_print_innodb_monitor = false;
     srv_print_innodb_lock_monitor = false;
-  } else if (namelen == sizeof S_innodb_lock_monitor &&
-             !memcmp(table_name, S_innodb_lock_monitor,
-                     sizeof S_innodb_lock_monitor)) {
+  } else if (namelen == sizeof S_innodb_lock_monitor && !memcmp(table_name, S_innodb_lock_monitor, sizeof S_innodb_lock_monitor)) {
     srv_print_innodb_monitor = false;
     srv_print_innodb_lock_monitor = false;
-  } else if (namelen == sizeof S_innodb_tablespace_monitor &&
-             !memcmp(table_name, S_innodb_tablespace_monitor,
-                     sizeof S_innodb_tablespace_monitor)) {
+  } else if (namelen == sizeof S_innodb_tablespace_monitor && !memcmp(table_name, S_innodb_tablespace_monitor, sizeof S_innodb_tablespace_monitor)) {
 
     srv_print_innodb_tablespace_monitor = false;
-  } else if (namelen == sizeof S_innodb_table_monitor &&
-             !memcmp(table_name, S_innodb_table_monitor,
-                     sizeof S_innodb_table_monitor)) {
+  } else if (namelen == sizeof S_innodb_table_monitor && !memcmp(table_name, S_innodb_table_monitor, sizeof S_innodb_table_monitor)) {
 
     srv_print_innodb_table_monitor = false;
   }
@@ -280,12 +274,14 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
 
     ib_logger(ib_stream, "  Error: table ");
     ut_print_name(ib_stream, trx, true, name);
-    ib_logger(ib_stream,
-              " does not exist in the InnoDB internal\n"
-              "data dictionary though the client is"
-              " trying to drop it.\n"
-              "You can look for further help on the\n"
-              "InnoDB website. Check the site for details\n");
+    ib_logger(
+      ib_stream,
+      " does not exist in the InnoDB internal\n"
+      "data dictionary though the client is"
+      " trying to drop it.\n"
+      "You can look for further help on the\n"
+      "InnoDB website. Check the site for details\n"
+    );
     goto func_exit;
   }
 
@@ -299,9 +295,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     foreign = UT_LIST_GET_NEXT(referenced_list, foreign);
   }
 
-  if (foreign && trx->check_foreigns &&
-      !(drop_db &&
-        dict_tables_have_same_db(name, foreign->foreign_table_name))) {
+  if (foreign && trx->check_foreigns && !(drop_db && dict_tables_have_same_db(name, foreign->foreign_table_name))) {
     /* We only allow dropping a referenced table if
     FOREIGN_KEY_CHECKS is set to 0 */
 
@@ -331,16 +325,21 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
 
     if (added) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream,
-                "  Warning: Client is"
-                " trying to drop table (%lu) ",
-                (ulint)table->id);
+      ib_logger(
+        ib_stream,
+        "  Warning: Client is"
+        " trying to drop table (%lu) ",
+        (ulint)table->id
+      );
       ut_print_name(ib_stream, trx, true, table->name);
-      ib_logger(ib_stream, "\n"
-                           "though there are still"
-                           " open handles to it.\n"
-                           "Adding the table to the"
-                           " background drop queue.\n");
+      ib_logger(
+        ib_stream,
+        "\n"
+        "though there are still"
+        " open handles to it.\n"
+        "Adding the table to the"
+        " background drop queue.\n"
+      );
 
       /* We return DB_SUCCESS though the drop will
       happen lazily later */
@@ -370,11 +369,14 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  You are trying to drop table ");
       ut_print_name(ib_stream, trx, true, table_name);
-      ib_logger(ib_stream, "\n"
-                           "though there is a"
-                           " foreign key check running on it.\n"
-                           "Adding the table to"
-                           " the background drop queue.\n");
+      ib_logger(
+        ib_stream,
+        "\n"
+        "though there is a"
+        " foreign key check running on it.\n"
+        "Adding the table to"
+        " the background drop queue.\n"
+      );
 
       /* We return DB_SUCCESS though the drop will
       happen lazily later */
@@ -404,73 +406,76 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
 
   pars_info_add_str_literal(info, "table_name", name);
 
-  err = que_eval_sql(info,
-                     "PROCEDURE DROP_TABLE_PROC () IS\n"
-                     "sys_foreign_id CHAR;\n"
-                     "table_id CHAR;\n"
-                     "index_id CHAR;\n"
-                     "foreign_id CHAR;\n"
-                     "found INT;\n"
-                     "BEGIN\n"
-                     "SELECT ID INTO table_id\n"
-                     "FROM SYS_TABLES\n"
-                     "WHERE NAME = :table_name\n"
-                     "LOCK IN SHARE MODE;\n"
-                     "IF (SQL % NOTFOUND) THEN\n"
-                     "       RETURN;\n"
-                     "END IF;\n"
-                     "found := 1;\n"
-                     "SELECT ID INTO sys_foreign_id\n"
-                     "FROM SYS_TABLES\n"
-                     "WHERE NAME = 'SYS_FOREIGN'\n"
-                     "LOCK IN SHARE MODE;\n"
-                     "IF (SQL % NOTFOUND) THEN\n"
-                     "       found := 0;\n"
-                     "END IF;\n"
-                     "IF (:table_name = 'SYS_FOREIGN') THEN\n"
-                     "       found := 0;\n"
-                     "END IF;\n"
-                     "IF (:table_name = 'SYS_FOREIGN_COLS') THEN\n"
-                     "       found := 0;\n"
-                     "END IF;\n"
-                     "WHILE found = 1 LOOP\n"
-                     "       SELECT ID INTO foreign_id\n"
-                     "       FROM SYS_FOREIGN\n"
-                     "       WHERE FOR_NAME = :table_name\n"
-                     "               AND TO_BINARY(FOR_NAME)\n"
-                     "                 = TO_BINARY(:table_name)\n"
-                     "               LOCK IN SHARE MODE;\n"
-                     "       IF (SQL % NOTFOUND) THEN\n"
-                     "               found := 0;\n"
-                     "       ELSE\n"
-                     "               DELETE FROM SYS_FOREIGN_COLS\n"
-                     "               WHERE ID = foreign_id;\n"
-                     "               DELETE FROM SYS_FOREIGN\n"
-                     "               WHERE ID = foreign_id;\n"
-                     "       END IF;\n"
-                     "END LOOP;\n"
-                     "found := 1;\n"
-                     "WHILE found = 1 LOOP\n"
-                     "       SELECT ID INTO index_id\n"
-                     "       FROM SYS_INDEXES\n"
-                     "       WHERE TABLE_ID = table_id\n"
-                     "       LOCK IN SHARE MODE;\n"
-                     "       IF (SQL % NOTFOUND) THEN\n"
-                     "               found := 0;\n"
-                     "       ELSE\n"
-                     "               DELETE FROM SYS_FIELDS\n"
-                     "               WHERE INDEX_ID = index_id;\n"
-                     "               DELETE FROM SYS_INDEXES\n"
-                     "               WHERE ID = index_id\n"
-                     "               AND TABLE_ID = table_id;\n"
-                     "       END IF;\n"
-                     "END LOOP;\n"
-                     "DELETE FROM SYS_COLUMNS\n"
-                     "WHERE TABLE_ID = table_id;\n"
-                     "DELETE FROM SYS_TABLES\n"
-                     "WHERE ID = table_id;\n"
-                     "END;\n",
-                     false, trx);
+  err = que_eval_sql(
+    info,
+    "PROCEDURE DROP_TABLE_PROC () IS\n"
+    "sys_foreign_id CHAR;\n"
+    "table_id CHAR;\n"
+    "index_id CHAR;\n"
+    "foreign_id CHAR;\n"
+    "found INT;\n"
+    "BEGIN\n"
+    "SELECT ID INTO table_id\n"
+    "FROM SYS_TABLES\n"
+    "WHERE NAME = :table_name\n"
+    "LOCK IN SHARE MODE;\n"
+    "IF (SQL % NOTFOUND) THEN\n"
+    "       RETURN;\n"
+    "END IF;\n"
+    "found := 1;\n"
+    "SELECT ID INTO sys_foreign_id\n"
+    "FROM SYS_TABLES\n"
+    "WHERE NAME = 'SYS_FOREIGN'\n"
+    "LOCK IN SHARE MODE;\n"
+    "IF (SQL % NOTFOUND) THEN\n"
+    "       found := 0;\n"
+    "END IF;\n"
+    "IF (:table_name = 'SYS_FOREIGN') THEN\n"
+    "       found := 0;\n"
+    "END IF;\n"
+    "IF (:table_name = 'SYS_FOREIGN_COLS') THEN\n"
+    "       found := 0;\n"
+    "END IF;\n"
+    "WHILE found = 1 LOOP\n"
+    "       SELECT ID INTO foreign_id\n"
+    "       FROM SYS_FOREIGN\n"
+    "       WHERE FOR_NAME = :table_name\n"
+    "               AND TO_BINARY(FOR_NAME)\n"
+    "                 = TO_BINARY(:table_name)\n"
+    "               LOCK IN SHARE MODE;\n"
+    "       IF (SQL % NOTFOUND) THEN\n"
+    "               found := 0;\n"
+    "       ELSE\n"
+    "               DELETE FROM SYS_FOREIGN_COLS\n"
+    "               WHERE ID = foreign_id;\n"
+    "               DELETE FROM SYS_FOREIGN\n"
+    "               WHERE ID = foreign_id;\n"
+    "       END IF;\n"
+    "END LOOP;\n"
+    "found := 1;\n"
+    "WHILE found = 1 LOOP\n"
+    "       SELECT ID INTO index_id\n"
+    "       FROM SYS_INDEXES\n"
+    "       WHERE TABLE_ID = table_id\n"
+    "       LOCK IN SHARE MODE;\n"
+    "       IF (SQL % NOTFOUND) THEN\n"
+    "               found := 0;\n"
+    "       ELSE\n"
+    "               DELETE FROM SYS_FIELDS\n"
+    "               WHERE INDEX_ID = index_id;\n"
+    "               DELETE FROM SYS_INDEXES\n"
+    "               WHERE ID = index_id\n"
+    "               AND TABLE_ID = table_id;\n"
+    "       END IF;\n"
+    "END LOOP;\n"
+    "DELETE FROM SYS_COLUMNS\n"
+    "WHERE TABLE_ID = table_id;\n"
+    "DELETE FROM SYS_TABLES\n"
+    "WHERE ID = table_id;\n"
+    "END;\n",
+    false,
+    trx
+  );
 
   if (err != DB_SUCCESS) {
 
@@ -520,27 +525,34 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     wrong: we do not want to delete valuable data of the user */
 
     if (err == DB_SUCCESS && space_id > 0) {
-      if (!fil_space_for_table_exists_in_mem(space_id, name_or_path, is_path,
-                                             false, true)) {
+      if (!fil_space_for_table_exists_in_mem(space_id, name_or_path, is_path, false, true)) {
         err = DB_SUCCESS;
 
-        ib_logger(ib_stream, "We removed now the InnoDB"
-                             " internal data dictionary entry\n"
-                             "of table ");
+        ib_logger(
+          ib_stream,
+          "We removed now the InnoDB"
+          " internal data dictionary entry\n"
+          "of table "
+        );
         ut_print_name(ib_stream, trx, true, name);
         ib_logger(ib_stream, ".\n");
       } else if (!fil_delete_tablespace(space_id)) {
-        ib_logger(ib_stream, "We removed now the InnoDB"
-                             " internal data dictionary entry\n"
-                             "of table ");
+        ib_logger(
+          ib_stream,
+          "We removed now the InnoDB"
+          " internal data dictionary entry\n"
+          "of table "
+        );
         ut_print_name(ib_stream, trx, true, name);
         ib_logger(ib_stream, ".\n");
 
         ut_print_timestamp(ib_stream);
-        ib_logger(ib_stream,
-                  "  Error: not able to"
-                  " delete tablespace %lu of table ",
-                  (ulong)space_id);
+        ib_logger(
+          ib_stream,
+          "  Error: not able to"
+          " delete tablespace %lu of table ",
+          (ulong)space_id
+        );
         ut_print_name(ib_stream, trx, true, name);
         ib_logger(ib_stream, "!\n");
         err = DB_ERROR;
@@ -561,9 +573,8 @@ func_exit:
 
 /* Evaluates to true if str1 equals str2_onstack, used for comparing
 the above strings. */
-#define STR_EQ(str1, str1_len, str2_onstack)                                   \
-  ((str1_len) == sizeof(str2_onstack) &&                                       \
-   memcmp(str1, str2_onstack, sizeof(str2_onstack)) == 0)
+#define STR_EQ(str1, str1_len, str2_onstack) \
+  ((str1_len) == sizeof(str2_onstack) && memcmp(str1, str2_onstack, sizeof(str2_onstack)) == 0)
 
 db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
   tab_node_t *node;
@@ -582,11 +593,14 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
   ut_ad(trx->dict_operation_lock_mode == RW_X_LATCH);
 
   if (srv_created_new_raw) {
-    ib_logger(ib_stream, "A new raw disk partition was initialized:\n"
-                         "we do not allow database modifications"
-                         " by the user.\n"
-                         "Shut down the database and edit your config "
-                         "file so that newraw is replaced with raw.\n");
+    ib_logger(
+      ib_stream,
+      "A new raw disk partition was initialized:\n"
+      "we do not allow database modifications"
+      " by the user.\n"
+      "Shut down the database and edit your config "
+      "file so that newraw is replaced with raw.\n"
+    );
   err_exit:
     dict_mem_table_free(table);
 
@@ -645,19 +659,25 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
     /* We define here a debugging feature intended for
     developers */
 
-    ib_logger(ib_stream, "Validating InnoDB memory:\n"
-                         "to use this feature you must compile InnoDB with\n"
-                         "UNIV_MEM_DEBUG defined in innodb0types.h and"
-                         " the server must be\n"
-                         "quiet because allocation from a mem heap"
-                         " is not protected\n"
-                         "by any semaphore.\n");
+    ib_logger(
+      ib_stream,
+      "Validating InnoDB memory:\n"
+      "to use this feature you must compile InnoDB with\n"
+      "UNIV_MEM_DEBUG defined in innodb0types.h and"
+      " the server must be\n"
+      "quiet because allocation from a mem heap"
+      " is not protected\n"
+      "by any semaphore.\n"
+    );
 #ifdef UNIV_MEM_DEBUG
     ut_a(mem_validate());
     ib_logger(ib_stream, "Memory validated\n");
 #else  /* UNIV_MEM_DEBUG */
-    ib_logger(ib_stream, "Memory NOT validated (recompile with "
-                         "UNIV_MEM_DEBUG)\n");
+    ib_logger(
+      ib_stream,
+      "Memory NOT validated (recompile with "
+      "UNIV_MEM_DEBUG)\n"
+    );
 #endif /* UNIV_MEM_DEBUG */
   }
 
@@ -669,8 +689,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
 
   thr = pars_complete_graph_for_exec(node, trx, heap);
 
-  auto tmp = que_fork_start_command(
-      static_cast<que_fork_t *>(que_node_get_parent(thr)));
+  auto tmp = que_fork_start_command(static_cast<que_fork_t *>(que_node_get_parent(thr)));
   ut_a(tmp == thr);
 
   que_run_threads(thr);
@@ -682,34 +701,37 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
   }
 
   switch (err) {
-  case DB_OUT_OF_FILE_SPACE:
-    ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  Warning: cannot create table ");
-    ut_print_name(ib_stream, trx, true, table->name);
-    ib_logger(ib_stream, " because tablespace full\n");
+    case DB_OUT_OF_FILE_SPACE:
+      ut_print_timestamp(ib_stream);
+      ib_logger(ib_stream, "  Warning: cannot create table ");
+      ut_print_name(ib_stream, trx, true, table->name);
+      ib_logger(ib_stream, " because tablespace full\n");
 
-    if (dict_table_get_low(table->name)) {
+      if (dict_table_get_low(table->name)) {
 
-      ddl_drop_table(table->name, trx, false);
-    }
-    break;
+        ddl_drop_table(table->name, trx, false);
+      }
+      break;
 
-  case DB_DUPLICATE_KEY:
-    ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  Error: table ");
-    ut_print_name(ib_stream, trx, true, table->name);
-    ib_logger(ib_stream, " already exists in InnoDB internal\n"
-                         "data dictionary.\n"
-                         "You can look for further help on\n"
-                         "the InnoDB website\n");
+    case DB_DUPLICATE_KEY:
+      ut_print_timestamp(ib_stream);
+      ib_logger(ib_stream, "  Error: table ");
+      ut_print_name(ib_stream, trx, true, table->name);
+      ib_logger(
+        ib_stream,
+        " already exists in InnoDB internal\n"
+        "data dictionary.\n"
+        "You can look for further help on\n"
+        "the InnoDB website\n"
+      );
 
-    /* We may also get err == DB_ERROR if the .ibd file for the
+      /* We may also get err == DB_ERROR if the .ibd file for the
     table already exists */
 
-    break;
+      break;
 
-  default:
-    break;
+    default:
+      break;
   }
 
   que_graph_free((que_t *)que_node_get_parent(thr));
@@ -736,8 +758,7 @@ db_err ddl_create_index(dict_index_t *index, trx_t *trx) {
   node = ind_create_graph_create(index, heap, false);
   thr = pars_complete_graph_for_exec(node, trx, heap);
 
-  auto tmp = que_fork_start_command(
-      static_cast<que_fork_t *>(que_node_get_parent(thr)));
+  auto tmp = que_fork_start_command(static_cast<que_fork_t *>(que_node_get_parent(thr)));
 
   ut_a(thr == tmp);
 
@@ -803,11 +824,14 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   a new tablespace identifier to the truncated tablespace. */
 
   if (srv_created_new_raw) {
-    ib_logger(ib_stream, "A new raw disk partition was initialized:\n"
-                         "we do not allow database modifications"
-                         " by the user.\n"
-                         "Shut down server and edit config file so "
-                         "that newraw is replaced with raw.\n");
+    ib_logger(
+      ib_stream,
+      "A new raw disk partition was initialized:\n"
+      "we do not allow database modifications"
+      " by the user.\n"
+      "Shut down server and edit config file so "
+      "that newraw is replaced with raw.\n"
+    );
 
     return DB_ERROR;
   }
@@ -844,8 +868,11 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
 
     ib_logger(ib_stream, "  Cannot truncate table ");
     ut_print_name(ib_stream, trx, true, table->name);
-    ib_logger(ib_stream, " by DROP+CREATE\n"
-                         "because it is referenced by ");
+    ib_logger(
+      ib_stream,
+      " by DROP+CREATE\n"
+      "because it is referenced by "
+    );
     ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
     ib_logger(ib_stream, "\n");
     mutex_exit(&dict_foreign_err_mutex);
@@ -864,9 +891,12 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream, "  Cannot truncate table ");
     ut_print_name(ib_stream, trx, true, table->name);
-    ib_logger(ib_stream, " by DROP+CREATE\n"
-                         "because there is a foreign key check"
-                         " running on it.\n");
+    ib_logger(
+      ib_stream,
+      " by DROP+CREATE\n"
+      "because there is a foreign key check"
+      " running on it.\n"
+    );
     err = DB_ERROR;
 
     goto func_exit;
@@ -888,14 +918,14 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
 
       space = 0;
 
-      if (fil_create_new_single_table_tablespace(
-              &space, table->name, false, flags, FIL_IBD_FILE_INITIAL_SIZE) !=
-          DB_SUCCESS) {
+      if (fil_create_new_single_table_tablespace(&space, table->name, false, flags, FIL_IBD_FILE_INITIAL_SIZE) != DB_SUCCESS) {
         ut_print_timestamp(ib_stream);
-        ib_logger(ib_stream,
-                  "  TRUNCATE TABLE %s failed to"
-                  " create a new tablespace\n",
-                  table->name);
+        ib_logger(
+          ib_stream,
+          "  TRUNCATE TABLE %s failed to"
+          " create a new tablespace\n",
+          table->name
+        );
         table->ibd_file_missing = 1;
         err = DB_ERROR;
         goto func_exit;
@@ -934,8 +964,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   dict_index_copy_types(tuple, sys_index, 1);
 
   mtr_start(&mtr);
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF,
-                            &pcur, &mtr);
+  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &pcur, &mtr);
   for (;;) {
     rec_t *rec;
     const byte *field;
@@ -969,8 +998,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     rec = btr_pcur_get_rec(&pcur);
 
     if (root_page_no != FIL_NULL) {
-      page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD,
-                                   root_page_no, &mtr);
+      page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, root_page_no, &mtr);
       /* We will need to commit and restart the
       mini-transaction in order to avoid deadlocks.
       The dict_truncate_index_tree() call has allocated
@@ -998,32 +1026,37 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   pars_info_add_uint64_literal(info, "old_id", table->id);
   pars_info_add_uint64_literal(info, "new_id", new_id);
 
-  err = que_eval_sql(info,
-                     "PROCEDURE RENUMBER_TABLESPACE_PROC () IS\n"
-                     "BEGIN\n"
-                     "UPDATE SYS_TABLES"
-                     " SET ID = :new_id, SPACE = :space\n"
-                     " WHERE ID = :old_id;\n"
-                     "UPDATE SYS_COLUMNS SET TABLE_ID = :new_id\n"
-                     " WHERE TABLE_ID = :old_id;\n"
-                     "UPDATE SYS_INDEXES"
-                     " SET TABLE_ID = :new_id, SPACE = :space\n"
-                     " WHERE TABLE_ID = :old_id;\n"
-                     "COMMIT WORK;\n"
-                     "END;\n",
-                     false, trx);
+  err = que_eval_sql(
+    info,
+    "PROCEDURE RENUMBER_TABLESPACE_PROC () IS\n"
+    "BEGIN\n"
+    "UPDATE SYS_TABLES"
+    " SET ID = :new_id, SPACE = :space\n"
+    " WHERE ID = :old_id;\n"
+    "UPDATE SYS_COLUMNS SET TABLE_ID = :new_id\n"
+    " WHERE TABLE_ID = :old_id;\n"
+    "UPDATE SYS_INDEXES"
+    " SET TABLE_ID = :new_id, SPACE = :space\n"
+    " WHERE TABLE_ID = :old_id;\n"
+    "COMMIT WORK;\n"
+    "END;\n",
+    false,
+    trx
+  );
 
   if (err != DB_SUCCESS) {
     trx->error_state = DB_SUCCESS;
     trx_general_rollback(trx, false, nullptr);
     trx->error_state = DB_SUCCESS;
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  Unable to assign a new identifier to table ");
+    ib_logger(ib_stream, "  Unable to assign a new identifier to table ");
     ut_print_name(ib_stream, trx, true, table->name);
-    ib_logger(ib_stream, "\n"
-                         "after truncating it.  Background processes"
-                         " may corrupt the table!\n");
+    ib_logger(
+      ib_stream,
+      "\n"
+      "after truncating it.  Background processes"
+      " may corrupt the table!\n"
+    );
     err = DB_ERROR;
   } else {
     dict_table_change_id_in_cache(table, new_id);
@@ -1050,19 +1083,19 @@ db_err ddl_drop_index(dict_table_t *table, dict_index_t *index, trx_t *trx) {
   frees the file segments of the B-tree associated with the index. */
 
   static const char str1[] =
-      "PROCEDURE DROP_INDEX_PROC () IS\n"
-      "BEGIN\n"
-      /* Rename the index, so that it will be dropped by
+    "PROCEDURE DROP_INDEX_PROC () IS\n"
+    "BEGIN\n"
+    /* Rename the index, so that it will be dropped by
       row_merge_drop_temp_indexes() at crash recovery
       if the server crashes before this trx is committed. */
-      "UPDATE SYS_INDEXES SET NAME=CONCAT('" TEMP_INDEX_PREFIX_STR
-      "', NAME) WHERE ID = :indexid;\n"
-      "COMMIT WORK;\n"
-      /* Drop the field definitions of the index. */
-      "DELETE FROM SYS_FIELDS WHERE INDEX_ID = :indexid;\n"
-      /* Drop the index definition and the B-tree. */
-      "DELETE FROM SYS_INDEXES WHERE ID = :indexid;\n"
-      "END;\n";
+    "UPDATE SYS_INDEXES SET NAME=CONCAT('" TEMP_INDEX_PREFIX_STR
+    "', NAME) WHERE ID = :indexid;\n"
+    "COMMIT WORK;\n"
+    /* Drop the field definitions of the index. */
+    "DELETE FROM SYS_FIELDS WHERE INDEX_ID = :indexid;\n"
+    /* Drop the index definition and the B-tree. */
+    "DELETE FROM SYS_INDEXES WHERE ID = :indexid;\n"
+    "END;\n";
 
   ut_ad(index && table && trx);
 
@@ -1089,37 +1122,41 @@ db_err ddl_drop_index(dict_table_t *table, dict_index_t *index, trx_t *trx) {
 
 /** Delete a single constraint.
 @return	error code or DB_SUCCESS */
-static db_err
-ddl_delete_constraint_low(const char *id, /*!< in: constraint id */
-                          trx_t *trx)     /*!< in: transaction handle */
+static db_err ddl_delete_constraint_low(
+  const char *id, /*!< in: constraint id */
+  trx_t *trx
+) /*!< in: transaction handle */
 {
   pars_info_t *info = pars_info_create();
 
   pars_info_add_str_literal(info, "id", id);
 
-  return que_eval_sql(info,
-                      "PROCEDURE DELETE_CONSTRAINT () IS\n"
-                      "BEGIN\n"
-                      "DELETE FROM SYS_FOREIGN_COLS WHERE ID = :id;\n"
-                      "DELETE FROM SYS_FOREIGN WHERE ID = :id;\n"
-                      "END;\n",
-                      false, trx);
+  return que_eval_sql(
+    info,
+    "PROCEDURE DELETE_CONSTRAINT () IS\n"
+    "BEGIN\n"
+    "DELETE FROM SYS_FOREIGN_COLS WHERE ID = :id;\n"
+    "DELETE FROM SYS_FOREIGN WHERE ID = :id;\n"
+    "END;\n",
+    false,
+    trx
+  );
 }
 
 /** Delete a single constraint.
 @return	error code or DB_SUCCESS */
-static db_err
-ddl_delete_constraint(const char *id,            /*!< in: constraint id */
-                      const char *database_name, /*!< in: database name, with
+static db_err ddl_delete_constraint(
+  const char *id,            /*!< in: constraint id */
+  const char *database_name, /*!< in: database name, with
                                                  the trailing '/' */
-                      mem_heap_t *heap,          /*!< in: memory heap */
-                      trx_t *trx)                /*!< in: transaction handle */
+  mem_heap_t *heap,          /*!< in: memory heap */
+  trx_t *trx
+) /*!< in: transaction handle */
 {
   db_err err;
 
   /* New format constraints have ids <databasename>/<constraintname>. */
-  err =
-      ddl_delete_constraint_low(mem_heap_strcat(heap, database_name, id), trx);
+  err = ddl_delete_constraint_low(mem_heap_strcat(heap, database_name, id), trx);
 
   if (err == DB_SUCCESS && !strchr(id, '/')) {
     /* Old format < 4.0.18 constraints have constraint ids
@@ -1135,8 +1172,7 @@ ddl_delete_constraint(const char *id,            /*!< in: constraint id */
   return err;
 }
 
-db_err ddl_rename_table(const char *old_name, const char *new_name,
-                        trx_t *trx) {
+db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) {
   dict_table_t *table;
   db_err err = DB_ERROR;
   mem_heap_t *heap = nullptr;
@@ -1149,12 +1185,14 @@ db_err ddl_rename_table(const char *old_name, const char *new_name,
   ut_ad(trx->client_thread_id == os_thread_get_curr_id());
 
   if (srv_created_new_raw || srv_force_recovery != IB_RECOVERY_DEFAULT) {
-    ib_logger(ib_stream,
-              "A new raw disk partition was initialized or\n"
-              "innodb_force_recovery is on: we do not allow\n"
-              "database modifications by the user. Shut down\n"
-              "the server and ensure that newraw is replaced\n"
-              "with raw, and innodb_force_... is removed.\n");
+    ib_logger(
+      ib_stream,
+      "A new raw disk partition was initialized or\n"
+      "innodb_force_recovery is on: we do not allow\n"
+      "database modifications by the user. Shut down\n"
+      "the server and ensure that newraw is replaced\n"
+      "with raw, and innodb_force_... is removed.\n"
+    );
 
     goto func_exit;
   }
@@ -1179,13 +1217,16 @@ db_err ddl_rename_table(const char *old_name, const char *new_name,
   pars_info_add_str_literal(info, "new_table_name", new_name);
   pars_info_add_str_literal(info, "old_table_name", old_name);
 
-  err = que_eval_sql(info,
-                     "PROCEDURE RENAME_TABLE () IS\n"
-                     "BEGIN\n"
-                     "UPDATE SYS_TABLES SET NAME = :new_table_name\n"
-                     " WHERE NAME = :old_table_name;\n"
-                     "END;\n",
-                     false, trx);
+  err = que_eval_sql(
+    info,
+    "PROCEDURE RENAME_TABLE () IS\n"
+    "BEGIN\n"
+    "UPDATE SYS_TABLES SET NAME = :new_table_name\n"
+    " WHERE NAME = :old_table_name;\n"
+    "END;\n",
+    false,
+    trx
+  );
 
   if (err == DB_SUCCESS) {
     /* Rename all constraints. */
@@ -1195,70 +1236,73 @@ db_err ddl_rename_table(const char *old_name, const char *new_name,
     pars_info_add_str_literal(info, "new_table_name", new_name);
     pars_info_add_str_literal(info, "old_table_name", old_name);
 
-    err = que_eval_sql(info,
-                       "PROCEDURE RENAME_CONSTRAINT_IDS () IS\n"
-                       "gen_constr_prefix CHAR;\n"
-                       "new_db_name CHAR;\n"
-                       "foreign_id CHAR;\n"
-                       "new_foreign_id CHAR;\n"
-                       "old_db_name_len INT;\n"
-                       "old_t_name_len INT;\n"
-                       "new_db_name_len INT;\n"
-                       "id_len INT;\n"
-                       "found INT;\n"
-                       "BEGIN\n"
-                       "found := 1;\n"
-                       "old_db_name_len := INSTR(:old_table_name, '/')-1;\n"
-                       "new_db_name_len := INSTR(:new_table_name, '/')-1;\n"
-                       "new_db_name := SUBSTR(:new_table_name, 0,\n"
-                       "                      new_db_name_len);\n"
-                       "old_t_name_len := LENGTH(:old_table_name);\n"
-                       "gen_constr_prefix := CONCAT(:old_table_name,\n"
-                       "                            '_ibfk_');\n"
-                       "WHILE found = 1 LOOP\n"
-                       "       SELECT ID INTO foreign_id\n"
-                       "        FROM SYS_FOREIGN\n"
-                       "        WHERE FOR_NAME = :old_table_name\n"
-                       "         AND TO_BINARY(FOR_NAME)\n"
-                       "           = TO_BINARY(:old_table_name)\n"
-                       "         LOCK IN SHARE MODE;\n"
-                       "       IF (SQL % NOTFOUND) THEN\n"
-                       "        found := 0;\n"
-                       "       ELSE\n"
-                       "        UPDATE SYS_FOREIGN\n"
-                       "        SET FOR_NAME = :new_table_name\n"
-                       "         WHERE ID = foreign_id;\n"
-                       "        id_len := LENGTH(foreign_id);\n"
-                       "        IF (INSTR(foreign_id, '/') > 0) THEN\n"
-                       "               IF (INSTR(foreign_id,\n"
-                       "                         gen_constr_prefix) > 0)\n"
-                       "               THEN\n"
-                       "                new_foreign_id :=\n"
-                       "                CONCAT(:new_table_name,\n"
-                       "                SUBSTR(foreign_id, old_t_name_len,\n"
-                       "                       id_len - old_t_name_len));\n"
-                       "               ELSE\n"
-                       "                new_foreign_id :=\n"
-                       "                CONCAT(new_db_name,\n"
-                       "                SUBSTR(foreign_id,\n"
-                       "                       old_db_name_len,\n"
-                       "                       id_len - old_db_name_len));\n"
-                       "               END IF;\n"
-                       "               UPDATE SYS_FOREIGN\n"
-                       "                SET ID = new_foreign_id\n"
-                       "                WHERE ID = foreign_id;\n"
-                       "               UPDATE SYS_FOREIGN_COLS\n"
-                       "                SET ID = new_foreign_id\n"
-                       "                WHERE ID = foreign_id;\n"
-                       "        END IF;\n"
-                       "       END IF;\n"
-                       "END LOOP;\n"
-                       "UPDATE SYS_FOREIGN SET REF_NAME = :new_table_name\n"
-                       "WHERE REF_NAME = :old_table_name\n"
-                       "  AND TO_BINARY(REF_NAME)\n"
-                       "    = TO_BINARY(:old_table_name);\n"
-                       "END;\n",
-                       false, trx);
+    err = que_eval_sql(
+      info,
+      "PROCEDURE RENAME_CONSTRAINT_IDS () IS\n"
+      "gen_constr_prefix CHAR;\n"
+      "new_db_name CHAR;\n"
+      "foreign_id CHAR;\n"
+      "new_foreign_id CHAR;\n"
+      "old_db_name_len INT;\n"
+      "old_t_name_len INT;\n"
+      "new_db_name_len INT;\n"
+      "id_len INT;\n"
+      "found INT;\n"
+      "BEGIN\n"
+      "found := 1;\n"
+      "old_db_name_len := INSTR(:old_table_name, '/')-1;\n"
+      "new_db_name_len := INSTR(:new_table_name, '/')-1;\n"
+      "new_db_name := SUBSTR(:new_table_name, 0,\n"
+      "                      new_db_name_len);\n"
+      "old_t_name_len := LENGTH(:old_table_name);\n"
+      "gen_constr_prefix := CONCAT(:old_table_name,\n"
+      "                            '_ibfk_');\n"
+      "WHILE found = 1 LOOP\n"
+      "       SELECT ID INTO foreign_id\n"
+      "        FROM SYS_FOREIGN\n"
+      "        WHERE FOR_NAME = :old_table_name\n"
+      "         AND TO_BINARY(FOR_NAME)\n"
+      "           = TO_BINARY(:old_table_name)\n"
+      "         LOCK IN SHARE MODE;\n"
+      "       IF (SQL % NOTFOUND) THEN\n"
+      "        found := 0;\n"
+      "       ELSE\n"
+      "        UPDATE SYS_FOREIGN\n"
+      "        SET FOR_NAME = :new_table_name\n"
+      "         WHERE ID = foreign_id;\n"
+      "        id_len := LENGTH(foreign_id);\n"
+      "        IF (INSTR(foreign_id, '/') > 0) THEN\n"
+      "               IF (INSTR(foreign_id,\n"
+      "                         gen_constr_prefix) > 0)\n"
+      "               THEN\n"
+      "                new_foreign_id :=\n"
+      "                CONCAT(:new_table_name,\n"
+      "                SUBSTR(foreign_id, old_t_name_len,\n"
+      "                       id_len - old_t_name_len));\n"
+      "               ELSE\n"
+      "                new_foreign_id :=\n"
+      "                CONCAT(new_db_name,\n"
+      "                SUBSTR(foreign_id,\n"
+      "                       old_db_name_len,\n"
+      "                       id_len - old_db_name_len));\n"
+      "               END IF;\n"
+      "               UPDATE SYS_FOREIGN\n"
+      "                SET ID = new_foreign_id\n"
+      "                WHERE ID = foreign_id;\n"
+      "               UPDATE SYS_FOREIGN_COLS\n"
+      "                SET ID = new_foreign_id\n"
+      "                WHERE ID = foreign_id;\n"
+      "        END IF;\n"
+      "       END IF;\n"
+      "END LOOP;\n"
+      "UPDATE SYS_FOREIGN SET REF_NAME = :new_table_name\n"
+      "WHERE REF_NAME = :old_table_name\n"
+      "  AND TO_BINARY(REF_NAME)\n"
+      "    = TO_BINARY(:old_table_name);\n"
+      "END;\n",
+      false,
+      trx
+    );
 
   } else if (n_constraints_to_drop > 0) {
     /* Drop some constraints of tmp tables. */
@@ -1282,19 +1326,25 @@ db_err ddl_rename_table(const char *old_name, const char *new_name,
   if (err != DB_SUCCESS) {
     if (err == DB_DUPLICATE_KEY) {
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  Error; possible reasons:\n"
-                           "1) Table rename would cause"
-                           " two FOREIGN KEY constraints\n"
-                           "to have the same internal name"
-                           " in case-insensitive comparison.\n"
-                           " trying to rename table.\n"
-                           "If table ");
+      ib_logger(
+        ib_stream,
+        "  Error; possible reasons:\n"
+        "1) Table rename would cause"
+        " two FOREIGN KEY constraints\n"
+        "to have the same internal name"
+        " in case-insensitive comparison.\n"
+        " trying to rename table.\n"
+        "If table "
+      );
       ut_print_name(ib_stream, trx, true, new_name);
-      ib_logger(ib_stream, " is a temporary table, then it can be that\n"
-                           "there are still queries running"
-                           " on the table, and it will be\n"
-                           "dropped automatically when"
-                           " the queries end.\n");
+      ib_logger(
+        ib_stream,
+        " is a temporary table, then it can be that\n"
+        "there are still queries running"
+        " on the table, and it will be\n"
+        "dropped automatically when"
+        " the queries end.\n"
+      );
     }
     trx->error_state = DB_SUCCESS;
     trx_general_rollback(trx, false, nullptr);
@@ -1320,14 +1370,20 @@ db_err ddl_rename_table(const char *old_name, const char *new_name,
 
       ut_print_timestamp(ib_stream);
 
-      ib_logger(ib_stream, "  Error: in RENAME TABLE"
-                           " table ");
+      ib_logger(
+        ib_stream,
+        "  Error: in RENAME TABLE"
+        " table "
+      );
       ut_print_name(ib_stream, trx, true, new_name);
-      ib_logger(ib_stream, "\n"
-                           "is referenced in"
-                           " foreign key constraints\n"
-                           "which are not compatible"
-                           " with the new table definition.\n");
+      ib_logger(
+        ib_stream,
+        "\n"
+        "is referenced in"
+        " foreign key constraints\n"
+        "which are not compatible"
+        " with the new table definition.\n"
+      );
 
       ret = dict_table_rename_in_cache(table, old_name, false);
       ut_a(ret);
@@ -1349,8 +1405,7 @@ func_exit:
   return err;
 }
 
-db_err ddl_rename_index(const char *table_name, const char *old_name,
-                        const char *new_name, trx_t *trx) {
+db_err ddl_rename_index(const char *table_name, const char *old_name, const char *new_name, trx_t *trx) {
   dict_table_t *table;
   pars_info_t *info = nullptr;
   db_err err = DB_ERROR;
@@ -1361,12 +1416,14 @@ db_err ddl_rename_index(const char *table_name, const char *old_name,
   ut_ad(trx->client_thread_id == os_thread_get_curr_id());
 
   if (srv_created_new_raw || srv_force_recovery != IB_RECOVERY_DEFAULT) {
-    ib_logger(ib_stream,
-              "A new raw disk partition was initialized or\n"
-              "innodb_force_recovery is on: we do not allow\n"
-              "database modifications by the user. Shut down\n"
-              "the server and ensure that newraw is replaced\n"
-              "with raw, and innodb_force_... is removed.\n");
+    ib_logger(
+      ib_stream,
+      "A new raw disk partition was initialized or\n"
+      "innodb_force_recovery is on: we do not allow\n"
+      "database modifications by the user. Shut down\n"
+      "the server and ensure that newraw is replaced\n"
+      "with raw, and innodb_force_... is removed.\n"
+    );
 
     goto func_exit;
   }
@@ -1389,22 +1446,25 @@ db_err ddl_rename_index(const char *table_name, const char *old_name,
   pars_info_add_str_literal(info, "new_index_name", new_name);
   pars_info_add_str_literal(info, "old_index_name", old_name);
 
-  err = que_eval_sql(info,
-                     "PROCEDURE RENAME_TABLE () IS\n"
-                     "table_id CHAR;\n"
-                     "BEGIN\n"
-                     "SELECT ID INTO table_id\n"
-                     " FROM SYS_TABLES\n"
-                     " WHERE NAME = :table_name\n"
-                     "LOCK IN SHARE MODE;\n"
-                     "IF (SQL % NOTFOUND) THEN\n"
-                     " RETURN;\n"
-                     "END IF;\n"
-                     "UPDATE SYS_INDEXES SET NAME = :new_index_name\n"
-                     " WHERE NAME = :old_index_name\n"
-                     "  AND table_id = table_id;\n"
-                     "END;\n",
-                     false, trx);
+  err = que_eval_sql(
+    info,
+    "PROCEDURE RENAME_TABLE () IS\n"
+    "table_id CHAR;\n"
+    "BEGIN\n"
+    "SELECT ID INTO table_id\n"
+    " FROM SYS_TABLES\n"
+    " WHERE NAME = :table_name\n"
+    "LOCK IN SHARE MODE;\n"
+    "IF (SQL % NOTFOUND) THEN\n"
+    " RETURN;\n"
+    "END IF;\n"
+    "UPDATE SYS_INDEXES SET NAME = :new_index_name\n"
+    " WHERE NAME = :old_index_name\n"
+    "  AND table_id = table_id;\n"
+    "END;\n",
+    false,
+    trx
+  );
 
   if (err == DB_SUCCESS) {
     dict_index_t *index;
@@ -1439,8 +1499,9 @@ func_exit:
 /** Drop all foreign keys in a database, see Bug#18942.
 @return	error code or DB_SUCCESS */
 static enum db_err ddl_drop_all_foreign_keys_in_db(
-    const char *name, /*!< in: database name which ends to '/' */
-    trx_t *trx)       /*!< in: transaction handle */
+  const char *name, /*!< in: database name which ends to '/' */
+  trx_t *trx
+) /*!< in: transaction handle */
 {
   enum db_err err;
   pars_info_t *pinfo;
@@ -1454,37 +1515,40 @@ static enum db_err ddl_drop_all_foreign_keys_in_db(
 /* true if for_name is not prefixed with dbname */
 #define TABLE_NOT_IN_THIS_DB "SUBSTR(for_name, 0, LENGTH(:dbname)) <> :dbname"
 
-  err = que_eval_sql(pinfo,
-                     "PROCEDURE DROP_ALL_FOREIGN_KEYS_PROC () IS\n"
-                     "foreign_id CHAR;\n"
-                     "for_name CHAR;\n"
-                     "found INT;\n"
-                     "DECLARE CURSOR cur IS\n"
-                     "SELECT ID, FOR_NAME FROM SYS_FOREIGN\n"
-                     "WHERE FOR_NAME >= :dbname\n"
-                     "LOCK IN SHARE MODE\n"
-                     "ORDER BY FOR_NAME;\n"
-                     "BEGIN\n"
-                     "found := 1;\n"
-                     "OPEN cur;\n"
-                     "WHILE found = 1 LOOP\n"
-                     "        FETCH cur INTO foreign_id, for_name;\n"
-                     "        IF (SQL % NOTFOUND) THEN\n"
-                     "                found := 0;\n"
-                     "        ELSIF (" TABLE_NOT_IN_THIS_DB ") THEN\n"
-                     "                found := 0;\n"
-                     "        ELSIF (1=1) THEN\n"
-                     "                DELETE FROM SYS_FOREIGN_COLS\n"
-                     "                WHERE ID = foreign_id;\n"
-                     "                DELETE FROM SYS_FOREIGN\n"
-                     "                WHERE ID = foreign_id;\n"
-                     "        END IF;\n"
-                     "END LOOP;\n"
-                     "CLOSE cur;\n"
-                     "END;\n",
-                     false, /* do not reserve dict mutex,
+  err = que_eval_sql(
+    pinfo,
+    "PROCEDURE DROP_ALL_FOREIGN_KEYS_PROC () IS\n"
+    "foreign_id CHAR;\n"
+    "for_name CHAR;\n"
+    "found INT;\n"
+    "DECLARE CURSOR cur IS\n"
+    "SELECT ID, FOR_NAME FROM SYS_FOREIGN\n"
+    "WHERE FOR_NAME >= :dbname\n"
+    "LOCK IN SHARE MODE\n"
+    "ORDER BY FOR_NAME;\n"
+    "BEGIN\n"
+    "found := 1;\n"
+    "OPEN cur;\n"
+    "WHILE found = 1 LOOP\n"
+    "        FETCH cur INTO foreign_id, for_name;\n"
+    "        IF (SQL % NOTFOUND) THEN\n"
+    "                found := 0;\n"
+    "        ELSIF (" TABLE_NOT_IN_THIS_DB
+    ") THEN\n"
+    "                found := 0;\n"
+    "        ELSIF (1=1) THEN\n"
+    "                DELETE FROM SYS_FOREIGN_COLS\n"
+    "                WHERE ID = foreign_id;\n"
+    "                DELETE FROM SYS_FOREIGN\n"
+    "                WHERE ID = foreign_id;\n"
+    "        END IF;\n"
+    "END LOOP;\n"
+    "CLOSE cur;\n"
+    "END;\n",
+    false, /* do not reserve dict mutex,
                             we are already holding it */
-                     trx);
+    trx
+  );
 
   return err;
 }
@@ -1518,12 +1582,18 @@ loop:
       dict_unlock_data_dictionary(trx);
 
       ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  Warning: The client is trying to"
-                           " drop database ");
+      ib_logger(
+        ib_stream,
+        "  Warning: The client is trying to"
+        " drop database "
+      );
       ut_print_name(ib_stream, trx, true, name);
-      ib_logger(ib_stream, "\n"
-                           "though there are still"
-                           " open handles to table ");
+      ib_logger(
+        ib_stream,
+        "\n"
+        "though there are still"
+        " open handles to table "
+      );
       ut_print_name(ib_stream, trx, true, table_name);
       ib_logger(ib_stream, ".\n");
 
@@ -1557,10 +1627,12 @@ loop:
     if (err != DB_SUCCESS) {
       ib_logger(ib_stream, "DROP DATABASE ");
       ut_print_name(ib_stream, trx, true, name);
-      ib_logger(ib_stream,
-                " failed with error %d while "
-                "dropping all foreign keys",
-                err);
+      ib_logger(
+        ib_stream,
+        " failed with error %d while "
+        "dropping all foreign keys",
+        err
+      );
     }
   }
 
@@ -1588,9 +1660,7 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
 
   mtr_start(&mtr);
 
-  btr_pcur_open_at_index_side(true,
-                              dict_table_get_first_index(dict_sys->sys_indexes),
-                              BTR_SEARCH_LEAF, &pcur, true, &mtr);
+  btr_pcur_open_at_index_side(true, dict_table_get_first_index(dict_sys->sys_indexes), BTR_SEARCH_LEAF, &pcur, true, &mtr);
 
   for (;;) {
     const rec_t *rec;
@@ -1607,8 +1677,7 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
 
     rec = btr_pcur_get_rec(&pcur);
     field = rec_get_nth_field_old(rec, DICT_SYS_INDEXES_NAME_FIELD, &len);
-    if (len == UNIV_SQL_NULL || len == 0 ||
-        mach_read_from_1(field) != (ulint)TEMP_INDEX_PREFIX) {
+    if (len == UNIV_SQL_NULL || len == 0 || mach_read_from_1(field) != (ulint)TEMP_INDEX_PREFIX) {
       continue;
     }
 
@@ -1630,8 +1699,7 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
     if (table) {
       dict_index_t *index;
 
-      for (index = dict_table_get_first_index(table); index;
-           index = dict_table_get_next_index(index)) {
+      for (index = dict_table_get_first_index(table); index; index = dict_table_get_next_index(index)) {
 
         if (*index->name == TEMP_INDEX_PREFIX) {
           ddl_drop_index(table, index, trx);
@@ -1670,9 +1738,7 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
 
   mtr_start(&mtr);
 
-  btr_pcur_open_at_index_side(true,
-                              dict_table_get_first_index(dict_sys->sys_tables),
-                              BTR_SEARCH_LEAF, &pcur, true, &mtr);
+  btr_pcur_open_at_index_side(true, dict_table_get_first_index(dict_sys->sys_tables), BTR_SEARCH_LEAF, &pcur, true, &mtr);
 
   for (;;) {
     const rec_t *rec;

@@ -40,15 +40,15 @@ void lock_queue_iterator_reset(lock_queue_iterator_t *iter, const lock_t *lock, 
   } else {
 
     switch (lock_get_type_low(lock)) {
-    case LOCK_TABLE:
-      iter->bit_no = ULINT_UNDEFINED;
-      break;
-    case LOCK_REC:
-      iter->bit_no = lock_rec_find_set_bit(lock);
-      ut_a(iter->bit_no != ULINT_UNDEFINED);
-      break;
-    default:
-      ut_error;
+      case LOCK_TABLE:
+        iter->bit_no = ULINT_UNDEFINED;
+        break;
+      case LOCK_REC:
+        iter->bit_no = lock_rec_find_set_bit(lock);
+        ut_a(iter->bit_no != ULINT_UNDEFINED);
+        break;
+      default:
+        ut_error;
     }
   }
 }
@@ -57,14 +57,14 @@ const lock_t *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter) {
   const lock_t *prev_lock;
 
   switch (lock_get_type_low(iter->current_lock)) {
-  case LOCK_REC:
-    prev_lock = lock_rec_get_prev(iter->current_lock, iter->bit_no);
-    break;
-  case LOCK_TABLE:
-    prev_lock = UT_LIST_GET_PREV(un_member.tab_lock.locks, iter->current_lock);
-    break;
-  default:
-    ut_error;
+    case LOCK_REC:
+      prev_lock = lock_rec_get_prev(iter->current_lock, iter->bit_no);
+      break;
+    case LOCK_TABLE:
+      prev_lock = UT_LIST_GET_PREV(un_member.tab_lock.locks, iter->current_lock);
+      break;
+    default:
+      ut_error;
   }
 
   if (prev_lock != NULL) {

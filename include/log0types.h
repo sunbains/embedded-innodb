@@ -2,8 +2,8 @@
 
 #include "innodb0types.h"
 
-#include "sync0sync.h"
 #include "sync0rw.h"
+#include "sync0sync.h"
 
 #ifdef UNIV_DEBUG
 /** Flag: write to log file? */
@@ -12,9 +12,9 @@ extern bool log_do_write;
 /** Flag: enable debug output when writing to the log? */
 extern bool log_debug_writes;
 
-#else /* UNIV_DEBUG */
+#else  /* UNIV_DEBUG */
 /** Write to log */
-constexpr bool log_do_write  = true;
+constexpr bool log_do_write = true;
 #endif /* UNIV_DEBUG */
 
 /** Wait modes for log_write_up_to @{ */
@@ -74,8 +74,8 @@ constexpr ulint LOG_BLOCK_TRL_SIZE = 4;
 constexpr ulint LOG_MAX_N_GROUPS = 32;
 
 /*@{ Offsets for a checkpoint field */
-constexpr ulint LOG_CHECKPOINT_NO=  0;
-constexpr ulint LOG_CHECKPOINT_LSN=  8;
+constexpr ulint LOG_CHECKPOINT_NO = 0;
+constexpr ulint LOG_CHECKPOINT_LSN = 8;
 constexpr ulint LOG_CHECKPOINT_OFFSET = 16;
 constexpr ulint LOG_CHECKPOINT_LOG_BUF_SIZE = 20;
 constexpr ulint LOG_CHECKPOINT_UNUSED_LSN = 24;
@@ -83,8 +83,8 @@ constexpr ulint LOG_CHECKPOINT_GROUP_ARRAY = 32;
 /*@} */
 
 /* For each value smaller than LOG_MAX_N_GROUPS the following 8 bytes: @{*/
-constexpr ulint LOG_CHECKPOINT_UNUSED_FILE_NO =  0;
-constexpr ulint LOG_CHECKPOINT_UNUSED_OFFSET=  4;
+constexpr ulint LOG_CHECKPOINT_UNUSED_FILE_NO = 0;
+constexpr ulint LOG_CHECKPOINT_UNUSED_OFFSET = 4;
 constexpr ulint LOG_CHECKPOINT_ARRAY_END = LOG_CHECKPOINT_GROUP_ARRAY + LOG_MAX_N_GROUPS * 8;
 constexpr ulint LOG_CHECKPOINT_CHECKSUM_1 = LOG_CHECKPOINT_ARRAY_END;
 constexpr ulint LOG_CHECKPOINT_CHECKSUM_2 = 4 + LOG_CHECKPOINT_ARRAY_END;
@@ -199,7 +199,7 @@ struct log_t {
   byte pad[64];
 
   /** Log sequence number */
-  lsn_t lsn; 
+  lsn_t lsn;
 
   /** First free offset within the log buffer */
   ulint buf_free;

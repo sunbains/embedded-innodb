@@ -38,10 +38,10 @@ typedef struct sync_array_struct sync_array_t;
 /** Parameters for sync_array_create() @{ */
 
 /** protected by os_mutex_t */
-constexpr ulint SYNC_ARRAY_OS_MUTEX  = 1;
+constexpr ulint SYNC_ARRAY_OS_MUTEX = 1;
 
 /** protected by mutex_t */
- constexpr ulint SYNC_ARRAY_MUTEX  = 2;
+constexpr ulint SYNC_ARRAY_MUTEX = 2;
 
 /* @} */
 
@@ -49,10 +49,11 @@ constexpr ulint SYNC_ARRAY_OS_MUTEX  = 1;
 which is automatically reserved when the functions operating on it
 are called.
 @return	own: created wait array */
-sync_array_t *
-sync_array_create(ulint n_cells,     /** in: number of cells in the array
+sync_array_t *sync_array_create(
+  ulint n_cells, /** in: number of cells in the array
                                      to create */
-                  ulint protection); /** in: either SYNC_ARRAY_OS_MUTEX or
+  ulint protection
+); /** in: either SYNC_ARRAY_OS_MUTEX or
                                      SYNC_ARRAY_MUTEX: determines the type
                                      of mutex protecting the data structure */
 
@@ -62,24 +63,29 @@ void sync_array_free(sync_array_t *arr); /** in, own: sync wait array */
 /** Reserves a wait array cell for waiting for an object.
 The event of the cell is reset to nonsignalled state. */
 void sync_array_reserve_cell(
-    sync_array_t *arr, /** in: wait array */
-    void *object,      /** in: pointer to the object to wait for */
-    ulint type,        /** in: lock request type */
-    const char *file,  /** in: file where requested */
-    ulint line,        /** in: line where requested */
-    ulint *index);     /** out: index of the reserved cell */
+  sync_array_t *arr, /** in: wait array */
+  void *object,      /** in: pointer to the object to wait for */
+  ulint type,        /** in: lock request type */
+  const char *file,  /** in: file where requested */
+  ulint line,        /** in: line where requested */
+  ulint *index
+); /** out: index of the reserved cell */
 
 /** This function should be called when a thread starts to wait on
 a wait array cell. In the debug version this function checks
 if the wait for a semaphore will result in a deadlock, in which
 case prints info and asserts. */
-void sync_array_wait_event(sync_array_t *arr, /** in: wait array */
-                           ulint index); /** in: index of the reserved cell */
+void sync_array_wait_event(
+  sync_array_t *arr, /** in: wait array */
+  ulint index
+); /** in: index of the reserved cell */
 
 /** Frees the cell. NOTE! sync_array_wait_event frees the cell
 automatically! */
-void sync_array_free_cell(sync_array_t *arr, /** in: wait array */
-                          ulint index); /** in: index of the cell in array */
+void sync_array_free_cell(
+  sync_array_t *arr, /** in: wait array */
+  ulint index
+); /** in: index of the cell in array */
 
 /** Note that one of the wait objects was signalled. */
 void sync_array_object_signalled(sync_array_t *arr); /** in: wait array */
@@ -99,6 +105,6 @@ void sync_array_validate(sync_array_t *arr); /** in: sync wait array */
 
 /** Prints info of the wait array. */
 void sync_array_print_info(
-    ib_stream_t ib_stream, /** in: stream where to print */
-    sync_array_t *arr);    /** in: wait array */
-
+  ib_stream_t ib_stream, /** in: stream where to print */
+  sync_array_t *arr
+); /** in: wait array */

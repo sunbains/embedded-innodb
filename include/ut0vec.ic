@@ -30,8 +30,10 @@ inline ulint ib_vector_size(const ib_vector_t *vec) /*!< in: vector */
 
 /** Get n'th element.
 @return	n'th element */
-inline void *ib_vector_get(ib_vector_t *vec, /*!< in: vector */
-                           ulint n)          /*!< in: element index to get */
+inline void *ib_vector_get(
+  ib_vector_t *vec, /*!< in: vector */
+  ulint n
+) /*!< in: element index to get */
 {
   ut_a(n < ib_vector_size(vec));
 
@@ -40,9 +42,10 @@ inline void *ib_vector_get(ib_vector_t *vec, /*!< in: vector */
 
 /** Get n'th element as a const pointer.
 @return	n'th element */
-inline const void *
-ib_vector_get_const(const ib_vector_t *vec, /*!< in: vector */
-                    ulint n)                /*!< in: element index to get */
+inline const void *ib_vector_get_const(
+  const ib_vector_t *vec, /*!< in: vector */
+  ulint n
+) /*!< in: element index to get */
 {
   ut_a(n < ib_vector_size(vec));
 
@@ -51,9 +54,11 @@ ib_vector_get_const(const ib_vector_t *vec, /*!< in: vector */
 
 /** Set n'th element and return the previous value.
 @return	n'th element */
-inline void *ib_vector_set(ib_vector_t *vec, /*!< in: vector */
-                           ulint n,          /*!< in: element index to set */
-                           void *p)          /*!< in: new value to set */
+inline void *ib_vector_set(
+  ib_vector_t *vec, /*!< in: vector */
+  ulint n,          /*!< in: element index to set */
+  void *p
+) /*!< in: new value to set */
 {
   void *prev;
 

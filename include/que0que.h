@@ -41,32 +41,37 @@ extern bool que_trace_on;
 
 /** Adds a query graph to the session's list of graphs. */
 
-void que_graph_publish(que_t *graph,  /*!< in: graph */
-                       sess_t *sess); /*!< in: session */
+void que_graph_publish(
+  que_t *graph, /*!< in: graph */
+  sess_t *sess
+); /*!< in: session */
 /** Creates a query graph fork node.
 @return	own: fork node */
 
-que_fork_t *
-que_fork_create(que_t *graph,       /*!< in: graph, if NULL then this
+que_fork_t *que_fork_create(
+  que_t *graph,       /*!< in: graph, if NULL then this
                                     fork node is assumed to be the
                                     graph root */
-                que_node_t *parent, /*!< in: parent node */
-                ulint fork_type,    /*!< in: fork type */
-                mem_heap_t *heap);  /*!< in: memory heap where created */
+  que_node_t *parent, /*!< in: parent node */
+  ulint fork_type,    /*!< in: fork type */
+  mem_heap_t *heap
+); /*!< in: memory heap where created */
 /** Gets the first thr in a fork. */
-inline que_thr_t *
-que_fork_get_first_thr(que_fork_t *fork); /*!< in: query fork */
+inline que_thr_t *que_fork_get_first_thr(que_fork_t *fork); /*!< in: query fork */
 /** Gets the child node of the first thr in a fork. */
 inline que_node_t *que_fork_get_child(que_fork_t *fork); /*!< in: query fork */
 /** Sets the parent of a graph node. */
-inline void que_node_set_parent(que_node_t *node,    /*!< in: graph node */
-                                que_node_t *parent); /*!< in: parent */
+inline void que_node_set_parent(
+  que_node_t *node, /*!< in: graph node */
+  que_node_t *parent
+); /*!< in: parent */
 /** Creates a query graph thread node.
 @return	own: query thread node */
 
-que_thr_t *
-que_thr_create(que_fork_t *parent, /*!< in: parent node, i.e., a fork node */
-               mem_heap_t *heap);  /*!< in: memory heap where created */
+que_thr_t *que_thr_create(
+  que_fork_t *parent, /*!< in: parent node, i.e., a fork node */
+  mem_heap_t *heap
+); /*!< in: memory heap where created */
 /** Frees a query graph, but not the heap where it was created. Does not free
 explicit cursor declarations, they are freed in que_graph_free. */
 
@@ -89,8 +94,9 @@ the n_active_thrs counters of the query graph and transaction if thr was
 not active. */
 
 void que_thr_move_to_run_state_for_client(
-    que_thr_t *thr, /*!< in: an query thread */
-    trx_t *trx);    /*!< in: transaction */
+  que_thr_t *thr, /*!< in: an query thread */
+  trx_t *trx
+); /*!< in: transaction */
 /** The query thread is stopped and made inactive, except in the case where
 it was put to the lock wait state in lock0lock.c, but the lock has already
 been granted or the transaction chosen as a victim in deadlock resolution. */
@@ -104,27 +110,29 @@ handling routine. (Currently, just returns the control to the root of the
 graph so that the graph can communicate an error message to the client.) */
 
 void que_fork_error_handle(
-    trx_t *trx,   /*!< in: trx */
-    que_t *fork); /*!< in: query graph which was run before signal
+  trx_t *trx, /*!< in: trx */
+  que_t *fork
+); /*!< in: query graph which was run before signal
                   handling started, NULL not allowed */
 /** Moves a suspended query thread to the QUE_THR_RUNNING state and releases
 a single worker thread to execute it. This function should be used to end
 the wait state of a query thread waiting for a lock or a stored procedure
 completion. */
 
-void que_thr_end_wait(que_thr_t *thr,        /*!< in: query thread in the
+void que_thr_end_wait(
+  que_thr_t *thr, /*!< in: query thread in the
                                              QUE_THR_LOCK_WAIT,
                                              or QUE_THR_PROCEDURE_WAIT, or
                                              QUE_THR_SIG_REPLY_WAIT state */
-                      que_thr_t **next_thr); /*!< in/out: next query thread to
+  que_thr_t **next_thr
+); /*!< in/out: next query thread to
                                              run; if the value which is passed
                                              in is a pointer to a NULL pointer,
                                              then the calling function can start
                                              running a new query thread */
 /** Same as que_thr_end_wait, but no parameter next_thr available. */
 
-void que_thr_end_wait_no_next_thr(
-    que_thr_t *thr); /*!< in: query thread in the
+void que_thr_end_wait_no_next_thr(que_thr_t *thr); /*!< in: query thread in the
                      QUE_THR_LOCK_WAIT,
                      or QUE_THR_PROCEDURE_WAIT, or
                      QUE_THR_SIG_REPLY_WAIT state */
@@ -154,11 +162,12 @@ inline dfield_t *que_node_get_val(que_node_t *node); /*!< in: graph node */
 @return	val buffer size, not defined if val.data == NULL in node */
 inline ulint que_node_get_val_buf_size(que_node_t *node); /*!< in: graph node */
 /** Sets the value buffer size of a graph node. */
-inline void que_node_set_val_buf_size(que_node_t *node, /*!< in: graph node */
-                                      ulint size);      /*!< in: size */
+inline void que_node_set_val_buf_size(
+  que_node_t *node, /*!< in: graph node */
+  ulint size
+); /*!< in: size */
 /** Gets the next list node in a list of query graph nodes. */
-inline que_node_t *
-que_node_get_next(que_node_t *node); /*!< in: node in a list */
+inline que_node_t *que_node_get_next(que_node_t *node); /*!< in: node in a list */
 /** Gets the parent node of a query graph node.
 @return	parent node or NULL */
 inline que_node_t *que_node_get_parent(que_node_t *node); /*!< in: node */
@@ -166,17 +175,16 @@ inline que_node_t *que_node_get_parent(que_node_t *node); /*!< in: node */
 given node, or NULL if the node is not within a loop.
 @return	containing loop node, or NULL. */
 
-que_node_t *
-que_node_get_containing_loop_node(que_node_t *node); /*!< in: node */
+que_node_t *que_node_get_containing_loop_node(que_node_t *node); /*!< in: node */
 /** Catenates a query graph node to a list of them, possible empty list.
 @return	one-way list of nodes */
-inline que_node_t *
-que_node_list_add_last(que_node_t *node_list, /*!< in: node list, or NULL */
-                       que_node_t *node);     /*!< in: node */
+inline que_node_t *que_node_list_add_last(
+  que_node_t *node_list, /*!< in: node list, or NULL */
+  que_node_t *node
+); /*!< in: node */
 /** Gets a query graph node list length.
 @return	length, for NULL list 0 */
-inline ulint
-que_node_list_get_len(que_node_t *node_list); /*!< in: node list, or NULL */
+inline ulint que_node_list_get_len(que_node_t *node_list); /*!< in: node list, or NULL */
 /** Checks if graph, trx, or session is in a state where the query thread should
 be stopped.
 @return true if should be stopped; NOTE that if the peek is made
@@ -192,12 +200,14 @@ void que_node_print_info(que_node_t *node); /*!< in: query graph node */
 /** Evaluate the given SQL
 @return	error code or DB_SUCCESS */
 
-db_err que_eval_sql(pars_info_t *info, /*!< in: info struct, or NULL */
-                    const char *sql,   /*!< in: SQL string */
-                    bool reserve_dict_mutex,
-                    /*!< in: if true, acquire/release
+db_err que_eval_sql(
+  pars_info_t *info, /*!< in: info struct, or NULL */
+  const char *sql,   /*!< in: SQL string */
+  bool reserve_dict_mutex,
+  /*!< in: if true, acquire/release
                     dict_sys->mutex around call to pars_sql. */
-                    trx_t *trx); /*!< in: trx */
+  trx_t *trx
+); /*!< in: trx */
 /** Moves a thread from another state to the QUE_THR_RUNNING state. Increments
 the n_active_thrs counters of the query graph and transaction if thr was
 not active.
@@ -211,11 +221,14 @@ select, when there is no error or lock wait.
 
 TODO: Currently only called from row0merge, needs to be removed. */
 
-void que_thr_stop_for_client_no_error(que_thr_t *thr, /*!< in: query thread */
-                                      trx_t *trx);    /*!< in: transaction */
+void que_thr_stop_for_client_no_error(
+  que_thr_t *thr, /*!< in: query thread */
+  trx_t *trx
+); /*!< in: transaction */
 /** Reset the variables. */
 
 void que_var_init(void);
+
 /* Query graph query thread node: the fields are protected by the kernel
 mutex with the exceptions named below */
 
@@ -293,9 +306,9 @@ struct que_fork_struct {
   bool cur_on_row;           /*!< true if cursor is on a row, i.e.,
                               it is not before the first row or
                               after the last row */
-  uint64_t n_inserts;          /*!< number of rows inserted */
-  uint64_t n_updates;          /*!< number of rows updated */
-  uint64_t n_deletes;          /*!< number of rows deleted */
+  uint64_t n_inserts;        /*!< number of rows inserted */
+  uint64_t n_updates;        /*!< number of rows updated */
+  uint64_t n_deletes;        /*!< number of rows deleted */
   sel_node_t *last_sel_node; /*!< last executed select node, or NULL
                              if none */
   UT_LIST_NODE_T(que_fork_t)
@@ -366,7 +379,7 @@ no signal-sending roll_node in this graph */
 /* Query thread states */
 #define QUE_THR_RUNNING 1
 #define QUE_THR_PROCEDURE_WAIT 2
-#define QUE_THR_COMPLETED                                                      \
+#define QUE_THR_COMPLETED \
   3 /* in selects this means that the                                          \
     thread is at the end of its result set                                     \
     (or start, in case of a scroll cursor);                                    \

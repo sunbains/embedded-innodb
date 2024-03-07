@@ -41,7 +41,6 @@ extern bool trx_doublewrite_buf_is_being_created;
 #include "ut0byte.h"
 #include "ut0lst.h"
 
-
 /** The automatically created system rollback segment has this id */
 constexpr ulint TRX_SYS_SYSTEM_RSEG_ID = 0;
 
@@ -98,7 +97,7 @@ constexpr auto TRX_SYS_DOUBLEWRITE_BLOCK1 = 4 + FSEG_HEADER_SIZE;
 
 /** Page number of the first page in the second sequence of 64
 consecutive pages in the doublewrite buffer */
-constexpr auto TRX_SYS_DOUBLEWRITE_BLOCK2  = 8 + FSEG_HEADER_SIZE;
+constexpr auto TRX_SYS_DOUBLEWRITE_BLOCK2 = 8 + FSEG_HEADER_SIZE;
 
 /** We repeat TRX_SYS_DOUBLEWRITE_MAGIC, TRX_SYS_DOUBLEWRITE_BLOCK1,
 TRX_SYS_DOUBLEWRITE_BLOCK2 so that if the trx sys header is half-written
@@ -109,10 +108,10 @@ constexpr auto TRX_SYS_DOUBLEWRITE_REPEAT = 12;
 we must reset the doublewrite buffer, because starting from 4.1.x the
 space id of a data page is stored into
 FIL_PAGE_ARCH_LOG_NO_OR_SPACE_NO. */
-constexpr auto TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED  = 24 + FSEG_HEADER_SIZE;
+constexpr auto TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED = 24 + FSEG_HEADER_SIZE;
 
 /** Contents of TRX_SYS_DOUBLEWRITE_MAGIC */
-constexpr ulint TRX_SYS_DOUBLEWRITE_MAGIC_N  = 536853855;
+constexpr ulint TRX_SYS_DOUBLEWRITE_MAGIC_N = 536853855;
 
 /** Contents of TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED */
 constexpr ulint TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N = 1783657386;
@@ -131,7 +130,7 @@ constexpr auto TRX_SYS_FILE_FORMAT_TAG = UNIV_PAGE_SIZE - 16;
 
 /** Contents of TRX_SYS_FILE_FORMAT_TAG when valid.  The file format
 identifier is added to this constant. */
-constexpr ulint TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW  = 3645922177UL;
+constexpr ulint TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW = 3645922177UL;
 
 /** Contents of TRX_SYS_FILE_FORMAT_TAG+4 when valid */
 constexpr ulint TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH = 2745987765UL;
@@ -171,8 +170,7 @@ upgrading to an InnoDB version which supports multiple tablespaces, then this
 function performs the necessary update operations. If we are in a crash
 recovery, this function uses a possible doublewrite buffer to restore
 half-written pages in the data files. */
-void trx_sys_doublewrite_init_or_restore_pages(
-    bool restore_corrupt_pages); /** in: true=restore pages */
+void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages); /** in: true=restore pages */
 
 /** Marks the trx sys header when we have successfully upgraded to the >= 4.1.x
 multiple tablespace format. */
@@ -185,8 +183,10 @@ bool trx_doublewrite_page_inside(ulint page_no); /** in: page number */
 
 /** Checks if a page address is the trx sys header page.
 @return	true if trx sys header page */
-inline bool trx_sys_hdr_page(ulint space,    /** in: space */
-                             ulint page_no); /** in: page number */
+inline bool trx_sys_hdr_page(
+  ulint space, /** in: space */
+  ulint page_no
+); /** in: page number */
 
 /** Creates and initializes the central memory structures for the transaction
 system. This is called when the database is started. */
@@ -201,14 +201,17 @@ ulint trx_sysf_rseg_find_free(mtr_t *mtr); /** in: mtr */
 
 /** Gets the pointer in the nth slot of the rseg array.
 @return	pointer to rseg object, NULL if slot not in use */
-inline trx_rseg_t *trx_sys_get_nth_rseg(trx_sys_t *sys, /** in: trx system */
-                                        ulint n); /** in: index of slot */
+inline trx_rseg_t *trx_sys_get_nth_rseg(
+  trx_sys_t *sys, /** in: trx system */
+  ulint n
+); /** in: index of slot */
 
 /** Sets the pointer in the nth slot of the rseg array. */
-inline void
-trx_sys_set_nth_rseg(trx_sys_t *sys,    /** in: trx system */
-                     ulint n,           /** in: index of slot */
-                     trx_rseg_t *rseg); /** in: pointer to rseg object,
+inline void trx_sys_set_nth_rseg(
+  trx_sys_t *sys, /** in: trx system */
+  ulint n,        /** in: index of slot */
+  trx_rseg_t *rseg
+); /** in: pointer to rseg object,
                                         NULL if slot not in use */
 
 /** Gets a pointer to the transaction system file copy and x-locks its page.
@@ -218,35 +221,39 @@ inline trx_sysf_t *trx_sysf_get(mtr_t *mtr); /** in: mtr */
 /** Gets the space of the nth rollback segment slot in the trx system
 file copy.
 @return	space id */
-inline ulint
-trx_sysf_rseg_get_space(trx_sysf_t *sys_header, /** in: trx sys file copy */
-                        ulint i,     /** in: slot index == rseg id */
-                        mtr_t *mtr); /** in: mtr */
+inline ulint trx_sysf_rseg_get_space(
+  trx_sysf_t *sys_header, /** in: trx sys file copy */
+  ulint i,                /** in: slot index == rseg id */
+  mtr_t *mtr
+); /** in: mtr */
 
 /** Gets the page number of the nth rollback segment slot in the trx system
 file copy.
 @return	page number, FIL_NULL if slot unused */
-inline ulint
-trx_sysf_rseg_get_page_no(trx_sysf_t *sys_header, /** in: trx sys file copy */
-                          ulint i,     /** in: slot index == rseg id */
-                          mtr_t *mtr); /** in: mtr */
+inline ulint trx_sysf_rseg_get_page_no(
+  trx_sysf_t *sys_header, /** in: trx sys file copy */
+  ulint i,                /** in: slot index == rseg id */
+  mtr_t *mtr
+); /** in: mtr */
 
 /** Sets the space id of the nth rollback segment slot in the trx system
 file copy. */
-inline void
-trx_sysf_rseg_set_space(trx_sysf_t *sys_header, /** in: trx sys file copy */
-                        ulint i,     /** in: slot index == rseg id */
-                        ulint space, /** in: space id */
-                        mtr_t *mtr); /** in: mtr */
+inline void trx_sysf_rseg_set_space(
+  trx_sysf_t *sys_header, /** in: trx sys file copy */
+  ulint i,                /** in: slot index == rseg id */
+  ulint space,            /** in: space id */
+  mtr_t *mtr
+); /** in: mtr */
 
 /** Sets the page number of the nth rollback segment slot in the trx system
 file copy. */
-inline void
-trx_sysf_rseg_set_page_no(trx_sysf_t *sys_header, /** in: trx sys file copy */
-                          ulint i,       /** in: slot index == rseg id */
-                          ulint page_no, /** in: page number, FIL_NULL if
+inline void trx_sysf_rseg_set_page_no(
+  trx_sysf_t *sys_header, /** in: trx sys file copy */
+  ulint i,                /** in: slot index == rseg id */
+  ulint page_no,          /** in: page number, FIL_NULL if
                                          the slot is reset to unused */
-                          mtr_t *mtr);   /** in: mtr */
+  mtr_t *mtr
+); /** in: mtr */
 
 /** Allocates a new transaction id.
 @return	new, allocated trx id */
@@ -259,16 +266,16 @@ inline trx_id_t trx_sys_get_new_trx_no(void);
 /** Writes a trx id to an index page. In case that the id size changes in
 some future version, this function should be used instead of
 mach_write_... */
-inline void
-trx_write_trx_id(byte *ptr,    /** in: pointer to memory where written */
-                 trx_id_t id); /** in: id */
+inline void trx_write_trx_id(
+  byte *ptr, /** in: pointer to memory where written */
+  trx_id_t id
+); /** in: id */
 
 /** Reads a trx id from an index page. In case that the id size changes in
 some future version, this function should be used instead of
 mach_read_...
 @return	id */
-inline trx_id_t trx_read_trx_id(
-    const byte *ptr); /** in: pointer to memory from where to read */
+inline trx_id_t trx_read_trx_id(const byte *ptr); /** in: pointer to memory from where to read */
 
 /** Looks for the trx handle with the given id in trx_list.
 @return	the trx handle or NULL if not found */
@@ -283,8 +290,7 @@ inline trx_id_t trx_list_get_min_trx_id(void);
 
 /** Checks if a transaction with the given id is active.
 @return	true if active */
-inline bool
-trx_is_active(trx_id_t trx_id); /** in: trx id of the transaction */
+inline bool trx_is_active(trx_id_t trx_id); /** in: trx id of the transaction */
 
 /** Checks that trx is in the trx list.
 @return	true if is in */
@@ -310,20 +316,19 @@ void trx_sys_close(void);
 
 /** Get the name representation of the file format from its id.
 @return	pointer to the name */
-const char *trx_sys_file_format_id_to_name(
-    const ulint id); /** in: id of the file format */
+const char *trx_sys_file_format_id_to_name(const ulint id); /** in: id of the file format */
 
 /** Validate the file format name and return its corresponding id.
 @return	valid file format id or DICT_TF_FORMAT_MAX + 1 */
-ulint trx_sys_file_format_name_to_id(
-    const char *format_name); /** in: pointer to file format name */
+ulint trx_sys_file_format_name_to_id(const char *format_name); /** in: pointer to file format name */
 
 /** Set the file format id unconditionally except if it's already the
 same value.
 @return	true if value updated */
 bool trx_sys_file_format_max_set(
-    ulint format_id,    /** in: file format id */
-    const char **name); /** out: max file format name or
+  ulint format_id, /** in: file format id */
+  const char **name
+); /** out: max file format name or
                         NULL if not needed. */
 
 /** Get the name representation of the file format from its id.
@@ -332,16 +337,16 @@ const char *trx_sys_file_format_max_get(void);
 
 /** Check for the max file format tag stored on disk.
 @return	DB_SUCCESS or error code */
-db_err trx_sys_file_format_max_check(
-    ulint max_format_id); /** in: the max format id to check */
+db_err trx_sys_file_format_max_check(ulint max_format_id); /** in: the max format id to check */
 
 /** Update the file format tag in the system tablespace only if the given
 format id is greater than the known max id.
 @return	true if format_id was bigger than the known max id */
 
 bool trx_sys_file_format_max_upgrade(
-    const char **name, /** out: max file format name */
-    ulint format_id);  /** in: file format identifier */
+  const char **name, /** out: max file format name */
+  ulint format_id
+); /** in: file format identifier */
 
 /** Reset the variables. */
 void trx_sys_var_init(void);
@@ -352,17 +357,19 @@ may be ULINT_UNDEFINED signalling that the format id was not present
 in the data file.
 @return true if call succeeds */
 bool trx_sys_read_file_format_id(
-    const char *pathname, /** in: pathname of the first system
+  const char *pathname, /** in: pathname of the first system
                           table space file */
-    ulint *format_id);    /** out: file format of the system table
+  ulint *format_id
+); /** out: file format of the system table
                           space */
 
 /** Reads the file format id from the given per-table data file.
 @return true if call succeeds */
 bool trx_sys_read_pertable_file_format_id(
-    const char *pathname, /** in: pathname of a per-table
+  const char *pathname, /** in: pathname of a per-table
                           datafile */
-    ulint *format_id);    /** out: file format of the per-table
+  ulint *format_id
+); /** out: file format of the per-table
                           data file */
 
 /** Doublewrite control struct */

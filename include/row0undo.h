@@ -36,14 +36,15 @@ Created 1/8/1997 Heikki Tuuri
 /** Creates a row undo node to a query graph.
 @return	own: undo node */
 undo_node_t *row_undo_node_create(
-    /** in: transaction */
-    trx_t *trx,
+  /** in: transaction */
+  trx_t *trx,
 
-    /** in: parent node, i.e., a thr node */
-    que_thr_t *parent,
+  /** in: parent node, i.e., a thr node */
+  que_thr_t *parent,
 
-/** in: memory heap where created */
-    mem_heap_t *heap);
+  /** in: memory heap where created */
+  mem_heap_t *heap
+);
 
 /** Looks for the clustered index record when node has the row reference.
 The pcur in node is used in the search. If found, stores the row to node,

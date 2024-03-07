@@ -31,19 +31,18 @@ Created 11/5/1995 Heikki Tuuri
 
 /*** Remove a block from the flush list of modified blocks. */
 
-void buf_flush_remove(
-    buf_page_t *bpage); /*!< in: pointer to the block in question */
+void buf_flush_remove(buf_page_t *bpage); /*!< in: pointer to the block in question */
 /*** Relocates a buffer control block on the flush_list.
 Note that it is assumed that the contents of bpage has already been
 copied to dpage. */
 
 void buf_flush_relocate_on_flush_list(
-    buf_page_t *bpage,  /*!< in/out: control block being moved */
-    buf_page_t *dpage); /*!< in/out: destination block */
+  buf_page_t *bpage, /*!< in/out: control block being moved */
+  buf_page_t *dpage
+); /*!< in/out: destination block */
 /*** Updates the flush system data structures when a write is completed. */
 
-void buf_flush_write_complete(
-    buf_page_t *bpage); /*!< in: pointer to the block in question */
+void buf_flush_write_complete(buf_page_t *bpage); /*!< in: pointer to the block in question */
 /*** Flushes pages from the end of the LRU list if there is too small
 a margin of replaceable pages there. */
 
@@ -51,8 +50,9 @@ void buf_flush_free_margin(void);
 /*** Initializes a page for writing to the tablespace. */
 
 void buf_flush_init_for_writing(
-    byte *page,           /*!< in/out: page */
-    uint64_t newest_lsn); /*!< in: newest modification lsn
+  byte *page, /*!< in/out: page */
+  uint64_t newest_lsn
+); /*!< in: newest modification lsn
                              to the page */
 /*** This utility flushes dirty blocks from the end of the LRU list or
 flush_list. NOTE 1: in the case of an LRU flush the calling thread may own
@@ -63,41 +63,42 @@ flush, the calling thread is not allowed to own any latches on pages!
 ULINT_UNDEFINED if there was a flush of the same type already running */
 
 ulint buf_flush_batch(
-    enum buf_flush flush_type, /*!< in: BUF_FLUSH_LRU or
+  enum buf_flush flush_type, /*!< in: BUF_FLUSH_LRU or
                                BUF_FLUSH_LIST; if BUF_FLUSH_LIST,
                                then the caller must not own any
                                latches on pages */
-    ulint min_n,               /*!< in: wished minimum mumber of blocks
+  ulint min_n,               /*!< in: wished minimum mumber of blocks
                                flushed (it is not guaranteed that the
                                actual number is that big, though) */
-    uint64_t lsn_limit);       /*!< in the case BUF_FLUSH_LIST all
+  uint64_t lsn_limit
+); /*!< in the case BUF_FLUSH_LIST all
                                   blocks whose oldest_modification is
                                   smaller than this should be flushed
                                   (if their number does not exceed
                                   min_n), otherwise ignored */
 /*** Waits until a flush batch of the given type ends */
 
-void buf_flush_wait_batch_end(
-    enum buf_flush type); /*!< in: BUF_FLUSH_LRU or BUF_FLUSH_LIST */
+void buf_flush_wait_batch_end(enum buf_flush type); /*!< in: BUF_FLUSH_LRU or BUF_FLUSH_LIST */
 /*** This function should be called at a mini-transaction commit, if a page was
 modified in it. Puts the block to the list of modified blocks, if it not
 already in it. */
 inline void buf_flush_note_modification(
-    buf_block_t *block, /*!< in: block which is modified */
-    mtr_t *mtr);        /*!< in: mtr */
+  buf_block_t *block, /*!< in: block which is modified */
+  mtr_t *mtr
+); /*!< in: mtr */
 /*** This function should be called when recovery has modified a buffer page. */
 inline void buf_flush_recv_note_modification(
-    buf_block_t *block, /*!< in: block which is modified */
-    uint64_t start_lsn, /*!< in: start lsn of the first mtr in a
+  buf_block_t *block, /*!< in: block which is modified */
+  uint64_t start_lsn, /*!< in: start lsn of the first mtr in a
                            set of mtr's */
-    uint64_t end_lsn);  /*!< in: end lsn of the last mtr in the
+  uint64_t end_lsn
+); /*!< in: end lsn of the last mtr in the
                            set of mtr's */
 /*** Returns true if the file page block is immediately suitable for
 replacement, i.e., transition FILE_PAGE => NOT_USED allowed.
 @return	true if can replace immediately */
 
-bool buf_flush_ready_for_replace(
-    buf_page_t *bpage); /*!< in: buffer control block, must be
+bool buf_flush_ready_for_replace(buf_page_t *bpage); /*!< in: buffer control block, must be
                         buf_page_in_file(bpage) and in the LRU list */
 
 /** @brief Statistics for selecting flush rate based on redo log
@@ -160,21 +161,20 @@ sweep). */
 
 /** Inserts a modified block into the flush list. */
 
-void buf_flush_insert_into_flush_list(
-    buf_block_t *block); /*!< in/out: block which is modified */
+void buf_flush_insert_into_flush_list(buf_block_t *block); /*!< in/out: block which is modified */
 /** Inserts a modified block into the flush list in the right sorted position.
 This function is used by recovery, because there the modifications do not
 necessarily come in the order of lsn's. */
 
-void buf_flush_insert_sorted_into_flush_list(
-    buf_block_t *block); /*!< in/out: block which is modified */
+void buf_flush_insert_sorted_into_flush_list(buf_block_t *block); /*!< in/out: block which is modified */
 
 /** This function should be called at a mini-transaction commit, if a page was
 modified in it. Puts the block to the list of modified blocks, if it is not
 already in it. */
 inline void buf_flush_note_modification(
-    buf_block_t *block, /*!< in: block which is modified */
-    mtr_t *mtr)         /*!< in: mtr */
+  buf_block_t *block, /*!< in: block which is modified */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   ut_ad(block);
   ut_ad(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
@@ -205,10 +205,11 @@ inline void buf_flush_note_modification(
 
 /** This function should be called when recovery has modified a buffer page. */
 inline void buf_flush_recv_note_modification(
-    buf_block_t *block, /*!< in: block which is modified */
-    uint64_t start_lsn, /*!< in: start lsn of the first mtr in a
+  buf_block_t *block, /*!< in: block which is modified */
+  uint64_t start_lsn, /*!< in: start lsn of the first mtr in a
                            set of mtr's */
-    uint64_t end_lsn)   /*!< in: end lsn of the last mtr in the
+  uint64_t end_lsn
+) /*!< in: end lsn of the last mtr in the
                            set of mtr's */
 {
   ut_ad(block);

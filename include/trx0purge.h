@@ -43,8 +43,7 @@ extern trx_undo_rec_t trx_purge_dummy_rec;
 /** Calculates the file address of an undo log header when we have the file
 address of its history list node.
 @return	file address of the log */
-inline fil_addr_t trx_purge_get_log_from_hist(
-    fil_addr_t node_addr); /*!< in: file address of the history
+inline fil_addr_t trx_purge_get_log_from_hist(fil_addr_t node_addr); /*!< in: file address of the history
                            list node of the log */
 /** Checks if trx_id is >= purge_view: then it is guaranteed that its update
 undo log still exists in the system.
@@ -52,8 +51,7 @@ undo log still exists in the system.
 returns false, it is possible that the undo log still exists in the
 system */
 
-bool trx_purge_update_undo_must_exist(
-    trx_id_t trx_id); /*!< in: transaction id */
+bool trx_purge_update_undo_must_exist(trx_id_t trx_id); /*!< in: transaction id */
 /** Creates the global purge system control structure and inits the history
 mutex. */
 
@@ -65,20 +63,22 @@ void trx_purge_sys_close(void);
 update undo log segment from the rseg slot if it is too big for reuse. */
 
 void trx_purge_add_update_undo_to_history(
-    trx_t *trx,        /*!< in: transaction */
-    page_t *undo_page, /*!< in: update undo log header page,
+  trx_t *trx,        /*!< in: transaction */
+  page_t *undo_page, /*!< in: update undo log header page,
                        x-latched */
-    mtr_t *mtr);       /*!< in: mtr */
+  mtr_t *mtr
+); /*!< in: mtr */
 /** Fetches the next undo log record from the history list to purge. It must be
 released with the corresponding release function.
 @return copy of an undo log record or pointer to trx_purge_dummy_rec,
 if the whole undo log can skipped in purge; NULL if none left */
 
 trx_undo_rec_t *trx_purge_fetch_next_rec(
-    roll_ptr_t *roll_ptr,  /*!< out: roll pointer to undo record */
-    trx_undo_inf_t **cell, /*!< out: storage cell for the record in the
+  roll_ptr_t *roll_ptr,  /*!< out: roll pointer to undo record */
+  trx_undo_inf_t **cell, /*!< out: storage cell for the record in the
                            purge array */
-    mem_heap_t *heap);     /*!< in: memory heap where copied */
+  mem_heap_t *heap
+); /*!< in: memory heap where copied */
 /** Releases a reserved purge undo record. */
 
 void trx_purge_rec_release(trx_undo_inf_t *cell); /*!< in: storage cell */
@@ -152,7 +152,7 @@ struct trx_purge_struct {
 };
 
 #define TRX_PURGE_ON 1 /* purge operation is running */
-#define TRX_STOP_PURGE                                                         \
+#define TRX_STOP_PURGE \
   2 /* purge operation is stopped, or                                          \
     it should be stopped */
 #ifndef UNIV_NONINL

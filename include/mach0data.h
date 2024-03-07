@@ -437,7 +437,7 @@ inline uint32_t mach_uint32_read_compressed(const byte *&b) {
   for (ulint i = 0; i < sizeof(d); i++) {
 #ifdef WORDS_BIGENDIAN
     ptr[sizeof(double) - i - 1] = b[i];
-#else /* WORDS_BIGENDIAN */
+#else  /* WORDS_BIGENDIAN */
     ptr[i] = b[i];
 #endif /* WORDS_BIGENDIAN */
   }
@@ -452,7 +452,7 @@ inline void mach_double_ptr_write(byte *b, const byte *ptr) {
   for (ulint i = 0; i < sizeof(double); i++) {
 #ifdef WORDS_BIGENDIAN
     b[i] = ptr[sizeof(double) - i - 1];
-#else /* WORDS_BIGENDIAN */
+#else  /* WORDS_BIGENDIAN */
     b[i] = ptr[i];
 #endif /* WORDS_BIGENDIAN */
   }
@@ -475,7 +475,7 @@ inline void mach_double_write(byte *b, double v) {
   for (ulint i = 0; i < sizeof(f); i++) {
 #ifdef WORDS_BIGENDIAN
     ptr[sizeof(float) - i - 1] = b[i];
-#else /* WORDS_BIGENDIAN */
+#else  /* WORDS_BIGENDIAN */
     ptr[i] = b[i];
 #endif /* WORDS_BIGENDIAN */
   }
@@ -490,7 +490,7 @@ inline void mach_float_ptr_write(byte *b, const byte *ptr) {
   for (ulint i = 0; i < sizeof(float); i++) {
 #ifdef WORDS_BIGENDIAN
     b[i] = ptr[sizeof(float) - i - 1];
-#else /* WORDS_BIGENDIAN */
+#else  /* WORDS_BIGENDIAN */
     b[i] = ptr[i];
 #endif /* WORDS_BIGENDIAN */
   }
@@ -540,7 +540,7 @@ inline void mach_write_to_n_little_endian(byte *b, ulint dest_size, ulint n) {
   auto end = b + dest_size;
 
   for (;;) {
-    *b= byte(n & 0xFF);
+    *b = byte(n & 0xFF);
 
     n = n >> 8;
 
@@ -564,8 +564,7 @@ inline void mach_write_to_n_little_endian(byte *b, ulint dest_size, ulint n) {
 /** Writes a ulint in the little-endian format.
 @param[in,out] b                Pointer where you want to write.
 @param[in]                      Value to write to the pointer. */
-inline void mach_write_to_2_little_endian(byte *b, ulint n)
-{
+inline void mach_write_to_2_little_endian(byte *b, ulint n) {
   ut_ad(n < 256 * 256);
 
   *b = byte(n & 0xFFUL);
@@ -573,7 +572,7 @@ inline void mach_write_to_2_little_endian(byte *b, ulint n)
 
   ++b;
 
-  *b= byte(n & 0xFFUL);
+  *b = byte(n & 0xFFUL);
 }
 
 /** Swap byte ordering.
@@ -589,22 +588,22 @@ inline void mach_swap_byte_order(void *dest, const byte *from, ulint len) {
   d += len;
 
   switch (len & 0x7) {
-  case 0:
-    *--d = *from++;
-  case 7:
-    *--d = *from++;
-  case 6:
-    *--d = *from++;
-  case 5:
-    *--d = *from++;
-  case 4:
-    *--d = *from++;
-  case 3:
-    *--d = *from++;
-  case 2:
-    *--d = *from++;
-  case 1:
-    *--d = *from;
+    case 0:
+      *--d = *from++;
+    case 7:
+      *--d = *from++;
+    case 6:
+      *--d = *from++;
+    case 5:
+      *--d = *from++;
+    case 4:
+      *--d = *from++;
+    case 3:
+      *--d = *from++;
+    case 2:
+      *--d = *from++;
+    case 1:
+      *--d = *from;
   }
 }
 
@@ -620,7 +619,7 @@ inline void mach_read_int_type(void *dst, const byte *src, ulint len, bool usign
 
   memcpy(dst, src, len);
 
-#else /* WORDS_BIGENDIAN */
+#else  /* WORDS_BIGENDIAN */
 
   mach_swap_byte_order(dst, src, len);
 
@@ -642,7 +641,7 @@ inline void mach_write_int_type(byte *dest, const byte *src, ulint len, bool usi
 
   memcpy(dest, src, len);
 
-#else /* WORDS_BIGENDIAN */
+#else  /* WORDS_BIGENDIAN */
 
   mach_swap_byte_order(dest, src, len);
 
@@ -746,4 +745,3 @@ inline void mach_write_int32(byte *b, int32_t v) {
 @param[out] v                   Where to write value read
 @return	pointer to end of the stored field, NULL if not complete */
 [[nodiscard]] byte *mach_uint64_parse_compressed(byte *ptr, byte *end_ptr, uint64_t *v);
-

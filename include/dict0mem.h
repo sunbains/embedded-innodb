@@ -74,9 +74,7 @@ constexpr ulint DICT_TF_COMPACT = 1;
 /** File format */
 constexpr ulint DICT_TF_FORMAT_SHIFT = 5;
 
-constexpr ulint DICT_TF_FORMAT_MASK =
-    ((~(~0UL << (DICT_TF_BITS - DICT_TF_FORMAT_SHIFT)))
-     << DICT_TF_FORMAT_SHIFT);
+constexpr ulint DICT_TF_FORMAT_MASK = ((~(~0UL << (DICT_TF_BITS - DICT_TF_FORMAT_SHIFT))) << DICT_TF_FORMAT_SHIFT);
 
 /** InnoDBL up to 0.1 */
 constexpr ulint DICT_TF_FORMAT_51 = 0;
@@ -89,8 +87,9 @@ constexpr ulint DICT_TF_FORMAT_MAX = DICT_TF_FORMAT_V1;
 
 /* @} */
 
-static_assert((1 << (DICT_TF_BITS - DICT_TF_FORMAT_SHIFT)) > DICT_TF_FORMAT_MAX,
-              "error DICT_TF_BITS is insufficient for DICT_TF_FORMAT_MAX");
+static_assert(
+  (1 << (DICT_TF_BITS - DICT_TF_FORMAT_SHIFT)) > DICT_TF_FORMAT_MAX, "error DICT_TF_BITS is insufficient for DICT_TF_FORMAT_MAX"
+);
 
 /* @} */
 
@@ -115,45 +114,50 @@ constexpr ulint DICT_TF2_BITS = DICT_TF2_SHIFT + 1;
 
 /** Creates a table memory object.
 @return	own: table object */
-dict_table_t *
-dict_mem_table_create(const char *name, /*!< in: table name */
-                      ulint space,      /*!< in: space where the clustered index
+dict_table_t *dict_mem_table_create(
+  const char *name, /*!< in: table name */
+  ulint space,      /*!< in: space where the clustered index
                                         of the table is placed; this parameter
                                         is ignored if the table is made
                                         a member of a cluster */
-                      ulint n_cols,     /*!< in: number of columns */
-                      ulint flags);     /*!< in: table flags */
+  ulint n_cols,     /*!< in: number of columns */
+  ulint flags
+); /*!< in: table flags */
 
 /** Free a table memory object. */
 void dict_mem_table_free(dict_table_t *table); /*!< in: table */
 
 /** Adds a column definition to a table. */
 void dict_mem_table_add_col(
-    dict_table_t *table, /*!< in: table */
-    mem_heap_t *heap,    /*!< in: temporary memory heap, or NULL */
-    const char *name,    /*!< in: column name, or NULL */
-    ulint mtype,         /*!< in: main datatype */
-    ulint prtype,        /*!< in: precise type */
-    ulint len);          /*!< in: precision */
+  dict_table_t *table, /*!< in: table */
+  mem_heap_t *heap,    /*!< in: temporary memory heap, or NULL */
+  const char *name,    /*!< in: column name, or NULL */
+  ulint mtype,         /*!< in: main datatype */
+  ulint prtype,        /*!< in: precise type */
+  ulint len
+); /*!< in: precision */
 
 /** Creates an index memory object.
 @return	own: index object */
-dict_index_t *
-dict_mem_index_create(const char *table_name, /*!< in: table name */
-                      const char *index_name, /*!< in: index name */
-                      ulint space,     /*!< in: space where the index tree is
+dict_index_t *dict_mem_index_create(
+  const char *table_name, /*!< in: table name */
+  const char *index_name, /*!< in: index name */
+  ulint space,            /*!< in: space where the index tree is
                                        placed, ignored if the index is of
                                        the clustered type */
-                      ulint type,      /*!< in: DICT_UNIQUE,
+  ulint type,             /*!< in: DICT_UNIQUE,
                                        DICT_CLUSTERED, ... ORed */
-                      ulint n_fields); /*!< in: number of fields */
+  ulint n_fields
+); /*!< in: number of fields */
 
 /** Adds a field definition to an index. NOTE: does not take a copy
 of the column name if the field is a column. The memory occupied
 by the column name may be released only after publishing the index. */
-void dict_mem_index_add_field(dict_index_t *index, /*!< in: index */
-                              const char *name,    /*!< in: column name */
-                              ulint prefix_len); /*!< in: 0 or the column prefix
+void dict_mem_index_add_field(
+  dict_index_t *index, /*!< in: index */
+  const char *name,    /*!< in: column name */
+  ulint prefix_len
+); /*!< in: 0 or the column prefix
                                                  length in a column prefix index
                                                  like INDEX (textcol(25)) */
 
@@ -401,7 +405,6 @@ struct dict_table_struct {
   created by a user should be placed if innodb_file_per_table is defined; in
   Unix this is usually /tmp/... */
   const char *dir_path_of_temp_table;
-
 
   /*!< space where the clustered index of the
   table is placed */

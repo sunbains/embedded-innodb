@@ -30,15 +30,15 @@ Created 12/9/1995 Heikki Tuuri
 
 #pragma once
 
-#include "log0types.h"
 #include "api0api.h"
+#include "log0types.h"
+#include "mach0data.h"
+#include "mtr0mtr.h"
+#include "os0file.h"
 #include "srv0srv.h"
 #include "sync0rw.h"
 #include "sync0sync.h"
 #include "ut0lst.h"
-#include "mach0data.h"
-#include "mtr0mtr.h"
-#include "os0file.h"
 
 extern log_t *log_sys;
 
@@ -65,7 +65,6 @@ inline void log_release() {
  */
 bool log_check_log_recs(const byte *buf, ulint len, lsn_t buf_start_lsn);
 #endif /* UNIV_LOG_DEBUG */
-
 
 /**
  * Gets the flush bit of a log block.
@@ -196,8 +195,8 @@ inline ulint log_block_convert_lsn_to_no(lsn_t lsn) {
  * @return The checksum.
  */
 inline ulint log_block_calc_checksum(const byte *block) {
-  auto sh = 0; // Shift value.
-  auto sum = 1; // Checksum value.
+  auto sh = 0;   // Shift value.
+  auto sum = 1;  // Checksum value.
 
   for (ulint i = 0; i < IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE; i++) {
     ulint b = ulint(block[i]);
@@ -285,16 +284,15 @@ inline lsn_t log_reserve_and_write_fast(const void *str, ulint len, lsn_t *start
 #endif /* UNIV_LOG_LSN_DEBUG */
 
 #ifdef UNIV_LOG_LSN_DEBUG
-  lsn_len = 1 + mach_get_compressed_size(log_sys->lsn >> 32) +
-            mach_get_compressed_size(log_sys->lsn & 0xFFFFFFFFUL);
+  lsn_len = 1 + mach_get_compressed_size(log_sys->lsn >> 32) + mach_get_compressed_size(log_sys->lsn & 0xFFFFFFFFUL);
 #endif /* UNIV_LOG_LSN_DEBUG */
 
   auto data_len = len
 
 #ifdef UNIV_LOG_LSN_DEBUG
-             + lsn_len
+                  + lsn_len
 #endif /* UNIV_LOG_LSN_DEBUG */
-             + log_sys->buf_free % IB_FILE_BLOCK_SIZE;
+                  + log_sys->buf_free % IB_FILE_BLOCK_SIZE;
 
   if (data_len >= IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE) {
     // The string does not fit within the current log block or the log block would become full
@@ -358,7 +356,9 @@ inline lsn_t log_get_lsn() {
  *
  * @return The log group capacity.
  */
-inline ulint log_get_capacity() { return (log_sys->log_group_capacity); }
+inline ulint log_get_capacity() {
+  return (log_sys->log_group_capacity);
+}
 
 /**
  * Checks if there is a need for a log buffer flush or a new checkpoint, and does this if yes.
@@ -649,4 +649,3 @@ void log_var_init();
 
 /** Free the log system data structures. */
 void log_mem_free();
-

@@ -40,13 +40,14 @@ Created 4/24/1996 Heikki Tuuri
 
 /** Compare the name of an index column.
 @return	true if the i'th column of index is 'name'. */
-static bool name_of_col_is(const dict_table_t *table, /*!< in: table */
-                           const dict_index_t *index, /*!< in: index */
-                           ulint i,          /*!< in: index field offset */
-                           const char *name) /*!< in: name to compare to */
+static bool name_of_col_is(
+  const dict_table_t *table, /*!< in: table */
+  const dict_index_t *index, /*!< in: index */
+  ulint i,                   /*!< in: index field offset */
+  const char *name
+) /*!< in: name to compare to */
 {
-  ulint tmp =
-      dict_col_get_no(dict_field_get_col(dict_index_get_nth_field(index, i)));
+  ulint tmp = dict_col_get_no(dict_field_get_col(dict_index_get_nth_field(index, i)));
 
   return (strcmp(name, dict_table_get_col_name(table, tmp)) == 0);
 }
@@ -55,8 +56,7 @@ static bool name_of_col_is(const dict_table_t *table, /*!< in: table */
 @return own: table name, NULL if does not exist; the caller must free
 the memory in the string! */
 
-char *dict_get_first_table_name_in_db(
-    const char *name) /*!< in: database name which ends in '/' */
+char *dict_get_first_table_name_in_db(const char *name) /*!< in: database name which ends in '/' */
 {
   dict_table_t *sys_tables;
   btr_pcur_t pcur;
@@ -85,8 +85,7 @@ char *dict_get_first_table_name_in_db(
   dfield_set_data(dfield, name, strlen(name));
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF,
-                            &pcur, &mtr);
+  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
 loop:
   rec = btr_pcur_get_rec(&pcur);
 
@@ -157,8 +156,7 @@ void dict_print(void) {
   sys_tables = dict_table_get_low("SYS_TABLES");
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
 
-  btr_pcur_open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, &pcur, true,
-                              &mtr);
+  btr_pcur_open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, &pcur, true, &mtr);
 loop:
   btr_pcur_move_to_next_user_rec(&pcur, &mtr);
 
@@ -222,8 +220,7 @@ loop:
 /** Determine the flags of a table described in SYS_TABLES.
 @return compressed page size in kilobytes; or 0 if the tablespace is
 uncompressed, ULINT_UNDEFINED on error */
-static ulint
-dict_sys_tables_get_flags(const rec_t *rec) /*!< in: a record of SYS_TABLES */
+static ulint dict_sys_tables_get_flags(const rec_t *rec) /*!< in: a record of SYS_TABLES */
 {
   const byte *field;
   ulint len;
@@ -248,19 +245,21 @@ dict_sys_tables_get_flags(const rec_t *rec) /*!< in: a record of SYS_TABLES */
   }
 
   switch (flags & (DICT_TF_FORMAT_MASK | DICT_TF_COMPACT)) {
-  default:
-  case DICT_TF_FORMAT_51 << DICT_TF_FORMAT_SHIFT:
-  case DICT_TF_FORMAT_51 << DICT_TF_FORMAT_SHIFT | DICT_TF_COMPACT:
-    /* flags should be DICT_TABLE_ORDINARY,
+    default:
+    case DICT_TF_FORMAT_51 << DICT_TF_FORMAT_SHIFT:
+    case DICT_TF_FORMAT_51 << DICT_TF_FORMAT_SHIFT | DICT_TF_COMPACT:
+      /* flags should be DICT_TABLE_ORDINARY,
     or DICT_TF_FORMAT_MASK should be nonzero. */
-    return (ULINT_UNDEFINED);
+      return (ULINT_UNDEFINED);
 
-  case DICT_TF_FORMAT_V1 << DICT_TF_FORMAT_SHIFT | DICT_TF_COMPACT:
-    static_assert(DICT_TF_FORMAT_MAX <= DICT_TF_FORMAT_V1,
-                  "error missing case labels for DICT_TF_FORMAT_V1 .. "
-                  "DICT_TF_FORMAT_MAX");
-    /* We support this format. */
-    break;
+    case DICT_TF_FORMAT_V1 << DICT_TF_FORMAT_SHIFT | DICT_TF_COMPACT:
+      static_assert(
+        DICT_TF_FORMAT_MAX <= DICT_TF_FORMAT_V1,
+        "error missing case labels for DICT_TF_FORMAT_V1 .. "
+        "DICT_TF_FORMAT_MAX"
+      );
+      /* We support this format. */
+      break;
   }
 
   if (unlikely(flags & (~0UL << DICT_TF_BITS))) {
@@ -287,8 +286,7 @@ void dict_check_tablespaces_and_store_max_id(bool in_crash_recovery) {
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
   ut_a(!dict_table_is_comp(sys_tables));
 
-  btr_pcur_open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, &pcur, true,
-                              &mtr);
+  btr_pcur_open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, &pcur, true, &mtr);
 loop:
   btr_pcur_move_to_next_user_rec(&pcur, &mtr);
 
@@ -333,11 +331,13 @@ loop:
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  Error: table ");
       ut_print_filename(ib_stream, name);
-      ib_logger(ib_stream,
-                "\n"
-                "in InnoDB data dictionary"
-                " has unknown type %lx.\n",
-                (ulong)flags);
+      ib_logger(
+        ib_stream,
+        "\n"
+        "in InnoDB data dictionary"
+        " has unknown type %lx.\n",
+        (ulong)flags
+      );
 
       goto loop;
     }
@@ -376,8 +376,7 @@ loop:
         is_temp = false;
       }
 
-      fil_space_for_table_exists_in_mem(space_id, name, is_temp, true,
-                                        !is_temp);
+      fil_space_for_table_exists_in_mem(space_id, name, is_temp, true, !is_temp);
     } else {
       /* It is a normal database startup: create the space
       object and check that the .ibd file exists. */
@@ -401,8 +400,9 @@ loop:
 
 /** Loads definitions for table columns. */
 static void dict_load_columns(
-    dict_table_t *table, /*!< in: table */
-    mem_heap_t *heap)    /*!< in: memory heap for temporary storage */
+  dict_table_t *table, /*!< in: table */
+  mem_heap_t *heap
+) /*!< in: memory heap for temporary storage */
 {
   dict_table_t *sys_columns;
   dict_index_t *sys_index;
@@ -437,8 +437,7 @@ static void dict_load_columns(
   dfield_set_data(dfield, buf, 8);
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF,
-                            &pcur, &mtr);
+  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
   for (i = 0; i + DATA_N_SYS_COLS < (ulint)table->n_cols; i++) {
 
     rec = btr_pcur_get_rec(&pcur);
@@ -496,9 +495,10 @@ static void dict_load_columns(
 }
 
 /** Loads definitions for index fields. */
-static void
-dict_load_fields(dict_index_t *index, /*!< in: index whose fields to load */
-                 mem_heap_t *heap) /*!< in: memory heap for temporary storage */
+static void dict_load_fields(
+  dict_index_t *index, /*!< in: index whose fields to load */
+  mem_heap_t *heap
+) /*!< in: memory heap for temporary storage */
 {
   dict_table_t *sys_fields;
   dict_index_t *sys_index;
@@ -531,8 +531,7 @@ dict_load_fields(dict_index_t *index, /*!< in: index whose fields to load */
   dfield_set_data(dfield, buf, 8);
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF,
-                            &pcur, &mtr);
+  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
   for (i = 0; i < index->n_fields; i++) {
 
     rec = btr_pcur_get_rec(&pcur);
@@ -564,11 +563,9 @@ dict_load_fields(dict_index_t *index, /*!< in: index whose fields to load */
 
     pos_and_prefix_len = mach_read_from_4(field);
 
-    ut_a((pos_and_prefix_len & 0xFFFFUL) == i ||
-         (pos_and_prefix_len & 0xFFFF0000UL) == (i << 16));
+    ut_a((pos_and_prefix_len & 0xFFFFUL) == i || (pos_and_prefix_len & 0xFFFF0000UL) == (i << 16));
 
-    if ((i == 0 && pos_and_prefix_len > 0) ||
-        (pos_and_prefix_len & 0xFFFF0000UL) > 0) {
+    if ((i == 0 && pos_and_prefix_len > 0) || (pos_and_prefix_len & 0xFFFF0000UL) > 0) {
 
       prefix_len = pos_and_prefix_len & 0xFFFFUL;
     } else {
@@ -579,8 +576,7 @@ dict_load_fields(dict_index_t *index, /*!< in: index whose fields to load */
 
     field = rec_get_nth_field_old(rec, 4, &len);
 
-    dict_mem_index_add_field(index, mem_heap_strdupl(heap, (char *)field, len),
-                             prefix_len);
+    dict_mem_index_add_field(index, mem_heap_strdupl(heap, (char *)field, len), prefix_len);
 
   next_rec:
     btr_pcur_move_to_next_user_rec(&pcur, &mtr);
@@ -595,8 +591,9 @@ cache.
 @return DB_SUCCESS if ok, DB_CORRUPTION if corruption of dictionary
 table or DB_UNSUPPORTED if table has unknown index type */
 static ulint dict_load_indexes(
-    dict_table_t *table, /*!< in: table */
-    mem_heap_t *heap)    /*!< in: memory heap for temporary storage */
+  dict_table_t *table, /*!< in: table */
+  mem_heap_t *heap
+) /*!< in: memory heap for temporary storage */
 {
   dict_table_t *sys_indexes;
   dict_index_t *sys_index;
@@ -637,8 +634,7 @@ static ulint dict_load_indexes(
   dfield_set_data(dfield, buf, 8);
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF,
-                            &pcur, &mtr);
+  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
   for (;;) {
     if (!btr_pcur_is_on_user_rec(&pcur)) {
 
@@ -684,46 +680,52 @@ static ulint dict_load_indexes(
     subsequent checks are relevant for the supported types. */
     if (type & ~(DICT_CLUSTERED | DICT_UNIQUE)) {
 
-      ib_logger(ib_stream,
-                "Error: unknown type %lu"
-                " of index %s of table %s\n",
-                (ulong)type, name_buf, table->name);
+      ib_logger(
+        ib_stream,
+        "Error: unknown type %lu"
+        " of index %s of table %s\n",
+        (ulong)type,
+        name_buf,
+        table->name
+      );
 
       error = DB_UNSUPPORTED;
       goto func_exit;
     } else if (page_no == FIL_NULL) {
 
-      ib_logger(ib_stream,
-                "Error: trying to load index %s"
-                " for table %s\n"
-                "but the index tree has been freed!\n",
-                name_buf, table->name);
+      ib_logger(
+        ib_stream,
+        "Error: trying to load index %s"
+        " for table %s\n"
+        "but the index tree has been freed!\n",
+        name_buf,
+        table->name
+      );
 
       error = DB_CORRUPTION;
       goto func_exit;
-    } else if ((type & DICT_CLUSTERED) == 0 &&
-               NULL == dict_table_get_first_index(table)) {
+    } else if ((type & DICT_CLUSTERED) == 0 && NULL == dict_table_get_first_index(table)) {
 
       ib_logger(ib_stream, "Error: trying to load index ");
       ut_print_name(ib_stream, NULL, false, name_buf);
       ib_logger(ib_stream, " for table ");
       ut_print_name(ib_stream, NULL, true, table->name);
-      ib_logger(ib_stream, "\nbut the first index"
-                           " is not clustered!\n");
+      ib_logger(
+        ib_stream,
+        "\nbut the first index"
+        " is not clustered!\n"
+      );
 
       error = DB_CORRUPTION;
       goto func_exit;
     } else if (is_sys_table &&
-               ((type & DICT_CLUSTERED) ||
-                ((table == dict_sys->sys_tables) &&
-                 (name_len == (sizeof "ID_IND") - 1) &&
-                 (0 == memcmp(name_buf, "ID_IND", name_len))))) {
+               ((type & DICT_CLUSTERED) || ((table == dict_sys->sys_tables) && (name_len == (sizeof "ID_IND") - 1) &&
+                                            (0 == memcmp(name_buf, "ID_IND", name_len))))) {
 
       /* The index was created in memory already at booting
       of the database server */
     } else {
-      index =
-          dict_mem_index_create(table->name, name_buf, space, type, n_fields);
+      index = dict_mem_index_create(table->name, name_buf, space, type, n_fields);
       index->id = id;
 
       dict_load_fields(index, heap);
@@ -759,8 +761,10 @@ dictionary cache.
 .ibd file, but the file does not exist, then we set the
 ibd_file_missing flag true in the table object we return */
 
-dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
-                              const char *name)       /*!< in: table name in the
+dict_table_t *dict_load_table(
+  ib_recovery_t recovery, /*!< in: recovery flag */
+  const char *name
+) /*!< in: table name in the
                                                       databasename/tablename format */
 {
   bool ibd_file_missing = false;
@@ -796,8 +800,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
   dfield_set_data(dfield, name, strlen(name));
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF,
-                            &pcur, &mtr);
+  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
   rec = btr_pcur_get_rec(&pcur);
 
   if (!btr_pcur_is_on_user_rec(&pcur) || rec_get_deleted_flag(rec, 0)) {
@@ -834,11 +837,13 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  Error: table ");
       ut_print_filename(ib_stream, name);
-      ib_logger(ib_stream,
-                "\n"
-                "in InnoDB data dictionary"
-                " has unknown type %lx.\n",
-                (ulong)flags);
+      ib_logger(
+        ib_stream,
+        "\n"
+        "in InnoDB data dictionary"
+        " has unknown type %lx.\n",
+        (ulong)flags
+      );
       goto err_exit;
     }
 
@@ -867,11 +872,13 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  Warning: table ");
       ut_print_filename(ib_stream, name);
-      ib_logger(ib_stream,
-                "\n"
-                "in InnoDB data dictionary"
-                " has unknown flags %lx.\n",
-                (ulong)flags2);
+      ib_logger(
+        ib_stream,
+        "\n"
+        "in InnoDB data dictionary"
+        " has unknown flags %lx.\n",
+        (ulong)flags2
+      );
 
       flags2 &= ~(~0UL << (DICT_TF2_BITS - DICT_TF2_SHIFT));
     }
@@ -882,9 +889,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
   /* See if the tablespace is available. */
   if (space == 0) {
     /* The system tablespace is always available. */
-  } else if (!fil_space_for_table_exists_in_mem(
-                 space, name, (flags >> DICT_TF2_SHIFT) & DICT_TF2_TEMPORARY,
-                 false, false)) {
+  } else if (!fil_space_for_table_exists_in_mem(space, name, (flags >> DICT_TF2_SHIFT) & DICT_TF2_TEMPORARY, false, false)) {
 
     if ((flags >> DICT_TF2_SHIFT) & DICT_TF2_TEMPORARY) {
       /* Do not bother to retry opening temporary tables. */
@@ -893,14 +898,15 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  error: space object of table");
       ut_print_filename(ib_stream, name);
-      ib_logger(ib_stream,
-                ",\n"
-                "space id %lu did not exist in memory."
-                " Retrying an open.\n",
-                (ulong)space);
+      ib_logger(
+        ib_stream,
+        ",\n"
+        "space id %lu did not exist in memory."
+        " Retrying an open.\n",
+        (ulong)space
+      );
       /* Try to open the tablespace */
-      if (!fil_open_single_table_tablespace(
-              true, space, flags & ~(~0UL << DICT_TF_BITS), name)) {
+      if (!fil_open_single_table_tablespace(true, space, flags & ~(~0UL << DICT_TF_BITS), name)) {
         /* We failed to find a sensible
         tablespace file */
 
@@ -971,9 +977,10 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
 /** Loads a table object based on the table id.
 @return	table; NULL if table does not exist */
 
-dict_table_t *
-dict_load_table_on_id(ib_recovery_t recovery, /*!< in: recovery flag */
-                      uint64_t table_id)        /*!< in: table id */
+dict_table_t *dict_load_table_on_id(
+  ib_recovery_t recovery, /*!< in: recovery flag */
+  uint64_t table_id
+) /*!< in: table id */
 {
   byte id_buf[8];
   btr_pcur_t pcur;
@@ -998,8 +1005,7 @@ dict_load_table_on_id(ib_recovery_t recovery, /*!< in: recovery flag */
   /*---------------------------------------------------*/
   /* Get the secondary index based on ID for table SYS_TABLES */
   sys_tables = dict_sys->sys_tables;
-  sys_table_ids =
-      dict_table_get_next_index(dict_table_get_first_index(sys_tables));
+  sys_table_ids = dict_table_get_next_index(dict_table_get_first_index(sys_tables));
   ut_a(!dict_table_is_comp(sys_tables));
   heap = mem_heap_create(256);
 
@@ -1012,8 +1018,7 @@ dict_load_table_on_id(ib_recovery_t recovery, /*!< in: recovery flag */
   dfield_set_data(dfield, id_buf, 8);
   dict_index_copy_types(tuple, sys_table_ids, 1);
 
-  btr_pcur_open_on_user_rec(sys_table_ids, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF,
-                            &pcur, &mtr);
+  btr_pcur_open_on_user_rec(sys_table_ids, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
   rec = btr_pcur_get_rec(&pcur);
 
   if (!btr_pcur_is_on_user_rec(&pcur) || rec_get_deleted_flag(rec, 0)) {
@@ -1075,9 +1080,10 @@ void dict_load_sys_table(dict_table_t *table) /*!< in: system table */
 
 /** Loads foreign key constraint col names (also for the referenced table). */
 static void dict_load_foreign_cols(
-    const char *id,          /*!< in: foreign constraint id as a
+  const char *id, /*!< in: foreign constraint id as a
                              null-terminated string */
-    dict_foreign_t *foreign) /*!< in: foreign constraint object */
+  dict_foreign_t *foreign
+) /*!< in: foreign constraint object */
 {
   dict_table_t *sys_foreign_cols;
   dict_index_t *sys_index;
@@ -1092,11 +1098,9 @@ static void dict_load_foreign_cols(
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
-  foreign->foreign_col_names = (const char **)mem_heap_alloc(
-      foreign->heap, foreign->n_fields * sizeof(void *));
+  foreign->foreign_col_names = (const char **)mem_heap_alloc(foreign->heap, foreign->n_fields * sizeof(void *));
 
-  foreign->referenced_col_names = (const char **)mem_heap_alloc(
-      foreign->heap, foreign->n_fields * sizeof(void *));
+  foreign->referenced_col_names = (const char **)mem_heap_alloc(foreign->heap, foreign->n_fields * sizeof(void *));
   mtr_start(&mtr);
 
   sys_foreign_cols = dict_table_get_low("SYS_FOREIGN_COLS");
@@ -1109,8 +1113,7 @@ static void dict_load_foreign_cols(
   dfield_set_data(dfield, id, strlen(id));
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF,
-                            &pcur, &mtr);
+  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
   for (i = 0; i < foreign->n_fields; i++) {
 
     rec = btr_pcur_get_rec(&pcur);
@@ -1127,12 +1130,10 @@ static void dict_load_foreign_cols(
     ut_a(i == mach_read_from_4(field));
 
     field = rec_get_nth_field_old(rec, 4, &len);
-    foreign->foreign_col_names[i] =
-        mem_heap_strdupl(foreign->heap, (char *)field, len);
+    foreign->foreign_col_names[i] = mem_heap_strdupl(foreign->heap, (char *)field, len);
 
     field = rec_get_nth_field_old(rec, 5, &len);
-    foreign->referenced_col_names[i] =
-        mem_heap_strdupl(foreign->heap, (char *)field, len);
+    foreign->referenced_col_names[i] = mem_heap_strdupl(foreign->heap, (char *)field, len);
 
     btr_pcur_move_to_next_user_rec(&pcur, &mtr);
   }
@@ -1143,9 +1144,11 @@ static void dict_load_foreign_cols(
 
 /** Loads a foreign key constraint to the dictionary cache.
 @return	DB_SUCCESS or error code */
-static db_err dict_load_foreign(const char *id, /*!< in: foreign constraint id
+static db_err dict_load_foreign(
+  const char *id, /*!< in: foreign constraint id
                                                as a null-terminated string */
-                                bool check_charsets)
+  bool check_charsets
+)
 /*!< in: true=check charset compatibility */
 {
   dict_foreign_t *foreign;
@@ -1177,15 +1180,13 @@ static db_err dict_load_foreign(const char *id, /*!< in: foreign constraint id
   dfield_set_data(dfield, id, strlen(id));
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF,
-                            &pcur, &mtr);
+  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
   rec = btr_pcur_get_rec(&pcur);
 
   if (!btr_pcur_is_on_user_rec(&pcur) || rec_get_deleted_flag(rec, 0)) {
     /* Not found */
 
-    ib_logger(ib_stream, "Error A: cannot load foreign constraint %s\n",
-              id);
+    ib_logger(ib_stream, "Error A: cannot load foreign constraint %s\n", id);
 
     btr_pcur_close(&pcur);
     mtr_commit(&mtr);
@@ -1199,8 +1200,7 @@ static db_err dict_load_foreign(const char *id, /*!< in: foreign constraint id
   /* Check if the id in record is the searched one */
   if (len != strlen(id) || memcmp(id, field, len) != 0) {
 
-    ib_logger(ib_stream, "Error B: cannot load foreign constraint %s\n",
-              id);
+    ib_logger(ib_stream, "Error B: cannot load foreign constraint %s\n", id);
 
     btr_pcur_close(&pcur);
     mtr_commit(&mtr);
@@ -1228,12 +1228,10 @@ static db_err dict_load_foreign(const char *id, /*!< in: foreign constraint id
   foreign->id = mem_heap_strdup(foreign->heap, id);
 
   field = rec_get_nth_field_old(rec, 3, &len);
-  foreign->foreign_table_name =
-      mem_heap_strdupl(foreign->heap, (char *)field, len);
+  foreign->foreign_table_name = mem_heap_strdupl(foreign->heap, (char *)field, len);
 
   field = rec_get_nth_field_old(rec, 4, &len);
-  foreign->referenced_table_name =
-      mem_heap_strdupl(foreign->heap, (char *)field, len);
+  foreign->referenced_table_name = mem_heap_strdupl(foreign->heap, (char *)field, len);
 
   btr_pcur_close(&pcur);
   mtr_commit(&mtr);
@@ -1277,8 +1275,11 @@ db_err dict_load_foreigns(const char *table_name, bool check_charsets) {
   if (sys_foreign == NULL) {
     /* No foreign keys defined yet in this database */
 
-    ib_logger(ib_stream, "Error: no foreign key system tables"
-                         " in the database\n");
+    ib_logger(
+      ib_stream,
+      "Error: no foreign key system tables"
+      " in the database\n"
+    );
 
     return (DB_ERROR);
   }
@@ -1289,8 +1290,7 @@ db_err dict_load_foreigns(const char *table_name, bool check_charsets) {
   /* Get the secondary index based on FOR_NAME from table
   SYS_FOREIGN */
 
-  sec_index =
-      dict_table_get_next_index(dict_table_get_first_index(sys_foreign));
+  sec_index = dict_table_get_next_index(dict_table_get_first_index(sys_foreign));
 
   db_err err;
 
@@ -1303,8 +1303,7 @@ start_load:
   dfield_set_data(dfield, table_name, strlen(table_name));
   dict_index_copy_types(tuple, sec_index, 1);
 
-  btr_pcur_open_on_user_rec(sec_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF,
-                            &pcur, &mtr);
+  btr_pcur_open_on_user_rec(sec_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
 loop:
   rec = btr_pcur_get_rec(&pcur);
 
@@ -1324,10 +1323,7 @@ loop:
   following call does the comparison in the latin1_swedish_ci
   charset-collation, in a case-insensitive way. */
 
-  if (0 != cmp_data_data(NULL, dfield_get_type(dfield)->mtype,
-                         dfield_get_type(dfield)->prtype,
-                         (const byte *)dfield_get_data(dfield),
-                         dfield_get_len(dfield), field, len)) {
+  if (0 != cmp_data_data(NULL, dfield_get_type(dfield)->mtype, dfield_get_type(dfield)->prtype, (const byte *)dfield_get_data(dfield), dfield_get_len(dfield), field, len)) {
 
     goto load_next_index;
   }

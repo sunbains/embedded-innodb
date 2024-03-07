@@ -27,10 +27,11 @@ Created September 2006 Marko Makela
 /** Looks up a column prefix of an externally stored column.
 @return column prefix, or NULL if the column is not stored externally,
 or pointer to field_ref_zero if the BLOB pointer is unset */
-inline const byte *
-row_ext_lookup_ith(const row_ext_t *ext, /*!< in/out: column prefix cache */
-                   ulint i,              /*!< in: index of ext->ext[] */
-                   ulint *len)           /*!< out: length of prefix, in bytes,
+inline const byte *row_ext_lookup_ith(
+  const row_ext_t *ext, /*!< in/out: column prefix cache */
+  ulint i,              /*!< in: index of ext->ext[] */
+  ulint *len
+) /*!< out: length of prefix, in bytes,
                                          at most REC_MAX_INDEX_COL_LEN */
 {
   ut_ad(ext);
@@ -50,13 +51,14 @@ row_ext_lookup_ith(const row_ext_t *ext, /*!< in/out: column prefix cache */
 /** Looks up a column prefix of an externally stored column.
 @return column prefix, or NULL if the column is not stored externally,
 or pointer to field_ref_zero if the BLOB pointer is unset */
-inline const byte *
-row_ext_lookup(const row_ext_t *ext, /*!< in: column prefix cache */
-               ulint col,            /*!< in: column number in the InnoDB
+inline const byte *row_ext_lookup(
+  const row_ext_t *ext, /*!< in: column prefix cache */
+  ulint col,            /*!< in: column number in the InnoDB
                                      table object, as reported by
                                      dict_col_get_no(); NOT relative to the
                                      records in the clustered index */
-               ulint *len)           /*!< out: length of prefix, in bytes,
+  ulint *len
+) /*!< out: length of prefix, in bytes,
                                      at most REC_MAX_INDEX_COL_LEN */
 {
   ulint i;

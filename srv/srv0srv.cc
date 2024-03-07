@@ -635,14 +635,18 @@ ib_panic_function_t ib_panic = nullptr;
 /** Prints counters for work done by srv_master_thread.
 @param[in,out] stream           Output stream. */
 static void srv_print_master_thread_info(ib_stream_t stream) {
-  ib_logger(stream,
-            "srv_master_thread loops: %lu 1_second, %lu sleeps, "
-            "%lu 10_second, %lu background, %lu flush\n",
-            srv_main_1_second_loops, srv_main_sleeps, srv_main_10_second_loops,
-            srv_main_background_loops, srv_main_flush_loops);
+  ib_logger(
+    stream,
+    "srv_master_thread loops: %lu 1_second, %lu sleeps, "
+    "%lu 10_second, %lu background, %lu flush\n",
+    srv_main_1_second_loops,
+    srv_main_sleeps,
+    srv_main_10_second_loops,
+    srv_main_background_loops,
+    srv_main_flush_loops
+  );
 
-  ib_logger(stream, "srv_master_thread log flush and writes: %lu\n",
-            srv_log_writes_and_flush);
+  ib_logger(stream, "srv_master_thread log flush and writes: %lu\n", srv_log_writes_and_flush);
 }
 
 void srv_var_init() {
@@ -761,8 +765,7 @@ void srv_var_init() {
 /** Accessor function to get pointer to n'th slot in the server thread
 table.
 @return	pointer to the slot */
-static srv_slot_t *
-srv_table_get_nth_slot(ulint index) /*!< in: index of the slot */
+static srv_slot_t *srv_table_get_nth_slot(ulint index) /*!< in: index of the slot */
 {
   ut_a(index < OS_THREAD_MAX_N);
 
@@ -792,8 +795,7 @@ ulint srv_get_n_threads(void) {
 thread local storage struct for the current thread. NOTE! The server mutex
 has to be reserved by the caller!
 @return	reserved slot index */
-static ulint
-srv_table_reserve_slot(srv_thread_type type) /*!< in: type of the thread */
+static ulint srv_table_reserve_slot(srv_thread_type type) /*!< in: type of the thread */
 {
   srv_slot_t *slot;
   ulint i;
@@ -833,8 +835,7 @@ static os_event_t srv_suspend_thread(void) {
   auto slot_no = thr_local_get_slot_no(os_thread_get_curr_id());
 
   if (srv_print_thread_releases) {
-    ib_logger(ib_stream, "Suspending thread %lu to slot %lu\n",
-              (ulong)os_thread_get_curr_id(), (ulong)slot_no);
+    ib_logger(ib_stream, "Suspending thread %lu to slot %lu\n", (ulong)os_thread_get_curr_id(), (ulong)slot_no);
   }
 
   auto slot = srv_table_get_nth_slot(slot_no);
@@ -862,8 +863,10 @@ NOTE! The server mutex has to be reserved by the caller!
 @return number of threads released: this may be less than n if not
 enough threads were suspended at the moment */
 
-ulint srv_release_threads(srv_thread_type type, /*!< in: thread type */
-                          ulint n) /*!< in: number of threads to release */
+ulint srv_release_threads(
+  srv_thread_type type, /*!< in: thread type */
+  ulint n
+) /*!< in: number of threads to release */
 {
   srv_slot_t *slot;
   ulint i;
@@ -887,10 +890,14 @@ ulint srv_release_threads(srv_thread_type type, /*!< in: thread type */
       os_event_set(slot->event);
 
       if (srv_print_thread_releases) {
-        ib_logger(ib_stream,
-                  "Releasing thread %lu type %lu"
-                  " from slot %lu\n",
-                  (ulong)slot->id, (ulong)type, (ulong)i);
+        ib_logger(
+          ib_stream,
+          "Releasing thread %lu type %lu"
+          " from slot %lu\n",
+          (ulong)slot->id,
+          (ulong)type,
+          (ulong)i
+        );
       }
 
       count++;
@@ -941,8 +948,7 @@ static void srv_init(void) {
 
   mutex_create(&srv_innodb_monitor_mutex, SYNC_NO_ORDER_CHECK);
 
-  srv_sys->threads = static_cast<srv_slot_t *>(
-      mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
+  srv_sys->threads = static_cast<srv_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
 
   for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
     slot = srv_table_get_nth_slot(i);
@@ -952,8 +958,7 @@ static void srv_init(void) {
     ut_a(slot->event);
   }
 
-  srv_client_table = static_cast<srv_slot_t *>(
-      mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
+  srv_client_table = static_cast<srv_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
 
   slot = srv_client_table;
 
@@ -983,8 +988,7 @@ static void srv_init(void) {
 
   UT_LIST_INIT(srv_conc_queue);
 
-  srv_conc_slots = static_cast<srv_conc_slot_t *>(
-      mem_alloc(OS_THREAD_MAX_N * sizeof(srv_conc_slot_t)));
+  srv_conc_slots = static_cast<srv_conc_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_conc_slot_t)));
 
   conc_slot = srv_conc_slots;
 
@@ -1046,12 +1050,10 @@ static db_err srv_normalize_init_values(void) {
   auto n = srv_n_data_files;
 
   for (ulint i = 0; i < n; i++) {
-    srv_data_file_sizes[i] =
-        srv_data_file_sizes[i] * ((1024 * 1024) / UNIV_PAGE_SIZE);
+    srv_data_file_sizes[i] = srv_data_file_sizes[i] * ((1024 * 1024) / UNIV_PAGE_SIZE);
   }
 
-  srv_last_file_size_max =
-      srv_last_file_size_max * ((1024 * 1024) / UNIV_PAGE_SIZE);
+  srv_last_file_size_max = srv_last_file_size_max * ((1024 * 1024) / UNIV_PAGE_SIZE);
 
   srv_log_file_size = srv_log_file_curr_size / UNIV_PAGE_SIZE;
   srv_log_file_curr_size = srv_log_file_size * UNIV_PAGE_SIZE;
@@ -1130,27 +1132,34 @@ static srv_slot_t *srv_table_reserve_slot_for_user_thread(void) {
 
       ut_print_timestamp(ib_stream);
 
-      ib_logger(ib_stream,
-                "  There appear to be %lu user"
-                " threads currently waiting\n"
-                "inside InnoDB, which is the"
-                " upper limit. Cannot continue operation.\n"
-                "We intentionally generate"
-                " a seg fault to print a stack trace\n"
-                "on Linux. But first we print"
-                " a list of waiting threads.\n",
-                (ulong)i);
+      ib_logger(
+        ib_stream,
+        "  There appear to be %lu user"
+        " threads currently waiting\n"
+        "inside InnoDB, which is the"
+        " upper limit. Cannot continue operation.\n"
+        "We intentionally generate"
+        " a seg fault to print a stack trace\n"
+        "on Linux. But first we print"
+        " a list of waiting threads.\n",
+        (ulong)i
+      );
 
       for (i = 0; i < OS_THREAD_MAX_N; i++) {
 
         slot = srv_client_table + i;
 
-        ib_logger(ib_stream,
-                  "Slot %lu: thread id %lu, type %lu,"
-                  " in use %lu, susp %lu, time %lu\n",
-                  (ulong)i, (ulong)os_thread_pf(slot->id), (ulong)slot->type,
-                  (ulong)slot->in_use, (ulong)slot->suspended,
-                  (ulong)difftime(ut_time(), slot->suspend_time));
+        ib_logger(
+          ib_stream,
+          "Slot %lu: thread id %lu, type %lu,"
+          " in use %lu, susp %lu, time %lu\n",
+          (ulong)i,
+          (ulong)os_thread_pf(slot->id),
+          (ulong)slot->type,
+          (ulong)slot->in_use,
+          (ulong)slot->suspended,
+          (ulong)difftime(ut_time(), slot->suspend_time)
+        );
       }
 
       ut_error;
@@ -1240,14 +1249,14 @@ void srv_suspend_user_thread(que_thr_t *thr) {
   had_dict_lock = trx->dict_operation_lock_mode;
 
   switch (had_dict_lock) {
-  case RW_S_LATCH:
-    /* Release foreign key check latch */
-    dict_unfreeze_data_dictionary(trx);
-    break;
-  case RW_X_LATCH:
-    /* Release fast index creation latch */
-    dict_unlock_data_dictionary(trx);
-    break;
+    case RW_S_LATCH:
+      /* Release foreign key check latch */
+      dict_unfreeze_data_dictionary(trx);
+      break;
+    case RW_X_LATCH:
+      /* Release fast index creation latch */
+      dict_unlock_data_dictionary(trx);
+      break;
   }
 
   ut_a(trx->dict_operation_lock_mode == 0);
@@ -1260,12 +1269,12 @@ void srv_suspend_user_thread(que_thr_t *thr) {
   necessary. */
 
   switch (had_dict_lock) {
-  case RW_S_LATCH:
-    dict_freeze_data_dictionary(trx);
-    break;
-  case RW_X_LATCH:
-    dict_lock_data_dictionary(trx);
-    break;
+    case RW_S_LATCH:
+      dict_freeze_data_dictionary(trx);
+      break;
+    case RW_X_LATCH:
+      dict_lock_data_dictionary(trx);
+      break;
   }
 
   mutex_enter(&kernel_mutex);
@@ -1310,8 +1319,7 @@ void srv_suspend_user_thread(que_thr_t *thr) {
   innodb_lock_wait_timeout, because trx->client_thd == nullptr. */
   lock_wait_timeout = sess_lock_wait_timeout(trx);
 
-  if (trx_is_interrupted(trx) || (lock_wait_timeout < 100000000 &&
-                                  wait_time > (double)lock_wait_timeout)) {
+  if (trx_is_interrupted(trx) || (lock_wait_timeout < 100000000 && wait_time > (double)lock_wait_timeout)) {
 
     trx->error_state = DB_LOCK_WAIT_TIMEOUT;
   }
@@ -1356,8 +1364,7 @@ static void srv_refresh_innodb_monitor_stats() {
   mutex_exit(&srv_innodb_monitor_mutex);
 }
 
-bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
-                               ulint *trx_start, ulint *trx_end) {
+bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_start, ulint *trx_end) {
   double time_elapsed;
   time_t current_time;
   ulint n_reserved;
@@ -1378,20 +1385,28 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
   ib_logger(ib_stream, "\n=====================================\n");
 
   ut_print_timestamp(ib_stream);
-  ib_logger(ib_stream,
-            " INNODB MONITOR OUTPUT\n"
-            "=====================================\n"
-            "Per second averages calculated from the last %lu seconds\n",
-            (ulong)time_elapsed);
+  ib_logger(
+    ib_stream,
+    " INNODB MONITOR OUTPUT\n"
+    "=====================================\n"
+    "Per second averages calculated from the last %lu seconds\n",
+    (ulong)time_elapsed
+  );
 
-  ib_logger(ib_stream, "----------\n"
-                       "BACKGROUND THREAD\n"
-                       "----------\n");
+  ib_logger(
+    ib_stream,
+    "----------\n"
+    "BACKGROUND THREAD\n"
+    "----------\n"
+  );
   srv_print_master_thread_info(ib_stream);
 
-  ib_logger(ib_stream, "----------\n"
-                       "SEMAPHORES\n"
-                       "----------\n");
+  ib_logger(
+    ib_stream,
+    "----------\n"
+    "SEMAPHORES\n"
+    "----------\n"
+  );
   sync_print(ib_stream);
 
 #ifdef WITH_FOREIGN_KEY
@@ -1403,9 +1418,12 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
   mutex_enter(&dict_foreign_err_mutex);
 
   if (ftell(dict_foreign_err_file) != 0L) {
-    ib_logger(ib_stream, "------------------------\n"
-                         "LATEST FOREIGN KEY ERROR\n"
-                         "------------------------\n");
+    ib_logger(
+      ib_stream,
+      "------------------------\n"
+      "LATEST FOREIGN KEY ERROR\n"
+      "------------------------\n"
+    );
     ut_copy_file(ib_stream, dict_foreign_err_file);
   }
 
@@ -1414,9 +1432,12 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
 
   lock_print_info_all_transactions(ib_stream);
 
-  ib_logger(ib_stream, "--------\n"
-                       "FILE I/O\n"
-                       "--------\n");
+  ib_logger(
+    ib_stream,
+    "--------\n"
+    "FILE I/O\n"
+    "--------\n"
+  );
   os_aio_print(ib_stream);
 
   /* Only if lock_print_info_summary proceeds correctly,
@@ -1445,65 +1466,83 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
     }
   }
 
-  ib_logger(ib_stream, "--------\n"
-                       "FILE I/O\n"
-                       "--------\n");
+  ib_logger(
+    ib_stream,
+    "--------\n"
+    "FILE I/O\n"
+    "--------\n"
+  );
   os_aio_print(ib_stream);
 
-  ib_logger(ib_stream, "---\n"
-                       "LOG\n"
-                       "---\n");
+  ib_logger(
+    ib_stream,
+    "---\n"
+    "LOG\n"
+    "---\n"
+  );
   log_print(ib_stream);
 
-  ib_logger(ib_stream, "----------------------\n"
-                       "BUFFER POOL AND MEMORY\n"
-                       "----------------------\n");
-  ib_logger(ib_stream, "Total memory allocated " ULINTPF "\n",
-            ut_total_allocated_memory);
-  ib_logger(ib_stream, "Dictionary memory allocated " ULINTPF "\n",
-            dict_sys->size);
+  ib_logger(
+    ib_stream,
+    "----------------------\n"
+    "BUFFER POOL AND MEMORY\n"
+    "----------------------\n"
+  );
+  ib_logger(ib_stream, "Total memory allocated " ULINTPF "\n", ut_total_allocated_memory);
+  ib_logger(ib_stream, "Dictionary memory allocated " ULINTPF "\n", dict_sys->size);
 
   buf_print_io(ib_stream);
 
-  ib_logger(ib_stream, "--------------\n"
-                       "ROW OPERATIONS\n"
-                       "--------------\n");
-  ib_logger(ib_stream, "%lu queries in queue\n",
-            (ulong)srv_conc_n_waiting_threads);
+  ib_logger(
+    ib_stream,
+    "--------------\n"
+    "ROW OPERATIONS\n"
+    "--------------\n"
+  );
+  ib_logger(ib_stream, "%lu queries in queue\n", (ulong)srv_conc_n_waiting_threads);
 
-  ib_logger(ib_stream, "%lu read views open inside InnoDB\n",
-            UT_LIST_GET_LEN(trx_sys->view_list));
+  ib_logger(ib_stream, "%lu read views open inside InnoDB\n", UT_LIST_GET_LEN(trx_sys->view_list));
 
   n_reserved = fil_space_get_n_reserved_extents(0);
   if (n_reserved > 0) {
-    ib_logger(ib_stream,
-              "%lu tablespace extents now reserved for"
-              " B-tree split operations\n",
-              (ulong)n_reserved);
+    ib_logger(
+      ib_stream,
+      "%lu tablespace extents now reserved for"
+      " B-tree split operations\n",
+      (ulong)n_reserved
+    );
   }
 
 #ifdef UNIV_LINUX
-  ib_logger(ib_stream, "Main thread process no. %lu, id %lu, state: %s\n",
-            (ulong)srv_main_thread_process_no, (ulong)srv_main_thread_id,
-            srv_main_thread_op_info);
+  ib_logger(
+    ib_stream,
+    "Main thread process no. %lu, id %lu, state: %s\n",
+    (ulong)srv_main_thread_process_no,
+    (ulong)srv_main_thread_id,
+    srv_main_thread_op_info
+  );
 #else
-  ib_logger(ib_stream, "Main thread id %lu, state: %s\n",
-            (ulong)srv_main_thread_id, srv_main_thread_op_info);
+  ib_logger(ib_stream, "Main thread id %lu, state: %s\n", (ulong)srv_main_thread_id, srv_main_thread_op_info);
 #endif /* UNIV_LINUX */
 
-  ib_logger(ib_stream,
-            "Number of rows inserted " ULINTPF ", updated " ULINTPF
-            ", deleted " ULINTPF ", read " ULINTPF "\n",
-            srv_n_rows_inserted, srv_n_rows_updated, srv_n_rows_deleted,
-            srv_n_rows_read);
+  ib_logger(
+    ib_stream,
+    "Number of rows inserted " ULINTPF ", updated " ULINTPF ", deleted " ULINTPF ", read " ULINTPF "\n",
+    srv_n_rows_inserted,
+    srv_n_rows_updated,
+    srv_n_rows_deleted,
+    srv_n_rows_read
+  );
 
-  ib_logger(ib_stream,
-            "%.2f inserts/s, %.2f updates/s,"
-            " %.2f deletes/s, %.2f reads/s\n",
-            (srv_n_rows_inserted - srv_n_rows_inserted_old) / time_elapsed,
-            (srv_n_rows_updated - srv_n_rows_updated_old) / time_elapsed,
-            (srv_n_rows_deleted - srv_n_rows_deleted_old) / time_elapsed,
-            (srv_n_rows_read - srv_n_rows_read_old) / time_elapsed);
+  ib_logger(
+    ib_stream,
+    "%.2f inserts/s, %.2f updates/s,"
+    " %.2f deletes/s, %.2f reads/s\n",
+    (srv_n_rows_inserted - srv_n_rows_inserted_old) / time_elapsed,
+    (srv_n_rows_updated - srv_n_rows_updated_old) / time_elapsed,
+    (srv_n_rows_deleted - srv_n_rows_deleted_old) / time_elapsed,
+    (srv_n_rows_read - srv_n_rows_read_old) / time_elapsed
+  );
 
   srv_n_rows_inserted_old = srv_n_rows_inserted;
 
@@ -1513,9 +1552,12 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait,
 
   srv_n_rows_read_old = srv_n_rows_read;
 
-  ib_logger(ib_stream, "----------------------------\n"
-                       "END OF INNODB MONITOR OUTPUT\n"
-                       "============================\n");
+  ib_logger(
+    ib_stream,
+    "----------------------------\n"
+    "END OF INNODB MONITOR OUTPUT\n"
+    "============================\n"
+  );
   mutex_exit(&srv_innodb_monitor_mutex);
 
   return ret;
@@ -1528,8 +1570,7 @@ void srv_export_innodb_status(void) {
 
   export_vars.innodb_data_pending_reads = os_n_pending_reads;
   export_vars.innodb_data_pending_writes = os_n_pending_writes;
-  export_vars.innodb_data_pending_fsyncs =
-      fil_n_pending_log_flushes + fil_n_pending_tablespace_flushes;
+  export_vars.innodb_data_pending_fsyncs = fil_n_pending_log_flushes + fil_n_pending_tablespace_flushes;
   export_vars.innodb_data_fsyncs = os_n_fsyncs;
   export_vars.innodb_data_read = srv_data_read;
   export_vars.innodb_data_reads = os_n_file_reads;
@@ -1541,20 +1582,17 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_buffer_pool_pages_flushed = srv_buf_pool_flushed;
   export_vars.innodb_buffer_pool_reads = srv_buf_pool_reads;
   export_vars.innodb_buffer_pool_read_ahead = buf_pool->stat.n_ra_pages_read;
-  export_vars.innodb_buffer_pool_read_ahead_evicted =
-      buf_pool->stat.n_ra_pages_evicted;
+  export_vars.innodb_buffer_pool_read_ahead_evicted = buf_pool->stat.n_ra_pages_evicted;
   export_vars.innodb_buffer_pool_pages_data = UT_LIST_GET_LEN(buf_pool->LRU);
-  export_vars.innodb_buffer_pool_pages_dirty =
-      UT_LIST_GET_LEN(buf_pool->flush_list);
+  export_vars.innodb_buffer_pool_pages_dirty = UT_LIST_GET_LEN(buf_pool->flush_list);
   export_vars.innodb_buffer_pool_pages_free = UT_LIST_GET_LEN(buf_pool->free);
 #ifdef UNIV_DEBUG
   export_vars.innodb_buffer_pool_pages_latched = buf_get_latched_pages_number();
 #endif /* UNIV_DEBUG */
   export_vars.innodb_buffer_pool_pages_total = buf_pool->curr_size;
 
-  export_vars.innodb_buffer_pool_pages_misc = buf_pool->curr_size -
-                                              UT_LIST_GET_LEN(buf_pool->LRU) -
-                                              UT_LIST_GET_LEN(buf_pool->free);
+  export_vars.innodb_buffer_pool_pages_misc =
+    buf_pool->curr_size - UT_LIST_GET_LEN(buf_pool->LRU) - UT_LIST_GET_LEN(buf_pool->free);
 #ifdef HAVE_ATOMIC_BUILTINS
   export_vars.innodb_have_atomic_builtins = 1;
 #else
@@ -1577,8 +1615,7 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_row_lock_current_waits = srv_n_lock_wait_current_count;
   export_vars.innodb_row_lock_time = srv_n_lock_wait_time / 1000;
   if (srv_n_lock_wait_count > 0) {
-    export_vars.innodb_row_lock_time_avg =
-        (ulint)(srv_n_lock_wait_time / 1000 / srv_n_lock_wait_count);
+    export_vars.innodb_row_lock_time_avg = (ulint)(srv_n_lock_wait_time / 1000 / srv_n_lock_wait_count);
   } else {
     export_vars.innodb_row_lock_time_avg = 0;
   }
@@ -1601,8 +1638,7 @@ void *srv_monitor_thread(void *arg __attribute__((unused))) {
   bool last_srv_print_monitor;
 
 #ifdef UNIV_DEBUG_THREAD_CREATION
-  ib_logger(ib_stream, "Lock timeout thread starts, id %lu\n",
-            os_thread_pf(os_thread_get_curr_id()));
+  ib_logger(ib_stream, "Lock timeout thread starts, id %lu\n", os_thread_pf(os_thread_get_curr_id()));
 #endif
   UT_NOT_USED(arg);
   srv_last_monitor_time = time(nullptr);
@@ -1637,8 +1673,7 @@ loop:
         last_srv_print_monitor = true;
       }
 
-      if (!srv_printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped),
-                                     nullptr, nullptr)) {
+      if (!srv_printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped), nullptr, nullptr)) {
         mutex_skipped++;
       } else {
         /* Reset the counter */
@@ -1651,8 +1686,7 @@ loop:
     if (srv_innodb_status) {
       mutex_enter(&srv_monitor_file_mutex);
 
-      if (!srv_printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped),
-                                     nullptr, nullptr)) {
+      if (!srv_printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped), nullptr, nullptr)) {
         mutex_skipped++;
       } else {
         mutex_skipped = 0;
@@ -1661,45 +1695,61 @@ loop:
       mutex_exit(&srv_monitor_file_mutex);
     }
 
-    if (srv_print_innodb_tablespace_monitor &&
-        difftime(current_time, last_tablespace_monitor_time) > 60) {
+    if (srv_print_innodb_tablespace_monitor && difftime(current_time, last_tablespace_monitor_time) > 60) {
       last_tablespace_monitor_time = time(nullptr);
 
-      ib_logger(ib_stream, "========================"
-                           "========================\n");
+      ib_logger(
+        ib_stream,
+        "========================"
+        "========================\n"
+      );
 
       ut_print_timestamp(ib_stream);
 
-      ib_logger(ib_stream, " INNODB TABLESPACE MONITOR OUTPUT\n"
-                           "========================"
-                           "========================\n");
+      ib_logger(
+        ib_stream,
+        " INNODB TABLESPACE MONITOR OUTPUT\n"
+        "========================"
+        "========================\n"
+      );
 
       fsp_print(0);
       ib_logger(ib_stream, "Validating tablespace\n");
       fsp_validate(0);
-      ib_logger(ib_stream, "Validation ok\n"
-                           "---------------------------------------\n"
-                           "END OF INNODB TABLESPACE MONITOR OUTPUT\n"
-                           "=======================================\n");
+      ib_logger(
+        ib_stream,
+        "Validation ok\n"
+        "---------------------------------------\n"
+        "END OF INNODB TABLESPACE MONITOR OUTPUT\n"
+        "=======================================\n"
+      );
     }
 
-    if (srv_print_innodb_table_monitor &&
-        difftime(current_time, last_table_monitor_time) > 60) {
+    if (srv_print_innodb_table_monitor && difftime(current_time, last_table_monitor_time) > 60) {
 
       last_table_monitor_time = time(nullptr);
 
-      ib_logger(ib_stream, "==========================================="
-                           "\n");
+      ib_logger(
+        ib_stream,
+        "==========================================="
+        "\n"
+      );
       ut_print_timestamp(ib_stream);
 
-      ib_logger(ib_stream, " INNODB TABLE MONITOR OUTPUT\n"
-                           "==========================================="
-                           "\n");
+      ib_logger(
+        ib_stream,
+        " INNODB TABLE MONITOR OUTPUT\n"
+        "==========================================="
+        "\n"
+      );
       dict_print();
 
-      ib_logger(ib_stream, "-----------------------------------\n"
-                           "END OF INNODB TABLE MONITOR OUTPUT\n"
-                           "==================================\n");
+      ib_logger(
+        ib_stream,
+        "-----------------------------------\n"
+        "END OF INNODB TABLE MONITOR OUTPUT\n"
+        "==================================\n"
+      );
     }
   }
 
@@ -1707,8 +1757,7 @@ loop:
     goto exit_func;
   }
 
-  if (srv_print_innodb_monitor || srv_print_innodb_lock_monitor ||
-      srv_print_innodb_tablespace_monitor || srv_print_innodb_table_monitor) {
+  if (srv_print_innodb_monitor || srv_print_innodb_lock_monitor || srv_print_innodb_tablespace_monitor || srv_print_innodb_table_monitor) {
     goto loop;
   }
 
@@ -1763,9 +1812,7 @@ loop:
       trx = thr_get_trx(slot->thr);
       lock_wait_timeout = sess_lock_wait_timeout(trx);
 
-      if (trx_is_interrupted(trx) ||
-          (lock_wait_timeout < 100000000 &&
-           (wait_time > (double)lock_wait_timeout || wait_time < 0))) {
+      if (trx_is_interrupted(trx) || (lock_wait_timeout < 100000000 && (wait_time > (double)lock_wait_timeout || wait_time < 0))) {
         /* Timeout exceeded or a wrap-around in system
         time counter: cancel the lock request queued
         by the transaction and release possible
@@ -1816,8 +1863,7 @@ void *srv_error_monitor_thread(void *arg __attribute__((unused))) {
   old_lsn = srv_start_lsn;
 
 #ifdef UNIV_DEBUG_THREAD_CREATION
-  ib_logger(ib_stream, "Error monitor thread starts, id %lu\n",
-            os_thread_pf(os_thread_get_curr_id()));
+  ib_logger(ib_stream, "Error monitor thread starts, id %lu\n", os_thread_pf(os_thread_get_curr_id()));
 #endif
 loop:
   srv_error_monitor_active = true;
@@ -1829,13 +1875,16 @@ loop:
 
   if (new_lsn < old_lsn) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  Error: old log sequence number %lu"
-              " was greater\n"
-              "than the new log sequence number %lu!\n"
-              "Please submit a bug report, "
-              "check the InnoDB website for details",
-              old_lsn, new_lsn);
+    ib_logger(
+      ib_stream,
+      "  Error: old log sequence number %lu"
+      " was greater\n"
+      "than the new log sequence number %lu!\n"
+      "Please submit a bug report, "
+      "check the InnoDB website for details",
+      old_lsn,
+      new_lsn
+    );
   }
 
   old_lsn = new_lsn;
@@ -1864,12 +1913,14 @@ loop:
     fatal_cnt++;
     if (fatal_cnt > 10) {
 
-      ib_logger(ib_stream,
-                "Error: semaphore wait has lasted"
-                " > %lu seconds\n"
-                "We intentionally crash the server,"
-                " because it appears to be hung.\n",
-                (ulong)srv_fatal_semaphore_wait_threshold);
+      ib_logger(
+        ib_stream,
+        "Error: semaphore wait has lasted"
+        " > %lu seconds\n"
+        "We intentionally crash the server,"
+        " because it appears to be hung.\n",
+        (ulong)srv_fatal_semaphore_wait_threshold
+      );
 
       ut_error;
     }
@@ -1956,8 +2007,7 @@ void *srv_master_thread(void *arg __attribute__((unused))) {
   ulint i;
 
 #ifdef UNIV_DEBUG_THREAD_CREATION
-  ib_logger(ib_stream, "Master thread starts, id %lu\n",
-            os_thread_pf(os_thread_get_curr_id()));
+  ib_logger(ib_stream, "Master thread starts, id %lu\n", os_thread_pf(os_thread_get_curr_id()));
 #endif
 #ifdef UNIV_LINUX
   srv_main_thread_process_no = os_proc_get_number();
@@ -1977,8 +2027,7 @@ loop:
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
-  n_ios_very_old = log_sys->n_log_ios + buf_pool->stat.n_pages_read +
-                   buf_pool->stat.n_pages_written;
+  n_ios_very_old = log_sys->n_log_ios + buf_pool->stat.n_pages_read + buf_pool->stat.n_pages_written;
   mutex_enter(&kernel_mutex);
 
   /* Store the user activity counter at the start of this loop */
@@ -1999,8 +2048,7 @@ loop:
   skip_sleep = (srv_shutdown_state != SRV_SHUTDOWN_NONE);
 
   for (i = 0; i < 10; i++) {
-    n_ios_old = log_sys->n_log_ios + buf_pool->stat.n_pages_read +
-                buf_pool->stat.n_pages_written;
+    n_ios_old = log_sys->n_log_ios + buf_pool->stat.n_pages_read + buf_pool->stat.n_pages_written;
     srv_main_thread_op_info = "sleeping";
     srv_main_1_second_loops++;
 
@@ -2025,8 +2073,7 @@ loop:
 
     srv_main_thread_op_info = "";
 
-    if (srv_fast_shutdown != IB_SHUTDOWN_NORMAL &&
-        srv_shutdown_state > SRV_SHUTDOWN_NONE) {
+    if (srv_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > SRV_SHUTDOWN_NONE) {
 
       goto background_loop;
     }
@@ -2042,25 +2089,21 @@ loop:
     available, and it makes sense to do an insert buffer merge. */
 
     n_pend_ios = buf_get_n_pending_ios() + log_sys->n_pending_writes;
-    n_ios = log_sys->n_log_ios + buf_pool->stat.n_pages_read +
-            buf_pool->stat.n_pages_written;
-    if (n_pend_ios < SRV_PEND_IO_THRESHOLD &&
-        (n_ios - n_ios_old < SRV_RECENT_IO_ACTIVITY)) {
+    n_ios = log_sys->n_log_ios + buf_pool->stat.n_pages_read + buf_pool->stat.n_pages_written;
+    if (n_pend_ios < SRV_PEND_IO_THRESHOLD && (n_ios - n_ios_old < SRV_RECENT_IO_ACTIVITY)) {
       srv_main_thread_op_info = "doing insert buffer merge";
 
       /* Flush logs if needed */
       srv_sync_log_buffer_in_background();
     }
 
-    if (unlikely(buf_get_modified_ratio_pct() >
-                 srv_max_buf_pool_modified_pct)) {
+    if (unlikely(buf_get_modified_ratio_pct() > srv_max_buf_pool_modified_pct)) {
 
       /* Try to keep the number of modified pages in the
       buffer pool under the limit wished by the user */
 
       srv_main_thread_op_info = "flushing buffer pool pages";
-      n_pages_flushed =
-          buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+      n_pages_flushed = buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
 
       /* If we had to do the flush, it may have taken
       even more than 1 second, and also, there may be more
@@ -2078,8 +2121,7 @@ loop:
       if (n_flush) {
         srv_main_thread_op_info = "flushing buffer pool pages";
         n_flush = ut_min(PCT_IO(100), n_flush);
-        n_pages_flushed =
-            buf_flush_batch(BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
+        n_pages_flushed = buf_flush_batch(BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
 
         if (n_flush == PCT_IO(100)) {
           skip_sleep = true;
@@ -2106,12 +2148,10 @@ loop:
   are not required, and may be disabled. */
 
   n_pend_ios = buf_get_n_pending_ios() + log_sys->n_pending_writes;
-  n_ios = log_sys->n_log_ios + buf_pool->stat.n_pages_read +
-          buf_pool->stat.n_pages_written;
+  n_ios = log_sys->n_log_ios + buf_pool->stat.n_pages_read + buf_pool->stat.n_pages_written;
 
   srv_main_10_second_loops++;
-  if (n_pend_ios < SRV_PEND_IO_THRESHOLD &&
-      (n_ios - n_ios_very_old < SRV_PAST_IO_ACTIVITY)) {
+  if (n_pend_ios < SRV_PEND_IO_THRESHOLD && (n_ios - n_ios_very_old < SRV_PAST_IO_ACTIVITY)) {
 
     srv_main_thread_op_info = "flushing buffer pool pages";
     buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(100), IB_ULONGLONG_MAX);
@@ -2155,15 +2195,13 @@ loop:
     (> 70 %), we assume we can afford reserving the disk(s) for
     the time it requires to flush 100 pages */
 
-    n_pages_flushed =
-        buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+    n_pages_flushed = buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
   } else {
     /* Otherwise, we only flush a small number of pages so that
     we do not unnecessarily use much disk i/o capacity from
     other work */
 
-    n_pages_flushed =
-        buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(10), IB_UINT64_T_MAX);
+    n_pages_flushed = buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(10), IB_UINT64_T_MAX);
   }
 
   srv_main_thread_op_info = "making checkpoint";
@@ -2257,8 +2295,7 @@ flush_loop:
   srv_main_thread_op_info = "flushing buffer pool pages";
   srv_main_flush_loops++;
   if (srv_fast_shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
-    n_pages_flushed =
-        buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+    n_pages_flushed = buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
   } else {
     /* In the fastest shutdown we do not flush the buffer pool
     to data files: we set n_pages_flushed to 0 artificially. */
@@ -2322,9 +2359,7 @@ flush_loop:
 
       goto background_loop;
     }
-  } else if (n_tables_to_drop + n_pages_purged + n_bytes_merged +
-                 n_pages_flushed + n_bytes_archived !=
-             0) {
+  } else if (n_tables_to_drop + n_pages_purged + n_bytes_merged + n_pages_flushed + n_bytes_archived != 0) {
     /* In a 'slow' shutdown we run purge and the insert buffer
     merge to completion */
 
@@ -2393,10 +2428,12 @@ void srv_panic(int panic_ib_error, char *fmt, ...) {
     ib_panic(ib_panic_data, panic_ib_error, fmt, ap);
     return;
   } else {
-    ib_logger(ib_stream,
-              "Database forced shutdown! "
-              "(ib_err %d)",
-              panic_ib_error);
+    ib_logger(
+      ib_stream,
+      "Database forced shutdown! "
+      "(ib_err %d)",
+      panic_ib_error
+    );
     ib_logger(ib_stream, fmt, ap);
     exit(-1);
   }

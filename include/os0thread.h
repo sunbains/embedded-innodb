@@ -48,8 +48,10 @@ typedef os_thread_t os_thread_id_t;
 /** Compares two thread ids for equality.
 @return	true if equal */
 
-bool os_thread_eq(os_thread_id_t a,  /*!< in: OS thread or thread id */
-                  os_thread_id_t b); /*!< in: OS thread or thread id */
+bool os_thread_eq(
+  os_thread_id_t a, /*!< in: OS thread or thread id */
+  os_thread_id_t b
+); /*!< in: OS thread or thread id */
 
 /** Converts an OS thread id to a ulint. It is NOT guaranteed that the ulint is
 unique for the thread though!
@@ -66,8 +68,7 @@ thread should always use that to exit and not use return() to exit.
 @param[out] thread_id           The new thread ID.
 
 @return	handle to the thread. */
-os_thread_t os_thread_create(void *(*f)(void *), void *arg,
-                             os_thread_id_t *thread_id);
+os_thread_t os_thread_create(void *(*f)(void *), void *arg, os_thread_id_t *thread_id);
 
 /** Exits the current thread. */
 void os_thread_exit(void *exit_value);
@@ -88,13 +89,13 @@ void os_thread_sleep(ulint tm); /*!< in: time in microseconds */
 
 /** Gets a thread priority.
 @return	priority */
-ulint os_thread_get_priority(
-    os_thread_t handle); /*!< in: OS handle to the thread */
+ulint os_thread_get_priority(os_thread_t handle); /*!< in: OS handle to the thread */
 
 /** Sets a thread priority. */
 void os_thread_set_priority(
-    os_thread_t handle, /*!< in: OS handle to the thread */
-    ulint pri);         /*!< in: priority: one of OS_PRIORITY_... */
+  os_thread_t handle, /*!< in: OS handle to the thread */
+  ulint pri
+); /*!< in: priority: one of OS_PRIORITY_... */
 
 /** Gets the last operating system error code for the calling thread.
 @return	last error on Windows, 0 otherwise */

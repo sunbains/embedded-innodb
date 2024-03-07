@@ -98,8 +98,7 @@ void os_sync_free(void);
 states: signaled and nonsignaled. The created event is manual reset: it must be
 reset explicitly by calling sync_os_reset_event.
 @return	the event handle */
-os_event_t
-os_event_create(const char *name); /** in: the name of the event, if NULL
+os_event_t os_event_create(const char *name); /** in: the name of the event, if NULL
                                    the event is created without a name */
 
 /** Sets an event semaphore to the signaled state: lets waiting threads
@@ -136,8 +135,10 @@ thread C calls os_event_wait()  [infinite wait!]
 Where such a scenario is possible, to avoid infinite wait, the
 value returned by os_event_reset() should be passed in as
 reset_sig_count. */
-void os_event_wait_low(os_event_t event,         /** in: event to wait */
-                       int64_t reset_sig_count); /** in: zero or the value
+void os_event_wait_low(
+  os_event_t event, /** in: event to wait */
+  int64_t reset_sig_count
+); /** in: zero or the value
                                                    returned by previous call of
                                                    os_event_reset(). */
 
@@ -147,15 +148,16 @@ void os_event_wait_low(os_event_t event,         /** in: event to wait */
 a timeout is exceeded. In Unix the timeout is always infinite.
 @return	0 if success, OS_SYNC_TIME_EXCEEDED if timeout was exceeded */
 
-ulint os_event_wait_time(os_event_t event, /** in: event to wait */
-                         ulint time);      /** in: timeout in microseconds, or
+ulint os_event_wait_time(
+  os_event_t event, /** in: event to wait */
+  ulint time
+); /** in: timeout in microseconds, or
                                            OS_SYNC_INFINITE_TIME */
 
 /** Creates an operating system mutex semaphore. Because these are slow, the
 mutex semaphore of InnoDB itself (mutex_t) should be used where possible.
 @return	the mutex handle */
-os_mutex_t
-os_mutex_create(const char *name); /** in: the name of the mutex, if NULL
+os_mutex_t os_mutex_create(const char *name); /** in: the name of the mutex, if NULL
                                    the mutex is created without a name */
 
 /** Acquires ownership of a mutex semaphore. */
@@ -170,19 +172,16 @@ void os_mutex_free(os_mutex_t mutex); /** in: mutex to free */
 /** Acquires ownership of a fast mutex. Currently in Windows this is the same
 as os_fast_mutex_lock!
 @return	0 if success, != 0 if was reserved by another thread */
-inline ulint
-os_fast_mutex_trylock(os_fast_mutex_t *fast_mutex); /** in: mutex to acquire */
+inline ulint os_fast_mutex_trylock(os_fast_mutex_t *fast_mutex); /** in: mutex to acquire */
 
 /** Releases ownership of a fast mutex. */
-void os_fast_mutex_unlock(
-    os_fast_mutex_t *fast_mutex); /** in: mutex to release */
+void os_fast_mutex_unlock(os_fast_mutex_t *fast_mutex); /** in: mutex to release */
 
 /** Initializes an operating system fast mutex semaphore. */
 void os_fast_mutex_init(os_fast_mutex_t *fast_mutex); /** in: fast mutex */
 
 /** Acquires ownership of a fast mutex. */
-void os_fast_mutex_lock(
-    os_fast_mutex_t *fast_mutex); /** in: mutex to acquire */
+void os_fast_mutex_lock(os_fast_mutex_t *fast_mutex); /** in: mutex to acquire */
 
 /** Frees an mutex object. */
 void os_fast_mutex_free(os_fast_mutex_t *fast_mutex); /** in: mutex to free */
@@ -191,26 +190,21 @@ void os_fast_mutex_free(os_fast_mutex_t *fast_mutex); /** in: mutex to free */
 void os_sync_var_init(void);
 
 /** Atomic compare-and-swap and increment for InnoDB. */
-#if defined(HAVE_IB_GCC_ATOMIC_BUILTINS) &&                                    \
-    defined(IB_ATOMIC_MODE_GCC_ATOMIC_BUILTINS)
+#if defined(HAVE_IB_GCC_ATOMIC_BUILTINS) && defined(IB_ATOMIC_MODE_GCC_ATOMIC_BUILTINS)
 
 #define HAVE_ATOMIC_BUILTINS
 
 /** Returns true if swapped, ptr is pointer to target, old_val is value to
 compare to, new_val is the value to swap in. */
 
-#define os_compare_and_swap(ptr, old_val, new_val)                             \
-  __sync_bool_compare_and_swap(ptr, old_val, new_val)
+#define os_compare_and_swap(ptr, old_val, new_val) __sync_bool_compare_and_swap(ptr, old_val, new_val)
 
-#define os_compare_and_swap_ulint(ptr, old_val, new_val)                       \
-  os_compare_and_swap(ptr, old_val, new_val)
+#define os_compare_and_swap_ulint(ptr, old_val, new_val) os_compare_and_swap(ptr, old_val, new_val)
 
-#define os_compare_and_swap_lint(ptr, old_val, new_val)                        \
-  os_compare_and_swap(ptr, old_val, new_val)
+#define os_compare_and_swap_lint(ptr, old_val, new_val) os_compare_and_swap(ptr, old_val, new_val)
 
 #ifdef HAVE_IB_ATOMIC_PTHREAD_T_GCC
-#define os_compare_and_swap_thread_id(ptr, old_val, new_val)                   \
-  os_compare_and_swap(ptr, old_val, new_val)
+#define os_compare_and_swap_thread_id(ptr, old_val, new_val) os_compare_and_swap(ptr, old_val, new_val)
 
 #define INNODB_RW_LOCKS_USE_ATOMICS
 
@@ -218,8 +212,7 @@ compare to, new_val is the value to swap in. */
 
 #else /* HAVE_IB_ATOMIC_PTHREAD_T_GCC */
 
-#define IB_ATOMICS_STARTUP_MSG                                                 \
-  "Mutexes use GCC atomic builtins, rw_locks do not"
+#define IB_ATOMICS_STARTUP_MSG "Mutexes use GCC atomic builtins, rw_locks do not"
 #endif /* HAVE_IB_ATOMIC_PTHREAD_T_GCC */
 
 /** Returns the resulting value, ptr is pointer to target, amount is the
@@ -233,20 +226,16 @@ amount of increment. */
 
 /** Returns the old value of *ptr, atomically sets *ptr to new_val */
 
-#define os_atomic_test_and_set_byte(ptr, new_val)                              \
-  __sync_lock_test_and_set(ptr, new_val)
+#define os_atomic_test_and_set_byte(ptr, new_val) __sync_lock_test_and_set(ptr, new_val)
 
 #else
-#define IB_ATOMICS_STARTUP_MSG                                                 \
-  "Mutexes and rw_locks use InnoDB's own implementation"
+#define IB_ATOMICS_STARTUP_MSG "Mutexes and rw_locks use InnoDB's own implementation"
 #endif
-
 
 /** Acquires ownership of a fast mutex. Currently in Windows this is the same
 as os_fast_mutex_lock!
 @param[in,out] fast_mutex       Mutex to acquire
 @return	0 if success, != 0 if was reserved by another thread */
-inline ulint
-os_fast_mutex_trylock(os_fast_mutex_t *fast_mutex) {
+inline ulint os_fast_mutex_trylock(os_fast_mutex_t *fast_mutex) {
   return (ulint)pthread_mutex_trylock(fast_mutex);
 }

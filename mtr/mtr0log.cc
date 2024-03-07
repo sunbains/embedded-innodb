@@ -137,31 +137,31 @@ byte *mlog_parse_nbytes(ulint type, byte *ptr, byte *end_ptr, byte *page) {
   }
 
   switch (type) {
-  case MLOG_1BYTE:
-    if (unlikely(val > 0xFFUL)) {
-      goto corrupt;
-    }
-    if (page != nullptr) {
-      mach_write_to_1(page + offset, val);
-    }
-    break;
-  case MLOG_2BYTES:
-    if (unlikely(val > 0xFFFFUL)) {
-      goto corrupt;
-    }
-    if (page != nullptr) {
-      mach_write_to_2(page + offset, val);
-    }
-    break;
-  case MLOG_4BYTES:
-    if (page != nullptr) {
-      mach_write_to_4(page + offset, val);
-    }
-    break;
-  default:
-  corrupt:
-    recv_sys->found_corrupt_log = true;
-    ptr = nullptr;
+    case MLOG_1BYTE:
+      if (unlikely(val > 0xFFUL)) {
+        goto corrupt;
+      }
+      if (page != nullptr) {
+        mach_write_to_1(page + offset, val);
+      }
+      break;
+    case MLOG_2BYTES:
+      if (unlikely(val > 0xFFFFUL)) {
+        goto corrupt;
+      }
+      if (page != nullptr) {
+        mach_write_to_2(page + offset, val);
+      }
+      break;
+    case MLOG_4BYTES:
+      if (page != nullptr) {
+        mach_write_to_4(page + offset, val);
+      }
+      break;
+    default:
+    corrupt:
+      recv_sys->found_corrupt_log = true;
+      ptr = nullptr;
   }
 
   return (ptr);
@@ -171,17 +171,17 @@ void mlog_write_ulint(byte *ptr, ulint val, byte type, mtr_t *mtr) {
   byte *log_ptr;
 
   switch (type) {
-  case MLOG_1BYTE:
-    mach_write_to_1(ptr, val);
-    break;
-  case MLOG_2BYTES:
-    mach_write_to_2(ptr, val);
-    break;
-  case MLOG_4BYTES:
-    mach_write_to_4(ptr, val);
-    break;
-  default:
-    ut_error;
+    case MLOG_1BYTE:
+      mach_write_to_1(ptr, val);
+      break;
+    case MLOG_2BYTES:
+      mach_write_to_2(ptr, val);
+      break;
+    case MLOG_4BYTES:
+      mach_write_to_4(ptr, val);
+      break;
+    default:
+      ut_error;
   }
 
   log_ptr = mlog_open(mtr, 11 + 2 + 5);
@@ -250,8 +250,7 @@ void mlog_log_string(byte *ptr, ulint len, mtr_t *mtr) {
     return;
   }
 
-  log_ptr =
-      mlog_write_initial_log_record_fast(ptr, MLOG_WRITE_STRING, log_ptr, mtr);
+  log_ptr = mlog_write_initial_log_record_fast(ptr, MLOG_WRITE_STRING, log_ptr, mtr);
   mach_write_to_2(log_ptr, page_offset(ptr));
   log_ptr += 2;
 
@@ -376,10 +375,12 @@ byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, dict_index_t *index
 /** Parses a log record written by mlog_open_and_write_index.
 @return	parsed record end, nullptr if not a complete record */
 
-byte *mlog_parse_index(byte *ptr,           /*!< in: buffer */
-                       const byte *end_ptr, /*!< in: buffer end */
-                       bool comp, /*!< in: true=compact record format */
-                       dict_index_t **index) /*!< out, own: dummy index */
+byte *mlog_parse_index(
+  byte *ptr,           /*!< in: buffer */
+  const byte *end_ptr, /*!< in: buffer end */
+  bool comp,           /*!< in: true=compact record format */
+  dict_index_t **index
+) /*!< out, own: dummy index */
 {
   ulint i, n, n_uniq;
   dict_table_t *table;
@@ -402,8 +403,7 @@ byte *mlog_parse_index(byte *ptr,           /*!< in: buffer */
   } else {
     n = n_uniq = 1;
   }
-  table = dict_mem_table_create("LOG_DUMMY", DICT_HDR_SPACE, n,
-                                comp ? DICT_TF_COMPACT : 0);
+  table = dict_mem_table_create("LOG_DUMMY", DICT_HDR_SPACE, n, comp ? DICT_TF_COMPACT : 0);
   ind = dict_mem_index_create("LOG_DUMMY", "LOG_DUMMY", DICT_HDR_SPACE, 0, n);
   ind->table = table;
   ind->n_uniq = (unsigned int)n_uniq;
@@ -418,23 +418,24 @@ byte *mlog_parse_index(byte *ptr,           /*!< in: buffer */
       /* The high-order bit of len is the NOT nullptr flag;
       the rest is 0 or 0x7fff for variable-length fields,
       and 1..0x7ffe for fixed-length fields. */
-      dict_mem_table_add_col(table, nullptr, nullptr,
-                             ((len + 1) & 0x7fff) <= 1 ? DATA_BINARY
-                                                       : DATA_FIXBINARY,
-                             len & 0x8000 ? DATA_NOT_NULL : 0, len & 0x7fff);
+      dict_mem_table_add_col(
+        table,
+        nullptr,
+        nullptr,
+        ((len + 1) & 0x7fff) <= 1 ? DATA_BINARY : DATA_FIXBINARY,
+        len & 0x8000 ? DATA_NOT_NULL : 0,
+        len & 0x7fff
+      );
 
       dict_index_add_col(ind, table, dict_table_get_nth_col(table, i), 0);
     }
     dict_table_add_system_columns(table, table->heap);
     if (n_uniq != n) {
       /* Identify DB_TRX_ID and DB_ROLL_PTR in the index. */
-      ut_a(DATA_TRX_ID_LEN ==
-           dict_index_get_nth_col(ind, DATA_TRX_ID - 1 + n_uniq)->len);
-      ut_a(DATA_ROLL_PTR_LEN ==
-           dict_index_get_nth_col(ind, DATA_ROLL_PTR - 1 + n_uniq)->len);
+      ut_a(DATA_TRX_ID_LEN == dict_index_get_nth_col(ind, DATA_TRX_ID - 1 + n_uniq)->len);
+      ut_a(DATA_ROLL_PTR_LEN == dict_index_get_nth_col(ind, DATA_ROLL_PTR - 1 + n_uniq)->len);
       ind->fields[DATA_TRX_ID - 1 + n_uniq].col = &table->cols[n + DATA_TRX_ID];
-      ind->fields[DATA_ROLL_PTR - 1 + n_uniq].col =
-          &table->cols[n + DATA_ROLL_PTR];
+      ind->fields[DATA_ROLL_PTR - 1 + n_uniq].col = &table->cols[n + DATA_ROLL_PTR];
     }
   }
   /* avoid ut_ad(index->cached) in dict_index_get_n_unique_in_tree */
@@ -463,21 +464,24 @@ byte *mlog_write_initial_log_record_fast(const byte *ptr, byte type, byte *log_p
   the doublewrite buffer is located in pages
   FSP_EXTENT_SIZE, ..., 3 * FSP_EXTENT_SIZE - 1 in the
   system tablespace */
-  if (space == SYS_TABLESPACE && offset >= FSP_EXTENT_SIZE &&
-      offset < 3 * FSP_EXTENT_SIZE) {
+  if (space == SYS_TABLESPACE && offset >= FSP_EXTENT_SIZE && offset < 3 * FSP_EXTENT_SIZE) {
     if (trx_doublewrite_buf_is_being_created) {
       /* Do nothing: we only come to this branch in an
       InnoDB database creation. We do not redo log
       anything for the doublewrite buffer pages. */
       return (log_ptr);
     } else {
-      ib_logger(ib_stream,
-                "Error: trying to redo log a record of type "
-                "%d on page %lu of space %lu in the "
-                "doublewrite buffer, continuing anyway.\n"
-                "Please post a bug report to "
-                "bugs.mysql.com.\n",
-                type, offset, space);
+      ib_logger(
+        ib_stream,
+        "Error: trying to redo log a record of type "
+        "%d on page %lu of space %lu in the "
+        "doublewrite buffer, continuing anyway.\n"
+        "Please post a bug report to "
+        "bugs.mysql.com.\n",
+        type,
+        offset,
+        space
+      );
     }
   }
 
@@ -489,9 +493,7 @@ byte *mlog_write_initial_log_record_fast(const byte *ptr, byte type, byte *log_p
   mtr->n_log_recs++;
 
 #ifdef UNIV_LOG_DEBUG
-  ib_logger(ib_stream,
-            "Adding to mtr log record type %lu space %lu page no %lu\n",
-            (ulong)type, space, offset);
+  ib_logger(ib_stream, "Adding to mtr log record type %lu space %lu page no %lu\n", (ulong)type, space, offset);
 #endif
 
 #ifdef UNIV_DEBUG

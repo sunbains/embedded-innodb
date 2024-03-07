@@ -39,6 +39,7 @@ those functions in lock/ */
 
 /** A table lock */
 typedef struct lock_table_struct lock_table_t;
+
 /** A table lock */
 struct lock_table_struct {
   dict_table_t *table; /*!< database table in dictionary
@@ -50,6 +51,7 @@ struct lock_table_struct {
 
 /** Record lock for a page */
 typedef struct lock_rec_struct lock_rec_t;
+
 /** Record lock for a page */
 struct lock_rec_struct {
   ulint space;   /*!< space id */
@@ -74,6 +76,7 @@ struct lock_struct {
   hash_node_t hash;    /*!< hash chain node for a record
                        lock */
   dict_index_t *index; /*!< index for a record lock */
+
   union {
     lock_table_t tab_lock; /*!< table lock */
     lock_rec_t rec_lock;   /*!< record lock */
@@ -87,9 +90,10 @@ inline ulint lock_get_type_low(const lock_t *lock); /*!< in: lock */
 /** Gets the previous record lock set on a record.
 @return	previous lock on the same record, NULL if none exists */
 
-const lock_t *
-lock_rec_get_prev(const lock_t *in_lock, /*!< in: record lock */
-                  ulint heap_no);        /*!< in: heap number of the record */
+const lock_t *lock_rec_get_prev(
+  const lock_t *in_lock, /*!< in: record lock */
+  ulint heap_no
+); /*!< in: heap number of the record */
 
 #ifndef UNIV_NONINL
 #include "lock0priv.ic"

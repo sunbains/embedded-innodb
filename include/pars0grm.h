@@ -48,6 +48,7 @@ extern int yydebug;
 /* Token kinds.  */
 #ifndef YYTOKENTYPE
 #define YYTOKENTYPE
+
 enum yytokentype {
   YYEMPTY = -2,
   YYEOF = 0,                            /* "end of file"  */

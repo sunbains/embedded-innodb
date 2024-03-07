@@ -34,8 +34,7 @@ inline void trx_start_if_not_started(trx_t *trx) /*!< in: transaction */
 
 /** Retrieves the error_info field from a trx.
 @return	the error info */
-inline const dict_index_t *
-trx_get_error_info(const trx_t *trx) /*!< in: trx object */
+inline const dict_index_t *trx_get_error_info(const trx_t *trx) /*!< in: trx object */
 {
   return (trx->error_info);
 }
@@ -50,66 +49,67 @@ inline uint64_t trx_get_id(const trx_t *trx) /*!< in: transaction */
 /** Retrieves transaction's que state in a human readable string. The string
 should not be free()'d or modified.
 @return	string in the data segment */
-inline const char *
-trx_get_que_state_str(const trx_t *trx) /*!< in: transaction */
+inline const char *trx_get_que_state_str(const trx_t *trx) /*!< in: transaction */
 {
   /* be sure to adjust TRX_QUE_STATE_STR_MAX_LEN if you change this */
   switch (trx->que_state) {
-  case TRX_QUE_RUNNING:
-    return ("RUNNING");
-  case TRX_QUE_LOCK_WAIT:
-    return ("LOCK WAIT");
-  case TRX_QUE_ROLLING_BACK:
-    return ("ROLLING BACK");
-  case TRX_QUE_COMMITTING:
-    return ("COMMITTING");
-  default:
-    return ("UNKNOWN");
+    case TRX_QUE_RUNNING:
+      return ("RUNNING");
+    case TRX_QUE_LOCK_WAIT:
+      return ("LOCK WAIT");
+    case TRX_QUE_ROLLING_BACK:
+      return ("ROLLING BACK");
+    case TRX_QUE_COMMITTING:
+      return ("COMMITTING");
+    default:
+      return ("UNKNOWN");
   }
 }
 
 /** Determine if a transaction is a dictionary operation.
 @return	dictionary operation mode */
-inline enum trx_dict_op
-trx_get_dict_operation(const trx_t *trx) /*!< in: transaction */
+inline enum trx_dict_op trx_get_dict_operation(const trx_t *trx) /*!< in: transaction */
 {
   enum trx_dict_op op = (enum trx_dict_op)trx->dict_operation;
 
 #ifdef UNIV_DEBUG
   switch (op) {
-  case TRX_DICT_OP_NONE:
-  case TRX_DICT_OP_TABLE:
-  case TRX_DICT_OP_INDEX:
-    return (op);
+    case TRX_DICT_OP_NONE:
+    case TRX_DICT_OP_TABLE:
+    case TRX_DICT_OP_INDEX:
+      return (op);
   }
   ut_error;
 #endif /* UNIV_DEBUG */
   return ((enum trx_dict_op)expect(op, TRX_DICT_OP_NONE));
 }
+
 /** Flag a transaction a dictionary operation. */
-inline void trx_set_dict_operation(trx_t *trx, /*!< in/out: transaction */
-                                   enum trx_dict_op op) /*!< in: operation, not
+inline void trx_set_dict_operation(
+  trx_t *trx, /*!< in/out: transaction */
+  enum trx_dict_op op
+) /*!< in: operation, not
                                                         TRX_DICT_OP_NONE */
 {
 #ifdef UNIV_DEBUG
   enum trx_dict_op old_op = trx_get_dict_operation(trx);
 
   switch (op) {
-  case TRX_DICT_OP_NONE:
-    ut_error;
-    break;
-  case TRX_DICT_OP_TABLE:
-    switch (old_op) {
     case TRX_DICT_OP_NONE:
-    case TRX_DICT_OP_INDEX:
+      ut_error;
+      break;
     case TRX_DICT_OP_TABLE:
-      goto ok;
-    }
-    ut_error;
-    break;
-  case TRX_DICT_OP_INDEX:
-    ut_ad(old_op == TRX_DICT_OP_NONE);
-    break;
+      switch (old_op) {
+        case TRX_DICT_OP_NONE:
+        case TRX_DICT_OP_INDEX:
+        case TRX_DICT_OP_TABLE:
+          goto ok;
+      }
+      ut_error;
+      break;
+    case TRX_DICT_OP_INDEX:
+      ut_ad(old_op == TRX_DICT_OP_NONE);
+      break;
   }
 ok:
 #endif /* UNIV_DEBUG */

@@ -25,8 +25,8 @@ Created 9/30/1995 Heikki Tuuri
 #include "innodb0types.h"
 
 #include <errno.h>
-#include <sys/types.h>
 #include <sys/mman.h>
+#include <sys/types.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -90,18 +90,23 @@ void *os_mem_alloc_large(ulint *n) /*!< in/out: number of bytes */
 
   shmid = shmget(IPC_PRIVATE, (size_t)size, SHM_HUGETLB | SHM_R | SHM_W);
   if (shmid < 0) {
-    ib_logger(ib_stream,
-              "HugeTLB: Warning: Failed to allocate"
-              " %lu bytes. errno %d\n",
-              size, errno);
+    ib_logger(
+      ib_stream,
+      "HugeTLB: Warning: Failed to allocate"
+      " %lu bytes. errno %d\n",
+      size,
+      errno
+    );
     ptr = NULL;
   } else {
     ptr = shmat(shmid, NULL, 0);
     if (ptr == (void *)-1) {
-      ib_logger(ib_stream,
-                "HugeTLB: Warning: Failed to"
-                " attach shared memory segment, errno %d\n",
-                errno);
+      ib_logger(
+        ib_stream,
+        "HugeTLB: Warning: Failed to"
+        " attach shared memory segment, errno %d\n",
+        errno
+      );
       ptr = NULL;
     }
 
@@ -123,8 +128,11 @@ void *os_mem_alloc_large(ulint *n) /*!< in/out: number of bytes */
     return (ptr);
   }
 
-  ib_logger(ib_stream, "InnoDB HugeTLB: Warning: Using conventional"
-                       " memory pool\n");
+  ib_logger(
+    ib_stream,
+    "InnoDB HugeTLB: Warning: Using conventional"
+    " memory pool\n"
+  );
 skip:
 #endif /* HAVE_LARGE_PAGES && UNIV_LINUX */
 
@@ -137,13 +145,15 @@ skip:
   /* Align block size to system page size */
   ut_ad(ut_is_2pow(size));
   size = *n = ut_2pow_round(*n + (size - 1), size);
-  ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | OS_MAP_ANON, -1,
-             0);
+  ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | OS_MAP_ANON, -1, 0);
   if (unlikely(ptr == (void *)-1)) {
-    ib_logger(ib_stream,
-              "mmap(%lu bytes) failed;"
-              " errno %lu\n",
-              (ulong)size, (ulong)errno);
+    ib_logger(
+      ib_stream,
+      "mmap(%lu bytes) failed;"
+      " errno %lu\n",
+      (ulong)size,
+      (ulong)errno
+    );
     ptr = NULL;
   } else {
     os_fast_mutex_lock(&ut_list_mutex);
@@ -170,10 +180,14 @@ void os_mem_free_large(void *ptr, ulint size) {
   }
 #endif /* HAVE_LARGE_PAGES && UNIV_LINUX */
   if (munmap(ptr, size)) {
-    ib_logger(ib_stream,
-              "munmap(%p, %lu) failed;"
-              " errno %lu\n",
-              ptr, (ulong)size, (ulong)errno);
+    ib_logger(
+      ib_stream,
+      "munmap(%p, %lu) failed;"
+      " errno %lu\n",
+      ptr,
+      (ulong)size,
+      (ulong)errno
+    );
   } else {
     os_fast_mutex_lock(&ut_list_mutex);
     ut_a(ut_total_allocated_memory >= size);

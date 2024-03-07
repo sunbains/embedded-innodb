@@ -74,11 +74,12 @@ void hash_table_free(hash_table_t *table) {
 }
 
 void hash_create_mutexes_func(
-    hash_table_t *table,
+  hash_table_t *table,
 #ifdef UNIV_SYNC_DEBUG
-    ulint sync_level,
+  ulint sync_level,
 #endif /* UNIV_SYNC_DEBUG */
-    ulint n_mutexes) {
+  ulint n_mutexes
+) {
 
   ut_a(n_mutexes > 0);
   ut_a(ut_is_2pow(n_mutexes));

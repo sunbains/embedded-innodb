@@ -1698,7 +1698,8 @@ void pars_info_add_int8_literal(pars_info_t *info, const char *name,
   pars_info_add_literal(info, name, buf, sizeof(val), DATA_INT, 0);
 }
 
-void pars_info_add_uint64_literal(pars_info_t *info, const char *name, uint64_t val) {
+void pars_info_add_uint64_literal(pars_info_t *info, const char *name,
+                                  uint64_t val) {
   auto buf = mem_heap_alloc(info->heap, 8);
 
   mach_write_to_8(buf, val);

@@ -58,18 +58,19 @@ differ from dtuple in some of the m fields rec has.
 @return 1, 0, -1, if dtuple is greater, equal, less than rec,
 respectively, when only the common first fields are compared */
 static int cmp_debug_dtuple_rec_with_match(
-    void *cmp_ctx,          /*!< in: client compare context */
-    const dtuple_t *dtuple, /*!< in: data tuple */
-    const rec_t *rec,       /*!< in: physical record which differs from
+  void *cmp_ctx,          /*!< in: client compare context */
+  const dtuple_t *dtuple, /*!< in: data tuple */
+  const rec_t *rec,       /*!< in: physical record which differs from
                             dtuple in some of the common fields, or which
                             has an equal number or more fields than
                             dtuple */
-    const ulint *offsets,   /*!< in: array returned by rec_get_offsets() */
-    ulint *matched_fields); /*!< in/out: number of already
+  const ulint *offsets,   /*!< in: array returned by rec_get_offsets() */
+  ulint *matched_fields
+);     /*!< in/out: number of already
                     completely  matched fields; when function
                     returns, contains the value for current
                     comparison */
-#endif                      /* UNIV_DEBUG */
+#endif /* UNIV_DEBUG */
 /** Transforms the character code so that it is ordered appropriately for the
 language. This is only used for the latin1 char set. The client does the
 comparisons for other char sets.
@@ -85,27 +86,26 @@ inline ulint cmp_collate(ulint code) /*!< in: code of a character stored in
 /** Returns true if two columns are equal for comparison purposes.
 @return	true if the columns are considered equal in comparisons */
 
-bool cmp_cols_are_equal(const dict_col_t *col1, /*!< in: column 1 */
-                        const dict_col_t *col2, /*!< in: column 2 */
-                        bool check_charsets)
+bool cmp_cols_are_equal(
+  const dict_col_t *col1, /*!< in: column 1 */
+  const dict_col_t *col2, /*!< in: column 2 */
+  bool check_charsets
+)
 /*!< in: whether to check charsets */
 {
-  if (dtype_is_non_binary_string_type(col1->mtype, col1->prtype) &&
-      dtype_is_non_binary_string_type(col2->mtype, col2->prtype)) {
+  if (dtype_is_non_binary_string_type(col1->mtype, col1->prtype) && dtype_is_non_binary_string_type(col2->mtype, col2->prtype)) {
 
     /* Both are non-binary string types: they can be compared if
     and only if the charset-collation is the same */
 
     if (check_charsets) {
-      return dtype_get_charset_coll(col1->prtype ==
-                                    dtype_get_charset_coll(col2->prtype));
+      return dtype_get_charset_coll(col1->prtype == dtype_get_charset_coll(col2->prtype));
     } else {
       return true;
     }
   }
 
-  if (dtype_is_binary_string_type(col1->mtype, col1->prtype) &&
-      dtype_is_binary_string_type(col2->mtype, col2->prtype)) {
+  if (dtype_is_binary_string_type(col1->mtype, col1->prtype) && dtype_is_binary_string_type(col2->mtype, col2->prtype)) {
 
     /* Both are binary string types: they can be compared */
 
@@ -117,8 +117,7 @@ bool cmp_cols_are_equal(const dict_col_t *col1, /*!< in: column 1 */
     return false;
   }
 
-  if (col1->mtype == DATA_INT &&
-      (col1->prtype & DATA_UNSIGNED) != (col2->prtype & DATA_UNSIGNED)) {
+  if (col1->mtype == DATA_INT && (col1->prtype & DATA_UNSIGNED) != (col2->prtype & DATA_UNSIGNED)) {
 
     /* The storage format of an unsigned integer is different
     from a signed integer: in a signed integer we OR
@@ -134,14 +133,16 @@ bool cmp_cols_are_equal(const dict_col_t *col1, /*!< in: column 1 */
 data type is such that we must compare whole fields or call the client
 to do the comparison
 @return	1, 0, -1, if a is greater, equal, less than b, respectively */
-static int cmp_whole_field(void *cmp_ctx,   /*!< in: client compare context */
-                           ulint mtype,     /*!< in: main type */
-                           uint16_t prtype, /*!< in: precise type */
-                           const byte *a,   /*!< in: data field */
-                           unsigned int a_length, /*!< in: data field length,
+static int cmp_whole_field(
+  void *cmp_ctx,         /*!< in: client compare context */
+  ulint mtype,           /*!< in: main type */
+  uint16_t prtype,       /*!< in: precise type */
+  const byte *a,         /*!< in: data field */
+  unsigned int a_length, /*!< in: data field length,
                                                   not UNIV_SQL_NULL */
-                           const byte *b,         /*!< in: data field */
-                           unsigned int b_length) /*!< in: data field length,
+  const byte *b,         /*!< in: data field */
+  unsigned int b_length
+) /*!< in: data field length,
                                                   not UNIV_SQL_NULL */
 {
   float f_1;
@@ -152,143 +153,144 @@ static int cmp_whole_field(void *cmp_ctx,   /*!< in: client compare context */
 
   switch (mtype) {
 
-  case DATA_DECIMAL:
-    /* Remove preceding spaces */
-    for (; a_length && *a == ' '; a++, a_length--)
-      ;
-    for (; b_length && *b == ' '; b++, b_length--)
-      ;
+    case DATA_DECIMAL:
+      /* Remove preceding spaces */
+      for (; a_length && *a == ' '; a++, a_length--)
+        ;
+      for (; b_length && *b == ' '; b++, b_length--)
+        ;
 
-    if (*a == '-') {
-      if (*b != '-') {
+      if (*a == '-') {
+        if (*b != '-') {
+          return -1;
+        }
+
+        a++;
+        b++;
+        a_length--;
+        b_length--;
+
+        swap_flag = -1;
+
+      } else if (*b == '-') {
+
+        return 1;
+      }
+
+      while (a_length > 0 && (*a == '+' || *a == '0')) {
+        a++;
+        a_length--;
+      }
+
+      while (b_length > 0 && (*b == '+' || *b == '0')) {
+        b++;
+        b_length--;
+      }
+
+      if (a_length != b_length) {
+        if (a_length < b_length) {
+          return -swap_flag;
+        }
+
+        return swap_flag;
+      }
+
+      while (a_length > 0 && *a == *b) {
+
+        a++;
+        b++;
+        a_length--;
+      }
+
+      if (a_length == 0) {
+
+        return 0;
+      }
+
+      if (*a > *b) {
+        return swap_flag;
+      }
+
+      return -swap_flag;
+    case DATA_DOUBLE:
+      d_1 = mach_double_read(a);
+      d_2 = mach_double_read(b);
+
+      if (d_1 > d_2) {
+        return 1;
+      } else if (d_2 > d_1) {
         return -1;
       }
 
-      a++;
-      b++;
-      a_length--;
-      b_length--;
+      return 0;
 
-      swap_flag = -1;
+    case DATA_FLOAT:
+      f_1 = mach_float_read(a);
+      f_2 = mach_float_read(b);
 
-    } else if (*b == '-') {
-
-      return 1;
-    }
-
-    while (a_length > 0 && (*a == '+' || *a == '0')) {
-      a++;
-      a_length--;
-    }
-
-    while (b_length > 0 && (*b == '+' || *b == '0')) {
-      b++;
-      b_length--;
-    }
-
-    if (a_length != b_length) {
-      if (a_length < b_length) {
-        return -swap_flag;
+      if (f_1 > f_2) {
+        return 1;
+      } else if (f_2 > f_1) {
+        return -1;
       }
 
-      return swap_flag;
-    }
-
-    while (a_length > 0 && *a == *b) {
-
-      a++;
-      b++;
-      a_length--;
-    }
-
-    if (a_length == 0) {
-
       return 0;
-    }
+    case DATA_BLOB:
+      if (prtype & DATA_BINARY_TYPE) {
 
-    if (*a > *b) {
-      return swap_flag;
-    }
+        ut_print_timestamp(ib_stream);
+        ib_logger(
+          ib_stream,
+          "  Error: comparing a binary BLOB"
+          " with a character set sensitive\n"
+          "comparison!\n"
+        );
+      }
+      /* fall through */
+    case DATA_VARCLIENT:
+    case DATA_CLIENT: {
+      ib_col_meta_t ib_col_meta;
 
-    return -swap_flag;
-  case DATA_DOUBLE:
-    d_1 = mach_double_read(a);
-    d_2 = mach_double_read(b);
-
-    if (d_1 > d_2) {
-      return 1;
-    } else if (d_2 > d_1) {
-      return -1;
-    }
-
-    return 0;
-
-  case DATA_FLOAT:
-    f_1 = mach_float_read(a);
-    f_2 = mach_float_read(b);
-
-    if (f_1 > f_2) {
-      return 1;
-    } else if (f_2 > f_1) {
-      return -1;
-    }
-
-    return 0;
-  case DATA_BLOB:
-    if (prtype & DATA_BINARY_TYPE) {
-
-      ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  Error: comparing a binary BLOB"
-                           " with a character set sensitive\n"
-                           "comparison!\n");
-    }
-    /* fall through */
-  case DATA_VARCLIENT:
-  case DATA_CLIENT: {
-    ib_col_meta_t ib_col_meta;
-
-    /* FIXME: We should do this once at a higher level. Current
+      /* FIXME: We should do this once at a higher level. Current
     impact is on perfromance. */
-    ib_col_meta.type = ib_col_type_t(mtype);
-    /* FIXME: Set the length where it's known. */
-    ib_col_meta.type_len = 0;
-    ib_col_meta.attr = IB_COL_NONE;
-    ib_col_meta.client_type = prtype & DATA_CLIENT_TYPE_MASK;
+      ib_col_meta.type = ib_col_type_t(mtype);
+      /* FIXME: Set the length where it's known. */
+      ib_col_meta.type_len = 0;
+      ib_col_meta.attr = IB_COL_NONE;
+      ib_col_meta.client_type = prtype & DATA_CLIENT_TYPE_MASK;
 
-    const auto attr{to_int(ib_col_meta.attr)};
+      const auto attr{to_int(ib_col_meta.attr)};
 
-    if (prtype & DATA_NOT_NULL) {
-      ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_NOT_NULL);
+      if (prtype & DATA_NOT_NULL) {
+        ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_NOT_NULL);
+      }
+
+      if (prtype & DATA_UNSIGNED) {
+        ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_UNSIGNED);
+      }
+
+      if (prtype & DATA_CUSTOM_TYPE) {
+        ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_CUSTOM1);
+      }
+
+      if (prtype & (DATA_CUSTOM_TYPE << 1)) {
+        ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_CUSTOM2);
+      }
+
+      if (prtype & (DATA_CUSTOM_TYPE << 2)) {
+        ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_CUSTOM3);
+      }
+      return ib_client_compare(&ib_col_meta, a, a_length, b, b_length);
     }
-
-    if (prtype & DATA_UNSIGNED) {
-      ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_UNSIGNED);
-    }
-
-    if (prtype & DATA_CUSTOM_TYPE) {
-      ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_CUSTOM1);
-    }
-
-    if (prtype & (DATA_CUSTOM_TYPE << 1)) {
-      ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_CUSTOM2);
-    }
-
-    if (prtype & (DATA_CUSTOM_TYPE << 2)) {
-      ib_col_meta.attr = static_cast<ib_col_attr_t>(attr | IB_COL_CUSTOM3);
-    }
-    return ib_client_compare(&ib_col_meta, a, a_length, b, b_length);
-  }
-  default:
-    ib_logger(ib_stream, "unknown type number %lu\n", (ulong)mtype);
-    ut_error;
+    default:
+      ib_logger(ib_stream, "unknown type number %lu\n", (ulong)mtype);
+      ut_error;
   }
 
   return 0;
 }
 
-int cmp_data_data_slow(void *cmp_ctx, ulint mtype, ulint prtype,
-                       const byte *data1, ulint len1, const byte *data2,
-                       ulint len2) {
+int cmp_data_data_slow(void *cmp_ctx, ulint mtype, ulint prtype, const byte *data1, ulint len1, const byte *data2, ulint len2) {
   ulint data1_byte;
   ulint data2_byte;
   ulint cur_bytes;
@@ -310,14 +312,10 @@ int cmp_data_data_slow(void *cmp_ctx, ulint mtype, ulint prtype,
     return 1;
   }
 
-  if (mtype >= DATA_FLOAT ||
-      (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) &&
-       dtype_get_charset_coll(prtype) !=
-           DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
+  if (mtype >= DATA_FLOAT || (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) && dtype_get_charset_coll(prtype) != DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
 
     /* prtype is really a 16 unsigned type. */
-    return cmp_whole_field(cmp_ctx, mtype, (uint16_t)prtype, data1,
-                           (unsigned)len1, data2, (unsigned)len2);
+    return cmp_whole_field(cmp_ctx, mtype, (uint16_t)prtype, data1, (unsigned)len1, data2, (unsigned)len2);
   }
 
   /* Compare then the fields */
@@ -359,8 +357,7 @@ int cmp_data_data_slow(void *cmp_ctx, ulint mtype, ulint prtype,
       goto next_byte;
     }
 
-    if (mtype <= DATA_CHAR ||
-        (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE))) {
+    if (mtype <= DATA_CHAR || (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE))) {
 
       data1_byte = cmp_collate(data1_byte);
       data2_byte = cmp_collate(data2_byte);
@@ -395,17 +392,18 @@ respectively, when only the common first fields are compared, or until
 the first externally stored field in rec */
 
 int cmp_dtuple_rec_with_match(
-    void *cmp_ctx,          /*!< in: client compare context */
-    const dtuple_t *dtuple, /*!< in: data tuple */
-    const rec_t *rec,       /*!< in: physical record which differs from
+  void *cmp_ctx,          /*!< in: client compare context */
+  const dtuple_t *dtuple, /*!< in: data tuple */
+  const rec_t *rec,       /*!< in: physical record which differs from
                             dtuple in some of the common fields, or which
                             has an equal number or more fields than
                             dtuple */
-    const ulint *offsets,   /*!< in: array returned by rec_get_offsets() */
-    ulint *matched_fields,  /*!< in/out: number of already completely
+  const ulint *offsets,   /*!< in: array returned by rec_get_offsets() */
+  ulint *matched_fields,  /*!< in/out: number of already completely
                     matched fields; when function returns,
                     contains the value for current comparison */
-    ulint *matched_bytes)   /*!< in/out: number of already matched
+  ulint *matched_bytes
+) /*!< in/out: number of already matched
                      bytes within the first field not completely
                      matched; when function returns, contains the
                      value for current comparison */
@@ -503,14 +501,11 @@ int cmp_dtuple_rec_with_match(
       }
     }
 
-    if (mtype >= DATA_FLOAT ||
-        (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) &&
-         dtype_get_charset_coll(prtype) !=
-             DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
+    if (mtype >= DATA_FLOAT || (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) && dtype_get_charset_coll(prtype) != DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
 
       ret = cmp_whole_field(
-          cmp_ctx, mtype, prtype, (byte *)dfield_get_data(dtuple_field),
-          (unsigned)dtuple_f_len, rec_b_ptr, (unsigned)rec_f_len);
+        cmp_ctx, mtype, prtype, (byte *)dfield_get_data(dtuple_field), (unsigned)dtuple_f_len, rec_b_ptr, (unsigned)rec_f_len
+      );
 
       if (ret != 0) {
         cur_bytes = 0;
@@ -565,8 +560,7 @@ int cmp_dtuple_rec_with_match(
         goto next_byte;
       }
 
-      if (mtype <= DATA_CHAR ||
-          (mtype == DATA_BLOB && !(prtype & DATA_BINARY_TYPE))) {
+      if (mtype <= DATA_CHAR || (mtype == DATA_BLOB && !(prtype & DATA_BINARY_TYPE))) {
 
         rec_byte = cmp_collate(rec_byte);
         dtuple_byte = cmp_collate(dtuple_byte);
@@ -600,8 +594,7 @@ int cmp_dtuple_rec_with_match(
            up to the common fields */
 order_resolved:
   ut_ad((ret >= -1) && (ret <= 1));
-  ut_ad(ret == cmp_debug_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets,
-                                               matched_fields));
+  ut_ad(ret == cmp_debug_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets, matched_fields));
   ut_ad(*matched_fields == cur_field); /* In the debug version, the
                                        above cmp_debug_... sets
                                        *matched_fields to a value */
@@ -616,17 +609,17 @@ order_resolved:
 @return 1, 0, -1, if dtuple is greater, equal, less than rec, respectively */
 
 int cmp_dtuple_rec(
-    void *cmp_ctx,          /*!< in: client compare context */
-    const dtuple_t *dtuple, /*!< in: data tuple */
-    const rec_t *rec,       /*!< in: physical record */
-    const ulint *offsets)   /*!< in: array returned by rec_get_offsets() */
+  void *cmp_ctx,          /*!< in: client compare context */
+  const dtuple_t *dtuple, /*!< in: data tuple */
+  const rec_t *rec,       /*!< in: physical record */
+  const ulint *offsets
+) /*!< in: array returned by rec_get_offsets() */
 {
   ulint matched_fields = 0;
   ulint matched_bytes = 0;
 
   ut_ad(rec_offs_validate(rec, nullptr, offsets));
-  return (cmp_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets,
-                                    &matched_fields, &matched_bytes));
+  return (cmp_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets, &matched_fields, &matched_bytes));
 }
 
 /** Checks if a dtuple is a prefix of a record. The last field in dtuple
@@ -634,10 +627,11 @@ is allowed to be a prefix of the corresponding field in the record.
 @return	true if prefix */
 
 bool cmp_dtuple_is_prefix_of_rec(
-    void *cmp_ctx,          /*!< in: client compare context */
-    const dtuple_t *dtuple, /*!< in: data tuple */
-    const rec_t *rec,       /*!< in: physical record */
-    const ulint *offsets)   /*!< in: array returned by rec_get_offsets() */
+  void *cmp_ctx,          /*!< in: client compare context */
+  const dtuple_t *dtuple, /*!< in: data tuple */
+  const rec_t *rec,       /*!< in: physical record */
+  const ulint *offsets
+) /*!< in: array returned by rec_get_offsets() */
 {
   ulint n_fields;
   ulint matched_fields = 0;
@@ -651,17 +645,14 @@ bool cmp_dtuple_is_prefix_of_rec(
     return false;
   }
 
-  cmp_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets, &matched_fields,
-                            &matched_bytes);
+  cmp_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets, &matched_fields, &matched_bytes);
 
   if (matched_fields == n_fields) {
 
     return true;
   }
 
-  if (matched_fields == n_fields - 1 &&
-      matched_bytes ==
-          dfield_get_len(dtuple_get_nth_field(dtuple, n_fields - 1))) {
+  if (matched_fields == n_fields - 1 && matched_bytes == dfield_get_len(dtuple_get_nth_field(dtuple, n_fields - 1))) {
     return true;
   }
 
@@ -673,11 +664,12 @@ none of which are stored externally.
 @return	1, 0, -1 if rec1 is greater, equal, less, respectively, than rec2 */
 
 int cmp_rec_rec_simple(
-    const rec_t *rec1,         /*!< in: physical record */
-    const rec_t *rec2,         /*!< in: physical record */
-    const ulint *offsets1,     /*!< in: rec_get_offsets(rec1, ...) */
-    const ulint *offsets2,     /*!< in: rec_get_offsets(rec2, ...) */
-    const dict_index_t *index) /*!< in: data dictionary index */
+  const rec_t *rec1,     /*!< in: physical record */
+  const rec_t *rec2,     /*!< in: physical record */
+  const ulint *offsets1, /*!< in: rec_get_offsets(rec1, ...) */
+  const ulint *offsets2, /*!< in: rec_get_offsets(rec2, ...) */
+  const dict_index_t *index
+) /*!< in: data dictionary index */
 {
   ulint rec1_f_len;       /*!< length of current field in rec1 */
   const byte *rec1_b_ptr; /*!< pointer to the current byte
@@ -735,16 +727,11 @@ int cmp_rec_rec_simple(
       }
     }
 
-    if (mtype >= DATA_FLOAT ||
-        (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) &&
-         dtype_get_charset_coll(prtype) !=
-             DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
+    if (mtype >= DATA_FLOAT || (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) && dtype_get_charset_coll(prtype) != DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
 
       int ret;
 
-      ret = cmp_whole_field(index->cmp_ctx, mtype, prtype, rec1_b_ptr,
-                            (unsigned)rec1_f_len, rec2_b_ptr,
-                            (unsigned)rec2_f_len);
+      ret = cmp_whole_field(index->cmp_ctx, mtype, prtype, rec1_b_ptr, (unsigned)rec1_f_len, rec2_b_ptr, (unsigned)rec2_f_len);
 
       if (ret) {
         return ret;
@@ -789,8 +776,7 @@ int cmp_rec_rec_simple(
         continue;
       }
 
-      if (mtype <= DATA_CHAR ||
-          (mtype == DATA_BLOB && !(prtype & DATA_BINARY_TYPE))) {
+      if (mtype <= DATA_CHAR || (mtype == DATA_BLOB && !(prtype & DATA_BINARY_TYPE))) {
 
         rec1_byte = cmp_collate(rec1_byte);
         rec2_byte = cmp_collate(rec2_byte);
@@ -816,16 +802,17 @@ encountered, then 0 is returned.
 @return 1, 0, -1 if rec1 is greater, equal, less, respectively */
 
 int cmp_rec_rec_with_match(
-    const rec_t *rec1,     /*!< in: physical record */
-    const rec_t *rec2,     /*!< in: physical record */
-    const ulint *offsets1, /*!< in: rec_get_offsets(rec1, index) */
-    const ulint *offsets2, /*!< in: rec_get_offsets(rec2, index) */
-    dict_index_t *index,   /*!< in: data dictionary index */
-    ulint *matched_fields, /*!< in/out: number of already completely
+  const rec_t *rec1,     /*!< in: physical record */
+  const rec_t *rec2,     /*!< in: physical record */
+  const ulint *offsets1, /*!< in: rec_get_offsets(rec1, index) */
+  const ulint *offsets2, /*!< in: rec_get_offsets(rec2, index) */
+  dict_index_t *index,   /*!< in: data dictionary index */
+  ulint *matched_fields, /*!< in/out: number of already completely
                    matched fields; when the function returns,
                    contains the value the for current
                    comparison */
-    ulint *matched_bytes)  /*!< in/out: number of already matched
+  ulint *matched_bytes
+) /*!< in/out: number of already matched
                     bytes within the first field not completely
                     matched; when the function returns, contains
                     the value for the current comparison */
@@ -884,8 +871,7 @@ int cmp_rec_rec_with_match(
 
           goto order_resolved;
 
-        } else if (unlikely(rec_get_info_bits(rec2, comp) &
-                            REC_INFO_MIN_REC_FLAG)) {
+        } else if (unlikely(rec_get_info_bits(rec2, comp) & REC_INFO_MIN_REC_FLAG)) {
 
           ret = 1;
 
@@ -893,8 +879,7 @@ int cmp_rec_rec_with_match(
         }
       }
 
-      if (rec_offs_nth_extern(offsets1, cur_field) ||
-          rec_offs_nth_extern(offsets2, cur_field)) {
+      if (rec_offs_nth_extern(offsets1, cur_field) || rec_offs_nth_extern(offsets2, cur_field)) {
         /* We do not compare to an externally
         stored field */
 
@@ -922,14 +907,9 @@ int cmp_rec_rec_with_match(
       }
     }
 
-    if (mtype >= DATA_FLOAT ||
-        (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) &&
-         dtype_get_charset_coll(prtype) !=
-             DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
+    if (mtype >= DATA_FLOAT || (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) && dtype_get_charset_coll(prtype) != DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
 
-      ret = cmp_whole_field(index->cmp_ctx, mtype, prtype, rec1_b_ptr,
-                            (unsigned)rec1_f_len, rec2_b_ptr,
-                            (unsigned)rec2_f_len);
+      ret = cmp_whole_field(index->cmp_ctx, mtype, prtype, rec1_b_ptr, (unsigned)rec1_f_len, rec2_b_ptr, (unsigned)rec2_f_len);
 
       if (ret != 0) {
         cur_bytes = 0;
@@ -984,8 +964,7 @@ int cmp_rec_rec_with_match(
         goto next_byte;
       }
 
-      if (mtype <= DATA_CHAR ||
-          (mtype == DATA_BLOB && !(prtype & DATA_BINARY_TYPE))) {
+      if (mtype <= DATA_CHAR || (mtype == DATA_BLOB && !(prtype & DATA_BINARY_TYPE))) {
 
         rec1_byte = cmp_collate(rec1_byte);
         rec2_byte = cmp_collate(rec2_byte);
@@ -1035,14 +1014,15 @@ externally stored field, returns 0.
 @return 1, 0, -1, if dtuple is greater, equal, less than rec,
 respectively, when only the common first fields are compared */
 static int cmp_debug_dtuple_rec_with_match(
-    void *cmp_ctx,          /*!< in: client compare context */
-    const dtuple_t *dtuple, /*!< in: data tuple */
-    const rec_t *rec,       /*!< in: physical record which differs from
+  void *cmp_ctx,          /*!< in: client compare context */
+  const dtuple_t *dtuple, /*!< in: data tuple */
+  const rec_t *rec,       /*!< in: physical record which differs from
                             dtuple in some of the common fields, or which
                             has an equal number or more fields than
                             dtuple */
-    const ulint *offsets,   /*!< in: array returned by rec_get_offsets() */
-    ulint *matched_fields)  /*!< in/out: number of already
+  const ulint *offsets,   /*!< in: array returned by rec_get_offsets() */
+  ulint *matched_fields
+) /*!< in/out: number of already
                     completely matched fields; when function
                     returns, contains the value for current
                     comparison */
@@ -1067,8 +1047,7 @@ static int cmp_debug_dtuple_rec_with_match(
   cur_field = *matched_fields;
 
   if (cur_field == 0) {
-    if (unlikely(rec_get_info_bits(rec, rec_offs_comp(offsets)) &
-                 REC_INFO_MIN_REC_FLAG)) {
+    if (unlikely(rec_get_info_bits(rec, rec_offs_comp(offsets)) & REC_INFO_MIN_REC_FLAG)) {
 
       ret = !(dtuple_get_info_bits(dtuple) & REC_INFO_MIN_REC_FLAG);
 
@@ -1110,8 +1089,7 @@ static int cmp_debug_dtuple_rec_with_match(
       goto order_resolved;
     }
 
-    ret = cmp_data_data(cmp_ctx, mtype, prtype, dtuple_f_data, dtuple_f_len,
-                        rec_f_data, rec_f_len);
+    ret = cmp_data_data(cmp_ctx, mtype, prtype, dtuple_f_data, dtuple_f_len, rec_f_data, rec_f_len);
 
     if (ret != 0) {
       goto order_resolved;

@@ -188,7 +188,9 @@ static rw_lock_debug_t *rw_lock_debug_create(void) {
 }
 
 /** Frees a debug info struct. */
-static void rw_lock_debug_free(rw_lock_debug_t *info) { mem_free(info); }
+static void rw_lock_debug_free(rw_lock_debug_t *info) {
+  mem_free(info);
+}
 #endif /* UNIV_SYNC_DEBUG */
 
 void rw_lock_var_init() {
@@ -209,14 +211,16 @@ void rw_lock_var_init() {
 #endif /* UNIV_SYNC_DEBUG */
 }
 
-void rw_lock_create_func(rw_lock_t *lock, /*!< in: pointer to memory */
+void rw_lock_create_func(
+  rw_lock_t *lock, /*!< in: pointer to memory */
 #ifdef UNIV_DEBUG
 #ifdef UNIV_SYNC_DEBUG
-                         ulint level,
+  ulint level,
 #endif /* UNIV_SYNC_DEBUG */
-                         const char *cmutex_name,
+  const char *cmutex_name,
 #endif /* UNIV_DEBUG */
-                         const char *cfile_name, ulint cline) {
+  const char *cfile_name, ulint cline
+) {
   /* If this is the very first time a synchronization object is
   created, then the following call initializes the sync system. */
 
@@ -300,8 +304,7 @@ bool rw_lock_validate(rw_lock_t *lock) {
 }
 #endif /* UNIV_DEBUG */
 
-void rw_lock_s_lock_spin(rw_lock_t *lock, ulint pass, const char *file_name,
-                         ulint line) {
+void rw_lock_s_lock_spin(rw_lock_t *lock, ulint pass, const char *file_name, ulint line) {
   ulint i{};
   ulint index; /* index of the reserved wait cell */
 
@@ -324,11 +327,16 @@ lock_loop:
   }
 
   if (srv_print_latch_waits) {
-    ib_logger(ib_stream,
-              "Thread %lu spin wait rw-s-lock at %p"
-              " cfile %s cline %lu rnds %lu\n",
-              (ulong)os_thread_pf(os_thread_get_curr_id()), (void *)lock,
-              lock->m_cfile_name, (ulong)lock->m_cline, (ulong)i);
+    ib_logger(
+      ib_stream,
+      "Thread %lu spin wait rw-s-lock at %p"
+      " cfile %s cline %lu rnds %lu\n",
+      (ulong)os_thread_pf(os_thread_get_curr_id()),
+      (void *)lock,
+      lock->m_cfile_name,
+      (ulong)lock->m_cline,
+      (ulong)i
+    );
   }
 
   /* We try once again to obtain the lock */
@@ -344,8 +352,7 @@ lock_loop:
 
     rw_s_spin_round_count += i;
 
-    sync_array_reserve_cell(sync_primary_wait_array, lock, RW_LOCK_SHARED,
-                            file_name, line, &index);
+    sync_array_reserve_cell(sync_primary_wait_array, lock, RW_LOCK_SHARED, file_name, line, &index);
 
     /* Set waiters before checking lock_word to ensure wake-up
     signal is sent. This may lead to some unnecessary signals. */
@@ -357,11 +364,15 @@ lock_loop:
     }
 
     if (srv_print_latch_waits) {
-      ib_logger(ib_stream,
-                "Thread %lu OS wait rw-s-lock at %p"
-                " cfile %s cline %lu\n",
-                os_thread_pf(os_thread_get_curr_id()), (void *)lock,
-                lock->m_cfile_name, (ulong)lock->m_cline);
+      ib_logger(
+        ib_stream,
+        "Thread %lu OS wait rw-s-lock at %p"
+        " cfile %s cline %lu\n",
+        os_thread_pf(os_thread_get_curr_id()),
+        (void *)lock,
+        lock->m_cfile_name,
+        (ulong)lock->m_cline
+      );
     }
 
     /* these stats may not be accurate */
@@ -388,11 +399,13 @@ The caller must have already decremented lock_word by X_LOCK_DECR.
                                 to another thread to unlock
 @param[in] file_name            File name where lock requested
 @param[in] line                 Line where requested */
-inline void rw_lock_x_lock_wait(rw_lock_t *lock,
+inline void rw_lock_x_lock_wait(
+  rw_lock_t *lock,
 #ifdef UNIV_SYNC_DEBUG
-                                ulint pass,
+  ulint pass,
 #endif /* UNIV_SYNC_DEBUG */
-                                const char *file_name, ulint line) {
+  const char *file_name, ulint line
+) {
   ulint index;
   ulint i = 0;
 
@@ -413,8 +426,7 @@ inline void rw_lock_x_lock_wait(rw_lock_t *lock,
 
     i = 0;
 
-    sync_array_reserve_cell(sync_primary_wait_array, lock, RW_LOCK_WAIT_EX,
-                            file_name, line, &index);
+    sync_array_reserve_cell(sync_primary_wait_array, lock, RW_LOCK_WAIT_EX, file_name, line, &index);
 
     /* Check lock_word to ensure wake-up isn't missed.*/
     if (lock->m_lock_word < 0) {
@@ -452,8 +464,7 @@ inline void rw_lock_x_lock_wait(rw_lock_t *lock,
 @param[in] file_name       File name where lock requested
 @param[in] line            Line in filen_ame where requested
 @return	RW_LOCK_NOT_LOCKED if did not succeed, RW_LOCK_EX if success. */
-inline bool rw_lock_x_lock_low(rw_lock_t *lock, ulint pass,
-                               const char *file_name, ulint line) {
+inline bool rw_lock_x_lock_low(rw_lock_t *lock, ulint pass, const char *file_name, ulint line) {
   if (rw_lock_lock_word_decr(lock, X_LOCK_DECR)) {
 
     /* lock->m_recursive also tells us if the writer_thread
@@ -465,16 +476,18 @@ inline bool rw_lock_x_lock_low(rw_lock_t *lock, ulint pass,
     /* Decrement occurred: we are writer or next-writer. */
     rw_lock_set_writer_id_and_recursion_flag(lock, pass ? false : true);
 
-    rw_lock_x_lock_wait(lock,
+    rw_lock_x_lock_wait(
+      lock,
 #ifdef UNIV_SYNC_DEBUG
-                        pass,
+      pass,
 #endif /* UNIV_SYNC_DEBUG */
-                        file_name, line);
+      file_name,
+      line
+    );
 
   } else {
     /* Decrement failed: relock or failed lock */
-    if (!pass && lock->m_recursive &&
-        lock->m_writer_thread.load() == std::this_thread::get_id()) {
+    if (!pass && lock->m_recursive && lock->m_writer_thread.load() == std::this_thread::get_id()) {
       /* Relock */
       lock->m_lock_word -= X_LOCK_DECR;
     } else {
@@ -492,8 +505,7 @@ inline bool rw_lock_x_lock_low(rw_lock_t *lock, ulint pass,
   return true;
 }
 
-void rw_lock_x_lock_func(rw_lock_t *lock, ulint pass, const char *file_name,
-                         ulint line) {
+void rw_lock_x_lock_func(rw_lock_t *lock, ulint pass, const char *file_name, ulint line) {
   ulint i;
   ulint index;
   bool spinning{false};
@@ -534,15 +546,19 @@ lock_loop:
   rw_x_spin_round_count += i;
 
   if (srv_print_latch_waits) {
-    ib_logger(ib_stream,
-              "Thread %lu spin wait rw-x-lock at %p"
-              " cfile %s cline %lu rnds %lu\n",
-              os_thread_pf(os_thread_get_curr_id()), (void *)lock,
-              lock->m_cfile_name, (ulong)lock->m_cline, (ulong)i);
+    ib_logger(
+      ib_stream,
+      "Thread %lu spin wait rw-x-lock at %p"
+      " cfile %s cline %lu rnds %lu\n",
+      os_thread_pf(os_thread_get_curr_id()),
+      (void *)lock,
+      lock->m_cfile_name,
+      (ulong)lock->m_cline,
+      (ulong)i
+    );
   }
 
-  sync_array_reserve_cell(sync_primary_wait_array, lock, RW_LOCK_EX, file_name,
-                          line, &index);
+  sync_array_reserve_cell(sync_primary_wait_array, lock, RW_LOCK_EX, file_name, line, &index);
 
   /* Waiters must be set before checking lock_word, to ensure signal
   is sent. This could lead to a few unnecessary wake-up signals. */
@@ -554,11 +570,15 @@ lock_loop:
   }
 
   if (srv_print_latch_waits) {
-    ib_logger(ib_stream,
-              "Thread %lu OS wait for rw-x-lock at %p"
-              " cfile %s cline %lu\n",
-              os_thread_pf(os_thread_get_curr_id()), (void *)lock,
-              lock->m_cfile_name, (ulong)lock->m_cline);
+    ib_logger(
+      ib_stream,
+      "Thread %lu OS wait for rw-x-lock at %p"
+      " cfile %s cline %lu\n",
+      os_thread_pf(os_thread_get_curr_id()),
+      (void *)lock,
+      lock->m_cfile_name,
+      (ulong)lock->m_cline
+    );
   }
 
   /* these stats may not be accurate */
@@ -600,8 +620,7 @@ void rw_lock_debug_mutex_exit(void) {
   }
 }
 
-void rw_lock_add_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type,
-                            const char *file_name, ulint line) {
+void rw_lock_add_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type, const char *file_name, ulint line) {
   ut_ad(lock);
   ut_ad(file_name);
 
@@ -636,10 +655,7 @@ void rw_lock_remove_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type) {
   auto info = UT_LIST_GET_FIRST(lock->m_debug_list);
 
   while (info != nullptr) {
-    if ((pass == info->pass) &&
-        ((pass != 0) ||
-         os_thread_eq(info->thread_id, os_thread_get_curr_id())) &&
-        (info->lock_type == lock_type)) {
+    if ((pass == info->pass) && ((pass != 0) || os_thread_eq(info->thread_id, os_thread_get_curr_id())) && (info->lock_type == lock_type)) {
 
       /* Found! */
       UT_LIST_REMOVE(list, lock->m_debug_list, info);
@@ -666,8 +682,7 @@ bool rw_lock_own(rw_lock_t *lock, ulint lock_type) {
 
   while (info != nullptr) {
 
-    if (os_thread_eq(info->thread_id, os_thread_get_curr_id()) &&
-        (info->pass == 0) && (info->lock_type == lock_type)) {
+    if (os_thread_eq(info->thread_id, os_thread_get_curr_id()) && (info->pass == 0) && (info->lock_type == lock_type)) {
 
       rw_lock_debug_mutex_exit();
 
@@ -713,9 +728,12 @@ void rw_lock_list_print_info(ib_stream_t ib_stream) {
 
   mutex_enter(&rw_lock_list_mutex);
 
-  ib_logger(ib_stream, "-------------\n"
-                       "RW-LATCH INFO\n"
-                       "-------------\n");
+  ib_logger(
+    ib_stream,
+    "-------------\n"
+    "RW-LATCH INFO\n"
+    "-------------\n"
+  );
 
   lock = UT_LIST_GET_FIRST(rw_lock_list);
 
@@ -750,11 +768,13 @@ void rw_lock_list_print_info(ib_stream_t ib_stream) {
 void rw_lock_print(rw_lock_t *lock) {
   rw_lock_debug_t *info;
 
-  ib_logger(ib_stream,
-            "-------------\n"
-            "RW-LATCH INFO\n"
-            "RW-LATCH: %p ",
-            (void *)lock);
+  ib_logger(
+    ib_stream,
+    "-------------\n"
+    "RW-LATCH INFO\n"
+    "RW-LATCH: %p ",
+    (void *)lock
+  );
 
   if (lock->m_lock_word != X_LOCK_DECR) {
 
@@ -775,9 +795,9 @@ void rw_lock_print(rw_lock_t *lock) {
 void rw_lock_debug_print(rw_lock_debug_t *info) {
   auto rwt = info->lock_type;
 
-  ib_logger(ib_stream, "Locked: thread %ld file %s line %ld  ",
-            (ulong)os_thread_pf(info->thread_id), info->file_name,
-            (ulong)info->line);
+  ib_logger(
+    ib_stream, "Locked: thread %ld file %s line %ld  ", (ulong)os_thread_pf(info->thread_id), info->file_name, (ulong)info->line
+  );
 
   if (rwt == RW_LOCK_SHARED) {
     ib_logger(ib_stream, "S-LOCK");

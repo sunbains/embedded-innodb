@@ -45,9 +45,10 @@ record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
    of a wait lock. */
 
 void lock_queue_iterator_reset(
-    lock_queue_iterator_t *iter, /*!< out: iterator */
-    const lock_t *lock,          /*!< in: lock to start from */
-    ulint bit_no);               /*!< in: record number in the
+  lock_queue_iterator_t *iter, /*!< out: iterator */
+  const lock_t *lock,          /*!< in: lock to start from */
+  ulint bit_no
+); /*!< in: record number in the
                                  heap */
 
 /** Gets the previous lock in the lock queue, returns NULL if there are no
@@ -55,7 +56,6 @@ more locks (i.e. the current lock is the first one). The iterator is
 receded (if not-NULL is returned).
 @return	previous lock or NULL */
 
-const lock_t *lock_queue_iterator_get_prev(
-    lock_queue_iterator_t *iter); /*!< in/out: iterator */
+const lock_t *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter); /*!< in/out: iterator */
 
 #endif /* lock0iter_h */

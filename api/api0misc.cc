@@ -73,13 +73,14 @@ bool trx_is_interrupted(const trx_t *trx) /*!< in: transaction */
 thread */
 
 bool ib_handle_errors(
-    enum db_err *new_err, /*!< out: possible new error encountered in
+  enum db_err *new_err, /*!< out: possible new error encountered in
                           lock wait, or if no new error, the value
                           of trx->error_state at the entry of this
                           function */
-    trx_t *trx,           /*!< in: transaction */
-    que_thr_t *thr,       /*!< in: query thread */
-    trx_savept_t *savept) /*!< in: savepoint or NULL */
+  trx_t *trx,           /*!< in: transaction */
+  que_thr_t *thr,       /*!< in: query thread */
+  trx_savept_t *savept
+) /*!< in: savepoint or NULL */
 {
   enum db_err err;
 
@@ -91,73 +92,78 @@ handle_new_error:
   trx->error_state = DB_SUCCESS;
 
   switch (err) {
-  case DB_LOCK_WAIT_TIMEOUT:
-    if (ses_rollback_on_timeout) {
-      trx_general_rollback(trx, false, NULL);
-      break;
-    }
-    /* fall through */
-  case DB_DUPLICATE_KEY:
-  case DB_FOREIGN_DUPLICATE_KEY:
-  case DB_TOO_BIG_RECORD:
-  case DB_ROW_IS_REFERENCED:
-  case DB_NO_REFERENCED_ROW:
-  case DB_CANNOT_ADD_CONSTRAINT:
-  case DB_TOO_MANY_CONCURRENT_TRXS:
-  case DB_OUT_OF_FILE_SPACE:
-    if (savept) {
-      /* Roll back the latest, possibly incomplete
+    case DB_LOCK_WAIT_TIMEOUT:
+      if (ses_rollback_on_timeout) {
+        trx_general_rollback(trx, false, NULL);
+        break;
+      }
+      /* fall through */
+    case DB_DUPLICATE_KEY:
+    case DB_FOREIGN_DUPLICATE_KEY:
+    case DB_TOO_BIG_RECORD:
+    case DB_ROW_IS_REFERENCED:
+    case DB_NO_REFERENCED_ROW:
+    case DB_CANNOT_ADD_CONSTRAINT:
+    case DB_TOO_MANY_CONCURRENT_TRXS:
+    case DB_OUT_OF_FILE_SPACE:
+      if (savept) {
+        /* Roll back the latest, possibly incomplete
       insertion or update */
 
-      trx_general_rollback(trx, true, savept);
-    }
-    break;
-  case DB_LOCK_WAIT:
-    srv_suspend_user_thread(thr);
+        trx_general_rollback(trx, true, savept);
+      }
+      break;
+    case DB_LOCK_WAIT:
+      srv_suspend_user_thread(thr);
 
-    if (trx->error_state != DB_SUCCESS) {
-      que_thr_stop_client(thr);
+      if (trx->error_state != DB_SUCCESS) {
+        que_thr_stop_client(thr);
 
-      goto handle_new_error;
-    }
+        goto handle_new_error;
+      }
 
-    *new_err = err;
+      *new_err = err;
 
-    return (true); /* Operation needs to be retried. */
+      return (true); /* Operation needs to be retried. */
 
-  case DB_DEADLOCK:
-  case DB_LOCK_TABLE_FULL:
-    /* Roll back the whole transaction; this resolution was added
+    case DB_DEADLOCK:
+    case DB_LOCK_TABLE_FULL:
+      /* Roll back the whole transaction; this resolution was added
     to version 3.23.43 */
 
-    trx_general_rollback(trx, false, NULL);
-    break;
+      trx_general_rollback(trx, false, NULL);
+      break;
 
-  case DB_MUST_GET_MORE_FILE_SPACE:
-    log_fatal("The database cannot continue"
-              " operation because of\n"
-              "lack of space. You must add"
-              " a new data file\n"
-              "and restart the database.\n");
-    break;
+    case DB_MUST_GET_MORE_FILE_SPACE:
+      log_fatal(
+        "The database cannot continue"
+        " operation because of\n"
+        "lack of space. You must add"
+        " a new data file\n"
+        "and restart the database.\n"
+      );
+      break;
 
-  case DB_CORRUPTION:
-    ib_logger(ib_stream, "We detected index corruption"
-                         " in an InnoDB type table.\n"
-                         "You have to dump + drop + reimport"
-                         " the table or, in\n"
-                         "a case of widespread corruption,"
-                         " dump all InnoDB\n"
-                         "tables and recreate the"
-                         " whole InnoDB tablespace.\n"
-                         "If the server crashes"
-                         " after the startup or when\n"
-                         "you dump the tables, check the \n"
-                         "InnoDB website for help.\n");
-    break;
-  default:
-    ib_logger(ib_stream, "unknown error code %lu\n", (ulong)err);
-    ut_error;
+    case DB_CORRUPTION:
+      ib_logger(
+        ib_stream,
+        "We detected index corruption"
+        " in an InnoDB type table.\n"
+        "You have to dump + drop + reimport"
+        " the table or, in\n"
+        "a case of widespread corruption,"
+        " dump all InnoDB\n"
+        "tables and recreate the"
+        " whole InnoDB tablespace.\n"
+        "If the server crashes"
+        " after the startup or when\n"
+        "you dump the tables, check the \n"
+        "InnoDB website for help.\n"
+      );
+      break;
+    default:
+      ib_logger(ib_stream, "unknown error code %lu\n", (ulong)err);
+      ut_error;
   }
 
   if (trx->error_state != DB_SUCCESS) {
@@ -174,10 +180,11 @@ handle_new_error:
 /** Sets a lock on a table.
 @return	error code or DB_SUCCESS */
 
-enum db_err
-ib_trx_lock_table_with_retry(trx_t *trx,          /*!< in/out: transaction */
-                             dict_table_t *table, /*!< in: table to lock */
-                             enum lock_mode mode) /*!< in: LOCK_X or LOCK_S */
+enum db_err ib_trx_lock_table_with_retry(
+  trx_t *trx,          /*!< in/out: transaction */
+  dict_table_t *table, /*!< in: table to lock */
+  enum lock_mode mode
+) /*!< in: LOCK_X or LOCK_S */
 {
   que_thr_t *thr;
   enum db_err err;
@@ -197,8 +204,7 @@ ib_trx_lock_table_with_retry(trx_t *trx,          /*!< in/out: transaction */
   /* We use the select query graph as the dummy graph needed
   in the lock module call */
 
-  thr = que_fork_get_first_thr(
-      static_cast<que_fork_t *>(que_node_get_parent(thr)));
+  thr = que_fork_get_first_thr(static_cast<que_fork_t *>(que_node_get_parent(thr)));
   que_thr_move_to_run_state(thr);
 
 run_again:
@@ -260,8 +266,7 @@ void ib_update_statistics_if_needed(dict_table_t *table) /*!< in/out: table */
   We calculate statistics at most every 16th round, since we may have
   a counter table which is very small and updated very often. */
 
-  if (counter > 2000000000 ||
-      ((int64_t)counter > 16 + table->stat_n_rows / 16)) {
+  if (counter > 2000000000 || ((int64_t)counter > 16 + table->stat_n_rows / 16)) {
 
     dict_update_statistics(table);
   }

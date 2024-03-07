@@ -45,14 +45,14 @@ Created 3/14/1997 Heikki Tuuri
 @return	own: purge node */
 
 purge_node_t *row_purge_node_create(
-    que_thr_t *parent, /*!< in: parent node, i.e., a thr node */
-    mem_heap_t *heap)  /*!< in: memory heap where created */
+  que_thr_t *parent, /*!< in: parent node, i.e., a thr node */
+  mem_heap_t *heap
+) /*!< in: memory heap where created */
 {
   ut_ad(parent);
   ut_ad(heap);
 
-  auto node = reinterpret_cast<purge_node_t *>(
-      mem_heap_alloc(heap, sizeof(purge_node_t)));
+  auto node = reinterpret_cast<purge_node_t *>(mem_heap_alloc(heap, sizeof(purge_node_t)));
 
   node->common.type = QUE_NODE_PURGE;
   node->common.parent = parent;
@@ -65,10 +65,11 @@ purge_node_t *row_purge_node_create(
 /** Repositions the pcur in the purge node on the clustered index record,
 if found.
 @return	true if the record was found */
-static bool
-row_purge_reposition_pcur(ulint mode,         /*!< in: latching mode */
-                          purge_node_t *node, /*!< in: row purge node */
-                          mtr_t *mtr)         /*!< in: mtr */
+static bool row_purge_reposition_pcur(
+  ulint mode,         /*!< in: latching mode */
+  purge_node_t *node, /*!< in: row purge node */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   bool found;
 
@@ -78,8 +79,7 @@ row_purge_reposition_pcur(ulint mode,         /*!< in: latching mode */
     return (found);
   }
 
-  found =
-      row_search_on_row_ref(&(node->pcur), mode, node->table, node->ref, mtr);
+  found = row_search_on_row_ref(&(node->pcur), mode, node->table, node->ref, mtr);
   node->found_clust = found;
 
   if (found) {
@@ -93,8 +93,9 @@ row_purge_reposition_pcur(ulint mode,         /*!< in: latching mode */
 @return true if success, or if not found, or if modified after the
 delete marking */
 static bool row_purge_remove_clust_if_poss_low(
-    purge_node_t *node, /*!< in: row purge node */
-    ulint mode)         /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE */
+  purge_node_t *node, /*!< in: row purge node */
+  ulint mode
+) /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE */
 {
   dict_index_t *index;
   btr_pcur_t *pcur;
@@ -163,8 +164,7 @@ static bool row_purge_remove_clust_if_poss_low(
 
 /** Removes a clustered index record if it has not been modified after the
 delete marking. */
-static void
-row_purge_remove_clust_if_poss(purge_node_t *node) /*!< in: row purge node */
+static void row_purge_remove_clust_if_poss(purge_node_t *node) /*!< in: row purge node */
 {
   bool success;
   ulint n_tries = 0;
@@ -195,11 +195,12 @@ retry:
 
 /** Removes a secondary index entry if possible.
 @return	true if success or if not found */
-static bool
-row_purge_remove_sec_if_poss_low(purge_node_t *node,  /*!< in: row purge node */
-                                 dict_index_t *index, /*!< in: index */
-                                 const dtuple_t *entry, /*!< in: index entry */
-                                 ulint mode) /*!< in: latch mode BTR_MODIFY_LEAF
+static bool row_purge_remove_sec_if_poss_low(
+  purge_node_t *node,    /*!< in: row purge node */
+  dict_index_t *index,   /*!< in: index */
+  const dtuple_t *entry, /*!< in: index entry */
+  ulint mode
+) /*!< in: latch mode BTR_MODIFY_LEAF
                                              or BTR_MODIFY_TREE */
 {
   btr_pcur_t pcur;
@@ -248,8 +249,7 @@ row_purge_remove_sec_if_poss_low(purge_node_t *node,  /*!< in: row purge node */
   success = row_purge_reposition_pcur(BTR_SEARCH_LEAF, node, &mtr_vers);
 
   if (success) {
-    old_has = row_vers_old_has_index_entry(
-        true, btr_pcur_get_rec(&(node->pcur)), &mtr_vers, index, entry);
+    old_has = row_vers_old_has_index_entry(true, btr_pcur_get_rec(&(node->pcur)), &mtr_vers, index, entry);
   }
 
   btr_pcur_commit_specify_mtr(&(node->pcur), &mtr_vers);
@@ -274,25 +274,24 @@ row_purge_remove_sec_if_poss_low(purge_node_t *node,  /*!< in: row purge node */
 }
 
 /** Removes a secondary index entry if possible. */
-static void
-row_purge_remove_sec_if_poss(purge_node_t *node,  /*!< in: row purge node */
-                             dict_index_t *index, /*!< in: index */
-                             dtuple_t *entry)     /*!< in: index entry */
+static void row_purge_remove_sec_if_poss(
+  purge_node_t *node,  /*!< in: row purge node */
+  dict_index_t *index, /*!< in: index */
+  dtuple_t *entry
+) /*!< in: index entry */
 {
   bool success;
   ulint n_tries = 0;
 
   /* ib_logger(ib_stream, "Purge: Removing secondary record\n"); */
 
-  success =
-      row_purge_remove_sec_if_poss_low(node, index, entry, BTR_MODIFY_LEAF);
+  success = row_purge_remove_sec_if_poss_low(node, index, entry, BTR_MODIFY_LEAF);
   if (success) {
 
     return;
   }
 retry:
-  success =
-      row_purge_remove_sec_if_poss_low(node, index, entry, BTR_MODIFY_TREE);
+  success = row_purge_remove_sec_if_poss_low(node, index, entry, BTR_MODIFY_TREE);
   /* The delete operation may fail if we have little
   file space left: TODO: easiest to crash the database
   and restart with more file space */
@@ -338,8 +337,7 @@ static void row_purge_del_mark(purge_node_t *node) /*!< in: row purge node */
 
 /** Purges an update of an existing record. Also purges an update of a delete
 marked record if that record contained an externally stored field. */
-static void
-row_purge_upd_exist_or_extern(purge_node_t *node) /*!< in: row purge node */
+static void row_purge_upd_exist_or_extern(purge_node_t *node) /*!< in: row purge node */
 {
   mem_heap_t *heap;
   dtuple_t *entry;
@@ -392,13 +390,11 @@ skip_secondaries:
       can calculate from node->roll_ptr the file
       address of the new_val data */
 
-      internal_offset =
-          ((const byte *)dfield_get_data(&ufield->new_val)) - node->undo_rec;
+      internal_offset = ((const byte *)dfield_get_data(&ufield->new_val)) - node->undo_rec;
 
       ut_a(internal_offset < UNIV_PAGE_SIZE);
 
-      trx_undo_decode_roll_ptr(node->roll_ptr, &is_insert, &rseg_id, &page_no,
-                               &offset);
+      trx_undo_decode_roll_ptr(node->roll_ptr, &is_insert, &rseg_id, &page_no, &offset);
       mtr_start(&mtr);
 
       /* We have to acquire an X-latch to the clustered
@@ -428,11 +424,9 @@ skip_secondaries:
       data_field = buf_block_get_frame(block) + offset + internal_offset;
 
       ut_a(dfield_get_len(&ufield->new_val) >= BTR_EXTERN_FIELD_REF_SIZE);
-      btr_free_externally_stored_field(index,
-                                       data_field +
-                                           dfield_get_len(&ufield->new_val) -
-                                           BTR_EXTERN_FIELD_REF_SIZE,
-                                       nullptr, nullptr, 0, RB_NONE, &mtr);
+      btr_free_externally_stored_field(
+        index, data_field + dfield_get_len(&ufield->new_val) - BTR_EXTERN_FIELD_REF_SIZE, nullptr, nullptr, 0, RB_NONE, &mtr
+      );
       mtr_commit(&mtr);
     }
   }
@@ -441,12 +435,13 @@ skip_secondaries:
 /** Parses the row reference and other info in a modify undo log record.
 @return true if purge operation required: NOTE that then the CALLER
 must unfreeze data dictionary! */
-static bool
-row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
-                         bool *updated_extern,
-                         /*!< out: true if an externally stored field
+static bool row_purge_parse_undo_rec(
+  purge_node_t *node, /*!< in: row undo node */
+  bool *updated_extern,
+  /*!< out: true if an externally stored field
                          was updated */
-                         que_thr_t *thr) /*!< in: query thread */
+  que_thr_t *thr
+) /*!< in: query thread */
 {
   dict_index_t *clust_index;
   byte *ptr;
@@ -463,8 +458,7 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
 
   trx = thr_get_trx(thr);
 
-  ptr = trx_undo_rec_get_pars(node->undo_rec, &type, &cmpl_info, updated_extern,
-                              &undo_no, &table_id);
+  ptr = trx_undo_rec_get_pars(node->undo_rec, &type, &cmpl_info, updated_extern, &undo_no, &table_id);
   node->rec_type = type;
 
   if (type == TRX_UNDO_UPD_DEL_REC && !(*updated_extern)) {
@@ -475,8 +469,7 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
   node->table = nullptr;
 
-  if (type == TRX_UNDO_UPD_EXIST_REC && cmpl_info & UPD_NODE_NO_ORD_CHANGE &&
-      !(*updated_extern)) {
+  if (type == TRX_UNDO_UPD_EXIST_REC && cmpl_info & UPD_NODE_NO_ORD_CHANGE && !(*updated_extern)) {
 
     /* Purge requires no changes to indexes: we may return */
 
@@ -491,8 +484,7 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
   mutex_enter(&(dict_sys->mutex));
 
   // FIXME: srv_force_recovery should be passed in as an arg
-  node->table =
-      dict_table_get_on_id_low(ib_recovery_t(srv_force_recovery), table_id);
+  node->table = dict_table_get_on_id_low(ib_recovery_t(srv_force_recovery), table_id);
 
   mutex_exit(&(dict_sys->mutex));
 
@@ -521,15 +513,12 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
 
   ptr = trx_undo_rec_get_row_ref(ptr, clust_index, &(node->ref), node->heap);
 
-  ptr = trx_undo_update_rec_get_update(ptr, clust_index, type, trx_id, roll_ptr,
-                                       info_bits, trx, node->heap,
-                                       &(node->update));
+  ptr = trx_undo_update_rec_get_update(ptr, clust_index, type, trx_id, roll_ptr, info_bits, trx, node->heap, &(node->update));
 
   /* Read to the partial row the fields that occur in indexes */
 
   if (!(cmpl_info & UPD_NODE_NO_ORD_CHANGE)) {
-    ptr = trx_undo_rec_get_partial_row(
-        ptr, clust_index, &node->row, type == TRX_UNDO_UPD_DEL_REC, node->heap);
+    ptr = trx_undo_rec_get_partial_row(ptr, clust_index, &node->row, type == TRX_UNDO_UPD_DEL_REC, node->heap);
   }
 
   return (true);
@@ -539,8 +528,10 @@ row_purge_parse_undo_rec(purge_node_t *node, /*!< in: row undo node */
 If none left, or the current purge completed, returns the control to the
 parent node, which is always a query thread node.
 @return	DB_SUCCESS if operation successfully completed, else error code */
-static ulint row_purge(purge_node_t *node, /*!< in: row purge node */
-                       que_thr_t *thr)     /*!< in: query thread */
+static ulint row_purge(
+  purge_node_t *node, /*!< in: row purge node */
+  que_thr_t *thr
+) /*!< in: query thread */
 {
   roll_ptr_t roll_ptr;
   bool purge_needed;
@@ -551,8 +542,7 @@ static ulint row_purge(purge_node_t *node, /*!< in: row purge node */
 
   trx = thr_get_trx(thr);
 
-  node->undo_rec =
-      trx_purge_fetch_next_rec(&roll_ptr, &(node->reservation), node->heap);
+  node->undo_rec = trx_purge_fetch_next_rec(&roll_ptr, &(node->reservation), node->heap);
   if (!node->undo_rec) {
     /* Purge completed for this query thread */
 

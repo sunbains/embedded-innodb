@@ -47,7 +47,6 @@ byte *mach_uint64_parse_compressed(byte *ptr, byte *end_ptr, uint64_t *v) {
   return ptr + 4;
 }
 
-
 uint32_t mach_parse_compressed(byte *&ptr, const byte *end_ptr) {
   ulint val;
 

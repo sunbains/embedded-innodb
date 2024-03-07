@@ -36,7 +36,9 @@ ulint data_client_default_charset_coll;
 
 /** Reset dtype variables. */
 
-void dtype_var_init(void) { data_client_default_charset_coll = 0; }
+void dtype_var_init(void) {
+  data_client_default_charset_coll = 0;
+}
 
 /** Determine how many bytes the first n characters of the given string occupy.
 If the string is shorter than n characters, returns the number of bytes
@@ -44,16 +46,17 @@ the characters in the string occupy.
 @return	length of the prefix, in bytes */
 
 ulint dtype_get_at_most_n_mbchars(
-    ulint prtype,     /*!< in: precise type */
-    ulint mbminlen,   /*!< in: minimum length of a
+  ulint prtype,     /*!< in: precise type */
+  ulint mbminlen,   /*!< in: minimum length of a
                       multi-byte character */
-    ulint mbmaxlen,   /*!< in: maximum length of a
+  ulint mbmaxlen,   /*!< in: maximum length of a
                       multi-byte character */
-    ulint prefix_len, /*!< in: length of the requested
+  ulint prefix_len, /*!< in: length of the requested
                       prefix, in characters, multiplied by
                       dtype_get_mbmaxlen(dtype) */
-    ulint data_len,   /*!< in: length of str (in bytes) */
-    const char *str)  /*!< in: the string whose prefix
+  ulint data_len,   /*!< in: length of str (in bytes) */
+  const char *str
+) /*!< in: the string whose prefix
                       length is being determined */
 {
   ut_a(data_len != UNIV_SQL_NULL);
@@ -81,8 +84,7 @@ ulint dtype_get_at_most_n_mbchars(
 string type.
 @return	true if string type */
 
-bool dtype_is_string_type(
-    ulint mtype) /*!< in: InnoDB main data type code: DATA_CHAR, ... */
+bool dtype_is_string_type(ulint mtype) /*!< in: InnoDB main data type code: DATA_CHAR, ... */
 {
   if (mtype <= DATA_BLOB || mtype == DATA_CLIENT || mtype == DATA_VARCLIENT) {
 
@@ -97,11 +99,12 @@ bool dtype_is_string_type(
 those DATA_BLOB columns this function currently returns false.
 @return	true if binary string type */
 
-bool dtype_is_binary_string_type(ulint mtype,  /*!< in: main data type */
-                                 ulint prtype) /*!< in: precise type */
+bool dtype_is_binary_string_type(
+  ulint mtype, /*!< in: main data type */
+  ulint prtype
+) /*!< in: precise type */
 {
-  if ((mtype == DATA_FIXBINARY) || (mtype == DATA_BINARY) ||
-      (mtype == DATA_BLOB && (prtype & DATA_BINARY_TYPE))) {
+  if ((mtype == DATA_FIXBINARY) || (mtype == DATA_BINARY) || (mtype == DATA_BLOB && (prtype & DATA_BINARY_TYPE))) {
 
     return (true);
   }
@@ -115,11 +118,12 @@ with < 4.0.14, we do not know if a DATA_BLOB column is a BLOB or a TEXT column.
 For those DATA_BLOB columns this function currently returns true.
 @return	true if non-binary string type */
 
-bool dtype_is_non_binary_string_type(ulint mtype,  /*!< in: main data type */
-                                     ulint prtype) /*!< in: precise type */
+bool dtype_is_non_binary_string_type(
+  ulint mtype, /*!< in: main data type */
+  ulint prtype
+) /*!< in: precise type */
 {
-  if (dtype_is_string_type(mtype) == true &&
-      dtype_is_binary_string_type(mtype, prtype) == false) {
+  if (dtype_is_string_type(mtype) == true && dtype_is_binary_string_type(mtype, prtype) == false) {
 
     return (true);
   }
@@ -132,9 +136,10 @@ charset-collation code.
 @return precise type, including the charset-collation code */
 
 ulint dtype_form_prtype(
-    ulint old_prtype,   /*!< in: the user type code and the flags
+  ulint old_prtype, /*!< in: the user type code and the flags
                         DATA_BINARY_TYPE etc. */
-    ulint charset_coll) /*!< in: user charset-collation code */
+  ulint charset_coll
+) /*!< in: user charset-collation code */
 {
   ut_a(old_prtype < 256 * 256);
   ut_a(charset_coll < 256);
@@ -174,59 +179,58 @@ void dtype_print(const dtype_t *type) /*!< in: type */
   prtype = type->prtype;
 
   switch (mtype) {
-  case DATA_VARCHAR:
-    ib_logger(ib_stream, "DATA_VARCHAR");
-    break;
+    case DATA_VARCHAR:
+      ib_logger(ib_stream, "DATA_VARCHAR");
+      break;
 
-  case DATA_CHAR:
-    ib_logger(ib_stream, "DATA_CHAR");
-    break;
+    case DATA_CHAR:
+      ib_logger(ib_stream, "DATA_CHAR");
+      break;
 
-  case DATA_BINARY:
-    ib_logger(ib_stream, "DATA_BINARY");
-    break;
+    case DATA_BINARY:
+      ib_logger(ib_stream, "DATA_BINARY");
+      break;
 
-  case DATA_FIXBINARY:
-    ib_logger(ib_stream, "DATA_FIXBINARY");
-    break;
+    case DATA_FIXBINARY:
+      ib_logger(ib_stream, "DATA_FIXBINARY");
+      break;
 
-  case DATA_BLOB:
-    ib_logger(ib_stream, "DATA_BLOB");
-    break;
+    case DATA_BLOB:
+      ib_logger(ib_stream, "DATA_BLOB");
+      break;
 
-  case DATA_INT:
-    ib_logger(ib_stream, "DATA_INT");
-    break;
+    case DATA_INT:
+      ib_logger(ib_stream, "DATA_INT");
+      break;
 
-  case DATA_CLIENT:
-    ib_logger(ib_stream, "DATA_CLIENT");
-    break;
+    case DATA_CLIENT:
+      ib_logger(ib_stream, "DATA_CLIENT");
+      break;
 
-  case DATA_SYS:
-    ib_logger(ib_stream, "DATA_SYS");
-    break;
+    case DATA_SYS:
+      ib_logger(ib_stream, "DATA_SYS");
+      break;
 
-  case DATA_FLOAT:
-    ib_logger(ib_stream, "DATA_FLOAT");
-    break;
+    case DATA_FLOAT:
+      ib_logger(ib_stream, "DATA_FLOAT");
+      break;
 
-  case DATA_DOUBLE:
-    ib_logger(ib_stream, "DATA_DOUBLE");
-    break;
+    case DATA_DOUBLE:
+      ib_logger(ib_stream, "DATA_DOUBLE");
+      break;
 
-  case DATA_DECIMAL:
-    ib_logger(ib_stream, "DATA_DECIMAL");
-    break;
+    case DATA_DECIMAL:
+      ib_logger(ib_stream, "DATA_DECIMAL");
+      break;
 
-  default:
-    ib_logger(ib_stream, "type %lu", (ulong)mtype);
-    break;
+    default:
+      ib_logger(ib_stream, "type %lu", (ulong)mtype);
+      break;
   }
 
   len = type->len;
 
-  if ((type->mtype == DATA_SYS) || (type->mtype == DATA_VARCHAR) ||
-      (type->mtype == DATA_CHAR)) {
+  if ((type->mtype == DATA_SYS) || (type->mtype == DATA_VARCHAR) || (type->mtype == DATA_CHAR)) {
     ib_logger(ib_stream, " ");
     if (prtype == DATA_ROW_ID) {
       ib_logger(ib_stream, "DATA_ROW_ID");

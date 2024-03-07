@@ -62,25 +62,29 @@ void ib_list_free(ib_list_t *list); /*!< in: list */
 /** Add the data to the end of the list.
 @return	new list node */
 
-ib_list_node_t *
-ib_list_add_last(ib_list_t *list,   /*!< in: list */
-                 void *data,        /*!< in: data */
-                 mem_heap_t *heap); /*!< in: memory heap to use */
+ib_list_node_t *ib_list_add_last(
+  ib_list_t *list, /*!< in: list */
+  void *data,      /*!< in: data */
+  mem_heap_t *heap
+); /*!< in: memory heap to use */
 
 /** Add the data after the indicated node.
 @return	new list node */
 
-ib_list_node_t *
-ib_list_add_after(ib_list_t *list,           /*!< in: list */
-                  ib_list_node_t *prev_node, /*!< in: node preceding new node
+ib_list_node_t *ib_list_add_after(
+  ib_list_t *list,           /*!< in: list */
+  ib_list_node_t *prev_node, /*!< in: node preceding new node
                                              (can be NULL) */
-                  void *data,                /*!< in: data */
-                  mem_heap_t *heap);         /*!< in: memory heap to use */
+  void *data,                /*!< in: data */
+  mem_heap_t *heap
+); /*!< in: memory heap to use */
 
 /** Remove the node from the list. */
 
-void ib_list_remove(ib_list_t *list,       /*!< in: list */
-                    ib_list_node_t *node); /*!< in: node to remove */
+void ib_list_remove(
+  ib_list_t *list, /*!< in: list */
+  ib_list_node_t *node
+); /*!< in: node to remove */
 
 /** Get the first node in the list.
 @return	first node, or NULL */

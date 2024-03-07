@@ -61,9 +61,10 @@ static ulint trx_roll_progress_printed_pct;
 @return	error code or DB_SUCCESS */
 
 db_err trx_general_rollback(
-    trx_t *trx,           /*!< in: transaction handle */
-    bool partial,         /*!< in: true if partial rollback requested */
-    trx_savept_t *savept) /*!< in: pointer to savepoint undo number, if
+  trx_t *trx,   /*!< in: transaction handle */
+  bool partial, /*!< in: true if partial rollback requested */
+  trx_savept_t *savept
+) /*!< in: pointer to savepoint undo number, if
                           partial rollback requested */
 {
   mem_heap_t *heap;
@@ -89,8 +90,7 @@ db_err trx_general_rollback(
 
   thr = pars_complete_graph_for_exec(roll_node, trx, heap);
 
-  ut_a(thr == que_fork_start_command(
-                  static_cast<que_fork_t *>(que_node_get_parent(thr))));
+  ut_a(thr == que_fork_start_command(static_cast<que_fork_t *>(que_node_get_parent(thr))));
 
   que_run_threads(thr);
 
@@ -123,8 +123,9 @@ db_err trx_general_rollback(
 free all savepoints. */
 
 void trx_roll_savepoints_free(
-    trx_t *trx,                /*!< in: transaction handle */
-    trx_named_savept_t *savep) /*!< in: free all savepoints > this one;
+  trx_t *trx, /*!< in: transaction handle */
+  trx_named_savept_t *savep
+) /*!< in: free all savepoints > this one;
                                if this is nullptr, free all savepoints
                                of trx */
 {
@@ -169,9 +170,10 @@ trx_savept_t trx_savept_take(trx_t *trx) /*!< in: transaction */
 }
 
 /** Roll back an active transaction. */
-static void
-trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
-                    trx_t *trx)             /*!< in/out: transaction */
+static void trx_rollback_active(
+  ib_recovery_t recovery, /*!< in: recovery flag */
+  trx_t *trx
+) /*!< in/out: transaction */
 {
   mem_heap_t *heap;
   que_fork_t *fork;
@@ -211,9 +213,9 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
   }
 
   ut_print_timestamp(ib_stream);
-  ib_logger(ib_stream,
-            "  Rolling back trx with id %lu, %lu%s rows to undo\n",
-            TRX_ID_PREP_PRINTF(trx->id), (ulong)rows_to_undo, unit);
+  ib_logger(
+    ib_stream, "  Rolling back trx with id %lu, %lu%s rows to undo\n", TRX_ID_PREP_PRINTF(trx->id), (ulong)rows_to_undo, unit
+  );
   mutex_exit(&kernel_mutex);
 
   trx->client_thread_id = os_thread_get_curr_id();
@@ -233,8 +235,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
 
     mutex_exit(&kernel_mutex);
 
-    ib_logger(ib_stream, "Waiting for rollback of trx id %lu to end\n",
-              (ulong)trx->id);
+    ib_logger(ib_stream, "Waiting for rollback of trx id %lu to end\n", (ulong)trx->id);
     os_thread_sleep(100000);
 
     mutex_enter(&kernel_mutex);
@@ -247,11 +248,13 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
     /* If the transaction was for a dictionary operation, we
     drop the relevant table, if it still exists */
 
-    ib_logger(ib_stream,
-              "Dropping table with id %lu %lu"
-              " in recovery if it exists\n",
-              (ulong)trx->table_id,
-              (ulong)trx->table_id);
+    ib_logger(
+      ib_stream,
+      "Dropping table with id %lu %lu"
+      " in recovery if it exists\n",
+      (ulong)trx->table_id,
+      (ulong)trx->table_id
+    );
 
     table = dict_table_get_on_id_low(recovery, trx->table_id);
 
@@ -273,8 +276,7 @@ trx_rollback_active(ib_recovery_t recovery, /*!< in: recovery flag */
     dict_unlock_data_dictionary(trx);
   }
 
-  ib_logger(ib_stream, "\nRolling back of trx id %lu completed\n",
-            TRX_ID_PREP_PRINTF(trx->id));
+  ib_logger(ib_stream, "\nRolling back of trx id %lu completed\n", TRX_ID_PREP_PRINTF(trx->id));
   mem_heap_free(heap);
 
   trx_roll_crash_recv_trx = nullptr;
@@ -285,8 +287,7 @@ encountered in crash recovery.  If the transaction already was
 committed, then we clean up a possible insert undo log. If the
 transaction was not yet committed, then we roll it back. */
 
-void trx_rollback_or_clean_recovered(
-    bool all) /*!< in: false=roll back dictionary transactions;
+void trx_rollback_or_clean_recovered(bool all) /*!< in: false=roll back dictionary transactions;
                true=roll back all non-PREPARED transactions */
 {
   trx_t *trx;
@@ -298,8 +299,11 @@ void trx_rollback_or_clean_recovered(
   }
 
   if (all) {
-    ib_logger(ib_stream, "Starting in background the rollback"
-                         " of uncommitted transactions\n");
+    ib_logger(
+      ib_stream,
+      "Starting in background the rollback"
+      " of uncommitted transactions\n"
+    );
   }
 
   mutex_exit(&kernel_mutex);
@@ -307,38 +311,39 @@ void trx_rollback_or_clean_recovered(
 loop:
   mutex_enter(&kernel_mutex);
 
-  for (trx = UT_LIST_GET_FIRST(trx_sys->trx_list); trx;
-       trx = UT_LIST_GET_NEXT(trx_list, trx)) {
+  for (trx = UT_LIST_GET_FIRST(trx_sys->trx_list); trx; trx = UT_LIST_GET_NEXT(trx_list, trx)) {
     if (!trx->is_recovered) {
       continue;
     }
 
     switch (trx->conc_state) {
-    case TRX_NOT_STARTED:
-    case TRX_PREPARED:
-      continue;
+      case TRX_NOT_STARTED:
+      case TRX_PREPARED:
+        continue;
 
-    case TRX_COMMITTED_IN_MEMORY:
-      mutex_exit(&kernel_mutex);
-      ib_logger(ib_stream, "Cleaning up trx with id %lu\n",
-                TRX_ID_PREP_PRINTF(trx->id));
-      trx_cleanup_at_db_startup(trx);
-      goto loop;
-
-    case TRX_ACTIVE:
-      if (all || trx_get_dict_operation(trx) != TRX_DICT_OP_NONE) {
+      case TRX_COMMITTED_IN_MEMORY:
         mutex_exit(&kernel_mutex);
-        // FIXME: Need to get rid of this global access
-        trx_rollback_active(srv_force_recovery, trx);
+        ib_logger(ib_stream, "Cleaning up trx with id %lu\n", TRX_ID_PREP_PRINTF(trx->id));
+        trx_cleanup_at_db_startup(trx);
         goto loop;
-      }
+
+      case TRX_ACTIVE:
+        if (all || trx_get_dict_operation(trx) != TRX_DICT_OP_NONE) {
+          mutex_exit(&kernel_mutex);
+          // FIXME: Need to get rid of this global access
+          trx_rollback_active(srv_force_recovery, trx);
+          goto loop;
+        }
     }
   }
 
   if (all) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  Rollback of non-prepared"
-                         " transactions completed\n");
+    ib_logger(
+      ib_stream,
+      "  Rollback of non-prepared"
+      " transactions completed\n"
+    );
   }
 
 leave_function:
@@ -358,11 +363,9 @@ void *trx_rollback_or_clean_all_recovered(void *arg __attribute__((unused))) {
 
 trx_undo_arr_t *trx_undo_arr_create() {
   auto heap = mem_heap_create(1024);
-  auto arr = reinterpret_cast<trx_undo_arr_t *>(
-      mem_heap_alloc(heap, sizeof(trx_undo_arr_t)));
+  auto arr = reinterpret_cast<trx_undo_arr_t *>(mem_heap_alloc(heap, sizeof(trx_undo_arr_t)));
 
-  arr->infos = reinterpret_cast<trx_undo_inf_t *>(
-      mem_heap_alloc(heap, sizeof(trx_undo_inf_t) * UNIV_MAX_PARALLELISM));
+  arr->infos = reinterpret_cast<trx_undo_inf_t *>(mem_heap_alloc(heap, sizeof(trx_undo_inf_t) * UNIV_MAX_PARALLELISM));
 
   arr->n_cells = UNIV_MAX_PARALLELISM;
   arr->n_used = 0;
@@ -387,8 +390,10 @@ void trx_undo_arr_free(trx_undo_arr_t *arr) /*!< in: undo number array */
 
 /** Stores info of an undo log record to the array if it is not stored yet.
 @return	false if the record already existed in the array */
-static bool trx_undo_arr_store_info(trx_t *trx,        /*!< in: transaction */
-                                    undo_no_t undo_no) /*!< in: undo number */
+static bool trx_undo_arr_store_info(
+  trx_t *trx, /*!< in: transaction */
+  undo_no_t undo_no
+) /*!< in: undo number */
 {
   trx_undo_inf_t *cell;
   trx_undo_inf_t *stored_here;
@@ -442,9 +447,10 @@ static bool trx_undo_arr_store_info(trx_t *trx,        /*!< in: transaction */
 }
 
 /** Removes an undo number from the array. */
-static void
-trx_undo_arr_remove_info(trx_undo_arr_t *arr, /*!< in: undo number array */
-                         undo_no_t undo_no)   /*!< in: undo number */
+static void trx_undo_arr_remove_info(
+  trx_undo_arr_t *arr, /*!< in: undo number array */
+  undo_no_t undo_no
+) /*!< in: undo number */
 {
   trx_undo_inf_t *cell;
   ulint i;
@@ -467,8 +473,7 @@ trx_undo_arr_remove_info(trx_undo_arr_t *arr, /*!< in: undo number array */
 
 /** Gets the biggest undo number in an array.
 @return	biggest value, 0 if the array is empty */
-static undo_no_t
-trx_undo_arr_get_biggest(trx_undo_arr_t *arr) /*!< in: undo number array */
+static undo_no_t trx_undo_arr_get_biggest(trx_undo_arr_t *arr) /*!< in: undo number array */
 {
   trx_undo_inf_t *cell;
   ulint n_used;
@@ -531,10 +536,11 @@ void trx_roll_try_truncate(trx_t *trx) {
 /** Pops the topmost undo log record in a single undo log and updates the info
 about the topmost record in the undo log memory struct.
 @return	undo log record, the page s-latched */
-static trx_undo_rec_t *
-trx_roll_pop_top_rec(trx_t *trx,       /*!< in: transaction */
-                     trx_undo_t *undo, /*!< in: undo log */
-                     mtr_t *mtr)       /*!< in: mtr */
+static trx_undo_rec_t *trx_roll_pop_top_rec(
+  trx_t *trx,       /*!< in: transaction */
+  trx_undo_t *undo, /*!< in: undo log */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   page_t *undo_page;
   ulint offset;
@@ -550,8 +556,7 @@ trx_roll_pop_top_rec(trx_t *trx,       /*!< in: transaction */
   os_thread_get_curr_id(), trx->id,
   undo->top_undo_no); */
 
-  prev_rec = trx_undo_get_prev_rec(undo_page + offset, undo->hdr_page_no,
-                                   undo->hdr_offset, mtr);
+  prev_rec = trx_undo_get_prev_rec(undo_page + offset, undo->hdr_page_no, undo->hdr_offset, mtr);
   if (prev_rec == nullptr) {
 
     undo->empty = true;
@@ -580,10 +585,11 @@ of this undo record, it must be released with trx_undo_rec_release.
 undo number of the top record would be less than the limit */
 
 trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(
-    trx_t *trx,           /*!< in: transaction */
-    undo_no_t limit,      /*!< in: least undo number we need */
-    roll_ptr_t *roll_ptr, /*!< out: roll pointer to undo record */
-    mem_heap_t *heap)     /*!< in: memory heap where copied */
+  trx_t *trx,           /*!< in: transaction */
+  undo_no_t limit,      /*!< in: least undo number we need */
+  roll_ptr_t *roll_ptr, /*!< out: roll pointer to undo record */
+  mem_heap_t *heap
+) /*!< in: memory heap where copied */
 {
   trx_undo_t *undo;
   trx_undo_t *ins_undo;
@@ -621,7 +627,7 @@ try_again:
     undo = ins_undo;
   }
 
-  if (!undo || undo->empty || limit >undo->top_undo_no) {
+  if (!undo || undo->empty || limit > undo->top_undo_no) {
 
     if ((trx->undo_no_arr)->n_used == 0) {
       /* Rollback is ending */
@@ -644,8 +650,7 @@ try_again:
     is_insert = false;
   }
 
-  *roll_ptr = trx_undo_build_roll_ptr(is_insert, (undo->rseg)->id,
-                                      undo->top_page_no, undo->top_offset);
+  *roll_ptr = trx_undo_build_roll_ptr(is_insert, (undo->rseg)->id, undo->top_page_no, undo->top_offset);
   mtr_start(&mtr);
 
   undo_rec = trx_roll_pop_top_rec(trx, undo, &mtr);
@@ -663,10 +668,12 @@ try_again:
 
     if (progress_pct != trx_roll_progress_printed_pct) {
       if (trx_roll_progress_printed_pct == 0) {
-        ib_logger(ib_stream,
-                  "\nProgress in percents:"
-                  " %lu",
-                  (ulong)progress_pct);
+        ib_logger(
+          ib_stream,
+          "\nProgress in percents:"
+          " %lu",
+          (ulong)progress_pct
+        );
       } else {
         ib_logger(ib_stream, " %lu", (ulong)progress_pct);
       }
@@ -817,8 +824,9 @@ static void trx_finish_error_processing(trx_t *trx) /*!< in: transaction */
 
 /** Finishes a partial rollback operation. */
 static void trx_finish_partial_rollback_off_kernel(
-    trx_t *trx,           /*!< in: transaction */
-    que_thr_t **next_thr) /*!< in/out: next query thread to run;
+  trx_t *trx, /*!< in: transaction */
+  que_thr_t **next_thr
+) /*!< in/out: next query thread to run;
                          if the value which is passed in is a pointer
                          to a nullptr pointer, then the calling function
                          can start running a new query thread; if this
@@ -836,8 +844,7 @@ static void trx_finish_partial_rollback_off_kernel(
   trx->que_state = TRX_QUE_RUNNING;
 }
 
-void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx,
-                                    que_thr_t **next_thr) {
+void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx, que_thr_t **next_thr) {
   ut_ad(mutex_own(&kernel_mutex));
   ut_a(trx->undo_no_arr == nullptr || trx->undo_no_arr->n_used == 0);
 
@@ -861,8 +868,7 @@ void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx,
 
 #ifdef UNIV_DEBUG
   if (lock_print_waits) {
-    ib_logger(ib_stream, "Trx %lu rollback finished\n",
-              (ulong)trx->id);
+    ib_logger(ib_stream, "Trx %lu rollback finished\n", (ulong)trx->id);
   }
 #endif /* UNIV_DEBUG */
 
@@ -888,8 +894,7 @@ void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx,
 }
 
 roll_node_t *roll_node_create(mem_heap_t *heap) {
-  auto node = reinterpret_cast<roll_node_t *>(
-      mem_heap_alloc(heap, sizeof(roll_node_t)));
+  auto node = reinterpret_cast<roll_node_t *>(mem_heap_alloc(heap, sizeof(roll_node_t)));
 
   node->common.type = QUE_NODE_ROLLBACK;
   node->state = ROLL_NODE_SEND;

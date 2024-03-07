@@ -52,11 +52,10 @@ static db_err row_undo_ins_remove_clust_rec(undo_node_t *node) {
 
   mtr_start(&mtr);
 
-  auto success =
-      btr_pcur_restore_position(BTR_MODIFY_LEAF, &(node->pcur), &mtr);
+  auto success = btr_pcur_restore_position(BTR_MODIFY_LEAF, &(node->pcur), &mtr);
   ut_a(success);
 
-  if (node->table->id ==DICT_INDEXES_ID) {
+  if (node->table->id == DICT_INDEXES_ID) {
     ut_ad(node->trx->dict_operation_lock_mode == RW_X_LATCH);
 
     /* Drop the index tree associated with the row in
@@ -90,9 +89,7 @@ retry:
   success = btr_pcur_restore_position(BTR_MODIFY_TREE, &(node->pcur), &mtr);
   ut_a(success);
 
-  btr_cur_pessimistic_delete(&err, false, btr_cur,
-                             trx_is_recv(node->trx) ? RB_RECOVERY : RB_NORMAL,
-                             &mtr);
+  btr_cur_pessimistic_delete(&err, false, btr_cur, trx_is_recv(node->trx) ? RB_RECOVERY : RB_NORMAL, &mtr);
 
   /* The delete operation may fail if we have little
   file space left: TODO: easiest to crash the database
@@ -123,8 +120,7 @@ retry:
 @param[in] index                Remove entry from this index
 @param[in] entry                Index entry to remove
 @return	DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE */
-static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index,
-                                          dtuple_t *entry) {
+static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtuple_t *entry) {
   btr_pcur_t pcur;
   btr_cur_t *btr_cur;
   bool found;
@@ -211,23 +207,20 @@ static db_err row_undo_ins_remove_sec(dict_index_t *index, dtuple_t *entry) {
 /** Parses the row reference and other info in a fresh insert undo record.
 @param[in] recovery             Recovery flag
 @param[in,out] node             Ros undo node. */
-static void row_undo_ins_parse_undo_rec(ib_recovery_t recovery,
-                                        undo_node_t *node) {
+static void row_undo_ins_parse_undo_rec(ib_recovery_t recovery, undo_node_t *node) {
   ulint type;
   ulint dummy;
   uint64_t table_id;
   undo_no_t undo_no;
   bool dummy_extern;
 
-  auto ptr = trx_undo_rec_get_pars(node->undo_rec, &type, &dummy, &dummy_extern,
-                                   &undo_no, &table_id);
+  auto ptr = trx_undo_rec_get_pars(node->undo_rec, &type, &dummy, &dummy_extern, &undo_no, &table_id);
 
   ut_ad(type == TRX_UNDO_INSERT_REC);
   node->rec_type = type;
 
   node->update = nullptr;
-  node->table = dict_table_get_on_id(ib_recovery_t(srv_force_recovery),
-                                     table_id, node->trx);
+  node->table = dict_table_get_on_id(ib_recovery_t(srv_force_recovery), table_id, node->trx);
 
   /* Skip the UNDO if we can't find the table or the .ibd file. */
   if (unlikely(node->table == nullptr)) {
@@ -242,8 +235,11 @@ static void row_undo_ins_parse_undo_rec(ib_recovery_t recovery,
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  table ");
       ut_print_name(ib_stream, node->trx, true, node->table->name);
-      ib_logger(ib_stream, " has no indexes, "
-                           "ignoring the table\n");
+      ib_logger(
+        ib_stream,
+        " has no indexes, "
+        "ignoring the table\n"
+      );
 
       node->table = nullptr;
     }
@@ -265,12 +261,10 @@ db_err row_undo_ins(undo_node_t *node) {
   /* Iterate over all the indexes and undo the insert.*/
 
   /* Skip the clustered index (the first index) */
-  node->index =
-      dict_table_get_next_index(dict_table_get_first_index(node->table));
+  node->index = dict_table_get_next_index(dict_table_get_first_index(node->table));
 
   while (node->index != nullptr) {
-    auto entry =
-        row_build_index_entry(node->row, node->ext, node->index, node->heap);
+    auto entry = row_build_index_entry(node->row, node->ext, node->index, node->heap);
 
     if (unlikely(!entry)) {
       /* The database must have crashed after

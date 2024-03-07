@@ -117,10 +117,8 @@ doing the purge. Similarly, during a rollback, a record can be removed
 if the stored roll ptr in the undo log points to a trx already (being) purged,
 or if the roll ptr is nullptr, i.e., it was a fresh insert. */
 
-undo_node_t *row_undo_node_create(trx_t *trx, que_thr_t *parent,
-                                  mem_heap_t *heap) {
-  auto undo = reinterpret_cast<undo_node_t *>(
-      mem_heap_alloc(heap, sizeof(undo_node_t)));
+undo_node_t *row_undo_node_create(trx_t *trx, que_thr_t *parent, mem_heap_t *heap) {
+  auto undo = reinterpret_cast<undo_node_t *>(mem_heap_alloc(heap, sizeof(undo_node_t)));
 
   undo->common.type = QUE_NODE_UNDO;
   undo->common.parent = parent;
@@ -148,8 +146,7 @@ bool row_undo_search_clust_to_pcur(undo_node_t *node) {
 
   auto clust_index = dict_table_get_first_index(node->table);
 
-  auto found = row_search_on_row_ref(&(node->pcur), BTR_MODIFY_LEAF,
-                                     node->table, node->ref, &mtr);
+  auto found = row_search_on_row_ref(&(node->pcur), BTR_MODIFY_LEAF, node->table, node->ref, &mtr);
 
   auto rec = btr_pcur_get_rec(&(node->pcur));
 
@@ -167,12 +164,10 @@ bool row_undo_search_clust_to_pcur(undo_node_t *node) {
 
     ret = false;
   } else {
-    node->row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr,
-                          &node->ext, node->heap);
+    node->row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr, &node->ext, node->heap);
     if (node->update) {
       node->undo_row = dtuple_copy(node->row, node->heap);
-      row_upd_replace(node->undo_row, &node->undo_ext, clust_index,
-                      node->update, node->heap);
+      row_upd_replace(node->undo_row, &node->undo_ext, clust_index, node->update, node->heap);
     } else {
       node->undo_row = nullptr;
       node->undo_ext = nullptr;
@@ -204,8 +199,7 @@ static db_err row_undo(undo_node_t *node, que_thr_t *thr) {
 
   if (node->state == UNDO_NODE_FETCH_NEXT) {
 
-    node->undo_rec = trx_roll_pop_top_rec_of_trx(trx, trx->roll_limit,
-                                                 &roll_ptr, node->heap);
+    node->undo_rec = trx_roll_pop_top_rec_of_trx(trx, trx->roll_limit, &roll_ptr, node->heap);
     if (!node->undo_rec) {
       /* Rollback completed for this query thread */
 
@@ -302,8 +296,10 @@ que_thr_t *row_undo_step(que_thr_t *thr) {
     ib_logger(ib_stream, "Fatal error %lu in rollback.\n", (ulong)err);
 
     if (err == DB_OUT_OF_FILE_SPACE) {
-      log_fatal("Error 13 means out of tablespace.\n"
-                "Consider increasing your tablespace.\n");
+      log_fatal(
+        "Error 13 means out of tablespace.\n"
+        "Consider increasing your tablespace.\n"
+      );
     }
 
     ut_error;

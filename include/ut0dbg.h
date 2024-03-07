@@ -53,19 +53,20 @@ extern ulint ut_dbg_zero;
 
 /* you must #define UT_DBG_ENTER_FUNC_ENABLED to something before
 using this macro */
-#define UT_DBG_ENTER_FUNC                                                      \
-  do {                                                                         \
-    if (UT_DBG_ENTER_FUNC_ENABLED) {                                           \
-      UT_DBG_PRINT_FUNC;                                                       \
-    }                                                                          \
+#define UT_DBG_ENTER_FUNC            \
+  do {                               \
+    if (UT_DBG_ENTER_FUNC_ENABLED) { \
+      UT_DBG_PRINT_FUNC;             \
+    }                                \
   } while (0)
 
 /** Report a failed assertion. */
 
 void ut_dbg_assertion_failed(
-    const char *expr, /*!< in: the failed assertion */
-    const char *file, /*!< in: source file containing the assertion */
-    ulint line);      /*!< in: line number of the assertion */
+  const char *expr, /*!< in: the failed assertion */
+  const char *file, /*!< in: source file containing the assertion */
+  ulint line
+); /*!< in: line number of the assertion */
 
 #if defined(__GNUC__) && (__GNUC__ > 2)
 #define UT_DBG_USE_ABORT
@@ -91,43 +92,43 @@ void ut_dbg_stop_thread(const char *file, ulint line);
 #define UT_DBG_PANIC abort()
 
 /** Stop threads (null operation) */
-#define UT_DBG_STOP                                                            \
-  do {                                                                         \
+#define UT_DBG_STOP \
+  do {              \
   } while (0)
 
 #else /* UT_DBG_USE_ABORT */
 
 /** Abort the execution. */
-#define UT_DBG_PANIC                                                           \
-  if (*(ut_dbg_null_ptr))                                                      \
-     ut_dbg_null_ptr = nullptr
+#define UT_DBG_PANIC      \
+  if (*(ut_dbg_null_ptr)) \
+  ut_dbg_null_ptr = nullptr
 
 /** Stop threads in ut_a(). */
-#define UT_DBG_STOP                                                            \
-  do                                                                           \
-    if (unlikely(ut_dbg_stop_threads)) {                                       \
-      ut_dbg_stop_thread(__FILE__, (ulint)__LINE__);                           \
-    }                                                                          \
+#define UT_DBG_STOP                                  \
+  do                                                 \
+    if (unlikely(ut_dbg_stop_threads)) {             \
+      ut_dbg_stop_thread(__FILE__, (ulint)__LINE__); \
+    }                                                \
   while (0)
 
 #endif /* UT_DBG_USE_ABORT */
 
 /** Abort execution if EXPR does not evaluate to nonzero.
 @param EXPR	assertion expression that should hold */
-#define ut_a(EXPR)                                                             \
-  do {                                                                         \
-    if (UT_DBG_FAIL(EXPR)) {                                                   \
-      ut_dbg_assertion_failed(#EXPR, __FILE__, (ulint)__LINE__);               \
-      UT_DBG_PANIC;                                                            \
-    }                                                                          \
-    UT_DBG_STOP;                                                               \
+#define ut_a(EXPR)                                               \
+  do {                                                           \
+    if (UT_DBG_FAIL(EXPR)) {                                     \
+      ut_dbg_assertion_failed(#EXPR, __FILE__, (ulint)__LINE__); \
+      UT_DBG_PANIC;                                              \
+    }                                                            \
+    UT_DBG_STOP;                                                 \
   } while (0)
 
 /** Abort execution. */
-#define ut_error                                                               \
-  do {                                                                         \
-    ut_dbg_assertion_failed(0, __FILE__, (ulint)__LINE__);                     \
-    UT_DBG_PANIC;                                                              \
+#define ut_error                                           \
+  do {                                                     \
+    ut_dbg_assertion_failed(0, __FILE__, (ulint)__LINE__); \
+    UT_DBG_PANIC;                                          \
   } while (0)
 
 #ifdef UNIV_DEBUG
@@ -136,9 +137,9 @@ void ut_dbg_stop_thread(const char *file, ulint line);
 #define ut_ad(EXPR) ut_a(EXPR)
 
 /** Debug statement. Does nothing unless UNIV_DEBUG is defined. */
-#define ut_d(EXPR)                                                             \
-  do {                                                                         \
-    EXPR;                                                                      \
+#define ut_d(EXPR) \
+  do {             \
+    EXPR;          \
   } while (0)
 
 #else /* UNIV_DEBUG */

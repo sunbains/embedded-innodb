@@ -122,9 +122,12 @@ constexpr auto to_int(T v) -> typename std::underlying_type<T>::type {
 
 /** Explicitly call the destructor, this is to get around Clang bug#12350.
 @param[in,out]  p               Instance on which to call the destructor */
-template <typename T> void call_destructor(T *p) { p->~T(); }
+template <typename T>
+void call_destructor(T *p) {
+  p->~T();
+}
 
-constexpr const char SRV_PATH_SEPARATOR  = '/';
+constexpr const char SRV_PATH_SEPARATOR = '/';
 
 using page_no_t = ulint;
 using space_id_t = ulint;

@@ -52,16 +52,17 @@ typedef enum ib_cfg_flag {
                                             before innodb is started */
   IB_CFG_FLAG_READONLY = 0x4                /* cannot be modified */
 } ib_cfg_flag_t;
+
 /* @} */
 
 /* struct ib_cfg_var_t @{ */
 typedef struct ib_cfg_var {
-  const char *name;   /* config var name */
-  ib_cfg_type_t type; /* config var type */
-  ib_cfg_flag_t flag; /* config var flag */
-  uint64_t min_val;   /* minimum allowed value for numeric types,
+  const char *name;                                              /* config var name */
+  ib_cfg_type_t type;                                            /* config var type */
+  ib_cfg_flag_t flag;                                            /* config var flag */
+  uint64_t min_val;                                              /* minimum allowed value for numeric types,
                          ignored for other types */
-  uint64_t max_val;   /* maximum allowed value for numeric types,
+  uint64_t max_val;                                              /* maximum allowed value for numeric types,
                          ignored for other types */
   ib_err_t (*validate)(const struct ib_cfg_var *, const void *); /*
                      function used to validate a new variable's
@@ -70,9 +71,10 @@ typedef struct ib_cfg_var {
                                 used to set the variable's value */
   ib_err_t (*get)(const struct ib_cfg_var *, void *);            /* function
                                 used to get the variable's value */
-  void *tank; /* opaque storage that may be used by the
+  void *tank;                                                    /* opaque storage that may be used by the
               set() and get() functions */
 } ib_cfg_var_t;
+
 /* @} */
 
 /** @file api/api0cfg.c
@@ -80,48 +82,50 @@ Assign src to dst according to type. If this is a string variable (char*)
 the string itself is not copied.
 ib_cfg_assign() @{
 @return	DB_SUCCESS if assigned (type is known) */
-static ib_err_t
-ib_cfg_assign(ib_cfg_type_t type, /*!< in: type of src and dst */
-              void *dst,          /*!< out: destination */
-              const void *src)    /*!< in: source */
+static ib_err_t ib_cfg_assign(
+  ib_cfg_type_t type, /*!< in: type of src and dst */
+  void *dst,          /*!< out: destination */
+  const void *src
+) /*!< in: source */
 {
   switch (type) {
-  case IB_CFG_IBOOL: {
+    case IB_CFG_IBOOL: {
 
-    *(bool *)dst = *(const bool *)src;
-    return (DB_SUCCESS);
-  }
+      *(bool *)dst = *(const bool *)src;
+      return (DB_SUCCESS);
+    }
 
-  case IB_CFG_ULINT: {
+    case IB_CFG_ULINT: {
 
-    *(ulint *)dst = *(const ulint *)src;
-    return (DB_SUCCESS);
-  }
+      *(ulint *)dst = *(const ulint *)src;
+      return (DB_SUCCESS);
+    }
 
-  case IB_CFG_ULONG: {
+    case IB_CFG_ULONG: {
 
-    *(ulong *)dst = *(const ulong *)src;
-    return (DB_SUCCESS);
-  }
+      *(ulong *)dst = *(const ulong *)src;
+      return (DB_SUCCESS);
+    }
 
-  case IB_CFG_TEXT: {
+    case IB_CFG_TEXT: {
 
-    *(char **)dst = *(char **)src;
-    return (DB_SUCCESS);
-  }
+      *(char **)dst = *(char **)src;
+      return (DB_SUCCESS);
+    }
 
-  case IB_CFG_CB: {
+    case IB_CFG_CB: {
 
-    *(ib_cb_t *)dst = *(ib_cb_t *)src;
-    return (DB_SUCCESS);
-  }
-    /* do not add default: in order to produce a compilation
+      *(ib_cb_t *)dst = *(ib_cb_t *)src;
+      return (DB_SUCCESS);
+    }
+      /* do not add default: in order to produce a compilation
     warning if new type is added which is not handled here */
   }
 
   /* NOT REACHED */
   return (DB_ERROR);
 }
+
 /* @} */
 
 /** A generic function used for ib_cfg_var_t::validate() to check a numeric
@@ -129,47 +133,49 @@ type for min/max allowed value overflow.
 ib_cfg_var_validate_numeric() @{
 @return	DB_SUCCESS if value is in range */
 static ib_err_t ib_cfg_var_validate_numeric(
-    const struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+  const struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
                                      check */
-    const void *value)                /*!< in: value to check */
+  const void *value
+) /*!< in: value to check */
 {
   switch (cfg_var->type) {
 
-  case IB_CFG_ULINT: {
-    ulint v;
+    case IB_CFG_ULINT: {
+      ulint v;
 
-    v = *(ulint *)value;
+      v = *(ulint *)value;
 
-    if ((ulint)cfg_var->min_val <= v && v <= (ulint)cfg_var->max_val) {
+      if ((ulint)cfg_var->min_val <= v && v <= (ulint)cfg_var->max_val) {
 
-      return (DB_SUCCESS);
-    } else {
+        return (DB_SUCCESS);
+      } else {
 
-      return (DB_INVALID_INPUT);
+        return (DB_INVALID_INPUT);
+      }
     }
-  }
 
-  case IB_CFG_ULONG: {
-    ulong v;
+    case IB_CFG_ULONG: {
+      ulong v;
 
-    v = *(ulong *)value;
+      v = *(ulong *)value;
 
-    if ((ulong)cfg_var->min_val <= v && v <= (ulong)cfg_var->max_val) {
+      if ((ulong)cfg_var->min_val <= v && v <= (ulong)cfg_var->max_val) {
 
-      return (DB_SUCCESS);
-    } else {
+        return (DB_SUCCESS);
+      } else {
 
-      return (DB_INVALID_INPUT);
+        return (DB_INVALID_INPUT);
+      }
     }
-  }
 
-  default:
-    ut_error;
+    default:
+      ut_error;
   }
 
   /* NOT REACHED */
   return (DB_ERROR);
 }
+
 /* @} */
 
 /* generic and specific ib_cfg_var_(set|get)_* functions @{ */
@@ -181,10 +187,11 @@ is not copied and a reference to "value" is made. It should not be freed
 or modified until InnoDB is running or a new value is set.
 ib_cfg_var_set_generic() @{
 @return	DB_SUCCESS if set successfully */
-static ib_err_t
-ib_cfg_var_set_generic(struct ib_cfg_var *cfg_var, /*!< in/out: configuration
+static ib_err_t ib_cfg_var_set_generic(
+  struct ib_cfg_var *cfg_var, /*!< in/out: configuration
                                                    variable to manipulate */
-                       const void *value)          /*!< in: value to set */
+  const void *value
+) /*!< in: value to set */
 {
   ib_err_t ret;
 
@@ -199,6 +206,7 @@ ib_cfg_var_set_generic(struct ib_cfg_var *cfg_var, /*!< in/out: configuration
 
   return (ret);
 }
+
 /* @} */
 
 /** A generic function used for ib_cfg_var_t::get() that retrieves the value
@@ -209,25 +217,28 @@ storage is written in "value". It should not be freed unless it was
 allocated by the user and set with ib_cfg_set().
 ib_cfg_var_get_generic() @{
 @return	DB_SUCCESS if retrieved successfully */
-static ib_err_t
-ib_cfg_var_get_generic(const struct ib_cfg_var *cfg_var, /*!< in: configuration
+static ib_err_t ib_cfg_var_get_generic(
+  const struct ib_cfg_var *cfg_var, /*!< in: configuration
                                                          variable whose value to
                                                          retrieve */
-                       void *value) /*!< out: place to store
+  void *value
+) /*!< out: place to store
                                     the retrieved value */
 {
   return (ib_cfg_assign(cfg_var->type, value, cfg_var->tank));
 }
+
 /* @} */
 
 /** Set the value of the config variable "data_file_path".
 ib_cfg_var_set_data_file_path() @{
 @return	DB_SUCCESS if set successfully */
 static ib_err_t ib_cfg_var_set_data_file_path(
-    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+  struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
                                 manipulate, must be
                                 "data_file_path" */
-    const void *value)          /*!< in: value to set, must point to
+  const void *value
+) /*!< in: value to set, must point to
                                 char* variable */
 {
   const char *value_str;
@@ -243,17 +254,19 @@ static ib_err_t ib_cfg_var_set_data_file_path(
     return (DB_INVALID_INPUT);
   }
 }
+
 /* @} */
 
 /** Retrieve the value of the config variable "data_file_path".
 ib_cfg_var_get_data_file_path() @{
 @return	DB_SUCCESS if retrieved successfully */
 static ib_err_t ib_cfg_var_get_data_file_path(
-    const struct ib_cfg_var *cfg_var, /*!< in: configuration
+  const struct ib_cfg_var *cfg_var, /*!< in: configuration
                                       variable whose value to
                                       retrieve, must be
                                       "data_file_path" */
-    void *value)                      /*!< out: place to store
+  void *value
+) /*!< out: place to store
                                       the retrieved value, must
                                       point to char* variable */
 {
@@ -264,15 +277,17 @@ static ib_err_t ib_cfg_var_get_data_file_path(
 
   return (DB_SUCCESS);
 }
+
 /* @} */
 
 /** Set the value of the config variable "file_format".
 ib_cfg_var_set_file_format() @{
 @return	DB_SUCCESS if set successfully */
 static ib_err_t ib_cfg_var_set_file_format(
-    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+  struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
                                 manipulate, must be "file_format" */
-    const void *value)          /*!< in: value to set, must point to
+  const void *value
+) /*!< in: value to set, must point to
                                 char* variable */
 {
   ulint format_id;
@@ -290,17 +305,19 @@ static ib_err_t ib_cfg_var_set_file_format(
 
   return (DB_SUCCESS);
 }
+
 /* @} */
 
 /** Retrieve the value of the config variable "file_format".
 ib_cfg_var_get_file_format @{
 @return	DB_SUCCESS if retrieved successfully */
 static ib_err_t ib_cfg_var_get_file_format(
-    const struct ib_cfg_var *cfg_var, /*!< in: configuration
+  const struct ib_cfg_var *cfg_var, /*!< in: configuration
                                       variable whose value to
                                       retrieve, must be
                                       "file_format" */
-    void *value)                      /*!< out: place to store
+  void *value
+) /*!< out: place to store
                                       the retrieved value, must
                                       point to char* variable */
 {
@@ -311,6 +328,7 @@ static ib_err_t ib_cfg_var_get_file_format(
 
   return (DB_SUCCESS);
 }
+
 /* @} */
 
 /** Check the value of the config variable "data_home_dir". We need to ensure
@@ -318,9 +336,10 @@ that the value ends with a path separator.
 ib_cfg_var_validate_data_home_dir() @{
 @return	DB_SUCCESS if value is valid */
 static ib_err_t ib_cfg_var_validate_data_home_dir(
-    const struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+  const struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
                                       check, must be "data_home_dir" */
-    const void *value)                /*!< in: value to check, must point to
+  const void *value
+) /*!< in: value to check, must point to
                                       char* variable */
 {
   ulint len;
@@ -342,16 +361,18 @@ static ib_err_t ib_cfg_var_validate_data_home_dir(
 
   return (DB_SUCCESS);
 }
+
 /* @} */
 
 /** Set the value of the config variable "log_group_home_dir".
 ib_cfg_var_set_log_group_home_dir @{
 @return	DB_SUCCESS if set successfully */
 static ib_err_t ib_cfg_var_set_log_group_home_dir(
-    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+  struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
                                 manipulate, must be
                                 "log_group_home_dir" */
-    const void *value)          /*!< in: value to set, must point to
+  const void *value
+) /*!< in: value to set, must point to
                                 char* variable */
 {
   const char *value_str;
@@ -369,16 +390,18 @@ static ib_err_t ib_cfg_var_set_log_group_home_dir(
     return (DB_INVALID_INPUT);
   }
 }
+
 /* @} */
 
 /** Set the value of the config variable "flush_method".
 ib_cfg_var_set_flush_method@{
 @return	DB_SUCCESS if set successfully */
 static ib_err_t ib_cfg_var_set_flush_method(
-    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+  struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
                                 manipulate, must be
                                 "log_group_home_dir" */
-    const void *value)          /*!< in: value to set, must point to
+  const void *value
+) /*!< in: value to set, must point to
                                 char* variable */
 {
   const char *value_str;
@@ -413,16 +436,18 @@ static ib_err_t ib_cfg_var_set_flush_method(
 
   return (err);
 }
+
 /* @} */
 /** Retrieve the value of the config variable "log_group_home_dir".
 ib_cfg_var_get_log_group_home_dir() @{
 @return	DB_SUCCESS if retrieved successfully */
 static ib_err_t ib_cfg_var_get_log_group_home_dir(
-    const struct ib_cfg_var *cfg_var, /*!< in: configuration
+  const struct ib_cfg_var *cfg_var, /*!< in: configuration
                                       variable whose value to
                                       retrieve, must be
                                       "log_group_home_dir" */
-    void *value)                      /*!< out: place to store
+  void *value
+) /*!< out: place to store
                                       the retrieved value, must
                                       point to char* variable */
 {
@@ -433,16 +458,18 @@ static ib_err_t ib_cfg_var_get_log_group_home_dir(
 
   return (DB_SUCCESS);
 }
+
 /* @} */
 
 /** Set the value of the config variable "lru_old_blocks_pct".
 ib_cfg_var_set_lru_old_blocks_pct() @{
 @return	DB_SUCCESS if set successfully */
 static ib_err_t ib_cfg_var_set_lru_old_blocks_pct(
-    struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
+  struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
                                 manipulate, must be
                                 "lru_old_blocks_pct" */
-    const void *value)          /*!< in: value to set, must point to
+  const void *value
+) /*!< in: value to set, must point to
                                 ulint variable */
 {
   bool adjust_buf_pool;
@@ -468,11 +495,11 @@ static ib_err_t ib_cfg_var_set_lru_old_blocks_pct(
     adjust_buf_pool = false;
   }
 
-  lru_old_blocks_pct =
-      buf_LRU_old_ratio_update(*(ulint *)value, adjust_buf_pool);
+  lru_old_blocks_pct = buf_LRU_old_ratio_update(*(ulint *)value, adjust_buf_pool);
 
   return (DB_SUCCESS);
 }
+
 /* @} */
 
 /* ib_cfg_var_get_generic() is used to get the value of lru_old_blocks_pct */
@@ -482,12 +509,13 @@ static ib_err_t ib_cfg_var_set_lru_old_blocks_pct(
 /** Retrieve the value of the config variable "version".
 ib_cfg_var_get_version() @{
 @return	DB_SUCCESS if retrieved successfully */
-static ib_err_t
-ib_cfg_var_get_version(const struct ib_cfg_var *cfg_var, /*!< in: configuration
+static ib_err_t ib_cfg_var_get_version(
+  const struct ib_cfg_var *cfg_var, /*!< in: configuration
                                                          variable whose value to
                                                          retrieve, must be
                                                          "version" */
-                       void *value) /*!< out: place to store
+  void *value
+) /*!< out: place to store
                                     the retrieved value, must
                                     point to char* variable */
 {
@@ -498,368 +526,375 @@ ib_cfg_var_get_version(const struct ib_cfg_var *cfg_var, /*!< in: configuration
 
   return (DB_SUCCESS);
 }
+
 /* @} */
 
 /* @} */
 
 /* cfg_vars_defaults[] @{ */
 static const ib_cfg_var_t cfg_vars_defaults[] = {
-	{STRUCT_FLD(name,	"adaptive_flushing"),
-	 STRUCT_FLD(type,	IB_CFG_IBOOL),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_adaptive_flushing)},
+  {STRUCT_FLD(name, "adaptive_flushing"),
+   STRUCT_FLD(type, IB_CFG_IBOOL),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_adaptive_flushing)},
 
-	{STRUCT_FLD(name,	"additional_mem_pool_size"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	512 * 1024),
-	 STRUCT_FLD(max_val,	IB_UINT64_T_MAX),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_mem_pool_size)},
+  {STRUCT_FLD(name, "additional_mem_pool_size"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 512 * 1024),
+   STRUCT_FLD(max_val, IB_UINT64_T_MAX),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_mem_pool_size)},
 
-	{STRUCT_FLD(name,	"autoextend_increment"),
-	 STRUCT_FLD(type,	IB_CFG_ULONG),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	1),
-	 STRUCT_FLD(max_val,	1000),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_auto_extend_increment)},
+  {STRUCT_FLD(name, "autoextend_increment"),
+   STRUCT_FLD(type, IB_CFG_ULONG),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 1),
+   STRUCT_FLD(max_val, 1000),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_auto_extend_increment)},
 
-	{STRUCT_FLD(name,	"buffer_pool_size"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	5 * 1024 * 1024),
-	 STRUCT_FLD(max_val,	ULINT_MAX),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_buf_pool_size)},
+  {STRUCT_FLD(name, "buffer_pool_size"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 5 * 1024 * 1024),
+   STRUCT_FLD(max_val, ULINT_MAX),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_buf_pool_size)},
 
-	{STRUCT_FLD(name,	"checksums"),
-	 STRUCT_FLD(type,	IB_CFG_IBOOL),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_use_checksums)},
+  {STRUCT_FLD(name, "checksums"),
+   STRUCT_FLD(type, IB_CFG_IBOOL),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_use_checksums)},
 
-	{STRUCT_FLD(name,	"data_file_path"),
-	 STRUCT_FLD(type,	IB_CFG_TEXT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_data_file_path),
-	 STRUCT_FLD(get,	ib_cfg_var_get_data_file_path),
-	 STRUCT_FLD(tank,	NULL)},
+  {STRUCT_FLD(name, "data_file_path"),
+   STRUCT_FLD(type, IB_CFG_TEXT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_data_file_path),
+   STRUCT_FLD(get, ib_cfg_var_get_data_file_path),
+   STRUCT_FLD(tank, NULL)},
 
-	{STRUCT_FLD(name,	"data_home_dir"),
-	 STRUCT_FLD(type,	IB_CFG_TEXT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_data_home_dir),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_data_home)},
+  {STRUCT_FLD(name, "data_home_dir"),
+   STRUCT_FLD(type, IB_CFG_TEXT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, ib_cfg_var_validate_data_home_dir),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_data_home)},
 
-	{STRUCT_FLD(name,	"doublewrite"),
-	 STRUCT_FLD(type,	IB_CFG_IBOOL),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_use_doublewrite_buf)},
+  {STRUCT_FLD(name, "doublewrite"),
+   STRUCT_FLD(type, IB_CFG_IBOOL),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_use_doublewrite_buf)},
 
-	{STRUCT_FLD(name,	"file_format"),
-	 STRUCT_FLD(type,	IB_CFG_TEXT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL /* validation is done inside
-				     ib_cfg_var_set_file_format */),
-	 STRUCT_FLD(set,	ib_cfg_var_set_file_format),
-	 STRUCT_FLD(get,	ib_cfg_var_get_file_format),
-	 STRUCT_FLD(tank,	NULL)},
+  {STRUCT_FLD(name, "file_format"),
+   STRUCT_FLD(type, IB_CFG_TEXT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(
+     validate, NULL /* validation is done inside
+				     ib_cfg_var_set_file_format */
+   ),
+   STRUCT_FLD(set, ib_cfg_var_set_file_format),
+   STRUCT_FLD(get, ib_cfg_var_get_file_format),
+   STRUCT_FLD(tank, NULL)},
 
-	{STRUCT_FLD(name,	"file_io_threads"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	NULL /* The ::set() function should never
+  {STRUCT_FLD(name, "file_io_threads"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(
+     set, NULL /* The ::set() function should never
 				     be called because this variable is
-				     flagged as IB_CFG_FLAG_READONLY */),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_n_file_io_threads)},
-	{STRUCT_FLD(name,	"file_per_table"),
-	 STRUCT_FLD(type,	IB_CFG_IBOOL),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_file_per_table)},
+				     flagged as IB_CFG_FLAG_READONLY */
+   ),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_n_file_io_threads)},
+  {STRUCT_FLD(name, "file_per_table"),
+   STRUCT_FLD(type, IB_CFG_IBOOL),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_file_per_table)},
 
-	{STRUCT_FLD(name,	"flush_log_at_trx_commit"),
-	 STRUCT_FLD(type,	IB_CFG_ULONG),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	2),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_flush_log_at_trx_commit)},
+  {STRUCT_FLD(name, "flush_log_at_trx_commit"),
+   STRUCT_FLD(type, IB_CFG_ULONG),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 2),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_flush_log_at_trx_commit)},
 
-	{STRUCT_FLD(name,	"flush_method"),
-	 STRUCT_FLD(type,	IB_CFG_TEXT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_flush_method),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_file_flush_method_str)},
+  {STRUCT_FLD(name, "flush_method"),
+   STRUCT_FLD(type, IB_CFG_TEXT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_flush_method),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_file_flush_method_str)},
 
-	{STRUCT_FLD(name,	"force_recovery"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	IB_RECOVERY_DEFAULT),
-	 STRUCT_FLD(max_val,	IB_RECOVERY_NO_LOG_REDO),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_force_recovery)},
+  {STRUCT_FLD(name, "force_recovery"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, IB_RECOVERY_DEFAULT),
+   STRUCT_FLD(max_val, IB_RECOVERY_NO_LOG_REDO),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_force_recovery)},
 
-	{STRUCT_FLD(name,	"io_capacity"),
-	 STRUCT_FLD(type,	IB_CFG_ULONG),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	100),
-	 STRUCT_FLD(max_val,	1000000),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_io_capacity)},
+  {STRUCT_FLD(name, "io_capacity"),
+   STRUCT_FLD(type, IB_CFG_ULONG),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 100),
+   STRUCT_FLD(max_val, 1000000),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_io_capacity)},
 
-	{STRUCT_FLD(name,	"lock_wait_timeout"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	1),
-	 STRUCT_FLD(max_val,	1024 * 1024 * 1024),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&ses_lock_wait_timeout)},
+  {STRUCT_FLD(name, "lock_wait_timeout"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 1),
+   STRUCT_FLD(max_val, 1024 * 1024 * 1024),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &ses_lock_wait_timeout)},
 
-	{STRUCT_FLD(name,	"log_buffer_size"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	256 * 1024),
-	 STRUCT_FLD(max_val,	IB_UINT64_T_MAX),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_log_buffer_curr_size)},
+  {STRUCT_FLD(name, "log_buffer_size"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 256 * 1024),
+   STRUCT_FLD(max_val, IB_UINT64_T_MAX),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_log_buffer_curr_size)},
 
-	{STRUCT_FLD(name,	"log_file_size"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	1024 * 1024),
-	 STRUCT_FLD(max_val,	ULINT_MAX),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_log_file_curr_size)},
+  {STRUCT_FLD(name, "log_file_size"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 1024 * 1024),
+   STRUCT_FLD(max_val, ULINT_MAX),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_log_file_curr_size)},
 
-	{STRUCT_FLD(name,	"log_files_in_group"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	2),
-	 STRUCT_FLD(max_val,	100),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_n_log_files)},
+  {STRUCT_FLD(name, "log_files_in_group"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 2),
+   STRUCT_FLD(max_val, 100),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_n_log_files)},
 
-	{STRUCT_FLD(name,	"log_group_home_dir"),
-	 STRUCT_FLD(type,	IB_CFG_TEXT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_log_group_home_dir),
-	 STRUCT_FLD(get,	ib_cfg_var_get_log_group_home_dir),
-	 STRUCT_FLD(tank,	NULL)},
+  {STRUCT_FLD(name, "log_group_home_dir"),
+   STRUCT_FLD(type, IB_CFG_TEXT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_log_group_home_dir),
+   STRUCT_FLD(get, ib_cfg_var_get_log_group_home_dir),
+   STRUCT_FLD(tank, NULL)},
 
-	{STRUCT_FLD(name,	"max_dirty_pages_pct"),
-	 STRUCT_FLD(type,	IB_CFG_ULONG),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	100),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_max_buf_pool_modified_pct)},
+  {STRUCT_FLD(name, "max_dirty_pages_pct"),
+   STRUCT_FLD(type, IB_CFG_ULONG),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 100),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_max_buf_pool_modified_pct)},
 
-	{STRUCT_FLD(name,	"max_purge_lag"),
-	 STRUCT_FLD(type,	IB_CFG_ULONG),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	IB_UINT64_T_MAX),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_max_purge_lag)},
+  {STRUCT_FLD(name, "max_purge_lag"),
+   STRUCT_FLD(type, IB_CFG_ULONG),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, IB_UINT64_T_MAX),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_max_purge_lag)},
 
-	{STRUCT_FLD(name,	"lru_old_blocks_pct"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	5),
-	 STRUCT_FLD(max_val,	95),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_lru_old_blocks_pct),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&lru_old_blocks_pct)},
+  {STRUCT_FLD(name, "lru_old_blocks_pct"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 5),
+   STRUCT_FLD(max_val, 95),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_lru_old_blocks_pct),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &lru_old_blocks_pct)},
 
-	{STRUCT_FLD(name,	"lru_block_access_recency"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0xFFFFFFFFUL),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&buf_LRU_old_threshold_ms)},
+  {STRUCT_FLD(name, "lru_block_access_recency"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0xFFFFFFFFUL),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &buf_LRU_old_threshold_ms)},
 
-	{STRUCT_FLD(name,	"open_files"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	10),
-	 STRUCT_FLD(max_val,	IB_UINT64_T_MAX),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_max_n_open_files)},
+  {STRUCT_FLD(name, "open_files"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 10),
+   STRUCT_FLD(max_val, IB_UINT64_T_MAX),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_max_n_open_files)},
 
-	{STRUCT_FLD(name,	"read_io_threads"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	1),
-	 STRUCT_FLD(max_val,	64),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_n_read_io_threads)},
+  {STRUCT_FLD(name, "read_io_threads"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 1),
+   STRUCT_FLD(max_val, 64),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_n_read_io_threads)},
 
-	{STRUCT_FLD(name,	"write_io_threads"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY_AFTER_STARTUP),
-	 STRUCT_FLD(min_val,	1),
-	 STRUCT_FLD(max_val,	64),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_n_write_io_threads)},
+  {STRUCT_FLD(name, "write_io_threads"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
+   STRUCT_FLD(min_val, 1),
+   STRUCT_FLD(max_val, 64),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_n_write_io_threads)},
 
-	/* New, not present in InnoDB/MySQL */
-	{STRUCT_FLD(name,	"pre_rollback_hook"),
-	 STRUCT_FLD(type,	IB_CFG_CB),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&recv_pre_rollback_hook)},
+  /* New, not present in InnoDB/MySQL */
+  {STRUCT_FLD(name, "pre_rollback_hook"),
+   STRUCT_FLD(type, IB_CFG_CB),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &recv_pre_rollback_hook)},
 
-	/* New, not present in InnoDB/MySQL */
-	{STRUCT_FLD(name,	"print_verbose_log"),
-	 STRUCT_FLD(type,	IB_CFG_IBOOL),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_print_verbose_log)},
+  /* New, not present in InnoDB/MySQL */
+  {STRUCT_FLD(name, "print_verbose_log"),
+   STRUCT_FLD(type, IB_CFG_IBOOL),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_print_verbose_log)},
 
-	/* New, not present in InnoDB/MySQL */
-	{STRUCT_FLD(name,	"rollback_on_timeout"),
-	 STRUCT_FLD(type,	IB_CFG_IBOOL),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&ses_rollback_on_timeout)},
+  /* New, not present in InnoDB/MySQL */
+  {STRUCT_FLD(name, "rollback_on_timeout"),
+   STRUCT_FLD(type, IB_CFG_IBOOL),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &ses_rollback_on_timeout)},
 
-	{STRUCT_FLD(name,	"stats_sample_pages"),
-	 STRUCT_FLD(type,	IB_CFG_ULINT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	1),
-	 STRUCT_FLD(max_val,	ULINT_MAX),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_stats_sample_pages)},
+  {STRUCT_FLD(name, "stats_sample_pages"),
+   STRUCT_FLD(type, IB_CFG_ULINT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 1),
+   STRUCT_FLD(max_val, ULINT_MAX),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_stats_sample_pages)},
 
-	{STRUCT_FLD(name,	"status_file"),
-	 STRUCT_FLD(type,	IB_CFG_IBOOL),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_innodb_status)},
+  {STRUCT_FLD(name, "status_file"),
+   STRUCT_FLD(type, IB_CFG_IBOOL),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_innodb_status)},
 
-	{STRUCT_FLD(name,	"sync_spin_loops"),
-	 STRUCT_FLD(type,	IB_CFG_ULONG),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	IB_UINT64_T_MAX),
-	 STRUCT_FLD(validate,	ib_cfg_var_validate_numeric),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_n_spin_wait_rounds)},
+  {STRUCT_FLD(name, "sync_spin_loops"),
+   STRUCT_FLD(type, IB_CFG_ULONG),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, IB_UINT64_T_MAX),
+   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_n_spin_wait_rounds)},
 
-	{STRUCT_FLD(name,	"use_sys_malloc"),
-	 STRUCT_FLD(type,	IB_CFG_IBOOL),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_NONE),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	ib_cfg_var_set_generic),
-	 STRUCT_FLD(get,	ib_cfg_var_get_generic),
-	 STRUCT_FLD(tank,	&srv_use_sys_malloc)},
+  {STRUCT_FLD(name, "use_sys_malloc"),
+   STRUCT_FLD(type, IB_CFG_IBOOL),
+   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(set, ib_cfg_var_set_generic),
+   STRUCT_FLD(get, ib_cfg_var_get_generic),
+   STRUCT_FLD(tank, &srv_use_sys_malloc)},
 
-	{STRUCT_FLD(name,	"version"),
-	 STRUCT_FLD(type,	IB_CFG_TEXT),
-	 STRUCT_FLD(flag,	IB_CFG_FLAG_READONLY),
-	 STRUCT_FLD(min_val,	0),
-	 STRUCT_FLD(max_val,	0),
-	 STRUCT_FLD(validate,	NULL),
-	 STRUCT_FLD(set,	NULL /* The ::set() function should never
+  {STRUCT_FLD(name, "version"),
+   STRUCT_FLD(type, IB_CFG_TEXT),
+   STRUCT_FLD(flag, IB_CFG_FLAG_READONLY),
+   STRUCT_FLD(min_val, 0),
+   STRUCT_FLD(max_val, 0),
+   STRUCT_FLD(validate, NULL),
+   STRUCT_FLD(
+     set, NULL /* The ::set() function should never
 				     be called because this variable is
-				     flagged as IB_CFG_FLAG_READONLY */),
-	 STRUCT_FLD(get,	ib_cfg_var_get_version),
-	 STRUCT_FLD(tank,	NULL)},
+				     flagged as IB_CFG_FLAG_READONLY */
+   ),
+   STRUCT_FLD(get, ib_cfg_var_get_version),
+   STRUCT_FLD(tank, NULL)},
 };
 /* @} */
 
@@ -873,8 +908,7 @@ static ib_cfg_var_t cfg_vars[std::size(cfg_vars_defaults)];
 /** Lookup a variable name.
 ib_cfg_lookup_var() @{
 @return	config variable instance if found else NULL */
-static ib_cfg_var_t *
-ib_cfg_lookup_var(const char *var) /*!< in: variable name */
+static ib_cfg_var_t *ib_cfg_lookup_var(const char *var) /*!< in: variable name */
 {
   ulint i;
 
@@ -890,6 +924,7 @@ ib_cfg_lookup_var(const char *var) /*!< in: variable name */
 
   return (NULL);
 }
+
 /* @} */
 
 /** Get the type of a configuration variable. Returns DB_SUCCESS if the
@@ -897,8 +932,10 @@ variable with name "name" was found and "type" was set.
 ib_cfg_var_get_type() @{
 @return	DB_SUCCESS if successful */
 
-ib_err_t ib_cfg_var_get_type(const char *name,    /*!< in: variable name */
-                             ib_cfg_type_t *type) /*!< out: variable type */
+ib_err_t ib_cfg_var_get_type(
+  const char *name, /*!< in: variable name */
+  ib_cfg_type_t *type
+) /*!< out: variable type */
 {
   ib_cfg_var_t *cfg_var;
   ib_err_t ret;
@@ -918,6 +955,7 @@ ib_err_t ib_cfg_var_get_type(const char *name,    /*!< in: variable name */
 
   return (ret);
 }
+
 /* @} */
 
 /** Set a configuration variable. "ap" must contain one argument whose type
@@ -926,8 +964,10 @@ DB_SUCCESS if the variable with name "name" was found and if its value
 was set.
 ib_cfg_set_ap() @{
 @return	DB_SUCCESS if set */
-static ib_err_t ib_cfg_set_ap(const char *name, /*!< in: variable name */
-                              va_list ap)       /*!< in: variable value */
+static ib_err_t ib_cfg_set_ap(
+  const char *name, /*!< in: variable name */
+  va_list ap
+) /*!< in: variable value */
 {
   ib_cfg_var_t *cfg_var;
   ib_err_t ret = DB_NOT_FOUND;
@@ -940,9 +980,7 @@ static ib_err_t ib_cfg_set_ap(const char *name, /*!< in: variable name */
 
     /* check whether setting the variable is appropriate,
     according to its flag */
-    if (cfg_var->flag & IB_CFG_FLAG_READONLY ||
-        (cfg_var->flag & IB_CFG_FLAG_READONLY_AFTER_STARTUP &&
-         srv_was_started)) {
+    if (cfg_var->flag & IB_CFG_FLAG_READONLY || (cfg_var->flag & IB_CFG_FLAG_READONLY_AFTER_STARTUP && srv_was_started)) {
 
       ret = DB_READONLY;
     } else {
@@ -950,57 +988,57 @@ static ib_err_t ib_cfg_set_ap(const char *name, /*!< in: variable name */
       /* Get the parameter according to its type and
       call ::set() */
       switch (cfg_var->type) {
-      case IB_CFG_IBOOL: {
-        bool value;
+        case IB_CFG_IBOOL: {
+          bool value;
 
-        /* Should be passing bool here, but va_arg only accepts int. */
-        value = va_arg(ap, int);
+          /* Should be passing bool here, but va_arg only accepts int. */
+          value = va_arg(ap, int);
 
-        ret = cfg_var->set(cfg_var, &value);
+          ret = cfg_var->set(cfg_var, &value);
 
-        break;
-      }
+          break;
+        }
 
-      case IB_CFG_ULINT: {
-        ulint value;
+        case IB_CFG_ULINT: {
+          ulint value;
 
-        value = va_arg(ap, ulint);
+          value = va_arg(ap, ulint);
 
-        ret = cfg_var->set(cfg_var, &value);
+          ret = cfg_var->set(cfg_var, &value);
 
-        break;
-      }
+          break;
+        }
 
-      case IB_CFG_ULONG: {
-        ulong value;
+        case IB_CFG_ULONG: {
+          ulong value;
 
-        value = va_arg(ap, ulong);
+          value = va_arg(ap, ulong);
 
-        ret = cfg_var->set(cfg_var, &value);
+          ret = cfg_var->set(cfg_var, &value);
 
-        break;
-      }
+          break;
+        }
 
-      case IB_CFG_TEXT: {
-        const char *value;
+        case IB_CFG_TEXT: {
+          const char *value;
 
-        value = va_arg(ap, const char *);
+          value = va_arg(ap, const char *);
 
-        ret = cfg_var->set(cfg_var, &value);
+          ret = cfg_var->set(cfg_var, &value);
 
-        break;
-      }
+          break;
+        }
 
-      case IB_CFG_CB: {
-        ib_cb_t value;
+        case IB_CFG_CB: {
+          ib_cb_t value;
 
-        value = va_arg(ap, ib_cb_t);
+          value = va_arg(ap, ib_cb_t);
 
-        ret = cfg_var->set(cfg_var, &value);
+          ret = cfg_var->set(cfg_var, &value);
 
-        break;
-      }
-        /* do not add default: in order to produce a
+          break;
+        }
+          /* do not add default: in order to produce a
         compilation warning if new type is added which is
         not handled here */
       }
@@ -1011,6 +1049,7 @@ static ib_err_t ib_cfg_set_ap(const char *name, /*!< in: variable name */
 
   return (ret);
 }
+
 /* @} */
 
 /** Set a configuration variable. The second argument's type depends on the
@@ -1024,8 +1063,10 @@ config variable, then you are responsible to free the first string.
 ib_cfg_set() @{
 @return	DB_SUCCESS if set */
 
-ib_err_t ib_cfg_set(const char *name, /*!< in: variable name */
-                    ...)              /*!< in: variable value */
+ib_err_t ib_cfg_set(
+  const char *name, /*!< in: variable name */
+  ...
+) /*!< in: variable value */
 {
   va_list ap;
 
@@ -1037,6 +1078,7 @@ ib_err_t ib_cfg_set(const char *name, /*!< in: variable name */
 
   return ret;
 }
+
 /* @} */
 
 /** Get the value of a configuration variable. The type of the returned value
@@ -1048,8 +1090,10 @@ a crash.
 ib_cfg_get() @{
 @return	DB_SUCCESS if retrieved successfully */
 
-ib_err_t ib_cfg_get(const char *name, /*!< in: variable name */
-                    void *value)      /*!< out: pointer to the place to
+ib_err_t ib_cfg_get(
+  const char *name, /*!< in: variable name */
+  void *value
+) /*!< out: pointer to the place to
                                       store the retrieved value */
 {
   ib_cfg_var_t *cfg_var;
@@ -1069,6 +1113,7 @@ ib_err_t ib_cfg_get(const char *name, /*!< in: variable name */
 
   return (ret);
 }
+
 /* @} */
 
 /** Get a list of the names of all configuration variables.
@@ -1077,9 +1122,10 @@ when it is not needed anymore and for not modifying the individual strings.
 ib_cfg_get_all() @{
 @return	DB_SUCCESS or error code */
 
-ib_err_t
-ib_cfg_get_all(const char ***names, /*!< out: pointer to array of strings */
-               ib_u32_t *names_num) /*!< out: number of strings returned */
+ib_err_t ib_cfg_get_all(
+  const char ***names, /*!< out: pointer to array of strings */
+  ib_u32_t *names_num
+) /*!< out: number of strings returned */
 {
   ib_u32_t i;
 
@@ -1096,6 +1142,7 @@ ib_cfg_get_all(const char ***names, /*!< out: pointer to array of strings */
 
   return (DB_SUCCESS);
 }
+
 /* @} */
 
 /** Initialize the config system.
@@ -1115,8 +1162,8 @@ ib_err_t ib_cfg_init(void) {
   os_aio_print_debug = false;
   os_aio_use_native_aio = false;
 
-#define IB_CFG_SET(name, var)                                                  \
-  if (ib_cfg_set(name, var) != DB_SUCCESS)                                     \
+#define IB_CFG_SET(name, var)              \
+  if (ib_cfg_set(name, var) != DB_SUCCESS) \
   ut_error
 
   IB_CFG_SET("additional_mem_pool_size", 4 * 1024 * 1024);
@@ -1139,6 +1186,7 @@ ib_err_t ib_cfg_init(void) {
 
   return (DB_SUCCESS);
 }
+
 /* @} */
 
 /** Shutdown the config system.
@@ -1157,6 +1205,7 @@ ib_err_t ib_cfg_shutdown(void) {
 
   return (DB_SUCCESS);
 }
+
 /* @} */
 
 /* @} */

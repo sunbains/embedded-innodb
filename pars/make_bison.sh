@@ -19,13 +19,14 @@
 set - eu OUTFILE = pars0grm TMPFILE =
     ${OUTFILE}.tab
 
-        bison -
-    d ${OUTFILE}.y mv ${OUTFILE}.tab.h../ include /
-        ${OUTFILE}.h
+            bison -
+        d ${OUTFILE}.y mv ${OUTFILE}.tab.h../ include /
+            ${OUTFILE}.h
 
-            sed -
-    e ' s / ' "$TMPFILE" ' / ' "$OUTFILE"' / ; s /
-        ^\(\(YYSTYPE\| int\) yy\(char\| nerrs\)\) / static \1 /
+                sed -
+        e ' s / ' "$TMPFILE" ' / ' "$OUTFILE"' / ; s / ^\(\(YYSTYPE\| int\) yy\(
+                                                            char\| nerrs\)\) /
+                                                            static \1 /
     ;
 ' < "${TMPFILE}.c" > "${OUTFILE}.cc"
 

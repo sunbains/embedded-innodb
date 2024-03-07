@@ -25,11 +25,11 @@ Created 1/20/1998 Heikki Tuuri
 
 #include "innodb0types.h"
 
+#include "eval0eval.h"
 #include "pars0pars.h"
 #include "pars0sym.h"
-#include "que0types.h"
-#include "eval0eval.h"
 #include "que0que.h"
+#include "que0types.h"
 
 /** Performs an execution step of an if-statement node.
 @param[in,out] thr              Query thread.

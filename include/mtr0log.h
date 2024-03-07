@@ -267,8 +267,7 @@ inline void mlog_catenate_ulint_compressed(mtr_t *mtr, ulint val) {
  * @param mtr Mtr.
  * @param val Value to write.
  */
-inline void mlog_catenate_uint64_compressed(mtr_t *mtr, uint64_t val)
-{
+inline void mlog_catenate_uint64_compressed(mtr_t *mtr, uint64_t val) {
   auto log_ptr = mlog_open(mtr, 15);
 
   /**
@@ -294,12 +293,8 @@ inline void mlog_catenate_uint64_compressed(mtr_t *mtr, uint64_t val)
  * @return New value of log_ptr.
  */
 inline byte *mlog_write_initial_log_record_for_file_op(
-    ulint type,
-    space_id_t space_id,
-    page_no_t page_no,
-    byte *log_ptr,
-    mtr_t *mtr)
-{
+  ulint type, space_id_t space_id, page_no_t page_no, byte *log_ptr, mtr_t *mtr
+) {
   mach_write_to_1(log_ptr, type);
 
   ++log_ptr;

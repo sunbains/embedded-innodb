@@ -56,7 +56,7 @@ struct sess_struct {
 
 /* Session states */
 #define SESS_ACTIVE 1
-#define SESS_ERROR                                                             \
+#define SESS_ERROR \
   2 /* session contains an error message                                       \
     which has not yet been communicated                                        \
     to the client */

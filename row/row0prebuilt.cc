@@ -36,8 +36,7 @@ Created 02/03/2009 Sunny Bains
 /** Create a prebuilt struct for a user table handle.
 @return	own: a prebuilt struct */
 
-row_prebuilt_t *
-row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table handle */
+row_prebuilt_t *row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table handle */
 {
   ulint sz;
   dtuple_t *ref;
@@ -46,8 +45,7 @@ row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table handle */
   dict_index_t *clust_index;
 
   auto heap = mem_heap_create(128);
-  auto prebuilt = reinterpret_cast<row_prebuilt_t *>(
-      mem_heap_zalloc(heap, sizeof(row_prebuilt_t)));
+  auto prebuilt = reinterpret_cast<row_prebuilt_t *>(mem_heap_zalloc(heap, sizeof(row_prebuilt_t)));
 
   prebuilt->magic_n = ROW_PREBUILT_ALLOCATED;
   prebuilt->magic_n2 = ROW_PREBUILT_ALLOCATED;
@@ -63,8 +61,7 @@ row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table handle */
 
   prebuilt->select_lock_type = LOCK_NONE;
 
-  prebuilt->search_tuple =
-      dtuple_create(heap, 2 * dict_table_get_n_cols(table));
+  prebuilt->search_tuple = dtuple_create(heap, 2 * dict_table_get_n_cols(table));
 
   clust_index = dict_table_get_first_index(table);
 
@@ -88,8 +85,7 @@ row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table handle */
 
   row_cache->heap = mem_heap_create(sz);
 
-  row_cache->ptr =
-      reinterpret_cast<ib_cached_row_t *>(mem_heap_zalloc(row_cache->heap, sz));
+  row_cache->ptr = reinterpret_cast<ib_cached_row_t *>(mem_heap_zalloc(row_cache->heap, sz));
 
   return (prebuilt);
 }
@@ -97,19 +93,22 @@ row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table handle */
 /** Free a prebuilt struct for a user table handle. */
 
 void row_prebuilt_free(
-    row_prebuilt_t *prebuilt, /*!< in, own: prebuilt struct */
-    bool dict_locked)         /*!< in: true if dict was locked */
+  row_prebuilt_t *prebuilt, /*!< in, own: prebuilt struct */
+  bool dict_locked
+) /*!< in: true if dict was locked */
 {
   ulint i;
   ib_row_cache_t *row_cache;
 
-  if (prebuilt->magic_n != ROW_PREBUILT_ALLOCATED ||
-      prebuilt->magic_n2 != ROW_PREBUILT_ALLOCATED) {
-    ib_logger(ib_stream,
-              "Error: trying to free a corrupt\n"
-              "table handle. Magic n %lu,"
-              " magic n2 %lu, table name",
-              (ulong)prebuilt->magic_n, (ulong)prebuilt->magic_n2);
+  if (prebuilt->magic_n != ROW_PREBUILT_ALLOCATED || prebuilt->magic_n2 != ROW_PREBUILT_ALLOCATED) {
+    ib_logger(
+      ib_stream,
+      "Error: trying to free a corrupt\n"
+      "table handle. Magic n %lu,"
+      " magic n2 %lu, table name",
+      (ulong)prebuilt->magic_n,
+      (ulong)prebuilt->magic_n2
+    );
     ut_print_name(ib_stream, NULL, true, prebuilt->table->name);
     ib_logger(ib_stream, "\n");
 
@@ -151,8 +150,7 @@ void row_prebuilt_free(
 
 /** Reset a prebuilt struct for a user table handle. */
 
-void row_prebuilt_reset(
-    row_prebuilt_t *prebuilt) /*!< in/out: prebuilt struct */
+void row_prebuilt_reset(row_prebuilt_t *prebuilt) /*!< in/out: prebuilt struct */
 {
   ut_a(prebuilt->magic_n == ROW_PREBUILT_ALLOCATED);
   ut_a(prebuilt->magic_n2 == ROW_PREBUILT_ALLOCATED);
@@ -182,23 +180,28 @@ void row_prebuilt_reset(
 struct. */
 
 void row_prebuilt_update_trx(
-    row_prebuilt_t *prebuilt, /*!< in/out: prebuilt struct handle */
-    trx_t *trx)               /*!< in: transaction handle */
+  row_prebuilt_t *prebuilt, /*!< in/out: prebuilt struct handle */
+  trx_t *trx
+) /*!< in: transaction handle */
 {
   ut_a(trx != NULL);
 
   if (trx->magic_n != TRX_MAGIC_N) {
-    ib_logger(ib_stream,
-              "Error: trying to use a corrupt\n"
-              "trx handle. Magic n %lu\n",
-              (ulong)trx->magic_n);
+    ib_logger(
+      ib_stream,
+      "Error: trying to use a corrupt\n"
+      "trx handle. Magic n %lu\n",
+      (ulong)trx->magic_n
+    );
 
     ut_error;
   } else if (prebuilt->magic_n != ROW_PREBUILT_ALLOCATED) {
-    ib_logger(ib_stream,
-              "Error: trying to use a corrupt\n"
-              "table handle. Magic n %lu, table name",
-              (ulong)prebuilt->magic_n);
+    ib_logger(
+      ib_stream,
+      "Error: trying to use a corrupt\n"
+      "table handle. Magic n %lu, table name",
+      (ulong)prebuilt->magic_n
+    );
     ut_print_name(ib_stream, NULL, true, prebuilt->table->name);
     ib_logger(ib_stream, "\n");
 
@@ -210,7 +213,6 @@ void row_prebuilt_update_trx(
       prebuilt->sel_graph->trx = trx;
     }
 
-    prebuilt->index_usable =
-        row_merge_is_index_usable(prebuilt->trx, prebuilt->index);
+    prebuilt->index_usable = row_merge_is_index_usable(prebuilt->trx, prebuilt->index);
   }
 }

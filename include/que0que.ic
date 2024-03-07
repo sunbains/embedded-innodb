@@ -41,15 +41,13 @@ inline bool thr_is_recv(const que_thr_t *thr) /*!< in: query thread */
 }
 
 /** Gets the first thr in a fork. */
-inline que_thr_t *
-que_fork_get_first_thr(que_fork_t *query_fork) /*!< in: query fork */
+inline que_thr_t *que_fork_get_first_thr(que_fork_t *query_fork) /*!< in: query fork */
 {
   return (UT_LIST_GET_FIRST(query_fork->thrs));
 }
 
 /** Gets the child node of the first thr in a fork. */
-inline que_node_t *
-que_fork_get_child(que_fork_t *query_fork) /*!< in: query fork */
+inline que_node_t *que_fork_get_child(que_fork_t *query_fork) /*!< in: query fork */
 {
   que_thr_t *thr;
 
@@ -84,8 +82,10 @@ inline ulint que_node_get_val_buf_size(que_node_t *node) /*!< in: graph node */
 }
 
 /** Sets the value buffer size of a graph node. */
-inline void que_node_set_val_buf_size(que_node_t *node, /*!< in: graph node */
-                                      ulint size)       /*!< in: size */
+inline void que_node_set_val_buf_size(
+  que_node_t *node, /*!< in: graph node */
+  ulint size
+) /*!< in: size */
 {
   ut_ad(node);
 
@@ -93,8 +93,10 @@ inline void que_node_set_val_buf_size(que_node_t *node, /*!< in: graph node */
 }
 
 /** Sets the parent of a graph node. */
-inline void que_node_set_parent(que_node_t *node,   /*!< in: graph node */
-                                que_node_t *parent) /*!< in: parent */
+inline void que_node_set_parent(
+  que_node_t *node, /*!< in: graph node */
+  que_node_t *parent
+) /*!< in: parent */
 {
   ut_ad(node);
 
@@ -111,9 +113,10 @@ inline dtype_t *que_node_get_data_type(que_node_t *node) /*!< in: graph node */
 
 /** Catenates a query graph node to a list of them, possible empty list.
 @return	one-way list of nodes */
-inline que_node_t *
-que_node_list_add_last(que_node_t *node_list, /*!< in: node list, or NULL */
-                       que_node_t *node)      /*!< in: node */
+inline que_node_t *que_node_list_add_last(
+  que_node_t *node_list, /*!< in: node list, or NULL */
+  que_node_t *node
+) /*!< in: node */
 {
   que_common_t *cnode;
   que_common_t *cnode2;
@@ -140,16 +143,14 @@ que_node_list_add_last(que_node_t *node_list, /*!< in: node list, or NULL */
 
 /** Gets the next list node in a list of query graph nodes.
 @return	next node in a list of nodes */
-inline que_node_t *
-que_node_get_next(que_node_t *node) /*!< in: node in a list */
+inline que_node_t *que_node_get_next(que_node_t *node) /*!< in: node in a list */
 {
   return (((que_common_t *)node)->brother);
 }
 
 /** Gets a query graph node list length.
 @return	length, for NULL list 0 */
-inline ulint
-que_node_list_get_len(que_node_t *node_list) /*!< in: node list, or NULL */
+inline ulint que_node_list_get_len(que_node_t *node_list) /*!< in: node list, or NULL */
 {
   const que_common_t *cnode;
   ulint len;
@@ -185,9 +186,7 @@ inline bool que_thr_peek_stop(que_thr_t *thr) /*!< in: query thread */
   graph = thr->graph;
   trx = graph->trx;
 
-  if (graph->state != QUE_FORK_ACTIVE || trx->que_state == TRX_QUE_LOCK_WAIT ||
-      (UT_LIST_GET_LEN(trx->signals) > 0 &&
-       trx->que_state == TRX_QUE_RUNNING)) {
+  if (graph->state != QUE_FORK_ACTIVE || trx->que_state == TRX_QUE_LOCK_WAIT || (UT_LIST_GET_LEN(trx->signals) > 0 && trx->que_state == TRX_QUE_RUNNING)) {
 
     return (true);
   }
@@ -199,8 +198,7 @@ inline bool que_thr_peek_stop(que_thr_t *thr) /*!< in: query thread */
 @return	true if a select */
 inline bool que_graph_is_select(que_t *graph) /*!< in: graph */
 {
-  if (graph->fork_type == QUE_FORK_SELECT_SCROLL ||
-      graph->fork_type == QUE_FORK_SELECT_NON_SCROLL) {
+  if (graph->fork_type == QUE_FORK_SELECT_SCROLL || graph->fork_type == QUE_FORK_SELECT_NON_SCROLL) {
 
     return (true);
   }

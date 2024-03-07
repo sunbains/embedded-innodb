@@ -31,12 +31,12 @@ typedef byte trx_sysf_rseg_t;
 
 /* Rollback segment specification slot offsets */
 /*-------------------------------------------------------------*/
-#define TRX_SYS_RSEG_SPACE                                                     \
+#define TRX_SYS_RSEG_SPACE \
   0 /* space where the segment                                                 \
     header is placed; starting with                                            \
     InnoDB 5.1.7, this is                                                      \
     ULINT_UNDEFINED for unused slots */
-#define TRX_SYS_RSEG_PAGE_NO                                                   \
+#define TRX_SYS_RSEG_PAGE_NO \
   4 /*  page number where the segment                                          \
     header is placed; this is FIL_NULL                                         \
     if the slot is unused */
@@ -50,8 +50,10 @@ void trx_sys_flush_max_trx_id(void);
 
 /** Checks if a page address is the trx sys header page.
 @return	true if trx sys header page */
-inline bool trx_sys_hdr_page(ulint space,   /*!< in: space */
-                             ulint page_no) /*!< in: page number */
+inline bool trx_sys_hdr_page(
+  ulint space, /*!< in: space */
+  ulint page_no
+) /*!< in: page number */
 {
   if ((space == TRX_SYS_SPACE) && (page_no == TRX_SYS_PAGE_NO)) {
 
@@ -63,8 +65,10 @@ inline bool trx_sys_hdr_page(ulint space,   /*!< in: space */
 
 /** Gets the pointer in the nth slot of the rseg array.
 @return	pointer to rseg object, NULL if slot not in use */
-inline trx_rseg_t *trx_sys_get_nth_rseg(trx_sys_t *sys, /*!< in: trx system */
-                                        ulint n) /*!< in: index of slot */
+inline trx_rseg_t *trx_sys_get_nth_rseg(
+  trx_sys_t *sys, /*!< in: trx system */
+  ulint n
+) /*!< in: index of slot */
 {
   ut_ad(mutex_own(&(kernel_mutex)));
   ut_ad(n < TRX_SYS_N_RSEGS);
@@ -73,10 +77,11 @@ inline trx_rseg_t *trx_sys_get_nth_rseg(trx_sys_t *sys, /*!< in: trx system */
 }
 
 /** Sets the pointer in the nth slot of the rseg array. */
-inline void
-trx_sys_set_nth_rseg(trx_sys_t *sys,   /*!< in: trx system */
-                     ulint n,          /*!< in: index of slot */
-                     trx_rseg_t *rseg) /*!< in: pointer to rseg object,
+inline void trx_sys_set_nth_rseg(
+  trx_sys_t *sys, /*!< in: trx system */
+  ulint n,        /*!< in: index of slot */
+  trx_rseg_t *rseg
+) /*!< in: pointer to rseg object,
                                        NULL if slot not in use */
 {
   ut_ad(n < TRX_SYS_N_RSEGS);
@@ -104,78 +109,75 @@ inline trx_sysf_t *trx_sysf_get(mtr_t *mtr) /*!< in: mtr */
 /** Gets the space of the nth rollback segment slot in the trx system
 file copy.
 @return	space id */
-inline ulint
-trx_sysf_rseg_get_space(trx_sysf_t *sys_header, /*!< in: trx sys header */
-                        ulint i,    /*!< in: slot index == rseg id */
-                        mtr_t *mtr) /*!< in: mtr */
+inline ulint trx_sysf_rseg_get_space(
+  trx_sysf_t *sys_header, /*!< in: trx sys header */
+  ulint i,                /*!< in: slot index == rseg id */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   ut_ad(mutex_own(&(kernel_mutex)));
   ut_ad(sys_header);
   ut_ad(i < TRX_SYS_N_RSEGS);
 
-  return (mtr_read_ulint(sys_header + TRX_SYS_RSEGS +
-                             i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE,
-                         MLOG_4BYTES, mtr));
+  return (mtr_read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE, MLOG_4BYTES, mtr));
 }
 
 /** Gets the page number of the nth rollback segment slot in the trx system
 header.
 @return	page number, FIL_NULL if slot unused */
-inline ulint
-trx_sysf_rseg_get_page_no(trx_sysf_t *sys_header, /*!< in: trx system header */
-                          ulint i,    /*!< in: slot index == rseg id */
-                          mtr_t *mtr) /*!< in: mtr */
+inline ulint trx_sysf_rseg_get_page_no(
+  trx_sysf_t *sys_header, /*!< in: trx system header */
+  ulint i,                /*!< in: slot index == rseg id */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   ut_ad(sys_header);
   ut_ad(mutex_own(&(kernel_mutex)));
   ut_ad(i < TRX_SYS_N_RSEGS);
 
-  return (mtr_read_ulint(sys_header + TRX_SYS_RSEGS +
-                             i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_PAGE_NO,
-                         MLOG_4BYTES, mtr));
+  return (mtr_read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_PAGE_NO, MLOG_4BYTES, mtr));
 }
 
 /** Sets the space id of the nth rollback segment slot in the trx system
 file copy. */
-inline void
-trx_sysf_rseg_set_space(trx_sysf_t *sys_header, /*!< in: trx sys file copy */
-                        ulint i,     /*!< in: slot index == rseg id */
-                        ulint space, /*!< in: space id */
-                        mtr_t *mtr)  /*!< in: mtr */
+inline void trx_sysf_rseg_set_space(
+  trx_sysf_t *sys_header, /*!< in: trx sys file copy */
+  ulint i,                /*!< in: slot index == rseg id */
+  ulint space,            /*!< in: space id */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   ut_ad(mutex_own(&(kernel_mutex)));
   ut_ad(sys_header);
   ut_ad(i < TRX_SYS_N_RSEGS);
 
-  mlog_write_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE +
-                       TRX_SYS_RSEG_SPACE,
-                   space, MLOG_4BYTES, mtr);
+  mlog_write_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE, space, MLOG_4BYTES, mtr);
 }
 
 /** Sets the page number of the nth rollback segment slot in the trx system
 header. */
-inline void
-trx_sysf_rseg_set_page_no(trx_sysf_t *sys_header, /*!< in: trx sys header */
-                          ulint i,       /*!< in: slot index == rseg id */
-                          ulint page_no, /*!< in: page number, FIL_NULL if the
+inline void trx_sysf_rseg_set_page_no(
+  trx_sysf_t *sys_header, /*!< in: trx sys header */
+  ulint i,                /*!< in: slot index == rseg id */
+  ulint page_no,          /*!< in: page number, FIL_NULL if the
                                          slot is reset to unused */
-                          mtr_t *mtr)    /*!< in: mtr */
+  mtr_t *mtr
+) /*!< in: mtr */
 {
   ut_ad(mutex_own(&(kernel_mutex)));
   ut_ad(sys_header);
   ut_ad(i < TRX_SYS_N_RSEGS);
 
-  mlog_write_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE +
-                       TRX_SYS_RSEG_PAGE_NO,
-                   page_no, MLOG_4BYTES, mtr);
+  mlog_write_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_PAGE_NO, page_no, MLOG_4BYTES, mtr);
 }
 
 /** Writes a trx id to an index page. In case that the id size changes in
 some future version, this function should be used instead of
 mach_write_... */
-inline void
-trx_write_trx_id(byte *ptr,   /*!< in: pointer to memory where written */
-                 trx_id_t id) /*!< in: id */
+inline void trx_write_trx_id(
+  byte *ptr, /*!< in: pointer to memory where written */
+  trx_id_t id
+) /*!< in: id */
 {
   static_assert(DATA_TRX_ID_LEN == 6, "error DATA_TRX_ID_LEN != 6");
 
@@ -186,8 +188,7 @@ trx_write_trx_id(byte *ptr,   /*!< in: pointer to memory where written */
 some future version, this function should be used instead of
 mach_read_...
 @return	id */
-inline trx_id_t trx_read_trx_id(
-    const byte *ptr) /*!< in: pointer to memory from where to read */
+inline trx_id_t trx_read_trx_id(const byte *ptr) /*!< in: pointer to memory from where to read */
 {
   static_assert(DATA_TRX_ID_LEN == 6, "error DATA_TRX_ID_LEN != 6");
 
@@ -282,8 +283,7 @@ inline trx_id_t trx_sys_get_new_trx_id(void) {
   Thus trx id values will not overlap when the database is
   repeatedly started! */
 
-  if (trx_sys->max_trx_id % TRX_SYS_TRX_ID_WRITE_MARGIN ==
-      0) {
+  if (trx_sys->max_trx_id % TRX_SYS_TRX_ID_WRITE_MARGIN == 0) {
 
     trx_sys_flush_max_trx_id();
   }

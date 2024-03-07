@@ -37,8 +37,7 @@ typedef struct big_rec_struct big_rec_t;
 #ifdef UNIV_DEBUG
 /*** Gets pointer to the type struct of SQL data field.
 @return	pointer to the type struct */
-inline dtype_t *
-dfield_get_type(const dfield_t *field); /*!< in: SQL data field */
+inline dtype_t *dfield_get_type(const dfield_t *field); /*!< in: SQL data field */
 /*** Gets pointer to the data in a field.
 @return	pointer to data */
 inline void *dfield_get_data(const dfield_t *field); /*!< in: field */
@@ -47,15 +46,18 @@ inline void *dfield_get_data(const dfield_t *field); /*!< in: field */
 #define dfield_get_data(field) (reinterpret_cast<byte *>((field)->data))
 #endif /* UNIV_DEBUG */
 /*** Sets the type struct of SQL data field. */
-inline void
-dfield_set_type(dfield_t *field, /*!< in: SQL data field */
-                dtype_t *type);  /*!< in: pointer to data type struct */
+inline void dfield_set_type(
+  dfield_t *field, /*!< in: SQL data field */
+  dtype_t *type
+); /*!< in: pointer to data type struct */
 /*** Gets length of field data.
 @return	length of data; UNIV_SQL_NULL if SQL null data */
 inline ulint dfield_get_len(const dfield_t *field); /*!< in: field */
 /*** Sets length in a field. */
-inline void dfield_set_len(dfield_t *field, /*!< in: field */
-                           ulint len);      /*!< in: length or UNIV_SQL_NULL */
+inline void dfield_set_len(
+  dfield_t *field, /*!< in: field */
+  ulint len
+); /*!< in: length or UNIV_SQL_NULL */
 /*** Determines if a field is SQL NULL
 @return	nonzero if SQL null data */
 inline ulint dfield_is_null(const dfield_t *field); /*!< in: field */
@@ -65,96 +67,117 @@ inline ulint dfield_is_ext(const dfield_t *field); /*!< in: field */
 /*** Sets the "external storage" flag */
 inline void dfield_set_ext(dfield_t *field); /*!< in/out: field */
 /*** Sets pointer to the data and length in a field. */
-inline void dfield_set_data(dfield_t *field,  /*!< in: field */
-                            const void *data, /*!< in: data */
-                            ulint len); /*!< in: length or UNIV_SQL_NULL */
+inline void dfield_set_data(
+  dfield_t *field,  /*!< in: field */
+  const void *data, /*!< in: data */
+  ulint len
+); /*!< in: length or UNIV_SQL_NULL */
 /*** Sets a data field to SQL NULL. */
 inline void dfield_set_null(dfield_t *field); /*!< in/out: field */
 /*** Writes an SQL null field full of zeros. */
-inline void
-data_write_sql_null(byte *data, /*!< in: pointer to a buffer of size len */
-                    ulint len); /*!< in: SQL null size in bytes */
+inline void data_write_sql_null(
+  byte *data, /*!< in: pointer to a buffer of size len */
+  ulint len
+); /*!< in: SQL null size in bytes */
 /*** Copies the data and len fields. */
-inline void
-dfield_copy_data(dfield_t *field1,        /*!< out: field to copy to */
-                 const dfield_t *field2); /*!< in: field to copy from */
+inline void dfield_copy_data(
+  dfield_t *field1, /*!< out: field to copy to */
+  const dfield_t *field2
+); /*!< in: field to copy from */
 /*** Copies a data field to another. */
-inline void dfield_copy(dfield_t *field1,        /*!< out: field to copy to */
-                        const dfield_t *field2); /*!< in: field to copy from */
+inline void dfield_copy(
+  dfield_t *field1, /*!< out: field to copy to */
+  const dfield_t *field2
+); /*!< in: field to copy from */
 /*** Copies the data pointed to by a data field. */
-inline void
-dfield_dup(dfield_t *field,   /*!< in/out: data field */
-           mem_heap_t *heap); /*!< in: memory heap where allocated */
+inline void dfield_dup(
+  dfield_t *field, /*!< in/out: data field */
+  mem_heap_t *heap
+); /*!< in: memory heap where allocated */
 /*** Tests if data length and content is equal for two dfields.
 @return	true if equal */
-inline bool
-dfield_datas_are_binary_equal(const dfield_t *field1,  /*!< in: field */
-                              const dfield_t *field2); /*!< in: field */
+inline bool dfield_datas_are_binary_equal(
+  const dfield_t *field1, /*!< in: field */
+  const dfield_t *field2
+); /*!< in: field */
 /*** Tests if dfield data length and content is equal to the given.
 @return	true if equal */
 
 bool dfield_data_is_binary_equal(
-    const dfield_t *field, /*!< in: field */
-    ulint len,             /*!< in: data length or UNIV_SQL_NULL */
-    const byte *data);     /*!< in: data */
+  const dfield_t *field, /*!< in: field */
+  ulint len,             /*!< in: data length or UNIV_SQL_NULL */
+  const byte *data
+); /*!< in: data */
 /*** Gets number of fields in a data tuple.
 @return	number of fields */
 inline ulint dtuple_get_n_fields(const dtuple_t *tuple); /*!< in: tuple */
 #ifdef UNIV_DEBUG
 /*** Gets nth field of a tuple.
 @return	nth field */
-inline dfield_t *dtuple_get_nth_field(const dtuple_t *tuple, /*!< in: tuple */
-                                      ulint n); /*!< in: index of field */
-#else                                           /* UNIV_DEBUG */
+inline dfield_t *dtuple_get_nth_field(
+  const dtuple_t *tuple, /*!< in: tuple */
+  ulint n
+);    /*!< in: index of field */
+#else /* UNIV_DEBUG */
 #define dtuple_get_nth_field(tuple, n) ((tuple)->fields + (n))
 #endif /* UNIV_DEBUG */
 /*** Gets info bits in a data tuple.
 @return	info bits */
 inline ulint dtuple_get_info_bits(const dtuple_t *tuple); /*!< in: tuple */
 /*** Sets info bits in a data tuple. */
-inline void dtuple_set_info_bits(dtuple_t *tuple,  /*!< in: tuple */
-                                 ulint info_bits); /*!< in: info bits */
+inline void dtuple_set_info_bits(
+  dtuple_t *tuple, /*!< in: tuple */
+  ulint info_bits
+); /*!< in: info bits */
 /*** Gets number of fields used in record comparisons.
 @return	number of fields used in comparisons in rem0cmp.* */
 inline ulint dtuple_get_n_fields_cmp(const dtuple_t *tuple); /*!< in: tuple */
 /*** Gets number of fields used in record comparisons. */
-inline void
-dtuple_set_n_fields_cmp(dtuple_t *tuple,     /*!< in: tuple */
-                        ulint n_fields_cmp); /*!< in: number of fields used
+inline void dtuple_set_n_fields_cmp(
+  dtuple_t *tuple, /*!< in: tuple */
+  ulint n_fields_cmp
+); /*!< in: number of fields used
                                              in comparisons in rem0cmp.* */
 /*** Creates a data tuple to a memory heap. The default value for number
 of fields used in record comparisons for this tuple is n_fields.
 @return	own: created tuple */
-inline dtuple_t *dtuple_create(mem_heap_t *heap, /*!< in: memory heap where the
+inline dtuple_t *dtuple_create(
+  mem_heap_t *heap, /*!< in: memory heap where the
                                                  tuple is created */
-                               ulint n_fields);  /*!< in: number of fields */
+  ulint n_fields
+); /*!< in: number of fields */
 
 /*** Wrap data fields in a tuple. The default value for number
 of fields used in record comparisons for this tuple is n_fields.
 @return	data tuple */
-inline const dtuple_t *
-dtuple_from_fields(dtuple_t *tuple,        /*!< in: storage for data tuple */
-                   const dfield_t *fields, /*!< in: fields */
-                   ulint n_fields);        /*!< in: number of fields */
+inline const dtuple_t *dtuple_from_fields(
+  dtuple_t *tuple,        /*!< in: storage for data tuple */
+  const dfield_t *fields, /*!< in: fields */
+  ulint n_fields
+); /*!< in: number of fields */
 
 /*** Sets number of fields used in a tuple. Normally this is set in
 dtuple_create, but if you want later to set it smaller, you can use this. */
 
-void dtuple_set_n_fields(dtuple_t *tuple, /*!< in: tuple */
-                         ulint n_fields); /*!< in: number of fields */
+void dtuple_set_n_fields(
+  dtuple_t *tuple, /*!< in: tuple */
+  ulint n_fields
+); /*!< in: number of fields */
 /*** Copies a data tuple to another.  This is a shallow copy; if a deep copy
 is desired, dfield_dup() will have to be invoked on each field.
 @return	own: copy of tuple */
-inline dtuple_t *
-dtuple_copy(const dtuple_t *tuple, /*!< in: tuple to copy from */
-            mem_heap_t *heap);     /*!< in: memory heap
+inline dtuple_t *dtuple_copy(
+  const dtuple_t *tuple, /*!< in: tuple to copy from */
+  mem_heap_t *heap
+); /*!< in: memory heap
                                    where the tuple is created */
 /*** The following function returns the sum of data lengths of a tuple. The
 space occupied by the field structs or the tuple struct is not counted.
 @return	sum of data lens */
-inline ulint
-dtuple_get_data_size(const dtuple_t *tuple, /*!< in: typed data tuple */
-                     ulint comp); /*!< in: nonzero=ROW_FORMAT=COMPACT  */
+inline ulint dtuple_get_data_size(
+  const dtuple_t *tuple, /*!< in: typed data tuple */
+  ulint comp
+); /*!< in: nonzero=ROW_FORMAT=COMPACT  */
 /*** Computes the number of externally stored fields in a data tuple.
 @return	number of fields */
 inline ulint dtuple_get_n_ext(const dtuple_t *tuple); /*!< in: tuple */
@@ -162,22 +185,26 @@ inline ulint dtuple_get_n_ext(const dtuple_t *tuple); /*!< in: tuple */
 @return	1, 0 , -1 if tuple1 is greater, equal, less, respectively,
 than tuple2 */
 
-int dtuple_coll_cmp(void *cmp_ctx,           /*!< in: client compare context */
-                    const dtuple_t *tuple1,  /*!< in: tuple 1 */
-                    const dtuple_t *tuple2); /*!< in: tuple 2 */
+int dtuple_coll_cmp(
+  void *cmp_ctx,          /*!< in: client compare context */
+  const dtuple_t *tuple1, /*!< in: tuple 1 */
+  const dtuple_t *tuple2
+); /*!< in: tuple 2 */
 /*** Folds a prefix given as the number of fields of a tuple.
 @return	the folded value */
-inline ulint
-dtuple_fold(const dtuple_t *tuple, /*!< in: the tuple */
-            ulint n_fields,        /*!< in: number of complete fields to fold */
-            ulint n_bytes,         /*!< in: number of bytes to fold in an
+inline ulint dtuple_fold(
+  const dtuple_t *tuple, /*!< in: the tuple */
+  ulint n_fields,        /*!< in: number of complete fields to fold */
+  ulint n_bytes,         /*!< in: number of bytes to fold in an
                                    incomplete last field */
-            uint64_t tree_id)        /*!< in: index tree id */
-    __attribute__((pure));
+  uint64_t tree_id
+) /*!< in: index tree id */
+  __attribute__((pure));
 /*** Sets types of fields binary in a tuple. */
-inline void
-dtuple_set_types_binary(dtuple_t *tuple, /*!< in: data tuple */
-                        ulint n);        /*!< in: number of fields to set */
+inline void dtuple_set_types_binary(
+  dtuple_t *tuple, /*!< in: data tuple */
+  ulint n
+); /*!< in: number of fields to set */
 /*** Checks if a dtuple contains an SQL null value.
 @return	true if some field is SQL null */
 inline bool dtuple_contains_null(const dtuple_t *tuple); /*!< in: dtuple */
@@ -210,8 +237,10 @@ is printed if a string contains non-printable characters. */
 void dfield_print_also_hex(const dfield_t *dfield); /*!< in: dfield */
 /** The following function prints the contents of a tuple. */
 
-void dtuple_print(ib_stream_t ib_stream,  /*!< in: output stream */
-                  const dtuple_t *tuple); /*!< in: tuple */
+void dtuple_print(
+  ib_stream_t ib_stream, /*!< in: output stream */
+  const dtuple_t *tuple
+); /*!< in: tuple */
 /** Moves parts of long fields in entry to the big record vector so that
 the size of tuple drops below the maximum record size allowed in the
 database. Moves data only from those fields which are not necessary
@@ -220,22 +249,24 @@ to determine uniquely the insertion place of the tuple in the index.
 shorten the entry enough, i.e., if there are too many fixed-length or
 short fields in entry or the index is clustered */
 
-big_rec_t *dtuple_convert_big_rec(dict_index_t *index, /*!< in: index */
-                                  dtuple_t *entry, /*!< in/out: index entry */
-                                  ulint *n_ext);   /*!< in/out: number of
+big_rec_t *dtuple_convert_big_rec(
+  dict_index_t *index, /*!< in: index */
+  dtuple_t *entry,     /*!< in/out: index entry */
+  ulint *n_ext
+); /*!< in/out: number of
                                                    externally stored columns */
 /*** Puts back to entry the data stored in vector. Note that to ensure the
 fields in entry can accommodate the data, vector must have been created
 from entry with dtuple_convert_big_rec. */
 
 void dtuple_convert_back_big_rec(
-    dict_index_t *index, /*!< in: index */
-    dtuple_t *entry,     /*!< in: entry whose data was put to vector */
-    big_rec_t *vector);  /*!< in, own: big rec vector; it is
+  dict_index_t *index, /*!< in: index */
+  dtuple_t *entry,     /*!< in: entry whose data was put to vector */
+  big_rec_t *vector
+); /*!< in, own: big rec vector; it is
                          freed in this function */
 /*** Frees the memory in a big rec vector. */
-inline void
-dtuple_big_rec_free(big_rec_t *vector); /*!< in, own: big rec vector; it is
+inline void dtuple_big_rec_free(big_rec_t *vector); /*!< in, own: big rec vector; it is
                                         freed in this function */
 /** Reset dfield variables. */
 
@@ -279,6 +310,7 @@ struct dtuple_struct {
 
 /** A slot for a field in a big rec vector */
 typedef struct big_rec_field_struct big_rec_field_t;
+
 /** A slot for a field in a big rec vector */
 struct big_rec_field_struct {
   ulint field_no;   /*!< field number in record */
@@ -295,7 +327,6 @@ struct big_rec_struct {
   big_rec_field_t *fields; /*!< stored fields */
 };
 
-
 #include "mem0mem.h"
 #include "ut0rnd.h"
 
@@ -307,8 +338,7 @@ extern byte data_error;
 
 /** Gets pointer to the type struct of SQL data field.
 @return	pointer to the type struct */
-inline dtype_t *
-dfield_get_type(const dfield_t *field) /*!< in: SQL data field */
+inline dtype_t *dfield_get_type(const dfield_t *field) /*!< in: SQL data field */
 {
   ut_ad(field);
 
@@ -317,9 +347,10 @@ dfield_get_type(const dfield_t *field) /*!< in: SQL data field */
 #endif /* UNIV_DEBUG */
 
 /** Sets the type struct of SQL data field. */
-inline void
-dfield_set_type(dfield_t *field, /*!< in: SQL data field */
-                dtype_t *type)   /*!< in: pointer to data type struct */
+inline void dfield_set_type(
+  dfield_t *field, /*!< in: SQL data field */
+  dtype_t *type
+) /*!< in: pointer to data type struct */
 {
   ut_ad(field && type);
 
@@ -349,8 +380,10 @@ inline ulint dfield_get_len(const dfield_t *field) /*!< in: field */
 }
 
 /** Sets length in a field. */
-inline void dfield_set_len(dfield_t *field, /*!< in: field */
-                           ulint len)       /*!< in: length or UNIV_SQL_NULL */
+inline void dfield_set_len(
+  dfield_t *field, /*!< in: field */
+  ulint len
+) /*!< in: length or UNIV_SQL_NULL */
 {
   ut_ad(field);
 #ifdef UNIV_VALGRIND_DEBUG
@@ -389,9 +422,11 @@ inline void dfield_set_ext(dfield_t *field) /*!< in/out: field */
 }
 
 /** Sets pointer to the data and length in a field. */
-inline void dfield_set_data(dfield_t *field,  /*!< in: field */
-                            const void *data, /*!< in: data */
-                            ulint len) /*!< in: length or UNIV_SQL_NULL */
+inline void dfield_set_data(
+  dfield_t *field,  /*!< in: field */
+  const void *data, /*!< in: data */
+  ulint len
+) /*!< in: length or UNIV_SQL_NULL */
 {
   ut_ad(field);
 
@@ -411,9 +446,10 @@ inline void dfield_set_null(dfield_t *field) /*!< in/out: field */
 }
 
 /** Copies the data and len fields. */
-inline void
-dfield_copy_data(dfield_t *field1,       /*!< out: field to copy to */
-                 const dfield_t *field2) /*!< in: field to copy from */
+inline void dfield_copy_data(
+  dfield_t *field1, /*!< out: field to copy to */
+  const dfield_t *field2
+) /*!< in: field to copy from */
 {
   ut_ad(field1 && field2);
 
@@ -423,15 +459,19 @@ dfield_copy_data(dfield_t *field1,       /*!< out: field to copy to */
 }
 
 /** Copies a data field to another. */
-inline void dfield_copy(dfield_t *field1,       /*!< out: field to copy to */
-                        const dfield_t *field2) /*!< in: field to copy from */
+inline void dfield_copy(
+  dfield_t *field1, /*!< out: field to copy to */
+  const dfield_t *field2
+) /*!< in: field to copy from */
 {
   *field1 = *field2;
 }
 
 /** Copies the data pointed to by a data field. */
-inline void dfield_dup(dfield_t *field,  /*!< in/out: data field */
-                       mem_heap_t *heap) /*!< in: memory heap where allocated */
+inline void dfield_dup(
+  dfield_t *field, /*!< in/out: data field */
+  mem_heap_t *heap
+) /*!< in: memory heap where allocated */
 {
   if (!dfield_is_null(field)) {
     UNIV_MEM_ASSERT_RW(field->data, field->len);
@@ -441,16 +481,16 @@ inline void dfield_dup(dfield_t *field,  /*!< in/out: data field */
 
 /** Tests if data length and content is equal for two dfields.
 @return	true if equal */
-inline bool
-dfield_datas_are_binary_equal(const dfield_t *field1, /*!< in: field */
-                              const dfield_t *field2) /*!< in: field */
+inline bool dfield_datas_are_binary_equal(
+  const dfield_t *field1, /*!< in: field */
+  const dfield_t *field2
+) /*!< in: field */
 {
   ulint len;
 
   len = field1->len;
 
-  return (len == field2->len &&
-          (len == UNIV_SQL_NULL || !memcmp(field1->data, field2->data, len)));
+  return (len == field2->len && (len == UNIV_SQL_NULL || !memcmp(field1->data, field2->data, len)));
 }
 
 /** Gets info bits in a data tuple.
@@ -463,8 +503,10 @@ inline ulint dtuple_get_info_bits(const dtuple_t *tuple) /*!< in: tuple */
 }
 
 /** Sets info bits in a data tuple. */
-inline void dtuple_set_info_bits(dtuple_t *tuple, /*!< in: tuple */
-                                 ulint info_bits) /*!< in: info bits */
+inline void dtuple_set_info_bits(
+  dtuple_t *tuple, /*!< in: tuple */
+  ulint info_bits
+) /*!< in: info bits */
 {
   ut_ad(tuple);
 
@@ -481,9 +523,10 @@ inline ulint dtuple_get_n_fields_cmp(const dtuple_t *tuple) /*!< in: tuple */
 }
 
 /** Sets number of fields used in record comparisons. */
-inline void
-dtuple_set_n_fields_cmp(dtuple_t *tuple,    /*!< in: tuple */
-                        ulint n_fields_cmp) /*!< in: number of fields used
+inline void dtuple_set_n_fields_cmp(
+  dtuple_t *tuple, /*!< in: tuple */
+  ulint n_fields_cmp
+) /*!< in: number of fields used
                                             in comparisons in rem0cmp.* */
 {
   ut_ad(tuple);
@@ -504,8 +547,10 @@ inline ulint dtuple_get_n_fields(const dtuple_t *tuple) /*!< in: tuple */
 #ifdef UNIV_DEBUG
 /** Gets nth field of a tuple.
 @return	nth field */
-inline dfield_t *dtuple_get_nth_field(const dtuple_t *tuple, /*!< in: tuple */
-                                      ulint n) /*!< in: index of field */
+inline dfield_t *dtuple_get_nth_field(
+  const dtuple_t *tuple, /*!< in: tuple */
+  ulint n
+) /*!< in: index of field */
 {
   ut_ad(tuple);
   ut_ad(n < tuple->n_fields);
@@ -517,16 +562,17 @@ inline dfield_t *dtuple_get_nth_field(const dtuple_t *tuple, /*!< in: tuple */
 /** Creates a data tuple to a memory heap. The default value for number
 of fields used in record comparisons for this tuple is n_fields.
 @return	own: created tuple */
-inline dtuple_t *dtuple_create(mem_heap_t *heap, /*!< in: memory heap where the
+inline dtuple_t *dtuple_create(
+  mem_heap_t *heap, /*!< in: memory heap where the
                                                  tuple is created */
-                               ulint n_fields)   /*!< in: number of fields */
+  ulint n_fields
+) /*!< in: number of fields */
 {
   dtuple_t *tuple;
 
   ut_ad(heap);
 
-  tuple = (dtuple_t *)mem_heap_alloc(heap, sizeof(dtuple_t) +
-                                               n_fields * sizeof(dfield_t));
+  tuple = (dtuple_t *)mem_heap_alloc(heap, sizeof(dtuple_t) + n_fields * sizeof(dfield_t));
   tuple->info_bits = 0;
   tuple->n_fields = n_fields;
   tuple->n_fields_cmp = n_fields;
@@ -557,10 +603,11 @@ inline dtuple_t *dtuple_create(mem_heap_t *heap, /*!< in: memory heap where the
 /** Wrap data fields in a tuple. The default value for number
 of fields used in record comparisons for this tuple is n_fields.
 @return	data tuple */
-inline const dtuple_t *
-dtuple_from_fields(dtuple_t *tuple,        /*!< in: storage for data tuple */
-                   const dfield_t *fields, /*!< in: fields */
-                   ulint n_fields)         /*!< in: number of fields */
+inline const dtuple_t *dtuple_from_fields(
+  dtuple_t *tuple,        /*!< in: storage for data tuple */
+  const dfield_t *fields, /*!< in: fields */
+  ulint n_fields
+) /*!< in: number of fields */
 {
   tuple->info_bits = 0;
   tuple->n_fields = tuple->n_fields_cmp = n_fields;
@@ -573,9 +620,10 @@ dtuple_from_fields(dtuple_t *tuple,        /*!< in: storage for data tuple */
 /** Copies a data tuple to another.  This is a shallow copy; if a deep copy
 is desired, dfield_dup() will have to be invoked on each field.
 @return	own: copy of tuple */
-inline dtuple_t *
-dtuple_copy(const dtuple_t *tuple, /*!< in: tuple to copy from */
-            mem_heap_t *heap)      /*!< in: memory heap
+inline dtuple_t *dtuple_copy(
+  const dtuple_t *tuple, /*!< in: tuple to copy from */
+  mem_heap_t *heap
+) /*!< in: memory heap
                                    where the tuple is created */
 {
   ulint n_fields = dtuple_get_n_fields(tuple);
@@ -583,8 +631,7 @@ dtuple_copy(const dtuple_t *tuple, /*!< in: tuple to copy from */
   ulint i;
 
   for (i = 0; i < n_fields; i++) {
-    dfield_copy(dtuple_get_nth_field(new_tuple, i),
-                dtuple_get_nth_field(tuple, i));
+    dfield_copy(dtuple_get_nth_field(new_tuple, i), dtuple_get_nth_field(tuple, i));
   }
 
   return (new_tuple);
@@ -594,9 +641,10 @@ dtuple_copy(const dtuple_t *tuple, /*!< in: tuple to copy from */
 occupied by the field structs or the tuple struct is not counted. Neither
 is possible space in externally stored parts of the field.
 @return	sum of data lengths */
-inline ulint
-dtuple_get_data_size(const dtuple_t *tuple, /*!< in: typed data tuple */
-                     ulint comp) /*!< in: nonzero=ROW_FORMAT=COMPACT  */
+inline ulint dtuple_get_data_size(
+  const dtuple_t *tuple, /*!< in: typed data tuple */
+  ulint comp
+) /*!< in: nonzero=ROW_FORMAT=COMPACT  */
 {
   const dfield_t *field;
   ulint n_fields;
@@ -644,8 +692,10 @@ inline ulint dtuple_get_n_ext(const dtuple_t *tuple) /*!< in: tuple */
 }
 
 /** Sets types of fields binary in a tuple. */
-inline void dtuple_set_types_binary(dtuple_t *tuple, /*!< in: data tuple */
-                                    ulint n) /*!< in: number of fields to set */
+inline void dtuple_set_types_binary(
+  dtuple_t *tuple, /*!< in: data tuple */
+  ulint n
+) /*!< in: number of fields to set */
 {
   dtype_t *dfield_type;
   ulint i;
@@ -658,12 +708,13 @@ inline void dtuple_set_types_binary(dtuple_t *tuple, /*!< in: data tuple */
 
 /** Folds a prefix given as the number of fields of a tuple.
 @return	the folded value */
-inline ulint
-dtuple_fold(const dtuple_t *tuple, /*!< in: the tuple */
-            ulint n_fields,        /*!< in: number of complete fields to fold */
-            ulint n_bytes,         /*!< in: number of bytes to fold in an
+inline ulint dtuple_fold(
+  const dtuple_t *tuple, /*!< in: the tuple */
+  ulint n_fields,        /*!< in: number of complete fields to fold */
+  ulint n_bytes,         /*!< in: number of bytes to fold in an
                                    incomplete last field */
-            uint64_t tree_id)        /*!< in: index tree id */
+  uint64_t tree_id
+) /*!< in: index tree id */
 {
   const dfield_t *field;
   ulint i;
@@ -707,9 +758,10 @@ dtuple_fold(const dtuple_t *tuple, /*!< in: the tuple */
 }
 
 /** Writes an SQL null field full of zeros. */
-inline void
-data_write_sql_null(byte *data, /*!< in: pointer to a buffer of size len */
-                    ulint len)  /*!< in: SQL null size in bytes */
+inline void data_write_sql_null(
+  byte *data, /*!< in: pointer to a buffer of size len */
+  ulint len
+) /*!< in: SQL null size in bytes */
 {
   memset(data, 0, len);
 }
@@ -734,8 +786,7 @@ inline bool dtuple_contains_null(const dtuple_t *tuple) /*!< in: dtuple */
 }
 
 /** Frees the memory in a big rec vector. */
-inline void
-dtuple_big_rec_free(big_rec_t *vector) /*!< in, own: big rec vector; it is
+inline void dtuple_big_rec_free(big_rec_t *vector) /*!< in, own: big rec vector; it is
                                        freed in this function */
 {
   mem_heap_free(vector->heap);

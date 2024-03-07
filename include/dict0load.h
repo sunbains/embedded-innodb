@@ -36,14 +36,12 @@ to what we already read with fil_load_single_table_tablespaces().
 In a normal startup, we create the tablespace objects for every table in
 InnoDB's data dictionary, if the corresponding .ibd file exists.
 We also scan the biggest space id, and store it to fil_system. */
-void dict_check_tablespaces_and_store_max_id(
-    bool in_crash_recovery); /*!< in: are we doing a crash recovery */
+void dict_check_tablespaces_and_store_max_id(bool in_crash_recovery); /*!< in: are we doing a crash recovery */
 
 /** Finds the first table name in the given database.
 @return own: table name, NULL if does not exist; the caller must free
 the memory in the string! */
-char *dict_get_first_table_name_in_db(
-    const char *name); /*!< in: database name which ends to '/' */
+char *dict_get_first_table_name_in_db(const char *name); /*!< in: database name which ends to '/' */
 
 /** Loads a table definition and also all its index definitions, and also
 the cluster definition if the table is a member in a cluster. Also loads
@@ -52,16 +50,18 @@ a foreign key references columns in this table.
 @return table, NULL if does not exist; if the table is stored in an
 .ibd file, but the file does not exist, then we set the
 ibd_file_missing flag true in the table object we return */
-dict_table_t *
-dict_load_table(ib_recovery_t recovery, /*!< in: recovery flag */
-                const char *name);      /*!< in: table name in the
+dict_table_t *dict_load_table(
+  ib_recovery_t recovery, /*!< in: recovery flag */
+  const char *name
+); /*!< in: table name in the
                                         databasename/tablename format */
 
 /** Loads a table object based on the table id.
 @return	table; NULL if table does not exist */
-dict_table_t *
-dict_load_table_on_id(ib_recovery_t recovery, /*!< in: recovery flag */
-                      uint64_t table_id);       /*!< in: table id */
+dict_table_t *dict_load_table_on_id(
+  ib_recovery_t recovery, /*!< in: recovery flag */
+  uint64_t table_id
+); /*!< in: table id */
 
 /** This function is called when the database is booted.
 Loads system table index definitions except for the clustered index which
@@ -74,11 +74,12 @@ constraints to the data dictionary. Note that we know that the dictionary
 cache already contains all constraints where the other relevant table is
 already in the dictionary cache.
 @return	DB_SUCCESS or error code */
-db_err dict_load_foreigns(const char *table_name, /*!< in: table name */
-                          bool check_charsets);   /*!< in: true=check charsets
+db_err dict_load_foreigns(
+  const char *table_name, /*!< in: table name */
+  bool check_charsets
+); /*!< in: true=check charsets
                                                    compatibility */
 
 /** Prints to the standard output information on all tables found in the data
 dictionary system table. */
 void dict_print();
-

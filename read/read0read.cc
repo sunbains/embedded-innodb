@@ -140,18 +140,15 @@ TODO: proof this
 @param[in,out] heap             Memory heap to use for allocation.
 @return	own: read view struct */
 inline read_view_t *read_view_create_low(ulint n, mem_heap_t *heap) {
-  auto view = reinterpret_cast<read_view_t *>(
-      mem_heap_alloc(heap, sizeof(read_view_t)));
+  auto view = reinterpret_cast<read_view_t *>(mem_heap_alloc(heap, sizeof(read_view_t)));
 
   view->n_trx_ids = n;
-  view->trx_ids = reinterpret_cast<trx_id_t *>(
-      mem_heap_alloc(heap, n * sizeof *view->trx_ids));
+  view->trx_ids = reinterpret_cast<trx_id_t *>(mem_heap_alloc(heap, n * sizeof *view->trx_ids));
 
   return view;
 }
 
-read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id,
-                                               mem_heap_t *heap) {
+read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *heap) {
   read_view_t *old_view;
   read_view_t *view_copy;
   bool needs_insert = true;
@@ -183,16 +180,13 @@ read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id,
 
   i = 0;
   while (i < n) {
-    if (needs_insert &&
-        (i >= old_view->n_trx_ids ||
-         old_view->creator_trx_id > read_view_get_nth_trx_id(old_view, i))) {
+    if (needs_insert && (i >= old_view->n_trx_ids || old_view->creator_trx_id > read_view_get_nth_trx_id(old_view, i))) {
 
       read_view_set_nth_trx_id(view_copy, i, old_view->creator_trx_id);
       needs_insert = false;
       insert_done = 1;
     } else {
-      read_view_set_nth_trx_id(
-          view_copy, i, read_view_get_nth_trx_id(old_view, i - insert_done));
+      read_view_set_nth_trx_id(view_copy, i, read_view_get_nth_trx_id(old_view, i - insert_done));
     }
 
     i++;
@@ -239,8 +233,7 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
 
   while (trx) {
     ut_ad(trx->magic_n == TRX_MAGIC_N);
-    if (trx->id != cr_trx_id &&
-        (trx->conc_state == TRX_ACTIVE || trx->conc_state == TRX_PREPARED)) {
+    if (trx->id != cr_trx_id && (trx->conc_state == TRX_ACTIVE || trx->conc_state == TRX_PREPARED)) {
 
       read_view_set_nth_trx_id(view, n, trx->id);
 
@@ -300,30 +293,23 @@ void read_view_print(const read_view_t *view) {
   ulint n_ids;
 
   if (view->type == VIEW_HIGH_GRANULARITY) {
-    ib_logger(ib_stream, "High-granularity read view undo_n:o %lu %lu\n",
-              (ulong)view->undo_no,
-              (ulong)view->undo_no);
+    ib_logger(ib_stream, "High-granularity read view undo_n:o %lu %lu\n", (ulong)view->undo_no, (ulong)view->undo_no);
   } else {
     ib_logger(ib_stream, "Normal read view\n");
   }
 
-  ib_logger(ib_stream, "Read view low limit trx n:o %lu %lu\n",
-            (ulong)view->low_limit_no,
-            (ulong)view->low_limit_no);
+  ib_logger(ib_stream, "Read view low limit trx n:o %lu %lu\n", (ulong)view->low_limit_no, (ulong)view->low_limit_no);
 
-  ib_logger(ib_stream, "Read view up limit trx id %lu\n",
-            TRX_ID_PREP_PRINTF(view->up_limit_id));
+  ib_logger(ib_stream, "Read view up limit trx id %lu\n", TRX_ID_PREP_PRINTF(view->up_limit_id));
 
-  ib_logger(ib_stream, "Read view low limit trx id %lu\n",
-            TRX_ID_PREP_PRINTF(view->low_limit_id));
+  ib_logger(ib_stream, "Read view low limit trx id %lu\n", TRX_ID_PREP_PRINTF(view->low_limit_id));
 
   ib_logger(ib_stream, "Read view individually stored trx ids:\n");
 
   n_ids = view->n_trx_ids;
 
   for (i = 0; i < n_ids; i++) {
-    ib_logger(ib_stream, "Read view trx id %lu\n",
-              TRX_ID_PREP_PRINTF(read_view_get_nth_trx_id(view, i)));
+    ib_logger(ib_stream, "Read view trx id %lu\n", TRX_ID_PREP_PRINTF(read_view_get_nth_trx_id(view, i)));
   }
 }
 
@@ -351,8 +337,7 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
 
   mutex_enter(&kernel_mutex);
 
-  curview->read_view =
-      read_view_create_low(UT_LIST_GET_LEN(trx_sys->trx_list), curview->heap);
+  curview->read_view = read_view_create_low(UT_LIST_GET_LEN(trx_sys->trx_list), curview->heap);
 
   view = curview->read_view;
   view->creator_trx_id = cr_trx->id;

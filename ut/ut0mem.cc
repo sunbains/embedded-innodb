@@ -122,26 +122,30 @@ retry:
     if (retry_count == 0) {
       ut_print_timestamp(ib_stream);
 
-      ib_logger(ib_stream,
-                "  Error: cannot allocate"
-                " %lu bytes of\n"
-                "memory with malloc!"
-                " Total allocated memory\n"
-                "by InnoDB %lu bytes."
-                " Operating system errno: %lu\n"
-                "Check if you should"
-                " increase the swap file or\n"
-                "ulimits of your operating system.\n"
-                "On FreeBSD check you"
-                " have compiled the OS with\n"
-                "a big enough maximum process size.\n"
-                "Note that in most 32-bit"
-                " computers the process\n"
-                "memory space is limited"
-                " to 2 GB or 4 GB.\n"
-                "We keep retrying"
-                " the allocation for 60 seconds...\n",
-                (ulong)n, (ulong)ut_total_allocated_memory, (ulong)errno);
+      ib_logger(
+        ib_stream,
+        "  Error: cannot allocate"
+        " %lu bytes of\n"
+        "memory with malloc!"
+        " Total allocated memory\n"
+        "by InnoDB %lu bytes."
+        " Operating system errno: %lu\n"
+        "Check if you should"
+        " increase the swap file or\n"
+        "ulimits of your operating system.\n"
+        "On FreeBSD check you"
+        " have compiled the OS with\n"
+        "a big enough maximum process size.\n"
+        "Note that in most 32-bit"
+        " computers the process\n"
+        "memory space is limited"
+        " to 2 GB or 4 GB.\n"
+        "We keep retrying"
+        " the allocation for 60 seconds...\n",
+        (ulong)n,
+        (ulong)ut_total_allocated_memory,
+        (ulong)errno
+      );
     }
 
     os_fast_mutex_unlock(&ut_list_mutex);
@@ -166,9 +170,12 @@ retry:
     if (assert_on_error) {
       ut_print_timestamp(ib_stream);
 
-      ib_logger(ib_stream, "  We now intentionally"
-                           " generate a seg fault so that\n"
-                           "on Linux we get a stack trace.\n");
+      ib_logger(
+        ib_stream,
+        "  We now intentionally"
+        " generate a seg fault so that\n"
+        "on Linux we get a stack trace.\n"
+      );
 
       if (*ut_mem_null_ptr) {
         ut_mem_null_ptr = 0;
@@ -197,26 +204,32 @@ retry:
   return ((void *)((byte *)ret + sizeof(ut_mem_block_t)));
 }
 
-void *ut_malloc(ulint n) { return (ut_malloc_low(n, true, true)); }
+void *ut_malloc(ulint n) {
+  return (ut_malloc_low(n, true, true));
+}
 
 bool ut_test_malloc(ulint n) {
   auto ret = malloc(n);
 
   if (ret == nullptr) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream,
-              "  Error: cannot allocate"
-              " %lu bytes of memory for\n"
-              "a BLOB with malloc! Total allocated memory\n"
-              "by InnoDB %lu bytes."
-              " Operating system errno: %d\n"
-              "Check if you should increase"
-              " the swap file or\n"
-              "ulimits of your operating system.\n"
-              "On FreeBSD check you have"
-              " compiled the OS with\n"
-              "a big enough maximum process size.\n",
-              (ulong)n, (ulong)ut_total_allocated_memory, (int)errno);
+    ib_logger(
+      ib_stream,
+      "  Error: cannot allocate"
+      " %lu bytes of memory for\n"
+      "a BLOB with malloc! Total allocated memory\n"
+      "by InnoDB %lu bytes."
+      " Operating system errno: %d\n"
+      "Check if you should increase"
+      " the swap file or\n"
+      "ulimits of your operating system.\n"
+      "On FreeBSD check you have"
+      " compiled the OS with\n"
+      "a big enough maximum process size.\n",
+      (ulong)n,
+      (ulong)ut_total_allocated_memory,
+      (int)errno
+    );
     return (false);
   }
 
@@ -320,10 +333,12 @@ void ut_free_all_mem() {
   }
 
   if (ut_total_allocated_memory != 0) {
-    ib_logger(ib_stream,
-              "Warning: after shutdown"
-              " total allocated memory is %lu\n",
-              (ulong)ut_total_allocated_memory);
+    ib_logger(
+      ib_stream,
+      "Warning: after shutdown"
+      " total allocated memory is %lu\n",
+      (ulong)ut_total_allocated_memory
+    );
   }
 
   ut_mem_block_list_inited = false;
@@ -417,8 +432,7 @@ char *ut_strreplace(const char *str, const char *s1, const char *s2) {
     count = ut_strcount(str, s1);
   }
 
-  auto new_str =
-      static_cast<char *>(mem_alloc(str_len + count * len_delta + 1));
+  auto new_str = static_cast<char *>(mem_alloc(str_len + count * len_delta + 1));
   ptr = new_str;
 
   while (str) {
@@ -453,29 +467,26 @@ void test_ut_str_sql_format() {
   char buf[128];
   ulint ret;
 
-#define CALL_AND_TEST(str, str_len, buf, buf_size, ret_expected, buf_expected) \
-  do {                                                                         \
-    bool ok = true;                                                            \
-    memset(buf, 'x', 10);                                                      \
-    buf[10] = '\0';                                                            \
-    ib_logger(ib_stream, "TESTING \"%s\", %lu, %lu\n", str, (ulint)str_len,    \
-              (ulint)buf_size);                                                \
-    ret = ut_str_sql_format(str, str_len, buf, buf_size);                      \
-    if (ret != ret_expected) {                                                 \
-      ib_logger(ib_stream, "expected ret %lu, got %lu\n", (ulint)ret_expected, \
-                ret);                                                          \
-      ok = false;                                                              \
-    }                                                                          \
-    if (strcmp((char *)buf, buf_expected) != 0) {                              \
-      ib_logger(ib_stream, "expected buf \"%s\", got \"%s\"\n", buf_expected,  \
-                buf);                                                          \
-      ok = false;                                                              \
-    }                                                                          \
-    if (ok) {                                                                  \
-      ib_logger(ib_stream, "OK: %lu, \"%s\"\n\n", (ulint)ret, buf);            \
-    } else {                                                                   \
-      return;                                                                  \
-    }                                                                          \
+#define CALL_AND_TEST(str, str_len, buf, buf_size, ret_expected, buf_expected)                \
+  do {                                                                                        \
+    bool ok = true;                                                                           \
+    memset(buf, 'x', 10);                                                                     \
+    buf[10] = '\0';                                                                           \
+    ib_logger(ib_stream, "TESTING \"%s\", %lu, %lu\n", str, (ulint)str_len, (ulint)buf_size); \
+    ret = ut_str_sql_format(str, str_len, buf, buf_size);                                     \
+    if (ret != ret_expected) {                                                                \
+      ib_logger(ib_stream, "expected ret %lu, got %lu\n", (ulint)ret_expected, ret);          \
+      ok = false;                                                                             \
+    }                                                                                         \
+    if (strcmp((char *)buf, buf_expected) != 0) {                                             \
+      ib_logger(ib_stream, "expected buf \"%s\", got \"%s\"\n", buf_expected, buf);           \
+      ok = false;                                                                             \
+    }                                                                                         \
+    if (ok) {                                                                                 \
+      ib_logger(ib_stream, "OK: %lu, \"%s\"\n\n", (ulint)ret, buf);                           \
+    } else {                                                                                  \
+      return;                                                                                 \
+    }                                                                                         \
   } while (0)
 
   CALL_AND_TEST("abcd", 4, buf, 0, 0, "xxxxxxxxxx");

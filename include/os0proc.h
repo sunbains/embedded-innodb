@@ -50,9 +50,11 @@ ulint os_proc_get_number();
 void *os_mem_alloc_large(ulint *n); /*!< in/out: number of bytes */
 
 /** Frees large pages memory. */
-void os_mem_free_large(void *ptr,   /*!< in: pointer returned by
+void os_mem_free_large(
+  void *ptr, /*!< in: pointer returned by
                                     os_mem_alloc_large() */
-                       ulint size); /*!< in: size returned by
+  ulint size
+); /*!< in: size returned by
                                     os_mem_alloc_large() */
 
 /** Reset the variables. */

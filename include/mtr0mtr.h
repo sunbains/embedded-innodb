@@ -27,17 +27,15 @@ Created 11/26/1995 Heikki Tuuri
 
 #include "buf0types.h"
 #include "dyn0dyn.h"
+#include "mach0data.h"
 #include "mem0mem.h"
 #include "mtr0types.h"
 #include "page0types.h"
 #include "sync0rw.h"
-#include "ut0byte.h"
-#include "mach0data.h"
-#include "sync0rw.h"
 #include "sync0sync.h"
+#include "ut0byte.h"
 
 /* @} */
-
 
 /**
  * @brief Commits a mini-transaction.
@@ -76,7 +74,6 @@ ulint mtr_read_ulint(const byte *ptr, ulint type, mtr_t *mtr);
  */
 uint64_t mtr_read_uint64(const byte *ptr, mtr_t *mtr);
 
-
 /** This macro locks an rw-lock in s-mode. */
 #define mtr_s_lock(B, MTR) mtr_s_lock_func((B), __FILE__, __LINE__, (MTR))
 
@@ -95,9 +92,11 @@ void mtr_memo_release(mtr_t *mtr, void *object, ulint type);
 #ifdef UNIV_DEBUG
 /** Checks if memo contains the given page.
 @return	true if contains */
-bool mtr_memo_contains_page(mtr_t *mtr,      /*!< in: mtr */
-                            const byte *ptr, /*!< in: pointer to buffer frame */
-                            ulint type);     /*!< in: type of object */
+bool mtr_memo_contains_page(
+  mtr_t *mtr,      /*!< in: mtr */
+  const byte *ptr, /*!< in: pointer to buffer frame */
+  ulint type
+); /*!< in: type of object */
 
 /** Prints info of an mtr handle. */
 void mtr_print(mtr_t *mtr); /*!< in: mtr */

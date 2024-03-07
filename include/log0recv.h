@@ -57,8 +57,7 @@ the recovery and free the resources used in it.
 @param[in] min_flushed_lsn,     Flushed lsn from data files
 @param[in] max_flushed_lsn      Max flushed lsn from data files
 @return	error code or DB_SUCCESS */
-db_err recv_recovery_from_checkpoint_start_func(
-	ib_recovery_t recovery, lsn_t min_flushed_lsn, lsn_t max_flushed_lsn);
+db_err recv_recovery_from_checkpoint_start_func(ib_recovery_t recovery, lsn_t min_flushed_lsn, lsn_t max_flushed_lsn);
 
 /** Wrapper for recv_recovery_from_checkpoint_start_func().
 Recovers from a checkpoint. When this function returns, the database is able
@@ -69,8 +68,7 @@ the recovery and free the resources used in it.
 @param min	in: minimum flushed log sequence number from data files
 @param max	in: maximum flushed log sequence number from data files
 @return	error code or DB_SUCCESS */
-#define recv_recovery_from_checkpoint_start(recv, type, lim, min, max)         \
-  recv_recovery_from_checkpoint_start_func(recv, min, max)
+#define recv_recovery_from_checkpoint_start(recv, type, lim, min, max) recv_recovery_from_checkpoint_start_func(recv, min, max)
 
 /** Completes recovery from a checkpoint.
 @param[in] recovery             Recovery flag */
@@ -97,14 +95,9 @@ more in this log group.
                                 contiguouslog data up to this lsn
 @param[out] group_scanned_lsn   Scanning succeeded up to this lsn */
 bool recv_scan_log_recs(
-    ib_recovery_t recovery,
-    ulint available_memory,
-    bool store_to_hash,
-    const byte *buf,
-    ulint len,
-    lsn_t start_lsn,
-    lsn_t *contiguous_lsn,
-    lsn_t *group_scanned_lsn);
+  ib_recovery_t recovery, ulint available_memory, bool store_to_hash, const byte *buf, ulint len, lsn_t start_lsn,
+  lsn_t *contiguous_lsn, lsn_t *group_scanned_lsn
+);
 
 /** Resets the logs. The contents of log files will be lost!
 @param[in] lsn                  reset to this lsn rounded up to be divisible by

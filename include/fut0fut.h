@@ -25,18 +25,20 @@ Created 12/13/1995 Heikki Tuuri
 
 #include "innodb0types.h"
 
+#include "buf0buf.h"
 #include "fil0fil.h"
 #include "mtr0mtr.h"
-#include "buf0buf.h"
 #include "sync0rw.h"
 
 /** Gets a pointer to a file address and latches the page.
 @return pointer to a byte in a frame; the file page in the frame is
 bufferfixed and latched */
-inline byte *fut_get_ptr(ulint space,     /*!< in: space id */
-                         fil_addr_t addr, /*!< in: file address */
-                         ulint rw_latch,  /*!< in: RW_S_LATCH, RW_X_LATCH */
-                         mtr_t *mtr)      /*!< in: mtr handle */
+inline byte *fut_get_ptr(
+  ulint space,     /*!< in: space id */
+  fil_addr_t addr, /*!< in: file address */
+  ulint rw_latch,  /*!< in: RW_S_LATCH, RW_X_LATCH */
+  mtr_t *mtr
+) /*!< in: mtr handle */
 {
   buf_block_t *block;
   byte *ptr;

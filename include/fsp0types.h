@@ -57,19 +57,20 @@ constexpr auto FSEG_PAGE_DATA = FIL_PAGE_DATA;
 The file segment header points to the inode describing the file segment. */
 /* @{ */
 /** Data type for file segment header */
-using fseg_header_t = byte;;
+using fseg_header_t = byte;
+;
 
 /** Space id of the inode */
-constexpr ulint FSEG_HDR_SPACE =  0;
+constexpr ulint FSEG_HDR_SPACE = 0;
 
 /** Page number of the inode */
-constexpr ulint FSEG_HDR_PAGE_NO =  4;
+constexpr ulint FSEG_HDR_PAGE_NO = 4;
 
 /** Byte offset of the inode */
-constexpr ulint FSEG_HDR_OFFSET =  8;
+constexpr ulint FSEG_HDR_OFFSET = 8;
 
 /** Length of the file system header, in bytes */
-constexpr ulint FSEG_HEADER_SIZE =  10;
+constexpr ulint FSEG_HEADER_SIZE = 10;
 
 /* @} */
 
@@ -90,23 +91,23 @@ in every tablespace. */
 
 /* @{ */
 /** extent descriptor */
-constexpr ulint FSP_XDES_OFFSET =  0;
+constexpr ulint FSP_XDES_OFFSET = 0;
 
 /** The number of reserved pages in a fragment extent. */
 constexpr ulint FSP_XDES_RESERVED = 0;
 
 /** In every tablespace */
-constexpr ulint FSP_FIRST_INODE_PAGE_NO =  1;
+constexpr ulint FSP_FIRST_INODE_PAGE_NO = 1;
 
 /* The following pages exist in the system tablespace SYS_TABLESPACE. */
 
 /** Transaction system header, in tablespace SYS_TABLESPACE */
-constexpr page_no_t FSP_TRX_SYS_PAGE_NO =  2;
+constexpr page_no_t FSP_TRX_SYS_PAGE_NO = 2;
 
 /** First rollback segment page, in tablespace SYS_TABLESPACWE */
-constexpr page_no_t FSP_FIRST_RSEG_PAGE_NO =  3;
+constexpr page_no_t FSP_FIRST_RSEG_PAGE_NO = 3;
 
 /** data dictionary header  page, in tablespace SYS_TABLESPACE */
-constexpr page_no_t FSP_DICT_HDR_PAGE_NO =  4;
+constexpr page_no_t FSP_DICT_HDR_PAGE_NO = 4;
 
 /* @} */

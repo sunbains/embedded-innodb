@@ -103,8 +103,7 @@ que_thr_t *while_step(que_thr_t *thr) /*!< in: query thread */
   auto node = (while_node_t *)thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_WHILE);
 
-  ut_ad((thr->prev_node == que_node_get_parent(node)) ||
-        (que_node_get_next(thr->prev_node) == NULL));
+  ut_ad((thr->prev_node == que_node_get_parent(node)) || (que_node_get_next(thr->prev_node) == NULL));
 
   /* Evaluate the condition */
 
