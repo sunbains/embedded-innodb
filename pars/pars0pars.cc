@@ -211,7 +211,7 @@ pars_func_low(int func,        /*!< in: function token code */
 
   node->args = arg;
 
-  UT_LIST_ADD_LAST(func_node_list, pars_sym_tab_global->func_node_list, node);
+  UT_LIST_ADD_LAST(pars_sym_tab_global->func_node_list, node);
   return (node);
 }
 
@@ -445,7 +445,7 @@ static void pars_resolve_exp_variables_and_types(
   sym_node->indirection = node;
 
   if (select_node) {
-    UT_LIST_ADD_LAST(col_var_list, select_node->copy_variables, sym_node);
+    UT_LIST_ADD_LAST(select_node->copy_variables, sym_node);
   }
 
   dfield_set_type(que_node_get_val(sym_node), que_node_get_data_type(node));

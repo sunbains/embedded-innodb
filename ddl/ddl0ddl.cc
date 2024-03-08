@@ -29,7 +29,7 @@ struct ddl_drop_struct {
   UT_LIST_NODE_T(ddl_drop_t) ddl_drop_list;
 };
 
-static UT_LIST_BASE_NODE_T(ddl_drop_t) ddl_drop_list;
+static UT_LIST_BASE_NODE_T(ddl_drop_t, ddl_drop_list) ddl_drop_list;
 static bool ddl_drop_list_inited = false;
 
 /* Magic table names for invoking various monitor threads */
@@ -127,7 +127,7 @@ loop:
 already_dropped:
   mutex_enter(&kernel_mutex);
 
-  UT_LIST_REMOVE(ddl_drop_list, ddl_drop_list, drop);
+  UT_LIST_REMOVE(ddl_drop_list, drop);
 
   ut_print_timestamp(ib_stream);
   ib_logger(ib_stream, "  Dropped table ");
@@ -190,7 +190,7 @@ static bool ddl_add_table_to_background_drop_list(const char *name) /*!< in: tab
 
   drop->table_name = mem_strdup(name);
 
-  UT_LIST_ADD_LAST(ddl_drop_list, ddl_drop_list, drop);
+  UT_LIST_ADD_LAST(ddl_drop_list, drop);
 
   /*	ib_logger(ib_stream, "Adding table ");
   ut_print_name(ib_stream, trx, true, drop->table_name);

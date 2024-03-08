@@ -196,7 +196,7 @@ static mutex_t sync_thread_mutex;
 #endif /* UNIV_SYNC_DEBUG */
 
 /** Global list of database mutexes (not OS mutexes) created. */
-ut_list_base_node_t mutex_list;
+ut_list_base_node_t mutex_list{};
 
 /** Mutex protecting the mutex_list variable */
 mutex_t mutex_list_mutex;
@@ -240,7 +240,6 @@ void sync_var_init(void) {
   sync_thread_level_arrays = NULL;
   memset(&sync_thread_mutex, 0x0, sizeof(sync_thread_mutex));
 #endif /* UNIV_SYNC_DEBUG */
-  memset(&mutex_list, 0x0, sizeof(mutex_list));
   memset(&mutex_list_mutex, 0x0, sizeof(mutex_list_mutex));
 
 #ifdef UNIV_SYNC_DEBUG
@@ -314,7 +313,7 @@ void mutex_create_func(
 
   ut_ad(UT_LIST_GET_LEN(mutex_list) == 0 || UT_LIST_GET_FIRST(mutex_list)->magic_n == MUTEX_MAGIC_N);
 
-  UT_LIST_ADD_FIRST(list, mutex_list, mutex);
+  UT_LIST_ADD_FIRST(mutex_list, mutex);
 
   mutex_exit(&mutex_list_mutex);
 }
@@ -341,7 +340,7 @@ void mutex_free(mutex_t *mutex) /*!< in: mutex */
     ut_ad(!UT_LIST_GET_PREV(list, mutex) || UT_LIST_GET_PREV(list, mutex)->magic_n == MUTEX_MAGIC_N);
     ut_ad(!UT_LIST_GET_NEXT(list, mutex) || UT_LIST_GET_NEXT(list, mutex)->magic_n == MUTEX_MAGIC_N);
 
-    UT_LIST_REMOVE(list, mutex_list, mutex);
+    UT_LIST_REMOVE(mutex_list, mutex);
 
     mutex_exit(&mutex_list_mutex);
   }

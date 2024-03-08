@@ -347,7 +347,7 @@ mem_block_t *mem_heap_add_block(mem_heap_t *heap, ulint n) {
 
   /* Add the new block as the last block */
 
-  UT_LIST_INSERT_AFTER(list, heap->base, block, new_block);
+  UT_LIST_INSERT_AFTER(heap->base, block, new_block);
 
   return (new_block);
 }
@@ -359,7 +359,7 @@ void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
     ut_error;
   }
 
-  UT_LIST_REMOVE(list, heap->base, block);
+  UT_LIST_REMOVE(heap->base, block);
 
   ut_ad(heap->total_size >= block->len);
   heap->total_size -= block->len;

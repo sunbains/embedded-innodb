@@ -297,7 +297,7 @@ struct srv_conc_slot_struct {
 };
 
 /** Queue of threads waiting to get in */
-static UT_LIST_BASE_NODE_T(srv_conc_slot_t) srv_conc_queue;
+static UT_LIST_BASE_NODE_T(srv_conc_slot_t, srv_conc_queue) srv_conc_queue;
 
 /** Array of wait slots */
 static srv_conc_slot_t *srv_conc_slots;
@@ -598,7 +598,7 @@ typedef struct srv_sys_struct {
   srv_table_t *threads;
 
   /*!< task queue */
-  UT_LIST_BASE_NODE_T(que_thr_t) tasks;
+  UT_LIST_BASE_NODE_T(que_thr_t, queue) tasks;
 } srv_sys_t;
 
 /** Table for client threads where they will be suspended to wait for locks */
@@ -2414,7 +2414,7 @@ void srv_que_task_enqueue_low(que_thr_t *thr) /*!< in: query thread */
   ut_ad(thr);
   ut_ad(mutex_own(&kernel_mutex));
 
-  UT_LIST_ADD_LAST(queue, srv_sys->tasks, thr);
+  UT_LIST_ADD_LAST(srv_sys->tasks, thr);
 
   srv_release_threads(SRV_WORKER, 1);
 }

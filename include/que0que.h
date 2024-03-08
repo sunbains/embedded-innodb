@@ -268,6 +268,10 @@ struct que_thr_struct {
                          row) */
 };
 
+UT_LIST_NODE_GETTER_DEFINITION(que_thr_t, thrs);
+UT_LIST_NODE_GETTER_DEFINITION(que_thr_t, trx_thrs);
+UT_LIST_NODE_GETTER_DEFINITION(que_thr_t, queue);
+
 #define QUE_THR_MAGIC_N 8476583
 #define QUE_THR_MAGIC_FREED 123461526
 
@@ -286,8 +290,8 @@ struct que_fork_struct {
   ulint state;         /*!< state of the fork node */
   que_thr_t *caller;   /*!< pointer to a possible calling query
                        thread */
-  UT_LIST_BASE_NODE_T(que_thr_t)
-  thrs; /*!< list of query threads */
+  UT_LIST_BASE_NODE_T(que_thr_t, thrs)
+      thrs; /*!< list of query threads */
   /*------------------------------*/
   /* The fields in this section are defined only in the root node */
   sym_tab_t *sym_tab; /*!< symbol table of the query,
@@ -312,12 +316,14 @@ struct que_fork_struct {
   sel_node_t *last_sel_node; /*!< last executed select node, or NULL
                              if none */
   UT_LIST_NODE_T(que_fork_t)
-  graphs; /*!< list of query graphs of a session
+      graphs; /*!< list of query graphs of a session
           or a stored procedure */
   /*------------------------------*/
   mem_heap_t *heap; /*!< memory heap where the fork was
                     created */
 };
+
+UT_LIST_NODE_GETTER_DEFINITION(que_t, graphs);
 
 /* Query fork (or graph) types */
 #define QUE_FORK_SELECT_NON_SCROLL 1 /* forward-only cursor */

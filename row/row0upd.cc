@@ -261,9 +261,7 @@ func_exit:
 
 upd_node_t *upd_node_create(mem_heap_t *heap) {
   auto node = reinterpret_cast<upd_node_t *>(mem_heap_alloc(heap, sizeof(upd_node_t)));
-#ifdef UNIV_DEBUG
-  memset(node, '\0', sizeof(*node));
-#endif
+
   node->common.type = QUE_NODE_UPDATE;
 
   node->state = UPD_NODE_UPDATE_CLUSTERED;

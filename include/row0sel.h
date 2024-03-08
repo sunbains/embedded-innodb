@@ -194,7 +194,7 @@ struct plan_struct {
   bool no_prefetch;        /*!< no prefetch for this table */
   sym_node_list_t columns; /*!< symbol table nodes for the columns
                            to retrieve from the table */
-  UT_LIST_BASE_NODE_T(func_node_t)
+  UT_LIST_BASE_NODE_T_EXTERN(func_node_t, cond_list)
   end_conds; /*!< conditions which determine the
              fetch limit of the index segment we
              have to look at: when one of these
@@ -203,7 +203,7 @@ struct plan_struct {
              index; these conditions are normalized
              so that in a comparison the column
              for this table is the first argument */
-  UT_LIST_BASE_NODE_T(func_node_t)
+  UT_LIST_BASE_NODE_T_EXTERN(func_node_t, func_node_list)
   other_conds;               /*!< the rest of search conditions we
                              can test at this table in a join */
   bool must_get_clust;       /*!< true if index is a non-clustered
@@ -281,7 +281,7 @@ struct sel_node_struct {
                                 if it contains positioned
                                 update or delete statements */
   sym_node_t *explicit_cursor; /*!< not NULL if an explicit cursor */
-  UT_LIST_BASE_NODE_T(sym_node_t)
+  UT_LIST_BASE_NODE_T(sym_node_t, sym_list)
   copy_variables; /*!< variables whose values we have to
                   copy when an explicit cursor is opened,
                   so that they do not change between

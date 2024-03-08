@@ -566,7 +566,7 @@ void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap) {
   /* Add table to hash table of tables based on table id */
   HASH_INSERT(dict_table_t, id_hash, dict_sys->table_id_hash, id_fold, table);
   /* Add table to LRU list of tables */
-  UT_LIST_ADD_FIRST(table_LRU, dict_sys->table_LRU, table);
+  UT_LIST_ADD_FIRST(dict_sys->table_LRU, table);
 
   dict_sys->size += mem_heap_get_size(table->heap);
 }
@@ -846,7 +846,7 @@ void dict_table_remove_from_cache(dict_table_t *table) {
   HASH_DELETE(dict_table_t, id_hash, dict_sys->table_id_hash, ut_uint64_fold(table->id), table);
 
   /* Remove table from LRU list of tables */
-  UT_LIST_REMOVE(table_LRU, dict_sys->table_LRU, table);
+  UT_LIST_REMOVE(dict_sys->table_LRU, table);
 
   size = mem_heap_get_size(table->heap);
 
@@ -1185,7 +1185,7 @@ undo_size_ok:
 
   /* Add the new index as the last index for the table */
 
-  UT_LIST_ADD_LAST(indexes, table->indexes, new_index);
+  UT_LIST_ADD_LAST(table->indexes, new_index);
   new_index->table = table;
   new_index->table_name = table->name;
 
@@ -1223,7 +1223,7 @@ void dict_index_remove_from_cache(dict_table_t *table, dict_index_t *index) {
   rw_lock_free(&index->lock);
 
   /* Remove the index from the list of indexes of the table */
-  UT_LIST_REMOVE(indexes, table->indexes, index);
+  UT_LIST_REMOVE(table->indexes, index);
 
   auto size = mem_heap_get_size(index->heap);
 
@@ -1607,11 +1607,11 @@ static void dict_foreign_remove_from_cache(dict_foreign_t *foreign) /*!< in, own
   ut_a(foreign);
 
   if (foreign->referenced_table) {
-    UT_LIST_REMOVE(referenced_list, foreign->referenced_table->referenced_list, foreign);
+    UT_LIST_REMOVE(foreign->referenced_table->referenced_list, foreign);
   }
 
   if (foreign->foreign_table) {
-    UT_LIST_REMOVE(foreign_list, foreign->foreign_table->foreign_list, foreign);
+    UT_LIST_REMOVE(foreign->foreign_table->foreign_list, foreign);
   }
 
   dict_foreign_free(foreign);
@@ -1875,7 +1875,7 @@ db_err dict_foreign_add_to_cache(dict_foreign_t *foreign, bool check_charsets) {
 
     for_in_cache->referenced_table = ref_table;
     for_in_cache->referenced_index = index;
-    UT_LIST_ADD_LAST(referenced_list, ref_table->referenced_list, for_in_cache);
+    UT_LIST_ADD_LAST(ref_table->referenced_list, for_in_cache);
     added_to_referenced_list = true;
   }
 
@@ -1905,7 +1905,7 @@ db_err dict_foreign_add_to_cache(dict_foreign_t *foreign, bool check_charsets) {
 
       if (for_in_cache == foreign) {
         if (added_to_referenced_list) {
-          UT_LIST_REMOVE(referenced_list, ref_table->referenced_list, for_in_cache);
+          UT_LIST_REMOVE(ref_table->referenced_list, for_in_cache);
         }
 
         mem_heap_free(foreign->heap);
@@ -1916,7 +1916,7 @@ db_err dict_foreign_add_to_cache(dict_foreign_t *foreign, bool check_charsets) {
 
     for_in_cache->foreign_table = for_table;
     for_in_cache->foreign_index = index;
-    UT_LIST_ADD_LAST(foreign_list, for_table->foreign_list, for_in_cache);
+    UT_LIST_ADD_LAST(for_table->foreign_list, for_in_cache);
   }
 
   return DB_SUCCESS;
@@ -2945,10 +2945,10 @@ try_find_index:
 
   /* We found an ok constraint definition: add to the lists */
 
-  UT_LIST_ADD_LAST(foreign_list, table->foreign_list, foreign);
+  UT_LIST_ADD_LAST(table->foreign_list, foreign);
 
   if (referenced_table) {
-    UT_LIST_ADD_LAST(referenced_list, referenced_table->referenced_list, foreign);
+    UT_LIST_ADD_LAST(referenced_table->referenced_list, foreign);
   }
 
   goto loop;

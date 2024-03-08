@@ -600,7 +600,7 @@ inline bool row_sel_test_other_conds(plan_t *plan) /*!< in: plan for the table; 
       return false;
     }
 
-    cond = UT_LIST_GET_NEXT(cond_list, cond);
+    cond = UT_LIST_GET_NEXT(func_node_list, cond);
   }
 
   return true;

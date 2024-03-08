@@ -357,6 +357,13 @@ Monitor will then fetch it and print */
 bool lock_deadlock_found = false;
 ib_stream_t lock_latest_err_stream;
 
+struct Table_lock_get_node {
+  /** Functor for accessing the embedded node within a table lock. */
+  static const ut_list_node<lock_t> &get_node(const lock_t &lock) {
+    return lock.un_member.tab_lock.locks;
+  }
+};
+
 /* Flags for recursive deadlock search */
 #define LOCK_VICTIM_IS_START 1
 #define LOCK_VICTIM_IS_OTHER 2
@@ -1418,7 +1425,7 @@ static lock_t *lock_rec_create_low(
 
   auto lock = reinterpret_cast<lock_t *>(mem_heap_alloc(trx->lock_heap, sizeof(lock_t) + n_bytes));
 
-  UT_LIST_ADD_LAST(trx_locks, trx->trx_locks, lock);
+  UT_LIST_ADD_LAST(trx->trx_locks, lock);
 
   lock->trx = trx;
 
@@ -1934,7 +1941,7 @@ static void lock_rec_dequeue_from_page(lock_t *in_lock) /*!< in: record lock obj
 
   HASH_DELETE(lock_t, hash, lock_sys->rec_hash, lock_rec_fold(space, page_no), in_lock);
 
-  UT_LIST_REMOVE(trx_locks, trx->trx_locks, in_lock);
+  UT_LIST_REMOVE(trx->trx_locks, in_lock);
 
   /* Check if waiting locks in the queue can now be granted: grant
   locks if there are no conflicting locks ahead. */
@@ -1970,7 +1977,7 @@ static void lock_rec_discard(lock_t *in_lock) /*!< in: record lock object: all r
 
   HASH_DELETE(lock_t, hash, lock_sys->rec_hash, lock_rec_fold(space, page_no), in_lock);
 
-  UT_LIST_REMOVE(trx_locks, trx->trx_locks, in_lock);
+  UT_LIST_REMOVE(trx->trx_locks, in_lock);
 }
 
 /** Removes record lock objects set on an index page which is discarded. This
@@ -2149,7 +2156,8 @@ void lock_move_reorganize_page(
                                reorganized page */
 {
   lock_t *lock;
-  UT_LIST_BASE_NODE_T(lock_t) old_locks;
+  UT_LIST_BASE_NODE_T(lock_t, trx_locks) old_locks;
+
   mem_heap_t *heap = nullptr;
   ulint comp;
 
@@ -2175,7 +2183,7 @@ void lock_move_reorganize_page(
     /* Make a copy of the lock */
     lock_t *old_lock = lock_rec_copy(lock, heap);
 
-    UT_LIST_ADD_LAST(trx_locks, old_locks, old_lock);
+    UT_LIST_ADD_LAST(old_locks, old_lock);
 
     /* Reset bitmap of lock */
     lock_rec_bitmap_reset(lock);
@@ -3113,14 +3121,14 @@ inline lock_t *lock_table_create(
 
   auto lock = reinterpret_cast<lock_t *>(mem_heap_alloc(trx->lock_heap, sizeof(lock_t)));
 
-  UT_LIST_ADD_LAST(trx_locks, trx->trx_locks, lock);
+  UT_LIST_ADD_LAST(trx->trx_locks, lock);
 
   lock->type_mode = type_mode | LOCK_TABLE;
   lock->trx = trx;
 
   lock->un_member.tab_lock.table = table;
 
-  UT_LIST_ADD_LAST(un_member.tab_lock.locks, table->locks, lock);
+  UT_LIST_ADD_LAST(table->locks, lock);
 
   if (unlikely(type_mode & LOCK_WAIT)) {
 
@@ -3143,8 +3151,8 @@ inline void lock_table_remove_low(lock_t *lock) /*!< in: table lock */
   trx = lock->trx;
   table = lock->un_member.tab_lock.table;
 
-  UT_LIST_REMOVE(trx_locks, trx->trx_locks, lock);
-  UT_LIST_REMOVE(un_member.tab_lock.locks, table->locks, lock);
+  UT_LIST_REMOVE(trx->trx_locks, lock);
+  UT_LIST_REMOVE(table->locks, lock);
 }
 
 /** Enqueues a waiting request for a table lock which cannot be granted

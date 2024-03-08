@@ -190,7 +190,7 @@ struct fil_space_t {
   ulint purpose;
 
   /** base node for the file chain */
-  UT_LIST_BASE_NODE_T(fil_node_t) chain;
+  UT_LIST_BASE_NODE_T(fil_node_t, chain) chain;
 
   /** space size in pages; 0 if a single-table tablespace whose size we do
   not know yet; last incomplete megabytes in data files may be ignored if
@@ -254,12 +254,12 @@ struct fil_system_t {
   list, and return it to the start of the list when the i/o ends; log files and
   the system tablespace are not put to this list: they are opened after the
   startup, and kept open until shutdown */
-  UT_LIST_BASE_NODE_T(fil_node_t) LRU;
+  UT_LIST_BASE_NODE_T(fil_node_t, LRU) LRU;
 
   /** base node for the list of those tablespaces whose files contain unflushed
   writes; those spaces have at least one file node where modification_counter
   > flush_counter */
-  UT_LIST_BASE_NODE_T(fil_space_t) unflushed_spaces;
+  UT_LIST_BASE_NODE_T(fil_space_t, unflushed_spaces) unflushed_spaces;
 
   /** number of files currently open */
   ulint n_open;
@@ -281,7 +281,7 @@ struct fil_system_t {
   int64_t tablespace_version;
 
   /** List of all file spaces */
-  UT_LIST_BASE_NODE_T(fil_space_t) space_list;
+  UT_LIST_BASE_NODE_T(fil_space_t, space_list) space_list;
 };
 
 /** The tablespace memory cache. This variable is nullptr before the module is
@@ -577,7 +577,7 @@ void fil_node_create(const char *name, ulint size, ulint id, bool is_raw) {
 
   node->space = space;
 
-  UT_LIST_ADD_LAST(chain, space->chain, node);
+  UT_LIST_ADD_LAST(space->chain, node);
 
   if (id < SRV_LOG_SPACE_FIRST_ID && fil_system->max_assigned_id < id) {
 
@@ -744,7 +744,7 @@ static void fil_node_open_file(
 
   if (space->purpose == FIL_TABLESPACE && space->id != 0) {
     /* Put the node to the LRU list */
-    UT_LIST_ADD_FIRST(LRU, system->LRU, node);
+    UT_LIST_ADD_FIRST(system->LRU, node);
   }
 }
 
@@ -776,7 +776,7 @@ static void fil_node_close_file(
     ut_a(UT_LIST_GET_LEN(system->LRU) > 0);
 
     /* The node is in the LRU list, remove it */
-    UT_LIST_REMOVE(LRU, system->LRU, node);
+    UT_LIST_REMOVE(system->LRU, node);
   }
 }
 
@@ -960,7 +960,7 @@ static void fil_node_free(
 
       space->is_in_unflushed_spaces = false;
 
-      UT_LIST_REMOVE(unflushed_spaces, system->unflushed_spaces, space);
+      UT_LIST_REMOVE(system->unflushed_spaces, space);
     }
 
     fil_node_close_file(node, system);
@@ -968,7 +968,7 @@ static void fil_node_free(
 
   space->size -= node->size;
 
-  UT_LIST_REMOVE(chain, space->chain, node);
+  UT_LIST_REMOVE(space->chain, node);
 
   mem_free(node->name);
   mem_free(node);
@@ -1115,7 +1115,7 @@ try_again:
   HASH_INSERT(fil_space_t, name_hash, fil_system->name_hash, ut_fold_string(name), space);
   space->is_in_unflushed_spaces = false;
 
-  UT_LIST_ADD_LAST(space_list, fil_system->space_list, space);
+  UT_LIST_ADD_LAST(fil_system->space_list, space);
 
   mutex_exit(&fil_system->mutex);
 
@@ -1219,10 +1219,10 @@ static bool fil_space_free(
   if (space->is_in_unflushed_spaces) {
     space->is_in_unflushed_spaces = false;
 
-    UT_LIST_REMOVE(unflushed_spaces, fil_system->unflushed_spaces, space);
+    UT_LIST_REMOVE(fil_system->unflushed_spaces, space);
   }
 
-  UT_LIST_REMOVE(space_list, fil_system->space_list, space);
+  UT_LIST_REMOVE(fil_system->space_list, space);
 
   ut_a(space->magic_n == FIL_SPACE_MAGIC_N);
   ut_a(0 == space->n_pending_flushes);
@@ -3288,7 +3288,7 @@ static void fil_node_prepare_for_io(
 
     ut_a(UT_LIST_GET_LEN(system->LRU) > 0);
 
-    UT_LIST_REMOVE(LRU, system->LRU, node);
+    UT_LIST_REMOVE(system->LRU, node);
   }
 
   node->n_pending++;
@@ -3319,13 +3319,13 @@ static void fil_node_complete_io(
     if (!node->space->is_in_unflushed_spaces) {
 
       node->space->is_in_unflushed_spaces = true;
-      UT_LIST_ADD_FIRST(unflushed_spaces, system->unflushed_spaces, node->space);
+      UT_LIST_ADD_FIRST(system->unflushed_spaces, node->space);
     }
   }
 
   if (node->n_pending == 0 && node->space->purpose == FIL_TABLESPACE && node->space->id != 0) {
     /* The node must be put back to the LRU list */
-    UT_LIST_ADD_FIRST(LRU, system->LRU, node);
+    UT_LIST_ADD_FIRST(system->LRU, node);
   }
 }
 
@@ -3615,7 +3615,7 @@ void fil_flush(ulint space_id) {
 
           space->is_in_unflushed_spaces = false;
 
-          UT_LIST_REMOVE(unflushed_spaces, fil_system->unflushed_spaces, space);
+          UT_LIST_REMOVE(fil_system->unflushed_spaces, space);
         }
       }
 
@@ -3691,7 +3691,11 @@ bool fil_validate() {
     auto space = (fil_space_t *)HASH_GET_FIRST(fil_system->spaces, i);
 
     while (space != nullptr) {
-      UT_LIST_VALIDATE(chain, fil_node_t, space->chain, ut_a(ut_list_node_313->open || !ut_list_node_313->n_pending));
+      auto check = [](const fil_node_t *node) {
+        ut_a(node->open || !node->n_pending);
+      };
+
+      ut_list_validate(space->chain, check);
 
       fil_node = UT_LIST_GET_FIRST(space->chain);
 
@@ -3711,7 +3715,8 @@ bool fil_validate() {
 
   ut_a(fil_system->n_open == n_open);
 
-  UT_LIST_VALIDATE(LRU, fil_node_t, fil_system->LRU, (void)0);
+  auto check = [](const fil_node_t *node) { (void)0; };
+  ut_list_validate(fil_system->LRU, check);
 
   fil_node = UT_LIST_GET_FIRST(fil_system->LRU);
 

@@ -122,6 +122,8 @@ struct read_view_struct {
   UT_LIST_NODE_T(read_view_t) view_list;
 };
 
+UT_LIST_NODE_GETTER_DEFINITION(read_view_t, view_list);
+
 /** Read view types @{ */
 
 /** Normal consistent read view where transaction does not see

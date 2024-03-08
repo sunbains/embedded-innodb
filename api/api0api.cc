@@ -4893,7 +4893,7 @@ void ib_savepoint_take(
 
   if (savep) {
     /* There is a savepoint with the same name: free that */
-    UT_LIST_REMOVE(trx_savepoints, trx->trx_savepoints, savep);
+    UT_LIST_REMOVE(trx->trx_savepoints, savep);
 
     mem_free(savep);
   }
@@ -4907,7 +4907,7 @@ void ib_savepoint_take(
   savep->name_len = name_len;
   memcpy(savep->name, name, name_len);
 
-  UT_LIST_ADD_LAST(trx_savepoints, trx->trx_savepoints, savep);
+  UT_LIST_ADD_LAST(trx->trx_savepoints, savep);
 }
 
 /** Releases only the named savepoint. Savepoints which were set after this
@@ -4933,7 +4933,7 @@ ib_err_t ib_savepoint_release(
 
     if (name_len == savep->name_len && 0 == memcmp(savep->name, name, name_len)) {
 
-      UT_LIST_REMOVE(trx_savepoints, trx->trx_savepoints, savep);
+      UT_LIST_REMOVE(trx->trx_savepoints, savep);
       mem_free(savep);
 
       return DB_SUCCESS;

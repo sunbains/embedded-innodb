@@ -199,7 +199,7 @@ struct recv_addr_struct {
   page_no_t page_no;
 
   /** list of log records for this page */
-  UT_LIST_BASE_NODE_T(recv_t) rec_list;
+  UT_LIST_BASE_NODE_T(recv_t, rec_list) rec_list;
 
   /** hash node in the hash bucket chain */
   hash_node_t addr_hash;

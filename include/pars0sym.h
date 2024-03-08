@@ -189,6 +189,9 @@ struct sym_node_struct {
             nodes */
 };
 
+UT_LIST_NODE_GETTER_DEFINITION(sym_node_t, col_var_list);
+UT_LIST_NODE_GETTER_DEFINITION(sym_node_t, sym_list);
+
 /** Symbol table */
 struct sym_tab_struct {
   que_t *query_graph;
@@ -203,13 +206,13 @@ struct sym_tab_struct {
   sql_string to give to the lexical
   analyzer */
   pars_info_t *info; /** extra information, or NULL */
-  sym_node_list_t sym_list;
-  /** list of symbol nodes in the symbol
-  table */
-  UT_LIST_BASE_NODE_T(func_node_t)
-  func_node_list;
-  /** list of function nodes in the
-  parsed query graph */
-  mem_heap_t *heap; /** memory heap from which we can
-                    allocate space */
+
+  /** List of symbol nodes in the symbol table */
+  UT_LIST_BASE_NODE_T_EXTERN(sym_node_t, sym_list) sym_list;
+
+  /** List of function nodes in the parsed query graph */
+  func_node_list_t func_node_list;
+
+  /** memory heap from which we can allocate space */
+  mem_heap_t *heap;
 };

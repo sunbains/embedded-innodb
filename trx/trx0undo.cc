@@ -1124,16 +1124,16 @@ static trx_undo_t *trx_undo_mem_create_at_db_start(
 add_to_list:
   if (type == TRX_UNDO_INSERT) {
     if (state != TRX_UNDO_CACHED) {
-      UT_LIST_ADD_LAST(undo_list, rseg->insert_undo_list, undo);
+      UT_LIST_ADD_LAST(rseg->insert_undo_list, undo);
     } else {
-      UT_LIST_ADD_LAST(undo_list, rseg->insert_undo_cached, undo);
+      UT_LIST_ADD_LAST(rseg->insert_undo_cached, undo);
     }
   } else {
     ut_ad(type == TRX_UNDO_UPDATE);
     if (state != TRX_UNDO_CACHED) {
-      UT_LIST_ADD_LAST(undo_list, rseg->update_undo_list, undo);
+      UT_LIST_ADD_LAST(rseg->update_undo_list, undo);
     } else {
-      UT_LIST_ADD_LAST(undo_list, rseg->update_undo_cached, undo);
+      UT_LIST_ADD_LAST(rseg->update_undo_cached, undo);
     }
   }
 
@@ -1370,7 +1370,7 @@ static trx_undo_t *trx_undo_reuse_cached(
       return nullptr;
     }
 
-    UT_LIST_REMOVE(undo_list, rseg->insert_undo_cached, undo);
+    UT_LIST_REMOVE(rseg->insert_undo_cached, undo);
   } else {
     ut_ad(type == TRX_UNDO_UPDATE);
 
@@ -1380,7 +1380,7 @@ static trx_undo_t *trx_undo_reuse_cached(
       return nullptr;
     }
 
-    UT_LIST_REMOVE(undo_list, rseg->update_undo_cached, undo);
+    UT_LIST_REMOVE(rseg->update_undo_cached, undo);
   }
 
   ut_ad(undo->size == 1);
@@ -1491,11 +1491,11 @@ db_err trx_undo_assign_undo(trx_t *trx, ulint type) {
   }
 
   if (type == TRX_UNDO_INSERT) {
-    UT_LIST_ADD_FIRST(undo_list, rseg->insert_undo_list, undo);
+    UT_LIST_ADD_FIRST(rseg->insert_undo_list, undo);
     ut_ad(trx->insert_undo == nullptr);
     trx->insert_undo = undo;
   } else {
-    UT_LIST_ADD_FIRST(undo_list, rseg->update_undo_list, undo);
+    UT_LIST_ADD_FIRST(rseg->update_undo_list, undo);
     ut_ad(trx->update_undo == nullptr);
     trx->update_undo = undo;
   }
@@ -1611,13 +1611,13 @@ void trx_undo_update_cleanup(trx_t *trx, page_t *undo_page, mtr_t *mtr) {
 
   trx_purge_add_update_undo_to_history(trx, undo_page, mtr);
 
-  UT_LIST_REMOVE(undo_list, rseg->update_undo_list, undo);
+  UT_LIST_REMOVE(rseg->update_undo_list, undo);
 
   trx->update_undo = nullptr;
 
   if (undo->state == TRX_UNDO_CACHED) {
 
-    UT_LIST_ADD_FIRST(undo_list, rseg->update_undo_cached, undo);
+    UT_LIST_ADD_FIRST(rseg->update_undo_cached, undo);
   } else {
     ut_ad(undo->state == TRX_UNDO_TO_PURGE);
 
@@ -1636,12 +1636,12 @@ void trx_undo_insert_cleanup(trx_t *trx) {
 
   mutex_enter(&(rseg->mutex));
 
-  UT_LIST_REMOVE(undo_list, rseg->insert_undo_list, undo);
+  UT_LIST_REMOVE(rseg->insert_undo_list, undo);
   trx->insert_undo = nullptr;
 
   if (undo->state == TRX_UNDO_CACHED) {
 
-    UT_LIST_ADD_FIRST(undo_list, rseg->insert_undo_cached, undo);
+    UT_LIST_ADD_FIRST(rseg->insert_undo_cached, undo);
   } else {
     ut_ad(undo->state == TRX_UNDO_TO_FREE);
 

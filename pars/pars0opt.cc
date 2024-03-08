@@ -669,10 +669,10 @@ static void opt_find_test_conds(sel_node_t *sel_node, /*!< in: select node */
   func_class = opt_classify_comparison(sel_node, i, cond);
 
   if (func_class == OPT_END_COND) {
-    UT_LIST_ADD_LAST(cond_list, plan->end_conds, cond);
+    UT_LIST_ADD_LAST(plan->end_conds, cond);
 
   } else if (func_class == OPT_TEST_COND) {
-    UT_LIST_ADD_LAST(cond_list, plan->other_conds, cond);
+    UT_LIST_ADD_LAST(plan->other_conds, cond);
   }
 }
 
@@ -755,7 +755,6 @@ void opt_find_all_cols(
   func_node_t *func_node;
   que_node_t *arg;
   sym_node_t *sym_node;
-  sym_node_t *col_node;
   ulint col_pos;
 
   if (exp == NULL) {
@@ -793,9 +792,9 @@ void opt_find_all_cols(
   /* Look for an occurrence of the same column in the plan column
   list */
 
-  col_node = UT_LIST_GET_FIRST(*col_list);
+  auto col_node = UT_LIST_GET_FIRST(*col_list);
 
-  while (col_node) {
+  while (col_node != nullptr) {
     if (col_node->col_no == sym_node->col_no) {
 
       if (col_node == sym_node) {
@@ -817,7 +816,7 @@ void opt_find_all_cols(
 
   /* The same column did not occur in the list: add it */
 
-  UT_LIST_ADD_LAST(col_var_list, *col_list, sym_node);
+  UT_LIST_ADD_LAST(*col_list, sym_node);
 
   sym_node->copy_val = copy_val;
 

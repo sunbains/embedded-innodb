@@ -1109,7 +1109,7 @@ void trx_sys_close() {
     trx_rseg_t *prev_rseg = rseg;
 
     rseg = UT_LIST_GET_NEXT(rseg_list, prev_rseg);
-    UT_LIST_REMOVE(rseg_list, trx_sys->rseg_list, prev_rseg);
+    UT_LIST_REMOVE(trx_sys->rseg_list, prev_rseg);
 
     trx_rseg_mem_free(prev_rseg);
   }
@@ -1123,7 +1123,7 @@ void trx_sys_close() {
 
     /* Views are allocated from the trx_sys->global_read_view_heap.
     So, we simply remove the element here. */
-    UT_LIST_REMOVE(view_list, trx_sys->view_list, prev_view);
+    UT_LIST_REMOVE(trx_sys->view_list, prev_view);
   }
 
   ut_a(UT_LIST_GET_LEN(trx_sys->trx_list) == 0);

@@ -400,13 +400,13 @@ struct trx_sys_struct {
 
   /** List of active and committed in memory transactions,
   sorted on trx id, biggest first */
-  UT_LIST_BASE_NODE_T(trx_t) trx_list;
+  UT_LIST_BASE_NODE_T_EXTERN(trx_t, trx_list) trx_list;
 
   /** List of transactions created for users */
-  UT_LIST_BASE_NODE_T(trx_t) client_trx_list;
+  UT_LIST_BASE_NODE_T_EXTERN(trx_t, client_trx_list) client_trx_list;
 
   /** List of rollback segment objects */
-  UT_LIST_BASE_NODE_T(trx_rseg_t) rseg_list;
+  UT_LIST_BASE_NODE_T_EXTERN(trx_rseg_t, rseg_list) rseg_list;
 
   /** Latest rollback segment in the round-robin assignment
   of rollback segments to transactions */
@@ -420,8 +420,10 @@ struct trx_sys_struct {
   ulint rseg_history_len;
 
   /** List of read views sorted on trx no, biggest first */
-  UT_LIST_BASE_NODE_T(read_view_t) view_list;
+  UT_LIST_BASE_NODE_T_EXTERN(read_view_t, view_list) view_list;
 };
+
+
 
 #ifndef UNIV_NONINL
 #include "trx0sys.ic"

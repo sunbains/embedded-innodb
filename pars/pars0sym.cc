@@ -96,7 +96,7 @@ sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, ulint val) {
   node->prefetch_buf = nullptr;
   node->cursor_def = nullptr;
 
-  UT_LIST_ADD_LAST(sym_list, sym_tab->sym_list, node);
+  UT_LIST_ADD_LAST(sym_tab->sym_list, node);
 
   node->sym_table = sym_tab;
 
@@ -131,7 +131,7 @@ sym_node_t *sym_tab_add_str_lit(sym_tab_t *sym_tab, byte *str, ulint len) {
   node->prefetch_buf = nullptr;
   node->cursor_def = nullptr;
 
-  UT_LIST_ADD_LAST(sym_list, sym_tab->sym_list, node);
+  UT_LIST_ADD_LAST(sym_tab->sym_list, node);
 
   node->sym_table = sym_tab;
 
@@ -196,7 +196,7 @@ sym_node_t *sym_tab_add_bound_lit(sym_tab_t *sym_tab, const char *name,
   node->prefetch_buf = nullptr;
   node->cursor_def = nullptr;
 
-  UT_LIST_ADD_LAST(sym_list, sym_tab->sym_list, node);
+  UT_LIST_ADD_LAST(sym_tab->sym_list, node);
 
   node->sym_table = sym_tab;
 
@@ -222,7 +222,7 @@ sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab) {
   node->prefetch_buf = nullptr;
   node->cursor_def = nullptr;
 
-  UT_LIST_ADD_LAST(sym_list, sym_tab->sym_list, node);
+  UT_LIST_ADD_LAST(sym_tab->sym_list, node);
 
   node->sym_table = sym_tab;
 
@@ -241,7 +241,7 @@ sym_node_t *sym_tab_add_id(sym_tab_t *sym_tab, byte *name, ulint len) {
   node->name = mem_heap_strdupl(sym_tab->heap, (char *)name, len);
   node->name_len = len;
 
-  UT_LIST_ADD_LAST(sym_list, sym_tab->sym_list, node);
+  UT_LIST_ADD_LAST(sym_tab->sym_list, node);
 
   dfield_set_null(&node->common.val);
 
@@ -269,7 +269,7 @@ sym_node_t *sym_tab_add_bound_id(sym_tab_t *sym_tab, const char *name) {
   node->name = mem_heap_strdup(sym_tab->heap, bid->id);
   node->name_len = strlen(node->name);
 
-  UT_LIST_ADD_LAST(sym_list, sym_tab->sym_list, node);
+  UT_LIST_ADD_LAST(sym_tab->sym_list, node);
 
   dfield_set_null(&node->common.val);
 

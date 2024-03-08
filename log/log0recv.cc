@@ -905,7 +905,7 @@ static void recv_add_to_hash_table(
     recv_sys->n_addrs++;
   }
 
-  UT_LIST_ADD_LAST(rec_list, recv_addr->rec_list, recv);
+  UT_LIST_ADD_LAST(recv_addr->rec_list, recv);
 
   prev_field = &(recv->data);
 

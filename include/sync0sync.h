@@ -423,7 +423,7 @@ extern bool sync_order_checks_on;
 extern bool sync_initialized;
 
 /** Global list of database mutexes (not OS mutexes) created. */
-typedef UT_LIST_BASE_NODE_T(mutex_t) ut_list_base_node_t;
+typedef UT_LIST_BASE_NODE_T(mutex_t, list) ut_list_base_node_t;
 
 /** Global list of database mutexes (not OS mutexes) created. */
 extern ut_list_base_node_t mutex_list;

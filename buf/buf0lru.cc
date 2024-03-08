@@ -462,7 +462,7 @@ buf_block_t *buf_LRU_get_free_only(void) {
     ut_ad(!block->page.in_flush_list);
     ut_ad(!block->page.in_LRU_list);
     ut_a(!buf_page_in_file(&block->page));
-    UT_LIST_REMOVE(list, buf_pool->free, (&block->page));
+    UT_LIST_REMOVE(buf_pool->free, (&block->page));
 
     mutex_enter(&block->mutex);
 
@@ -748,7 +748,7 @@ static void buf_LRU_remove_block(buf_page_t *bpage) /*!< in: control block */
   }
 
   /* Remove the block from the LRU list */
-  UT_LIST_REMOVE(LRU, buf_pool->LRU, bpage);
+  UT_LIST_REMOVE(buf_pool->LRU, bpage);
   ut_d(bpage->in_LRU_list = false);
 
   /* If the LRU list is so short that LRU_old is not defined,
@@ -789,7 +789,7 @@ static void buf_LRU_add_block_to_end_low(buf_page_t *bpage) /*!< in: control blo
   ut_a(buf_page_in_file(bpage));
 
   ut_ad(!bpage->in_LRU_list);
-  UT_LIST_ADD_LAST(LRU, buf_pool->LRU, bpage);
+  UT_LIST_ADD_LAST(buf_pool->LRU, bpage);
   ut_d(bpage->in_LRU_list = true);
 
   if (UT_LIST_GET_LEN(buf_pool->LRU) > BUF_LRU_OLD_MIN_LEN) {
@@ -831,7 +831,7 @@ static void buf_LRU_add_block_low(
 
   if (!old || (UT_LIST_GET_LEN(buf_pool->LRU) < BUF_LRU_OLD_MIN_LEN)) {
 
-    UT_LIST_ADD_FIRST(LRU, buf_pool->LRU, bpage);
+    UT_LIST_ADD_FIRST(buf_pool->LRU, bpage);
 
     bpage->freed_page_clock = buf_pool->freed_page_clock;
   } else {
@@ -842,7 +842,7 @@ static void buf_LRU_add_block_low(
     ut_a(!UT_LIST_GET_PREV(LRU, buf_pool->LRU_old) || !UT_LIST_GET_PREV(LRU, buf_pool->LRU_old)->old);
     ut_a(!UT_LIST_GET_NEXT(LRU, buf_pool->LRU_old) || UT_LIST_GET_NEXT(LRU, buf_pool->LRU_old)->old);
 #endif /* UNIV_LRU_DEBUG */
-    UT_LIST_INSERT_AFTER(LRU, buf_pool->LRU, buf_pool->LRU_old, bpage);
+    UT_LIST_INSERT_AFTER(buf_pool->LRU, buf_pool->LRU_old, bpage);
     buf_pool->LRU_old_len++;
   }
 
@@ -966,7 +966,7 @@ void buf_LRU_block_free_non_file_page(buf_block_t *block) {
   memset(block->frame + FIL_PAGE_PACE_ID, 0xfe, 4);
 #endif /* UNIV_DEBUG */
 
-  UT_LIST_ADD_FIRST(list, buf_pool->free, (&block->page));
+  UT_LIST_ADD_FIRST(buf_pool->free, (&block->page));
 
   ut_d(block->page.in_free_list = true);
 
@@ -1149,7 +1149,7 @@ bool buf_LRU_validate() {
     ut_a(old_len <= new_len + BUF_LRU_OLD_TOLERANCE);
   }
 
-  UT_LIST_VALIDATE(LRU, buf_page_t, buf_pool->LRU, ut_ad(ut_list_node_313->in_LRU_list));
+  UT_LIST_CHECK(buf_pool->LRU);
 
   bpage = UT_LIST_GET_FIRST(buf_pool->LRU);
 
@@ -1187,7 +1187,8 @@ bool buf_LRU_validate() {
 
   ut_a(buf_pool->LRU_old_len == old_len);
 
-  UT_LIST_VALIDATE(list, buf_page_t, buf_pool->free, ut_ad(ut_list_node_313->in_free_list));
+  auto check = [](const buf_page_t *page) { ut_ad(page->in_free_list); };
+  ut_list_validate(buf_pool->free, check);
 
   for (bpage = UT_LIST_GET_FIRST(buf_pool->free); bpage != nullptr; bpage = UT_LIST_GET_NEXT(list, bpage)) {
 

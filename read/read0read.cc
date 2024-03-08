@@ -204,7 +204,7 @@ read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *h
     view_copy->up_limit_id = old_view->up_limit_id;
   }
 
-  UT_LIST_ADD_LAST(view_list, trx_sys->view_list, view_copy);
+  UT_LIST_ADD_LAST(trx_sys->view_list, view_copy);
 
   return view_copy;
 }
@@ -262,7 +262,7 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
     view->up_limit_id = view->low_limit_id;
   }
 
-  UT_LIST_ADD_FIRST(view_list, trx_sys->view_list, view);
+  UT_LIST_ADD_FIRST(trx_sys->view_list, view);
 
   return view;
 }
@@ -270,7 +270,7 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
 void read_view_close(read_view_t *view) {
   ut_ad(mutex_own(&kernel_mutex));
 
-  UT_LIST_REMOVE(view_list, trx_sys->view_list, view);
+  UT_LIST_REMOVE(trx_sys->view_list, view);
 }
 
 void read_view_close_for_read_committed(trx_t *trx) {
@@ -386,7 +386,7 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
     view->up_limit_id = view->low_limit_id;
   }
 
-  UT_LIST_ADD_FIRST(view_list, trx_sys->view_list, view);
+  UT_LIST_ADD_FIRST(trx_sys->view_list, view);
 
   mutex_exit(&kernel_mutex);
 
