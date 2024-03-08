@@ -83,7 +83,7 @@ struct lock_struct {
   } un_member;             /*!< lock details */
 };
 
-UT_LIST_NODE_GETTER_DEFINITION(lock_t, trx_locks)
+UT_LIST_NODE_GETTER_DEFINITION(lock_t, trx_locks);
 
 /** Gets the type of a lock.
 @return	LOCK_TABLE or LOCK_REC */

@@ -47,6 +47,7 @@ typedef struct return_node_struct return_node_t;
 typedef struct assign_node_struct assign_node_t;
 typedef struct col_assign_node_struct col_assign_node_t;
 
-using sym_node_list_t = UT_LIST_BASE_NODE_T_EXTERN(sym_node_t, sym_list);
+using sym_node_list_t = UT_LIST_BASE_NODE_T_EXTERN(sym_node_t, col_var_list);
+using func_node_list_t = UT_LIST_BASE_NODE_T_EXTERN(func_node_t, func_node_list);
 
 #endif
