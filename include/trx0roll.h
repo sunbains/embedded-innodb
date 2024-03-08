@@ -216,6 +216,8 @@ struct trx_named_savept_struct {
                   transaction */
 };
 
+UT_LIST_NODE_GETTER_DEFINITION(trx_named_savept_t, trx_savepoints);
+
 #ifndef UNIV_NONINL
 #include "trx0roll.ic"
 #endif

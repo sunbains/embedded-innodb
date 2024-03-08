@@ -200,7 +200,7 @@ void buf_flush_insert_into_flush_list(buf_block_t *block) {
   ut_ad(block->page.in_page_hash);
   ut_ad(!block->page.in_flush_list);
   ut_d(block->page.in_flush_list = true);
-  UT_LIST_ADD_FIRST(list, buf_pool->flush_list, &block->page);
+  UT_LIST_ADD_FIRST(buf_pool->flush_list, &block->page);
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
   ut_a(buf_flush_validate_low());
@@ -240,9 +240,9 @@ void buf_flush_insert_sorted_into_flush_list(buf_block_t *block) {
   }
 
   if (prev_b == nullptr) {
-    UT_LIST_ADD_FIRST(list, buf_pool->flush_list, &block->page);
+    UT_LIST_ADD_FIRST(buf_pool->flush_list, &block->page);
   } else {
-    UT_LIST_INSERT_AFTER(list, buf_pool->flush_list, prev_b, &block->page);
+    UT_LIST_INSERT_AFTER(buf_pool->flush_list, prev_b, &block->page);
   }
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
@@ -322,7 +322,7 @@ void buf_flush_remove(buf_page_t *bpage) /*!< in: pointer to the block in questi
       ut_error;
       break;
     case BUF_BLOCK_FILE_PAGE:
-      UT_LIST_REMOVE(list, buf_pool->flush_list, bpage);
+      UT_LIST_REMOVE(buf_pool->flush_list, bpage);
       break;
   }
 
@@ -337,7 +337,8 @@ void buf_flush_remove(buf_page_t *bpage) /*!< in: pointer to the block in questi
 
   bpage->oldest_modification = 0;
 
-  ut_d(UT_LIST_VALIDATE(list, buf_page_t, buf_pool->flush_list, ut_ad(ut_list_node_313->in_flush_list)));
+  auto check = [](const buf_page_t *ptr) { ut_ad(ptr->in_flush_list); };
+  ut_list_validate(buf_pool->flush_list, check);
 }
 
 /** Relocates a buffer control block on the flush_list.
@@ -371,13 +372,13 @@ void buf_flush_relocate_on_flush_list(
   ut_d(bpage->in_flush_list = false);
 
   prev = UT_LIST_GET_PREV(list, bpage);
-  UT_LIST_REMOVE(list, buf_pool->flush_list, bpage);
+  UT_LIST_REMOVE(buf_pool->flush_list, bpage);
 
   if (prev) {
     ut_ad(prev->in_flush_list);
-    UT_LIST_INSERT_AFTER(list, buf_pool->flush_list, prev, dpage);
+    UT_LIST_INSERT_AFTER(buf_pool->flush_list, prev, dpage);
   } else {
-    UT_LIST_ADD_FIRST(list, buf_pool->flush_list, dpage);
+    UT_LIST_ADD_FIRST(buf_pool->flush_list, dpage);
   }
 
   /* Just an extra check. Previous in flush_list
@@ -1270,7 +1271,7 @@ ulint buf_flush_get_desired_flush_rate(void) {
 static bool buf_flush_validate_low() {
   const ib_rbt_node_t *rnode{};
 
-  UT_LIST_VALIDATE(list, buf_page_t, buf_pool->flush_list, ut_ad(ut_list_node_313->in_flush_list));
+  UT_LIST_CHECK(buf_pool->flush_list);
 
   auto bpage = UT_LIST_GET_FIRST(buf_pool->flush_list);
 

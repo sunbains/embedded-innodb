@@ -562,6 +562,10 @@ struct func_node_struct {
   query graph */
 };
 
+UT_LIST_NODE_GETTER_DEFINITION(func_node_t, cond_list)
+
+UT_LIST_NODE_GETTER_DEFINITION(func_node_t, func_node_list)
+
 /** An order-by node in a select */
 struct order_node_struct {
   que_common_t common; /** type: QUE_NODE_ORDER */

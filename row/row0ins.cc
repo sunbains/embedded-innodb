@@ -78,7 +78,7 @@ void row_ins_node_create_entry_list(ins_node_t *node) {
   while (index != NULL) {
     auto entry = row_build_index_entry(node->row, NULL, index, node->entry_sys_heap);
 
-    UT_LIST_ADD_LAST(tuple_list, node->entry_list, entry);
+    UT_LIST_ADD_LAST(node->entry_list, entry);
 
     index = dict_table_get_next_index(index);
   }

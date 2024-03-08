@@ -60,7 +60,7 @@ memory corruption. */
 
 /** List of all memory blocks allocated from the operating system
 with malloc.  Protected by ut_list_mutex. */
-static UT_LIST_BASE_NODE_T(ut_mem_block_t) ut_mem_block_list;
+static UT_LIST_BASE_NODE_T(ut_mem_block_t, mem_block_list) ut_mem_block_list{};
 
 /** Flag: has ut_mem_block_list been initialized? */
 static bool ut_mem_block_list_inited = false;
@@ -71,8 +71,6 @@ static ulint *ut_mem_null_ptr = nullptr;
 
 void ut_mem_var_init() {
   ut_total_allocated_memory = 0;
-
-  memset(&ut_mem_block_list, 0x0, sizeof(ut_mem_block_list));
 
   memset(&ut_list_mutex, 0x0, sizeof(ut_list_mutex));
 
@@ -198,7 +196,7 @@ retry:
 
   ut_total_allocated_memory += n + sizeof(ut_mem_block_t);
 
-  UT_LIST_ADD_FIRST(mem_block_list, ut_mem_block_list, ((ut_mem_block_t *)ret));
+  UT_LIST_ADD_FIRST(ut_mem_block_list, ((ut_mem_block_t *)ret));
   os_fast_mutex_unlock(&ut_list_mutex);
 
   return ((void *)((byte *)ret + sizeof(ut_mem_block_t)));
@@ -257,7 +255,7 @@ void ut_free(void *ptr) {
 
   ut_total_allocated_memory -= block->size;
 
-  UT_LIST_REMOVE(mem_block_list, ut_mem_block_list, block);
+  UT_LIST_REMOVE(ut_mem_block_list, block);
   free(block);
 
   os_fast_mutex_unlock(&ut_list_mutex);
@@ -328,7 +326,7 @@ void ut_free_all_mem() {
 
     ut_total_allocated_memory -= block->size;
 
-    UT_LIST_REMOVE(mem_block_list, ut_mem_block_list, block);
+    UT_LIST_REMOVE(ut_mem_block_list, block);
     free(block);
   }
 

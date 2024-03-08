@@ -72,7 +72,8 @@ trx_t *trx_create(sess_t *sess) {
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(sess);
 
-  auto trx = static_cast<trx_t *>(mem_alloc(sizeof(trx_t)));
+  auto ptr = mem_alloc(sizeof(trx_t));
+  auto trx = new (ptr) trx_t;
 
   trx->magic_n = TRX_MAGIC_N;
 
@@ -165,7 +166,7 @@ trx_t *trx_allocate_for_client(void *arg) {
 
   trx_n_transactions++;
 
-  UT_LIST_ADD_FIRST(client_trx_list, trx_sys->client_trx_list, trx);
+  UT_LIST_ADD_FIRST(trx_sys->client_trx_list, trx);
 
   mutex_exit(&kernel_mutex);
 
@@ -252,13 +253,15 @@ static void trx_free(trx_t *trx) /*!< in, own: trx object */
 
   ut_a(trx->read_view == nullptr);
 
+  call_destructor(trx);
+
   mem_free(trx);
 }
 
 void trx_free_for_client(trx_t *trx) {
   mutex_enter(&kernel_mutex);
 
-  UT_LIST_REMOVE(client_trx_list, trx_sys->client_trx_list, trx);
+  UT_LIST_REMOVE(trx_sys->client_trx_list, trx);
 
   trx_free(trx);
 
@@ -300,12 +303,12 @@ static void trx_list_insert_ordered(trx_t *trx) /*!< in: trx handle */
     trx2 = UT_LIST_GET_PREV(trx_list, trx2);
 
     if (trx2 == nullptr) {
-      UT_LIST_ADD_FIRST(trx_list, trx_sys->trx_list, trx);
+      UT_LIST_ADD_FIRST(trx_sys->trx_list, trx);
     } else {
-      UT_LIST_INSERT_AFTER(trx_list, trx_sys->trx_list, trx2, trx);
+      UT_LIST_INSERT_AFTER(trx_sys->trx_list, trx2, trx);
     }
   } else {
-    UT_LIST_ADD_LAST(trx_list, trx_sys->trx_list, trx);
+    UT_LIST_ADD_LAST(trx_sys->trx_list, trx);
   }
 }
 
@@ -539,7 +542,7 @@ bool trx_start_low(
   trx->must_flush_log_later = false;
 #endif /* WITH_XOPEN */
 
-  UT_LIST_ADD_FIRST(trx_list, trx_sys->trx_list, trx);
+  UT_LIST_ADD_FIRST(trx_sys->trx_list, trx);
 
   return true;
 }
@@ -772,7 +775,7 @@ void trx_commit_off_kernel(trx_t *trx) {
   ut_ad(UT_LIST_GET_LEN(trx->wait_thrs) == 0);
   ut_ad(UT_LIST_GET_LEN(trx->trx_locks) == 0);
 
-  UT_LIST_REMOVE(trx_list, trx_sys->trx_list, trx);
+  UT_LIST_REMOVE(trx_sys->trx_list, trx);
 }
 
 void trx_cleanup_at_db_startup(trx_t *trx) {
@@ -786,7 +789,7 @@ void trx_cleanup_at_db_startup(trx_t *trx) {
   trx->undo_no = 0;
   trx->last_sql_stat_start.least_undo_no = 0;
 
-  UT_LIST_REMOVE(trx_list, trx_sys->trx_list, trx);
+  UT_LIST_REMOVE(trx_sys->trx_list, trx);
 }
 
 read_view_t *trx_assign_read_view(trx_t *trx) {
@@ -861,7 +864,7 @@ void trx_end_lock_wait(trx_t *trx) {
   while (thr != nullptr) {
     que_thr_end_wait_no_next_thr(thr);
 
-    UT_LIST_REMOVE(trx_thrs, trx->wait_thrs, thr);
+    UT_LIST_REMOVE(trx->wait_thrs, thr);
 
     thr = UT_LIST_GET_FIRST(trx->wait_thrs);
   }
@@ -883,7 +886,7 @@ static void trx_lock_wait_to_suspended(trx_t *trx) /*!< in: transaction in the T
   while (thr != nullptr) {
     thr->state = QUE_THR_SUSPENDED;
 
-    UT_LIST_REMOVE(trx_thrs, trx->wait_thrs, thr);
+    UT_LIST_REMOVE(trx->wait_thrs, thr);
 
     thr = UT_LIST_GET_FIRST(trx->wait_thrs);
   }
@@ -911,7 +914,7 @@ static void trx_sig_reply_wait_to_suspended(trx_t *trx) /*!< in: transaction */
 
     sig->receiver = nullptr;
 
-    UT_LIST_REMOVE(reply_signals, trx->reply_signals, sig);
+    UT_LIST_REMOVE(trx->reply_signals, sig);
 
     sig = UT_LIST_GET_FIRST(trx->reply_signals);
   }
@@ -1016,7 +1019,7 @@ void trx_sig_send(trx_t *trx, ulint type, ulint sender, que_thr_t *receiver_thr,
     sig = static_cast<trx_sig_t *>(mem_alloc(sizeof(trx_sig_t)));
   }
 
-  UT_LIST_ADD_LAST(signals, trx->signals, sig);
+  UT_LIST_ADD_LAST(trx->signals, sig);
 
   sig->type = type;
   sig->sender = sender;
@@ -1029,7 +1032,7 @@ void trx_sig_send(trx_t *trx, ulint type, ulint sender, que_thr_t *receiver_thr,
   if (receiver_thr) {
     receiver_trx = thr_get_trx(receiver_thr);
 
-    UT_LIST_ADD_LAST(reply_signals, receiver_trx->reply_signals, sig);
+    UT_LIST_ADD_LAST(receiver_trx->reply_signals, sig);
   }
 
   if (trx->sess->state == SESS_ERROR) {
@@ -1166,7 +1169,7 @@ void trx_sig_reply(trx_sig_t *sig, que_thr_t **next_thr) {
 
     receiver_trx = thr_get_trx(sig->receiver);
 
-    UT_LIST_REMOVE(reply_signals, receiver_trx->reply_signals, sig);
+    UT_LIST_REMOVE(receiver_trx->reply_signals, sig);
     ut_ad(receiver_trx->sess->state != SESS_ERROR);
 
     que_thr_end_wait(sig->receiver, next_thr);
@@ -1181,7 +1184,7 @@ void trx_sig_remove(trx_t *trx, trx_sig_t *sig) {
 
   ut_ad(sig->receiver == nullptr);
 
-  UT_LIST_REMOVE(signals, trx->signals, sig);
+  UT_LIST_REMOVE(trx->signals, sig);
   sig->type = 0; /* reset the field to catch possible bugs */
 
   if (sig != &(trx->sig)) {

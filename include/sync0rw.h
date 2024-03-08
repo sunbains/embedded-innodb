@@ -56,7 +56,7 @@ typedef struct rw_lock_struct rw_lock_t;
 typedef struct rw_lock_debug_struct rw_lock_debug_t;
 #endif /* UNIV_SYNC_DEBUG */
 
-typedef UT_LIST_BASE_NODE_T(rw_lock_t) rw_lock_list_t;
+typedef UT_LIST_BASE_NODE_T_EXTERN(rw_lock_t, list) rw_lock_list_t;
 
 extern rw_lock_list_t rw_lock_list;
 extern mutex_t rw_lock_list_mutex;
@@ -379,6 +379,8 @@ struct rw_lock_struct {
   /** RW_LOCK_MAGIC_N */
   ulint m_magic_n;
 };
+
+UT_LIST_NODE_GETTER_DEFINITION(rw_lock_t, list);
 
 /** Value of rw_lock_struct::magic_n */
 #define RW_LOCK_MAGIC_N 22643

@@ -140,7 +140,7 @@ void trx_roll_savepoints_free(
   while (savep != nullptr) {
     next_savep = UT_LIST_GET_NEXT(trx_savepoints, savep);
 
-    UT_LIST_REMOVE(trx_savepoints, trx->trx_savepoints, savep);
+    UT_LIST_REMOVE(trx->trx_savepoints, savep);
     mem_free(savep);
 
     savep = next_savep;

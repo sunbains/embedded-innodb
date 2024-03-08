@@ -43,6 +43,12 @@ dict_table_t *dict_mem_table_create(const char *name, ulint space, ulint n_cols,
   table->space = (unsigned int)space;
   table->n_cols = (unsigned int)(n_cols + DATA_N_SYS_COLS);
 
+  UT_LIST_INIT(table->locks);
+  UT_LIST_INIT(table->indexes);
+  UT_LIST_INIT(table->foreign_list);
+  UT_LIST_INIT(table->referenced_list);
+  UT_LIST_INIT(table->table_LRU);
+
   table->cols = (dict_col_t *)mem_heap_alloc(heap, (n_cols + DATA_N_SYS_COLS) * sizeof(dict_col_t));
 
   ut_d(table->magic_n = DICT_TABLE_MAGIC_N);

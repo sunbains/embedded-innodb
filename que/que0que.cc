@@ -131,7 +131,7 @@ void que_var_init() {
 void que_graph_publish(que_t *graph, sess_t *sess) {
   ut_ad(mutex_own(&kernel_mutex));
 
-  UT_LIST_ADD_LAST(graphs, sess->graphs, graph);
+  UT_LIST_ADD_LAST(sess->graphs, graph);
 }
 
 que_fork_t *que_fork_create(que_t *graph, que_node_t *parent, ulint fork_type, mem_heap_t *heap) {
@@ -185,7 +185,7 @@ que_thr_t *que_thr_create(que_fork_t *parent, mem_heap_t *heap) {
   thr->resource = 0;
   thr->lock_state = QUE_THR_LOCK_NOLOCK;
 
-  UT_LIST_ADD_LAST(thrs, parent->thrs, thr);
+  UT_LIST_ADD_LAST(parent->thrs, thr);
 
   return thr;
 }
@@ -748,7 +748,7 @@ bool que_thr_stop(que_thr_t *thr) {
 
   } else if (trx->que_state == TRX_QUE_LOCK_WAIT) {
 
-    UT_LIST_ADD_FIRST(trx_thrs, trx->wait_thrs, thr);
+    UT_LIST_ADD_FIRST(trx->wait_thrs, thr);
     thr->state = QUE_THR_LOCK_WAIT;
 
   } else if (trx->error_state != DB_SUCCESS && trx->error_state != DB_LOCK_WAIT) {

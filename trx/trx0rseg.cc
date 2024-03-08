@@ -120,7 +120,7 @@ void trx_rseg_mem_free(trx_rseg_t *rseg) /*!< in, own: instance to free */
     trx_undo_t *prev_undo = undo;
 
     undo = UT_LIST_GET_NEXT(undo_list, undo);
-    UT_LIST_REMOVE(undo_list, rseg->update_undo_cached, prev_undo);
+    UT_LIST_REMOVE(rseg->update_undo_cached, prev_undo);
 
     trx_undo_mem_free(prev_undo);
   }
@@ -131,7 +131,7 @@ void trx_rseg_mem_free(trx_rseg_t *rseg) /*!< in, own: instance to free */
     trx_undo_t *prev_undo = undo;
 
     undo = UT_LIST_GET_NEXT(undo_list, undo);
-    UT_LIST_REMOVE(undo_list, rseg->insert_undo_cached, prev_undo);
+    UT_LIST_REMOVE(rseg->insert_undo_cached, prev_undo);
 
     trx_undo_mem_free(prev_undo);
   }
@@ -170,7 +170,7 @@ static trx_rseg_t *trx_rseg_mem_create(
 
   mutex_create(&rseg->mutex, SYNC_RSEG);
 
-  UT_LIST_ADD_LAST(rseg_list, trx_sys->rseg_list, rseg);
+  UT_LIST_ADD_LAST(trx_sys->rseg_list, rseg);
 
   trx_sys_set_nth_rseg(trx_sys, id, rseg);
 

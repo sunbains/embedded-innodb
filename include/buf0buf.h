@@ -739,7 +739,7 @@ struct buf_pool_t {
   /* @{ */
 
   /** base node of the modified block list */
-  UT_LIST_BASE_NODE_T(buf_page_t)
+  UT_LIST_BASE_NODE_T(buf_page_t, list)
   flush_list;
 
   /** this is true when a flush of the given type is being initialized */
@@ -774,10 +774,10 @@ struct buf_pool_t {
   /* @{ */
 
   /** base node of the free block list */
-  UT_LIST_BASE_NODE_T(buf_page_t) free;
+  UT_LIST_BASE_NODE_T(buf_page_t, list) free;
 
   /** base node of the LRU list */
-  UT_LIST_BASE_NODE_T(buf_page_t) LRU;
+  UT_LIST_BASE_NODE_T(buf_page_t, LRU) LRU;
 
   /** pointer to the about buf_LRU_old_ratio/BUF_LRU_OLD_RATIO_DIV oldest
   blocks in the LRU list; nullptr if LRU length less than BUF_LRU_OLD_MIN_LEN;

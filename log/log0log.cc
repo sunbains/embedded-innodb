@@ -598,7 +598,7 @@ void log_group_init(ulint id, ulint n_files, ulint file_size, ulint space_id) {
 
   memset(group->checkpoint_buf, '\0', IB_FILE_BLOCK_SIZE);
 
-  UT_LIST_ADD_LAST(log_groups, log_sys->log_groups, group);
+  UT_LIST_ADD_LAST(log_sys->log_groups, group);
 
   ut_a(log_calc_max_ages());
 }
@@ -1819,7 +1819,7 @@ void log_shutdown() {
     log_group_t *prev_group = group;
 
     group = UT_LIST_GET_NEXT(log_groups, group);
-    UT_LIST_REMOVE(log_groups, log_sys->log_groups, prev_group);
+    UT_LIST_REMOVE(log_sys->log_groups, prev_group);
 
     log_group_close(prev_group);
   }

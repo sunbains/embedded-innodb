@@ -235,7 +235,7 @@ struct log_t {
   bool check_flush_or_checkpoint;
 
   /** Log groups */
-  UT_LIST_BASE_NODE_T(log_group_t) log_groups;
+  UT_LIST_BASE_NODE_T(log_group_t, log_groups) log_groups;
 
   /** The fields involved in the log buffer flush @{ */
 

@@ -420,9 +420,9 @@ struct trx_struct {
   in consistent read */
   /*------------------------------*/
   UT_LIST_NODE_T(trx_t)
-  trx_list; /*!< list of transactions */
+      trx_list; /*!< list of transactions */
   UT_LIST_NODE_T(trx_t)
-  client_trx_list; /*!< list of transactions created for
+      client_trx_list; /*!< list of transactions created for
                    client */
   /*------------------------------*/
   enum db_err error_state;        /*!< 0 if no error, otherwise error
@@ -451,11 +451,11 @@ struct trx_struct {
   graph for error processing */
   trx_sig_t sig; /*!< one signal object can be allocated
                  in this space, avoiding mem_alloc */
-  UT_LIST_BASE_NODE_T(trx_sig_t)
-  signals; /*!< queue of processed or pending
+  UT_LIST_BASE_NODE_T(trx_sig_t, signals)
+      signals; /*!< queue of processed or pending
            signals to the trx */
-  UT_LIST_BASE_NODE_T(trx_sig_t)
-  reply_signals; /*!< list of signals sent by the query
+  UT_LIST_BASE_NODE_T(trx_sig_t, reply_signals)
+      reply_signals; /*!< list of signals sent by the query
                  threads of this trx for which a thread
                  is waiting for a reply; if this trx is
                  killed, the reply requests in the list
@@ -472,15 +472,15 @@ struct trx_struct {
   transaction as a victim in deadlock
   resolution, it sets this to true */
   time_t wait_started; /*!< lock wait started at this time */
-  UT_LIST_BASE_NODE_T(que_thr_t)
-  wait_thrs; /*!< query threads belonging to this
+  UT_LIST_BASE_NODE_T_EXTERN(que_thr_t, trx_thrs)
+      wait_thrs; /*!< query threads belonging to this
              trx that are in the QUE_THR_LOCK_WAIT
              state */
   /*------------------------------*/
   mem_heap_t *lock_heap; /*!< memory heap for the locks of the
                          transaction */
-  UT_LIST_BASE_NODE_T(lock_t)
-  trx_locks; /*!< locks reserved by the
+  UT_LIST_BASE_NODE_T_EXTERN(lock_t, trx_locks)
+      trx_locks; /*!< locks reserved by the
              transaction */
   /*------------------------------*/
   mem_heap_t *global_read_view_heap;
@@ -496,8 +496,8 @@ struct trx_struct {
                           same as global_read_view) or read view
                           associated to a cursor */
   /*------------------------------*/
-  UT_LIST_BASE_NODE_T(trx_named_savept_t)
-  trx_savepoints; /*!< savepoints set with SAVEPOINT ...,
+  UT_LIST_BASE_NODE_T_EXTERN(trx_named_savept_t, trx_savepoints)
+      trx_savepoints; /*!< savepoints set with SAVEPOINT ...,
                   oldest first */
   /*------------------------------*/
   mutex_t undo_mutex; /*!< mutex protecting the fields in this
@@ -537,7 +537,10 @@ struct trx_struct {
                             error, or empty. */
 };
 
-#define TRX_MAX_N_THREADS \
+UT_LIST_NODE_GETTER_DEFINITION(trx_t, trx_list);
+UT_LIST_NODE_GETTER_DEFINITION(trx_t, client_trx_list);
+
+#define TRX_MAX_N_THREADS                                                      \
   32 /*!< maximum number of                                                    \
      concurrent threads running a                                              \
      single operation of a                                                     \

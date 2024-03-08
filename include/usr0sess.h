@@ -49,7 +49,7 @@ struct sess_struct {
                transaction instance designated by the
                trx id changes, but the memory
                structure is preserved */
-  UT_LIST_BASE_NODE_T(que_t)
+  UT_LIST_BASE_NODE_T_EXTERN(que_t, graphs)
   graphs; /*!< query graphs belonging to this
           session */
 };

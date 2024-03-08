@@ -52,11 +52,11 @@ struct dyn_block_t {
   /** Storage for array elements */
   byte data[DYN_ARRAY_DATA_SIZE];
 
-  /** Linear list of dyn blocks: this node is used only in the first block */
-  UT_LIST_BASE_NODE_T(dyn_block_t) base;
+  /** storage for array elements */
+  UT_LIST_NODE_T(dyn_block_t) list;
 
   /** linear list node: used in all blocks */
-  UT_LIST_NODE_T(dyn_block_t) list;
+  UT_LIST_BASE_NODE_T(dyn_block_t, list) base;
 
 #ifdef UNIV_DEBUG
   /** Only in the debug version: if dyn array is opened, this

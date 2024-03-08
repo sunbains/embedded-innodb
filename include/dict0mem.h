@@ -385,6 +385,12 @@ constexpr ulint DICT_FOREIGN_ON_DELETE_NO_ACTION = 16;
 constexpr ulint DICT_FOREIGN_ON_UPDATE_NO_ACTION = 32;
 /* @} */
 
+/** List of locks that different transactions have acquired on a table. This
+list has a list node that is embedded in a nested union/structure. We have to
+generate a specific template for it. See lock0lock.cc for the implementation. */
+struct Table_lock_get_node;
+using table_lock_list_t = ut_list_base<lock_t, Table_lock_get_node>;
+
 #ifdef UNIV_DEBUG
 constexpr ulint DICT_TABLE_MAGIC_N = 76333786;
 #endif /* UNIV_DEBUG */
@@ -445,14 +451,14 @@ struct dict_table_struct {
   hash_node_t id_hash;
 
   /** List of indexes of the table */
-  UT_LIST_BASE_NODE_T(dict_index_t) indexes;
+  UT_LIST_BASE_NODE_T(dict_index_t, indexes) indexes;
 
   /** List of foreign key constraints in the table; these refer to columns
   in other tables */
-  UT_LIST_BASE_NODE_T(dict_foreign_t) foreign_list;
+  UT_LIST_BASE_NODE_T(dict_foreign_t, foreign_list) foreign_list;
 
   /** List of foreign key constraints which refer to this table */
-  UT_LIST_BASE_NODE_T(dict_foreign_t) referenced_list;
+  UT_LIST_BASE_NODE_T(dict_foreign_t, referenced_list) referenced_list;
 
   /** Node of the LRU list of tables */
   UT_LIST_NODE_T(dict_table_t) table_LRU;
@@ -467,7 +473,7 @@ struct dict_table_struct {
   ulint n_foreign_key_checks_running;
 
   /** List of locks on the table */
-  UT_LIST_BASE_NODE_T(lock_t) locks;
+  table_lock_list_t locks;
 
 #ifdef UNIV_DEBUG
   /** This field is used to specify in simulations tables which are so big

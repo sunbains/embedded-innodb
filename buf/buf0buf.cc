@@ -629,7 +629,7 @@ static buf_chunk_t *buf_chunk_init(
     memset(block->frame, '\0', UNIV_PAGE_SIZE);
 #endif
     /* Add the block to the free list */
-    UT_LIST_ADD_LAST(list, buf_pool->free, (&block->page));
+    UT_LIST_ADD_LAST(buf_pool->free, (&block->page));
     ut_d(block->page.in_free_list = true);
 
     block++;
@@ -694,7 +694,9 @@ buf_pool_t *buf_pool_init() {
   buf_pool->n_chunks = 1;
   buf_pool->chunks = chunk = (buf_chunk_t *)mem_alloc(sizeof *chunk);
 
+  UT_LIST_INIT(buf_pool->flush_list);
   UT_LIST_INIT(buf_pool->free);
+  UT_LIST_INIT(buf_pool->LRU);
 
   if (!buf_chunk_init(chunk, srv_buf_pool_size)) {
     mem_free(chunk);

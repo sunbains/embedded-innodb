@@ -61,10 +61,10 @@ os_thread_exit */
 ulint os_thread_count = 0;
 
 /** The list of all events created */
-static UT_LIST_BASE_NODE_T(os_event_struct_t) os_event_list;
+static UT_LIST_BASE_NODE_T(os_event_struct_t, os_event_list) os_event_list{};
 
 /** The list of all OS 'slow' mutexes */
-static UT_LIST_BASE_NODE_T(os_mutex_str_t) os_mutex_list;
+static UT_LIST_BASE_NODE_T(os_mutex_str_t, os_mutex_list) os_mutex_list{};
 
 ulint os_event_count = 0;
 ulint os_mutex_count = 0;
@@ -80,9 +80,6 @@ void os_sync_var_init() {
   os_sync_mutex_inited = false;
   os_sync_free_called = false;
   os_thread_count = 0;
-
-  memset(&os_event_list, 0x0, sizeof(os_event_list));
-  memset(&os_mutex_list, 0x0, sizeof(os_mutex_list));
 
   os_event_count = 0;
   os_mutex_count = 0;
@@ -158,7 +155,7 @@ os_event_t os_event_create(const char *name) {
   }
 
   /* Put to the list of events */
-  UT_LIST_ADD_FIRST(os_event_list, os_event_list, event);
+  UT_LIST_ADD_FIRST(os_event_list, event);
 
   os_event_count++;
 
@@ -211,7 +208,7 @@ static void os_event_free_internal(os_event_t event) {
   ut_a(0 == pthread_cond_destroy(&(event->cond_var)));
 
   /* Remove from the list of events */
-  UT_LIST_REMOVE(os_event_list, os_event_list, event);
+  UT_LIST_REMOVE(os_event_list, event);
 
   --os_event_count;
 
@@ -227,7 +224,7 @@ void os_event_free(os_event_t event) {
   /* Remove from the list of events */
   os_mutex_enter(os_sync_mutex);
 
-  UT_LIST_REMOVE(os_event_list, os_event_list, event);
+  UT_LIST_REMOVE(os_event_list, event);
 
   --os_event_count;
 
@@ -286,7 +283,7 @@ os_mutex_t os_mutex_create(const char *name) {
     os_mutex_enter(os_sync_mutex);
   }
 
-  UT_LIST_ADD_FIRST(os_mutex_list, os_mutex_list, mutex_str);
+  UT_LIST_ADD_FIRST(os_mutex_list, mutex_str);
 
   os_mutex_count++;
 
@@ -326,7 +323,7 @@ void os_mutex_free(os_mutex_t mutex) {
     os_mutex_enter(os_sync_mutex);
   }
 
-  UT_LIST_REMOVE(os_mutex_list, os_mutex_list, mutex);
+  UT_LIST_REMOVE(os_mutex_list, mutex);
 
   --os_mutex_count;
 

@@ -159,7 +159,7 @@ set only when UNIV_SYNC_PERF_STAT is defined */
 int64_t rw_x_exit_count = 0;
 
 /* The global list of rw-locks */
-rw_lock_list_t rw_lock_list;
+rw_lock_list_t rw_lock_list{};
 mutex_t rw_lock_list_mutex;
 
 #ifdef UNIV_SYNC_DEBUG
@@ -201,7 +201,6 @@ void rw_lock_var_init() {
   rw_x_os_wait_count = 0;
   rw_x_exit_count = 0;
 
-  memset(&rw_lock_list, 0x0, sizeof(rw_lock_list));
   memset(&rw_lock_list_mutex, 0x0, sizeof(rw_lock_list_mutex));
 
 #ifdef UNIV_SYNC_DEBUG
@@ -261,7 +260,7 @@ void rw_lock_create_func(
     ut_a(UT_LIST_GET_FIRST(rw_lock_list)->m_magic_n == RW_LOCK_MAGIC_N);
   }
 
-  UT_LIST_ADD_FIRST(list, rw_lock_list, lock);
+  UT_LIST_ADD_FIRST(rw_lock_list, lock);
 
   mutex_exit(&rw_lock_list_mutex);
 }
@@ -284,7 +283,7 @@ void rw_lock_free(rw_lock_t *lock) {
     ut_a(UT_LIST_GET_NEXT(list, lock)->m_magic_n == RW_LOCK_MAGIC_N);
   }
 
-  UT_LIST_REMOVE(list, rw_lock_list, lock);
+  UT_LIST_REMOVE(rw_lock_list, lock);
 
   mutex_exit(&rw_lock_list_mutex);
 }
