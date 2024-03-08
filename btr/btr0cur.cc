@@ -2389,13 +2389,12 @@ void btr_cur_mark_extern_inherited_fields(rec_t *rec, dict_index_t *index, const
         for (ulint j = 0; j < upd_get_n_fields(update); j++) {
           if (upd_get_nth_field(update, j)->field_no == i) {
 
-            goto updated;
+            continue;
           }
         }
       }
 
       btr_cur_set_ownership_of_extern_field(rec, index, offsets, i, false, mtr);
-    updated:
     }
   }
 }
@@ -2427,7 +2426,7 @@ void btr_cur_mark_dtuple_inherited_extern(
     for (ulint j = 0; j < upd_get_n_fields(update); j++) {
       if (upd_get_nth_field(update, j)->field_no == i) {
 
-        goto is_updated;
+        continue;
       }
     }
 
@@ -2435,8 +2434,6 @@ void btr_cur_mark_dtuple_inherited_extern(
     len = dfield_get_len(dfield);
 
     data[len - BTR_EXTERN_FIELD_REF_SIZE + BTR_EXTERN_LEN] |= BTR_EXTERN_INHERITED_FLAG;
-
-  is_updated:
   }
 }
 
