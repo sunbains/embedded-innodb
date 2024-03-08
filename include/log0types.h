@@ -235,7 +235,7 @@ struct log_t {
   bool check_flush_or_checkpoint;
 
   /** Log groups */
-  UT_LIST_BASE_NODE_T(log_group_t, log_groups) log_groups;
+  UT_LIST_BASE_NODE_T_EXTERN(log_group_t, log_groups) log_groups;
 
   /** The fields involved in the log buffer flush @{ */
 
@@ -351,3 +351,5 @@ struct log_t {
   /** Checkpoint header is read to this buffer */
   byte *checkpoint_buf;
 };
+
+UT_LIST_NODE_GETTER_DEFINITION(log_group_t, log_groups);
