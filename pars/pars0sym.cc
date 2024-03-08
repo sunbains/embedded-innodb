@@ -231,7 +231,7 @@ sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab) {
 
 sym_node_t *sym_tab_add_id(sym_tab_t *sym_tab, byte *name, ulint len) {
   auto node = reinterpret_cast<sym_node_t *>(
-      mem_heap_alloc(sym_tab->heap, sizeof(sym_node_t)));
+      mem_heap_zalloc(sym_tab->heap, sizeof(sym_node_t)));
 
   node->common.type = QUE_NODE_SYMBOL;
 
