@@ -1091,9 +1091,6 @@ void trx_sys_close() {
   trx_doublewrite->buf_block_arr = nullptr;
 
   mutex_free(&trx_doublewrite->mutex);
-#ifdef UNIV_DEBUG
-  memset(&trx_doublewrite->mutex, 0x0, sizeof(trx_doublewrite->mutex));
-#endif
   mem_free(trx_doublewrite);
   trx_doublewrite = nullptr;
   /* End freeing of doublewrite buffer data structures. */

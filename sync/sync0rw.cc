@@ -170,7 +170,7 @@ mutex_t rw_lock_debug_mutex;
 
 /** If deadlock detection does not get immediately the mutex,
 it may wait for this event */
-os_event_t rw_lock_debug_event;
+OS_cond* rw_lock_debug_event;
 
 /** This is set to true, if there may be waiters for the event */
 bool rw_lock_debug_waiters;
@@ -200,8 +200,6 @@ void rw_lock_var_init() {
   rw_x_spin_wait_count = 0;
   rw_x_os_wait_count = 0;
   rw_x_exit_count = 0;
-
-  memset(&rw_lock_list_mutex, 0x0, sizeof(rw_lock_list_mutex));
 
 #ifdef UNIV_SYNC_DEBUG
   memset(&rw_lock_debug_mutex, 0x0, sizeof(rw_lock_debug_mutex));

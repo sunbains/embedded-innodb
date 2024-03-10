@@ -282,7 +282,7 @@ typedef struct srv_conc_slot_struct srv_conc_slot_t;
 
 struct srv_conc_slot_struct {
   /** event to wait */
-  os_event_t event;
+  OS_cond* event;
 
   /** true if slot reserved */
   bool reserved;
@@ -582,7 +582,7 @@ typedef struct srv_slot_struct {
   ib_time_t suspend_time;
 
   /** event used in suspending the thread when it has nothing to do */
-  os_event_t event;
+  OS_cond* event;
 
   /*!< suspended query thread (only used for client threads) */
   que_thr_t *thr;
@@ -604,7 +604,7 @@ typedef struct srv_sys_struct {
 /** Table for client threads where they will be suspended to wait for locks */
 static srv_slot_t *srv_client_table = nullptr;
 
-os_event_t srv_lock_timeout_thread_event;
+OS_cond* srv_lock_timeout_thread_event;
 
 static srv_sys_t *srv_sys = nullptr;
 
@@ -829,7 +829,7 @@ static ulint srv_table_reserve_slot(srv_thread_type type) /*!< in: type of the t
 /** Suspends the calling thread to wait for the event in its thread slot.
 NOTE! The server mutex has to be reserved by the caller!
 @return	event for the calling thread to wait */
-static os_event_t srv_suspend_thread(void) {
+static OS_cond* srv_suspend_thread(void) {
   ut_ad(mutex_own(&kernel_mutex));
 
   auto slot_no = thr_local_get_slot_no(os_thread_get_curr_id());
@@ -1179,7 +1179,7 @@ static srv_slot_t *srv_table_reserve_slot_for_user_thread(void) {
 
 void srv_suspend_user_thread(que_thr_t *thr) {
   srv_slot_t *slot;
-  os_event_t event;
+  OS_cond* event;
   double wait_time;
   trx_t *trx;
   ulint had_dict_lock;
@@ -1593,11 +1593,7 @@ void srv_export_innodb_status(void) {
 
   export_vars.innodb_buffer_pool_pages_misc =
     buf_pool->curr_size - UT_LIST_GET_LEN(buf_pool->LRU) - UT_LIST_GET_LEN(buf_pool->free);
-#ifdef HAVE_ATOMIC_BUILTINS
   export_vars.innodb_have_atomic_builtins = 1;
-#else
-  export_vars.innodb_have_atomic_builtins = 0;
-#endif
   export_vars.innodb_page_size = UNIV_PAGE_SIZE;
   export_vars.innodb_log_waits = srv_log_waits;
   export_vars.innodb_os_log_written = srv_os_log_written;
@@ -1992,7 +1988,7 @@ static void srv_sync_log_buffer_in_background(void) {
 }
 
 void *srv_master_thread(void *arg __attribute__((unused))) {
-  os_event_t event;
+  OS_cond* event;
   ulint old_activity_count;
   ulint n_pages_purged = 0;
   ulint n_bytes_merged;

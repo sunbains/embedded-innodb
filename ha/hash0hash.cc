@@ -97,9 +97,6 @@ void hash_create_mutexes_func(
 void hash_free_mutexes_func(hash_table_t *table) {
   for (ulint i = 0; i < table->n_mutexes; i++) {
     mutex_free(&table->mutexes[i]);
-#ifdef UNIV_DEBUG
-    memset(&table->mutexes[i], 0x0, sizeof(table->mutexes[i]));
-#endif /* UNIV_DEBUG */
   }
 
   mem_free(table->mutexes);

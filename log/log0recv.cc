@@ -141,7 +141,6 @@ void recv_sys_create() {
   }
 
   recv_sys = static_cast<recv_sys_t *>(mem_alloc(sizeof(*recv_sys)));
-  memset(recv_sys, 0x0, sizeof(*recv_sys));
 
   mutex_create(&recv_sys->mutex, SYNC_RECV);
 
@@ -152,7 +151,6 @@ void recv_sys_create() {
 void recv_sys_close(void) {
   if (recv_sys != nullptr) {
     mutex_free(&recv_sys->mutex);
-    memset(&recv_sys->mutex, 0x0, sizeof(recv_sys->mutex));
   }
 }
 

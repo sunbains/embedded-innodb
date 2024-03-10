@@ -750,7 +750,7 @@ struct buf_pool_t {
 
   /** this is in the set state when there is no flush batch of the given type
    * running */
-  os_event_t no_flush[BUF_FLUSH_N_TYPES];
+  OS_cond* no_flush[BUF_FLUSH_N_TYPES];
 
   /** a red-black tree is used exclusively during recovery to speed up
   insertions in the flush_list. This tree contains blocks in order of

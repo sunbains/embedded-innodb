@@ -50,7 +50,7 @@ extern const char *srv_main_thread_op_info;
 
 /* When this event is set the lock timeout and InnoDB monitor
 thread starts running */
-extern os_event_t srv_lock_timeout_thread_event;
+extern OS_cond* srv_lock_timeout_thread_event;
 
 /** Alternatives for srv_force_recovery. Non-zero values are intended
 to help the user get a damaged database up so that he can dump intact
@@ -458,7 +458,7 @@ struct export_var_struct {
   ulint innodb_buffer_pool_read_ahead_evicted; /*!< srv_read_ahead evicted*/
   ulint innodb_dblwr_pages_written;            /*!< srv_dblwr_pages_written */
   ulint innodb_dblwr_writes;                   /*!< srv_dblwr_writes */
-  bool innodb_have_atomic_builtins;            /*!< HAVE_ATOMIC_BUILTINS */
+  bool innodb_have_atomic_builtins;            /*!< Always true for now */
   ulint innodb_log_waits;                      /*!< srv_log_waits */
   ulint innodb_log_write_requests;             /*!< srv_log_write_requests */
   ulint innodb_log_writes;                     /*!< srv_log_writes */

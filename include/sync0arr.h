@@ -30,10 +30,10 @@ Created 9/5/1995 Heikki Tuuri
 #include "ut0mem.h"
 
 /** Synchronization wait array cell */
-typedef struct sync_cell_struct sync_cell_t;
+struct Sync_cell;
 
 /** Synchronization wait array */
-typedef struct sync_array_struct sync_array_t;
+struct Sync_check;
 
 /** Parameters for sync_array_create() @{ */
 
@@ -49,7 +49,7 @@ constexpr ulint SYNC_ARRAY_MUTEX = 2;
 which is automatically reserved when the functions operating on it
 are called.
 @return	own: created wait array */
-sync_array_t *sync_array_create(
+Sync_check *sync_array_create(
   ulint n_cells, /** in: number of cells in the array
                                      to create */
   ulint protection
@@ -58,12 +58,12 @@ sync_array_t *sync_array_create(
                                      of mutex protecting the data structure */
 
 /** Frees the resources in a wait array. */
-void sync_array_free(sync_array_t *arr); /** in, own: sync wait array */
+void sync_array_free(Sync_check *arr); /** in, own: sync wait array */
 
 /** Reserves a wait array cell for waiting for an object.
 The event of the cell is reset to nonsignalled state. */
 void sync_array_reserve_cell(
-  sync_array_t *arr, /** in: wait array */
+  Sync_check *arr, /** in: wait array */
   void *object,      /** in: pointer to the object to wait for */
   ulint type,        /** in: lock request type */
   const char *file,  /** in: file where requested */
@@ -76,35 +76,31 @@ a wait array cell. In the debug version this function checks
 if the wait for a semaphore will result in a deadlock, in which
 case prints info and asserts. */
 void sync_array_wait_event(
-  sync_array_t *arr, /** in: wait array */
+  Sync_check *arr, /** in: wait array */
   ulint index
 ); /** in: index of the reserved cell */
 
 /** Frees the cell. NOTE! sync_array_wait_event frees the cell
 automatically! */
 void sync_array_free_cell(
-  sync_array_t *arr, /** in: wait array */
+  Sync_check *arr, /** in: wait array */
   ulint index
 ); /** in: index of the cell in array */
 
 /** Note that one of the wait objects was signalled. */
-void sync_array_object_signalled(sync_array_t *arr); /** in: wait array */
+void sync_array_object_signalled(Sync_check *arr); /** in: wait array */
 
 /** If the wakeup algorithm does not work perfectly at semaphore relases,
 this function will do the waking (see the comment in mutex_exit). This
 function should be called about every 1 second in the server. */
-void sync_arr_wake_threads_if_sema_free(void);
+void sync_arr_wake_threads_if_sema_free();
 
 /** Prints warnings of long semaphore waits to stderr.
 @return	true if fatal semaphore wait threshold was exceeded */
 bool sync_array_print_long_waits(void);
 
-/** Validates the integrity of the wait array. Checks
-that the number of reserved cells equals the count variable. */
-void sync_array_validate(sync_array_t *arr); /** in: sync wait array */
-
 /** Prints info of the wait array. */
 void sync_array_print_info(
   ib_stream_t ib_stream, /** in: stream where to print */
-  sync_array_t *arr
+  Sync_check *arr
 ); /** in: wait array */

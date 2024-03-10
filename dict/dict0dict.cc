@@ -61,7 +61,7 @@ in S-mode; we cannot trust that the client protects implicit or background
 operations a table drop since the client does not know about them; therefore
 we need this; NOTE: a transaction which reserves this must keep book
 on the mode in trx_struct::dict_operation_lock_mode */
-rw_lock_t dict_operation_lock;
+rw_lock_t dict_operation_lock{};
 
 #define DICT_HEAP_SIZE \
   100 /*!< initial memory heap size when                                       \
@@ -128,13 +128,10 @@ static void dict_field_print_low(const dict_field_t *field); /*!< in: field */
 static void dict_foreign_free(dict_foreign_t *foreign); /*!< in, own: foreign key struct */
 
 /* mutex protecting the foreign and unique error buffers */
-mutex_t dict_foreign_err_mutex;
+mutex_t dict_foreign_err_mutex{};
 
 void dict_var_init() {
   dict_sys = nullptr;
-  // FIXME:
-  // memset(&dict_operation_lock, 0x0, sizeof(dict_operation_lock));
-  memset(&dict_foreign_err_mutex, 0x0, sizeof(dict_foreign_err_mutex));
 }
 
 void dict_casedn_str(char *a) {

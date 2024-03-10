@@ -116,11 +116,11 @@ typedef struct os_aio_array_struct os_aio_array_t;
 /** The asynchronous i/o array structure */
 struct os_aio_array_struct {
   os_mutex_t mutex; /*!< the mutex protecting the aio array */
-  os_event_t not_full;
+  OS_cond* not_full;
   /*!< The event which is set to the
   signaled state when there is space in
   the aio outside the ibuf segment */
-  os_event_t is_empty;
+  OS_cond* is_empty;
   /*!< The event which is set to the
   signaled state when there are no
   pending i/os in this array */
@@ -139,7 +139,7 @@ struct os_aio_array_struct {
 };
 
 /** Array of events used in simulated aio */
-static os_event_t *os_aio_segment_wait_events = nullptr;
+static OS_cond* *os_aio_segment_wait_events = nullptr;
 
 /** The aio arrays for non-ibuf i/o and ibuf i/o, as well as sync aio. These
 are nullptr when the module has not yet been initialized. @{ */
@@ -1530,7 +1530,7 @@ void os_aio_init(ulint n_per_seg, ulint n_read_segs, ulint n_write_segs, ulint n
 
   os_aio_validate();
 
-  os_aio_segment_wait_events = static_cast<os_event_t *>(ut_malloc(n_segments * sizeof(void *)));
+  os_aio_segment_wait_events = static_cast<OS_cond* *>(ut_malloc(n_segments * sizeof(void *)));
 
   for (ulint i = 0; i < n_segments; i++) {
     os_aio_segment_wait_events[i] = os_event_create(nullptr);

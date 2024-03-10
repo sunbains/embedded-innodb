@@ -218,7 +218,7 @@ buf_pool_t *buf_pool = nullptr;
 
 /** mutex protecting the buffer pool struct and control blocks, except the
 read-write lock in them */
-mutex_t buf_pool_mutex;
+mutex_t buf_pool_mutex{};
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 static ulint buf_dbg_counter = 0; /*!< This is used to insert validation
@@ -315,7 +315,6 @@ void buf_page_release(buf_block_t *block, ulint rw_latch, mtr_t *mtr) {
 
 void buf_var_init() {
   buf_pool = nullptr;
-  memset(&buf_pool_mutex, 0x0, sizeof(buf_pool_mutex));
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
   buf_dbg_counter = 0;
@@ -680,10 +679,7 @@ static const buf_block_t *buf_chunk_not_freed(buf_chunk_t *chunk) /*!< in: chunk
 }
 
 buf_pool_t *buf_pool_init() {
-  buf_chunk_t *chunk;
-  ulint i;
-
-  buf_pool = (buf_pool_t *)mem_zalloc(sizeof(buf_pool_t));
+  buf_pool = reinterpret_cast<buf_pool_t *>(mem_zalloc(sizeof(buf_pool_t)));
 
   /* 1. Initialize general fields
   ------------------------------- */
@@ -691,19 +687,21 @@ buf_pool_t *buf_pool_init() {
 
   buf_pool_mutex_enter();
 
-  buf_pool->n_chunks = 1;
-  buf_pool->chunks = chunk = (buf_chunk_t *)mem_alloc(sizeof *chunk);
+  auto chunk = reinterpret_cast<buf_chunk_t *>(mem_alloc(sizeof(buf_chunk_t)));
 
-  UT_LIST_INIT(buf_pool->flush_list);
-  UT_LIST_INIT(buf_pool->free);
+  buf_pool->n_chunks = 1;
+  buf_pool->chunks = chunk;
+
   UT_LIST_INIT(buf_pool->LRU);
+  UT_LIST_INIT(buf_pool->free);
+  UT_LIST_INIT(buf_pool->flush_list);
 
   if (!buf_chunk_init(chunk, srv_buf_pool_size)) {
     mem_free(chunk);
     mem_free(buf_pool);
     buf_pool = nullptr;
     buf_pool_mutex_exit();
-    return (nullptr);
+    return nullptr;
   }
 
   srv_buf_pool_old_size = srv_buf_pool_size;
@@ -716,7 +714,7 @@ buf_pool_t *buf_pool_init() {
 
   /* 2. Initialize flushing fields */
 
-  for (i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
+  for (ulint i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
     buf_pool->no_flush[i] = os_event_create(nullptr);
   }
 

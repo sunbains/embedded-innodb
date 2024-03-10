@@ -33,7 +33,7 @@ Created 9/6/1995 Heikki Tuuri
 /* Type definition for an operating system mutex struct */
 struct os_mutex_struct {
   /** Used by sync0arr.c for queing threads */
-  os_event_t event;
+  OS_cond* event;
 
   /** OS handle to mutex */
   void *handle;
@@ -61,7 +61,7 @@ os_thread_exit */
 ulint os_thread_count = 0;
 
 /** The list of all events created */
-static UT_LIST_BASE_NODE_T(os_event_struct_t, os_event_list) os_event_list{};
+static UT_LIST_BASE_NODE_T(OS_cond, os_event_list) os_event_list{};
 
 /** The list of all OS 'slow' mutexes */
 static UT_LIST_BASE_NODE_T(os_mutex_str_t, os_mutex_list) os_mutex_list{};
@@ -73,7 +73,7 @@ ulint os_fast_mutex_count = 0;
 /* Because a mutex is embedded inside an event and there is an
 event embedded inside a mutex, on free, this generates a recursive call.
 This version of the free event function doesn't acquire the global lock */
-static void os_event_free_internal(os_event_t event);
+static void os_event_free_internal(OS_cond* event);
 
 void os_sync_var_init() {
   os_sync_mutex = nullptr;
@@ -128,10 +128,10 @@ void os_sync_free(void) {
   os_sync_free_called = false;
 }
 
-os_event_t os_event_create(const char *name) {
+OS_cond* os_event_create(const char *name) {
   UT_NOT_USED(name);
 
-  auto event = static_cast<os_event_struct *>(ut_malloc(sizeof(os_event_struct)));
+  auto event = static_cast<OS_cond *>(ut_malloc(sizeof(OS_cond)));
 
   os_fast_mutex_init(&event->os_mutex);
 
@@ -166,7 +166,7 @@ os_event_t os_event_create(const char *name) {
   return event;
 }
 
-void os_event_set(os_event_t event) {
+void os_event_set(OS_cond* event) {
   ut_a(event);
 
   os_fast_mutex_lock(&(event->os_mutex));
@@ -180,7 +180,7 @@ void os_event_set(os_event_t event) {
   os_fast_mutex_unlock(&(event->os_mutex));
 }
 
-int64_t os_event_reset(os_event_t event) {
+int64_t os_event_reset(OS_cond* event) {
   int64_t ret = 0;
 
   ut_a(event);
@@ -199,7 +199,7 @@ int64_t os_event_reset(os_event_t event) {
 
 /** Frees an event object, without acquiring the global lock.
 @param[in,oun] event            Event to free. */
-static void os_event_free_internal(os_event_t event) {
+static void os_event_free_internal(OS_cond* event) {
   ut_a(event);
 
   /* This is to avoid freeing the mutex twice */
@@ -215,7 +215,7 @@ static void os_event_free_internal(os_event_t event) {
   ut_free(event);
 }
 
-void os_event_free(os_event_t event) {
+void os_event_free(OS_cond* event) {
   ut_a(event);
 
   os_fast_mutex_free(&(event->os_mutex));
@@ -233,7 +233,7 @@ void os_event_free(os_event_t event) {
   ut_free(event);
 }
 
-void os_event_wait_low(os_event_t event, int64_t reset_sig_count) {
+void os_event_wait_low(OS_cond* event, int64_t reset_sig_count) {
   int64_t old_signal_count;
 
   os_fast_mutex_lock(&(event->os_mutex));

@@ -55,10 +55,10 @@ necessary only if the memory block containing it is freed. */
 mutex_create_func((M), #M, (level), __FILE__, __LINE__)
 #else
 #define mutex_create(M, level) mutex_create_func((M), #M, __FILE__, __LINE__)
-#endif
+#endif /* UNIV_SYNC_DEBUG */
 #else
 #define mutex_create(M, level) mutex_create_func((M), __FILE__, __LINE__)
-#endif
+#endif /* UNIV_DEBUG */
 
   /** Creates, or rather, initializes a mutex object in a specified memory
 location (which must be appropriately aligned). The mutex is initialized
@@ -403,7 +403,7 @@ implementation of a mutual exclusion semaphore. */
 
 /** The global array of wait cells for implementation of the databases own
 mutexes and read-write locks. */
-extern sync_array_t *sync_primary_wait_array;
+extern Sync_check *sync_primary_wait_array;
 
 /** Constant determining how long spin wait is continued before suspending
 the thread. A value 600 rounds on a 1995 100 MHz Pentium seems to correspond
@@ -464,61 +464,28 @@ mutex.
 @return	the previous value of lock_word: 0 or 1 */
 inline byte mutex_test_and_set(mutex_t *mutex) /*!< in: mutex */
 {
-#if defined(HAVE_ATOMIC_BUILTINS)
-  return (os_atomic_test_and_set_byte(&mutex->lock_word, 1));
-#else
-  bool ret;
-
-  ret = os_fast_mutex_trylock(&(mutex->os_fast_mutex));
-
-  if (ret == 0) {
-    /* We check that os_fast_mutex_trylock does not leak
-    and allow race conditions */
-    ut_a(mutex->lock_word == 0);
-
-    mutex->lock_word = 1;
-  }
-
-  return ((byte)ret);
-#endif
+  return mutex->lock_word.exchange(true);
 }
 
 /** Performs a reset instruction to the lock_word field of a mutex. This
 instruction also serializes memory operations to the program order. */
 inline void mutex_reset_lock_word(mutex_t *mutex) /*!< in: mutex */
 {
-#if defined(HAVE_ATOMIC_BUILTINS)
-  /* In theory __sync_lock_release should be used to release the lock.
-  Unfortunately, it does not work properly alone. The workaround is
-  that more conservative __sync_lock_test_and_set is used instead. */
-  os_atomic_test_and_set_byte(&mutex->lock_word, 0);
-#else
-  mutex->lock_word = 0;
 
-  os_fast_mutex_unlock(&(mutex->os_fast_mutex));
-#endif
+  mutex->lock_word.store(false);
 }
 
 /** Gets the value of the lock word. */
 inline lock_word_t mutex_get_lock_word(const mutex_t *mutex) /*!< in: mutex */
 {
-  ut_ad(mutex);
-
-  return (mutex->lock_word);
+  return mutex->lock_word.load();
 }
 
 /** Gets the waiters field in a mutex.
+@param[in] mutex                Get the waiters or this mutex.
 @return	value to set */
-inline ulint mutex_get_waiters(const mutex_t *mutex) /*!< in: mutex */
-{
-  const volatile ulint *ptr; /*!< declared volatile to ensure that
-                             the value is read from memory */
-  ut_ad(mutex);
-
-  ptr = &(mutex->waiters);
-
-  return (*ptr); /* Here we assume that the read of a single
-                 word from memory is atomic */
+inline ulint mutex_get_waiters(const mutex_t *mutex) {
+  return mutex->m_waiters.load();
 }
 
 /** Unlocks a mutex owned by the current thread. */

@@ -70,7 +70,7 @@ extern mutex_t rw_lock_debug_mutex;
 
 /** If deadlock detection does not get immediately the mutex it may wait for
  * this event */
-extern os_event_t rw_lock_debug_event;
+extern OS_cond* rw_lock_debug_event;
 
 /** This is set to true, if there may be waiters for the event */
 extern bool rw_lock_debug_waiters;
@@ -324,11 +324,11 @@ struct rw_lock_struct {
   value iff recursive flag is set. */
 
   /** Used by sync0arr.c for thread queueing */
-  os_event_t m_event;
+  OS_cond* m_event;
 
   /** Event for next-writer to wait on. A thread
   must decrement m_lock_word before waiting. */
-  os_event_t m_wait_ex_event;
+  OS_cond* m_wait_ex_event;
 
   /** Event for next-writer to wait on. A thread
   must decrement m_lock_word before waiting. */

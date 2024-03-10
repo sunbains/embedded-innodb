@@ -1334,7 +1334,7 @@ void fil_init(ulint hash_size, ulint max_n_open) {
   ut_a(hash_size > 0);
   ut_a(max_n_open > 0);
 
-  fil_system = (fil_system_t *)mem_alloc(sizeof(fil_system_t));
+  fil_system = reinterpret_cast<fil_system_t *>(mem_alloc(sizeof(fil_system_t)));
 
   mutex_create(&fil_system->mutex, SYNC_ANY_LATCH);
 
@@ -3764,7 +3764,6 @@ void fil_close() {
   }
 
   mutex_free(&system->mutex);
-  memset(&system->mutex, 0x0, sizeof(system->mutex));
 
   /* Free the hash elements. We don't remove them from the table
   because we are going to destroy the table anyway. */

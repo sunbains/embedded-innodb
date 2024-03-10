@@ -1087,8 +1087,6 @@ ib_err_t innobase_start_or_create() {
     ib_logger(ib_stream, "The InnoDB memory heap is disabled\n");
   }
 
-  ib_logger(ib_stream, "" IB_ATOMICS_STARTUP_MSG "\n");
-
   /* Print an error message if someone tries to start up InnoDB a
   second time while it's already in state running. */
   if (srv_was_started && srv_start_has_been_called) {
@@ -1559,20 +1557,6 @@ ib_err_t innobase_start_or_create() {
   /* Check that os_fast_mutexes work as expected */
   os_fast_mutex_init(&srv_os_test_mutex);
 
-  if (0 != os_fast_mutex_trylock(&srv_os_test_mutex)) {
-    ib_logger(
-      ib_stream,
-      "Error: pthread_mutex_trylock returns"
-      " an unexpected value on\n"
-      "success! Cannot continue.\n"
-    );
-
-    srv_startup_abort(DB_ERROR);
-    return DB_ERROR;
-  }
-
-  os_fast_mutex_unlock(&srv_os_test_mutex);
-
   os_fast_mutex_lock(&srv_os_test_mutex);
 
   os_fast_mutex_unlock(&srv_os_test_mutex);
@@ -1654,7 +1638,7 @@ ib_err_t innobase_start_or_create() {
 
 /** Try to shutdown the InnoDB threads.
 @return	true if all threads exited. */
-static bool srv_threads_try_shutdown(os_event_t lock_timeout_thread_event) {
+static bool srv_threads_try_shutdown(OS_cond* lock_timeout_thread_event) {
   /* Let the lock timeout thread exit */
   os_event_set(lock_timeout_thread_event);
 

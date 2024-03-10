@@ -108,11 +108,11 @@ traffic between the cache and the main memory. The read loop can just access
 the cache, saving bus bandwidth.
 
 If we cannot acquire the mutex lock in the specified time, we reserve a cell
-in the wait array, set the waiters byte in the mutex to 1. To avoid a race
-condition, after setting the waiters byte and before suspending the waiting
+in the wait array, set the m_waiters byte in the mutex to 1. To avoid a race
+condition, after setting the m_waiters byte and before suspending the waiting
 thread, we still have to check that the mutex is reserved, because it may
 have happened that the thread which was holding the mutex has just released
-it and did not see the waiters byte set to 1, a case which would lead the
+it and did not see the m_waiters byte set to 1, a case which would lead the
 other thread to an infinite wait.
 
 LEMMA 1: After a thread resets the event of a mutex (or rw_lock), some
@@ -120,11 +120,11 @@ LEMMA 1: After a thread resets the event of a mutex (or rw_lock), some
 thread will eventually call os_event_set() on that particular event.
 Thus no infinite wait is possible in this case.
 
-Proof:	After making the reservation the thread sets the waiters field in the
+Proof:	After making the reservation the thread sets the m_waiters field in the
 mutex to 1. Then it checks that the mutex is still reserved by some thread,
 or it reserves the mutex for itself. In any case, some thread (which may be
 also some earlier thread, not necessarily the one currently holding the mutex)
-will set the waiters field to 0 in mutex_exit, and then call
+will set the m_waiters field to 0 in mutex_exit, and then call
 os_event_set() with the mutex as an argument.
 Q.E.D.
 
@@ -163,19 +163,19 @@ Q.E.D. */
 /** The number of iterations in the mutex_spin_wait() spin loop.
 Intended for performance monitoring. */
 static int64_t mutex_spin_round_count = 0;
-/** The number of mutex_spin_wait() calls.  Intended for
-performance monitoring. */
+
+/** The number of mutex_spin_wait() calls.  Intended for performance monitoring. */
 static int64_t mutex_spin_wait_count = 0;
-/** The number of OS waits in mutex_spin_wait().  Intended for
-performance monitoring. */
+
+/** The number of OS waits in mutex_spin_wait().  Intended for performance monitoring. */
 static int64_t mutex_os_wait_count = 0;
-/** The number of mutex_exit() calls. Intended for performance
-monitoring. */
+
+/** The number of mutex_exit() calls. Intended for performance monitoring. */
 int64_t mutex_exit_count = 0;
 
 /** The global array of wait cells for implementation of the database's own
 mutexes and read-write locks */
-sync_array_t *sync_primary_wait_array;
+Sync_check *sync_primary_wait_array;
 
 /** This variable is set to true when sync_init is called */
 bool sync_initialized = false;
@@ -227,71 +227,47 @@ struct sync_level_struct {
   ulint level; /*!< level of the latch in the latching order */
 };
 
-/** * Reset variables. */
-
-void sync_var_init(void) {
+void sync_var_init() {
   mutex_spin_round_count = 0;
   mutex_spin_wait_count = 0;
   mutex_os_wait_count = 0;
   mutex_exit_count = 0;
   sync_primary_wait_array = NULL;
   sync_initialized = false;
+
 #ifdef UNIV_SYNC_DEBUG
   sync_thread_level_arrays = NULL;
-  memset(&sync_thread_mutex, 0x0, sizeof(sync_thread_mutex));
 #endif /* UNIV_SYNC_DEBUG */
-  memset(&mutex_list_mutex, 0x0, sizeof(mutex_list_mutex));
 
 #ifdef UNIV_SYNC_DEBUG
   sync_order_checks_on = false;
 #endif /* UNIV_SYNC_DEBUG */
 }
 
-/** Creates, or rather, initializes a mutex object in a specified memory
-location (which must be appropriately aligned). The mutex is initialized
-in the reset state. Explicit freeing of the mutex with mutex_free is
-necessary only if the memory block containing it is freed. */
-
 void mutex_create_func(
-  mutex_t *mutex, /*!< in: pointer to memory */
+  mutex_t *mutex,
 #ifdef UNIV_DEBUG
-  const char *cmutex_name, /*!< in: mutex name */
+  const char *cmutex_name,
 #ifdef UNIV_SYNC_DEBUG
-  ulint level,            /*!< in: level */
-#endif                    /* UNIV_SYNC_DEBUG */
-#endif                    /* UNIV_DEBUG */
-  const char *cfile_name, /*!< in: file name where created */
-  ulint cline
-) /*!< in: file line where created */
-{
-#if defined(HAVE_ATOMIC_BUILTINS)
-  mutex_reset_lock_word(mutex);
-#else
-  os_fast_mutex_init(&(mutex->os_fast_mutex));
-  mutex->lock_word = 0;
-#endif
-  mutex->event = os_event_create(NULL);
-  mutex_set_waiters(mutex, 0);
-#ifdef UNIV_DEBUG
-  mutex->magic_n = MUTEX_MAGIC_N;
+  ulint level,
+#endif /* UNIV_SYNC_DEBUG */
 #endif /* UNIV_DEBUG */
+  const char *cfile_name,
+  ulint cline) {
+  new (mutex) mutex_t;
+
+  mutex->init();
+
 #ifdef UNIV_SYNC_DEBUG
-  mutex->line = 0;
   mutex->file_name = "not yet reserved";
   mutex->level = level;
 #endif /* UNIV_SYNC_DEBUG */
+
   mutex->cfile_name = cfile_name;
   mutex->cline = cline;
-  mutex->count_os_wait = 0;
+
 #ifdef UNIV_DEBUG
   mutex->cmutex_name = cmutex_name;
-  mutex->count_using = 0;
-  mutex->mutex_type = 0;
-  mutex->lspent_time = 0;
-  mutex->lmax_spent_time = 0;
-  mutex->count_spin_loop = 0;
-  mutex->count_spin_rounds = 0;
-  mutex->count_os_yield = 0;
 #endif /* UNIV_DEBUG */
 
   /* Check that lock_word is aligned; this is important on Intel */
@@ -299,8 +275,7 @@ void mutex_create_func(
 
   /* NOTE! The very first mutexes are not put to the mutex list */
 
-  if (
-    mutex == &mutex_list_mutex
+  if (mutex == &mutex_list_mutex
 #ifdef UNIV_SYNC_DEBUG
     || mutex == &sync_thread_mutex
 #endif /* UNIV_SYNC_DEBUG */
@@ -318,12 +293,7 @@ void mutex_create_func(
   mutex_exit(&mutex_list_mutex);
 }
 
-/** Calling this function is obligatory only if the memory buffer containing
-the mutex is freed. Removes a mutex object from the mutex list. The mutex
-is checked to be in the reset state. */
-
-void mutex_free(mutex_t *mutex) /*!< in: mutex */
-{
+void mutex_free(mutex_t *mutex) {
   ut_ad(mutex_validate(mutex));
   ut_a(mutex_get_lock_word(mutex) == 0);
   ut_a(mutex_get_waiters(mutex) == 0);
@@ -345,16 +315,7 @@ void mutex_free(mutex_t *mutex) /*!< in: mutex */
     mutex_exit(&mutex_list_mutex);
   }
 
-  os_event_free(mutex->event);
-#if !defined(HAVE_ATOMIC_BUILTINS)
-  os_fast_mutex_free(&(mutex->os_fast_mutex));
-#endif
-  /* If we free the mutex protecting the mutex list (freeing is
-  not necessary), we have to reset the magic number AFTER removing
-  it from the list. */
-#ifdef UNIV_DEBUG
-  mutex->magic_n = 0;
-#endif /* UNIV_DEBUG */
+  call_destructor(mutex);
 }
 
 /** NOTE! Use the corresponding macro in the header file, not this function
@@ -401,14 +362,7 @@ bool mutex_own(const mutex_t *mutex) {
 #endif /* UNIV_DEBUG */
 
 void mutex_set_waiters(mutex_t *mutex, ulint n) {
-  volatile ulint *ptr; /* declared volatile to ensure that
-                       the value is stored to memory */
-  ut_ad(mutex);
-
-  ptr = &(mutex->waiters);
-
-  *ptr = n; /* Here we assume that the write of a single
-            word in memory is atomic */
+  mutex->m_waiters.store(n);
 }
 
 void mutex_spin_wait(mutex_t *mutex, const char *file_name, ulint line) {
@@ -506,9 +460,9 @@ spin_loop:
   sync_array_reserve_cell(sync_primary_wait_array, mutex, SYNC_MUTEX, file_name, line, &index);
 
   /* The memory order of the array reservation and the change in the
-  waiters field is important: when we suspend a thread, we first
-  reserve the cell and then set waiters field to 1. When threads are
-  released in mutex_exit, the waiters field is first set to zero and
+  m_waiters field is important: when we suspend a thread, we first
+  reserve the cell and then set m_waiters field to 1. When threads are
+  released in mutex_exit, the m_waiters field is first set to zero and
   then the event is set to the signaled state. */
 
   mutex_set_waiters(mutex, 1);
@@ -537,14 +491,14 @@ spin_loop:
 
       goto finish_timing;
 
-      /* Note that in this case we leave the waiters field
+      /* Note that in this case we leave the m_waiters field
       set to 1. We cannot reset it to zero, as we do not
-      know if there are other waiters. */
+      know if there are other m_waiters. */
     }
   }
 
   /* Now we know that there has been some thread holding the mutex
-  after the change in the wait array and the waiters field was made.
+  after the change in the wait array and the m_waiters field was made.
   Now there is no risk of infinite wait on the event. */
 
 #ifdef UNIV_SRV_PRINT_LATCH_WAITS
@@ -594,7 +548,7 @@ finish_timing:
 void mutex_signal_object(mutex_t *mutex) {
   mutex_set_waiters(mutex, 0);
 
-  /* The memory order of resetting the waiters field and
+  /* The memory order of resetting the m_waiters field and
   signaling the object is important. See LEMMA 1 above. */
   os_event_set(mutex->event);
   sync_array_object_signalled(sync_primary_wait_array);
@@ -1229,7 +1183,7 @@ void sync_init() {
   mutex_create(&rw_lock_debug_mutex, SYNC_NO_ORDER_CHECK);
 
   rw_lock_debug_event = os_event_create(NULL);
-  rw_lock_debug_waiters = false;
+  rw_lock_debug_m_waiters = false;
 #endif /* UNIV_SYNC_DEBUG */
 }
 
