@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 2006, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,10 +21,10 @@ A vector of pointers to data items
 Created 4/6/2006 Osku Salerma
 ************************************************************************/
 
-#ifndef IB_VECTOR_H
-#define IB_VECTOR_H
+#pragma once
 
 #include "innodb0types.h"
+
 #include "mem0mem.h"
 
 /** An automatically resizing vector data type. */
@@ -46,55 +46,16 @@ typedef struct ib_vector_struct ib_vector_t;
 
 /** Create a new vector with the given initial size.
 @return	vector */
-
 ib_vector_t *ib_vector_create(
   mem_heap_t *heap, /*!< in: heap */
   ulint size
 ); /*!< in: initial size */
 
 /** Push a new element to the vector, increasing its size if necessary. */
-
 void ib_vector_push(
   ib_vector_t *vec, /*!< in: vector */
   void *elem
 ); /*!< in: data element */
-
-/** Get the number of elements in the vector.
-@return	number of elements in vector */
-inline ulint ib_vector_size(const ib_vector_t *vec); /*!< in: vector */
-
-/** Test whether a vector is empty or not.
-@return	true if empty */
-inline bool ib_vector_is_empty(const ib_vector_t *vec); /*!< in: vector */
-
-/** Get the n'th element.
-@return	n'th element */
-inline void *ib_vector_get(
-  ib_vector_t *vec, /*!< in: vector */
-  ulint n
-); /*!< in: element index to get */
-
-/** Get n'th element as a const pointer.
-@return	n'th element */
-inline const void *ib_vector_get_const(
-  const ib_vector_t *vec, /*!< in: vector */
-  ulint n
-); /*!< in: element index to get */
-
-/** Set the n'th element and return the previous value.
-@return	n'th element */
-inline void *ib_vector_set(
-  ib_vector_t *vec, /*!< in: vector */
-  ulint n,          /*!< in: element index to set */
-  void *p
-); /*!< in: new value to set */
-
-/** Remove the last element from the vector. */
-inline void *ib_vector_pop(ib_vector_t *vec); /*!< in: vector */
-
-/** Free the underlying heap of the vector. Note that vec is invalid
-after this call. */
-inline void ib_vector_free(ib_vector_t *vec); /*!< in,own: vector */
 
 /** An automatically resizing vector data type. */
 struct ib_vector_struct {
@@ -104,8 +65,81 @@ struct ib_vector_struct {
   ulint total;      /*!< number of elements allocated */
 };
 
-#ifndef UNIV_NONINL
-#include "ut0vec.ic"
-#endif
+/** Get number of elements in vector.
+@return	number of elements in vector */
+inline ulint ib_vector_size(const ib_vector_t *vec) /*!< in: vector */
+{
+  return (vec->used);
+}
 
-#endif
+/** Get n'th element.
+@return	n'th element */
+inline void *ib_vector_get(
+  ib_vector_t *vec, /*!< in: vector */
+  ulint n
+) /*!< in: element index to get */
+{
+  ut_a(n < ib_vector_size(vec));
+
+  return (vec->data[n]);
+}
+
+/** Get n'th element as a const pointer.
+@return	n'th element */
+inline const void *ib_vector_get_const(
+  const ib_vector_t *vec, /*!< in: vector */
+  ulint n
+) /*!< in: element index to get */
+{
+  ut_a(n < ib_vector_size(vec));
+
+  return (vec->data[n]);
+}
+
+/** Set n'th element and return the previous value.
+@return	n'th element */
+inline void *ib_vector_set(
+  ib_vector_t *vec, /*!< in: vector */
+  ulint n,          /*!< in: element index to set */
+  void *p
+) /*!< in: new value to set */
+{
+  void *prev;
+
+  ut_a(n < ib_vector_size(vec));
+
+  prev = vec->data[n];
+  vec->data[n] = p;
+
+  return (prev);
+}
+
+/** Remove the last element from the vector.
+@return	last vector element */
+inline void *ib_vector_pop(ib_vector_t *vec) /*!< in/out: vector */
+{
+  void *elem;
+
+  ut_a(vec->used > 0);
+  --vec->used;
+  elem = vec->data[vec->used];
+
+  ut_d(vec->data[vec->used] = NULL);
+  UNIV_MEM_INVALID(&vec->data[vec->used], sizeof(*vec->data));
+
+  return (elem);
+}
+
+/** Free the underlying heap of the vector. Note that vec is invalid
+after this call. */
+inline void ib_vector_free(ib_vector_t *vec) /*!< in, own: vector */
+{
+  mem_heap_free(vec->heap);
+}
+
+/** Test whether a vector is empty or not.
+@return	true if empty */
+inline bool ib_vector_is_empty(const ib_vector_t *vec) /*!< in: vector */
+{
+  return (ib_vector_size(vec) == 0);
+}

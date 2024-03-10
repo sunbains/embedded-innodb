@@ -23,10 +23,6 @@ Created 12/27/1996 Heikki Tuuri
 
 #include "row0upd.h"
 
-#ifdef UNIV_NONINL
-#include "row0upd.ic"
-#endif
-
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "buf0lru.h"

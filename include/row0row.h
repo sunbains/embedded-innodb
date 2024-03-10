@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ General row routines
 Created 4/20/1996 Heikki Tuuri
 *******************************************************/
 
-#ifndef row0row_h
-#define row0row_h
+#pragma once
 
 #include "btr0types.h"
 #include "data0data.h"
@@ -34,6 +33,9 @@ Created 4/20/1996 Heikki Tuuri
 #include "rem0types.h"
 #include "row0types.h"
 #include "trx0types.h"
+#include "dict0dict.h"
+#include "rem0rec.h"
+#include "trx0undo.h"
 
 /** Gets the offset of the trx id field, in bytes relative to the origin of
 a clustered index record.
@@ -240,8 +242,8 @@ bool row_search_index_entry(
   mtr_t *mtr
 ); /*!< in: mtr */
 
-#define ROW_COPY_DATA 1
-#define ROW_COPY_POINTERS 2
+constexpr ulint ROW_COPY_DATA = 1;
+constexpr ulint ROW_COPY_POINTERS = 2;
 
 /* The allowed latching order of index records is the following:
 (1) a secondary index record ->
@@ -269,8 +271,85 @@ ulint row_raw_format(
 ); /*!< in: output buffer size
                                                      in bytes */
 
-#ifndef UNIV_NONINL
-#include "row0row.ic"
-#endif
 
-#endif
+/** Reads the trx id field from a clustered index record.
+@return	value of the field */
+inline trx_id_t row_get_rec_trx_id(
+  const rec_t *rec,         /*!< in: record */
+  dict_index_t *dict_index, /*!< in: clustered index */
+  const ulint *offsets
+) /*!< in: rec_get_offsets(rec, index) */
+{
+  ulint offset;
+
+  ut_ad(dict_index_is_clust(dict_index));
+  ut_ad(rec_offs_validate(rec, dict_index, offsets));
+
+  offset = dict_index->trx_id_offset;
+
+  if (!offset) {
+    offset = row_get_trx_id_offset(rec, dict_index, offsets);
+  }
+
+  return (trx_read_trx_id(rec + offset));
+}
+
+/** Reads the roll pointer field from a clustered index record.
+@return	value of the field */
+inline roll_ptr_t row_get_rec_roll_ptr(
+  const rec_t *rec,         /*!< in: record */
+  dict_index_t *dict_index, /*!< in: clustered index */
+  const ulint *offsets
+) /*!< in: rec_get_offsets(rec, index) */
+{
+  ulint offset;
+
+  ut_ad(dict_index_is_clust(dict_index));
+  ut_ad(rec_offs_validate(rec, dict_index, offsets));
+
+  offset = dict_index->trx_id_offset;
+
+  if (!offset) {
+    offset = row_get_trx_id_offset(rec, dict_index, offsets);
+  }
+
+  return (trx_read_roll_ptr(rec + offset + DATA_TRX_ID_LEN));
+}
+
+/** Builds from a secondary index record a row reference with which we can
+search the clustered index record. */
+inline void row_build_row_ref_fast(
+  dtuple_t *ref,    /*!< in/out: typed data tuple where the
+                          reference is built */
+  const ulint *map, /*!< in: array of field numbers in rec
+                          telling how ref should be built from
+                          the fields of rec */
+  const rec_t *rec, /*!< in: record in the index; must be
+                          preserved while ref is used, as we do
+                          not copy field values to heap */
+  const ulint *offsets
+) /*!< in: array returned by rec_get_offsets() */
+{
+  dfield_t *dfield;
+  const byte *field;
+  ulint len;
+  ulint ref_len;
+  ulint field_no;
+  ulint i;
+
+  ut_ad(rec_offs_validate(rec, NULL, offsets));
+  ut_ad(!rec_offs_any_extern(offsets));
+  ref_len = dtuple_get_n_fields(ref);
+
+  for (i = 0; i < ref_len; i++) {
+    dfield = dtuple_get_nth_field(ref, i);
+
+    field_no = *(map + i);
+
+    if (field_no != ULINT_UNDEFINED) {
+
+      field = rec_get_nth_field(rec, offsets, field_no, &len);
+      dfield_set_data(dfield, field, len);
+    }
+  }
+}

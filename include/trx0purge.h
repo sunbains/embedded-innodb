@@ -1,4 +1,4 @@
-/**
+/*****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ Purge old versions
 Created 3/26/1996 Heikki Tuuri
 *******************************************************/
 
-#ifndef trx0purge_h
-#define trx0purge_h
+#pragma once
 
 #include "fil0fil.h"
 #include "innodb0types.h"
@@ -31,6 +30,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "que0types.h"
 #include "trx0sys.h"
 #include "trx0types.h"
+#include "trx0undo.h"
 #include "usr0sess.h"
 
 /** The global data structure coordinating a purge */
@@ -40,57 +40,51 @@ extern trx_purge_t *purge_sys;
 which needs no purge */
 extern trx_undo_rec_t trx_purge_dummy_rec;
 
-/** Calculates the file address of an undo log header when we have the file
-address of its history list node.
-@return	file address of the log */
-inline fil_addr_t trx_purge_get_log_from_hist(fil_addr_t node_addr); /*!< in: file address of the history
-                           list node of the log */
 /** Checks if trx_id is >= purge_view: then it is guaranteed that its update
 undo log still exists in the system.
 @return true if is sure that it is preserved, also if the function
 returns false, it is possible that the undo log still exists in the
 system */
-
 bool trx_purge_update_undo_must_exist(trx_id_t trx_id); /*!< in: transaction id */
+
 /** Creates the global purge system control structure and inits the history
 mutex. */
+void trx_purge_sys_create();
 
-void trx_purge_sys_create(void);
 /** Frees the global purge system control structure. */
+void trx_purge_sys_close();
 
-void trx_purge_sys_close(void);
 /** Adds the update undo log as the first log in the history list. Removes the
 update undo log segment from the rseg slot if it is too big for reuse. */
-
 void trx_purge_add_update_undo_to_history(
   trx_t *trx,        /*!< in: transaction */
   page_t *undo_page, /*!< in: update undo log header page,
                        x-latched */
   mtr_t *mtr
 ); /*!< in: mtr */
+
 /** Fetches the next undo log record from the history list to purge. It must be
 released with the corresponding release function.
 @return copy of an undo log record or pointer to trx_purge_dummy_rec,
 if the whole undo log can skipped in purge; NULL if none left */
-
 trx_undo_rec_t *trx_purge_fetch_next_rec(
   roll_ptr_t *roll_ptr,  /*!< out: roll pointer to undo record */
   trx_undo_inf_t **cell, /*!< out: storage cell for the record in the
                            purge array */
   mem_heap_t *heap
 ); /*!< in: memory heap where copied */
-/** Releases a reserved purge undo record. */
 
+/** Releases a reserved purge undo record. */
 void trx_purge_rec_release(trx_undo_inf_t *cell); /*!< in: storage cell */
+
 /** This function runs a purge batch.
 @return	number of undo log pages handled in the batch */
+ulint trx_purge();
 
-ulint trx_purge(void);
 /** Prints information of the purge system to stderr. */
+void trx_purge_sys_print();
 
-void trx_purge_sys_print(void);
 /** Reset the variables. */
-
 void trx_purge_var_init(void);
 
 /** The control structure used in the purge operation */
@@ -151,12 +145,18 @@ struct trx_purge_struct {
                        completes */
 };
 
-#define TRX_PURGE_ON 1 /* purge operation is running */
-#define TRX_STOP_PURGE \
-  2 /* purge operation is stopped, or                                          \
-    it should be stopped */
-#ifndef UNIV_NONINL
-#include "trx0purge.ic"
-#endif
+/** Purge operation is running */
+constexpr ulint TRX_PURGE_ON = 1;
 
-#endif
+/* purge operation is stopped, or it should be stopped */
+constexpr ulint TRX_STOP_PURGE = 2;
+
+/** Calculates the file address of an undo log header when we have the file
+address of its history list node.
+@param[in,out] node_addr  File address of the history list node of the log.
+@return	file address of the log */
+inline fil_addr_t trx_purge_get_log_from_hist(fil_addr_t node_addr) {
+  node_addr.boffset -= TRX_UNDO_HISTORY_NODE;
+
+  return node_addr;
+}

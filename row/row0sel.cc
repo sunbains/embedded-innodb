@@ -31,15 +31,10 @@ Created 12/19/1997 Heikki Tuuri
 #include "row0sel.h"
 #include "row0prebuilt.h"
 
-#ifdef UNIV_NONINL
-#include "row0sel.ic"
-#endif
-
 #include "api0misc.h"
 #include "api0ucode.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
-
 #include "buf0lru.h"
 #include "dict0boot.h"
 #include "dict0dict.h"

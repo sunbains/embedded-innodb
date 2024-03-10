@@ -43,45 +43,39 @@ the kernel mutex */
 extern ulint trx_n_transactions;
 
 /** Set detailed error message for the transaction. */
-
 void trx_set_detailed_error(
   trx_t *trx, /*!< in: transaction struct */
   const char *msg
 ); /*!< in: detailed error message */
-/** Retrieves the error_info field from a trx.
-@return	the error info */
-inline const dict_index_t *trx_get_error_info(const trx_t *trx); /*!< in: trx object */
+
 /** Creates and initializes a transaction object.
 @return	own: the transaction */
+trx_t *trx_create(sess_t *sess);/*!< in: session */
 
-trx_t *trx_create(sess_t *sess) /*!< in: session */
-  __attribute__((nonnull));
 /** Creates a transaction object.
 @return	own: transaction object */
+trx_t *trx_allocate_();
 
-trx_t *trx_allocate_(void);
 /** Creates a transaction object for background operations by the master thread.
 @return	own: transaction object */
+trx_t *trx_allocate_for_background();
 
-trx_t *trx_allocate_for_background(void);
 /** Frees a transaction object. */
-
 void trx_free_(trx_t *trx); /*!< in, own: trx object */
-/** Frees a transaction object of a background operation of the master thread.
- */
 
+/** Frees a transaction object of a background operation of the master thread.  */
 void trx_free_for_background(trx_t *trx); /*!< in, own: trx object */
+
 /** Creates trx objects for transactions and initializes the trx list of
 trx_sys at database start. Rollback segment and undo log lists must
 already exist when this function is called, because the lists of
 transactions to be rolled back or cleaned up are built based on the
 undo log lists. */
-
 void trx_lists_init_at_db_start(ib_recovery_t recovery); /*!< in: recovery flag */
+
 /** Starts a new transaction.
 @return true if success, false if the rollback segment could not
 support this many transactions */
-
 bool trx_start(
   trx_t *trx, /*!< in: transaction */
   ulint rseg_id
@@ -90,64 +84,61 @@ bool trx_start(
                               segment automatically in a round-robin fashion */
 /** Starts a new transaction.
 @return	true */
-
 bool trx_start_low(
   trx_t *trx, /*!< in: transaction */
   ulint rseg_id
 ); /*!< in: rollback segment id; if ULINT_UNDEFINED
                    is passed, the system chooses the rollback segment
                    automatically in a round-robin fashion */
-/** Starts the transaction if it is not yet started. */
-inline void trx_start_if_not_started(trx_t *trx); /*!< in: transaction */
-/** Commits a transaction. */
 
+/** Commits a transaction. */
 void trx_commit_off_kernel(trx_t *trx); /*!< in: transaction */
+
 /** Cleans up a transaction at database startup. The cleanup is needed if
 the transaction already got to the middle of a commit when the database
 crashed, and we cannot roll it back. */
-
 void trx_cleanup_at_db_startup(trx_t *trx); /*!< in: transaction */
+
 /** Does the transaction prepare.
 @return	0 or error number */
-
 ulint trx_prepare(trx_t *trx); /*!< in: trx handle */
+
 /** This function is used to find number of prepared transactions and
 their transaction objects for a recovery. This function is used to
 recover any X/Open XA distributed transactions
 @return	number of prepared transactions */
-
 int trx_recover(
   XID *xid_list, /*!< in/out: prepared transactions */
   ulint len
 ); /*!< in: number of slots in xid_list */
+
 #ifdef WITH_XOPEN
 /** This function is used to find one X/Open XA distributed transaction
 which is in the prepared state
 @return	trx or NULL */
-
 trx_t *trx_get_trx_by_xid(XID *xid); /*!< in: X/Open XA transaction identification */
-#endif                               /* WITH_XOPEN */
+#endif /* WITH_XOPEN */
+
 /** If required, flushes the log to disk if we called trx_commit_()
 with trx->flush_log_later == true.
 @return	0 or error number */
-
 ulint trx_commit_complete_(trx_t *trx); /*!< in: trx handle */
-/** Marks the latest SQL statement ended. */
 
+/** Marks the latest SQL statement ended. */
 void trx_mark_sql_stat_end(trx_t *trx); /*!< in: trx handle */
+
 /** Assigns a read view for a consistent read query. All the consistent reads
 within the same transaction will get the same read view, which is created
 when this function is first called for a new started transaction.
 @return	consistent read view */
-
 read_view_t *trx_assign_read_view(trx_t *trx); /*!< in: active transaction */
+
 /** The transaction must be in the TRX_QUE_LOCK_WAIT state. Puts it to
 the TRX_QUE_RUNNING state and releases query threads which were
 waiting for a lock in the wait_thrs list. */
-
 void trx_end_lock_wait(trx_t *trx); /*!< in: transaction */
-/** Sends a signal to a trx object. */
 
+/** Sends a signal to a trx object. */
 void trx_sig_send(
   trx_t *trx,              /*!< in: trx handle */
   ulint type,              /*!< in: signal type */
@@ -165,9 +156,9 @@ void trx_sig_send(
                              calling function can start running
                              a new query thread; if the parameter
                              is NULL, it is ignored */
+
 /** Send the reply message when a signal in the queue of the trx has
 been handled. */
-
 void trx_sig_reply(
   trx_sig_t *sig, /*!< in: signal */
   que_thr_t **next_thr
@@ -192,24 +183,23 @@ void trx_sig_start_handle(
                            a pointer to a NULL pointer, then the
                            calling function can start running
                            a new query thread */
+
 /** Ends signal handling. If the session is in the error state, and
 trx->graph_before_signal_handling != NULL, returns control to the error
 handling routine of the graph (currently only returns the control to the
 graph root which then sends an error message to the client). */
-
 void trx_end_signal_handling(trx_t *trx); /*!< in: trx */
+
 /** Creates a commit command node struct.
 @return	own: commit node struct */
-
 commit_node_t *commit_node_create(mem_heap_t *heap); /*!< in: mem heap where created */
+
 /** Performs an execution step for a commit type node in a query graph.
 @return	query thread to run next, or NULL */
-
 que_thr_t *trx_commit_step(que_thr_t *thr); /*!< in: query thread */
 
 /** Prints info about a transaction to the given file. The caller must own the
 kernel mutex. */
-
 void trx_print(
   ib_stream_t ib_stream, /*!< in: output stream */
   trx_t *trx,            /*!< in: transaction */
@@ -232,20 +222,8 @@ typedef enum trx_dict_op {
   TRX_DICT_OP_INDEX = 2
 } trx_dict_op_t;
 
-/** Determine if a transaction is a dictionary operation.
-@return	dictionary operation mode */
-inline enum trx_dict_op trx_get_dict_operation(const trx_t *trx) /*!< in: transaction */
-  __attribute__((pure));
-/** Flag a transaction a dictionary operation. */
-inline void trx_set_dict_operation(
-  trx_t *trx, /*!< in/out: transaction */
-  enum trx_dict_op op
-); /*!< in: operation, not
-                                                         TRX_DICT_OP_NONE */
-
 /** Determines if the currently running transaction has been interrupted.
 @return	true if interrupted */
-
 bool trx_is_interrupted(const trx_t *trx); /*!< in: transaction */
 
 /** Calculates the "weight" of a transaction. The weight of one transaction
@@ -258,18 +236,12 @@ is estimated as the number of altered rows + the number of locked rows.
 have edited non-transactional tables are considered heavier than ones
 that have not.
 @return	<0, 0 or >0; similar to strcmp(3) */
-
 int trx_weight_cmp(
   const trx_t *a, /*!< in: the first transaction to be compared */
   const trx_t *b
 ); /*!< in: the second transaction to be compared */
 
-/** Retrieves transacion's id, represented as unsigned long long.
-@return	transaction's id */
-inline uint64_t trx_get_id(const trx_t *trx); /*!< in: transaction */
-
 /** Creates a transaction object for client. */
-
 trx_t *trx_allocate_for_client(void *arg); /*!< in: pointer to client data */
 
 /** Does the transaction commit for client.
@@ -281,16 +253,12 @@ void trx_free_for_client(trx_t *trx); /*!< in, own: trx object */
 
 /* Maximum length of a string that can be returned by
 trx_get_que_state_str(). */
-#define TRX_QUE_STATE_STR_MAX_LEN 12 /* "ROLLING BACK" */
-
-/** Retrieves transaction's que state in a human readable string. The string
-should not be free()'d or modified.
-@return	string in the data segment */
-inline const char *trx_get_que_state_str(const trx_t *trx); /*!< in: transaction */
+// FIXME: Use get rid of this magic number
+/* "ROLLING BACK" */
+constexpr ulint TRX_QUE_STATE_STR_MAX_LEN = 12;
 
 /** Reset global variables. */
-
-void trx_var_init(void);
+void trx_var_init();
 
 /* Signal to a transaction */
 struct trx_sig_struct {
@@ -301,20 +269,19 @@ struct trx_sig_struct {
                        wants reply after the operation induced
                        by the signal is completed */
   trx_savept_t savept; /*!< possible rollback savepoint */
-  UT_LIST_NODE_T(trx_sig_t)
-  signals; /*!< queue of pending signals to the
-           transaction */
-  UT_LIST_NODE_T(trx_sig_t)
-  reply_signals; /*!< list of signals for which the sender
-                 transaction is waiting a reply */
+
+  /*!< queue of pending signals to the transaction */
+  UT_LIST_NODE_T(trx_sig_t) signals;
+
+  /*!< list of signals for which the sender transaction is waiting a reply */
+  UT_LIST_NODE_T(trx_sig_t) reply_signals;
 };
 
-#define TRX_MAGIC_N 91118598
+constexpr ulint TRX_MAGIC_N = 91118598;
 
 /* The transaction handle; every session has a trx object which is freed only
 when the session is freed; in addition there may be session-less transactions
 rolling back after a database recovery */
-
 struct trx_struct {
   ulint magic_n;
 
@@ -356,7 +323,7 @@ struct trx_struct {
                          were modifications by the transaction;
                          in that case we must flush the log
                          in trx_commit() */
-#endif                          /* WITH_XOPEN */
+#endif /* WITH_XOPEN */
   ulint duplicates;             /*!< TRX_DUP_IGNORE | TRX_DUP_REPLACE */
   ulint deadlock_mark;          /*!< a mark field used in deadlock
                                 checking algorithm.  */
@@ -394,11 +361,11 @@ struct trx_struct {
   XID xid;             /*!< X/Open XA transaction
                        identification to identify a
                        transaction branch */
-#endif                 /* WITH_XOPEN */
+#endif /* WITH_XOPEN */
   trx_id_t no;         /*!< transaction serialization number ==
                        max trx id when the transaction is
                        moved to COMMITTED_IN_MEMORY state */
-  uint64_t commit_lsn; /*!< lsn at the time of the commit */
+  lsn_t commit_lsn; /*!< lsn at the time of the commit */
   trx_id_t table_id;   /*!< Table to drop iff dict_operation
                        is true, or 0. */
   /*------------------------------*/
@@ -421,11 +388,12 @@ struct trx_struct {
   /*------------------------------*/
   UT_LIST_NODE_T(trx_t)
       trx_list; /*!< list of transactions */
+
   UT_LIST_NODE_T(trx_t)
       client_trx_list; /*!< list of transactions created for
                    client */
   /*------------------------------*/
-  enum db_err error_state;        /*!< 0 if no error, otherwise error
+  db_err error_state;        /*!< 0 if no error, otherwise error
                                   number; NOTE That ONLY the thread
                                   doing the transaction is allowed to
                                   set this field: this is NOT protected
@@ -540,86 +508,77 @@ struct trx_struct {
 UT_LIST_NODE_GETTER_DEFINITION(trx_t, trx_list);
 UT_LIST_NODE_GETTER_DEFINITION(trx_t, client_trx_list);
 
-#define TRX_MAX_N_THREADS                                                      \
-  32 /*!< maximum number of                                                    \
-     concurrent threads running a                                              \
-     single operation of a                                                     \
-     transaction, e.g., a parallel                                             \
-     query */
+/** Maximum number of concurrent threads running a single operation of a
+transaction, e.g., a parallel query */
+#define TRX_MAX_N_THREADS 32
+
+
 /* Transaction concurrency states (trx->conc_state) */
 #define TRX_NOT_STARTED 0
 #define TRX_ACTIVE 1
 #define TRX_COMMITTED_IN_MEMORY 2
-#define TRX_PREPARED 3 /*!< Support for 2PC/XA */
+
+/*!< Support for 2PC/XA */
+constexpr ulint TRX_PREPARED = 3;
 
 /* Transaction execution states when trx->conc_state == TRX_ACTIVE */
-#define TRX_QUE_RUNNING 0 /*!< transaction is running */
-#define TRX_QUE_LOCK_WAIT \
-  1                            /*!< transaction is waiting                     \
-                               for a lock */
-#define TRX_QUE_ROLLING_BACK 2 /*!< transaction is rolling back */
-#define TRX_QUE_COMMITTING 3   /*!< transaction is committing */
+
+/** transaction is running */
+constexpr ulint TRX_QUE_RUNNING = 0;
+
+/** transaction is waiting for a lock */
+constexpr ulint TRX_QUE_LOCK_WAIT = 1 ;
+
+/** transaction is rolling back */
+constexpr ulint TRX_QUE_ROLLING_BACK = 2;
+
+/** transaction is committing */
+constexpr ulint TRX_QUE_COMMITTING = 3;
 
 /* Transaction isolation levels (trx->isolation_level) */
-#define TRX_ISO_READ_UNCOMMITTED \
-  0 /*!< dirty read: non-locking                                               \
-    SELECTs are performed so that                                              \
-    we do not look at a possible                                               \
-    earlier version of a record;                                               \
-    thus they are not 'consistent'                                             \
-    reads under this isolation                                                 \
-    level; otherwise like level                                                \
-    2 */
 
-#define TRX_ISO_READ_COMMITTED \
-  1 /*!< somewhat Oracle-like                                                  \
-    isolation, except that in                                                  \
-    range UPDATE and DELETE we                                                 \
-    must block phantom rows                                                    \
-    with next-key locks;                                                       \
-    SELECT ... FOR UPDATE and ...                                              \
-    LOCK IN SHARE MODE only lock                                               \
-    the index records, NOT the                                                 \
-    gaps before them, and thus                                                 \
-    allow free inserting;                                                      \
-    each consistent read reads its                                             \
-    own snapshot */
+/** dirty read: non-locking SELECTs are performed so that we
+do not look at a possible earlier version of a record; thus they
+are not 'consistent' reads under this isolation level; otherwise like level 2 */
+constexpr ulint TRX_ISO_READ_UNCOMMITTED = 0;
 
-#define TRX_ISO_REPEATABLE_READ \
-  2 /*!< this is the default;                                                  \
-    all consistent reads in the                                                \
-    same trx read the same                                                     \
-    snapshot;                                                                  \
-    full next-key locking used                                                 \
-    in locking reads to block                                                  \
-    insertions into gaps */
+/** somewhat Oracle-like isolation, except that in range UPDATE and DELETE
+we must block phantom rows with next-key locks;
+  SELECT ... FOR UPDATE and ...  LOCK IN SHARE MODE only lock the index records,
+  NOT the gaps before them, and thus allow free inserting;
+  each consistent read reads its own snapshot */
+constexpr ulint TRX_ISO_READ_COMMITTED = 1;
 
-#define TRX_ISO_SERIALIZABLE \
-  3 /*!< all plain SELECTs are                                                 \
-    converted to LOCK IN SHARE                                                 \
-    MODE reads */
+/** this is the default; all consistent reads in the same trx read the same
+snapshot; full next-key locking used in locking reads to block insertions into gaps */
+constexpr ulint TRX_ISO_REPEATABLE_READ = 2;
+
+/** all plain SELECTs are converted to LOCK IN SHARE MODE reads */
+constexpr ulint TRX_ISO_SERIALIZABLE = 3;
 
 /* Treatment of duplicate values (trx->duplicates; for example, in inserts).
 Multiple flags can be combined with bitwise OR. */
-#define TRX_DUP_IGNORE 1  /*!< duplicate rows are to be updated */
-#define TRX_DUP_REPLACE 2 /*!< duplicate rows are to be replaced */
+
+/** duplicate rows are to be updated */
+constexpr ulint TRX_DUP_IGNORE = 1;
+
+/** duplicate rows are to be replaced */
+constexpr ulint TRX_DUP_REPLACE = 2;
 
 /* Types of a trx signal */
-#define TRX_SIG_NO_SIGNAL 0
-#define TRX_SIG_TOTAL_ROLLBACK 1
-#define TRX_SIG_ROLLBACK_TO_SAVEPT 2
-#define TRX_SIG_COMMIT 3
-#define TRX_SIG_ERROR_OCCURRED 4
-#define TRX_SIG_BREAK_EXECUTION 5
+constexpr ulint TRX_SIG_NO_SIGNAL = 0;
+constexpr ulint TRX_SIG_TOTAL_ROLLBACK = 1;
+constexpr ulint TRX_SIG_ROLLBACK_TO_SAVEPT = 2;
+constexpr ulint TRX_SIG_COMMIT = 3;
+constexpr ulint TRX_SIG_ERROR_OCCURRED = 4;
+constexpr ulint TRX_SIG_BREAK_EXECUTION = 5;
 
 /* Sender types of a signal */
-#define TRX_SIG_SELF \
-  0 /*!< sent by the session itself, or                                        \
-    by an error occurring within this                                          \
-    session */
-#define TRX_SIG_OTHER_SESS \
-  1 /*!< sent by another session (which                                        \
-    must hold rights to this) */
+/** sent by the session itself, or by an error occurring within this session */
+constexpr ulint TRX_SIG_SELF = 0;
+
+/** sent by another session (which must hold rights to this) */
+constexpr ulint TRX_SIG_OTHER_SESS = 1;
 
 /** Commit node states */
 enum commit_node_state {
@@ -635,6 +594,99 @@ struct commit_node_struct {
   enum commit_node_state state; /*!< node execution state */
 };
 
-#ifndef UNIV_NONINL
-#include "trx0trx.ic"
-#endif
+
+/** Starts the transaction if it is not yet started. */
+inline void trx_start_if_not_started(trx_t *trx) /*!< in: transaction */
+{
+  ut_ad(trx->conc_state != TRX_COMMITTED_IN_MEMORY);
+
+  if (trx->conc_state == TRX_NOT_STARTED) {
+
+    trx_start(trx, ULINT_UNDEFINED);
+  }
+}
+
+/** Retrieves the error_info field from a trx.
+@return	the error info */
+inline const dict_index_t *trx_get_error_info(const trx_t *trx) /*!< in: trx object */
+{
+  return (trx->error_info);
+}
+
+/** Retrieves transacion's id, represented as unsigned long long.
+@return	transaction's id */
+inline uint64_t trx_get_id(const trx_t *trx) /*!< in: transaction */
+{
+  return trx->id;
+}
+
+/** Retrieves transaction's que state in a human readable string. The string
+should not be free()'d or modified.
+@return	string in the data segment */
+inline const char *trx_get_que_state_str(const trx_t *trx) /*!< in: transaction */
+{
+  /* be sure to adjust TRX_QUE_STATE_STR_MAX_LEN if you change this */
+  switch (trx->que_state) {
+    case TRX_QUE_RUNNING:
+      return ("RUNNING");
+    case TRX_QUE_LOCK_WAIT:
+      return ("LOCK WAIT");
+    case TRX_QUE_ROLLING_BACK:
+      return ("ROLLING BACK");
+    case TRX_QUE_COMMITTING:
+      return ("COMMITTING");
+    default:
+      return ("UNKNOWN");
+  }
+}
+
+/** Determine if a transaction is a dictionary operation.
+@return	dictionary operation mode */
+inline enum trx_dict_op trx_get_dict_operation(const trx_t *trx) /*!< in: transaction */
+{
+  enum trx_dict_op op = (enum trx_dict_op)trx->dict_operation;
+
+#ifdef UNIV_DEBUG
+  switch (op) {
+    case TRX_DICT_OP_NONE:
+    case TRX_DICT_OP_TABLE:
+    case TRX_DICT_OP_INDEX:
+      return (op);
+  }
+  ut_error;
+#endif /* UNIV_DEBUG */
+  return ((enum trx_dict_op)expect(op, TRX_DICT_OP_NONE));
+}
+
+/** Flag a transaction a dictionary operation. */
+inline void trx_set_dict_operation(
+  trx_t *trx, /*!< in/out: transaction */
+  enum trx_dict_op op
+) /*!< in: operation, not
+                                                        TRX_DICT_OP_NONE */
+{
+#ifdef UNIV_DEBUG
+  enum trx_dict_op old_op = trx_get_dict_operation(trx);
+
+  switch (op) {
+    case TRX_DICT_OP_NONE:
+      ut_error;
+      break;
+    case TRX_DICT_OP_TABLE:
+      switch (old_op) {
+        case TRX_DICT_OP_NONE:
+        case TRX_DICT_OP_INDEX:
+        case TRX_DICT_OP_TABLE:
+          goto ok;
+      }
+      ut_error;
+      break;
+    case TRX_DICT_OP_INDEX:
+      ut_ad(old_op == TRX_DICT_OP_NONE);
+      break;
+  }
+ok:
+#endif /* UNIV_DEBUG */
+
+  trx->dict_operation = op;
+}

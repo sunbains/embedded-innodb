@@ -23,10 +23,6 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "trx0roll.h"
 
-#ifdef UNIV_NONINL
-#include "trx0roll.ic"
-#endif
-
 #include "ddl0ddl.h"
 #include "fsp0fsp.h"
 #include "lock0lock.h"
@@ -45,7 +41,7 @@ Created 3/26/1996 Heikki Tuuri
 
 /** This many pages must be undone before a truncate is tried within
 rollback */
-#define TRX_ROLL_TRUNC_THRESHOLD 1
+static constexpr ulint TRX_ROLL_TRUNC_THRESHOLD = 1;
 
 /** In crash recovery, the current trx to be rolled back */
 static trx_t *trx_roll_crash_recv_trx = nullptr;
@@ -57,16 +53,7 @@ static int64_t trx_roll_max_undo_no;
 /** Auxiliary variable which tells the previous progress % we printed */
 static ulint trx_roll_progress_printed_pct;
 
-/** Rollback a transaction.
-@return	error code or DB_SUCCESS */
-
-db_err trx_general_rollback(
-  trx_t *trx,   /*!< in: transaction handle */
-  bool partial, /*!< in: true if partial rollback requested */
-  trx_savept_t *savept
-) /*!< in: pointer to savepoint undo number, if
-                          partial rollback requested */
-{
+db_err trx_general_rollback(trx_t *trx, bool partial, trx_savept_t *savept) {
   mem_heap_t *heap;
   que_thr_t *thr;
   roll_node_t *roll_node;

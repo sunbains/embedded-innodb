@@ -23,10 +23,6 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "trx0rseg.h"
 
-#ifdef UNIV_NONINL
-#include "trx0rseg.ic"
-#endif
-
 #include "fut0lst.h"
 #include "srv0srv.h"
 #include "trx0purge.h"

@@ -57,13 +57,6 @@ void read_view_close(read_view_t *view); /** in: read view */
 statement end if the trx isolation level is <= TRX_ISO_READ_COMMITTED. */
 void read_view_close_for_read_committed(trx_t *trx); /** in: trx which has a read view */
 
-/** Checks if a read view sees the specified transaction.
-@return	true if sees */
-inline bool read_view_sees_trx_id(
-  const read_view_t *view, /** in: read view */
-  trx_id_t trx_id
-); /** in: trx id */
-
 /** Prints a read view to stderr. */
 void read_view_print(const read_view_t *view); /** in: read view */
 
@@ -151,6 +144,62 @@ struct cursor_view_struct {
   ulint n_client_tables_in_use;
 };
 
-#ifndef UNIV_NONINL
-#include "read0read.ic"
-#endif
+/** Gets the nth trx id in a read view.
+@return	trx id */
+inline trx_id_t read_view_get_nth_trx_id(
+  const read_view_t *view, /*!< in: read view */
+  ulint n
+) /*!< in: position */
+{
+  ut_ad(n < view->n_trx_ids);
+
+  return *(view->trx_ids + n);
+}
+
+/** Sets the nth trx id in a read view. */
+inline void read_view_set_nth_trx_id(
+  read_view_t *view, /*!< in: read view */
+  ulint n,           /*!< in: position */
+  trx_id_t trx_id
+) /*!< in: trx id to set */
+{
+  ut_ad(n < view->n_trx_ids);
+
+  *(view->trx_ids + n) = trx_id;
+}
+
+/** Checks if a read view sees the specified transaction.
+@return	true if sees */
+inline bool read_view_sees_trx_id(
+  const read_view_t *view, /*!< in: read view */
+  trx_id_t trx_id
+) /*!< in: trx id */
+{
+  if (trx_id < view->up_limit_id) {
+
+    return true;
+  }
+
+  if (trx_id >= view->low_limit_id) {
+
+    return false;
+  }
+
+  /* We go through the trx ids in the array smallest first: this order
+  may save CPU time, because if there was a very long running
+  transaction in the trx id array, its trx id is looked at first, and
+  the first two comparisons may well decide the visibility of trx_id. */
+
+  const auto n_ids = view->n_trx_ids;
+
+  for (ulint i = 0; i < n_ids; i++) {
+
+    int cmp = trx_id - read_view_get_nth_trx_id(view, n_ids - i - 1);
+
+    if (cmp <= 0) {
+      return cmp < 0;
+    }
+  }
+
+  return true;
+}

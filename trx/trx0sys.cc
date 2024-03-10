@@ -23,10 +23,6 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "trx0sys.h"
 
-#ifdef UNIV_NONINL
-#include "trx0sys.ic"
-#endif
-
 #include "fsp0fsp.h"
 #include "log0log.h"
 #include "mtr0log.h"

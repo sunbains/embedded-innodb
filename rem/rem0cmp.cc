@@ -23,10 +23,6 @@ Created 7/1/1994 Heikki Tuuri
 
 #include "rem0cmp.h"
 
-#ifdef UNIV_NONINL
-#include "rem0cmp.ic"
-#endif
-
 #include "api0api.h"
 #include "api0ucode.h"
 #include "srv0srv.h"

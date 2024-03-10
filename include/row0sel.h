@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -21,8 +21,7 @@ Select
 Created 12/19/1997 Heikki Tuuri
 *******************************************************/
 
-#ifndef row0sel_h
-#define row0sel_h
+#pragma once
 
 #include "api0api.h"
 #include "btr0pcur.h"
@@ -30,7 +29,7 @@ Created 12/19/1997 Heikki Tuuri
 #include "dict0types.h"
 #include "innodb0types.h"
 #include "pars0sym.h"
-#include "que0types.h"
+#include "que0que.h"
 #include "read0read.h"
 #include "row0types.h"
 #include "trx0types.h"
@@ -328,11 +327,69 @@ struct row_printf_node_struct {
   sel_node_t *sel_node; /*!< select */
 };
 
-#define ROW_SEL_OPEN_CURSOR 0
-#define ROW_SEL_CLOSE_CURSOR 1
+/** Gets the plan node for the nth table in a join.
+@return	plan node */
+inline plan_t *sel_node_get_nth_plan(
+  sel_node_t *node, /*!< in: select node */
+  ulint i
+) /*!< in: get ith plan node */
+{
+  ut_ad(i < node->n_tables);
 
-#ifndef UNIV_NONINL
-#include "row0sel.ic"
-#endif
+  return (node->plans + i);
+}
 
-#endif
+/** Resets the cursor defined by sel_node to the SEL_NODE_OPEN state, which
+means that it will start fetching from the start of the result set again,
+regardless of where it was before, and it will set intention locks on the
+tables. */
+inline void sel_node_reset_cursor(sel_node_t *node) /*!< in: select node */
+{
+  node->state = SEL_NODE_OPEN;
+}
+
+/** Performs an execution step of an open or close cursor statement node.
+@return	query thread to run next or NULL */
+inline que_thr_t *open_step(que_thr_t *thr) /*!< in: query thread */
+{
+  sel_node_t *sel_node;
+  open_node_t *node;
+  ulint err;
+
+  ut_ad(thr);
+
+  node = (open_node_t *)thr->run_node;
+  ut_ad(que_node_get_type(node) == QUE_NODE_OPEN);
+
+  sel_node = node->cursor_def;
+
+  err = DB_SUCCESS;
+
+  if (node->op_type == ROW_SEL_OPEN_CURSOR) {
+
+    /*		if (sel_node->state == SEL_NODE_CLOSED) { */
+
+    sel_node_reset_cursor(sel_node);
+    /*		} else {
+    err = DB_ERROR;
+    } */
+  } else {
+    if (sel_node->state != SEL_NODE_CLOSED) {
+
+      sel_node->state = SEL_NODE_CLOSED;
+    } else {
+      err = DB_ERROR;
+    }
+  }
+
+  if (expect(err, DB_SUCCESS) != DB_SUCCESS) {
+    /* SQL error detected */
+    ib_logger(ib_stream, "SQL error %lu\n", (ulong)err);
+
+    ut_error;
+  }
+
+  thr->run_node = que_node_get_parent(node);
+
+  return (thr);
+}

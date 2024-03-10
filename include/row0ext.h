@@ -23,9 +23,12 @@ Created September 2006 Marko Makela
 
 #pragma once
 
-#include "data0types.h"
 #include "innodb0types.h"
+
+#include "btr0types.h"
+#include "data0types.h"
 #include "mem0mem.h"
+#include "rem0types.h"
 #include "row0types.h"
 
 /** Creates a cache of column prefixes of externally stored columns.
@@ -46,6 +49,14 @@ row_ext_t *row_ext_create(
   mem_heap_t *heap
 ); /*!< in: heap where created */
 
+/** Prefixes of externally stored columns */
+struct row_ext_struct {
+  ulint n_ext;      /*!< number of externally stored columns */
+  const ulint *ext; /*!< col_no's of externally stored columns */
+  byte *buf;        /*!< backing store of the column prefix cache */
+  ulint len[1];     /*!< prefix lengths; 0 if not cached */
+};
+
 /** Looks up a column prefix of an externally stored column.
 @return column prefix, or NULL if the column is not stored externally,
 or pointer to field_ref_zero if the BLOB pointer is unset */
@@ -53,8 +64,23 @@ inline const byte *row_ext_lookup_ith(
   const row_ext_t *ext, /*!< in/out: column prefix cache */
   ulint i,              /*!< in: index of ext->ext[] */
   ulint *len
-); /*!< out: length of prefix, in bytes,
+) /*!< out: length of prefix, in bytes,
                                          at most REC_MAX_INDEX_COL_LEN */
+{
+  ut_ad(ext);
+  ut_ad(len);
+  ut_ad(i < ext->n_ext);
+
+  *len = ext->len[i];
+
+  if (unlikely(*len == 0)) {
+    /* The BLOB could not be fetched to the cache. */
+    return (field_ref_zero);
+  } else {
+    return (ext->buf + i * REC_MAX_INDEX_COL_LEN);
+  }
+}
+
 /** Looks up a column prefix of an externally stored column.
 @return column prefix, or NULL if the column is not stored externally,
 or pointer to field_ref_zero if the BLOB pointer is unset */
@@ -65,17 +91,19 @@ inline const byte *row_ext_lookup(
                                      dict_col_get_no(); NOT relative to the
                                      records in the clustered index */
   ulint *len
-); /*!< out: length of prefix, in bytes,
+) /*!< out: length of prefix, in bytes,
                                      at most REC_MAX_INDEX_COL_LEN */
+{
+  ulint i;
 
-/** Prefixes of externally stored columns */
-struct row_ext_struct {
-  ulint n_ext;      /*!< number of externally stored columns */
-  const ulint *ext; /*!< col_no's of externally stored columns */
-  byte *buf;        /*!< backing store of the column prefix cache */
-  ulint len[1];     /*!< prefix lengths; 0 if not cached */
-};
+  ut_ad(ext);
+  ut_ad(len);
 
-#ifndef UNIV_NONINL
-#include "row0ext.ic"
-#endif
+  for (i = 0; i < ext->n_ext; i++) {
+    if (col == ext->ext[i]) {
+      return (row_ext_lookup_ith(ext, i, len));
+    }
+  }
+
+  return (NULL);
+}

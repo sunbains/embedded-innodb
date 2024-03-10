@@ -26,11 +26,6 @@ Created 5/7/1996 Heikki Tuuri
 #include "lock0lock.h"
 #include "lock0priv.h"
 
-#ifdef UNIV_NONINL
-#include "lock0lock.ic"
-#include "lock0priv.ic"
-#endif
-
 #include "api0ucode.h"
 #include "dict0mem.h"
 #include "trx0purge.h"

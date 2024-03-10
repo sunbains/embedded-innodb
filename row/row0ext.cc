@@ -21,13 +21,8 @@ Caching of externally stored column prefixes
 Created September 2006 Marko Makela
 *******************************************************/
 
-#include "row0ext.h"
-
-#ifdef UNIV_NONINL
-#include "row0ext.ic"
-#endif
-
 #include "btr0cur.h"
+#include "row0ext.h"
 
 /** Fills the column prefix cache of an externally stored column.
 @param[in,out] ext              Column prefix cache
