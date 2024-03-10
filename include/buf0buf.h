@@ -25,6 +25,9 @@ Created 11/5/1995 Heikki Tuuri
 
 #include "innodb0types.h"
 
+#include <functional>
+#include <optional>
+#include <set>
 #include "buf0types.h"
 #include "fil0types.h"
 #include "hash0hash.h"
@@ -378,6 +381,66 @@ void buf_pool_invalidate();
 void buf_var_init();
 
 /* --------------------------- LOWER LEVEL ROUTINES ------------------------- */
+
+template <typename T>
+using rbt_cmp_t = std::function<bool(T, T)>;
+
+template <typename T>
+using rbt_t = std::set<T, rbt_cmp_t<T>>;
+
+template <typename T>
+using rbt_itr_t = typename rbt_t<T>::iterator;
+
+// TODO: create allocator using ut_malloc and ut_free, and use here. 
+template <typename T>
+rbt_t<T> *rbt_create(rbt_cmp_t<T> cmp) {
+  return new rbt_t<T>(std::move(cmp));
+}
+
+template <typename T>
+void rbt_free(rbt_t<T> *tree) {
+  delete tree;
+}
+
+template <typename T>
+std::optional<rbt_itr_t<T>> rbt_insert(rbt_t<T> *tree, T t) {
+  auto result = tree->emplace(t);
+  return result.first;
+}
+
+template <typename T>
+bool rbt_delete(rbt_t<T> *tree, T t) {
+  auto delete_count = tree->erase(t);
+  return delete_count > 0;
+}
+
+template <typename T>
+std::optional<rbt_itr_t<T>> rbt_first(rbt_t<T> *tree) {
+  if (tree->empty()) {
+    return {};
+  }
+
+  return tree->begin();
+}
+
+template <typename T>
+std::optional<rbt_itr_t<T>> rbt_prev(rbt_t<T> *tree, rbt_itr_t<T> itr) {
+  if (itr == tree->begin()) {
+    return {};
+  }
+
+  itr--;
+  return itr;
+}
+
+template <typename T>
+std::optional<rbt_itr_t<T>> rbt_next(rbt_t<T> *tree, rbt_itr_t<T> itr) {
+  if (itr == tree->end() || (++itr) == tree->end()) {
+    return {};
+  }
+
+  return itr;
+}
 
 #ifdef UNIV_SYNC_DEBUG
 /*** Adds latch level info for the rw-lock protecting the buffer frame. This
@@ -757,7 +820,7 @@ struct buf_pool_t {
   oldest_modification LSN and is kept in sync with the flush_list.
   Each member of the tree MUST also be on the flush_list. This tree
   is relevant only in recovery and is set to nullptr once the recovery is over. */
-  ib_rbt_t *flush_rbt;
+  rbt_t<buf_page_t *> *flush_rbt;
 
   /** a sequence number used to count the number of buffer blocks removed
   from the end of the LRU list; NOTE that this counter may wrap around
