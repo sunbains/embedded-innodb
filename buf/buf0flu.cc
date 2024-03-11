@@ -83,11 +83,12 @@ static buf_page_t *buf_flush_insert_in_flush_rbt(buf_page_t *bpage) /*!< in: bpa
   ut_ad(buf_pool_mutex_own());
 
   /* Insert this buffer into the rbt. */
-  auto c_node = rbt_insert(buf_pool->flush_rbt, bpage);
-  ut_a(c_node.has_value());
+  auto insert_result = rbt_insert(buf_pool->flush_rbt, bpage);
+  ut_a(insert_result.second);
 
+  auto c_node = insert_result.first;
   /* Get the predecessor. */
-  auto p_node = rbt_prev(buf_pool->flush_rbt, c_node.value());
+  auto p_node = rbt_prev(buf_pool->flush_rbt, c_node);
 
   if (p_node.has_value()) {
     prev = *p_node.value();
@@ -154,7 +155,7 @@ void buf_flush_init_flush_rbt() {
   ut_ad(buf_pool_mutex_own());
 
   /* Create red black tree for speedy insertions in flush list. */
-  buf_pool->flush_rbt = rbt_create<buf_page_t *>(buf_flush_block_cmp);
+  buf_pool->flush_rbt = rbt_create(buf_flush_block_cmp);
 }
 
 void buf_flush_free_flush_rbt() {
@@ -1259,7 +1260,7 @@ ulint buf_flush_get_desired_flush_rate(void) {
 /** Validates the flush list.
 @return	true if ok */
 static bool buf_flush_validate_low() {
-  std::optional<rbt_itr_t<buf_page_t *>> rnode{};
+  std::optional<buf_page_rbt_itr_t> rnode{};
 
   UT_LIST_CHECK(buf_pool->flush_list);
 

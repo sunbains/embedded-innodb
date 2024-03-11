@@ -382,65 +382,63 @@ void buf_var_init();
 
 /* --------------------------- LOWER LEVEL ROUTINES ------------------------- */
 
+/*** Simple allocator using ut_malloc and ur_free */
 template <typename T>
-using rbt_cmp_t = std::function<bool(T, T)>;
+struct ut_allocator {
+  using value_type = T;
+  ut_allocator() noexcept = default;
 
-template <typename T>
-using rbt_t = std::set<T, rbt_cmp_t<T>>;
+  template <class U>
+  explicit ut_allocator(const ut_allocator<U> &) noexcept {}
 
-template <typename T>
-using rbt_itr_t = typename rbt_t<T>::iterator;
+  T *allocate(std::size_t n) { return (T *)ut_malloc(sizeof(T) * n); }
 
-// TODO: create allocator using ut_malloc and ut_free, and use here. 
-template <typename T>
-rbt_t<T> *rbt_create(rbt_cmp_t<T> cmp) {
-  return new rbt_t<T>(std::move(cmp));
+  void deallocate(T *p, std::size_t n) { ut_free(p); }
+};
+
+template <class T, class U>
+constexpr bool operator==(const ut_allocator<T> &, const ut_allocator<U> &) noexcept {
+  return true;
 }
 
-template <typename T>
-void rbt_free(rbt_t<T> *tree) {
-  delete tree;
+template <class T, class U>
+constexpr bool operator!=(const ut_allocator<T> &, const ut_allocator<U> &) noexcept {
+  return false;
 }
 
-template <typename T>
-std::optional<rbt_itr_t<T>> rbt_insert(rbt_t<T> *tree, T t) {
-  auto result = tree->emplace(t);
-  return result.first;
-}
+/* set typedefs for buffer_page_t */
+using buf_page_rbt_cmp_t = std::function<bool(buf_page_t *, buf_page_t *)>;
 
-template <typename T>
-bool rbt_delete(rbt_t<T> *tree, T t) {
-  auto delete_count = tree->erase(t);
-  return delete_count > 0;
-}
+using buf_page_rbt_t = std::set<buf_page_t *, buf_page_rbt_cmp_t, ut_allocator<buf_page_t *>>;
 
-template <typename T>
-std::optional<rbt_itr_t<T>> rbt_first(rbt_t<T> *tree) {
-  if (tree->empty()) {
-    return {};
-  }
+using buf_page_rbt_itr_t = typename buf_page_rbt_t::iterator;
 
-  return tree->begin();
-}
+/* operations on set(rbt) */
+/** Create an instance of set for buffer_page_t */
+buf_page_rbt_t *rbt_create(buf_page_rbt_cmp_t cmp);
 
-template <typename T>
-std::optional<rbt_itr_t<T>> rbt_prev(rbt_t<T> *tree, rbt_itr_t<T> itr) {
-  if (itr == tree->begin()) {
-    return {};
-  }
+/** Free te instance of set for buffer_page_t */
+void rbt_free(buf_page_rbt_t *tree);
 
-  itr--;
-  return itr;
-}
+/** Insert buf_page in the set.
+ * @return pair of inserted node if successful. success is determined by second element of pair. */
+std::pair<buf_page_rbt_itr_t, bool> rbt_insert(buf_page_rbt_t *tree, buf_page_t *t);
 
-template <typename T>
-std::optional<rbt_itr_t<T>> rbt_next(rbt_t<T> *tree, rbt_itr_t<T> itr) {
-  if (itr == tree->end() || (++itr) == tree->end()) {
-    return {};
-  }
+/** Delete buf_page from the set.
+ * @return pair of inserted node if successful. success is determined by second element of pair. */
+bool rbt_delete(buf_page_rbt_t *tree, buf_page_t *t);
 
-  return itr;
-}
+/** Get the first element of the set.
+ * @return iterator to the first element of the set if it exists. */
+std::optional<buf_page_rbt_itr_t> rbt_first(buf_page_rbt_t *tree);
+
+/** Get the previous node of the current node.
+ * @return iterator to the prev element if it exists. */
+std::optional<buf_page_rbt_itr_t> rbt_prev(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr);
+
+/** Get the next node of the current node.
+ * @return iterator to the next element if it exists. */
+std::optional<buf_page_rbt_itr_t> rbt_next(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr);
 
 #ifdef UNIV_SYNC_DEBUG
 /*** Adds latch level info for the rw-lock protecting the buffer frame. This
@@ -820,7 +818,7 @@ struct buf_pool_t {
   oldest_modification LSN and is kept in sync with the flush_list.
   Each member of the tree MUST also be on the flush_list. This tree
   is relevant only in recovery and is set to nullptr once the recovery is over. */
-  rbt_t<buf_page_t *> *flush_rbt;
+  buf_page_rbt_t *flush_rbt;
 
   /** a sequence number used to count the number of buffer blocks removed
   from the end of the LRU list; NOTE that this counter may wrap around
