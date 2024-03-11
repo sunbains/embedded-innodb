@@ -249,13 +249,6 @@ struct fil_system_t {
   /** hash table based on the space name */
   hash_table_t *name_hash;
 
-  /** Base node for the LRU list of the most recently used open files with no
-  pending i/o's; if we start an i/o on the file, we first remove it from this
-  list, and return it to the start of the list when the i/o ends; log files and
-  the system tablespace are not put to this list: they are opened after the
-  startup, and kept open until shutdown */
-  UT_LIST_BASE_NODE_T(fil_node_t, LRU) LRU;
-
   /** base node for the list of those tablespaces whose files contain unflushed
   writes; those spaces have at least one file node where modification_counter
   > flush_counter */
@@ -742,10 +735,6 @@ static void fil_node_open_file(
 
   system->n_open++;
 
-  if (space->purpose == FIL_TABLESPACE && space->id != 0) {
-    /* Put the node to the LRU list */
-    UT_LIST_ADD_FIRST(system->LRU, node);
-  }
 }
 
 /** Closes a file. */
@@ -771,61 +760,6 @@ static void fil_node_close_file(
   node->open = false;
   ut_a(system->n_open > 0);
   system->n_open--;
-
-  if (node->space->purpose == FIL_TABLESPACE && node->space->id != 0) {
-    ut_a(UT_LIST_GET_LEN(system->LRU) > 0);
-
-    /* The node is in the LRU list, remove it */
-    UT_LIST_REMOVE(system->LRU, node);
-  }
-}
-
-/** Tries to close a file in the LRU list. The caller must hold the fil_sys
-mutex.
-@return true if success, false if should retry later; since i/o's
-generally complete in < 100 ms, and as InnoDB writes at most 128 pages
-from the buffer pool in a batch, and then immediately flushes the
-files, there is a good chance that the next time we find a suitable
-node from the LRU list */
-static bool fil_try_to_close_file_in_LRU(bool print_info) /** in: if true, prints information why it
-                      cannot close a file */
-{
-  fil_node_t *node;
-
-  ut_ad(mutex_own(&fil_system->mutex));
-
-  node = UT_LIST_GET_LAST(fil_system->LRU);
-
-  if (print_info) {
-    ib_logger(ib_stream, "fil_sys open file LRU len %lu\n", (ulong)UT_LIST_GET_LEN(fil_system->LRU));
-  }
-
-  while (node != nullptr) {
-    if (node->modification_counter == node->flush_counter && node->n_pending_flushes == 0) {
-
-      fil_node_close_file(node, fil_system);
-
-      return true;
-    }
-
-    if (print_info && node->n_pending_flushes > 0) {
-      ib_logger(ib_stream, "cannot close file ");
-      ut_print_filename(ib_stream, node->name);
-      ib_logger(ib_stream, ", because n_pending_flushes %lu\n", (ulong)node->n_pending_flushes);
-    }
-
-    if (print_info && node->modification_counter != node->flush_counter) {
-      ib_logger(ib_stream, "cannot close file ");
-      ut_print_filename(ib_stream, node->name);
-      ib_logger(
-        ib_stream, ", because mod_count %ld != fl_count %ld\n", (long)node->modification_counter, (long)node->flush_counter
-      );
-    }
-
-    node = UT_LIST_GET_PREV(LRU, node);
-  }
-
-  return false;
 }
 
 /** Reserves the fil_system mutex and tries to make sure we can open at least
@@ -834,8 +768,6 @@ fil_node_prepare_for_io(), because that function may need to open a file. */
 static void fil_mutex_enter_and_prepare_for_io(ulint space_id) /** in: space id */
 {
   fil_space_t *space;
-  bool success;
-  bool print_info = false;
   ulint count = 0;
   ulint count2 = 0;
 
@@ -885,19 +817,6 @@ retry:
   if (!space || UT_LIST_GET_FIRST(space->chain)->open) {
 
     return;
-  }
-
-  if (count > 1) {
-    print_info = true;
-  }
-
-  /* Too many files are open, try to close some */
-close_more:
-  success = fil_try_to_close_file_in_LRU(print_info);
-
-  if (success && fil_system->n_open >= fil_system->max_n_open) {
-
-    goto close_more;
   }
 
   if (fil_system->n_open < fil_system->max_n_open) {
@@ -1340,8 +1259,6 @@ void fil_init(ulint hash_size, ulint max_n_open) {
 
   fil_system->spaces = hash_create(hash_size);
   fil_system->name_hash = hash_create(hash_size);
-
-  UT_LIST_INIT(fil_system->LRU);
 
   fil_system->n_open = 0;
   fil_system->max_n_open = max_n_open;
@@ -3283,14 +3200,6 @@ static void fil_node_prepare_for_io(
     fil_node_open_file(node, system, space);
   }
 
-  if (node->n_pending == 0 && space->purpose == FIL_TABLESPACE && space->id != 0) {
-    /* The node is in the LRU list, remove it */
-
-    ut_a(UT_LIST_GET_LEN(system->LRU) > 0);
-
-    UT_LIST_REMOVE(system->LRU, node);
-  }
-
   node->n_pending++;
 }
 
@@ -3321,11 +3230,6 @@ static void fil_node_complete_io(
       node->space->is_in_unflushed_spaces = true;
       UT_LIST_ADD_FIRST(system->unflushed_spaces, node->space);
     }
-  }
-
-  if (node->n_pending == 0 && node->space->purpose == FIL_TABLESPACE && node->space->id != 0) {
-    /* The node must be put back to the LRU list */
-    UT_LIST_ADD_FIRST(system->LRU, node);
   }
 }
 
@@ -3715,18 +3619,11 @@ bool fil_validate() {
 
   ut_a(fil_system->n_open == n_open);
 
-  auto check = [](const fil_node_t *node) { (void)0; };
-  ut_list_validate(fil_system->LRU, check);
-
-  fil_node = UT_LIST_GET_FIRST(fil_system->LRU);
-
   while (fil_node != nullptr) {
     ut_a(fil_node->n_pending == 0);
     ut_a(fil_node->open);
     ut_a(fil_node->space->purpose == FIL_TABLESPACE);
     ut_a(fil_node->space->id != 0);
-
-    fil_node = UT_LIST_GET_NEXT(LRU, fil_node);
   }
 
   mutex_exit(&fil_system->mutex);
@@ -3785,7 +3682,6 @@ void fil_close() {
   therefore no need to free the individual elements. */
   hash_table_free(system->name_hash);
 
-  ut_a(UT_LIST_GET_LEN(system->LRU) == 0);
   ut_a(UT_LIST_GET_LEN(system->unflushed_spaces) == 0);
   ut_a(UT_LIST_GET_LEN(system->space_list) == 0);
 
