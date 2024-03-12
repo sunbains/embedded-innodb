@@ -113,11 +113,9 @@ CHECK_INCLUDE_FILES(sys/utsname.h sys/HAVE_UTSNAME_H)
 CHECK_INCLUDE_FILES(time.h HAVE_TIME_H)
 CHECK_INCLUDE_FILES(unistd.h HAVE_UNISTD_H)
 CHECK_INCLUDE_FILES(valgrind/memcheck.h HAVE_MEMCHECK_H)
-CHECK_INCLUDE_FILES(zlib.h HAVE_ZLIB_H)
 
 include(CheckLibraryExists)
 CHECK_LIBRARY_EXISTS(m floor "" HAVE_MATH)
-CHECK_LIBRARY_EXISTS(z inflate "" HAVE_ZLIB)
 CHECK_LIBRARY_EXISTS(pthread pthread_create "" HAVE_PTHREAD)
 
 Include(CheckFunctionExists)

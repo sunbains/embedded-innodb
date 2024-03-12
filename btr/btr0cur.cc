@@ -41,8 +41,6 @@ Created 10/16/1994 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#include <zlib.h>
-
 #include "btr0cur.h"
 
 #ifdef UNIV_NONINL
