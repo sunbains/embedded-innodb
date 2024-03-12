@@ -1180,8 +1180,6 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
   recv_sys->apply_log_recs = true;
   recv_sys->apply_batch_on = true;
 
-  size_t count{};
-
   for (ulint i = 0; i < hash_get_n_cells(recv_sys->addr_hash); i++) {
 
     auto recv_addr = static_cast<recv_addr_t *>(HASH_GET_FIRST(recv_sys->addr_hash, i));
@@ -1221,8 +1219,6 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
       }
 
       recv_addr = static_cast<recv_addr_t *>(HASH_GET_NEXT(addr_hash, recv_addr));
-
-      ++count;
     }
 
     if (has_printed && (i * 100) / hash_get_n_cells(recv_sys->addr_hash) != ((i + 1) * 100) / hash_get_n_cells(recv_sys->addr_hash)) {
