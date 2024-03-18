@@ -214,7 +214,7 @@ SET(INNODB_SOURCES  btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       trx/trx0roll.cc trx/trx0rseg.cc
       trx/trx0sys.cc trx/trx0trx.cc trx/trx0undo.cc
       usr/usr0sess.cc ut/ut0dbg.cc ut/ut0mem.cc
-      ut/ut0rnd.cc ut/ut0ut.cc ut/ut0vec.cc  ut/ut0rbt.cc
+      ut/ut0rnd.cc ut/ut0ut.cc ut/ut0vec.cc
       ddl/ddl0ddl.cc
       api/api0api.cc api/api0misc.cc api/api0ucode.cc
       api/api0cfg.cc api/api0status.cc api/api0sql.cc)

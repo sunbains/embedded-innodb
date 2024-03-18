@@ -1187,7 +1187,9 @@ bool buf_LRU_validate() {
 
   ut_a(buf_pool->LRU_old_len == old_len);
 
-  auto check = [](const buf_page_t *page) { ut_ad(page->in_free_list); };
+  auto check = [](const buf_page_t *page) {
+    ut_ad(page->in_free_list);
+  };
   ut_list_validate(buf_pool->free, check);
 
   for (bpage = UT_LIST_GET_FIRST(buf_pool->free); bpage != nullptr; bpage = UT_LIST_GET_NEXT(list, bpage)) {

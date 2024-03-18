@@ -2324,3 +2324,45 @@ ulint buf_get_free_list_len() {
 
   return len;
 }
+
+buf_page_rbt_t *rbt_create(buf_page_rbt_cmp_t cmp) {
+  return new buf_page_rbt_t(std::move(cmp), ut_allocator<buf_page_t *>{});
+}
+
+void rbt_free(buf_page_rbt_t *tree) {
+  delete tree;
+}
+
+std::pair<buf_page_rbt_itr_t, bool> rbt_insert(buf_page_rbt_t *tree, buf_page_t *t) {
+  return tree->emplace(t);
+}
+
+bool rbt_delete(buf_page_rbt_t *tree, buf_page_t *t) {
+  auto delete_count = tree->erase(t);
+  return delete_count > 0;
+}
+
+std::optional<buf_page_rbt_itr_t> rbt_first(buf_page_rbt_t *tree) {
+  if (tree->empty()) {
+    return {};
+  }
+
+  return tree->begin();
+}
+
+std::optional<buf_page_rbt_itr_t> rbt_prev(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr) {
+  if (itr == tree->begin()) {
+    return {};
+  }
+
+  itr--;
+  return itr;
+}
+
+std::optional<buf_page_rbt_itr_t> rbt_next(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr) {
+  if (itr == tree->end() || (++itr) == tree->end()) {
+    return {};
+  }
+
+  return itr;
+}

@@ -23,10 +23,6 @@ Created 6/2/1994 Heikki Tuuri
 
 #include "btr0btr.h"
 
-#ifdef UNIV_NONINL
-#include "btr0btr.ic"
-#endif
-
 #include "btr0cur.h"
 #include "btr0pcur.h"
 #include "fsp0fsp.h"
@@ -577,7 +573,6 @@ static bool btr_page_reorganize_low(
 ) /*!< in: mtr */
 {
   page_t *page = buf_block_get_frame(block);
-  buf_block_t *temp_block;
   page_t *temp_page;
   ulint log_mode;
   ulint data_size1;
@@ -597,7 +592,7 @@ static bool btr_page_reorganize_low(
   /* Turn logging off */
   log_mode = mtr_set_log_mode(mtr, MTR_LOG_NONE);
 
-  temp_block = buf_block_alloc();
+  auto temp_block = buf_pool_t::block_alloc();
   temp_page = temp_block->frame;
 
   /* Copy the old page to temporary space */

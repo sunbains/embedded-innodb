@@ -26,6 +26,15 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "innodb0types.h"
 
+#include <functional>
+#include <optional>
+#include <set>
+
+#include "hash0hash.h"
+#include "sync0mutex.h"
+#include "sync0rw.h"
+#include "ut0mem.h"
+
 /** Buffer page (uncompressed or compressed) */
 struct buf_page_t;
 
@@ -72,7 +81,6 @@ enum buf_io_fix {
   BUF_IO_WRITE
 };
 
-struct ib_rbt_t;
 struct fil_addr_t;
 
 /** @name Modes for buf_page_get_gen */
@@ -112,8 +120,38 @@ extern bool buf_debug_prints;
 extern ulint srv_buf_pool_write_requests;
 
 /** Magic value to use instead of checksums when they are disabled */
-#define BUF_NO_CHECKSUM_MAGIC 0xDEADBEEFUL
+constexpr ulint BUF_NO_CHECKSUM_MAGIC = 0xDEADBEEFUL;
 
+/*** Simple allocator using ut_malloc and ur_free */
+template <typename T>
+struct ut_allocator {
+  using value_type = T;
+  ut_allocator() noexcept = default;
+
+  template <class U>
+  explicit ut_allocator(const ut_allocator<U> &) noexcept {}
+
+  T *allocate(std::size_t n) { return (T *)ut_malloc(sizeof(T) * n); }
+
+  void deallocate(T *p, std::size_t n) { ut_free(p); }
+};
+
+template <class T, class U>
+constexpr bool operator==(const ut_allocator<T> &, const ut_allocator<U> &) noexcept {
+  return true;
+}
+
+template <class T, class U>
+constexpr bool operator!=(const ut_allocator<T> &, const ut_allocator<U> &) noexcept {
+  return false;
+}
+
+/* set typedefs for buffer_page_t */
+using buf_page_rbt_cmp_t = std::function<bool(buf_page_t *, buf_page_t *)>;
+
+using buf_page_rbt_t = std::set<buf_page_t *, buf_page_rbt_cmp_t, ut_allocator<buf_page_t *>>;
+
+using buf_page_rbt_itr_t = typename buf_page_rbt_t::iterator;
 /** @brief States of a control block
 @see buf_page_t
 
@@ -438,7 +476,7 @@ struct buf_pool_t {
   oldest_modification LSN and is kept in sync with the flush_list.
   Each member of the tree MUST also be on the flush_list. This tree
   is relevant only in recovery and is set to nullptr once the recovery is over. */
-  ib_rbt_t *flush_rbt;
+  buf_page_rbt_t *flush_rbt;
 
   /** a sequence number used to count the number of buffer blocks removed
   from the end of the LRU list; NOTE that this counter may wrap around
@@ -473,3 +511,4 @@ struct buf_pool_t {
 
   /* @} */
 };
+

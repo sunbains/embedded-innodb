@@ -33,7 +33,6 @@ Created 11/11/1995 Heikki Tuuri
 #include "srv0srv.h"
 #include "trx0sys.h"
 #include "ut0lst.h"
-#include "ut0rbt.h"
 
 /** These statistics are generated for heuristics used in estimating the
 rate at which we should flush the dirty blocks to avoid bursty IO
@@ -80,20 +79,19 @@ on the basis of the <oldest_modification, space, offset> key.
 static buf_page_t *buf_flush_insert_in_flush_rbt(buf_page_t *bpage) /*!< in: bpage to be inserted. */
 {
   buf_page_t *prev = nullptr;
-  const ib_rbt_node_t *c_node;
-  const ib_rbt_node_t *p_node;
 
   ut_ad(buf_pool_mutex_own());
 
   /* Insert this buffer into the rbt. */
-  c_node = rbt_insert(buf_pool->flush_rbt, &bpage, &bpage);
-  ut_a(c_node != nullptr);
+  auto insert_result = rbt_insert(buf_pool->flush_rbt, bpage);
+  ut_a(insert_result.second);
 
+  auto c_node = insert_result.first;
   /* Get the predecessor. */
-  p_node = rbt_prev(buf_pool->flush_rbt, c_node);
+  auto p_node = rbt_prev(buf_pool->flush_rbt, c_node);
 
-  if (p_node != nullptr) {
-    prev = *rbt_value(buf_page_t *, p_node);
+  if (p_node.has_value()) {
+    prev = *p_node.value();
     ut_a(prev != nullptr);
   }
 
@@ -112,7 +110,7 @@ static void buf_flush_delete_from_flush_rbt(buf_page_t *bpage) /*!< in: bpage to
 #ifdef UNIV_DEBUG
   ret =
 #endif /* UNIV_DEBUG */
-    rbt_delete(buf_pool->flush_rbt, &bpage);
+    rbt_delete(buf_pool->flush_rbt, bpage);
   ut_ad(ret);
 }
 
@@ -125,21 +123,11 @@ Note that for the purpose of flush_rbt, we only need to order blocks
 on the oldest_modification. The other two fields are used to uniquely
 identify the blocks.
 @return < 0 if b2 < b1, 0 if b2 == b1, > 0 if b2 > b1 */
-static int buf_flush_block_cmp(
-  const void *p1, /*!< in: block1 */
-  const void *p2
+static bool buf_flush_block_cmp(
+  const buf_page_t *b1, /*!< in: block1 */
+  const buf_page_t *b2
 ) /*!< in: block2 */
 {
-  int ret;
-  const buf_page_t *b1;
-  const buf_page_t *b2;
-
-  ut_ad(p1 != nullptr);
-  ut_ad(p2 != nullptr);
-
-  b1 = *(const buf_page_t **)p1;
-  b2 = *(const buf_page_t **)p2;
-
   ut_ad(b1 != nullptr);
   ut_ad(b2 != nullptr);
 
@@ -147,25 +135,27 @@ static int buf_flush_block_cmp(
   ut_ad(b2->in_flush_list);
 
   if (b2->oldest_modification > b1->oldest_modification) {
-    return (1);
+    return false;
   }
 
   if (b2->oldest_modification < b1->oldest_modification) {
-    return (-1);
+    return true;
   }
 
   /* If oldest_modification is same then decide on the space. */
-  ret = (int)(b2->space - b1->space);
+  if (b2->space != b1->space) {
+    return b2->space < b1->space;
+  }
 
   /* Or else decide ordering on the offset field. */
-  return (ret ? ret : (int)(b2->offset - b1->offset));
+  return b2->offset < b1->offset;
 }
 
 void buf_flush_init_flush_rbt() {
   ut_ad(buf_pool_mutex_own());
 
   /* Create red black tree for speedy insertions in flush list. */
-  buf_pool->flush_rbt = rbt_create(sizeof(buf_page_t *), buf_flush_block_cmp);
+  buf_pool->flush_rbt = rbt_create(buf_flush_block_cmp);
 }
 
 void buf_flush_free_flush_rbt() {
@@ -256,7 +246,6 @@ bool buf_flush_ready_for_replace(buf_page_t *bpage) {
   ut_ad(bpage->in_LRU_list);
 
   if (likely(buf_page_in_file(bpage))) {
-
     return (bpage->oldest_modification == 0 && buf_page_get_io_fix(bpage) == BUF_IO_NONE && bpage->buf_fix_count == 0);
   }
 
@@ -337,7 +326,9 @@ void buf_flush_remove(buf_page_t *bpage) /*!< in: pointer to the block in questi
 
   bpage->oldest_modification = 0;
 
-  auto check = [](const buf_page_t *ptr) { ut_ad(ptr->in_flush_list); };
+  auto check = [](const buf_page_t *ptr) {
+    ut_ad(ptr->in_flush_list);
+  };
   ut_list_validate(buf_pool->flush_list, check);
 }
 
@@ -1269,7 +1260,7 @@ ulint buf_flush_get_desired_flush_rate(void) {
 /** Validates the flush list.
 @return	true if ok */
 static bool buf_flush_validate_low() {
-  const ib_rbt_node_t *rnode{};
+  std::optional<buf_page_rbt_itr_t> rnode{};
 
   UT_LIST_CHECK(buf_pool->flush_list);
 
@@ -1289,14 +1280,13 @@ static bool buf_flush_validate_low() {
     ut_a(om > 0);
 
     if (buf_pool->flush_rbt != nullptr) {
-      ut_a(rnode != nullptr);
+      ut_a(rnode.has_value());
 
-      auto rpage = *rbt_value(buf_page_t *, rnode);
-
+      auto rpage = *rnode.value();
       ut_a(rpage != nullptr);
       ut_a(rpage == bpage);
 
-      rnode = rbt_next(buf_pool->flush_rbt, rnode);
+      rnode = rbt_next(buf_pool->flush_rbt, rnode.value());
     }
 
     bpage = UT_LIST_GET_NEXT(list, bpage);
@@ -1306,7 +1296,7 @@ static bool buf_flush_validate_low() {
 
   /* By this time we must have exhausted the traversal of
   flush_rbt (if active) as well. */
-  ut_a(rnode == nullptr);
+  ut_a(!rnode.has_value());
 
   return (true);
 }

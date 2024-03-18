@@ -271,7 +271,7 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const 
         return (nullptr);
       }
     } else {
-      buf_block = buf_block_alloc();
+      buf_block = buf_pool_t::block_alloc();
     }
 
     block = (mem_block_t *)buf_block->frame;
