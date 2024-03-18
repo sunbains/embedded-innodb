@@ -25,6 +25,9 @@ Created 11/5/1995 Heikki Tuuri
 
 #include "innodb0types.h"
 
+#include <functional>
+#include <optional>
+#include <set>
 #include "buf0types.h"
 #include "fil0types.h"
 #include "hash0hash.h"
@@ -378,6 +381,64 @@ void buf_pool_invalidate();
 void buf_var_init();
 
 /* --------------------------- LOWER LEVEL ROUTINES ------------------------- */
+
+/*** Simple allocator using ut_malloc and ur_free */
+template <typename T>
+struct ut_allocator {
+  using value_type = T;
+  ut_allocator() noexcept = default;
+
+  template <class U>
+  explicit ut_allocator(const ut_allocator<U> &) noexcept {}
+
+  T *allocate(std::size_t n) { return (T *)ut_malloc(sizeof(T) * n); }
+
+  void deallocate(T *p, std::size_t n) { ut_free(p); }
+};
+
+template <class T, class U>
+constexpr bool operator==(const ut_allocator<T> &, const ut_allocator<U> &) noexcept {
+  return true;
+}
+
+template <class T, class U>
+constexpr bool operator!=(const ut_allocator<T> &, const ut_allocator<U> &) noexcept {
+  return false;
+}
+
+/* set typedefs for buffer_page_t */
+using buf_page_rbt_cmp_t = std::function<bool(buf_page_t *, buf_page_t *)>;
+
+using buf_page_rbt_t = std::set<buf_page_t *, buf_page_rbt_cmp_t, ut_allocator<buf_page_t *>>;
+
+using buf_page_rbt_itr_t = typename buf_page_rbt_t::iterator;
+
+/* operations on set(rbt) */
+/** Create an instance of set for buffer_page_t */
+buf_page_rbt_t *rbt_create(buf_page_rbt_cmp_t cmp);
+
+/** Free te instance of set for buffer_page_t */
+void rbt_free(buf_page_rbt_t *tree);
+
+/** Insert buf_page in the set.
+ * @return pair of inserted node if successful. success is determined by second element of pair. */
+std::pair<buf_page_rbt_itr_t, bool> rbt_insert(buf_page_rbt_t *tree, buf_page_t *t);
+
+/** Delete buf_page from the set.
+ * @return pair of inserted node if successful. success is determined by second element of pair. */
+bool rbt_delete(buf_page_rbt_t *tree, buf_page_t *t);
+
+/** Get the first element of the set.
+ * @return iterator to the first element of the set if it exists. */
+std::optional<buf_page_rbt_itr_t> rbt_first(buf_page_rbt_t *tree);
+
+/** Get the previous node of the current node.
+ * @return iterator to the prev element if it exists. */
+std::optional<buf_page_rbt_itr_t> rbt_prev(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr);
+
+/** Get the next node of the current node.
+ * @return iterator to the next element if it exists. */
+std::optional<buf_page_rbt_itr_t> rbt_next(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr);
 
 #ifdef UNIV_SYNC_DEBUG
 /*** Adds latch level info for the rw-lock protecting the buffer frame. This
@@ -757,7 +818,7 @@ struct buf_pool_t {
   oldest_modification LSN and is kept in sync with the flush_list.
   Each member of the tree MUST also be on the flush_list. This tree
   is relevant only in recovery and is set to nullptr once the recovery is over. */
-  ib_rbt_t *flush_rbt;
+  buf_page_rbt_t *flush_rbt;
 
   /** a sequence number used to count the number of buffer blocks removed
   from the end of the LRU list; NOTE that this counter may wrap around
