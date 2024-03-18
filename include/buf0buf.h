@@ -30,7 +30,6 @@ Created 11/5/1995 Heikki Tuuri
 #include "hash0hash.h"
 #include "mtr0types.h"
 #include "page0types.h"
-#include "sync0rw.h"
 
 
 /** mutex protecting the buffer pool struct and control blocks, except the
@@ -235,23 +234,27 @@ buf_page_t *buf_page_reset_file_page_was_freed(space_id_t space, page_no_t offse
 #endif /* UNIV_DEBUG */
 
 #ifdef UNIV_SYNC_DEBUG
-/*** Adds latch level info for the rw-lock protecting the buffer frame. This
-should be called in the debug version after a successful latching of a
-page if we know the latching order level of the acquired latch. */
-inline void buf_block_dbg_add_level(
-  buf_block_t *block, /** in: buffer page
-                                              where we have acquired latch */
-  ulint level
-);                                            /** in: latching order level */
+/**
+ * @brief Adds latch level info for the rw-lock protecting the buffer frame.
+ *        This should be called in the debug version after a successful latching
+ *        of a page if we know the latching order level of the acquired latch.
+ *
+ * @param block Pointer to the buffer page where we have acquired latch.
+ * @param level Latching order level.
+ */
+inline void buf_block_dbg_add_level(buf_block_t *block, ulint level);
 #else /* UNIV_SYNC_DEBUG */
 #define buf_block_dbg_add_level(block, level) /* nothing */
 #endif /* UNIV_SYNC_DEBUG */
 
 #ifdef UNIV_DEBUG
-/*** Gets a pointer to the memory frame of a block.
-@return	pointer to the frame */
-inline buf_frame_t *buf_block_get_frame(const buf_block_t *block) /** in: pointer to the control block */
-  __attribute__((pure));
+/**
+ * @brief Gets a pointer to the memory frame of a block.
+ *
+ * @param block Pointer to the control block.
+ * @return Pointer to the frame.
+ */
+inline buf_frame_t *buf_block_get_frame(const buf_block_t *block) __attribute__((pure));
 #else /* UNIV_DEBUG */
 #define buf_block_get_frame(block) (block)->frame
 #endif /* UNIV_DEBUG */
@@ -381,20 +384,21 @@ bool buf_validate();
 
 #if defined UNIV_DEBUG_PRINT || defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 /*** Prints info of the buffer pool data structure. */
-void buf_print(void);
+void buf_print();
 #endif /* UNIV_DEBUG_PRINT || UNIV_DEBUG || UNIV_BUF_DEBUG */
 
-/*** Prints a page to stderr. */
-void buf_page_print(
-  const byte *read_buf, /** in: a database page */
-  ulint
-);
+/**
+ * @brief Prints a page to stderr.
+ *
+ * @param read_buf  in: a database page
+ * @param ulint
+ */
+void buf_page_print(const byte *read_buf, ulint);
 
 #ifdef UNIV_DEBUG
-
-/*** Returns the number of latched pages in the buffer pool.
+/** Returns the number of latched pages in the buffer pool.
 @return	number of latched pages */
-ulint buf_get_latched_pages_number(void);
+ulint buf_get_latched_pages_number();
 #endif /* UNIV_DEBUG */
 
 /*** Returns the number of pending buf pool ios.
@@ -431,60 +435,37 @@ void buf_var_init();
 
 /* --------------------------- LOWER LEVEL ROUTINES ------------------------- */
 
-/* operations on set(rbt) */
-/** Create an instance of set for buffer_page_t */
-buf_page_rbt_t *rbt_create(buf_page_rbt_cmp_t cmp);
-
-/** Free te instance of set for buffer_page_t */
-void rbt_free(buf_page_rbt_t *tree);
-
-/** Insert buf_page in the set.
- * @return pair of inserted node if successful. success is determined by second element of pair. */
-std::pair<buf_page_rbt_itr_t, bool> rbt_insert(buf_page_rbt_t *tree, buf_page_t *t);
-
-/** Delete buf_page from the set.
- * @return pair of inserted node if successful. success is determined by second element of pair. */
-bool rbt_delete(buf_page_rbt_t *tree, buf_page_t *t);
-
-/** Get the first element of the set.
- * @return iterator to the first element of the set if it exists. */
-std::optional<buf_page_rbt_itr_t> rbt_first(buf_page_rbt_t *tree);
-
-/** Get the previous node of the current node.
- * @return iterator to the prev element if it exists. */
-std::optional<buf_page_rbt_itr_t> rbt_prev(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr);
-
-/** Get the next node of the current node.
- * @return iterator to the next element if it exists. */
-std::optional<buf_page_rbt_itr_t> rbt_next(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr);
-
 #ifdef UNIV_SYNC_DEBUG
-/*** Adds latch level info for the rw-lock protecting the buffer frame. This
-should be called in the debug version after a successful latching of a
-page if we know the latching order level of the acquired latch. */
-inline void buf_block_dbg_add_level(
-  buf_block_t *block, /** in: buffer page
-                                              where we have acquired latch */
-  ulint level
-);                                            /** in: latching order level */
-#else                                         /* UNIV_SYNC_DEBUG */
+/**
+ * Adds latch level info for the rw-lock protecting the buffer frame. This
+ * should be called in the debug version after a successful latching of a
+ * page if we know the latching order level of the acquired latch.
+ *
+ * @param block The buffer page where we have acquired latch.
+ * @param level The latching order level.
+ */
+inline void buf_block_dbg_add_level(buf_block_t *block, ulint level);
+#else /* UNIV_SYNC_DEBUG */
 #define buf_block_dbg_add_level(block, level) /* nothing */
-#endif                                        /* UNIV_SYNC_DEBUG */
+#endif /* UNIV_SYNC_DEBUG */
 
 #ifdef UNIV_DEBUG
-/*** Gets a pointer to the memory frame of a block.
-@return	pointer to the frame */
-inline buf_frame_t *buf_block_get_frame(const buf_block_t *block) /** in: pointer to the control block */
-  __attribute__((pure));
+/**
+ * Gets a pointer to the memory frame of a block.
+ *
+ * @param block Pointer to the control block.
+ * @return Pointer to the frame.
+ */
+inline buf_frame_t *buf_block_get_frame(const buf_block_t *block) __attribute__((pure));
 #else /* UNIV_DEBUG */
 #define buf_block_get_frame(block) (block)->frame
 #endif /* UNIV_DEBUG */
 
-/*** Gets the block to whose frame the pointer is pointing to.
+/** Gets the block to whose frame the pointer is pointing to.
 @return	pointer to block, never nullptr */
 buf_block_t *buf_block_align(const byte *ptr); /** in: pointer to a frame */
 
-/*** Find out if a pointer belongs to a buf_block_t. It can be a pointer to
+/** Find out if a pointer belongs to a buf_block_t. It can be a pointer to
 the buf_block_t itself or a member of it
 @return	true if ptr belongs to a buf_block_t struct */
 bool buf_pointer_is_block_field(const void *ptr); /** in: pointer not
@@ -1051,7 +1032,7 @@ ok:
  * @return Space id.
  */
 inline ulint buf_page_get_space(const buf_page_t *bpage) {
-  ut_ad(bpage);
+  ut_ad(bpage != nullptr);
   ut_a(buf_page_in_file(bpage));
 
   return bpage->space;
@@ -1066,7 +1047,7 @@ inline ulint buf_page_get_space(const buf_page_t *bpage) {
 inline ulint buf_block_get_space(const buf_block_t *block) {
   ut_a(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
 
-  return block->page.space;
+  return buf_page_get_space(&block->page);
 }
 
 /**
@@ -1076,7 +1057,7 @@ inline ulint buf_block_get_space(const buf_block_t *block) {
  * @return Page number.
  */
 inline ulint buf_page_get_page_no(const buf_page_t *bpage) {
-  ut_ad(bpage);
+  ut_ad(bpage != nullptr);
   ut_a(buf_page_in_file(bpage));
 
   return bpage->offset;
@@ -1092,7 +1073,7 @@ inline ulint buf_block_get_page_no(const buf_block_t *block) {
   ut_ad(block != nullptr);
   ut_a(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
 
-  return block->page.offset;
+  return buf_page_get_page_no(&block->page);
 }
 
 /**
@@ -1103,7 +1084,7 @@ inline ulint buf_block_get_page_no(const buf_block_t *block) {
  * @param addr Pointer to store the page offset and byte offset.
  */
 inline void buf_ptr_get_fsp_addr(const void *ptr, ulint *space, fil_addr_t *addr) {
-  const page_t *page = (const page_t *)ut_align_down(ptr, UNIV_PAGE_SIZE);
+  auto page = reinterpret_cast<const page_t *>(ut_align_down(ptr, UNIV_PAGE_SIZE));
 
   *space = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
   addr->page = mach_read_from_4(page + FIL_PAGE_OFFSET);
@@ -1186,10 +1167,10 @@ inline lsn_t buf_page_get_newest_modification(const buf_page_t *bpage) {
  */
 inline void buf_block_modify_clock_inc(buf_block_t *block) {
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad((buf_pool_mutex_own() && (block->page.buf_fix_count == 0)) || rw_lock_own(&(block->lock), RW_LOCK_EXCLUSIVE));
+  ut_ad((buf_pool_mutex_own() && block->page.buf_fix_count == 0) || rw_lock_own(&block->lock, RW_LOCK_EXCLUSIVE));
 #endif /* UNIV_SYNC_DEBUG */
 
-  block->modify_clock++;
+  ++block->modify_clock;
 }
 
 /**
@@ -1226,14 +1207,12 @@ inline void buf_block_buf_fix_inc_func(buf_block_t *block)
 #endif /* UNIV_SYNC_DEBUG */
 {
 #ifdef UNIV_SYNC_DEBUG
-  bool ret;
-
-  ret = rw_lock_s_lock_nowait(&(block->debug_latch), file, line);
+  auto ret = rw_lock_s_lock_nowait(&(block->debug_latch), file, line);
   ut_a(ret);
 #endif /* UNIV_SYNC_DEBUG */
   ut_ad(mutex_own(&block->mutex));
 
-  block->page.buf_fix_count++;
+  ++block->page.buf_fix_count;
 }
 
 #ifdef UNIV_SYNC_DEBUG
@@ -1260,7 +1239,7 @@ inline void buf_block_buf_fix_inc_func(buf_block_t *block)
 inline void buf_block_buf_fix_dec(buf_block_t *block) {
   ut_ad(mutex_own(&block->mutex));
 
-  block->page.buf_fix_count--;
+  --block->page.buf_fix_count;
 
 #ifdef UNIV_SYNC_DEBUG
   rw_lock_s_unlock(&block->debug_latch);
@@ -1349,3 +1328,57 @@ inline void buf_block_dbg_add_level(buf_block_t *block, ulint level) {
   sync_thread_add_level(&block->lock, level);
 }
 #endif /* UNIV_SYNC_DEBUG */
+
+/** Create an instance of set for buffer_page_t */
+inline buf_page_rbt_t *rbt_create(buf_page_rbt_cmp_t cmp) {
+  return new buf_page_rbt_t(std::move(cmp), ut_allocator<buf_page_t *>{});
+}
+
+/** Free te instance of set for buffer_page_t */
+inline void rbt_free(buf_page_rbt_t *tree) {
+  delete tree;
+}
+
+/** Insert buf_page in the set.
+@return pair of inserted node if successful. success is determined by second element of pair. */
+inline std::pair<buf_page_rbt_itr_t, bool> rbt_insert(buf_page_rbt_t *tree, buf_page_t *t) {
+  return tree->emplace(t);
+}
+
+/** Delete buf_page from the set.
+@return pair of inserted node if successful. success is determined by second element of pair. */
+inline bool rbt_delete(buf_page_rbt_t *tree, buf_page_t *t) {
+  auto delete_count = tree->erase(t);
+  return delete_count > 0;
+}
+
+/** Get the first element of the set.
+ * @return iterator to the first element of the set if it exists. */
+inline std::optional<buf_page_rbt_itr_t> rbt_first(buf_page_rbt_t *tree) {
+  if (tree->empty()) {
+    return {};
+  } else {
+   return tree->begin();
+  }
+}
+
+/** Get the previous node of the current node.
+@return iterator to the prev element if it exists. */
+inline std::optional<buf_page_rbt_itr_t> rbt_prev(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr) {
+  if (itr == tree->begin()) {
+    return {};
+  } else {
+    --itr;
+    return itr;
+  }
+}
+
+/** Get the next node of the current node.
+@return iterator to the next element if it exists. */
+inline std::optional<buf_page_rbt_itr_t> rbt_next(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr) {
+  if (itr == tree->end() || (++itr) == tree->end()) {
+    return {};
+  } else {
+    return itr;
+  }
+}
