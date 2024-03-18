@@ -272,6 +272,14 @@ inline bool buf_page_peek_if_too_old(const buf_page_t *bpage) {
   }
 }
 
+buf_block_t *buf_pool_t::block_alloc() {
+  auto block = buf_LRU_get_free_block();
+
+  buf_block_set_state(block, BUF_BLOCK_MEMORY);
+
+  return block;
+}
+
 void buf_block_free(buf_block_t *block) {
   buf_pool_mutex_enter();
 

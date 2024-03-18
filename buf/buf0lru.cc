@@ -962,8 +962,8 @@ void buf_LRU_block_free_non_file_page(buf_block_t *block) {
   memset(block->frame, '\0', UNIV_PAGE_SIZE);
 #else
   /* Wipe page_no and space_id */
-  memset(block->frame + FIL_PAGE_OFFSET, 0xfe, 4);
-  memset(block->frame + FIL_PAGE_PACE_ID, 0xfe, 4);
+  memset(block->frame + FIL_PAGE_OFFSET, 0xcafe, 4);
+  memset(block->frame + FIL_PAGE_SPACE_ID, 0xcafe, 4);
 #endif /* UNIV_DEBUG */
 
   UT_LIST_ADD_FIRST(buf_pool->free, (&block->page));
