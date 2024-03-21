@@ -1990,12 +1990,9 @@ void *srv_master_thread(void *arg __attribute__((unused))) {
   OS_cond* event;
   ulint old_activity_count;
   ulint n_pages_purged = 0;
-  ulint n_bytes_merged;
   ulint n_pages_flushed;
-  ulint n_bytes_archived;
   ulint n_tables_to_drop;
   ulint n_ios;
-  ulint n_ios_old;
   ulint n_ios_very_old;
   ulint n_pend_ios;
   bool skip_sleep = false;
@@ -2043,7 +2040,6 @@ loop:
   skip_sleep = (srv_shutdown_state != SRV_SHUTDOWN_NONE);
 
   for (i = 0; i < 10; i++) {
-    n_ios_old = log_sys->n_log_ios + buf_pool->stat.n_pages_read + buf_pool->stat.n_pages_written;
     srv_main_thread_op_info = "sleeping";
     srv_main_1_second_loops++;
 
@@ -2079,18 +2075,9 @@ loop:
     srv_main_thread_op_info = "making checkpoint";
     log_free_check();
 
-    /* If i/os during one second sleep were less than 5% of
-    capacity, we assume that there is free disk i/o capacity
-    available, and it makes sense to do an insert buffer merge. */
-
     n_pend_ios = buf_get_n_pending_ios() + log_sys->n_pending_writes;
-    n_ios = log_sys->n_log_ios + buf_pool->stat.n_pages_read + buf_pool->stat.n_pages_written;
-    if (n_pend_ios < SRV_PEND_IO_THRESHOLD && (n_ios - n_ios_old < SRV_RECENT_IO_ACTIVITY)) {
-      srv_main_thread_op_info = "doing insert buffer merge";
 
-      /* Flush logs if needed */
-      srv_sync_log_buffer_in_background();
-    }
+    n_ios = log_sys->n_log_ios + buf_pool->stat.n_pages_read + buf_pool->stat.n_pages_written;
 
     if (unlikely(buf_get_modified_ratio_pct() > srv_max_buf_pool_modified_pct)) {
 
@@ -2154,11 +2141,6 @@ loop:
     /* Flush logs if needed */
     srv_sync_log_buffer_in_background();
   }
-
-  /* We run a batch of insert buffer merge every 10 seconds,
-  even if the server were active */
-
-  srv_main_thread_op_info = "doing insert buffer merge";
 
   /* Flush logs if needed */
   srv_sync_log_buffer_in_background();
@@ -2269,12 +2251,6 @@ background_loop:
   }
   mutex_exit(&kernel_mutex);
 
-  srv_main_thread_op_info = "doing insert buffer merge";
-
-  if (srv_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > 0) {
-    n_bytes_merged = 0;
-  }
-
   srv_main_thread_op_info = "reserving kernel mutex";
 
   mutex_enter(&kernel_mutex);
@@ -2333,30 +2309,21 @@ flush_loop:
     goto loop;
   }
   mutex_exit(&kernel_mutex);
-  /*
-  srv_main_thread_op_info = "archiving log (if log archive is on)";
-
-  log_archive_do(false, &n_bytes_archived);
-  */
-  n_bytes_archived = 0;
 
   /* Keep looping in the background loop if still work to do */
 
   if (srv_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > 0) {
-    if (n_tables_to_drop + n_pages_flushed + n_bytes_archived != 0) {
+    if (n_tables_to_drop + n_pages_flushed != 0) {
 
-      /* If we are doing a fast shutdown (= the default)
-      we do not do purge or insert buffer merge. But we
-      flush the buffer pool completely to disk.
-      In a 'very fast' shutdown we do not flush the buffer
-      pool to data files: we have set n_pages_flushed to
-      0 artificially. */
+      /* If we are doing a fast shutdown (= the default) we do not do purge.
+      But we flush the buffer pool completely to disk. In a 'very fast'
+      shutdown we do not flush the buffer pool to data files: we have
+      set n_pages_flushed to 0 artificially. */
 
       goto background_loop;
     }
-  } else if (n_tables_to_drop + n_pages_purged + n_bytes_merged + n_pages_flushed + n_bytes_archived != 0) {
-    /* In a 'slow' shutdown we run purge and the insert buffer
-    merge to completion */
+  } else if (n_tables_to_drop + n_pages_purged + n_pages_flushed != 0) {
+    /* In a 'slow' shutdown we run purge to completion */
 
     goto background_loop;
   }
