@@ -328,10 +328,13 @@ enum srv_thread_type {
 
 /** Boots Innobase server.
 @return	DB_SUCCESS or error code */
-db_err srv_boot(void);
+db_err srv_boot();
+
+/** Create the core in memory data structures. */
+void srv_init();
 
 /** Frees the data structures created in srv_init(). */
-void srv_free(void);
+void srv_free();
 
 /** Initializes the synchronization primitives, memory system, and the thread
 local storage. */

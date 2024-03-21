@@ -23,10 +23,6 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "trx0trx.h"
 
-#ifdef UNIV_NONINL
-#include "trx0trx.ic"
-#endif
-
 #include "api0ucode.h"
 
 #include "lock0lock.h"
@@ -68,14 +64,10 @@ void trx_set_detailed_error(trx_t *trx, const char *msg) {
   ut_strlcpy(trx->detailed_error, msg, sizeof(trx->detailed_error));
 }
 
-trx_t *trx_create(sess_t *sess) {
-  ut_ad(mutex_own(&kernel_mutex));
-  ut_ad(sess);
-
+trx_t* trx_create_low(sess_t *sess) {
   auto ptr = mem_alloc(sizeof(trx_t));
-  auto trx = new (ptr) trx_t;
 
-  trx->magic_n = TRX_MAGIC_N;
+  auto trx = new (ptr) trx_t;
 
   trx->op_info = "";
 
@@ -154,15 +146,22 @@ trx_t *trx_create(sess_t *sess) {
   trx->xid.formatID = -1;
 #endif /* WITH_XOPEN */
 
+  trx->magic_n = TRX_MAGIC_N;
+
   return trx;
 }
 
-trx_t *trx_allocate_for_client(void *arg) {
-  trx_t *trx;
+trx_t *trx_create(sess_t *sess) {
+  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(sess);
 
+  return trx_create_low(sess);
+}
+
+trx_t *trx_allocate_for_client(void *arg) {
   mutex_enter(&kernel_mutex);
 
-  trx = trx_create(trx_dummy_sess);
+  auto trx = trx_create(trx_dummy_sess);
 
   trx_n_transactions++;
 
@@ -177,12 +176,10 @@ trx_t *trx_allocate_for_client(void *arg) {
   return trx;
 }
 
-trx_t *trx_allocate_for_background(void) {
-  trx_t *trx;
-
+trx_t *trx_allocate_for_background() {
   mutex_enter(&kernel_mutex);
 
-  trx = trx_create(trx_dummy_sess);
+  auto trx = trx_create(trx_dummy_sess);
 
   mutex_exit(&kernel_mutex);
 
@@ -193,9 +190,9 @@ trx_t *trx_allocate_for_background(void) {
   return trx;
 }
 
-/** Frees a transaction object. */
-static void trx_free(trx_t *trx) /*!< in, own: trx object */
-{
+/** Frees a transaction object.
+@param[in,own] trx              Transaction instance to free. */
+static void trx_free(trx_t *&trx) {
   ut_ad(mutex_own(&kernel_mutex));
 
   if (trx->n_client_tables_in_use != 0 || trx->client_n_tables_locked != 0) {
@@ -203,9 +200,8 @@ static void trx_free(trx_t *trx) /*!< in, own: trx object */
     ut_print_timestamp(ib_stream);
     ib_logger(
       ib_stream,
-      "  Error: Client is freeing a trx instance\n"
-      "though trx->n_client_tables_in_use is %lu\n"
-      "and trx->client_n_tables_locked is %lu.\n",
+      "Error: Client is freeing a trx instance though trx->n_client_tables_in_use is %lu"
+      " and trx->client_n_tables_locked is %lu.",
       (ulong)trx->n_client_tables_in_use,
       (ulong)trx->client_n_tables_locked
     );
@@ -239,7 +235,7 @@ static void trx_free(trx_t *trx) /*!< in, own: trx object */
 
   ut_a(trx->dict_operation_lock_mode == 0);
 
-  if (trx->lock_heap) {
+  if (trx->lock_heap != nullptr) {
     mem_heap_free(trx->lock_heap);
   }
 
@@ -256,9 +252,11 @@ static void trx_free(trx_t *trx) /*!< in, own: trx object */
   call_destructor(trx);
 
   mem_free(trx);
+
+  trx = nullptr;
 }
 
-void trx_free_for_client(trx_t *trx) {
+void trx_free_for_client(trx_t *&trx) {
   mutex_enter(&kernel_mutex);
 
   UT_LIST_REMOVE(trx_sys->client_trx_list, trx);
@@ -267,7 +265,7 @@ void trx_free_for_client(trx_t *trx) {
 
   ut_a(trx_n_transactions > 0);
 
-  trx_n_transactions--;
+  --trx_n_transactions;
 
   mutex_exit(&kernel_mutex);
 }

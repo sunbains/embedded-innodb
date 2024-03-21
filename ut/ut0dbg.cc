@@ -41,8 +41,7 @@ void ut_dbg_assertion_failed(const char *expr, const char *file, ulint line) {
 
   ib_logger(
     ib_stream,
-    "  Assertion failure in thread %lu"
-    " in file %s line %lu\n",
+    " Assertion failure in thread %lu in file %s line %lu",
     os_thread_pf(os_thread_get_curr_id()),
     file,
     line
@@ -54,16 +53,7 @@ void ut_dbg_assertion_failed(const char *expr, const char *file, ulint line) {
 
   ib_logger(
     ib_stream,
-    "We intentionally generate a memory trap.\n"
-    "Submit a detailed bug report, "
-    "check the InnoDB website for details\n"
-    "If you get repeated assertion failures"
-    " or crashes, even\n"
-    "immediately after the server startup, there may be\n"
-    "corruption in the InnoDB tablespace. Please refer to\n"
-    "the InnoDB website for details\n"
-    "about forcing recovery.\n"
-  );
+    "We intentionally generate a memory trap. Please submit a detailed bug report on the Embedded InnoDB GitHub repository");
 #if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
   ut_dbg_stop_threads = true;
 #endif /* UNIV_SYNC_DEBUG || !UT_DBG_USE_ABORT */

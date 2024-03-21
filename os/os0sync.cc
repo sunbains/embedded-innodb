@@ -86,7 +86,7 @@ void os_sync_var_init() {
   os_fast_mutex_count = 0;
 }
 
-void os_sync_init(void) {
+void os_sync_init() {
   UT_LIST_INIT(os_event_list);
   UT_LIST_INIT(os_mutex_list);
 
@@ -98,13 +98,16 @@ void os_sync_init(void) {
   os_sync_mutex_inited = true;
 }
 
-void os_sync_free(void) {
+void os_sync_free() {
+  ut_a(os_sync_mutex_inited);
+
   os_mutex_t mutex;
 
   os_sync_free_called = true;
+
   auto event = UT_LIST_GET_FIRST(os_event_list);
 
-  while (event) {
+  while (event != nullptr) {
 
     os_event_free(event);
 

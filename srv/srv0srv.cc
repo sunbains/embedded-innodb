@@ -935,8 +935,7 @@ srv_thread_type srv_get_thread_type(void) {
   return type;
 }
 
-/** Initializes the server. */
-static void srv_init(void) {
+void srv_init() {
   srv_conc_slot_t *conc_slot;
   srv_slot_t *slot;
 
