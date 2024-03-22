@@ -524,7 +524,8 @@ static void buf_flush_buffered_writes(void) {
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
     const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
 
-    if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) && unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4), 4))) {
+    if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
+	unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4), 4))) {
       ut_print_timestamp(ib_stream);
       ib_logger(
         ib_stream,
@@ -550,7 +551,8 @@ static void buf_flush_buffered_writes(void) {
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
     const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
 
-    if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) && unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4), 4))) {
+    if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
+        unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4), 4))) {
       ut_print_timestamp(ib_stream);
       ib_logger(
         ib_stream,

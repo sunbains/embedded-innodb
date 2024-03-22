@@ -199,22 +199,26 @@ void buf_LRU_invalidate_tablespace(ulint id) {
 }
 
 /** Try to free a clean page from the common LRU list.
+
+If n_iterations < 10, then we search:
+   n_iterations / 10 * buf_pool->curr_size pages
+
+from the end of the LRU list.A high value means that we should search farther.
+
+@param[in] n_iterations         How many times this has been called repeatedly
+                                without result.
+
 @return	true if freed */
-static bool buf_LRU_free_from_common_LRU_list(ulint n_iterations) /*!< in: how many times this has been called
-                        repeatedly without result: a high value means
-                        that we should search farther; if
-                        n_iterations < 10, then we search
-                        n_iterations / 10 * buf_pool->curr_size
-                        pages from the end of the LRU list */
+static bool buf_LRU_free_from_common_LRU_list(ulint n_iterations)
+       
 {
-  buf_page_t *bpage;
-  ulint distance;
 
   ut_ad(buf_pool_mutex_own());
 
-  distance = 100 + (n_iterations * buf_pool->m_curr_size) / 10;
+  auto distance = 100 + (n_iterations * buf_pool->m_curr_size) / 10;
 
-  for (bpage = UT_LIST_GET_LAST(buf_pool->m_lru_list); likely(bpage != nullptr) && likely(distance > 0);
+  for (auto bpage = UT_LIST_GET_LAST(buf_pool->m_lru_list);
+       likely(bpage != nullptr) && likely(distance > 0);
        bpage = UT_LIST_GET_PREV(m_lru_list, bpage), distance--) {
 
     enum buf_lru_free_block_status freed;
@@ -274,15 +278,7 @@ bool buf_LRU_search_and_free_block(ulint n_iterations) {
   return freed;
 }
 
-/** Tries to remove LRU flushed blocks from the end of the LRU list and put them
-to the free list. This is beneficial for the efficiency of the insert buffer
-operation, as flushed pages from non-unique non-clustered indexes are here
-taken out of the buffer pool, and their inserts redirected to the insert
-buffer. Otherwise, the flushed blocks could get modified again before read
-operations need new buffer blocks, and the i/o work done in flushing would be
-wasted. */
-
-void buf_LRU_try_free_flushed_blocks(void) {
+void buf_LRU_try_free_flushed_blocks() {
   buf_pool_mutex_enter();
 
   while (buf_pool->m_lru_flush_ended > 0) {
@@ -297,31 +293,19 @@ void buf_LRU_try_free_flushed_blocks(void) {
   buf_pool_mutex_exit();
 }
 
-/** Returns true if less than 25 % of the buffer pool is available. This can be
-used in heuristics to prevent huge transactions eating up the whole buffer
-pool for their locks.
-@return	true if less than 25 % of buffer pool left */
-
-bool buf_LRU_buf_pool_running_out(void) {
-  bool ret = false;
-
+bool buf_LRU_buf_pool_running_out() {
   buf_pool_mutex_enter();
 
-  if (!recv_recovery_on && UT_LIST_GET_LEN(buf_pool->m_free_list) + UT_LIST_GET_LEN(buf_pool->m_lru_list) < buf_pool->m_curr_size / 4) {
-
-    ret = true;
-  }
+  auto ret = !recv_recovery_on &&
+	     UT_LIST_GET_LEN(buf_pool->m_free_list) + UT_LIST_GET_LEN(buf_pool->m_lru_list) <
+	     buf_pool->m_curr_size / 4;
 
   buf_pool_mutex_exit();
 
-  return (ret);
+  return ret;
 }
 
-/** Returns a free block from the buf_pool.  The block is taken off the
-free list.  If it is empty, returns nullptr.
-@return	a free control block, or nullptr if the buf_block->free list is empty */
-
-buf_block_t *buf_LRU_get_free_only(void) {
+buf_block_t *buf_LRU_get_free_only() {
   buf_block_t *block;
 
   ut_ad(buf_pool_mutex_own());
@@ -553,9 +537,7 @@ static void buf_LRU_old_adjust_len() {
 
 /** Initializes the old blocks pointer in the LRU list. This function should be
 called when the LRU list grows to BUF_LRU_OLD_MIN_LEN length. */
-static void buf_LRU_old_init(void) {
-  buf_page_t *bpage;
-
+static void buf_LRU_old_init() {
   ut_ad(buf_pool_mutex_own());
   ut_a(UT_LIST_GET_LEN(buf_pool->m_lru_list) == BUF_LRU_OLD_MIN_LEN);
 
@@ -563,7 +545,10 @@ static void buf_LRU_old_init(void) {
   the adjust function to move the LRU_old pointer to the right
   position */
 
-  for (bpage = UT_LIST_GET_LAST(buf_pool->m_lru_list); bpage != nullptr; bpage = UT_LIST_GET_PREV(m_lru_list, bpage)) {
+  for (auto bpage = UT_LIST_GET_LAST(buf_pool->m_lru_list);
+       bpage != nullptr;
+       bpage = UT_LIST_GET_PREV(m_lru_list, bpage)) {
+
     ut_ad(bpage->m_in_lru_list);
     ut_ad(buf_page_in_file(bpage));
     /* This loop temporarily violates the
@@ -577,9 +562,9 @@ static void buf_LRU_old_init(void) {
   buf_LRU_old_adjust_len();
 }
 
-/** Removes a block from the LRU list. */
-static void buf_LRU_remove_block(buf_page_t *bpage) /*!< in: control block */
-{
+/** Removes a block from the LRU list.
+@param[in] bpage                Buffer lock to remove */
+static void buf_LRU_remove_block(buf_page_t *bpage) {
   ut_ad(buf_pool);
   ut_ad(bpage);
   ut_ad(buf_pool_mutex_own());
@@ -639,9 +624,9 @@ static void buf_LRU_remove_block(buf_page_t *bpage) /*!< in: control block */
   buf_LRU_old_adjust_len();
 }
 
-/** Adds a block to the LRU list end. */
-static void buf_LRU_add_block_to_end_low(buf_page_t *bpage) /*!< in: control block */
-{
+/** Adds a block to the LRU list end.
+@param[in] bpage                Buffer lock to add */
+static void buf_LRU_add_block_to_end_low(buf_page_t *bpage) {
   ut_ad(buf_pool);
   ut_ad(bpage);
   ut_ad(buf_pool_mutex_own());
@@ -673,15 +658,12 @@ static void buf_LRU_add_block_to_end_low(buf_page_t *bpage) /*!< in: control blo
   }
 }
 
-/** Adds a block to the LRU list. */
-static void buf_LRU_add_block_low(
-  buf_page_t *bpage, /*!< in: control block */
-  bool old
-) /*!< in: true if should be put to the old blocks
-                                 in the LRU list, else put to the start; if the
-                                 LRU list is very short, the block is added to
-                                 the start, regardless of this parameter */
-{
+/** Adds a block to the LRU list.
+@param[in] bpage                Buffer lock to add
+@param[in] old                  true if should be put to the old blocks in the LRU list,
+                                else put to the start; if the LRU list is very short, the
+				block is added to the start, regardless of this parameter */
+static void buf_LRU_add_block_low(buf_page_t *bpage, bool old) {
   ut_ad(buf_pool);
   ut_ad(bpage);
   ut_ad(buf_pool_mutex_own());
@@ -983,7 +965,7 @@ void buf_LRU_stat_update() {
   memset(&buf_LRU_stat_cur, 0x0, sizeof buf_LRU_stat_cur);
 }
 
-#if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
+#if defined UNIV_DEBUG
 bool buf_LRU_validate() {
   buf_page_t *bpage;
   ulint old_len;
@@ -1056,12 +1038,8 @@ bool buf_LRU_validate() {
 
   return (true);
 }
-#endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 
-#if defined UNIV_DEBUG_PRINT || defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
-/** Prints the LRU list. */
-
-void buf_LRU_print(void) {
+void buf_LRU_print() {
   const buf_page_t *bpage;
 
   ut_ad(buf_pool);
@@ -1112,4 +1090,4 @@ void buf_LRU_print(void) {
 
   buf_pool_mutex_exit();
 }
-#endif /* UNIV_DEBUG_PRINT || UNIV_DEBUG || UNIV_BUF_DEBUG */
+#endif /* UNIV_DEBUG */
