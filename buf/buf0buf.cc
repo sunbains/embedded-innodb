@@ -808,10 +808,10 @@ static void buf_page_set_accessed_make_young(buf_page_t *bpage, unsigned access_
   }
 }
 
-void buf_reset_check_index_page_at_flush(space_id_t space, ulint offset) {
+void buf_reset_check_index_page_at_flush(space_id_t space, page_no_t page_no) {
   buf_pool_mutex_enter();
 
-  auto block = (buf_block_t *)buf_page_hash_get(space, offset);
+  auto block = reinterpret_cast<buf_block_t *>(buf_page_hash_get(space, page_no));
 
   if (block && block->get_state() == BUF_BLOCK_FILE_PAGE) {
     block->m_check_index_page_at_flush = false;
@@ -821,10 +821,10 @@ void buf_reset_check_index_page_at_flush(space_id_t space, ulint offset) {
 }
 
 #ifdef UNIV_DEBUG
-buf_page_t *buf_page_set_file_page_was_freed(space_id_t space, page_no_t offset) {
+buf_page_t *buf_page_set_file_page_was_freed(space_id_t space, page_no_t page_no) {
   buf_pool_mutex_enter();
 
-  auto bpage = buf_page_hash_get(space, offset);
+  auto bpage = buf_page_hash_get(space, page_no);
 
   if (bpage != nullptr) {
     bpage->m_file_page_was_freed = true;
@@ -835,10 +835,10 @@ buf_page_t *buf_page_set_file_page_was_freed(space_id_t space, page_no_t offset)
   return bpage;
 }
 
-buf_page_t *buf_page_reset_file_page_was_freed(space_id_t space, ulint offset) {
+buf_page_t *buf_page_reset_file_page_was_freed(space_id_t space, page_no_t page_no) {
   buf_pool_mutex_enter();
 
-  auto bpage = buf_page_hash_get(space, offset);
+  auto bpage = buf_page_hash_get(space, page_no);
 
   if (bpage != nullptr) {
     bpage->m_file_page_was_freed = false;
@@ -945,7 +945,7 @@ bool buf_pointer_is_block_field(const void *ptr) {
 }
 
 buf_block_t *buf_page_get_gen(
-  space_id_t space, ulint offset, ulint rw_latch, buf_block_t *guess, ulint mode, const char *file, ulint line, mtr_t *mtr
+  space_id_t space, page_no_t page_no, ulint rw_latch, buf_block_t *guess, ulint mode, const char *file, ulint line, mtr_t *mtr
 ) {
   ulint n_retries{};
   buf_block_t *block{};
@@ -966,7 +966,7 @@ buf_block_t *buf_page_get_gen(
     block = guess;
 
     if (block != nullptr) {
-      if (offset != block->m_page.m_page_no || space != block->m_page.m_space || block->get_state() != BUF_BLOCK_FILE_PAGE) {
+      if (page_no != block->m_page.m_page_no || space != block->m_page.m_space || block->get_state() != BUF_BLOCK_FILE_PAGE) {
         block = guess = nullptr;
       } else {
         ut_ad(block->m_page.m_in_page_hash);
@@ -974,7 +974,7 @@ buf_block_t *buf_page_get_gen(
     }
 
     if (block == nullptr) {
-      block = reinterpret_cast<buf_block_t *>(buf_page_hash_get(space, offset));
+      block = reinterpret_cast<buf_block_t *>(buf_page_hash_get(space, page_no));
     }
 
     if (block == nullptr) {
@@ -984,7 +984,7 @@ buf_block_t *buf_page_get_gen(
         return nullptr;
       }
 
-      if (buf_read_page(space, offset)) {
+      if (buf_read_page(space, page_no)) {
         n_retries = 0;
       } else if (n_retries < BUF_PAGE_READ_MAX_RETRIES) {
         ++n_retries;
@@ -995,7 +995,7 @@ buf_block_t *buf_page_get_gen(
           " %lu attempts. The most probable cause of this error may be that the table"
           " has been corrupted. You can try to fix this problem by using innodb_force_recovery."
           " Please see reference manual for more details. Aborting...",
-          space, offset, BUF_PAGE_READ_MAX_RETRIES
+          space, page_no, BUF_PAGE_READ_MAX_RETRIES
         );
 
         ut_error;
@@ -1095,7 +1095,7 @@ buf_block_t *buf_page_get_gen(
   if (!access_time) {
     /* In the case of a first access, try to apply linear read-ahead */
 
-    buf_read_ahead_linear(space, offset);
+    buf_read_ahead_linear(space, page_no);
   }
 
   return block;
@@ -1347,10 +1347,10 @@ inline void buf_page_init_low(buf_page_t *bpage) {
  * @brief Inits a page to the buffer buf_pool.
  * 
  * @param space in: space id
- * @param offset in: offset of the page within space in units of a page
+ * @param page_no in: Page number within space
  * @param block in: block to init
  */
-static void buf_page_init(space_id_t space, ulint offset, buf_block_t *block) {
+static void buf_page_init(space_id_t space, page_no_t page_no, buf_block_t *block) {
   buf_page_t *hash_page;
 
   ut_ad(buf_pool_mutex_own());
@@ -1358,7 +1358,7 @@ static void buf_page_init(space_id_t space, ulint offset, buf_block_t *block) {
   ut_a(block->get_state() != BUF_BLOCK_FILE_PAGE);
 
   /* Set the state of the block */
-  buf_block_set_file_page(block, space, offset);
+  buf_block_set_file_page(block, space, page_no);
 
 #ifdef UNIV_DEBUG_VALGRIND
   if (space == 0) {
@@ -1371,18 +1371,18 @@ static void buf_page_init(space_id_t space, ulint offset, buf_block_t *block) {
 
   buf_block_init_low(block);
 
-  block->m_lock_hash_val = lock_rec_hash(space, offset);
+  block->m_lock_hash_val = lock_rec_hash(space, page_no);
 
   /* Insert into the hash table of file pages */
 
-  hash_page = buf_page_hash_get(space, offset);
+  hash_page = buf_page_hash_get(space, page_no);
 
   if (likely_null(hash_page)) {
     ib_logger(
       ib_stream,
       "Error: page %lu %lu already found in the hash table: %p, %p",
       (ulong)space,
-      (ulong)offset,
+      (ulong)page_no,
       (const void *)hash_page,
       (const void *)block
     );
@@ -1402,10 +1402,10 @@ static void buf_page_init(space_id_t space, ulint offset, buf_block_t *block) {
   ut_ad(!block->m_page.m_in_page_hash);
   ut_d(block->m_page.m_in_page_hash = true);
 
-  HASH_INSERT(buf_page_t, m_hash, buf_pool->m_page_hash, buf_page_address_fold(space, offset), &block->m_page);
+  HASH_INSERT(buf_page_t, m_hash, buf_pool->m_page_hash, buf_page_address_fold(space, page_no), &block->m_page);
 }
 
-buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, space_id_t space, int64_t tablespace_version, ulint offset) {
+buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, space_id_t space, int64_t tablespace_version, page_no_t page_no) {
   ut_ad(buf_pool != nullptr);
   ut_ad(mode == BUF_READ_ANY_PAGE);
 
@@ -1416,7 +1416,7 @@ buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, space_id_t space, in
 
   buf_pool_mutex_enter();
 
-  if (buf_page_hash_get(space, offset)) {
+  if (buf_page_hash_get(space, page_no)) {
     /* The page is already in the buffer pool. */
     if (block != nullptr) {
 
@@ -1448,7 +1448,7 @@ buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, space_id_t space, in
 
     mutex_enter(&block->m_mutex);
 
-    buf_page_init(space, offset, block);
+    buf_page_init(space, page_no, block);
 
     buf_LRU_add_block(bpage, true /* to old blocks */);
 
@@ -1468,7 +1468,7 @@ buf_page_t *buf_page_init_for_read(db_err *err, ulint mode, space_id_t space, in
   return bpage;
 }
 
-buf_block_t *buf_page_create(space_id_t space, ulint offset, mtr_t *mtr) {
+buf_block_t *buf_page_create(space_id_t space, page_no_t page_no, mtr_t *mtr) {
   auto time_ms = ut_time_ms();
 
   ut_ad(mtr != nullptr);
@@ -1478,7 +1478,7 @@ buf_block_t *buf_page_create(space_id_t space, ulint offset, mtr_t *mtr) {
 
   buf_pool_mutex_enter();
 
-  auto block = (buf_block_t *)buf_page_hash_get(space, offset);
+  auto block = (buf_block_t *)buf_page_hash_get(space, page_no);
 
   if (block != nullptr && buf_page_in_file(&block->m_page)) {
     ut_d(block->m_page.m_file_page_was_freed = false);
@@ -1488,7 +1488,7 @@ buf_block_t *buf_page_create(space_id_t space, ulint offset, mtr_t *mtr) {
 
     buf_block_free(free_block);
 
-    return buf_page_get_with_no_latch(space, 0, offset, mtr);
+    return buf_page_get_with_no_latch(space, 0, page_no, mtr);
   }
 
   /* If we get here, the page was not in buf_pool: init it there */
@@ -1497,7 +1497,7 @@ buf_block_t *buf_page_create(space_id_t space, ulint offset, mtr_t *mtr) {
 
   mutex_enter(&block->m_mutex);
 
-  buf_page_init(space, offset, block);
+  buf_page_init(space, page_no, block);
 
   /* The block must be put to the LRU list */
   buf_LRU_add_block(&block->m_page, false);

@@ -306,7 +306,7 @@ struct buf_page_t {
 };
 
 /** We need this to alias a buf_block_t from a buf_page_t. */
-static_assert(std::is_standard_layout<buf_page_t>::value, "buf_page_t doesn't have a standard layout");
+static_assert(std::is_standard_layout<buf_page_t>::value, "buf_page_t mustt have a standard layout");
 
 /** The buffer control block structure */
 struct buf_block_t {
@@ -348,6 +348,7 @@ struct buf_block_t {
   pool mutex), io_fix, buf_fix_count, and accessed. */
   mutex_t m_mutex;
 
+  /** RW lock protoecting the buffer frame state changes. */
   rw_lock_t m_rw_lock;
 
   /** hashed value of the page address in the record lock hash table;
@@ -466,7 +467,7 @@ struct buf_pool_t {
   ulint m_curr_size;
 
   /** hash table of buf_page_t or buf_block_t file pages,
-   buf_page_in_file() == true, indexed by (space_id, offset) */
+   buf_page_in_file() == true, indexed by (m_nspace_id, m_page_no) */
   hash_table_t *m_page_hash;
 
   ulint m_n_pend_reads; /** number of pending read operations */
@@ -541,7 +542,7 @@ struct buf_pool_t {
 };
 
 /** We need this to alias a buf_block_t from a buf_page_t. */
-static_assert(std::is_standard_layout<buf_block_t>::value, "buf_block_t doesn't have a standard layout");
+static_assert(std::is_standard_layout<buf_block_t>::value, "buf_block_t must have a standard layout");
 
 /** Create an instance of set for buffer_page_t */
 inline buf_page_rbt_t *rbt_create(buf_page_rbt_cmp_t cmp) {

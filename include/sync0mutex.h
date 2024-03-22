@@ -91,4 +91,4 @@ struct mutex_t {
 #endif /* UNIV_SYNC_DEBUG */
 };
 
-static_assert(std::is_standard_layout<mutex_t>::value, "mutex_t is not a POD");
+static_assert(std::is_standard_layout<mutex_t>::value, "mutex_t must have standard layout");

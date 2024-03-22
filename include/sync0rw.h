@@ -380,7 +380,7 @@ struct rw_lock_struct {
   ulint m_magic_n;
 };
 
-static_assert(std::is_standard_layout<rw_lock_t>::value, "rw_lock_t doesn't have a standard layout");
+static_assert(std::is_standard_layout<rw_lock_t>::value, "rw_lock_t must have a standard layout");
 
 UT_LIST_NODE_GETTER_DEFINITION(rw_lock_t, list);
 
