@@ -2425,9 +2425,7 @@ static void fseg_free_page_low(
   crash:
     ib_logger(
       ib_stream,
-      "Please refer to\n"
-      "the InnoDB website for details"
-      "about forcing recovery.\n"
+      "Please refer to the Embdedded InnoDB GitHub repository for details about forcing recovery."
     );
     ut_error;
   }

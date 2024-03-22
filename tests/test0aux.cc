@@ -23,14 +23,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string.h>
 #include <ctype.h>
 
-#ifdef __WIN__
-#include <windows.h>
-#else
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <getopt.h> /* For getopt_long() */
-#endif
+#include <getopt.h>
 
 #include "test0aux.h"
 
@@ -46,20 +42,8 @@ static const char log_group_home_dir[] = "log";
 static const char data_file_path[] = "ibdata1:32M:autoextend";
 
 static void create_directory(const char *path) {
-#ifdef __WIN__
-  BOOL ret;
-
-  ret = CreateDirectory((LPCTSTR)path, NULL);
-
-  if (ret == 0 && GetLastError() != ERROR_ALREADY_EXISTS) {
-    fprintf(stderr, "CreateDirectory failed for: %s\n", path);
-    exit(EXIT_FAILURE);
-  }
-#else
-  int ret;
-
   /* Try and create the log sub-directory */
-  ret = mkdir(path, S_IRWXU);
+  auto ret = mkdir(path, S_IRWXU);
 
   /* Note: This doesn't catch all errors. EEXIST can also refer to
   dangling symlinks. */
@@ -67,18 +51,13 @@ static void create_directory(const char *path) {
     perror(path);
     exit(EXIT_FAILURE);
   }
-#endif
 }
 
 /** Read a value from an integer column in an InnoDB tuple.
 @return	column value */
 
-ib_u64_t
-read_int_from_tuple(ib_tpl_t tpl,                  /*!< in: InnoDB tuple */
-                    const ib_col_meta_t *col_meta, /*!< in: col meta data */
-                    int i)                         /*!< in: column number */
-{
-  ib_u64_t ival = 0;
+uint64_t read_int_from_tuple(ib_tpl_t tpl, const ib_col_meta_t *col_meta, int i) {
+  uint64_t ival = 0;
 
   switch (col_meta->type_len) {
   case 1: {
@@ -116,8 +95,7 @@ read_int_from_tuple(ib_tpl_t tpl,                  /*!< in: InnoDB tuple */
 
 /** Print all columns in a tuple. */
 
-void print_int_col(FILE *stream, const ib_tpl_t tpl, int i,
-                   ib_col_meta_t *col_meta) {
+void print_int_col(FILE *stream, const ib_tpl_t tpl, int i, ib_col_meta_t *col_meta) {
   ib_err_t err = DB_SUCCESS;
 
   switch (col_meta->type_len) {
@@ -165,7 +143,7 @@ void print_int_col(FILE *stream, const ib_tpl_t tpl, int i,
   }
   case 8: {
     if (col_meta->attr & IB_COL_UNSIGNED) {
-      ib_u64_t u64;
+      uint64_t u64;
 
       err = ib_tuple_read_u64(tpl, i, &u64);
       fprintf(stream, "%llu", (unsigned long long)u64);
@@ -185,26 +163,19 @@ void print_int_col(FILE *stream, const ib_tpl_t tpl, int i,
 }
 
 /** Print character array of give size or upto 256 chars */
-
-void print_char_array(FILE *stream,      /*!< in: stream to print to */
-                      const char *array, /*!< in: char array */
-                      int len)           /*!< in: length of data */
-{
-  int i;
+void print_char_array(FILE *stream, const char *array, int len) {
   const char *ptr = array;
 
-  for (i = 0; i < len; ++i) {
+  for (int i = 0; i < len; ++i) {
     fprintf(stream, "%c", *(ptr + i));
   }
 }
 
 /** Print all columns in a tuple. */
-
 void print_tuple(FILE *stream, const ib_tpl_t tpl) {
-  int i;
   int n_cols = ib_tuple_get_n_cols(tpl);
 
-  for (i = 0; i < n_cols; ++i) {
+  for (int i = 0; i < n_cols; ++i) {
     ib_ulint_t data_len;
     ib_col_meta_t col_meta;
 
@@ -265,19 +236,13 @@ void print_tuple(FILE *stream, const ib_tpl_t tpl) {
 }
 
 /** Setup the InnoDB configuration parameters. */
-
-void test_configure(void) {
+void test_configure() {
   ib_err_t err;
 
   create_directory(log_group_home_dir);
 
-#ifndef __WIN__
   err = ib_cfg_set_text("flush_method", "O_DIRECT");
   assert(err == DB_SUCCESS);
-#else
-  err = ib_cfg_set_text("flush_method", "async_unbuffered");
-  assert(err == DB_SUCCESS);
-#endif
 
   err = ib_cfg_set_int("log_files_in_group", 2);
   assert(err == DB_SUCCESS);
@@ -352,25 +317,16 @@ int gen_rand_text(char *ptr,    /*!< in,out: text written here */
                       "0123456789";
 
   do {
-#ifdef __WIN__
-    len = rand() % max_size;
-#else
     len = random() % max_size;
-#endif
   } while (len == 0);
 
   for (i = 0; i < len; ++i, ++ptr) {
-#ifdef __WIN__
-    *ptr = txt[rand() % (sizeof(txt) - 1)];
-#else
     *ptr = txt[random() % (sizeof(txt) - 1)];
-#endif
   }
 
   return (len);
 }
 
-#ifndef __WIN__
 struct option ib_longopts[] = {
     {"ib-buffer-pool-size", required_argument, NULL, 1},
     {"ib-log-file-size", required_argument, NULL, 2},
@@ -393,10 +349,8 @@ struct option ib_longopts[] = {
     {"ib-max-open-files", required_argument, NULL, 19},
     {"ib-lock-wait-timeout", required_argument, NULL, 20},
     {NULL, 0, NULL, 0}};
-#endif /* __WIN__ */
 
 /** Print usage. */
-
 void print_usage(const char *progname) {
   fprintf(stderr,
           "usage: %s "
@@ -586,7 +540,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
 /** Print API version to stdout. */
 
 void print_version(void) {
-  ib_u64_t version;
+  uint64_t version;
 
   version = ib_api_version();
   printf("API: %d.%d.%d\n", (int)(version >> 32), /* Current version */
@@ -783,11 +737,7 @@ ib_err_t drop_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
   assert(ib_trx != NULL);

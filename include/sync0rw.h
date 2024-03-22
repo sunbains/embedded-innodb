@@ -380,10 +380,12 @@ struct rw_lock_struct {
   ulint m_magic_n;
 };
 
+static_assert(std::is_standard_layout<rw_lock_t>::value, "rw_lock_t doesn't have a standard layout");
+
 UT_LIST_NODE_GETTER_DEFINITION(rw_lock_t, list);
 
 /** Value of rw_lock_struct::magic_n */
-#define RW_LOCK_MAGIC_N 22643
+constexpr ulint RW_LOCK_MAGIC_N = 22643;
 
 #ifdef UNIV_SYNC_DEBUG
 /** The structure for storing debug info of an rw-lock */

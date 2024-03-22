@@ -293,6 +293,19 @@ void mutex_create_func(
   mutex_exit(&mutex_list_mutex);
 }
 
+static void mutex_destroy(mutex_t *mutex) noexcept {
+  if (mutex->event != nullptr) {
+    os_event_free(mutex->event);
+    mutex->event = nullptr;
+  }
+
+  /* If we free the mutex protecting the mutex list (freeing is
+  necessary), we have to reset the magic number AFTER removing
+  it from the list. */
+
+  ut_d(mutex->magic_n = 0);
+}
+
 void mutex_free(mutex_t *mutex) {
   ut_ad(mutex_validate(mutex));
   ut_a(mutex_get_lock_word(mutex) == 0);
@@ -315,7 +328,7 @@ void mutex_free(mutex_t *mutex) {
     mutex_exit(&mutex_list_mutex);
   }
 
-  call_destructor(mutex);
+  mutex_destroy(mutex);
 }
 
 /** NOTE! Use the corresponding macro in the header file, not this function

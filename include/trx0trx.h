@@ -52,6 +52,13 @@ void trx_set_detailed_error(
 @return	own: the transaction */
 trx_t *trx_create(sess_t *sess);/*!< in: session */
 
+#ifdef UNIT_TESTING
+/** Initialize all the fields in a transaction instance.
+@param[in] sess                 Client session (nullptr for now).
+@return transaction instance. */
+trx_t *trx_create_low(trx_t *trx, sess_t* sess);
+#endif /* UNIT_TESTING */
+
 /** Creates a transaction object.
 @return	own: transaction object */
 trx_t *trx_allocate_();
@@ -249,7 +256,7 @@ trx_t *trx_allocate_for_client(void *arg); /*!< in: pointer to client data */
 db_err trx_commit(trx_t *trx); /*!< in: trx handle */
 
 /** Frees a transaction object for client. */
-void trx_free_for_client(trx_t *trx); /*!< in, own: trx object */
+void trx_free_for_client(trx_t *&trx); /*!< in, own: trx object */
 
 /* Maximum length of a string that can be returned by
 trx_get_que_state_str(). */

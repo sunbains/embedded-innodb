@@ -278,6 +278,9 @@ struct buf_page_t {
 #endif /* UNIV_DEBUG */
 };
 
+/** We need this to alias a buf_block_t from a buf_page_t. */
+static_assert(std::is_standard_layout<buf_page_t>::value, "buf_page_t doesn't have a standard layout");
+
 /** The buffer control block structure */
 struct buf_block_t {
 
@@ -511,4 +514,7 @@ struct buf_pool_t {
 
   /* @} */
 };
+
+/** We need this to alias a buf_block_t from a buf_page_t. */
+static_assert(std::is_standard_layout<buf_block_t>::value, "buf_block_t doesn't have a standard layout");
 

@@ -631,6 +631,8 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
 
   trx_sys = static_cast<trx_sys_t *>(mem_alloc(sizeof(trx_sys_t)));
 
+  UT_LIST_INIT(trx_sys->client_trx_list);
+
   sys_header = trx_sysf_get(&mtr);
 
   trx_rseg_list_and_array_init(recovery, sys_header, &mtr);
@@ -647,7 +649,6 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
   trx_sys->max_trx_id = ut_uint64_align_up(mtr_read_uint64(sys_header + TRX_SYS_TRX_ID_STORE, &mtr), TRX_SYS_TRX_ID_WRITE_MARGIN) +
                         2 * TRX_SYS_TRX_ID_WRITE_MARGIN;
 
-  UT_LIST_INIT(trx_sys->client_trx_list);
 
   trx_dummy_sess = sess_open();
   trx_lists_init_at_db_start(recovery);

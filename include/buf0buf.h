@@ -25,6 +25,9 @@ Created 11/5/1995 Heikki Tuuri
 
 #include "innodb0types.h"
 
+#include <functional>
+#include <optional>
+#include <set>
 #include "buf0types.h"
 #include "fil0types.h"
 #include "hash0hash.h"
@@ -433,7 +436,32 @@ void buf_pool_invalidate();
 /*** Reset the buffer variables. */
 void buf_var_init();
 
-/* --------------------------- LOWER LEVEL ROUTINES ------------------------- */
+/* operations on set(rbt) */
+/** Create an instance of set for buffer_page_t */
+buf_page_rbt_t *rbt_create(buf_page_rbt_cmp_t cmp);
+
+/** Free te instance of set for buffer_page_t */
+void rbt_free(buf_page_rbt_t *tree);
+
+/** Insert buf_page in the set.
+ * @return pair of inserted node if successful. success is determined by second element of pair. */
+std::pair<buf_page_rbt_itr_t, bool> rbt_insert(buf_page_rbt_t *tree, buf_page_t *t);
+
+/** Delete buf_page from the set.
+ * @return pair of inserted node if successful. success is determined by second element of pair. */
+bool rbt_delete(buf_page_rbt_t *tree, buf_page_t *t);
+
+/** Get the first element of the set.
+ * @return iterator to the first element of the set if it exists. */
+std::optional<buf_page_rbt_itr_t> rbt_first(buf_page_rbt_t *tree);
+
+/** Get the previous node of the current node.
+ * @return iterator to the prev element if it exists. */
+std::optional<buf_page_rbt_itr_t> rbt_prev(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr);
+
+/** Get the next node of the current node.
+ * @return iterator to the next element if it exists. */
+std::optional<buf_page_rbt_itr_t> rbt_next(buf_page_rbt_t *tree, buf_page_rbt_itr_t itr);
 
 #ifdef UNIV_SYNC_DEBUG
 /**

@@ -2343,16 +2343,9 @@ bool fil_open_single_table_tablespace(bool check_space_id, ulint id, ulint flags
     ib_logger(
       ib_stream,
       "!\n"
-      "Have you moved InnoDB .ibd files around"
-      " without using the\n"
-      "commands DISCARD TABLESPACE and"
-      " IMPORT TABLESPACE?\n"
-      "It is also possible that this is"
-      " a temporary table ...,\n"
-      "and the server removed the .ibd file for this.\n"
-      "Please refer to\n"
-      "the InnoDB website for details\n"
-      "for how to resolve the issue.\n"
+      "Have you moved InnoDB .ibd files around without using the commands DISCARD TABLESPACE and"
+      " IMPORT TABLESPACE? It is also possible that this is a temporary table ..., and the server"
+      " removed the .ibd file for this."
     );
 
     mem_free(filepath);
@@ -2385,15 +2378,8 @@ bool fil_open_single_table_tablespace(bool check_space_id, ulint id, ulint flags
       ut_print_filename(ib_stream, filepath);
       ib_logger(
         ib_stream,
-        " are %lu and %lu, but in the InnoDB\n"
-        "data dictionary they are %lu and %lu.\n"
-        "Have you moved InnoDB .ibd files"
-        " around without using the\n"
-        "commands DISCARD TABLESPACE and"
-        " IMPORT TABLESPACE?\n"
-        "Please refer to\n"
-        "the InnoDB website for details\n"
-        "for how to resolve the issue.\n",
+        " are %lu and %lu, but in the InnoDB data dictionary they are %lu and %lu. Have you moved InnoDB .ibd files"
+        " around without using the commands DISCARD TABLESPACE andIMPORT TABLESPACE?",
         (ulong)space_id,
         (ulong)space_flags,
         (ulong)id,
@@ -2938,9 +2924,7 @@ bool fil_space_for_table_exists_in_mem(
   error_exit:
     ib_logger(
       ib_stream,
-      "Please refer to\n"
-      "the InnoDB website for details\n"
-      "for how to resolve the issue.\n"
+      "Please refer to the Embdedded InnoDB GitHub repository for details for how to resolve the issue."
     );
 
     mem_free(path);

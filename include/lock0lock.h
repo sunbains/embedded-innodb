@@ -718,3 +718,33 @@ inline ulint lock_get_min_heap_no(const buf_block_t *block) /*!< in: buffer bloc
     return (rec_get_heap_no_old(page + rec_get_next_offs(page + PAGE_OLD_INFIMUM, false)));
   }
 }
+
+
+#ifdef UNIT_TESTING
+/** Creates a new record lock and inserts it to the lock queue. Does NOT check
+for deadlocks or lock compatibility!
+@param[in] type_mode            Lock mode and wait flag, type is ignored and replaced by LOCK_REC
+@param[in] space                Tablespace ID.
+@param[in] page_no              Page number in tablespace
+@param[in] heap_no              Heap number in page
+@param[in] n_bits               No. of bits in lock bitmap
+@param[in] index                Index of record
+@param[in,out] trx              Transaction that wants to create the record lock.
+@return	created lock */
+lock_t *lock_rec_create_low(
+  ulint type_mode,
+  space_id_t space,
+  page_no_t page_no,
+  ulint heap_no,
+  ulint n_bits,
+  dict_index_t *index,
+  trx_t *trx);
+
+
+/** Check if a transaction has any other transaction waiting on its locks.
+@param[in] trx                  Transaction to check.
+@return true if some other transaction is waiting on its locks. */
+bool lock_trx_has_no_waiters(const trx_t *trx);
+
+#endif /* UNIT_TESTING */
+

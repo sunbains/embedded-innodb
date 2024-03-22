@@ -1039,8 +1039,6 @@ buf_block_t *buf_page_get_gen(
     }
   }
 
-  buf_pool_mutex_exit();
-
   auto must_read = buf_block_get_io_fix(block) == BUF_IO_READ;
 
   if (must_read && mode == BUF_GET_IF_IN_POOL) {

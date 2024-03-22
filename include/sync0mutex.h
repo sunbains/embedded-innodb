@@ -19,22 +19,8 @@ struct mutex_t {
   mutex_t() = default;
 
   void init() {
-   ut_a(event == nullptr);
+    ut_a(event == nullptr);
     event = os_event_create(nullptr);
-  }
-
-  /** Destructor */
-  ~mutex_t() noexcept {
-    if (event != nullptr) {
-      os_event_free(event);
-      event = nullptr;
-    }
-
-    /* If we free the mutex protecting the mutex list (freeing is
-    necessary), we have to reset the magic number AFTER removing
-    it from the list. */
-
-    ut_d(magic_n = 0);
   }
 
   /** Used by sync0arr.c for the wait queue */
@@ -104,3 +90,5 @@ struct mutex_t {
   ulint level{};
 #endif /* UNIV_SYNC_DEBUG */
 };
+
+static_assert(std::is_standard_layout<mutex_t>::value, "mutex_t is not a POD");
