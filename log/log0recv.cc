@@ -188,7 +188,7 @@ void recv_sys_init(ulint available_memory) {
   recv_sys->heap = mem_heap_create_in_buffer(256);
 
   /* Set appropriate value of recv_n_pool_free_frames. */
-  if (buf_pool_get_curr_size() >= (10 * 1024 * 1024)) {
+  if (buf_pool->get_curr_size() >= (10 * 1024 * 1024)) {
     /* Buffer pool of size greater than 10 MB. */
     recv_n_pool_free_frames = 512;
   }
@@ -233,7 +233,7 @@ static void recv_sys_empty_hash(void) {
   hash_table_free(recv_sys->addr_hash);
   mem_heap_empty(recv_sys->heap);
 
-  recv_sys->addr_hash = hash_create(buf_pool_get_curr_size() / 256);
+  recv_sys->addr_hash = hash_create(buf_pool->get_curr_size() / 256);
 }
 
 #ifndef UNIV_LOG_DEBUG
@@ -616,7 +616,7 @@ static byte *recv_parse_or_apply_log_rec_body(
   ut_ad(!block == !mtr);
 
   if (block) {
-    page = block->frame;
+    page = block->m_frame;
     ut_d(page_type = fil_page_get_type(page));
   } else {
     page = nullptr;
@@ -985,9 +985,9 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
     return;
   }
 
-  recv_addr = recv_get_fil_addr_struct(buf_block_get_space(block), buf_block_get_page_no(block));
+  recv_addr = recv_get_fil_addr_struct(block->get_space(), buf_block_get_page_no(block));
 
-  if ((recv_addr == nullptr) || (recv_addr->state == RECV_BEING_PROCESSED) || (recv_addr->state == RECV_PROCESSED)) {
+  if (recv_addr == nullptr || recv_addr->state == RECV_BEING_PROCESSED || recv_addr->state == RECV_PROCESSED) {
 
     mutex_exit(&(recv_sys->mutex));
 
@@ -1001,7 +1001,7 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
   mtr_start(&mtr);
   mtr_set_log_mode(&mtr, MTR_LOG_NONE);
 
-  page = block->frame;
+  page = block->m_frame;
 
   if (just_read_in) {
     /* Move the ownership of the x-latch on the page to
@@ -1009,7 +1009,7 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
     x-latch on it.  This is needed for the operations to
     the page to pass the debug checks. */
 
-    rw_lock_x_lock_move_ownership(&block->lock);
+    rw_lock_x_lock_move_ownership(&block->m_rw_lock);
   }
 
   success = buf_page_get_known_nowait(RW_X_LATCH, block, BUF_KEEP_OLD, __FILE__, __LINE__, &mtr);
@@ -1023,7 +1023,7 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
   /* It may be that the page has been modified in the buffer
   pool: read the newest modification lsn there */
 
-  page_newest_lsn = buf_page_get_newest_modification(&block->page);
+  page_newest_lsn = buf_page_get_newest_modification(&block->m_page);
 
   if (page_newest_lsn) {
 
@@ -1947,7 +1947,7 @@ static void recv_group_scan_log_recs(
 
     finished = recv_scan_log_recs(
       recovery,
-      (buf_pool->curr_size - recv_n_pool_free_frames) * UNIV_PAGE_SIZE,
+      (buf_pool->m_curr_size - recv_n_pool_free_frames) * UNIV_PAGE_SIZE,
       true,
       log_sys->buf,
       RECV_SCAN_SIZE,
@@ -2114,7 +2114,7 @@ static void recv_init_crash_recovery(
 db_err recv_recovery_from_checkpoint_start_func(ib_recovery_t recovery, lsn_t min_flushed_lsn, lsn_t max_flushed_lsn) {
   recv_sys_create();
 
-  recv_sys_init(buf_pool_get_curr_size());
+  recv_sys_init(buf_pool->get_curr_size());
 
   if (recovery >= IB_RECOVERY_NO_LOG_REDO) {
     ib_logger(ib_stream, "The user has set IB_RECOVERY_NO_LOG_REDO on. Skipping log redo");

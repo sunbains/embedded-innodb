@@ -186,9 +186,9 @@ static void btr_cur_latch_leaves(
       mode = latch_mode == BTR_SEARCH_LEAF ? RW_S_LATCH : RW_X_LATCH;
       get_block = btr_block_get(space, page_no, mode, mtr);
 #ifdef UNIV_BTR_DEBUG
-      ut_a(page_is_comp(get_block->frame) == page_is_comp(page));
+      ut_a(page_is_comp(get_block->m_frame) == page_is_comp(page));
 #endif /* UNIV_BTR_DEBUG */
-      get_block->check_index_page_at_flush = true;
+      get_block->m_check_index_page_at_flush = true;
       return;
     case BTR_MODIFY_TREE:
       /* x-latch also brothers from left to right */
@@ -197,27 +197,27 @@ static void btr_cur_latch_leaves(
       if (left_page_no != FIL_NULL) {
         get_block = btr_block_get(space, left_page_no, RW_X_LATCH, mtr);
 #ifdef UNIV_BTR_DEBUG
-        ut_a(page_is_comp(get_block->frame) == page_is_comp(page));
-        ut_a(btr_page_get_next(get_block->frame, mtr) == page_get_page_no(page));
+        ut_a(page_is_comp(get_block->m_frame) == page_is_comp(page));
+        ut_a(btr_page_get_next(buf_block_get_frame(get_block), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
-        get_block->check_index_page_at_flush = true;
+        get_block->m_check_index_page_at_flush = true;
       }
 
       get_block = btr_block_get(space, page_no, RW_X_LATCH, mtr);
 #ifdef UNIV_BTR_DEBUG
-      ut_a(page_is_comp(get_block->frame) == page_is_comp(page));
+      ut_a(page_is_comp(buf_block_get_frame(get_block)) == page_is_comp(page));
 #endif /* UNIV_BTR_DEBUG */
-      get_block->check_index_page_at_flush = true;
+      get_block->m_check_index_page_at_flush = true;
 
       right_page_no = btr_page_get_next(page, mtr);
 
       if (right_page_no != FIL_NULL) {
         get_block = btr_block_get(space, right_page_no, RW_X_LATCH, mtr);
 #ifdef UNIV_BTR_DEBUG
-        ut_a(page_is_comp(get_block->frame) == page_is_comp(page));
-        ut_a(btr_page_get_prev(get_block->frame, mtr) == page_get_page_no(page));
+        ut_a(page_is_comp(buf_block_get_frame(get_block)) == page_is_comp(page));
+        ut_a(btr_page_get_prev(buf_block_get_frame(get_block), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
-        get_block->check_index_page_at_flush = true;
+        get_block->m_check_index_page_at_flush = true;
       }
 
       return;
@@ -232,17 +232,17 @@ static void btr_cur_latch_leaves(
         get_block = btr_block_get(space, left_page_no, mode, mtr);
         cursor->left_block = get_block;
 #ifdef UNIV_BTR_DEBUG
-        ut_a(page_is_comp(get_block->frame) == page_is_comp(page));
-        ut_a(btr_page_get_next(get_block->frame, mtr) == page_get_page_no(page));
+        ut_a(page_is_comp(buf_block_get_frame(get_block)) == page_is_comp(page));
+        ut_a(btr_page_get_next(buf_block_get_frame(get_block), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
-        get_block->check_index_page_at_flush = true;
+        get_block->m_check_index_page_at_flush = true;
       }
 
       get_block = btr_block_get(space, page_no, mode, mtr);
 #ifdef UNIV_BTR_DEBUG
-      ut_a(page_is_comp(get_block->frame) == page_is_comp(page));
+      ut_a(page_is_comp(buf_block_get_frame(get_block)) == page_is_comp(page));
 #endif /* UNIV_BTR_DEBUG */
-      get_block->check_index_page_at_flush = true;
+      get_block->m_check_index_page_at_flush = true;
       return;
   }
 
@@ -371,7 +371,7 @@ void btr_cur_search_to_nth_level(
 
     page = buf_block_get_frame(block);
 
-    block->check_index_page_at_flush = true;
+    block->m_check_index_page_at_flush = true;
 
     if (rw_latch != RW_NO_LATCH) {
 
@@ -506,7 +506,7 @@ void btr_cur_open_at_index_side_func(
 
     ut_ad(dict_index->id == btr_page_get_index_id(page));
 
-    block->check_index_page_at_flush = true;
+    block->m_check_index_page_at_flush = true;
 
     if (height == ULINT_UNDEFINED) {
       /* We are in the root node */
@@ -1193,16 +1193,6 @@ db_err btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, const upd_t *upda
     return err;
   }
 
-  if (block->is_hashed) {
-    /* The function row_upd_changes_ord_field_binary works only
-    if the update vector was built for a clustered index, we must
-    NOT call it if index is secondary */
-
-    if (!dict_index_is_clust(dict_index) ||
-
-        row_upd_changes_ord_field_binary(nullptr, dict_index, update)) {}
-  }
-
   if (!(flags & BTR_KEEP_SYS_FLAG)) {
     row_upd_rec_sys_fields(rec, dict_index, offsets, trx, roll_ptr);
   }
@@ -1392,7 +1382,7 @@ static void btr_cur_pess_upd_restore_supremum(
     return;
   }
 
-  auto space = buf_block_get_space(block);
+  auto space = block->get_space();
   auto prev_page_no = btr_page_get_prev(page, mtr);
 
   ut_ad(prev_page_no != FIL_NULL);
@@ -1400,7 +1390,7 @@ static void btr_cur_pess_upd_restore_supremum(
   auto prev_block = buf_page_get_with_no_latch(space, 0, prev_page_no, mtr);
 
 #ifdef UNIV_BTR_DEBUG
-  ut_a(btr_page_get_next(prev_block->frame, mtr) == page_get_page_no(page));
+  ut_a(btr_page_get_next(buf_block_get_frame(prev_block), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
 
   /* We must already have an x-latch on prev_block! */
@@ -2558,7 +2548,7 @@ static ulint btr_blob_get_next_page_no(const byte *blob_header) {
 @param[in] unused
 @param[in,out] mtr              Min-transaction. */
 static void btr_blob_free(buf_block_t *block, bool, mtr_t *mtr) {
-  auto space = buf_block_get_space(block);
+  auto space = block->get_space();
   auto page_no = buf_block_get_page_no(block);
 
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
@@ -2566,18 +2556,18 @@ static void btr_blob_free(buf_block_t *block, bool, mtr_t *mtr) {
   mtr_commit(mtr);
 
   buf_pool_mutex_enter();
-  mutex_enter(&block->mutex);
+  mutex_enter(&block->m_mutex);
 
   /* Only free the block if it is still allocated to the same file page. */
 
-  if (buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE && buf_block_get_space(block) == space && buf_block_get_page_no(block) == page_no) {
+  if (block->get_state() == BUF_BLOCK_FILE_PAGE && block->get_space() == space && buf_block_get_page_no(block) == page_no) {
 
-    auto freed = buf_LRU_free_block(&block->page, nullptr);
+    auto freed = buf_LRU_free_block(&block->m_page, nullptr);
     ut_a(freed == BUF_LRU_FREED);
   }
 
   buf_pool_mutex_exit();
-  mutex_exit(&block->mutex);
+  mutex_exit(&block->m_mutex);
 }
 
 db_err btr_store_big_rec_extern_fields(
@@ -2597,7 +2587,7 @@ db_err btr_store_big_rec_extern_fields(
   ut_ad(buf_block_get_frame(rec_block) == page_align(rec));
   ut_a(dict_index_is_clust(index));
 
-  auto space_id = buf_block_get_space(rec_block);
+  auto space_id = rec_block->get_space();
   auto rec_page_no = buf_block_get_page_no(rec_block);
   ut_a(fil_page_get_type(page_align(rec)) == FIL_PAGE_INDEX);
 

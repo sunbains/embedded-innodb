@@ -140,7 +140,7 @@ void log_fsp_current_free_limit_set_and_checkpoint(ulint limit) {
 static lsn_t log_buf_pool_get_oldest_modification() {
   ut_ad(mutex_own(&(log_sys->mutex)));
 
-  auto lsn = buf_pool_get_oldest_modification();
+  auto lsn = buf_pool->get_oldest_modification();
 
   if (lsn == 0) {
     lsn = log_sys->lsn;
@@ -244,7 +244,7 @@ lsn_t log_close(ib_recovery_t recovery) {
   auto first_rec_group = log_block_get_first_rec_group(log_block);
   auto lsn = log->lsn;
   auto checkpoint_age = lsn - log->last_checkpoint_lsn;
-  auto oldest_lsn = buf_pool_get_oldest_modification();
+  auto oldest_lsn = buf_pool->get_oldest_modification();
 
   ut_ad(mutex_own(&(log->mutex)));
 
@@ -558,7 +558,7 @@ void innobase_log_init() {
 
 #ifdef UNIV_LOG_DEBUG
   recv_sys_create();
-  recv_sys_init(buf_pool_get_curr_size());
+  recv_sys_init(buf_pool->get_curr_size());
 
   recv_sys->parse_start_lsn = log_sys->lsn;
   recv_sys->scanned_lsn = log_sys->lsn;

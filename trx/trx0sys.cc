@@ -197,7 +197,7 @@ start_again:
       " creating new\n"
     );
 
-    if (buf_pool_get_curr_size() < ((2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2 + 100) * UNIV_PAGE_SIZE)) {
+    if (buf_pool->get_curr_size() < ((2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2 + 100) * UNIV_PAGE_SIZE)) {
       ib_logger(
         ib_stream,
         "Cannot create doublewrite buffer:"

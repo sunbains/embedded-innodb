@@ -48,12 +48,12 @@ void ut_dbg_assertion_failed(const char *expr, const char *file, ulint line) {
   );
 
   if (expr) {
-    ib_logger(ib_stream, "Failing assertion: %s\n", expr);
+    ib_logger(ib_stream, " see: %s\n", expr);
   }
 
   ib_logger(
     ib_stream,
-    "We intentionally generate a memory trap. Please submit a detailed bug report on the Embedded InnoDB GitHub repository");
+    " We intentionally generate a memory trap. Please submit a detailed bug report on the Embedded InnoDB GitHub repository");
 #if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
   ut_dbg_stop_threads = true;
 #endif /* UNIV_SYNC_DEBUG || !UT_DBG_USE_ABORT */

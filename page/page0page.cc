@@ -1126,7 +1126,7 @@ void page_dir_print(page_t *page, ulint pr_n) {
 }
 
 void page_print_list(buf_block_t *block, dict_index_t *index, ulint pr_n) {
-  page_t *page = block->frame;
+  page_t *page = block->m_frame;
   page_cur_t cur;
   ulint count;
   ulint n_recs;
@@ -1213,7 +1213,7 @@ void page_header_print(const page_t *page) {
 }
 
 void page_print(buf_block_t *block, dict_index_t *index, ulint dn, ulint rn) {
-  page_t *page = block->frame;
+  page_t *page = block->m_frame;
 
   page_header_print(page);
   page_dir_print(page, dn);

@@ -177,8 +177,8 @@ inline void buf_flush_note_modification(
 ) /*!< in: mtr */
 {
   ut_ad(block);
-  ut_ad(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
-  ut_ad(block->page.buf_fix_count > 0);
+  ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
+  ut_ad(block->m_page.m_buf_fix_count > 0);
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(&(block->lock), RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
@@ -186,18 +186,18 @@ inline void buf_flush_note_modification(
 
   ut_ad(mtr->start_lsn != 0);
   ut_ad(mtr->modifications);
-  ut_ad(block->page.newest_modification <= mtr->end_lsn);
+  ut_ad(block->m_page.m_newest_modification <= mtr->end_lsn);
 
-  block->page.newest_modification = mtr->end_lsn;
+  block->m_page.m_newest_modification = mtr->end_lsn;
 
-  if (!block->page.oldest_modification) {
+  if (!block->m_page.m_oldest_modification) {
 
-    block->page.oldest_modification = mtr->start_lsn;
-    ut_ad(block->page.oldest_modification != 0);
+    block->m_page.m_oldest_modification = mtr->start_lsn;
+    ut_ad(block->m_page.m_oldest_modification != 0);
 
     buf_flush_insert_into_flush_list(block);
   } else {
-    ut_ad(block->page.oldest_modification <= mtr->start_lsn);
+    ut_ad(block->m_page.m_oldest_modification <= mtr->start_lsn);
   }
 
   ++srv_buf_pool_write_requests;
@@ -213,27 +213,27 @@ inline void buf_flush_recv_note_modification(
                            set of mtr's */
 {
   ut_ad(block);
-  ut_ad(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
-  ut_ad(block->page.buf_fix_count > 0);
+  ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
+  ut_ad(block->m_page.m_buf_fix_count > 0);
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(&(block->lock), RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
 
   buf_pool_mutex_enter();
 
-  ut_ad(block->page.newest_modification <= end_lsn);
+  ut_ad(block->m_page.m_newest_modification <= end_lsn);
 
-  block->page.newest_modification = end_lsn;
+  block->m_page.m_newest_modification = end_lsn;
 
-  if (!block->page.oldest_modification) {
+  if (!block->m_page.m_oldest_modification) {
 
-    block->page.oldest_modification = start_lsn;
+    block->m_page.m_oldest_modification = start_lsn;
 
-    ut_ad(block->page.oldest_modification != 0);
+    ut_ad(block->m_page.m_oldest_modification != 0);
 
     buf_flush_insert_sorted_into_flush_list(block);
   } else {
-    ut_ad(block->page.oldest_modification <= start_lsn);
+    ut_ad(block->m_page.m_oldest_modification <= start_lsn);
   }
 
   buf_pool_mutex_exit();

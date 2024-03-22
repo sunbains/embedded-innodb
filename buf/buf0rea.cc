@@ -39,7 +39,7 @@ Created 11/5/1995 Heikki Tuuri
 /** The linear read-ahead area size */
 #define BUF_READ_AHEAD_LINEAR_AREA BUF_READ_AHEAD_AREA
 
-/** If there are buf_pool->curr_size per the number below pending reads, then
+/** If there are buf_pool->m_curr_size per the number below pending reads, then
 read-ahead is not done: this is to prevent flooding the buffer pool with
 i/o-fixed buffer blocks */
 #define BUF_READ_AHEAD_PEND_LIMIT 2
@@ -118,9 +118,9 @@ static ulint buf_read_page_low(
 
   ut_ad(buf_page_in_file(bpage));
 
-  ut_a(buf_page_get_state(bpage) == BUF_BLOCK_FILE_PAGE);
+  ut_a(bpage->get_state() == BUF_BLOCK_FILE_PAGE);
 
-  *err = fil_io(OS_FILE_READ | wake_later, sync, space, offset, 0, UNIV_PAGE_SIZE, ((buf_block_t *)bpage)->frame, bpage);
+  *err = fil_io(OS_FILE_READ | wake_later, sync, space, offset, 0, UNIV_PAGE_SIZE, ((buf_block_t *)bpage)->m_frame, bpage);
   ut_a(*err == DB_SUCCESS);
 
   if (sync) {
@@ -165,7 +165,7 @@ bool buf_read_page(ulint space, ulint offset) {
   return (count > 0);
 }
 
-ulint buf_read_ahead_linear(ulint space, ulint offset) {
+ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   buf_page_t *bpage;
   buf_frame_t *frame;
   buf_page_t *pred_bpage = nullptr;
@@ -214,7 +214,7 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
     return 0;
   }
 
-  if (buf_pool->n_pend_reads > buf_pool->curr_size / BUF_READ_AHEAD_PEND_LIMIT) {
+  if (buf_pool->m_n_pend_reads > buf_pool->m_curr_size / BUF_READ_AHEAD_PEND_LIMIT) {
     buf_pool_mutex_exit();
 
     return 0;
@@ -280,9 +280,9 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
     return (0);
   }
 
-  switch (buf_page_get_state(bpage)) {
+  switch (bpage->get_state()) {
     case BUF_BLOCK_FILE_PAGE:
-      frame = ((buf_block_t *)bpage)->frame;
+      frame = ((buf_block_t *)bpage)->m_frame;
       break;
     default:
       ut_error;
@@ -369,7 +369,7 @@ ulint buf_read_ahead_linear(ulint space, ulint offset) {
   /* Read ahead is considered one I/O operation for the purpose of LRU policy decision. */
   buf_LRU_stat_inc_io();
 
-  buf_pool->stat.n_ra_pages_read += count;
+  buf_pool->m_stat.n_ra_pages_read += count;
 
   return count;
 }
@@ -391,7 +391,7 @@ void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_
 
     os_aio_print_debug = false;
 
-    while (buf_pool->n_pend_reads >= recv_n_pool_free_frames / 2) {
+    while (buf_pool->m_n_pend_reads >= recv_n_pool_free_frames / 2) {
 
       os_aio_simulated_wake_handler_threads();
       os_thread_sleep(10000);
@@ -407,7 +407,7 @@ void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_
           " be finished.\n"
           "Number of pending reads %lu,"
           " pending pread calls %lu\n",
-          (ulong)buf_pool->n_pend_reads,
+          (ulong)buf_pool->m_n_pend_reads,
           (ulong)os_file_n_pending_preads
         );
 

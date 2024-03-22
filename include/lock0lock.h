@@ -710,7 +710,7 @@ inline trx_t *lock_clust_rec_some_has_impl(
 @return	heap_no of smallest user record, or PAGE_HEAP_NO_SUPREMUM */
 inline ulint lock_get_min_heap_no(const buf_block_t *block) /*!< in: buffer block */
 {
-  const page_t *page = block->frame;
+  const page_t *page = block->m_frame;
 
   if (page_is_comp(page)) {
     return (rec_get_heap_no_new(page + rec_get_next_offs(page + PAGE_NEW_INFIMUM, true)));

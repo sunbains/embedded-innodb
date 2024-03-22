@@ -168,7 +168,7 @@ struct page_cur_struct {
  * @return Page.
  */
 inline page_t *page_cur_get_page(page_cur_t *cur) {
-  ut_ad(page_align(cur->rec) == cur->block->frame);
+  ut_ad(page_align(cur->rec) == buf_block_get_frame(cur->block));
 
   return page_align(cur->rec);
 }
@@ -180,7 +180,7 @@ inline page_t *page_cur_get_page(page_cur_t *cur) {
  * @return Buffer block.
  */
 inline buf_block_t *page_cur_get_block(page_cur_t *cur) {
-  ut_ad(page_align(cur->rec) == cur->block->frame);
+  ut_ad(page_align(cur->rec) == buf_block_get_frame(cur->block));
 
   return cur->block;
 }
@@ -192,7 +192,7 @@ inline buf_block_t *page_cur_get_block(page_cur_t *cur) {
  * @return Record.
  */
 inline rec_t *page_cur_get_rec(page_cur_t *cur) {
-  ut_ad(page_align(cur->rec) == cur->block->frame);
+  ut_ad(page_align(cur->rec) == buf_block_get_frame(cur->block));
 
   return cur->rec;
 }
@@ -252,7 +252,7 @@ inline void page_cur_set_after_last(const buf_block_t *block, page_cur_t *cur) {
  * @return True if at start.
  */
 inline bool page_cur_is_before_first(const page_cur_t *cur) {
-  ut_ad(page_align(cur->rec) == cur->block->frame);
+  ut_ad(page_align(cur->rec) == buf_block_get_frame(cur->block));
   return page_rec_is_infimum(cur->rec);
 }
 
@@ -263,7 +263,7 @@ inline bool page_cur_is_before_first(const page_cur_t *cur) {
  * @return True if at end.
  */
 inline bool page_cur_is_after_last(const page_cur_t *cur) {
-  ut_ad(page_align(cur->rec) == cur->block->frame);
+  ut_ad(page_align(cur->rec) == buf_block_get_frame(cur->block));
   return page_rec_is_supremum(cur->rec);
 }
 
@@ -275,7 +275,7 @@ inline bool page_cur_is_after_last(const page_cur_t *cur) {
  * @param cur Out: Page cursor.
  */
 inline void page_cur_position(const rec_t *rec, const buf_block_t *block, page_cur_t *cur) {
-  ut_ad(page_align(rec) == block->frame);
+  ut_ad(page_align(rec) == buf_block_get_frame(block));
 
   cur->rec = (rec_t *)rec;
   cur->block = (buf_block_t *)block;

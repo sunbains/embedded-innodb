@@ -899,7 +899,7 @@ pointer to it.
 inline lock_t *lock_rec_get_first_on_page(const buf_block_t *block) {
   ut_ad(mutex_own(&kernel_mutex));
 
-  const auto space = buf_block_get_space(block);
+  const auto space = block->get_space();
   const auto page_no = buf_block_get_page_no(block);
   auto hash = buf_block_get_lock_hash_val(block);
 
@@ -1297,9 +1297,9 @@ static lock_t *lock_rec_create(
 
   ut_ad(mutex_own(&kernel_mutex));
 
-  space = buf_block_get_space(block);
+  space = block->get_space();
   page_no = buf_block_get_page_no(block);
-  page = block->frame;
+  page = block->m_frame;
 
   ut_ad(!!page_is_comp(page) == dict_table_is_comp(index->table));
 
@@ -1752,7 +1752,7 @@ lock bitmaps must already be reset when this function is called.
 static void lock_rec_free_all_from_discard_page(const buf_block_t *block) {
   ut_ad(mutex_own(&kernel_mutex));
 
-  auto space = buf_block_get_space(block);
+  auto space = block->get_space();
   auto page_no = buf_block_get_page_no(block);
   auto lock = lock_rec_get_first_on_page_addr(space, page_no);
 
@@ -1911,8 +1911,8 @@ void lock_move_reorganize_page(const buf_block_t *block, const buf_block_t *oblo
     lock = lock_rec_get_next_on_page(lock);
   } while (lock != nullptr);
 
-  comp = page_is_comp(block->frame);
-  ut_ad(comp == page_is_comp(oblock->frame));
+  comp = page_is_comp(block->m_frame);
+  ut_ad(comp == page_is_comp(oblock->m_frame));
 
   for (lock = UT_LIST_GET_FIRST(old_locks); lock; lock = UT_LIST_GET_NEXT(trx_locks, lock)) {
     /* NOTE: we copy also the locks set on the infimum and
@@ -1991,7 +1991,7 @@ void lock_move_reorganize_page(const buf_block_t *block, const buf_block_t *oblo
   mem_heap_free(heap);
 
 #ifdef UNIV_DEBUG_LOCK_VALIDATE
-  ut_ad(lock_rec_validate_page(buf_block_get_space(block), buf_block_get_page_no(block)));
+  ut_ad(lock_rec_validate_page(block->get_space(), buf_block_get_page_no(block)));
 #endif /* UNIV_DEBUG_LOCK_VALIDATE */
 }
 
@@ -2058,8 +2058,8 @@ void lock_move_rec_list_end(const buf_block_t *new_block, const buf_block_t *blo
   lock_mutex_exit_kernel();
 
 #ifdef UNIV_DEBUG_LOCK_VALIDATE
-  ut_ad(lock_rec_validate_page(buf_block_get_space(block), buf_block_get_page_no(block)));
-  ut_ad(lock_rec_validate_page(buf_block_get_space(new_block), buf_block_get_page_no(new_block)));
+  ut_ad(lock_rec_validate_page(block->get_space(), buf_block_get_page_no(block)));
+  ut_ad(lock_rec_validate_page(new_block->get_space(), buf_block_get_page_no(new_block)));
 #endif /* UNIV_DEBUG_LOCK_VALIDATE */
 }
 
@@ -2067,8 +2067,8 @@ void lock_move_rec_list_start(const buf_block_t *new_block, const buf_block_t *b
   lock_t *lock;
   const ulint comp = page_rec_is_comp(rec);
 
-  ut_ad(block->frame == page_align(rec));
-  ut_ad(new_block->frame == page_align(old_end));
+  ut_ad(block->m_frame == page_align(rec));
+  ut_ad(new_block->m_frame == page_align(old_end));
 
   lock_mutex_enter_kernel();
 
@@ -2140,7 +2140,7 @@ void lock_move_rec_list_start(const buf_block_t *new_block, const buf_block_t *b
   lock_mutex_exit_kernel();
 
 #ifdef UNIV_DEBUG_LOCK_VALIDATE
-  ut_ad(lock_rec_validate_page(buf_block_get_space(block), buf_block_get_page_no(block)));
+  ut_ad(lock_rec_validate_page(block->get_space(), buf_block_get_page_no(block)));
 #endif /* UNIV_DEBUG_LOCK_VALIDATE */
 }
 
@@ -2218,7 +2218,7 @@ void lock_update_split_left(const buf_block_t *right_block, const buf_block_t *l
 void lock_update_merge_left(const buf_block_t *left_block, const rec_t *orig_pred, const buf_block_t *right_block) {
   const rec_t *left_next_rec;
 
-  ut_ad(left_block->frame == page_align(orig_pred));
+  ut_ad(left_block->m_frame == page_align(orig_pred));
 
   lock_mutex_enter_kernel();
 
@@ -2260,7 +2260,7 @@ void lock_rec_reset_and_inherit_gap_locks(
 }
 
 void lock_update_discard(const buf_block_t *heir_block, ulint heir_heap_no, const buf_block_t *block) {
-  const page_t *page = block->frame;
+  const page_t *page = block->m_frame;
   const rec_t *rec;
   ulint heap_no;
 
@@ -2312,7 +2312,7 @@ void lock_update_insert(const buf_block_t *block, const rec_t *rec) {
   ulint receiver_heap_no;
   ulint donator_heap_no;
 
-  ut_ad(block->frame == page_align(rec));
+  ut_ad(block->m_frame == page_align(rec));
 
   /* Inherit the gap-locking locks for rec, in gap mode, from the next
   record */
@@ -2331,7 +2331,7 @@ void lock_update_insert(const buf_block_t *block, const rec_t *rec) {
 }
 
 void lock_update_delete(const buf_block_t *block, const rec_t *rec) {
-  const page_t *page = block->frame;
+  const page_t *page = block->m_frame;
   ulint heap_no;
   ulint next_heap_no;
 
@@ -2361,7 +2361,7 @@ void lock_update_delete(const buf_block_t *block, const rec_t *rec) {
 void lock_rec_store_on_page_infimum(const buf_block_t *block, const rec_t *rec) {
   ulint heap_no = page_rec_get_heap_no(rec);
 
-  ut_ad(block->frame == page_align(rec));
+  ut_ad(block->m_frame == page_align(rec));
 
   lock_mutex_enter_kernel();
 
@@ -2901,7 +2901,7 @@ static void lock_table_dequeue(lock_t *in_lock) {
 
 void lock_rec_unlock(trx_t *trx, const buf_block_t *block, const rec_t *rec, lock_mode lock_mode) {
   ut_ad(trx && rec);
-  ut_ad(block->frame == page_align(rec));
+  ut_ad(block->m_frame == page_align(rec));
 
   auto heap_no = page_rec_get_heap_no(rec);
 
@@ -3487,7 +3487,7 @@ static bool lock_table_queue_validate(dict_table_t *table) {
 @return	true if ok */
 static bool lock_rec_queue_validate(const buf_block_t *block, const rec_t *rec, dict_index_t *index, const ulint *offsets) {
   ut_a(rec);
-  ut_a(block->frame == page_align(rec));
+  ut_a(buf_block_get_frame(block) == page_align(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_ad(!page_rec_is_comp(rec) == !rec_offs_comp(offsets));
 
@@ -3577,8 +3577,6 @@ static bool lock_rec_queue_validate(const buf_block_t *block, const rec_t *rec, 
 
 static bool lock_rec_validate_page(space_id_t space, page_no_t page_no) {
   dict_index_t *index;
-  buf_block_t *block;
-  const page_t *page;
   lock_t *lock;
   const rec_t *rec;
   ulint nth_lock = 0;
@@ -3594,10 +3592,11 @@ static bool lock_rec_validate_page(space_id_t space, page_no_t page_no) {
 
   mtr_start(&mtr);
 
-  block = buf_page_get(space, 0, page_no, RW_X_LATCH, &mtr);
+  auto block = buf_page_get(space, 0, page_no, RW_X_LATCH, &mtr);
+
   buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
 
-  page = block->frame;
+  const auto page = buf_block_get_frame(block);
 
   lock_mutex_enter_kernel();
 loop:
@@ -3757,7 +3756,7 @@ db_err lock_rec_insert_check_and_lock(
   db_err err;
   ulint next_rec_heap_no;
 
-  ut_ad(block->frame == page_align(rec));
+  ut_ad(block->m_frame == page_align(rec));
 
   if (flags & BTR_NO_LOCKING_FLAG) {
 
@@ -3884,7 +3883,7 @@ db_err lock_clust_rec_modify_check_and_lock(
 
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_ad(dict_index_is_clust(index));
-  ut_ad(block->frame == page_align(rec));
+  ut_ad(block->m_frame == page_align(rec));
 
   if (flags & BTR_NO_LOCKING_FLAG) {
 
@@ -3919,7 +3918,7 @@ db_err lock_sec_rec_modify_check_and_lock(
   ulint heap_no;
 
   ut_ad(!dict_index_is_clust(index));
-  ut_ad(block->frame == page_align(rec));
+  ut_ad(block->m_frame == page_align(rec));
 
   if (flags & BTR_NO_LOCKING_FLAG) {
 
@@ -3973,7 +3972,7 @@ db_err lock_sec_rec_read_check_and_lock(
   ulint heap_no;
 
   ut_ad(!dict_index_is_clust(index));
-  ut_ad(block->frame == page_align(rec));
+  ut_ad(block->m_frame == page_align(rec));
   ut_ad(page_rec_is_user_rec(rec) || page_rec_is_supremum(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_ad(mode == LOCK_X || mode == LOCK_S);
@@ -3994,7 +3993,7 @@ db_err lock_sec_rec_read_check_and_lock(
   if the max trx id for the page >= min trx id for the trx list or a
   database recovery is running. */
 
-  if ((page_get_max_trx_id(block->frame) >= trx_list_get_min_trx_id() || recv_recovery_on) && !page_rec_is_supremum(rec)) {
+  if ((page_get_max_trx_id(block->m_frame) >= trx_list_get_min_trx_id() || recv_recovery_on) && !page_rec_is_supremum(rec)) {
 
     lock_rec_convert_impl_to_expl(block, rec, index, offsets);
   }
@@ -4017,7 +4016,7 @@ db_err lock_clust_rec_read_check_and_lock(
   ulint heap_no;
 
   ut_ad(dict_index_is_clust(index));
-  ut_ad(block->frame == page_align(rec));
+  ut_ad(block->m_frame == page_align(rec));
   ut_ad(page_rec_is_user_rec(rec) || page_rec_is_supremum(rec));
   ut_ad(gap_mode == LOCK_ORDINARY || gap_mode == LOCK_GAP || gap_mode == LOCK_REC_NOT_GAP);
   ut_ad(rec_offs_validate(rec, index, offsets));

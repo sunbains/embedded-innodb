@@ -345,7 +345,7 @@ void btr_pcur_move_to_next_page(btr_pcur_t *cursor, mtr_t *mtr) {
 
   page = btr_pcur_get_page(cursor);
   next_page_no = btr_page_get_next(page, mtr);
-  space = buf_block_get_space(btr_pcur_get_block(cursor));
+  space = btr_pcur_get_block(cursor)->get_space();
 
   ut_ad(next_page_no != FIL_NULL);
 
@@ -355,7 +355,7 @@ void btr_pcur_move_to_next_page(btr_pcur_t *cursor, mtr_t *mtr) {
   ut_a(page_is_comp(next_page) == page_is_comp(page));
   ut_a(btr_page_get_prev(next_page, mtr) == buf_block_get_page_no(btr_pcur_get_block(cursor)));
 #endif /* UNIV_BTR_DEBUG */
-  next_block->check_index_page_at_flush = true;
+  next_block->m_check_index_page_at_flush = true;
 
   btr_leaf_page_release(btr_pcur_get_block(cursor), cursor->latch_mode, mtr);
 

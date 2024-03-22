@@ -2956,7 +2956,7 @@ rec_loop:
         "\nrec address %p,"
         " buf block fix count %lu\n",
         (void *)rec,
-        (ulong)btr_cur_get_block(btr_pcur_get_btr_cur(pcur))->page.buf_fix_count
+        (ulong)btr_cur_get_block(btr_pcur_get_btr_cur(pcur))->m_page.m_buf_fix_count
       );
       ib_logger(
         ib_stream,

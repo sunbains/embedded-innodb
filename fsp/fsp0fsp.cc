@@ -640,16 +640,16 @@ static void fsp_init_file_page_low(buf_block_t *block) /*!< in: pointer to a pag
 {
   page_t *page = buf_block_get_frame(block);
 
-  block->check_index_page_at_flush = false;
+  block->m_check_index_page_at_flush = false;
 
   UNIV_MEM_INVALID(page, UNIV_PAGE_SIZE);
 
   memset(page, 0, UNIV_PAGE_SIZE);
   mach_write_to_4(page + FIL_PAGE_OFFSET, buf_block_get_page_no(block));
   memset(page + FIL_PAGE_LSN, 0, 8);
-  mach_write_to_4(page + FIL_PAGE_SPACE_ID, buf_block_get_space(block));
+  mach_write_to_4(page + FIL_PAGE_SPACE_ID, block->get_space());
   memset(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM, 0, 8);
-  mach_write_to_4(page + FIL_PAGE_SPACE_ID, buf_block_get_space(block));
+  mach_write_to_4(page + FIL_PAGE_SPACE_ID, block->get_space());
 }
 
 /** Inits a file page whose prior contents should be ignored. */
@@ -1427,7 +1427,7 @@ static bool fsp_alloc_seg_inode_page(
   block = buf_page_get(space, 0, page_no, RW_X_LATCH, mtr);
   buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
-  block->check_index_page_at_flush = false;
+  block->m_check_index_page_at_flush = false;
 
   page = buf_block_get_frame(block);
 

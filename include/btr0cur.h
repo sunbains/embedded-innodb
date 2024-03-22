@@ -669,7 +669,7 @@ inline dict_index_t *btr_cur_get_index(btr_cur_t *cursor) {
  * @param cursor The output cursor.
  */
 inline void btr_cur_position(dict_index_t *dict_index, rec_t *rec, buf_block_t *block, btr_cur_t *cursor) {
-  ut_ad(page_align(rec) == block->frame);
+  ut_ad(page_align(rec) == block->m_frame);
 
   page_cur_position(rec, block, btr_cur_get_page_cur(cursor));
 

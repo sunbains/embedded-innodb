@@ -1575,23 +1575,23 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_data_reads = os_n_file_reads;
   export_vars.innodb_data_writes = os_n_file_writes;
   export_vars.innodb_data_written = srv_data_written;
-  export_vars.innodb_buffer_pool_read_requests = buf_pool->stat.n_page_gets;
+  export_vars.innodb_buffer_pool_read_requests = buf_pool->m_stat.n_page_gets;
   export_vars.innodb_buffer_pool_write_requests = srv_buf_pool_write_requests;
   export_vars.innodb_buffer_pool_wait_free = srv_buf_pool_wait_free;
   export_vars.innodb_buffer_pool_pages_flushed = srv_buf_pool_flushed;
   export_vars.innodb_buffer_pool_reads = srv_buf_pool_reads;
-  export_vars.innodb_buffer_pool_read_ahead = buf_pool->stat.n_ra_pages_read;
-  export_vars.innodb_buffer_pool_read_ahead_evicted = buf_pool->stat.n_ra_pages_evicted;
-  export_vars.innodb_buffer_pool_pages_data = UT_LIST_GET_LEN(buf_pool->LRU);
-  export_vars.innodb_buffer_pool_pages_dirty = UT_LIST_GET_LEN(buf_pool->flush_list);
-  export_vars.innodb_buffer_pool_pages_free = UT_LIST_GET_LEN(buf_pool->free);
+  export_vars.innodb_buffer_pool_read_ahead = buf_pool->m_stat.n_ra_pages_read;
+  export_vars.innodb_buffer_pool_read_ahead_evicted = buf_pool->m_stat.n_ra_pages_evicted;
+  export_vars.innodb_buffer_pool_pages_data = UT_LIST_GET_LEN(buf_pool->m_lru_list);
+  export_vars.innodb_buffer_pool_pages_dirty = UT_LIST_GET_LEN(buf_pool->m_flush_list);
+  export_vars.innodb_buffer_pool_pages_free = UT_LIST_GET_LEN(buf_pool->m_free_list);
 #ifdef UNIV_DEBUG
   export_vars.innodb_buffer_pool_pages_latched = buf_get_latched_pages_number();
 #endif /* UNIV_DEBUG */
-  export_vars.innodb_buffer_pool_pages_total = buf_pool->curr_size;
+  export_vars.innodb_buffer_pool_pages_total = buf_pool->m_curr_size;
 
   export_vars.innodb_buffer_pool_pages_misc =
-    buf_pool->curr_size - UT_LIST_GET_LEN(buf_pool->LRU) - UT_LIST_GET_LEN(buf_pool->free);
+    buf_pool->m_curr_size - UT_LIST_GET_LEN(buf_pool->m_lru_list) - UT_LIST_GET_LEN(buf_pool->m_free_list);
   export_vars.innodb_have_atomic_builtins = 1;
   export_vars.innodb_page_size = UNIV_PAGE_SIZE;
   export_vars.innodb_log_waits = srv_log_waits;
@@ -1603,9 +1603,9 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_log_writes = srv_log_writes;
   export_vars.innodb_dblwr_pages_written = srv_dblwr_pages_written;
   export_vars.innodb_dblwr_writes = srv_dblwr_writes;
-  export_vars.innodb_pages_created = buf_pool->stat.n_pages_created;
-  export_vars.innodb_pages_read = buf_pool->stat.n_pages_read;
-  export_vars.innodb_pages_written = buf_pool->stat.n_pages_written;
+  export_vars.innodb_pages_created = buf_pool->m_stat.n_pages_created;
+  export_vars.innodb_pages_read = buf_pool->m_stat.n_pages_read;
+  export_vars.innodb_pages_written = buf_pool->m_stat.n_pages_written;
   export_vars.innodb_row_lock_waits = srv_n_lock_wait_count;
   export_vars.innodb_row_lock_current_waits = srv_n_lock_wait_current_count;
   export_vars.innodb_row_lock_time = srv_n_lock_wait_time / 1000;
@@ -2019,7 +2019,7 @@ loop:
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
-  n_ios_very_old = log_sys->n_log_ios + buf_pool->stat.n_pages_read + buf_pool->stat.n_pages_written;
+  n_ios_very_old = log_sys->n_log_ios + buf_pool->m_stat.n_pages_read + buf_pool->m_stat.n_pages_written;
   mutex_enter(&kernel_mutex);
 
   /* Store the user activity counter at the start of this loop */
@@ -2077,7 +2077,7 @@ loop:
 
     n_pend_ios = buf_get_n_pending_ios() + log_sys->n_pending_writes;
 
-    n_ios = log_sys->n_log_ios + buf_pool->stat.n_pages_read + buf_pool->stat.n_pages_written;
+    n_ios = log_sys->n_log_ios + buf_pool->m_stat.n_pages_read + buf_pool->m_stat.n_pages_written;
 
     if (unlikely(buf_get_modified_ratio_pct() > srv_max_buf_pool_modified_pct)) {
 
@@ -2130,7 +2130,7 @@ loop:
   are not required, and may be disabled. */
 
   n_pend_ios = buf_get_n_pending_ios() + log_sys->n_pending_writes;
-  n_ios = log_sys->n_log_ios + buf_pool->stat.n_pages_read + buf_pool->stat.n_pages_written;
+  n_ios = log_sys->n_log_ios + buf_pool->m_stat.n_pages_read + buf_pool->m_stat.n_pages_written;
 
   srv_main_10_second_loops++;
   if (n_pend_ios < SRV_PEND_IO_THRESHOLD && (n_ios - n_ios_very_old < SRV_PAST_IO_ACTIVITY)) {

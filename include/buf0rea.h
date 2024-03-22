@@ -62,10 +62,10 @@ bool buf_read_page(ulint space, ulint offset);
  *        this function must be written such that it cannot end up waiting
  *        for these latches!
  * @param space The space id.
- * @param offset The page number of a page. NOTE: the current thread must want access to this page (see NOTE 3 above).
+ * @param page_no The page number of a page. NOTE: the current thread must want access to this page (see NOTE 3 above).
  * @return The number of page read requests issued.
  */
-ulint buf_read_ahead_linear(ulint space, ulint offset);
+ulint buf_read_ahead_linear(space_id_t space, page_no_t page_no);
 
 /**
  * @brief Issues read requests for pages which recovery wants to read in.
@@ -82,7 +82,7 @@ void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_
 /** 
  * @brief The size in pages of the area which the read-ahead algorithms read if invoked
  */
-#define BUF_READ_AHEAD_AREA ut_min(64, ut_2_power_up(buf_pool->curr_size / 32))
+#define BUF_READ_AHEAD_AREA ut_min(64, ut_2_power_up(buf_pool->m_curr_size / 32))
 
 /** @name Modes used in read-ahead @{ */
 /** Read any page */

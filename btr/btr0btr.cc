@@ -213,7 +213,7 @@ static void btr_page_create(buf_block_t *block, dict_index_t *dict_index, ulint 
   /* Set the level of the new index page */
   btr_page_set_level(page, level, mtr);
 
-  block->check_index_page_at_flush = true;
+  block->m_check_index_page_at_flush = true;
 
   btr_page_set_index_id(page, dict_index->id, mtr);
 }
@@ -299,7 +299,7 @@ void btr_page_free_low(dict_index_t *dict_index, buf_block_t *block, ulint level
     seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_TOP;
   }
 
-  fseg_free_page(seg_header, buf_block_get_space(block), buf_block_get_page_no(block), mtr);
+  fseg_free_page(seg_header, block->get_space(), buf_block_get_page_no(block), mtr);
 }
 
 void btr_page_free(dict_index_t *dict_index, buf_block_t *block, mtr_t *mtr) {
@@ -488,7 +488,7 @@ ulint btr_create(ulint type, ulint space, uint64_t index_id, dict_index_t *dict_
   /* Set the level of the new index page */
   btr_page_set_level(page, 0, mtr);
 
-  block->check_index_page_at_flush = true;
+  block->m_check_index_page_at_flush = true;
 
   /* Set the index id of the page */
   btr_page_set_index_id(page, index_id, mtr);
@@ -592,13 +592,13 @@ static bool btr_page_reorganize_low(
   /* Turn logging off */
   log_mode = mtr_set_log_mode(mtr, MTR_LOG_NONE);
 
-  auto temp_block = buf_pool_t::block_alloc();
-  temp_page = temp_block->frame;
+  auto temp_block = buf_pool_t::m_block_alloc();
+  temp_page = buf_block_get_frame(temp_block);
 
   /* Copy the old page to temporary space */
   buf_frame_copy(temp_page, page);
 
-  block->check_index_page_at_flush = true;
+  block->m_check_index_page_at_flush = true;
 
   /* Recreate the page: note that global data on page (possible
   segment headers, next page-field, etc.) is preserved intact */
@@ -710,7 +710,7 @@ static void btr_page_empty(buf_block_t *block, dict_index_t *dict_index, ulint l
   page_create(block, mtr, dict_table_is_comp(dict_index->table));
   btr_page_set_level(page, level, mtr);
 
-  block->check_index_page_at_flush = true;
+  block->m_check_index_page_at_flush = true;
 }
 
 rec_t *btr_root_raise_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ulint n_ext, mtr_t *mtr) {
@@ -1200,7 +1200,7 @@ static void btr_attach_half_pages(
 
   prev_page_no = btr_page_get_prev(page, mtr);
   next_page_no = btr_page_get_next(page, mtr);
-  space = buf_block_get_space(block);
+  space = block->get_space();
 
   /* Update page links of the level */
 
@@ -1208,8 +1208,8 @@ static void btr_attach_half_pages(
     auto prev_block = btr_block_get(space, prev_page_no, RW_X_LATCH, mtr);
 
 #ifdef UNIV_BTR_DEBUG
-    ut_a(page_is_comp(prev_block->frame) == page_is_comp(page));
-    ut_a(btr_page_get_next(prev_block->frame, mtr) == buf_block_get_page_no(block));
+    ut_a(page_is_comp(buf_block_get_frame(prev_block)) == page_is_comp(page));
+    ut_a(btr_page_get_next(buf_block_get_frame(prev_block), mtr) == buf_block_get_page_no(block));
 #endif /* UNIV_BTR_DEBUG */
 
     btr_page_set_next(buf_block_get_frame(prev_block), lower_page_no, mtr);
@@ -1219,8 +1219,8 @@ static void btr_attach_half_pages(
     auto next_block = btr_block_get(space, next_page_no, RW_X_LATCH, mtr);
 
 #ifdef UNIV_BTR_DEBUG
-    ut_a(page_is_comp(next_block->frame) == page_is_comp(page));
-    ut_a(btr_page_get_prev(next_block->frame, mtr) == page_get_page_no(page));
+    ut_a(page_is_comp(buf_block_get_frame(next_block)) == page_is_comp(page));
+    ut_a(btr_page_get_prev(buf_block_get_frame(next_block), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
 
     btr_page_set_prev(buf_block_get_frame(next_block), upper_page_no, mtr);
@@ -2293,7 +2293,7 @@ static bool btr_validate_level(
   while (level != btr_page_get_level(page, &mtr)) {
     const rec_t *node_ptr;
 
-    ut_a(space == buf_block_get_space(block));
+    ut_a(space == block->get_space());
     ut_a(space == page_get_space_id(page));
     ut_a(!page_is_leaf(page));
 

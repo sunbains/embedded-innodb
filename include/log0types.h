@@ -311,11 +311,11 @@ struct log_t {
   log and spoil crash recovery */
   ulint log_group_capacity;
 
-  /** When this recommended value for lsn - buf_pool_get_oldest_modification()
+  /** When this recommended value for lsn - buf_pool->get_oldest_modification()
   s exceeded, we start an asynchronous preflush of pool pages */
   ulint max_modified_age_async;
 
-  /** When this recommended value for lsn - buf_pool_get_oldest_modification()
+  /** When this recommended value for lsn - buf_pool->get_oldest_modification()
   is exceeded, we start a synchronous preflush of pool pages */
   ulint max_modified_age_sync;
 
