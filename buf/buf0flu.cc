@@ -129,7 +129,7 @@ void Buf_flush::insert_into_flush_list(buf_block_t *block) {
   }
 
   ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
-  ut_ad(block->m_page.m_in_lru_list);
+  ut_ad(block->m_page.m_in_LRU_list);
   ut_ad(block->m_page.m_in_page_hash);
   ut_ad(!block->m_page.m_in_flush_list);
   ut_d(block->m_page.m_in_flush_list = true);
@@ -144,7 +144,7 @@ void Buf_flush::insert_sorted_into_flush_list(buf_block_t *block) {
   ut_ad(buf_pool_mutex_own());
   ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
 
-  ut_ad(block->m_page.m_in_lru_list);
+  ut_ad(block->m_page.m_in_LRU_list);
   ut_ad(block->m_page.m_in_page_hash);
   ut_ad(!block->m_page.m_in_flush_list);
   ut_d(block->m_page.m_in_flush_list = true);
@@ -185,7 +185,7 @@ void Buf_flush::insert_sorted_into_flush_list(buf_block_t *block) {
 bool Buf_flush::ready_for_replace(buf_page_t *bpage) {
   ut_ad(buf_pool_mutex_own());
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
-  ut_ad(bpage->m_in_lru_list);
+  ut_ad(bpage->m_in_LRU_list);
 
   if (likely(buf_page_in_file(bpage))) {
 
@@ -318,9 +318,9 @@ void Buf_flush::write_complete(buf_page_t *bpage) {
     /* Put the block to the end of the LRU list to wait to be
     moved to the free list */
 
-    buf_LRU_make_block_old(bpage);
+    buf_pool->m_LRU->make_block_old(bpage);
 
-    buf_pool->m_lru_flush_ended++;
+    buf_pool->m_LRU_flush_ended++;
   }
 
   /* ib_logger(ib_stream, "n pending flush %lu\n",
@@ -523,7 +523,7 @@ flush:
 
     /* Increment the counter of I/O operations used
     for selecting LRU policy. */
-    buf_LRU_stat_inc_io();
+    buf_pool->m_LRU->stat_inc_io();
   }
 
   /* Sync the writes to the disk. */
@@ -743,7 +743,7 @@ ulint Buf_flush::try_neighbors(ulint space, ulint offset, buf_flush flush_type) 
 
   ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
 
-  if (UT_LIST_GET_LEN(buf_pool->m_lru_list) < BUF_LRU_OLD_MIN_LEN) {
+  if (UT_LIST_GET_LEN(buf_pool->m_LRU_list) < Buf_LRU::OLD_MIN_LEN) {
     /* If there is little space, it is better not to flush any
     block except from the end of the LRU list */
 
@@ -753,7 +753,7 @@ ulint Buf_flush::try_neighbors(ulint space, ulint offset, buf_flush flush_type) 
     /* When flushed, dirty blocks are searched in neighborhoods of
     this size, and flushed along with the original page. */
 
-    ulint area = ut_min(BUF_READ_AHEAD_AREA, buf_pool->m_curr_size / 16);
+    ulint area = std::min(buf_pool->get_read_ahead_area(), buf_pool->m_curr_size / 16);
 
     low = (offset / area) * area;
     high = (offset / area + 1) * area;
@@ -846,7 +846,7 @@ ulint Buf_flush::batch( buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
     block to be flushed. */
 
     if (flush_type == BUF_FLUSH_LRU) {
-      bpage = UT_LIST_GET_LAST(buf_pool->m_lru_list);
+      bpage = UT_LIST_GET_LAST(buf_pool->m_LRU_list);
     } else {
       ut_ad(flush_type == BUF_FLUSH_LIST);
 
@@ -888,7 +888,7 @@ ulint Buf_flush::batch( buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
         goto flush_next;
 
       } else if (flush_type == BUF_FLUSH_LRU) {
-        bpage = UT_LIST_GET_PREV(m_lru_list, bpage);
+        bpage = UT_LIST_GET_PREV(m_LRU_list, bpage);
       } else {
         ut_ad(flush_type == BUF_FLUSH_LIST);
 
@@ -932,7 +932,7 @@ ulint Buf_flush::batch( buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
   flush. When estimating the desired rate at which m_flush_list
   should be flushed we factor in this value. */
   if (flush_type == BUF_FLUSH_LRU) {
-    m_lru_flush_page_count += page_count;
+    m_LRU_flush_page_count += page_count;
   }
 
   return (page_count);
@@ -953,12 +953,12 @@ ulint Buf_flush::LRU_recommendation() {
 
   n_replaceable = UT_LIST_GET_LEN(buf_pool->m_free_list);
 
-  bpage = UT_LIST_GET_LAST(buf_pool->m_lru_list);
+  bpage = UT_LIST_GET_LAST(buf_pool->m_LRU_list);
 
-  while ((bpage != nullptr) && (n_replaceable < BUF_FLUSH_FREE_BLOCK_MARGIN + BUF_FLUSH_EXTRA_MARGIN) &&
-         (distance < BUF_LRU_FREE_SEARCH_LEN)) {
+  while (bpage != nullptr && n_replaceable < get_free_block_margin() + get_extra_margin() &&
+         (distance < Buf_LRU::get_free_search_len())) {
 
-    mutex_t *block_mutex = buf_page_get_mutex(bpage);
+    auto block_mutex = buf_page_get_mutex(bpage);
 
     mutex_enter(block_mutex);
 
@@ -968,29 +968,28 @@ ulint Buf_flush::LRU_recommendation() {
 
     mutex_exit(block_mutex);
 
-    distance++;
+    ++distance;
 
-    bpage = UT_LIST_GET_PREV(m_lru_list, bpage);
+    bpage = UT_LIST_GET_PREV(m_LRU_list, bpage);
   }
 
   buf_pool_mutex_exit();
 
-  if (n_replaceable >= BUF_FLUSH_FREE_BLOCK_MARGIN) {
+  if (n_replaceable >= get_free_block_margin()) {
 
-    return (0);
+    return 0;
   }
 
-  return (BUF_FLUSH_FREE_BLOCK_MARGIN + BUF_FLUSH_EXTRA_MARGIN - n_replaceable);
+  return get_free_block_margin() + get_extra_margin() - n_replaceable;
 }
 
 void Buf_flush::free_margin() {
-  ulint n_to_flush;
-  ulint n_flushed;
-
-  n_to_flush = LRU_recommendation();
+  auto n_to_flush = LRU_recommendation();
 
   if (n_to_flush > 0) {
-    n_flushed = batch(BUF_FLUSH_LRU, n_to_flush, 0);
+
+    const auto n_flushed = batch(BUF_FLUSH_LRU, n_to_flush, 0);
+
     if (n_flushed == ULINT_UNDEFINED) {
       /* There was an LRU type flush batch already running;
       let us wait for it to end */
@@ -1001,9 +1000,6 @@ void Buf_flush::free_margin() {
 }
 
 void Buf_flush::stat_update() {
-  ulint n_flushed;
-  uint64_t lsn_diff;
-
   auto lsn = log_get_lsn();
 
   if (m_stat_cur.m_redo == 0) {
@@ -1012,11 +1008,11 @@ void Buf_flush::stat_update() {
     return;
   }
 
-  auto item = &m_stat[m_stat_ind];
+  auto item = &m_stats[m_stat_ind];
 
   /* values for this interval */
-  lsn_diff = lsn - m_stat_cur.m_redo;
-  n_flushed = m_lru_flush_page_count - m_stat_cur.m_n_flushed;
+  auto lsn_diff = lsn - m_stat_cur.m_redo;
+  auto n_flushed = m_LRU_flush_page_count - m_stat_cur.m_n_flushed;
 
   /* add the current value and subtract the obsolete entry. */
   m_stat_sum.m_redo += lsn_diff - item->m_redo;
@@ -1028,11 +1024,11 @@ void Buf_flush::stat_update() {
 
   /* update the index */
   ++m_stat_ind;
-  m_stat_ind %= BUF_FLUSH_STAT_N_INTERVAL;
+  m_stat_ind %= m_stats.size();
 
   /* reset the current entry. */
   m_stat_cur.m_redo = lsn;
-  m_stat_cur.m_n_flushed = m_lru_flush_page_count;
+  m_stat_cur.m_n_flushed = m_LRU_flush_page_count;
 }
 
 ulint Buf_flush::get_desired_flush_rate() {
@@ -1044,33 +1040,29 @@ ulint Buf_flush::get_desired_flush_rate() {
   uint64_t lsn = log_get_lsn();
   ulint log_capacity = log_get_capacity();
 
-  /* log_capacity should never be zero after the initialization
-  of log subsystem. */
+  /* log_capacity should never be zero after the initialization of log subsystem. */
   ut_ad(log_capacity != 0);
 
-  /* Get total number of dirty pages. It is OK to access
-  m_flush_list without holding any mtex as we are using this
-  only for heuristics. */
+  /* Get total number of dirty pages. It is OK to access m_flush_list without holding
+  any mtex as we are using this only for heuristics. */
   n_dirty = UT_LIST_GET_LEN(buf_pool->m_flush_list);
 
-  /* An overflow can happen if we generate more than 2^32 bytes
-  of redo in this interval i.e.: 4G of redo in 1 second. We can
-  safely consider this as infinity because if we ever come close
-  to 4G we'll start a synchronous flush of dirty pages. */
-  /* redo_avg below is average at which redo is generated in
-  past BUF_FLUSH_STAT_N_INTERVAL + redo generated in the current
-  interval. */
-  redo_avg = (ulint)(m_stat_sum.m_redo / BUF_FLUSH_STAT_N_INTERVAL + (lsn - m_stat_cur.m_redo));
+  /* An overflow can happen if we generate more than 2^32 bytes of redo in this
+  interval i.e.: 4G of redo in 1 second. We can safely consider this as infinity
+  because if we ever come close to 4G we'll start a synchronous flush of dirty pages.
 
-  /* An overflow can happen possibly if we flush more than 2^32
-  pages in BUF_FLUSH_STAT_N_INTERVAL. This is a very very
-  unlikely scenario. Even when this happens it means that our
-  flush rate will be off the mark. It won't affect correctness
-  of any subsystem. */
-  /* lru_flush_avg below is rate at which pages are flushed as
-  part of LRU flush in past BUF_FLUSH_STAT_N_INTERVAL + the
-  number of pages flushed in the current interval. */
-  lru_flush_avg = m_stat_sum.m_n_flushed / BUF_FLUSH_STAT_N_INTERVAL + (m_lru_flush_page_count - m_stat_cur.m_n_flushed);
+  Redo_avg below is average at which redo is generated in past STAT_N_INTERVAL 
+  redo generated in the current interval. */
+  redo_avg = (ulint)(m_stat_sum.m_redo / STAT_N_INTERVAL + (lsn - m_stat_cur.m_redo));
+
+  /* An overflow can happen possibly if we flush more than 2^32 pages in STAT_N_INTERVAL.
+  This is a very very unlikely scenario. Even when this happens it means that our flush
+  rate will be off the mark. It won't affect correctness of any subsystem.
+
+  lru_flush_avg below is rate at which pages are flushed as part of LRU flush in
+  past STAT_N_INTERVAL the number of pages flushed in the current interval. */
+
+  lru_flush_avg = m_stat_sum.m_n_flushed / STAT_N_INTERVAL + (m_LRU_flush_page_count - m_stat_cur.m_n_flushed);
 
   n_flush_req = (n_dirty * redo_avg) / log_capacity;
 

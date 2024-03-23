@@ -79,11 +79,6 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t page_no);
  */
 void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_stored);
 
-/** 
- * @brief The size in pages of the area which the read-ahead algorithms read if invoked
- */
-#define BUF_READ_AHEAD_AREA ut_min(64, ut_2_power_up(buf_pool->m_curr_size / 32))
-
 /** @name Modes used in read-ahead @{ */
 /** Read any page */
 constexpr ulint BUF_READ_ANY_PAGE = 132;

@@ -36,13 +36,11 @@ Created 11/5/1995 Heikki Tuuri
 #include "srv0start.h"
 #include "trx0sys.h"
 
-/** The linear read-ahead area size */
-#define BUF_READ_AHEAD_LINEAR_AREA BUF_READ_AHEAD_AREA
 
 /** If there are buf_pool->m_curr_size per the number below pending reads, then
 read-ahead is not done: this is to prevent flooding the buffer pool with
 i/o-fixed buffer blocks */
-#define BUF_READ_AHEAD_PEND_LIMIT 2
+constexpr ulint BUF_READ_AHEAD_PEND_LIMIT = 2;
 
 /** Low-level function which reads a page asynchronously from a file to the
 buffer buf_pool if it is not already there, in which case does nothing.
@@ -160,7 +158,7 @@ bool buf_read_page(ulint space, ulint offset) {
   buf_pool->m_flusher->free_margin();
 
   /* Increment number of I/O operations used for LRU policy. */
-  buf_LRU_stat_inc_io();
+  buf_pool->m_LRU->stat_inc_io();
 
   return (count > 0);
 }
@@ -177,7 +175,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   ulint fail_count;
   db_err err;
   ulint i;
-  const ulint buf_read_ahead_linear_area = BUF_READ_AHEAD_LINEAR_AREA;
+  const ulint buf_read_ahead_linear_area = buf_pool->get_read_ahead_area();
   ulint threshold;
 
   if (unlikely(srv_startup_is_before_trx_rollback_phase)) {
@@ -232,7 +230,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
 
   /* How many out of order accessed pages can we ignore
   when working out the access pattern for linear readahead */
-  threshold = ut_min((64 - srv_read_ahead_threshold), BUF_READ_AHEAD_AREA);
+  threshold = ut_min((64 - srv_read_ahead_threshold), buf_pool->get_read_ahead_area());
 
   fail_count = 0;
 
@@ -367,7 +365,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
 #endif /* UNIV_DEBUG */
 
   /* Read ahead is considered one I/O operation for the purpose of LRU policy decision. */
-  buf_LRU_stat_inc_io();
+  buf_pool->m_LRU->stat_inc_io();
 
   buf_pool->m_stat.n_ra_pages_read += count;
 

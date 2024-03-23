@@ -46,36 +46,47 @@ destructively. The copy is done using ut_malloc(). */
 static char *srv_data_file_paths_and_sizes = NULL;
 
 /* enum ib_cfg_flag_t @{ */
-typedef enum ib_cfg_flag {
+enum ib_cfg_flag_t {
   IB_CFG_FLAG_NONE = 0x1,
-  IB_CFG_FLAG_READONLY_AFTER_STARTUP = 0x2, /* can be modified only
-                                            before innodb is started */
-  IB_CFG_FLAG_READONLY = 0x4                /* cannot be modified */
-} ib_cfg_flag_t;
+
+  /** Can be modified only before innodb is started */
+  IB_CFG_FLAG_READONLY_AFTER_STARTUP = 0x2,
+
+  /** cannot be modified */
+  IB_CFG_FLAG_READONLY = 0x4
+
+};
 
 /* @} */
 
-/* struct ib_cfg_var_t @{ */
-typedef struct ib_cfg_var {
-  const char *name;                                              /* config var name */
-  ib_cfg_type_t type;                                            /* config var type */
-  ib_cfg_flag_t flag;                                            /* config var flag */
-  uint64_t min_val;                                              /* minimum allowed value for numeric types,
-                         ignored for other types */
-  uint64_t max_val;                                              /* maximum allowed value for numeric types,
-                         ignored for other types */
-  ib_err_t (*validate)(const struct ib_cfg_var *, const void *); /*
-                     function used to validate a new variable's
-                     value when setting it */
-  ib_err_t (*set)(struct ib_cfg_var *, const void *);            /* function
-                                used to set the variable's value */
-  ib_err_t (*get)(const struct ib_cfg_var *, void *);            /* function
-                                used to get the variable's value */
-  void *tank;                                                    /* opaque storage that may be used by the
-              set() and get() functions */
-} ib_cfg_var_t;
+struct ib_cfg_var {
+  /** Config var name */
+  const char *name;
 
-/* @} */
+  /** Config var type */
+  ib_cfg_type_t type;
+
+  /** Config var flag */
+  ib_cfg_flag_t flag;
+
+  /** Minimum allowed value for numeric types, ignored for other types */
+  uint64_t min_val;
+
+  /** Maximum allowed value for numeric types, ignored for other types */
+  uint64_t max_val;
+
+  /** Function used to validate a new variable's value when setting it */
+  ib_err_t (*validate)(const struct ib_cfg_var *, const void *);
+
+  /** Function used to set the variable's value */
+  ib_err_t (*set)(struct ib_cfg_var *, const void *);
+
+  /** Function used to get the variable's value */
+  ib_err_t (*get)(const struct ib_cfg_var *, void *);
+
+  /** Opaque storage that may be used by the set() and get() functions */
+  void *tank;
+};
 
 /** @file api/api0cfg.c
 Assign src to dst according to type. If this is a string variable (char*)
@@ -128,7 +139,7 @@ static ib_err_t ib_cfg_assign(
 
 /* @} */
 
-/** A generic function used for ib_cfg_var_t::validate() to check a numeric
+/** A generic function used for ib_cfg_var::validate() to check a numeric
 type for min/max allowed value overflow.
 ib_cfg_var_validate_numeric() @{
 @return	DB_SUCCESS if value is in range */
@@ -180,9 +191,9 @@ static ib_err_t ib_cfg_var_validate_numeric(
 
 /* generic and specific ib_cfg_var_(set|get)_* functions @{ */
 
-/** A generic function used for ib_cfg_var_t::set() that stores the value
+/** A generic function used for ib_cfg_var::set() that stores the value
 of the configuration parameter in the location pointed by
-ib_cfg_var_t::tank. If this is a string variable (char*) then the string
+ib_cfg_var::tank. If this is a string variable (char*) then the string
 is not copied and a reference to "value" is made. It should not be freed
 or modified until InnoDB is running or a new value is set.
 ib_cfg_var_set_generic() @{
@@ -209,9 +220,9 @@ static ib_err_t ib_cfg_var_set_generic(
 
 /* @} */
 
-/** A generic function used for ib_cfg_var_t::get() that retrieves the value
+/** A generic function used for ib_cfg_var::get() that retrieves the value
 of the configuration parameter from the location pointed by
-ib_cfg_var_t::tank and stores it in "value". The variable is not copied
+ib_cfg_var::tank and stores it in "value". The variable is not copied
 to "value" even if it is a string variable (char*). Only a pointer to the
 storage is written in "value". It should not be freed unless it was
 allocated by the user and set with ib_cfg_set().
@@ -462,9 +473,9 @@ static ib_err_t ib_cfg_var_get_log_group_home_dir(
 /* @} */
 
 /** Set the value of the config variable "lru_old_blocks_pct".
-ib_cfg_var_set_lru_old_blocks_pct() @{
+ib_cfg_var_set_LRU_old_blocks_pct() @{
 @return	DB_SUCCESS if set successfully */
-static ib_err_t ib_cfg_var_set_lru_old_blocks_pct(
+static ib_err_t ib_cfg_var_set_LRU_old_blocks_pct(
   struct ib_cfg_var *cfg_var, /*!< in/out: configuration variable to
                                 manipulate, must be
                                 "lru_old_blocks_pct" */
@@ -472,8 +483,6 @@ static ib_err_t ib_cfg_var_set_lru_old_blocks_pct(
 ) /*!< in: value to set, must point to
                                 ulint variable */
 {
-  bool adjust_buf_pool;
-
   ut_a(strcasecmp(cfg_var->name, "lru_old_blocks_pct") == 0);
   ut_a(cfg_var->type == IB_CFG_ULINT);
 
@@ -487,17 +496,9 @@ static ib_err_t ib_cfg_var_set_lru_old_blocks_pct(
     }
   }
 
-  if (buf_pool != NULL) {
-    /* buffer pool has been created */
-    adjust_buf_pool = true;
-  } else {
-    /* buffer pool not yet created, do not attempt to modify it */
-    adjust_buf_pool = false;
-  }
+  lru_old_blocks_pct = Buf_LRU::old_ratio_update(*(ulint *)value, buf_pool != nullptr);
 
-  lru_old_blocks_pct = buf_LRU_old_ratio_update(*(ulint *)value, adjust_buf_pool);
-
-  return (DB_SUCCESS);
+  return DB_SUCCESS;
 }
 
 /* @} */
@@ -524,7 +525,7 @@ static ib_err_t ib_cfg_var_get_version(
 
   *(const char **)value = VERSION;
 
-  return (DB_SUCCESS);
+  return DB_SUCCESS;
 }
 
 /* @} */
@@ -532,7 +533,7 @@ static ib_err_t ib_cfg_var_get_version(
 /* @} */
 
 /* cfg_vars_defaults[] @{ */
-static const ib_cfg_var_t cfg_vars_defaults[] = {
+static const ib_cfg_var cfg_vars_defaults[] = {
   {STRUCT_FLD(name, "adaptive_flushing"),
    STRUCT_FLD(type, IB_CFG_IBOOL),
    STRUCT_FLD(flag, IB_CFG_FLAG_READONLY_AFTER_STARTUP),
@@ -765,7 +766,7 @@ static const ib_cfg_var_t cfg_vars_defaults[] = {
    STRUCT_FLD(min_val, 5),
    STRUCT_FLD(max_val, 95),
    STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
-   STRUCT_FLD(set, ib_cfg_var_set_lru_old_blocks_pct),
+   STRUCT_FLD(set, ib_cfg_var_set_LRU_old_blocks_pct),
    STRUCT_FLD(get, ib_cfg_var_get_generic),
    STRUCT_FLD(tank, &lru_old_blocks_pct)},
 
@@ -777,7 +778,7 @@ static const ib_cfg_var_t cfg_vars_defaults[] = {
    STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
    STRUCT_FLD(set, ib_cfg_var_set_generic),
    STRUCT_FLD(get, ib_cfg_var_get_generic),
-   STRUCT_FLD(tank, &buf_LRU_old_threshold_ms)},
+   STRUCT_FLD(tank, &Buf_LRU::s_old_threshold_ms)},
 
   {STRUCT_FLD(name, "open_files"),
    STRUCT_FLD(type, IB_CFG_ULINT),
@@ -901,21 +902,19 @@ static const ib_cfg_var_t cfg_vars_defaults[] = {
 /** This mutex has to work even if the InnoDB latching infrastructure
 hasn't been initialized. */
 static os_fast_mutex_t cfg_vars_mutex;
-static ib_cfg_var_t cfg_vars[std::size(cfg_vars_defaults)];
+static ib_cfg_var cfg_vars[std::size(cfg_vars_defaults)];
 
 /* public API functions and some auxiliary ones @{ */
 
 /** Lookup a variable name.
 ib_cfg_lookup_var() @{
 @return	config variable instance if found else NULL */
-static ib_cfg_var_t *ib_cfg_lookup_var(const char *var) /*!< in: variable name */
+static ib_cfg_var *ib_cfg_lookup_var(const char *var) /*!< in: variable name */
 {
-  ulint i;
 
-  for (i = 0; i < std::size(cfg_vars); ++i) {
-    ib_cfg_var_t *cfg_var;
+  for (ulint i = 0; i < std::size(cfg_vars); ++i) {
 
-    cfg_var = &cfg_vars[i];
+    auto cfg_var = &cfg_vars[i];
 
     if (strcasecmp(var, cfg_var->name) == 0) {
       return (cfg_var);
@@ -937,12 +936,11 @@ ib_err_t ib_cfg_var_get_type(
   ib_cfg_type_t *type
 ) /*!< out: variable type */
 {
-  ib_cfg_var_t *cfg_var;
   ib_err_t ret;
 
   os_fast_mutex_lock(&cfg_vars_mutex);
 
-  cfg_var = ib_cfg_lookup_var(name);
+  auto cfg_var = ib_cfg_lookup_var(name);
 
   if (cfg_var != NULL) {
     *type = cfg_var->type;
@@ -969,12 +967,11 @@ static ib_err_t ib_cfg_set_ap(
   va_list ap
 ) /*!< in: variable value */
 {
-  ib_cfg_var_t *cfg_var;
   ib_err_t ret = DB_NOT_FOUND;
 
   os_fast_mutex_lock(&cfg_vars_mutex);
 
-  cfg_var = ib_cfg_lookup_var(name);
+  auto cfg_var = ib_cfg_lookup_var(name);
 
   if (cfg_var != NULL) {
 
@@ -1096,12 +1093,11 @@ ib_err_t ib_cfg_get(
 ) /*!< out: pointer to the place to
                                       store the retrieved value */
 {
-  ib_cfg_var_t *cfg_var;
   ib_err_t ret;
 
   os_fast_mutex_lock(&cfg_vars_mutex);
 
-  cfg_var = ib_cfg_lookup_var(name);
+  auto cfg_var = ib_cfg_lookup_var(name);
 
   if (cfg_var != NULL) {
     ret = cfg_var->get(cfg_var, value);
@@ -1210,4 +1206,3 @@ ib_err_t ib_cfg_shutdown(void) {
 
 /* @} */
 
-/* vim: set foldmethod=marker foldmarker=@{,@}: */

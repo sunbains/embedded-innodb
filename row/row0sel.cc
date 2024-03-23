@@ -791,7 +791,7 @@ inline db_err sel_set_rec_lock(
   trx = thr_get_trx(thr);
 
   if (UT_LIST_GET_LEN(trx->trx_locks) > 10000) {
-    if (buf_LRU_buf_pool_running_out()) {
+    if (buf_pool->m_LRU->buf_pool_running_out()) {
 
       return DB_LOCK_TABLE_FULL;
     }

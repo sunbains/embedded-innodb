@@ -1761,7 +1761,7 @@ bool fil_delete_tablespace(ulint id) {
   is_being_deleted also prevents fil_flush() from being applied to this
   tablespace. */
 
-  buf_LRU_invalidate_tablespace(id);
+  buf_pool->m_LRU->invalidate_tablespace(id);
 
   success = fil_space_free(id, false);
 

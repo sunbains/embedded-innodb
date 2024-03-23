@@ -38,6 +38,9 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 /** The buffer pool page flusher. */
 struct Buf_flush;
 
+/** Buffer pool LRU implementation. */
+struct Buf_LRU;
+
 /** Buffer page (uncompressed or compressed) */
 struct buf_page_t;
 
@@ -119,7 +122,14 @@ extern Buf_pool *buf_pool;
 extern bool buf_debug_prints;
 #endif /* UNIV_DEBUG */
 
-/** variable to count write request issued */
+/** These statistics are generated for heuristics used in estimating the
+rate at which we should flush the dirty blocks to avoid bursty IO
+activity. Note that the rate of flushing not only depends on how many
+dirty pages we have in the buffer pool but it is also a fucntion of
+how much redo the workload is generating and at what rate. */
+/* @{ */
+
+/** Variable to count write request issued */
 extern ulint srv_buf_pool_write_requests;
 
 /** Magic value to use instead of checksums when they are disabled */
@@ -163,7 +173,7 @@ enum buf_page_state {
   /** Is in the free list */
   BUF_BLOCK_NOT_USED,
 
-  /** When buf_LRU_get_free_block returns a block, it is in this state */
+  /** When m_LRU->get_free_block returns a block, it is in this state */
   BUF_BLOCK_READY_FOR_USE,
 
   /** Contains a buffered file page */
@@ -283,7 +293,7 @@ struct buf_page_t {
   /* @{ */
 
   /** node of the LRU list */
-  UT_LIST_NODE_T(buf_page_t) m_lru_list;
+  UT_LIST_NODE_T(buf_page_t) m_LRU_list;
 
   /* @} */
 
@@ -300,7 +310,7 @@ struct buf_page_t {
   bool m_in_free_list;
 
   /** true if the page is in the LRU list; used in debugging */
-  bool m_in_lru_list;
+  bool m_in_LRU_list;
 
   /** this is set to true when fsp
   frees a page in buffer pool */
@@ -422,7 +432,7 @@ struct buf_pool_stat_t {
   being accessed */
   ulint n_ra_pages_evicted;
 
-  /** number of pages made young, in calls to buf_LRU_make_block_young() */
+  /** number of pages made young, in calls to m_LRU->make_block_young() */
   ulint n_pages_made_young;
 
   /** number of pages not made young because the first access
@@ -452,6 +462,12 @@ struct Buf_pool {
   */
   uint64_t get_oldest_modification() const;
 
+  /** 
+  * @brief The size in pages of the area which the read-ahead algorithms read if invoked
+  */
+  ulint get_read_ahead_area() const {
+    return std::min(ulint(64), ut_2_power_up(m_curr_size / 32));
+  }
 
   /** Allocates a buffer block.
   @return	own: the allocated block, in state BUF_BLOCK_MEMORY */
@@ -518,7 +534,7 @@ struct Buf_pool {
 
   /** when an LRU flush ends for a page, this is incremented by one;
   this is set to zero when a buffer block is allocated */
-  ulint m_lru_flush_ended;
+  ulint m_LRU_flush_ended;
 
   /* @} */
   /** @name LRU replacement algorithm fields */
@@ -528,21 +544,24 @@ struct Buf_pool {
   UT_LIST_BASE_NODE_T(buf_page_t, m_list) m_free_list;
 
   /** base node of the LRU list */
-  UT_LIST_BASE_NODE_T(buf_page_t, m_lru_list) m_lru_list;
+  UT_LIST_BASE_NODE_T(buf_page_t, m_LRU_list) m_LRU_list;
 
-  /** pointer to the about buf_LRU_old_ratio/BUF_LRU_OLD_RATIO_DIV oldest
+  /** pointer to the about m_LRU->old_ratio/BUF_LRU_OLD_RATIO_DIV oldest
   blocks in the LRU list; nullptr if LRU length less than BUF_LRU_OLD_MIN_LEN;
   NOTE: when LRU_old != nullptr, its length should always equal LRU_old_len */
-  buf_page_t *m_lru_old;
+  buf_page_t *m_LRU_old;
 
   /** length of the LRU list from the block to which LRU_old points onward,
   including that block; see buf0lru.c for the restrictions on this value;
   0 if LRU_old == nullptr; NOTE: LRU_old_len must be adjusted whenever LRU_old
   shrinks or grows! */
-  ulint m_lru_old_len;
+  ulint m_LRU_old_len;
 
   // FIXME: Convert to a std::unique_ptr
-  Buf_flush* m_flusher;
+  Buf_flush *m_flusher;
+
+  // FIXME: Convert to a std::unique_ptr
+  Buf_LRU *m_LRU;
 
   /* @} */
 };

@@ -157,9 +157,7 @@ inline void btr_rec_set_deleted_flag(
 }
 
 void btr_cur_var_init() {
-#ifdef UNIV_DEBUG
-  btr_cur_print_record_ops = false;
-#endif /* UNIV_DEBUG */
+  ut_d(btr_cur_print_record_ops = false);
 }
 
 /** Latches the leaf page or pages requested. */
@@ -2562,8 +2560,8 @@ static void btr_blob_free(buf_block_t *block, bool, mtr_t *mtr) {
 
   if (block->get_state() == BUF_BLOCK_FILE_PAGE && block->get_space() == space && buf_block_get_page_no(block) == page_no) {
 
-    auto freed = buf_LRU_free_block(&block->m_page, nullptr);
-    ut_a(freed == BUF_LRU_FREED);
+    auto block_status = buf_pool->m_LRU->free_block(&block->m_page, nullptr);
+    ut_a(block_status == Buf_LRU::Block_status::FREED);
   }
 
   buf_pool_mutex_exit();

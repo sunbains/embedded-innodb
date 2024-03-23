@@ -207,7 +207,7 @@ static db_err row_ins_sec_index_entry_by_modify(
   } else {
     ut_a(mode == BTR_MODIFY_TREE);
 
-    if (buf_LRU_buf_pool_running_out()) {
+    if (buf_pool->m_LRU->buf_pool_running_out()) {
 
       err = DB_LOCK_TABLE_FULL;
 
@@ -280,7 +280,7 @@ static db_err row_ins_clust_index_entry_by_modify(
     }
   } else {
     ut_a(mode == BTR_MODIFY_TREE);
-    if (buf_LRU_buf_pool_running_out()) {
+    if (buf_pool->m_LRU->buf_pool_running_out()) {
 
       return DB_LOCK_TABLE_FULL;
     }
@@ -1859,7 +1859,7 @@ static db_err row_ins_index_entry_low(
       err = btr_cur_optimistic_insert(0, &cursor, entry, &insert_rec, &big_rec, n_ext, thr, &mtr);
     } else {
       ut_a(mode == BTR_MODIFY_TREE);
-      if (buf_LRU_buf_pool_running_out()) {
+      if (buf_pool->m_LRU->buf_pool_running_out()) {
 
         err = DB_LOCK_TABLE_FULL;
 

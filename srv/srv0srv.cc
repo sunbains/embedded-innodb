@@ -1085,7 +1085,6 @@ void srv_modules_var_init() {
   dfield_var_init();
   dtype_var_init();
   buf_var_init();
-  buf_LRU_var_init();
   btr_cur_var_init();
   ut_mem_var_init();
   os_sync_var_init();
@@ -1582,7 +1581,7 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_buffer_pool_reads = srv_buf_pool_reads;
   export_vars.innodb_buffer_pool_read_ahead = buf_pool->m_stat.n_ra_pages_read;
   export_vars.innodb_buffer_pool_read_ahead_evicted = buf_pool->m_stat.n_ra_pages_evicted;
-  export_vars.innodb_buffer_pool_pages_data = UT_LIST_GET_LEN(buf_pool->m_lru_list);
+  export_vars.innodb_buffer_pool_pages_data = UT_LIST_GET_LEN(buf_pool->m_LRU_list);
   export_vars.innodb_buffer_pool_pages_dirty = UT_LIST_GET_LEN(buf_pool->m_flush_list);
   export_vars.innodb_buffer_pool_pages_free = UT_LIST_GET_LEN(buf_pool->m_free_list);
 #ifdef UNIV_DEBUG
@@ -1591,7 +1590,7 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_buffer_pool_pages_total = buf_pool->m_curr_size;
 
   export_vars.innodb_buffer_pool_pages_misc =
-    buf_pool->m_curr_size - UT_LIST_GET_LEN(buf_pool->m_lru_list) - UT_LIST_GET_LEN(buf_pool->m_free_list);
+    buf_pool->m_curr_size - UT_LIST_GET_LEN(buf_pool->m_LRU_list) - UT_LIST_GET_LEN(buf_pool->m_free_list);
   export_vars.innodb_have_atomic_builtins = 1;
   export_vars.innodb_page_size = UNIV_PAGE_SIZE;
   export_vars.innodb_log_waits = srv_log_waits;
@@ -1891,9 +1890,8 @@ loop:
     srv_refresh_innodb_monitor_stats();
   }
 
-  /* Update the statistics collected for deciding LRU
-  eviction policy. */
-  buf_LRU_stat_update();
+  /* Update the statistics collected for deciding LRU eviction policy. */
+  buf_pool->m_LRU->stat_update();
 
   /* Update the statistics collected for flush rate policy. */
   buf_pool->m_flusher->stat_update();

@@ -68,12 +68,6 @@ void buf_pool_invalidate();
 /** Reset the buffer variables. */
 void buf_var_init();
 
-/** Returns a free block from the buf_pool. The block is taken off the
-free list. If it is empty, blocks are moved from the end of the
-LRU list to the free list.
-@return the free control block, in state BUF_BLOCK_READY_FOR_USE */
-buf_block_t *buf_LRU_get_free_block();
-
 /** Creates the buffer pool.
 @return	own: buf_pool object, nullptr if not enough memory or error */
 Buf_pool *buf_pool_init();
@@ -827,7 +821,7 @@ inline bool buf_page_can_relocate(const buf_page_t *bpage) {
   ut_ad(buf_pool_mutex_own());
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
   ut_ad(buf_page_in_file(bpage));
-  ut_ad(bpage->m_in_lru_list);
+  ut_ad(bpage->m_in_LRU_list);
 
   return buf_page_get_io_fix(bpage) == BUF_IO_NONE && bpage->m_buf_fix_count == 0;
 }
@@ -854,7 +848,7 @@ inline bool buf_page_is_old(const buf_page_t *bpage) {
 inline void buf_page_set_old(buf_page_t *bpage, bool old) {
   ut_a(buf_page_in_file(bpage));
   ut_ad(buf_pool_mutex_own());
-  ut_ad(bpage->m_in_lru_list);
+  ut_ad(bpage->m_in_LRU_list);
 
   bpage->m_old = old;
 }

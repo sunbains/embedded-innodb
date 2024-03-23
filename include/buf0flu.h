@@ -32,19 +32,15 @@ Created 11/5/1995 Heikki Tuuri
 
 #include <array>
 
-/** When free_margin is called, it tries to make this many blocks
-available to replacement in the free list and at the end of the LRU list (to
-make sure that a read-ahead batch can be read efficiently in a single
-sweep). */
-#define BUF_FLUSH_FREE_BLOCK_MARGIN (5 + BUF_READ_AHEAD_AREA)
-
-/** Extra margin to apply above BUF_FLUSH_FREE_BLOCK_MARGIN */
-#define BUF_FLUSH_EXTRA_MARGIN (BUF_FLUSH_FREE_BLOCK_MARGIN / 4 + 100)
-
 struct buf_page_t;
 struct buf_block_t;
 
 struct Buf_flush {
+  /** Number of intervals for which we keep the history of these stats.
+  Each interval is 1 second, defined by the rate at which
+  srv_error_monitor_thread() calls buf_pool->m_flusher->stat_update(). */
+  static constexpr ulint STAT_N_INTERVAL = 20;
+
   /**
   * Remove a block from the flush list of modified blocks.
   *
@@ -246,6 +242,18 @@ struct Buf_flush {
     buf_pool_mutex_exit();
   }
 
+  /** When free_margin is called, it tries to make this many blocks
+  available to replacement in the free list and at the end of the LRU list (to
+  make sure that a read-ahead batch can be read efficiently in a single sweep). */
+  auto get_free_block_margin() const {
+    return 5 + buf_pool->get_read_ahead_area();
+  }
+
+  /** Extra margin to apply above the free block margin */
+  auto get_extra_margin() const {
+    return get_free_block_margin() / 4 + 100;
+  }
+
 #if defined UNIV_DEBUG
   /** Validates the flush list.
   @return	true if ok */
@@ -361,21 +369,9 @@ private:
 
 
 private:
-  /** These statistics are generated for heuristics used in estimating the
-  rate at which we should flush the dirty blocks to avoid bursty IO
-  activity. Note that the rate of flushing not only depends on how many
-  dirty pages we have in the buffer pool but it is also a fucntion of
-  how much redo the workload is generating and at what rate. */
-  /* @{ */
-
-  /** Number of intervals for which we keep the history of these stats.
-  Each interval is 1 second, defined by the rate at which
-  srv_error_monitor_thread() calls buf_pool->m_flusher->stat_update(). */
-  static constexpr ulint BUF_FLUSH_STAT_N_INTERVAL = 20;
-
   /** Sampled values buf_pool->m_flusher->stat_cur.
   Not protected by any mutex.  Updated by buf_pool->m_flusher->stat_update(). */
-  std::array<Stat, BUF_FLUSH_STAT_N_INTERVAL> m_stat;
+  std::array<Stat, STAT_N_INTERVAL> m_stats;
 
   /** Cursor to m_stats[]. Updated in a round-robin fashion. */
   ulint m_stat_ind;
@@ -388,7 +384,7 @@ private:
   Stat m_stat_sum;
 
   /** Number of pages flushed through non m_flush_list flushes. */
-  ulint m_lru_flush_page_count{};
+  ulint m_LRU_flush_page_count{};
 
 /* @} */
 
