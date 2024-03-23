@@ -35,6 +35,9 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "sync0rw.h"
 #include "ut0mem.h"
 
+/** The buffer pool page flusher. */
+struct Buf_flush;
+
 /** Buffer page (uncompressed or compressed) */
 struct buf_page_t;
 
@@ -45,7 +48,7 @@ struct buf_block_t;
 struct buf_chunk_t;
 
 /** Buffer pool comprising buf_chunk_t */
-struct buf_pool_t;
+struct Buf_pool;
 
 /** Buffer pool statistics struct */
 struct buf_pool_stat_t;
@@ -109,7 +112,7 @@ constexpr ulint BUF_KEEP_OLD = 52;
 /* @} */
 
 /** The buffer pool of the database */
-extern buf_pool_t *buf_pool;
+extern Buf_pool *buf_pool;
 
 #ifdef UNIV_DEBUG
 /*! If this is set true, the program prints info whenever read or flush occurs */
@@ -431,7 +434,7 @@ struct buf_pool_stat_t {
 
 NOTE! The definition appears here only for other modules of this
 directory (buf) to see it. Do not use from outside! */
-struct buf_pool_t {
+struct Buf_pool {
   /**
    * Gets the current size of the buffer pool in bytes.
    *
@@ -537,6 +540,9 @@ struct buf_pool_t {
   0 if LRU_old == nullptr; NOTE: LRU_old_len must be adjusted whenever LRU_old
   shrinks or grows! */
   ulint m_lru_old_len;
+
+  // FIXME: Convert to a std::unique_ptr
+  Buf_flush* m_flusher;
 
   /* @} */
 };

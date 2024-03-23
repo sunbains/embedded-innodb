@@ -171,7 +171,7 @@ void buf_LRU_invalidate_tablespace(ulint id) {
         } else {
 
           if (bpage->m_oldest_modification != 0) {
-            buf_flush_remove(bpage);
+            buf_pool->m_flusher->remove(bpage);
           }
 
           /* Remove from the LRU list. */
@@ -453,7 +453,7 @@ loop:
 
   /* No free block was found: try to flush the LRU list */
 
-  buf_flush_free_margin();
+  buf_pool->m_flusher->free_margin();
   ++srv_buf_pool_wait_free;
 
   os_aio_simulated_wake_handler_threads();

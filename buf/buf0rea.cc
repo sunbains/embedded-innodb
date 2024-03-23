@@ -157,7 +157,7 @@ bool buf_read_page(ulint space, ulint offset) {
   }
 
   /* Flush pages from the end of the LRU list if necessary */
-  buf_flush_free_margin();
+  buf_pool->m_flusher->free_margin();
 
   /* Increment number of I/O operations used for LRU policy. */
   buf_LRU_stat_inc_io();
@@ -358,7 +358,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   os_aio_simulated_wake_handler_threads();
 
   /* Flush pages from the end of the LRU list if necessary */
-  buf_flush_free_margin();
+  buf_pool->m_flusher->free_margin();
 
 #ifdef UNIV_DEBUG
   if (buf_debug_prints && count > 0) {
@@ -429,7 +429,7 @@ void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_
   os_aio_simulated_wake_handler_threads();
 
   /* Flush pages from the end of the LRU list if necessary */
-  buf_flush_free_margin();
+  buf_pool->m_flusher->free_margin();
 
 #ifdef UNIV_DEBUG
   if (buf_debug_prints) {

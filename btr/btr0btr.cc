@@ -592,7 +592,7 @@ static bool btr_page_reorganize_low(
   /* Turn logging off */
   log_mode = mtr_set_log_mode(mtr, MTR_LOG_NONE);
 
-  auto temp_block = buf_pool_t::m_block_alloc();
+  auto temp_block = Buf_pool::m_block_alloc();
   temp_page = buf_block_get_frame(temp_block);
 
   /* Copy the old page to temporary space */

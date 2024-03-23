@@ -2123,7 +2123,7 @@ db_err fil_create_new_single_table_tablespace(ulint *space_id, const char *table
   fsp_header_init_fields(page, *space_id, flags);
   mach_write_to_4(page + FIL_PAGE_SPACE_ID, *space_id);
 
-  buf_flush_init_for_writing(page, 0);
+  buf_pool->m_flusher->init_for_writing(page, 0);
   ret = os_file_write(path, file, page, 0, 0, UNIV_PAGE_SIZE);
 
   ut_free(buf2);
@@ -2266,7 +2266,7 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
     if (mach_read_from_8(page + FIL_PAGE_LSN) > current_lsn) {
       /* We have to reset the lsn */
 
-      buf_flush_init_for_writing(page, current_lsn);
+      buf_pool->m_flusher->init_for_writing(page, current_lsn);
       success = os_file_write(filepath, file, page, (ulint)(offset & 0xFFFFFFFFUL), (ulint)(offset >> 32), UNIV_PAGE_SIZE);
 
       if (!success) {

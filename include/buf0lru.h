@@ -65,7 +65,7 @@ These are low-level functions
 /* 8 megabytes of 16k pages */
 constexpr ulint BUF_LRU_OLD_MIN_LEN = 512;
 
-/** Maximum LRU list search length in buf_flush_LRU_recommendation() */
+/** Maximum LRU list search length in buf_pool->m_flusher->LRU_recommendation() */
 #define BUF_LRU_FREE_SEARCH_LEN (5 + 2 * BUF_READ_AHEAD_AREA)
 
 /*** Invalidates all pages belonging to a given tablespace when we are deleting

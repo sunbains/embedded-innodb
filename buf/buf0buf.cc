@@ -215,7 +215,7 @@ static const int WAIT_FOR_READ = 5000;
 static const ulint BUF_PAGE_READ_MAX_RETRIES = 100;
 
 /** The buffer buf_pool of the database */
-buf_pool_t *buf_pool = nullptr;
+Buf_pool *buf_pool = nullptr;
 
 /** mutex protecting the buffer pool struct and control blocks, except the
 read-write lock in them */
@@ -280,7 +280,7 @@ inline bool buf_page_peek_if_too_old(const buf_page_t *bpage) {
   }
 }
 
-buf_block_t *buf_pool_t::m_block_alloc() {
+buf_block_t *Buf_pool::m_block_alloc() {
   auto block = buf_LRU_get_free_block();
 
   buf_block_set_state(block, BUF_BLOCK_MEMORY);
@@ -308,7 +308,7 @@ void buf_page_release(buf_block_t *block, ulint rw_latch, mtr_t *mtr) {
 
   if (rw_latch == RW_X_LATCH && mtr->modifications) {
     buf_pool_mutex_enter();
-    buf_flush_note_modification(block, mtr);
+    buf_pool->m_flusher->note_modification(block, mtr);
     buf_pool_mutex_exit();
   }
 
@@ -659,7 +659,7 @@ static const buf_block_t *buf_chunk_not_freed(buf_chunk_t *chunk) {
         break;
       case BUF_BLOCK_FILE_PAGE:
         mutex_enter(&block->m_mutex);
-        ready = buf_flush_ready_for_replace(&block->m_page);
+        ready = buf_pool->m_flusher->ready_for_replace(&block->m_page);
         mutex_exit(&block->m_mutex);
 
         if (!ready) {
@@ -674,8 +674,10 @@ static const buf_block_t *buf_chunk_not_freed(buf_chunk_t *chunk) {
   return nullptr;
 }
 
-buf_pool_t *buf_pool_init() {
-  buf_pool = reinterpret_cast<buf_pool_t *>(mem_zalloc(sizeof(buf_pool_t)));
+Buf_pool *buf_pool_init() {
+  buf_pool = reinterpret_cast<Buf_pool *>(mem_zalloc(sizeof(Buf_pool)));
+
+  buf_pool->m_flusher = new Buf_flush;
 
   /* 1. Initialize general fields
   ------------------------------- */
@@ -694,6 +696,9 @@ buf_pool_t *buf_pool_init() {
 
   if (!buf_chunk_init(chunk, srv_buf_pool_size)) {
     mem_free(chunk);
+
+    delete buf_pool->m_flusher;
+
     mem_free(buf_pool);
     buf_pool = nullptr;
     buf_pool_mutex_exit();
@@ -721,7 +726,7 @@ buf_pool_t *buf_pool_init() {
   flush_list during recovery process.
   As this initialization is done while holding the buffer pool
   mutex we perform it before acquiring recv_sys->mutex. */
-  buf_flush_init_flush_rbt();
+  buf_pool->m_flusher->init_flush_rbt();
 
   buf_pool_mutex_exit();
 
@@ -761,6 +766,8 @@ void buf_mem_free() {
     }
 
     buf_pool->m_n_chunks = 0;
+
+    delete buf_pool->m_flusher;
 
     mem_free(buf_pool->m_chunks);
     mem_free(buf_pool);
@@ -1518,7 +1525,7 @@ buf_block_t *buf_page_create(space_id_t space, page_no_t page_no, mtr_t *mtr) {
   such can exist if the page belonged to an index which was dropped */
 
   /* Flush pages from the end of the LRU list if necessary */
-  buf_flush_free_margin();
+  buf_pool->m_flusher->free_margin();
 
   auto frame = block->m_frame;
 
@@ -1650,7 +1657,7 @@ void buf_page_io_complete(buf_page_t *bpage) {
       /* Write means a flush operation: call the completion
     routine in the flush system */
 
-      buf_flush_write_complete(bpage);
+      buf_pool->m_flusher->write_complete(bpage);
 
       rw_lock_s_unlock_gen(&((buf_block_t *)bpage)->m_rw_lock, BUF_IO_WRITE);
 
@@ -1696,7 +1703,7 @@ void buf_pool_invalidate() {
     write activity happening. */
     if (buf_pool->m_n_flush[i] > 0) {
       buf_pool_mutex_exit();
-      buf_flush_wait_batch_end((buf_flush)i);
+      buf_pool->m_flusher->wait_batch_end((buf_flush)i);
       buf_pool_mutex_enter();
     }
   }
@@ -1828,7 +1835,7 @@ bool buf_validate() {
   buf_pool_mutex_exit();
 
   ut_a(buf_LRU_validate());
-  ut_a(buf_flush_validate());
+  ut_a(buf_pool->m_flusher->validate());
 
   return (true);
 }

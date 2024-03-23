@@ -1002,7 +1002,7 @@ static void srv_startup_abort(enum db_err err) /* in: Current error code */
 }
 
 ib_err_t innobase_start_or_create() {
-  buf_pool_t *ret;
+  Buf_pool *ret;
   bool create_new_db;
   bool log_file_created;
   bool log_created = false;

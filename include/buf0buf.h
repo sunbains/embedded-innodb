@@ -74,16 +74,9 @@ LRU list to the free list.
 @return the free control block, in state BUF_BLOCK_READY_FOR_USE */
 buf_block_t *buf_LRU_get_free_block();
 
-/** This function should be called at a mini-transaction commit, if a page was
-modified in it. Puts the block to the list of modified blocks, if it is not
-already in it.
-@param[in,out] block              BLock which is modified
-@param[in,out] mtr                Mini-transaction that modified it. */
-void buf_flush_note_modification(buf_block_t *block, mtr_t *mtr);
-
 /** Creates the buffer pool.
 @return	own: buf_pool object, nullptr if not enough memory or error */
-buf_pool_t *buf_pool_init();
+Buf_pool *buf_pool_init();
 
 /** Prepares the buffer pool for shutdown. */
 void buf_close();
@@ -604,7 +597,7 @@ FILE_PAGE => NOT_USED	NOTE: This transition is allowed if and only if
   (3) io_fix == 0.
 */
 
-inline uint64_t buf_pool_t::get_oldest_modification() const {
+inline uint64_t Buf_pool::get_oldest_modification() const {
   buf_pool_mutex_enter();
 
   uint64_t lsn;

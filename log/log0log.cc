@@ -1140,10 +1140,10 @@ bool log_preflush_pool_modified_pages(lsn_t new_oldest, bool sync) {
     recv_apply_hashed_log_recs(false);
   }
 
-  auto n_pages = buf_flush_batch(BUF_FLUSH_LIST, ULINT_MAX, new_oldest);
+  auto n_pages = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, new_oldest);
 
   if (sync) {
-    buf_flush_wait_batch_end(BUF_FLUSH_LIST);
+    buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
   }
 
   return n_pages != ULINT_UNDEFINED;

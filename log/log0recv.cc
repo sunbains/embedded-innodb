@@ -254,7 +254,7 @@ static void recv_sys_debug_free(void) {
   mutex_exit(&(recv_sys->mutex));
 
   /* Free up the flush_rbt. */
-  buf_flush_free_flush_rbt();
+  buf_pool->m_flusher->free_flush_rbt();
 }
 #endif /* UNIV_LOG_DEBUG */
 
@@ -1110,7 +1110,7 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
   if (modification_to_page) {
     ut_a(block);
 
-    buf_flush_recv_note_modification(block, start_lsn, end_lsn);
+    buf_pool->m_flusher->recv_note_modification(block, start_lsn, end_lsn);
   }
 
   /* Make sure that committing mtr does not change the modification
@@ -1247,10 +1247,10 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
     mutex_exit(&recv_sys->mutex);
     mutex_exit(&log_sys->mutex);
 
-    auto n_pages = buf_flush_batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
+    auto n_pages = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
     ut_a(n_pages != ULINT_UNDEFINED);
 
-    buf_flush_wait_batch_end(BUF_FLUSH_LIST);
+    buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
 
     buf_pool_invalidate();
 

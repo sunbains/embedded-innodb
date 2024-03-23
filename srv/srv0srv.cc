@@ -1896,7 +1896,7 @@ loop:
   buf_LRU_stat_update();
 
   /* Update the statistics collected for flush rate policy. */
-  buf_flush_stat_update();
+  buf_pool->m_flusher->stat_update();
 
   /* In case mutex_exit is not a memory barrier, it is
   theoretically possible some threads are left waiting though
@@ -2085,7 +2085,7 @@ loop:
       buffer pool under the limit wished by the user */
 
       srv_main_thread_op_info = "flushing buffer pool pages";
-      n_pages_flushed = buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+      n_pages_flushed = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
 
       /* If we had to do the flush, it may have taken
       even more than 1 second, and also, there may be more
@@ -2098,12 +2098,12 @@ loop:
       /* Try to keep the rate of flushing of dirty
       pages such that redo log generation does not
       produce bursts of IO at checkpoint time. */
-      ulint n_flush = buf_flush_get_desired_flush_rate();
+      ulint n_flush = buf_pool->m_flusher->get_desired_flush_rate();
 
       if (n_flush) {
         srv_main_thread_op_info = "flushing buffer pool pages";
         n_flush = ut_min(PCT_IO(100), n_flush);
-        n_pages_flushed = buf_flush_batch(BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
+        n_pages_flushed = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
 
         if (n_flush == PCT_IO(100)) {
           skip_sleep = true;
@@ -2136,7 +2136,7 @@ loop:
   if (n_pend_ios < SRV_PEND_IO_THRESHOLD && (n_ios - n_ios_very_old < SRV_PAST_IO_ACTIVITY)) {
 
     srv_main_thread_op_info = "flushing buffer pool pages";
-    buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(100), IB_ULONGLONG_MAX);
+    buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_ULONGLONG_MAX);
 
     /* Flush logs if needed */
     srv_sync_log_buffer_in_background();
@@ -2172,13 +2172,13 @@ loop:
     (> 70 %), we assume we can afford reserving the disk(s) for
     the time it requires to flush 100 pages */
 
-    n_pages_flushed = buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+    n_pages_flushed = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
   } else {
     /* Otherwise, we only flush a small number of pages so that
     we do not unnecessarily use much disk i/o capacity from
     other work */
 
-    n_pages_flushed = buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(10), IB_UINT64_T_MAX);
+    n_pages_flushed = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(10), IB_UINT64_T_MAX);
   }
 
   srv_main_thread_op_info = "making checkpoint";
@@ -2266,7 +2266,7 @@ flush_loop:
   srv_main_thread_op_info = "flushing buffer pool pages";
   srv_main_flush_loops++;
   if (srv_fast_shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
-    n_pages_flushed = buf_flush_batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+    n_pages_flushed = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
   } else {
     /* In the fastest shutdown we do not flush the buffer pool
     to data files: we set n_pages_flushed to 0 artificially. */
@@ -2284,7 +2284,7 @@ flush_loop:
   mutex_exit(&kernel_mutex);
 
   srv_main_thread_op_info = "waiting for buffer pool flush to end";
-  buf_flush_wait_batch_end(BUF_FLUSH_LIST);
+  buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
 
   /* Flush logs if needed */
   srv_sync_log_buffer_in_background();
