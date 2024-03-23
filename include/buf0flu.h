@@ -26,80 +26,84 @@ Created 11/5/1995 Heikki Tuuri
 #include "innodb0types.h"
 
 #include "buf0types.h"
-#include "mtr0types.h"
+#include "buf0buf.h"
+#include "mtr0mtr.h"
 #include "ut0byte.h"
 
-/*** Remove a block from the flush list of modified blocks. */
+/**
+ * Remove a block from the flush list of modified blocks.
+ *
+ * @param bpage Pointer to the block in question.
+ */
+void buf_flush_remove(buf_page_t *bpage);
 
-void buf_flush_remove(buf_page_t *bpage); /*!< in: pointer to the block in question */
-/*** Relocates a buffer control block on the flush_list.
-Note that it is assumed that the contents of bpage has already been
-copied to dpage. */
+/**
+ * Relocates a buffer control block on the flush_list.
+ * Note that it is assumed that the contents of bpage has already been copied to dpage.
+ *
+ * @param bpage Pointer to the control block being moved.
+ * @param dpage Pointer to the destination block.
+ */
+void buf_flush_relocate_on_flush_list(buf_page_t *bpage, buf_page_t *dpage);
 
-void buf_flush_relocate_on_flush_list(
-  buf_page_t *bpage, /*!< in/out: control block being moved */
-  buf_page_t *dpage
-); /*!< in/out: destination block */
-/*** Updates the flush system data structures when a write is completed. */
+/**
+ * Updates the flush system data structures when a write is completed.
+ *
+ * @param bpage Pointer to the block in question.
+ */
+void buf_flush_write_complete(buf_page_t *bpage);
 
-void buf_flush_write_complete(buf_page_t *bpage); /*!< in: pointer to the block in question */
-/*** Flushes pages from the end of the LRU list if there is too small
-a margin of replaceable pages there. */
+/**
+ * Flushes pages from the end of the LRU list if there is too small
+ * a margin of replaceable pages there.
+ */
+void buf_flush_free_margin();
 
-void buf_flush_free_margin(void);
-/*** Initializes a page for writing to the tablespace. */
+/**
+ * Initializes a page for writing to the tablespace.
+ *
+ * @param page The page to initialize.
+ * @param newest_lsn The newest modification LSN to the page.
+ */
+void buf_flush_init_for_writing( byte *page, uint64_t newest_lsn);
 
-void buf_flush_init_for_writing(
-  byte *page, /*!< in/out: page */
-  uint64_t newest_lsn
-); /*!< in: newest modification lsn
-                             to the page */
-/*** This utility flushes dirty blocks from the end of the LRU list or
-flush_list. NOTE 1: in the case of an LRU flush the calling thread may own
-latches to pages: to avoid deadlocks, this function must be written so that it
-cannot end up waiting for these latches! NOTE 2: in the case of a flush list
-flush, the calling thread is not allowed to own any latches on pages!
-@return number of blocks for which the write request was queued;
-ULINT_UNDEFINED if there was a flush of the same type already running */
+/**
+ * This utility flushes dirty blocks from the end of the LRU list or flush_list.
+ * NOTE 1: in the case of an LRU flush the calling thread may own latches to pages:
+ * to avoid deadlocks, this function must be written so that it cannot end up waiting for these latches!
+ * NOTE 2: in the case of a flush list flush, the calling thread is not allowed to own any latches on pages!
+ *
+ * @param flush_type BUF_FLUSH_LRU or BUF_FLUSH_LIST; if BUF_FLUSH_LIST, then the caller must not own any latches on pages
+ * @param min_n wished minimum number of blocks flushed (it is not guaranteed that the actual number is that big, though)
+ * @param lsn_limit in the case BUF_FLUSH_LIST all blocks whose oldest_modification is smaller than this should be flushed (if their number does not exceed min_n), otherwise ignored
+ * @return number of blocks for which the write request was queued; ULINT_UNDEFINED if there was a flush of the same type already running
+ */
+ulint buf_flush_batch(buf_flush flush_type, ulint min_n, uint64_t lsn_limit);
 
-ulint buf_flush_batch(
-  enum buf_flush flush_type, /*!< in: BUF_FLUSH_LRU or
-                               BUF_FLUSH_LIST; if BUF_FLUSH_LIST,
-                               then the caller must not own any
-                               latches on pages */
-  ulint min_n,               /*!< in: wished minimum mumber of blocks
-                               flushed (it is not guaranteed that the
-                               actual number is that big, though) */
-  uint64_t lsn_limit
-); /*!< in the case BUF_FLUSH_LIST all
-                                  blocks whose oldest_modification is
-                                  smaller than this should be flushed
-                                  (if their number does not exceed
-                                  min_n), otherwise ignored */
-/*** Waits until a flush batch of the given type ends */
+/**
+ * Waits until a flush batch of the given type ends.
+ *
+ * @param type The type of flush batch to wait for (BUF_FLUSH_LRU or BUF_FLUSH_LIST).
+ */
+void buf_flush_wait_batch_end(buf_flush type);
 
-void buf_flush_wait_batch_end(enum buf_flush type); /*!< in: BUF_FLUSH_LRU or BUF_FLUSH_LIST */
-/*** This function should be called at a mini-transaction commit, if a page was
-modified in it. Puts the block to the list of modified blocks, if it not
-already in it. */
-inline void buf_flush_note_modification(
-  buf_block_t *block, /*!< in: block which is modified */
-  mtr_t *mtr
-); /*!< in: mtr */
-/*** This function should be called when recovery has modified a buffer page. */
-inline void buf_flush_recv_note_modification(
-  buf_block_t *block, /*!< in: block which is modified */
-  uint64_t start_lsn, /*!< in: start lsn of the first mtr in a
-                           set of mtr's */
-  uint64_t end_lsn
-); /*!< in: end lsn of the last mtr in the
-                           set of mtr's */
-/*** Returns true if the file page block is immediately suitable for
-replacement, i.e., transition FILE_PAGE => NOT_USED allowed.
-@return	true if can replace immediately */
+/**
+ * Returns true if the file page block is immediately suitable for replacement,
+ * i.e., transition FILE_PAGE => NOT_USED allowed.
+ *
+ * @param bpage The buffer control block, must be buf_page_in_file(bpage) and in the LRU list.
+ * @return True if the block can be replaced immediately.
+ */
+bool buf_flush_ready_for_replace(buf_page_t *bpage);
 
-bool buf_flush_ready_for_replace(buf_page_t *bpage); /*!< in: buffer control block, must be
-                        buf_page_in_file(bpage) and in the LRU list */
+/**
+ * @brief Returns true if the file page block is immediately suitable for replacement,
+ * i.e., transition FILE_PAGE => NOT_USED allowed.
+ *
+ * @param bpage The buffer control block, must be buf_page_in_file(bpage) and in the LRU list.
+ * @return True if the block can be replaced immediately.
+ */
+bool buf_flush_ready_for_replace(buf_page_t *bpage);
 
 /** @brief Statistics for selecting flush rate based on redo log
 generation speed.
@@ -109,73 +113,86 @@ rate at which we should flush the dirty blocks to avoid bursty IO
 activity. Note that the rate of flushing not only depends on how many
 dirty pages we have in the buffer pool but it is also a fucntion of
 how much redo the workload is generating and at what rate. */
-
 struct buf_flush_stat_struct {
-  uint64_t redo;   /*!< amount of redo generated. */
-  ulint n_flushed; /*!< number of pages flushed. */
+  /** amount of redo generated. */
+  uint64_t redo;
+
+  /** number of pages flushed. */
+  ulint n_flushed;
 };
 
 /** Statistics for selecting flush rate of dirty pages. */
 typedef struct buf_flush_stat_struct buf_flush_stat_t;
-/*** Update the historical stats that we are collecting for flush rate
-heuristics at the end of each interval. */
 
-void buf_flush_stat_update(void);
-/*** Determines the fraction of dirty pages that need to be flushed based
-on the speed at which we generate redo log. Note that if redo log
-is generated at significant rate without a corresponding increase
-in the number of dirty pages (for example, an in-memory workload)
-it can cause IO bursts of flushing. This function implements heuristics
-to avoid this burstiness.
-@return	number of dirty pages to be flushed / second */
+/**
+ * @brief Update the historical stats that we are collecting for flush rate
+ * heuristics at the end of each interval.
+ */
+void buf_flush_stat_update();
 
-ulint buf_flush_get_desired_flush_rate(void);
+/**
+ * @brief Determines the fraction of dirty pages that need to be flushed based
+ * on the speed at which we generate redo log. Note that if redo log
+ * is generated at significant rate without a corresponding increase
+ * in the number of dirty pages (for example, an in-memory workload)
+ * it can cause IO bursts of flushing. This function implements heuristics
+ * to avoid this burstiness.
+ * @return Number of dirty pages to be flushed per second.
+ */
+ulint buf_flush_get_desired_flush_rate();
 
-#if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
-/*** Validates the flush list.
+#if defined UNIV_DEBUG
+/** Validates the flush list.
 @return	true if ok */
+bool buf_flush_validate();
+#endif /* UNIV_DEBUG */
 
-bool buf_flush_validate(void);
-#endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
+/**
+ * @brief Initialize the red-black tree to speed up insertions into the flush_list
+ * during recovery process. Should be called at the start of recovery
+ * process before any page has been read/written.
+ */
+void buf_flush_init_flush_rbt();
 
-/*** Initialize the red-black tree to speed up insertions into the flush_list
-during recovery process. Should be called at the start of recovery
-process before any page has been read/written. */
-
-void buf_flush_init_flush_rbt(void);
-
-/*** Frees up the red-black tree. */
-
-void buf_flush_free_flush_rbt(void);
+/**
+ * @brief Frees up the red-black tree.
+ */
+void buf_flush_free_flush_rbt();
 
 /** When buf_flush_free_margin is called, it tries to make this many blocks
 available to replacement in the free list and at the end of the LRU list (to
 make sure that a read-ahead batch can be read efficiently in a single
 sweep). */
 #define BUF_FLUSH_FREE_BLOCK_MARGIN (5 + BUF_READ_AHEAD_AREA)
+
 /** Extra margin to apply above BUF_FLUSH_FREE_BLOCK_MARGIN */
 #define BUF_FLUSH_EXTRA_MARGIN (BUF_FLUSH_FREE_BLOCK_MARGIN / 4 + 100)
 
-#include "buf0buf.h"
-#include "mtr0mtr.h"
+/**
+ * @brief Inserts a modified block into the flush list.
+ *
+ * @param block The block which is modified.
+ */
+void buf_flush_insert_into_flush_list(buf_block_t *block);
 
-/** Inserts a modified block into the flush list. */
+/**
+ * @brief Inserts a modified block into the flush list in the right sorted position.
+ * This function is used by recovery, because there the modifications do not
+ * necessarily come in the order of lsn's.
+ *
+ * @param block The block which is modified.
+ */
+void buf_flush_insert_sorted_into_flush_list(buf_block_t *block);
 
-void buf_flush_insert_into_flush_list(buf_block_t *block); /*!< in/out: block which is modified */
-/** Inserts a modified block into the flush list in the right sorted position.
-This function is used by recovery, because there the modifications do not
-necessarily come in the order of lsn's. */
-
-void buf_flush_insert_sorted_into_flush_list(buf_block_t *block); /*!< in/out: block which is modified */
-
-/** This function should be called at a mini-transaction commit, if a page was
-modified in it. Puts the block to the list of modified blocks, if it is not
-already in it. */
-inline void buf_flush_note_modification(
-  buf_block_t *block, /*!< in: block which is modified */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
+/**
+ * @brief This function should be called at a mini-transaction commit, if a page was
+ * modified in it. Puts the block to the list of modified blocks, if it is not
+ * already in it.
+ *
+ * @param block The block which is modified.
+ * @param mtr The mini-transaction.
+ */
+inline void buf_flush_note_modification( buf_block_t *block, mtr_t *mtr) {
   ut_ad(block);
   ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
   ut_ad(block->m_page.m_buf_fix_count > 0);
@@ -203,18 +220,18 @@ inline void buf_flush_note_modification(
   ++srv_buf_pool_write_requests;
 }
 
-/** This function should be called when recovery has modified a buffer page. */
-inline void buf_flush_recv_note_modification(
-  buf_block_t *block, /*!< in: block which is modified */
-  uint64_t start_lsn, /*!< in: start lsn of the first mtr in a
-                           set of mtr's */
-  uint64_t end_lsn
-) /*!< in: end lsn of the last mtr in the
-                           set of mtr's */
-{
+/**
+ * @brief This function should be called when recovery has modified a buffer page.
+ *
+ * @param block The block which is modified.
+ * @param start_lsn The start LSN of the first MTR in a set of MTRs.
+ * @param end_lsn The end LSN of the last MTR in the set of MTRs.
+ */
+inline void buf_flush_recv_note_modification( buf_block_t *block, uint64_t start_lsn, uint64_t end_lsn) {
   ut_ad(block);
   ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
   ut_ad(block->m_page.m_buf_fix_count > 0);
+
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(&(block->lock), RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
