@@ -142,39 +142,51 @@ constexpr ulint TRX_RSEG_UNDO_SLOTS = 8 + FLST_BASE_NODE_SIZE + FSEG_HEADER_SIZE
 /** Gets a rollback segment header.
 @return	rollback segment header, page x-latched */
 inline trx_rsegf_t *trx_rsegf_get(
-  ulint space,   /*!< in: space where placed */
-  ulint page_no, /*!< in: page number of the header */
+  space_id_t space_id,   /*!< in: space where placed */
+  page_no_t page_no, /*!< in: page number of the header */
   mtr_t *mtr
 ) /*!< in: mtr */
 {
-  buf_block_t *block;
-  trx_rsegf_t *header;
+  Buf_pool::Request req {
+    .m_rw_latch = RW_X_LATCH,
+    .m_page_id = { space_id, page_no },
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = mtr
+  };
 
-  block = buf_page_get(space, 0, page_no, RW_X_LATCH, mtr);
-  buf_block_dbg_add_level(block, SYNC_RSEG_HEADER);
+  auto block = buf_pool->get(req, nullptr);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER));
 
-  header = TRX_RSEG + buf_block_get_frame(block);
+  auto header = TRX_RSEG + block->get_frame();
 
-  return (header);
+  return header;
 }
 
 /** Gets a newly created rollback segment header.
 @return	rollback segment header, page x-latched */
 inline trx_rsegf_t *trx_rsegf_get_new(
-  ulint space,   /*!< in: space where placed */
-  ulint page_no, /*!< in: page number of the header */
+  space_id_t space_id,   /*!< in: space where placed */
+  page_no_t page_no, /*!< in: page number of the header */
   mtr_t *mtr
 ) /*!< in: mtr */
 {
-  buf_block_t *block;
-  trx_rsegf_t *header;
+  Buf_pool::Request req {
+    .m_rw_latch = RW_X_LATCH,
+    .m_page_id = { space_id, page_no },
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = mtr
+  };
 
-  block = buf_page_get(space, 0, page_no, RW_X_LATCH, mtr);
-  buf_block_dbg_add_level(block, SYNC_RSEG_HEADER_NEW);
+  auto block = buf_pool->get(req, nullptr);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER_NEW));
 
-  header = TRX_RSEG + buf_block_get_frame(block);
+  auto header = TRX_RSEG + block->get_frame();
 
-  return (header);
+  return header;
 }
 
 /** Gets the file page number of the nth undo log slot.

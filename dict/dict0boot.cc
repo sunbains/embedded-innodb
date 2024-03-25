@@ -32,24 +32,26 @@ Created 4/18/1996 Heikki Tuuri
 #include "srv0srv.h"
 #include "trx0trx.h"
 
-/** Gets a pointer to the dictionary header and x-latches its page.
-@return	pointer to the dictionary header, page x-latched */
+dict_hdr_t *dict_hdr_get(mtr_t *mtr) {
+  Buf_pool::Request req {
+      .m_rw_latch = RW_X_LATCH,
+      .m_page_id = { DICT_HDR_SPACE, DICT_HDR_PAGE_NO },
+      .m_mode = BUF_GET,
+      .m_file = __FILE__,
+      .m_line = __LINE__,
+      .m_mtr = mtr
+    };
 
-dict_hdr_t *dict_hdr_get(mtr_t *mtr) /*!< in: mtr */
-{
-  buf_block_t *block;
-  dict_hdr_t *header;
+  auto block = buf_pool->get(req, nullptr);
+  auto header = DICT_HDR + block->get_frame();
 
-  block = buf_page_get(DICT_HDR_SPACE, 0, DICT_HDR_PAGE_NO, RW_X_LATCH, mtr);
-  header = DICT_HDR + buf_block_get_frame(block);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_DICT_HEADER));
 
-  buf_block_dbg_add_level(block, SYNC_DICT_HEADER);
-
-  return (header);
+  return header;
 }
 
 uint64_t dict_hdr_get_new_id(ulint type) {
-  ut_ad((type == DICT_HDR_TABLE_ID) || (type == DICT_HDR_INDEX_ID));
+  ut_ad(type == DICT_HDR_TABLE_ID || type == DICT_HDR_INDEX_ID);
 
   mtr_t mtr;
 
@@ -63,24 +65,19 @@ uint64_t dict_hdr_get_new_id(ulint type) {
 
   mtr_commit(&mtr);
 
-  return (id);
+  return id;
 }
 
-/** Writes the current value of the row id counter to the dictionary header file
-page. */
-
-void dict_hdr_flush_row_id(void) {
-  dict_hdr_t *dict_hdr;
-  uint64_t id;
+void dict_hdr_flush_row_id() {
   mtr_t mtr;
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
-  id = dict_sys->row_id;
+  auto id = dict_sys->row_id;
 
   mtr_start(&mtr);
 
-  dict_hdr = dict_hdr_get(&mtr);
+  auto dict_hdr = dict_hdr_get(&mtr);
 
   mlog_write_uint64(dict_hdr + DICT_HDR_ROW_ID, id, &mtr);
 
@@ -106,8 +103,7 @@ static bool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
 
   dict_header = dict_hdr_get(mtr);
 
-  /* Start counting row, table, index, and tree ids from
-  DICT_HDR_FIRST_ID */
+  /* Start counting row, table, index, and tree ids from DICT_HDR_FIRST_ID */
   mlog_write_uint64(dict_header + DICT_HDR_ROW_ID, DICT_HDR_FIRST_ID, mtr);
 
   mlog_write_uint64(dict_header + DICT_HDR_TABLE_ID, DICT_HDR_FIRST_ID, mtr);
@@ -117,52 +113,53 @@ static bool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
   /* Obsolete, but we must initialize it to 0 anyway. */
   mlog_write_uint64(dict_header + DICT_HDR_MIX_ID, DICT_HDR_FIRST_ID, mtr);
 
-  /* Create the B-tree roots for the clustered indexes of the basic
-  system tables */
+  /* Create the B-tree roots for the clustered indexes of the basic system tables */
 
-  /*--------------------------*/
   root_page_no = btr_create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLES_ID, dict_ind_redundant, mtr);
   if (root_page_no == FIL_NULL) {
 
-    return (false);
+    return false;
   }
 
   mlog_write_ulint(dict_header + DICT_HDR_TABLES, root_page_no, MLOG_4BYTES, mtr);
-  /*--------------------------*/
+
   root_page_no = btr_create(DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLE_IDS_ID, dict_ind_redundant, mtr);
+
   if (root_page_no == FIL_NULL) {
 
-    return (false);
+    return false;
   }
 
   mlog_write_ulint(dict_header + DICT_HDR_TABLE_IDS, root_page_no, MLOG_4BYTES, mtr);
-  /*--------------------------*/
+
   root_page_no = btr_create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_COLUMNS_ID, dict_ind_redundant, mtr);
+
   if (root_page_no == FIL_NULL) {
 
     return (false);
   }
 
   mlog_write_ulint(dict_header + DICT_HDR_COLUMNS, root_page_no, MLOG_4BYTES, mtr);
-  /*--------------------------*/
+
   root_page_no = btr_create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_INDEXES_ID, dict_ind_redundant, mtr);
+
   if (root_page_no == FIL_NULL) {
 
-    return (false);
+    return false;
   }
 
   mlog_write_ulint(dict_header + DICT_HDR_INDEXES, root_page_no, MLOG_4BYTES, mtr);
-  /*--------------------------*/
+
   root_page_no = btr_create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_FIELDS_ID, dict_ind_redundant, mtr);
+
   if (root_page_no == FIL_NULL) {
 
-    return (false);
+    return false;
   }
 
   mlog_write_ulint(dict_header + DICT_HDR_FIELDS, root_page_no, MLOG_4BYTES, mtr);
-  /*--------------------------*/
 
-  return (true);
+  return true;
 }
 
 void dict_boot() {

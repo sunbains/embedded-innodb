@@ -486,17 +486,23 @@ inline void trx_sys_set_nth_rseg(
 @return	pointer to system header, page x-latched. */
 inline trx_sysf_t *trx_sysf_get(mtr_t *mtr) /*!< in: mtr */
 {
-  buf_block_t *block;
-  trx_sysf_t *header;
+  ut_ad(mtr != nullptr);
 
-  ut_ad(mtr);
+  Buf_pool::Request req {
+    .m_rw_latch = RW_X_LATCH,
+    .m_page_id = { TRX_SYS_SPACE, TRX_SYS_PAGE_NO },
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = mtr
+  };
 
-  block = buf_page_get(TRX_SYS_SPACE, 0, TRX_SYS_PAGE_NO, RW_X_LATCH, mtr);
-  buf_block_dbg_add_level(block, SYNC_TRX_SYS_HEADER);
+  auto block = buf_pool->get(req, nullptr);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_SYS_HEADER));
 
-  header = TRX_SYS + buf_block_get_frame(block);
+  auto header = TRX_SYS + block->get_frame();
 
-  return (header);
+  return header;
 }
 
 /** Gets the space of the nth rollback segment slot in the trx system

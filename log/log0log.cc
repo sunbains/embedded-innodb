@@ -1620,7 +1620,7 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
 
     log_release();
 
-    if (!buf_pool_check_no_pending_io()) {
+    if (buf_pool->is_io_pending()) {
 
       continue;
     }
@@ -1665,7 +1665,7 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
     completely flushed to disk! (We do not call fil_write... if the
     'very fast' shutdown is enabled.) */
 
-    if (buf_all_freed()) {
+    if (buf_pool->all_freed()) {
       break;
     }
   }
@@ -1674,7 +1674,7 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
 
   /* Make some checks that the server really is quiet */
   ut_a(srv_n_threads_active[SRV_MASTER] == 0);
-  ut_a(buf_all_freed());
+  ut_a(buf_pool->all_freed());
   ut_a(lsn == log_sys->lsn);
 
   if (lsn < srv_start_lsn) {
@@ -1698,7 +1698,7 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
 
   /* Make some checks that the server really is quiet */
   ut_a(srv_n_threads_active[SRV_MASTER] == 0);
-  ut_a(buf_all_freed());
+  ut_a(buf_pool->all_freed());
   ut_a(lsn == log_sys->lsn);
 }
 

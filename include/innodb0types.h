@@ -133,9 +133,24 @@ using page_no_t = ulint;
 using space_id_t = ulint;
 using lsn_t = uint64_t;
 
+constexpr auto NULL_PAGE_NO = std::numeric_limits<page_no_t>::max();
+constexpr auto NULL_SPACE_ID = std::numeric_limits<space_id_t>::max();
+
 constexpr auto LSN_MAX = std::numeric_limits<lsn_t>::max();
 
 constexpr ulint IB_FILE_BLOCK_SIZE = 512;
+
+#ifdef UNIV_DEBUG
+#define IF_DEBUG(...) __VA_ARGS__
+#else
+#define IF_DEBUG(...)
+#endif /* UNIV_DEBUG */
+
+#ifdef UNIV_SYNC_DEBUG
+#define IF_SYNC_DEBUG(...) __VA_ARGS__
+#else
+#define IF_SYNC_DEBUG(...)
+#endif /* UNIV_SYNC_DEBUG */
 
 #include "innodb0valgrind.h"
 #include "ut0dbg.h"

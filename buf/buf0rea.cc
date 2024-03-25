@@ -86,7 +86,7 @@ static ulint buf_read_page_low(
       (ulong)offset
     );
 
-    return (0);
+    return 0;
   }
 
   if (trx_sys_hdr_page(space, offset)) {
@@ -102,10 +102,11 @@ static ulint buf_read_page_low(
   or is being dropped; if we succeed in initing the page in the buffer
   pool for read, then DISCARD cannot proceed until the read has
   completed */
-  bpage = buf_page_init_for_read(err, mode, space, tablespace_version, offset);
+  bpage = buf_pool->init_for_read(err, mode, space, tablespace_version, offset);
+
   if (bpage == nullptr) {
 
-    return (0);
+    return 0;
   }
 
 #ifdef UNIV_DEBUG
@@ -122,9 +123,8 @@ static ulint buf_read_page_low(
   ut_a(*err == DB_SUCCESS);
 
   if (sync) {
-    /* The i/o is already completed when we arrive from
-    fil_read */
-    buf_page_io_complete(bpage);
+    /* The i/o is already completed when we arrive from fil_read */
+    buf_pool->io_complete(bpage);
   }
 
   return (1);
@@ -135,8 +135,7 @@ bool buf_read_page(ulint space, ulint offset) {
 
   auto tablespace_version = fil_space_get_version(space);
 
-  /* We do the i/o in the synchronous aio mode to save thread switches: hence
-   * true */
+  /* We do the i/o in the synchronous aio mode to save thread switches: hence true */
   auto count = buf_read_page_low(&err, true, BUF_READ_ANY_PAGE, space, 0, false, tablespace_version, offset);
 
   srv_buf_pool_reads += count;
@@ -145,9 +144,7 @@ bool buf_read_page(ulint space, ulint offset) {
     ut_print_timestamp(ib_stream);
     ib_logger(
       ib_stream,
-      "  Error: trying to access"
-      " tablespace %lu page no. %lu,\n"
-      "but the tablespace does not exist"
+      "  Error: trying to access tablespace %lu page no. %lu, but the tablespace does not exist"
       " or is just being dropped.\n",
       (ulong)space,
       (ulong)offset
@@ -160,7 +157,7 @@ bool buf_read_page(ulint space, ulint offset) {
   /* Increment number of I/O operations used for LRU policy. */
   buf_pool->m_LRU->stat_inc_io();
 
-  return (count > 0);
+  return count > 0;
 }
 
 ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
@@ -235,7 +232,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   fail_count = 0;
 
   for (i = low; i < high; i++) {
-    bpage = buf_page_hash_get(space, i);
+    bpage = buf_pool->hash_get_page(space, i);
 
     if (bpage == nullptr || !buf_page_is_accessed(bpage)) {
       /* Not accessed */
@@ -270,17 +267,17 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   /* If we got this far, we know that enough pages in the area have
   been accessed in the right order: linear read-ahead can be sensible */
 
-  bpage = buf_page_hash_get(space, offset);
+  bpage = buf_pool->hash_get_page(space, offset);
 
   if (bpage == nullptr) {
     buf_pool_mutex_exit();
 
-    return (0);
+    return 0;
   }
 
   switch (bpage->get_state()) {
     case BUF_BLOCK_FILE_PAGE:
-      frame = ((buf_block_t *)bpage)->m_frame;
+      frame = bpage->get_block()->get_frame();
       break;
     default:
       ut_error;

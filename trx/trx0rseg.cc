@@ -68,7 +68,7 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
     return (FIL_NULL);
   }
 
-  buf_block_dbg_add_level(block, SYNC_RSEG_HEADER_NEW);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER_NEW));
 
   page_no = buf_block_get_page_no(block);
 

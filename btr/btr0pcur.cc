@@ -225,34 +225,42 @@ bool btr_pcur_restore_position_func(
   ut_a(cursor->old_n_fields);
 
   if (likely(latch_mode == BTR_SEARCH_LEAF) || likely(latch_mode == BTR_MODIFY_LEAF)) {
+
     /* Try optimistic restoration */
 
-    if (likely(buf_page_optimistic_get(latch_mode, cursor->block_when_stored, cursor->modify_clock, file, line, mtr))) {
+    Buf_pool::Request req {
+      .m_rw_latch = latch_mode,
+      .m_guess = cursor->block_when_stored,
+      .m_modify_clock = cursor->modify_clock,
+      .m_file = file,
+      .m_line = line,
+      .m_mtr = mtr
+    };
+
+    if (likely(buf_pool->try_get(req))) {
       cursor->pos_state = BTR_PCUR_IS_POSITIONED;
 
-      buf_block_dbg_add_level(btr_pcur_get_block(cursor), SYNC_TREE_NODE);
+      buf_block_dbg_add_level(IF_SYNC_DEBUG(btr_pcur_get_block(cursor), SYNC_TREE_NODE));
 
       if (cursor->rel_pos == BTR_PCUR_ON) {
-#ifdef UNIV_DEBUG
-        const rec_t *rec;
-        const ulint *offsets1;
-        const ulint *offsets2;
-#endif /* UNIV_DEBUG */
         cursor->latch_mode = latch_mode;
-#ifdef UNIV_DEBUG
-        rec = btr_pcur_get_rec(cursor);
 
-        heap = mem_heap_create(256);
-        offsets1 = rec_get_offsets(cursor->old_rec, index, NULL, cursor->old_n_fields, &heap);
-        offsets2 = rec_get_offsets(rec, index, NULL, cursor->old_n_fields, &heap);
+#ifdef UNIV_DEBUG
+        auto rec = btr_pcur_get_rec(cursor);
+        auto heap = mem_heap_create(256);
+        auto offsets1 = rec_get_offsets(cursor->old_rec, index, NULL, cursor->old_n_fields, &heap);
+        auto offsets2 = rec_get_offsets(rec, index, NULL, cursor->old_n_fields, &heap);
 
         ut_ad(!cmp_rec_rec(cursor->old_rec, rec, offsets1, offsets2, index));
         mem_heap_free(heap);
 #endif /* UNIV_DEBUG */
-        return (true);
-      }
 
-      return (false);
+        return true;
+
+      } else {
+
+        return false;
+      }
     }
   }
 
@@ -331,30 +339,26 @@ void btr_pcur_release_leaf(
 }
 
 void btr_pcur_move_to_next_page(btr_pcur_t *cursor, mtr_t *mtr) {
-  ulint next_page_no;
-  ulint space;
-  page_t *page;
-  buf_block_t *next_block;
-  page_t *next_page;
-
   ut_a(cursor->pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(cursor->latch_mode != BTR_NO_LATCHES);
   ut_ad(btr_pcur_is_after_last_on_page(cursor));
 
   cursor->old_stored = BTR_PCUR_OLD_NOT_STORED;
 
-  page = btr_pcur_get_page(cursor);
-  next_page_no = btr_page_get_next(page, mtr);
-  space = btr_pcur_get_block(cursor)->get_space();
+  auto page = btr_pcur_get_page(cursor);
+  auto next_page_no = btr_page_get_next(page, mtr);
+  auto space = btr_pcur_get_block(cursor)->get_space();
 
   ut_ad(next_page_no != FIL_NULL);
 
-  next_block = btr_block_get(space, next_page_no, cursor->latch_mode, mtr);
-  next_page = buf_block_get_frame(next_block);
+  auto next_block = btr_block_get(space, next_page_no, cursor->latch_mode, mtr);
+  auto next_page = next_block->get_frame();
+
 #ifdef UNIV_BTR_DEBUG
   ut_a(page_is_comp(next_page) == page_is_comp(page));
   ut_a(btr_page_get_prev(next_page, mtr) == buf_block_get_page_no(btr_pcur_get_block(cursor)));
 #endif /* UNIV_BTR_DEBUG */
+
   next_block->m_check_index_page_at_flush = true;
 
   btr_leaf_page_release(btr_pcur_get_block(cursor), cursor->latch_mode, mtr);

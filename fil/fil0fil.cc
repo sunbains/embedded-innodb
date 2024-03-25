@@ -3419,7 +3419,7 @@ void fil_aio_wait(ulint segment) {
 
   if (fil_node->space->purpose == FIL_TABLESPACE) {
     os_set_io_thread_op_info(segment, "complete io for buf page");
-    buf_page_io_complete((buf_page_t *)message);
+    buf_pool->io_complete((buf_page_t *)message);
   } else {
     os_set_io_thread_op_info(segment, "complete io for log");
     log_io_complete((log_group_t *)message);

@@ -468,31 +468,45 @@ inline roll_ptr_t trx_read_roll_ptr(const byte *ptr) /*!< in: pointer to memory 
 }
 
 /** Gets an undo log page and x-latches it.
+@param[in] space_id             Tablspace ID.
+@param[in] page_no              Page number
+@param[in,out] mtr              Mini-transaction covering the page get.
 @return	pointer to page x-latched */
-inline page_t *trx_undo_page_get(
-  ulint space,   /*!< in: space where placed */
-  ulint page_no, /*!< in: page number */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
-  auto block = buf_page_get(space, 0, page_no, RW_X_LATCH, mtr);
-  buf_block_dbg_add_level(block, SYNC_TRX_UNDO_PAGE);
+inline page_t *trx_undo_page_get(space_id_t space_id, page_no_t page_no, mtr_t *mtr) {
+  Buf_pool::Request req {
+    .m_rw_latch = RW_X_LATCH,
+    .m_page_id = { space_id, page_no },
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = mtr
+  };
 
-  return buf_block_get_frame(block);
+  auto block = buf_pool->get(req, nullptr);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
+
+  return block->get_frame();
 }
 
 /** Gets an undo log page and s-latches it.
+@param[in] space_id             Tablspace ID.
+@param[in] page_no              Page number
+@param[in,out] mtr              Mini-transaction covering the page get.
 @return	pointer to page s-latched */
-inline page_t *trx_undo_page_get_s_latched(
-  ulint space,   /*!< in: space where placed */
-  ulint page_no, /*!< in: page number */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
-  buf_block_t *block = buf_page_get(space, 0, page_no, RW_S_LATCH, mtr);
-  buf_block_dbg_add_level(block, SYNC_TRX_UNDO_PAGE);
+inline page_t *trx_undo_page_get_s_latched(space_id_t  space_id, page_no_t page_no, mtr_t *mtr) {
+  Buf_pool::Request req {
+    .m_rw_latch = RW_S_LATCH,
+    .m_page_id = { space_id, page_no },
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = mtr
+  };
 
-  return (buf_block_get_frame(block));
+  auto block = buf_pool->get(req, nullptr);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
+
+  return block->get_frame();
 }
 
 /** Returns the start offset of the undo log records of the specified undo

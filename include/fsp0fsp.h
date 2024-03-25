@@ -65,20 +65,20 @@ a new single-table tablespace.
 @param[in] space_id             Tablespace ID
 @param[in] flags                Tablespace flags (FSP_SPACE_FLAFS):
                                 0, or table->flags if newer than COMPACT.  */
-void fsp_header_init_fields(page_t *page, ulint space_id, ulint flags);
+void fsp_header_init_fields(page_t *page, space_id_t space_id, ulint flags);
 
 /** Initializes the space header of a new created space and creates also the
 insert buffer tree root if space == 0.
 @param[in] space                 Tablespace ID
 @param[in] size                  Current size in block
 @param[in,out] mtr               Mini-transaction covering the operation. */
-void fsp_header_init(ulint space, ulint size, mtr_t *mtr);
+void fsp_header_init(space_id_t space, ulint size, mtr_t *mtr);
 
 /** Increases the space size field of a space.
 @param[in] space                 Tablespace ID
 @param[in] size_inc              Size increment in pages
 @param[in,out] mtr               Mini-transaction covering the operation. */
-void fsp_header_inc_size(ulint space, ulint size_inc, mtr_t *mtr);
+void fsp_header_inc_size(space_id_t space, ulint size_inc, mtr_t *mtr);
 
 /** Creates a new segment.
 @param[in] space                Tablespace ID
@@ -93,15 +93,15 @@ void fsp_header_inc_size(ulint space, ulint size_inc, mtr_t *mtr);
 
 @return the block where the segment header is placed, x-latched, NULL if
 could not create segment because of lack of space */
-buf_block_t *fseg_create(ulint space, ulint page, ulint byte_offset, mtr_t *mtr);
+buf_block_t *fseg_create(space_id_t space, page_no_t page_no, ulint byte_offset, mtr_t *mtr);
 
 /** Creates a new segment.
 @return the block where the segment header is placed, x-latched, NULL
 if could not create segment because of lack of space */
 
 buf_block_t *fseg_create_general(
-  ulint space,               /*!< in: space id */
-  ulint page,                /*!< in: page where the segment header is placed: if
+  space_id_t space,               /*!< in: space id */
+  page_no_t page_no,                /*!< in: page where the segment header is placed: if
                        this is != 0, the page must belong to another segment,
                        if this is 0, a new page will be allocated and it
                        will belong to the created segment */
@@ -131,7 +131,7 @@ file space fragmentation.
 @return	the allocated page offset FIL_NULL if no page could be allocated */
 ulint fseg_alloc_free_page(
   fseg_header_t *seg_header, /*!< in: segment header */
-  ulint hint,                /*!< in: hint of which page would be desirable */
+  page_no_t hint,                /*!< in: hint of which page would be desirable */
   byte direction,            /*!< in: if the new page is needed because
                             of an index page split, and records are
                             inserted there in order, into which
@@ -146,7 +146,7 @@ fragmentation.
 @return	allocated page offset, FIL_NULL if no page could be allocated */
 ulint fseg_alloc_free_page_general(
   fseg_header_t *seg_header, /*!< in: segment header */
-  ulint hint,                /*!< in: hint of which page would be desirable */
+  page_no_t hint,                /*!< in: hint of which page would be desirable */
   byte direction,            /*!< in: if the new page is needed because
                              of an index page split, and records are
                              inserted there in order, into which
@@ -189,7 +189,7 @@ bool fsp_reserve_free_extents(
   ulint *n_reserved, /*!< out: number of extents actually reserved; if we
                     return true and the tablespace size is < 64 pages,
                     then this can be 0, otherwise it is n_ext */
-  ulint space,       /*!< in: space id */
+  space_id_t space,       /*!< in: space id */
   ulint n_ext,       /*!< in: number of extents to reserve */
   ulint alloc_type,  /*!< in: FSP_NORMAL, FSP_UNDO, or FSP_CLEANING */
   mtr_t *mtr
@@ -200,13 +200,13 @@ will be able to insert new data to the database without running out the
 tablespace. Only free extents are taken into account and we also subtract
 the safety margin required by the above function fsp_reserve_free_extents.
 @return	available space in kB */
-uint64_t fsp_get_available_space_in_free_extents(ulint space); /*!< in: space id */
+uint64_t fsp_get_available_space_in_free_extents(space_id_t space); /*!< in: space id */
 
 /** Frees a single page of a segment. */
 void fseg_free_page(
   fseg_header_t *seg_header, /*!< in: segment header */
-  ulint space,               /*!< in: space id */
-  ulint page,                /*!< in: page offset */
+  space_id_t space,               /*!< in: space id */
+  page_no_t page_no,                /*!< in: page offset */
   mtr_t *mtr
 ); /*!< in: mtr handle */
 
@@ -242,10 +242,10 @@ byte *fsp_parse_init_file_page(
 
 /** Validates the file space system and its segments.
 @return	true if ok */
-bool fsp_validate(ulint space); /*!< in: space id */
+bool fsp_validate(space_id_t space); /*!< in: space id */
 
 /** Prints info of a file space. */
-void fsp_print(ulint space); /*!< in: space id */
+void fsp_print(space_id_t space); /*!< in: space id */
 
 #ifdef UNIV_DEBUG
 /** Validates a segment.
@@ -267,7 +267,7 @@ void fseg_print(
 /** Checks if a page address is an extent descriptor page address.
 @param[in] page_no             Page numnber to check.
 @return	true if a descriptor page */
-inline bool fsp_descr_page(ulint page_no) {
+inline bool fsp_descr_page(page_no_t page_no) {
   return unlikely((page_no & (UNIV_PAGE_SIZE - 1)) == FSP_XDES_OFFSET);
 }
 

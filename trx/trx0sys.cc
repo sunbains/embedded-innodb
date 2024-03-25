@@ -130,8 +130,6 @@ static void trx_doublewrite_init(byte *doublewrite) /*!< in: pointer to the doub
 }
 
 void trx_sys_mark_upgraded_to_multiple_tablespaces() {
-  buf_block_t *block;
-  byte *doublewrite;
   mtr_t mtr;
 
   /* We upgraded to 4.1.x and reset the space id fields in the
@@ -140,10 +138,19 @@ void trx_sys_mark_upgraded_to_multiple_tablespaces() {
 
   mtr_start(&mtr);
 
-  block = buf_page_get(TRX_SYS_SPACE, 0, TRX_SYS_PAGE_NO, RW_X_LATCH, &mtr);
-  buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
+  Buf_pool::Request req {
+    .m_rw_latch = RW_X_LATCH,
+    .m_page_id = { TRX_SYS_SPACE, TRX_SYS_PAGE_NO },
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = &mtr
+  };
 
-  doublewrite = buf_block_get_frame(block) + TRX_SYS_DOUBLEWRITE;
+  auto block = buf_pool->get(req, nullptr);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
+
+  auto doublewrite = block->get_frame() + TRX_SYS_DOUBLEWRITE;
 
   mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED, TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N, MLOG_4BYTES, &mtr);
   mtr_commit(&mtr);
@@ -157,9 +164,6 @@ void trx_sys_mark_upgraded_to_multiple_tablespaces() {
 db_err trx_sys_create_doublewrite_buf() {
   buf_block_t *block;
   buf_block_t *block2;
-#ifdef UNIV_SYNC_DEBUG
-  buf_block_t *new_block;
-#endif /* UNIV_SYNC_DEBUG */
   byte *doublewrite;
   byte *fseg_header;
   ulint page_no;
@@ -170,17 +174,27 @@ db_err trx_sys_create_doublewrite_buf() {
   if (trx_doublewrite) {
     /* Already inited */
 
-    return (DB_SUCCESS);
+    return DB_SUCCESS;
   }
+
+  Buf_pool::Request req {
+    .m_rw_latch = RW_X_LATCH,
+    .m_page_id = { TRX_SYS_SPACE, TRX_SYS_PAGE_NO },
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = &mtr
+  };
 
 start_again:
   mtr_start(&mtr);
+
   trx_doublewrite_buf_is_being_created = true;
 
-  block = buf_page_get(TRX_SYS_SPACE, 0, TRX_SYS_PAGE_NO, RW_X_LATCH, &mtr);
-  buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
+  block = buf_pool->get(req, nullptr);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
 
-  doublewrite = buf_block_get_frame(block) + TRX_SYS_DOUBLEWRITE;
+  doublewrite = block->get_frame() + TRX_SYS_DOUBLEWRITE;
 
   if (mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_MAGIC) == TRX_SYS_DOUBLEWRITE_MAGIC_N) {
     /* The doublewrite buffer has already been created:
@@ -214,7 +228,7 @@ start_again:
     /* fseg_create acquires a second latch on the page,
     therefore we must declare it: */
 
-    buf_block_dbg_add_level(block2, SYNC_NO_ORDER_CHECK);
+    buf_block_dbg_add_level(IF_SYNC_DEBUG(block2, SYNC_NO_ORDER_CHECK));
 
     if (block2 == nullptr) {
       ib_logger(
@@ -232,7 +246,7 @@ start_again:
       return (DB_FATAL);
     }
 
-    fseg_header = buf_block_get_frame(block) + TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_FSEG;
+    fseg_header = block->get_frame() + TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_FSEG;
     prev_page_no = 0;
 
     for (i = 0; i < 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2; i++) {
@@ -259,10 +273,18 @@ start_again:
       the page position in the tablespace, then the page
       has not been written to in doublewrite. */
 
-#ifdef UNIV_SYNC_DEBUG
-      new_block = buf_page_get(TRX_SYS_SPACE, 0, page_no, RW_X_LATCH, &mtr);
-      buf_block_dbg_add_level(new_block, SYNC_NO_ORDER_CHECK);
-#endif /* UNIV_SYNC_DEBUG */
+      IF_SYNC_DEBUG({
+        Buf_pool::Request req {
+          .m_rw_lock = RW_X_LATCH,
+          .m_page_id = { TRX_SYS_SPACE, page_no },
+          .m_mode = BUF_GET,
+          .m_file = __FILE__,
+          .m_line = __LINE__,
+          .m_mtr = &mtr
+        };
+        auto new_block = buf_pool->get(req, nullptr);
+        buf_block_dbg_add_level(IF_SYNC_DEBUG(new_block, SYNC_NO_ORDER_CHECK));
+      })
 
       if (i == FSP_EXTENT_SIZE / 2) {
         ut_a(page_no == FSP_EXTENT_SIZE);
@@ -437,7 +459,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
 
       /* Check if the page is corrupt */
 
-      if (unlikely(buf_page_is_corrupted(read_buf))) {
+      if (unlikely(buf_pool->is_corrupted(read_buf))) {
 
         ib_logger(
           ib_stream,
@@ -451,7 +473,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
           (ulong)page_no
         );
 
-        if (buf_page_is_corrupted(page)) {
+        if (buf_pool->is_corrupted(page)) {
           ib_logger(ib_stream, "Dump of the page:\n");
           buf_page_print(read_buf, 0);
           ib_logger(
@@ -572,11 +594,11 @@ static void trx_sysf_create(mtr_t *mtr) {
   /* Create the trx sys file block in a new allocated file segment */
   auto block = fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER, mtr);
 
-  buf_block_dbg_add_level(block, SYNC_TRX_SYS_HEADER);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_SYS_HEADER));
 
   ut_a(buf_block_get_page_no(block) == TRX_SYS_PAGE_NO);
 
-  auto page = buf_block_get_frame(block);
+  auto page = block->get_frame();
 
   mlog_write_ulint(page + FIL_PAGE_TYPE, FIL_PAGE_TYPE_TRX_SYS, MLOG_2BYTES, mtr);
 
@@ -717,21 +739,27 @@ static bool trx_sys_file_format_max_write(
                                                  can be nullptr */
 {
   mtr_t mtr;
-  byte *ptr;
-  buf_block_t *block;
-  ulint tag_value_low;
 
   mtr_start(&mtr);
 
-  block = buf_page_get(TRX_SYS_SPACE, 0, TRX_SYS_PAGE_NO, RW_X_LATCH, &mtr);
+  Buf_pool::Request req {
+    .m_rw_latch = RW_X_LATCH,
+    .m_page_id = { TRX_SYS_SPACE, TRX_SYS_PAGE_NO },
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = &mtr
+  };
+
+  auto block = buf_pool->get(req, nullptr);
 
   file_format_max.id = format_id;
   file_format_max.name = trx_sys_file_format_id_to_name(format_id);
 
-  ptr = buf_block_get_frame(block) + TRX_SYS_FILE_FORMAT_TAG;
-  tag_value_low = format_id + TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW;
+  auto ptr = block->get_frame() + TRX_SYS_FILE_FORMAT_TAG;
+  auto tag_value_low = format_id + TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW;
 
-  if (name) {
+  if (name != nullptr) {
     *name = file_format_max.name;
   }
 
@@ -739,40 +767,45 @@ static bool trx_sys_file_format_max_write(
 
   mtr_commit(&mtr);
 
-  return (true);
+  return true;
 }
 
 /** Read the file format tag.
 @return	the file format */
 static ulint trx_sys_file_format_max_read(void) {
   mtr_t mtr;
-  const byte *ptr;
-  const buf_block_t *block;
-  ulint format_id;
-  uint64_t file_format_id;
 
   /* Since this is called during the startup phase it's safe to
   read the value without a covering mutex. */
   mtr_start(&mtr);
 
-  block = buf_page_get(TRX_SYS_SPACE, 0, TRX_SYS_PAGE_NO, RW_X_LATCH, &mtr);
+  Buf_pool::Request req {
+    .m_rw_latch = RW_X_LATCH,
+    .m_page_id = { TRX_SYS_SPACE, TRX_SYS_PAGE_NO },
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = &mtr
+  };
 
-  ptr = buf_block_get_frame(block) + TRX_SYS_FILE_FORMAT_TAG;
-  file_format_id = mach_read_from_8(ptr);
+  auto block = buf_pool->get(req, nullptr);
+
+  const auto ptr = block->get_frame() + TRX_SYS_FILE_FORMAT_TAG;
+
+  auto file_format_id = mach_read_from_8(ptr);
 
   mtr_commit(&mtr);
 
-  format_id = file_format_id - TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW;
+  auto format_id = file_format_id - TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW;
 
   if (file_format_id != TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH || format_id >= FILE_FORMAT_NAME_N) {
 
-    /* Either it has never been tagged, or garbage in it.
-    Reset the tag in either case. */
+    /* Either it has never been tagged, or garbage in it.  Reset the tag in either case. */
     format_id = DICT_TF_FORMAT_51;
     trx_sys_file_format_max_write(format_id, nullptr);
   }
 
-  return (format_id);
+  return format_id;
 }
 
 const char *trx_sys_file_format_id_to_name(const ulint id) {

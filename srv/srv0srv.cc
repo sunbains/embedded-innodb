@@ -1084,7 +1084,7 @@ void srv_modules_var_init() {
   dict_var_init();
   dfield_var_init();
   dtype_var_init();
-  buf_var_init();
+  buf_pool->init();
   btr_cur_var_init();
   ut_mem_var_init();
   os_sync_var_init();
@@ -1352,7 +1352,7 @@ static void srv_refresh_innodb_monitor_stats() {
 
   log_refresh_stats();
 
-  buf_refresh_io_stats();
+  buf_pool->refresh_io_stats();
 
   srv_n_rows_inserted_old = srv_n_rows_inserted;
   srv_n_rows_updated_old = srv_n_rows_updated;
@@ -1489,7 +1489,7 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_st
   ib_logger(ib_stream, "Total memory allocated " ULINTPF "\n", ut_total_allocated_memory);
   ib_logger(ib_stream, "Dictionary memory allocated " ULINTPF "\n", dict_sys->size);
 
-  buf_print_io(ib_stream);
+  buf_pool->print_io(ib_stream);
 
   ib_logger(
     ib_stream,
@@ -1584,13 +1584,14 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_buffer_pool_pages_data = UT_LIST_GET_LEN(buf_pool->m_LRU_list);
   export_vars.innodb_buffer_pool_pages_dirty = UT_LIST_GET_LEN(buf_pool->m_flush_list);
   export_vars.innodb_buffer_pool_pages_free = UT_LIST_GET_LEN(buf_pool->m_free_list);
-#ifdef UNIV_DEBUG
-  export_vars.innodb_buffer_pool_pages_latched = buf_get_latched_pages_number();
-#endif /* UNIV_DEBUG */
+
+  ut_d(export_vars.innodb_buffer_pool_pages_latched = buf_pool->get_latched_pages_number());
+
   export_vars.innodb_buffer_pool_pages_total = buf_pool->m_curr_size;
 
   export_vars.innodb_buffer_pool_pages_misc =
     buf_pool->m_curr_size - UT_LIST_GET_LEN(buf_pool->m_LRU_list) - UT_LIST_GET_LEN(buf_pool->m_free_list);
+
   export_vars.innodb_have_atomic_builtins = 1;
   export_vars.innodb_page_size = UNIV_PAGE_SIZE;
   export_vars.innodb_log_waits = srv_log_waits;
@@ -1608,6 +1609,7 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_row_lock_waits = srv_n_lock_wait_count;
   export_vars.innodb_row_lock_current_waits = srv_n_lock_wait_current_count;
   export_vars.innodb_row_lock_time = srv_n_lock_wait_time / 1000;
+
   if (srv_n_lock_wait_count > 0) {
     export_vars.innodb_row_lock_time_avg = (ulint)(srv_n_lock_wait_time / 1000 / srv_n_lock_wait_count);
   } else {
@@ -1631,9 +1633,6 @@ void *srv_monitor_thread(void *arg __attribute__((unused))) {
   ulint mutex_skipped;
   bool last_srv_print_monitor;
 
-#ifdef UNIV_DEBUG_THREAD_CREATION
-  ib_logger(ib_stream, "Lock timeout thread starts, id %lu\n", os_thread_pf(os_thread_get_curr_id()));
-#endif
   UT_NOT_USED(arg);
   srv_last_monitor_time = time(nullptr);
   last_table_monitor_time = time(nullptr);
@@ -2073,11 +2072,11 @@ loop:
     srv_main_thread_op_info = "making checkpoint";
     log_free_check();
 
-    n_pend_ios = buf_get_n_pending_ios() + log_sys->n_pending_writes;
+    n_pend_ios = buf_pool->get_n_pending_ios() + log_sys->n_pending_writes;
 
     n_ios = log_sys->n_log_ios + buf_pool->m_stat.n_pages_read + buf_pool->m_stat.n_pages_written;
 
-    if (unlikely(buf_get_modified_ratio_pct() > srv_max_buf_pool_modified_pct)) {
+    if (unlikely(buf_pool->get_modified_ratio_pct() > srv_max_buf_pool_modified_pct)) {
 
       /* Try to keep the number of modified pages in the
       buffer pool under the limit wished by the user */
@@ -2127,7 +2126,7 @@ loop:
   loop above requests writes for that case. The writes done here
   are not required, and may be disabled. */
 
-  n_pend_ios = buf_get_n_pending_ios() + log_sys->n_pending_writes;
+  n_pend_ios = buf_pool->get_n_pending_ios() + log_sys->n_pending_writes;
   n_ios = log_sys->n_log_ios + buf_pool->m_stat.n_pages_read + buf_pool->m_stat.n_pages_written;
 
   srv_main_10_second_loops++;
@@ -2164,7 +2163,7 @@ loop:
 
   /* Flush a few oldest pages to make a new checkpoint younger */
 
-  if (buf_get_modified_ratio_pct() > 70) {
+  if (buf_pool->get_modified_ratio_pct() > 70) {
 
     /* If there are lots of modified pages in the buffer pool
     (> 70 %), we assume we can afford reserving the disk(s) for
@@ -2291,7 +2290,7 @@ flush_loop:
 
   log_checkpoint(true, false);
 
-  if (buf_get_modified_ratio_pct() > srv_max_buf_pool_modified_pct) {
+  if (buf_pool->get_modified_ratio_pct() > srv_max_buf_pool_modified_pct) {
 
     /* Try to keep the number of modified pages in the
     buffer pool under the limit wished by the user */

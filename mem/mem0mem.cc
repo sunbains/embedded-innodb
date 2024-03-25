@@ -268,10 +268,10 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const 
 
       if (unlikely(buf_block == nullptr)) {
 
-        return (nullptr);
+        return nullptr;
       }
     } else {
-      buf_block = Buf_pool::m_block_alloc();
+      buf_block = buf_pool->block_alloc();
     }
 
     block = (mem_block_t *)buf_block->m_frame;
@@ -305,7 +305,7 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const 
 
   ut_ad((ulint)MEM_BLOCK_HEADER_SIZE < len);
 
-  return (block);
+  return block;
 }
 
 mem_block_t *mem_heap_add_block(mem_heap_t *heap, ulint n) {
@@ -375,13 +375,13 @@ void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
 
     free(block);
   } else {
-    buf_block_free(buf_block);
+    buf_pool->block_free(buf_block);
   }
 }
 
 void mem_heap_free_block_free(mem_heap_t *heap) {
   if (likely_null(heap->free_block)) {
-    buf_block_free(static_cast<buf_block_t *>(heap->free_block));
+    buf_pool->block_free(static_cast<buf_block_t *>(heap->free_block));
     heap->free_block = nullptr;
   }
 }

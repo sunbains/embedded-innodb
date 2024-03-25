@@ -743,7 +743,7 @@ buf_page_state Buf_LRU::block_remove_hashed_page(buf_page_t *bpage) {
       break;
   }
 
-  auto hashed_bpage = buf_page_hash_get(bpage->m_space, bpage->m_page_no);
+  auto hashed_bpage = buf_pool->hash_get_page(bpage->m_space, bpage->m_page_no);
 
   if (unlikely(bpage != hashed_bpage)) {
     ib_logger(
@@ -763,10 +763,15 @@ buf_page_state Buf_LRU::block_remove_hashed_page(buf_page_t *bpage) {
 
 #if defined UNIV_DEBUG
     mutex_exit(buf_page_get_mutex(bpage));
+
     buf_pool_mutex_exit();
-    buf_print();
+
+    buf_pool->print();
+
     print();
-    buf_validate();
+
+    buf_pool->validate();
+
     validate();
 #endif /* UNIV_DEBUG */
     ut_error;
@@ -971,7 +976,8 @@ void Buf_LRU::print() {
       const byte *frame;
 
       case BUF_BLOCK_FILE_PAGE:
-        frame = buf_block_get_frame((buf_block_t *)bpage);
+        frame = reinterpret_cast<buf_block_t*>(bpage)->get_frame();
+
         ib_logger(
           ib_stream,
           "\ntype %lu index id %lu\n", (ulong)fil_page_get_type(frame), (ulong)btr_page_get_index_id(frame)

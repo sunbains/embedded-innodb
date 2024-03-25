@@ -769,7 +769,7 @@ ulint Buf_flush::try_neighbors(ulint space, ulint offset, buf_flush flush_type) 
 
   for (i = low; i < high; i++) {
 
-    bpage = buf_page_hash_get(space, i);
+    bpage = buf_pool->hash_get_page(space, i);
 
     if (!bpage) {
 

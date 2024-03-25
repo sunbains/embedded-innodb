@@ -1012,10 +1012,19 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
     rw_lock_x_lock_move_ownership(&block->m_rw_lock);
   }
 
-  success = buf_page_get_known_nowait(RW_X_LATCH, block, BUF_KEEP_OLD, __FILE__, __LINE__, &mtr);
+  Buf_pool::Request req {
+    .m_rw_latch  = RW_X_LATCH,
+    .m_guess = block,
+    .m_mode = BUF_KEEP_OLD,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = &mtr
+  };
+
+  success = buf_pool->try_get_known_nowait(req);
   ut_a(success);
 
-  buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(lock, SYNC_NO_ORDER_CHECK));
 
   /* Read the newest modification lsn from the page */
   page_lsn = mach_read_from_8(page + FIL_PAGE_LSN);
@@ -1141,7 +1150,7 @@ static ulint recv_read_in_area(
   for (page_no = low_limit; page_no < low_limit + RECV_READ_AHEAD_AREA; page_no++) {
     recv_addr = recv_get_fil_addr_struct(space, page_no);
 
-    if (recv_addr && !buf_page_peek(space, page_no)) {
+    if (recv_addr && !buf_pool->peek(space, page_no)) {
 
       mutex_enter(&(recv_sys->mutex));
 
@@ -1185,7 +1194,7 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
     auto recv_addr = static_cast<recv_addr_t *>(HASH_GET_FIRST(recv_sys->addr_hash, i));
 
     while (recv_addr != nullptr) {
-      auto space = recv_addr->space;
+      auto space_id = recv_addr->space;
       auto page_no = recv_addr->page_no;
 
       if (recv_addr->state == RECV_NOT_PROCESSED) {
@@ -1198,21 +1207,30 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
 
         mutex_exit(&(recv_sys->mutex));
 
-        if (buf_page_peek(space, page_no)) {
+        if (buf_pool->peek(space_id, page_no)) {
 
           mtr_t mtr;
 
           mtr_start(&mtr);
 
-          auto block = buf_page_get(space, 0, page_no, RW_X_LATCH, &mtr);
-          buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
+          Buf_pool::Request req {
+            .m_rw_latch = RW_X_LATCH,
+            .m_page_id = { space_id, page_no },
+            .m_mode = BUF_GET,
+            .m_file = __FILE__,
+            .m_line = __LINE__,
+            .m_mtr = &mtr
+          };
+
+          auto block = buf_pool->get(req, nullptr);
+          buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
 
           recv_recover_page(false, block);
 
           mtr_commit(&mtr);
 
         } else {
-          recv_read_in_area(space, 0, page_no);
+          recv_read_in_area(space_id, 0, page_no);
         }
 
         mutex_enter(&recv_sys->mutex);
@@ -1252,7 +1270,7 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
 
     buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
 
-    buf_pool_invalidate();
+    buf_pool->invalidate();
 
     mutex_enter(&log_sys->mutex);
     mutex_enter(&recv_sys->mutex);

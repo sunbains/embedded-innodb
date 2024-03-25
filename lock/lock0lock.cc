@@ -3178,14 +3178,21 @@ void lock_rec_print(ib_stream_t ib_stream, const lock_t *lock) {
 
   ib_logger(ib_stream, "\n");
 
-  block = buf_page_try_get(space, page_no, &mtr);
+  Buf_pool::Request req {
+    .m_page_id = { space, page_no },
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = &mtr
+  };
 
-  if (block) {
+  block = buf_pool->try_get_by_page_id(req);
+
+  if (block != nullptr) {
     for (i = 0; i < lock_rec_get_n_bits(lock); i++) {
 
       if (lock_rec_get_nth_bit(lock, i)) {
 
-        const rec_t *rec = page_find_rec_with_heap_no(buf_block_get_frame(block), i);
+        const rec_t *rec = page_find_rec_with_heap_no(block->get_frame(), i);
         offsets = rec_get_offsets(rec, lock->index, offsets, ULINT_UNDEFINED, &heap);
 
         ib_logger(ib_stream, "Record lock, heap no %lu ", (ulong)i);
@@ -3387,24 +3394,17 @@ loop:
 
   if (lock_get_type_low(lock) == LOCK_REC) {
     if (load_page_first) {
-      ulint space = lock->un_member.rec_lock.space;
-      ulint size = fil_space_get_flags(space);
-      ulint page_no = lock->un_member.rec_lock.page_no;
+      auto space = lock->un_member.rec_lock.space;
+      auto size = fil_space_get_flags(space);
+      auto page_no = lock->un_member.rec_lock.page_no;
 
       if (unlikely(size == ULINT_UNDEFINED)) {
 
-        /* It is a single table tablespace and
-        the .ibd file is missing (TRUNCATE
-        TABLE probably stole the locks): just
-        print the lock without attempting to
+        /* It is a single table tablespace and the .ibd file is missing (TRUNCATE
+        TABLE probably stole the locks): just print the lock without attempting to
         load the page in the buffer pool. */
 
-        ib_logger(
-          ib_stream,
-          "RECORD LOCKS on"
-          " non-existing space %lu\n",
-          (ulong)space
-        );
+        ib_logger(ib_stream, "RECORD LOCKS on non-existing space %lu\n", (ulong)space);
         goto print_rec;
       }
 
@@ -3412,7 +3412,17 @@ loop:
 
       mtr_start(&mtr);
 
-      buf_page_get_with_no_latch(space, 0, page_no, &mtr);
+      Buf_pool::Request req {
+        .m_rw_latch = BUF_GET_NO_LATCH,
+        .m_page_id = { space, page_no },
+	.m_mode = BUF_GET_NO_LATCH,
+	.m_file = __FILE__,
+	.m_line = __LINE__,
+	.m_mtr = &mtr
+      };
+
+      /* We are simply trying to force a read here. */
+      (void) buf_pool->get(req, nullptr);
 
       mtr_commit(&mtr);
 
@@ -3487,7 +3497,7 @@ static bool lock_table_queue_validate(dict_table_t *table) {
 @return	true if ok */
 static bool lock_rec_queue_validate(const buf_block_t *block, const rec_t *rec, dict_index_t *index, const ulint *offsets) {
   ut_a(rec);
-  ut_a(buf_block_get_frame(block) == page_align(rec));
+  ut_a(block->get_frame() == page_align(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_ad(!page_rec_is_comp(rec) == !rec_offs_comp(offsets));
 
@@ -3592,11 +3602,20 @@ static bool lock_rec_validate_page(space_id_t space, page_no_t page_no) {
 
   mtr_start(&mtr);
 
-  auto block = buf_page_get(space, 0, page_no, RW_X_LATCH, &mtr);
+  Buf_pool::Request req {
+    .m_rw_latch = RW_X_LATCH,
+    .m_page_id = { space, page_no },
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = &mtr
+  };
 
-  buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
+  auto block = buf_pool->get(req, nullptr);
 
-  const auto page = buf_block_get_frame(block);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
+
+  const auto page = block->get_frame();
 
   lock_mutex_enter_kernel();
 loop:

@@ -196,14 +196,14 @@ static void btr_cur_latch_leaves(
         get_block = btr_block_get(space, left_page_no, RW_X_LATCH, mtr);
 #ifdef UNIV_BTR_DEBUG
         ut_a(page_is_comp(get_block->m_frame) == page_is_comp(page));
-        ut_a(btr_page_get_next(buf_block_get_frame(get_block), mtr) == page_get_page_no(page));
+        ut_a(btr_page_get_next(get_block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
         get_block->m_check_index_page_at_flush = true;
       }
 
       get_block = btr_block_get(space, page_no, RW_X_LATCH, mtr);
 #ifdef UNIV_BTR_DEBUG
-      ut_a(page_is_comp(buf_block_get_frame(get_block)) == page_is_comp(page));
+      ut_a(page_is_comp(get_block->get_frame()) == page_is_comp(page));
 #endif /* UNIV_BTR_DEBUG */
       get_block->m_check_index_page_at_flush = true;
 
@@ -212,8 +212,8 @@ static void btr_cur_latch_leaves(
       if (right_page_no != FIL_NULL) {
         get_block = btr_block_get(space, right_page_no, RW_X_LATCH, mtr);
 #ifdef UNIV_BTR_DEBUG
-        ut_a(page_is_comp(buf_block_get_frame(get_block)) == page_is_comp(page));
-        ut_a(btr_page_get_prev(buf_block_get_frame(get_block), mtr) == page_get_page_no(page));
+        ut_a(page_is_comp(get_block->get_frame()) == page_is_comp(page));
+        ut_a(btr_page_get_prev(get_block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
         get_block->m_check_index_page_at_flush = true;
       }
@@ -230,15 +230,15 @@ static void btr_cur_latch_leaves(
         get_block = btr_block_get(space, left_page_no, mode, mtr);
         cursor->left_block = get_block;
 #ifdef UNIV_BTR_DEBUG
-        ut_a(page_is_comp(buf_block_get_frame(get_block)) == page_is_comp(page));
-        ut_a(btr_page_get_next(buf_block_get_frame(get_block), mtr) == page_get_page_no(page));
+        ut_a(page_is_comp(get_block->get_frame()) == page_is_comp(page));
+        ut_a(btr_page_get_next(get_block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
         get_block->m_check_index_page_at_flush = true;
       }
 
       get_block = btr_block_get(space, page_no, mode, mtr);
 #ifdef UNIV_BTR_DEBUG
-      ut_a(page_is_comp(buf_block_get_frame(get_block)) == page_is_comp(page));
+      ut_a(page_is_comp(get_block->get_frame()) == page_is_comp(page));
 #endif /* UNIV_BTR_DEBUG */
       get_block->m_check_index_page_at_flush = true;
       return;
@@ -354,7 +354,18 @@ void btr_cur_search_to_nth_level(
     }
 
   retry_page_get:
-    block = buf_page_get_gen(space, page_no, rw_latch, nullptr, buf_mode, file, line, mtr);
+
+    Buf_pool::Request req {
+      .m_rw_latch = rw_latch,
+      .m_page_id = { space, page_no },
+      .m_mode = buf_mode,
+      .m_file = file,
+      .m_line = line,
+      .m_mtr = mtr
+    };
+
+    block = buf_pool->get(req, nullptr);
+
     if (block == nullptr) {
 
       ut_ad(cursor->thr);
@@ -367,13 +378,13 @@ void btr_cur_search_to_nth_level(
       goto retry_page_get;
     }
 
-    page = buf_block_get_frame(block);
+    page = block->get_frame();
 
     block->m_check_index_page_at_flush = true;
 
     if (rw_latch != RW_NO_LATCH) {
 
-      buf_block_dbg_add_level(block, SYNC_TREE_NODE);
+      buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
     }
 
     ut_ad(dict_index->id == btr_page_get_index_id(page));
@@ -499,8 +510,18 @@ void btr_cur_open_at_index_side_func(
   height = ULINT_UNDEFINED;
 
   for (;;) {
-    auto block = buf_page_get_gen(space, page_no, RW_NO_LATCH, nullptr, BUF_GET, file, line, mtr);
-    auto page = buf_block_get_frame(block);
+  
+    Buf_pool::Request req {
+      .m_rw_latch = RW_NO_LATCH,
+      .m_page_id = { space, page_no },
+      .m_mode = BUF_GET,
+      .m_file = file,
+      .m_line = line,
+      .m_mtr = mtr
+    };
+
+    auto block = buf_pool->get(req, nullptr);
+    auto page = block->get_frame();
 
     ut_ad(dict_index->id == btr_page_get_index_id(page));
 
@@ -563,23 +584,9 @@ void btr_cur_open_at_index_side_func(
   }
 }
 
-/** Positions a cursor at a randomly chosen position within a B-tree. */
-
-void btr_cur_open_at_rnd_pos_func(
-  dict_index_t *dict_index, /*!< in: index */
-  ulint latch_mode,         /*!< in: BTR_SEARCH_LEAF, ... */
-  btr_cur_t *cursor,        /*!< in/out: B-tree cursor */
-  const char *file,         /*!< in: file name */
-  ulint line,               /*!< in: line where called */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
-  page_cur_t *page_cursor;
-  ulint page_no;
-  ulint space;
-  ulint height;
+void btr_cur_open_at_rnd_pos_func(dict_index_t *dict_index, ulint latch_mode, btr_cur_t *cursor, const char *file, ulint line, mtr_t *mtr) {
   rec_t *node_ptr;
-  mem_heap_t *heap = nullptr;
+  mem_heap_t *heap{};
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
@@ -590,20 +597,29 @@ void btr_cur_open_at_rnd_pos_func(
     mtr_s_lock(dict_index_get_lock(dict_index), mtr);
   }
 
-  page_cursor = btr_cur_get_page_cur(cursor);
+  auto page_cursor = btr_cur_get_page_cur(cursor);
+
   cursor->m_index = dict_index;
 
-  space = dict_index_get_space(dict_index);
-  page_no = dict_index_get_page(dict_index);
+  auto space = dict_index_get_space(dict_index);
+  auto page_no = dict_index_get_page(dict_index);
 
-  height = ULINT_UNDEFINED;
+  auto height = ULINT_UNDEFINED;
 
   for (;;) {
-    buf_block_t *block;
-    page_t *page;
 
-    block = buf_page_get_gen(space, page_no, RW_NO_LATCH, nullptr, BUF_GET, file, line, mtr);
-    page = buf_block_get_frame(block);
+    Buf_pool::Request req {
+      .m_rw_latch = RW_NO_LATCH,
+      .m_page_id = { space, page_no },
+      .m_mode = BUF_GET,
+      .m_file = file,
+      .m_line = line,
+      .m_mtr = mtr
+    };
+
+    auto block = buf_pool->get(req, nullptr);
+    auto page = block->get_frame();
+
     ut_ad(dict_index->id == btr_page_get_index_id(page));
 
     if (height == ULINT_UNDEFINED) {
@@ -752,10 +768,7 @@ db_err btr_cur_optimistic_insert(
   ulint flags, btr_cur_t *cursor, dtuple_t *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
 ) {
   big_rec_t *big_rec_vec = nullptr;
-  dict_index_t *dict_index;
   page_cur_t *page_cursor;
-  buf_block_t *block;
-  page_t *page;
   ulint max_size;
   rec_t *dummy_rec;
   bool leaf;
@@ -766,9 +779,9 @@ db_err btr_cur_optimistic_insert(
 
   *big_rec = nullptr;
 
-  block = btr_cur_get_block(cursor);
-  page = buf_block_get_frame(block);
-  dict_index = cursor->m_index;
+  auto block = btr_cur_get_block(cursor);
+  auto page = block->get_frame();
+  auto dict_index = cursor->m_index;
 
   if (!dtuple_check_typed_no_assert(entry)) {
     ib_logger(ib_stream, "Error in a tuple to insert into ");
@@ -1195,15 +1208,14 @@ db_err btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, const upd_t *upda
     row_upd_rec_sys_fields(rec, dict_index, offsets, trx, roll_ptr);
   }
 
-  was_delete_marked = rec_get_deleted_flag(rec, page_is_comp(buf_block_get_frame(block)));
+  was_delete_marked = rec_get_deleted_flag(rec, page_is_comp(block->get_frame()));
 
   row_upd_rec_in_place(rec, dict_index, offsets, update);
 
   btr_cur_update_in_place_log(flags, rec, dict_index, update, trx, roll_ptr, mtr);
 
-  if (was_delete_marked && !rec_get_deleted_flag(rec, page_is_comp(buf_block_get_frame(block)))) {
-    /* The new updated record owns its possible externally
-    stored fields */
+  if (was_delete_marked && !rec_get_deleted_flag(rec, page_is_comp(block->get_frame()))) {
+    /* The new updated record owns its possible externally stored fields */
 
     btr_cur_unmark_extern_fields(rec, dict_index, offsets, mtr);
   }
@@ -1215,32 +1227,26 @@ db_err btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, const upd_t *upda
 }
 
 db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor, const upd_t *update, ulint cmpl_info, que_thr_t *thr, mtr_t *mtr) {
-  dict_index_t *index;
   page_cur_t *page_cursor;
   db_err err;
-  buf_block_t *block;
-  page_t *page;
-  rec_t *rec;
   ulint max_size;
   ulint new_rec_size;
   ulint old_rec_size;
-  dtuple_t *new_entry;
   roll_ptr_t roll_ptr;
   trx_t *trx;
-  mem_heap_t *heap;
   ulint i;
   ulint n_ext;
-  ulint *offsets;
 
-  block = btr_cur_get_block(cursor);
-  page = buf_block_get_frame(block);
-  rec = btr_cur_get_rec(cursor);
-  index = cursor->m_index;
+  auto block = btr_cur_get_block(cursor);
+  auto page = block->get_frame();
+  auto rec = btr_cur_get_rec(cursor);
+  auto index = cursor->m_index;
+
   ut_ad(!!page_rec_is_comp(rec) == dict_table_is_comp(index->table));
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
 
-  heap = mem_heap_create(1024);
-  offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED, &heap);
+  auto heap = mem_heap_create(1024);
+  auto offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED, &heap);
 
 #ifdef UNIV_DEBUG
   if (btr_cur_print_record_ops && thr) {
@@ -1257,7 +1263,7 @@ db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor, const upd_t *up
     on the compressed page to log the update. */
 
     mem_heap_free(heap);
-    return (btr_cur_update_in_place(flags, cursor, update, cmpl_info, thr, mtr));
+    return btr_cur_update_in_place(flags, cursor, update, cmpl_info, thr, mtr);
   }
 
   if (rec_offs_any_extern(offsets)) {
@@ -1278,7 +1284,8 @@ db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor, const upd_t *up
 
   page_cursor = btr_cur_get_page_cur(cursor);
 
-  new_entry = row_rec_to_index_entry(ROW_COPY_DATA, rec, index, offsets, &n_ext, heap);
+  auto new_entry = row_rec_to_index_entry(ROW_COPY_DATA, rec, index, offsets, &n_ext, heap);
+
   /* We checked above that there are no externally stored fields. */
   ut_a(!n_ext);
 
@@ -1372,7 +1379,7 @@ static void btr_cur_pess_upd_restore_supremum(
   mtr_t *mtr
 ) /*!< in: mtr */
 {
-  auto page = buf_block_get_frame(block);
+  auto page = block->get_frame();
 
   if (page_rec_get_next(page_get_infimum_rec(page)) != rec) {
     /* Updated record is not the first user record on its page */
@@ -1385,10 +1392,19 @@ static void btr_cur_pess_upd_restore_supremum(
 
   ut_ad(prev_page_no != FIL_NULL);
 
-  auto prev_block = buf_page_get_with_no_latch(space, 0, prev_page_no, mtr);
+  Buf_pool::Request req {
+    .m_rw_latch = RW_NO_LATCH,
+    .m_page_id = { space, prev_page_no },
+    .m_mode = BUF_GET_NO_LATCH,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = mtr
+  };
+
+  auto prev_block = buf_pool->get(req, nullptr);
 
 #ifdef UNIV_BTR_DEBUG
-  ut_a(btr_page_get_next(buf_block_get_frame(prev_block), mtr) == page_get_page_no(page));
+  ut_a(btr_page_get_next(prev_block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
 
   /* We must already have an x-latch on prev_block! */
@@ -1403,10 +1419,6 @@ db_err btr_cur_pessimistic_update(
 ) {
   big_rec_t *big_rec_vec = nullptr;
   big_rec_t *dummy_big_rec;
-  dict_index_t *index;
-  buf_block_t *block;
-  page_t *page;
-  rec_t *rec;
   page_cur_t *page_cursor;
   dtuple_t *new_entry;
   db_err err;
@@ -1420,10 +1432,10 @@ db_err btr_cur_pessimistic_update(
 
   *big_rec = nullptr;
 
-  block = btr_cur_get_block(cursor);
-  page = buf_block_get_frame(block);
-  rec = btr_cur_get_rec(cursor);
-  index = cursor->m_index;
+  auto block = btr_cur_get_block(cursor);
+  auto page = block->get_frame();
+  auto rec = btr_cur_get_rec(cursor);
+  auto index = cursor->m_index;
 
   ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(index), MTR_MEMO_X_LOCK));
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
@@ -1465,7 +1477,7 @@ db_err btr_cur_pessimistic_update(
     }
   }
 
-  if (!*heap) {
+  if (*heap == nullptr) {
     *heap = mem_heap_create(1024);
   }
   offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED, heap);
@@ -1842,7 +1854,7 @@ bool btr_cur_optimistic_delete(btr_cur_t *cursor, mtr_t *mtr) {
   /* This is intended only for leaf page deletions */
   auto block = btr_cur_get_block(cursor);
 
-  ut_ad(page_is_leaf(buf_block_get_frame(block)));
+  ut_ad(page_is_leaf(block->get_frame()));
 
   auto rec = btr_cur_get_rec(cursor);
 
@@ -1851,7 +1863,7 @@ bool btr_cur_optimistic_delete(btr_cur_t *cursor, mtr_t *mtr) {
   bool deleted{};
 
   if (!rec_offs_any_extern(offsets) && btr_cur_delete_will_underflow(cursor, rec_offs_size(offsets), mtr)) {
-    auto page = buf_block_get_frame(block);
+    auto page = block->get_frame();
 
     lock_update_delete(block, rec);
 
@@ -1874,7 +1886,7 @@ void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents, btr_cur_
   ulint n_reserved{};
 
   auto block = btr_cur_get_block(cursor);
-  auto page = buf_block_get_frame(block);
+  auto page = block->get_frame();
   auto index = btr_cur_get_index(cursor);
 
   ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(index), MTR_MEMO_X_LOCK));
@@ -2572,17 +2584,10 @@ db_err btr_store_big_rec_extern_fields(
   dict_index_t *index, buf_block_t *rec_block, rec_t *rec, const ulint *offsets, big_rec_t *big_rec_vec,
   mtr_t *local_mtr __attribute__((unused))
 ) {
-  byte *field_ref;
-  ulint extern_len;
-  ulint store_len;
-  ulint prev_page_no;
-  ulint hint_page_no;
-  mtr_t mtr;
-
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_ad(mtr_memo_contains(local_mtr, dict_index_get_lock(index), MTR_MEMO_X_LOCK));
   ut_ad(mtr_memo_contains(local_mtr, rec_block, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(buf_block_get_frame(rec_block) == page_align(rec));
+  ut_ad(rec_block->get_frame() == page_align(rec));
   ut_a(dict_index_is_clust(index));
 
   auto space_id = rec_block->get_space();
@@ -2593,21 +2598,32 @@ db_err btr_store_big_rec_extern_fields(
   for each field and put the pointer to the field in rec */
 
   for (ulint i = 0; i < big_rec_vec->n_fields; i++) {
+    byte *field_ref;
+
     ut_ad(rec_offs_nth_extern(offsets, big_rec_vec->fields[i].field_no));
+
     {
       ulint local_len;
+
       field_ref = rec_get_nth_field(rec, offsets, big_rec_vec->fields[i].field_no, &local_len);
+
       ut_a(local_len >= BTR_EXTERN_FIELD_REF_SIZE);
+
       local_len -= BTR_EXTERN_FIELD_REF_SIZE;
+
       field_ref += local_len;
     }
-    extern_len = big_rec_vec->fields[i].len;
+
+    auto extern_len = big_rec_vec->fields[i].len;
 
     ut_a(extern_len > 0);
 
-    prev_page_no = FIL_NULL;
+    page_no_t prev_page_no = FIL_NULL;
 
     for (;;) {
+      mtr_t mtr;
+      ulint hint_page_no;
+
       mtr_start(&mtr);
 
       if (prev_page_no == FIL_NULL) {
@@ -2626,19 +2642,31 @@ db_err btr_store_big_rec_extern_fields(
       }
 
       auto page_no = buf_block_get_page_no(block);
-      auto page = buf_block_get_frame(block);
+      auto page = block->get_frame();
 
       if (prev_page_no != FIL_NULL) {
-        auto prev_block = buf_page_get(space_id, 0, prev_page_no, RW_X_LATCH, &mtr);
 
-        buf_block_dbg_add_level(prev_block, SYNC_EXTERN_STORAGE);
+        Buf_pool::Request req {
+          .m_rw_latch = RW_X_LATCH,
+          .m_page_id = { space_id, prev_page_no },
+	  .m_mode = BUF_GET,
+	  .m_file = __FILE__,
+	  .m_line = __LINE__,
+	  .m_mtr = &mtr
+        };
 
-        auto prev_page = buf_block_get_frame(prev_block);
+        auto prev_block = buf_pool->get(req, nullptr);
+
+        buf_block_dbg_add_level(IF_SYNC_DEBUG(prev_block, SYNC_EXTERN_STORAGE));
+
+        auto prev_page = prev_block->get_frame();
 
         mlog_write_ulint(prev_page + FIL_PAGE_DATA + BTR_BLOB_HDR_NEXT_PAGE_NO, page_no, MLOG_4BYTES, &mtr);
       }
 
       mlog_write_ulint(page + FIL_PAGE_TYPE, FIL_PAGE_TYPE_BLOB, MLOG_2BYTES, &mtr);
+
+      ulint store_len;
 
       if (extern_len > (UNIV_PAGE_SIZE - FIL_PAGE_DATA - BTR_BLOB_HDR_SIZE - FIL_PAGE_DATA_END)) {
         store_len = UNIV_PAGE_SIZE - FIL_PAGE_DATA - BTR_BLOB_HDR_SIZE - FIL_PAGE_DATA_END;
@@ -2659,9 +2687,18 @@ db_err btr_store_big_rec_extern_fields(
 
       extern_len -= store_len;
 
-      rec_block = buf_page_get(space_id, 0, rec_page_no, RW_X_LATCH, &mtr);
+        Buf_pool::Request req {
+          .m_rw_latch = RW_X_LATCH,
+          .m_page_id = { space_id, rec_page_no },
+	  .m_mode = BUF_GET,
+	  .m_file = __FILE__,
+	  .m_line = __LINE__,
+	  .m_mtr = &mtr
+        };
 
-      buf_block_dbg_add_level(rec_block, SYNC_NO_ORDER_CHECK);
+      rec_block = buf_pool->get(req, nullptr);
+
+      buf_block_dbg_add_level(IF_SYNC_DEBUG(rec_block, SYNC_NO_ORDER_CHECK));
 
       mlog_write_ulint(field_ref + BTR_EXTERN_LEN, 0, MLOG_4BYTES, &mtr);
 
@@ -2731,22 +2768,22 @@ void btr_free_externally_stored_field(
   dict_index_t *index, byte *field_ref, const rec_t *rec, const ulint *offsets, ulint i, enum trx_rb_ctx rb_ctx,
   mtr_t *local_mtr __attribute__((unused))
 ) {
-  page_t *page;
-  ulint space_id;
-  ulint page_no;
-  ulint next_page_no;
-  mtr_t mtr;
+
 #ifdef UNIV_DEBUG
   ut_ad(mtr_memo_contains(local_mtr, dict_index_get_lock(index), MTR_MEMO_X_LOCK));
   ut_ad(mtr_memo_contains_page(local_mtr, field_ref, MTR_MEMO_PAGE_X_FIX));
   ut_ad(!rec || rec_offs_validate(rec, index, offsets));
 
-  if (rec) {
+  if (rec != nullptr) {
     ulint local_len;
     const byte *f = rec_get_nth_field(rec, offsets, i, &local_len);
+
     ut_a(local_len >= BTR_EXTERN_FIELD_REF_SIZE);
+
     local_len -= BTR_EXTERN_FIELD_REF_SIZE;
+
     f += local_len;
+
     ut_ad(f == field_ref);
   }
 #endif /* UNIV_DEBUG */
@@ -2759,7 +2796,7 @@ void btr_free_externally_stored_field(
     return;
   }
 
-  space_id = mach_read_from_4(field_ref + BTR_EXTERN_SPACE_ID);
+  auto space_id = mach_read_from_4(field_ref + BTR_EXTERN_SPACE_ID);
 
   if (unlikely(space_id != dict_index_get_space(index))) {
     /* This must be an undo log record in the system tablespace,
@@ -2770,18 +2807,28 @@ void btr_free_externally_stored_field(
     ut_ad(!rec);
   }
 
-  for (;;) {
-    buf_block_t *ext_block;
+  mtr_t mtr;
 
+  for (;;) {
     mtr_start(&mtr);
 
-#ifdef UNIV_SYNC_DEBUG
-    auto rec_block =
-      buf_page_get(page_get_space_id(page_align(field_ref)), 0, page_get_page_no(page_align(field_ref)), RW_X_LATCH, &mtr);
-    buf_block_dbg_add_level(rec_block, SYNC_NO_ORDER_CHECK);
-#endif /* UNIV_SYNC_DEBUG */
+    auto ptr{page_align(field_ref)};
 
-    page_no = mach_read_from_4(field_ref + BTR_EXTERN_PAGE_NO);
+    Buf_pool::Request req {
+      .m_rw_latch = RW_X_LATCH,
+      .m_page_id = { page_get_space_id(ptr), page_get_page_no(ptr) },
+      .m_mode = BUF_GET,
+      .m_file = __FILE__,
+      .m_line = __LINE__,
+      .m_mtr = &mtr
+    };
+
+    IF_SYNC_DEBUG({
+     auto rec_block = buf_pool->get(req, nullptr);
+     buf_block_dbg_add_level(rec_block, SYNC_NO_ORDER_CHECK)
+    });
+
+    auto page_no = mach_read_from_4(field_ref + BTR_EXTERN_PAGE_NO);
 
     if (/* There is no external storage data */
         page_no == FIL_NULL
@@ -2797,13 +2844,19 @@ void btr_free_externally_stored_field(
       return;
     }
 
-    ext_block = buf_page_get(space_id, 0, page_no, RW_X_LATCH, &mtr);
-    buf_block_dbg_add_level(ext_block, SYNC_EXTERN_STORAGE);
-    page = buf_block_get_frame(ext_block);
+    req.m_page_id.m_space_id = space_id;
+    req.m_page_id.m_page_no = page_no;
+    req.m_line = __LINE__;
+
+    auto ext_block = buf_pool->get(req, nullptr);
+
+    buf_block_dbg_add_level(IF_SYNC_DEBUG(ext_block, SYNC_EXTERN_STORAGE));
+
+    auto page = ext_block->get_frame();
 
     btr_check_blob_fil_page_type(space_id, page_no, page, false);
 
-    next_page_no = mach_read_from_4(page + FIL_PAGE_DATA + BTR_BLOB_HDR_NEXT_PAGE_NO);
+    auto next_page_no = mach_read_from_4(page + FIL_PAGE_DATA + BTR_BLOB_HDR_NEXT_PAGE_NO);
 
     /* We must supply the page level (= 0) as an argument
     because we did not store it on the page (we save the
@@ -2905,23 +2958,28 @@ static ulint btr_copy_blob_prefix(
 
   for (;;) {
     mtr_t mtr;
-    buf_block_t *block;
-    const page_t *page;
-    const byte *blob_header;
-    ulint part_len;
-    ulint copy_len;
 
     mtr_start(&mtr);
 
-    block = buf_page_get(space_id, 0, page_no, RW_S_LATCH, &mtr);
-    buf_block_dbg_add_level(block, SYNC_EXTERN_STORAGE);
-    page = buf_block_get_frame(block);
+    Buf_pool::Request req {
+      .m_rw_latch = RW_S_LATCH,
+      .m_page_id = { space_id, page_no },
+      .m_mode = BUF_GET,
+      .m_file = __FILE__,
+      .m_line = __LINE__,
+      .m_mtr = &mtr
+    };
+
+    auto block = buf_pool->get(req, nullptr);
+    const auto page = block->get_frame();
+
+    buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_EXTERN_STORAGE));
 
     btr_check_blob_fil_page_type(space_id, page_no, page, true);
 
-    blob_header = page + offset;
-    part_len = btr_blob_get_part_len(blob_header);
-    copy_len = ut_min(part_len, len - copied_len);
+    const auto blob_header = page + offset;
+    auto part_len = btr_blob_get_part_len(blob_header);
+    auto copy_len = ut_min(part_len, len - copied_len);
 
     memcpy(buf + copied_len, blob_header + BTR_BLOB_HDR_SIZE, copy_len);
     copied_len += copy_len;

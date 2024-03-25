@@ -376,9 +376,9 @@ static db_err trx_undo_seg_create(
     return DB_OUT_OF_FILE_SPACE;
   }
 
-  buf_block_dbg_add_level(block, SYNC_TRX_UNDO_PAGE);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
 
-  *undo_page = buf_block_get_frame(block);
+  *undo_page = block->get_frame();
 
   auto page_hdr = *undo_page + TRX_UNDO_PAGE_HDR;
   auto seg_hdr = *undo_page + TRX_UNDO_SEG_HDR;

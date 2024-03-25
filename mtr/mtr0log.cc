@@ -445,20 +445,13 @@ byte *mlog_parse_index(
 }
 
 byte *mlog_write_initial_log_record_fast(const byte *ptr, byte type, byte *log_ptr, mtr_t *mtr) {
-#ifdef UNIV_DEBUG
-  buf_block_t *block;
-#endif /* UNIV_DEBUG */
-  const byte *page;
-  ulint space;
-  ulint offset;
-
   ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));
   ut_ad(type <= MLOG_BIGGEST_TYPE);
   ut_ad(ptr && log_ptr);
 
-  page = (const byte *)ut_align_down(ptr, UNIV_PAGE_SIZE);
-  space = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
-  offset = mach_read_from_4(page + FIL_PAGE_OFFSET);
+  auto page = (const byte *)ut_align_down(ptr, UNIV_PAGE_SIZE);
+  auto space = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
+  auto offset = mach_read_from_4(page + FIL_PAGE_OFFSET);
 
   /* check whether the page is in the doublewrite buffer;
   the doublewrite buffer is located in pages
@@ -498,12 +491,13 @@ byte *mlog_write_initial_log_record_fast(const byte *ptr, byte type, byte *log_p
 
 #ifdef UNIV_DEBUG
   /* We now assume that all x-latched pages have been modified! */
-  block = (buf_block_t *)buf_block_align(ptr);
+  auto block = buf_pool->block_align(ptr);
 
   if (!mtr_memo_contains(mtr, block, MTR_MEMO_MODIFY)) {
 
     mtr_memo_push(mtr, block, MTR_MEMO_MODIFY);
   }
-#endif
-  return (log_ptr);
+#endif /* UNIV_DEBUG */
+
+  return log_ptr;
 }

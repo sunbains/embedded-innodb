@@ -96,7 +96,7 @@ static bool page_cur_try_search_shortcut(
   page_cur_t cursor2;
 #endif
   bool success = false;
-  page_t *page = buf_block_get_frame(block);
+  page_t *page = block->get_frame();
   mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
@@ -246,7 +246,7 @@ void page_cur_search_with_match(
 #endif /* PAGE_CUR_LE_OR_EXTENDS */
       ut_ad(mode == PAGE_CUR_L || mode == PAGE_CUR_LE || mode == PAGE_CUR_G || mode == PAGE_CUR_GE);
 #endif /* UNIV_DEBUG */
-  page = buf_block_get_frame(block);
+  page = block->get_frame();
 
   page_check_dir(page);
 
@@ -456,7 +456,7 @@ void page_cur_search_with_match(
 
 void page_cur_open_on_rnd_user_rec(buf_block_t *block, page_cur_t *cursor) {
   ulint rnd;
-  ulint n_recs = page_get_n_recs(buf_block_get_frame(block));
+  ulint n_recs = page_get_n_recs(block->get_frame());
 
   page_cur_set_before_first(block, cursor);
 
@@ -647,7 +647,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_blo
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
 
-  page = block ? buf_block_get_frame(block) : nullptr;
+  page = block ? block->get_frame() : nullptr;
 
   if (is_short) {
     cursor_rec = page_rec_get_prev(page_get_supremum_rec(page));
@@ -1024,7 +1024,7 @@ byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, buf_blo
 
   ut_a(ptr == rec_end);
 
-  page = buf_block_get_frame(block);
+  page = block->get_frame();
 
   page_header_set_ptr(page, PAGE_LAST_INSERT, nullptr);
   page_header_set_field(page, PAGE_DIRECTION, PAGE_NO_DIRECTION);
@@ -1232,7 +1232,7 @@ byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, buf_block_t *block, di
   ut_a(offset <= UNIV_PAGE_SIZE);
 
   if (block) {
-    page_t *page = buf_block_get_frame(block);
+    page_t *page = block->get_frame();
     mem_heap_t *heap = nullptr;
     ulint offsets_[REC_OFFS_NORMAL_SIZE];
     rec_t *rec = page + offset;

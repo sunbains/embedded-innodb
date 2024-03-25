@@ -186,7 +186,7 @@ static bool page_dir_slot_check(page_dir_slot_t *slot) /*!< in: slot */
 }
 
 void page_set_max_trx_id(buf_block_t *block, trx_id_t trx_id, mtr_t *mtr) {
-  auto page = buf_block_get_frame(block);
+  auto page = block->get_frame();
 
   ut_ad(!mtr || mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
 
@@ -275,7 +275,7 @@ static page_t *page_create_low(
   /* 1. INCREMENT MODIFY CLOCK */
   buf_block_modify_clock_inc(block);
 
-  page = buf_block_get_frame(block);
+  page = block->get_frame();
 
   fil_page_set_type(page, FIL_PAGE_INDEX);
 
@@ -381,12 +381,12 @@ static page_t *page_create_low(
 }
 
 page_t *page_create(buf_block_t *block, mtr_t *mtr, ulint comp) {
-  page_create_write_log(buf_block_get_frame(block), mtr, comp);
+  page_create_write_log(block->get_frame(), mtr, comp);
   return (page_create_low(block, comp));
 }
 
 void page_copy_rec_list_end_no_locks(buf_block_t *new_block, buf_block_t *block, rec_t *rec, dict_index_t *index, mtr_t *mtr) {
-  page_t *new_page = buf_block_get_frame(new_block);
+  page_t *new_page = new_block->get_frame();
   page_cur_t cur1;
   rec_t *cur2;
   mem_heap_t *heap = nullptr;
@@ -405,7 +405,7 @@ void page_copy_rec_list_end_no_locks(buf_block_t *new_block, buf_block_t *block,
   ut_a(page_is_comp(new_page) == page_rec_is_comp(rec));
   ut_a(mach_read_from_2(new_page + UNIV_PAGE_SIZE - 10) == (ulint)(page_is_comp(new_page) ? PAGE_NEW_INFIMUM : PAGE_OLD_INFIMUM));
 
-  cur2 = page_get_infimum_rec(buf_block_get_frame(new_block));
+  cur2 = page_get_infimum_rec(new_block->get_frame());
 
   /* Copy records from the original page to the new page */
 
@@ -443,11 +443,11 @@ void page_copy_rec_list_end_no_locks(buf_block_t *new_block, buf_block_t *block,
 }
 
 rec_t *page_copy_rec_list_end(buf_block_t *new_block, buf_block_t *block, rec_t *rec, dict_index_t *index, mtr_t *mtr) {
-  page_t *new_page = buf_block_get_frame(new_block);
+  page_t *new_page = new_block->get_frame();
   page_t *page = page_align(rec);
   rec_t *ret = page_rec_get_next(page_get_infimum_rec(new_page));
 
-  ut_ad(buf_block_get_frame(block) == page);
+  ut_ad(block->get_frame() == page);
   ut_ad(page_is_leaf(page) == page_is_leaf(new_page));
   ut_ad(page_is_comp(page) == page_is_comp(new_page));
 
@@ -472,7 +472,7 @@ rec_t *page_copy_rec_list_end(buf_block_t *new_block, buf_block_t *block, rec_t 
 }
 
 rec_t *page_copy_rec_list_start(buf_block_t *new_block, buf_block_t *block, rec_t *rec, dict_index_t *index, mtr_t *mtr) {
-  page_t *new_page = buf_block_get_frame(new_block);
+  page_t *new_page = new_block->get_frame();
   page_cur_t cur1;
   rec_t *cur2;
   mem_heap_t *heap = nullptr;
@@ -567,7 +567,7 @@ byte *page_parse_delete_rec_list(byte type, byte *ptr, byte *end_ptr, buf_block_
     return (ptr);
   }
 
-  page = buf_block_get_frame(block);
+  page = block->get_frame();
 
   ut_ad(!!page_is_comp(page) == dict_table_is_comp(index->table));
 
@@ -746,7 +746,7 @@ void page_delete_rec_list_start(rec_t *rec, buf_block_t *block, dict_index_t *in
 }
 
 bool page_move_rec_list_end(buf_block_t *new_block, buf_block_t *block, rec_t *split_rec, dict_index_t *index, mtr_t *mtr) {
-  page_t *new_page = buf_block_get_frame(new_block);
+  page_t *new_page = new_block->get_frame();
   ulint old_data_size;
   ulint new_data_size;
   ulint old_n_recs;

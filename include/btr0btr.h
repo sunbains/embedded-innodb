@@ -37,6 +37,26 @@ Created 6/2/1994 Heikki Tuuri
 special big record storage structure */
 constexpr ulint BTR_PAGE_MAX_REC_SIZE = UNIV_PAGE_SIZE / 2 - 200;
 
+constexpr ulint BTR_TOTAL_SIZE = 2;
+constexpr ulint BTR_N_LEAF_PAGES = 1;
+
+/** Maximum B-tree page level (not really a hard limit). Used in debug
+assertions in btr_page_set_level and btr_page_get_level_low */
+constexpr ulint BTR_MAX_NODE_LEVEL = 50;
+
+/** If this is ORed to btr_latch_mode, it means that the search tuple
+will be inserted to the index, at the searched position */
+constexpr ulint BTR_INSERT = 512;
+
+/** This flag ORed to btr_latch_mode says that we do the search in query
+optimization */
+constexpr ulint BTR_ESTIMATE = 1024;
+
+/** This flag ORed to btr_latch_mode says that we can ignore possible
+UNIQUE definition on secondary indexes when we decide if we can use
+the insert buffer to speed up inserts */
+constexpr ulint BTR_IGNORE_SEC_UNIQUE = 2048;
+
 /** @brief Maximum depth of a B-tree in InnoDB.
 
 Note that this isn't a maximum as such; none of the tree operations
@@ -71,19 +91,6 @@ enum btr_latch_mode {
   /** Modify the previous record. */
   BTR_MODIFY_PREV = 36
 };
-
-/** If this is ORed to btr_latch_mode, it means that the search tuple
-will be inserted to the index, at the searched position */
-constexpr ulint BTR_INSERT = 512;
-
-/** This flag ORed to btr_latch_mode says that we do the search in query
-optimization */
-constexpr ulint BTR_ESTIMATE = 1024;
-
-/** This flag ORed to btr_latch_mode says that we can ignore possible
-UNIQUE definition on secondary indexes when we decide if we can use
-the insert buffer to speed up inserts */
-constexpr ulint BTR_IGNORE_SEC_UNIQUE = 2048;
 
 /** Gets the root node of a tree and x-latches it.
 @param[in] index                Index tree.
@@ -318,24 +325,26 @@ bool btr_index_rec_validate(const rec_t *rec, const dict_index_t *index, bool du
 @return	true if ok */
 bool btr_validate_index(dict_index_t *index, trx_t *trx);
 
-constexpr ulint BTR_TOTAL_SIZE = 2;
-constexpr ulint BTR_N_LEAF_PAGES = 1;
-
-/** Maximum B-tree page level (not really a hard limit). Used in debug
-assertions in btr_page_set_level and btr_page_get_level_low */
-constexpr ulint BTR_MAX_NODE_LEVEL = 50;
-
 /** Gets a buffer page and declares its latching order level.
-@param[in] space                Space id
+@param[in] space_id             Space id
 @param[in] page_no              Page number
-@param[in] mode                 Latch mode
+@param[in] rw_latch             Latch mode
 @param[in,out] mtr              Mini-transaction. */
-inline buf_block_t *btr_block_get(space_id_t space, page_no_t page_no, ulint mode, mtr_t *mtr) {
-  auto block = buf_page_get(space, 0, page_no, mode, mtr);
+inline buf_block_t *btr_block_get(space_id_t space_id, page_no_t page_no, ulint rw_latch, mtr_t *mtr) {
+  Buf_pool::Request req {
+    .m_rw_latch = rw_latch,
+    .m_page_id = { space_id, page_no },
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = mtr
+  };
 
-  if (mode != RW_NO_LATCH) {
+  auto block = buf_pool->get(req, nullptr);
 
-    buf_block_dbg_add_level(block, SYNC_TREE_NODE);
+  if (rw_latch != RW_NO_LATCH) {
+
+    buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
   }
 
   return block;
@@ -346,8 +355,8 @@ inline buf_block_t *btr_block_get(space_id_t space, page_no_t page_no, ulint mod
 @param[in] page_no              Page number
 @param[in] mode                 Latch mode
 @param[in,out] mtr              Mini-transaction. */
-inline page_t *btr_page_get(space_id_t space, page_no_t page_no, ulint mode, mtr_t *mtr) {
-  return buf_block_get_frame(btr_block_get(space, page_no, mode, mtr));
+inline page_t *btr_page_get(space_id_t space, page_no_t page_no, ulint rw_latch, mtr_t *mtr) {
+  return btr_block_get(space, page_no, rw_latch, mtr)->get_frame();
 }
 
 /** Sets the index id field of a page.

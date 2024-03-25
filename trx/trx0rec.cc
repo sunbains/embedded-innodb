@@ -1014,14 +1014,23 @@ db_err trx_undo_report_row_operation(
   mtr_start(&mtr);
 
   for (;;) {
-    buf_block_t *undo_block;
-    page_t *undo_page;
+
+    Buf_pool::Request req {
+      .m_rw_latch = RW_X_LATCH,
+      .m_page_id = { undo->space, page_no },
+      .m_mode = BUF_GET,
+      .m_file = __FILE__,
+      .m_line = __LINE__,
+      .m_mtr = &mtr
+    };
+
+    auto undo_block = buf_pool->get(req, undo->guess_block);
+
+    buf_block_dbg_add_level(IF_SYNC_DEBUG(undo_block, SYNC_TRX_UNDO_PAGE));
+
+    auto undo_page = undo_block->get_frame();
+
     ulint offset;
-
-    undo_block = buf_page_get_gen(undo->space, page_no, RW_X_LATCH, undo->guess_block, BUF_GET, __FILE__, __LINE__, &mtr);
-    buf_block_dbg_add_level(undo_block, SYNC_TRX_UNDO_PAGE);
-
-    undo_page = buf_block_get_frame(undo_block);
 
     if (op_type == TRX_UNDO_INSERT_OP) {
       offset = trx_undo_page_report_insert(undo_page, trx, index, clust_entry, &mtr);

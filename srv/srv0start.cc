@@ -993,16 +993,16 @@ static void srv_startup_abort(enum db_err err) /* in: Current error code */
 
   log_shutdown();
   lock_sys_close();
-  buf_close();
+  buf_pool->close();
   fil_close();
   os_aio_close();
 
   log_mem_free();
-  buf_mem_free();
+
+  delete buf_pool;
 }
 
 ib_err_t innobase_start_or_create() {
-  Buf_pool *ret;
   bool create_new_db;
   bool log_file_created;
   bool log_created = false;
@@ -1210,9 +1210,9 @@ ib_err_t innobase_start_or_create() {
 
   fil_init(srv_file_per_table ? 50000 : 5000, srv_max_n_open_files);
 
-  ret = buf_pool_init();
+  buf_pool = new Buf_pool();
 
-  if (ret == nullptr) {
+  if (!buf_pool->open(srv_buf_pool_size)) {
     /* Shutdown all sub-systems that have been initialized. */
     fil_close();
     os_aio_close();
@@ -1760,14 +1760,17 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
   thr_local_close();
   trx_sys_file_format_close();
   trx_sys_close();
-  dict_close(); /* Must be called before buf_close(). */
-  buf_close();
+
+  /* Must be called before Buf_pool::close(). */
+  dict_close();
+
+  buf_pool->close();
+
   fil_close();
   os_aio_close();
   srv_free();
 
-  /* 3. Free all InnoDB's own mutexes and the os_fast_mutexes inside
-  them */
+  /* 3. Free all InnoDB's own mutexes and the os_fast_mutexes inside them */
   sync_close();
 
   /* 4. Free the os_conc_mutex and all os_events and os_mutexes */
@@ -1777,7 +1780,9 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
   pars_close();
 
   log_mem_free();
-  buf_mem_free();
+
+  delete buf_pool;
+  buf_pool = nullptr;
 
   /* This variable should come from the user and should not be
   malloced by InnoDB. */

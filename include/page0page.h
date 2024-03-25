@@ -517,9 +517,9 @@ inline void page_update_max_trx_id(
   application).  In that case, PAGE_MAX_TRX_ID is unused,
   and trx_id is usually zero. */
   ut_ad(trx_id > 0 || recv_recovery_on);
-  ut_ad(page_is_leaf(buf_block_get_frame(block)));
+  ut_ad(page_is_leaf(block->get_frame()));
 
-  if (page_get_max_trx_id(buf_block_get_frame(block)) < trx_id) {
+  if (page_get_max_trx_id(block->get_frame()) < trx_id) {
 
     page_set_max_trx_id(block, trx_id, mtr);
   }
