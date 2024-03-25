@@ -23,35 +23,27 @@ Created 2/23/1996 Heikki Tuuri
 
 #include "btr0pcur.h"
 
-#include "rem0cmp.h"
 #include "trx0trx.h"
-#include "ut0byte.h"
 
-/** Allocates memory for a persistent cursor object and initializes the cursor.
-@return	own: persistent cursor */
-
-btr_pcur_t *btr_pcur_create(void) {
+btr_pcur_t *btr_pcur_create() {
   auto pcur = (btr_pcur_t *)mem_alloc(sizeof(btr_pcur_t));
 
-  pcur->btr_cur.m_index = NULL;
+  pcur->btr_cur.m_index = nullptr;
   btr_pcur_init(pcur);
 
-  return (pcur);
+  return pcur;
 }
 
-/** Frees the memory for a persistent cursor object. */
-
-void btr_pcur_free(btr_pcur_t *cursor) /*!< in, own: persistent cursor */
-{
-  if (cursor->old_rec_buf != NULL) {
+void btr_pcur_free(btr_pcur_t *cursor) {
+  if (cursor->old_rec_buf != nullptr) {
 
     mem_free(cursor->old_rec_buf);
 
-    cursor->old_rec_buf = NULL;
+    cursor->old_rec_buf = nullptr;
   }
 
-  cursor->btr_cur.m_page_cur.rec = NULL;
-  cursor->old_rec = NULL;
+  cursor->btr_cur.m_page_cur.rec = nullptr;
+  cursor->old_rec = nullptr;
   cursor->old_n_fields = 0;
   cursor->old_stored = BTR_PCUR_OLD_NOT_STORED;
 
@@ -61,18 +53,7 @@ void btr_pcur_free(btr_pcur_t *cursor) /*!< in, own: persistent cursor */
   mem_free(cursor);
 }
 
-/** The position of the cursor is stored by taking an initial segment of the
-record the cursor is positioned on, before, or after, and copying it to the
-cursor data structure, or just setting a flag if the cursor id before the
-first in an EMPTY tree, or after the last in an EMPTY tree. NOTE that the
-page where the cursor is positioned must not be empty if the index tree is
-not totally empty! */
-
-void btr_pcur_store_position(
-  btr_pcur_t *cursor, /*!< in: persistent cursor */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
+void btr_pcur_store_position(btr_pcur_t *cursor, mtr_t *mtr) {
   page_cur_t *page_cursor;
   buf_block_t *block;
   rec_t *rec;
@@ -107,9 +88,9 @@ void btr_pcur_store_position(
 
     if (page_rec_is_supremum_low(offs)) {
 
-      cursor->rel_pos = BTR_PCUR_AFTER_LAST_IN_TREE;
+      cursor->rel_pos = Btree_cursor_pos::AFTER_LAST_IN_TREE;
     } else {
-      cursor->rel_pos = BTR_PCUR_BEFORE_FIRST_IN_TREE;
+      cursor->rel_pos = Btree_cursor_pos::BEFORE_FIRST_IN_TREE;
     }
 
     return;
@@ -119,15 +100,15 @@ void btr_pcur_store_position(
 
     rec = page_rec_get_prev(rec);
 
-    cursor->rel_pos = BTR_PCUR_AFTER;
+    cursor->rel_pos = Btree_cursor_pos::AFTER;
 
   } else if (page_rec_is_infimum_low(offs)) {
 
     rec = page_rec_get_next(rec);
 
-    cursor->rel_pos = BTR_PCUR_BEFORE;
+    cursor->rel_pos = Btree_cursor_pos::BEFORE;
   } else {
-    cursor->rel_pos = BTR_PCUR_ON;
+    cursor->rel_pos = Btree_cursor_pos::ON;
   }
 
   cursor->old_stored = BTR_PCUR_OLD_STORED;
@@ -137,15 +118,7 @@ void btr_pcur_store_position(
   cursor->modify_clock = buf_block_get_modify_clock(block);
 }
 
-/** Copies the stored position of a pcur to another pcur. */
-
-void btr_pcur_copy_stored_position(
-  btr_pcur_t *pcur_receive, /*!< in: pcur which will receive the
-                              position info */
-  btr_pcur_t *pcur_donate
-) /*!< in: pcur from which the info is
-                              copied */
-{
+void btr_pcur_copy_stored_position(btr_pcur_t *pcur_receive, btr_pcur_t *pcur_donate) {
   if (pcur_receive->old_rec_buf) {
     mem_free(pcur_receive->old_rec_buf);
   }
@@ -163,30 +136,7 @@ void btr_pcur_copy_stored_position(
   pcur_receive->old_n_fields = pcur_donate->old_n_fields;
 }
 
-/** Restores the stored position of a persistent cursor bufferfixing the page
-and obtaining the specified latches. If the cursor position was saved when the
-(1) cursor was positioned on a user record: this function restores the position
-to the last record LESS OR EQUAL to the stored record;
-(2) cursor was positioned on a page infimum record: restores the position to
-the last record LESS than the user record which was the successor of the page
-infimum;
-(3) cursor was positioned on the page supremum: restores to the first record
-GREATER than the user record which was the predecessor of the supremum.
-(4) cursor was positioned before the first or after the last in an empty tree:
-restores to before first or after the last in the tree.
-@return true if the cursor position was stored when it was on a user
-record and it can be restored on a user record whose ordering fields
-are identical to the ones of the original user record */
-
-bool btr_pcur_restore_position_func(
-  ulint latch_mode,   /*!< in: BTR_SEARCH_LEAF, ... */
-  btr_pcur_t *cursor, /*!< in: detached persistent cursor */
-  const char *file,   /*!< in: file name */
-  ulint line,         /*!< in: line where called */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
-  dict_index_t *index;
+bool btr_pcur_restore_position_func(ulint latch_mode, btr_pcur_t *cursor, const char *file, ulint line, mtr_t *mtr) {
   dtuple_t *tuple;
   ib_srch_mode_t mode;
   ib_srch_mode_t old_mode;
@@ -195,11 +145,15 @@ bool btr_pcur_restore_position_func(
   ut_ad(mtr);
   ut_ad(mtr->state == MTR_ACTIVE);
 
-  index = btr_cur_get_index(btr_pcur_get_btr_cur(cursor));
+  auto index = btr_cur_get_index(btr_pcur_get_btr_cur(cursor));
 
-  if (unlikely(cursor->old_stored != BTR_PCUR_OLD_STORED) || unlikely(cursor->pos_state != BTR_PCUR_WAS_POSITIONED && cursor->pos_state != BTR_PCUR_IS_POSITIONED)) {
+  if (unlikely(cursor->old_stored != BTR_PCUR_OLD_STORED) ||
+      unlikely(cursor->pos_state != BTR_PCUR_WAS_POSITIONED && cursor->pos_state != BTR_PCUR_IS_POSITIONED)) {
+
     ut_print_buf(ib_stream, cursor, sizeof(btr_pcur_t));
+
     ib_logger(ib_stream, "\n");
+
     if (cursor->trx_if_known) {
       trx_print(ib_stream, cursor->trx_if_known, 0);
     }
@@ -207,18 +161,19 @@ bool btr_pcur_restore_position_func(
     ut_error;
   }
 
-  if (unlikely(cursor->rel_pos == BTR_PCUR_AFTER_LAST_IN_TREE || cursor->rel_pos == BTR_PCUR_BEFORE_FIRST_IN_TREE)) {
+  if (unlikely(cursor->rel_pos == Btree_cursor_pos::AFTER_LAST_IN_TREE ||
+      cursor->rel_pos == Btree_cursor_pos::BEFORE_FIRST_IN_TREE)) {
 
     /* In these cases we do not try an optimistic restoration,
     but always do a search */
 
     btr_cur_open_at_index_side(
-      cursor->rel_pos == BTR_PCUR_BEFORE_FIRST_IN_TREE, index, latch_mode, btr_pcur_get_btr_cur(cursor), mtr
+      cursor->rel_pos == Btree_cursor_pos::BEFORE_FIRST_IN_TREE, index, latch_mode, btr_pcur_get_btr_cur(cursor), mtr
     );
 
     cursor->block_when_stored = btr_pcur_get_block(cursor);
 
-    return (false);
+    return false;
   }
 
   ut_a(cursor->old_rec);
@@ -242,14 +197,14 @@ bool btr_pcur_restore_position_func(
 
       buf_block_dbg_add_level(IF_SYNC_DEBUG(btr_pcur_get_block(cursor), SYNC_TREE_NODE));
 
-      if (cursor->rel_pos == BTR_PCUR_ON) {
+      if (cursor->rel_pos == Btree_cursor_pos::ON) {
         cursor->latch_mode = latch_mode;
 
 #ifdef UNIV_DEBUG
         auto rec = btr_pcur_get_rec(cursor);
         auto heap = mem_heap_create(256);
-        auto offsets1 = rec_get_offsets(cursor->old_rec, index, NULL, cursor->old_n_fields, &heap);
-        auto offsets2 = rec_get_offsets(rec, index, NULL, cursor->old_n_fields, &heap);
+        auto offsets1 = rec_get_offsets(cursor->old_rec, index, nullptr, cursor->old_n_fields, &heap);
+        auto offsets2 = rec_get_offsets(rec, index, nullptr, cursor->old_n_fields, &heap);
 
         ut_ad(!cmp_rec_rec(cursor->old_rec, rec, offsets1, offsets2, index));
         mem_heap_free(heap);
@@ -273,12 +228,12 @@ bool btr_pcur_restore_position_func(
   /* Save the old search mode of the cursor */
   old_mode = cursor->search_mode;
 
-  if (likely(cursor->rel_pos == BTR_PCUR_ON)) {
+  if (likely(cursor->rel_pos == Btree_cursor_pos::ON)) {
     mode = PAGE_CUR_LE;
-  } else if (cursor->rel_pos == BTR_PCUR_AFTER) {
+  } else if (cursor->rel_pos == Btree_cursor_pos::AFTER) {
     mode = PAGE_CUR_G;
   } else {
-    ut_ad(cursor->rel_pos == BTR_PCUR_BEFORE);
+    ut_ad(cursor->rel_pos == Btree_cursor_pos::BEFORE);
     mode = PAGE_CUR_L;
   }
 
@@ -287,7 +242,7 @@ bool btr_pcur_restore_position_func(
   /* Restore the old search mode */
   cursor->search_mode = old_mode;
 
-  if (cursor->rel_pos == BTR_PCUR_ON && btr_pcur_is_on_user_rec(cursor) && 0 == cmp_dtuple_rec(index->cmp_ctx, tuple, btr_pcur_get_rec(cursor), rec_get_offsets(btr_pcur_get_rec(cursor), index, NULL, ULINT_UNDEFINED, &heap))) {
+  if (cursor->rel_pos == Btree_cursor_pos::ON && btr_pcur_is_on_user_rec(cursor) && 0 == cmp_dtuple_rec(index->cmp_ctx, tuple, btr_pcur_get_rec(cursor), rec_get_offsets(btr_pcur_get_rec(cursor), index, nullptr, ULINT_UNDEFINED, &heap))) {
 
     /* We have to store the NEW value for the modify clock, since
     the cursor can now be on a different page! But we can retain
@@ -299,7 +254,7 @@ bool btr_pcur_restore_position_func(
 
     mem_heap_free(heap);
 
-    return (true);
+    return true;
   }
 
   mem_heap_free(heap);
@@ -310,20 +265,10 @@ bool btr_pcur_restore_position_func(
 
   btr_pcur_store_position(cursor, mtr);
 
-  return (false);
+  return false;
 }
 
-/** If the latch mode of the cursor is BTR_LEAF_SEARCH or BTR_LEAF_MODIFY,
-releases the page latch and bufferfix reserved by the cursor.
-NOTE! In the case of BTR_LEAF_MODIFY, there should not exist changes
-made by the current mini-transaction to the data protected by the
-cursor latch, as then the latch must not be released until mtr_commit. */
-
-void btr_pcur_release_leaf(
-  btr_pcur_t *cursor, /*!< in: persistent cursor */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
+void btr_pcur_release_leaf( btr_pcur_t *cursor, mtr_t *mtr) {
   buf_block_t *block;
 
   ut_a(cursor->pos_state == BTR_PCUR_IS_POSITIONED);

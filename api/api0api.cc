@@ -3123,7 +3123,7 @@ static ib_err_t ib_execute_update_query_graph(
   ut_a(dict_index_is_clust(pcur->btr_cur.m_index));
   btr_pcur_copy_stored_position(node->pcur, pcur);
 
-  ut_a(node->pcur->rel_pos == BTR_PCUR_ON);
+  ut_a(node->pcur->rel_pos == Btree_cursor_pos::ON);
 
   savept = trx_savept_take(trx);
 

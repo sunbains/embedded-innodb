@@ -885,23 +885,22 @@ static bool row_sel_restore_pcur_pos(
 ) /*!< in: mtr */
 {
   bool equal_position;
-  ulint relative_position;
 
   ut_ad(!plan->cursor_at_end);
 
-  relative_position = btr_pcur_get_rel_pos(&(plan->pcur));
+  auto relative_position = btr_pcur_get_rel_pos(&(plan->pcur));
 
   equal_position = btr_pcur_restore_position(BTR_SEARCH_LEAF, &(plan->pcur), mtr);
 
   /* If the cursor is traveling upwards, and relative_position is
 
-  (1) BTR_PCUR_BEFORE: this is not allowed, as we did not have a lock
+  (1) Btree_cursor_pos::BEFORE: this is not allowed, as we did not have a lock
   yet on the successor of the page infimum;
-  (2) BTR_PCUR_AFTER: btr_pcur_restore_position placed the cursor on the
+  (2) Btree_cursor_pos::AFTER: btr_pcur_restore_position placed the cursor on the
   first record GREATER than the predecessor of a page supremum; we have
   not yet processed the cursor record: no need to move the cursor to the
   next record;
-  (3) BTR_PCUR_ON: btr_pcur_restore_position placed the cursor on the
+  (3) Btree_cursor_pos::ON: btr_pcur_restore_position placed the cursor on the
   last record LESS or EQUAL to the old stored user record; (a) if
   equal_position is false, this means that the cursor is now on a record
   less than the old user record, and we must move to the next record;
@@ -910,7 +909,7 @@ static bool row_sel_restore_pcur_pos(
   record, else there is no need to move the cursor. */
 
   if (plan->asc) {
-    if (relative_position == BTR_PCUR_ON) {
+    if (relative_position == Btree_cursor_pos::ON) {
 
       if (equal_position) {
 
@@ -920,21 +919,21 @@ static bool row_sel_restore_pcur_pos(
       return true;
     }
 
-    ut_ad(relative_position == BTR_PCUR_AFTER || relative_position == BTR_PCUR_AFTER_LAST_IN_TREE);
+    ut_ad(relative_position == Btree_cursor_pos::AFTER || relative_position == Btree_cursor_pos::AFTER_LAST_IN_TREE);
 
     return false;
   }
 
   /* If the cursor is traveling downwards, and relative_position is
 
-  (1) BTR_PCUR_BEFORE: btr_pcur_restore_position placed the cursor on
+  (1) Btree_cursor_pos::BEFORE: btr_pcur_restore_position placed the cursor on
   the last record LESS than the successor of a page infimum; we have not
   processed the cursor record: no need to move the cursor;
-  (2) BTR_PCUR_AFTER: btr_pcur_restore_position placed the cursor on the
+  (2) Btree_cursor_pos::AFTER: btr_pcur_restore_position placed the cursor on the
   first record GREATER than the predecessor of a page supremum; we have
   processed the cursor record: we should move the cursor to the previous
   record;
-  (3) BTR_PCUR_ON: btr_pcur_restore_position placed the cursor on the
+  (3) Btree_cursor_pos::ON: btr_pcur_restore_position placed the cursor on the
   last record LESS or EQUAL to the old stored user record; (a) if
   equal_position is false, this means that the cursor is now on a record
   less than the old user record, and we need not move to the previous
@@ -942,12 +941,12 @@ static bool row_sel_restore_pcur_pos(
   plan->stored_cursor_rec_processed is true, we must move to the previous
   record, else there is no need to move the cursor. */
 
-  if (relative_position == BTR_PCUR_BEFORE || relative_position == BTR_PCUR_BEFORE_FIRST_IN_TREE) {
+  if (relative_position == Btree_cursor_pos::BEFORE || relative_position == Btree_cursor_pos::BEFORE_FIRST_IN_TREE) {
 
     return false;
   }
 
-  if (relative_position == BTR_PCUR_ON) {
+  if (relative_position == Btree_cursor_pos::ON) {
 
     if (equal_position) {
 
@@ -957,7 +956,7 @@ static bool row_sel_restore_pcur_pos(
     return false;
   }
 
-  ut_ad(relative_position == BTR_PCUR_AFTER || relative_position == BTR_PCUR_AFTER_LAST_IN_TREE);
+  ut_ad(relative_position == Btree_cursor_pos::AFTER || relative_position == Btree_cursor_pos::AFTER_LAST_IN_TREE);
 
   return true;
 }
@@ -2179,15 +2178,14 @@ static bool row_sel_restore_position(
                                         mtr temporarily! */
 {
   bool success;
-  ulint relative_position;
 
-  relative_position = pcur->rel_pos;
+  auto relative_position = pcur->rel_pos;
 
   success = btr_pcur_restore_position(latch_mode, pcur, mtr);
 
   *same_user_rec = success;
 
-  if (relative_position == BTR_PCUR_ON) {
+  if (relative_position == Btree_cursor_pos::ON) {
     if (success) {
       return false;
     }
@@ -2199,7 +2197,7 @@ static bool row_sel_restore_position(
     return true;
   }
 
-  if (relative_position == BTR_PCUR_AFTER || relative_position == BTR_PCUR_AFTER_LAST_IN_TREE) {
+  if (relative_position == Btree_cursor_pos::AFTER || relative_position == Btree_cursor_pos::AFTER_LAST_IN_TREE) {
 
     if (moves_up) {
       return true;
@@ -2212,7 +2210,7 @@ static bool row_sel_restore_position(
     return true;
   }
 
-  ut_ad(relative_position == BTR_PCUR_BEFORE || relative_position == BTR_PCUR_BEFORE_FIRST_IN_TREE);
+  ut_ad(relative_position == Btree_cursor_pos::BEFORE || relative_position == Btree_cursor_pos::BEFORE_FIRST_IN_TREE);
 
   if (moves_up && btr_pcur_is_on_user_rec(pcur)) {
     btr_pcur_move_to_next(pcur, mtr);

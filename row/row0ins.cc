@@ -955,7 +955,7 @@ static db_err row_ins_foreign_check_on_constraint(
 
   mtr_commit(mtr);
 
-  ut_a(cascade->pcur->rel_pos == BTR_PCUR_ON);
+  ut_a(cascade->pcur->rel_pos == Btree_cursor_pos::ON);
 
   cascade->state = UPD_NODE_UPDATE_CLUSTERED;
 

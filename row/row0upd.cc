@@ -1446,7 +1446,7 @@ static db_err row_upd_clust_step(
   that case we know that the transaction has at least an
   implicit x-lock on the record. */
 
-  ut_a(pcur->rel_pos == BTR_PCUR_ON);
+  ut_a(pcur->rel_pos == Btree_cursor_pos::ON);
 
   success = btr_pcur_restore_position(BTR_MODIFY_LEAF, pcur, mtr);
 

@@ -23,32 +23,91 @@ Created 2/23/1996 Heikki Tuuri
 
 #pragma once
 
-#include "innodb0types.h"
-
-#include "btr0btr.h"
 #include "btr0cur.h"
-#include "btr0types.h"
-#include "data0data.h"
-#include "dict0dict.h"
-#include "mem0mem.h"
-#include "mtr0mtr.h"
-#include "page0cur.h"
+
+struct mtr_t;
+struct buf_block_t;
 
 /* Relative positions for a stored cursor position */
-constexpr ulint BTR_PCUR_ON = 1;
-constexpr ulint BTR_PCUR_BEFORE = 2;
-constexpr ulint BTR_PCUR_AFTER = 3;
+enum class Btree_cursor_pos : uint8_t {
+  ON = 1,
+  BEFORE = 2,
+  AFTER = 3,
 
-/* Note that if the tree is not empty, btr_pcur_store_position does not
-use the following, but only uses the above three alternatives, where the
-position is stored relative to a specific record: this makes implementation
-of a scroll cursor easier */
+  /* Note that if the tree is not empty, btr_pcur_store_position does not
+  use the following, but only uses the above three alternatives, where the
+  position is stored relative to a specific record: this makes implementation
+  of a scroll cursor easier */
 
-/* In an empty tree */
-constexpr ulint BTR_PCUR_BEFORE_FIRST_IN_TREE = 4;
+  /** In an empty tree */
+  BEFORE_FIRST_IN_TREE = 4,
 
-/*! In an empty tree */
-constexpr ulint BTR_PCUR_AFTER_LAST_IN_TREE = 5;
+  /**In an empty tree */
+  AFTER_LAST_IN_TREE = 5
+};
+
+/* The persistent B-tree cursor structure. This is used mainly for SQL
+selects, updates, and deletes. */
+struct btr_pcur_t {
+  /** a B-tree cursor */
+  btr_cur_t btr_cur;
+
+  /** See the TODO note below. 
+  BTR_SEARCH_LEAF, BTR_MODIFY_LEAF, BTR_MODIFY_TREE, or BTR_NO_LATCHES,
+  depending on the latching state of the page and tree where the cursor is
+  positioned; the last value means that the cursor is not currently positioned:
+  we say then that the cursor is detached; it can be restored to
+  attached if the old position was stored in old_rec */
+  ulint latch_mode;
+
+  /** BTR_PCUR_OLD_STORED or BTR_PCUR_OLD_NOT_STORED */
+  ulint old_stored;
+
+  /** if cursor position is stored, contains an initial segment of the
+  latest record cursor was positioned either on, before, or after */
+  rec_t *old_rec;
+
+  /** number of fields in old_rec */
+  ulint old_n_fields;
+
+  /** Btree_cursor_pos::ON, Btree_cursor_pos::BEFORE, or Btree_cursor_pos::AFTER, depending on whether
+  cursor was on, before, or after the old_rec record */
+  Btree_cursor_pos rel_pos;
+
+  /** buffer block when the position was stored */
+  buf_block_t *block_when_stored;
+
+  /** the modify clock value of the buffer block when the cursor position
+  was stored */
+  uint64_t modify_clock;
+
+  /** see TODO note below!
+    BTR_PCUR_IS_POSITIONED,
+    BTR_PCUR_WAS_POSITIONED,
+    BTR_PCUR_NOT_POSITIONED */
+  ulint pos_state;
+
+  /** PAGE_CUR_G, ... */
+  ib_srch_mode_t search_mode;
+
+  /** the transaction, if we know it; otherwise this field is not defined;
+  can ONLY BE USED in error prints in fatal assertion failures! */
+  trx_t *trx_if_known;
+
+  /*-----------------------------*/
+  /* NOTE that the following fields may possess dynamically allocated
+  memory which should be freed if not needed anymore! */
+
+  /** nullptr, or this field may contain a mini-transaction which holds the
+  latch on the cursor page */
+  mtr_t *mtr;
+
+  /** nullptr, or a dynamically allocated buffer for old_rec */
+  byte *old_rec_buf;
+
+  /** old_rec_buf size if old_rec_buf is not nullptr */
+  ulint buf_size;
+};
 
 /*** Allocates memory for a persistent cursor object and initializes the cursor.
 @return	own: persistent cursor */
@@ -186,69 +245,6 @@ void btr_pcur_move_backward_from_page(btr_pcur_t *cursor, mtr_t *mtr);
 #define btr_pcur_get_page_cur(cursor) (&(cursor)->btr_cur.page_cur)
 #endif /* !UNIV_DEBUG */
 
-/* The persistent B-tree cursor structure. This is used mainly for SQL
-selects, updates, and deletes. */
-struct btr_pcur_t {
-  /*!< a B-tree cursor */
-  btr_cur_t btr_cur;
-
-  /** See the TODO note below. 
-  BTR_SEARCH_LEAF, BTR_MODIFY_LEAF, BTR_MODIFY_TREE, or BTR_NO_LATCHES,
-  depending on the latching state of the page and tree where the cursor is
-  positioned; the last value means that the cursor is not currently positioned:
-  we say then that the cursor is detached; it can be restored to
-  attached if the old position was stored in old_rec */
-  ulint latch_mode;
-
-  /** BTR_PCUR_OLD_STORED or BTR_PCUR_OLD_NOT_STORED */
-  ulint old_stored;
-
-  /** if cursor position is stored, contains an initial segment of the
-  latest record cursor was positioned either on, before, or after */
-  rec_t *old_rec;
-
-  /** number of fields in old_rec */
-  ulint old_n_fields;
-
-  /** BTR_PCUR_ON, BTR_PCUR_BEFORE, or BTR_PCUR_AFTER, depending on whether
-  cursor was on, before, or after the old_rec record */
-  ulint rel_pos;
-
-  /** buffer block when the position was stored */
-  buf_block_t *block_when_stored;
-
-  /** the modify clock value of the buffer block when the cursor position
-  was stored */
-  uint64_t modify_clock;
-
-  /** see TODO note below!
-    BTR_PCUR_IS_POSITIONED,
-    BTR_PCUR_WAS_POSITIONED,
-    BTR_PCUR_NOT_POSITIONED */
-  ulint pos_state;
-
-  /** PAGE_CUR_G, ... */
-  ib_srch_mode_t search_mode;
-
-  /** the transaction, if we know it; otherwise this field is not defined;
-  can ONLY BE USED in error prints in fatal assertion failures! */
-  trx_t *trx_if_known;
-
-  /*-----------------------------*/
-  /* NOTE that the following fields may possess dynamically allocated
-  memory which should be freed if not needed anymore! */
-
-  /** NULL, or this field may contain a mini-transaction which holds the
-  latch on the cursor page */
-  mtr_t *mtr;
-
-  /** NULL, or a dynamically allocated buffer for old_rec */
-  byte *old_rec_buf;
-
-  /** old_rec_buf size if old_rec_buf is not NULL */
-  ulint buf_size;
-};
-
 /* TODO: currently, the state can be BTR_PCUR_IS_POSITIONED, though it
 really should be BTR_PCUR_WAS_POSITIONED, because we have no obligation
 to commit the cursor with mtr; similarly latch_mode may be out of date.
@@ -270,7 +266,7 @@ constexpr ulint BTR_PCUR_OLD_NOT_STORED = 122766467;
  * @param cursor The persistent cursor.
  * @return The rel_pos field value.
  */
-inline ulint btr_pcur_get_rel_pos(const btr_pcur_t *cursor) {
+inline Btree_cursor_pos btr_pcur_get_rel_pos(const btr_pcur_t *cursor) {
   ut_ad(cursor);
   ut_ad(cursor->old_rec);
   ut_ad(cursor->old_stored == BTR_PCUR_OLD_STORED);
@@ -693,14 +689,14 @@ inline bool btr_pcur_is_detached(btr_pcur_t *pcur) {
 /**
  * @brief Initializes the persistent cursor.
  *
- * This function sets the old_rec_buf field to NULL.
+ * This function sets the old_rec_buf field to nullptr.
  *
  * @param pcur The persistent cursor.
  */
 inline void btr_pcur_init(btr_pcur_t *pcur) {
   pcur->old_stored = BTR_PCUR_OLD_NOT_STORED;
-  pcur->old_rec_buf = NULL;
-  pcur->old_rec = NULL;
+  pcur->old_rec_buf = nullptr;
+  pcur->old_rec = nullptr;
 }
 
 /**
@@ -735,7 +731,7 @@ inline void btr_pcur_open_func(
   btr_cursor = btr_pcur_get_btr_cur(cursor);
   btr_cur_search_to_nth_level(dict_index, 0, tuple, mode, latch_mode, btr_cursor, 0, file, line, mtr);
   cursor->pos_state = BTR_PCUR_IS_POSITIONED;
-  cursor->trx_if_known = NULL;
+  cursor->trx_if_known = nullptr;
 }
 
 /**
@@ -765,7 +761,7 @@ inline void btr_pcur_open_with_no_init_func(
   btr_cur_search_to_nth_level(dict_index, 0, tuple, mode, latch_mode, btr_cursor, has_search_latch, file, line, mtr);
   cursor->pos_state = BTR_PCUR_IS_POSITIONED;
   cursor->old_stored = BTR_PCUR_OLD_NOT_STORED;
-  cursor->trx_if_known = NULL;
+  cursor->trx_if_known = nullptr;
 }
 
 /**
@@ -796,7 +792,7 @@ inline void btr_pcur_open_at_index_side(
   btr_cur_open_at_index_side(from_left, dict_index, latch_mode, btr_pcur_get_btr_cur(pcur), mtr);
   pcur->pos_state = BTR_PCUR_IS_POSITIONED;
   pcur->old_stored = BTR_PCUR_OLD_NOT_STORED;
-  pcur->trx_if_known = NULL;
+  pcur->trx_if_known = nullptr;
 }
 
 /**
@@ -820,7 +816,7 @@ inline void btr_pcur_open_at_rnd_pos_func(
   btr_cur_open_at_rnd_pos_func(dict_index, latch_mode, btr_pcur_get_btr_cur(cursor), file, line, mtr);
   cursor->pos_state = BTR_PCUR_IS_POSITIONED;
   cursor->old_stored = BTR_PCUR_OLD_NOT_STORED;
-  cursor->trx_if_known = NULL;
+  cursor->trx_if_known = nullptr;
 }
 
 /**
@@ -829,17 +825,17 @@ inline void btr_pcur_open_at_rnd_pos_func(
  * @param cursor The persistent cursor.
  */
 inline void btr_pcur_close(btr_pcur_t *cursor) {
-  if (cursor->old_rec_buf != NULL) {
+  if (cursor->old_rec_buf != nullptr) {
     mem_free(cursor->old_rec_buf);
-    cursor->old_rec = NULL;
-    cursor->old_rec_buf = NULL;
+    cursor->old_rec = nullptr;
+    cursor->old_rec_buf = nullptr;
   }
 
-  cursor->btr_cur.m_page_cur.rec = NULL;
-  cursor->btr_cur.m_page_cur.block = NULL;
-  cursor->old_rec = NULL;
+  cursor->btr_cur.m_page_cur.rec = nullptr;
+  cursor->btr_cur.m_page_cur.block = nullptr;
+  cursor->old_rec = nullptr;
   cursor->old_stored = BTR_PCUR_OLD_NOT_STORED;
   cursor->latch_mode = BTR_NO_LATCHES;
   cursor->pos_state = BTR_PCUR_NOT_POSITIONED;
-  cursor->trx_if_known = NULL;
+  cursor->trx_if_known = nullptr;
 }

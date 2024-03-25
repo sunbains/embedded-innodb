@@ -1332,7 +1332,8 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
 
 #ifdef UNIV_LINUX
   ib_logger(ib_stream, ", process no %lu", trx->client_process_no);
-#endif
+#endif /* UNIV_LINUX */
+
   ib_logger(ib_stream, ", OS thread id %lu", (ulong)os_thread_pf(trx->client_thread_id));
 
   if (*trx->op_info) {
