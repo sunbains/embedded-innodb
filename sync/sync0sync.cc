@@ -232,7 +232,7 @@ void sync_var_init() {
   mutex_spin_wait_count = 0;
   mutex_os_wait_count = 0;
   mutex_exit_count = 0;
-  sync_primary_wait_array = NULL;
+  sync_primary_wait_array = nullptr;
   sync_initialized = false;
 
 #ifdef UNIV_SYNC_DEBUG
@@ -244,42 +244,29 @@ void sync_var_init() {
 #endif /* UNIV_SYNC_DEBUG */
 }
 
-void mutex_create_func(
-  mutex_t *mutex,
-#ifdef UNIV_DEBUG
-  const char *cmutex_name,
-#ifdef UNIV_SYNC_DEBUG
-  ulint level,
-#endif /* UNIV_SYNC_DEBUG */
-#endif /* UNIV_DEBUG */
-  const char *cfile_name,
-  ulint cline) {
+void mutex_create(mutex_t *mutex, IF_DEBUG(const char *cmutex_name,) IF_SYNC_DEBUG(ulint level,) Source_location loc) {
   new (mutex) mutex_t;
 
   mutex->init();
 
-#ifdef UNIV_SYNC_DEBUG
-  mutex->file_name = "not yet reserved";
-  mutex->level = level;
-#endif /* UNIV_SYNC_DEBUG */
+  IF_SYNC_DEBUG(
+    mutex->file_name = "not yet reserved";
+    mutex->level = level;
+  )
 
-  mutex->cfile_name = cfile_name;
-  mutex->cline = cline;
+  IF_SYNC_DEBUG(
+    mutex->cfile_name = cfile_name;
+    mutex->cline = cline;
+  )
 
-#ifdef UNIV_DEBUG
-  mutex->cmutex_name = cmutex_name;
-#endif /* UNIV_DEBUG */
+  ut_d(mutex->cmutex_name = cmutex_name);
 
   /* Check that lock_word is aligned; this is important on Intel */
   ut_ad(((ulint)(&(mutex->lock_word))) % 4 == 0);
 
   /* NOTE! The very first mutexes are not put to the mutex list */
 
-  if (mutex == &mutex_list_mutex
-#ifdef UNIV_SYNC_DEBUG
-    || mutex == &sync_thread_mutex
-#endif /* UNIV_SYNC_DEBUG */
-  ) {
+  if (mutex == &mutex_list_mutex IF_SYNC_DEBUG(|| mutex == &sync_thread_mutex)) {
 
     return;
   }
@@ -311,13 +298,7 @@ void mutex_free(mutex_t *mutex) {
   ut_a(mutex_get_lock_word(mutex) == 0);
   ut_a(mutex_get_waiters(mutex) == 0);
 
-  if (
-    mutex != &mutex_list_mutex
-#ifdef UNIV_SYNC_DEBUG
-    && mutex != &sync_thread_mutex
-#endif /* UNIV_SYNC_DEBUG */
-  ) {
-
+  if (mutex != &mutex_list_mutex IF_SYNC_DEBUG(&& mutex != &sync_thread_mutex)) {
     mutex_enter(&mutex_list_mutex);
 
     ut_ad(!UT_LIST_GET_PREV(list, mutex) || UT_LIST_GET_PREV(list, mutex)->magic_n == MUTEX_MAGIC_N);
@@ -1150,12 +1131,7 @@ bool sync_thread_reset_level(void *latch) /*!< in: pointer to a mutex or an rw-l
 }
 #endif /* UNIV_SYNC_DEBUG */
 
-/** Initializes the synchronization data structures. */
 void sync_init() {
-#ifdef UNIV_SYNC_DEBUG
-  sync_thread_t *thread_slot;
-  ulint i;
-#endif /* UNIV_SYNC_DEBUG */
 
   ut_a(sync_initialized == false);
 
@@ -1166,64 +1142,60 @@ void sync_init() {
 
   sync_primary_wait_array = sync_array_create(OS_THREAD_MAX_N, SYNC_ARRAY_OS_MUTEX);
 
-#ifdef UNIV_SYNC_DEBUG
-  /* Create the thread latch level array where the latch levels
-  are stored for each OS thread */
+  IF_SYNC_DEBUG(
+    /* Create the thread latch level array where the latch levels
+    are stored for each OS thread */
 
-  sync_thread_level_arrays = ut_malloc(OS_THREAD_MAX_N * sizeof(sync_thread_t));
+    sync_thread_level_arrays = new sync_thread_t[OS_THREAD_MAX_N];
 
-  for (i = 0; i < OS_THREAD_MAX_N; i++) {
-
-    thread_slot = sync_thread_level_arrays_get_nth(i);
-    thread_slot->levels = NULL;
-  }
-#endif /* UNIV_SYNC_DEBUG */
+    for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
+      auto thread_slot = sync_thread_level_arrays_get_nth(i);
+      thread_slot->levels = nullptr;
+    }
+  )
 
   /* Init the mutex list and create the mutex to protect it. */
   UT_LIST_INIT(mutex_list);
-  mutex_create(&mutex_list_mutex, SYNC_NO_ORDER_CHECK);
+  mutex_create(&mutex_list_mutex, IF_DEBUG("mutex_list_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Source_location{});
 
-#ifdef UNIV_SYNC_DEBUG
-  mutex_create(&sync_thread_mutex, SYNC_NO_ORDER_CHECK);
-#endif /* UNIV_SYNC_DEBUG */
+  IF_SYNC_DEBUG(
+    mutex_create(&sync_thread_mutex, IF_DEBUG("sync_thread",) SYNC_NO_ORDER_CHECK, Source_location{});
+  )
 
   /* Init the rw-lock list and create the mutex to protect it. */
 
   UT_LIST_INIT(rw_lock_list);
-  mutex_create(&rw_lock_list_mutex, SYNC_NO_ORDER_CHECK);
+  mutex_create(&rw_lock_list_mutex, IF_DEBUG("rw_lock_list_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Source_location{});
 
-#ifdef UNIV_SYNC_DEBUG
-  mutex_create(&rw_lock_debug_mutex, SYNC_NO_ORDER_CHECK);
+  IF_SYNC_DEBUG(
+    mutex_create(&rw_lock_debug_mutex, "rw_lock_debug_mutex", SYNC_NO_ORDER_CHECK, Source_location{});
 
-  rw_lock_debug_event = os_event_create(NULL);
-  rw_lock_debug_m_waiters = false;
-#endif /* UNIV_SYNC_DEBUG */
+    rw_lock_debug_event = os_event_create(nullptr);
+    rw_lock_debug_m_waiters = false;
+  )
 }
 
-/** Frees the resources in InnoDB's own synchronization data structures. Use
-os_sync_free() after calling this. */
-
-void sync_close(void) {
-  mutex_t *mutex;
-
+void sync_close() {
   sync_array_free(sync_primary_wait_array);
 
-  mutex = UT_LIST_GET_FIRST(mutex_list);
-
-  while (mutex) {
+  for (auto mutex = UT_LIST_GET_FIRST(mutex_list);
+       mutex != nullptr;
+       mutex = UT_LIST_GET_FIRST(mutex_list)) {
     mutex_free(mutex);
-    mutex = UT_LIST_GET_FIRST(mutex_list);
   }
 
   mutex_free(&mutex_list_mutex);
 
-#ifdef UNIV_SYNC_DEBUG
-  mutex_free(&sync_thread_mutex);
-  sync_order_checks_on = false;
+  IF_SYNC_DEBUG(
+    mutex_free(&sync_thread_mutex);
+    sync_order_checks_on = false;
 
-  /* Switch latching order checks on in sync0sync.c */
-  sync_order_checks_on = false;
-#endif /* UNIV_SYNC_DEBUG */
+    /* Switch latching order checks on in sync0sync.c */
+    sync_order_checks_on = false;
+
+    delete {} sync_thread_level_arrays;
+    sync_thread_level_arrays = nullptr;
+  )
 
   sync_initialized = false;
 }
@@ -1252,22 +1224,18 @@ void sync_print_wait_info(ib_stream_t ib_stream) /*!< in: stream where to print 
 
   ib_logger(
     ib_stream,
-    "Spin rounds per wait: %.2f mutex, %.2f RW-shared, "
-    "%.2f RW-excl\n",
+    "Spin rounds per wait: %.2f mutex, %.2f RW-shared, %.2f RW-excl\n",
     (double)mutex_spin_round_count / (mutex_spin_wait_count ? mutex_spin_wait_count : 1),
     (double)rw_s_spin_round_count / (rw_s_spin_wait_count ? rw_s_spin_wait_count : 1),
     (double)rw_x_spin_round_count / (rw_x_spin_wait_count ? rw_x_spin_wait_count : 1)
   );
 }
 
-/** Prints info of the sync system. */
-void sync_print(ib_stream_t ib_stream) /*!< in: stream where to print */
-{
-#ifdef UNIV_SYNC_DEBUG
-  mutex_list_print_info(ib_stream);
-
-  rw_lock_list_print_info(ib_stream);
-#endif /* UNIV_SYNC_DEBUG */
+void sync_print(ib_stream_t ib_stream) {
+  IF_SYNC_DEBUG(
+    mutex_list_print_info(ib_stream);
+    rw_lock_list_print_info(ib_stream);
+  )
 
   sync_array_print_info(ib_stream, sync_primary_wait_array);
 

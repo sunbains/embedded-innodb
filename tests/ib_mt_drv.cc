@@ -181,7 +181,7 @@ static void create_test_table(tbl_class_t *tbl) /*!< in: table to create */
   ib_err_t err;
   cb_args_t args;
 
-  args.trx = NULL;
+  args.trx = nullptr;
   args.tbl = tbl;
   args.isolation_level = isolation_level;
   args.run_number = get_cur_run_number();
@@ -199,14 +199,14 @@ static void seed_test_table(tbl_class_t *tbl) /*!< in: table to populate */
   cb_args_t args;
   int i;
 
-  args.trx = NULL;
+  args.trx = nullptr;
   args.isolation_level = isolation_level;
   args.batch_size = 1;
   args.tbl = tbl;
 
   for (i = 0; i < n_rows; ++i) {
     trx = ib_trx_begin(ib_trx_level_t(isolation_level));
-    assert(trx != NULL);
+    assert(trx != nullptr);
 
     args.trx = trx;
     args.run_number = get_cur_run_number();
@@ -240,7 +240,7 @@ static void drop_test_tables(void) {
     cb_args_t args;
     tbl_class_t *tbl = &tbl_array[i];
 
-    args.trx = NULL;
+    args.trx = nullptr;
     args.tbl = tbl;
     args.isolation_level = isolation_level;
     args.err_st = &ddl_op_errs[DDL_OP_TYPE_DROP];
@@ -293,7 +293,7 @@ static void *dml_worker(void *dummy) /*!< in: unused */
   args.batch_size = batch_size;
   do {
     trx = ib_trx_begin(ib_trx_level_t(isolation_level));
-    assert(trx != NULL);
+    assert(trx != nullptr);
 
     /* choose a table randomly */
     tbl = &tbl_array[random() % num_tables];
@@ -324,7 +324,7 @@ static void *dml_worker(void *dummy) /*!< in: unused */
   } while (test_running);
 
   fprintf(stderr, "dml_worker done!\n");
-  return (NULL);
+  return (nullptr);
 }
 
 /** A DDL worker thread that performs a randomly chosen DDL operation on a
@@ -374,7 +374,7 @@ static void *ddl_worker(void *dummy) /*!< in: unused */
   } while (test_running);
 
   fprintf(stderr, "ddl_worker done!\n");
-  return (NULL);
+  return (nullptr);
 }
 
 /** Create worker threads */
@@ -383,17 +383,17 @@ static void create_worker_threads(void) {
   int i;
 
   dml_tid = (pthread_t *)malloc(sizeof(pthread_t) * n_dml_thr);
-  assert(dml_tid != NULL);
+  assert(dml_tid != nullptr);
 
   for (i = 0; i < n_dml_thr; ++i) {
-    rc = pthread_create(&dml_tid[i], NULL, dml_worker, NULL);
+    rc = pthread_create(&dml_tid[i], nullptr, dml_worker, nullptr);
     assert(!rc);
   }
 
   ddl_tid = (pthread_t *)malloc(sizeof(pthread_t) * n_ddl_thr);
-  assert(ddl_tid != NULL);
+  assert(ddl_tid != nullptr);
   for (i = 0; i < n_ddl_thr; ++i) {
-    rc = pthread_create(&ddl_tid[i], NULL, ddl_worker, NULL);
+    rc = pthread_create(&ddl_tid[i], nullptr, ddl_worker, nullptr);
     assert(!rc);
   }
 }
@@ -403,7 +403,7 @@ static void
 init_err_op_struct(op_err_t *st) /*!< in/out: struct to initialize */
 {
   st->clear();
-  auto rc = pthread_mutex_init(&st->mutex, NULL);
+  auto rc = pthread_mutex_init(&st->mutex, nullptr);
   assert(!rc);
 }
 
@@ -511,7 +511,7 @@ static void check_test_tables(void) {
     ib_err_t err;
 
     trx = ib_trx_begin(ib_trx_level_t(isolation_level));
-    assert(trx != NULL);
+    assert(trx != nullptr);
 
     tbl = &tbl_array[i];
     args.tbl = tbl;
@@ -536,7 +536,7 @@ int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  srandom(time(NULL));
+  srandom(time(nullptr));
 
   err = ib_init();
   assert(err == DB_SUCCESS);

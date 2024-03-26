@@ -2242,7 +2242,7 @@ static bool btr_index_page_validate(
       break;
     }
 
-    if (!btr_index_rec_validate(cur.rec, dict_index, true)) {
+    if (!btr_index_rec_validate(cur.m_rec, dict_index, true)) {
 
       return (false);
     }

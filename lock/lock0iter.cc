@@ -67,7 +67,7 @@ const lock_t *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter) {
       ut_error;
   }
 
-  if (prev_lock != NULL) {
+  if (prev_lock != nullptr) {
 
     iter->current_lock = prev_lock;
   }

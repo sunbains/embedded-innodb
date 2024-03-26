@@ -72,8 +72,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t ib_idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -128,7 +128,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -156,10 +156,10 @@ static ib_err_t
 insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 {
   ib_err_t err;
-  ib_tpl_t tpl = NULL;
+  ib_tpl_t tpl = nullptr;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   err = ib_col_set_value(tpl, 0, "abcdefghij", 10);
   assert(err == DB_SUCCESS);
@@ -198,7 +198,7 @@ static ib_err_t do_query(ib_crsr_t crsr) {
   ib_tpl_t tpl;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   err = ib_cursor_first(crsr);
   assert(err == DB_SUCCESS);
@@ -221,10 +221,10 @@ static ib_err_t do_query(ib_crsr_t crsr) {
            err == DB_RECORD_NOT_FOUND);
 
     tpl = ib_tuple_clear(tpl);
-    assert(tpl != NULL);
+    assert(tpl != nullptr);
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -259,7 +259,7 @@ int main(int argc, char *argv[]) {
 
   printf("Begin transaction\n");
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   printf("Open cursor\n");
   err = open_table(DATABASE, TABLE, ib_trx, &crsr);
@@ -280,7 +280,7 @@ int main(int argc, char *argv[]) {
   printf("Close cursor\n");
   err = ib_cursor_close(crsr);
   assert(err == DB_SUCCESS);
-  crsr = NULL;
+  crsr = nullptr;
 
   printf("Commit transaction\n");
   err = ib_trx_commit(ib_trx);

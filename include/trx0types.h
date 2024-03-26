@@ -23,12 +23,11 @@ Place, Suite 330, Boston, MA 02111-1307 USA
  Created 3/26/1996 Heikki Tuuri
  *******************************************************/
 
-#ifndef trx0types_h
-#define trx0types_h
+#pragma once
 
 #include "ut0byte.h"
 
-/** prepare trx_t::id for being printed via printf(3) */
+/** Prepare trx_t::id for being printed via printf(3) */
 #define TRX_ID_PREP_PRINTF(id) id
 
 /** printf(3) format used for printing TRX_ID_PRINTF_PREP() */
@@ -36,82 +35,94 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 /** maximum length that a formatted trx_t::id could take, not including
 the terminating NUL character. */
-#define TRX_ID_MAX_LEN 17
+constexpr ulint TRX_ID_MAX_LEN  = 17;
 
-/** Memory objects */
-/* @{ */
 /** Transaction */
-typedef struct trx_struct trx_t;
-/** Transaction system */
-typedef struct trx_sys_struct trx_sys_t;
-/** Doublewrite information */
-typedef struct trx_doublewrite_struct trx_doublewrite_t;
-/** Signal */
-typedef struct trx_sig_struct trx_sig_t;
-/** Rollback segment */
-typedef struct trx_rseg_struct trx_rseg_t;
-/** Transaction undo log */
-typedef struct trx_undo_struct trx_undo_t;
-/** Array of undo numbers of undo records being rolled back or purged */
-typedef struct trx_undo_arr_struct trx_undo_arr_t;
-/** A cell of trx_undo_arr_t */
-typedef struct trx_undo_inf_struct trx_undo_inf_t;
-/** The control structure used in the purge operation */
-typedef struct trx_purge_struct trx_purge_t;
-/** Rollback command node in a query graph */
-typedef struct roll_node_struct roll_node_t;
-/** Commit command node in a query graph */
-typedef struct commit_node_struct commit_node_t;
-/** SAVEPOINT command node in a query graph */
-typedef struct trx_named_savept_struct trx_named_savept_t;
+struct trx_t;
 
-/* @} */
+/** Transaction system */
+struct trx_sys_t;
+
+/** Doublewrite information */
+struct trx_doublewrite_t;
+
+/** Signal */
+struct trx_sig_t;
+
+/** Rollback segment */
+struct trx_rseg_t;
+
+/** Transaction undo log */
+struct trx_undo_t;
+
+/** Array of undo numbers of undo records being rolled back or purged */
+struct trx_undo_arr_t;
+
+/** A cell of trx_undo_arr_t */
+struct trx_undo_inf_t;
+
+/** The control structure used in the purge operation */
+struct trx_purge_t;
+
+/** Rollback command node in a query graph */
+struct roll_node_t;
+
+/** Commit command node in a query graph */
+struct commit_node_t;
+
+/** SAVEPOINT command node in a query graph */
+struct trx_named_savept_t;
+
+/** Transaction savepoint */
+struct trx_savept_t;
 
 /** Rollback contexts */
 enum trx_rb_ctx {
-  RB_NONE = 0, /*!< no rollback */
-  RB_NORMAL,   /*!< normal rollback */
+   /** No rollback */
+  RB_NONE = 0,
+
+  /** Normal rollback */
+  RB_NORMAL,
+
+  /** Rolling back an incomplete transaction, in crash recovery, rolling back
+  an INSERT that was performed by updating a delete-marked record; if the
+  delete-marked record no longer exists in an active read view, it will
+  be purged. */
   RB_RECOVERY_PURGE_REC,
-  /*!< rolling back an incomplete transaction,
-  in crash recovery, rolling back an
-  INSERT that was performed by updating a
-  delete-marked record; if the delete-marked record
-  no longer exists in an active read view, it will
-  be purged */
-  RB_RECOVERY /*!< rolling back an incomplete transaction,
-              in crash recovery */
+
+ /** Rolling back an incomplete transaction, in crash recovery */
+  RB_RECOVERY
 };
 
 /** Transaction identifier (DB_TRX_ID, DATA_TRX_ID) */
-typedef uint64_t trx_id_t;
+using trx_id_t = uint64_t;
+
 /** Rollback pointer (DB_ROLL_PTR, DATA_ROLL_PTR) */
-typedef uint64_t roll_ptr_t;
+using roll_ptr_t = uint64_t;
+
 /** Undo number */
-typedef uint64_t undo_no_t;
+using undo_no_t = uint64_t;
 
 /** Transaction savepoint */
-typedef struct trx_savept_struct trx_savept_t;
-
-/** Transaction savepoint */
-struct trx_savept_struct {
-  undo_no_t least_undo_no; /*!< least undo number to undo */
+struct trx_savept_t {
+   /** Least undo number to undo */
+  undo_no_t least_undo_no;
 };
 
-/** File objects */
-/* @{ */
 /** Transaction system header */
-typedef byte trx_sysf_t;
+using trx_sysf_t = byte;
+
 /** Rollback segment header */
-typedef byte trx_rsegf_t;
+using trx_rsegf_t = byte;
+
 /** Undo segment header */
-typedef byte trx_usegf_t;
+using trx_usegf_t = byte;
+
 /** Undo log header */
-typedef byte trx_ulogf_t;
+using trx_ulogf_t = byte;
+
 /** Undo log page header */
-typedef byte trx_upagef_t;
+using trx_upagef_t = byte;
 
 /** Undo log record */
-typedef byte trx_undo_rec_t;
-/* @} */
-
-#endif
+using trx_undo_rec_t = byte;

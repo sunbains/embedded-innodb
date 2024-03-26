@@ -79,7 +79,7 @@ db_err row_ins_index_entry(
 
 /** Inserts a row to a table. This is a high-level function used in
 SQL execution graphs.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 que_thr_t *row_ins_step(que_thr_t *thr); /*!< in: query thread */
 
 /** Creates an entry template for each index of a table. */
@@ -95,11 +95,11 @@ struct ins_node_struct {
   que_node_t *values_list; /* list of expressions to evaluate and
                        insert in an INS_VALUES insert */
   ulint state;             /*!< node execution state */
-  dict_index_t *index;     /*!< NULL, or the next index where the index
+  dict_index_t *index;     /*!< nullptr, or the next index where the index
                            entry should be inserted */
-  dtuple_t *entry;         /*!< NULL, or entry to insert in the index;
+  dtuple_t *entry;         /*!< nullptr, or entry to insert in the index;
                            after a successful insert of the entry,
-                           this should be reset to NULL */
+                           this should be reset to nullptr */
   UT_LIST_BASE_NODE_T(dtuple_t, tuple_list)
       entry_list;       /* list of entries, one for each index */
   byte *row_id_buf; /* buffer for the row id sys field in row */
@@ -109,7 +109,7 @@ struct ins_node_struct {
   mem_heap_t *entry_sys_heap;
   /* memory heap used as auxiliary storage;
   entry_list and sys fields are stored here;
-  if this is NULL, entry list should be created
+  if this is nullptr, entry list should be created
   and buffers for sys fields in row allocated */
   ulint magic_n;
 };

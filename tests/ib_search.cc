@@ -83,8 +83,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t ib_idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
 #ifdef __WIN__
@@ -137,7 +137,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -169,11 +169,11 @@ static ib_err_t
 insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 {
   row_t *row;
-  ib_tpl_t tpl = NULL;
+  ib_tpl_t tpl = nullptr;
   ib_err_t err = DB_ERROR;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   for (row = in_rows; *row->c1; ++row) {
     err = ib_col_set_value(tpl, 0, row->c1, strlen(row->c1));
@@ -189,7 +189,7 @@ insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
     assert(err == DB_SUCCESS);
   }
 
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
   ib_tuple_delete(tpl);
 
   return (err);
@@ -205,7 +205,7 @@ static ib_err_t do_moveto1(ib_crsr_t crsr) {
 
   /* Create a tuple for searching an index. */
   key_tpl = ib_sec_search_tuple_create(crsr);
-  assert(key_tpl != NULL);
+  assert(key_tpl != nullptr);
 
   /* Set the value to move to. */
   err = ib_col_set_value(key_tpl, 0, "abc", 3);
@@ -248,7 +248,7 @@ static ib_err_t do_moveto2(ib_crsr_t crsr) {
 
   /* Create a tuple for searching an index. */
   key_tpl = ib_sec_search_tuple_create(crsr);
-  assert(key_tpl != NULL);
+  assert(key_tpl != nullptr);
 
   /* Set the value to move to. */
   err = ib_col_set_value(key_tpl, 0, "abc", 3);
@@ -277,7 +277,7 @@ static bool do_select2(ib_tpl_t tpl) {
   c1 = (const char *)ib_col_get_value(tpl, 0);
 
   /* There are no SQL_NULL values in our test data. */
-  assert(c1 != NULL);
+  assert(c1 != nullptr);
 
   if (strncmp(c1, "abc", 3) == 0) {
     print_tuple(stdout, tpl);
@@ -298,7 +298,7 @@ static ib_err_t do_moveto3(ib_crsr_t crsr) {
 
   /* Create a tuple for searching an index. */
   key_tpl = ib_sec_search_tuple_create(crsr);
-  assert(key_tpl != NULL);
+  assert(key_tpl != nullptr);
 
   /* Set the value to move to. */
   err = ib_col_set_value(key_tpl, 0, "g", 1);
@@ -327,7 +327,7 @@ static bool do_select3(ib_tpl_t tpl) {
   c1 = (const char *)ib_col_get_value(tpl, 0);
 
   /* There are no SQL_NULL values in our test data. */
-  assert(c1 != NULL);
+  assert(c1 != nullptr);
 
   if (strncmp(c1, "g", 1) >= 0) {
     print_tuple(stdout, tpl);
@@ -348,7 +348,7 @@ static ib_err_t do_moveto4(ib_crsr_t crsr) {
 
   /* Create a tuple for searching an index. */
   key_tpl = ib_sec_search_tuple_create(crsr);
-  assert(key_tpl != NULL);
+  assert(key_tpl != nullptr);
 
   /* Set the value to move to. */
   err = ib_col_set_value(key_tpl, 0, "mno", 3);
@@ -383,8 +383,8 @@ static bool do_select4(ib_tpl_t tpl) {
   c2 = (const char *)ib_col_get_value(tpl, 1);
 
   /* There are no SQL_NULL values in our test data. */
-  assert(c1 != NULL);
-  assert(c2 != NULL);
+  assert(c1 != nullptr);
+  assert(c2 != nullptr);
 
   if (strncmp(c1, "mno", 3) == 0 && strncmp(c2, "x", 1) >= 0) {
     print_tuple(stdout, tpl);
@@ -405,7 +405,7 @@ static ib_err_t do_moveto5(ib_crsr_t crsr) {
 
   /* Create a tuple for searching an index. */
   key_tpl = ib_sec_search_tuple_create(crsr);
-  assert(key_tpl != NULL);
+  assert(key_tpl != nullptr);
 
   /* Set the value to move to. */
   err = ib_col_set_value(key_tpl, 0, "mno", 3);
@@ -432,13 +432,13 @@ static ib_err_t do_moveto5(ib_crsr_t crsr) {
 static ib_err_t do_query(ib_crsr_t crsr, ib_err_t (*moveto)(ib_crsr_t),
                          bool (*select_func)(ib_tpl_t)) {
   ib_err_t err;
-  ib_tpl_t tpl = NULL;
+  ib_tpl_t tpl = nullptr;
 
   err = moveto(crsr);
 
   if (err == DB_SUCCESS) {
     tpl = ib_clust_read_tuple_create(crsr);
-    assert(tpl != NULL);
+    assert(tpl != nullptr);
   }
 
   while (err == DB_SUCCESS) {
@@ -461,10 +461,10 @@ static ib_err_t do_query(ib_crsr_t crsr, ib_err_t (*moveto)(ib_crsr_t),
            err == DB_RECORD_NOT_FOUND);
 
     tpl = ib_tuple_clear(tpl);
-    assert(tpl != NULL);
+    assert(tpl != nullptr);
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -503,7 +503,7 @@ int main(int argc, char *argv[]) {
   assert(err == DB_SUCCESS);
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   err = open_table(DATABASE, TABLE, ib_trx, &crsr);
   assert(err == DB_SUCCESS);
@@ -527,12 +527,12 @@ int main(int argc, char *argv[]) {
   assert(err == DB_SUCCESS);
 
   /* There should be no records to select, pass NULL. */
-  err = do_query(crsr, do_moveto5, NULL);
+  err = do_query(crsr, do_moveto5, nullptr);
   assert(err == DB_SUCCESS);
 
   err = ib_cursor_close(crsr);
   assert(err == DB_SUCCESS);
-  crsr = NULL;
+  crsr = nullptr;
 
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);

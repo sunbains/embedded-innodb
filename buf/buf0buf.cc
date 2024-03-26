@@ -517,7 +517,7 @@ void Buf_pool::block_init(buf_block_t *block, byte *frame) {
   ut_d(block->m_page.m_in_free_list = false);
   ut_d(block->m_page.m_in_LRU_list = false);
 
-  mutex_create(&block->m_mutex, SYNC_BUF_BLOCK);
+  mutex_create(&block->m_mutex, IF_DEBUG("block_mutex",) IF_SYNC_DEBUG(SYNC_BUF_BLOCK,) Source_location{});
 
   rw_lock_create(&block->m_rw_lock, SYNC_LEVEL_VARYING);
   ut_ad(rw_lock_validate(&(block->m_rw_lock)));
@@ -630,7 +630,7 @@ bool Buf_pool::open(uint64_t pool_size) {
 
   /* 1. Initialize general fields
   ------------------------------- */
-  mutex_create(&buf_pool_mutex, SYNC_BUF_POOL);
+  mutex_create(&buf_pool_mutex, IF_DEBUG("buffer_pool",) IF_SYNC_DEBUG(SYNC_BUF_POOL,) Source_location{});
 
   buf_pool_mutex_enter();
 

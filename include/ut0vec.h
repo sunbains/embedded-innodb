@@ -124,7 +124,7 @@ inline void *ib_vector_pop(ib_vector_t *vec) /*!< in/out: vector */
   --vec->used;
   elem = vec->data[vec->used];
 
-  ut_d(vec->data[vec->used] = NULL);
+  ut_d(vec->data[vec->used] = nullptr);
   UNIV_MEM_INVALID(&vec->data[vec->used], sizeof(*vec->data));
 
   return (elem);

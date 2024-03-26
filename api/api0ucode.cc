@@ -27,16 +27,16 @@ Determines the connection character set.
 @return	connection character set */
 
 const charset_t *ib_ucode_get_connection_charset(void) {
-  return (NULL);
+  return (nullptr);
 }
 
 /** Determines the character set based on id.
 FIXME: If the id can't be found then what do we do, return some default ?
-@return	character set or NULL */
+@return	character set or nullptr */
 
 const charset_t *ib_ucode_get_charset(ulint id) /*!< in: Charset-collation code */
 {
-  return (NULL);
+  return (nullptr);
 }
 
 /** Get the variable length bounds of the given (multibyte) character set. */

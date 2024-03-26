@@ -27,7 +27,7 @@ dyn_block_t *dyn_array_add_block(dyn_array_t *arr) {
   ut_ad(arr);
   ut_ad(arr->magic_n == DYN_BLOCK_MAGIC_N);
 
-  if (arr->heap == NULL) {
+  if (arr->heap == nullptr) {
     UT_LIST_INIT(arr->base);
     UT_LIST_ADD_FIRST(arr->base, arr);
 

@@ -60,7 +60,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
 #ifdef __WIN__
@@ -90,7 +90,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
   }
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   /* Open and close the cursor. */
   for (i = 0; i < 10; i++) {
@@ -154,7 +154,7 @@ int main(int argc, char *argv[]) {
 
     err = ib_cursor_close(crsr);
     assert(err == DB_SUCCESS);
-    crsr = NULL;
+    crsr = nullptr;
   }
 
   err = ib_trx_commit(ib_trx);

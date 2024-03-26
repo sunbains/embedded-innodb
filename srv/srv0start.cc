@@ -969,7 +969,7 @@ static db_err open_or_create_data_files(
 
   ios = 0;
 
-  mutex_create(&ios_mutex, SYNC_NO_ORDER_CHECK);
+  mutex_create(&ios_mutex, IF_DEBUG("ios_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Source_location{});
 
   return DB_SUCCESS;
 }
@@ -1653,7 +1653,7 @@ static bool srv_threads_try_shutdown(OS_cond* lock_timeout_thread_event) {
 
   os_mutex_enter(os_sync_mutex);
 
-  if (os_thread_count == 0) {
+  if (os_thread_count.load(std::memory_order_relaxed) == 0) {
     /* All the threads have exited or are just exiting;
     NOTE that the threads may not have completed their
     exit yet. Should we use pthread_join() to make sure
@@ -1678,12 +1678,10 @@ static bool srv_threads_try_shutdown(OS_cond* lock_timeout_thread_event) {
 to the signaled state. Then the threads will exit themselves in
 os_thread_event_wait().
 @return	true if all threads exited. */
-static bool srv_threads_shutdown(void) {
-  ulint i;
-
+static bool srv_threads_shutdown() {
   srv_shutdown_state = SRV_SHUTDOWN_EXIT_THREADS;
 
-  for (i = 0; i < 1000; i++) {
+  for (ulint i = 0; i < 1000; i++) {
 
     if (srv_threads_try_shutdown(srv_lock_timeout_thread_event)) {
 
@@ -1693,19 +1691,14 @@ static bool srv_threads_shutdown(void) {
 
   ib_logger(
     ib_stream,
-    "Warning: %lu threads created by InnoDB"
-    " had not exited at shutdown!\n",
-    (ulong)os_thread_count
+    "Warning: %lu threads created by InnoDB had not exited at shutdown!",
+    (ulong)os_thread_count.load(std::memory_order_relaxed)
   );
 
   return false;
 }
 
-/** Shuts down the InnoDB database.
-@return	DB_SUCCESS or error code */
-
-enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
-{
+db_err innobase_shutdown(ib_shutdown_t shutdown) {
   if (!srv_was_started) {
     if (srv_is_being_started) {
       ut_print_timestamp(ib_stream);
@@ -1735,11 +1728,9 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
     ut_print_timestamp(ib_stream);
     ib_logger(
       ib_stream,
-      "  User has requested a very fast shutdown"
-      " without flushing "
-      "the InnoDB buffer pool to data files."
-      " At the next startup "
-      "InnoDB will do a crash recovery!\n"
+      "User has requested a very fast shutdown without flushing"
+      "the InnoDB buffer pool to data files. At the next startup"
+      " InnoDB will do a crash recovery!"
     );
   }
 
@@ -1798,11 +1789,9 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
   if (os_thread_count != 0 || os_event_count != 0 || os_mutex_count != 0 || os_fast_mutex_count != 0) {
     ib_logger(
       ib_stream,
-      "Warning: some resources were not"
-      " cleaned up in shutdown:\n"
-      "threads %lu, events %lu,"
-      " os_mutexes %lu, os_fast_mutexes %lu\n",
-      (ulong)os_thread_count,
+      "Warning: some resources were not cleaned up in shutdown:"
+      " threads %lu, events %lu, os_mutexes %lu, os_fast_mutexes %lu\n",
+      (ulong)os_thread_count.load(),
       (ulong)os_event_count,
       (ulong)os_mutex_count,
       (ulong)os_fast_mutex_count
@@ -1817,8 +1806,7 @@ enum db_err innobase_shutdown(ib_shutdown_t shutdown) /*!< in: shutdown flag */
     ut_print_timestamp(ib_stream);
     ib_logger(
       ib_stream,
-      "  Shutdown completed;"
-      " log sequence number %lu\n",
+      " Shutdown completed; log sequence number %lu\n",
       srv_shutdown_lsn
     );
   }

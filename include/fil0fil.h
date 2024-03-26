@@ -153,7 +153,7 @@ created does not exist, then we create the directory, too.
 
 Note that ibbackup --apply-log sets fil_path_to_client_datadir to point to the
 datadir that we should use in replaying the file operations.
-@return end of log record, or NULL if the record was not completely
+@return end of log record, or nullptr if the record was not completely
 contained between ptr and end_ptr
 
 @param[in] ptr                  buffer containing the log record body,
@@ -191,7 +191,7 @@ tablespace memory cache.
 
 @param[in] old_name             Old table name in the standard
                                 databasename/tablename format of
-                                InnoDB, or NULL if we do the rename
+                                InnoDB, or nullptr if we do the rename
                                 based on the space id only
 @param[in] id                   Tablepace id
 @param[in] new_name             New table name in the standard

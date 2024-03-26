@@ -189,7 +189,7 @@ void thr_local_init(void) {
 
   thr_local_hash = hash_create(OS_THREAD_MAX_N + 100);
 
-  mutex_create(&thr_local_mutex, SYNC_THR_LOCAL);
+  mutex_create(&thr_local_mutex, IF_DEBUG("thr_local_mutex",) IF_SYNC_DEBUG(SYNC_THR_LOCAL,) Source_location{});
 }
 
 void thr_local_close() {

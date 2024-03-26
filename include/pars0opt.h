@@ -48,7 +48,7 @@ void opt_find_all_cols(
   dict_index_t *index,       /*!< in: index to use */
   sym_node_list_t *col_list, /*!< in: base node of a list where
                                to add new found columns */
-  plan_t *plan,              /*!< in: plan or NULL */
+  plan_t *plan,              /*!< in: plan or nullptr */
   que_node_t *exp
 ); /*!< in: expression or condition */
 

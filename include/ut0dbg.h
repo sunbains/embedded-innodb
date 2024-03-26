@@ -27,41 +27,12 @@ Created 1/30/1994 Heikki Tuuri
 
 #include "os0thread.h"
 
-#if defined(__GNUC__) && (__GNUC__ > 2)
 /** Test if an assertion fails.
 @param EXPR	assertion expression
 @return		nonzero if EXPR holds, zero if not */
 #define UT_DBG_FAIL(EXPR) unlikely(!((bool)(EXPR)))
-#else
-/** This is used to eliminate compiler warnings */
-extern ulint ut_dbg_zero;
-/** Test if an assertion fails.
-@param EXPR	assertion expression
-@return		nonzero if EXPR holds, zero if not */
-#define UT_DBG_FAIL(EXPR) !((ulint)(EXPR) + ut_dbg_zero)
-#endif
-
-#if __STDC_VERSION__ < 199901L
-#if __GNUC__ >= 2
-#define __func__ __FUNCTION__
-#else
-#define __func__ "<unknown>"
-#endif
-#endif
-
-#define UT_DBG_PRINT_FUNC printf("%s\n", __func__)
-
-/* you must #define UT_DBG_ENTER_FUNC_ENABLED to something before
-using this macro */
-#define UT_DBG_ENTER_FUNC            \
-  do {                               \
-    if (UT_DBG_ENTER_FUNC_ENABLED) { \
-      UT_DBG_PRINT_FUNC;             \
-    }                                \
-  } while (0)
 
 /** Report a failed assertion. */
-
 void ut_dbg_assertion_failed(
   const char *expr, /*!< in: the failed assertion */
   const char *file, /*!< in: source file containing the assertion */

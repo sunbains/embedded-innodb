@@ -33,11 +33,7 @@ Created 02/03/2009 Sunny Bains
 #include "row0ins.h"
 #include "row0merge.h"
 
-/** Create a prebuilt struct for a user table handle.
-@return	own: a prebuilt struct */
-
-row_prebuilt_t *row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table handle */
-{
+row_prebuilt_t *row_prebuilt_create(dict_table_t *table) {
   ulint sz;
   dtuple_t *ref;
   ulint ref_len;
@@ -56,8 +52,8 @@ row_prebuilt_t *row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table
 
   prebuilt->sql_stat_start = true;
 
-  prebuilt->pcur = btr_pcur_create();
-  prebuilt->clust_pcur = btr_pcur_create();
+  prebuilt->pcur = new (std::nothrow) btr_pcur_t();
+  prebuilt->clust_pcur = new (std::nothrow) btr_pcur_t();
 
   prebuilt->select_lock_type = LOCK_NONE;
 
@@ -90,16 +86,7 @@ row_prebuilt_t *row_prebuilt_create(dict_table_t *table) /*!< in: Innobase table
   return (prebuilt);
 }
 
-/** Free a prebuilt struct for a user table handle. */
-
-void row_prebuilt_free(
-  row_prebuilt_t *prebuilt, /*!< in, own: prebuilt struct */
-  bool dict_locked
-) /*!< in: true if dict was locked */
-{
-  ulint i;
-  ib_row_cache_t *row_cache;
-
+void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
   if (prebuilt->magic_n != ROW_PREBUILT_ALLOCATED || prebuilt->magic_n2 != ROW_PREBUILT_ALLOCATED) {
     ib_logger(
       ib_stream,
@@ -109,7 +96,7 @@ void row_prebuilt_free(
       (ulong)prebuilt->magic_n,
       (ulong)prebuilt->magic_n2
     );
-    ut_print_name(ib_stream, NULL, true, prebuilt->table->name);
+    ut_print_name(ib_stream, nullptr, true, prebuilt->table->name);
     ib_logger(ib_stream, "\n");
 
     ut_error;
@@ -118,8 +105,8 @@ void row_prebuilt_free(
   prebuilt->magic_n = ROW_PREBUILT_FREED;
   prebuilt->magic_n2 = ROW_PREBUILT_FREED;
 
-  btr_pcur_free(prebuilt->pcur);
-  btr_pcur_free(prebuilt->clust_pcur);
+  delete prebuilt->pcur;
+  delete prebuilt->clust_pcur;
 
   if (prebuilt->sel_graph) {
     que_graph_free_recursive(prebuilt->sel_graph);
@@ -129,29 +116,26 @@ void row_prebuilt_free(
     mem_heap_free(prebuilt->old_vers_heap);
   }
 
-  row_cache = &prebuilt->row_cache;
+  auto row_cache = &prebuilt->row_cache;
 
-  for (i = 0; i < row_cache->n_max; i++) {
+  for (ulint i = 0; i < row_cache->n_max; i++) {
     ib_cached_row_t *row = &row_cache->ptr[i];
 
-    if (row->ptr != NULL) {
+    if (row->ptr != nullptr) {
       mem_free(row->ptr);
     }
   }
 
   mem_heap_free(row_cache->heap);
 
-  if (prebuilt->table != NULL) {
+  if (prebuilt->table != nullptr) {
     dict_table_decrement_handle_count(prebuilt->table, dict_locked);
   }
 
   mem_heap_free(prebuilt->heap);
 }
 
-/** Reset a prebuilt struct for a user table handle. */
-
-void row_prebuilt_reset(row_prebuilt_t *prebuilt) /*!< in/out: prebuilt struct */
-{
+void row_prebuilt_reset(row_prebuilt_t *prebuilt) {
   ut_a(prebuilt->magic_n == ROW_PREBUILT_ALLOCATED);
   ut_a(prebuilt->magic_n2 == ROW_PREBUILT_ALLOCATED);
 
@@ -166,13 +150,13 @@ void row_prebuilt_reset(row_prebuilt_t *prebuilt) /*!< in/out: prebuilt struct *
 
   if (prebuilt->old_vers_heap) {
     mem_heap_free(prebuilt->old_vers_heap);
-    prebuilt->old_vers_heap = NULL;
+    prebuilt->old_vers_heap = nullptr;
   }
 
-  prebuilt->trx = NULL;
+  prebuilt->trx = nullptr;
 
   if (prebuilt->sel_graph) {
-    prebuilt->sel_graph->trx = NULL;
+    prebuilt->sel_graph->trx = nullptr;
   }
 }
 
@@ -184,7 +168,7 @@ void row_prebuilt_update_trx(
   trx_t *trx
 ) /*!< in: transaction handle */
 {
-  ut_a(trx != NULL);
+  ut_a(trx != nullptr);
 
   if (trx->magic_n != TRX_MAGIC_N) {
     ib_logger(
@@ -202,7 +186,7 @@ void row_prebuilt_update_trx(
       "table handle. Magic n %lu, table name",
       (ulong)prebuilt->magic_n
     );
-    ut_print_name(ib_stream, NULL, true, prebuilt->table->name);
+    ut_print_name(ib_stream, nullptr, true, prebuilt->table->name);
     ib_logger(ib_stream, "\n");
 
     ut_error;

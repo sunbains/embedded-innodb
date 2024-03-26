@@ -70,23 +70,23 @@ que_thr_t *if_step(que_thr_t *thr) {
 
         elsif_node = (elsif_node_t *)que_node_get_next(elsif_node);
 
-        if (elsif_node == NULL) {
-          thr->run_node = NULL;
+        if (elsif_node == nullptr) {
+          thr->run_node = nullptr;
 
           break;
         }
       }
     } else {
-      thr->run_node = NULL;
+      thr->run_node = nullptr;
     }
   } else {
     /* Move to the next statement */
-    ut_ad(que_node_get_next(thr->prev_node) == NULL);
+    ut_ad(que_node_get_next(thr->prev_node) == nullptr);
 
-    thr->run_node = NULL;
+    thr->run_node = nullptr;
   }
 
-  if (thr->run_node == NULL) {
+  if (thr->run_node == nullptr) {
     thr->run_node = que_node_get_parent(node);
   }
 
@@ -94,7 +94,7 @@ que_thr_t *if_step(que_thr_t *thr) {
 }
 
 /** Performs an execution step of a while-statement node.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 
 que_thr_t *while_step(que_thr_t *thr) /*!< in: query thread */
 {
@@ -103,7 +103,7 @@ que_thr_t *while_step(que_thr_t *thr) /*!< in: query thread */
   auto node = (while_node_t *)thr->run_node;
   ut_ad(que_node_get_type(node) == QUE_NODE_WHILE);
 
-  ut_ad((thr->prev_node == que_node_get_parent(node)) || (que_node_get_next(thr->prev_node) == NULL));
+  ut_ad((thr->prev_node == que_node_get_parent(node)) || (que_node_get_next(thr->prev_node) == nullptr));
 
   /* Evaluate the condition */
 
@@ -123,7 +123,7 @@ que_thr_t *while_step(que_thr_t *thr) /*!< in: query thread */
 }
 
 /** Performs an execution step of an assignment statement node.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 
 que_thr_t *assign_step(que_thr_t *thr) /*!< in: query thread */
 {
@@ -144,7 +144,7 @@ que_thr_t *assign_step(que_thr_t *thr) /*!< in: query thread */
 }
 
 /** Performs an execution step of a for-loop node.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 
 que_thr_t *for_step(que_thr_t *thr) /*!< in: query thread */
 {
@@ -164,7 +164,7 @@ que_thr_t *for_step(que_thr_t *thr) /*!< in: query thread */
     /* Move to the next statement */
     thr->run_node = que_node_get_next(thr->prev_node);
 
-    if (thr->run_node != NULL) {
+    if (thr->run_node != nullptr) {
 
       return (thr);
     }
@@ -200,7 +200,7 @@ que_thr_t *for_step(que_thr_t *thr) /*!< in: query thread */
 }
 
 /** Performs an execution step of an exit statement node.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 
 que_thr_t *exit_step(que_thr_t *thr) /*!< in: query thread */
 {
@@ -227,7 +227,7 @@ que_thr_t *exit_step(que_thr_t *thr) /*!< in: query thread */
 }
 
 /** Performs an execution step of a return-statement node.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 
 que_thr_t *return_step(que_thr_t *thr) /*!< in: query thread */
 {

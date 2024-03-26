@@ -122,7 +122,7 @@ int trx_recover(
 #ifdef WITH_XOPEN
 /** This function is used to find one X/Open XA distributed transaction
 which is in the prepared state
-@return	trx or NULL */
+@return	trx or nullptr */
 trx_t *trx_get_trx_by_xid(XID *xid); /*!< in: X/Open XA transaction identification */
 #endif /* WITH_XOPEN */
 
@@ -152,17 +152,17 @@ void trx_sig_send(
   ulint sender,            /*!< in: TRX_SIG_SELF or
                              TRX_SIG_OTHER_SESS */
   que_thr_t *receiver_thr, /*!< in: query thread which wants the
-                             reply, or NULL; if type is
-                             TRX_SIG_END_WAIT, this must be NULL */
+                             reply, or nullptr; if type is
+                             TRX_SIG_END_WAIT, this must be nullptr */
   trx_savept_t *savept,    /*!< in: possible rollback savepoint, or
-                             NULL */
+                             nullptr */
   que_thr_t **next_thr
 ); /*!< in/out: next query thread to run;
                              if the value which is passed in is
-                             a pointer to a NULL pointer, then the
+                             a pointer to a nullptr pointer, then the
                              calling function can start running
                              a new query thread; if the parameter
-                             is NULL, it is ignored */
+                             is nullptr, it is ignored */
 
 /** Send the reply message when a signal in the queue of the trx has
 been handled. */
@@ -171,7 +171,7 @@ void trx_sig_reply(
   que_thr_t **next_thr
 ); /*!< in/out: next query thread to run;
                                           if the value which is passed in is
-                                          a pointer to a NULL pointer, then the
+                                          a pointer to a nullptr pointer, then the
                                           calling function can start running
                                           a new query thread */
 /** Removes the signal object from a trx signal queue. */
@@ -187,12 +187,12 @@ void trx_sig_start_handle(
   que_thr_t **next_thr
 ); /*!< in/out: next query thread to run;
                            if the value which is passed in is
-                           a pointer to a NULL pointer, then the
+                           a pointer to a nullptr pointer, then the
                            calling function can start running
                            a new query thread */
 
 /** Ends signal handling. If the session is in the error state, and
-trx->graph_before_signal_handling != NULL, returns control to the error
+trx->graph_before_signal_handling != nullptr, returns control to the error
 handling routine of the graph (currently only returns the control to the
 graph root which then sends an error message to the client). */
 void trx_end_signal_handling(trx_t *trx); /*!< in: trx */
@@ -202,7 +202,7 @@ void trx_end_signal_handling(trx_t *trx); /*!< in: trx */
 commit_node_t *commit_node_create(mem_heap_t *heap); /*!< in: mem heap where created */
 
 /** Performs an execution step for a commit type node in a query graph.
-@return	query thread to run next, or NULL */
+@return	query thread to run next, or nullptr */
 que_thr_t *trx_commit_step(que_thr_t *thr); /*!< in: query thread */
 
 /** Prints info about a transaction to the given file. The caller must own the
@@ -268,11 +268,11 @@ constexpr ulint TRX_QUE_STATE_STR_MAX_LEN = 12;
 void trx_var_init();
 
 /* Signal to a transaction */
-struct trx_sig_struct {
+struct trx_sig_t {
   unsigned type : 3;   /*!< signal type */
   unsigned sender : 1; /*!< TRX_SIG_SELF or
                        TRX_SIG_OTHER_SESS */
-  que_thr_t *receiver; /*!< non-NULL if the sender of the signal
+  que_thr_t *receiver; /*!< non-nullptr if the sender of the signal
                        wants reply after the operation induced
                        by the signal is completed */
   trx_savept_t savept; /*!< possible rollback savepoint */
@@ -289,7 +289,7 @@ constexpr ulint TRX_MAGIC_N = 91118598;
 /* The transaction handle; every session has a trx object which is freed only
 when the session is freed; in addition there may be session-less transactions
 rolling back after a database recovery */
-struct trx_struct {
+struct trx_t {
   ulint magic_n;
 
   /* These fields are not protected by any mutex. */
@@ -377,7 +377,7 @@ struct trx_struct {
                        is true, or 0. */
   /*------------------------------*/
   void *client_thd;                /*!< Client thread handle corresponding
-                                   to this trx, or NULL */
+                                   to this trx, or nullptr */
   char **client_query_str;         /*!< pointer to the SQL query string */
   os_thread_id_t client_thread_id; /*!< id of the user thread associated
                                   with this transaction object */
@@ -411,9 +411,9 @@ struct trx_struct {
   ulint error_key_num;            /*!< if the index creation fails to a
                                   duplicate key error, a key number of
                                   that index is stored here */
-  sess_t *sess;                   /*!< session of the trx, NULL if none */
+  sess_t *sess;                   /*!< session of the trx, nullptr if none */
   que_t *graph;                   /*!< query currently run in the session,
-                                  or NULL if none; NOTE that the query
+                                  or nullptr if none; NOTE that the query
                                   belongs to the session, and it can
                                   survive over a transaction commit, if
                                   it is a stored procedure with a COMMIT
@@ -439,7 +439,7 @@ struct trx_struct {
   lock_t *wait_lock; /*!< if trx execution state is
                      TRX_QUE_LOCK_WAIT, this points to
                      the lock request, otherwise this is
-                     NULL */
+                     nullptr */
   bool was_chosen_as_deadlock_victim;
   /*!< when the transaction decides to
   wait for a lock, it sets this to false;
@@ -463,9 +463,9 @@ struct trx_struct {
   view */
   read_view_t *global_read_view;
   /*!< consistent read view associated
-  to a transaction or NULL */
+  to a transaction or nullptr */
   read_view_t *read_view; /*!< consistent read view used in the
-                          transaction or NULL, this read view
+                          transaction or nullptr, this read view
                           if defined can be normal read view
                           associated to a transaction (i.e.
                           same as global_read_view) or read view
@@ -494,12 +494,12 @@ struct trx_struct {
   is rolled back down to this undo
   number; see note at undo_mutex! */
   trx_rseg_t *rseg;            /*!< rollback segment assigned to the
-                               transaction, or NULL if not assigned
+                               transaction, or nullptr if not assigned
                                yet */
   trx_undo_t *insert_undo;     /*!< pointer to the insert undo log, or
-                               NULL if no inserts performed yet */
+                               nullptr if no inserts performed yet */
   trx_undo_t *update_undo;     /*!< pointer to the update undo log, or
-                               NULL if no update performed yet */
+                               nullptr if no update performed yet */
   undo_no_t roll_limit;        /*!< least undo number to undo during
                                a rollback */
   ulint pages_undone;          /*!< number of undo log pages undone
@@ -596,7 +596,7 @@ enum commit_node_state {
 };
 
 /** Commit command node in a query graph */
-struct commit_node_struct {
+struct commit_node_t {
   que_common_t common;          /*!< node type: QUE_NODE_COMMIT */
   enum commit_node_state state; /*!< node execution state */
 };

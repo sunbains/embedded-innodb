@@ -779,3 +779,13 @@ inline void buf_block_dbg_add_level(IF_SYNC_DEBUG(buf_block_t *block, ulint leve
   IF_SYNC_DEBUG(sync_thread_add_level(&block->m_rw_lock, level));
 }
 
+/** Releases a latch, if specified.
+@param[in] block             Block for which to release the latch
+@param[in] rw_latch          The latch type. */
+inline void buf_page_release_latch( buf_block_t *block, ulint rw_latch) {
+  if (rw_latch == RW_S_LATCH) {
+    rw_lock_s_unlock(&block->m_rw_lock);
+  } else if (rw_latch == RW_X_LATCH) {
+    rw_lock_x_unlock(&block->m_rw_lock);
+  }
+}

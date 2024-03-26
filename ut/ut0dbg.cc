@@ -33,7 +33,7 @@ bool ut_dbg_stop_threads = false;
 
 #if !defined(UT_DBG_USE_ABORT)
 /** A null pointer that will be dereferenced to trigger a memory trap */
-ulint *ut_dbg_null_ptr = NULL;
+ulint *ut_dbg_null_ptr = nullptr;
 #endif /* !UT_DBG_USE_ABORT */
 
 void ut_dbg_assertion_failed(const char *expr, const char *file, ulint line) {

@@ -23,23 +23,90 @@ Place, Suite 330, Boston, MA 02111-1307 USA
  Created 5/7/1996 Heikki Tuuri
  *******************************************************/
 
-#ifndef lock0types_h
-#define lock0types_h
+#pragma once
+
+#include "innodb0types.h"
+#include "ut0lst.h"
 
 #define lock_t ib_lock_t
-typedef struct lock_struct lock_t;
-typedef struct lock_sys_struct lock_sys_t;
+
+struct trx_t;
+struct lock_t;
+struct lock_sys_t;
+struct dict_table_t;
+struct dict_index_t;
 
 /* Basic lock modes */
 enum lock_mode {
-  LOCK_IS = 0,         /* intention shared */
-  LOCK_IX,             /* intention exclusive */
-  LOCK_S,              /* shared */
-  LOCK_X,              /* exclusive */
-  LOCK_AUTO_INC,       /* locks the auto-inc counter of a table
-                       in an exclusive mode */
-  LOCK_NONE,           /* this is used elsewhere to note consistent read */
-  LOCK_NUM = LOCK_NONE /* number of lock modes */
+  /* Intention shared */
+  LOCK_IS = 0,
+
+  /* Intention exclusive */
+  LOCK_IX,             
+
+  /* Shared */
+  LOCK_S,
+
+  /* Exclusive */
+  LOCK_X,
+
+  /* Locks the auto-inc counter of a table in an exclusive mode */
+  LOCK_AUTO_INC,       
+
+  /* This is used elsewhere to note consistent read */
+  LOCK_NONE,
+
+  /* Number of lock modes */
+  LOCK_NUM = LOCK_NONE
 };
 
-#endif
+/** A table lock */
+struct lock_table_t {
+  /** Database table in dictionary cache */
+  dict_table_t *table;
+
+  /** List of locks on the same table */
+  UT_LIST_NODE_T(lock_t) locks;
+};
+
+/** Record lock for a page */
+struct lock_rec_t {
+  /** Tablespace ID. */
+  space_id_t space;
+
+  /** Page number in space. */
+  page_no_t page_no;
+
+  /** Number of bits in the lock bitmap; NOTE: the lock bitmap
+  is placed immediately after the lock struct */
+  ulint n_bits;
+};
+
+/** Lock struct */
+struct lock_t {
+  /** Transaction owning the lock */
+  trx_t *trx;
+
+  /** list of the locks of the transaction */
+  UT_LIST_NODE_T(lock_t) trx_locks;
+
+  /*r< Lock type, mode, LOCK_GAP or LOCK_REC_NOT_GAP, LOCK_INSERT_INTENTION, wait flag, ORed */
+  ulint type_mode;
+
+  /** Hash chain node for a record lock */
+  void* hash;
+
+  /** Index for a record lock */
+  dict_index_t *index;
+
+  union {
+    /** Table lock */
+    lock_table_t tab_lock;
+
+    /** Record lock */
+    lock_rec_t rec_lock;
+
+  /** lock details */
+  } un_member;
+};
+

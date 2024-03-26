@@ -24,9 +24,10 @@ Created May 26, 2009 Vasil Dimov
 *******************************************************/
 
 #pragma once
+
 #include "innodb0types.h"
 
-#include "fil0fil.h"
+#include "fil0types.h"
 
 constexpr space_id_t SYS_TABLESPACE = 0;
 

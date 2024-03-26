@@ -65,28 +65,18 @@ purge_node_t *row_purge_node_create(
 /** Repositions the pcur in the purge node on the clustered index record,
 if found.
 @return	true if the record was found */
-static bool row_purge_reposition_pcur(
-  ulint mode,         /*!< in: latching mode */
-  purge_node_t *node, /*!< in: row purge node */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
-  bool found;
-
+static bool row_purge_reposition_pcur(ulint latch_mode, purge_node_t *node, mtr_t *mtr) {
   if (node->found_clust) {
-    found = btr_pcur_restore_position(mode, &(node->pcur), mtr);
+    return node->pcur.restore_position(latch_mode, mtr, Source_location{});
+  } else {
+    node->found_clust = row_search_on_row_ref(&node->pcur, latch_mode, node->table, node->ref, mtr);
 
-    return (found);
+    if (node->found_clust) {
+      node->pcur.store_position(mtr);
+    }
+
+    return node->found_clust;
   }
-
-  found = row_search_on_row_ref(&(node->pcur), mode, node->table, node->ref, mtr);
-  node->found_clust = found;
-
-  if (found) {
-    btr_pcur_store_position(&(node->pcur), mtr);
-  }
-
-  return (found);
 }
 
 /** Removes a delete marked clustered index record if possible.
@@ -111,7 +101,7 @@ static bool row_purge_remove_clust_if_poss_low(
   index = dict_table_get_first_index(node->table);
 
   pcur = &(node->pcur);
-  btr_cur = btr_pcur_get_btr_cur(pcur);
+  btr_cur = pcur->get_btr_cur();
 
   mtr_start(&mtr);
 
@@ -120,12 +110,12 @@ static bool row_purge_remove_clust_if_poss_low(
   if (!success) {
     /* The record is already removed */
 
-    btr_pcur_commit_specify_mtr(pcur, &mtr);
+    pcur->commit_specify_mtr(&mtr);
 
     return (true);
   }
 
-  rec = btr_pcur_get_rec(pcur);
+  rec = pcur->get_rec();
 
   if (node->roll_ptr != row_get_rec_roll_ptr(rec, index, rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap))) {
 
@@ -133,7 +123,7 @@ static bool row_purge_remove_clust_if_poss_low(
       mem_heap_free(heap);
     }
     /* Someone else has modified the record later: do not remove */
-    btr_pcur_commit_specify_mtr(pcur, &mtr);
+    pcur->commit_specify_mtr(&mtr);
 
     return (true);
   }
@@ -157,7 +147,7 @@ static bool row_purge_remove_clust_if_poss_low(
     }
   }
 
-  btr_pcur_commit_specify_mtr(pcur, &mtr);
+  pcur->commit_specify_mtr(&mtr);
 
   return (success);
 }
@@ -232,13 +222,14 @@ static bool row_purge_remove_sec_if_poss_low(
              "PURGE:........sec entry not found\n"); */
     /* dtuple_print(ib_stream, entry); */
 
-    btr_pcur_close(&pcur);
+    pcur.close();
+
     mtr_commit(&mtr);
 
     return (true);
   }
 
-  btr_cur = btr_pcur_get_btr_cur(&pcur);
+  btr_cur = pcur.get_btr_cur();
 
   /* We should remove the index record if no later version of the row,
   which cannot be purged yet, requires its existence. If some requires,
@@ -249,10 +240,10 @@ static bool row_purge_remove_sec_if_poss_low(
   success = row_purge_reposition_pcur(BTR_SEARCH_LEAF, node, &mtr_vers);
 
   if (success) {
-    old_has = row_vers_old_has_index_entry(true, btr_pcur_get_rec(&(node->pcur)), &mtr_vers, index, entry);
+    old_has = row_vers_old_has_index_entry(true, node->pcur.get_rec(), &mtr_vers, index, entry);
   }
 
-  btr_pcur_commit_specify_mtr(&(node->pcur), &mtr_vers);
+  pcur.commit_specify_mtr(&mtr_vers);
 
   if (!success || !old_has) {
     /* Remove the index record */
@@ -267,7 +258,7 @@ static bool row_purge_remove_sec_if_poss_low(
     }
   }
 
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
 
   return (success);
@@ -588,7 +579,7 @@ static ulint row_purge(
     }
 
     if (node->found_clust) {
-      btr_pcur_close(&(node->pcur));
+      node->pcur.close();
     }
 
     dict_unfreeze_data_dictionary(trx);

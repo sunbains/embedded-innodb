@@ -110,15 +110,16 @@ void btr_cur_search_to_nth_level(
  * @param index       the index to open the cursor on
  * @param latch_mode  the latch mode to use
  * @param cursor      the cursor to open
+ * @param level       the level to position at
  * @param file        the name of the file where the function is called
  * @param line        the line number where the function is called
  * @param mtr         the mini-transaction handle
  */
 void btr_cur_open_at_index_side_func(
-  bool from_left, dict_index_t *index, ulint latch_mode, btr_cur_t *cursor, const char *file, ulint line, mtr_t *mtr
+  bool from_left, dict_index_t *index, ulint latch_mode, btr_cur_t *cursor, ulint level, const char *file, ulint line, mtr_t *mtr
 );
 
-#define btr_cur_open_at_index_side(f, i, l, c, m) btr_cur_open_at_index_side_func(f, i, l, c, __FILE__, __LINE__, m)
+#define btr_cur_open_at_index_side(f, i, l, c, lv, m) btr_cur_open_at_index_side_func(f, i, l, c, lv, __FILE__, __LINE__, m)
 
 /**
  * Positions a cursor at a randomly chosen position within a B-tree.
@@ -149,9 +150,9 @@ void btr_cur_open_at_rnd_pos_func(
  * @param entry         in/out: entry to insert
  * @param rec           out: pointer to inserted record if succeed
  * @param big_rec       out: big rec vector whose fields have to be stored externally by
- *                      the caller, or NULL
+ *                      the caller, or nullptr
  * @param n_ext         in: number of externally stored columns
- * @param thr           in: query thread or NULL
+ * @param thr           in: query thread or nullptr
  * @param mtr           in: mtr; if this function returns DB_SUCCESS on a leaf page of
  *                      a secondary index in a compressed tablespace, the mtr must be
  *                      committed before latching any further pages
@@ -173,9 +174,9 @@ db_err btr_cur_optimistic_insert(
  * @param cursor    in: cursor after which to insert; cursor stays valid
  * @param entry     in/out: entry to insert
  * @param rec       out: pointer to inserted record if succeed
- * @param big_rec   out: big rec vector whose fields have to be stored externally by the caller, or NULL
+ * @param big_rec   out: big rec vector whose fields have to be stored externally by the caller, or nullptr
  * @param n_ext     in: number of externally stored columns
- * @param thr       in: query thread or NULL
+ * @param thr       in: query thread or nullptr
  * @param mtr       in: mtr
  *
  * @return          DB_SUCCESS or error number
@@ -225,8 +226,8 @@ db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor, const upd_t *up
  *
  * @param flags         in: undo logging, locking, and rollback flags
  * @param cursor        in: cursor on the record to update
- * @param heap          in/out: pointer to memory heap, or NULL
- * @param big_rec       out: big rec vector whose fields have to be stored externally by the caller, or NULL
+ * @param heap          in/out: pointer to memory heap, or nullptr
+ * @param big_rec       out: big rec vector whose fields have to be stored externally by the caller, or nullptr
  * @param update        in: update vector; this is allowed also contain trx id and roll ptr fields,
  *                      but the values in update vector have no effect
  * @param cmpl_info     in: compiler info on secondary index updates
@@ -306,10 +307,10 @@ void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents, btr_cur_
  *
  * @param ptr     in: buffer
  * @param end_ptr in: buffer end
- * @param page    in/out: page or NULL
+ * @param page    in/out: page or nullptr
  * @param index   in: index corresponding to page
  *
- * @return        end of log record or NULL
+ * @return        end of log record or nullptr
  */
 byte *btr_cur_parse_update_in_place(byte *ptr, byte *end_ptr, page_t *page, dict_index_t *index);
 
@@ -318,10 +319,10 @@ byte *btr_cur_parse_update_in_place(byte *ptr, byte *end_ptr, page_t *page, dict
  *
  * @param ptr     in: buffer
  * @param end_ptr in: buffer end
- * @param page    in/out: page or NULL
+ * @param page    in/out: page or nullptr
  * @param index   in: index corresponding to page
  *
- * @return        end of log record or NULL
+ * @return        end of log record or nullptr
  */
 byte *btr_cur_parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_t *page, dict_index_t *index);
 
@@ -330,9 +331,9 @@ byte *btr_cur_parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_t *pag
  *
  * @param ptr       in: buffer
  * @param end_ptr   in: buffer end
- * @param page      in/out: page or NULL
+ * @param page      in/out: page or nullptr
  *
- * @return          end of log record or NULL
+ * @return          end of log record or nullptr
  */
 byte *btr_cur_parse_del_mark_set_sec_rec(byte *ptr, byte *end_ptr, page_t *page);
 
@@ -413,9 +414,9 @@ db_err btr_store_big_rec_extern_fields(
  *
  * @param index      in: index of the data, the index tree MUST be X-latched; if the tree height is 1, then also the root page must be X-latched! (this is relevant in the case this function is called from purge where 'data' is located on an undo log page, not an index page)
  * @param field_ref  in/out: field reference
- * @param rec        in: record containing field_ref or NULL
- * @param offsets    in: rec_get_offsets(rec, index), or NULL
- * @param i          in: field number of field_ref; ignored if rec == NULL
+ * @param rec        in: record containing field_ref or nullptr
+ * @param offsets    in: rec_get_offsets(rec, index), or nullptr
+ * @param i          in: field number of field_ref; ignored if rec == nullptr
  * @param rb_ctx     in: rollback context
  * @param local_mtr  in: mtr containing the latch to data an an X-latch to the index tree
  */
@@ -489,6 +490,9 @@ constexpr ulint BTR_PATH_ARRAY_N_SLOTS = 250;
  * Values for the flag documenting the used search method.
  */
 enum btr_cur_method {
+  /** Unset */
+  BTR_CUR_NONE = 0,
+
   /** Successful shortcut using the hash index. */
   BTR_CUR_HASH = 1,
 
@@ -505,26 +509,26 @@ enum btr_cur_method {
 to know struct size! */
 struct btr_cur_t {
   /** index where positioned */
-  dict_index_t *m_index;
+  dict_index_t *m_index{};
 
   /** page cursor */
-  page_cur_t m_page_cur;
+  page_cur_t m_page_cur{};
 
   /*!< this field is used to store a pointer to the left neighbor page, in the
      * cases BTR_SEARCH_PREV and BTR_MODIFY_PREV */
-  buf_block_t *left_block;
+  buf_block_t *left_block{};
 
   /** this field is only used when btr_cur_search_to_nth_level is called for an
      * index entry insertion: the calling query thread is passed here to be used
      * in the insert buffer */
-  que_thr_t *thr;
+  que_thr_t *thr{};
 
   /** Search method used */
-  enum btr_cur_method flag;
+  btr_cur_method flag{BTR_CUR_NONE};
 
   /*!< Tree height if the search is done for a pessimistic insert or update
      * operation */
-  ulint tree_height;
+  ulint tree_height{};
 
   /*!< If the search mode was PAGE_CUR_LE, the number of matched fields to the
      * the first user record to the right of the cursor record after
@@ -533,34 +537,34 @@ struct btr_cur_t {
      * up_match and low_match values may exceed the correct values for comparison
      * to the adjacent user record if that record is on a different leaf page!
      * (See the note in row_ins_duplicate_key.) */
-  ulint up_match;
+  ulint up_match{};
 
   /** number of matched bytes to the right at the time cursor positioned; only
      * used internally in searches: not defined after the search */
-  ulint up_bytes;
+  ulint up_bytes{};
 
   /** if search mode was PAGE_CUR_LE, the number of matched fields to the first
      * user record AT THE CURSOR or to the left of it after
      * btr_cur_search_to_nth_level; NOT defined for PAGE_CUR_GE or any other search
      * modes; see also the NOTE in up_match! */
-  ulint low_match;
+  ulint low_match{};
 
   /** number of matched bytes to the right at the time cursor positioned; only
      * used internally in searches: not defined after the search */
-  ulint low_bytes;
+  ulint low_bytes{};
 
-  /** prefix length used in a hash search if hash_node != NULL */
-  ulint n_fields;
+  /** prefix length used in a hash search if hash_node != nullptr */
+  ulint n_fields{};
 
-  /** hash prefix bytes if hash_node != NULL */
-  ulint n_bytes;
+  /** hash prefix bytes if hash_node != nullptr */
+  ulint n_bytes{};
 
   /** fold value used in the search if flag is BTR_CUR_HASH */
-  ulint fold;
+  ulint fold{};
 
   /** in estimating the number of rows in range, we store in this array
      * information of the path through the tree */
-  btr_path_t *path_arr;
+  btr_path_t *path_arr{};
 };
 
 /** If pessimistic delete fails because of lack of file space, there
@@ -636,7 +640,7 @@ inline rec_t *btr_cur_get_rec(btr_cur_t *cursor) {
 }
 
 /**
- * Invalidates a tree cursor by setting the record pointer to NULL.
+ * Invalidates a tree cursor by setting the record pointer to nullptr.
  * @param cursor The tree cursor.
  */
 inline void btr_cur_invalidate(btr_cur_t *cursor) {

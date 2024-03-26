@@ -743,5 +743,5 @@ inline void mach_write_int32(byte *b, int32_t v) {
 @param[in] ptr                  Pointer from where you want to read
 @param[in] end_ptr              Pointer to end of the buffer
 @param[out] v                   Where to write value read
-@return	pointer to end of the stored field, NULL if not complete */
+@return	pointer to end of the stored field, nullptr if not complete */
 [[nodiscard]] byte *mach_uint64_parse_compressed(byte *ptr, byte *end_ptr, uint64_t *v);

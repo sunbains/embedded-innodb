@@ -159,7 +159,7 @@ static ib_err_t drop_base(void *arg) /*!< in: arguments for callback */
            tbl->m_name.c_str());
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   err = ib_schema_lock_exclusive(ib_trx);
   assert(err == DB_SUCCESS);
@@ -245,7 +245,7 @@ static ib_err_t alter_base(void *arg) /*!< in: arguments for callback */
 void register_base_table(
     tbl_class_t *tbl) /*!< in/out: table class to register */
 {
-  assert(tbl != NULL);
+  assert(tbl != nullptr);
 
   tbl->m_name.assign("dummy");
 

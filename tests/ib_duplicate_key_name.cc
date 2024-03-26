@@ -53,8 +53,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t ib_idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
 #ifdef __WIN__
@@ -113,7 +113,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   }
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -147,7 +147,7 @@ static ib_err_t insert_rows(ib_trx_t trx, ib_crsr_t crsr) {
   ib_tpl_t tpl;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   /* INSERT (1, 1) */
 
@@ -161,7 +161,7 @@ static ib_err_t insert_rows(ib_trx_t trx, ib_crsr_t crsr) {
   assert(err == DB_SUCCESS);
 
   tpl = ib_tuple_clear(tpl);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   /* INSERT (2, 2) */
 
@@ -175,7 +175,7 @@ static ib_err_t insert_rows(ib_trx_t trx, ib_crsr_t crsr) {
   assert(err == DB_SUCCESS);
 
   tpl = ib_tuple_clear(tpl);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   /* INSERT (1,3) <- fail on pkey */
   err = ib_tuple_write_i32(tpl, 0, 1);
@@ -196,7 +196,7 @@ static ib_err_t insert_rows(ib_trx_t trx, ib_crsr_t crsr) {
   assert(strcmp(d_index, PRIMARY_INDEX_NAME) == 0);
 
   tpl = ib_tuple_clear(tpl);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   /* insert (3,1) <- fail on secondary */
   err = ib_tuple_write_i32(tpl, 0, 3);
@@ -216,9 +216,9 @@ static ib_err_t insert_rows(ib_trx_t trx, ib_crsr_t crsr) {
   assert(strcmp(d_index, SEC_INDEX_NAME) == 0);
 
   tpl = ib_tuple_clear(tpl);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -248,7 +248,7 @@ int main(int argc, char **argv) {
   assert(err == DB_SUCCESS);
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   err = open_table(DATABASE, TABLE, ib_trx, &crsr);
   assert(err == DB_SUCCESS);
@@ -258,7 +258,7 @@ int main(int argc, char **argv) {
 
   err = ib_cursor_close(crsr);
   assert(err == DB_SUCCESS);
-  crsr = NULL;
+  crsr = nullptr;
 
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);

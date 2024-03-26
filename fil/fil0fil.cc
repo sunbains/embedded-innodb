@@ -1255,7 +1255,7 @@ void fil_init(ulint hash_size, ulint max_n_open) {
 
   fil_system = reinterpret_cast<fil_system_t *>(mem_alloc(sizeof(fil_system_t)));
 
-  mutex_create(&fil_system->mutex, SYNC_ANY_LATCH);
+  mutex_create(&fil_system->mutex, IF_DEBUG("fil_sys_mutex",) IF_SYNC_DEBUG(SYNC_ANY_LATCH,) Source_location{});
 
   fil_system->spaces = hash_create(hash_size);
   fil_system->name_hash = hash_create(hash_size);

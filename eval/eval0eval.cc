@@ -77,7 +77,7 @@ bool eval_cmp(func_node_t *cmp_node) {
 
   auto arg1 = cmp_node->args;
   auto arg2 = que_node_get_next(arg1);
-  auto res = cmp_dfield_dfield(NULL, que_node_get_val(arg1), que_node_get_val(arg2));
+  auto res = cmp_dfield_dfield(nullptr, que_node_get_val(arg1), que_node_get_val(arg2));
   auto val = true;
   auto func = cmp_node->func;
 
@@ -120,7 +120,7 @@ inline void eval_logical(func_node_t *logical_node) /*!< in: logical operation n
   ut_ad(que_node_get_type(logical_node) == QUE_NODE_FUNC);
 
   auto arg1 = logical_node->args;
-  auto arg2 = que_node_get_next(arg1); /* arg2 is NULL if func is 'NOT' */
+  auto arg2 = que_node_get_next(arg1); /* arg2 is nullptr if func is 'NOT' */
 
   auto val1 = eval_node_get_bool_val(arg1);
 
@@ -152,7 +152,7 @@ inline void eval_arith(func_node_t *arith_node) /*!< in: arithmetic operation no
   ut_ad(que_node_get_type(arith_node) == QUE_NODE_FUNC);
 
   auto arg1 = arith_node->args;
-  auto arg2 = que_node_get_next(arg1); /* arg2 is NULL if func is unary '-' */
+  auto arg2 = que_node_get_next(arg1); /* arg2 is nullptr if func is unary '-' */
 
   auto val1 = eval_node_get_int_val(arg1);
 

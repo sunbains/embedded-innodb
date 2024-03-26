@@ -108,7 +108,7 @@ db_err row_merge_rename_tables(
 
 /** Create a temporary table for creating a primary key, using the definition
 of an existing table.
-@return	table, or NULL on error */
+@return	table, or nullptr on error */
 
 dict_table_t *row_merge_create_temporary_table(
   const char *table_name,             /*!< in: new table name */
@@ -130,7 +130,7 @@ db_err row_merge_rename_indexes(
 ); /*!< in/out: table with new indexes */
 
 /** Create the index and load in to the dictionary.
-@return	index, or NULL on error */
+@return	index, or nullptr on error */
 
 dict_index_t *row_merge_create_index(
   trx_t *trx,          /*!< in/out: trx (sets error_state) */

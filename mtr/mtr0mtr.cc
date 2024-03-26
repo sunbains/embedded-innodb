@@ -38,7 +38,7 @@ inline void mtr_memo_slot_release(mtr_t *mtr, mtr_memo_slot_t *slot) {
   auto object = slot->object;
   auto type = slot->type;
 
-  if (likely(object != NULL)) {
+  if (likely(object != nullptr)) {
     if (type <= MTR_MEMO_BUF_FIX) {
       buf_pool->release((buf_block_t *)object, type, mtr);
     } else if (type == MTR_MEMO_S_LOCK) {
@@ -53,7 +53,11 @@ inline void mtr_memo_slot_release(mtr_t *mtr, mtr_memo_slot_t *slot) {
     }
   }
 
-  slot->object = NULL;
+  slot->object = nullptr;
+}
+
+void mtr_disable_redo_logging(mtr_t* mtr) {
+
 }
 
 void mtr_memo_pop_all(mtr_t *mtr) {
@@ -92,7 +96,7 @@ static void mtr_log_reserve_and_write(mtr_t *mtr, ulint recovery) {
     *first_data = (byte)((ulint)*first_data | MLOG_SINGLE_REC_FLAG);
   }
 
-  if (mlog->heap == NULL) {
+  if (mlog->heap == nullptr) {
 
     log_acquire();
 
@@ -115,7 +119,7 @@ static void mtr_log_reserve_and_write(mtr_t *mtr, ulint recovery) {
 
     block = mlog;
 
-    while (block != NULL) {
+    while (block != nullptr) {
       log_write_low(dyn_block_get_data(block), dyn_block_get_used(block));
       block = dyn_array_get_next_block(mlog, block);
     }
@@ -131,7 +135,8 @@ void mtr_commit(mtr_t *mtr) {
   ut_ad(mtr);
   ut_ad(mtr->magic_n == MTR_MAGIC_N);
   ut_ad(mtr->state == MTR_ACTIVE);
-  ut_d(mtr->state = MTR_COMMITTING);
+
+  mtr->state = MTR_COMMITTING;
 
   /* This is a dirty read, for debugging. */
   auto write_log = mtr->modifications && mtr->n_log_recs;
@@ -154,7 +159,7 @@ void mtr_commit(mtr_t *mtr) {
     log_release();
   }
 
-  ut_d(mtr->state = MTR_COMMITTED);
+  mtr->state = MTR_COMMITTED;
   dyn_array_free(&(mtr->memo));
   dyn_array_free(&(mtr->log));
 }
@@ -239,3 +244,17 @@ void mtr_print(mtr_t *mtr) {
   );
 }
 #endif /* UNIV_DEBUG */
+
+inline void mtr_release_block_at_savepoint(mtr_t *mtr, ulint savepoint, buf_block_t *block) {
+  ut_ad(mtr_is_active(mtr));
+  ut_ad(mtr->magic_n == MTR_MAGIC_N);
+
+  auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&mtr->memo, savepoint));
+
+  ut_a(slot->object == block);
+
+  buf_page_release_latch(block, slot->type);
+  block->fix_dec();
+
+  slot->object = nullptr;
+}

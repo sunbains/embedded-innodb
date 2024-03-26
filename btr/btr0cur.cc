@@ -43,12 +43,9 @@ Created 10/16/1994 Heikki Tuuri
 
 #include "btr0cur.h"
 
-#ifdef UNIV_NONINL
-#include "btr0cur.ic"
-#endif
-
 #include "btr0btr.h"
 #include "buf0lru.h"
+#include "dict0types.h"
 #include "lock0lock.h"
 #include "mtr0log.h"
 #include "page0page.h"
@@ -61,11 +58,9 @@ Created 10/16/1994 Heikki Tuuri
 #include "trx0rec.h"
 #include "trx0roll.h"
 
-#ifdef UNIV_DEBUG
 /** If the following is set to true, this module prints a lot of
 trace information of individual record operations */
-bool btr_cur_print_record_ops = false;
-#endif /* UNIV_DEBUG */
+IF_DEBUG(bool btr_cur_print_record_ops = false;)
 
 /** In the optimistic insert, if the insert does not fit, but this much space
 can be released by page reorganize, then it is reorganized */
@@ -165,7 +160,7 @@ static void btr_cur_latch_leaves(
   page_t *page,         /*!< in: leaf page where the search
                                            converged */
   ulint space,          /*!< in: space id */
-  ulint, ulint page_no, /*!< in: page number of the leaf */
+  ulint page_no, /*!< in: page number of the leaf */
   ulint latch_mode,     /*!< in: BTR_SEARCH_LEAF, ... */
   btr_cur_t *cursor,    /*!< in: cursor */
   mtr_t *mtr
@@ -400,7 +395,7 @@ void btr_cur_search_to_nth_level(
     if (height == 0) {
       if (rw_latch == RW_NO_LATCH) {
 
-        btr_cur_latch_leaves(page, space, 0, page_no, latch_mode, cursor, mtr);
+        btr_cur_latch_leaves(page, space, page_no, latch_mode, cursor, mtr);
       }
 
       if ((latch_mode != BTR_MODIFY_TREE) && (latch_mode != BTR_CONT_MODIFY_TREE)) {
@@ -461,39 +456,33 @@ void btr_cur_search_to_nth_level(
   }
 }
 
-/** Opens a cursor at either end of an index. */
-
 void btr_cur_open_at_index_side_func(
-  bool from_left,           /*!< in: true if open to the low end,
-                               false if to the high end */
-  dict_index_t *dict_index, /*!< in: index */
-  ulint latch_mode,         /*!< in: latch mode */
-  btr_cur_t *cursor,        /*!< in: cursor */
-  const char *file,         /*!< in: file name */
-  ulint line,               /*!< in: line where called */
+  bool from_left,
+  dict_index_t *dict_index,
+  ulint latch_mode,
+  btr_cur_t *cursor,
+  ulint level,
+  const char *file,
+  ulint line,
   mtr_t *mtr
-) /*!< in: mtr */
+)
 {
-  page_cur_t *page_cursor;
-  ulint page_no;
-  ulint space;
-  ulint height;
-  ulint root_height = 0; /* remove warning */
-  rec_t *node_ptr;
-  ulint estimate;
-  ulint savepoint;
+  ulint root_height{};
   mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
 
-  estimate = latch_mode & BTR_ESTIMATE;
+  ut_a(level != ULINT_UNDEFINED);
+
+  auto estimate = latch_mode & BTR_ESTIMATE;
+
   latch_mode = latch_mode & ~BTR_ESTIMATE;
 
   /* Store the position of the tree latch we push to mtr so that we
   know how to release it when we have latched the leaf node */
 
-  savepoint = mtr_set_savepoint(mtr);
+  auto savepoint = mtr_set_savepoint(mtr);
 
   if (latch_mode == BTR_MODIFY_TREE) {
     mtr_x_lock(dict_index_get_lock(dict_index), mtr);
@@ -501,13 +490,13 @@ void btr_cur_open_at_index_side_func(
     mtr_s_lock(dict_index_get_lock(dict_index), mtr);
   }
 
-  page_cursor = btr_cur_get_page_cur(cursor);
+  auto page_cursor = btr_cur_get_page_cur(cursor);
   cursor->m_index = dict_index;
 
-  space = dict_index_get_space(dict_index);
-  page_no = dict_index_get_page(dict_index);
+  auto space = dict_index_get_space(dict_index);
+  auto page_no = dict_index_get_page(dict_index);
 
-  height = ULINT_UNDEFINED;
+  auto height = ULINT_UNDEFINED;
 
   for (;;) {
   
@@ -535,9 +524,9 @@ void btr_cur_open_at_index_side_func(
     }
 
     if (height == 0) {
-      btr_cur_latch_leaves(page, space, 0, page_no, latch_mode, cursor, mtr);
+      btr_cur_latch_leaves(page, space, page_no, latch_mode, cursor, mtr);
 
-      if ((latch_mode != BTR_MODIFY_TREE) && (latch_mode != BTR_CONT_MODIFY_TREE)) {
+      if (latch_mode != BTR_MODIFY_TREE && latch_mode != BTR_CONT_MODIFY_TREE) {
 
         /* Release the tree s-latch */
 
@@ -551,7 +540,7 @@ void btr_cur_open_at_index_side_func(
       page_cur_set_after_last(block, page_cursor);
     }
 
-    if (height == 0) {
+    if (height == 0 || height == level) {
       if (estimate) {
         btr_cur_add_path_info(cursor, height, root_height);
       }
@@ -571,10 +560,12 @@ void btr_cur_open_at_index_side_func(
       btr_cur_add_path_info(cursor, height, root_height);
     }
 
-    height--;
+    --height;
 
-    node_ptr = page_cur_get_rec(page_cursor);
+    auto node_ptr = page_cur_get_rec(page_cursor);
+
     offsets = rec_get_offsets(node_ptr, cursor->m_index, offsets, ULINT_UNDEFINED, &heap);
+
     /* Go to the child node */
     page_no = btr_node_ptr_get_child_page_no(node_ptr, offsets);
   }
@@ -629,7 +620,7 @@ void btr_cur_open_at_rnd_pos_func(dict_index_t *dict_index, ulint latch_mode, bt
     }
 
     if (height == 0) {
-      btr_cur_latch_leaves(page, space, 0, page_no, latch_mode, cursor, mtr);
+      btr_cur_latch_leaves(page, space, page_no, latch_mode, cursor, mtr);
     }
 
     page_cur_open_on_rnd_user_rec(block, page_cursor);
@@ -696,21 +687,26 @@ static rec_t *btr_cur_insert_if_possible(
   return rec;
 }
 
-/** For an insert, checks the locks and does the undo logging if desired.
-@return	DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number */
+/**
+ * For an insert, checks the locks and does the undo logging if desired.
+ *
+ * @param flags   Undo logging and locking flags: if not zero, the parameters index and thr should be specified.
+ * @param cursor  Cursor on page after which to insert.
+ * @param entry   Entry to insert.
+ * @param thr     Query thread or nullptr.
+ * @param mtr     Mini-transaction.
+ * @param inherit True if the inserted new record maybe should inherit LOCK_GAP type locks from the successor record.
+ *
+ * @return DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number.
+ */
 inline db_err btr_cur_ins_lock_and_undo(
-  ulint flags,           /*!< in: undo logging and locking flags: if
-                           not zero, the parameters index and thr
-                           should be specified */
-  btr_cur_t *cursor,     /*!< in: cursor on page after which to insert */
-  const dtuple_t *entry, /*!< in: entry to insert */
-  que_thr_t *thr,        /*!< in: query thread or nullptr */
-  mtr_t *mtr,            /*!< in/out: mini-transaction */
+  ulint flags,
+  btr_cur_t *cursor,
+  const dtuple_t *entry,
+  que_thr_t *thr,
+  mtr_t *mtr,
   bool *inherit
-) /*!< out: true if the inserted new record maybe
-                            should inherit LOCK_GAP type locks from the
-                            successor record */
-{
+) {
   dict_index_t *dict_index;
   db_err err;
   rec_t *rec;
@@ -750,13 +746,14 @@ inline db_err btr_cur_ins_lock_and_undo(
 }
 
 #ifdef UNIV_DEBUG
-/** Report information about a transaction. */
-static void btr_cur_trx_report(
-  trx_t *trx,                /*!< in: transaction */
-  const dict_index_t *index, /*!< in: index */
-  const char *op
-) /*!< in: operation */
-{
+/**
+ * Report information about a transaction.
+ *
+ * @param trx   The transaction.
+ * @param index The index.
+ * @param op    The operation.
+ */
+static void btr_cur_trx_report(trx_t *trx, const dict_index_t *index, const char *op) {
   ib_logger(ib_stream, "Trx with id %lu going to ", TRX_ID_PREP_PRINTF(trx->id));
   ib_logger(ib_stream, "%s", op);
   dict_index_name_print(ib_stream, trx, index);
@@ -2037,7 +2034,7 @@ int64_t btr_estimate_n_rows_in_range(
 
     btr_cur_search_to_nth_level(index, 0, tuple1, mode1, BTR_SEARCH_LEAF | BTR_ESTIMATE, &cursor, 0, __FILE__, __LINE__, &mtr);
   } else {
-    btr_cur_open_at_index_side(true, index, BTR_SEARCH_LEAF | BTR_ESTIMATE, &cursor, &mtr);
+    btr_cur_open_at_index_side(true, index, BTR_SEARCH_LEAF | BTR_ESTIMATE, &cursor, 0, &mtr);
   }
 
   mtr_commit(&mtr);
@@ -2050,7 +2047,7 @@ int64_t btr_estimate_n_rows_in_range(
 
     btr_cur_search_to_nth_level(index, 0, tuple2, mode2, BTR_SEARCH_LEAF | BTR_ESTIMATE, &cursor, 0, __FILE__, __LINE__, &mtr);
   } else {
-    btr_cur_open_at_index_side(false, index, BTR_SEARCH_LEAF | BTR_ESTIMATE, &cursor, &mtr);
+    btr_cur_open_at_index_side(false, index, BTR_SEARCH_LEAF | BTR_ESTIMATE, &cursor, 0, &mtr);
   }
 
   mtr_commit(&mtr);

@@ -23,6 +23,7 @@ Created 1/8/1996 Heikki Tuuri
 
 #pragma once
 
+#include "btr0pcur.h"
 #include "dict0dict.h"
 #include "dict0types.h"
 #include "innodb0types.h"
@@ -49,12 +50,12 @@ ind_node_t *ind_create_graph_create(
 ); /*!< in: true if transaction should be commit */
 
 /** Creates a table. This is a high-level function used in SQL execution graphs.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 que_thr_t *dict_create_table_step(que_thr_t *thr); /*!< in: query thread */
 
 /** Creates an index. This is a high-level function used in SQL execution
 graphs.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 que_thr_t *dict_create_index_step(que_thr_t *thr); /*!< in: query thread */
 
 /** Truncates the index tree associated with a row in SYS_INDEXES table.
@@ -107,7 +108,7 @@ db_err dict_create_add_foreigns_to_dictionary(
 ); /*!< in: transaction */
 
 /* Table create node structure */
-struct tab_node_struct {
+struct tab_node_t {
   que_common_t common; /*!< node type: QUE_NODE_TABLE_CREATE */
   dict_table_t *table; /*!< table to create, built as a memory data
                        structure with dict_mem_... functions */
@@ -136,7 +137,7 @@ constexpr ulint TABLE_COMPLETED = 5;
 
 /* Index create node struct */
 
-struct ind_node_struct {
+struct ind_node_t {
   que_common_t common;   /*!< node type: QUE_NODE_INDEX_CREATE */
   dict_index_t *index;   /*!< index to create, built as a memory data
                          structure with dict_mem_... functions */

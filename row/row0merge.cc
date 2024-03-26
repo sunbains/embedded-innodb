@@ -381,7 +381,7 @@ static void row_merge_dup_report(
   const rec_t *rec;
   const dict_index_t *index = dup->index;
   ulint n_fields = dict_index_get_n_fields(index);
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint n_ext;
 
@@ -680,13 +680,13 @@ static __attribute__((nonnull)) const byte *row_merge_read_rec(
 
   if (unlikely(!extra_size)) {
     /* End of list */
-    *mrec = NULL;
+    *mrec = nullptr;
 #ifdef UNIV_DEBUG
     if (row_merge_print_read) {
       ib_logger(ib_stream, "row_merge_read %p,%p,%d,%lu EOF\n", (const void *)b, (const void *)block, fd, (ulong)*foffs);
     }
 #endif /* UNIV_DEBUG */
-    return (NULL);
+    return (nullptr);
   }
 
   if (extra_size >= 0x80) {
@@ -697,7 +697,7 @@ static __attribute__((nonnull)) const byte *row_merge_read_rec(
       err_exit:
         /* Signal I/O error. */
         *mrec = b;
-        return (NULL);
+        return (nullptr);
       }
 
       /* Wrap around to the beginning of the buffer. */
@@ -888,7 +888,7 @@ static byte *row_merge_write_rec(
     memcpy(b, buf[0], avail_size);
 
     if (!row_merge_write(fd, (*foffs)++, block)) {
-      return (NULL);
+      return (nullptr);
     }
 
     UNIV_MEM_INVALID(block[0], sizeof block[0]);
@@ -934,7 +934,7 @@ static byte *row_merge_write_eof(
 #endif /* UNIV_DEBUG_VALGRIND */
 
   if (!row_merge_write(fd, (*foffs)++, block)) {
-    return (NULL);
+    return (nullptr);
   }
 
   UNIV_MEM_INVALID(block[0], sizeof block[0]);
@@ -970,35 +970,37 @@ static int row_merge_cmp(
   return (cmp);
 }
 
-/** Reads clustered index of the table and create temporary files
-containing the index entries for the indexes to be built.
-@return	DB_SUCCESS or error */
-static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
-  trx_t *trx,                    /*!< in: transaction */
-  table_handle_t table,          /*!< in/out: Client table object,
-                                   for reporting erroneous records */
-  const dict_table_t *old_table, /*!< in: table where rows are
-                                 read from */
-  const dict_table_t *new_table, /*!< in: table where indexes are
-                                 created; identical to old_table
-                                 unless creating a PRIMARY KEY */
-  dict_index_t **index,          /*!< in: indexes to be created */
-  merge_file_t *files,           /*!< in: temporary files */
-  ulint n_index,                 /*!< in: number of indexes to create */
+/**
+ * Reads clustered index of the table and create temporary files
+ * containing the index entries for the indexes to be built.
+ *
+ * @param trx Transaction
+ * @param table Client table object, for reporting erroneous records
+ * @param old_table Table where rows are read from
+ * @param new_table Table where indexes are created; identical to old_table unless creating a PRIMARY KEY
+ * @param index Indexes to be created
+ * @param files Temporary files
+ * @param n_index Number of indexes to create
+ * @param block File buffer
+ * @return DB_SUCCESS or error
+ */
+static db_err row_merge_read_clustered_index(
+  trx_t *trx,
+  table_handle_t table,
+  const dict_table_t *old_table,
+  const dict_table_t *new_table,
+  dict_index_t **index,
+  merge_file_t *files,
+  ulint n_index,
   row_merge_block_t *block
-) /*!< in/out: file buffer */
-{
-  dict_index_t *clust_index; /* Clustered index */
-  mem_heap_t *row_heap;      /* Heap memory to create
-                             clustered index records */
-  btr_pcur_t pcur;           /* Persistent cursor on the
-                             clustered index */
-  mtr_t mtr;                 /* Mini transaction */
-  db_err err = DB_SUCCESS;   /* Return code */
+) {
+  mem_heap_t *row_heap;
+  btr_pcur_t pcur;
+  mtr_t mtr;
+  db_err err = DB_SUCCESS;
   ulint i;
-  ulint n_nonnull = 0;   /* number of columns
-                         changed to NOT NULL */
-  ulint *nonnull = NULL; /* NOT NULL columns */
+  ulint n_nonnull = 0;
+  ulint *nonnull = nullptr;
 
   trx->op_info = "reading clustered index";
 
@@ -1021,9 +1023,9 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
   /* Find the clustered index and create a persistent cursor
   based on that. */
 
-  clust_index = dict_table_get_first_index(old_table);
+  auto clust_index = dict_table_get_first_index(old_table);
 
-  btr_pcur_open_at_index_side(true, clust_index, BTR_SEARCH_LEAF, &pcur, true, &mtr);
+  pcur.open_at_index_side(true, clust_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   if (unlikely(old_table != new_table)) {
     ulint n_cols = dict_table_get_n_cols(old_table);
@@ -1052,7 +1054,7 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
 
     if (!n_nonnull) {
       mem_free(nonnull);
-      nonnull = NULL;
+      nonnull = nullptr;
     }
   }
 
@@ -1062,11 +1064,11 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
   for (;;) {
     const rec_t *rec;
     ulint *offsets;
-    dtuple_t *row = NULL;
+    dtuple_t *row = nullptr;
     row_ext_t *ext;
     bool has_next = true;
 
-    btr_pcur_move_to_next_on_page(&pcur);
+    pcur.move_to_next_on_page();
 
     /* When switching pages, commit the mini-transaction
     in order to release the latch on the old page. */
@@ -1074,25 +1076,25 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
     merge_file_t *file{};
     const dict_index_t *index{};
 
-    if (btr_pcur_is_after_last_on_page(&pcur)) {
+    if (pcur.is_after_last_on_page()) {
       if (unlikely(trx_is_interrupted(trx))) {
         i = 0;
         err = DB_INTERRUPTED;
         goto err_exit;
       }
 
-      btr_pcur_store_position(&pcur, &mtr);
+      pcur.store_position(&mtr);
       mtr_commit(&mtr);
       mtr_start(&mtr);
-      btr_pcur_restore_position(BTR_SEARCH_LEAF, &pcur, &mtr);
-      has_next = btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+      pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+      has_next = pcur.move_to_next_user_rec(&mtr);
     }
 
     row_merge_buf_t *buf;
 
     if (likely(has_next)) {
-      rec = btr_pcur_get_rec(&pcur);
-      offsets = rec_get_offsets(rec, clust_index, NULL, ULINT_UNDEFINED, &row_heap);
+      rec = pcur.get_rec();
+      offsets = rec_get_offsets(rec, clust_index, nullptr, ULINT_UNDEFINED, &row_heap);
 
       /* Skip delete marked records. */
       if (rec_get_deleted_flag(rec, dict_table_is_comp(old_table))) {
@@ -1159,7 +1161,7 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
             goto func_exit;
           }
         } else {
-          row_merge_buf_sort(buf, NULL);
+          row_merge_buf_sort(buf, nullptr);
         }
       }
 
@@ -1173,7 +1175,7 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
       UNIV_MEM_INVALID(block[0], sizeof block[0]);
       merge_buf[i] = row_merge_buf_empty(buf);
 
-      if (likely(row != NULL)) {
+      if (likely(row != nullptr)) {
         /* Try writing the record again, now
         that the buffer has been written out
         and emptied. */
@@ -1196,7 +1198,7 @@ static __attribute__((nonnull)) db_err row_merge_read_clustered_index(
   }
 
 func_exit:
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
   mem_heap_free(row_heap);
 
@@ -1406,7 +1408,7 @@ done0:
   (*foffs0)++;
 
   mem_heap_free(heap);
-  return (row_merge_write_eof(&block[2], b2, of->fd, &of->offset) != NULL);
+  return (row_merge_write_eof(&block[2], b2, of->fd, &of->offset) != nullptr);
 }
 
 /** Merge disk files.
@@ -1676,7 +1678,7 @@ static db_err row_merge_insert_index_tuples(
         trx->error_state = err;
         que_thr_stop_client(thr);
         thr->lock_state = QUE_THR_LOCK_NOLOCK;
-      } while (ib_handle_errors(&err, trx, thr, NULL));
+      } while (ib_handle_errors(&err, trx, thr, nullptr));
 
       goto err_exit;
     next_rec:
@@ -1705,7 +1707,7 @@ void row_merge_drop_index(
   trx_t *trx
 ) /*!< in: transaction handle */
 {
-  if (index != NULL) {
+  if (index != nullptr) {
     ddl_drop_index(table, index, trx);
   }
 }
@@ -1788,7 +1790,7 @@ dict_table_t *row_merge_create_temporary_table(
                                         (sets error_state) */
 {
   ulint i;
-  dict_table_t *new_table = NULL;
+  dict_table_t *new_table = nullptr;
   ulint n_cols = dict_table_get_n_user_cols(table);
   db_err err;
   ;
@@ -1816,7 +1818,7 @@ dict_table_t *row_merge_create_temporary_table(
 
   if (err != DB_SUCCESS) {
     trx->error_state = err;
-    new_table = NULL;
+    new_table = nullptr;
   }
 
   return (new_table);
@@ -1916,7 +1918,7 @@ db_err row_merge_rename_tables(dict_table_t *old_table, dict_table_t *new_table,
   if (err != DB_SUCCESS) {
   err_exit:
     trx->error_state = DB_SUCCESS;
-    trx_general_rollback(trx, false, NULL);
+    trx_general_rollback(trx, false, nullptr);
     trx->error_state = DB_SUCCESS;
   }
 
@@ -1969,7 +1971,7 @@ dict_index_t *row_merge_create_index(
     this index, to ensure read consistency. */
     index->trx_id = trx->id;
   } else {
-    index = NULL;
+    index = nullptr;
   }
 
   return (index);

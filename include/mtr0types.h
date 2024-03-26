@@ -220,10 +220,8 @@ struct mtr_memo_slot_t {
 
 /* Mini-transaction handle and buffer */
 struct mtr_t {
-#ifdef UNIV_DEBUG
   /** MTR_ACTIVE, MTR_COMMITTING, MTR_COMMITTED */
   ulint state;
-#endif /* UNIV_DEBUG */
 
   /** Memo stack for locks etc. */
   dyn_array_t memo;

@@ -39,7 +39,7 @@ We also scan the biggest space id, and store it to fil_system. */
 void dict_check_tablespaces_and_store_max_id(bool in_crash_recovery); /*!< in: are we doing a crash recovery */
 
 /** Finds the first table name in the given database.
-@return own: table name, NULL if does not exist; the caller must free
+@return own: table name, nullptr if does not exist; the caller must free
 the memory in the string! */
 char *dict_get_first_table_name_in_db(const char *name); /*!< in: database name which ends to '/' */
 
@@ -47,7 +47,7 @@ char *dict_get_first_table_name_in_db(const char *name); /*!< in: database name 
 the cluster definition if the table is a member in a cluster. Also loads
 all foreign key constraints where the foreign key is in the table or where
 a foreign key references columns in this table.
-@return table, NULL if does not exist; if the table is stored in an
+@return table, nullptr if does not exist; if the table is stored in an
 .ibd file, but the file does not exist, then we set the
 ibd_file_missing flag true in the table object we return */
 dict_table_t *dict_load_table(
@@ -57,7 +57,7 @@ dict_table_t *dict_load_table(
                                         databasename/tablename format */
 
 /** Loads a table object based on the table id.
-@return	table; NULL if table does not exist */
+@return	table; nullptr if table does not exist */
 dict_table_t *dict_load_table_on_id(
   ib_recovery_t recovery, /*!< in: recovery flag */
   uint64_t table_id

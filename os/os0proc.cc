@@ -145,7 +145,7 @@ skip:
   /* Align block size to system page size */
   ut_ad(ut_is_2pow(size));
   size = *n = ut_2pow_round(*n + (size - 1), size);
-  ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | OS_MAP_ANON, -1, 0);
+  ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | OS_MAP_ANON, -1, 0);
   if (unlikely(ptr == (void *)-1)) {
     ib_logger(
       ib_stream,
@@ -154,7 +154,7 @@ skip:
       (ulong)size,
       (ulong)errno
     );
-    ptr = NULL;
+    ptr = nullptr;
   } else {
     os_fast_mutex_lock(&ut_list_mutex);
     ut_total_allocated_memory += size;

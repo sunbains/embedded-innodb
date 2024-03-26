@@ -35,7 +35,8 @@ Created 11/26/1995 Heikki Tuuri
 #include "sync0sync.h"
 #include "ut0byte.h"
 
-/* @} */
+/** Disable redo loggin. */
+void mtr_disable_redo_logging(mtr_t *mtr);
 
 /**
  * @brief Commits a mini-transaction.
@@ -74,6 +75,9 @@ ulint mtr_read_ulint(const byte *ptr, ulint type, mtr_t *mtr);
  */
 uint64_t mtr_read_uint64(const byte *ptr, mtr_t *mtr);
 
+/** Releases the block in an mtr memo after a savepoint. */
+void mtr_release_block_at_savepoint(mtr_t *mtr, ulint savepoint, buf_block_t *block);
+
 /** This macro locks an rw-lock in s-mode. */
 #define mtr_s_lock(B, MTR) mtr_s_lock_func((B), __FILE__, __LINE__, (MTR))
 
@@ -100,9 +104,7 @@ bool mtr_memo_contains_page(
 
 /** Prints info of an mtr handle. */
 void mtr_print(mtr_t *mtr); /*!< in: mtr */
-#endif                      /* UNIV_DEBUG */
-
-/*######################################################################*/
+#endif /* UNIV_DEBUG */
 
 /**
  * @brief Starts a mini-transaction and creates a mini-transaction handle and a buffer in the memory buffer given by the caller.
@@ -118,7 +120,7 @@ inline mtr_t *mtr_start(mtr_t *mtr) {
   mtr->modifications = false;
   mtr->n_log_recs = 0;
 
-  ut_d(mtr->state = MTR_ACTIVE);
+  mtr->state = MTR_ACTIVE;
   ut_d(mtr->magic_n = MTR_MAGIC_N);
 
   return mtr;
@@ -144,6 +146,10 @@ inline void mtr_memo_push(mtr_t *mtr, void *object, ulint type) {
   slot->type = type;
 }
 
+[[nodiscard]] inline bool mtr_is_active(mtr_t *mtr) {
+  return mtr->state == MTR_ACTIVE;
+}
+
 /**
  * @brief Sets and returns a savepoint in mtr.
  * 
@@ -156,7 +162,18 @@ inline ulint mtr_set_savepoint(mtr_t *mtr) {
 
   auto memo = &mtr->memo;
 
+  // FIXME: This can become expensive multi-block mtrs
   return dyn_array_get_data_size(memo);
+}
+
+/**
+ * @brief Gets a savepoint.
+ * 
+ * @param mtr The mtr.
+ * @return Savepoint.
+ */
+inline ulint mtr_get_savepoint(mtr_t *mtr) {
+  return mtr_set_savepoint(mtr);
 }
 
 /**
@@ -181,7 +198,7 @@ inline void mtr_release_s_latch_at_savepoint(mtr_t *mtr, ulint savepoint, rw_loc
 
   rw_lock_s_unlock(lock);
 
-  slot->object = NULL;
+  slot->object = nullptr;
 }
 
 #ifdef UNIV_DEBUG
@@ -280,3 +297,4 @@ inline void mtr_x_lock_func(rw_lock_t *lock, const char *file, ulint line, mtr_t
 
   mtr_memo_push(mtr, lock, MTR_MEMO_X_LOCK);
 }
+

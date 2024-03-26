@@ -63,7 +63,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(
   mem_heap_t *heap;
   mem_heap_t *heap2;
   dtuple_t *row;
-  dtuple_t *entry = NULL; /* assignment to eliminate compiler
+  dtuple_t *entry = nullptr; /* assignment to eliminate compiler
                           warning */
   trx_t *trx;
   ulint rec_del;
@@ -103,18 +103,18 @@ trx_t *row_vers_impl_x_locked_off_kernel(
     mutex_enter(&kernel_mutex);
     mtr_commit(&mtr);
 
-    return (NULL);
+    return (nullptr);
   }
 
   heap = mem_heap_create(1024);
-  clust_offsets = rec_get_offsets(clust_rec, clust_index, NULL, ULINT_UNDEFINED, &heap);
+  clust_offsets = rec_get_offsets(clust_rec, clust_index, nullptr, ULINT_UNDEFINED, &heap);
   trx_id = row_get_rec_trx_id(clust_rec, clust_index, clust_offsets);
 
   mtr_s_lock(&(purge_sys->latch), &mtr);
 
   mutex_enter(&kernel_mutex);
 
-  trx = NULL;
+  trx = nullptr;
   if (!trx_is_active(trx_id)) {
     /* The transaction that modified or inserted clust_rec is no
     longer active: no implicit lock on rec */
@@ -141,7 +141,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(
   modify rec, and does not necessarily have an implicit x-lock on rec. */
 
   rec_del = rec_get_deleted_flag(rec, comp);
-  trx = NULL;
+  trx = nullptr;
 
   version = clust_rec;
 
@@ -165,7 +165,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(
     err = trx_undo_prev_version_build(clust_rec, &mtr, version, clust_index, clust_offsets, heap, &prev_version);
     mem_heap_free(heap2); /* free version and clust_offsets */
 
-    if (prev_version == NULL) {
+    if (prev_version == nullptr) {
       mutex_enter(&kernel_mutex);
 
       if (!trx_is_active(trx_id)) {
@@ -188,7 +188,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(
       break;
     }
 
-    clust_offsets = rec_get_offsets(prev_version, clust_index, NULL, ULINT_UNDEFINED, &heap);
+    clust_offsets = rec_get_offsets(prev_version, clust_index, nullptr, ULINT_UNDEFINED, &heap);
 
     vers_del = rec_get_deleted_flag(prev_version, comp);
     prev_trx_id = row_get_rec_trx_id(prev_version, clust_index, clust_offsets);
@@ -207,7 +207,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(
     /* The stack of versions is locked by mtr.  Thus, it
     is safe to fetch the prefixes for externally stored
     columns. */
-    row = row_build(ROW_COPY_POINTERS, clust_index, prev_version, clust_offsets, NULL, &ext, heap);
+    row = row_build(ROW_COPY_POINTERS, clust_index, prev_version, clust_offsets, nullptr, &ext, heap);
     entry = row_build_index_entry(row, ext, index, heap);
     /* entry may be NULL if a record was inserted in place
     of a deleted record, and the BLOB pointers of the new
@@ -354,7 +354,7 @@ bool row_vers_old_has_index_entry(
   comp = page_rec_is_comp(rec);
   ut_ad(!dict_table_is_comp(index->table) == !comp);
   heap = mem_heap_create(1024);
-  clust_offsets = rec_get_offsets(rec, clust_index, NULL, ULINT_UNDEFINED, &heap);
+  clust_offsets = rec_get_offsets(rec, clust_index, nullptr, ULINT_UNDEFINED, &heap);
 
   if (also_curr && !rec_get_deleted_flag(rec, comp)) {
     row_ext_t *ext;
@@ -362,7 +362,7 @@ bool row_vers_old_has_index_entry(
     /* The stack of versions is locked by mtr.
     Thus, it is safe to fetch the prefixes for
     externally stored columns. */
-    row = row_build(ROW_COPY_POINTERS, clust_index, rec, clust_offsets, NULL, &ext, heap);
+    row = row_build(ROW_COPY_POINTERS, clust_index, rec, clust_offsets, nullptr, &ext, heap);
     entry = row_build_index_entry(row, ext, index, heap);
 
     /* If entry == NULL, the record contains unset BLOB
@@ -410,7 +410,7 @@ bool row_vers_old_has_index_entry(
       return (false);
     }
 
-    clust_offsets = rec_get_offsets(prev_version, clust_index, NULL, ULINT_UNDEFINED, &heap);
+    clust_offsets = rec_get_offsets(prev_version, clust_index, nullptr, ULINT_UNDEFINED, &heap);
 
     if (!rec_get_deleted_flag(prev_version, comp)) {
       row_ext_t *ext;
@@ -418,7 +418,7 @@ bool row_vers_old_has_index_entry(
       /* The stack of versions is locked by mtr.
       Thus, it is safe to fetch the prefixes for
       externally stored columns. */
-      row = row_build(ROW_COPY_POINTERS, clust_index, prev_version, clust_offsets, NULL, &ext, heap);
+      row = row_build(ROW_COPY_POINTERS, clust_index, prev_version, clust_offsets, nullptr, &ext, heap);
       entry = row_build_index_entry(row, ext, index, heap);
 
       /* If entry == NULL, the record contains unset
@@ -433,7 +433,7 @@ bool row_vers_old_has_index_entry(
       a char field, but the collation identifies the old
       and new value anyway! */
 
-      if (entry != NULL && !dtuple_coll_cmp(index->cmp_ctx, ientry, entry)) {
+      if (entry != nullptr && !dtuple_coll_cmp(index->cmp_ctx, ientry, entry)) {
 
         mem_heap_free(heap);
 
@@ -474,7 +474,7 @@ db_err row_vers_build_for_consistent_read(
   const rec_t *version;
   rec_t *prev_version;
   trx_id_t trx_id;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   byte *buf;
   db_err err;
 
@@ -535,9 +535,9 @@ db_err row_vers_build_for_consistent_read(
       break;
     }
 
-    if (prev_version == NULL) {
+    if (prev_version == nullptr) {
       /* It was a freshly inserted version */
-      *old_vers = NULL;
+      *old_vers = nullptr;
       err = DB_SUCCESS;
 
       break;
@@ -594,7 +594,7 @@ ulint row_vers_build_for_semi_consistent_read(
                              it was freshly inserted afterwards */
 {
   const rec_t *version;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   byte *buf;
   ulint err;
   trx_id_t rec_trx_id = 0;
@@ -676,9 +676,9 @@ ulint row_vers_build_for_semi_consistent_read(
       break;
     }
 
-    if (prev_version == NULL) {
+    if (prev_version == nullptr) {
       /* It was a freshly inserted version */
-      *old_vers = NULL;
+      *old_vers = nullptr;
       err = DB_SUCCESS;
 
       break;

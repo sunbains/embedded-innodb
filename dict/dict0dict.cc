@@ -60,7 +60,7 @@ backround operations purge, rollback, foreign key checks reserve this
 in S-mode; we cannot trust that the client protects implicit or background
 operations a table drop since the client does not know about them; therefore
 we need this; NOTE: a transaction which reserves this must keep book
-on the mode in trx_struct::dict_operation_lock_mode */
+on the mode in trx_t::dict_operation_lock_mode */
 rw_lock_t dict_operation_lock{};
 
 #define DICT_HEAP_SIZE \
@@ -414,7 +414,7 @@ bool dict_table_col_in_clustered_key(const dict_table_t *table, ulint n) {
 void dict_init() {
   dict_sys = (dict_sys_t *)mem_alloc(sizeof(dict_sys_t));
 
-  mutex_create(&dict_sys->mutex, SYNC_DICT);
+  mutex_create(&dict_sys->mutex, IF_DEBUG("dict_mutex",) IF_SYNC_DEBUG(SYNC_DICT,) Source_location{});
 
   dict_sys->table_hash = hash_create(buf_pool->get_curr_size() / (DICT_POOL_PER_TABLE_HASH * UNIV_WORD_SIZE));
   dict_sys->table_id_hash = hash_create(buf_pool->get_curr_size() / (DICT_POOL_PER_TABLE_HASH * UNIV_WORD_SIZE));
@@ -424,10 +424,10 @@ void dict_init() {
 
   rw_lock_create(&dict_operation_lock, SYNC_DICT_OPERATION);
 
-  mutex_create(&dict_foreign_err_mutex, SYNC_ANY_LATCH);
+  mutex_create(&dict_foreign_err_mutex, IF_DEBUG("dict_foreign_mutex",) IF_SYNC_DEBUG(SYNC_ANY_LATCH,) Source_location{});
 
   for (int i = 0; i < DICT_INDEX_STAT_MUTEX_SIZE; i++) {
-    mutex_create(&dict_index_stat_mutex[i], SYNC_INDEX_TREE);
+    mutex_create(&dict_index_stat_mutex[i], IF_DEBUG("dict_index_stat_mutex",) IF_SYNC_DEBUG(SYNC_INDEX_TREE,) Source_location{});
   }
 }
 
@@ -3156,7 +3156,7 @@ dtuple_t *dict_index_build_node_ptr(const dict_index_t *index, const rec_t *rec,
   return tuple;
 }
 
-rec_t *dict_index_copy_rec_order_prefix(const dict_index_t *index, const rec_t *rec, ulint *n_fields, byte **buf, ulint *buf_size) {
+rec_t *dict_index_copy_rec_order_prefix(const dict_index_t *index, const rec_t *rec, ulint *n_fields, byte *&buf, ulint &buf_size) {
   prefetch_r(rec);
 
   auto n = dict_index_get_n_unique_in_tree(index);

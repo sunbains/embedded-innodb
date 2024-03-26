@@ -651,7 +651,7 @@ struct lock_op_struct {
 };
 
 /** The lock system struct */
-struct lock_sys_struct {
+struct lock_sys_t {
   hash_table_t *rec_hash; /*!< hash table of the record locks */
 };
 
@@ -703,7 +703,7 @@ inline trx_t *lock_clust_rec_some_has_impl(
     return (trx_get_on_id(trx_id));
   }
 
-  return (NULL);
+  return (nullptr);
 }
 
 /** Gets the heap_no of the smallest user record on a page.

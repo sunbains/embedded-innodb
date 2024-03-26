@@ -24,13 +24,13 @@ Created 2/2/1994 Heikki Tuuri
 #pragma once
 
 #include "dict0types.h"
-#include "innodb0types.h"
 #include "mtr0types.h"
 
 /** Eliminates a name collision on HP-UX */
 #define page_t ib_page_t
+
 /** Type of the index page */
 using page_t = byte;
 
 /** Index page cursor */
-typedef struct page_cur_struct page_cur_t;
+struct page_cur_t;

@@ -177,7 +177,7 @@ static db_err row_upd_check_references_constraints(
 
   trx = thr_get_trx(thr);
 
-  rec = btr_pcur_get_rec(pcur);
+  rec = pcur->get_rec();
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   heap = mem_heap_create(500);
@@ -1026,7 +1026,7 @@ static void row_upd_store_row(upd_node_t *node) /*!< in: row update node */
   const ulint *offsets;
   rec_offs_init(offsets_);
 
-  ut_ad(node->pcur->latch_mode != BTR_NO_LATCHES);
+  ut_ad(node->pcur->m_latch_mode != BTR_NO_LATCHES);
 
   if (node->row != nullptr) {
     mem_heap_empty(node->heap);
@@ -1034,7 +1034,7 @@ static void row_upd_store_row(upd_node_t *node) /*!< in: row update node */
 
   clust_index = dict_table_get_first_index(node->table);
 
-  rec = btr_pcur_get_rec(node->pcur);
+  rec = node->pcur->get_rec();
 
   offsets = rec_get_offsets(rec, clust_index, offsets_, ULINT_UNDEFINED, &heap);
   node->row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr, &node->ext, node->heap);
@@ -1085,7 +1085,7 @@ static db_err row_upd_sec_index_entry(
   mtr_start(&mtr);
 
   found = row_search_index_entry(index, entry, BTR_MODIFY_LEAF, &pcur, &mtr);
-  btr_cur = btr_pcur_get_btr_cur(&pcur);
+  btr_cur = pcur.get_btr_cur();
 
   rec = btr_cur_get_rec(btr_cur);
 
@@ -1127,7 +1127,7 @@ static db_err row_upd_sec_index_entry(
     }
   }
 
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
 
   if (node->is_delete || err != DB_SUCCESS) {
@@ -1196,7 +1196,7 @@ static db_err row_upd_clust_rec_by_insert(
   trx = thr_get_trx(thr);
   table = node->table;
   pcur = node->pcur;
-  btr_cur = btr_pcur_get_btr_cur(pcur);
+  btr_cur = pcur->get_btr_cur();
 
   if (node->state != UPD_NODE_INSERT_CLUSTERED) {
     rec_t *rec;
@@ -1288,9 +1288,9 @@ static db_err row_upd_clust_rec(
   ut_ad(dict_index_is_clust(index));
 
   pcur = node->pcur;
-  btr_cur = btr_pcur_get_btr_cur(pcur);
+  btr_cur = pcur->get_btr_cur();
 
-  ut_ad(!rec_get_deleted_flag(btr_pcur_get_rec(pcur), dict_table_is_comp(index->table)));
+  ut_ad(!rec_get_deleted_flag(pcur->get_rec(), dict_table_is_comp(index->table)));
 
   /* Try optimistic updating of the record, keeping changes within
   the page; we do not check locks because we assume the x-lock on the
@@ -1324,9 +1324,9 @@ static db_err row_upd_clust_rec(
   the same transaction do not modify the record in the meantime.
   Therefore we can assert that the restoration of the cursor succeeds. */
 
-  ut_a(btr_pcur_restore_position(BTR_MODIFY_TREE, pcur, mtr));
+  ut_a(pcur->restore_position(BTR_MODIFY_TREE, mtr, Source_location{}));
 
-  ut_ad(!rec_get_deleted_flag(btr_pcur_get_rec(pcur), dict_table_is_comp(index->table)));
+  ut_ad(!rec_get_deleted_flag(pcur->get_rec(), dict_table_is_comp(index->table)));
 
   err = btr_cur_pessimistic_update(BTR_NO_LOCKING_FLAG, btr_cur, &heap, &big_rec, node->update, node->cmpl_info, thr, mtr);
 
@@ -1339,7 +1339,7 @@ static db_err row_upd_clust_rec(
 
     mtr_start(mtr);
 
-    ut_a(btr_pcur_restore_position(BTR_MODIFY_TREE, pcur, mtr));
+    ut_a(pcur->restore_position(BTR_MODIFY_TREE, mtr, Source_location{}));
 
     rec = btr_cur_get_rec(btr_cur);
 
@@ -1374,16 +1374,14 @@ static db_err row_upd_del_mark_clust_rec(
   mtr_t *mtr
 ) /*!< in: mtr; gets committed here */
 {
-  btr_pcur_t *pcur;
-  btr_cur_t *btr_cur;
   db_err err;
 
   ut_ad(node);
   ut_ad(dict_index_is_clust(index));
   ut_ad(node->is_delete);
 
-  pcur = node->pcur;
-  btr_cur = btr_pcur_get_btr_cur(pcur);
+  auto pcur = node->pcur;
+  auto btr_cur = pcur->get_btr_cur();
 
   /* Store row because we have to build also the secondary index
   entries */
@@ -1446,9 +1444,9 @@ static db_err row_upd_clust_step(
   that case we know that the transaction has at least an
   implicit x-lock on the record. */
 
-  ut_a(pcur->rel_pos == Btree_cursor_pos::ON);
+  ut_a(pcur->m_rel_pos == Btree_cursor_pos::ON);
 
-  success = btr_pcur_restore_position(BTR_MODIFY_LEAF, pcur, mtr);
+  success = pcur->restore_position(BTR_MODIFY_LEAF, mtr, Source_location{});
 
   if (!success) {
     err = DB_RECORD_NOT_FOUND;
@@ -1464,13 +1462,13 @@ static db_err row_upd_clust_step(
 
   if (node->is_delete && node->table->id == DICT_INDEXES_ID) {
 
-    dict_drop_index_tree(btr_pcur_get_rec(pcur), mtr);
+    dict_drop_index_tree(pcur->get_rec(), mtr);
 
     mtr_commit(mtr);
 
     mtr_start(mtr);
 
-    success = btr_pcur_restore_position(BTR_MODIFY_LEAF, pcur, mtr);
+    success = pcur->restore_position(BTR_MODIFY_LEAF, mtr, Source_location{});
     if (!success) {
       err = DB_ERROR;
 
@@ -1480,11 +1478,11 @@ static db_err row_upd_clust_step(
     }
   }
 
-  rec = btr_pcur_get_rec(pcur);
+  rec = pcur->get_rec();
   offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
 
   if (!node->has_clust_rec_x_lock) {
-    err = lock_clust_rec_modify_check_and_lock(0, btr_pcur_get_block(pcur), rec, index, offsets, thr);
+    err = lock_clust_rec_modify_check_and_lock(0, pcur->get_block(), rec, index, offsets, thr);
     if (err != DB_SUCCESS) {
       mtr_commit(mtr);
       goto exit_func;
@@ -1742,7 +1740,7 @@ upd_node_t *row_create_update_node(dict_table_t *table, mem_heap_t *heap) {
   node->is_delete = false;
   node->searched_update = false;
   node->select = nullptr;
-  node->pcur = btr_pcur_create();
+  node->pcur = new btr_pcur_t();
   node->table = table;
 
   node->update = upd_create(dict_table_get_n_cols(table), heap);

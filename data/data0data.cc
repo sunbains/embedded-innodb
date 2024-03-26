@@ -226,7 +226,7 @@ void dfield_print(const dfield_t *dfield) {
   auto data = (const byte *)dfield_get_data(dfield);
 
   if (dfield_is_null(dfield)) {
-    ib_logger(ib_stream, "NULL");
+    ib_logger(ib_stream, "nullptr");
 
     return;
   }
@@ -260,7 +260,7 @@ void dfield_print_also_hex(const dfield_t *dfield) {
   auto data = (const byte *)dfield_get_data(dfield);
 
   if (dfield_is_null(dfield)) {
-    ib_logger(ib_stream, "NULL");
+    ib_logger(ib_stream, "nullptr");
 
     return;
   }
@@ -417,7 +417,7 @@ static void dfield_print_raw(
       ib_logger(ib_stream, "(total %lu bytes%s)", (ulong)len, dfield_is_ext(dfield) ? ", external" : "");
     }
   } else {
-    ib_logger(ib_stream, " SQL NULL");
+    ib_logger(ib_stream, " SQL nullptr");
   }
 }
 
@@ -451,7 +451,7 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n
   ulint local_prefix_len;
 
   if (unlikely(!dict_index_is_clust(index))) {
-    return (NULL);
+    return (nullptr);
   }
 
   if (dict_table_get_format(index->table) < DICT_TF_FORMAT_V1) {
@@ -499,7 +499,7 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n
       dfield = dtuple_get_nth_field(entry, i);
       ifield = dict_index_get_nth_field(index, i);
 
-      /* Skip fixed-length, NULL, externally stored,
+      /* Skip fixed-length, nullptr, externally stored,
       or short columns */
 
       if (ifield->fixed_len || dfield_is_null(dfield) || dfield_is_ext(dfield) || dfield_get_len(dfield) <= local_len || dfield_get_len(dfield) <= BTR_EXTERN_FIELD_REF_SIZE * 2) {
@@ -539,7 +539,7 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n
 
       mem_heap_free(heap);
 
-      return (NULL);
+      return (nullptr);
     }
 
     /* Move data from field longest_i to big rec vector.
@@ -599,4 +599,16 @@ void dtuple_convert_back_big_rec(dict_index_t *index __attribute__((unused)), dt
   }
 
   mem_heap_free(vector->heap);
+}
+
+std::ostream &dfield_t::print(std::ostream &out) const {
+  out << "dfield_t { data:" << (void *)data << ", ext=" << (ulint) ext << " ";
+
+  if (dfield_is_ext(this)) {
+    out << (static_cast<byte*>(data) + len - BTR_EXTERN_FIELD_REF_SIZE);
+  }
+
+  out << ", len=" << len << ", type=TBD" << "}";
+
+  return out;
 }

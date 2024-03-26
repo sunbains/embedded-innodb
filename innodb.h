@@ -25,6 +25,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define INNODB_API
 #define INNODB_LOCAL
 
+// FIXME: Functions tagged with UNIV_NO_IGNORE should be
+// tagged with [[nounused]]
+#define UNIV_NO_IGNORE
+
 /** \enum db_err InnoDB error codes.
     Most of the error codes are internal to the engine
     and will not be seen by user applications. The partial error codes reflect
@@ -147,7 +151,7 @@ enum db_err {
 	recoginize or work with e.g., FT indexes created by a later version of the engine. */
 	DB_UNSUPPORTED,			
 
-	/** A column in the PRIMARY KEY was found to be NULL */
+	/** A column in the PRIMARY KEY was found to be nullptr */
 	DB_PRIMARY_KEY_IS_NULL,		
 
 	/** The application should clean up and quite ASAP. Fatal error,
@@ -197,37 +201,32 @@ enum db_err {
 
 	/** Generic error code for "Invalid input" type of errors */
 	DB_INVALID_INPUT,		
+
+	/** Out of a resource, could be memory, threads, file descriptors etc. */
+	DB_OUT_OF_RESOURCES,
 };
+
+using dberr_t = db_err;
+
 #include <stdio.h>
 
-#ifdef _MSC_VER
-#define strncasecmp		_strnicmp
-#define strcasecmp		_stricmp
-#endif
-
-/** \def UNIV_NO_IGNORE
-    Some InnoDB methods will produce warnings if the result of calling them is not
-    checked in client code. This uses a GCC compiler extension. */
-#if defined(__GNUC__) && (__GNUC__ > 2) && ! defined(__INTEL_COMPILER)
-#define UNIV_NO_IGNORE		__attribute__ ((warn_unused_result))
-#else
-#define UNIV_NO_IGNORE
-#endif /* __GNUC__ && __GNUC__ > 2 && !__INTEL_COMPILER */
-
 /* Basic types used by the InnoDB API. */
+
 /** All InnoDB error codes are represented by ib_err_t. See \ref db_err for
-    a complete list of possible error codes.
- */
-typedef enum db_err             ib_err_t;
+a complete list of possible error codes. */
+using ib_err_t = dberr_t;
+
 /** Representation of a byte within InnoDB */
-typedef unsigned char           ib_byte_t;
+using ib_byte_t = unsigned char;
+
 /** Representation of an unsigned long int within InnoDB */
-typedef unsigned long int       ib_ulint_t;
+using ib_ulint_t = unsigned long int;
+
 /** Representation of a void* within InnoDB */
-typedef void*                   ib_opaque_t;
+using ib_opaque_t = void*;
 
 /** A character set pointer */
-typedef ib_opaque_t             ib_charset_t;
+using ib_charset_t = ib_opaque_t;
 
 /* We assume C99 support except when using VisualStudio. */
 #if !defined(_MSC_VER)
@@ -236,102 +235,50 @@ typedef ib_opaque_t             ib_charset_t;
 
 /* Integer types used by the API. Microsft VS defines its own types
 and we use the Microsoft types when building with Visual Studio. */
-#if defined(_MSC_VER)
 /** A signed 8 bit integral type. */
-typedef __int8			ib_i8_t;
-#else
-/** A signed 8 bit integral type. */
-typedef int8_t                  ib_i8_t;
-#endif
+using ib_i8_t = int8_t;
 
-#if defined(_MSC_VER)
 /** An unsigned 8 bit integral type. */
-typedef unsigned __int8		ib_u8_t;
-#else
-/** An unsigned 8 bit integral type. */
-typedef uint8_t                 ib_u8_t;
-#endif
+using ib_u8_t = uint8_t;
 
-#if defined(_MSC_VER)
 /** A signed 16 bit integral type. */
-typedef __int16			ib_i16_t;
-#else
-/** A signed 16 bit integral type. */
-typedef int16_t                 ib_i16_t;
-#endif
+using ib_i16_t = int16_t;
 
-#if defined(_MSC_VER)
 /** An unsigned 16 bit integral type. */
-typedef unsigned __int16	ib_u16_t;
-#else
-/** An unsigned 16 bit integral type. */
-typedef uint16_t                ib_u16_t;
-#endif
+using ib_u16_t = uint16_t;
 
-#if defined(_MSC_VER)
 /** A signed 32 bit integral type. */
-typedef __int32			ib_i32_t;
-#else
-/** A signed 32 bit integral type. */
-typedef int32_t                 ib_i32_t;
-#endif
+using ib_i32_t = int32_t;
 
-#if defined(_MSC_VER)
 /** An unsigned 32 bit integral type. */
-typedef unsigned __int32	ib_u32_t;
-#else
-/** An unsigned 32 bit integral type. */
-typedef uint32_t                ib_u32_t;
-#endif
+using ib_u32_t = uint32_t;
 
-#if defined(_MSC_VER)
 /** A signed 64 bit integral type. */
-typedef __int64			ib_i64_t;
-#else
-/** A signed 64 bit integral type. */
-typedef int64_t                 ib_i64_t;
-#endif
+using ib_i64_t = int64_t;
 
-#if defined(_MSC_VER)
 /** An unsigned 64 bit integral type. */
-typedef unsigned __int64	ib_u64_t;
-#else
-/** An unsigned 64 bit integral type. */
-typedef uint64_t                ib_u64_t;
-#endif
+using ib_u64_t = uint64_t;
 
 /** The integral type that represents internal table and index ids. */
-typedef ib_u64_t                ib_id_t;
+using ib_id_t = ib_u64_t;
 
 /** @enum ib_cfg_type_t Possible types for a configuration variable. */
-typedef enum {
-	IB_CFG_IBOOL,			/*!< The configuration parameter is
-					of type ibool */
+enum ib_cfg_type_t {
+	/** The configuration parameter is of type ibool */
+	IB_CFG_IBOOL,
 
-	/* XXX Can we avoid having different types for ulint and ulong?
-	- On Win64 "unsigned long" is 32 bits
-	- ulong is always defined as "unsigned long"
-	- On Win64 ulint is defined as 64 bit integer
-	=> On Win64 ulint != ulong.
-	If we typecast all ulong and ulint variables to the smaller type
-	ulong, then we will cut the range of the ulint variables.
-	This is not a problem for most ulint variables because their max
-	allowed values do not exceed 2^32-1 (e.g. log_groups is ulint
-	but its max allowed value is 10). BUT buffer_pool_size and
-	log_file_size allow up to 2^64-1. */
+ 	/** The configuration parameter is of type ulint */
+	IB_CFG_ULINT,
 
-	IB_CFG_ULINT,			/*!< The configuration parameter is
-					of type ulint */
+ 	/** The configuration parameter is of type ulong */
+	IB_CFG_ULONG,
 
-	IB_CFG_ULONG,			/*!< The configuration parameter is
-					of type ulong */
+	/** The configuration parameter is of type char* */
+	IB_CFG_TEXT,
 
-	IB_CFG_TEXT,			/*!< The configuration parameter is
-					of type char* */
-
-	IB_CFG_CB			/*!< The configuration parameter is
-					a callback parameter */
-} ib_cfg_type_t;
+	/** The configuration parameter is a callback parameter */
+	IB_CFG_CB
+};
 
 /** @enum ib_col_type_t  column types that are supported. */
 enum ib_col_type_t : int {
@@ -396,7 +343,7 @@ typedef enum {
 typedef enum {
 	IB_COL_NONE = 0,		/*!< No special attributes. */
 
-	IB_COL_NOT_NULL = 1,		/*!< Column data can't be NULL. */
+	IB_COL_NOT_NULL = 1,		/*!< Column data can't be nullptr. */
 
 	IB_COL_UNSIGNED = 2,		/*!< Column is IB_INT and unsigned. */
 
@@ -737,7 +684,7 @@ Add an UNSIGNED BIGINT column to a table schema.
 	ib_table_schema_add_col(s, n, IB_INT, IB_COL_UNSIGNED, 0, 8)
 
 /*! @def ib_tbl_sch_add_u64_notnull_col(s, n)
-Add an UNSIGNED BIGINT NOT NULL column to a table schema.
+Add an UNSIGNED BIGINT NOT nullptr column to a table schema.
 @param s is the schema handle
 @param n is the column name
 @return DB_SUCCESS or error code */
@@ -814,8 +761,7 @@ extern ib_client_cmp_t	ib_client_compare;
 @return	API version number */
 
 INNODB_API
-ib_u64_t
-ib_api_version(void) UNIV_NO_IGNORE;
+[[nodiscard]] ib_u64_t ib_api_version();
 
 /** Initialize the InnoDB engine. This must be called prior to calling
 any other InnoDB API function. You can call only the ib_cfg_*() functions
@@ -826,8 +772,7 @@ functions should be called.
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
-ib_init(void) UNIV_NO_IGNORE;
+[[nodiscard]] ib_err_t ib_init();
 
 /** Startup the InnoDB engine. If this function is called on a non-existent
 database then based on the default or user specified configuration
@@ -841,8 +786,7 @@ will recreate the REDO log files.
 @see DB_SUCCESS */
 
 INNODB_API
-ib_err_t
-ib_startup(const char* format) UNIV_NO_IGNORE;
+[[nodiscard]] ib_err_t ib_startup(const char* format);
 
 /** Shutdown the InnoDB engine. Call this function when they are no 
 active transactions. It will close all files and release all memory
@@ -854,8 +798,7 @@ default values.
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
-ib_shutdown(ib_shutdown_t	flag) UNIV_NO_IGNORE;
+[[nodiscard]] ib_err_t ib_shutdown(ib_shutdown_t flag);
 
 /** Start a transaction that's been rolled back. This special function
 exists for the case when InnoDB's deadlock detector has rolledack
@@ -1167,7 +1110,7 @@ ib_index_drop(
 
 @ingroup cursor
 @param table_id is the id of the table to open
-@param ib_trx is the current transaction handle, can be NULL
+@param ib_trx is the current transaction handle, can be nullptr
 @param[out] ib_crsr is the new cursor
 @return	DB_SUCCESS or err code */
 
@@ -1182,7 +1125,7 @@ ib_cursor_open_table_using_id(
 
 @ingroup cursor
 @param index_id is the id of the index to open
-@param ib_trx is the current transaction handlem can be NULL
+@param ib_trx is the current transaction handlem can be nullptr
 @param[out] ib_crsr is the new cursor
 @return	DB_SUCCESS or err code */
 
@@ -1212,7 +1155,7 @@ ib_cursor_open_index_using_name(
 
 @ingroup cursor
 @param name is the table name to open
-@param ib_trx is the current transactionm, can be NULL
+@param ib_trx is the current transactionm, can be nullptr
 @param ib_crsr is the new cursor
 @return	DB_SUCCESS or err code */
 
@@ -1566,7 +1509,7 @@ ib_tuple_read_u64(
 @ingroup dml
 @param ib_tpl is the tuple instance
 @param i is the index (ordinal position) of the column within the tuple
-@return	NULL or pointer to buffer */
+@return	nullptr or pointer to buffer */
 
 INNODB_API
 const void*
@@ -1593,7 +1536,7 @@ ib_col_get_meta(
 
 @ingroup tuple
 @param ib_tpl is the tuple to be freed
-@return	new tuple, or NULL */
+@return	new tuple, or nullptr */
 
 INNODB_API
 ib_tpl_t
@@ -1707,7 +1650,7 @@ void
 ib_tuple_delete(
 	ib_tpl_t	ib_tpl);
 
-/** Truncate a table. The cursor handle will be closed and set to NULL
+/** Truncate a table. The cursor handle will be closed and set to nullptr
 on success.
 
 @ingroup ddl
@@ -2047,12 +1990,12 @@ savepoint are undone but InnoDB does NOT release the corresponding locks
 which are stored in memory. If a lock is 'implicit', that is, a new inserted
 row holds a lock where the lock information is carried by the trx id stored in
 the row, these locks are naturally released in the rollback. Savepoints which
-were set after this savepoint are deleted. If name equals NULL then all the
+were set after this savepoint are deleted. If name equals nullptr then all the
 savepoints are rolled back.
 
 @ingroup trx
 @param ib_trx is the active transaction
-@param name is the savepoint name  can be NULL
+@param name is the savepoint name  can be nullptr
 @param name_len is the length of name in bytes
 @return	if no savepoint of the name found then DB_NO_SAVEPOINT,
         otherwise DB_SUCCESS */
@@ -2479,6 +2422,6 @@ extern int level;
 
 // FIXME: Change to proper C++ style streams
 /** The first argument to the InnoDB error logging function. */
-typedef FILE *ib_stream_t;
+using ib_stream_t = FILE *;
 
 extern ib_stream_t ib_stream;

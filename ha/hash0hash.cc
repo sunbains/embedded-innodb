@@ -54,9 +54,9 @@ hash_table_t *hash_create(ulint n) {
   table->array = array;
   table->n_cells = prime;
   table->n_mutexes = 0;
-  table->mutexes = NULL;
-  table->heaps = NULL;
-  table->heap = NULL;
+  table->mutexes = nullptr;
+  table->heaps = nullptr;
+  table->heap = nullptr;
   ut_d(table->magic_n = HASH_TABLE_MAGIC_N);
 
   /* Initialize the cell array */
@@ -67,7 +67,7 @@ hash_table_t *hash_create(ulint n) {
 
 void hash_table_free(hash_table_t *table) {
   ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
-  ut_a(table->mutexes == NULL);
+  ut_a(table->mutexes == nullptr);
 
   ut_free(table->array);
   mem_free(table);
@@ -85,10 +85,10 @@ void hash_create_mutexes_func(
   ut_a(ut_is_2pow(n_mutexes));
   ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
 
-  table->mutexes = (mutex_t *)mem_alloc(n_mutexes * sizeof(mutex_t));
+  table->mutexes = new mutex_t[n_mutexes];
 
   for (ulint i = 0; i < n_mutexes; i++) {
-    mutex_create(table->mutexes + i, sync_level);
+    mutex_create(table->mutexes + i, IF_DEBUG("hash_mutex",) IF_SYNC_DEBUG(sync_level,) Source_location{});
   }
 
   table->n_mutexes = n_mutexes;
@@ -99,5 +99,5 @@ void hash_free_mutexes_func(hash_table_t *table) {
     mutex_free(&table->mutexes[i]);
   }
 
-  mem_free(table->mutexes);
+  delete [] table->mutexes;
 }

@@ -154,8 +154,8 @@ constexpr ulint PAGE_NO_DIRECTION = 5;
                         ==============
 */
 
-typedef byte page_dir_slot_t;
-typedef page_dir_slot_t page_dir_t;
+using page_dir_slot_t = byte;
+using page_dir_t = page_dir_slot_t;
 
 /** Offset of the directory start down from the page end. We call the
 slot with the highest file address directory start, as it points to
@@ -180,7 +180,6 @@ void page_set_max_trx_id(
   trx_id_t trx_id,    /*!< in: transaction id */
   mtr_t *mtr
 ); /*!< in/out: mini-transaction, or NULL */
-
 
 #define page_get_infimum_rec(page) ((page) + page_get_infimum_offset(page))
 
@@ -216,7 +215,7 @@ inline ulint page_header_get_offs(
 
 /** Returns the pointer stored in the given header field, or NULL. */
 inline page_t *page_header_get_ptr(page_t *page, ulint field) {
-  return page_header_get_offs(page, field) ? page + page_header_get_offs(page, field) : NULL;
+  return page_header_get_offs(page, field) ? page + page_header_get_offs(page, field) : nullptr;
 }
 
 
@@ -551,7 +550,7 @@ inline void page_header_set_ptr(
   ut_ad(page);
   ut_ad((field == PAGE_FREE) || (field == PAGE_LAST_INSERT) || (field == PAGE_HEAP_TOP));
 
-  if (ptr == NULL) {
+  if (ptr == nullptr) {
     offs = 0;
   } else {
     offs = ptr - page;
@@ -633,25 +632,14 @@ inline ulint page_get_supremum_offset(const page_t *page) /*!< in: page which mu
 inline bool page_rec_is_user_rec_low(ulint offset) /*!< in: record offset on page */
 {
   ut_ad(offset >= PAGE_NEW_INFIMUM);
-#if PAGE_OLD_INFIMUM < PAGE_NEW_INFIMUM
-#error "PAGE_OLD_INFIMUM < PAGE_NEW_INFIMUM"
-#endif
-#if PAGE_OLD_SUPREMUM < PAGE_NEW_SUPREMUM
-#error "PAGE_OLD_SUPREMUM < PAGE_NEW_SUPREMUM"
-#endif
-#if PAGE_NEW_INFIMUM > PAGE_OLD_SUPREMUM
-#error "PAGE_NEW_INFIMUM > PAGE_OLD_SUPREMUM"
-#endif
-#if PAGE_OLD_INFIMUM > PAGE_NEW_SUPREMUM
-#error "PAGE_OLD_INFIMUM > PAGE_NEW_SUPREMUM"
-#endif
-#if PAGE_NEW_SUPREMUM > PAGE_OLD_SUPREMUM_END
-#error "PAGE_NEW_SUPREMUM > PAGE_OLD_SUPREMUM_END"
-#endif
-#if PAGE_OLD_SUPREMUM > PAGE_NEW_SUPREMUM_END
-#error "PAGE_OLD_SUPREMUM > PAGE_NEW_SUPREMUM_END"
-#endif
   ut_ad(offset <= UNIV_PAGE_SIZE - PAGE_EMPTY_DIR_START);
+
+  static_assert(PAGE_OLD_INFIMUM >= PAGE_NEW_INFIMUM, "error PAGE_OLD_INFIMUM < PAGE_NEW_INFIMUM");
+  static_assert(PAGE_OLD_SUPREMUM >= PAGE_NEW_SUPREMUM, "error PAGE_OLD_SUPREMUM < PAGE_NEW_SUPREMUM");
+  static_assert(PAGE_NEW_INFIMUM <= PAGE_OLD_SUPREMUM, "error PAGE_NEW_INFIMUM > PAGE_OLD_SUPREMUM");
+  static_assert(PAGE_OLD_INFIMUM <= PAGE_NEW_SUPREMUM, "error PAGE_OLD_INFIMUM > PAGE_NEW_SUPREMUM");
+  static_assert(PAGE_NEW_SUPREMUM <= PAGE_OLD_SUPREMUM_END, "error PAGE_NEW_SUPREMUM > PAGE_OLD_SUPREMUM_END");
+  static_assert(PAGE_OLD_SUPREMUM <= PAGE_NEW_SUPREMUM_END, "error PAGE_OLD_SUPREMUM > PAGE_NEW_SUPREMUM_END");
 
   return (
     likely(offset != PAGE_NEW_SUPREMUM) && likely(offset != PAGE_NEW_INFIMUM) && likely(offset != PAGE_OLD_INFIMUM) &&
@@ -727,7 +715,7 @@ inline int page_cmp_dtuple_rec_with_match(
   ulint rec_offset;
 
   ut_ad(dtuple_check_typed(dtuple));
-  ut_ad(rec_offs_validate(rec, NULL, offsets));
+  ut_ad(rec_offs_validate(rec, nullptr, offsets));
   ut_ad(!rec_offs_comp(offsets) == !page_rec_is_comp(rec));
 
   rec_offset = page_offset(rec);
@@ -915,7 +903,7 @@ inline const rec_t *page_rec_get_next_low(
 
   if (unlikely(offs == 0)) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   return (page + offs);
@@ -952,7 +940,7 @@ inline void page_rec_set_next(
   ut_ad(!next || !page_rec_is_infimum(next));
   ut_ad(!next || page_align(rec) == page_align(next));
 
-  if (likely(next != NULL)) {
+  if (likely(next != nullptr)) {
     offs = page_offset(next);
   } else {
     offs = 0;
@@ -973,7 +961,7 @@ inline const rec_t *page_rec_get_prev_const(const rec_t *rec) /*!< in: pointer t
   const page_dir_slot_t *slot;
   ulint slot_no;
   const rec_t *rec2;
-  const rec_t *prev_rec = NULL;
+  const rec_t *prev_rec = nullptr;
   const page_t *page;
 
   ut_ad(page_rec_check(rec));
@@ -1076,7 +1064,7 @@ inline void page_mem_alloc_free(
 
   ut_ad(old_rec);
   next_offs = rec_get_next_offs(old_rec, page_is_comp(page));
-  ut_ad(next_rec == (next_offs ? page + next_offs : NULL));
+  ut_ad(next_rec == (next_offs ? page + next_offs : nullptr));
 #endif /* UNIV_DEBUG */
 
   page_header_set_ptr(page, PAGE_FREE, next_rec);

@@ -49,34 +49,11 @@ location (which must be appropriately aligned). The mutex is initialized
 in the reset state. Explicit freeing of the mutex with mutex_free is
 necessary only if the memory block containing it is freed. */
 
-#ifdef UNIV_DEBUG
-#ifdef UNIV_SYNC_DEBUG
-#define mutex_create(M, level)
-mutex_create_func((M), #M, (level), __FILE__, __LINE__)
-#else
-#define mutex_create(M, level) mutex_create_func((M), #M, __FILE__, __LINE__)
-#endif /* UNIV_SYNC_DEBUG */
-#else
-#define mutex_create(M, level) mutex_create_func((M), __FILE__, __LINE__)
-#endif /* UNIV_DEBUG */
-
-  /** Creates, or rather, initializes a mutex object in a specified memory
+/** Creates, or rather, initializes a mutex object in a specified memory
 location (which must be appropriately aligned). The mutex is initialized
 in the reset state. Explicit freeing of the mutex with mutex_free is
 necessary only if the memory block containing it is freed. */
-  void mutex_create_func(
-    mutex_t *mutex, /** in: pointer to memory */
-#ifdef UNIV_DEBUG
-    const char *cmutex_name, /** in: mutex name */
-#ifdef UNIV_SYNC_DEBUG
-    ulint level,            /** in: level */
-#endif                      /* UNIV_SYNC_DEBUG */
-#endif                      /* UNIV_DEBUG */
-    const char *cfile_name, /** in: file name where created */
-    ulint cline
-  ); /** in: file line where created */
-
-#undef mutex_free /* Fix for MacOS X */
+void mutex_create(mutex_t *mutex, IF_DEBUG(const char *cmutex_name,) IF_SYNC_DEBUG(ulint level,) Source_location loc);
 
 /** Calling this function is obligatory only if the memory buffer containing
 the mutex is freed. Removes a mutex object from the mutex list. The mutex
@@ -159,12 +136,12 @@ bool sync_thread_levels_empty(void);
 
 /** Checks if the level array for the current thread contains a
 mutex or rw-latch at the specified level.
-@return	a matching latch, or NULL if not found */
+@return	a matching latch, or nullptr if not found */
 void *sync_thread_levels_contains(ulint level); /** in: latching order level
                                                 (SYNC_DICT, ...)*/
 
 /** Checks if the level array for the current thread is empty.
-@return	a latch, or NULL if empty except the exceptions specified below */
+@return	a latch, or nullptr if empty except the exceptions specified below */
 void *sync_thread_levels_nonempty_gen(bool dict_mutex_allowed); /** in: true if dictionary mutex is
                                allowed to be owned by the thread,
                                also purge_is_running mutex is
@@ -381,6 +358,7 @@ constexpr ulint SYNC_SEARCH_SYS = 160;
 
 constexpr ulint SYNC_BUF_POOL = 150;
 constexpr ulint SYNC_BUF_BLOCK = 149;
+constexpr ulint SYNC_PARALLEL_READ = 148;
 constexpr ulint SYNC_DOUBLEWRITE = 140;
 constexpr ulint SYNC_ANY_LATCH = 135;
 constexpr ulint SYNC_THR_LOCAL = 133;

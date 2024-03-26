@@ -52,7 +52,7 @@ static db_err row_undo_ins_remove_clust_rec(undo_node_t *node) {
 
   mtr_start(&mtr);
 
-  auto success = btr_pcur_restore_position(BTR_MODIFY_LEAF, &(node->pcur), &mtr);
+  auto success = node->pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
   ut_a(success);
 
   if (node->table->id == DICT_INDEXES_ID) {
@@ -61,21 +61,21 @@ static db_err row_undo_ins_remove_clust_rec(undo_node_t *node) {
     /* Drop the index tree associated with the row in
     SYS_INDEXES table: */
 
-    dict_drop_index_tree(btr_pcur_get_rec(&(node->pcur)), &mtr);
+    dict_drop_index_tree(node->pcur.get_rec(), &mtr);
 
     mtr_commit(&mtr);
 
     mtr_start(&mtr);
 
-    success = btr_pcur_restore_position(BTR_MODIFY_LEAF, &(node->pcur), &mtr);
+    success = node->pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
     ut_a(success);
   }
 
-  btr_cur = btr_pcur_get_btr_cur(&(node->pcur));
+  btr_cur = node->pcur.get_btr_cur();
 
   success = btr_cur_optimistic_delete(btr_cur, &mtr);
 
-  btr_pcur_commit_specify_mtr(&(node->pcur), &mtr);
+  node->pcur.commit_specify_mtr(&mtr);
 
   if (success) {
     trx_undo_rec_release(node->trx, node->undo_no);
@@ -86,7 +86,7 @@ retry:
   /* If did not succeed, try pessimistic descent to tree */
   mtr_start(&mtr);
 
-  success = btr_pcur_restore_position(BTR_MODIFY_TREE, &(node->pcur), &mtr);
+  success = node->pcur.restore_position(BTR_MODIFY_TREE, &mtr, Source_location{});
   ut_a(success);
 
   btr_cur_pessimistic_delete(&err, false, btr_cur, trx_is_recv(node->trx) ? RB_RECOVERY : RB_NORMAL, &mtr);
@@ -97,7 +97,7 @@ retry:
 
   if (err == DB_OUT_OF_FILE_SPACE && n_tries < BTR_CUR_RETRY_DELETE_N_TIMES) {
 
-    btr_pcur_commit_specify_mtr(&(node->pcur), &mtr);
+    node->pcur.commit_specify_mtr(&mtr);
 
     ++n_tries;
 
@@ -106,7 +106,7 @@ retry:
     goto retry;
   }
 
-  btr_pcur_commit_specify_mtr(&(node->pcur), &mtr);
+  node->pcur.commit_specify_mtr(&mtr);
 
   trx_undo_rec_release(node->trx, node->undo_no);
 
@@ -121,37 +121,28 @@ retry:
 @param[in] entry                Index entry to remove
 @return	DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE */
 static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtuple_t *entry) {
-  btr_pcur_t pcur;
-  btr_cur_t *btr_cur;
-  bool found;
-  bool success;
   db_err err;
   mtr_t mtr;
+  btr_pcur_t pcur;
 
   log_free_check();
   mtr_start(&mtr);
 
-  found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
-
-  btr_cur = btr_pcur_get_btr_cur(&pcur);
+  auto found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
+  auto btr_cur = pcur.get_btr_cur();
 
   if (!found) {
     /* Not found */
 
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
 
     return DB_SUCCESS;
   }
 
   if (mode == BTR_MODIFY_LEAF) {
-    success = btr_cur_optimistic_delete(btr_cur, &mtr);
-
-    if (success) {
-      err = DB_SUCCESS;
-    } else {
-      err = DB_FAIL;
-    }
+    auto success = btr_cur_optimistic_delete(btr_cur, &mtr);
+    err = success ? DB_SUCCESS : DB_FAIL;
   } else {
     ut_ad(mode == BTR_MODIFY_TREE);
 
@@ -164,7 +155,7 @@ static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtupl
     btr_cur_pessimistic_delete(&err, false, btr_cur, RB_NORMAL, &mtr);
   }
 
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
 
   return err;

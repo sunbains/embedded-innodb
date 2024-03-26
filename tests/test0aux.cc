@@ -328,27 +328,27 @@ int gen_rand_text(char *ptr,    /*!< in,out: text written here */
 }
 
 struct option ib_longopts[] = {
-    {"ib-buffer-pool-size", required_argument, NULL, 1},
-    {"ib-log-file-size", required_argument, NULL, 2},
-    {"ib-disable-ahi", no_argument, NULL, 3},
-    {"ib-io-capacity", required_argument, NULL, 4},
-    {"ib-use-sys-malloc", required_argument, NULL, 5},
-    {"ib-lru-old-ratio", required_argument, NULL, 6},
-    {"ib-lru-access-threshold", required_argument, NULL, 7},
-    {"ib-force-recovery", required_argument, NULL, 8},
-    {"ib-log-dir", required_argument, NULL, 9},
-    {"ib-data-dir", required_argument, NULL, 10},
-    {"ib-data-file-path", required_argument, NULL, 11},
-    {"ib-disble-dblwr", no_argument, NULL, 12},
-    {"ib-disble-checksum", no_argument, NULL, 13},
-    {"ib-disble-file-per-table", no_argument, NULL, 14},
-    {"ib-flush-log-at-trx-commit", required_argument, NULL, 15},
-    {"ib-flush-method", required_argument, NULL, 16},
-    {"ib-read-threads", required_argument, NULL, 17},
-    {"ib-write-threads", required_argument, NULL, 18},
-    {"ib-max-open-files", required_argument, NULL, 19},
-    {"ib-lock-wait-timeout", required_argument, NULL, 20},
-    {NULL, 0, NULL, 0}};
+    {"ib-buffer-pool-size", required_argument, nullptr, 1},
+    {"ib-log-file-size", required_argument, nullptr, 2},
+    {"ib-disable-ahi", no_argument, nullptr, 3},
+    {"ib-io-capacity", required_argument, nullptr, 4},
+    {"ib-use-sys-malloc", required_argument, nullptr, 5},
+    {"ib-lru-old-ratio", required_argument, nullptr, 6},
+    {"ib-lru-access-threshold", required_argument, nullptr, 7},
+    {"ib-force-recovery", required_argument, nullptr, 8},
+    {"ib-log-dir", required_argument, nullptr, 9},
+    {"ib-data-dir", required_argument, nullptr, 10},
+    {"ib-data-file-path", required_argument, nullptr, 11},
+    {"ib-disble-dblwr", no_argument, nullptr, 12},
+    {"ib-disble-checksum", no_argument, nullptr, 13},
+    {"ib-disble-file-per-table", no_argument, nullptr, 14},
+    {"ib-flush-log-at-trx-commit", required_argument, nullptr, 15},
+    {"ib-flush-method", required_argument, nullptr, 16},
+    {"ib-read-threads", required_argument, nullptr, 17},
+    {"ib-write-threads", required_argument, nullptr, 18},
+    {"ib-max-open-files", required_argument, nullptr, 19},
+    {"ib-lock-wait-timeout", required_argument, nullptr, 20},
+    {nullptr, 0, nullptr, 0}};
 
 /** Print usage. */
 void print_usage(const char *progname) {
@@ -386,7 +386,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 1: {
     ib_ulint_t size;
 
-    size = strtoul(arg, NULL, 10);
+    size = strtoul(arg, nullptr, 10);
     size *= 1024UL * 1024UL;
     err = ib_cfg_set_int("buffer_pool_size", size);
     assert(err == DB_SUCCESS);
@@ -395,7 +395,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 2: {
     ib_ulint_t size;
 
-    size = strtoul(arg, NULL, 10);
+    size = strtoul(arg, nullptr, 10);
     size *= 1024UL * 1024UL;
     err = ib_cfg_set_int("log_file_size", size);
     assert(err == DB_SUCCESS);
@@ -404,7 +404,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 3: {
     ib_ulint_t size;
 
-    size = strtoul(arg, NULL, 10);
+    size = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("io_capacity", size);
     assert(err == DB_SUCCESS);
     break;
@@ -417,7 +417,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 5: {
     ib_ulint_t pct;
 
-    pct = strtoul(arg, NULL, 10);
+    pct = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("lru_old_blocks_pct", pct);
     assert(err == DB_SUCCESS);
     break;
@@ -426,7 +426,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 6: {
     ib_ulint_t pct;
 
-    pct = strtoul(arg, NULL, 10);
+    pct = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("lru_block_access_recency", pct);
     assert(err == DB_SUCCESS);
     break;
@@ -435,7 +435,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 7: {
     ib_ulint_t level;
 
-    level = strtoul(arg, NULL, 10);
+    level = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("force_recovery", level);
     assert(err == DB_SUCCESS);
     break;
@@ -480,7 +480,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 14: {
     ib_ulint_t level;
 
-    level = strtoul(arg, NULL, 10);
+    level = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("flush_log_at_trx_commit", level);
     assert(err == DB_SUCCESS);
     break;
@@ -495,7 +495,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 16: {
     ib_ulint_t threads;
 
-    threads = strtoul(arg, NULL, 10);
+    threads = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("read_io_threads", threads);
     assert(err == DB_SUCCESS);
     break;
@@ -504,7 +504,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 17: {
     ib_ulint_t threads;
 
-    threads = strtoul(arg, NULL, 10);
+    threads = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("write_io_threads", threads);
     assert(err == DB_SUCCESS);
     break;
@@ -513,7 +513,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 18: {
     ib_ulint_t n;
 
-    n = strtoul(arg, NULL, 10);
+    n = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("open_files", n);
     assert(err == DB_SUCCESS);
     break;
@@ -522,7 +522,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   case 19: {
     ib_ulint_t secs;
 
-    secs = strtoul(arg, NULL, 10);
+    secs = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("lock_wait_timeout", secs);
     assert(err == DB_SUCCESS);
     break;
@@ -583,7 +583,7 @@ static void config_add_elem(ib_config_t *config, const ib_string_t *key,
   var = &config->elems[config->n_elems];
 
   assert(key->len > 0);
-  assert(key->ptr != NULL);
+  assert(key->ptr != nullptr);
 
   var->name.len = key->len;
   var->name.ptr = (ib_byte_t *)malloc(var->name.len);
@@ -615,7 +615,7 @@ int config_parse_file(const char *filename, ib_config_t *config) {
 
   fp = fopen(filename, "r");
 
-  if (fp == NULL) {
+  if (fp == nullptr) {
     return (-1);
   }
 
@@ -704,7 +704,7 @@ void config_print(const ib_config_t *config) {
   ib_ulint_t i;
 
   for (i = 0; i < config->n_elems; ++i) {
-    if (config->elems[i].value.ptr != NULL) {
+    if (config->elems[i].value.ptr != nullptr) {
       printf("%.*s=%.*s\n", config->elems[i].name.len,
              config->elems[i].name.ptr, config->elems[i].value.len,
              config->elems[i].value.ptr);
@@ -740,7 +740,7 @@ ib_err_t drop_table(const char *dbname, /*!< in: database name */
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   err = ib_schema_lock_exclusive(ib_trx);
   assert(err == DB_SUCCESS);

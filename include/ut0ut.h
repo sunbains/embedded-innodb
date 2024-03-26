@@ -70,8 +70,8 @@ if cond becomes true.
 #define UT_WAIT_FOR(cond, max_wait_us)                               \
   do {                                                               \
     uint64_t start_us;                                               \
-    start_us = ut_time_us(NULL);                                     \
-    while (!(cond) && ut_time_us(NULL) - start_us < (max_wait_us)) { \
+    start_us = ut_time_us(nullptr);                                     \
+    while (!(cond) && ut_time_us(nullptr) - start_us < (max_wait_us)) { \
                                                                      \
       os_thread_sleep(2000 /* 2 ms */);                              \
     }                                                                \
@@ -191,7 +191,7 @@ void ut_print_filename(
 ); /*!< in: name to print */
 
 /* Forward declaration of transaction handle */
-struct trx_struct;
+struct trx_t;
 
 /** Outputs a fixed-length string, quoted as an SQL identifier.
 If the string contains a slash '/', the string will be
@@ -199,7 +199,7 @@ output as two identifiers separated by a period (.),
 as in SQL database_name.identifier. */
 void ut_print_name(
   ib_stream_t ib_stream,  /*!< in: output stream */
-  struct trx_struct *trx, /*!< in: transaction */
+  struct trx_t *trx, /*!< in: transaction */
   bool table_id,          /*!< in: true=print a table name,
                                             false=print other identifier */
   const char *name

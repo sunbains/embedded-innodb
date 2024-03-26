@@ -102,7 +102,7 @@ page_t *btr_root_get(dict_index_t *index, mtr_t *mtr);
 that the caller has appropriate latches on the page and its neighbor.
 @param[in,out] rec              Record on leaf level
 @param[in,out] mtr              Mini-tranaction.
-@return	previous user record, NULL if there is none */
+@return	previous user record, nullptr if there is none */
 rec_t *btr_get_prev_user_rec(rec_t *rec, mtr_t *mtr);
 
 /** Gets pointer to the next user record in the tree. It is assumed
@@ -110,7 +110,7 @@ that the caller has appropriate latches on the page and its neighbor.
 @param[in,out] rec              Record on leaf level
 @param[in,out] mtr              holding a latch on the page, and if needed,
                                 also to the next page
-@return	next user record, NULL if there is none */
+@return	next user record, nullptr if there is none */
 rec_t *btr_get_next_user_rec(rec_t *rec, mtr_t *mtr);
 
 /** Creates the root node for a new index tree.
@@ -165,7 +165,7 @@ bool btr_page_reorganize(buf_block_t *block, dict_index_t *index, mtr_t *mtr);
 inserts converging to left.
 @param[in] cursor               Cursor at which to insert
 @param[out] split_rec           If split recommended, the first record on
-                                upper half page, or NULL if tuple should be first
+                                upper half page, or nullptr if tuple should be first
 @return	true if split recommended */
 bool btr_page_get_split_rec_to_left(btr_cur_t *cursor, rec_t **split_rec);
 
@@ -173,7 +173,7 @@ bool btr_page_get_split_rec_to_left(btr_cur_t *cursor, rec_t **split_rec);
 inserts converging to right.
 @param[in] cursor               Cursor at which to insert
 @param[in] split_rec            If split recommended, the first record on
-                                upper half page, or NULL if tuple should
+                                upper half page, or nullptr if tuple should
 				be first.
 @return	true if split recommended */
 bool btr_page_get_split_rec_to_right(btr_cur_t *cursor, rec_t **split_rec);
@@ -253,9 +253,9 @@ minimum record.
 @param[in,out] ptr,             Buffer
 @param[in,out] end_ptr          Buffer end
 @param[in,out] comp             Nonzero=compact page format
-@param[in,out] page             Page or NULL
+@param[in,out] page             Page or nullptr
 @param[in,out] mtr              Mini-transaction or nullptr
-@return	end of log record or NULL */
+@return	end of log record or nullptr */
 byte *btr_parse_set_min_rec_mark(byte *ptr, byte *end_ptr, ulint comp, page_t *page, mtr_t *mtr);
 
 /** Parses a redo log record of reorganizing a page.
@@ -264,7 +264,7 @@ byte *btr_parse_set_min_rec_mark(byte *ptr, byte *end_ptr, ulint comp, page_t *p
 @param[in,out] index            Record descriptor
 @param[in,out] block            Page to be reorganized, or nullptr
 @param[in,out] mtr              Mini-transaction or nullptr
-@return	end of log record or NULL */
+@return	end of log record or nullptr */
 byte *btr_parse_page_reorganize(byte *ptr, byte *end_ptr, dict_index_t *index, buf_block_t *block, mtr_t *mtr);
 
 /** Gets the number of pages in a B-tree.
@@ -280,7 +280,7 @@ that the caller has made the reservation for free extents!
 @param[in] file_direction       Direction where a possible page split is made
 @param[in] level                Level where the page is placed in the tree
 @param[in] mtr                  Mini-transaction
-@return	new allocated block, x-latched; NULL if out of space */
+@return	new allocated block, x-latched; nullptr if out of space */
 buf_block_t *btr_page_alloc(dict_index_t *index, page_no_t hint_page_no, byte file_direction, ulint level, mtr_t *mtr);
 
 /** Frees a file page used in an index tree. NOTE: cannot free field external

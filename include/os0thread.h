@@ -35,28 +35,33 @@ can wait inside InnoDB */
 #define OS_THREAD_MAX_N srv_max_n_threads
 
 /* Possible fixed priorities for threads */
-#define OS_THREAD_PRIORITY_NONE 100
-#define OS_THREAD_PRIORITY_BACKGROUND 1
-#define OS_THREAD_PRIORITY_NORMAL 2
-#define OS_THREAD_PRIORITY_ABOVE_NORMAL 3
+constexpr ulint OS_THREAD_PRIORITY_NONE = 100;
+constexpr ulint OS_THREAD_PRIORITY_BACKGROUND = 1;
+constexpr ulint OS_THREAD_PRIORITY_NORMAL = 2;
+constexpr ulint OS_THREAD_PRIORITY_ABOVE_NORMAL = 3;
 
-typedef pthread_t os_thread_t;
+using os_thread_t = pthread_t;
 
 /** In Unix we use the thread handle itself as the id of the thread */
-typedef os_thread_t os_thread_id_t;
+using os_thread_id_t = os_thread_t;
 
-/** Compares two thread ids for equality.
-@return	true if equal */
+/**
+ * Compares two thread ids for equality.
+ *
+ * @param a - OS thread or thread id
+ * @param b - OS thread or thread id
+ * @return true if equal
+ */
+bool os_thread_eq(os_thread_id_t a, os_thread_id_t b);
 
-bool os_thread_eq(
-  os_thread_id_t a, /*!< in: OS thread or thread id */
-  os_thread_id_t b
-); /*!< in: OS thread or thread id */
-
-/** Converts an OS thread id to a ulint. It is NOT guaranteed that the ulint is
-unique for the thread though!
-@return	thread identifier as a number */
-ulint os_thread_pf(os_thread_id_t a); /*!< in: OS thread identifier */
+/**
+ * Converts an OS thread id to a ulint. It is NOT guaranteed that the ulint is
+ * unique for the thread though!
+ *
+ * @param a - OS thread identifier
+ * @return thread identifier as a number
+ */
+ulint os_thread_pf(os_thread_id_t a);
 
 /** Creates a new thread of execution. The execution starts from the function
 given. The start function takes a void* parameter and returns a ulint.
@@ -84,18 +89,12 @@ os_thread_t os_thread_get_curr();
 /** Advises the os to give up remainder of the thread's time slice. */
 void os_thread_yield();
 
-/** The thread sleeps at least the time given in microseconds. */
-void os_thread_sleep(ulint tm); /*!< in: time in microseconds */
-
-/** Gets a thread priority.
-@return	priority */
-ulint os_thread_get_priority(os_thread_t handle); /*!< in: OS handle to the thread */
-
-/** Sets a thread priority. */
-void os_thread_set_priority(
-  os_thread_t handle, /*!< in: OS handle to the thread */
-  ulint pri
-); /*!< in: priority: one of OS_PRIORITY_... */
+/**
+ * The thread sleeps at least the time given in microseconds.
+ *
+ * @param tm - time in microseconds
+ */
+void os_thread_sleep(ulint tm);
 
 /** Gets the last operating system error code for the calling thread.
 @return	last error on Windows, 0 otherwise */

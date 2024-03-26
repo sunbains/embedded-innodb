@@ -21,12 +21,8 @@ The memory management
 Created 6/9/1994 Heikki Tuuri
 *************************************************************************/
 
-#include "mem0mem.h"
-#ifdef UNIV_NONINL
-#include "mem0mem.ic"
-#endif
-
 #include <stdarg.h>
+
 #include "buf0buf.h"
 #include "srv0srv.h"
 
@@ -247,7 +243,7 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const 
 
   /* In dynamic allocation, calculate the size: block header + data. */
 
-  len = MEM_BLOCK_HEADER_SIZE + MEM_SPACE_NEEDED(n);
+  len = mem_block_header_size() + MEM_SPACE_NEEDED(n);
 
   if (type == MEM_HEAP_DYNAMIC || len < UNIV_PAGE_SIZE / 2) {
 
@@ -287,8 +283,8 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const 
 
   mem_block_set_len(block, len);
   mem_block_set_type(block, type);
-  mem_block_set_free(block, MEM_BLOCK_HEADER_SIZE);
-  mem_block_set_start(block, MEM_BLOCK_HEADER_SIZE);
+  mem_block_set_free(block, mem_block_header_size());
+  mem_block_set_start(block, mem_block_header_size());
 
   if (unlikely(heap == nullptr)) {
     /* This is the first block of the heap. The field
@@ -303,7 +299,7 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const 
     heap->total_size += len;
   }
 
-  ut_ad((ulint)MEM_BLOCK_HEADER_SIZE < len);
+  ut_ad((ulint)mem_block_header_size() < len);
 
   return block;
 }
@@ -330,9 +326,9 @@ mem_block_t *mem_heap_add_block(mem_heap_t *heap, ulint n) {
     if (new_size > MEM_MAX_ALLOC_IN_BUF) {
       new_size = MEM_MAX_ALLOC_IN_BUF;
     }
-  } else if (new_size > MEM_BLOCK_STANDARD_SIZE) {
+  } else if (new_size > mem_block_standard_size()) {
 
-    new_size = MEM_BLOCK_STANDARD_SIZE;
+    new_size = mem_block_standard_size();
   }
 
   if (new_size < n) {

@@ -66,8 +66,8 @@ static ib_err_t create_t1(void *arg) /*!< in: arguments for callback */
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
   ib_err_t err2 = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t ib_idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
@@ -131,7 +131,7 @@ static ib_err_t create_t1(void *arg) /*!< in: arguments for callback */
   err2 = ib_trx_commit(ib_trx);
   assert(err2 == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -157,8 +157,8 @@ static ib_err_t insert_t1(void *arg) /*!< in: arguments for callback */
   ib_err_t err;
   int val = 0;
   int zero = 0;
-  ib_crsr_t crsr = NULL;
-  ib_tpl_t tpl = NULL;
+  ib_crsr_t crsr = nullptr;
+  ib_tpl_t tpl = nullptr;
   char *ptr = (char *)malloc(8192);
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
@@ -178,7 +178,7 @@ static ib_err_t insert_t1(void *arg) /*!< in: arguments for callback */
 
   if (err == DB_SUCCESS) {
     tpl = ib_clust_read_tuple_create(crsr);
-    if (tpl == NULL) {
+    if (tpl == nullptr) {
       err = DB_OUT_OF_MEMORY;
     }
   }
@@ -208,7 +208,7 @@ static ib_err_t insert_t1(void *arg) /*!< in: arguments for callback */
     if (err == DB_SUCCESS) {
       update_err_stats(cb_arg->err_st, err);
       tpl = ib_tuple_clear(tpl);
-      assert(tpl != NULL);
+      assert(tpl != nullptr);
     }
   }
 
@@ -216,16 +216,16 @@ static ib_err_t insert_t1(void *arg) /*!< in: arguments for callback */
     update_err_stats(cb_arg->err_st, err);
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
-  if (crsr != NULL) {
+  if (crsr != nullptr) {
     ib_err_t cur_err;
 
     cur_err = ib_cursor_close(crsr);
     assert(cur_err == DB_SUCCESS);
-    crsr = NULL;
+    crsr = nullptr;
   }
 
   free(ptr);
@@ -240,10 +240,10 @@ static ib_err_t update_t1(void *arg) /*!< in: arguments for callback */
 {
   ib_err_t err;
   int res = ~0L;
-  ib_tpl_t key_tpl = NULL;
-  ib_tpl_t old_tpl = NULL;
-  ib_tpl_t new_tpl = NULL;
-  ib_crsr_t crsr = NULL;
+  ib_tpl_t key_tpl = nullptr;
+  ib_tpl_t old_tpl = nullptr;
+  ib_tpl_t new_tpl = nullptr;
+  ib_crsr_t crsr = nullptr;
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
 
@@ -267,7 +267,7 @@ static ib_err_t update_t1(void *arg) /*!< in: arguments for callback */
 
   /* Create a tuple for searching an index. */
   key_tpl = ib_sec_search_tuple_create(crsr);
-  assert(key_tpl != NULL);
+  assert(key_tpl != nullptr);
 
   /* Set the value to look for. */
   err = ib_col_set_value(key_tpl, 0, "a", 1);
@@ -289,10 +289,10 @@ static ib_err_t update_t1(void *arg) /*!< in: arguments for callback */
   new_tpl will contain the update row data. */
 
   old_tpl = ib_clust_read_tuple_create(crsr);
-  assert(old_tpl != NULL);
+  assert(old_tpl != nullptr);
 
   new_tpl = ib_clust_read_tuple_create(crsr);
-  assert(new_tpl != NULL);
+  assert(new_tpl != nullptr);
 
   /* Iterate over the records while the first column matches "a". */
   while (1) {
@@ -309,7 +309,7 @@ static ib_err_t update_t1(void *arg) /*!< in: arguments for callback */
     ib_col_get_meta(old_tpl, 0, &col_meta);
 
     /* There are no SQL_NULL values in our test data. */
-    assert(first != NULL);
+    assert(first != nullptr);
 
     /* Only update first names that are == "a". */
     if (strncmp(first, "a", 1) != 0) {
@@ -348,29 +348,29 @@ static ib_err_t update_t1(void *arg) /*!< in: arguments for callback */
 
     /* Reset the old and new tuple instances. */
     old_tpl = ib_tuple_clear(old_tpl);
-    assert(old_tpl != NULL);
+    assert(old_tpl != nullptr);
 
     new_tpl = ib_tuple_clear(new_tpl);
-    assert(new_tpl != NULL);
+    assert(new_tpl != nullptr);
   }
 
 err_exit:
   update_err_stats(cb_arg->err_st, err);
 
 clean_exit:
-  if (old_tpl != NULL) {
+  if (old_tpl != nullptr) {
     ib_tuple_delete(old_tpl);
   }
-  if (new_tpl != NULL) {
+  if (new_tpl != nullptr) {
     ib_tuple_delete(new_tpl);
   }
 
-  if (crsr != NULL) {
+  if (crsr != nullptr) {
     ib_err_t err2;
 
     err2 = ib_cursor_close(crsr);
     assert(err2 == DB_SUCCESS);
-    crsr = NULL;
+    crsr = nullptr;
   }
 
   return (err);
@@ -382,8 +382,8 @@ static ib_err_t delete_t1(void *arg) /*!< in: arguments for callback */
 {
   ib_err_t err;
   int res = ~0L;
-  ib_tpl_t key_tpl = NULL;
-  ib_crsr_t crsr = NULL;
+  ib_tpl_t key_tpl = nullptr;
+  ib_crsr_t crsr = nullptr;
   cb_args_t *cb_arg = (cb_args_t *)arg;
   tbl_class_t *tbl = cb_arg->tbl;
 
@@ -407,7 +407,7 @@ static ib_err_t delete_t1(void *arg) /*!< in: arguments for callback */
 
   /* Create a tuple for searching an index. */
   key_tpl = ib_sec_search_tuple_create(crsr);
-  assert(key_tpl != NULL);
+  assert(key_tpl != nullptr);
 
   /* Set the value to delete. */
   err = ib_col_set_value(key_tpl, 0, "x", 1);
@@ -436,16 +436,16 @@ err_exit:
   update_err_stats(cb_arg->err_st, err);
 
 clean_exit:
-  if (key_tpl != NULL) {
+  if (key_tpl != nullptr) {
     ib_tuple_delete(key_tpl);
   }
 
-  if (crsr != NULL) {
+  if (crsr != nullptr) {
     ib_err_t err2;
 
     err2 = ib_cursor_close(crsr);
     assert(err2 == DB_SUCCESS);
-    crsr = NULL;
+    crsr = nullptr;
   }
 
   return (err);
@@ -455,7 +455,7 @@ clean_exit:
 
 void register_t1_table(tbl_class_t *tbl) /*!< in/out: table class to register */
 {
-  assert(tbl != NULL);
+  assert(tbl != nullptr);
 
   tbl->m_name.assign("t1");
 

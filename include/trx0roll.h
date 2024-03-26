@@ -62,7 +62,7 @@ as a single stack of records ordered by their undo numbers. Inserts the
 undo number of the popped undo record to the array of currently processed
 undo numbers in the transaction. When the query thread finishes processing
 of this undo record, it must be released with trx_undo_rec_release.
-@return undo log record copied to heap, NULL if none left, or if the
+@return undo log record copied to heap, nullptr if none left, or if the
 undo number of the top record would be less than the limit */
 trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(
   trx_t *trx,           /*!< in: transaction */
@@ -90,7 +90,7 @@ void trx_rollback(
   trx_t *trx,     /*!< in: transaction */
   trx_sig_t *sig, /*!< in: signal starting the rollback */
   que_thr_t **next_thr /*!< in/out: next query thread to run; if the value
-			 which is passed in is a pointer to a NULL pointer, then
+			 which is passed in is a pointer to a nullptr pointer, then
 			 the calling function can start running a new query thread */
   );
 
@@ -114,8 +114,8 @@ void trx_finish_rollback_off_kernel(
   que_t *graph, /*!< in: undo graph which can now be freed */
   trx_t *trx,   /*!< in: transaction */
   que_thr_t **next_thr /*!< in/out: next query thread to run; if the value which is passed
-			 in is a pointer to a NULL pointer, then the calling function can
-			 start running a new query thread; if this parameter is NULL, it is ignored */
+			 in is a pointer to a nullptr pointer, then the calling function can
+			 start running a new query thread; if this parameter is nullptr, it is ignored */
   );
 
 /** Builds an undo 'query' graph for a transaction. The actual rollback is
@@ -130,7 +130,7 @@ que_t *trx_roll_graph_build(trx_t *trx); /*!< in: trx handle */
 roll_node_t *roll_node_create(mem_heap_t *heap); /*!< in: mem heap where created */
 
 /** Performs an execution step for a rollback command node in a query graph.
-@return	query thread to run next, or NULL */
+@return	query thread to run next, or nullptr */
 que_thr_t *trx_rollback_step(que_thr_t *thr); /*!< in: query thread */
 
 /** Rollback a user transaction.
@@ -141,15 +141,15 @@ db_err trx_general_rollback(
   trx_savept_t *savept /*!< in: pointer to savepoint undo number, if partial rollback requested */
   );
 
-/** Frees savepoint structs starting from savep, if savep == NULL then
+/** Frees savepoint structs starting from savep, if savep == nullptr then
 free all savepoints. */
 void trx_roll_savepoints_free(
   trx_t *trx, /*!< in: transaction handle */
-  trx_named_savept_t *savep /*!< in: free all savepoints > this one; if this is NULL, free all savepoints of trx */
+  trx_named_savept_t *savep /*!< in: free all savepoints > this one; if this is nullptr, free all savepoints of trx */
   );
 
-/** A cell of trx_undo_arr_struct; used during a rollback and a purge */
-struct trx_undo_inf_struct {
+/** A cell of trx_undo_arr_t; used during a rollback and a purge */
+struct trx_undo_inf_t {
   trx_id_t trx_no;   /*!< transaction number: not defined during
                      a rollback */
   undo_no_t undo_no; /*!< undo number of an undo record */
@@ -158,7 +158,7 @@ struct trx_undo_inf_struct {
 
 /** During a rollback and a purge, undo numbers of undo records currently being
 processed are stored in this array */
-struct trx_undo_arr_struct {
+struct trx_undo_arr_t {
   ulint n_cells;         /*!< number of cells in the array */
   ulint n_used;          /*!< number of cells currently in use */
   trx_undo_inf_t *infos; /*!< the array of undo infos */
@@ -174,7 +174,7 @@ enum roll_node_state {
 };
 
 /** Rollback command node in a query graph */
-struct roll_node_struct {
+struct roll_node_t {
   que_common_t common;        /*!< node type: QUE_NODE_ROLLBACK */
   enum roll_node_state state; /*!< node execution state */
   bool partial;               /*!< true if we want a partial
@@ -185,7 +185,7 @@ struct roll_node_struct {
 };
 
 /** A savepoint set with SQL's "SAVEPOINT savepoint_id" command */
-struct trx_named_savept_struct {
+struct trx_named_savept_t {
   void *name;          /*!< savepoint name, it can be any
                        arbitrary set of characters. Note:
                        When allocating memory for trx_named

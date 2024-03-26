@@ -62,7 +62,7 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
   /* Allocate a new file segment for the rollback segment */
   block = fseg_create(space, 0, TRX_RSEG + TRX_RSEG_FSEG_HEADER, mtr);
 
-  if (block == NULL) {
+  if (block == nullptr) {
     /* No space left */
 
     return (FIL_NULL);
@@ -112,7 +112,7 @@ void trx_rseg_mem_free(trx_rseg_t *rseg) /*!< in, own: instance to free */
 
   undo = UT_LIST_GET_FIRST(rseg->update_undo_cached);
 
-  while (undo != NULL) {
+  while (undo != nullptr) {
     trx_undo_t *prev_undo = undo;
 
     undo = UT_LIST_GET_NEXT(undo_list, undo);
@@ -123,7 +123,7 @@ void trx_rseg_mem_free(trx_rseg_t *rseg) /*!< in, own: instance to free */
 
   undo = UT_LIST_GET_FIRST(rseg->insert_undo_cached);
 
-  while (undo != NULL) {
+  while (undo != nullptr) {
     trx_undo_t *prev_undo = undo;
 
     undo = UT_LIST_GET_NEXT(undo_list, undo);
@@ -132,7 +132,7 @@ void trx_rseg_mem_free(trx_rseg_t *rseg) /*!< in, own: instance to free */
     trx_undo_mem_free(prev_undo);
   }
 
-  trx_sys_set_nth_rseg(trx_sys, rseg->id, NULL);
+  trx_sys_set_nth_rseg(trx_sys, rseg->id, nullptr);
 
   mem_free(rseg);
 }
@@ -164,7 +164,7 @@ static trx_rseg_t *trx_rseg_mem_create(
   rseg->space = space;
   rseg->page_no = page_no;
 
-  mutex_create(&rseg->mutex, SYNC_RSEG);
+  mutex_create(&rseg->mutex, IF_DEBUG("rseg_mutex",) IF_SYNC_DEBUG(SYNC_RSEG,) Source_location{});
 
   UT_LIST_ADD_LAST(trx_sys->rseg_list, rseg);
 
@@ -210,7 +210,7 @@ void trx_rseg_list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header
 
     if (page_no == FIL_NULL) {
 
-      trx_sys_set_nth_rseg(trx_sys, i, NULL);
+      trx_sys_set_nth_rseg(trx_sys, i, nullptr);
     } else {
       auto space = trx_sysf_rseg_get_space(sys_header, i, mtr);
 

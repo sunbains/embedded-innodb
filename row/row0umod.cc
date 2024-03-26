@@ -86,8 +86,8 @@ pages.
 @return	DB_SUCCESS, DB_FAIL, or error code: we may run out of file space */
 static db_err row_undo_mod_clust_low(undo_node_t *node, que_thr_t *thr, mtr_t *mtr, ulint mode) {
   auto pcur = &(node->pcur);
-  auto btr_cur = btr_pcur_get_btr_cur(pcur);
-  auto success = btr_pcur_restore_position(mode, pcur, mtr);
+  auto btr_cur = pcur->get_btr_cur();
+  auto success = pcur->restore_position(mode, mtr, Source_location{});
 
   ut_a(success);
 
@@ -141,8 +141,8 @@ static db_err row_undo_mod_remove_clust_low(undo_node_t *node, que_thr_t *thr, m
   ut_ad(node->rec_type == TRX_UNDO_UPD_DEL_REC);
 
   auto pcur = &(node->pcur);
-  auto btr_cur = btr_pcur_get_btr_cur(pcur);
-  auto success = btr_pcur_restore_position(mode, pcur, mtr);
+  auto btr_cur = pcur->get_btr_cur();
+  auto success = pcur->restore_position(mode, mtr, Source_location{});
 
   if (!success) {
 
@@ -197,7 +197,7 @@ static db_err row_undo_mod_clust(undo_node_t *node, que_thr_t *thr) {
   should be undone in this same rollback operation */
 
   auto more_vers = row_undo_mod_undo_also_prev_vers(node, &new_undo_no);
-  auto pcur = &(node->pcur);
+  auto pcur = &node->pcur;
 
   mtr_start(&mtr);
 
@@ -207,7 +207,7 @@ static db_err row_undo_mod_clust(undo_node_t *node, que_thr_t *thr) {
   auto err = row_undo_mod_clust_low(node, thr, &mtr, BTR_MODIFY_LEAF);
 
   if (err != DB_SUCCESS) {
-    btr_pcur_commit_specify_mtr(pcur, &mtr);
+    pcur->commit_specify_mtr(&mtr);
 
     /* We may have to modify tree structure: do a pessimistic
     descent down the index tree */
@@ -217,7 +217,7 @@ static db_err row_undo_mod_clust(undo_node_t *node, que_thr_t *thr) {
     err = row_undo_mod_clust_low(node, thr, &mtr, BTR_MODIFY_TREE);
   }
 
-  btr_pcur_commit_specify_mtr(pcur, &mtr);
+  pcur->commit_specify_mtr(&mtr);
 
   if (err == DB_SUCCESS && node->rec_type == TRX_UNDO_UPD_DEL_REC) {
 
@@ -225,7 +225,7 @@ static db_err row_undo_mod_clust(undo_node_t *node, que_thr_t *thr) {
 
     err = row_undo_mod_remove_clust_low(node, thr, &mtr, BTR_MODIFY_LEAF);
     if (err != DB_SUCCESS) {
-      btr_pcur_commit_specify_mtr(pcur, &mtr);
+      pcur->commit_specify_mtr(&mtr);
 
       /* We may have to modify tree structure: do a
       pessimistic descent down the index tree */
@@ -235,7 +235,7 @@ static db_err row_undo_mod_clust(undo_node_t *node, que_thr_t *thr) {
       err = row_undo_mod_remove_clust_low(node, thr, &mtr, BTR_MODIFY_TREE);
     }
 
-    btr_pcur_commit_specify_mtr(pcur, &mtr);
+    pcur->commit_specify_mtr(&mtr);
   }
 
   node->state = UNDO_NODE_FETCH_NEXT;
@@ -281,7 +281,7 @@ static db_err row_undo_mod_del_mark_or_remove_sec_low(
 
   auto found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
 
-  auto btr_cur = btr_pcur_get_btr_cur(&pcur);
+  auto btr_cur = pcur.get_btr_cur();
 
   if (!found) {
     /* In crash recovery, the secondary index record may
@@ -294,7 +294,7 @@ static db_err row_undo_mod_del_mark_or_remove_sec_low(
     before it has inserted all updated secondary index
     records, then the undo will not find those records. */
 
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
 
     return DB_SUCCESS;
@@ -306,10 +306,10 @@ static db_err row_undo_mod_del_mark_or_remove_sec_low(
 
   mtr_start(&mtr_vers);
 
-  success = btr_pcur_restore_position(BTR_SEARCH_LEAF, &(node->pcur), &mtr_vers);
+  success = node->pcur.restore_position(BTR_SEARCH_LEAF, &mtr_vers, Source_location{});
   ut_a(success);
 
-  old_has = row_vers_old_has_index_entry(false, btr_pcur_get_rec(&(node->pcur)), &mtr_vers, index, entry);
+  old_has = row_vers_old_has_index_entry(false, node->pcur.get_rec(), &mtr_vers, index, entry);
 
   if (old_has) {
     err = btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, btr_cur, true, thr, &mtr);
@@ -342,8 +342,8 @@ static db_err row_undo_mod_del_mark_or_remove_sec_low(
     }
   }
 
-  btr_pcur_commit_specify_mtr(&(node->pcur), &mtr_vers);
-  btr_pcur_close(&pcur);
+  node->pcur.commit_specify_mtr(&mtr_vers);
+  pcur.close();
   mtr_commit(&mtr);
 
   return err;
@@ -407,12 +407,12 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
     ib_logger(ib_stream, "\n tuple ");
     dtuple_print(ib_stream, entry);
     ib_logger(ib_stream, "\n record ");
-    rec_print(ib_stream, btr_pcur_get_rec(&pcur), index);
+    rec_print(ib_stream, pcur.get_rec(), index);
     ib_logger(ib_stream, "\n");
     trx_print(ib_stream, trx, 0);
     ib_logger(ib_stream, "\nSubmit a detailed bug report, check the TBD website for details");
   } else {
-    auto btr_cur = btr_pcur_get_btr_cur(&pcur);
+    auto btr_cur = pcur.get_btr_cur();
 
     err = btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, btr_cur, false, thr, &mtr);
     ut_a(err == DB_SUCCESS);
@@ -448,7 +448,7 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
     mem_heap_free(heap);
   }
 
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
 
   return err;

@@ -1150,8 +1150,8 @@ void page_print_list(buf_block_t *block, dict_index_t *index, ulint pr_n) {
   page_cur_set_before_first(block, &cur);
   count = 0;
   for (;;) {
-    offsets = rec_get_offsets(cur.rec, index, offsets, ULINT_UNDEFINED, &heap);
-    page_rec_print(cur.rec, offsets);
+    offsets = rec_get_offsets(cur.m_rec, index, offsets, ULINT_UNDEFINED, &heap);
+    page_rec_print(cur.m_rec, offsets);
 
     if (count == pr_n) {
       break;
@@ -1171,8 +1171,8 @@ void page_print_list(buf_block_t *block, dict_index_t *index, ulint pr_n) {
     page_cur_move_to_next(&cur);
 
     if (count + pr_n >= n_recs) {
-      offsets = rec_get_offsets(cur.rec, index, offsets, ULINT_UNDEFINED, &heap);
-      page_rec_print(cur.rec, offsets);
+      offsets = rec_get_offsets(cur.m_rec, index, offsets, ULINT_UNDEFINED, &heap);
+      page_rec_print(cur.m_rec, offsets);
     }
     count++;
   }

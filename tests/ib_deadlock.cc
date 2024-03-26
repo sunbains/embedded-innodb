@@ -73,8 +73,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t ib_idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t ib_idx_sch = nullptr;
   ib_tbl_fmt_t tbl_fmt = IB_TBL_COMPACT;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
@@ -114,7 +114,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -153,7 +153,7 @@ insert_rows(ib_crsr_t crsr,    /*!< in, out: cursor to use for write */
   ib_err_t err = DB_SUCCESS;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   for (i = start; i < start + n_values; ++i) {
     err = ib_tuple_write_u32(tpl, 0, i);
@@ -182,17 +182,17 @@ static void *worker_thread(void *arg) {
   int ret;
   ib_err_t err;
   ib_trx_t ib_trx;
-  ib_crsr_t crsr1 = NULL;
-  ib_crsr_t crsr2 = NULL;
+  ib_crsr_t crsr1 = nullptr;
+  ib_crsr_t crsr2 = nullptr;
   bool deadlock = false;
   int thread_id = *(int *)arg;
 
   free(arg);
 
-  err = open_table(DATABASE, "T1", NULL, &crsr1);
+  err = open_table(DATABASE, "T1", nullptr, &crsr1);
   assert(err == DB_SUCCESS);
 
-  err = open_table(DATABASE, "T2", NULL, &crsr2);
+  err = open_table(DATABASE, "T2", nullptr, &crsr2);
   assert(err == DB_SUCCESS);
 
   ret = pthread_barrier_wait(&barrier);
@@ -202,7 +202,7 @@ static void *worker_thread(void *arg) {
   }
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   ib_cursor_attach_trx(crsr1, ib_trx);
   ib_cursor_attach_trx(crsr2, ib_trx);
@@ -283,13 +283,13 @@ static void *worker_thread(void *arg) {
   if (crsr1) {
     err = ib_cursor_close(crsr1);
     assert(err == DB_SUCCESS);
-    crsr1 = NULL;
+    crsr1 = nullptr;
   }
 
   if (crsr2) {
     err = ib_cursor_close(crsr2);
     assert(err == DB_SUCCESS);
-    crsr2 = NULL;
+    crsr2 = nullptr;
   }
 
   pthread_exit(0);
@@ -318,30 +318,30 @@ static void set_options(int argc, char *argv[]) {
   /* Add the local parameters (threads, rows and page_size). */
   longopts[count].name = "threads";
   longopts[count].has_arg = required_argument;
-  longopts[count].flag = NULL;
+  longopts[count].flag = nullptr;
   longopts[count].val = USER_OPT + 1;
   ++count;
 
   longopts[count].name = "rows";
   longopts[count].has_arg = required_argument;
-  longopts[count].flag = NULL;
+  longopts[count].flag = nullptr;
   longopts[count].val = USER_OPT + 2;
   ++count;
 
   longopts[count].name = "page_size";
   longopts[count].has_arg = required_argument;
-  longopts[count].flag = NULL;
+  longopts[count].flag = nullptr;
   longopts[count].val = USER_OPT + 3;
 
   while ((opt = getopt_long(argc, argv, "", longopts, &optind)) != -1) {
     switch (opt) {
 
     case USER_OPT + 1:
-      n_threads = strtoul(optarg, NULL, 10);
+      n_threads = strtoul(optarg, nullptr, 10);
       break;
 
     case USER_OPT + 2:
-      n_rows = strtoul(optarg, NULL, 10);
+      n_rows = strtoul(optarg, nullptr, 10);
       break;
 
     case USER_OPT + 3:
@@ -420,7 +420,7 @@ int main(int argc, char *argv[]) {
   err = create_tables();
   assert(err == DB_SUCCESS);
 
-  ret = pthread_barrier_init(&barrier, NULL, n_threads);
+  ret = pthread_barrier_init(&barrier, nullptr, n_threads);
   assert(ret == 0);
 
   pthreads = (pthread_t *)malloc(sizeof(*pthreads) * n_threads);
@@ -432,12 +432,12 @@ int main(int argc, char *argv[]) {
     int retval;
     int *ptr = (int *)malloc(sizeof(int));
 
-    assert(ptr != NULL);
+    assert(ptr != nullptr);
     *ptr = i;
 
     /* worker_thread owns the argument and is responsible for
     freeing it. */
-    retval = pthread_create(&pthreads[i], NULL, worker_thread, ptr);
+    retval = pthread_create(&pthreads[i], nullptr, worker_thread, ptr);
 
     if (retval != 0) {
       fprintf(stderr,
@@ -452,11 +452,11 @@ int main(int argc, char *argv[]) {
   printf("\nWaiting for threads to finish ...\n");
 
   for (uint32_t i = 0; i < n_threads; ++i) {
-    pthread_join(pthreads[i], NULL);
+    pthread_join(pthreads[i], nullptr);
   }
 
   free(pthreads);
-  pthreads = NULL;
+  pthreads = nullptr;
 
   ret = pthread_barrier_destroy(&barrier);
   assert(ret == 0);

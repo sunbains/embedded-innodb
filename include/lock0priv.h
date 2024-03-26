@@ -23,77 +23,18 @@ Created July 12, 2007 Vasil Dimov
 
 #pragma once
 
-#include "dict0types.h"
-#include "hash0hash.h"
-#include "innodb0types.h"
-#include "trx0types.h"
-#include "ut0lst.h"
-
-/** A table lock */
-typedef struct lock_table_struct lock_table_t;
-
-/** A table lock */
-struct lock_table_struct {
-  /** Database table in dictionary cache */
-  dict_table_t *table;
-
-  /** List of locks on the same table */
-  UT_LIST_NODE_T(lock_t) locks;
-};
-
-/** Record lock for a page */
-typedef struct lock_rec_struct lock_rec_t;
-
-/** Record lock for a page */
-struct lock_rec_struct {
-  /** Tablespace ID. */
-  space_id_t space;
-
-  /** Page number in space. */
-  page_no_t page_no;
-
-  /** Number of bits in the lock bitmap; NOTE: the lock bitmap
-  is placed immediately after the lock struct */
-  ulint n_bits;
-};
-
-/** Lock struct */
-struct lock_struct {
-  /** Transaction owning the lock */
-  trx_t *trx;
-
-  /** list of the locks of the transaction */
-  UT_LIST_NODE_T(lock_t) trx_locks;
-
-  /*r< Lock type, mode, LOCK_GAP or LOCK_REC_NOT_GAP, LOCK_INSERT_INTENTION, wait flag, ORed */
-  ulint type_mode;
-
-  /** Hash chain node for a record lock */
-  hash_node_t hash;
-
-  /** Index for a record lock */
-  dict_index_t *index;
-
-  union {
-    /** Table lock */
-    lock_table_t tab_lock;
-
-    /** Record lock */
-    lock_rec_t rec_lock;
-
-  /** lock details */
-  } un_member;
-};
+#include "lock0types.h"
 
 UT_LIST_NODE_GETTER_DEFINITION(lock_t, trx_locks);
 
-/** Gets the previous record lock set on a record.
-@return	previous lock on the same record, NULL if none exists */
-const lock_t *lock_rec_get_prev(
-  const lock_t *in_lock, /*!< in: record lock */
-  ulint heap_no
-); /*!< in: heap number of the record */
-
+/**
+ * Gets the previous record lock set on a record.
+ *
+ * @param[in] in_lock   in: record lock
+ * @param[in] heap_no   in: heap number of the record
+ * @return              previous lock on the same record, nullptr if none exists
+ */
+const lock_t *lock_rec_get_prev(const lock_t *in_lock, ulint heap_no);
 
 /** Gets the type of a lock.
 @param[in]c lock      Get the type for this lock.

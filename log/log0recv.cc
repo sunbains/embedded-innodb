@@ -142,7 +142,7 @@ void recv_sys_create() {
 
   recv_sys = static_cast<recv_sys_t *>(mem_alloc(sizeof(*recv_sys)));
 
-  mutex_create(&recv_sys->mutex, SYNC_RECV);
+  mutex_create(&recv_sys->mutex, IF_DEBUG("recv_sys_mutex",) IF_SYNC_DEBUG(SYNC_RECV,) Source_location{});
 
   recv_sys->heap = nullptr;
   recv_sys->addr_hash = nullptr;

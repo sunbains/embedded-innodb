@@ -40,10 +40,10 @@ static int use_sys_malloc = 0;
 static void get_options(int argc, char *argv[]) {
   int opt;
 
-  struct option longopts[] = {{"use-sys-malloc", required_argument, NULL, 1},
-                              {NULL, 0, NULL, 0}};
+  struct option longopts[] = {{"use-sys-malloc", required_argument, nullptr, 1},
+                              {nullptr, 0, nullptr, 0}};
 
-  while ((opt = getopt_long(argc, argv, "", longopts, NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "", longopts, nullptr)) != -1) {
     switch (opt) {
     case 1:
       use_sys_malloc = 1;

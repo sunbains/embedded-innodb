@@ -30,6 +30,8 @@ Created 5/30/1994 Heikki Tuuri
 #include "dict0types.h"
 #include "mem0mem.h"
 
+struct dict_index_t;
+
 /** Storage for overflow data in a big record, that is, a clustered
 index record which needs external storage of data fields */
 typedef struct big_rec_struct big_rec_t;
@@ -58,7 +60,7 @@ inline void dfield_set_len(
   dfield_t *field, /*!< in: field */
   ulint len
 ); /*!< in: length or UNIV_SQL_NULL */
-/*** Determines if a field is SQL NULL
+/*** Determines if a field is SQL nullptr
 @return	nonzero if SQL null data */
 inline ulint dfield_is_null(const dfield_t *field); /*!< in: field */
 /*** Determines if a field is externally stored
@@ -72,7 +74,7 @@ inline void dfield_set_data(
   const void *data, /*!< in: data */
   ulint len
 ); /*!< in: length or UNIV_SQL_NULL */
-/*** Sets a data field to SQL NULL. */
+/*** Sets a data field to SQL nullptr. */
 inline void dfield_set_null(dfield_t *field); /*!< in/out: field */
 /*** Writes an SQL null field full of zeros. */
 inline void data_write_sql_null(
@@ -245,7 +247,7 @@ void dtuple_print(
 the size of tuple drops below the maximum record size allowed in the
 database. Moves data only from those fields which are not necessary
 to determine uniquely the insertion place of the tuple in the index.
-@return own: created big record vector, NULL if we are not able to
+@return own: created big record vector, nullptr if we are not able to
 shorten the entry enough, i.e., if there are too many fixed-length or
 short fields in entry or the index is clustered */
 
@@ -275,15 +277,20 @@ void dfield_var_init(void);
 /*######################################################################*/
 
 /** Structure for an SQL data field */
-struct dfield_struct {
+struct dfield_t {
+  /** Print the dfield_t object into the given output stream.
+  @param[in]    out     the output stream.
+  @return       the ouput stream. */
+  std::ostream &print(std::ostream &out) const;
+
   void *data;        /*!< pointer to data */
-  unsigned ext : 1;  /*!< true=externally stored, false=local */
-  unsigned len : 32; /*!< data length; UNIV_SQL_NULL if SQL null */
+  uint32_t len;      /*!< data length; UNIV_SQL_NULL if SQL null */
+  uint8_t ext;       /*!< true=externally stored, false=local */
   dtype_t type;      /*!< type of data */
 };
 
 /** Structure for an SQL data tuple of fields (logical record) */
-struct dtuple_struct {
+struct dtuple_t {
   ulint info_bits;    /*!< info bits of an index record:
                       the default is 0; this field is used
                       if an index record is built from
@@ -395,7 +402,7 @@ inline void dfield_set_len(
   field->len = len;
 }
 
-/** Determines if a field is SQL NULL
+/** Determines if a field is SQL nullptr
 @return	nonzero if SQL null data */
 inline ulint dfield_is_null(const dfield_t *field) /*!< in: field */
 {
@@ -439,10 +446,10 @@ inline void dfield_set_data(
   field->len = len;
 }
 
-/** Sets a data field to SQL NULL. */
+/** Sets a data field to SQL nullptr. */
 inline void dfield_set_null(dfield_t *field) /*!< in/out: field */
 {
-  dfield_set_data(field, NULL, UNIV_SQL_NULL);
+  dfield_set_data(field, nullptr, UNIV_SQL_NULL);
 }
 
 /** Copies the data and len fields. */

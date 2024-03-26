@@ -21,16 +21,16 @@ The interface to the operating system thread control primitives
 Created 9/8/1995 Heikki Tuuri
 *******************************************************/
 
+#include <chrono>
+#include <thread>
+
 #include "os0thread.h"
 
 #include "os0sync.h"
 #include "srv0srv.h"
 
 bool os_thread_eq(os_thread_id_t a, os_thread_id_t b) {
-  if (pthread_equal(a, b)) {
-    return true;
-  }
-  return false;
+  return pthread_equal(a, b) > 0;
 }
 
 ulint os_thread_pf(os_thread_id_t a) {
@@ -47,22 +47,12 @@ os_thread_t os_thread_create(void *(*f)(void *), void *arg, os_thread_id_t *thre
 
   memset(&attr, 0x0, sizeof(attr));
 
-  os_mutex_enter(os_sync_mutex);
-
-  ++os_thread_count;
-
-  os_mutex_exit(os_sync_mutex);
+  os_thread_count.fetch_add(1, std::memory_order_relaxed);
 
   auto ret = pthread_create(&pthread, &attr, f, arg);
 
   if (ret != 0) {
     log_fatal("Error: pthread_create returned %d\n", ret);
-  }
-
-  if (srv_set_thread_priorities) {
-#ifdef HAVE_PTHREAD_SETPRIO
-    pthread_setprio(pthread, srv_query_thread_priority);
-#endif /* HAVE_PTHREAD_SETPRIO */
   }
 
   if (thread_id != nullptr) {
@@ -73,9 +63,7 @@ os_thread_t os_thread_create(void *(*f)(void *), void *arg, os_thread_id_t *thre
 }
 
 void os_thread_exit(void *exit_value) {
-  os_mutex_enter(os_sync_mutex);
-  --os_thread_count;
-  os_mutex_exit(os_sync_mutex);
+  os_thread_count.fetch_sub(1, std::memory_order_relaxed);
 
   auto ret = pthread_detach(pthread_self());
   ut_a(ret == 0);
@@ -87,34 +75,10 @@ os_thread_t os_thread_get_curr() {
   return pthread_self();
 }
 
-void os_thread_yield(void) {
-#if defined(HAVE_PTHREAD_YIELD_ZERO_ARG)
-  pthread_yield();
-#elif defined(HAVE_PTHREAD_YIELD_ONE_ARG)
-  pthread_yield(0);
-#else
-  os_thread_sleep(0);
-#endif
+void os_thread_yield() {
+  std::this_thread::yield();
 }
 
-void os_thread_sleep(ulint tm) {
-  struct timeval t;
-
-  t.tv_sec = tm / 1000000;
-  t.tv_usec = tm % 1000000;
-
-  select(0, NULL, NULL, NULL, &t);
-}
-
-void os_thread_set_priority(os_thread_t handle, ulint pri) {
-  UT_NOT_USED(handle);
-  UT_NOT_USED(pri);
-}
-
-ulint os_thread_get_priority(os_thread_t handle __attribute__((unused))) {
-  return 0;
-}
-
-ulint os_thread_get_last_error(void) {
-  return 0;
+void os_thread_sleep(ulint sleep_time) {
+  std::this_thread::sleep_for(std::chrono::microseconds(sleep_time));
 }

@@ -29,8 +29,8 @@ Created 4/26/2006 Osku Salerma
 ib_list_t *ib_list_create() {
   auto list = static_cast<ib_list_t *>(mem_alloc(sizeof(ib_list_t)));
 
-  list->first = NULL;
-  list->last = NULL;
+  list->first = nullptr;
+  list->last = nullptr;
   list->is_heap_list = false;
 
   return list;
@@ -60,15 +60,15 @@ ib_list_node_t *ib_list_add_after(ib_list_t *list, ib_list_node_t *prev_node, vo
 
     ut_a(!prev_node);
 
-    node->prev = NULL;
-    node->next = NULL;
+    node->prev = nullptr;
+    node->next = nullptr;
 
     list->first = node;
     list->last = node;
   } else if (!prev_node) {
     /* Start of list. */
 
-    node->prev = NULL;
+    node->prev = nullptr;
     node->next = list->first;
 
     list->first->prev = node;

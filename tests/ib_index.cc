@@ -71,8 +71,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t ib_idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t ib_idx_sch = nullptr;
   ib_tbl_fmt_t tbl_fmt = IB_TBL_COMPACT;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
@@ -144,7 +144,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -175,11 +175,11 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 INSERT INTO T VALUE('xxxxbbbb', 2); */
 static void insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 {
-  ib_tpl_t tpl = NULL;
+  ib_tpl_t tpl = nullptr;
   ib_err_t err = DB_ERROR;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   err = ib_col_set_value(tpl, 0, "xxxxaaaa", 8);
   assert(err == DB_SUCCESS);
@@ -232,7 +232,7 @@ int main(int argc, char *argv[]) {
   assert(err == DB_SUCCESS);
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   err = open_table(DATABASE, TABLE, ib_trx, &crsr);
   assert(err == DB_SUCCESS);
@@ -244,7 +244,7 @@ int main(int argc, char *argv[]) {
 
   err = ib_cursor_close(crsr);
   assert(err == DB_SUCCESS);
-  crsr = NULL;
+  crsr = nullptr;
 
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);

@@ -23,10 +23,7 @@ Created 5/30/1994 Heikki Tuuri
 
 #include "rem0rec.h"
 
-#ifdef UNIV_NONINL
-#include "rem0rec.ic"
-#endif
-
+#include "btr0types.h"
 #include "mtr0log.h"
 #include "mtr0mtr.h"
 
@@ -519,7 +516,7 @@ ulint *rec_get_offsets_func(
         break;
       default:
         ut_error;
-        return (NULL);
+        return (nullptr);
     }
   } else {
     n = rec_get_n_fields_old(rec);
@@ -1170,7 +1167,7 @@ rec_t *rec_convert_dtuple_to_rec(
 
 #ifdef UNIV_DEBUG
   {
-    mem_heap_t *heap = NULL;
+    mem_heap_t *heap = nullptr;
     ulint offsets_[REC_OFFS_NORMAL_SIZE];
     const ulint *offsets;
     ulint i;
@@ -1235,19 +1232,15 @@ void rec_copy_prefix_to_dtuple(
 
 /** Copies the first n fields of an old-style physical record
 to a new physical record in a buffer.
+@param[in] rec                  Physical record
+@param[in] n_fields             Number of fields to copy
+@param[in] area_end             End of the prefix data
+@param[out] buf                 Memory buffer for the copied prefix, or NULL.
+                                Memory wll be allocated using std::new, free using delete [] buf.
+@param[in] buf_size             Buffer size
 @return	own: copied record */
-static rec_t *rec_copy_prefix_to_buf_old(
-  const rec_t *rec, /*!< in: physical record */
-  ulint n_fields,   /*!< in: number of fields to copy */
-  ulint area_end,   /*!< in: end of the prefix data */
-  byte **buf,       /*!< in/out: memory buffer for
-                                            the copied prefix, or NULL */
-  ulint *buf_size
-) /*!< in/out: buffer size */
-{
-  rec_t *copy_rec;
+static rec_t *rec_copy_prefix_to_buf_old(const rec_t *rec, ulint n_fields, ulint area_end, byte *&buf, ulint &buf_size) {
   ulint area_start;
-  ulint prefix_len;
 
   if (rec_get_1byte_offs_flag(rec)) {
     area_start = REC_N_OLD_EXTRA_BYTES + n_fields;
@@ -1255,55 +1248,34 @@ static rec_t *rec_copy_prefix_to_buf_old(
     area_start = REC_N_OLD_EXTRA_BYTES + 2 * n_fields;
   }
 
-  prefix_len = area_start + area_end;
+  auto prefix_len = area_start + area_end;
 
-  if ((*buf == NULL) || (*buf_size < prefix_len)) {
-    if (*buf != NULL) {
-      mem_free(*buf);
+  if (buf == nullptr || buf_size < prefix_len) {
+    if (buf != nullptr) {
+      mem_free(buf);
     }
 
-    *buf = static_cast<byte *>(mem_alloc2(prefix_len, buf_size));
+    buf = static_cast<byte *>(mem_alloc2(prefix_len, &buf_size));
   }
 
-  memcpy(*buf, rec - area_start, prefix_len);
+  memcpy(buf, rec - area_start, prefix_len);
 
-  copy_rec = *buf + area_start;
+  auto copy_rec = buf + area_start;
 
   rec_set_n_fields_old(copy_rec, n_fields);
 
-  return (copy_rec);
+  return copy_rec;
 }
 
-/** Copies the first n fields of a physical record to a new physical record in
-a buffer.
-@return	own: copied record */
-
-rec_t *rec_copy_prefix_to_buf(
-  const rec_t *rec,          /*!< in: physical record */
-  const dict_index_t *index, /*!< in: record descriptor */
-  ulint n_fields,            /*!< in: number of fields
-                                                  to copy */
-  byte **buf,                /*!< in/out: memory buffer
-                                                  for the copied prefix,
-                                                  or NULL */
-  ulint *buf_size
-) /*!< in/out: buffer size */
-{
-  const byte *nulls;
-  const byte *lens;
-  ulint i;
-  ulint prefix_len;
-  ulint null_mask;
-  ulint status;
-
-  prefetch_rw(*buf);
+rec_t *rec_copy_prefix_to_buf(const rec_t *rec, const dict_index_t *index, ulint n_fields, byte *&buf, ulint &buf_size) {
+  prefetch_rw(buf);
 
   if (!dict_table_is_comp(index->table)) {
     ut_ad(rec_validate_old(rec));
-    return (rec_copy_prefix_to_buf_old(rec, n_fields, rec_get_field_start_offs(rec, n_fields), buf, buf_size));
+    return rec_copy_prefix_to_buf_old(rec, n_fields, rec_get_field_start_offs(rec, n_fields), buf, buf_size);
   }
 
-  status = rec_get_status(rec);
+  auto status = rec_get_status(rec);
 
   switch (status) {
     case REC_STATUS_ORDINARY:
@@ -1318,22 +1290,21 @@ rec_t *rec_copy_prefix_to_buf(
       /* infimum or supremum record: no sense to copy anything */
     default:
       ut_error;
-      return (NULL);
+      return nullptr;
   }
 
-  nulls = rec - (REC_N_NEW_EXTRA_BYTES + 1);
-  lens = nulls - UT_BITS_IN_BYTES(index->n_nullable);
+  auto nulls = rec - (REC_N_NEW_EXTRA_BYTES + 1);
+  auto lens = nulls - UT_BITS_IN_BYTES(index->n_nullable);
+
   prefetch_r(lens);
-  prefix_len = 0;
-  null_mask = 1;
 
-  /* read the lengths of fields 0..n */
-  for (i = 0; i < n_fields; i++) {
-    const dict_field_t *field;
-    const dict_col_t *col;
+  ulint prefix_len{};
+  ulint null_mask{1};
 
-    field = dict_index_get_nth_field(index, i);
-    col = dict_field_get_col(field);
+  /* Read the lengths of fields 0..n */
+  for (ulint i = 0; i < n_fields; i++) {
+    const auto field = dict_index_get_nth_field(index, i);
+    const auto col = dict_field_get_col(field);
 
     if (!(col->prtype & DATA_NOT_NULL)) {
       /* nullable field => read the null flag */
@@ -1378,17 +1349,17 @@ rec_t *rec_copy_prefix_to_buf(
 
   prefix_len += rec - (lens + 1);
 
-  if ((*buf == NULL) || (*buf_size < prefix_len)) {
-    if (*buf != NULL) {
-      mem_free(*buf);
+  if (buf == nullptr || buf_size < prefix_len) {
+    if (buf != nullptr) {
+      mem_free(buf);
     }
 
-    *buf = static_cast<byte *>(mem_alloc2(prefix_len, buf_size));
+    buf = static_cast<byte *>(mem_alloc2(prefix_len, &buf_size));
   }
 
-  memcpy(*buf, lens + 1, prefix_len);
+  memcpy(buf, lens + 1, prefix_len);
 
-  return (*buf + (rec - (lens + 1)));
+  return buf + (rec - (lens + 1));
 }
 
 /** Validates the consistency of an old-style physical record.
@@ -1588,7 +1559,7 @@ void rec_print_new(
 {
   ut_ad(rec);
   ut_ad(offsets);
-  ut_ad(rec_offs_validate(rec, NULL, offsets));
+  ut_ad(rec_offs_validate(rec, nullptr, offsets));
 
   if (!rec_offs_comp(offsets)) {
     rec_print_old(ib_stream, rec);
@@ -1621,7 +1592,7 @@ void rec_print(
     rec_print_old(ib_stream, rec);
     return;
   } else {
-    mem_heap_t *heap = NULL;
+    mem_heap_t *heap = nullptr;
     ulint offsets_[REC_OFFS_NORMAL_SIZE];
     rec_offs_init(offsets_);
 

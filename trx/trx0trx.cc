@@ -100,7 +100,7 @@ trx_t* trx_create_low(sess_t *sess) {
   trx->n_client_tables_in_use = 0;
   trx->client_n_tables_locked = 0;
 
-  mutex_create(&trx->undo_mutex, SYNC_TRX_UNDO);
+  mutex_create(&trx->undo_mutex, IF_DEBUG("trc_undo_mutex",) IF_SYNC_DEBUG(SYNC_TRX_UNDO,) Source_location{});
 
   trx->rseg = nullptr;
 

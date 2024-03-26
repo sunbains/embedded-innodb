@@ -48,9 +48,9 @@ at a time. */
 template <typename Type>
 struct ut_list_node {
   Type *prev; /*!< pointer to the previous
-              node, NULL if start of list */
+              node, nullptr if start of list */
   Type *next; /*!< pointer to next node,
-              NULL if end of list */
+              nullptr if end of list */
 
   void reverse() {
     Type *tmp = prev;
@@ -95,9 +95,9 @@ struct ut_list_base {
     return const_cast<elem_type *>(prev(const_cast<const elem_type &>(e)));
   }
 
-  /** Pointer to list start, NULL if empty. */
+  /** Pointer to list start, nullptr if empty. */
   elem_type *first_element{nullptr};
-  /** Pointer to list end, NULL if empty. */
+  /** Pointer to list end, nullptr if empty. */
   elem_type *last_element{nullptr};
 #ifdef UNIV_DEBUG
   /** UT_LIST_INITIALISED if the list was initialised with the constructor. It
@@ -424,13 +424,13 @@ void ut_list_remove(List &list, typename List::elem_type *elem) {
 /** Gets the next node in a two-way list.
  @param NAME list name
  @param N pointer to a node
- @return the successor of N in NAME, or NULL */
+ @return the successor of N in NAME, or nullptr */
 #define UT_LIST_GET_NEXT(NAME, N) (((N)->NAME).next)
 
 /** Gets the previous node in a two-way list.
  @param NAME list name
  @param N pointer to a node
- @return the predecessor of N in NAME, or NULL */
+ @return the predecessor of N in NAME, or nullptr */
 #define UT_LIST_GET_PREV(NAME, N) (((N)->NAME).prev)
 
 /** Alternative macro to get the number of nodes in a two-way list, i.e.,
@@ -447,7 +447,7 @@ inline auto ut_list_get_len(List& list) {
 
 /** Gets the first node in a two-way list.
  @param BASE the base node (not a pointer to it)
- @return first node, or NULL if the list is empty */
+ @return first node, or nullptr if the list is empty */
 #define UT_LIST_GET_FIRST(BASE) ut_list_get_first(BASE)
 
 template <typename List>
@@ -458,7 +458,7 @@ inline auto ut_list_get_first(List& list) {
 
 /** Gets the last node in a two-way list.
  @param BASE the base node (not a pointer to it)
- @return last node, or NULL if the list is empty */
+ @return last node, or nullptr if the list is empty */
 #define UT_LIST_GET_LAST(BASE) ut_list_get_last(BASE)
 
 template <typename List>

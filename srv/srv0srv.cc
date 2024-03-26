@@ -943,9 +943,9 @@ void srv_init() {
 
   kernel_mutex_temp = static_cast<mutex_t *>(mem_alloc(sizeof(mutex_t)));
 
-  mutex_create(&kernel_mutex, SYNC_KERNEL);
+  mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex",) IF_SYNC_DEBUG(SYNC_KERNEL,) Source_location{});
 
-  mutex_create(&srv_innodb_monitor_mutex, SYNC_NO_ORDER_CHECK);
+  mutex_create(&srv_innodb_monitor_mutex, IF_DEBUG("monitor_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Source_location{});
 
   srv_sys->threads = static_cast<srv_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
 

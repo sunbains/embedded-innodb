@@ -452,16 +452,16 @@ inline que_node_t *que_node_list_add_last(
 
   cnode = (que_common_t *)node;
 
-  cnode->brother = NULL;
+  cnode->brother = nullptr;
 
-  if (node_list == NULL) {
+  if (node_list == nullptr) {
 
     return (node);
   }
 
   cnode2 = (que_common_t *)node_list;
 
-  while (cnode2->brother != NULL) {
+  while (cnode2->brother != nullptr) {
     cnode2 = (que_common_t *)cnode2->brother;
   }
 
@@ -487,7 +487,7 @@ inline ulint que_node_list_get_len(que_node_t *node_list) /*!< in: node list, or
   cnode = (const que_common_t *)node_list;
   len = 0;
 
-  while (cnode != NULL) {
+  while (cnode != nullptr) {
     len++;
     cnode = (const que_common_t *)cnode->brother;
   }

@@ -70,7 +70,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   assert(size == 8 || size == 16 || size == 32 || size == 64);
@@ -107,7 +107,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -150,7 +150,7 @@ static ib_err_t insert(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
   assert(size == 8 || size == 16 || size == 32 || size == 64);
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   for (i = 0; i < 100; ++i) {
     switch (size) {
@@ -206,10 +206,10 @@ static ib_err_t insert(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
     assert(err == DB_SUCCESS);
 
     tpl = ib_tuple_clear(tpl);
-    assert(tpl != NULL);
+    assert(tpl != nullptr);
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -310,7 +310,7 @@ static ib_err_t read_rows(ib_crsr_t crsr) {
   int c2 = 0;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   err = ib_cursor_first(crsr);
   assert(err == DB_SUCCESS);
@@ -335,7 +335,7 @@ static ib_err_t read_rows(ib_crsr_t crsr) {
            err == DB_RECORD_NOT_FOUND);
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -363,7 +363,7 @@ static ib_err_t drop_table_n(const char *dbname, /*!< in: database name */
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, size);
 #endif
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   err = ib_schema_lock_exclusive(ib_trx);
   assert(err == DB_SUCCESS);
@@ -390,7 +390,7 @@ int main(int argc, char *argv[]) {
 #ifdef __WIN__
   srand((int)time(NULL));
 #else
-  srandom(time(NULL));
+  srandom(time(nullptr));
 #endif
 
   err = ib_init();
@@ -412,7 +412,7 @@ int main(int argc, char *argv[]) {
 
     printf("Begin transaction\n");
     ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-    assert(ib_trx != NULL);
+    assert(ib_trx != nullptr);
 
     err = open_table(DATABASE, TABLE, size, ib_trx, &crsr);
     assert(err == DB_SUCCESS);
@@ -426,7 +426,7 @@ int main(int argc, char *argv[]) {
     printf("Close cursor\n");
     err = ib_cursor_close(crsr);
     assert(err == DB_SUCCESS);
-    crsr = NULL;
+    crsr = nullptr;
 
     printf("Commit transaction\n");
     err = ib_trx_commit(ib_trx);

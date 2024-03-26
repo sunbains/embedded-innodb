@@ -91,12 +91,12 @@ void fsp_header_inc_size(space_id_t space, ulint size_inc, mtr_t *mtr);
                                 the page
 @param[in,out] mtr              Mini-transaction covering the operation.
 
-@return the block where the segment header is placed, x-latched, NULL if
+@return the block where the segment header is placed, x-latched, nullptr if
 could not create segment because of lack of space */
 buf_block_t *fseg_create(space_id_t space, page_no_t page_no, ulint byte_offset, mtr_t *mtr);
 
 /** Creates a new segment.
-@return the block where the segment header is placed, x-latched, NULL
+@return the block where the segment header is placed, x-latched, nullptr
 if could not create segment because of lack of space */
 
 buf_block_t *fseg_create_general(
@@ -233,12 +233,12 @@ bool fseg_free_step_not_header(
 ); /*!< in: mtr */
 
 /** Parses a redo log record of a file page init.
-@return	end of log record or NULL */
+@return	end of log record or nullptr */
 byte *fsp_parse_init_file_page(
   byte *ptr,     /*!< in: buffer */
   byte *end_ptr, /*!< in: buffer end */
   buf_block_t *block
-); /*!< in: block or NULL */
+); /*!< in: block or nullptr */
 
 /** Validates the file space system and its segments.
 @return	true if ok */

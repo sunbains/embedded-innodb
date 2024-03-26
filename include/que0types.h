@@ -45,7 +45,7 @@ substruct must be 'common' */
 
 struct que_common_struct {
   ulint type;          /*!< query node type */
-  que_node_t *parent;  /*!< back pointer to parent node, or NULL */
+  que_node_t *parent;  /*!< back pointer to parent node, or nullptr */
   que_node_t *brother; /* pointer to a possible brother node */
   dfield_t val;        /*!< evaluated value for an expression */
   ulint val_buf_size;

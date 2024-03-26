@@ -28,7 +28,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 /** All attempts to create the table should fail */
 static void create_table(void) {
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
 
   err = ib_table_schema_create("", &ib_tbl_sch, IB_TBL_COMPACT, 0);
   assert(err == DB_DATA_MISMATCH);

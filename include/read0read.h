@@ -73,7 +73,7 @@ void read_cursor_view_close(
 ); /** in: cursor view to be closed */
 
 /** This function sets a given consistent cursor view to a transaction
-read view if given consistent cursor view is not NULL. Otherwise, function
+read view if given consistent cursor view is not nullptr. Otherwise, function
 restores a global read view to a transaction read view. */
 void read_cursor_set(
   trx_t *trx, /** in: transaction where cursor is set */

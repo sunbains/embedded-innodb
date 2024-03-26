@@ -202,7 +202,7 @@ constexpr ulint TRX_UNDO_PREPARED = 5;
 /** Transaction undo log memory object; this is protected by the undo_mutex
 in the corresponding transaction object */
 
-struct trx_undo_struct {
+struct trx_undo_t {
   /*-----------------------------*/
   ulint id;        /*!< undo log slot number within the
                    rollback segment */
@@ -576,7 +576,7 @@ inline trx_undo_rec_t *trx_undo_page_get_prev_rec(
 
   if (start + undo_page == rec) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   return (undo_page + mach_read_from_2(rec - 2));
@@ -597,7 +597,7 @@ inline trx_undo_rec_t *trx_undo_page_get_next_rec(
 
   if (next == end) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   return (undo_page + next);
@@ -617,7 +617,7 @@ inline trx_undo_rec_t *trx_undo_page_get_last_rec(
 
   if (start == end) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   return (undo_page + mach_read_from_2(undo_page + end - 2));
@@ -637,7 +637,7 @@ inline trx_undo_rec_t *trx_undo_page_get_first_rec(
 
   if (start == end) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   return (undo_page + start);

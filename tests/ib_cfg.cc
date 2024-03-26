@@ -55,7 +55,7 @@ static void get_all(void) {
                                     "status_file",
                                     "sync_spin_loops",
                                     "version",
-                                    NULL};
+                                    nullptr};
 
   const char **ptr;
 

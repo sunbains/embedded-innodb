@@ -65,7 +65,7 @@ void row_prebuilt_update_trx(
 
 /* An InnoDB cached row. */
 typedef struct ib_cached_row_struct {
-  ulint max_len; /* max len of rec if not NULL */
+  ulint max_len; /* max len of rec if not nullptr */
   ulint rec_len; /* length of valid data in rec */
   rec_t *rec;    /* cached record, pointer into the
                  start of the record data */

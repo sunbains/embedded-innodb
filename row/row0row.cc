@@ -611,11 +611,11 @@ bool row_search_on_row_ref(
 
   ut_a(dtuple_get_n_fields(ref) == dict_index_get_n_unique(index));
 
-  btr_pcur_open(index, ref, PAGE_CUR_LE, mode, pcur, mtr);
+  pcur->open(index, ref, PAGE_CUR_LE, mode, mtr, Source_location{});
 
-  low_match = btr_pcur_get_low_match(pcur);
+  low_match = pcur->get_low_match();
 
-  rec = btr_pcur_get_rec(pcur);
+  rec = pcur->get_rec();
 
   if (page_rec_is_infimum(rec)) {
 
@@ -648,11 +648,11 @@ rec_t *row_get_clust_rec(ulint mode, const rec_t *rec, dict_index_t *index, dict
 
   found = row_search_on_row_ref(&pcur, mode, table, ref, mtr);
 
-  clust_rec = found ? btr_pcur_get_rec(&pcur) : nullptr;
+  clust_rec = found ? pcur.get_rec() : nullptr;
 
   mem_heap_free(heap);
 
-  btr_pcur_close(&pcur);
+  pcur.close();
 
   *clust_index = dict_table_get_first_index(table);
 
@@ -666,10 +666,11 @@ bool row_search_index_entry(dict_index_t *index, const dtuple_t *entry, ulint mo
 
   ut_ad(dtuple_check_typed(entry));
 
-  btr_pcur_open(index, entry, PAGE_CUR_LE, mode, pcur, mtr);
-  low_match = btr_pcur_get_low_match(pcur);
+  pcur->open(index, entry, PAGE_CUR_LE, mode, mtr, Source_location{});
 
-  rec = btr_pcur_get_rec(pcur);
+  low_match = pcur->get_low_match();
+
+  rec = pcur->get_rec();
 
   n_fields = dtuple_get_n_fields(entry);
 

@@ -30,7 +30,7 @@ bool ib_handle_errors(
   trx_t *trx,           /*!< in: transaction */
   que_thr_t *thr,       /*!< in: query thread */
   trx_savept_t *savept
-); /*!< in: savepoint or NULL */
+); /*!< in: savepoint or nullptr */
 
 /** Sets a lock on a table.
 @return	error code or DB_SUCCESS */

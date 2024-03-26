@@ -88,7 +88,7 @@ static int visit_table(void *arg,            /*!< User callback arg */
   (void)tbl_fmt;
 
   p = strchr(name, '/');
-  if (p == NULL) {
+  if (p == nullptr) {
     p = name;
   } else {
     ++p;
@@ -218,7 +218,7 @@ static int visit_index(void *arg,        /*!< User callback arg */
   visitor_arg->n_index_cols = n_cols;
 
   p = strchr(visitor_arg->table_name, '/');
-  if (p == NULL) {
+  if (p == nullptr) {
     p = visitor_arg->table_name;
   } else {
     ++p;
@@ -267,8 +267,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t ib_idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
 #ifdef __WIN__
@@ -322,7 +322,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -331,7 +331,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 
 /* Check whether NULL callbacks work. */
 static const ib_schema_visitor_t table_visitor = {
-    IB_SCHEMA_VISITOR_TABLE_AND_INDEX_COL, visit_table_list, NULL, NULL, NULL};
+    IB_SCHEMA_VISITOR_TABLE_AND_INDEX_COL, visit_table_list, nullptr, nullptr, nullptr};
 
 /** Read table names only. */
 static int visit_tables_list(void *arg, const char *name, int len)
@@ -452,7 +452,7 @@ static ib_err_t drop_table_n(const char *dbname, /*!< in: database name */
 #endif
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   err = ib_schema_lock_exclusive(ib_trx);
   assert(err == DB_SUCCESS);

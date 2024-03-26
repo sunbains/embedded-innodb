@@ -377,7 +377,7 @@ bool trx_sys_read_pertable_file_format_id(
                           data file */
 
 /** Doublewrite control struct */
-struct trx_doublewrite_struct {
+struct trx_doublewrite_t {
   mutex_t mutex;    /** mutex protecting the first_free field and
                     write_buf */
   ulint block1;     /** the page number of the first
@@ -397,7 +397,7 @@ struct trx_doublewrite_struct {
 
 /** The transaction system central memory data structure; protected by the
 kernel mutex */
-struct trx_sys_struct {
+struct trx_sys_t {
   /** The smallest number not yet assigned as a transaction
   id or transaction number */
   trx_id_t max_trx_id;
@@ -604,7 +604,7 @@ inline trx_t *trx_get_on_id(trx_id_t trx_id) /*!< in: trx id to search for */
 
   trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
 
-  while (trx != NULL) {
+  while (trx != nullptr) {
     if (trx_id == trx->id) {
 
       return (trx);
@@ -613,7 +613,7 @@ inline trx_t *trx_get_on_id(trx_id_t trx_id) /*!< in: trx id to search for */
     trx = UT_LIST_GET_NEXT(trx_list, trx);
   }
 
-  return (NULL);
+  return (nullptr);
 }
 
 /** Returns the minumum trx id in trx list. This is the smallest id for which
@@ -628,7 +628,7 @@ inline trx_id_t trx_list_get_min_trx_id(void) {
 
   trx = UT_LIST_GET_LAST(trx_sys->trx_list);
 
-  if (trx == NULL) {
+  if (trx == nullptr) {
 
     return (trx_sys->max_trx_id);
   }

@@ -159,13 +159,10 @@ ulint rec_get_nth_field_offs_old(
 rec_t *rec_copy_prefix_to_buf(
   const rec_t *rec,          /*!< in: physical record */
   const dict_index_t *index, /*!< in: record descriptor */
-  ulint n_fields,            /*!< in: number of fields
-                                                  to copy */
-  byte **buf,                /*!< in/out: memory buffer
-                                                  for the copied prefix,
-                                                  or nullptr */
-  ulint *buf_size
-); /*!< in/out: buffer size */
+  ulint n_fields,            /*!< in: number of fields to copy */
+  byte *&buf,                /*!< in/out: memory buffer for the copied prefix, or nullptr. */
+  ulint &buf_size            /*!< in/out: buffer size */
+);
 
 /** Builds a ROW_FORMAT=COMPACT record out of a data tuple. */
 void rec_convert_dtuple_to_rec_comp(

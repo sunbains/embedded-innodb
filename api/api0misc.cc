@@ -47,7 +47,7 @@ int ib_create_tempfile(const char *prefix) /*!< in: temp filename prefix */
 
   file = tmpfile();
 
-  if (file != NULL) {
+  if (file != nullptr) {
     fh = dup(fileno(file));
     fclose(file);
   }
@@ -58,11 +58,11 @@ int ib_create_tempfile(const char *prefix) /*!< in: temp filename prefix */
 /** Determines if the currently running transaction has been interrupted.
 @return	true if interrupted */
 
-ib_trx_is_interrupted_handler_t ib_trx_is_interrupted = NULL;
+ib_trx_is_interrupted_handler_t ib_trx_is_interrupted = nullptr;
 
 bool trx_is_interrupted(const trx_t *trx) /*!< in: transaction */
 {
-  if (trx->client_thd && ib_trx_is_interrupted != NULL) {
+  if (trx->client_thd && ib_trx_is_interrupted != nullptr) {
     return (ib_trx_is_interrupted(trx->client_thd));
   }
   return (false);
@@ -94,7 +94,7 @@ handle_new_error:
   switch (err) {
     case DB_LOCK_WAIT_TIMEOUT:
       if (ses_rollback_on_timeout) {
-        trx_general_rollback(trx, false, NULL);
+        trx_general_rollback(trx, false, nullptr);
         break;
       }
       /* fall through */
@@ -131,7 +131,7 @@ handle_new_error:
       /* Roll back the whole transaction; this resolution was added
     to version 3.23.43 */
 
-      trx_general_rollback(trx, false, NULL);
+      trx_general_rollback(trx, false, nullptr);
       break;
 
     case DB_MUST_GET_MORE_FILE_SPACE:
@@ -223,7 +223,7 @@ run_again:
     if (err != DB_QUE_THR_SUSPENDED) {
       bool was_lock_wait;
 
-      was_lock_wait = ib_handle_errors(&err, trx, thr, NULL);
+      was_lock_wait = ib_handle_errors(&err, trx, thr, nullptr);
 
       if (was_lock_wait) {
         goto run_again;

@@ -108,7 +108,7 @@ enum sym_tab_entry {
 struct sym_node_struct {
   que_common_t common; /** node type:
                        QUE_NODE_SYMBOL */
-  /* NOTE: if the data field in 'common.val' is not NULL and the symbol
+  /* NOTE: if the data field in 'common.val' is not nullptr and the symbol
   table node is not for a temporary column, the memory for the value has
   been allocated from dynamic memory and it should be freed when the
   symbol table is discarded */
@@ -120,7 +120,7 @@ struct sym_node_struct {
   when initializing a cursor (e.g., "DECLARE CURSOR c IS SELECT * FROM
   t WHERE id = x;"), we copy the values from the primary instance to
   the cursor's instance so that they are fixed for the duration of the
-  cursor, and set 'indirection' to NULL. If we did not, the value of
+  cursor, and set 'indirection' to nullptr. If we did not, the value of
   'x' could change between fetches and things would break horribly.
 
   TODO: It would be cleaner to make 'indirection' a boolean field and
@@ -130,12 +130,12 @@ struct sym_node_struct {
                            another symbol table
                            node which contains
                            the value for this
-                           node, NULL otherwise */
+                           node, nullptr otherwise */
   sym_node_t *alias;       /** pointer to
                            another symbol table
                            node for which this
                            node is an alias,
-                           NULL otherwise */
+                           nullptr otherwise */
   UT_LIST_NODE_T(sym_node_t)
   col_var_list;                  /** list of table
                                  columns or a list of
@@ -171,7 +171,7 @@ struct sym_node_struct {
                                  column id */
   ulint col_no;                  /** column number if a
                                  column */
-  sel_buf_t *prefetch_buf;       /** NULL, or a buffer
+  sel_buf_t *prefetch_buf;       /** nullptr, or a buffer
                                  for cached column
                                  values for prefetched
                                  rows */
@@ -205,7 +205,7 @@ struct sym_tab_struct {
   /** position of the next character in
   sql_string to give to the lexical
   analyzer */
-  pars_info_t *info; /** extra information, or NULL */
+  pars_info_t *info; /** extra information, or nullptr */
 
   /** List of symbol nodes in the symbol table */
   UT_LIST_BASE_NODE_T_EXTERN(sym_node_t, sym_list) sym_list;

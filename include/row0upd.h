@@ -447,7 +447,7 @@ inline const upd_field_t *upd_get_field_by_field_no(
     }
   }
 
-  return (NULL);
+  return (nullptr);
 }
 
 /** Updates the trx id and roll ptr field in a clustered index record when

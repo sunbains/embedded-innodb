@@ -152,14 +152,14 @@ static que_node_t *opt_look_for_col_in_comparison_before(
 
   if ((cmp_type == OPT_EQUAL) && (search_cond->func != '=')) {
 
-    return (NULL);
+    return (nullptr);
 
   } else if ((cmp_type == OPT_COMPARISON) && (search_cond->func != '<') &&
              (search_cond->func != '>') &&
              (search_cond->func != PARS_GE_TOKEN) &&
              (search_cond->func != PARS_LE_TOKEN)) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   arg = search_cond->args;
@@ -202,7 +202,7 @@ static que_node_t *opt_look_for_col_in_comparison_before(
     }
   }
 
-  return (NULL);
+  return (nullptr);
 }
 
 /** Looks in a search condition if a column value is already restricted by the
@@ -224,9 +224,9 @@ static que_node_t *opt_look_for_col_in_cond_before(
   func_node_t *new_cond;
   que_node_t *exp;
 
-  if (search_cond == NULL) {
+  if (search_cond == nullptr) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   ut_a(que_node_get_type(search_cond) == QUE_NODE_FUNC);
@@ -252,9 +252,9 @@ static que_node_t *opt_look_for_col_in_cond_before(
 
   exp = opt_look_for_col_in_comparison_before(cmp_type, col_no, search_cond,
                                               sel_node, nth_table, op);
-  if (exp == NULL) {
+  if (exp == nullptr) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   /* If we will fetch in an ascending order, we cannot utilize an upper
@@ -263,11 +263,11 @@ static que_node_t *opt_look_for_col_in_cond_before(
 
   if (sel_node->asc && ((*op == '<') || (*op == PARS_LE_TOKEN))) {
 
-    return (NULL);
+    return (nullptr);
 
   } else if (!sel_node->asc && ((*op == '>') || (*op == PARS_GE_TOKEN))) {
 
-    return (NULL);
+    return (nullptr);
   }
 
   return (exp);
@@ -515,7 +515,7 @@ opt_search_plan_for_table(sel_node_t *sel_node, /*!< in: parsed select node */
   n_fields = opt_calc_n_fields_from_goodness(best_goodness);
 
   if (n_fields == 0) {
-    plan->tuple = NULL;
+    plan->tuple = nullptr;
     plan->n_exact_match = 0;
   } else {
     plan->tuple = dtuple_create(pars_sym_tab_global->heap, n_fields);
@@ -543,10 +543,10 @@ opt_search_plan_for_table(sel_node_t *sel_node, /*!< in: parsed select node */
     plan->unique_search = false;
   }
 
-  plan->old_vers_heap = NULL;
+  plan->old_vers_heap = nullptr;
 
-  btr_pcur_init(&(plan->pcur));
-  btr_pcur_init(&(plan->clust_pcur));
+  plan->pcur.init(0);
+  plan->clust_pcur.init(0);
 }
 
 /** Looks at a comparison condition and decides if it can, and need, be tested
@@ -647,7 +647,7 @@ static void opt_find_test_conds(sel_node_t *sel_node, /*!< in: select node */
   ulint func_class;
   plan_t *plan;
 
-  if (cond == NULL) {
+  if (cond == nullptr) {
 
     return;
   }
@@ -701,7 +701,7 @@ opt_normalize_cmp_conds(func_node_t *cond,   /*!< in: first in a list of
         /* Switch the order of the arguments */
 
         cond->args = arg2;
-        que_node_list_add_last(NULL, arg2);
+        que_node_list_add_last(nullptr, arg2);
         que_node_list_add_last(arg2, arg1);
 
         /* Invert the operator */
@@ -757,7 +757,7 @@ void opt_find_all_cols(
   sym_node_t *sym_node;
   ulint col_pos;
 
-  if (exp == NULL) {
+  if (exp == nullptr) {
 
     return;
   }
@@ -851,7 +851,7 @@ static void opt_find_copy_cols(
   func_node_t *new_cond;
   plan_t *plan;
 
-  if (search_cond == NULL) {
+  if (search_cond == nullptr) {
 
     return;
   }
@@ -945,8 +945,8 @@ static void opt_clust_access(sel_node_t *sel_node, /*!< in: select node */
   plan->no_prefetch = false;
 
   if (dict_index_is_clust(index)) {
-    plan->clust_map = NULL;
-    plan->clust_ref = NULL;
+    plan->clust_map = nullptr;
+    plan->clust_ref = nullptr;
 
     return;
   }
@@ -1006,7 +1006,7 @@ void opt_search_plan(sel_node_t *sel_node) /*!< in: parsed select node */
 
   table_node = sel_node->table_list;
 
-  if (sel_node->order_by == NULL) {
+  if (sel_node->order_by == nullptr) {
     sel_node->asc = true;
   } else {
     order_by = sel_node->order_by;
@@ -1092,7 +1092,7 @@ void opt_print_query_plan(sel_node_t *sel_node) /*!< in: select node */
     }
 
     ib_logger(ib_stream, "Table ");
-    dict_index_name_print(ib_stream, NULL, plan->index);
+    dict_index_name_print(ib_stream, nullptr, plan->index);
     ib_logger(ib_stream, "; exact m. %lu, match %lu, end conds %lu\n",
               (unsigned long)plan->n_exact_match, (unsigned long)n_fields,
               (unsigned long)UT_LIST_GET_LEN(plan->end_conds));

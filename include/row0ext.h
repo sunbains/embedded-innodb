@@ -105,5 +105,5 @@ inline const byte *row_ext_lookup(
     }
   }
 
-  return (NULL);
+  return (nullptr);
 }

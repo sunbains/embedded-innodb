@@ -483,7 +483,7 @@ void innobase_log_init() {
 
   log_sys = static_cast<log_t *>(mem_alloc(sizeof(log_t)));
 
-  mutex_create(&log_sys->mutex, SYNC_LOG);
+  mutex_create(&log_sys->mutex, IF_DEBUG("log_sys_mutex",) IF_SYNC_DEBUG(SYNC_LOG,) Source_location{});
 
   log_acquire();
 

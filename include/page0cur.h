@@ -152,12 +152,18 @@ byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, buf_blo
 byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr);
 
 /** Index page cursor */
-struct page_cur_struct {
-  /** Pointer to a record on page */
-  byte *rec;
+struct page_cur_t {
+  /** Index the cursor is on. */
+  const dict_index_t *m_index{};
 
-  /** Pointer to the block containing rec */
-  buf_block_t *block;
+  /** pointer to a record on page */
+  rec_t *m_rec{};
+
+  /** Current offsets of the record. */
+  ulint *m_offsets{};
+
+  /** Pointer to the current block containing rec. */
+  buf_block_t *m_block{};
 };
 
 #ifdef UNIV_DEBUG
@@ -168,9 +174,9 @@ struct page_cur_struct {
  * @return Page.
  */
 inline page_t *page_cur_get_page(page_cur_t *cur) {
-  ut_ad(page_align(cur->rec) == cur->block->get_frame());
+  ut_ad(page_align(cur->m_rec) == cur->m_block->get_frame());
 
-  return page_align(cur->rec);
+  return page_align(cur->m_rec);
 }
 
 /**
@@ -180,9 +186,9 @@ inline page_t *page_cur_get_page(page_cur_t *cur) {
  * @return Buffer block.
  */
 inline buf_block_t *page_cur_get_block(page_cur_t *cur) {
-  ut_ad(page_align(cur->rec) == cur->block->get_frame());
+  ut_ad(page_align(cur->m_rec) == cur->m_block->get_frame());
 
-  return cur->block;
+  return cur->m_block;
 }
 
 /**
@@ -192,9 +198,9 @@ inline buf_block_t *page_cur_get_block(page_cur_t *cur) {
  * @return Record.
  */
 inline rec_t *page_cur_get_rec(page_cur_t *cur) {
-  ut_ad(page_align(cur->rec) == cur->block->get_frame());
+  ut_ad(page_align(cur->m_rec) == cur->m_block->get_frame());
 
-  return cur->rec;
+  return cur->m_rec;
 }
 #else
 #define page_cur_get_page(cur) page_align((cur)->rec)
@@ -209,8 +215,8 @@ inline rec_t *page_cur_get_rec(page_cur_t *cur) {
  * @param cur In: Cursor.
  */
 inline void page_cur_set_before_first(buf_block_t *block, page_cur_t *cur) {
-  cur->block = block;
-  cur->rec = page_get_infimum_rec(cur->block->get_frame());
+  cur->m_block = block;
+  cur->m_rec = page_get_infimum_rec(cur->m_block->get_frame());
 }
 
 /**
@@ -230,8 +236,8 @@ inline void page_cur_set_before_first(const buf_block_t *block, page_cur_t *cur)
  * @param cur In: Cursor.
  */
 inline void page_cur_set_after_last(buf_block_t *block, page_cur_t *cur) {
-  cur->block = block;
-  cur->rec = page_get_supremum_rec(cur->block->get_frame());
+  cur->m_block = block;
+  cur->m_rec = page_get_supremum_rec(cur->m_block->get_frame());
 }
 
 /**
@@ -241,8 +247,8 @@ inline void page_cur_set_after_last(buf_block_t *block, page_cur_t *cur) {
  * @param cur In: Cursor.
  */
 inline void page_cur_set_after_last(const buf_block_t *block, page_cur_t *cur) {
-  cur->block = const_cast<buf_block_t *>(block);
-  cur->rec = page_get_supremum_rec(cur->block->get_frame());
+  cur->m_block = const_cast<buf_block_t *>(block);
+  cur->m_rec = page_get_supremum_rec(cur->m_block->get_frame());
 }
 
 /**
@@ -252,8 +258,8 @@ inline void page_cur_set_after_last(const buf_block_t *block, page_cur_t *cur) {
  * @return True if at start.
  */
 inline bool page_cur_is_before_first(const page_cur_t *cur) {
-  ut_ad(page_align(cur->rec) == cur->block->get_frame());
-  return page_rec_is_infimum(cur->rec);
+  ut_ad(page_align(cur->m_rec) == cur->m_block->get_frame());
+  return page_rec_is_infimum(cur->m_rec);
 }
 
 /**
@@ -263,8 +269,8 @@ inline bool page_cur_is_before_first(const page_cur_t *cur) {
  * @return True if at end.
  */
 inline bool page_cur_is_after_last(const page_cur_t *cur) {
-  ut_ad(page_align(cur->rec) == cur->block->get_frame());
-  return page_rec_is_supremum(cur->rec);
+  ut_ad(page_align(cur->m_rec) == cur->m_block->get_frame());
+  return page_rec_is_supremum(cur->m_rec);
 }
 
 /**
@@ -277,8 +283,8 @@ inline bool page_cur_is_after_last(const page_cur_t *cur) {
 inline void page_cur_position(const rec_t *rec, const buf_block_t *block, page_cur_t *cur) {
   ut_ad(page_align(rec) == block->get_frame());
 
-  cur->rec = const_cast<rec_t *>(rec);
-  cur->block = const_cast<buf_block_t *>(block);
+  cur->m_rec = const_cast<rec_t *>(rec);
+  cur->m_block = const_cast<buf_block_t *>(block);
 }
 
 /**
@@ -287,8 +293,8 @@ inline void page_cur_position(const rec_t *rec, const buf_block_t *block, page_c
  * @param cur Out: Page cursor.
  */
 inline void page_cur_invalidate(page_cur_t *cur) {
-  cur->rec = nullptr;
-  cur->block = nullptr;
+  cur->m_rec = nullptr;
+  cur->m_block = nullptr;
 }
 
 /**
@@ -299,7 +305,7 @@ inline void page_cur_invalidate(page_cur_t *cur) {
 inline void page_cur_move_to_next(page_cur_t *cur) {
   ut_ad(!page_cur_is_after_last(cur));
 
-  cur->rec = page_rec_get_next(cur->rec);
+  cur->m_rec = page_rec_get_next(cur->m_rec);
 }
 
 /**
@@ -310,7 +316,7 @@ inline void page_cur_move_to_next(page_cur_t *cur) {
 inline void page_cur_move_to_prev(page_cur_t *cur) {
   ut_ad(!page_cur_is_before_first(cur));
 
-  cur->rec = page_rec_get_prev(cur->rec);
+  cur->m_rec = page_rec_get_prev(cur->m_rec);
 }
 
 /**
@@ -358,9 +364,9 @@ inline rec_t *page_cur_tuple_insert(page_cur_t *cursor, const dtuple_t *tuple, d
 
   auto heap = mem_heap_create(size + (4 + REC_OFFS_HEADER_SIZE + dtuple_get_n_fields(tuple)) * sizeof(ulint));
   auto rec = rec_convert_dtuple_to_rec((byte *)mem_heap_alloc(heap, size), dict_index, tuple, n_ext);
-  auto offsets = rec_get_offsets(rec, dict_index, NULL, ULINT_UNDEFINED, &heap);
+  auto offsets = rec_get_offsets(rec, dict_index, nullptr, ULINT_UNDEFINED, &heap);
 
-  rec = page_cur_insert_rec_low(cursor->rec, dict_index, rec, offsets, mtr);
+  rec = page_cur_insert_rec_low(cursor->m_rec, dict_index, rec, offsets, mtr);
 
   mem_heap_free(heap);
 
@@ -381,5 +387,5 @@ inline rec_t *page_cur_tuple_insert(page_cur_t *cursor, const dtuple_t *tuple, d
  * @return Pointer to the inserted record if successful, NULL otherwise.
  */
 inline rec_t *page_cur_rec_insert(page_cur_t *cursor, const rec_t *rec, dict_index_t *dict_index, ulint *offsets, mtr_t *mtr) {
-  return page_cur_insert_rec_low(cursor->rec, dict_index, rec, offsets, mtr);
+  return page_cur_insert_rec_low(cursor->m_rec, dict_index, rec, offsets, mtr);
 }

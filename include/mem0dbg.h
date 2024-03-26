@@ -24,10 +24,12 @@ Created 6/9/1994 Heikki Tuuri
 
 #pragma once
 
+#include "mem0types.h"
+
 /* In the debug version each allocated field is surrounded with
 check fields whose sizes are given below */
 
-/* Space needed when allocating for a user a field of
+/** Space needed when allocating for a user a field of
 length N. The space is allocated only in multiples of
 UNIV_MEM_ALIGNMENT. In the debug version there are also
 check fields at the both ends of the field. */
@@ -35,43 +37,40 @@ check fields at the both ends of the field. */
 
 #if defined UNIV_DEBUG
 
-/** Checks a memory heap for consistency and prints the contents if requested.
-Outputs the sum of sizes of buffers given to the user (only in
-the debug version), the physical size of the heap and the number of
-blocks in the heap. In case of error returns 0 as sizes and number
-of blocks. */
-void mem_heap_validate_or_print(
-  mem_heap_t *heap, /*!< in: memory heap */
-  byte *top,        /*!< in: calculate and validate only until
-                      this top pointer in the heap is reached,
-                      if this pointer is NULL, ignored */
-  bool print,       /*!< in: if true, prints the contents
-                      of the heap; works only in
-                      the debug version */
-  bool *error,      /*!< out: true if error */
-  ulint *us_size,   /*!< out: allocated memory
-                      (for the user) in the heap,
-                      if a NULL pointer is passed as this
-                      argument, it is ignored; in the
-                      non-debug version this is always -1 */
-  ulint *ph_size,   /*!< out: physical size of the heap,
-                      if a NULL pointer is passed as this
-                      argument, it is ignored */
-  ulint *n_blocks
-); /*!< out: number of blocks in the heap,
-                   if a NULL pointer is passed as this
-                   argument, it is ignored */
+/**
+ * Checks a memory heap for consistency and prints the contents if requested.
+ * Outputs the sum of sizes of buffers given to the user (only in the debug version),
+ * the physical size of the heap and the number of blocks in the heap.
+ * In case of error returns 0 as sizes and number of blocks.
+ *
+ * @param heap in: memory heap
+ * @param top in: calculate and validate only until this top pointer in the heap is reached, if this pointer is nullptr, ignored
+ * @param print in: if true, prints the contents of the heap; works only in the debug version
+ * @param error out: true if error
+ * @param us_size out: allocated memory (for the user) in the heap, if a nullptr pointer is passed as this argument, it is ignored; in the non-debug version this is always -1
+ * @param ph_size out: physical size of the heap, if a nullptr pointer is passed as this argument, it is ignored
+ * @param n_blocks out: number of blocks in the heap, if a nullptr pointer is passed as this argument, it is ignored
+ */
+void mem_heap_validate_or_print(mem_heap_t *heap, byte *top, bool print, bool *error, ulint *us_size, ulint *ph_size, ulint *n_blocks);
 
-/** Validates the contents of a memory heap.
-@return	true if ok */
-bool mem_heap_validate(mem_heap_t *heap); /*!< in: memory heap */
+/**
+ * Validates the contents of a memory heap.
+ * @param heap in: memory heap
+ * @return true if ok
+ */
+bool mem_heap_validate(mem_heap_t *heap);
 
-/** Checks that an object is a memory heap (or a block of it)
-@return	true if ok */
-bool mem_heap_check(mem_heap_t *heap); /*!< in: memory heap */
+/**
+ * Checks that an object is a memory heap (or a block of it)
+ * @param heap in: memory heap
+ * @return true if ok
+ */
+bool mem_heap_check(mem_heap_t *heap);
 
-/** Validates the dynamic memory
-@return	true if ok */
+/**
+ * Validates the dynamic memory
+ * @return true if ok
+ */
 bool mem_validate();
 
 #endif /* UNIV_DEBUG */

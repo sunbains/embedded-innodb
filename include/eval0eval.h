@@ -134,7 +134,7 @@ inline void eval_node_set_int_val(
   auto dfield = que_node_get_val(node);
   auto data = (byte *)dfield_get_data(dfield);
 
-  if (data == NULL) {
+  if (data == nullptr) {
     data = eval_node_alloc_val_buf(node, 4);
   }
 
@@ -162,7 +162,7 @@ inline bool eval_node_get_bool_val(que_node_t *node) /*!< in: query graph node *
 
   auto data = (byte *)dfield_get_data(dfield);
 
-  ut_ad(data != NULL);
+  ut_ad(data != nullptr);
 
   return (mach_read_from_1(data));
 }
@@ -176,7 +176,7 @@ inline void eval_node_set_bool_val(
   auto dfield = que_node_get_val(func_node);
   auto data = (byte *)dfield_get_data(dfield);
 
-  if (data == NULL) {
+  if (data == nullptr) {
     /* Allocate 1 byte to hold the value */
 
     data = eval_node_alloc_val_buf(func_node, 1);

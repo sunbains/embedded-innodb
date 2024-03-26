@@ -110,7 +110,7 @@ static bool row_sel_sec_rec_is_for_blob(
 
   /* FIXME: Pass a NULL compare context, the compare context will be
   required once we support comparison operations outside of rem0cmp.c. */
-  return !cmp_data_data(NULL, mtype, prtype, buf, len, sec_field, sec_len);
+  return !cmp_data_data(nullptr, mtype, prtype, buf, len, sec_field, sec_len);
 }
 
 /** Returns true if the user-defined column values in a secondary index record
@@ -136,7 +136,7 @@ static bool row_sel_sec_rec_is_for_clust_rec(
   const byte *clust_field;
   ulint n;
   ulint i;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint clust_offsets_[REC_OFFS_NORMAL_SIZE];
   ulint sec_offsets_[REC_OFFS_SMALL_SIZE];
   ulint *clust_offs = clust_offsets_;
@@ -219,7 +219,7 @@ sel_node_t *sel_node_create(mem_heap_t *heap) /*!< in: memory heap where created
   node->common.type = QUE_NODE_SELECT;
   node->state = SEL_NODE_OPEN;
 
-  node->plans = NULL;
+  node->plans = nullptr;
 
   return node;
 }
@@ -232,12 +232,12 @@ void sel_node_free_private(sel_node_t *node) /*!< in: select node struct */
   ulint i;
   plan_t *plan;
 
-  if (node->plans != NULL) {
+  if (node->plans != nullptr) {
     for (i = 0; i < node->n_tables; i++) {
       plan = sel_node_get_nth_plan(node, i);
 
-      btr_pcur_close(&(plan->pcur));
-      btr_pcur_close(&(plan->clust_pcur));
+      plan->pcur.close();
+      plan->clust_pcur.close();
 
       if (plan->old_vers_heap) {
         mem_heap_free(plan->old_vers_heap);
@@ -270,7 +270,7 @@ inline void sel_assign_into_var_values(
 {
   que_node_t *exp;
 
-  if (var == NULL) {
+  if (var == nullptr) {
 
     return;
   }
@@ -312,7 +312,7 @@ inline void row_sel_copy_input_variable_vals(sel_node_t *node) /*!< in: select n
   while (var != nullptr) {
     eval_node_copy_val(var, var->alias);
 
-    var->indirection = NULL;
+    var->indirection = nullptr;
 
     var = UT_LIST_GET_NEXT(col_var_list, var);
   }
@@ -343,7 +343,7 @@ static void row_sel_fetch_columns(
   }
 
   while (column) {
-    mem_heap_t *heap = NULL;
+    mem_heap_t *heap = nullptr;
     bool needs_copy;
 
     field_no = column->field_nos[index_type];
@@ -397,7 +397,7 @@ static void sel_col_prefetch_buf_alloc(sym_node_t *column) /*!< in: symbol table
   for (i = 0; i < SEL_MAX_N_PREFETCH; i++) {
     sel_buf = column->prefetch_buf + i;
 
-    sel_buf->data = NULL;
+    sel_buf->data = nullptr;
 
     sel_buf->val_buf_size = 0;
   }
@@ -648,31 +648,29 @@ static db_err row_sel_get_clust_rec(
                                        non-clustered record; the same mtr is used to
                                        access the clustered index */
 {
-  dict_index_t *index;
-  rec_t *clust_rec;
-  rec_t *old_vers;
   db_err err;
-  mem_heap_t *heap = NULL;
+  rec_t *old_vers;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
 
-  *out_rec = NULL;
+  *out_rec = nullptr;
 
-  offsets = rec_get_offsets(rec, btr_pcur_get_btr_cur(&plan->pcur)->m_index, offsets, ULINT_UNDEFINED, &heap);
+  offsets = rec_get_offsets(rec, plan->pcur.get_btr_cur()->m_index, offsets, ULINT_UNDEFINED, &heap);
 
   row_build_row_ref_fast(plan->clust_ref, plan->clust_map, rec, offsets);
 
-  index = dict_table_get_first_index(plan->table);
+  auto index = dict_table_get_first_index(plan->table);
 
-  btr_pcur_open_with_no_init(index, plan->clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, &plan->clust_pcur, 0, mtr);
+  plan->clust_pcur.open_with_no_init(index, plan->clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Source_location{});
 
-  clust_rec = btr_pcur_get_rec(&(plan->clust_pcur));
+  auto clust_rec = plan->clust_pcur.get_rec();
 
   /* Note: only if the search ends up on a non-infimum record is the
   low_match value the real match to the search tuple */
 
-  if (!page_rec_is_user_rec(clust_rec) || btr_pcur_get_low_match(&(plan->clust_pcur)) < dict_index_get_n_unique(index)) {
+  if (!page_rec_is_user_rec(clust_rec) || plan->clust_pcur.get_low_match() < dict_index_get_n_unique(index)) {
 
     ut_a(rec_get_deleted_flag(rec, dict_table_is_comp(plan->table)));
     ut_a(node->read_view);
@@ -709,7 +707,7 @@ static db_err row_sel_get_clust_rec(
     }
 
     err = lock_clust_rec_read_check_and_lock(
-      0, btr_pcur_get_block(&plan->clust_pcur), clust_rec, index, offsets, node->row_lock_mode, lock_type, thr
+      0, plan->clust_pcur.get_block(), clust_rec, index, offsets, node->row_lock_mode, lock_type, thr
     );
 
     if (err != DB_SUCCESS) {
@@ -720,7 +718,7 @@ static db_err row_sel_get_clust_rec(
     /* This is a non-locking consistent read: if necessary, fetch
     a previous version of the record */
 
-    old_vers = NULL;
+    old_vers = nullptr;
 
     if (!lock_clust_rec_cons_read_sees(clust_rec, index, offsets, node->read_view)) {
 
@@ -733,7 +731,7 @@ static db_err row_sel_get_clust_rec(
 
       clust_rec = old_vers;
 
-      if (clust_rec == NULL) {
+      if (clust_rec == nullptr) {
         goto func_exit;
       }
     }
@@ -859,12 +857,13 @@ static void row_sel_open_pcur(
 
     /* Open pcur to the index */
 
-    btr_pcur_open_with_no_init(index, plan->tuple, plan->mode, BTR_SEARCH_LEAF, &plan->pcur, has_search_latch, mtr);
+    plan->pcur.open_with_no_init(index, plan->tuple, plan->mode, BTR_SEARCH_LEAF, has_search_latch, mtr, Source_location{});
+
   } else {
     /* Open the cursor to the start or the end of the index
     (false: no init) */
 
-    btr_pcur_open_at_index_side(plan->asc, index, BTR_SEARCH_LEAF, &(plan->pcur), false, mtr);
+    plan->pcur.open_at_index_side(plan->asc, index, BTR_SEARCH_LEAF, false, 0, mtr);
   }
 
   ut_ad(plan->n_rows_prefetched == 0);
@@ -888,19 +887,19 @@ static bool row_sel_restore_pcur_pos(
 
   ut_ad(!plan->cursor_at_end);
 
-  auto relative_position = btr_pcur_get_rel_pos(&(plan->pcur));
+  auto relative_position = plan->pcur.get_rel_pos();
 
-  equal_position = btr_pcur_restore_position(BTR_SEARCH_LEAF, &(plan->pcur), mtr);
+  equal_position = plan->pcur.restore_position(BTR_SEARCH_LEAF, mtr, Source_location{});
 
   /* If the cursor is traveling upwards, and relative_position is
 
   (1) Btree_cursor_pos::BEFORE: this is not allowed, as we did not have a lock
   yet on the successor of the page infimum;
-  (2) Btree_cursor_pos::AFTER: btr_pcur_restore_position placed the cursor on the
+  (2) Btree_cursor_pos::AFTER: btr_pcur_t::restore_position placed the cursor on the
   first record GREATER than the predecessor of a page supremum; we have
   not yet processed the cursor record: no need to move the cursor to the
   next record;
-  (3) Btree_cursor_pos::ON: btr_pcur_restore_position placed the cursor on the
+  (3) Btree_cursor_pos::ON: btr_pcur_t::restore_position placed the cursor on the
   last record LESS or EQUAL to the old stored user record; (a) if
   equal_position is false, this means that the cursor is now on a record
   less than the old user record, and we must move to the next record;
@@ -926,14 +925,14 @@ static bool row_sel_restore_pcur_pos(
 
   /* If the cursor is traveling downwards, and relative_position is
 
-  (1) Btree_cursor_pos::BEFORE: btr_pcur_restore_position placed the cursor on
+  (1) Btree_cursor_pos::BEFORE: btr_pcur_t::restore_position placed the cursor on
   the last record LESS than the successor of a page infimum; we have not
   processed the cursor record: no need to move the cursor;
-  (2) Btree_cursor_pos::AFTER: btr_pcur_restore_position placed the cursor on the
+  (2) Btree_cursor_pos::AFTER: btr_pcur_t::restore_position placed the cursor on the
   first record GREATER than the predecessor of a page supremum; we have
   processed the cursor record: we should move the cursor to the previous
   record;
-  (3) Btree_cursor_pos::ON: btr_pcur_restore_position placed the cursor on the
+  (3) Btree_cursor_pos::ON: btr_pcur_t::restore_position placed the cursor on the
   last record LESS or EQUAL to the old stored user record; (a) if
   equal_position is false, this means that the cursor is now on a record
   less than the old user record, and we need not move to the previous
@@ -982,7 +981,7 @@ static ulint row_sel_try_search_shortcut(
 {
   dict_index_t *index;
   rec_t *rec;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   ulint ret;
@@ -996,7 +995,7 @@ static ulint row_sel_try_search_shortcut(
 
   row_sel_open_pcur(plan, true, mtr);
 
-  rec = btr_pcur_get_rec(&(plan->pcur));
+  rec = plan->pcur.get_rec();
 
   if (!page_rec_is_user_rec(rec)) {
 
@@ -1009,7 +1008,7 @@ static ulint row_sel_try_search_shortcut(
   the mode PAGE_CUR_GE, the up_match field in the cursor tells how many
   fields in the user record matched to the search tuple */
 
-  if (btr_pcur_get_up_match(&(plan->pcur)) < plan->n_exact_match) {
+  if (plan->pcur.get_up_match() < plan->n_exact_match) {
 
     return SEL_EXHAUSTED;
   }
@@ -1053,7 +1052,7 @@ static ulint row_sel_try_search_shortcut(
     goto func_exit;
   }
 
-  ut_ad(plan->pcur.latch_mode == BTR_SEARCH_LEAF);
+  ut_ad(plan->pcur.m_latch_mode == BTR_SEARCH_LEAF);
 
   plan->n_rows_fetched++;
   ret = SEL_FOUND;
@@ -1099,7 +1098,7 @@ static db_err row_sel(
   to the next non-clustered record */
   ulint found_flag;
   db_err err;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
@@ -1214,7 +1213,7 @@ rec_loop:
 
   ut_ad(mtr_has_extra_clust_latch == false);
 
-  rec = btr_pcur_get_rec(&(plan->pcur));
+  rec = plan->pcur.get_rec();
 
   /* PHASE 1: Set a lock if specified */
 
@@ -1252,7 +1251,7 @@ rec_loop:
         lock_type = LOCK_ORDINARY;
       }
 
-      err = sel_set_rec_lock(btr_pcur_get_block(&plan->pcur), next_rec, index, offsets, node->row_lock_mode, lock_type, thr);
+      err = sel_set_rec_lock(plan->pcur.get_block(), next_rec, index, offsets, node->row_lock_mode, lock_type, thr);
 
       if (err != DB_SUCCESS) {
         /* Note that in this case we will store in pcur
@@ -1303,7 +1302,7 @@ skip_lock:
       lock_type = LOCK_ORDINARY;
     }
 
-    err = sel_set_rec_lock(btr_pcur_get_block(&plan->pcur), rec, index, offsets, node->row_lock_mode, lock_type, thr);
+    err = sel_set_rec_lock(plan->pcur.get_block(), rec, index, offsets, node->row_lock_mode, lock_type, thr);
 
     if (err != DB_SUCCESS) {
 
@@ -1344,7 +1343,7 @@ skip_lock:
     tells how many fields in the user record matched to the search
     tuple */
 
-    if (btr_pcur_get_up_match(&(plan->pcur)) < plan->n_exact_match) {
+    if (plan->pcur.get_up_match() < plan->n_exact_match) {
       goto table_exhausted;
     }
 
@@ -1374,7 +1373,7 @@ skip_lock:
           goto lock_wait_or_error;
         }
 
-        if (old_vers == NULL) {
+        if (old_vers == nullptr) {
           offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
 
           /* Fetch the columns needed in
@@ -1460,7 +1459,7 @@ skip_lock:
 
     cost_counter++;
 
-    if (clust_rec == NULL) {
+    if (clust_rec == nullptr) {
       /* The record did not exist in the read view */
       ut_ad(consistent_read);
 
@@ -1476,7 +1475,7 @@ skip_lock:
 
     if (node->can_get_updated) {
 
-      btr_pcur_store_position(&(plan->clust_pcur), &mtr);
+      plan->clust_pcur.store_position(&mtr);
     }
   }
 
@@ -1497,7 +1496,7 @@ skip_lock:
 
   plan->n_rows_fetched++;
 
-  ut_ad(plan->pcur.latch_mode == BTR_SEARCH_LEAF);
+  ut_ad(plan->pcur.m_latch_mode == BTR_SEARCH_LEAF);
 
   if ((plan->n_rows_fetched <= SEL_PREFETCH_LIMIT) || plan->unique_search || plan->no_prefetch || plan->table->big_rows) {
 
@@ -1531,9 +1530,9 @@ next_rec:
   }
 
   if (node->asc) {
-    moved = btr_pcur_move_to_next(&(plan->pcur), &mtr);
+    moved = plan->pcur.move_to_next(&mtr);
   } else {
-    moved = btr_pcur_move_to_prev(&(plan->pcur), &mtr);
+    moved = plan->pcur.move_to_prev(&mtr);
   }
 
   if (!moved) {
@@ -1551,7 +1550,7 @@ next_table:
   /* We found a record which satisfies the conditions: we can move to
   the next table or return a row in the result set */
 
-  ut_ad(btr_pcur_is_on_user_rec(&plan->pcur));
+  ut_ad(plan->pcur.is_on_user_rec());
 
   if (plan->unique_search && !node->can_get_updated) {
 
@@ -1561,7 +1560,7 @@ next_table:
 
     plan->stored_cursor_rec_processed = true;
 
-    btr_pcur_store_position(&(plan->pcur), &mtr);
+    plan->pcur.store_position(&mtr);
   }
 
   mtr_commit(&mtr);
@@ -1652,7 +1651,7 @@ stop_for_a_while:
   ut_ad(!search_latch_locked);
 
   plan->stored_cursor_rec_processed = false;
-  btr_pcur_store_position(&(plan->pcur), &mtr);
+  plan->pcur.store_position(&mtr);
 
   mtr_commit(&mtr);
 
@@ -1670,7 +1669,7 @@ commit_mtr_for_a_while:
   plan->stored_cursor_rec_processed = true;
 
   ut_ad(!search_latch_locked);
-  btr_pcur_store_position(&(plan->pcur), &mtr);
+  plan->pcur.store_position(&mtr);
 
   mtr_commit(&mtr);
 
@@ -1685,11 +1684,11 @@ commit_mtr_for_a_while:
 lock_wait_or_error:
   /* See the note at stop_for_a_while: the same holds for this case */
 
-  ut_ad(!btr_pcur_is_before_first_on_page(&plan->pcur) || !node->asc);
+  ut_ad(!plan->pcur.is_before_first_on_page() || !node->asc);
   ut_ad(!search_latch_locked);
 
   plan->stored_cursor_rec_processed = false;
-  btr_pcur_store_position(&(plan->pcur), &mtr);
+  plan->pcur.store_position(&mtr);
 
   mtr_commit(&mtr);
 
@@ -1750,7 +1749,7 @@ que_thr_t *row_sel_step(que_thr_t *thr) {
         if (err != DB_SUCCESS) {
           thr_get_trx(thr)->error_state = err;
 
-          return NULL;
+          return nullptr;
         }
 
         table_node = static_cast<sym_node_t *>(que_node_get_next(table_node));
@@ -1787,7 +1786,7 @@ que_thr_t *row_sel_step(que_thr_t *thr) {
   if (err != DB_SUCCESS) {
     thr_get_trx(thr)->error_state = err;
 
-    return NULL;
+    return nullptr;
   }
 
   return thr;
@@ -1834,7 +1833,7 @@ que_thr_t *fetch_step(que_thr_t *thr) {
 
     thr_get_trx(thr)->error_state = DB_ERROR;
 
-    return NULL;
+    return nullptr;
   }
 
   thr->run_node = sel_node;
@@ -1899,7 +1898,7 @@ void *row_fetch_store_uint4(void *row, void *user_arg) {
   tmp = mach_read_from_4((byte *)dfield_get_data(dfield));
   *val = (uint32_t)tmp;
 
-  return NULL;
+  return nullptr;
 }
 
 /** Prints a row in a select result.
@@ -1964,7 +1963,7 @@ void row_sel_prebuild_graph(row_prebuilt_t *prebuilt) /*!< in: prebuilt handle *
 
   ut_ad(prebuilt && prebuilt->trx);
 
-  if (prebuilt->sel_graph == NULL) {
+  if (prebuilt->sel_graph == nullptr) {
 
     node = sel_node_create(prebuilt->heap);
 
@@ -2007,23 +2006,23 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
   ulint err;
   trx_t *trx;
 
-  *out_rec = NULL;
+  *out_rec = nullptr;
   trx = thr_get_trx(thr);
 
   row_build_row_ref_in_tuple(prebuilt->clust_ref, rec, sec_index, *offsets, trx);
 
   clust_index = dict_table_get_first_index(sec_index->table);
 
-  btr_pcur_open_with_no_init(clust_index, prebuilt->clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, prebuilt->clust_pcur, 0, mtr);
+  prebuilt->clust_pcur->open_with_no_init(clust_index, prebuilt->clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Source_location{});
 
-  clust_rec = btr_pcur_get_rec(prebuilt->clust_pcur);
+  clust_rec = prebuilt->clust_pcur->get_rec();
 
-  prebuilt->clust_pcur->trx_if_known = trx;
+  prebuilt->clust_pcur->m_trx_if_known = trx;
 
   /* Note: only if the search ends up on a non-infimum record is the
   low_match value the real match to the search tuple */
 
-  if (!page_rec_is_user_rec(clust_rec) || btr_pcur_get_low_match(prebuilt->clust_pcur) < dict_index_get_n_unique(clust_index)) {
+  if (!page_rec_is_user_rec(clust_rec) || prebuilt->clust_pcur->get_low_match() < dict_index_get_n_unique(clust_index)) {
 
     /* In a rare case it is possible that no clust rec is found
     for a delete-marked secondary index record: if in row0umod.c
@@ -2066,7 +2065,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
       );
     }
 
-    clust_rec = NULL;
+    clust_rec = nullptr;
 
     goto func_exit;
   }
@@ -2080,7 +2079,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
 
     err = lock_clust_rec_read_check_and_lock(
       0,
-      btr_pcur_get_block(prebuilt->clust_pcur),
+      prebuilt->clust_pcur->get_block(),
       clust_rec,
       clust_index,
       *offsets,
@@ -2096,7 +2095,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
     /* This is a non-locking consistent read: if necessary, fetch
     a previous version of the record */
 
-    old_vers = NULL;
+    old_vers = nullptr;
 
     /* If the isolation level allows reading of uncommitted data,
     then we never look for an earlier version */
@@ -2109,7 +2108,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
         trx->read_view, clust_index, clust_rec, offsets, offset_heap, &prebuilt->old_vers_heap, &old_vers, mtr
       );
 
-      if (err != DB_SUCCESS || old_vers == NULL) {
+      if (err != DB_SUCCESS || old_vers == nullptr) {
 
         goto err_exit;
       }
@@ -2134,7 +2133,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
         (old_vers || trx->isolation_level <= TRX_ISO_READ_UNCOMMITTED ||
          rec_get_deleted_flag(rec, dict_table_is_comp(sec_index->table))) &&
         !row_sel_sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index)) {
-      clust_rec = NULL;
+      clust_rec = nullptr;
 #ifdef UNIV_SEARCH_DEBUG
     } else {
       ut_a(clust_rec == NULL || row_sel_sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index));
@@ -2149,7 +2148,7 @@ func_exit:
     /* We may use the cursor in update or in unlock_row():
     store its position */
 
-    btr_pcur_store_position(prebuilt->clust_pcur, mtr);
+    prebuilt->clust_pcur->store_position(mtr);
   }
 
   err = DB_SUCCESS;
@@ -2179,9 +2178,9 @@ static bool row_sel_restore_position(
 {
   bool success;
 
-  auto relative_position = pcur->rel_pos;
+  auto relative_position = pcur->get_rel_pos();
 
-  success = btr_pcur_restore_position(latch_mode, pcur, mtr);
+  success = pcur->restore_position(latch_mode, mtr, Source_location{});
 
   *same_user_rec = success;
 
@@ -2191,7 +2190,7 @@ static bool row_sel_restore_position(
     }
 
     if (moves_up) {
-      btr_pcur_move_to_next(pcur, mtr);
+      pcur->move_to_next(mtr);
     }
 
     return true;
@@ -2203,8 +2202,8 @@ static bool row_sel_restore_position(
       return true;
     }
 
-    if (btr_pcur_is_on_user_rec(pcur)) {
-      btr_pcur_move_to_prev(pcur, mtr);
+    if (pcur->is_on_user_rec()) {
+      pcur->move_to_prev(mtr);
     }
 
     return true;
@@ -2212,8 +2211,8 @@ static bool row_sel_restore_position(
 
   ut_ad(relative_position == Btree_cursor_pos::BEFORE || relative_position == Btree_cursor_pos::BEFORE_FIRST_IN_TREE);
 
-  if (moves_up && btr_pcur_is_on_user_rec(pcur)) {
-    btr_pcur_move_to_next(pcur, mtr);
+  if (moves_up && pcur->is_on_user_rec()) {
+    pcur->move_to_next(mtr);
   }
 
   return true;
@@ -2292,7 +2291,7 @@ inline void row_sel_row_cache_add(
   row_cache = &prebuilt->row_cache;
   ut_a(row_cache->first == 0);
   ut_ad(!row_sel_row_cache_is_full(prebuilt));
-  ut_ad(rec_offs_validate(rec, NULL, offsets));
+  ut_ad(rec_offs_validate(rec, nullptr, offsets));
 
   row = &prebuilt->row_cache.ptr[row_cache->n_cached];
 
@@ -2302,18 +2301,18 @@ inline void row_sel_row_cache_add(
   /* Check if there is enough space for the record being added
   to the cache. Free existing memory if it won't fit. */
   if (row->max_len < rec_len) {
-    if (row->ptr != NULL) {
+    if (row->ptr != nullptr) {
       ut_a(row->max_len > 0);
       ut_a(row->rec_len > 0);
       mem_free(row->ptr);
 
-      row->ptr = NULL;
-      row->rec = NULL;
+      row->ptr = nullptr;
+      row->rec = nullptr;
       row->max_len = 0;
       row->rec_len = 0;
     } else {
-      ut_a(row->ptr == NULL);
-      ut_a(row->rec == NULL);
+      ut_a(row->ptr == nullptr);
+      ut_a(row->rec == nullptr);
       ut_a(row->max_len == 0);
       ut_a(row->rec_len == 0);
     }
@@ -2321,7 +2320,7 @@ inline void row_sel_row_cache_add(
 
   row->rec_len = rec_len;
 
-  if (row->ptr == NULL) {
+  if (row->ptr == nullptr) {
     row->max_len = row->rec_len * 2;
     row->ptr = static_cast<byte *>(mem_alloc(row->max_len));
   }
@@ -2358,11 +2357,12 @@ static ulint row_sel_try_search_shortcut_for_prebuilt(
   ut_ad(dict_index_is_clust(index));
 
 #ifndef UNIV_SEARCH_DEBUG
-  btr_pcur_open_with_no_init(index, search_tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, pcur, RW_S_LATCH, mtr);
+  pcur->open_with_no_init(index, search_tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, RW_S_LATCH, mtr, Source_location{});
 #else  /* UNIV_SEARCH_DEBUG */
-  btr_pcur_open_with_no_init(index, search_tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, pcur, 0, mtr);
+  pcur->open_with_no_init(index, search_tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, 0, mtr, Source_location{});
 #endif /* UNIV_SEARCH_DEBUG */
-  rec = btr_pcur_get_rec(pcur);
+
+  rec = pcur->get_rec();
 
   if (!page_rec_is_user_rec(rec)) {
 
@@ -2373,7 +2373,7 @@ static ulint row_sel_try_search_shortcut_for_prebuilt(
   the mode PAGE_CUR_GE, the up_match field in the cursor tells how many
   fields in the user record matched to the search tuple */
 
-  if (btr_pcur_get_up_match(pcur) < dtuple_get_n_fields(search_tuple)) {
+  if (pcur->get_up_match() < dtuple_get_n_fields(search_tuple)) {
 
     return SEL_EXHAUSTED;
   }
@@ -2446,12 +2446,12 @@ int row_unlock_for_client(
     /* Restore the cursor position and find the record */
 
     if (!has_latches_on_recs) {
-      btr_pcur_restore_position(BTR_SEARCH_LEAF, pcur, &mtr);
+      pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
     }
 
-    rec = btr_pcur_get_rec(pcur);
+    rec = pcur->get_rec();
 
-    lock_rec_unlock(trx, btr_pcur_get_block(pcur), rec, prebuilt->select_lock_type);
+    lock_rec_unlock(trx, pcur->get_block(), rec, prebuilt->select_lock_type);
 
     mtr_commit(&mtr);
 
@@ -2472,12 +2472,12 @@ int row_unlock_for_client(
     /* Restore the cursor position and find the record */
 
     if (!has_latches_on_recs) {
-      btr_pcur_restore_position(BTR_SEARCH_LEAF, clust_pcur, &mtr);
+      clust_pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
     }
 
-    rec = btr_pcur_get_rec(clust_pcur);
+    rec = clust_pcur->get_rec();
 
-    lock_rec_unlock(trx, btr_pcur_get_block(clust_pcur), rec, prebuilt->select_lock_type);
+    lock_rec_unlock(trx, clust_pcur->get_block(), rec, prebuilt->select_lock_type);
 
     mtr_commit(&mtr);
   }
@@ -2546,7 +2546,7 @@ enum db_err row_search_for_client(
   ulint next_offs;
   bool same_user_rec;
   mtr_t mtr;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   void *cmp_ctx = index->cmp_ctx;
@@ -2630,7 +2630,7 @@ enum db_err row_search_for_client(
 
     row_sel_row_cache_reset(prebuilt);
 
-    if (prebuilt->sel_graph == NULL) {
+    if (prebuilt->sel_graph == nullptr) {
       /* Build a dummy select query graph */
       row_sel_prebuild_graph(prebuilt);
     }
@@ -2670,7 +2670,7 @@ enum db_err row_search_for_client(
       goto func_exit;
     }
 
-    mode = pcur->search_mode;
+    mode = pcur->m_search_mode;
   }
 
   /* In a search where at most one record in the index may match, we
@@ -2812,20 +2812,24 @@ enum db_err row_search_for_client(
 
   } else if (dtuple_get_n_fields(search_tuple) > 0) {
 
-    btr_pcur_open_with_no_init(index, search_tuple, mode, BTR_SEARCH_LEAF, pcur, 0, &mtr);
+    pcur->open_with_no_init(index, search_tuple, mode, BTR_SEARCH_LEAF, 0, &mtr, Source_location{});
 
-    pcur->trx_if_known = trx;
+    pcur->m_trx_if_known = trx;
 
-    rec = btr_pcur_get_rec(pcur);
+    rec = pcur->get_rec();
 
-    if (!moves_up && !page_rec_is_supremum(rec) && set_also_gap_locks && trx->isolation_level != TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+    if (!moves_up &&
+        !page_rec_is_supremum(rec) &&
+        set_also_gap_locks &&
+        trx->isolation_level != TRX_ISO_READ_COMMITTED &&
+        prebuilt->select_lock_type != LOCK_NONE) {
 
       /* Try to place a gap lock on the next index record
       to prevent phantoms in ORDER BY ... DESC queries */
       const rec_t *next = page_rec_get_next_const(rec);
 
       offsets = rec_get_offsets(next, index, offsets, ULINT_UNDEFINED, &heap);
-      err = sel_set_rec_lock(btr_pcur_get_block(pcur), next, index, offsets, prebuilt->select_lock_type, LOCK_GAP, thr);
+      err = sel_set_rec_lock(pcur->get_block(), next, index, offsets, prebuilt->select_lock_type, LOCK_GAP, thr);
 
       if (err != DB_SUCCESS) {
 
@@ -2833,15 +2837,15 @@ enum db_err row_search_for_client(
       }
     }
   } else if (mode == IB_CUR_G) {
-    btr_pcur_open_at_index_side(true, index, BTR_SEARCH_LEAF, pcur, false, &mtr);
+    pcur->open_at_index_side(true, index, BTR_SEARCH_LEAF, false, 0, &mtr);
   } else if (mode == IB_CUR_L) {
-    btr_pcur_open_at_index_side(false, index, BTR_SEARCH_LEAF, pcur, false, &mtr);
+    pcur->open_at_index_side(false, index, BTR_SEARCH_LEAF, false, 0, &mtr);
   }
 
   if (!prebuilt->sql_stat_start) {
     /* No need to set an intention lock or assign a read view */
 
-    if (trx->read_view == NULL && prebuilt->select_lock_type == LOCK_NONE) {
+    if (trx->read_view == nullptr && prebuilt->select_lock_type == LOCK_NONE) {
 
       ib_logger(
         ib_stream,
@@ -2879,8 +2883,9 @@ rec_loop:
   /*-------------------------------------------------------------*/
   /* PHASE 4: Look for matching records in a loop */
 
-  rec = btr_pcur_get_rec(pcur);
+  rec = pcur->get_rec();
   ut_ad(!!page_rec_is_comp(rec) == comp);
+
 #ifdef UNIV_SEARCH_DEBUG
   /*
   ib_logger(ib_stream, "Using ");
@@ -2911,7 +2916,7 @@ rec_loop:
       a gap and therefore we do not set locks there. */
 
       offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
-      err = sel_set_rec_lock(btr_pcur_get_block(pcur), rec, index, offsets, prebuilt->select_lock_type, LOCK_ORDINARY, thr);
+      err = sel_set_rec_lock(pcur->get_block(), rec, index, offsets, prebuilt->select_lock_type, LOCK_ORDINARY, thr);
 
       if (err != DB_SUCCESS) {
 
@@ -2954,7 +2959,7 @@ rec_loop:
         "\nrec address %p,"
         " buf block fix count %lu\n",
         (void *)rec,
-        (ulong)btr_cur_get_block(btr_pcur_get_btr_cur(pcur))->m_page.m_buf_fix_count
+        (ulong)btr_cur_get_block(pcur->get_btr_cur())->m_page.m_buf_fix_count
       );
       ib_logger(
         ib_stream,
@@ -2992,7 +2997,7 @@ rec_loop:
       dict_index_name_print(ib_stream, trx, index);
       ib_logger(ib_stream, ". We try to skip the rest of the page.\n");
 
-      btr_pcur_move_to_last_on_page(pcur, &mtr);
+      pcur->move_to_last_on_page(&mtr);
 
       goto next_rec;
     }
@@ -3057,7 +3062,7 @@ rec_loop:
         record only if this session is not
         using a READ COMMITTED isolation level. */
 
-        err = (db_err)sel_set_rec_lock(btr_pcur_get_block(pcur), rec, index, offsets, prebuilt->select_lock_type, LOCK_GAP, thr);
+        err = (db_err)sel_set_rec_lock(pcur->get_block(), rec, index, offsets, prebuilt->select_lock_type, LOCK_GAP, thr);
 
         if (err != DB_SUCCESS) {
 
@@ -3065,7 +3070,7 @@ rec_loop:
         }
       }
 
-      btr_pcur_store_position(pcur, &mtr);
+      pcur->store_position(&mtr);
 
       err = DB_RECORD_NOT_FOUND;
       /* ut_print_name(ib_stream, index->name);
@@ -3119,7 +3124,7 @@ rec_loop:
       prebuilt->result = result;
     }
 
-    err = (db_err)sel_set_rec_lock(btr_pcur_get_block(pcur), rec, index, offsets, prebuilt->select_lock_type, lock_type, thr);
+    err = (db_err)sel_set_rec_lock(pcur->get_block(), rec, index, offsets, prebuilt->select_lock_type, lock_type, thr);
 
     if (err != DB_SUCCESS) {
       goto lock_wait_or_error;
@@ -3153,7 +3158,7 @@ rec_loop:
           goto lock_wait_or_error;
         }
 
-        if (old_vers == NULL) {
+        if (old_vers == nullptr) {
           /* The row did not exist yet in
           the read view */
 
@@ -3249,7 +3254,7 @@ rec_loop:
       goto lock_wait_or_error;
     }
 
-    if (clust_rec == NULL) {
+    if (clust_rec == nullptr) {
       /* The record did not exist in the read view */
       ut_ad(prebuilt->select_lock_type == LOCK_NONE);
 
@@ -3349,7 +3354,7 @@ got_row:
 
     /* Inside an update always store the cursor position */
 
-    btr_pcur_store_position(pcur, &mtr);
+    pcur->store_position(&mtr);
   }
 
   err = DB_SUCCESS;
@@ -3368,7 +3373,7 @@ next_rec:
     latching order if we would access a different clustered
     index page right away without releasing the previous. */
 
-    btr_pcur_store_position(pcur, &mtr);
+    pcur->store_position(&mtr);
 
     mtr_commit(&mtr);
     mtr_has_extra_clust_latch = false;
@@ -3384,9 +3389,9 @@ next_rec:
   }
 
   if (moves_up) {
-    if (unlikely(!btr_pcur_move_to_next(pcur, &mtr))) {
+    if (unlikely(!pcur->move_to_next(&mtr))) {
     not_moved:
-      btr_pcur_store_position(pcur, &mtr);
+      pcur->store_position(&mtr);
 
       if (match_mode != ROW_SEL_DEFAULT) {
         err = DB_RECORD_NOT_FOUND;
@@ -3397,7 +3402,7 @@ next_rec:
       prebuilt->result = -1;
       goto normal_return;
     }
-  } else if (unlikely(!btr_pcur_move_to_prev(pcur, &mtr))) {
+  } else if (unlikely(!pcur->move_to_prev(&mtr))) {
     goto not_moved;
   }
 
@@ -3410,7 +3415,7 @@ next_rec:
 lock_wait_or_error:
   /*-------------------------------------------------------------*/
 
-  btr_pcur_store_position(pcur, &mtr);
+  pcur->store_position(&mtr);
 
   mtr_commit(&mtr);
   mtr_has_extra_clust_latch = false;
@@ -3422,7 +3427,7 @@ lock_wait_or_error:
 
   thr->lock_state = QUE_THR_LOCK_ROW;
 
-  if (ib_handle_errors(&err, trx, thr, NULL)) {
+  if (ib_handle_errors(&err, trx, thr, nullptr)) {
     /* It was a lock wait, and it ended */
 
     thr->lock_state = QUE_THR_LOCK_NOLOCK;
@@ -3451,7 +3456,7 @@ lock_wait_or_error:
       prebuilt->new_rec_locks = 0;
     }
 
-    mode = static_cast<ib_srch_mode_t>(pcur->search_mode);
+    mode = static_cast<ib_srch_mode_t>(pcur->m_search_mode);
 
     goto rec_loop;
   }

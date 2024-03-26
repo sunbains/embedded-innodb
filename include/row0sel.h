@@ -54,18 +54,18 @@ inline plan_t *sel_node_get_nth_plan(
 ); /*!< in: get ith plan node */
 /** Performs a select step. This is a high-level function used in SQL execution
 graphs.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 
 que_thr_t *row_sel_step(que_thr_t *thr); /*!< in: query thread */
 /** Performs an execution step of an open or close cursor statement node.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 inline que_thr_t *open_step(que_thr_t *thr); /*!< in: query thread */
 /** Performs a fetch for a cursor.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 
 que_thr_t *fetch_step(que_thr_t *thr); /*!< in: query thread */
 /** Sample callback function for fetch that prints each row.
-@return	always returns non-NULL */
+@return	always returns non-nullptr */
 
 void *row_fetch_print(
   void *row, /*!< in:  sel_node_t* */
@@ -74,14 +74,14 @@ void *row_fetch_print(
 /** Callback function for fetch that stores an unsigned 4 byte integer to the
 location pointed. The column's type must be DATA_INT, DATA_UNSIGNED, length
 = 4.
-@return	always returns NULL */
+@return	always returns nullptr */
 
 void *row_fetch_store_uint4(
   void *row, /*!< in:  sel_node_t* */
   void *user_arg
 ); /*!< in:  data pointer */
 /** Prints a row in a select result.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 
 que_thr_t *row_printf_step(que_thr_t *thr); /*!< in: query thread */
 /** Builds a dummy query graph used in selects. */
@@ -138,15 +138,15 @@ bool row_sel_row_cache_is_empty(row_prebuilt_t *prebuilt); /*!< in: prebuilt str
 
 /** A structure for caching column values for prefetched rows */
 struct sel_buf_struct {
-  byte *data; /*!< data, or NULL; if not NULL, this field
+  byte *data; /*!< data, or nullptr; if not nullptr, this field
               has allocated memory which must be explicitly
-              freed; can be != NULL even when len is
+              freed; can be != nullptr even when len is
               UNIV_SQL_NULL */
   ulint len;  /*!< data length or UNIV_SQL_NULL */
   ulint val_buf_size;
   /*!< size of memory buffer allocated for data:
   this can be more than len; this is defined
-  when data != NULL */
+  when data != nullptr */
 };
 
 /** Query plan */
@@ -223,7 +223,7 @@ struct plan_struct {
                              this pcur to search the clustered
                              index */
   mem_heap_t *old_vers_heap; /*!< memory heap used in building an old
-                             version of a row, or NULL */
+                             version of a row, or nullptr */
 };
 
 /** Select node states */
@@ -240,7 +240,7 @@ struct sel_node_struct {
   que_common_t common;       /*!< node type: QUE_NODE_SELECT */
   enum sel_node_state state; /*!< node state */
   que_node_t *select_list;   /*!< select list */
-  sym_node_t *into_list;     /*!< variables list or NULL */
+  sym_node_t *into_list;     /*!< variables list or nullptr */
   sym_node_t *table_list;    /*!< table list */
   bool asc;                  /*!< true if the rows should be fetched
                               in an ascending order */
@@ -257,11 +257,11 @@ struct sel_node_struct {
   que_node_t *search_cond;   /*!< search condition */
   read_view_t *read_view;    /*!< if the query is a non-locking
                              consistent read, its read view is
-                             placed here, otherwise NULL */
+                             placed here, otherwise nullptr */
   bool consistent_read;      /*!< true if the select is a consistent,
                               non-locking read */
   order_node_t *order_by;    /*!< order by column definition, or
-                             NULL */
+                             nullptr */
   bool is_aggregate;         /*!< true if the select list consists of
                               aggregate functions */
   bool aggregate_already_fetched;
@@ -279,7 +279,7 @@ struct sel_node_struct {
                                 checks from a stored procedure
                                 if it contains positioned
                                 update or delete statements */
-  sym_node_t *explicit_cursor; /*!< not NULL if an explicit cursor */
+  sym_node_t *explicit_cursor; /*!< not nullptr if an explicit cursor */
   UT_LIST_BASE_NODE_T(sym_node_t, sym_list)
   copy_variables; /*!< variables whose values we have to
                   copy when an explicit cursor is opened,
@@ -293,15 +293,15 @@ struct fetch_node_struct {
   sel_node_t *cursor_def; /*!< cursor definition */
   sym_node_t *into_list;  /*!< variables to set */
 
-  pars_user_func_t *func; /*!< User callback function or NULL.
+  pars_user_func_t *func; /*!< User callback function or nullptr.
                           The first argument to the function
                           is a sel_node_t*, containing the
                           results of the SELECT operation for
                           one row. If the function returns
-                          NULL, it is not interested in
+                          nullptr, it is not interested in
                           further rows and the cursor is
                           modified so (cursor % NOTFOUND) is
-                          true. If it returns not-NULL,
+                          true. If it returns not-nullptr,
                           continue normally. See
                           row_fetch_print() for an example
                           (and a useful debugging tool). */
@@ -349,7 +349,7 @@ inline void sel_node_reset_cursor(sel_node_t *node) /*!< in: select node */
 }
 
 /** Performs an execution step of an open or close cursor statement node.
-@return	query thread to run next or NULL */
+@return	query thread to run next or nullptr */
 inline que_thr_t *open_step(que_thr_t *thr) /*!< in: query thread */
 {
   sel_node_t *sel_node;

@@ -114,7 +114,7 @@ static void trx_doublewrite_init(byte *doublewrite) /*!< in: pointer to the doub
   os_do_not_call_flush_at_each_write = true;
 #endif /* UNIV_DO_FLUSH */
 
-  mutex_create(&trx_doublewrite->mutex, SYNC_DOUBLEWRITE);
+  mutex_create(&trx_doublewrite->mutex, IF_DEBUG("dblwr_mutex",) IF_SYNC_DEBUG(SYNC_DOUBLEWRITE,) Source_location{});
 
   trx_doublewrite->first_free = 0;
 

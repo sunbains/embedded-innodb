@@ -126,7 +126,7 @@ undo_node_t *row_undo_node_create(trx_t *trx, que_thr_t *parent, mem_heap_t *hea
   undo->state = UNDO_NODE_FETCH_NEXT;
   undo->trx = trx;
 
-  btr_pcur_init(&(undo->pcur));
+  undo->pcur.init(0);
 
   undo->heap = mem_heap_create(256);
 
@@ -148,7 +148,7 @@ bool row_undo_search_clust_to_pcur(undo_node_t *node) {
 
   auto found = row_search_on_row_ref(&(node->pcur), BTR_MODIFY_LEAF, node->table, node->ref, &mtr);
 
-  auto rec = btr_pcur_get_rec(&(node->pcur));
+  auto rec = node->pcur.get_rec();
 
   offsets = rec_get_offsets(rec, clust_index, offsets, ULINT_UNDEFINED, &heap);
 
@@ -173,12 +173,12 @@ bool row_undo_search_clust_to_pcur(undo_node_t *node) {
       node->undo_ext = nullptr;
     }
 
-    btr_pcur_store_position(&(node->pcur), &mtr);
+    node->pcur.store_position(&mtr);
 
     ret = true;
   }
 
-  btr_pcur_commit_specify_mtr(&(node->pcur), &mtr);
+  node->pcur.commit_specify_mtr(&mtr);
 
   if (likely_null(heap)) {
     mem_heap_free(heap);
@@ -268,7 +268,7 @@ static db_err row_undo(undo_node_t *node, que_thr_t *thr) {
   }
 
   /* Do some cleanup */
-  btr_pcur_close(&(node->pcur));
+  node->pcur.close();
 
   mem_heap_empty(node->heap);
 

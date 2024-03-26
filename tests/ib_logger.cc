@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
 
   test_configure();
 
-  ib_logger_set(null_logger, NULL);
+  ib_logger_set(null_logger, nullptr);
 
   err = ib_startup("barracuda");
   assert(err == DB_SUCCESS);

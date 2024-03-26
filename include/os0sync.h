@@ -38,6 +38,7 @@ Created 9/6/1995 Heikki Tuuri
 #include <pthread.h>
 
 #include <atomic>
+#include <chrono>
 
 /** Native mutex */
 typedef pthread_mutex_t os_fast_mutex_t;
@@ -78,7 +79,7 @@ extern os_mutex_t os_sync_mutex;
 
 /** This is incremented by 1 in os_thread_create and decremented by 1 in
 os_thread_exit */
-extern ulint os_thread_count;
+extern std::atomic_int os_thread_count;
 
 extern ulint os_event_count;
 extern ulint os_mutex_count;
@@ -94,7 +95,7 @@ void os_sync_free(void);
 states: signaled and nonsignaled. The created event is manual reset: it must be
 reset explicitly by calling sync_os_reset_event.
 @return	the event handle */
-OS_cond* os_event_create(const char *name); /** in: the name of the event, if NULL
+OS_cond* os_event_create(const char *name); /** in: the name of the event, if nullptr
                                    the event is created without a name */
 
 /** Sets an event semaphore to the signaled state: lets waiting threads
@@ -128,15 +129,22 @@ thread C calls os_event_reset() [event->is_set == false]
 thread A calls os_event_wait()  [infinite wait!]
 thread C calls os_event_wait()  [infinite wait!]
 
+@param[in,out] event            Event to wait
+@param[in] reset_sig_count      Zero or the value returned by previous call of os_event_reset().
+
 Where such a scenario is possible, to avoid infinite wait, the
 value returned by os_event_reset() should be passed in as
 reset_sig_count. */
-void os_event_wait_low(
-  OS_cond* event, /** in: event to wait */
-  int64_t reset_sig_count
-); /** in: zero or the value
-                                                   returned by previous call of
-                                                   os_event_reset(). */
+void os_event_wait_low(OS_cond* event, int64_t reset_sig_count);
+
+
+/** Waits for an event object until it is in the signaled state or
+a timeout is exceeded. In Unix the timeout is always infinite.
+@param[in,out] event            Event to wait
+@param[in] timeout              Timeout, or std::chrono::microseconds::max()
+@param[in] reset_sig_count      Zero or the value returned by previous call of os_event_reset().
+@return 0 if success, OS_SYNC_TIME_EXCEEDED if timeout was exceeded */
+ulint os_event_wait_time_low(OS_cond* event, std::chrono::microseconds timeout, int64_t reset_sig_count);
 
 #define os_event_wait(event) os_event_wait_low(event, 0)
 
@@ -153,7 +161,7 @@ ulint os_event_wait_time(
 /** Creates an operating system mutex semaphore. Because these are slow, the
 mutex semaphore of InnoDB itself (mutex_t) should be used where possible.
 @return	the mutex handle */
-os_mutex_t os_mutex_create(const char *name); /** in: the name of the mutex, if NULL
+os_mutex_t os_mutex_create(const char *name); /** in: the name of the mutex, if nullptr
                                    the mutex is created without a name */
 
 /** Acquires ownership of a mutex semaphore. */

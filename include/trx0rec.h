@@ -83,7 +83,7 @@ byte *trx_undo_update_rec_get_sys_cols(
   ulint *info_bits /*!< out: info bits state */);
 
 /** Builds an update vector based on a remaining part of an undo log record.
-@return remaining part of the record, NULL if an error detected, which
+@return remaining part of the record, nullptr if an error detected, which
 means that the record is corrupted */
 byte *trx_undo_update_rec_get_update(
   byte *ptr,           /*!< in: remaining part in update undo log
@@ -139,14 +139,14 @@ db_err trx_undo_report_row_operation(
   dict_index_t *index,         /*!< in: clustered index */
   const dtuple_t *clust_entry, /*!< in: in the case of an insert,
                                  index entry to insert into the
-                                 clustered index, otherwise NULL */
+                                 clustered index, otherwise nullptr */
   const upd_t *update,         /*!< in: in the case of an update,
-                                 the update vector, otherwise NULL */
+                                 the update vector, otherwise nullptr */
   ulint cmpl_info,             /*!< in: compiler info on secondary
                                  index updates */
   const rec_t *rec,            /*!< in: case of an update or delete
                                  marking, the record in the clustered
-                                 index, otherwise NULL */
+                                 index, otherwise nullptr */
   roll_ptr_t *roll_ptr         /*!< out: rollback pointer to the inserted undo log record, 0 if BTR_NO_UNDO_LOG flag was specified */
   );
 
@@ -191,23 +191,23 @@ db_err trx_undo_prev_version_build(
   ulint *offsets,         /*!< in: rec_get_offsets(rec, index) */
   mem_heap_t *heap,       /*!< in: memory heap from which the memory
                             needed is allocated */
-  rec_t **old_vers /*!< out, own: previous version, or NULL if rec is the first inserted version, or if history data has been deleted */
+  rec_t **old_vers /*!< out, own: previous version, or nullptr if rec is the first inserted version, or if history data has been deleted */
   );
 
 /** Parses a redo log record of adding an undo log record.
-@return	end of log record or NULL */
+@return	end of log record or nullptr */
 byte *trx_undo_parse_add_undo_rec(
   byte *ptr,     /*!< in: buffer */
   byte *end_ptr, /*!< in: buffer end */
-  page_t *page /*!< in: page or NULL */);
+  page_t *page /*!< in: page or nullptr */);
 
 /** Parses a redo log record of erasing of an undo page end.
-@return	end of log record or NULL */
+@return	end of log record or nullptr */
 byte *trx_undo_parse_erase_page_end(
   byte *ptr,     /*!< in: buffer */
   byte *end_ptr, /*!< in: buffer end */
-  page_t *page,  /*!< in: page or NULL */
-  mtr_t *mtr /*!< in: mtr or NULL */);
+  page_t *page,  /*!< in: page or nullptr */
+  mtr_t *mtr /*!< in: mtr or nullptr */);
 
 /* Types of an undo log record: these have to be smaller than 16, as the
 compilation info multiplied by 16 is ORed to this value in an undo log

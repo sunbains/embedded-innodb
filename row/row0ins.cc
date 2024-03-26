@@ -54,10 +54,10 @@ ins_node_t *row_ins_node_create(ib_ins_mode_t ins_type, dict_table_t *table, mem
 
   node->state = INS_NODE_SET_IX_LOCK;
   node->table = table;
-  node->index = NULL;
-  node->entry = NULL;
+  node->index = nullptr;
+  node->entry = nullptr;
 
-  node->select = NULL;
+  node->select = nullptr;
 
   node->trx_id = 0;
 
@@ -75,8 +75,8 @@ void row_ins_node_create_entry_list(ins_node_t *node) {
 
   auto index = dict_table_get_first_index(node->table);
 
-  while (index != NULL) {
-    auto entry = row_build_index_entry(node->row, NULL, index, node->entry_sys_heap);
+  while (index != nullptr) {
+    auto entry = row_build_index_entry(node->row, nullptr, index, node->entry_sys_heap);
 
     UT_LIST_ADD_LAST(node->entry_list, entry);
 
@@ -136,8 +136,8 @@ static void row_ins_alloc_sys_fields(ins_node_t *node) {
 
 void row_ins_node_set_new_row(ins_node_t *node, dtuple_t *row) {
   node->state = INS_NODE_SET_IX_LOCK;
-  node->index = NULL;
-  node->entry = NULL;
+  node->index = nullptr;
+  node->entry = nullptr;
 
   node->row = row;
 
@@ -248,7 +248,7 @@ static db_err row_ins_clust_index_entry_by_modify(
 
   ut_ad(dict_index_is_clust(cursor->m_index));
 
-  *big_rec = NULL;
+  *big_rec = nullptr;
 
   rec = btr_cur_get_rec(cursor);
 
@@ -415,7 +415,7 @@ static ulint row_ins_cascade_calc_update_vec(
         ufield = update->fields + n_fields_updated;
 
         ufield->field_no = dict_table_get_nth_col_pos(table, dict_col_get_no(col));
-        ufield->exp = NULL;
+        ufield->exp = nullptr;
 
         ufield->new_val = parent_ufield->new_val;
         ufield_len = dfield_get_len(&ufield->new_val);
@@ -679,22 +679,25 @@ run_again:
   return err;
 }
 
-/** Perform referential actions or checks when a parent row is deleted or
-updated and the constraint had an ON DELETE or ON UPDATE condition which was not
-RESTRICT.
-@return	DB_SUCCESS, DB_LOCK_WAIT, or error code */
+/**
+ * Perform referential actions or checks when a parent row is
+ * deleted or updated and the constraint had an ON DELETE or
+ * ON UPDATE condition which was not RESTRICT.
+ *
+ * @param thr     in: query thread whose run_node is an update node
+ * @param foreign in: foreign key constraint whose type is != 0
+ * @param pcur    in: cursor placed on a matching index record in the child table
+ * @param entry   in: index entry in the parent table
+ * @param mtr     in: mtr holding the latch of pcur page
+ * @return        DB_SUCCESS, DB_LOCK_WAIT, or error code
+ */
 static db_err row_ins_foreign_check_on_constraint(
-  que_thr_t *thr,          /*!< in: query thread whose run_node
-                             is an update node */
-  dict_foreign_t *foreign, /*!< in: foreign key constraint whose
-                             type is != 0 */
-  btr_pcur_t *pcur,        /*!< in: cursor placed on a matching
-                             index record in the child table */
-  dtuple_t *entry,         /*!< in: index entry in the parent
-                             table */
+  que_thr_t *thr,
+  dict_foreign_t *foreign,
+  btr_pcur_t *pcur,
+  dtuple_t *entry,
   mtr_t *mtr
-) /*!< in: mtr holding the latch of pcur
-                             page */
+)
 {
   upd_node_t *node;
   upd_node_t *cascade;
@@ -702,7 +705,7 @@ static db_err row_ins_foreign_check_on_constraint(
   dict_index_t *index;
   dict_index_t *clust_index;
   dtuple_t *ref;
-  mem_heap_t *upd_vec_heap = NULL;
+  mem_heap_t *upd_vec_heap = nullptr;
   const rec_t *rec;
   const rec_t *clust_rec;
   const buf_block_t *clust_block;
@@ -711,7 +714,7 @@ static db_err row_ins_foreign_check_on_constraint(
   db_err err;
   ulint i;
   trx_t *trx;
-  mem_heap_t *tmp_heap = NULL;
+  mem_heap_t *tmp_heap = nullptr;
 
   ut_a(thr);
   ut_a(foreign);
@@ -724,7 +727,7 @@ static db_err row_ins_foreign_check_on_constraint(
 
   if (node->is_delete && 0 == (foreign->type & (DICT_FOREIGN_ON_DELETE_CASCADE | DICT_FOREIGN_ON_DELETE_SET_NULL))) {
 
-    row_ins_foreign_report_err("Trying to delete", thr, foreign, btr_pcur_get_rec(pcur), entry);
+    row_ins_foreign_report_err("Trying to delete", thr, foreign, pcur->get_rec(), entry);
 
     return DB_ROW_IS_REFERENCED;
   }
@@ -732,12 +735,12 @@ static db_err row_ins_foreign_check_on_constraint(
   if (!node->is_delete && 0 == (foreign->type & (DICT_FOREIGN_ON_UPDATE_CASCADE | DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
     /* This is an UPDATE */
 
-    row_ins_foreign_report_err("Trying to update", thr, foreign, btr_pcur_get_rec(pcur), entry);
+    row_ins_foreign_report_err("Trying to update", thr, foreign, pcur->get_rec(), entry);
 
     return DB_ROW_IS_REFERENCED;
   }
 
-  if (node->cascade_node == NULL) {
+  if (node->cascade_node == nullptr) {
     /* Extend our query graph by creating a child to current
     update node. The child is used in the cascade or set null
     operation. */
@@ -792,7 +795,7 @@ static db_err row_ins_foreign_check_on_constraint(
       "in the child table,",
       thr,
       foreign,
-      btr_pcur_get_rec(pcur),
+      pcur->get_rec(),
       entry
     );
 
@@ -802,16 +805,16 @@ static db_err row_ins_foreign_check_on_constraint(
   if (row_ins_cascade_n_ancestors(cascade) >= 15) {
     err = DB_ROW_IS_REFERENCED;
 
-    row_ins_foreign_report_err("Trying a too deep cascaded delete or update\n", thr, foreign, btr_pcur_get_rec(pcur), entry);
+    row_ins_foreign_report_err("Trying a too deep cascaded delete or update\n", thr, foreign, pcur->get_rec(), entry);
 
     goto nonstandard_exit_func;
   }
 
-  index = btr_pcur_get_btr_cur(pcur)->m_index;
+  index = pcur->get_index();
 
   ut_a(index == foreign->foreign_index);
 
-  rec = btr_pcur_get_rec(pcur);
+  rec = pcur->get_rec();
 
   if (dict_index_is_clust(index)) {
     /* pcur is already positioned in the clustered index of
@@ -819,7 +822,7 @@ static db_err row_ins_foreign_check_on_constraint(
 
     clust_index = index;
     clust_rec = rec;
-    clust_block = btr_pcur_get_block(pcur);
+    clust_block = pcur->get_block();
   } else {
     /* We have to look for the record in the clustered index
     in the child table */
@@ -829,12 +832,13 @@ static db_err row_ins_foreign_check_on_constraint(
     tmp_heap = mem_heap_create(256);
 
     ref = row_build_row_ref(ROW_COPY_POINTERS, index, rec, tmp_heap);
-    btr_pcur_open_with_no_init(clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, cascade->pcur, 0, mtr);
 
-    clust_rec = btr_pcur_get_rec(cascade->pcur);
-    clust_block = btr_pcur_get_block(cascade->pcur);
+    cascade->pcur->open_with_no_init(clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, false, mtr, Source_location{});
 
-    if (!page_rec_is_user_rec(clust_rec) || btr_pcur_get_low_match(cascade->pcur) < dict_index_get_n_unique(clust_index)) {
+    clust_rec = cascade->pcur->get_rec();
+    clust_block = cascade->pcur->get_block();
+
+    if (!page_rec_is_user_rec(clust_rec) || cascade->pcur->get_low_match() < dict_index_get_n_unique(clust_index)) {
 
       ib_logger(ib_stream, "error in cascade of a foreign key op\n");
       dict_index_name_print(ib_stream, trx, index);
@@ -897,7 +901,7 @@ static db_err row_ins_foreign_check_on_constraint(
 
       ufield->field_no = dict_table_get_nth_col_pos(table, dict_index_get_nth_col_no(index, i));
       ufield->orig_len = 0;
-      ufield->exp = NULL;
+      ufield->exp = nullptr;
       dfield_set_null(&ufield->new_val);
     }
   }
@@ -923,7 +927,7 @@ static db_err row_ins_foreign_check_on_constraint(
         " declared as not NULL in the child table,",
         thr,
         foreign,
-        btr_pcur_get_rec(pcur),
+        pcur->get_rec(),
         entry
       );
 
@@ -945,17 +949,17 @@ static db_err row_ins_foreign_check_on_constraint(
   /* Store pcur position and initialize or store the cascade node
   pcur stored position */
 
-  btr_pcur_store_position(pcur, mtr);
+  pcur->store_position(mtr);
 
   if (index == clust_index) {
-    btr_pcur_copy_stored_position(cascade->pcur, pcur);
+    cascade->pcur->copy_stored_position(pcur);
   } else {
-    btr_pcur_store_position(cascade->pcur, mtr);
+    cascade->pcur->store_position(mtr);
   }
 
   mtr_commit(mtr);
 
-  ut_a(cascade->pcur->rel_pos == Btree_cursor_pos::ON);
+  ut_a(cascade->pcur->get_rel_pos() == Btree_cursor_pos::ON);
 
   cascade->state = UPD_NODE_UPDATE_CLUSTERED;
 
@@ -984,7 +988,7 @@ static db_err row_ins_foreign_check_on_constraint(
 
   /* Restore pcur position */
 
-  btr_pcur_restore_position(BTR_SEARCH_LEAF, pcur, mtr);
+  pcur->restore_position(BTR_SEARCH_LEAF, mtr, Source_location{});
 
   if (tmp_heap) {
     mem_heap_free(tmp_heap);
@@ -1005,12 +1009,12 @@ nonstandard_exit_func:
     mem_heap_free(upd_vec_heap);
   }
 
-  btr_pcur_store_position(pcur, mtr);
+  pcur->store_position(mtr);
 
   mtr_commit(mtr);
   mtr_start(mtr);
 
-  btr_pcur_restore_position(BTR_SEARCH_LEAF, pcur, mtr);
+  pcur->restore_position(BTR_SEARCH_LEAF, mtr, Source_location{});
 
   return err;
 }
@@ -1081,7 +1085,7 @@ db_err row_ins_check_foreign_constraint(
   ulint i;
   mtr_t mtr;
   trx_t *trx = thr_get_trx(thr);
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
@@ -1142,7 +1146,7 @@ run_again:
     check_index = foreign->foreign_index;
   }
 
-  if (check_table == NULL || check_table->ibd_file_missing) {
+  if (check_table == nullptr || check_table->ibd_file_missing) {
     if (check_ref) {
       row_ins_set_detailed(trx, foreign);
 
@@ -1196,13 +1200,13 @@ run_again:
 
   dtuple_set_n_fields_cmp(entry, foreign->n_fields);
 
-  btr_pcur_open(check_index, entry, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
+  pcur.open(check_index, entry, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
 
   /* Scan index records and check if there is a matching record */
 
   for (;;) {
-    const rec_t *rec = btr_pcur_get_rec(&pcur);
-    const buf_block_t *block = btr_pcur_get_block(&pcur);
+    const rec_t *rec = pcur.get_rec();
+    const buf_block_t *block = pcur.get_block();
 
     if (page_rec_is_infimum(rec)) {
 
@@ -1277,7 +1281,7 @@ run_again:
           /* row_ins_foreign_check_on_constraint
           may have repositioned pcur on a
           different block */
-          block = btr_pcur_get_block(&pcur);
+          block = pcur.get_block();
         } else {
           row_ins_foreign_report_err("Trying to delete or update", thr, foreign, rec, entry);
 
@@ -1306,11 +1310,11 @@ run_again:
 
     ut_a(cmp == 0);
   next_rec:
-    moved = btr_pcur_move_to_next(&pcur, &mtr);
+    moved = pcur.move_to_next(&mtr);
 
     if (!moved) {
       if (check_ref) {
-        rec = btr_pcur_get_rec(&pcur);
+        rec = pcur.get_rec();
         row_ins_foreign_report_add_err(trx, foreign, rec, entry);
         err = DB_NO_REFERENCED_ROW;
       } else {
@@ -1321,7 +1325,7 @@ run_again:
     }
   }
 
-  btr_pcur_close(&pcur);
+  pcur.close();
 
   mtr_commit(&mtr);
 
@@ -1376,7 +1380,7 @@ static db_err row_ins_check_foreign_constraints(
   while (foreign) {
     if (foreign->foreign_index == index) {
 
-      if (foreign->referenced_table == NULL) {
+      if (foreign->referenced_table == nullptr) {
         dict_table_get(foreign->referenced_table_name, false);
       }
 
@@ -1490,7 +1494,7 @@ static db_err row_ins_scan_sec_index_for_duplicate(
   db_err err = DB_SUCCESS;
   unsigned allow_duplicates;
   mtr_t mtr;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
@@ -1516,15 +1520,15 @@ static db_err row_ins_scan_sec_index_for_duplicate(
 
   dtuple_set_n_fields_cmp(entry, dict_index_get_n_unique(index));
 
-  btr_pcur_open(index, entry, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
+  pcur.open(index, entry, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
 
   allow_duplicates = thr_get_trx(thr)->duplicates & TRX_DUP_IGNORE;
 
   /* Scan index records and check if there is a duplicate */
 
   do {
-    const rec_t *rec = btr_pcur_get_rec(&pcur);
-    const buf_block_t *block = btr_pcur_get_block(&pcur);
+    const rec_t *rec = pcur.get_rec();
+    const buf_block_t *block = pcur.get_block();
 
     if (page_rec_is_infimum(rec)) {
 
@@ -1573,7 +1577,7 @@ static db_err row_ins_scan_sec_index_for_duplicate(
     }
 
     ut_a(cmp == 0);
-  } while (btr_pcur_move_to_next(&pcur, &mtr));
+  } while (pcur.move_to_next(&mtr));
 
   if (likely_null(heap)) {
     mem_heap_free(heap);
@@ -1603,7 +1607,7 @@ static db_err row_ins_duplicate_error_in_clust(
   rec_t *rec;
   ulint n_unique;
   trx_t *trx = thr_get_trx(thr);
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
@@ -1770,9 +1774,9 @@ static db_err row_ins_index_entry_low(
   rec_t *rec;
   db_err err;
   ulint n_unique;
-  big_rec_t *big_rec = NULL;
+  big_rec_t *big_rec = nullptr;
   mtr_t mtr;
-  mem_heap_t *heap = NULL;
+  mem_heap_t *heap = nullptr;
 
   log_free_check();
 
@@ -1879,7 +1883,7 @@ function_exit:
 
     btr_cur_search_to_nth_level(index, 0, entry, PAGE_CUR_LE, BTR_MODIFY_TREE, &cursor, 0, __FILE__, __LINE__, &mtr);
     rec = btr_cur_get_rec(&cursor);
-    offsets = rec_get_offsets(rec, index, NULL, ULINT_UNDEFINED, &heap);
+    offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED, &heap);
 
     err = btr_store_big_rec_extern_fields(index, btr_cur_get_block(&cursor), rec, offsets, big_rec, &mtr);
 
@@ -2107,7 +2111,7 @@ static ulint row_ins(
 
   ut_ad(node->state == INS_NODE_INSERT_ENTRIES);
 
-  while (node->index != NULL) {
+  while (node->index != nullptr) {
     err = row_ins_index_entry_step(node, thr);
 
     if (err != DB_SUCCESS) {
@@ -2119,7 +2123,7 @@ static ulint row_ins(
     node->entry = UT_LIST_GET_NEXT(tuple_list, node->entry);
   }
 
-  ut_ad(node->entry == NULL);
+  ut_ad(node->entry == nullptr);
 
   node->state = INS_NODE_ALLOC_ROW_ID;
 
@@ -2212,7 +2216,7 @@ error_handling:
 
   if (err != DB_SUCCESS) {
     /* err == DB_LOCK_WAIT or SQL error detected */
-    return NULL;
+    return nullptr;
   }
 
   /* DO THE TRIGGER ACTIONS HERE */

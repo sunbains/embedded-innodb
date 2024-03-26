@@ -61,8 +61,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t ib_idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
 #ifdef __WIN__
@@ -107,7 +107,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -140,11 +140,11 @@ insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 {
   int i;
   char ptr[] = "a";
-  ib_tpl_t tpl = NULL;
+  ib_tpl_t tpl = nullptr;
   ib_err_t err = DB_ERROR;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   for (i = 0; i < 10; i += 2, ++*ptr) {
 
@@ -158,7 +158,7 @@ insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
     assert(err == DB_SUCCESS);
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -168,8 +168,8 @@ insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 /** UPDATE t SET c1 = c1 / 2; */
 static ib_err_t update_rows(ib_crsr_t crsr) {
   ib_err_t err;
-  ib_tpl_t old_tpl = NULL;
-  ib_tpl_t new_tpl = NULL;
+  ib_tpl_t old_tpl = nullptr;
+  ib_tpl_t new_tpl = nullptr;
 
   /* Set the record lock mode, since we are doing a SELECT FOR UPDATE */
   err = ib_cursor_set_lock_mode(crsr, IB_LOCK_X);
@@ -184,10 +184,10 @@ static ib_err_t update_rows(ib_crsr_t crsr) {
   new_tpl will contain the update row data. */
 
   old_tpl = ib_clust_read_tuple_create(crsr);
-  assert(old_tpl != NULL);
+  assert(old_tpl != nullptr);
 
   new_tpl = ib_clust_read_tuple_create(crsr);
-  assert(new_tpl != NULL);
+  assert(new_tpl != nullptr);
 
   /* Iterate over the records and update all records read. */
   while (err == DB_SUCCESS) {
@@ -218,10 +218,10 @@ static ib_err_t update_rows(ib_crsr_t crsr) {
 
   assert(err == DB_END_OF_INDEX || err == DB_RECORD_NOT_FOUND);
 
-  if (old_tpl != NULL) {
+  if (old_tpl != nullptr) {
     ib_tuple_delete(old_tpl);
   }
-  if (new_tpl != NULL) {
+  if (new_tpl != nullptr) {
     ib_tuple_delete(new_tpl);
   }
 
@@ -234,7 +234,7 @@ static ib_err_t do_query(ib_crsr_t crsr) {
   ib_tpl_t tpl;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   err = ib_cursor_first(crsr);
   assert(err == DB_SUCCESS);
@@ -257,7 +257,7 @@ static ib_err_t do_query(ib_crsr_t crsr) {
            err == DB_RECORD_NOT_FOUND);
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -296,7 +296,7 @@ int main(int argc, char *argv[]) {
   assert(err == DB_SUCCESS);
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   err = open_table(DATABASE, TABLE, ib_trx, &crsr);
   assert(err == DB_SUCCESS);
@@ -319,7 +319,7 @@ int main(int argc, char *argv[]) {
 
   err = ib_cursor_close(crsr);
   assert(err == DB_SUCCESS);
-  crsr = NULL;
+  crsr = nullptr;
 
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);

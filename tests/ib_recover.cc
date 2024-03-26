@@ -63,8 +63,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t ib_idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -104,7 +104,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -135,14 +135,14 @@ insert_rows(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
 {
   int i;
   int dups = 0;
-  ib_tpl_t tpl = NULL;
+  ib_tpl_t tpl = nullptr;
   ib_err_t err = DB_ERROR;
   char *ptr = new char[8192];
 
-  assert(ptr != NULL);
+  assert(ptr != nullptr);
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   for (i = start; i < start + count; ++i) {
     int l;
@@ -166,7 +166,7 @@ insert_rows(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
     }
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -189,7 +189,7 @@ insert_rows(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
 static void set_options(int argc, char *argv[]) {
   int opt;
 
-  while ((opt = getopt_long(argc, argv, "", ib_longopts, NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "", ib_longopts, nullptr)) != -1) {
 
     /* If it's an InnoDB parameter, then we let the
     auxillary function handle it. */
@@ -216,7 +216,7 @@ static ib_err_t test_phase_I(void) {
     ib_trx_t ib_trx;
 
     ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-    assert(ib_trx != NULL);
+    assert(ib_trx != nullptr);
 
     err = open_table(DATABASE, TABLE, ib_trx, &crsr);
     assert(err == DB_SUCCESS);
@@ -232,7 +232,7 @@ static ib_err_t test_phase_I(void) {
 
     err = ib_cursor_close(crsr);
     assert(err == DB_SUCCESS);
-    crsr = NULL;
+    crsr = nullptr;
 
     err = ib_trx_commit(ib_trx);
     assert(err == DB_SUCCESS);

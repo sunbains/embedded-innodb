@@ -53,7 +53,7 @@ static bool name_of_col_is(
 }
 
 /** Finds the first table name in the given database.
-@return own: table name, NULL if does not exist; the caller must free
+@return own: table name, nullptr if does not exist; the caller must free
 the memory in the string! */
 
 char *dict_get_first_table_name_in_db(const char *name) /*!< in: database name which ends in '/' */
@@ -85,18 +85,18 @@ char *dict_get_first_table_name_in_db(const char *name) /*!< in: database name w
   dfield_set_data(dfield, name, strlen(name));
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
+  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
 loop:
-  rec = btr_pcur_get_rec(&pcur);
+  rec = pcur.get_rec();
 
-  if (!btr_pcur_is_on_user_rec(&pcur)) {
+  if (!pcur.is_on_user_rec()) {
     /* Not found */
 
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
     mem_heap_free(heap);
 
-    return (NULL);
+    return (nullptr);
   }
 
   field = rec_get_nth_field_old(rec, 0, &len);
@@ -104,11 +104,11 @@ loop:
   if (len < strlen(name) || memcmp(name, field, strlen(name)) != 0) {
     /* Not found */
 
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
     mem_heap_free(heap);
 
-    return (NULL);
+    return (nullptr);
   }
 
   if (!rec_get_deleted_flag(rec, 0)) {
@@ -117,14 +117,14 @@ loop:
 
     char *table_name = mem_strdupl((char *)field, len);
 
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
     mem_heap_free(heap);
 
     return (table_name);
   }
 
-  btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+  pcur.move_to_next_user_rec(&mtr);
 
   goto loop;
 }
@@ -156,16 +156,17 @@ void dict_print(void) {
   sys_tables = dict_table_get_low("SYS_TABLES");
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
 
-  btr_pcur_open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, &pcur, true, &mtr);
+  pcur.open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+
 loop:
-  btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+  pcur.move_to_next_user_rec(&mtr);
 
-  rec = btr_pcur_get_rec(&pcur);
+  rec = pcur.get_rec();
 
-  if (!btr_pcur_is_on_user_rec(&pcur)) {
+  if (!pcur.is_on_user_rec()) {
     /* end of index */
 
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
 
     mutex_exit(&(dict_sys->mutex));
@@ -187,14 +188,14 @@ loop:
 
     char *table_name = mem_strdupl((char *)field, len);
 
-    btr_pcur_store_position(&pcur, &mtr);
+    pcur.store_position(&mtr);
 
     mtr_commit(&mtr);
 
     table = dict_table_get_low(table_name);
     mem_free(table_name);
 
-    if (table == NULL) {
+    if (table == nullptr) {
       ib_logger(ib_stream, "Failed to load table ");
       ut_print_namel(ib_stream, (char *)field, len);
       ib_logger(ib_stream, "\n");
@@ -211,7 +212,7 @@ loop:
 
     mtr_start(&mtr);
 
-    btr_pcur_restore_position(BTR_SEARCH_LEAF, &pcur, &mtr);
+    pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
 
   goto loop;
@@ -286,16 +287,17 @@ void dict_check_tablespaces_and_store_max_id(bool in_crash_recovery) {
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
   ut_a(!dict_table_is_comp(sys_tables));
 
-  btr_pcur_open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, &pcur, true, &mtr);
+  pcur.open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+
 loop:
-  btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+  pcur.move_to_next_user_rec(&mtr);
 
-  rec = btr_pcur_get_rec(&pcur);
+  rec = pcur.get_rec();
 
-  if (!btr_pcur_is_on_user_rec(&pcur)) {
+  if (!pcur.is_on_user_rec()) {
     /* end of index */
 
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
 
     /* We must make the tablespace cache aware of the biggest
@@ -347,7 +349,7 @@ loop:
 
     space_id = mach_read_from_4(field);
 
-    btr_pcur_store_position(&pcur, &mtr);
+    pcur.store_position(&mtr);
 
     mtr_commit(&mtr);
 
@@ -392,7 +394,7 @@ loop:
 
     mtr_start(&mtr);
 
-    btr_pcur_restore_position(BTR_SEARCH_LEAF, &pcur, &mtr);
+    pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
 
   goto loop;
@@ -437,12 +439,13 @@ static void dict_load_columns(
   dfield_set_data(dfield, buf, 8);
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
+  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
+
   for (i = 0; i + DATA_N_SYS_COLS < (ulint)table->n_cols; i++) {
 
-    rec = btr_pcur_get_rec(&pcur);
+    rec = pcur.get_rec();
 
-    ut_a(btr_pcur_is_on_user_rec(&pcur));
+    ut_a(pcur.is_on_user_rec());
 
     ut_a(!rec_get_deleted_flag(rec, 0));
 
@@ -487,10 +490,10 @@ static void dict_load_columns(
     ut_a(name_of_col_is(sys_columns, sys_index, 8, "PREC"));
 
     dict_mem_table_add_col(table, heap, name, mtype, prtype, col_len);
-    btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+    pcur.move_to_next_user_rec(&mtr);
   }
 
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
 }
 
@@ -531,12 +534,13 @@ static void dict_load_fields(
   dfield_set_data(dfield, buf, 8);
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
+  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
+
   for (i = 0; i < index->n_fields; i++) {
 
-    rec = btr_pcur_get_rec(&pcur);
+    rec = pcur.get_rec();
 
-    ut_a(btr_pcur_is_on_user_rec(&pcur));
+    ut_a(pcur.is_on_user_rec());
 
     /* There could be delete marked records in SYS_FIELDS
     because SYS_FIELDS.INDEX_ID can be updated
@@ -579,10 +583,11 @@ static void dict_load_fields(
     dict_mem_index_add_field(index, mem_heap_strdupl(heap, (char *)field, len), prefix_len);
 
   next_rec:
-    btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+    pcur.move_to_next_user_rec(&mtr);
   }
 
-  btr_pcur_close(&pcur);
+  pcur.close();
+
   mtr_commit(&mtr);
 }
 
@@ -634,14 +639,15 @@ static ulint dict_load_indexes(
   dfield_set_data(dfield, buf, 8);
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
+  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
+
   for (;;) {
-    if (!btr_pcur_is_on_user_rec(&pcur)) {
+    if (!pcur.is_on_user_rec()) {
 
       break;
     }
 
-    rec = btr_pcur_get_rec(&pcur);
+    rec = pcur.get_rec();
 
     field = rec_get_nth_field_old(rec, 0, &len);
     ut_ad(len == 8);
@@ -704,12 +710,12 @@ static ulint dict_load_indexes(
 
       error = DB_CORRUPTION;
       goto func_exit;
-    } else if ((type & DICT_CLUSTERED) == 0 && NULL == dict_table_get_first_index(table)) {
+    } else if ((type & DICT_CLUSTERED) == 0 && nullptr == dict_table_get_first_index(table)) {
 
       ib_logger(ib_stream, "Error: trying to load index ");
-      ut_print_name(ib_stream, NULL, false, name_buf);
+      ut_print_name(ib_stream, nullptr, false, name_buf);
       ib_logger(ib_stream, " for table ");
-      ut_print_name(ib_stream, NULL, true, table->name);
+      ut_print_name(ib_stream, nullptr, true, table->name);
       ib_logger(
         ib_stream,
         "\nbut the first index"
@@ -742,14 +748,14 @@ static ulint dict_load_indexes(
     }
 
   next_rec:
-    btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+    pcur.move_to_next_user_rec(&mtr);
   }
 
 func_exit:
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
 
-  return (error);
+  return error;
 }
 
 /** Loads a table definition and also all its index definitions, and also
@@ -757,7 +763,7 @@ the cluster definition if the table is a member in a cluster. Also loads
 all foreign key constraints where the foreign key is in the table or where
 a foreign key references columns in this table. Adds all these to the data
 dictionary cache.
-@return table, NULL if does not exist; if the table is stored in an
+@return table, nullptr if does not exist; if the table is stored in an
 .ibd file, but the file does not exist, then we set the
 ibd_file_missing flag true in the table object we return */
 
@@ -800,17 +806,17 @@ dict_table_t *dict_load_table(
   dfield_set_data(dfield, name, strlen(name));
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
-  rec = btr_pcur_get_rec(&pcur);
+  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
+  rec = pcur.get_rec();
 
-  if (!btr_pcur_is_on_user_rec(&pcur) || rec_get_deleted_flag(rec, 0)) {
+  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec, 0)) {
     /* Not found */
   err_exit:
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
     mem_heap_free(heap);
 
-    return (NULL);
+    return (nullptr);
   }
 
   field = rec_get_nth_field_old(rec, 0, &len);
@@ -924,7 +930,7 @@ dict_table_t *dict_load_table(
   field = rec_get_nth_field_old(rec, 3, &len);
   table->id = mach_read_from_8(field);
 
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
 
   dict_load_columns(table, heap);
@@ -943,10 +949,10 @@ dict_table_t *dict_load_table(
     err = dict_load_foreigns(table->name, true);
   } else if (recovery == IB_RECOVERY_DEFAULT) {
     dict_table_remove_from_cache(table);
-    table = NULL;
+    table = nullptr;
   }
 #if 0
-	if (err != DB_SUCCESS && table != NULL) {
+	if (err != DB_SUCCESS && table != nullptr) {
 
 		mutex_enter(&dict_foreign_err_mutex);
 
@@ -975,7 +981,7 @@ dict_table_t *dict_load_table(
 }
 
 /** Loads a table object based on the table id.
-@return	table; NULL if table does not exist */
+@return	table; nullptr if table does not exist */
 
 dict_table_t *dict_load_table_on_id(
   ib_recovery_t recovery, /*!< in: recovery flag */
@@ -1018,35 +1024,36 @@ dict_table_t *dict_load_table_on_id(
   dfield_set_data(dfield, id_buf, 8);
   dict_index_copy_types(tuple, sys_table_ids, 1);
 
-  btr_pcur_open_on_user_rec(sys_table_ids, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
-  rec = btr_pcur_get_rec(&pcur);
+  pcur.open_on_user_rec(sys_table_ids, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
 
-  if (!btr_pcur_is_on_user_rec(&pcur) || rec_get_deleted_flag(rec, 0)) {
+  rec = pcur.get_rec();
+
+  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec, 0)) {
     /* Not found */
 
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
     mem_heap_free(heap);
 
-    return (NULL);
+    return (nullptr);
   }
 
   /*---------------------------------------------------*/
   /* Now we have the record in the secondary index containing the
   table ID and NAME */
 
-  rec = btr_pcur_get_rec(&pcur);
+  rec = pcur.get_rec();
   field = rec_get_nth_field_old(rec, 0, &len);
   ut_ad(len == 8);
 
   /* Check if the table id in record is the one searched for */
   if (table_id != mach_read_from_8(field)) {
 
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
     mem_heap_free(heap);
 
-    return (NULL);
+    return (nullptr);
   }
 
   /* Now we get the table name from the record */
@@ -1054,7 +1061,7 @@ dict_table_t *dict_load_table_on_id(
   /* Load the table definition to memory */
   table = dict_load_table(recovery, mem_heap_strdupl(heap, (char *)field, len));
 
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
   mem_heap_free(heap);
 
@@ -1113,12 +1120,13 @@ static void dict_load_foreign_cols(
   dfield_set_data(dfield, id, strlen(id));
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
+  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
+
   for (i = 0; i < foreign->n_fields; i++) {
 
-    rec = btr_pcur_get_rec(&pcur);
+    rec = pcur.get_rec();
 
-    ut_a(btr_pcur_is_on_user_rec(&pcur));
+    ut_a(pcur.is_on_user_rec());
     ut_a(!rec_get_deleted_flag(rec, 0));
 
     field = rec_get_nth_field_old(rec, 0, &len);
@@ -1135,10 +1143,11 @@ static void dict_load_foreign_cols(
     field = rec_get_nth_field_old(rec, 5, &len);
     foreign->referenced_col_names[i] = mem_heap_strdupl(foreign->heap, (char *)field, len);
 
-    btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+    pcur.move_to_next_user_rec(&mtr);
   }
 
-  btr_pcur_close(&pcur);
+  pcur.close();
+
   mtr_commit(&mtr);
 }
 
@@ -1180,15 +1189,15 @@ static db_err dict_load_foreign(
   dfield_set_data(dfield, id, strlen(id));
   dict_index_copy_types(tuple, sys_index, 1);
 
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
-  rec = btr_pcur_get_rec(&pcur);
+  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
+  rec = pcur.get_rec();
 
-  if (!btr_pcur_is_on_user_rec(&pcur) || rec_get_deleted_flag(rec, 0)) {
+  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec, 0)) {
     /* Not found */
 
     ib_logger(ib_stream, "Error A: cannot load foreign constraint %s\n", id);
 
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
     mem_heap_free(heap2);
 
@@ -1202,7 +1211,7 @@ static db_err dict_load_foreign(
 
     ib_logger(ib_stream, "Error B: cannot load foreign constraint %s\n", id);
 
-    btr_pcur_close(&pcur);
+    pcur.close();
     mtr_commit(&mtr);
     mem_heap_free(heap2);
 
@@ -1233,7 +1242,8 @@ static db_err dict_load_foreign(
   field = rec_get_nth_field_old(rec, 4, &len);
   foreign->referenced_table_name = mem_heap_strdupl(foreign->heap, (char *)field, len);
 
-  btr_pcur_close(&pcur);
+  pcur.close();
+
   mtr_commit(&mtr);
 
   dict_load_foreign_cols(id, foreign);
@@ -1272,7 +1282,7 @@ db_err dict_load_foreigns(const char *table_name, bool check_charsets) {
 
   sys_foreign = dict_table_get_low("SYS_FOREIGN");
 
-  if (sys_foreign == NULL) {
+  if (sys_foreign == nullptr) {
     /* No foreign keys defined yet in this database */
 
     ib_logger(
@@ -1303,11 +1313,11 @@ start_load:
   dfield_set_data(dfield, table_name, strlen(table_name));
   dict_index_copy_types(tuple, sec_index, 1);
 
-  btr_pcur_open_on_user_rec(sec_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &pcur, &mtr);
+  pcur.open_on_user_rec(sec_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
 loop:
-  rec = btr_pcur_get_rec(&pcur);
+  rec = pcur.get_rec();
 
-  if (!btr_pcur_is_on_user_rec(&pcur)) {
+  if (!pcur.is_on_user_rec()) {
     /* End of index */
 
     goto load_next_index;
@@ -1316,14 +1326,14 @@ loop:
   /* Now we have the record in the secondary index containing a table
   name and a foreign constraint ID */
 
-  rec = btr_pcur_get_rec(&pcur);
+  rec = pcur.get_rec();
   field = rec_get_nth_field_old(rec, 0, &len);
 
   /* Check if the table name in the record is the one searched for; the
   following call does the comparison in the latin1_swedish_ci
   charset-collation, in a case-insensitive way. */
 
-  if (0 != cmp_data_data(NULL, dfield_get_type(dfield)->mtype, dfield_get_type(dfield)->prtype, (const byte *)dfield_get_data(dfield), dfield_get_len(dfield), field, len)) {
+  if (0 != cmp_data_data(nullptr, dfield_get_type(dfield)->mtype, dfield_get_type(dfield)->prtype, (const byte *)dfield_get_data(dfield), dfield_get_len(dfield), field, len)) {
 
     goto load_next_index;
   }
@@ -1349,7 +1359,7 @@ loop:
   field = rec_get_nth_field_old(rec, 1, &len);
   id = mem_heap_strdupl(heap, (char *)field, len);
 
-  btr_pcur_store_position(&pcur, &mtr);
+  pcur.store_position(&mtr);
 
   mtr_commit(&mtr);
 
@@ -1358,7 +1368,7 @@ loop:
   err = dict_load_foreign(id, check_charsets);
 
   if (err != DB_SUCCESS) {
-    btr_pcur_close(&pcur);
+    pcur.close();
     mem_heap_free(heap);
 
     return err;
@@ -1366,20 +1376,21 @@ loop:
 
   mtr_start(&mtr);
 
-  btr_pcur_restore_position(BTR_SEARCH_LEAF, &pcur, &mtr);
+  pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+
 next_rec:
-  btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+  pcur.move_to_next_user_rec(&mtr);
 
   goto loop;
 
 load_next_index:
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
   mem_heap_free(heap);
 
   sec_index = dict_table_get_next_index(sec_index);
 
-  if (sec_index != NULL) {
+  if (sec_index != nullptr) {
 
     mtr_start(&mtr);
 

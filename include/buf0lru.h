@@ -122,7 +122,7 @@ struct Buf_LRU {
    *
    * @param bpage The block to be freed.
    * @param buf_pool_mutex_released Pointer to a variable that will be assigned true
-   *             if buf_pool_mutex was temporarily released, or NULL.
+   *             if buf_pool_mutex was temporarily released, or nullptr.
    * 
    * @return FREED if freed, CANNOT_RELOCATE or NOT_FREED otherwise.
    */
@@ -141,9 +141,9 @@ struct Buf_LRU {
 
   /**
    * Returns a free block from the buf_pool. The block is taken off the
-   * free list. If it is empty, returns NULL.
+   * free list. If it is empty, returns nullptr.
    *
-   * @return A free control block, or NULL if the buf_block->free list is empty.
+   * @return A free control block, or nullptr if the buf_block->free list is empty.
    */
   buf_block_t *get_free_only();
   

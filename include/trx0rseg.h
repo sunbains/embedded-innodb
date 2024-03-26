@@ -61,7 +61,7 @@ constexpr auto TRX_RSEG_N_SLOTS = UNIV_PAGE_SIZE / 16;
 constexpr auto TRX_RSEG_MAX_N_TRXS = TRX_RSEG_N_SLOTS / 2;
 
 /* The rollback segment memory object */
-struct trx_rseg_struct {
+struct trx_rseg_t {
   /*--------------------------------------------------------*/
   ulint id;        /*!< rollback segment id == the index of
                    its slot in the trx system file copy */

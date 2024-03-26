@@ -105,7 +105,7 @@ static void ib_op_stats_alloc(int n_threads) {
   ib_op_time_alloc(&ib_op_stats.join, n_threads);
   ib_op_time_alloc(&ib_op_stats.insert, n_threads);
 
-  ret = pthread_mutex_init(&ib_op_stats.mutex, NULL);
+  ret = pthread_mutex_init(&ib_op_stats.mutex, nullptr);
   assert(ret == 0);
 }
 
@@ -130,7 +130,7 @@ static void ib_op_stats_free(void) {
 /** Add timing info for operation. */
 static void ib_stats_collect(ib_op_t op, time_t elapsed_time) {
   int ret;
-  ib_op_time_t *collect = NULL;
+  ib_op_time_t *collect = nullptr;
 
   ret = pthread_mutex_lock(&ib_op_stats.mutex);
   assert(ret == 0);
@@ -174,8 +174,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t ib_idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t ib_idx_sch = nullptr;
   ib_tbl_fmt_t tbl_fmt = IB_TBL_COMPACT;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
@@ -215,7 +215,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -249,11 +249,11 @@ insert_rows(ib_crsr_t crsr,    /*!< in, out: cursor to use for write */
             ib_u32_t n_values) /*!< in: no. of values to insert */
 {
   ib_u32_t i;
-  ib_tpl_t tpl = NULL;
+  ib_tpl_t tpl = nullptr;
   ib_err_t err = DB_SUCCESS;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   for (i = start; i < start + n_values; ++i) {
     err = ib_col_set_value(tpl, 0, &i, sizeof(i));
@@ -269,7 +269,7 @@ insert_rows(ib_crsr_t crsr,    /*!< in, out: cursor to use for write */
     there is no need to reset the tuple. */
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -283,15 +283,15 @@ copy_table(ib_crsr_t dst_crsr, /*!< in, out: dest table */
            ib_u32_t n_values)  /*!< in: no. of rows to copy in a batch */
 {
   ib_u32_t i;
-  ib_tpl_t src_tpl = NULL;
-  ib_tpl_t dst_tpl = NULL;
+  ib_tpl_t src_tpl = nullptr;
+  ib_tpl_t dst_tpl = nullptr;
   ib_err_t err = DB_SUCCESS;
 
   src_tpl = ib_clust_read_tuple_create(src_crsr);
-  assert(src_tpl != NULL);
+  assert(src_tpl != nullptr);
 
   dst_tpl = ib_clust_read_tuple_create(dst_crsr);
-  assert(dst_tpl != NULL);
+  assert(dst_tpl != nullptr);
 
   for (i = 0; i < n_values; ++i) {
     ib_u32_t v;
@@ -326,7 +326,7 @@ copy_table(ib_crsr_t dst_crsr, /*!< in, out: dest table */
       /* The source tuple makes a copy of the record
       therefore it needs to be reset. */
       src_tpl = ib_tuple_clear(src_tpl);
-      assert(dst_tpl != NULL);
+      assert(dst_tpl != nullptr);
     }
 
     err = ib_cursor_next(src_crsr);
@@ -339,10 +339,10 @@ copy_table(ib_crsr_t dst_crsr, /*!< in, out: dest table */
     assert(err == DB_SUCCESS);
   }
 
-  if (src_tpl != NULL) {
+  if (src_tpl != nullptr) {
     ib_tuple_delete(src_tpl);
   }
-  if (dst_tpl != NULL) {
+  if (dst_tpl != nullptr) {
     ib_tuple_delete(dst_tpl);
   }
 
@@ -357,21 +357,21 @@ static ib_err_t join_on_c1(ib_crsr_t t1_crsr, /*!< in: table */
   ib_err_t t2_err;
   ib_err_t t1_err;
   ib_trx_t ib_trx;
-  ib_tpl_t t1_tpl = NULL;
-  ib_tpl_t t2_tpl = NULL;
+  ib_tpl_t t1_tpl = nullptr;
+  ib_tpl_t t2_tpl = nullptr;
 
   // printf("Begin transaction\n");
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   ib_cursor_attach_trx(t1_crsr, ib_trx);
   ib_cursor_attach_trx(t2_crsr, ib_trx);
 
   t1_tpl = ib_clust_read_tuple_create(t1_crsr);
-  assert(t1_tpl != NULL);
+  assert(t1_tpl != nullptr);
 
   t2_tpl = ib_clust_read_tuple_create(t2_crsr);
-  assert(t2_tpl != NULL);
+  assert(t2_tpl != nullptr);
 
   t1_err = ib_cursor_first(t1_crsr);
   assert(t1_err == DB_SUCCESS);
@@ -401,7 +401,7 @@ static ib_err_t join_on_c1(ib_crsr_t t1_crsr, /*!< in: table */
 
       if ((*count % 100) == 0) {
         t2_tpl = ib_tuple_clear(t2_tpl);
-        assert(t2_tpl != NULL);
+        assert(t2_tpl != nullptr);
       }
 
       if (t1_c1 == t2_c1) {
@@ -420,7 +420,7 @@ static ib_err_t join_on_c1(ib_crsr_t t1_crsr, /*!< in: table */
 
     if ((*count % 100) == 0) {
       t1_tpl = ib_tuple_clear(t1_tpl);
-      assert(t1_tpl != NULL);
+      assert(t1_tpl != nullptr);
     }
 
     t1_err = ib_cursor_next(t1_crsr);
@@ -435,10 +435,10 @@ static ib_err_t join_on_c1(ib_crsr_t t1_crsr, /*!< in: table */
 
   assert(t1_err == DB_END_OF_INDEX);
 
-  if (t1_tpl != NULL) {
+  if (t1_tpl != nullptr) {
     ib_tuple_delete(t1_tpl);
   }
-  if (t2_tpl != NULL) {
+  if (t2_tpl != nullptr) {
     ib_tuple_delete(t2_tpl);
   }
 
@@ -465,8 +465,8 @@ static void *worker_thread(void *arg) {
   ib_u32_t count = 0;
   char table1[BUFSIZ];
   char table2[BUFSIZ];
-  ib_crsr_t src_crsr = NULL;
-  ib_crsr_t dst_crsr = NULL;
+  ib_crsr_t src_crsr = nullptr;
+  ib_crsr_t dst_crsr = nullptr;
   int *table_id = (int *)arg;
   bool positioned = false;
 
@@ -475,7 +475,7 @@ static void *worker_thread(void *arg) {
 
   /* We are done with the arg. */
   free(arg);
-  table_id = NULL;
+  table_id = nullptr;
 
   err = create_table(DATABASE, table1);
   assert(err == DB_SUCCESS);
@@ -483,7 +483,7 @@ static void *worker_thread(void *arg) {
   err = create_table(DATABASE, table2);
   assert(err == DB_SUCCESS);
 
-  err = open_table(DATABASE, table1, NULL, &src_crsr);
+  err = open_table(DATABASE, table1, nullptr, &src_crsr);
   assert(err == DB_SUCCESS);
 
   ret = pthread_barrier_wait(&barrier);
@@ -492,12 +492,12 @@ static void *worker_thread(void *arg) {
     printf("Start insert...\n");
   }
 
-  start = time(NULL);
+  start = time(nullptr);
   for (i = 0; i < (int)n_rows; i += BATCH_SIZE) {
     ib_trx_t ib_trx;
 
     ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-    assert(ib_trx != NULL);
+    assert(ib_trx != nullptr);
 
     ib_cursor_attach_trx(src_crsr, ib_trx);
 
@@ -513,11 +513,11 @@ static void *worker_thread(void *arg) {
     err = ib_trx_commit(ib_trx);
     assert(err == DB_SUCCESS);
   }
-  end = time(NULL);
+  end = time(nullptr);
 
   ib_stats_collect(INSERT, end - start);
 
-  err = open_table(DATABASE, table2, NULL, &dst_crsr);
+  err = open_table(DATABASE, table2, nullptr, &dst_crsr);
   assert(err == DB_SUCCESS);
 
   ret = pthread_barrier_wait(&barrier);
@@ -526,12 +526,12 @@ static void *worker_thread(void *arg) {
     printf("Start copy...\n");
   }
 
-  start = time(NULL);
+  start = time(nullptr);
   for (i = 0; i < (int)n_rows && err == DB_SUCCESS; i += BATCH_SIZE) {
     ib_trx_t ib_trx;
 
     ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-    assert(ib_trx != NULL);
+    assert(ib_trx != nullptr);
 
     ib_cursor_attach_trx(src_crsr, ib_trx);
     ib_cursor_attach_trx(dst_crsr, ib_trx);
@@ -560,7 +560,7 @@ static void *worker_thread(void *arg) {
     err = ib_trx_commit(ib_trx);
     assert(err == DB_SUCCESS);
   }
-  end = time(NULL);
+  end = time(nullptr);
 
   ib_stats_collect(COPY, end - start);
 
@@ -570,10 +570,10 @@ static void *worker_thread(void *arg) {
     printf("Start join ...\n");
   }
 
-  start = time(NULL);
+  start = time(nullptr);
   err = join_on_c1(src_crsr, dst_crsr, &count);
   assert(err == DB_SUCCESS);
-  end = time(NULL);
+  end = time(nullptr);
   assert(count == n_rows);
 
   ib_stats_collect(JOIN, end - start);
@@ -581,13 +581,13 @@ static void *worker_thread(void *arg) {
   if (src_crsr) {
     err = ib_cursor_close(src_crsr);
     assert(err == DB_SUCCESS);
-    src_crsr = NULL;
+    src_crsr = nullptr;
   }
 
   if (dst_crsr) {
     err = ib_cursor_close(dst_crsr);
     assert(err == DB_SUCCESS);
-    dst_crsr = NULL;
+    dst_crsr = nullptr;
   }
 
   err = drop_table(DATABASE, table1);
@@ -657,34 +657,34 @@ static void set_options(int argc, char *argv[]) {
   /* Add the local parameters (threads, rows and page_size). */
   longopts[count].name = "threads";
   longopts[count].has_arg = required_argument;
-  longopts[count].flag = NULL;
+  longopts[count].flag = nullptr;
   longopts[count].val = USER_OPT + 1;
   ++count;
 
   longopts[count].name = "rows";
   longopts[count].has_arg = required_argument;
-  longopts[count].flag = NULL;
+  longopts[count].flag = nullptr;
   longopts[count].val = USER_OPT + 2;
   ++count;
 
   longopts[count].name = "page_size";
   longopts[count].has_arg = required_argument;
-  longopts[count].flag = NULL;
+  longopts[count].flag = nullptr;
   longopts[count].val = USER_OPT + 3;
 
   while ((opt = getopt_long(argc, argv, "", longopts, &optind)) != -1) {
     switch (opt) {
 
     case USER_OPT + 1:
-      n_threads = strtoul(optarg, NULL, 10);
+      n_threads = strtoul(optarg, nullptr, 10);
       break;
 
     case USER_OPT + 2:
-      n_rows = strtoul(optarg, NULL, 10);
+      n_rows = strtoul(optarg, nullptr, 10);
       break;
 
     case USER_OPT + 3:
-      page_size = strtoul(optarg, NULL, 10);
+      page_size = strtoul(optarg, nullptr, 10);
       break;
 
     default:
@@ -733,7 +733,7 @@ int main(int argc, char *argv[]) {
   err = create_database(DATABASE);
   assert(err == DB_SUCCESS);
 
-  ret = pthread_barrier_init(&barrier, NULL, n_threads);
+  ret = pthread_barrier_init(&barrier, nullptr, n_threads);
   assert(ret == 0);
 
   pthreads = (pthread_t *)malloc(sizeof(*pthreads) * n_threads);
@@ -747,12 +747,12 @@ int main(int argc, char *argv[]) {
     int retval;
     int *ptr = (int *)malloc(sizeof(int));
 
-    assert(ptr != NULL);
+    assert(ptr != nullptr);
     *ptr = i * 2;
 
     /* worker_thread owns the argument and is responsible for
     freeing it. */
-    retval = pthread_create(&pthreads[i], NULL, worker_thread, ptr);
+    retval = pthread_create(&pthreads[i], nullptr, worker_thread, ptr);
 
     if (retval != 0) {
       fprintf(stderr,
@@ -767,11 +767,11 @@ int main(int argc, char *argv[]) {
   printf("\nWaiting for threads to finish ...\n");
 
   for (i = 0; i < (int)n_threads; ++i) {
-    pthread_join(pthreads[i], NULL);
+    pthread_join(pthreads[i], nullptr);
   }
 
   free(pthreads);
-  pthreads = NULL;
+  pthreads = nullptr;
 
   ret = pthread_barrier_destroy(&barrier);
   assert(ret == 0);

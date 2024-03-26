@@ -66,7 +66,7 @@ void trx_purge_add_update_undo_to_history(
 /** Fetches the next undo log record from the history list to purge. It must be
 released with the corresponding release function.
 @return copy of an undo log record or pointer to trx_purge_dummy_rec,
-if the whole undo log can skipped in purge; NULL if none left */
+if the whole undo log can skipped in purge; nullptr if none left */
 trx_undo_rec_t *trx_purge_fetch_next_rec(
   roll_ptr_t *roll_ptr,  /*!< out: roll pointer to undo record */
   trx_undo_inf_t **cell, /*!< out: storage cell for the record in the
@@ -88,7 +88,7 @@ void trx_purge_sys_print();
 void trx_purge_var_init(void);
 
 /** The control structure used in the purge operation */
-struct trx_purge_struct {
+struct trx_purge_t {
   ulint state;           /*!< Purge system state */
   sess_t *sess;          /*!< System session running the purge
                          query */

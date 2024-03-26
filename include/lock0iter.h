@@ -51,10 +51,10 @@ void lock_queue_iterator_reset(
 ); /*!< in: record number in the
                                  heap */
 
-/** Gets the previous lock in the lock queue, returns NULL if there are no
+/** Gets the previous lock in the lock queue, returns nullptr if there are no
 more locks (i.e. the current lock is the first one). The iterator is
-receded (if not-NULL is returned).
-@return	previous lock or NULL */
+receded (if not-nullptr is returned).
+@return	previous lock or nullptr */
 
 const lock_t *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter); /*!< in/out: iterator */
 

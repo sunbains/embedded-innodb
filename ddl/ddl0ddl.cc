@@ -964,19 +964,21 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   dict_index_copy_types(tuple, sys_index, 1);
 
   mtr_start(&mtr);
-  btr_pcur_open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &pcur, &mtr);
+
+  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &mtr, Source_location{});
+
   for (;;) {
     rec_t *rec;
     const byte *field;
     ulint len;
     ulint root_page_no;
 
-    if (!btr_pcur_is_on_user_rec(&pcur)) {
+    if (!pcur.is_on_user_rec()) {
       /* The end of SYS_INDEXES has been reached. */
       break;
     }
 
-    rec = btr_pcur_get_rec(&pcur);
+    rec = pcur.get_rec();
 
     field = rec_get_nth_field_old(rec, 0, &len);
     ut_ad(len == 8);
@@ -995,7 +997,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     and reposition pcur. */
     root_page_no = dict_truncate_index_tree(table, recreate_space, &pcur, &mtr);
 
-    rec = btr_pcur_get_rec(&pcur);
+    rec = pcur.get_rec();
 
     if (root_page_no != FIL_NULL) {
       page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, root_page_no, &mtr);
@@ -1006,14 +1008,15 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
       this loop could latch another index page. */
       mtr_commit(&mtr);
       mtr_start(&mtr);
-      btr_pcur_restore_position(BTR_MODIFY_LEAF, &pcur, &mtr);
+
+      pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
     }
 
   next_rec:
-    btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+    pcur.move_to_next_user_rec(&mtr);
   }
 
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
 
   mem_heap_free(heap);
@@ -1660,7 +1663,7 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
 
   mtr_start(&mtr);
 
-  btr_pcur_open_at_index_side(true, dict_table_get_first_index(dict_sys->sys_indexes), BTR_SEARCH_LEAF, &pcur, true, &mtr);
+  pcur.open_at_index_side(true, dict_table_get_first_index(dict_sys->sys_indexes), BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
     const rec_t *rec;
@@ -1669,13 +1672,13 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
     dict_table_t *table;
     uint64_t table_id;
 
-    btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+    pcur.move_to_next_user_rec(&mtr);
 
-    if (!btr_pcur_is_on_user_rec(&pcur)) {
+    if (!pcur.is_on_user_rec()) {
       break;
     }
 
-    rec = btr_pcur_get_rec(&pcur);
+    rec = pcur.get_rec();
     field = rec_get_nth_field_old(rec, DICT_SYS_INDEXES_NAME_FIELD, &len);
     if (len == UNIV_SQL_NULL || len == 0 || mach_read_from_1(field) != (ulint)TEMP_INDEX_PREFIX) {
       continue;
@@ -1691,8 +1694,9 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
 
     table_id = mach_read_from_8(field);
 
-    btr_pcur_store_position(&pcur, &mtr);
-    btr_pcur_commit_specify_mtr(&pcur, &mtr);
+    pcur.store_position(&mtr);
+
+    pcur.commit_specify_mtr(&mtr);
 
     table = dict_load_table_on_id(recovery, table_id);
 
@@ -1709,10 +1713,11 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
     }
 
     mtr_start(&mtr);
-    btr_pcur_restore_position(BTR_SEARCH_LEAF, &pcur, &mtr);
+    pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
 
-  btr_pcur_close(&pcur);
+  pcur.close();
+
   mtr_commit(&mtr);
 
   dict_unlock_data_dictionary(trx);
@@ -1738,7 +1743,7 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
 
   mtr_start(&mtr);
 
-  btr_pcur_open_at_index_side(true, dict_table_get_first_index(dict_sys->sys_tables), BTR_SEARCH_LEAF, &pcur, true, &mtr);
+  pcur.open_at_index_side(true, dict_table_get_first_index(dict_sys->sys_tables), BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
     const rec_t *rec;
@@ -1747,13 +1752,13 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
     dict_table_t *table;
     const char *table_name;
 
-    btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+    pcur.move_to_next_user_rec(&mtr);
 
-    if (!btr_pcur_is_on_user_rec(&pcur)) {
+    if (!pcur.is_on_user_rec()) {
       break;
     }
 
-    rec = btr_pcur_get_rec(&pcur);
+    rec = pcur.get_rec();
     field = rec_get_nth_field_old(rec, 4 /*N_COLS*/, &len);
     if (len != 4 || !(mach_read_from_4(field) & 0x80000000UL)) {
       continue;
@@ -1776,8 +1781,8 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
 
     table_name = mem_heap_strdupl(heap, (const char *)field, len);
 
-    btr_pcur_store_position(&pcur, &mtr);
-    btr_pcur_commit_specify_mtr(&pcur, &mtr);
+    pcur.store_position(&mtr);
+    pcur.commit_specify_mtr(&mtr);
 
     table = dict_load_table(recovery, table_name);
 
@@ -1787,10 +1792,10 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
     }
 
     mtr_start(&mtr);
-    btr_pcur_restore_position(BTR_SEARCH_LEAF, &pcur, &mtr);
+    pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
 
-  btr_pcur_close(&pcur);
+  pcur.close();
   mtr_commit(&mtr);
   mem_heap_free(heap);
 

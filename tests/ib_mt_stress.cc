@@ -245,8 +245,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t idx_sch = nullptr;
   ib_tbl_fmt_t tbl_fmt = IB_TBL_COMPACT;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
@@ -337,7 +337,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -424,7 +424,7 @@ static int insert_row_batch(ib_crsr_t crsr, /*!< in, out: cursor to use */
   assert(n_rows <= num_rows);
 
   tpl = ib_clust_read_tuple_create(crsr);
-  if (tpl == NULL) {
+  if (tpl == nullptr) {
     *err = DB_OUT_OF_MEMORY;
     return (0);
   }
@@ -443,12 +443,12 @@ static int insert_row_batch(ib_crsr_t crsr, /*!< in, out: cursor to use */
       break;
     }
     tpl = ib_tuple_clear(tpl);
-    if (tpl == NULL) {
+    if (tpl == nullptr) {
       break;
     }
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   } else {
     *err = DB_OUT_OF_MEMORY;
@@ -480,7 +480,7 @@ static void *ins_worker(void *dummy) /*!< in: unused */
 
     // printf("Begin INSERT transaction\n");
     trx = ib_trx_begin(ib_trx_level_t(isolation_level));
-    assert(trx != NULL);
+    assert(trx != nullptr);
 
     err = open_table(DATABASE, TABLE, trx, &crsr);
     assert(err == DB_SUCCESS);
@@ -491,7 +491,7 @@ static void *ins_worker(void *dummy) /*!< in: unused */
 
     err = ib_cursor_close(crsr);
     assert(err == DB_SUCCESS);
-    crsr = NULL;
+    crsr = nullptr;
 
     if (ins_err == DB_DEADLOCK || ins_err == DB_LOCK_WAIT_TIMEOUT) {
 
@@ -502,7 +502,7 @@ static void *ins_worker(void *dummy) /*!< in: unused */
     }
   } while (test_running);
 
-  return (NULL);
+  return (nullptr);
 }
 
 /** Update one row in the table.
@@ -522,10 +522,10 @@ static ib_err_t update_one_row(ib_crsr_t crsr) /*!< in: cursor on the table
   new_tpl will contain the update row data. */
 
   old_tpl = ib_clust_read_tuple_create(crsr);
-  assert(old_tpl != NULL);
+  assert(old_tpl != nullptr);
 
   new_tpl = ib_clust_read_tuple_create(crsr);
-  assert(new_tpl != NULL);
+  assert(new_tpl != nullptr);
 
   err = ib_cursor_read_row(crsr, old_tpl);
   assert(err == DB_SUCCESS);
@@ -544,11 +544,11 @@ static ib_err_t update_one_row(ib_crsr_t crsr) /*!< in: cursor on the table
   err = ib_cursor_update_row(crsr, old_tpl, new_tpl);
 
   /* delete the old and new tuple instances. */
-  if (old_tpl != NULL) {
+  if (old_tpl != nullptr) {
     ib_tuple_delete(old_tpl);
   }
 
-  if (new_tpl != NULL) {
+  if (new_tpl != nullptr) {
     ib_tuple_delete(new_tpl);
   }
 
@@ -586,7 +586,7 @@ static void process_row_batch(ib_crsr_t crsr,    /*!< in, out: cursor to use
 
     /* Create a tuple for searching the secondary index. */
     sec_key_tpl = ib_sec_search_tuple_create(index_crsr);
-    assert(sec_key_tpl != NULL);
+    assert(sec_key_tpl != nullptr);
 
     /* Set the value to look for. */
     key = random() % num_rows;
@@ -601,9 +601,9 @@ static void process_row_batch(ib_crsr_t crsr,    /*!< in, out: cursor to use
     assert(err == DB_SUCCESS || err == DB_DEADLOCK || err == DB_END_OF_INDEX ||
            err == DB_LOCK_WAIT_TIMEOUT || err == DB_RECORD_NOT_FOUND);
 
-    if (sec_key_tpl != NULL) {
+    if (sec_key_tpl != nullptr) {
       ib_tuple_delete(sec_key_tpl);
-      sec_key_tpl = NULL;
+      sec_key_tpl = nullptr;
     }
 
     /* Match found in secondary index "SEC_1" */
@@ -647,7 +647,7 @@ static void *upd_worker(void *dummy) /*!< in: unused */
     ++cnt;
     // printf("Begin UPDATE transaction\n");
     trx = ib_trx_begin(ib_trx_level_t(isolation_level));
-    assert(trx != NULL);
+    assert(trx != nullptr);
 
     err = open_table(DATABASE, TABLE, trx, &crsr);
     assert(err == DB_SUCCESS);
@@ -658,7 +658,7 @@ static void *upd_worker(void *dummy) /*!< in: unused */
 
     err = ib_cursor_close(crsr);
     assert(err == DB_SUCCESS);
-    crsr = NULL;
+    crsr = nullptr;
 
     commit_or_rollback(trx, cnt);
 
@@ -666,7 +666,7 @@ static void *upd_worker(void *dummy) /*!< in: unused */
       break;
     }
   }
-  return (NULL);
+  return (nullptr);
 }
 
 /** DELETE worker thread that does the following:
@@ -690,7 +690,7 @@ static void *del_worker(void *dummy) /*!< in: unused */
     ++cnt;
     // printf("Begin DELETE transaction\n");
     trx = ib_trx_begin(ib_trx_level_t(isolation_level));
-    assert(trx != NULL);
+    assert(trx != nullptr);
 
     err = open_table(DATABASE, TABLE, trx, &crsr);
     assert(err == DB_SUCCESS);
@@ -701,12 +701,12 @@ static void *del_worker(void *dummy) /*!< in: unused */
 
     err = ib_cursor_close(crsr);
     assert(err == DB_SUCCESS);
-    crsr = NULL;
+    crsr = nullptr;
 
     commit_or_rollback(trx, cnt);
   } while (test_running != false);
 
-  return (NULL);
+  return (nullptr);
 }
 
 /** SELECT * FROM blobt3; */
@@ -715,7 +715,7 @@ static ib_err_t do_query(ib_crsr_t crsr) {
   ib_tpl_t tpl;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   err = ib_cursor_first(crsr);
   assert(err == DB_SUCCESS || err == DB_END_OF_INDEX);
@@ -737,10 +737,10 @@ static ib_err_t do_query(ib_crsr_t crsr) {
 
     UPDATE_ERR_STATS(sel_stats, err);
     tpl = ib_tuple_clear(tpl);
-    assert(tpl != NULL);
+    assert(tpl != nullptr);
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -766,7 +766,7 @@ static void *sel_worker(void *dummy) /*!< in: unused */
 
     // printf("Begin SELECT transaction\n");
     trx = ib_trx_begin(ib_trx_level_t(isolation_level));
-    assert(trx != NULL);
+    assert(trx != nullptr);
 
     err = open_table(DATABASE, TABLE, trx, &crsr);
     assert(err == DB_SUCCESS);
@@ -775,7 +775,7 @@ static void *sel_worker(void *dummy) /*!< in: unused */
 
     err = ib_cursor_close(crsr);
     assert(err == DB_SUCCESS);
-    crsr = NULL;
+    crsr = nullptr;
 
     if (ib_trx_state(trx) == IB_TRX_NOT_STARTED) {
       err = ib_trx_release(trx);
@@ -787,7 +787,7 @@ static void *sel_worker(void *dummy) /*!< in: unused */
 
   } while (test_running);
 
-  return (NULL);
+  return (nullptr);
 }
 
 #if 0
@@ -816,7 +816,7 @@ create_dml_threads(int ind,             /*!< in: index in tid array */
   int count = 0;
   int i;
   for (i = 0; i < NUM_THREADS / 4; ++i) {
-    rc = pthread_create(&tid[ind + i], NULL, fn, NULL);
+    rc = pthread_create(&tid[ind + i], nullptr, fn, nullptr);
     assert(!rc);
     ++count;
   }
@@ -854,7 +854,7 @@ init_dml_op_struct(dml_op_t *st) /*!< in/out: struct to initialize */
 {
   int rc;
   memset(st, 0x00, sizeof(*st));
-  rc = pthread_mutex_init(&st->mutex, NULL);
+  rc = pthread_mutex_init(&st->mutex, nullptr);
   assert(!rc);
 }
 
@@ -936,11 +936,11 @@ static void set_options(int argc, char *argv[]) {
   /* Add the local parameter (page-size). */
   longopts[count].name = "page-size";
   longopts[count].has_arg = required_argument;
-  longopts[count].flag = NULL;
+  longopts[count].flag = nullptr;
   longopts[count].val = USER_OPT + 1;
   ++count;
 
-  while ((opt = getopt_long(argc, argv, "", longopts, NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "", longopts, nullptr)) != -1) {
     switch (opt) {
 
     case USER_OPT + 1:
@@ -971,7 +971,7 @@ int main(int argc, char *argv[]) {
 
   (void)argc;
 
-  srandom(time(NULL));
+  srandom(time(nullptr));
 
   err = ib_init();
   assert(err == DB_SUCCESS);
@@ -998,7 +998,7 @@ int main(int argc, char *argv[]) {
     /* Insert initial rows */
     // printf("Begin transaction\n");
     ib_trx = ib_trx_begin(ib_trx_level_t(isolation_level));
-    assert(ib_trx != NULL);
+    assert(ib_trx != nullptr);
 
     err = open_table(DATABASE, TABLE, ib_trx, &crsr);
     assert(err == DB_SUCCESS);
@@ -1009,7 +1009,7 @@ int main(int argc, char *argv[]) {
 
     err = ib_cursor_close(crsr);
     assert(err == DB_SUCCESS);
-    crsr = NULL;
+    crsr = nullptr;
 
     // printf("Commit transaction\n");
     if (ib_trx_state(ib_trx) == IB_TRX_NOT_STARTED) {
@@ -1027,13 +1027,13 @@ int main(int argc, char *argv[]) {
   test_running = true;
   create_worker_threads();
 
-  start_time = time(NULL);
+  start_time = time(nullptr);
 
   /* Sleep can be interrupted by a signal. */
   do {
     /* sleep for test duration */
     if (sleep(test_time) != 0) {
-      test_time -= (int)time(NULL) - start_time;
+      test_time -= (int)time(nullptr) - start_time;
     } else {
       break;
     }

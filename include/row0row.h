@@ -337,7 +337,7 @@ inline void row_build_row_ref_fast(
   ulint field_no;
   ulint i;
 
-  ut_ad(rec_offs_validate(rec, NULL, offsets));
+  ut_ad(rec_offs_validate(rec, nullptr, offsets));
   ut_ad(!rec_offs_any_extern(offsets));
   ref_len = dtuple_get_n_fields(ref);
 

@@ -1264,7 +1264,7 @@ void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *o
 
   page = page_cur_get_page(cursor);
 
-  current_rec = cursor->rec;
+  current_rec = cursor->m_rec;
   ut_ad(rec_offs_validate(current_rec, index, offsets));
   ut_ad(!!page_is_comp(page) == dict_table_is_comp(index->table));
 
@@ -1306,7 +1306,7 @@ void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *o
   }
 
   page_cur_move_to_next(cursor);
-  next_rec = cursor->rec;
+  next_rec = cursor->m_rec;
 
   /* 3. Remove the record from the linked list of records */
 

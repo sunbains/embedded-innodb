@@ -464,7 +464,7 @@ void que_graph_free_recursive(que_node_t *node) {
 
       if (upd->in_client_interface) {
 
-        btr_pcur_free(upd->pcur);
+        delete upd->pcur;
       }
 
       que_graph_free_recursive(upd->cascade_node);

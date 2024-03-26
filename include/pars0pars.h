@@ -96,7 +96,7 @@ int yyparse(void);
 @return	own: the query graph */
 
 que_t *pars_sql(
-  pars_info_t *info, /** in: extra information, or NULL */
+  pars_info_t *info, /** in: extra information, or nullptr */
   const char *str
 ); /** in: SQL string */
 /** Retrieves characters to the lexical analyzer. */
@@ -131,7 +131,7 @@ func_node_t *pars_op(
   int func,         /** in: operator token code */
   que_node_t *arg1, /** in: first argument */
   que_node_t *arg2
-); /** in: second argument or NULL for an
+); /** in: second argument or nullptr for an
                                         unary operator */
 /** Parses an ORDER BY clause. Order by a single column only is supported.
 @return	own: order-by node in a query tree */
@@ -147,7 +147,7 @@ statement.
 sel_node_t *pars_select_list(
   que_node_t *select_list, /** in: select list */
   sym_node_t *into_list
-); /** in: variables list or NULL */
+); /** in: variables list or nullptr */
 /** Parses a cursor declaration.
 @return	sym_node */
 
@@ -168,12 +168,12 @@ sel_node_t *pars_select_statement(
   sel_node_t *select_node,          /** in: select node already containing
                                       the select list */
   sym_node_t *table_list,           /** in: table list */
-  que_node_t *search_cond,          /** in: search condition or NULL */
-  pars_res_word_t *for_update,      /** in: NULL or &pars_update_token */
-  pars_res_word_t *consistent_read, /** in: NULL or
+  que_node_t *search_cond,          /** in: search condition or nullptr */
+  pars_res_word_t *for_update,      /** in: nullptr or &pars_update_token */
+  pars_res_word_t *consistent_read, /** in: nullptr or
                                              &pars_consistent_token */
   order_node_t *order_by
-); /** in: NULL or an order-by node */
+); /** in: nullptr or an order-by node */
 /** Parses a column assignment in an update.
 @return	column assignment node */
 
@@ -188,7 +188,7 @@ upd_node_t *pars_update_statement_start(
   bool is_delete,        /** in: true if delete */
   sym_node_t *table_sym, /** in: table name node */
   col_assign_node_t *col_assign_list
-); /** in: column assignment list, NULL
+); /** in: column assignment list, nullptr
                                      if delete */
 /** Parses an update or delete statement.
 @return	own: update node in a query tree */
@@ -196,17 +196,17 @@ upd_node_t *pars_update_statement_start(
 upd_node_t *pars_update_statement(
   upd_node_t *node,       /** in: update node */
   sym_node_t *cursor_sym, /** in: pointer to a cursor entry in
-                              the symbol table or NULL */
+                              the symbol table or nullptr */
   que_node_t *search_cond
-); /** in: search condition or NULL */
+); /** in: search condition or nullptr */
 /** Parses an insert statement.
 @return	own: update node in a query tree */
 
 ins_node_t *pars_insert_statement(
   sym_node_t *table_sym,   /** in: table name node */
-  que_node_t *values_list, /** in: value expression list or NULL */
+  que_node_t *values_list, /** in: value expression list or nullptr */
   sel_node_t *select
-); /** in: select condition or NULL */
+); /** in: select condition or nullptr */
 /** Parses a procedure parameter declaration.
 @return	own: symbol table node of type SYM_VAR */
 
@@ -271,14 +271,14 @@ assign_node_t *pars_assignment_statement(
   que_node_t *val
 ); /** in: value to assign */
 /** Parses a fetch statement. into_list or user_func (but not both) must be
-non-NULL.
+non-nullptr.
 @return	fetch statement node */
 
 fetch_node_t *pars_fetch_statement(
   sym_node_t *cursor,    /** in: cursor node */
-  sym_node_t *into_list, /** in: variables to set, or NULL */
+  sym_node_t *into_list, /** in: variables to set, or nullptr */
   sym_node_t *user_func
-); /** in: user function name, or NULL */
+); /** in: user function name, or nullptr */
 /** Parses an open or close cursor statement.
 @return	fetch statement node */
 
@@ -307,12 +307,12 @@ sym_node_t *pars_column_def(
                                                    symbol table */
   pars_res_word_t *type, /** in: data type */
   sym_node_t *len,       /** in: length of column, or
-                                                   NULL */
-  void *is_unsigned,     /** in: if not NULL, column
+                                                   nullptr */
+  void *is_unsigned,     /** in: if not nullptr, column
                                                    is of type UNSIGNED. */
   void *is_not_null
-); /** in: if not NULL, column
-                                                   is of type NOT NULL. */
+); /** in: if not nullptr, column
+                                                   is of type NOT nullptr. */
 /** Parses a table creation operation.
 @return	table create subgraph */
 
@@ -321,22 +321,22 @@ tab_node_t *pars_create_table(
                                          table */
   sym_node_t *column_defs, /** in: list of column names */
   void *not_fit_in_memory
-); /** in: a non-NULL pointer means
+); /** in: a non-nullptr pointer means
                                          that this is a table which in
                                          simulations should be simulated as not
                                          fitting in memory; thread is put to
                                          sleep to simulate disk accesses; NOTE
                                          that this flag is not stored to the
                                          data dictionary on disk, and the
-                                         database will forget about non-NULL
+                                         database will forget about non-nullptr
                                          value if it has to reload the table
                                          definition from disk */
 /** Parses an index creation operation.
 @return	index create subgraph */
 
 ind_node_t *pars_create_index(
-  pars_res_word_t *unique_def,    /** in: not NULL if a unique index */
-  pars_res_word_t *clustered_def, /** in: not NULL if a clustered index */
+  pars_res_word_t *unique_def,    /** in: not nullptr if a unique index */
+  pars_res_word_t *clustered_def, /** in: not nullptr if a clustered index */
   sym_node_t *index_sym,          /** in: index name node in the symbol
                                     table */
   sym_node_t *table_sym,          /** in: table name node in the symbol
@@ -464,7 +464,7 @@ void pars_info_add_id(
 ); /** in: id */
 
 /** Get user function with the given name.
-@return	user func, or NULL if not found */
+@return	user func, or nullptr if not found */
 
 pars_user_func_t *pars_info_get_user_func(
   pars_info_t *info, /** in: info struct */
@@ -472,7 +472,7 @@ pars_user_func_t *pars_info_get_user_func(
 ); /** in: function name to find*/
 
 /** Get bound literal with the given name.
-@return	bound literal, or NULL if not found */
+@return	bound literal, or nullptr if not found */
 
 pars_bound_lit_t *pars_info_get_bound_lit(
   pars_info_t *info, /** in: info struct */
@@ -480,7 +480,7 @@ pars_bound_lit_t *pars_info_get_bound_lit(
 ); /** in: bound literal name to find */
 
 /** Get bound id with the given name.
-@return	bound id, or NULL if not found */
+@return	bound id, or nullptr if not found */
 
 pars_bound_id_t *pars_info_get_bound_id(
   pars_info_t *info, /** in: info struct */
@@ -509,9 +509,9 @@ struct pars_info_struct {
 
   ib_vector_t *funcs;      /** user functions, or NUll
                            (pars_user_func_t*) */
-  ib_vector_t *bound_lits; /** bound literals, or NULL
+  ib_vector_t *bound_lits; /** bound literals, or nullptr
                            (pars_bound_lit_t*) */
-  ib_vector_t *bound_ids;  /** bound ids, or NULL
+  ib_vector_t *bound_ids;  /** bound ids, or nullptr
                            (pars_bound_id_t*) */
 
   bool graph_owns_us; /** if true (which is the default),

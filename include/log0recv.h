@@ -136,7 +136,7 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages);
 
 /** Block of log record data, variable size struct, see note. */
 struct recv_data_t {
-  /** Pointer to the next block or NULL */
+  /** Pointer to the next block or nullptr */
   recv_data_t *next;
 
   /* Note: the log record data is stored physically immediately after this

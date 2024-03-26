@@ -23,12 +23,15 @@ Created 9/6/1995 Heikki Tuuri
 *******************************************************/
 
 #include "os0sync.h"
-#ifdef UNIV_NONINL
-#include "os0sync.ic"
-#endif
 
 #include "srv0start.h"
 #include "ut0mem.h"
+
+/** The number of microseconds in a second. */
+constexpr uint64_t MICROSECS_IN_A_SECOND = 1000000;
+
+/** The number of nanoseconds in a second. */
+constexpr uint64_t NANOSECS_IN_A_SECOND = 1000 * MICROSECS_IN_A_SECOND;
 
 /* Type definition for an operating system mutex struct */
 struct os_mutex_struct {
@@ -58,7 +61,7 @@ static bool os_sync_free_called = false;
 
 /** This is incremented by 1 in os_thread_create and decremented by 1 in
 os_thread_exit */
-ulint os_thread_count = 0;
+std::atomic_int os_thread_count{};
 
 /** The list of all events created */
 static UT_LIST_BASE_NODE_T(OS_cond, os_event_list) os_event_list{};
@@ -79,7 +82,8 @@ void os_sync_var_init() {
   os_sync_mutex = nullptr;
   os_sync_mutex_inited = false;
   os_sync_free_called = false;
-  os_thread_count = 0;
+
+  os_thread_count.store(0, std::memory_order_relaxed);
 
   os_event_count = 0;
   os_mutex_count = 0;
@@ -393,4 +397,110 @@ void os_fast_mutex_free(os_fast_mutex_t *fast_mutex) {
   if (likely(os_sync_mutex_inited)) {
     os_mutex_exit(os_sync_mutex);
   }
+}
+
+static timespec get_wait_timelimit(std::chrono::microseconds timeout) {
+  /* We could get rid of this function if we switched to std::condition_variable
+  from the pthread_cond_. The std::condition_variable::wait_for relies on the
+  steady_clock internally and accepts timeout (not time increased by the timeout). */
+  for (int i = 0;; i++) {
+    ut_a(i < 10);
+#ifdef HAVE_CLOCK_GETTIME
+    if (cond_attr_has_monotonic_clock) {
+
+      struct timespec tp;
+
+      if (clock_gettime(CLOCK_MONOTONIC, &tp) == -1) {
+        const auto errno_clock_gettime = errno;
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        errno = errno_clock_gettime;
+
+      } else {
+        const auto increased = tp.tv_nsec + std::chrono::duration_cast<std::chrono::nanoseconds>(timeout) .count();
+
+        if (increased >= static_cast<std::remove_cv<decltype(increased)>::type>( NANOSECS_IN_A_SECOND)) {
+          tp.tv_sec += increased / NANOSECS_IN_A_SECOND;
+          tp.tv_nsec = increased % NANOSECS_IN_A_SECOND;
+        } else {
+          tp.tv_nsec = increased;
+        }
+        return tp;
+      }
+
+    } else
+#endif /* HAVE_CLOCK_GETTIME */
+    {
+      struct timeval tv;
+
+      if (gettimeofday(&tv, nullptr) == -1) {
+        const auto errno_gettimeofday = errno;
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        errno = errno_gettimeofday;
+
+      } else {
+        const auto increased = tv.tv_usec + timeout.count();
+
+        if (increased >= static_cast<std::remove_cv<decltype(increased)>::type>(MICROSECS_IN_A_SECOND)) {
+          tv.tv_sec += increased / MICROSECS_IN_A_SECOND;
+          tv.tv_usec = increased % MICROSECS_IN_A_SECOND;
+        } else {
+          tv.tv_usec = increased;
+        }
+
+        struct timespec abstime;
+        abstime.tv_sec = tv.tv_sec;
+        abstime.tv_nsec = tv.tv_usec * 1000;
+
+        return abstime;
+      }
+    }
+  }
+}
+
+ulint os_event_wait_time_low(OS_cond* event, std::chrono::microseconds timeout, int64_t reset_sig_count) {
+  bool timed_out = false;
+
+  timespec abstime;
+
+  if (timeout != std::chrono::microseconds::max()) {
+    abstime = get_wait_timelimit(timeout);
+  } else {
+    abstime.tv_nsec = 999999999;
+    abstime.tv_sec = std::numeric_limits<time_t>::max();
+  }
+
+  ut_a(abstime.tv_nsec <= 999999999);
+
+  os_mutex_enter(os_sync_mutex);
+
+  if (!reset_sig_count) {
+    reset_sig_count = event->signal_count;
+  }
+
+  do {
+
+    if (event->is_set || event->signal_count != reset_sig_count) {
+      break;
+    }
+
+    switch(auto ret = pthread_cond_timedwait(&event->cond_var, &event->os_mutex, &abstime)) {
+      case 0:
+      case ETIMEDOUT:
+        /* We play it safe by checking for EINTR even though
+        according to the POSIX documentation it can't return EINTR. */
+        timed_out = true;
+      case EINTR:
+        break;
+  
+      default:
+        log_fatal("pthread_cond_timedout() returned ", ret);
+    }
+  
+  } while (!timed_out);
+
+  os_mutex_exit(os_sync_mutex);
+
+  return timed_out ? OS_SYNC_TIME_EXCEEDED : 0;
 }

@@ -61,8 +61,8 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   ib_id_t table_id = 0;
   ib_err_t err = DB_SUCCESS;
-  ib_tbl_sch_t ib_tbl_sch = NULL;
-  ib_idx_sch_t ib_idx_sch = NULL;
+  ib_tbl_sch_t ib_tbl_sch = nullptr;
+  ib_idx_sch_t ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
 #ifdef __WIN__
@@ -102,7 +102,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
 
-  if (ib_tbl_sch != NULL) {
+  if (ib_tbl_sch != nullptr) {
     ib_table_schema_delete(ib_tbl_sch);
   }
 
@@ -136,10 +136,10 @@ insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 {
   int i;
   ib_err_t err;
-  ib_tpl_t tpl = NULL;
+  ib_tpl_t tpl = nullptr;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   for (i = 0; i < 10; ++i) {
     err = ib_tuple_write_i32(tpl, 0, i);
@@ -149,10 +149,10 @@ insert_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
     assert(err == DB_SUCCESS);
 
     tpl = ib_tuple_clear(tpl);
-    assert(tpl != NULL);
+    assert(tpl != nullptr);
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -166,7 +166,7 @@ static ib_err_t iterate(ib_crsr_t crsr, void *arg,
   ib_err_t err = DB_SUCCESS;
 
   tpl = ib_clust_read_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   while (err == DB_SUCCESS) {
     err = ib_cursor_read_row(crsr, tpl);
@@ -188,10 +188,10 @@ static ib_err_t iterate(ib_crsr_t crsr, void *arg,
            err == DB_RECORD_NOT_FOUND);
 
     tpl = ib_tuple_clear(tpl);
-    assert(tpl != NULL);
+    assert(tpl != nullptr);
   }
 
-  if (tpl != NULL) {
+  if (tpl != nullptr) {
     ib_tuple_delete(tpl);
   }
 
@@ -248,7 +248,7 @@ int main(int argc, char *argv[]) {
   ib_err_t err;
   ib_crsr_t crsr;
   ib_trx_t ib_trx;
-  ib_tpl_t tpl = NULL;
+  ib_tpl_t tpl = nullptr;
 
   (void)argc;
   (void)argv;
@@ -268,7 +268,7 @@ int main(int argc, char *argv[]) {
   assert(err == DB_SUCCESS);
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
-  assert(ib_trx != NULL);
+  assert(ib_trx != nullptr);
 
   err = open_table(DATABASE, TABLE, ib_trx, &crsr);
   assert(err == DB_SUCCESS);
@@ -283,12 +283,12 @@ int main(int argc, char *argv[]) {
   err = ib_cursor_first(crsr);
   assert(err == DB_SUCCESS);
 
-  err = iterate(crsr, NULL, print_all);
+  err = iterate(crsr, nullptr, print_all);
   assert(err == DB_SUCCESS);
 
   printf("SELECT * FROM T WHERE c1 = 5;\n");
   tpl = ib_clust_search_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   err = ib_tuple_write_i32(tpl, 0, 5);
   assert(err == DB_SUCCESS);
@@ -297,7 +297,7 @@ int main(int argc, char *argv[]) {
   assert(err == DB_SUCCESS);
   assert(ret == 0);
 
-  err = iterate(crsr, NULL, print_eq_5);
+  err = iterate(crsr, nullptr, print_eq_5);
   assert(err == DB_SUCCESS);
 
   printf("SELECT * FROM T WHERE c1 > 5;\n");
@@ -306,19 +306,19 @@ int main(int argc, char *argv[]) {
   assert(err == DB_SUCCESS);
   assert(ret < 0);
 
-  err = iterate(crsr, NULL, print_all);
+  err = iterate(crsr, nullptr, print_all);
   assert(err == DB_SUCCESS);
 
   printf("SELECT * FROM T WHERE c1 < 5;\n");
   err = ib_cursor_first(crsr);
   assert(err == DB_SUCCESS);
 
-  err = iterate(crsr, NULL, print_lt_5);
+  err = iterate(crsr, nullptr, print_lt_5);
   assert(err == DB_SUCCESS);
 
   printf("SELECT * FROM T WHERE c1 >= 1 AND c1 < 5;\n");
   tpl = ib_clust_search_tuple_create(crsr);
-  assert(tpl != NULL);
+  assert(tpl != nullptr);
 
   err = ib_tuple_write_i32(tpl, 0, 1);
   assert(err == DB_SUCCESS);
@@ -327,12 +327,12 @@ int main(int argc, char *argv[]) {
   assert(err == DB_SUCCESS);
   assert(ret == 0);
 
-  err = iterate(crsr, NULL, print_lt_5);
+  err = iterate(crsr, nullptr, print_lt_5);
   assert(err == DB_SUCCESS);
 
   err = ib_cursor_close(crsr);
   assert(err == DB_SUCCESS);
-  crsr = NULL;
+  crsr = nullptr;
 
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);

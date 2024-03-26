@@ -32,9 +32,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "que0que.h"
 #include "trx0roll.h"
 
-static int api_sql_enter_func_enabled = 0;
-#define UT_DBG_ENTER_FUNC_ENABLED api_sql_enter_func_enabled
-
 /** Function to parse ib_exec_sql() and ib_exec_ddl_sql() args.
 @return	own: info struct */
 static pars_info_t *ib_exec_vsql(
@@ -42,11 +39,7 @@ static pars_info_t *ib_exec_vsql(
   va_list ap
 ) /*!< in: arg list */
 {
-  pars_info_t *info;
-
-  UT_DBG_ENTER_FUNC;
-
-  info = pars_info_create();
+  auto info = pars_info_create();
 
   for (int i = 0; i < n_args; ++i) {
     ib_col_type_t type;
@@ -158,8 +151,6 @@ ib_err_t ib_exec_sql(
   ib_err_t err;
   pars_info_t *info;
 
-  UT_DBG_ENTER_FUNC;
-
   va_start(ap, n_args);
 
   info = ib_exec_vsql(n_args, ap);
@@ -169,7 +160,7 @@ ib_err_t ib_exec_sql(
   /* We use the private SQL parser of Innobase to generate
   the query graphs needed to execute the SQL statement. */
 
-  trx = trx_allocate_for_client(NULL);
+  trx = trx_allocate_for_client(nullptr);
   auto success = trx_start(trx, ULINT_UNDEFINED);
   ut_a(success);
   trx->op_info = "exec client sql";
@@ -181,7 +172,7 @@ ib_err_t ib_exec_sql(
   dict_mutex_exit();
 
   if (err != DB_SUCCESS) {
-    trx_general_rollback(trx, false, NULL);
+    trx_general_rollback(trx, false, nullptr);
   } else {
     trx_commit(trx);
   }
@@ -208,8 +199,6 @@ ib_err_t ib_exec_ddl_sql(
   pars_info_t *info;
   int started;
 
-  UT_DBG_ENTER_FUNC;
-
   va_start(ap, n_args);
 
   info = ib_exec_vsql(n_args, ap);
@@ -235,7 +224,7 @@ ib_err_t ib_exec_ddl_sql(
   ib_schema_unlock((ib_trx_t)trx);
 
   if (err != DB_SUCCESS) {
-    trx_general_rollback(trx, false, NULL);
+    trx_general_rollback(trx, false, nullptr);
   } else {
     trx_commit(trx);
   }
