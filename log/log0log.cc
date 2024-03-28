@@ -1137,7 +1137,7 @@ bool log_preflush_pool_modified_pages(lsn_t new_oldest, bool sync) {
     and we could not make a new checkpoint on the basis of the
     info on the buffer pool only. */
 
-    recv_apply_hashed_log_recs(false);
+//    recv_apply_hashed_log_recs(false);
   }
 
   auto n_pages = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, new_oldest);
@@ -1326,7 +1326,7 @@ void log_groups_write_checkpoint_info(void) {
 
 bool log_checkpoint(bool sync, bool write_always) {
   if (recv_recovery_on) {
-    recv_apply_hashed_log_recs(false);
+    //recv_apply_hashed_log_recs(false);
   }
 
   if (srv_unix_file_flush_method != SRV_UNIX_NOSYNC) {

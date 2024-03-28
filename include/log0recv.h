@@ -25,6 +25,10 @@ Created 9/20/1997 Heikki Tuuri
 
 #include "innodb0types.h"
 
+#include <condition_variable>
+#include <list>
+#include <memory>
+#include <vector>
 #include "api0api.h"
 #include "buf0types.h"
 #include "hash0hash.h"
@@ -32,22 +36,9 @@ Created 9/20/1997 Heikki Tuuri
 #include "srv0srv.h"
 #include "ut0byte.h"
 
-/** Applies the hashed log records to the page, if the page lsn is less than
-the lsn of a log record. This can be called when a buffer page has just been
-read in, or also for a page already in the buffer pool.
-@param[in] just_read_in         true if the i/o handler calls this for a
-                                freshly read page
-@param[in,out] block            buffer block */
-void recv_recover_page_func(bool just_read_in, buf_block_t *block);
-
-/** Wrapper for recv_recover_page_func().
-Applies the hashed log records to the page, if the page lsn is less than the
-lsn of a log record. This can be called when a buffer page has just been
-read in, or also for a page already in the buffer pool.
-@param jri	in: true if just read in (the i/o handler calls this for
-a freshly read page)
-@param block	in/out: the buffer block */
-#define recv_recover_page(jri, block) recv_recover_page_func(jri, block)
+using namespace std::chrono_literals;
+struct recv_t;
+class append_only_queue;
 
 /** Recovers from a checkpoint. When this function returns, the database is able
 to start processing of new user transactions, but the function
@@ -83,8 +74,6 @@ apply log records automatically when the hash table becomes full.
 @return true if limit_lsn has been reached, or not able to scan any
 more in this log group.
 @param[in] recovery             Recovery flag
-@param[in] available_memory     We let the hash table of recs to grow to this
-                                size, at the maximum
 @param[in] store_to_hash        true if the records should be stored to the
                                 hashtable; this is set to false if just debug
 				checking is needed
@@ -95,8 +84,8 @@ more in this log group.
                                 contiguouslog data up to this lsn
 @param[out] group_scanned_lsn   Scanning succeeded up to this lsn */
 bool recv_scan_log_recs(
-  ib_recovery_t recovery, ulint available_memory, bool store_to_hash, const byte *buf, ulint len, lsn_t start_lsn,
-  lsn_t *contiguous_lsn, lsn_t *group_scanned_lsn
+  ib_recovery_t recovery, bool store_to_hash, const byte *buf, ulint len, lsn_t start_lsn,
+  lsn_t *contiguous_lsn, lsn_t *group_scanned_lsn, append_only_queue records
 );
 
 /** Resets the logs. The contents of log files will be lost!
@@ -124,15 +113,16 @@ void recv_sys_init(ulint size);
 /** Reset the state of the recovery system variables. */
 void recv_sys_var_init();
 
-/** Empties the hash table of stored log records, applying 
-them to appropriate pages.
-@param[in] flush_and_free_pages If true the application all file pages
-                                are flushed to disk and invalidated in buffer
-                                pool: this alternative means that no
-			       	new log records can be generated during
-				the application; the caller must in this
-				case own the log mutex; */
-void recv_apply_hashed_log_recs(bool flush_and_free_pages);
+void recv_apply_log_recs(std::vector<recv_t *> records);
+
+/** Applies the hashed log records to the page, if the page lsn is less than
+the lsn of a log record. This can be called when a buffer page has just been
+read in, or also for a page already in the buffer pool.
+@param[in] just_read_in         true if the i/o handler calls this for a
+                                freshly read page
+@param[in,out] block            buffer block */
+
+void recv_apply_records_to_page(bool just_read_in, buf_block_t *block, std::vector<recv_t *> records);
 
 /** Block of log record data, variable size struct, see note. */
 struct recv_data_t {
@@ -151,6 +141,12 @@ struct recv_t {
   /** log record body length in bytes */
   ulint len;
 
+  /** space id */
+  space_id_t space_id;
+
+  /** page number */
+  page_no_t page_no;
+
   /** chain of blocks containing the log record body */
   recv_data_t *data;
 
@@ -163,46 +159,6 @@ struct recv_t {
   which generated this log record: NOTE that this is
   not necessarily the end lsn of this log record */
   lsn_t end_lsn;
-
-  /** list of log records for this page */
-  UT_LIST_NODE_T(recv_t) rec_list;
-};
-
-/** States of recv_addr_struct */
-enum recv_addr_state {
-  /** not yet processed */
-  RECV_NOT_PROCESSED,
-
-  /** page is being read */
-  RECV_BEING_READ,
-
-  /** log records are being applied on the page */
-  RECV_BEING_PROCESSED,
-
-  /** log records have been applied on the page, or they have
-  been discarded because the tablespace does not exist */
-  RECV_PROCESSED
-};
-
-/** Hashed page file address struct */
-typedef struct recv_addr_struct recv_addr_t;
-
-/** Hashed page file address struct */
-struct recv_addr_struct {
-  /** recovery state of the page */
-  recv_addr_state state;
-
-  /** space id */
-  space_id_t space;
-
-  /** page number */
-  page_no_t page_no;
-
-  /** list of log records for this page */
-  UT_LIST_BASE_NODE_T(recv_t, rec_list) rec_list;
-
-  /** hash node in the hash bucket chain */
-  hash_node_t addr_hash;
 };
 
 /** Recovery system data structure */
@@ -210,13 +166,6 @@ struct recv_sys_t {
   /** mutex protecting the fields apply_log_recs, n_addrs, and
   the state field in each recv_addr struct */
   mutex_t mutex;
-
-  /** this is true when log rec application to pages is allowed;
-  this flag tells the i/o-handler if it should do log record application */
-  bool apply_log_recs;
-
-  /** this is true when a log rec application batch is running */
-  bool apply_batch_on;
 
   /** log sequence number */
   lsn_t lsn;
@@ -262,12 +211,6 @@ struct recv_sys_t {
 
   /** memory heap of log records and file addresses*/
   mem_heap_t *heap;
-
-  /** hash table of file addresses of pages */
-  hash_table_t *addr_hash;
-
-  /** number of not processed hashed file addresses in the hash table */
-  ulint n_addrs;
 };
 
 /** The recovery system */
@@ -304,3 +247,89 @@ constexpr ulint RECV_PARSING_BUF_SIZE = 2 * 1024 * 1024;
 /** Size of block reads when the log groups are scanned forward to do a
 roll-forward */
 constexpr ulint RECV_SCAN_SIZE = 4 * UNIV_PAGE_SIZE;
+
+// stream reader
+class append_only_queue {
+ public:
+  explicit append_only_queue(std::list<recv_t *> *records_list) : m_records_list(records_list) { ut_a(m_records_list != nullptr); }
+
+  void append(recv_t *record) { m_records_list->push_front(record); }
+
+ private:
+  std::list<recv_t *> *m_records_list;
+};
+
+class redo_log_stream {
+ public:
+  struct read_result {
+    enum class status {
+      Ok,
+      MemoryBufferFull,
+      NoMoreData,
+    };
+
+    recv_t *data;
+    status status;
+  };
+
+  redo_log_stream(byte *buf, uint64_t start_lsn, uint64_t &contiguous_lsn, uint64_t &group_scanned, log_group_t *group);
+
+  read_result read_next();
+
+  uint64_t get_start_lsn() const;
+
+  uint64_t get_group_scanned_lsn() const;
+
+ private:
+  void fetch_next();
+
+ private:
+  bool m_finished;
+  byte *m_buf;
+  uint64_t m_start_lsn;
+  uint64_t m_current_lsn;
+  uint64_t &m_contiguous_lsn;
+  uint64_t &m_group_scanned_lsn;
+  log_group_t *m_group;
+  ib_recovery_t m_recovery;
+  ulint m_available_memory;
+
+ public:
+  std::list<recv_t *> m_records;
+};
+
+// applicator
+class redo_log_applicator {
+
+  struct record_list {
+    std::unique_ptr<std::mutex> mtx;
+    std::list<recv_t *> records;
+  };
+
+ public:
+  explicit redo_log_applicator(std::int32_t total_workers);
+
+  std::uint64_t records_applied();
+  std::uint64_t records_received();
+
+  void add(recv_t *record);
+
+  bool wait_for_queue_drain(std::chrono::milliseconds timeout_ms = 86400000ms);
+
+  ~redo_log_applicator();
+
+ private:
+  void apply(std::vector<recv_t *> chunk);
+  void worker_loop(std::stop_source stoken, record_list *record_list, std::size_t batch_size);
+
+ private:
+  std::int32_t m_total_workers;
+  std::size_t m_batch_size;
+  std::vector<record_list> m_queues;
+  std::vector<std::jthread> m_workers;
+  std::vector<std::stop_source> m_stop_sources;
+  std::atomic_uint64_t m_total_applied;
+  std::atomic_uint64_t m_total_received;
+  std::mutex m_mtx;
+  std::condition_variable m_queue_drained;
+};
