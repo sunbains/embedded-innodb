@@ -102,6 +102,69 @@ uint64_t recv_max_page_lsn;
 
 /* prototypes */
 
+/** Adds a new log record to the hash table of log records. */
+static void recv_add_to_list(
+  byte type,                /*!< in: log record type */
+  ulint space,              /*!< in: space id */
+  ulint page_no,            /*!< in: page number */
+  byte *body,               /*!< in: log record body */
+  byte *rec_end,            /*!< in: log record end */
+  uint64_t start_lsn,       /*!< in: start lsn of the mtr */
+  uint64_t end_lsn,         /*!< in: end lsn of the mtr */
+  append_only_queue records /*!< log stream */
+) {
+  ulint len;
+  recv_data_t *recv_data;
+  recv_data_t **prev_field;
+
+  if (fil_tablespace_deleted_or_being_deleted_in_mem(space, -1)) {
+    /* The tablespace does not exist any more: do not store the
+    log record */
+
+    return;
+  }
+
+  len = rec_end - body;
+
+  auto recv = reinterpret_cast<recv_t *>(mem_heap_alloc(recv_sys->heap, sizeof(recv_t)));
+
+  recv->type = type;
+  recv->len = len;
+  recv->page_no = page_no;
+  recv->space_id = space;
+  recv->start_lsn = start_lsn;
+  recv->end_lsn = end_lsn;
+
+  records.append(recv);
+
+  prev_field = &(recv->data);
+
+  /* Store the log record body in chunks of less than UNIV_PAGE_SIZE:
+  recv_sys->heap grows into the buffer pool, and bigger chunks could not
+  be allocated */
+
+  while (rec_end > body) {
+
+    len = rec_end - body;
+
+    if (len > RECV_DATA_BLOCK_SIZE) {
+      len = RECV_DATA_BLOCK_SIZE;
+    }
+
+    recv_data = reinterpret_cast<recv_data_t *>(mem_heap_alloc(recv_sys->heap, sizeof(recv_data_t) + len));
+
+    *prev_field = recv_data;
+
+    memcpy(recv_data + 1, body, len);
+
+    prev_field = &(recv_data->next);
+
+    body += len;
+  }
+
+  *prev_field = nullptr;
+}
+
 /** Initialize crash recovery environment. Can be called iff
 recv_needed_recovery == false. */
 static void recv_start_crash_recovery(ib_recovery_t recovery); /*!< in: recovery flag */
@@ -145,7 +208,6 @@ void recv_sys_create() {
   mutex_create(&recv_sys->mutex, SYNC_RECV);
 
   recv_sys->heap = nullptr;
-  recv_sys->addr_hash = nullptr;
 }
 
 void recv_sys_close(void) {
@@ -156,9 +218,6 @@ void recv_sys_close(void) {
 
 void recv_sys_mem_free() {
   if (recv_sys != nullptr) {
-    if (recv_sys->addr_hash != nullptr) {
-      hash_table_free(recv_sys->addr_hash);
-    }
 
     if (recv_sys->heap != nullptr) {
       mem_heap_free(recv_sys->heap);
@@ -197,11 +256,6 @@ void recv_sys_init(ulint available_memory) {
   recv_sys->len = 0;
   recv_sys->recovered_offset = 0;
 
-  recv_sys->addr_hash = hash_create(available_memory / 64);
-  recv_sys->n_addrs = 0;
-
-  recv_sys->apply_log_recs = false;
-  recv_sys->apply_batch_on = false;
 
   recv_sys->last_block_buf_start = static_cast<byte *>(mem_alloc(2 * IB_FILE_BLOCK_SIZE));
 
@@ -213,42 +267,17 @@ void recv_sys_init(ulint available_memory) {
   mutex_exit(&(recv_sys->mutex));
 }
 
-/** Empties the hash table when it has been fully processed. */
-static void recv_sys_empty_hash(void) {
-  ut_ad(mutex_own(&(recv_sys->mutex)));
-
-  if (recv_sys->n_addrs != 0) {
-    ib_logger(
-      ib_stream,
-      "Error: %lu pages with log records"
-      " were left unprocessed!\n"
-      "Maximum page number with"
-      " log records on it %lu\n",
-      (ulong)recv_sys->n_addrs,
-      (ulong)recv_max_parsed_page_no
-    );
-    ut_error;
-  }
-
-  hash_table_free(recv_sys->addr_hash);
-  mem_heap_empty(recv_sys->heap);
-
-  recv_sys->addr_hash = hash_create(buf_pool->get_curr_size() / 256);
-}
-
 #ifndef UNIV_LOG_DEBUG
 /** Frees the recovery system. */
 static void recv_sys_debug_free(void) {
   mutex_enter(&(recv_sys->mutex));
 
-  hash_table_free(recv_sys->addr_hash);
   mem_heap_free(recv_sys->heap);
   ut_free(recv_sys->buf);
   mem_free(recv_sys->last_block_buf_start);
 
   recv_sys->buf = nullptr;
   recv_sys->heap = nullptr;
-  recv_sys->addr_hash = nullptr;
   recv_sys->last_block_buf_start = nullptr;
 
   mutex_exit(&(recv_sys->mutex));
@@ -824,115 +853,6 @@ inline ulint recv_fold(
   return ut_fold_ulint_pair(space, page_no);
 }
 
-/** Calculates the hash value of a page file address: used in inserting or
-searching for a log record in the hash table.
-@return	folded value */
-inline ulint recv_hash(
-  ulint space, /*!< in: space */
-  ulint page_no
-) /*!< in: page number */
-{
-  return hash_calc_hash(recv_fold(space, page_no), recv_sys->addr_hash);
-}
-
-/** Gets the hashed file address struct for a page.
-@return	file address struct, nullptr if not found from the hash table */
-static recv_addr_t *recv_get_fil_addr_struct(
-  ulint space, /*!< in: space id */
-  ulint page_no
-) /*!< in: page number */
-{
-  auto recv_addr = static_cast<recv_addr_t *>(HASH_GET_FIRST(recv_sys->addr_hash, recv_hash(space, page_no)));
-
-  while (recv_addr != nullptr) {
-    if ((recv_addr->space == space) && (recv_addr->page_no == page_no)) {
-
-      break;
-    }
-
-    recv_addr = static_cast<recv_addr_t *>(HASH_GET_NEXT(addr_hash, recv_addr));
-  }
-
-  return recv_addr;
-}
-
-/** Adds a new log record to the hash table of log records. */
-static void recv_add_to_hash_table(
-  byte type,          /*!< in: log record type */
-  ulint space,        /*!< in: space id */
-  ulint page_no,      /*!< in: page number */
-  byte *body,         /*!< in: log record body */
-  byte *rec_end,      /*!< in: log record end */
-  uint64_t start_lsn, /*!< in: start lsn of the mtr */
-  uint64_t end_lsn
-) /*!< in: end lsn of the mtr */
-{
-  ulint len;
-  recv_data_t *recv_data;
-  recv_data_t **prev_field;
-  recv_addr_t *recv_addr;
-
-  if (fil_tablespace_deleted_or_being_deleted_in_mem(space, -1)) {
-    /* The tablespace does not exist any more: do not store the
-    log record */
-
-    return;
-  }
-
-  len = rec_end - body;
-
-  auto recv = reinterpret_cast<recv_t *>(mem_heap_alloc(recv_sys->heap, sizeof(recv_t)));
-
-  recv->type = type;
-  recv->len = rec_end - body;
-  recv->start_lsn = start_lsn;
-  recv->end_lsn = end_lsn;
-
-  recv_addr = recv_get_fil_addr_struct(space, page_no);
-
-  if (recv_addr == nullptr) {
-    recv_addr = reinterpret_cast<recv_addr_t *>(mem_heap_alloc(recv_sys->heap, sizeof(recv_addr_t)));
-
-    recv_addr->space = space;
-    recv_addr->page_no = page_no;
-    recv_addr->state = RECV_NOT_PROCESSED;
-
-    UT_LIST_INIT(recv_addr->rec_list);
-
-    HASH_INSERT(recv_addr_t, addr_hash, recv_sys->addr_hash, recv_fold(space, page_no), recv_addr);
-    recv_sys->n_addrs++;
-  }
-
-  UT_LIST_ADD_LAST(recv_addr->rec_list, recv);
-
-  prev_field = &(recv->data);
-
-  /* Store the log record body in chunks of less than UNIV_PAGE_SIZE:
-  recv_sys->heap grows into the buffer pool, and bigger chunks could not
-  be allocated */
-
-  while (rec_end > body) {
-
-    len = rec_end - body;
-
-    if (len > RECV_DATA_BLOCK_SIZE) {
-      len = RECV_DATA_BLOCK_SIZE;
-    }
-
-    recv_data = reinterpret_cast<recv_data_t *>(mem_heap_alloc(recv_sys->heap, sizeof(recv_data_t) + len));
-
-    *prev_field = recv_data;
-
-    memcpy(recv_data + 1, body, len);
-
-    prev_field = &(recv_data->next);
-
-    body += len;
-  }
-
-  *prev_field = nullptr;
-}
-
 /** Copies the log record body from recv to buf. */
 static void recv_data_copy_to_buf(
   byte *buf, /*!< in: buffer of length at least recv->len */
@@ -961,10 +881,8 @@ static void recv_data_copy_to_buf(
   }
 }
 
-void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
+void recv_apply_records_to_page(bool just_read_in, buf_block_t *block, std::vector<recv_t *> records) {
   page_t *page;
-  recv_addr_t *recv_addr;
-  recv_t *recv;
   byte *buf;
   uint64_t start_lsn;
   uint64_t end_lsn;
@@ -973,30 +891,6 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
   bool modification_to_page;
   bool success;
   mtr_t mtr;
-
-  mutex_enter(&(recv_sys->mutex));
-
-  if (recv_sys->apply_log_recs == false) {
-
-    /* Log records should not be applied now */
-
-    mutex_exit(&(recv_sys->mutex));
-
-    return;
-  }
-
-  recv_addr = recv_get_fil_addr_struct(block->get_space(), buf_block_get_page_no(block));
-
-  if (recv_addr == nullptr || recv_addr->state == RECV_BEING_PROCESSED || recv_addr->state == RECV_PROCESSED) {
-
-    mutex_exit(&(recv_sys->mutex));
-
-    return;
-  }
-
-  recv_addr->state = RECV_BEING_PROCESSED;
-
-  mutex_exit(&(recv_sys->mutex));
 
   mtr_start(&mtr);
   mtr_set_log_mode(&mtr, MTR_LOG_NONE);
@@ -1012,13 +906,8 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
     rw_lock_x_lock_move_ownership(&block->m_rw_lock);
   }
 
-  Buf_pool::Request req {
-    .m_rw_latch  = RW_X_LATCH,
-    .m_guess = block,
-    .m_mode = BUF_KEEP_OLD,
-    .m_file = __FILE__,
-    .m_line = __LINE__,
-    .m_mtr = &mtr
+  Buf_pool::Request req{
+    .m_rw_latch = RW_X_LATCH, .m_guess = block, .m_mode = BUF_KEEP_OLD, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr
   };
 
   success = buf_pool->try_get_known_nowait(req);
@@ -1042,36 +931,35 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
   modification_to_page = false;
   start_lsn = end_lsn = 0;
 
-  recv = UT_LIST_GET_FIRST(recv_addr->rec_list);
+  for (auto record : records) {
+    end_lsn = record->end_lsn;
 
-  while (recv) {
-    end_lsn = recv->end_lsn;
-
-    if (recv->len > RECV_DATA_BLOCK_SIZE) {
+    if (record->len > RECV_DATA_BLOCK_SIZE) {
       /* We have to copy the record body to a separate buffer */
 
-      buf = static_cast<byte *>(mem_alloc(recv->len));
+      buf = static_cast<byte *>(mem_alloc(record->len));
 
-      recv_data_copy_to_buf(buf, recv);
+      recv_data_copy_to_buf(buf, record);
     } else {
-      buf = ((byte *)(recv->data)) + sizeof(recv_data_t);
+      buf = ((byte *)(record->data)) + sizeof(recv_data_t);
     }
 
-    if (recv->type == MLOG_INIT_FILE_PAGE) {
+    if (record->type == MLOG_INIT_FILE_PAGE) {
+
       page_lsn = page_newest_lsn;
 
       memset(FIL_PAGE_LSN + page, 0, 8);
       memset(UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + page, 0, 8);
     }
 
-    if (recv->start_lsn >= page_lsn) {
+    if (record->start_lsn >= page_lsn) {
 
       uint64_t end_lsn;
 
       if (!modification_to_page) {
 
         modification_to_page = true;
-        start_lsn = recv->start_lsn;
+        start_lsn = record->start_lsn;
       }
 
 #ifdef UNIV_DEBUG
@@ -1081,26 +969,30 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
           "Applying log rec"
           " type %lu len %lu"
           " to space %lu page no %lu\n",
-          (ulong)recv->type,
-          (ulong)recv->len,
-          (ulong)recv_addr->space,
-          (ulong)recv_addr->page_no
+          (ulong)record->type,
+          (ulong)record->len,
+          (ulong)record->space_id,
+          (ulong)record->page_no
         );
       }
 #endif /* UNIV_DEBUG */
 
-      recv_parse_or_apply_log_rec_body(recv->type, buf, buf + recv->len, block, &mtr);
+      recv_parse_or_apply_log_rec_body(record->type, buf, buf + record->len, block, &mtr);
 
-      end_lsn = recv->start_lsn + recv->len;
+      end_lsn = record->start_lsn + record->len;
       mach_write_to_8(FIL_PAGE_LSN + page, end_lsn);
       mach_write_to_8(UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + page, end_lsn);
     }
 
-    if (recv->len > RECV_DATA_BLOCK_SIZE) {
+    if (record->len > RECV_DATA_BLOCK_SIZE) {
       mem_free(buf);
     }
+  }
 
-    recv = UT_LIST_GET_NEXT(rec_list, recv);
+  if (modification_to_page) {
+    ut_a(block);
+
+    buf_pool->m_flusher->recv_note_modification(block, start_lsn, end_lsn);
   }
 
   mutex_enter(&(recv_sys->mutex));
@@ -1109,18 +1001,7 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
     recv_max_page_lsn = page_lsn;
   }
 
-  recv_addr->state = RECV_PROCESSED;
-
-  ut_a(recv_sys->n_addrs);
-  recv_sys->n_addrs--;
-
   mutex_exit(&(recv_sys->mutex));
-
-  if (modification_to_page) {
-    ut_a(block);
-
-    buf_pool->m_flusher->recv_note_modification(block, start_lsn, end_lsn);
-  }
 
   /* Make sure that committing mtr does not change the modification
   lsn values of page */
@@ -1138,7 +1019,6 @@ static ulint recv_read_in_area(
   ulint, ulint page_no
 ) /*!< in: page number */
 {
-  recv_addr_t *recv_addr;
   ulint page_nos[RECV_READ_AHEAD_AREA];
   ulint low_limit;
   ulint n;
@@ -1148,144 +1028,73 @@ static ulint recv_read_in_area(
   n = 0;
 
   for (page_no = low_limit; page_no < low_limit + RECV_READ_AHEAD_AREA; page_no++) {
-    recv_addr = recv_get_fil_addr_struct(space, page_no);
 
-    if (recv_addr && !buf_pool->peek(space, page_no)) {
+    if (!buf_pool->peek(space, page_no)) {
 
-      mutex_enter(&(recv_sys->mutex));
-
-      if (recv_addr->state == RECV_NOT_PROCESSED) {
-        recv_addr->state = RECV_BEING_READ;
-
-        page_nos[n] = page_no;
-
-        n++;
-      }
-
-      mutex_exit(&(recv_sys->mutex));
+      page_nos[n] = page_no;
+      n++;
     }
   }
 
-  buf_read_recv_pages(false, space, page_nos, n);
+  buf_read_recv_pages(true, space, page_nos, n);
 
   return n;
 }
 
-void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
-  bool has_printed{};
+void recv_apply_log_recs(std::vector<recv_t *> records) {
 
-  for (;;) {
-    mutex_enter(&recv_sys->mutex);
+  for (auto record : records) {
+    ut_a(record != nullptr);
 
-    if (!recv_sys->apply_batch_on) {
-      break;
-    }
+    auto space = record->space_id;
+    auto page_no = record->page_no;
 
-    mutex_exit(&recv_sys->mutex);
+    bool just_read_in{false};
+    bool table_space_deleted{false};
+    bool page_found = buf_pool->peek(space, page_no);
 
-    os_thread_sleep(100000);
-  }
+    if (!page_found) {
+      ib_logger(ib_stream, "page not found, space: %lu, page_no: %lu\n", space, page_no);
 
-  recv_sys->apply_log_recs = true;
-  recv_sys->apply_batch_on = true;
-
-  for (ulint i = 0; i < hash_get_n_cells(recv_sys->addr_hash); i++) {
-
-    auto recv_addr = static_cast<recv_addr_t *>(HASH_GET_FIRST(recv_sys->addr_hash, i));
-
-    while (recv_addr != nullptr) {
-      auto space_id = recv_addr->space;
-      auto page_no = recv_addr->page_no;
-
-      if (recv_addr->state == RECV_NOT_PROCESSED) {
-        if (!has_printed) {
-          ut_print_timestamp(ib_stream);
-          ib_logger(ib_stream, "Starting an apply batch of log records to the database...");
-          ib_logger(ib_stream, "Progress in percents: ");
-          has_printed = true;
-        }
-
-        mutex_exit(&(recv_sys->mutex));
-
-        if (buf_pool->peek(space_id, page_no)) {
-
-          mtr_t mtr;
-
-          mtr_start(&mtr);
-
-          Buf_pool::Request req {
-            .m_rw_latch = RW_X_LATCH,
-            .m_page_id = { space_id, page_no },
-            .m_mode = BUF_GET,
-            .m_file = __FILE__,
-            .m_line = __LINE__,
-            .m_mtr = &mtr
-          };
-
-          auto block = buf_pool->get(req, nullptr);
-          buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
-
-          recv_recover_page(false, block);
-
-          mtr_commit(&mtr);
-
-        } else {
-          recv_read_in_area(space_id, 0, page_no);
-        }
-
-        mutex_enter(&recv_sys->mutex);
+      recv_read_in_area(space, 0, page_no);
+      page_found = buf_pool->peek(space, page_no);
+      just_read_in = page_found;
+      if (page_found) {
+        ib_logger(ib_stream, "page found on re-read, space: %lu, page_no: %lu\n", space, page_no);
       }
 
-      recv_addr = static_cast<recv_addr_t *>(HASH_GET_NEXT(addr_hash, recv_addr));
+      auto tablespace_version = fil_space_get_version(space);
+      table_space_deleted = fil_tablespace_deleted_or_being_deleted_in_mem(space, tablespace_version);
     }
 
-    if (has_printed && (i * 100) / hash_get_n_cells(recv_sys->addr_hash) != ((i + 1) * 100) / hash_get_n_cells(recv_sys->addr_hash)) {
-
-      ib_logger(ib_stream, "%lu ", (ulong)((i * 100) / hash_get_n_cells(recv_sys->addr_hash)));
+    if (table_space_deleted) {
+      ib_logger(ib_stream, "tablespace deleted, space: %lu, page_no: %lu\n", space, page_no);
+      continue;
     }
+
+    ut_a(page_found && "page should be in memory by now");
+
+    mtr_t mtr;
+
+    mtr_start(&mtr);
+
+    Buf_pool::Request request{
+      .m_rw_latch = RW_X_LATCH,
+      .m_page_id = Page_id(space, page_no),
+      .m_mode = BUF_GET,
+      .m_file = __FILE__,
+      .m_line = __LINE__,
+      .m_mtr = &mtr,
+    };
+
+    auto block = buf_pool->get(request, nullptr);
+
+    buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
+
+    recv_apply_records_to_page(just_read_in, block, {record});
+
+    mtr_commit(&mtr);
   }
-
-  /* Wait until all the pages have been processed */
-
-  while (recv_sys->n_addrs != 0) {
-
-    mutex_exit(&recv_sys->mutex);
-
-    os_thread_sleep(100000);
-
-    mutex_enter(&recv_sys->mutex);
-  }
-
-  if (has_printed) {
-    ib_logger(ib_stream, "\n");
-  }
-
-  if (flush_and_free_pages) {
-    /* Flush all the file pages to disk and invalidate them in the buffer pool */
-    mutex_exit(&recv_sys->mutex);
-    mutex_exit(&log_sys->mutex);
-
-    auto n_pages = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
-    ut_a(n_pages != ULINT_UNDEFINED);
-
-    buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
-
-    buf_pool->invalidate();
-
-    mutex_enter(&log_sys->mutex);
-    mutex_enter(&recv_sys->mutex);
-  }
-
-  recv_sys->apply_log_recs = false;
-  recv_sys->apply_batch_on = false;
-
-  recv_sys_empty_hash();
-
-  if (has_printed) {
-    ib_logger(ib_stream, "Apply batch completed\n");
-  }
-
-  mutex_exit(&recv_sys->mutex);
 }
 
 /** Tries to parse a single log record and returns its length.
@@ -1459,10 +1268,7 @@ static void recv_report_corrupt_log(
 /** Parses log records from a buffer and stores them to a hash table to wait
 merging to file pages.
 @return	currently always returns false */
-static bool recv_parse_log_recs(bool store_to_hash) /*!< in: true if the records should be stored
-                         to the hash table; this is set to false if just
-                         debug checking is needed */
-{
+static bool recv_parse_log_recs(bool store_to_hash, append_only_queue records) {
   byte *ptr;
   byte *end_ptr;
   ulint single_rec;
@@ -1562,7 +1368,7 @@ loop:
       for something else. */
 #endif /* UNIV_LOG_LSN_DEBUG */
     } else {
-      recv_add_to_hash_table(type, space, page_no, body, ptr + len, old_lsn, recv_sys->recovered_lsn);
+      recv_add_to_list(type, space, page_no, body, ptr + len, old_lsn, old_lsn + len, records);
     }
   } else {
     /* Check that all the records associated with the single mtr
@@ -1659,7 +1465,7 @@ loop:
         && type != MLOG_LSN
 #endif /* UNIV_LOG_LSN_DEBUG */
       ) {
-        recv_add_to_hash_table(type, space, page_no, body, ptr + len, old_lsn, new_recovered_lsn);
+        recv_add_to_list(type, space, page_no, body, ptr + len, old_lsn, old_lsn + len, records);
       }
 
       ptr += len;
@@ -1750,8 +1556,8 @@ static void recv_sys_justify_left_parsing_buf() {
 }
 
 bool recv_scan_log_recs(
-  ib_recovery_t recovery, ulint available_memory, bool store_to_hash, const byte *buf, ulint len, uint64_t start_lsn,
-  uint64_t *contiguous_lsn, uint64_t *group_scanned_lsn
+  ib_recovery_t recovery, bool store_to_hash, const byte *buf, ulint len, uint64_t start_lsn, uint64_t *contiguous_lsn,
+  uint64_t *group_scanned_lsn, append_only_queue records
 ) {
   const byte *log_block;
   ulint no;
@@ -1919,14 +1725,7 @@ bool recv_scan_log_recs(
   if (more_data && !recv_sys->found_corrupt_log) {
     /* Try to parse more log records */
 
-    recv_parse_log_recs(store_to_hash);
-
-    if (store_to_hash && mem_heap_get_size(recv_sys->heap) > available_memory) {
-
-      /* Hash table of log records has grown too big: empty it. */
-
-      recv_apply_hashed_log_recs(true);
-    }
+    recv_parse_log_recs(store_to_hash, records);
 
     if (recv_sys->recovered_offset > RECV_PARSING_BUF_SIZE / 4) {
       /* Move parsing buffer data to the buffer start */
@@ -1936,57 +1735,6 @@ bool recv_scan_log_recs(
   }
 
   return finished;
-}
-
-/** Scans log from a buffer and stores new log data to the parsing buffer.
-Parses and hashes the log records if new data found. */
-static void recv_group_scan_log_recs(
-  ib_recovery_t recovery,   /*!< in: recovery flag */
-  log_group_t *group,       /*!< in: log group */
-  uint64_t *contiguous_lsn, /*!< in/out: it is known that all log
-                                    groups contain contiguous log data up
-                                    to this lsn */
-  uint64_t *group_scanned_lsn
-) /*!< out: scanning succeeded up to
-                                  this lsn */
-{
-  bool finished;
-  uint64_t start_lsn;
-  uint64_t end_lsn;
-
-  finished = false;
-
-  start_lsn = *contiguous_lsn;
-
-  while (!finished) {
-    end_lsn = start_lsn + RECV_SCAN_SIZE;
-
-    log_group_read_log_seg(LOG_RECOVER, log_sys->buf, group, start_lsn, end_lsn);
-
-    finished = recv_scan_log_recs(
-      recovery,
-      (buf_pool->m_curr_size - recv_n_pool_free_frames) * UNIV_PAGE_SIZE,
-      true,
-      log_sys->buf,
-      RECV_SCAN_SIZE,
-      start_lsn,
-      contiguous_lsn,
-      group_scanned_lsn
-    );
-    start_lsn = end_lsn;
-  }
-
-#ifdef UNIV_DEBUG
-  if (log_debug_writes) {
-    ib_logger(
-      ib_stream,
-      "Scanned group %lu up to"
-      " log sequence number %lu\n",
-      (ulong)group->id,
-      *group_scanned_lsn
-    );
-  }
-#endif /* UNIV_DEBUG */
 }
 
 /** Initialize crash recovery environment. Can be called iff
@@ -2186,14 +1934,67 @@ db_err recv_recovery_from_checkpoint_start_func(ib_recovery_t recovery, lsn_t mi
   ut_ad(RECV_SCAN_SIZE <= log_sys->buf_size);
 
   lsn_t group_scanned_lsn{};
-
+  redo_log_applicator log_applicator{1};
   for (auto group = UT_LIST_GET_FIRST(log_sys->log_groups); group != nullptr; group = UT_LIST_GET_NEXT(log_groups, group)) {
+    redo_log_stream stream{log_sys->buf, contiguous_lsn, contiguous_lsn, group_scanned_lsn, group};
+
+    std::uint64_t records_sent{0};
+    for (auto item = stream.read_next(); item.status == redo_log_stream::read_result::status::Ok ||
+                                         item.status == redo_log_stream::read_result::status::MemoryBufferFull;
+         item = stream.read_next()) {
+      mutex_exit(&log_sys->mutex);
+
+      if (item.status == redo_log_stream::read_result::status::MemoryBufferFull) {
+        ib_logger(ib_stream, "heap memory full, waiting for space\n");
+        auto records_applied = log_applicator.records_applied();
+        auto records_received = log_applicator.records_received();
+        if (records_sent != records_applied) {
+          ib_logger(
+            ib_stream,
+            "heap memory cannot be free, records_sent: %lu, records_received: %lu, records_applied: %lu\n",
+            records_sent,
+            records_received,
+            records_applied
+          );
+
+          log_applicator.wait_for_queue_drain(std::chrono::milliseconds{10});
+        } else {
+          ib_logger(
+            ib_stream,
+            "heap memory can be freed now, records_sent: %lu, records_received: %lu, records_applied: %lu\n",
+            records_sent,
+            records_received,
+            records_applied
+          );
+
+          mem_heap_empty(recv_sys->heap);
+
+          auto n_pages = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
+          ut_a(n_pages != ULINT_UNDEFINED);
+
+          buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
+
+          buf_pool->invalidate();
+        }
+
+        mutex_enter(&log_sys->mutex);
+        continue;
+      }
+
+      mutex_enter(&log_sys->mutex);
+      ib_logger(ib_stream, "Item: %lu, start_lsn: %lu, end_lsn: %lu\n", records_sent, item.data->start_lsn, item.data->end_lsn);
+      log_applicator.add(item.data);
+      records_sent++;
+    }
+
+    bool drained = log_applicator.wait_for_queue_drain();
+    ut_a(drained && "queue should be drained now");
+
+    ib_logger(ib_stream, "sent: %lu, applied: %lu\n", records_sent, log_applicator.records_applied());
 
     auto old_scanned_lsn = recv_sys->scanned_lsn;
 
-    recv_group_scan_log_recs(recovery, group, &contiguous_lsn, &group_scanned_lsn);
-
-    group->scanned_lsn = group_scanned_lsn;
+    group->scanned_lsn = stream.get_group_scanned_lsn();
 
     if (old_scanned_lsn < group_scanned_lsn) {
       /* We found a more up-to-date group */
@@ -2201,6 +2002,9 @@ db_err recv_recovery_from_checkpoint_start_func(ib_recovery_t recovery, lsn_t mi
       up_to_date_group = group;
     }
   }
+
+  //  mutex_enter(&log_sys->mutex);
+  ib_logger(ib_stream, "contiguous lsn: %lu, group: %lu\n", contiguous_lsn, group_scanned_lsn);
 
   recv_init_crash_recovery(recovery, checkpoint_lsn, min_flushed_lsn, max_flushed_lsn);
 
@@ -2265,12 +2069,6 @@ db_err recv_recovery_from_checkpoint_start_func(ib_recovery_t recovery, lsn_t mi
 
   log_sys->next_checkpoint_no = checkpoint_no + 1;
 
-  mutex_enter(&recv_sys->mutex);
-
-  recv_sys->apply_log_recs = true;
-
-  mutex_exit(&recv_sys->mutex);
-
   mutex_exit(&log_sys->mutex);
 
   recv_lsn_checks_on = true;
@@ -2287,7 +2085,7 @@ void recv_recovery_from_checkpoint_finish(ib_recovery_t recovery) {
 
   if (recovery < IB_RECOVERY_NO_LOG_REDO) {
 
-    recv_apply_hashed_log_recs(false);
+    //recv_apply_hashed_log_recs(false);
   }
 
 #ifdef UNIV_DEBUG
@@ -2392,4 +2190,184 @@ void recv_reset_logs(uint64_t lsn, bool new_logs_created) {
   log_make_checkpoint_at(IB_UINT64_T_MAX, true);
 
   mutex_enter(&log_sys->mutex);
+}
+
+// log stream reader
+redo_log_stream::redo_log_stream(
+  byte *buf, uint64_t start_lsn, uint64_t &contiguous_lsn, uint64_t &group_scanned, log_group_t *group
+)
+    : m_finished{false},
+      m_buf{buf},
+      m_start_lsn{start_lsn},
+      m_current_lsn{start_lsn},
+      m_contiguous_lsn{contiguous_lsn},
+      m_group_scanned_lsn{group_scanned},
+      m_group{group},
+      m_recovery{IB_RECOVERY_DEFAULT},
+      m_available_memory{(buf_pool->m_curr_size - recv_n_pool_free_frames) * UNIV_PAGE_SIZE} {}
+
+redo_log_stream::read_result redo_log_stream::read_next() {
+  if (m_records.empty()) {
+    if (mem_heap_get_size(recv_sys->heap) >= m_available_memory && !m_finished) {
+      return {.data = nullptr, .status = read_result::status::MemoryBufferFull};
+    }
+
+    if (!m_finished) {
+      fetch_next();
+    } else {
+      return {.data = nullptr, .status = read_result::status::NoMoreData};
+    }
+  }
+
+  recv_t *result = m_records.back();
+  m_records.pop_back();
+  ib_logger(ib_stream, "\nscanner space_id: %lu page_no: %lu\n", result->space_id, result->page_no);
+  return {.data = result, .status = read_result::status::Ok};
+}
+
+uint64_t redo_log_stream::get_start_lsn() const {
+  return m_start_lsn;
+}
+
+uint64_t redo_log_stream::get_group_scanned_lsn() const {
+  return m_group_scanned_lsn;
+}
+
+void redo_log_stream::fetch_next() {
+  ib_logger(ib_stream, "fetch next lsn: %lu\n", m_current_lsn);
+  if (m_finished) {
+    return;
+  }
+
+  uint64_t end_lsn{m_current_lsn + RECV_SCAN_SIZE};
+  log_group_read_log_seg(LOG_RECOVER, m_buf, m_group, m_current_lsn, end_lsn);
+
+  append_only_queue queue{&this->m_records};
+
+  m_finished =
+    recv_scan_log_recs(m_recovery, true, m_buf, RECV_SCAN_SIZE, m_current_lsn, &m_contiguous_lsn, &m_group_scanned_lsn, queue);
+
+  m_current_lsn = end_lsn;
+}
+
+// applicator
+
+redo_log_applicator::redo_log_applicator(std::int32_t total_workers)
+    : m_total_workers{total_workers},
+      m_batch_size{100},
+      m_queues{[](std::int32_t count) {
+        std::vector<record_list> queues(count);
+        for (record_list &l : queues) {
+          l.mtx = std::make_unique<std::mutex>();
+        }
+        return queues;
+      }(total_workers)},
+      m_workers{},
+      m_stop_sources{std::vector<std::stop_source>(total_workers)},
+      m_total_applied{0},
+      m_total_received{0},
+      m_mtx{std::mutex{}},
+      m_queue_drained{std::condition_variable{}} {
+
+  for (auto i = 0; i < total_workers; i++) {
+    m_workers.emplace_back(&redo_log_applicator::worker_loop, this, m_stop_sources[i], &(m_queues[i]), m_batch_size);
+  }
+}
+
+void redo_log_applicator::add(recv_t *record) {
+  auto bucket = record->page_no % m_total_workers;
+  auto &queue = m_queues[bucket];
+
+  m_total_received.fetch_add(1, std::memory_order_relaxed);
+  std::lock_guard lg{*(queue.mtx)};
+  queue.records.push_front(record);
+}
+
+bool redo_log_applicator::wait_for_queue_drain(std::chrono::milliseconds timeout_ms) {
+  auto should_leave = [this]() {
+    for (auto &qu : m_queues) {
+      std::lock_guard lg{*qu.mtx};
+      if (!qu.records.empty()) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  std::unique_lock lg{m_mtx};
+  bool drained{false};
+  m_queue_drained.wait_for(lg, timeout_ms, [pred = std::move(should_leave), &drained]() {
+    drained = pred();
+    return drained;
+  });
+
+  return drained;
+}
+
+std::uint64_t redo_log_applicator::records_applied() {
+  return m_total_applied.load(std::memory_order_relaxed);
+}
+
+std::uint64_t redo_log_applicator::records_received() {
+  return m_total_received.load(std::memory_order_relaxed);
+}
+
+void redo_log_applicator::apply(std::vector<recv_t *> chunk) {
+  ib_logger(ib_stream, "applied: %lu\n", m_total_applied.load(std::memory_order_relaxed));
+
+  auto chunk_size = chunk.size();
+  recv_apply_log_recs(std::move(chunk));
+  m_total_applied.fetch_add(chunk_size, std::memory_order_relaxed);
+}
+
+void redo_log_applicator::worker_loop(std::stop_source stoken, record_list *record_list, std::size_t batch_size) {
+  ib_logger(ib_stream, "jthread started for processing\n");
+  std::vector<recv_t *> work_items;
+  while (true) {
+    if (stoken.stop_requested()) {
+      ib_logger(ib_stream, "stopping jthread");
+
+      std::lock_guard lg{*(record_list->mtx)};
+      ut_a(record_list->records.empty());
+      return;
+    }
+
+    {
+      std::lock_guard lg{*(record_list->mtx)};
+      while (!record_list->records.empty() && work_items.size() < batch_size) {
+        recv_t *record = record_list->records.back();
+        work_items.push_back(record);
+        record_list->records.pop_back();
+      }
+    }
+
+    if (work_items.empty()) {
+      {
+        std::lock_guard lg{m_mtx};
+        m_queue_drained.notify_one();
+      }
+
+      std::int32_t sleep_time{2};
+      std::this_thread::sleep_for(std::chrono::milliseconds{sleep_time});
+    } else {
+      apply(std::move(work_items));
+      work_items.clear();
+    }
+  }
+}
+
+redo_log_applicator::~redo_log_applicator() {
+  for (auto &q : m_queues) {
+    std::lock_guard lg{*q.mtx};
+    ut_a(q.records.empty());
+  }
+
+  for (auto &stoken : m_stop_sources) {
+    stoken.request_stop();
+  }
+
+  for (auto &worker : m_workers) {
+    worker.join();
+  }
 }
