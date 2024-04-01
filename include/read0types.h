@@ -19,9 +19,8 @@ read should not see the modifications to the database. */
 struct read_view_t {
   /** Check whether the changes by id are visible.
   @param[in]    id      transaction id to check against the view
-  @param[in]    name    table name
   @return whether the view sees the modifications of id. */
-  [[nodiscard]] bool changes_visible(trx_id_t id, const char *name) const;
+  [[nodiscard]] bool changes_visible(trx_id_t id) const;
 
   /** VIEW_NORMAL, VIEW_HIGH_GRANULARITY */
   ulint type;

@@ -119,13 +119,14 @@ inline void read_view_set_nth_trx_id(read_view_t *view, ulint n, trx_id_t trx_id
   view->trx_ids[n] = trx_id;
 }
 
-/** Checks if a read view sees the specified transaction.
-@return	true if sees */
-inline bool read_view_sees_trx_id(
-  const read_view_t *view, /*!< in: read view */
-  trx_id_t trx_id
-) /*!< in: trx id */
-{
+/**
+ * Checks if a read view sees the specified transaction.
+ *
+ * @param view in: read view
+ * @param trx_id in: trx id
+ * @return true if sees
+ */
+inline bool read_view_sees_trx_id(const read_view_t *view, trx_id_t trx_id) {
   if (trx_id < view->up_limit_id) {
 
     return true;
@@ -155,27 +156,7 @@ inline bool read_view_sees_trx_id(
   return true;
 }
 
-[[nodiscard]] inline bool read_view_t::changes_visible(trx_id_t id, const char* name) const {
-  ut_ad(id > 0);
-
-#if 0
-  if (id < m_up_limit_id || id == m_creator_trx_id) {
-    return true;
-  }
-
-  check_trx_id_sanity(id, name);
-
-  if (id >= m_low_limit_id) {
-    return false;
-  } else if (m_ids.empty()) {
-    return true;
-  } else {
-    const ids_t::value_type *p = m_ids.data();
-    return !std::binary_search(p, p + m_ids.size(), id);
-  }
-#else
-  ut_error;
-  return false;
-#endif
+[[nodiscard]] inline bool read_view_t::changes_visible(trx_id_t id) const {
+  return read_view_sees_trx_id(this, id);
 }
 
