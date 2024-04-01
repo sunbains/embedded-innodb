@@ -54,18 +54,21 @@ struct Runnable {
 
     std::atomic_thread_fence(std::memory_order_release);
 
-    const auto old = os_thread_count.fetch_add(1, std::memory_order_relaxed);
-    ut_a(old <= static_cast<int>(srv_max_n_threads) - 1);
+    {
+      const auto old = os_thread_count.fetch_add(1, std::memory_order_relaxed);
+      ut_a(old <= static_cast<int>(srv_max_n_threads) - 1);
+    }
 
     task();
 
     std::atomic_thread_fence(std::memory_order_release);
 
-    const auto old = os_thread_count.fetch_sub(1, std::memory_order_relaxed);
-    ut_a(old > 0);
+    {
+      const auto old = os_thread_count.fetch_sub(1, std::memory_order_relaxed);
+      ut_a(old > 0);
+    }
   }
 };
-
 
 /** Create a detached non-started thread. After thread is created, you should
 assign the received object to any of variables/fields which you later could
@@ -111,7 +114,7 @@ void par_for(const Container &c, size_t n, F &&f, Args &&... args) {
 
   size_t slice = (n > 0) ? c.size() / n : 0;
 
-  using Workers = std::vector<IB_thread>;
+  using Workers = std::vector<std::thread>;
 
   Workers workers;
 
@@ -121,7 +124,7 @@ void par_for(const Container &c, size_t n, F &&f, Args &&... args) {
     auto b = c.begin() + (i * slice);
     auto e = b + slice;
 
-    auto worker = os_thread_create(pfs_key, i, f, b, e, i, args...);
+    auto worker = os_thread_create(f, b, e, i, args...);
     worker.start();
 
     workers.push_back(std::move(worker));

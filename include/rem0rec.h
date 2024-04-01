@@ -26,6 +26,7 @@ Created 5/30/1994 Heikki Tuuri
 
 #include "innodb0types.h"
 
+#include "btr0types.h"
 #include "data0data.h"
 #include "mtr0types.h"
 #include "page0types.h"
@@ -1553,3 +1554,32 @@ inline ulint rec_fold(
 
   return (fold);
 }
+
+/**
+ * Determine if the offsets are for a record containing null BLOB pointers.
+ * @param rec     in: record
+ * @param offsets in: rec_get_offsets(rec)
+ * @return        first field containing a null BLOB pointer, or NULL if none found
+ */
+inline const byte *rec_offs_any_null_extern(const rec_t *rec, const ulint *offsets) {
+  ut_ad(rec_offs_validate(rec, nullptr, offsets));
+
+  if (!rec_offs_any_extern(offsets)) {
+    return (nullptr);
+  }
+
+  for (ulint i = 0; i < rec_offs_n_fields(offsets); i++) {
+    if (rec_offs_nth_extern(offsets, i)) {
+      ulint len;
+      const byte *field = rec_get_nth_field(rec, offsets, i, &len);
+
+      ut_a(len >= BTR_EXTERN_FIELD_REF_SIZE);
+      if (!memcmp(field + len - BTR_EXTERN_FIELD_REF_SIZE, field_ref_zero, BTR_EXTERN_FIELD_REF_SIZE)) {
+        return field;
+      }
+    }
+  }
+
+  return nullptr;
+}
+

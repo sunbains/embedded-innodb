@@ -28,6 +28,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include <atomic>
 #include <new>
 
+#include "innodb0types.h"
+
 #ifdef __cpp_lib_hardware_interference_size
 using std::hardware_constructive_interference_size;
 using std::hardware_destructive_interference_size;
@@ -44,10 +46,10 @@ struct Bounded_channel {
   using Pos = std::size_t;
 
   explicit Bounded_channel(uint32_t n) noexcept
-      : m_ring(reinterpret_cast<Cell*>(new (std::nothrow) Aligned[n])),
+      : m_ring(new (std::nothrow) Cell[n]),
         m_capacity(n - 1) {
     /* Should be a power of 2 */
-    assert(n >= 2 && (n & (n - 1)) == 0);
+    ut_a(n >= 2 && (n & (n - 1)) == 0);
 
     for (size_t i{}; i < n; ++i) {
       m_ring[i].m_pos.store(i, std::memory_order_relaxed);
@@ -164,12 +166,10 @@ struct Bounded_channel {
  private:
   using Pad = std::byte[std::hardware_constructive_interference_size];
 
-  struct Cell {
+  struct alignas(T) Cell {
     T m_data{};
     std::atomic<Pos> m_pos{};
   };
-
-  using Aligned = typename std::aligned_storage<sizeof(Cell), std::alignment_of<Cell>::value>::type;
 
   std::byte* m_ptr{};
   Pad m_pad0;

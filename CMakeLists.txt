@@ -206,6 +206,7 @@ SET(INNODB_SOURCES  btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       read/read0read.cc
       rem/rem0cmp.cc rem/rem0rec.cc
       row/row0ext.cc row/row0ins.cc row/row0merge.cc
+      row/row0pread.cc
       row/row0purge.cc row/row0row.cc row/row0prebuilt.cc
       row/row0sel.cc row/row0uins.cc row/row0umod.cc
       row/row0undo.cc row/row0upd.cc row/row0vers.cc

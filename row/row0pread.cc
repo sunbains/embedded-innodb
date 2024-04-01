@@ -305,7 +305,7 @@ buf_block_t *Parallel_reader::Scan_ctx::block_get_s_latched(const Page_id &page_
     .m_page_id = page_id,
     .m_mode = BUF_GET,
     .m_file = __FILE__,
-    .m_line = line,
+    .m_line = ulint(line),
     .m_mtr = mtr
   };
 
@@ -417,14 +417,11 @@ dberr_t PCursor::move_to_next_block(dict_index_t *index) {
 }
 
 bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr) {
-  const auto table_name = m_config.m_index->table->name;
+  // const auto table_name = m_config.m_index->table->name;
 
-  ut_ad(m_trx == nullptr || m_trx->read_view == nullptr ||
-        MVCC::is_view_active(m_trx->read_view));
+  ut_ad(m_trx == nullptr || m_trx->read_view == nullptr);
 
-  if (!m_trx) {
-    /* Do nothing */
-  } else if (m_trx->read_view != nullptr) {
+  if (m_trx != nullptr && m_trx->read_view != nullptr) {
     auto view = m_trx->read_view;
 
     if (dict_index_is_clust(m_config.m_index)) {
@@ -459,7 +456,8 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
     return false;
   }
 
-  ut_ad(!m_trx || m_trx->isolation_level == TRX_ISO_READ_UNCOMMITTED ||
+  ut_ad(m_trx == nullptr ||
+        m_trx->isolation_level == TRX_ISO_READ_UNCOMMITTED ||
         !rec_offs_any_null_extern(rec, offsets));
 
   return true;
@@ -528,7 +526,7 @@ Parallel_reader::Scan_ctx::create_persistent_cursor(const page_cur_t &page_curso
 
   iter->m_pcur->open_on_user_rec(page_cursor, PAGE_CUR_GE, BTR_ALREADY_S_LATCHED | BTR_SEARCH_LEAF);
 
-  ut_ad(btr_page_get_level(buf_block_get_frame(iter->m_pcur->get_block()), mtr) == m_config.m_read_level);
+  ut_ad(btr_page_get_level(iter->m_pcur->get_block()->get_frame(), mtr) == m_config.m_read_level);
 
   iter->m_pcur->store_position(mtr);
 
