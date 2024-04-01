@@ -30,16 +30,17 @@ Created 5/11/1994 Heikki Tuuri
 
 #include <innodb0types.h>
 
-#include "ut0ut.h"
-
-#include <errno.h>
+#include <format>
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
+
 #include "api0ucode.h"
 #include "trx0trx.h"
+#include "ut0ut.h"
 
 static bool ut_always_false = false;
 
@@ -179,6 +180,31 @@ ulint ut_delay(ulint delay) {
 
   return j;
 }
+
+std::ostream &ut_print_buf(std::ostream &o, const void *buf, ulint len) {
+  UNIV_MEM_ASSERT_RW(buf, len);
+
+  o << " buf = { len: " << len << ",\nhex = {\n";
+
+  auto data = reinterpret_cast<const byte *>(buf);
+
+  for (uint i = 0; i < len; i++, ++data) {
+    o << std::format("{:#x}", *data);
+  }
+
+  o << " },\nasc  = {\n";
+
+  data = reinterpret_cast<const byte *>(buf);
+
+  for (ulint i = 0; i < len; i++, ++data) {
+    o << std::format("{}", *data);
+  }
+
+   o << "}\n";
+
+   return o;
+}
+
 
 void ut_print_buf(ib_stream_t ib_stream, const void *buf, ulint len) {
   UNIV_MEM_ASSERT_RW(buf, len);

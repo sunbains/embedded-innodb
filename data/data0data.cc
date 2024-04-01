@@ -403,41 +403,55 @@ void dfield_print_also_hex(const dfield_t *dfield) {
   }
 }
 
-/** Print a dfield value using ut_print_buf. */
-static void dfield_print_raw(
-  ib_stream_t ib_stream, /*!< in: output stream */
-  const dfield_t *dfield
-) /*!< in: dfield */
-{
+/**
+ * @brief Print a dfield value using ut_print_buf.
+ *
+ * @param ib_stream Output stream.
+ * @param dfield    Dfield to be printed.
+ */
+static void dfield_print_raw(std::ostream &o, const dfield_t *dfield) {
   ulint len = dfield_get_len(dfield);
+
   if (!dfield_is_null(dfield)) {
     ulint print_len = ut_min(len, 1000);
-    ut_print_buf(ib_stream, dfield_get_data(dfield), print_len);
+
+    ut_print_buf(o, dfield_get_data(dfield), print_len);
+
     if (len != print_len) {
-      ib_logger(ib_stream, "(total %lu bytes%s)", (ulong)len, dfield_is_ext(dfield) ? ", external" : "");
+      o << "(total " << len <<  (dfield_is_ext(dfield) ? ", external" : "");
     }
   } else {
-    ib_logger(ib_stream, " SQL nullptr");
+    o << " SQL nullptr";
   }
 }
 
-void dtuple_print(ib_stream_t ib_stream, const dtuple_t *tuple) {
-  ulint n_fields;
-  ulint i;
+std::ostream &dtuple_print(std::ostream &o, const dtuple_t *tuple) {
+  const auto n_fields = dtuple_get_n_fields(tuple);
 
-  n_fields = dtuple_get_n_fields(tuple);
+  o << "DATA TUPLE: " << n_fields << " fields;\n";
 
-  ib_logger(ib_stream, "DATA TUPLE: %lu fields;\n", (ulong)n_fields);
+  for (ulint i = 0; i < n_fields; i++) {
+    o << std::format("{}", i);
 
-  for (i = 0; i < n_fields; i++) {
-    ib_logger(ib_stream, " %lu:", (ulong)i);
+    dfield_print_raw(o, dtuple_get_nth_field(tuple, i));
 
-    dfield_print_raw(ib_stream, dtuple_get_nth_field(tuple, i));
-
-    ib_logger(ib_stream, ";\n");
+    o << ";\n";
   }
-
   ut_ad(dtuple_validate(tuple));
+  return o;
+}
+
+void dtuple_print(ib_stream_t ib_stream, const dtuple_t *tuple) {
+  std::ostringstream os{};
+
+  dtuple_print(os, tuple);
+  ib_logger(ib_stream, "%s", os.str().c_str());
+}
+
+
+std::ostream &dtuple_t::print(std::ostream &o) const {
+  dtuple_print(o, this);
+  return o;
 }
 
 big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n_ext) {

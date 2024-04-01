@@ -177,12 +177,22 @@ in microseconds on 100 MHz Pentium + Visual C++.
 @return	dummy value */
 ulint ut_delay(ulint delay); /*!< in: delay in microseconds on 100 MHz Pentium */
 
-/** Prints the contents of a memory buffer in hex and ascii. */
-void ut_print_buf(
-  ib_stream_t ib_stream, /*!< in: file where to print */
-  const void *buf,       /*!< in: memory buffer */
-  ulint len
-); /*!< in: length of the buffer */
+/**
+ * Prints the contents of a memory buffer in hex and ascii.
+ *
+ * @param[in] ib_stream file where to print
+ * @param[in] buf memory buffer
+ * @param[in] len length of the buffer
+ */
+void ut_print_buf(ib_stream_t ib_stream, const void *buf, ulint len);
+
+/** Prints the contents of a memory buffer in hex and ascii.
+ * 
+ * @param[in,out] o output stream
+ * @param[in] buf memory buffer
+ * @param[in] len length of the buffer
+ * @return output stream */
+std::ostream &ut_print_buf(std::ostream &o, const void *buf, ulint len); 
 
 /** Outputs a NUL-terminated file name, quoted with apostrophes. */
 void ut_print_filename(

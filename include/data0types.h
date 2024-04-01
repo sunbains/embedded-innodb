@@ -25,18 +25,18 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #pragma once
 
-/* SQL data field struct */
-struct dfield_t;
+#include "innodb0types.h"
+#include "mem0mem.h"
+#include "rem0types.h"
+#include "trx0types.h"
+#include "ut0ut.h"
+#include "ut0lst.h"
 
-/* SQL data tuple struct */
-struct dtuple_t;
+struct dict_index_t;
 
 constexpr ulint DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL = 8;
 
 constexpr ulint DATA_CLIENT_BINARY_CHARSET_COLL = 63;
-
-/* SQL data type struct */
-typedef struct dtype_t dtype_t;
 
 /* The 'MAIN TYPE' of a column */
 
@@ -175,6 +175,8 @@ const ulint DATA_ORDER_NULL_TYPE_BUF_SIZE = 4;
 /** Store the charset-collation number; one byte is left unused */
 const ulint DATA_NEW_ORDER_NULL_TYPE_BUF_SIZE = 6;
 
+constexpr ulint DATA_TUPLE_MAGIC_N = 65478679;
+
 /* Structure for an SQL data type.
 If you add fields to this structure, be sure to initialize them everywhere.
 This structure is initialized in the following functions:
@@ -188,13 +190,13 @@ want to ensure that they are identical and also want to ensure that
 all bit-fields can be packed tightly in both structs. */
 #define DTYPE_FIELDS   \
   /** Main data type */ \
-  unsigned mtype : 8; \
+  uint8_t mtype; \
+  /* The remaining fields do not affect alphabetical ordering: */ \
+  /** Length of the column in bytes. */ \
+  uint16_t len; \
   /** Precise type; user data type, charset code, flags to indicate \
    * nullability, signedness, whether this is a binary string */  \
   unsigned prtype : 24; \
-  /* The remaining fields do not affect alphabetical ordering: */ \
-  /** Length of the column in bytes. */ \
-  unsigned len : 16; \
   /** Minimum length of a character, in bytes */ \
   unsigned mbminlen : 2; \
   /** Maximum length of bytes to store the string length) */ \
@@ -202,4 +204,127 @@ all bit-fields can be packed tightly in both structs. */
 
 struct dtype_t {
   DTYPE_FIELDS
+};
+
+
+/** Structure for an SQL data field */
+struct dfield_t {
+  /** Print the dfield_t object into the given output stream.
+  @param[in]    out     the output stream.
+  @return       the ouput stream. */
+  std::ostream &print(std::ostream &out) const;
+
+  /** Pointer to data */
+  void *data;
+
+  /** Data length; UNIV_SQL_NULL if SQL null */
+  uint32_t len;
+
+  /** true=externally stored, false=local */
+  uint8_t ext;
+
+  /** Type of data */
+  dtype_t type;
+};
+
+/** Structure for an SQL data tuple of fields (logical record) */
+struct dtuple_t {
+  /** Print the tuple to the output stream.
+  @param[in,out] out            Stream to output to.
+  @return stream */
+  std::ostream &print(std::ostream &o) const;
+
+  /** Read the trx id from the tuple (DB_TRX_ID)
+  @return transaction id of the tuple. */
+  trx_id_t get_trx_id() const;
+
+  /** Ignore at most n trailing default fields if this is a tuple
+  from instant index
+  @param[in]    index   clustered index object for this tuple */
+  void ignore_trailing_default(const dict_index_t *index);
+
+  /** Compare a data tuple to a physical record.
+  @param[in]    rec             record
+  @param[in]    index           index
+  @param[in]    offsets         rec_get_offsets(rec)
+  @param[in,out]        matched_fields  number of completely matched fields
+  @return the comparison result of dtuple and rec
+  @retval 0 if dtuple is equal to rec
+  @retval negative if dtuple is less than rec
+  @retval positive if dtuple is greater than rec */
+  int compare(const rec_t *rec, const dict_index_t *index, const ulint *offsets,
+              ulint *matched_fields) const;
+
+  /** Compare a data tuple to a physical record.
+  @param[in]    rec             record
+  @param[in]    index           index
+  @param[in]    offsets         rec_get_offsets(rec)
+  @return the comparison result of dtuple and rec
+  @retval 0 if dtuple is equal to rec
+  @retval negative if dtuple is less than rec
+  @retval positive if dtuple is greater than rec */
+  inline int compare(const rec_t *rec, const dict_index_t *index,
+                     const ulint *offsets) const {
+    ulint matched_fields{};
+
+    return (compare(rec, index, offsets, &matched_fields));
+  }
+
+  /** Get number of externally stored fields.
+  @retval number of externally stored fields. */
+  size_t get_n_ext() const;
+
+  /** Does tuple has externally stored fields.
+  @retval true if there is externally stored fields. */
+  bool has_ext() const;
+
+  /** Info bits of an index record: the default is 0; this field
+   * is used if an index record is built from a data tuple */
+  ulint info_bits;
+
+  /** Number of fields in dtuple */
+  ulint n_fields;
+
+  /** Number of fields which should be used in comparison services
+   * of rem0cmp.*; the index search is performed by comparing only
+   * these fields, others are ignored; the default value in dtuple
+   * creation is the same value as n_fields */
+  ulint n_fields_cmp;
+
+  /** Fields */
+  dfield_t *fields;
+
+  /** data tuples can be linked into a list using this field */
+  UT_LIST_NODE_T(dtuple_t) tuple_list;
+
+#ifdef UNIV_DEBUG
+  /** Magic number, used in debug assertions */
+  ulint magic_n;
+/** Value of dtuple_struct::magic_n */
+#endif /* UNIV_DEBUG */
+};
+
+/** A slot for a field in a big rec vector */
+struct big_rec_field_t {
+  /** Field number in record */
+  ulint field_no;
+
+  /** Stored data length, in bytes */
+  ulint len;
+
+   /** Stored data */
+  const void *data;
+};
+
+/** Storage format for overflow data in a big record, that is, a
+clustered index record which needs external storage of data fields */
+struct big_rec_t {
+  /** Memory heap from which allocated */
+  mem_heap_t *heap;
+
+  /** Number of stored fields */
+  ulint n_fields;
+
+  /** Stored fields */
+  big_rec_field_t *fields;
 };
