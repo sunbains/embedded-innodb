@@ -23,6 +23,7 @@ Created 2/23/1996 Heikki Tuuri
 
 #include "btr0pcur.h"
 
+#include "btr0types.h"
 #include "trx0trx.h"
 
 btr_pcur_t::btr_pcur_t() : m_btr_cur() {
@@ -42,13 +43,12 @@ btr_pcur_t::~btr_pcur_t() {
   m_old_n_fields = 0;
   m_latch_mode = BTR_NO_LATCHES;
   m_btr_cur.m_page_cur.m_rec = nullptr;
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
-  m_pos_state = BTR_PCUR_NOT_POSITIONED;
-
+  m_old_stored = false;
+  m_pos_state = Btr_pcur_positioned::UNSET;
 }
 
 void btr_pcur_t::store_position(mtr_t *mtr) {
-  ut_a(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   auto block = get_block();
@@ -70,7 +70,7 @@ void btr_pcur_t::store_position(mtr_t *mtr) {
     ut_a(btr_page_get_next(page, mtr) == FIL_NULL);
     ut_a(btr_page_get_prev(page, mtr) == FIL_NULL);
 
-    m_old_stored = BTR_PCUR_OLD_STORED;
+    m_old_stored = true;
 
     if (page_rec_is_supremum_low(offs)) {
 
@@ -99,7 +99,7 @@ void btr_pcur_t::store_position(mtr_t *mtr) {
     m_rel_pos = Btree_cursor_pos::ON;
   }
 
-  m_old_stored = BTR_PCUR_OLD_STORED;
+  m_old_stored = true;
   m_old_rec = dict_index_copy_rec_order_prefix(index, rec, &m_old_n_fields, m_old_rec_buf, m_buf_size);
 
   m_block_when_stored = block;
@@ -130,8 +130,9 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
 
   auto index = btr_cur_get_index(get_btr_cur());
 
-  if (unlikely(m_old_stored != BTR_PCUR_OLD_STORED) ||
-      unlikely(m_pos_state != BTR_PCUR_WAS_POSITIONED && m_pos_state != BTR_PCUR_IS_POSITIONED)) {
+  if (unlikely(m_old_stored) ||
+      unlikely(m_pos_state != Btr_pcur_positioned::WAS_POSITIONED &&
+               m_pos_state != Btr_pcur_positioned::IS_POSITIONED)) {
 
     ut_print_buf(ib_stream, this, sizeof(btr_pcur_t));
 
@@ -173,7 +174,7 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
     };
 
     if (likely(buf_pool->try_get(req))) {
-      m_pos_state = BTR_PCUR_IS_POSITIONED;
+      m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
 
       buf_block_dbg_add_level(IF_SYNC_DEBUG(get_block(), SYNC_TREE_NODE));
 
@@ -193,6 +194,12 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
         return true;
 
       } else {
+
+        /* This is the same record as stored, may need to be adjusted
+        for BTR_PCUR_BEFORE/AFTER, depending on search mode and direction. */
+        if (is_on_user_rec()) {
+          m_pos_state = Btr_pcur_positioned::IS_POSITIONED_OPTIMISTIC;
+        }
 
         return false;
       }
@@ -233,7 +240,7 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
 
     m_block_when_stored = get_block();
     m_modify_clock = buf_block_get_modify_clock(m_block_when_stored);
-    m_old_stored = BTR_PCUR_OLD_STORED;
+    m_old_stored = true;
 
     ret = true;
 
@@ -253,7 +260,7 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
 }
 
 void btr_pcur_t::release_leaf(mtr_t *mtr) {
-  ut_a(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   auto block = get_block();
@@ -262,15 +269,15 @@ void btr_pcur_t::release_leaf(mtr_t *mtr) {
 
   m_latch_mode = BTR_NO_LATCHES;
 
-  m_pos_state = BTR_PCUR_WAS_POSITIONED;
+  m_pos_state = Btr_pcur_positioned::WAS_POSITIONED;
 }
 
 void btr_pcur_t::move_to_next_page(mtr_t *mtr) {
-  ut_a(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
   ut_ad(is_after_last_on_page());
 
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_old_stored = false;
 
   auto page = get_page();
   auto next_page_no = btr_page_get_next(page, mtr);
@@ -296,7 +303,7 @@ void btr_pcur_t::move_to_next_page(mtr_t *mtr) {
 }
 
 void btr_pcur_t::move_backward_from_page(mtr_t *mtr) {
-  ut_a(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
   ut_ad(is_before_first_on_page());
   ut_ad(!is_before_first_in_tree(mtr));
@@ -352,7 +359,7 @@ void btr_pcur_t::move_backward_from_page(mtr_t *mtr) {
 
   m_latch_mode = latch_mode;
 
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_old_stored = false;
 }
 
 void btr_pcur_t::open_on_user_rec(
@@ -378,4 +385,22 @@ void btr_pcur_t::open_on_user_rec(
 
     ut_error;
   }
+}
+
+void btr_pcur_t::open_on_user_rec(const page_cur_t &page_cursor, ib_srch_mode_t mode, ulint latch_mode) {
+  auto btr_cur = get_btr_cur();
+
+  btr_cur->m_index = const_cast<dict_index_t *>(page_cursor.m_index);
+
+  auto page_cur = get_page_cur();
+
+  memcpy(page_cur, &page_cursor, sizeof(*page_cur));
+
+  m_search_mode = mode;
+  
+  m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
+  
+  m_latch_mode = BTR_LATCH_MODE_WITHOUT_FLAGS(latch_mode);
+
+  m_trx_if_known = nullptr;
 }

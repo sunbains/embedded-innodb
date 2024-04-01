@@ -166,7 +166,6 @@ struct page_cur_t {
   buf_block_t *m_block{};
 };
 
-#ifdef UNIV_DEBUG
 /**
  * @brief Gets pointer to the page frame where the cursor is positioned.
  * 
@@ -202,11 +201,6 @@ inline rec_t *page_cur_get_rec(page_cur_t *cur) {
 
   return cur->m_rec;
 }
-#else
-#define page_cur_get_page(cur) page_align((cur)->rec)
-#define page_cur_get_block(cur) (cur)->block
-#define page_cur_get_rec(cur) (cur)->rec
-#endif /* UNIV_DEBUG */
 
 /**
  * @brief Sets the cursor object to point before the first user record on the page.

@@ -88,7 +88,6 @@ trx_t* trx_create_low(sess_t *sess) {
 #endif /* WITH_XOPEN */
 
   trx->check_foreigns = true;
-  trx->check_unique_secondary = true;
 
   trx->dict_operation = TRX_DICT_OP_NONE;
   trx->table_id = 0;

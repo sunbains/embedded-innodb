@@ -287,9 +287,9 @@ static int ib_default_compare(
 @return	true if positioned */
 static bool ib_btr_cursor_is_positioned(const btr_pcur_t *pcur) {
   return
-    pcur->m_old_stored == BTR_PCUR_OLD_STORED &&
-    (pcur->m_pos_state == BTR_PCUR_IS_POSITIONED ||
-     pcur->m_pos_state == BTR_PCUR_WAS_POSITIONED);
+    pcur->m_old_stored &&
+    (pcur->m_pos_state == Btr_pcur_positioned::IS_POSITIONED ||
+     pcur->m_pos_state == Btr_pcur_positioned::WAS_POSITIONED);
 }
 
 /** Delays an INSERT, DELETE or UPDATE operation if the purge is lagging. */

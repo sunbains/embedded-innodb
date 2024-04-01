@@ -1768,7 +1768,6 @@ static db_err row_ins_index_entry_low(
 ) /*!< in: query thread */
 {
   btr_cur_t cursor;
-  ulint ignore_sec_unique = 0;
   ulint modify = 0; /* remove warning */
   rec_t *insert_rec;
   rec_t *rec;
@@ -1784,16 +1783,8 @@ static db_err row_ins_index_entry_low(
 
   cursor.thr = thr;
 
-  /* Note that we use PAGE_CUR_LE as the search mode, because then
-  the function will return in both low_match and up_match of the
-  cursor sensible values */
-
-  if (!(thr_get_trx(thr)->check_unique_secondary)) {
-    ignore_sec_unique = BTR_IGNORE_SEC_UNIQUE;
-  }
-
   btr_cur_search_to_nth_level(
-    index, 0, entry, PAGE_CUR_LE, mode | BTR_INSERT | ignore_sec_unique, &cursor, 0, __FILE__, __LINE__, &mtr
+    index, 0, entry, PAGE_CUR_LE, mode | BTR_INSERT, &cursor, 0, __FILE__, __LINE__, &mtr
   );
 
 #ifdef UNIV_DEBUG

@@ -1628,7 +1628,7 @@ static void btr_lift_page_up(
   ulint page_level;
   page_t *page = block->get_frame();
   ulint root_page_no;
-  buf_block_t *blocks[BTR_MAX_LEVELS];
+  buf_block_t *blocks[BTR_MAX_DEPTH];
   ulint n_blocks; /*!< last used index in blocks[] */
   ulint i;
 
@@ -1657,7 +1657,7 @@ static void btr_lift_page_up(
     the first level, the tree is in an inconsistent state
     and can not be searched. */
     for (b = father_block; buf_block_get_page_no(b) != root_page_no;) {
-      ut_a(n_blocks < BTR_MAX_LEVELS);
+      ut_a(n_blocks < BTR_MAX_DEPTH);
 
       offsets = btr_page_get_father_block(offsets, heap, dict_index, b, mtr, &cursor);
 

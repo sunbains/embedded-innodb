@@ -84,7 +84,7 @@ Parallel_reader::Scan_ctx::Iter::~Iter() {
 
 Parallel_reader::~Parallel_reader() {
   mutex_free(&m_mutex);
-  os_event_free(&m_event);
+  os_event_free(m_event);
   if (!m_sync) {
     release_unused_threads(m_n_threads);
   }
@@ -250,19 +250,19 @@ class PCursor {
         The position also needs to take the previous search_mode into
         consideration. */
         switch (m_pcur->m_pos_state) {
-          case BTR_PCUR_IS_POSITIONED_OPTIMISTIC:
-            m_pcur->m_pos_state = BTR_PCUR_IS_POSITIONED;
+          case Btr_pcur_positioned::IS_POSITIONED_OPTIMISTIC:
+            m_pcur->m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
             /* The cursor always moves "up" ie. in ascending order. */
             break;
 
-          case BTR_PCUR_IS_POSITIONED:
+          case Btr_pcur_positioned::IS_POSITIONED:
             if (m_pcur->is_on_user_rec()) {
               m_pcur->move_to_next(m_mtr);
             }
             break;
 
-          case BTR_PCUR_NOT_POSITIONED:
-          case BTR_PCUR_WAS_POSITIONED:
+          case Btr_pcur_positioned::UNSET:
+          case Btr_pcur_positioned::WAS_POSITIONED:
             ut_error;
         }
         break;
@@ -311,7 +311,7 @@ buf_block_t *Parallel_reader::Scan_ctx::block_get_s_latched(const Page_id &page_
 
   auto block = buf_pool->get(req, nullptr);
 
-  buf_block_dbg_add_level(block, SYNC_TREE_NODE);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
 
   return block;
 }
@@ -364,7 +364,7 @@ dberr_t PCursor::move_to_user_rec() noexcept {
 
   block = buf_pool->get(req, nullptr);
 
-  buf_block_dbg_add_level(block, SYNC_TREE_NODE);
+  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
 
   if (page_is_leaf(block->get_frame())) {
     btr_leaf_page_release(page_cur_get_block(cur), RW_S_LATCH, m_mtr);
@@ -436,10 +436,11 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
         rec_trx_id = row_get_rec_trx_id(rec, m_config.m_index, offsets);
       }
 
-      if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED && !view->changes_visible(rec_trx_id, table_name)) {
+      if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
+          !view->changes_visible(rec_trx_id, table_name)) {
         rec_t *old_vers;
 
-        row_vers_build_for_consistent_read(rec, mtr, m_config.m_index, &offsets, view, &heap, heap, &old_vers, nullptr, nullptr);
+        row_vers_build_for_consistent_read(rec, mtr, m_config.m_index, &offsets, view, &heap, heap, &old_vers);
 
         rec = old_vers;
 
@@ -478,7 +479,9 @@ void Parallel_reader::Scan_ctx::copy_row(const rec_t *rec, Iter *iter) const {
 
   iter->m_rec = copy_rec;
 
-  auto tuple = row_rec_to_index_entry_low(iter->m_rec, m_config.m_index, iter->m_offsets, iter->m_heap);
+  ulint n_ext{};
+
+  auto tuple = row_rec_to_index_entry_low(iter->m_rec, m_config.m_index, iter->m_offsets, &n_ext, iter->m_heap);
 
   ut_ad(dtuple_validate(tuple));
 
@@ -509,7 +512,7 @@ Parallel_reader::Scan_ctx::create_persistent_cursor(const page_cur_t &page_curso
 
   if (page_rec_is_supremum(rec)) {
     /* Empty page, only root page can be empty. */
-    ut_a(!is_infimum || page_cursor.m_block->page.id.page_no() == m_config.m_index->page);
+    ut_a(!is_infimum || page_cursor.m_block->get_page_no() == m_config.m_index->page);
     return iter;
   }
 
@@ -678,7 +681,7 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
 
     bool skip{};
 
-    if (page_is_leaf(cur->m_block->frame)) {
+    if (page_is_leaf(cur->m_block->get_frame())) {
       skip = !m_scan_ctx->check_visibility(rec, offsets, heap, mtr);
     }
 
@@ -911,7 +914,7 @@ page_cur_t Parallel_reader::Scan_ctx::start_range(page_no_t page_no, mtr_t *mtr,
 
   /* Follow the left most pointer down on each page. */
   for (;;) {
-    auto savepoint = mtr_get_savepoint(&mtr);
+    auto savepoint = mtr_get_savepoint(mtr);
 
     auto block = block_get_s_latched(page_id, mtr, __LINE__);
 
@@ -987,7 +990,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
 
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   auto offsets = offsets_;
-m
+
   rec_offs_init(offsets_);
 
   page_cur_t page_cursor;
@@ -1078,7 +1081,7 @@ m
     /* We've created the persistent cursor, safe to release S latches on
     the blocks that are in this range (sub-tree). */
     for (auto &savepoint : savepoints) {
-      mtr_release_block_at_savepoint(&mtr, savepoint.first, savepoint.second);
+      mtr_release_block_at_savepoint(mtr, savepoint.first, savepoint.second);
     }
 
     if (m_depth == 0 && depth == 0) {
@@ -1147,7 +1150,7 @@ dberr_t Parallel_reader::Scan_ctx::create_context(const Range &range, bool split
 
   // clang-format off
 
-  auto ctx = std::make_shared<Ctx>({ctx_id, this, range});
+  auto ctx = std::shared_ptr<Ctx>(new Ctx(ctx_id, this, range), [](Ctx *ctx) { delete ctx; });
 
   // clang-format on
 

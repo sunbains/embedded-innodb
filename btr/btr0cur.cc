@@ -278,7 +278,7 @@ void btr_cur_search_to_nth_level(
 #endif
   insert_planned = latch_mode & BTR_INSERT;
   estimate = latch_mode & BTR_ESTIMATE;
-  latch_mode = latch_mode & ~(BTR_INSERT | BTR_ESTIMATE | BTR_IGNORE_SEC_UNIQUE);
+  latch_mode = latch_mode & ~(BTR_INSERT | BTR_ESTIMATE);
 
   ut_ad(!insert_planned || (mode == PAGE_CUR_LE));
 

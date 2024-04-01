@@ -199,18 +199,26 @@ struct buf_page_t {
    *
    * @return The freed_page_clock.
    */
-  ulint get_freed_page_clock() const {
+  [[nodiscard]] ulint get_freed_page_clock() const {
     /* This is sometimes read without holding buf_pool_mutex. */
     return m_freed_page_clock;
   }
 
   /**
-  * Gets the space id of a block.
+  * Gets the space id of a page.
   *
-  * @param bpage Pointer to the control block.
   * @return Space id.
   */
-  space_id_t get_space() const;
+  [[nodiscard]] space_id_t get_space() const;
+
+  /**
+  * Gets the page number of a page.
+  *
+  * @return Page number
+  */
+  [[nodiscard]] page_no_t get_page_no() const {
+    return m_page_no;
+  }
 
   /**
   * Gets the state of a block.
@@ -218,10 +226,10 @@ struct buf_page_t {
   * @param bpage Pointer to the control block.
   * @return The state of the block.
   */
-  buf_page_state get_state() const;
+  [[nodiscard]] buf_page_state get_state() const;
 
   /** @return cast the instance to a buf_page_t pointer. */
-  buf_block_t* get_block() {
+  [[nodiscard]] buf_block_t* get_block() {
     return reinterpret_cast<buf_block_t*>(this);
   }
 
@@ -349,6 +357,15 @@ struct buf_block_t {
   [[nodiscard]] space_id_t get_space() const;
 
   /**
+  * Gets the page number of a block.
+  *
+  * @return Page number
+  */
+  [[nodiscard]] page_no_t get_page_no() const {
+    return m_page.get_page_no();
+  }
+
+  /**
   * Gets the state of a block.
   *
   * @return The state of the block.
@@ -469,6 +486,7 @@ struct buf_pool_stat_t {
 struct Page_id {
 
   Page_id(Page_id&&) = default;
+  Page_id(const Page_id&) = default;
   Page_id& operator=(Page_id&&) = default;
   Page_id& operator=(const Page_id&) = default;
 

@@ -47,20 +47,27 @@ enum class Btree_cursor_pos : uint8_t {
   AFTER_LAST_IN_TREE = 5
 };
 
-/* TODO: currently, the state can be BTR_PCUR_IS_POSITIONED, though it
-really should be BTR_PCUR_WAS_POSITIONED, because we have no obligation
-to commit the cursor with mtr; similarly latch_mode may be out of date.
-This can lead to problems if btr_pcur is not used the right way; all
-current code should be ok. */
-constexpr ulint BTR_PCUR_IS_POSITIONED = 1997660512;
+enum class Btr_pcur_positioned {
+  /** Persistent cursor is not positioned. */
+  UNSET = 0,
 
-constexpr ulint BTR_PCUR_WAS_POSITIONED = 1187549791;
+  /** The persistent cursor is positioned by index search.
+  Or optimistic get for rel_pos == BTR_PCUR_ON. */
+  IS_POSITIONED,
 
-constexpr ulint BTR_PCUR_NOT_POSITIONED = 1328997689;
+  /** The persistent cursor is positioned by optimistic get to the same
+  record as it was positioned at. Not used for rel_pos == Btree_cursor_pos::ON.
+  It may need adjustment depending on previous/current search direction
+  and rel_pos. */
+  IS_POSITIONED_OPTIMISTIC,
 
-constexpr ulint BTR_PCUR_OLD_STORED = 908467085;
-
-constexpr ulint BTR_PCUR_OLD_NOT_STORED = 122766467;
+  /* TODO: currently, the state can be IS_POSITIONED, though it
+  really should be WAS_POSITIONED, because we have no obligation
+  to commit the cursor with mtr; similarly latch_mode may be out of date.
+  This can lead to problems if btr_pcur is not used the right way; all
+  current code should be ok. */
+  WAS_POSITIONED,
+};
 
 /* The persistent B-tree cursor structure. This is used mainly for SQL
 selects, updates, and deletes. */
@@ -109,6 +116,12 @@ struct btr_pcur_t {
    */
   void open_on_user_rec(dict_index_t *index, const dtuple_t *tuple, ib_srch_mode_t mode, ulint latch_mode, mtr_t *mtr, Source_location loc);
   
+   /** Allows setting the persistent cursor manually.
+    * @param[in] cursor      Page cursor where positioned.
+    * @param[in] mode        PAGE_CUR_L, ...
+    * @param[in] latch_mode  BTR_SEARCH_LEAF or BTR_MODIFY_LEAF */
+  void open_on_user_rec(const page_cur_t &cursor, ib_srch_mode_t mode, ulint latch_mode);
+
 
   /**
    * @brief Stores the position of the cursor.
@@ -476,8 +489,8 @@ struct btr_pcur_t {
   attached if the old position was stored in old_rec */
   ulint m_latch_mode{};
 
-  /** BTR_PCUR_OLD_STORED or BTR_PCUR_OLD_NOT_STORED */
-  ulint m_old_stored{};
+  /** true if the old cursor position is stored */
+  bool m_old_stored{};
 
   /** if cursor position is stored, contains an initial segment of the
   latest record cursor was positioned either on, before, or after */
@@ -497,11 +510,8 @@ struct btr_pcur_t {
   was stored */
   uint64_t m_modify_clock{};
 
-  /** see TODO note below!
-    BTR_PCUR_IS_POSITIONED,
-    BTR_PCUR_WAS_POSITIONED,
-    BTR_PCUR_NOT_POSITIONED */
-  ulint m_pos_state{BTR_PCUR_NOT_POSITIONED};
+  /** Cursor postiion state. */
+  Btr_pcur_positioned m_pos_state{Btr_pcur_positioned::UNSET};
 
   /** PAGE_CUR_G, ... */
   ib_srch_mode_t m_search_mode{};
@@ -530,8 +540,10 @@ struct btr_pcur_t {
 
 inline Btree_cursor_pos btr_pcur_t::get_rel_pos() const {
   ut_ad(m_old_rec != nullptr);
-  ut_ad(m_old_stored == BTR_PCUR_OLD_STORED);
-  ut_ad(m_pos_state == BTR_PCUR_WAS_POSITIONED || m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_old_stored);
+
+  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED ||
+        m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   return m_rel_pos;
 }
@@ -561,26 +573,27 @@ inline page_cur_t *btr_pcur_t::get_page_cur() {
 }
 
 inline page_t *btr_pcur_t::get_page() {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   return btr_cur_get_page(get_btr_cur());
 }
 
 inline buf_block_t *btr_pcur_t::get_block() {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   return btr_cur_get_block(get_btr_cur());
 }
 
 inline rec_t *btr_pcur_t::get_rec() {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   return btr_cur_get_rec(get_btr_cur());
 }
 
 inline ulint btr_pcur_t::get_up_match() {
-  ut_ad(m_pos_state == BTR_PCUR_WAS_POSITIONED || m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED ||
+        m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   auto btr_cur = get_btr_cur();
 
@@ -591,9 +604,10 @@ inline ulint btr_pcur_t::get_up_match() {
 
 inline ulint btr_pcur_t::get_low_match() {
   /**
-   * @note The cursor must be either in the BTR_PCUR_WAS_POSITIONED or BTR_PCUR_IS_POSITIONED state.
+   * @note The cursor must be either in the WAS_POSITIONED or IS_POSITIONED state.
    */
-  ut_ad(m_pos_state == BTR_PCUR_WAS_POSITIONED || m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED ||
+        m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   auto btr_cur = get_btr_cur();
 
@@ -606,28 +620,28 @@ inline ulint btr_pcur_t::get_low_match() {
 }
 
 inline bool btr_pcur_t::is_after_last_on_page() const {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   return page_cur_is_after_last(get_page_cur());
 }
 
 inline bool btr_pcur_t::is_before_first_on_page() const {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   return page_cur_is_before_first(get_page_cur());
 }
 
 inline bool btr_pcur_t::is_on_user_rec() const {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   return !is_before_first_on_page() && !is_after_last_on_page();
 }
 
 inline bool btr_pcur_t::is_before_first_in_tree(mtr_t *m) {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   if (btr_page_get_prev(get_page(), m) != FIL_NULL) {
@@ -638,7 +652,7 @@ inline bool btr_pcur_t::is_before_first_in_tree(mtr_t *m) {
 }
 
 inline bool btr_pcur_t::is_after_last_in_tree(mtr_t *m) {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   if (btr_page_get_next(get_page(), m) != FIL_NULL) {
@@ -649,21 +663,21 @@ inline bool btr_pcur_t::is_after_last_in_tree(mtr_t *m) {
 }
 
 inline void btr_pcur_t::move_to_next_on_page() {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   page_cur_move_to_next(get_page_cur());
 
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_old_stored = false;
 }
 
 inline void btr_pcur_t::move_to_prev_on_page() {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   page_cur_move_to_prev(get_page_cur());
 
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_old_stored = false;
 }
 
 inline void btr_pcur_t::move_to_last_on_page(mtr_t *) {
@@ -671,14 +685,14 @@ inline void btr_pcur_t::move_to_last_on_page(mtr_t *) {
 
   page_cur_set_after_last(get_block(), get_page_cur());
 
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_old_stored = false;
 }
 
 inline bool btr_pcur_t::move_to_next_user_rec(mtr_t *mtr) {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_old_stored = false;
 
   for (;;) {
     if (is_after_last_on_page()) {
@@ -696,10 +710,10 @@ inline bool btr_pcur_t::move_to_next_user_rec(mtr_t *mtr) {
 }
 
 inline bool btr_pcur_t::move_to_prev_user_rec(mtr_t *mtr) {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_old_stored = false;
 
   for (;;) {
     if (is_before_first_on_page()) {
@@ -718,10 +732,10 @@ inline bool btr_pcur_t::move_to_prev_user_rec(mtr_t *mtr) {
 }
 
 inline bool btr_pcur_t::move_to_next(mtr_t *mtr) {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_old_stored = false;
 
   if (is_after_last_on_page()) {
 
@@ -741,10 +755,10 @@ inline bool btr_pcur_t::move_to_next(mtr_t *mtr) {
 }
 
 inline bool btr_pcur_t::move_to_prev(mtr_t *mtr) {
-  ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_old_stored = false;
 
   if (is_before_first_on_page()) {
 
@@ -764,20 +778,20 @@ inline bool btr_pcur_t::move_to_prev(mtr_t *mtr) {
 }
 
 inline void btr_pcur_t::commit_specify_mtr(mtr_t *mtr) {
-  ut_a(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   m_latch_mode = BTR_NO_LATCHES;
 
   mtr_commit(mtr);
 
-  m_pos_state = BTR_PCUR_WAS_POSITIONED;
+  m_pos_state = Btr_pcur_positioned::WAS_POSITIONED;
 }
 
 inline void btr_pcur_t::detach() {
-  ut_a(m_pos_state == BTR_PCUR_IS_POSITIONED);
+  ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   m_latch_mode = BTR_NO_LATCHES;
-  m_pos_state = BTR_PCUR_WAS_POSITIONED;
+  m_pos_state = Btr_pcur_positioned::WAS_POSITIONED;
 }
 
 inline bool btr_pcur_t::is_detached() {
@@ -785,7 +799,7 @@ inline bool btr_pcur_t::is_detached() {
 }
 
 inline void btr_pcur_t::init(ulint read_level) {
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_old_stored = false;
   m_old_rec_buf = nullptr;
   m_old_rec = nullptr;
   m_read_level = read_level;
@@ -804,7 +818,7 @@ inline void btr_pcur_t::open(
 
   btr_cur_search_to_nth_level(dict_index, m_read_level, tuple, search_mode, latch_mode, btr_cur, 0, loc.m_from.file_name(), loc.m_from.line(), mtr);
 
-  m_pos_state = BTR_PCUR_IS_POSITIONED;
+  m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
 
   m_trx_if_known = nullptr;
 }
@@ -821,8 +835,8 @@ inline void btr_pcur_t::open_with_no_init(
 
   btr_cur_search_to_nth_level(dict_index, m_read_level, tuple, search_mode, latch_mode, btr_cur, has_search_latch, loc.m_from.file_name(), loc.m_from.line() , mtr);
 
-  m_pos_state = BTR_PCUR_IS_POSITIONED;
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
+  m_old_stored = false;
   m_trx_if_known = nullptr;
 }
 
@@ -841,8 +855,8 @@ inline void btr_pcur_t::open_at_index_side(bool from_left, dict_index_t *dict_in
 
   btr_cur_open_at_index_side(from_left, dict_index, latch_mode, get_btr_cur(), m_read_level, mtr);
 
-  m_pos_state = BTR_PCUR_IS_POSITIONED;
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
+  m_old_stored = false;
   m_trx_if_known = nullptr;
 }
 
@@ -855,8 +869,8 @@ inline void btr_pcur_t::set_random_position(dict_index_t *dict_index, ulint latc
 
   btr_cur_open_at_rnd_pos(dict_index, latch_mode, get_btr_cur(), mtr);
 
-  m_pos_state = BTR_PCUR_IS_POSITIONED;
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
+  m_old_stored = false;
   m_trx_if_known = nullptr;
 }
 
@@ -870,8 +884,8 @@ inline void btr_pcur_t::close() {
   m_btr_cur.m_page_cur.m_rec = nullptr;
   m_btr_cur.m_page_cur.m_block = nullptr;
   m_old_rec = nullptr;
-  m_old_stored = BTR_PCUR_OLD_NOT_STORED;
+  m_old_stored = false;
   m_latch_mode = BTR_NO_LATCHES;
-  m_pos_state = BTR_PCUR_NOT_POSITIONED;
+  m_pos_state = Btr_pcur_positioned::UNSET;
   m_trx_if_known = nullptr;
 }

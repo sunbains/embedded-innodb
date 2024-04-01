@@ -277,20 +277,13 @@ dtuple_t *row_build(
   return (row);
 }
 
-/** Converts an index record to a typed data tuple.
-@return index entry built; does not set info_bits, and the data fields
-in the entry will point directly to rec */
-
 dtuple_t *row_rec_to_index_entry_low(
-  const rec_t *rec,          /*!< in: record in the index */
-  const dict_index_t *index, /*!< in: index */
-  const ulint *offsets,      /*!< in: rec_get_offsets(rec, index) */
-  ulint *n_ext,              /*!< out: number of externally
-                               stored columns */
+  const rec_t *rec,
+  const dict_index_t *index,
+  const ulint *offsets,
+  ulint *n_ext,
   mem_heap_t *heap
-) /*!< in: memory heap from which
-                               the memory needed is allocated */
-{
+) {
   dtuple_t *entry;
   dfield_t *dfield;
   ulint i;
@@ -329,39 +322,19 @@ dtuple_t *row_rec_to_index_entry_low(
 
   ut_ad(dtuple_check_typed(entry));
 
-  return (entry);
+  return entry;
 }
 
-/** Converts an index record to a typed data tuple. NOTE that externally
-stored (often big) fields are NOT copied to heap.
-@return	own: index entry built; see the NOTE below! */
-
 dtuple_t *row_rec_to_index_entry(
-  ulint type,                /*!< in: ROW_COPY_DATA, or
-                                                  ROW_COPY_POINTERS: the former
-                                                  copies also the data fields to
-                                                  heap as the latter only places
-                                                  pointers to data fields on the
-                                                  index page */
-  const rec_t *rec,          /*!< in: record in the index;
-                                                  NOTE: in the case
-                                                  ROW_COPY_POINTERS the data
-                                                  fields in the row will point
-                                                  directly into this record,
-                                                  therefore, the buffer page of
-                                                  this record must be at least
-                                                  s-latched and the latch held
-                                                  as long as the dtuple is used! */
-  const dict_index_t *index, /*!< in: index */
-  ulint *offsets,            /*!< in/out: rec_get_offsets(rec) */
-  ulint *n_ext,              /*!< out: number of externally
-                                         stored columns */
-  mem_heap_t *heap
-) /*!< in: memory heap from which
-                                         the memory needed is allocated */
-{
-  dtuple_t *entry;
+  ulint type,
+  const rec_t *rec,
+  const dict_index_t *index,
+  ulint *offsets,
+  ulint *n_ext,
+  mem_heap_t *heap) {
+
   byte *buf;
+  dtuple_t *entry;
 
   ut_ad(rec && heap && index);
   ut_ad(rec_offs_validate(rec, index, offsets));

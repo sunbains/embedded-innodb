@@ -305,13 +305,6 @@ struct trx_t {
                          wants to suppress foreign key checks,
                          (in table imports, for example) we
                          set this false */
-  ulint check_unique_secondary;
-  /*!< normally true, but if the user
-  wants to speed up inserts by
-  suppressing unique key checks
-  for secondary indexes when we decide
-  if we can use the insert buffer for
-  them, we set this false */
 #ifdef WITH_XOPEN
   ulint support_xa;             /*!< normally we do the XA two-phase
                               commit steps, but by setting this to

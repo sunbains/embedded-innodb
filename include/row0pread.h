@@ -55,6 +55,7 @@ struct dict_table_t;
 #include "ut0mpmcbq.h"
 
 using dberr_t = db_err;
+using Page_range_t = std::pair<page_no_t, page_no_t>;
 
 /** The core idea is to find the left and right paths down the B+Tree.These
 paths correspond to the scan start and scan end search. Follow the links
