@@ -130,7 +130,7 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
 
   auto index = btr_cur_get_index(get_btr_cur());
 
-  if (unlikely(m_old_stored) ||
+  if (unlikely(!m_old_stored) ||
       unlikely(m_pos_state != Btr_pcur_positioned::WAS_POSITIONED &&
                m_pos_state != Btr_pcur_positioned::IS_POSITIONED)) {
 
