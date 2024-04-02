@@ -198,7 +198,6 @@ constexpr ulint MTR_BUF_MEMO_SIZE = 200;
  * in debug mode. */
 constexpr ulint MTR_MAGIC_N = 54551;
 
-#ifdef UNIV_DEBUG
 /** Minit-transaction is active. */
 constexpr ulint MTR_ACTIVE = 12231;
 
@@ -207,7 +206,6 @@ constexpr ulint MTR_COMMITTING = 56456;
 
 /** Mini-tranaction has committed. */
 constexpr ulint MTR_COMMITTED = 34676;
-#endif /* UNIV_DEBUG */
 
 /* Type definition of a mini-transaction memo stack slot. */
 struct mtr_memo_slot_t {

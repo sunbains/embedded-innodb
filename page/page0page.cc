@@ -592,7 +592,6 @@ void page_delete_rec_list_end(rec_t *rec, buf_block_t *block, dict_index_t *inde
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
 
-  ut_ad(page_rec_is_comp(rec));
   ut_ad(size == ULINT_UNDEFINED || size < UNIV_PAGE_SIZE);
 
   if (page_rec_is_infimum(rec)) {

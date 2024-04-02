@@ -35,7 +35,6 @@ struct dict_index_t;
 index record which needs external storage of data fields */
 struct big_rec_t;
 
-#ifdef UNIV_DEBUG
 /**
  * @brief Gets pointer to the type struct of SQL data field.
  * @param field - SQL data field
@@ -49,10 +48,6 @@ inline dtype_t *dfield_get_type(const dfield_t *field);
  * @return pointer to data
  */
 inline void *dfield_get_data(const dfield_t *field);
-#else /* UNIV_DEBUG */
-#define dfield_get_type(field) (&field->type)
-#define dfield_get_data(field) (reinterpret_cast<byte *>(field->data))
-#endif /* UNIV_DEBUG */
 
 /**
  * @brief Tests if dfield data length and content is equal to the given.
@@ -158,6 +153,7 @@ void dfield_var_init();
 debug version, dtuple_create() will make all fields of dtuple_t point
 to data_error. */
 extern byte data_error;
+#endif /* UNIV_DEBUG */
 
 /** Gets pointer to the type struct of SQL data field.
  * @param[in] field SQL data field
@@ -165,7 +161,6 @@ extern byte data_error;
 inline dtype_t *dfield_get_type(const dfield_t *field) {
   return const_cast<dtype_t *>(&field->type);
 }
-#endif /* UNIV_DEBUG */
 
 /**
  * Sets the type struct of SQL data field.
@@ -177,7 +172,6 @@ inline void dfield_set_type(dfield_t *field, dtype_t *type) {
   field->type = *type;
 }
 
-#ifdef UNIV_DEBUG
 /** Gets pointer to the data in a field.
 @return	pointer to data */
 inline void *dfield_get_data(const dfield_t *field) /*!< in: field */
@@ -187,7 +181,6 @@ inline void *dfield_get_data(const dfield_t *field) /*!< in: field */
 
   return const_cast<void*>(field->data);
 }
-#endif /* UNIV_DEBUG */
 
 /**
  * Gets length of field data.
@@ -195,10 +188,9 @@ inline void *dfield_get_data(const dfield_t *field) /*!< in: field */
  * @param field - field
  * @return length of data; UNIV_SQL_NULL if SQL null data
  */
-inline ulint dfield_get_len(const dfield_t *field)
-{
+inline ulint dfield_get_len(const dfield_t *field) {
   ut_ad(field->len == UNIV_SQL_NULL || field->data != &data_error);
-return field->len;
+  return field->len;
 }
 
 /**

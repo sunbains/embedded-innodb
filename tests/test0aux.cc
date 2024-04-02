@@ -305,22 +305,18 @@ void test_configure() {
   }
 }
 
-/** Generate random text upto max size. */
-
-int gen_rand_text(char *ptr,    /*!< in,out: text written here */
-                  int max_size) /*!< in: max size of ptr */
-{
-  int i;
-  int len = 0;
+int gen_rand_text(char *ptr, int max_size) {
   static char txt[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                       "abcdefghijklmnopqrstuvwxyz"
                       "0123456789";
+
+  int len{};
 
   do {
     len = random() % max_size;
   } while (len == 0);
 
-  for (i = 0; i < len; ++i, ++ptr) {
+  for (int i = 0; i < len; ++i, ++ptr) {
     *ptr = txt[random() % (sizeof(txt) - 1)];
   }
 
@@ -330,24 +326,23 @@ int gen_rand_text(char *ptr,    /*!< in,out: text written here */
 struct option ib_longopts[] = {
     {"ib-buffer-pool-size", required_argument, nullptr, 1},
     {"ib-log-file-size", required_argument, nullptr, 2},
-    {"ib-disable-ahi", no_argument, nullptr, 3},
-    {"ib-io-capacity", required_argument, nullptr, 4},
-    {"ib-use-sys-malloc", required_argument, nullptr, 5},
-    {"ib-lru-old-ratio", required_argument, nullptr, 6},
-    {"ib-lru-access-threshold", required_argument, nullptr, 7},
-    {"ib-force-recovery", required_argument, nullptr, 8},
-    {"ib-log-dir", required_argument, nullptr, 9},
-    {"ib-data-dir", required_argument, nullptr, 10},
-    {"ib-data-file-path", required_argument, nullptr, 11},
-    {"ib-disble-dblwr", no_argument, nullptr, 12},
-    {"ib-disble-checksum", no_argument, nullptr, 13},
-    {"ib-disble-file-per-table", no_argument, nullptr, 14},
-    {"ib-flush-log-at-trx-commit", required_argument, nullptr, 15},
-    {"ib-flush-method", required_argument, nullptr, 16},
-    {"ib-read-threads", required_argument, nullptr, 17},
-    {"ib-write-threads", required_argument, nullptr, 18},
-    {"ib-max-open-files", required_argument, nullptr, 19},
-    {"ib-lock-wait-timeout", required_argument, nullptr, 20},
+    {"ib-io-capacity", required_argument, nullptr, 3},
+    {"ib-use-sys-malloc", required_argument, nullptr, 4},
+    {"ib-lru-old-ratio", required_argument, nullptr, 5},
+    {"ib-lru-access-threshold", required_argument, nullptr, 6},
+    {"ib-force-recovery", required_argument, nullptr, 7},
+    {"ib-log-dir", required_argument, nullptr, 8},
+    {"ib-data-dir", required_argument, nullptr, 9},
+    {"ib-data-file-path", required_argument, nullptr, 10},
+    {"ib-disble-dblwr", no_argument, nullptr, 11},
+    {"ib-disble-checksum", no_argument, nullptr, 12},
+    {"ib-disble-file-per-table", no_argument, nullptr, 13},
+    {"ib-flush-log-at-trx-commit", required_argument, nullptr, 14},
+    {"ib-flush-method", required_argument, nullptr, 15},
+    {"ib-read-threads", required_argument, nullptr, 16},
+    {"ib-write-threads", required_argument, nullptr, 17},
+    {"ib-max-open-files", required_argument, nullptr, 18},
+    {"ib-lock-wait-timeout", required_argument, nullptr, 19},
     {nullptr, 0, nullptr, 0}};
 
 /** Print usage. */
@@ -377,7 +372,6 @@ void print_usage(const char *progname) {
 }
 
 /** Set the runtime global options. */
-
 ib_err_t set_global_option(int opt, const char *arg) {
   ib_err_t err = DB_ERROR;
 
@@ -532,17 +526,16 @@ ib_err_t set_global_option(int opt, const char *arg) {
     err = DB_ERROR;
     break;
 
-  } /* switch */
+  }
 
-  return (err);
+  return err;
 }
 
 /** Print API version to stdout. */
 
 void print_version(void) {
-  uint64_t version;
+  auto version = ib_api_version();
 
-  version = ib_api_version();
   printf("API: %d.%d.%d\n", (int)(version >> 32), /* Current version */
          (int)((version >> 16)) & 0xffff,         /* Revisiion */
          (int)(version & 0xffff));                /* Age */
@@ -559,8 +552,7 @@ static int config_skip_line(FILE *fp) {
 }
 
 /** Add an element to the config. */
-static void config_add_elem(ib_config_t *config, const ib_string_t *key,
-                            const ib_string_t *val) {
+static void config_add_elem(ib_config_t *config, const ib_string_t *key, const ib_string_t *val) {
   ib_var_t *var;
 
   if (config->n_count == 0) {
@@ -715,7 +707,6 @@ void config_print(const ib_config_t *config) {
 }
 
 /** Free the the elements. */
-
 void config_free(ib_config_t *config) {
   ib_ulint_t i;
 
@@ -729,10 +720,7 @@ void config_free(ib_config_t *config) {
 }
 
 /** Drop the table. */
-
-ib_err_t drop_table(const char *dbname, /*!< in: database name */
-                    const char *name)   /*!< in: table to drop */
-{
+ib_err_t drop_table(const char *dbname, const char *name) {
   ib_err_t err;
   ib_trx_t ib_trx;
   char table_name[IB_MAX_TABLE_NAME_LEN];

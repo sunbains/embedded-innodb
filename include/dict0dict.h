@@ -855,7 +855,6 @@ inline ulint dict_index_get_n_ordering_defined_by_user(const dict_index_t *dict_
   return dict_index->n_user_defined_cols;
 }
 
-#ifdef UNIV_DEBUG
 /** Gets the nth field of an index.
  * @param index in: index
  * @param pos in: position of field
@@ -864,9 +863,8 @@ inline dict_field_t *dict_index_get_nth_field(const dict_index_t *index, ulint p
   ut_ad(pos < index->n_def);
   ut_ad(index->magic_n == DICT_INDEX_MAGIC_N);
 
-  return ((dict_field_t *)(index->fields) + pos);
+  return const_cast<dict_field_t *>(&index->fields[pos]);
 }
-#endif /* UNIV_DEBUG */
 
 /** Returns the position of a system column in an index.
  * @param dict_index in: index

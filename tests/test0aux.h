@@ -4,8 +4,9 @@
 #include <stdlib.h>
 
 #include "innodb.h"
+#include "ut0logger.h"
 
-#define USER_OPT 1000
+constexpr int USER_OPT = 1000;
 
 #define OK(expr)                                                               \
   do {                                                                         \

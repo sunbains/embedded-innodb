@@ -223,23 +223,14 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 }
 
 /** Open a table and return a cursor for the table. */
-static ib_err_t open_table(const char *dbname, /*!< in: database name */
-                           const char *name,   /*!< in: table name */
-                           ib_trx_t ib_trx,    /*!< in: transaction */
-                           ib_crsr_t *crsr)    /*!< out: innodb cursor */
-{
-  ib_err_t err = DB_SUCCESS;
+static ib_err_t open_table(const char *dbname, const char *name, ib_trx_t ib_trx, ib_crsr_t *crsr) {
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
-  snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
-  err = ib_cursor_open_table(table_name, ib_trx, crsr);
+  snprintf(table_name, sizeof(table_name), "%.64s/%.64s", dbname, name);
+  auto err = ib_cursor_open_table(table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 
-  return (err);
+  return err;
 }
 
 /** INSERT INTO T VALUE(i, i); */
