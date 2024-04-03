@@ -36,6 +36,7 @@ Created 9/5/1995 Heikki Tuuri
 #include "os0thread.h"
 #include "sync0arr.h"
 #include "sync0mutex.h"
+#include "ut0counter.h"
 #include "ut0mem.h"
 
 /** Initializes the synchronization data structures. */
@@ -53,7 +54,7 @@ necessary only if the memory block containing it is freed. */
 location (which must be appropriately aligned). The mutex is initialized
 in the reset state. Explicit freeing of the mutex with mutex_free is
 necessary only if the memory block containing it is freed. */
-void mutex_create(mutex_t *mutex, IF_DEBUG(const char *cmutex_name,) IF_SYNC_DEBUG(ulint level,) Source_location loc);
+void mutex_create(mutex_t *mutex, IF_DEBUG(const char *cmutex_name, ) IF_SYNC_DEBUG(ulint level, ) Source_location loc);
 
 /** Calling this function is obligatory only if the memory buffer containing
 the mutex is freed. Removes a mutex object from the mutex list. The mutex
@@ -390,7 +391,9 @@ to 20 microseconds. */
 #define SYNC_SPIN_ROUNDS srv_n_spin_wait_rounds
 
 /** The number of mutex_exit calls. Intended for performance monitoring. */
-extern int64_t mutex_exit_count;
+// FIXME(RAHUL): Figure out the number of cpus.
+using counter_t = Sharded_counter<16>;
+extern counter_t mutex_exit_count;
 
 #ifdef UNIV_SYNC_DEBUG
 /** Latching order checks start when this is set true */

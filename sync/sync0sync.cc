@@ -162,16 +162,16 @@ Q.E.D. */
 
 /** The number of iterations in the mutex_spin_wait() spin loop.
 Intended for performance monitoring. */
-static int64_t mutex_spin_round_count = 0;
+static counter_t mutex_spin_round_count{};
 
 /** The number of mutex_spin_wait() calls.  Intended for performance monitoring. */
-static int64_t mutex_spin_wait_count = 0;
+static counter_t mutex_spin_wait_count{};
 
 /** The number of OS waits in mutex_spin_wait().  Intended for performance monitoring. */
-static int64_t mutex_os_wait_count = 0;
+static counter_t mutex_os_wait_count{};
 
 /** The number of mutex_exit() calls. Intended for performance monitoring. */
-int64_t mutex_exit_count = 0;
+counter_t mutex_exit_count{};
 
 /** The global array of wait cells for implementation of the database's own
 mutexes and read-write locks */
@@ -228,10 +228,10 @@ struct sync_level_struct {
 };
 
 void sync_var_init() {
-  mutex_spin_round_count = 0;
-  mutex_spin_wait_count = 0;
-  mutex_os_wait_count = 0;
-  mutex_exit_count = 0;
+  mutex_spin_round_count.reset();
+  mutex_spin_wait_count.reset();
+  mutex_os_wait_count.reset();
+  mutex_exit_count.reset();
   sync_primary_wait_array = nullptr;
   sync_initialized = false;
 
@@ -244,20 +244,14 @@ void sync_var_init() {
 #endif /* UNIV_SYNC_DEBUG */
 }
 
-void mutex_create(mutex_t *mutex, IF_DEBUG(const char *cmutex_name,) IF_SYNC_DEBUG(ulint level,) Source_location loc) {
+void mutex_create(mutex_t *mutex, IF_DEBUG(const char *cmutex_name, ) IF_SYNC_DEBUG(ulint level, ) Source_location loc) {
   new (mutex) mutex_t;
 
   mutex->init();
 
-  IF_SYNC_DEBUG(
-    mutex->file_name = "not yet reserved";
-    mutex->level = level;
-  )
+  IF_SYNC_DEBUG(mutex->file_name = "not yet reserved"; mutex->level = level;)
 
-  IF_SYNC_DEBUG(
-    mutex->cfile_name = cfile_name;
-    mutex->cline = cline;
-  )
+  IF_SYNC_DEBUG(mutex->cfile_name = cfile_name; mutex->cline = cline;)
 
   ut_d(mutex->cmutex_name = cmutex_name);
 
@@ -298,7 +292,7 @@ void mutex_free(mutex_t *mutex) {
   ut_a(mutex_get_lock_word(mutex) == 0);
   ut_a(mutex_get_waiters(mutex) == 0);
 
-  if (mutex != &mutex_list_mutex IF_SYNC_DEBUG(&& mutex != &sync_thread_mutex)) {
+  if (mutex != &mutex_list_mutex IF_SYNC_DEBUG(&&mutex != &sync_thread_mutex)) {
     mutex_enter(&mutex_list_mutex);
 
     ut_ad(!UT_LIST_GET_PREV(list, mutex) || UT_LIST_GET_PREV(list, mutex)->magic_n == MUTEX_MAGIC_N);
@@ -375,7 +369,7 @@ void mutex_spin_wait(mutex_t *mutex, const char *file_name, ulint line) {
   isn't exact. Moved out of ifdef that follows because we are willing
   to sacrifice the cost of counting this as the data is valuable.
   Count the number of calls to mutex_spin_wait. */
-  mutex_spin_wait_count++;
+  mutex_spin_wait_count.inc(1);
 
 mutex_loop:
 
@@ -423,7 +417,7 @@ spin_loop:
   );
 #endif
 
-  mutex_spin_round_count += i;
+  mutex_spin_round_count.inc(i);
 
   ut_d(mutex->count_spin_rounds += i);
 
@@ -507,7 +501,7 @@ spin_loop:
   );
 #endif
 
-  mutex_os_wait_count++;
+  mutex_os_wait_count.inc(1);
 
   mutex->count_os_wait++;
 #ifdef UNIV_DEBUG
@@ -1156,46 +1150,37 @@ void sync_init() {
 
   /* Init the mutex list and create the mutex to protect it. */
   UT_LIST_INIT(mutex_list);
-  mutex_create(&mutex_list_mutex, IF_DEBUG("mutex_list_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Source_location{});
+  mutex_create(&mutex_list_mutex, IF_DEBUG("mutex_list_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Source_location{});
 
-  IF_SYNC_DEBUG(
-    mutex_create(&sync_thread_mutex, IF_DEBUG("sync_thread",) SYNC_NO_ORDER_CHECK, Source_location{});
-  )
+  IF_SYNC_DEBUG(mutex_create(&sync_thread_mutex, IF_DEBUG("sync_thread", ) SYNC_NO_ORDER_CHECK, Source_location{});)
 
   /* Init the rw-lock list and create the mutex to protect it. */
 
   UT_LIST_INIT(rw_lock_list);
-  mutex_create(&rw_lock_list_mutex, IF_DEBUG("rw_lock_list_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Source_location{});
+  mutex_create(&rw_lock_list_mutex, IF_DEBUG("rw_lock_list_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Source_location{});
 
-  IF_SYNC_DEBUG(
-    mutex_create(&rw_lock_debug_mutex, "rw_lock_debug_mutex", SYNC_NO_ORDER_CHECK, Source_location{});
+  IF_SYNC_DEBUG(mutex_create(&rw_lock_debug_mutex, "rw_lock_debug_mutex", SYNC_NO_ORDER_CHECK, Source_location{});
 
-    rw_lock_debug_event = os_event_create(nullptr);
-    rw_lock_debug_m_waiters = false;
-  )
+                rw_lock_debug_event = os_event_create(nullptr);
+                rw_lock_debug_m_waiters = false;)
 }
 
 void sync_close() {
   sync_array_free(sync_primary_wait_array);
 
-  for (auto mutex = UT_LIST_GET_FIRST(mutex_list);
-       mutex != nullptr;
-       mutex = UT_LIST_GET_FIRST(mutex_list)) {
+  for (auto mutex = UT_LIST_GET_FIRST(mutex_list); mutex != nullptr; mutex = UT_LIST_GET_FIRST(mutex_list)) {
     mutex_free(mutex);
   }
 
   mutex_free(&mutex_list_mutex);
 
-  IF_SYNC_DEBUG(
-    mutex_free(&sync_thread_mutex);
-    sync_order_checks_on = false;
+  IF_SYNC_DEBUG(mutex_free(&sync_thread_mutex); sync_order_checks_on = false;
 
-    /* Switch latching order checks on in sync0sync.c */
-    sync_order_checks_on = false;
+                /* Switch latching order checks on in sync0sync.c */
+                sync_order_checks_on = false;
 
-    delete {} sync_thread_level_arrays;
-    sync_thread_level_arrays = nullptr;
-  )
+                delete {} sync_thread_level_arrays;
+                sync_thread_level_arrays = nullptr;)
 
   sync_initialized = false;
 }
@@ -1213,9 +1198,9 @@ void sync_print_wait_info(ib_stream_t ib_stream) /*!< in: stream where to print 
     "Mutex spin waits %lu, rounds %lu, OS waits %lu\n"
     "RW-shared spins %lu, OS waits %lu;"
     " RW-excl spins %lu, OS waits %lu\n",
-    mutex_spin_wait_count,
-    mutex_spin_round_count,
-    mutex_os_wait_count,
+    mutex_spin_wait_count.value(),
+    mutex_spin_round_count.value(),
+    mutex_os_wait_count.value(),
     rw_s_spin_wait_count,
     rw_s_os_wait_count,
     rw_x_spin_wait_count,
@@ -1225,17 +1210,14 @@ void sync_print_wait_info(ib_stream_t ib_stream) /*!< in: stream where to print 
   ib_logger(
     ib_stream,
     "Spin rounds per wait: %.2f mutex, %.2f RW-shared, %.2f RW-excl\n",
-    (double)mutex_spin_round_count / (mutex_spin_wait_count ? mutex_spin_wait_count : 1),
+    (double)mutex_spin_round_count.value() / (mutex_spin_wait_count.value() ? mutex_spin_wait_count.value() : 1),
     (double)rw_s_spin_round_count / (rw_s_spin_wait_count ? rw_s_spin_wait_count : 1),
     (double)rw_x_spin_round_count / (rw_x_spin_wait_count ? rw_x_spin_wait_count : 1)
   );
 }
 
 void sync_print(ib_stream_t ib_stream) {
-  IF_SYNC_DEBUG(
-    mutex_list_print_info(ib_stream);
-    rw_lock_list_print_info(ib_stream);
-  )
+  IF_SYNC_DEBUG(mutex_list_print_info(ib_stream); rw_lock_list_print_info(ib_stream);)
 
   sync_array_print_info(ib_stream, sync_primary_wait_array);
 
