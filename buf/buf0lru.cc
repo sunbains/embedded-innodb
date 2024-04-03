@@ -73,7 +73,7 @@ void Buf_LRU::invalidate_tablespace(space_id_t id) {
     auto bpage = UT_LIST_GET_LAST(buf_pool->m_LRU_list);
 
     while (bpage != nullptr) {
-      ut_a(buf_page_in_file(bpage));
+      ut_a(bpage->in_file());
 
       auto prev_bpage = UT_LIST_GET_PREV(m_LRU_list, bpage);
 
@@ -148,7 +148,7 @@ bool Buf_LRU::free_from_common_LRU_list(ulint n_iterations) {
     auto block_mutex = buf_page_get_mutex(bpage);
 
     ut_ad(bpage->m_in_LRU_list);
-    ut_ad(buf_page_in_file(bpage));
+    ut_ad(bpage->in_file());
 
     mutex_enter(block_mutex);
 
@@ -234,7 +234,7 @@ buf_block_t *Buf_LRU::get_free_only() {
     ut_d(block->m_page.m_in_free_list = false);
     ut_ad(!block->m_page.m_in_flush_list);
     ut_ad(!block->m_page.m_in_LRU_list);
-    ut_a(!buf_page_in_file(&block->m_page));
+    ut_a(!block->m_page.in_file());
 
     UT_LIST_REMOVE(buf_pool->m_free_list, (&block->m_page));
 
@@ -465,7 +465,7 @@ void Buf_LRU::old_init() {
        bpage = UT_LIST_GET_PREV(m_LRU_list, bpage)) {
 
     ut_ad(bpage->m_in_LRU_list);
-    ut_ad(buf_page_in_file(bpage));
+    ut_ad(bpage->in_file());
     /* This loop temporarily violates the
     assertions of buf_page_set_old(). */
     bpage->m_old = true;
@@ -482,7 +482,7 @@ void Buf_LRU::remove_block(buf_page_t *bpage) {
   ut_ad(bpage);
   ut_ad(buf_pool_mutex_own());
 
-  ut_a(buf_page_in_file(bpage));
+  ut_a(bpage->in_file());
 
   ut_ad(bpage->m_in_LRU_list);
 
@@ -539,7 +539,7 @@ void Buf_LRU::add_block_to_end_low(buf_page_t *bpage) {
   ut_ad(bpage);
   ut_ad(buf_pool_mutex_own());
 
-  ut_a(buf_page_in_file(bpage));
+  ut_a(bpage->in_file());
 
   ut_ad(!bpage->m_in_LRU_list);
   UT_LIST_ADD_LAST(buf_pool->m_LRU_list, bpage);
@@ -571,7 +571,7 @@ void Buf_LRU::add_block_low(buf_page_t *bpage, bool old) {
   ut_ad(bpage);
   ut_ad(buf_pool_mutex_own());
 
-  ut_a(buf_page_in_file(bpage));
+  ut_a(bpage->in_file());
   ut_ad(!bpage->m_in_LRU_list);
 
   if (!old || (UT_LIST_GET_LEN(buf_pool->m_LRU_list) < OLD_MIN_LEN)) {
@@ -631,7 +631,7 @@ Buf_LRU::Block_status Buf_LRU::free_block(buf_page_t *bpage, bool *buf_pool_mute
 
   ut_ad(buf_pool_mutex_own());
   ut_ad(mutex_own(block_mutex));
-  ut_ad(buf_page_in_file(bpage));
+  ut_ad(bpage->in_file());
   ut_ad(bpage->m_in_LRU_list);
   ut_ad(!bpage->m_in_flush_list == !bpage->m_oldest_modification);
 
@@ -953,7 +953,7 @@ void Buf_LRU::print() {
        bpage != nullptr;
        bpage = UT_LIST_GET_NEXT(m_LRU_list, bpage)) {
 
-    ib_logger(ib_stream, "BLOCK space %lu page %lu ", (ulong)bpage->get_space(), (ulong)buf_page_get_page_no(bpage));
+    ib_logger(ib_stream, "BLOCK space %lu page %lu ", (ulong)bpage->get_space(), (ulong)bpage->get_page_no());
 
     if (buf_page_is_old(bpage)) {
       ib_logger(ib_stream, "old ");

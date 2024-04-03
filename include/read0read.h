@@ -26,9 +26,9 @@ Created 2/16/1997 Heikki Tuuri
 #include "innodb0types.h"
 
 #include "read0types.h"
-#include "trx0trx.h"
 #include "ut0byte.h"
-#include "ut0lst.h"
+
+struct trx_t;
 
 /**
  * Opens a read view where exactly the transactions serialized before this

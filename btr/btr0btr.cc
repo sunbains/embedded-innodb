@@ -331,7 +331,7 @@ void btr_page_free_low(dict_index_t *dict_index, buf_block_t *block, ulint level
     seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_TOP;
   }
 
-  fseg_free_page(seg_header, block->get_space(), buf_block_get_page_no(block), mtr);
+  fseg_free_page(seg_header, block->get_space(), block->get_page_no(), mtr);
 }
 
 void btr_page_free(dict_index_t *dict_index, buf_block_t *block, mtr_t *mtr) {
@@ -392,11 +392,9 @@ static ulint *btr_page_get_father_node_ptr_func(
   rec_t *user_rec;
   rec_t *node_ptr;
   ulint level;
-  ulint page_no;
-  dict_index_t *dict_index;
 
-  page_no = buf_block_get_page_no(btr_cur_get_block(cursor));
-  dict_index = btr_cur_get_index(cursor);
+  auto page_no = btr_cur_get_block(cursor)->get_page_no();
+  auto dict_index = btr_cur_get_index(cursor);
 
   ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
 
@@ -500,7 +498,7 @@ ulint btr_create(ulint type, ulint space, uint64_t index_id, dict_index_t *dict_
     return FIL_NULL;
   }
 
-  auto page_no = buf_block_get_page_no(block);
+  auto page_no = block->get_page_no();
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE_NEW));
 
@@ -796,7 +794,7 @@ rec_t *btr_root_raise_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ulint
   heap = mem_heap_create(100);
 
   rec = page_rec_get_next(page_get_infimum_rec(new_page));
-  new_page_no = buf_block_get_page_no(new_block);
+  new_page_no = new_block->get_page_no();
 
   /* Build the node pointer (= node key and page address) for the
   child */
@@ -1185,9 +1183,9 @@ static void btr_attach_half_pages(
     ulint *offsets;
 
     lower_page = new_block->get_frame();
-    lower_page_no = buf_block_get_page_no(new_block);
+    lower_page_no = new_block->get_page_no();
     upper_page = block->get_frame();
-    upper_page_no = buf_block_get_page_no(block);
+    upper_page_no = block->get_page_no();
 
     /* Look up the index for the node pointer to page */
     offsets = btr_page_get_father_block(nullptr, heap, dict_index, block, mtr, &cursor);
@@ -1199,9 +1197,9 @@ static void btr_attach_half_pages(
     mem_heap_empty(heap);
   } else {
     lower_page = block->get_frame();
-    lower_page_no = buf_block_get_page_no(block);
+    lower_page_no = block->get_page_no();
     upper_page = new_block->get_frame();
-    upper_page_no = buf_block_get_page_no(new_block);
+    upper_page_no = new_block->get_page_no();
   }
 
   /* Get the level of the split pages */
@@ -1234,7 +1232,7 @@ static void btr_attach_half_pages(
 
 #ifdef UNIV_BTR_DEBUG
     ut_a(page_is_comp(prev_block->get_frame()) == page_is_comp(page));
-    ut_a(btr_page_get_next(prev_block->get_frame(), mtr) == buf_block_get_page_no(block));
+    ut_a(btr_page_get_next(prev_block->get_frame(), mtr) == block->get_page_no());
 #endif /* UNIV_BTR_DEBUG */
 
     btr_page_set_next(prev_block->get_frame(), lower_page_no, mtr);
@@ -1324,7 +1322,7 @@ func_start:
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
   ut_ad(page_get_n_recs(page) >= 1);
 
-  page_no = buf_block_get_page_no(block);
+  page_no = block->get_page_no();
 
   /* 1. Decide the split record; split_rec == nullptr means that the
   tuple to be inserted should be the first record on the upper
@@ -1656,7 +1654,7 @@ static void btr_lift_page_up(
     the tree now because later on, after we've replaced
     the first level, the tree is in an inconsistent state
     and can not be searched. */
-    for (b = father_block; buf_block_get_page_no(b) != root_page_no;) {
+    for (b = father_block; b->get_page_no() != root_page_no;) {
       ut_a(n_blocks < BTR_MAX_DEPTH);
 
       offsets = btr_page_get_father_block(offsets, heap, dict_index, b, mtr, &cursor);
@@ -1731,7 +1729,7 @@ bool btr_compress(btr_cur_t *cursor, mtr_t *mtr) {
     merge_page = merge_block->get_frame();
 
 #ifdef UNIV_BTR_DEBUG
-    ut_a(btr_page_get_next(merge_page, mtr) == buf_block_get_page_no(block));
+    ut_a(btr_page_get_next(merge_page, mtr) == block->get_page_no());
 #endif /* UNIV_BTR_DEBUG */
 
   } else if (right_page_no != FIL_NULL) {
@@ -1740,7 +1738,7 @@ bool btr_compress(btr_cur_t *cursor, mtr_t *mtr) {
     merge_page = merge_block->get_frame();
 
 #ifdef UNIV_BTR_DEBUG
-    ut_a(btr_page_get_prev(merge_page, mtr) == buf_block_get_page_no(block));
+    ut_a(btr_page_get_prev(merge_page, mtr) == block->get_page_no());
 #endif /* UNIV_BTR_DEBUG */
 
   } else {
@@ -1848,7 +1846,7 @@ static void btr_discard_only_page_on_level(
   /* Save the PAGE_MAX_TRX_ID from the leaf page. */
   auto max_trx_id = page_get_max_trx_id(block->get_frame());
 
-  while (buf_block_get_page_no(block) != dict_index_get_page(dict_index)) {
+  while (block->get_page_no() != dict_index_get_page(dict_index)) {
     btr_cur_t cursor;
     buf_block_t *father;
     const page_t *page = block->get_frame();
@@ -1904,7 +1902,7 @@ void btr_discard_page(btr_cur_t *cursor, mtr_t *mtr) {
   block = btr_cur_get_block(cursor);
   dict_index = btr_cur_get_index(cursor);
 
-  ut_ad(dict_index_get_page(dict_index) != buf_block_get_page_no(block));
+  ut_ad(dict_index_get_page(dict_index) != block->get_page_no());
   ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
   space = dict_index_get_space(dict_index);
@@ -1919,7 +1917,7 @@ void btr_discard_page(btr_cur_t *cursor, mtr_t *mtr) {
     merge_page = merge_block->get_frame();
 
 #ifdef UNIV_BTR_DEBUG
-    ut_a(btr_page_get_next(merge_page, mtr) == buf_block_get_page_no(block));
+    ut_a(btr_page_get_next(merge_page, mtr) == block->get_page_no());
 #endif /* UNIV_BTR_DEBUG */
 
   } else if (right_page_no != FIL_NULL) {
@@ -1927,7 +1925,7 @@ void btr_discard_page(btr_cur_t *cursor, mtr_t *mtr) {
     merge_page = merge_block->get_frame();
 
 #ifdef UNIV_BTR_DEBUG
-    ut_a(btr_page_get_prev(merge_page, mtr) == buf_block_get_page_no(block));
+    ut_a(btr_page_get_prev(merge_page, mtr) == block->get_page_no());
 #endif /* UNIV_BTR_DEBUG */
 
   } else {
@@ -2005,7 +2003,7 @@ static void btr_print_recursive(
 
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
   ib_logger(
-    ib_stream, "NODE ON LEVEL %lu page number %lu\n", (ulong)btr_page_get_level(page, mtr), (ulong)buf_block_get_page_no(block)
+    ib_stream, "NODE ON LEVEL %lu page number %lu\n", (ulong)btr_page_get_level(page, mtr), (ulong)block->get_page_no()
   );
 
   page_print(block, index, width, width);
@@ -2092,7 +2090,7 @@ bool btr_check_node_ptr(
   page_t *page = block->get_frame();
 
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
-  if (dict_index_get_page(index) == buf_block_get_page_no(block)) {
+  if (dict_index_get_page(index) == block->get_page_no()) {
 
     return (true);
   }
@@ -2260,7 +2258,7 @@ static void btr_validate_report1(
   const buf_block_t *block
 ) /*!< in: index page */
 {
-  ib_logger(ib_stream, "Error in page %lu of ", buf_block_get_page_no(block));
+  ib_logger(ib_stream, "Error in page %lu of ", block->get_page_no());
   dict_index_name_print(ib_stream, nullptr, dict_index);
   if (level) {
     ib_logger(ib_stream, ", index tree level %lu", level);
@@ -2276,7 +2274,7 @@ static void btr_validate_report2(
   const buf_block_t *block2
 ) /*!< in: second index page */
 {
-  ib_logger(ib_stream, "Error in pages %lu and %lu of ", buf_block_get_page_no(block1), buf_block_get_page_no(block2));
+  ib_logger(ib_stream, "Error in pages %lu and %lu of ", block1->get_page_no(), block2->get_page_no());
   dict_index_name_print(ib_stream, nullptr, dict_index);
   if (level) {
     ib_logger(ib_stream, ", index tree level %lu", level);
@@ -2432,7 +2430,7 @@ loop:
     ut_a(REC_INFO_MIN_REC_FLAG & rec_get_info_bits(page_rec_get_next(page_get_infimum_rec(page)), page_is_comp(page)));
   }
 
-  if (buf_block_get_page_no(block) != dict_index_get_page(dict_index)) {
+  if (block->get_page_no() != dict_index_get_page(dict_index)) {
 
     /* Check father node pointers */
 
@@ -2445,7 +2443,7 @@ loop:
     btr_cur_position(dict_index, page_rec_get_prev(page_get_supremum_rec(page)), block, &node_cur);
     offsets = btr_page_get_father_node_ptr(offsets, heap, &node_cur, &mtr);
 
-    if (unlikely(node_ptr != btr_cur_get_rec(&node_cur)) || unlikely(btr_node_ptr_get_child_page_no(node_ptr, offsets) != buf_block_get_page_no(block))) {
+    if (unlikely(node_ptr != btr_cur_get_rec(&node_cur)) || unlikely(btr_node_ptr_get_child_page_no(node_ptr, offsets) != block->get_page_no())) {
 
       btr_validate_report1(dict_index, level, block);
 

@@ -288,33 +288,13 @@ inline void buf_block_set_state(buf_block_t *block, buf_page_state state) {
 }
 
 /**
- * Determines if a block is mapped to a tablespace.
- *
- * @param bpage Pointer to the control block.
- * @return True if the block is mapped to a tablespace, false otherwise.
- */
-inline bool buf_page_in_file(const buf_page_t *bpage) {
-  switch (bpage->get_state()) {
-    case BUF_BLOCK_FILE_PAGE:
-      return true;
-    case BUF_BLOCK_NOT_USED:
-    case BUF_BLOCK_READY_FOR_USE:
-    case BUF_BLOCK_MEMORY:
-    case BUF_BLOCK_REMOVE_HASH:
-      break;
-  }
-
-  return false;
-}
-
-/**
  * Gets the mutex of a block.
  *
  * @param bpage Pointer to the control block.
  * @return Pointer to the mutex protecting the block.
  */
 inline mutex_t *buf_page_get_mutex(const buf_page_t *bpage) {
-  return &((buf_block_t *)bpage)->m_mutex;
+  return &bpage->get_block()->m_mutex;
 }
 
 /**
@@ -431,7 +411,7 @@ inline void buf_block_set_io_fix(buf_block_t *block, buf_io_fix io_fix) {
 inline bool buf_page_can_relocate(const buf_page_t *bpage) {
   ut_ad(buf_pool_mutex_own());
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
-  ut_ad(buf_page_in_file(bpage));
+  ut_ad(bpage->in_file());
   ut_ad(bpage->m_in_LRU_list);
 
   return buf_page_get_io_fix(bpage) == BUF_IO_NONE && bpage->m_buf_fix_count == 0;
@@ -444,7 +424,7 @@ inline bool buf_page_can_relocate(const buf_page_t *bpage) {
  * @return True if the block is flagged as old, false otherwise.
  */
 inline bool buf_page_is_old(const buf_page_t *bpage) {
-  ut_ad(buf_page_in_file(bpage));
+  ut_ad(bpage->in_file());
   ut_ad(buf_pool_mutex_own());
 
   return bpage->m_old;
@@ -457,7 +437,7 @@ inline bool buf_page_is_old(const buf_page_t *bpage) {
  * @param old Flag indicating if the block is old.
  */
 inline void buf_page_set_old(buf_page_t *bpage, bool old) {
-  ut_a(buf_page_in_file(bpage));
+  ut_a(bpage->in_file());
   ut_ad(buf_pool_mutex_own());
   ut_ad(bpage->m_in_LRU_list);
 
@@ -471,7 +451,7 @@ inline void buf_page_set_old(buf_page_t *bpage, bool old) {
  * @return The time of first access (ut_time_ms()) if the block has been accessed, 0 otherwise.
  */
 inline unsigned buf_page_is_accessed(const buf_page_t *bpage) {
-  ut_ad(buf_page_in_file(bpage));
+  ut_ad(bpage->in_file());
 
   return bpage->m_access_time;
 }
@@ -483,7 +463,7 @@ inline unsigned buf_page_is_accessed(const buf_page_t *bpage) {
  * @param time_ms The current time in milliseconds.
  */
 inline void buf_page_set_accessed(buf_page_t *bpage, ulint time_ms) {
-  ut_a(buf_page_in_file(bpage));
+  ut_a(bpage->in_file());
   ut_ad(buf_pool_mutex_own());
 
   if (!bpage->m_access_time) {
@@ -500,7 +480,7 @@ inline void buf_page_set_accessed(buf_page_t *bpage, ulint time_ms) {
  */
 inline buf_block_t *buf_page_get_block(buf_page_t *bpage) {
   if (likely(bpage != nullptr)) {
-    ut_ad(buf_page_in_file(bpage));
+    ut_ad(bpage->in_file());
 
     if (bpage->get_state() == BUF_BLOCK_FILE_PAGE) {
       return reinterpret_cast<buf_block_t *>(bpage);
@@ -508,56 +488,6 @@ inline buf_block_t *buf_page_get_block(buf_page_t *bpage) {
   }
 
   return nullptr;
-}
-
-/**
- * Gets the space id of a block.
- *
- * @param bpage Pointer to the control block.
- * @return Space id.
- */
-inline space_id_t buf_page_t::get_space() const {
-  ut_a(buf_page_in_file(this));
-
-  return m_space;
-}
-
-/**
- * Gets the space id of a block.
- *
- * @param block Pointer to the control block.
- * @return Space id.
- */
-inline space_id_t buf_block_t::get_space() const {
-  ut_a(get_state() == BUF_BLOCK_FILE_PAGE);
-
-  return m_page.get_space();
-}
-
-/**
- * Gets the page number of a block.
- *
- * @param bpage Pointer to the control block.
- * @return Page number.
- */
-inline ulint buf_page_get_page_no(const buf_page_t *bpage) {
-  ut_ad(bpage != nullptr);
-  ut_a(buf_page_in_file(bpage));
-
-  return bpage->m_page_no;
-}
-
-/**
- * Gets the page number of a block.
- *
- * @param block Pointer to the control block.
- * @return Page number.
- */
-inline ulint buf_block_get_page_no(const buf_block_t *block) {
-  ut_ad(block != nullptr);
-  ut_a(block->get_state() == BUF_BLOCK_FILE_PAGE);
-
-  return buf_page_get_page_no(&block->m_page);
 }
 
 /**
@@ -582,7 +512,7 @@ inline void buf_ptr_get_fsp_addr(const void *ptr, ulint *space, fil_addr_t *addr
  * @return Lock hash value.
  */
 inline ulint buf_block_get_lock_hash_val(const buf_block_t *block) {
-  ut_ad(buf_page_in_file(&block->m_page));
+  ut_ad(block->m_page.in_file());
 
   IF_SYNC_DEBUG(
     ut_ad(
@@ -632,7 +562,7 @@ inline lsn_t buf_page_get_newest_modification(const buf_page_t *bpage) {
 
   lsn_t lsn;
 
-  if (buf_page_in_file(bpage)) {
+  if (bpage->in_file()) {
     lsn = bpage->m_newest_modification;
   } else {
     lsn = 0;
@@ -719,12 +649,12 @@ inline buf_page_t *Buf_pool::hash_get_page(space_id_t space_id, page_no_t page_n
     fold,
     buf_page_t *,
     bpage,
-    ut_ad(bpage->m_in_page_hash && buf_page_in_file(bpage)),
+    ut_ad(bpage->m_in_page_hash && bpage->in_file()),
     bpage->m_space == space_id && bpage->m_page_no ==page_no 
   );
 
   if (bpage != nullptr) {
-    ut_a(buf_page_in_file(bpage));
+    ut_a(bpage->in_file());
     ut_ad(bpage->m_in_page_hash);
     UNIV_MEM_ASSERT_RW(bpage, sizeof(*bpage));
   }

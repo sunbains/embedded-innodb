@@ -713,7 +713,7 @@ Buf_pool::~Buf_pool() {
 void Buf_pool::make_young(buf_page_t *bpage) {
   buf_pool_mutex_enter();
 
-  ut_a(buf_page_in_file(bpage));
+  ut_a(bpage->in_file());
 
   m_LRU->make_block_young(bpage);
 
@@ -722,7 +722,7 @@ void Buf_pool::make_young(buf_page_t *bpage) {
 
 void Buf_pool::set_accessed_make_young(buf_page_t *bpage, unsigned access_time) {
   ut_ad(!buf_pool_mutex_own());
-  ut_a(buf_page_in_file(bpage));
+  ut_a(bpage->in_file());
 
   if (peek_if_too_old(bpage)) {
     buf_pool_mutex_enter();
@@ -796,7 +796,7 @@ buf_block_t *Buf_pool::block_align(const byte *ptr) {
           break;
         case BUF_BLOCK_FILE_PAGE:
           ut_ad(block->get_space() == page_get_space_id(page_align(ptr)));
-          ut_ad(buf_block_get_page_no(block) == page_get_page_no(page_align(ptr)));
+          ut_ad(block->get_page_no() == page_get_page_no(page_align(ptr)));
           break;
       }
 
@@ -1084,7 +1084,7 @@ bool Buf_pool::try_get(Request& req) {
     if (unlikely(!access_time)) {
 
       /* In the case of a first access, try to apply linear read-ahead */
-      buf_read_ahead_linear(req.m_guess->get_space(), buf_block_get_page_no(req.m_guess));
+      buf_read_ahead_linear(req.m_guess->get_space(), req.m_guess->get_page_no());
     }
 
     ++m_stat.n_page_gets;
@@ -1201,7 +1201,7 @@ const buf_block_t *Buf_pool::try_get_by_page_id(Request& req) {
   buf_pool_mutex_exit();
 
   ut_ad(block->get_space() == page_id.m_space_id);
-  ut_ad(buf_block_get_page_no(block) == page_id.m_page_no);
+  ut_ad(block->get_page_no() == page_id.m_page_no);
   ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
 
   buf_block_buf_fix_inc(block, req.m_file, req.m_line);
@@ -1369,7 +1369,7 @@ buf_page_t *Buf_pool::init_for_read(db_err *err, ulint mode, space_id_t space, i
 
   buf_pool_mutex_exit();
 
-  ut_ad(bpage == nullptr || buf_page_in_file(bpage));
+  ut_ad(bpage == nullptr || bpage->in_file());
 
   return bpage;
 }
@@ -1386,7 +1386,7 @@ buf_block_t *Buf_pool::create(space_id_t space, page_no_t page_no, mtr_t *mtr) {
 
   auto block = hash_get_block(space, page_no);
 
-  if (block != nullptr && buf_page_in_file(&block->m_page)) {
+  if (block != nullptr && block->m_page.in_file()) {
     ut_d(block->m_page.m_file_page_was_freed = false);
 
     /* Page can be found in buf_pool */
@@ -1453,7 +1453,7 @@ buf_block_t *Buf_pool::create(space_id_t space, page_no_t page_no, mtr_t *mtr) {
 }
 
 void Buf_pool::io_complete(buf_page_t *bpage) {
-  ut_a(buf_page_in_file(bpage));
+  ut_a(bpage->in_file());
 
   /* We do not need protect io_fix here by mutex to read
   it because this is the only function where we can change the value
@@ -1581,7 +1581,7 @@ void Buf_pool::io_complete(buf_page_t *bpage) {
         ib_stream,
         "Has %s page space %lu page no %lu\n", io_type == BUF_IO_READ ? "read" : "written",
         (ulong)bpage->get_space(),
-        (ulong)buf_page_get_page_no(bpage)
+        (ulong)bpage->get_page_no()
       );
     }
   );
@@ -1664,7 +1664,7 @@ bool Buf_pool::validate() {
 
       switch (block->get_state()) {
         case BUF_BLOCK_FILE_PAGE:
-          ut_a(hash_get_page(block->get_space(), buf_block_get_page_no(block)) == &block->m_page);
+          ut_a(hash_get_page(block->get_space(), block->get_page_no()) == &block->m_page);
 
           switch (buf_page_get_io_fix(&block->m_page)) {
             case BUF_IO_NONE:

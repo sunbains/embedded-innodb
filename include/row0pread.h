@@ -531,7 +531,7 @@ class Parallel_reader::Scan_ctx {
   @param[in,out]  mtr           Mini-transaction covering the fetch.
   @param[in]      line          Line from where called.
   @return the block fetched from the buffer pool. */
-  [[nodiscard]] buf_block_t *block_get_s_latched(const Page_id &page_id, mtr_t *mtr, int line) const;
+  [[nodiscard]] buf_block_t *block_get_s_latched(const Page_id &page_id, mtr_t *mtr, ulint line) const;
 
   /** Partition the B+Tree for parallel read.
   @param[in] scan_range Range for partitioning.

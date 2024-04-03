@@ -969,7 +969,7 @@ db_err btr_cur_pessimistic_insert(
     }
   }
 
-  if (dict_index_get_page(dict_index) == buf_block_get_page_no(btr_cur_get_block(cursor))) {
+  if (dict_index_get_page(dict_index) == btr_cur_get_block(cursor)->get_page_no()) {
 
     /* The page is the root page */
     *rec = btr_root_raise_and_insert(cursor, entry, n_ext, mtr);
@@ -1911,7 +1911,7 @@ void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents, btr_cur_
     btr_rec_free_externally_stored_fields(index, rec, offsets, rb_ctx, mtr);
   }
 
-  if (page_get_n_recs(page) < 2 && dict_index_get_page(index) != buf_block_get_page_no(block)) {
+  if (page_get_n_recs(page) < 2 && dict_index_get_page(index) != block->get_page_no()) {
 
     /* If there is only one record, drop the whole page in
     btr_discard_page, if this is not the root page */
@@ -1946,7 +1946,7 @@ void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents, btr_cur_
 
         btr_node_ptr_delete(index, block, mtr);
 
-        auto node_ptr = dict_index_build_node_ptr(index, next_rec, buf_block_get_page_no(block), heap, level);
+        auto node_ptr = dict_index_build_node_ptr(index, next_rec, block->get_page_no(), heap, level);
 
         btr_insert_on_non_leaf_level(index, level + 1, node_ptr, mtr);
       }
@@ -2556,7 +2556,7 @@ static ulint btr_blob_get_next_page_no(const byte *blob_header) {
 @param[in,out] mtr              Min-transaction. */
 static void btr_blob_free(buf_block_t *block, bool, mtr_t *mtr) {
   auto space = block->get_space();
-  auto page_no = buf_block_get_page_no(block);
+  auto page_no = block->get_page_no();
 
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
 
@@ -2567,7 +2567,7 @@ static void btr_blob_free(buf_block_t *block, bool, mtr_t *mtr) {
 
   /* Only free the block if it is still allocated to the same file page. */
 
-  if (block->get_state() == BUF_BLOCK_FILE_PAGE && block->get_space() == space && buf_block_get_page_no(block) == page_no) {
+  if (block->get_state() == BUF_BLOCK_FILE_PAGE && block->get_space() == space && block->get_page_no() == page_no) {
 
     auto block_status = buf_pool->m_LRU->free_block(&block->m_page, nullptr);
     ut_a(block_status == Buf_LRU::Block_status::FREED);
@@ -2588,7 +2588,7 @@ db_err btr_store_big_rec_extern_fields(
   ut_a(dict_index_is_clust(index));
 
   auto space_id = rec_block->get_space();
-  auto rec_page_no = buf_block_get_page_no(rec_block);
+  auto rec_page_no = rec_block->get_page_no();
   ut_a(fil_page_get_type(page_align(rec)) == FIL_PAGE_INDEX);
 
   /* We have to create a file segment to the tablespace
@@ -2638,7 +2638,7 @@ db_err btr_store_big_rec_extern_fields(
         return DB_OUT_OF_FILE_SPACE;
       }
 
-      auto page_no = buf_block_get_page_no(block);
+      auto page_no = block->get_page_no();
       auto page = block->get_frame();
 
       if (prev_page_no != FIL_NULL) {

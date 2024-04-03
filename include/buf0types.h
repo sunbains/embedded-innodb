@@ -209,14 +209,20 @@ struct buf_page_t {
   *
   * @return Space id.
   */
-  [[nodiscard]] space_id_t get_space() const;
+  [[nodiscard]] space_id_t get_space() const {
+    ut_a(in_file());
+
+    return m_space;
+  }
 
   /**
-  * Gets the page number of a page.
-  *
-  * @return Page number
-  */
+   * Gets the page number of a block.
+   *
+   * @return Page number.
+   */
   [[nodiscard]] page_no_t get_page_no() const {
+    ut_a(in_file());
+
     return m_page_no;
   }
 
@@ -231,6 +237,31 @@ struct buf_page_t {
   /** @return cast the instance to a buf_page_t pointer. */
   [[nodiscard]] buf_block_t* get_block() {
     return reinterpret_cast<buf_block_t*>(this);
+  }
+
+  /** @return cast the instance to a buf_page_t pointer. */
+  const buf_block_t* get_block() const {
+    return reinterpret_cast<const buf_block_t*>(this);
+  }
+
+  /**
+   * Determines if a block is mapped to a tablespace.
+   *
+   * @param bpage Pointer to the control block.
+   * @return True if the block is mapped to a tablespace, false otherwise.
+   */
+  bool in_file() const {
+    switch (get_state()) {
+      case BUF_BLOCK_FILE_PAGE:
+        return true;
+      case BUF_BLOCK_NOT_USED:
+      case BUF_BLOCK_READY_FOR_USE:
+      case BUF_BLOCK_MEMORY:
+      case BUF_BLOCK_REMOVE_HASH:
+        break;
+    }
+  
+    return false;
   }
 
   /** @name General fields
@@ -354,7 +385,11 @@ struct buf_block_t {
   *
   * @return Space id.
   */
-  [[nodiscard]] space_id_t get_space() const;
+  [[nodiscard]] space_id_t get_space() const {
+    ut_a(get_state() == BUF_BLOCK_FILE_PAGE);
+
+    return m_page.get_space();
+  }
 
   /**
   * Gets the page number of a block.
@@ -402,10 +437,10 @@ struct buf_block_t {
 
   /** mutex protecting this block: state (also protected by the buffer
   pool mutex), io_fix, buf_fix_count, and accessed. */
-  mutex_t m_mutex;
+  mutable mutex_t m_mutex;
 
   /** RW lock protoecting the buffer frame state changes. */
-  rw_lock_t m_rw_lock;
+  mutable rw_lock_t m_rw_lock;
 
   /** hashed value of the page address in the record lock hash table;
   protected by buf_block_t::lock (or buf_block_t::mutex, buf_pool_mutex
@@ -844,7 +879,7 @@ struct Buf_pool {
   ulint m_curr_size;
 
   /** hash table of buf_page_t or buf_block_t file pages,
-   buf_page_in_file() == true, indexed by (m_nspace_id, m_page_no) */
+  buf_page_t::in_file() == true, indexed by (m_nspace_id, m_page_no) */
   hash_table_t *m_page_hash;
 
   ulint m_n_pend_reads; /** number of pending read operations */

@@ -35,6 +35,8 @@ Created 3/26/1996 Heikki Tuuri
 #include "usr0types.h"
 #include "ut0vec.h"
 
+struct read_view_t;
+
 /** Dummy session used currently in MySQL interface */
 extern sess_t *trx_dummy_sess;
 

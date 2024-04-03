@@ -298,7 +298,7 @@ class PCursor {
   size_t m_read_level{};
 };
 
-buf_block_t *Parallel_reader::Scan_ctx::block_get_s_latched(const Page_id &page_id, mtr_t *mtr, int line) const {
+buf_block_t *Parallel_reader::Scan_ctx::block_get_s_latched(const Page_id &page_id, mtr_t *mtr, ulint line) const {
   /* We never scan undo tablespaces. */
   Buf_pool::Request req {
     .m_rw_latch = RW_S_LATCH,
@@ -351,7 +351,7 @@ dberr_t PCursor::move_to_user_rec() noexcept {
   }
 
   auto block = page_cur_get_block(cur);
-  const Page_id page_id{block->get_space(), buf_block_get_page_no(block)};
+  const Page_id page_id{block->get_space(), block->get_page_no()};
 
   Buf_pool::Request req {
     .m_rw_latch = RW_S_LATCH,

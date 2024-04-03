@@ -210,9 +210,6 @@ read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *h
 }
 
 read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
-  ulint n;
-  trx_t *trx;
-
   ut_ad(mutex_own(&kernel_mutex));
 
   auto view = read_view_create_low(UT_LIST_GET_LEN(trx_sys->trx_list), heap);
@@ -226,31 +223,29 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
   view->low_limit_no = trx_sys->max_trx_id;
   view->low_limit_id = view->low_limit_no;
 
-  n = 0;
-  trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  ulint n = 0;
 
   /* No active transaction should be visible, except cr_trx */
+  for (auto trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+       trx != nullptr;
+       trx = UT_LIST_GET_NEXT(trx_list, trx)) {
 
-  while (trx) {
     ut_ad(trx->magic_n == TRX_MAGIC_N);
+
     if (trx->id != cr_trx_id && (trx->conc_state == TRX_ACTIVE || trx->conc_state == TRX_PREPARED)) {
 
       read_view_set_nth_trx_id(view, n, trx->id);
 
-      n++;
+      ++n;
 
-      /* NOTE that a transaction whose trx number is <
-      trx_sys->max_trx_id can still be active, if it is
-      in the middle of its commit! Note that when a
-      transaction starts, we initialize trx->no to LSN_MAX. */
+      /* NOTE that a transaction whose trx number is < trx_sys->max_trx_id can still be active, if it is
+      in the middle of its commit! Note that when a transaction starts, we initialize trx->no to LSN_MAX. */
 
       if (view->low_limit_no > trx->no) {
 
         view->low_limit_no = trx->no;
       }
     }
-
-    trx = UT_LIST_GET_NEXT(trx_list, trx);
   }
 
   view->n_trx_ids = n;
@@ -289,9 +284,6 @@ void read_view_close_for_read_committed(trx_t *trx) {
 }
 
 void read_view_print(const read_view_t *view) {
-  ulint i;
-  ulint n_ids;
-
   if (view->type == VIEW_HIGH_GRANULARITY) {
     ib_logger(ib_stream, "High-granularity read view undo_n:o %lu %lu\n", (ulong)view->undo_no, (ulong)view->undo_no);
   } else {
@@ -306,28 +298,21 @@ void read_view_print(const read_view_t *view) {
 
   ib_logger(ib_stream, "Read view individually stored trx ids:\n");
 
-  n_ids = view->n_trx_ids;
+  auto n_ids = view->n_trx_ids;
 
-  for (i = 0; i < n_ids; i++) {
+  for (ulint i = 0; i < n_ids; i++) {
     ib_logger(ib_stream, "Read view trx id %lu\n", TRX_ID_PREP_PRINTF(read_view_get_nth_trx_id(view, i)));
   }
 }
 
 cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
-  cursor_view_t *curview;
-  read_view_t *view;
-  mem_heap_t *heap;
-  trx_t *trx;
-  ulint n;
+  ut_a(cr_trx != nullptr);
 
-  ut_a(cr_trx);
+  /* Use larger heap than in trx_create when creating a read_view because cursors are quite long. */
 
-  /* Use larger heap than in trx_create when creating a read_view
-  because cursors are quite long. */
+  auto heap = mem_heap_create(512);
 
-  heap = mem_heap_create(512);
-
-  curview = (cursor_view_t *)mem_heap_alloc(heap, sizeof(cursor_view_t));
+  auto curview = (cursor_view_t *)mem_heap_alloc(heap, sizeof(cursor_view_t));
   curview->heap = heap;
 
   /* Drop cursor tables from consideration when evaluating the need of
@@ -339,7 +324,7 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
 
   curview->read_view = read_view_create_low(UT_LIST_GET_LEN(trx_sys->trx_list), curview->heap);
 
-  view = curview->read_view;
+  auto view = curview->read_view;
   view->creator_trx_id = cr_trx->id;
   view->type = VIEW_HIGH_GRANULARITY;
   view->undo_no = cr_trx->undo_no;
@@ -349,8 +334,8 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
   view->low_limit_no = trx_sys->max_trx_id;
   view->low_limit_id = view->low_limit_no;
 
-  n = 0;
-  trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  ulint n = 0;
+  auto trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
 
   /* No active transaction should be visible */
 
@@ -394,7 +379,6 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
 }
 
 void read_cursor_view_close(trx_t *trx, cursor_view_t *curview) {
-  ut_a(curview);
   ut_a(curview->read_view);
   ut_a(curview->heap);
 
@@ -413,8 +397,6 @@ void read_cursor_view_close(trx_t *trx, cursor_view_t *curview) {
 }
 
 void read_cursor_set(trx_t *trx, cursor_view_t *curview) {
-  ut_a(trx);
-
   mutex_enter(&kernel_mutex);
 
   if (likely(curview != nullptr)) {

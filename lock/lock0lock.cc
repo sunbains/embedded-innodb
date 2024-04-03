@@ -900,7 +900,7 @@ inline lock_t *lock_rec_get_first_on_page(const buf_block_t *block) {
   ut_ad(mutex_own(&kernel_mutex));
 
   const auto space = block->get_space();
-  const auto page_no = buf_block_get_page_no(block);
+  const auto page_no = block->get_page_no();
   auto hash = buf_block_get_lock_hash_val(block);
 
   for (auto lock = static_cast<lock_t *>(HASH_GET_FIRST(lock_sys->rec_hash, hash));
@@ -1298,7 +1298,7 @@ static lock_t *lock_rec_create(
   ut_ad(mutex_own(&kernel_mutex));
 
   space = block->get_space();
-  page_no = buf_block_get_page_no(block);
+  page_no = block->get_page_no();
   page = block->m_frame;
 
   ut_ad(!!page_is_comp(page) == dict_table_is_comp(index->table));
@@ -1753,7 +1753,7 @@ static void lock_rec_free_all_from_discard_page(const buf_block_t *block) {
   ut_ad(mutex_own(&kernel_mutex));
 
   auto space = block->get_space();
-  auto page_no = buf_block_get_page_no(block);
+  auto page_no = block->get_page_no();
   auto lock = lock_rec_get_first_on_page_addr(space, page_no);
 
   while (lock != nullptr) {
@@ -1991,7 +1991,7 @@ void lock_move_reorganize_page(const buf_block_t *block, const buf_block_t *oblo
   mem_heap_free(heap);
 
 #ifdef UNIV_DEBUG_LOCK_VALIDATE
-  ut_ad(lock_rec_validate_page(block->get_space(), buf_block_get_page_no(block)));
+  ut_ad(lock_rec_validate_page(block->get_space(), block->get_page_no()));
 #endif /* UNIV_DEBUG_LOCK_VALIDATE */
 }
 
@@ -2058,8 +2058,8 @@ void lock_move_rec_list_end(const buf_block_t *new_block, const buf_block_t *blo
   lock_mutex_exit_kernel();
 
 #ifdef UNIV_DEBUG_LOCK_VALIDATE
-  ut_ad(lock_rec_validate_page(block->get_space(), buf_block_get_page_no(block)));
-  ut_ad(lock_rec_validate_page(new_block->get_space(), buf_block_get_page_no(new_block)));
+  ut_ad(lock_rec_validate_page(block->get_space(), block->get_page_no()));
+  ut_ad(lock_rec_validate_page(new_block->get_space(), new_block->get_page_no()));
 #endif /* UNIV_DEBUG_LOCK_VALIDATE */
 }
 
@@ -2140,7 +2140,7 @@ void lock_move_rec_list_start(const buf_block_t *new_block, const buf_block_t *b
   lock_mutex_exit_kernel();
 
 #ifdef UNIV_DEBUG_LOCK_VALIDATE
-  ut_ad(lock_rec_validate_page(block->get_space(), buf_block_get_page_no(block)));
+  ut_ad(lock_rec_validate_page(block->get_space(), block->get_page_no()));
 #endif /* UNIV_DEBUG_LOCK_VALIDATE */
 }
 

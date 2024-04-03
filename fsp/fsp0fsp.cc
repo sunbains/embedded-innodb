@@ -278,7 +278,6 @@ static xdes_t *fseg_get_first_extent(fseg_inode_t *inode, space_id_t space, mtr_
  * Puts new extents to the free list if there are free extents above the free limit.
  * If an extent happens to contain an extent descriptor page, the extent is put to
  * the FSP_FREE_FRAG list with the page marked as used.
- * 
  * @param[in] init_space - true if this is a single-table tablespace and we are only initing the tablespace's first extent descriptor page; then we do not allocate more extents
  * @param[in] space - space
  * @param[in] header - space header
@@ -294,7 +293,9 @@ static void fsp_fill_free_list(bool init_space, space_id_t space, fsp_header_t *
  * @param[in] space - space
  * @param[in] seg_inode - segment inode
  * @param[in] hint - hint of which page would be desirable
- * @param[in] direction - if the new page is needed because of an index page split, and records are inserted there in order, into which direction they go alphabetically: FSP_DOWN, FSP_UP, FSP_NO_DIR
+ * @param[in] direction - if the new page is needed because of an index page plit,
+ *  and records are inserted there in order, into which direction they go alphabetically:
+ *  FSP_DOWN, FSP_UP, FSP_NO_DIR
  * @param[in,out] mtr - mtr handle
  *
  * @return the allocated page number, FIL_NULL if no page could be allocated
@@ -340,9 +341,9 @@ inline bool xdes_get_bit(const xdes_t *descr, ulint bit, ulint offset, mtr_t *mt
   ut_ad((bit == XDES_FREE_BIT) || (bit == XDES_CLEAN_BIT));
   ut_ad(offset < FSP_EXTENT_SIZE);
 
-  ulint index = bit + XDES_BITS_PER_PAGE * offset;
-  ulint byte_index = index / 8;
-  ulint bit_index = index % 8;
+  auto index = bit + XDES_BITS_PER_PAGE * offset;
+  auto byte_index = index / 8;
+  auto bit_index = index % 8;
 
   return ut_bit_get_nth(mtr_read_ulint(descr + XDES_BITMAP + byte_index, MLOG_1BYTE, mtr), bit_index);
 }
@@ -365,8 +366,8 @@ inline void xdes_set_bit(xdes_t *descr, ulint bit, ulint offset, bool val, mtr_t
 
   auto byte_index = index / 8;
   auto bit_index = index % 8;
-
   auto descr_byte = mtr_read_ulint(descr + XDES_BITMAP + byte_index, MLOG_1BYTE, mtr);
+
   descr_byte = ut_bit_set_nth(descr_byte, bit_index, val);
 
   mlog_write_ulint(descr + XDES_BITMAP + byte_index, descr_byte, MLOG_1BYTE, mtr);
@@ -663,7 +664,7 @@ static void fsp_init_file_page_low(buf_block_t *block) {
   UNIV_MEM_INVALID(page, UNIV_PAGE_SIZE);
 
   memset(page, 0, UNIV_PAGE_SIZE);
-  mach_write_to_4(page + FIL_PAGE_OFFSET, buf_block_get_page_no(block));
+  mach_write_to_4(page + FIL_PAGE_OFFSET, block->get_page_no());
   memset(page + FIL_PAGE_LSN, 0, 8);
   mach_write_to_4(page + FIL_PAGE_SPACE_ID, block->get_space());
   memset(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM, 0, 8);

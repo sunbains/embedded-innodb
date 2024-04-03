@@ -115,7 +115,7 @@ static ulint buf_read_page_low(
   }
 #endif /* UNIV_DEBUG */
 
-  ut_ad(buf_page_in_file(bpage));
+  ut_ad(bpage->in_file());
 
   ut_a(bpage->get_state() == BUF_BLOCK_FILE_PAGE);
 

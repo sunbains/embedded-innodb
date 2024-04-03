@@ -114,7 +114,7 @@ struct Buf_flush {
    * @brief Returns true if the file page block is immediately suitable for replacement,
    * i.e., transition FILE_PAGE => NOT_USED allowed.
    *
-   * @param bpage The buffer control block, must be buf_page_in_file(bpage) and in the LRU list.
+   * @param bpage The buffer control block, must be bpage->in_file() and in the LRU list.
    * @return True if the block can be replaced immediately.
    */
   bool ready_for_replace(buf_page_t *bpage);
@@ -361,7 +361,7 @@ private:
 
   /**
    * @brief Returns true if the block is modified and ready for flushing.
-   * @param bpage Buffer control block, must be buf_page_in_file(bpage)
+   * @param bpage Buffer control block, must be bpage->in_file()
    * @param flush_type Flush type (BUF_FLUSH_LRU or BUF_FLUSH_LIST)
    * @return True if can flush immediately
    */

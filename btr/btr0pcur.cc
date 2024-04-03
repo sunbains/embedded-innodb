@@ -1,4 +1,4 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -290,7 +290,7 @@ void btr_pcur_t::move_to_next_page(mtr_t *mtr) {
 
 #ifdef UNIV_BTR_DEBUG
   ut_a(page_is_comp(next_page) == page_is_comp(page));
-  ut_a(btr_page_get_prev(next_page, mtr) == buf_block_get_page_no(get_block()));
+  ut_a(btr_page_get_prev(next_page, mtr) == get_block()->get_page_no());
 #endif /* UNIV_BTR_DEBUG */
 
   next_block->m_check_index_page_at_flush = true;

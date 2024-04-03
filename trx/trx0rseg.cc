@@ -70,7 +70,7 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER_NEW));
 
-  page_no = buf_block_get_page_no(block);
+  page_no = block->get_page_no();
 
   /* Get the rollback segment file page */
   rsegf = trx_rsegf_get_new(space, page_no, mtr);

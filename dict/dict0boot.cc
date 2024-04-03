@@ -99,7 +99,7 @@ static bool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
   segment in the system tablespace */
   block = fseg_create(DICT_HDR_SPACE, 0, DICT_HDR + DICT_HDR_FSEG_HEADER, mtr);
 
-  ut_a(DICT_HDR_PAGE_NO == buf_block_get_page_no(block));
+  ut_a(DICT_HDR_PAGE_NO == block->get_page_no());
 
   dict_header = dict_hdr_get(mtr);
 

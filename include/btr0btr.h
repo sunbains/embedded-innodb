@@ -33,7 +33,6 @@ Created 6/2/1994 Heikki Tuuri
 #include "mtr0mtr.h"
 #include "page0cur.h"
 
-
 /** Gets the root node of a tree and x-latches it.
 @param[in] index                Index tree.
 @param[in,out]                  Mini-transaction.

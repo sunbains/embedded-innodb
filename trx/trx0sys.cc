@@ -596,7 +596,7 @@ static void trx_sysf_create(mtr_t *mtr) {
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_SYS_HEADER));
 
-  ut_a(buf_block_get_page_no(block) == TRX_SYS_PAGE_NO);
+  ut_a(block->get_page_no() == TRX_SYS_PAGE_NO);
 
   auto page = block->get_frame();
 

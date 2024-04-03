@@ -985,7 +985,7 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
     return;
   }
 
-  recv_addr = recv_get_fil_addr_struct(block->get_space(), buf_block_get_page_no(block));
+  recv_addr = recv_get_fil_addr_struct(block->get_space(), block->get_page_no());
 
   if (recv_addr == nullptr || recv_addr->state == RECV_BEING_PROCESSED || recv_addr->state == RECV_PROCESSED) {
 

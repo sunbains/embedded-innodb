@@ -187,7 +187,7 @@ bool Buf_flush::ready_for_replace(buf_page_t *bpage) {
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
   ut_ad(bpage->m_in_LRU_list);
 
-  if (likely(buf_page_in_file(bpage))) {
+  if (likely(bpage->in_file())) {
 
     return (bpage->m_oldest_modification == 0 && buf_page_get_io_fix(bpage) == BUF_IO_NONE && bpage->m_buf_fix_count == 0);
   }
@@ -206,7 +206,7 @@ bool Buf_flush::ready_for_replace(buf_page_t *bpage) {
 }
 
 bool Buf_flush::ready_for_flush(buf_page_t *bpage, buf_flush flush_type) {
-  ut_a(buf_page_in_file(bpage));
+  ut_a(bpage->in_file());
   ut_ad(buf_pool_mutex_own());
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
   ut_ad(flush_type == to_int(BUF_FLUSH_LRU) || flush_type == BUF_FLUSH_LIST);
@@ -409,7 +409,7 @@ void Buf_flush::buffered_writes() {
           "to prevent corrupt data"
           " from ending up in data\n"
           "files.\n",
-          (ulong)buf_block_get_page_no(block),
+          (ulong)block->get_page_no(),
           (ulong)block->get_space()
         );
 
@@ -488,7 +488,7 @@ flush:
   for (i = 0; i < trx_doublewrite->first_free; i++) {
     const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
 
-    ut_a(buf_page_in_file(&block->m_page));
+    ut_a(block->m_page.in_file());
 
     ut_a(block->get_state() == BUF_BLOCK_FILE_PAGE);
 
@@ -514,7 +514,7 @@ flush:
       OS_FILE_WRITE | OS_AIO_SIMULATED_WAKE_LATER,
       false,
       block->get_space(),
-      buf_block_get_page_no(block),
+      block->get_page_no(),
       0,
       UNIV_PAGE_SIZE,
       (void *)block->m_frame,
@@ -539,7 +539,7 @@ void Buf_flush::post_to_doublewrite_buf(buf_page_t *bpage) {
 try_again:
   mutex_enter(&(trx_doublewrite->mutex));
 
-  ut_a(buf_page_in_file(bpage));
+  ut_a(bpage->in_file());
 
   if (trx_doublewrite->first_free >= 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) {
     mutex_exit(&(trx_doublewrite->mutex));
@@ -597,7 +597,7 @@ void Buf_flush::write_block_low(buf_page_t *bpage) {
   static bool univ_log_debug_warned;
 #endif /* UNIV_LOG_DEBUG */
 
-  ut_ad(buf_page_in_file(bpage));
+  ut_ad(bpage->in_file());
 
   /* We are not holding buf_pool_mutex or block_mutex here.
   Nevertheless, it is safe to access bpage, because it is
@@ -642,7 +642,7 @@ void Buf_flush::write_block_low(buf_page_t *bpage) {
       OS_FILE_WRITE | OS_AIO_SIMULATED_WAKE_LATER,
       false,
       bpage->get_space(),
-      buf_page_get_page_no(bpage),
+      bpage->get_page_no(),
       0,
       UNIV_PAGE_SIZE,
       frame,
@@ -658,7 +658,7 @@ void Buf_flush::page(buf_page_t *bpage, buf_flush flush_type) {
 
   ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
   ut_ad(buf_pool_mutex_own());
-  ut_ad(buf_page_in_file(bpage));
+  ut_ad(bpage->in_file());
 
   block_mutex = buf_page_get_mutex(bpage);
   ut_ad(mutex_own(block_mutex));
@@ -776,7 +776,7 @@ ulint Buf_flush::try_neighbors(ulint space, ulint offset, buf_flush flush_type) 
       continue;
     }
 
-    ut_a(buf_page_in_file(bpage));
+    ut_a(bpage->in_file());
 
     /* We avoid flushing 'non-old' blocks in an LRU flush,
     because the flushed blocks are soon freed */
@@ -869,7 +869,7 @@ ulint Buf_flush::batch( buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
       mutex_t *block_mutex = buf_page_get_mutex(bpage);
       bool ready;
 
-      ut_a(buf_page_in_file(bpage));
+      ut_a(bpage->in_file());
 
       mutex_enter(block_mutex);
       ready = ready_for_flush(bpage, flush_type);
@@ -877,7 +877,7 @@ ulint Buf_flush::batch( buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
 
       if (ready) {
         space = bpage->get_space();
-        offset = buf_page_get_page_no(bpage);
+        offset = bpage->get_page_no();
 
         buf_pool_mutex_exit();
 
@@ -1092,7 +1092,7 @@ bool Buf_flush::validate_low() {
   while (bpage != nullptr) {
     const uint64_t om = bpage->m_oldest_modification;
     ut_ad(bpage->m_in_flush_list);
-    ut_a(buf_page_in_file(bpage));
+    ut_a(bpage->in_file());
     ut_a(om > 0);
 
     if (buf_pool->m_recovery_flush_list != nullptr) {
