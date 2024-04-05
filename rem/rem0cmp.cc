@@ -376,34 +376,7 @@ int cmp_data_data_slow(void *cmp_ctx, ulint mtype, ulint prtype, const byte *dat
   return 0; /* Not reached */
 }
 
-/** This function is used to compare a data tuple to a physical record.
-Only dtuple->n_fields_cmp first fields are taken into account for
-the data tuple! If we denote by n = n_fields_cmp, then rec must
-have either m >= n fields, or it must differ from dtuple in some of
-the m fields rec has. If rec has an externally stored field we do not
-compare it but return with value 0 if such a comparison should be
-made.
-@return 1, 0, -1, if dtuple is greater, equal, less than rec,
-respectively, when only the common first fields are compared, or until
-the first externally stored field in rec */
-
-int cmp_dtuple_rec_with_match(
-  void *cmp_ctx,          /*!< in: client compare context */
-  const dtuple_t *dtuple, /*!< in: data tuple */
-  const rec_t *rec,       /*!< in: physical record which differs from
-                            dtuple in some of the common fields, or which
-                            has an equal number or more fields than
-                            dtuple */
-  const ulint *offsets,   /*!< in: array returned by rec_get_offsets() */
-  ulint *matched_fields,  /*!< in/out: number of already completely
-                    matched fields; when function returns,
-                    contains the value for current comparison */
-  ulint *matched_bytes
-) /*!< in/out: number of already matched
-                     bytes within the first field not completely
-                     matched; when function returns, contains the
-                     value for current comparison */
-{
+int cmp_dtuple_rec_with_match(void *cmp_ctx, const dtuple_t *dtuple, const rec_t *rec, const ulint *offsets, ulint *matched_fields, ulint *matched_bytes) {
   const dfield_t *dtuple_field; /* current field in logical record */
   ulint dtuple_f_len;           /* the length of the current field
                                 in the logical record */
@@ -497,7 +470,9 @@ int cmp_dtuple_rec_with_match(
       }
     }
 
-    if (mtype >= DATA_FLOAT || (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) && dtype_get_charset_coll(prtype) != DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
+    if (mtype >= DATA_FLOAT ||
+        (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) &&
+	 dtype_get_charset_coll(prtype) != DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
 
       ret = cmp_whole_field(
         cmp_ctx, mtype, prtype, (byte *)dfield_get_data(dtuple_field), (unsigned)dtuple_f_len, rec_b_ptr, (unsigned)rec_f_len
@@ -516,8 +491,8 @@ int cmp_dtuple_rec_with_match(
 
     rec_b_ptr = rec_b_ptr + cur_bytes;
     dtuple_b_ptr = (byte *)dfield_get_data(dtuple_field) + cur_bytes;
-    /* Compare then the fields */
 
+    /* Compare then the fields */
     for (;;) {
       if (unlikely(rec_f_len <= cur_bytes)) {
         if (dtuple_f_len <= cur_bytes) {
@@ -549,8 +524,7 @@ int cmp_dtuple_rec_with_match(
       }
 
       if (dtuple_byte == rec_byte) {
-        /* If the bytes are equal, they will
-        remain such even after the collation
+        /* If the bytes are equal, they will remain such even after the collation
         transformation below */
 
         goto next_byte;
@@ -563,7 +537,8 @@ int cmp_dtuple_rec_with_match(
       }
 
       ret = (int)(dtuple_byte - rec_byte);
-      if (likely(ret)) {
+
+      if (likely(ret != 0)) {
         if (ret < 0) {
           ret = -1;
           goto order_resolved;
@@ -586,49 +561,32 @@ int cmp_dtuple_rec_with_match(
 
   ut_ad(cur_bytes == 0);
 
-  ret = 0; /* If we ran out of fields, dtuple was equal to rec
-           up to the common fields */
+  /* If we ran out of fields, dtuple was equal to rec up to the common fields */
+  ret = 0;
+
 order_resolved:
+
   ut_ad((ret >= -1) && (ret <= 1));
   ut_ad(ret == cmp_debug_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets, matched_fields));
-  ut_ad(*matched_fields == cur_field); /* In the debug version, the
-                                       above cmp_debug_... sets
-                                       *matched_fields to a value */
+
+  /* In the debug version, the above cmp_debug_... sets *matched_fields to a value */
+  ut_ad(*matched_fields == cur_field);
+
   *matched_fields = cur_field;
   *matched_bytes = cur_bytes;
 
   return ret;
 }
 
-/** Compares a data tuple to a physical record.
-@see cmp_dtuple_rec_with_match
-@return 1, 0, -1, if dtuple is greater, equal, less than rec, respectively */
-
-int cmp_dtuple_rec(
-  void *cmp_ctx,          /*!< in: client compare context */
-  const dtuple_t *dtuple, /*!< in: data tuple */
-  const rec_t *rec,       /*!< in: physical record */
-  const ulint *offsets
-) /*!< in: array returned by rec_get_offsets() */
-{
+int cmp_dtuple_rec(void *cmp_ctx, const dtuple_t *dtuple, const rec_t *rec, const ulint *offsets) {
   ulint matched_fields = 0;
   ulint matched_bytes = 0;
 
   ut_ad(rec_offs_validate(rec, nullptr, offsets));
-  return (cmp_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets, &matched_fields, &matched_bytes));
+  return cmp_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets, &matched_fields, &matched_bytes);
 }
 
-/** Checks if a dtuple is a prefix of a record. The last field in dtuple
-is allowed to be a prefix of the corresponding field in the record.
-@return	true if prefix */
-
-bool cmp_dtuple_is_prefix_of_rec(
-  void *cmp_ctx,          /*!< in: client compare context */
-  const dtuple_t *dtuple, /*!< in: data tuple */
-  const rec_t *rec,       /*!< in: physical record */
-  const ulint *offsets
-) /*!< in: array returned by rec_get_offsets() */
-{
+bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const dtuple_t *dtuple, const rec_t *rec, const ulint *offsets) {
   ulint n_fields;
   ulint matched_fields = 0;
   ulint matched_bytes = 0;
@@ -655,18 +613,7 @@ bool cmp_dtuple_is_prefix_of_rec(
   return false;
 }
 
-/** Compare two physical records that contain the same number of columns,
-none of which are stored externally.
-@return	1, 0, -1 if rec1 is greater, equal, less, respectively, than rec2 */
-
-int cmp_rec_rec_simple(
-  const rec_t *rec1,     /*!< in: physical record */
-  const rec_t *rec2,     /*!< in: physical record */
-  const ulint *offsets1, /*!< in: rec_get_offsets(rec1, ...) */
-  const ulint *offsets2, /*!< in: rec_get_offsets(rec2, ...) */
-  const dict_index_t *index
-) /*!< in: data dictionary index */
-{
+int cmp_rec_rec_simple(const rec_t *rec1, const rec_t *rec2, const ulint *offsets1, const ulint *offsets2, const dict_index_t *index) {
   ulint rec1_f_len;       /*!< length of current field in rec1 */
   const byte *rec1_b_ptr; /*!< pointer to the current byte
                           in rec1 field */
@@ -792,27 +739,15 @@ int cmp_rec_rec_simple(
   return 0;
 }
 
-/** This function is used to compare two physical records. Only the common
-first fields are compared, and if an externally stored field is
-encountered, then 0 is returned.
-@return 1, 0, -1 if rec1 is greater, equal, less, respectively */
-
 int cmp_rec_rec_with_match(
-  const rec_t *rec1,     /*!< in: physical record */
-  const rec_t *rec2,     /*!< in: physical record */
-  const ulint *offsets1, /*!< in: rec_get_offsets(rec1, index) */
-  const ulint *offsets2, /*!< in: rec_get_offsets(rec2, index) */
-  dict_index_t *index,   /*!< in: data dictionary index */
-  ulint *matched_fields, /*!< in/out: number of already completely
-                   matched fields; when the function returns,
-                   contains the value the for current
-                   comparison */
+  const rec_t *rec1,
+  const rec_t *rec2,
+  const ulint *offsets1,
+  const ulint *offsets2,
+  dict_index_t *index,
+  ulint *matched_fields,
   ulint *matched_bytes
-) /*!< in/out: number of already matched
-                    bytes within the first field not completely
-                    matched; when the function returns, contains
-                    the value for the current comparison */
-{
+) {
   ulint rec1_n_fields;    /* the number of fields in rec */
   ulint rec1_f_len;       /* length of current field in rec */
   const byte *rec1_b_ptr; /* pointer to the current byte
@@ -903,7 +838,9 @@ int cmp_rec_rec_with_match(
       }
     }
 
-    if (mtype >= DATA_FLOAT || (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) && dtype_get_charset_coll(prtype) != DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
+    if (mtype >= DATA_FLOAT ||
+        (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) &&
+	 dtype_get_charset_coll(prtype) != DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
 
       ret = cmp_whole_field(index->cmp_ctx, mtype, prtype, rec1_b_ptr, (unsigned)rec1_f_len, rec2_b_ptr, (unsigned)rec2_f_len);
 

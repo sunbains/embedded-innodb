@@ -325,6 +325,41 @@ static void select_all_rows() {
   log_info("Read ", n, " rows");
 }
 
+static void select_count_star() {
+  log_info("SELECT COUNT(*) FROM ", std::format("{}.{}", DATABASE, TABLE));
+
+  auto trx = ib_trx_begin(ib_trx_level_t(ISOLATION_LEVEL));
+  ut_a(trx != nullptr);
+
+  ib_crsr_t crsr;
+  auto err = open_table(DATABASE, TABLE, trx, &crsr);
+  ut_a(err == DB_SUCCESS);
+
+  std::vector<ib_crsr_t> crsrs;
+
+  crsrs.push_back(crsr);
+
+  uint64_t n{};
+
+  err = ib_parallel_select_count_star(trx, crsrs, 4, n);
+  ut_a(err == DB_SUCCESS);
+
+  err = ib_cursor_close(crsr);
+  ut_a(err == DB_SUCCESS);
+
+  crsr = nullptr;
+
+  if (ib_trx_state(trx) == IB_TRX_NOT_STARTED) {
+    err = ib_trx_release(trx);
+    ut_a(err == DB_SUCCESS);
+  } else {
+    err = ib_trx_commit(trx);
+    ut_a(err == DB_SUCCESS);
+  }
+
+  log_info("Read ", n, " rows");
+}
+
 /** Set the runtime global options. */
 static void set_options(int argc, char *argv[]) {
   int opt;
@@ -373,7 +408,6 @@ static void set_options(int argc, char *argv[]) {
         print_usage(argv[0]);
         exit(EXIT_FAILURE);
       }
-
     }
   }
 
@@ -437,6 +471,7 @@ int main(int argc, char *argv[]) {
   }
 
   select_all_rows();
+  select_count_star();
 
   shutdown(DATABASE, TABLE);
 

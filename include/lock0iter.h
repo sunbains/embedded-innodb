@@ -28,7 +28,7 @@ Created July 16, 2007 Vasil Dimov
 #include "lock0types.h"
 
 typedef struct lock_queue_iterator_struct {
-  const lock_t *current_lock;
+  const Lock *current_lock;
   /* In case this is a record lock queue (not table lock queue)
   then bit_no is the record number within the heap in which the
   record is stored. */
@@ -46,7 +46,7 @@ record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
 
 void lock_queue_iterator_reset(
   lock_queue_iterator_t *iter, /*!< out: iterator */
-  const lock_t *lock,          /*!< in: lock to start from */
+  const Lock *lock,          /*!< in: lock to start from */
   ulint bit_no
 ); /*!< in: record number in the
                                  heap */
@@ -56,6 +56,6 @@ more locks (i.e. the current lock is the first one). The iterator is
 receded (if not-nullptr is returned).
 @return	previous lock or nullptr */
 
-const lock_t *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter); /*!< in/out: iterator */
+const Lock *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter); /*!< in/out: iterator */
 
 #endif /* lock0iter_h */

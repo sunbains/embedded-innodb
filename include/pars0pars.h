@@ -32,6 +32,9 @@ Created 11/19/1996 Heikki Tuuri
 #include "usr0types.h"
 #include "ut0vec.h"
 
+struct ind_node_t;
+struct tab_node_t;
+
 /** Type of the user functions. The first argument is always InnoDB-supplied
 and varies in type, while 'user_arg' is a user-supplied argument. The
 meaning of the return type also varies. See the individual use cases, e.g.
@@ -504,7 +507,7 @@ void pars_lexer_var_init(void);
 void pars_lexer_close(void);
 
 /** Extra information supplied for pars_sql(). */
-struct pars_info_struct {
+struct pars_info_t {
   mem_heap_t *heap; /** our own memory heap */
 
   ib_vector_t *funcs;      /** user functions, or NUll

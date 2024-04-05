@@ -605,7 +605,7 @@ inline trx_t *trx_get_on_id(trx_id_t trx_id) /*!< in: trx id to search for */
   trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
 
   while (trx != nullptr) {
-    if (trx_id == trx->id) {
+    if (trx_id == trx->m_id) {
 
       return (trx);
     }
@@ -633,7 +633,7 @@ inline trx_id_t trx_list_get_min_trx_id(void) {
     return (trx_sys->max_trx_id);
   }
 
-  return (trx->id);
+  return (trx->m_id);
 }
 
 /** Checks if a transaction with the given id is active.
@@ -660,7 +660,7 @@ inline bool trx_is_active(trx_id_t trx_id) /*!< in: trx id of the transaction */
   }
 
   trx = trx_get_on_id(trx_id);
-  if (trx && (trx->conc_state == TRX_ACTIVE || trx->conc_state == TRX_PREPARED)) {
+  if (trx && (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED)) {
 
     return (true);
   }

@@ -75,7 +75,7 @@ struct Sync_cell {
   bool can_wake_up();
 
   /** Returns the event that the thread owning the cell waits for. */
-  OS_cond* get_event();
+  Cond_var* get_event();
 
   /** Reports info of a wait array cell.
   @param[in,out] stream         Where to print */
@@ -186,7 +186,7 @@ struct Sync_check {
   /** Possible operating system mutex protecting the data structure.
   As this data structure is used in constructing the database mutex, to
   prevent infinite recursion in implementation, we fall back to an OS mutex. */
-  os_mutex_t m_os_mutex{};
+  OS_mutex *m_os_mutex{};
 
   /** Count of how many times an object has been signalled */
   std::atomic<ulint> m_sg_count{};
@@ -211,7 +211,7 @@ Sync_check::Sync_check(ulint n, ulint p) : m_protection(p) {
 Sync_check::~Sync_check() {
   /* Free the mutex protecting the wait array. */
   if (m_protection == SYNC_ARRAY_OS_MUTEX) {
-    os_mutex_free(m_os_mutex);
+    os_mutex_destroy(m_os_mutex);
   } else if (m_protection == SYNC_ARRAY_MUTEX) {
     mutex_free(&m_mutex);
   } else {
@@ -271,7 +271,7 @@ void sync_array_free(Sync_check *arr) {
 }
 
 /** Returns the event that the thread owning the cell waits for. */
-OS_cond* Sync_cell::get_event() {
+Cond_var* Sync_cell::get_event() {
   if (m_request_type == SYNC_MUTEX) {
     return reinterpret_cast<mutex_t *>(m_wait_object)->event;
   } else if (m_request_type == RW_LOCK_WAIT_EX) {

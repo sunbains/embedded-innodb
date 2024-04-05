@@ -160,7 +160,7 @@ struct row_prebuilt_struct {
   here */
   dtuple_t *clust_ref;             /* prebuilt dtuple used in
                                    sel/upd/del */
-  enum lock_mode select_lock_type; /* LOCK_NONE, LOCK_S, or LOCK_X */
+  enum Lock_mode select_lock_type; /* LOCK_NONE, LOCK_S, or LOCK_X */
   mem_heap_t *old_vers_heap;       /* memory heap where a previous
                                    version is built in consistent read */
   ib_row_cache_t row_cache;        /* rows cached by select read ahead */

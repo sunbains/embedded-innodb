@@ -1097,7 +1097,7 @@ run_again:
 
   err = DB_SUCCESS;
 
-  if (trx->check_foreigns == false) {
+  if (trx->m_check_foreigns == false) {
     /* The user has suppressed foreign key checks currently for
     this session */
     goto exit_func;
@@ -1384,7 +1384,7 @@ static db_err row_ins_check_foreign_constraints(
         dict_table_get(foreign->referenced_table_name, false);
       }
 
-      if (0 == trx->dict_operation_lock_mode) {
+      if (0 == trx->m_dict_operation_lock_mode) {
         got_s_lock = true;
 
         dict_freeze_data_dictionary(trx);
@@ -1522,7 +1522,7 @@ static db_err row_ins_scan_sec_index_for_duplicate(
 
   pcur.open(index, entry, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
 
-  allow_duplicates = thr_get_trx(thr)->duplicates & TRX_DUP_IGNORE;
+  allow_duplicates = thr_get_trx(thr)->m_duplicates & TRX_DUP_IGNORE;
 
   /* Scan index records and check if there is a duplicate */
 
@@ -1644,7 +1644,7 @@ static db_err row_ins_duplicate_error_in_clust(
       sure that in roll-forward we get the same duplicate
       errors as in original execution */
 
-      if (trx->duplicates & TRX_DUP_IGNORE) {
+      if (trx->m_duplicates & TRX_DUP_IGNORE) {
 
         /* If the SQL-query will update or replace
         duplicate key we will take X-lock for
@@ -1676,7 +1676,7 @@ static db_err row_ins_duplicate_error_in_clust(
     if (!page_rec_is_supremum(rec)) {
       offsets = rec_get_offsets(rec, cursor->m_index, offsets, ULINT_UNDEFINED, &heap);
 
-      if (trx->duplicates & TRX_DUP_IGNORE) {
+      if (trx->m_duplicates & TRX_DUP_IGNORE) {
 
         /* If the SQL-query will update or replace
         duplicate key we will take X-lock for
@@ -2131,7 +2131,7 @@ que_thr_t *row_ins_step(que_thr_t *thr) {
 
   trx = thr_get_trx(thr);
 
-  ut_a(trx->conc_state != TRX_NOT_STARTED);
+  ut_a(trx->m_conc_state != TRX_NOT_STARTED);
 
   auto node = static_cast<ins_node_t *>(thr->run_node);
 
@@ -2153,14 +2153,14 @@ que_thr_t *row_ins_step(que_thr_t *thr) {
   operation, and there is no need to set it again here. But we
   must write trx->id to node->trx_id. */
 
-  trx_write_trx_id(node->trx_id_buf, trx->id);
+  trx_write_trx_id(node->trx_id_buf, trx->m_id);
 
   if (node->state == INS_NODE_SET_IX_LOCK) {
 
     /* It may be that the current session has not yet started
     its transaction, or it has been committed: */
 
-    if (trx->id == node->trx_id) {
+    if (trx->m_id == node->trx_id) {
       /* No need to do IX-locking */
 
       goto same_trx;
@@ -2173,7 +2173,7 @@ que_thr_t *row_ins_step(que_thr_t *thr) {
       goto error_handling;
     }
 
-    node->trx_id = trx->id;
+    node->trx_id = trx->m_id;
   same_trx:
     node->state = INS_NODE_ALLOC_ROW_ID;
 

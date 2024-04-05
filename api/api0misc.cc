@@ -37,15 +37,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 /* If set then we rollback the transaction on DB_LOCK_WAIT_TIMEOUT error. */
 bool ses_rollback_on_timeout = false;
 
-/** Create a temporary file. FIXME: This is a Q&D solution. */
-int ib_create_tempfile(const char *prefix) /*!< in: temp filename prefix */
-{
+int ib_create_tempfile(const char *) {
   int fh = -1;
-  FILE *file;
-
-  (void)prefix;
-
-  file = tmpfile();
+  auto file = tmpfile();
 
   if (file != nullptr) {
     fh = dup(fileno(file));
@@ -57,148 +51,107 @@ int ib_create_tempfile(const char *prefix) /*!< in: temp filename prefix */
 
 /** Determines if the currently running transaction has been interrupted.
 @return	true if interrupted */
-
 ib_trx_is_interrupted_handler_t ib_trx_is_interrupted = nullptr;
 
-bool trx_is_interrupted(const trx_t *trx) /*!< in: transaction */
-{
-  if (trx->client_thd && ib_trx_is_interrupted != nullptr) {
-    return (ib_trx_is_interrupted(trx->client_thd));
+bool trx_is_interrupted(const trx_t *trx) {
+  if (trx->m_client_ctx && ib_trx_is_interrupted != nullptr) {
+    return ib_trx_is_interrupted(trx->m_client_ctx);
   }
-  return (false);
+  return false;
 }
 
-/** Handles user errors and lock waits detected by the database engine.
-@return	true if it was a lock wait and we should continue running the query
-thread */
+bool ib_handle_errors(db_err *new_err, trx_t *trx, que_thr_t *thr, trx_savept_t *savept) {
+  for (;;) {
+    auto err = trx->error_state;
+    ut_a(err != DB_SUCCESS);
 
-bool ib_handle_errors(
-  enum db_err *new_err, /*!< out: possible new error encountered in
-                          lock wait, or if no new error, the value
-                          of trx->error_state at the entry of this
-                          function */
-  trx_t *trx,           /*!< in: transaction */
-  que_thr_t *thr,       /*!< in: query thread */
-  trx_savept_t *savept
-) /*!< in: savepoint or NULL */
-{
-  enum db_err err;
+    trx->error_state = DB_SUCCESS;
 
-handle_new_error:
-  err = trx->error_state;
+    switch (err) {
+      case DB_LOCK_WAIT_TIMEOUT:
+        if (ses_rollback_on_timeout) {
+          trx_general_rollback(trx, false, nullptr);
+          break;
+        }
+        /* fall through */
+      case DB_DUPLICATE_KEY:
+      case DB_FOREIGN_DUPLICATE_KEY:
+      case DB_TOO_BIG_RECORD:
+      case DB_ROW_IS_REFERENCED:
+      case DB_NO_REFERENCED_ROW:
+      case DB_CANNOT_ADD_CONSTRAINT:
+      case DB_TOO_MANY_CONCURRENT_TRXS:
+      case DB_OUT_OF_FILE_SPACE:
+        if (savept) {
+          /* Roll back the latest, possibly incomplete
+          insertion or update */
 
-  ut_a(err != DB_SUCCESS);
+          trx_general_rollback(trx, true, savept);
+        }
+        break;
+      case DB_LOCK_WAIT:
+        srv_suspend_user_thread(thr);
 
-  trx->error_state = DB_SUCCESS;
+        if (trx->error_state != DB_SUCCESS) {
+          que_thr_stop_client(thr);
 
-  switch (err) {
-    case DB_LOCK_WAIT_TIMEOUT:
-      if (ses_rollback_on_timeout) {
+          continue;
+        }
+
+        *new_err = err;
+
+         /* Operation needs to be retried. */
+        return true;
+
+      case DB_DEADLOCK:
+      case DB_LOCK_TABLE_FULL:
+        /* Roll back the whole transaction; this resolution was added
+        to version 3.23.43 */
+
         trx_general_rollback(trx, false, nullptr);
         break;
-      }
-      /* fall through */
-    case DB_DUPLICATE_KEY:
-    case DB_FOREIGN_DUPLICATE_KEY:
-    case DB_TOO_BIG_RECORD:
-    case DB_ROW_IS_REFERENCED:
-    case DB_NO_REFERENCED_ROW:
-    case DB_CANNOT_ADD_CONSTRAINT:
-    case DB_TOO_MANY_CONCURRENT_TRXS:
-    case DB_OUT_OF_FILE_SPACE:
-      if (savept) {
-        /* Roll back the latest, possibly incomplete
-      insertion or update */
 
-        trx_general_rollback(trx, true, savept);
-      }
-      break;
-    case DB_LOCK_WAIT:
-      srv_suspend_user_thread(thr);
+      case DB_MUST_GET_MORE_FILE_SPACE:
+        log_fatal(
+          "The database cannot continue operation because of"
+          " lack of space. You must add a new data file and restart"
+          " the database."
+        );
+        break;
 
-      if (trx->error_state != DB_SUCCESS) {
-        que_thr_stop_client(thr);
+      case DB_CORRUPTION:
+        log_err(
+          "We detected index corruption in an InnoDB type table."
+          " You have to dump + drop + reimport the table or, in"
+          " a case of widespread corruption, dump all InnoDB tables"
+          " and recreate the whole InnoDB tablespace. If the server"
+          " crashes after the startup or when you dump the tables,"
+          " check the InnoDB website for help.");
+        break;
+      default:
+        log_fatal("Unknown error code ", (ulint) err);
+    }
 
-        goto handle_new_error;
-      }
-
+    if (trx->error_state != DB_SUCCESS) {
+      *new_err = trx->error_state;
+    } else {
       *new_err = err;
+    }
 
-      return (true); /* Operation needs to be retried. */
+    trx->error_state = DB_SUCCESS;
 
-    case DB_DEADLOCK:
-    case DB_LOCK_TABLE_FULL:
-      /* Roll back the whole transaction; this resolution was added
-    to version 3.23.43 */
-
-      trx_general_rollback(trx, false, nullptr);
-      break;
-
-    case DB_MUST_GET_MORE_FILE_SPACE:
-      log_fatal(
-        "The database cannot continue"
-        " operation because of\n"
-        "lack of space. You must add"
-        " a new data file\n"
-        "and restart the database.\n"
-      );
-      break;
-
-    case DB_CORRUPTION:
-      ib_logger(
-        ib_stream,
-        "We detected index corruption"
-        " in an InnoDB type table.\n"
-        "You have to dump + drop + reimport"
-        " the table or, in\n"
-        "a case of widespread corruption,"
-        " dump all InnoDB\n"
-        "tables and recreate the"
-        " whole InnoDB tablespace.\n"
-        "If the server crashes"
-        " after the startup or when\n"
-        "you dump the tables, check the \n"
-        "InnoDB website for help.\n"
-      );
-      break;
-    default:
-      ib_logger(ib_stream, "unknown error code %lu\n", (ulong)err);
-      ut_error;
+    return false;
   }
-
-  if (trx->error_state != DB_SUCCESS) {
-    *new_err = trx->error_state;
-  } else {
-    *new_err = err;
-  }
-
-  trx->error_state = DB_SUCCESS;
-
-  return (false);
 }
 
-/** Sets a lock on a table.
-@return	error code or DB_SUCCESS */
+db_err ib_trx_lock_table_with_retry(trx_t *trx, dict_table_t *table, enum Lock_mode mode) {
+  auto heap = mem_heap_create(512);
 
-enum db_err ib_trx_lock_table_with_retry(
-  trx_t *trx,          /*!< in/out: transaction */
-  dict_table_t *table, /*!< in: table to lock */
-  enum lock_mode mode
-) /*!< in: LOCK_X or LOCK_S */
-{
-  que_thr_t *thr;
-  enum db_err err;
-  mem_heap_t *heap;
-  sel_node_t *node;
+  trx->m_op_info = "setting table lock";
 
-  ut_ad(trx->client_thread_id == os_thread_get_curr_id());
+  auto node = sel_node_create(heap);
+  auto thr = pars_complete_graph_for_exec(node, trx, heap);
 
-  heap = mem_heap_create(512);
-
-  trx->op_info = "setting table lock";
-
-  node = sel_node_create(heap);
-  thr = pars_complete_graph_for_exec(node, trx, heap);
   thr->graph->state = QUE_FORK_ACTIVE;
 
   /* We use the select query graph as the dummy graph needed
@@ -207,58 +160,50 @@ enum db_err ib_trx_lock_table_with_retry(
   thr = que_fork_get_first_thr(static_cast<que_fork_t *>(que_node_get_parent(thr)));
   que_thr_move_to_run_state(thr);
 
-run_again:
-  thr->run_node = thr;
-  thr->prev_node = thr->common.parent;
+  for (;;) {
+    thr->run_node = thr;
+    thr->prev_node = thr->common.parent;
 
-  err = lock_table(0, table, mode, thr);
+    auto err = lock_table(0, table, mode, thr);
 
-  trx->error_state = err;
+    trx->error_state = err;
 
-  if (likely(err == DB_SUCCESS)) {
-    que_thr_stop_for_client_no_error(thr, trx);
-  } else {
-    que_thr_stop_client(thr);
-
-    if (err != DB_QUE_THR_SUSPENDED) {
-      bool was_lock_wait;
-
-      was_lock_wait = ib_handle_errors(&err, trx, thr, nullptr);
-
-      if (was_lock_wait) {
-        goto run_again;
-      }
+    if (likely(err == DB_SUCCESS)) {
+      que_thr_stop_for_client_no_error(thr, trx);
     } else {
-      que_thr_t *run_thr;
-      que_node_t *parent;
+      que_thr_stop_client(thr);
 
-      parent = que_node_get_parent(thr);
-      run_thr = que_fork_start_command(static_cast<que_fork_t *>(parent));
+      if (err != DB_QUE_THR_SUSPENDED) {
+        auto was_lock_wait = ib_handle_errors(&err, trx, thr, nullptr);
 
-      ut_a(run_thr == thr);
+        if (was_lock_wait) {
+          continue;
+        }
+      } else {
+        auto parent = que_node_get_parent(thr);
+        auto run_thr = que_fork_start_command(static_cast<que_fork_t *>(parent));
 
-      /* There was a lock wait but the thread was not
-      in a ready to run or running state. */
-      trx->error_state = DB_LOCK_WAIT;
+        ut_a(run_thr == thr);
 
-      goto run_again;
+        /* There was a lock wait but the thread was not
+        in a ready to run or running state. */
+        trx->error_state = DB_LOCK_WAIT;
+
+        continue;
+      }
     }
+
+    que_graph_free(thr->graph);
+    trx->m_op_info = "";
+
+    return err;
   }
 
-  que_graph_free(thr->graph);
-  trx->op_info = "";
-
-  return (err);
+   ut_error;
 }
 
-/** Updates the table modification counter and calculates new estimates
-for table and index statistics if necessary. */
-
-void ib_update_statistics_if_needed(dict_table_t *table) /*!< in/out: table */
-{
-  ulint counter;
-
-  counter = table->stat_modified_counter++;
+void ib_update_statistics_if_needed(dict_table_t *table) {
+  auto counter = table->stat_modified_counter++;
 
   /* Calculate new statistics if 1 / 16 of table has been modified
   since the last time a statistics batch was run, or if
@@ -270,4 +215,111 @@ void ib_update_statistics_if_needed(dict_table_t *table) /*!< in/out: table */
 
     dict_update_statistics(table);
   }
+}
+
+const char *ib_strerror(ib_err_t err) {
+  switch (err) {
+    case DB_SUCCESS:
+      return "Success";
+    case DB_PANIC:
+      return "Panic";
+    case DB_ERROR:
+      return "Generic error";
+    case DB_OUT_OF_MEMORY:
+      return "Cannot allocate memory";
+    case DB_OUT_OF_FILE_SPACE:
+      return "Out of disk space";
+    case DB_LOCK_WAIT:
+      return "Lock wait";
+    case DB_DEADLOCK:
+      return "Deadlock";
+    case DB_ROLLBACK:
+      return "Rollback";
+    case DB_DUPLICATE_KEY:
+      return "Duplicate key";
+    case DB_QUE_THR_SUSPENDED:
+      return "The queue thread has been suspended";
+    case DB_MISSING_HISTORY:
+      return "Required history data has been deleted";
+    case DB_CLUSTER_NOT_FOUND:
+      return "Cluster not found";
+    case DB_TABLE_NOT_FOUND:
+      return "Table not found";
+    case DB_MUST_GET_MORE_FILE_SPACE:
+      return "More file space needed";
+    case DB_TABLE_EXISTS:
+      return "Table is being used";
+    case DB_TOO_BIG_RECORD:
+      return "Record too big";
+    case DB_LOCK_WAIT_TIMEOUT:
+      return "Lock wait timeout";
+    case DB_NO_REFERENCED_ROW:
+      return "Referenced key value not found";
+    case DB_ROW_IS_REFERENCED:
+      return "Row is referenced";
+    case DB_CANNOT_ADD_CONSTRAINT:
+      return "Cannot add constraint";
+    case DB_CORRUPTION:
+      return "Data structure corruption";
+    case DB_COL_APPEARS_TWICE_IN_INDEX:
+      return "Column appears twice in index";
+    case DB_CANNOT_DROP_CONSTRAINT:
+      return "Cannot drop constraint";
+    case DB_NO_SAVEPOINT:
+      return "No such savepoint";
+    case DB_TABLESPACE_ALREADY_EXISTS:
+      return "Tablespace already exists";
+    case DB_TABLESPACE_DELETED:
+      return "No such tablespace";
+    case DB_LOCK_TABLE_FULL:
+      return "Lock structs have exhausted the buffer pool";
+    case DB_FOREIGN_DUPLICATE_KEY:
+      return "Foreign key activated with duplicate keys";
+    case DB_TOO_MANY_CONCURRENT_TRXS:
+      return "Too many concurrent transactions";
+    case DB_UNSUPPORTED:
+      return "Unsupported";
+    case DB_PRIMARY_KEY_IS_NULL:
+      return "Primary key is nullptr";
+    case DB_FAIL:
+      return "Failed, retry may succeed";
+    case DB_OVERFLOW:
+      return "Overflow";
+    case DB_UNDERFLOW:
+      return "Underflow";
+    case DB_STRONG_FAIL:
+      return "Failed, retry will not succeed";
+    case DB_RECORD_NOT_FOUND:
+      return "Record not found";
+    case DB_END_OF_INDEX:
+      return "End of index";
+    case DB_SCHEMA_ERROR:
+      return "Error while validating a table or index schema";
+    case DB_DATA_MISMATCH:
+      return "Type mismatch";
+    case DB_SCHEMA_NOT_LOCKED:
+      return "Schema not locked";
+    case DB_NOT_FOUND:
+      return "Not found";
+    case DB_READONLY:
+      return "Readonly";
+    case DB_INVALID_INPUT:
+      return "Invalid input";
+    case DB_FATAL:
+      return "InnoDB fatal error";
+    case DB_INTERRUPTED:
+      return "Operation interrupted";
+    case DB_OUT_OF_RESOURCES:
+      return "Out of resources";
+    case DB_INDEX_CORRUPT:
+      return "Index corrupt";
+    case DB_DDL_IN_PROGRESS:
+      return "DDL in progress";
+  }
+
+  /* Do not add default: in order to produce a warning if new code
+  is added to the enum but not added here */
+
+  /* NOT REACHED */
+  return "Unknown error";
 }

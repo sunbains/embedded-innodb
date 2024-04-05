@@ -150,6 +150,29 @@ constexpr ulint DICT_TF2_TEMPORARY = 1;
 /** Total number of bits in table->flags. */
 constexpr ulint DICT_TF2_BITS = DICT_TF2_SHIFT + 1;
 
+/** TBD: This needs to be implemented to fix a bug.
+ *  The status of online index creation */
+enum class DDL_index_status {
+  /** The index is complete and ready for access */
+  READY = 0,
+
+  /** The index is being created, online
+  (allowing concurrent modifications) */
+  IN_PROGRESS,
+
+  /** Secondary index creation was aborted and the index
+  should be dropped as soon as index->table->n_ref_count reaches 0,
+  or online table rebuild was aborted and the clustered index
+  of the original table should soon be restored to ONLINE_INDEX_COMPLETE */
+  FAILED,
+
+  /** The online index creation was aborted, the index was
+  dropped from the data dictionary and the tablespace, and it
+  should be dropped from the data dictionary cache as soon as
+  index->table->n_ref_count reaches 0. */
+  DROPPED
+};
+
 /* @} */
 /** Data structure for a column in a table */
 struct dict_col_t {
@@ -199,58 +222,53 @@ struct dict_field_t {
 /** Data structure for an index.  Most fields will be
 initialized to 0, nullptr or false in dict_mem_index_create(). */
 struct dict_index_t {
+  [[nodiscard]] bool is_clustered() const {
+    ut_ad(magic_n == DICT_INDEX_MAGIC_N);
+
+    return type & DICT_CLUSTERED;
+  }
+
+  /**
+  * @brief Gets the status of online index creation.
+  * Without the index->lock protection, the online status can change from
+  * ONLINE_INDEX_CREATION to ONLINE_INDEX_COMPLETE (or ONLINE_INDEX_ABORTED) in
+  * row_log_apply() once log application is done. So to make sure the status
+  * is ONLINE_INDEX_CREATION or ONLINE_INDEX_COMPLETE you should always do
+  * the recheck after acquiring index->lock 
+  *
+  * @return The status.
+  */
+  [[nodiscard]] DDL_index_status get_online_ddl_status() const;
+
+  /** Determines if a secondary index is being created online, or if the
+  * table is being rebuilt online, allowing concurrent modifications
+  * to the table.
+  * @retval true if the index is being or has been built online, or
+  * if this is a clustered index and the table is being or has been rebuilt online
+  * @retval false if the index has been created or the table has been
+  * rebuilt completely */
+  [[nodiscard]] bool is_online_ddl_in_progress() const;
+
   /** Id of the index */
   uint64_t id;
 
-  /** memory heap */
+  /** Memory heap */
   mem_heap_t *heap;
 
-  /** index name */
+  /** Index name */
   const char *name;
 
-  /** table name */
+  /** Table name */
   const char *table_name;
 
-  /** back pointer to table */
+  /** Back pointer to table */
   dict_table_t *table;
 
   /** Space where the index tree is placed */
   space_id_t space;
 
-  /** index tree root page number */
+  /** Index tree root page number */
   page_no_t page;
-
-  /** index type (DICT_CLUSTERED, DICT_UNIQUE, DICT_UNIVERSAL) */
-  unsigned type : 4;
-
-  /* position of the trx id column in a clustered index
-  record, if the fields before it are known to be of a
-  fixed size, 0 otherwise */
-  unsigned trx_id_offset : 10;
-
-  /** Number of columns the user defined to be in the
-  index: in the internal representation we add more columns */
-  unsigned n_user_defined_cols : 10;
-
-  /** Number of fields from the beginning which are enough to determine
-  an index entry uniquely */
-  unsigned n_uniq : 10;
-
-  /** Number of fields defined so far */
-  unsigned n_def : 10;
-
-  /** number of fields in the index */
-  unsigned n_fields : 10;
-
-  /** number of nullable fields */
-  unsigned n_nullable : 10;
-
-  /** true if the index object is in the dictionary cache */
-  unsigned cached : 1;
-
-  /** true if this index is marked to be dropped in
-   * ha_innobase::prepare_drop_index(), otherwise false */
-  unsigned to_be_dropped : 1;
 
   /** Array of field descriptions */
   dict_field_t *fields;
@@ -267,11 +285,11 @@ struct dict_index_t {
   periodically calculate new estimates */
   int64_t *stat_n_diff_key_vals;
 
-  /** approximate index size in database pages */
-  ulint stat_index_size;
+  /** Approximate index size in database pages */
+  page_no_t stat_index_size;
 
   /** Approximate number of leaf pages in the index tree */
-  ulint stat_n_leaf_pages;
+  page_no_t stat_n_leaf_pages;
 
   /** read-write lock protecting the upper levels of the index tree */
   rw_lock_t lock;
@@ -282,9 +300,50 @@ struct dict_index_t {
   void *cmp_ctx;
 
   /** Id of the transaction that created this index, or 0 if the index existed
-   * when InnoDB was started up */
+  when InnoDB was started up */
   uint64_t trx_id;
+
   /* @} */
+  /** Index type (DICT_CLUSTERED, DICT_UNIQUE, DICT_UNIVERSAL) */
+  unsigned type : 4;
+
+  /* Position of the trx id column in a clustered index
+  record, if the fields before it are known to be of a
+  fixed size, 0 otherwise */
+  unsigned trx_id_offset : 10;
+
+  /** Number of columns the user defined to be in the
+  index: in the internal representation we add more columns */
+  unsigned n_user_defined_cols : 10;
+
+  /** Number of fields from the beginning which are enough
+  to determine an index entry uniquely */
+  unsigned n_uniq : 10;
+
+  /** Number of fields defined so far */
+  unsigned n_def : 10;
+
+  /** Number of fields in the index */
+  unsigned n_fields : 10;
+
+  /** Number of nullable fields */
+  unsigned n_nullable : 10;
+
+  /** True if the index object is in the dictionary cache */
+  unsigned cached : 1;
+
+  /** DDL_index_status. Transitions from IN_PROGRESS to SUCCESS
+  are protected by dict_operation_lock and dict_sys->mutex. Other
+  changes are protected only by the index->lock. */
+  unsigned m_ddl_status : 2;
+
+  /** Flag that is set for secondary indexes that have not been
+  committed to the data dictionary yet */
+  unsigned uncommitted : 1;
+
+  /** True if this index is marked to be dropped in
+  ha_innobase::prepare_drop_index(), otherwise false */
+  unsigned to_be_dropped : 1;
 
   /** Magic number */
   IF_DEBUG(ulint magic_n;)
@@ -346,7 +405,7 @@ struct dict_foreign_t {
 list has a list node that is embedded in a nested union/structure. We have to
 generate a specific template for it. See lock0lock.cc for the implementation. */
 struct Table_lock_get_node;
-using Table_locks = ut_list_base<lock_t, Table_lock_get_node>;
+using Table_locks = ut_list_base<Lock, Table_lock_get_node>;
 
 /** Data structure for a database table.  Most fields will be
 initialized to 0, nullptr or false in dict_mem_table_create(). */

@@ -28,6 +28,7 @@ Created 11/5/1995 Heikki Tuuri
 #include "buf0types.h"
 #include "fil0types.h"
 #include "hash0hash.h"
+#include "mach0data.h"
 #include "mtr0types.h"
 #include "page0types.h"
 

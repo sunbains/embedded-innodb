@@ -25,6 +25,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define INNODB_API
 #define INNODB_LOCAL
 
+#include <stdint.h>
+#include <stdio.h>
+
+#include <vector>
+
 // FIXME: Functions tagged with UNIV_NO_IGNORE should be
 // tagged with [[nounused]]
 #define UNIV_NO_IGNORE
@@ -204,11 +209,15 @@ enum db_err {
 
 	/** Out of a resource, could be memory, threads, file descriptors etc. */
 	DB_OUT_OF_RESOURCES,
+
+	/** Index is corrupted. */
+	DB_INDEX_CORRUPT,
+
+	/** DDL is in progress. */
+	DB_DDL_IN_PROGRESS,
 };
 
 using dberr_t = db_err;
-
-#include <stdio.h>
 
 /* Basic types used by the InnoDB API. */
 
@@ -228,10 +237,6 @@ using ib_opaque_t = void*;
 /** A character set pointer */
 using ib_charset_t = ib_opaque_t;
 
-/* We assume C99 support except when using VisualStudio. */
-#if !defined(_MSC_VER)
-#include <stdint.h>
-#endif /* _MSC_VER */
 
 /* Integer types used by the API. Microsft VS defines its own types
 and we use the Microsoft types when building with Visual Studio. */
@@ -457,9 +462,9 @@ typedef enum {
 	IB_TRX_PREPARED			/*!< Support for 2PC/XA */
 } ib_trx_state_t;
 
-/* Note: Must be in sync with trx0trx.h */
+/* Note: Must be in sync with Trx_isolation in trx0types.h */
 /** @enum ib_trx_level_t Transaction isolation levels */
-typedef enum {
+enum ib_trx_level_t {
 	IB_TRX_READ_UNCOMMITTED = 0,	/*!< Dirty read: non-locking SELECTs are
 					performed so that we do not look at a
 					possible earlier version of a record;
@@ -484,7 +489,7 @@ typedef enum {
 
 	IB_TRX_SERIALIZABLE = 3		/*!< All plain SELECTs are converted to
 					LOCK IN SHARE MODE reads */
-} ib_trx_level_t;
+};
 
 /** @enum ib_shutdown_t When ib_shutdown() is called InnoDB may take a long
 time to shutdown because of background tasks e.g., purging deleted records.
@@ -504,7 +509,7 @@ typedef enum {
 } ib_shutdown_t;
 
 /** Generical InnoDB callback prototype. */
-typedef void (*ib_cb_t)(void);
+typedef void (*ib_cb_t)();
 
 /** The first argument to the InnoDB message logging function. By default
 it's set to stderr. You should treat ib_msg_stream_t as a void*, since
@@ -630,6 +635,7 @@ typedef int (*ib_client_cmp_t)(
 /* This should be the same as univ.i */
 /** Represents SQL_NULL length */
 #define	IB_SQL_NULL		0xFFFFFFFF
+
 /** The number of system columns in a row. */
 #define IB_N_SYS_COLS		3
 
@@ -2404,6 +2410,28 @@ ib_update_table_statistics(ib_crsr_t crsr);
 INNODB_API
 ib_err_t
 ib_error_inject(int error_to_inject);
+
+/** Do a parallel select count(*) from T;
+ * @param[in] ib_trx InnoDB transaction
+ * @param[in] ib_crsrs InnoDB cursors
+ * @param[in] n_threads Number of threads to use
+ * @param[out] n_rows Number of rows in the table
+*/
+[[nodiscard]] ib_err_t ib_parallel_select_count_star(
+	ib_trx_t ib_trx,
+	std::vector<ib_crsr_t> &ib_crsrs,
+	size_t n_threads,
+	uint64_t &n_rows);
+
+/**
+ * Checks the table for errors using the given transaction and cursor.
+ *
+ * @param ib_trx The InnoDB transaction to use for checking the table.
+ * @param ib_crsr The InnoDB cursor to use for checking the table.
+ * @param n_threads The number of threads to use for checking the table.
+ * @return The error code indicating the result of the table check.
+ */
+[[nodiscard]] ib_err_t ib_check_table(ib_trx_t ib_trx, ib_crsr_t ib_crsr, size_t n_threads);
 
 namespace logger {
 

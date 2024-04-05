@@ -16,8 +16,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/********************************************************************/ /**
- @file include/data0types.h
+/** @file include/data0types.h
  Some type definitions
 
  Created 9/21/2000 Heikki Tuuri
@@ -28,7 +27,6 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "innodb0types.h"
 #include "mem0mem.h"
 #include "rem0types.h"
-#include "trx0types.h"
 #include "ut0ut.h"
 #include "ut0lst.h"
 
@@ -206,7 +204,6 @@ struct dtype_t {
   DTYPE_FIELDS
 };
 
-
 /** Structure for an SQL data field */
 struct dfield_t {
   /** Print the dfield_t object into the given output stream.
@@ -252,8 +249,7 @@ struct dtuple_t {
   @retval 0 if dtuple is equal to rec
   @retval negative if dtuple is less than rec
   @retval positive if dtuple is greater than rec */
-  int compare(const rec_t *rec, const dict_index_t *index, const ulint *offsets,
-              ulint *matched_fields) const;
+  int compare(const rec_t *rec, const dict_index_t *index, const ulint *offsets, ulint *matched_fields) const;
 
   /** Compare a data tuple to a physical record.
   @param[in]    rec             record
@@ -263,11 +259,10 @@ struct dtuple_t {
   @retval 0 if dtuple is equal to rec
   @retval negative if dtuple is less than rec
   @retval positive if dtuple is greater than rec */
-  inline int compare(const rec_t *rec, const dict_index_t *index,
-                     const ulint *offsets) const {
+  inline int compare(const rec_t *rec, const dict_index_t *index, const ulint *offsets) const {
     ulint matched_fields{};
 
-    return (compare(rec, index, offsets, &matched_fields));
+    return compare(rec, index, offsets, &matched_fields);
   }
 
   /** Get number of externally stored fields.
@@ -297,11 +292,8 @@ struct dtuple_t {
   /** data tuples can be linked into a list using this field */
   UT_LIST_NODE_T(dtuple_t) tuple_list;
 
-#ifdef UNIV_DEBUG
   /** Magic number, used in debug assertions */
-  ulint magic_n;
-/** Value of dtuple_struct::magic_n */
-#endif /* UNIV_DEBUG */
+  IF_DEBUG(ulint magic_n;)
 };
 
 /** A slot for a field in a big rec vector */

@@ -165,7 +165,7 @@ void recv_sys_mem_free() {
     }
 
     if (recv_sys->buf != nullptr) {
-      ut_free(recv_sys->buf);
+      ut_delete(recv_sys->buf);
     }
 
     if (recv_sys->last_block_buf_start != nullptr) {
@@ -193,7 +193,7 @@ void recv_sys_init(ulint available_memory) {
     recv_n_pool_free_frames = 512;
   }
 
-  recv_sys->buf = static_cast<byte *>(ut_malloc(RECV_PARSING_BUF_SIZE));
+  recv_sys->buf = static_cast<byte *>(ut_new(RECV_PARSING_BUF_SIZE));
   recv_sys->len = 0;
   recv_sys->recovered_offset = 0;
 
@@ -243,7 +243,7 @@ static void recv_sys_debug_free(void) {
 
   hash_table_free(recv_sys->addr_hash);
   mem_heap_free(recv_sys->heap);
-  ut_free(recv_sys->buf);
+  ut_delete(recv_sys->buf);
   mem_free(recv_sys->last_block_buf_start);
 
   recv_sys->buf = nullptr;

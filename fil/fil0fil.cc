@@ -651,7 +651,7 @@ static void fil_node_open_file(
 
     /* Read the first page of the tablespace */
 
-    auto buf2 = (byte *)ut_malloc(2 * UNIV_PAGE_SIZE);
+    auto buf2 = (byte *)ut_new(2 * UNIV_PAGE_SIZE);
     /* Align the memory for file i/o if we might have O_DIRECT set */
     page = (page_t *)ut_align(buf2, UNIV_PAGE_SIZE);
 
@@ -659,7 +659,7 @@ static void fil_node_open_file(
     space_id = fsp_header_get_space_id(page);
     flags = fsp_header_get_flags(page);
 
-    ut_free(buf2);
+    ut_delete(buf2);
 
     /* Close the file now that we have read the space id from it */
 
@@ -1445,7 +1445,7 @@ void fil_read_flushed_lsn_and_arch_log_no(
 ) /** in/out: */
 {
   uint64_t flushed_lsn;
-  auto buf2 = (byte *)ut_malloc(2 * UNIV_PAGE_SIZE);
+  auto buf2 = (byte *)ut_new(2 * UNIV_PAGE_SIZE);
 
   /* Align the memory for a possible read from a raw device */
   auto buf = (byte *)ut_align(buf2, UNIV_PAGE_SIZE);
@@ -1454,7 +1454,7 @@ void fil_read_flushed_lsn_and_arch_log_no(
 
   flushed_lsn = mach_read_from_8(buf + FIL_PAGE_FILE_FLUSH_LSN);
 
-  ut_free(buf2);
+  ut_delete(buf2);
 
   if (!one_read_already) {
     *min_flushed_lsn = flushed_lsn;
@@ -2077,14 +2077,14 @@ db_err fil_create_new_single_table_tablespace(ulint *space_id, const char *table
     return DB_ERROR;
   }
 
-  auto buf2 = (byte *)ut_malloc(3 * UNIV_PAGE_SIZE);
+  auto buf2 = (byte *)ut_new(3 * UNIV_PAGE_SIZE);
   /* Align the memory for file i/o if we might have O_DIRECT set */
   auto page = (byte *)ut_align(buf2, UNIV_PAGE_SIZE);
 
   ret = os_file_set_size(path, file, size * UNIV_PAGE_SIZE, 0);
 
   if (!ret) {
-    ut_free(buf2);
+    ut_delete(buf2);
     os_file_close(file);
     os_file_delete(path);
 
@@ -2099,7 +2099,7 @@ db_err fil_create_new_single_table_tablespace(ulint *space_id, const char *table
   /* printf("Creating tablespace %s id %lu\n", path, *space_id); */
 
   if (*space_id == ULINT_UNDEFINED) {
-    ut_free(buf2);
+    ut_delete(buf2);
   error_exit:
     os_file_close(file);
   error_exit2:
@@ -2126,7 +2126,7 @@ db_err fil_create_new_single_table_tablespace(ulint *space_id, const char *table
   buf_pool->m_flusher->init_for_writing(page, 0);
   ret = os_file_write(path, file, page, 0, 0, UNIV_PAGE_SIZE);
 
-  ut_free(buf2);
+  ut_delete(buf2);
 
   if (ret == 0) {
     ib_logger(
@@ -2211,7 +2211,7 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
 
   /* Read the first page of the tablespace */
 
-  auto buf2 = (byte *)ut_malloc(3 * UNIV_PAGE_SIZE);
+  auto buf2 = (byte *)ut_new(3 * UNIV_PAGE_SIZE);
   /* Align the memory for file i/o if we might have O_DIRECT set */
   auto page = (byte *)ut_align(buf2, UNIV_PAGE_SIZE);
 
@@ -2302,7 +2302,7 @@ bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
   success = os_file_flush(file);
 func_exit:
   os_file_close(file);
-  ut_free(buf2);
+  ut_delete(buf2);
   mem_free(filepath);
 
   return success;
@@ -2358,7 +2358,7 @@ bool fil_open_single_table_tablespace(bool check_space_id, ulint id, ulint flags
   } else {
     /* Read the first page of the tablespace */
 
-    auto buf2 = (byte *)ut_malloc(2 * UNIV_PAGE_SIZE);
+    auto buf2 = (byte *)ut_new(2 * UNIV_PAGE_SIZE);
     /* Align the memory for file i/o if we might have O_DIRECT set */
     auto page = (byte *)ut_align(buf2, UNIV_PAGE_SIZE);
 
@@ -2369,7 +2369,7 @@ bool fil_open_single_table_tablespace(bool check_space_id, ulint id, ulint flags
     space_id = fsp_header_get_space_id(page);
     space_flags = fsp_header_get_flags(page);
 
-    ut_free(buf2);
+    ut_delete(buf2);
 
     if (unlikely(space_id != id || space_flags != (flags & ~(~0UL << DICT_TF_BITS)))) {
       ut_print_timestamp(ib_stream);
@@ -2571,7 +2571,7 @@ static void fil_load_single_table_tablespace(
   }
   /* Read the first page of the tablespace if the size big enough */
 
-  auto buf2 = (byte *)ut_malloc(2 * UNIV_PAGE_SIZE);
+  auto buf2 = (byte *)ut_new(2 * UNIV_PAGE_SIZE);
 
   /* Align the memory for file i/o if we might have O_DIRECT set */
   auto page = (byte *)ut_align(buf2, UNIV_PAGE_SIZE);
@@ -2624,7 +2624,7 @@ static void fil_load_single_table_tablespace(
   fil_node_create(filepath, 0, space_id, false);
 func_exit:
   os_file_close(file);
-  ut_free(buf2);
+  ut_delete(buf2);
   mem_free(filepath);
 }
 

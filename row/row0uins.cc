@@ -56,7 +56,7 @@ static db_err row_undo_ins_remove_clust_rec(undo_node_t *node) {
   ut_a(success);
 
   if (node->table->id == DICT_INDEXES_ID) {
-    ut_ad(node->trx->dict_operation_lock_mode == RW_X_LATCH);
+    ut_ad(node->trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
     /* Drop the index tree associated with the row in
     SYS_INDEXES table: */

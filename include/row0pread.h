@@ -293,8 +293,7 @@ class Parallel_reader {
   @param[in] use_reserved true if reserved threads needs to be considered
   while checking for availability of threads
   @return number of threads available. */
-  [[nodiscard]] static size_t available_threads(size_t n_required,
-                                                bool use_reserved);
+  [[nodiscard]] static size_t available_threads(size_t n_required, bool use_reserved);
 
   /** Release the parallel read threads. */
   static void release_threads(size_t n_threads) {
@@ -428,7 +427,7 @@ class Parallel_reader {
   Scan_ctxs m_scan_ctxs{};
 
   /** For signalling worker threads about events. */
-  OS_cond* m_event{};
+  Cond_var* m_event{};
 
   /** Value returned by previous call of os_event_reset() on m_event. */
   uint64_t m_sig_count;

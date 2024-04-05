@@ -44,22 +44,27 @@ struct fil_node_t;
 #ifdef UNIV_DO_FLUSH
 extern bool os_do_not_call_flush_at_each_write;
 #endif /* UNIV_DO_FLUSH */
+
 extern bool os_has_said_disk_full;
+
 /** Flag: enable debug printout for asynchronous i/o */
 extern bool os_aio_print_debug;
 
 /** Number of pending os_file_pread() operations */
-extern ulint os_file_n_pending_preads;
+extern std::atomic<ulint> os_file_n_pending_preads;
+
 /** Number of pending os_file_pwrite() operations */
-extern ulint os_file_n_pending_pwrites;
+extern std::atomic<ulint> os_file_n_pending_pwrites;
 
 /** Number of pending read operations */
-extern ulint os_n_pending_reads;
+extern std::atomic<ulint> os_n_pending_reads;
+
 /** Number of pending write operations */
-extern ulint os_n_pending_writes;
+extern std::atomic<ulint> os_n_pending_writes;
 
 /** File handle */
 typedef int os_file_t;
+
 /** Convert a C file descriptor to a native file handle
 @param fd	file descriptor
 @return		native file handle */
@@ -71,7 +76,6 @@ extern ulint os_innodb_umask;
 /** If this flag is true, then we will use the native aio of the
 OS (provided we compiled Innobase with it in), otherwise we will
 use simulated aio we build below with threads */
-
 extern bool os_aio_use_native_aio;
 
 /** The next value should be smaller or equal to the smallest sector size used

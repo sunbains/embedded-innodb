@@ -626,3 +626,9 @@ std::ostream &dfield_t::print(std::ostream &out) const {
 
   return out;
 }
+
+int dtuple_t::compare(const rec_t *rec, const dict_index_t *, const ulint *offsets, ulint *matched_fields) const {
+  ulint matched_bytes{};
+
+  return cmp_dtuple_rec_with_match(nullptr, this, rec, offsets, matched_fields, &matched_bytes);
+}

@@ -31,6 +31,7 @@ Created 5/11/1994 Heikki Tuuri
 #include <innodb0types.h>
 
 #include <format>
+#include <sstream>
 
 #include <ctype.h>
 #include <errno.h>
@@ -207,27 +208,10 @@ std::ostream &ut_print_buf(std::ostream &o, const void *buf, ulint len) {
 
 
 void ut_print_buf(ib_stream_t ib_stream, const void *buf, ulint len) {
-  UNIV_MEM_ASSERT_RW(buf, len);
+  std::ostringstream os{};
 
-  ib_logger(ib_stream, " len %lu; hex ", len);
-
-  ulint i{};
-  const byte *data;
-
-  for (data = (const byte *)buf, i = 0; i < len; i++) {
-    ib_logger(ib_stream, "%02lx", (ulong)*data++);
-  }
-
-  ib_logger(ib_stream, "; asc ");
-
-  data = (const byte *)buf;
-
-  for (ulint i = 0; i < len; i++) {
-    int c = (int)*data++;
-    ib_logger(ib_stream, "%c", isprint(c) ? c : ' ');
-  }
-
-  ib_logger(ib_stream, ";");
+  ut_print_buf(os, buf, len);
+  ib_logger(ib_stream, "%s;", os.str().c_str());
 }
 
 ulint ut_2_power_up(ulint n) {
@@ -249,7 +233,8 @@ void ut_print_filename(ib_stream_t ib_stream, const char *name) {
     int c = *name++;
     switch (c) {
       case 0:
-        goto done;
+        ib_logger(ib_stream, "'");
+        return;
       case '\'':
         ib_logger(ib_stream, "%c", c);
         /* fall through */
@@ -257,8 +242,6 @@ void ut_print_filename(ib_stream_t ib_stream, const char *name) {
         ib_logger(ib_stream, "%c", c);
     }
   }
-done:
-  ib_logger(ib_stream, "'");
 }
 
 void ut_print_name(ib_stream_t ib_stream, trx_t *trx, bool table_id, const char *name) {

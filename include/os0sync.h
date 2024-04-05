@@ -39,34 +39,117 @@ Created 9/6/1995 Heikki Tuuri
 
 #include <atomic>
 #include <chrono>
-
-/** Native mutex */
-typedef pthread_mutex_t os_fast_mutex_t;
+#include <mutex>
+#include <condition_variable>
 
 /** An asynchronous signal sent between threads */
-struct OS_cond {
-  /** this mutex protects the next fields */
-  os_fast_mutex_t os_mutex;
+struct Cond_var {
+  /**
+   * Constructor
+   * 
+   * Note: Why is signal_count set to 1? We return this value in reset(),
+   * which can then be be used to pass to the wait_low(). The value
+   * of zero is reserved in wait() for the case when the caller
+   * does not * want to pass any signal_count value. To distinguish
+   * between the two cases we initialize signal_count to 1 here.
+   */
+  Cond_var() : m_is_set(), m_signal_count(1) { }
 
-  /** this is true when the event is in the signaled state,
-  i.e., a thread does not stop if it tries to wait for this event */
-  bool is_set;
+  /**
+   * Destructor
+   */
+  ~Cond_var() = default;
 
-  /** this is incremented each time the event becomes signaled */
-  int64_t signal_count;
+  /**
+  * Sets an event semaphore to the signaled state: lets waiting threads proceed.
+  */
+  void set();
 
-  /** condition variable is used in waiting for the event */
-  pthread_cond_t cond_var;
+  /**
+  * Resets an event semaphore to the nonsignaled state. Waiting threads will
+  * stop to wait for the event. The return value should be passed to wait()
+  * if it is desired that this thread should not wait in case of an intervening
+  * call to set() between this os_event_reset() and the wait() call.
+  * See comments wait().
+  * @return the value to be passed to wait()
+  */
+  int64_t reset();
 
-  /** list of all created events */
-  UT_LIST_NODE_T(OS_cond) os_event_list;
+  /** Waits for an event object until it is in the signaled state. If
+  * srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS this also exits the
+  * waiting thread when the event becomes signaled (or immediately if the
+  * event is already in the signaled state).
+  *
+  * Typically, if the event has been signalled after the reset()
+  * we'll return immediately because is_set == true.
+  * There are, however, situations (e.g.: sync_array code) where we may
+  * lose this information. For example:
+  *
+  * thread A calls reset()
+  * thread B calls set()   [is_set == true]
+  * thread C calls reset() [is_set == false]
+  * thread A calls wait()  [infinite wait!]
+  * thread C calls wait()  [infinite wait!]
+  *
+  * @param[in] reset_sig_count      Zero or the value returned by previous call of reset().
+  *
+  * Where such a scenario is possible, to avoid infinite wait, the
+  * value returned by reset() should be passed in as reset_sig_count. */
+  void wait(int64_t reset_sig_count);
+
+  /**
+   * Waits for an event object until it is in the signaled state or
+   * a timeout is exceeded. In Unix the timeout is always infinite.
+   * @param[in] timeout              Timeout, or std::chrono::microseconds::max()
+   * @param[in] reset_sig_count      Zero or the value returned by previous call of reset().
+   * @return 0 if success, OS_SYNC_TIME_EXCEEDED if timeout was exceeded */
+  ulint wait_time(std::chrono::microseconds timeout, int64_t reset_sig_count);
+
+  /**
+   * Creates an event semaphore, i.e., a semaphore which may just have two
+   * states: signaled and nonsignaled. The created event is manual reset: it must be
+   * reset explicitly by calling sync_os_reset_event.
+   * @param[in] name the name of the event, if nullptr the event is created without a name
+   * @return the event handle
+   */
+  static Cond_var* create(const char *name);
+
+  /**
+   * Frees an event object.
+   * @param[in] event event to free
+   */
+  static void destroy(Cond_var* event);
+
+  /** This mutex protects the next fields */
+  std::mutex m_mutex{};
+
+  /** This is true when the event is in the signaled state,
+   * i.e., a thread does not stop if it tries to wait for this event */
+  bool m_is_set;
+
+  /** This is incremented each time the event becomes signaled */
+  int64_t m_signal_count;
+
+  /** Condition variable is used in waiting for the event */
+  std::condition_variable m_cond_var{};
+
+  /** List of all created events */
+  UT_LIST_NODE_T(Cond_var) m_os_event_list;
+
+  using Events = UT_LIST_BASE_NODE_T(Cond_var, m_os_event_list);
+
+  /** Mutex protecting s_events && s_count */
+  static std::mutex s_mutex;
+
+  /* For tracking all the created events. */
+  static Events s_events;
+
+  /* Number of events created. */
+  static ulint s_count;
 };
 
 /** Operating system mutex */
-typedef struct os_mutex_struct os_mutex_str_t;
-
-/** Operating system mutex handle */
-typedef os_mutex_str_t *os_mutex_t;
+struct OS_mutex;
 
 /** Denotes an infinite delay for os_event_wait_time() */
 constexpr ulint OS_SYNC_INFINITE_TIME = ((ulint)(-1));
@@ -74,117 +157,72 @@ constexpr ulint OS_SYNC_INFINITE_TIME = ((ulint)(-1));
 /** Return value of os_event_wait_time() when the time is exceeded */
 constexpr ulint OS_SYNC_TIME_EXCEEDED = 1;
 
-/** Mutex protecting counts and the event and OS 'slow' mutex lists */
-extern os_mutex_t os_sync_mutex;
-
 /** This is incremented by 1 in os_thread_create and decremented by 1 in
 os_thread_exit */
 extern std::atomic_int os_thread_count;
 
-extern ulint os_event_count;
-extern ulint os_mutex_count;
-extern ulint os_fast_mutex_count;
-
 /** Initializes global event and OS 'slow' mutex lists. */
-void os_sync_init(void);
+void os_sync_init();
 
 /** Frees created events and OS 'slow' mutexes. */
-void os_sync_free(void);
+void os_sync_free();
 
-/** Creates an event semaphore, i.e., a semaphore which may just have two
-states: signaled and nonsignaled. The created event is manual reset: it must be
-reset explicitly by calling sync_os_reset_event.
-@return	the event handle */
-OS_cond* os_event_create(const char *name); /** in: the name of the event, if nullptr
-                                   the event is created without a name */
+/**
+ * Creates an event semaphore, i.e., a semaphore which may just have two
+ * states: signaled and nonsignaled. The created event is manual reset: it must be
+ * reset explicitly by calling sync_os_reset_event.
+ * @param[in] name the name of the event, if nullptr the event is created without a name
+ * @return the event handle
+ */
+#define os_event_create(n) Cond_var::create(n)
 
-/** Sets an event semaphore to the signaled state: lets waiting threads
-proceed. */
-void os_event_set(OS_cond* event); /** in: event to set */
+#define os_event_free(e) Cond_var::destroy(e)
 
-/** Resets an event semaphore to the nonsignaled state. Waiting threads will
-stop to wait for the event.
-The return value should be passed to os_even_wait_low() if it is desired
-that this thread should not wait in case of an intervening call to
-os_event_set() between this os_event_reset() and the
-os_event_wait_low() call. See comments for os_event_wait_low(). */
-int64_t os_event_reset(OS_cond* event); /** in: event to reset */
+#define os_event_set(e) (e)->set()
 
-/** Frees an event object. */
-void os_event_free(OS_cond* event); /** in: event to free */
+#define os_event_reset(e) e->reset()
 
-/** Waits for an event object until it is in the signaled state. If
-srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS this also exits the
-waiting thread when the event becomes signaled (or immediately if the
-event is already in the signaled state).
+#define os_event_wait_low(e, r) (e)->wait(r)
 
-Typically, if the event has been signalled after the os_event_reset()
-we'll return immediately because event->is_set == true.
-There are, however, situations (e.g.: sync_array code) where we may
-lose this information. For example:
+#define os_event_wait(e) (e)->wait(0)
 
-thread A calls os_event_reset()
-thread B calls os_event_set()   [event->is_set == true]
-thread C calls os_event_reset() [event->is_set == false]
-thread A calls os_event_wait()  [infinite wait!]
-thread C calls os_event_wait()  [infinite wait!]
+#define os_fast_mutex_lock(m) (m)->lock()
 
-@param[in,out] event            Event to wait
-@param[in] reset_sig_count      Zero or the value returned by previous call of os_event_reset().
+#define os_fast_mutex_unlock(m) (m)->unlock()
 
-Where such a scenario is possible, to avoid infinite wait, the
-value returned by os_event_reset() should be passed in as
-reset_sig_count. */
-void os_event_wait_low(OS_cond* event, int64_t reset_sig_count);
+/**
+ * Creates an operating system mutex semaphore. Because these are slow, the
+ * mutex semaphore of InnoDB itself (mutex_t) should be used where possible.
+ *
+ * @return The mutex handle
+ */
+OS_mutex *os_mutex_create(const char *);
 
+/**
+ * Locks the mutex.
+ *
+ * @param[in] mutex Mutex to acquire
+ */
+void os_mutex_enter(OS_mutex *mutex);
 
-/** Waits for an event object until it is in the signaled state or
-a timeout is exceeded. In Unix the timeout is always infinite.
-@param[in,out] event            Event to wait
-@param[in] timeout              Timeout, or std::chrono::microseconds::max()
-@param[in] reset_sig_count      Zero or the value returned by previous call of os_event_reset().
-@return 0 if success, OS_SYNC_TIME_EXCEEDED if timeout was exceeded */
-ulint os_event_wait_time_low(OS_cond* event, std::chrono::microseconds timeout, int64_t reset_sig_count);
+/**
+ * Unlocks the mutex
+ *
+ * @param[in] mutex Mutex to acquire
+ */
+void os_mutex_exit(OS_mutex *mutex);
 
-#define os_event_wait(event) os_event_wait_low(event, 0)
+/**
+ * Frees an mutex object.
+ *
+ * @param[in] mutex Mutex to free
+ */
+void os_mutex_destroy(OS_mutex *mutex);
 
-/** Waits for an event object until it is in the signaled state or
-a timeout is exceeded. In Unix the timeout is always infinite.
-@return	0 if success, OS_SYNC_TIME_EXCEEDED if timeout was exceeded */
+/** @return the number of mutexes created. */
+ulint os_mutex_count();
 
-ulint os_event_wait_time(
-  OS_cond* event, /** in: event to wait */
-  ulint time
-); /** in: timeout in microseconds, or
-                                           OS_SYNC_INFINITE_TIME */
-
-/** Creates an operating system mutex semaphore. Because these are slow, the
-mutex semaphore of InnoDB itself (mutex_t) should be used where possible.
-@return	the mutex handle */
-os_mutex_t os_mutex_create(const char *name); /** in: the name of the mutex, if nullptr
-                                   the mutex is created without a name */
-
-/** Acquires ownership of a mutex semaphore. */
-void os_mutex_enter(os_mutex_t mutex); /** in: mutex to acquire */
-
-/** Releases ownership of a mutex. */
-void os_mutex_exit(os_mutex_t mutex); /** in: mutex to release */
-
-/** Frees an mutex object. */
-void os_mutex_free(os_mutex_t mutex); /** in: mutex to free */
-
-
-/** Releases ownership of a fast mutex. */
-void os_fast_mutex_unlock(os_fast_mutex_t *fast_mutex); /** in: mutex to release */
-
-/** Initializes an operating system fast mutex semaphore. */
-void os_fast_mutex_init(os_fast_mutex_t *fast_mutex); /** in: fast mutex */
-
-/** Acquires ownership of a fast mutex. */
-void os_fast_mutex_lock(os_fast_mutex_t *fast_mutex); /** in: mutex to acquire */
-
-/** Frees an mutex object. */
-void os_fast_mutex_free(os_fast_mutex_t *fast_mutex); /** in: mutex to free */
-
-/** Reset the variables. */
+/**
+ * Reset the variables.
+ */
 void os_sync_var_init();

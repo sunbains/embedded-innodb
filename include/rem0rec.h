@@ -26,6 +26,8 @@ Created 5/30/1994 Heikki Tuuri
 
 #include "innodb0types.h"
 
+#include <ostream>
+
 #include "btr0types.h"
 #include "data0data.h"
 #include "mtr0types.h"
@@ -238,10 +240,20 @@ void rec_print_old(
   const rec_t *rec
 ); /*!< in: physical record */
 
+/** Prints an old-style physical record. */
+std::ostream &rec_print_old(std::ostream &os, const rec_t *rec);
+
 /** Prints a physical record in ROW_FORMAT=COMPACT.  Ignores the
 record header. */
 void rec_print_comp(
   ib_stream_t ib_stream, /*!< in: stream where to print */
+  const rec_t *rec,      /*!< in: physical record */
+  const ulint *offsets
+); /*!< in: array returned by rec_get_offsets() */
+
+/** Prints a physical record. */
+std::ostream &rec_print_new(
+  std::ostream &os,      /*!< in: stream where to print */
   const rec_t *rec,      /*!< in: physical record */
   const ulint *offsets
 ); /*!< in: array returned by rec_get_offsets() */
@@ -256,6 +268,13 @@ void rec_print_new(
 /** Prints a physical record. */
 void rec_print(
   ib_stream_t ib_stream, /*!< in: stream where to print */
+  const rec_t *rec,      /*!< in: physical record */
+  dict_index_t *index
+); /*!< in: record descriptor */
+
+/** Prints a physical record. */
+std::ostream &rec_print(
+  std::ostream &os,       /*!< in: stream where to print */
   const rec_t *rec,      /*!< in: physical record */
   dict_index_t *index
 ); /*!< in: record descriptor */
@@ -1583,3 +1602,28 @@ inline const byte *rec_offs_any_null_extern(const rec_t *rec, const ulint *offse
   return nullptr;
 }
 
+/** Wrapper for pretty-printing a record */
+struct Rec_offsets {
+  /** Record */
+  const rec_t *m_rec{};
+
+  /** Index the records belong to. */
+  dict_index_t *m_index{};
+};
+
+/** Print the Rec_offset to the output stream.
+@param[in,out] os Stream to write to
+@param[in] r Record and its offsets
+@return the output stream */
+inline std::ostream &operator<<(std::ostream &os, Rec_offsets &&r) {
+  rec_print(os, r.m_rec, r.m_index);
+  return os;
+}
+
+/** Returns nonzero if the default bit is set in nth field of rec.
+@return nonzero if default bit is set */
+static inline ulint rec_offs_nth_default(const ulint *offsets, ulint n) {
+  ut_ad(rec_offs_validate(nullptr, nullptr, offsets));
+  ut_ad(n < rec_offs_n_fields(offsets));
+  return rec_offs_base(offsets)[1 + n] & REC_OFFS_MASK;
+}

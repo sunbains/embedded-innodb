@@ -281,7 +281,7 @@ struct log_t {
   running; a thread should wait for this without owning the log
   mutex, but NOTE that to set or reset this event, the thread MUST
   own the log mutex! */
-  OS_cond* no_flush_event;
+  Cond_var* no_flush_event;
 
   /** During a flush, this is first false and becomes true when one
   log group has been written or flushed */
@@ -292,7 +292,7 @@ struct log_t {
   committed when this is set; a thread should wait for this without owning
   the log mutex, but NOTE that to set or reset this event, the thread
   MUST own the log mutex! */
-  OS_cond* one_flushed_event;
+  Cond_var* one_flushed_event;
 
   /** Number of log i/os initiated thus far */
   ulint n_log_ios;

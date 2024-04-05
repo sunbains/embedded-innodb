@@ -24,7 +24,7 @@ struct mutex_t {
   }
 
   /** Used by sync0arr.c for the wait queue */
-  OS_cond* event{};
+  Cond_var* event{};
 
   /** lock_word is the target of the atomic test-and-set
   instruction when atomic operations are enabled. */

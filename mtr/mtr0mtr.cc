@@ -245,7 +245,7 @@ void mtr_print(mtr_t *mtr) {
 }
 #endif /* UNIV_DEBUG */
 
-inline void mtr_release_block_at_savepoint(mtr_t *mtr, ulint savepoint, buf_block_t *block) {
+void mtr_release_block_at_savepoint(mtr_t *mtr, ulint savepoint, buf_block_t *block) {
   ut_ad(mtr_is_active(mtr));
   ut_ad(mtr->magic_n == MTR_MAGIC_N);
 
@@ -254,7 +254,10 @@ inline void mtr_release_block_at_savepoint(mtr_t *mtr, ulint savepoint, buf_bloc
   ut_a(slot->object == block);
 
   buf_page_release_latch(block, slot->type);
+
+  block->acquire_mutex();
   block->fix_dec();
+  block->release_mutex();
 
   slot->object = nullptr;
 }

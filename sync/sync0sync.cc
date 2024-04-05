@@ -922,7 +922,7 @@ void sync_thread_add_level(void *latch, ulint level) {
 
   if (thread_slot == NULL) {
     /* We have to allocate the level array for a new thread */
-    array = ut_malloc(sizeof(sync_level_t) * SYNC_THREAD_N_LEVELS);
+    array = ut_new(sizeof(sync_level_t) * SYNC_THREAD_N_LEVELS);
 
     thread_slot = sync_thread_level_arrays_find_free();
 

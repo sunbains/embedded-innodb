@@ -1323,7 +1323,7 @@ static db_err trx_undo_create(
   offset = trx_undo_header_create(undo_page, trx_id, mtr);
 
 #ifdef WITH_XOPEN
-  if (trx->support_xa) {
+  if (trx->m_support_xa) {
     trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr);
   }
 #endif /* WITH_XOPEN */
@@ -1392,7 +1392,7 @@ static trx_undo_t *trx_undo_reuse_cached(
     offset = trx_undo_insert_header_reuse(undo_page, trx_id, mtr);
 
 #ifdef WITH_XOPEN
-    if (trx->support_xa) {
+    if (trx->m_support_xa) {
       trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr);
     }
 #endif /* WITH_XOPEN */
@@ -1402,7 +1402,7 @@ static trx_undo_t *trx_undo_reuse_cached(
     offset = trx_undo_header_create(undo_page, trx_id, mtr);
 
 #ifdef WITH_XOPEN
-    if (trx->support_xa) {
+    if (trx->m_support_xa) {
       trx_undo_header_add_space_for_xid(undo_page, undo_page + offset, mtr);
     }
 #endif /* WITH_XOPEN */
@@ -1465,14 +1465,14 @@ db_err trx_undo_assign_undo(trx_t *trx, ulint type) {
   mutex_enter(&(rseg->mutex));
 
 #ifdef WITH_XOPEN
-  auto undo = trx_undo_reuse_cached(trx, rseg, type, trx->id, &trx->xid, &mtr);
+  auto undo = trx_undo_reuse_cached(trx, rseg, type, trx->m_id, &trx->m_xid, &mtr);
 #else
   auto undo = trx_undo_reuse_cached(trx, rseg, type, trx->id, &mtr);
 #endif /* WITH_XOPEN */
 
   if (undo == nullptr) {
 #ifdef WITH_XOPEN
-    auto err = trx_undo_create(trx, rseg, type, trx->id, &trx->xid, &undo, &mtr);
+    auto err = trx_undo_create(trx, rseg, type, trx->m_id, &trx->m_xid, &undo, &mtr);
 #else
     auto err = trx_undo_create(trx, rseg, type, trx->id, nullptr, &undo, &mtr);
 #endif /* WITH_OPEN */
@@ -1576,7 +1576,7 @@ page_t *trx_undo_set_state_at_prepare(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) 
   /*------------------------------*/
   undo->state = TRX_UNDO_PREPARED;
 #ifdef WITH_XOPEN
-  undo->xid = trx->xid;
+  undo->xid = trx->m_xid;
 #endif /* WITH_XOPEN */
   /*------------------------------*/
 

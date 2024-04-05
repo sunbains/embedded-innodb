@@ -32,31 +32,27 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "que0que.h"
 #include "trx0roll.h"
 
-/** Function to parse ib_exec_sql() and ib_exec_ddl_sql() args.
-@return	own: info struct */
-static pars_info_t *ib_exec_vsql(
-  int n_args, /*!< in: no. of args */
-  va_list ap
-) /*!< in: arg list */
-{
+/**
+ * Function to parse ib_exec_sql() and ib_exec_ddl_sql() args.
+ *
+ * @param n_args  in: no. of args
+ * @param ap      in: arg list
+ *
+ * @return        own: info struct
+ */
+static pars_info_t *ib_exec_vsql(int n_args, va_list ap) {
   auto info = pars_info_create();
 
   for (int i = 0; i < n_args; ++i) {
-    ib_col_type_t type;
-
-    type = static_cast<ib_col_type_t>(va_arg(ap, int));
+    auto type = static_cast<ib_col_type_t>(va_arg(ap, int));
 
     switch (type) {
       case IB_CHAR:
       case IB_VARCHAR: {
-        const char *n;
-        const char *v;
-        char prefix;
+        auto n = va_arg(ap, const char *);
+        auto v = va_arg(ap, const char *);
+        auto prefix = *n;
 
-        n = va_arg(ap, const char *);
-        v = va_arg(ap, const char *);
-
-        prefix = *n;
         ut_a(prefix == ':' || prefix == '$');
         ++n;
 
@@ -68,45 +64,31 @@ static pars_info_t *ib_exec_vsql(
         break;
       }
       case IB_INT: {
-        byte *p;       /* dest buffer */
-        ulint l;       /* length */
-        ulint s;       /* true if signed integer */
-        const char *n; /* literal name */
-        ulint prtype;
+        auto l = va_arg(ap, ib_ulint_t);
+        auto s = va_arg(ap, ib_ulint_t);
+        auto n = va_arg(ap, const char *);
 
-        l = va_arg(ap, ib_ulint_t);
-        s = va_arg(ap, ib_ulint_t);
-        n = va_arg(ap, const char *);
-
-        prtype = s ? 0 : DATA_UNSIGNED;
-        p = mem_heap_alloc(info->heap, l);
+        auto prtype = s ? 0 : DATA_UNSIGNED;
+        auto p = mem_heap_alloc(info->heap, l);
 
         switch (l) {
           case 1: {
-            byte v;
-
-            v = va_arg(ap, int);
+            byte v = va_arg(ap, int);
             mach_write_int_type(p, (byte *)&v, l, s);
             break;
           }
           case 2: {
-            uint16_t v;
-
-            v = va_arg(ap, int);
+            uint16_t v = va_arg(ap, int);
             mach_write_int_type(p, (byte *)&v, l, s);
             break;
           }
           case 4: {
-            uint32_t v;
-
-            v = va_arg(ap, uint32_t);
+            uint32_t v = va_arg(ap, uint32_t);
             mach_write_int_type(p, (byte *)&v, l, s);
             break;
           }
           case 8: {
-            uint64_t v;
-
-            v = va_arg(ap, uint64_t);
+            uint64_t v = va_arg(ap, uint64_t);
             mach_write_int_type(p, (byte *)&v, l, s);
             break;
           }
@@ -117,13 +99,9 @@ static pars_info_t *ib_exec_vsql(
         break;
       }
       case IB_SYS: {
-        const char *n;
-        pars_user_func_cb_t f;
-        void *a;
-
-        n = va_arg(ap, const char *);
-        f = va_arg(ap, pars_user_func_cb_t);
-        a = va_arg(ap, void *);
+        auto n = va_arg(ap, const char *);
+        auto f = va_arg(ap, pars_user_func_cb_t);
+        auto a = va_arg(ap, void *);
         pars_info_add_function(info, n, f, a);
         break;
       }
@@ -133,87 +111,66 @@ static pars_info_t *ib_exec_vsql(
     }
   }
 
-  return (info);
+ return info;
 }
 
-/** Execute arbitrary SQL using InnoDB's internal parser. The statement
-is executed in a new transaction. Table name parameters must be prefixed
-with a '$' symbol and variables with ':'
-@return	DB_SUCCESS or error code */
-
-ib_err_t ib_exec_sql(
-  const char *sql,   /*!< in: sql to execute */
-  ib_ulint_t n_args, /*!< in: no. of args */
-  ...
-) {
+ib_err_t ib_exec_sql( const char *sql, ib_ulint_t n_args, ...) {
   va_list ap;
-  trx_t *trx;
-  ib_err_t err;
-  pars_info_t *info;
 
   va_start(ap, n_args);
 
-  info = ib_exec_vsql(n_args, ap);
+  auto info = ib_exec_vsql(n_args, ap);
 
   va_end(ap);
 
   /* We use the private SQL parser of Innobase to generate
   the query graphs needed to execute the SQL statement. */
 
-  trx = trx_allocate_for_client(nullptr);
+  auto trx = trx_allocate_for_client(nullptr);
   auto success = trx_start(trx, ULINT_UNDEFINED);
   ut_a(success);
-  trx->op_info = "exec client sql";
+  trx->m_op_info = "exec client sql";
 
   dict_mutex_enter();
+
   /* Note that we've already acquired the dictionary mutex. */
-  err = que_eval_sql(info, sql, false, trx);
+  auto err = que_eval_sql(info, sql, false, trx);
   ut_a(err == DB_SUCCESS);
+
   dict_mutex_exit();
 
   if (err != DB_SUCCESS) {
     trx_general_rollback(trx, false, nullptr);
   } else {
-    trx_commit(trx);
+    auto commit_err = trx_commit(trx);
+    ut_a(commit_err == DB_SUCCESS);
   }
 
-  trx->op_info = "";
+  trx->m_op_info = "";
   trx_free_for_client(trx);
 
-  return (err);
+  return err;
 }
 
-/** Execute arbitrary SQL using InnoDB's internal parser. The statement
-is executed in a background transaction. It will lock the data
-dictionary lock for the duration of the query.
-@return	DB_SUCCESS or error code */
-
-ib_err_t ib_exec_ddl_sql(
-  const char *sql,   /*!< in: sql to execute */
-  ib_ulint_t n_args, /*!< in: no. of args */
-  ...
-) {
+ib_err_t ib_exec_ddl_sql(const char *sql, ib_ulint_t n_args, ...) {
   va_list ap;
-  trx_t *trx;
-  ib_err_t err;
-  pars_info_t *info;
-  int started;
 
   va_start(ap, n_args);
 
-  info = ib_exec_vsql(n_args, ap);
+  auto info = ib_exec_vsql(n_args, ap);
 
   va_end(ap);
 
   /* We use the private SQL parser of Innobase to generate
   the query graphs needed to execute the SQL statement. */
 
-  trx = trx_allocate_for_background();
-  started = trx_start(trx, ULINT_UNDEFINED);
+  auto trx = trx_allocate_for_background();
+  auto started = trx_start(trx, ULINT_UNDEFINED);
   ut_a(started);
-  trx->op_info = "exec client ddl sql";
 
-  err = ib_schema_lock_exclusive((ib_trx_t)trx);
+  trx->m_op_info = "exec client ddl sql";
+
+  auto err = ib_schema_lock_exclusive((ib_trx_t)trx);
   ut_a(err == DB_SUCCESS);
 
   /* Note that we've already acquired the dictionary mutex by
@@ -226,11 +183,12 @@ ib_err_t ib_exec_ddl_sql(
   if (err != DB_SUCCESS) {
     trx_general_rollback(trx, false, nullptr);
   } else {
-    trx_commit(trx);
+    auto commit_err = trx_commit(trx);
+    ut_a(commit_err == DB_SUCCESS);
   }
 
-  trx->op_info = "";
+  trx->m_op_info = "";
   trx_free_for_background(trx);
 
-  return (err);
+  return err;
 }

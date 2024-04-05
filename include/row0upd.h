@@ -474,6 +474,6 @@ inline void row_upd_rec_sys_fields(
 
   static_assert(DATA_TRX_ID + 1 == DATA_ROLL_PTR, "error DATA_TRX_ID + 1 != DATA_ROLL_PTR");
 
-  trx_write_trx_id(rec + offset, trx->id);
+  trx_write_trx_id(rec + offset, trx->m_id);
   trx_write_roll_ptr(rec + offset + DATA_TRX_ID_LEN, roll_ptr);
 }

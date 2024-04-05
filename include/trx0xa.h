@@ -16,63 +16,67 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/*
- * Start of xa.h header
- *
- * Define a symbol to prevent multiple inclusions of this header file
- */
-#ifndef XA_H
-#define XA_H
+#pragma once
 
 /*
  * Transaction branch identification: XID and NULLXID:
  */
-#ifndef XIDDATASIZE
 
-/** Sizes of transaction identifier */
-#define XIDDATASIZE \
-  128                   /*!< maximum size of a transaction                     \
-                        identifier, in bytes */
-#define MAXGTRIDSIZE 64 /*!< maximum size in bytes of gtrid */
-#define MAXBQUALSIZE 64 /*!< maximum size in bytes of bqual */
+/** Sizes of transaction identifier @{ */
+/** Maximum size of a transaction identifier, in bytes */
+constexpr ulint XIDDATASIZE = 128;
+
+/** Maximum size in bytes of gtrid */
+constexpr ulint MAXGTRIDSIZE = 64;
+
+/* }@ */
+
+/** Maximum size in bytes of bqual */
+constexpr ulint MAXBQUALSIZE = 64;
 
 /** X/Open XA distributed transaction identifier */
-struct xid_t {
-  long formatID;          /*!< format identifier; -1
-                          means that the XID is null */
-  long gtrid_length;      /*!< value from 1 through 64 */
-  long bqual_length;      /*!< value from 1 through 64 */
-  char data[XIDDATASIZE]; /*!< distributed transaction
-                          identifier */
+struct XID {
+  /** Format identifier; -1 means that the XID is null */
+  int64_t formatID;
+
+  /** Value from 1 through 64 */
+  uint8_t gtrid_length;
+
+  /** Value from 1 through 64 */
+  uint8_t bqual_length;
+
+  /** Distributed transaction identifier */
+  char data[XIDDATASIZE];
 };
 
-/** X/Open XA distributed transaction identifier */
-typedef struct xid_t XID;
-
-#endif
 /** X/Open XA distributed transaction status codes */
 /* @{ */
-#define XA_OK 0 /*!< normal execution */
-#define XAER_ASYNC \
-  -2 /*!< asynchronous operation already                                       \
-     outstanding */
-#define XAER_RMERR \
-  -3                  /*!< a resource manager error                            \
-                      occurred in the transaction                              \
-                      branch */
-#define XAER_NOTA -4  /*!< the XID is not valid */
-#define XAER_INVAL -5 /*!< invalid arguments were given */
-#define XAER_PROTO \
-  -6                   /*!< routine invoked in an improper                     \
-                       context */
-#define XAER_RMFAIL -7 /*!< resource manager unavailable */
-#define XAER_DUPID -8  /*!< the XID already exists */
-#define XAER_OUTSIDE \
-  -9 /*!< resource manager doing                                               \
-     work outside transaction */
+/** Normal execution */
+constexpr ulint XA_OK = 0;
+
+/** Asynchronous operation already outstanding */
+constexpr lint XAER_ASYNC = -2;
+
+/** A resource manager error occurred in the transaction  branch */
+constexpr lint XAER_RMERR = -3;
+
+/** The XID is not valid */
+constexpr lint XAER_NOTA = -4;
+
+/** Invalid arguments were given */
+constexpr lint XAER_INVAL = -5;
+
+/** Routine invoked in an improper context */
+constexpr lint XAER_PROTO = -6;
+
+/** Resource manager unavailable */
+constexpr lint XAER_RMFAIL = -7;
+
+/** The XID already exists */
+constexpr lint XAER_DUPID = -8;
+
+/** Resource manager doing work outside transaction */
+constexpr lint XAER_OUTSIDE = -9;
+
 /* @} */
 
-#endif /* ifndef XA_H */
-/*
- * End of xa.h header
- */

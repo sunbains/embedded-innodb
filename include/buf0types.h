@@ -139,7 +139,7 @@ extern ulint srv_buf_pool_write_requests;
 /** Magic value to use instead of checksums when they are disabled */
 constexpr ulint BUF_NO_CHECKSUM_MAGIC = 0xDEADBEEFUL;
 
-/*** Simple allocator using ut_malloc and ur_free */
+/*** Simple allocator using ut_new and ur_free */
 template <typename T>
 struct ut_allocator {
   using value_type = T;
@@ -148,9 +148,9 @@ struct ut_allocator {
   template <class U>
   explicit ut_allocator(const ut_allocator<U> &) noexcept {}
 
-  T *allocate(std::size_t n) { return (T *)ut_malloc(sizeof(T) * n); }
+  T *allocate(std::size_t n) { return (T *)ut_new(sizeof(T) * n); }
 
-  void deallocate(T *p, std::size_t n) { ut_free(p); }
+  void deallocate(T *p, std::size_t n) { ut_delete(p); }
 };
 
 template <class T, class U>
@@ -367,7 +367,7 @@ struct buf_page_t {
 };
 
 /** We need this to alias a buf_block_t from a buf_page_t. */
-static_assert(std::is_standard_layout<buf_page_t>::value, "buf_page_t mustt have a standard layout");
+static_assert(std::is_standard_layout<buf_page_t>::value, "buf_page_t must have a standard layout");
 
 /** The buffer control block structure */
 struct buf_block_t {
@@ -423,6 +423,16 @@ struct buf_block_t {
    * @return Pointer to the frame.
    */
   buf_frame_t *get_frame() const;
+
+  /** Acquire block mutex. */
+  void acquire_mutex() const {
+    mutex_enter(&m_mutex);
+  }
+
+  /** Release the block mutex. */
+  void release_mutex() const {
+    mutex_exit(&m_mutex);
+  }
 
   /** @name General fields */
   /* @{ */
@@ -910,7 +920,7 @@ struct Buf_pool {
 
   /** this is in the set state when there is no flush batch of the given type
    * running */
-  OS_cond* m_no_flush[BUF_FLUSH_N_TYPES];
+  Cond_var* m_no_flush[BUF_FLUSH_N_TYPES];
 
   /** A red-black tree is used exclusively during recovery to speed up
   insertions in the flush_list. This tree contains blocks in order of

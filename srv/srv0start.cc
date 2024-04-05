@@ -142,10 +142,6 @@ static char *data_path_buf;
 this variable. Since the function does a destructive read. */
 static char *log_path_buf;
 
-/**We use this mutex to test the return value of pthread_mutex_trylock
-on successful locking. HP-UX does NOT return 0, though Linux et al do. */
-static os_fast_mutex_t srv_os_test_mutex;
-
 /** The system data file names */
 static char **srv_data_file_names = nullptr;
 
@@ -1554,15 +1550,6 @@ ib_err_t innobase_start_or_create() {
     }
   }
 
-  /* Check that os_fast_mutexes work as expected */
-  os_fast_mutex_init(&srv_os_test_mutex);
-
-  os_fast_mutex_lock(&srv_os_test_mutex);
-
-  os_fast_mutex_unlock(&srv_os_test_mutex);
-
-  os_fast_mutex_free(&srv_os_test_mutex);
-
   if (srv_print_verbose_log) {
     ut_print_timestamp(ib_stream);
     ib_logger(
@@ -1638,7 +1625,7 @@ ib_err_t innobase_start_or_create() {
 
 /** Try to shutdown the InnoDB threads.
 @return	true if all threads exited. */
-static bool srv_threads_try_shutdown(OS_cond* lock_timeout_thread_event) {
+static bool srv_threads_try_shutdown(Cond_var* lock_timeout_thread_event) {
   /* Let the lock timeout thread exit */
   os_event_set(lock_timeout_thread_event);
 
@@ -1651,8 +1638,6 @@ static bool srv_threads_try_shutdown(OS_cond* lock_timeout_thread_event) {
   /* Exit the i/o threads */
   os_aio_wake_all_threads_at_shutdown();
 
-  os_mutex_enter(os_sync_mutex);
-
   if (os_thread_count.load(std::memory_order_relaxed) == 0) {
     /* All the threads have exited or are just exiting;
     NOTE that the threads may not have completed their
@@ -1660,14 +1645,10 @@ static bool srv_threads_try_shutdown(OS_cond* lock_timeout_thread_event) {
     they have exited? Now we just sleep 0.1 seconds and
     hope that is enough! */
 
-    os_mutex_exit(os_sync_mutex);
-
     os_thread_sleep(100000);
 
     return true;
   }
-
-  os_mutex_exit(os_sync_mutex);
 
   os_thread_sleep(100000);
 
@@ -1710,7 +1691,7 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
       );
     }
 
-    ut_free_all_mem();
+    ut_delete_all_mem();
 
     return DB_SUCCESS;
   }
@@ -1784,17 +1765,16 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
 
   pars_lexer_var_init();
 
-  ut_free_all_mem();
+  ut_delete_all_mem();
 
-  if (os_thread_count != 0 || os_event_count != 0 || os_mutex_count != 0 || os_fast_mutex_count != 0) {
+  if (os_thread_count != 0 || Cond_var::s_count != 0 || os_mutex_count() != 0) {
     ib_logger(
       ib_stream,
       "Warning: some resources were not cleaned up in shutdown:"
-      " threads %lu, events %lu, os_mutexes %lu, os_fast_mutexes %lu\n",
+      " threads %lu, events %lu, os_mutexes %lu\n",
       (ulong)os_thread_count.load(),
-      (ulong)os_event_count,
-      (ulong)os_mutex_count,
-      (ulong)os_fast_mutex_count
+      (ulong)Cond_var::s_count,
+      (ulong)os_mutex_count()
     );
   }
 

@@ -156,14 +156,12 @@ dict_index_t *dict_mem_index_create(const char *table_name, const char *index_na
 
   /* The '1 +' above prevents allocation of an empty mem block */
 
-#ifdef UNIV_DEBUG
-  index->magic_n = DICT_INDEX_MAGIC_N;
-#endif /* UNIV_DEBUG */
+  ut_d(index->magic_n = DICT_INDEX_MAGIC_N);
 
   return index;
 }
 
-dict_foreign_t *dict_mem_foreign_create(void) {
+dict_foreign_t *dict_mem_foreign_create() {
   auto heap = mem_heap_create(100);
   auto foreign = (dict_foreign_t *)mem_heap_zalloc(heap, sizeof(dict_foreign_t));
 

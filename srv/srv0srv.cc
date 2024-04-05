@@ -115,7 +115,7 @@ char *srv_data_home = nullptr;
 
 /** We copy the argument passed to ib_cfg_set_text("log_group_home_dir")
 because srv_parse_log_group_home_dirs() parses it's input argument
-destructively. The copy is done using ut_malloc(). */
+destructively. The copy is done using ut_new(). */
 char *srv_log_group_home_dir = nullptr;
 
 /** store to its own file each table created by an user; data
@@ -272,17 +272,15 @@ value. */
 ulint srv_max_n_threads = 0;
 
 /** This mutex protects srv_conc data structures */
-static os_fast_mutex_t srv_conc_mutex;
+static std::mutex srv_conc_mutex;
 
 /** Number of OS threads waiting in the FIFO for a permission to enter
 InnoDB */
 ulint srv_conc_n_waiting_threads = 0;
 
-typedef struct srv_conc_slot_struct srv_conc_slot_t;
-
-struct srv_conc_slot_struct {
+struct srv_conc_slot_t {
   /** event to wait */
-  OS_cond* event;
+  Cond_var* event;
 
   /** true if slot reserved */
   bool reserved;
@@ -582,7 +580,7 @@ typedef struct srv_slot_struct {
   ib_time_t suspend_time;
 
   /** event used in suspending the thread when it has nothing to do */
-  OS_cond* event;
+  Cond_var* event;
 
   /*!< suspended query thread (only used for client threads) */
   que_thr_t *thr;
@@ -604,7 +602,7 @@ typedef struct srv_sys_struct {
 /** Table for client threads where they will be suspended to wait for locks */
 static srv_slot_t *srv_client_table = nullptr;
 
-OS_cond* srv_lock_timeout_thread_event;
+Cond_var* srv_lock_timeout_thread_event;
 
 static srv_sys_t *srv_sys = nullptr;
 
@@ -772,16 +770,12 @@ static srv_slot_t *srv_table_get_nth_slot(ulint index) /*!< in: index of the slo
   return srv_sys->threads + index;
 }
 
-/** Gets the number of threads in the system.
-@return	sum of srv_n_threads[] */
-
-ulint srv_get_n_threads(void) {
-  ulint i;
+ulint srv_get_n_threads() {
   ulint n_threads = 0;
 
   mutex_enter(&kernel_mutex);
 
-  for (i = SRV_COM; i < SRV_MASTER + 1; i++) {
+  for (ulint i = SRV_COM; i < SRV_MASTER + 1; i++) {
 
     n_threads += srv_n_threads[i];
   }
@@ -829,7 +823,7 @@ static ulint srv_table_reserve_slot(srv_thread_type type) /*!< in: type of the t
 /** Suspends the calling thread to wait for the event in its thread slot.
 NOTE! The server mutex has to be reserved by the caller!
 @return	event for the calling thread to wait */
-static OS_cond* srv_suspend_thread(void) {
+static Cond_var* srv_suspend_thread(void) {
   ut_ad(mutex_own(&kernel_mutex));
 
   auto slot_no = thr_local_get_slot_no(os_thread_get_curr_id());
@@ -858,18 +852,8 @@ static OS_cond* srv_suspend_thread(void) {
   return event;
 }
 
-/** Releases threads of the type given from suspension in the thread table.
-NOTE! The server mutex has to be reserved by the caller!
-@return number of threads released: this may be less than n if not
-enough threads were suspended at the moment */
-
-ulint srv_release_threads(
-  srv_thread_type type, /*!< in: thread type */
-  ulint n
-) /*!< in: number of threads to release */
-{
+ulint srv_release_threads(srv_thread_type type, ulint n) {
   srv_slot_t *slot;
-  ulint i;
   ulint count = 0;
 
   ut_ad(type >= SRV_WORKER);
@@ -877,7 +861,7 @@ ulint srv_release_threads(
   ut_ad(n > 0);
   ut_ad(mutex_own(&kernel_mutex));
 
-  for (i = 0; i < OS_THREAD_MAX_N; i++) {
+  for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
 
     slot = srv_table_get_nth_slot(i);
 
@@ -911,21 +895,14 @@ ulint srv_release_threads(
   return count;
 }
 
-/** Returns the calling thread type.
-@return	SRV_COM, ... */
-
-srv_thread_type srv_get_thread_type(void) {
-  ulint slot_no;
-  srv_slot_t *slot;
-  srv_thread_type type;
-
+srv_thread_type srv_get_thread_type() {
   mutex_enter(&kernel_mutex);
 
-  slot_no = thr_local_get_slot_no(os_thread_get_curr_id());
+  auto slot_no = thr_local_get_slot_no(os_thread_get_curr_id());
 
-  slot = srv_table_get_nth_slot(slot_no);
+  auto slot = srv_table_get_nth_slot(slot_no);
 
-  type = slot->type;
+  auto type = slot->type;
 
   ut_ad(type >= SRV_WORKER);
   ut_ad(type <= SRV_MASTER);
@@ -983,8 +960,6 @@ void srv_init() {
 
   /* Init the server concurrency restriction data structures */
 
-  os_fast_mutex_init(&srv_conc_mutex);
-
   UT_LIST_INIT(srv_conc_queue);
 
   srv_conc_slots = static_cast<srv_conc_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_conc_slot_t)));
@@ -1018,8 +993,6 @@ void srv_free() {
 
   mem_free(srv_conc_slots);
   srv_conc_slots = nullptr;
-
-  os_fast_mutex_free(&srv_conc_mutex);
 
   mutex_free(&srv_innodb_monitor_mutex);
   mutex_free(&kernel_mutex);
@@ -1177,7 +1150,7 @@ static srv_slot_t *srv_table_reserve_slot_for_user_thread(void) {
 
 void srv_suspend_user_thread(que_thr_t *thr) {
   srv_slot_t *slot;
-  OS_cond* event;
+  Cond_var* event;
   double wait_time;
   trx_t *trx;
   ulint had_dict_lock;
@@ -1244,7 +1217,7 @@ void srv_suspend_user_thread(que_thr_t *thr) {
 
   mutex_exit(&kernel_mutex);
 
-  had_dict_lock = trx->dict_operation_lock_mode;
+  had_dict_lock = trx->m_dict_operation_lock_mode;
 
   switch (had_dict_lock) {
     case RW_S_LATCH:
@@ -1257,7 +1230,7 @@ void srv_suspend_user_thread(que_thr_t *thr) {
       break;
   }
 
-  ut_a(trx->dict_operation_lock_mode == 0);
+  ut_a(trx->m_dict_operation_lock_mode == 0);
 
   /* Suspend this thread and wait for the event. */
 
@@ -1314,7 +1287,7 @@ void srv_suspend_user_thread(que_thr_t *thr) {
   /* InnoDB system transactions (such as the purge, and
   incomplete transactions that are being rolled back after crash
   recovery) will use the global value of
-  innodb_lock_wait_timeout, because trx->client_thd == nullptr. */
+  innodb_lock_wait_timeout, because trx->m_client_ctx == nullptr. */
   lock_wait_timeout = sess_lock_wait_timeout(trx);
 
   if (trx_is_interrupted(trx) || (lock_wait_timeout < 100000000 && wait_time > (double)lock_wait_timeout)) {
@@ -1486,7 +1459,7 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_st
     "BUFFER POOL AND MEMORY\n"
     "----------------------\n"
   );
-  ib_logger(ib_stream, "Total memory allocated " ULINTPF "\n", ut_total_allocated_memory);
+  ib_logger(ib_stream, "Total memory allocated " ULINTPF "\n", ut_total_allocated_memory());
   ib_logger(ib_stream, "Dictionary memory allocated " ULINTPF "\n", dict_sys->size);
 
   buf_pool->print_io(ib_stream);
@@ -1984,7 +1957,7 @@ static void srv_sync_log_buffer_in_background(void) {
 }
 
 void *srv_master_thread(void *arg __attribute__((unused))) {
-  OS_cond* event;
+  Cond_var* event;
   ulint old_activity_count;
   ulint n_pages_purged = 0;
   ulint n_pages_flushed;

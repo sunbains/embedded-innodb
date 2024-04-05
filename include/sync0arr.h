@@ -37,7 +37,7 @@ struct Sync_check;
 
 /** Parameters for sync_array_create() @{ */
 
-/** protected by os_mutex_t */
+/** protected by Mutex */
 constexpr ulint SYNC_ARRAY_OS_MUTEX = 1;
 
 /** protected by mutex_t */

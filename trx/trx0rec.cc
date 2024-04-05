@@ -520,7 +520,7 @@ static ulint trx_undo_page_report_modify(
   by some other trx as it must have committed by now for us to
   allow an over-write. */
   if (ignore_prefix) {
-    ignore_prefix = trx_id != trx->id;
+    ignore_prefix = trx_id != trx->m_id;
   }
 
   ptr += mach_uint64_write_compressed(ptr, trx_id);

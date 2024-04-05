@@ -23,17 +23,15 @@ Place, Suite 330, Boston, MA 02111-1307 USA
  Created 1/11/1998 Heikki Tuuri
  *******************************************************/
 
-#ifndef pars0types_h
-#define pars0types_h
+#pragma once
 
 #include "innodb0types.h"
+#include "ut0lst.h"
 
-typedef struct pars_info_struct pars_info_t;
 typedef struct pars_user_func_struct pars_user_func_t;
 typedef struct pars_bound_lit_struct pars_bound_lit_t;
 typedef struct pars_bound_id_struct pars_bound_id_t;
 typedef struct sym_node_struct sym_node_t;
-typedef struct sym_tab_struct sym_tab_t;
 typedef struct pars_res_word_struct pars_res_word_t;
 typedef struct func_node_struct func_node_t;
 typedef struct order_node_struct order_node_t;
@@ -50,4 +48,3 @@ typedef struct col_assign_node_struct col_assign_node_t;
 using sym_node_list_t = UT_LIST_BASE_NODE_T_EXTERN(sym_node_t, col_var_list);
 using func_node_list_t = UT_LIST_BASE_NODE_T_EXTERN(func_node_t, func_node_list);
 
-#endif

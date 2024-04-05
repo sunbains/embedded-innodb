@@ -30,52 +30,33 @@ Created 9/30/1995 Heikki Tuuri
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
-#endif
-
-#include "os0proc.h"
-#ifdef UNIV_NONINL
-#include "os0proc.ic"
-#endif
+#endif /* HAVE_UNIST_H */
 
 #include "ut0byte.h"
 #include "ut0mem.h"
 
-/* FreeBSD for example has only MAP_ANON, Linux has MAP_ANONYMOUS and
-MAP_ANON but MAP_ANON is marked as deprecated */
-#if defined(MAP_ANONYMOUS)
 #define OS_MAP_ANON MAP_ANONYMOUS
-#elif defined(MAP_ANON)
-#define OS_MAP_ANON MAP_ANON
-#endif
 
 bool os_use_large_pages;
+
 /* Large page size. This may be a boot-time option on some platforms */
 ulint os_large_page_size;
 
 /** Reset the variables. */
 
-void os_proc_var_init(void) {
+void os_proc_var_init() {
   os_use_large_pages = 0;
   os_large_page_size = 0;
 }
 
-/** Converts the current process id to a number. It is not guaranteed that the
-number is unique. In Linux returns the 'process number' of the current
-thread. That number is the same as one sees in 'top', for example. In Linux
-the thread id is not the same as one sees in 'top'.
-@return	process id as a number */
-
-ulint os_proc_get_number(void) {
+ulint os_proc_get_number() {
   return (ulint)getpid();
 }
 
-/** Allocates large pages memory.
-@return	allocated memory */
-
-void *os_mem_alloc_large(ulint *n) /*!< in/out: number of bytes */
-{
+void *os_mem_alloc_large(ulint *n) {
   void *ptr;
   ulint size;
+
 #if defined HAVE_LARGE_PAGES && defined UNIV_LINUX
   int shmid;
   struct shmid_ds buf;
@@ -98,7 +79,10 @@ void *os_mem_alloc_large(ulint *n) /*!< in/out: number of bytes */
       errno
     );
     ptr = NULL;
-  } else {
+  } else {);
+
+  ut_a(block->m_magic_n == UT_MEM_MAGIC_N);
+  ut_a(ut_total_allocated_memory >= block->m_size);
     ptr = shmat(shmid, NULL, 0);
     if (ptr == (void *)-1) {
       ib_logger(
@@ -128,11 +112,7 @@ void *os_mem_alloc_large(ulint *n) /*!< in/out: number of bytes */
     return (ptr);
   }
 
-  ib_logger(
-    ib_stream,
-    "InnoDB HugeTLB: Warning: Using conventional"
-    " memory pool\n"
-  );
+  ib_logger(ib_stream, "InnoDB HugeTLB: Warning: Using conventional memory pool\n");
 skip:
 #endif /* HAVE_LARGE_PAGES && UNIV_LINUX */
 
@@ -146,28 +126,18 @@ skip:
   ut_ad(ut_is_2pow(size));
   size = *n = ut_2pow_round(*n + (size - 1), size);
   ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | OS_MAP_ANON, -1, 0);
-  if (unlikely(ptr == (void *)-1)) {
-    ib_logger(
-      ib_stream,
-      "mmap(%lu bytes) failed;"
-      " errno %lu\n",
-      (ulong)size,
-      (ulong)errno
-    );
+  if (ptr == (void *)-1) {
+    ib_logger(ib_stream, "mmap(%lu bytes) failed;errno %lu\n", (ulong)size, (ulong)errno);
     ptr = nullptr;
   } else {
-    os_fast_mutex_lock(&ut_list_mutex);
-    ut_total_allocated_memory += size;
-    os_fast_mutex_unlock(&ut_list_mutex);
+    ut_allocated_memory(size);
     UNIV_MEM_ALLOC(ptr, size);
   }
   return (ptr);
 }
 
 void os_mem_free_large(void *ptr, ulint size) {
-  os_fast_mutex_lock(&ut_list_mutex);
-  ut_a(ut_total_allocated_memory >= size);
-  os_fast_mutex_unlock(&ut_list_mutex);
+  ut_a(ut_total_allocated_memory() >= size);
 
 #if defined HAVE_LARGE_PAGES && defined UNIV_LINUX
   if (os_use_large_pages && os_large_page_size && !shmdt(ptr)) {
@@ -179,20 +149,10 @@ void os_mem_free_large(void *ptr, ulint size) {
     return;
   }
 #endif /* HAVE_LARGE_PAGES && UNIV_LINUX */
-  if (munmap(ptr, size)) {
-    ib_logger(
-      ib_stream,
-      "munmap(%p, %lu) failed;"
-      " errno %lu\n",
-      ptr,
-      (ulong)size,
-      (ulong)errno
-    );
+  if (munmap(ptr, size) != 0) {
+    log_err(std::format("munmap({}, {}) failed; errno {}: {}", ptr, size, errno, strerror(errno)));
   } else {
-    os_fast_mutex_lock(&ut_list_mutex);
-    ut_a(ut_total_allocated_memory >= size);
-    ut_total_allocated_memory -= size;
-    os_fast_mutex_unlock(&ut_list_mutex);
+    ut_deallocated_memory(size);
     UNIV_MEM_FREE(ptr, size);
   }
 }

@@ -64,7 +64,7 @@ inline bool row_undo_mod_undo_also_prev_vers(undo_node_t *node, undo_no_t *undo_
 
   trx = node->trx;
 
-  if (node->new_trx_id != trx->id) {
+  if (node->new_trx_id != trx->m_id) {
 
     *undo_no = 0;
     return false;

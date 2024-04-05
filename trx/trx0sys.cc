@@ -122,7 +122,7 @@ static void trx_doublewrite_init(byte *doublewrite) /*!< in: pointer to the doub
 
   trx_doublewrite->block2 = mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_BLOCK2);
 
-  trx_doublewrite->write_buf_unaligned = static_cast<byte *>(ut_malloc((1 + 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) * UNIV_PAGE_SIZE));
+  trx_doublewrite->write_buf_unaligned = static_cast<byte *>(ut_new((1 + 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) * UNIV_PAGE_SIZE));
 
   trx_doublewrite->write_buf = static_cast<byte *>(ut_align(trx_doublewrite->write_buf_unaligned, UNIV_PAGE_SIZE));
 
@@ -345,7 +345,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
 
   /* We do the file i/o past the buffer pool */
 
-  unaligned_read_buf = static_cast<byte *>(ut_malloc(2 * UNIV_PAGE_SIZE));
+  unaligned_read_buf = static_cast<byte *>(ut_new(2 * UNIV_PAGE_SIZE));
   read_buf = static_cast<byte *>(ut_align(unaligned_read_buf, UNIV_PAGE_SIZE));
 
   /* Read the trx sys header to check if we are using the doublewrite
@@ -515,7 +515,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
   fil_flush_file_spaces(FIL_TABLESPACE);
 
 leave_func:
-  ut_free(unaligned_read_buf);
+  ut_delete(unaligned_read_buf);
 }
 
 bool trx_in_trx_list(trx_t *in_trx) {
@@ -680,7 +680,7 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
 
     for (;;) {
 
-      if (trx->conc_state != TRX_PREPARED) {
+      if (trx->m_conc_state != TRX_PREPARED) {
         rows_to_undo += trx->undo_no;
       }
 
@@ -1118,7 +1118,7 @@ void trx_sys_close() {
 
   /* Free the double write data structures. */
   ut_a(trx_doublewrite != nullptr);
-  ut_free(trx_doublewrite->write_buf_unaligned);
+  ut_delete(trx_doublewrite->write_buf_unaligned);
   trx_doublewrite->write_buf_unaligned = nullptr;
 
   mem_free(trx_doublewrite->buf_block_arr);

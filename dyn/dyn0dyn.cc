@@ -46,5 +46,5 @@ dyn_block_t *dyn_array_add_block(dyn_array_t *arr) {
 
   UT_LIST_ADD_LAST(arr->base, block);
 
-  return (block);
+  return block;
 }

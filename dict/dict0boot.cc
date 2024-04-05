@@ -84,24 +84,24 @@ void dict_hdr_flush_row_id() {
   mtr_commit(&mtr);
 }
 
-/** Creates the file page for the dictionary header. This function is
-called only at the database creation.
-@return	true if succeed */
-static bool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
-{
-  buf_block_t *block;
-  dict_hdr_t *dict_header;
-  ulint root_page_no;
+/**
+ * Creates the file page for the dictionary header. This function is called only at the database creation.
+ *
+ * @param mtr in: mtr
+ *
+ * @return true if succeed
+ */
+static bool dict_hdr_create(mtr_t *mtr) {
 
   ut_ad(mtr);
 
   /* Create the dictionary header file block in a new, allocated file
   segment in the system tablespace */
-  block = fseg_create(DICT_HDR_SPACE, 0, DICT_HDR + DICT_HDR_FSEG_HEADER, mtr);
+  auto block = fseg_create(DICT_HDR_SPACE, 0, DICT_HDR + DICT_HDR_FSEG_HEADER, mtr);
 
   ut_a(DICT_HDR_PAGE_NO == block->get_page_no());
 
-  dict_header = dict_hdr_get(mtr);
+  auto dict_header = dict_hdr_get(mtr);
 
   /* Start counting row, table, index, and tree ids from DICT_HDR_FIRST_ID */
   mlog_write_uint64(dict_header + DICT_HDR_ROW_ID, DICT_HDR_FIRST_ID, mtr);
@@ -115,7 +115,9 @@ static bool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
 
   /* Create the B-tree roots for the clustered indexes of the basic system tables */
 
-  root_page_no = btr_create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLES_ID, dict_ind_redundant, mtr);
+  auto root_page_no = btr_create(
+    DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLES_ID, dict_ind_redundant, mtr);
+
   if (root_page_no == FIL_NULL) {
 
     return false;
@@ -331,8 +333,7 @@ void dict_boot() {
 
 /** Inserts the basic system table data into themselves in the database
 creation. */
-static void dict_insert_initial_data(void) { /* Does nothing yet */
-}
+static void dict_insert_initial_data() { }
 
 void dict_create() {
   mtr_t mtr;

@@ -170,7 +170,7 @@ mutex_t rw_lock_debug_mutex;
 
 /** If deadlock detection does not get immediately the mutex,
 it may wait for this event */
-OS_cond* rw_lock_debug_event;
+Cond_var* rw_lock_debug_event;
 
 /** This is set to true, if there may be waiters for the event */
 bool rw_lock_debug_waiters;

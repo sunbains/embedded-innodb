@@ -39,14 +39,14 @@ static const char S_innodb_tablespace_monitor[] = "innodb_tablespace_monitor";
 static const char S_innodb_table_monitor[] = "innodb_table_monitor";
 static const char S_innodb_mem_validate[] = "innodb_mem_validate";
 
-/** Drops a table as a background operation.  On Unix in ALTER TABLE the table
-handler does not remove the table before all handles to it has been removed.
-Furhermore, the call to the drop table must be non-blocking. Therefore
-we do the drop table as a background operation, which is taken care of by
-the master thread in srv0srv.c.
-@return	error code or DB_SUCCESS */
-static db_err ddl_drop_table_in_background(const char *name) /*!< in: table name */
-{
+/**
+ * Drops a table as a background operation.
+ * On Unix in ALTER TABLE the table handler does not remove the table before all handles to it has been removed.
+ * Furhermore, the call to the drop table must be non-blocking. Therefore we do the drop table as a background operation, which is taken care of by the master thread in srv0srv.c.
+ * @param name table name
+ * @return error code or DB_SUCCESS
+ */
+static db_err ddl_drop_table_in_background(const char *name) {
   bool started;
 
   auto trx = trx_allocate_for_background();
@@ -58,7 +58,7 @@ static db_err ddl_drop_table_in_background(const char *name) /*!< in: table name
   foreign keys, we must set the following to be able to drop the
   table: */
 
-  trx->check_foreigns = false;
+  trx->m_check_foreigns = false;
 
   /* Try to drop the table in InnoDB */
 
@@ -66,7 +66,8 @@ static db_err ddl_drop_table_in_background(const char *name) /*!< in: table name
 
   auto err = ddl_drop_table(name, trx, false);
 
-  trx_commit(trx);
+  auto err_commit = trx_commit(trx);
+  ut_a(err_commit == DB_SUCCESS);
 
   dict_unlock_data_dictionary(trx);
 
@@ -155,14 +156,16 @@ ulint ddl_get_background_drop_list_len_low() {
   return UT_LIST_GET_LEN(ddl_drop_list);
 }
 
-/** If a table is not yet in the drop list, adds the table to the list of tables
-which the master thread drops in background. We need this on Unix because in
-ALTER TABLE may call drop table even if the table has running queries on
-it. Also, if there are running foreign key checks on the table, we drop the
-table lazily.
-@return	true if the table was not yet in the drop list, and was added there */
-static bool ddl_add_table_to_background_drop_list(const char *name) /*!< in: table name */
-{
+/**
+ * If a table is not yet in the drop list, adds the table to the list of tables
+ * which the master thread drops in background. We need this on Unix because in
+ * ALTER TABLE may call drop table even if the table has running queries on
+ * it. Also, if there are running foreign key checks on the table, we drop the
+ * table lazily.
+ * @param name table name
+ * @return true if the table was not yet in the drop list, and was added there
+ */
+static bool ddl_add_table_to_background_drop_list(const char *name) {
   mutex_enter(&kernel_mutex);
 
   if (!ddl_drop_list_inited) {
@@ -225,7 +228,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     return DB_ERROR;
   }
 
-  trx->op_info = "dropping table";
+  trx->m_op_info = "dropping table";
 
   /* The table name is prefixed with the database name and a '/'.
   Certain table names starting with 'innodb_' have their special
@@ -257,7 +260,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
   /* Serialize data dictionary operations with dictionary mutex:
   no deadlocks can occur then in these operations */
 
-  if (trx->dict_operation_lock_mode != RW_X_LATCH) {
+  if (trx->m_dict_operation_lock_mode != RW_X_LATCH) {
     return DB_SCHEMA_NOT_LOCKED;
   }
 
@@ -295,7 +298,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     foreign = UT_LIST_GET_NEXT(referenced_list, foreign);
   }
 
-  if (foreign && trx->check_foreigns && !(drop_db && dict_tables_have_same_db(name, foreign->foreign_table_name))) {
+  if (foreign && trx->m_check_foreigns && !(drop_db && dict_tables_have_same_db(name, foreign->foreign_table_name))) {
     /* We only allow dropping a referenced table if
     FOREIGN_KEY_CHECKS is set to 0 */
 
@@ -314,7 +317,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     goto func_exit;
   }
 
-  if (foreign && trx->check_foreigns) {
+  if (foreign && trx->m_check_foreigns) {
     goto check_next_foreign;
   }
 
@@ -564,7 +567,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
 
 func_exit:
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   srv_wake_master_thread();
 
@@ -585,12 +588,10 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
   db_err err;
   ulint i;
 
-  ut_ad(trx->client_thread_id == os_thread_get_curr_id());
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&dict_operation_lock, RW_LOCK_EX));
-#endif /* UNIV_SYNC_DEBUG */
+  IF_SYNC_DEBUG(ut_ad(rw_lock_own(&dict_operation_lock, RW_LOCK_EX));)
+
   ut_ad(mutex_own(&(dict_sys->mutex)));
-  ut_ad(trx->dict_operation_lock_mode == RW_X_LATCH);
+  ut_ad(trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
   if (srv_created_new_raw) {
     ib_logger(
@@ -617,7 +618,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
     goto err_exit;
   }
 
-  trx->op_info = "creating table";
+  trx->m_op_info = "creating table";
 
   /* Check that no reserved column names are used. */
   for (i = 0; i < dict_table_get_n_user_cols(table); i++) {
@@ -736,7 +737,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
 
   que_graph_free((que_t *)que_node_get_parent(thr));
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   return err;
 }
@@ -836,11 +837,11 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     return DB_ERROR;
   }
 
-  trx->op_info = "truncating table";
+  trx->m_op_info = "truncating table";
 
   /* Serialize data dictionary operations with dictionary mutex:
   no deadlocks can occur then in these operations */
-  ut_a(trx->dict_operation_lock_mode != 0);
+  ut_a(trx->m_dict_operation_lock_mode != 0);
 
   /* Prevent foreign key checks etc. while we are truncating the
   table */
@@ -859,7 +860,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     foreign = UT_LIST_GET_NEXT(referenced_list, foreign);
   }
 
-  if (foreign && trx->check_foreigns) {
+  if (foreign && trx->m_check_foreigns) {
     /* We only allow truncating a referenced table if
     FOREIGN_KEY_CHECKS is set to 0 */
 
@@ -1069,7 +1070,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
 
 func_exit:
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   srv_wake_master_thread();
 
@@ -1105,9 +1106,9 @@ db_err ddl_drop_index(dict_table_t *table, dict_index_t *index, trx_t *trx) {
   pars_info_add_uint64_literal(info, "indexid", index->id);
 
   trx_start_if_not_started(trx);
-  trx->op_info = "dropping index";
+  trx->m_op_info = "dropping index";
 
-  ut_a(trx->dict_operation_lock_mode == RW_X_LATCH);
+  ut_a(trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
   err = que_eval_sql(info, str1, false, trx);
 
@@ -1119,7 +1120,7 @@ db_err ddl_drop_index(dict_table_t *table, dict_index_t *index, trx_t *trx) {
   dict_table_replace_index_in_foreign_list(table, index);
   dict_index_remove_from_cache(table, index);
 
-  trx->op_info = "";
+  trx->m_op_info = "";
   return err;
 }
 
@@ -1146,20 +1147,18 @@ static db_err ddl_delete_constraint_low(
   );
 }
 
-/** Delete a single constraint.
-@return	error code or DB_SUCCESS */
-static db_err ddl_delete_constraint(
-  const char *id,            /*!< in: constraint id */
-  const char *database_name, /*!< in: database name, with
-                                                 the trailing '/' */
-  mem_heap_t *heap,          /*!< in: memory heap */
-  trx_t *trx
-) /*!< in: transaction handle */
-{
-  db_err err;
-
+/**
+ * Delete a single constraint.
+ *
+ * @param id constraint id
+ * @param database_name database name, with the trailing '/'
+ * @param heap memory heap
+ * @param trx transaction handle
+ * @return error code or DB_SUCCESS
+ */
+static db_err ddl_delete_constraint(const char *id, const char *database_name, mem_heap_t *heap, trx_t *trx) {
   /* New format constraints have ids <databasename>/<constraintname>. */
-  err = ddl_delete_constraint_low(mem_heap_strcat(heap, database_name, id), trx);
+  auto err = ddl_delete_constraint_low(mem_heap_strcat(heap, database_name, id), trx);
 
   if (err == DB_SUCCESS && !strchr(id, '/')) {
     /* Old format < 4.0.18 constraints have constraint ids
@@ -1185,7 +1184,6 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
 
   ut_a(old_name != nullptr);
   ut_a(new_name != nullptr);
-  ut_ad(trx->client_thread_id == os_thread_get_curr_id());
 
   if (srv_created_new_raw || srv_force_recovery != IB_RECOVERY_DEFAULT) {
     ib_logger(
@@ -1200,7 +1198,7 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
     goto func_exit;
   }
 
-  trx->op_info = "renaming table";
+  trx->m_op_info = "renaming table";
 
   table = dict_table_get_low(old_name);
 
@@ -1366,7 +1364,7 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
     /* We only want to switch off some of the type checking in
     an ALTER, not in a RENAME. */
 
-    err = dict_load_foreigns(new_name, trx->check_foreigns);
+    err = dict_load_foreigns(new_name, trx->m_check_foreigns);
 
     if (err != DB_SUCCESS) {
       bool ret;
@@ -1403,7 +1401,7 @@ func_exit:
     mem_heap_free(heap);
   }
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   return err;
 }
@@ -1416,7 +1414,6 @@ db_err ddl_rename_index(const char *table_name, const char *old_name, const char
   ut_a(old_name != nullptr);
   ut_a(old_name != nullptr);
   ut_a(table_name != nullptr);
-  ut_ad(trx->client_thread_id == os_thread_get_curr_id());
 
   if (srv_created_new_raw || srv_force_recovery != IB_RECOVERY_DEFAULT) {
     ib_logger(
@@ -1431,7 +1428,7 @@ db_err ddl_rename_index(const char *table_name, const char *old_name, const char
     goto func_exit;
   }
 
-  trx->op_info = "renaming index";
+  trx->m_op_info = "renaming index";
 
   table = dict_table_get_low(table_name);
 
@@ -1494,24 +1491,24 @@ db_err ddl_rename_index(const char *table_name, const char *old_name, const char
 
 func_exit:
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   return err;
 }
 
-/** Drop all foreign keys in a database, see Bug#18942.
-@return	error code or DB_SUCCESS */
-static enum db_err ddl_drop_all_foreign_keys_in_db(
-  const char *name, /*!< in: database name which ends to '/' */
-  trx_t *trx
-) /*!< in: transaction handle */
-{
-  enum db_err err;
-  pars_info_t *pinfo;
+/**
+ * Drop all foreign keys in a database, see Bug#18942.
+ *
+ * @param name database name which ends to '/'
+ * @param trx transaction handle
+ * @return error code or DB_SUCCESS
+ */
+static enum db_err ddl_drop_all_foreign_keys_in_db(const char *name, trx_t *trx) {
+  db_err err;
 
   ut_a(name[strlen(name) - 1] == '/');
 
-  pinfo = pars_info_create();
+  auto pinfo = pars_info_create();
 
   pars_info_add_str_literal(pinfo, "dbname", name);
 
@@ -1562,9 +1559,8 @@ db_err ddl_drop_database(const char *name, trx_t *trx) {
   ulint namelen = strlen(name);
 
   ut_a(name[namelen - 1] == '/');
-  ut_ad(trx->client_thread_id == os_thread_get_curr_id());
 
-  trx->op_info = "dropping database";
+  trx->m_op_info = "dropping database";
 
 loop:
   dict_lock_data_dictionary(trx);
@@ -1641,7 +1637,7 @@ loop:
 
   dict_unlock_data_dictionary(trx);
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   return err;
 }
@@ -1658,7 +1654,7 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
   trx = trx_allocate_for_background();
   started = trx_start(trx, ULINT_UNDEFINED);
   ut_a(started);
-  trx->op_info = "dropping partially created indexes";
+  trx->m_op_info = "dropping partially created indexes";
   dict_lock_data_dictionary(trx);
 
   mtr_start(&mtr);
@@ -1707,7 +1703,8 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
 
         if (*index->name == TEMP_INDEX_PREFIX) {
           ddl_drop_index(table, index, trx);
-          trx_commit(trx);
+          auto err_commit = trx_commit(trx);
+	  ut_a(err_commit == DB_SUCCESS);
         }
       }
     }
@@ -1722,26 +1719,29 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
 
   dict_unlock_data_dictionary(trx);
 
-  trx_commit(trx);
+  auto err_commit = trx_commit(trx);
+  ut_a(err_commit == DB_SUCCESS);
   trx_free_for_background(trx);
 }
 
 void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
-  trx_t *trx;
-  btr_pcur_t pcur;
-  mtr_t mtr;
-  mem_heap_t *heap;
+  auto trx = trx_allocate_for_background();
 
-  trx = trx_allocate_for_background();
+  {
+    auto success = trx_start(trx, ULINT_UNDEFINED);
+    ut_a(success);
+  }
 
-  trx_start(trx, ULINT_UNDEFINED);
-
-  trx->op_info = "dropping temporary tables";
+  trx->m_op_info = "dropping temporary tables";
   dict_lock_data_dictionary(trx);
 
-  heap = mem_heap_create(200);
+  auto heap = mem_heap_create(200);
+
+  mtr_t mtr;
 
   mtr_start(&mtr);
+
+  btr_pcur_t pcur;
 
   pcur.open_at_index_side(true, dict_table_get_first_index(dict_sys->sys_tables), BTR_SEARCH_LEAF, true, 0, &mtr);
 
@@ -1786,9 +1786,10 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
 
     table = dict_load_table(recovery, table_name);
 
-    if (table) {
+    if (table != nullptr) {
       ddl_drop_table(table_name, trx, false);
-      trx_commit(trx);
+      auto err_commit = trx_commit(trx);
+      ut_a(err_commit == DB_SUCCESS);
     }
 
     mtr_start(&mtr);
@@ -1801,6 +1802,8 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
 
   dict_unlock_data_dictionary(trx);
 
-  trx_commit(trx);
+  auto err_commit = trx_commit(trx);
+  ut_a(err_commit == DB_SUCCESS);
+
   trx_free_for_background(trx);
 }

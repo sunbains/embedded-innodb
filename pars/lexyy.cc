@@ -634,8 +634,8 @@ Created 12/14/1997 Heikki Tuuri
 #include "mem0mem.h"
 #include "os0proc.h"
 
-#define malloc(A) ut_malloc(A)
-#define free(A) ut_free(A)
+#define malloc(A) ut_new(A)
+#define free(A) ut_delete(A)
 #define realloc(P, A) ut_realloc(P, A)
 #define exit(A) ut_error
 
@@ -653,7 +653,7 @@ static void string_append(const char *str, /*!< in: string to be appended */
                           ulint len)       /*!< in: length of the string */
 {
   if (stringbuf == nullptr) {
-    stringbuf = (char *)ut_malloc(1);
+    stringbuf = (char *)ut_new(1);
     stringbuf_len_alloc = 1;
   }
 
@@ -673,7 +673,7 @@ void pars_lexer_var_init() {
   stringbuf_len_alloc = 0;
 
   if (stringbuf != nullptr) {
-    ut_free(stringbuf);
+    ut_delete(stringbuf);
     stringbuf = nullptr;
   }
 }

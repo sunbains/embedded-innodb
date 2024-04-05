@@ -69,32 +69,32 @@ trx_t* trx_create_low(sess_t *sess) {
 
   auto trx = new (ptr) trx_t;
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
-  trx->is_purge = 0;
-  trx->is_recovered = 0;
-  trx->conc_state = TRX_NOT_STARTED;
-  trx->start_time = time(nullptr);
+  trx->m_is_purge = 0;
+  trx->m_is_recovered = 0;
+  trx->m_conc_state = TRX_NOT_STARTED;
+  trx->m_start_time = time(nullptr);
 
-  trx->isolation_level = TRX_ISO_REPEATABLE_READ;
+  trx->m_isolation_level = TRX_ISO_REPEATABLE_READ;
 
-  trx->id = 0;
-  trx->no = LSN_MAX;
+  trx->m_id = 0;
+  trx->m_no = LSN_MAX;
 
 #ifdef WITH_XOPEN
-  trx->support_xa = false;
-  trx->flush_log_later = false;
-  trx->must_flush_log_later = false;
+  trx->m_support_xa = false;
+  trx->m_flush_log_later = false;
+  trx->m_must_flush_log_later = false;
 #endif /* WITH_XOPEN */
 
-  trx->check_foreigns = true;
+  trx->m_check_foreigns = true;
 
-  trx->dict_operation = TRX_DICT_OP_NONE;
+  trx->m_dict_operation = TRX_DICT_OP_NONE;
   trx->table_id = 0;
 
-  trx->client_thd = nullptr;
+  trx->m_client_ctx = nullptr;
   trx->client_query_str = nullptr;
-  trx->duplicates = 0;
+  trx->m_duplicates = 0;
 
   trx->n_client_tables_in_use = 0;
   trx->client_n_tables_locked = 0;
@@ -114,10 +114,10 @@ trx_t* trx_create_low(sess_t *sess) {
   trx->detailed_error[0] = '\0';
 
   trx->sess = sess;
-  trx->que_state = TRX_QUE_RUNNING;
+  trx->m_que_state = TRX_QUE_RUNNING;
   trx->n_active_thrs = 0;
 
-  trx->handling_signals = false;
+  trx->m_handling_signals = false;
 
   UT_LIST_INIT(trx->signals);
   UT_LIST_INIT(trx->reply_signals);
@@ -133,7 +133,7 @@ trx_t* trx_create_low(sess_t *sess) {
 
   UT_LIST_INIT(trx->trx_savepoints);
 
-  trx->dict_operation_lock_mode = 0;
+  trx->m_dict_operation_lock_mode = 0;
 
   trx->global_read_view_heap = mem_heap_create(256);
   trx->global_read_view = nullptr;
@@ -141,11 +141,11 @@ trx_t* trx_create_low(sess_t *sess) {
 
 #ifdef WITH_XOPEN
   /* Set X/Open XA transaction identification to nullptr */
-  memset(&trx->xid, 0, sizeof(trx->xid));
-  trx->xid.formatID = -1;
+  memset(&trx->m_xid, 0, sizeof(trx->m_xid));
+  trx->m_xid.formatID = -1;
 #endif /* WITH_XOPEN */
 
-  trx->magic_n = TRX_MAGIC_N;
+  trx->m_magic_n = TRX_MAGIC_N;
 
   return trx;
 }
@@ -168,10 +168,6 @@ trx_t *trx_allocate_for_client(void *arg) {
 
   mutex_exit(&kernel_mutex);
 
-  trx->client_thread_id = os_thread_get_curr_id();
-
-  trx->client_process_no = os_proc_get_number();
-
   return trx;
 }
 
@@ -181,10 +177,6 @@ trx_t *trx_allocate_for_background() {
   auto trx = trx_create(trx_dummy_sess);
 
   mutex_exit(&kernel_mutex);
-
-  trx->client_process_no = 0;
-
-  trx->client_thread_id = NULL_THREAD_ID;
 
   return trx;
 }
@@ -211,11 +203,11 @@ static void trx_free(trx_t *&trx) {
     ib_logger(ib_stream, "\n");
   }
 
-  ut_a(trx->magic_n == TRX_MAGIC_N);
+  ut_a(trx->m_magic_n == TRX_MAGIC_N);
 
-  trx->magic_n = 11112222;
+  trx->m_magic_n = 11112222;
 
-  ut_a(trx->conc_state == TRX_NOT_STARTED);
+  ut_a(trx->m_conc_state == TRX_NOT_STARTED);
 
   mutex_free(&(trx->undo_mutex));
 
@@ -232,7 +224,7 @@ static void trx_free(trx_t *&trx) {
   ut_a(trx->wait_lock == nullptr);
   ut_a(UT_LIST_GET_LEN(trx->wait_thrs) == 0);
 
-  ut_a(trx->dict_operation_lock_mode == 0);
+  ut_a(trx->m_dict_operation_lock_mode == 0);
 
   if (trx->lock_heap != nullptr) {
     mem_heap_free(trx->lock_heap);
@@ -288,9 +280,9 @@ static void trx_list_insert_ordered(trx_t *trx) /*!< in: trx handle */
   auto trx2 = UT_LIST_GET_FIRST(trx_sys->trx_list);
 
   while (trx2 != nullptr) {
-    if (trx->id >= trx2->id) {
+    if (trx->m_id >= trx2->m_id) {
 
-      ut_ad(trx->id > trx2->id);
+      ut_ad(trx->m_id > trx2->m_id);
       break;
     }
     trx2 = UT_LIST_GET_NEXT(trx_list, trx2);
@@ -326,10 +318,10 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 
       auto trx = trx_create(trx_dummy_sess);
 
-      trx->is_recovered = true;
-      trx->id = undo->trx_id;
+      trx->m_is_recovered = true;
+      trx->m_id = undo->trx_id;
 #ifdef WITH_XOPEN
-      trx->xid = undo->xid;
+      trx->m_xid = undo->xid;
 #endif /* WITH_XOPEN */
       trx->insert_undo = undo;
       trx->rseg = rseg;
@@ -340,18 +332,18 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 
         if (undo->state == TRX_UNDO_PREPARED) {
 
-          ib_logger(ib_stream, "Transaction %lu was in the XA prepared state.\n", TRX_ID_PREP_PRINTF(trx->id));
+          ib_logger(ib_stream, "Transaction %lu was in the XA prepared state.\n", TRX_ID_PREP_PRINTF(trx->m_id));
 
           if (recovery == IB_RECOVERY_DEFAULT) {
 
-            trx->conc_state = TRX_PREPARED;
+            trx->m_conc_state = TRX_PREPARED;
           } else {
             ib_logger(ib_stream, "Since force_recovery > 0, we will do a rollback anyway.\n");
 
-            trx->conc_state = TRX_ACTIVE;
+            trx->m_conc_state = TRX_ACTIVE;
           }
         } else {
-          trx->conc_state = TRX_COMMITTED_IN_MEMORY;
+          trx->m_conc_state = TRX_COMMITTED_IN_MEMORY;
         }
 
         /* We give a dummy value for the trx no;
@@ -361,13 +353,13 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
         list, in which case it looks the number
         from the disk based undo log structure */
 
-        trx->no = trx->id;
+        trx->m_no = trx->m_id;
       } else {
-        trx->conc_state = TRX_ACTIVE;
+        trx->m_conc_state = TRX_ACTIVE;
 
         /* A running transaction always has the number field inited to LSN_MAX */
 
-        trx->no = LSN_MAX;
+        trx->m_no = LSN_MAX;
       }
 
       if (undo->dict_operation) {
@@ -392,10 +384,10 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
       if (nullptr == trx) {
         trx = trx_create(trx_dummy_sess);
 
-        trx->is_recovered = true;
-        trx->id = undo->trx_id;
+        trx->m_is_recovered = true;
+        trx->m_id = undo->trx_id;
 #ifdef WITH_XOPEN
-        trx->xid = undo->xid;
+        trx->m_xid = undo->xid;
 #endif /* WITH_XOPEN */
 
         if (undo->state != TRX_UNDO_ACTIVE) {
@@ -406,11 +398,11 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
           the client. */
 
           if (undo->state == TRX_UNDO_PREPARED) {
-            ib_logger(ib_stream, "Transaction %lu was in the XA prepared state.\n", TRX_ID_PREP_PRINTF(trx->id));
+            ib_logger(ib_stream, "Transaction %lu was in the XA prepared state.\n", TRX_ID_PREP_PRINTF(trx->m_id));
 
             if (recovery == IB_RECOVERY_DEFAULT) {
 
-              trx->conc_state = TRX_PREPARED;
+              trx->m_conc_state = TRX_PREPARED;
             } else {
               ib_logger(
                 ib_stream,
@@ -421,22 +413,22 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
                 " anyway.\n"
               );
 
-              trx->conc_state = TRX_ACTIVE;
+              trx->m_conc_state = TRX_ACTIVE;
             }
           } else {
-            trx->conc_state = TRX_COMMITTED_IN_MEMORY;
+            trx->m_conc_state = TRX_COMMITTED_IN_MEMORY;
           }
 
           /* We give a dummy value for the trx
           number */
 
-          trx->no = trx->id;
+          trx->m_no = trx->m_id;
         } else {
-          trx->conc_state = TRX_ACTIVE;
+          trx->m_conc_state = TRX_ACTIVE;
 
           /* A running transaction always has the number field inited to LSN_MAX */
 
-          trx->no = LSN_MAX;
+          trx->m_no = LSN_MAX;
         }
 
         trx->rseg = rseg;
@@ -465,7 +457,7 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 /** Assigns a rollback segment to a transaction in a round-robin fashion.
 Skips the SYSTEM rollback segment if another is available.
 @return	assigned rollback segment id */
-inline ulint trx_assign_rseg(void) {
+inline ulint trx_assign_rseg() {
   trx_rseg_t *rseg = trx_sys->latest_rseg;
 
   ut_ad(mutex_own(&kernel_mutex));
@@ -490,31 +482,22 @@ loop:
   return rseg->id;
 }
 
-/** Starts a new transaction.
-@return	true */
-
-bool trx_start_low(
-  trx_t *trx, /*!< in: transaction */
-  ulint rseg_id
-) /*!< in: rollback segment id; if ULINT_UNDEFINED
-                   is passed, the system chooses the rollback segment
-                   automatically in a round-robin fashion */
-{
+bool trx_start_low(trx_t *trx, ulint rseg_id) {
   trx_rseg_t *rseg;
 
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(trx->rseg == nullptr);
-  ut_ad(trx->magic_n == TRX_MAGIC_N);
+  ut_ad(trx->m_magic_n == TRX_MAGIC_N);
 
-  if (trx->is_purge) {
-    trx->id = 0;
-    trx->conc_state = TRX_ACTIVE;
-    trx->start_time = time(nullptr);
+  if (trx->m_is_purge) {
+    trx->m_id = 0;
+    trx->m_conc_state = TRX_ACTIVE;
+    trx->m_start_time = time(nullptr);
 
     return true;
   }
 
-  ut_ad(trx->conc_state != TRX_ACTIVE);
+  ut_ad(trx->m_conc_state != TRX_ACTIVE);
 
   if (rseg_id == ULINT_UNDEFINED) {
 
@@ -523,20 +506,20 @@ bool trx_start_low(
 
   rseg = trx_sys_get_nth_rseg(trx_sys, rseg_id);
 
-  trx->id = trx_sys_get_new_trx_id();
+  trx->m_id = trx_sys_get_new_trx_id();
 
   /* The initial value for trx->no: LSN_MAX is used in read_view_open_now: */
 
-  trx->no = LSN_MAX;
+  trx->m_no = LSN_MAX;
 
   trx->rseg = rseg;
 
-  trx->conc_state = TRX_ACTIVE;
-  trx->start_time = time(nullptr);
+  trx->m_conc_state = TRX_ACTIVE;
+  trx->m_start_time = time(nullptr);
 
 #ifdef WITH_XOPEN
-  trx->flush_log_later = false;
-  trx->must_flush_log_later = false;
+  trx->m_flush_log_later = false;
+  trx->m_must_flush_log_later = false;
 #endif /* WITH_XOPEN */
 
   UT_LIST_ADD_FIRST(trx_sys->trx_list, trx);
@@ -548,14 +531,14 @@ bool trx_start(trx_t *trx, ulint rseg_id) {
   bool ret;
 
   /* Update the info whether we should skip XA steps that eat CPU time
-  For the duration of the transaction trx->support_xa is not reread
+  For the duration of the transaction trx->m_support_xa is not reread
   from thd so any changes in the value take effect in the next
   transaction. This is to avoid a scenario where some undo
   generated by a transaction, has XA stuff, and other undo,
   generated by the same transaction, doesn't. */
 
   /* FIXME: This requires an API change to support */
-  /* trx->support_xa = ib_supports_xa(trx->client_thd); */
+  /* trx->m_support_xa = ib_supports_xa(trx->m_client_ctx); */
 
   mutex_enter(&kernel_mutex);
 
@@ -599,7 +582,7 @@ void trx_commit_off_kernel(trx_t *trx) {
 
     if (undo) {
       mutex_enter(&kernel_mutex);
-      trx->no = trx_sys_get_new_trx_no();
+      trx->m_no = trx_sys_get_new_trx_no();
 
       mutex_exit(&kernel_mutex);
 
@@ -644,7 +627,7 @@ void trx_commit_off_kernel(trx_t *trx) {
     mutex_enter(&kernel_mutex);
   }
 
-  ut_ad(trx->conc_state == TRX_ACTIVE || trx->conc_state == TRX_PREPARED);
+  ut_ad(trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED);
   ut_ad(mutex_own(&kernel_mutex));
 
   /* The following assignment makes the transaction committed in memory
@@ -662,7 +645,7 @@ void trx_commit_off_kernel(trx_t *trx) {
   committed. */
 
   /*--------------------------------------*/
-  trx->conc_state = TRX_COMMITTED_IN_MEMORY;
+  trx->m_conc_state = TRX_COMMITTED_IN_MEMORY;
   /*--------------------------------------*/
 
   /* If we release kernel_mutex below and we are still doing
@@ -675,9 +658,9 @@ void trx_commit_off_kernel(trx_t *trx) {
   rollback of a PREPARED trx happens in the recovery thread
   while the rollback of other transactions happen in the
   background thread. To avoid this race we unconditionally
-  unset the is_recovered flag from the trx. */
+  unset the m_is_recovered flag from the trx. */
 
-  trx->is_recovered = false;
+  trx->m_is_recovered = false;
 
   lock_release_off_kernel(trx);
 
@@ -726,9 +709,9 @@ void trx_commit_off_kernel(trx_t *trx) {
     mutex would serialize all commits and prevent a group of
     transactions from gathering. */
 #ifdef WITH_XOPEN
-    if (trx->flush_log_later) {
+    if (trx->m_flush_log_later) {
       /* Do nothing yet */
-      trx->must_flush_log_later = true;
+      trx->m_must_flush_log_later = true;
     } else
 #endif /* WITH_XOPEN */
       if (srv_flush_log_at_trx_commit == 0) {
@@ -763,7 +746,7 @@ void trx_commit_off_kernel(trx_t *trx) {
   /* Free all savepoints */
   trx_roll_free_all_savepoints(trx);
 
-  trx->conc_state = TRX_NOT_STARTED;
+  trx->m_conc_state = TRX_NOT_STARTED;
   trx->rseg = nullptr;
   trx->undo_no = 0;
   trx->last_sql_stat_start.least_undo_no = 0;
@@ -781,7 +764,7 @@ void trx_cleanup_at_db_startup(trx_t *trx) {
     trx_undo_insert_cleanup(trx);
   }
 
-  trx->conc_state = TRX_NOT_STARTED;
+  trx->m_conc_state = TRX_NOT_STARTED;
   trx->rseg = nullptr;
   trx->undo_no = 0;
   trx->last_sql_stat_start.least_undo_no = 0;
@@ -790,7 +773,7 @@ void trx_cleanup_at_db_startup(trx_t *trx) {
 }
 
 read_view_t *trx_assign_read_view(trx_t *trx) {
-  ut_ad(trx->conc_state == TRX_ACTIVE);
+  ut_ad(trx->m_conc_state == TRX_ACTIVE);
 
   if (trx->read_view) {
     return trx->read_view;
@@ -799,7 +782,7 @@ read_view_t *trx_assign_read_view(trx_t *trx) {
   mutex_enter(&kernel_mutex);
 
   if (!trx->read_view) {
-    trx->read_view = read_view_open_now(trx->id, trx->global_read_view_heap);
+    trx->read_view = read_view_open_now(trx->m_id, trx->global_read_view_heap);
     trx->global_read_view = trx->read_view;
   }
 
@@ -824,7 +807,7 @@ static void trx_handle_commit_sig_off_kernel(
 
   ut_ad(mutex_own(&kernel_mutex));
 
-  trx->que_state = TRX_QUE_COMMITTING;
+  trx->m_que_state = TRX_QUE_COMMITTING;
 
   trx_commit_off_kernel(trx);
 
@@ -847,14 +830,14 @@ static void trx_handle_commit_sig_off_kernel(
     sig = next_sig;
   }
 
-  trx->que_state = TRX_QUE_RUNNING;
+  trx->m_que_state = TRX_QUE_RUNNING;
 }
 
 void trx_end_lock_wait(trx_t *trx) {
   que_thr_t *thr;
 
   ut_ad(mutex_own(&kernel_mutex));
-  ut_ad(trx->que_state == TRX_QUE_LOCK_WAIT);
+  ut_ad(trx->m_que_state == TRX_QUE_LOCK_WAIT);
 
   thr = UT_LIST_GET_FIRST(trx->wait_thrs);
 
@@ -866,7 +849,7 @@ void trx_end_lock_wait(trx_t *trx) {
     thr = UT_LIST_GET_FIRST(trx->wait_thrs);
   }
 
-  trx->que_state = TRX_QUE_RUNNING;
+  trx->m_que_state = TRX_QUE_RUNNING;
 }
 
 /** Moves the query threads in the lock wait list to the SUSPENDED state and
@@ -876,7 +859,7 @@ static void trx_lock_wait_to_suspended(trx_t *trx) /*!< in: transaction in the T
   que_thr_t *thr;
 
   ut_ad(mutex_own(&kernel_mutex));
-  ut_ad(trx->que_state == TRX_QUE_LOCK_WAIT);
+  ut_ad(trx->m_que_state == TRX_QUE_LOCK_WAIT);
 
   thr = UT_LIST_GET_FIRST(trx->wait_thrs);
 
@@ -888,7 +871,7 @@ static void trx_lock_wait_to_suspended(trx_t *trx) /*!< in: transaction in the T
     thr = UT_LIST_GET_FIRST(trx->wait_thrs);
   }
 
-  trx->que_state = TRX_QUE_RUNNING;
+  trx->m_que_state = TRX_QUE_RUNNING;
 }
 
 /** Moves the query threads in the sig reply wait list of trx to the SUSPENDED
@@ -1052,9 +1035,9 @@ void trx_sig_send(trx_t *trx, ulint type, ulint sender, que_thr_t *receiver_thr,
 
 void trx_end_signal_handling(trx_t *trx) {
   ut_ad(mutex_own(&kernel_mutex));
-  ut_ad(trx->handling_signals == true);
+  ut_ad(trx->m_handling_signals == true);
 
-  trx->handling_signals = false;
+  trx->m_handling_signals = false;
 
   trx->graph = trx->graph_before_signal_handling;
 
@@ -1074,22 +1057,23 @@ loop:
   ut_ad(trx);
   ut_ad(mutex_own(&kernel_mutex));
 
-  if (trx->handling_signals && (UT_LIST_GET_LEN(trx->signals) == 0)) {
+  if (trx->m_handling_signals && (UT_LIST_GET_LEN(trx->signals) == 0)) {
 
     trx_end_signal_handling(trx);
 
     return;
   }
 
-  if (trx->conc_state == TRX_NOT_STARTED) {
+  if (trx->m_conc_state == TRX_NOT_STARTED) {
 
-    trx_start_low(trx, ULINT_UNDEFINED);
+    auto success = trx_start_low(trx, ULINT_UNDEFINED);
+    ut_a(success);
   }
 
   /* If the trx is in a lock wait state, moves the waiting query threads
   to the suspended state */
 
-  if (trx->que_state == TRX_QUE_LOCK_WAIT) {
+  if (trx->m_que_state == TRX_QUE_LOCK_WAIT) {
 
     trx_lock_wait_to_suspended(trx);
   }
@@ -1113,10 +1097,10 @@ loop:
     return;
   }
 
-  if (trx->handling_signals == false) {
+  if (trx->m_handling_signals == false) {
     trx->graph_before_signal_handling = trx->graph;
 
-    trx->handling_signals = true;
+    trx->m_handling_signals = true;
   }
 
   sig = UT_LIST_GET_FIRST(trx->signals);
@@ -1241,7 +1225,7 @@ db_err trx_commit(trx_t *trx) {
 
   ut_a(trx);
 
-  trx->op_info = "committing";
+  trx->m_op_info = "committing";
 
   mutex_enter(&kernel_mutex);
 
@@ -1249,58 +1233,15 @@ db_err trx_commit(trx_t *trx) {
 
   mutex_exit(&kernel_mutex);
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   return DB_SUCCESS;
 }
 
-#ifdef WITH_XOPEN
-ulint trx_commit_flush_log(trx_t *trx) {
-  uint64_t lsn = trx->commit_lsn;
-
+void trx_mark_sql_stat_end(trx_t *trx) {
   ut_a(trx);
 
-  trx->op_info = "flushing log";
-
-  if (!trx->must_flush_log_later) {
-    /* Do nothing */
-  } else if (srv_flush_log_at_trx_commit == 0) {
-    /* Do nothing */
-  } else if (srv_flush_log_at_trx_commit == 1) {
-    if (srv_unix_file_flush_method == SRV_UNIX_NOSYNC) {
-      /* Write the log but do not flush it to disk */
-
-      log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
-    } else {
-      /* Write the log to the log files AND flush them to
-      disk */
-
-      log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
-    }
-  } else if (srv_flush_log_at_trx_commit == 2) {
-
-    /* Write the log but do not flush it to disk */
-
-    log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
-  } else {
-    ut_error;
-  }
-
-  trx->must_flush_log_later = false;
-
-  trx->op_info = "";
-
-  return 0;
-}
-#endif
-
-/** Marks the latest SQL statement ended. */
-
-void trx_mark_sql_stat_end(trx_t *trx) /*!< in: trx handle */
-{
-  ut_a(trx);
-
-  if (trx->conc_state == TRX_NOT_STARTED) {
+  if (trx->m_conc_state == TRX_NOT_STARTED) {
     trx->undo_no = 0;
   }
 
@@ -1310,40 +1251,34 @@ void trx_mark_sql_stat_end(trx_t *trx) /*!< in: trx handle */
 void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
   bool newline;
 
-  ib_logger(ib_stream, "TRANSACTION %lu", TRX_ID_PREP_PRINTF(trx->id));
+  ib_logger(ib_stream, "TRANSACTION %lu", TRX_ID_PREP_PRINTF(trx->m_id));
 
-  switch (trx->conc_state) {
+  switch (trx->m_conc_state) {
     case TRX_NOT_STARTED:
       ib_logger(ib_stream, ", not started");
       break;
     case TRX_ACTIVE:
-      ib_logger(ib_stream, ", ACTIVE %lu sec", (ulong)difftime(time(nullptr), trx->start_time));
+      ib_logger(ib_stream, ", ACTIVE %lu sec", (ulong)difftime(time(nullptr), trx->m_start_time));
       break;
     case TRX_PREPARED:
-      ib_logger(ib_stream, ", ACTIVE (PREPARED) %lu sec", (ulong)difftime(time(nullptr), trx->start_time));
+      ib_logger(ib_stream, ", ACTIVE (PREPARED) %lu sec", (ulong)difftime(time(nullptr), trx->m_start_time));
       break;
     case TRX_COMMITTED_IN_MEMORY:
       ib_logger(ib_stream, ", COMMITTED IN MEMORY");
       break;
     default:
-      ib_logger(ib_stream, " state %lu", (ulong)trx->conc_state);
+      ib_logger(ib_stream, " state %lu", (ulong)trx->m_conc_state);
   }
 
-#ifdef UNIV_LINUX
-  ib_logger(ib_stream, ", process no %lu", trx->client_process_no);
-#endif /* UNIV_LINUX */
-
-  ib_logger(ib_stream, ", OS thread id %lu", (ulong)os_thread_pf(trx->client_thread_id));
-
-  if (*trx->op_info) {
-    ib_logger(ib_stream, " %s", trx->op_info);
+  if (*trx->m_op_info) {
+    ib_logger(ib_stream, " %s", trx->m_op_info);
   }
 
-  if (trx->is_recovered) {
+  if (trx->m_is_recovered) {
     ib_logger(ib_stream, " recovered trx");
   }
 
-  if (trx->is_purge) {
+  if (trx->m_is_purge) {
     ib_logger(ib_stream, " purge trx");
   }
 
@@ -1358,7 +1293,7 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
 
   newline = true;
 
-  switch (trx->que_state) {
+  switch (trx->m_que_state) {
     case TRX_QUE_RUNNING:
       newline = false;
       break;
@@ -1372,7 +1307,7 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
       ib_logger(ib_stream, "COMMITTING ");
       break;
     default:
-      ib_logger(ib_stream, "que state %lu ", (ulong)trx->que_state);
+      ib_logger(ib_stream, "que state %lu ", (ulong)trx->m_que_state);
   }
 
   if (0 < UT_LIST_GET_LEN(trx->trx_locks) || mem_heap_get_size(trx->lock_heap) > 400) {
@@ -1400,8 +1335,7 @@ void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
 
 int trx_weight_cmp(const trx_t *a, const trx_t *b) {
   /* We compare the number of altered/locked rows. */
-
-  return TRX_WEIGHT(a) - TRX_WEIGHT(b);
+  return trx_weight(a) - trx_weight(b);
 }
 
 void trx_prepare_off_kernel(trx_t *trx) {
@@ -1454,7 +1388,7 @@ void trx_prepare_off_kernel(trx_t *trx) {
   ut_ad(mutex_own(&kernel_mutex));
 
   /*--------------------------------------*/
-  trx->conc_state = TRX_PREPARED;
+  trx->m_conc_state = TRX_PREPARED;
   /*--------------------------------------*/
 
   if (lsn) {
@@ -1507,7 +1441,7 @@ ulint trx_prepare(trx_t *trx) {
 
   ut_a(trx);
 
-  trx->op_info = "preparing";
+  trx->m_op_info = "preparing";
 
   mutex_enter(&kernel_mutex);
 
@@ -1515,13 +1449,12 @@ ulint trx_prepare(trx_t *trx) {
 
   mutex_exit(&kernel_mutex);
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   return 0;
 }
 
 int trx_recover(XID *xid_list, ulint len) {
-  trx_t *trx;
   ulint count = 0;
 
   ut_ad(xid_list);
@@ -1532,38 +1465,25 @@ int trx_recover(XID *xid_list, ulint len) {
 
   mutex_enter(&kernel_mutex);
 
-  trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  auto trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
 
-  while (trx) {
-    if (trx->conc_state == TRX_PREPARED) {
+  while (trx != nullptr) {
+    if (trx->m_conc_state == TRX_PREPARED) {
 #ifdef WITH_XOPEN
-      xid_list[count] = trx->xid;
+      xid_list[count] = trx->m_xid;
 #endif /* WITH_XOPEN */
 
       if (count == 0) {
         ut_print_timestamp(ib_stream);
-        ib_logger(
-          ib_stream,
-          "  Starting recovery for"
-          " XA transactions...\n"
-        );
+        ib_logger(ib_stream, "Starting recovery for XA transactions...\n");
       }
 
       ut_print_timestamp(ib_stream);
-      ib_logger(
-        ib_stream,
-        "  Transaction %lu in"
-        " prepared state after recovery\n",
-        TRX_ID_PREP_PRINTF(trx->id)
+      ib_logger(ib_stream, "Transaction %lu in" " prepared state after recovery\n", TRX_ID_PREP_PRINTF(trx->m_id)
       );
 
       ut_print_timestamp(ib_stream);
-      ib_logger(
-        ib_stream,
-        "  Transaction contains changes"
-        " to %lu rows\n",
-        (ulong)trx->undo_no
-      );
+      ib_logger(ib_stream, "Transaction contains changes to %lu rows\n", (ulong)trx->undo_no);
 
       count++;
 
@@ -1579,21 +1499,52 @@ int trx_recover(XID *xid_list, ulint len) {
 
   if (count > 0) {
     ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      "  %lu transactions in prepared state"
-      " after recovery\n",
-      (ulong)count
-    );
+    ib_logger(ib_stream, " %lu transactions in prepared state after recovery\n", (ulong)count);
   }
 
   return (int)count;
 }
 
 #ifdef WITH_XOPEN
-trx_t *trx_get_trx_by_xid(XID *xid) {
-  trx_t *trx;
+ulint trx_commit_flush_log(trx_t *trx) {
+  uint64_t lsn = trx->commit_lsn;
 
+  ut_a(trx);
+
+  trx->m_op_info = "flushing log";
+
+  if (!trx->m_must_flush_log_later) {
+    /* Do nothing */
+  } else if (srv_flush_log_at_trx_commit == 0) {
+    /* Do nothing */
+  } else if (srv_flush_log_at_trx_commit == 1) {
+    if (srv_unix_file_flush_method == SRV_UNIX_NOSYNC) {
+      /* Write the log but do not flush it to disk */
+
+      log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
+    } else {
+      /* Write the log to the log files AND flush them to
+      disk */
+
+      log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
+    }
+  } else if (srv_flush_log_at_trx_commit == 2) {
+
+    /* Write the log but do not flush it to disk */
+
+    log_write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
+  } else {
+    ut_error;
+  }
+
+  trx->m_must_flush_log_later = false;
+
+  trx->m_op_info = "";
+
+  return 0;
+}
+
+trx_t *trx_get_trx_by_xid(XID *xid) {
   if (xid == nullptr) {
 
     return nullptr;
@@ -1601,16 +1552,16 @@ trx_t *trx_get_trx_by_xid(XID *xid) {
 
   mutex_enter(&kernel_mutex);
 
-  trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  auto trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
 
-  while (trx) {
+  while (trx != nullptr) {
     /* Compare two X/Open XA transaction id's: their
     length should be the same and binary comparison
     of gtrid_lenght+bqual_length bytes should be
     the same */
 
-    if (xid->gtrid_length == trx->xid.gtrid_length && xid->bqual_length == trx->xid.bqual_length &&
-        memcmp(xid->data, trx->xid.data, xid->gtrid_length + xid->bqual_length) == 0) {
+    if (xid->gtrid_length == trx->m_xid.gtrid_length && xid->bqual_length == trx->m_xid.bqual_length &&
+        memcmp(xid->data, trx->m_xid.data, xid->gtrid_length + xid->bqual_length) == 0) {
       break;
     }
 
@@ -1619,14 +1570,16 @@ trx_t *trx_get_trx_by_xid(XID *xid) {
 
   mutex_exit(&kernel_mutex);
 
-  if (trx) {
-    if (trx->conc_state != TRX_PREPARED) {
+  if (trx != nullptr) {
+    if (trx->m_conc_state != TRX_PREPARED) {
 
       return nullptr;
     }
 
     return trx;
+
   } else {
+
     return nullptr;
   }
 }

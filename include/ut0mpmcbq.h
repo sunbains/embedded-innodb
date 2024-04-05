@@ -31,15 +31,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 #include "innodb0types.h"
 
-#ifdef __cpp_lib_hardware_interference_size
-using std::hardware_constructive_interference_size;
-using std::hardware_destructive_interference_size;
-#else
-// 64 bytes on x86-64 │ L1_CACHE_BYTES │ L1_CACHE_SHIFT │ __cacheline_aligned │ ...
-constexpr std::size_t hardware_constructive_interference_size = 64;
-constexpr std::size_t hardware_destructive_interference_size = 64;
-#endif /* __cpp_lib_hardware_interference_size */
-
 /** @see http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue */
 template <typename T>
 struct Bounded_channel {

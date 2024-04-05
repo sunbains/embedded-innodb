@@ -700,7 +700,7 @@ static db_err row_sel_get_clust_rec(
 
     trx = thr_get_trx(thr);
 
-    if (trx->isolation_level == TRX_ISO_READ_COMMITTED) {
+    if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED) {
       lock_type = LOCK_REC_NOT_GAP;
     } else {
       lock_type = LOCK_ORDINARY;
@@ -777,7 +777,7 @@ inline db_err sel_set_rec_lock(
   const rec_t *rec,         /*!< in: record */
   dict_index_t *index,      /*!< in: index */
   const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
-  lock_mode mode,           /*!< in: lock mode */
+  Lock_mode mode,           /*!< in: lock mode */
   ulint type,               /*!< in: LOCK_ORDINARY, LOCK_GAP, or
                                        LOC_REC_NOT_GAP */
   que_thr_t *thr
@@ -1239,7 +1239,7 @@ rec_loop:
 
       offsets = rec_get_offsets(next_rec, index, offsets, ULINT_UNDEFINED, &heap);
 
-      if (trx->isolation_level == TRX_ISO_READ_COMMITTED) {
+      if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED) {
 
         if (page_rec_is_supremum(next_rec)) {
 
@@ -1290,7 +1290,7 @@ skip_lock:
 
     trx = thr_get_trx(thr);
 
-    if (trx->isolation_level == TRX_ISO_READ_COMMITTED) {
+    if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED) {
 
       if (page_rec_is_supremum(rec)) {
 
@@ -1705,7 +1705,7 @@ func_exit:
 
 que_thr_t *row_sel_step(que_thr_t *thr) {
   db_err err;
-  lock_mode i_lock_mode;
+  Lock_mode i_lock_mode;
   sym_node_t *table_node;
 
   ut_ad(thr);
@@ -1728,7 +1728,7 @@ que_thr_t *row_sel_step(que_thr_t *thr) {
     /* It may be that the current session has not yet started
     its transaction, or it has been committed: */
 
-    ut_a(thr_get_trx(thr)->conc_state != TRX_NOT_STARTED);
+    ut_a(thr_get_trx(thr)->m_conc_state != TRX_NOT_STARTED);
 
     plan_reset_cursor(sel_node_get_nth_plan(node, 0));
 
@@ -2100,7 +2100,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
     /* If the isolation level allows reading of uncommitted data,
     then we never look for an earlier version */
 
-    if (trx->isolation_level > TRX_ISO_READ_UNCOMMITTED && !lock_clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->read_view)) {
+    if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !lock_clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->read_view)) {
 
       /* The following call returns 'offsets' associated with
       'old_vers' */
@@ -2130,7 +2130,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
     exist in our snapshot. */
 
     if (clust_rec &&
-        (old_vers || trx->isolation_level <= TRX_ISO_READ_UNCOMMITTED ||
+        (old_vers || trx->m_isolation_level <= TRX_ISO_READ_UNCOMMITTED ||
          rec_get_deleted_flag(rec, dict_table_is_comp(sec_index->table))) &&
         !row_sel_sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index)) {
       clust_rec = nullptr;
@@ -2423,9 +2423,8 @@ int row_unlock_for_client(
   mtr_t mtr;
 
   ut_ad(prebuilt && trx);
-  ut_ad(trx->client_thread_id == os_thread_get_curr_id());
 
-  if (unlikely(trx->isolation_level != TRX_ISO_READ_COMMITTED)) {
+  if (unlikely(trx->m_isolation_level != TRX_ISO_READ_COMMITTED)) {
 
     ib_logger(
       ib_stream,
@@ -2437,7 +2436,7 @@ int row_unlock_for_client(
     return DB_SUCCESS;
   }
 
-  trx->op_info = "unlock_row";
+  trx->m_op_info = "unlock_row";
 
   if (prebuilt->new_rec_locks >= 1) {
 
@@ -2483,7 +2482,7 @@ int row_unlock_for_client(
   }
 
 func_exit:
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   return DB_SUCCESS;
 }
@@ -2556,7 +2555,6 @@ enum db_err row_search_for_client(
   prebuilt->result = -1;
 
   ut_ad(index && pcur && search_tuple);
-  ut_ad(trx->client_thread_id == os_thread_get_curr_id());
 
   if (unlikely(prebuilt->table->ibd_file_missing)) {
     ut_print_timestamp(ib_stream);
@@ -2626,7 +2624,7 @@ enum db_err row_search_for_client(
   /* PHASE 1: Try to pop the row from the prefetch cache */
 
   if (unlikely(direction == ROW_SEL_MOVETO)) {
-    trx->op_info = "starting index read";
+    trx->m_op_info = "starting index read";
 
     row_sel_row_cache_reset(prebuilt);
 
@@ -2635,7 +2633,7 @@ enum db_err row_search_for_client(
       row_sel_prebuild_graph(prebuilt);
     }
   } else {
-    trx->op_info = "fetching rows";
+    trx->m_op_info = "fetching rows";
 
     /* Is this the first row being fetched by the cursor ? */
     if (row_sel_row_cache_is_empty(prebuilt)) {
@@ -2711,7 +2709,7 @@ enum db_err row_search_for_client(
     unique_search_from_clust_index = true;
 
     if (trx->client_n_tables_locked == 0 && prebuilt->select_lock_type == LOCK_NONE &&
-        trx->isolation_level > TRX_ISO_READ_UNCOMMITTED && trx->read_view) {
+        trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && trx->read_view) {
 
       /* This is a SELECT query done as a consistent read,
       and the read view has already been allocated:
@@ -2776,9 +2774,9 @@ enum db_err row_search_for_client(
   /*-------------------------------------------------------------*/
   /* PHASE 3: Open or restore index cursor position */
 
-  ut_a(trx->conc_state != TRX_NOT_STARTED);
+  ut_a(trx->m_conc_state != TRX_NOT_STARTED);
 
-  if (trx->isolation_level <= TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE && prebuilt->simple_select) {
+  if (trx->m_isolation_level <= TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE && prebuilt->simple_select) {
     /* It is a plain locking SELECT and the isolation
     level is low: do not lock gaps */
 
@@ -2821,7 +2819,7 @@ enum db_err row_search_for_client(
     if (!moves_up &&
         !page_rec_is_supremum(rec) &&
         set_also_gap_locks &&
-        trx->isolation_level != TRX_ISO_READ_COMMITTED &&
+        trx->m_isolation_level != TRX_ISO_READ_COMMITTED &&
         prebuilt->select_lock_type != LOCK_NONE) {
 
       /* Try to place a gap lock on the next index record
@@ -2861,10 +2859,12 @@ enum db_err row_search_for_client(
     /* This is a consistent read */
     /* Assign a read view for the query */
 
-    trx_assign_read_view(trx);
+    auto rv = trx_assign_read_view(trx);
+    ut_a(rv != nullptr);
+
     prebuilt->sql_stat_start = false;
   } else {
-    lock_mode lck_mode;
+    Lock_mode lck_mode;
     if (prebuilt->select_lock_type == LOCK_S) {
       lck_mode = LOCK_IS;
     } else {
@@ -2886,16 +2886,6 @@ rec_loop:
   rec = pcur->get_rec();
   ut_ad(!!page_rec_is_comp(rec) == comp);
 
-#ifdef UNIV_SEARCH_DEBUG
-  /*
-  ib_logger(ib_stream, "Using ");
-  dict_index_name_print(ib_stream, index);
-  ib_logger(ib_stream, " cnt %lu ; Page no %lu\n", cnt,
-  page_get_page_no(page_align(rec)));
-  rec_print(rec);
-  */
-#endif /* UNIV_SEARCH_DEBUG */
-
   if (page_rec_is_infimum(rec)) {
 
     /* The infimum record on a page cannot be in the result set,
@@ -2907,7 +2897,7 @@ rec_loop:
 
   if (page_rec_is_supremum(rec)) {
 
-    if (set_also_gap_locks && trx->isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+    if (set_also_gap_locks && trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
 
       /* Try to place a lock on the index record */
 
@@ -3056,7 +3046,7 @@ rec_loop:
 
       prebuilt->result = -1;
     not_found:
-      if (set_also_gap_locks && trx->isolation_level != TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+      if (set_also_gap_locks && trx->m_isolation_level != TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
 
         /* Try to place a gap lock on the index
         record only if this session is not
@@ -3097,7 +3087,7 @@ rec_loop:
 
     ulint lock_type;
 
-    if (!set_also_gap_locks || trx->isolation_level == TRX_ISO_READ_COMMITTED || (unique_search && !unlikely(rec_get_deleted_flag(rec, comp)))) {
+    if (!set_also_gap_locks || trx->m_isolation_level == TRX_ISO_READ_COMMITTED || (unique_search && !unlikely(rec_get_deleted_flag(rec, comp)))) {
 
       goto no_gap_lock;
     } else {
@@ -3133,7 +3123,7 @@ rec_loop:
     /* This is a non-locking consistent read: if necessary, fetch
     a previous version of the record */
 
-    if (trx->isolation_level == TRX_ISO_READ_UNCOMMITTED) {
+    if (trx->m_isolation_level == TRX_ISO_READ_UNCOMMITTED) {
 
       /* Do nothing: we let a non-locking SELECT read the
       latest version of the record */
@@ -3194,7 +3184,7 @@ rec_loop:
 
     /* The record is delete-marked: we can skip it */
 
-    if (trx->isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+    if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
 
       /* No need to keep a lock on a delete-marked record
       if we do not want to use next-key locking. */
@@ -3261,7 +3251,7 @@ rec_loop:
       goto next_rec;
     }
 
-    if (trx->isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+    if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
       /* Note that both the secondary index record
       and the clustered index record were locked. */
       ut_ad(prebuilt->new_rec_locks == 1);
@@ -3272,7 +3262,7 @@ rec_loop:
 
       /* The record is delete marked: we can skip it */
 
-      if (trx->isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+      if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
 
         /* No need to keep a lock on a delete-marked
         record if we do not want to use next-key
@@ -3435,7 +3425,7 @@ lock_wait_or_error:
 
     row_sel_restore_position(&same_user_rec, BTR_SEARCH_LEAF, pcur, moves_up, &mtr);
 
-    if (trx->isolation_level == TRX_ISO_READ_COMMITTED && !same_user_rec) {
+    if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED && !same_user_rec) {
 
       /* Since we were not able to restore the cursor
       on the same user record, we cannot use
@@ -3489,7 +3479,7 @@ normal_return:
   }
 
 func_exit:
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   if (likely_null(heap)) {
     mem_heap_free(heap);

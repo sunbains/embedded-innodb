@@ -37,7 +37,7 @@ bool ib_handle_errors(
 enum db_err ib_trx_lock_table_with_retry(
   trx_t *trx,          /*!< in/out: transaction */
   dict_table_t *table, /*!< in: table to lock */
-  enum lock_mode mode
+  enum Lock_mode mode
 ); /*!< in: lock mode */
 
 /** Updates the table modification counter and calculates new estimates

@@ -754,7 +754,7 @@ inline db_err btr_cur_ins_lock_and_undo(
  * @param op    The operation.
  */
 static void btr_cur_trx_report(trx_t *trx, const dict_index_t *index, const char *op) {
-  ib_logger(ib_stream, "Trx with id %lu going to ", TRX_ID_PREP_PRINTF(trx->id));
+  ib_logger(ib_stream, "Trx with id %lu going to ", TRX_ID_PREP_PRINTF(trx->m_id));
   ib_logger(ib_stream, "%s", op);
   dict_index_name_print(ib_stream, trx, index);
   ib_logger(ib_stream, "\n");
@@ -1347,7 +1347,7 @@ db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor, const upd_t *up
 
   if (!(flags & BTR_KEEP_SYS_FLAG)) {
     row_upd_index_entry_sys_field(new_entry, index, DATA_ROLL_PTR, roll_ptr);
-    row_upd_index_entry_sys_field(new_entry, index, DATA_TRX_ID, trx->id);
+    row_upd_index_entry_sys_field(new_entry, index, DATA_TRX_ID, trx->m_id);
   }
 
   /* There are no externally stored columns in new_entry */
@@ -1497,7 +1497,7 @@ db_err btr_cur_pessimistic_update(
   row_upd_index_replace_new_col_vals_index_pos(new_entry, index, update, false, *heap);
   if (!(flags & BTR_KEEP_SYS_FLAG)) {
     row_upd_index_entry_sys_field(new_entry, index, DATA_ROLL_PTR, roll_ptr);
-    row_upd_index_entry_sys_field(new_entry, index, DATA_TRX_ID, trx->id);
+    row_upd_index_entry_sys_field(new_entry, index, DATA_TRX_ID, trx->m_id);
   }
 
   if ((flags & BTR_NO_UNDO_LOG_FLAG) && rec_offs_any_extern(offsets)) {
@@ -1586,7 +1586,7 @@ db_err btr_cur_pessimistic_update(
     because of BTR_NO_LOCKING_FLAG. */
     auto rec_block = btr_cur_get_block(cursor);
 
-    page_update_max_trx_id(rec_block, trx->id, mtr);
+    page_update_max_trx_id(rec_block, trx->m_id, mtr);
   }
 
   if (!rec_get_deleted_flag(rec, rec_offs_comp(offsets))) {

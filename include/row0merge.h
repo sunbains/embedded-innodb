@@ -67,7 +67,7 @@ typedef struct merge_index_def_struct merge_index_def_t;
 db_err row_merge_lock_table(
   trx_t *trx,          /*!< in/out: transaction */
   dict_table_t *table, /*!< in: table to lock */
-  enum lock_mode mode
+  enum Lock_mode mode
 ); /*!< in: LOCK_X or LOCK_S */
 /** Drop an index from the InnoDB system tables.  The data dictionary must
 have been locked exclusively by the caller, because the transaction

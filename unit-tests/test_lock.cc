@@ -100,7 +100,7 @@ void run_1() {
   for (auto &trx : trxs) {
     if (lock_trx_has_no_waiters(trx)) {
       ++no_waiters;
-      std::cout << "Trx " << trx->id << " has no waiters\n";
+      std::cout << "Trx " << trx->m_id << " has no waiters\n";
     }
   }
 
@@ -193,7 +193,7 @@ int main() {
 
   delete buf_pool;
 
-  ut_free_all_mem();
+  ut_delete_all_mem();
 
   exit(EXIT_SUCCESS);
 }

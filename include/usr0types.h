@@ -23,9 +23,33 @@ Place, Suite 330, Boston, MA 02111-1307 USA
  Created 6/25/1996 Heikki Tuuri
  *******************************************************/
 
-#ifndef usr0types_h
-#define usr0types_h
+#pragma once
 
-typedef struct sess_struct sess_t;
+#include "innodb0types.h"
 
-#endif
+#include "que0types.h"
+#include "ut0lst.h"
+
+struct trx_t;
+
+/** Session states */
+constexpr ulint SESS_ACTIVE = 1;
+
+/** Session contains an error message which has not yet been
+communicated to the client */
+constexpr ulint SESS_ERROR = 2;
+
+/** The session handle. All fields are protected by the kernel mutex */
+struct sess_t {
+  /** State of the session */
+  ulint state;
+
+  /** Transaction object permanently assigned for the session:
+  the transaction instance designated by the trx id changes, but
+  the memory structure is preserved */
+  trx_t *trx;
+
+  /** Query graphs belonging to this session */
+  UT_LIST_BASE_NODE_T_EXTERN(que_t, graphs) graphs;
+};
+

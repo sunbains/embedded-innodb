@@ -21,11 +21,13 @@ Record manager
 Created 5/30/1994 Heikki Tuuri
 *************************************************************************/
 
-#include "rem0rec.h"
+#include <sstream>
+#include <format>
 
 #include "btr0types.h"
 #include "mtr0log.h"
 #include "mtr0mtr.h"
+#include "rem0rec.h"
 
 /*			PHYSICAL RECORD (OLD STYLE)
                         ===========================
@@ -1363,242 +1365,201 @@ rec_t *rec_copy_prefix_to_buf(const rec_t *rec, const dict_index_t *index, ulint
 }
 
 /** Validates the consistency of an old-style physical record.
+@param[in] rec  Record to validate.
 @return	true if ok */
-static bool rec_validate_old(const rec_t *rec) /*!< in: physical record */
-{
-  const byte *data;
-  ulint len;
-  ulint n_fields;
+static bool rec_validate_old(const rec_t *rec) {
   ulint len_sum = 0;
-  ulint sum = 0;
-  ulint i;
 
-  ut_a(rec);
-  n_fields = rec_get_n_fields_old(rec);
+  auto n_fields = rec_get_n_fields_old(rec);
 
-  if ((n_fields == 0) || (n_fields > REC_MAX_N_FIELDS)) {
+  if (n_fields == 0 || n_fields > REC_MAX_N_FIELDS) {
     ib_logger(ib_stream, "Error: record has %lu fields\n", (ulong)n_fields);
-    return (false);
+    return false;
   }
 
-  for (i = 0; i < n_fields; i++) {
-    data = rec_get_nth_field_old(rec, i, &len);
+  for (ulint i = 0; i < n_fields; i++) {
+    ulint len;
+    auto data = rec_get_nth_field_old(rec, i, &len);
 
-    if (!((len < UNIV_PAGE_SIZE) || (len == UNIV_SQL_NULL))) {
-      ib_logger(ib_stream, "Error: record field %lu len %lu\n", (ulong)i, (ulong)len);
-      return (false);
+    if (!(len < UNIV_PAGE_SIZE || len == UNIV_SQL_NULL)) {
+      log_err(std::format("Record field {} len {}", i, len));
+      return false;
     }
 
     if (len != UNIV_SQL_NULL) {
+      ulint sum{};
+
       len_sum += len;
-      /* dereference the end of the field to cause a memory trap if possible */
+
+      /* Dereference the end of the field to cause a memory trap if possible */
       sum += *(data + len - 1);
       (void)sum;
+
     } else {
       len_sum += rec_get_nth_field_size(rec, i);
     }
   }
 
   if (len_sum != rec_get_data_size_old(rec)) {
-    ib_logger(ib_stream, "Error: record len should be %lu, len %lu\n", (ulong)len_sum, rec_get_data_size_old(rec));
-    return (false);
+    log_err(std::format("Record len should be {}, len {}", len_sum, rec_get_data_size_old(rec)));
+    return false;
+  } else {
+    return true;
   }
-
-  return (true);
 }
 
-/** Validates the consistency of a physical record.
-@return	true if ok */
-
-bool rec_validate(
-  const rec_t *rec, /*!< in: physical record */
-  const ulint *offsets
-) /*!< in: array returned by rec_get_offsets() */
-{
-  const byte *data;
-  ulint len;
-  ulint n_fields;
+bool rec_validate(const rec_t *rec, const ulint *offsets) {
   ulint len_sum = 0;
-  ulint sum = 0;
-  ulint i;
+  auto n_fields = rec_offs_n_fields(offsets);
 
-  ut_a(rec);
-  n_fields = rec_offs_n_fields(offsets);
-
-  if ((n_fields == 0) || (n_fields > REC_MAX_N_FIELDS)) {
+  if (n_fields == 0 || n_fields > REC_MAX_N_FIELDS) {
     ib_logger(ib_stream, "Error: record has %lu fields\n", (ulong)n_fields);
-    return (false);
+    return false;
   }
 
   ut_a(rec_offs_comp(offsets) || n_fields <= rec_get_n_fields_old(rec));
 
-  for (i = 0; i < n_fields; i++) {
-    data = rec_get_nth_field(rec, offsets, i, &len);
+  for (ulint i = 0; i < n_fields; i++) {
+    ulint len;
+    auto data = rec_get_nth_field(rec, offsets, i, &len);
 
     if (!((len < UNIV_PAGE_SIZE) || (len == UNIV_SQL_NULL))) {
       ib_logger(ib_stream, "Error: record field %lu len %lu\n", (ulong)i, (ulong)len);
-      return (false);
+      return false;
     }
 
     if (len != UNIV_SQL_NULL) {
+      ulint sum{};
+
       len_sum += len;
-      /* dereference the end of the field to cause a memory trap if possible */
+
+      /* Dereference the end of the field to cause a memory trap if possible */
       sum += *(data + len - 1);
       (void)sum;
+
     } else if (!rec_offs_comp(offsets)) {
       len_sum += rec_get_nth_field_size(rec, i);
     }
   }
 
   if (len_sum != rec_offs_data_size(offsets)) {
-    ib_logger(ib_stream, "Error: record len should be %lu, len %lu\n", (ulong)len_sum, (ulong)rec_offs_data_size(offsets));
-    return (false);
+    log_err("Record len should be %lu, len %lu\n", len_sum, rec_offs_data_size(offsets));
+    return false;
   }
 
   if (!rec_offs_comp(offsets)) {
     ut_a(rec_validate_old(rec));
   }
 
-  return (true);
+  return true;
 }
 
-/** Prints an old-style physical record. */
+std::ostream &rec_print_old(std::ostream &os, const rec_t *rec) {
+  auto n = rec_get_n_fields_old(rec);
 
-void rec_print_old(
-  ib_stream_t ib_stream, /*!< in: stream where to print */
-  const rec_t *rec
-) /*!< in: physical record */
-{
-  const byte *data;
-  ulint len;
-  ulint n;
-  ulint i;
+  os << std::format("PHYSICAL RECORD: n_fields {}; {}-byte offsets; info bits {}\n",
+		    n,
+		    (rec_get_1byte_offs_flag(rec) ? 1 : 2),
+		    rec_get_info_bits(rec, false));
 
-  ut_ad(rec);
+  for (ulint i = 0; i < n; i++) {
+    ulint len;
+    auto data = rec_get_nth_field_old(rec, i, &len);
 
-  n = rec_get_n_fields_old(rec);
-
-  ib_logger(
-    ib_stream,
-    "PHYSICAL RECORD: n_fields %lu;"
-    " %u-byte offsets; info bits %lu\n",
-    (ulong)n,
-    rec_get_1byte_offs_flag(rec) ? 1 : 2,
-    (ulong)rec_get_info_bits(rec, false)
-  );
-
-  for (i = 0; i < n; i++) {
-
-    data = rec_get_nth_field_old(rec, i, &len);
-
-    ib_logger(ib_stream, " %lu:", (ulong)i);
+    os << std::format(" {}:", i);
 
     if (len != UNIV_SQL_NULL) {
-      if (len <= 30) {
-
-        ut_print_buf(ib_stream, data, len);
-      } else {
-        ut_print_buf(ib_stream, data, 30);
-
-        ib_logger(ib_stream, " (total %lu bytes)", (ulong)len);
-      }
+      ut_print_buf(os, data, std::max(len, 30UL));
+      os << std::format("; len: {} ", len);
     } else {
-      ib_logger(ib_stream, " SQL NULL, size %lu ", rec_get_nth_field_size(rec, i));
+      os << std::format(" SQL NULL, size {} ", rec_get_nth_field_size(rec, i));
     }
 
-    ib_logger(ib_stream, ";\n");
+    os << ";\n";
   }
 
   rec_validate_old(rec);
+
+  return os;
 }
 
-/** Prints a physical record in ROW_FORMAT=COMPACT.  Ignores the
-record header. */
+void rec_print_old(ib_stream_t ib_stream, const rec_t *rec) {
+  std::ostringstream os{};
 
-void rec_print_comp(
-  ib_stream_t ib_stream, /*!< in: streamwhere to print */
-  const rec_t *rec,      /*!< in: physical record */
-  const ulint *offsets
-) /*!< in: array returned by
-                                           rec_get_offsets() */
-{
-  ulint i;
+  rec_print_old(os, rec);
 
-  for (i = 0; i < rec_offs_n_fields(offsets); i++) {
-    const byte *data;
+  ib_logger(ib_stream, "%s", os.str().c_str());
+}
+
+std::ostream &rec_print_comp(std::ostream &os, const rec_t *rec, const ulint *offsets) {
+  for (ulint i = 0; i < rec_offs_n_fields(offsets); i++) {
     ulint len;
+    auto data = rec_get_nth_field(rec, offsets, i, &len);
 
-    data = rec_get_nth_field(rec, offsets, i, &len);
-
-    ib_logger(ib_stream, " %lu:", (ulong)i);
+    os << std::format(" {}:", i);
 
     if (len != UNIV_SQL_NULL) {
-      if (len <= 30) {
-
-        ut_print_buf(ib_stream, data, len);
-      } else {
-        ut_print_buf(ib_stream, data, 30);
-
-        ib_logger(ib_stream, " (total %lu bytes)", (ulong)len);
-      }
+      ut_print_buf(os, data, std::max(len, 30UL));
+      os << std::format("; len: {} ", len);
     } else {
-      ib_logger(ib_stream, " SQL NULL");
+      os << " SQL NULL";
     }
-    ib_logger(ib_stream, ";\n");
+
+    os << ";\n";
   }
+
+  return os;
 }
 
-/** Prints a physical record. */
+void rec_print_comp(ib_stream_t ib_stream, const rec_t *rec, const ulint *offsets) {
+  std::stringstream os{};
 
-void rec_print_new(
-  ib_stream_t ib_stream, /*!< in: stream where to print */
-  const rec_t *rec,      /*!< in: physical record */
-  const ulint *offsets
-) /*!< in: array returned by
-                                          rec_get_offsets() */
-{
-  ut_ad(rec);
-  ut_ad(offsets);
+  rec_print_comp(os, rec, offsets);
+
+  ib_logger(ib_stream, "%s", os.str().c_str());
+}
+
+std::ostream &rec_print_new(std::ostream& os, const rec_t *rec, const ulint *offsets) {
+  ut_a(rec_offs_comp(offsets));
   ut_ad(rec_offs_validate(rec, nullptr, offsets));
 
-  if (!rec_offs_comp(offsets)) {
-    rec_print_old(ib_stream, rec);
-    return;
-  }
+  os << std::format("PHYSICAL RECORD: n_fields ; {} compact format; info bits {}",
+		    rec_offs_n_fields(offsets), rec_get_info_bits(rec, true));
 
-  ib_logger(
-    ib_stream,
-    "PHYSICAL RECORD: n_fields %lu;"
-    " compact format; info bits %lu\n",
-    (ulong)rec_offs_n_fields(offsets),
-    (ulong)rec_get_info_bits(rec, true)
-  );
-
-  rec_print_comp(ib_stream, rec, offsets);
+  rec_print_comp(os, rec, offsets);
   rec_validate(rec, offsets);
+
+  return os;
 }
 
-/** Prints a physical record. */
+void rec_print_new(ib_stream_t ib_stream, const rec_t *rec, const ulint *offsets) {
+  std::ostringstream os{};
 
-void rec_print(
-  ib_stream_t ib_stream, /*!< in: stream where to print */
-  const rec_t *rec,      /*!< in: physical record */
-  dict_index_t *index
-) /*!< in: record descriptor */
-{
-  ut_ad(index);
+  rec_print_comp(os, rec, offsets);
+  ib_logger(ib_stream, "%s", os.str().c_str());
+}
 
+std::ostream &rec_print(std::ostream &os, const rec_t *rec, dict_index_t *index) {
   if (!dict_table_is_comp(index->table)) {
-    rec_print_old(ib_stream, rec);
-    return;
+    rec_print_old(os, rec);
   } else {
-    mem_heap_t *heap = nullptr;
+    mem_heap_t *heap{};
     ulint offsets_[REC_OFFS_NORMAL_SIZE];
     rec_offs_init(offsets_);
 
-    rec_print_new(ib_stream, rec, rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap));
+    rec_print_new(os, rec, rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap));
+
     if (likely_null(heap)) {
       mem_heap_free(heap);
     }
   }
+
+  return os;
+}
+
+void rec_print(ib_stream_t ib_stream, const rec_t *rec, dict_index_t *index) {
+  std::ostringstream os{};
+
+  rec_print(os, rec, index);
+  ib_logger(ib_stream, "%s\n", os.str().c_str());
 }

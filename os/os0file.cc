@@ -62,11 +62,6 @@ bool os_do_not_call_flush_at_each_write = false;
 /* We do not call os_file_flush in every os_file_write. */
 #endif /* UNIV_DO_FLUSH */
 
-/* We use these mutexes to protect lseek + file i/o operation, if the
-OS does not provide an atomic pread or pwrite, or similar */
-#define OS_FILE_N_SEEK_MUTEXES 16
-os_mutex_t os_file_seek_mutexes[OS_FILE_N_SEEK_MUTEXES];
-
 /* In simulated aio, merge at most this many consecutive i/os */
 #define OS_AIO_MERGE_N_CONSECUTIVE 64
 
@@ -111,35 +106,34 @@ struct os_aio_slot_struct {
 };
 
 /** The asynchronous i/o array structure */
-typedef struct os_aio_array_struct os_aio_array_t;
+struct os_aio_array_t {
+  /** The mutex protecting the aio array */
+  OS_mutex *mutex;
 
-/** The asynchronous i/o array structure */
-struct os_aio_array_struct {
-  os_mutex_t mutex; /*!< the mutex protecting the aio array */
-  OS_cond* not_full;
-  /*!< The event which is set to the
-  signaled state when there is space in
+  /** The event which is set to the signaled state when there is space in
   the aio outside the ibuf segment */
-  OS_cond* is_empty;
-  /*!< The event which is set to the
-  signaled state when there are no
+  Cond_var* not_full;
+
+  /** The event which is set to the signaled state when there are no
   pending i/os in this array */
-  ulint n_slots; /*!< Total number of slots in the aio
-                 array.  This must be divisible by
-                 n_threads. */
+  Cond_var* is_empty;
+
+  /** Total number of slots in the aio array.  This must be divisible by n_threads. */
+  ulint n_slots;
+
+  /** Number of segments in the aio array of pending aio requests. A thread
+   * can wait separately for any one of the segments. */
   ulint n_segments;
-  /*!< Number of segments in the aio
-  array of pending aio requests. A
-  thread can wait separately for any one
-  of the segments. */
+
+  /** Number of reserved slots in the aio array outside the ibuf segment */
   ulint n_reserved;
-  /*!< Number of reserved slots in the
-  aio array outside the ibuf segment */
-  os_aio_slot_t *slots; /*!< Pointer to the slots in the array */
+
+  /** Pointer to the slots in the array */
+  os_aio_slot_t *slots;
 };
 
 /** Array of events used in simulated aio */
-static OS_cond* *os_aio_segment_wait_events = nullptr;
+static Cond_var* *os_aio_segment_wait_events = nullptr;
 
 /** The aio arrays for non-ibuf i/o and ibuf i/o, as well as sync aio. These
 are nullptr when the module has not yet been initialized. @{ */
@@ -168,16 +162,17 @@ time_t os_last_printout;
 
 bool os_has_said_disk_full = false;
 
-/** The mutex protecting the following counts of pending I/O operations */
-static os_mutex_t os_file_count_mutex;
 /** Number of pending os_file_pread() operations */
-ulint os_file_n_pending_preads = 0;
+std::atomic<ulint> os_file_n_pending_preads{};
+
 /** Number of pending os_file_pwrite() operations */
-ulint os_file_n_pending_pwrites = 0;
+std::atomic<ulint> os_file_n_pending_pwrites{};
+
 /** Number of pending write operations */
-ulint os_n_pending_writes = 0;
+std::atomic<ulint> os_n_pending_writes{};
+
 /** Number of pending read operations */
-ulint os_n_pending_reads = 0;
+std::atomic<ulint> os_n_pending_reads{};
 
 /* Array of English strings describing the current state of an
 i/o handler thread */
@@ -203,7 +198,6 @@ void os_file_var_init() {
   os_n_fsyncs_old = 0;
   os_last_printout = 0;
   os_has_said_disk_full = false;
-  os_file_count_mutex = nullptr;
   os_file_n_pending_preads = 0;
   os_file_n_pending_pwrites = 0;
   os_n_pending_writes = 0;
@@ -212,8 +206,6 @@ void os_file_var_init() {
 #ifdef UNIV_DO_FLUSH
   os_do_not_call_flush_at_each_write = false;
 #endif /* UNIV_DO_FLUSH */
-
-  memset(os_file_seek_mutexes, 0x0, sizeof(os_file_seek_mutexes));
 }
 
 /** Returns a pointer to the nth slot in the aio array.
@@ -231,21 +223,21 @@ static os_aio_slot_t *os_aio_array_get_nth_slot(
 /** Frees an aio wait array. */
 static void os_aio_array_free(os_aio_array_t *array) /*!< in, own: array to free */
 {
-  os_mutex_free(array->mutex);
+  os_mutex_destroy(array->mutex);
   os_event_free(array->not_full);
   os_event_free(array->is_empty);
 
-  ut_free(array->slots);
+  ut_delete(array->slots);
   array->slots = nullptr;
 
-  ut_free(array);
+  ut_delete(array);
 }
 
 /** Shutdown the IO sub-system and free all the memory. */
 
 void os_aio_close(void) {
   if (os_aio_segment_wait_events != nullptr) {
-    ut_free(os_aio_segment_wait_events);
+    ut_delete(os_aio_segment_wait_events);
     os_aio_segment_wait_events = nullptr;
   }
 
@@ -475,14 +467,7 @@ static int os_file_lock(int fd, const char *name) {
 }
 #endif /* USE_FILE_LOCK */
 
-void os_io_init_simple(void) {
-  ulint i;
-
-  os_file_count_mutex = os_mutex_create(nullptr);
-
-  for (i = 0; i < OS_FILE_N_SEEK_MUTEXES; i++) {
-    os_file_seek_mutexes[i] = os_mutex_create(nullptr);
-  }
+void os_io_init_simple() {
 }
 
 FILE *os_file_create_tmpfile() {
@@ -579,7 +564,7 @@ next_file:
 
   len = strlen(dirname) + strlen(ent->d_name) + 10;
 
-  auto full_path = static_cast<char *>(ut_malloc(len));
+  auto full_path = static_cast<char *>(ut_new(len));
 
   ut_snprintf(full_path, len, "%s/%s", dirname, ent->d_name);
 
@@ -598,14 +583,14 @@ next_file:
       caller shouldn't be looking at info when end of
       directory is returned. */
 
-      ut_free(full_path);
+      ut_delete(full_path);
 
       goto next_file;
     }
 
     os_file_handle_error_no_exit(full_path, "stat");
 
-    ut_free(full_path);
+    ut_delete(full_path);
 
     return -1;
   }
@@ -622,7 +607,7 @@ next_file:
     info->type = OS_FILE_TYPE_UNKNOWN;
   }
 
-  ut_free(full_path);
+  ut_delete(full_path);
 
   return 0;
 }
@@ -929,7 +914,7 @@ bool os_file_set_size(const char *name, os_file_t file, ulint size, ulint size_h
 
   /* Write up to 1 megabyte at a time. */
   auto buf_size = ut_min(64, (ulint)(desired_size / UNIV_PAGE_SIZE)) * UNIV_PAGE_SIZE;
-  auto buf2 = static_cast<byte *>(ut_malloc(buf_size + UNIV_PAGE_SIZE));
+  auto buf2 = static_cast<byte *>(ut_new(buf_size + UNIV_PAGE_SIZE));
 
   /* Align the buffer for possible raw i/o */
   auto buf = static_cast<byte *>(ut_align(buf2, UNIV_PAGE_SIZE));
@@ -955,7 +940,7 @@ bool os_file_set_size(const char *name, os_file_t file, ulint size, ulint size_h
     ret = os_file_write(name, file, buf, (ulint)(current_size & 0xFFFFFFFF), (ulint)(current_size >> 32), n_bytes);
 
     if (!ret) {
-      ut_free(buf2);
+      ut_delete(buf2);
       goto error_handling;
     }
 
@@ -973,7 +958,7 @@ bool os_file_set_size(const char *name, os_file_t file, ulint size, ulint size_h
     ib_logger(ib_stream, "\n");
   }
 
-  ut_free(buf2);
+  ut_delete(buf2);
 
   ret = os_file_flush(file);
 
@@ -1111,17 +1096,15 @@ static ssize_t os_file_pread(
 
   os_n_file_reads++;
 
-  os_mutex_enter(os_file_count_mutex);
-  os_file_n_pending_preads++;
-  os_n_pending_reads++;
-  os_mutex_exit(os_file_count_mutex);
+  os_file_n_pending_preads.fetch_add(1, std::memory_order_relaxed);
+
+  os_n_pending_reads.fetch_add(1, std::memory_order_relaxed);
 
   n_bytes = pread(file, buf, (ssize_t)n, offs);
 
-  os_mutex_enter(os_file_count_mutex);
-  os_file_n_pending_preads--;
-  os_n_pending_reads--;
-  os_mutex_exit(os_file_count_mutex);
+  os_file_n_pending_preads.fetch_sub(1, std::memory_order_relaxed);
+
+  os_n_pending_reads.fetch_sub(1, std::memory_order_relaxed);
 
   return n_bytes;
 }
@@ -1162,20 +1145,20 @@ static ssize_t os_file_pwrite(
 
   os_n_file_writes++;
 
-  os_mutex_enter(os_file_count_mutex);
-  os_file_n_pending_pwrites++;
-  os_n_pending_writes++;
-  os_mutex_exit(os_file_count_mutex);
+  os_file_n_pending_pwrites.fetch_add(1, std::memory_order_relaxed)
+	  ;
+  os_n_pending_writes.fetch_add(1, std::memory_order_relaxed);
 
   ret = pwrite(file, buf, (ssize_t)n, offs);
 
-  os_mutex_enter(os_file_count_mutex);
-  os_file_n_pending_pwrites--;
-  os_n_pending_writes--;
-  os_mutex_exit(os_file_count_mutex);
+  os_file_n_pending_pwrites.fetch_sub(1, std::memory_order_relaxed);
+
+  os_n_pending_writes.fetch_sub(1, std::memory_order_relaxed);
 
 #ifdef UNIV_DO_FLUSH
-  if (srv_unix_file_flush_method != SRV_UNIX_LITTLESYNC && srv_unix_file_flush_method != SRV_UNIX_NOSYNC && !os_do_not_call_flush_at_each_write) {
+  if (srv_unix_file_flush_method != SRV_UNIX_LITTLESYNC &&
+      srv_unix_file_flush_method != SRV_UNIX_NOSYNC &&
+      !os_do_not_call_flush_at_each_write) {
 
     /* Always do fsync to reduce the probability that when
     the OS crashes, a database page is only partially
@@ -1378,7 +1361,7 @@ bool os_file_get_status(const char *path, os_file_stat_t *stat_info) {
 /** The function os_file_dirname returns a directory component of a
 null-terminated pathname string.  In the usual case, dirname returns
 the string up to, but not including, the final '/', and basename
-is the component following the final '/'.  Trailing '/' charac­
+is the component following the final '/'.  Trailing '/' characï¿½
 ters are not counted as part of the pathname.
 
 If path does not contain a slash, dirname returns the string ".".
@@ -1468,7 +1451,7 @@ static os_aio_array_t *os_aio_array_create(
   ut_a(n > 0);
   ut_a(n_segments > 0);
 
-  auto array = static_cast<os_aio_array_t *>(ut_malloc(sizeof(os_aio_array_t)));
+  auto array = static_cast<os_aio_array_t *>(ut_new(sizeof(os_aio_array_t)));
 
   array->mutex = os_mutex_create(nullptr);
   array->not_full = os_event_create(nullptr);
@@ -1479,7 +1462,7 @@ static os_aio_array_t *os_aio_array_create(
   array->n_slots = n;
   array->n_segments = n_segments;
   array->n_reserved = 0;
-  array->slots = static_cast<os_aio_slot_t *>(ut_malloc(n * sizeof(os_aio_slot_t)));
+  array->slots = static_cast<os_aio_slot_t *>(ut_new(n * sizeof(os_aio_slot_t)));
 
   for (ulint i = 0; i < n; i++) {
     auto slot = os_aio_array_get_nth_slot(array, i);
@@ -1530,7 +1513,7 @@ void os_aio_init(ulint n_per_seg, ulint n_read_segs, ulint n_write_segs, ulint n
 
   os_aio_validate();
 
-  os_aio_segment_wait_events = static_cast<OS_cond* *>(ut_malloc(n_segments * sizeof(void *)));
+  os_aio_segment_wait_events = static_cast<Cond_var* *>(ut_new(n_segments * sizeof(void *)));
 
   for (ulint i = 0; i < n_segments; i++) {
     os_aio_segment_wait_events[i] = os_event_create(nullptr);
@@ -2067,7 +2050,7 @@ consecutive_loop:
     combined_buf = slot->buf;
     combined_buf2 = nullptr;
   } else {
-    combined_buf2 = static_cast<byte *>(ut_malloc(total_len + UNIV_PAGE_SIZE));
+    combined_buf2 = static_cast<byte *>(ut_new(total_len + UNIV_PAGE_SIZE));
 
     ut_a(combined_buf2);
 
@@ -2127,7 +2110,7 @@ consecutive_loop:
   }
 
   if (combined_buf2) {
-    ut_free(combined_buf2);
+    ut_delete(combined_buf2);
   }
 
   os_mutex_enter(array->mutex);
@@ -2237,7 +2220,7 @@ void os_aio_print(ib_stream_t ib_stream) {
   for (i = 0; i < srv_n_file_io_threads; i++) {
     ib_logger(ib_stream, "I/O thread %lu state: %s (%s)", (ulong)i, srv_io_thread_op_info[i], srv_io_thread_function[i]);
 
-    if (os_aio_segment_wait_events[i]->is_set) {
+    if (os_aio_segment_wait_events[i]->m_is_set) {
       ib_logger(ib_stream, " ev set");
     }
 
@@ -2318,7 +2301,9 @@ loop:
 
   if (os_file_n_pending_preads != 0 || os_file_n_pending_pwrites != 0) {
     ib_logger(
-      ib_stream, "%lu pending preads, %lu pending pwrites\n", (ulong)os_file_n_pending_preads, (ulong)os_file_n_pending_pwrites
+      ib_stream, "%lu pending preads, %lu pending pwrites\n",
+      (ulong)os_file_n_pending_preads.load(),
+      (ulong)os_file_n_pending_pwrites
     );
   }
 

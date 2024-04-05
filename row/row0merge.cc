@@ -1002,7 +1002,7 @@ static db_err row_merge_read_clustered_index(
   ulint n_nonnull = 0;
   ulint *nonnull = nullptr;
 
-  trx->op_info = "reading clustered index";
+  trx->m_op_info = "reading clustered index";
 
   ut_ad(trx);
   ut_ad(old_table);
@@ -1212,7 +1212,7 @@ func_exit:
 
   mem_free(merge_buf);
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   return (err);
 }
@@ -1614,7 +1614,7 @@ static db_err row_merge_insert_index_tuples(
   /* We use the insert query graph as the dummy graph
   needed in the row module call */
 
-  trx->op_info = "inserting index entries";
+  trx->m_op_info = "inserting index entries";
 
   graph_heap = mem_heap_create(500);
   node = row_ins_node_create(INS_DIRECT, table, graph_heap);
@@ -1659,7 +1659,7 @@ static db_err row_merge_insert_index_tuples(
 
       node->row = dtuple;
       node->table = table;
-      node->trx_id = trx->id;
+      node->trx_id = trx->m_id;
 
       ut_ad(dtuple_validate(dtuple));
 
@@ -1690,7 +1690,7 @@ static db_err row_merge_insert_index_tuples(
 err_exit:
   que_graph_free(thr->graph);
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   mem_heap_free(tuple_heap);
 
@@ -1841,9 +1841,9 @@ db_err row_merge_rename_indexes(trx_t *trx, dict_table_t *table) {
 
   ut_ad(table);
   ut_ad(trx);
-  ut_a(trx->dict_operation_lock_mode == RW_X_LATCH);
+  ut_a(trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
-  trx->op_info = "renaming indexes";
+  trx->m_op_info = "renaming indexes";
 
   pars_info_add_uint64_literal(info, "tableid", table->id);
 
@@ -1859,7 +1859,7 @@ db_err row_merge_rename_indexes(trx_t *trx, dict_table_t *table) {
     } while (index);
   }
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   return (err);
 }
@@ -1869,13 +1869,12 @@ db_err row_merge_rename_tables(dict_table_t *old_table, dict_table_t *new_table,
   pars_info_t *info;
   const char *old_name = old_table->name;
 
-  ut_ad(trx->client_thread_id == os_thread_get_curr_id());
   ut_ad(old_table != new_table);
   ut_ad(mutex_own(&dict_sys->mutex));
 
-  ut_a(trx->dict_operation_lock_mode == RW_X_LATCH);
+  ut_a(trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
-  trx->op_info = "renaming tables";
+  trx->m_op_info = "renaming tables";
 
   /* We use the private SQL parser of Innobase to generate the query
   graphs needed in updating the dictionary data in system tables. */
@@ -1922,7 +1921,7 @@ db_err row_merge_rename_tables(dict_table_t *old_table, dict_table_t *new_table,
     trx->error_state = DB_SUCCESS;
   }
 
-  trx->op_info = "";
+  trx->m_op_info = "";
 
   return (err);
 }
@@ -1969,7 +1968,7 @@ dict_index_t *row_merge_create_index(
     /* Note the id of the transaction that created this
     index, we use it to restrict readers from accessing
     this index, to ensure read consistency. */
-    index->trx_id = trx->id;
+    index->trx_id = trx->m_id;
   } else {
     index = nullptr;
   }
@@ -1982,15 +1981,14 @@ bool row_merge_is_index_usable(const trx_t *trx, const dict_index_t *index) {
 }
 
 db_err row_merge_drop_table(trx_t *trx, dict_table_t *table) {
-  db_err err;
-
   /* There must be no open transactions on the table. */
   ut_a(table->n_handles_opened == 0);
 
-  err = ddl_drop_table(table->name, trx, false);
-  trx_commit(trx);
+  auto err = ddl_drop_table(table->name, trx, false);
+  auto err_commit = trx_commit(trx);
+  ut_a(err_commit == DB_SUCCESS);
 
-  return (err);
+  return err;
 }
 
 db_err row_merge_build_indexes(
@@ -2017,7 +2015,7 @@ db_err row_merge_build_indexes(
   ut_ad(indexes);
   ut_ad(n_indexes);
 
-  ut_a(trx->conc_state != TRX_NOT_STARTED);
+  ut_a(trx->m_conc_state != TRX_NOT_STARTED);
 
   /* Allocate memory for merge file data structure and initialize fields */
 

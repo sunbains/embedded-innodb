@@ -244,12 +244,12 @@ static db_err row_undo(undo_node_t *node, que_thr_t *thr) {
 
   db_err err;
 
-  auto locked_data_dict = (trx->dict_operation_lock_mode == 0);
+  auto locked_data_dict = (trx->m_dict_operation_lock_mode == 0);
 
   if (locked_data_dict) {
 
     dict_lock_data_dictionary(trx);
-    ut_a(trx->dict_operation_lock_mode != 0);
+    ut_a(trx->m_dict_operation_lock_mode != 0);
   }
 
   if (node->state == UNDO_NODE_INSERT) {

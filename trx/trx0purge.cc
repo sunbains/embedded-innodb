@@ -205,7 +205,7 @@ void trx_purge_sys_create() {
 
   purge_sys->trx = purge_sys->sess->trx;
 
-  purge_sys->trx->is_purge = 1;
+  purge_sys->trx->m_is_purge = 1;
 
   ut_a(trx_start_low(purge_sys->trx, ULINT_UNDEFINED));
 
@@ -219,8 +219,8 @@ void trx_purge_sys_close() {
 
   que_graph_free(purge_sys->query);
 
-  ut_a(purge_sys->sess->trx->is_purge);
-  purge_sys->sess->trx->conc_state = TRX_NOT_STARTED;
+  ut_a(purge_sys->sess->trx->m_is_purge);
+  purge_sys->sess->trx->m_conc_state = TRX_NOT_STARTED;
   sess_close(purge_sys->sess);
   purge_sys->sess = nullptr;
 
@@ -290,7 +290,7 @@ void trx_purge_add_update_undo_to_history(trx_t *trx, page_t *undo_page, mtr_t *
   mutex_exit(&kernel_mutex);
 
   /* Write the trx number to the undo log header */
-  mlog_write_uint64(undo_header + TRX_UNDO_TRX_NO, trx->no, mtr);
+  mlog_write_uint64(undo_header + TRX_UNDO_TRX_NO, trx->m_no, mtr);
   /* Write information about delete markings to the undo log header */
 
   if (!undo->del_marks) {
@@ -301,7 +301,7 @@ void trx_purge_add_update_undo_to_history(trx_t *trx, page_t *undo_page, mtr_t *
 
     rseg->last_page_no = undo->hdr_page_no;
     rseg->last_offset = undo->hdr_offset;
-    rseg->last_trx_no = trx->no;
+    rseg->last_trx_no = trx->m_no;
     rseg->last_del_marks = undo->del_marks;
   }
 }

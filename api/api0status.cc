@@ -160,33 +160,30 @@ ib_err_t ib_status_get_all(const char ***names, ib_u32_t *names_num) {
 
 /* @} */
 
-/** Get the status variable that matches name.
-
-@return DB_SUCCESS if found else DB_NOT_FOUND */
-static ib_err_t ib_status_lookup(
-  const char *name, /*!< in: Variable to lookup */
-  const ib_status_t **var
-) /*!< out: pointer to entry */
-{
-  const ib_status_t *ptr;
-
+/**
+ * Get the status variable that matches name.
+ *
+ * @param name Variable to lookup
+ * @param var Pointer to entry
+ * @return DB_SUCCESS if found else DB_NOT_FOUND
+ */
+static ib_err_t ib_status_lookup(const char *name, const ib_status_t **var) {
   *var = nullptr;
 
-  for (ptr = status_vars; ptr && ptr->name != nullptr; ++ptr) {
+  for (auto ptr = status_vars; ptr && ptr->name != nullptr; ++ptr) {
     if (ib_utf8_strcasecmp(name, ptr->name) == 0) {
       *var = ptr;
-      return (DB_SUCCESS);
+      return DB_SUCCESS;
     }
   }
 
-  return (DB_NOT_FOUND);
+  return DB_NOT_FOUND;
 }
 
 ib_err_t ib_status_get_i64(const char *name, ib_i64_t *dst) {
-  ib_err_t err;
   const ib_status_t *var;
 
-  err = ib_status_lookup(name, &var);
+  auto err = ib_status_lookup(name, &var);
 
   if (err == DB_SUCCESS) {
 
@@ -215,5 +212,5 @@ ib_err_t ib_status_get_i64(const char *name, ib_i64_t *dst) {
     }
   }
 
-  return (err);
+  return err;
 }

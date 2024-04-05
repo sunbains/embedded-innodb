@@ -84,7 +84,7 @@ Parallel_reader::Scan_ctx::Iter::~Iter() {
 
 Parallel_reader::~Parallel_reader() {
   mutex_free(&m_mutex);
-  os_event_free(m_event);
+  Cond_var::destroy(m_event);
   if (!m_sync) {
     release_unused_threads(m_n_threads);
   }
@@ -95,8 +95,7 @@ Parallel_reader::~Parallel_reader() {
   }
 }
 
-size_t Parallel_reader::available_threads(size_t n_required,
-                                          bool use_reserved) {
+size_t Parallel_reader::available_threads(size_t n_required, bool use_reserved) {
   auto max_threads = MAX_THREADS;
   constexpr auto SEQ_CST = std::memory_order_seq_cst;
   auto active = s_active_threads.fetch_add(n_required, SEQ_CST);
@@ -189,8 +188,8 @@ Parallel_reader::Parallel_reader(size_t max_threads)
 
   mutex_create(&m_mutex, IF_DEBUG("parallel_read_mutex",) IF_SYNC_DEBUG(SYNC_PARALLEL_READ,) Source_location{});
 
-  m_event = os_event_create("parallel_reader");
-  m_sig_count = os_event_reset(m_event);
+  m_event = Cond_var::create("parallel_reader");
+  m_sig_count = m_event->reset();
 }
 
 Parallel_reader::Scan_ctx::Scan_ctx(Parallel_reader *reader, size_t id,
@@ -417,9 +416,7 @@ dberr_t PCursor::move_to_next_block(dict_index_t *index) {
 }
 
 bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr) {
-  // const auto table_name = m_config.m_index->table->name;
-
-  ut_ad(m_trx == nullptr || m_trx->read_view == nullptr);
+  ut_ad(m_trx == nullptr || m_trx->read_view != nullptr);
 
   if (m_trx != nullptr && m_trx->read_view != nullptr) {
     auto view = m_trx->read_view;
@@ -433,7 +430,7 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
         rec_trx_id = row_get_rec_trx_id(rec, m_config.m_index, offsets);
       }
 
-      if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED && !view->changes_visible(rec_trx_id)) {
+      if (m_trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !view->changes_visible(rec_trx_id)) {
         rec_t *old_vers;
 
         row_vers_build_for_consistent_read(rec, mtr, m_config.m_index, &offsets, view, &heap, heap, &old_vers);
@@ -457,7 +454,7 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
   }
 
   ut_ad(m_trx == nullptr ||
-        m_trx->isolation_level == TRX_ISO_READ_UNCOMMITTED ||
+        m_trx->m_isolation_level == TRX_ISO_READ_UNCOMMITTED ||
         !rec_offs_any_null_extern(rec, offsets));
 
   return true;
@@ -768,12 +765,12 @@ void Parallel_reader::worker(Parallel_reader::Thread_ctx *thread_ctx) {
   abort the operation if there are not enough resources to spawn all the
   threads. */
   if (!m_sync) {
-    os_event_wait_time_low(m_event, std::chrono::microseconds::max(), m_sig_count);
+    m_event->wait_time(std::chrono::microseconds::max(), m_sig_count);
   }
 
   for (;;) {
     size_t n_completed{};
-    int64_t sig_count = os_event_reset(m_event);
+    int64_t sig_count = m_event->reset();
 
     while (err == DB_SUCCESS && cb_err == DB_SUCCESS && !is_error_set()) {
       auto ctx = dequeue();
@@ -793,7 +790,7 @@ void Parallel_reader::worker(Parallel_reader::Thread_ctx *thread_ctx) {
       if (ctx->m_split) {
         err = ctx->split();
         /* Tell the other threads that there is work to do. */
-        os_event_set(m_event);
+        m_event->set();
       } else {
         if (m_start_callback) {
           /* Context start. */
@@ -832,12 +829,12 @@ void Parallel_reader::worker(Parallel_reader::Thread_ctx *thread_ctx) {
 
     if (m_n_completed == m_ctx_id) {
       /* Wakeup other worker threads before exiting */
-      os_event_set(m_event);
+      m_event->set();
       break;
     }
 
     if (!m_sync) {
-      os_event_wait_time_low(m_event, std::chrono::microseconds::max(), sig_count);
+      m_event->wait_time(std::chrono::microseconds::max(), sig_count);
     }
   }
 
@@ -848,7 +845,7 @@ void Parallel_reader::worker(Parallel_reader::Thread_ctx *thread_ctx) {
 
   if (is_error_set()) {
     /* Wake up any sleeping threads. */
-    os_event_set(m_event);
+    m_event->set();
   }
 
   if (m_finish_callback) {
@@ -1212,7 +1209,7 @@ void Parallel_reader::parallel_read() {
     m_thread_ctxs.push_back(ptr);
 
     /* Set event to indicate to ::worker() that no threads will be spawned. */
-    os_event_set(m_event);
+    m_event->set();
 
     worker(m_thread_ctxs[0]);
 
@@ -1247,7 +1244,7 @@ void Parallel_reader::parallel_read() {
     }
   }
 
-  os_event_set(m_event);
+  m_event->set();
 }
 
 dberr_t Parallel_reader::spawn(size_t n_threads) noexcept {

@@ -36,6 +36,7 @@ Created 9/11/1995 Heikki Tuuri
 
 #include "os0sync.h"
 #include "sync0sync.h"
+#include "ut0rnd.h"
 #include "ut0lst.h"
 
 /** Latch types; these are used also in btr0btr.h: keep the numerical values
@@ -70,7 +71,7 @@ extern mutex_t rw_lock_debug_mutex;
 
 /** If deadlock detection does not get immediately the mutex it may wait for
  * this event */
-extern OS_cond* rw_lock_debug_event;
+extern Cond_var* rw_lock_debug_event;
 
 /** This is set to true, if there may be waiters for the event */
 extern bool rw_lock_debug_waiters;
@@ -324,11 +325,11 @@ struct rw_lock_struct {
   value iff recursive flag is set. */
 
   /** Used by sync0arr.c for thread queueing */
-  OS_cond* m_event;
+  Cond_var* m_event;
 
   /** Event for next-writer to wait on. A thread
   must decrement m_lock_word before waiting. */
-  OS_cond* m_wait_ex_event;
+  Cond_var* m_wait_ex_event;
 
   /** Event for next-writer to wait on. A thread
   must decrement m_lock_word before waiting. */

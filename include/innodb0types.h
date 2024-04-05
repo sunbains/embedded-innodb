@@ -132,9 +132,17 @@ void call_destructor(T *p) {
 
 constexpr const char SRV_PATH_SEPARATOR = '/';
 
+/** Page number type. FIXME: Change to uint32_t later. */
 using page_no_t = ulint;
+
+/** Table space ID type. FIXME: Change to uint32_t later. */
 using space_id_t = ulint;
+
+/** Log sequence number. */
 using lsn_t = uint64_t;
+
+/** Transaction identifier (DB_TRX_ID, DATA_TRX_ID) */
+using trx_id_t = uint64_t;
 
 constexpr auto NULL_PAGE_NO = std::numeric_limits<page_no_t>::max();
 constexpr auto NULL_SPACE_ID = std::numeric_limits<space_id_t>::max();
@@ -165,6 +173,15 @@ struct Source_location {
 
   const std::source_location m_from{};
 };
+
+#ifdef __cpp_lib_hardware_interference_size
+using std::hardware_constructive_interference_size;
+using std::hardware_destructive_interference_size;
+#else
+// 64 bytes on x86-64 │ L1_CACHE_BYTES │ L1_CACHE_SHIFT │ __cacheline_aligned │ ...
+constexpr std::size_t hardware_constructive_interference_size = 64;
+constexpr std::size_t hardware_destructive_interference_size = 64;
+#endif /* __cpp_lib_hardware_interference_size */
 
 #include "innodb0valgrind.h"
 #include "ut0dbg.h"

@@ -49,7 +49,7 @@ void hash_mutex_exit_all(hash_table_t *table) {
 hash_table_t *hash_create(ulint n) {
   auto prime = ut_find_prime(n);
   auto table = (hash_table_t *)mem_alloc(sizeof(hash_table_t));
-  auto array = (hash_cell_t *)ut_malloc(sizeof(hash_cell_t) * prime);
+  auto array = (hash_cell_t *)ut_new(sizeof(hash_cell_t) * prime);
 
   table->array = array;
   table->n_cells = prime;
@@ -69,7 +69,7 @@ void hash_table_free(hash_table_t *table) {
   ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
   ut_a(table->mutexes == nullptr);
 
-  ut_free(table->array);
+  ut_delete(table->array);
   mem_free(table);
 }
 

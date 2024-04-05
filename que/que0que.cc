@@ -697,7 +697,7 @@ static void que_thr_dec_refer_count(
       no roll_node in this graph */
 
         ut_ad(UT_LIST_GET_LEN(trx->signals) > 0);
-        ut_ad(trx->handling_signals == true);
+        ut_ad(trx->m_handling_signals == true);
 
         trx_finish_rollback_off_kernel(fork, trx, next_thr);
         break;
@@ -723,7 +723,7 @@ static void que_thr_dec_refer_count(
     trx_sig_start_handle(trx, next_thr);
   }
 
-  if (trx->handling_signals && UT_LIST_GET_LEN(trx->signals) == 0) {
+  if (trx->m_handling_signals && UT_LIST_GET_LEN(trx->signals) == 0) {
 
     trx_end_signal_handling(trx);
   }
@@ -742,7 +742,7 @@ bool que_thr_stop(que_thr_t *thr) {
   if (graph->state == QUE_FORK_COMMAND_WAIT) {
     thr->state = QUE_THR_SUSPENDED;
 
-  } else if (trx->que_state == TRX_QUE_LOCK_WAIT) {
+  } else if (trx->m_que_state == TRX_QUE_LOCK_WAIT) {
 
     UT_LIST_ADD_FIRST(trx->wait_thrs, thr);
     thr->state = QUE_THR_LOCK_WAIT;

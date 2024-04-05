@@ -83,7 +83,7 @@ db_err trx_general_rollback(trx_t *trx, bool partial, trx_savept_t *savept) {
 
   mutex_enter(&kernel_mutex);
 
-  while (trx->que_state != TRX_QUE_RUNNING) {
+  while (trx->m_que_state != TRX_QUE_RUNNING) {
 
     mutex_exit(&kernel_mutex);
 
@@ -201,13 +201,9 @@ static void trx_rollback_active(
 
   ut_print_timestamp(ib_stream);
   ib_logger(
-    ib_stream, "  Rolling back trx with id %lu, %lu%s rows to undo\n", TRX_ID_PREP_PRINTF(trx->id), (ulong)rows_to_undo, unit
+    ib_stream, "  Rolling back trx with id %lu, %lu%s rows to undo\n", TRX_ID_PREP_PRINTF(trx->m_id), (ulong)rows_to_undo, unit
   );
   mutex_exit(&kernel_mutex);
-
-  trx->client_thread_id = os_thread_get_curr_id();
-
-  trx->client_process_no = os_proc_get_number();
 
   if (trx_get_dict_operation(trx) != TRX_DICT_OP_NONE) {
     dict_lock_data_dictionary(trx);
@@ -218,11 +214,11 @@ static void trx_rollback_active(
 
   mutex_enter(&kernel_mutex);
 
-  while (trx->que_state != TRX_QUE_RUNNING) {
+  while (trx->m_que_state != TRX_QUE_RUNNING) {
 
     mutex_exit(&kernel_mutex);
 
-    ib_logger(ib_stream, "Waiting for rollback of trx id %lu to end\n", (ulong)trx->id);
+    ib_logger(ib_stream, "Waiting for rollback of trx id %lu to end\n", (ulong)trx->m_id);
     os_thread_sleep(100000);
 
     mutex_enter(&kernel_mutex);
@@ -246,14 +242,13 @@ static void trx_rollback_active(
     table = dict_table_get_on_id_low(recovery, trx->table_id);
 
     if (table) {
-      ulint err;
-
       ib_logger(ib_stream, "Table found: dropping table ");
       ut_print_name(ib_stream, trx, true, table->name);
       ib_logger(ib_stream, " in recovery\n");
 
-      err = ddl_drop_table(table->name, trx, true);
-      trx_commit(trx);
+      auto err = ddl_drop_table(table->name, trx, true);
+      auto err_commit = trx_commit(trx);
+      ut_a(err_commit == DB_SUCCESS);
 
       ut_a(err == (int)DB_SUCCESS);
     }
@@ -263,7 +258,7 @@ static void trx_rollback_active(
     dict_unlock_data_dictionary(trx);
   }
 
-  ib_logger(ib_stream, "\nRolling back of trx id %lu completed\n", TRX_ID_PREP_PRINTF(trx->id));
+  ib_logger(ib_stream, "\nRolling back of trx id %lu completed\n", TRX_ID_PREP_PRINTF(trx->m_id));
   mem_heap_free(heap);
 
   trx_roll_crash_recv_trx = nullptr;
@@ -299,18 +294,18 @@ loop:
   mutex_enter(&kernel_mutex);
 
   for (trx = UT_LIST_GET_FIRST(trx_sys->trx_list); trx; trx = UT_LIST_GET_NEXT(trx_list, trx)) {
-    if (!trx->is_recovered) {
+    if (!trx->m_is_recovered) {
       continue;
     }
 
-    switch (trx->conc_state) {
+    switch (trx->m_conc_state) {
       case TRX_NOT_STARTED:
       case TRX_PREPARED:
         continue;
 
       case TRX_COMMITTED_IN_MEMORY:
         mutex_exit(&kernel_mutex);
-        ib_logger(ib_stream, "Cleaning up trx with id %lu\n", TRX_ID_PREP_PRINTF(trx->id));
+        ib_logger(ib_stream, "Cleaning up trx with id %lu\n", TRX_ID_PREP_PRINTF(trx->m_id));
         trx_cleanup_at_db_startup(trx);
         goto loop;
 
@@ -749,7 +744,7 @@ void trx_rollback(trx_t *trx, trx_sig_t *sig, que_thr_t **next_thr) {
   auto roll_graph = trx_roll_graph_build(trx);
 
   trx->graph = roll_graph;
-  trx->que_state = TRX_QUE_ROLLING_BACK;
+  trx->m_que_state = TRX_QUE_ROLLING_BACK;
 
   auto thr = que_fork_start_command(roll_graph);
 
@@ -806,7 +801,7 @@ static void trx_finish_error_processing(trx_t *trx) /*!< in: transaction */
     sig = next_sig;
   }
 
-  trx->que_state = TRX_QUE_RUNNING;
+  trx->m_que_state = TRX_QUE_RUNNING;
 }
 
 /** Finishes a partial rollback operation. */
@@ -828,7 +823,7 @@ static void trx_finish_partial_rollback_off_kernel(
   trx_sig_reply(sig, next_thr);
   trx_sig_remove(trx, sig);
 
-  trx->que_state = TRX_QUE_RUNNING;
+  trx->m_que_state = TRX_QUE_RUNNING;
 }
 
 void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx, que_thr_t **next_thr) {
@@ -855,7 +850,7 @@ void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx, que_thr_t **next_t
 
 #ifdef UNIV_DEBUG
   if (lock_print_waits) {
-    ib_logger(ib_stream, "Trx %lu rollback finished\n", (ulong)trx->id);
+    ib_logger(ib_stream, "Trx %lu rollback finished\n", (ulong)trx->m_id);
   }
 #endif /* UNIV_DEBUG */
 
@@ -864,7 +859,7 @@ void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx, que_thr_t **next_t
   /* Remove all TRX_SIG_TOTAL_ROLLBACK signals from the signal queue and
   send reply messages to them */
 
-  trx->que_state = TRX_QUE_RUNNING;
+  trx->m_que_state = TRX_QUE_RUNNING;
 
   while (sig != nullptr) {
     auto next_sig = UT_LIST_GET_NEXT(signals, sig);

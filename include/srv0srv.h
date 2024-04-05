@@ -50,7 +50,7 @@ extern const char *srv_main_thread_op_info;
 
 /* When this event is set the lock timeout and InnoDB monitor
 thread starts running */
-extern OS_cond* srv_lock_timeout_thread_event;
+extern Cond_var* srv_lock_timeout_thread_event;
 
 /** Alternatives for srv_force_recovery. Non-zero values are intended
 to help the user get a damaged database up so that he can dump intact

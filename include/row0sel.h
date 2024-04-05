@@ -236,7 +236,7 @@ enum sel_node_state {
 };
 
 /** Select statement node */
-struct sel_node_struct {
+struct sel_node_t {
   que_common_t common;       /*!< node type: QUE_NODE_SELECT */
   enum sel_node_state state; /*!< node state */
   que_node_t *select_list;   /*!< select list */
@@ -247,7 +247,7 @@ struct sel_node_struct {
   bool set_x_locks;          /*!< true if the cursor is for update or
                               delete, which means that a row x-lock
                               should be placed on the cursor row */
-  lock_mode row_lock_mode;   /*!< LOCK_X or LOCK_S */
+  Lock_mode row_lock_mode;   /*!< LOCK_X or LOCK_S */
   ulint n_tables;            /*!< number of tables */
   ulint fetch_table;         /*!< number of the next table to access
                              in the join */

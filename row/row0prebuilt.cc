@@ -170,12 +170,12 @@ void row_prebuilt_update_trx(
 {
   ut_a(trx != nullptr);
 
-  if (trx->magic_n != TRX_MAGIC_N) {
+  if (trx->m_magic_n != TRX_MAGIC_N) {
     ib_logger(
       ib_stream,
       "Error: trying to use a corrupt\n"
       "trx handle. Magic n %lu\n",
-      (ulong)trx->magic_n
+      (ulong)trx->m_magic_n
     );
 
     ut_error;

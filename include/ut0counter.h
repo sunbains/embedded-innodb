@@ -21,30 +21,41 @@ Utilities for sharded counter
 ***********************************************************************/
 
 #pragma once
+
 #include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <new>
 #include <thread>
+
+#ifdef UNIV_LINUX
+#include <sched.h>
+#endif /* UNIV_LINUX */
+
 #include "innodb0types.h"
+#include "ut0logger.h"
 
-#ifdef __linux__
-#include <utmpx.h>
-#endif
-
-// TODO(Rahul): FIX
-#ifdef __cpp_lib_hardware_interference_size
-using std::hardware_destructive_interference_size;
-#else
-constexpr std::size_t hardware_destructive_interference_size = 64;
-#endif
+namespace ut {
 
 /** Struct housing an cache-line aligned atomic int*/
-struct cache_aligned_atomic_int {
-  using value_t = std::atomic<ulint>;
-  alignas(hardware_destructive_interference_size) value_t val;
+template <typename T=uint64_t>
+struct Counter {
+  using Type = T;
+  using Value = std::atomic<Type>;
 
-  inline value_t &get_ref() { return val; }
+  [[nodiscard]] Value &get_ref() {
+    return m_val;
+  }
+
+  alignas(hardware_destructive_interference_size) Value m_val;
+};
+
+/** Null indexer, doesnt do anything. */
+struct Dummy_indexer {
+  [[nodiscard]] std::size_t get_index() const {
+    ut_error;
+    return 0;
+  }
 };
 
 /** Concept defining a method constraint. The type should have get_index method.
@@ -56,61 +67,80 @@ concept has_get_index = requires(T t) {
 
 /** Struct with a get_index method using the hash of the thread id.
  @tparam total_buckets total number of buckets*/
-template <std::int32_t total_buckets>
-class index_using_thread_id {
- public:
-  explicit index_using_thread_id() : hash{} {}
+template <std::int32_t Total_buckets>
+struct Index_using_thread_id {
+  explicit Index_using_thread_id() : m_hash{} {}
 
-  std::size_t getIndex() {
-    auto buck = hash(std::this_thread::get_id()) % total_buckets;
-    return buck;
+  [[nodiscard]] std::size_t get_index() const {
+    return m_hash(std::this_thread::get_id()) % Total_buckets;
   }
 
  private:
-  std::hash<std::thread::id> hash;
+  /** Note: This may result in collisions that could cause problems. */
+  std::hash<std::thread::id> m_hash;
 };
 
 /** Struct with a get_index method using the cpu number of the thread.
  @tparam total_buckets total number of buckets*/
-template <std::int32_t number_of_cpu>
-struct index_using_cpu_number {
-  std::size_t get_index() {
-#ifdef __linux__
-    return sched_getcpu() % number_of_cpu;
+struct Index_using_CPU {
+  [[nodiscard]] std::size_t get_index() const {
+#ifdef UNIV_LINUX
+     uint cpu;
+     if (getcpu(&cpu, nullptr) != 0) {
+      cpu = 0;
+      if (!(m_n_errors++ % 10000)) {
+        log_err("getcpu() failed: ", strerror(errno)) 
+      }
+     }
+    return cpu;
 #else
-    ut_a(false && "total number of cpus could not be determined");
-#endif
+    static_assert(false, "Need Linux getcpu() equivalent");
+#endif /* UNIV_LINUX */
   }
+
+  mutable int m_n_errors{};
 };
 
 /** A counter that is sharded into multiple counters to reduce contention.
  @tparam shards total number of counters
- @tparam T type supporting get_index method to select the appropriate shard */
-template <std::int32_t shards, typename T>
+ @tparam T type supporting get_index method to select the appropriate shard
+ @tparam Int type of the integer */
+template <std::int32_t Shards, typename T = Dummy_indexer, typename Int=uint64_t>
   requires has_get_index<T>
-class sharded_counter {
- public:
-  static constexpr std::int32_t SHARDS_COUNT = shards;
+struct Counters {
 
-  void inc(ulint value = 1) {
-    auto index = index_func.get_index();
-    counters[index].get_ref().fetch_add(value, std::memory_order_relaxed);
+  void inc(Int value, size_t index) {
+    m_counters[index].get_ref().fetch_add(value, std::memory_order_relaxed);
   }
 
-  ulint value() {
-    ulint total{0};
-    for (auto &counter : counters) {
+  void inc(Int value = 1) {
+    const auto index = m_indexer.get_index() % m_counters.size();
+
+    m_counters[index].get_ref().fetch_add(value, std::memory_order_relaxed);
+  }
+
+  [[nodiscard]] uint64_t value() {
+    uint64_t total{0};
+    for (auto &counter : m_counters) {
       total += counter.get_ref().load(std::memory_order_relaxed);
     }
 
     return total;
   }
 
+  /** Reset the counter. */
+  void clear() {
+    for (auto &counter : m_counters) {
+     counter.get_ref().store(0, std::memory_order_release);
+    }
+  }
+
  private:
-  cache_aligned_atomic_int counters[SHARDS_COUNT];
-  T index_func;
+  T m_indexer;
+  Counter<Int> m_counters[Shards];
 };
 
-// TODO(Rahul): Get the CPU count
-template <std::int32_t shards>
-using per_cpu_sharded_counter_t = sharded_counter<shards, index_using_cpu_number<shards>>;
+template <std::int32_t Shards>
+using Sharded_counter = Counters<Shards>;
+
+} // namespace ut

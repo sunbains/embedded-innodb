@@ -31,7 +31,7 @@ Created July 16, 2007 Vasil Dimov
 #include "ut0dbg.h"
 #include "ut0lst.h"
 
-void lock_queue_iterator_reset(lock_queue_iterator_t *iter, const lock_t *lock, ulint bit_no) {
+void lock_queue_iterator_reset(lock_queue_iterator_t *iter, const Lock *lock, ulint bit_no) {
   iter->current_lock = lock;
 
   if (bit_no != ULINT_UNDEFINED) {
@@ -53,8 +53,8 @@ void lock_queue_iterator_reset(lock_queue_iterator_t *iter, const lock_t *lock, 
   }
 }
 
-const lock_t *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter) {
-  const lock_t *prev_lock;
+const Lock *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter) {
+  const Lock *prev_lock;
 
   switch (lock_get_type_low(iter->current_lock)) {
     case LOCK_REC:

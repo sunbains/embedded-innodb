@@ -298,7 +298,7 @@ db_err lock_sec_rec_read_check_and_lock(
                               read cursor */
   dict_index_t *index,      /*!< in: secondary index */
   const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
-  enum lock_mode mode,      /*!< in: mode of the lock which
+  enum Lock_mode mode,      /*!< in: mode of the lock which
                               the read cursor should set on
                               records: LOCK_S or LOCK_X; the
                               latter is possible in
@@ -325,7 +325,7 @@ db_err lock_clust_rec_read_check_and_lock(
                               read cursor */
   dict_index_t *index,      /*!< in: clustered index */
   const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
-  enum lock_mode mode,      /*!< in: mode of the lock which
+  enum Lock_mode mode,      /*!< in: mode of the lock which
                               the read cursor should set on
                               records: LOCK_S or LOCK_X; the
                               latter is possible in
@@ -354,7 +354,7 @@ db_err lock_clust_rec_read_check_and_lock_alt(
                               be read or passed over by a
                               read cursor */
   dict_index_t *index,      /*!< in: clustered index */
-  enum lock_mode mode,      /*!< in: mode of the lock which
+  enum Lock_mode mode,      /*!< in: mode of the lock which
                               the read cursor should set on
                               records: LOCK_S or LOCK_X; the
                               latter is possible in
@@ -398,7 +398,7 @@ db_err lock_table(
   ulint flags,         /*!< in: if BTR_NO_LOCKING_FLAG bit is set,
                                 does nothing */
   dict_table_t *table, /*!< in: database table in dictionary cache */
-  enum lock_mode mode, /*!< in: lock mode */
+  enum Lock_mode mode, /*!< in: lock mode */
   que_thr_t *thr
 ); /*!< in: query thread */
 
@@ -410,7 +410,7 @@ void lock_rec_unlock(
                                set a record lock */
   const buf_block_t *block, /*!< in: buffer block containing rec */
   const rec_t *rec,         /*!< in: record */
-  enum lock_mode lock_mode
+  enum Lock_mode Lock_mode
 ); /*!< in: LOCK_S or LOCK_X */
 
 /** Releases transaction locks, and releases possible other transactions waiting
@@ -419,7 +419,7 @@ void lock_release_off_kernel(trx_t *trx); /*!< in: transaction */
 
 /** Cancels a waiting lock request and releases possible other transactions
 waiting behind it. */
-void lock_cancel_waiting_and_release(lock_t *lock); /*!< in: waiting lock request */
+void lock_cancel_waiting_and_release(Lock *lock); /*!< in: waiting lock request */
 
 /** Removes locks on a table to be dropped or truncated.
 If remove_also_table_sx_locks is true then table-level S and X locks are
@@ -453,7 +453,7 @@ inline ulint lock_rec_hash(
 if none found.
 @return bit index == heap number of the record, or ULINT_UNDEFINED if
 none found */
-ulint lock_rec_find_set_bit(const lock_t *lock); /*!< in: record lock with at
+ulint lock_rec_find_set_bit(const Lock *lock); /*!< in: record lock with at
                                                  least one bit set */
 
 /** Gets the source table of an ALTER TABLE transaction.  The table must be
@@ -465,7 +465,7 @@ found */
 dict_table_t *lock_get_src_table(
   trx_t *trx,         /*!< in: transaction */
   dict_table_t *dest, /*!< in: destination of ALTER TABLE */
-  lock_mode *mode
+  Lock_mode *mode
 ); /*!< out: lock mode of the source table */
 
 /** Determine if the given table is exclusively "owned" by the given
@@ -481,8 +481,8 @@ bool lock_is_table_exclusive(
 /** Checks if a lock request lock1 has to wait for request lock2.
 @return	true if lock1 has to wait for lock2 to be removed */
 bool lock_has_to_wait(
-  const lock_t *lock1, /*!< in: waiting lock */
-  const lock_t *lock2
+  const Lock *lock1, /*!< in: waiting lock */
+  const Lock *lock2
 ); /*!< in: another lock; NOTE that it
                                             is assumed that this has a lock bit
                                             set on the same record as in lock1
@@ -501,13 +501,13 @@ bool lock_check_trx_id_sanity(
 /** Prints info of a table lock. */
 void lock_table_print(
   ib_stream_t ib_stream, /*!< in: stream where to print */
-  const lock_t *lock
+  const Lock *lock
 ); /*!< in: table type lock */
 
 /** Prints info of a record lock. */
 void lock_rec_print(
   ib_stream_t ib_stream, /*!< in: stream where to print */
-  const lock_t *lock
+  const Lock *lock
 ); /*!< in: record type lock */
 
 /** Prints info of locks for all transactions.
@@ -530,47 +530,47 @@ ulint lock_number_of_rows_locked(trx_t *trx); /*!< in: transaction */
 /** Gets the type of a lock. Non-inline version for using outside of the
 lock module.
 @return	LOCK_TABLE or LOCK_REC */
-ulint lock_get_type(const lock_t *lock); /*!< in: lock */
+ulint lock_get_type(const Lock *lock); /*!< in: lock */
 
 /** Gets the id of the transaction owning a lock.
 @return	transaction id */
-uint64_t lock_get_trx_id(const lock_t *lock); /*!< in: lock */
+uint64_t lock_get_trx_id(const Lock *lock); /*!< in: lock */
 
 /** Gets the mode of a lock in a human readable string.
 The string should not be free()'d or modified.
 @return	lock mode */
-const char *lock_get_mode_str(const lock_t *lock); /*!< in: lock */
+const char *lock_get_mode_str(const Lock *lock); /*!< in: lock */
 
 /** Gets the type of a lock in a human readable string.
 The string should not be free()'d or modified.
 @return	lock type */
-const char *lock_get_type_str(const lock_t *lock); /*!< in: lock */
+const char *lock_get_type_str(const Lock *lock); /*!< in: lock */
 
 /** Gets the id of the table on which the lock is.
 @return	id of the table */
-uint64_t lock_get_table_id(const lock_t *lock); /*!< in: lock */
+uint64_t lock_get_table_id(const Lock *lock); /*!< in: lock */
 
 /** Gets the name of the table on which the lock is.
 The string should not be free()'d or modified.
 @return	name of the table */
-const char *lock_get_table_name(const lock_t *lock); /*!< in: lock */
+const char *lock_get_table_name(const Lock *lock); /*!< in: lock */
 
 /** For a record lock, gets the index on which the lock is.
 @return	index */
-const dict_index_t *lock_rec_get_index(const lock_t *lock); /*!< in: lock */
+const dict_index_t *lock_rec_get_index(const Lock *lock); /*!< in: lock */
 
 /** For a record lock, gets the name of the index on which the lock is.
 The string should not be free()'d or modified.
 @return	name of the index */
-const char *lock_rec_get_index_name(const lock_t *lock); /*!< in: lock */
+const char *lock_rec_get_index_name(const Lock *lock); /*!< in: lock */
 
 /** For a record lock, gets the tablespace number on which the lock is.
 @return	tablespace number */
-ulint lock_rec_get_space_id(const lock_t *lock); /*!< in: lock */
+ulint lock_rec_get_space_id(const Lock *lock); /*!< in: lock */
 
 /** For a record lock, gets the page number on which the lock is.
 @return	page number */
-ulint lock_rec_get_page_no(const lock_t *lock); /*!< in: lock */
+ulint lock_rec_get_page_no(const Lock *lock); /*!< in: lock */
 
 /** Reset the lock variables. */
 void lock_var_init(void);
@@ -647,7 +647,7 @@ typedef struct lock_op_struct lock_op_t;
 /** Lock operation struct */
 struct lock_op_struct {
   dict_table_t *table; /*!< table to be locked */
-  enum lock_mode mode; /*!< lock mode */
+  enum Lock_mode mode; /*!< lock mode */
 };
 
 /** The lock system struct */
@@ -731,7 +731,7 @@ for deadlocks or lock compatibility!
 @param[in] index                Index of record
 @param[in,out] trx              Transaction that wants to create the record lock.
 @return	created lock */
-lock_t *lock_rec_create_low(
+Lock *lock_rec_create_low(
   ulint type_mode,
   space_id_t space,
   page_no_t page_no,

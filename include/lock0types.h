@@ -28,16 +28,14 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "innodb0types.h"
 #include "ut0lst.h"
 
-#define lock_t ib_lock_t
-
 struct trx_t;
-struct lock_t;
+struct Lock;
 struct lock_sys_t;
 struct dict_table_t;
 struct dict_index_t;
 
 /* Basic lock modes */
-enum lock_mode {
+enum Lock_mode {
   /* Intention shared */
   LOCK_IS = 0,
 
@@ -61,16 +59,16 @@ enum lock_mode {
 };
 
 /** A table lock */
-struct lock_table_t {
+struct Table_lock {
   /** Database table in dictionary cache */
   dict_table_t *table;
 
   /** List of locks on the same table */
-  UT_LIST_NODE_T(lock_t) locks;
+  UT_LIST_NODE_T(Lock) locks;
 };
 
 /** Record lock for a page */
-struct lock_rec_t {
+struct Rec_lock {
   /** Tablespace ID. */
   space_id_t space;
 
@@ -83,12 +81,12 @@ struct lock_rec_t {
 };
 
 /** Lock struct */
-struct lock_t {
+struct Lock {
   /** Transaction owning the lock */
   trx_t *trx;
 
   /** list of the locks of the transaction */
-  UT_LIST_NODE_T(lock_t) trx_locks;
+  UT_LIST_NODE_T(Lock) trx_locks;
 
   /*r< Lock type, mode, LOCK_GAP or LOCK_REC_NOT_GAP, LOCK_INSERT_INTENTION, wait flag, ORed */
   ulint type_mode;
@@ -101,10 +99,10 @@ struct lock_t {
 
   union {
     /** Table lock */
-    lock_table_t tab_lock;
+    Table_lock tab_lock;
 
     /** Record lock */
-    lock_rec_t rec_lock;
+    Rec_lock rec_lock;
 
   /** lock details */
   } un_member;

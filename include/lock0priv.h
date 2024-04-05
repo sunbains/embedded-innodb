@@ -25,7 +25,7 @@ Created July 12, 2007 Vasil Dimov
 
 #include "lock0types.h"
 
-UT_LIST_NODE_GETTER_DEFINITION(lock_t, trx_locks);
+UT_LIST_NODE_GETTER_DEFINITION(Lock, trx_locks);
 
 /**
  * Gets the previous record lock set on a record.
@@ -34,11 +34,11 @@ UT_LIST_NODE_GETTER_DEFINITION(lock_t, trx_locks);
  * @param[in] heap_no   in: heap number of the record
  * @return              previous lock on the same record, nullptr if none exists
  */
-const lock_t *lock_rec_get_prev(const lock_t *in_lock, ulint heap_no);
+const Lock *lock_rec_get_prev(const Lock *in_lock, ulint heap_no);
 
 /** Gets the type of a lock.
 @param[in]c lock      Get the type for this lock.
 @return	LOCK_TABLE or LOCK_REC */
-inline ulint lock_get_type_low(const lock_t *lock) {
+inline ulint lock_get_type_low(const Lock *lock) {
   return lock->type_mode & LOCK_TYPE_MASK;
 }

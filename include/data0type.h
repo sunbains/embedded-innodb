@@ -30,6 +30,7 @@ Created 1/16/1996 Heikki Tuuri
 #include "mach0data.h"
 #include "data0types.h"
 
+struct dtype_t;
 extern ulint data_client_default_charset_coll;
 
 /**

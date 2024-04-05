@@ -34,473 +34,229 @@ constexpr uint64_t MICROSECS_IN_A_SECOND = 1000000;
 constexpr uint64_t NANOSECS_IN_A_SECOND = 1000 * MICROSECS_IN_A_SECOND;
 
 /* Type definition for an operating system mutex struct */
-struct os_mutex_struct {
+struct OS_mutex {
+  /** Constructor */
+  OS_mutex() : m_event(nullptr), m_ptr(nullptr), m_count(0) {
+    auto std_mutex = new (std::nothrow) std::mutex;
+    m_ptr = std_mutex;
+    m_event = Cond_var::create(nullptr);
+   }
+
+  /** Destructor */
+   ~OS_mutex() {
+     delete static_cast<std::mutex*>(m_ptr);
+     Cond_var::destroy(m_event);
+   }
+
+  /* Create an instance of a mutex. 
+  @return the mutex */
+  static OS_mutex* create(const char*);
+
+  /** Destroy an instance of a mutex created with create()
+   * @param mutex the mutex to destroy */
+  static void destroy(OS_mutex*);
+
+  void lock() {
+    static_cast<std::mutex*>(m_ptr)->lock();
+
+    ++m_count;
+
+    ut_a(m_count == 1);
+  }
+
+  void unlock() {
+    ut_a(m_count == 1);
+
+    --m_count;
+
+    static_cast<std::mutex *>(m_ptr)->unlock();
+  }
+
   /** Used by sync0arr.c for queing threads */
-  OS_cond* event;
+  Cond_var* m_event{};
 
   /** OS handle to mutex */
-  void *handle;
+  void *m_ptr{};
 
   /** we use this counter to check that the same thread
   does not recursively lock the mutex: we do not assume
   that the OS mutex supports recursive locking, though NT seems to do that */
-  ulint count;
+  uint16_t m_count{};
 
   /** list of all 'slow' OS mutexes created */
-  UT_LIST_NODE_T(os_mutex_str_t) os_mutex_list;
+  UT_LIST_NODE_T(OS_mutex) m_os_mutex_list;
+
+  using Mutexes = UT_LIST_BASE_NODE_T(OS_mutex, m_os_mutex_list);
+
+  /** Mutex protecting counts and the lists of OS mutexes and events */
+  static std::mutex s_mutex;
+
+  /* For tracking all mutexes created. */
+  static Mutexes s_mutexes;
+
+  /** Number of mutexes created. */
+  static ulint s_count;
 };
-
-/** Mutex protecting counts and the lists of OS mutexes and events */
-os_mutex_t os_sync_mutex;
-
-/** true if os_sync_mutex has been initialized */
-static bool os_sync_mutex_inited = false;
-
-/** true when os_sync_free() is being executed */
-static bool os_sync_free_called = false;
 
 /** This is incremented by 1 in os_thread_create and decremented by 1 in
 os_thread_exit */
 std::atomic_int os_thread_count{};
 
-/** The list of all events created */
-static UT_LIST_BASE_NODE_T(OS_cond, os_event_list) os_event_list{};
+std::mutex OS_mutex::s_mutex{};
+std::mutex Cond_var::s_mutex{};
 
-/** The list of all OS 'slow' mutexes */
-static UT_LIST_BASE_NODE_T(os_mutex_str_t, os_mutex_list) os_mutex_list{};
+OS_mutex::Mutexes OS_mutex::s_mutexes{};
+Cond_var::Events Cond_var::s_events{};
 
-ulint os_event_count = 0;
-ulint os_mutex_count = 0;
-ulint os_fast_mutex_count = 0;
-
-/* Because a mutex is embedded inside an event and there is an
-event embedded inside a mutex, on free, this generates a recursive call.
-This version of the free event function doesn't acquire the global lock */
-static void os_event_free_internal(OS_cond* event);
+ulint OS_mutex::s_count = 0;
+ulint Cond_var::s_count = 0;
 
 void os_sync_var_init() {
-  os_sync_mutex = nullptr;
-  os_sync_mutex_inited = false;
-  os_sync_free_called = false;
-
-  os_thread_count.store(0, std::memory_order_relaxed);
-
-  os_event_count = 0;
-  os_mutex_count = 0;
-  os_fast_mutex_count = 0;
+  os_thread_count.store(0, std::memory_order_release);
 }
 
 void os_sync_init() {
-  UT_LIST_INIT(os_event_list);
-  UT_LIST_INIT(os_mutex_list);
-
-  os_sync_mutex = nullptr;
-  os_sync_mutex_inited = false;
-
-  os_sync_mutex = os_mutex_create(nullptr);
-
-  os_sync_mutex_inited = true;
+  UT_LIST_INIT(Cond_var::s_events);
+  UT_LIST_INIT(OS_mutex::s_mutexes);
 }
 
 void os_sync_free() {
-  ut_a(os_sync_mutex_inited);
+  for (auto event = UT_LIST_GET_FIRST(Cond_var::s_events);
+       event != nullptr;
+       event = UT_LIST_GET_FIRST(Cond_var::s_events)) {
 
-  os_mutex_t mutex;
-
-  os_sync_free_called = true;
-
-  auto event = UT_LIST_GET_FIRST(os_event_list);
-
-  while (event != nullptr) {
-
-    os_event_free(event);
-
-    event = UT_LIST_GET_FIRST(os_event_list);
+    Cond_var::destroy(event);
   }
 
-  mutex = UT_LIST_GET_FIRST(os_mutex_list);
-
-  while (mutex) {
-    if (mutex == os_sync_mutex) {
-      /* Set the flag to false so that we do not try to
-      reserve os_sync_mutex any more in remaining freeing
-      operations in shutdown */
-      os_sync_mutex_inited = false;
-    }
-
-    os_mutex_free(mutex);
-
-    mutex = UT_LIST_GET_FIRST(os_mutex_list);
+  for (auto mutex = UT_LIST_GET_FIRST(OS_mutex::s_mutexes);
+       mutex != nullptr;
+       mutex = UT_LIST_GET_FIRST(OS_mutex::s_mutexes)) {
+     
+    OS_mutex::destroy(mutex);
   }
-  os_sync_free_called = false;
 }
 
-OS_cond* os_event_create(const char *name) {
-  UT_NOT_USED(name);
+Cond_var* Cond_var::create(const char *) {
+  auto event = new Cond_var;
 
-  auto event = static_cast<OS_cond *>(ut_malloc(sizeof(OS_cond)));
-
-  os_fast_mutex_init(&event->os_mutex);
-
-  ut_a(0 == pthread_cond_init(&(event->cond_var), nullptr));
-
-  event->is_set = false;
-
-  /* We return this value in os_event_reset(), which can then be
-  be used to pass to the os_event_wait_low(). The value of zero
-  is reserved in os_event_wait_low() for the case when the
-  caller does not want to pass any signal_count value. To
-  distinguish between the two cases we initialize signal_count
-  to 1 here. */
-  event->signal_count = 1;
-
-  /* The os_sync_mutex can be nullptr because during startup an event
-  can be created [ because it's embedded in the mutex/rwlock ] before
-  this module has been initialized */
-  if (os_sync_mutex != nullptr) {
-    os_mutex_enter(os_sync_mutex);
-  }
+  std::lock_guard<std::mutex> lock(s_mutex);
 
   /* Put to the list of events */
-  UT_LIST_ADD_FIRST(os_event_list, event);
+  UT_LIST_ADD_FIRST(Cond_var::s_events, event);
 
-  os_event_count++;
-
-  if (os_sync_mutex != nullptr) {
-    os_mutex_exit(os_sync_mutex);
-  }
+  ++s_count;
 
   return event;
 }
 
-void os_event_set(OS_cond* event) {
-  ut_a(event);
+void Cond_var::set() {
+  std::lock_guard<std::mutex> lock(m_mutex);
 
-  os_fast_mutex_lock(&(event->os_mutex));
-
-  if (!event->is_set) {
-    event->is_set = true;
-    event->signal_count += 1;
-    ut_a(0 == pthread_cond_broadcast(&(event->cond_var)));
+  if (!m_is_set) {
+    m_is_set = true;
+    m_signal_count += 1;
+    m_cond_var.notify_all();
   }
-
-  os_fast_mutex_unlock(&(event->os_mutex));
 }
 
-int64_t os_event_reset(OS_cond* event) {
-  int64_t ret = 0;
+int64_t Cond_var::reset() {
+  std::lock_guard<std::mutex> lock(m_mutex);
 
-  ut_a(event);
-
-  os_fast_mutex_lock(&(event->os_mutex));
-
-  if (event->is_set) {
-    event->is_set = false;
+  if (m_is_set) {
+    m_is_set = false;
   }
-  ret = event->signal_count;
-
-  os_fast_mutex_unlock(&(event->os_mutex));
+  auto ret = m_signal_count;
 
   return ret;
 }
 
-/** Frees an event object, without acquiring the global lock.
-@param[in,oun] event            Event to free. */
-static void os_event_free_internal(OS_cond* event) {
-  ut_a(event);
+void Cond_var::destroy(Cond_var* event) {
+  std::lock_guard<std::mutex> lock(s_mutex);
 
-  /* This is to avoid freeing the mutex twice */
-  os_fast_mutex_free(&(event->os_mutex));
+  UT_LIST_REMOVE(s_events, event);
 
-  ut_a(0 == pthread_cond_destroy(&(event->cond_var)));
+  --s_count;
 
-  /* Remove from the list of events */
-  UT_LIST_REMOVE(os_event_list, event);
-
-  --os_event_count;
-
-  ut_free(event);
+  delete event;
 }
 
-void os_event_free(OS_cond* event) {
-  ut_a(event);
+void Cond_var::wait(int64_t reset_sig_count) {
+  std::unique_lock<std::mutex> lk(m_mutex);
+  auto old_sig_count = reset_sig_count != 0 ? reset_sig_count : m_signal_count;
 
-  os_fast_mutex_free(&(event->os_mutex));
-  ut_a(0 == pthread_cond_destroy(&(event->cond_var)));
-
-  /* Remove from the list of events */
-  os_mutex_enter(os_sync_mutex);
-
-  UT_LIST_REMOVE(os_event_list, event);
-
-  --os_event_count;
-
-  os_mutex_exit(os_sync_mutex);
-
-  ut_free(event);
-}
-
-void os_event_wait_low(OS_cond* event, int64_t reset_sig_count) {
-  int64_t old_signal_count;
-
-  os_fast_mutex_lock(&(event->os_mutex));
-
-  if (reset_sig_count) {
-    old_signal_count = reset_sig_count;
-  } else {
-    old_signal_count = event->signal_count;
-  }
-
-  for (;;) {
-    if (event->is_set == true || event->signal_count != old_signal_count) {
-
-      os_fast_mutex_unlock(&(event->os_mutex));
-
-      if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
-
-        os_thread_exit(nullptr);
-      }
-
-      return;
+  m_cond_var.wait(lk, [this, old_sig_count] {
+    if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
+      log_err("srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS");
+      os_thread_exit(nullptr);
     }
-
-    pthread_cond_wait(&(event->cond_var), &(event->os_mutex));
-
-    /* Solaris manual said that spurious wakeups may occur: we
-    have to check if the event really has been signaled after
-    we came here to wait */
-  }
+    return m_is_set || m_signal_count != old_sig_count; }
+  );
 }
 
-os_mutex_t os_mutex_create(const char *name) {
-  UT_NOT_USED(name);
-
-  auto mutex = static_cast<os_fast_mutex_t *>(ut_malloc(sizeof(os_fast_mutex_t)));
-
-  os_fast_mutex_init(mutex);
-
-  auto mutex_str = static_cast<os_mutex_str_t *>(ut_malloc(sizeof(os_mutex_str_t)));
-
-  mutex_str->handle = mutex;
-  mutex_str->count = 0;
-  mutex_str->event = os_event_create(nullptr);
-
-  if (likely(os_sync_mutex_inited)) {
-    /* When creating os_sync_mutex itself we cannot reserve it */
-    os_mutex_enter(os_sync_mutex);
-  }
-
-  UT_LIST_ADD_FIRST(os_mutex_list, mutex_str);
-
-  os_mutex_count++;
-
-  if (likely(os_sync_mutex_inited)) {
-    os_mutex_exit(os_sync_mutex);
-  }
-
-  return mutex_str;
-}
-
-void os_mutex_enter(os_mutex_t mutex) {
-  os_fast_mutex_lock(static_cast<os_fast_mutex_t *>(mutex->handle));
-
-  ++mutex->count;
-
-  ut_a(mutex->count == 1);
-}
-
-void os_mutex_exit(os_mutex_t mutex) {
-  ut_a(mutex);
-
-  ut_a(mutex->count == 1);
-
-  --mutex->count;
-
-  os_fast_mutex_unlock(static_cast<os_fast_mutex_t *>(mutex->handle));
-}
-
-void os_mutex_free(os_mutex_t mutex) {
-  ut_a(mutex);
-
-  if (likely(!os_sync_free_called)) {
-    os_event_free_internal(mutex->event);
-  }
-
-  if (likely(os_sync_mutex_inited)) {
-    os_mutex_enter(os_sync_mutex);
-  }
-
-  UT_LIST_REMOVE(os_mutex_list, mutex);
-
-  --os_mutex_count;
-
-  if (likely(os_sync_mutex_inited)) {
-    os_mutex_exit(os_sync_mutex);
-  }
-
-  os_fast_mutex_free(static_cast<os_fast_mutex_t *>(mutex->handle));
-  ut_free(mutex->handle);
-  ut_free(mutex);
-}
-
-void os_fast_mutex_init(os_fast_mutex_t *fast_mutex) {
-  ut_a(0 == pthread_mutex_init(fast_mutex, nullptr));
-
-  if (likely(os_sync_mutex_inited)) {
-    /* When creating os_sync_mutex itself (in Unix) we cannot
-    reserve it */
-
-    os_mutex_enter(os_sync_mutex);
-  }
-
-  os_fast_mutex_count++;
-
-  if (likely(os_sync_mutex_inited)) {
-    os_mutex_exit(os_sync_mutex);
-  }
-}
-
-void os_fast_mutex_lock(os_fast_mutex_t *fast_mutex) {
-  pthread_mutex_lock(fast_mutex);
-}
-
-void os_fast_mutex_unlock(os_fast_mutex_t *fast_mutex) {
-  pthread_mutex_unlock(fast_mutex);
-}
-
-void os_fast_mutex_free(os_fast_mutex_t *fast_mutex) {
-  auto ret = pthread_mutex_destroy(fast_mutex);
-
-  if (unlikely(ret != 0)) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      "  error: return value %lu when calling\n"
-      "pthread_mutex_destroy().\n",
-      (ulint)ret
-    );
-    ib_logger(ib_stream, "Byte contents of the pthread mutex at %p:\n", (void *)fast_mutex);
-    ut_print_buf(ib_stream, fast_mutex, sizeof(os_fast_mutex_t));
-    ib_logger(ib_stream, "\n");
-  }
-
-  if (likely(os_sync_mutex_inited)) {
-    /* When freeing the last mutexes, we have
-    already freed os_sync_mutex */
-
-    os_mutex_enter(os_sync_mutex);
-  }
-
-  ut_ad(os_fast_mutex_count > 0);
-  --os_fast_mutex_count;
-
-  if (likely(os_sync_mutex_inited)) {
-    os_mutex_exit(os_sync_mutex);
-  }
-}
-
-static timespec get_wait_timelimit(std::chrono::microseconds timeout) {
-  /* We could get rid of this function if we switched to std::condition_variable
-  from the pthread_cond_. The std::condition_variable::wait_for relies on the
-  steady_clock internally and accepts timeout (not time increased by the timeout). */
-  for (int i = 0;; i++) {
-    ut_a(i < 10);
-#ifdef HAVE_CLOCK_GETTIME
-    if (cond_attr_has_monotonic_clock) {
-
-      struct timespec tp;
-
-      if (clock_gettime(CLOCK_MONOTONIC, &tp) == -1) {
-        const auto errno_clock_gettime = errno;
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        errno = errno_clock_gettime;
-
-      } else {
-        const auto increased = tp.tv_nsec + std::chrono::duration_cast<std::chrono::nanoseconds>(timeout) .count();
-
-        if (increased >= static_cast<std::remove_cv<decltype(increased)>::type>( NANOSECS_IN_A_SECOND)) {
-          tp.tv_sec += increased / NANOSECS_IN_A_SECOND;
-          tp.tv_nsec = increased % NANOSECS_IN_A_SECOND;
-        } else {
-          tp.tv_nsec = increased;
-        }
-        return tp;
-      }
-
-    } else
-#endif /* HAVE_CLOCK_GETTIME */
-    {
-      struct timeval tv;
-
-      if (gettimeofday(&tv, nullptr) == -1) {
-        const auto errno_gettimeofday = errno;
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        errno = errno_gettimeofday;
-
-      } else {
-        const auto increased = tv.tv_usec + timeout.count();
-
-        if (increased >= static_cast<std::remove_cv<decltype(increased)>::type>(MICROSECS_IN_A_SECOND)) {
-          tv.tv_sec += increased / MICROSECS_IN_A_SECOND;
-          tv.tv_usec = increased % MICROSECS_IN_A_SECOND;
-        } else {
-          tv.tv_usec = increased;
-        }
-
-        struct timespec abstime;
-        abstime.tv_sec = tv.tv_sec;
-        abstime.tv_nsec = tv.tv_usec * 1000;
-
-        return abstime;
-      }
-    }
-  }
-}
-
-ulint os_event_wait_time_low(OS_cond* event, std::chrono::microseconds timeout, int64_t reset_sig_count) {
-  bool timed_out = false;
-
-  timespec abstime;
+ulint Cond_var::wait_time(std::chrono::microseconds timeout, int64_t reset_sig_count) {
+  std::chrono::time_point<std::chrono::system_clock> timepoint;
 
   if (timeout != std::chrono::microseconds::max()) {
-    abstime = get_wait_timelimit(timeout);
+    timepoint = std::chrono::system_clock::now() + timeout;
   } else {
-    abstime.tv_nsec = 999999999;
-    abstime.tv_sec = std::numeric_limits<time_t>::max();
+    timepoint = std::chrono::time_point<std::chrono::system_clock>::max();
+  } 
+
+  std::unique_lock<std::mutex> lk(m_mutex);
+
+  if (reset_sig_count == 0) {
+    reset_sig_count = m_signal_count;
   }
 
-  ut_a(abstime.tv_nsec <= 999999999);
-
-  os_mutex_enter(os_sync_mutex);
-
-  if (!reset_sig_count) {
-    reset_sig_count = event->signal_count;
-  }
-
-  do {
-
-    if (event->is_set || event->signal_count != reset_sig_count) {
-      break;
+  auto ret = m_cond_var.wait_until(lk, timepoint, [this, reset_sig_count] {
+    if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
+      log_err("srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS");
+      os_thread_exit(nullptr);
     }
+    return m_is_set || m_signal_count != reset_sig_count; }
+  );
 
-    switch(auto ret = pthread_cond_timedwait(&event->cond_var, &event->os_mutex, &abstime)) {
-      case 0:
-      case ETIMEDOUT:
-        /* We play it safe by checking for EINTR even though
-        according to the POSIX documentation it can't return EINTR. */
-        timed_out = true;
-      case EINTR:
-        break;
-  
-      default:
-        log_fatal("pthread_cond_timedout() returned ", ret);
-    }
-  
-  } while (!timed_out);
+  return ret ? 0 : OS_SYNC_TIME_EXCEEDED;
+}
 
-  os_mutex_exit(os_sync_mutex);
+OS_mutex *OS_mutex::create(const char *) {
+  auto mutex = new (std::nothrow) OS_mutex;
 
-  return timed_out ? OS_SYNC_TIME_EXCEEDED : 0;
+  std::lock_guard<std::mutex> lock(s_mutex);
+
+  UT_LIST_ADD_FIRST(s_mutexes, mutex);
+
+  ++s_count;
+
+  return mutex;
+}
+
+void os_mutex_enter(OS_mutex *mutex) {
+  mutex->lock();
+}
+
+void os_mutex_exit(OS_mutex *mutex) {
+  mutex->unlock();
+}
+
+void OS_mutex::destroy(OS_mutex *mutex) {
+  std::lock_guard<std::mutex> lock(s_mutex);
+
+  UT_LIST_REMOVE(s_mutexes, mutex);
+
+  --s_count;
+
+  delete mutex;
+}
+
+OS_mutex *os_mutex_create(const char*) {
+  return OS_mutex::create(nullptr);
+}
+
+void os_mutex_destroy(OS_mutex *mutex) {
+  OS_mutex::destroy(mutex);
+}
+
+ulint os_mutex_count() {
+  return OS_mutex::s_count;
 }

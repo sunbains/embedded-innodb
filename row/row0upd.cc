@@ -118,7 +118,7 @@ static bool row_upd_index_is_referenced(
     return false;
   }
 
-  if (trx->dict_operation_lock_mode == 0) {
+  if (trx->m_dict_operation_lock_mode == 0) {
     dict_freeze_data_dictionary(trx);
     froze_data_dict = true;
   }
@@ -188,7 +188,7 @@ static db_err row_upd_check_references_constraints(
 
   mtr_start(mtr);
 
-  if (trx->dict_operation_lock_mode == 0) {
+  if (trx->m_dict_operation_lock_mode == 0) {
     got_s_lock = true;
 
     dict_freeze_data_dictionary(trx);
@@ -397,7 +397,7 @@ byte *row_upd_write_sys_vals_to_log(
   trx_write_roll_ptr(log_ptr, roll_ptr);
   log_ptr += DATA_ROLL_PTR_LEN;
 
-  log_ptr += mach_uint64_write_compressed(log_ptr, trx->id);
+  log_ptr += mach_uint64_write_compressed(log_ptr, trx->m_id);
 
   return log_ptr;
 }
@@ -1090,11 +1090,7 @@ static db_err row_upd_sec_index_entry(
   rec = btr_cur_get_rec(btr_cur);
 
   if (unlikely(!found)) {
-    ib_logger(
-      ib_stream,
-      "error in sec index entry update in\n"
-      ""
-    );
+    ib_logger(ib_stream, "Error in sec index entry update in\n");
     dict_index_name_print(ib_stream, trx, index);
     ib_logger(ib_stream, "\ntuple ");
     dtuple_print(ib_stream, entry);
@@ -1104,24 +1100,21 @@ static db_err row_upd_sec_index_entry(
 
     trx_print(ib_stream, trx, 0);
 
-    ib_logger(
-      ib_stream,
-      "\n"
-      "Submit a detailed bug report, check the"
-      "InnoDB website for details"
-    );
+    ib_logger(ib_stream, "Submit a detailed bug report");
   } else {
     /* Delete mark the old index record; it can already be
     delete marked if we return after a lock wait in
     row_ins_index_entry below */
 
     if (!rec_get_deleted_flag(rec, dict_table_is_comp(index->table))) {
+
       err = btr_cur_del_mark_set_sec_rec(0, btr_cur, true, thr, &mtr);
+
       if (err == DB_SUCCESS && check_ref) {
 
         ulint *offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED, &heap);
-        /* NOTE that the following call loses
-        the position of pcur ! */
+
+        /* NOTE that the following call loses the position of pcur ! */
         err = row_upd_check_references_constraints(node, &pcur, index->table, index, offsets, thr, &mtr);
       }
     }
@@ -1245,7 +1238,7 @@ static db_err row_upd_clust_rec_by_insert(
   entry = row_build_index_entry(node->upd_row, node->upd_ext, index, heap);
   ut_a(entry);
 
-  row_upd_index_entry_sys_field(entry, index, DATA_TRX_ID, trx->id);
+  row_upd_index_entry_sys_field(entry, index, DATA_TRX_ID, trx->m_id);
 
   if (node->upd_ext) {
     /* If we return from a lock wait, for example, we may have

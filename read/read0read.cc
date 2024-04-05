@@ -230,20 +230,20 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
        trx != nullptr;
        trx = UT_LIST_GET_NEXT(trx_list, trx)) {
 
-    ut_ad(trx->magic_n == TRX_MAGIC_N);
+    ut_ad(trx->m_magic_n == TRX_MAGIC_N);
 
-    if (trx->id != cr_trx_id && (trx->conc_state == TRX_ACTIVE || trx->conc_state == TRX_PREPARED)) {
+    if (trx->m_id != cr_trx_id && (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED)) {
 
-      read_view_set_nth_trx_id(view, n, trx->id);
+      read_view_set_nth_trx_id(view, n, trx->m_id);
 
       ++n;
 
       /* NOTE that a transaction whose trx number is < trx_sys->max_trx_id can still be active, if it is
       in the middle of its commit! Note that when a transaction starts, we initialize trx->no to LSN_MAX. */
 
-      if (view->low_limit_no > trx->no) {
+      if (view->low_limit_no > trx->m_no) {
 
-        view->low_limit_no = trx->no;
+        view->low_limit_no = trx->m_no;
       }
     }
   }
@@ -325,7 +325,7 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
   curview->read_view = read_view_create_low(UT_LIST_GET_LEN(trx_sys->trx_list), curview->heap);
 
   auto view = curview->read_view;
-  view->creator_trx_id = cr_trx->id;
+  view->creator_trx_id = cr_trx->m_id;
   view->type = VIEW_HIGH_GRANULARITY;
   view->undo_no = cr_trx->undo_no;
 
@@ -341,9 +341,9 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
 
   while (trx) {
 
-    if (trx->conc_state == TRX_ACTIVE || trx->conc_state == TRX_PREPARED) {
+    if (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED) {
 
-      read_view_set_nth_trx_id(view, n, trx->id);
+      read_view_set_nth_trx_id(view, n, trx->m_id);
 
       n++;
 
@@ -353,9 +353,9 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
       transaction starts, we initialize trx->no to
       LSN_MAX. */
 
-      if (view->low_limit_no > trx->no) {
+      if (view->low_limit_no > trx->m_no) {
 
-        view->low_limit_no = trx->no;
+        view->low_limit_no = trx->m_no;
       }
     }
 
