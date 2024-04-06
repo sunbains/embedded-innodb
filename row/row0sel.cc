@@ -840,16 +840,14 @@ inline db_err sel_set_rec_lock(
   return err;
 }
 
-/** Opens a pcur to a table index. */
-static void row_sel_open_pcur(
-  plan_t *plan, /*!< in: table plan */
-  bool search_latch_locked,
-  /*!< in: true if the thread currently
-                              has the search latch locked in
-                              s-mode */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
+/**
+ * Opens a pcur to a table index.
+ *
+ * @param plan                  in: table plan
+ * @param search_latch_locked   in: true if the thread currently has the search latch locked in s-mode
+ * @param mtr                   in: mtr
+ */
+static void row_sel_open_pcur(plan_t *plan, bool search_latch_locked, mtr_t *mtr) {
   dict_index_t *index;
   func_node_t *cond;
   que_node_t *exp;
@@ -2034,7 +2032,8 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
   const rec_t **out_rec,
   ulint **offsets,
   mem_heap_t **offset_heap,
-  mtr_t *mtr) {
+  mtr_t *mtr
+) {
 
   dict_index_t *clust_index;
   const rec_t *clust_rec;
@@ -2254,40 +2253,36 @@ static bool row_sel_restore_position(
   return true;
 }
 
-/** Reset the row cache. The memory is not freed only the stack pointers
-are reset. */
-inline void row_sel_row_cache_reset(row_prebuilt_t *prebuilt) /*!< in: prebuilt struct */
-{
+/**
+ * @brief Reset the row cache. The memory is not freed only the stack pointers
+ * are reset.
+ * @param[in] prebuilt prebuilt struct
+ */
+inline void row_sel_row_cache_reset(row_prebuilt_t *prebuilt) {
   prebuilt->row_cache.first = 0;
   prebuilt->row_cache.n_cached = 0;
 }
 
-/** Check if there are any rows in the cache that can be popped. */
-
-bool row_sel_row_cache_is_empty(row_prebuilt_t *prebuilt) /*!< in: prebuilt struct */
-{
+bool row_sel_row_cache_is_empty(row_prebuilt_t *prebuilt) {
   return prebuilt->row_cache.n_cached == 0;
 }
 
-/** Check if there is a fetch in progress. ie. at lease one row was cached
-and read from the cache. */
-
-bool row_sel_row_cache_fetch_in_progress(row_prebuilt_t *prebuilt) /*!< in: prebuilt struct */
-{
+bool row_sel_row_cache_fetch_in_progress(row_prebuilt_t *prebuilt) {
   return (prebuilt->row_cache.first > 0 && prebuilt->row_cache.first < prebuilt->row_cache.n_size);
 }
 
-/** Check if row cache is full. */
-inline bool row_sel_row_cache_is_full(row_prebuilt_t *prebuilt) /*!< in: prebuilt struct */
-{
+/**
+ * Check if row cache is full.
+ *
+ * @param prebuilt in: prebuilt struct
+ * @return true if row cache is full, false otherwise
+ */
+inline bool row_sel_row_cache_is_full(row_prebuilt_t *prebuilt) {
   ut_a(prebuilt->row_cache.n_cached <= prebuilt->row_cache.n_size);
   return prebuilt->row_cache.n_cached == prebuilt->row_cache.n_size - 1;
 }
 
-/** Reads the current row from the fetch cache. */
-
-const rec_t *row_sel_row_cache_get(row_prebuilt_t *prebuilt) /*!< in: prebuilt struct */
-{
+const rec_t *row_sel_row_cache_get(row_prebuilt_t *prebuilt) {
   ib_cached_row_t *row;
 
   ut_ad(!row_sel_row_cache_is_empty(prebuilt));
@@ -2297,10 +2292,7 @@ const rec_t *row_sel_row_cache_get(row_prebuilt_t *prebuilt) /*!< in: prebuilt s
   return row->rec;
 }
 
-/** Pops a cached row from the fetch cache. */
-
-void row_sel_row_cache_next(row_prebuilt_t *prebuilt) /*!< in: prebuilt struct */
-{
+void row_sel_row_cache_next(row_prebuilt_t *prebuilt) {
   if (!row_sel_row_cache_is_empty(prebuilt)) {
     --prebuilt->row_cache.n_cached;
     ++prebuilt->row_cache.first;
@@ -2312,14 +2304,13 @@ void row_sel_row_cache_next(row_prebuilt_t *prebuilt) /*!< in: prebuilt struct *
   }
 }
 
-/** Add a record to the fetch cache. */
-inline void row_sel_row_cache_add(
-  row_prebuilt_t *prebuilt, /*!< in: prebuilt struct */
-  const rec_t *rec,         /*!< in: record to push; must
-                                                be protected by a page latch */
-  const ulint *offsets
-) /*!< in: rec_get_offsets() */
-{
+/**
+ * @brief Add a record to the fetch cache.
+ * @param[in] prebuilt prebuilt struct
+ * @param[in] rec record to push; must be protected by a page latch
+ * @param[in] offsets rec_get_offsets()
+ */
+inline void row_sel_row_cache_add(row_prebuilt_t *prebuilt, const rec_t *rec, const ulint *offsets) {
   ib_cached_row_t *row;
   ulint rec_len;
   ib_row_cache_t *row_cache;
@@ -2371,19 +2362,27 @@ inline void row_sel_row_cache_add(
   ut_a(row_cache->n_cached < row_cache->n_size);
 }
 
-/** Tries to do a shortcut to fetch a clustered index record with a unique key,
-using the hash index if possible (not always). We assume that the search
-mode is PAGE_CUR_GE, it is a consistent read, there is a read view in trx,
-btr search latch has been locked in S-mode.
-@return	SEL_FOUND, SEL_EXHAUSTED, SEL_RETRY */
+/**
+ * Tries to do a shortcut to fetch a clustered index record with a unique key,
+ * using the hash index if possible (not always). We assume that the search
+ * mode is PAGE_CUR_GE, it is a consistent read, there is a read view in trx,
+ * btr search latch has been locked in S-mode.
+ *
+ * @param[out] out_rec record if found
+ * @param[in] prebuilt prebuilt struct
+ * @param[in,out] offsets for rec_get_offsets(*out_rec)
+ * @param[in,out] heap heap for rec_get_offsets()
+ * @param[in] mtr started mtr
+ *
+ * @return SEL_FOUND, SEL_EXHAUSTED, SEL_RETRY
+ */
 static ulint row_sel_try_search_shortcut_for_prebuilt(
-  const rec_t **out_rec,    /*!< out: record if found */
-  row_prebuilt_t *prebuilt, /*!< in: prebuilt struct */
-  ulint **offsets,          /*!< in/out: for rec_get_offsets(*out_rec) */
-  mem_heap_t **heap,        /*!< in/out: heap for rec_get_offsets() */
+  const rec_t **out_rec,
+  row_prebuilt_t *prebuilt,
+  ulint **offsets,
+  mem_heap_t **heap,
   mtr_t *mtr
-) /*!< in: started mtr */
-{
+) {
   dict_index_t *index = prebuilt->index;
   const dtuple_t *search_tuple = prebuilt->search_tuple;
   btr_pcur_t *pcur = prebuilt->pcur;
@@ -2434,24 +2433,7 @@ static ulint row_sel_try_search_shortcut_for_prebuilt(
   return SEL_FOUND;
 }
 
-/** This can only be used when this session is using a READ COMMITTED isolation
-level. Before calling this function we must use trx_reset_new_rec_lock_info()
-and trx_register_new_rec_lock() to store the information which new record locks
-really were set. This function removes a newly set lock under prebuilt->pcur,
-and also under prebuilt->clust_pcur. Currently, this is only used and tested
-in the case of an UPDATE or a DELETE statement, where the row lock is of the
-LOCK_X type. Thus, this implements a 'mini-rollback' that releases the latest
-record locks we set.
-@return	error code or DB_SUCCESS */
-
-int row_unlock_for_client(
-  row_prebuilt_t *prebuilt, /*!< in: prebuilt struct handle */
-  bool has_latches_on_recs
-) /*!< true if called so that we have
-                           the latches on the records under pcur
-                           and clust_pcur, and we do not need to
-                           reposition the cursors. */
-{
+int row_unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) {
   btr_pcur_t *pcur = prebuilt->pcur;
   btr_pcur_t *clust_pcur = prebuilt->clust_pcur;
   trx_t *trx = prebuilt->trx;
@@ -2523,39 +2505,13 @@ func_exit:
   return DB_SUCCESS;
 }
 
-/** This function does several things, in fact too many things:
-
- 1. Moveto/Search for a record
- 2. Next record
- 3. Prev record
- 4. Set appropriate locks (gap and table locks).
- 5. Handle rollback
-
-This function opens a cursor, and also implements fetch next and fetch
-prev. NOTE that if we do a search with a full key value from a unique
-index (ROW_SEL_EXACT), then we will not store the cursor position and
-fetch next or fetch prev must not be tried to the cursor!
-@return DB_SUCCESS, DB_RECORD_NOT_FOUND, DB_END_OF_INDEX, DB_DEADLOCK,
-DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD */
-
-enum db_err row_search_for_client(
-  ib_recovery_t recovery,   /*!< in: recovery flag */
-  ib_srch_mode_t mode,      /*!< in: search mode */
-  row_prebuilt_t *prebuilt, /*!< in: prebuilt struct for the
-                              table handle; this contains the info
-                              of search_tuple, index; if search
-                              tuple contains 0 fields then we
-                              position the cursor at the start or
-                              the end of the index, depending on
-                              'mode' */
-  ib_match_t match_mode,    /*!< in: mode for matching the key */
+db_err row_search_for_client(
+  ib_recovery_t recovery,
+  ib_srch_mode_t mode,
+  row_prebuilt_t *prebuilt,
+  ib_match_t match_mode,
   ib_cur_op_t direction
-) /*!< in: cursor operation, NOTE: if this
-                              is != ROW_SEL_MOVETO, then prebuilt
-                              must have a pcur with stored position!
-                              In opening of a cursor 'direction'
-                              should be ROW_SEL_MOVETO */
-{
+) {
   dict_index_t *index = prebuilt->index;
   bool comp = dict_table_is_comp(index->table);
   const dtuple_t *search_tuple = prebuilt->search_tuple;
@@ -2716,7 +2672,10 @@ enum db_err row_search_for_client(
   values differ: thus in a secondary index we must use next-key
   locks when locking delete-marked records. */
 
-  if (match_mode == ROW_SEL_EXACT && dict_index_is_unique(index) && dtuple_get_n_fields(search_tuple) == dict_index_get_n_unique(index) && (dict_index_is_clust(index) || !dtuple_contains_null(search_tuple))) {
+  if (match_mode == ROW_SEL_EXACT &&
+      dict_index_is_unique(index) &&
+      dtuple_get_n_fields(search_tuple) == dict_index_get_n_unique(index) &&
+      (dict_index_is_clust(index) || !dtuple_contains_null(search_tuple))) {
 
     /* Note above that a UNIQUE secondary index can contain many
     rows with the same key value if one of the columns is the SQL
