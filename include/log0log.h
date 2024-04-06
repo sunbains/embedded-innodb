@@ -54,18 +54,6 @@ inline void log_release() {
   mutex_exit(&log_sys->mutex);
 }
 
-#ifdef UNIV_LOG_DEBUG
-/**
- * Checks by parsing that the concatenated log segment for a single mtr is consistent.
- *
- * @param buf The pointer to the start of the log segment in the log_sys->buf log buffer.
- * @param len The segment length in bytes.
- * @param buf_start_lsn The buffer start lsn.
- * @return True if the log segment is consistent, false otherwise.
- */
-bool log_check_log_recs(const byte *buf, ulint len, lsn_t buf_start_lsn);
-#endif /* UNIV_LOG_DEBUG */
-
 /**
  * Gets the flush bit of a log block.
  *
@@ -320,20 +308,11 @@ inline lsn_t log_reserve_and_write_fast(const void *str, ulint len, lsn_t *start
 
   log_block_set_data_len((byte *)ut_align_down(log_sys->buf + log_sys->buf_free, IB_FILE_BLOCK_SIZE), data_len);
 
-#ifdef UNIV_LOG_DEBUG
-  log_sys->old_buf_free = log_sys->buf_free;
-  log_sys->old_lsn = log_sys->lsn;
-#endif /* UNIV_LOG_DEBUG */
-
   log_sys->buf_free += len;
 
   ut_ad(log_sys->buf_free <= log_sys->buf_size);
 
   log_sys->lsn += len;
-
-#ifdef UNIV_LOG_DEBUG
-  log_check_log_recs(log_sys->buf + log_sys->old_buf_free, log_sys->buf_free - log_sys->old_buf_free, log_sys->old_lsn);
-#endif /* UNIV_LOG_DEBUG */
 
   return log_sys->lsn;
 }

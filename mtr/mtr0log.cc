@@ -485,10 +485,6 @@ byte *mlog_write_initial_log_record_fast(const byte *ptr, byte type, byte *log_p
 
   mtr->n_log_recs++;
 
-#ifdef UNIV_LOG_DEBUG
-  ib_logger(ib_stream, "Adding to mtr log record type %lu space %lu page no %lu\n", (ulong)type, space, offset);
-#endif
-
 #ifdef UNIV_DEBUG
   /* We now assume that all x-latched pages have been modified! */
   auto block = buf_pool->block_align(ptr);

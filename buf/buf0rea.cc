@@ -29,125 +29,114 @@ Created 11/5/1995 Heikki Tuuri
 #include "buf0buf.h"
 #include "buf0flu.h"
 #include "buf0lru.h"
-
 #include "log0recv.h"
 #include "os0file.h"
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "trx0sys.h"
-
+#include "ut0logger.h"
 
 /** If there are buf_pool->m_curr_size per the number below pending reads, then
 read-ahead is not done: this is to prevent flooding the buffer pool with
 i/o-fixed buffer blocks */
 constexpr ulint BUF_READ_AHEAD_PEND_LIMIT = 2;
 
-/** Low-level function which reads a page asynchronously from a file to the
-buffer buf_pool if it is not already there, in which case does nothing.
-Sets the io_fix flag and sets an exclusive lock on the buffer frame. The
-flag is cleared and the x-lock released by an i/o-handler thread.
-@return 1 if a read request was queued, 0 if the page already resided
-in buf_pool, or if the page is in the doublewrite buffer blocks in
-which case it is never read into the pool, or if the tablespace does
-not exist or is being dropped
-@return 1 if read request is issued. 0 if it is not */
-static ulint buf_read_page_low(
-  db_err *err,                             /*!< out: DB_SUCCESS or DB_TABLESPACE_DELETED if we are
-                trying to read from a non-existent tablespace, or a
-                tablespace which is just now being dropped */
-  bool sync,                               /*!< in: true if synchronous aio is desired */
-  ulint mode,                              /*!< in: ..., ORed to OS_AIO_SIMULATED_WAKE_LATER (see below
-                 at read-ahead functions) */
-  ulint space,                             /*!< in: space id */
-  ulint, bool, int64_t tablespace_version, /*!< in: if the space memory object has
-                    this timestamp different from what we are giving here,
-                    treat the tablespace as dropped; this is a timestamp we
-                    use to stop dangling page reads from a tablespace
-                    which we have DISCARDed + IMPORTed back */
-  ulint offset
-) /*!< in: page number */
-{
-  buf_page_t *bpage;
-  ulint wake_later;
+/**
+ * @brief Low-level function which reads a page asynchronously from a file to
+ * the buffer buf_pool if it is not already there, in which case does nothing.
+ * Sets the io_fix flag and sets an exclusive lock on the buffer frame. The flag
+ * is cleared and the x-lock released by an i/o-handler thread.
+ * 
+ * @param[out] err out: DB_SUCCESS or DB_TABLESPACE_DELETED if we are trying to
+ *  read from a non-existent tablespace, or a tablespace which is just now being dropped
+ * 
+ * @param[in] batch in: if a batch operation is required.
+ * 
+ * @param[in] space in: space id
+ * 
+ * @param[in] tablespace_version in: if the space memory object has this timestamp different from
+ *  what we are giving here, treat the tablespace as dropped; this is a timestamp we use to stop
+ *  dangling page reads from a tablespace which we have DISCARDed + IMPORTed back
+ * 
+ * @param[in] page_no_t in: page number
+ * 
+ * @return DB_SUCCESS if a request was posted to the IO layer, DB_FAIL the request was not posted
+ *  or error code from the IO layer.
+ */
+static db_err buf_read_page(
+  IO_request io_request,
+  bool batch,
+  space_id_t space,
+  page_no_t page_no,
+  int64_t tablespace_version
+) {
+  ut_a(io_request == IO_request::Async_read ||
+       io_request == IO_request::Sync_read);
 
-  *err = DB_SUCCESS;
+  if (trx_doublewrite &&
+      space == TRX_SYS_SPACE &&
+      ((page_no >= trx_doublewrite->block1 && page_no < trx_doublewrite->block1 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) ||
+       (page_no >= trx_doublewrite->block2 && page_no < trx_doublewrite->block2 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE))) {
 
-  wake_later = mode & OS_AIO_SIMULATED_WAKE_LATER;
-  mode = mode & ~OS_AIO_SIMULATED_WAKE_LATER;
+    log_warn(std::format("Trying to read the doublewrite buffer page {}", page_no));
 
-  if (trx_doublewrite && space == TRX_SYS_SPACE &&
-      ((offset >= trx_doublewrite->block1 && offset < trx_doublewrite->block1 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) ||
-       (offset >= trx_doublewrite->block2 && offset < trx_doublewrite->block2 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE))) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      "  Warning: trying to read"
-      " doublewrite buffer page %lu\n",
-      (ulong)offset
-    );
-
-    return 0;
+    return DB_FAIL;
   }
 
-  if (trx_sys_hdr_page(space, offset)) {
-
-    /* Trx sys header is so low in the latching order that we play
-    safe and do not leave the i/o-completion to an asynchronous
-    i/o-thread. */
-
-    sync = true;
-  }
+  db_err err;
 
   /* The following call will also check if the tablespace does not exist
   or is being dropped; if we succeed in initing the page in the buffer
   pool for read, then DISCARD cannot proceed until the read has
   completed */
-  bpage = buf_pool->init_for_read(err, mode, space, tablespace_version, offset);
+  auto bpage = buf_pool->init_for_read(&err, space, page_no, tablespace_version);
 
   if (bpage == nullptr) {
-
-    return 0;
+    ut_a(err == DB_TABLESPACE_DELETED);
+    return DB_FAIL;
   }
-
-#ifdef UNIV_DEBUG
-  if (buf_debug_prints) {
-    ib_logger(ib_stream, "Posting read request for page %lu, sync %lu\n", (ulong)offset, (ulong)sync);
-  }
-#endif /* UNIV_DEBUG */
 
   ut_ad(bpage->in_file());
 
   ut_a(bpage->get_state() == BUF_BLOCK_FILE_PAGE);
 
-  *err = fil_io(OS_FILE_READ | wake_later, sync, space, offset, 0, UNIV_PAGE_SIZE, ((buf_block_t *)bpage)->m_frame, bpage);
-  ut_a(*err == DB_SUCCESS);
+  err = fil_io(
+    io_request,
+    batch,
+    space,
+    page_no,
+    0,
+    UNIV_PAGE_SIZE,
+    buf_page_get_block(bpage)->get_frame(),
+    bpage);
 
-  if (sync) {
+  ut_a(err == DB_SUCCESS);
+
+  if (io_request == IO_request::Sync_read) {
     /* The i/o is already completed when we arrive from fil_read */
     buf_pool->io_complete(bpage);
+  } else {
+    ut_a(io_request == IO_request::Async_read);
   }
 
-  return (1);
+  return DB_SUCCESS;
 }
 
 bool buf_read_page(ulint space, ulint offset) {
-  db_err err;
-
   auto tablespace_version = fil_space_get_version(space);
+  auto err = buf_read_page(IO_request::Sync_read, false, space, offset, tablespace_version);
 
-  /* We do the i/o in the synchronous aio mode to save thread switches: hence true */
-  auto count = buf_read_page_low(&err, true, BUF_READ_ANY_PAGE, space, 0, false, tablespace_version, offset);
+  if (err == DB_SUCCESS) {
 
-  srv_buf_pool_reads += count;
+    ++srv_buf_pool_reads;
 
-  if (err == DB_TABLESPACE_DELETED) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      "  Error: trying to access tablespace %lu page no. %lu, but the tablespace does not exist"
-      " or is just being dropped.\n",
-      (ulong)space,
-      (ulong)offset
+  } else if (err == DB_TABLESPACE_DELETED) {
+
+    log_err(
+      std::format(
+        "Trying to access tablespace {} page no. {}, but the "
+        " tablespace does not exist or is being dropped.",
+        space, offset)
     );
   }
 
@@ -157,7 +146,7 @@ bool buf_read_page(ulint space, ulint offset) {
   /* Increment number of I/O operations used for LRU policy. */
   buf_pool->m_LRU->stat_inc_io();
 
-  return count > 0;
+  return err == DB_SUCCESS;
 }
 
 ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
@@ -331,18 +320,22 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
     /* It is only sensible to do read-ahead in the non-sync
     aio mode: hence false as the first parameter */
 
-    count +=
-      buf_read_page_low(&err, false, OS_AIO_SIMULATED_WAKE_LATER | BUF_READ_ANY_PAGE, space, 0, false, tablespace_version, i);
+    err = buf_read_page(IO_request::Async_read, true, space, i, tablespace_version);
 
-    if (err == DB_TABLESPACE_DELETED) {
-      ut_print_timestamp(ib_stream);
-      ib_logger(
-        ib_stream,
-        "Lnear readahead trying to access tablespace %lu page %lu,but the tablespace does not"
-        " exist or is just being dropped.",
-        (ulong)space,
-        (ulong)i
+    if (err == DB_SUCCESS) {
+
+      ++count;
+
+    } else if (err == DB_TABLESPACE_DELETED) {
+
+      log_info(
+        std::format(
+          "Lnear readahead trying to access tablespace {} page {},but the tablespace does not"
+          " exist or is just being dropped.", space, i)
       );
+
+    } else {
+      ut_a(err == DB_FAIL);
     }
   }
 
@@ -355,12 +348,6 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   /* Flush pages from the end of the LRU list if necessary */
   buf_pool->m_flusher->free_margin();
 
-#ifdef UNIV_DEBUG
-  if (buf_debug_prints && count > 0) {
-    ib_logger(ib_stream, "LINEAR read-ahead space %lu offset %lu pages %lu\n", (ulong)space, (ulong)offset, (ulong)count);
-  }
-#endif /* UNIV_DEBUG */
-
   /* Read ahead is considered one I/O operation for the purpose of LRU policy decision. */
   buf_pool->m_LRU->stat_inc_io();
 
@@ -369,22 +356,17 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   return count;
 }
 
-void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_stored) {
+void buf_read_recv_pages(bool sync, space_id_t space, const page_no_t *page_nos, ulint n_stored) {
   if (fil_space_get_size(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
     return;
   }
 
-  db_err err;
-  ulint count;
   auto tablespace_version = fil_space_get_version(space);
 
   for (ulint i = 0; i < n_stored; i++) {
-
-    count = 0;
-
-    os_aio_print_debug = false;
+    ulint count{};
 
     while (buf_pool->m_n_pend_reads >= recv_n_pool_free_frames / 2) {
 
@@ -394,30 +376,20 @@ void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_
       count++;
 
       if (count > 1000) {
-        ib_logger(
-          ib_stream,
-          "Error: InnoDB has waited for"
-          " 10 seconds for pending\n"
-          "reads to the buffer pool to"
-          " be finished.\n"
-          "Number of pending reads %lu,"
-          " pending pread calls %lu\n",
-          (ulong)buf_pool->m_n_pend_reads,
-          (ulong)os_file_n_pending_preads
-        );
 
-        os_aio_print_debug = true;
+        log_err(
+          std::format(
+            "Waited for 10 seconds for pending reads to the buffer pool to"
+            " be finished. Number of pending reads {}. pending pread calls {}",
+            buf_pool->m_n_pend_reads, os_file_n_pending_preads.load())
+	);
       }
     }
 
-    os_aio_print_debug = false;
-
     if ((i + 1 == n_stored) && sync) {
-      buf_read_page_low(&err, true, BUF_READ_ANY_PAGE, space, 0, true, tablespace_version, page_nos[i]);
+      buf_read_page(IO_request::Sync_read, false, space, page_nos[i], tablespace_version);
     } else {
-      buf_read_page_low(
-        &err, false, BUF_READ_ANY_PAGE | OS_AIO_SIMULATED_WAKE_LATER, space, 0, true, tablespace_version, page_nos[i]
-      );
+      buf_read_page(IO_request::Async_read, true, space, page_nos[i], tablespace_version);
     }
   }
 
@@ -425,10 +397,4 @@ void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_
 
   /* Flush pages from the end of the LRU list if necessary */
   buf_pool->m_flusher->free_margin();
-
-#ifdef UNIV_DEBUG
-  if (buf_debug_prints) {
-    ib_logger(ib_stream, "Recovery applies read-ahead pages %lu\n", (ulong)n_stored);
-  }
-#endif /* UNIV_DEBUG */
 }

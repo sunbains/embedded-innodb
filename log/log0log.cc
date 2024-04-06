@@ -180,11 +180,6 @@ uint64_t log_reserve_and_open(ulint len) {
     }
   }
 
-#ifdef UNIV_LOG_DEBUG
-  log->old_buf_free = log->buf_free;
-  log->old_lsn = log->lsn;
-#endif /* UNIV_LOG_DEBUG */
-
   return log->lsn;
 }
 
@@ -294,10 +289,6 @@ lsn_t log_close(ib_recovery_t recovery) {
       checkpoint_age > log->max_checkpoint_age_async) {
     log->check_flush_or_checkpoint = true;
   }
-
-#ifdef UNIV_LOG_DEBUG
-  log_check_log_recs(recovery, log->buf + log->old_buf_free, log->buf_free - log->old_buf_free, log->old_lsn);
-#endif
 
   return lsn;
 }
@@ -555,17 +546,6 @@ void innobase_log_init() {
   log_sys->lsn = LOG_START_LSN + LOG_BLOCK_HDR_SIZE;
 
   log_release();
-
-#ifdef UNIV_LOG_DEBUG
-  recv_sys_create();
-  recv_sys_init(buf_pool->get_curr_size());
-
-  recv_sys->parse_start_lsn = log_sys->lsn;
-  recv_sys->scanned_lsn = log_sys->lsn;
-  recv_sys->scanned_checkpoint_no = 0;
-  recv_sys->recovered_lsn = log_sys->lsn;
-  recv_sys->limit_lsn = IB_UINT64_T_MAX;
-#endif /* UNIV_DEBUG */
 }
 
 void log_group_init(ulint id, ulint n_files, ulint file_size, ulint space_id) {
@@ -642,22 +622,12 @@ inline ulint log_group_check_flush_completion(log_group_t *group) /*!< [in] Log 
   ut_ad(mutex_own(&(log_sys->mutex)));
 
   if (!log_sys->one_flushed && group->n_pending_writes == 0) {
-#ifdef UNIV_DEBUG
-    if (log_debug_writes) {
-      ib_logger(ib_stream, "Log flushed first to group %lu\n", (ulong)group->id);
-    }
-#endif /* UNIV_DEBUG */
     log_sys->written_to_some_lsn = log_sys->write_lsn;
     log_sys->one_flushed = true;
 
     return LOG_UNLOCK_NONE_FLUSHED_LOCK;
   }
 
-#ifdef UNIV_DEBUG
-  if (log_debug_writes && (group->n_pending_writes == 0)) {
-    ib_logger(ib_stream, "Log flushed to group %lu\n", (ulong)group->id);
-  }
-#endif /* UNIV_DEBUG */
   return 0;
 }
 
@@ -731,11 +701,6 @@ void log_io_complete(log_group_t *group) {
       fil_flush(group->space_id);
     }
 
-#ifdef UNIV_DEBUG
-    if (log_debug_writes) {
-      ib_logger(ib_stream, "Checkpoint info written to group %lu\n", group->id);
-    }
-#endif /* UNIV_DEBUG */
     log_io_complete_checkpoint();
 
     return;
@@ -786,26 +751,20 @@ static void log_group_file_header_flush(log_group_t *group, ulint nth_file, uint
 
   auto dest_offset = nth_file * group->file_size;
 
-#ifdef UNIV_DEBUG
-  if (log_debug_writes) {
-    ib_logger(ib_stream, "Writing log file header to group %lu file %lu\n", (ulong)group->id, (ulong)nth_file);
-  }
-#endif /* UNIV_DEBUG */
-
   if (log_do_write) {
     log_sys->n_log_ios++;
 
     srv_os_log_pending_writes++;
 
     fil_io(
-      OS_FILE_WRITE | OS_FILE_LOG,
-      true,
+      IO_request::Sync_log_write,
+      false,
       group->space_id,
       dest_offset / UNIV_PAGE_SIZE,
       dest_offset % UNIV_PAGE_SIZE,
       IB_FILE_BLOCK_SIZE,
       buf,
-      group
+      nullptr
     );
 
     srv_os_log_pending_writes--;
@@ -848,30 +807,6 @@ void log_group_write_buf(log_group_t *group, byte *buf, ulint len, uint64_t star
       write_len = len;
     }
 
-#ifdef UNIV_DEBUG
-    if (log_debug_writes) {
-      ib_logger(
-        ib_stream,
-        "Writing log file segment to group %lu"
-        " offset %lu len %lu\n"
-        "start lsn %lu\n"
-        "First block n:o %lu last block n:o %lu\n",
-        (ulong)group->id,
-        (ulong)next_offset,
-        (ulong)write_len,
-        start_lsn,
-        (ulong)log_block_get_hdr_no(buf),
-        (ulong)log_block_get_hdr_no(buf + write_len - IB_FILE_BLOCK_SIZE)
-      );
-
-      ut_a(log_block_get_hdr_no(buf) == log_block_convert_lsn_to_no(start_lsn));
-
-      for (ulint i = 0; i < write_len / IB_FILE_BLOCK_SIZE; i++) {
-        ut_a(log_block_get_hdr_no(buf) + i == log_block_get_hdr_no(buf + i * IB_FILE_BLOCK_SIZE));
-      }
-    }
-#endif /* UNIV_DEBUG */
-
     // Calculate the checksums for each log block and write them
     // to the trailer fields of the log blocks
     for (ulint i = 0; i < write_len / IB_FILE_BLOCK_SIZE; i++) {
@@ -883,14 +818,14 @@ void log_group_write_buf(log_group_t *group, byte *buf, ulint len, uint64_t star
       ++srv_os_log_pending_writes;
 
       fil_io(
-        OS_FILE_WRITE | OS_FILE_LOG,
-        true,
+        IO_request::Sync_log_write,
+        false,
         group->space_id,
         next_offset / UNIV_PAGE_SIZE,
         next_offset % UNIV_PAGE_SIZE,
         write_len,
         buf,
-        group
+        nullptr
       );
 
       --srv_os_log_pending_writes;
@@ -988,11 +923,6 @@ void log_write_up_to(uint64_t lsn, ulint wait, bool flush_to_disk) {
       return;
     }
 
-#ifdef UNIV_DEBUG
-    if (log_debug_writes) {
-      ib_logger(ib_stream, "Writing log from %lu up to lsn %lu\n", log_sys->written_to_all_lsn, log_sys->lsn);
-    }
-#endif /* UNIV_DEBUG */
     log_sys->n_pending_writes++;
 
     group = UT_LIST_GET_FIRST(log_sys->log_groups);
@@ -1238,7 +1168,7 @@ static void log_group_checkpoint(log_group_t *group) {
 
   if (log_do_write) {
     if (log_sys->n_pending_checkpoint_writes == 0) {
-      rw_lock_x_lock_gen(&(log_sys->checkpoint_lock), LOG_CHECKPOINT);
+      rw_lock_x_lock_gen(&log_sys->checkpoint_lock, LOG_CHECKPOINT);
     }
 
     log_sys->n_pending_checkpoint_writes++;
@@ -1247,7 +1177,7 @@ static void log_group_checkpoint(log_group_t *group) {
 
     /** Send the log file write request */
     fil_io(
-      OS_FILE_WRITE | OS_FILE_LOG,
+      IO_request::Async_log_write,
       false,
       group->space_id,
       write_offset / UNIV_PAGE_SIZE,
@@ -1301,8 +1231,8 @@ void log_group_read_checkpoint_info(log_group_t *group, ulint field) {
   log_sys->n_log_ios++;
 
   fil_io(
-    OS_FILE_READ | OS_FILE_LOG,
-    true,
+    IO_request::Sync_log_read,
+    false,
     group->space_id,
     field / UNIV_PAGE_SIZE,
     field % UNIV_PAGE_SIZE,
@@ -1367,8 +1297,8 @@ bool log_checkpoint(bool sync, bool write_always) {
 
     if (sync) {
       /* Wait for the checkpoint write to complete */
-      rw_lock_s_lock(&(log_sys->checkpoint_lock));
-      rw_lock_s_unlock(&(log_sys->checkpoint_lock));
+      rw_lock_s_lock(&log_sys->checkpoint_lock);
+      rw_lock_s_unlock(&log_sys->checkpoint_lock);
     }
 
     return false;
@@ -1376,20 +1306,14 @@ bool log_checkpoint(bool sync, bool write_always) {
 
   log_sys->next_checkpoint_lsn = oldest_lsn;
 
-#ifdef UNIV_DEBUG
-  if (log_debug_writes) {
-    ib_logger(ib_stream, "Making checkpoint no %lu at lsn %lu\n", (ulong)log_sys->next_checkpoint_no, oldest_lsn);
-  }
-#endif /* UNIV_DEBUG */
-
   log_groups_write_checkpoint_info();
 
   log_release();
 
   if (sync) {
     /* Wait for the checkpoint write to complete */
-    rw_lock_s_lock(&(log_sys->checkpoint_lock));
-    rw_lock_s_unlock(&(log_sys->checkpoint_lock));
+    rw_lock_s_lock(&log_sys->checkpoint_lock);
+    rw_lock_s_unlock(&log_sys->checkpoint_lock);
   }
 
   return true;
@@ -1487,7 +1411,6 @@ static void log_checkpoint_margin() {
 void log_group_read_log_seg(ulint type, byte *buf, log_group_t *group, uint64_t start_lsn, uint64_t end_lsn) {
   ut_ad(mutex_own(&(log_sys->mutex)));
 
-  auto sync = (type == LOG_RECOVER);
   auto source_offset = log_group_calc_lsn_offset(start_lsn, group);
   auto len = (ulint)(end_lsn - start_lsn);
 
@@ -1501,8 +1424,8 @@ void log_group_read_log_seg(ulint type, byte *buf, log_group_t *group, uint64_t 
     log_sys->n_log_ios++;
 
     fil_io(
-      OS_FILE_READ | OS_FILE_LOG,
-      sync,
+      type == LOG_RECOVER ? IO_request::Sync_log_read : IO_request::Async_log_read,
+      false,
       group->space_id,
       source_offset / UNIV_PAGE_SIZE,
       source_offset % UNIV_PAGE_SIZE,
@@ -1702,45 +1625,6 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
   ut_a(lsn == log_sys->lsn);
 }
 
-#ifdef UNIV_LOG_DEBUG
-bool log_check_log_recs(const byte *buf, ulint len, lsn_t buf_start_lsn) {
-  ut_ad(mutex_own(&(log_sys->mutex)));
-
-  if (len == 0) {
-
-    return true;
-  }
-
-  auto start = static_cast<byte *>(ut_align_down(buf, IB_FILE_BLOCK_SIZE));
-  auto end = static_cast<byte *>(ut_align(buf + len, IB_FILE_BLOCK_SIZE));
-  auto buf1 = static_cast<byte *>(mem_alloc((end - start) + IB_FILE_BLOCK_SIZE));
-  auto scan_buf = static_cast<byte *>(ut_align(buf1, IB_FILE_BLOCK_SIZE));
-
-  memcpy(scan_buf, start, end - start);
-
-  lsn_t scanned_lsn;
-  lsn_t contiguous_lsn;
-
-  recv_scan_log_recs(
-    recovery,
-    (buf_pool->curr_size - recv_n_pool_free_frames) * UNIV_PAGE_SIZE,
-    false,
-    scan_buf,
-    end - start,
-    ut_uint64_align_down(buf_start_lsn, IB_FILE_BLOCK_SIZE),
-    &contiguous_lsn,
-    &scanned_lsn
-  );
-
-  ut_a(scanned_lsn == buf_start_lsn + len);
-  ut_a(recv_sys->recovered_lsn == scanned_lsn);
-
-  mem_free(buf1);
-
-  return true;
-}
-#endif /* UNIV_LOG_DEBUG */
-
 bool log_peek_lsn(lsn_t *lsn) {
   if (mutex_enter_nowait(&(log_sys->mutex)) == 0) {
     *lsn = log_sys->lsn;
@@ -1806,17 +1690,15 @@ static void log_group_close(log_group_t *group) {
 }
 
 void log_shutdown() {
-  log_group_t *group;
-
   /* This can happen if we have to abort during startup. */
   if (log_sys == nullptr || UT_LIST_GET_LEN(log_sys->log_groups) == 0) {
     return;
   }
 
-  group = UT_LIST_GET_FIRST(log_sys->log_groups);
+  auto group = UT_LIST_GET_FIRST(log_sys->log_groups);
 
   while (UT_LIST_GET_LEN(log_sys->log_groups) > 0) {
-    log_group_t *prev_group = group;
+    auto prev_group = group;
 
     group = UT_LIST_GET_NEXT(log_groups, group);
     UT_LIST_REMOVE(log_sys->log_groups, prev_group);
@@ -1833,10 +1715,6 @@ void log_shutdown() {
   os_event_free(log_sys->one_flushed_event);
 
   rw_lock_free(&log_sys->checkpoint_lock);
-
-#ifdef UNIV_LOG_DEBUG
-  recv_sys_debug_free();
-#endif /* UNIV_LOG_DEBUG */
 
   recv_sys_close();
 }

@@ -377,8 +377,6 @@ static ib_err_t ib_cfg_var_set_flush_method(struct ib_cfg_var *cfg_var, const vo
 
   value_str = *(const char **)value;
 
-  os_aio_use_native_aio = false;
-
   if (0 == strcmp(value_str, "fsync")) {
     srv_unix_file_flush_method = SRV_UNIX_FSYNC;
   } else if (0 == strcmp(value_str, "O_DSYNC")) {
@@ -1023,9 +1021,6 @@ ib_err_t ib_cfg_init() {
   /* Set the default options. */
   srv_file_flush_method_str = nullptr;
   srv_unix_file_flush_method = SRV_UNIX_FSYNC;
-
-  os_aio_print_debug = false;
-  os_aio_use_native_aio = false;
 
 #define IB_CFG_SET(name, var)              \
   if (ib_cfg_set(name, var) != DB_SUCCESS) \

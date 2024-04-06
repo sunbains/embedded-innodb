@@ -431,7 +431,7 @@ struct dict_table_t {
   unsigned flags : DICT_TF2_BITS; /*!< DICT_TF_COMPACT, ... */
 
   /** true if this is in a single-table tablespace and the .ibd file is
-  missing; then we must return in ha_innodb.cc an error if the user tries
+  missing; then we must return an error if the user tries
   to query such an orphaned table */
   unsigned ibd_file_missing : 1;
 

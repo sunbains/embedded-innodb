@@ -342,34 +342,39 @@ void fil_space_release_free_extents(
 should be zero. */
 ulint fil_space_get_n_reserved_extents(ulint id); /** in: space id */
 
-/** Reads or writes data. This operation is asynchronous (aio).
-@return DB_SUCCESS, or DB_TABLESPACE_DELETED if we are trying to do
-i/o on a tablespace which does not exist */
+/**
+ * Reads or writes data. This operation is asynchronous (aio).
+ * @param io_request - in: IO_request type.
+ * @param batched    - in: if simulated aio and we want to post a
+ *                     batch of i/os; NOTE that a simulated batch
+ *                     may introduce hidden chances of deadlocks,
+ *                     because i/os are not actually handled until
+ *                     all have been posted: use with great
+ *                     caution!
+ * @param space_id -   in: space id
+ * @param block_offset-in: offset in number of blocks
+ * @param byte_offset -in: remainder of offset in bytes; in
+ *                     aio this must be divisible by the OS block size
+ * @param len -        in: how many bytes to read or write; this
+ *                     must not cross a file boundary; in aio this
+ *                     must be a block size multiple
+ * @param buf -        in/out: buffer where to store read data
+ *                     or from where to write; in aio this must be
+ *                     appropriately aligned
+ * @param message -    in: message for aio handler if non-sync
+ *                     aio used, else ignored
+ * @return DB_SUCCESS, or DB_TABLESPACE_DELETED if we are trying to do
+ *         i/o on a tablespace which does not exist
+ */
 db_err fil_io(
-  ulint type,          /** in: OS_FILE_READ or OS_FILE_WRITE,
-                                 ORed to OS_FILE_LOG, if a log i/o
-                                 and ORed to OS_AIO_SIMULATED_WAKE_LATER
-                                 if simulated aio and we want to post a
-                                 batch of i/os; NOTE that a simulated batch
-                                 may introduce hidden chances of deadlocks,
-                                 because i/os are not actually handled until
-                                 all have been posted: use with great
-                                 caution! */
-  bool sync,           /** in: true if synchronous aio is desired */
-  space_id_t space_id, /** in: space id */
-  ulint block_offset,  /** in: offset in number of blocks */
-  ulint byte_offset,   /** in: remainder of offset in bytes; in
-                                  aio this must be divisible by the OS block
-                                  size */
-  ulint len,           /** in: how many bytes to read or write; this
-                                  must not cross a file boundary; in aio this
-                                  must be a block size multiple */
-  void *buf,           /** in/out: buffer where to store read data
-                                  or from where to write; in aio this must be
-                                  appropriately aligned */
-  void *message
-); /** in: message for aio handler if non-sync
-                                  aio used, else ignored */
+  IO_request io_request,
+  bool batched,
+  space_id_t space_id,
+  page_no_t page_no,
+  ulint byte_offset,
+  ulint len,
+  void *buf,
+  void *message);
 
 /** Waits for an aio operation to complete. This function is used to write the
 handler for completed requests. The aio array of pending requests is divided

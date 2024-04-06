@@ -685,7 +685,7 @@ inline buf_frame_t *buf_block_t::get_frame() const {
       ut_error;
       break;
     case BUF_BLOCK_FILE_PAGE:
-      ut_a(m_page.m_buf_fix_count > 0);
+      ut_a(m_page.m_buf_fix_count > 0 || buf_block_get_io_fix(this) == BUF_IO_READ);
       /* fall through */
     case BUF_BLOCK_MEMORY:
     case BUF_BLOCK_REMOVE_HASH:

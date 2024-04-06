@@ -1312,9 +1312,7 @@ void Buf_pool::page_init(space_id_t space, page_no_t page_no, buf_block_t *block
   HASH_INSERT(buf_page_t, m_hash, m_page_hash, buf_page_address_fold(space, page_no), &block->m_page);
 }
 
-buf_page_t *Buf_pool::init_for_read(db_err *err, ulint mode, space_id_t space, int64_t tablespace_version, page_no_t page_no) {
-  ut_ad(mode == BUF_READ_ANY_PAGE);
-
+buf_page_t *Buf_pool::init_for_read(db_err *err, space_id_t space, page_no_t page_no, int64_t tablespace_version) {
   buf_page_t *bpage{};
   auto block = m_LRU->get_free_block();
 
@@ -1345,7 +1343,6 @@ buf_page_t *Buf_pool::init_for_read(db_err *err, ulint mode, space_id_t space, i
       m_LRU->block_free_non_file_page(block);
 
       mutex_exit(&block->m_mutex);
-
     }
 
   } else if (block != nullptr) {

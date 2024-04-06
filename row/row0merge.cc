@@ -71,10 +71,6 @@ static bool row_merge_print_write;
 /** Log each row_merge_blocks() call, merging two blocks of records to
 a bigger one. */
 static bool row_merge_print_block;
-/** Log each block read from temporary file. */
-static bool row_merge_print_block_read;
-/** Log each block read from temporary file. */
-static bool row_merge_print_block_write;
 /* @} */
 #endif /* UNIV_DEBUG */
 
@@ -607,22 +603,16 @@ static bool row_merge_read(
   row_merge_block_t *buf
 ) /*!< out: data */
 {
-  uint64_t ofs = ((uint64_t)offset) * sizeof *buf;
-  bool success;
+  off_t off = ((off_t)offset) * sizeof(*buf);
 
-#ifdef UNIV_DEBUG
-  if (row_merge_print_block_read) {
-    ib_logger(ib_stream, "row_merge_read fd=%d ofs=%lu\n", fd, (ulong)offset);
-  }
-#endif /* UNIV_DEBUG */
+  auto success = os_file_read_no_error_handling(OS_FILE_FROM_FD(fd), buf, sizeof(*buf), off);
 
-  success = os_file_read_no_error_handling(OS_FILE_FROM_FD(fd), buf, (ulint)(ofs & 0xFFFFFFFF), (ulint)(ofs >> 32), sizeof *buf);
-  if (unlikely(!success)) {
+  if (!success) {
     ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  failed to read merge block at %lu\n", ofs);
+    ib_logger(ib_stream, "  failed to read merge block at %lu\n", off);
   }
 
-  return (likely(success));
+  return success;
 }
 
 /** Read a merge block from the file system.
@@ -633,17 +623,9 @@ static bool row_merge_write(
   const void *buf
 ) /*!< in: data */
 {
-  uint64_t ofs = ((uint64_t)offset) * sizeof(row_merge_block_t);
+  off_t off = off_t(offset) * sizeof(row_merge_block_t);
 
-#ifdef UNIV_DEBUG
-  if (row_merge_print_block_write) {
-    ib_logger(ib_stream, "row_merge_write fd=%d ofs=%lu\n", fd, (ulong)offset);
-  }
-#endif /* UNIV_DEBUG */
-
-  return (likely(
-    os_file_write("(merge)", OS_FILE_FROM_FD(fd), buf, (ulint)(ofs & 0xFFFFFFFF), (ulint)(ofs >> 32), sizeof(row_merge_block_t))
-  ));
+  return os_file_write("(merge)", OS_FILE_FROM_FD(fd), buf, sizeof(row_merge_block_t), off);
 }
 
 /** Read a merge record.

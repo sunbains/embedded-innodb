@@ -2612,13 +2612,6 @@ loop:
   }
 
   if (*ptr == '\0') {
-    /* The proper way to reject foreign keys for temporary
-    tables would be to split the lexing and syntactical
-    analysis of foreign key clauses from the actual adding
-    of them, so that ha_innodb.cc could first parse the SQL
-    command, determine if there are any foreign keys, and
-    if so, immediately reject the command if the table is a
-    temporary one. For now, this kludge will work. */
     if (reject_fks && (UT_LIST_GET_LEN(table->foreign_list) > 0)) {
 
       return DB_CANNOT_ADD_CONSTRAINT;

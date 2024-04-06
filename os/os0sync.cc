@@ -154,7 +154,7 @@ void Cond_var::set() {
 
   if (!m_is_set) {
     m_is_set = true;
-    m_signal_count += 1;
+    ++m_signal_count;
     m_cond_var.notify_all();
   }
 }
@@ -165,9 +165,8 @@ int64_t Cond_var::reset() {
   if (m_is_set) {
     m_is_set = false;
   }
-  auto ret = m_signal_count;
 
-  return ret;
+  return m_signal_count;
 }
 
 void Cond_var::destroy(Cond_var* event) {

@@ -430,13 +430,22 @@ void Buf_flush::buffered_writes() {
   write_buf = trx_doublewrite->write_buf;
   ulint i = 0;
 
-  fil_io(OS_FILE_WRITE, true, TRX_SYS_SPACE, trx_doublewrite->block1, 0, len, (void *)write_buf, nullptr);
+  fil_io(IO_request::Sync_write,
+         false,
+	        TRX_SYS_SPACE,
+          trx_doublewrite->block1,
+          0,
+          len,
+          write_buf,
+          nullptr);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
     const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
 
     if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
-	unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4), 4))) {
+        unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4),
+                        write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4), 4))) {
+
       ut_print_timestamp(ib_stream);
       ib_logger(
         ib_stream,
@@ -457,7 +466,7 @@ void Buf_flush::buffered_writes() {
   write_buf = trx_doublewrite->write_buf + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE;
   ut_ad(i == TRX_SYS_DOUBLEWRITE_BLOCK_SIZE);
 
-  fil_io(OS_FILE_WRITE, true, TRX_SYS_SPACE, trx_doublewrite->block2, 0, len, (void *)write_buf, nullptr);
+  fil_io(IO_request::Sync_write, false, TRX_SYS_SPACE, trx_doublewrite->block2, 0, len, (void *)write_buf, nullptr);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
     const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
@@ -493,26 +502,17 @@ flush:
     ut_a(block->get_state() == BUF_BLOCK_FILE_PAGE);
 
     if (unlikely(memcmp(block->m_frame + (FIL_PAGE_LSN + 4), block->m_frame + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4), 4))) {
-      ut_print_timestamp(ib_stream);
-      ib_logger(
-        ib_stream,
-        "  ERROR: The page to be written"
-        " seems corrupt!\n"
-        "The lsn fields do not match!"
-        " Noticed in the buffer pool\n"
-        "after posting and flushing"
-        " the doublewrite buffer.\n"
-        "Page buf fix count %lu,"
-        " io fix %lu, state %lu\n",
-        (ulong)block->m_page.m_buf_fix_count,
-        (ulong)buf_block_get_io_fix(block),
-        (ulong)block->get_state()
+      log_err(
+        std::format(
+        "The page to be written seems corrupt! The lsn fields do not match! Noticed in the buffer pool"
+        " after posting and flushing the doublewrite buffer. Page buf fix count {}, io fix {}, state {}",
+        (int) block->m_page.m_buf_fix_count, (int) buf_block_get_io_fix(block), (int) block->get_state())
       );
     }
 
     fil_io(
-      OS_FILE_WRITE | OS_AIO_SIMULATED_WAKE_LATER,
-      false,
+      IO_request::Async_write,
+      true,
       block->get_space(),
       block->get_page_no(),
       0,
@@ -593,9 +593,6 @@ void Buf_flush::init_for_writing(byte *page, uint64_t newest_lsn) {
 
 void Buf_flush::write_block_low(buf_page_t *bpage) {
   page_t *frame = nullptr;
-#ifdef UNIV_LOG_DEBUG
-  static bool univ_log_debug_warned;
-#endif /* UNIV_LOG_DEBUG */
 
   ut_ad(bpage->in_file());
 
@@ -610,20 +607,9 @@ void Buf_flush::write_block_low(buf_page_t *bpage) {
   ut_ad(bpage->m_oldest_modification != 0);
   ut_ad(bpage->m_newest_modification != 0);
 
-#ifdef UNIV_LOG_DEBUG
-  if (!univ_log_debug_warned) {
-    univ_log_debug_warned = true;
-    ib_logger(
-      ib_stream,
-      "Warning: cannot force log to disk if"
-      " UNIV_LOG_DEBUG is defined!\n"
-      "Crash recovery will not work!\n"
-    );
-  }
-#else
   /* Force the log to the disk before writing the modified block */
   log_write_up_to(bpage->m_newest_modification, LOG_WAIT_ALL_GROUPS, true);
-#endif
+
   switch (bpage->get_state()) {
     case BUF_BLOCK_NOT_USED:
     case BUF_BLOCK_READY_FOR_USE:
@@ -639,8 +625,8 @@ void Buf_flush::write_block_low(buf_page_t *bpage) {
 
   if (!srv_use_doublewrite_buf || !trx_doublewrite) {
     fil_io(
-      OS_FILE_WRITE | OS_AIO_SIMULATED_WAKE_LATER,
-      false,
+      IO_request::Async_write,
+      true,
       bpage->get_space(),
       bpage->get_page_no(),
       0,

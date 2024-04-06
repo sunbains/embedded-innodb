@@ -836,13 +836,13 @@ struct Buf_pool {
    * The io-handler must take care that the flag is cleared and the lock released later.
    *
    * @param[out] err - Pointer to the error code (DB_SUCCESS or DB_TABLESPACE_DELETED).
-   * @param mode - The mode of reading (BUF_READ_ANY_PAGE, ...).
    * @param space - The space id.
-   * @param[in] tablespace_version - Prevents reading from a wrong version of the tablespace in case we have done DISCARD + IMPORT.
+   * @param[in] tablespace_version - Prevents reading from a wrong version of the
+   *  tablespace in case we have done DISCARD + IMPORT.
    * @param page_no - The page number.
    * @return Pointer to the block or nullptr.
    */
-  buf_page_t *init_for_read(db_err *err, ulint mode, space_id_t space, int64_t tablespace_version, page_no_t page_no);
+  buf_page_t *init_for_read(db_err *err, space_id_t space, page_no_t page_no, int64_t tablespace_version);
 
   /**
    * @brief Completes an asynchronous read or write request of a file page to or from the buffer pool.

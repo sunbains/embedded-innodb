@@ -154,7 +154,7 @@ os_thread_event_wait().
 @return	true if all threads exited. */
 static bool srv_threads_shutdown(void);
 
-#define SRV_N_PENDING_IOS_PER_THREAD OS_AIO_N_PENDING_IOS_PER_THREAD
+constexpr auto SRV_N_PENDING_IOS_PER_THREAD  = OS_AIO_N_PENDING_IOS_PER_THREAD;
 constexpr ulint SRV_MAX_N_PENDING_SYNC_IOS = 100;
 
 /** Convert a numeric string that optionally ends in G or M, to a number
@@ -587,8 +587,7 @@ static db_err open_or_create_log_file(
 ) /*!< in: log file number in group */
 {
   bool ret;
-  ulint size;
-  ulint size_high;
+  off_t size;
   char name[10000];
 
   UT_NOT_USED(create_new_db);
@@ -621,21 +620,16 @@ static db_err open_or_create_log_file(
       return DB_ERROR;
     }
 
-    ret = os_file_get_size(files[i], &size, &size_high);
+    ret = os_file_get_size(files[i], &size);
     ut_a(ret);
 
-    if (size != srv_calc_low32(srv_log_file_size) || size_high != srv_calc_high32(srv_log_file_size)) {
+    if (size != (off_t) srv_log_file_size) {
 
       ib_logger(
         ib_stream,
-        "Error: log file %s is"
-        " of different size %lu %lu bytes\n"
-        "than the configured %lu %lu bytes!\n",
-        name,
-        (ulong)size_high,
-        (ulong)size,
-        (ulong)srv_calc_high32(srv_log_file_size),
-        (ulong)srv_calc_low32(srv_log_file_size)
+        "Error: log file %s is of different size %lu bytes"
+        " than the configured %lu bytes!\n",
+        name, (ulong)size, (ulong)srv_log_file_size
       );
 
       return DB_ERROR;
@@ -714,8 +708,7 @@ static db_err open_or_create_data_files(
   ulint i;
   bool one_opened = false;
   bool one_created = false;
-  ulint size;
-  ulint size_high;
+  off_t size;
   ulint rounded_size_pages;
   char name[PATH_MAX];
   char home[1024];
@@ -845,11 +838,11 @@ static db_err open_or_create_data_files(
         goto skip_size_check;
       }
 
-      ret = os_file_get_size(files[i], &size, &size_high);
+      ret = os_file_get_size(files[i], &size);
       ut_a(ret);
       /* Round size downward to megabytes */
 
-      rounded_size_pages = (size / (1024 * 1024) + 4096 * size_high) << (20 - UNIV_PAGE_SIZE_SHIFT);
+      rounded_size_pages = size / (1024 * 1024) + 4096;
 
       if (i == srv_n_data_files - 1 && srv_auto_extend_last_data_file) {
 
@@ -1137,17 +1130,11 @@ ib_err_t innobase_start_or_create() {
 
   /* file_io_threads used to be user settable, now it's just a
      sum of read_io_threads and write_io_threads */
-  srv_n_file_io_threads = 2 + srv_n_read_io_threads + srv_n_write_io_threads;
+  srv_n_file_io_threads = 1 + srv_n_read_io_threads + srv_n_write_io_threads;
 
   ut_a(srv_n_file_io_threads <= SRV_MAX_N_IO_THREADS);
 
-  /* TODO: Investigate if SRV_N_PENDING_IOS_PER_THREAD (32) limit
-  still applies to windows. */
-  if (!os_aio_use_native_aio) {
-    io_limit = 8 * SRV_N_PENDING_IOS_PER_THREAD;
-  } else {
-    io_limit = SRV_N_PENDING_IOS_PER_THREAD;
-  }
+  io_limit = 8 * SRV_N_PENDING_IOS_PER_THREAD;
 
 #ifdef UNIV_DEBUG
   /* We have observed deadlocks with a 5MB buffer pool but

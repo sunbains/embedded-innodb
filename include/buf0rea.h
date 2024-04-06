@@ -62,7 +62,8 @@ bool buf_read_page(ulint space, ulint offset);
  *        this function must be written such that it cannot end up waiting
  *        for these latches!
  * @param space The space id.
- * @param page_no The page number of a page. NOTE: the current thread must want access to this page (see NOTE 3 above).
+ * @param page_no The page number of a page. NOTE: the current thread must
+ *  want access to this page (see NOTE 3 above).
  * @return The number of page read requests issued.
  */
 ulint buf_read_ahead_linear(space_id_t space, page_no_t page_no);
@@ -77,9 +78,6 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t page_no);
  * @param page_nos array of page numbers to read, with the highest page number the last in the array
  * @param n_stored number of page numbers in the array
  */
-void buf_read_recv_pages(bool sync, ulint space, const ulint *page_nos, ulint n_stored);
+void buf_read_recv_pages(bool sync, space_id_t space, const page_no_t *page_nos, ulint n_stored);
 
-/** @name Modes used in read-ahead @{ */
-/** Read any page */
-constexpr ulint BUF_READ_ANY_PAGE = 132;
 /* @} */

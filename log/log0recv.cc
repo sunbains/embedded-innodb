@@ -236,9 +236,7 @@ static void recv_sys_empty_hash(void) {
   recv_sys->addr_hash = hash_create(buf_pool->get_curr_size() / 256);
 }
 
-#ifndef UNIV_LOG_DEBUG
-/** Frees the recovery system. */
-static void recv_sys_debug_free(void) {
+static void recv_sys_debug_free() {
   mutex_enter(&(recv_sys->mutex));
 
   hash_table_free(recv_sys->addr_hash);
@@ -256,7 +254,6 @@ static void recv_sys_debug_free(void) {
   /* Free up the flush_rbt. */
   buf_pool->m_flusher->free_flush_rbt();
 }
-#endif /* UNIV_LOG_DEBUG */
 
 /** Truncates possible corrupted or extra records from a log group. */
 static void recv_truncate_group(
@@ -574,9 +571,6 @@ InnoDB-3.23.52 where the checksum field contains the log block number.
 version predating 3.23.52 */
 static bool log_block_checksum_is_ok_or_old_format(const byte *block) /*!< in: pointer to a log block */
 {
-#ifdef UNIV_LOG_DEBUG
-  return true;
-#endif /* UNIV_LOG_DEBUG */
   if (log_block_calc_checksum(block) == log_block_get_checksum(block)) {
 
     return true;
@@ -1334,11 +1328,7 @@ static ulint recv_parse_log_rec(
 #ifdef UNIV_LOG_LSN_DEBUG
   if (*type == MLOG_LSN) {
     uint64_t lsn = uint64_t(*space) << 32 | *page_no;
-#ifdef UNIV_LOG_DEBUG
-    ut_a(lsn == log_sys->old_lsn);
-#else  /* UNIV_LOG_DEBUG */
     ut_a(lsn == recv_sys->recovered_lsn);
-#endif /* UNIV_LOG_DEBUG */
   }
 #endif /* UNIV_LOG_LSN_DEBUG */
 
@@ -1373,26 +1363,6 @@ static uint64_t recv_calc_lsn_on_data_add(
 
   return lsn + lsn_len;
 }
-
-#ifdef UNIV_LOG_DEBUG
-/** Checks that the parser recognizes incomplete initial segments of a log
-record as incomplete. */
-static void recv_check_incomplete_log_recs(
-  byte *ptr, /*!< in: pointer to a complete log record */
-  ulint len
-) /*!< in: length of the log record */
-{
-  ulint i;
-  byte type;
-  ulint space;
-  ulint page_no;
-  byte *body;
-
-  for (i = 0; i < len; i++) {
-    ut_a(0 == recv_parse_log_rec(ptr, ptr + i, &type, &space, &page_no, &body));
-  }
-}
-#endif /* UNIV_LOG_DEBUG */
 
 /** Prints diagnostic info of corrupt log. */
 static void recv_report_corrupt_log(
@@ -1546,9 +1516,6 @@ loop:
       /* In debug checking, update a replicate page
       according to the log record, and check that it
       becomes identical with the original page */
-#ifdef UNIV_LOG_DEBUG
-      recv_check_incomplete_log_recs(ptr, len);
-#endif /* UNIV_LOG_DEBUG */
 
     } else if (type == MLOG_FILE_CREATE || type == MLOG_FILE_CREATE2 || type == MLOG_FILE_RENAME || type == MLOG_FILE_DELETE) {
       ut_a(space);
@@ -1585,12 +1552,6 @@ loop:
       recv_previous_parsed_rec_type = (ulint)type;
       recv_previous_parsed_rec_offset = recv_sys->recovered_offset + total_len;
       recv_previous_parsed_rec_is_multi = 1;
-
-#ifdef UNIV_LOG_DEBUG
-      if ((!store_to_hash) && (type != MLOG_MULTI_REC_END)) {
-        recv_check_incomplete_log_recs(ptr, len);
-      }
-#endif /* UNIV_LOG_DEBUG */
 
 #ifdef UNIV_DEBUG
       if (log_debug_writes) {
@@ -1820,12 +1781,6 @@ bool recv_scan_log_recs(
       before the most recent database recovery */
 
       finished = true;
-#ifdef UNIV_LOG_DEBUG
-      /* This is not really an error, but currently
-      we stop here in the debug version: */
-
-      ut_error;
-#endif
       break;
     }
 
@@ -2039,7 +1994,14 @@ static void recv_recover_from_ibbackup(log_group_t *max_cp_group) /*!< in/out: l
   /* Read the first log file header to print a note if this is
   a recovery from a restored InnoDB Hot Backup */
 
-  fil_io(OS_FILE_READ | OS_FILE_LOG, true, max_cp_group->space_id, 0, 0, LOG_FILE_HDR_SIZE, log_hdr_buf, max_cp_group);
+  fil_io(IO_request::Sync_log_read,
+         false,
+         max_cp_group->space_id,
+         0,
+         0,
+         LOG_FILE_HDR_SIZE,
+         log_hdr_buf,
+         max_cp_group);
 
   if (0 == memcmp(log_hdr_buf + LOG_FILE_WAS_CREATED_BY_HOT_BACKUP, (byte *)"ibbackup", (sizeof "ibbackup") - 1)) {
     /* This log file was created by ibbackup --restore: print
@@ -2061,8 +2023,16 @@ static void recv_recover_from_ibbackup(log_group_t *max_cp_group) /*!< in/out: l
     /* Wipe over the label now */
 
     memset(log_hdr_buf + LOG_FILE_WAS_CREATED_BY_HOT_BACKUP, ' ', 4);
+
     /* Write to the log file to wipe over the label */
-    fil_io(OS_FILE_WRITE | OS_FILE_LOG, true, max_cp_group->space_id, 0, 0, IB_FILE_BLOCK_SIZE, log_hdr_buf, max_cp_group);
+    fil_io(IO_request::Sync_log_write,
+           false,
+           max_cp_group->space_id,
+           0,
+           0,
+           IB_FILE_BLOCK_SIZE,
+           log_hdr_buf,
+           max_cp_group);
   }
 }
 
@@ -2313,9 +2283,7 @@ void recv_recovery_from_checkpoint_finish(ib_recovery_t recovery) {
 
   recv_recovery_on = false;
 
-#ifndef UNIV_LOG_DEBUG
   recv_sys_debug_free();
-#endif /* UNIV_LOG_DEBUG */
 
   /* Roll back any recovered data dictionary transactions, so
   that the data dictionary tables will be free of any locks.

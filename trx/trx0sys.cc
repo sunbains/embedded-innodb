@@ -110,9 +110,6 @@ static void trx_doublewrite_init(byte *doublewrite) /*!< in: pointer to the doub
 
   /* Since we now start to use the doublewrite buffer, no need to call
   fsync() after every write to a data file */
-#ifdef UNIV_DO_FLUSH
-  os_do_not_call_flush_at_each_write = true;
-#endif /* UNIV_DO_FLUSH */
 
   mutex_create(&trx_doublewrite->mutex, IF_DEBUG("dblwr_mutex",) IF_SYNC_DEBUG(SYNC_DOUBLEWRITE,) Source_location{});
 
@@ -351,7 +348,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
   /* Read the trx sys header to check if we are using the doublewrite
   buffer */
 
-  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, TRX_SYS_PAGE_NO, 0, UNIV_PAGE_SIZE, read_buf, nullptr);
+  fil_io(IO_request::Sync_read, false, TRX_SYS_SPACE, TRX_SYS_PAGE_NO, 0, UNIV_PAGE_SIZE, read_buf, nullptr);
 
   doublewrite = read_buf + TRX_SYS_DOUBLEWRITE;
 
@@ -385,11 +382,19 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
 
   /* Read the pages from the doublewrite buffer to memory */
 
-  fil_io(OS_FILE_READ, true, TRX_SYS_SPACE, block1, 0, TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE, buf, nullptr);
+  fil_io(
+    IO_request::Sync_read,
+    false,
+    TRX_SYS_SPACE,
+    block1,
+    0,
+    TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE,
+    buf,
+    nullptr);
 
   fil_io(
-    OS_FILE_READ,
-    true,
+    IO_request::Sync_read,
+    false,
     TRX_SYS_SPACE,
     block2,
     0,
@@ -421,7 +426,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
         source_page_no = block2 + i - TRX_SYS_DOUBLEWRITE_BLOCK_SIZE;
       }
 
-      fil_io(OS_FILE_WRITE, true, 0, 0, source_page_no, UNIV_PAGE_SIZE, page, nullptr);
+      fil_io(IO_request::Sync_write, false, 0, 0, source_page_no, UNIV_PAGE_SIZE, page, nullptr);
       /* printf("Resetting space id in page %lu\n",
       source_page_no); */
     } else {
@@ -455,7 +460,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
       do nothing */
     } else {
       /* Read in the actual page from the file */
-      fil_io(OS_FILE_READ, true, space_id, page_no, 0, UNIV_PAGE_SIZE, read_buf, nullptr);
+      fil_io(IO_request::Sync_read, false, space_id, page_no, 0, UNIV_PAGE_SIZE, read_buf, nullptr);
 
       /* Check if the page is corrupt */
 
@@ -503,7 +508,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
         /* Write the good page from the doublewrite buffer to the intended
          * position */
 
-        fil_io(OS_FILE_WRITE, true, space_id, page_no, 0, UNIV_PAGE_SIZE, page, nullptr);
+        fil_io(IO_request::Sync_write, false, space_id, page_no, 0, UNIV_PAGE_SIZE, page, nullptr);
 
         ib_logger(ib_stream, "Recovered the page from the doublewrite buffer.\n");
       }
@@ -980,7 +985,7 @@ bool trx_sys_read_file_format_id(const char *pathname, ulint *format_id) {
 
   /* Read the page on which file format is stored */
 
-  success = os_file_read_no_error_handling(file, page, TRX_SYS_PAGE_NO * UNIV_PAGE_SIZE, 0, UNIV_PAGE_SIZE);
+  success = os_file_read_no_error_handling(file, page, UNIV_PAGE_SIZE, TRX_SYS_PAGE_NO * UNIV_PAGE_SIZE);
 
   if (!success) {
     /* The following call prints an error message */
@@ -1049,7 +1054,7 @@ bool trx_sys_read_pertable_file_format_id(const char *pathname, ulint *format_id
 
   /* Read the first page of the per-table datafile */
 
-  success = os_file_read_no_error_handling(file, page, 0, 0, UNIV_PAGE_SIZE);
+  success = os_file_read_no_error_handling(file, page, UNIV_PAGE_SIZE, 0);
   if (!success) {
     /* The following call prints an error message */
     os_file_get_last_error(true);
@@ -1111,10 +1116,6 @@ void trx_sys_close() {
   /* This is required only because it's a pre-condition for many
   of the functions that we need to call. */
   mutex_enter(&kernel_mutex);
-
-#ifdef UNIV_DO_FLUSH
-  os_do_not_call_flush_at_each_write = true;
-#endif /* UNIV_DO_FLUSH */
 
   /* Free the double write data structures. */
   ut_a(trx_doublewrite != nullptr);
