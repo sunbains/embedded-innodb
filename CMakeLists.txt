@@ -26,6 +26,8 @@ SET(CMAKE_CXX_STANDARD_REQUIRED True)
 SET (LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/lib)
 SET (EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
+INCLUDE(ExternalProject)
+
 SET(UNIT_TESTING true)
 
 # Increment if interfaces have been added, removed or changed
@@ -59,6 +61,33 @@ SET(IB_LANG "english")
 # Check for programs required to build InnoDB e.g., Bison and Flex
 FIND_PROGRAM(FLEX flex)
 FIND_PROGRAM(BISON bison)
+
+SET(DEPS_INSTALL_DIR "${CMAKE_SOURCE_DIR}/deps/install")
+SET(LIBURING_SRC_DIR "${CMAKE_SOURCE_DIR}/deps/liburing")
+SET(LIBURING_INSTALL_DIR "${DEPS_INSTALL_DIR}/liburing")
+
+SET(LIBURING_LIB_DIR "${LIBURING_INSTALL_DIR}/lib")
+SET(LIBURING_INCLUDE_DIR "${LIBURING_INSTALL_DIR}/include")
+
+ExternalProject_Add(liburing
+  BUILD_ALWAYS ON
+  SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/liburing"
+  PREFIX ${DEPS_INSTALL_DIR}
+  BUILD_COMMAND make -C ${LIBURING_SRC_DIR} prefix=${LIBURING_INSTALL_DIR}
+  CONFIGURE_COMMAND ""
+  INSTALL_COMMAND make 
+    -C ${LIBURING_SRC_DIR}
+    prefix=${LIBURING_INSTALL_DIR}
+    includedir=${LIBURING_INCLUDE_DIR}
+    libdir=${LIBURING_LIB_DIR}
+    libdevdir=${LIBURING_LIB_DIR}
+    mandir=${LIBURING_INSTALL_DIR}/man
+    install
+)
+
+LINK_DIRECTORIES(${LIBURING_LIB_DIR})
+INCLUDE_DIRECTORIES(${LIBURING_INCLUDE_DIR})
+
 
 include(CheckTypeSize)
 CHECK_TYPE_SIZE(char SIZEOF_CHAR)
@@ -158,9 +187,7 @@ SET(CMAKE_EXTRA_INCLUDE_FILES pthread.h)
 CHECK_TYPE_SIZE(pthread_t SIZEOF_PTHREAD_T)
 SET(CMAKE_EXTRA_INCLUDE_FILES)
 
-# Include directories under innobase
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}/include)
+INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include)
 
 SET(INNODB_SOURCES  btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       buf/buf0buf.cc
