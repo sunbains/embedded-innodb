@@ -3,6 +3,8 @@
 #include <array>
 #include <vector>
 
+#include <liburing.h>
+
 #include "os0aio.h"
 #include "os0file.h"
 #include "ut0mem.h"
