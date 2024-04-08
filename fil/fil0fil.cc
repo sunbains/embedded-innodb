@@ -353,7 +353,8 @@ static void fil_node_prepare_for_io(fil_node_t *node, fil_system_t *system, fil_
  * 
  * @param node - file node
  * @param system - tablespace memory cache
- * @param io_request - IO_request::Write or IO_request::Read; marks the node as modified if type == IO_request::Write
+ * @param io_request - IO_request::Write or IO_request::Read; marks the node as
+ *  modified if type == IO_request::Write
  */
 static void fil_node_complete_io(fil_node_t *node, fil_system_t *system, IO_request io_request);
 
@@ -557,14 +558,15 @@ void fil_node_create(const char *name, ulint size, space_id_t id, bool is_raw) {
   mutex_exit(&fil_system->mutex);
 }
 
-/** Opens a the file of a node of a tablespace. The caller must own the
-fil_system mutex. */
-static void fil_node_open_file(
-  fil_node_t *node,     /** in: file node */
-  fil_system_t *system, /** in: tablespace memory cache */
-  fil_space_t *space
-) /** in: space */
-{
+/**
+ * Opens a the file of a node of a tablespace.
+ * The caller must own the fil_system mutex.
+ *
+ * @param node The file node.
+ * @param system The tablespace memory cache.
+ * @param space The space.
+ */
+static void fil_node_open_file(fil_node_t *node, fil_system_t *system, fil_space_t *space) {
   off_t size;
   bool ret;
   bool success;
@@ -835,13 +837,14 @@ retry:
   goto retry;
 }
 
-/** Frees a file node object from a tablespace memory cache. */
-static void fil_node_free(
-  fil_node_t *node,     /** in, own: file node */
-  fil_system_t *system, /** in: tablespace memory cache */
-  fil_space_t *space
-) /** in: space where the file node is chained */
-{
+/**
+ * @brief Frees a file node object from a tablespace memory cache.
+ *
+ * @param node in, own: file node
+ * @param system in: tablespace memory cache
+ * @param space in: space where the file node is chained
+ */
+static void fil_node_free(fil_node_t *node, fil_system_t *system, fil_space_t *space) {
   ut_ad(node && system && space);
   ut_ad(mutex_own(&(system->mutex)));
   ut_a(node->magic_n == FIL_NODE_MAGIC_N);
@@ -1352,15 +1355,17 @@ void fil_set_max_space_id_if_bigger(ulint max_id) {
   mutex_exit(&fil_system->mutex);
 }
 
-/** Writes the flushed lsn and the latest archived log number to the page header
-of the first page of a data file of the system tablespace (space 0),
-which is uncompressed. */
-static db_err fil_write_lsn_and_arch_no_to_file(
-  ulint sum_of_sizes, /** in: combined size of previous files
-                        in space, in database pages */
-  lsn_t lsn
-) /** in: lsn to write */
-{
+/**
+ * @brief Writes the flushed lsn and the latest archived log number to the page header
+ * of the first page of a data file of the system tablespace (space 0),
+ * which is uncompressed.
+ *
+ * @param sum_of_sizes in: combined size of previous files in space, in database pages
+ * @param lsn in: lsn to write
+ *
+ * @return db_err
+ */
+static db_err fil_write_lsn_and_arch_no_to_file(ulint sum_of_sizes, lsn_t lsn) {
   auto buf1 = (byte *)mem_alloc(2 * UNIV_PAGE_SIZE);
   auto buf = (byte *)ut_align(buf1, UNIV_PAGE_SIZE);
 
@@ -1419,10 +1424,11 @@ db_err fil_write_flushed_lsn_to_data_files(lsn_t lsn) {
 }
 
 void fil_read_flushed_lsn_and_arch_log_no(
-  os_file_t data_file, bool one_read_already, lsn_t *min_flushed_lsn, /** in/out: */
+  os_file_t data_file,
+  bool one_read_already,
+  lsn_t *min_flushed_lsn,
   lsn_t *max_flushed_lsn
-) /** in/out: */
-{
+ ) {
   uint64_t flushed_lsn;
   auto buf2 = (byte *)ut_new(2 * UNIV_PAGE_SIZE);
 
@@ -1449,16 +1455,16 @@ void fil_read_flushed_lsn_and_arch_log_no(
   }
 }
 
-/** Creates the database directory for a table if it does not exist yet. */
-static void fil_create_directory_for_tablename(const char *name) /** in: name in the standard
-                      'databasename/tablename' format */
-{
-  const char *namend;
-
+/**
+ * @brief Creates the database directory for a table if it does not exist yet.
+ *
+ * @param name in: name in the standard 'databasename/tablename' format
+ */
+static void fil_create_directory_for_tablename(const char *name) {
   auto len = strlen(srv_data_home);
   ut_a(len > 0);
 
-  namend = strchr(name, '/');
+  auto namend = strchr(name, '/');
   ut_a(namend);
 
   auto path = (char *)mem_alloc(len + (namend - name) + 2);
@@ -1834,15 +1840,15 @@ static bool fil_rename_tablespace_in_mem(
   return true;
 }
 
-/** Allocates a file name for a single-table tablespace. The string must be
-freed by caller with mem_free().
-@return	own: file name */
-static char *fil_make_ibd_name(
-  const char *name, /** in: table name or a dir path of a
-                                    TEMPORARY table */
-  bool is_temp
-) /** in: true if it is a dir path */
-{
+/**
+ * @brief Allocates a file name for a single-table tablespace.
+ * The string must be freed by caller with mem_free().
+ * 
+ * @param name The table name or a dir path of a TEMPORARY table.
+ * @param is_temp True if it is a dir path.
+ * @return char* The allocated file name.
+ */
+static char *fil_make_ibd_name(const char *name, bool is_temp) {
   ulint namelen = strlen(name);
   auto dirlen = strlen(srv_data_home);
   auto sz = dirlen + namelen + sizeof("/.ibd");
@@ -2381,6 +2387,7 @@ static void fil_load_single_table_tablespace(ib_recovery_t recovery, const char 
 
     return;
   }
+
   /* Read the first page of the tablespace if the size big enough */
 
   auto buf2 = (byte *)ut_new(2 * UNIV_PAGE_SIZE);
@@ -2873,18 +2880,17 @@ ulint fil_space_get_n_reserved_extents(space_id_t id) {
   return n;
 }
 
-/** NOTE: you must call fil_mutex_enter_and_prepare_for_io() first!
-
-Prepares a file node for i/o. Opens the file if it is closed. Updates the
-pending i/o's field in the node and the system appropriately. Takes the node
-off the LRU list if it is in the LRU list. The caller must hold the fil_sys
-mutex. */
-static void fil_node_prepare_for_io(
-  fil_node_t *node,     /** in: file node */
-  fil_system_t *system, /** in: tablespace memory cache */
-  fil_space_t *space
-) /** in: space */
-{
+/**
+ * @brief Prepares a file node for i/o. Opens the file if it is closed. Updates the
+ * pending i/o's field in the node and the system appropriately. Takes the node
+ * off the LRU list if it is in the LRU list. The caller must hold the fil_sys
+ * mutex.
+ *
+ * @param node in: file node
+ * @param system in: tablespace memory cache
+ * @param space in: space
+ */
+static void fil_node_prepare_for_io(fil_node_t *node, fil_system_t *system, fil_space_t *space) {
   ut_ad(node && system && space);
   ut_ad(mutex_own(&(system->mutex)));
 
