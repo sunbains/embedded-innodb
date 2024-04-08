@@ -12,10 +12,6 @@
 /* In simulated aio, merge at most this many consecutive i/os */
 constexpr ulint OS_AIO_MERGE_N_CONSECUTIVE = 64;
 
-/** If this flag is true, then we will use the native aio of the
-OS (provided we compiled Innobase with it in), otherwise we will
-use simulated aio we build below with threads */
-
 /** The asynchronous i/o array slot structure */
 struct AIO_slot {
   /** Time when reserved */
