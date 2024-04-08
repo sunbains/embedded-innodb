@@ -105,6 +105,7 @@ ulint fil_n_log_flushes = 0;
 
 /** Number of pending redo log flushes */
 ulint fil_n_pending_log_flushes = 0;
+
 /** Number of pending tablespace flushes */
 ulint fil_n_pending_tablespace_flushes = 0;
 
@@ -114,7 +115,7 @@ const fil_addr_t fil_addr_null = {FIL_NULL, 0};
 /** File node of a tablespace or the log data space */
 struct fil_node_t {
   /** backpointer to the space where this node belongs */
-  fil_space_t *space;
+  fil_space_t *m_space;
 
   /** path to the file */
   char *m_file_name;
@@ -546,7 +547,7 @@ void fil_node_create(const char *name, ulint size, space_id_t id, bool is_raw) {
 
   space->m_size_in_pages += size;
 
-  node->space = space;
+  node->m_space = space;
 
   UT_LIST_ADD_LAST(space->chain, node);
 
@@ -2927,10 +2928,10 @@ static void fil_node_complete_io(fil_node_t *node, fil_system_t *system, IO_requ
     ++system->modification_counter;
     node->modification_counter = system->modification_counter;
 
-    if (!node->space->is_in_unflushed_spaces) {
+    if (!node->m_space->is_in_unflushed_spaces) {
 
-      node->space->is_in_unflushed_spaces = true;
-      UT_LIST_ADD_FIRST(system->unflushed_spaces, node->space);
+      node->m_space->is_in_unflushed_spaces = true;
+      UT_LIST_ADD_FIRST(system->unflushed_spaces, node->m_space);
     }
   }
 }
@@ -3134,7 +3135,7 @@ void fil_aio_wait(ulint segment) {
   deadlocks in the i/o system. We keep tablespace 0 data files always
   open, and use a special i/o thread to serve insert buffer requests. */
 
-  if (io_ctx.m_fil_node->space->purpose == FIL_TABLESPACE) {
+  if (io_ctx.m_fil_node->m_space->purpose == FIL_TABLESPACE) {
     buf_pool->io_complete(reinterpret_cast<buf_page_t *>(io_ctx.m_msg));
   } else {
     log_io_complete(reinterpret_cast<log_group_t *>(io_ctx.m_msg));
@@ -3321,8 +3322,8 @@ bool fil_validate() {
   while (fil_node != nullptr) {
     ut_a(fil_node->n_pending == 0);
     ut_a(fil_node->open);
-    ut_a(fil_node->space->purpose == FIL_TABLESPACE);
-    ut_a(fil_node->space->id != 0);
+    ut_a(fil_node->m_space->purpose == FIL_TABLESPACE);
+    ut_a(fil_node->m_space->id != 0);
   }
 
   mutex_exit(&fil_system->mutex);

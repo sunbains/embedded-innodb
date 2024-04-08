@@ -250,9 +250,9 @@ bool fil_open_single_table_tablespace(bool check_space_id, space_id_t space_id, 
  * in the doublewrite buffer, also to know where to apply log records where the
  * space id is != 0.
  *
- * @param[in] path      The path to the database files and sub-directories
- * @param[in] recovery  The recovery flag
- * @param[in] max_depth The maximum depth of the directory tree to scan
+ * @param[in] path              The path to the database files and sub-directories
+ * @param[in] recovery          The recovery flag
+ * @param[in] max_depth         The maximum depth of the directory tree to scan
  *
  * @return  DB_SUCCESS or error number
  */
@@ -269,8 +269,8 @@ void fil_print_orphaned_tablespaces();
  * Returns true if a single-table tablespace does not exist in the memory
  * cache, or is being deleted there.
  *
- * @param[in] space_id        Space id
- * @param[in] version         Tablespace version; if you pass -1 as the value of this,
+ * @param[in] space_id          Space id
+ * @param[in] version           Tablespace version; if you pass -1 as the value of this,
  *  then this parameter is ignored
  *
  * @return true if does not exist or is being deleted
@@ -291,13 +291,14 @@ bool fil_tablespace_exists_in_mem(space_id_t space_id);
  * cache. Note that if we have not done a crash recovery at the database startup,
  * there may be many tablespaces which are not yet in the memory cache.
  *
- * @param[in] space_id                space id
- * @param[in] name                    table name in the standard 'databasename/tablename'
- *  format or the dir path to a temp table
- * @param[in] is_temp                 true if created with CREATE TEMPORARY TABLE
- * @param[in] mark_space              in crash recovery, at database startup we mark all
- *  spaces which have an associated table in the InnoDB data dictionary, so that we can
- *   print a warning about orphaned tablespaces
+ * @param[in] space_id          space id
+ * @param[in] name              table name in the standard 'databasename/tablename'
+ *                              format or the dir path to a temp table
+ * @param[in] is_temp           true if created with CREATE TEMPORARY TABLE
+ * @param[in] mark_space        in crash recovery, at database startup we mark all
+ *                              spaces which have an associated table in the InnoDB
+ *                              data dictionary, so that we can print a warning about
+ *                              orphaned tablespaces
  * @param[in] print_error_if_does_not_exist
  *
  * @return true if a matching tablespace exists in the memory cache
@@ -314,11 +315,13 @@ bool fil_space_for_table_exists_in_mem(
  * the number of pages given. The tablespace must be cached
  * in the memory cache. If the space is big enough already, does nothing.
  *
- * @param[out] actual_size        size of the space after extension;
- *   if we ran out of disk space this may be lower than the desired size
- * @param[in]  space_id           space id
- * @param[in]  size_after_extend  desired size in pages after the extension;
- *   if the current space size is bigger than this already, the function does nothing
+ * @param[out]actual_size       Size of the space after extension;
+ *                              if we ran out of disk space this may be
+ *                              lower than the desired size
+ * @param[in] space_id          space id
+ * @param[in] size_after_extend desired size in pages after the extension;
+ *                              if the current space size is bigger than this
+ *                              already, the function does nothing
  *
  * @return true if success
  */
@@ -327,9 +330,9 @@ bool fil_extend_space_to_desired_size(ulint *actual_size, space_id_t space_id, u
 /**
  * Tries to reserve free extents in a file space.
  *
- * @param[in] space_id        Space id
- * @param[in] n_free_now      Number of free extents now
- * @param[in] n_to_reserve    How many one wants to reserve
+ * @param[in] space_id          Space id
+ * @param[in] n_free_now        Number of free extents now
+ * @param[in] n_to_reserve      How many one wants to reserve
  *
  * @return true if succeed
  */
@@ -338,15 +341,15 @@ bool fil_space_reserve_free_extents(space_id_t space_id, ulint n_free_now, ulint
 /**
  * Releases free extents in a file space.
  *
- * @param[in] space_id        Space id
- * @param[in] n_reserved      How many one reserved
+ * @param[in] space_id          Space id
+ * @param[in] n_reserved        How many one reserved
  */
 void fil_space_release_free_extents(space_id_t id, ulint n_reserved);
 
-/**
+/* *
  * Gets the number of reserved extents. If the database is silent, this number should be zero.
  *
- * @param[in] space_id        Space id
+ * @param[in] space_id          Space id
  *
  * @return Number of reserved extents
  */
@@ -354,26 +357,26 @@ ulint fil_space_get_n_reserved_extents(space_id_t space_id);
 
 /**
  * Reads or writes data. This operation is asynchronous (aio).
- * @param io_request - i      in: IO_request type.
- * @param batched    -        in: if simulated aio and we want to post a
- *                            batch of i/os; NOTE that a simulated batch
- *                            may introduce hidden chances of deadlocks,
- *                            because i/os are not actually handled until
- *                            all have been posted: use with great
- *                            caution!
- * @param space_id -          in: space id
- * @param block_offset-       in: offset in number of blocks
- * @param byte_offset -       in: remainder of offset in bytes; in
- *                            aio this must be divisible by the OS block size
- * @param len -               in: how many bytes to read or write; this
- *                            must not cross a file boundary; in aio this
- *                            must be a block size multiple
- * @param buf -               in/out: buffer where to store read data
- *                            or from where to write; in aio this must be
- *                            appropriately aligned
- * @param message -           in: message for aio handler if non-sync
- *                            aio used, else ignored
- * @return DB_SUCCESS, or DB_TABLESPACE_DELETED if we are trying to do
+ * @param io_request            in: IO_request type.
+ * @param batched               in: if simulated aio and we want to post a
+ *                              batch of i/os; NOTE that a simulated batch
+ *                              may introduce hidden chances of deadlocks,
+ *                              because i/os are not actually handled until
+ *                              all have been posted: use with great
+ *                              caution!
+ * @param space_id              in: space id
+ * @param block_offset          in: offset in number of blocks
+ * @param byte_offset           in: remainder of offset in bytes; in
+ *                              aio this must be divisible by the OS block size
+ * @param len                   in: how many bytes to read or write; this
+ *                              must not cross a file boundary; in aio this
+ *                              must be a block size multiple
+ * @param buf                   in/out: buffer where to store read data
+ *                              or from where to write; in aio this must be
+ *                              appropriately aligned
+ * @param message               in: message for aio handler if non-sync
+ *                             aio used, else ignored
+ * @return DB_SUCCESS, or DB_T ABLESPACE_DELETED if we are trying to do
  *         i/o on a tablespace which does not exist
  */
 db_err fil_io(
@@ -392,7 +395,7 @@ db_err fil_io(
  * into segments (see os0file.c for more info). The thread specifies which
  * segment it wants to wait for.
  * 
- * @param[in] segment - the number of the segment in the aio array to wait for
+ * @param[in] segment           The number of the segmentto wait for
  */
 void fil_aio_wait(ulint segment);
 
@@ -400,7 +403,7 @@ void fil_aio_wait(ulint segment);
  * Flushes to disk possible writes cached by the OS. If the space does not
  * exist or is being dropped, does not do anything.
  * 
- * @param[in] space_id - file space id (this can be a group of log files or
+ * @param[in] space_id          File space id (this can be a group of log files or
  *  a tablespace of the database)
  */
 void fil_flush(space_id_t space_id);
@@ -409,7 +412,7 @@ void fil_flush(space_id_t space_id);
  * Flushes to disk writes in file spaces of the given type possibly cached by
  * the OS.
  * 
- * @param[in] purpose - FIL_TABLESPACE, FIL_LOG
+ * @param[in] purpose           FIL_TABLESPACE, FIL_LOG
  */
 void fil_flush_file_spaces(ulint purpose);
 
@@ -423,7 +426,7 @@ bool fil_validate();
 /**
  * Returns true if file address is undefined.
  * 
- * @param[in] addr - address
+ * @param[in] addr              Address
  * @return true if undefined
  */
 bool fil_addr_is_null(fil_addr_t addr);
@@ -439,7 +442,7 @@ ulint fil_page_get_prev(const byte *page);
 /**
  * Get the successor of a file page.
  * 
- * @param[in] page - file page
+ * @param[in] page               File page
  * @return FIL_PAGE_NEXT
  */
 ulint fil_page_get_next(const byte *page);
@@ -447,22 +450,22 @@ ulint fil_page_get_next(const byte *page);
 /**
  * Sets the file page type.
  * 
- * @param[in,out] page - file page
+ * @param[in,out] page          File page
  * @param[in] type - type
  */
 void fil_page_set_type(byte *page, ulint type);
 
 /**
  * Gets the file page type.
- * @param[in] page - file page
+ * @param[in] page              File page
  * @return type; NOTE that if the type has not been written to page, the
  *         return value not defined
  */
-ulint fil_page_get_type(const byte *page); /** in: file page */
+ulint fil_page_get_type(const byte *page);
 
 /**
  * Reset variables.
- */
+ */ 
 void fil_var_init();
 
 /**
