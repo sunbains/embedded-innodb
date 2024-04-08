@@ -183,6 +183,9 @@ constexpr std::size_t hardware_constructive_interference_size = 64;
 constexpr std::size_t hardware_destructive_interference_size = 64;
 #endif /* __cpp_lib_hardware_interference_size */
 
+/** OS file handle */
+using os_file_t = int;
+
 #include "innodb0valgrind.h"
 #include "ut0dbg.h"
 #include "ut0ut.h"

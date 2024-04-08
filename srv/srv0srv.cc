@@ -1321,7 +1321,7 @@ static void srv_refresh_innodb_monitor_stats() {
 
   srv_last_monitor_time = time(nullptr);
 
-  os_aio_refresh_stats();
+  os_file_refresh_stats();
 
   log_refresh_stats();
 

@@ -34,9 +34,8 @@ Created 10/21/1995 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#include <dirent.h>
-#include <sys/stat.h>
-#include <time.h>
+#include <filesystem>
+#include <atomic>
 
 /** File node of a tablespace or the log data space */
 struct fil_node_t;
@@ -54,9 +53,6 @@ extern std::atomic<ulint> os_n_pending_reads;
 
 /** Number of pending write operations */
 extern std::atomic<ulint> os_n_pending_writes;
-
-/** File handle */
-typedef int os_file_t;
 
 /** Convert a C file descriptor to a native file handle
 @param fd	file descriptor
@@ -109,29 +105,6 @@ constexpr ulint OS_FILE_OPERATION_ABORTED = 79;
 
 /* @} */
 
-/** Types for aio operations @{ */
-enum class IO_request {
-  None,
-  Async_read,
-  Async_write,
-  Async_log_read,
-  Async_log_write,
-  Sync_read,
-  Sync_write,
-  Sync_log_read,
-  Sync_log_write,
-};
-
-/** This can be ORed to mode in the call of os_aio(...), if the caller wants
-to post several i/o requests in a batch, and only after that wake the
-i/o-handler thread; this has effect only in simulated aio */
-constexpr ulint OS_AIO_SIMULATED_WAKE_LATER = 512;
-
-/** Note: This value is from Windows NT, should be updated */
-constexpr ulint OS_AIO_N_PENDING_IOS_PER_THREAD = 32;
-
-/* @} */
-
 extern ulint os_n_file_reads;
 extern ulint os_n_file_writes;
 extern ulint os_n_fsyncs;
@@ -175,76 +148,6 @@ struct os_file_stat_t {
   time_t atime;
 };
 
-struct IO_ctx {
-  void validate() const {
-    ut_a(m_file != -1);
-    ut_a(m_name != nullptr);
-  }
-
-  bool is_sync_request() const {
-    switch (m_io_request) {
-      case IO_request::Sync_read:
-      case IO_request::Sync_write:
-      case IO_request::Sync_log_read:
-      case IO_request::Sync_log_write:
-        return true;
-      default:
-        return false;
-    }
-  }
-
-  bool is_log_request() const {
-    switch (m_io_request) {
-      case IO_request::Async_log_read:
-      case IO_request::Async_log_write:
-      case IO_request::Sync_log_read:
-      case IO_request::Sync_log_write:
-        return true;
-      default:
-        return false;
-    }
-  }
-
-  bool is_read_request() const {
-    switch (m_io_request) {
-      case IO_request::Async_read:
-      case IO_request::Async_log_read:
-      case IO_request::Sync_read:
-      case IO_request::Sync_log_read:
-        return true;
-      default:
-        return false;
-    }
-  }
-
-  /** File name. */
-  const char *m_name{};
-
-  /** File handle. */
-  os_file_t m_file{-1};
-
-  /** Request type. */
-  IO_request m_io_request{};
-
-  /**  Batch mode, we need to wake up the IO handler threads after posting the batch. */
-  bool m_batch{};
-
-  /** File meta data. */
-  fil_node_t *m_fil_node{};
-
-  /** User defined message. */
-  void *m_msg{};
-};
-
-/** Directory stream */
-using Dir = DIR *;
-
-/** Gets the operating system version. */
-ulint os_get_os_version();
-
-/** Creates the seek mutexes used in positioned reads and writes. */
-void os_io_init_simple();
-
 /**
  * @brief Creates a temporary file. This function is like tmpfile(3), but
  * the temporary file is created in the configured temporary directory.
@@ -254,33 +157,6 @@ void os_io_init_simple();
  * @return temporary file handle, or nullptr on error
  */
 FILE *os_file_create_tmpfile();
-
-/**
- * @brief The os_file_opendir() function opens a directory stream corresponding
- * to the directory named by the dirname argument. The directory stream is
- * positioned at the first entry. In both Unix and Windows we automatically
- * skip the '.' and '..' items at the start of the directory listing.
- *
- * @param[in] dirname Directory name; it must not contain a trailing '\' or '/'
- * @param[in] err_is_fatal true if we should treat an error as a fatal error; if we try to open symlinks
- * then we do not wish a fatal error if it happens not to be a directory
- * @return directory stream, nullptr if error
- */
-Dir os_file_opendir(const char *dirname, bool error_is_fatal);
-
-/** Closes a directory stream.
-@param[in,out] dir               Directory anme.
-@return	0 if success, -1 if failure */
-int os_file_closedir(Dir dir);
-
-/** This function returns information of the next file in the directory. We jump
-over the '.' and '..' entries in the directory.
-@param[in] dirname              Directory name or path
-@param[in,out] dir              Directory stream
-@param[in,out] info             BUffer where the info is returned
-
-@return	0 if ok, -1 if error, 1 if at the end of the directory */
-int os_file_readdir_next_file(const char *dirname, Dir dir, os_file_stat_t *info);
 
 /**
  * @brief This function attempts to create a directory named pathname.
@@ -383,10 +259,7 @@ bool os_file_delete_if_exists(const char *name); /*!< in: file path as a null-te
  * @param newpath New file path.
  * @return True if success.
  */
-bool os_file_rename(
-  const char *oldpath, /*!< in: old file path as a null-terminated string */
-  const char *newpath
-); /*!< in: new file path */
+bool os_file_rename(const char *oldpath, const char *newpath);
 
 /**
  * @brief Closes a file handle. In case of error, error number can be retrieved with
@@ -395,7 +268,7 @@ bool os_file_rename(
  * @param file Handle to a file.
  * @return True if success.
  */
-bool os_file_close(os_file_t file); /*!< in, own: handle to a file */
+bool os_file_close(os_file_t file);
 
 /**
  * @brief Gets a file size.
@@ -413,7 +286,7 @@ bool os_file_get_size(os_file_t file, off_t *size);
  * @param file Handle to a file.
  * @return Size in bytes, -1 if error.
  */
-int64_t os_file_get_size_as_iblonglong(os_file_t file); /*!< in: handle to a file */
+int64_t os_file_get_size_as_iblonglong(os_file_t file);
 
 /**
  * @brief Write the specified number of zeros to a newly created file.
@@ -545,89 +418,21 @@ char *os_file_dirname(const char *path);
 bool os_file_create_subdirs_if_needed(const char *path);
 
 /**
- * @brief Initializes the asynchronous io system.
- *
- * @param n_per_seg Maximum number of pending aio operations allowed per segment.
- * @param n_read_segs Number of reader threads.
- * @param n_write_segs Number of writer threads.
- * @param n_slots_sync Number of slots in the sync aio array.
+ * @brief Create an internal data structures.
  */
-void os_aio_init(ulint n_per_seg, ulint n_read_segs, ulint n_write_segs, ulint n_slots_sync);
+void os_file_init();
 
 /**
- * @brief Frees the asynchronous io system.
+ * @brief  Free any internal data structures.
  */
-void os_aio_free();
+void os_file_free();
 
 /**
- * @brief Requests an asynchronous i/o operation.
- *
- * @param io_ctx Context of the i/o operation.
- * @param buf Buffer where to read or from which to write.
- * @param n Number of bytes to read or write.
- * @param offset Least significant 32 bits of file offset where to read or write.
- * @return true if the request was queued successfully, false if failed.
- */
-bool os_aio(IO_ctx&& io_ctx, void *buf, ulint n, off_t off);
-
-/**
- * @brief Wakes up all async i/o threads so that they know to exit themselves in shutdown.
- */
-void os_aio_wake_all_threads_at_shutdown();
-
-/**
- * @brief Waits until there are no pending writes in os_aio_write_array.
- *        There can be other, synchronous, pending writes.
- */
-void os_aio_wait_until_no_pending_writes();
-
-/**
- * @brief Wakes up simulated aio i/o-handler threads if they have something to do.
- */
-void os_aio_simulated_wake_handler_threads();
-
-/**
- * @brief Posts a batch of reads and prefers an i/o-handler thread to handle them all at once later.
- *        You must call os_aio_simulated_wake_handler_threads later to ensure the threads are not left sleeping!
- */
-void os_aio_simulated_put_read_threads_to_sleep();
-
-/**
- * @brief Does simulated aio. This function should be called by an i/o-handler thread.
- *
- * @param[in] segment The number of the segment in the aio arrays to wait for.
- * @param[out] io_ctx Context of the i/o operation.
- * @return true if the aio operation succeeded.
- */
-bool os_aio_simulated_handle(ulint segment, IO_ctx &io_ctx);
-
-/**
- * @brief Validates the consistency of the aio system.
- *
- * @return true if the aio system is consistent, false otherwise.
- */
-bool os_aio_validate(void);
-
-/**
- * @brief Prints info of the aio arrays.
+ * @brief Prints info about the IO subsystem.
  *
  * @param ib_stream Stream where to print.
  */
-void os_aio_print(ib_stream_t ib_stream);
-
-/**
- * @brief Refreshes the statistics used to print per-second averages.
- */
-void os_aio_refresh_stats();
-
-#ifdef UNIV_DEBUG
-/**
- * @brief Checks that all slots in the system have been freed, that is, there are no pending io operations.
- *
- * @return true if all slots are free, false otherwise.
- */
-bool os_aio_all_slots_free();
-#endif /* UNIV_DEBUG */
+void os_file_print(ib_stream_t ib_stream);
 
 /**
  * @brief Returns information about the specified file.
@@ -643,51 +448,28 @@ bool os_file_get_status(const char *path, os_file_stat_t *stat_info);
  */
 void os_file_var_init();
 
-/**
- * @brief Closes/shuts down the IO sub-system and frees all the memory.
- */
-void os_aio_close();
+/** @return a text version of the path type. */
+[[nodiscard]] inline const char *get_path_status(const std::filesystem::path &path) {
+  namespace fs = std::filesystem;
 
-/**
- * @brief Sets the info describing an i/o thread current state.
- *
- * @param i The 'segment' of the i/o thread.
- * @param str Constant char string describing the state.
- */
-void os_set_io_thread_op_info(ulint i, const char *str);
-
-inline std::string to_string(IO_request request) {
-  std::ostringstream os;
-
-  switch (request) {
-    case IO_request::None:
-      os << "None";
-      break;
-    case IO_request::Async_read:
-      os << "Async_read";
-      break;
-    case IO_request::Async_write:
-      os << "Async_write";
-      break;
-    case IO_request::Async_log_read:
-      os << "Async_log_read";
-      break;
-    case IO_request::Async_log_write:
-      os << "Async_log_write";
-      break;
-    case IO_request::Sync_read:
-      os << "Sync_read";
-      break;
-    case IO_request::Sync_write:
-      os << "Sync_write";
-      break;
-    case IO_request::Sync_log_read:
-      os << "Sync_log_read";
-      break;
-    case IO_request::Sync_log_write:
-      os << "Sync_log_write";
-      break;
+  if (!fs::exists(path)) {
+    return "does not exist";
+  } else if (fs::is_regular_file(path)) {
+    return "is a regular file";
+  } else if (fs::is_directory(path)) {
+    return "is a directory";
+  } else if (fs::is_block_file(path)) {
+    return "is a block device";
+  } else if (fs::is_character_file(path)) {
+    return "is a character device";
+  } else if (fs::is_fifo(path)) {
+    return "is a named IPC pipe";
+  } else if (fs::is_socket(path)) {
+    return "is a named IPC socket";
+  } else if (fs::is_symlink(path)) {
+    return "is a symlink";
   }
 
-  return os.str();
+  ut_error;
+  return "Unknown file status";
 }

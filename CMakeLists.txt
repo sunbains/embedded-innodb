@@ -181,7 +181,7 @@ SET(INNODB_SOURCES  btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       mach/mach0data.cc
       mem/mem0mem.cc
       mtr/mtr0log.cc mtr/mtr0mtr.cc
-      os/os0file.cc os/os0proc.cc os/os0sync.cc os/os0thread.cc
+      os/os0aio.cc os/os0file.cc os/os0proc.cc os/os0sync.cc os/os0thread.cc
       page/page0cur.cc page/page0page.cc
       que/que0que.cc
       read/read0read.cc

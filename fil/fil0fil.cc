@@ -21,12 +21,13 @@ The tablespace memory cache
 Created 10/25/1995 Heikki Tuuri
 *******************************************************/
 
-#include "fil0fil.h"
+#include <filesystem>
 
 #include "buf0buf.h"
 #include "buf0flu.h"
 #include "buf0lru.h"
 #include "dict0dict.h"
+#include "fil0fil.h"
 #include "fsp0fsp.h"
 #include "hash0hash.h"
 #include "log0recv.h"
@@ -40,6 +41,8 @@ Created 10/25/1995 Heikki Tuuri
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "sync0sync.h"
+#include "ut0logger.h"
+
 
 /*
                 IMPLEMENTATION OF THE TABLESPACE MEMORY CACHE
@@ -2152,137 +2155,6 @@ db_err fil_create_new_single_table_tablespace(ulint *space_id, const char *table
   return DB_SUCCESS;
 }
 
-bool fil_reset_too_high_lsns(const char *name, uint64_t current_lsn) {
-  os_file_t file;
-  char *filepath;
-  uint64_t flush_lsn;
-  space_id_t space_id;
-  int64_t file_size;
-  bool success;
-
-  filepath = fil_make_ibd_name(name, false);
-
-  file = os_file_create_simple_no_error_handling(filepath, OS_FILE_OPEN, OS_FILE_READ_WRITE, &success);
-  if (!success) {
-    /* The following call prints an error message */
-    os_file_get_last_error(true);
-
-    ut_print_timestamp(ib_stream);
-
-    ib_logger(
-      ib_stream,
-      "  Error: trying to open a table,"
-      " but could not\n"
-      "open the tablespace file "
-    );
-    ut_print_filename(ib_stream, filepath);
-    ib_logger(ib_stream, "!\n");
-    mem_free(filepath);
-
-    return false;
-  }
-
-  /* Read the first page of the tablespace */
-
-  auto buf2 = (byte *)ut_new(3 * UNIV_PAGE_SIZE);
-  /* Align the memory for file i/o if we might have O_DIRECT set */
-  auto page = (byte *)ut_align(buf2, UNIV_PAGE_SIZE);
-
-  success = os_file_read(file, page, UNIV_PAGE_SIZE, 0);
-
-  if (!success) {
-    goto func_exit;
-  }
-
-  /* We have to read the file flush lsn from the header of the file */
-
-  flush_lsn = mach_read_from_8(page + FIL_PAGE_FILE_FLUSH_LSN);
-
-  if (current_lsn >= flush_lsn) {
-    /* Ok */
-    success = true;
-
-    goto func_exit;
-  }
-
-  space_id = fsp_header_get_space_id(page);
-
-  ut_print_timestamp(ib_stream);
-  ib_logger(
-    ib_stream,
-    "  Flush lsn in the tablespace file %lu"
-    " to be imported\n"
-    "is %lu, which exceeds current"
-    " system lsn %lu.\n"
-    "We reset the lsn's in the file ",
-    space_id,
-    flush_lsn,
-    current_lsn
-  );
-  ut_print_filename(ib_stream, filepath);
-  ib_logger(ib_stream, ".\n");
-
-  /* Loop through all the pages in the tablespace and reset the lsn and
-  the page checksum if necessary */
-
-  file_size = os_file_get_size_as_iblonglong(file);
-
-  for (off_t off = 0; off < file_size; off += UNIV_PAGE_SIZE) {
-
-    success = os_file_read(file, page,  UNIV_PAGE_SIZE, off);
-
-    if (!success) {
-
-      goto func_exit;
-    }
-
-    if (mach_read_from_8(page + FIL_PAGE_LSN) > current_lsn) {
-      /* We have to reset the lsn */
-
-      buf_pool->m_flusher->init_for_writing(page, current_lsn);
-      success = os_file_write(filepath, file, page, UNIV_PAGE_SIZE, off);
-
-      if (!success) {
-
-        goto func_exit;
-      }
-    }
-  }
-
-  success = os_file_flush(file);
-
-  if (!success) {
-
-    goto func_exit;
-  }
-
-  /* We now update the flush_lsn stamp at the start of the file */
-  success = os_file_read(file, page, UNIV_PAGE_SIZE, 0);
-
-  if (!success) {
-
-    goto func_exit;
-  }
-
-  mach_write_to_8(page + FIL_PAGE_FILE_FLUSH_LSN, current_lsn);
-
-  success = os_file_write(filepath, file, page, UNIV_PAGE_SIZE, 0);
-
-  if (!success) {
-
-    goto func_exit;
-  }
-
-  success = os_file_flush(file);
-
-func_exit:
-  os_file_close(file);
-  ut_delete(buf2);
-  mem_free(filepath);
-
-  return success;
-}
-
 bool fil_open_single_table_tablespace(bool check_space_id, space_id_t id, ulint flags, const char *name) {
   os_file_t file;
   char *filepath;
@@ -2381,33 +2253,21 @@ bool fil_open_single_table_tablespace(bool check_space_id, space_id_t id, ulint 
   return success;
 }
 
-/** Opens an .ibd file and adds the associated single-table tablespace to the
-InnoDB fil0fil.c data structures. */
-static void fil_load_single_table_tablespace(
-  ib_recovery_t recovery, /** in: recovery flag */
-  const char *dbname,     /** in: database name */
-  const char *filename
-) /** in: file name (not a path),
-                            including the .ibd extension */
-{
-  os_file_t file;
-  bool success;
-  space_id_t space_id;
-  ulint flags;
-  off_t size;
-  ulint len;
-  const char *ptr;
-  ulint dbname_len;
+/**
+ * @param recovery recovery flag
+ * @param dbname database (or directory) name
+ * @param filename file name (not a path), including the .ibd extension
+ */
+static void fil_load_single_table_tablespace(ib_recovery_t recovery, const char *dbname, const char *filename) {
   char dir[OS_FILE_MAX_PATH];
 
   strcpy(dir, srv_data_home);
 
-  ptr = fil_normalize_path(dir);
-
-  len = strlen(dbname) + strlen(filename) + strlen(dir) + 3;
+  auto ptr = fil_normalize_path(dir);
+  auto len = strlen(dbname) + strlen(filename) + strlen(dir) + 3;
   auto filepath = (char *)mem_alloc(len);
 
-  dbname_len = strlen(dbname);
+  auto dbname_len = strlen(dbname);
 
   if (strlen(ptr) > 0) {
     ut_snprintf(filepath, len, "%s%s/%s", ptr, dbname, filename);
@@ -2418,36 +2278,28 @@ static void fil_load_single_table_tablespace(
     ut_snprintf(filepath, len, "%s/%s", dbname, filename);
   }
 
-  file = os_file_create_simple_no_error_handling(filepath, OS_FILE_OPEN, OS_FILE_READ_ONLY, &success);
+  bool success;
+
+  auto file = os_file_create_simple_no_error_handling(filepath, OS_FILE_OPEN, OS_FILE_READ_ONLY, &success);
+
   if (!success) {
     /* The following call prints an error message */
     os_file_get_last_error(true);
 
     ib_logger(
       ib_stream,
-      "Error: could not open single-table tablespace"
-      " file\n"
-      "%s!\n"
-      "We do not continue the crash recovery,"
-      " because the table may become\n"
-      "corrupt if we cannot apply the log records"
-      " in the InnoDB log to it.\n"
-      "To fix the problem and start InnoDB:\n"
-      "1) If there is a permission problem"
-      " in the file and InnoDB cannot\n"
-      "open the file, you should"
-      " modify the permissions.\n"
-      "2) If the table is not needed, or you can"
-      " restore it from a backup,\n"
-      "then you can remove the .ibd file,"
-      " and InnoDB will do a normal\n"
-      "crash recovery and ignore that table.\n"
-      "3) If the file system or the"
-      " disk is broken, and you cannot remove\n"
-      "the .ibd file, you can set"
-      " force_recovery != IB_RECOVERY_DEFAULT \n"
-      "and force InnoDB to continue crash"
-      " recovery here.\n",
+      "Error: could not open single-table tablespace file %s!"
+      " We do not continue the crash recovery, because the table may become"
+      " corrupt if we cannot apply the log records in the InnoDB log to it."
+      " To fix the problem and start InnoDB: \n"
+      "   1) If there is a permission problem in the file and InnoDB cannot"
+      " open the file, you should" " modify the permissions.\n"
+      "   2) If the table is not needed, or you can restore it from a backup,"
+      " then you can remove the .ibd file, and InnoDB will do a normal crash"
+      " recovery and ignore that table.\n"
+      "   3) If the file system or the disk is broken, and you cannot remove"
+      " the .ibd file, you can set force_recovery != IB_RECOVERY_DEFAULT"
+      " and force InnoDB to continue crash recovery here.\n",
       filepath
     );
 
@@ -2456,10 +2308,8 @@ static void fil_load_single_table_tablespace(
     if (recovery != IB_RECOVERY_DEFAULT) {
       ib_logger(
         ib_stream,
-        "force_recovery"
-        " was set to %d. Continuing crash recovery\n"
-        "even though we cannot access"
-        " the .ibd file of this table.\n",
+        "force_recovery was set to %d. Continuing crash recovery even though"
+        " we cannot access the .ibd file of this table.\n",
         (int)recovery
       );
       return;
@@ -2467,6 +2317,8 @@ static void fil_load_single_table_tablespace(
 
     log_fatal("Cannot access .ibd file: ", filepath);
   }
+
+  off_t size{};
 
   success = os_file_get_size(file, &size);
 
@@ -2476,29 +2328,18 @@ static void fil_load_single_table_tablespace(
 
     ib_logger(
       ib_stream,
-      "Error: could not measure the size"
-      " of single-table tablespace file\n"
-      "%s!\n"
-      "We do not continue crash recovery,"
-      " because the table will become\n"
-      "corrupt if we cannot apply the log records"
-      " in the InnoDB log to it.\n"
-      "To fix the problem and start the server:\n"
-      "1) If there is a permission problem"
-      " in the file and the server cannot\n"
-      "access the file, you should"
-      " modify the permissions.\n"
-      "2) If the table is not needed,"
-      " or you can restore it from a backup,\n"
-      "then you can remove the .ibd file,"
-      " and InnoDB will do a normal\n"
-      "crash recovery and ignore that table.\n"
-      "3) If the file system or the disk is broken,"
-      " and you cannot remove\n"
-      "the .ibd file, you can set"
-      " force_recovery != IB_RECOVERY_DEFAULT\n"
-      "and force InnoDB to continue"
-      " crash recovery here.\n",
+      "Could not measure the size of single-table tablespace file %s!"
+      " We do not continue crash recovery, because the table will become"
+      " corrupt if we cannot apply the log recordsin the InnoDB log to it."
+      " To fix the problem and start the server:\n"
+      "    1) If there is a permission problem in the file and the server cannot"
+      " access the file, you should modify the permissions.\n"
+      "    2) If the table is not needed, or you can restore it from a backup,"
+      " then you can remove the .ibd file, and InnoDB will do a normal"
+      " crash recovery and ignore that table.\n"
+      "    3) If the file system or the disk is broken, and you cannot remove"
+      " the .ibd file, you can set force_recovery != IB_RECOVERY_DEFAULT"
+      " and force InnoDB to continue crash recovery here.\n",
       filepath
     );
 
@@ -2506,14 +2347,14 @@ static void fil_load_single_table_tablespace(
     mem_free(filepath);
 
     if (recovery != IB_RECOVERY_DEFAULT) {
+
       ib_logger(
         ib_stream,
-        "force_recovery"
-        " was set to %d. Continuing crash recovery\n"
-        "even though we cannot access"
-        " the .ibd file of this table.\n",
+        "force_recovery was set to %d. Continuing crash recovery"
+        " even though we cannot access the .ibd file of this table.\n",
         (int)recovery
       );
+
       return;
     }
 
@@ -2547,6 +2388,8 @@ static void fil_load_single_table_tablespace(
   /* Align the memory for file i/o if we might have O_DIRECT set */
   auto page = (byte *)ut_align(buf2, UNIV_PAGE_SIZE);
 
+  ulint flags{};
+  space_id_t space_id;
   if (size >= off_t(FIL_IBD_FILE_INITIAL_SIZE * UNIV_PAGE_SIZE)) {
     success = os_file_read(file, page, UNIV_PAGE_SIZE, 0);
 
@@ -2560,13 +2403,14 @@ static void fil_load_single_table_tablespace(
   }
 
   if (space_id == ULINT_UNDEFINED || space_id == 0) {
+
     ib_logger(
       ib_stream,
-      "Error: tablespace id %lu in file %s"
-      " is not sensible\n",
+      "Tablespace id %lu in file %s is not sensible\n",
       (ulong)space_id,
       filepath
     );
+
     goto func_exit;
   }
   success = fil_space_create(filepath, space_id, flags, FIL_TABLESPACE);
@@ -2599,161 +2443,75 @@ func_exit:
   mem_free(filepath);
 }
 
-/** A fault-tolerant function that tries to read the next file name in the
-directory. We retry 100 times if os_file_readdir_next_file() returns -1. The
-idea is to read as much good data as we can and jump over bad data.
-@return 0 if ok, -1 if error even after the retries, 1 if at the end
-of the directory */
-static int fil_file_readdir_next_file(
-  db_err *err,         /** out: this is set to DB_ERROR if an error
-                         was encountered, otherwise not changed */
-  const char *dirname, /** in: directory name or path */
-  Dir dir,   /** in: directory stream */
-  os_file_stat_t *info
-) /** in/out: buffer where the info is returned */
-{
-  ulint i;
-  int ret;
+static db_err fil_scan_and_load_tablespaces(const std::string &dir, ib_recovery_t recovery, ulint max_depth, ulint depth) {
+  namespace fs = std::filesystem;
 
-  for (i = 0; i < 100; i++) {
-    ret = os_file_readdir_next_file(dirname, dir, info);
-
-    if (ret != -1) {
-
-      return ret;
-    }
-
-    ib_logger(
-      ib_stream,
-      "Error: os_file_readdir_next_file()"
-      " returned -1 in\n"
-      "directory %s\n"
-      "Crash recovery may have failed"
-      " for some .ibd files!\n",
-      dirname
-    );
-
-    *err = DB_ERROR;
+  if (depth >= max_depth) {
+    return DB_SUCCESS;
   }
-
-  return -1;
-}
-
-db_err fil_load_single_table_tablespaces(ib_recovery_t recovery) {
-  int ret;
-  ulint dbpath_len = 100;
-  Dir dbdir;
-  os_file_stat_t dbinfo;
-  os_file_stat_t fileinfo;
-  db_err err = DB_SUCCESS;
-  char home[OS_FILE_MAX_PATH];
 
   /* The datadir of the server is always the default directory. */
+  fs::path path(dir);
+  auto path_name = path.filename().string();
 
-  strcpy(home, srv_data_home);
+  auto check_directory  = [path_name] (const fs::path &path) -> db_err {
+    if (fs::status(path).type() != fs::file_type::directory) {
+      log_err("The datadir is not a directory: ", path_name);
+      return DB_ERROR;
+    }
 
-  auto dir = os_file_opendir(home, true);
+    switch (fs::status(path).permissions()) {
+      case fs::perms::owner_all:
+        break;
+      case fs::perms::owner_read:
+      case fs::perms::owner_write:
+        log_err("The datadir is not readable and writable: ", path_name);
+        return DB_ERROR;
+      default:
+        log_err("The datadir is not writable: ", path_name);
+        return DB_ERROR;
+    }
 
-  if (dir == nullptr) {
+    return DB_SUCCESS;
+  };
 
+  if (check_directory(path) != DB_SUCCESS) {
     return DB_ERROR;
   }
 
-  auto dbpath = (char *)mem_alloc(dbpath_len);
+  const std::string ext = ".ibd";
+ 
+  for (auto it{fs::directory_iterator(path)}; it != fs::directory_iterator(); ++it) {
+    auto filename = it->path().filename().string();
 
-  /* Scan all directories under the datadir. They are the database
-  directories of the server. */
-
-  ret = fil_file_readdir_next_file(&err, home, dir, &dbinfo);
-  while (ret == 0) {
-    ulint len;
-    /* printf("Looking at %s in datadir\n", dbinfo.name); */
-
-    if (dbinfo.type == REGULAR_FILE || dbinfo.type == OS_FILE_TYPE_UNKNOWN) {
-
-      goto next_datadir_item;
-    }
-
-    /* We found a symlink or a directory; try opening it to see
-    if a symlink is a directory */
-
-    len = strlen(home) + strlen(dbinfo.name) + 2;
-
-    if (len > dbpath_len) {
-      dbpath_len = len;
-
-      if (dbpath) {
-        mem_free(dbpath);
+    if (it->is_directory()) {
+      if (check_directory(it->path()) != DB_SUCCESS) {
+        return DB_ERROR;
       }
 
-      dbpath = (char *)mem_alloc(dbpath_len);
-    }
+      /* Recursively load tablespaces. */
+      auto err = fil_scan_and_load_tablespaces(filename, recovery, max_depth, depth + 1);
 
-    len = strlen(home);
-    ut_a(home[len - 1] == SRV_PATH_SEPARATOR);
-
-    ut_snprintf(dbpath, dbpath_len, "%s%s", home, dbinfo.name);
-
-    dbdir = os_file_opendir(dbpath, false);
-
-    if (dbdir != nullptr) {
-      /* printf("Opened dir %s\n", dbinfo.name); */
-
-      /* We found a database directory; loop through it,
-      looking for possible .ibd files in it */
-
-      ret = fil_file_readdir_next_file(&err, dbpath, dbdir, &fileinfo);
-
-      while (ret == 0) {
-        /* printf(
-        "     Looking at file %s\n", fileinfo.name); */
-
-        if (fileinfo.type == DIRECTORY) {
-
-          goto next_file_item;
-        }
-
-        len = strlen(fileinfo.name);
-
-        /* We found a symlink or a file */
-        if (len > 4 && 0 == strcmp(fileinfo.name + len - 4, ".ibd")) {
-          /* The name ends in .ibd; try opening
-          the file */
-          fil_load_single_table_tablespace(recovery, dbinfo.name, fileinfo.name);
-        }
-      next_file_item:
-        ret = fil_file_readdir_next_file(&err, dbpath, dbdir, &fileinfo);
+      if (err != DB_SUCCESS) {
+        log_err("Failed to scan and load tablespaces in directory: ", filename);
       }
 
-      if (0 != os_file_closedir(dbdir)) {
-        ib_logger(
-          ib_stream,
-          "Warning: could not"
-          " close database directory "
-        );
-        ut_print_filename(ib_stream, dbpath);
-        ib_logger(ib_stream, "\n");
+    } else if (it->is_regular_file() &&
+               it->path().filename().has_extension() &&
+               it->path().filename().extension().string() == ext) {
 
-        err = DB_ERROR;
-      }
+      fil_load_single_table_tablespace(recovery, path_name.c_str(), filename.c_str());
     }
-
-  next_datadir_item:
-    ret = fil_file_readdir_next_file(&err, home, dir, &dbinfo);
   }
 
-  mem_free(dbpath);
-
-  if (0 != os_file_closedir(dir)) {
-    ib_logger(ib_stream, "Error: could not close datadir\n");
-
-    return DB_ERROR;
-  }
-
-  return err;
+  return DB_SUCCESS;
 }
 
-void fil_print_orphaned_tablespaces(void) {
+db_err fil_load_single_table_tablespaces(const std::string &dir, ib_recovery_t recovery, ulint max_depth) {
+  return fil_scan_and_load_tablespaces(dir, recovery, max_depth, 0);
+}
+
+void fil_print_orphaned_tablespaces() {
   mutex_enter(&fil_system->mutex);
 
   auto space = UT_LIST_GET_FIRST(fil_system->space_list);
@@ -3353,12 +3111,8 @@ void fil_aio_wait(ulint segment) {
 
   IO_ctx io_ctx{};
 
-  os_set_io_thread_op_info(segment, "simulated aio handle");
-
   auto success = os_aio_simulated_handle(segment, io_ctx);
   ut_a(success);
-
-  os_set_io_thread_op_info(segment, "complete io for fil node");
 
   mutex_enter(&fil_system->mutex);
 
@@ -3375,10 +3129,8 @@ void fil_aio_wait(ulint segment) {
   open, and use a special i/o thread to serve insert buffer requests. */
 
   if (io_ctx.m_fil_node->space->purpose == FIL_TABLESPACE) {
-    os_set_io_thread_op_info(segment, "complete io for buf page");
     buf_pool->io_complete(reinterpret_cast<buf_page_t *>(io_ctx.m_msg));
   } else {
-    os_set_io_thread_op_info(segment, "complete io for log");
     log_io_complete(reinterpret_cast<log_group_t *>(io_ctx.m_msg));
   }
 }

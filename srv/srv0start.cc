@@ -1003,7 +1003,6 @@ ib_err_t innobase_start_or_create() {
   ulint tablespace_size_in_header;
   db_err err;
   ulint i;
-  ulint io_limit;
   mtr_t mtr;
   bool srv_file_per_table_original_value;
 
@@ -1134,7 +1133,7 @@ ib_err_t innobase_start_or_create() {
 
   ut_a(srv_n_file_io_threads <= SRV_MAX_N_IO_THREADS);
 
-  io_limit = 8 * SRV_N_PENDING_IOS_PER_THREAD;
+  auto io_limit = 8 * SRV_N_PENDING_IOS_PER_THREAD;
 
 #ifdef UNIV_DEBUG
   /* We have observed deadlocks with a 5MB buffer pool but

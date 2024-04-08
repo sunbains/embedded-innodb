@@ -1966,7 +1966,8 @@ static void recv_start_crash_recovery(ib_recovery_t recovery) /*!< in: recovery 
     " from the .ibd files...\n"
   );
 
-  fil_load_single_table_tablespaces(recovery);
+  /* Recursively scan to a depth of 2. */
+  fil_load_single_table_tablespaces(srv_data_home, recovery, 2);
 
   /* If we are using the doublewrite method, we will
   check if there are half-written pages in data files,
