@@ -92,7 +92,8 @@ static db_err buf_read_page(
   auto bpage = buf_pool->init_for_read(&err, space, page_no, tablespace_version);
 
   if (bpage == nullptr) {
-    ut_a(err == DB_TABLESPACE_DELETED);
+    /* The bpage can be nullptr if the page is already in the buffer pool. */
+    ut_a(err == DB_TABLESPACE_DELETED || err == DB_SUCCESS);
     return DB_FAIL;
   }
 

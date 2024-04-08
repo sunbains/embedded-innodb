@@ -48,7 +48,7 @@ struct AIO_slot {
 constexpr ulint AIO_LOG = 0;
 constexpr ulint AIO_READ = 1;
 constexpr ulint AIO_WRITE = 2;
-constexpr ulint AIO_SYNC = 4;
+constexpr ulint AIO_SYNC = 3;
 
 /** The asynchronous i/o array structure */
 struct Segment {
@@ -81,8 +81,10 @@ struct Segment {
   [[nodiscard]] bool validate() const;
 
   /* Wake up any thread that's waiting for IO completion. */
-  void wake_thread() {
-    os_event_set(m_completion);
+  void notify_all() {
+    for (auto e : m_completion) {
+      os_event_set(e);
+    }
   }
 
   /**
@@ -109,25 +111,23 @@ struct Segment {
   /* Mutex protecting the fields below. */
   mutable OS_mutex *m_mutex{};
 
-  /** Wait for IO completion events. */
-  Cond_var *m_completion{};
+  /** There is one event per local segment (or thread). */
+  std::vector<Cond_var *>m_completion{};
 
-  /** The event which is set to the signaled state when there is space in
-  the aio segment */
+  /** The event which is set to the signaled state when there are
+   * slots available in this segment. */
   Cond_var* m_not_full{};
 
-  /** The event which is set to the signaled state when there are no
-  pending i/os in this array */
+  /** The event which is set to the signaled state when there are
+   * no free slots in this segment. */
   Cond_var* m_is_empty{};
-
-  /** Number of segments in the aio array of pending aio requests. A thread
-   * can wait separately for any one of the segments. */
-  ulint m_n_segments{};
 
   /** Number of  Treserved slots in the aio array segment */
   ulint m_n_reserved{};
 
-  /** Pointer to the slots in the array */
+  /** Pointer to the to the slots in the array, the slots are partitioned
+   * into local segments.
+   */
   std::vector<AIO_slot> m_slots{};
 
   /** Number of asynchronous I/O segments.  Set by os_aio_init(). */
@@ -138,7 +138,7 @@ ulint Segment::s_n_segments = ULINT_UNDEFINED;
 
 struct Local_segment {
   ulint get_slot_count() const {
-    return m_segment->m_slots.capacity() / m_segment->m_n_segments;
+    return m_segment->m_slots.capacity() / m_segment->m_completion.size();
   }
 
   void lock() const {
@@ -147,6 +147,16 @@ struct Local_segment {
 
   void unlock() const {
     os_mutex_exit(m_segment->m_mutex);
+  }
+
+  /* Wait on a completion event. */
+  void wait_for_completion_event() {
+    os_event_wait(m_segment->m_completion[m_no]);
+  }
+
+  /* Reset the completion event. */
+  void reset_completion_event() {
+    os_event_reset(m_segment->m_completion[m_no]);
   }
 
   /**
@@ -211,14 +221,16 @@ void os_aio_var_init() {
 Segment::Segment(ulint id, size_t n_segments, size_t n)
   : m_id(id) {
   m_mutex = os_mutex_create(nullptr);
-  m_completion = os_event_create(nullptr);
   m_not_full = os_event_create(nullptr);
   m_is_empty = os_event_create(nullptr);
+
+  for (size_t i = 0; i < n_segments; i++) {
+    m_completion.push_back(os_event_create(nullptr));
+  }
 
   os_event_set(m_is_empty);
 
   m_n_reserved = 0;
-  m_n_segments = n_segments;
 
   m_slots.resize(n);
 
@@ -230,7 +242,13 @@ Segment::Segment(ulint id, size_t n_segments, size_t n)
 
 Segment::~Segment() {
   os_mutex_destroy(m_mutex);
-  os_event_free(m_completion);
+
+  for (auto e : m_completion) {
+    os_event_free(e);
+  }
+
+  m_completion.clear();
+
   os_event_free(m_not_full);
   os_event_free(m_is_empty);
 }
@@ -239,7 +257,7 @@ bool Segment::validate() const {
   os_mutex_enter(m_mutex);
 
   ut_a(!m_slots.empty());
-  ut_a(m_n_segments > 0);
+  ut_a(!m_completion.empty());
 
   ulint n_reserved{};
 
@@ -316,9 +334,10 @@ ulint Local_segment::get_local_segment_no(const AIO_slot *slot) const {
     return 1 + slot->m_pos / get_slot_count();
 
   } else {
+    const auto local_segments = m_segment->m_completion.size();
     ut_a(m_segment->is_write());
 
-    return 1 + m_segment->m_n_segments + slot->m_pos / get_slot_count();
+    return 1 + local_segments + slot->m_pos / get_slot_count();
   }
 }
 
@@ -339,7 +358,7 @@ Local_segment Local_segment::create(ulint global_segment) {
     local_segment.m_no = 0;
     local_segment.m_segment = segments[AIO_LOG];
 
-  } else if (global_segment < segments[AIO_READ]->m_n_segments + 1) {
+  } else if (global_segment < segments[AIO_READ]->m_completion.size() + 1) {
 
     local_segment.m_no = global_segment - 1;
     local_segment.m_segment = segments[AIO_READ];
@@ -347,8 +366,7 @@ Local_segment Local_segment::create(ulint global_segment) {
   } else {
 
     local_segment.m_segment = segments[AIO_WRITE];
-    local_segment.m_no  = global_segment - (segments[AIO_READ]->m_n_segments + 1);
-
+    local_segment.m_no = global_segment - (segments[AIO_READ]->m_completion.size() + 1);
   }
 
   return local_segment;
@@ -360,7 +378,7 @@ AIO_slot *Local_segment::reserve_slot(const IO_ctx &io_ctx, void *ptr, ulint len
   segment. This can help in merging IO requests when we are
   doing simulated AIO */
   auto slots_per_seg = get_slot_count();
-  auto local_seg = (off >> (UNIV_PAGE_SIZE_SHIFT + 6)) % m_segment->m_n_segments;
+  auto local_seg = (off >> (UNIV_PAGE_SIZE_SHIFT + 6)) % m_segment->m_completion.size();
   auto slot_prepare = [&](AIO_slot &slot) {
     auto io_ctx_copy = io_ctx;
     ut_a(slot.m_reserved == false);
@@ -453,7 +471,7 @@ void os_aio_wake_all_threads_at_shutdown() {
   /* This loop wakes up all simulated ai/o threads */
   for (auto &segment : segments) {
     if (segment) {
-      segment->wake_thread();
+      segment->notify_all();
     }
   }
 }
@@ -489,7 +507,7 @@ static void os_aio_simulated_wake_handler_thread(ulint global_segment) {
   segment.unlock();
 
   if (found_empty_slot) {
-    segment.m_segment->wake_thread();
+    segment.m_segment->notify_all();
   }
 }
 
@@ -497,7 +515,7 @@ void os_aio_simulated_wake_handler_threads() {
   os_aio_recommend_sleep_for_read_threads = false;
 
   for (auto &segment : segments) {
-    segment->wake_thread();
+    segment->notify_all();
   }
 }
 
@@ -536,7 +554,6 @@ bool os_aio(IO_ctx&& io_ctx, void *ptr, ulint n, off_t off) {
 }
 
 bool os_aio_simulated_handle(ulint global_segment, IO_ctx &out_io_ctx) {
-  auto completion_event = segments[global_segment]->m_completion;
   std::array<AIO_slot *, OS_AIO_MERGE_N_CONSECUTIVE> consecutive_ios;
   auto local_segment = Local_segment::create(global_segment);
 
@@ -545,7 +562,7 @@ bool os_aio_simulated_handle(ulint global_segment, IO_ctx &out_io_ctx) {
     we do not have to acquire the protecting mutex yet */
 
     ut_ad(os_aio_validate());
-    ut_ad(local_segment.m_no < local_segment.m_segment->m_n_segments);
+    ut_ad(local_segment.m_no < local_segment.m_segment->m_completion.size());
 
     auto n = local_segment.get_slot_count();
 
@@ -555,7 +572,7 @@ bool os_aio_simulated_handle(ulint global_segment, IO_ctx &out_io_ctx) {
 
       /* Give other threads chance to add several i/os to the array at once. */
 
-      os_event_wait(completion_event);
+      local_segment.wait_for_completion_event();
 
       continue;
     }
@@ -636,13 +653,13 @@ bool os_aio_simulated_handle(ulint global_segment, IO_ctx &out_io_ctx) {
 
       /* We wait here until there again can be i/os in the segment of this thread */
 
-      os_event_reset(completion_event);
+      local_segment.reset_completion_event();
 
       local_segment.unlock();
 
       /* Give other threads chance to add several i/os to the array at once. */
 
-      os_event_wait(completion_event);
+      local_segment.wait_for_completion_event();
 
       continue;
     }
@@ -803,8 +820,10 @@ void os_aio_print(ib_stream_t ib_stream) {
 
     ib_logger(ib_stream, name);
 
-    if (segment->m_completion->m_is_set) {
-      ib_logger(ib_stream, " [ev set] ");
+    for (auto e : segment->m_completion) {
+      if (e->m_is_set) {
+        ib_logger(ib_stream, " [ev %s]", e->m_is_set ? "set" : "reset");
+      }
     }
 
     ib_logger(ib_stream, ":");
@@ -812,7 +831,7 @@ void os_aio_print(ib_stream_t ib_stream) {
     os_mutex_enter(segment->m_mutex);
 
     ut_a(!segment->m_slots.empty());
-    ut_a(segment->m_n_segments > 0);
+    ut_a(!segment->m_completion.empty());
 
     ulint n_reserved{};
 

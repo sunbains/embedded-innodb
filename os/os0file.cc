@@ -264,6 +264,10 @@ static int os_file_lock(int fd, const char *name) {
 }
 #endif /* USE_FILE_LOCK */
 
+void os_file_init() { /* Do nothing. */}
+
+void os_file_free() { /* Do Nothing. */}
+
 FILE *os_file_create_tmpfile() {
   FILE *file = nullptr;
   auto fd = ib_create_tempfile("ib");

@@ -985,6 +985,7 @@ static void srv_startup_abort(enum db_err err) /* in: Current error code */
   buf_pool->close();
   fil_close();
   os_aio_close();
+  os_file_free();
 
   log_mem_free();
 
@@ -1188,6 +1189,7 @@ ib_err_t innobase_start_or_create() {
     return DB_ERROR;
   }
 
+  os_file_init();
   os_aio_init(io_limit, srv_n_read_io_threads, srv_n_write_io_threads, SRV_MAX_N_PENDING_SYNC_IOS);
 
   fil_init(srv_file_per_table ? 50000 : 5000, srv_max_n_open_files);
@@ -1198,6 +1200,7 @@ ib_err_t innobase_start_or_create() {
     /* Shutdown all sub-systems that have been initialized. */
     fil_close();
     os_aio_close();
+    os_file_free();
 
     ib_logger(
       ib_stream,
