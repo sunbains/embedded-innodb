@@ -392,7 +392,7 @@ to 20 microseconds. */
 
 /** The number of mutex_exit calls. Intended for performance monitoring. */
 // FIXME(RAHUL): Figure out the number of cpus.
-using counter_t = Sharded_counter<16>;
+using counter_t = ut::Sharded_counter<16>;
 extern counter_t mutex_exit_count;
 
 #ifdef UNIV_SYNC_DEBUG

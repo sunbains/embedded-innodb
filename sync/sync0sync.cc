@@ -228,10 +228,10 @@ struct sync_level_struct {
 };
 
 void sync_var_init() {
-  mutex_spin_round_count.reset();
-  mutex_spin_wait_count.reset();
-  mutex_os_wait_count.reset();
-  mutex_exit_count.reset();
+  mutex_spin_round_count.clear();
+  mutex_spin_wait_count.clear();
+  mutex_os_wait_count.clear();
+  mutex_exit_count.clear();
   sync_primary_wait_array = nullptr;
   sync_initialized = false;
 
