@@ -114,7 +114,7 @@ struct Counters {
   }
 
   void inc(Int value = 1) {
-    const auto index = m_indexer.get_index() % m_counters.size();
+    const auto index = m_indexer.get_index() % Shards;
 
     m_counters[index].get_ref().fetch_add(value, std::memory_order_relaxed);
   }
