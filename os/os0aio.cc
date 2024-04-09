@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <liburing.h>
+#include <BS_thread_pool.hpp>
 
 #include "os0aio.h"
 #include "os0file.h"
@@ -19,8 +20,8 @@ struct AIO_slot {
   /** Time when reserved */
   time_t m_reservation_time{};
 
-  /** Index of the slot in the aio array */
-  uint32_t m_pos{};
+  /** The local segment the slot belongs to. */
+  uint32_t m_segment_id{};
 
   /** Length of the block to read or write */
   uint32_t m_len{};
@@ -169,7 +170,7 @@ struct Local_segment {
   /** Free the slot.
    * @param[in] slot Slot to free.
   */
-  void free_slot(AIO_slot* slot);
+  void mark_as_free(AIO_slot* slot);
 
   /** Create an instnce without the local segment number from the
   * IO mode and request type. *
@@ -187,24 +188,14 @@ struct Local_segment {
   */
   [[nodiscard]] static Local_segment create(ulint global_segment);
   
-  /** Get a local segment number from the AIO array an slot ordinal value.
-   * @param[in] slot AIO slot.
-   * 
-   * @return the local segment number.
-  */
-  [[nodiscard]] ulint get_local_segment_no(const AIO_slot *slot) const;
-
+  /** Parent segment. */
   std::shared_ptr<Segment> m_segment{};
 
-  /* Local segment number. */
+  /** Local segment number. */
   ulint m_no{std::numeric_limits<ulint>::max()};
 };
 
 static std::array<std::shared_ptr<Segment>, AIO_SYNC + 1> segments;
-
-/** If the following is true, read i/o handler threads try to
-wait until a batch of new read requests have been posted */
-static bool os_aio_recommend_sleep_for_read_threads = false;
 
 void os_aio_var_init() {
   for (auto &segment: segments) {
@@ -212,8 +203,6 @@ void os_aio_var_init() {
   }
 
   Segment::s_n_segments = ULINT_UNDEFINED;
-
-  os_aio_recommend_sleep_for_read_threads = false;
 }
 
 Segment::Segment(ulint id, size_t n_segments, size_t n)
@@ -232,9 +221,8 @@ Segment::Segment(ulint id, size_t n_segments, size_t n)
 
   m_slots.resize(n);
 
-  ulint i{};
   for (auto &slot : m_slots) {
-    slot.m_pos = i++;
+    slot.m_segment_id = id;
   }
 }
 
@@ -303,7 +291,7 @@ Local_segment Local_segment::create(const IO_ctx& io_ctx) {
   return segment;
 }
 
-void Local_segment::free_slot(AIO_slot *slot) {
+void Local_segment::mark_as_free(AIO_slot *slot) {
   lock();
 
   ut_ad(slot->m_reserved);
@@ -321,22 +309,6 @@ void Local_segment::free_slot(AIO_slot *slot) {
   }
 
   unlock();
-}
-
-ulint Local_segment::get_local_segment_no(const AIO_slot *slot) const {
-  if (m_segment->is_log()) {
-    return 0;
-
-  } else if (m_segment->is_read()) {
-
-    return 1 + slot->m_pos / get_slot_count();
-
-  } else {
-    const auto local_segments = m_segment->m_completion.size();
-    ut_a(m_segment->is_write());
-
-    return 1 + local_segments + slot->m_pos / get_slot_count();
-  }
 }
 
 /**
@@ -510,8 +482,6 @@ static void os_aio_simulated_wake_handler_thread(ulint global_segment) {
 }
 
 void os_aio_simulated_wake_handler_threads() {
-  os_aio_recommend_sleep_for_read_threads = false;
-
   for (auto &segment : segments) {
     segment->notify_all();
   }
@@ -540,11 +510,11 @@ bool os_aio(IO_ctx&& io_ctx, void *ptr, ulint n, off_t off) {
 
   if (io_ctx.is_read_request()) {
     if (!io_ctx.m_batch) {
-      os_aio_simulated_wake_handler_thread(local_segment.get_local_segment_no(slot));
+      os_aio_simulated_wake_handler_thread(slot->m_segment_id);
     }
   } else {
     if (!io_ctx.m_batch) {
-      os_aio_simulated_wake_handler_thread(local_segment.get_local_segment_no(slot));
+      os_aio_simulated_wake_handler_thread(slot->m_segment_id);
     }
   }
 
@@ -552,7 +522,6 @@ bool os_aio(IO_ctx&& io_ctx, void *ptr, ulint n, off_t off) {
 }
 
 bool os_aio_simulated_handle(ulint global_segment, IO_ctx &out_io_ctx) {
-  std::array<AIO_slot *, OS_AIO_MERGE_N_CONSECUTIVE> consecutive_ios;
   auto local_segment = Local_segment::create(global_segment);
 
   for (;;) {
@@ -566,89 +535,34 @@ bool os_aio_simulated_handle(ulint global_segment, IO_ctx &out_io_ctx) {
 
     /* Look through n slots after the segment * n'th slot */
 
-    if (local_segment.m_segment->is_read() && os_aio_recommend_sleep_for_read_threads) {
-
-      /* Give other threads chance to add several i/os to the array at once. */
-
-      local_segment.wait_for_completion_event();
-
-      continue;
-    }
-
     local_segment.lock();
 
     /* Check if there is a slot for which the i/o has already been done */
-
-    for (ulint i = 0; i < n; i++) {
-      auto slot = &local_segment.m_segment->m_slots[i + local_segment.m_no * n];
-
-      if (slot->m_reserved && slot->m_io_already_done) {
-
-        ut_a(slot->m_reserved);
-
-        out_io_ctx = slot->m_io_ctx;
-
-        local_segment.unlock();
-
-        local_segment.free_slot(slot);
-
-        return true;
-      }
-    }
-
-    ulint age{};
-    ulint n_consecutive = 0;
-    ulint biggest_age = 0;
-    off_t lowest_offset = std::numeric_limits<off_t>::max();
-
-    /* If there are at least 2 seconds old requests, then pick the oldest
-    one to prevent starvation. If several requests have the same age,
-    then pick the one at the lowest offset. */
+    std::vector<AIO_slot*> slots;
 
     for (ulint i = 0; i < n; i++) {
       auto slot = &local_segment.m_segment->m_slots[i + local_segment.m_no * n];
 
       if (slot->m_reserved) {
-        age = (ulint)difftime(time(nullptr), slot->m_reservation_time);
+        if (slot->m_io_already_done) {
 
-        if ((age >= 2 && age > biggest_age) ||
-            (age >= 2 && age == biggest_age && slot->m_off < lowest_offset)) {
+          ut_a(slot->m_reserved);
 
-          /* Found an i/o request */
-          consecutive_ios[0] = slot;
+          out_io_ctx = slot->m_io_ctx;
 
-          n_consecutive = 1;
+          local_segment.unlock();
 
-          biggest_age = age;
-          lowest_offset = slot->m_off;
+          local_segment.mark_as_free(slot);
+
+          return true;
+        } else {
+          slots.push_back(slot);
         }
       }
     }
 
-    if (n_consecutive == 0) {
-      /* There were no old requests. Look for an i/o request at the
-      lowest offset in the array (we ignore the high 32 bits of the
-      offset in these heuristics) */
-
-      off_t lowest_offset = std::numeric_limits<off_t>::max();
-
-      for (ulint i = 0; i < n; i++) {
-        auto slot = &local_segment.m_segment->m_slots[i + local_segment.m_no * n];
-
-        if (slot->m_reserved && slot->m_off < lowest_offset) {
-          /* Found an i/o request */
-          consecutive_ios[0] = slot;
-
-          n_consecutive = 1;
-
-          lowest_offset = slot->m_off;
-        }
-      }
-    }
-
-    if (n_consecutive == 0) {
-      /* No i/o requested at the moment */
-
+    /* No i/o requested at the moment */
+    if (slots.empty()) {
       /* We wait here until there again can be i/os in the segment of this thread */
 
       local_segment.reset_completion_event();
@@ -659,128 +573,34 @@ bool os_aio_simulated_handle(ulint global_segment, IO_ctx &out_io_ctx) {
 
       local_segment.wait_for_completion_event();
 
-      continue;
-    }
+    } else {
 
-    auto slot = consecutive_ios[0];
-    ut_a(slot != nullptr);
+      local_segment.unlock();
 
-    /* Check if there are several consecutive blocks to read or write */
+      for (auto slot : slots) {
+        ut_a(slot->m_reserved);
 
-    ulint i;
+        bool ret;
+        const auto &io_ctx = slot->m_io_ctx;
 
-    do {
-      for (i = 0; i < n && n_consecutive < OS_AIO_MERGE_N_CONSECUTIVE; i++) {
-        auto slot2 = &local_segment.m_segment->m_slots[i + local_segment.m_no * n];
-
-        if (slot2->m_reserved &&
-            slot2 != slot &&
-            slot2->m_io_ctx.m_file  == slot->m_io_ctx.m_file &&
-            slot2->m_off == slot->m_off + off_t(slot->m_len) &&
-            slot2->m_io_ctx.m_io_request == slot->m_io_ctx.m_io_request) {
-
-          /* Found a consecutive i/o request */
-          consecutive_ios[n_consecutive] = slot2;
-
-          ++n_consecutive;
-
-          slot = slot2;
-
-          /* Scan from the beginning comparing the current match. */
-          break;
+        /* Do the i/o with ordinary, synchronous i/o functions: */
+        if (slot->m_io_ctx.is_read_request()) {
+          ret = os_file_read(io_ctx.m_file, slot->m_buf, slot->m_len, slot->m_off);
+        } else {
+          ret = os_file_write(io_ctx.m_name, io_ctx.m_file, slot->m_buf, slot->m_len, slot->m_off);
         }
-      }
-    } while (n_consecutive < OS_AIO_MERGE_N_CONSECUTIVE && i < n);
 
-    /* We have now collected n_consecutive i/o requests in the array;
-    allocate a single buffer which can hold all data, and perform the
-    i/o */
+        ut_a(ret);
 
-    uint total_len = 0;
-    slot = consecutive_ios[0];
 
-    for (ulint i = 0; i < n_consecutive; i++) {
-      total_len += consecutive_ios[i]->m_len;
-    }
-
-    byte *combined_buf;
-    byte *combined_buf_ptr;
-
-    if (n_consecutive == 1) {
-      /* We can use the buffer of the i/o request */
-      combined_buf = slot->m_buf;
-      combined_buf_ptr = nullptr;
-    } else {
-      combined_buf_ptr = static_cast<byte *>(ut_new(total_len + UNIV_PAGE_SIZE));
-
-      ut_a(combined_buf_ptr);
-
-      combined_buf = static_cast<byte *>(ut_align(combined_buf_ptr, UNIV_PAGE_SIZE));
-    }
-
-    /* We release the array mutex for the time of the i/o: NOTE that
-    this assumes that there is just one i/o-handler thread serving
-    a single segment of slots! */
-
-    local_segment.unlock();
-
-    ulint offs{};
-
-    if (!slot->m_io_ctx.is_read_request() && n_consecutive > 1) {
-      /* Copy the buffers to the combined buffer */
-      offs = 0;
-
-      for (ulint i = 0; i < n_consecutive; i++) {
-        memcpy(combined_buf + offs, consecutive_ios[i]->m_buf, consecutive_ios[i]->m_len);
-        offs += consecutive_ios[i]->m_len;
-      }
-    }
-
-    bool ret;
-
-    /* Do the i/o with ordinary, synchronous i/o functions: */
-    if (slot->m_io_ctx.is_read_request()) {
-      const auto &io_ctx = slot->m_io_ctx;
-
-      ret = os_file_read(io_ctx.m_file, combined_buf, total_len, slot->m_off);
-    } else {
-      const auto &io_ctx = slot->m_io_ctx;
-
-      ret = os_file_write(io_ctx.m_name, io_ctx.m_file, combined_buf, total_len, slot->m_off);
-    }
-
-    ut_a(ret);
-
-    if (slot->m_io_ctx.is_read_request() && n_consecutive > 1) {
-      /* Copy the combined buffer to individual buffers */
-      offs = 0;
-
-      for (ulint i = 0; i < n_consecutive; i++) {
-        memcpy(consecutive_ios[i]->m_buf, combined_buf + offs, consecutive_ios[i]->m_len);
-        offs += consecutive_ios[i]->m_len;
-      }
-    }
-
-    if (combined_buf_ptr) {
-      ut_delete(combined_buf_ptr);
-    }
-
-    local_segment.lock();
+        local_segment.lock();
     
-    /* Mark the i/os done in slots */
+        /* Mark the i/os done in slots */
+        slot->m_io_already_done = true;
 
-    for (ulint i = 0; i < n_consecutive; i++) {
-      consecutive_ios[i]->m_io_already_done = true;
+        local_segment.unlock();
+      }
     }
-
-    ut_a(slot->m_reserved);
-
-    out_io_ctx = slot->m_io_ctx;
-
-    local_segment.unlock();
-    local_segment.free_slot(slot);
-
-    return ret;
   }
 }
 
