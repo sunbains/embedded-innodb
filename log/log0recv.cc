@@ -188,7 +188,7 @@ void recv_sys_init(ulint available_memory) {
   recv_sys->heap = mem_heap_create_in_buffer(256);
 
   /* Set appropriate value of recv_n_pool_free_frames. */
-  if (buf_pool->get_curr_size() >= (10 * 1024 * 1024)) {
+  if (srv_buf_pool->get_curr_size() >= (10 * 1024 * 1024)) {
     /* Buffer pool of size greater than 10 MB. */
     recv_n_pool_free_frames = 512;
   }
@@ -233,7 +233,7 @@ static void recv_sys_empty_hash(void) {
   hash_table_free(recv_sys->addr_hash);
   mem_heap_empty(recv_sys->heap);
 
-  recv_sys->addr_hash = hash_create(buf_pool->get_curr_size() / 256);
+  recv_sys->addr_hash = hash_create(srv_buf_pool->get_curr_size() / 256);
 }
 
 static void recv_sys_debug_free() {
@@ -252,7 +252,7 @@ static void recv_sys_debug_free() {
   mutex_exit(&(recv_sys->mutex));
 
   /* Free up the flush_rbt. */
-  buf_pool->m_flusher->free_flush_rbt();
+  srv_buf_pool->m_flusher->free_flush_rbt();
 }
 
 /** Truncates possible corrupted or extra records from a log group. */
@@ -1015,7 +1015,7 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
     .m_mtr = &mtr
   };
 
-  success = buf_pool->try_get_known_nowait(req);
+  success = srv_buf_pool->try_get_known_nowait(req);
   ut_a(success);
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(lock, SYNC_NO_ORDER_CHECK));
@@ -1113,7 +1113,7 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
   if (modification_to_page) {
     ut_a(block);
 
-    buf_pool->m_flusher->recv_note_modification(block, start_lsn, end_lsn);
+    srv_buf_pool->m_flusher->recv_note_modification(block, start_lsn, end_lsn);
   }
 
   /* Make sure that committing mtr does not change the modification
@@ -1144,7 +1144,7 @@ static ulint recv_read_in_area(
   for (page_no = low_limit; page_no < low_limit + RECV_READ_AHEAD_AREA; page_no++) {
     recv_addr = recv_get_fil_addr_struct(space, page_no);
 
-    if (recv_addr && !buf_pool->peek(space, page_no)) {
+    if (recv_addr && !srv_buf_pool->peek(space, page_no)) {
 
       mutex_enter(&(recv_sys->mutex));
 
@@ -1201,7 +1201,7 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
 
         mutex_exit(&(recv_sys->mutex));
 
-        if (buf_pool->peek(space_id, page_no)) {
+        if (srv_buf_pool->peek(space_id, page_no)) {
 
           mtr_t mtr;
 
@@ -1216,7 +1216,7 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
             .m_mtr = &mtr
           };
 
-          auto block = buf_pool->get(req, nullptr);
+          auto block = srv_buf_pool->get(req, nullptr);
           buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
 
           recv_recover_page(false, block);
@@ -1259,12 +1259,12 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
     mutex_exit(&recv_sys->mutex);
     mutex_exit(&log_sys->mutex);
 
-    auto n_pages = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
+    auto n_pages = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
     ut_a(n_pages != ULINT_UNDEFINED);
 
-    buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
+    srv_buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
 
-    buf_pool->invalidate();
+    srv_buf_pool->invalidate();
 
     mutex_enter(&log_sys->mutex);
     mutex_enter(&recv_sys->mutex);
@@ -1920,7 +1920,7 @@ static void recv_group_scan_log_recs(
 
     finished = recv_scan_log_recs(
       recovery,
-      (buf_pool->m_curr_size - recv_n_pool_free_frames) * UNIV_PAGE_SIZE,
+      (srv_buf_pool->m_curr_size - recv_n_pool_free_frames) * UNIV_PAGE_SIZE,
       true,
       log_sys->buf,
       RECV_SCAN_SIZE,
@@ -2103,7 +2103,7 @@ static void recv_init_crash_recovery(
 db_err recv_recovery_from_checkpoint_start_func(ib_recovery_t recovery, lsn_t min_flushed_lsn, lsn_t max_flushed_lsn) {
   recv_sys_create();
 
-  recv_sys_init(buf_pool->get_curr_size());
+  recv_sys_init(srv_buf_pool->get_curr_size());
 
   if (recovery >= IB_RECOVERY_NO_LOG_REDO) {
     ib_logger(ib_stream, "The user has set IB_RECOVERY_NO_LOG_REDO on. Skipping log redo");

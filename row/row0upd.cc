@@ -1302,7 +1302,7 @@ static db_err row_upd_clust_rec(
     return DB_SUCCESS;
   }
 
-  if (buf_pool->m_LRU->buf_pool_running_out()) {
+  if (srv_buf_pool->m_LRU->buf_pool_running_out()) {
 
     return DB_LOCK_TABLE_FULL;
   }

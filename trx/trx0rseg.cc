@@ -185,10 +185,10 @@ static trx_rseg_t *trx_rseg_mem_create(
     trx_sys->rseg_history_len += len;
 
     node_addr = trx_purge_get_log_from_hist(flst_get_last(rseg_header + TRX_RSEG_HISTORY, mtr));
-    rseg->last_page_no = node_addr.page;
-    rseg->last_offset = node_addr.boffset;
+    rseg->last_page_no = node_addr.m_page_no;
+    rseg->last_offset = node_addr.m_boffset;
 
-    undo_log_hdr = trx_undo_page_get(rseg->space, node_addr.page, mtr) + node_addr.boffset;
+    undo_log_hdr = trx_undo_page_get(rseg->space, node_addr.m_page_no, mtr) + node_addr.m_boffset;
 
     rseg->last_trx_no = mtr_read_uint64(undo_log_hdr + TRX_UNDO_TRX_NO, mtr);
     rseg->last_del_marks = mtr_read_ulint(undo_log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES, mtr);

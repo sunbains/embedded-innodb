@@ -42,7 +42,7 @@ dict_hdr_t *dict_hdr_get(mtr_t *mtr) {
       .m_mtr = mtr
     };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
   auto header = DICT_HDR + block->get_frame();
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_DICT_HEADER));

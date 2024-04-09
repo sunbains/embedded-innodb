@@ -83,8 +83,6 @@ std::atomic<ulint> os_n_pending_reads{};
 i/o handler thread */
 
 void os_file_var_init() {
-  os_aio_var_init();
-
   os_aio_recommend_sleep_for_read_threads = false;
   os_n_file_reads = 0;
   os_bytes_read_since_printout = 0;

@@ -560,7 +560,7 @@ the privileged mode used when processing the kernel calls in traditional
 Unix.*/
 
 /** Thread slot in the thread table */
-typedef struct srv_slot_struct {
+struct srv_slot_t {
   /** thread id */
   os_thread_id_t id;
 
@@ -584,20 +584,16 @@ typedef struct srv_slot_struct {
 
   /*!< suspended query thread (only used for client threads) */
   que_thr_t *thr;
-
-} srv_slot_t;
-
-/** Thread table is an array of slots */
-typedef srv_slot_t srv_table_t;
+};
 
 /** The server system struct */
-typedef struct srv_sys_struct {
-  /*!< server thread table */
-  srv_table_t *threads;
+struct srv_sys_t {
+  /** Server thread table */
+  srv_slot_t *threads;
 
-  /*!< task queue */
+  /** Task queue */
   UT_LIST_BASE_NODE_T(que_thr_t, queue) tasks;
-} srv_sys_t;
+};
 
 /** Table for client threads where they will be suspended to wait for locks */
 static srv_slot_t *srv_client_table = nullptr;
@@ -876,8 +872,7 @@ ulint srv_release_threads(srv_thread_type type, ulint n) {
       if (srv_print_thread_releases) {
         ib_logger(
           ib_stream,
-          "Releasing thread %lu type %lu"
-          " from slot %lu\n",
+          "Releasing thread %lu type %lu from slot %lu\n",
           (ulong)slot->id,
           (ulong)type,
           (ulong)i
@@ -1057,7 +1052,7 @@ void srv_modules_var_init() {
   dict_var_init();
   dfield_var_init();
   dtype_var_init();
-  buf_pool->init();
+  srv_buf_pool->init();
   btr_cur_var_init();
   ut_mem_var_init();
   os_sync_var_init();
@@ -1325,7 +1320,7 @@ static void srv_refresh_innodb_monitor_stats() {
 
   log_refresh_stats();
 
-  buf_pool->refresh_io_stats();
+  srv_buf_pool->refresh_io_stats();
 
   srv_n_rows_inserted_old = srv_n_rows_inserted;
   srv_n_rows_updated_old = srv_n_rows_updated;
@@ -1406,10 +1401,11 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_st
   ib_logger(
     ib_stream,
     "--------\n"
-    "FILE I/O\n"
+    "I/O\n"
     "--------\n"
   );
-  os_aio_print(ib_stream);
+
+  ib_logger(ib_stream, "%s", srv_aio->to_string().c_str());
 
   /* Only if lock_print_info_summary proceeds correctly,
   before we call the lock_print_info_all_transactions
@@ -1439,22 +1435,6 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_st
 
   ib_logger(
     ib_stream,
-    "--------\n"
-    "FILE I/O\n"
-    "--------\n"
-  );
-  os_aio_print(ib_stream);
-
-  ib_logger(
-    ib_stream,
-    "---\n"
-    "LOG\n"
-    "---\n"
-  );
-  log_print(ib_stream);
-
-  ib_logger(
-    ib_stream,
     "----------------------\n"
     "BUFFER POOL AND MEMORY\n"
     "----------------------\n"
@@ -1462,7 +1442,7 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_st
   ib_logger(ib_stream, "Total memory allocated " ULINTPF "\n", ut_total_allocated_memory());
   ib_logger(ib_stream, "Dictionary memory allocated " ULINTPF "\n", dict_sys->size);
 
-  buf_pool->print_io(ib_stream);
+  srv_buf_pool->print_io(ib_stream);
 
   ib_logger(
     ib_stream,
@@ -1547,23 +1527,23 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_data_reads = os_n_file_reads;
   export_vars.innodb_data_writes = os_n_file_writes;
   export_vars.innodb_data_written = srv_data_written;
-  export_vars.innodb_buffer_pool_read_requests = buf_pool->m_stat.n_page_gets;
+  export_vars.innodb_buffer_pool_read_requests = srv_buf_pool->m_stat.n_page_gets;
   export_vars.innodb_buffer_pool_write_requests = srv_buf_pool_write_requests;
   export_vars.innodb_buffer_pool_wait_free = srv_buf_pool_wait_free;
   export_vars.innodb_buffer_pool_pages_flushed = srv_buf_pool_flushed;
   export_vars.innodb_buffer_pool_reads = srv_buf_pool_reads;
-  export_vars.innodb_buffer_pool_read_ahead = buf_pool->m_stat.n_ra_pages_read;
-  export_vars.innodb_buffer_pool_read_ahead_evicted = buf_pool->m_stat.n_ra_pages_evicted;
-  export_vars.innodb_buffer_pool_pages_data = UT_LIST_GET_LEN(buf_pool->m_LRU_list);
-  export_vars.innodb_buffer_pool_pages_dirty = UT_LIST_GET_LEN(buf_pool->m_flush_list);
-  export_vars.innodb_buffer_pool_pages_free = UT_LIST_GET_LEN(buf_pool->m_free_list);
+  export_vars.innodb_buffer_pool_read_ahead = srv_buf_pool->m_stat.n_ra_pages_read;
+  export_vars.innodb_buffer_pool_read_ahead_evicted = srv_buf_pool->m_stat.n_ra_pages_evicted;
+  export_vars.innodb_buffer_pool_pages_data = UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list);
+  export_vars.innodb_buffer_pool_pages_dirty = UT_LIST_GET_LEN(srv_buf_pool->m_flush_list);
+  export_vars.innodb_buffer_pool_pages_free = UT_LIST_GET_LEN(srv_buf_pool->m_free_list);
 
-  ut_d(export_vars.innodb_buffer_pool_pages_latched = buf_pool->get_latched_pages_number());
+  ut_d(export_vars.innodb_buffer_pool_pages_latched = srv_buf_pool->get_latched_pages_number());
 
-  export_vars.innodb_buffer_pool_pages_total = buf_pool->m_curr_size;
+  export_vars.innodb_buffer_pool_pages_total = srv_buf_pool->m_curr_size;
 
   export_vars.innodb_buffer_pool_pages_misc =
-    buf_pool->m_curr_size - UT_LIST_GET_LEN(buf_pool->m_LRU_list) - UT_LIST_GET_LEN(buf_pool->m_free_list);
+    srv_buf_pool->m_curr_size - UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) - UT_LIST_GET_LEN(srv_buf_pool->m_free_list);
 
   export_vars.innodb_have_atomic_builtins = 1;
   export_vars.innodb_page_size = UNIV_PAGE_SIZE;
@@ -1576,9 +1556,9 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_log_writes = srv_log_writes;
   export_vars.innodb_dblwr_pages_written = srv_dblwr_pages_written;
   export_vars.innodb_dblwr_writes = srv_dblwr_writes;
-  export_vars.innodb_pages_created = buf_pool->m_stat.n_pages_created;
-  export_vars.innodb_pages_read = buf_pool->m_stat.n_pages_read;
-  export_vars.innodb_pages_written = buf_pool->m_stat.n_pages_written;
+  export_vars.innodb_pages_created = srv_buf_pool->m_stat.n_pages_created;
+  export_vars.innodb_pages_read = srv_buf_pool->m_stat.n_pages_read;
+  export_vars.innodb_pages_written = srv_buf_pool->m_stat.n_pages_written;
   export_vars.innodb_row_lock_waits = srv_n_lock_wait_count;
   export_vars.innodb_row_lock_current_waits = srv_n_lock_wait_current_count;
   export_vars.innodb_row_lock_time = srv_n_lock_wait_time / 1000;
@@ -1863,10 +1843,10 @@ loop:
   }
 
   /* Update the statistics collected for deciding LRU eviction policy. */
-  buf_pool->m_LRU->stat_update();
+  srv_buf_pool->m_LRU->stat_update();
 
   /* Update the statistics collected for flush rate policy. */
-  buf_pool->m_flusher->stat_update();
+  srv_buf_pool->m_flusher->stat_update();
 
   /* In case mutex_exit is not a memory barrier, it is
   theoretically possible some threads are left waiting though
@@ -1989,7 +1969,7 @@ loop:
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
-  n_ios_very_old = log_sys->n_log_ios + buf_pool->m_stat.n_pages_read + buf_pool->m_stat.n_pages_written;
+  n_ios_very_old = log_sys->n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
   mutex_enter(&kernel_mutex);
 
   /* Store the user activity counter at the start of this loop */
@@ -2045,17 +2025,17 @@ loop:
     srv_main_thread_op_info = "making checkpoint";
     log_free_check();
 
-    n_pend_ios = buf_pool->get_n_pending_ios() + log_sys->n_pending_writes;
+    n_pend_ios = srv_buf_pool->get_n_pending_ios() + log_sys->n_pending_writes;
 
-    n_ios = log_sys->n_log_ios + buf_pool->m_stat.n_pages_read + buf_pool->m_stat.n_pages_written;
+    n_ios = log_sys->n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
 
-    if (unlikely(buf_pool->get_modified_ratio_pct() > srv_max_buf_pool_modified_pct)) {
+    if (unlikely(srv_buf_pool->get_modified_ratio_pct() > srv_max_buf_pool_modified_pct)) {
 
       /* Try to keep the number of modified pages in the
       buffer pool under the limit wished by the user */
 
       srv_main_thread_op_info = "flushing buffer pool pages";
-      n_pages_flushed = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+      n_pages_flushed = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
 
       /* If we had to do the flush, it may have taken
       even more than 1 second, and also, there may be more
@@ -2068,12 +2048,12 @@ loop:
       /* Try to keep the rate of flushing of dirty
       pages such that redo log generation does not
       produce bursts of IO at checkpoint time. */
-      ulint n_flush = buf_pool->m_flusher->get_desired_flush_rate();
+      ulint n_flush = srv_buf_pool->m_flusher->get_desired_flush_rate();
 
       if (n_flush) {
         srv_main_thread_op_info = "flushing buffer pool pages";
-        n_flush = ut_min(PCT_IO(100), n_flush);
-        n_pages_flushed = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
+        n_flush = std::min(PCT_IO(100), n_flush);
+        n_pages_flushed = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
 
         if (n_flush == PCT_IO(100)) {
           skip_sleep = true;
@@ -2099,14 +2079,14 @@ loop:
   loop above requests writes for that case. The writes done here
   are not required, and may be disabled. */
 
-  n_pend_ios = buf_pool->get_n_pending_ios() + log_sys->n_pending_writes;
-  n_ios = log_sys->n_log_ios + buf_pool->m_stat.n_pages_read + buf_pool->m_stat.n_pages_written;
+  n_pend_ios = srv_buf_pool->get_n_pending_ios() + log_sys->n_pending_writes;
+  n_ios = log_sys->n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
 
   srv_main_10_second_loops++;
   if (n_pend_ios < SRV_PEND_IO_THRESHOLD && (n_ios - n_ios_very_old < SRV_PAST_IO_ACTIVITY)) {
 
     srv_main_thread_op_info = "flushing buffer pool pages";
-    buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_ULONGLONG_MAX);
+    srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_ULONGLONG_MAX);
 
     /* Flush logs if needed */
     srv_sync_log_buffer_in_background();
@@ -2136,19 +2116,19 @@ loop:
 
   /* Flush a few oldest pages to make a new checkpoint younger */
 
-  if (buf_pool->get_modified_ratio_pct() > 70) {
+  if (srv_buf_pool->get_modified_ratio_pct() > 70) {
 
     /* If there are lots of modified pages in the buffer pool
     (> 70 %), we assume we can afford reserving the disk(s) for
     the time it requires to flush 100 pages */
 
-    n_pages_flushed = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+    n_pages_flushed = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
   } else {
     /* Otherwise, we only flush a small number of pages so that
     we do not unnecessarily use much disk i/o capacity from
     other work */
 
-    n_pages_flushed = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(10), IB_UINT64_T_MAX);
+    n_pages_flushed = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(10), IB_UINT64_T_MAX);
   }
 
   srv_main_thread_op_info = "making checkpoint";
@@ -2236,7 +2216,7 @@ flush_loop:
   srv_main_thread_op_info = "flushing buffer pool pages";
   srv_main_flush_loops++;
   if (srv_fast_shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
-    n_pages_flushed = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+    n_pages_flushed = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
   } else {
     /* In the fastest shutdown we do not flush the buffer pool
     to data files: we set n_pages_flushed to 0 artificially. */
@@ -2254,7 +2234,7 @@ flush_loop:
   mutex_exit(&kernel_mutex);
 
   srv_main_thread_op_info = "waiting for buffer pool flush to end";
-  buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
+  srv_buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
 
   /* Flush logs if needed */
   srv_sync_log_buffer_in_background();
@@ -2263,7 +2243,7 @@ flush_loop:
 
   log_checkpoint(true, false);
 
-  if (buf_pool->get_modified_ratio_pct() > srv_max_buf_pool_modified_pct) {
+  if (srv_buf_pool->get_modified_ratio_pct() > srv_max_buf_pool_modified_pct) {
 
     /* Try to keep the number of modified pages in the
     buffer pool under the limit wished by the user */

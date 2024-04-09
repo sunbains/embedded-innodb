@@ -210,7 +210,7 @@ struct Buf_LRU {
   
   /** Maximum LRU list search length in buf_pool->m_flusher->LRU_recommendation() */
   static ulint get_free_search_len () {
-    return 5 + 2 * buf_pool->get_read_ahead_area();
+    return 5 + 2 * srv_buf_pool->get_read_ahead_area();
   }
 
   /** Increments the I/O counter in buf_LRU_stat_cur. */

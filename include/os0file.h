@@ -448,6 +448,9 @@ bool os_file_get_status(const char *path, os_file_stat_t *stat_info);
  */
 void os_file_var_init();
 
+/** Get the ifile system statistics. */
+void os_file_refresh_stats();
+
 /** @return a text version of the path type. */
 [[nodiscard]] inline const char *get_path_status(const std::filesystem::path &path) {
   namespace fs = std::filesystem;

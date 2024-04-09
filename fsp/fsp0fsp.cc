@@ -320,7 +320,7 @@ inline fsp_header_t *fsp_get_space_header(space_id_t id, mtr_t *mtr) {
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
   auto header = FSP_HEADER_OFFSET + block->get_frame();
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
 
@@ -575,7 +575,7 @@ inline xdes_t *xdes_get_descriptor_with_space_hdr(
       .m_mtr = mtr
     };
 
-    auto block = buf_pool->get(req, nullptr);
+    auto block = srv_buf_pool->get(req, nullptr);
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
 
@@ -611,7 +611,7 @@ static xdes_t *xdes_get_descriptor(space_id_t space_id, page_no_t page_no, mtr_t
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
 
@@ -711,7 +711,7 @@ void fsp_header_init(space_id_t space, ulint size, mtr_t *mtr) {
 
   mtr_x_lock(fil_space_get_latch(space), mtr);
 
-  auto block = buf_pool->create(space, 0, mtr);
+  auto block = srv_buf_pool->create(space, 0, mtr);
 
   Buf_pool::Request req {
     .m_rw_latch = RW_X_LATCH,
@@ -723,7 +723,7 @@ void fsp_header_init(space_id_t space, ulint size, mtr_t *mtr) {
   };
 
   {
-    const auto b = buf_pool->get(req, nullptr);
+    const auto b = srv_buf_pool->get(req, nullptr);
     ut_a(b == block);
   }
 
@@ -1027,7 +1027,7 @@ static void fsp_fill_free_list(bool init_space, space_id_t space, fsp_header_t *
       the prior contents of the pages should be ignored. */
 
       if (i > 0) {
-        block = buf_pool->create(space, i, mtr);
+        block = srv_buf_pool->create(space, i, mtr);
 
         Buf_pool::Request req {
           .m_rw_latch = RW_X_LATCH,
@@ -1039,7 +1039,7 @@ static void fsp_fill_free_list(bool init_space, space_id_t space, fsp_header_t *
         };
 
 	{
-          const auto b = buf_pool->get(req, nullptr);
+          const auto b = srv_buf_pool->get(req, nullptr);
 	  ut_a(block == b);
         }
 
@@ -1237,7 +1237,7 @@ static ulint fsp_alloc_free_page(space_id_t space, page_no_t hint, mtr_t *mtr) {
   be obtained immediately with buf_page_get without need for a disk
   read. */
 
-  block = buf_pool->create(space, page_no, mtr);
+  block = srv_buf_pool->create(space, page_no, mtr);
 
   Buf_pool::Request req {
     .m_rw_latch = RW_X_LATCH,
@@ -1249,7 +1249,7 @@ static ulint fsp_alloc_free_page(space_id_t space, page_no_t hint, mtr_t *mtr) {
   };
 
   {
-    auto b = buf_pool->get(req, nullptr);
+    auto b = srv_buf_pool->get(req, nullptr);
     ut_a(block == b);
   }
 
@@ -1466,7 +1466,7 @@ static bool fsp_alloc_seg_inode_page( fsp_header_t *space_header, mtr_t *mtr) {
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
 
@@ -1516,14 +1516,14 @@ static fseg_inode_t *fsp_alloc_seg_inode(fsp_header_t *space_header, mtr_t *mtr)
 
   Buf_pool::Request req {
     .m_rw_latch = RW_X_LATCH,
-    .m_page_id = { page_get_space_id(ptr), flst_get_first(page_ptr, mtr).page },
+    .m_page_id = { page_get_space_id(ptr), flst_get_first(page_ptr, mtr).m_page_no },
     .m_mode = BUF_GET,
     .m_file = __FILE__,
     .m_line = __LINE__,
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
 
@@ -1595,8 +1595,8 @@ static void fsp_free_seg_inode(space_id_t space, fseg_inode_t *inode, mtr_t *mtr
 static fseg_inode_t *fseg_inode_try_get(fseg_header_t *header, space_id_t space, mtr_t *mtr) {
   fil_addr_t inode_addr;
 
-  inode_addr.page = mach_read_from_4(header + FSEG_HDR_PAGE_NO);
-  inode_addr.boffset = mach_read_from_2(header + FSEG_HDR_OFFSET);
+  inode_addr.m_page_no = mach_read_from_4(header + FSEG_HDR_PAGE_NO);
+  inode_addr.m_boffset = mach_read_from_2(header + FSEG_HDR_OFFSET);
 
   ut_ad(space == mach_read_from_4(header + FSEG_HDR_SPACE));
 
@@ -1742,7 +1742,7 @@ buf_block_t *fseg_create_general(space_id_t space_id, page_no_t page_no, ulint b
       .m_mtr = mtr
     };
 
-    block = buf_pool->get(req, nullptr);
+    block = srv_buf_pool->get(req, nullptr);
 
     header = byte_offset + block->get_frame();
   }
@@ -1800,7 +1800,7 @@ buf_block_t *fseg_create_general(space_id_t space_id, page_no_t page_no, ulint b
           .m_mtr = mtr
         };
 
-        block = buf_pool->get(req, nullptr);
+        block = srv_buf_pool->get(req, nullptr);
 
         header = byte_offset + block->get_frame();
 
@@ -2154,7 +2154,7 @@ static ulint fseg_alloc_free_page_low(space_id_t space, fseg_inode_t *seg_inode,
     can be obtained immediately with buf_pool->get without need
     for a disk read */
 
-    auto block = buf_pool->create(space, ret_page, mtr);
+    auto block = srv_buf_pool->create(space, ret_page, mtr);
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
 
@@ -2167,7 +2167,7 @@ static ulint fseg_alloc_free_page_low(space_id_t space, fseg_inode_t *seg_inode,
       .m_mtr = mtr
     };
 
-    if (block != buf_pool->get(req, nullptr)) {
+    if (block != srv_buf_pool->get(req, nullptr)) {
       ut_error;
     }
 
@@ -2185,7 +2185,7 @@ static ulint fseg_alloc_free_page_low(space_id_t space, fseg_inode_t *seg_inode,
     fseg_mark_page_used(seg_inode, space, ret_page, mtr);
   }
 
-  buf_pool->check_index_page_at_flush(space, ret_page);
+  srv_buf_pool->check_index_page_at_flush(space, ret_page);
 
   return ret_page;
 }
@@ -2582,7 +2582,7 @@ void fseg_free_page(fseg_header_t *seg_header, space_id_t space, ulint page, mtr
 
   fseg_free_page_low(seg_inode, space, page, mtr);
 
-  ut_d(buf_pool->set_file_page_was_freed(space, page));
+  ut_d(srv_buf_pool->set_file_page_was_freed(space, page));
 }
 
 static void fseg_free_extent(fseg_inode_t *seg_inode, space_id_t space, page_no_t page, mtr_t *mtr) {
@@ -2618,7 +2618,7 @@ static void fseg_free_extent(fseg_inode_t *seg_inode, space_id_t space, page_no_
 
   for (ulint i = 0; i < FSP_EXTENT_SIZE; i++) {
 
-    buf_pool->set_file_page_was_freed(space, first_page_in_extent + i);
+    srv_buf_pool->set_file_page_was_freed(space, first_page_in_extent + i);
   }
 #endif /* UNIV_DEBUG */
 }
@@ -2771,7 +2771,7 @@ static xdes_t *fseg_get_first_extent(fseg_inode_t *inode, space_id_t space, mtr_
     first = flst_get_first(inode + FSEG_FREE, mtr);
   }
 
-  if (first.page == FIL_NULL) {
+  if (first.m_page_no == FIL_NULL) {
 
     return (nullptr);
   }

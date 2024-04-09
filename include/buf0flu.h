@@ -246,7 +246,7 @@ struct Buf_flush {
   available to replacement in the free list and at the end of the LRU list (to
   make sure that a read-ahead batch can be read efficiently in a single sweep). */
   auto get_free_block_margin() const {
-    return 5 + buf_pool->get_read_ahead_area();
+    return 5 + srv_buf_pool->get_read_ahead_area();
   }
 
   /** Extra margin to apply above the free block margin */

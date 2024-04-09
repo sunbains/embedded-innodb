@@ -359,7 +359,7 @@ void btr_cur_search_to_nth_level(
       .m_mtr = mtr
     };
 
-    block = buf_pool->get(req, nullptr);
+    block = srv_buf_pool->get(req, nullptr);
 
     if (block == nullptr) {
 
@@ -509,7 +509,7 @@ void btr_cur_open_at_index_side_func(
       .m_mtr = mtr
     };
 
-    auto block = buf_pool->get(req, nullptr);
+    auto block = srv_buf_pool->get(req, nullptr);
     auto page = block->get_frame();
 
     ut_ad(dict_index->id == btr_page_get_index_id(page));
@@ -608,7 +608,7 @@ void btr_cur_open_at_rnd_pos_func(dict_index_t *dict_index, ulint latch_mode, bt
       .m_mtr = mtr
     };
 
-    auto block = buf_pool->get(req, nullptr);
+    auto block = srv_buf_pool->get(req, nullptr);
     auto page = block->get_frame();
 
     ut_ad(dict_index->id == btr_page_get_index_id(page));
@@ -1398,7 +1398,7 @@ static void btr_cur_pess_upd_restore_supremum(
     .m_mtr = mtr
   };
 
-  auto prev_block = buf_pool->get(req, nullptr);
+  auto prev_block = srv_buf_pool->get(req, nullptr);
 
 #ifdef UNIV_BTR_DEBUG
   ut_a(btr_page_get_next(prev_block->get_frame(), mtr) == page_get_page_no(page));
@@ -2569,7 +2569,7 @@ static void btr_blob_free(buf_block_t *block, bool, mtr_t *mtr) {
 
   if (block->get_state() == BUF_BLOCK_FILE_PAGE && block->get_space() == space && block->get_page_no() == page_no) {
 
-    auto block_status = buf_pool->m_LRU->free_block(&block->m_page, nullptr);
+    auto block_status = srv_buf_pool->m_LRU->free_block(&block->m_page, nullptr);
     ut_a(block_status == Buf_LRU::Block_status::FREED);
   }
 
@@ -2652,7 +2652,7 @@ db_err btr_store_big_rec_extern_fields(
 	  .m_mtr = &mtr
         };
 
-        auto prev_block = buf_pool->get(req, nullptr);
+        auto prev_block = srv_buf_pool->get(req, nullptr);
 
         buf_block_dbg_add_level(IF_SYNC_DEBUG(prev_block, SYNC_EXTERN_STORAGE));
 
@@ -2693,7 +2693,7 @@ db_err btr_store_big_rec_extern_fields(
 	  .m_mtr = &mtr
         };
 
-      rec_block = buf_pool->get(req, nullptr);
+      rec_block = srv_buf_pool->get(req, nullptr);
 
       buf_block_dbg_add_level(IF_SYNC_DEBUG(rec_block, SYNC_NO_ORDER_CHECK));
 
@@ -2821,7 +2821,7 @@ void btr_free_externally_stored_field(
     };
 
     IF_SYNC_DEBUG({
-     auto rec_block = buf_pool->get(req, nullptr);
+     auto rec_block = srv_buf_pool->get(req, nullptr);
      buf_block_dbg_add_level(rec_block, SYNC_NO_ORDER_CHECK)
     });
 
@@ -2845,7 +2845,7 @@ void btr_free_externally_stored_field(
     req.m_page_id.m_page_no = page_no;
     req.m_line = __LINE__;
 
-    auto ext_block = buf_pool->get(req, nullptr);
+    auto ext_block = srv_buf_pool->get(req, nullptr);
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(ext_block, SYNC_EXTERN_STORAGE));
 
@@ -2967,7 +2967,7 @@ static ulint btr_copy_blob_prefix(
       .m_mtr = &mtr
     };
 
-    auto block = buf_pool->get(req, nullptr);
+    auto block = srv_buf_pool->get(req, nullptr);
     const auto page = block->get_frame();
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_EXTERN_STORAGE));

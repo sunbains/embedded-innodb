@@ -40,7 +40,7 @@ inline void mtr_memo_slot_release(mtr_t *mtr, mtr_memo_slot_t *slot) {
 
   if (likely(object != nullptr)) {
     if (type <= MTR_MEMO_BUF_FIX) {
-      buf_pool->release((buf_block_t *)object, type, mtr);
+      srv_buf_pool->release((buf_block_t *)object, type, mtr);
     } else if (type == MTR_MEMO_S_LOCK) {
       rw_lock_s_unlock((rw_lock_t *)object);
 #ifdef UNIV_DEBUG
@@ -231,7 +231,7 @@ uint64_t mtr_read_uint64(const byte *ptr, mtr_t *mtr __attribute__((unused))) {
 
 #ifdef UNIV_DEBUG
 bool mtr_memo_contains_page(mtr_t *mtr, const byte *ptr, ulint type) {
-  return mtr_memo_contains(mtr, buf_pool->block_align(ptr), type);
+  return mtr_memo_contains(mtr, srv_buf_pool->block_align(ptr), type);
 }
 
 void mtr_print(mtr_t *mtr) {

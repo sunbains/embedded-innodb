@@ -281,7 +281,7 @@ inline buf_block_t *btr_block_get(space_id_t space_id, page_no_t page_no, ulint 
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
 
   if (rw_latch != RW_NO_LATCH) {
 

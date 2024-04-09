@@ -153,7 +153,7 @@ rec_t *btr_get_prev_user_rec(rec_t *rec, mtr_t *mtr) {
       .m_mtr = mtr
     };
 
-    auto prev_block = buf_pool->get(req, nullptr);
+    auto prev_block = srv_buf_pool->get(req, nullptr);
     auto prev_page = prev_block->get_frame();
 
     /* The caller must already have a latch to the brother */
@@ -198,7 +198,7 @@ rec_t *btr_get_next_user_rec(rec_t *rec, mtr_t *mtr) {
       .m_mtr = mtr
     };
 
-    auto next_block = buf_pool->get(req, nullptr);
+    auto next_block = srv_buf_pool->get(req, nullptr);
     auto next_page = next_block->get_frame();
 
     /* The caller must already have a latch to the brother */
@@ -271,7 +271,7 @@ buf_block_t *btr_page_alloc(dict_index_t *dict_index, ulint hint_page_no, byte f
       .m_mtr = mtr
     };
 
-    auto new_block = buf_pool->get(req, nullptr);
+    auto new_block = srv_buf_pool->get(req, nullptr);
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(new_block, SYNC_TREE_NODE_NEW));
 
@@ -617,7 +617,7 @@ static bool btr_page_reorganize_low(
   /* Turn logging off */
   auto log_mode = mtr_set_log_mode(mtr, MTR_LOG_NONE);
 
-  auto temp_block = buf_pool->block_alloc();
+  auto temp_block = srv_buf_pool->block_alloc();
   auto temp_page = temp_block->get_frame();
 
   /* Copy the old page to temporary space */
@@ -670,7 +670,7 @@ static bool btr_page_reorganize_low(
     success = true;
   }
 
-  buf_pool->block_free(temp_block);
+  srv_buf_pool->block_free(temp_block);
 
   /* Restore logging mode */
   mtr_set_log_mode(mtr, log_mode);

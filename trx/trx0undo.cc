@@ -140,7 +140,7 @@ static trx_undo_rec_t *trx_undo_get_prev_rec_from_prev_page(
 
   undo_page = page_align(rec);
 
-  prev_page_no = flst_get_prev_addr(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr).page;
+  prev_page_no = flst_get_prev_addr(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr).m_page_no;
 
   if (prev_page_no == FIL_NULL) {
 
@@ -206,7 +206,7 @@ static trx_undo_rec_t *trx_undo_get_next_rec_from_next_page(
     }
   }
 
-  next_page_no = flst_get_next_addr(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr).page;
+  next_page_no = flst_get_next_addr(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr).m_page_no;
   if (next_page_no == FIL_NULL) {
 
     return nullptr;
@@ -822,7 +822,7 @@ static ulint trx_undo_free_page(
     mlog_write_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, hist_size - 1, MLOG_4BYTES, mtr);
   }
 
-  return last_addr.page;
+  return last_addr.m_page_no;
 }
 
 /** Frees an undo log page when there is also the memory object for the undo
@@ -1103,8 +1103,8 @@ static trx_undo_t *trx_undo_mem_create_at_db_start(
 
   last_addr = flst_get_last(seg_header + TRX_UNDO_PAGE_LIST, mtr);
 
-  undo->last_page_no = last_addr.page;
-  undo->top_page_no = last_addr.page;
+  undo->last_page_no = last_addr.m_page_no;
+  undo->top_page_no = last_addr.m_page_no;
 
   last_page = trx_undo_page_get(rseg->space, undo->last_page_no, mtr);
 

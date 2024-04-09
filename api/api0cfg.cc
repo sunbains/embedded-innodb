@@ -442,7 +442,7 @@ static ib_err_t ib_cfg_var_set_LRU_old_blocks_pct(struct ib_cfg_var *cfg_var, co
     }
   }
 
-  lru_old_blocks_pct = Buf_LRU::old_ratio_update(*(ulint *)value, buf_pool != nullptr);
+  lru_old_blocks_pct = Buf_LRU::old_ratio_update(*(ulint *)value, srv_buf_pool != nullptr);
 
   return DB_SUCCESS;
 }

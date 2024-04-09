@@ -487,7 +487,7 @@ byte *mlog_write_initial_log_record_fast(const byte *ptr, byte type, byte *log_p
 
 #ifdef UNIV_DEBUG
   /* We now assume that all x-latched pages have been modified! */
-  auto block = buf_pool->block_align(ptr);
+  auto block = srv_buf_pool->block_align(ptr);
 
   if (!mtr_memo_contains(mtr, block, MTR_MEMO_MODIFY)) {
 

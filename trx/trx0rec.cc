@@ -1024,7 +1024,7 @@ db_err trx_undo_report_row_operation(
       .m_mtr = &mtr
     };
 
-    auto undo_block = buf_pool->get(req, undo->guess_block);
+    auto undo_block = srv_buf_pool->get(req, undo->guess_block);
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(undo_block, SYNC_TRX_UNDO_PAGE));
 

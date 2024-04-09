@@ -3185,7 +3185,7 @@ void lock_rec_print(ib_stream_t ib_stream, const Lock *lock) {
     .m_mtr = &mtr
   };
 
-  block = buf_pool->try_get_by_page_id(req);
+  block = srv_buf_pool->try_get_by_page_id(req);
 
   if (block != nullptr) {
     for (i = 0; i < lock_rec_get_n_bits(lock); i++) {
@@ -3422,7 +3422,7 @@ loop:
       };
 
       /* We are simply trying to force a read here. */
-      (void) buf_pool->get(req, nullptr);
+      (void) srv_buf_pool->get(req, nullptr);
 
       mtr_commit(&mtr);
 
@@ -3611,7 +3611,7 @@ static bool lock_rec_validate_page(space_id_t space, page_no_t page_no) {
     .m_mtr = &mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
 

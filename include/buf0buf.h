@@ -502,8 +502,8 @@ inline void buf_ptr_get_fsp_addr(const void *ptr, ulint *space, fil_addr_t *addr
   auto page = reinterpret_cast<const page_t *>(ut_align_down(ptr, UNIV_PAGE_SIZE));
 
   *space = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
-  addr->page = mach_read_from_4(page + FIL_PAGE_OFFSET);
-  addr->boffset = ut_align_offset(ptr, UNIV_PAGE_SIZE);
+  addr->m_page_no = mach_read_from_4(page + FIL_PAGE_OFFSET);
+  addr->m_boffset = ut_align_offset(ptr, UNIV_PAGE_SIZE);
 }
 
 /**
@@ -576,7 +576,7 @@ inline lsn_t buf_page_get_newest_modification(const buf_page_t *bpage) {
 
 /**
  * @brief Increments the modify clock of a frame by 1.
- * The caller must (1) own the buf_pool mutex and block bufferfix count has to be zero,
+ * The caller must (1) own the srv_buf_pool mutex and block bufferfix count has to be zero,
  * (2) or own an x-lock on the block.
  *
  * @param block Pointer to the buffer block.

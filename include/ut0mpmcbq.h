@@ -37,8 +37,9 @@ struct Bounded_channel {
   using Type = T;
   using Pos = std::size_t;
 
-  explicit Bounded_channel(uint32_t n) noexcept
-      : m_ring(new (std::nothrow) Cell[n]),
+  explicit Bounded_channel(size_t n) noexcept
+      : m_ptr(ut_new(sizeof(Cell) * n)),
+        m_ring(new (m_ptr) Cell[n]),
         m_capacity(n - 1) {
     /* Should be a power of 2 */
     ut_a(n >= 2 && (n & (n - 1)) == 0);
@@ -51,7 +52,10 @@ struct Bounded_channel {
     m_dpos.store(0, std::memory_order_relaxed);
   }
 
-  ~Bounded_channel() noexcept { delete [] m_ring; }
+  ~Bounded_channel() noexcept {
+    call_destructor(m_ring);
+    ut_delete(m_ptr);
+  }
 
   [[nodiscard]] bool enqueue(T const &data) noexcept {
     /* m_epos only wraps at MAX(m_epos), instead we use the capacity to
@@ -152,6 +156,30 @@ struct Bounded_channel {
       }
     }
 
+    ut_error;
+    return false;
+  }
+  
+  /** @return true if the Bounded_channel is full. */
+  [[nodiscard]] bool full() const noexcept {
+    auto pos{m_epos.load(std::memory_order_relaxed)};
+
+    for (;;) {
+      auto cell = &m_ring[pos & m_capacity];
+      const auto seq{cell->m_pos.load(std::memory_order_acquire)};
+      const intptr_t diff{(intptr_t)seq - (intptr_t)pos};
+
+      if (diff == 0) {
+        return m_epos == pos;
+      } else if (diff < 0) {
+        /* The Bounded_channel is full */
+        return true;
+      } else {
+        pos = m_epos.load(std::memory_order_relaxed);
+      }
+    }
+
+    ut_error;
     return false;
   }
 
@@ -163,7 +191,7 @@ struct Bounded_channel {
     std::atomic<Pos> m_pos{};
   };
 
-  std::byte* m_ptr{};
+  void* m_ptr{};
   Pad m_pad0;
   Cell* const m_ring{};
   Pos const m_capacity{};

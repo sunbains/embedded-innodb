@@ -144,11 +144,11 @@ inline void flst_write_addr(
 {
   ut_ad(faddr && mtr);
   ut_ad(mtr_memo_contains_page(mtr, faddr, MTR_MEMO_PAGE_X_FIX));
-  ut_a(addr.page == FIL_NULL || addr.boffset >= FIL_PAGE_DATA);
+  ut_a(addr.m_page_no == FIL_NULL || addr.m_boffset >= FIL_PAGE_DATA);
   ut_a(ut_align_offset(faddr, UNIV_PAGE_SIZE) >= FIL_PAGE_DATA);
 
-  mlog_write_ulint(faddr + FIL_ADDR_PAGE, addr.page, MLOG_4BYTES, mtr);
-  mlog_write_ulint(faddr + FIL_ADDR_BYTE, addr.boffset, MLOG_2BYTES, mtr);
+  mlog_write_ulint(faddr + FIL_ADDR_PAGE, addr.m_page_no, MLOG_4BYTES, mtr);
+  mlog_write_ulint(faddr + FIL_ADDR_BYTE, addr.m_boffset, MLOG_2BYTES, mtr);
 }
 
 /** Reads a file address.
@@ -160,9 +160,9 @@ inline fil_addr_t flst_read_addr(const fil_faddr_t *faddr, mtr_t *mtr) {
 
   ut_ad(faddr && mtr);
 
-  addr.page = mtr_read_ulint(faddr + FIL_ADDR_PAGE, MLOG_4BYTES, mtr);
-  addr.boffset = mtr_read_ulint(faddr + FIL_ADDR_BYTE, MLOG_2BYTES, mtr);
-  ut_a(addr.page == FIL_NULL || addr.boffset >= FIL_PAGE_DATA);
+  addr.m_page_no = mtr_read_ulint(faddr + FIL_ADDR_PAGE, MLOG_4BYTES, mtr);
+  addr.m_boffset = mtr_read_ulint(faddr + FIL_ADDR_BYTE, MLOG_2BYTES, mtr);
+  ut_a(addr.m_page_no == FIL_NULL || addr.m_boffset >= FIL_PAGE_DATA);
   ut_a(ut_align_offset(faddr, UNIV_PAGE_SIZE) >= FIL_PAGE_DATA);
 
   return addr;

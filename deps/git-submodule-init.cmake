@@ -7,7 +7,7 @@ SET(THREAD_POOL_SRC_DIR "${CMAKE_SOURCE_DIR}/deps/thread-pool")
 IF(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
 
   # Update submodules as needed
- OPTION(GIT_SUBMODULE "Check submodules during build" ON)
+ OPTION(GIT_SUBMODULE "-- Check submodules during build" ON)
 
  IF(GIT_SUBMODULE)
 
@@ -19,8 +19,8 @@ IF(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
 
    IF(NOT GIT_SUBMOD_RESULT EQUAL "0")
      MESSAGE(FATAL_ERROR 
-	     "git submodule update --init --recursive failed with "
-	     "${GIT_SUBMOD_RESULT}, please checkout submodules")
+             "git submodule update --init --recursive failed with "
+             "${GIT_SUBMOD_RESULT}, please checkout submodules")
    ENDIF()
 
  ENDIF()
@@ -28,10 +28,10 @@ IF(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
 ENDIF()
 
 IF(NOT EXISTS "${LIBURING_SRC_DIR}")
-	MESSAGE(FATAL_ERROR "Failed to download liburing from GitHub")
+    MESSAGE(FATAL_ERROR "-- Failed to download liburing from GitHub")
 ELSE()
 
-  MESSAGE("-- Add external dependency liburing")
+   MESSAGE(STATUS "Add external dependency liburing")
 
   SET(LIBURING_SRC_DIR "${CMAKE_SOURCE_DIR}/deps/liburing")
   SET(LIBURING_INSTALL_DIR "${DEPS_INSTALL_DIR}/liburing")
@@ -60,11 +60,11 @@ ELSE()
 ENDIF()
 
 IF(NOT EXISTS "${THREAD_POOL_SRC_DIR}")
-  MESsAGE(FATAL_ERROR "Failed to download thread pool from GitHub")
+  MESSAGE(FATAL_ERROR "Failed to download thread pool from GitHub")
 ELSE()
 
   # It's a header only library.
-  MESSAGE("-- Add external dependency thread-pool")
+  MESSAGE(STATUS "Add external dependency thread-pool")
 
   SET(THREAD_POOL_SRC_DIR "${CMAKE_SOURCE_DIR}/deps/thread-pool")
   SET(THREAD_POOL_INCLUDE_DIR "${THREAD_POOL_SRC_DIR}/include")

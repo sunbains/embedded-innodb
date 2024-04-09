@@ -74,18 +74,13 @@ corresponding function. */
 
 /** NOTE! The following macro should be used in mutex locking, not the
 corresponding function. */
-#define mutex_enter_nowait(M) mutex_enter_nowait_func((M), __FILE__, __LINE__)
+#define mutex_enter_nowait(M) mutex_enter_nowait_func((M) IF_SYNC_DEBUG(, __FILE__, __LINE__))
 
 /** NOTE! Use the corresponding macro in the header file, not this function
 directly. Tries to lock the mutex for the current thread. If the lock is not
 acquired immediately, returns with return value 1.
 @return	0 if succeed, 1 if not */
-ulint mutex_enter_nowait_func(
-  mutex_t *mutex,        /** in: pointer to mutex */
-  const char *file_name, /** in: file name where
-                                                     mutex requested */
-  ulint line
-); /** in: line where requested */
+ulint mutex_enter_nowait_func(mutex_t *mutex IF_SYNC_DEBUG(, const char *file_name, ulint line));
 
 #ifdef UNIV_SYNC_DEBUG
 /** Returns true if no mutex or rw-lock is currently locked.
@@ -391,8 +386,7 @@ to 20 microseconds. */
 #define SYNC_SPIN_ROUNDS srv_n_spin_wait_rounds
 
 /** The number of mutex_exit calls. Intended for performance monitoring. */
-// FIXME(RAHUL): Figure out the number of cpus.
-using counter_t = ut::Sharded_counter<16>;
+using counter_t = ut::CPU_sharded_counter<8>;
 extern counter_t mutex_exit_count;
 
 #ifdef UNIV_SYNC_DEBUG
@@ -404,47 +398,58 @@ extern bool sync_order_checks_on;
 extern bool sync_initialized;
 
 /** Global list of database mutexes (not OS mutexes) created. */
-typedef UT_LIST_BASE_NODE_T(mutex_t, list) ut_list_base_node_t;
+using ut_mutex_list_base_node_t  = UT_LIST_BASE_NODE_T(mutex_t, list);
 
 /** Global list of database mutexes (not OS mutexes) created. */
-extern ut_list_base_node_t mutex_list;
+extern ut_mutex_list_base_node_t mutex_list;
 
 /** Mutex protecting the mutex_list variable */
 extern mutex_t mutex_list_mutex;
 
-/** Sets the waiters field in a mutex. */
-void mutex_set_waiters(
-  mutex_t *mutex, /*!< in: mutex */
-  ulint n
-); /*!< in: value to set */
+/**
+ * Sets the waiters field in a mutex.
+ *
+ * @param mutex - mutex
+ * @param n - value to set
+ */
+void mutex_set_waiters(mutex_t *mutex, ulint n);
 
-/** Reserves a mutex for the current thread. If the mutex is reserved, the
-function spins a preset time (controlled by SYNC_SPIN_ROUNDS) waiting
-for the mutex before suspending the thread. */
-void mutex_spin_wait(
-  mutex_t *mutex,        /*!< in: pointer to mutex */
-  const char *file_name, /*!< in: file name where mutex
-                                            requested */
-  ulint line
-); /*!< in: line where requested */
+/**
+ * Reserves a mutex for the current thread. If the mutex is reserved, the
+ * function spins a preset time (controlled by SYNC_SPIN_ROUNDS) waiting
+ * for the mutex before suspending the thread.
+ *
+ * @param mutex - pointer to mutex
+ * @param file_name - file name where mutex requested
+ * @param line - line where requested
+ */
+void mutex_spin_wait(mutex_t *mutex, const char *file_name, ulint line);
 
 #ifdef UNIV_SYNC_DEBUG
-/** Sets the debug information for a reserved mutex. */
-void mutex_set_debug_info(
-  mutex_t *mutex,        /*!< in: mutex */
-  const char *file_name, /*!< in: file where requested */
-  ulint line
-);     /*!< in: line where requested */
+/**
+ * Sets the debug information for a reserved mutex.
+ *
+ * @param mutex - mutex
+ * @param file_name - file where requested
+ * @param line - line where requested
+ */
+void mutex_set_debug_info(mutex_t *mutex, const char *file_name, ulint line);
 #endif /* UNIV_SYNC_DEBUG */
 
-/** Releases the threads waiting in the primary wait array for this mutex. */
-void mutex_signal_object(mutex_t *mutex); /*!< in: mutex */
+/**
+ * Releases the threads waiting in the primary wait array for this mutex.
+ *
+ * @param mutex - mutex
+ */
+void mutex_signal_object(mutex_t *mutex);
 
-/** Performs an atomic test-and-set instruction to the lock_word field of a
-mutex.
-@return	the previous value of lock_word: 0 or 1 */
-inline byte mutex_test_and_set(mutex_t *mutex) /*!< in: mutex */
-{
+/**
+ * Performs an atomic test-and-set instruction to the lock_word field of a mutex.
+ *
+ * @param mutex - mutex
+ * @return the previous value of lock_word: 0 or 1
+ */
+inline byte mutex_test_and_set(mutex_t *mutex) {
   return mutex->lock_word.exchange(true);
 }
 
@@ -456,9 +461,13 @@ inline void mutex_reset_lock_word(mutex_t *mutex) /*!< in: mutex */
   mutex->lock_word.store(false);
 }
 
-/** Gets the value of the lock word. */
-inline lock_word_t mutex_get_lock_word(const mutex_t *mutex) /*!< in: mutex */
-{
+/**
+ * Gets the value of the lock word.
+ *
+ * @param mutex - mutex
+ * @return the value of the lock word
+ */
+inline lock_word_t mutex_get_lock_word(const mutex_t *mutex) {
   return mutex->lock_word.load();
 }
 
@@ -469,16 +478,17 @@ inline ulint mutex_get_waiters(const mutex_t *mutex) {
   return mutex->m_waiters.load();
 }
 
-/** Unlocks a mutex owned by the current thread. */
-inline void mutex_exit(mutex_t *mutex) /*!< in: pointer to mutex */
-{
+/**
+ * Unlocks a mutex owned by the current thread.
+ *
+ * @param mutex - pointer to mutex
+ */
+inline void mutex_exit(mutex_t *mutex) {
   ut_ad(mutex_own(mutex));
-
   ut_d(mutex->thread_id = (os_thread_id_t)ULINT_UNDEFINED);
 
-#ifdef UNIV_SYNC_DEBUG
-  sync_thread_reset_level(mutex);
-#endif
+  IF_SYNC_DEBUG(sync_thread_reset_level(mutex);)
+
   mutex_reset_lock_word(mutex);
 
   /* A problem: we assume that mutex_reset_lock word
@@ -497,21 +507,18 @@ inline void mutex_exit(mutex_t *mutex) /*!< in: pointer to mutex */
 
     mutex_signal_object(mutex);
   }
-
-#ifdef UNIV_SYNC_PERF_STAT
-  mutex_exit_count++;
-#endif
 }
 
-/** Locks a mutex for the current thread. If the mutex is reserved, the function
-spins a preset time (controlled by SYNC_SPIN_ROUNDS), waiting for the mutex
-before suspending the thread. */
-inline void mutex_enter_func(
-  mutex_t *mutex,        /*!< in: pointer to mutex */
-  const char *file_name, /*!< in: file name where locked */
-  ulint line
-) /*!< in: line where locked */
-{
+/**
+ * Locks a mutex for the current thread. If the mutex is reserved, the function
+ * spins a preset time (controlled by SYNC_SPIN_ROUNDS), waiting for the mutex
+ * before suspending the thread.
+ *
+ * @param mutex - pointer to mutex
+ * @param file_name - file name where locked
+ * @param line - line where locked
+ */
+inline void mutex_enter_func(mutex_t *mutex, const char *file_name, ulint line) {
   ut_ad(mutex_validate(mutex));
   ut_ad(!mutex_own(mutex));
 
@@ -522,10 +529,10 @@ inline void mutex_enter_func(
 
   if (!mutex_test_and_set(mutex)) {
     ut_d(mutex->thread_id = os_thread_get_curr_id());
-#ifdef UNIV_SYNC_DEBUG
-    mutex_set_debug_info(mutex, file_name, line);
-#endif
-    return; /* Succeeded! */
+    IF_SYNC_DEBUG(mutex_set_debug_info(mutex, file_name, line);)
+
+    /* Succeeded! */
+    return;
   }
 
   mutex_spin_wait(mutex, file_name, line);

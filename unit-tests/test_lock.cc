@@ -146,10 +146,10 @@ int main() {
   {
     srv_buf_pool_size = 64 * 1024 * 1024;
 
-    buf_pool = new (std::nothrow) Buf_pool();
-    ut_a(buf_pool != nullptr);
+    srv_buf_pool = new (std::nothrow) Buf_pool();
+    ut_a(srv_buf_pool != nullptr);
 
-    auto success = buf_pool->open(srv_buf_pool_size);
+    auto success = srv_buf_pool->open(srv_buf_pool_size);
     ut_a(success);
   }
 
@@ -185,13 +185,13 @@ int main() {
   os_event_free(srv_lock_timeout_thread_event);
   srv_lock_timeout_thread_event = nullptr;
 
-  buf_pool->close();
+  srv_buf_pool->close();
 
   sync_close();
 
   os_sync_free();
 
-  delete buf_pool;
+  delete srv_buf_pool;
 
   ut_delete_all_mem();
 

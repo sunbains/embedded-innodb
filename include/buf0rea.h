@@ -29,7 +29,7 @@ Created 11/5/1995 Heikki Tuuri
 
 /**
  * @brief High-level function which reads a page asynchronously
- *        from a file to the buffer buf_pool if it is not already
+ *        from a file to the buffer srv_buf_pool if it is not already
  *        there. Sets the io_fix flag and sets an exclusive lock
  *        on the buffer frame. The flag is cleared and the
  *        x-lock released by the i/o-handler thread.
@@ -48,9 +48,9 @@ bool buf_read_page(ulint space, ulint offset);
  *        the 'natural' adjacent successor and predecessor of the page,
  *        which on the leaf level of a B-tree are the next and previous page
  *        in the chain of leaves. To know these, the page specified in
- *        (space, offset) must already be present in the buf_pool. Thus,
+ *        (space, offset) must already be present in the srv_buf_pool. Thus,
  *        the natural way to use this function is to call it when a page
- *        in the buf_pool is accessed the first time, calling this function
+ *        in the srv_buf_pool is accessed the first time, calling this function
  *        just after it has been bufferfixed.
  *   NOTE 1: as this function looks at the natural predecessor and successor
  *        fields on the page, what happens, if these are not initialized

@@ -308,7 +308,7 @@ buf_block_t *Parallel_reader::Scan_ctx::block_get_s_latched(const Page_id &page_
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
 
@@ -361,7 +361,7 @@ dberr_t PCursor::move_to_user_rec() noexcept {
     .m_mtr = m_mtr
   };
 
-  block = buf_pool->get(req, nullptr);
+  block = srv_buf_pool->get(req, nullptr);
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
 

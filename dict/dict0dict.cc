@@ -435,8 +435,8 @@ void dict_init() {
 
   mutex_create(&dict_sys->mutex, IF_DEBUG("dict_mutex",) IF_SYNC_DEBUG(SYNC_DICT,) Source_location{});
 
-  dict_sys->table_hash = hash_create(buf_pool->get_curr_size() / (DICT_POOL_PER_TABLE_HASH * UNIV_WORD_SIZE));
-  dict_sys->table_id_hash = hash_create(buf_pool->get_curr_size() / (DICT_POOL_PER_TABLE_HASH * UNIV_WORD_SIZE));
+  dict_sys->table_hash = hash_create(srv_buf_pool->get_curr_size() / (DICT_POOL_PER_TABLE_HASH * UNIV_WORD_SIZE));
+  dict_sys->table_id_hash = hash_create(srv_buf_pool->get_curr_size() / (DICT_POOL_PER_TABLE_HASH * UNIV_WORD_SIZE));
   dict_sys->size = 0;
 
   UT_LIST_INIT(dict_sys->table_LRU);

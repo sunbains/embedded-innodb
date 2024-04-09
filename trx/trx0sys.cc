@@ -144,7 +144,7 @@ void trx_sys_mark_upgraded_to_multiple_tablespaces() {
     .m_mtr = &mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
 
   auto doublewrite = block->get_frame() + TRX_SYS_DOUBLEWRITE;
@@ -188,7 +188,7 @@ start_again:
 
   trx_doublewrite_buf_is_being_created = true;
 
-  block = buf_pool->get(req, nullptr);
+  block = srv_buf_pool->get(req, nullptr);
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
 
   doublewrite = block->get_frame() + TRX_SYS_DOUBLEWRITE;
@@ -208,7 +208,7 @@ start_again:
       " creating new\n"
     );
 
-    if (buf_pool->get_curr_size() < ((2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2 + 100) * UNIV_PAGE_SIZE)) {
+    if (srv_buf_pool->get_curr_size() < ((2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2 + 100) * UNIV_PAGE_SIZE)) {
       ib_logger(
         ib_stream,
         "Cannot create doublewrite buffer:"
@@ -464,7 +464,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
 
       /* Check if the page is corrupt */
 
-      if (unlikely(buf_pool->is_corrupted(read_buf))) {
+      if (unlikely(srv_buf_pool->is_corrupted(read_buf))) {
 
         ib_logger(
           ib_stream,
@@ -478,7 +478,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
           (ulong)page_no
         );
 
-        if (buf_pool->is_corrupted(page)) {
+        if (srv_buf_pool->is_corrupted(page)) {
           ib_logger(ib_stream, "Dump of the page:\n");
           buf_page_print(read_buf, 0);
           ib_logger(
@@ -756,7 +756,7 @@ static bool trx_sys_file_format_max_write(
     .m_mtr = &mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
 
   file_format_max.id = format_id;
   file_format_max.name = trx_sys_file_format_id_to_name(format_id);
@@ -793,7 +793,7 @@ static ulint trx_sys_file_format_max_read(void) {
     .m_mtr = &mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
 
   const auto ptr = block->get_frame() + TRX_SYS_FILE_FORMAT_TAG;
 

@@ -67,12 +67,11 @@ concept has_get_index = requires(T t) {
 
 /** Struct with a get_index method using the hash of the thread id.
  @tparam total_buckets total number of buckets*/
-template <std::int32_t Total_buckets>
-struct Index_using_thread_id {
-  explicit Index_using_thread_id() : m_hash{} {}
+struct Thread_id_indexer{
+  explicit Thread_id_indexer() : m_hash{} {}
 
   [[nodiscard]] std::size_t get_index() const {
-    return m_hash(std::this_thread::get_id()) % Total_buckets;
+    return m_hash(std::this_thread::get_id());
   }
 
  private:
@@ -82,7 +81,7 @@ struct Index_using_thread_id {
 
 /** Struct with a get_index method using the cpu number of the thread.
  @tparam total_buckets total number of buckets*/
-struct Index_using_CPU {
+struct CPU_indexer {
   [[nodiscard]] std::size_t get_index() const {
 #ifdef UNIV_LINUX
      uint cpu;
@@ -142,5 +141,11 @@ struct Counters {
 
 template <std::int32_t Shards>
 using Sharded_counter = Counters<Shards>;
+
+template <std::int32_t Shards>
+using Thread_id_sharded_counter = Counters<Shards, Thread_id_indexer>;
+
+template <std::int32_t Shards>
+using CPU_sharded_counter = Counters<Shards, CPU_indexer>;
 
 } // namespace ut

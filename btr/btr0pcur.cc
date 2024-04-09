@@ -173,7 +173,7 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
       .m_mtr = mtr
     };
 
-    if (likely(buf_pool->try_get(req))) {
+    if (likely(srv_buf_pool->try_get(req))) {
       m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
 
       buf_block_dbg_add_level(IF_SYNC_DEBUG(get_block(), SYNC_TREE_NODE));

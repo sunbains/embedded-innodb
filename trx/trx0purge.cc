@@ -333,9 +333,9 @@ loop:
 
   rseg_hdr = trx_rsegf_get(rseg->space, rseg->page_no, &mtr);
 
-  undo_page = trx_undo_page_get(rseg->space, hdr_addr.page, &mtr);
+  undo_page = trx_undo_page_get(rseg->space, hdr_addr.m_page_no, &mtr);
   seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
-  log_hdr = undo_page + hdr_addr.boffset;
+  log_hdr = undo_page + hdr_addr.m_boffset;
 
   /* Mark the last undo log totally purged, so that if the system
   crashes, the tail of the undo log will not get accessed again. The
@@ -428,7 +428,7 @@ static void trx_purge_truncate_rseg_history(
 
   hdr_addr = trx_purge_get_log_from_hist(flst_get_last(rseg_hdr + TRX_RSEG_HISTORY, &mtr));
 loop:
-  if (hdr_addr.page == FIL_NULL) {
+  if (hdr_addr.m_page_no == FIL_NULL) {
 
     mutex_exit(&(rseg->mutex));
 
@@ -437,14 +437,14 @@ loop:
     return;
   }
 
-  undo_page = trx_undo_page_get(rseg->space, hdr_addr.page, &mtr);
+  undo_page = trx_undo_page_get(rseg->space, hdr_addr.m_page_no, &mtr);
 
-  log_hdr = undo_page + hdr_addr.boffset;
+  log_hdr = undo_page + hdr_addr.m_boffset;
 
   cmp = mach_read_from_8(log_hdr + TRX_UNDO_TRX_NO) - limit_trx_no;
 
   if (cmp == 0) {
-    trx_undo_truncate_start(rseg, rseg->space, hdr_addr.page, hdr_addr.boffset, limit_undo_no);
+    trx_undo_truncate_start(rseg, rseg->space, hdr_addr.m_page_no, hdr_addr.m_boffset, limit_undo_no);
   }
 
   if (cmp >= 0) {
@@ -575,7 +575,7 @@ static void trx_purge_rseg_get_next_history_log(trx_rseg_t *rseg) /** in: rollba
   purge_sys->n_pages_handled++;
 
   prev_log_addr = trx_purge_get_log_from_hist(flst_get_prev_addr(log_hdr + TRX_UNDO_HISTORY_NODE, &mtr));
-  if (prev_log_addr.page == FIL_NULL) {
+  if (prev_log_addr.m_page_no == FIL_NULL) {
     /* No logs left in the history list */
 
     rseg->last_page_no = FIL_NULL;
@@ -619,7 +619,7 @@ static void trx_purge_rseg_get_next_history_log(trx_rseg_t *rseg) /** in: rollba
   /* Read the trx number and del marks from the previous log header */
   mtr_start(&mtr);
 
-  log_hdr = trx_undo_page_get_s_latched(rseg->space, prev_log_addr.page, &mtr) + prev_log_addr.boffset;
+  log_hdr = trx_undo_page_get_s_latched(rseg->space, prev_log_addr.m_page_no, &mtr) + prev_log_addr.m_boffset;
 
   trx_no = mach_read_from_8(log_hdr + TRX_UNDO_TRX_NO);
 
@@ -629,8 +629,8 @@ static void trx_purge_rseg_get_next_history_log(trx_rseg_t *rseg) /** in: rollba
 
   mutex_enter(&(rseg->mutex));
 
-  rseg->last_page_no = prev_log_addr.page;
-  rseg->last_offset = prev_log_addr.boffset;
+  rseg->last_page_no = prev_log_addr.m_page_no;
+  rseg->last_offset = prev_log_addr.m_boffset;
   rseg->last_trx_no = trx_no;
   rseg->last_del_marks = del_marks;
 

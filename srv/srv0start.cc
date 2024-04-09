@@ -122,12 +122,6 @@ enum srv_shutdown_state srv_shutdown_state = SRV_SHUTDOWN_NONE;
 /** Files comprising the system tablespace */
 static os_file_t files[1000];
 
-/** Mutex protecting the ios count */
-static mutex_t ios_mutex;
-
-/** Count of I/O operations in io_handler_thread() */
-static ulint ios;
-
 /** io_handler_thread parameters for thread identification */
 static ulint n[SRV_MAX_N_IO_THREADS + 6];
 
@@ -152,10 +146,10 @@ static char **srv_log_group_home_dirs = nullptr;
 to the signaled state. Then the threads will exit themselves in
 os_thread_event_wait().
 @return	true if all threads exited. */
-static bool srv_threads_shutdown(void);
+static bool srv_threads_shutdown();
 
-constexpr auto SRV_N_PENDING_IOS_PER_THREAD  = OS_AIO_N_PENDING_IOS_PER_THREAD;
-constexpr ulint SRV_MAX_N_PENDING_SYNC_IOS = 100;
+/** FIXME: Make this configurable. */
+constexpr ulint OS_AIO_N_PENDING_IOS_PER_THREAD = 256;
 
 /** Convert a numeric string that optionally ends in G or M, to a number
 containing megabytes.
@@ -532,17 +526,7 @@ void srv_free_paths_and_sizes(void) {
 void *io_handler_thread(void *arg) {
   auto segment = *((ulint *)arg);
 
-#ifdef UNIV_DEBUG_THREAD_CREATION
-  ib_logger(ib_stream, "Io handler thread %lu starts, id %lu\n", segment, os_thread_pf(os_thread_get_curr_id()));
-#endif
-
-  for (;;) {
-    fil_aio_wait(segment);
-
-    mutex_enter(&ios_mutex);
-    ios++;
-    mutex_exit(&ios_mutex);
-  }
+  while (fil_aio_wait(segment)) { }
 
   thr_local_free(os_thread_get_curr_id());
 
@@ -948,7 +932,7 @@ static db_err open_or_create_data_files(
     ut_a(ret);
 
     if (i == 0) {
-      fil_space_create(name, 0, 0, FIL_TABLESPACE);
+      fil_space_create(name, SYS_TABLESPACE, 0, FIL_TABLESPACE);
     }
 
     ut_a(fil_validate());
@@ -956,17 +940,16 @@ static db_err open_or_create_data_files(
     fil_node_create(name, srv_data_file_sizes[i], 0, srv_data_file_is_raw_partition[i] != 0);
   }
 
-  ios = 0;
-
-  mutex_create(&ios_mutex, IF_DEBUG("ios_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Source_location{});
-
   return DB_SUCCESS;
 }
 
-/** Abort the startup process and shutdown the minimum set of sub-systems
-required to create files and. */
-static void srv_startup_abort(enum db_err err) /* in: Current error code */
-{
+/**
+ * @brief Abort the startup process and shutdown the minimum set of
+ * sub-systems required to create files and.
+ * 
+ * @param err Current error code
+ */
+static void srv_startup_abort(db_err err) {
   /* This is currently required to inform the master thread only. Once
   we have contexts we can get rid of this global. */
   srv_fast_shutdown = IB_SHUTDOWN_NORMAL;
@@ -982,14 +965,19 @@ static void srv_startup_abort(enum db_err err) /* in: Current error code */
 
   log_shutdown();
   lock_sys_close();
-  buf_pool->close();
+
+  srv_buf_pool->close();
+
+  srv_aio->shutdown();
+
   fil_close();
-  os_aio_close();
   os_file_free();
 
   log_mem_free();
 
-  delete buf_pool;
+  AIO::destroy(srv_aio);
+
+  delete srv_buf_pool;
 }
 
 ib_err_t innobase_start_or_create() {
@@ -1012,40 +1000,12 @@ ib_err_t innobase_start_or_create() {
 
   srv_file_per_table_original_value = srv_file_per_table;
 
-#ifdef HAVE_DARWIN_THREADS
-#ifdef F_FULLFSYNC
-  /* This executable has been compiled on Mac OS X 10.3 or later.
-  Assume that F_FULLFSYNC is available at run-time. */
-  srv_have_fullfsync = true;
-#else  /* F_FULLFSYNC */
-  /* This executable has been compiled on Mac OS X 10.2
-  or earlier.  Determine if the executable is running
-  on Mac OS X 10.3 or later. */
-  struct utsname utsname;
-  if (uname(&utsname)) {
-    ib_logger(ib_stream, "cannot determine Mac OS X version!\n");
-  } else {
-    srv_have_fullfsync = strcmp(utsname.release, "7.") >= 0;
-  }
-  if (!srv_have_fullfsync) {
-    ib_logger(
-      ib_stream,
-      "On Mac OS X, fsync() may be"
-      " broken on internal drives,\n"
-      "making transactions unsafe!\n"
-    );
-  }
-#endif /* F_FULLFSYNC */
-#endif /* HAVE_DARWIN_THREADS */
-
   if (sizeof(ulint) != sizeof(void *)) {
     ib_logger(
       ib_stream,
-      "Error: size of InnoDB's ulint is %lu,"
-      " but size of void* is %lu.\n"
-      "The sizes should be the same"
-      " so that on a 64-bit platform you can\n"
-      "allocate more than 4 GB of memory.",
+      "Size of InnoDB's ulint is %lu, but size of void* is %lu."
+      " The sizes should be the same so that on a 64-bit platform"
+      " you can allocate more than 4 GB of memory.",
       (ulong)sizeof(ulint),
       (ulong)sizeof(void *)
     );
@@ -1056,13 +1016,9 @@ ib_err_t innobase_start_or_create() {
   server will not accept connections (which could modify
   file_per_table) until this function has returned. */
   srv_file_per_table = false;
-#ifdef UNIV_DEBUG
-  ib_logger(ib_stream, "!!!!!!!! UNIV_DEBUG switched on !!!!!!!!!\n");
-#endif
+  IF_DEBUG(ib_logger(ib_stream, "!!!!!!!! UNIV_DEBUG switched on !!!!!!!!!\n");)
 
-#ifdef UNIV_SYNC_DEBUG
-  ib_logger(ib_stream, "!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!\n");
-#endif
+  IF_SYNC_DEBUG(ib_logger(ib_stream, "!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!\n");)
 
 #ifdef UNIV_SEARCH_DEBUG
   ib_logger(ib_stream, "!!!!!!!! UNIV_SEARCH_DEBUG switched on !!!!!!!!!\n");
@@ -1081,18 +1037,15 @@ ib_err_t innobase_start_or_create() {
   if (srv_was_started && srv_start_has_been_called) {
     ib_logger(
       ib_stream,
-      "Error: startup called second time"
-      " during the process lifetime.\n"
-      "more than once during"
-      " the process lifetime.\n"
+      "Startup called second time during the process lifetime."
+      " more than once during the process lifetime.\n"
     );
   }
 
   srv_start_has_been_called = true;
 
-#ifdef UNIV_DEBUG
-  log_do_write = true;
-#endif /* UNIV_DEBUG */
+  ut_d(log_do_write = true);
+
   /*	yydebug = true; */
 
   srv_is_being_started = true;
@@ -1134,8 +1087,6 @@ ib_err_t innobase_start_or_create() {
 
   ut_a(srv_n_file_io_threads <= SRV_MAX_N_IO_THREADS);
 
-  auto io_limit = 8 * SRV_N_PENDING_IOS_PER_THREAD;
-
 #ifdef UNIV_DEBUG
   /* We have observed deadlocks with a 5MB buffer pool but
   the actual lower limit could very well be a little higher. */
@@ -1150,13 +1101,10 @@ ib_err_t innobase_start_or_create() {
       srv_buf_pool_size / 1024 / 1024
     );
   }
-#endif
+#endif /* UNIV_DEBUG */
 
   if (srv_n_log_files * srv_log_file_size >= 262144) {
-    ib_logger(
-      ib_stream,
-      "Error: combined size of log files"
-      " must be < 4 GB\n"
+    ib_logger(ib_stream, "Combined size of log files must be < 4 GB\n"
     );
 
     return DB_ERROR;
@@ -1168,10 +1116,8 @@ ib_err_t innobase_start_or_create() {
     if (sizeof(off_t) < 5 && srv_data_file_sizes[i] >= 262144) {
       ib_logger(
         ib_stream,
-        "Error: file size must be < 4 GB"
-        " with this binary\n"
-        "and operating system combination,"
-        " in some OS's < 2 GB\n"
+        "File size must be < 4 GB with this binary"
+        " and operating system combination, in some OS's < 2 GB\n"
       );
 
       return DB_ERROR;
@@ -1180,38 +1126,45 @@ ib_err_t innobase_start_or_create() {
   }
 
   if (sum_of_new_sizes < 10485760 / UNIV_PAGE_SIZE) {
-    ib_logger(
-      ib_stream,
-      "Error: tablespace size must be"
-      " at least 10 MB\n"
-    );
+    ib_logger(ib_stream, "Tablespace size must be at least 10 MB\n");
 
     return DB_ERROR;
   }
 
+  const auto io_limit = OS_AIO_N_PENDING_IOS_PER_THREAD;
+
   os_file_init();
-  os_aio_init(io_limit, srv_n_read_io_threads, srv_n_write_io_threads, SRV_MAX_N_PENDING_SYNC_IOS);
 
-  fil_init(srv_file_per_table ? 50000 : 5000, srv_max_n_open_files);
+  srv_aio = AIO::create(io_limit, srv_n_read_io_threads, srv_n_write_io_threads);
 
-  buf_pool = new Buf_pool();
+  if (srv_aio == nullptr) {
+    log_err("Failed to create an AIO instance.");
+    os_file_free();
+    return DB_OUT_OF_MEMORY;
+  }
 
-  if (!buf_pool->open(srv_buf_pool_size)) {
+  fil_open(srv_max_n_open_files);
+
+  srv_buf_pool = new (std::nothrow) Buf_pool();
+
+  if (!srv_buf_pool->open(srv_buf_pool_size)) {
     /* Shutdown all sub-systems that have been initialized. */
     fil_close();
-    os_aio_close();
+
+    AIO::destroy(srv_aio);
+
     os_file_free();
 
     ib_logger(
       ib_stream,
-      "Fatal error: cannot allocate the memory"
-      " for the buffer pool\n"
+      "Fatal error: cannot allocate the memory for the buffer pool\n"
     );
 
     return DB_ERROR;
   }
 
   fsp_init();
+
   innobase_log_init();
 
   lock_sys_create(srv_lock_table_size);
@@ -1225,21 +1178,16 @@ ib_err_t innobase_start_or_create() {
   }
 
   err = open_or_create_data_files(&create_new_db, &min_flushed_lsn, &max_flushed_lsn, &sum_of_new_sizes);
+
   if (err != DB_SUCCESS) {
     ib_logger(
       ib_stream,
-      "Could not open or create data files.\n"
-      "If you tried to add new data files,"
-      " and it failed here,\n"
-      "you should now set data_file_path"
-      " back\n"
-      "to what it was, and remove the"
-      " new ibdata files InnoDB created\n"
-      "in this failed attempt. InnoDB only wrote"
-      " those files full of\n"
-      "zeros, but did not yet use them in any way."
-      " But be careful: do not\n"
-      "remove old data files"
+      "Could not open or create data files. If you tried to add"
+      " new data files, and it failed here, you should now set"
+      " data_file_path back to what it was, and remove the new"
+      " ibdata files InnoDB created in this failed attempt. InnoDB"
+      " only wrote those files full of zeros, but did not yet use"
+      " them in any way. But be careful: do not emove old data files"
       " which contain your precious data!\n"
     );
 
@@ -1263,17 +1211,11 @@ ib_err_t innobase_start_or_create() {
     if ((log_opened && create_new_db) || (log_opened && log_created)) {
       ib_logger(
         ib_stream,
-        "Error: all log files must be"
-        " created at the same time.\n"
-        "All log files must be"
-        " created also in database creation.\n"
-        "If you want bigger or smaller"
-        " log files, shut down the\n"
-        "database and make sure there"
-        " were no errors in shutdown.\n"
-        "Then delete the existing log files."
-        " Reconfigure InnoDB\n"
-        "and start the database again.\n"
+        "All log files must be created at the same time. All log files must be"
+        " created also in database creation. If you want bigger or smaller"
+        " log files, shut down the database and make sure there were no errors"
+        " in shutdown. Then delete the existing log files. Reconfigure InnoDB"
+        " and start the database again.\n"
       );
 
       srv_startup_abort(DB_ERROR);
@@ -1290,11 +1232,8 @@ ib_err_t innobase_start_or_create() {
     if (max_flushed_lsn != min_flushed_lsn) {
       ib_logger(
         ib_stream,
-        "Cannot initialize created"
-        " log files because\n"
-        "data files were not in sync"
-        " with each other\n"
-        "or the data files are corrupt.\n"
+        "Cannot initialize created  log files because data files were not in sync"
+        " with each other or the data files are corrupt.\n"
       );
 
       srv_startup_abort(DB_ERROR);
@@ -1304,15 +1243,9 @@ ib_err_t innobase_start_or_create() {
     if (max_flushed_lsn < (uint64_t)1000) {
       ib_logger(
         ib_stream,
-        "Cannot initialize created"
-        " log files because\n"
-        "data files are corrupt,"
-        " or new data files were\n"
-        "created when the database"
-        " was started previous\n"
-        "time but the database"
-        " was not shut down\n"
-        "normally after that.\n"
+        "Cannot initialize created log files because data files are corrupt,"
+        " or new data files were created when the database was started previous"
+        " time but the database was not shut down normally after that.\n"
       );
 
       srv_startup_abort(DB_ERROR);
@@ -1461,9 +1394,7 @@ ib_err_t innobase_start_or_create() {
   operations */
 
   os_thread_create(&srv_master_thread, nullptr, thread_ids + (1 + SRV_MAX_N_IO_THREADS));
-#ifdef UNIV_DEBUG
-  /* buf_debug_prints = true; */
-#endif /* UNIV_DEBUG */
+
   sum_of_data_file_sizes = 0;
 
   for (i = 0; i < srv_n_data_files; i++) {
@@ -1476,9 +1407,8 @@ ib_err_t innobase_start_or_create() {
 
     ib_logger(
       ib_stream,
-      "Error: tablespace size"
-      " stored in header is %lu pages, but\n"
-      "the sum of data file sizes is %lu pages\n",
+      "Tablespace size stored in header is %lu pages, but the sum of data"
+      " file sizes is %lu pages\n",
       (ulong)tablespace_size_in_header,
       (ulong)sum_of_data_file_sizes
     );
@@ -1489,16 +1419,10 @@ ib_err_t innobase_start_or_create() {
 
       ib_logger(
         ib_stream,
-        "Cannot start InnoDB."
-        " The tail of the system tablespace is\n"
-        "missing. Have you set the"
-        " data_file_path in an\n"
-        "inappropriate way, removing"
-        " ibdata files from there?\n"
-        "You can set force_recovery=1"
-        " to force\n"
-        "a startup if you are trying"
-        " to recover a badly corrupt database.\n"
+        "Cannot start InnoDB. The tail of the system tablespace is missing."
+        " Have you set the data_file_path in an inappropriate way, removing"
+        " ibdata files from there? You can set force_recovery=1 to force"
+        " a startup if you are trying to recover a badly corrupt database.\n"
       );
 
       srv_startup_abort(DB_ERROR);
@@ -1510,9 +1434,7 @@ ib_err_t innobase_start_or_create() {
 
     ib_logger(
       ib_stream,
-      "Error: tablespace size stored in header"
-      " is %lu pages, but\n"
-      "the sum of data file sizes"
+      "Tablespace size stored in header is %lu pages, but the sum of data file sizes"
       " is only %lu pages\n",
       (ulong)tablespace_size_in_header,
       (ulong)sum_of_data_file_sizes
@@ -1522,15 +1444,9 @@ ib_err_t innobase_start_or_create() {
 
       ib_logger(
         ib_stream,
-        "Cannot start InnoDB. The tail of"
-        " the system tablespace is\n"
-        "missing. Have you set "
-        " data_file_path in an\n"
-        "inappropriate way, removing"
-        " ibdata files from there?\n"
-        "You can set force_recovery=1"
-        " in to force\n"
-        "a startup if you are trying to"
+        "Cannot start InnoDB. The tail of the system tablespace is missing. Have you set "
+        " data_file_path in aninappropriate way, removing ibdata files from there?"
+        " You can set force_recovery=1 in to force a startup if you are trying to"
         " recover a badly corrupt database.\n"
       );
 
@@ -1540,13 +1456,7 @@ ib_err_t innobase_start_or_create() {
   }
 
   if (srv_print_verbose_log) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      " InnoDB %s started; "
-      "log sequence number %lu\n",
-      VERSION,
-      srv_start_lsn
+    ib_logger(ib_stream, " InnoDB %s started; log sequence number %lu\n", VERSION, srv_start_lsn
     );
   }
 
@@ -1570,12 +1480,10 @@ ib_err_t innobase_start_or_create() {
 
     ib_logger(
       ib_stream,
-      "You are upgrading to an"
-      " InnoDB version which allows multiple\n"
-      "tablespaces. Wait that purge"
-      " and insert buffer merge run to\n"
-      "completion...\n"
+      "You are upgrading to an InnoDB version which allows multiple"
+      " tablespaces. Wait for purge to run to completion...\n"
     );
+
     for (;;) {
       os_thread_sleep(1000000);
 
@@ -1594,14 +1502,10 @@ ib_err_t innobase_start_or_create() {
 
     ib_logger(
       ib_stream,
-      "You have now successfully upgraded"
-      " to the multiple tablespaces\n"
-      "format. You should NOT DOWNGRADE"
-      " to an earlier version of\n"
-      "InnoDB! But if you absolutely need to"
-      " downgrade, check\n"
-      "the InnoDB website for details\n"
-      "for instructions.\n"
+      "You have now successfully upgraded to the multiple tablespaces"
+      " format. You should NOT DOWNGRAD to an earlier version of"
+      " InnoDB! But if you absolutely need to downgrade, check"
+      " the InnoDB website for details for instructions.\n"
     );
   }
 
@@ -1624,24 +1528,16 @@ static bool srv_threads_try_shutdown(Cond_var* lock_timeout_thread_event) {
   /* We wake the master thread so that it exits */
   srv_wake_master_thread();
 
-  /* Exit the i/o threads */
-  os_aio_wake_all_threads_at_shutdown();
+  srv_aio->shutdown();
 
   if (os_thread_count.load(std::memory_order_relaxed) == 0) {
     /* All the threads have exited or are just exiting;
     NOTE that the threads may not have completed their
-    exit yet. Should we use pthread_join() to make sure
-    they have exited? Now we just sleep 0.1 seconds and
-    hope that is enough! */
-
-    os_thread_sleep(100000);
-
+    exit yet. */
     return true;
+  } else {
+    return false;
   }
-
-  os_thread_sleep(100000);
-
-  return false;
 }
 
 /** All threads end up waiting for certain events. Put those events
@@ -1661,7 +1557,7 @@ static bool srv_threads_shutdown() {
 
   ib_logger(
     ib_stream,
-    "Warning: %lu threads created by InnoDB had not exited at shutdown!",
+    "%lu threads created by InnoDB had not exited at shutdown!",
     (ulong)os_thread_count.load(std::memory_order_relaxed)
   );
 
@@ -1671,12 +1567,9 @@ static bool srv_threads_shutdown() {
 db_err innobase_shutdown(ib_shutdown_t shutdown) {
   if (!srv_was_started) {
     if (srv_is_being_started) {
-      ut_print_timestamp(ib_stream);
       ib_logger(
         ib_stream,
-        "  Warning: shutting down"
-        " a not properly started\n"
-        "or created database!\n"
+        "Shutting down a not properly started or created database!\n"
       );
     }
 
@@ -1725,11 +1618,15 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
   /* Must be called before Buf_pool::close(). */
   dict_close();
 
-  buf_pool->close();
+  srv_buf_pool->close();
+
+  srv_aio->shutdown();
 
   fil_close();
-  os_aio_close();
+
   srv_free();
+
+  AIO::destroy(srv_aio);
 
   /* 3. Free all InnoDB's own mutexes and the os_fast_mutexes inside them */
   sync_close();
@@ -1742,8 +1639,9 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
 
   log_mem_free();
 
-  delete buf_pool;
-  buf_pool = nullptr;
+
+  delete srv_buf_pool;
+  srv_buf_pool = nullptr;
 
   /* This variable should come from the user and should not be
   malloced by InnoDB. */

@@ -32,6 +32,20 @@ Created 10/25/1995 Heikki Tuuri
 #include "srv0srv.h"
 #include "sync0rw.h"
 
+/** The number of fsyncs done to the log */
+extern ulint fil_n_log_flushes;
+
+/** Number of pending redo log flushes */
+extern ulint fil_n_pending_log_flushes;
+
+/** Number of pending tablespace flushes */
+extern ulint fil_n_pending_tablespace_flushes;
+
+/** When program is run, the default directory "." is the current datadir,
+but in ibbackup we must set it explicitly; the path must NOT contain the
+trailing '/' or '' */
+extern const char *fil_path_to_client_datadir;
+
 /** Returns the version number of a tablespace, -1 if not found.
 @return version number, -1 if the tablespace does not exist in the
 memory cache
@@ -63,7 +77,7 @@ there is an error, prints an error message to the .err log.
 @param[in] flags                Tablespace flags
 @param[in] purpose              FIL_TABLESPACE, or FIL_LOG if log
 @return	true if success */
-bool fil_space_create(const char *name, space_id_t space_id, ulint flags, ulint purpose);
+bool fil_space_create(const char *name, space_id_t space_id, ulint flags, Fil_type fil_type);
 
 /** Returns the size of the space in pages. The tablespace must be cached in the
 memory cache.
@@ -91,9 +105,8 @@ file space. The tablespace must be cached in the memory cache.
 bool fil_check_adress_in_tablespace(space_id_t space_id, page_no_t page_no);
 
 /** Initializes the tablespace memory cache.
-@param[in] hash_size            Hash tbale size
 @param[in] max_n_open           Max number of open files. */
-void fil_init(ulint hash_size, ulint max_n_open);
+void fil_open(ulint max_n_open);
 
 /** Deinitializes the tablespace memory cache. */
 void fil_close();
@@ -396,8 +409,9 @@ db_err fil_io(
  * segment it wants to wait for.
  * 
  * @param[in] segment           The number of the segmentto wait for
+ * @return false if AIO reaper was shutdown
  */
-void fil_aio_wait(ulint segment);
+bool fil_aio_wait(ulint segment);
 
 /**
  * Flushes to disk possible writes cached by the OS. If the space does not

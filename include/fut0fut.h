@@ -38,20 +38,20 @@ Created 12/13/1995 Heikki Tuuri
 @return pointer to a byte in a frame; the file page in the frame is
 bufferfixed and latched */
 inline byte *fut_get_ptr(space_id_t space_id, fil_addr_t addr, ulint rw_latch, mtr_t *mtr) {
-  ut_ad(addr.boffset < UNIV_PAGE_SIZE);
+  ut_ad(addr.m_boffset < UNIV_PAGE_SIZE);
   ut_ad(rw_latch == RW_S_LATCH || rw_latch == RW_X_LATCH);
 
   Buf_pool::Request req {
     .m_rw_latch = rw_latch,
-    .m_page_id = { space_id, addr.page },
+    .m_page_id = { space_id, addr.m_page_no },
     .m_mode = BUF_GET,
     .m_file = __FILE__,
     .m_line = __LINE__,
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
-  auto ptr = block->get_frame() + addr.boffset;
+  auto block = srv_buf_pool->get(req, nullptr);
+  auto ptr = block->get_frame() + addr.m_boffset;
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
 

@@ -156,7 +156,7 @@ inline trx_rsegf_t *trx_rsegf_get(
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER));
 
   auto header = TRX_RSEG + block->get_frame();
@@ -181,7 +181,7 @@ inline trx_rsegf_t *trx_rsegf_get_new(
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER_NEW));
 
   auto header = TRX_RSEG + block->get_frame();

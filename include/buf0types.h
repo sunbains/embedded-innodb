@@ -119,7 +119,7 @@ constexpr ulint BUF_KEEP_OLD = 52;
 /* @} */
 
 /** The buffer pool of the database */
-extern Buf_pool *buf_pool;
+extern Buf_pool *srv_buf_pool;
 
 #ifdef UNIV_DEBUG
 /*! If this is set true, the program prints info whenever read or flush occurs */
@@ -139,18 +139,24 @@ extern ulint srv_buf_pool_write_requests;
 /** Magic value to use instead of checksums when they are disabled */
 constexpr ulint BUF_NO_CHECKSUM_MAGIC = 0xDEADBEEFUL;
 
-/*** Simple allocator using ut_new and ur_free */
+/** Simple allocator using ut_new and ur_free */
 template <typename T>
 struct ut_allocator {
   using value_type = T;
+
   ut_allocator() noexcept = default;
 
   template <class U>
   explicit ut_allocator(const ut_allocator<U> &) noexcept {}
 
-  T *allocate(std::size_t n) { return (T *)ut_new(sizeof(T) * n); }
+  T *allocate(std::size_t n) {
+    return new (ut_new(sizeof(T) * n)) T[n];
+  }
 
-  void deallocate(T *p, std::size_t n) { ut_delete(p); }
+  void deallocate(T *p, std::size_t n) {
+    call_destructor(p, n);
+    ut_delete(p);
+  }
 };
 
 template <class T, class U>

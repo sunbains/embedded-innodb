@@ -36,14 +36,14 @@ Created 11/5/1995 Heikki Tuuri
 #include "trx0sys.h"
 #include "ut0logger.h"
 
-/** If there are buf_pool->m_curr_size per the number below pending reads, then
+/** If there are srv_buf_pool->m_curr_size per the number below pending reads, then
 read-ahead is not done: this is to prevent flooding the buffer pool with
 i/o-fixed buffer blocks */
 constexpr ulint BUF_READ_AHEAD_PEND_LIMIT = 2;
 
 /**
  * @brief Low-level function which reads a page asynchronously from a file to
- * the buffer buf_pool if it is not already there, in which case does nothing.
+ * the buffer srv_buf_pool if it is not already there, in which case does nothing.
  * Sets the io_fix flag and sets an exclusive lock on the buffer frame. The flag
  * is cleared and the x-lock released by an i/o-handler thread.
  * 
@@ -89,7 +89,7 @@ static db_err buf_read_page(
   or is being dropped; if we succeed in initing the page in the buffer
   pool for read, then DISCARD cannot proceed until the read has
   completed */
-  auto bpage = buf_pool->init_for_read(&err, space, page_no, tablespace_version);
+  auto bpage = srv_buf_pool->init_for_read(&err, space, page_no, tablespace_version);
 
   if (bpage == nullptr) {
     /* The bpage can be nullptr if the page is already in the buffer pool. */
@@ -115,7 +115,7 @@ static db_err buf_read_page(
 
   if (io_request == IO_request::Sync_read) {
     /* The i/o is already completed when we arrive from fil_read */
-    buf_pool->io_complete(bpage);
+    srv_buf_pool->io_complete(bpage);
   } else {
     ut_a(io_request == IO_request::Async_read);
   }
@@ -142,10 +142,10 @@ bool buf_read_page(ulint space, ulint offset) {
   }
 
   /* Flush pages from the end of the LRU list if necessary */
-  buf_pool->m_flusher->free_margin();
+  srv_buf_pool->m_flusher->free_margin();
 
   /* Increment number of I/O operations used for LRU policy. */
-  buf_pool->m_LRU->stat_inc_io();
+  srv_buf_pool->m_LRU->stat_inc_io();
 
   return err == DB_SUCCESS;
 }
@@ -162,7 +162,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   ulint fail_count;
   db_err err;
   ulint i;
-  const ulint buf_read_ahead_linear_area = buf_pool->get_read_ahead_area();
+  const ulint buf_read_ahead_linear_area = srv_buf_pool->get_read_ahead_area();
   ulint threshold;
 
   if (unlikely(srv_startup_is_before_trx_rollback_phase)) {
@@ -199,7 +199,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
     return 0;
   }
 
-  if (buf_pool->m_n_pend_reads > buf_pool->m_curr_size / BUF_READ_AHEAD_PEND_LIMIT) {
+  if (srv_buf_pool->m_n_pend_reads > srv_buf_pool->m_curr_size / BUF_READ_AHEAD_PEND_LIMIT) {
     buf_pool_mutex_exit();
 
     return 0;
@@ -217,12 +217,12 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
 
   /* How many out of order accessed pages can we ignore
   when working out the access pattern for linear readahead */
-  threshold = ut_min((64 - srv_read_ahead_threshold), buf_pool->get_read_ahead_area());
+  threshold = ut_min((64 - srv_read_ahead_threshold), srv_buf_pool->get_read_ahead_area());
 
   fail_count = 0;
 
   for (i = low; i < high; i++) {
-    bpage = buf_pool->hash_get_page(space, i);
+    bpage = srv_buf_pool->hash_get_page(space, i);
 
     if (bpage == nullptr || !buf_page_is_accessed(bpage)) {
       /* Not accessed */
@@ -257,7 +257,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   /* If we got this far, we know that enough pages in the area have
   been accessed in the right order: linear read-ahead can be sensible */
 
-  bpage = buf_pool->hash_get_page(space, offset);
+  bpage = srv_buf_pool->hash_get_page(space, offset);
 
   if (bpage == nullptr) {
     buf_pool_mutex_exit();
@@ -340,19 +340,13 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
     }
   }
 
-  /* In simulated aio we wake the aio handler threads only after
-  queuing all aio requests, in native aio the following call does
-  nothing: */
-
-  os_aio_simulated_wake_handler_threads();
-
   /* Flush pages from the end of the LRU list if necessary */
-  buf_pool->m_flusher->free_margin();
+  srv_buf_pool->m_flusher->free_margin();
 
   /* Read ahead is considered one I/O operation for the purpose of LRU policy decision. */
-  buf_pool->m_LRU->stat_inc_io();
+  srv_buf_pool->m_LRU->stat_inc_io();
 
-  buf_pool->m_stat.n_ra_pages_read += count;
+  srv_buf_pool->m_stat.n_ra_pages_read += count;
 
   return count;
 }
@@ -369,9 +363,8 @@ void buf_read_recv_pages(bool sync, space_id_t space, const page_no_t *page_nos,
   for (ulint i = 0; i < n_stored; i++) {
     ulint count{};
 
-    while (buf_pool->m_n_pend_reads >= recv_n_pool_free_frames / 2) {
+    while (srv_buf_pool->m_n_pend_reads >= recv_n_pool_free_frames / 2) {
 
-      os_aio_simulated_wake_handler_threads();
       os_thread_sleep(10000);
 
       count++;
@@ -382,7 +375,7 @@ void buf_read_recv_pages(bool sync, space_id_t space, const page_no_t *page_nos,
           std::format(
             "Waited for 10 seconds for pending reads to the buffer pool to"
             " be finished. Number of pending reads {}. pending pread calls {}",
-            buf_pool->m_n_pend_reads, os_file_n_pending_preads.load())
+            srv_buf_pool->m_n_pend_reads, os_file_n_pending_preads.load())
 	);
       }
     }
@@ -394,8 +387,6 @@ void buf_read_recv_pages(bool sync, space_id_t space, const page_no_t *page_nos,
     }
   }
 
-  os_aio_simulated_wake_handler_threads();
-
   /* Flush pages from the end of the LRU list if necessary */
-  buf_pool->m_flusher->free_margin();
+  srv_buf_pool->m_flusher->free_margin();
 }

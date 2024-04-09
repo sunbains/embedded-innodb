@@ -140,7 +140,7 @@ void log_fsp_current_free_limit_set_and_checkpoint(ulint limit) {
 static lsn_t log_buf_pool_get_oldest_modification() {
   ut_ad(mutex_own(&(log_sys->mutex)));
 
-  auto lsn = buf_pool->get_oldest_modification();
+  auto lsn = srv_buf_pool->get_oldest_modification();
 
   if (lsn == 0) {
     lsn = log_sys->lsn;
@@ -239,7 +239,7 @@ lsn_t log_close(ib_recovery_t recovery) {
   auto first_rec_group = log_block_get_first_rec_group(log_block);
   auto lsn = log->lsn;
   auto checkpoint_age = lsn - log->last_checkpoint_lsn;
-  auto oldest_lsn = buf_pool->get_oldest_modification();
+  auto oldest_lsn = srv_buf_pool->get_oldest_modification();
 
   ut_ad(mutex_own(&(log->mutex)));
 
@@ -1070,10 +1070,10 @@ bool log_preflush_pool_modified_pages(lsn_t new_oldest, bool sync) {
     recv_apply_hashed_log_recs(false);
   }
 
-  auto n_pages = buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, new_oldest);
+  auto n_pages = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, new_oldest);
 
   if (sync) {
-    buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
+    srv_buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
   }
 
   return n_pages != ULINT_UNDEFINED;
@@ -1472,8 +1472,7 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
   }
 
   if (srv_print_verbose_log) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  Starting shutdown...\n");
+    ib_logger(ib_stream, "Starting shutdown...\n");
   }
   /* Wait until the master thread and all other operations are idle: our
   algorithm only works if the server is idle at shutdown */
@@ -1543,7 +1542,7 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
 
     log_release();
 
-    if (buf_pool->is_io_pending()) {
+    if (srv_buf_pool->is_io_pending()) {
 
       continue;
     }
@@ -1569,8 +1568,7 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
     if (srv_n_threads_active[SRV_MASTER] != 0) {
       ib_logger(
         ib_stream,
-        "Warning: the master thread woke up"
-        " during shutdown\n"
+        "Warning: the master thread woke up during shutdown\n"
       );
 
       mutex_exit(&kernel_mutex);
@@ -1588,7 +1586,7 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
     completely flushed to disk! (We do not call fil_write... if the
     'very fast' shutdown is enabled.) */
 
-    if (buf_pool->all_freed()) {
+    if (srv_buf_pool->all_freed()) {
       break;
     }
   }
@@ -1597,17 +1595,14 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
 
   /* Make some checks that the server really is quiet */
   ut_a(srv_n_threads_active[SRV_MASTER] == 0);
-  ut_a(buf_pool->all_freed());
+  ut_a(srv_buf_pool->all_freed());
   ut_a(lsn == log_sys->lsn);
 
   if (lsn < srv_start_lsn) {
     ib_logger(
       ib_stream,
-      "Error: log sequence number"
-      " at shutdown %lu\n"
-      "is lower than at startup %lu!\n",
-      lsn,
-      srv_start_lsn
+      "Error: log sequence number at shutdown %lu\n is lower than at startup %lu!\n",
+      lsn, srv_start_lsn
     );
   }
 
@@ -1621,7 +1616,7 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
 
   /* Make some checks that the server really is quiet */
   ut_a(srv_n_threads_active[SRV_MASTER] == 0);
-  ut_a(buf_pool->all_freed());
+  ut_a(srv_buf_pool->all_freed());
   ut_a(lsn == log_sys->lsn);
 }
 

@@ -23,7 +23,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 *****************************************************************************/
 
 /** @file buf/buf0buf.c
-The database buffer buf_pool
+The database buffer srv_buf_pool
 
 Created 11/5/1995 Heikki Tuuri
 *******************************************************/
@@ -73,24 +73,24 @@ in the file along with the file page, resides in the control block.
 
                 Buffer pool struct
                 ------------------
-The buffer buf_pool contains a single mutex which protects all the
-control data structures of the buf_pool. The content of a buffer frame is
+The buffer srv_buf_pool contains a single mutex which protects all the
+control data structures of the srv_buf_pool. The content of a buffer frame is
 protected by a separate read-write lock in its control block, though.
-These locks can be locked and unlocked without owning the buf_pool mutex.
-The OS events in the buf_pool struct can be waited for without owning the
-buf_pool mutex.
+These locks can be locked and unlocked without owning the srv_buf_pool mutex.
+The OS events in the srv_buf_pool struct can be waited for without owning the
+srv_buf_pool mutex.
 
-The buf_pool mutex is a hot-spot in main memory, causing a lot of
+The srv_buf_pool mutex is a hot-spot in main memory, causing a lot of
 memory bus traffic on multiprocessor systems when processors
 alternately access the mutex. On our Pentium, the mutex is accessed
 maybe every 10 microseconds. We gave up the solution to have mutexes
 for each control block, for instance, because it seemed to be
 complicated.
 
-A solution to reduce mutex contention of the buf_pool mutex is to
+A solution to reduce mutex contention of the srv_buf_pool mutex is to
 create a separate mutex for the page hash table. On Pentium,
 accessing the hash table takes 2 microseconds, about half
-of the total buf_pool mutex hold time.
+of the total srv_buf_pool mutex hold time.
 
                 Control blocks
                 --------------
@@ -105,13 +105,13 @@ The buffer frames have to be aligned so that the start memory
 address of a frame is divisible by the universal page size, which
 is a power of two.
 
-We intend to make the buffer buf_pool size on-line reconfigurable,
-that is, the buf_pool size can be changed without closing the database.
+We intend to make the buffer srv_buf_pool size on-line reconfigurable,
+that is, the srv_buf_pool size can be changed without closing the database.
 Then the database administarator may adjust it to be bigger
 at night, for example. The control block array must
-contain enough control blocks for the maximum buffer buf_pool size
+contain enough control blocks for the maximum buffer srv_buf_pool size
 which is used in the particular database.
-If the buf_pool size is cut, we exploit the virtual memory mechanism of
+If the srv_buf_pool size is cut, we exploit the virtual memory mechanism of
 the OS, and just refrain from using frames at high addresses. Then the OS
 can swap them to disk.
 
@@ -120,8 +120,8 @@ according to the file address of the page.
 We could speed up the access to an individual page by using
 "pointer swizzling": we could replace the page references on
 non-leaf index pages by direct pointers to the page, if it exists
-in the buf_pool. We could make a separate hash table where we could
-chain all the page references in non-leaf pages residing in the buf_pool,
+in the srv_buf_pool. We could make a separate hash table where we could
+chain all the page references in non-leaf pages residing in the srv_buf_pool,
 using the page reference as the hash key,
 and at the time of reading of a page update the pointers accordingly.
 Drawbacks of this solution are added complexity and,
@@ -143,13 +143,13 @@ The pages are in the LRU list roughly in the order of the last
 access to the page, so that the oldest pages are at the end of the
 list. We also keep a pointer to near the end of the LRU list,
 which we can use when we want to artificially age a page in the
-buf_pool. This is used if we know that some page is not needed
+srv_buf_pool. This is used if we know that some page is not needed
 again for some time: we insert the block right after the pointer,
 causing it to be replaced sooner than would noramlly be the case.
 Currently this aging mechanism is used for read-ahead mechanism
 of pages, and it can also be used when there is a scan of a full
 table which cannot fit in the memory. Putting the pages near the
-of the LRU list, we make sure that most of the buf_pool stays in the
+of the LRU list, we make sure that most of the srv_buf_pool stays in the
 main memory, undisturbed.
 
 The chain of modified blocks (Buf_pool::m_flush_list) contains the blocks
@@ -161,9 +161,9 @@ which has not yet been written to disk is at the end of the chain.
                 -------------------
 
 First, a victim block for replacement has to be found in the
-buf_pool. It is taken from the free list or searched for from the
+srv_buf_pool. It is taken from the free list or searched for from the
 end of the LRU-list. An exclusive lock is reserved for the frame,
-the io_fix field is set in the block fixing the block in buf_pool,
+the io_fix field is set in the block fixing the block in srv_buf_pool,
 and the io-operation for loading the page is queued. The io-handler thread
 releases the X-lock on the frame and resets the io_fix field
 when the io operation completes.
@@ -185,7 +185,7 @@ order of the pages.
 
 Let us first explain the read-ahead mechanism when the leafs
 of a B-tree are scanned in an ascending or descending order.
-When a read page is the first time referenced in the buf_pool,
+When a read page is the first time referenced in the srv_buf_pool,
 the buffer manager checks if it is at the border of a so-called
 linear read-ahead area. The tablespace is divided into these
 areas of size 64 blocks, for example. So if the page is at the
@@ -201,7 +201,7 @@ appear holes of unused pages in the area.
 
 A different read-ahead mechanism is used when there appears
 to be a random access pattern to a file.
-If a new page is referenced in the buf_pool, and several pages
+If a new page is referenced in the srv_buf_pool, and several pages
 of its random access area (for instance, 32 consecutive pages
 in a tablespace) have recently been referenced, we may predict
 that the whole area may be needed in the near future, and issue
@@ -214,8 +214,8 @@ static constexpr int WAIT_FOR_READ = 5000;
 /** Number of attemtps made to read in a page in the buffer pool */
 static constexpr ulint BUF_PAGE_READ_MAX_RETRIES = 100;
 
-/** The buffer buf_pool of the database */
-Buf_pool *buf_pool = nullptr;
+/** The buffer srv_buf_pool of the database */
+Buf_pool *srv_buf_pool = nullptr;
 
 /** mutex protecting the buffer pool struct and control blocks, except the
 read-write lock in them */
@@ -1386,7 +1386,7 @@ buf_block_t *Buf_pool::create(space_id_t space, page_no_t page_no, mtr_t *mtr) {
   if (block != nullptr && block->m_page.in_file()) {
     ut_d(block->m_page.m_file_page_was_freed = false);
 
-    /* Page can be found in buf_pool */
+    /* Page can be found in srv_buf_pool */
     buf_pool_mutex_exit();
 
     block_free(free_block);
@@ -1643,7 +1643,7 @@ bool Buf_pool::validate() {
   ulint n_flush = 0;
   ulint n_free = 0;
 
-  ut_ad(buf_pool);
+  ut_ad(srv_buf_pool);
 
   buf_pool_mutex_enter();
 
@@ -1746,7 +1746,7 @@ void Buf_pool::print() {
   uint64_t id;
   dict_index_t *index;
 
-  ut_ad(buf_pool);
+  ut_ad(srv_buf_pool);
 
   auto size = m_curr_size;
 
@@ -1757,7 +1757,7 @@ void Buf_pool::print() {
 
   ib_logger(
     ib_stream,
-    "buf_pool size %lu\n"
+    "srv_buf_pool size %lu\n"
     "database pages %lu\n"
     "free pages %lu\n"
     "modified database pages %lu\n"
@@ -1897,7 +1897,7 @@ void Buf_pool::print_io(ib_stream_t ib_stream) {
   double time_elapsed;
   ulint n_gets_diff;
 
-  ut_ad(buf_pool);
+  ut_ad(srv_buf_pool);
 
   buf_pool_mutex_enter();
 

@@ -482,7 +482,7 @@ inline page_t *trx_undo_page_get(space_id_t space_id, page_no_t page_no, mtr_t *
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
 
   return block->get_frame();
@@ -503,7 +503,7 @@ inline page_t *trx_undo_page_get_s_latched(space_id_t  space_id, page_no_t page_
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
 
   return block->get_frame();

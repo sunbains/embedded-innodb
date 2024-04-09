@@ -497,7 +497,7 @@ inline trx_sysf_t *trx_sysf_get(mtr_t *mtr) /*!< in: mtr */
     .m_mtr = mtr
   };
 
-  auto block = buf_pool->get(req, nullptr);
+  auto block = srv_buf_pool->get(req, nullptr);
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_SYS_HEADER));
 
   auto header = TRX_SYS + block->get_frame();

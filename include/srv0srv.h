@@ -46,6 +46,8 @@ Created 10/10/1995 Heikki Tuuri
 #include "sync0sync.h"
 #include "trx0types.h"
 
+struct AIO;
+
 extern const char *srv_main_thread_op_info;
 
 /* When this event is set the lock timeout and InnoDB monitor
@@ -214,13 +216,14 @@ extern ulint srv_activity_count;
 extern ulint srv_fatal_semaphore_wait_threshold;
 extern ulint srv_dml_needed_delay;
 
-extern mutex_t *kernel_mutex_temp; /* mutex protecting the server, trx structs,
-                                 query threads, and lock table: we allocate
-                                 it from dynamic memory to get it to the
-                                 same DRAM page as other hotspot semaphores */
+/** Mutex protecting the server, trx structs, query threads, and lock table:
+ * we allocate it from dynamic memory to get it to the same DRAM page as
+ * other hotspot semaphores */
+extern mutex_t *kernel_mutex_temp;
+
 #define kernel_mutex (*kernel_mutex_temp)
 
-#define SRV_MAX_N_IO_THREADS 130
+constexpr ulint SRV_MAX_N_IO_THREADS = 32;
 
 /* the number of the log write requests done */
 extern ulint srv_log_write_requests;
@@ -273,6 +276,8 @@ typedef struct export_var_struct export_struc;
 
 /** Status variables to be passed to MySQL */
 extern export_struc export_vars;
+
+extern AIO *srv_aio;
 
 /** Types of raw partitions in innodb_data_file_path */
 enum {
@@ -452,7 +457,7 @@ struct export_var_struct {
 #ifdef UNIV_DEBUG
   ulint innodb_buffer_pool_pages_latched;      /*!< Latched pages */
 #endif                                         /* UNIV_DEBUG */
-  ulint innodb_buffer_pool_read_requests;      /*!< buf_pool->stat.n_page_gets */
+  ulint innodb_buffer_pool_read_requests;      /*!< srv_buf_pool->stat.n_page_gets */
   ulint innodb_buffer_pool_reads;              /*!< srv_buf_pool_reads */
   ulint innodb_buffer_pool_wait_free;          /*!< srv_buf_pool_wait_free */
   ulint innodb_buffer_pool_pages_flushed;      /*!< srv_buf_pool_flushed */
@@ -470,9 +475,9 @@ struct export_var_struct {
   ulint innodb_os_log_pending_writes;          /*!< srv_os_log_pending_writes */
   ulint innodb_os_log_pending_fsyncs;          /*!< fil_n_pending_log_flushes */
   ulint innodb_page_size;                      /*!< UNIV_PAGE_SIZE */
-  ulint innodb_pages_created;                  /*!< buf_pool->stat.n_pages_created */
-  ulint innodb_pages_read;                     /*!< buf_pool->stat.n_pages_read */
-  ulint innodb_pages_written;                  /*!< buf_pool->stat.n_pages_written */
+  ulint innodb_pages_created;                  /*!< srv_buf_pool->stat.n_pages_created */
+  ulint innodb_pages_read;                     /*!< srv_buf_pool->stat.n_pages_read */
+  ulint innodb_pages_written;                  /*!< srv_buf_pool->stat.n_pages_written */
   ulint innodb_row_lock_waits;                 /*!< srv_n_lock_wait_count */
   ulint innodb_row_lock_current_waits;         /*!< srv_n_lock_wait_current_count */
   int64_t innodb_row_lock_time;                /*!< srv_n_lock_wait_time
