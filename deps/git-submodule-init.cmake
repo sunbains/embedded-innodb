@@ -2,6 +2,7 @@ FIND_PACKAGE(Git QUIET)
 
 SET(DEPS_INSTALL_DIR "${CMAKE_SOURCE_DIR}/deps/install")
 SET(LIBURING_SRC_DIR "${CMAKE_SOURCE_DIR}/deps/liburing")
+SET(THREAD_POOL_SRC_DIR "${CMAKE_SOURCE_DIR}/deps/thread-pool")
 
 IF(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
 
@@ -27,7 +28,7 @@ IF(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
 ENDIF()
 
 IF(NOT EXISTS "${LIBURING_SRC_DIR}")
-    MESSAGE(FATAL_ERROR "The submodules were not downloaded!")
+	MESSAGE(FATAL_ERROR "Failed to download liburing from GitHub")
 ELSE()
 
   MESSAGE("-- Add external dependency liburing")
@@ -39,7 +40,6 @@ ELSE()
   SET(LIBURING_INCLUDE_DIR "${LIBURING_INSTALL_DIR}/include")
 
   ExternalProject_Add(liburing
-     #BUILD_ALWAYS ON
     SOURCE_DIR "${CMAKE_SOURCE_DIR}/deps/liburing"
     PREFIX ${DEPS_INSTALL_DIR}
     BUILD_COMMAND make -C ${LIBURING_SRC_DIR} prefix=${LIBURING_INSTALL_DIR}
@@ -56,5 +56,19 @@ ELSE()
 
   LINK_DIRECTORIES(${LIBURING_LIB_DIR})
   INCLUDE_DIRECTORIES(${LIBURING_INCLUDE_DIR})
+
+ENDIF()
+
+IF(NOT EXISTS "${THREAD_POOL_SRC_DIR}")
+  MESsAGE(FATAL_ERROR "Failed to download thread pool from GitHub")
+ELSE()
+
+  # It's a header only library.
+  MESSAGE("-- Add external dependency thread-pool")
+
+  SET(THREAD_POOL_SRC_DIR "${CMAKE_SOURCE_DIR}/deps/thread-pool")
+  SET(THREAD_POOL_INCLUDE_DIR "${THREAD_POOL_SRC_DIR}/include")
+
+  INCLUDE_DIRECTORIES(${THREAD_POOL_INCLUDE_DIR})
 
 ENDIF()
