@@ -8,13 +8,20 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
+    container: gcc:13
+    strategy:
+      fail-fast: false
     steps:
-    - uses: actions/checkout@v3
-    - name: cmake
-      run: cmake -G "Unix Makefiles" .
-    - name: make
-      run: make
-    
+      - uses: actions/checkout@v3
+      - name: Install CMake
+        run: |
+          apt update -y
+          apt install -y cmake
+        shell: bash
+      - name: liburing
+        run: git config --global --add safe.directory /__w/embedded-innodb/embedded-innodb && git submodule update --init --recursive
+      - name: cmake
+        run: cmake -G "Unix Makefiles" .
+      - name: make
+        run: make
