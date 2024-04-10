@@ -28,9 +28,6 @@ struct Buffer {
 
 /** The asynchronous i/o array slot structure */
 struct AIO_slot {
-  /** Time when reserved */
-  time_t m_reservation_time{};
-
   /** The local segment the slot belongs to. */
   uint32_t m_segment_id{};
 
@@ -496,7 +493,6 @@ AIO_slot *Segment::Handler::reserve_slot(const IO_ctx &io_ctx, void *ptr, size_t
       slot->m_off = off;
       slot->m_reserved = true;
       slot->m_io_ctx = std::move(io_ctx_copy);
-      slot->m_reservation_time = time(nullptr);
       slot->m_requested = {static_cast<byte*>(ptr), len};
 
       return slot;
@@ -722,8 +718,6 @@ std::string AIO_impl::to_string() noexcept {
         ut_a(slot.m_len > 0);
       }
     }
-
-    ut_a(segment->m_n_reserved.load(std::memory_order_relaxed) == n_reserved);
 
     os << std::format(" {}", n_reserved);
 
