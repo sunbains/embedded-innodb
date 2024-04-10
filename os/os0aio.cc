@@ -28,9 +28,6 @@ struct Buffer {
 
 /** The asynchronous i/o array slot structure */
 struct AIO_slot {
-  /** The local segment the slot belongs to. */
-  uint32_t m_segment_id{};
-
   /** Buffer pointer and length subbmitted to the kernel. */
   Buffer m_requested{};
 
@@ -382,7 +379,6 @@ Segment::Segment(ulint id, size_t n_slots, size_t n_threads) noexcept
   m_free_pool = new (ut_new(sizeof(Slots_pool))) Slots_pool(n_slots);
 
   for (auto &slot : m_slots) {
-    slot.m_segment_id = id;
     auto success = m_free_pool->enqueue(&slot);
     ut_a(success);
   }
