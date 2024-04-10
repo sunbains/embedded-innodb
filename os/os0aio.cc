@@ -625,10 +625,10 @@ void AIO::destroy(AIO *&aio) noexcept {
 ulint AIO_impl::get_aio_type(const IO_ctx& io_ctx) noexcept {
   if (io_ctx.is_log_request()) {
     return AIO_LOG;
-  } else if (io_ctx.is_sync_request()) {
+  } else if (io_ctx.is_read_request()) {
     return AIO_READ;
   } else {
-    return AIO_READ;
+    return AIO_WRITE;
   } 
   ut_error;
   return ULINT_UNDEFINED;
