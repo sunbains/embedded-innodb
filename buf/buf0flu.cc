@@ -334,7 +334,7 @@ void Buf_flush::write_complete(buf_page_t *bpage) {
 
 void Buf_flush::sync_datafiles() {
   /* Wait until all pending async writes are completed */ 
-  srv_aio->wait_for_async_writes();
+  srv_aio->wait_for_pending_ops(aio::WRITE);
 
   /* Now we flush the data to disk (for example, with fsync) */
   fil_flush_file_spaces(FIL_TABLESPACE);

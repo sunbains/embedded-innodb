@@ -1,8 +1,35 @@
+/***********************************************************************
+Copyright 2024 Sunny Bains
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or Implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+***********************************************************************/
+
 #pragma once
 
 #include "innodb0types.h"
 
 struct fil_node_t;
+
+namespace aio {
+
+constexpr ulint LOG = 0;
+constexpr ulint READ = 1;
+constexpr ulint WRITE = 2;
+
+using Queue_id = ulint;
+
+} // namespace aio
 
 /** Types for aio operations @{ */
 enum class IO_request {
@@ -89,14 +116,13 @@ struct AIO {
   * @brief Initializes the asynchronous io system.
   * Note: The log uses a single thread for IO.
   *
-  * @param max_pending Maximum number of pending aio operations allowed per thread.
-  * @param read_threads Number of reader threads.
-  * @param writer_threads Number of writer threads.
-  * @param sync_slots Number of slots in the sync AIO_array.
+  * @param[in] n_slots          Total number of slots per handler
+  * @param[in] n_read_queues    Number of queues for read operations
+  * @param[in] n_write_queues   Number of queues for write operations
   * 
   * @retval AIO* Pointer to the created instance. Call destroy() below to delete it.
   */
-  static AIO* create(ulint max_pending, ulint read_threads, ulint write_threads) noexcept;
+  static AIO* create(ulint n_slots, ulint n_read_queues, ulint n_write_queues) noexcept;
 
   /** Destroy an instance that was created using AIO::create()
    * @param[own] aio The instance to destroy.
@@ -109,28 +135,30 @@ struct AIO {
   /**
   * @brief Submit a request
   *
-  * @param io_ctx Context of the i/o operation.
-  * @param buf Buffer where to read or from which to write.
-  * @param n Number of bytes to read or write.
-  * @param offset Least significant 32 bits of file offset where to read or write.
-  * @return true if the request was queued successfully, false if failed.
+  * @param[in] io_ctx           Context of the i/o operation.
+  * @param[in] buf              Buffer where to read or from which to write.
+  * @param[in] n                Number of bytes to read or write.
+  * @param[in] off              Least significant 32 bits of file offset where
+  *                             to read or write.
+  * @return DB_SUCCESS or error code.
   */
   [[nodiscard]] virtual db_err submit(IO_ctx&& io_ctx, void *buf, ulint n, off_t off) noexcept = 0;
 
   /**
-  * @brief Does simulated aio. This function should be called by an i/o-handler thread.
+  * @brief Reaps requests that have completed. It's a blocking function.
   *
-  * @param[in] segment The number of the segment in the aio arrays to wait for.
-  * @param[out] io_ctx Context of the i/o operation.
+  * @param[in] queue_id         ID of the queue to reap from.
+  * @param[out] io_ctx          Context of the i/o operation.
   * @return DB_SUCCESS or error code.
   */
-  [[nodiscard]] virtual db_err reap(ulint segment, IO_ctx &io_ctx) noexcept = 0;
+  [[nodiscard]] virtual db_err reap(aio::Queue_id queue_id, IO_ctx &io_ctx) noexcept = 0;
 
   /**
-  * @brief Waits until there are no pending async writes, There can be other,
-  * synchronous, pending writes.
+  * @brief Waits until there are no pending operations
+  * 
+  * @param[in] handler_id       ID of the handler to wait for.
   */
-  virtual void wait_for_async_writes() noexcept = 0;
+  virtual void wait_for_pending_ops(ulint handler_id) noexcept = 0;
 
   /**
   * @brief Closes/shuts down the IO sub-system and frees all the memory.
@@ -138,9 +166,7 @@ struct AIO {
   virtual void shutdown() noexcept = 0;
 
   /**
-  * @brief Prints info of the aio arrays.
-  *
-  * @param ib_stream Stream where to print.
+   * @return A string representation of the instance.
   */
   virtual std::string to_string() noexcept = 0;
 };
