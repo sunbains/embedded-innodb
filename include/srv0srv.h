@@ -349,10 +349,6 @@ void srv_general_init(void);
 @return	sum of srv_n_threads[] */
 ulint srv_get_n_threads(void);
 
-/** Returns the calling thread type.
-@return	SRV_COM, ... */
-enum srv_thread_type srv_get_thread_type(void);
-
 /** Releases threads of the type given from suspension in the thread table.
 NOTE! The server mutex has to be reserved by the caller!
 @return number of threads released: this may be less than n if not
@@ -364,8 +360,7 @@ ulint srv_release_threads(
 
 /** The master thread controlling the server.
 @return	a dummy parameter */
-os_thread_ret_t srv_master_thread(void *arg); /*!< in: a dummy parameter
-                                              required by os_thread_create */
+os_thread_ret_t srv_master_thread(void*);
 
 /** Tells the Innobase server that there has been activity in the database
 and wakes up the master thread if it is suspended (not sleeping). Used

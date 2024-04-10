@@ -31,7 +31,6 @@ Created 3/26/1996 Heikki Tuuri
 #include "que0que.h"
 #include "read0read.h"
 #include "srv0srv.h"
-#include "thr0loc.h"
 #include "trx0roll.h"
 #include "trx0rseg.h"
 #include "trx0undo.h"

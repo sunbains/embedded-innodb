@@ -33,25 +33,6 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 /** @file srv/srv0srv.c
 The database server main program
 
-NOTE: SQL Server 7 uses something which the documentation
-calls user mode scheduled threads (UMS threads). One such
-thread is usually allocated per processor. Win32
-documentation does not know any UMS threads, which suggests
-that the concept is internal to SQL Server 7. It may mean that
-SQL Server 7 does all the scheduling of threads itself, even
-in i/o waits. We should maybe modify InnoDB to use the same
-technique, because thread switches within NT may be too slow.
-
-SQL Server 7 also mentions fibers, which are cooperatively
-scheduled threads. They can boost performance by 5 %,
-according to the Delaney and Soukup's book.
-
-Windows 2000 will have something called thread pooling
-(see msdn website), which we could possibly use.
-
-Another possibility could be to use some very fast user space
-thread library. This might confuse NT though.
-
 Created 10/8/1995 Heikki Tuuri
 *******************************************************/
 
@@ -77,7 +58,6 @@ Created 10/8/1995 Heikki Tuuri
 #include "srv0que.h"
 #include "srv0start.h"
 #include "sync0sync.h"
-#include "thr0loc.h"
 #include "trx0purge.h"
 #include "usr0sess.h"
 #include "ut0mem.h"
@@ -85,6 +65,7 @@ Created 10/8/1995 Heikki Tuuri
 
 /* FIXME: When we setup the session variables infrastructure. */
 #define sess_lock_wait_timeout(t) (ses_lock_wait_timeout)
+
 ulint ses_lock_wait_timeout = 1024 * 1024 * 1024;
 
 bool srv_lower_case_table_names = false;
@@ -361,6 +342,7 @@ mutex_t srv_monitor_file_mutex;
 #ifdef UNIV_LINUX
 static ulint srv_main_thread_process_no = 0;
 #endif /* UNIV_LINUX */
+
 static ulint srv_main_thread_id = 0;
 
 /* The following count work done by srv_master_thread. */
@@ -727,6 +709,7 @@ void srv_var_init() {
 
   srv_conc_slots = nullptr;
   srv_last_monitor_time = 0;
+
 #ifdef UNIV_LINUX
   srv_main_thread_process_no = 0;
 #endif /* UNIV_LINUX */
@@ -809,26 +792,14 @@ static ulint srv_table_reserve_slot(srv_thread_type type) /*!< in: type of the t
   slot->id = os_thread_get_curr_id();
   slot->handle = os_thread_get_curr();
 
-  thr_local_create();
-
-  thr_local_set_slot_no(os_thread_get_curr_id(), i);
-
   return i;
 }
 
 /** Suspends the calling thread to wait for the event in its thread slot.
 NOTE! The server mutex has to be reserved by the caller!
 @return	event for the calling thread to wait */
-static Cond_var* srv_suspend_thread(void) {
+static Cond_var* srv_suspend_thread(srv_slot_t *slot) {
   ut_ad(mutex_own(&kernel_mutex));
-
-  auto slot_no = thr_local_get_slot_no(os_thread_get_curr_id());
-
-  if (srv_print_thread_releases) {
-    ib_logger(ib_stream, "Suspending thread %lu to slot %lu\n", (ulong)os_thread_get_curr_id(), (ulong)slot_no);
-  }
-
-  auto slot = srv_table_get_nth_slot(slot_no);
 
   auto type = slot->type;
 
@@ -888,23 +859,6 @@ ulint srv_release_threads(srv_thread_type type, ulint n) {
   }
 
   return count;
-}
-
-srv_thread_type srv_get_thread_type() {
-  mutex_enter(&kernel_mutex);
-
-  auto slot_no = thr_local_get_slot_no(os_thread_get_curr_id());
-
-  auto slot = srv_table_get_nth_slot(slot_no);
-
-  auto type = slot->type;
-
-  ut_ad(type >= SRV_WORKER);
-  ut_ad(type <= SRV_MASTER);
-
-  mutex_exit(&kernel_mutex);
-
-  return type;
 }
 
 void srv_init() {
@@ -1005,7 +959,6 @@ void srv_general_init() {
   recv_sys_var_init();
   os_sync_init();
   sync_init();
-  thr_local_init();
 }
 
 /* Maximum allowable purge history length.  <=0 means 'infinite'. */
@@ -1085,7 +1038,7 @@ db_err srv_boot() {
 /** Reserves a slot in the thread table for the current user OS thread.
 NOTE! The kernel mutex has to be reserved by the caller!
 @return	reserved slot */
-static srv_slot_t *srv_table_reserve_slot_for_user_thread(void) {
+static srv_slot_t *srv_table_reserve_slot_for_user_thread() {
   ut_ad(mutex_own(&kernel_mutex));
 
   ulint i{};
@@ -1144,8 +1097,6 @@ static srv_slot_t *srv_table_reserve_slot_for_user_thread(void) {
 }
 
 void srv_suspend_user_thread(que_thr_t *thr) {
-  srv_slot_t *slot;
-  Cond_var* event;
   double wait_time;
   trx_t *trx;
   ulint had_dict_lock;
@@ -1186,9 +1137,8 @@ void srv_suspend_user_thread(que_thr_t *thr) {
 
   ut_ad(thr->is_active == false);
 
-  slot = srv_table_reserve_slot_for_user_thread();
-
-  event = slot->event;
+  auto slot = srv_table_reserve_slot_for_user_thread();
+  auto event = slot->event;
 
   slot->thr = thr;
 
@@ -1936,7 +1886,7 @@ static void srv_sync_log_buffer_in_background(void) {
   }
 }
 
-void *srv_master_thread(void *arg __attribute__((unused))) {
+void *srv_master_thread(void*) {
   Cond_var* event;
   ulint old_activity_count;
   ulint n_pages_purged = 0;
@@ -1948,15 +1898,13 @@ void *srv_master_thread(void *arg __attribute__((unused))) {
   bool skip_sleep = false;
   ulint i;
 
-#ifdef UNIV_DEBUG_THREAD_CREATION
-  ib_logger(ib_stream, "Master thread starts, id %lu\n", os_thread_pf(os_thread_get_curr_id()));
-#endif
 #ifdef UNIV_LINUX
   srv_main_thread_process_no = os_proc_get_number();
 #endif /* UNIV_LINUX */
+
   srv_main_thread_id = os_thread_pf(os_thread_get_curr_id());
 
-  srv_table_reserve_slot(SRV_MASTER);
+  auto slot_no = srv_table_reserve_slot(SRV_MASTER);
 
   mutex_enter(&kernel_mutex);
 
@@ -2292,7 +2240,8 @@ suspend_thread:
     goto loop;
   }
 
-  event = srv_suspend_thread();
+  auto slot = srv_table_get_nth_slot(slot_no);
+  event = srv_suspend_thread(slot);
 
   mutex_exit(&kernel_mutex);
 

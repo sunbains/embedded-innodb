@@ -73,7 +73,6 @@ Created 2/16/1996 Heikki Tuuri
 #include "row0upd.h"
 #include "srv0srv.h"
 #include "sync0sync.h"
-#include "thr0loc.h"
 #include "trx0purge.h"
 #include "trx0roll.h"
 #include "trx0sys.h"
@@ -527,8 +526,6 @@ void *io_handler_thread(void *arg) {
   auto segment = *((ulint *)arg);
 
   while (fil_aio_wait(segment)) { }
-
-  thr_local_free(os_thread_get_curr_id());
 
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit.
@@ -1611,7 +1608,6 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
 
   log_shutdown();
   lock_sys_close();
-  thr_local_close();
   trx_sys_file_format_close();
   trx_sys_close();
 
