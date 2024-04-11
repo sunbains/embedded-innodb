@@ -115,10 +115,10 @@ using Slots_pool = Bounded_channel<Slot*>;
  * handler. The m_is_empty event is set when there are no free
  * slots in the free pool.
  * 
- * The io_uring completion queue is polled by the queue queues. These
- * queue queues are created by the callers of AIO::reap(). There
- * are no checks to enforce this, so the caller must ensure that
- * reap is called with the correct queue id.
+ * The io_uring completion queue is polled by the queue reap threads.
+ * These queue reap threads are created by the callers of AIO::reap().
+ * So the caller must ensure that reap is called with the correct
+ * queue id.
  * 
  * The queues are suspended when there are no available
  * completion entries in the io_uring queue.
