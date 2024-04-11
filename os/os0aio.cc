@@ -577,7 +577,7 @@ Slot *Handler::Queue::reserve_slot(const IO_ctx &io_ctx, void *ptr, uint32_t len
         std::this_thread::yield();
       }
 
-      ut_a(!slot->m_reserved);
+      ut_ad(!slot->m_reserved);
 
       auto io_ctx_copy = io_ctx;
 
@@ -593,7 +593,7 @@ Slot *Handler::Queue::reserve_slot(const IO_ctx &io_ctx, void *ptr, uint32_t len
 
       slot->m_len = 0;
       slot->m_off = off;
-      slot->m_reserved = true;
+      ut_ad(slot->m_reserved = true);
       slot->m_io_ctx = std::move(io_ctx_copy);
       slot->m_request = {static_cast<byte*>(ptr), len};
 
@@ -679,7 +679,7 @@ db_err Handler::Queue::reap(IO_ctx &io_ctx) noexcept {
     auto slot = reinterpret_cast<Slot*>(io_uring_cqe_get_data64(cqe));
 
     ut_a(cqe->res != -1);
-    ut_a(slot->m_reserved);
+    ut_ad(slot->m_reserved);
     ut_a(decltype(cqe->res)(slot->m_request.m_len) >= cqe->res);
 
     slot->m_off += cqe->res;

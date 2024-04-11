@@ -21,9 +21,8 @@ The database buffer srv_buf_pool flush algorithm
 Created 11/11/1995 Heikki Tuuri
 *******************************************************/
 
-#include "buf0flu.h"
-
 #include "buf0buf.h"
+#include "buf0flu.h"
 #include "buf0lru.h"
 #include "buf0rea.h"
 #include "fil0fil.h"
@@ -573,17 +572,14 @@ void Buf_flush::init_for_writing(byte *page, uint64_t newest_lsn) {
 
   /* Store the new formula checksum */
 
-  mach_write_to_4(page + FIL_PAGE_SPACE_OR_CHKSUM, srv_use_checksums ? buf_calc_page_new_checksum(page) : BUF_NO_CHECKSUM_MAGIC);
+  mach_write_to_4(page + FIL_PAGE_SPACE_OR_CHKSUM, buf_page_data_calc_checksum(page));
 
   /* We overwrite the first 4 bytes of the end lsn field to store
   the old formula checksum. Since it depends also on the field
   FIL_PAGE_SPACE_OR_CHKSUM, it has to be calculated after storing the
   new formula checksum. */
 
-  mach_write_to_4(
-    page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM,
-    srv_use_checksums ? buf_calc_page_old_checksum(page) : BUF_NO_CHECKSUM_MAGIC
-  );
+  mach_write_to_4(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM, BUF_NO_CHECKSUM_MAGIC);
 }
 
 void Buf_flush::write_block_low(buf_page_t *bpage) {
@@ -895,17 +891,6 @@ ulint Buf_flush::batch( buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
   buf_pool_mutex_exit();
 
   buffered_writes();
-
-#ifdef UNIV_DEBUG
-  if (buf_debug_prints && page_count > 0) {
-    ut_a(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
-    ib_logger(
-      ib_stream,
-      flush_type == BUF_FLUSH_LRU ? "Flushed %lu pages in LRU flush\n" : "Flushed %lu pages in flush list flush\n",
-      (ulong)page_count
-    );
-  }
-#endif /* UNIV_DEBUG */
 
   srv_buf_pool_flushed += page_count;
 

@@ -1622,7 +1622,7 @@ static void btr_lift_page_up(
 ) /*!< in: mtr */
 {
   buf_block_t *father_block;
-  page_t *father_page;
+  IF_DEBUG(page_t *father_page;)
   ulint page_level;
   page_t *page = block->get_frame();
   ulint root_page_no;
@@ -1645,7 +1645,7 @@ static void btr_lift_page_up(
 
     offsets = btr_page_get_father_block(nullptr, heap, dict_index, block, mtr, &cursor);
     father_block = btr_cur_get_block(&cursor);
-    father_page = father_block->get_frame();
+    IF_DEBUG(father_page = father_block->get_frame();)
 
     n_blocks = 0;
 

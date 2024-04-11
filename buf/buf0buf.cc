@@ -217,6 +217,9 @@ static constexpr ulint BUF_PAGE_READ_MAX_RETRIES = 100;
 /** The buffer srv_buf_pool of the database */
 Buf_pool *srv_buf_pool = nullptr;
 
+/** Checksum function. */
+crc32::Checksum crc32::checksum = {};
+
 /** mutex protecting the buffer pool struct and control blocks, except the
 read-write lock in them */
 mutex_t buf_pool_mutex{};
@@ -230,12 +233,6 @@ Protected by buf_pool_mutex. */
 ulint buf_pool_mutex_exit_forbidden = 0;
 
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
-
-#ifdef UNIV_DEBUG
-/** If this is set true, the program prints info whenever
-read-ahead or flush occurs */
-bool buf_debug_prints = false;
-#endif /* UNIV_DEBUG */
 
 /** A chunk of buffers.  The buffer pool is allocated in chunks. */
 struct buf_chunk_t {
@@ -328,36 +325,9 @@ void Buf_pool::release(buf_block_t *block, ulint rw_latch, mtr_t *mtr) {
 void Buf_pool::init() {
   ut_d(buf_dbg_counter = 0);
   ut_d(buf_pool_mutex_exit_forbidden = 0);
-  ut_d(buf_debug_prints = false);
-}
-
-ulint buf_calc_page_new_checksum(const byte *page) {
-  ulint checksum;
-
-  /* Since the field FIL_PAGE_FILE_FLUSH_LSN, and in versions <= 4.1.x
-  ...ARCH_LOG_NO, are written outside the buffer pool to the first
-  pages of data files, we have to skip them in the page checksum
-  calculation.
-  We must also skip the field FIL_PAGE_SPACE_OR_CHKSUM where the
-  checksum is stored, and also the last 8 bytes of page because
-  there we store the old formula checksum. */
-
-  checksum = ut_fold_binary(page + FIL_PAGE_OFFSET, FIL_PAGE_FILE_FLUSH_LSN - FIL_PAGE_OFFSET) +
-             ut_fold_binary(page + FIL_PAGE_DATA, UNIV_PAGE_SIZE - FIL_PAGE_DATA - FIL_PAGE_END_LSN_OLD_CHKSUM);
-
-  return checksum & 0xFFFFFFFFUL;
-}
-
-ulint buf_calc_page_old_checksum(const byte *page) {
-  auto checksum = ut_fold_binary(page, FIL_PAGE_FILE_FLUSH_LSN);
-
-  return checksum & 0xFFFFFFFFUL;
 }
 
 bool Buf_pool::is_corrupted(const byte *read_buf) {
-  ulint checksum_field;
-  ulint old_checksum_field;
-
   if (memcmp(read_buf + FIL_PAGE_LSN + 4, read_buf + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4, 4)) {
 
     /* Stored log sequence numbers at the start and the end
@@ -390,27 +360,11 @@ bool Buf_pool::is_corrupted(const byte *read_buf) {
   disabled. Otherwise, skip checksum calculation and return false */
 
   if (likely(srv_use_checksums)) {
-    checksum_field = mach_read_from_4(read_buf + FIL_PAGE_SPACE_OR_CHKSUM);
+    auto checksum = mach_read_from_4(read_buf + FIL_PAGE_SPACE_OR_CHKSUM);
 
-    old_checksum_field = mach_read_from_4(read_buf + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM);
-
-    /* There are 2 valid formulas for old_checksum_field:
-
-    1. Very old versions of InnoDB only stored 8 byte lsn to the start and the end of the page.
-
-    2. Newer InnoDB versions store the old formula checksum there. */
-
-    if (old_checksum_field != mach_read_from_4(read_buf + FIL_PAGE_LSN) &&
-	old_checksum_field != BUF_NO_CHECKSUM_MAGIC && old_checksum_field != buf_calc_page_old_checksum(read_buf)) {
-
-      return true;
-    }
-
-    /* InnoDB versions < 4.0.14 and < 4.1.1 stored the space id (always equal to 0), to FIL_PAGE_SPACE_OR_CHKSUM */
-
-    if (checksum_field != 0 &&
-        checksum_field != BUF_NO_CHECKSUM_MAGIC &&
-	checksum_field != buf_calc_page_new_checksum(read_buf)) {
+    if (checksum != 0 &&
+        checksum != BUF_NO_CHECKSUM_MAGIC &&
+	      checksum != buf_page_data_calc_checksum(read_buf)) {
 
       return true;
     }
@@ -423,29 +377,19 @@ void buf_page_print(const byte *read_buf, ulint) {
   dict_index_t *index;
   auto size = UNIV_PAGE_SIZE;
 
-  ut_print_timestamp(ib_stream);
   ib_logger(ib_stream, "  Page dump in ascii and hex (%lu bytes):\n", (ulong)size);
-  ut_print_buf(ib_stream, read_buf, size);
   ib_logger(ib_stream, "\nEnd of page dump\n");
 
-  auto checksum = srv_use_checksums ? buf_calc_page_new_checksum(read_buf) : BUF_NO_CHECKSUM_MAGIC;
-  auto old_checksum = srv_use_checksums ? buf_calc_page_old_checksum(read_buf) : BUF_NO_CHECKSUM_MAGIC;
+  auto checksum =  buf_page_data_calc_checksum(read_buf);
 
-  ut_print_timestamp(ib_stream);
   ib_logger(
     ib_stream,
-    "  Page checksum %lu, prior-to-4.0.14-form checksum %lu stored checksum %lu, prior-to-4.0.14-form"
-    " stored checksum %lu\n Page lsn %lu %lu, low 4 bytes of lsn at page end %lu Page number"
-    " (if stored to page already) %lu,space id (if created with >= v4.1.1 and stored already) %lu",
+    " Checksum stored on page %lu, lsn %lu, %lu space id %lu, page number %lu",
     (ulong)checksum,
-    (ulong)old_checksum,
     (ulong)mach_read_from_4(read_buf + FIL_PAGE_SPACE_OR_CHKSUM),
-    (ulong)mach_read_from_4(read_buf + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM),
-    (ulong)mach_read_from_4(read_buf + FIL_PAGE_LSN),
-    (ulong)mach_read_from_4(read_buf + FIL_PAGE_LSN + 4),
-    (ulong)mach_read_from_4(read_buf + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4),
-    (ulong)mach_read_from_4(read_buf + FIL_PAGE_OFFSET),
-    (ulong)mach_read_from_4(read_buf + FIL_PAGE_SPACE_ID)
+    (ulong)mach_read_from_4(read_buf + FIL_PAGE_LSN) | (ulong)mach_read_from_4(read_buf + FIL_PAGE_LSN + 4),
+    (ulong)mach_read_from_4(read_buf + FIL_PAGE_SPACE_ID),
+    (ulong)mach_read_from_4(read_buf + FIL_PAGE_OFFSET)
   );
 
   if (mach_read_from_2(read_buf + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) == TRX_UNDO_INSERT) {
@@ -678,6 +622,8 @@ bool Buf_pool::open(uint64_t pool_size) {
 
   /* 4. Initialize the buddy allocator fields */
   /* All fields are initialized by mem_zalloc(). */
+
+  crc32::checksum = crc32::init();
 
   return true;
 }
@@ -1571,17 +1517,6 @@ void Buf_pool::io_complete(buf_page_t *bpage) {
     default:
       ut_error;
   }
-
-  ut_d(
-    if (buf_debug_prints) {
-      ib_logger(
-        ib_stream,
-        "Has %s page space %lu page no %lu\n", io_type == BUF_IO_READ ? "read" : "written",
-        (ulong)bpage->get_space(),
-        (ulong)bpage->get_page_no()
-      );
-    }
-  );
 
   mutex_exit(buf_page_get_mutex(bpage));
   buf_pool_mutex_exit();

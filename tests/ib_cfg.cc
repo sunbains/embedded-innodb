@@ -61,9 +61,8 @@ static void get_all(void) {
 
   for (ptr = var_names; *ptr; ++ptr) {
     void *val;
-    ib_err_t err;
 
-    err = ib_cfg_get(*ptr, &val);
+    auto err = ib_cfg_get(*ptr, &val);
     assert(err == DB_SUCCESS);
   }
 }
@@ -105,7 +104,6 @@ static void test_ib_cfg_get_all(void) {
 }
 
 int main(int argc, char **argv) {
-  ib_err_t err;
   char *ptr;
   ib_ulint_t val;
   unsigned int i;
@@ -115,7 +113,7 @@ int main(int argc, char **argv) {
 
   test_config_parser();
 
-  err = ib_init();
+  auto err = ib_init();
   assert(err == DB_SUCCESS);
 
   test_ib_cfg_get_all();

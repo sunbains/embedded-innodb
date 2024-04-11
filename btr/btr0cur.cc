@@ -258,7 +258,7 @@ void btr_cur_search_to_nth_level(
   ulint height;
   ulint savepoint;
   ulint page_mode;
-  ulint insert_planned;
+  IF_DEBUG(ulint insert_planned;)
   ulint estimate;
   ulint root_height = 0; /* remove warning */
   mem_heap_t *heap = nullptr;
@@ -272,11 +272,12 @@ void btr_cur_search_to_nth_level(
   ut_ad(dict_index_check_search_tuple(dict_index, tuple));
   ut_ad(dtuple_check_typed(tuple));
 
-#ifdef UNIV_DEBUG
-  cursor->up_match = ULINT_UNDEFINED;
-  cursor->low_match = ULINT_UNDEFINED;
-#endif
-  insert_planned = latch_mode & BTR_INSERT;
+  IF_DEBUG(
+    cursor->up_match = ULINT_UNDEFINED;
+    cursor->low_match = ULINT_UNDEFINED;
+    insert_planned = latch_mode & BTR_INSERT;
+  )
+
   estimate = latch_mode & BTR_ESTIMATE;
   latch_mode = latch_mode & ~(BTR_INSERT | BTR_ESTIMATE);
 

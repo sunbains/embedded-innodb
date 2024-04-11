@@ -422,7 +422,7 @@ static bool log_calc_max_ages() {
 
   auto free = LOG_CHECKPOINT_FREE_PER_THREAD * 10 + LOG_CHECKPOINT_EXTRA_FREE;
 
-  ulint margin;
+  ulint margin{};
   bool success = true;
 
   if (free >= smallest_capacity / 2) {

@@ -31,7 +31,7 @@ Created 11/5/1995 Heikki Tuuri
 #include "mach0data.h"
 #include "mtr0types.h"
 #include "page0types.h"
-
+#include "ut0crc32.h"
 
 /** mutex protecting the buffer pool struct and control blocks, except the
 read-write lock in them */
@@ -96,29 +96,6 @@ extern ulint buf_pool_mutex_exit_forbidden;
 @param l	in: rw-lock candidate
 @return		true if l is a buf_block_t::lock */
 #define buf_pool_is_block_lock(l) buf_pool->pointer_is_block_field((const void *)(l))
-
-/**
- * Calculates a page checksum which is stored to the page when it is
- * written to a file. Note that we must be careful to calculate the
- * same value on 32-bit and 64-bit architectures.
- *
- * @param page      in: buffer page
- * @return          checksum
- */
-ulint buf_calc_page_new_checksum(const byte *page);
-
-/**
- * In versions < 4.0.14 and < 4.1.1 there was a bug that the
- * checksum only looked at the first few bytes of the page.
- * This calculates that old checksum.
- * NOTE: we must first store the new formula checksum to
- * FIL_PAGE_SPACE_OR_CHKSUM before calculating and storing this old checksum
- * because this takes that field as an input!
- *
- * @param page      in: buffer page
- * @return          checksum
- */
-ulint buf_calc_page_old_checksum(const byte *page);
 
 /**
  * @brief Prints a page to stderr.
@@ -719,4 +696,8 @@ inline void buf_page_release_latch( buf_block_t *block, ulint rw_latch) {
   } else if (rw_latch == RW_X_LATCH) {
     rw_lock_x_unlock(&block->m_rw_lock);
   }
+}
+
+inline uint32_t buf_page_data_calc_checksum(const byte *page) {
+  return crc32::checksum(page + FIL_PAGE_OFFSET, UNIV_PAGE_SIZE - FIL_PAGE_DATA);
 }

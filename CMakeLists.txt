@@ -18,7 +18,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.5 FATAL_ERROR)
 
 PROJECT (EMBEDDED_INNODB)
 
-SET(CMAKE_BUILD_TYPE debug)
+SET(CMAKE_BUILD_TYPE Release)
 SET(CMAKE_CXX_STANDARD 23)
 SET(CMAKE_CXX_STANDARD_REQUIRED True)
 
@@ -206,9 +206,10 @@ SET(INNODB_SOURCES  btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
 
 IF(CMAKE_BUILD_TYPE MATCHES debug)
   ADD_DEFINITIONS(-O0 -g -Wall -DUNIV_DEBUG -Werror -Wno-interference-size)
-ELSEIF(CMAKE_BUILD_TYPE MATCHES release)
-  ADD_DEFINITIONS(-g -O2 -Wall -Werror -Wno-interference-size)
+ELSEIF(CMAKE_BUILD_TYPE MATCHES Release)
+	ADD_DEFINITIONS(-g -O2 -Wall -Werror -Wno-interference-size -UNDEBUG)
 ENDIF(CMAKE_BUILD_TYPE MATCHES debug)
+
 
 IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
   ADD_DEFINITIONS(-DUNIV_LINUX)
@@ -233,8 +234,9 @@ ENDIF(NOT DISABLE_XA)
 
 SUBDIRS(tests)
 
-CONFIGURE_FILE(  ${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/include/ib0config.h)
+CONFIGURE_FILE(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/include/ib0config.h)
 
 # List all install files and use CPack for packaging and installation
 SET(CMAKE_INSTALL_PREFIX package)

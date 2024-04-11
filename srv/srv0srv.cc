@@ -102,8 +102,10 @@ char *srv_log_group_home_dir = nullptr;
 /** store to its own file each table created by an user; data
 dictionary tables are in the system tablespace 0 */
 bool srv_file_per_table;
+
 /** The file format to use on new *.ibd files. */
 ulint srv_file_format = 0;
+
 /** Whether to check file format during startup a value of
 DICT_TF_FORMAT_MAX + 1 means no checking ie. false.  The default is to
 set it to the highest format we support. */
@@ -113,31 +115,39 @@ ulint srv_check_file_format_at_startup = DICT_TF_FORMAT_MAX;
 #error "DICT_TF_FORMAT_51 must be 0!"
 #endif
 ulint srv_n_data_files = 0;
+
 /** Size in database pages */
 ulint *srv_data_file_sizes = nullptr;
 
 /** If true, then we auto-extend the last data file */
 bool srv_auto_extend_last_data_file = false;
+
 /* if != 0, this tells the max size auto-extending may increase the
 last data file size */
 ulint srv_last_file_size_max = 0;
+
 /** If the last data file is auto-extended, we add this
 many pages to it at a time */
 ulong srv_auto_extend_increment = 8;
+
 ulint *srv_data_file_is_raw_partition = nullptr;
 
 /* If the following is true we do not allow inserts etc. This protects
 the user from forgetting the 'newraw' keyword. */
-
 bool srv_created_new_raw = false;
 
 ulint srv_n_log_files = ULINT_MAX;
+
 /** Size in database pages */
 ulint srv_log_file_size = ULINT_MAX;
+
 ulint srv_log_file_curr_size = ULINT_MAX;
+
 /** Size in database pages */
 ulint srv_log_buffer_size = ULINT_MAX;
+
 ulint srv_log_buffer_curr_size = ULINT_MAX;
+
 ulong srv_flush_log_at_trx_commit = 1;
 
 /** Try to flush dirty pages so as to avoid IO bursts at
@@ -149,7 +159,7 @@ bool srv_use_sys_malloc = false;
 
 /** Maximum number of times allowed to conditionally acquire
 mutex before switching to blocking wait on the mutex */
-#define MAX_MUTEX_NOWAIT 20
+constexpr ulint MAX_MUTEX_NOWAIT = 20;
 
 /** Check whether the number of failed nonblocking mutex
 acquisition attempts exceeds maximum allowed value. If so,
@@ -159,18 +169,24 @@ with mutex_enter(), which will wait until it gets the mutex. */
 
 /** Requested size in kilobytes of the buffer pool. */
 ulint srv_buf_pool_size = ULINT_MAX;
+
 /** previously requested size of the buffer pool. */
 ulint srv_buf_pool_old_size;
+
 /** Current size in kilobytes of the buffer pool. */
 ulint srv_buf_pool_curr_size = 0;
+
 /** Memory pool size in bytes */
 ulint srv_mem_pool_size = ULINT_MAX;
+
 ulint srv_lock_table_size = ULINT_MAX;
 
 /** This parameter is deprecated. Use srv_n_io_[read|write]_threads
 instead. */
 ulint srv_n_file_io_threads = ULINT_MAX;
+
 ulint srv_n_read_io_threads = ULINT_MAX;
+
 ulint srv_n_write_io_threads = ULINT_MAX;
 
 /** User settable value of the number of pages that must be present
@@ -245,11 +261,10 @@ export_struc export_vars;
 the user from forgetting the force_recovery keyword. */
 
 ib_recovery_t srv_force_recovery = IB_RECOVERY_DEFAULT;
-/*-----------------------*/
+
 /* We are prepared for a situation that we have this many threads waiting for
 a semaphore inside InnoDB. innobase_start_or_create() sets the
 value. */
-
 ulint srv_max_n_threads = 0;
 
 /** This mutex protects srv_conc data structures */
@@ -349,14 +364,19 @@ static ulint srv_main_thread_id = 0;
 
 /** Iterations by the 'once per second' loop. */
 static ulint srv_main_1_second_loops = 0;
+
 /** Calls to sleep by the 'once per second' loop. */
 static ulint srv_main_sleeps = 0;
+
 /** Iterations by the 'once per 10 seconds' loop. */
 static ulint srv_main_10_second_loops = 0;
+
 /** Iterations of the loop bounded by the 'background_loop' label. */
 static ulint srv_main_background_loops = 0;
+
 /** Iterations of the loop bounded by the 'flush_loop' label. */
 static ulint srv_main_flush_loops = 0;
+
 /** Log writes involving flush. */
 static ulint srv_log_writes_and_flush = 0;
 
@@ -739,11 +759,13 @@ void srv_var_init() {
   srv_fast_shutdown = IB_SHUTDOWN_NORMAL;
 }
 
-/** Accessor function to get pointer to n'th slot in the server thread
-table.
-@return	pointer to the slot */
-static srv_slot_t *srv_table_get_nth_slot(ulint index) /*!< in: index of the slot */
-{
+/**
+ * Accessor function to get pointer to n'th slot in the server thread table.
+ *
+ * @param index in: index of the slot
+ * @return pointer to the slot
+ */
+static srv_slot_t *srv_table_get_nth_slot(ulint index) {
   ut_a(index < OS_THREAD_MAX_N);
 
   return srv_sys->threads + index;
@@ -764,12 +786,15 @@ ulint srv_get_n_threads() {
   return n_threads;
 }
 
-/** Reserves a slot in the thread table for the current thread. Also creates the
-thread local storage struct for the current thread. NOTE! The server mutex
-has to be reserved by the caller!
-@return	reserved slot index */
-static ulint srv_table_reserve_slot(srv_thread_type type) /*!< in: type of the thread */
-{
+/**
+ * Reserves a slot in the thread table for the current thread. Also creates the
+ * thread local storage struct for the current thread. NOTE! The server mutex
+ * has to be reserved by the caller!
+ *
+ * @param type in: type of the thread
+ * @return reserved slot index
+ */
+static ulint srv_table_reserve_slot(srv_thread_type type) {
   srv_slot_t *slot;
   ulint i;
 
@@ -966,7 +991,7 @@ ulong srv_max_purge_lag = 0;
 
 /** Normalizes init parameter values to use units we use inside InnoDB.
 @return	DB_SUCCESS or error code */
-static db_err srv_normalize_init_values(void) {
+static db_err srv_normalize_init_values() {
   auto n = srv_n_data_files;
 
   for (ulint i = 0; i < n; i++) {
@@ -1049,18 +1074,13 @@ static srv_slot_t *srv_table_reserve_slot_for_user_thread() {
 
     if (i >= OS_THREAD_MAX_N) {
 
-      ut_print_timestamp(ib_stream);
-
       ib_logger(
         ib_stream,
-        "  There appear to be %lu user"
-        " threads currently waiting\n"
-        "inside InnoDB, which is the"
-        " upper limit. Cannot continue operation.\n"
-        "We intentionally generate"
-        " a seg fault to print a stack trace\n"
-        "on Linux. But first we print"
-        " a list of waiting threads.\n",
+        "There appear to be %lu user threads currently waiting"
+        " inside InnoDB, which is the upper limit. Cannot continue"
+        " operation. We intentionally generate a seg fault to print"
+        " a stack trace on Linux. But first we print a list of waiting"
+        " threads.\n",
         (ulong)i
       );
 
@@ -1070,8 +1090,7 @@ static srv_slot_t *srv_table_reserve_slot_for_user_thread() {
 
         ib_logger(
           ib_stream,
-          "Slot %lu: thread id %lu, type %lu,"
-          " in use %lu, susp %lu, time %lu\n",
+          "Slot %lu: thread id %lu, type %lu, in use %lu, susp %lu, time %lu\n",
           (ulong)i,
           (ulong)os_thread_pf(slot->id),
           (ulong)slot->type,
@@ -1600,8 +1619,6 @@ loop:
         "========================\n"
       );
 
-      ut_print_timestamp(ib_stream);
-
       ib_logger(
         ib_stream,
         " INNODB TABLESPACE MONITOR OUTPUT\n"
@@ -1653,7 +1670,11 @@ loop:
     goto exit_func;
   }
 
-  if (srv_print_innodb_monitor || srv_print_innodb_lock_monitor || srv_print_innodb_tablespace_monitor || srv_print_innodb_table_monitor) {
+  if (srv_print_innodb_monitor ||
+      srv_print_innodb_lock_monitor ||
+      srv_print_innodb_tablespace_monitor ||
+       srv_print_innodb_table_monitor) {
+
     goto loop;
   }
 
@@ -1672,82 +1693,67 @@ exit_func:
   return nullptr;
 }
 
-void *srv_lock_timeout_thread(void *arg __attribute__((unused))) {
-  srv_slot_t *slot;
-  bool some_waits;
-  double wait_time;
-  ulint i;
+void *srv_lock_timeout_thread(void *) {
+  for (;;) {
+    /* When someone is waiting for a lock, we wake up every second
+    and check if a timeout has passed for a lock wait */
 
-loop:
-  /* When someone is waiting for a lock, we wake up every second
-  and check if a timeout has passed for a lock wait */
+    os_thread_sleep(1000000);
 
-  os_thread_sleep(1000000);
+    srv_lock_timeout_active = true;
 
-  srv_lock_timeout_active = true;
+    mutex_enter(&kernel_mutex);
 
-  mutex_enter(&kernel_mutex);
+    auto some_waits = false;
 
-  some_waits = false;
+    /* Check of all slots if a thread is waiting there, and if it
+    has exceeded the time limit */
 
-  /* Check of all slots if a thread is waiting there, and if it
-  has exceeded the time limit */
+    for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
 
-  for (i = 0; i < OS_THREAD_MAX_N; i++) {
+      auto slot = srv_client_table + i;
 
-    slot = srv_client_table + i;
+      if (slot->in_use) {
+        some_waits = true;
+        auto wait_time = ut_difftime(ut_time(), slot->suspend_time);
+        auto trx = thr_get_trx(slot->thr);
+        auto lock_wait_timeout = sess_lock_wait_timeout(trx);
 
-    if (slot->in_use) {
-      trx_t *trx;
-      ulong lock_wait_timeout;
+        if (trx_is_interrupted(trx) ||
+            (lock_wait_timeout < 100000000 &&
+             (wait_time > (double)lock_wait_timeout || wait_time < 0))) {
 
-      some_waits = true;
-
-      wait_time = ut_difftime(ut_time(), slot->suspend_time);
-
-      trx = thr_get_trx(slot->thr);
-      lock_wait_timeout = sess_lock_wait_timeout(trx);
-
-      if (trx_is_interrupted(trx) || (lock_wait_timeout < 100000000 && (wait_time > (double)lock_wait_timeout || wait_time < 0))) {
-        /* Timeout exceeded or a wrap-around in system
-        time counter: cancel the lock request queued
-        by the transaction and release possible
-        other transactions waiting behind; it is
-        possible that the lock has already been
-        granted: in that case do nothing */
-
-        if (trx->wait_lock) {
-          lock_cancel_waiting_and_release(trx->wait_lock);
+          /* Timeout exceeded or a wrap-around in system time counter:
+          cancel the lock request queued by the transaction and release possible
+          other transactions waiting behind; it is possible that the lock has
+          already been granted: in that case do nothing */
+  
+          if (trx->wait_lock) {
+            lock_cancel_waiting_and_release(trx->wait_lock);
+          }
         }
       }
     }
+
+    os_event_reset(srv_lock_timeout_thread_event);
+
+    mutex_exit(&kernel_mutex);
+
+    if (srv_shutdown_state >= SRV_SHUTDOWN_CLEANUP) {
+      srv_lock_timeout_active = false;
+
+      /* We count the number of threads in os_thread_exit(). A created
+      thread should always use that to exit and not use return() to exit. */
+
+      os_thread_exit(nullptr);
+
+      return nullptr;
+    }
+
+    if (!some_waits) {
+      srv_lock_timeout_active = false;
+    }
   }
-
-  os_event_reset(srv_lock_timeout_thread_event);
-
-  mutex_exit(&kernel_mutex);
-
-  if (srv_shutdown_state >= SRV_SHUTDOWN_CLEANUP) {
-    goto exit_func;
-  }
-
-  if (some_waits) {
-    goto loop;
-  }
-
-  srv_lock_timeout_active = false;
-
-  goto loop;
-
-exit_func:
-  srv_lock_timeout_active = false;
-
-  /* We count the number of threads in os_thread_exit(). A created
-  thread should always use that to exit and not use return() to exit. */
-
-  os_thread_exit(nullptr);
-
-  return nullptr;
 }
 
 void *srv_error_monitor_thread(void *arg __attribute__((unused))) {
@@ -1810,10 +1816,8 @@ loop:
 
       ib_logger(
         ib_stream,
-        "Error: semaphore wait has lasted"
-        " > %lu seconds\n"
-        "We intentionally crash the server,"
-        " because it appears to be hung.\n",
+        "Semaphore wait has lasted > %lu seconds. We intentionally crash the"
+        " server, because it appears to be hung.\n",
         (ulong)srv_fatal_semaphore_wait_threshold
       );
 
@@ -2285,18 +2289,15 @@ void srv_panic(int panic_ib_error, char *fmt, ...) {
   srv_panic_status = panic_ib_error;
 
   va_start(ap, fmt);
+
   if (ib_panic) {
     ib_panic(ib_panic_data, panic_ib_error, fmt, ap);
     return;
   } else {
-    ib_logger(
-      ib_stream,
-      "Database forced shutdown! "
-      "(ib_err %d)",
-      panic_ib_error
-    );
+    ib_logger(ib_stream, "Database forced shutdown! (ib_err %d)", panic_ib_error);
     ib_logger(ib_stream, fmt, ap);
     exit(-1);
   }
+
   va_end(ap);
 }

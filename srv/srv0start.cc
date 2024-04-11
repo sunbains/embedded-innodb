@@ -150,14 +150,16 @@ static bool srv_threads_shutdown();
 /** FIXME: Make this configurable. */
 constexpr ulint OS_AIO_N_PENDING_IOS_PER_THREAD = 256;
 
-/** Convert a numeric string that optionally ends in G or M, to a number
-containing megabytes.
-@return	next character in string */
-static char *srv_parse_megabytes(
-  char *str, /*!< in: string containing a quantity in bytes */
-  ulint *megs
-) /*!< out: the number in megabytes */
-{
+/**
+ * Convert a numeric string that optionally ends in G or M, to a number
+ * containing megabytes.
+ *
+ * @param str  in: string containing a quantity in bytes
+ * @param megs out: the number in megabytes
+ *
+ * @return next character in string
+ */
+static char *srv_parse_megabytes(char *str, ulint *megs) {
   char *endp;
   ulint size;
 
@@ -384,11 +386,7 @@ bool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
   return true;
 }
 
-/** Reads log group home directories from a character string.
-@return	true if ok, false on parse error */
-
-bool srv_parse_log_group_home_dirs(const char *usr_str) /*!< in: character string */
-{
+bool srv_parse_log_group_home_dirs(const char *usr_str) {
   ulint i;
   char *str;
   char *path;
@@ -481,10 +479,7 @@ bool srv_parse_log_group_home_dirs(const char *usr_str) /*!< in: character strin
   return true;
 }
 
-/** Frees the memory allocated by srv_parse_data_file_paths_and_sizes()
-and srv_parse_log_group_home_dirs(). */
-
-void srv_free_paths_and_sizes(void) {
+void srv_free_paths_and_sizes() {
   if (srv_data_file_names != nullptr) {
     free(srv_data_file_names);
     srv_data_file_names = nullptr;
@@ -537,36 +532,49 @@ void *io_handler_thread(void *arg) {
   return nullptr;
 }
 
-/** Calculates the low 32 bits when a file size which is given as a number
-database pages is converted to the number of bytes.
-@return	low 32 bytes of file size when expressed in bytes */
-static ulint srv_calc_low32(ulint file_size) /*!< in: file size in database pages */
-{
+/**
+ * @brief Calculates the low 32 bits when a file size which is given as a number
+ *        database pages is converted to the number of bytes.
+ *
+ * @param file_size  in: file size in database pages
+ *
+ * @return low 32 bytes of file size when expressed in bytes
+ */
+static ulint srv_calc_low32(off_t file_size) {
   return 0xFFFFFFFFUL & (file_size << UNIV_PAGE_SIZE_SHIFT);
 }
 
-/** Calculates the high 32 bits when a file size which is given as a number
-database pages is converted to the number of bytes.
-@return	high 32 bytes of file size when expressed in bytes */
-static ulint srv_calc_high32(ulint file_size) /*!< in: file size in database pages */
-{
+/**
+ * @brief Calculates the high 32 bits when a file size which is given as a number
+ *        database pages is converted to the number of bytes.
+ *
+ * @param file_size  in: file size in database pages
+ *
+ * @return high 32 bytes of file size when expressed in bytes
+ */
+static ulint srv_calc_high32(off_t file_size) {
   return file_size >> (32 - UNIV_PAGE_SIZE_SHIFT);
 }
 
-/** Creates or opens the log files and closes them.
-@return	DB_SUCCESS or error code */
+/**
+ * @brief Creates or opens the log files and closes them.
+ *
+ * @param create_new_db         true if we should create a new database
+ * @param log_file_created      true if new log file created
+ * @param log_file_has_been_opened true if a log file has been opened before:
+ *                              then it is an error to try to create another log file
+ * @param k                     Log group number
+ * @param i                     log file number in group
+ *
+ * @return DB_SUCCESS or error code
+ */
 static db_err open_or_create_log_file(
-  bool create_new_db,            /*!< in: true if we should create a
-                                    new database */
-  bool *log_file_created,        /*!< out: true if new log file
-                                    created */
-  bool log_file_has_been_opened, /*!< in: true if a log file has been
-                                   opened before: then it is an error
-                                   to try to create another log file */
-  ulint k,                       /*!< in: log group number */
+  bool create_new_db,
+  bool *log_file_created,
+  bool log_file_has_been_opened,
+  ulint k,
   ulint i
-) /*!< in: log file number in group */
-{
+) {
   bool ret;
   off_t size;
   char name[10000];
@@ -672,19 +680,22 @@ static db_err open_or_create_log_file(
   return DB_SUCCESS;
 }
 
-/** Creates or opens database data files and closes them.
-@return	DB_SUCCESS or error code */
+/**
+ * @brief Creates or opens database data files and closes them.
+ * 
+ * @param[out] create_new_db    True if new database should be created
+ * @param[out] min_flushed_lsn  Min of flushed lsn values in data files
+ * @param[out] max_flushed_lsn  Max of flushed lsn values in data files
+ * @param[out] sum_of_new_sizes Sum of sizes of the new files added
+ * 
+ * @return DB_SUCCESS or error code
+ */
 static db_err open_or_create_data_files(
-  bool *create_new_db,       /*!< out: true if new database should be
-                          created */
-  uint64_t *min_flushed_lsn, /*!< out: min of flushed lsn
-                                  values in data files */
-  uint64_t *max_flushed_lsn, /*!< out: max of flushed lsn
-                                  values in data files */
+  bool *create_new_db,
+  uint64_t *min_flushed_lsn,
+  uint64_t *max_flushed_lsn,
   ulint *sum_of_new_sizes
-) /*!< out: sum of sizes of the
-                              new files added */
-{
+) {
   bool ret;
   ulint i;
   bool one_opened = false;
@@ -741,25 +752,12 @@ static db_err open_or_create_data_files(
 
       files[i] = os_file_create(name, OS_FILE_CREATE, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
 
-      if (
-        ret == false &&
-        os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS
-#ifdef UNIV_AIX
-        /* AIX 5.1 after security patch ML7 may have
-          errno set to 0 here, which causes our function
-          to return 100; work around that AIX problem */
-        && os_file_get_last_error(false) != 100
-#endif
-      ) {
-        ib_logger(
-          ib_stream,
-          "Error in creating"
-          " or opening %s\n",
-          name
-        );
+      if (ret == false && os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
+        ib_logger(ib_stream, "Error in creating or opening %s\n", name);
 
         return DB_ERROR;
       }
+
     } else if (srv_data_file_is_raw_partition[i] == SRV_NEW_RAW) {
       /* The partition is opened, not created; then it is
       written over */
@@ -768,6 +766,7 @@ static db_err open_or_create_data_files(
       srv_created_new_raw = true;
 
       files[i] = os_file_create(name, OS_FILE_OPEN_RAW, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
+
       if (!ret) {
         ib_logger(ib_stream, "Error in opening %s\n", name);
 
@@ -785,15 +784,9 @@ static db_err open_or_create_data_files(
       /* We open the data file */
 
       if (one_created) {
+        ib_logger(ib_stream, "Data files can only be added at the end\n");
         ib_logger(
-          ib_stream,
-          "Error: data files can only"
-          " be added at the end\n"
-        );
-        ib_logger(
-          ib_stream,
-          "of a tablespace, but"
-          " data file %s existed beforehand.\n",
+          ib_stream, "of a tablespace, but data file %s existed beforehand.\n",
           name
         );
         return DB_ERROR;
@@ -831,15 +824,9 @@ static db_err open_or_create_data_files(
 
           ib_logger(
             ib_stream,
-            "Error: auto-extending"
-            " data file %s is"
-            " of a different size\n"
-            "%lu pages (rounded"
-            " down to MB) than the "
-            "configured\n"
-            "initial %lu pages,"
-            " max %lu (relevant if"
-            " non-zero) pages!\n",
+            "Auto-extending data file %s is of a different size"
+            " %lu pages (rounded down to MB) than the configured"
+            " initial %lu pages, max %lu (relevant if non-zero) pages!\n",
             name,
             (ulong)rounded_size_pages,
             (ulong)srv_data_file_sizes[i],
@@ -856,12 +843,8 @@ static db_err open_or_create_data_files(
 
         ib_logger(
           ib_stream,
-          "Error: data file %s"
-          " is of a different size\n"
-          "%lu pages"
-          " (rounded down to MB)\n"
-          "than the configured "
-          "%lu pages!\n",
+          "Data file %s is of a different size %lu pages (rounded down to MB)"
+          " than the configured %lu pages!\n",
           name,
           (ulong)rounded_size_pages,
           (ulong)srv_data_file_sizes[i]
@@ -879,45 +862,27 @@ static db_err open_or_create_data_files(
       one_created = true;
 
       if (i > 0) {
-        ut_print_timestamp(ib_stream);
-        ib_logger(
-          ib_stream,
-          "  Data file %s did not"
-          " exist: new to be created\n",
-          name
-        );
+        ib_logger(ib_stream, "Data file %s did not exist: new to be created\n", name);
       } else {
         ib_logger(
           ib_stream,
-          "The first specified"
-          " data file %s did not exist:\n"
-          "a new database"
+          "The first specified data file %s did not exist: a new database"
           " to be created!\n",
           name
         );
         *create_new_db = true;
       }
 
-      ut_print_timestamp(ib_stream);
       ib_logger(
         ib_stream, "  Setting file %s size to %lu MB\n", name, (ulong)(srv_data_file_sizes[i] >> (20 - UNIV_PAGE_SIZE_SHIFT))
       );
 
-      ib_logger(
-        ib_stream,
-        "Database physically writes the"
-        " file full: wait...\n"
-      );
+      ib_logger(ib_stream, "Database physically writes the file full: wait...\n");
 
       ret = os_file_set_size(name, files[i], srv_calc_low32(srv_data_file_sizes[i]), srv_calc_high32(srv_data_file_sizes[i]));
 
       if (!ret) {
-        ib_logger(
-          ib_stream,
-          "Error in creating %s:"
-          " probably out of disk space\n",
-          name
-        );
+        ib_logger(ib_stream, "Error in creating %s: probably out of disk space\n", name);
 
         return DB_ERROR;
       }
@@ -1016,10 +981,6 @@ ib_err_t innobase_start_or_create() {
   IF_DEBUG(ib_logger(ib_stream, "!!!!!!!! UNIV_DEBUG switched on !!!!!!!!!\n");)
 
   IF_SYNC_DEBUG(ib_logger(ib_stream, "!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!\n");)
-
-#ifdef UNIV_SEARCH_DEBUG
-  ib_logger(ib_stream, "!!!!!!!! UNIV_SEARCH_DEBUG switched on !!!!!!!!!\n");
-#endif
 
 #ifdef UNIV_LOG_LSN_DEBUG
   ib_logger(ib_stream, "!!!!!!!! UNIV_LOG_LSN_DEBUG switched on !!!!!!!!!\n");

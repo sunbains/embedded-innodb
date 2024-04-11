@@ -633,8 +633,6 @@ static void page_cur_insert_rec_write_log(
 }
 
 byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr) {
-  ulint origin_offset;
-  ulint mismatch_index;
   page_t *page;
   rec_t *cursor_rec;
   byte buf1[1024];
@@ -687,6 +685,9 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_blo
     return (nullptr);
   }
 
+  ulint origin_offset;
+  ulint mismatch_index;
+
   if (end_seg_len & 0x1UL) {
     /* Read the info bits */
 
@@ -715,6 +716,9 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_blo
     }
 
     ut_a(mismatch_index < UNIV_PAGE_SIZE);
+  } else {
+    origin_offset = 0;
+    mismatch_index = 0;
   }
 
   if (unlikely(end_ptr < ptr + (end_seg_len >> 1))) {
