@@ -69,7 +69,7 @@ enum buf_flush {
   /** Flush via the LRU list */
   BUF_FLUSH_LRU = 0,
 
-   /** Flush a single page */
+  /** Flush a single page */
   BUF_FLUSH_SINGLE_PAGE,
 
   /** Flush via the flush list of dirty blocks */
@@ -81,7 +81,7 @@ enum buf_flush {
 
 /** Flags for io_fix types */
 enum buf_io_fix {
-   /** No pending I/O */
+  /** No pending I/O */
   BUF_IO_NONE = 0,
 
   /** Read pending */
@@ -149,9 +149,7 @@ struct ut_allocator {
   template <class U>
   explicit ut_allocator(const ut_allocator<U> &) noexcept {}
 
-  T *allocate(std::size_t n) {
-    return new (ut_new(sizeof(T) * n)) T[n];
-  }
+  T *allocate(std::size_t n) { return new (ut_new(sizeof(T) * n)) T[n]; }
 
   void deallocate(T *p, std::size_t n) {
     call_destructor(p, n);
@@ -175,6 +173,7 @@ using buf_page_rbt_cmp_t = std::function<bool(buf_page_t *, buf_page_t *)>;
 using buf_page_rbt_t = std::set<buf_page_t *, buf_page_rbt_cmp_t, ut_allocator<buf_page_t *>>;
 
 using buf_page_rbt_itr_t = typename buf_page_rbt_t::iterator;
+
 /** @brief States of a control block
 @see buf_page_t
 
@@ -200,7 +199,7 @@ enum buf_page_state {
 for compressed and uncompressed frames */
 struct buf_page_t {
 
-   /**
+  /**
    * Reads the freed_page_clock of the buffer page.
    *
    * @return The freed_page_clock.
@@ -241,14 +240,10 @@ struct buf_page_t {
   [[nodiscard]] buf_page_state get_state() const;
 
   /** @return cast the instance to a buf_page_t pointer. */
-  [[nodiscard]] buf_block_t* get_block() {
-    return reinterpret_cast<buf_block_t*>(this);
-  }
+  [[nodiscard]] buf_block_t *get_block() { return reinterpret_cast<buf_block_t *>(this); }
 
   /** @return cast the instance to a buf_page_t pointer. */
-  const buf_block_t* get_block() const {
-    return reinterpret_cast<const buf_block_t*>(this);
-  }
+  const buf_block_t *get_block() const { return reinterpret_cast<const buf_block_t *>(this); }
 
   /**
    * Determines if a block is mapped to a tablespace.
@@ -266,7 +261,7 @@ struct buf_page_t {
       case BUF_BLOCK_REMOVE_HASH:
         break;
     }
-  
+
     return false;
   }
 
@@ -382,9 +377,7 @@ struct buf_block_t {
    *
    * @return The freed_page_clock.
    */
-  [[nodiscard]] ulint get_freed_page_clock() const {
-   return m_page.get_freed_page_clock();
-  }
+  [[nodiscard]] ulint get_freed_page_clock() const { return m_page.get_freed_page_clock(); }
 
   /**
   * Gets the space id of a block.
@@ -402,9 +395,7 @@ struct buf_block_t {
   *
   * @return Page number
   */
-  [[nodiscard]] page_no_t get_page_no() const {
-    return m_page.get_page_no();
-  }
+  [[nodiscard]] page_no_t get_page_no() const { return m_page.get_page_no(); }
 
   /**
   * Gets the state of a block.
@@ -431,14 +422,10 @@ struct buf_block_t {
   buf_frame_t *get_frame() const;
 
   /** Acquire block mutex. */
-  void acquire_mutex() const {
-    mutex_enter(&m_mutex);
-  }
+  void acquire_mutex() const { mutex_enter(&m_mutex); }
 
   /** Release the block mutex. */
-  void release_mutex() const {
-    mutex_exit(&m_mutex);
-  }
+  void release_mutex() const { mutex_exit(&m_mutex); }
 
   /** @name General fields */
   /* @{ */
@@ -536,26 +523,18 @@ struct buf_pool_stat_t {
 
 struct Page_id {
 
-  Page_id(Page_id&&) = default;
-  Page_id(const Page_id&) = default;
-  Page_id& operator=(Page_id&&) = default;
-  Page_id& operator=(const Page_id&) = default;
+  Page_id(Page_id &&) = default;
+  Page_id(const Page_id &) = default;
+  Page_id &operator=(Page_id &&) = default;
+  Page_id &operator=(const Page_id &) = default;
 
-  Page_id()
-    : m_space_id(NULL_SPACE_ID),
-      m_page_no(NULL_PAGE_NO) {}
+  Page_id() : m_space_id(NULL_SPACE_ID), m_page_no(NULL_PAGE_NO) {}
 
-  Page_id(space_id_t space_id, page_no_t page_no)
-    : m_space_id(space_id),
-      m_page_no(page_no) {}
+  Page_id(space_id_t space_id, page_no_t page_no) : m_space_id(space_id), m_page_no(page_no) {}
 
-  bool operator==(const Page_id& rhs) const {
-    return m_space_id == rhs.m_space_id && m_page_no == rhs.m_page_no;
-  }
+  bool operator==(const Page_id &rhs) const { return m_space_id == rhs.m_space_id && m_page_no == rhs.m_page_no; }
 
-  bool operator!=(const Page_id& rhs) const {
-    return !(*this == rhs);
-  }
+  bool operator!=(const Page_id &rhs) const { return !(*this == rhs); }
 
   std::string to_string() const {
     std::ostringstream oss{};
@@ -683,14 +662,14 @@ struct Buf_pool {
    * @param[in]       Get request
    * @return          true if success
    */
-  bool try_get_known_nowait(Request& request);
+  bool try_get_known_nowait(Request &request);
 
   /*** Given a tablespace id and page number tries to get that page. If the page is not in
   the buffer pool it is not loaded and nullptr is returned. Suitable for using when holding
   the kernel mutex.
   @param[in,out] req       Request 
   @return page or nullptr */
-  const buf_block_t *try_get_by_page_id(Request& req);
+  const buf_block_t *try_get_by_page_id(Request &req);
 
   /**
    * This is the general function used to get access to a database page.
@@ -700,7 +679,7 @@ struct Buf_pool {
    * 
    * @return          pointer to the block or nullptr
    */
-  buf_block_t *get(Request& req, buf_block_t* guess);
+  buf_block_t *get(Request &req, buf_block_t *guess);
 
   /**
    * Initializes a page to the buffer buf_pool. The page is usually not read
@@ -737,9 +716,7 @@ struct Buf_pool {
    *
    * @return The size of the buffer pool in bytes.
    */
-  [[nodiscard]] uint64_t get_curr_size() {
-    return m_curr_size * UNIV_PAGE_SIZE;
-  }
+  [[nodiscard]] uint64_t get_curr_size() { return m_curr_size * UNIV_PAGE_SIZE; }
 
   /**
    * Gets the smallest oldest_modification lsn for any page in the pool.
@@ -752,9 +729,7 @@ struct Buf_pool {
   /** 
   * @brief The size in pages of the area which the read-ahead algorithms read if invoked
   */
-  [[nodiscard]] ulint get_read_ahead_area() const {
-    return std::min(ulint(64), ut_2_power_up(m_curr_size / 32));
-  }
+  [[nodiscard]] ulint get_read_ahead_area() const { return std::min(ulint(64), ut_2_power_up(m_curr_size / 32)); }
 
   /** Allocates a buffer block.
   @return own: the allocated block, in state BUF_BLOCK_MEMORY */
@@ -857,7 +832,7 @@ struct Buf_pool {
    */
   void io_complete(buf_page_t *bpage);
 
-  #ifdef UNIV_DEBUG
+#ifdef UNIV_DEBUG
   /** Prints info of the buffer pool data structure. */
   void print();
 
@@ -926,7 +901,7 @@ struct Buf_pool {
 
   /** this is in the set state when there is no flush batch of the given type
    * running */
-  Cond_var* m_no_flush[BUF_FLUSH_N_TYPES];
+  Cond_var *m_no_flush[BUF_FLUSH_N_TYPES];
 
   /** A red-black tree is used exclusively during recovery to speed up
   insertions in the flush_list. This tree contains blocks in order of
@@ -965,15 +940,13 @@ struct Buf_pool {
   0 if LRU_old == nullptr; NOTE: LRU_old_len must be adjusted whenever LRU_old
   shrinks or grows! */
   ulint m_LRU_old_len;
+  
+  std::unique_ptr<Buf_LRU> m_LRU;
 
-  // FIXME: Convert to a std::unique_ptr
-  Buf_LRU *m_LRU;
-
-  // FIXME: Convert to a std::unique_ptr
-  Buf_flush *m_flusher;
+  std::unique_ptr<Buf_flush> m_flusher;
 
   /* @} */
-private:
+ private:
   /**
    * @brief Sets the time of the first access of a page and moves a page to the
    * start of the buffer pool LRU list if it is too old.
@@ -985,7 +958,7 @@ private:
    * @param access_time Access time of the page (in: bpage->m_access_time read under mutex protection, or 0 if unknown)
    */
   void set_accessed_make_young(buf_page_t *bpage, unsigned access_time);
-  
+
   /**
    * @brief Inits a page to the buffer buf_pool.
    * 
@@ -1068,7 +1041,7 @@ inline std::optional<buf_page_rbt_itr_t> rbt_first(buf_page_rbt_t *tree) {
   if (tree->empty()) {
     return {};
   } else {
-   return tree->begin();
+    return tree->begin();
   }
 }
 
@@ -1092,4 +1065,3 @@ inline std::optional<buf_page_rbt_itr_t> rbt_next(buf_page_rbt_t *tree, buf_page
     return itr;
   }
 }
-

@@ -104,7 +104,7 @@ void Buf_LRU::invalidate_tablespace(space_id_t id) {
           currently reading it in, or flushing the modifications to the file */
 
           all_freed = false;
-	  break;
+          break;
 
         } else {
 
@@ -115,11 +115,11 @@ void Buf_LRU::invalidate_tablespace(space_id_t id) {
           /* Remove from the LRU list. */
           block_remove_hashed_page(bpage);
 
-	  {
+          {
             /* We can't cast it using buf_page_get_block() because of the checks there. */
-	    auto block{reinterpret_cast<buf_block_t*>(bpage)};
+            auto block{reinterpret_cast<buf_block_t *>(bpage)};
             block_free_hashed_page(block);
-           }
+          }
         }
 
         mutex_exit(block_mutex);
@@ -141,8 +141,7 @@ bool Buf_LRU::free_from_common_LRU_list(ulint n_iterations) {
 
   auto distance = 100 + (n_iterations * srv_buf_pool->m_curr_size) / 10;
 
-  for (auto bpage = UT_LIST_GET_LAST(srv_buf_pool->m_LRU_list);
-       likely(bpage != nullptr) && likely(distance > 0);
+  for (auto bpage = UT_LIST_GET_LAST(srv_buf_pool->m_LRU_list); likely(bpage != nullptr) && likely(distance > 0);
        bpage = UT_LIST_GET_PREV(m_LRU_list, bpage), distance--) {
 
     auto block_mutex = buf_page_get_mutex(bpage);
@@ -216,8 +215,7 @@ bool Buf_LRU::buf_pool_running_out() {
   buf_pool_mutex_enter();
 
   auto ret = !recv_recovery_on &&
-	     UT_LIST_GET_LEN(srv_buf_pool->m_free_list) + UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) <
-	     srv_buf_pool->m_curr_size / 4;
+             UT_LIST_GET_LEN(srv_buf_pool->m_free_list) + UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) < srv_buf_pool->m_curr_size / 4;
 
   buf_pool_mutex_exit();
 
@@ -260,7 +258,8 @@ buf_block_t *Buf_LRU::get_free_block() {
 loop:
   buf_pool_mutex_enter();
 
-  if (!recv_recovery_on && UT_LIST_GET_LEN(srv_buf_pool->m_free_list) + UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) < srv_buf_pool->m_curr_size / 20) {
+  if (!recv_recovery_on &&
+      UT_LIST_GET_LEN(srv_buf_pool->m_free_list) + UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) < srv_buf_pool->m_curr_size / 20) {
 
     ut_print_timestamp(ib_stream);
 
@@ -275,7 +274,8 @@ loop:
 
     ut_error;
 
-  } else if (!recv_recovery_on && (UT_LIST_GET_LEN(srv_buf_pool->m_free_list) + UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list)) < srv_buf_pool->m_curr_size / 3) {
+  } else if (!recv_recovery_on && (UT_LIST_GET_LEN(srv_buf_pool->m_free_list) + UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list)) <
+                                    srv_buf_pool->m_curr_size / 3) {
 
     if (!m_switched_on_monitor) {
 
@@ -458,9 +458,7 @@ void Buf_LRU::old_init() {
   the adjust function to move the LRU_old pointer to the right
   position */
 
-  for (auto bpage = UT_LIST_GET_LAST(srv_buf_pool->m_LRU_list);
-       bpage != nullptr;
-       bpage = UT_LIST_GET_PREV(m_LRU_list, bpage)) {
+  for (auto bpage = UT_LIST_GET_LAST(srv_buf_pool->m_LRU_list); bpage != nullptr; bpage = UT_LIST_GET_PREV(m_LRU_list, bpage)) {
 
     ut_ad(bpage->m_in_LRU_list);
     ut_ad(bpage->in_file());
@@ -744,10 +742,7 @@ buf_page_state Buf_LRU::block_remove_hashed_page(buf_page_t *bpage) {
   auto hashed_bpage = srv_buf_pool->hash_get_page(bpage->m_space, bpage->m_page_no);
 
   if (unlikely(bpage != hashed_bpage)) {
-    ib_logger(
-      ib_stream,
-      "Error: page %lu %lu not found in the hash table ", (ulong)bpage->m_space, (ulong)bpage->m_page_no
-    );
+    ib_logger(ib_stream, "Error: page %lu %lu not found in the hash table ", (ulong)bpage->m_space, (ulong)bpage->m_page_no);
     if (hashed_bpage) {
       ib_logger(
         ib_stream,
@@ -821,13 +816,12 @@ ulint Buf_LRU::old_ratio_update(ulint old_pct, bool adjust) {
   } else if (ratio > OLD_RATIO_MAX) {
 
     ratio = OLD_RATIO_MAX;
-
   }
 
   if (adjust) {
     buf_pool_mutex_enter();
 
-    auto buf_LRU = srv_buf_pool->m_LRU;
+    auto buf_LRU = srv_buf_pool->m_LRU.get();
 
     if (ratio != buf_LRU->m_old_ratio) {
 
@@ -895,9 +889,7 @@ bool Buf_LRU::validate() {
 
   ulint old_len{};
 
-  for (auto bpage = UT_LIST_GET_FIRST(srv_buf_pool->m_LRU_list);
-       bpage != nullptr;
-       bpage = UT_LIST_GET_NEXT(m_LRU_list, bpage)) {
+  for (auto bpage = UT_LIST_GET_FIRST(srv_buf_pool->m_LRU_list); bpage != nullptr; bpage = UT_LIST_GET_NEXT(m_LRU_list, bpage)) {
 
     switch (bpage->get_state()) {
       default:
@@ -929,12 +921,12 @@ bool Buf_LRU::validate() {
 
   ut_a(srv_buf_pool->m_LRU_old_len == old_len);
 
-  auto check = [](const buf_page_t *page) { ut_ad(page->m_in_free_list); };
+  auto check = [](const buf_page_t *page) {
+    ut_ad(page->m_in_free_list);
+  };
   ut_list_validate(srv_buf_pool->m_free_list, check);
 
-  for (auto bpage = UT_LIST_GET_FIRST(srv_buf_pool->m_free_list);
-       bpage != nullptr;
-       bpage = UT_LIST_GET_NEXT(m_list, bpage)) {
+  for (auto bpage = UT_LIST_GET_FIRST(srv_buf_pool->m_free_list); bpage != nullptr; bpage = UT_LIST_GET_NEXT(m_list, bpage)) {
 
     ut_a(bpage->get_state() == BUF_BLOCK_NOT_USED);
   }
@@ -947,9 +939,7 @@ bool Buf_LRU::validate() {
 void Buf_LRU::print() {
   buf_pool_mutex_enter();
 
-  for (auto bpage = UT_LIST_GET_FIRST(srv_buf_pool->m_LRU_list);
-       bpage != nullptr;
-       bpage = UT_LIST_GET_NEXT(m_LRU_list, bpage)) {
+  for (auto bpage = UT_LIST_GET_FIRST(srv_buf_pool->m_LRU_list); bpage != nullptr; bpage = UT_LIST_GET_NEXT(m_LRU_list, bpage)) {
 
     ib_logger(ib_stream, "BLOCK space %lu page %lu ", (ulong)bpage->get_space(), (ulong)bpage->get_page_no());
 
@@ -974,19 +964,15 @@ void Buf_LRU::print() {
       const byte *frame;
 
       case BUF_BLOCK_FILE_PAGE:
-        frame = reinterpret_cast<buf_block_t*>(bpage)->get_frame();
+        frame = reinterpret_cast<buf_block_t *>(bpage)->get_frame();
 
-        ib_logger(
-          ib_stream,
-          "\ntype %lu index id %lu\n", (ulong)fil_page_get_type(frame), (ulong)btr_page_get_index_id(frame)
-        );
+        ib_logger(ib_stream, "\ntype %lu index id %lu\n", (ulong)fil_page_get_type(frame), (ulong)btr_page_get_index_id(frame));
         break;
 
       default:
         ib_logger(ib_stream, "\n!state %lu!\n", (ulong)bpage->get_state());
         break;
     }
-
   }
 
   buf_pool_mutex_exit();
