@@ -703,9 +703,6 @@ Buf_pool::~Buf_pool() {
 
   m_n_chunks = 0;
 
-  delete m_LRU;
-  delete m_flusher;
-
   mem_free(m_chunks);
 }
 
