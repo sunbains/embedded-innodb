@@ -23,10 +23,6 @@ Created 2/6/1997 Heikki Tuuri
 
 #include "row0vers.h"
 
-#ifdef UNIV_NONINL
-#include "row0vers.ic"
-#endif
-
 #include "btr0btr.h"
 #include "dict0boot.h"
 #include "dict0dict.h"

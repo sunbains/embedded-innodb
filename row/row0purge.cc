@@ -23,10 +23,6 @@ Created 3/14/1997 Heikki Tuuri
 
 #include "row0purge.h"
 
-#ifdef UNIV_NONINL
-#include "row0purge.ic"
-#endif
-
 #include "fsp0fsp.h"
 #include "log0log.h"
 #include "mach0data.h"

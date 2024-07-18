@@ -1,4 +1,5 @@
-/** Copyright (c) 2008 Innobase Oy. All rights reserved.
+/***********************************************************************
+Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify

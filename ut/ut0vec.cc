@@ -23,10 +23,6 @@ Created 4/6/2006 Osku Salerma
 
 #include "ut0vec.h"
 
-#ifdef UNIV_NONINL
-
-#include "ut0vec.ic"
-#endif
 #include <string.h>
 
 ib_vector_t *ib_vector_create(mem_heap_t *heap, ulint size) {

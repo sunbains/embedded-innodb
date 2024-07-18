@@ -23,10 +23,6 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "trx0purge.h"
 
-#ifdef UNIV_NONINL
-#include "trx0purge.ic"
-#endif
-
 #include "fsp0fsp.h"
 #include "fut0fut.h"
 #include "mach0data.h"
