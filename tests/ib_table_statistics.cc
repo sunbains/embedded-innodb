@@ -67,11 +67,7 @@ static ib_err_t create_table_t2(const char *dbname, /*!< in: database name */
   ib_tbl_fmt_t tbl_fmt = IB_TBL_COMPACT;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
 
   err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
@@ -145,11 +141,7 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
   ib_err_t err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
   err = ib_cursor_open_table(table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 
@@ -161,7 +153,7 @@ static ib_err_t insert_rows(ib_crsr_t crsr, int start, int count) {
   int i;
   ib_err_t err;
   ib_tpl_t tpl = nullptr;
-  char *ptr = malloc(8192);
+  char *ptr = reinterpret_cast<char*>(malloc(8192));
 
   tpl = ib_clust_read_tuple_create(crsr);
   assert(tpl != nullptr);

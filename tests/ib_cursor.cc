@@ -65,11 +65,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_idx_sch_t ib_idx_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
 
   /* Pass a table page size of 0, ie., use default page size. */
   err = ib_table_schema_create(table_name, &ib_tbl_sch, IB_TBL_COMPACT, 0);
@@ -118,11 +114,7 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
   ib_err_t err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
 
   err = ib_cursor_open_table(table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);

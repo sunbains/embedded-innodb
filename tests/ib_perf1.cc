@@ -625,7 +625,6 @@ static void print_data(ib_op_time_t *ib_op_time, const char *title) {
          (int)elapsed_time[0], (int)elapsed_time[ib_op_time->n_elems - 1]);
 }
 
-#ifndef __WIN__
 /** Set the runtime global options. */
 static void set_options(int argc, char *argv[]) {
   int opt;
@@ -691,7 +690,6 @@ static void set_options(int argc, char *argv[]) {
 
   free(longopts);
 }
-#endif /* __WIN__ */
 
 /** Print the statistics. */
 static void print_stats(void) {
@@ -711,9 +709,7 @@ int main(int argc, char *argv[]) {
 
   test_configure();
 
-#ifndef __WIN__
   set_options(argc, argv);
-#endif /* __WIN__ */
 
   err = ib_cfg_set_int("open_files", 8192);
   assert(err == DB_SUCCESS);

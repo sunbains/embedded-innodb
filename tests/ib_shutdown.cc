@@ -20,12 +20,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef WIN32
-#include <windows.h>
-#else
-#include <unistd.h> /* For sleep() */
-#include <getopt.h> /* For getopt_long() */
-#endif
+#include <unistd.h>
+#include <getopt.h>
 
 #include "test0aux.h"
 
@@ -33,7 +29,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <valgrind/memcheck.h>
 #endif
 
-#ifndef WIN32
 static int use_sys_malloc = 0;
 
 /** Get the runtime options. */
@@ -54,14 +49,11 @@ static void get_options(int argc, char *argv[]) {
     }
   }
 }
-#endif
 
 int main(int argc, char *argv[]) {
   int i;
 
-#ifndef WIN32
   get_options(argc, argv);
-#endif
   for (i = 0; i < 10; ++i) {
     ib_ulint_t err;
 
@@ -72,9 +64,6 @@ int main(int argc, char *argv[]) {
 
     test_configure();
 
-#ifdef WIN32
-    Sleep(2);
-#else
     if (use_sys_malloc) {
       printf("Using system malloc\n");
       err = ib_cfg_set_bool_on("use_sys_malloc");
@@ -84,7 +73,6 @@ int main(int argc, char *argv[]) {
     assert(err == DB_SUCCESS);
 
     sleep(2);
-#endif
 
     err = ib_shutdown(IB_SHUTDOWN_NORMAL);
     assert(err == DB_SUCCESS);

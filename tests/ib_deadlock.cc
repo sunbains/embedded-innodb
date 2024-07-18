@@ -130,11 +130,7 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
   ib_err_t err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
   err = ib_cursor_open_table(table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 
@@ -295,7 +291,6 @@ static void *worker_thread(void *arg) {
   pthread_exit(0);
 }
 
-#ifndef __WIN__
 /** Set the runtime global options. */
 static void set_options(int argc, char *argv[]) {
   int opt;
@@ -360,7 +355,6 @@ static void set_options(int argc, char *argv[]) {
 
   free(longopts);
 }
-#endif /* __WIN__ */
 
 /** Create the tables required for the test
 @return DB_SUCCESS if all went well.*/
@@ -400,9 +394,7 @@ int main(int argc, char *argv[]) {
 
   test_configure();
 
-#ifndef __WIN__
   set_options(argc, argv);
-#endif /* __WIN__ */
 
   err = ib_cfg_set_int("open_files", 8192);
   assert(err == DB_SUCCESS);

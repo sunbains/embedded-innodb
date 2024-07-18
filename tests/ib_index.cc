@@ -160,11 +160,7 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
   ib_err_t err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
   err = ib_cursor_open_table(table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
 

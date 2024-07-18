@@ -75,11 +75,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 
   assert(size == 8 || size == 16 || size == 32 || size == 64);
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s%d", dbname, name, size);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, size);
-#endif
 
   /* Pass a table page size of 0, ie., use default page size. */
   err = ib_table_schema_create(table_name, &ib_tbl_sch, IB_TBL_COMPACT, 0);
@@ -126,11 +122,7 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 
   assert(size == 8 || size == 16 || size == 32 || size == 64);
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s%d", dbname, name, size);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, size);
-#endif
 
   err = ib_cursor_open_table(table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
@@ -357,11 +349,7 @@ static ib_err_t drop_table_n(const char *dbname, /*!< in: database name */
   ib_trx_t ib_trx;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s%d", dbname, name, size);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s%d", dbname, name, size);
-#endif
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
   assert(ib_trx != nullptr);
 
@@ -387,11 +375,7 @@ int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-#ifdef __WIN__
-  srand((int)time(NULL));
-#else
   srandom(time(nullptr));
-#endif
 
   err = ib_init();
   assert(err == DB_SUCCESS);

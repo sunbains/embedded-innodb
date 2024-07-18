@@ -62,11 +62,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_tbl_sch_t ib_tbl_sch = nullptr;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
 
   /* Pass a table page size of 0, ie., use default page size. */
   err = ib_table_schema_create(table_name, &ib_tbl_sch, IB_TBL_COMPACT, 0);
@@ -117,11 +113,7 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
   ib_err_t err = DB_SUCCESS;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
 
   err = ib_cursor_open_table(table_name, ib_trx, crsr);
   assert(err == DB_SUCCESS);
@@ -188,11 +180,7 @@ static ib_err_t create_sec_index(const char *table_name, /*!< in: table name */
   err = ib_schema_lock_exclusive(ib_trx);
   assert(err == DB_SUCCESS);
 
-#ifdef __WIN__
-  sprintf(index_name, "%s_%s", table_name, col_name);
-#else
   snprintf(index_name, sizeof(index_name), "%s_%s", table_name, col_name);
-#endif
   err = ib_index_schema_create(ib_trx, index_name, table_name, &ib_idx_sch);
 
   assert(err == DB_SUCCESS);
@@ -227,11 +215,7 @@ static ib_err_t create_sec_index_1(const char *dbname, /*!< in: database name */
   ib_err_t err;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
 
   err = create_sec_index(table_name, "c1", 0);
 
@@ -272,38 +256,22 @@ static ib_err_t open_sec_index_1(const char *dbname, /*!< in: database name */
   char index_name[IB_MAX_TABLE_NAME_LEN];
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%.64s/%.64s", dbname, name);
-#endif
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
 
   err = ib_cursor_open_table(table_name, ib_trx, &crsr);
   assert(err == DB_SUCCESS);
 
-#ifdef __WIN__
-  sprintf(index_name, "%s_%s", table_name, "c1");
-#else
   snprintf(index_name, sizeof(index_name), "%.64s_%.64s", table_name, "c1");
-#endif
   err = open_sec_index(crsr, index_name);
   assert(err == DB_SUCCESS);
 
-#ifdef __WIN__
-  sprintf(index_name, "%s_%s", table_name, "c2");
-#else
   snprintf(index_name, sizeof(index_name), "%.64s_%.64s", table_name, "c2");
-#endif
   err = open_sec_index(crsr, index_name);
   assert(err == DB_SUCCESS);
 
-#ifdef __WIN__
-  sprintf(index_name, "%s_%s", table_name, "c3");
-#else
   snprintf(index_name, sizeof(index_name), "%.64s_%.64s", table_name, "c3");
-#endif
   err = open_sec_index(crsr, index_name);
   assert(err == DB_SUCCESS);
 
@@ -331,23 +299,15 @@ test_create_temp_index(const char *dbname,
   char index_name[IB_MAX_TABLE_NAME_LEN];
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
-#ifdef __WIN__
-  sprintf(table_name, "%s/%s", dbname, name);
-#else
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
-#endif
 
   ib_trx = ib_trx_begin(IB_TRX_REPEATABLE_READ);
 
   err = ib_schema_lock_exclusive(ib_trx);
   assert(err == DB_SUCCESS);
 
-#ifdef __WIN__
-  sprintf(index_name, "%c%s_%s", TEMP_INDEX_PREFIX, table_name, col_name);
-#else
   snprintf(index_name, sizeof(index_name), "%c%.64s_%.64s", TEMP_INDEX_PREFIX,
            table_name, col_name);
-#endif
   err = ib_index_schema_create(ib_trx, index_name, table_name, &ib_idx_sch);
 
   assert(err == DB_INVALID_INPUT);
