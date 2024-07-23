@@ -698,7 +698,7 @@ void log_io_complete(log_group_t *group) {
 
     if (srv_unix_file_flush_method != SRV_UNIX_O_DSYNC && srv_unix_file_flush_method != SRV_UNIX_NOSYNC) {
 
-      fil_flush(group->space_id);
+      srv_fil->flush(group->space_id);
     }
 
     log_io_complete_checkpoint();
@@ -711,7 +711,7 @@ void log_io_complete(log_group_t *group) {
 
   if (srv_unix_file_flush_method != SRV_UNIX_O_DSYNC && srv_unix_file_flush_method != SRV_UNIX_NOSYNC && srv_flush_log_at_trx_commit != 2) {
 
-    fil_flush(group->space_id);
+    srv_fil->flush(group->space_id);
   }
 
   log_acquire();
@@ -756,7 +756,7 @@ static void log_group_file_header_flush(log_group_t *group, ulint nth_file, uint
 
     srv_os_log_pending_writes++;
 
-    fil_io(
+    srv_fil->io(
       IO_request::Sync_log_write,
       false,
       group->space_id,
@@ -817,7 +817,7 @@ void log_group_write_buf(log_group_t *group, byte *buf, ulint len, uint64_t star
       ++log_sys->n_log_ios;
       ++srv_os_log_pending_writes;
 
-      fil_io(
+      srv_fil->io(
         IO_request::Sync_log_write,
         false,
         group->space_id,
@@ -984,7 +984,7 @@ void log_write_up_to(uint64_t lsn, ulint wait, bool flush_to_disk) {
       log_sys->flushed_to_disk_lsn = log_sys->write_lsn;
     } else if (flush_to_disk) {
       group = UT_LIST_GET_FIRST(log_sys->log_groups);
-      fil_flush(group->space_id);
+      srv_fil->flush(group->space_id);
       log_sys->flushed_to_disk_lsn = log_sys->write_lsn;
     }
 
@@ -1176,7 +1176,7 @@ static void log_group_checkpoint(log_group_t *group) {
     log_sys->n_log_ios++;
 
     /** Send the log file write request */
-    fil_io(
+    srv_fil->io(
       IO_request::Async_log_write,
       false,
       group->space_id,
@@ -1230,7 +1230,7 @@ void log_group_read_checkpoint_info(log_group_t *group, ulint field) {
 
   log_sys->n_log_ios++;
 
-  fil_io(
+  srv_fil->io(
     IO_request::Sync_log_read,
     false,
     group->space_id,
@@ -1260,7 +1260,7 @@ bool log_checkpoint(bool sync, bool write_always) {
   }
 
   if (srv_unix_file_flush_method != SRV_UNIX_NOSYNC) {
-    fil_flush_file_spaces(FIL_TABLESPACE);
+    srv_fil->flush_file_spaces(FIL_TABLESPACE);
   }
 
   log_acquire();
@@ -1423,7 +1423,7 @@ void log_group_read_log_seg(ulint type, byte *buf, log_group_t *group, uint64_t 
 
     log_sys->n_log_ios++;
 
-    fil_io(
+    srv_fil->io(
       type == LOG_RECOVER ? IO_request::Sync_log_read : IO_request::Async_log_read,
       false,
       group->space_id,
@@ -1466,7 +1466,7 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
   attempt to close all open files and return. */
   if (log_sys == nullptr || UT_LIST_GET_LEN(log_sys->log_groups) == 0) {
 
-    fil_close_all_files();
+    srv_fil->close_all_files();
 
     return;
   }
@@ -1578,12 +1578,12 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
 
     mutex_exit(&kernel_mutex);
 
-    fil_flush_file_spaces(FIL_TABLESPACE);
-    fil_flush_file_spaces(FIL_LOG);
+    srv_fil->flush_file_spaces(FIL_TABLESPACE);
+    srv_fil->flush_file_spaces(FIL_LOG);
 
-    /* The call fil_write_flushed_lsn_to_data_files() will pass the buffer
+    /* The call srv_fil->write_flushed_lsn_to_data_files() will pass the buffer
     pool: therefore it is essential that the buffer pool has been
-    completely flushed to disk! (We do not call fil_write... if the
+    completely flushed to disk! (We do not call srv_fil->write... if the
     'very fast' shutdown is enabled.) */
 
     if (srv_buf_pool->all_freed()) {
@@ -1608,11 +1608,11 @@ void logs_empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t
 
   srv_shutdown_lsn = lsn;
 
-  fil_write_flushed_lsn_to_data_files(lsn);
+  srv_fil->write_flushed_lsn_to_data_files(lsn);
 
-  fil_flush_file_spaces(FIL_TABLESPACE);
+  srv_fil->flush_file_spaces(FIL_TABLESPACE);
 
-  fil_close_all_files();
+  srv_fil->close_all_files();
 
   /* Make some checks that the server really is quiet */
   ut_a(srv_n_threads_active[SRV_MASTER] == 0);

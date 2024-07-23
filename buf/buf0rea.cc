@@ -101,7 +101,7 @@ static db_err buf_read_page(
 
   ut_a(bpage->get_state() == BUF_BLOCK_FILE_PAGE);
 
-  err = fil_io(
+  err = srv_fil->io(
     io_request,
     batch,
     space,
@@ -114,7 +114,7 @@ static db_err buf_read_page(
   ut_a(err == DB_SUCCESS);
 
   if (io_request == IO_request::Sync_read) {
-    /* The i/o is already completed when we arrive from fil_read */
+    /* The i/o is already completed when we arrive from srv_fil->read */
     srv_buf_pool->io_complete(bpage);
   } else {
     ut_a(io_request == IO_request::Async_read);
@@ -124,7 +124,7 @@ static db_err buf_read_page(
 }
 
 bool buf_read_page(ulint space, ulint offset) {
-  auto tablespace_version = fil_space_get_version(space);
+  auto tablespace_version = srv_fil->space_get_version(space);
   auto err = buf_read_page(IO_request::Sync_read, false, space, offset, tablespace_version);
 
   if (err == DB_SUCCESS) {
@@ -188,11 +188,11 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   below: if DISCARD + IMPORT changes the actual .ibd file meanwhile, we
   do not try to read outside the bounds of the tablespace! */
 
-  auto tablespace_version = fil_space_get_version(space);
+  auto tablespace_version = srv_fil->space_get_version(space);
 
   buf_pool_mutex_enter();
 
-  if (high > fil_space_get_size(space)) {
+  if (high > srv_fil->space_get_size(space)) {
     buf_pool_mutex_exit();
     /* The area is not whole, return */
 
@@ -280,8 +280,8 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   prevent deadlocks. Even if we read values which are nonsense, the
   algorithm will work. */
 
-  pred_offset = fil_page_get_prev(frame);
-  succ_offset = fil_page_get_next(frame);
+  pred_offset = srv_fil->page_get_prev(frame);
+  succ_offset = srv_fil->page_get_next(frame);
 
   buf_pool_mutex_exit();
 
@@ -308,7 +308,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
 
     return 0;
 
-  } else if (high > fil_space_get_size(space)) {
+  } else if (high > srv_fil->space_get_size(space)) {
 
     /* The area is not whole, return */
 
@@ -352,13 +352,13 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
 }
 
 void buf_read_recv_pages(bool sync, space_id_t space, const page_no_t *page_nos, ulint n_stored) {
-  if (fil_space_get_size(space) == ULINT_UNDEFINED) {
+  if (srv_fil->space_get_size(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
     return;
   }
 
-  auto tablespace_version = fil_space_get_version(space);
+  auto tablespace_version = srv_fil->space_get_version(space);
 
   for (ulint i = 0; i < n_stored; i++) {
     ulint count{};

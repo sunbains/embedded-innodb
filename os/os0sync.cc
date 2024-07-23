@@ -185,7 +185,7 @@ void Cond_var::wait(int64_t reset_sig_count) {
 
   m_cond_var.wait(lk, [this, old_sig_count] {
     if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
-      log_err("srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS");
+      log_info("srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS");
       os_thread_exit(nullptr);
     }
     return m_is_set || m_signal_count != old_sig_count; }

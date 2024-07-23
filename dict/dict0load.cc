@@ -305,7 +305,7 @@ loop:
 
     /* printf("Biggest space id in data dictionary %lu\n",
     max_space_id); */
-    fil_set_max_space_id_if_bigger(max_space_id);
+    srv_fil->set_max_space_id_if_bigger(max_space_id);
 
     mutex_exit(&(dict_sys->mutex));
 
@@ -378,12 +378,12 @@ loop:
         is_temp = false;
       }
 
-      fil_space_for_table_exists_in_mem(space_id, name, is_temp, true, !is_temp);
+      srv_fil->space_for_table_exists_in_mem(space_id, name, is_temp, true, !is_temp);
     } else {
       /* It is a normal database startup: create the space
       object and check that the .ibd file exists. */
 
-      fil_open_single_table_tablespace(false, space_id, flags, name);
+      srv_fil->open_single_table_tablespace(false, space_id, flags, name);
     }
 
     mem_free(name);
@@ -881,7 +881,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
   /* See if the tablespace is available. */
   if (space == 0) {
     /* The system tablespace is always available. */
-  } else if (!fil_space_for_table_exists_in_mem(space, name, (flags >> DICT_TF2_SHIFT) & DICT_TF2_TEMPORARY, false, false)) {
+  } else if (!srv_fil->space_for_table_exists_in_mem(space, name, (flags >> DICT_TF2_SHIFT) & DICT_TF2_TEMPORARY, false, false)) {
 
     if ((flags >> DICT_TF2_SHIFT) & DICT_TF2_TEMPORARY) {
       /* Do not bother to retry opening temporary tables. */
@@ -898,7 +898,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
         (ulong)space
       );
       /* Try to open the tablespace */
-      if (!fil_open_single_table_tablespace(true, space, flags & ~(~0UL << DICT_TF_BITS), name)) {
+      if (!srv_fil->open_single_table_tablespace(true, space, flags & ~(~0UL << DICT_TF_BITS), name)) {
         /* We failed to find a sensible
         tablespace file */
 

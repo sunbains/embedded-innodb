@@ -517,47 +517,19 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
 
     // FIXME: srv_force_recovery should be passed in as an arg
     if (dict_load_table(srv_force_recovery, name) != nullptr) {
-      ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  Error: not able to remove table ");
-      ut_print_name(ib_stream, trx, true, name);
-      ib_logger(ib_stream, " from the dictionary cache!\n");
+      log_err(std::format("Not able to remove table {} from the dictionary cache", name));
       err = DB_ERROR;
     }
 
     /* Do not drop possible .ibd tablespace if something went
     wrong: we do not want to delete valuable data of the user */
 
-    if (err == DB_SUCCESS && space_id > 0) {
-      if (!fil_space_for_table_exists_in_mem(space_id, name_or_path, is_path, false, true)) {
+    if (err == DB_SUCCESS && space_id != SYS_TABLESPACE) {
+      if (!srv_fil->space_for_table_exists_in_mem(space_id, name_or_path, is_path, false, true)) {
         err = DB_SUCCESS;
-
-        ib_logger(
-          ib_stream,
-          "We removed now the InnoDB"
-          " internal data dictionary entry\n"
-          "of table "
-        );
-        ut_print_name(ib_stream, trx, true, name);
-        ib_logger(ib_stream, ".\n");
-      } else if (!fil_delete_tablespace(space_id)) {
-        ib_logger(
-          ib_stream,
-          "We removed now the InnoDB"
-          " internal data dictionary entry\n"
-          "of table "
-        );
-        ut_print_name(ib_stream, trx, true, name);
-        ib_logger(ib_stream, ".\n");
-
-        ut_print_timestamp(ib_stream);
-        ib_logger(
-          ib_stream,
-          "  Error: not able to"
-          " delete tablespace %lu of table ",
-          (ulong)space_id
-        );
-        ut_print_name(ib_stream, trx, true, name);
-        ib_logger(ib_stream, "!\n");
+        log_info(std::format("Removed {} from the internal data dictionary", name));
+      } else if (!srv_fil->delete_tablespace(space_id)) {
+        log_err(std::format("Unable to delete tablespace {} of table ", space_id, name));
         err = DB_ERROR;
       }
     }
@@ -910,16 +882,16 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
 
   if (table->space && !table->dir_path_of_temp_table) {
     /* Discard and create the single-table tablespace. */
-    ulint space = table->space;
-    ulint flags = fil_space_get_flags(space);
+    auto space = table->space;
+    ulint flags = srv_fil->space_get_flags(space);
 
-    if (flags != ULINT_UNDEFINED && fil_discard_tablespace(space)) {
+    if (flags != ULINT_UNDEFINED && srv_fil->discard_tablespace(space)) {
 
       dict_index_t *index;
 
       space = 0;
 
-      if (fil_create_new_single_table_tablespace(&space, table->name, false, flags, FIL_IBD_FILE_INITIAL_SIZE) != DB_SUCCESS) {
+      if (srv_fil->create_new_single_table_tablespace(&space, table->name, false, flags, FIL_IBD_FILE_INITIAL_SIZE) != DB_SUCCESS) {
         ut_print_timestamp(ib_stream);
         ib_logger(
           ib_stream,

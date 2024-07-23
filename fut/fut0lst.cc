@@ -168,7 +168,7 @@ void flst_insert_after(
   flst_write_addr(node2 + FLST_PREV, node1_addr, mtr);
   flst_write_addr(node2 + FLST_NEXT, node3_addr, mtr);
 
-  if (!fil_addr_is_null(node3_addr)) {
+  if (!srv_fil->addr_is_null(node3_addr)) {
     /* Update prev field of node3 */
     node3 = fut_get_ptr(space, node3_addr, RW_X_LATCH, mtr);
     flst_write_addr(node3 + FLST_PREV, node2_addr, mtr);
@@ -218,7 +218,7 @@ void flst_insert_before(
   flst_write_addr(node2 + FLST_PREV, node1_addr, mtr);
   flst_write_addr(node2 + FLST_NEXT, node3_addr, mtr);
 
-  if (!fil_addr_is_null(node1_addr)) {
+  if (!srv_fil->addr_is_null(node1_addr)) {
     /* Update next field of node1 */
     node1 = fut_get_ptr(space, node1_addr, RW_X_LATCH, mtr);
     flst_write_addr(node1 + FLST_NEXT, node2_addr, mtr);
@@ -260,7 +260,7 @@ void flst_remove(
   node1_addr = flst_get_prev_addr(node2, mtr);
   node3_addr = flst_get_next_addr(node2, mtr);
 
-  if (!fil_addr_is_null(node1_addr)) {
+  if (!srv_fil->addr_is_null(node1_addr)) {
 
     /* Update next field of node1 */
 
@@ -279,7 +279,7 @@ void flst_remove(
     flst_write_addr(base + FLST_FIRST, node3_addr, mtr);
   }
 
-  if (!fil_addr_is_null(node3_addr)) {
+  if (!srv_fil->addr_is_null(node3_addr)) {
     /* Update prev field of node3 */
 
     if (node3_addr.m_page_no == node2_addr.m_page_no) {
@@ -331,7 +331,7 @@ void flst_cut_end(
 
   node1_addr = flst_get_prev_addr(node2, mtr);
 
-  if (!fil_addr_is_null(node1_addr)) {
+  if (!srv_fil->addr_is_null(node1_addr)) {
 
     /* Update next field of node1 */
 
@@ -367,7 +367,7 @@ void flst_truncate_end(flst_base_node_t *base, flst_node_t *node2, ulint n_nodes
   ut_ad(mtr_memo_contains_page(mtr, node2, MTR_MEMO_PAGE_X_FIX));
   if (n_nodes == 0) {
 
-    ut_ad(fil_addr_is_null(flst_get_next_addr(node2, mtr)));
+    ut_ad(srv_fil->addr_is_null(flst_get_next_addr(node2, mtr)));
 
     return;
   }
@@ -428,7 +428,7 @@ bool flst_validate(
                        becoming full */
   }
 
-  ut_a(fil_addr_is_null(node_addr));
+  ut_a(srv_fil->addr_is_null(node_addr));
 
   node_addr = flst_get_last(base, mtr1);
 
@@ -442,7 +442,7 @@ bool flst_validate(
                        becoming full */
   }
 
-  ut_a(fil_addr_is_null(node_addr));
+  ut_a(srv_fil->addr_is_null(node_addr));
 
   return (true);
 }

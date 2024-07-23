@@ -611,7 +611,7 @@ static byte *recv_parse_or_apply_log_rec_body(
 
   if (block) {
     page = block->m_frame;
-    ut_d(page_type = fil_page_get_type(page));
+    ut_d(page_type = srv_fil->page_get_type(page));
   } else {
     page = nullptr;
     ut_d(page_type = FIL_PAGE_TYPE_ALLOCATED);
@@ -790,7 +790,7 @@ static byte *recv_parse_or_apply_log_rec_body(
     case MLOG_FILE_RENAME:
     case MLOG_FILE_DELETE:
     case MLOG_FILE_CREATE2:
-      ptr = fil_op_log_parse_or_replay(ptr, end_ptr, type, 0, 0);
+      ptr = srv_fil->op_log_parse_or_replay(ptr, end_ptr, type, 0, 0);
       break;
     default:
       ptr = nullptr;
@@ -866,7 +866,7 @@ static void recv_add_to_hash_table(
   recv_data_t **prev_field;
   recv_addr_t *recv_addr;
 
-  if (fil_tablespace_deleted_or_being_deleted_in_mem(space, -1)) {
+  if (srv_fil->tablespace_deleted_or_being_deleted_in_mem(space, -1)) {
     /* The tablespace does not exist any more: do not store the
     log record */
 
@@ -1967,7 +1967,7 @@ static void recv_start_crash_recovery(ib_recovery_t recovery) /*!< in: recovery 
   );
 
   /* Recursively scan to a depth of 2. */
-  fil_load_single_table_tablespaces(srv_data_home, recovery, 2);
+  srv_fil->load_single_table_tablespaces(srv_data_home, recovery, 2);
 
   /* If we are using the doublewrite method, we will
   check if there are half-written pages in data files,
@@ -1995,7 +1995,7 @@ static void recv_recover_from_ibbackup(log_group_t *max_cp_group) /*!< in/out: l
   /* Read the first log file header to print a note if this is
   a recovery from a restored InnoDB Hot Backup */
 
-  fil_io(IO_request::Sync_log_read,
+  srv_fil->io(IO_request::Sync_log_read,
          false,
          max_cp_group->space_id,
          0,
@@ -2026,7 +2026,7 @@ static void recv_recover_from_ibbackup(log_group_t *max_cp_group) /*!< in/out: l
     memset(log_hdr_buf + LOG_FILE_WAS_CREATED_BY_HOT_BACKUP, ' ', 4);
 
     /* Write to the log file to wipe over the label */
-    fil_io(IO_request::Sync_log_write,
+    srv_fil->io(IO_request::Sync_log_write,
            false,
            max_cp_group->space_id,
            0,

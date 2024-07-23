@@ -466,9 +466,9 @@ struct export_var_struct {
   ulint innodb_log_write_requests;             /*!< srv_log_write_requests */
   ulint innodb_log_writes;                     /*!< srv_log_writes */
   ulint innodb_os_log_written;                 /*!< srv_os_log_written */
-  ulint innodb_os_log_fsyncs;                  /*!< fil_n_log_flushes */
+  ulint innodb_os_log_fsyncs;                  /*!< srv_fil->n_log_flushes */
   ulint innodb_os_log_pending_writes;          /*!< srv_os_log_pending_writes */
-  ulint innodb_os_log_pending_fsyncs;          /*!< fil_n_pending_log_flushes */
+  ulint innodb_os_log_pending_fsyncs;          /*!< srv_fil->n_pending_log_flushes */
   ulint innodb_page_size;                      /*!< UNIV_PAGE_SIZE */
   ulint innodb_pages_created;                  /*!< srv_buf_pool->stat.n_pages_created */
   ulint innodb_pages_read;                     /*!< srv_buf_pool->stat.n_pages_read */
@@ -490,3 +490,7 @@ struct export_var_struct {
 
 extern ulint srv_n_threads_active[];
 typedef void (*ib_panic_function_t)(void *, int, char *, ...);
+
+struct Fil;
+
+extern Fil *srv_fil;

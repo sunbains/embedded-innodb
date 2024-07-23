@@ -1026,7 +1026,6 @@ void srv_modules_var_init() {
   sync_var_init();
   log_var_init();
   lock_var_init();
-  fil_var_init();
   dict_var_init();
   dfield_var_init();
   dtype_var_init();
@@ -1423,7 +1422,7 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_st
 
   ib_logger(ib_stream, "%lu read views open inside InnoDB\n", UT_LIST_GET_LEN(trx_sys->view_list));
 
-  n_reserved = fil_space_get_n_reserved_extents(0);
+  n_reserved = srv_fil->space_get_n_reserved_extents(0);
   if (n_reserved > 0) {
     ib_logger(
       ib_stream,
@@ -1490,7 +1489,7 @@ void srv_export_innodb_status(void) {
 
   export_vars.innodb_data_pending_reads = os_n_pending_reads;
   export_vars.innodb_data_pending_writes = os_n_pending_writes;
-  export_vars.innodb_data_pending_fsyncs = fil_n_pending_log_flushes + fil_n_pending_tablespace_flushes;
+  export_vars.innodb_data_pending_fsyncs = srv_fil->get_pending_log_flushes() + srv_fil->get_pending_tablespace_flushes();
   export_vars.innodb_data_fsyncs = os_n_fsyncs;
   export_vars.innodb_data_read = srv_data_read;
   export_vars.innodb_data_reads = os_n_file_reads;
@@ -1518,8 +1517,8 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_page_size = UNIV_PAGE_SIZE;
   export_vars.innodb_log_waits = srv_log_waits;
   export_vars.innodb_os_log_written = srv_os_log_written;
-  export_vars.innodb_os_log_fsyncs = fil_n_log_flushes;
-  export_vars.innodb_os_log_pending_fsyncs = fil_n_pending_log_flushes;
+  export_vars.innodb_os_log_fsyncs = srv_fil->get_log_flushes();
+  export_vars.innodb_os_log_pending_fsyncs = srv_fil->get_pending_log_flushes();
   export_vars.innodb_os_log_pending_writes = srv_os_log_pending_writes;
   export_vars.innodb_log_write_requests = srv_log_write_requests;
   export_vars.innodb_log_writes = srv_log_writes;

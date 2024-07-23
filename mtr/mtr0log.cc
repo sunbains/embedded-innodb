@@ -263,7 +263,7 @@ void mlog_log_string(byte *ptr, ulint len, mtr_t *mtr) {
 }
 
 byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
-  ut_a(page == nullptr || fil_page_get_type(page) != FIL_PAGE_INDEX);
+  ut_a(page == nullptr || srv_fil->page_get_type(page) != FIL_PAGE_INDEX);
 
   if (end_ptr < ptr + 4) {
 

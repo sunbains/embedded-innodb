@@ -8,6 +8,8 @@
 
 using fil_faddr_t = byte;
 
+struct Fil;
+
 /** File space address
 An address stored in a file page is a string of bytes */
 struct fil_addr_t {

@@ -664,7 +664,7 @@ bool dict_table_rename_in_cache(dict_table_t *table, const char *new_name, bool 
       ut_print_filename(ib_stream, table->dir_path_of_temp_table);
       ib_logger(ib_stream, " )\n");
       return false;
-    } else if (!fil_rename_tablespace(old_name, table->space, new_name)) {
+    } else if (!srv_fil->rename_tablespace(old_name, table->space, new_name)) {
       return false;
     }
   }

@@ -317,7 +317,7 @@ static void trx_undo_page_init(
   mach_write_to_2(page_hdr + TRX_UNDO_PAGE_START, TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_HDR_SIZE);
   mach_write_to_2(page_hdr + TRX_UNDO_PAGE_FREE, TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_HDR_SIZE);
 
-  fil_page_set_type(undo_page, FIL_PAGE_UNDO_LOG);
+  srv_fil->page_set_type(undo_page, FIL_PAGE_UNDO_LOG);
 
   trx_undo_page_init_log(undo_page, type, mtr);
 }
@@ -368,7 +368,7 @@ static db_err trx_undo_seg_create(
   /* Allocate a new file segment for the undo log */
   auto block = fseg_create_general(space, 0, TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, true, mtr);
 
-  fil_space_release_free_extents(space, n_reserved);
+  srv_fil->space_release_free_extents(space, n_reserved);
 
   if (block == nullptr) {
     /* No space left */
@@ -755,7 +755,7 @@ ulint trx_undo_add_page(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) {
   page_no =
     fseg_alloc_free_page_general(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, undo->top_page_no + 1, FSP_UP, true, mtr);
 
-  fil_space_release_free_extents(undo->space, n_reserved);
+  srv_fil->space_release_free_extents(undo->space, n_reserved);
 
   if (page_no == FIL_NULL) {
 

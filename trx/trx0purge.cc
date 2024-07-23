@@ -642,9 +642,9 @@ static void trx_purge_choose_next_log(void) {
   trx_rseg_t *rseg;
   trx_rseg_t *min_rseg;
   trx_id_t min_trx_no;
-  ulint space = 0;   /* remove warning (??? bug ???) */
-  ulint page_no = 0; /* remove warning (??? bug ???) */
-  ulint offset = 0;  /* remove warning (??? bug ???) */
+  space_id_t space {};
+  page_no_t page_no{};
+  ulint offset{};
   mtr_t mtr;
 
   ut_ad(mutex_own(&(purge_sys->mutex)));
@@ -656,7 +656,7 @@ static void trx_purge_choose_next_log(void) {
 
   min_rseg = nullptr;
 
-  while (rseg) {
+  while (rseg != nullptr) {
     mutex_enter(&(rseg->mutex));
 
     if (rseg->last_page_no != FIL_NULL) {
@@ -666,9 +666,10 @@ static void trx_purge_choose_next_log(void) {
         min_rseg = rseg;
         min_trx_no = rseg->last_trx_no;
         space = rseg->space;
-        ut_a(space == 0); /* We assume in purge of
-                          externally stored fields
-                          that space id == 0 */
+
+	/* We assume in purge of externally stored fields that space id == 0 */
+        ut_a(space == 0);
+
         page_no = rseg->last_page_no;
         offset = rseg->last_offset;
       }

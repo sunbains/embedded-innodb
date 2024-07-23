@@ -3395,7 +3395,7 @@ loop:
   if (lock_get_type_low(lock) == LOCK_REC) {
     if (load_page_first) {
       auto space = lock->un_member.rec_lock.space;
-      auto size = fil_space_get_flags(space);
+      auto size = srv_fil->space_get_flags(space);
       auto page_no = lock->un_member.rec_lock.page_no;
 
       if (unlikely(size == ULINT_UNDEFINED)) {

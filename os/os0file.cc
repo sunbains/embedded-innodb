@@ -947,8 +947,8 @@ void os_file_print(ib_stream_t ib_stream) {
     ib_stream,
     "Pending flushes (fsync) log: %lu; buffer pool: %lu\n"
     "%lu OS file reads, %lu OS file writes, %lu OS fsyncs\n",
-    (ulong)fil_n_pending_log_flushes,
-    (ulong)fil_n_pending_tablespace_flushes,
+    (ulong)srv_fil->get_pending_log_flushes(),
+    (ulong)srv_fil->get_pending_tablespace_flushes(),
     (ulong)os_n_file_reads,
     (ulong)os_n_file_writes,
     (ulong)os_n_fsyncs

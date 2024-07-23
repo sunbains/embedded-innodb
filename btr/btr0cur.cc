@@ -964,7 +964,7 @@ db_err btr_cur_pessimistic_insert(
     if (big_rec_vec == nullptr) {
 
       if (n_extents > 0) {
-        fil_space_release_free_extents(dict_index->space, n_reserved);
+        srv_fil->space_release_free_extents(dict_index->space, n_reserved);
       }
       return DB_TOO_BIG_RECORD;
     }
@@ -990,7 +990,7 @@ db_err btr_cur_pessimistic_insert(
   }
 
   if (n_extents > 0) {
-    fil_space_release_free_extents(dict_index->space, n_reserved);
+    srv_fil->space_release_free_extents(dict_index->space, n_reserved);
   }
 
   *big_rec = big_rec_vec;
@@ -1611,7 +1611,7 @@ db_err btr_cur_pessimistic_update(
 
 return_after_reservations:
   if (n_extents > 0) {
-    fil_space_release_free_extents(index->space, n_reserved);
+    srv_fil->space_release_free_extents(index->space, n_reserved);
   }
 
   *big_rec = big_rec_vec;
@@ -1963,7 +1963,7 @@ void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents, btr_cur_
   mem_heap_free(heap);
 
   if (n_extents > 0) {
-    fil_space_release_free_extents(index->space, n_reserved);
+    srv_fil->space_release_free_extents(index->space, n_reserved);
   }
 }
 
@@ -2590,7 +2590,7 @@ db_err btr_store_big_rec_extern_fields(
 
   auto space_id = rec_block->get_space();
   auto rec_page_no = rec_block->get_page_no();
-  ut_a(fil_page_get_type(page_align(rec)) == FIL_PAGE_INDEX);
+  ut_a(srv_fil->page_get_type(page_align(rec)) == FIL_PAGE_INDEX);
 
   /* We have to create a file segment to the tablespace
   for each field and put the pointer to the field in rec */
@@ -2731,13 +2731,13 @@ static void btr_check_blob_fil_page_type(
   bool read
 ) /*!< in: true=read, false=purge */
 {
-  ulint type = fil_page_get_type(page);
+  ulint type = srv_fil->page_get_type(page);
 
   ut_a(space_id == page_get_space_id(page));
   ut_a(page_no == page_get_page_no(page));
 
   if (unlikely(type != FIL_PAGE_TYPE_BLOB)) {
-    ulint flags = fil_space_get_flags(space_id);
+    ulint flags = srv_fil->space_get_flags(space_id);
 
     if (likely((flags & DICT_TF_FORMAT_MASK) == DICT_TF_FORMAT_51)) {
       /* Old versions of InnoDB did not initialize

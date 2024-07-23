@@ -348,7 +348,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
   /* Read the trx sys header to check if we are using the doublewrite
   buffer */
 
-  fil_io(IO_request::Sync_read, false, TRX_SYS_SPACE, TRX_SYS_PAGE_NO, 0, UNIV_PAGE_SIZE, read_buf, nullptr);
+  srv_fil->io(IO_request::Sync_read, false, TRX_SYS_SPACE, TRX_SYS_PAGE_NO, 0, UNIV_PAGE_SIZE, read_buf, nullptr);
 
   doublewrite = read_buf + TRX_SYS_DOUBLEWRITE;
 
@@ -382,7 +382,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
 
   /* Read the pages from the doublewrite buffer to memory */
 
-  fil_io(
+  srv_fil->io(
     IO_request::Sync_read,
     false,
     TRX_SYS_SPACE,
@@ -392,7 +392,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
     buf,
     nullptr);
 
-  fil_io(
+  srv_fil->io(
     IO_request::Sync_read,
     false,
     TRX_SYS_SPACE,
@@ -426,7 +426,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
         source_page_no = block2 + i - TRX_SYS_DOUBLEWRITE_BLOCK_SIZE;
       }
 
-      fil_io(IO_request::Sync_write, false, 0, 0, source_page_no, UNIV_PAGE_SIZE, page, nullptr);
+      srv_fil->io(IO_request::Sync_write, false, 0, 0, source_page_no, UNIV_PAGE_SIZE, page, nullptr);
       /* printf("Resetting space id in page %lu\n",
       source_page_no); */
     } else {
@@ -437,11 +437,11 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
       /* The database was shut down gracefully: no need to
       restore pages */
 
-    } else if (!fil_tablespace_exists_in_mem(space_id)) {
+    } else if (!srv_fil->tablespace_exists_in_mem(space_id)) {
       /* Maybe we have dropped the single-table tablespace
       and this page once belonged to it: do nothing */
 
-    } else if (!fil_check_adress_in_tablespace(space_id, page_no)) {
+    } else if (!srv_fil->check_adress_in_tablespace(space_id, page_no)) {
       ib_logger(
         ib_stream,
         "Warning: a page in the"
@@ -460,7 +460,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
       do nothing */
     } else {
       /* Read in the actual page from the file */
-      fil_io(IO_request::Sync_read, false, space_id, page_no, 0, UNIV_PAGE_SIZE, read_buf, nullptr);
+      srv_fil->io(IO_request::Sync_read, false, space_id, page_no, 0, UNIV_PAGE_SIZE, read_buf, nullptr);
 
       /* Check if the page is corrupt */
 
@@ -508,7 +508,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
         /* Write the good page from the doublewrite buffer to the intended
          * position */
 
-        fil_io(IO_request::Sync_write, false, space_id, page_no, 0, UNIV_PAGE_SIZE, page, nullptr);
+        srv_fil->io(IO_request::Sync_write, false, space_id, page_no, 0, UNIV_PAGE_SIZE, page, nullptr);
 
         ib_logger(ib_stream, "Recovered the page from the doublewrite buffer.\n");
       }
@@ -517,7 +517,7 @@ void trx_sys_doublewrite_init_or_restore_pages(bool restore_corrupt_pages) /*!< 
     page += UNIV_PAGE_SIZE;
   }
 
-  fil_flush_file_spaces(FIL_TABLESPACE);
+  srv_fil->flush_file_spaces(FIL_TABLESPACE);
 
 leave_func:
   ut_delete(unaligned_read_buf);
@@ -593,7 +593,7 @@ static void trx_sysf_create(mtr_t *mtr) {
   then enter the kernel: we must do it in this order to conform
   to the latching order rules. */
 
-  mtr_x_lock(fil_space_get_latch(TRX_SYS_SPACE), mtr);
+  mtr_x_lock(srv_fil->space_get_latch(TRX_SYS_SPACE), mtr);
   mutex_enter(&kernel_mutex);
 
   /* Create the trx sys file block in a new allocated file segment */

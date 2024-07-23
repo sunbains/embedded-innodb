@@ -4082,7 +4082,7 @@ bool ib_database_create(const char *dbname) {
 
   /* Only necessary if file per table is set. */
   if (srv_file_per_table) {
-    return fil_mkdir(dbname);
+    return srv_fil->mkdir(dbname);
   }
 
   return true;
@@ -4115,7 +4115,7 @@ ib_err_t ib_database_drop(const char *dbname) {
 
   /* Only necessary if file per table is set. */
   if (err == DB_SUCCESS && srv_file_per_table) {
-    fil_rmdir(ptr);
+    srv_fil->rmdir(ptr);
   }
 
   mem_free(ptr);

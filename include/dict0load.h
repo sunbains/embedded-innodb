@@ -31,11 +31,11 @@ Created 4/24/1996 Heikki Tuuri
 
 /** In a crash recovery we already have all the tablespace objects created.
 This function compares the space id information in the InnoDB data dictionary
-to what we already read with fil_load_single_table_tablespaces().
+to what we already read with srv_fil->load_single_table_tablespaces().
 
 In a normal startup, we create the tablespace objects for every table in
 InnoDB's data dictionary, if the corresponding .ibd file exists.
-We also scan the biggest space id, and store it to fil_system. */
+We also scan the biggest space id, and store it to srv_fil->system. */
 void dict_check_tablespaces_and_store_max_id(bool in_crash_recovery); /*!< in: are we doing a crash recovery */
 
 /** Finds the first table name in the given database.

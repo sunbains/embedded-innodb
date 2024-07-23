@@ -49,7 +49,7 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
 
   ut_ad(mtr);
   ut_ad(mutex_own(&kernel_mutex));
-  ut_ad(mtr_memo_contains(mtr, fil_space_get_latch(space), MTR_MEMO_X_LOCK));
+  ut_ad(mtr_memo_contains(mtr, srv_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
   sys_header = trx_sysf_get(mtr);
 
   *slot_no = trx_sysf_rseg_find_free(mtr);

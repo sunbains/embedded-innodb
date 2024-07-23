@@ -398,7 +398,7 @@ void buf_page_print(const byte *read_buf, ulint) {
     ib_logger(ib_stream, "Page may be an update undo log page\n");
   }
 
-  switch (fil_page_get_type(read_buf)) {
+  switch (srv_fil->page_get_type(read_buf)) {
     case FIL_PAGE_INDEX:
       ib_logger(
         ib_stream,
@@ -1274,7 +1274,7 @@ buf_page_t *Buf_pool::init_for_read(db_err *err, space_id_t space, page_no_t pag
       mutex_exit(&block->m_mutex);
     }
 
-  } else if (fil_tablespace_deleted_or_being_deleted_in_mem(space, tablespace_version)) {
+  } else if (srv_fil->tablespace_deleted_or_being_deleted_in_mem(space, tablespace_version)) {
 
     /* The page belongs to a space which has been deleted or is being deleted. */
     *err = DB_TABLESPACE_DELETED;
@@ -1725,7 +1725,7 @@ void Buf_pool::print() {
     for (; n_blocks--; block++) {
       const buf_frame_t *frame = block->m_frame;
 
-      if (fil_page_get_type(frame) == FIL_PAGE_INDEX) {
+      if (srv_fil->page_get_type(frame) == FIL_PAGE_INDEX) {
 
         id = btr_page_get_index_id(frame);
 

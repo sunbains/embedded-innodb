@@ -338,7 +338,7 @@ void Buf_flush::sync_datafiles() {
   srv_aio->wait_for_pending_ops(aio::WRITE);
 
   /* Now we flush the data to disk (for example, with fsync) */
-  fil_flush_file_spaces(FIL_TABLESPACE);
+  srv_fil->flush_file_spaces(FIL_TABLESPACE);
 
   return;
 }
@@ -427,7 +427,7 @@ void Buf_flush::buffered_writes() {
   write_buf = trx_doublewrite->write_buf;
   ulint i = 0;
 
-  fil_io(IO_request::Sync_write, false, TRX_SYS_SPACE, trx_doublewrite->block1, 0, len, write_buf, nullptr);
+  srv_fil->io(IO_request::Sync_write, false, TRX_SYS_SPACE, trx_doublewrite->block1, 0, len, write_buf, nullptr);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
     const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
@@ -457,7 +457,7 @@ void Buf_flush::buffered_writes() {
   write_buf = trx_doublewrite->write_buf + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE;
   ut_ad(i == TRX_SYS_DOUBLEWRITE_BLOCK_SIZE);
 
-  fil_io(IO_request::Sync_write, false, TRX_SYS_SPACE, trx_doublewrite->block2, 0, len, (void *)write_buf, nullptr);
+  srv_fil->io(IO_request::Sync_write, false, TRX_SYS_SPACE, trx_doublewrite->block2, 0, len, (void *)write_buf, nullptr);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
     const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
@@ -481,7 +481,7 @@ void Buf_flush::buffered_writes() {
 flush:
   /* Now flush the doublewrite buffer data to disk */
 
-  fil_flush(TRX_SYS_SPACE);
+  srv_fil->flush(TRX_SYS_SPACE);
 
   /* We know that the writes have been flushed to disk now
   and in recovery we will find them in the doublewrite buffer
@@ -505,7 +505,7 @@ flush:
       ));
     }
 
-    fil_io(
+    srv_fil->io(
       IO_request::Async_write,
       true,
       block->get_space(),
@@ -618,7 +618,7 @@ void Buf_flush::write_block_low(buf_page_t *bpage) {
   }
 
   if (!srv_use_doublewrite_buf || !trx_doublewrite) {
-    fil_io(IO_request::Async_write, true, bpage->get_space(), bpage->get_page_no(), 0, UNIV_PAGE_SIZE, frame, bpage);
+    srv_fil->io(IO_request::Async_write, true, bpage->get_space(), bpage->get_page_no(), 0, UNIV_PAGE_SIZE, frame, bpage);
   } else {
     post_to_doublewrite_buf(bpage);
   }
@@ -732,8 +732,8 @@ ulint Buf_flush::try_neighbors(ulint space, ulint offset, buf_flush flush_type) 
 
   /* ib_logger(ib_stream, "Flush area: low %lu high %lu\n", low, high); */
 
-  if (high > fil_space_get_size(space)) {
-    high = fil_space_get_size(space);
+  if (high > srv_fil->space_get_size(space)) {
+    high = srv_fil->space_get_size(space);
   }
 
   buf_pool_mutex_enter();

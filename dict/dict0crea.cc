@@ -242,7 +242,7 @@ static db_err dict_build_table_def_step(que_thr_t *thr, tab_node_t *node) {
     ut_ad(dict_table_get_format(table) <= DICT_TF_FORMAT_MAX);
 
     flags = table->flags & ~(~0UL << DICT_TF_BITS);
-    err = fil_create_new_single_table_tablespace(
+    err = srv_fil->create_new_single_table_tablespace(
       &space, path_or_name, is_path, flags == DICT_TF_COMPACT ? 0 : flags, FIL_IBD_FILE_INITIAL_SIZE
     );
     table->space = (unsigned int)space;
@@ -609,7 +609,7 @@ void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
 
   space = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
 
-  if (fil_space_get_flags(space) == ULINT_UNDEFINED) {
+  if (srv_fil->space_get_flags(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
 
@@ -667,7 +667,7 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space, btr_pcur_t *pcu
     space = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
   }
 
-  if (fil_space_get_flags(space) == ULINT_UNDEFINED) {
+  if (srv_fil->space_get_flags(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
 

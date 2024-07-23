@@ -277,7 +277,7 @@ static page_t *page_create_low(
 
   page = block->get_frame();
 
-  fil_page_set_type(page, FIL_PAGE_INDEX);
+  srv_fil->page_set_type(page, FIL_PAGE_INDEX);
 
   heap = mem_heap_create(200);
 

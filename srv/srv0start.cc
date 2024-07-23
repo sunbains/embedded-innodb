@@ -520,7 +520,7 @@ void srv_free_paths_and_sizes() {
 void *io_handler_thread(void *arg) {
   auto segment = *((ulint *)arg);
 
-  while (fil_aio_wait(segment)) { }
+  while (srv_fil->aio_wait(segment)) { }
 
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit.
@@ -666,12 +666,12 @@ static db_err open_or_create_log_file(
   if (i == 0) {
     /* Create in memory the file space object which is for this log group */
 
-    fil_space_create(name, 2 * k + SRV_LOG_SPACE_FIRST_ID, 0, FIL_LOG);
+    srv_fil->space_create(name, 2 * k + SRV_LOG_SPACE_FIRST_ID, 0, FIL_LOG);
   }
 
-  ut_a(fil_validate());
+  ut_a(srv_fil->validate());
 
-  fil_node_create(name, srv_log_file_size, 2 * k + SRV_LOG_SPACE_FIRST_ID, false);
+  srv_fil->node_create(name, srv_log_file_size, 2 * k + SRV_LOG_SPACE_FIRST_ID, false);
 
   if (i == 0) {
     log_group_init(k, srv_n_log_files, srv_log_file_size * UNIV_PAGE_SIZE, 2 * k + SRV_LOG_SPACE_FIRST_ID);
@@ -853,7 +853,7 @@ static db_err open_or_create_data_files(
         return DB_ERROR;
       }
     skip_size_check:
-      fil_read_flushed_lsn_and_arch_log_no(files[i], one_opened, min_flushed_lsn, max_flushed_lsn);
+      srv_fil->read_flushed_lsn_and_arch_log_no(files[i], one_opened, min_flushed_lsn, max_flushed_lsn);
       one_opened = true;
     } else {
       /* We created the data file and now write it full of
@@ -894,12 +894,12 @@ static db_err open_or_create_data_files(
     ut_a(ret);
 
     if (i == 0) {
-      fil_space_create(name, SYS_TABLESPACE, 0, FIL_TABLESPACE);
+      srv_fil->space_create(name, SYS_TABLESPACE, 0, FIL_TABLESPACE);
     }
 
-    ut_a(fil_validate());
+    ut_a(srv_fil->validate());
 
-    fil_node_create(name, srv_data_file_sizes[i], 0, srv_data_file_is_raw_partition[i] != 0);
+    srv_fil->node_create(name, srv_data_file_sizes[i], 0, srv_data_file_is_raw_partition[i] != 0);
   }
 
   return DB_SUCCESS;
@@ -920,7 +920,7 @@ static void srv_startup_abort(db_err err) {
   if (err != DB_FATAL) {
     logs_empty_and_mark_files_at_shutdown(srv_force_recovery, srv_fast_shutdown);
 
-    fil_close_all_files();
+    srv_fil->close_all_files();
   }
 
   srv_threads_shutdown();
@@ -932,7 +932,9 @@ static void srv_startup_abort(db_err err) {
 
   srv_aio->shutdown();
 
-  fil_close();
+  delete srv_fil;
+  srv_fil = nullptr;
+
   os_file_free();
 
   log_mem_free();
@@ -1101,13 +1103,29 @@ ib_err_t innobase_start_or_create() {
     return DB_OUT_OF_MEMORY;
   }
 
-  fil_open(srv_max_n_open_files);
+  ut_a(srv_fil == nullptr);
+
+  srv_fil = new (std::nothrow) Fil(srv_max_n_open_files);
+
+  if (srv_fil == nullptr) {
+    AIO::destroy(srv_aio);
+
+    os_file_free();
+
+    ib_logger(
+      ib_stream,
+      "Fatal error: cannot allocate the memory for the file system\n"
+    );
+
+    return DB_OUT_OF_MEMORY;
+  }
 
   srv_buf_pool = new (std::nothrow) Buf_pool();
 
   if (!srv_buf_pool->open(srv_buf_pool_size)) {
     /* Shutdown all sub-systems that have been initialized. */
-    fil_close();
+    delete srv_fil;
+    srv_fil = nullptr;
 
     AIO::destroy(srv_aio);
 
@@ -1118,7 +1136,7 @@ ib_err_t innobase_start_or_create() {
       "Fatal error: cannot allocate the memory for the buffer pool\n"
     );
 
-    return DB_ERROR;
+    return DB_OUT_OF_MEMORY;
   }
 
   fsp_init();
@@ -1184,7 +1202,7 @@ ib_err_t innobase_start_or_create() {
   /* Open all log files and data files in the system tablespace: we
   keep them open until database shutdown */
 
-  fil_open_log_and_system_tablespace_files();
+  srv_fil->open_log_and_system_tablespace_files();
 
   if (log_created && !create_new_db) {
     if (max_flushed_lsn != min_flushed_lsn) {
@@ -1282,7 +1300,7 @@ ib_err_t innobase_start_or_create() {
       /* In a crash recovery, we check that the info in data
       dictionary is consistent with what we already know
       about space id's from the call of
-      fil_load_single_table_tablespaces().
+      srv_fil->load_single_table_tablespaces().
 
       In a normal startup, we create the space objects for
       every table in the InnoDB data dictionary that has
@@ -1579,7 +1597,8 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
 
   srv_aio->shutdown();
 
-  fil_close();
+  delete srv_fil;
+  srv_fil = nullptr;
 
   srv_free();
 

@@ -358,8 +358,8 @@ loop:
       "Starting InnoDB Monitor to print further\n"
       "diagnostics to the standard output.\n",
       (ulong)n_iterations,
-      (ulong)fil_n_pending_log_flushes,
-      (ulong)fil_n_pending_tablespace_flushes,
+      (ulong)srv_fil->get_pending_log_flushes(),
+      (ulong)srv_fil->get_pending_tablespace_flushes(),
       (ulong)os_n_file_reads,
       (ulong)os_n_file_writes,
       (ulong)os_n_fsyncs
@@ -966,7 +966,7 @@ void Buf_LRU::print() {
       case BUF_BLOCK_FILE_PAGE:
         frame = reinterpret_cast<buf_block_t *>(bpage)->get_frame();
 
-        ib_logger(ib_stream, "\ntype %lu index id %lu\n", (ulong)fil_page_get_type(frame), (ulong)btr_page_get_index_id(frame));
+        ib_logger(ib_stream, "\ntype %lu index id %lu\n", (ulong)srv_fil->page_get_type(frame), (ulong)btr_page_get_index_id(frame));
         break;
 
       default:

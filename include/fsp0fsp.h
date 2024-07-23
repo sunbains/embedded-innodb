@@ -164,7 +164,7 @@ ulint fseg_alloc_free_page_general(
 use several pages from the tablespace should call this function beforehand
 and reserve enough free extents so that they certainly will be able
 to do their operation, like a B-tree page split, fully. Reservations
-must be released with function fil_space_release_free_extents!
+must be released with function srv_fil->space_release_free_extents!
 
 The alloc_type below has the following meaning: FSP_NORMAL means an
 operation which will probably result in more space usage, like an
