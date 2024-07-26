@@ -27,8 +27,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 #pragma once
 
+#if defined(__SSE4_2__)
 #include <nmmintrin.h>
 #include <wmmintrin.h>
+#endif
+
 #include <stdint.h>
 
 #include "innodb0types.h"
@@ -59,10 +62,11 @@ constexpr ulint NO_CHECKSUM = 0x1EDC6F41;
 /** The CRC-32C polynomial without the implicit highest 1 at x^32 */
 constexpr uint32_t CRC32C_POLYNOMIAL = 0x1EDC6F41;
 
-using Checksum = std::function<uint32_t(const byte*, size_t)>;
+using Checksum = std::function<uint32_t(const byte *, size_t)>;
 
 extern Checksum checksum;
 
+#if defined(__SSE4_2__)
 /** Executes cpuid assembly instruction and returns the ecx register's value.
  * 
  * @return ecx value produced by cpuid
@@ -98,9 +102,8 @@ inline bool can_use_poly_mul() noexcept {
 template <size_t iterations>
 struct Loop {
   template <typename Step_executor, typename... Args>
-  static void run(Args &&... args) noexcept {
-    Loop<iterations - 1>::template run<Step_executor, Args...>(
-        std::forward<Args>(args)...);
+  static void run(Args &&...args) noexcept {
+    Loop<iterations - 1>::template run<Step_executor, Args...>(std::forward<Args>(args)...);
     Step_executor::template run<iterations - 1>(std::forward<Args>(args)...);
   }
 };
@@ -108,7 +111,7 @@ struct Loop {
 template <>
 struct Loop<0> {
   template <typename Step_executor, typename... Args>
-  static void run(Args &&... args) noexcept {}
+  static void run(Args &&...args) noexcept {}
 };
 
 /** Computes x^(len*8) modulo CRC32-C polynomial, which is useful, when you need
@@ -184,23 +187,19 @@ struct crc32_impl {
   static inline uint64_t update(uint64_t crc, uint64_t data) noexcept;
 };
 
-__attribute__((target("sse4.2")))
-inline uint32_t crc32_impl::update(uint32_t crc, unsigned char data) noexcept {
+__attribute__((target("sse4.2"))) inline uint32_t crc32_impl::update(uint32_t crc, unsigned char data) noexcept {
   return _mm_crc32_u8(crc, data);
 }
 
-__attribute__((target("sse4.2")))
-inline uint32_t crc32_impl::update(uint32_t crc, uint16_t data) noexcept {
+__attribute__((target("sse4.2"))) inline uint32_t crc32_impl::update(uint32_t crc, uint16_t data) noexcept {
   return _mm_crc32_u16(crc, data);
 }
 
-__attribute__((target("sse4.2")))
-inline uint32_t crc32_impl::update(uint32_t crc, uint32_t data) noexcept {
+__attribute__((target("sse4.2"))) inline uint32_t crc32_impl::update(uint32_t crc, uint32_t data) noexcept {
   return _mm_crc32_u32(crc, data);
 }
 
-__attribute__((target("sse4.2")))
-inline uint64_t crc32_impl::update(uint64_t crc, uint64_t data) noexcept {
+__attribute__((target("sse4.2"))) inline uint64_t crc32_impl::update(uint64_t crc, uint64_t data) noexcept {
   return _mm_crc32_u64(crc, data);
 }
 
@@ -217,11 +216,9 @@ struct use_pclmul : crc32_impl {
 };
 
 template <uint32_t w>
-__attribute__((target("sse4.2,pclmul")))
-uint64_t use_pclmul::polynomial_mul_rev(uint32_t rev_u) noexcept {
+__attribute__((target("sse4.2,pclmul"))) uint64_t use_pclmul::polynomial_mul_rev(uint32_t rev_u) noexcept {
   constexpr uint64_t flipped_w = flip_at_32(w);
-  return _mm_cvtsi128_si64(_mm_clmulepi64_si128(
-      _mm_set_epi64x(0, rev_u), _mm_set_epi64x(0, flipped_w), 0x00));
+  return _mm_cvtsi128_si64(_mm_clmulepi64_si128(_mm_set_epi64x(0, rev_u), _mm_set_epi64x(0, flipped_w), 0x00));
 }
 
 /**
@@ -344,15 +341,12 @@ static inline uint32_t consume_chunk(uint32_t crc0, const unsigned char *data) n
    * Each iteration of the for() loop will eat 8 bytes (single uint64_t) from
    * each slice.
    */
-  static_assert(
-      slice_len % sizeof(uint64_t) == 0,
-      "we must be able to process a slice efficiently using 8-byte updates");
+  static_assert(slice_len % sizeof(uint64_t) == 0, "we must be able to process a slice efficiently using 8-byte updates");
 
   constexpr auto iters = slice_len / sizeof(uint64_t);
 
   for (size_t i = 0; i < iters; ++i) {
-    Loop<slices_count>::template run<
-        Update_step_executor<algo_to_use, slice_len>>(crc, data64);
+    Loop<slices_count>::template run<Update_step_executor<algo_to_use, slice_len>>(crc, data64);
     ++data64;
   }
 
@@ -383,9 +377,7 @@ static inline uint32_t consume_chunk(uint32_t crc0, const unsigned char *data) n
   conditionally, when slices_count > 1. */
   if (1 < slices_count) {
 
-    Loop<slices_count - 1>::template run<
-        Combination_step_executor<algo_to_use, slice_len, slices_count>>(
-        combined_crc, crc);
+    Loop<slices_count - 1>::template run<Combination_step_executor<algo_to_use, slice_len, slices_count>>(combined_crc, crc);
 
     combined_crc = fold_64_to_32<algo_to_use>(combined_crc);
   }
@@ -518,8 +510,7 @@ static inline uint32_t calculate_with(uint32_t crc, const byte *data, size_t len
  * 
  * @return CRC-32C (polynomial 0x11EDC6F41)
  */
-__attribute__((target("sse4.2,pclmul"), flatten))
-static inline uint32_t pclmul(const byte *data, size_t len) noexcept {
+__attribute__((target("sse4.2,pclmul"), flatten)) static inline uint32_t pclmul(const byte *data, size_t len) noexcept {
   return calculate_with<use_pclmul>(0, data, len);
 }
 
@@ -534,12 +525,14 @@ static inline uint32_t pclmul(const byte *data, size_t len) noexcept {
  * 
  * @return CRC-32C (polynomial 0x11EDC6F41)
  */
-__attribute__((target("sse4.2"), flatten))
-static inline uint32_t unrolled_loop_poly_mul(const byte *data, size_t len) noexcept {
+__attribute__((target("sse4.2"), flatten)) static inline uint32_t unrolled_loop_poly_mul(const byte *data, size_t len) noexcept {
   return calculate_with<use_unrolled_loop_poly_mul>(0, data, len);
 }
 
-static inline Checksum init() noexcept { // Provide complete type for Checksum
+#endif
+
+static inline Checksum init() noexcept {  // Provide complete type for Checksum
+#if defined(__SSE4_2__)
   const auto cpu_enabled = can_use_crc32();
   const auto mul_cpu_enabled = can_use_poly_mul();
 
@@ -549,11 +542,12 @@ static inline Checksum init() noexcept { // Provide complete type for Checksum
     } else {
       return unrolled_loop_poly_mul;
     }
-  } else {
-    return [] (const byte *, size_t ) {
-      return NO_CHECKSUM;
-    };
   }
+#endif
+
+  return [](const byte *, size_t) {
+    return NO_CHECKSUM;
+  };
 }
 
-} // crc32
+}  // namespace crc32
