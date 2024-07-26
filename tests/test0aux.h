@@ -96,3 +96,7 @@ ib_err_t drop_table(
     const char *dbname, /*!< in: database name */
     const char *name);  /*!< in: table to drop */
 
+/** Truncate the table. */
+ib_err_t truncate_table(
+    const char *dbname, /*!< in: database name */
+    const char *name);  /*!< in: table to drop */

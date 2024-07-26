@@ -21,8 +21,8 @@ The database buffer srv_buf_pool flush algorithm
 Created 11/11/1995 Heikki Tuuri
 *******************************************************/
 
-#include "buf0buf.h"
 #include "buf0flu.h"
+#include "buf0buf.h"
 #include "buf0lru.h"
 #include "buf0rea.h"
 #include "fil0fil.h"
@@ -624,6 +624,32 @@ void Buf_flush::write_block_low(buf_page_t *bpage) {
   }
 }
 
+inline static bool free_page_if_truncated(buf_page_t *bpage) {
+  ut_a(bpage != nullptr);
+
+  ut_ad(buf_pool_mutex_own());
+  ut_ad(mutex_own(buf_page_get_mutex(bpage)));
+
+  auto space = bpage->get_space();
+  bool table_truncated = srv_fil->tablespace_deleted_or_being_deleted_in_mem(space, -1);
+
+  bool page_from_flush_list = bpage->m_oldest_modification != 0;
+
+  if (table_truncated) {
+    ib_logger(ib_stream, "freeing a page from truncated table, tablespace_id: %lu, page_no: %lu\n", space, bpage->m_page_no);
+    // free up the page.
+    srv_buf_pool->m_LRU->free_block(bpage, nullptr);
+
+    if (page_from_flush_list) {
+      srv_buf_pool->m_flusher->remove(bpage);
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
 void Buf_flush::page(buf_page_t *bpage, buf_flush flush_type) {
   mutex_t *block_mutex;
 
@@ -747,6 +773,14 @@ ulint Buf_flush::try_neighbors(ulint space, ulint offset, buf_flush flush_type) 
       continue;
     }
 
+    mutex_t *block_mtx = buf_page_get_mutex(bpage);
+    mutex_enter(block_mtx);
+    if (free_page_if_truncated(bpage)) {
+      mutex_exit(block_mtx);
+      continue;
+    }
+    mutex_exit(block_mtx);
+
     ut_a(bpage->in_file());
 
     /* We avoid flushing 'non-old' blocks in an LRU flush,
@@ -838,12 +872,14 @@ ulint Buf_flush::batch(buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
 
     do {
       mutex_t *block_mutex = buf_page_get_mutex(bpage);
-      bool ready;
+      bool ready{false};
 
       ut_a(bpage->in_file());
 
       mutex_enter(block_mutex);
-      ready = ready_for_flush(bpage, flush_type);
+      if (!free_page_if_truncated(bpage)) {
+        ready = ready_for_flush(bpage, flush_type);
+      }
       mutex_exit(block_mutex);
 
       if (ready) {

@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <getopt.h>
 
 #include "test0aux.h"
+#include "buf0types.h"
 
 #define COMMENT '#'
 
@@ -56,7 +57,8 @@ static void create_directory(const char *path) {
 /** Read a value from an integer column in an InnoDB tuple.
 @return	column value */
 
-uint64_t read_int_from_tuple(ib_tpl_t tpl, const ib_col_meta_t *col_meta, int i) {
+uint64_t read_int_from_tuple(ib_tpl_t tpl, const ib_col_meta_t *col_meta,
+                             int i) {
   uint64_t ival = 0;
 
   switch (col_meta->type_len) {
@@ -95,7 +97,8 @@ uint64_t read_int_from_tuple(ib_tpl_t tpl, const ib_col_meta_t *col_meta, int i)
 
 /** Print all columns in a tuple. */
 
-void print_int_col(FILE *stream, const ib_tpl_t tpl, int i, ib_col_meta_t *col_meta) {
+void print_int_col(FILE *stream, const ib_tpl_t tpl, int i,
+                   ib_col_meta_t *col_meta) {
   ib_err_t err = DB_SUCCESS;
 
   switch (col_meta->type_len) {
@@ -525,7 +528,6 @@ ib_err_t set_global_option(int opt, const char *arg) {
   default:
     err = DB_ERROR;
     break;
-
   }
 
   return err;
@@ -552,7 +554,8 @@ static int config_skip_line(FILE *fp) {
 }
 
 /** Add an element to the config. */
-static void config_add_elem(ib_config_t *config, const ib_string_t *key, const ib_string_t *val) {
+static void config_add_elem(ib_config_t *config, const ib_string_t *key,
+                            const ib_string_t *val) {
   ib_var_t *var;
 
   if (config->n_count == 0) {
@@ -738,6 +741,25 @@ ib_err_t drop_table(const char *dbname, const char *name) {
 
   err = ib_trx_commit(ib_trx);
   assert(err == DB_SUCCESS);
+
+  return (err);
+}
+
+/** Truncate the table. */
+ib_err_t truncate_table(const char *dbname, const char *name) {
+  ib_err_t err;
+  char table_name[IB_MAX_TABLE_NAME_LEN];
+
+  snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
+
+  ib_id_t table_id;
+  err = ib_table_get_id(table_name, &table_id);
+  assert(err == DB_SUCCESS);
+
+  err = ib_table_truncate(table_name, &table_id);
+  assert(err == DB_SUCCESS);
+
+  assert(srv_buf_pool != nullptr);
 
   return (err);
 }

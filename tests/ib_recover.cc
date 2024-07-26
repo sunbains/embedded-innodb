@@ -276,6 +276,9 @@ int main(int argc, char *argv[]) {
     /* Recovery was successful. */
     assert(err == DB_DUPLICATE_KEY);
 
+    err = truncate_table(DATABASE, TABLE);
+    assert(err == DB_SUCCESS);
+
     err = drop_table(DATABASE, TABLE);
     assert(err == DB_SUCCESS);
 

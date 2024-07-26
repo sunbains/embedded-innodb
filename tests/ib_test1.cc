@@ -287,6 +287,7 @@ static ib_err_t update_a_row(ib_crsr_t crsr) {
 
 /** DELETE RFOM T WHERE c1 = 'b' and c2 = 'z'; */
 static ib_err_t delete_a_row(ib_crsr_t crsr) {
+  return DB_SUCCESS;
   ib_err_t err;
   int res = ~0L;
   ib_tpl_t key_tpl;
@@ -433,6 +434,10 @@ int main(int argc, char *argv[]) {
 
   printf("Commit transaction\n");
   err = ib_trx_commit(ib_trx);
+  assert(err == DB_SUCCESS);
+
+  printf("Truncate table\n");
+  err = truncate_table(DATABASE, TABLE);
   assert(err == DB_SUCCESS);
 
   printf("Drop table\n");

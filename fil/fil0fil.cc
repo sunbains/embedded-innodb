@@ -139,7 +139,7 @@ Fil::~Fil() noexcept {
   ut_a(UT_LIST_GET_LEN(m_unflushed_spaces) == 0);
 
   mutex_free(&m_mutex);
-} 
+}
 
 const char *Fil::normalize_path(const char *ptr) {
   if (*ptr == '.' && *(ptr + 1) == SRV_PATH_SEPARATOR) {
@@ -441,7 +441,7 @@ void Fil::mutex_enter_and_prepare_for_io(space_id_t space_id) {
       if (n_stopped_ios > 20000) {
         log_warn(std::format(
           "Tablespace {} has i/o ops stopped for a long time {}",
-          space->m_name,n_stopped_ios 
+          space->m_name,n_stopped_ios
         ));
       }
 
@@ -463,7 +463,7 @@ void Fil::mutex_enter_and_prepare_for_io(space_id_t space_id) {
         ));
 
       return;
-    } 
+    }
 
     mutex_exit(&m_mutex);
 
@@ -808,7 +808,7 @@ void Fil::open_log_and_system_tablespace_files() {
 
   for (auto space : m_space_list) {
     if (space->m_type != FIL_TABLESPACE || space->m_id == 0) {
-      
+
       for (auto node : space->m_chain) {
         if (!node->open) {
           node_open_file(node, space);
@@ -1169,8 +1169,6 @@ bool Fil::delete_tablespace(space_id_t id) {
     is_being_deleted also prevents Fil::flush() from being applied to this
     tablespace. */
 
-    srv_buf_pool->m_LRU->invalidate_tablespace(id);
-
     auto success = space_free(id, false);
 
     if (success) {
@@ -1180,7 +1178,7 @@ bool Fil::delete_tablespace(space_id_t id) {
       mtr_start(&mtr);
 
       op_write_log(MLOG_FILE_DELETE, id, 0, 0, path, nullptr, &mtr);
-  
+
       mtr_commit(&mtr);
 
       success = os_file_delete(path);
