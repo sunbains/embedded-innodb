@@ -28,7 +28,6 @@ Created 11/5/1995 Heikki Tuuri
 
 #include "buf0types.h"
 #include "fil0types.h"
-#include "hash0hash.h"
 #include "mach0data.h"
 #include "mtr0types.h"
 #include "page0types.h"
@@ -70,10 +69,10 @@ extern ulint buf_pool_mutex_exit_forbidden;
   } while (0)
 
 /** Release the buffer pool mutex. */
-#define buf_pool_mutex_exit()             \
-  do {                                    \
+#define buf_pool_mutex_exit()                 \
+  do {                                        \
     ut_a(buf_pool_mutex_exit_forbidden == 0); \
-    mutex_exit(&buf_pool_mutex);          \
+    mutex_exit(&buf_pool_mutex);              \
   } while (0)
 
 #else /* UNIV_DEBUG */
@@ -493,12 +492,10 @@ inline void buf_ptr_get_fsp_addr(const void *ptr, ulint *space, fil_addr_t *addr
 inline ulint buf_block_get_lock_hash_val(const buf_block_t *block) {
   ut_ad(block->m_page.in_file());
 
-  IF_SYNC_DEBUG(
-    ut_ad(
-      rw_lock_own(&(((buf_block_t *)block)->m_rw_lock), RW_LOCK_EXCLUSIVE) ||
-      rw_lock_own(&(((buf_block_t *)block)->m_rw_lock), RW_LOCK_SHARED)
-   );
-  )
+  IF_SYNC_DEBUG(ut_ad(
+                  rw_lock_own(&(((buf_block_t *)block)->m_rw_lock), RW_LOCK_EXCLUSIVE) ||
+                  rw_lock_own(&(((buf_block_t *)block)->m_rw_lock), RW_LOCK_SHARED)
+  );)
 
   return block->m_lock_hash_val;
 }
@@ -562,8 +559,7 @@ inline lsn_t buf_page_get_newest_modification(const buf_page_t *bpage) {
 inline void buf_block_modify_clock_inc(buf_block_t *block) {
 
   IF_SYNC_DEBUG(
-    ut_ad((buf_pool_mutex_own() && block->m_page.buf_fix_count == 0) ||
-	  rw_lock_own(&block->m_rw_lock, RW_LOCK_EXCLUSIVE));
+    ut_ad((buf_pool_mutex_own() && block->m_page.buf_fix_count == 0) || rw_lock_own(&block->m_rw_lock, RW_LOCK_EXCLUSIVE));
   )
 
   ++block->m_modify_clock;
@@ -578,10 +574,7 @@ inline void buf_block_modify_clock_inc(buf_block_t *block) {
  */
 inline uint64_t buf_block_get_modify_clock(buf_block_t *block) {
 
-  IF_SYNC_DEBUG(
-    ut_ad(rw_lock_own(&(block->m_rw_lock), RW_LOCK_SHARED) ||
-          rw_lock_own(&(block->m_rw_lock), RW_LOCK_EXCLUSIVE));
-  )
+  IF_SYNC_DEBUG(ut_ad(rw_lock_own(&(block->m_rw_lock), RW_LOCK_SHARED) || rw_lock_own(&(block->m_rw_lock), RW_LOCK_EXCLUSIVE));)
 
   return block->m_modify_clock;
 }
@@ -594,17 +587,14 @@ inline uint64_t buf_block_get_modify_clock(buf_block_t *block) {
  * @param block Pointer to the buffer block.
  */
 inline void buf_block_buf_fix_inc_func(IF_SYNC_DEBUG(const char *file, ulint line, ) buf_block_t *block) {
-  IF_SYNC_DEBUG(
-    auto ret = rw_lock_s_lock_nowait(&(block->m_debug_latch), file, line);
-    ut_a(ret);
-  );
+  IF_SYNC_DEBUG(auto ret = rw_lock_s_lock_nowait(&(block->m_debug_latch), file, line); ut_a(ret););
 
   ut_ad(mutex_own(&block->m_mutex));
 
   ++block->m_page.m_buf_fix_count;
 }
 
-#define buf_block_buf_fix_inc(b, f, l) buf_block_buf_fix_inc_func(IF_SYNC_DEBUG(f, l,) b)
+#define buf_block_buf_fix_inc(b, f, l) buf_block_buf_fix_inc_func(IF_SYNC_DEBUG(f, l, ) b)
 
 inline void buf_block_t::fix_dec() {
   ut_ad(mutex_own(&m_mutex));
@@ -618,19 +608,10 @@ inline buf_page_t *Buf_pool::hash_get_page(space_id_t space_id, page_no_t page_n
   ut_ad(buf_pool_mutex_own());
 
   // Look for the page in the hash table
-  auto fold = buf_page_address_fold(space_id, page_no);
-
-  buf_page_t *bpage;
-
-  HASH_SEARCH(
-    m_hash,
-    m_page_hash,
-    fold,
-    buf_page_t *,
-    bpage,
-    ut_ad(bpage->m_in_page_hash && bpage->in_file()),
-    bpage->m_space == space_id && bpage->m_page_no ==page_no 
-  );
+  buf_page_t *bpage{nullptr};
+  if (auto it = m_page_hash->find(Page_id(space_id, page_no)); it != m_page_hash->end()) {
+    bpage = it->second;
+  }
 
   if (bpage != nullptr) {
     ut_a(bpage->in_file());
@@ -691,7 +672,7 @@ inline void buf_block_dbg_add_level(IF_SYNC_DEBUG(buf_block_t *block, ulint leve
 /** Releases a latch, if specified.
 @param[in] block             Block for which to release the latch
 @param[in] rw_latch          The latch type. */
-inline void buf_page_release_latch( buf_block_t *block, ulint rw_latch) {
+inline void buf_page_release_latch(buf_block_t *block, ulint rw_latch) {
   if (rw_latch == RW_S_LATCH) {
     rw_lock_s_unlock(&block->m_rw_lock);
   } else if (rw_latch == RW_X_LATCH) {
