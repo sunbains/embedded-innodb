@@ -27,6 +27,8 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "innodb0types.h"
 
+#include <string>
+#include <unordered_map>
 #include "data0types.h"
 #include "fsp0types.h"
 #include "hash0hash.h"
@@ -50,10 +52,10 @@ struct ind_node_t;
 struct tab_node_t;
 
 /** Space id and page no where the dictionary header resides */
-constexpr ulint DICT_HDR_SPACE  = 0;
+constexpr ulint DICT_HDR_SPACE = 0;
 
- /** The page number of the dictionary header */
-constexpr ulint DICT_HDR_PAGE_NO  = FSP_DICT_HDR_PAGE_NO;
+/** The page number of the dictionary header */
+constexpr ulint DICT_HDR_PAGE_NO = FSP_DICT_HDR_PAGE_NO;
 
 /** The flags for ON_UPDATE and ON_DELETE can be ORed; the default is that
 a foreign key constraint is enforced, therefore RESTRICT just means no flag */
@@ -543,10 +545,10 @@ struct dict_sys_t {
   uint64_t row_id;
 
   /** Hash table of the tables, based on name */
-  hash_table_t *table_hash;
+  std::unordered_map<std::string, dict_table_t *> *table_hash;
 
   /** Hash table of the tables, based on id */
-  hash_table_t *table_id_hash;
+  std::unordered_map<std::uint64_t, dict_table_t *> *table_id_hash;
 
   /** LRU list of tables */
   UT_LIST_BASE_NODE_T(dict_table_t, table_LRU) table_LRU;

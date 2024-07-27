@@ -249,7 +249,9 @@ db_err dict_create_foreign_constraints(trx_t *trx, const char *sql_string, const
  * @param constraints_to_drop The id's of the constraints to drop.
  * @return DB_SUCCESS or DB_CANNOT_DROP_CONSTRAINT if syntax error or the constraint id does not match.
  */
-db_err dict_foreign_parse_drop_constraints(mem_heap_t *heap, trx_t *trx, dict_table_t *table, ulint *n, const char ***constraints_to_drop);
+db_err dict_foreign_parse_drop_constraints(
+  mem_heap_t *heap, trx_t *trx, dict_table_t *table, ulint *n, const char ***constraints_to_drop
+);
 
 /**
  * @brief Finds an index that is equivalent to the one passed in and is not marked for deletion.
@@ -636,7 +638,7 @@ inline ulint dict_col_get_max_size(const dict_col_t *col) {
  * @param comp nonzero=ROW_FORMAT=COMPACT
  * @return fixed size, or 0
  */
-inline ulint dict_col_get_fixed_size( const dict_col_t *col, ulint comp) {
+inline ulint dict_col_get_fixed_size(const dict_col_t *col, ulint comp) {
   return dtype_get_fixed_size_low(col->mtype, col->prtype, col->len, col->mbminlen, col->mbmaxlen, comp);
 }
 
@@ -727,8 +729,7 @@ inline ulint dict_table_get_n_user_cols(const dict_table_t *table) {
  * @param table table
  * @return number of system (e.g., ROW_ID) columns of a table
  */
-inline ulint dict_table_get_n_sys_cols(const dict_table_t *IF_DEBUG(table))
-{
+inline ulint dict_table_get_n_sys_cols(const dict_table_t *IF_DEBUG(table)) {
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
   ut_ad(table->cached);
 
@@ -980,13 +981,10 @@ inline dict_table_t *dict_table_check_if_in_cache_low(const char *table_name) {
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
   /* Look for the table name in the hash table */
-  auto table_fold = ut_fold_string(table_name);
-
-  dict_table_t *table;
-
-  HASH_SEARCH(
-    name_hash, dict_sys->table_hash, table_fold, dict_table_t *, table, ut_ad(table->cached), !strcmp(table->name, table_name)
-  );
+  dict_table_t *table{nullptr};
+  if (auto itr = dict_sys->table_hash->find(table_name); itr != dict_sys->table_hash->end()) {
+    table = itr->second;
+  }
 
   return table;
 }
@@ -1022,11 +1020,10 @@ inline dict_table_t *dict_table_get_on_id_low(ib_recovery_t recovery, uint64_t t
   ut_ad(mutex_own(&dict_sys->mutex));
 
   /* Look for the table name in the hash table */
-  auto fold = ut_uint64_fold(table_id);
-
-  dict_table_t *table;
-
-  HASH_SEARCH(id_hash, dict_sys->table_id_hash, fold, dict_table_t *, table, ut_ad(table->cached), table->id == table_id);
+  dict_table_t *table{nullptr};
+  if (auto itr = dict_sys->table_id_hash->find(table_id); itr != dict_sys->table_id_hash->end()) {
+    table = itr->second;
+  }
 
   if (table == nullptr) {
     table = dict_load_table_on_id(recovery, table_id);
