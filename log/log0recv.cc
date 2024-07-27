@@ -142,7 +142,7 @@ void recv_sys_create() {
 
   recv_sys = static_cast<recv_sys_t *>(mem_alloc(sizeof(*recv_sys)));
 
-  mutex_create(&recv_sys->mutex, IF_DEBUG("recv_sys_mutex",) IF_SYNC_DEBUG(SYNC_RECV,) Source_location{});
+  mutex_create(&recv_sys->mutex, IF_DEBUG("recv_sys_mutex", ) IF_SYNC_DEBUG(SYNC_RECV, ) Source_location{});
 
   recv_sys->heap = nullptr;
   recv_sys->addr_hash = nullptr;
@@ -157,7 +157,7 @@ void recv_sys_close(void) {
 void recv_sys_mem_free() {
   if (recv_sys != nullptr) {
     if (recv_sys->addr_hash != nullptr) {
-      hash_table_free(recv_sys->addr_hash);
+      delete recv_sys->addr_hash;
     }
 
     if (recv_sys->heap != nullptr) {
@@ -197,7 +197,7 @@ void recv_sys_init(ulint available_memory) {
   recv_sys->len = 0;
   recv_sys->recovered_offset = 0;
 
-  recv_sys->addr_hash = hash_create(available_memory / 64);
+  recv_sys->addr_hash = new recv_sys_t::addr_hash_t();
   recv_sys->n_addrs = 0;
 
   recv_sys->apply_log_recs = false;
@@ -230,16 +230,15 @@ static void recv_sys_empty_hash(void) {
     ut_error;
   }
 
-  hash_table_free(recv_sys->addr_hash);
   mem_heap_empty(recv_sys->heap);
 
-  recv_sys->addr_hash = hash_create(srv_buf_pool->get_curr_size() / 256);
+  recv_sys->addr_hash = new recv_sys_t::addr_hash_t();
 }
 
 static void recv_sys_debug_free() {
   mutex_enter(&(recv_sys->mutex));
 
-  hash_table_free(recv_sys->addr_hash);
+  delete recv_sys->addr_hash;
   mem_heap_free(recv_sys->heap);
   ut_delete(recv_sys->buf);
   mem_free(recv_sys->last_block_buf_start);
@@ -714,7 +713,9 @@ static byte *recv_parse_or_apply_log_rec_body(
     case MLOG_COMP_LIST_START_DELETE:
       ut_ad(!page || page_type == FIL_PAGE_INDEX);
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, type == MLOG_COMP_LIST_END_DELETE || type == MLOG_COMP_LIST_START_DELETE, &index))) {
+      if (nullptr !=
+          (ptr =
+             mlog_parse_index(ptr, end_ptr, type == MLOG_COMP_LIST_END_DELETE || type == MLOG_COMP_LIST_START_DELETE, &index))) {
         ut_a(!page || (bool)!!page_is_comp(page) == dict_table_is_comp(index->table));
         ptr = page_parse_delete_rec_list(type, ptr, end_ptr, block, index, mtr);
       }
@@ -818,17 +819,6 @@ inline ulint recv_fold(
   return ut_fold_ulint_pair(space, page_no);
 }
 
-/** Calculates the hash value of a page file address: used in inserting or
-searching for a log record in the hash table.
-@return	folded value */
-inline ulint recv_hash(
-  ulint space, /*!< in: space */
-  ulint page_no
-) /*!< in: page number */
-{
-  return hash_calc_hash(recv_fold(space, page_no), recv_sys->addr_hash);
-}
-
 /** Gets the hashed file address struct for a page.
 @return	file address struct, nullptr if not found from the hash table */
 static recv_addr_t *recv_get_fil_addr_struct(
@@ -836,18 +826,11 @@ static recv_addr_t *recv_get_fil_addr_struct(
   ulint page_no
 ) /*!< in: page number */
 {
-  auto recv_addr = static_cast<recv_addr_t *>(HASH_GET_FIRST(recv_sys->addr_hash, recv_hash(space, page_no)));
-
-  while (recv_addr != nullptr) {
-    if ((recv_addr->space == space) && (recv_addr->page_no == page_no)) {
-
-      break;
-    }
-
-    recv_addr = static_cast<recv_addr_t *>(HASH_GET_NEXT(addr_hash, recv_addr));
+  if (auto itr = recv_sys->addr_hash->find(std::make_pair(space, page_no)); itr != recv_sys->addr_hash->end()) {
+    return itr->second;
   }
 
-  return recv_addr;
+  return nullptr;
 }
 
 /** Adds a new log record to the hash table of log records. */
@@ -893,7 +876,7 @@ static void recv_add_to_hash_table(
 
     UT_LIST_INIT(recv_addr->rec_list);
 
-    HASH_INSERT(recv_addr_t, addr_hash, recv_sys->addr_hash, recv_fold(space, page_no), recv_addr);
+    recv_sys->addr_hash->emplace(std::make_pair(space, page_no), recv_addr);
     recv_sys->n_addrs++;
   }
 
@@ -1006,13 +989,8 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
     rw_lock_x_lock_move_ownership(&block->m_rw_lock);
   }
 
-  Buf_pool::Request req {
-    .m_rw_latch  = RW_X_LATCH,
-    .m_guess = block,
-    .m_mode = BUF_KEEP_OLD,
-    .m_file = __FILE__,
-    .m_line = __LINE__,
-    .m_mtr = &mtr
+  Buf_pool::Request req{
+    .m_rw_latch = RW_X_LATCH, .m_guess = block, .m_mode = BUF_KEEP_OLD, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr
   };
 
   success = srv_buf_pool->try_get_known_nowait(req);
@@ -1183,59 +1161,53 @@ void recv_apply_hashed_log_recs(bool flush_and_free_pages) {
   recv_sys->apply_log_recs = true;
   recv_sys->apply_batch_on = true;
 
-  for (ulint i = 0; i < hash_get_n_cells(recv_sys->addr_hash); i++) {
+  std::uint64_t i{0};
+  for (auto &[space_id_page_no_pair, recv_addr] : *recv_sys->addr_hash) {
+    auto space_id = recv_addr->space;
+    auto page_no = recv_addr->page_no;
 
-    auto recv_addr = static_cast<recv_addr_t *>(HASH_GET_FIRST(recv_sys->addr_hash, i));
-
-    while (recv_addr != nullptr) {
-      auto space_id = recv_addr->space;
-      auto page_no = recv_addr->page_no;
-
-      if (recv_addr->state == RECV_NOT_PROCESSED) {
-        if (!has_printed) {
-          ut_print_timestamp(ib_stream);
-          ib_logger(ib_stream, "Starting an apply batch of log records to the database...");
-          ib_logger(ib_stream, "Progress in percents: ");
-          has_printed = true;
-        }
-
-        mutex_exit(&(recv_sys->mutex));
-
-        if (srv_buf_pool->peek(space_id, page_no)) {
-
-          mtr_t mtr;
-
-          mtr_start(&mtr);
-
-          Buf_pool::Request req {
-            .m_rw_latch = RW_X_LATCH,
-            .m_page_id = { space_id, page_no },
-            .m_mode = BUF_GET,
-            .m_file = __FILE__,
-            .m_line = __LINE__,
-            .m_mtr = &mtr
-          };
-
-          auto block = srv_buf_pool->get(req, nullptr);
-          buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
-
-          recv_recover_page(false, block);
-
-          mtr_commit(&mtr);
-
-        } else {
-          recv_read_in_area(space_id, 0, page_no);
-        }
-
-        mutex_enter(&recv_sys->mutex);
+    if (recv_addr->state == RECV_NOT_PROCESSED) {
+      if (!has_printed) {
+        ut_print_timestamp(ib_stream);
+        ib_logger(ib_stream, "Starting an apply batch of log records to the database...");
+        ib_logger(ib_stream, "Progress in percents: ");
+        has_printed = true;
       }
 
-      recv_addr = static_cast<recv_addr_t *>(HASH_GET_NEXT(addr_hash, recv_addr));
+      mutex_exit(&(recv_sys->mutex));
+
+      if (srv_buf_pool->peek(space_id, page_no)) {
+
+        mtr_t mtr;
+
+        mtr_start(&mtr);
+
+        Buf_pool::Request req{
+          .m_rw_latch = RW_X_LATCH,
+          .m_page_id = {space_id, page_no},
+          .m_mode = BUF_GET,
+          .m_file = __FILE__,
+          .m_line = __LINE__,
+          .m_mtr = &mtr
+        };
+
+        auto block = srv_buf_pool->get(req, nullptr);
+        buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
+
+        recv_recover_page(false, block);
+
+        mtr_commit(&mtr);
+
+      } else {
+        recv_read_in_area(space_id, 0, page_no);
+      }
+
+      mutex_enter(&recv_sys->mutex);
     }
 
-    if (has_printed && (i * 100) / hash_get_n_cells(recv_sys->addr_hash) != ((i + 1) * 100) / hash_get_n_cells(recv_sys->addr_hash)) {
+    if (has_printed && i % 100 == 0) {
 
-      ib_logger(ib_stream, "%lu ", (ulong)((i * 100) / hash_get_n_cells(recv_sys->addr_hash)));
+      ib_logger(ib_stream, "%lu ", i);
     }
   }
 
@@ -1389,7 +1361,8 @@ static void recv_report_corrupt_log(
     (ulong)recv_previous_parsed_rec_offset
   );
 
-  if ((ulint)(ptr - recv_sys->buf + 100) > recv_previous_parsed_rec_offset && (ulint)(ptr - recv_sys->buf + 100 - recv_previous_parsed_rec_offset) < 200000) {
+  if ((ulint)(ptr - recv_sys->buf + 100) > recv_previous_parsed_rec_offset &&
+      (ulint)(ptr - recv_sys->buf + 100 - recv_previous_parsed_rec_offset) < 200000) {
     ib_logger(
       ib_stream,
       "Hex dump of corrupt log starting"
@@ -1614,10 +1587,9 @@ loop:
         break;
       }
 
-      if (
-        store_to_hash
+      if (store_to_hash
 #ifdef UNIV_LOG_LSN_DEBUG
-        && type != MLOG_LSN
+          && type != MLOG_LSN
 #endif /* UNIV_LOG_LSN_DEBUG */
       ) {
         recv_add_to_hash_table(type, space, page_no, body, ptr + len, old_lsn, new_recovered_lsn);
@@ -1995,14 +1967,7 @@ static void recv_recover_from_ibbackup(log_group_t *max_cp_group) /*!< in/out: l
   /* Read the first log file header to print a note if this is
   a recovery from a restored InnoDB Hot Backup */
 
-  srv_fil->io(IO_request::Sync_log_read,
-         false,
-         max_cp_group->space_id,
-         0,
-         0,
-         LOG_FILE_HDR_SIZE,
-         log_hdr_buf,
-         max_cp_group);
+  srv_fil->io(IO_request::Sync_log_read, false, max_cp_group->space_id, 0, 0, LOG_FILE_HDR_SIZE, log_hdr_buf, max_cp_group);
 
   if (0 == memcmp(log_hdr_buf + LOG_FILE_WAS_CREATED_BY_HOT_BACKUP, (byte *)"ibbackup", (sizeof "ibbackup") - 1)) {
     /* This log file was created by ibbackup --restore: print
@@ -2026,14 +1991,7 @@ static void recv_recover_from_ibbackup(log_group_t *max_cp_group) /*!< in/out: l
     memset(log_hdr_buf + LOG_FILE_WAS_CREATED_BY_HOT_BACKUP, ' ', 4);
 
     /* Write to the log file to wipe over the label */
-    srv_fil->io(IO_request::Sync_log_write,
-           false,
-           max_cp_group->space_id,
-           0,
-           0,
-           IB_FILE_BLOCK_SIZE,
-           log_hdr_buf,
-           max_cp_group);
+    srv_fil->io(IO_request::Sync_log_write, false, max_cp_group->space_id, 0, 0, IB_FILE_BLOCK_SIZE, log_hdr_buf, max_cp_group);
   }
 }
 
