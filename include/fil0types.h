@@ -2,7 +2,6 @@
 
 #include "innodb0types.h"
 
-#include "hash0hash.h"
 #include "sync0rw.h"
 #include "ut0lst.h"
 
@@ -130,11 +129,11 @@ constexpr ulint FIL_PAGE_TYPE_ZBLOB2 = 12;
 /* @} */
 
 enum Fil_type {
-/** Tablespace */
-FIL_TABLESPACE = 501,
+  /** Tablespace */
+  FIL_TABLESPACE = 501,
 
-/** Redo log */
-FIL_LOG = 502
+  /** Redo log */
+  FIL_LOG = 502
 };
 
 /** Value of fil_space_t::magic_n */
@@ -241,12 +240,6 @@ struct fil_space_t {
   /** this is positive when flushing the tablespace to disk; dropping of
   the tablespace is forbidden if this is positive */
   uint32_t m_n_pending_flushes;
-
-  /** Hash chain node */
-  hash_node_t m_hash;
-
-  /** hash chain the name_hash table */
-  hash_node_t m_name_hash;
 
   /** latch protecting the file space storage allocation */
   rw_lock_t m_latch;
