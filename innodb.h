@@ -845,7 +845,6 @@ extern ib_client_cmp_t  ib_client_compare;
  * @return  innobase txn handle */
 [[nodiscard]] ib_trx_t ib_trx_begin(ib_trx_level_t  trx_level);
 
-
 /** Set client data for a transaction. This is passed back to the client
  * in the trx_is_interrupted callback. InnoDB will only ever pass this
  * around, it will never dereference it.
@@ -1155,20 +1154,14 @@ void ib_index_schema_delete(ib_idx_sch_t idx_sch);
 
 /** Attach the cursor to the transaction. The cursor must not already be
  * attached to another transaction.
- * 
+ *
  * @ingroup cursor
  * @param crsr is the cursor instance
  * @param trx is the transaction to attach to the cursor */
 void ib_cursor_attach_trx(ib_crsr_t crsr, ib_trx_t trx);
 
-/** Set the client comparison function for BLOBs and client types.
- * 
- * @ingroup misc
- * @param client_cmp_func is the index key compare callback function */
-void ib_set_client_compare(ib_client_cmp_t client_cmp_func);
-
 /** Set the match mode for ib_cursor_move().
- * 
+ *
  * @ingroup cursor
  * @param crsr is the cursor instance
  * @param match_mode is the match mode to set */
@@ -1736,7 +1729,6 @@ void ib_logger_set(ib_msg_log_t msg_log, ib_msg_stream_t msg_stream);
 * @ingroup misc
 * @param db_errno is the error number
 * @return  string, describing the error */
-
 [[nodiscard]] const char* ib_strerror(ib_err_t db_errno);
 
 /** Get the value of an INT status variable. 
