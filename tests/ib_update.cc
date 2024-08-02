@@ -263,7 +263,7 @@ int main(int argc, char *argv[]) {
   ib_err_t err;
   ib_crsr_t crsr;
   ib_trx_t ib_trx;
-  ib_u64_t version;
+  uint64_t version;
 
   (void)argc;
   (void)argv;

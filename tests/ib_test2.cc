@@ -218,7 +218,7 @@ static ib_err_t update_random_rows(ib_crsr_t crsr) {
 
   /* Match found */
   if (res == 0) {
-    ib_u32_t score;
+    uint32_t score;
     const char *first;
     ib_ulint_t data_len;
     ib_ulint_t first_len;

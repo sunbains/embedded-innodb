@@ -85,9 +85,9 @@ static void test_config_parser(void) {
 
 static void test_ib_cfg_get_all(void) {
   const char **names;
-  ib_u32_t names_num;
+  uint32_t names_num;
   char buf[8]; /* long enough to store any type */
-  ib_u32_t i;
+  uint32_t i;
 
   /* can be called before ib_init() */
   OK(ib_cfg_get_all(&names, &names_num));

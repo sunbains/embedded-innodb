@@ -141,8 +141,8 @@ static const ib_status_t status_vars[] = {
 
   {nullptr, IB_STATUS_UNDEF, 0}};
 
-ib_err_t ib_status_get_all(const char ***names, ib_u32_t *names_num) {
-  ib_u32_t i;
+ib_err_t ib_status_get_all(const char ***names, uint32_t *names_num) {
+  uint32_t i;
 
   *names_num = std::size(status_vars);
 
@@ -180,7 +180,7 @@ static ib_err_t ib_status_lookup(const char *name, const ib_status_t **var) {
   return DB_NOT_FOUND;
 }
 
-ib_err_t ib_status_get_i64(const char *name, ib_i64_t *dst) {
+ib_err_t ib_status_get_i64(const char *name, int64_t *dst) {
   const ib_status_t *var;
 
   auto err = ib_status_lookup(name, &var);

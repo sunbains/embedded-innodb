@@ -296,7 +296,7 @@ static ib_err_t update_t1(void *arg) /*!< in: arguments for callback */
 
   /* Iterate over the records while the first column matches "a". */
   while (1) {
-    ib_u32_t score;
+    uint32_t score;
     const char *first;
     ib_ulint_t data_len;
     ib_col_meta_t col_meta;

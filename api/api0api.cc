@@ -618,8 +618,8 @@ static ib_tpl_t ib_row_tuple_new(const dict_index_t *dict_index, ulint n_cols) {
   return ib_row_tuple_new_low(dict_index, n_cols, heap);
 }
 
-ib_u64_t ib_api_version() {
-  return ((ib_u64_t)IB_API_VERSION_CURRENT << 32 | (IB_API_VERSION_REVISION << 16) | IB_API_VERSION_AGE);
+uint64_t ib_api_version() {
+  return ((uint64_t)IB_API_VERSION_CURRENT << 32 | (IB_API_VERSION_REVISION << 16) | IB_API_VERSION_AGE);
 }
 
 ib_err_t ib_init() {
@@ -911,7 +911,7 @@ static const ib_key_col_t *ib_index_find_col(ib_vector_t *cols, const char *name
 }
 
 ib_err_t ib_table_schema_add_col(
-  ib_tbl_sch_t ib_tbl_sch, const char *name, ib_col_type_t ib_col_type, ib_col_attr_t ib_col_attr, ib_u16_t client_type, ib_ulint_t len) {
+  ib_tbl_sch_t ib_tbl_sch, const char *name, ib_col_type_t ib_col_type, ib_col_attr_t ib_col_attr, uint16_t client_type, ib_ulint_t len) {
   ib_col_t *ib_col;
   ib_err_t err = DB_SUCCESS;
   ib_table_def_t *table_def = (ib_table_def_t *)ib_tbl_sch;
@@ -3580,7 +3580,7 @@ static ib_col_attr_t ib_col_get_attr(ulint prtype) {
  * @return len of column data
  */
 static ib_ulint_t ib_col_get_meta_low(ib_tpl_t ib_tpl, ib_ulint_t i, ib_col_meta_t *ib_col_meta) {
-  ib_u16_t prtype;
+  uint16_t prtype;
   const dfield_t *dfield;
   ulint data_len;
   ib_tuple_t *tuple = (ib_tuple_t *)ib_tpl;
@@ -3594,7 +3594,7 @@ static ib_ulint_t ib_col_get_meta_low(ib_tpl_t ib_tpl, ib_ulint_t i, ib_col_meta
 
   ib_col_meta->type_len = dtype_get_len(dfield_get_type(dfield));
 
-  prtype = (ib_u16_t)dtype_get_prtype(dfield_get_type(dfield));
+  prtype = (uint16_t)dtype_get_prtype(dfield_get_type(dfield));
 
   ib_col_meta->attr = ib_col_get_attr(prtype);
   ib_col_meta->client_type = prtype & DATA_CLIENT_TYPE_MASK;
@@ -3630,7 +3630,7 @@ static ib_err_t ib_tuple_check_int(ib_tpl_t ib_tpl, ib_ulint_t i, bool usign, ul
   return DB_SUCCESS;
 }
 
-ib_err_t ib_tuple_read_i8(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i8_t *ival) {
+ib_err_t ib_tuple_read_i8(ib_tpl_t ib_tpl, ib_ulint_t i, int8_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3644,7 +3644,7 @@ ib_err_t ib_tuple_read_i8(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i8_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_u8(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u8_t *ival) {
+ib_err_t ib_tuple_read_u8(ib_tpl_t ib_tpl, ib_ulint_t i, uint8_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3658,7 +3658,7 @@ ib_err_t ib_tuple_read_u8(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u8_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_i16(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i16_t *ival) {
+ib_err_t ib_tuple_read_i16(ib_tpl_t ib_tpl, ib_ulint_t i, int16_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3672,7 +3672,7 @@ ib_err_t ib_tuple_read_i16(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i16_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_u16(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u16_t *ival) {
+ib_err_t ib_tuple_read_u16(ib_tpl_t ib_tpl, ib_ulint_t i, uint16_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3686,7 +3686,7 @@ ib_err_t ib_tuple_read_u16(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u16_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_i32(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i32_t *ival) {
+ib_err_t ib_tuple_read_i32(ib_tpl_t ib_tpl, ib_ulint_t i, int32_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3700,7 +3700,7 @@ ib_err_t ib_tuple_read_i32(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i32_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_u32(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u32_t *ival) {
+ib_err_t ib_tuple_read_u32(ib_tpl_t ib_tpl, ib_ulint_t i, uint32_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3728,7 +3728,7 @@ ib_err_t ib_tuple_read_i64(ib_tpl_t ib_tpl, ib_ulint_t i, int64_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_u64(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u64_t *ival) {
+ib_err_t ib_tuple_read_u64(ib_tpl_t ib_tpl, ib_ulint_t i, uint64_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -4683,15 +4683,15 @@ static ib_err_t ib_tuple_write_int(ib_tpl_t ib_tpl, ulint col_no, const void *va
 }
 #endif
 
-ib_err_t ib_tuple_write_i8(ib_tpl_t ib_tpl, int col_no, ib_i8_t val) {
+ib_err_t ib_tuple_write_i8(ib_tpl_t ib_tpl, int col_no, int8_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_i16(ib_tpl_t ib_tpl, int col_no, ib_i16_t val) {
+ib_err_t ib_tuple_write_i16(ib_tpl_t ib_tpl, int col_no, int16_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_i32(ib_tpl_t ib_tpl, int col_no, ib_i32_t val) {
+ib_err_t ib_tuple_write_i32(ib_tpl_t ib_tpl, int col_no, int32_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
@@ -4699,19 +4699,19 @@ ib_err_t ib_tuple_write_i64(ib_tpl_t ib_tpl, int col_no, int64_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_u8(ib_tpl_t ib_tpl, int col_no, ib_u8_t val) {
+ib_err_t ib_tuple_write_u8(ib_tpl_t ib_tpl, int col_no, uint8_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_u16(ib_tpl_t ib_tpl, int col_no, ib_u16_t val) {
+ib_err_t ib_tuple_write_u16(ib_tpl_t ib_tpl, int col_no, uint16_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_u32(ib_tpl_t ib_tpl, int col_no, ib_u32_t val) {
+ib_err_t ib_tuple_write_u32(ib_tpl_t ib_tpl, int col_no, uint32_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_u64(ib_tpl_t ib_tpl, int col_no, ib_u64_t val) {
+ib_err_t ib_tuple_write_u64(ib_tpl_t ib_tpl, int col_no, uint64_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
@@ -4821,7 +4821,7 @@ ib_err_t ib_get_table_statistics(ib_crsr_t ib_crsr, ib_table_stats_t *table_stat
   return DB_SUCCESS;
 }
 
-ib_err_t ib_get_index_stat_n_diff_key_vals(ib_crsr_t ib_crsr, const char *index_name, ib_u64_t *ncols, int64_t **n_diff) {
+ib_err_t ib_get_index_stat_n_diff_key_vals(ib_crsr_t ib_crsr, const char *index_name, uint64_t *ncols, int64_t **n_diff) {
   ib_cursor_t *cursor = (ib_cursor_t *)ib_crsr;
   dict_table_t *table = cursor->prebuilt->table;
   dict_index_t *index;

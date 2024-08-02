@@ -75,9 +75,9 @@ typedef struct ib_op_stats {
   ib_op_time_t insert;
 } ib_op_stats_t;
 
-static ib_u32_t n_threads = 1;
-static ib_u32_t n_rows = MILLION;
-static const ib_u32_t BATCH_SIZE = 10000;
+static uint32_t n_threads = 1;
+static uint32_t n_rows = MILLION;
+static const uint32_t BATCH_SIZE = 10000;
 
 /* The page size for compressed tables, if this value is > 0 then
 we create compressed tables. It's set via the command line parameter
@@ -187,11 +187,11 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_UNSIGNED, 0,
-                                sizeof(ib_u32_t));
+                                sizeof(uint32_t));
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_col(ib_tbl_sch, "c2", IB_INT, IB_COL_UNSIGNED, 0,
-                                sizeof(ib_u32_t));
+                                sizeof(uint32_t));
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_index(ib_tbl_sch, "PRIMARY", &ib_idx_sch);
@@ -236,10 +236,10 @@ static ib_err_t open_table(const char *dbname, const char *name, ib_trx_t ib_trx
 /** INSERT INTO T VALUE(i, i); */
 static ib_err_t
 insert_rows(ib_crsr_t crsr,    /*!< in, out: cursor to use for write */
-            ib_u32_t start,    /*!< in: start of column value */
-            ib_u32_t n_values) /*!< in: no. of values to insert */
+            uint32_t start,    /*!< in: start of column value */
+            uint32_t n_values) /*!< in: no. of values to insert */
 {
-  ib_u32_t i;
+  uint32_t i;
   ib_tpl_t tpl = nullptr;
   ib_err_t err = DB_SUCCESS;
 
@@ -271,9 +271,9 @@ insert_rows(ib_crsr_t crsr,    /*!< in, out: cursor to use for write */
 static ib_err_t
 copy_table(ib_crsr_t dst_crsr, /*!< in, out: dest table */
            ib_crsr_t src_crsr, /*!< in, out: source table */
-           ib_u32_t n_values)  /*!< in: no. of rows to copy in a batch */
+           uint32_t n_values)  /*!< in: no. of rows to copy in a batch */
 {
-  ib_u32_t i;
+  uint32_t i;
   ib_tpl_t src_tpl = nullptr;
   ib_tpl_t dst_tpl = nullptr;
   ib_err_t err = DB_SUCCESS;
@@ -285,7 +285,7 @@ copy_table(ib_crsr_t dst_crsr, /*!< in, out: dest table */
   assert(dst_tpl != nullptr);
 
   for (i = 0; i < n_values; ++i) {
-    ib_u32_t v;
+    uint32_t v;
 
     err = ib_cursor_read_row(src_crsr, src_tpl);
     assert(err == DB_SUCCESS);
@@ -343,7 +343,7 @@ copy_table(ib_crsr_t dst_crsr, /*!< in, out: dest table */
 /** SELECT COUNT(*) FROM T1, T2 WHERE T1.c1 = T2.c1; */
 static ib_err_t join_on_c1(ib_crsr_t t1_crsr, /*!< in: table */
                            ib_crsr_t t2_crsr, /*!< in: table */
-                           ib_u32_t *count) /*!< in: no. of rows that matched */
+                           uint32_t *count) /*!< in: no. of rows that matched */
 {
   ib_err_t t2_err;
   ib_err_t t1_err;
@@ -373,7 +373,7 @@ static ib_err_t join_on_c1(ib_crsr_t t1_crsr, /*!< in: table */
   /* Since we know that both tables have the same number of rows
   we iterate over the tables together. */
   while (t1_err == DB_SUCCESS && t2_err == DB_SUCCESS) {
-    ib_u32_t t1_c1;
+    uint32_t t1_c1;
 
     t1_err = ib_cursor_read_row(t1_crsr, t1_tpl);
     assert(t1_err == DB_SUCCESS);
@@ -382,7 +382,7 @@ static ib_err_t join_on_c1(ib_crsr_t t1_crsr, /*!< in: table */
     assert(t1_err == DB_SUCCESS);
 
     while (t2_err == DB_SUCCESS) {
-      ib_u32_t t2_c1;
+      uint32_t t2_c1;
 
       t2_err = ib_cursor_read_row(t2_crsr, t2_tpl);
       assert(t2_err == DB_SUCCESS);
@@ -453,7 +453,7 @@ static void *worker_thread(void *arg) {
   ib_err_t err;
   time_t end;
   time_t start;
-  ib_u32_t count = 0;
+  uint32_t count = 0;
   char table1[BUFSIZ];
   char table2[BUFSIZ];
   ib_crsr_t src_crsr = nullptr;

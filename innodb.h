@@ -237,35 +237,8 @@ using ib_opaque_t = void*;
 /** A character set pointer */
 using ib_charset_t = ib_opaque_t;
 
-
-/* Integer types used by the API. Microsft VS defines its own types
-and we use the Microsoft types when building with Visual Studio. */
-/** A signed 8 bit integral type. */
-using ib_i8_t = int8_t;
-
-/** An unsigned 8 bit integral type. */
-using ib_u8_t = uint8_t;
-
-/** A signed 16 bit integral type. */
-using ib_i16_t = int16_t;
-
-/** An unsigned 16 bit integral type. */
-using ib_u16_t = uint16_t;
-
-/** A signed 32 bit integral type. */
-using ib_i32_t = int32_t;
-
-/** An unsigned 32 bit integral type. */
-using ib_u32_t = uint32_t;
-
-/** A signed 64 bit integral type. */
-using ib_i64_t = int64_t;
-
-/** An unsigned 64 bit integral type. */
-using ib_u64_t = uint64_t;
-
 /** The integral type that represents internal table and index ids. */
-using ib_id_t = ib_u64_t;
+using ib_id_t = uint64_t;
 
 /** @enum ib_cfg_type_t Possible types for a configuration variable. */
 enum ib_cfg_type_t {
@@ -435,9 +408,9 @@ typedef struct {
 
 	ib_col_attr_t	attr;		/*!< Column attributes */
 
-	ib_u32_t	type_len;	/*!< Length of type */
+	uint32_t	type_len;	/*!< Length of type */
 
-	ib_u16_t	client_type;	/*!< 16 bits of data relevant only to
+	uint16_t	client_type;	/*!< 16 bits of data relevant only to
 					the client. InnoDB doesn't care */
 
 	ib_charset_t*	charset;	/*!< Column charset */
@@ -767,7 +740,7 @@ extern ib_client_cmp_t	ib_client_compare;
 @return	API version number */
 
 INNODB_API
-[[nodiscard]] ib_u64_t ib_api_version();
+[[nodiscard]] uint64_t ib_api_version();
 
 /** Initialize the InnoDB engine. This must be called prior to calling
 any other InnoDB API function. You can call only the ib_cfg_*() functions
@@ -915,7 +888,7 @@ ib_table_schema_add_col(
 	const char*	name,
 	ib_col_type_t	ib_col_type,
 	ib_col_attr_t	ib_col_attr,
-	ib_u16_t	client_type,
+	uint16_t	client_type,
 	ib_ulint_t	len) UNIV_NO_IGNORE;
 
 /** Create and add an index key definition to a table schema. The index
@@ -1403,7 +1376,7 @@ ib_err_t
 ib_tuple_read_i8(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	ib_i8_t*	ival) UNIV_NO_IGNORE;
+	int8_t*	ival) UNIV_NO_IGNORE;
 
 /** Read an unsigned int 8 bit column from an InnoDB tuple.
 
@@ -1418,7 +1391,7 @@ ib_err_t
 ib_tuple_read_u8(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	ib_u8_t*	ival) UNIV_NO_IGNORE;
+	uint8_t*	ival) UNIV_NO_IGNORE;
 
 /** Read a signed int 16 bit column from an InnoDB tuple.
 
@@ -1433,7 +1406,7 @@ ib_err_t
 ib_tuple_read_i16(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	ib_i16_t*	ival) UNIV_NO_IGNORE;
+	int16_t*	ival) UNIV_NO_IGNORE;
 
 /** Read an unsigned int 16 bit column from an InnoDB tuple.
 
@@ -1448,7 +1421,7 @@ ib_err_t
 ib_tuple_read_u16(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	ib_u16_t*	ival) UNIV_NO_IGNORE;
+	uint16_t*	ival) UNIV_NO_IGNORE;
 
 /** Read a signed int 32 bit column from an InnoDB tuple.
 
@@ -1463,7 +1436,7 @@ ib_err_t
 ib_tuple_read_i32(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	ib_i32_t*	ival) UNIV_NO_IGNORE;
+	int32_t*	ival) UNIV_NO_IGNORE;
 
 /** Read an unsigned int 32 bit column from an InnoDB tuple.
 
@@ -1478,7 +1451,7 @@ ib_err_t
 ib_tuple_read_u32(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	ib_u32_t*	ival) UNIV_NO_IGNORE;
+	uint32_t*	ival) UNIV_NO_IGNORE;
 
 /** Read a signed int 64 bit column from an InnoDB tuple.
 
@@ -1493,7 +1466,7 @@ ib_err_t
 ib_tuple_read_i64(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	ib_i64_t*	ival) UNIV_NO_IGNORE;
+	int64_t*	ival) UNIV_NO_IGNORE;
 
 /** Read an unsigned int 64 bit column from an InnoDB tuple.
 
@@ -1508,7 +1481,7 @@ ib_err_t
 ib_tuple_read_u64(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	ib_u64_t*	ival) UNIV_NO_IGNORE;
+	uint64_t*	ival) UNIV_NO_IGNORE;
 
 /** Get a column value pointer from the tuple.
 
@@ -1955,7 +1928,7 @@ INNODB_API
 ib_err_t
 ib_cfg_get_all(
 	const char***	names,
-	ib_u32_t*	names_num) UNIV_NO_IGNORE;
+	uint32_t*	names_num) UNIV_NO_IGNORE;
 
 /** Creates a named savepoint. The transaction must be started. If there is
 already a savepoint of the same name, this call erases that old savepoint
@@ -2027,7 +2000,7 @@ ib_err_t
 ib_tuple_write_i8(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	ib_i8_t		val) UNIV_NO_IGNORE;
+	int8_t		val) UNIV_NO_IGNORE;
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2043,7 +2016,7 @@ ib_err_t
 ib_tuple_write_i16(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	ib_i16_t	val) UNIV_NO_IGNORE;
+	int16_t	val) UNIV_NO_IGNORE;
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2059,7 +2032,7 @@ ib_err_t
 ib_tuple_write_i32(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	ib_i32_t	val) UNIV_NO_IGNORE;
+	int32_t	val) UNIV_NO_IGNORE;
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2075,7 +2048,7 @@ ib_err_t
 ib_tuple_write_i64(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	ib_i64_t	val) UNIV_NO_IGNORE;
+	int64_t	val) UNIV_NO_IGNORE;
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2091,7 +2064,7 @@ ib_err_t
 ib_tuple_write_u8(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	ib_u8_t		val) UNIV_NO_IGNORE;
+	uint8_t		val) UNIV_NO_IGNORE;
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2107,7 +2080,7 @@ ib_err_t
 ib_tuple_write_u16(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	ib_u16_t	val) UNIV_NO_IGNORE;
+	uint16_t	val) UNIV_NO_IGNORE;
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2123,7 +2096,7 @@ ib_err_t
 ib_tuple_write_u32(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	ib_u32_t	val) UNIV_NO_IGNORE;
+	uint32_t	val) UNIV_NO_IGNORE;
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2139,7 +2112,7 @@ ib_err_t
 ib_tuple_write_u64(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	ib_u64_t	val) UNIV_NO_IGNORE;
+	uint64_t	val) UNIV_NO_IGNORE;
 
 /** Inform the cursor that it's the start of an SQL statement.
 
@@ -2249,7 +2222,7 @@ INNODB_API
 ib_err_t
 ib_status_get_i64(
 	const char*	name,
-	ib_i64_t*	dst) UNIV_NO_IGNORE;
+	int64_t*	dst) UNIV_NO_IGNORE;
 
 /** Get a list of the names of all status variables.
 The caller is responsible for free(3)ing the returned array of strings
@@ -2264,7 +2237,7 @@ INNODB_API
 ib_err_t
 ib_status_get_all(
 	const char***	names,
-	ib_u32_t*	names_num) UNIV_NO_IGNORE;
+	uint32_t*	names_num) UNIV_NO_IGNORE;
 
 /**
    Type of callback in the event of InnoDB panicing. Your callback should
@@ -2330,15 +2303,15 @@ ib_get_duplicate_key(ib_trx_t ib_trx, const char **table_name, const char **inde
 
 /** @struct ib_table_stats_t InnoDB Table and index statistics. */
 typedef struct {
-	ib_i64_t	stat_n_rows;
+	int64_t	stat_n_rows;
 				/*!< approximate number of rows in the table;
 				we periodically calculate new estimates */
-	ib_u64_t	stat_clustered_index_size;
+	uint64_t	stat_clustered_index_size;
 				/*!< approximate clustered index size in
 				bytes. */
-	ib_u64_t	stat_sum_of_other_index_sizes;
+	uint64_t	stat_sum_of_other_index_sizes;
 				/*!< other indexes in bytes */
-	ib_u64_t	stat_modified_counter;
+	uint64_t	stat_modified_counter;
 				/*!< when a row is inserted, updated,
 				or deleted, we add 1 to this number; we
 			       	calculate new estimates for the stat_...
@@ -2381,7 +2354,7 @@ ib_get_table_statistics(ib_crsr_t ib_crsr, ib_table_stats_t *table_stats, size_t
  */
 INNODB_API
 ib_err_t
-ib_get_index_stat_n_diff_key_vals(ib_crsr_t ib_crsr, const char* index_name, ib_u64_t *ncols, ib_i64_t **n_diff);
+ib_get_index_stat_n_diff_key_vals(ib_crsr_t ib_crsr, const char* index_name, uint64_t *ncols, int64_t **n_diff);
 
 /** Force an update of table and index statistics
 

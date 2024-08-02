@@ -50,8 +50,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #define DATABASE "test"
 
-static ib_u32_t n_rows = 100;
-static ib_u32_t n_threads = 2;
+static uint32_t n_rows = 100;
+static uint32_t n_threads = 2;
 
 /* Barrier to synchronize all threads */
 static pthread_barrier_t barrier;
@@ -86,11 +86,11 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_UNSIGNED, 0,
-                                sizeof(ib_u32_t));
+                                sizeof(uint32_t));
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_col(ib_tbl_sch, "c2", IB_INT, IB_COL_UNSIGNED, 0,
-                                sizeof(ib_u32_t));
+                                sizeof(uint32_t));
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_index(ib_tbl_sch, "PRIMARY", &ib_idx_sch);
@@ -140,11 +140,11 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 /** INSERT INTO T VALUE(i, i); */
 static ib_err_t
 insert_rows(ib_crsr_t crsr,    /*!< in, out: cursor to use for write */
-            ib_u32_t start,    /*!< in: start of column value */
-            ib_u32_t n_values, /*!< in: no. of values to insert */
+            uint32_t start,    /*!< in: start of column value */
+            uint32_t n_values, /*!< in: no. of values to insert */
             int thread_id)     /*!< in: id of thread doing insert */
 {
-  ib_u32_t i;
+  uint32_t i;
   ib_tpl_t tpl;
   ib_err_t err = DB_SUCCESS;
 
@@ -155,7 +155,7 @@ insert_rows(ib_crsr_t crsr,    /*!< in, out: cursor to use for write */
     err = ib_tuple_write_u32(tpl, 0, i);
     assert(err == DB_SUCCESS);
 
-    err = ib_tuple_write_u32(tpl, 1, (ib_u32_t)thread_id);
+    err = ib_tuple_write_u32(tpl, 1, (uint32_t)thread_id);
     assert(err == DB_SUCCESS);
 
     err = ib_cursor_insert_row(crsr, tpl);

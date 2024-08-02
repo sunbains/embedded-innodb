@@ -65,11 +65,11 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_NONE, 0,
-                                sizeof(ib_i32_t));
+                                sizeof(int32_t));
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_col(ib_tbl_sch, "c2", IB_INT, IB_COL_NONE, 0,
-                                sizeof(ib_i32_t));
+                                sizeof(int32_t));
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_index(ib_tbl_sch, PRIMARY_INDEX_NAME, &ib_idx_sch);

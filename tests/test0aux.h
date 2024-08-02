@@ -44,7 +44,7 @@ typedef struct ib_config {
 
 /** Read a value from an integer column in an InnoDB tuple.
 @return	column value */
-ib_u64_t read_int_from_tuple(
+uint64_t read_int_from_tuple(
     ib_tpl_t tpl,                  /*!< in: InnoDB tuple */
     const ib_col_meta_t *col_meta, /*!< in: col meta data */
     int i);                        /*!< in: column number */

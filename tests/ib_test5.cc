@@ -160,7 +160,7 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 static ib_err_t
 insert_random_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 {
-  ib_i32_t i;
+  int32_t i;
   ib_err_t err;
   ib_tpl_t tpl;
   char *ptr = (char *)malloc(8192);
@@ -201,9 +201,9 @@ insert_random_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 /** UPDATE T SET c1 = RANDOM(string), c3 = MOD(c3 + 1, 10)
         WHERE c3 = MOD(RANDOM(INT), 10); */
 static ib_err_t update_random_rows(ib_crsr_t crsr) {
-  ib_i32_t c3;
+  int32_t c3;
   ib_err_t err;
-  ib_i32_t key;
+  int32_t key;
   int res = ~0L;
   ib_crsr_t index_crsr;
   ib_tpl_t sec_key_tpl;

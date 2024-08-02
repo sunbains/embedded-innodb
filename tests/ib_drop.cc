@@ -71,7 +71,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_UNSIGNED, 0,
-                                sizeof(ib_u32_t));
+                                sizeof(uint32_t));
 
   assert(err == DB_SUCCESS);
 
