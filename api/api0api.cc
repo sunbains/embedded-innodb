@@ -747,7 +747,8 @@ ib_err_t ib_trx_commit(ib_trx_t ib_trx) {
   auto err = trx_commit(trx);
   ut_a(err == DB_SUCCESS);
 
-  ib_schema_unlock(ib_trx);
+  err = ib_schema_unlock(ib_trx);
+  ut_a(err == DB_SUCCESS);
 
   err = ib_trx_release(ib_trx);
   ut_a(err == DB_SUCCESS);
@@ -767,7 +768,8 @@ ib_err_t ib_trx_rollback(ib_trx_t ib_trx) {
   /* It should always succeed */
   ut_a(err == DB_SUCCESS);
 
-  ib_schema_unlock(ib_trx);
+  err = ib_schema_unlock(ib_trx);
+  ut_a(err == DB_SUCCESS);
 
   err = ib_trx_release(ib_trx);
   ut_a(err == DB_SUCCESS);
@@ -1545,7 +1547,8 @@ static ib_err_t ib_build_secondary_index(
   if (!create) {
     /* Even if the user locked the schema, we release it here and
     build the index without holding the dictionary lock. */
-    ib_schema_unlock((ib_trx_t)usr_trx);
+    err = ib_schema_unlock((ib_trx_t)usr_trx);
+    ut_a(err == DB_SUCCESS);
   }
 
   err = ddl_trx->error_state;
@@ -1652,7 +1655,8 @@ static index_def_t *ib_table_create_index_defs(trx_t *trx, const dict_table_t *t
     dict_index = dict_table_get_next_index(dict_index);
   }
 
-  ib_schema_unlock((ib_trx_t)trx);
+  err = ib_schema_unlock((ib_trx_t)trx);
+  ut_a(err == DB_SUCCESS);
 
   return index_defs;
 }
@@ -1770,7 +1774,8 @@ static ib_err_t ib_table_clone(
     err = ib_table_clone_indexes(trx, src_table, *new_table, heap);
   }
 
-  ib_schema_unlock((ib_trx_t)trx);
+  err = ib_schema_unlock((ib_trx_t)trx);
+  ut_a(err == DB_SUCCESS);
 
   return err;
 }
@@ -1805,7 +1810,8 @@ static ib_err_t ib_table_copy(trx_t *trx, dict_table_t *src_table, dict_table_t 
   }
   ut_a(n_indexes == UT_LIST_GET_LEN(dst_table->indexes));
 
-  ib_schema_unlock((ib_trx_t)trx);
+  err = ib_schema_unlock((ib_trx_t)trx);
+  ut_a(err == DB_SUCCESS);
 
   /* Build the actual indexes. */
   return  row_merge_build_indexes(trx, src_table, dst_table, indexes, n_indexes, nullptr);

@@ -63,7 +63,8 @@ uint64_t read_int_from_tuple(ib_tpl_t tpl, const ib_col_meta_t *col_meta, int i)
   case 1: {
     uint8_t v;
 
-    ib_col_copy_value(tpl, i, &v, sizeof(v));
+    auto err = ib_col_copy_value(tpl, i, &v, sizeof(v));
+    assert(err != IB_SQL_NULL);
 
     ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (int8_t)v;
     break;
@@ -71,19 +72,22 @@ uint64_t read_int_from_tuple(ib_tpl_t tpl, const ib_col_meta_t *col_meta, int i)
   case 2: {
     uint16_t v;
 
-    ib_col_copy_value(tpl, i, &v, sizeof(v));
+    auto err = ib_col_copy_value(tpl, i, &v, sizeof(v));
+    assert(err != IB_SQL_NULL);
     ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (int16_t)v;
     break;
   }
   case 4: {
     uint32_t v;
 
-    ib_col_copy_value(tpl, i, &v, sizeof(v));
+    auto err = ib_col_copy_value(tpl, i, &v, sizeof(v));
+    assert(err != IB_SQL_NULL);
     ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (int32_t)v;
     break;
   }
   case 8: {
-    ib_col_copy_value(tpl, i, &ival, sizeof(ival));
+    auto err = ib_col_copy_value(tpl, i, &ival, sizeof(ival));
+    assert(err != IB_SQL_NULL);
     break;
   }
   default:

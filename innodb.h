@@ -30,10 +30,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <vector>
 
-// FIXME: Functions tagged with UNIV_NO_IGNORE should be
-// tagged with [[nounused]]
-#define UNIV_NO_IGNORE
-
 /** \enum db_err InnoDB error codes.
     Most of the error codes are internal to the engine
     and will not be seen by user applications. The partial error codes reflect
@@ -792,8 +788,8 @@ by calling ib_trx_release().
 @return	innobase txn handle */
 
 INNODB_API
-ib_err_t
-ib_trx_start( ib_trx_t	ib_trx, ib_trx_level_t	ib_trx_level) UNIV_NO_IGNORE;
+[[nodiscard]] ib_err_t
+ib_trx_start( ib_trx_t	ib_trx, ib_trx_level_t	ib_trx_level);
 
 /** Begin a transaction. This will allocate a new transaction handle and
 put the transaction in the active state.
@@ -803,8 +799,8 @@ put the transaction in the active state.
 @return	innobase txn handle */
 
 INNODB_API
-ib_trx_t
-ib_trx_begin(ib_trx_level_t	ib_trx_level) UNIV_NO_IGNORE;
+[[nodiscard]] ib_trx_t
+ib_trx_begin(ib_trx_level_t	ib_trx_level);
 
 
 /** Set client data for a transaction. This is passed back to the client
@@ -831,8 +827,8 @@ code indicating this. @see DB_DEADLOCK, @see DB_LOCK_TABLE_FULL and
 @return	transaction state */
 
 INNODB_API
-ib_trx_state_t
-ib_trx_state(ib_trx_t	ib_trx) UNIV_NO_IGNORE;
+[[nodiscard]] ib_trx_state_t
+ib_trx_state(ib_trx_t	ib_trx);
 
 /** Release the resources of the transaction. If the transaction was
 selected as a victim by InnoDB and rolled back then use this function
@@ -843,8 +839,8 @@ to free the transaction handle.
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
-ib_trx_release(ib_trx_t	ib_trx) UNIV_NO_IGNORE;
+[[nodiscard]] ib_err_t
+ib_trx_release(ib_trx_t	ib_trx);
 
 /** Commit a transaction. This function will release the schema latches too.
 It will also free the transaction handle.
@@ -854,8 +850,8 @@ It will also free the transaction handle.
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
-ib_trx_commit(ib_trx_t	ib_trx) UNIV_NO_IGNORE;
+[[nodiscard]] ib_err_t
+ib_trx_commit(ib_trx_t	ib_trx);
 
 /** Rollback a transaction. This function will release the schema latches too.
 It will also free the transaction handle.
@@ -865,8 +861,8 @@ It will also free the transaction handle.
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
-ib_trx_rollback(ib_trx_t ib_trx) UNIV_NO_IGNORE;
+[[nodiscard]] ib_err_t
+ib_trx_rollback(ib_trx_t ib_trx);
 
 /** Add columns to a table schema. Tables are created in InnoDB by first
 creating a table schema which is identified by a handle. Then you
@@ -882,14 +878,14 @@ add the column definitions to the table schema.
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_table_schema_add_col(
 	ib_tbl_sch_t	ib_tbl_sch,
 	const char*	name,
 	ib_col_type_t	ib_col_type,
 	ib_col_attr_t	ib_col_attr,
 	uint16_t	client_type,
-	ib_ulint_t	len) UNIV_NO_IGNORE;
+	ib_ulint_t	len);
 
 /** Create and add an index key definition to a table schema. The index
 schema is owned by the table schema instance and will be freed when
@@ -902,11 +898,11 @@ the table schema instance is freed.
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_table_schema_add_index(
 	ib_tbl_sch_t	ib_tbl_sch,
 	const char*	name,
-	ib_idx_sch_t*	ib_idx_sch) UNIV_NO_IGNORE;
+	ib_idx_sch_t*	ib_idx_sch);
 
 /** Destroy a schema. The handle is freed by this function.
 
@@ -929,12 +925,12 @@ ib_table_schema_delete(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_table_schema_create(
 	const char*	name,
 	ib_tbl_sch_t*	ib_tbl_sch,
 	ib_tbl_fmt_t	ib_tbl_fmt,
-	ib_ulint_t	page_size) UNIV_NO_IGNORE;
+	ib_ulint_t	page_size);
 
 /** Add columns to an index schema definition.
 
@@ -945,11 +941,11 @@ ib_table_schema_create(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_index_schema_add_col(
 	ib_idx_sch_t	ib_idx_sch,
 	const char*	name,
-	ib_ulint_t	prefix_len) UNIV_NO_IGNORE;
+	ib_ulint_t	prefix_len);
 
 /** Create an index schema instance.
 
@@ -961,12 +957,12 @@ ib_index_schema_add_col(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_index_schema_create(
 	ib_trx_t	ib_usr_trx,
 	const char*	name,
 	const char*	table_name,
-	ib_idx_sch_t*	ib_idx_sch) UNIV_NO_IGNORE;
+	ib_idx_sch_t*	ib_idx_sch);
 
 /** Set index as clustered index. Implies UNIQUE.
 
@@ -975,9 +971,9 @@ ib_index_schema_create(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_index_schema_set_clustered(
-	ib_idx_sch_t	ib_idx_sch) UNIV_NO_IGNORE;
+	ib_idx_sch_t	ib_idx_sch);
 
 /** Set to true if it's a simple select.
 
@@ -996,9 +992,9 @@ ib_cursor_set_simple_select(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_index_schema_set_unique(
-	ib_idx_sch_t	ib_idx_sch) UNIV_NO_IGNORE;
+	ib_idx_sch_t	ib_idx_sch);
 
 /** Destroy an index schema.
 
@@ -1021,11 +1017,11 @@ DB_TABLE_IS_BEING_USED and id will contain that table's id.
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_table_create(
 	ib_trx_t		ib_trx,
 	const ib_tbl_sch_t	ib_tbl_sch,
-	ib_id_t*		id) UNIV_NO_IGNORE;
+	ib_id_t*		id);
 
 /** Rename a table. Ensure that you have acquired the schema lock in
 exclusive mode.
@@ -1037,11 +1033,11 @@ exclusive mode.
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_table_rename(
 	ib_trx_t	ib_trx,
 	const char*	old_name,
-	const char*	new_name) UNIV_NO_IGNORE;
+	const char*	new_name);
 
 /** Create a secondary index. The index id encodes the table id in the high
 4 bytes and the index id in the lower 4 bytes.
@@ -1052,10 +1048,10 @@ ib_table_rename(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_index_create(
 	ib_idx_sch_t	ib_idx_sch,
-	ib_id_t*	index_id) UNIV_NO_IGNORE;
+	ib_id_t*	index_id);
 
 /** Drop a table. Ensure that you have acquired the schema lock in
 exclusive mode.
@@ -1066,10 +1062,10 @@ exclusive mode.
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_table_drop(
 	ib_trx_t	trx,
-	const char*	name) UNIV_NO_IGNORE;
+	const char*	name);
 
 /** Drop a secondary index. Ensure that you have acquired the schema lock in
 exclusive mode.
@@ -1080,10 +1076,10 @@ exclusive mode.
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_index_drop(
 	ib_trx_t	trx,
-	ib_id_t		index_id) UNIV_NO_IGNORE;
+	ib_id_t		index_id);
 
 /** Open an InnoDB table and return a cursor handle to it.
 
@@ -1094,11 +1090,11 @@ ib_index_drop(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_open_table_using_id(
 	ib_id_t		table_id,
 	ib_trx_t	ib_trx,
-	ib_crsr_t*	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t*	ib_crsr);
 
 /** Open an InnoDB index and return a cursor handle to it.
 
@@ -1109,11 +1105,11 @@ ib_cursor_open_table_using_id(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_open_index_using_id(
 	ib_id_t		index_id,
 	ib_trx_t	ib_trx,
-	ib_crsr_t*	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t*	ib_crsr);
 
 /** Open an InnoDB secondary index cursor and return a cursor handle to it.
 
@@ -1124,11 +1120,11 @@ ib_cursor_open_index_using_id(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_open_index_using_name(
 	ib_crsr_t	ib_open_crsr,
 	const char*	index_name,
-	ib_crsr_t*	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t*	ib_crsr);
 
 /** Open an InnoDB table by name and return a cursor handle to it.
 
@@ -1139,11 +1135,11 @@ ib_cursor_open_index_using_name(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_open_table(
 	const char*	name,
 	ib_trx_t	ib_trx,
-	ib_crsr_t*	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t*	ib_crsr);
 
 /** Reset the cursor.
 
@@ -1152,9 +1148,9 @@ ib_cursor_open_table(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_reset(
-	ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t	ib_crsr);
 
 /** Close an InnoDB table and free the cursor.
 
@@ -1163,9 +1159,9 @@ ib_cursor_reset(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_close(
-	ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t	ib_crsr);
 
 /** Insert a row to a table.
 
@@ -1175,10 +1171,10 @@ ib_cursor_close(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_insert_row(
 	ib_crsr_t	ib_crsr,
-	const ib_tpl_t	ib_tpl) UNIV_NO_IGNORE;
+	const ib_tpl_t	ib_tpl);
 
 /** Update a row in a table.
 
@@ -1189,11 +1185,11 @@ ib_cursor_insert_row(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_update_row(
 	ib_crsr_t	ib_crsr,
 	const ib_tpl_t	ib_old_tpl,
-	const ib_tpl_t	ib_new_tpl) UNIV_NO_IGNORE;
+	const ib_tpl_t	ib_new_tpl);
 
 /** Delete a row in a table.
 
@@ -1202,9 +1198,9 @@ ib_cursor_update_row(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_delete_row(
-	ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t	ib_crsr);
 
 /** Read current row.
 
@@ -1214,10 +1210,10 @@ ib_cursor_delete_row(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_read_row(
 	ib_crsr_t	ib_crsr,
-	ib_tpl_t	ib_tpl) UNIV_NO_IGNORE;
+	ib_tpl_t	ib_tpl);
 
 /** Move cursor to the prev user record in the table.
 
@@ -1226,9 +1222,9 @@ ib_cursor_read_row(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_prev(
-	ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t	ib_crsr);
 
 /** Move cursor to the next user record in the table.
 
@@ -1237,9 +1233,9 @@ ib_cursor_prev(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_next(
-	ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t	ib_crsr);
 
 /** Move cursor to the first record in the table.
 
@@ -1248,9 +1244,9 @@ ib_cursor_next(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_first(
-	ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t	ib_crsr);
 
 /** Move cursor to the last record in the table.
 
@@ -1259,9 +1255,9 @@ ib_cursor_first(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_last(
-	ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t	ib_crsr);
 
 /** Search for key.
 
@@ -1274,12 +1270,12 @@ ib_cursor_last(
 @return	DB_SUCCESS or err code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_moveto(
 	ib_crsr_t	ib_crsr,
 	ib_tpl_t	ib_tpl,
 	ib_srch_mode_t	ib_srch_mode,
-	int*		result) UNIV_NO_IGNORE;
+	int*		result);
 
 /** Attach the cursor to the transaction. The cursor must not already be
 attached to another transaction.
@@ -1326,12 +1322,12 @@ ib_cursor_set_match_mode(
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_col_set_value(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	col_no,
 	const void*	src,
-	ib_ulint_t	len) UNIV_NO_IGNORE;
+	ib_ulint_t	len);
 
 /** Get the size of the data available in the column the tuple.
 
@@ -1341,10 +1337,10 @@ ib_col_set_value(
 @return	bytes avail or IB_SQL_NULL */
 
 INNODB_API
-ib_ulint_t
+[[nodiscard]] ib_ulint_t
 ib_col_get_len(
 	ib_tpl_t	ib_tpl,
-	ib_ulint_t	i) UNIV_NO_IGNORE;
+	ib_ulint_t	i);
 
 /** Copy a column value from the tuple.
 
@@ -1356,7 +1352,7 @@ ib_col_get_len(
 @return	bytes copied or IB_SQL_NULL */
 
 INNODB_API
-ib_ulint_t
+[[nodiscard]] ib_ulint_t
 ib_col_copy_value(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
@@ -1376,7 +1372,7 @@ ib_err_t
 ib_tuple_read_i8(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	int8_t*	ival) UNIV_NO_IGNORE;
+	int8_t*	ival);
 
 /** Read an unsigned int 8 bit column from an InnoDB tuple.
 
@@ -1387,11 +1383,11 @@ ib_tuple_read_i8(
 @return	DB_SUCCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_read_u8(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	uint8_t*	ival) UNIV_NO_IGNORE;
+	uint8_t*	ival);
 
 /** Read a signed int 16 bit column from an InnoDB tuple.
 
@@ -1402,11 +1398,11 @@ ib_tuple_read_u8(
 @return	DB_SUCCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_read_i16(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	int16_t*	ival) UNIV_NO_IGNORE;
+	int16_t*	ival);
 
 /** Read an unsigned int 16 bit column from an InnoDB tuple.
 
@@ -1417,11 +1413,11 @@ ib_tuple_read_i16(
 @return	DB_SUCCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_read_u16(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	uint16_t*	ival) UNIV_NO_IGNORE;
+	uint16_t*	ival);
 
 /** Read a signed int 32 bit column from an InnoDB tuple.
 
@@ -1432,11 +1428,11 @@ ib_tuple_read_u16(
 @return	DB_SUCCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_read_i32(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	int32_t*	ival) UNIV_NO_IGNORE;
+	int32_t*	ival);
 
 /** Read an unsigned int 32 bit column from an InnoDB tuple.
 
@@ -1447,11 +1443,11 @@ ib_tuple_read_i32(
 @return	DB_SUCCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_read_u32(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	uint32_t*	ival) UNIV_NO_IGNORE;
+	uint32_t*	ival);
 
 /** Read a signed int 64 bit column from an InnoDB tuple.
 
@@ -1462,11 +1458,11 @@ ib_tuple_read_u32(
 @return	DB_SUCCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_read_i64(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	int64_t*	ival) UNIV_NO_IGNORE;
+	int64_t*	ival);
 
 /** Read an unsigned int 64 bit column from an InnoDB tuple.
 
@@ -1477,11 +1473,11 @@ ib_tuple_read_i64(
 @return	DB_SUCCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_read_u64(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	i,
-	uint64_t*	ival) UNIV_NO_IGNORE;
+	uint64_t*	ival);
 
 /** Get a column value pointer from the tuple.
 
@@ -1491,10 +1487,10 @@ ib_tuple_read_u64(
 @return	nullptr or pointer to buffer */
 
 INNODB_API
-const void*
+[[nodiscard]] const void*
 ib_col_get_value(
 	ib_tpl_t	ib_tpl,
-	ib_ulint_t	i) UNIV_NO_IGNORE;
+	ib_ulint_t	i);
 
 /** Get a column type, length and attributes from the tuple.
 
@@ -1518,9 +1514,9 @@ ib_col_get_meta(
 @return	new tuple, or nullptr */
 
 INNODB_API
-ib_tpl_t
+[[nodiscard]] ib_tpl_t
 ib_tuple_clear(
-	ib_tpl_t	ib_tpl) UNIV_NO_IGNORE;
+	ib_tpl_t	ib_tpl);
 
 /** Create a new cluster key search tuple and copy the contents of  the
 secondary index key tuple columns that refer to the cluster index record
@@ -1533,11 +1529,11 @@ to the cluster key. It does a deep copy of the column data.
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_get_cluster_key(
 	ib_crsr_t	ib_crsr,
 	ib_tpl_t*	ib_dst_tpl,
-	const ib_tpl_t	ib_src_tpl) UNIV_NO_IGNORE;
+	const ib_tpl_t	ib_src_tpl);
 
 /** Copy the contents of  source tuple to destination tuple. The tuples
 must be of the same type and belong to the same table/index.
@@ -1548,10 +1544,10 @@ must be of the same type and belong to the same table/index.
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_copy(
 	ib_tpl_t	ib_dst_tpl,
-	const ib_tpl_t	ib_src_tpl) UNIV_NO_IGNORE;
+	const ib_tpl_t	ib_src_tpl);
 
 /** Create an InnoDB tuple used for index/table search.
 
@@ -1560,9 +1556,9 @@ ib_tuple_copy(
 @return tuple for current index */
 
 INNODB_API
-ib_tpl_t
+[[nodiscard]] ib_tpl_t
 ib_sec_search_tuple_create(
-	ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t	ib_crsr);
 
 /** Create an InnoDB tuple used for index/table search.
 
@@ -1571,9 +1567,9 @@ ib_sec_search_tuple_create(
 @return	tuple for current index */
 
 INNODB_API
-ib_tpl_t
+[[nodiscard]] ib_tpl_t
 ib_sec_read_tuple_create(
-	ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t	ib_crsr);
 
 /** Create an InnoDB tuple used for table key operations.
 
@@ -1582,9 +1578,9 @@ ib_sec_read_tuple_create(
 @return	tuple for current table */
 
 INNODB_API
-ib_tpl_t
+[[nodiscard]] ib_tpl_t
 ib_clust_search_tuple_create(
-	ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t	ib_crsr);
 
 /** Create an InnoDB tuple for table row operations.
 
@@ -1593,9 +1589,9 @@ ib_clust_search_tuple_create(
 @return	tTuple for current table */
 
 INNODB_API
-ib_tpl_t
+[[nodiscard]] ib_tpl_t
 ib_clust_read_tuple_create(
-	ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	ib_crsr_t	ib_crsr);
 
 /** Return the number of user columns in the tuple definition.
 
@@ -1604,9 +1600,9 @@ ib_clust_read_tuple_create(
 @return	number of user columns */
 
 INNODB_API
-ib_ulint_t
+[[nodiscard]] ib_ulint_t
 ib_tuple_get_n_user_cols(
-	const ib_tpl_t	ib_tpl) UNIV_NO_IGNORE;
+	const ib_tpl_t	ib_tpl);
 
 /** Return the number of columns in the tuple definition.
 
@@ -1615,9 +1611,9 @@ ib_tuple_get_n_user_cols(
 @return	number of columns */
 
 INNODB_API
-ib_ulint_t
+[[nodiscard]] ib_ulint_t
 ib_tuple_get_n_cols(
-	const ib_tpl_t	ib_tpl) UNIV_NO_IGNORE;
+	const ib_tpl_t	ib_tpl);
 
 /** Destroy an InnoDB tuple.
 
@@ -1638,10 +1634,10 @@ on success.
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_truncate(
 	ib_crsr_t*	ib_crsr,
-	ib_id_t*	table_id) UNIV_NO_IGNORE;
+	ib_id_t*	table_id);
 
 /** Truncate a table.
 
@@ -1651,10 +1647,10 @@ ib_cursor_truncate(
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_table_truncate(
 	const char*	table_name,
-	ib_id_t*	table_id) UNIV_NO_IGNORE;
+	ib_id_t*	table_id);
 
 /** Get a table id.
 
@@ -1664,10 +1660,10 @@ ib_table_truncate(
 @return	DB_SUCCESS if found */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_table_get_id(
 	const char*	table_name,
-	ib_id_t*	table_id) UNIV_NO_IGNORE;
+	ib_id_t*	table_id);
 
 /** Get an index id.
 
@@ -1678,11 +1674,11 @@ ib_table_get_id(
 @return	DB_SUCCESS if found */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_index_get_id(
 	const char*	table_name,
 	const char*	index_name,
-	ib_id_t*	index_id) UNIV_NO_IGNORE;
+	ib_id_t*	index_id);
 
 /** Create a database if it doesn't exist.
 
@@ -1691,9 +1687,9 @@ ib_index_get_id(
 @return	true on success */
 
 INNODB_API
-bool
+[[nodiscard]] bool
 ib_database_create(
-	const char*	dbname) UNIV_NO_IGNORE;
+	const char*	dbname);
 
 /** Drop a database if it exists. This function will also drop all tables
 within the database.
@@ -1703,9 +1699,9 @@ within the database.
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_database_drop(
-	const char*	dbname) UNIV_NO_IGNORE;
+	const char*	dbname);
 
 /** Check if cursor is positioned.
 
@@ -1714,9 +1710,9 @@ ib_database_drop(
 @return	true if positioned */
 
 INNODB_API
-bool
+[[nodiscard]] bool
 ib_cursor_is_positioned(
-	const ib_crsr_t	ib_crsr) UNIV_NO_IGNORE;
+	const ib_crsr_t	ib_crsr);
 
 /** Latches the data dictionary in shared mode.
 
@@ -1725,9 +1721,9 @@ ib_cursor_is_positioned(
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_schema_lock_shared(
-	ib_trx_t	ib_trx) UNIV_NO_IGNORE;
+	ib_trx_t	ib_trx);
 
 /** Latches the data dictionary in exclusive mode.
 
@@ -1736,9 +1732,9 @@ ib_schema_lock_shared(
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_schema_lock_exclusive(
-	ib_trx_t	ib_trx) UNIV_NO_IGNORE;
+	ib_trx_t	ib_trx);
 
 /** Checks if the data dictionary is latched in exclusive mode by a
 user transaction.
@@ -1748,18 +1744,18 @@ user transaction.
 @return	true if exclusive latch */
 
 INNODB_API
-bool
+[[nodiscard]] bool
 ib_schema_lock_is_exclusive(
-	const ib_trx_t	ib_trx) UNIV_NO_IGNORE;
+	const ib_trx_t	ib_trx);
 
 /** Checks if the data dictionary is latched in shared mode.
 @param ib_trx is a transaction instance
 @return	true if shared latch */
 
 INNODB_API
-bool
+[[nodiscard]] bool
 ib_schema_lock_is_shared(
-	const ib_trx_t	ib_trx) UNIV_NO_IGNORE;
+	const ib_trx_t	ib_trx);
 
 /** Unlocks the data dictionary.
 
@@ -1768,7 +1764,7 @@ ib_schema_lock_is_shared(
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_schema_unlock(
 	ib_trx_t	ib_trx);
 
@@ -1780,10 +1776,10 @@ ib_schema_unlock(
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_lock(
 	ib_crsr_t	ib_crsr,
-	ib_lck_mode_t	ib_lck_mode) UNIV_NO_IGNORE;
+	ib_lck_mode_t	ib_lck_mode);
 
 /** Set the Lock an InnoDB table using the table id.
 
@@ -1794,11 +1790,11 @@ ib_cursor_lock(
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_table_lock(
 	ib_trx_t	ib_trx,
 	ib_id_t		table_id,
-	ib_lck_mode_t	ib_lck_mode) UNIV_NO_IGNORE;
+	ib_lck_mode_t	ib_lck_mode);
 
 /** Set the Lock mode of the cursor.
 
@@ -1808,10 +1804,10 @@ ib_table_lock(
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cursor_set_lock_mode(
 	ib_crsr_t	ib_crsr,
-	ib_lck_mode_t	ib_lck_mode) UNIV_NO_IGNORE;
+	ib_lck_mode_t	ib_lck_mode);
 
 /** Set need to access clustered index record flag.
 
@@ -1842,13 +1838,13 @@ The caller must have an exclusive lock on the InnoDB data dictionary
 @return	DB_SUCCESS or DB_ERROR */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_table_schema_visit(
 	ib_trx_t	ib_trx,
 	const char*	name,
 	const ib_schema_visitor_t*
 			visitor,
-	void*		arg) UNIV_NO_IGNORE;
+	void*		arg);
 
 /** List all the tables in the InnoDB's data dictionary. It will abort
 if visitor returns a non-zero value.
@@ -1865,12 +1861,12 @@ The function will abort if visitor.tables() returns non-zero.
 @return DB_SUCCESS if successful */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_schema_tables_iterate(
 	ib_trx_t	ib_trx,
 	ib_schema_visitor_table_all_t
 			visitor,
-	void*		arg) UNIV_NO_IGNORE;
+	void*		arg);
 
 /** Get the type of a configuration variable. Returns DB_SUCCESS if the
 variable with name "name" was found and "type" was set.
@@ -1881,10 +1877,10 @@ variable with name "name" was found and "type" was set.
 @return	DB_SUCCESS if successful */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cfg_var_get_type(
 	const char*	name,
-	ib_cfg_type_t*	type) UNIV_NO_IGNORE;
+	ib_cfg_type_t*	type);
 
 /** Set a configuration variable. The second argument's type depends on the
 type of the variable with the given "name". Returns DB_SUCCESS if the
@@ -1895,10 +1891,10 @@ variable with name "name" was found and if its value was set.
 @return	DB_SUCCESS if set */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cfg_set(
 	const char*	name,
-	...) UNIV_NO_IGNORE;
+	...);
 
 /** Get the value of a configuration variable. The type of the returned value
 depends on the type of the configuration variable. DB_SUCCESS is returned
@@ -1910,10 +1906,10 @@ if the variable with name "name" was found and "value" was set.
 @return	DB_SUCCESS if retrieved successfully */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cfg_get(
 	const char*	name,
-	void*		value) UNIV_NO_IGNORE;
+	void*		value);
 
 /** Get a list of the names of all configuration variables.
 The caller is responsible for free(3)ing the returned array of strings
@@ -1925,10 +1921,10 @@ when it is not needed anymore and for not modifying the individual strings.
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_cfg_get_all(
 	const char***	names,
-	uint32_t*	names_num) UNIV_NO_IGNORE;
+	uint32_t*	names_num);
 
 /** Creates a named savepoint. The transaction must be started. If there is
 already a savepoint of the same name, this call erases that old savepoint
@@ -1958,11 +1954,11 @@ savepoint are left as is.
         otherwise DB_SUCCESS */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_savepoint_release(
 	ib_trx_t	ib_trx,
 	const void*	name,
-	ib_ulint_t	name_len) UNIV_NO_IGNORE;
+	ib_ulint_t	name_len);
 
 /** Rolls back a transaction back to a named savepoint. Modifications after the
 savepoint are undone but InnoDB does NOT release the corresponding locks
@@ -1980,11 +1976,11 @@ savepoints are rolled back.
         otherwise DB_SUCCESS */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_savepoint_rollback(
 	ib_trx_t	ib_trx,
 	const void*	name,
-	ib_ulint_t	name_len) UNIV_NO_IGNORE;
+	ib_ulint_t	name_len);
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -1996,11 +1992,11 @@ format and will need to be converted from the host format.
 @return	DB_SUCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_write_i8(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	int8_t		val) UNIV_NO_IGNORE;
+	int8_t		val);
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2012,11 +2008,11 @@ format and will need to be converted from the host format.
 @return	DB_SUCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_write_i16(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	int16_t	val) UNIV_NO_IGNORE;
+	int16_t	val);
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2028,11 +2024,11 @@ format and will need to be converted from the host format.
 @return	DB_SUCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_write_i32(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	int32_t	val) UNIV_NO_IGNORE;
+	int32_t	val);
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2044,11 +2040,11 @@ format and will need to be converted from the host format.
 @return	DB_SUCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_write_i64(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	int64_t	val) UNIV_NO_IGNORE;
+	int64_t	val);
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2060,11 +2056,11 @@ format and will need to be converted from the host format.
 @return	DB_SUCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_write_u8(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	uint8_t		val) UNIV_NO_IGNORE;
+	uint8_t		val);
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2076,11 +2072,11 @@ format and will need to be converted from the host format.
 @return	DB_SUCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_write_u16(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	uint16_t	val) UNIV_NO_IGNORE;
+	uint16_t	val);
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2092,11 +2088,11 @@ format and will need to be converted from the host format.
 @return	DB_SUCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_write_u32(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	uint32_t	val) UNIV_NO_IGNORE;
+	uint32_t	val);
 
 /** Write an integer value to a column. Integers are stored in big-endian
 format and will need to be converted from the host format.
@@ -2108,11 +2104,11 @@ format and will need to be converted from the host format.
 @return	DB_SUCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_write_u64(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	uint64_t	val) UNIV_NO_IGNORE;
+	uint64_t	val);
 
 /** Inform the cursor that it's the start of an SQL statement.
 
@@ -2133,11 +2129,11 @@ ib_cursor_stmt_begin(
 @return	DB_SUCCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_write_double(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	double		val) UNIV_NO_IGNORE;
+	double		val);
 
 /** Read a double column value from an InnoDB tuple.
 
@@ -2148,11 +2144,11 @@ ib_tuple_write_double(
 @return	DB_SUCCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_read_double(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	col_no,
-	double*		dval) UNIV_NO_IGNORE;
+	double*		dval);
 
 /** Write a float value to a column.
 
@@ -2163,11 +2159,11 @@ ib_tuple_read_double(
 @return	DB_SUCCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_write_float(
 	ib_tpl_t	ib_tpl,
 	int		col_no,
-	float		val) UNIV_NO_IGNORE;
+	float		val);
 
 /** Read a float value from an InnoDB tuple.
 
@@ -2178,11 +2174,11 @@ ib_tuple_write_float(
 @return	DB_SUCCESS or error */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_tuple_read_float(
 	ib_tpl_t	ib_tpl,
 	ib_ulint_t	col_no,
-	float*		fval) UNIV_NO_IGNORE;
+	float*		fval);
 
 /** Set the message logging function.
 
@@ -2205,9 +2201,9 @@ returned string is static and should not be freed or modified.
 @return	string, describing the error */
 
 INNODB_API
-const char*
+[[nodiscard]] const char*
 ib_strerror(
-	ib_err_t	db_errno) UNIV_NO_IGNORE;
+	ib_err_t	db_errno);
 
 /** Get the value of an INT status variable. 
 
@@ -2219,10 +2215,10 @@ ib_strerror(
 	DB_NOT_FOUND otherwise. */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_status_get_i64(
 	const char*	name,
-	int64_t*	dst) UNIV_NO_IGNORE;
+	int64_t*	dst);
 
 /** Get a list of the names of all status variables.
 The caller is responsible for free(3)ing the returned array of strings
@@ -2234,10 +2230,10 @@ when it is not needed anymore and for not modifying the individual strings.
 @return	DB_SUCCESS or error code */
 
 INNODB_API
-ib_err_t
+[[nodiscard]] ib_err_t
 ib_status_get_all(
 	const char***	names,
-	uint32_t*	names_num) UNIV_NO_IGNORE;
+	uint32_t*	names_num);
 
 /**
    Type of callback in the event of InnoDB panicing. Your callback should

@@ -178,7 +178,8 @@ ib_err_t ib_exec_ddl_sql(const char *sql, ib_ulint_t n_args, ...) {
   err = que_eval_sql(info, sql, false, trx);
   ut_a(err == DB_SUCCESS);
 
-  ib_schema_unlock((ib_trx_t)trx);
+  err = ib_schema_unlock((ib_trx_t)trx);
+  ut_a(err == DB_SUCCESS);
 
   if (err != DB_SUCCESS) {
     trx_general_rollback(trx, false, nullptr);
