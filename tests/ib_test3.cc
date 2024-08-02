@@ -147,8 +147,8 @@ static ib_err_t insert(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
   for (i = 0; i < 100; ++i) {
     switch (size) {
     case 8: {
-      ib_u8_t u8 = (i + 1);
-      ib_i8_t i8 = (i + 1) * -1;
+      uint8_t u8 = (i + 1);
+      int8_t i8 = (i + 1) * -1;
 
       err = ib_tuple_write_i8(tpl, 0, i8);
       assert(err == DB_SUCCESS);
@@ -158,8 +158,8 @@ static ib_err_t insert(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
       break;
     }
     case 16: {
-      ib_u16_t u16 = (i + 1);
-      ib_i16_t i16 = (i + 1) * -1;
+      uint16_t u16 = (i + 1);
+      int16_t i16 = (i + 1) * -1;
 
       err = ib_tuple_write_i16(tpl, 0, i16);
       assert(err == DB_SUCCESS);
@@ -169,8 +169,8 @@ static ib_err_t insert(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
       break;
     }
     case 32: {
-      ib_u32_t u32 = (i + 1);
-      ib_i32_t i32 = (i + 1) * -1;
+      uint32_t u32 = (i + 1);
+      int32_t i32 = (i + 1) * -1;
 
       err = ib_tuple_write_i32(tpl, 0, i32);
       assert(err == DB_SUCCESS);
@@ -180,8 +180,8 @@ static ib_err_t insert(ib_crsr_t crsr, /*!< in, out: cursor to use for write */
       break;
     }
     case 64: {
-      ib_u64_t u64 = (i + 1);
-      ib_i64_t i64 = (i + 1) * -1;
+      uint64_t u64 = (i + 1);
+      int64_t i64 = (i + 1) * -1;
 
       err = ib_tuple_write_i64(tpl, 0, i64);
       assert(err == DB_SUCCESS);
@@ -216,12 +216,12 @@ static void read_col(const ib_tpl_t tpl, int i, ib_col_meta_t *col_meta,
   switch (col_meta->type_len) {
   case 1: {
     if (col_meta->attr & IB_COL_UNSIGNED) {
-      ib_u8_t u8;
+      uint8_t u8;
 
       err = ib_tuple_read_u8(tpl, i, &u8);
       *c += u8;
     } else {
-      ib_i8_t i8;
+      int8_t i8;
 
       err = ib_tuple_read_i8(tpl, i, &i8);
       *c -= i8;
@@ -230,12 +230,12 @@ static void read_col(const ib_tpl_t tpl, int i, ib_col_meta_t *col_meta,
   }
   case 2: {
     if (col_meta->attr & IB_COL_UNSIGNED) {
-      ib_u16_t u16;
+      uint16_t u16;
 
       err = ib_tuple_read_u16(tpl, i, &u16);
       *c += u16;
     } else {
-      ib_i16_t i16;
+      int16_t i16;
 
       err = ib_tuple_read_i16(tpl, i, &i16);
       *c -= i16;
@@ -244,12 +244,12 @@ static void read_col(const ib_tpl_t tpl, int i, ib_col_meta_t *col_meta,
   }
   case 4: {
     if (col_meta->attr & IB_COL_UNSIGNED) {
-      ib_u32_t u32;
+      uint32_t u32;
 
       err = ib_tuple_read_u32(tpl, i, &u32);
       *c += u32;
     } else {
-      ib_i32_t i32;
+      int32_t i32;
 
       err = ib_tuple_read_i32(tpl, i, &i32);
       *c -= i32;
@@ -258,12 +258,12 @@ static void read_col(const ib_tpl_t tpl, int i, ib_col_meta_t *col_meta,
   }
   case 8: {
     if (col_meta->attr & IB_COL_UNSIGNED) {
-      ib_u64_t u64;
+      uint64_t u64;
 
       err = ib_tuple_read_u64(tpl, i, &u64);
       *c += u64;
     } else {
-      ib_i64_t i64;
+      int64_t i64;
 
       err = ib_tuple_read_i64(tpl, i, &i64);
       *c -= i64;

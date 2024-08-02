@@ -33,7 +33,7 @@ with a '$' symbol and variables with ':'
 @param[in] sql                  SQL to execute
 @param[in] args                 Arguments for the SQL.
 @return	DB_SUCCESS or error code */
-ib_err_t ib_exec_sql(const char *sql, ib_ulint_t n_args, ...);
+ib_err_t ib_exec_sql(const char *sql, ulint n_args, ...);
 
 /** Execute arbitrary SQL using InnoDB's internal parser. The statement
 is executed in a background transaction. It will lock the data
@@ -41,7 +41,7 @@ dictionary lock for the duration of the query.
 @param[in] sql                  SQL to execute
 @param[in] args                 Arguments to SQL
 @return	DB_SUCCESS or error code */
-ib_err_t ib_exec_ddl_sql(const char *sql, ib_ulint_t n_args, ...);
+ib_err_t ib_exec_ddl_sql(const char *sql, ulint n_args, ...);
 
 /** Initialize the config system.
 @return	DB_SUCCESS or error code */

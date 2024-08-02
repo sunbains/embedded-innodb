@@ -626,7 +626,7 @@ static ulint srv_n_threads[SRV_MASTER + 1];
    we try not to do anything at all. */
 int srv_panic_status = 0;
 void *ib_panic_data = nullptr;
-ib_panic_function_t ib_panic = nullptr;
+ib_panic_handler_t ib_panic = nullptr;
 
 /** Prints counters for work done by srv_master_thread.
 @param[in,out] stream           Output stream. */

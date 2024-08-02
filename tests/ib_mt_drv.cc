@@ -140,7 +140,7 @@ static int num_tables = 0;
 /* These are going to be configurable parameters for table
 creation */
 static ib_tbl_fmt_t tbl_format = IB_TBL_COMPACT;
-static ib_ulint_t page_size = 0;
+static ulint page_size = 0;
 
 /* Datastructure to hold error statistics for DML and DDL operations */
 static op_err_t dml_op_errs[DML_OP_TYPE_MAX];

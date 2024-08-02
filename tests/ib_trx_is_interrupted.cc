@@ -65,7 +65,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_NONE, 0,
-                                sizeof(ib_i32_t));
+                                sizeof(int32_t));
 
   assert(err == DB_SUCCESS);
 
@@ -121,7 +121,7 @@ static ib_err_t open_table(const char *dbname, /*!< in: database name */
 static ib_err_t
 insert_random_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
 {
-  ib_i32_t i;
+  int32_t i;
   ib_err_t err;
   ib_tpl_t tpl;
   char *ptr = (char*) malloc(8192);
@@ -397,7 +397,7 @@ int main(int argc, char **argv) {
   ib_err_t err;
   ib_crsr_t crsr;
   ib_trx_t ib_trx;
-  ib_u64_t version;
+  uint64_t version;
 
   (void)argc;
   (void)argv;

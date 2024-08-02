@@ -998,8 +998,8 @@ ib_err_t ib_cfg_get(const char *name, void *value) {
   return ret;
 }
 
-ib_err_t ib_cfg_get_all(const char ***names, ib_u32_t *names_num) {
-  ib_u32_t i;
+ib_err_t ib_cfg_get_all(const char ***names, uint32_t *names_num) {
+  uint32_t i;
 
   *names_num = std::size(cfg_vars_defaults);
 
@@ -1056,4 +1056,3 @@ ib_err_t ib_cfg_shutdown() {
 
   return DB_SUCCESS;
 }
-

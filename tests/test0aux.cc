@@ -63,29 +63,33 @@ uint64_t read_int_from_tuple(ib_tpl_t tpl, const ib_col_meta_t *col_meta,
 
   switch (col_meta->type_len) {
   case 1: {
-    ib_u8_t v;
+    uint8_t v;
 
-    ib_col_copy_value(tpl, i, &v, sizeof(v));
+    auto err = ib_col_copy_value(tpl, i, &v, sizeof(v));
+    assert(err != IB_SQL_NULL);
 
-    ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (ib_i8_t)v;
+    ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (int8_t)v;
     break;
   }
   case 2: {
-    ib_u16_t v;
+    uint16_t v;
 
-    ib_col_copy_value(tpl, i, &v, sizeof(v));
-    ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (ib_i16_t)v;
+    auto err = ib_col_copy_value(tpl, i, &v, sizeof(v));
+    assert(err != IB_SQL_NULL);
+    ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (int16_t)v;
     break;
   }
   case 4: {
-    ib_u32_t v;
+    uint32_t v;
 
-    ib_col_copy_value(tpl, i, &v, sizeof(v));
-    ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (ib_i32_t)v;
+    auto err = ib_col_copy_value(tpl, i, &v, sizeof(v));
+    assert(err != IB_SQL_NULL);
+    ival = (col_meta->attr & IB_COL_UNSIGNED) ? v : (int32_t)v;
     break;
   }
   case 8: {
-    ib_col_copy_value(tpl, i, &ival, sizeof(ival));
+    auto err = ib_col_copy_value(tpl, i, &ival, sizeof(ival));
+    assert(err != IB_SQL_NULL);
     break;
   }
   default:
@@ -104,12 +108,12 @@ void print_int_col(FILE *stream, const ib_tpl_t tpl, int i,
   switch (col_meta->type_len) {
   case 1: {
     if (col_meta->attr & IB_COL_UNSIGNED) {
-      ib_u8_t u8;
+      uint8_t u8;
 
       err = ib_tuple_read_u8(tpl, i, &u8);
       fprintf(stream, "%u", u8);
     } else {
-      ib_i8_t i8;
+      int8_t i8;
 
       err = ib_tuple_read_i8(tpl, i, &i8);
       fprintf(stream, "%d", i8);
@@ -118,12 +122,12 @@ void print_int_col(FILE *stream, const ib_tpl_t tpl, int i,
   }
   case 2: {
     if (col_meta->attr & IB_COL_UNSIGNED) {
-      ib_u16_t u16;
+      uint16_t u16;
 
       err = ib_tuple_read_u16(tpl, i, &u16);
       fprintf(stream, "%u", u16);
     } else {
-      ib_i16_t i16;
+      int16_t i16;
 
       err = ib_tuple_read_i16(tpl, i, &i16);
       fprintf(stream, "%d", i16);
@@ -132,12 +136,12 @@ void print_int_col(FILE *stream, const ib_tpl_t tpl, int i,
   }
   case 4: {
     if (col_meta->attr & IB_COL_UNSIGNED) {
-      ib_u32_t u32;
+      uint32_t u32;
 
       err = ib_tuple_read_u32(tpl, i, &u32);
       fprintf(stream, "%u", u32);
     } else {
-      ib_i32_t i32;
+      int32_t i32;
 
       err = ib_tuple_read_i32(tpl, i, &i32);
       fprintf(stream, "%d", i32);
@@ -151,7 +155,7 @@ void print_int_col(FILE *stream, const ib_tpl_t tpl, int i,
       err = ib_tuple_read_u64(tpl, i, &u64);
       fprintf(stream, "%llu", (unsigned long long)u64);
     } else {
-      ib_i64_t i64;
+      int64_t i64;
 
       err = ib_tuple_read_i64(tpl, i, &i64);
       fprintf(stream, "%lld", (long long)i64);
@@ -179,7 +183,7 @@ void print_tuple(FILE *stream, const ib_tpl_t tpl) {
   int n_cols = ib_tuple_get_n_cols(tpl);
 
   for (int i = 0; i < n_cols; ++i) {
-    ib_ulint_t data_len;
+    ulint data_len;
     ib_col_meta_t col_meta;
 
     data_len = ib_col_get_meta(tpl, i, &col_meta);
@@ -381,7 +385,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   /* FIXME: Change numbers to enums or #defines */
   switch (opt) {
   case 1: {
-    ib_ulint_t size;
+    ulint size;
 
     size = strtoul(arg, nullptr, 10);
     size *= 1024UL * 1024UL;
@@ -390,7 +394,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
   case 2: {
-    ib_ulint_t size;
+    ulint size;
 
     size = strtoul(arg, nullptr, 10);
     size *= 1024UL * 1024UL;
@@ -399,7 +403,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
   case 3: {
-    ib_ulint_t size;
+    ulint size;
 
     size = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("io_capacity", size);
@@ -412,7 +416,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
 
   case 5: {
-    ib_ulint_t pct;
+    ulint pct;
 
     pct = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("lru_old_blocks_pct", pct);
@@ -421,7 +425,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   }
 
   case 6: {
-    ib_ulint_t pct;
+    ulint pct;
 
     pct = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("lru_block_access_recency", pct);
@@ -430,7 +434,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   }
 
   case 7: {
-    ib_ulint_t level;
+    ulint level;
 
     level = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("force_recovery", level);
@@ -475,7 +479,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   }
 
   case 14: {
-    ib_ulint_t level;
+    ulint level;
 
     level = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("flush_log_at_trx_commit", level);
@@ -490,7 +494,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   }
 
   case 16: {
-    ib_ulint_t threads;
+    ulint threads;
 
     threads = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("read_io_threads", threads);
@@ -499,7 +503,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   }
 
   case 17: {
-    ib_ulint_t threads;
+    ulint threads;
 
     threads = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("write_io_threads", threads);
@@ -508,7 +512,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   }
 
   case 18: {
-    ib_ulint_t n;
+    ulint n;
 
     n = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("open_files", n);
@@ -517,7 +521,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
   }
 
   case 19: {
-    ib_ulint_t secs;
+    ulint secs;
 
     secs = strtoul(arg, nullptr, 10);
     err = ib_cfg_set_int("lock_wait_timeout", secs);
@@ -696,7 +700,7 @@ int config_parse_file(const char *filename, ib_config_t *config) {
 /** Print the elements. */
 
 void config_print(const ib_config_t *config) {
-  ib_ulint_t i;
+  ulint i;
 
   for (i = 0; i < config->n_elems; ++i) {
     if (config->elems[i].value.ptr != nullptr) {
@@ -711,7 +715,7 @@ void config_print(const ib_config_t *config) {
 
 /** Free the the elements. */
 void config_free(ib_config_t *config) {
-  ib_ulint_t i;
+  ulint i;
 
   for (i = 0; i < config->n_elems; ++i) {
     free(config->elems[i].name.ptr);

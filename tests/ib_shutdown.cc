@@ -55,7 +55,7 @@ int main(int argc, char *argv[]) {
 
   get_options(argc, argv);
   for (i = 0; i < 10; ++i) {
-    ib_ulint_t err;
+    ulint err;
 
     printf(" *** STARTING INNODB *** \n");
 

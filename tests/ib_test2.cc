@@ -218,10 +218,10 @@ static ib_err_t update_random_rows(ib_crsr_t crsr) {
 
   /* Match found */
   if (res == 0) {
-    ib_u32_t score;
+    uint32_t score;
     const char *first;
-    ib_ulint_t data_len;
-    ib_ulint_t first_len;
+    ulint data_len;
+    ulint first_len;
     ib_col_meta_t col_meta;
 
     /* Create the tuple instance that we will use to update the

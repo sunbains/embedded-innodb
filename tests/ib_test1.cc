@@ -48,7 +48,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 typedef struct row_t {
   char c1[32];
   char c2[32];
-  ib_u32_t c3;
+  uint32_t c3;
 } row_t;
 
 static row_t in_rows[] = {{"a", "t", 1},  {"b", "u", 2}, {"c", "b", 3},
@@ -226,8 +226,8 @@ static ib_err_t update_a_row(ib_crsr_t crsr) {
   /* Iterate over the records while the c1 column matches "a". */
   while (err == DB_SUCCESS) {
     const char *c1;
-    ib_u32_t c3;
-    ib_ulint_t data_len;
+    uint32_t c3;
+    ulint data_len;
     ib_col_meta_t col_meta;
 
     err = ib_cursor_read_row(crsr, old_tpl);
@@ -366,7 +366,7 @@ int main(int argc, char *argv[]) {
   ib_err_t err;
   ib_crsr_t crsr;
   ib_trx_t ib_trx;
-  ib_u64_t version;
+  uint64_t version;
 
   (void)argc;
   (void)argv;

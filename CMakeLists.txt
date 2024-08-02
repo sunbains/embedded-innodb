@@ -236,7 +236,7 @@ SUBDIRS(tests)
 
 CONFIGURE_FILE(
   ${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.cmake
-  ${CMAKE_CURRENT_BINARY_DIR}/include/ib0config.h)
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/ib0config.h)
 
 # List all install files and use CPack for packaging and installation
 SET(CMAKE_INSTALL_PREFIX package)

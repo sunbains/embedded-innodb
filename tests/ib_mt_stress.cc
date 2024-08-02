@@ -514,7 +514,7 @@ static ib_err_t update_one_row(ib_crsr_t crsr) /*!< in: cursor on the table
   ib_err_t err;
   ib_tpl_t old_tpl;
   ib_tpl_t new_tpl;
-  ib_ulint_t data_len;
+  ulint data_len;
   ib_col_meta_t col_meta;
 
   /* Create the tuple instance that we will use to update the

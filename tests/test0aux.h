@@ -38,13 +38,13 @@ typedef struct ib_var {
 /* Memory representation of the config file. */
 typedef struct ib_config {
   ib_var_t *elems;
-  ib_ulint_t n_elems;
-  ib_ulint_t n_count;
+  ulint n_elems;
+  ulint n_count;
 } ib_config_t;
 
 /** Read a value from an integer column in an InnoDB tuple.
 @return	column value */
-ib_u64_t read_int_from_tuple(
+uint64_t read_int_from_tuple(
     ib_tpl_t tpl,                  /*!< in: InnoDB tuple */
     const ib_col_meta_t *col_meta, /*!< in: col meta data */
     int i);                        /*!< in: column number */

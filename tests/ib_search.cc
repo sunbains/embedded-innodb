@@ -53,7 +53,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 typedef struct row_t {
   char c1[32];
   char c2[32];
-  ib_u32_t c3;
+  uint32_t c3;
 } row_t;
 
 static row_t in_rows[] = {
@@ -471,7 +471,7 @@ int main(int argc, char *argv[]) {
   ib_err_t err;
   ib_crsr_t crsr;
   ib_trx_t ib_trx;
-  ib_u64_t version;
+  uint64_t version;
 
   (void)argc;
   (void)argv;

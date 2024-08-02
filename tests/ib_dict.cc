@@ -58,7 +58,7 @@ static int visit_tables(void *arg,        /*!< in: callback argument */
 static int visit_table_list(void *arg,            /*!< User callback arg */
                             const char *name,     /*!< Table name */
                             ib_tbl_fmt_t tbl_fmt, /*!< Table type */
-                            ib_ulint_t page_size, /*!< Table page size */
+                            ulint page_size, /*!< Table page size */
                             int n_cols,           /*!< No. of cols defined */
                             int n_indexes)        /*!< No. of indexes defined */
 {
@@ -76,7 +76,7 @@ static int visit_table_list(void *arg,            /*!< User callback arg */
 static int visit_table(void *arg,            /*!< User callback arg */
                        const char *name,     /*!< Table name */
                        ib_tbl_fmt_t tbl_fmt, /*!< Table type */
-                       ib_ulint_t page_size, /*!< Table page size */
+                       ulint page_size, /*!< Table page size */
                        int n_cols,           /*!< No. of cols defined */
                        int n_indexes)        /*!< No. of indexes defined */
 {
@@ -108,7 +108,7 @@ static int visit_table(void *arg,            /*!< User callback arg */
 static int visit_table_col(void *arg,              /*!< User callback arg */
                            const char *name,       /*!< Column name */
                            ib_col_type_t col_type, /*!< Column type */
-                           ib_ulint_t len,         /*!< Column len */
+                           ulint len,         /*!< Column len */
                            ib_col_attr_t attr)     /*!< Column attributes */
 {
   visitor_arg_t *visitor_arg = (visitor_arg_t *)arg;
@@ -232,7 +232,7 @@ static int visit_index(void *arg,        /*!< User callback arg */
 /** Callback functions to traverse a table's schema. */
 int visit_index_col(void *arg,             /*!< User callback arg */
                     const char *name,      /*!< Column name */
-                    ib_ulint_t prefix_len) /*!< Prefix length */
+                    ulint prefix_len) /*!< Prefix length */
 {
   visitor_arg_t *visitor_arg = (visitor_arg_t *)arg;
   FILE *fp = (FILE *)visitor_arg->fp;
@@ -288,7 +288,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_col(ib_tbl_sch, "C3", IB_INT, IB_COL_UNSIGNED, 0,
-                                sizeof(ib_u32_t));
+                                sizeof(uint32_t));
 
   assert(err == DB_SUCCESS);
 
@@ -327,7 +327,9 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
 
 /* Check whether NULL callbacks work. */
 static const ib_schema_visitor_t table_visitor = {
-    IB_SCHEMA_VISITOR_TABLE_AND_INDEX_COL, visit_table_list, nullptr, nullptr, nullptr};
+    ib_schema_visitor_t::Version::TABLE_AND_INDEX_COL,
+     visit_table_list,
+     nullptr, nullptr, nullptr};
 
 /** Read table names only. */
 static int visit_tables_list(void *arg, const char *name, int len)
@@ -349,8 +351,11 @@ static int visit_tables_list(void *arg, const char *name, int len)
 }
 
 static const ib_schema_visitor_t visitor = {
-    IB_SCHEMA_VISITOR_TABLE_AND_INDEX_COL, visit_table, visit_table_col,
-    visit_index, visit_index_col};
+    ib_schema_visitor_t::TABLE_AND_INDEX_COL,
+    visit_table,
+    visit_table_col,
+    visit_index,
+    visit_index_col};
 
 /** Read a table's schema and print it. */
 static int visit_tables(void *arg, const char *name, int len)

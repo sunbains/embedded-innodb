@@ -489,7 +489,6 @@ struct export_var_struct {
 };
 
 extern ulint srv_n_threads_active[];
-typedef void (*ib_panic_function_t)(void *, int, char *, ...);
 
 struct Fil;
 

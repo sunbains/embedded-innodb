@@ -52,7 +52,7 @@ struct tbl_class_t {
   std::string m_name{};
   std::string m_db_name{};
   ib_tbl_fmt_t format;
-  ib_ulint_t page_size;
+  ulint page_size;
   fn *dml_fn[DML_OP_TYPE_MAX];
   fn *ddl_fn[DDL_OP_TYPE_MAX];
 };

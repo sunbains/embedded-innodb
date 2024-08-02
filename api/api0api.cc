@@ -47,7 +47,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "ut0dbg.h"
 #include "ut0logger.h"
 
-extern ib_panic_function_t ib_panic;
+extern ib_panic_handler_t ib_panic;
 
 static const char *GEN_CLUST_INDEX = "GEN_CLUST_INDEX";
 
@@ -78,9 +78,9 @@ static ib_db_format_t db_format;
 static int ib_default_compare(
   const ib_col_meta_t *col_meta,
   const ib_byte_t *p1,
-  ib_ulint_t p1_len,
+  ulint p1_len,
   const ib_byte_t *p2,
-  ib_ulint_t p2_len
+  ulint p2_len
 );
 
 ib_client_cmp_t ib_client_compare = ib_default_compare;
@@ -276,9 +276,9 @@ constexpr ulint INNOBASE_WAKE_INTERVAL = 32;
 static int ib_default_compare(
   const ib_col_meta_t *ib_col_meta,
   const ib_byte_t *p1,
-  ib_ulint_t p1_len,
+  ulint p1_len,
   const ib_byte_t *p2,
-  ib_ulint_t p2_len
+  ulint p2_len
 ) {
   (void)ib_col_meta;
 
@@ -618,8 +618,8 @@ static ib_tpl_t ib_row_tuple_new(const dict_index_t *dict_index, ulint n_cols) {
   return ib_row_tuple_new_low(dict_index, n_cols, heap);
 }
 
-ib_u64_t ib_api_version() {
-  return ((ib_u64_t)IB_API_VERSION_CURRENT << 32 | (IB_API_VERSION_REVISION << 16) | IB_API_VERSION_AGE);
+uint64_t ib_api_version() {
+  return ((uint64_t)IB_API_VERSION_CURRENT << 32 | (IB_API_VERSION_REVISION << 16) | IB_API_VERSION_AGE);
 }
 
 ib_err_t ib_init() {
@@ -747,7 +747,8 @@ ib_err_t ib_trx_commit(ib_trx_t ib_trx) {
   auto err = trx_commit(trx);
   ut_a(err == DB_SUCCESS);
 
-  ib_schema_unlock(ib_trx);
+  err = ib_schema_unlock(ib_trx);
+  ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
 
   err = ib_trx_release(ib_trx);
   ut_a(err == DB_SUCCESS);
@@ -767,7 +768,8 @@ ib_err_t ib_trx_rollback(ib_trx_t ib_trx) {
   /* It should always succeed */
   ut_a(err == DB_SUCCESS);
 
-  ib_schema_unlock(ib_trx);
+  err = ib_schema_unlock(ib_trx);
+  ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
 
   err = ib_trx_release(ib_trx);
   ut_a(err == DB_SUCCESS);
@@ -786,7 +788,7 @@ ib_err_t ib_trx_rollback(ib_trx_t ib_trx) {
  * @param len The length of the column.
  * @return True if the combination is valid, false otherwise.
  */
-static bool ib_check_col_is_ok(const char *name, ib_col_type_t ib_col_type, ib_col_attr_t ib_col_attr, ib_ulint_t len) {
+static bool ib_check_col_is_ok(const char *name, ib_col_type_t ib_col_type, ib_col_attr_t ib_col_attr, ulint len) {
   if (strlen(name) > IB_MAX_COL_NAME_LEN) {
     return false;
   } else if ((ib_col_type == IB_VARCHAR || ib_col_type == IB_CHAR || ib_col_type == IB_BINARY) && len == 0) {
@@ -911,7 +913,7 @@ static const ib_key_col_t *ib_index_find_col(ib_vector_t *cols, const char *name
 }
 
 ib_err_t ib_table_schema_add_col(
-  ib_tbl_sch_t ib_tbl_sch, const char *name, ib_col_type_t ib_col_type, ib_col_attr_t ib_col_attr, ib_u16_t client_type, ib_ulint_t len) {
+  ib_tbl_sch_t ib_tbl_sch, const char *name, ib_col_type_t ib_col_type, ib_col_attr_t ib_col_attr, uint16_t client_type, ulint len) {
   ib_col_t *ib_col;
   ib_err_t err = DB_SUCCESS;
   ib_table_def_t *table_def = (ib_table_def_t *)ib_tbl_sch;
@@ -1008,7 +1010,7 @@ void ib_table_schema_delete(ib_tbl_sch_t ib_tbl_sch) {
   mem_heap_free(table_def->heap);
 }
 
-static ib_err_t ib_table_schema_check(ib_tbl_fmt_t ib_tbl_fmt, ib_ulint_t *page_size) {
+static ib_err_t ib_table_schema_check(ib_tbl_fmt_t ib_tbl_fmt, ulint *page_size) {
   ib_err_t err = DB_SUCCESS;
 
   IB_CHECK_PANIC();
@@ -1112,7 +1114,7 @@ static ib_err_t ib_table_name_check(const char *name)  {
   return slash ? DB_SUCCESS : DB_DATA_MISMATCH;
 }
 
-ib_err_t ib_table_schema_create(const char *name, ib_tbl_sch_t *ib_tbl_sch, ib_tbl_fmt_t ib_tbl_fmt, ib_ulint_t page_size) {
+ib_err_t ib_table_schema_create(const char *name, ib_tbl_sch_t *ib_tbl_sch, ib_tbl_fmt_t ib_tbl_fmt, ulint page_size) {
   IB_CHECK_PANIC();
 
   auto err = ib_table_name_check(name);
@@ -1248,7 +1250,7 @@ static int ib_index_is_prefix_allowed(const ib_index_def_t *ib_index_def, const 
   return allowed;
 }
 
-ib_err_t ib_index_schema_add_col(ib_idx_sch_t ib_idx_sch, const char *name, ib_ulint_t prefix_len) {
+ib_err_t ib_index_schema_add_col(ib_idx_sch_t ib_idx_sch, const char *name, ulint prefix_len) {
   ib_err_t err = DB_SUCCESS;
   ib_index_def_t *index_def = (ib_index_def_t *)ib_idx_sch;
 
@@ -1545,7 +1547,8 @@ static ib_err_t ib_build_secondary_index(
   if (!create) {
     /* Even if the user locked the schema, we release it here and
     build the index without holding the dictionary lock. */
-    ib_schema_unlock((ib_trx_t)usr_trx);
+    err = ib_schema_unlock((ib_trx_t)usr_trx);
+    ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
   }
 
   err = ddl_trx->error_state;
@@ -1652,7 +1655,8 @@ static index_def_t *ib_table_create_index_defs(trx_t *trx, const dict_table_t *t
     dict_index = dict_table_get_next_index(dict_index);
   }
 
-  ib_schema_unlock((ib_trx_t)trx);
+  err = ib_schema_unlock((ib_trx_t)trx);
+  ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
 
   return index_defs;
 }
@@ -1770,7 +1774,8 @@ static ib_err_t ib_table_clone(
     err = ib_table_clone_indexes(trx, src_table, *new_table, heap);
   }
 
-  ib_schema_unlock((ib_trx_t)trx);
+  err = ib_schema_unlock((ib_trx_t)trx);
+  ut_a(err == DB_SUCCESS);
 
   return err;
 }
@@ -1805,7 +1810,8 @@ static ib_err_t ib_table_copy(trx_t *trx, dict_table_t *src_table, dict_table_t 
   }
   ut_a(n_indexes == UT_LIST_GET_LEN(dst_table->indexes));
 
-  ib_schema_unlock((ib_trx_t)trx);
+  err = ib_schema_unlock((ib_trx_t)trx);
+  ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
 
   /* Build the actual indexes. */
   return  row_merge_build_indexes(trx, src_table, dst_table, indexes, n_indexes, nullptr);
@@ -2682,7 +2688,7 @@ static void ib_insert_query_graph_create(ib_cursor_t *cursor) {
 }
 
 ib_err_t ib_cursor_insert_row(ib_crsr_t ib_crsr, const ib_tpl_t ib_tpl) {
-  ib_ulint_t i;
+  ulint i;
   ib_qry_node_t *node;
   ib_qry_proc_t *q_proc;
   ulint n_fields;
@@ -3336,7 +3342,7 @@ static bool ib_col_is_capped(const dtype_t *dtype) /* in: column type */
            dtype_get_mtype(dtype) == DATA_BINARY);
 }
 
-ib_err_t ib_col_set_value(ib_tpl_t ib_tpl, ib_ulint_t col_no, const void *s, ib_ulint_t len) {
+ib_err_t ib_col_set_value(ib_tpl_t ib_tpl, ulint col_no, const void *s, ulint len) {
   const dtype_t *dtype;
   dfield_t *dfield;
   byte *dst = nullptr;
@@ -3456,7 +3462,7 @@ ib_err_t ib_col_set_value(ib_tpl_t ib_tpl, ib_ulint_t col_no, const void *s, ib_
   return DB_SUCCESS;
 }
 
-ib_ulint_t ib_col_get_len(ib_tpl_t ib_tpl, ib_ulint_t i) {
+ulint ib_col_get_len(ib_tpl_t ib_tpl, ulint i) {
   const dfield_t *dfield;
   ulint data_len;
   ib_tuple_t *tuple = (ib_tuple_t *)ib_tpl;
@@ -3478,7 +3484,7 @@ ib_ulint_t ib_col_get_len(ib_tpl_t ib_tpl, ib_ulint_t i) {
  *
  * @return bytes copied or IB_SQL_NULL
  */
-static ib_ulint_t ib_col_copy_value_low(ib_tpl_t ib_tpl, ib_ulint_t i, void *dst, ib_ulint_t len) {
+static ulint ib_col_copy_value_low(ib_tpl_t ib_tpl, ulint i, void *dst, ulint len) {
   ib_tuple_t *tuple = (ib_tuple_t *)ib_tpl;
 
   auto dfield = ib_col_get_dfield(tuple, i);
@@ -3532,7 +3538,7 @@ static ib_ulint_t ib_col_copy_value_low(ib_tpl_t ib_tpl, ib_ulint_t i, void *dst
   return data_len;
 }
 
-ib_ulint_t ib_col_copy_value(ib_tpl_t ib_tpl, ib_ulint_t i, void *dst, ib_ulint_t len) {
+ulint ib_col_copy_value(ib_tpl_t ib_tpl, ulint i, void *dst, ulint len) {
   return ib_col_copy_value_low(ib_tpl, i, dst, len);
 }
 
@@ -3579,8 +3585,8 @@ static ib_col_attr_t ib_col_get_attr(ulint prtype) {
  *
  * @return len of column data
  */
-static ib_ulint_t ib_col_get_meta_low(ib_tpl_t ib_tpl, ib_ulint_t i, ib_col_meta_t *ib_col_meta) {
-  ib_u16_t prtype;
+static ulint ib_col_get_meta_low(ib_tpl_t ib_tpl, ulint i, ib_col_meta_t *ib_col_meta) {
+  uint16_t prtype;
   const dfield_t *dfield;
   ulint data_len;
   ib_tuple_t *tuple = (ib_tuple_t *)ib_tpl;
@@ -3594,7 +3600,7 @@ static ib_ulint_t ib_col_get_meta_low(ib_tpl_t ib_tpl, ib_ulint_t i, ib_col_meta
 
   ib_col_meta->type_len = dtype_get_len(dfield_get_type(dfield));
 
-  prtype = (ib_u16_t)dtype_get_prtype(dfield_get_type(dfield));
+  prtype = (uint16_t)dtype_get_prtype(dfield_get_type(dfield));
 
   ib_col_meta->attr = ib_col_get_attr(prtype);
   ib_col_meta->client_type = prtype & DATA_CLIENT_TYPE_MASK;
@@ -3612,7 +3618,7 @@ static ib_ulint_t ib_col_get_meta_low(ib_tpl_t ib_tpl, ib_ulint_t i, ib_col_meta
  *
  * @return DB_SUCCESS or error
  */
-static ib_err_t ib_tuple_check_int(ib_tpl_t ib_tpl, ib_ulint_t i, bool usign, ulint size) {
+static ib_err_t ib_tuple_check_int(ib_tpl_t ib_tpl, ulint i, bool usign, ulint size) {
   ib_col_meta_t ib_col_meta;
 
   ib_col_get_meta_low(ib_tpl, i, &ib_col_meta);
@@ -3630,7 +3636,7 @@ static ib_err_t ib_tuple_check_int(ib_tpl_t ib_tpl, ib_ulint_t i, bool usign, ul
   return DB_SUCCESS;
 }
 
-ib_err_t ib_tuple_read_i8(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i8_t *ival) {
+ib_err_t ib_tuple_read_i8(ib_tpl_t ib_tpl, ulint i, int8_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3644,7 +3650,7 @@ ib_err_t ib_tuple_read_i8(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i8_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_u8(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u8_t *ival) {
+ib_err_t ib_tuple_read_u8(ib_tpl_t ib_tpl, ulint i, uint8_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3658,7 +3664,7 @@ ib_err_t ib_tuple_read_u8(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u8_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_i16(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i16_t *ival) {
+ib_err_t ib_tuple_read_i16(ib_tpl_t ib_tpl, ulint i, int16_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3672,7 +3678,7 @@ ib_err_t ib_tuple_read_i16(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i16_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_u16(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u16_t *ival) {
+ib_err_t ib_tuple_read_u16(ib_tpl_t ib_tpl, ulint i, uint16_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3686,7 +3692,7 @@ ib_err_t ib_tuple_read_u16(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u16_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_i32(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i32_t *ival) {
+ib_err_t ib_tuple_read_i32(ib_tpl_t ib_tpl, ulint i, int32_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3700,7 +3706,7 @@ ib_err_t ib_tuple_read_i32(ib_tpl_t ib_tpl, ib_ulint_t i, ib_i32_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_u32(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u32_t *ival) {
+ib_err_t ib_tuple_read_u32(ib_tpl_t ib_tpl, ulint i, uint32_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3714,7 +3720,7 @@ ib_err_t ib_tuple_read_u32(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u32_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_i64(ib_tpl_t ib_tpl, ib_ulint_t i, int64_t *ival) {
+ib_err_t ib_tuple_read_i64(ib_tpl_t ib_tpl, ulint i, int64_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3728,7 +3734,7 @@ ib_err_t ib_tuple_read_i64(ib_tpl_t ib_tpl, ib_ulint_t i, int64_t *ival) {
   return err;
 }
 
-ib_err_t ib_tuple_read_u64(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u64_t *ival) {
+ib_err_t ib_tuple_read_u64(ib_tpl_t ib_tpl, ulint i, uint64_t *ival) {
   ib_err_t err;
 
   IB_CHECK_PANIC();
@@ -3742,7 +3748,7 @@ ib_err_t ib_tuple_read_u64(ib_tpl_t ib_tpl, ib_ulint_t i, ib_u64_t *ival) {
   return err;
 }
 
-const void *ib_col_get_value(ib_tpl_t ib_tpl, ib_ulint_t i) {
+const void *ib_col_get_value(ib_tpl_t ib_tpl, ulint i) {
   const void *data;
   const dfield_t *dfield;
   ulint data_len;
@@ -3756,7 +3762,7 @@ const void *ib_col_get_value(ib_tpl_t ib_tpl, ib_ulint_t i) {
   return data_len != UNIV_SQL_NULL ? data : nullptr;
 }
 
-ib_ulint_t ib_col_get_meta(ib_tpl_t ib_tpl, ib_ulint_t i, ib_col_meta_t *ib_col_meta) {
+ulint ib_col_get_meta(ib_tpl_t ib_tpl, ulint i, ib_col_meta_t *ib_col_meta) {
   return ib_col_get_meta_low(ib_tpl, i, ib_col_meta);
 }
 
@@ -3909,7 +3915,7 @@ ib_tpl_t ib_clust_read_tuple_create(ib_crsr_t ib_crsr) {
   return ib_row_tuple_new(dict_index, n_cols);
 }
 
-ib_ulint_t ib_tuple_get_n_user_cols(const ib_tpl_t ib_tpl) {
+ulint ib_tuple_get_n_user_cols(const ib_tpl_t ib_tpl) {
   const ib_tuple_t *tuple = (const ib_tuple_t *)ib_tpl;
 
   if (tuple->type == TPL_ROW) {
@@ -3919,7 +3925,7 @@ ib_ulint_t ib_tuple_get_n_user_cols(const ib_tpl_t ib_tpl) {
   }
 }
 
-ib_ulint_t ib_tuple_get_n_cols(const ib_tpl_t ib_tpl) {
+ulint ib_tuple_get_n_cols(const ib_tpl_t ib_tpl) {
   const ib_tuple_t *tuple = (const ib_tuple_t *)ib_tpl;
 
   return dtuple_get_n_fields(tuple->ptr);
@@ -4012,7 +4018,7 @@ ib_err_t ib_table_truncate(const char *table_name, ib_id_t *table_id) {
     ut_a(ib_trx_state(ib_trx) == IB_TRX_NOT_STARTED);
 
     err = ib_schema_unlock(ib_trx);
-    ut_a(err == DB_SUCCESS);
+    ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
 
     err = ib_trx_release(ib_trx);
     ut_a(err == DB_SUCCESS);
@@ -4303,7 +4309,7 @@ void ib_cursor_set_simple_select(ib_crsr_t ib_crsr) {
   prebuilt->simple_select = true;
 }
 
-void ib_savepoint_take(ib_trx_t ib_trx, const void *name, ib_ulint_t name_len) {
+void ib_savepoint_take(ib_trx_t ib_trx, const void *name, ulint name_len) {
   trx_t *trx = (trx_t *)ib_trx;
 
   ut_a(trx);
@@ -4343,7 +4349,7 @@ void ib_savepoint_take(ib_trx_t ib_trx, const void *name, ib_ulint_t name_len) {
   UT_LIST_ADD_LAST(trx->trx_savepoints, savep);
 }
 
-ib_err_t ib_savepoint_release(ib_trx_t ib_trx, const void *name, ib_ulint_t name_len) {
+ib_err_t ib_savepoint_release(ib_trx_t ib_trx, const void *name, ulint name_len) {
   trx_named_savept_t *savep;
   trx_t *trx = (trx_t *)ib_trx;
 
@@ -4368,7 +4374,7 @@ ib_err_t ib_savepoint_release(ib_trx_t ib_trx, const void *name, ib_ulint_t name
   return DB_NO_SAVEPOINT;
 }
 
-ib_err_t ib_savepoint_rollback(ib_trx_t ib_trx, const void *name, ib_ulint_t name_len) {
+ib_err_t ib_savepoint_rollback(ib_trx_t ib_trx, const void *name, ulint name_len) {
   trx_t *trx = (trx_t *)ib_trx;
 
   IB_CHECK_PANIC();
@@ -4451,7 +4457,7 @@ static void ib_table_get_format(const dict_table_t *table, ib_tbl_fmt_t *tbl_fmt
  *
  * @return return value from index_col
  */
-static int ib_table_schema_visit_table_columns(const dict_table_t *table, ib_schema_visitor_table_col_t table_col, void *arg) {
+static int ib_table_schema_visit_table_columns(const dict_table_t *table, ib_schema_visitor_t::table_col_t table_col, void *arg) {
   for (ulint i = 0; i < table->n_cols; ++i) {
     auto col = dict_table_get_nth_col(table, i);
     auto col_no = dict_col_get_no(col);
@@ -4476,7 +4482,7 @@ static int ib_table_schema_visit_table_columns(const dict_table_t *table, ib_sch
  *
  * @return return value from index_col
  */
-static int ib_table_schema_visit_index_columns(const dict_index_t *dict_index, ib_schema_visitor_index_col_t index_col, void *arg) {
+static int ib_table_schema_visit_index_columns(const dict_index_t *dict_index, ib_schema_visitor_t::index_col_t index_col, void *arg) {
   ulint n_index_cols = dict_index->n_user_defined_cols;
 
   for (ulint i = 0; i < n_index_cols; ++i) {
@@ -4529,7 +4535,7 @@ ib_err_t ib_table_schema_visit(ib_trx_t ib_trx, const char *name, const ib_schem
     --n_indexes;
   }
 
-  if (visitor->version < IB_SCHEMA_VISITOR_TABLE) {
+  if (visitor->version < ib_schema_visitor_t::Version::TABLE) {
 
     goto func_exit;
 
@@ -4541,7 +4547,7 @@ ib_err_t ib_table_schema_visit(ib_trx_t ib_trx, const char *name, const ib_schem
     }
   }
 
-  if (visitor->version < IB_SCHEMA_VISITOR_TABLE_COL) {
+  if (visitor->version < ib_schema_visitor_t::Version::TABLE_COL) {
 
     goto func_exit;
 
@@ -4555,7 +4561,7 @@ ib_err_t ib_table_schema_visit(ib_trx_t ib_trx, const char *name, const ib_schem
 
   if (!visitor->index) {
     goto func_exit;
-  } else if (visitor->version < IB_SCHEMA_VISITOR_TABLE_AND_INDEX) {
+  } else if (visitor->version < ib_schema_visitor_t::Version::TABLE_AND_INDEX) {
     goto func_exit;
   }
 
@@ -4572,7 +4578,7 @@ ib_err_t ib_table_schema_visit(ib_trx_t ib_trx, const char *name, const ib_schem
         goto func_exit;
       }
 
-      if (visitor->version >= IB_SCHEMA_VISITOR_TABLE_AND_INDEX_COL && visitor->index_col) {
+      if (visitor->version >= ib_schema_visitor_t::Version::TABLE_AND_INDEX_COL && visitor->index_col) {
         user_err = ib_table_schema_visit_index_columns(dict_index, visitor->index_col, arg);
 
         if (user_err > 0) {
@@ -4626,7 +4632,7 @@ ib_err_t ib_schema_tables_iterate(ib_trx_t ib_trx, ib_schema_visitor_table_all_t
     err = ib_cursor_read_row(ib_crsr, ib_tpl);
 
     if (err == DB_SUCCESS) {
-      ib_ulint_t len;
+      ulint len;
 
       ptr = ib_col_get_value(ib_tpl, 0);
       /* Can't have nullptr columns. */
@@ -4683,15 +4689,15 @@ static ib_err_t ib_tuple_write_int(ib_tpl_t ib_tpl, ulint col_no, const void *va
 }
 #endif
 
-ib_err_t ib_tuple_write_i8(ib_tpl_t ib_tpl, int col_no, ib_i8_t val) {
+ib_err_t ib_tuple_write_i8(ib_tpl_t ib_tpl, int col_no, int8_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_i16(ib_tpl_t ib_tpl, int col_no, ib_i16_t val) {
+ib_err_t ib_tuple_write_i16(ib_tpl_t ib_tpl, int col_no, int16_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_i32(ib_tpl_t ib_tpl, int col_no, ib_i32_t val) {
+ib_err_t ib_tuple_write_i32(ib_tpl_t ib_tpl, int col_no, int32_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
@@ -4699,19 +4705,19 @@ ib_err_t ib_tuple_write_i64(ib_tpl_t ib_tpl, int col_no, int64_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_u8(ib_tpl_t ib_tpl, int col_no, ib_u8_t val) {
+ib_err_t ib_tuple_write_u8(ib_tpl_t ib_tpl, int col_no, uint8_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_u16(ib_tpl_t ib_tpl, int col_no, ib_u16_t val) {
+ib_err_t ib_tuple_write_u16(ib_tpl_t ib_tpl, int col_no, uint16_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_u32(ib_tpl_t ib_tpl, int col_no, ib_u32_t val) {
+ib_err_t ib_tuple_write_u32(ib_tpl_t ib_tpl, int col_no, uint32_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
-ib_err_t ib_tuple_write_u64(ib_tpl_t ib_tpl, int col_no, ib_u64_t val) {
+ib_err_t ib_tuple_write_u64(ib_tpl_t ib_tpl, int col_no, uint64_t val) {
   return ib_col_set_value(ib_tpl, col_no, &val, sizeof(val));
 }
 
@@ -4733,7 +4739,7 @@ ib_err_t ib_tuple_write_double(ib_tpl_t ib_tpl, int col_no, double val) {
   }
 }
 
-ib_err_t ib_tuple_read_double(ib_tpl_t ib_tpl, ib_ulint_t col_no, double *dval) {
+ib_err_t ib_tuple_read_double(ib_tpl_t ib_tpl, ulint col_no, double *dval) {
   ib_err_t err;
   ib_tuple_t *tuple = (ib_tuple_t *)ib_tpl;
 
@@ -4761,7 +4767,7 @@ ib_err_t ib_tuple_write_float(ib_tpl_t ib_tpl, int col_no, float val) {
   }
 }
 
-ib_err_t ib_tuple_read_float(ib_tpl_t ib_tpl, ib_ulint_t col_no, float *fval) {
+ib_err_t ib_tuple_read_float(ib_tpl_t ib_tpl, ulint col_no, float *fval) {
   ib_err_t err;
   ib_tuple_t *tuple = (ib_tuple_t *)ib_tpl;
 
@@ -4783,7 +4789,7 @@ void ib_logger_set(ib_msg_log_t, ib_msg_stream_t ib_msg_stream) {
 }
 
 void ib_set_panic_handler(ib_panic_handler_t new_panic_handler) {
-  ib_panic = new_panic_handler;
+  ib_panic = std::move(new_panic_handler);
 }
 
 extern ib_trx_is_interrupted_handler_t ib_trx_is_interrupted;
@@ -4821,7 +4827,7 @@ ib_err_t ib_get_table_statistics(ib_crsr_t ib_crsr, ib_table_stats_t *table_stat
   return DB_SUCCESS;
 }
 
-ib_err_t ib_get_index_stat_n_diff_key_vals(ib_crsr_t ib_crsr, const char *index_name, ib_u64_t *ncols, int64_t **n_diff) {
+ib_err_t ib_get_index_stat_n_diff_key_vals(ib_crsr_t ib_crsr, const char *index_name, uint64_t *ncols, int64_t **n_diff) {
   ib_cursor_t *cursor = (ib_cursor_t *)ib_crsr;
   dict_table_t *table = cursor->prebuilt->table;
   dict_index_t *index;

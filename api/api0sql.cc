@@ -64,8 +64,8 @@ static pars_info_t *ib_exec_vsql(int n_args, va_list ap) {
         break;
       }
       case IB_INT: {
-        auto l = va_arg(ap, ib_ulint_t);
-        auto s = va_arg(ap, ib_ulint_t);
+        auto l = va_arg(ap, ulint);
+        auto s = va_arg(ap, ulint);
         auto n = va_arg(ap, const char *);
 
         auto prtype = s ? 0 : DATA_UNSIGNED;
@@ -114,7 +114,7 @@ static pars_info_t *ib_exec_vsql(int n_args, va_list ap) {
  return info;
 }
 
-ib_err_t ib_exec_sql( const char *sql, ib_ulint_t n_args, ...) {
+ib_err_t ib_exec_sql( const char *sql, ulint n_args, ...) {
   va_list ap;
 
   va_start(ap, n_args);
@@ -152,7 +152,7 @@ ib_err_t ib_exec_sql( const char *sql, ib_ulint_t n_args, ...) {
   return err;
 }
 
-ib_err_t ib_exec_ddl_sql(const char *sql, ib_ulint_t n_args, ...) {
+ib_err_t ib_exec_ddl_sql(const char *sql, ulint n_args, ...) {
   va_list ap;
 
   va_start(ap, n_args);
@@ -178,7 +178,8 @@ ib_err_t ib_exec_ddl_sql(const char *sql, ib_ulint_t n_args, ...) {
   err = que_eval_sql(info, sql, false, trx);
   ut_a(err == DB_SUCCESS);
 
-  ib_schema_unlock((ib_trx_t)trx);
+  err = ib_schema_unlock((ib_trx_t)trx);
+  ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
 
   if (err != DB_SUCCESS) {
     trx_general_rollback(trx, false, nullptr);

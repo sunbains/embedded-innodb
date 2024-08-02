@@ -25,14 +25,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 static void get_all(void) {
   const char **var_names;
-  ib_u32_t num_status_var;
+  uint32_t num_status_var;
 
   OK(ib_status_get_all(&var_names, &num_status_var));
 
   assert(num_status_var > 1);
 
   const char **ptr;
-  ib_i64_t val;
+  int64_t val;
 
   for (ptr = var_names; *ptr; ++ptr) {
     ib_err_t err;
