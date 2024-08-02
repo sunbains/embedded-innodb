@@ -27,8 +27,12 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "innodb0types.h"
 
+#include <functional>
+#include <list>
 #include <string>
 #include <unordered_map>
+#include <variant>
+
 #include "data0types.h"
 #include "fsp0types.h"
 #include "hash0hash.h"
@@ -530,6 +534,50 @@ struct dict_table_t {
   IF_DEBUG(ulint magic_n;)
 };
 
+class dict_table_lru {
+ private:
+  using table_list_t = std::list<dict_table_t *>;
+  using list_itr_t = table_list_t::iterator;
+
+  struct cache_entry {
+    list_itr_t list_itr;
+    std::string name;
+    std::uint64_t id;
+    bool evicted;
+  };
+
+ public:
+  struct stats {
+    std::uint32_t total_in_memory;
+    std::uint32_t total_in_evicted_state;
+  };
+
+  explicit dict_table_lru(std::int32_t capacity, std::function<dict_table_t *(std::uint64_t)> table_fetcher);
+  dict_table_t *get(std::string_view name);
+  dict_table_t *get(std::uint64_t id);
+  bool contains(std::uint64_t id);
+  bool contains(std::string_view name);
+  bool add(std::string_view name, std::uint64_t id, dict_table_t *table);
+  bool erase(std::string_view name);
+  bool erase(std::uint64_t id);
+  void releaseAll(std::function<void(dict_table_t *)> deleter);
+  std::int32_t size() const;
+  stats get_stats();
+
+ private:
+  void move_to_front(const std::shared_ptr<cache_entry> &entry);
+  void evict();
+  void erase(const std::shared_ptr<cache_entry> &entry);
+
+ private:
+  std::int32_t m_capacity;
+  std::int32_t m_size;
+  std::function<dict_table_t *(std::uint64_t)> m_table_fetcher;
+  table_list_t m_tables;
+  std::unordered_map<std::string_view, std::shared_ptr<cache_entry>> m_name_lookup;
+  std::unordered_map<std::uint64_t, std::shared_ptr<cache_entry>> m_id_lookup;
+};
+
 /** Data dictionary */
 struct dict_sys_t {
   /** mutex protecting the data dictionary; protects also the disk-based
@@ -544,11 +592,8 @@ struct dict_sys_t {
    * recovery this must be derived from the log records */
   uint64_t row_id;
 
-  /** Hash table of the tables, based on name */
-  std::unordered_map<std::string, dict_table_t *> *table_hash;
-
-  /** Hash table of the tables, based on id */
-  std::unordered_map<std::uint64_t, dict_table_t *> *table_id_hash;
+  /** lru with both name and id lookup */
+  dict_table_lru *table_lookup;
 
   /** LRU list of tables */
   UT_LIST_BASE_NODE_T(dict_table_t, table_LRU) table_LRU;

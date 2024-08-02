@@ -48,12 +48,7 @@ Created 4/24/1996 Heikki Tuuri
  *
  * @return True if the i'th column of index is 'name'.
  */
-static bool name_of_col_is(
-  const dict_table_t *table,
-  const dict_index_t *index,
-  ulint i,
-  const char *name
-) {
+static bool name_of_col_is(const dict_table_t *table, const dict_index_t *index, ulint i, const char *name) {
   ulint tmp = dict_col_get_no(dict_field_get_col(dict_index_get_nth_field(index, i)));
 
   return strcmp(name, dict_table_get_col_name(table, tmp)) == 0;
@@ -758,7 +753,7 @@ func_exit:
   return error;
 }
 
-dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
+dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name, bool skip_load_cache) {
   bool ibd_file_missing = false;
   dict_table_t *table;
   dict_table_t *sys_tables;
@@ -921,7 +916,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
 
   dict_load_columns(table, heap);
 
-  dict_table_add_to_cache(table, heap);
+  dict_table_add_to_cache(table, heap, skip_load_cache);
 
   mem_heap_empty(heap);
 
@@ -966,7 +961,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
   return (table);
 }
 
-dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
+dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id, bool skip_load_cache) {
   byte id_buf[8];
   btr_pcur_t pcur;
   mem_heap_t *heap;
@@ -1038,7 +1033,7 @@ dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
   /* Now we get the table name from the record */
   field = rec_get_nth_field_old(rec, 1, &len);
   /* Load the table definition to memory */
-  table = dict_load_table(recovery, mem_heap_strdupl(heap, (char *)field, len));
+  table = dict_load_table(recovery, mem_heap_strdupl(heap, (char *)field, len), skip_load_cache);
 
   pcur.close();
   mtr_commit(&mtr);
@@ -1305,7 +1300,15 @@ loop:
   following call does the comparison in the latin1_swedish_ci
   charset-collation, in a case-insensitive way. */
 
-  if (0 != cmp_data_data(nullptr, dfield_get_type(dfield)->mtype, dfield_get_type(dfield)->prtype, (const byte *)dfield_get_data(dfield), dfield_get_len(dfield), field, len)) {
+  if (0 != cmp_data_data(
+             nullptr,
+             dfield_get_type(dfield)->mtype,
+             dfield_get_type(dfield)->prtype,
+             (const byte *)dfield_get_data(dfield),
+             dfield_get_len(dfield),
+             field,
+             len
+           )) {
 
     goto load_next_index;
   }

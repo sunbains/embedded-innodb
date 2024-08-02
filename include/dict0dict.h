@@ -150,7 +150,7 @@ void dict_table_add_system_columns(dict_table_t *table, mem_heap_t *heap);
  * @param table The table object.
  * @param heap The temporary heap.
  */
-void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap);
+void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap, bool skip_add_to_cache = false);
 
 /**
  * @brief Removes a table object from the dictionary cache.
@@ -981,10 +981,7 @@ inline dict_table_t *dict_table_check_if_in_cache_low(const char *table_name) {
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
   /* Look for the table name in the hash table */
-  dict_table_t *table{nullptr};
-  if (auto itr = dict_sys->table_hash->find(table_name); itr != dict_sys->table_hash->end()) {
-    table = itr->second;
-  }
+  dict_table_t *table{dict_sys->table_lookup->get(table_name)};
 
   return table;
 }
@@ -1020,10 +1017,7 @@ inline dict_table_t *dict_table_get_on_id_low(ib_recovery_t recovery, uint64_t t
   ut_ad(mutex_own(&dict_sys->mutex));
 
   /* Look for the table name in the hash table */
-  dict_table_t *table{nullptr};
-  if (auto itr = dict_sys->table_id_hash->find(table_id); itr != dict_sys->table_id_hash->end()) {
-    table = itr->second;
-  }
+  dict_table_t *table{dict_sys->table_lookup->get(table_id)};
 
   if (table == nullptr) {
     table = dict_load_table_on_id(recovery, table_id);

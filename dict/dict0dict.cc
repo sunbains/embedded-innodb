@@ -22,6 +22,7 @@ Created 1/8/1996 Heikki Tuuri
 ***********************************************************************/
 
 #include "dict0dict.h"
+#include <unordered_set>
 
 /** dummy index for ROW_FORMAT=REDUNDANT supremum and infimum records */
 dict_index_t *dict_ind_redundant;
@@ -429,8 +430,12 @@ void dict_init() {
   dict_sys = (dict_sys_t *)mem_alloc(sizeof(dict_sys_t));
 
   mutex_create(&dict_sys->mutex, IF_DEBUG("dict_mutex", ) IF_SYNC_DEBUG(SYNC_DICT, ) Source_location{});
-  dict_sys->table_hash = new std::unordered_map<std::string, dict_table_t *>();
-  dict_sys->table_id_hash = new std::unordered_map<std::uint64_t, dict_table_t *>();
+
+  auto func = [](std::uint64_t id) {
+    return dict_load_table_on_id(ib_recovery_t::IB_RECOVERY_DEFAULT, id, true);
+  };
+
+  dict_sys->table_lookup = new dict_table_lru{8, std::move(func)};
 
   dict_sys->size = 0;
 
@@ -508,7 +513,7 @@ void dict_table_add_system_columns(dict_table_t *table, mem_heap_t *heap) {
   dict_mem_table_add_col(table, heap, "DB_ROLL_PTR", DATA_SYS, DATA_ROLL_PTR | DATA_NOT_NULL, DATA_ROLL_PTR_LEN);
 }
 
-void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap) {
+void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap, bool skip_add_to_cache) {
   ulint i;
   ulint row_len;
 
@@ -538,40 +543,35 @@ void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap) {
 
   table->big_rows = row_len >= BIG_ROW_SIZE;
 
-  /* Look for a table with the same name: error if such exists */
-  {
-    auto contains = dict_sys->table_hash->contains(table->name);
-    ut_a(!contains);
+  if (!skip_add_to_cache) {
+
+    /* Look for a table with the same name: error if such exists */
+    {
+      auto contains = dict_sys->table_lookup->contains(table->name);
+      ut_a(!contains);
 
 #ifdef UNIV_DEBUG
-    /* Look for the same table pointer with a different name */
-    HASH_SEARCH_ALL(name_hash, dict_sys->table_hash, dict_table_t *, table2, ut_ad(table2->cached), table2 == table);
-    ut_ad(table2 == nullptr);
+      /* Look for the same table pointer with a different name */
+      HASH_SEARCH_ALL(name_hash, dict_sys->table_hash, dict_table_t *, table2, ut_ad(table2->cached), table2 == table);
+      ut_ad(table2 == nullptr);
 #endif /* UNIV_DEBUG */
-  }
-
-  /* Look for a table with the same id: error if such exists */
-  {
-    dict_table_t *table2{nullptr};
-    if (auto itr = dict_sys->table_id_hash->find(table->id); itr != dict_sys->table_id_hash->end()) {
-      table2 = itr->second;
     }
-    ut_a(table2 == nullptr);
 
+    /* Look for a table with the same id: error if such exists */
+    {
+      auto contains = dict_sys->table_lookup->contains(table->id);
+      ut_a(!contains);
 #ifdef UNIV_DEBUG
-    /* Look for the same table pointer with a different id */
-    HASH_SEARCH_ALL(id_hash, dict_sys->table_id_hash, dict_table_t *, table2, ut_ad(table2->cached), table2 == table);
-    ut_ad(table2 == nullptr);
+      /* Look for the same table pointer with a different id */
+      HASH_SEARCH_ALL(id_hash, dict_sys->table_id_hash, dict_table_t *, table2, ut_ad(table2->cached), table2 == table);
+      ut_ad(table2 == nullptr);
 #endif /* UNIV_DEBUG */
+    }
+
+    auto result = dict_sys->table_lookup->add(table->name, table->id, table);
+    ut_a(result);
   }
 
-  /* Add table to hash table of tables */
-  auto table_name_hash_insertion = dict_sys->table_hash->emplace(table->name, table);
-  ut_a(table_name_hash_insertion.second);
-
-  /* Add table to hash table of tables based on table id */
-  auto table_id_hash_insertion = dict_sys->table_id_hash->emplace(table->id, table);
-  ut_a(table_id_hash_insertion.second);
   /* Add table to LRU list of tables */
   UT_LIST_ADD_FIRST(dict_sys->table_LRU, table);
 
@@ -613,10 +613,7 @@ bool dict_table_rename_in_cache(dict_table_t *table, const char *new_name, bool 
 
   /* Look for a table with the same name: error if such exists */
   {
-    dict_table_t *table2{nullptr};
-    if (auto itr = dict_sys->table_hash->find(new_name); itr != dict_sys->table_hash->end()) {
-      table2 = itr->second;
-    }
+    dict_table_t *table2{dict_sys->table_lookup->get(new_name)};
 
     if (likely_null(table2)) {
       ut_print_timestamp(ib_stream);
@@ -659,13 +656,13 @@ bool dict_table_rename_in_cache(dict_table_t *table, const char *new_name, bool 
   }
 
   /* Remove table from the hash tables of tables */
-  auto deletion_count = dict_sys->table_hash->erase(old_name);
-  ut_a(deletion_count == 1);
+  auto deletion_count = dict_sys->table_lookup->erase(old_name);
+  ut_a(deletion_count);
   table->name = mem_heap_strdup(table->heap, new_name);
 
   /* Add table to hash table of tables */
-  auto insertion_result = dict_sys->table_hash->emplace(table->name, table);
-  ut_a(insertion_result.second);
+  auto insertion_result = dict_sys->table_lookup->add(table->name, table->id, table);
+  ut_a(insertion_result);
 
   dict_sys->size += (mem_heap_get_size(table->heap) - old_size);
 
@@ -804,17 +801,14 @@ void dict_table_change_id_in_cache(
   ut_ad(mutex_own(&(dict_sys->mutex)));
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
 
-  /* Remove the table from the hash table of id's */
-  auto deleted_count = dict_sys->table_id_hash->erase(table->id);
-  ut_a(deleted_count == 1);
-  table->id = new_id;
+  auto deletion_result = dict_sys->table_lookup->erase(table->id);
+  ut_a(deletion_result);
 
-  /* Add the table back to the hash table */
-  auto insertion_result = dict_sys->table_id_hash->emplace(table->id, table);
-  ut_a(insertion_result.second);
+  auto insertion_result = dict_sys->table_lookup->add(table->name, table->id, table);
+  ut_a(insertion_result);
 }
 
-void dict_table_remove_from_cache(dict_table_t *table) {
+void dict_table_remove_from_cache(dict_table_t *table, bool skip_remove_from_lru) {
   dict_foreign_t *foreign;
   dict_index_t *index;
   ulint size;
@@ -850,11 +844,14 @@ void dict_table_remove_from_cache(dict_table_t *table) {
     index = UT_LIST_GET_LAST(table->indexes);
   }
 
-  /* Remove table from the hash tables of tables */
-  ut_a(dict_sys->table_hash->contains(table->name));
-  ut_a(dict_sys->table_id_hash->contains(table->id));
-  dict_sys->table_hash->erase(table->name);
-  dict_sys->table_id_hash->erase(table->id);
+  if (!skip_remove_from_lru) {
+    /* Remove table from lru */
+    ut_a(dict_sys->table_lookup->contains(table->name));
+    ut_a(dict_sys->table_lookup->contains(table->id));
+
+    dict_sys->table_lookup->erase(table->id);
+    dict_sys->table_lookup->erase(table->name);
+  }
 
   /* Remove table from LRU list of tables */
   UT_LIST_REMOVE(dict_sys->table_LRU, table);
@@ -866,6 +863,10 @@ void dict_table_remove_from_cache(dict_table_t *table) {
   dict_sys->size -= size;
 
   dict_mem_table_free(table);
+}
+
+void dict_table_remove_from_cache(dict_table_t *table) {
+  dict_table_remove_from_cache(table, false);
 }
 
 bool dict_col_name_is_reserved(const char *name) {
@@ -1288,6 +1289,10 @@ static bool dict_index_find_cols(dict_table_t *table, dict_index_t *index) {
 void dict_index_add_col(dict_index_t *index, const dict_table_t *table, dict_col_t *col, ulint prefix_len) {
   dict_field_t *field;
   const char *col_name;
+
+  if (table->id == 14) {
+    ib_logger(ib_stream, "hello\n");
+  }
 
   col_name = dict_table_get_col_name(table, dict_col_get_no(col));
 
@@ -3788,22 +3793,15 @@ void dict_unlock_data_dictionary(trx_t *trx) {
 void dict_close() {
   /* Free the hash elements. We don't remove them from the table
   because we are going to destroy the table anyway. */
-  std::vector<dict_table_t *> tables;
-  for (auto &itr : *dict_sys->table_hash) {
-    tables.emplace_back(itr.second);
-  }
-
-  for (auto table : tables) {
+  auto deleter = [](dict_table_t *table) {
     mutex_enter(&dict_sys->mutex);
-    dict_table_remove_from_cache(table);
+    dict_table_remove_from_cache(table, true);
     mutex_exit(&dict_sys->mutex);
-  }
+  };
 
-  delete dict_sys->table_hash;
+  dict_sys->table_lookup->releaseAll(std::move(deleter));
 
-  /* The elements are the same instance as in dict_sys->table_hash,
-  therefore we don't delete the individual elements. */
-  delete dict_sys->table_id_hash;
+  delete dict_sys->table_lookup;
 
   /* Acquire only because it's a pre-condition. */
   mutex_enter(&dict_sys->mutex);
@@ -3824,4 +3822,205 @@ void dict_close() {
   for (auto &i : dict_index_stat_mutex) {
     mutex_free(&i);
   }
+}
+
+dict_table_lru::dict_table_lru(std::int32_t capacity, std::function<dict_table_t *(std::uint64_t)> table_fetcher)
+    : m_capacity{capacity}, m_size{0}, m_table_fetcher{std::move(table_fetcher)}, m_tables{}, m_name_lookup{}, m_id_lookup{} {}
+
+dict_table_t *dict_table_lru::get(std::string_view name) {
+  if (auto itr = m_name_lookup.find(name); itr != m_name_lookup.end()) {
+    ut_a(m_name_lookup[name] == m_id_lookup[itr->second->id]);
+    move_to_front(itr->second);
+    return (*itr->second->list_itr);
+  }
+
+  return nullptr;
+}
+
+dict_table_t *dict_table_lru::get(std::uint64_t id) {
+  if (auto itr = m_id_lookup.find(id); itr != m_id_lookup.end()) {
+    ut_a(m_id_lookup[id] == m_name_lookup[itr->second->name]);
+    move_to_front(itr->second);
+    return (*itr->second->list_itr);
+  }
+
+  return nullptr;
+}
+
+bool dict_table_lru::contains(std::uint64_t id) {
+  ib_logger(ib_stream, "contains check table: %lu\n", id);
+  return m_id_lookup.contains(id);
+}
+
+bool dict_table_lru::contains(std::string_view name) {
+  ib_logger(ib_stream, "contains check table: %s\n", std::string{name}.c_str());
+  return m_name_lookup.contains(name);
+}
+
+bool dict_table_lru::add(std::string_view name, std::uint64_t id, dict_table_t *table) {
+  ut_a(table);
+  ib_logger(ib_stream, "adding table: %lu, %s\n", id, std::string{name}.c_str());
+
+  auto name_itr = m_name_lookup.find(name);
+  auto id_itr = m_id_lookup.find(id);
+
+  auto found_in_name_map = name_itr != m_name_lookup.end();
+  auto found_in_id_map = id_itr != m_id_lookup.end();
+  ut_a((found_in_id_map && found_in_id_map) || (!found_in_id_map && !found_in_name_map));
+
+  if (found_in_id_map) {
+    return false;
+  }
+
+  m_size++;
+
+  if (m_size > m_capacity) {
+    evict();
+  }
+
+  m_tables.emplace_front(table);
+
+  auto cached_entry = std::make_shared<cache_entry>(cache_entry{
+    .list_itr = m_tables.begin(),
+    .name = std::string{table->name},
+    .id = table->id,
+    .evicted = false,
+  });
+
+  auto name_insertion_result = m_name_lookup.emplace(cached_entry->name, cached_entry);
+  ut_a(name_insertion_result.second);
+
+  auto id_insertion_result = m_id_lookup.emplace(id, cached_entry);
+  ut_a(id_insertion_result.second);
+
+  return true;
+}
+
+bool dict_table_lru::erase(std::string_view name) {
+  if (auto itr = m_name_lookup.find(name); itr != m_name_lookup.end()) {
+    erase(itr->second);
+    m_size--;
+  }
+
+  return false;
+}
+
+bool dict_table_lru::erase(std::uint64_t id) {
+  if (auto itr = m_id_lookup.find(id); itr != m_id_lookup.end()) {
+    erase(itr->second);
+    m_size--;
+  }
+
+  return true;
+}
+
+void dict_table_lru::releaseAll(std::function<void(dict_table_t *)> deleter) {
+  for (const auto &itr : m_id_lookup) {
+    if (itr.second->evicted) {
+      // nothing to do
+    } else {
+      deleter(*(itr.second->list_itr));
+    }
+  }
+}
+
+std::int32_t dict_table_lru::size() const {
+  return m_size;
+}
+
+dict_table_lru::stats dict_table_lru::get_stats() {
+  stats result{};
+  for (const auto &itr : m_id_lookup) {
+    if (itr.second->evicted) {
+      result.total_in_evicted_state++;
+    } else {
+      result.total_in_memory++;
+    }
+  }
+
+  return result;
+}
+
+void dict_table_lru::move_to_front(const std::shared_ptr<cache_entry> &entry) {
+  list_itr_t itr{m_tables.end()};
+  if (entry->list_itr != m_tables.end()) {
+    ut_a(!entry->evicted);
+
+    auto table = *entry->list_itr;
+    m_tables.erase(entry->list_itr);
+    m_tables.emplace_front(table);
+
+    itr = m_tables.begin();
+  } else {
+    ut_a(entry->list_itr == m_tables.end());
+    ut_a(entry->evicted);
+
+    // table was evicted, load it first
+    auto table = m_table_fetcher(entry->id);
+    ut_a(table);
+
+    m_tables.emplace_front(table);
+    itr = m_tables.begin();
+  }
+
+  ut_a(itr != m_tables.end());
+
+  entry->evicted = false;
+  entry->list_itr = itr;
+}
+
+void dict_table_lru::evict() {
+  static std::unordered_set<std::string> dont_evict{
+    "SYS_TABLES",
+    "SYS_COLUMNS",
+    "SYS_INDEXES",
+    "SYS_FIELDS",
+    "SYS_FOREIGN",
+    "SYS_FOREIGN_COLS",
+  };
+
+  ut_a(m_size >= m_capacity);
+
+  dict_table_t *table{nullptr};
+
+  std::int32_t max_scan_limit{100};
+  std::int32_t count{0};
+  for (auto it = m_tables.rbegin(); it != m_tables.rend() && count < max_scan_limit; it++, count++) {
+    table = *it;
+    if (dont_evict.contains(table->name)) {
+      continue;
+    }
+
+    if (table->locks.get_length() == 0) {
+      break;
+    }
+  }
+
+  ut_a(table);
+  ut_a(table->locks.get_length() == 0);
+
+  ib_logger(ib_stream, "evicting table: %lu, %s\n", table->id, table->name);
+
+  auto itr = m_id_lookup.find(table->id);
+  ut_a(itr != m_id_lookup.end());
+  auto entry = itr->second;
+  m_tables.erase(entry->list_itr);
+
+  entry->list_itr = m_tables.end();
+  entry->evicted = true;
+
+  // release the memory occupied by dict_table
+  dict_table_remove_from_cache(table, true);
+}
+
+void dict_table_lru::erase(const std::shared_ptr<cache_entry> &entry) {
+  const auto &table = entry;
+  ut_a(table);
+
+  auto name = std::string_view{table->name};
+  auto id = table->id;
+
+  m_tables.erase(table->list_itr);
+  m_name_lookup.erase(name);
+  m_id_lookup.erase(id);
 }
