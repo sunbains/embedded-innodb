@@ -32,7 +32,6 @@ Created 3/26/1996 Heikki Tuuri
 #include "srv0srv.h"
 #include "trx0types.h"
 #include "usr0types.h"
-#include "ut0vec.h"
 
 struct read_view_t;
 
@@ -64,7 +63,7 @@ void trx_set_detailed_error(trx_t *trx, const char *msg);
 /** Initialize all the fields in a transaction instance.
 @param[in] sess                 Client session (nullptr for now).
 @return transaction instance. */
-[[nodiscard]] trx_t *trx_create_low(trx_t *trx, sess_t* sess);
+[[nodiscard]] trx_t *trx_create_low(trx_t *trx, sess_t *sess);
 #endif /* UNIT_TESTING */
 
 /**
@@ -419,7 +418,7 @@ inline bool trx_start_if_not_started(trx_t *trx) {
  * @param[in/out] trx Transaction.
  * @param[in] op Operation, not TRX_DICT_OP_NONE.
  */
-inline void trx_set_dict_operation( trx_t *trx, trx_dict_op_t op) {
+inline void trx_set_dict_operation(trx_t *trx, trx_dict_op_t op) {
 #ifdef UNIV_DEBUG
   const auto old_op = trx_get_dict_operation(trx);
 
@@ -433,7 +432,7 @@ inline void trx_set_dict_operation( trx_t *trx, trx_dict_op_t op) {
         case TRX_DICT_OP_INDEX:
         case TRX_DICT_OP_TABLE:
           trx->m_dict_operation = op;
-	  return;
+          return;
       }
       ut_error;
       break;
@@ -453,6 +452,6 @@ inline void trx_set_dict_operation( trx_t *trx, trx_dict_op_t op) {
  * @param[in] t Transaction.
  * @return Transaction weight.
  */
-[[nodiscard]] inline ulint trx_weight(const trx_t* trx) {
+[[nodiscard]] inline ulint trx_weight(const trx_t *trx) {
   return trx->undo_no + UT_LIST_GET_LEN(trx->trx_locks);
 }

@@ -47,7 +47,6 @@ Created 5/7/1996 Heikki Tuuri
 #include "trx0sys.h"
 #include "trx0trx.h"
 #include "trx0types.h"
-#include "ut0vec.h"
 
 #ifdef UNIV_DEBUG
 extern bool lock_print_waits;
