@@ -205,18 +205,9 @@ struct recv_addr_struct {
   hash_node_t addr_hash;
 };
 
-struct Space_id_page_no_hash {
-  std::size_t operator()(const std::pair<space_id_t, page_no_t> &pair) const {
-    return space_id_hash(pair.first) ^ page_no_hash(pair.second);
-  }
-
-  std::hash<space_id_t> space_id_hash{};
-  std::hash<page_no_t> page_no_hash{};
-};
-
 /** Recovery system data structure */
 struct recv_sys_t {
-  using addr_hash_t = std::unordered_map<std::pair<space_id_t, page_no_t>, recv_addr_t *, Space_id_page_no_hash>;
+  using addr_hash_t = std::unordered_map<Page_id, recv_addr_t *, Page_id_hash>;
   /** mutex protecting the fields apply_log_recs, n_addrs, and
   the state field in each recv_addr struct */
   mutex_t mutex;
