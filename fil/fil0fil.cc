@@ -300,9 +300,7 @@ void Fil::node_open_file(fil_node_t *node, fil_space_t *space) {
       /* The following call prints an error message */
       os_file_get_last_error(true);
 
-      log_fatal(
-        std::format("Cannot open '{}'. Have you deleted .ibd files under a running server?\n", node->m_file_name)
-      );
+      log_fatal(std::format("Cannot open '{}'. Have you deleted .ibd files under a running server?\n", node->m_file_name));
     }
 
     os_file_get_size(node->m_fh, &size);
@@ -339,9 +337,9 @@ void Fil::node_open_file(fil_node_t *node, fil_space_t *space) {
     os_file_close(node->m_fh);
 
     if (unlikely(space_id != space->m_id)) {
-      log_fatal( std::format(
-      	"Tablespace id is {} in the data dictionary but in file {} it is {}!", space->m_id, node->m_file_name, space_id
-	));
+      log_fatal(
+        std::format("Tablespace id is {} in the data dictionary but in file {} it is {}!", space->m_id, node->m_file_name, space_id)
+      );
     }
 
     if (unlikely(space_id == ULINT_UNDEFINED || space_id == 0)) {
@@ -439,10 +437,7 @@ void Fil::mutex_enter_and_prepare_for_io(space_id_t space_id) {
       for a while */
 
       if (n_stopped_ios > 20000) {
-        log_warn(std::format(
-          "Tablespace {} has i/o ops stopped for a long time {}",
-          space->m_name,n_stopped_ios
-        ));
+        log_warn(std::format("Tablespace {} has i/o ops stopped for a long time {}", space->m_name, n_stopped_ios));
       }
 
       ++n_stopped_ios;
@@ -452,7 +447,7 @@ void Fil::mutex_enter_and_prepare_for_io(space_id_t space_id) {
 
       return;
 
-    } else  if (n_retries >= 2) {
+    } else if (n_retries >= 2) {
 
       log_warn(std::format(
         "Too many ({}u) files stay open while the maximum"
@@ -460,7 +455,7 @@ void Fil::mutex_enter_and_prepare_for_io(space_id_t space_id) {
         " max_files_open",
         m_n_open,
         m_max_n_open
-        ));
+      ));
 
       return;
     }
@@ -565,9 +560,17 @@ try_again:
   space = space_get_by_id(id);
 
   if (likely_null(space)) {
-    log_err("Trying to add tablespace ", id, " of name ", name,
-      " to the tablespace memory cache, but tablespace ", space->m_id,
-      " of name ", space->m_name, " already exists in the tablespace memory cache!");
+    log_err(
+      "Trying to add tablespace ",
+      id,
+      " of name ",
+      name,
+      " to the tablespace memory cache, but tablespace ",
+      space->m_id,
+      " of name ",
+      space->m_name,
+      " already exists in the tablespace memory cache!"
+    );
 
     mutex_exit(&m_mutex);
 
@@ -841,7 +844,6 @@ void Fil::close_all_files() {
 
     auto node = UT_LIST_GET_FIRST(space->m_chain);
 
-
     while (node != nullptr) {
       if (node->open) {
         node_close_file(node);
@@ -979,13 +981,7 @@ void Fil::create_directory_for_tablename(const char *name) {
 }
 
 void Fil::op_write_log(
-  ulint type,
-  space_id_t space_id,
-  ulint log_flags,
-  ulint flags,
-  const char *name,
-  const char *new_name,
-  mtr_t *mtr
+  ulint type, space_id_t space_id, ulint log_flags, ulint flags, const char *name, const char *new_name, mtr_t *mtr
 ) {
   auto log_ptr = mlog_open(mtr, 11 + 2 + 1);
 
@@ -1157,7 +1153,7 @@ byte *Fil::op_log_parse_or_replay(byte *ptr, byte *end_ptr, ulint type, space_id
 bool Fil::delete_tablespace(space_id_t id) {
   ut_a(id != SYS_TABLESPACE);
 
-  auto delete_file = [this](space_id_t id, const char* name) -> bool {
+  auto delete_file = [this](space_id_t id, const char *name) -> bool {
     auto path = mem_strdup(name);
 
     mutex_exit(&m_mutex);
@@ -1205,11 +1201,11 @@ bool Fil::delete_tablespace(space_id_t id) {
     auto space = space_get_by_id(id);
 
     if (space == nullptr) {
-        log_err(std::format(
-          "Cannot delete tablespace {} because it is not found in the"
-          " tablespace memory cache.",
+      log_err(std::format(
+        "Cannot delete tablespace {} because it is not found in the"
+        " tablespace memory cache.",
         id
-        ));
+      ));
 
       mutex_exit(&m_mutex);
 
@@ -1249,10 +1245,7 @@ bool Fil::discard_tablespace(space_id_t id) {
   auto success = delete_tablespace(id);
 
   if (!success) {
-      log_warn(std::format(
-        "Cannot delete tablespace {} in DISCARD TABLESPACE.",
-        id
-      ));
+    log_warn(std::format("Cannot delete tablespace {} in DISCARD TABLESPACE.", id));
   }
 
   return success;
@@ -1329,9 +1322,7 @@ retry:
   count++;
 
   if (count > 1000) {
-    log_warn(std::format(
-      "Problems renaming {} to {}, {} iterations",
-      old_name, new_name, count));
+    log_warn(std::format("Problems renaming {} to {}, {} iterations", old_name, new_name, count));
   }
 
   mutex_enter(&m_mutex);
@@ -1516,7 +1507,7 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
 
   /* printf("Creating tablespace %s id %lu\n", path, *space_id); */
 
-  auto err_exit = [](char* path, os_file_t file) -> db_err {
+  auto err_exit = [](char *path, os_file_t file) -> db_err {
     if (file != -1) {
       os_file_close(file);
     }
@@ -1557,10 +1548,7 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
 
   if (ret == 0) {
 
-    log_err(std::format(
-      "Could not write the first page to tablespace {}",
-      path
-    ));
+    log_err(std::format("Could not write the first page to tablespace {}", path));
 
     return err_exit(path, file);
   }
@@ -1592,13 +1580,8 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
     mtr_start(&mtr);
 
     op_write_log(
-      flags ? MLOG_FILE_CREATE2 : MLOG_FILE_CREATE,
-      *space_id,
-      is_temp ? MLOG_FILE_FLAG_TEMP : 0,
-      flags,
-      tablename,
-      nullptr,
-      &mtr);
+      flags ? MLOG_FILE_CREATE2 : MLOG_FILE_CREATE, *space_id, is_temp ? MLOG_FILE_FLAG_TEMP : 0, flags, tablename, nullptr, &mtr
+    );
 
     mtr_commit(&mtr);
   }
@@ -1805,10 +1788,7 @@ void Fil::load_single_table_tablespace(ib_recovery_t recovery, const char *dbnam
   if (size < off_t(FIL_IBD_FILE_INITIAL_SIZE * UNIV_PAGE_SIZE)) {
 
     log_err(std::format(
-      "The size of single-table tablespace file {} is only {}, should be at least {}!",
-      filepath,
-      size,
-      4 * UNIV_PAGE_SIZE
+      "The size of single-table tablespace file {} is only {}, should be at least {}!", filepath, size, 4 * UNIV_PAGE_SIZE
     ));
 
     os_file_close(file);
@@ -1875,6 +1855,24 @@ func_exit:
   mem_free(filepath);
 }
 
+std::string get_permission_string(std::filesystem::perms p) {
+  std::stringstream ss;
+  auto write_to_stream = [&ss, &p](char op, std::filesystem::perms perm) {
+    ss << (std::filesystem::perms::none == (perm & p) ? '-' : op);
+  };
+
+  write_to_stream('r', std::filesystem::perms::owner_read);
+  write_to_stream('w', std::filesystem::perms::owner_write);
+  write_to_stream('x', std::filesystem::perms::owner_exec);
+  write_to_stream('r', std::filesystem::perms::group_read);
+  write_to_stream('w', std::filesystem::perms::group_write);
+  write_to_stream('x', std::filesystem::perms::group_exec);
+  write_to_stream('r', std::filesystem::perms::others_read);
+  write_to_stream('w', std::filesystem::perms::others_write);
+  write_to_stream('x', std::filesystem::perms::others_exec);
+  return ss.str();
+}
+
 db_err Fil::scan_and_load_tablespaces(const std::string &dir, ib_recovery_t recovery, ulint max_depth, ulint depth) {
   namespace fs = std::filesystem;
 
@@ -1892,16 +1890,18 @@ db_err Fil::scan_and_load_tablespaces(const std::string &dir, ib_recovery_t reco
       return DB_ERROR;
     }
 
-    switch (fs::status(path).permissions()) {
-      case fs::perms::owner_all:
-        break;
-      case fs::perms::owner_read:
-      case fs::perms::owner_write:
-        log_err("The datadir is not readable and writable: ", path_name);
-        return DB_ERROR;
-      default:
-        log_err("The datadir is not writable: ", path_name);
-        return DB_ERROR;
+    auto has_read_write = [](fs::perms perm) {
+      if ((perm & fs::perms::owner_read) != fs::perms::none && (perm & fs::perms::owner_write) != fs::perms::none) {
+        return true;
+      }
+
+      return false;
+    };
+
+    auto per = fs::status(path).permissions();
+    if (!has_read_write(per)) {
+      log_err(std::format("The datadir is not writable, path: {}, permissions: {}", path_name, get_permission_string(per)));
+      return DB_ERROR;
     }
 
     return DB_SUCCESS;
@@ -1992,11 +1992,7 @@ bool Fil::tablespace_exists_in_mem(space_id_t id) {
 }
 
 bool Fil::space_for_table_exists_in_mem(
-  space_id_t id,
-  const char *name,
-  bool is_temp,
-  bool mark_space,
-  bool print_error_if_does_not_exist
+  space_id_t id, const char *name, bool is_temp, bool mark_space, bool print_error_if_does_not_exist
 ) {
   mutex_enter(&m_mutex);
 
@@ -2082,11 +2078,9 @@ bool Fil::space_for_table_exists_in_mem(
     ));
 
     if (fil_namespace != nullptr) {
-      log_warn(std::format(
-        "There is a tablespace with the right name {},  but its id is {}.",
-        fil_namespace->m_name,
-        fil_namespace->m_id
-      ));
+      log_warn(
+        std::format("There is a tablespace with the right name {},  but its id is {}.", fil_namespace->m_name, fil_namespace->m_id)
+      );
     }
 
     return error_exit(path);
@@ -2283,12 +2277,7 @@ void Fil::node_complete_io(fil_node_t *node, IO_request io_request) {
 }
 
 [[noreturn]] void Fil::report_invalid_page_access(
-  ulint block_offset,
-  space_id_t space_id,
-  const char *space_name,
-  ulint byte_offset,
-  ulint len,
-  IO_request io_request
+  ulint block_offset, space_id_t space_id, const char *space_name, ulint byte_offset, ulint len, IO_request io_request
 ) {
   log_fatal(std::format(
     "Trying to access page number {} in space {}, space name {}, which is"
@@ -2628,13 +2617,12 @@ bool Fil::validate() {
 
   ut_a(m_n_open == n_open);
 
-
   mutex_exit(&m_mutex);
 
   return true;
 }
 
-bool Fil::addr_is_null(const fil_addr_t& addr) {
+bool Fil::addr_is_null(const fil_addr_t &addr) {
   return addr.m_page_no == FIL_NULL;
 }
 

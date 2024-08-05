@@ -520,7 +520,7 @@ void srv_free_paths_and_sizes() {
 void *io_handler_thread(void *arg) {
   auto segment = *((ulint *)arg);
 
-  while (srv_fil->aio_wait(segment)) { }
+  while (srv_fil->aio_wait(segment)) {}
 
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit.
@@ -568,13 +568,7 @@ static ulint srv_calc_high32(off_t file_size) {
  *
  * @return DB_SUCCESS or error code
  */
-static db_err open_or_create_log_file(
-  bool create_new_db,
-  bool *log_file_created,
-  bool log_file_has_been_opened,
-  ulint k,
-  ulint i
-) {
+static db_err open_or_create_log_file(bool create_new_db, bool *log_file_created, bool log_file_has_been_opened, ulint k, ulint i) {
   bool ret;
   off_t size;
   char name[10000];
@@ -612,13 +606,17 @@ static db_err open_or_create_log_file(
     ret = os_file_get_size(files[i], &size);
     ut_a(ret);
 
-    if (size != (off_t) srv_log_file_size) {
+    off_t size_high = srv_calc_high32(srv_log_file_size);
+    off_t file_size = (off_t)srv_calc_low32(srv_log_file_size) + (((off_t)size_high) << 32);
+    if (size != file_size) {
 
       ib_logger(
         ib_stream,
         "Error: log file %s is of different size %lu bytes"
         " than the configured %lu bytes!\n",
-        name, (ulong)size, (ulong)srv_log_file_size
+        name,
+        (ulong)size,
+        (ulong)file_size
       );
 
       return DB_ERROR;
@@ -691,10 +689,7 @@ static db_err open_or_create_log_file(
  * @return DB_SUCCESS or error code
  */
 static db_err open_or_create_data_files(
-  bool *create_new_db,
-  uint64_t *min_flushed_lsn,
-  uint64_t *max_flushed_lsn,
-  ulint *sum_of_new_sizes
+  bool *create_new_db, uint64_t *min_flushed_lsn, uint64_t *max_flushed_lsn, ulint *sum_of_new_sizes
 ) {
   bool ret;
   ulint i;
@@ -785,10 +780,7 @@ static db_err open_or_create_data_files(
 
       if (one_created) {
         ib_logger(ib_stream, "Data files can only be added at the end\n");
-        ib_logger(
-          ib_stream, "of a tablespace, but data file %s existed beforehand.\n",
-          name
-        );
+        ib_logger(ib_stream, "of a tablespace, but data file %s existed beforehand.\n", name);
         return DB_ERROR;
       }
 
@@ -820,7 +812,8 @@ static db_err open_or_create_data_files(
 
       if (i == srv_n_data_files - 1 && srv_auto_extend_last_data_file) {
 
-        if (srv_data_file_sizes[i] > rounded_size_pages || (srv_last_file_size_max > 0 && srv_last_file_size_max < rounded_size_pages)) {
+        if (srv_data_file_sizes[i] > rounded_size_pages ||
+            (srv_last_file_size_max > 0 && srv_last_file_size_max < rounded_size_pages)) {
 
           ib_logger(
             ib_stream,
@@ -1064,8 +1057,7 @@ ib_err_t innobase_start_or_create() {
 #endif /* UNIV_DEBUG */
 
   if (srv_n_log_files * srv_log_file_size >= 262144) {
-    ib_logger(ib_stream, "Combined size of log files must be < 4 GB\n"
-    );
+    ib_logger(ib_stream, "Combined size of log files must be < 4 GB\n");
 
     return DB_ERROR;
   }
@@ -1112,10 +1104,7 @@ ib_err_t innobase_start_or_create() {
 
     os_file_free();
 
-    ib_logger(
-      ib_stream,
-      "Fatal error: cannot allocate the memory for the file system\n"
-    );
+    ib_logger(ib_stream, "Fatal error: cannot allocate the memory for the file system\n");
 
     return DB_OUT_OF_MEMORY;
   }
@@ -1131,10 +1120,7 @@ ib_err_t innobase_start_or_create() {
 
     os_file_free();
 
-    ib_logger(
-      ib_stream,
-      "Fatal error: cannot allocate the memory for the buffer pool\n"
-    );
+    ib_logger(ib_stream, "Fatal error: cannot allocate the memory for the buffer pool\n");
 
     return DB_OUT_OF_MEMORY;
   }
@@ -1432,8 +1418,7 @@ ib_err_t innobase_start_or_create() {
   }
 
   if (srv_print_verbose_log) {
-    ib_logger(ib_stream, " InnoDB %s started; log sequence number %lu\n", VERSION, srv_start_lsn
-    );
+    ib_logger(ib_stream, " InnoDB %s started; log sequence number %lu\n", VERSION, srv_start_lsn);
   }
 
   if (srv_force_recovery != IB_RECOVERY_DEFAULT) {
@@ -1494,7 +1479,7 @@ ib_err_t innobase_start_or_create() {
 
 /** Try to shutdown the InnoDB threads.
 @return	true if all threads exited. */
-static bool srv_threads_try_shutdown(Cond_var* lock_timeout_thread_event) {
+static bool srv_threads_try_shutdown(Cond_var *lock_timeout_thread_event) {
   /* Let the lock timeout thread exit */
   os_event_set(lock_timeout_thread_event);
 
@@ -1532,9 +1517,7 @@ static bool srv_threads_shutdown() {
   }
 
   ib_logger(
-    ib_stream,
-    "%lu threads created by InnoDB had not exited at shutdown!",
-    (ulong)os_thread_count.load(std::memory_order_relaxed)
+    ib_stream, "%lu threads created by InnoDB had not exited at shutdown!", (ulong)os_thread_count.load(std::memory_order_relaxed)
   );
 
   return false;
@@ -1543,10 +1526,7 @@ static bool srv_threads_shutdown() {
 db_err innobase_shutdown(ib_shutdown_t shutdown) {
   if (!srv_was_started) {
     if (srv_is_being_started) {
-      ib_logger(
-        ib_stream,
-        "Shutting down a not properly started or created database!\n"
-      );
+      ib_logger(ib_stream, "Shutting down a not properly started or created database!\n");
     }
 
     ut_delete_all_mem();
@@ -1615,7 +1595,6 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
 
   log_mem_free();
 
-
   delete srv_buf_pool;
   srv_buf_pool = nullptr;
 
@@ -1647,11 +1626,7 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
 
   if (srv_print_verbose_log) {
     ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      " Shutdown completed; log sequence number %lu\n",
-      srv_shutdown_lsn
-    );
+    ib_logger(ib_stream, " Shutdown completed; log sequence number %lu\n", srv_shutdown_lsn);
   }
 
   srv_was_started = false;
