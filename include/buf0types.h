@@ -521,50 +521,6 @@ struct buf_pool_stat_t {
   ulint n_pages_not_made_young{};
 };
 
-struct Page_id {
-
-  Page_id(Page_id &&) = default;
-  Page_id(const Page_id &) = default;
-  Page_id &operator=(Page_id &&) = default;
-  Page_id &operator=(const Page_id &) = default;
-
-  Page_id() : m_space_id(NULL_SPACE_ID), m_page_no(NULL_PAGE_NO) {}
-
-  Page_id(space_id_t space_id, page_no_t page_no) : m_space_id(space_id), m_page_no(page_no) {}
-
-  bool operator==(const Page_id &rhs) const { return m_space_id == rhs.m_space_id && m_page_no == rhs.m_page_no; }
-
-  bool operator!=(const Page_id &rhs) const { return !(*this == rhs); }
-
-  std::string to_string() const {
-    std::ostringstream oss{};
-
-    oss << "{ m_space_id: " << m_space_id << ", m_page_no: " << m_page_no << " }";
-
-    return oss.str();
-  }
-
-  /** @return true if values have not been set. */
-  bool is_null() const {
-    if (m_space_id == NULL_SPACE_ID) {
-      /* Both must be null or not null. */
-      ut_a(m_page_no == NULL_PAGE_NO);
-      return true;
-    } else {
-      ut_a(m_page_no != NULL_PAGE_NO);
-      return false;
-    }
-  }
-
-  /** Tablespace ID. */
-  space_id_t m_space_id{NULL_SPACE_ID};
-
-  /** Page number in the tablespace. */
-  page_no_t m_page_no{NULL_PAGE_NO};
-};
-
-static_assert(std::is_standard_layout<Page_id>::value, "Page_id must have a standard layout");
-
 /** @brief The buffer pool structure.
 
 NOTE! The definition appears here only for other modules of this
