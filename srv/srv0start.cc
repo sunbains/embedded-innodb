@@ -606,9 +606,7 @@ static db_err open_or_create_log_file(bool create_new_db, bool *log_file_created
     ret = os_file_get_size(files[i], &size);
     ut_a(ret);
 
-    off_t size_high = srv_calc_high32(srv_log_file_size);
-    off_t file_size = (off_t)srv_calc_low32(srv_log_file_size) + (((off_t)size_high) << 32);
-    if (size != file_size) {
+    if ((ulint)size != srv_log_file_curr_size) {
 
       ib_logger(
         ib_stream,
@@ -616,7 +614,7 @@ static db_err open_or_create_log_file(bool create_new_db, bool *log_file_created
         " than the configured %lu bytes!\n",
         name,
         (ulong)size,
-        (ulong)file_size
+        (ulong)srv_log_file_curr_size
       );
 
       return DB_ERROR;
