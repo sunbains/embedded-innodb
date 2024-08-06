@@ -47,48 +47,41 @@ where two records disagree only in the way that one
 has more fields than the other. */
 
 #ifdef UNIV_DEBUG
-/** Used in debug checking of cmp_dtuple_... .
-This function is used to compare a data tuple to a physical record. If
-dtuple has n fields then rec must have either m >= n fields, or it must
-differ from dtuple in some of the m fields rec has.
-@return 1, 0, -1, if dtuple is greater, equal, less than rec,
-respectively, when only the common first fields are compared */
-static int cmp_debug_dtuple_rec_with_match(
-  void *cmp_ctx,          /*!< in: client compare context */
-  const dtuple_t *dtuple, /*!< in: data tuple */
-  const rec_t *rec,       /*!< in: physical record which differs from
-                            dtuple in some of the common fields, or which
-                            has an equal number or more fields than
-                            dtuple */
-  const ulint *offsets,   /*!< in: array returned by rec_get_offsets() */
-  ulint *matched_fields
-);     /*!< in/out: number of already
-                    completely  matched fields; when function
-                    returns, contains the value for current
-                    comparison */
+/**
+ * Used in debug checking of cmp_dtuple_... .
+ * This function is used to compare a data tuple to a physical record. If
+ * dtuple has n fields then rec must have either m >= n fields, or it must
+ * differ from dtuple in some of the m fields rec has.
+ * 
+ * @param[in] cmp_ctx client compare context
+ * @param[in] dtuple data tuple
+ * @param[in] rec physical record which differs from dtuple in some of the common fields,
+ *                or which has an equal number or more fields than dtuple
+ * @param[in] offsets array returned by rec_get_offsets()
+ * @param[in/out] matched_fields number of already completely matched fields; when function
+ *                returns, contains the value for current comparison
+ * 
+ * @return 1, 0, -1, if dtuple is greater, equal, less than rec,
+ *  respectively, when only the common first fields are compared */
+static int cmp_debug_dtuple_rec_with_match(void *cmp_ctx, const dtuple_t *dtuple, const rec_t *rec, const ulint *offsets, ulint *matched_fields}; 
 #endif /* UNIV_DEBUG */
-/** Transforms the character code so that it is ordered appropriately for the
-language. This is only used for the latin1 char set. The client does the
-comparisons for other char sets.
-@return	collation order position */
-inline ulint cmp_collate(ulint code) /*!< in: code of a character stored in
-                                     database record */
-{
+
+/**
+ * Transforms the character code so that it is ordered appropriately for the
+ * language. This is only used for the latin1 char set. The client does the
+ * comparisons for other char sets.
+ * 
+ * @param[in] code code of a character stored in database record
+ * 
+ * @return	collation order position
+ */
+inline ulint cmp_collate(ulint code) {
   // return((ulint) srv_latin1_ordering[code]);
   /* FIXME: Default to ASCII */
   return code;
 }
 
-/** Returns true if two columns are equal for comparison purposes.
-@return	true if the columns are considered equal in comparisons */
-
-bool cmp_cols_are_equal(
-  const dict_col_t *col1, /*!< in: column 1 */
-  const dict_col_t *col2, /*!< in: column 2 */
-  bool check_charsets
-)
-/*!< in: whether to check charsets */
-{
+bool cmp_cols_are_equal(const dict_col_t *col1, const dict_col_t *col2, bool check_charsets) {
   if (dtype_is_non_binary_string_type(col1->mtype, col1->prtype) && dtype_is_non_binary_string_type(col2->mtype, col2->prtype)) {
 
     /* Both are non-binary string types: they can be compared if
@@ -125,26 +118,22 @@ bool cmp_cols_are_equal(
   return col1->mtype != DATA_INT || col1->len == col2->len;
 }
 
-/** Innobase uses this function to compare two data fields for which the
-data type is such that we must compare whole fields or call the client
-to do the comparison
-@return	1, 0, -1, if a is greater, equal, less than b, respectively */
-static int cmp_whole_field(
-  void *cmp_ctx,         /*!< in: client compare context */
-  ulint mtype,           /*!< in: main type */
-  uint16_t prtype,       /*!< in: precise type */
-  const byte *a,         /*!< in: data field */
-  unsigned int a_length, /*!< in: data field length,
-                                                  not UNIV_SQL_NULL */
-  const byte *b,         /*!< in: data field */
-  unsigned int b_length
-) /*!< in: data field length,
-                                                  not UNIV_SQL_NULL */
-{
-  float f_1;
-  float f_2;
-  double d_1;
-  double d_2;
+/**
+ * InnoDB uses this function to compare two data fields for which the
+ * data type is such that we must compare whole fields or call the client
+ * to do the comparison
+ * 
+ * @param[in] cmp_ctx client compare context
+ * @param[in] mtype main type
+ * @param[in] prtype precise type
+ * @param[in] a data field
+ * @param[in] a_length data field length, not UNIV_SQL_NULL
+ * @param[in] b data field
+ * @param[in] b_length data field length, not UNIV_SQL_NULL
+ * 
+ * @return	1, 0, -1, if a is greater, equal, less than b, respectively
+ */
+static int cmp_whole_field(void *cmp_ctx, ulint mtype, uint16_t prtype, const byte *a, unsigned int a_length, const byte *b, unsigned int b_length) {
   int swap_flag = 1;
 
   switch (mtype) {
@@ -208,9 +197,9 @@ static int cmp_whole_field(
       }
 
       return -swap_flag;
-    case DATA_DOUBLE:
-      d_1 = mach_double_read(a);
-      d_2 = mach_double_read(b);
+    case DATA_DOUBLE: {
+      auto d_1 = mach_double_read(a);
+      auto d_2 = mach_double_read(b);
 
       if (d_1 > d_2) {
         return 1;
@@ -219,10 +208,11 @@ static int cmp_whole_field(
       }
 
       return 0;
+    }
 
-    case DATA_FLOAT:
-      f_1 = mach_float_read(a);
-      f_2 = mach_float_read(b);
+    case DATA_FLOAT: {
+      auto f_1 = mach_float_read(a);
+      auto f_2 = mach_float_read(b);
 
       if (f_1 > f_2) {
         return 1;
@@ -231,6 +221,7 @@ static int cmp_whole_field(
       }
 
       return 0;
+    }
     case DATA_BLOB:
       if (prtype & DATA_BINARY_TYPE) {
 
@@ -248,8 +239,9 @@ static int cmp_whole_field(
       ib_col_meta_t ib_col_meta;
 
       /* FIXME: We should do this once at a higher level. Current
-    impact is on perfromance. */
+      impact is on perfromance. */
       ib_col_meta.type = ib_col_type_t(mtype);
+
       /* FIXME: Set the length where it's known. */
       ib_col_meta.type_len = 0;
       ib_col_meta.attr = IB_COL_NONE;
@@ -939,27 +931,24 @@ order_resolved:
 }
 
 #ifdef UNIV_DEBUG
-/** Used in debug checking of cmp_dtuple_... .
-This function is used to compare a data tuple to a physical record. If
-dtuple has n fields then rec must have either m >= n fields, or it must
-differ from dtuple in some of the m fields rec has. If encounters an
-externally stored field, returns 0.
-@return 1, 0, -1, if dtuple is greater, equal, less than rec,
-respectively, when only the common first fields are compared */
-static int cmp_debug_dtuple_rec_with_match(
-  void *cmp_ctx,          /*!< in: client compare context */
-  const dtuple_t *dtuple, /*!< in: data tuple */
-  const rec_t *rec,       /*!< in: physical record which differs from
-                            dtuple in some of the common fields, or which
-                            has an equal number or more fields than
-                            dtuple */
-  const ulint *offsets,   /*!< in: array returned by rec_get_offsets() */
-  ulint *matched_fields
-) /*!< in/out: number of already
-                    completely matched fields; when function
-                    returns, contains the value for current
-                    comparison */
-{
+/**
+ * Used in debug checking of cmp_dtuple_... .
+ * This function is used to compare a data tuple to a physical record. If
+ * dtuple has n fields then rec must have either m >= n fields, or it must
+ * differ from dtuple in some of the m fields rec has. If encounters an
+ * externally stored field, returns 0.
+ * 
+ * @param[in] cmp_ctx client compare context
+ * @param[in] dtuple data tuple
+ * @param[in] rec physical record which differs from dtuple in some of the common fields,
+ *                or which has an equal number or more fields than dtuple
+ * @param[in] offsets array returned by rec_get_offsets()
+ * @param[in/out] matched_fields number of already completely matched fields; when function
+ *                returns, contains the value for current comparison
+ * 
+ * @return 1, 0, -1, if dtuple is greater, equal, less than rec,
+ *  respectively, when only the common first fields are compared */
+static int cmp_debug_dtuple_rec_with_match(void *cmp_ctx, const dtuple_t *dtuple, const rec_t *rec, const ulint *offsets, ulint *matched_fields) {
   const dfield_t *dtuple_field; /* current field in logical record */
   ulint dtuple_f_len;           /* the length of the current field
                                 in the logical record */
