@@ -37,7 +37,6 @@ Created 1/8/1996 Heikki Tuuri
 #include "row0ins.h"
 #include "trx0roll.h"
 #include "usr0sess.h"
-#include "ut0vec.h"
 
 /**
  * @brief Based on a table object, this function builds the entry to be inserted in the SYS_TABLES system table.

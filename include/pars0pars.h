@@ -23,6 +23,7 @@ Created 11/19/1996 Heikki Tuuri
 
 #pragma once
 
+#include <vector>
 #include "innodb0types.h"
 
 #include "pars0types.h"
@@ -30,7 +31,6 @@ Created 11/19/1996 Heikki Tuuri
 #include "row0types.h"
 #include "trx0types.h"
 #include "usr0types.h"
-#include "ut0vec.h"
 
 struct ind_node_t;
 struct tab_node_t;
@@ -510,11 +510,11 @@ void pars_lexer_close(void);
 struct pars_info_t {
   mem_heap_t *heap; /** our own memory heap */
 
-  ib_vector_t *funcs;      /** user functions, or NUll
+  std::vector<pars_user_func_t *> *funcs;      /** user functions, or NUll
                            (pars_user_func_t*) */
-  ib_vector_t *bound_lits; /** bound literals, or nullptr
+  std::vector<pars_bound_lit_t *> *bound_lits; /** bound literals, or nullptr
                            (pars_bound_lit_t*) */
-  ib_vector_t *bound_ids;  /** bound ids, or nullptr
+  std::vector<pars_bound_id_t *> *bound_ids;   /** bound ids, or nullptr
                            (pars_bound_id_t*) */
 
   bool graph_owns_us; /** if true (which is the default),

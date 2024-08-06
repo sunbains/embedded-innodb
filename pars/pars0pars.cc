@@ -1654,7 +1654,12 @@ pars_info_t *pars_info_create() {
   return info;
 }
 
-void pars_info_free(pars_info_t *info) { mem_heap_free(info->heap); }
+void pars_info_free(pars_info_t *info) {
+  delete info->funcs;
+  delete info->bound_lits;
+  delete info->bound_ids;
+  mem_heap_free(info->heap);
+}
 
 void pars_info_add_literal(pars_info_t *info, const char *name,
                            const void *address, ulint length, ulint type,
@@ -1671,10 +1676,10 @@ void pars_info_add_literal(pars_info_t *info, const char *name,
   pbl->prtype = prtype;
 
   if (!info->bound_lits) {
-    info->bound_lits = ib_vector_create(info->heap, 8);
+    info->bound_lits = new std::vector<pars_bound_lit_t *>();
   }
 
-  ib_vector_push(info->bound_lits, pbl);
+  info->bound_lits->emplace_back(pbl);
 }
 
 void pars_info_add_str_literal(pars_info_t *info, const char *name,
@@ -1719,10 +1724,10 @@ void pars_info_add_function(pars_info_t *info, const char *name,
   puf->arg = arg;
 
   if (!info->funcs) {
-    info->funcs = ib_vector_create(info->heap, 8);
+    info->funcs = new std::vector<pars_user_func_t *>();
   }
 
-  ib_vector_push(info->funcs, puf);
+  info->funcs->emplace_back(puf);
 }
 
 void pars_info_add_id(pars_info_t *info, const char *name, const char *id) {
@@ -1735,10 +1740,10 @@ void pars_info_add_id(pars_info_t *info, const char *name, const char *id) {
   bid->id = id;
 
   if (!info->bound_ids) {
-    info->bound_ids = ib_vector_create(info->heap, 8);
+    info->bound_ids = new std::vector<pars_bound_id_t *>();
   }
 
-  ib_vector_push(info->bound_ids, bid);
+  info->bound_ids->emplace_back(bid);
 }
 
 pars_user_func_t *pars_info_get_user_func(pars_info_t *info, const char *name) {
@@ -1746,10 +1751,7 @@ pars_user_func_t *pars_info_get_user_func(pars_info_t *info, const char *name) {
     return nullptr;
   }
 
-  auto vec = info->funcs;
-
-  for (ulint i = 0; i < ib_vector_size(vec); i++) {
-    auto puf = static_cast<pars_user_func_t *>(ib_vector_get(vec, i));
+  for (const auto puf : *info->funcs) {
 
     if (strcmp(puf->name, name) == 0) {
       return puf;
@@ -1764,10 +1766,7 @@ pars_bound_lit_t *pars_info_get_bound_lit(pars_info_t *info, const char *name) {
     return nullptr;
   }
 
-  auto vec = info->bound_lits;
-
-  for (ulint i = 0; i < ib_vector_size(vec); i++) {
-    auto pbl = static_cast<pars_bound_lit_t *>(ib_vector_get(vec, i));
+  for (const auto pbl : *info->bound_lits) {
 
     if (strcmp(pbl->name, name) == 0) {
       return pbl;
@@ -1782,10 +1781,7 @@ pars_bound_id_t *pars_info_get_bound_id(pars_info_t *info, const char *name) {
     return nullptr;
   }
 
-  auto vec = info->bound_ids;
-
-  for (ulint i = 0; i < ib_vector_size(vec); i++) {
-    auto bid = static_cast<pars_bound_id_t *>(ib_vector_get(vec, i));
+  for (const auto bid : *info->bound_ids) {
 
     if (strcmp(bid->name, name) == 0) {
       return bid;
