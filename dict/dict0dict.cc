@@ -22,6 +22,7 @@ Created 1/8/1996 Heikki Tuuri
 ***********************************************************************/
 
 #include "dict0dict.h"
+#include <unordered_set>
 
 /** dummy index for ROW_FORMAT=REDUNDANT supremum and infimum records */
 dict_index_t *dict_ind_redundant;
@@ -97,10 +98,7 @@ static bool dict_index_find_cols(dict_table_t *table, dict_index_t *index);
  * @param index - in: user representation of a clustered index
  * @return own: the internal representation of the clustered index
  */
-static dict_index_t *dict_index_build_internal_clust(
-  const dict_table_t *table,
-  dict_index_t *index
-); 
+static dict_index_t *dict_index_build_internal_clust(const dict_table_t *table, dict_index_t *index);
 
 /**
  * @brief Builds the internal dictionary cache representation for a non-clustered index, containing also system fields not defined by the user.
@@ -109,10 +107,7 @@ static dict_index_t *dict_index_build_internal_clust(
  * @param index - in: user representation of a non-clustered index
  * @return own: the internal representation of the non-clustered index
  */
-static dict_index_t *dict_index_build_internal_non_clust(
-  const dict_table_t *table,
-  dict_index_t *index
-);
+static dict_index_t *dict_index_build_internal_non_clust(const dict_table_t *table, dict_index_t *index);
 
 /** Removes a foreign constraint struct from the dictionary cache. */
 static void dict_foreign_remove_from_cache(dict_foreign_t *foreign); /*!< in, own: foreign constraint */
@@ -367,7 +362,8 @@ ulint dict_index_get_nth_field_pos(const dict_index_t *dict_index, const dict_in
   for (pos = 0; pos < n_fields; pos++) {
     field = dict_index_get_nth_field(dict_index, pos);
 
-    if (field->col == field2->col && (field->prefix_len == 0 || (field->prefix_len >= field2->prefix_len && field2->prefix_len != 0))) {
+    if (field->col == field2->col &&
+        (field->prefix_len == 0 || (field->prefix_len >= field2->prefix_len && field2->prefix_len != 0))) {
 
       return pos;
     }
@@ -433,20 +429,24 @@ bool dict_table_col_in_clustered_key(const dict_table_t *table, ulint n) {
 void dict_init() {
   dict_sys = (dict_sys_t *)mem_alloc(sizeof(dict_sys_t));
 
-  mutex_create(&dict_sys->mutex, IF_DEBUG("dict_mutex",) IF_SYNC_DEBUG(SYNC_DICT,) Source_location{});
+  mutex_create(&dict_sys->mutex, IF_DEBUG("dict_mutex", ) IF_SYNC_DEBUG(SYNC_DICT, ) Source_location{});
 
-  dict_sys->table_hash = hash_create(srv_buf_pool->get_curr_size() / (DICT_POOL_PER_TABLE_HASH * UNIV_WORD_SIZE));
-  dict_sys->table_id_hash = hash_create(srv_buf_pool->get_curr_size() / (DICT_POOL_PER_TABLE_HASH * UNIV_WORD_SIZE));
+  auto func = [](std::uint64_t id) {
+    return dict_load_table_on_id(ib_recovery_t::IB_RECOVERY_DEFAULT, id, true);
+  };
+
+  dict_sys->table_lookup = new dict_table_lru{8, std::move(func)};
+
   dict_sys->size = 0;
 
   UT_LIST_INIT(dict_sys->table_LRU);
 
   rw_lock_create(&dict_operation_lock, SYNC_DICT_OPERATION);
 
-  mutex_create(&dict_foreign_err_mutex, IF_DEBUG("dict_foreign_mutex",) IF_SYNC_DEBUG(SYNC_ANY_LATCH,) Source_location{});
+  mutex_create(&dict_foreign_err_mutex, IF_DEBUG("dict_foreign_mutex", ) IF_SYNC_DEBUG(SYNC_ANY_LATCH, ) Source_location{});
 
   for (ulint i = 0; i < DICT_INDEX_STAT_MUTEX_SIZE; i++) {
-    mutex_create(&dict_index_stat_mutex[i], IF_DEBUG("dict_index_stat_mutex",) IF_SYNC_DEBUG(SYNC_INDEX_TREE,) Source_location{});
+    mutex_create(&dict_index_stat_mutex[i], IF_DEBUG("dict_index_stat_mutex", ) IF_SYNC_DEBUG(SYNC_INDEX_TREE, ) Source_location{});
   }
 }
 
@@ -513,9 +513,7 @@ void dict_table_add_system_columns(dict_table_t *table, mem_heap_t *heap) {
   dict_mem_table_add_col(table, heap, "DB_ROLL_PTR", DATA_SYS, DATA_ROLL_PTR | DATA_NOT_NULL, DATA_ROLL_PTR_LEN);
 }
 
-void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap) {
-  ulint fold;
-  ulint id_fold;
+void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap, bool skip_add_to_cache) {
   ulint i;
   ulint row_len;
 
@@ -527,9 +525,6 @@ void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap) {
   dict_table_add_system_columns(table, heap);
 
   table->cached = true;
-
-  fold = ut_fold_string(table->name);
-  id_fold = ut_uint64_fold(table->id);
 
   row_len = 0;
   for (i = 0; i < table->n_def; i++) {
@@ -548,39 +543,35 @@ void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap) {
 
   table->big_rows = row_len >= BIG_ROW_SIZE;
 
-  /* Look for a table with the same name: error if such exists */
-  {
-    dict_table_t *table2;
-    HASH_SEARCH(
-      name_hash, dict_sys->table_hash, fold, dict_table_t *, table2, ut_ad(table2->cached), strcmp(table2->name, table->name) == 0
-    );
-    ut_a(table2 == nullptr);
+  if (!skip_add_to_cache) {
+
+    /* Look for a table with the same name: error if such exists */
+    {
+      auto contains = dict_sys->table_lookup->contains(table->name);
+      ut_a(!contains);
 
 #ifdef UNIV_DEBUG
-    /* Look for the same table pointer with a different name */
-    HASH_SEARCH_ALL(name_hash, dict_sys->table_hash, dict_table_t *, table2, ut_ad(table2->cached), table2 == table);
-    ut_ad(table2 == nullptr);
+      /* Look for the same table pointer with a different name */
+      HASH_SEARCH_ALL(name_hash, dict_sys->table_hash, dict_table_t *, table2, ut_ad(table2->cached), table2 == table);
+      ut_ad(table2 == nullptr);
 #endif /* UNIV_DEBUG */
-  }
+    }
 
-  /* Look for a table with the same id: error if such exists */
-  {
-    dict_table_t *table2;
-    HASH_SEARCH(id_hash, dict_sys->table_id_hash, id_fold, dict_table_t *, table2, ut_ad(table2->cached), table2->id == table->id);
-    ut_a(table2 == nullptr);
-
+    /* Look for a table with the same id: error if such exists */
+    {
+      auto contains = dict_sys->table_lookup->contains(table->id);
+      ut_a(!contains);
 #ifdef UNIV_DEBUG
-    /* Look for the same table pointer with a different id */
-    HASH_SEARCH_ALL(id_hash, dict_sys->table_id_hash, dict_table_t *, table2, ut_ad(table2->cached), table2 == table);
-    ut_ad(table2 == nullptr);
+      /* Look for the same table pointer with a different id */
+      HASH_SEARCH_ALL(id_hash, dict_sys->table_id_hash, dict_table_t *, table2, ut_ad(table2->cached), table2 == table);
+      ut_ad(table2 == nullptr);
 #endif /* UNIV_DEBUG */
+    }
+
+    auto result = dict_sys->table_lookup->add(table->name, table->id, table);
+    ut_a(result);
   }
 
-  /* Add table to hash table of tables */
-  HASH_INSERT(dict_table_t, name_hash, dict_sys->table_hash, fold, table);
-
-  /* Add table to hash table of tables based on table id */
-  HASH_INSERT(dict_table_t, id_hash, dict_sys->table_id_hash, id_fold, table);
   /* Add table to LRU list of tables */
   UT_LIST_ADD_FIRST(dict_sys->table_LRU, table);
 
@@ -611,7 +602,6 @@ dict_index_t *dict_index_find_on_id_low(uint64_t id) {
 bool dict_table_rename_in_cache(dict_table_t *table, const char *new_name, bool rename_also_foreigns) {
   dict_foreign_t *foreign;
   dict_index_t *index;
-  ulint fold;
   ulint old_size;
   const char *old_name;
 
@@ -621,14 +611,10 @@ bool dict_table_rename_in_cache(dict_table_t *table, const char *new_name, bool 
   old_size = mem_heap_get_size(table->heap);
   old_name = table->name;
 
-  fold = ut_fold_string(new_name);
-
   /* Look for a table with the same name: error if such exists */
   {
-    dict_table_t *table2;
-    HASH_SEARCH(
-      name_hash, dict_sys->table_hash, fold, dict_table_t *, table2, ut_ad(table2->cached), (strcmp(table2->name, new_name) == 0)
-    );
+    dict_table_t *table2{dict_sys->table_lookup->get(new_name)};
+
     if (likely_null(table2)) {
       ut_print_timestamp(ib_stream);
       ib_logger(
@@ -670,11 +656,14 @@ bool dict_table_rename_in_cache(dict_table_t *table, const char *new_name, bool 
   }
 
   /* Remove table from the hash tables of tables */
-  HASH_DELETE(dict_table_t, name_hash, dict_sys->table_hash, ut_fold_string(old_name), table);
+  auto deletion_count = dict_sys->table_lookup->erase(old_name);
+  ut_a(deletion_count);
   table->name = mem_heap_strdup(table->heap, new_name);
 
   /* Add table to hash table of tables */
-  HASH_INSERT(dict_table_t, name_hash, dict_sys->table_hash, fold, table);
+  auto insertion_result = dict_sys->table_lookup->add(table->name, table->id, table);
+  ut_a(insertion_result);
+
   dict_sys->size += (mem_heap_get_size(table->heap) - old_size);
 
   /* Update the table_name field in indexes */
@@ -812,16 +801,14 @@ void dict_table_change_id_in_cache(
   ut_ad(mutex_own(&(dict_sys->mutex)));
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
 
-  /* Remove the table from the hash table of id's */
+  auto deletion_result = dict_sys->table_lookup->erase(table->id);
+  ut_a(deletion_result);
 
-  HASH_DELETE(dict_table_t, id_hash, dict_sys->table_id_hash, ut_uint64_fold(table->id), table);
-  table->id = new_id;
-
-  /* Add the table back to the hash table */
-  HASH_INSERT(dict_table_t, id_hash, dict_sys->table_id_hash, ut_uint64_fold(table->id), table);
+  auto insertion_result = dict_sys->table_lookup->add(table->name, table->id, table);
+  ut_a(insertion_result);
 }
 
-void dict_table_remove_from_cache(dict_table_t *table) {
+void dict_table_remove_from_cache(dict_table_t *table, bool skip_remove_from_lru) {
   dict_foreign_t *foreign;
   dict_index_t *index;
   ulint size;
@@ -857,9 +844,14 @@ void dict_table_remove_from_cache(dict_table_t *table) {
     index = UT_LIST_GET_LAST(table->indexes);
   }
 
-  /* Remove table from the hash tables of tables */
-  HASH_DELETE(dict_table_t, name_hash, dict_sys->table_hash, ut_fold_string(table->name), table);
-  HASH_DELETE(dict_table_t, id_hash, dict_sys->table_id_hash, ut_uint64_fold(table->id), table);
+  if (!skip_remove_from_lru) {
+    /* Remove table from lru */
+    ut_a(dict_sys->table_lookup->contains(table->name));
+    ut_a(dict_sys->table_lookup->contains(table->id));
+
+    dict_sys->table_lookup->erase(table->id);
+    dict_sys->table_lookup->erase(table->name);
+  }
 
   /* Remove table from LRU list of tables */
   UT_LIST_REMOVE(dict_sys->table_LRU, table);
@@ -871,6 +863,10 @@ void dict_table_remove_from_cache(dict_table_t *table) {
   dict_sys->size -= size;
 
   dict_mem_table_free(table);
+}
+
+void dict_table_remove_from_cache(dict_table_t *table) {
+  dict_table_remove_from_cache(table, false);
 }
 
 bool dict_col_name_is_reserved(const char *name) {
@@ -898,10 +894,7 @@ bool dict_col_name_is_reserved(const char *name) {
  * @param new_index The index.
  * @return True if the undo log record could become too big.
  */
-static bool dict_index_too_big_for_undo(
-  const dict_table_t *table,
-  const dict_index_t *new_index
-) {
+static bool dict_index_too_big_for_undo(const dict_table_t *table, const dict_index_t *new_index) {
   /* Make sure that all column prefixes will fit in the undo log record
   in trx_undo_page_report_modify() right after trx_undo_page_init(). */
 
@@ -990,11 +983,7 @@ static bool dict_index_too_big_for_undo(
  * @param new_index - in: index
  * @return true if the index record could become too big
  */
-static bool dict_index_too_big_for_tree(
-  const dict_table_t *table,
-  const dict_index_t *new_index
-)
-{
+static bool dict_index_too_big_for_tree(const dict_table_t *table, const dict_index_t *new_index) {
   ulint comp;
   ulint i;
   /* maximum possible storage size of a record */
@@ -1301,6 +1290,10 @@ void dict_index_add_col(dict_index_t *index, const dict_table_t *table, dict_col
   dict_field_t *field;
   const char *col_name;
 
+  if (table->id == 14) {
+    ib_logger(ib_stream, "hello\n");
+  }
+
   col_name = dict_table_get_col_name(table, dict_col_get_no(col));
 
   dict_mem_index_add_field(index, col_name, prefix_len);
@@ -1341,13 +1334,7 @@ void dict_index_add_col(dict_index_t *index, const dict_table_t *table, dict_col
  * @param start - in: first position to copy
  * @param end - in: last position to copy
  */
-static void dict_index_copy(
-  dict_index_t *index1,
-  dict_index_t *index2,
-  const dict_table_t *table,
-  ulint start,
-  ulint end
-) {
+static void dict_index_copy(dict_index_t *index1, dict_index_t *index2, const dict_table_t *table, ulint start, ulint end) {
   dict_field_t *field;
 
   /* Copy fields contained in index2 */
@@ -1697,12 +1684,7 @@ static dict_foreign_t *dict_foreign_find(dict_table_t *table, const char *id) {
  * @return matching index, nullptr if not found
  */
 static dict_index_t *dict_foreign_find_index(
-  dict_table_t *table,
-  const char **columns,
-  ulint n_cols,
-  dict_index_t *types_idx,
-  bool check_charsets,
-  ulint check_null
+  dict_table_t *table, const char **columns, ulint n_cols, dict_index_t *types_idx, bool check_charsets, ulint check_null
 ) {
   auto index = dict_table_get_first_index(table);
 
@@ -1815,10 +1797,7 @@ dict_index_t *dict_table_get_index_by_max_id(dict_table_t *table, const char *na
  * @param ib_stream   [in] output stream
  * @param name        [in] table name
  */
-static void dict_foreign_error_report_low(
-  ib_stream_t ib_stream,
-  const char *name
-) {
+static void dict_foreign_error_report_low(ib_stream_t ib_stream, const char *name) {
   ut_print_timestamp(ib_stream);
   ib_logger(ib_stream, " Error in foreign key constraint of table %s:\n", name);
 }
@@ -2003,12 +1982,7 @@ static const char *dict_scan_to(const char *ptr, const char *string) {
  *
  * @return if string was accepted, the pointer is moved after that, else ptr is returned
  */
-static const char *dict_accept(
-  const charset_t *cs,
-  const char *ptr,
-  const char *string,
-  bool *success
-) {
+static const char *dict_accept(const charset_t *cs, const char *ptr, const char *string, bool *success) {
   const char *old_ptr = ptr;
   const char *old_ptr2;
 
@@ -2047,12 +2021,7 @@ static const char *dict_accept(
  * @return scanned to
  */
 static const char *dict_scan_id(
-  const charset_t *cs,
-  const char *ptr,
-  mem_heap_t *heap,
-  const char **id,
-  bool table_id,
-  bool accept_also_dot
+  const charset_t *cs, const char *ptr, mem_heap_t *heap, const char **id, bool table_id, bool accept_also_dot
 ) {
   char quote = '\0';
   ulint len = 0;
@@ -2155,12 +2124,7 @@ static const char *dict_scan_id(
  * @return Scanned to.
  */
 static const char *dict_scan_col(
-  const charset_t *cs,
-  const char *ptr,
-  bool *success,
-  dict_table_t *table,
-  const dict_col_t **column,
-  mem_heap_t *heap,
+  const charset_t *cs, const char *ptr, bool *success, dict_table_t *table, const dict_col_t **column, mem_heap_t *heap,
   const char **name
 ) {
   ulint i;
@@ -2210,12 +2174,7 @@ static const char *dict_scan_col(
  * @return Scanned to.
  */
 static const char *dict_scan_table_name(
-  const charset_t *cs,
-  const char *ptr,
-  dict_table_t **table,
-  const char *name,
-  bool *success,
-  mem_heap_t *heap,
+  const charset_t *cs, const char *ptr, dict_table_t **table, const char *name, bool *success, mem_heap_t *heap,
   const char **ref_name
 ) {
   const char *database_name = nullptr;
@@ -2444,11 +2403,7 @@ static ulint dict_table_get_highest_foreign_id(dict_table_t *table) {
  * @param start_of_latest_foreign in: start of the foreign key clause in the SQL string
  * @param ptr in: place of the syntax error
  */
-static void dict_foreign_report_syntax_err(
-  const char *name,
-  const char *start_of_latest_foreign,
-  const char *ptr
-) {
+static void dict_foreign_report_syntax_err(const char *name, const char *start_of_latest_foreign, const char *ptr) {
 
   mutex_enter(&dict_foreign_err_mutex);
   dict_foreign_error_report_low(ib_stream, name);
@@ -2481,12 +2436,7 @@ static void dict_foreign_report_syntax_err(
  * @return error code or DB_SUCCESS
  */
 static db_err dict_create_foreign_constraints_low(
-  trx_t *trx,
-  mem_heap_t *heap,
-  const charset_t *cs,
-  const char *sql_string,
-  const char *name,
-  bool reject_fks
+  trx_t *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks
 ) {
   dict_table_t *table;
   dict_table_t *referenced_table;
@@ -3036,7 +2986,9 @@ db_err dict_create_foreign_constraints(trx_t *trx, const char *sql_string, const
   return err;
 }
 
-db_err dict_foreign_parse_drop_constraints(mem_heap_t *heap, trx_t *trx, dict_table_t *table, ulint *n, const char ***constraints_to_drop) {
+db_err dict_foreign_parse_drop_constraints(
+  mem_heap_t *heap, trx_t *trx, dict_table_t *table, ulint *n, const char ***constraints_to_drop
+) {
   dict_foreign_t *foreign;
   bool success;
   char *str;
@@ -3553,12 +3505,7 @@ static void dict_field_print_low(const dict_field_t *field) /*!< in: field */
   }
 }
 
-void dict_print_info_on_foreign_key_in_create_format(
-  ib_stream_t ib_stream, 
-  trx_t *trx,
-  dict_foreign_t *foreign,
-  bool add_newline
-) {
+void dict_print_info_on_foreign_key_in_create_format(ib_stream_t ib_stream, trx_t *trx, dict_foreign_t *foreign, bool add_newline) {
   const char *stripped_id;
   ulint i;
 
@@ -3846,28 +3793,15 @@ void dict_unlock_data_dictionary(trx_t *trx) {
 void dict_close() {
   /* Free the hash elements. We don't remove them from the table
   because we are going to destroy the table anyway. */
-  for (ulint i = 0; i < hash_get_n_cells(dict_sys->table_hash); i++) {
-    auto table = (dict_table_t *)HASH_GET_FIRST(dict_sys->table_hash, i);
+  auto deleter = [](dict_table_t *table) {
+    mutex_enter(&dict_sys->mutex);
+    dict_table_remove_from_cache(table, true);
+    mutex_exit(&dict_sys->mutex);
+  };
 
-    while (table) {
-      dict_table_t *prev_table = table;
+  dict_sys->table_lookup->releaseAll(std::move(deleter));
 
-      table = (dict_table_t *)HASH_GET_NEXT(name_hash, prev_table);
-      ut_ad(prev_table->magic_n == DICT_TABLE_MAGIC_N);
-      /* Acquire only because it's a pre-condition. */
-      mutex_enter(&dict_sys->mutex);
-
-      dict_table_remove_from_cache(prev_table);
-
-      mutex_exit(&dict_sys->mutex);
-    }
-  }
-
-  hash_table_free(dict_sys->table_hash);
-
-  /* The elements are the same instance as in dict_sys->table_hash,
-  therefore we don't delete the individual elements. */
-  hash_table_free(dict_sys->table_id_hash);
+  delete dict_sys->table_lookup;
 
   /* Acquire only because it's a pre-condition. */
   mutex_enter(&dict_sys->mutex);
@@ -3885,7 +3819,208 @@ void dict_close() {
   mem_free(dict_sys);
   dict_sys = nullptr;
 
-  for (ulint i = 0; i < DICT_INDEX_STAT_MUTEX_SIZE; i++) {
-    mutex_free(&dict_index_stat_mutex[i]);
+  for (auto &i : dict_index_stat_mutex) {
+    mutex_free(&i);
   }
+}
+
+dict_table_lru::dict_table_lru(std::int32_t capacity, std::function<dict_table_t *(std::uint64_t)> table_fetcher)
+    : m_capacity{capacity}, m_size{0}, m_table_fetcher{std::move(table_fetcher)}, m_tables{}, m_name_lookup{}, m_id_lookup{} {}
+
+dict_table_t *dict_table_lru::get(std::string_view name) {
+  if (auto itr = m_name_lookup.find(name); itr != m_name_lookup.end()) {
+    ut_a(m_name_lookup[name] == m_id_lookup[itr->second->id]);
+    move_to_front(itr->second);
+    return (*itr->second->list_itr);
+  }
+
+  return nullptr;
+}
+
+dict_table_t *dict_table_lru::get(std::uint64_t id) {
+  if (auto itr = m_id_lookup.find(id); itr != m_id_lookup.end()) {
+    ut_a(m_id_lookup[id] == m_name_lookup[itr->second->name]);
+    move_to_front(itr->second);
+    return (*itr->second->list_itr);
+  }
+
+  return nullptr;
+}
+
+bool dict_table_lru::contains(std::uint64_t id) {
+  ib_logger(ib_stream, "contains check table: %lu\n", id);
+  return m_id_lookup.contains(id);
+}
+
+bool dict_table_lru::contains(std::string_view name) {
+  ib_logger(ib_stream, "contains check table: %s\n", std::string{name}.c_str());
+  return m_name_lookup.contains(name);
+}
+
+bool dict_table_lru::add(std::string_view name, std::uint64_t id, dict_table_t *table) {
+  ut_a(table);
+  ib_logger(ib_stream, "adding table: %lu, %s\n", id, std::string{name}.c_str());
+
+  auto name_itr = m_name_lookup.find(name);
+  auto id_itr = m_id_lookup.find(id);
+
+  auto found_in_name_map = name_itr != m_name_lookup.end();
+  auto found_in_id_map = id_itr != m_id_lookup.end();
+  ut_a((found_in_id_map && found_in_id_map) || (!found_in_id_map && !found_in_name_map));
+
+  if (found_in_id_map) {
+    return false;
+  }
+
+  m_size++;
+
+  if (m_size > m_capacity) {
+    evict();
+  }
+
+  m_tables.emplace_front(table);
+
+  auto cached_entry = std::make_shared<cache_entry>(cache_entry{
+    .list_itr = m_tables.begin(),
+    .name = std::string{table->name},
+    .id = table->id,
+    .evicted = false,
+  });
+
+  auto name_insertion_result = m_name_lookup.emplace(cached_entry->name, cached_entry);
+  ut_a(name_insertion_result.second);
+
+  auto id_insertion_result = m_id_lookup.emplace(id, cached_entry);
+  ut_a(id_insertion_result.second);
+
+  return true;
+}
+
+bool dict_table_lru::erase(std::string_view name) {
+  if (auto itr = m_name_lookup.find(name); itr != m_name_lookup.end()) {
+    erase(itr->second);
+    m_size--;
+  }
+
+  return false;
+}
+
+bool dict_table_lru::erase(std::uint64_t id) {
+  if (auto itr = m_id_lookup.find(id); itr != m_id_lookup.end()) {
+    erase(itr->second);
+    m_size--;
+  }
+
+  return true;
+}
+
+void dict_table_lru::releaseAll(std::function<void(dict_table_t *)> deleter) {
+  for (const auto &itr : m_id_lookup) {
+    if (itr.second->evicted) {
+      // nothing to do
+    } else {
+      deleter(*(itr.second->list_itr));
+    }
+  }
+}
+
+std::int32_t dict_table_lru::size() const {
+  return m_size;
+}
+
+dict_table_lru::stats dict_table_lru::get_stats() {
+  stats result{};
+  for (const auto &itr : m_id_lookup) {
+    if (itr.second->evicted) {
+      result.total_in_evicted_state++;
+    } else {
+      result.total_in_memory++;
+    }
+  }
+
+  return result;
+}
+
+void dict_table_lru::move_to_front(const std::shared_ptr<cache_entry> &entry) {
+  list_itr_t itr{m_tables.end()};
+  if (entry->list_itr != m_tables.end()) {
+    ut_a(!entry->evicted);
+
+    auto table = *entry->list_itr;
+    m_tables.erase(entry->list_itr);
+    m_tables.emplace_front(table);
+
+    itr = m_tables.begin();
+  } else {
+    ut_a(entry->list_itr == m_tables.end());
+    ut_a(entry->evicted);
+
+    // table was evicted, load it first
+    auto table = m_table_fetcher(entry->id);
+    ut_a(table);
+
+    m_tables.emplace_front(table);
+    itr = m_tables.begin();
+  }
+
+  ut_a(itr != m_tables.end());
+
+  entry->evicted = false;
+  entry->list_itr = itr;
+}
+
+void dict_table_lru::evict() {
+  static std::unordered_set<std::string> dont_evict{
+    "SYS_TABLES",
+    "SYS_COLUMNS",
+    "SYS_INDEXES",
+    "SYS_FIELDS",
+    "SYS_FOREIGN",
+    "SYS_FOREIGN_COLS",
+  };
+
+  ut_a(m_size >= m_capacity);
+
+  dict_table_t *table{nullptr};
+
+  std::int32_t max_scan_limit{100};
+  std::int32_t count{0};
+  for (auto it = m_tables.rbegin(); it != m_tables.rend() && count < max_scan_limit; it++, count++) {
+    table = *it;
+    if (dont_evict.contains(table->name)) {
+      continue;
+    }
+
+    if (table->locks.get_length() == 0) {
+      break;
+    }
+  }
+
+  ut_a(table);
+  ut_a(table->locks.get_length() == 0);
+
+  ib_logger(ib_stream, "evicting table: %lu, %s\n", table->id, table->name);
+
+  auto itr = m_id_lookup.find(table->id);
+  ut_a(itr != m_id_lookup.end());
+  auto entry = itr->second;
+  m_tables.erase(entry->list_itr);
+
+  entry->list_itr = m_tables.end();
+  entry->evicted = true;
+
+  // release the memory occupied by dict_table
+  dict_table_remove_from_cache(table, true);
+}
+
+void dict_table_lru::erase(const std::shared_ptr<cache_entry> &entry) {
+  const auto &table = entry;
+  ut_a(table);
+
+  auto name = std::string_view{table->name};
+  auto id = table->id;
+
+  m_tables.erase(table->list_itr);
+  m_name_lookup.erase(name);
+  m_id_lookup.erase(id);
 }

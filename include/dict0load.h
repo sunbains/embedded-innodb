@@ -52,7 +52,7 @@ a foreign key references columns in this table.
 ibd_file_missing flag true in the table object we return */
 dict_table_t *dict_load_table(
   ib_recovery_t recovery, /*!< in: recovery flag */
-  const char *name
+  const char *name, bool skip_load_cache = false
 ); /*!< in: table name in the
                                         databasename/tablename format */
 
@@ -60,7 +60,7 @@ dict_table_t *dict_load_table(
 @return	table; nullptr if table does not exist */
 dict_table_t *dict_load_table_on_id(
   ib_recovery_t recovery, /*!< in: recovery flag */
-  uint64_t table_id
+  uint64_t table_id, bool skip_load_cache = false
 ); /*!< in: table id */
 
 /** This function is called when the database is booted.

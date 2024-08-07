@@ -131,7 +131,7 @@ int main(int argc, char *argv[]) {
   assert(err == DB_SUCCESS);
 
   /* Create the tables. */
-  for (i = 0; i < 10; i++) {
+  for (i = 0; i < 100; i++) {
     err = create_table(DATABASE, TABLE, i);
     assert(err == DB_SUCCESS);
   }
