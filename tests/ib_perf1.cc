@@ -176,7 +176,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   ib_err_t err = DB_SUCCESS;
   ib_tbl_sch_t ib_tbl_sch = nullptr;
   ib_idx_sch_t ib_idx_sch = nullptr;
-  ib_tbl_fmt_t tbl_fmt = IB_TBL_COMPACT;
+  ib_tbl_fmt_t tbl_fmt = IB_TBL_V1;
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -714,7 +714,7 @@ int main(int argc, char *argv[]) {
   err = ib_cfg_set_int("open_files", 8192);
   assert(err == DB_SUCCESS);
 
-  err = ib_startup("barracuda");
+  err = ib_startup("default");
   assert(err == DB_SUCCESS);
 
   err = create_database(DATABASE);

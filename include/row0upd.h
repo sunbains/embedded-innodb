@@ -84,7 +84,7 @@ field to be updated is stored externally in rec or update.
 the field is external in rec or update */
 bool row_upd_changes_field_size_or_external(
   dict_index_t *index,  /*!< in: index */
-  const ulint *offsets, /*!< in: rec_get_offsets(rec, index) */
+  const ulint *offsets, /*!< in: Phy_rec::get_col_offsets(rec, index) */
   const upd_t *update /*!< in: update vector */
   );
 
@@ -93,7 +93,7 @@ given. No field size changes are allowed. */
 void row_upd_rec_in_place(
   rec_t *rec,           /*!< in/out: record where replaced */
   dict_index_t *index,  /*!< in: the index the record belongs to */
-  const ulint *offsets, /*!< in: array returned by rec_get_offsets() */
+  const ulint *offsets, /*!< in: array returned by Phy_rec::get_col_offsets() */
   const upd_t *update /*!< in: update vector */
   );
 
@@ -216,7 +216,7 @@ byte *row_upd_parse_sys_vals(
 database recovery. */
 void row_upd_rec_sys_fields_in_recovery(
   rec_t *rec,           /*!< in/out: record */
-  const ulint *offsets, /*!< in: array returned by rec_get_offsets() */
+  const ulint *offsets, /*!< in: array returned by Phy_rec::get_col_offsets() */
   ulint pos,            /*!< in: TRX_ID position in rec */
   trx_id_t trx_id,      /*!< in: transaction id */
   roll_ptr_t roll_ptr /*!< in: roll ptr of the undo log record */
@@ -455,7 +455,7 @@ a row is updated or marked deleted. */
 inline void row_upd_rec_sys_fields(
   rec_t *rec,               /*!< in/out: record */
   dict_index_t *dict_index, /*!< in: clustered index */
-  const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
+  const ulint *offsets,     /*!< in: Phy_rec::get_col_offsets(rec, index) */
   trx_t *trx,               /*!< in: transaction */
   roll_ptr_t roll_ptr
 ) /*!< in: roll ptr of the undo log record */

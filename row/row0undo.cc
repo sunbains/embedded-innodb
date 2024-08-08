@@ -146,7 +146,11 @@ bool row_undo_search_clust_to_pcur(undo_node_t *node) {
 
   auto rec = node->pcur.get_rec();
 
-  offsets = rec_get_offsets(rec, clust_index, offsets, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{clust_index, rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+  }
 
   if (!found || node->roll_ptr != row_get_rec_roll_ptr(rec, clust_index, offsets)) {
 

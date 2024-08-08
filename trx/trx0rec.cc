@@ -434,7 +434,7 @@ static ulint trx_undo_page_report_modify(
                           delete marking is done */
   const rec_t *rec,     /*!< in: clustered index record which
                           has NOT yet been modified */
-  const ulint *offsets, /*!< in: rec_get_offsets(rec, index) */
+  const ulint *offsets, /*!< in: Phy_rec::get_col_offsets(index, rec) */
   const upd_t *update,  /*!< in: update vector which tells the
                           columns to be updated; in the case of
                           a delete, this should be set to nullptr */
@@ -481,7 +481,7 @@ static ulint trx_undo_page_report_modify(
 
   if (!update) {
     type_cmpl = TRX_UNDO_DEL_MARK_REC;
-  } else if (rec_get_deleted_flag(rec, dict_table_is_comp(table))) {
+  } else if (rec_get_deleted_flag(rec)) {
     type_cmpl = TRX_UNDO_UPD_DEL_REC;
     /* We are about to update a delete marked record.
     We don't typically need the prefix in this case unless
@@ -503,7 +503,7 @@ static ulint trx_undo_page_report_modify(
   /*----------------------------------------*/
   /* Store the state of the info bits */
 
-  *ptr++ = (byte)rec_get_info_bits(rec, dict_table_is_comp(table));
+  *ptr++ = (byte)rec_get_info_bits(rec);
 
   /* Store the values of the system columns */
   field = rec_get_nth_field(rec, offsets, dict_index_get_sys_col_pos(index, DATA_TRX_ID), &flen);
@@ -1002,7 +1002,11 @@ db_err trx_undo_report_row_operation(
       return err;
     }
 
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record(index, rec);
+
+      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+    }
   }
 
   page_no = undo->last_page_no;
@@ -1174,9 +1178,9 @@ db_err trx_undo_prev_version_build(
       "index record ",
       index->name
     );
-    rec_print(ib_stream, index_rec, index);
+    rec_print(index_rec);
     ib_logger(ib_stream, "\nrecord version ");
-    rec_print_new(ib_stream, rec, offsets);
+    rec_print(rec);
     ib_logger(ib_stream, "\n");
     return DB_ERROR;
   }
@@ -1273,9 +1277,9 @@ db_err trx_undo_prev_version_build(
     );
     ut_print_buf(ib_stream, undo_rec, 150);
     ib_logger(ib_stream, "\nindex record ");
-    rec_print(ib_stream, index_rec, index);
+    rec_print(index_rec);
     ib_logger(ib_stream, "\nrecord version ");
-    rec_print_new(ib_stream, rec, offsets);
+    rec_print(rec);
     ib_logger(
       ib_stream,
       "\n"
@@ -1313,7 +1317,7 @@ db_err trx_undo_prev_version_build(
   } else {
     buf = mem_heap_alloc(heap, rec_offs_size(offsets));
     *old_vers = rec_copy(buf, rec, offsets);
-    rec_offs_make_valid(*old_vers, index, offsets);
+    ut_d(rec_offs_make_valid(*old_vers, index, offsets));
     row_upd_rec_in_place(*old_vers, index, offsets, update);
   }
 

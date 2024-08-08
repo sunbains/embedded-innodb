@@ -139,7 +139,7 @@ static int num_tables = 0;
 
 /* These are going to be configurable parameters for table
 creation */
-static ib_tbl_fmt_t tbl_format = IB_TBL_COMPACT;
+static constexpr ib_tbl_fmt_t tbl_format = IB_TBL_V1;
 static ulint page_size = 0;
 
 /* Datastructure to hold error statistics for DML and DDL operations */
@@ -545,7 +545,7 @@ int main(int argc, char *argv[]) {
 
   init_stat_structs();
 
-  err = ib_startup("barracuda");
+  err = ib_startup("default");
   assert(err == DB_SUCCESS);
 
   err = create_database(DATABASE);

@@ -386,7 +386,7 @@ void Fil::node_open_file(fil_node_t *node, fil_space_t *space) {
 }
 
 void Fil::node_close_file(fil_node_t *node) {
-  ut_ad(mutex_own(&(system->m_mutex)));
+  ut_ad(mutex_own(&m_mutex));
   ut_a(node->open);
   ut_a(node->m_n_pending == 0);
   ut_a(node->m_n_pending_flushes == 0);
@@ -512,11 +512,9 @@ bool Fil::space_create(const char *name, space_id_t id, ulint flags, Fil_type fi
   fil_space_t *space;
 
   /* The tablespace flags (FSP_SPACE_FLAGS) should be 0 for ROW_FORMAT=COMPACT
-  ((table->flags & ~(~0UL << DICT_TF_BITS)) == DICT_TF_COMPACT) and
-  ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other format, the tablespace
+  ROW_FORMAT=REDUNDANT (table->flags == 0). For any other format, the tablespace
   flags should equal (table->flags & ~(~0UL << DICT_TF_BITS)). */
 
-  ut_a(flags != DICT_TF_COMPACT);
   ut_a(!(flags & (~0UL << DICT_TF_BITS)));
 
 try_again:
@@ -1446,13 +1444,8 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
 
   ut_a(size >= FIL_IBD_FILE_INITIAL_SIZE);
 
-  /* The tablespace flags (FSP_SPACE_FLAGS) should be 0 for
-  ROW_FORMAT=COMPACT
-  ((table->flags & ~(~0UL << DICT_TF_BITS)) == DICT_TF_COMPACT) and
-  ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other
-  format, the tablespace flags should equal
-  (table->flags & ~(~0UL << DICT_TF_BITS)). */
-  ut_a(flags != DICT_TF_COMPACT);
+  /* ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other format, the tablespace
+  flags should equal (table->flags & ~(~0UL << DICT_TF_BITS)). */
   ut_a(!(flags & (~0UL << DICT_TF_BITS)));
 
   bool ret{};
@@ -1609,7 +1602,6 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
 }
 
 bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint flags, const char *name) {
-  os_file_t file;
   char *filepath;
   bool success;
   space_id_t space_id;
@@ -1617,16 +1609,12 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
 
   filepath = make_ibd_name(name, false);
 
-  /* The tablespace flags (FSP_SPACE_FLAGS) should be 0 for
-  ROW_FORMAT=COMPACT
-  ((table->flags & ~(~0UL << DICT_TF_BITS)) == DICT_TF_COMPACT) and
-  ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other
-  format, the tablespace flags should equal
-  (table->flags & ~(~0UL << DICT_TF_BITS)). */
-  ut_a(flags != DICT_TF_COMPACT);
+  /* ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other format, the tablespace flags
+  should equal (table->flags & ~(~0UL << DICT_TF_BITS)). */
   ut_a(!(flags & (~0UL << DICT_TF_BITS)));
 
-  file = os_file_create_simple_no_error_handling(filepath, OS_FILE_OPEN, OS_FILE_READ_ONLY, &success);
+  auto file = os_file_create_simple_no_error_handling(filepath, OS_FILE_OPEN, OS_FILE_READ_ONLY, &success);
+
   if (!success) {
     /* The following call prints an error message */
     os_file_get_last_error(true);

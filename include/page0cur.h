@@ -59,7 +59,7 @@ constexpr auto PAGE_CUR_DBG = 6;
  * @param current_rec Pointer to current record after which the new record is inserted.
  * @param index Record descriptor.
  * @param rec Pointer to a physical record.
- * @param offsets In/out: rec_get_offsets(rec, index).
+ * @param offsets In/out: Phy_rec::get_col_offsets(rec, index).
  * @param mtr Mini-transaction handle, or NULL.
  * @return Pointer to record if succeed, NULL otherwise.
  */
@@ -82,7 +82,7 @@ void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, dict_i
  * 
  * @param cursor In/out: A page cursor.
  * @param index Record descriptor.
- * @param offsets In: rec_get_offsets(cursor->rec, index).
+ * @param offsets In: Phy_rec::get_col_offsets(cursor->rec, index).
  * @param mtr Mini-transaction handle.
  */
 void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *offsets, mtr_t *mtr);
@@ -354,13 +354,17 @@ inline ulint page_cur_search(
  * @return Pointer to the inserted record if successful, NULL otherwise.
  */
 inline rec_t *page_cur_tuple_insert(page_cur_t *cursor, const dtuple_t *tuple, dict_index_t *dict_index, ulint n_ext, mtr_t *mtr) {
-  ulint size = rec_get_converted_size(dict_index, tuple, n_ext);
-
+  const auto size = rec_get_converted_size(dict_index, tuple, n_ext);
   auto heap = mem_heap_create(size + (4 + REC_OFFS_HEADER_SIZE + dtuple_get_n_fields(tuple)) * sizeof(ulint));
   auto rec = rec_convert_dtuple_to_rec((byte *)mem_heap_alloc(heap, size), dict_index, tuple, n_ext);
-  auto offsets = rec_get_offsets(rec, dict_index, nullptr, ULINT_UNDEFINED, &heap);
 
-  rec = page_cur_insert_rec_low(cursor->m_rec, dict_index, rec, offsets, mtr);
+  {
+    Phy_rec record(dict_index, rec);
+
+    auto offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+
+    rec = page_cur_insert_rec_low(cursor->m_rec, dict_index, rec, offsets, mtr);
+  }
 
   mem_heap_free(heap);
 

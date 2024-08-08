@@ -64,8 +64,6 @@ Completed by Sunny Bains and Marko Makela
 /* @{ */
 /** Log the outcome of each row_merge_cmp() call, comparing records. */
 static bool row_merge_print_cmp;
-/** Log each record read from temporary file. */
-static bool row_merge_print_read;
 /** Log each record write to temporary file. */
 static bool row_merge_print_write;
 /** Log each row_merge_blocks() call, merging two blocks of records to
@@ -101,14 +99,14 @@ typedef byte mrec_t;
 /** Buffer for sorting in main memory. */
 struct row_merge_buf_struct {
   mem_heap_t *heap;            /*!< memory heap where allocated */
-  dict_index_t *index;         /*!< the index the tuples belong to */
+  dict_index_t *index;         /*!< the index the rows belong to */
   ulint total_size;            /*!< total amount of data bytes */
-  ulint n_tuples;              /*!< number of data tuples */
-  ulint max_tuples;            /*!< maximum number of data tuples */
-  const dfield_t **tuples;     /*!< array of pointers to
+  ulint n_recs;              /*!< number of data rows */
+  ulint max_tuples;            /*!< maximum number of data rows */
+  const dfield_t **rows;     /*!< array of pointers to
                                arrays of fields that form
-                               the data tuples */
-  const dfield_t **tmp_tuples; /*!< temporary copy of tuples,
+                               the data rows */
+  const dfield_t **tmp_tuples; /*!< temporary copy of rows,
                                for sorting */
 };
 
@@ -125,45 +123,12 @@ struct merge_file_struct {
 /** Information about temporary files used in merge sort */
 typedef struct merge_file_struct merge_file_t;
 
-#ifdef UNIV_DEBUG
-/** Display a merge tuple. */
-static void row_merge_tuple_print(
-  ib_stream_t ib_stream, /*!< in: output stream */
-  const dfield_t *entry, /*!< in: tuple to print */
-  ulint n_fields
-) /*!< in: number of fields in the tuple */
-{
-  ulint j;
-
-  for (j = 0; j < n_fields; j++) {
-    const dfield_t *field = &entry[j];
-
-    if (dfield_is_null(field)) {
-      ib_logger(ib_stream, "\n NULL;");
-    } else {
-      ulint field_len = dfield_get_len(field);
-      ulint len = ut_min(field_len, 20);
-      if (dfield_is_ext(field)) {
-        ib_logger(ib_stream, "\nE");
-      } else {
-        ib_logger(ib_stream, "\n ");
-      }
-      ut_print_buf(ib_stream, dfield_get_data(field), len);
-      if (len != field_len) {
-        ib_logger(ib_stream, " (total %lu bytes)", field_len);
-      }
-    }
-  }
-  ib_logger(ib_stream, "\n");
-}
-#endif /* UNIV_DEBUG */
-
 /** Allocate a sort buffer.
 @return	own: sort buffer */
 static row_merge_buf_t *row_merge_buf_create_low(
   mem_heap_t *heap,    /*!< in: heap where allocated */
   dict_index_t *index, /*!< in: secondary index */
-  ulint max_tuples,    /*!< in: maximum number of data tuples */
+  ulint max_tuples,    /*!< in: maximum number of data rows */
   ulint buf_size
 ) /*!< in: size of the buffer, in bytes */
 {
@@ -177,8 +142,8 @@ static row_merge_buf_t *row_merge_buf_create_low(
   buf->heap = heap;
   buf->index = index;
   buf->max_tuples = max_tuples;
-  buf->tuples = reinterpret_cast<const dfield_t **>(mem_heap_alloc(heap, 2 * max_tuples * sizeof *buf->tuples));
-  buf->tmp_tuples = buf->tuples + max_tuples;
+  buf->rows = reinterpret_cast<const dfield_t **>(mem_heap_alloc(heap, 2 * max_tuples * sizeof *buf->rows));
+  buf->tmp_tuples = buf->rows + max_tuples;
 
   return (buf);
 }
@@ -188,7 +153,7 @@ static row_merge_buf_t *row_merge_buf_create_low(
 static row_merge_buf_t *row_merge_buf_create(dict_index_t *index) /*!< in: secondary index */
 {
   auto max_tuples = sizeof(row_merge_block_t) / ut_max(1, dict_index_get_min_size(index));
-  auto buf_size = (sizeof(row_merge_buf_t)) + (max_tuples - 1) * sizeof row_merge_buf_t::tuples;
+  auto buf_size = (sizeof(row_merge_buf_t)) + (max_tuples - 1) * sizeof row_merge_buf_t::rows;
   auto heap = static_cast<mem_heap_t *>(mem_heap_create(buf_size + sizeof(row_merge_block_t)));
   auto row_merge_buf = row_merge_buf_create_low(heap, index, max_tuples, buf_size);
 
@@ -204,7 +169,7 @@ static row_merge_buf_t *row_merge_buf_empty(row_merge_buf_t *buf) /*!< in,own: s
   mem_heap_t *heap = buf->heap;
   dict_index_t *index = buf->index;
 
-  buf_size = (sizeof *buf) + (max_tuples - 1) * sizeof *buf->tuples;
+  buf_size = (sizeof *buf) + (max_tuples - 1) * sizeof *buf->rows;
 
   mem_heap_empty(heap);
 
@@ -217,74 +182,70 @@ static void row_merge_buf_free(row_merge_buf_t *buf) /*!< in,own: sort buffer, t
   mem_heap_free(buf->heap);
 }
 
-/** Insert a data tuple into a sort buffer.
-@return	true if added, false if out of space */
-static bool row_merge_buf_add(
-  row_merge_buf_t *buf, /*!< in/out: sort buffer */
-  const dtuple_t *row,  /*!< in: row in clustered index */
-  const row_ext_t *ext
-) /*!< in: cache of externally stored
-                                        column prefixes, or NULL */
-{
-  ulint i;
-  ulint n_fields;
-  ulint data_size;
-  ulint extra_size;
-  const dict_index_t *index;
-  dfield_t *field;
-
-  if (buf->n_tuples >= buf->max_tuples) {
-    return (false);
+/**
+ *  Insert a data tuple into a sort buffer.
+ *
+ * @param buf[in,out] The sort buffer to add the row to.
+ * @param row[in] The row in the clustered index to add.
+ * @param ext[in] Cache of externally stored column prefixes, or NULL.
+ * 
+ * @return True if the row was successfully added, false if the sort buffer is full.
+ */
+static bool row_merge_buf_add(row_merge_buf_t *buf, const dtuple_t *row, const row_ext_t *ext) {
+  if (buf->n_recs >= buf->max_tuples) {
+    return false;
   }
 
   prefetch_r(row->fields);
 
-  index = buf->index;
-
-  n_fields = dict_index_get_n_fields(index);
-
+  auto index = buf->index;
+  const auto n_fields = dict_index_get_n_fields(index);
   auto entry = reinterpret_cast<dfield_t *>(mem_heap_alloc(buf->heap, n_fields * sizeof(dfield_t)));
-  buf->tuples[buf->n_tuples] = entry;
-  field = entry;
+  auto dfield = entry;
 
-  data_size = 0;
-  extra_size = UT_BITS_IN_BYTES(index->n_nullable);
+  buf->rows[buf->n_recs] = entry;
 
-  for (i = 0; i < n_fields; i++, field++) {
-    const dict_field_t *ifield;
-    const dict_col_t *col;
-    ulint col_no;
-    const dfield_t *row_field;
-    ulint len;
+  ulint data_size{};
+  ulint extra_size = UT_BITS_IN_BYTES(index->n_nullable);
 
-    ifield = dict_index_get_nth_field(index, i);
-    col = ifield->col;
-    col_no = dict_col_get_no(col);
-    row_field = dtuple_get_nth_field(row, col_no);
-    dfield_copy(field, row_field);
-    len = dfield_get_len(field);
+  for (ulint i{}; i < n_fields; ++i, ++dfield) {
+    auto ifield = dict_index_get_nth_field(index, i);
+    auto col = ifield->col;
+    auto col_no = dict_col_get_no(col);
+    auto row_field = dtuple_get_nth_field(row, col_no);
 
-    if (dfield_is_null(field)) {
+    dfield_copy(dfield, row_field);
+
+    auto len = dfield_get_len(dfield);
+
+    if (dfield_is_null(dfield)) {
       ut_ad(!(col->prtype & DATA_NOT_NULL));
       continue;
     } else if (likely(!ext)) {
+      ;
     } else if (dict_index_is_clust(index)) {
       /* Flag externally stored fields. */
       const byte *buf = row_ext_lookup(ext, col_no, &len);
+
       if (likely_null(buf)) {
+
         ut_a(buf != field_ref_zero);
+
         if (i < dict_index_get_n_unique(index)) {
-          dfield_set_data(field, buf, len);
+          dfield_set_data(dfield, buf, len);
         } else {
-          dfield_set_ext(field);
-          len = dfield_get_len(field);
+          dfield_set_ext(dfield);
+          len = dfield_get_len(dfield);
         }
       }
+
     } else {
+
       const byte *buf = row_ext_lookup(ext, col_no, &len);
+
       if (likely_null(buf)) {
         ut_a(buf != field_ref_zero);
-        dfield_set_data(field, buf, len);
+        dfield_set_data(dfield, buf, len);
       }
     }
 
@@ -292,20 +253,21 @@ static bool row_merge_buf_add(
 
     if (ifield->prefix_len) {
       len = dtype_get_at_most_n_mbchars(
-        col->prtype, col->mbminlen, col->mbmaxlen, ifield->prefix_len, len, (char *)dfield_get_data(field)
+        col->prtype, col->mbminlen, col->mbmaxlen, ifield->prefix_len, len, (char *)dfield_get_data(dfield)
       );
-      dfield_set_len(field, len);
+
+      dfield_set_len(dfield, len);
     }
 
     ut_ad(len <= col->len || col->mtype == DATA_BLOB);
 
     if (ifield->fixed_len) {
       ut_ad(len == ifield->fixed_len);
-      ut_ad(!dfield_is_ext(field));
-    } else if (dfield_is_ext(field)) {
+      ut_ad(!dfield_is_ext(dfield));
+    } else if (dfield_is_ext(dfield)) {
       extra_size += 2;
     } else if (len < 128 || (col->len < 256 && col->mtype != DATA_BLOB)) {
-      extra_size++;
+      ++extra_size;
     } else {
       /* For variable-length columns, we look up the
       maximum length from the column itself.  If this
@@ -318,13 +280,10 @@ static bool row_merge_buf_add(
 
 #ifdef UNIV_DEBUG
   {
-    ulint size;
-    ulint extra;
+    auto size = Phy_rec::get_encoded_size(index, REC_STATUS_ORDINARY, {entry, n_fields});
 
-    size = rec_get_converted_size_comp(index, REC_STATUS_ORDINARY, entry, n_fields, &extra);
-
-    ut_ad(data_size + extra_size + REC_N_NEW_EXTRA_BYTES == size);
-    ut_ad(extra_size + REC_N_NEW_EXTRA_BYTES == extra);
+    ut_ad(extra_size == size.first);
+    ut_ad(data_size == size.second);
   }
 #endif /* UNIV_DEBUG */
 
@@ -338,32 +297,33 @@ static bool row_merge_buf_add(
 
   /* Reserve one byte for the end marker of row_merge_block_t. */
   if (buf->total_size + data_size >= sizeof(row_merge_block_t) - 1) {
-    return (false);
+    return false;
   }
 
   buf->total_size += data_size;
-  buf->n_tuples++;
+  ++buf->n_recs;
 
-  field = entry;
+  dfield = entry;
 
   /* Copy the data fields. */
 
-  do {
-    dfield_dup(field++, buf->heap);
-  } while (--n_fields);
+  {
+    auto i{n_fields};
 
-  return (true);
+    do {
+      dfield_dup(dfield++, buf->heap);
+    } while (--i);
+  }
+
+  return true;
 }
 
 /** Structure for reporting duplicate records. */
-struct row_merge_dup_struct {
+struct row_merge_dup_t {
   const dict_index_t *index; /*!< index being sorted */
   table_handle_t table;      /*!< table object */
   ulint n_dup;               /*!< number of duplicates */
 };
-
-/** Structure for reporting duplicate records. */
-typedef struct row_merge_dup_struct row_merge_dup_t;
 
 /** Report a duplicate key. */
 static void row_merge_dup_report(
@@ -371,38 +331,25 @@ static void row_merge_dup_report(
   const dfield_t *entry
 ) /*!< in: duplicate index entry */
 {
-  mrec_buf_t buf;
-  const dtuple_t *tuple;
-  dtuple_t tuple_store;
-  const rec_t *rec;
-  const dict_index_t *index = dup->index;
-  ulint n_fields = dict_index_get_n_fields(index);
-  mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint n_ext;
-
-  if (dup->n_dup++) {
-    /* Only report the first duplicate record,
-    but count all duplicate records. */
+  if (dup->n_dup++ > 0) {
+    /* Only report the first duplicate record, but count all duplicate records. */
     return;
   }
 
-  rec_offs_init(offsets_);
+  mrec_buf_t buf;
+  dtuple_t tuple_store;
+  const dict_index_t *index = dup->index;
+  ulint n_fields = dict_index_get_n_fields(index);
 
   /* Convert the tuple to a record and then to client format. */
 
-  tuple = dtuple_from_fields(&tuple_store, entry, n_fields);
-  n_ext = dict_index_is_clust(index) ? dtuple_get_n_ext(tuple) : 0;
+  auto tuple = dtuple_from_fields(&tuple_store, entry, n_fields);
+  auto n_ext = dict_index_is_clust(index) ? dtuple_get_n_ext(tuple) : 0;
 
-  rec = rec_convert_dtuple_to_rec(buf, index, tuple, n_ext);
-  rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
-
-  if (likely_null(heap)) {
-    mem_heap_free(heap);
-  }
+  rec_convert_dtuple_to_rec(buf, index, tuple, n_ext);
 }
 
-/** Compare two tuples.
+/** Compare two rows.
 @return	1, 0, -1 if a is greater, equal, less, respectively, than b */
 static int row_merge_tuple_cmp(
   void *cmp_ctx,     /*!< in: compare context, required
@@ -416,36 +363,35 @@ static int row_merge_tuple_cmp(
   int cmp;
   const dfield_t *field = a;
 
-  /* Compare the fields of the tuples until a difference is
+  /* Compare the fields of the rows until a difference is
   found or we run out of fields to compare.  If !cmp at the
-  end, the tuples are equal. */
+  end, the rows are equal. */
   do {
     cmp = cmp_dfield_dfield(cmp_ctx, a++, b++);
   } while (!cmp && --n_field);
 
   if (unlikely(!cmp) && likely_null(dup)) {
-    /* Report a duplicate value error if the tuples are
+    /* Report a duplicate value error if the rows are
     logically equal.  NULL columns are logically inequal,
     although they are equal in the sorting order.  Find
     out if any of the fields are NULL. */
     for (b = field; b != a; b++) {
       if (dfield_is_null(b)) {
 
-        goto func_exit;
+        return cmp;
       }
     }
 
     row_merge_dup_report(dup, field);
   }
 
-func_exit:
-  return (cmp);
+  return cmp;
 }
 
 /** Wrapper for row_merge_tuple_sort() to inject some more context to
 UT_SORT_FUNCTION_BODY().
-@param a	array of tuples that being sorted
-@param b	aux (work area), same size as tuples[]
+@param a	array of rows that being sorted
+@param b	aux (work area), same size as rows[]
 @param c	lower bound of the sorting area, inclusive
 @param d	upper bound of the sorting area, inclusive */
 #define row_merge_tuple_sort_ctx(x, a, b, c, d) row_merge_tuple_sort(x, n_field, dup, a, b, c, d)
@@ -462,7 +408,7 @@ static void row_merge_tuple_sort(
                              for BLOBs and user defined types */
   ulint n_field,           /*!< in: number of fields */
   row_merge_dup_t *dup,    /*!< in/out: for reporting duplicates */
-  const dfield_t **tuples, /*!< in/out: tuples */
+  const dfield_t **rows, /*!< in/out: rows */
   const dfield_t **aux,    /*!< in/out: work area */
   ulint low,               /*!< in: lower bound of the
                              sorting area, inclusive */
@@ -470,7 +416,7 @@ static void row_merge_tuple_sort(
 ) /*!< in: upper bound of the
                              sorting area, exclusive */
 {
-  UT_SORT_FUNCTION_BODY(cmp_ctx, row_merge_tuple_sort_ctx, tuples, aux, low, high, row_merge_tuple_cmp_ctx);
+  UT_SORT_FUNCTION_BODY(cmp_ctx, row_merge_tuple_sort_ctx, rows, aux, low, high, row_merge_tuple_cmp_ctx);
 }
 
 /** Sort a buffer. */
@@ -480,7 +426,7 @@ static void row_merge_buf_sort(
 ) /*!< in/out: for reporting duplicates */
 {
   row_merge_tuple_sort(
-    buf->index->cmp_ctx, dict_index_get_n_unique(buf->index), dup, buf->tuples, buf->tmp_tuples, 0, buf->n_tuples
+    buf->index->cmp_ctx, dict_index_get_n_unique(buf->index), dup, buf->rows, buf->tmp_tuples, 0, buf->n_recs
   );
 }
 
@@ -496,60 +442,42 @@ static void row_merge_buf_write(
 #define row_merge_buf_write(buf, of, block) row_merge_buf_write(buf, block)
 #endif /* !UNIV_DEBUG */
 {
-  const dict_index_t *index = buf->index;
-  ulint n_fields = dict_index_get_n_fields(index);
-  byte *b = &(*block)[0];
+  auto b = &(*block)[0];
+  const auto index = buf->index;
+  const auto n_fields = dict_index_get_n_fields(index);
 
-  ulint i;
-
-  for (i = 0; i < buf->n_tuples; i++) {
-    ulint size;
-    ulint extra_size;
-    const dfield_t *entry = buf->tuples[i];
-
-    size = rec_get_converted_size_comp(index, REC_STATUS_ORDINARY, entry, n_fields, &extra_size);
-    ut_ad(size > extra_size);
-    ut_ad(extra_size >= REC_N_NEW_EXTRA_BYTES);
-    extra_size -= REC_N_NEW_EXTRA_BYTES;
-    size -= REC_N_NEW_EXTRA_BYTES;
+  for (ulint i{}; i < buf->n_recs; ++i) {
+    const auto dfield = buf->rows[i];
+    auto size = Phy_rec::get_encoded_size(index, REC_STATUS_ORDINARY, {dfield, n_fields});
+    auto total_size = size.first + size.second;
 
     /* Encode extra_size + 1 */
-    if (extra_size + 1 < 0x80) {
-      *b++ = (byte)(extra_size + 1);
+    if (size.first + 1 < 0x80) {
+      *b++ = (byte)(size.first + 1);
     } else {
-      ut_ad((extra_size + 1) < 0x8000);
-      *b++ = (byte)(0x80 | ((extra_size + 1) >> 8));
-      *b++ = (byte)(extra_size + 1);
+      ut_ad((size.first + 1) < 0x8000);
+      *b++ = (byte)(0x80 | ((size.first + 1) >> 8));
+      *b++ = (byte)(size.first + 1);
     }
 
-    ut_ad(b + size < block[1]);
+    ut_ad(b + total_size < block[1]);
 
-    rec_convert_dtuple_to_rec_comp(b + extra_size, 0, index, REC_STATUS_ORDINARY, entry, n_fields);
+    /* Encode into b + size.first */
+    Phy_rec::encode(index, b + size.first, REC_STATUS_ORDINARY, {dfield, n_fields});
 
-    b += size;
-
-#ifdef UNIV_DEBUG
-    if (row_merge_print_write) {
-      ib_logger(ib_stream, "row_merge_buf_write %p,%d,%lu %lu", (void *)b, of->fd, (ulong)of->offset, (ulong)i);
-      row_merge_tuple_print(ib_stream, entry, n_fields);
-    }
-#endif /* UNIV_DEBUG */
+    b += total_size;
   }
 
   /* Write an "end-of-chunk" marker. */
   ut_a(b < block[1]);
   ut_a(b == block[0] + buf->total_size);
+
   *b++ = 0;
+
 #ifdef UNIV_DEBUG_VALGRIND
-  /* The rest of the block is uninitialized.  Initialize it
-  to avoid bogus warnings. */
+  /* The rest of the block is uninitialized. Initialize it to avoid bogus warnings. */
   memset(b, 0xff, block[1] - b);
 #endif /* UNIV_DEBUG_VALGRIND */
-#ifdef UNIV_DEBUG
-  if (row_merge_print_write) {
-    ib_logger(ib_stream, "row_merge_buf_write %p,%d,%lu EOF\n", (void *)b, of->fd, (ulong)of->offset);
-  }
-#endif /* UNIV_DEBUG */
 }
 
 /** Create a memory heap and allocate space for row_merge_rec_offsets().
@@ -628,47 +556,43 @@ static bool row_merge_write(
   return os_file_write("(merge)", OS_FILE_FROM_FD(fd), buf, sizeof(row_merge_block_t), off);
 }
 
-/** Read a merge record.
-@return	pointer to next record, or NULL on I/O error or end of list */
-static __attribute__((nonnull)) const byte *row_merge_read_rec(
-  row_merge_block_t *block,  /*!< in/out: file buffer */
-  mrec_buf_t *buf,           /*!< in/out: secondary buffer */
-  const byte *b,             /*!< in: pointer to record */
-  const dict_index_t *index, /*!< in: index of the record */
-  int fd,                    /*!< in: file descriptor */
-  ulint *foffs,              /*!< in/out: file offset */
-  const mrec_t **mrec,       /*!< out: pointer to merge record,
-                                              or NULL on end of list
-                                              (non-NULL on I/O error) */
+/**
+ * Reads a record from the specified file buffer and returns a pointer to the merge record.
+ * 
+ * @param block The file buffer.
+ * @param buf The secondary buffer.
+ * @param b Pointer to the record.
+ * @param index Index of the record.
+ * @param fd File descriptor.
+ * @param foffs File offset.
+ * @param mrec Pointer to the merge record.
+ * @param offsets Column offsets of the merge record.
+ * @return Pointer to the next record, or nullptr on end of list (non-NULL on I/O error).
+ */
+static const byte *row_merge_read_rec(
+  row_merge_block_t *block,
+  mrec_buf_t *buf,
+  const byte *b,
+  const dict_index_t *index,
+  int fd,
+  ulint *foffs,
+  const mrec_t **mrec,
   ulint *offsets
-) /*!< out: offsets of mrec */
-{
+) {
   ulint extra_size;
-  ulint data_size;
   ulint avail_size;
 
-  ut_ad(block);
-  ut_ad(buf);
   ut_ad(b >= block[0]);
   ut_ad(b < block[1]);
-  ut_ad(index);
-  ut_ad(foffs);
-  ut_ad(mrec);
-  ut_ad(offsets);
 
   ut_ad(*offsets == 1 + REC_OFFS_HEADER_SIZE + dict_index_get_n_fields(index));
 
   extra_size = *b++;
 
-  if (unlikely(!extra_size)) {
+  if (unlikely(extra_size == 0)) {
     /* End of list */
     *mrec = nullptr;
-#ifdef UNIV_DEBUG
-    if (row_merge_print_read) {
-      ib_logger(ib_stream, "row_merge_read %p,%p,%d,%lu EOF\n", (const void *)b, (const void *)block, fd, (ulong)*foffs);
-    }
-#endif /* UNIV_DEBUG */
-    return (nullptr);
+    return nullptr;
   }
 
   if (extra_size >= 0x80) {
@@ -679,7 +603,7 @@ static __attribute__((nonnull)) const byte *row_merge_read_rec(
       err_exit:
         /* Signal I/O error. */
         *mrec = b;
-        return (nullptr);
+        return nullptr;
       }
 
       /* Wrap around to the beginning of the buffer. */
@@ -687,7 +611,8 @@ static __attribute__((nonnull)) const byte *row_merge_read_rec(
     }
 
     extra_size = (extra_size & 0x7f) << 8;
-    extra_size |= *b++;
+    extra_size |= *b;
+    ++b;
   }
 
   /* Normalize extra_size.  Above, value 0 signals "end of list". */
@@ -718,36 +643,41 @@ static __attribute__((nonnull)) const byte *row_merge_read_rec(
 
     *mrec = *buf + extra_size;
 
-    rec_init_offsets_comp_ordinary(*mrec, 0, index, offsets);
+    {
+      Phy_rec rec{index, *mrec};
+      rec.get_col_offsets(offsets);
+    }
 
-    data_size = rec_offs_data_size(offsets);
+    auto data_size = rec_offs_data_size(offsets);
 
     /* These overflows should be impossible given that
     records are much smaller than either buffer, and
     the record starts near the beginning of each buffer. */
-    ut_a(extra_size + data_size < sizeof *buf);
+    ut_a(extra_size + data_size < sizeof(*buf));
     ut_a(b + data_size < block[1]);
 
     /* Copy the data bytes. */
     memcpy(*buf + extra_size, b, data_size);
     b += data_size;
 
-    goto func_exit;
+    return b;
   }
 
   *mrec = b + extra_size;
 
-  rec_init_offsets_comp_ordinary(*mrec, 0, index, offsets);
+  {
+    Phy_rec rec{index, *mrec};
+    rec.get_col_offsets(offsets);
+  }
 
-  data_size = rec_offs_data_size(offsets);
+  auto data_size = rec_offs_data_size(offsets);
   ut_ad(extra_size + data_size < sizeof *buf);
 
   b += extra_size + data_size;
 
   if (likely(b < block[1])) {
-    /* The record fits entirely in the block.
-    This is the normal case. */
-    goto func_exit;
+    /* The record fits entirely in the block.  This is the normal case. */
+    return b;
   }
 
   /* The record spans two blocks.  Copy it to buf. */
@@ -756,6 +686,7 @@ static __attribute__((nonnull)) const byte *row_merge_read_rec(
   avail_size = block[1] - b;
   memcpy(*buf, b, avail_size);
   *mrec = *buf + extra_size;
+
 #ifdef UNIV_DEBUG
   /* We cannot invoke rec_offs_make_valid() here, because there
   are no REC_N_NEW_EXTRA_BYTES between extra_size and data_size.
@@ -777,16 +708,7 @@ static __attribute__((nonnull)) const byte *row_merge_read_rec(
   memcpy(*buf + avail_size, b, extra_size + data_size - avail_size);
   b += extra_size + data_size - avail_size;
 
-func_exit:
-#ifdef UNIV_DEBUG
-  if (row_merge_print_read) {
-    ib_logger(ib_stream, "row_merge_read %p,%p,%d,%lu ", (const void *)b, (const void *)block, fd, (ulong)*foffs);
-    rec_print_comp(ib_stream, *mrec, offsets);
-    ib_logger(ib_stream, "\n");
-  }
-#endif /* UNIV_DEBUG */
-
-  return (b);
+  return b;
 }
 
 /** Write a merge record. */
@@ -805,17 +727,6 @@ static void row_merge_write_rec_low(
 #define row_merge_write_rec_low(b, e, size, fd, foffs, mrec, offsets) row_merge_write_rec_low(b, e, mrec, offsets)
 #endif /* !UNIV_DEBUG */
 {
-#ifdef UNIV_DEBUG
-  const byte *const end = b + size;
-  ut_ad(e == rec_offs_extra_size(offsets) + 1);
-
-  if (row_merge_print_write) {
-    ib_logger(ib_stream, "row_merge_write %p,%d,%lu ", (void *)b, fd, (ulong)foffs);
-    rec_print_comp(ib_stream, mrec, offsets);
-    ib_logger(ib_stream, "\n");
-  }
-#endif /* UNIV_DEBUG */
-
   if (e < 0x80) {
     *b++ = (byte)e;
   } else {
@@ -824,7 +735,7 @@ static void row_merge_write_rec_low(
   }
 
   memcpy(b, mrec - rec_offs_extra_size(offsets), rec_offs_size(offsets));
-  ut_ad(b + rec_offs_size(offsets) == end);
+  ut_ad(b + rec_offs_size(offsets) == b + size);
 }
 
 /** Write a merge record.
@@ -839,10 +750,6 @@ static byte *row_merge_write_rec(
   const ulint *offsets
 ) /*!< in: offsets of mrec */
 {
-  ulint extra_size;
-  ulint size;
-  ulint avail_size;
-
   ut_ad(block);
   ut_ad(buf);
   ut_ad(b >= block[0]);
@@ -853,14 +760,16 @@ static byte *row_merge_write_rec(
   ut_ad(mrec < buf[0] || mrec > buf[1]);
 
   /* Normalize extra_size.  Value 0 signals "end of list". */
-  extra_size = rec_offs_extra_size(offsets) + 1;
+  auto extra_size = rec_offs_extra_size(offsets);
 
-  size = extra_size + (extra_size >= 0x80) + rec_offs_data_size(offsets);
+  auto size = extra_size + (extra_size >= 0x80) + rec_offs_data_size(offsets);
+
+  ++extra_size;
 
   if (unlikely(b + size >= block[1])) {
     /* The record spans two blocks.
     Copy it to the temporary buffer first. */
-    avail_size = block[1] - b;
+    auto avail_size = block[1] - b;
 
     row_merge_write_rec_low(buf[0], extra_size, size, fd, *foffs, mrec, offsets);
 
@@ -942,9 +851,9 @@ static int row_merge_cmp(
 #ifdef UNIV_DEBUG
   if (row_merge_print_cmp) {
     ib_logger(ib_stream, "row_merge_cmp1 ");
-    rec_print_comp(ib_stream, mrec1, offsets1);
+    rec_print(mrec1);
     ib_logger(ib_stream, "\nrow_merge_cmp2 ");
-    rec_print_comp(ib_stream, mrec2, offsets2);
+    rec_print(mrec2);
     ib_logger(ib_stream, "\nrow_merge_cmp=%d\n", cmp);
   }
 #endif /* UNIV_DEBUG */
@@ -1076,14 +985,19 @@ static db_err row_merge_read_clustered_index(
 
     if (likely(has_next)) {
       rec = pcur.get_rec();
-      offsets = rec_get_offsets(rec, clust_index, nullptr, ULINT_UNDEFINED, &row_heap);
+
+      {
+        Phy_rec record{clust_index, rec};
+
+        offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &row_heap, Source_location{});
+      }
 
       /* Skip delete marked records. */
-      if (rec_get_deleted_flag(rec, dict_table_is_comp(old_table))) {
+      if (rec_get_deleted_flag(rec)) {
         continue;
       }
 
-      srv_n_rows_inserted++;
+      ++srv_n_rows_inserted;
 
       /* Build a row based on the clustered index. */
 
@@ -1122,12 +1036,12 @@ static db_err row_merge_read_clustered_index(
 
       /* The buffer must be sufficiently large
       to hold at least one record. */
-      ut_ad(buf->n_tuples || !has_next);
+      ut_ad(buf->n_recs || !has_next);
 
-      /* We have enough data tuples to form a block.
+      /* We have enough data rows to form a block.
       Sort them and write to disk. */
 
-      if (buf->n_tuples) {
+      if (buf->n_recs) {
         if (dict_index_is_unique(index)) {
           row_merge_dup_t dup;
           dup.index = buf->index;
@@ -1568,8 +1482,8 @@ static void row_merge_copy_blobs(
   }
 }
 
-/** Read sorted file containing index data tuples and insert these data
-tuples to the index
+/** Read sorted file containing index data rows and insert these data
+rows to the index
 @return	DB_SUCCESS or error number */
 static db_err row_merge_insert_index_tuples(
   trx_t *trx,          /*!< in: transaction */

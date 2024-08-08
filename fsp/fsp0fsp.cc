@@ -667,7 +667,7 @@ static void fsp_init_file_page_low(buf_block_t *block) {
   mach_write_to_4(page + FIL_PAGE_OFFSET, block->get_page_no());
   memset(page + FIL_PAGE_LSN, 0, 8);
   mach_write_to_4(page + FIL_PAGE_SPACE_ID, block->get_space());
-  memset(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM, 0, 8);
+  memset(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM, 0, 8);
   mach_write_to_4(page + FIL_PAGE_SPACE_ID, block->get_space());
 }
 
@@ -696,11 +696,7 @@ byte *fsp_parse_init_file_page(byte *ptr, byte *end_ptr __attribute__((unused)),
 void fsp_init() { }
 
 void fsp_header_init_fields(page_t *page, space_id_t space_id, ulint flags) {
-  /* The tablespace flags (FSP_SPACE_FLAGS) should be 0 for
-  ROW_FORMAT=COMPACT (table->flags == DICT_TF_COMPACT) and
-  ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other
-  format, the tablespace flags should equal table->flags. */
-  ut_a(flags != DICT_TF_COMPACT);
+  ut_a(flags == DICT_TF_FORMAT_V1);
 
   mach_write_to_4(FSP_HEADER_OFFSET + FSP_SPACE_ID + page, space_id);
   mach_write_to_4(FSP_HEADER_OFFSET + FSP_SPACE_FLAGS + page, flags);

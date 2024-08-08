@@ -79,7 +79,6 @@ char *dict_get_first_table_name_in_db(const char *name) {
 
   sys_tables = dict_table_get_low("SYS_TABLES");
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
-  ut_a(!dict_table_is_comp(sys_tables));
 
   tuple = dtuple_create(heap, 1);
   dfield = dtuple_get_nth_field(tuple, 0);
@@ -101,7 +100,7 @@ loop:
     return (nullptr);
   }
 
-  field = rec_get_nth_field_old(rec, 0, &len);
+  field = rec_get_nth_field(rec, 0, &len);
 
   if (len < strlen(name) || memcmp(name, field, strlen(name)) != 0) {
     /* Not found */
@@ -113,7 +112,7 @@ loop:
     return (nullptr);
   }
 
-  if (!rec_get_deleted_flag(rec, 0)) {
+  if (!rec_get_deleted_flag(rec)) {
 
     /* We found one */
 
@@ -179,9 +178,9 @@ loop:
     return;
   }
 
-  field = rec_get_nth_field_old(rec, 0, &len);
+  field = rec_get_nth_field(rec, 0, &len);
 
-  if (!rec_get_deleted_flag(rec, 0)) {
+  if (!rec_get_deleted_flag(rec)) {
 
     /* We found one */
 
@@ -228,47 +227,31 @@ static ulint dict_sys_tables_get_flags(const rec_t *rec) {
   ulint n_cols;
   ulint flags;
 
-  field = rec_get_nth_field_old(rec, 5, &len);
+  field = rec_get_nth_field(rec, 5, &len);
   ut_a(len == 4);
 
   flags = mach_read_from_4(field);
 
   if (likely(flags == DICT_TABLE_ORDINARY)) {
-    return (0);
+    return 0;
   }
 
-  field = rec_get_nth_field_old(rec, 4 /*N_COLS*/, &len);
+  field = rec_get_nth_field(rec, 4 /*N_COLS*/, &len);
   n_cols = mach_read_from_4(field);
 
   if (unlikely(!(n_cols & 0x80000000UL))) {
     /* New file formats require ROW_FORMAT=COMPACT. */
-    return (ULINT_UNDEFINED);
+    return ULINT_UNDEFINED;
   }
 
-  switch (flags & (DICT_TF_FORMAT_MASK | DICT_TF_COMPACT)) {
-    default:
-    case DICT_TF_FORMAT_51 << DICT_TF_FORMAT_SHIFT:
-    case DICT_TF_FORMAT_51 << DICT_TF_FORMAT_SHIFT | DICT_TF_COMPACT:
-      /* flags should be DICT_TABLE_ORDINARY,
-    or DICT_TF_FORMAT_MASK should be nonzero. */
-      return (ULINT_UNDEFINED);
-
-    case DICT_TF_FORMAT_V1 << DICT_TF_FORMAT_SHIFT | DICT_TF_COMPACT:
-      static_assert(
-        DICT_TF_FORMAT_MAX <= DICT_TF_FORMAT_V1,
-        "error missing case labels for DICT_TF_FORMAT_V1 .. "
-        "DICT_TF_FORMAT_MAX"
-      );
-      /* We support this format. */
-      break;
-  }
+  ut_a(flags == DICT_TF_FORMAT_V1);
 
   if (unlikely(flags & (~0UL << DICT_TF_BITS))) {
     /* Some unused bits are set. */
-    return (ULINT_UNDEFINED);
+    return ULINT_UNDEFINED;
+  } else {
+    return flags;
   }
-
-  return (flags);
 }
 
 void dict_check_tablespaces_and_store_max_id(bool in_crash_recovery) {
@@ -285,7 +268,6 @@ void dict_check_tablespaces_and_store_max_id(bool in_crash_recovery) {
 
   sys_tables = dict_table_get_low("SYS_TABLES");
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
-  ut_a(!dict_table_is_comp(sys_tables));
 
   pcur.open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
@@ -312,7 +294,7 @@ loop:
     return;
   }
 
-  if (!rec_get_deleted_flag(rec, 0)) {
+  if (!rec_get_deleted_flag(rec)) {
 
     /* We found one */
     const byte *field;
@@ -321,13 +303,13 @@ loop:
     ulint flags;
     char *name;
 
-    field = rec_get_nth_field_old(rec, 0, &len);
+    field = rec_get_nth_field(rec, 0, &len);
     name = mem_strdupl((char *)field, len);
 
     flags = dict_sys_tables_get_flags(rec);
     if (flags == ULINT_UNDEFINED) {
 
-      field = rec_get_nth_field_old(rec, 5, &len);
+      field = rec_get_nth_field(rec, 5, &len);
       flags = mach_read_from_4(field);
 
       ut_print_timestamp(ib_stream);
@@ -344,7 +326,7 @@ loop:
       goto loop;
     }
 
-    field = rec_get_nth_field_old(rec, 9, &len);
+    field = rec_get_nth_field(rec, 9, &len);
     ut_a(len == 4);
 
     space_id = mach_read_from_4(field);
@@ -361,11 +343,11 @@ loop:
       Do not print warnings for temporary tables. */
       bool is_temp;
 
-      field = rec_get_nth_field_old(rec, 4, &len);
+      field = rec_get_nth_field(rec, 4, &len);
       if (0x80000000UL & mach_read_from_4(field)) {
         /* ROW_FORMAT=COMPACT: read the is_temp
         flag from SYS_TABLES.MIX_LEN. */
-        field = rec_get_nth_field_old(rec, 7, &len);
+        field = rec_get_nth_field(rec, 7, &len);
         is_temp = mach_read_from_4(field) & DICT_TF2_TEMPORARY;
       } else {
         /* For tables created with old versions
@@ -428,7 +410,6 @@ static void dict_load_columns(dict_table_t *table, mem_heap_t *heap) {
 
   sys_columns = dict_table_get_low("SYS_COLUMNS");
   sys_index = UT_LIST_GET_FIRST(sys_columns->indexes);
-  ut_a(!dict_table_is_comp(sys_columns));
 
   tuple = dtuple_create(heap, 1);
   dfield = dtuple_get_nth_field(tuple, 0);
@@ -447,25 +428,25 @@ static void dict_load_columns(dict_table_t *table, mem_heap_t *heap) {
 
     ut_a(pcur.is_on_user_rec());
 
-    ut_a(!rec_get_deleted_flag(rec, 0));
+    ut_a(!rec_get_deleted_flag(rec));
 
-    field = rec_get_nth_field_old(rec, 0, &len);
+    field = rec_get_nth_field(rec, 0, &len);
     ut_ad(len == 8);
     ut_a(table->id == mach_read_from_8(field));
 
-    field = rec_get_nth_field_old(rec, 1, &len);
+    field = rec_get_nth_field(rec, 1, &len);
     ut_ad(len == 4);
     ut_a(i == mach_read_from_4(field));
 
     ut_a(name_of_col_is(sys_columns, sys_index, 4, "NAME"));
 
-    field = rec_get_nth_field_old(rec, 4, &len);
+    field = rec_get_nth_field(rec, 4, &len);
     name = mem_heap_strdupl(heap, (char *)field, len);
 
-    field = rec_get_nth_field_old(rec, 5, &len);
+    field = rec_get_nth_field(rec, 5, &len);
     mtype = mach_read_from_4(field);
 
-    field = rec_get_nth_field_old(rec, 6, &len);
+    field = rec_get_nth_field(rec, 6, &len);
     prtype = mach_read_from_4(field);
 
     if (dtype_get_charset_coll(prtype) == 0 && dtype_is_string_type(mtype)) {
@@ -484,7 +465,7 @@ static void dict_load_columns(dict_table_t *table, mem_heap_t *heap) {
       }
     }
 
-    field = rec_get_nth_field_old(rec, 7, &len);
+    field = rec_get_nth_field(rec, 7, &len);
     col_len = mach_read_from_4(field);
 
     ut_a(name_of_col_is(sys_columns, sys_index, 8, "PREC"));
@@ -523,7 +504,6 @@ static void dict_load_fields(dict_index_t *index, mem_heap_t *heap) {
 
   sys_fields = dict_table_get_low("SYS_FIELDS");
   sys_index = UT_LIST_GET_FIRST(sys_fields->indexes);
-  ut_a(!dict_table_is_comp(sys_fields));
 
   tuple = dtuple_create(heap, 1);
   dfield = dtuple_get_nth_field(tuple, 0);
@@ -546,15 +526,15 @@ static void dict_load_fields(dict_index_t *index, mem_heap_t *heap) {
     because SYS_FIELDS.INDEX_ID can be updated
     by ALTER TABLE ADD INDEX. */
 
-    if (rec_get_deleted_flag(rec, 0)) {
+    if (rec_get_deleted_flag(rec)) {
 
       goto next_rec;
     }
 
-    field = rec_get_nth_field_old(rec, 0, &len);
+    field = rec_get_nth_field(rec, 0, &len);
     ut_ad(len == 8);
 
-    field = rec_get_nth_field_old(rec, 1, &len);
+    field = rec_get_nth_field(rec, 1, &len);
     ut_a(len == 4);
 
     /* The next field stores the field position in the index
@@ -578,7 +558,7 @@ static void dict_load_fields(dict_index_t *index, mem_heap_t *heap) {
 
     ut_a(name_of_col_is(sys_fields, sys_index, 4, "COL_NAME"));
 
-    field = rec_get_nth_field_old(rec, 4, &len);
+    field = rec_get_nth_field(rec, 4, &len);
 
     dict_mem_index_add_field(index, mem_heap_strdupl(heap, (char *)field, len), prefix_len);
 
@@ -628,7 +608,6 @@ static ulint dict_load_indexes(dict_table_t *table, mem_heap_t *heap) {
 
   sys_indexes = dict_table_get_low("SYS_INDEXES");
   sys_index = UT_LIST_GET_FIRST(sys_indexes->indexes);
-  ut_a(!dict_table_is_comp(sys_indexes));
 
   tuple = dtuple_create(heap, 1);
   dfield = dtuple_get_nth_field(tuple, 0);
@@ -649,37 +628,37 @@ static ulint dict_load_indexes(dict_table_t *table, mem_heap_t *heap) {
 
     rec = pcur.get_rec();
 
-    field = rec_get_nth_field_old(rec, 0, &len);
+    field = rec_get_nth_field(rec, 0, &len);
     ut_ad(len == 8);
 
     if (memcmp(buf, field, len) != 0) {
       break;
-    } else if (rec_get_deleted_flag(rec, 0)) {
+    } else if (rec_get_deleted_flag(rec)) {
       /* Skip delete marked records */
       goto next_rec;
     }
 
-    field = rec_get_nth_field_old(rec, 1, &len);
+    field = rec_get_nth_field(rec, 1, &len);
     ut_ad(len == 8);
     id = mach_read_from_8(field);
 
     ut_a(name_of_col_is(sys_indexes, sys_index, 4, "NAME"));
 
-    field = rec_get_nth_field_old(rec, 4, &name_len);
+    field = rec_get_nth_field(rec, 4, &name_len);
     name_buf = mem_heap_strdupl(heap, (char *)field, name_len);
 
-    field = rec_get_nth_field_old(rec, 5, &len);
+    field = rec_get_nth_field(rec, 5, &len);
     n_fields = mach_read_from_4(field);
 
-    field = rec_get_nth_field_old(rec, 6, &len);
+    field = rec_get_nth_field(rec, 6, &len);
     type = mach_read_from_4(field);
 
-    field = rec_get_nth_field_old(rec, 7, &len);
+    field = rec_get_nth_field(rec, 7, &len);
     space = mach_read_from_4(field);
 
     ut_a(name_of_col_is(sys_indexes, sys_index, 8, "PAGE_NO"));
 
-    field = rec_get_nth_field_old(rec, 8, &len);
+    field = rec_get_nth_field(rec, 8, &len);
     page_no = mach_read_from_4(field);
 
     /* We check for unsupported types first, so that the
@@ -784,7 +763,6 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
 
   sys_tables = dict_table_get_low("SYS_TABLES");
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
-  ut_a(!dict_table_is_comp(sys_tables));
 
   tuple = dtuple_create(heap, 1);
   dfield = dtuple_get_nth_field(tuple, 0);
@@ -795,7 +773,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
   pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
   rec = pcur.get_rec();
 
-  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec, 0)) {
+  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec)) {
     /* Not found */
   err_exit:
     pcur.close();
@@ -805,7 +783,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
     return (nullptr);
   }
 
-  field = rec_get_nth_field_old(rec, 0, &len);
+  field = rec_get_nth_field(rec, 0, &len);
 
   /* Check if the table name in record is the searched one */
   if (len != strlen(name) || memcmp(name, field, len) != 0) {
@@ -815,7 +793,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
 
   ut_a(name_of_col_is(sys_tables, sys_index, 9, "SPACE"));
 
-  field = rec_get_nth_field_old(rec, 9, &len);
+  field = rec_get_nth_field(rec, 9, &len);
   space = mach_read_from_4(field);
 
   /* Check if the tablespace exists and has the right name */
@@ -823,7 +801,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
     flags = dict_sys_tables_get_flags(rec);
 
     if (unlikely(flags == ULINT_UNDEFINED)) {
-      field = rec_get_nth_field_old(rec, 5, &len);
+      field = rec_get_nth_field(rec, 5, &len);
       flags = mach_read_from_4(field);
 
       ut_print_timestamp(ib_stream);
@@ -845,41 +823,11 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
 
   ut_a(name_of_col_is(sys_tables, sys_index, 4, "N_COLS"));
 
-  field = rec_get_nth_field_old(rec, 4, &len);
+  field = rec_get_nth_field(rec, 4, &len);
   n_cols = mach_read_from_4(field);
 
-  /* The high-order bit of N_COLS is the "compact format" flag.
-  For tables in that format, MIX_LEN may hold additional flags. */
-  if (n_cols & 0x80000000UL) {
-    ulint flags2;
-
-    flags |= DICT_TF_COMPACT;
-
-    ut_a(name_of_col_is(sys_tables, sys_index, 7, "MIX_LEN"));
-    field = rec_get_nth_field_old(rec, 7, &len);
-
-    flags2 = mach_read_from_4(field);
-
-    if (flags2 & (~0UL << (DICT_TF2_BITS - DICT_TF2_SHIFT))) {
-      ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  Warning: table ");
-      ut_print_filename(ib_stream, name);
-      ib_logger(
-        ib_stream,
-        "\n"
-        "in InnoDB data dictionary"
-        " has unknown flags %lx.\n",
-        (ulong)flags2
-      );
-
-      flags2 &= ~(~0UL << (DICT_TF2_BITS - DICT_TF2_SHIFT));
-    }
-
-    flags |= flags2 << DICT_TF2_SHIFT;
-  }
-
   /* See if the tablespace is available. */
-  if (space == 0) {
+  if (space == SYS_TABLESPACE) {
     /* The system tablespace is always available. */
   } else if (!srv_fil->space_for_table_exists_in_mem(space, name, (flags >> DICT_TF2_SHIFT) & DICT_TF2_TEMPORARY, false, false)) {
 
@@ -913,7 +861,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
 
   ut_a(name_of_col_is(sys_tables, sys_index, 3, "ID"));
 
-  field = rec_get_nth_field_old(rec, 3, &len);
+  field = rec_get_nth_field(rec, 3, &len);
   table->id = mach_read_from_8(field);
 
   pcur.close();
@@ -991,7 +939,6 @@ dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
   /* Get the secondary index based on ID for table SYS_TABLES */
   sys_tables = dict_sys->sys_tables;
   sys_table_ids = dict_table_get_next_index(dict_table_get_first_index(sys_tables));
-  ut_a(!dict_table_is_comp(sys_tables));
   heap = mem_heap_create(256);
 
   tuple = dtuple_create(heap, 1);
@@ -1007,7 +954,7 @@ dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
 
   rec = pcur.get_rec();
 
-  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec, 0)) {
+  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec)) {
     /* Not found */
 
     pcur.close();
@@ -1022,7 +969,7 @@ dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
   table ID and NAME */
 
   rec = pcur.get_rec();
-  field = rec_get_nth_field_old(rec, 0, &len);
+  field = rec_get_nth_field(rec, 0, &len);
   ut_ad(len == 8);
 
   /* Check if the table id in record is the one searched for */
@@ -1036,7 +983,7 @@ dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
   }
 
   /* Now we get the table name from the record */
-  field = rec_get_nth_field_old(rec, 1, &len);
+  field = rec_get_nth_field(rec, 1, &len);
   /* Load the table definition to memory */
   table = dict_load_table(recovery, mem_heap_strdupl(heap, (char *)field, len));
 
@@ -1084,7 +1031,6 @@ static void dict_load_foreign_cols(const char *id, dict_foreign_t *foreign) {
 
   sys_foreign_cols = dict_table_get_low("SYS_FOREIGN_COLS");
   sys_index = UT_LIST_GET_FIRST(sys_foreign_cols->indexes);
-  ut_a(!dict_table_is_comp(sys_foreign_cols));
 
   tuple = dtuple_create(foreign->heap, 1);
   dfield = dtuple_get_nth_field(tuple, 0);
@@ -1099,20 +1045,20 @@ static void dict_load_foreign_cols(const char *id, dict_foreign_t *foreign) {
     rec = pcur.get_rec();
 
     ut_a(pcur.is_on_user_rec());
-    ut_a(!rec_get_deleted_flag(rec, 0));
+    ut_a(!rec_get_deleted_flag(rec));
 
-    field = rec_get_nth_field_old(rec, 0, &len);
+    field = rec_get_nth_field(rec, 0, &len);
     ut_a(len == strlen(id));
     ut_a(memcmp(id, field, len) == 0);
 
-    field = rec_get_nth_field_old(rec, 1, &len);
+    field = rec_get_nth_field(rec, 1, &len);
     ut_a(len == 4);
     ut_a(i == mach_read_from_4(field));
 
-    field = rec_get_nth_field_old(rec, 4, &len);
+    field = rec_get_nth_field(rec, 4, &len);
     foreign->foreign_col_names[i] = mem_heap_strdupl(foreign->heap, (char *)field, len);
 
-    field = rec_get_nth_field_old(rec, 5, &len);
+    field = rec_get_nth_field(rec, 5, &len);
     foreign->referenced_col_names[i] = mem_heap_strdupl(foreign->heap, (char *)field, len);
 
     pcur.move_to_next_user_rec(&mtr);
@@ -1153,7 +1099,6 @@ static db_err dict_load_foreign(const char *id, bool check_charsets) {
 
   sys_foreign = dict_table_get_low("SYS_FOREIGN");
   sys_index = UT_LIST_GET_FIRST(sys_foreign->indexes);
-  ut_a(!dict_table_is_comp(sys_foreign));
 
   tuple = dtuple_create(heap2, 1);
   dfield = dtuple_get_nth_field(tuple, 0);
@@ -1164,7 +1109,7 @@ static db_err dict_load_foreign(const char *id, bool check_charsets) {
   pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Source_location{});
   rec = pcur.get_rec();
 
-  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec, 0)) {
+  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec)) {
     /* Not found */
 
     ib_logger(ib_stream, "Error A: cannot load foreign constraint %s\n", id);
@@ -1176,7 +1121,7 @@ static db_err dict_load_foreign(const char *id, bool check_charsets) {
     return DB_ERROR;
   }
 
-  field = rec_get_nth_field_old(rec, 0, &len);
+  field = rec_get_nth_field(rec, 0, &len);
 
   /* Check if the id in record is the searched one */
   if (len != strlen(id) || memcmp(id, field, len) != 0) {
@@ -1197,7 +1142,7 @@ static db_err dict_load_foreign(const char *id, bool check_charsets) {
 
   foreign = dict_mem_foreign_create();
 
-  n_fields_and_type = mach_read_from_4(rec_get_nth_field_old(rec, 5, &len));
+  n_fields_and_type = mach_read_from_4(rec_get_nth_field(rec, 5, &len));
 
   ut_a(len == 4);
 
@@ -1208,10 +1153,10 @@ static db_err dict_load_foreign(const char *id, bool check_charsets) {
 
   foreign->id = mem_heap_strdup(foreign->heap, id);
 
-  field = rec_get_nth_field_old(rec, 3, &len);
+  field = rec_get_nth_field(rec, 3, &len);
   foreign->foreign_table_name = mem_heap_strdupl(foreign->heap, (char *)field, len);
 
-  field = rec_get_nth_field_old(rec, 4, &len);
+  field = rec_get_nth_field(rec, 4, &len);
   foreign->referenced_table_name = mem_heap_strdupl(foreign->heap, (char *)field, len);
 
   pcur.close();
@@ -1266,7 +1211,6 @@ db_err dict_load_foreigns(const char *table_name, bool check_charsets) {
     return (DB_ERROR);
   }
 
-  ut_a(!dict_table_is_comp(sys_foreign));
   mtr_start(&mtr);
 
   /* Get the secondary index based on FOR_NAME from table
@@ -1299,7 +1243,7 @@ loop:
   name and a foreign constraint ID */
 
   rec = pcur.get_rec();
-  field = rec_get_nth_field_old(rec, 0, &len);
+  field = rec_get_nth_field(rec, 0, &len);
 
   /* Check if the table name in the record is the one searched for; the
   following call does the comparison in the latin1_swedish_ci
@@ -1322,13 +1266,13 @@ loop:
     goto next_rec;
   }
 
-  if (rec_get_deleted_flag(rec, 0)) {
+  if (rec_get_deleted_flag(rec)) {
 
     goto next_rec;
   }
 
   /* Now we get a foreign key constraint id */
-  field = rec_get_nth_field_old(rec, 1, &len);
+  field = rec_get_nth_field(rec, 1, &len);
   id = mem_heap_strdupl(heap, (char *)field, len);
 
   pcur.store_position(&mtr);

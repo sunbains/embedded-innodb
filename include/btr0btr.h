@@ -193,11 +193,10 @@ void btr_discard_page(btr_cur_t *cursor, mtr_t *mtr);
 minimum record.
 @param[in,out] ptr,             Buffer
 @param[in,out] end_ptr          Buffer end
-@param[in,out] comp             Nonzero=compact page format
 @param[in,out] page             Page or nullptr
 @param[in,out] mtr              Mini-transaction or nullptr
 @return	end of log record or nullptr */
-byte *btr_parse_set_min_rec_mark(byte *ptr, byte *end_ptr, ulint comp, page_t *page, mtr_t *mtr);
+byte *btr_parse_set_min_rec_mark(byte *ptr, byte *end_ptr, page_t *page, mtr_t *mtr);
 
 /** Parses a redo log record of reorganizing a page.
 @param[in,out] ptr              Buffer
@@ -340,6 +339,9 @@ inline ulint btr_page_get_level(const page_t *page, mtr_t *) {
 inline void btr_page_set_level(page_t *page, ulint level, mtr_t *mtr) {
   ut_ad(level <= BTR_MAX_DEPTH);
 
+  /** 16 levels is a very big tree. */
+  ut_ad(level < 16);
+
   mlog_write_ulint(page + (PAGE_HEADER + PAGE_LEVEL), level, MLOG_2BYTES, mtr);
 }
 
@@ -379,13 +381,11 @@ inline void btr_page_set_prev(page_t *page, ulint prev, mtr_t *mtr) {
 NOTE: the offsets array must contain all offsets for the record since
 we read the last field according to offsets and assume that it contains
 the child page number. In other words offsets must have been retrieved
-with rec_get_offsets(n_fields=ULINT_UNDEFINED).
+with Phy_rec::get_col_offsets(n_fields=ULINT_UNDEFINED).
 @param[in] rec,                 Node pointer record 
-@param[in] offsets              Array returned by rec_get_offsets()
+@param[in] offsets              Array returned by Phy_rec::get_col_offsets()
 @return	child node address */
 inline ulint btr_node_ptr_get_child_page_no(const rec_t *rec, const ulint *offsets) {
-  ut_ad(!rec_offs_comp(offsets) || rec_get_node_ptr_flag(rec));
-
   ulint len;
 
   /* The child address is in the last field */

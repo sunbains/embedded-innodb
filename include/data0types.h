@@ -243,7 +243,7 @@ struct dtuple_t {
   /** Compare a data tuple to a physical record.
   @param[in]    rec             record
   @param[in]    index           index
-  @param[in]    offsets         rec_get_offsets(rec)
+  @param[in]    offsets         Phy_rec::get_col_offsets(rec)
   @param[in,out]        matched_fields  number of completely matched fields
   @return the comparison result of dtuple and rec
   @retval 0 if dtuple is equal to rec
@@ -254,7 +254,7 @@ struct dtuple_t {
   /** Compare a data tuple to a physical record.
   @param[in]    rec             record
   @param[in]    index           index
-  @param[in]    offsets         rec_get_offsets(rec)
+  @param[in]    offsets         Phy_rec::get_col_offsets(rec)
   @return the comparison result of dtuple and rec
   @retval 0 if dtuple is equal to rec
   @retval negative if dtuple is less than rec

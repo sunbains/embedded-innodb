@@ -407,7 +407,7 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
     ib_logger(ib_stream, "\n tuple ");
     dtuple_print(ib_stream, entry);
     ib_logger(ib_stream, "\n record ");
-    rec_print(ib_stream, pcur.get_rec(), index);
+    rec_print(pcur.get_rec());
     ib_logger(ib_stream, "\n");
     trx_print(ib_stream, trx, 0);
     ib_logger(ib_stream, "\nSubmit a detailed bug report, check the TBD website for details");

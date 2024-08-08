@@ -49,7 +49,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(
   const rec_t *rec,    /*!< in: record in a secondary index */
   dict_index_t *index, /*!< in: the secondary index */
   const ulint *offsets
-) /*!< in: rec_get_offsets(rec, index) */
+) /*!< in: Phy_rec::get_col_offsets(index, rec) */
 {
   dict_index_t *clust_index;
   rec_t *clust_rec;
@@ -65,7 +65,6 @@ trx_t *row_vers_impl_x_locked_off_kernel(
   ulint rec_del;
   ulint err;
   mtr_t mtr;
-  ulint comp;
 
   ut_ad(mutex_own(&kernel_mutex));
 #ifdef UNIV_SYNC_DEBUG
@@ -103,7 +102,13 @@ trx_t *row_vers_impl_x_locked_off_kernel(
   }
 
   heap = mem_heap_create(1024);
-  clust_offsets = rec_get_offsets(clust_rec, clust_index, nullptr, ULINT_UNDEFINED, &heap);
+
+  {
+    Phy_rec record{clust_index, clust_rec};
+
+    clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+  }
+
   trx_id = row_get_rec_trx_id(clust_rec, clust_index, clust_offsets);
 
   mtr_s_lock(&(purge_sys->latch), &mtr);
@@ -122,10 +127,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(
     goto exit_func;
   }
 
-  comp = page_rec_is_comp(rec);
   ut_ad(index->table == clust_index->table);
-  ut_ad(!!comp == dict_table_is_comp(index->table));
-  ut_ad(!comp == !page_rec_is_comp(clust_rec));
 
   /* We look up if some earlier version, which was modified by the trx_id
   transaction, of the clustered index record would require rec to be in
@@ -136,7 +138,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(
   different state, then the trx_id transaction has not yet had time to
   modify rec, and does not necessarily have an implicit x-lock on rec. */
 
-  rec_del = rec_get_deleted_flag(rec, comp);
+  rec_del = rec_get_deleted_flag(rec);
   trx = nullptr;
 
   version = clust_rec;
@@ -184,9 +186,13 @@ trx_t *row_vers_impl_x_locked_off_kernel(
       break;
     }
 
-    clust_offsets = rec_get_offsets(prev_version, clust_index, nullptr, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record{clust_index, prev_version};
 
-    vers_del = rec_get_deleted_flag(prev_version, comp);
+      clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+    }
+
+    vers_del = rec_get_deleted_flag(prev_version);
     prev_trx_id = row_get_rec_trx_id(prev_version, clust_index, clust_offsets);
 
     /* If the trx_id and prev_trx_id are different and if
@@ -337,7 +343,6 @@ bool row_vers_old_has_index_entry(
   const dtuple_t *row;
   const dtuple_t *entry;
   ulint err;
-  ulint comp;
 
   ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_X_FIX) || mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_S_FIX));
 #ifdef UNIV_SYNC_DEBUG
@@ -347,12 +352,16 @@ bool row_vers_old_has_index_entry(
 
   clust_index = dict_table_get_first_index(index->table);
 
-  comp = page_rec_is_comp(rec);
-  ut_ad(!dict_table_is_comp(index->table) == !comp);
   heap = mem_heap_create(1024);
-  clust_offsets = rec_get_offsets(rec, clust_index, nullptr, ULINT_UNDEFINED, &heap);
 
-  if (also_curr && !rec_get_deleted_flag(rec, comp)) {
+  {
+    Phy_rec record{clust_index, rec};
+
+    clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+  }
+
+
+  if (also_curr && !rec_get_deleted_flag(rec)) {
     row_ext_t *ext;
 
     /* The stack of versions is locked by mtr.
@@ -406,9 +415,13 @@ bool row_vers_old_has_index_entry(
       return (false);
     }
 
-    clust_offsets = rec_get_offsets(prev_version, clust_index, nullptr, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record{clust_index, prev_version};
 
-    if (!rec_get_deleted_flag(prev_version, comp)) {
+      clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+    }
+
+    if (!rec_get_deleted_flag(prev_version)) {
       row_ext_t *ext;
 
       /* The stack of versions is locked by mtr.
@@ -454,7 +467,7 @@ db_err row_vers_build_for_consistent_read(
   mtr_t *mtr,               /*!< in: mtr holding the latch on rec */
   dict_index_t *index,      /*!< in: the clustered index */
   ulint **offsets,          /*!< in/out: offsets returned by
-                              rec_get_offsets(rec, index) */
+                              Phy_rec::get_col_offsets(index, rec) */
   read_view_t *view,        /*!< in: the consistent read view */
   mem_heap_t **offset_heap, /*!< in/out: memory heap from which
                           the offsets are allocated */
@@ -514,7 +527,7 @@ db_err row_vers_build_for_consistent_read(
 
         buf = mem_heap_alloc(in_heap, rec_offs_size(*offsets));
         *old_vers = rec_copy(buf, version, *offsets);
-        rec_offs_make_valid(*old_vers, index, *offsets);
+        ut_d(rec_offs_make_valid(*old_vers, index, *offsets));
         err = DB_SUCCESS;
 
         break;
@@ -539,7 +552,11 @@ db_err row_vers_build_for_consistent_read(
       break;
     }
 
-    *offsets = rec_get_offsets(prev_version, index, *offsets, ULINT_UNDEFINED, offset_heap);
+    {
+      Phy_rec record{index, prev_version};
+
+      *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Source_location{});
+    }
 
     trx_id = row_get_rec_trx_id(prev_version, index, *offsets);
 
@@ -550,7 +567,7 @@ db_err row_vers_build_for_consistent_read(
 
       buf = mem_heap_alloc(in_heap, rec_offs_size(*offsets));
       *old_vers = rec_copy(buf, prev_version, *offsets);
-      rec_offs_make_valid(*old_vers, index, *offsets);
+      ut_d(rec_offs_make_valid(*old_vers, index, *offsets));
       err = DB_SUCCESS;
 
       break;
@@ -576,8 +593,7 @@ ulint row_vers_build_for_semi_consistent_read(
                               of this records */
   mtr_t *mtr,               /*!< in: mtr holding the latch on rec */
   dict_index_t *index,      /*!< in: the clustered index */
-  ulint **offsets,          /*!< in/out: offsets returned by
-                              rec_get_offsets(rec, index) */
+  ulint **offsets,          /*!< in/out: offsets returned by Phy_rec::get_col_offsets(index, rec) */
   mem_heap_t **offset_heap, /*!< in/out: memory heap from which
                           the offsets are allocated */
   mem_heap_t *in_heap,      /*!< in: memory heap from which the memory for
@@ -649,12 +665,17 @@ ulint row_vers_build_for_semi_consistent_read(
         semi-consistent read. */
 
         version = rec;
-        *offsets = rec_get_offsets(version, index, *offsets, ULINT_UNDEFINED, offset_heap);
+
+        {
+          Phy_rec record{index, version};
+
+          *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Source_location{});
+        }
       }
 
       buf = mem_heap_alloc(in_heap, rec_offs_size(*offsets));
       *old_vers = rec_copy(buf, version, *offsets);
-      rec_offs_make_valid(*old_vers, index, *offsets);
+      ut_d(rec_offs_make_valid(*old_vers, index, *offsets));
       err = DB_SUCCESS;
 
       break;
@@ -681,7 +702,12 @@ ulint row_vers_build_for_semi_consistent_read(
     }
 
     version = prev_version;
-    *offsets = rec_get_offsets(version, index, *offsets, ULINT_UNDEFINED, offset_heap);
+
+    {
+      Phy_rec record{index, version};
+
+      *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Source_location{});
+    }
   } /* for (;;) */
 
   if (heap) {

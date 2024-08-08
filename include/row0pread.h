@@ -182,7 +182,6 @@ class Parallel_reader {
            size_t partition_id = std::numeric_limits<size_t>::max())
         : m_scan_range(scan_range),
           m_index(index),
-          m_is_compact(dict_table_is_comp(index->table)),
           m_page_size(UNIV_PAGE_SIZE),
           m_read_level(read_level),
           m_partition_id(partition_id) {}
@@ -198,9 +197,6 @@ class Parallel_reader {
 
     /** (Cluster) Index in table to scan. */
     dict_index_t *m_index{};
-
-    /** Row format of table. */
-    const bool m_is_compact{};
 
     /** Tablespace page size. */
     const ulint m_page_size;

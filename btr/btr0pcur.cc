@@ -183,9 +183,11 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
 
 #ifdef UNIV_DEBUG
         auto rec = get_rec();
+        Phy_rec record(index, rec);
+        Phy_rec old_record(index, m_old_rec);
         auto heap = mem_heap_create(256);
-        auto offsets1 = rec_get_offsets(m_old_rec, index, nullptr, m_old_n_fields, &heap);
-        auto offsets2 = rec_get_offsets(rec, index, nullptr, m_old_n_fields, &heap);
+        auto offsets2 = record.get_col_offsets(nullptr, m_old_n_fields, &heap, Source_location{});
+        auto offsets1 = old_record.get_col_offsets(nullptr, m_old_n_fields, &heap, Source_location{});
 
         ut_ad(!cmp_rec_rec(m_old_rec, rec, offsets1, offsets2, index));
         mem_heap_free(heap);
@@ -230,9 +232,16 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
   m_search_mode = old_search_mode;
 
   bool ret;
+  ulint *offsets{};
+  auto rec = get_rec();
 
-  if (m_rel_pos == Btree_cursor_pos::ON && is_on_user_rec() &&
-      cmp_dtuple_rec(index->cmp_ctx, tuple, get_rec(), rec_get_offsets(get_rec(), index, nullptr, ULINT_UNDEFINED, &heap)) == 0) {
+  {
+    Phy_rec record(index, rec);
+
+    offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+  }
+
+  if (m_rel_pos == Btree_cursor_pos::ON && is_on_user_rec() && cmp_dtuple_rec(index->cmp_ctx, tuple, rec, offsets) == 0) {
 
     /* We have to store the NEW value for the modify clock, since
     the cursor can now be on a different page! But we can retain
@@ -289,7 +298,6 @@ void btr_pcur_t::move_to_next_page(mtr_t *mtr) {
   auto next_page = next_block->get_frame();
 
 #ifdef UNIV_BTR_DEBUG
-  ut_a(page_is_comp(next_page) == page_is_comp(page));
   ut_a(btr_page_get_prev(next_page, mtr) == get_block()->get_page_no());
 #endif /* UNIV_BTR_DEBUG */
 

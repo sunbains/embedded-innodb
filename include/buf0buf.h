@@ -414,7 +414,7 @@ inline bool buf_page_is_old(const buf_page_t *bpage) {
  * @param bpage Pointer to the control block.
  * @param old Flag indicating if the block is old.
  */
-inline void buf_page_set_old(buf_page_t *bpage, bool old) {
+inline void buf_page_set(buf_page_t *bpage, bool old) {
   ut_a(bpage->in_file());
   ut_ad(buf_pool_mutex_own());
   ut_ad(bpage->m_in_LRU_list);

@@ -459,26 +459,19 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n
   big_rec_t *vector;
   dfield_t *dfield;
   dict_field_t *ifield;
-  ulint size;
   ulint n_fields;
-  ulint local_len;
   ulint local_prefix_len;
 
   if (unlikely(!dict_index_is_clust(index))) {
     return (nullptr);
   }
 
-  if (dict_table_get_format(index->table) < DICT_TF_FORMAT_V1) {
-    /* up to v5.1: store a 768-byte prefix locally */
-    local_len = BTR_EXTERN_FIELD_REF_SIZE + DICT_MAX_INDEX_COL_LEN;
-  } else {
-    /* new-format table: do not store any BLOB prefix locally */
-    local_len = BTR_EXTERN_FIELD_REF_SIZE;
-  }
+  ut_a(dict_table_get_format(index->table) == DICT_TF_FORMAT_V1);
+  auto local_len = BTR_EXTERN_FIELD_REF_SIZE + DICT_MAX_INDEX_COL_LEN;
 
   ut_a(dtuple_check_typed_no_assert(entry));
 
-  size = rec_get_converted_size(index, entry, *n_ext);
+  auto size = rec_get_converted_size(index, entry, *n_ext);
 
   if (unlikely(size > 1000000000)) {
     ib_logger(ib_stream, "Warning: tuple size very big: %lu\n", (ulong)size);
@@ -500,7 +493,7 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n
 
   n_fields = 0;
 
-  while (page_rec_needs_ext(rec_get_converted_size(index, entry, *n_ext), dict_table_is_comp(index->table))) {
+  while (page_rec_needs_ext(rec_get_converted_size(index, entry, *n_ext))) {
     ulint i;
     ulint longest = 0;
     ulint longest_i = ULINT_MAX;

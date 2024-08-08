@@ -1,4 +1,5 @@
-/** Copyright (c) 2009 Innobase Oy. All rights reserved.
+/***********************************************************************
+Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
@@ -23,39 +24,39 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "test0aux.h"
 
-static void get_all(void) {
-  static const char *var_names[] = {"adaptive_hash_index",
-                                    "additional_mem_pool_size",
-                                    "autoextend_increment",
-                                    "buffer_pool_size",
-                                    "checksums",
-                                    "data_file_path",
-                                    "data_home_dir",
-                                    "doublewrite",
-                                    "file_format",
-                                    "file_io_threads",
-                                    "file_per_table",
-                                    "flush_log_at_trx_commit",
-                                    "flush_method",
-                                    "force_recovery",
-                                    "lock_wait_timeout",
-                                    "log_buffer_size",
-                                    "log_file_size",
-                                    "log_files_in_group",
-                                    "log_group_home_dir",
-                                    "max_dirty_pages_pct",
-                                    "max_purge_lag",
-                                    "lru_old_blocks_pct",
-                                    "lru_block_access_recency",
-                                    "open_files",
-                                    "pre_rollback_hook",
-                                    "print_verbose_log",
-                                    "rollback_on_timeout",
-                                    "stats_sample_pages",
-                                    "status_file",
-                                    "sync_spin_loops",
-                                    "version",
-                                    nullptr};
+static void get_all() {
+  static const char *var_names[] = {
+    "additional_mem_pool_size",
+    "autoextend_increment",
+    "buffer_pool_size",
+    "checksums",
+    "data_file_path",
+    "data_home_dir",
+    "doublewrite",
+    "file_format",
+    "file_io_threads",
+    "file_per_table",
+    "flush_log_at_trx_commit",
+    "flush_method",
+    "force_recovery",
+    "lock_wait_timeout",
+    "log_buffer_size",
+    "log_file_size",
+    "log_files_in_group",
+    "log_group_home_dir",
+    "max_dirty_pages_pct",
+    "max_purge_lag",
+    "lru_old_blocks_pct",
+    "lru_block_access_recency",
+    "open_files",
+    "pre_rollback_hook",
+    "print_verbose_log",
+    "rollback_on_timeout",
+    "stats_sample_pages",
+    "status_file",
+    "sync_spin_loops",
+    "version",
+    nullptr};
 
   const char **ptr;
 
@@ -68,7 +69,7 @@ static void get_all(void) {
 }
 
 /** Function to test our simple config file parser. */
-static void test_config_parser(void) {
+static void test_config_parser() {
   ib_config_t config;
   const char *filename = "test.conf";
 
@@ -83,16 +84,15 @@ static void test_config_parser(void) {
   config_free(&config);
 }
 
-static void test_ib_cfg_get_all(void) {
+static void test_ib_cfg_get_all() {
   const char **names;
   uint32_t names_num;
-  char buf[8]; /* long enough to store any type */
-  uint32_t i;
+  char buf[64]; /* long enough to store any type */
 
   /* can be called before ib_init() */
   OK(ib_cfg_get_all(&names, &names_num));
 
-  for (i = 0; i < names_num; i++) {
+  for (uint32_t i = 0; i < names_num; i++) {
     /* must be called after ib_init() */
     OK(ib_cfg_get(names[i], buf));
 
@@ -107,9 +107,6 @@ int main(int argc, char **argv) {
   char *ptr;
   ulint val;
   unsigned int i;
-
-  (void)argc;
-  (void)argv;
 
   test_config_parser();
 

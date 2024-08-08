@@ -317,7 +317,7 @@ void Buf_flush::write_complete(buf_page_t *bpage) {
     /* Put the block to the end of the LRU list to wait to be
     moved to the free list */
 
-    srv_buf_pool->m_LRU->make_block_old(bpage);
+    srv_buf_pool->m_LRU->make_block(bpage);
 
     srv_buf_pool->m_LRU_flush_ended++;
   }
@@ -376,7 +376,7 @@ void Buf_flush::buffered_writes() {
       continue;
     }
 
-    if (unlikely(memcmp(block->m_frame + (FIL_PAGE_LSN + 4), block->m_frame + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4), 4)
+    if (unlikely(memcmp(block->m_frame + (FIL_PAGE_LSN + 4), block->m_frame + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4)
         )) {
       ut_print_timestamp(ib_stream);
       ib_logger(
@@ -390,31 +390,16 @@ void Buf_flush::buffered_writes() {
       );
     }
 
-    if (!block->m_check_index_page_at_flush) {
-    } else if (page_is_comp(block->m_frame)) {
-      if (unlikely(!page_simple_validate_new(block->m_frame))) {
-      corrupted_page:
+    if (block->m_check_index_page_at_flush && unlikely(!page_simple_validate(block->m_frame))) {
         buf_page_print(block->m_frame, 0);
 
-        ut_print_timestamp(ib_stream);
-        ib_logger(
-          ib_stream,
-          "  Apparent corruption of an"
-          " index page n:o %lu in space %lu\n"
-          "to be written to data file."
-          " We intentionally crash server\n"
-          "to prevent corrupt data"
-          " from ending up in data\n"
-          "files.\n",
-          (ulong)block->get_page_no(),
-          (ulong)block->get_space()
-        );
-
-        ut_error;
-      }
-    } else if (unlikely(!page_simple_validate_old(block->m_frame))) {
-
-      goto corrupted_page;
+        log_fatal(std::format(
+          "Apparent corruption of an index page n:o {} in space {}"
+          " to be written to data file. We intentionally crash server"
+          " to prevent corrupt data from ending up in data files.",
+          block->get_page_no(),
+          block->get_space()
+        ));
     }
   }
 
@@ -434,7 +419,7 @@ void Buf_flush::buffered_writes() {
 
     if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
         unlikely(
-          memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4), 4)
+          memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4)
         )) {
 
       ut_print_timestamp(ib_stream);
@@ -464,7 +449,7 @@ void Buf_flush::buffered_writes() {
 
     if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
         unlikely(
-          memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4), 4)
+          memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4)
         )) {
       ut_print_timestamp(ib_stream);
       ib_logger(
@@ -494,7 +479,7 @@ flush:
 
     ut_a(block->get_state() == BUF_BLOCK_FILE_PAGE);
 
-    if (unlikely(memcmp(block->m_frame + (FIL_PAGE_LSN + 4), block->m_frame + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4), 4)
+    if (unlikely(memcmp(block->m_frame + (FIL_PAGE_LSN + 4), block->m_frame + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4)
         )) {
       log_err(std::format(
         "The page to be written seems corrupt! The lsn fields do not match! Noticed in the buffer pool"
@@ -571,7 +556,7 @@ void Buf_flush::init_for_writing(byte *page, uint64_t newest_lsn) {
   /* Write the newest modification lsn to the page header and trailer */
   mach_write_to_8(page + FIL_PAGE_LSN, newest_lsn);
 
-  mach_write_to_8(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM, newest_lsn);
+  mach_write_to_8(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM, newest_lsn);
 
   /* Store the new formula checksum */
 
@@ -582,7 +567,7 @@ void Buf_flush::init_for_writing(byte *page, uint64_t newest_lsn) {
   FIL_PAGE_SPACE_OR_CHKSUM, it has to be calculated after storing the
   new formula checksum. */
 
-  mach_write_to_4(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM, BUF_NO_CHECKSUM_MAGIC);
+  mach_write_to_4(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM, BUF_NO_CHECKSUM_MAGIC);
 }
 
 void Buf_flush::write_block_low(buf_page_t *bpage) {

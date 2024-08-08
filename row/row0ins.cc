@@ -181,7 +181,7 @@ static db_err row_ins_sec_index_entry_by_modify(
   rec = btr_cur_get_rec(cursor);
 
   ut_ad(!dict_index_is_clust(cursor->m_index));
-  ut_ad(rec_get_deleted_flag(rec, dict_table_is_comp(cursor->m_index->table)));
+  ut_ad(rec_get_deleted_flag(rec));
 
   /* We know that in the alphabetical ordering, entry and rec are
   identified. But in their binary form there may be differences if
@@ -252,7 +252,7 @@ static db_err row_ins_clust_index_entry_by_modify(
 
   rec = btr_cur_get_rec(cursor);
 
-  ut_ad(rec_get_deleted_flag(rec, dict_table_is_comp(cursor->m_index->table)));
+  ut_ad(rec_get_deleted_flag(rec));
 
   if (!*heap) {
     *heap = mem_heap_create(1024);
@@ -555,7 +555,7 @@ static void row_ins_foreign_report_err(
   ut_print_name(ib_stream, trx, false, foreign->foreign_index->name);
   if (rec) {
     ib_logger(ib_stream, ", there is a record:\n");
-    rec_print(ib_stream, rec, foreign->foreign_index);
+    rec_print(rec);
   } else {
     ib_logger(ib_stream, ", the record is not available\n");
   }
@@ -608,7 +608,7 @@ static void row_ins_foreign_report_add_err(
   }
 
   if (rec) {
-    rec_print(ib_stream, rec, foreign->referenced_index);
+    rec_print(rec);
   }
   ib_logger(ib_stream, "\n");
 
@@ -844,9 +844,9 @@ static db_err row_ins_foreign_check_on_constraint(
       dict_index_name_print(ib_stream, trx, index);
 
       ib_logger(ib_stream, "\nrecord ");
-      rec_print(ib_stream, rec, index);
+      rec_print(rec);
       ib_logger(ib_stream, "\nclustered record ");
-      rec_print(ib_stream, clust_rec, clust_index);
+      rec_print(clust_rec);
       ib_logger(
         ib_stream,
         "\n"
@@ -877,7 +877,7 @@ static db_err row_ins_foreign_check_on_constraint(
     goto nonstandard_exit_func;
   }
 
-  if (rec_get_deleted_flag(clust_rec, dict_table_is_comp(table))) {
+  if (rec_get_deleted_flag(clust_rec)) {
     /* This can happen if there is a circular reference of
     rows such that cascading delete comes to delete a row
     already in the process of being delete marked */
@@ -1028,7 +1028,7 @@ static db_err row_ins_set_shared_rec_lock(
   const buf_block_t *block, /*!< in: buffer block of rec */
   const rec_t *rec,         /*!< in: record */
   dict_index_t *index,      /*!< in: index */
-  const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
+  const ulint *offsets,     /*!< in: Phy_rec::get_col_offsets(index, rec) */
   que_thr_t *thr
 ) /*!< in: query thread */
 {
@@ -1054,7 +1054,7 @@ static db_err row_ins_set_exclusive_rec_lock(
   const buf_block_t *block, /*!< in: buffer block of rec */
   const rec_t *rec,         /*!< in: record */
   dict_index_t *index,      /*!< in: index */
-  const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
+  const ulint *offsets,     /*!< in: Phy_rec::get_col_offsets(index, rec) */
   que_thr_t *thr
 ) /*!< in: query thread */
 {
@@ -1213,7 +1213,11 @@ run_again:
       goto next_rec;
     }
 
-    offsets = rec_get_offsets(rec, check_index, offsets, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record{check_index, rec};
+
+      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+    }
 
     if (page_rec_is_supremum(rec)) {
 
@@ -1230,7 +1234,7 @@ run_again:
     cmp = cmp_dtuple_rec(check_index->cmp_ctx, entry, rec, offsets);
 
     if (cmp == 0) {
-      if (rec_get_deleted_flag(rec, rec_offs_comp(offsets))) {
+      if (rec_get_deleted_flag(rec)) {
         err = row_ins_set_shared_rec_lock(LOCK_ORDINARY, block, rec, check_index, offsets, thr);
         if (err != DB_SUCCESS) {
 
@@ -1439,7 +1443,7 @@ static bool row_ins_dupl_error_with_rec(
   const dtuple_t *entry, /*!< in: entry to insert */
   dict_index_t *index,   /*!< in: index */
   const ulint *offsets
-) /*!< in: rec_get_offsets(rec, index) */
+) /*!< in: Phy_rec::get_col_offsets(index, rec) */
 {
   ulint matched_fields;
   ulint matched_bytes;
@@ -1473,7 +1477,7 @@ static bool row_ins_dupl_error_with_rec(
     }
   }
 
-  return !rec_get_deleted_flag(rec, rec_offs_comp(offsets));
+  return !rec_get_deleted_flag(rec);
 }
 
 /** Scans a unique non-clustered index at a given index entry to determine
@@ -1535,7 +1539,11 @@ static db_err row_ins_scan_sec_index_for_duplicate(
       continue;
     }
 
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record{index, rec};
+
+      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+    }
 
     if (allow_duplicates) {
 
@@ -1637,7 +1645,11 @@ static db_err row_ins_duplicate_error_in_clust(
     rec = btr_cur_get_rec(cursor);
 
     if (!page_rec_is_infimum(rec)) {
-      offsets = rec_get_offsets(rec, cursor->m_index, offsets, ULINT_UNDEFINED, &heap);
+      {
+        Phy_rec record{cursor->m_index, rec};
+
+        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+      }
 
       /* We set a lock on the possible duplicate: this
       is needed in logical logging, we need to make
@@ -1674,7 +1686,11 @@ static db_err row_ins_duplicate_error_in_clust(
     rec = page_rec_get_next(btr_cur_get_rec(cursor));
 
     if (!page_rec_is_supremum(rec)) {
-      offsets = rec_get_offsets(rec, cursor->m_index, offsets, ULINT_UNDEFINED, &heap);
+      {
+        Phy_rec record{cursor->m_index, rec};
+
+        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+      }
 
       if (trx->m_duplicates & TRX_DUP_IGNORE) {
 
@@ -1868,13 +1884,18 @@ function_exit:
   mtr_commit(&mtr);
 
   if (likely_null(big_rec)) {
-    rec_t *rec;
-    ulint *offsets;
     mtr_start(&mtr);
 
     btr_cur_search_to_nth_level(index, 0, entry, PAGE_CUR_LE, BTR_MODIFY_TREE, &cursor, 0, __FILE__, __LINE__, &mtr);
-    rec = btr_cur_get_rec(&cursor);
-    offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED, &heap);
+
+    ulint *offsets;
+    auto rec = btr_cur_get_rec(&cursor);
+
+    {
+      Phy_rec record{index, rec};
+
+      offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+    }
 
     err = btr_store_big_rec_extern_fields(index, btr_cur_get_block(&cursor), rec, offsets, big_rec, &mtr);
 

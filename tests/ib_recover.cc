@@ -70,7 +70,7 @@ static ib_err_t create_table(const char *dbname, /*!< in: database name */
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
 
   /* Pass a table page size of 0, ie., use default page size. */
-  err = ib_table_schema_create(table_name, &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create(table_name, &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_SUCCESS);
 
   err = ib_table_schema_add_col(ib_tbl_sch, "c1", IB_INT, IB_COL_NONE, 0, 4);
@@ -263,7 +263,7 @@ int main(int argc, char *argv[]) {
 
   set_options(argc, argv);
 
-  err = ib_startup("barracuda");
+  err = ib_startup("default");
   assert(err == DB_SUCCESS);
 
   err = test_phase_I();

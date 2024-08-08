@@ -152,7 +152,7 @@ static bool row_sel_sec_rec_is_for_clust_rec(
   rec_offs_init(clust_offsets_);
   rec_offs_init(sec_offsets_);
 
-  if (rec_get_deleted_flag(clust_rec, dict_table_is_comp(clust_index->table))) {
+  if (rec_get_deleted_flag(clust_rec)) {
 
     /* The clustered index record is delete-marked;
     it is not visible in the read view.  Besides,
@@ -161,8 +161,18 @@ static bool row_sel_sec_rec_is_for_clust_rec(
     return false;
   }
 
-  clust_offs = rec_get_offsets(clust_rec, clust_index, clust_offs, ULINT_UNDEFINED, &heap);
-  sec_offs = rec_get_offsets(sec_rec, sec_index, sec_offs, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{clust_index, clust_rec};
+
+    clust_offs = record.get_col_offsets(clust_offs, ULINT_UNDEFINED, &heap, Source_location{});
+  }
+
+  {
+    Phy_rec record{sec_index, sec_rec};
+
+    sec_offs = record.get_col_offsets(sec_offs, ULINT_UNDEFINED, &heap, Source_location{});
+  }
+
 
   n = dict_index_get_n_ordering_defined_by_user(sec_index);
 
@@ -329,7 +339,7 @@ inline void row_sel_copy_input_variable_vals(sel_node_t *node) {
  *
  * @param index [in] record index
  * @param rec [in] record in a clustered or non-clustered index; must be protected by a page latch
- * @param offsets [in] rec_get_offsets(rec, index)
+ * @param offsets [in] Phy_rec::get_col_offsets(index, rec)
  * @param column [in] first column in a column list, or NULL
  */
 static void row_sel_fetch_columns(
@@ -624,7 +634,7 @@ inline bool row_sel_test_other_conds(plan_t *plan) {
  * @param read_view     in: read view
  * @param index         in: plan node for table
  * @param rec           in: record in a clustered index
- * @param offsets       in/out: offsets returned by rec_get_offsets(rec, plan->index)
+ * @param offsets       in/out: offsets returned by Rec:get_offsets(plan->index, rec)
  * @param offset_heap   in/out: memory heap from which the offsets are allocated
  * @param old_vers_heap out: old version heap to use
  * @param old_vers      out: old version, or NULL if the record does not exist in the view:
@@ -685,7 +695,11 @@ static db_err row_sel_get_clust_rec(
 
   *out_rec = nullptr;
 
-  offsets = rec_get_offsets(rec, plan->pcur.get_btr_cur()->m_index, offsets, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{plan->pcur.get_btr_cur()->m_index, rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+  }
 
   row_build_row_ref_fast(plan->clust_ref, plan->clust_map, rec, offsets);
 
@@ -700,7 +714,7 @@ static db_err row_sel_get_clust_rec(
 
   if (!page_rec_is_user_rec(clust_rec) || plan->clust_pcur.get_low_match() < dict_index_get_n_unique(index)) {
 
-    ut_a(rec_get_deleted_flag(rec, dict_table_is_comp(plan->table)));
+    ut_a(rec_get_deleted_flag(rec));
     ut_a(node->read_view);
 
     /* In a rare case it is possible that no clust rec is found
@@ -715,7 +729,11 @@ static db_err row_sel_get_clust_rec(
     goto func_exit;
   }
 
-  offsets = rec_get_offsets(clust_rec, index, offsets, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{index, clust_rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+  }
 
   if (!node->read_view) {
     /* Try to place a lock on the index record */
@@ -777,7 +795,7 @@ static db_err row_sel_get_clust_rec(
     visit through secondary index records that would not really
     exist in our snapshot. */
 
-    if ((old_vers || rec_get_deleted_flag(rec, dict_table_is_comp(plan->table))) && !row_sel_sec_rec_is_for_clust_rec(rec, plan->index, clust_rec, index)) {
+    if ((old_vers || rec_get_deleted_flag(rec)) && !row_sel_sec_rec_is_for_clust_rec(rec, plan->index, clust_rec, index)) {
       goto func_exit;
     }
   }
@@ -804,7 +822,7 @@ err_exit:
  * @param block in: buffer block of rec
  * @param rec in: record
  * @param index in: index
- * @param offsets in: rec_get_offsets(rec, index)
+ * @param offsets in: Phy_rec::get_col_offsets(index, rec)
  * @param mode in: lock mode
  * @param type in: LOCK_ORDINARY, LOCK_GAP, or LOC_REC_NOT_GAP
  * @param thr in: query thread
@@ -1057,7 +1075,11 @@ static ulint row_sel_try_search_shortcut(sel_node_t *node, plan_t *plan, mtr_t *
   /* This is a non-locking consistent read: if necessary, fetch
   a previous version of the record */
 
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+  }
 
   if (dict_index_is_clust(index)) {
     if (!lock_clust_rec_cons_read_sees(rec, index, offsets, node->read_view)) {
@@ -1072,7 +1094,7 @@ static ulint row_sel_try_search_shortcut(sel_node_t *node, plan_t *plan, mtr_t *
 
   /* Test the deleted flag. */
 
-  if (rec_get_deleted_flag(rec, dict_table_is_comp(plan->table))) {
+  if (rec_get_deleted_flag(rec)) {
 
     ret = SEL_EXHAUSTED;
     goto func_exit;
@@ -1280,7 +1302,11 @@ rec_loop:
 
       trx = thr_get_trx(thr);
 
-      offsets = rec_get_offsets(next_rec, index, offsets, ULINT_UNDEFINED, &heap);
+      {
+        Phy_rec record{index, next_rec};
+
+        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+      }
 
       if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED) {
 
@@ -1329,7 +1355,11 @@ skip_lock:
     ulint lock_type;
     trx_t *trx;
 
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record{index, rec};
+
+      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+    }
 
     trx = thr_get_trx(thr);
 
@@ -1399,7 +1429,11 @@ skip_lock:
   /* PHASE 3: Get previous version in a consistent read */
 
   cons_read_requires_clust_rec = false;
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+  }
 
   if (consistent_read) {
     /* This is a non-locking consistent read: if necessary, fetch
@@ -1417,7 +1451,11 @@ skip_lock:
         }
 
         if (old_vers == nullptr) {
-          offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+          {
+            Phy_rec record{index, rec};
+
+            offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+          }
 
           /* Fetch the columns needed in
           test conditions. The clustered
@@ -1467,7 +1505,7 @@ skip_lock:
     goto table_exhausted;
   }
 
-  if (rec_get_deleted_flag(rec, dict_table_is_comp(plan->table)) && !cons_read_requires_clust_rec) {
+  if (rec_get_deleted_flag(rec) && !cons_read_requires_clust_rec) {
 
     /* The record is delete marked: we can skip it if this is
     not a consistent read which might see an earlier version
@@ -1509,7 +1547,7 @@ skip_lock:
       goto next_rec;
     }
 
-    if (rec_get_deleted_flag(clust_rec, dict_table_is_comp(plan->table))) {
+    if (rec_get_deleted_flag(clust_rec)) {
 
       /* The record is delete marked: we can skip it */
 
@@ -2017,8 +2055,8 @@ void row_sel_prebuild_graph(row_prebuilt_t *prebuilt) /*!< in: prebuilt handle *
  * @param thr in: query thread
  * @param out_rec out: clustered record or an old version of it, NULL if the old version
  *   did not exist in the read view, i.e., it was a fresh inserted version
- * @param offsets in: offsets returned by rec_get_offsets(rec, sec_index); out: offsets
- *   returned by rec_get_offsets(out_rec, clust_index)
+ * @param offsets in: offsets returned by Phy_rec::get_col_offsets(sec_index, rec); out: offsets
+ *   returned by Phy_rec::get_col_offsets(clust_index, out_rec)
  * @param offset_heap in/out: memory heap from which the offsets are allocated
  * @param mtr in: mtr used to get access to the non-clustered record; the same mtr is
  *  used to access the clustered index
@@ -2068,7 +2106,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
     clustered index record did not exist in the read view of
     trx. */
 
-    if (!rec_get_deleted_flag(rec, dict_table_is_comp(sec_index->table)) || prebuilt->select_lock_type != LOCK_NONE) {
+    if (!rec_get_deleted_flag(rec) || prebuilt->select_lock_type != LOCK_NONE) {
       ut_print_timestamp(ib_stream);
       ib_logger(
         ib_stream,
@@ -2082,13 +2120,13 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
         "\n"
         "sec index record "
       );
-      rec_print(ib_stream, rec, sec_index);
+      rec_print(rec);
       ib_logger(
         ib_stream,
         "\n"
         "clust index record "
       );
-      rec_print(ib_stream, clust_rec, clust_index);
+      rec_print(clust_rec);
       ib_logger(ib_stream, "\n");
       trx_print(ib_stream, trx, 600);
 
@@ -2105,7 +2143,11 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
     goto func_exit;
   }
 
-  *offsets = rec_get_offsets(clust_rec, clust_index, *offsets, ULINT_UNDEFINED, offset_heap);
+  {
+    Phy_rec record{clust_index, clust_rec};
+
+    *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Source_location{});
+  }
 
   if (prebuilt->select_lock_type != LOCK_NONE) {
     /* Try to place a lock on the index record; we are searching
@@ -2165,8 +2207,9 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
     exist in our snapshot. */
 
     if (clust_rec &&
-        (old_vers || trx->m_isolation_level <= TRX_ISO_READ_UNCOMMITTED ||
-         rec_get_deleted_flag(rec, dict_table_is_comp(sec_index->table))) &&
+        (old_vers ||
+        trx->m_isolation_level <= TRX_ISO_READ_UNCOMMITTED ||
+        rec_get_deleted_flag(rec)) &&
         !row_sel_sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index)) {
       clust_rec = nullptr;
 #ifdef UNIV_SEARCH_DEBUG
@@ -2308,7 +2351,7 @@ void row_sel_row_cache_next(row_prebuilt_t *prebuilt) {
  * @brief Add a record to the fetch cache.
  * @param[in] prebuilt prebuilt struct
  * @param[in] rec record to push; must be protected by a page latch
- * @param[in] offsets rec_get_offsets()
+ * @param[in] offsets Phy_rec::get_col_offsets()
  */
 inline void row_sel_row_cache_add(row_prebuilt_t *prebuilt, const rec_t *rec, const ulint *offsets) {
   ib_cached_row_t *row;
@@ -2370,8 +2413,8 @@ inline void row_sel_row_cache_add(row_prebuilt_t *prebuilt, const rec_t *rec, co
  *
  * @param[out] out_rec record if found
  * @param[in] prebuilt prebuilt struct
- * @param[in,out] offsets for rec_get_offsets(*out_rec)
- * @param[in,out] heap heap for rec_get_offsets()
+ * @param[in,out] offsets for Rec:get_offsets(*out_rec)
+ * @param[in,out] heap heap for Phy_rec::get_col_offsets()
  * @param[in] mtr started mtr
  *
  * @return SEL_FOUND, SEL_EXHAUSTED, SEL_RETRY
@@ -2416,14 +2459,18 @@ static ulint row_sel_try_search_shortcut_for_prebuilt(
   /* This is a non-locking consistent read: if necessary, fetch
   a previous version of the record */
 
-  *offsets = rec_get_offsets(rec, index, *offsets, ULINT_UNDEFINED, heap);
+  {
+    Phy_rec record{index, rec};
+
+    *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, heap, Source_location{});
+  }
 
   if (!lock_clust_rec_cons_read_sees(rec, index, *offsets, trx->read_view)) {
 
     return SEL_RETRY;
   }
 
-  if (rec_get_deleted_flag(rec, dict_table_is_comp(index->table))) {
+  if (rec_get_deleted_flag(rec)) {
 
     return SEL_EXHAUSTED;
   }
@@ -2513,7 +2560,6 @@ db_err row_search_for_client(
   ib_cur_op_t direction
 ) {
   dict_index_t *index = prebuilt->index;
-  bool comp = dict_table_is_comp(index->table);
   const dtuple_t *search_tuple = prebuilt->search_tuple;
   btr_pcur_t *pcur = prebuilt->pcur;
   trx_t *trx = prebuilt->trx;
@@ -2821,7 +2867,12 @@ db_err row_search_for_client(
       to prevent phantoms in ORDER BY ... DESC queries */
       const rec_t *next = page_rec_get_next_const(rec);
 
-      offsets = rec_get_offsets(next, index, offsets, ULINT_UNDEFINED, &heap);
+      {
+        Phy_rec record{index, next};
+
+        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+      }
+
       err = sel_set_rec_lock(pcur->get_block(), next, index, offsets, prebuilt->select_lock_type, LOCK_GAP, thr);
 
       if (err != DB_SUCCESS) {
@@ -2879,7 +2930,6 @@ rec_loop:
   /* PHASE 4: Look for matching records in a loop */
 
   rec = pcur->get_rec();
-  ut_ad(!!page_rec_is_comp(rec) == comp);
 
   if (page_rec_is_infimum(rec)) {
 
@@ -2900,7 +2950,12 @@ rec_loop:
       level we do not lock gaps. Supremum record is really
       a gap and therefore we do not set locks there. */
 
-      offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+      {
+        Phy_rec record{index, rec};
+
+        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+      }
+
       err = sel_set_rec_lock(pcur->get_block(), rec, index, offsets, prebuilt->select_lock_type, LOCK_ORDINARY, thr);
 
       if (err != DB_SUCCESS) {
@@ -2918,18 +2973,11 @@ rec_loop:
   /* Do sanity checks in case our cursor has bumped into page
   corruption */
 
-  if (comp) {
-    next_offs = rec_get_next_offs(rec, true);
-    if (unlikely(next_offs < PAGE_NEW_SUPREMUM)) {
+  next_offs = rec_get_next_offs(rec);
 
-      goto wrong_offs;
-    }
-  } else {
-    next_offs = rec_get_next_offs(rec, false);
-    if (unlikely(next_offs < PAGE_OLD_SUPREMUM)) {
+  if (unlikely(next_offs < PAGE_SUPREMUM)) {
 
-      goto wrong_offs;
-    }
+    goto wrong_offs;
   }
 
   if (unlikely(next_offs >= UNIV_PAGE_SIZE - PAGE_DIR)) {
@@ -2991,7 +3039,11 @@ rec_loop:
 
   /* Calculate the 'offsets' associated with 'rec' */
 
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+  }
 
   if (unlikely(recovery != IB_RECOVERY_DEFAULT)) {
     if (!rec_validate(rec, offsets) || !btr_index_rec_validate(rec, index, false)) {
@@ -3082,7 +3134,7 @@ rec_loop:
 
     ulint lock_type;
 
-    if (!set_also_gap_locks || trx->m_isolation_level == TRX_ISO_READ_COMMITTED || (unique_search && !unlikely(rec_get_deleted_flag(rec, comp)))) {
+    if (!set_also_gap_locks || trx->m_isolation_level == TRX_ISO_READ_COMMITTED || (unique_search && !unlikely(rec_get_deleted_flag(rec)))) {
 
       goto no_gap_lock;
     } else {
@@ -3172,10 +3224,9 @@ rec_loop:
 
   /* NOTE that at this point rec can be an old version of a clustered
   index record built for a consistent read. We cannot assume after this
-  point that rec is on a buffer pool page. Functions like
-  page_rec_is_comp() cannot be used! */
+  point that rec is on a buffer pool page. */
 
-  if (unlikely(rec_get_deleted_flag(rec, comp))) {
+  if (unlikely(rec_get_deleted_flag(rec))) {
 
     /* The record is delete-marked: we can skip it */
 
@@ -3253,7 +3304,7 @@ rec_loop:
       prebuilt->new_rec_locks = 2;
     }
 
-    if (unlikely(rec_get_deleted_flag(clust_rec, comp))) {
+    if (unlikely(rec_get_deleted_flag(clust_rec))) {
 
       /* The record is delete marked: we can skip it */
 
@@ -3279,9 +3330,13 @@ rec_loop:
 
       ut_ad(rec_offs_validate(result_rec, clust_index, offsets));
     } else {
-      /* We used 'offsets' for the clust rec, recalculate
-      them for 'rec' */
-      offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+      /* We used 'offsets' for the clust rec, recalculate them for 'rec' */
+      {
+        Phy_rec record{index, rec};
+
+        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+      }
+
       result_rec = rec;
     }
   } else {

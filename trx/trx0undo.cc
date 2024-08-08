@@ -442,7 +442,7 @@ static ulint trx_undo_header_create(
 
   log_hdr = undo_page + free;
 
-  new_free = free + TRX_UNDO_LOG_OLD_HDR_SIZE;
+  new_free = free + TRX_UNDO_LOG_HDR_SIZE;
 
 #ifdef WITH_XOPEN
   ut_a(free + TRX_UNDO_LOG_XA_HDR_SIZE < UNIV_PAGE_SIZE - 100);
@@ -545,9 +545,9 @@ static void trx_undo_header_add_space_for_xid(
 
   /* free is now the end offset of the old style undo log header */
 
-  ut_a(free == (ulint)(log_hdr - undo_page) + TRX_UNDO_LOG_OLD_HDR_SIZE);
+  ut_a(free == (ulint)(log_hdr - undo_page) + TRX_UNDO_LOG_HDR_SIZE);
 
-  new_free = free + (TRX_UNDO_LOG_XA_HDR_SIZE - TRX_UNDO_LOG_OLD_HDR_SIZE);
+  new_free = free + (TRX_UNDO_LOG_XA_HDR_SIZE - TRX_UNDO_LOG_HDR_SIZE);
 
   /* Add space for a XID after the header, update the free offset
   fields on the undo log page and in the undo log header */
@@ -632,7 +632,7 @@ static ulint trx_undo_insert_header_reuse(
 
   log_hdr = undo_page + free;
 
-  new_free = free + TRX_UNDO_LOG_OLD_HDR_SIZE;
+  new_free = free + TRX_UNDO_LOG_HDR_SIZE;
 
   /* Insert undo data is not needed after commit: we may free all
   the space on the page */

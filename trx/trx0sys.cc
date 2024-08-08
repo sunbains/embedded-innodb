@@ -62,10 +62,7 @@ a new database installation */
 bool trx_sys_multiple_tablespace_format = false;
 
 /** List of animal names representing file format. */
-static const char *file_format_name_map[] = {"Antelope", "Barracuda", "Cheetah", "Dragon",   "Elk",     "Fox",   "Gazelle",
-                                             "Hornet",   "Impala",    "Jaguar",  "Kangaroo", "Leopard", "Moose", "Nautilus",
-                                             "Ocelot",   "Porpoise",  "Quail",   "Rabbit",   "Shark",   "Tiger", "Urchin",
-                                             "Viper",    "Whale",     "Xenops",  "Yak",      "Zebra"};
+static const char *file_format_name_map[] = {"default" };
 
 /** The number of elements in the file format name array. */
 static const ulint FILE_FORMAT_NAME_N = sizeof(file_format_name_map) / sizeof(file_format_name_map[0]);
@@ -777,7 +774,7 @@ static bool trx_sys_file_format_max_write(
 
 /** Read the file format tag.
 @return	the file format */
-static ulint trx_sys_file_format_max_read(void) {
+static ulint trx_sys_file_format_max_read() {
   mtr_t mtr;
 
   /* Since this is called during the startup phase it's safe to
@@ -819,41 +816,37 @@ const char *trx_sys_file_format_id_to_name(const ulint id) {
     return ("Unknown");
   }
 
-  return (file_format_name_map[id]);
+  return file_format_name_map[id];
 }
 
 ulint trx_sys_file_format_name_to_id(const char *format_name) {
   char *endp;
-  ulint format_id;
 
   ut_a(format_name != nullptr);
 
   /* The format name can contain the format id itself instead of
   the name and we check for that. */
-  format_id = (ulint)strtoul(format_name, &endp, 10);
+  const auto format_id = (ulint)strtoul(format_name, &endp, 10);
 
   /* Check for valid parse. */
   if (*endp == '\0' && *format_name != '\0') {
 
     if (format_id <= DICT_TF_FORMAT_MAX) {
 
-      return (format_id);
+      return format_id;
     }
   } else {
 
-    for (format_id = 0; format_id <= DICT_TF_FORMAT_MAX; format_id++) {
-      const char *name;
-
-      name = trx_sys_file_format_id_to_name(format_id);
+    for (ulint i{}; i <= DICT_TF_FORMAT_MAX; ++i) {
+      auto name = trx_sys_file_format_id_to_name(i);
 
       if (!strcasecmp(format_name, name)) {
-
-        return (format_id);
+        return i;
       }
     }
   }
 
-  return (DICT_TF_FORMAT_MAX + 1);
+  return DICT_TF_FORMAT_MAX + 1;
 }
 
 db_err trx_sys_file_format_max_check(ulint max_format_id) {

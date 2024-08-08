@@ -363,7 +363,7 @@ constexpr ulint TRX_UNDO_HISTORY_NODE = 34;
 
 /*-------------------------------------------------------------*/
 /** Size of the undo log header without XID information */
-constexpr auto TRX_UNDO_LOG_OLD_HDR_SIZE = FLST_NODE_SIZE + 34;
+constexpr auto TRX_UNDO_LOG_HDR_SIZE = FLST_NODE_SIZE + 34;
 
 /* Note: the writing of the undo log old header is coded by a log record
 MLOG_UNDO_HDR_CREATE or MLOG_UNDO_HDR_REUSE. The appending of an XID to the
@@ -376,7 +376,7 @@ quite a large overhead. */
 /** X/Open XA Transaction Identification (XID) */
 /* @{ */
 /** xid_t::formatID */
-constexpr auto TRX_UNDO_XA_FORMAT = TRX_UNDO_LOG_OLD_HDR_SIZE;
+constexpr auto TRX_UNDO_XA_FORMAT = TRX_UNDO_LOG_HDR_SIZE;
 
 /** xid_t::gtrid_length */
 constexpr auto TRX_UNDO_XA_TRID_LEN = TRX_UNDO_XA_FORMAT + 4;

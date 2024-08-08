@@ -953,7 +953,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
 
     rec = pcur.get_rec();
 
-    field = rec_get_nth_field_old(rec, 0, &len);
+    field = rec_get_nth_field(rec, 0, &len);
     ut_ad(len == 8);
 
     if (memcmp(buf, field, len) != 0) {
@@ -961,7 +961,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
       break;
     }
 
-    if (rec_get_deleted_flag(rec, false)) {
+    if (rec_get_deleted_flag(rec)) {
       /* The index has been dropped. */
       goto next_rec;
     }
@@ -1647,14 +1647,14 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
     }
 
     rec = pcur.get_rec();
-    field = rec_get_nth_field_old(rec, DICT_SYS_INDEXES_NAME_FIELD, &len);
+    field = rec_get_nth_field(rec, DICT_SYS_INDEXES_NAME_FIELD, &len);
     if (len == UNIV_SQL_NULL || len == 0 || mach_read_from_1(field) != (ulint)TEMP_INDEX_PREFIX) {
       continue;
     }
 
     /* This is a temporary index. */
 
-    field = rec_get_nth_field_old(rec, 0 /*TABLE_ID*/, &len);
+    field = rec_get_nth_field(rec, 0 /*TABLE_ID*/, &len);
     if (len != 8) {
       /* Corrupted TABLE_ID */
       continue;
@@ -1731,7 +1731,7 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
     }
 
     rec = pcur.get_rec();
-    field = rec_get_nth_field_old(rec, 4 /*N_COLS*/, &len);
+    field = rec_get_nth_field(rec, 4 /*N_COLS*/, &len);
     if (len != 4 || !(mach_read_from_4(field) & 0x80000000UL)) {
       continue;
     }
@@ -1739,13 +1739,13 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
     /* Because this is not a ROW_FORMAT=REDUNDANT table,
     the is_temp flag is valid.  Examine it. */
 
-    field = rec_get_nth_field_old(rec, 7 /*MIX_LEN*/, &len);
+    field = rec_get_nth_field(rec, 7 /*MIX_LEN*/, &len);
     if (len != 4 || !(mach_read_from_4(field) & DICT_TF2_TEMPORARY)) {
       continue;
     }
 
     /* This is a temporary table. */
-    field = rec_get_nth_field_old(rec, 0 /*NAME*/, &len);
+    field = rec_get_nth_field(rec, 0 /*NAME*/, &len);
     if (len == UNIV_SQL_NULL || len == 0) {
       /* Corrupted SYS_TABLES.NAME */
       continue;

@@ -63,44 +63,35 @@ static dtuple_t *dict_create_sys_tables_tuple(const dict_table_t *table, mem_hea
   /* 3: ID -------------------------------*/
   dfield = dtuple_get_nth_field(entry, 1 /*ID*/);
 
-  ptr = (byte *)mem_heap_alloc(heap, 8);
+  ptr = static_cast<byte *>(mem_heap_alloc(heap, 8));
   mach_write_to_8(ptr, table->id);
 
   dfield_set_data(dfield, ptr, 8);
   /* 4: N_COLS ---------------------------*/
   dfield = dtuple_get_nth_field(entry, 2 /*N_COLS*/);
 
-  ut_a(DICT_TF_COMPACT);
-
-  ptr = (byte *)mem_heap_alloc(heap, 4);
-  mach_write_to_4(ptr, table->n_def | ((table->flags & DICT_TF_COMPACT) << 31));
+  ptr = static_cast<byte *>(mem_heap_alloc(heap, 4));
+  mach_write_to_4(ptr, table->n_def);
   dfield_set_data(dfield, ptr, 4);
   /* 5: TYPE -----------------------------*/
   dfield = dtuple_get_nth_field(entry, 3 /*TYPE*/);
 
-  ptr = (byte *)mem_heap_alloc(heap, 4);
-  if (table->flags & (~DICT_TF_COMPACT & ~(~0UL << DICT_TF_BITS))) {
-    ut_a(table->flags & DICT_TF_COMPACT);
-    ut_a(dict_table_get_format(table) >= DICT_TF_FORMAT_V1);
-    ut_a(!(table->flags & (~0UL << DICT_TF2_BITS)));
+  ptr = static_cast<byte *>(mem_heap_alloc(heap, 4));
 
-    mach_write_to_4(ptr, table->flags & ~(~0UL << DICT_TF_BITS));
-  } else {
-    mach_write_to_4(ptr, DICT_TABLE_ORDINARY);
-  }
+  mach_write_to_4(ptr, DICT_TABLE_ORDINARY);
 
   dfield_set_data(dfield, ptr, 4);
   /* 6: MIX_ID (obsolete) ---------------------------*/
   dfield = dtuple_get_nth_field(entry, 4 /*MIX_ID*/);
 
-  ptr = (byte *)mem_heap_zalloc(heap, 8);
+  ptr = static_cast<byte *>(mem_heap_zalloc(heap, 8));
 
   dfield_set_data(dfield, ptr, 8);
   /* 7: MIX_LEN (additional flags) --------------------------*/
 
   dfield = dtuple_get_nth_field(entry, 5 /*MIX_LEN*/);
 
-  ptr = (byte *)mem_heap_alloc(heap, 4);
+  ptr = static_cast<byte *>(mem_heap_alloc(heap, 4));
   mach_write_to_4(ptr, table->flags >> DICT_TF2_SHIFT);
 
   dfield_set_data(dfield, ptr, 4);
@@ -111,7 +102,7 @@ static dtuple_t *dict_create_sys_tables_tuple(const dict_table_t *table, mem_hea
   /* 9: SPACE ----------------------------*/
   dfield = dtuple_get_nth_field(entry, 7 /*SPACE*/);
 
-  ptr = (byte *)mem_heap_alloc(heap, 4);
+  ptr = static_cast<byte *>(mem_heap_alloc(heap, 4));
   mach_write_to_4(ptr, table->space);
 
   dfield_set_data(dfield, ptr, 4);
@@ -222,12 +213,11 @@ static db_err dict_build_table_def_step(que_thr_t *thr, tab_node_t *node) {
     - page 0 is the fsp header and an extent descriptor page,
     - page 1 is an ibuf bitmap page,
     - page 2 is the first inode page,
-    - page 3 will contain the root of the clustered index of the
-    table we create here. */
+    - page 3 will contain the root of the clustered index of the table we create here. */
 
-    ulint space = 0; /* reset to zero for the call below */
+    space_id_t space = 0; /* reset to zero for the call below */
 
-    if (table->dir_path_of_temp_table) {
+    if (table->dir_path_of_temp_table != nullptr) {
       /* We place tables created with CREATE TEMPORARY
       TABLE in the configured tmp dir. */
 
@@ -241,10 +231,8 @@ static db_err dict_build_table_def_step(que_thr_t *thr, tab_node_t *node) {
     ut_ad(dict_table_get_format(table) <= DICT_TF_FORMAT_MAX);
 
     flags = table->flags & ~(~0UL << DICT_TF_BITS);
-    err = srv_fil->create_new_single_table_tablespace(
-      &space, path_or_name, is_path, flags == DICT_TF_COMPACT ? 0 : flags, FIL_IBD_FILE_INITIAL_SIZE
-    );
-    table->space = (unsigned int)space;
+    err = srv_fil->create_new_single_table_tablespace(&space, path_or_name, is_path, flags, FIL_IBD_FILE_INITIAL_SIZE);
+    table->space = space_id_t(space);
 
     if (err != DB_SUCCESS) {
 
@@ -258,7 +246,6 @@ static db_err dict_build_table_def_step(que_thr_t *thr, tab_node_t *node) {
     mtr_commit(&mtr);
   } else {
     /* Create in the system tablespace: disallow new features */
-    table->flags &= (~0UL << DICT_TF_BITS) | DICT_TF_COMPACT;
   }
 
   row = dict_create_sys_tables_tuple(table, node->heap);
@@ -583,18 +570,14 @@ static ulint dict_create_index_tree_step(ind_node_t *node) {
 }
 
 void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
-  ulint root_page_no;
-  ulint space;
-  const byte *ptr;
   ulint len;
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
-  ut_a(!dict_table_is_comp(dict_sys->sys_indexes));
-  ptr = rec_get_nth_field_old(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
+  auto ptr = rec_get_nth_field(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
 
   ut_ad(len == 4);
 
-  root_page_no = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
+  page_no_t root_page_no = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
 
   if (root_page_no == FIL_NULL) {
     /* The tree has already been freed */
@@ -602,11 +585,11 @@ void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
     return;
   }
 
-  ptr = rec_get_nth_field_old(rec, DICT_SYS_INDEXES_SPACE_NO_FIELD, &len);
+  ptr = rec_get_nth_field(rec, DICT_SYS_INDEXES_SPACE_NO_FIELD, &len);
 
   ut_ad(len == 4);
 
-  space = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
+  space_id_t space = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
 
   if (srv_fil->space_get_flags(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
@@ -636,10 +619,9 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space, btr_pcur_t *pcu
   ulint len;
   dict_index_t *index;
 
-  ut_ad(mutex_own(&(dict_sys->mutex)));
-  ut_a(!dict_table_is_comp(dict_sys->sys_indexes));
+  ut_ad(mutex_own(&dict_sys->mutex));
   auto rec = pcur->get_rec();
-  auto ptr = rec_get_nth_field_old(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
+  auto ptr = rec_get_nth_field(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
 
   ut_ad(len == 4);
 
@@ -658,7 +640,7 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space, btr_pcur_t *pcu
     drop = false;
   }
 
-  ptr = rec_get_nth_field_old(rec, DICT_SYS_INDEXES_SPACE_NO_FIELD, &len);
+  ptr = rec_get_nth_field(rec, DICT_SYS_INDEXES_SPACE_NO_FIELD, &len);
 
   ut_ad(len == 4);
 
@@ -681,11 +663,11 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space, btr_pcur_t *pcu
     return FIL_NULL;
   }
 
-  ptr = rec_get_nth_field_old(rec, DICT_SYS_INDEXES_TYPE_FIELD, &len);
+  ptr = rec_get_nth_field(rec, DICT_SYS_INDEXES_TYPE_FIELD, &len);
   ut_ad(len == 4);
   type = mach_read_from_4(ptr);
 
-  ptr = rec_get_nth_field_old(rec, 1, &len);
+  ptr = rec_get_nth_field(rec, 1, &len);
   ut_ad(len == 8);
   index_id = mach_read_from_8(ptr);
 

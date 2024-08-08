@@ -156,7 +156,7 @@ static db_err row_upd_check_references_constraints(
                          cursor position is lost in this function! */
   dict_table_t *table, /*!< in: table in question */
   dict_index_t *index, /*!< in: index of the cursor */
-  ulint *offsets,      /*!< in/out: rec_get_offsets(pcur.rec, index) */
+  ulint *offsets,      /*!< in/out: Phy_rec::get_col_offsets(index, pcur.rec) */
   que_thr_t *thr,      /*!< in: query thread */
   mtr_t *mtr
 ) /*!< in: mtr */
@@ -287,11 +287,12 @@ upd_node_t *upd_node_create(mem_heap_t *heap) {
 void row_upd_rec_sys_fields_in_recovery(rec_t *rec, const ulint *offsets, ulint pos, trx_id_t trx_id, roll_ptr_t roll_ptr) {
   ut_ad(rec_offs_validate(rec, nullptr, offsets));
 
-  byte *field;
   ulint len;
 
-  field = rec_get_nth_field(rec, offsets, pos, &len);
+  auto col_offset = rec_get_nth_field_offs(offsets, pos, &len);
   ut_ad(len == DATA_TRX_ID_LEN);
+
+  auto field = rec + col_offset;
 
   static_assert(DATA_TRX_ID + 1 == DATA_ROLL_PTR, "error DATA_TRX_ID + 1 != DATA_ROLL_PTR");
 
@@ -316,41 +317,25 @@ void row_upd_index_entry_sys_field(const dtuple_t *entry, dict_index_t *index, u
 }
 
 bool row_upd_changes_field_size_or_external(dict_index_t *index, const ulint *offsets, const upd_t *update) {
-  const upd_field_t *upd_field;
-  const dfield_t *new_val;
-  ulint old_len;
-  ulint new_len;
-
   ut_ad(rec_offs_validate(nullptr, index, offsets));
   auto n_fields = upd_get_n_fields(update);
 
   for (ulint i = 0; i < n_fields; i++) {
-    upd_field = upd_get_nth_field(update, i);
+    auto upd_field = upd_get_nth_field(update, i);
 
-    new_val = &(upd_field->new_val);
-    new_len = dfield_get_len(new_val);
+    auto new_val = &(upd_field->new_val);
+    auto new_len = dfield_get_len(new_val);
 
-    if (dfield_is_null(new_val) && !rec_offs_comp(offsets)) {
+    if (dfield_is_null(new_val)) {
       /* A bug fixed on Dec 31st, 2004: we looked at the
       SQL nullptr size from the wrong field! We may backport
       this fix also to 4.0. The merge to 5.0 will be made
       manually immediately after we commit this to 4.1. */
 
-      new_len = dict_col_get_sql_null_size(dict_index_get_nth_col(index, upd_field->field_no), 0);
+      new_len = dict_col_get_sql_null_size(dict_index_get_nth_col(index, upd_field->field_no));
     }
 
-    old_len = rec_offs_nth_size(offsets, upd_field->field_no);
-
-    if (rec_offs_comp(offsets) && rec_offs_nth_sql_null(offsets, upd_field->field_no)) {
-      /* Note that in the compact table format, for a
-      variable length field, an SQL nullptr will use zero
-      bytes in the offset array at the start of the physical
-      record, but a zero-length value (empty string) will
-      use one byte! Thus, we cannot use update-in-place
-      if we update an SQL nullptr varchar to an empty string! */
-
-      old_len = UNIV_SQL_NULL;
-    }
+    auto old_len = rec_offs_nth_size(offsets, upd_field->field_no);
 
     if (dfield_is_ext(new_val) || old_len != new_len || rec_offs_nth_extern(offsets, upd_field->field_no)) {
 
@@ -362,24 +347,16 @@ bool row_upd_changes_field_size_or_external(dict_index_t *index, const ulint *of
 }
 
 void row_upd_rec_in_place(rec_t *rec, dict_index_t *index, const ulint *offsets, const upd_t *update) {
-  const upd_field_t *upd_field;
-  const dfield_t *new_val;
-  ulint n_fields;
-  ulint i;
-
   ut_ad(rec_offs_validate(rec, index, offsets));
 
-  if (rec_offs_comp(offsets)) {
-    rec_set_info_bits_new(rec, update->info_bits);
-  } else {
-    rec_set_info_bits_old(rec, update->info_bits);
-  }
+  rec_set_info_bits(rec, update->info_bits);
 
-  n_fields = upd_get_n_fields(update);
+  auto n_fields = upd_get_n_fields(update);
 
-  for (i = 0; i < n_fields; i++) {
-    upd_field = upd_get_nth_field(update, i);
-    new_val = &(upd_field->new_val);
+  for (ulint i = 0; i < n_fields; i++) {
+    auto upd_field = upd_get_nth_field(update, i);
+    auto new_val = &upd_field->new_val;
+
     ut_ad(!dfield_is_ext(new_val) == !rec_offs_nth_extern(offsets, upd_field->field_no));
 
     rec_set_nth_field(rec, offsets, upd_field->field_no, dfield_get_data(new_val), dfield_get_len(new_val));
@@ -564,7 +541,12 @@ upd_t *row_upd_build_sec_rec_difference_binary(
   update = upd_create(dtuple_get_n_fields(entry), heap);
 
   n_diff = 0;
-  offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
+
+  {
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
+  }
 
   for (i = 0; i < dtuple_get_n_fields(entry); i++) {
 
@@ -609,7 +591,6 @@ upd_t *row_upd_build_difference_binary(dict_index_t *index, const dtuple_t *entr
   ulint n_diff;
   ulint roll_ptr_pos;
   ulint trx_id_pos;
-  ulint i;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   const ulint *offsets;
   rec_offs_init(offsets_);
@@ -624,9 +605,13 @@ upd_t *row_upd_build_difference_binary(dict_index_t *index, const dtuple_t *entr
   roll_ptr_pos = dict_index_get_sys_col_pos(index, DATA_ROLL_PTR);
   trx_id_pos = dict_index_get_sys_col_pos(index, DATA_TRX_ID);
 
-  offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{index, rec};
 
-  for (i = 0; i < dtuple_get_n_fields(entry); i++) {
+    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
+  }
+
+  for (ulint i = 0; i < dtuple_get_n_fields(entry); i++) {
 
     data = rec_get_nth_field(rec, offsets, i, &len);
 
@@ -975,19 +960,19 @@ static bool row_upd_changes_first_fields_binary(
   return false;
 }
 
-/** Copies the column values from a record. */
-inline void row_upd_copy_columns(
-  rec_t *rec,           /*!< in: record in a clustered index */
-  const ulint *offsets, /*!< in: array returned by rec_get_offsets() */
-  sym_node_t *column
-) /*!< in: first column in a column list, or
-                          nullptr */
-{
-  byte *data;
-  ulint len;
+/**
+ * Copies the column values from a record. 
+ *
+ * @param rec The record in a clustered index.
+ * @param offsets The array returned by Phy_rec::get_col_offsets().
+ * @param column The first column in a column list, or nullptr.
+ */
+inline void row_upd_copy_columns(rec_t *rec, const ulint *offsets, sym_node_t *column) {
+  while (column != nullptr) {
+    ulint len;
+    auto col_offset = rec_get_nth_field_offs(offsets, column->field_nos[SYM_CLUST_FIELD_NO], &len);
+    auto data = rec + col_offset;
 
-  while (column) {
-    data = rec_get_nth_field(rec, offsets, column->field_nos[SYM_CLUST_FIELD_NO], &len);
     eval_node_copy_and_alloc_val(column, data, len);
 
     column = UT_LIST_GET_NEXT(col_var_list, column);
@@ -1036,8 +1021,14 @@ static void row_upd_store_row(upd_node_t *node) /*!< in: row update node */
 
   rec = node->pcur->get_rec();
 
-  offsets = rec_get_offsets(rec, clust_index, offsets_, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{clust_index, rec};
+
+    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
+  }
+
   node->row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr, &node->ext, node->heap);
+
   if (node->is_delete) {
     node->upd_row = nullptr;
     node->upd_ext = nullptr;
@@ -1095,7 +1086,7 @@ static db_err row_upd_sec_index_entry(
     ib_logger(ib_stream, "\ntuple ");
     dtuple_print(ib_stream, entry);
     ib_logger(ib_stream, "\nrecord ");
-    rec_print(ib_stream, rec, index);
+    rec_print(rec);
     ib_logger(ib_stream, "\n");
 
     trx_print(ib_stream, trx, 0);
@@ -1106,13 +1097,13 @@ static db_err row_upd_sec_index_entry(
     delete marked if we return after a lock wait in
     row_ins_index_entry below */
 
-    if (!rec_get_deleted_flag(rec, dict_table_is_comp(index->table))) {
+    if (!rec_get_deleted_flag(rec)) {
 
       err = btr_cur_del_mark_set_sec_rec(0, btr_cur, true, thr, &mtr);
 
       if (err == DB_SUCCESS && check_ref) {
-
-        ulint *offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED, &heap);
+        Phy_rec record{index, rec};
+        auto offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
 
         /* NOTE that the following call loses the position of pcur ! */
         err = row_upd_check_references_constraints(node, &pcur, index->table, index, offsets, thr, &mtr);
@@ -1212,7 +1203,13 @@ static db_err row_upd_clust_rec_by_insert(
 
     rec = btr_cur_get_rec(btr_cur);
     index = dict_table_get_first_index(table);
-    offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
+
+    {
+      Phy_rec record{index, rec};
+
+      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
+    }
+
     btr_cur_mark_extern_inherited_fields(rec, index, offsets, node->update, mtr);
 
     if (check_ref) {
@@ -1283,7 +1280,7 @@ static db_err row_upd_clust_rec(
   pcur = node->pcur;
   btr_cur = pcur->get_btr_cur();
 
-  ut_ad(!rec_get_deleted_flag(pcur->get_rec(), dict_table_is_comp(index->table)));
+  ut_ad(!rec_get_deleted_flag(pcur->get_rec()));
 
   /* Try optimistic updating of the record, keeping changes within
   the page; we do not check locks because we assume the x-lock on the
@@ -1319,7 +1316,7 @@ static db_err row_upd_clust_rec(
 
   ut_a(pcur->restore_position(BTR_MODIFY_TREE, mtr, Source_location{}));
 
-  ut_ad(!rec_get_deleted_flag(pcur->get_rec(), dict_table_is_comp(index->table)));
+  ut_ad(!rec_get_deleted_flag(pcur->get_rec()));
 
   err = btr_cur_pessimistic_update(BTR_NO_LOCKING_FLAG, btr_cur, &heap, &big_rec, node->update, node->cmpl_info, thr, mtr);
 
@@ -1336,9 +1333,15 @@ static db_err row_upd_clust_rec(
 
     rec = btr_cur_get_rec(btr_cur);
 
-    err = btr_store_big_rec_extern_fields(
-      index, btr_cur_get_block(btr_cur), rec, rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap), big_rec, mtr
-    );
+    ulint *offsets{};
+
+    {
+      Phy_rec record{index, rec};
+
+      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
+    }
+
+    err = btr_store_big_rec_extern_fields(index, btr_cur_get_block(btr_cur), rec, offsets, big_rec, mtr);
 
     mtr_commit(mtr);
   }
@@ -1359,14 +1362,11 @@ static db_err row_upd_clust_rec(
 static db_err row_upd_del_mark_clust_rec(
   upd_node_t *node,    /*!< in: row update node */
   dict_index_t *index, /*!< in: clustered index */
-  ulint *offsets,      /*!< in/out: rec_get_offsets() for the
-                         record under the cursor */
+  ulint *offsets,      /*!< in/out: Phy_rec::get_col_offsets() for the record under the cursor */
   que_thr_t *thr,      /*!< in: query thread */
-  bool check_ref,      /*!< in: true if index may be referenced in
-                        a foreign key constraint */
-  mtr_t *mtr
-) /*!< in: mtr; gets committed here */
-{
+  bool check_ref,      /*!< in: true if index may be referenced in a foreign key constraint */
+  mtr_t *mtr           /*!< in: mtr; gets committed here */
+) {
   db_err err;
 
   ut_ad(node);
@@ -1472,7 +1472,12 @@ static db_err row_upd_clust_step(
   }
 
   rec = pcur->get_rec();
-  offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
+
+  {
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
+  }
 
   if (!node->has_clust_rec_x_lock) {
     err = lock_clust_rec_modify_check_and_lock(0, pcur->get_block(), rec, index, offsets, thr);

@@ -139,10 +139,9 @@ byte *mlog_parse_nbytes(ulint type, byte *ptr, byte *end_ptr, byte *page);
 byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page);
 
 /**
- * @brief Opens a buffer for mlog, writes the initial log record and,
- *        if needed, the field lengths of an index. Reserves space
- *        for further log entries. The log entry must be closed with
- *        mtr_close().
+ *  @brief Opens a buffer for mlog, writes the initial log record
+ *    Reserves space for further log entries. The log entry must be
+ *    closed with mtr_close().
  * 
  * @param mtr Mtr.
  * @param rec Index record or page.
@@ -158,11 +157,10 @@ byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, dict_index_t *index
  * 
  * @param ptr Buffer.
  * @param end_ptr Buffer end.
- * @param comp True=compact record format.
  * @param index Dummy index.
  * @return Parsed record end, nullptr if not a complete record.
  */
-byte *mlog_parse_index(byte *ptr, const byte *end_ptr, bool comp, dict_index_t **index);
+byte *mlog_parse_index(byte *ptr, const byte *end_ptr, dict_index_t **index);
 
 /**
  * @brief Opens a buffer to mlog. It must be closed with mlog_close.

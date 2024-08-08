@@ -447,7 +447,7 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
     }
   }
 
-  if (rec_get_deleted_flag(rec, m_config.m_is_compact)) {
+  if (rec_get_deleted_flag(rec)) {
     /* This record was deleted in the latest committed version, or it was
     deleted and then reinserted-by-update before purge kicked in. Skip it. */
     return false;
@@ -461,7 +461,11 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
 }
 
 void Parallel_reader::Scan_ctx::copy_row(const rec_t *rec, Iter *iter) const {
-  iter->m_offsets = rec_get_offsets(rec, m_config.m_index, nullptr, ULINT_UNDEFINED, &iter->m_heap);
+  {
+    Phy_rec record{m_config.m_index, rec};
+
+    iter->m_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &iter->m_heap, Source_location{});
+  }
 
   /* Copy the row from the page to the scan iterator. The copy should use
   memory from the iterator heap because the scan iterator owns the copy. */
@@ -651,7 +655,12 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
     rec_offs_init(offsets_);
 
     const rec_t *rec = page_cur_get_rec(cur);
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+
+    {
+      Phy_rec record{index, rec};
+
+      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+    }
 
     if (end_tuple != nullptr) {
       ut_ad(rec != nullptr);
@@ -888,7 +897,11 @@ page_no_t Parallel_reader::Scan_ctx::search(const buf_block_t *block, const dtup
 
   rec_offs_init(offsets_);
 
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+  }
 
   auto page_no = btr_node_ptr_get_child_page_no(rec, offsets);
 
@@ -1009,7 +1022,6 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
 
   mem_heap_t *heap{};
 
-  const auto at_leaf = page_is_leaf(block->get_frame());
   const auto at_level = btr_page_get_level(block->get_frame(), mtr);
 
   Savepoints savepoints{};
@@ -1017,13 +1029,15 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
   while (!page_cur_is_after_last(&page_cursor)) {
     const auto rec = page_cur_get_rec(&page_cursor);
 
-    ut_a(at_leaf || rec_get_node_ptr_flag(rec) || !dict_table_is_comp(index->table));
-
     if (heap == nullptr) {
       heap = mem_heap_create(UNIV_PAGE_SIZE / 4);
     }
 
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record{index, rec};
+
+      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+    }
 
     const auto end = scan_range.m_end;
 

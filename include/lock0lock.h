@@ -263,7 +263,7 @@ db_err lock_clust_rec_modify_check_and_lock(
   const rec_t *rec,         /*!< in: record which should be
                               modified */
   dict_index_t *index,      /*!< in: clustered index */
-  const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
+  const ulint *offsets,     /*!< in: Phy_rec::get_col_offsets(rec, index) */
   que_thr_t *thr
 ); /*!< in: query thread */
 
@@ -296,7 +296,7 @@ db_err lock_sec_rec_read_check_and_lock(
                               be read or passed over by a
                               read cursor */
   dict_index_t *index,      /*!< in: secondary index */
-  const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
+  const ulint *offsets,     /*!< in: Phy_rec::get_col_offsets(rec, index) */
   enum Lock_mode mode,      /*!< in: mode of the lock which
                               the read cursor should set on
                               records: LOCK_S or LOCK_X; the
@@ -323,7 +323,7 @@ db_err lock_clust_rec_read_check_and_lock(
                               be read or passed over by a
                               read cursor */
   dict_index_t *index,      /*!< in: clustered index */
-  const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
+  const ulint *offsets,     /*!< in: Phy_rec::get_col_offsets(rec, index) */
   enum Lock_mode mode,      /*!< in: mode of the lock which
                               the read cursor should set on
                               records: LOCK_S or LOCK_X; the
@@ -370,7 +370,7 @@ bool lock_clust_rec_cons_read_sees(
   const rec_t *rec,     /*!< in: user record which should be read or
                           passed over by a read cursor */
   dict_index_t *index,  /*!< in: clustered index */
-  const ulint *offsets, /*!< in: rec_get_offsets(rec, index) */
+  const ulint *offsets, /*!< in: Phy_rec::get_col_offsets(rec, index) */
   read_view_t *view
 ); /*!< in: consistent read view */
 
@@ -493,7 +493,7 @@ bool lock_check_trx_id_sanity(
   trx_id_t trx_id,      /*!< in: trx id */
   const rec_t *rec,     /*!< in: user record */
   dict_index_t *index,  /*!< in: clustered index */
-  const ulint *offsets, /*!< in: rec_get_offsets(rec, index) */
+  const ulint *offsets, /*!< in: Phy_rec::get_col_offsets(rec, index) */
   bool has_kernel_mutex
 ); /*!< in: true if the caller owns the kernel mutex */
 
@@ -686,7 +686,7 @@ inline trx_t *lock_clust_rec_some_has_impl(
   const rec_t *rec,         /*!< in: user record */
   dict_index_t *dict_index, /*!< in: clustered index */
   const ulint *offsets
-) /*!< in: rec_get_offsets(rec, index) */
+) /*!< in: Phy_rec::get_col_offsets(rec, index) */
 {
   trx_id_t trx_id;
 
@@ -711,11 +711,7 @@ inline ulint lock_get_min_heap_no(const buf_block_t *block) /*!< in: buffer bloc
 {
   const page_t *page = block->m_frame;
 
-  if (page_is_comp(page)) {
-    return (rec_get_heap_no_new(page + rec_get_next_offs(page + PAGE_NEW_INFIMUM, true)));
-  } else {
-    return (rec_get_heap_no_old(page + rec_get_next_offs(page + PAGE_OLD_INFIMUM, false)));
-  }
+  return rec_get_heap_no(page + rec_get_next_offs(page + PAGE_INFIMUM));
 }
 
 

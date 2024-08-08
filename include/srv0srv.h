@@ -284,7 +284,7 @@ enum {
   SRV_NOT_RAW = 0, /*!< Not a raw partition */
   SRV_NEW_RAW,     /*!< A 'newraw' partition, only to be
                    initialized */
-  SRV_OLD_RAW      /*!< An initialized raw partition */
+  SRV_RAW      /*!< An initialized raw partition */
 };
 
 /** Alternatives for the file flush option in Unix; see the InnoDB manual

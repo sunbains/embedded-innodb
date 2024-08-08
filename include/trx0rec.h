@@ -188,7 +188,7 @@ db_err trx_undo_prev_version_build(
                           index_rec page and purge_view */
   const rec_t *rec,       /*!< in: version of a clustered index record */
   dict_index_t *index,    /*!< in: clustered index */
-  ulint *offsets,         /*!< in: rec_get_offsets(rec, index) */
+  ulint *offsets,         /*!< in: Phy_rec::get_col_offsets(rec, index) */
   mem_heap_t *heap,       /*!< in: memory heap from which the memory
                             needed is allocated */
   rec_t **old_vers /*!< out, own: previous version, or nullptr if rec is the first inserted version, or if history data has been deleted */

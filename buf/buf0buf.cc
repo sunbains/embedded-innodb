@@ -328,7 +328,7 @@ void Buf_pool::init() {
 }
 
 bool Buf_pool::is_corrupted(const byte *read_buf) {
-  if (memcmp(read_buf + FIL_PAGE_LSN + 4, read_buf + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + 4, 4)) {
+  if (memcmp(read_buf + FIL_PAGE_LSN + 4, read_buf + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4, 4)) {
 
     /* Stored log sequence numbers at the start and the end
     of page do not match */

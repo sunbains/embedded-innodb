@@ -138,8 +138,10 @@ dtuple_t *row_build(
   ut_ad(index && rec && heap);
   ut_ad(dict_index_is_clust(index));
 
-  if (!offsets) {
-    offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &tmp_heap);
+  if (offsets == nullptr) {
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &tmp_heap, Source_location{});
   } else {
     ut_ad(rec_offs_validate(rec, index, offsets));
   }
@@ -149,7 +151,7 @@ dtuple_t *row_build(
     buf = mem_heap_alloc(heap, rec_offs_size(offsets));
     rec = rec_copy(buf, rec, offsets);
     /* Avoid a debug assertion in rec_offs_validate(). */
-    rec_offs_make_valid(rec, index, (ulint *)offsets);
+    ut_d(rec_offs_make_valid(rec, index, (ulint *)offsets));
   }
 
   table = index->table;
@@ -159,7 +161,7 @@ dtuple_t *row_build(
 
   dict_table_copy_types(row, table);
 
-  dtuple_set_info_bits(row, rec_get_info_bits(rec, dict_table_is_comp(table)));
+  dtuple_set_info_bits(row, rec_get_info_bits(rec));
 
   n_fields = rec_offs_n_fields(offsets);
   n_ext_cols = rec_offs_n_extern(offsets);
@@ -277,12 +279,12 @@ dtuple_t *row_rec_to_index_entry(
     rec = rec_copy(buf, rec, offsets);
 
     /* Avoid a debug assertion in rec_offs_validate(). */
-    rec_offs_make_valid(rec, index, offsets);
+    ut_d(rec_offs_make_valid(rec, index, offsets));
   }
 
   auto entry = row_rec_to_index_entry_low(rec, index, offsets, n_ext, heap);
 
-  dtuple_set_info_bits(entry, rec_get_info_bits(rec, rec_offs_comp(offsets)));
+  dtuple_set_info_bits(entry, rec_get_info_bits(rec));
 
   return entry;
 }
@@ -307,7 +309,12 @@ dtuple_t *row_build_row_ref(ulint type, dict_index_t *index, const rec_t *rec, m
   ut_ad(index && rec && heap);
   ut_ad(!dict_index_is_clust(index));
 
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &tmp_heap);
+  {
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &tmp_heap, Source_location{});
+  }
+
   /* Secondary indexes must not contain externally stored columns. */
   ut_ad(!rec_offs_any_extern(offsets));
 
@@ -318,7 +325,7 @@ dtuple_t *row_build_row_ref(ulint type, dict_index_t *index, const rec_t *rec, m
 
     rec = rec_copy(buf, rec, offsets);
     /* Avoid a debug assertion in rec_offs_validate(). */
-    rec_offs_make_valid(rec, index, offsets);
+    ut_d(rec_offs_make_valid(rec, index, offsets));
   }
 
   table = index->table;
@@ -412,7 +419,9 @@ void row_build_row_ref_in_tuple(
   }
 
   if (!offsets) {
-    offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
   } else {
     ut_ad(rec_offs_validate(rec, index, offsets));
   }

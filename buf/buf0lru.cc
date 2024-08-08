@@ -55,9 +55,9 @@ constexpr ulint OLD_TOLERANCE = 20;
 /** The minimum amount of non-old blocks when the LRU_old list exists
 (that is, when there are more than LD_MIN_LEN blocks).
 @see Buf_LRU::old_adjust_len */
-constexpr ulint NON_OLD_MIN_LEN = 5;
+constexpr ulint NON_MIN_LEN = 5;
 
-static_assert(NON_OLD_MIN_LEN < Buf_LRU::OLD_MIN_LEN, "error Buf_LRU::NON_OLD_MIN_LEN >= Buf_LRU::OLD_MIN_LEN");
+static_assert(NON_MIN_LEN < Buf_LRU::OLD_MIN_LEN, "error Buf_LRU::NON_MIN_LEN >= Buf_LRU::OLD_MIN_LEN");
 
 ulint Buf_LRU::s_old_ratio{};
 ulint Buf_LRU::s_old_threshold_ms{};
@@ -415,7 +415,7 @@ void Buf_LRU::old_adjust_len() {
 
   auto new_len = std::min(
     UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) * m_old_ratio / OLD_RATIO_DIV,
-    UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) - (OLD_TOLERANCE + NON_OLD_MIN_LEN)
+    UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) - (OLD_TOLERANCE + NON_MIN_LEN)
   );
 
   for (;;) {
@@ -432,7 +432,7 @@ void Buf_LRU::old_adjust_len() {
 
       old_len = ++srv_buf_pool->m_LRU_old_len;
 
-      buf_page_set_old(lru_old, true);
+      buf_page_set(lru_old, true);
 
     } else if (old_len > new_len + OLD_TOLERANCE) {
 
@@ -442,7 +442,7 @@ void Buf_LRU::old_adjust_len() {
 
       old_len = srv_buf_pool->m_LRU_old_len;
 
-      buf_page_set_old(lru_old, false);
+      buf_page_set(lru_old, false);
 
     } else {
       return;
@@ -463,7 +463,7 @@ void Buf_LRU::old_init() {
     ut_ad(bpage->m_in_LRU_list);
     ut_ad(bpage->in_file());
     /* This loop temporarily violates the
-    assertions of buf_page_set_old(). */
+    assertions of buf_page_set(). */
     bpage->m_old = true;
   }
 
@@ -494,7 +494,7 @@ void Buf_LRU::remove_block(buf_page_t *bpage) {
 
     ut_a(prev_bpage);
     srv_buf_pool->m_LRU_old = prev_bpage;
-    buf_page_set_old(prev_bpage, true);
+    buf_page_set(prev_bpage, true);
 
     ++srv_buf_pool->m_LRU_old_len;
   }
@@ -508,7 +508,7 @@ void Buf_LRU::remove_block(buf_page_t *bpage) {
   if (UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) < OLD_MIN_LEN) {
 
     for (bpage = UT_LIST_GET_FIRST(srv_buf_pool->m_LRU_list); bpage != nullptr; bpage = UT_LIST_GET_NEXT(m_LRU_list, bpage)) {
-      /* This loop temporarily violates the assertions of buf_page_set_old(). */
+      /* This loop temporarily violates the assertions of buf_page_set(). */
       bpage->m_old = false;
     }
 
@@ -547,7 +547,7 @@ void Buf_LRU::add_block_to_end_low(buf_page_t *bpage) {
 
     /* Adjust the length of the old block list if necessary */
 
-    buf_page_set_old(bpage, true);
+    buf_page_set(bpage, true);
     srv_buf_pool->m_LRU_old_len++;
     old_adjust_len();
 
@@ -558,7 +558,7 @@ void Buf_LRU::add_block_to_end_low(buf_page_t *bpage) {
 
     old_init();
   } else {
-    buf_page_set_old(bpage, srv_buf_pool->m_LRU_old != nullptr);
+    buf_page_set(bpage, srv_buf_pool->m_LRU_old != nullptr);
   }
 }
 
@@ -588,7 +588,7 @@ void Buf_LRU::add_block_low(buf_page_t *bpage, bool old) {
 
     /* Adjust the length of the old block list if necessary */
 
-    buf_page_set_old(bpage, old);
+    buf_page_set(bpage, old);
     old_adjust_len();
 
   } else if (UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) == OLD_MIN_LEN) {
@@ -598,7 +598,7 @@ void Buf_LRU::add_block_low(buf_page_t *bpage, bool old) {
 
     old_init();
   } else {
-    buf_page_set_old(bpage, srv_buf_pool->m_LRU_old != nullptr);
+    buf_page_set(bpage, srv_buf_pool->m_LRU_old != nullptr);
   }
 }
 
@@ -617,7 +617,7 @@ void Buf_LRU::make_block_young(buf_page_t *bpage) {
   add_block_low(bpage, false);
 }
 
-void Buf_LRU::make_block_old(buf_page_t *bpage) {
+void Buf_LRU::make_block(buf_page_t *bpage) {
   remove_block(bpage);
   add_block_to_end_low(bpage);
 }
@@ -878,7 +878,7 @@ bool Buf_LRU::validate() {
 
     const auto new_len = std::min(
       UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) * m_old_ratio / OLD_RATIO_DIV,
-      UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) - (OLD_TOLERANCE + NON_OLD_MIN_LEN)
+      UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) - (OLD_TOLERANCE + NON_MIN_LEN)
     );
 
     ut_a(old_len >= new_len - OLD_TOLERANCE);

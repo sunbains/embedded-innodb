@@ -459,22 +459,21 @@ inline dtuple_t *dtuple_copy(const dtuple_t *tuple, mem_heap_t *heap) {
  * is possible space in externally stored parts of the field.
  *
  * @param tuple The typed data tuple.
- * @param comp Nonzero if ROW_FORMAT=COMPACT.
  * @return The sum of data lengths.
  */
-inline ulint dtuple_get_data_size(const dtuple_t *tuple, ulint comp) {
+inline ulint dtuple_get_data_size(const dtuple_t *tuple) {
   ut_ad(dtuple_check_typed(tuple));
   ut_ad(tuple->magic_n == DATA_TUPLE_MAGIC_N);
 
   ulint sum = 0;
-  auto n_fields = tuple->n_fields;
+  const auto n_fields = tuple->n_fields;
 
   for (ulint i = 0; i < n_fields; i++) {
     auto field = dtuple_get_nth_field(tuple, i);
     auto len = dfield_get_len(field);
 
     if (len == UNIV_SQL_NULL) {
-      len = dtype_get_sql_null_size(dfield_get_type(field), comp);
+      len = dtype_get_sql_null_size(dfield_get_type(field));
     }
 
     sum += len;

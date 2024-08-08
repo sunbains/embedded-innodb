@@ -372,7 +372,7 @@ bool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
       str += 3;
 
       if ((srv_data_file_is_raw_partition)[i] == 0) {
-        (srv_data_file_is_raw_partition)[i] = SRV_OLD_RAW;
+        (srv_data_file_is_raw_partition)[i] = SRV_RAW;
       }
     }
 
@@ -772,7 +772,7 @@ static db_err open_or_create_data_files(
 
         return DB_ERROR;
       }
-    } else if (srv_data_file_is_raw_partition[i] == SRV_OLD_RAW) {
+    } else if (srv_data_file_is_raw_partition[i] == SRV_RAW) {
       srv_start_raw_disk_in_use = true;
 
       ret = false;
@@ -792,7 +792,7 @@ static db_err open_or_create_data_files(
         return DB_ERROR;
       }
 
-      if (srv_data_file_is_raw_partition[i] == SRV_OLD_RAW) {
+      if (srv_data_file_is_raw_partition[i] == SRV_RAW) {
         files[i] = os_file_create(name, OS_FILE_OPEN_RAW, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
       } else if (i == 0) {
         files[i] = os_file_create(name, OS_FILE_OPEN_RETRY, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
@@ -807,7 +807,7 @@ static db_err open_or_create_data_files(
         return DB_ERROR;
       }
 
-      if (srv_data_file_is_raw_partition[i] == SRV_OLD_RAW) {
+      if (srv_data_file_is_raw_partition[i] == SRV_RAW) {
 
         goto skip_size_check;
       }

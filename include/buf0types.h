@@ -930,8 +930,8 @@ struct Buf_pool {
   /** base node of the LRU list */
   UT_LIST_BASE_NODE_T(buf_page_t, m_LRU_list) m_LRU_list;
 
-  /** pointer to the about m_LRU->old_ratio/BUF_LRU_OLD_RATIO_DIV oldest
-  blocks in the LRU list; nullptr if LRU length less than BUF_LRU_OLD_MIN_LEN;
+  /** pointer to the about m_LRU->old_ratio/BUF_LRU_RATIO_DIV oldest
+  blocks in the LRU list; nullptr if LRU length less than BUF_LRU_MIN_LEN;
   NOTE: when LRU_old != nullptr, its length should always equal LRU_old_len */
   buf_page_t *m_LRU_old;
 

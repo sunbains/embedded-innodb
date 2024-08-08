@@ -83,7 +83,7 @@ constexpr ulint FIL_PAGE_DATA = 38;
 
 /** the low 4 bytes of this are used to store the page checksum, the last 4
 bytes should be identical to the last 4 bytes of FIL_PAGE_LSN */
-constexpr ulint FIL_PAGE_END_LSN_OLD_CHKSUM = 8;
+constexpr ulint FIL_PAGE_END_LSN_CHKSUM = 8;
 
 /** Size of the page trailer */
 constexpr ulint FIL_PAGE_DATA_END = 8;

@@ -668,79 +668,54 @@ static byte *recv_parse_or_apply_log_rec_body(
       ptr = mlog_parse_nbytes(type, ptr, end_ptr, page);
       break;
     case MLOG_REC_INSERT:
-    case MLOG_COMP_REC_INSERT:
       ut_ad(!page || page_type == FIL_PAGE_INDEX);
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, type == MLOG_COMP_REC_INSERT, &index))) {
-        ut_a(!page || (bool)!!page_is_comp(page) == dict_table_is_comp(index->table));
+      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
         ptr = page_cur_parse_insert_rec(false, ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_REC_CLUST_DELETE_MARK:
-    case MLOG_COMP_REC_CLUST_DELETE_MARK:
       ut_ad(!page || page_type == FIL_PAGE_INDEX);
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, type == MLOG_COMP_REC_CLUST_DELETE_MARK, &index))) {
-        ut_a(!page || (bool)!!page_is_comp(page) == dict_table_is_comp(index->table));
+      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
         ptr = btr_cur_parse_del_mark_set_clust_rec(ptr, end_ptr, page, index);
       }
-      break;
-    case MLOG_COMP_REC_SEC_DELETE_MARK:
-      ut_ad(!page || page_type == FIL_PAGE_INDEX);
-      /* This log record type is obsolete, but we process it for
-    backward compatibility with v5.0.3 and v5.0.4. */
-      ut_a(!page || page_is_comp(page));
-      ptr = mlog_parse_index(ptr, end_ptr, true, &index);
-      if (!ptr) {
-        break;
-      }
-      /* Fall through */
     case MLOG_REC_SEC_DELETE_MARK:
       ut_ad(!page || page_type == FIL_PAGE_INDEX);
       ptr = btr_cur_parse_del_mark_set_sec_rec(ptr, end_ptr, page);
       break;
     case MLOG_REC_UPDATE_IN_PLACE:
-    case MLOG_COMP_REC_UPDATE_IN_PLACE:
       ut_ad(!page || page_type == FIL_PAGE_INDEX);
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, type == MLOG_COMP_REC_UPDATE_IN_PLACE, &index))) {
-        ut_a(!page || (bool)!!page_is_comp(page) == dict_table_is_comp(index->table));
+      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
         ptr = btr_cur_parse_update_in_place(ptr, end_ptr, page, index);
       }
       break;
     case MLOG_LIST_END_DELETE:
-    case MLOG_COMP_LIST_END_DELETE:
     case MLOG_LIST_START_DELETE:
-    case MLOG_COMP_LIST_START_DELETE:
       ut_ad(!page || page_type == FIL_PAGE_INDEX);
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, type == MLOG_COMP_LIST_END_DELETE || type == MLOG_COMP_LIST_START_DELETE, &index))) {
-        ut_a(!page || (bool)!!page_is_comp(page) == dict_table_is_comp(index->table));
+      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
         ptr = page_parse_delete_rec_list(type, ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_LIST_END_COPY_CREATED:
-    case MLOG_COMP_LIST_END_COPY_CREATED:
       ut_ad(!page || page_type == FIL_PAGE_INDEX);
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, type == MLOG_COMP_LIST_END_COPY_CREATED, &index))) {
-        ut_a(!page || (bool)!!page_is_comp(page) == dict_table_is_comp(index->table));
+      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
         ptr = page_parse_copy_rec_list_to_created_page(ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_PAGE_REORGANIZE:
-    case MLOG_COMP_PAGE_REORGANIZE:
       ut_ad(!page || page_type == FIL_PAGE_INDEX);
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, type == MLOG_COMP_PAGE_REORGANIZE, &index))) {
-        ut_a(!page || (bool)!!page_is_comp(page) == dict_table_is_comp(index->table));
+      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
         ptr = btr_parse_page_reorganize(ptr, end_ptr, index, block, mtr);
       }
       break;
     case MLOG_PAGE_CREATE:
-    case MLOG_COMP_PAGE_CREATE:
       /* Allow anything in page_type when creating a page. */
-      ptr = page_parse_create(ptr, end_ptr, type == MLOG_COMP_PAGE_CREATE, block, mtr);
+      ptr = page_parse_create(ptr, end_ptr, block, mtr);
       break;
     case MLOG_UNDO_INSERT:
       ut_ad(!page || page_type == FIL_PAGE_UNDO_LOG);
@@ -764,17 +739,13 @@ static byte *recv_parse_or_apply_log_rec_body(
       ptr = trx_undo_parse_page_header(type, ptr, end_ptr, page, mtr);
       break;
     case MLOG_REC_MIN_MARK:
-    case MLOG_COMP_REC_MIN_MARK:
       ut_ad(!page || page_type == FIL_PAGE_INDEX);
-      ut_a(type == MLOG_COMP_REC_MIN_MARK);
-      ptr = btr_parse_set_min_rec_mark(ptr, end_ptr, type == MLOG_COMP_REC_MIN_MARK, page, mtr);
+      ptr = btr_parse_set_min_rec_mark(ptr, end_ptr, page, mtr);
       break;
     case MLOG_REC_DELETE:
-    case MLOG_COMP_REC_DELETE:
       ut_ad(!page || page_type == FIL_PAGE_INDEX);
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, type == MLOG_COMP_REC_DELETE, &index))) {
-        ut_a(!page || (bool)!!page_is_comp(page) == dict_table_is_comp(index->table));
+      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
         ptr = page_cur_parse_delete_rec(ptr, end_ptr, block, index, mtr);
       }
       break;
@@ -1055,7 +1026,7 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
       page_lsn = page_newest_lsn;
 
       memset(FIL_PAGE_LSN + page, 0, 8);
-      memset(UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + page, 0, 8);
+      memset(UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + page, 0, 8);
     }
 
     if (recv->start_lsn >= page_lsn) {
@@ -1087,7 +1058,7 @@ void recv_recover_page_func(bool just_read_in, buf_block_t *block) {
 
       end_lsn = recv->start_lsn + recv->len;
       mach_write_to_8(FIL_PAGE_LSN + page, end_lsn);
-      mach_write_to_8(UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM + page, end_lsn);
+      mach_write_to_8(UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + page, end_lsn);
     }
 
     if (recv->len > RECV_DATA_BLOCK_SIZE) {

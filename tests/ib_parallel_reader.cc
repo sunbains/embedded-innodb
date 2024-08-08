@@ -45,10 +45,10 @@ constexpr lint NUM_THREADS  = 64;
 /** Initial number of rows. */
 constexpr lint NUMBER_OF_ROWS = 1000000;
 
-constexpr lint NUMBER_OF_UNIQUE_VARCHARS = 512;
-
 /** Batch size for DML. Commit after that many rows are worked upon */
 constexpr lint BATCH_SIZE = 50000;
+
+constexpr lint NUMBER_OF_UNIQUE_VARCHARS = 512;
 
 /* isolation level for transactions */
 constexpr auto ISOLATION_LEVEL = IB_TRX_REPEATABLE_READ;
@@ -111,7 +111,7 @@ static ib_err_t create_table(const char *dbname, const char *name) {
 
   /* Pass a table page size of 0, ie., use default page size. */
   ib_tbl_sch_t ib_tbl_sch = nullptr;
-  ib_tbl_fmt_t tbl_fmt = IB_TBL_REDUNDANT;
+  ib_tbl_fmt_t tbl_fmt = IB_TBL_V1;
   auto err = ib_table_schema_create(table_name, &ib_tbl_sch, tbl_fmt, 0);
 
   ut_a(err == DB_SUCCESS);
@@ -426,7 +426,7 @@ static void startup(int argc, char*argv[], const std::string& db, const std::str
 
   gen_random_data(NUMBER_OF_UNIQUE_VARCHARS);
 
-  err = ib_startup("antelope");
+  err = ib_startup("default");
   ut_a(err == DB_SUCCESS);
 
   log_info("Creating database ", db);

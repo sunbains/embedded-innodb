@@ -440,14 +440,9 @@ static ulint ib_get_max_row_len(dict_index_t *cluster) {
  * Read the columns from a record into a tuple.
  *
  * @param rec           Record to read
- * @param page_format   True if compressed format
  * @param tuple         Tuple to read into
  */
-static void ib_read_tuple(const rec_t *rec, bool page_format, ib_tuple_t *tuple) {
-  void *ptr;
-  rec_t *copy;
-  ulint rec_meta_data;
-  ulint n_index_fields;
+static void ib_read_tuple(const rec_t *rec, ib_tuple_t *tuple) {
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   dtuple_t *dtuple = tuple->ptr;
@@ -455,19 +450,23 @@ static void ib_read_tuple(const rec_t *rec, bool page_format, ib_tuple_t *tuple)
 
   rec_offs_init(offsets_);
 
-  offsets = rec_get_offsets(rec, dindex, offsets, ULINT_UNDEFINED, &tuple->heap);
+  {
+    Phy_rec record{dindex, rec};
 
-  rec_meta_data = rec_get_info_bits(rec, page_format);
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &tuple->heap, Source_location{});
+  }
+
+  auto rec_meta_data = rec_get_info_bits(rec);
   dtuple_set_info_bits(dtuple, rec_meta_data);
 
   /* Make a copy of the rec. */
-  ptr = reinterpret_cast<void *>(mem_heap_alloc(tuple->heap, rec_offs_size(offsets)));
-  copy = rec_copy(ptr, rec, offsets);
+  auto ptr = reinterpret_cast<void *>(mem_heap_alloc(tuple->heap, rec_offs_size(offsets)));
+  auto copy = rec_copy(ptr, rec, offsets);
 
   /* Avoid a debug assertion in rec_offs_validate(). */
-  rec_offs_make_valid(rec, dindex, (ulint *)offsets);
+  ut_d(rec_offs_make_valid(rec, dindex, (ulint *)offsets));
 
-  n_index_fields = ut_min(rec_offs_n_fields(offsets), dtuple_get_n_fields(dtuple));
+  auto n_index_fields = ut_min(rec_offs_n_fields(offsets), dtuple_get_n_fields(dtuple));
 
   for (ulint i = 0; i < n_index_fields; ++i) {
     dfield_t *dfield;
@@ -1396,14 +1395,7 @@ static ulint ib_table_def_get_flags(const ib_table_def_t *table_def) {
   ulint flags = 0;
 
   switch (table_def->ib_tbl_fmt) {
-    case IB_TBL_REDUNDANT: /* Old row format */
-      break;
-    case IB_TBL_COMPACT: /* The compact row format */
-      flags = DICT_TF_COMPACT;
-      break;
-    case IB_TBL_DYNAMIC: /* The dynamic row format */
-      /* Dynamic format implies a page size of 0. */
-      flags = DICT_TF_COMPACT | DICT_TF_FORMAT_V1 << DICT_TF_FORMAT_SHIFT;
+    case IB_TBL_V1:
       break;
     default:
       ut_error;
@@ -2995,8 +2987,7 @@ static ib_err_t ib_delete_row(ib_cursor_t *cursor, btr_pcur_t *pcur, const rec_t
 
   auto upd = ib_update_vector_create(cursor);
 
-  auto page_format = dict_table_is_comp(dict_index->table);
-  ib_read_tuple(rec, page_format, tuple);
+  ib_read_tuple(rec, tuple);
 
   upd->n_fields = ib_tuple_get_n_cols(ib_tpl);
 
@@ -3049,9 +3040,6 @@ ib_err_t ib_cursor_delete_row(ib_crsr_t ib_crsr) {
 
   if (ib_btr_cursor_is_positioned(pcur)) {
     const rec_t *rec;
-    bool page_format;
-
-    page_format = dict_table_is_comp(dict_index->table);
 
     if (!row_sel_row_cache_is_empty(prebuilt)) {
       rec = row_sel_row_cache_get(prebuilt);
@@ -3071,7 +3059,7 @@ ib_err_t ib_cursor_delete_row(ib_crsr_t ib_crsr) {
       mtr_commit(&mtr);
     }
 
-    if (rec && !rec_get_deleted_flag(rec, page_format)) {
+    if (rec && !rec_get_deleted_flag(rec)) {
       err = ib_delete_row(cursor, pcur, rec);
     } else {
       err = DB_RECORD_NOT_FOUND;
@@ -3098,16 +3086,11 @@ ib_err_t ib_cursor_read_row(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl) {
   if (!ib_cursor_is_positioned(ib_crsr) && row_sel_row_cache_is_empty(cursor->prebuilt)) {
     err = DB_RECORD_NOT_FOUND;
   } else if (!row_sel_row_cache_is_empty(cursor->prebuilt)) {
-    const rec_t *rec;
-    bool page_format;
-
-    page_format = dict_table_is_comp(tuple->index->table);
-
-    rec = row_sel_row_cache_get(cursor->prebuilt);
+    auto rec = row_sel_row_cache_get(cursor->prebuilt);
     ut_a(rec != nullptr);
 
-    if (!rec_get_deleted_flag(rec, page_format)) {
-      ib_read_tuple(rec, page_format, tuple);
+    if (!rec_get_deleted_flag(rec)) {
+      ib_read_tuple(rec, tuple);
       err = DB_SUCCESS;
     } else {
       err = DB_RECORD_NOT_FOUND;
@@ -3130,14 +3113,10 @@ ib_err_t ib_cursor_read_row(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl) {
     mtr_start(&mtr);
 
     if (pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{})) {
-      const rec_t *rec;
-      bool page_format;
+      auto rec = pcur->get_rec();
 
-      page_format = dict_table_is_comp(tuple->index->table);
-      rec = pcur->get_rec();
-
-      if (!rec_get_deleted_flag(rec, page_format)) {
-        ib_read_tuple(rec, page_format, tuple);
+      if (!rec_get_deleted_flag(rec)) {
+        ib_read_tuple(rec, tuple);
         err = DB_SUCCESS;
       } else {
         err = DB_RECORD_NOT_FOUND;
@@ -4392,17 +4371,11 @@ ib_err_t ib_savepoint_rollback(ib_trx_t ib_trx, const void *name, ulint name_len
  */
 static void ib_table_get_format(const dict_table_t *table, ib_tbl_fmt_t *tbl_fmt, ulint *page_size) {
   *page_size = 0;
-  *tbl_fmt = IB_TBL_REDUNDANT;
 
-  switch (table->flags) {
-    case 0:
-      break;
-    case DICT_TF_COMPACT: /* The compact row format */
-      *tbl_fmt = IB_TBL_COMPACT;
-      break;
-    case DICT_TF_COMPACT | DICT_TF_FORMAT_V1 << DICT_TF_FORMAT_SHIFT:
-      *tbl_fmt = IB_TBL_DYNAMIC;
-      break;
+  if (table->flags == DICT_TF_FORMAT_V1) {
+      *tbl_fmt = IB_TBL_V1;
+  } else {
+    *tbl_fmt = IB_TBL_UNKNOWN;
   }
 }
 
@@ -4932,8 +4905,13 @@ static dberr_t check_table(trx_t *trx, dict_index_t *index, size_t n_threads) {
     }
 
     auto prev_tuple = prev_tuples[id];
+    ulint *offsets{};
 
-    auto offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record{index, rec};
+
+      offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+    }
 
     if (prev_tuple != nullptr) {
       ulint matched_fields = 0;
@@ -4961,7 +4939,7 @@ static dberr_t check_table(trx_t *trx, dict_index_t *index, size_t n_threads) {
 
         n_corrupt.inc(1, id);
         prev_tuple->print(dtuple_os);
-        rec_print(rec_os, rec, index);
+        rec_print(rec_os, rec);
 
         log_err(std::format(
           "Index records in a wrong order in index {} of table {}: {}, {}",
@@ -4979,7 +4957,7 @@ static dberr_t check_table(trx_t *trx, dict_index_t *index, size_t n_threads) {
         std::ostringstream dtuple_os{};
 
         n_dups.inc(1, id);
-        rec_print(rec_os, rec, index);
+        rec_print(rec_os, rec);
         prev_tuple->print(dtuple_os);
 
         log_err(
@@ -4990,7 +4968,10 @@ static dberr_t check_table(trx_t *trx, dict_index_t *index, size_t n_threads) {
 
     if (prev_blocks[id] != block || prev_blocks[id] == nullptr) {
       mem_heap_empty(heap);
-      offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED, &heap);
+
+      Phy_rec record{index, rec};
+
+      offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
 
       prev_blocks[id] = block;
     }

@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
 
   test_configure();
 
-  err = ib_startup("barracuda");
+  err = ib_startup("default");
   assert(err == DB_SUCCESS);
 
   fprintf(stderr, "Set panic handler\n");

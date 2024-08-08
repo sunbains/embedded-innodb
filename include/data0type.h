@@ -387,10 +387,9 @@ inline void dtype_new_read_for_order_and_null_size(dtype_t *type, const byte *bu
  * @param len       length
  * @param mbminlen  minimum length of a multibyte char
  * @param mbmaxlen  maximum length of a multibyte char
- * @param comp      nonzero=ROW_FORMAT=COMPACT
  * @return          fixed size, or 0
  */
-inline ulint dtype_get_fixed_size_low(ulint mtype, ulint prtype, ulint len, ulint mbminlen, ulint mbmaxlen, ulint comp) {
+inline ulint dtype_get_fixed_size_low(ulint mtype, ulint prtype, ulint len, ulint mbminlen, ulint mbmaxlen) {
   switch (mtype) {
     case DATA_SYS:
       IF_DEBUG(
@@ -406,7 +405,7 @@ inline ulint dtype_get_fixed_size_low(ulint mtype, ulint prtype, ulint len, ulin
           break;
         default:
           ut_ad(0);
-          return (0);
+          return 0;
       })
 
     case DATA_CHAR:
@@ -414,10 +413,10 @@ inline ulint dtype_get_fixed_size_low(ulint mtype, ulint prtype, ulint len, ulin
     case DATA_INT:
     case DATA_FLOAT:
     case DATA_DOUBLE:
-      return (len);
+      return len;
     case DATA_CLIENT:
       if ((prtype & DATA_BINARY_TYPE) || mbminlen == mbmaxlen) {
-        return (len);
+        return len;
       }
       /* fall through for variable-length charsets */
     case DATA_VARCHAR:
@@ -425,12 +424,12 @@ inline ulint dtype_get_fixed_size_low(ulint mtype, ulint prtype, ulint len, ulin
     case DATA_DECIMAL:
     case DATA_VARCLIENT:
     case DATA_BLOB:
-      return (0);
+      return 0;
     default:
       ut_error;
   }
 
-  return (0);
+  return 0;
 }
 
 /**
@@ -530,9 +529,8 @@ inline ulint dtype_get_max_size_low(ulint mtype, ulint len) {
  * For fixed length types it is the fixed length of the type, otherwise 0.
  *
  * @param type   in: type
- * @param comp   in: nonzero=ROW_FORMAT=COMPACT
  * @return       SQL null storage size in ROW_FORMAT=REDUNDANT
  */
-inline ulint dtype_get_sql_null_size(const dtype_t *type, ulint comp) {
-  return dtype_get_fixed_size_low(type->mtype, type->prtype, type->len, type->mbminlen, type->mbmaxlen, comp);
+inline ulint dtype_get_sql_null_size(const dtype_t *type) {
+  return dtype_get_fixed_size_low(type->mtype, type->prtype, type->len, type->mbminlen, type->mbmaxlen);
 }

@@ -943,7 +943,7 @@ static bool dict_index_too_big_for_undo(
   for (i = 0; i < clust_index->n_def; i++) {
     const dict_col_t *col = dict_index_get_nth_col(clust_index, i);
     ulint max_size = dict_col_get_max_size(col);
-    ulint fixed_size = dict_col_get_fixed_size(col, dict_table_is_comp(table));
+    ulint fixed_size = dict_col_get_fixed_size(col);
 
     if (fixed_size) {
       /* Fixed-size columns are stored locally. */
@@ -995,7 +995,6 @@ static bool dict_index_too_big_for_tree(
   const dict_index_t *new_index
 )
 {
-  ulint comp;
   ulint i;
   /* maximum possible storage size of a record */
   ulint rec_max_size;
@@ -1004,35 +1003,25 @@ static bool dict_index_too_big_for_tree(
   /* maximum allowed size of a node pointer record */
   ulint page_ptr_max;
 
-  comp = dict_table_is_comp(table);
-
   /* The maximum allowed record size is half a B-tree
   page.  No additional sparse page directory entry will
   be generated for the first few user records. */
-  page_rec_max = page_get_free_space_of_empty(comp) / 2;
+  page_rec_max = page_get_free_space_of_empty() / 2;
   page_ptr_max = page_rec_max;
   /* Each record has a header. */
-  rec_max_size = comp ? REC_N_NEW_EXTRA_BYTES : REC_N_OLD_EXTRA_BYTES;
+  rec_max_size = REC_N_EXTRA_BYTES;
 
-  if (comp) {
-    /* Include the "null" flags in the
-    maximum possible record size. */
-    rec_max_size += UT_BITS_IN_BYTES(new_index->n_nullable);
-  } else {
-    /* For each column, include a 2-byte offset and a
-    "null" flag.  The 1-byte format is only used in short
-    records that do not contain externally stored columns.
-    Such records could never exceed the page limit, even
-    when using the 2-byte format. */
-    rec_max_size += 2 * new_index->n_fields;
-  }
+  /* For each column, include a 2-byte offset and a
+  "null" flag.  The 1-byte format is only used in short
+  records that do not contain externally stored columns.
+  Such records could never exceed the page limit, even
+  when using the 2-byte format. */
+  rec_max_size += 2 * new_index->n_fields;
 
   /* Compute the maximum possible record size. */
   for (i = 0; i < new_index->n_fields; i++) {
-    const dict_field_t *field = dict_index_get_nth_field(new_index, i);
-    const dict_col_t *col = dict_field_get_col(field);
-    ulint field_max_size;
-    ulint field_ext_max_size;
+    const auto field = dict_index_get_nth_field(new_index, i);
+    const auto col = dict_field_get_col(field);
 
     /* In dtuple_convert_big_rec(), variable-length columns
     that are longer than BTR_EXTERN_FIELD_REF_SIZE * 2
@@ -1046,20 +1035,17 @@ static bool dict_index_too_big_for_tree(
     case in rec_get_converted_size_comp() for
     REC_STATUS_ORDINARY records. */
 
-    field_max_size = dict_col_get_fixed_size(col, comp);
-    if (field_max_size) {
+    auto field_max_size = dict_col_get_fixed_size(col);
+
+    if (field_max_size > 0) {
       /* dict_index_add_col() should guarantee this */
       ut_ad(!field->prefix_len || field->fixed_len == field->prefix_len);
-      /* Fixed lengths are not encoded
-      in ROW_FORMAT=COMPACT. */
-      field_ext_max_size = 0;
       goto add_field_size;
     }
 
     field_max_size = dict_col_get_max_size(col);
-    field_ext_max_size = field_max_size < 256 ? 1 : 2;
 
-    if (field->prefix_len) {
+    if (field->prefix_len > 0) {
       if (field->prefix_len < field_max_size) {
         field_max_size = field->prefix_len;
       }
@@ -1072,15 +1058,8 @@ static bool dict_index_too_big_for_tree(
       the clustered index page would be
       BTR_EXTERN_FIELD_REF_SIZE and 2. */
       field_max_size = BTR_EXTERN_FIELD_REF_SIZE * 2;
-      field_ext_max_size = 1;
     }
 
-    if (comp) {
-      /* Add the extra size for ROW_FORMAT=COMPACT.
-      For ROW_FORMAT=REDUNDANT, these bytes were
-      added to rec_max_size before this loop. */
-      rec_max_size += field_ext_max_size;
-    }
   add_field_size:
     rec_max_size += field_max_size;
 
@@ -1148,22 +1127,11 @@ db_err dict_index_add_to_cache(dict_table_t *table, dict_index_t *index, ulint p
   n_ord = new_index->n_uniq;
 
   switch (dict_table_get_format(table)) {
-    case DICT_TF_FORMAT_51:
-      /* ROW_FORMAT=REDUNDANT and ROW_FORMAT=COMPACT store
-    prefixes of externally stored columns locally within
-    the record.  There are no special considerations for
-    the undo log record size. */
-      goto undo_size_ok;
-
     case DICT_TF_FORMAT_V1:
-      /* In ROW_FORMAT=DYNAMIC and ROW_FORMAT=COMPRESSED,
-    column prefix indexes require that prefixes of
-    externally stored columns are written to the undo log.
-    This may make the undo log record bigger than the
-    record on the B-tree page.  The maximum size of an
-    undo log record is the page size.  That must be
-    checked for below. */
-      break;
+      /* Store prefixes of externally stored columns locally within
+      the record.  There are no special considerations for the undo
+      log record size. */
+      goto undo_size_ok;
 
       static_assert(DICT_TF_FORMAT_V1 == DICT_TF_FORMAT_MAX, "error DICT_TF_FORMAT_V1 != DICT_TF_FORMAT_MAX");
   }
@@ -1184,7 +1152,7 @@ db_err dict_index_add_to_cache(dict_table_t *table, dict_index_t *index, ulint p
 
     if (field->prefix_len                      /* prefix index */
         && !col->ord_part                      /* not yet ordering column */
-        && !dict_col_get_fixed_size(col, true) /* variable-length */
+        && !dict_col_get_fixed_size(col) /* variable-length */
         && dict_col_get_max_size(col) > BTR_EXTERN_FIELD_REF_SIZE * 2 /* long enough */) {
 
       if (dict_index_too_big_for_undo(table, new_index)) {
@@ -1308,7 +1276,7 @@ void dict_index_add_col(dict_index_t *index, const dict_table_t *table, dict_col
   field = dict_index_get_nth_field(index, index->n_def - 1);
 
   field->col = col;
-  field->fixed_len = (unsigned int)dict_col_get_fixed_size(col, dict_table_is_comp(table));
+  field->fixed_len = (unsigned int)dict_col_get_fixed_size(col);
 
   if (prefix_len && field->fixed_len > prefix_len) {
     field->fixed_len = (unsigned int)prefix_len;
@@ -1447,7 +1415,7 @@ static dict_index_t *dict_index_build_internal_clust(const dict_table_t *table, 
 
   for (i = 0; i < trx_id_pos; i++) {
 
-    fixed_size = dict_col_get_fixed_size(dict_index_get_nth_col(new_index, i), dict_table_is_comp(table));
+    fixed_size = dict_col_get_fixed_size(dict_index_get_nth_col(new_index, i));
 
     if (fixed_size == 0) {
       new_index->trx_id_offset = 0;
@@ -3188,12 +3156,8 @@ bool dict_index_check_search_tuple(const dict_index_t *index, const dtuple_t *tu
 #endif /* UNIV_DEBUG */
 
 dtuple_t *dict_index_build_node_ptr(const dict_index_t *index, const rec_t *rec, ulint page_no, mem_heap_t *heap, ulint level) {
-  dtuple_t *tuple;
-  dfield_t *field;
-
-  auto n_unique = dict_index_get_n_unique_in_tree(index);
-
-  tuple = dtuple_create(heap, n_unique + 1);
+  const auto n_unique = dict_index_get_n_unique_in_tree(index);
+  auto tuple = dtuple_create(heap, n_unique + 1);
 
   /* When searching in the tree for the node pointer, we must not do
   comparison on the last field, the page number field, as on upper
@@ -3205,11 +3169,12 @@ dtuple_t *dict_index_build_node_ptr(const dict_index_t *index, const rec_t *rec,
 
   dict_index_copy_types(tuple, index, n_unique);
 
-  auto buf = (byte *)mem_heap_alloc(heap, 4);
+  auto buf = reinterpret_cast<byte *>(mem_heap_alloc(heap, 4));
 
   mach_write_to_4(buf, page_no);
 
-  field = dtuple_get_nth_field(tuple, n_unique);
+  auto field = dtuple_get_nth_field(tuple, n_unique);
+
   dfield_set_data(field, buf, 4);
 
   dtype_set(dfield_get_type(field), DATA_SYS_CHILD, DATA_NOT_NULL, 4);
@@ -3233,11 +3198,9 @@ rec_t *dict_index_copy_rec_order_prefix(const dict_index_t *index, const rec_t *
 }
 
 dtuple_t *dict_index_build_data_tuple(dict_index_t *index, rec_t *rec, ulint n_fields, mem_heap_t *heap) {
-  dtuple_t *tuple;
+  ut_ad(n_fields <= rec_get_n_fields(rec));
 
-  ut_ad(dict_table_is_comp(index->table) || n_fields <= rec_get_n_fields_old(rec));
-
-  tuple = dtuple_create(heap, n_fields);
+  auto tuple = dtuple_create(heap, n_fields);
 
   dict_index_copy_types(tuple, index, n_fields);
 
@@ -3249,34 +3212,10 @@ dtuple_t *dict_index_build_data_tuple(dict_index_t *index, rec_t *rec, ulint n_f
 }
 
 ulint dict_index_calc_min_rec_len(const dict_index_t *index) {
-  ulint i;
   ulint sum = 0;
-  ulint comp = dict_table_is_comp(index->table);
 
-  if (comp) {
-    ulint nullable = 0;
-    sum = REC_N_NEW_EXTRA_BYTES;
-    for (i = 0; i < dict_index_get_n_fields(index); i++) {
-      const dict_col_t *col = dict_index_get_nth_col(index, i);
-      ulint size = dict_col_get_fixed_size(col, comp);
-      sum += size;
-      if (!size) {
-        size = col->len;
-        sum += size < 128 ? 1 : 2;
-      }
-      if (!(col->prtype & DATA_NOT_NULL)) {
-        nullable++;
-      }
-    }
-
-    /* round the nullptr flags up to full bytes */
-    sum += UT_BITS_IN_BYTES(nullable);
-
-    return sum;
-  }
-
-  for (i = 0; i < dict_index_get_n_fields(index); i++) {
-    sum += dict_col_get_fixed_size(dict_index_get_nth_col(index, i), comp);
+  for (ulint i = 0; i < dict_index_get_n_fields(index); i++) {
+    sum += dict_col_get_fixed_size(dict_index_get_nth_col(index, i));
   }
 
   if (sum > 127) {
@@ -3285,7 +3224,7 @@ ulint dict_index_calc_min_rec_len(const dict_index_t *index) {
     sum += dict_index_get_n_fields(index);
   }
 
-  sum += REC_N_OLD_EXTRA_BYTES;
+  sum += REC_N_EXTRA_BYTES;
 
   return sum;
 }
@@ -3296,15 +3235,9 @@ void dict_update_statistics_low(dict_table_t *table, bool has_dict_mutex __attri
   ulint sum_of_index_sizes = 0;
 
   if (table->ibd_file_missing) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      "  cannot calculate statistics for table %s\n"
-      "because the .ibd file is missing.  For help,"
-      " please refer to\n"
-      "InnoDB website for details\n",
-      table->name
-    );
+    log_err(std::format(
+      "Cannot calculate statistics for table {} because the .ibd file is missing. For help,"
+      " please refer to the InnoDB website for details", table->name));
 
     return;
   }
@@ -3728,7 +3661,7 @@ void dict_ind_init() {
   dict_index_add_col(dict_ind_redundant, table, dict_table_get_nth_col(table, 0), 0);
   dict_ind_redundant->table = table;
   /* create dummy table and index for COMPACT infimum and supremum */
-  table = dict_mem_table_create("SYS_DUMMY2", DICT_HDR_SPACE, 1, DICT_TF_COMPACT);
+  table = dict_mem_table_create("SYS_DUMMY2", DICT_HDR_SPACE, 1, DICT_TF_FORMAT_V1);
   dict_mem_table_add_col(table, nullptr, nullptr, DATA_CHAR, DATA_ENGLISH | DATA_NOT_NULL, 8);
   dict_ind_compact = dict_mem_index_create("SYS_DUMMY2", "SYS_DUMMY2", DICT_HDR_SPACE, 0, 1);
   dict_index_add_col(dict_ind_compact, table, dict_table_get_nth_col(table, 0), 0);

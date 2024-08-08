@@ -320,17 +320,10 @@ enum ib_col_type_t : int {
 
 /** @enum ib_tbl_fmt_t InnoDB table format types */
 enum ib_tbl_fmt_t {
-  /** Redundant row format, the column type and length is stored in the row.*/
-  IB_TBL_REDUNDANT,
+  IB_TBL_UNKNOWN = 0,
 
-  /** Compact row format, the column type is not stored in the row. The
-  length is stored in the row but the storage format uses a compact format
-  to store the length of the column data and record data storage format also
-  uses less storage. */
-  IB_TBL_COMPACT,
-
-  /** Compact row format. BLOB prefixes are not stored in the clustered index */
-  IB_TBL_DYNAMIC,
+  /** Default row format. */
+  IB_TBL_V1,
 };
 
 /** @enum ib_col_attr_t InnoDB column attributes */
@@ -500,7 +493,7 @@ enum ib_shutdown_t {
 };
 
 /** Generical InnoDB callback prototype. */
-using ib_cb_t = std::function<void()>;
+using ib_cb_t = void(*)();
 
 /* Note: This is to make it easy for API users to have type
  * checking for arguments to our functions. Making it ib_opaque_t

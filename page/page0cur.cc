@@ -105,7 +105,12 @@ static bool page_cur_try_search_shortcut(
   ut_ad(dtuple_check_typed(tuple));
 
   rec = page_header_get_ptr(page, PAGE_LAST_INSERT);
-  offsets = rec_get_offsets(rec, index, offsets, dtuple_get_n_fields(tuple), &heap);
+
+  {
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets, dtuple_get_n_fields(tuple), &heap, Source_location());
+  }
 
   ut_ad(rec);
   ut_ad(page_rec_is_user_rec(rec));
@@ -121,7 +126,12 @@ static bool page_cur_try_search_shortcut(
   }
 
   next_rec = page_rec_get_next_const(rec);
-  offsets = rec_get_offsets(next_rec, index, offsets, dtuple_get_n_fields(tuple), &heap);
+
+  {
+    Phy_rec record{index, next_rec};
+
+    offsets = record.get_col_offsets(offsets, dtuple_get_n_fields(tuple), &heap, Source_location());
+  }
 
   if (page_cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, next_rec, offsets, &up_match, &up_bytes) >= 0) {
 
@@ -175,7 +185,7 @@ common first characters.
 static bool page_cur_rec_field_extends(
   const dtuple_t *tuple, /*!< in: data tuple */
   const rec_t *rec,      /*!< in: record */
-  const ulint *offsets,  /*!< in: array returned by rec_get_offsets() */
+  const ulint *offsets,  /*!< in: array returned by Phy_rec::get_col_offsets() */
   ulint n
 ) /*!< in: compare nth field */
 {
@@ -302,7 +312,11 @@ void page_cur_search_with_match(
       &cur_matched_fields, &cur_matched_bytes, low_matched_fields, low_matched_bytes, up_matched_fields, up_matched_bytes
     );
 
-    offsets = rec_get_offsets(mid_rec, index, offsets, dtuple_get_n_fields_cmp(tuple), &heap);
+    {
+      Phy_rec record{index, mid_rec};
+
+      offsets = record.get_col_offsets(offsets, dtuple_get_n_fields_cmp(tuple), &heap, Source_location());
+    }
 
     cmp = cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, mid_rec, offsets, &cur_matched_fields, &cur_matched_bytes);
 
@@ -354,7 +368,11 @@ void page_cur_search_with_match(
       &cur_matched_fields, &cur_matched_bytes, low_matched_fields, low_matched_bytes, up_matched_fields, up_matched_bytes
     );
 
-    offsets = rec_get_offsets(mid_rec, index, offsets, dtuple_get_n_fields_cmp(tuple), &heap);
+    {
+      Phy_rec record{index, mid_rec};
+
+      offsets = record.get_col_offsets(offsets, dtuple_get_n_fields_cmp(tuple), &heap, Source_location());
+    }
 
     cmp = cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, mid_rec, offsets, &cur_matched_fields, &cur_matched_bytes);
 
@@ -396,7 +414,11 @@ void page_cur_search_with_match(
   dbg_matched_fields = 0;
   dbg_matched_bytes = 0;
 
-  offsets = rec_get_offsets(low_rec, index, offsets, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{index, low_rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location()); 
+  }
 
   dbg_cmp = page_cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, low_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
 
@@ -419,7 +441,11 @@ void page_cur_search_with_match(
   dbg_matched_fields = 0;
   dbg_matched_bytes = 0;
 
-  offsets = rec_get_offsets(up_rec, index, offsets, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{index, up_rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location()); 
+  }
 
   dbg_cmp = page_cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, up_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
 
@@ -482,17 +508,15 @@ static void page_cur_insert_rec_write_log(
   mtr_t *mtr
 ) /*!< in: mini-transaction handle */
 {
-  ulint cur_rec_size;
-  ulint extra_size;
-  ulint cur_extra_size;
-  const byte *ins_ptr;
   byte *log_ptr;
   const byte *log_end;
-  ulint i;
 
   ut_a(rec_size < UNIV_PAGE_SIZE);
   ut_ad(page_align(insert_rec) == page_align(cursor_rec));
-  ut_ad(!page_rec_is_comp(insert_rec) == !dict_table_is_comp(index->table));
+
+  ulint extra_size{0};
+  ulint cur_extra_size{0};
+  ulint cur_rec_size{0};
 
   {
     mem_heap_t *heap = nullptr;
@@ -505,8 +529,17 @@ static void page_cur_insert_rec_write_log(
     rec_offs_init(cur_offs_);
     rec_offs_init(ins_offs_);
 
-    cur_offs = rec_get_offsets(cursor_rec, index, cur_offs_, ULINT_UNDEFINED, &heap);
-    ins_offs = rec_get_offsets(insert_rec, index, ins_offs_, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record{index, cursor_rec};
+
+      cur_offs = record.get_col_offsets(cur_offs_, ULINT_UNDEFINED, &heap, Source_location());
+    }
+
+    {
+      Phy_rec record{index, insert_rec};
+
+      ins_offs = record.get_col_offsets(ins_offs_, ULINT_UNDEFINED, &heap, Source_location());
+    }
 
     extra_size = rec_offs_extra_size(ins_offs);
     cur_extra_size = rec_offs_extra_size(cur_offs);
@@ -518,9 +551,8 @@ static void page_cur_insert_rec_write_log(
     }
   }
 
-  ins_ptr = insert_rec - extra_size;
-
-  i = 0;
+  ulint i = 0;
+  auto ins_ptr = insert_rec - extra_size;
 
   if (cur_extra_size == extra_size) {
     ulint min_rec_size = ut_min(cur_rec_size, rec_size);
@@ -547,25 +579,14 @@ static void page_cur_insert_rec_write_log(
 
   if (mtr_get_log_mode(mtr) != MTR_LOG_SHORT_INSERTS) {
 
-    if (page_rec_is_comp(insert_rec)) {
-      log_ptr = mlog_open_and_write_index(mtr, insert_rec, index, MLOG_COMP_REC_INSERT, 2 + 5 + 1 + 5 + 5 + MLOG_BUF_MARGIN);
-      if (unlikely(!log_ptr)) {
-        /* Logging in mtr is switched off
-        during crash recovery: in that case
-        mlog_open returns nullptr */
-        return;
-      }
-    } else {
-      log_ptr = mlog_open(mtr, 11 + 2 + 5 + 1 + 5 + 5 + MLOG_BUF_MARGIN);
-      if (unlikely(!log_ptr)) {
-        /* Logging in mtr is switched off
-        during crash recovery: in that case
-        mlog_open returns nullptr */
-        return;
-      }
-
-      log_ptr = mlog_write_initial_log_record_fast(insert_rec, MLOG_REC_INSERT, log_ptr, mtr);
+    log_ptr = mlog_open(mtr, 11 + 2 + 5 + 1 + 5 + 5 + MLOG_BUF_MARGIN);
+    if (unlikely(!log_ptr)) {
+      /* Logging in mtr is switched off during crash recovery: in that case
+      mlog_open returns nullptr */
+      return;
     }
+
+    log_ptr = mlog_write_initial_log_record_fast(insert_rec, MLOG_REC_INSERT, log_ptr, mtr);
 
     log_end = &log_ptr[2 + 5 + 1 + 5 + 5 + MLOG_BUF_MARGIN];
     /* Write the cursor rec offset as a 2-byte ulint */
@@ -581,16 +602,9 @@ static void page_cur_insert_rec_write_log(
     log_end = &log_ptr[5 + 1 + 5 + 5 + MLOG_BUF_MARGIN];
   }
 
-  if (page_rec_is_comp(insert_rec)) {
-    if (unlikely(rec_get_info_and_status_bits(insert_rec, true) != rec_get_info_and_status_bits(cursor_rec, true))) {
+  if (unlikely(rec_get_info_and_status_bits(insert_rec) != rec_get_info_and_status_bits(cursor_rec))) {
 
-      goto need_extra_info;
-    }
-  } else {
-    if (unlikely(rec_get_info_and_status_bits(insert_rec, false) != rec_get_info_and_status_bits(cursor_rec, false))) {
-
-      goto need_extra_info;
-    }
+    goto need_extra_info;
   }
 
   if (extra_size != cur_extra_size || rec_size != cur_rec_size) {
@@ -600,7 +614,7 @@ static void page_cur_insert_rec_write_log(
     log_ptr += mach_write_compressed(log_ptr, 2 * (rec_size - i) + 1);
 
     /* Write the info bits */
-    mach_write_to_1(log_ptr, rec_get_info_and_status_bits(insert_rec, page_rec_is_comp(insert_rec)));
+    mach_write_to_1(log_ptr, rec_get_info_and_status_bits(insert_rec));
     log_ptr++;
 
     /* Write the record origin offset */
@@ -731,15 +745,17 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_blo
     return (ptr + (end_seg_len >> 1));
   }
 
-  ut_ad(!!page_is_comp(page) == dict_table_is_comp(index->table));
-
   /* Read from the log the inserted index record end segment which
   differs from the cursor record */
 
-  offsets = rec_get_offsets(cursor_rec, index, offsets, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{index, cursor_rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location());
+  }
 
   if (!(end_seg_len & 0x1UL)) {
-    info_and_status_bits = rec_get_info_and_status_bits(cursor_rec, page_is_comp(page));
+    info_and_status_bits = rec_get_info_and_status_bits(cursor_rec);
     origin_offset = rec_offs_extra_size(offsets);
     mismatch_index = rec_offs_size(offsets) - (end_seg_len >> 1);
   }
@@ -782,15 +798,16 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_blo
   memcpy(buf, rec_get_start(cursor_rec, offsets), mismatch_index);
   memcpy(buf + mismatch_index, ptr, end_seg_len);
 
-  if (page_is_comp(page)) {
-    rec_set_info_and_status_bits(buf + origin_offset, info_and_status_bits);
-  } else {
-    rec_set_info_bits_old(buf + origin_offset, info_and_status_bits);
-  }
+  rec_set_info_bits(buf + origin_offset, info_and_status_bits);
 
   page_cur_position(cursor_rec, block, &cursor);
 
-  offsets = rec_get_offsets(buf + origin_offset, index, offsets, ULINT_UNDEFINED, &heap);
+  {
+    Phy_rec record{index, buf + origin_offset};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location());
+  }
+
   if (unlikely(!page_cur_rec_insert(&cursor, buf + origin_offset, index, offsets, mtr))) {
     /* The redo log record should only have been written
     after the write was successful. */
@@ -824,7 +841,6 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const re
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   page = page_align(current_rec);
-  ut_ad(dict_table_is_comp(index->table) == (bool)!!page_is_comp(page));
 
   ut_ad(!page_rec_is_supremum(current_rec));
 
@@ -834,7 +850,7 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const re
 #ifdef UNIV_DEBUG_VALGRIND
   {
     const void *rec_start = rec - rec_offs_extra_size(offsets);
-    ulint extra_size = rec_offs_extra_size(offsets) - (rec_offs_comp(offsets) ? REC_N_NEW_EXTRA_BYTES : REC_N_OLD_EXTRA_BYTES);
+    ulint extra_size = rec_offs_extra_size(offsets) - REC_N_EXTRA_BYTES;
 
     /* All data bytes of the record must be valid. */
     UNIV_MEM_ASSERT_RW(rec, rec_offs_data_size(offsets));
@@ -854,7 +870,12 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const re
 
     rec_offs_init(foffsets_);
 
-    foffsets = rec_get_offsets(free_rec, index, foffsets, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record{index, free_rec};
+
+      foffsets = record.get_col_offsets(foffsets, ULINT_UNDEFINED, &heap, Source_location());
+    }
+
     if (rec_offs_size(foffsets) < rec_size) {
       if (likely_null(heap)) {
         mem_heap_free(heap);
@@ -865,13 +886,8 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const re
 
     insert_buf = free_rec - rec_offs_extra_size(foffsets);
 
-    if (page_is_comp(page)) {
-      heap_no = rec_get_heap_no_new(free_rec);
-      page_mem_alloc_free(page, rec_get_next_ptr(free_rec, true), rec_size);
-    } else {
-      heap_no = rec_get_heap_no_old(free_rec);
-      page_mem_alloc_free(page, rec_get_next_ptr(free_rec, false), rec_size);
-    }
+    heap_no = rec_get_heap_no(free_rec);
+    page_mem_alloc_free(page, rec_get_next_ptr(free_rec), rec_size);
 
     if (likely_null(heap)) {
       mem_heap_free(heap);
@@ -888,7 +904,7 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const re
 
   /* 3. Create the record */
   insert_rec = rec_copy(insert_buf, rec, offsets);
-  rec_offs_make_valid(insert_rec, index, offsets);
+  ut_d(rec_offs_make_valid(insert_rec, index, offsets));
 
   /* 4. Insert the record in the linked list of records */
   ut_ad(current_rec != insert_rec);
@@ -896,13 +912,6 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const re
   {
     /* next record after current before the insertion */
     rec_t *next_rec = page_rec_get_next(current_rec);
-#ifdef UNIV_DEBUG
-    if (page_is_comp(page)) {
-      ut_ad(rec_get_status(current_rec) <= REC_STATUS_INFIMUM);
-      ut_ad(rec_get_status(insert_rec) < REC_STATUS_INFIMUM);
-      ut_ad(rec_get_status(next_rec) != REC_STATUS_INFIMUM);
-    }
-#endif
     page_rec_set_next(insert_rec, next_rec);
     page_rec_set_next(current_rec, insert_rec);
   }
@@ -911,19 +920,13 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const re
 
   /* 5. Set the n_owned field in the inserted record to zero,
   and set the heap_no field */
-  if (page_is_comp(page)) {
-    rec_set_n_owned_new(insert_rec, 0);
-    rec_set_heap_no_new(insert_rec, heap_no);
-  } else {
-    rec_set_n_owned_old(insert_rec, 0);
-    rec_set_heap_no_old(insert_rec, heap_no);
-  }
+  rec_set_n_owned(insert_rec, 0);
+  rec_set_heap_no(insert_rec, heap_no);
 
   UNIV_MEM_ASSERT_RW(rec_get_start(insert_rec, offsets), rec_offs_size(offsets));
   /* 6. Update the last insertion info in page header */
 
   last_insert = page_header_get_ptr(page, PAGE_LAST_INSERT);
-  ut_ad(!last_insert || !page_is_comp(page) || rec_get_node_ptr_flag(last_insert) == rec_get_node_ptr_flag(insert_rec));
 
   if (unlikely(last_insert == nullptr)) {
     page_header_set_field(page, PAGE_DIRECTION, PAGE_NO_DIRECTION);
@@ -948,14 +951,9 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const re
   /* 7. It remains to update the owner record. */
   {
     rec_t *owner_rec = page_rec_find_owner_rec(insert_rec);
-    ulint n_owned;
-    if (page_is_comp(page)) {
-      n_owned = rec_get_n_owned_new(owner_rec);
-      rec_set_n_owned_new(owner_rec, n_owned + 1);
-    } else {
-      n_owned = rec_get_n_owned_old(owner_rec);
-      rec_set_n_owned_old(owner_rec, n_owned + 1);
-    }
+    auto n_owned = rec_get_n_owned(owner_rec);
+
+    rec_set_n_owned(owner_rec, n_owned + 1);
 
     /* 8. Now we have incremented the n_owned field of the owner
     record. If the number exceeds PAGE_DIR_SLOT_MAX_N_OWNED,
@@ -983,18 +981,13 @@ static byte *page_copy_rec_list_to_created_page_write_log(
   mtr_t *mtr
 ) /*!< in: mtr */
 {
-  byte *log_ptr;
+  auto log_ptr = mlog_open_and_write_index(mtr, page, index, MLOG_LIST_END_COPY_CREATED, 4);
 
-  ut_ad(!!page_is_comp(page) == dict_table_is_comp(index->table));
-
-  log_ptr = mlog_open_and_write_index(
-    mtr, page, index, page_is_comp(page) ? MLOG_COMP_LIST_END_COPY_CREATED : MLOG_LIST_END_COPY_CREATED, 4
-  );
   if (likely(log_ptr != nullptr)) {
     mlog_close(mtr, log_ptr + 4);
   }
 
-  return (log_ptr);
+  return log_ptr;
 }
 
 byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr) {
@@ -1065,7 +1058,6 @@ void page_copy_rec_list_end_to_created_page(
 
   ut_ad(page_dir_get_n_heap(new_page) == PAGE_HEAP_NO_USER_LOW);
   ut_ad(page_align(rec) != new_page);
-  ut_ad(page_rec_is_comp(rec) == page_is_comp(new_page));
 
   if (page_rec_is_infimum(rec)) {
 
@@ -1093,30 +1085,22 @@ void page_copy_rec_list_end_to_created_page(
   log_mode = mtr_set_log_mode(mtr, MTR_LOG_SHORT_INSERTS);
 
   prev_rec = page_get_infimum_rec(new_page);
-  if (page_is_comp(new_page)) {
-    heap_top = new_page + PAGE_NEW_SUPREMUM_END;
-  } else {
-    heap_top = new_page + PAGE_OLD_SUPREMUM_END;
-  }
+  heap_top = new_page + PAGE_SUPREMUM_END;
   count = 0;
   slot_index = 0;
   n_recs = 0;
 
   do {
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location());
+
     insert_rec = rec_copy(heap_top, rec, offsets);
 
-    if (page_is_comp(new_page)) {
-      rec_set_next_offs_new(prev_rec, page_offset(insert_rec));
+    rec_set_next_offs(prev_rec, page_offset(insert_rec));
 
-      rec_set_n_owned_new(insert_rec, 0);
-      rec_set_heap_no_new(insert_rec, PAGE_HEAP_NO_USER_LOW + n_recs);
-    } else {
-      rec_set_next_offs_old(prev_rec, page_offset(insert_rec));
-
-      rec_set_n_owned_old(insert_rec, 0);
-      rec_set_heap_no_old(insert_rec, PAGE_HEAP_NO_USER_LOW + n_recs);
-    }
+    rec_set_n_owned(insert_rec, 0);
+    rec_set_heap_no(insert_rec, PAGE_HEAP_NO_USER_LOW + n_recs);
 
     count++;
     n_recs++;
@@ -1171,11 +1155,7 @@ void page_copy_rec_list_end_to_created_page(
     mach_write_to_4(log_ptr, log_data_len);
   }
 
-  if (page_is_comp(new_page)) {
-    rec_set_next_offs_new(insert_rec, PAGE_NEW_SUPREMUM);
-  } else {
-    rec_set_next_offs_old(insert_rec, PAGE_OLD_SUPREMUM);
-  }
+  rec_set_next_offs(insert_rec, PAGE_SUPREMUM);
 
   slot = page_dir_get_nth_slot(new_page, 1 + slot_index);
 
@@ -1202,11 +1182,7 @@ static void page_cur_delete_rec_write_log(
   mtr_t *mtr
 ) /*!< in: mini-transaction handle */
 {
-  byte *log_ptr;
-
-  ut_ad(!!page_rec_is_comp(rec) == dict_table_is_comp(index->table));
-
-  log_ptr = mlog_open_and_write_index(mtr, rec, index, page_rec_is_comp(rec) ? MLOG_COMP_REC_DELETE : MLOG_REC_DELETE, 2);
+  auto log_ptr = mlog_open_and_write_index(mtr, rec, index, MLOG_REC_DELETE, 2);
 
   if (!log_ptr) {
     /* Logging in mtr is switched off during crash recovery:
@@ -1244,13 +1220,22 @@ byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, buf_block_t *block, di
 
     page_cur_position(rec, block, &cursor);
 
-    page_cur_delete_rec(&cursor, index, rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap), mtr);
-    if (likely_null(heap)) {
+    ulint *offsets{};
+
+    {
+      Phy_rec record{index, rec};
+
+      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location());
+    }
+
+    page_cur_delete_rec(&cursor, index, offsets, mtr);
+
+    if (unlikely(heap != nullptr)) {
       mem_heap_free(heap);
     }
   }
 
-  return (ptr);
+  return ptr;
 }
 
 void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *offsets, mtr_t *mtr) {
@@ -1270,7 +1255,6 @@ void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *o
 
   current_rec = cursor->m_rec;
   ut_ad(rec_offs_validate(current_rec, index, offsets));
-  ut_ad(!!page_is_comp(page) == dict_table_is_comp(index->table));
 
   /* The record must not be the supremum or infimum record. */
   ut_ad(page_rec_is_user_rec(current_rec));

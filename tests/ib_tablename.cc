@@ -30,37 +30,37 @@ static void create_table(void) {
   ib_err_t err = DB_SUCCESS;
   ib_tbl_sch_t ib_tbl_sch = nullptr;
 
-  err = ib_table_schema_create("", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create("", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("a", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create("a", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("ab", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create("ab", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create(".", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create(".", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("./", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create("./", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("../", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create("../", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("/", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create("/", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("/aaaaa", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create("/aaaaa", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("/a/a", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create("/a/a", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("abcdef/", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create("abcdef/", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_DATA_MISMATCH);
 
-  err = ib_table_schema_create("a/b", &ib_tbl_sch, IB_TBL_COMPACT, 0);
+  err = ib_table_schema_create("a/b", &ib_tbl_sch, IB_TBL_V1, 0);
   assert(err == DB_SUCCESS);
 
   ib_table_schema_delete(ib_tbl_sch);
@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
 
   test_configure();
 
-  err = ib_startup("barracuda");
+  err = ib_startup("default");
   assert(err == DB_SUCCESS);
 
   create_table();

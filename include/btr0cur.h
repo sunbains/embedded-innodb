@@ -366,7 +366,7 @@ void btr_estimate_number_of_different_key_vals(dict_index_t *index);
  *
  * @param rec      in: record
  * @param index    in: index of rec; the index tree MUST be X-latched
- * @param offsets  in: rec_get_offsets(rec, index)
+ * @param offsets  in: Phy_rec::get_col_offsets(rec, index)
  * @param update   in: update entry
  * @param mtr      in: mtr
  */
@@ -397,7 +397,7 @@ void btr_cur_unmark_dtuple_extern_fields(dtuple_t *entry);
  * @param index         in: index of rec; the index tree MUST be X-latched
  * @param rec_block     in/out: block containing rec
  * @param rec           in: record
- * @param offsets       in: rec_get_offsets(rec, index); the "external storage" flags in offsets
+ * @param offsets       in: Phy_rec::get_col_offsets(rec, index); the "external storage" flags in offsets
  *                        will not correspond to rec when this function returns
  * @param big_rec_vec   in: vector containing fields to be stored externally
  * @param local_mtr     in: mtr containing the latch to rec and to the tree
@@ -415,7 +415,7 @@ db_err btr_store_big_rec_extern_fields(
  * @param index      in: index of the data, the index tree MUST be X-latched; if the tree height is 1, then also the root page must be X-latched! (this is relevant in the case this function is called from purge where 'data' is located on an undo log page, not an index page)
  * @param field_ref  in/out: field reference
  * @param rec        in: record containing field_ref or nullptr
- * @param offsets    in: rec_get_offsets(rec, index), or nullptr
+ * @param offsets    in: Phy_rec::get_col_offsets(rec, index), or nullptr
  * @param i          in: field number of field_ref; ignored if rec == nullptr
  * @param rb_ctx     in: rollback context
  * @param local_mtr  in: mtr containing the latch to data an an X-latch to the index tree
@@ -440,7 +440,7 @@ ulint btr_copy_externally_stored_field_prefix(byte *buf, ulint len, const byte *
  * Copies an externally stored field of a record to mem heap.
  *
  * @param rec     in: record in a clustered index; must be protected by a lock or a page latch
- * @param offsets in: array returned by rec_get_offsets()
+ * @param offsets in: array returned by Phy_rec::get_col_offsets()
  * @param no      in: field number
  * @param len     out: length of the field
  * @param heap    in: mem heap

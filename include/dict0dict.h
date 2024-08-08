@@ -633,11 +633,10 @@ inline ulint dict_col_get_max_size(const dict_col_t *col) {
 /**
  * Returns the size of a fixed size column, 0 if not a fixed size column.
  * @param col column
- * @param comp nonzero=ROW_FORMAT=COMPACT
  * @return fixed size, or 0
  */
-inline ulint dict_col_get_fixed_size( const dict_col_t *col, ulint comp) {
-  return dtype_get_fixed_size_low(col->mtype, col->prtype, col->len, col->mbminlen, col->mbmaxlen, comp);
+inline ulint dict_col_get_fixed_size(const dict_col_t *col) {
+  return dtype_get_fixed_size_low(col->mtype, col->prtype, col->len, col->mbminlen, col->mbmaxlen);
 }
 
 /**
@@ -647,8 +646,8 @@ inline ulint dict_col_get_fixed_size( const dict_col_t *col, ulint comp) {
  * @param comp nonzero=ROW_FORMAT=COMPACT
  * @return SQL null storage size in ROW_FORMAT=REDUNDANT
  */
-inline ulint dict_col_get_sql_null_size(const dict_col_t *col, ulint comp) {
-  return dict_col_get_fixed_size(col, comp);
+inline ulint dict_col_get_sql_null_size(const dict_col_t *col) {
+  return dict_col_get_fixed_size(col);
 }
 
 /**
@@ -781,15 +780,6 @@ inline ulint dict_table_get_sys_col_no(const dict_table_t *table, ulint sys) {
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
 
   return table->n_cols - DATA_N_SYS_COLS + sys;
-}
-
-/** Check whether the table uses the compact page format.
- * @param table in: table
- * @return true if table uses the compact page format */
-inline bool dict_table_is_comp(const dict_table_t *table) {
-  ut_a(DICT_TF_COMPACT);
-
-  return likely(table->flags & DICT_TF_COMPACT);
 }
 
 /** Determine the file format of a table.

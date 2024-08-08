@@ -286,7 +286,7 @@ byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
     return (nullptr);
   }
 
-  if (page) {
+  if (page != nullptr) {
     memcpy(page + offset, ptr, len);
   }
 
@@ -294,74 +294,15 @@ byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
 }
 
 byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, dict_index_t *index, byte type, ulint size) {
-  byte *log_ptr;
-  const byte *log_start;
-  const byte *log_end;
+  auto log_ptr = mlog_open(mtr, 11 + size);
 
-  ut_ad(!!page_rec_is_comp(rec) == dict_table_is_comp(index->table));
-
-  if (!page_rec_is_comp(rec)) {
-    log_start = log_ptr = mlog_open(mtr, 11 + size);
-    if (!log_ptr) {
-      return (nullptr); /* logging is disabled */
-    }
-    log_ptr = mlog_write_initial_log_record_fast(rec, type, log_ptr, mtr);
-    log_end = log_ptr + 11 + size;
-  } else {
-    ulint i;
-    ulint n = dict_index_get_n_fields(index);
-    /* total size needed */
-    ulint total = 11 + size + (n + 2) * 2;
-    ulint alloc = total;
-    /* allocate at most DYN_ARRAY_DATA_SIZE at a time */
-    if (alloc > DYN_ARRAY_DATA_SIZE) {
-      alloc = DYN_ARRAY_DATA_SIZE;
-    }
-    log_start = log_ptr = mlog_open(mtr, alloc);
-    if (!log_ptr) {
-      return (nullptr); /* logging is disabled */
-    }
-    log_end = log_ptr + alloc;
-    log_ptr = mlog_write_initial_log_record_fast(rec, type, log_ptr, mtr);
-    mach_write_to_2(log_ptr, n);
-    log_ptr += 2;
-    mach_write_to_2(log_ptr, dict_index_get_n_unique_in_tree(index));
-    log_ptr += 2;
-    for (i = 0; i < n; i++) {
-      dict_field_t *field;
-      const dict_col_t *col;
-      ulint len;
-
-      field = dict_index_get_nth_field(index, i);
-      col = dict_field_get_col(field);
-      len = field->fixed_len;
-      ut_ad(len < 0x7fff);
-      if (len == 0 && (col->len > 255 || col->mtype == DATA_BLOB)) {
-        /* variable-length field
-        with maximum length > 255 */
-        len = 0x7fff;
-      }
-      if (col->prtype & DATA_NOT_NULL) {
-        len |= 0x8000;
-      }
-      if (log_ptr + 2 > log_end) {
-        mlog_close(mtr, log_ptr);
-        ut_a(total > (ulint)(log_ptr - log_start));
-        total -= log_ptr - log_start;
-        alloc = total;
-        if (alloc > DYN_ARRAY_DATA_SIZE) {
-          alloc = DYN_ARRAY_DATA_SIZE;
-        }
-        log_start = log_ptr = mlog_open(mtr, alloc);
-        if (!log_ptr) {
-          return (nullptr); /* logging is disabled */
-        }
-        log_end = log_ptr + alloc;
-      }
-      mach_write_to_2(log_ptr, len);
-      log_ptr += 2;
-    }
+  if (log_ptr == nullptr) {
+    return (nullptr); /* logging is disabled */
   }
+
+  log_ptr = mlog_write_initial_log_record_fast(rec, type, log_ptr, mtr);
+  auto log_end = log_ptr + 11 + size;
+
   if (size == 0) {
     mlog_close(mtr, log_ptr);
     log_ptr = nullptr;
@@ -369,41 +310,18 @@ byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, dict_index_t *index
     mlog_close(mtr, log_ptr);
     log_ptr = mlog_open(mtr, size);
   }
-  return (log_ptr);
+  return log_ptr;
 }
 
-/** Parses a log record written by mlog_open_and_write_index.
-@return	parsed record end, nullptr if not a complete record */
-
-byte *mlog_parse_index(
-  byte *ptr,           /*!< in: buffer */
-  const byte *end_ptr, /*!< in: buffer end */
-  bool comp,           /*!< in: true=compact record format */
-  dict_index_t **index
-) /*!< out, own: dummy index */
-{
-  ulint i, n, n_uniq;
+byte *mlog_parse_index(byte *ptr, const byte *end_ptr, dict_index_t **index) {
+  ulint n;
+  ulint n_uniq;
   dict_table_t *table;
   dict_index_t *ind;
 
-  ut_ad(comp == false || comp == true);
+  n = n_uniq = 1;
 
-  if (comp) {
-    if (end_ptr < ptr + 4) {
-      return (nullptr);
-    }
-    n = mach_read_from_2(ptr);
-    ptr += 2;
-    n_uniq = mach_read_from_2(ptr);
-    ptr += 2;
-    ut_ad(n_uniq <= n);
-    if (end_ptr < ptr + n * 2) {
-      return (nullptr);
-    }
-  } else {
-    n = n_uniq = 1;
-  }
-  table = dict_mem_table_create("LOG_DUMMY", DICT_HDR_SPACE, n, comp ? DICT_TF_COMPACT : 0);
+  table = dict_mem_table_create("LOG_DUMMY", DICT_HDR_SPACE, n, 0);
   ind = dict_mem_index_create("LOG_DUMMY", "LOG_DUMMY", DICT_HDR_SPACE, 0, n);
   ind->table = table;
   ind->n_uniq = (unsigned int)n_uniq;
@@ -411,34 +329,8 @@ byte *mlog_parse_index(
     ut_a(n_uniq + DATA_ROLL_PTR <= n);
     ind->type = DICT_CLUSTERED;
   }
-  if (comp) {
-    for (i = 0; i < n; i++) {
-      ulint len = mach_read_from_2(ptr);
-      ptr += 2;
-      /* The high-order bit of len is the NOT nullptr flag;
-      the rest is 0 or 0x7fff for variable-length fields,
-      and 1..0x7ffe for fixed-length fields. */
-      dict_mem_table_add_col(
-        table,
-        nullptr,
-        nullptr,
-        ((len + 1) & 0x7fff) <= 1 ? DATA_BINARY : DATA_FIXBINARY,
-        len & 0x8000 ? DATA_NOT_NULL : 0,
-        len & 0x7fff
-      );
-
-      dict_index_add_col(ind, table, dict_table_get_nth_col(table, i), 0);
-    }
-    dict_table_add_system_columns(table, table->heap);
-    if (n_uniq != n) {
-      /* Identify DB_TRX_ID and DB_ROLL_PTR in the index. */
-      ut_a(DATA_TRX_ID_LEN == dict_index_get_nth_col(ind, DATA_TRX_ID - 1 + n_uniq)->len);
-      ut_a(DATA_ROLL_PTR_LEN == dict_index_get_nth_col(ind, DATA_ROLL_PTR - 1 + n_uniq)->len);
-      ind->fields[DATA_TRX_ID - 1 + n_uniq].col = &table->cols[n + DATA_TRX_ID];
-      ind->fields[DATA_ROLL_PTR - 1 + n_uniq].col = &table->cols[n + DATA_ROLL_PTR];
-    }
-  }
-  /* avoid ut_ad(index->cached) in dict_index_get_n_unique_in_tree */
+ 
+  /* Avoid ut_ad(index->cached) in dict_index_get_n_unique_in_tree */
   ind->cached = true;
   *index = ind;
   return (ptr);

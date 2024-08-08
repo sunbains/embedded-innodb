@@ -428,25 +428,16 @@ bool lock_check_trx_id_sanity(trx_id_t trx_id, const rec_t *rec, dict_index_t *i
   trx id counter */
 
   if (trx_id >= trx_sys->max_trx_id) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      "  Error: transaction id associated"
-      " with record\n"
-    );
-    rec_print_new(ib_stream, rec, offsets);
-    ib_logger(ib_stream, "in ");
+    log_err("Transaction id associated" " with record");
+    rec_print(rec);
+    log_info("in ");
     dict_index_name_print(ib_stream, nullptr, index);
-    ib_logger(
-      ib_stream,
-      "\n"
-      "is %lu which is higher than the"
-      " global trx id counter %lu\n"
-      "The table is corrupt. You have to do"
-      " dump + drop + reimport.\n",
+    log_err(std::format(
+      "\nis {} which is higher than the global trx id counter {}"
+      " The table is corrupt. You have to do dump + drop + reimport.",
       TRX_ID_PREP_PRINTF(trx_id),
       TRX_ID_PREP_PRINTF(trx_sys->max_trx_id)
-    );
+    ));
 
     is_ok = false;
   }
@@ -1168,7 +1159,7 @@ inline Lock *lock_rec_find_similar_on_page(ulint type_mode, ulint heap_no, Lock 
 /** Checks if some transaction has an implicit x-lock on a record in a secondary index.
 @param[in] rec                  User record
 @param[in] index                Secondary index
-@param[in] offsets              rec_get_offsets(rec, index)
+@param[in] offsets              Phy_rec::get_col_offsets(rec, index)
 @return	transaction which has the x-lock, or nullptr */
 static trx_t *lock_sec_rec_some_has_impl_off_kernel(const rec_t *rec, dict_index_t *index, const ulint *offsets) {
   const page_t *page = page_align(rec);
@@ -1300,8 +1291,6 @@ static Lock *lock_rec_create(
   space = block->get_space();
   page_no = block->get_page_no();
   page = block->m_frame;
-
-  ut_ad(!!page_is_comp(page) == dict_table_is_comp(index->table));
 
   n_bits = page_dir_get_n_heap(page);
 
@@ -1875,8 +1864,6 @@ static void lock_rec_move(const buf_block_t *receiver, const buf_block_t *donato
 void lock_move_reorganize_page(const buf_block_t *block, const buf_block_t *oblock) {
   UT_LIST_BASE_NODE_T(Lock, trx_locks) old_locks;
 
-  ulint comp;
-
   lock_mutex_enter_kernel();
 
   auto lock = lock_rec_get_first_on_page(block);
@@ -1911,9 +1898,6 @@ void lock_move_reorganize_page(const buf_block_t *block, const buf_block_t *oblo
     lock = lock_rec_get_next_on_page(lock);
   } while (lock != nullptr);
 
-  comp = page_is_comp(block->m_frame);
-  ut_ad(comp == page_is_comp(oblock->m_frame));
-
   for (lock = UT_LIST_GET_FIRST(old_locks); lock; lock = UT_LIST_GET_NEXT(trx_locks, lock)) {
     /* NOTE: we copy also the locks set on the infimum and
     supremum of the page; the infimum may carry locks if an
@@ -1927,17 +1911,10 @@ void lock_move_reorganize_page(const buf_block_t *block, const buf_block_t *oblo
 
     /* Set locks according to old locks */
     for (;;) {
-      ulint old_heap_no;
-      ulint new_heap_no;
+      ut_ad(!memcmp(page_cur_get_rec(&cur1), page_cur_get_rec(&cur2), rec_get_data_size(page_cur_get_rec(&cur2))));
 
-      ut_ad(comp || !memcmp(page_cur_get_rec(&cur1), page_cur_get_rec(&cur2), rec_get_data_size_old(page_cur_get_rec(&cur2))));
-      if (likely(comp)) {
-        old_heap_no = rec_get_heap_no_new(page_cur_get_rec(&cur2));
-        new_heap_no = rec_get_heap_no_new(page_cur_get_rec(&cur1));
-      } else {
-        old_heap_no = rec_get_heap_no_old(page_cur_get_rec(&cur2));
-        new_heap_no = rec_get_heap_no_old(page_cur_get_rec(&cur1));
-      }
+      auto old_heap_no = rec_get_heap_no(page_cur_get_rec(&cur2));
+      auto new_heap_no = rec_get_heap_no(page_cur_get_rec(&cur1));
 
       if (lock_rec_get_nth_bit(lock, old_heap_no)) {
 
@@ -1948,13 +1925,6 @@ void lock_move_reorganize_page(const buf_block_t *block, const buf_block_t *oblo
         small for the new heap number! */
 
         lock_rec_add_to_queue(lock->type_mode, block, new_heap_no, lock->index, lock->trx);
-
-        /* if (new_heap_no == PAGE_HEAP_NO_SUPREMUM
-        && lock_get_wait(lock)) {
-        ib_logger(ib_stream,
-        "---\n--\n!!!Lock reorg: supr type %lu\n",
-        lock->type_mode);
-        } */
       }
 
       if (unlikely(new_heap_no == PAGE_HEAP_NO_SUPREMUM)) {
@@ -1997,7 +1967,6 @@ void lock_move_reorganize_page(const buf_block_t *block, const buf_block_t *oblo
 
 void lock_move_rec_list_end(const buf_block_t *new_block, const buf_block_t *block, const rec_t *rec) {
   Lock *lock;
-  const ulint comp = page_rec_is_comp(rec);
 
   lock_mutex_enter_kernel();
 
@@ -2025,14 +1994,8 @@ void lock_move_rec_list_end(const buf_block_t *new_block, const buf_block_t *blo
     reset the lock bits on the old */
 
     while (!page_cur_is_after_last(&cur1)) {
-      ulint heap_no;
-
-      if (comp) {
-        heap_no = rec_get_heap_no_new(page_cur_get_rec(&cur1));
-      } else {
-        heap_no = rec_get_heap_no_old(page_cur_get_rec(&cur1));
-        ut_ad(!memcmp(page_cur_get_rec(&cur1), page_cur_get_rec(&cur2), rec_get_data_size_old(page_cur_get_rec(&cur2))));
-      }
+      auto heap_no = rec_get_heap_no(page_cur_get_rec(&cur1));
+      ut_ad(!memcmp(page_cur_get_rec(&cur1), page_cur_get_rec(&cur2), rec_get_data_size(page_cur_get_rec(&cur2))));
 
       if (lock_rec_get_nth_bit(lock, heap_no)) {
         lock_rec_reset_nth_bit(lock, heap_no);
@@ -2041,11 +2004,7 @@ void lock_move_rec_list_end(const buf_block_t *new_block, const buf_block_t *blo
           lock_reset_lock_and_trx_wait(lock);
         }
 
-        if (comp) {
-          heap_no = rec_get_heap_no_new(page_cur_get_rec(&cur2));
-        } else {
-          heap_no = rec_get_heap_no_old(page_cur_get_rec(&cur2));
-        }
+        heap_no = rec_get_heap_no(page_cur_get_rec(&cur2));
 
         lock_rec_add_to_queue(type_mode, new_block, heap_no, lock->index, lock->trx);
       }
@@ -2064,13 +2023,12 @@ void lock_move_rec_list_end(const buf_block_t *new_block, const buf_block_t *blo
 }
 
 void lock_move_rec_list_start(const buf_block_t *new_block, const buf_block_t *block, const rec_t *rec, const rec_t *old_end) {
-  Lock *lock;
-  const ulint comp = page_rec_is_comp(rec);
-
   ut_ad(block->m_frame == page_align(rec));
   ut_ad(new_block->m_frame == page_align(old_end));
 
   lock_mutex_enter_kernel();
+
+  Lock *lock;
 
   for (lock = lock_rec_get_first_on_page(block); lock; lock = lock_rec_get_next_on_page(lock)) {
     page_cur_t cur1;
@@ -2087,14 +2045,9 @@ void lock_move_rec_list_start(const buf_block_t *new_block, const buf_block_t *b
     reset the lock bits on the old */
 
     while (page_cur_get_rec(&cur1) != rec) {
-      ulint heap_no;
 
-      if (comp) {
-        heap_no = rec_get_heap_no_new(page_cur_get_rec(&cur1));
-      } else {
-        heap_no = rec_get_heap_no_old(page_cur_get_rec(&cur1));
-        ut_ad(!memcmp(page_cur_get_rec(&cur1), page_cur_get_rec(&cur2), rec_get_data_size_old(page_cur_get_rec(&cur2))));
-      }
+      auto heap_no = rec_get_heap_no(page_cur_get_rec(&cur1));
+      ut_ad(!memcmp(page_cur_get_rec(&cur1), page_cur_get_rec(&cur2), rec_get_data_size(page_cur_get_rec(&cur2))));
 
       if (lock_rec_get_nth_bit(lock, heap_no)) {
         lock_rec_reset_nth_bit(lock, heap_no);
@@ -2103,11 +2056,7 @@ void lock_move_rec_list_start(const buf_block_t *new_block, const buf_block_t *b
           lock_reset_lock_and_trx_wait(lock);
         }
 
-        if (comp) {
-          heap_no = rec_get_heap_no_new(page_cur_get_rec(&cur2));
-        } else {
-          heap_no = rec_get_heap_no_old(page_cur_get_rec(&cur2));
-        }
+        heap_no = rec_get_heap_no(page_cur_get_rec(&cur2));
 
         lock_rec_add_to_queue(type_mode, new_block, heap_no, lock->index, lock->trx);
       }
@@ -2277,31 +2226,17 @@ void lock_update_discard(const buf_block_t *heir_block, ulint heir_heap_no, cons
   /* Inherit all the locks on the page to the record and reset all
   the locks on the page */
 
-  if (page_is_comp(page)) {
-    rec = page + PAGE_NEW_INFIMUM;
+  rec = page + PAGE_INFIMUM;
 
-    do {
-      heap_no = rec_get_heap_no_new(rec);
+  do {
+    heap_no = rec_get_heap_no(rec);
 
-      lock_rec_inherit_to_gap(heir_block, block, heir_heap_no, heap_no);
+    lock_rec_inherit_to_gap(heir_block, block, heir_heap_no, heap_no);
 
-      lock_rec_reset_and_release_wait(block, heap_no);
+    lock_rec_reset_and_release_wait(block, heap_no);
 
-      rec = page + rec_get_next_offs(rec, true);
-    } while (heap_no != PAGE_HEAP_NO_SUPREMUM);
-  } else {
-    rec = page + PAGE_OLD_INFIMUM;
-
-    do {
-      heap_no = rec_get_heap_no_old(rec);
-
-      lock_rec_inherit_to_gap(heir_block, block, heir_heap_no, heap_no);
-
-      lock_rec_reset_and_release_wait(block, heap_no);
-
-      rec = page + rec_get_next_offs(rec, false);
-    } while (heap_no != PAGE_HEAP_NO_SUPREMUM);
-  }
+    rec = page + rec_get_next_offs(rec);
+  } while (heap_no != PAGE_HEAP_NO_SUPREMUM);
 
   lock_rec_free_all_from_discard_page(block);
 
@@ -2317,13 +2252,8 @@ void lock_update_insert(const buf_block_t *block, const rec_t *rec) {
   /* Inherit the gap-locking locks for rec, in gap mode, from the next
   record */
 
-  if (page_rec_is_comp(rec)) {
-    receiver_heap_no = rec_get_heap_no_new(rec);
-    donator_heap_no = rec_get_heap_no_new(page_rec_get_next_low(rec, true));
-  } else {
-    receiver_heap_no = rec_get_heap_no_old(rec);
-    donator_heap_no = rec_get_heap_no_old(page_rec_get_next_low(rec, false));
-  }
+  receiver_heap_no = rec_get_heap_no(rec);
+  donator_heap_no = rec_get_heap_no(page_rec_get_next_low(rec));
 
   lock_mutex_enter_kernel();
   lock_rec_inherit_to_gap_if_gap_lock(block, receiver_heap_no, donator_heap_no);
@@ -2332,18 +2262,11 @@ void lock_update_insert(const buf_block_t *block, const rec_t *rec) {
 
 void lock_update_delete(const buf_block_t *block, const rec_t *rec) {
   const page_t *page = block->m_frame;
-  ulint heap_no;
-  ulint next_heap_no;
 
   ut_ad(page == page_align(rec));
 
-  if (page_is_comp(page)) {
-    heap_no = rec_get_heap_no_new(rec);
-    next_heap_no = rec_get_heap_no_new(page + rec_get_next_offs(rec, true));
-  } else {
-    heap_no = rec_get_heap_no_old(rec);
-    next_heap_no = rec_get_heap_no_old(page + rec_get_next_offs(rec, false));
-  }
+  auto heap_no = rec_get_heap_no(rec);
+  auto next_heap_no = rec_get_heap_no(page + rec_get_next_offs(rec));
 
   lock_mutex_enter_kernel();
 
@@ -3131,7 +3054,6 @@ void lock_rec_print(ib_stream_t ib_stream, const Lock *lock) {
   const buf_block_t *block;
   ulint space;
   ulint page_no;
-  ulint i;
   mtr_t mtr;
   mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
@@ -3188,21 +3110,25 @@ void lock_rec_print(ib_stream_t ib_stream, const Lock *lock) {
   block = srv_buf_pool->try_get_by_page_id(req);
 
   if (block != nullptr) {
-    for (i = 0; i < lock_rec_get_n_bits(lock); i++) {
+    for (ulint i = 0; i < lock_rec_get_n_bits(lock); i++) {
 
       if (lock_rec_get_nth_bit(lock, i)) {
 
         const rec_t *rec = page_find_rec_with_heap_no(block->get_frame(), i);
-        offsets = rec_get_offsets(rec, lock->index, offsets, ULINT_UNDEFINED, &heap);
 
-        ib_logger(ib_stream, "Record lock, heap no %lu ", (ulong)i);
-        rec_print_new(ib_stream, rec, offsets);
-        ib_logger(ib_stream, "\n");
+        {
+          Phy_rec record{lock->index, rec};
+
+          offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+        }
+
+        log_info("Record lock, heap no ", i);
+        rec_print(rec);
       }
     }
   } else {
-    for (i = 0; i < lock_rec_get_n_bits(lock); i++) {
-      ib_logger(ib_stream, "Record lock, heap no %lu\n", (ulong)i);
+    for (ulint i = 0; i < lock_rec_get_n_bits(lock); i++) {
+      log_info("Record lock, heap no ", i);
     }
   }
 
@@ -3493,13 +3419,12 @@ static bool lock_table_queue_validate(dict_table_t *table) {
 @param[in] block                Buffer block containing rec
 @param[in] rec                  Record to look at
 @param[in] index                Index, or nullptr if not known 
-@param[in] offsets              rec_get_offsets(rec, index)
+@param[in] offsets              Phy_rec::get_col_offsets(rec, index)
 @return	true if ok */
 static bool lock_rec_queue_validate(const buf_block_t *block, const rec_t *rec, dict_index_t *index, const ulint *offsets) {
   ut_a(rec);
   ut_a(block->get_frame() == page_align(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
-  ut_ad(!page_rec_is_comp(rec) == !rec_offs_comp(offsets));
 
   auto heap_no = page_rec_get_heap_no(rec);
 
@@ -3653,7 +3578,12 @@ loop:
         index = lock->index;
         rec = page_find_rec_with_heap_no(page, i);
         ut_a(rec);
-        offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
+
+        {
+          Phy_rec record{index, rec};
+
+          offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+        }
 
         ib_logger(ib_stream, "Validating %lu %lu\n", (ulong)space, (ulong)page_no);
 
@@ -3846,7 +3776,12 @@ db_err lock_rec_insert_check_and_lock(
     const ulint *offsets;
     rec_offs_init(offsets_);
 
-    offsets = rec_get_offsets(next_rec, index, offsets_, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record{index, next_rec};
+
+      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
+    }
+
     ut_ad(lock_rec_queue_validate(block, next_rec, index, offsets));
     if (likely_null(heap)) {
       mem_heap_free(heap);
@@ -3865,14 +3800,13 @@ static void lock_rec_convert_impl_to_expl(
   const rec_t *rec,         /*!< in: user record on page */
   dict_index_t *index,      /*!< in: index of record */
   const ulint *offsets
-) /*!< in: rec_get_offsets(rec, index) */
+) /*!< in: Phy_rec::get_col_offsets(rec, index) */
 {
   trx_t *impl_trx;
 
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
-  ut_ad(!page_rec_is_comp(rec) == !rec_offs_comp(offsets));
 
   if (dict_index_is_clust(index)) {
     impl_trx = lock_clust_rec_some_has_impl(rec, index, offsets);
@@ -3898,7 +3832,6 @@ db_err lock_clust_rec_modify_check_and_lock(
 ) {
 
   db_err err;
-  ulint heap_no;
 
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_ad(dict_index_is_clust(index));
@@ -3909,7 +3842,7 @@ db_err lock_clust_rec_modify_check_and_lock(
     return DB_SUCCESS;
   }
 
-  heap_no = rec_offs_comp(offsets) ? rec_get_heap_no_new(rec) : rec_get_heap_no_old(rec);
+  auto heap_no = rec_get_heap_no(rec);
 
   lock_mutex_enter_kernel();
 
@@ -3966,8 +3899,14 @@ db_err lock_sec_rec_modify_check_and_lock(
     const ulint *offsets;
     rec_offs_init(offsets_);
 
-    offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap);
+    {
+      Phy_rec record{index, rec};
+
+      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
+    }
+
     ut_ad(lock_rec_queue_validate(block, rec, index, offsets));
+
     if (likely_null(heap)) {
       mem_heap_free(heap);
     }
@@ -4076,11 +4015,18 @@ db_err lock_clust_rec_read_check_and_lock_alt(
   db_err err;
   rec_offs_init(offsets_);
 
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &tmp_heap);
+  {
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &tmp_heap, Source_location{});
+  }
+
   err = lock_clust_rec_read_check_and_lock(flags, block, rec, index, offsets, mode, gap_mode, thr);
-  if (tmp_heap) {
+
+  if (tmp_heap != nullptr) {
     mem_heap_free(tmp_heap);
   }
+
   return err;
 }
 

@@ -895,9 +895,7 @@ static void pars_process_assign_list(upd_node_t *node) /*!< in: update node */
         clust_index, nullptr);
     upd_field->exp = assign_node->val;
 
-    if (!dict_col_get_fixed_size(
-            dict_index_get_nth_col(clust_index, upd_field->field_no),
-            dict_table_is_comp(node->table))) {
+    if (!dict_col_get_fixed_size(dict_index_get_nth_col(clust_index, upd_field->field_no))) {
       changes_field_size = 0;
     }
 

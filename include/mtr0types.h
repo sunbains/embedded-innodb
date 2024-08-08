@@ -76,7 +76,7 @@ enum mlog_type_t : byte {
   /** Copy record list end to a new created index page */
   MLOG_LIST_END_COPY_CREATED = 17,
 
-  /** Reorganize an index page in ROW_FORMAT=REDUNDANT */
+  /** Reorganize an index page. */
   MLOG_PAGE_REORGANIZE = 18,
 
   /** Create an index page */
@@ -129,41 +129,6 @@ enum mlog_type_t : byte {
 
   /** Log record about an .ibd file deletion */
   MLOG_FILE_DELETE = 35,
-
-  /** Mark a compact index record as the predefined minimum record */
-  MLOG_COMP_REC_MIN_MARK = 36,
-
-  /** Create a compact index page */
-  MLOG_COMP_PAGE_CREATE = 37,
-
-  /** Compact record insert */
-  MLOG_COMP_REC_INSERT = 38,
-
-  /*!< mark compact clustered index record deleted */
-  MLOG_COMP_REC_CLUST_DELETE_MARK = 39,
-
-  /** Mark compact secondary index record deleted; this log
-   * record type is redundant, as MLOG_REC_SEC_DELETE_MARK
-   * is independent of the record format. */
-  MLOG_COMP_REC_SEC_DELETE_MARK = 40,
-
-  /** Update of a compact record, preserves record field sizes */
-  MLOG_COMP_REC_UPDATE_IN_PLACE = 41,
-
-  /** Delete a compact record from a page */
-  MLOG_COMP_REC_DELETE = 42,
-
-  /** Delete compact record list end on index page */
-  MLOG_COMP_LIST_END_DELETE = 43,
-
-  /** Delete compact record list start on index page */
-  MLOG_COMP_LIST_START_DELETE = 44,
-
-  /** Copy compact record list end to a new created index page */
-  MLOG_COMP_LIST_END_COPY_CREATED = 45,
-
-  /** Reorganize an index page */
-  MLOG_COMP_PAGE_REORGANIZE = 46,
 
   /*!< log record about creating an .ibd file, with format */
   MLOG_FILE_CREATE2 = 47,

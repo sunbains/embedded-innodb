@@ -185,7 +185,7 @@ struct Buf_LRU {
    * 
    * @param bpage The control block to be moved.
    */
-  void make_block_old(buf_page_t *bpage);
+  void make_block(buf_page_t *bpage);
   
   /**
    * Update the historical stats that we are collecting for LRU eviction policy 

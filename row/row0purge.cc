@@ -83,25 +83,19 @@ static bool row_purge_remove_clust_if_poss_low(
   ulint mode
 ) /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE */
 {
-  dict_index_t *index;
-  btr_pcur_t *pcur;
-  btr_cur_t *btr_cur;
-  bool success;
-  db_err err;
   mtr_t mtr;
-  rec_t *rec;
+  db_err err;
   mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   rec_offs_init(offsets_);
 
-  index = dict_table_get_first_index(node->table);
-
-  pcur = &(node->pcur);
-  btr_cur = pcur->get_btr_cur();
+  auto pcur = &node->pcur;
+  auto btr_cur = pcur->get_btr_cur();
+  auto index = dict_table_get_first_index(node->table);
 
   mtr_start(&mtr);
 
-  success = row_purge_reposition_pcur(mode, node, &mtr);
+  auto success = row_purge_reposition_pcur(mode, node, &mtr);
 
   if (!success) {
     /* The record is already removed */
@@ -111,9 +105,16 @@ static bool row_purge_remove_clust_if_poss_low(
     return (true);
   }
 
-  rec = pcur->get_rec();
+  auto rec = pcur->get_rec();
+  ulint *offsets{};
 
-  if (node->roll_ptr != row_get_rec_roll_ptr(rec, index, rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED, &heap))) {
+  {
+    Phy_rec record{index, rec};
+
+    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
+  }
+
+  if (node->roll_ptr != row_get_rec_roll_ptr(rec, index, offsets)) {
 
     if (likely_null(heap)) {
       mem_heap_free(heap);

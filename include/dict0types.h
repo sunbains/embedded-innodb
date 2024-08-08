@@ -102,10 +102,6 @@ constexpr ulint DICT_TABLE_ORDINARY = 1;
 /** Table flags.  All unused bits must be 0. */
 /* @{ */
 
-/** Compact page format.  This must be set for new file formats (later than
- * DICT_TF_FORMAT_51). */
-constexpr ulint DICT_TF_COMPACT = 1;
-
 /* @} */
 
 /** File format */
@@ -119,8 +115,8 @@ constexpr ulint DICT_TF_FORMAT_MASK = ((~(~0UL << (DICT_TF_BITS - DICT_TF_FORMAT
 /** InnoDBL up to 0.1 */
 constexpr ulint DICT_TF_FORMAT_51 = 0;
 
-/** InnoDB 0.1: new BLOB treatment */
-constexpr ulint DICT_TF_FORMAT_V1 = 1;
+/** InnoDB 0.1: V1 row format flag. */
+constexpr ulint DICT_TF_FORMAT_V1 = DICT_TF_FORMAT_51;
 
 /** Maximum supported file format */
 constexpr ulint DICT_TF_FORMAT_MAX = DICT_TF_FORMAT_V1;
