@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -237,12 +238,12 @@ inline bool mtr_memo_contains(mtr_t *mtr, const void *object, ulint type) {
  * @param mtr The mtr.
  * @return Logging mode: MTR_LOG_NONE, ...
  */
-inline ulint mtr_get_log_mode(mtr_t *mtr) {
+inline mtr_log_mode_t mtr_get_log_mode(mtr_t *mtr) {
   ut_ad(mtr);
   ut_ad(mtr->log_mode >= MTR_LOG_ALL);
   ut_ad(mtr->log_mode <= MTR_LOG_SHORT_INSERTS);
 
-  return (mtr->log_mode);
+  return mtr->log_mode;
 }
 
 /**
@@ -252,13 +253,13 @@ inline ulint mtr_get_log_mode(mtr_t *mtr) {
  * @param mode Logging mode: MTR_LOG_NONE, ...
  * @return Old mode.
  */
-inline ulint mtr_set_log_mode(mtr_t *mtr, ulint mode) {
+inline mtr_log_mode_t mtr_set_log_mode(mtr_t *mtr, mtr_log_mode_t mode) {
   ut_ad(mode >= MTR_LOG_ALL);
   ut_ad(mode <= MTR_LOG_SHORT_INSERTS);
 
   auto old_mode = mtr->log_mode;
 
-  if ((mode == MTR_LOG_SHORT_INSERTS) && (old_mode == MTR_LOG_NONE)) {
+  if (mode == MTR_LOG_SHORT_INSERTS && old_mode == MTR_LOG_NONE) {
     /* Do nothing */
   } else {
     mtr->log_mode = mode;

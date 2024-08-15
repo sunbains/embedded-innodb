@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -225,7 +226,7 @@ static void row_undo_ins_parse_undo_rec(ib_recovery_t recovery, undo_node_t *nod
     } else {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  table ");
-      ut_print_name(ib_stream, node->trx, true, node->table->name);
+      ut_print_name(node->table->name);
       ib_logger(
         ib_stream,
         " has no indexes, "

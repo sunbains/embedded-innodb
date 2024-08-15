@@ -1,6 +1,6 @@
-#ifndef INNOBASE_UNI0CODE_H
+/** Copyright (c) 2024 Sunny Bains. All rights reserved.  */
 
-#define INNOBASE_UNI0CODE_H
+#pragma once
 
 #include "innodb0types.h"
 
@@ -87,4 +87,3 @@ void ib_utf8_convert_from_id(
 );     /*!< in: length of 'to', in bytes;
                          should be at least
                          3 * strlen(to) + 1 */
-#endif /* INNOBASE_UNI0CODE_H */

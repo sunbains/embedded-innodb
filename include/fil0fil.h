@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -27,6 +28,7 @@ Created 10/25/1995 Heikki Tuuri
 
 #include "dict0types.h"
 #include "fil0types.h"
+#include "mtr0types.h"
 #include "os0aio.h"
 #include "os0file.h"
 #include "srv0srv.h"
@@ -104,7 +106,7 @@ struct Fil {
   the space objects for the log and the system tablespace have been created. The
   purpose of this operation is to make sure we never run out of file descriptors
   if we need to read from the insert buffer or to write to the log. */
-  void open_log_and_system_tablespace_files();
+  void open_log_and_system_tablespace();
 
   /** Closes all open files. There must not be any pending i/o's or not flushed
   modifications in the files. */
@@ -123,16 +125,9 @@ struct Fil {
 
   /** Reads the flushed lsn and arch no fields from a data file at database
   startup.
-  @param[in] data_file             Open data file handle
-  @param[in] one_read_only         true if min and max parameters below contain
-                                   sensible data.
-  @param[out] min_arch_log_no      Minmum log number
-  @param[out] max_arch_log_no      Maximum log number
-  @param[out] min_flushed_lsn      Minimum flushed LSN.
-  @param[out] max_flushed_lsn      Maximum flushed LSN */
-  void read_flushed_lsn_and_arch_log_no(
-    os_file_t data_file, bool one_read_already, uint64_t *min_flushed_lsn, uint64_t *max_flushed_lsn
-  );
+  @param[in] fh                    Open data file handle
+  @param[out] flushed_lsn          Maximum flushed LSN */
+  void read_flushed_lsn(os_file_t fh, lsn_t &max_flushed_lsn);
 
    /** Parses the body of a log record written about an .ibd file operation. That
    is, the log record part after the standard (type, space id, page no) header of
@@ -463,7 +458,7 @@ struct Fil {
    * @return type; NOTE that if the type has not been written to page, the
    *         return value not defined
    */
-  ulint page_get_type(const byte *page);
+  Fil_page_type page_get_type(const byte *page);
 
   /**
    * Reset variables.
@@ -582,10 +577,10 @@ private:
    * The caller must own the Fil::system mutex.
    *
    * @param node The file node.
-   * @param system The tablespace memory cache.
    * @param space The space.
+   * @param[in] startup true if the server is starting up
    */
-  void node_open_file(fil_node_t *node, fil_space_t *space);
+  void node_open_file(fil_node_t *node, fil_space_t *space, bool startup);
 
   /**
    * @brief Closes a file.
@@ -649,7 +644,7 @@ private:
   * @param mtr       in: mini-transaction handle
   */
   void op_write_log(
-    ulint type,
+    mlog_type_t type,
     space_id_t space_id,
     ulint log_flags,
     ulint flags,

@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -810,25 +811,23 @@ ulint fsp_header_get_free_limit() {
 
   mtr_commit(&mtr);
 
-  return (limit);
+  return limit;
 }
 
 ulint fsp_header_get_tablespace_size() {
-  fsp_header_t *header;
-  ulint size;
   mtr_t mtr;
 
   mtr_start(&mtr);
 
   mtr_x_lock(srv_fil->space_get_latch(0), &mtr);
 
-  header = fsp_get_space_header(0, &mtr);
+  auto header = fsp_get_space_header(0, &mtr);
 
-  size = mtr_read_ulint(header + FSP_SIZE, MLOG_4BYTES, &mtr);
+  auto size = mtr_read_ulint(header + FSP_SIZE, MLOG_4BYTES, &mtr);
 
   mtr_commit(&mtr);
 
-  return (size);
+  return size;
 }
 
 /**
@@ -844,7 +843,7 @@ ulint fsp_header_get_tablespace_size() {
 static bool fsp_try_extend_data_file_with_pages(space_id_t space, page_no_t page_no, fsp_header_t *header, mtr_t *mtr) {
   ut_a(space != SYS_TABLESPACE);
 
-  ulint size = mtr_read_ulint(header + FSP_SIZE, MLOG_4BYTES, mtr);
+  auto size = mtr_read_ulint(header + FSP_SIZE, MLOG_4BYTES, mtr);
 
   ut_a(page_no >= size);
 
@@ -1175,8 +1174,7 @@ static ulint fsp_alloc_free_page(space_id_t space, page_no_t hint, mtr_t *mtr) {
 
   if (free == ULINT_UNDEFINED) {
 
-    ut_print_buf(ib_stream, ((byte *)descr) - 500, 1000);
-    ib_logger(ib_stream, "\n");
+    log_warn_buf(((byte *)descr) - 500, 1000);
 
     ut_error;
   }
@@ -1290,8 +1288,7 @@ static void fsp_free_page(space_id_t space, ulint page, mtr_t *mtr) {
       (ulong)state
     );
     ib_logger(ib_stream, "Dump of descriptor: ");
-    ut_print_buf(ib_stream, ((byte *)descr) - 50, 200);
-    ib_logger(ib_stream, "\n");
+    log_warn_buf(((byte *)descr) - 50, 200);
 
     if (state == XDES_FREE) {
       /* We put here some fault tolerance: if the page
@@ -1311,8 +1308,7 @@ static void fsp_free_page(space_id_t space, ulint page, mtr_t *mtr) {
       "Dump of descriptor: ",
       (ulong)page
     );
-    ut_print_buf(ib_stream, ((byte *)descr) - 50, 200);
-    ib_logger(ib_stream, "\n");
+    log_warn_buf(((byte *)descr) - 50, 200);
 
     /* We put here some fault tolerance: if the page
     is already free, return without doing anything! */
@@ -1354,8 +1350,7 @@ static void fsp_free_extent(space_id_t space, ulint page, mtr_t *mtr) {
 
   if (xdes_get_state(descr, mtr) == XDES_FREE) {
 
-    ut_print_buf(ib_stream, (byte *)descr - 500, 1000);
-    ib_logger(ib_stream, "\n");
+    log_warn_buf((byte *)descr - 500, 1000);
 
     ut_error;
   }
@@ -1470,7 +1465,7 @@ static bool fsp_alloc_seg_inode_page( fsp_header_t *space_header, mtr_t *mtr) {
 
   auto page = block->get_frame();
 
-  mlog_write_ulint(page + FIL_PAGE_TYPE, FIL_PAGE_INODE, MLOG_2BYTES, mtr);
+  mlog_write_ulint(page + FIL_PAGE_TYPE, FIL_PAGE_TYPE_INODE, MLOG_2BYTES, mtr);
 
   for (ulint i = 0; i < FSP_SEG_INODES_PER_PAGE; i++) {
 
@@ -2240,7 +2235,7 @@ static bool fsp_reserve_free_pages(
   xdes_t *descr;
   ulint n_used;
 
-  ut_a(space != 0);
+  ut_a(space != SYS_TABLESPACE);
   ut_a(size < FSP_EXTENT_SIZE / 2);
 
   descr = xdes_get_descriptor_with_space_hdr(space_header, space, 0, mtr);
@@ -2474,7 +2469,7 @@ static void fseg_free_page_low(
   ut_a(descr);
   if (xdes_get_bit(descr, XDES_FREE_BIT, page % FSP_EXTENT_SIZE, mtr)) {
     ib_logger(ib_stream, "Dump of the tablespace extent descriptor: ");
-    ut_print_buf(ib_stream, descr, 40);
+    log_warn_buf(descr, 40);
 
     ib_logger(
       ib_stream,
@@ -2522,10 +2517,9 @@ static void fseg_free_page_low(
 
   if (descr_id != seg_id) {
     ib_logger(ib_stream, "Dump of the tablespace extent descriptor: ");
-    ut_print_buf(ib_stream, descr, 40);
-    ib_logger(ib_stream, "\nDump of the segment inode: ");
-    ut_print_buf(ib_stream, seg_inode, 40);
-    ib_logger(ib_stream, "\n");
+    log_warn_buf(descr, 40);
+    log_warn("Dump of the segment inode: ");
+    log_warn_buf(seg_inode, 40);
 
     ib_logger(
       ib_stream,

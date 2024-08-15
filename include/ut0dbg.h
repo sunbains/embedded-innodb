@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -108,10 +109,7 @@ void ut_dbg_stop_thread(const char *file, ulint line);
 #define ut_ad(EXPR) ut_a(EXPR)
 
 /** Debug statement. Does nothing unless UNIV_DEBUG is defined. */
-#define ut_d(EXPR) \
-  do {             \
-    EXPR;          \
-  } while (0)
+#define ut_d(EXPR) EXPR
 
 #else /* UNIV_DEBUG */
 

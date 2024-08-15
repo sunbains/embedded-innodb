@@ -1,6 +1,7 @@
 /****************************************************************************
 Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -1943,8 +1944,7 @@ void *row_fetch_print(void *row, void *user_arg) {
     ib_logger(ib_stream, "\n");
 
     if (dfield_get_len(dfield) != UNIV_SQL_NULL) {
-      ut_print_buf(ib_stream, dfield_get_data(dfield), dfield_get_len(dfield));
-      ib_logger(ib_stream, "\n");
+      log_warn_buf(dfield_get_data(dfield), dfield_get_len(dfield));
     } else {
       ib_logger(ib_stream, " <NULL>;\n");
     }
@@ -2626,7 +2626,7 @@ db_err row_search_for_client(
       "table handle. Magic n %lu, table name ",
       (ulong)prebuilt->magic_n
     );
-    ut_print_name(ib_stream, trx, true, prebuilt->table->name);
+    ut_print_name(prebuilt->table->name);
     ib_logger(ib_stream, "\n");
 
     ut_error;
@@ -2781,9 +2781,6 @@ db_err row_search_for_client(
 
           mtr_commit(&mtr);
 
-          /* ut_print_name(ib_stream, index->name);
-        ib_logger(ib_stream, " shortcut\n"); */
-
           srv_n_rows_read++;
 
           prebuilt->result = 0;
@@ -2792,10 +2789,6 @@ db_err row_search_for_client(
 
         case SEL_EXHAUSTED:
           mtr_commit(&mtr);
-
-          /* ut_print_name(ib_stream, index->name);
-        ib_logger(ib_stream, " record not found 2\n");
-        */
 
           err = DB_RECORD_NOT_FOUND;
           goto func_exit;
@@ -3110,8 +3103,6 @@ rec_loop:
       pcur->store_position(&mtr);
 
       err = DB_RECORD_NOT_FOUND;
-      /* ut_print_name(ib_stream, index->name);
-      ib_logger(ib_stream, " record not found 4\n"); */
 
       goto normal_return;
     }

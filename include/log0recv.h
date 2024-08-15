@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -27,251 +28,268 @@ Created 9/20/1997 Heikki Tuuri
 
 #include "api0api.h"
 #include "buf0types.h"
-#include "hash0hash.h"
 #include "log0log.h"
 #include "srv0srv.h"
 #include "ut0byte.h"
 
-/** Applies the hashed log records to the page, if the page lsn is less than
-the lsn of a log record. This can be called when a buffer page has just been
-read in, or also for a page already in the buffer pool.
-@param[in] just_read_in         true if the i/o handler calls this for a
+#include <unordered_map>
+
+/**
+ * Applies the hashed log records to the page, if the page lsn is less than
+ * the lsn of a log record. This can be called when a buffer page has just been
+ * read in, or also for a page already in the buffer pool.
+ * 
+ * @param[in] just_read_in      true if the i/o handler calls this for a
                                 freshly read page
-@param[in,out] block            buffer block */
-void recv_recover_page_func(bool just_read_in, buf_block_t *block);
+ * @param[in,out] block         buffer block
+*/
+void recv_recover_page(bool just_read_in, buf_block_t *block) noexcept;
 
-/** Wrapper for recv_recover_page_func().
-Applies the hashed log records to the page, if the page lsn is less than the
-lsn of a log record. This can be called when a buffer page has just been
-read in, or also for a page already in the buffer pool.
-@param jri	in: true if just read in (the i/o handler calls this for
-a freshly read page)
-@param block	in/out: the buffer block */
-#define recv_recover_page(jri, block) recv_recover_page_func(jri, block)
+/**
+ * Recovers from a checkpoint. When this function returns, the database is able
+ * to start processing of new user transactions, but the function
+ * recv_recovery_from_checkpoint_finish should be called later to complete
+ * the recovery and free the resources used in it.
+ * 
+ * @param[in] recovery             Recovery flag
+ * @param[in] max_flushed_lsn      Max flushed lsn read from system.idb 
+ * 
+ * @return	error code or DB_SUCCESS
+ */
+db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flushed_lsn) noexcept;
 
-/** Recovers from a checkpoint. When this function returns, the database is able
-to start processing of new user transactions, but the function
-recv_recovery_from_checkpoint_finish should be called later to complete
-the recovery and free the resources used in it.
-@param[in] recovery             Recovery flag
-@param[in] min_flushed_lsn,     Flushed lsn from data files
-@param[in] max_flushed_lsn      Max flushed lsn from data files
-@return	error code or DB_SUCCESS */
-db_err recv_recovery_from_checkpoint_start_func(ib_recovery_t recovery, lsn_t min_flushed_lsn, lsn_t max_flushed_lsn);
+/**
+ * Completes recovery from a checkpoint.
+ * 
+ * @param[in] recovery             Recovery flag
+ */
+void recv_recovery_from_checkpoint_finish(ib_recovery_t recovery) noexcept;
 
-/** Wrapper for recv_recovery_from_checkpoint_start_func().
-Recovers from a checkpoint. When this function returns, the database is able
-to start processing of new user transactions, but the function
-recv_recovery_from_checkpoint_finish should be called later to complete
-the recovery and free the resources used in it.
-@param lim	ignored: recover up to this log sequence number if possible
-@param min	in: minimum flushed log sequence number from data files
-@param max	in: maximum flushed log sequence number from data files
-@return	error code or DB_SUCCESS */
-#define recv_recovery_from_checkpoint_start(recv, type, lim, min, max) recv_recovery_from_checkpoint_start_func(recv, min, max)
+/**
+ * Initiates the rollback of active transactions.
+ */
+void recv_recovery_rollback_active() noexcept;
 
-/** Completes recovery from a checkpoint.
-@param[in] recovery             Recovery flag */
-void recv_recovery_from_checkpoint_finish(ib_recovery_t recovery);
+/**
+ * Resets the logs. The contents of log files will be lost!
+ * 
+ * @param[in] lsn               reset to this lsn rounded up to be divisible by
+ *                              IB_FILE_BLOCK_SIZE, after which we add
+ *		                          LOG_BLOCK_HDR_SIZE
+ * @param[in] new_logs_created  true if resetting logs is done at the log
+ *                              creation; false if it is done after archive
+*		                            recovery
+ */
+void recv_reset_logs(lsn_t lsn, bool new_logs_created) noexcept;
 
-/** Initiates the rollback of active transactions. */
-void recv_recovery_rollback_active();
+/**
+ * Reset the state of the recovery system variables.
+ */
+void recv_sys_var_init() noexcept;
 
-/** Scans log from a buffer and stores new log data to the parsing buffer.
-Parses and hashes the log records if new data found.  This function will
-apply log records automatically when the hash table becomes full.
-@return true if limit_lsn has been reached, or not able to scan any
-more in this log group.
-@param[in] recovery             Recovery flag
-@param[in] available_memory     We let the hash table of recs to grow to this
-                                size, at the maximum
-@param[in] store_to_hash        true if the records should be stored to the
-                                hashtable; this is set to false if just debug
-				checking is needed
-@param[in] buf                  Buffer containing a log segment or garbage
-@param[in] len                  Buffer length
-@param[in] start_lsn            Buffer start lsn
-@param[in,out] contiguous_lsn   It is known that all log groups contain
-                                contiguouslog data up to this lsn
-@param[out] group_scanned_lsn   Scanning succeeded up to this lsn */
-bool recv_scan_log_recs(
-  ib_recovery_t recovery, ulint available_memory, bool store_to_hash, const byte *buf, ulint len, lsn_t start_lsn,
-  lsn_t *contiguous_lsn, lsn_t *group_scanned_lsn
-);
+/**
+ * Empties the log record storage, applying them to appropriate pages.
+ *
+ * @param[in] flush_and_free_pages If true the application all file pages
+ * are flushed to disk and invalidated in buffer pool: this alternative
+ * means that no new log records can be generated during the application;
+ * the caller must in this case own the log mutex;
+*/
+void recv_apply_log_recs(bool flush_and_free_pages) noexcept;
 
-/** Resets the logs. The contents of log files will be lost!
-@param[in] lsn                  reset to this lsn rounded up to be divisible by
-                                IB_FILE_BLOCK_SIZE, after which we add
-				LOG_BLOCK_HDR_SIZE
-@param[in] new_logs_created     true if resetting logs is done at the log
-                                creation; false if it is done after archive
-				recovery */
-void recv_reset_logs(lsn_t lsn, bool new_logs_created);
+/**
+ * Block of log record data, variable size struct, see note.
+ */
+struct Log_record_data {
 
-/** Creates the recovery system. */
-void recv_sys_create();
+  /** @return string representation of the data.  */
+  std::string to_string() const noexcept;
 
-/** Release recovery system mutexes. */
-void recv_sys_close();
-
-/** Frees the recovery system memory. */
-void recv_sys_mem_free();
-
-/** Inits the recovery system for a recovery operation
-@param[in] size                 Available memory in bytes */
-void recv_sys_init(ulint size);
-
-/** Reset the state of the recovery system variables. */
-void recv_sys_var_init();
-
-/** Empties the hash table of stored log records, applying 
-them to appropriate pages.
-@param[in] flush_and_free_pages If true the application all file pages
-                                are flushed to disk and invalidated in buffer
-                                pool: this alternative means that no
-			       	new log records can be generated during
-				the application; the caller must in this
-				case own the log mutex; */
-void recv_apply_hashed_log_recs(bool flush_and_free_pages);
-
-/** Block of log record data, variable size struct, see note. */
-struct recv_data_t {
   /** Pointer to the next block or nullptr */
-  recv_data_t *next;
+  Log_record_data *m_next;
 
   /* Note: the log record data is stored physically immediately after this
   struct, max amount RECV_DATA_BLOCK_SIZE bytes of it */
 };
 
-/** Stored log record struct */
-struct recv_t {
-  /** log record type */
-  byte type;
+/** Parsed log log record */
+struct Log_record {
 
-  /** log record body length in bytes */
-  ulint len;
+  /** @return string representation of the data.  */
+  std::string to_string() const noexcept;
 
-  /** chain of blocks containing the log record body */
-  recv_data_t *data;
+  /** Log record type */
+  mlog_type_t m_type{MLOG_UNKNOWN};
+
+  /** Log record body length in bytes */
+  uint32_t m_len{};
 
   /** start lsn of the log segment written by the mtr
   which generated this log record: NOTE that this is
   not necessarily the start lsn of this log record */
-  lsn_t start_lsn;
+  lsn_t m_start_lsn{};
 
   /** end lsn of the log segment written by the mtr
   which generated this log record: NOTE that this is
   not necessarily the end lsn of this log record */
-  lsn_t end_lsn;
+  lsn_t m_end_lsn{};
 
-  /** list of log records for this page */
-  UT_LIST_NODE_T(recv_t) rec_list;
+  /** Pointer to the next log record in the singly linked list */
+  Log_record *m_next{};
+
+  /** Chain of blocks containing the log record body */
+  Log_record_data *m_data{};
 };
 
 /** States of recv_addr_struct */
-enum recv_addr_state {
-  /** not yet processed */
+enum Recv_addr_state {
+  RECV_UNKNOWN = 0,
+
+  /** Not yet processed */
   RECV_NOT_PROCESSED,
 
-  /** page is being read */
+  /** Page is being read */
   RECV_BEING_READ,
 
-  /** log records are being applied on the page */
+  /** Log records are being applied on the page */
   RECV_BEING_PROCESSED,
 
-  /** log records have been applied on the page, or they have
+  /** Log records have been applied on the page, or they have
   been discarded because the tablespace does not exist */
   RECV_PROCESSED
 };
 
-/** Hashed page file address struct */
-typedef struct recv_addr_struct recv_addr_t;
+/** @return string presentation of Recv_addr_state */
+std::string to_string(Recv_addr_state s) noexcept;
 
-/** Hashed page file address struct */
-struct recv_addr_struct {
-  /** recovery state of the page */
-  recv_addr_state state;
+struct Page_log_records {
+  /** @return string representation of the data.  */
+  std::string to_string() const noexcept;
 
-  /** space id */
-  space_id_t space;
+  /** Recovery state of the page */
+  Recv_addr_state m_state{RECV_NOT_PROCESSED};
 
-  /** page number */
-  page_no_t page_no;
+  /** Head of the singly linked list */
+  Log_record *m_rec_head{};
 
-  /** list of log records for this page */
-  UT_LIST_BASE_NODE_T(recv_t, rec_list) rec_list;
-
-  /** hash node in the hash bucket chain */
-  hash_node_t addr_hash;
+  /** Tail of the singly linked list. */
+  Log_record *m_rec_tail{};
 };
 
 /** Recovery system data structure */
-struct recv_sys_t {
+struct Recv_sys {
+  using Page_log_records_map = std::unordered_map<page_no_t, Page_log_records*>;
+  using Tablespace_map = std::unordered_map<space_id_t, Page_log_records_map>;
+
+  /** Constructor */
+  Recv_sys() noexcept;
+
+  /** Destructor.  */
+  ~Recv_sys() noexcept;
+
+  /**
+  * Inits the recovery system for a recovery operation
+  * 
+  * @param[in] size              Available memory in bytes
+  */
+  void open(ulint size) noexcept;
+
+  /**
+   * Free the recv_sys recovery related data.
+   */
+  void close() noexcept;
+
+  /**
+   * Empties the hash table when it has been fully processed.
+   */
+  void reset() noexcept;
+
+  /**
+   * Clears the log records from the map.
+   */
+  void clear_log_records() noexcept;
+
+  /**
+  * Adds a new log record to the map of log records.
+  * 
+  * @param type The type of the log record.
+  * @param space The space id.
+  * @param page_no The page number.
+  * @param body Pointer to the log record body.
+  * @param rec_end Pointer to the end of the log record.
+  * @param start_lsn The start LSN of the mtr.
+  *  @param end_lsn The end LSN of the mtr.
+  */
+  void add_log_record(mlog_type_t type, space_id_t space, page_no_t page_no, byte *body, byte *rec_end, lsn_t start_lsn, lsn_t end_lsn) noexcept;
+
+  /** @return string representation of the data.  */
+  std::string to_string() const noexcept;
+
   /** mutex protecting the fields apply_log_recs, n_addrs, and
   the state field in each recv_addr struct */
-  mutex_t mutex;
+  mutable mutex_t m_mutex{};
 
   /** this is true when log rec application to pages is allowed;
   this flag tells the i/o-handler if it should do log record application */
-  bool apply_log_recs;
+  bool m_apply_log_recs{};
 
   /** this is true when a log rec application batch is running */
-  bool apply_batch_on;
+  bool m_apply_batch_on{};
 
   /** log sequence number */
-  lsn_t lsn;
+  lsn_t m_lsn{};
 
   /** size of the log buffer when the database last time wrote to the log */
-  ulint last_log_buf_size;
+  ulint m_last_log_buf_size{};
 
   /** possible incomplete last recovered log block */
-  byte *last_block;
+  byte *m_last_block{};
 
   /** the nonaligned start address of the preceding buffer */
-  byte *last_block_buf_start;
+  byte *m_last_block_buf_start{};
 
   /** buffer for parsing log records */
-  byte *buf;
+  byte *m_buf{};
 
   /** amount of data in buf */
-  ulint len;
+  ulint m_len{};
 
   /** this is the lsn from which we were able to start parsing log
   records and adding them to the hash table; zero if a suitable
   start point not found yet */
-  lsn_t parse_start_lsn;
+  lsn_t m_parse_start_lsn{};
 
   /** the log data has been scanned up to this lsn */
-  lsn_t scanned_lsn;
+  lsn_t m_scanned_lsn{};
 
   /** the log data has been scanned up to this checkpoint number (lowest 4 bytes) */
-  ulint scanned_checkpoint_no;
+  ulint m_scanned_checkpoint_no{};
 
   /** start offset of non-parsed log records in buf */
-  ulint recovered_offset;
+  ulint m_recovered_offset{};
 
   /** the log records have been parsed up to this lsn */
-  lsn_t recovered_lsn;
+  lsn_t m_recovered_lsn{};
 
   /** recovery should be made at most up to this lsn */
-  lsn_t limit_lsn;
+  lsn_t m_limit_lsn{};
 
   /** this is set to true if we during log scan find a corrupt log block, or a corrupt
   log record, or there is a log parsing buffer overflow */
-  bool found_corrupt_log;
+  bool m_found_corrupt_log{};
 
   /** memory heap of log records and file addresses*/
-  mem_heap_t *heap;
+  mem_heap_t *m_heap{};
 
-  /** hash table of file addresses of pages */
-  hash_table_t *addr_hash;
+  /** Parsed log records that need to be applied to the tablepsace pages. */
+  Tablespace_map m_log_records{};
 
-  /** number of not processed hashed file addresses in the hash table */
-  ulint n_addrs;
+  /** Number of log records parsed and stored in m_log_records so far. */
+  ulint m_n_log_records{};
 };
 
 /** The recovery system */
-extern recv_sys_t *recv_sys;
+extern Recv_sys *recv_sys;
 
 /** true when applying redo log records during crash recovery; false
 otherwise.  Note that this is false while a background thread is
@@ -297,10 +315,8 @@ use these free frames to read in pages when we start applying the
 log records to the database. */
 extern ulint recv_n_pool_free_frames;
 
-/** Size of the parsing buffer; it must accommodate RECV_SCAN_SIZE many
-times! */
+/** Size of the parsing buffer; it must accommodate RECV_SCAN_SIZE many times! */
 constexpr ulint RECV_PARSING_BUF_SIZE = 2 * 1024 * 1024;
 
-/** Size of block reads when the log groups are scanned forward to do a
-roll-forward */
+/** Size of block reads when the log groups are scanned forward to do a roll-forward */
 constexpr ulint RECV_SCAN_SIZE = 4 * UNIV_PAGE_SIZE;

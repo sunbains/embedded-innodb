@@ -1,5 +1,6 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -21,16 +22,16 @@ Server query execution
 Created 6/5/1996 Heikki Tuuri
 *******************************************************/
 
-#ifndef srv0que_h
-#define srv0que_h
+#pragma once
 
 #include "innodb0types.h"
 
 #include "que0types.h"
 
-/** Enqueues a task to server task queue and releases a worker thread, if there
-is a suspended one. */
-
-void srv_que_task_enqueue_low(que_thr_t *thr); /*!< in: query thread */
-
-#endif
+/**
+ * Enqueues a task to server task queue and releases a worker thread, if there
+ * is a suspended one.
+ *
+ * @param[in] thr query thread.
+ */
+void srv_que_task_enqueue_low(que_thr_t *thr);

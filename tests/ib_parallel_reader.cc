@@ -1,3 +1,5 @@
+/** Copyright (c) 2024 Sunny Bains. All rights reserved. */
+
 /** Test the parallel reder code. It does the following: 
 the following:
 

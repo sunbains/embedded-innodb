@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -1378,7 +1379,7 @@ static db_err lock_rec_enqueue_waiting(ulint type_mode, const buf_block_t *block
 #ifdef UNIV_DEBUG
   if (lock_print_waits) {
     ib_logger(ib_stream, "Lock wait for trx %lu in index ", (ulong)trx->m_id);
-    ut_print_name(ib_stream, trx, false, index->name);
+    ut_print_name(index->name);
   }
 #endif /* UNIV_DEBUG */
 
@@ -2656,7 +2657,7 @@ static db_err lock_table_enqueue_waiting(ulint mode, dict_table_t *table, que_th
         " in a dictionary operation!\n"
         "Table name "
       );
-      ut_print_name(ib_stream, trx, true, table->name);
+      ut_print_name(table->name);
       ib_logger(
         ib_stream,
         ".\n"
@@ -3026,7 +3027,7 @@ void lock_table_print(ib_stream_t ib_stream, const Lock *lock) {
   ut_a(lock_get_type_low(lock) == LOCK_TABLE);
 
   ib_logger(ib_stream, "TABLE LOCK table ");
-  ut_print_name(ib_stream, lock->trx, true, lock->un_member.tab_lock.table->name);
+  ut_print_name(lock->un_member.tab_lock.table->name);
   ib_logger(ib_stream, " trx id %lu", TRX_ID_PREP_PRINTF(lock->trx->m_id));
 
   if (lock_get_mode(lock) == LOCK_S) {

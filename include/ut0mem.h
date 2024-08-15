@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -28,6 +29,9 @@ Created 5/30/1994 Heikki Tuuri
 /** Initializes the mem block list at database startup. */
 void ut_mem_init();
 
+#define ut_new(n) ut_new_func(n, Source_location(std::source_location::current()))    
+#define ut_delete(ptr) ut_delete_func(ptr, Source_location(std::source_location::current()))
+
 /**
  * Allocates memory. Sets it also to zero if UNIV_SET_MEM_TO_ZERO is defined.
  *
@@ -35,14 +39,14 @@ void ut_mem_init();
  *
  * @return Allocated memory
  */
-void *ut_new(ulint n);
+void *ut_new_func(ulint n, Source_location location);
 
 /**
  * Frees a memory block allocated with ut_malloc.
  *
  * @param ptr Memory block to free
  */
-void ut_delete(void *ptr);
+void ut_delete_func(void *ptr, Source_location location);
 
 /**
  * Implements realloc. This is needed by /pars/lexyy.c. Otherwise, you should

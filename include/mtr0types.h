@@ -1,3 +1,5 @@
+/** Copyright (c) 2024 Sunny Bains. All rights reserved. */
+
 #pragma once
 
 #include "dyn0dyn.h"
@@ -5,24 +7,21 @@
 
 /* Logging modes for a mini-transaction */
 
-/** Default mode: log all operations modifying disk-based data */
-constexpr ulint MTR_LOG_ALL = 21;
+enum mtr_log_mode_t : byte {
+  /** Default mode: log all operations modifying disk-based data */
+  MTR_LOG_ALL = 21,
 
-/**
- * @brief Logging mode: log no operations
- */
-constexpr ulint MTR_LOG_NONE = 22;
+  /** Log only operations modifying file space page allocation
+   * data (operations in fsp0fsp.* ) */
+  MTR_LOG_SPACE = 23,
 
-/**
- * @brief Log only operations modifying file space page allocation
- * data (operations in fsp0fsp.* )
- */
-constexpr ulint MTR_LOG_SPACE = 23;
+  /** Log only operations modifying file space page allocation
+   * data (operations in fsp0fsp.* ) */
+  MTR_LOG_NONE = 22,
 
-/**
- * @brief Inserts are logged in a shorter form
- */
-constexpr ulint MTR_LOG_SHORT_INSERTS = 24;
+  /** Inserts are logged in a shorter form */
+  MTR_LOG_SHORT_INSERTS = 24,
+};
 
 /**
  * @brief Types for the mlock objects to store in the mtr memo;
@@ -40,6 +39,9 @@ The log items are declared 'byte' so that the compiler can warn if val
 and type parameters are switched in a call to mlog_write_ulint. NOTE!
 For 1 - 8 bytes, the flag value must give the length also! @{ */
 enum mlog_type_t : byte {
+  /** Unknown log type. */
+  MLOG_UNKNOWN = 0,
+
   /** @brief one byte is written */
   MLOG_1BYTE = 1,
 
@@ -130,9 +132,6 @@ enum mlog_type_t : byte {
   /** Log record about an .ibd file deletion */
   MLOG_FILE_DELETE = 35,
 
-  /*!< log record about creating an .ibd file, with format */
-  MLOG_FILE_CREATE2 = 47,
-
 #ifdef UNIV_LOG_LSN_DEBUG
   /** Current LSN */
   MLOG_LSN = 88,
@@ -159,18 +158,23 @@ constexpr byte MLOG_FILE_FLAG_TEMP = 1;
 /** Number of slots in memo */
 constexpr ulint MTR_BUF_MEMO_SIZE = 200;
 
+enum mtr_state_t : byte{
+  /** State is undefinedd. */
+  MTR_UNDEFINED = 0,
+
+  /** Mini-transaction is active. */
+  MTR_ACTIVE = 123,
+
+  /** Mini-tranaction is committing flag. */
+  MTR_COMMITTING = 64,
+
+  /** Mini-tranaction has committed. */
+  MTR_COMMITTED = 76,
+};
+
 /** Magic marker for mtr_t to check for corruption when compiled
  * in debug mode. */
 constexpr ulint MTR_MAGIC_N = 54551;
-
-/** Minit-transaction is active. */
-constexpr ulint MTR_ACTIVE = 12231;
-
-/** Mini-tranaction is committing flag. */
-constexpr ulint MTR_COMMITTING = 56456;
-
-/** Mini-tranaction has committed. */
-constexpr ulint MTR_COMMITTED = 34676;
 
 /* Type definition of a mini-transaction memo stack slot. */
 struct mtr_memo_slot_t {
@@ -184,7 +188,16 @@ struct mtr_memo_slot_t {
 /* Mini-transaction handle and buffer */
 struct mtr_t {
   /** MTR_ACTIVE, MTR_COMMITTING, MTR_COMMITTED */
-  ulint state;
+  mtr_state_t state{MTR_UNDEFINED};
+
+  /** True if the mtr made modifications to buffer pool pages */
+  bool modifications;
+
+  /** Specifies which operations should be logged. */
+  mtr_log_mode_t log_mode{MTR_LOG_ALL};
+
+  /** Count of how many page initial log records have been written to the mtr log */
+  uint32_t n_log_recs;
 
   /** Memo stack for locks etc. */
   dyn_array_t memo;
@@ -192,23 +205,84 @@ struct mtr_t {
   /** Mini-transaction log */
   dyn_array_t log;
 
-  /** True if the mtr made modifications to buffer pool pages */
-  bool modifications;
-
-  /** Count of how many page initial log records have been written to the mtr log */
-  ulint n_log_recs;
-
-  /** Specifies which operations should be logged; default value MTR_LOG_ALL */
-  ulint log_mode;
-
   /** Start lsn of the possible log entry for this mtr */
   lsn_t start_lsn;
 
   /** End lsn of the possible log entry for this mtr */
   lsn_t end_lsn;
 
-#ifdef UNIV_DEBUG
   /** For debugging. */
-  ulint magic_n;
-#endif /* UNIV_DEBUG */
+  ut_d(ulint magic_n;)
 };
+
+/**
+* @return text representation of mtr_log_t
+*/
+inline const char *mlog_type_str(mlog_type_t type) noexcept {
+  switch (type) {
+    case MLOG_1BYTE:
+      return "MLOG_1BYTE";
+    case MLOG_2BYTES:
+      return "MLOG_2BYTES";
+    case MLOG_4BYTES:
+      return "MLOG_4BYTES";
+    case MLOG_8BYTES:
+      return "MLOG_8BYTES";
+    case MLOG_REC_INSERT:
+      return "MLOG_REC_INSERT";
+    case MLOG_REC_CLUST_DELETE_MARK:
+      return "MLOG_REC_CLUST_DELETE_MARK";
+    case MLOG_REC_SEC_DELETE_MARK:
+      return "MLOG_REC_SEC_DELETE_MARK";
+    case MLOG_REC_UPDATE_IN_PLACE:
+      return "MLOG_REC_UPDATE_IN_PLACE";
+    case MLOG_REC_DELETE:
+      return "MLOG_REC_DELETE";
+    case MLOG_LIST_END_DELETE:
+      return "MLOG_LIST_END_DELETE";
+    case MLOG_LIST_START_DELETE:
+      return "MLOG_LIST_START_DELETE";
+    case MLOG_LIST_END_COPY_CREATED:
+      return "MLOG_LIST_END_COPY_CREATED";
+    case MLOG_PAGE_REORGANIZE:
+      return "MLOG_PAGE_REORGANIZE";
+    case MLOG_PAGE_CREATE:
+      return "MLOG_PAGE_CREATE";
+    case MLOG_UNDO_INSERT:
+      return "MLOG_UNDO_INSERT";
+    case MLOG_UNDO_ERASE_END:
+      return "MLOG_UNDO_ERASE_END";
+    case MLOG_UNDO_INIT:
+      return "MLOG_UNDO_INIT";
+    case MLOG_UNDO_HDR_DISCARD:
+      return "MLOG_UNDO_HDR_DISCARD";
+    case MLOG_UNDO_HDR_REUSE:
+      return "MLOG_UNDO_HDR_REUSE";
+    case MLOG_UNDO_HDR_CREATE:
+      return "MLOG_UNDO_HDR_CREATE";
+    case MLOG_REC_MIN_MARK:
+      return "MLOG_REC_MIN_MARK";
+    case MLOG_FULL_PAGE:
+      return "MLOG_FULL_PAGE";
+    case MLOG_INIT_FILE_PAGE:
+      return "MLOG_INIT_FILE_PAGE";
+    case MLOG_WRITE_STRING:
+      return "MLOG_WRITE_STRING";
+    case MLOG_MULTI_REC_END:
+      return "MLOG_MULTI_REC_END";
+    case MLOG_DUMMY_RECORD:
+      return "MLOG_DUMMY_RECORD";
+    case MLOG_FILE_CREATE:
+      return "MLOG_FILE_CREATE";
+    case MLOG_FILE_RENAME:
+      return "MLOG_FILE_RENAME";
+    case MLOG_FILE_DELETE:
+      return "MLOG_FILE_DELETE";
+#ifdef UNIV_LOG_LSN_DEBUG
+    case MLOG_LSN:
+      return "MLOG_LSN";
+#endif /* UNIV_LOG_LSN_DEBUG */
+    default:
+        log_fatal("Unknown mlog_type_t: ", (ulint) type);
+    }
+}

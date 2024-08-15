@@ -2,6 +2,7 @@
 Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 Copyright (c) 2010 Stewart Smith
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -1969,14 +1970,14 @@ ib_err_t ib_table_create(ib_trx_t ib_trx, const ib_tbl_sch_t ib_tbl_sch, ib_id_t
   }
 
   if (table != nullptr) {
-    ulint format_id;
-    const char *format = nullptr;
-
     /* We update the highest file format in the system
     table space, if this table has a higher file format
     setting. */
 
-    format_id = dict_table_get_format(table);
+    auto format_id = dict_table_get_format(table);
+
+    const char *format = nullptr;
+
     trx_sys_file_format_max_upgrade(&format, format_id);
 
     if (format != nullptr && format_id > db_format.id) {
@@ -4323,7 +4324,7 @@ ib_err_t ib_savepoint_rollback(ib_trx_t ib_trx, const void *name, ulint name_len
       "  Error: transaction trying to rollback a  "
       "savepoint "
     );
-    ut_print_name(ib_stream, trx, false, name != nullptr ? (char *)name : "(null)");
+    ut_print_name(name != nullptr ? (char *)name : "(null)");
     ib_logger(ib_stream, " though it is not started\n");
 
     return DB_ERROR;

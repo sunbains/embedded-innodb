@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -134,9 +135,7 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
       unlikely(m_pos_state != Btr_pcur_positioned::WAS_POSITIONED &&
                m_pos_state != Btr_pcur_positioned::IS_POSITIONED)) {
 
-    ut_print_buf(ib_stream, this, sizeof(btr_pcur_t));
-
-    ib_logger(ib_stream, "\n");
+    log_warn_buf(this, sizeof(btr_pcur_t));
 
     if (m_trx_if_known != nullptr) {
       trx_print(ib_stream, m_trx_if_known, 0);

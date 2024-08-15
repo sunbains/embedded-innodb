@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -510,7 +511,7 @@ static void row_ins_set_detailed(
   dict_foreign_t *foreign
 ) /*!< in: foreign key constraint */
 {
-  ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
+  ut_print_name(foreign->foreign_table_name);
   dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign, false);
   trx_set_detailed_error(trx, "foreign key error");
 }
@@ -539,20 +540,20 @@ static void row_ins_foreign_report_err(
   trx_print(ib_stream, trx, 600);
 
   ib_logger(ib_stream, "Foreign key constraint fails for table ");
-  ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
+  ut_print_name(foreign->foreign_table_name);
   ib_logger(ib_stream, ":\n");
   dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign, true);
   ib_logger(ib_stream, "\n%s", errstr);
   ib_logger(ib_stream, " in parent table, in index ");
-  ut_print_name(ib_stream, trx, false, foreign->referenced_index->name);
+  ut_print_name(foreign->referenced_index->name);
   if (entry) {
     ib_logger(ib_stream, " tuple:\n");
     dtuple_print(ib_stream, entry);
   }
   ib_logger(ib_stream, "\nBut in child table ");
-  ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
+  ut_print_name(foreign->foreign_table_name);
   ib_logger(ib_stream, ", in index ");
-  ut_print_name(ib_stream, trx, false, foreign->foreign_index->name);
+  ut_print_name(foreign->foreign_index->name);
   if (rec) {
     ib_logger(ib_stream, ", there is a record:\n");
     rec_print(rec);
@@ -584,11 +585,11 @@ static void row_ins_foreign_report_add_err(
   ib_logger(ib_stream, " Transaction:\n");
   trx_print(ib_stream, trx, 600);
   ib_logger(ib_stream, "Foreign key constraint fails for table ");
-  ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
+  ut_print_name(foreign->foreign_table_name);
   ib_logger(ib_stream, ":\n");
   dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign, true);
   ib_logger(ib_stream, "\nTrying to add in child table, in index ");
-  ut_print_name(ib_stream, trx, false, foreign->foreign_index->name);
+  ut_print_name(foreign->foreign_index->name);
   if (entry) {
     ib_logger(ib_stream, " tuple:\n");
     /* TODO: DB_TRX_ID and DB_ROLL_PTR may be uninitialized.
@@ -596,9 +597,9 @@ static void row_ins_foreign_report_add_err(
     dtuple_print(ib_stream, entry);
   }
   ib_logger(ib_stream, "\nBut in parent table ");
-  ut_print_name(ib_stream, trx, true, foreign->referenced_table_name);
+  ut_print_name(foreign->referenced_table_name);
   ib_logger(ib_stream, ", in index ");
-  ut_print_name(ib_stream, trx, false, foreign->referenced_index->name);
+  ut_print_name(foreign->referenced_index->name);
   ib_logger(ib_stream, ",\nthe closest match we can find is record:\n");
   if (rec && page_rec_is_supremum(rec)) {
     /* If the cursor ended on a supremum record, it is better
@@ -1155,15 +1156,15 @@ run_again:
       ib_logger(ib_stream, " Transaction:\n");
       trx_print(ib_stream, trx, 600);
       ib_logger(ib_stream, "Foreign key constraint fails for table ");
-      ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
+      ut_print_name(foreign->foreign_table_name);
       ib_logger(ib_stream, ":\n");
       dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign, true);
       ib_logger(ib_stream, "\nTrying to add to index ");
-      ut_print_name(ib_stream, trx, false, foreign->foreign_index->name);
+      ut_print_name(foreign->foreign_index->name);
       ib_logger(ib_stream, " tuple:\n");
       dtuple_print(ib_stream, entry);
       ib_logger(ib_stream, "\nBut the parent table ");
-      ut_print_name(ib_stream, trx, true, foreign->referenced_table_name);
+      ut_print_name(foreign->referenced_table_name);
       ib_logger(
         ib_stream,
         "\nor its .ibd file does"

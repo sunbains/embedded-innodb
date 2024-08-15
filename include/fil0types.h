@@ -1,3 +1,5 @@
+/** Copyright (c) 2024 Sunny Bains. All rights reserved. */
+
 #pragma once
 
 #include "innodb0types.h"
@@ -56,7 +58,7 @@ constexpr ulint FIL_PAGE_PREV = 8;
 
 /** If there is a 'natural' successor of the page, its offset.
 Otherwise FIL_NULL.  B-tree index pages (FIL_PAGE_TYPE contains
-FIL_PAGE_INDEX) on the same PAGE_LEVEL are maintained as a doubly
+FIL_PAGE_TYPE_INDEX) on the same PAGE_LEVEL are maintained as a doubly
 linked list via FIL_PAGE_PREV and FIL_PAGE_NEXT in the collation
 order of the smallest user record on each page. */
 constexpr ulint FIL_PAGE_NEXT = 12;
@@ -64,7 +66,7 @@ constexpr ulint FIL_PAGE_NEXT = 12;
 /** LSN of the end of the newest modification log record to the page */
 constexpr ulint FIL_PAGE_LSN = 16;
 
-/** File page type: FIL_PAGE_INDEX,..., 2 bytes. */
+/** File page type: FIL_PAGE_TYPE_INDEX,..., 2 bytes. */
 constexpr ulint FIL_PAGE_TYPE = 24;
 
 /** This is only defined for the first page in a system tablespace
@@ -93,38 +95,34 @@ constexpr ulint FIL_PAGE_DATA_END = 8;
 /** File page types (values of FIL_PAGE_TYPE) @{ */
 
 /** B-tree node */
-constexpr ulint FIL_PAGE_INDEX = 17855;
+enum Fil_page_type {
+  /** Freshly allocated page */
+  FIL_PAGE_TYPE_ALLOCATED = 0,
 
-/** Undo log page */
-constexpr ulint FIL_PAGE_UNDO_LOG = 2;
+  /** B+Tree index page.  */
+  FIL_PAGE_TYPE_INDEX = 17855,
 
-/** Index node */
-constexpr ulint FIL_PAGE_INODE = 3;
+  /** Undo log page */
+  FIL_PAGE_TYPE_UNDO_LOG = 2,
 
-/* File page types introduced in InnoDB 5.1.7 */
-/** Freshly allocated page */
-constexpr ulint FIL_PAGE_TYPE_ALLOCATED = 0;
+  /** Index node */
+  FIL_PAGE_TYPE_INODE = 3,
 
-/** System page */
-constexpr ulint FIL_PAGE_TYPE_SYS = 6;
+  /** System page */
+  FIL_PAGE_TYPE_SYS = 6,
 
-/** Transaction system data */
-constexpr ulint FIL_PAGE_TYPE_TRX_SYS = 7;
+  /** Transaction system data */
+  FIL_PAGE_TYPE_TRX_SYS = 7,
 
-/** File space header */
-constexpr ulint FIL_PAGE_TYPE_FSP_HDR = 8;
+  /** File space header */
+  FIL_PAGE_TYPE_FSP_HDR = 8,
 
-/** Extent descriptor page */
-constexpr ulint FIL_PAGE_TYPE_XDES = 9;
+  /** Extent descriptor page */
+  FIL_PAGE_TYPE_XDES = 9,
 
-/** Uncompressed BLOB page */
-constexpr ulint FIL_PAGE_TYPE_BLOB = 10;
-
-/** First compressed BLOB page */
-constexpr ulint FIL_PAGE_TYPE_ZBLOB = 11;
-
-/** Subsequent compressed BLOB page */
-constexpr ulint FIL_PAGE_TYPE_ZBLOB2 = 12;
+  /** Uncompressed BLOB page */
+  FIL_PAGE_TYPE_BLOB = 10
+};
 
 /* @} */
 

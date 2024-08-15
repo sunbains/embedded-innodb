@@ -1,6 +1,7 @@
 /****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2009, Google Inc.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -182,12 +183,12 @@ inline ulint log_block_convert_lsn_to_no(lsn_t lsn) {
  * @param block The log block.
  * @return The checksum.
  */
-inline ulint log_block_calc_checksum(const byte *block) {
-  auto sh = 0;   // Shift value.
-  auto sum = 1;  // Checksum value.
+inline uint32_t log_block_calc_checksum(const byte *block) {
+  uint32_t sh = 0;   // Shift value.
+  uint32_t sum = 1;  // Checksum value.
 
   for (ulint i = 0; i < IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE; i++) {
-    ulint b = ulint(block[i]);
+    auto b = uint32_t(block[i]);
 
     sum &= 0x7FFFFFFFUL;
     sum += b;
@@ -208,7 +209,7 @@ inline ulint log_block_calc_checksum(const byte *block) {
  * @param log_block The log block.
  * @return The checksum.
  */
-inline ulint log_block_get_checksum(const byte *log_block) {
+inline uint32_t log_block_get_checksum(const byte *log_block) {
   return mach_read_from_4(log_block + IB_FILE_BLOCK_SIZE - LOG_BLOCK_CHECKSUM);
 }
 
@@ -604,10 +605,8 @@ void log_fsp_current_free_limit_set_and_checkpoint(ulint limit);
 
 /**
  * @brief Prints information of the log.
- *
- * @param ib_stream The stream where to print.
  */
-void log_print(ib_stream_t ib_stream);
+void log_print();
 
 /**
  * @brief Peeks the current lsn.

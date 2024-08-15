@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -87,19 +88,25 @@ we allocate pages for the non-leaf levels of the tree.
 */
 
 #ifdef UNIV_BTR_DEBUG
-/** Checks a file segment header within a B-tree root page.
-@return	true if valid */
-static bool btr_root_fseg_validate(
-  const fseg_header_t *seg_header, /*!< in: segment header */
-  ulint space
-) /*!< in: tablespace identifier */
-{
+/**
+ * Validates the root file segment.
+ *
+ * This function checks the validity of the root file segment by verifying the segment header
+ * and the tablespace identifier. It ensures that the offset is within the valid range.
+ *
+ * @param seg_header The segment header to validate.
+ * @param space The tablespace identifier.
+ * 
+ * @return Returns true if the root file segment is valid, otherwise false.
+ */
+static bool btr_root_fseg_validate(const fseg_header_t *seg_header, ulint space) {
   ulint offset = mach_read_from_2(seg_header + FSEG_HDR_OFFSET);
 
   ut_a(mach_read_from_4(seg_header + FSEG_HDR_SPACE) == space);
   ut_a(offset >= FIL_PAGE_DATA);
   ut_a(offset <= UNIV_PAGE_SIZE - FIL_PAGE_DATA_END);
-  return (true);
+
+  return true;
 }
 #endif /* UNIV_BTR_DEBUG */
 
@@ -412,9 +419,9 @@ static ulint *btr_page_get_father_node_ptr_func(ulint *offsets, mem_heap_t *heap
     ib_logger(ib_stream, "Dump of the parent page:\n");
     buf_page_print(page_align(node_ptr), 0);
     ib_logger(ib_stream, "Corruption of an index tree: table ");
-    ut_print_name(ib_stream, nullptr, true, dict_index->table_name);
+    ut_print_name(dict_index->table_name);
     ib_logger(ib_stream, ", index ");
-    ut_print_name(ib_stream, nullptr, false, dict_index->name);
+    ut_print_name(dict_index->name);
     ib_logger(
       ib_stream,
       ",\n"
@@ -604,7 +611,7 @@ static bool btr_page_reorganize_low(
 ) /*!< in: mtr */
 {
   bool success = false;
-  page_t *page = block->get_frame();
+  auto page = block->get_frame();
 
   ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
 
@@ -675,7 +682,7 @@ static bool btr_page_reorganize_low(
   /* Restore logging mode */
   mtr_set_log_mode(mtr, log_mode);
 
-  return (success);
+  return success;
 }
 
 /** Reorganizes an index page.
@@ -1534,7 +1541,7 @@ static void btr_level_list_remove(
 minimum record. */
 static void btr_set_min_rec_mark_log(
   rec_t *rec, /*!< in: record */
-  byte type,  /*!< in: MLOG_COMP_REC_MIN_MARK or MLOG_REC_MIN_MARK */
+  mlog_type_t type,  /*!< in: MLOG_COMP_REC_MIN_MARK or MLOG_REC_MIN_MARK */
   mtr_t *mtr
 ) /*!< in: mtr */
 {

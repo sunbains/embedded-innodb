@@ -1,3 +1,5 @@
+/** Copyright (c) 2024 Sunny Bains. All rights reserved */
+
 #pragma once
 
 #include "innodb.h"
@@ -166,10 +168,18 @@ constexpr ulint IB_FILE_BLOCK_SIZE = 512;
 #endif /* UNIV_SYNC_DEBUG */
 
 struct Source_location {
+  /** Constructor/
+   * @param file      File name
+   * @param line      Line number
+   * @param function  Function name
+   */
+  explicit Source_location(auto from = std::source_location::current())
+    : m_from(from) {}  
+
   explicit Source_location()
     : m_from(std::source_location::current()){}
 
-  std::string to_string() const {
+  std::string to_string() const noexcept {
     return std::format("{}:{} {}", m_from.file_name(), m_from.line(), m_from.function_name());
   }
 

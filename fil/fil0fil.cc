@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -258,26 +259,25 @@ void Fil::node_create(const char *name, ulint size, space_id_t id, bool is_raw) 
 
     mem_free(node);
 
-    mutex_exit(&m_mutex);
+  } else {
 
-    return;
-  }
+    space->m_size_in_pages += size;
 
-  space->m_size_in_pages += size;
+    node->m_space = space;
 
-  node->m_space = space;
+    UT_LIST_ADD_LAST(space->m_chain, node);
+    ut_a(UT_LIST_GET_LEN(space->m_chain) == 1 || space->m_type == FIL_LOG);
 
-  UT_LIST_ADD_LAST(space->m_chain, node);
+    if (id < SRV_LOG_SPACE_FIRST_ID && m_max_assigned_id < id) {
 
-  if (id < SRV_LOG_SPACE_FIRST_ID && m_max_assigned_id < id) {
-
-    m_max_assigned_id = id;
+      m_max_assigned_id = id;
+    }
   }
 
   mutex_exit(&m_mutex);
 }
 
-void Fil::node_open_file(fil_node_t *node, fil_space_t *space) {
+void Fil::node_open_file(fil_node_t *node, fil_space_t *space, bool startup) {
   off_t size;
   bool success;
 
@@ -301,14 +301,16 @@ void Fil::node_open_file(fil_node_t *node, fil_space_t *space) {
       os_file_get_last_error(true);
 
       log_fatal(
-        std::format("Cannot open '{}'. Have you deleted .ibd files under a running server?\n", node->m_file_name)
+        std::format("Cannot open '{}'. Have you deleted .ibd files under a running server?", node->m_file_name)
       );
     }
 
-    os_file_get_size(node->m_fh, &size);
+    success = os_file_get_size(node->m_fh, &size);
+    ut_a(success);
 
-    ut_a(space->m_id != 0);
+    /* These are opened at the start and closed at shutdown. */
     ut_a(space->m_type != FIL_LOG);
+    ut_a(space->m_id != SYS_TABLESPACE || startup);
 
     auto size_bytes = size;
 
@@ -321,36 +323,36 @@ void Fil::node_open_file(fil_node_t *node, fil_space_t *space) {
       ));
     }
 
-    /* Read the first page of the tablespace */
-    auto buf2 = static_cast<byte *>(ut_new(2 * UNIV_PAGE_SIZE));
-
-    /* Align the memory for file i/o if we might have O_DIRECT set */
-    auto page = reinterpret_cast<page_t *>(ut_align(buf2, UNIV_PAGE_SIZE));
+    auto ptr = static_cast<byte *>(ut_new(2 * UNIV_PAGE_SIZE));
+    auto page = reinterpret_cast<page_t *>(ut_align(ptr, UNIV_PAGE_SIZE));
 
     success = os_file_read(node->m_fh, page, UNIV_PAGE_SIZE, 0);
 
     auto flags = fsp_header_get_flags(page);
     auto space_id = fsp_header_get_space_id(page);
 
-    ut_delete(buf2);
+    ut_delete(ptr);
 
     /* Close the file now that we have read the space id from it */
 
     os_file_close(node->m_fh);
 
-    if (unlikely(space_id != space->m_id)) {
+    if (space_id != space->m_id) {
       log_fatal( std::format(
-      	"Tablespace id is {} in the data dictionary but in file {} it is {}!", space->m_id, node->m_file_name, space_id
-	));
+      	"Tablespace id is {} in the data dictionary but in file {} it is {}!",
+        space->m_id, node->m_file_name, space_id
+));
     }
 
-    if (unlikely(space_id == ULINT_UNDEFINED || space_id == 0)) {
-      log_fatal(std::format("Tablespace id {} in file {} is not sensible", space_id, node->m_file_name));
+    if (!startup && (space_id == ULINT_UNDEFINED || space_id == SYS_TABLESPACE)) {
+      log_fatal(std::format("Tablespace id {} in file {} is not sensible",
+      space_id, node->m_file_name));
     }
 
-    if (unlikely(space->m_flags != flags)) {
+    if (space->m_flags != flags) {
       log_fatal(std::format(
-        "Table flags are {} in the data dictionary but the flags in file {} are {:x}!", space->m_flags, node->m_file_name, flags
+        "Table flags are {} in the data dictionary but the flags in file {} are {:x}!",
+        space->m_flags, node->m_file_name, flags
       ));
     }
 
@@ -359,7 +361,7 @@ void Fil::node_open_file(fil_node_t *node, fil_space_t *space) {
       size_bytes = ut_2pow_round(size_bytes, 1024 * 1024);
     }
 
-    node->m_size_in_pages = (ulint)(size_bytes / UNIV_PAGE_SIZE);
+    node->m_size_in_pages = ulint(size_bytes / UNIV_PAGE_SIZE);
 
     space->m_size_in_pages += node->m_size_in_pages;
   }
@@ -511,11 +513,8 @@ void Fil::node_free(fil_node_t *node, fil_space_t *space) {
 bool Fil::space_create(const char *name, space_id_t id, ulint flags, Fil_type fil_type) {
   fil_space_t *space;
 
-  /* The tablespace flags (FSP_SPACE_FLAGS) should be 0 for ROW_FORMAT=COMPACT
-  ROW_FORMAT=REDUNDANT (table->flags == 0). For any other format, the tablespace
-  flags should equal (table->flags & ~(~0UL << DICT_TF_BITS)). */
-
-  ut_a(!(flags & (~0UL << DICT_TF_BITS)));
+  /* FIXME: This is redundant now. */
+  ut_a(flags == 0);
 
 try_again:
   mutex_enter(&m_mutex);
@@ -572,7 +571,7 @@ try_again:
     return false;
   }
 
-  space = (fil_space_t *)mem_alloc(sizeof(fil_space_t));
+  space = static_cast<fil_space_t *>(mem_alloc(sizeof(fil_space_t)));
 
   space->m_name = mem_strdup(name);
   space->m_id = id;
@@ -801,27 +800,17 @@ bool Fil::check_adress_in_tablespace(space_id_t id, page_no_t page_no) {
   return space_get_size(id) > page_no;
 }
 
-void Fil::open_log_and_system_tablespace_files() {
+void Fil::open_log_and_system_tablespace() {
   mutex_enter(&m_mutex);
 
   for (auto space : m_space_list) {
-    if (space->m_type != FIL_TABLESPACE || space->m_id == 0) {
+    if (space->m_type == FIL_LOG || space->m_id == SYS_TABLESPACE) {
+      ut_a(UT_LIST_GET_LEN(space->m_chain) == 1 || space->m_type == FIL_LOG);
 
-      for (auto node : space->m_chain) {
-        if (!node->open) {
-          node_open_file(node, space);
-        }
-        if (m_max_n_open < 10 + m_n_open) {
-          log_warn(std::format(
-            "You must raise the value of max_open_files! Remember that"
-            " InnoDB keeps all log files and all system tablespace files open"
-            " for the whole time server is running, and needs to open also"
-            " some .ibd files if the file-per-table storage model is used."
-            " Current open files {}, max allowed open files {}.",
-            m_n_open,
-            m_max_n_open
-          ));
-        }
+      auto node = UT_LIST_GET_FIRST(space->m_chain);
+
+      if (!node->open) {
+        node_open_file(node, space, true);
       }
     }
   }
@@ -837,15 +826,11 @@ void Fil::close_all_files() {
   while (space != nullptr) {
     fil_space_t *prev_space = space;
 
+    ut_a(UT_LIST_GET_LEN(space->m_chain) == 1 || space->m_type == FIL_LOG);
     auto node = UT_LIST_GET_FIRST(space->m_chain);
 
-
-    while (node != nullptr) {
-      if (node->open) {
-        node_close_file(node);
-      }
-
-      node = UT_LIST_GET_NEXT(m_chain, node);
+    if (node->open) {
+      node_close_file(node);
     }
 
     space = UT_LIST_GET_NEXT(m_space_list, space);
@@ -856,7 +841,7 @@ void Fil::close_all_files() {
   mutex_exit(&m_mutex);
 }
 
-void Fil::set_max_space_id_if_bigger(ulint max_id) {
+void Fil::set_max_space_id_if_bigger(space_id_t max_id) {
   if (max_id >= SRV_LOG_SPACE_FIRST_ID) {
     log_fatal("Max tablespace id is too high, ", max_id);
   }
@@ -929,33 +914,17 @@ db_err Fil::write_flushed_lsn_to_data_files(lsn_t lsn) {
   return DB_SUCCESS;
 }
 
-void Fil::read_flushed_lsn_and_arch_log_no(
-  os_file_t data_file, bool one_read_already, lsn_t *min_flushed_lsn, lsn_t *max_flushed_lsn
-) {
-  uint64_t flushed_lsn;
-  auto buf2 = (byte *)ut_new(2 * UNIV_PAGE_SIZE);
-
+void Fil::read_flushed_lsn(os_file_t fh, lsn_t &flushed_lsn) {
+  auto ptr = static_cast<byte *>(ut_new(2 * UNIV_PAGE_SIZE));
   /* Align the memory for a possible read from a raw device */
-  auto buf = (byte *)ut_align(buf2, UNIV_PAGE_SIZE);
+  auto buf = static_cast<byte *>(ut_align(ptr, UNIV_PAGE_SIZE));
 
-  os_file_read(data_file, buf, UNIV_PAGE_SIZE, 0);
+  auto success = os_file_read(fh, buf, UNIV_PAGE_SIZE, 0);
+  ut_a(success);
 
   flushed_lsn = mach_read_from_8(buf + FIL_PAGE_FILE_FLUSH_LSN);
 
-  ut_delete(buf2);
-
-  if (!one_read_already) {
-    *min_flushed_lsn = flushed_lsn;
-    *max_flushed_lsn = flushed_lsn;
-    return;
-  }
-
-  if (*min_flushed_lsn > flushed_lsn) {
-    *min_flushed_lsn = flushed_lsn;
-  }
-  if (*max_flushed_lsn < flushed_lsn) {
-    *max_flushed_lsn = flushed_lsn;
-  }
+  ut_delete(ptr);
 }
 
 void Fil::create_directory_for_tablename(const char *name) {
@@ -977,7 +946,7 @@ void Fil::create_directory_for_tablename(const char *name) {
 }
 
 void Fil::op_write_log(
-  ulint type,
+  mlog_type_t type,
   space_id_t space_id,
   ulint log_flags,
   ulint flags,
@@ -995,10 +964,8 @@ void Fil::op_write_log(
 
   log_ptr = mlog_write_initial_log_record_for_file_op(type, space_id, log_flags, log_ptr, mtr);
 
-  if (type == MLOG_FILE_CREATE2) {
-    mach_write_to_4(log_ptr, flags);
-    log_ptr += 4;
-  }
+  mach_write_to_4(log_ptr, flags);
+  log_ptr += 4;
 
   /* Let us store the strings as null-terminated for easier readability
   and handling */
@@ -1030,15 +997,13 @@ byte *Fil::op_log_parse_or_replay(byte *ptr, byte *end_ptr, ulint type, space_id
   const char *new_name = nullptr;
   ulint flags = 0;
 
-  if (type == MLOG_FILE_CREATE2) {
-    if (end_ptr < ptr + 4) {
+  if (end_ptr < ptr + 4) {
 
-      return nullptr;
-    }
-
-    flags = mach_read_from_4(ptr);
-    ptr += 4;
+    return nullptr;
   }
+
+  flags = mach_read_from_4(ptr);
+  ptr += 4;
 
   if (end_ptr < ptr + 2) {
 
@@ -1126,7 +1091,6 @@ byte *Fil::op_log_parse_or_replay(byte *ptr, byte *end_ptr, ulint type, space_id
       break;
 
     case MLOG_FILE_CREATE:
-    case MLOG_FILE_CREATE2:
       if (tablespace_exists_in_mem(space_id)) {
         /* Do nothing */
       } else if (get_space_id_for_table(name) != ULINT_UNDEFINED) {
@@ -1442,11 +1406,8 @@ retry:
 db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tablename, bool is_temp, ulint flags, ulint size) {
   bool success;
 
+  ut_a(flags == 0);
   ut_a(size >= FIL_IBD_FILE_INITIAL_SIZE);
-
-  /* ROW_FORMAT=REDUNDANT (table->flags == 0).  For any other format, the tablespace
-  flags should equal (table->flags & ~(~0UL << DICT_TF_BITS)). */
-  ut_a(!(flags & (~0UL << DICT_TF_BITS)));
 
   bool ret{};
   auto path = make_ibd_name(tablename, is_temp);
@@ -1487,15 +1448,9 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
     return DB_ERROR;
   }
 
-  auto buf2 = static_cast<byte *>(ut_new(3 * UNIV_PAGE_SIZE));
-
-  /* Align the memory for file i/o if we might have O_DIRECT set */
-  auto page = static_cast<byte *>(ut_align(buf2, UNIV_PAGE_SIZE));
-
-  ret = os_file_set_size(path, file, size * UNIV_PAGE_SIZE, 0);
+  ret = os_file_set_size(path, file, size * UNIV_PAGE_SIZE);
 
   if (!ret) {
-    ut_delete(buf2);
     os_file_close(file);
     os_file_delete(path);
 
@@ -1506,8 +1461,6 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
   if (*space_id == 0) {
     *space_id = assign_new_space_id();
   }
-
-  /* printf("Creating tablespace %s id %lu\n", path, *space_id); */
 
   auto err_exit = [](char* path, os_file_t file) -> db_err {
     if (file != -1) {
@@ -1522,8 +1475,6 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
   };
 
   if (*space_id == ULINT_UNDEFINED) {
-    ut_delete(buf2);
-
     return err_exit(path, file);
   }
 
@@ -1536,6 +1487,9 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
   with zeros from the call of os_file_set_size(), until a buffer pool
   flush would write to it. */
 
+  auto ptr = static_cast<byte *>(ut_new(3 * UNIV_PAGE_SIZE));
+  auto page = static_cast<byte *>(ut_align(ptr, UNIV_PAGE_SIZE));
+
   memset(page, '\0', UNIV_PAGE_SIZE);
 
   fsp_header_init_fields(page, *space_id, flags);
@@ -1546,7 +1500,7 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
 
   ret = os_file_write(path, file, page, UNIV_PAGE_SIZE, 0);
 
-  ut_delete(buf2);
+  ut_delete(ptr);
 
   if (ret == 0) {
 
@@ -1585,7 +1539,7 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
     mtr_start(&mtr);
 
     op_write_log(
-      flags ? MLOG_FILE_CREATE2 : MLOG_FILE_CREATE,
+      MLOG_FILE_CREATE,
       *space_id,
       is_temp ? MLOG_FILE_FLAG_TEMP : 0,
       flags,
@@ -1867,32 +1821,30 @@ db_err Fil::scan_and_load_tablespaces(const std::string &dir, ib_recovery_t reco
   namespace fs = std::filesystem;
 
   if (depth >= max_depth) {
+    log_warn(std::format("The depth of the directory '{}' is greater than the maximum scan depth '{}'", dir, max_depth));
     return DB_SUCCESS;
   }
 
   /* The datadir of the server is always the default directory. */
   fs::path path(dir);
-  auto path_name = path.filename().string();
+  auto dir_name = path.parent_path().string();
 
-  auto check_directory = [path_name](const fs::path &path) -> db_err {
+  auto check_directory = [dir_name](const fs::path &path) -> db_err {
     if (fs::status(path).type() != fs::file_type::directory) {
-      log_err("The datadir is not a directory: ", path_name);
+      log_err(std::format("The datadir is not a directory: '{}'", dir_name));
       return DB_ERROR;
     }
 
-    switch (fs::status(path).permissions()) {
-      case fs::perms::owner_all:
-        break;
-      case fs::perms::owner_read:
-      case fs::perms::owner_write:
-        log_err("The datadir is not readable and writable: ", path_name);
-        return DB_ERROR;
-      default:
-        log_err("The datadir is not writable: ", path_name);
-        return DB_ERROR;
-    }
+    auto p = fs::status(path).permissions();
 
-    return DB_SUCCESS;
+    if ((p & fs::perms::owner_all) != fs::perms::none||
+        (p & fs::perms::group_all) != fs::perms::none||
+        (p & fs::perms::others_all)!= fs::perms::none) {  
+      return DB_SUCCESS;
+    } else { 
+      log_err(std::format("The datadir '{}' perms should be at least 'rwxr-xr-x', they are '{}'", dir_name, to_string(p)));
+      return DB_ERROR;
+    }
   };
 
   if (check_directory(path) != DB_SUCCESS) {
@@ -1904,7 +1856,10 @@ db_err Fil::scan_and_load_tablespaces(const std::string &dir, ib_recovery_t reco
   for (auto it{fs::directory_iterator(path)}; it != fs::directory_iterator(); ++it) {
     auto filename = it->path().filename().string();
 
-    if (it->is_directory()) {
+    if (filename == "system.ibd") {
+      continue;
+    } else if (it->is_directory()) {
+
       if (check_directory(it->path()) != DB_SUCCESS) {
         return DB_ERROR;
       }
@@ -1913,13 +1868,13 @@ db_err Fil::scan_and_load_tablespaces(const std::string &dir, ib_recovery_t reco
       auto err = scan_and_load_tablespaces(filename, recovery, max_depth, depth + 1);
 
       if (err != DB_SUCCESS) {
-        log_err("Failed to scan and load tablespaces in directory: ", filename);
+        log_err(std::format("Failed to scan and load tablespaces in directory: '{}'", filename));
       }
 
     } else if (it->is_regular_file() && it->path().filename().has_extension() &&
                it->path().filename().extension().string() == ext) {
 
-      load_single_table_tablespace(recovery, path_name.c_str(), filename.c_str());
+      load_single_table_tablespace(recovery, dir_name.c_str(), filename.c_str());
     }
   }
 
@@ -2245,7 +2200,7 @@ void Fil::node_prepare_for_io(fil_node_t *node, fil_space_t *space) {
     /* File is closed: open it */
     ut_a(node->m_n_pending == 0);
 
-    node_open_file(node, space);
+    node_open_file(node, space, false);
   }
 
   node->m_n_pending++;
@@ -2638,8 +2593,8 @@ void Fil::page_set_type(byte *page, ulint type) {
   mach_write_to_2(page + FIL_PAGE_TYPE, type);
 }
 
-ulint Fil::page_get_type(const byte *page) {
-  return mach_read_from_2(page + FIL_PAGE_TYPE);
+Fil_page_type Fil::page_get_type(const byte *page) {
+  return static_cast<Fil_page_type>(mach_read_from_2(page + FIL_PAGE_TYPE));
 }
 
 bool Fil::rmdir(const char *dbname) {

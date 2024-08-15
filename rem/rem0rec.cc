@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -804,7 +805,7 @@ std::ostream &rec_print(std::ostream &os, const rec_t *rec) noexcept {
     os << std::format(" {}:", i);
 
     if (len != UNIV_SQL_NULL) {
-      ut_print_buf(os, data, std::max(len, 30UL));
+      buf_to_hex_string(os, data, std::max(len, 30UL));
       os << std::format("; len: {} ", len);
     } else {
       os << std::format(" SQL NULL, size {} ", rec_get_nth_field_size(rec, i));

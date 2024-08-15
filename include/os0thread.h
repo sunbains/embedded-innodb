@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -87,14 +88,14 @@ os_thread_id_t os_thread_get_curr_id();
 os_thread_t os_thread_get_curr();
 
 /** Advises the os to give up remainder of the thread's time slice. */
-void os_thread_yield();
+void os_thread_yield() noexcept;
 
 /**
  * The thread sleeps at least the time given in microseconds.
  *
  * @param tm - time in microseconds
  */
-void os_thread_sleep(ulint tm);
+void os_thread_sleep(ulint tm) noexcept;
 
 /** Gets the last operating system error code for the calling thread.
 @return	last error on Windows, 0 otherwise */

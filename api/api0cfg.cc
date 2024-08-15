@@ -1,6 +1,7 @@
 /***********************************************************************
 Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -37,11 +38,6 @@ static char *srv_file_flush_method_str = nullptr;
 /* A point in the LRU list (expressed as a percent), all blocks from this
 point onwards (inclusive) are considered "old" blocks. */
 static ulint lru_old_blocks_pct;
-
-/** We copy the argument passed to ib_cfg_set_text("data_file_path")
-because srv_parse_data_file_paths_and_sizes() parses it's input argument
-destructively. The copy is done using ut_new(). */
-static char *srv_data_file_paths_and_sizes = nullptr;
 
 /* enum ib_cfg_flag_t @{ */
 enum ib_cfg_flag_t {
@@ -235,18 +231,11 @@ static ib_err_t ib_cfg_var_get_generic(const struct ib_cfg_var *cfg_var, void *v
  * @return DB_SUCCESS if set successfully
  */
 static ib_err_t ib_cfg_var_set_data_file_path(struct ib_cfg_var *cfg_var, const void *value) {
-  const char *value_str;
 
   ut_a(strcasecmp(cfg_var->name, "data_file_path") == 0);
   ut_a(cfg_var->type == IB_CFG_TEXT);
 
-  value_str = *(char **)value;
-
-  if (srv_parse_data_file_paths_and_sizes(value_str)) {
-    return (DB_SUCCESS);
-  } else {
-    return (DB_INVALID_INPUT);
-  }
+  return DB_UNSUPPORTED;
 }
 
 /** Retrieve the value of the config variable "data_file_path".
@@ -260,9 +249,7 @@ static ib_err_t ib_cfg_var_get_data_file_path(const struct ib_cfg_var *cfg_var, 
   ut_a(strcasecmp(cfg_var->name, "data_file_path") == 0);
   ut_a(cfg_var->type == IB_CFG_TEXT);
 
-  *(char **)value = srv_data_file_paths_and_sizes;
-
-  return (DB_SUCCESS);
+  return DB_UNSUPPORTED;
 }
 
 /** Set the value of the config variable "file_format".
@@ -1030,7 +1017,6 @@ ib_err_t ib_cfg_init() {
 
   IB_CFG_SET("additional_mem_pool_size", 4 * 1024 * 1024);
   IB_CFG_SET("buffer_pool_size", 8 * 1024 * 1024);
-  IB_CFG_SET("data_file_path", "ibdata1:32M:autoextend");
   IB_CFG_SET("data_home_dir", "./");
   IB_CFG_SET("file_per_table", true);
   IB_CFG_SET("flush_method", "fsync");

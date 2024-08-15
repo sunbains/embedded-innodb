@@ -1,6 +1,7 @@
 /****************************************************************************
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -2616,7 +2617,7 @@ db_err btr_store_big_rec_extern_fields(
 
   auto space_id = rec_block->get_space();
   auto rec_page_no = rec_block->get_page_no();
-  ut_a(srv_fil->page_get_type(page_align(rec)) == FIL_PAGE_INDEX);
+  ut_a(srv_fil->page_get_type(page_align(rec)) == FIL_PAGE_TYPE_INDEX);
 
   /* We have to create a file segment to the tablespace
   for each field and put the pointer to the field in rec */
@@ -2778,7 +2779,7 @@ static void btr_check_blob_fil_page_type(space_id_t space_id, page_no_t page_no,
 
     log_fatal(std::format(
       "FIL_PAGE_TYPE={} on BLOB: {} space: {} page: {} flags: {}",
-      type,
+      (ulong) type,
       read ? "read" : "purge",
       space_id,
       page_no,

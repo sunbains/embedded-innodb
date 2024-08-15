@@ -1,6 +1,7 @@
 /****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 Copyright (c) 2009, Sun Microsystems, Inc.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Sun Microsystems, Inc. Those modifications are gratefully acknowledged and
@@ -178,13 +179,12 @@ in microseconds on 100 MHz Pentium + Visual C++.
 ulint ut_delay(ulint delay); /*!< in: delay in microseconds on 100 MHz Pentium */
 
 /**
- * Prints the contents of a memory buffer in hex and ascii.
+ * Prints the contents of a memory buffer in hex and ascii as a warning
  *
- * @param[in] ib_stream file where to print
  * @param[in] buf memory buffer
  * @param[in] len length of the buffer
  */
-void ut_print_buf(ib_stream_t ib_stream, const void *buf, ulint len);
+void log_warn_buf(const void *buf, ulint len) noexcept;
 
 /** Prints the contents of a memory buffer in hex and ascii.
  * 
@@ -192,13 +192,10 @@ void ut_print_buf(ib_stream_t ib_stream, const void *buf, ulint len);
  * @param[in] buf memory buffer
  * @param[in] len length of the buffer
  * @return output stream */
-std::ostream &ut_print_buf(std::ostream &o, const void *buf, ulint len); 
+std::ostream &buf_to_hex_string(std::ostream &o, const void *buf, ulint len); 
 
 /** Outputs a NUL-terminated file name, quoted with apostrophes. */
-void ut_print_filename(
-  ib_stream_t ib_stream, /*!< in: output stream */
-  const char *name
-); /*!< in: name to print */
+void ut_print_filename(const std::string &name) noexcept; /*!< in: name to print */
 
 /* Forward declaration of transaction handle */
 struct trx_t;
@@ -207,23 +204,7 @@ struct trx_t;
 If the string contains a slash '/', the string will be
 output as two identifiers separated by a period (.),
 as in SQL database_name.identifier. */
-void ut_print_name(
-  ib_stream_t ib_stream,  /*!< in: output stream */
-  struct trx_t *trx, /*!< in: transaction */
-  bool table_id,          /*!< in: true=print a table name,
-                                            false=print other identifier */
-  const char *name
-); /*!< in: name to print */
-
-/** Outputs a fixed-length string, quoted as an SQL identifier.
-If the string contains a slash '/', the string will be
-output as two identifiers separated by a period (.),
-as in SQL database_name.identifier. */
-void ut_print_namel(
-  ib_stream_t ib_stream, /*!< in: output stream */
-  const char *name,      /*!< in: name to print */
-  ulint namelen
-); /*!< in: length of name */
+void ut_print_name(const std::string &name) noexcept;
 
 /** A wrapper for snprintf(3), formatted output conversion into
 a limited buffer. */

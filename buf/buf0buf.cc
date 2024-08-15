@@ -1,6 +1,7 @@
 /****************************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -337,20 +338,18 @@ bool Buf_pool::is_corrupted(const byte *read_buf) {
   }
 
   if (recv_lsn_checks_on) {
-    uint64_t current_lsn;
+    lsn_t current_lsn;
 
     if (log_peek_lsn(&current_lsn) && current_lsn < mach_read_from_8(read_buf + FIL_PAGE_LSN)) {
-      ut_print_timestamp(ib_stream);
-
-      ib_logger(
-        ib_stream,
-        "  Error: page %lu log sequence number %llu is in the future! Current system"
-        " log sequence number %llu. Your database may be corrupt or you may have copied"
+      log_err(std::format(
+        "Page {}::{} log sequence number {} is in the future! Current system"
+        " log sequence number is {}. Your database may be corrupt or you may have copied"
         " the InnoDB tablespace but not the InnoDB log files.", 
-        (ulong)mach_read_from_4(read_buf + FIL_PAGE_OFFSET),
-        (long long unsigned int)mach_read_from_8(read_buf + FIL_PAGE_LSN),
-        (long long unsigned int)current_lsn
-      );
+        mach_read_from_4(read_buf + FIL_PAGE_SPACE_ID),
+        mach_read_from_4(read_buf + FIL_PAGE_OFFSET),
+        mach_read_from_8(read_buf + FIL_PAGE_LSN),
+        current_lsn
+      ));
     }
   }
 
@@ -399,44 +398,43 @@ void buf_page_print(const byte *read_buf, ulint) {
   }
 
   switch (srv_fil->page_get_type(read_buf)) {
-    case FIL_PAGE_INDEX:
-      ib_logger(
-        ib_stream,
-        "Page may be an index page where"
-        " index id is  %lu\n",
-        (uint64_t)btr_page_get_index_id(read_buf)
-      );
+    case FIL_PAGE_TYPE_INDEX:
+      log_warn(std::format(
+        "Page may be an index page where index id is {}",
+        btr_page_get_index_id(read_buf)
+      ));
+
       index = dict_index_find_on_id_low(btr_page_get_index_id(read_buf));
-      if (index) {
+
+      if (index != nullptr) {
         ib_logger(ib_stream, "(");
         dict_index_name_print(ib_stream, nullptr, index);
         ib_logger(ib_stream, ")\n");
       }
       break;
-    case FIL_PAGE_INODE:
-      ib_logger(ib_stream, "Page may be an 'inode' page\n");
+    case FIL_PAGE_TYPE_INODE:
+      log_warn("Page may be an 'inode' page");
       break;
     case FIL_PAGE_TYPE_ALLOCATED:
-      ib_logger(ib_stream, "Page may be a freshly allocated page\n");
+      log_warn("Page may be a freshly allocated page");
       break;
     case FIL_PAGE_TYPE_SYS:
-      ib_logger(ib_stream, "Page may be a system page\n");
+      log_warn("Page may be a system page");
       break;
     case FIL_PAGE_TYPE_TRX_SYS:
-      ib_logger(ib_stream, "Page may be a transaction system page\n");
+      log_warn("Page may be a transaction system page");
       break;
     case FIL_PAGE_TYPE_FSP_HDR:
-      ib_logger(ib_stream, "Page may be a file space header page\n");
+      log_warn("Page may be a file space header page");
       break;
     case FIL_PAGE_TYPE_XDES:
-      ib_logger(ib_stream, "Page may be an extent descriptor page\n");
+      log_warn("Page may be an extent descriptor page");
       break;
     case FIL_PAGE_TYPE_BLOB:
-      ib_logger(ib_stream, "Page may be a BLOB page\n");
+      log_warn("Page may be a BLOB page");
       break;
-    case FIL_PAGE_TYPE_ZBLOB:
-    case FIL_PAGE_TYPE_ZBLOB2:
-      ib_logger(ib_stream, "Page may be a compressed BLOB page\n");
+    case FIL_PAGE_TYPE_UNDO_LOG:
+      log_warn("Page may be an undo log page");
       break;
   }
 }
@@ -1725,7 +1723,7 @@ void Buf_pool::print() {
     for (; n_blocks--; block++) {
       const buf_frame_t *frame = block->m_frame;
 
-      if (srv_fil->page_get_type(frame) == FIL_PAGE_INDEX) {
+      if (srv_fil->page_get_type(frame) == FIL_PAGE_TYPE_INDEX) {
 
         id = btr_page_get_index_id(frame);
 

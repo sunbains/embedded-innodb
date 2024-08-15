@@ -1,6 +1,7 @@
 /****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
 Copyright (c) 2009, Sun Microsystems, Inc.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Sun Microsystems, Inc. Those modifications are gratefully acknowledged and
@@ -182,7 +183,7 @@ ulint ut_delay(ulint delay) {
   return j;
 }
 
-std::ostream &ut_print_buf(std::ostream &o, const void *buf, ulint len) {
+std::ostream &buf_to_hex_string(std::ostream &o, const void *buf, ulint len) {
   UNIV_MEM_ASSERT_RW(buf, len);
 
   o << " buf = { len: " << len << ",\nhex = {\n";
@@ -206,12 +207,12 @@ std::ostream &ut_print_buf(std::ostream &o, const void *buf, ulint len) {
    return o;
 }
 
-
-void ut_print_buf(ib_stream_t ib_stream, const void *buf, ulint len) {
+void log_warn_buf(const void *buf, ulint len) noexcept {
   std::ostringstream os{};
 
-  ut_print_buf(os, buf, len);
-  ib_logger(ib_stream, "%s;", os.str().c_str());
+  buf_to_hex_string(os, buf, len);
+
+  log_warn(os.str().c_str());
 }
 
 ulint ut_2_power_up(ulint n) {
@@ -226,35 +227,10 @@ ulint ut_2_power_up(ulint n) {
   return res;
 }
 
-void ut_print_filename(ib_stream_t ib_stream, const char *name) {
-  ib_logger(ib_stream, "'");
-
-  for (;;) {
-    int c = *name++;
-    switch (c) {
-      case 0:
-        ib_logger(ib_stream, "'");
-        return;
-      case '\'':
-        ib_logger(ib_stream, "%c", c);
-        /* fall through */
-      default:
-        ib_logger(ib_stream, "%c", c);
-    }
-  }
+void ut_print_name(const std::string &name) noexcept {
+  log_info(std::format("'{}'", name));
 }
 
-void ut_print_name(ib_stream_t ib_stream, trx_t *trx, bool table_id, const char *name) {
-  ut_print_namel(ib_stream, name, strlen(name));
-}
-
-void ut_print_namel(ib_stream_t ib_stream, const char *name, ulint namelen) {
-  /* 2 * NAME_LEN for database and table name,
-  and some slack for the extra prefix and quotes */
-  char buf[3 * NAME_LEN];
-
-  int len = ut_snprintf(buf, sizeof(buf), "%.*s", (int)namelen, name);
-  ut_a(len >= (int)namelen);
-
-  ib_logger(ib_stream, "%.*s", len, buf);
+void ut_print_filename(const std::string &name) noexcept {
+  ut_print_name(name);
 }

@@ -1,8 +1,10 @@
-/**
+/******************************************************
 Interface between Innobase and client. This file contains
 the functions that don't have a proper home yet.
 
 (c) 2008 Oracle Corpn./Innobase Oy
+Copyright (c) 2024 Sunny Bains. All rights reserved.
+
 *******************************************************/
 
 #include "innodb0types.h"

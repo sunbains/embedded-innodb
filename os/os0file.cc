@@ -1,6 +1,7 @@
 /**********************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2009, Percona Inc.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 Portions of this file contain modifications contributed and copyrighted
 by Percona Inc.. Those modifications are
@@ -537,31 +538,33 @@ int64_t os_file_get_size_as_iblonglong(os_file_t file) {
   }
 }
 
-bool os_file_set_size(const char *name, os_file_t file, ulint size, ulint size_high) {
-  ut_a(size == (size & 0xFFFFFFFF));
-
-  off_t current_size{};
-  off_t desired_size = (off_t)size + (((off_t)size_high) << 32);
+bool os_file_set_size(const char *name, os_file_t file, off_t desired_size) {
+  ut_a(desired_size >= off_t(UNIV_PAGE_SIZE));
 
   /* Write up to 1 megabyte at a time. */
-  auto buf_size = ut_min(64, (ulint)(desired_size / UNIV_PAGE_SIZE)) * UNIV_PAGE_SIZE;
-  auto buf2 = static_cast<byte *>(ut_new(buf_size + UNIV_PAGE_SIZE));
-
-  /* Align the buffer for possible raw i/o */
-  auto buf = static_cast<byte *>(ut_align(buf2, UNIV_PAGE_SIZE));
+  auto buf_size = ut_min(64, ulint(desired_size / UNIV_PAGE_SIZE)) * UNIV_PAGE_SIZE;
+  auto ptr = static_cast<byte *>(ut_new(buf_size + UNIV_PAGE_SIZE));
+  auto buf = static_cast<byte *>(ut_align(ptr, UNIV_PAGE_SIZE));
 
   /* Write buffer full of zeros */
   memset(buf, 0, buf_size);
 
-  if (desired_size >= (off_t)(100 * 1024 * 1024)) {
-    ib_logger(ib_stream, "Progress in MB:");
+  if (desired_size >= off_t(100 * 1024 * 1024)) {
+    log_info_hdr("Progress in MB:");
+  }
+
+  off_t current_size;
+
+  {
+    auto success = os_file_get_size(file, &current_size);
+    ut_a(success);
   }
 
   while (current_size < desired_size) {
     ulint n_bytes;
 
-    if (desired_size - current_size < (off_t)buf_size) {
-      n_bytes = (ulint)(desired_size - current_size);
+    if (desired_size - current_size < off_t(buf_size)) {
+      n_bytes = ulint(desired_size - current_size);
     } else {
       n_bytes = buf_size;
     }
@@ -569,25 +572,24 @@ bool os_file_set_size(const char *name, os_file_t file, ulint size, ulint size_h
     auto ret = os_file_write(name, file, buf, n_bytes, current_size);
 
     if (!ret) {
-      ut_delete(buf2);
+      ut_delete(ptr);
       return false;
     }
 
     /* Print about progress for each 100 MB written */
-    if ((off_t)(current_size + n_bytes) / (off_t)(100 * 1024 * 1024) != current_size / (off_t)(100 * 1024 * 1024)) {
+    if (off_t(current_size + n_bytes) / off_t(100 * 1024 * 1024) != current_size / off_t(100 * 1024 * 1024)) {
 
-      ib_logger(ib_stream, " %lu00", (ulong)((current_size + n_bytes) / (off_t)(100 * 1024 * 1024)));
+      log_info_msg(std::format("{}00", ulong((current_size + n_bytes) / off_t(100 * 1024 * 1024))));
     }
 
     current_size += n_bytes;
   }
 
-  if (desired_size >= (off_t)(100 * 1024 * 1024)) {
-
-    ib_logger(ib_stream, "\n");
+  if (desired_size >= off_t(100 * 1024 * 1024)) {
+    log_info_msg("\n");
   }
 
-  ut_delete(buf2);
+  ut_delete(ptr);
 
   return os_file_flush(file);
 }

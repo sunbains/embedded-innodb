@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -139,7 +140,7 @@ extern ulint srv_buf_pool_write_requests;
 /** Magic value to use instead of checksums when they are disabled */
 constexpr ulint BUF_NO_CHECKSUM_MAGIC = 0xDEADBEEFUL;
 
-/** Simple allocator using ut_new and ur_free */
+/** Simple allocator using ut_new and ut_free */
 template <typename T>
 struct ut_allocator {
   using value_type = T;

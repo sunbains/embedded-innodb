@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -199,10 +200,13 @@ static void trx_rollback_active(
     unit = "M";
   }
 
-  ut_print_timestamp(ib_stream);
-  ib_logger(
-    ib_stream, "  Rolling back trx with id %lu, %lu%s rows to undo\n", TRX_ID_PREP_PRINTF(trx->m_id), (ulong)rows_to_undo, unit
-  );
+  log_info(std::format(
+    "Rolling back trx with id {}, {} rows to undo",
+    TRX_ID_PREP_PRINTF(trx->m_id),
+    rows_to_undo,
+    unit
+  ));
+
   mutex_exit(&kernel_mutex);
 
   if (trx_get_dict_operation(trx) != TRX_DICT_OP_NONE) {
@@ -218,7 +222,7 @@ static void trx_rollback_active(
 
     mutex_exit(&kernel_mutex);
 
-    ib_logger(ib_stream, "Waiting for rollback of trx id %lu to end\n", (ulong)trx->m_id);
+    log_info(std::format("Waiting for rollback of trx id {} to end", trx->m_id));
     os_thread_sleep(100000);
 
     mutex_enter(&kernel_mutex);
@@ -231,20 +235,12 @@ static void trx_rollback_active(
     /* If the transaction was for a dictionary operation, we
     drop the relevant table, if it still exists */
 
-    ib_logger(
-      ib_stream,
-      "Dropping table with id %lu %lu"
-      " in recovery if it exists\n",
-      (ulong)trx->table_id,
-      (ulong)trx->table_id
-    );
+    log_info(std::format("Dropping table with id {} {} in recovery if it exists", trx->table_id, trx->table_id));
 
     table = dict_table_get_on_id_low(recovery, trx->table_id);
 
-    if (table) {
-      ib_logger(ib_stream, "Table found: dropping table ");
-      ut_print_name(ib_stream, trx, true, table->name);
-      ib_logger(ib_stream, " in recovery\n");
+    if (table != nullptr) {
+      log_info(std::format("Table found: dropping table {} in recovery", table->name));
 
       auto err = ddl_drop_table(table->name, trx, true);
       auto err_commit = trx_commit(trx);
@@ -258,7 +254,8 @@ static void trx_rollback_active(
     dict_unlock_data_dictionary(trx);
   }
 
-  ib_logger(ib_stream, "\nRolling back of trx id %lu completed\n", TRX_ID_PREP_PRINTF(trx->m_id));
+  log_info(std::format("Rolling back of trx id {} completed", TRX_ID_PREP_PRINTF(trx->m_id)));
+
   mem_heap_free(heap);
 
   trx_roll_crash_recv_trx = nullptr;
@@ -281,11 +278,7 @@ void trx_rollback_or_clean_recovered(bool all) /*!< in: false=roll back dictiona
   }
 
   if (all) {
-    ib_logger(
-      ib_stream,
-      "Starting in background the rollback"
-      " of uncommitted transactions\n"
-    );
+    log_info("Starting in background the rollback of uncommitted transactions");
   }
 
   mutex_exit(&kernel_mutex);
@@ -305,7 +298,7 @@ loop:
 
       case TRX_COMMITTED_IN_MEMORY:
         mutex_exit(&kernel_mutex);
-        ib_logger(ib_stream, "Cleaning up trx with id %lu\n", TRX_ID_PREP_PRINTF(trx->m_id));
+        log_info("Cleaning up trx with id ", TRX_ID_PREP_PRINTF(trx->m_id));
         trx_cleanup_at_db_startup(trx);
         goto loop;
 
@@ -320,19 +313,14 @@ loop:
   }
 
   if (all) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      "  Rollback of non-prepared"
-      " transactions completed\n"
-    );
+    log_info("Rollback of non-prepared transactions completed");
   }
 
 leave_function:
   mutex_exit(&kernel_mutex);
 }
 
-void *trx_rollback_or_clean_all_recovered(void *arg __attribute__((unused))) {
+void *trx_rollback_or_clean_all_recovered(void *) {
   trx_rollback_or_clean_recovered(true);
 
   /* We count the number of threads in os_thread_exit(). A created
@@ -361,10 +349,7 @@ trx_undo_arr_t *trx_undo_arr_create() {
   return arr;
 }
 
-/** Frees an undo number array. */
-
-void trx_undo_arr_free(trx_undo_arr_t *arr) /*!< in: undo number array */
-{
+void trx_undo_arr_free(trx_undo_arr_t *arr) {
   ut_ad(arr->n_used == 0);
 
   mem_heap_free(arr->heap);
@@ -434,11 +419,8 @@ static void trx_undo_arr_remove_info(
   undo_no_t undo_no
 ) /*!< in: undo number */
 {
-  trx_undo_inf_t *cell;
-  ulint i;
-
-  for (i = 0;; i++) {
-    cell = trx_undo_arr_get_nth_info(arr, i);
+  for (ulint i = 0;; i++) {
+    auto cell = trx_undo_arr_get_nth_info(arr, i);
 
     if (cell->in_use && cell->undo_no == undo_no) {
 

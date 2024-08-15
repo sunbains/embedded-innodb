@@ -1,5 +1,7 @@
-/** Copyright (c) 2009 Innobase Oy. All rights reserved.
+/***************************************************************************
+Copyright (c) 2009 Innobase Oy. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -200,7 +202,7 @@ static void set_options(int argc, char *argv[]) {
   }
 }
 
-static ib_err_t test_phase_I(void) {
+static ib_err_t test_phase_I() {
   int i;
   ib_err_t err;
   int dups = 0;
@@ -244,19 +246,15 @@ static ib_err_t test_phase_I(void) {
 
 /** Restart the process with the same args. */
 static void restart(int argc, char *argv[]) {
-  (void)argc;
-
   execvp(argv[0], argv);
   perror("execvp");
   abort();
 }
 
 int main(int argc, char *argv[]) {
-  ib_err_t err;
-
   print_version();
 
-  err = ib_init();
+  auto err = ib_init();
   assert(err == DB_SUCCESS);
 
   test_configure();

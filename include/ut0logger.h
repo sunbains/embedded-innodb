@@ -1,3 +1,5 @@
+/** Copyright (c) 2024 Sunny Bains. All rights reserved. */
+
 #pragma once
 
 #include "innodb.h"
@@ -39,11 +41,18 @@ std::ostream &write(std::ostream &out, Args &&...args) noexcept {
 }
 
 template <typename Func, typename... Args>
-std::ostream &write(const char *level, Func &&func, Args &&...args) noexcept {
+std::ostream &write(const char *level, bool hdr, bool eol, Func &&func, Args &&...args) noexcept {
   std::stringstream ss{};
-  ss << level << " " << Progname << " " << func << " " << std::this_thread::get_id() << " ";
+
+  if (hdr) {
+    ss << level << " " << Progname << " " << func << " " << std::this_thread::get_id() << " ";
+  }
+
   (write(ss, std::forward<Args>(args)), ...);
-  ss << std::endl;
+
+  if (eol) {
+    ss << std::endl;
+  }
 
   std::osyncstream out{std::cerr};
 
@@ -57,28 +66,68 @@ std::ostream &write(const char *level, Func &&func, Args &&...args) noexcept {
 
 #define FUNC logger::func_name(__FILE__, __LINE__)
 
-#define log_dbg(args...)                            \
-  if (logger::level <= (int)logger::Level::Debug) { \
-    logger::write("dbg", FUNC, args);               \
+#define log_dbg_hdr(args...)                       \
+  if (logger::level <= (int)logger::Level::Debug) {\
+    logger::write("dbg", true, false, FUNC, args); \
+  }
+
+#define log_dbg(args...)                           \
+  if (logger::level <= (int)logger::Level::Debug) {\
+    logger::write("dbg", true, true, FUNC, args);  \
+  }
+
+#define log_dbg_msg(args...)                       \
+  if (logger::level <= (int)logger::Level::Debug) {\
+    logger::write("dbg", false, false, FUNC, args);\
+  }
+
+#define log_info_hdr(args...)                      \
+  if (logger::level <= (int)logger::Level::Info) { \
+    logger::write("inf", true, false, FUNC, args); \
   }
 
 #define log_info(args...)                          \
   if (logger::level <= (int)logger::Level::Info) { \
-    logger::write("inf", FUNC, args);              \
+    logger::write("inf", true, true, FUNC, args);  \
+  }
+
+#define log_info_msg(args...)                      \
+  if (logger::level <= (int)logger::Level::Info) { \
+    logger::write("inf", false, false, FUNC, args);\
+  }
+
+#define log_warn_hdr(args...)                      \
+  if (logger::level <= (int)logger::Level::Warn) { \
+    logger::write("wrn", true, false, FUNC, args); \
   }
 
 #define log_warn(args...)                          \
   if (logger::level <= (int)logger::Level::Warn) { \
-    logger::write("wrn", FUNC, args);              \
+    logger::write("wrn", true, true, FUNC, args);  \
   }
 
-#define log_err(args...)                            \
-  if (logger::level <= (int)logger::Level::Error) { \
-    logger::write("err", FUNC, args);               \
+#define log_warn_msg(args...)                      \
+  if (logger::level <= (int)logger::Level::Warn) { \
+    logger::write("wrn", false, false, FUNC, args);\
   }
 
-#define log_fatal(args...)              \
-  do {                                  \
-    logger::write("fatal", FUNC, args); \
-    ::abort();                          \
+#define log_err_hdr(args...)                       \
+  if (logger::level <= (int)logger::Level::Error) {\
+    logger::write("err", true, false, FUNC, args); \
+  }
+
+#define log_err(args...)                           \
+  if (logger::level <= (int)logger::Level::Error) {\
+    logger::write("err", false, true, FUNC, args); \
+  }
+
+#define log_err_msg(args...)                       \
+  if (logger::level <= (int)logger::Level::Error) {\
+    logger::write("err", false, false, FUNC, args);\
+  }
+
+#define log_fatal(args...)                         \
+  do {                                             \
+    logger::write("fatal", true, true, FUNC, args);\
+    ::abort();                                     \
   } while (false)

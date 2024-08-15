@@ -1,6 +1,7 @@
-/** Implemention of Innobase DDL operations.
-
+/*********************************************************
 (c) 2008 Oracle Corpn/Innobase Oy
+Copyright (c) 2024 Sunny Bains. All rights reserved.
+
 
 Created 12 Oct 2008.
 *******************************************************/
@@ -132,7 +133,7 @@ already_dropped:
 
   ut_print_timestamp(ib_stream);
   ib_logger(ib_stream, "  Dropped table ");
-  ut_print_name(ib_stream, nullptr, true, drop->table_name);
+  ut_print_name(drop->table_name);
   ib_logger(ib_stream, " in background drop queue.\n");
 
   mem_free(drop->table_name);
@@ -194,10 +195,6 @@ static bool ddl_add_table_to_background_drop_list(const char *name) {
   drop->table_name = mem_strdup(name);
 
   UT_LIST_ADD_LAST(ddl_drop_list, drop);
-
-  /*	ib_logger(ib_stream, "Adding table ");
-  ut_print_name(ib_stream, trx, true, drop->table_name);
-  ib_logger(ib_stream, " to background drop list\n"); */
 
   mutex_exit(&kernel_mutex);
 
@@ -276,7 +273,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     ut_print_timestamp(ib_stream);
 
     ib_logger(ib_stream, "  Error: table ");
-    ut_print_name(ib_stream, trx, true, name);
+    ut_print_name(name);
     ib_logger(
       ib_stream,
       " does not exist in the InnoDB internal\n"
@@ -308,9 +305,9 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     ut_print_timestamp(ib_stream);
 
     ib_logger(ib_stream, "  Cannot drop table ");
-    ut_print_name(ib_stream, trx, true, name);
+    ut_print_name(name);
     ib_logger(ib_stream, "\nbecause it is referenced by ");
-    ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
+    ut_print_name(foreign->foreign_table_name);
     ib_logger(ib_stream, "\n");
     mutex_exit(&dict_foreign_err_mutex);
 
@@ -334,7 +331,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
         " trying to drop table (%lu) ",
         (ulint)table->id
       );
-      ut_print_name(ib_stream, trx, true, table->name);
+      ut_print_name(table->name);
       ib_logger(
         ib_stream,
         "\n"
@@ -371,7 +368,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     if (added) {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  You are trying to drop table ");
-      ut_print_name(ib_stream, trx, true, table_name);
+      ut_print_name(table_name);
       ib_logger(
         ib_stream,
         "\n"
@@ -585,7 +582,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
     ignore the database name prefix in the comparisons. */
   } else if (strchr(table->name, '/') == nullptr) {
     ib_logger(ib_stream, "  Error: table ");
-    ut_print_name(ib_stream, trx, true, table->name);
+    ut_print_name(table->name);
     ib_logger(ib_stream, "not prefixed with a database name and '/'\n");
     goto err_exit;
   }
@@ -677,7 +674,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
     case DB_OUT_OF_FILE_SPACE:
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  Warning: cannot create table ");
-      ut_print_name(ib_stream, trx, true, table->name);
+      ut_print_name(table->name);
       ib_logger(ib_stream, " because tablespace full\n");
 
       if (dict_table_get_low(table->name)) {
@@ -689,7 +686,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
     case DB_DUPLICATE_KEY:
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  Error: table ");
-      ut_print_name(ib_stream, trx, true, table->name);
+      ut_print_name(table->name);
       ib_logger(
         ib_stream,
         " already exists in InnoDB internal\n"
@@ -840,13 +837,13 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     ut_print_timestamp(ib_stream);
 
     ib_logger(ib_stream, "  Cannot truncate table ");
-    ut_print_name(ib_stream, trx, true, table->name);
+    ut_print_name(table->name);
     ib_logger(
       ib_stream,
       " by DROP+CREATE\n"
       "because it is referenced by "
     );
-    ut_print_name(ib_stream, trx, true, foreign->foreign_table_name);
+    ut_print_name(foreign->foreign_table_name);
     ib_logger(ib_stream, "\n");
     mutex_exit(&dict_foreign_err_mutex);
 
@@ -863,7 +860,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   if (table->n_foreign_key_checks_running > 0) {
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream, "  Cannot truncate table ");
-    ut_print_name(ib_stream, trx, true, table->name);
+    ut_print_name(table->name);
     ib_logger(
       ib_stream,
       " by DROP+CREATE\n"
@@ -1026,7 +1023,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     trx->error_state = DB_SUCCESS;
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream, "  Unable to assign a new identifier to table ");
-    ut_print_name(ib_stream, trx, true, table->name);
+    ut_print_name(table->name);
     ib_logger(
       ib_stream,
       "\n"
@@ -1309,7 +1306,7 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
         " trying to rename table.\n"
         "If table "
       );
-      ut_print_name(ib_stream, trx, true, new_name);
+      ut_print_name(new_name);
       ib_logger(
         ib_stream,
         " is a temporary table, then it can be that\n"
@@ -1348,7 +1345,7 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
         "  Error: in RENAME TABLE"
         " table "
       );
-      ut_print_name(ib_stream, trx, true, new_name);
+      ut_print_name(new_name);
       ib_logger(
         ib_stream,
         "\n"
@@ -1558,14 +1555,14 @@ loop:
         "  Warning: The client is trying to"
         " drop database "
       );
-      ut_print_name(ib_stream, trx, true, name);
+      ut_print_name(name);
       ib_logger(
         ib_stream,
         "\n"
         "though there are still"
         " open handles to table "
       );
-      ut_print_name(ib_stream, trx, true, table_name);
+      ut_print_name(table_name);
       ib_logger(ib_stream, ".\n");
 
       os_thread_sleep(1000000);
@@ -1579,9 +1576,9 @@ loop:
 
     if (err != DB_SUCCESS) {
       ib_logger(ib_stream, "DROP DATABASE ");
-      ut_print_name(ib_stream, trx, true, name);
+      ut_print_name(name);
       ib_logger(ib_stream, " failed with error %lu for table ", (ulint)err);
-      ut_print_name(ib_stream, trx, true, table_name);
+      ut_print_name(table_name);
       ib_logger(ib_stream, "\n");
       mem_free(table_name);
       break;
@@ -1597,7 +1594,7 @@ loop:
 
     if (err != DB_SUCCESS) {
       ib_logger(ib_stream, "DROP DATABASE ");
-      ut_print_name(ib_stream, trx, true, name);
+      ut_print_name(name);
       ib_logger(
         ib_stream,
         " failed with error %d while "

@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -404,9 +405,9 @@ void row_build_row_ref_in_tuple(
   if (unlikely(!index->table)) {
     ib_logger(ib_stream, "table ");
   notfound:
-    ut_print_name(ib_stream, trx, true, index->table_name);
+    ut_print_name(index->table_name);
     ib_logger(ib_stream, " for index ");
-    ut_print_name(ib_stream, trx, false, index->name);
+    ut_print_name(index->name);
     ib_logger(ib_stream, " not found\n");
     ut_error;
   }

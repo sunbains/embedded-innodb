@@ -1,6 +1,7 @@
 /****************************************************************************
 Copyright (c) 1997, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -96,7 +97,7 @@ void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
       (ulong)prebuilt->magic_n,
       (ulong)prebuilt->magic_n2
     );
-    ut_print_name(ib_stream, nullptr, true, prebuilt->table->name);
+    ut_print_name(prebuilt->table->name);
     ib_logger(ib_stream, "\n");
 
     ut_error;
@@ -186,7 +187,7 @@ void row_prebuilt_update_trx(
       "table handle. Magic n %lu, table name",
       (ulong)prebuilt->magic_n
     );
-    ut_print_name(ib_stream, nullptr, true, prebuilt->table->name);
+    ut_print_name(prebuilt->table->name);
     ib_logger(ib_stream, "\n");
 
     ut_error;

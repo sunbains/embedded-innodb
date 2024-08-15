@@ -2,6 +2,7 @@
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2008, Google Inc.
 Copyright (c) 2009, Percona Inc.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -84,19 +85,16 @@ Created 2/16/1996 Heikki Tuuri
 #include <unistd.h>
 #endif
 
-#include <errno.h>
+#include <filesystem>
+
+/** System tablespace initial size.  */
+constexpr ulint SYSTEM_IBD_FILE_INITIAL_SIZE = 32 * 1024 * 1024;
 
 /* Log sequence number immediately after startup */
 uint64_t srv_start_lsn;
 
 /** Log sequence number at shutdown */
 uint64_t srv_shutdown_lsn;
-
-#ifdef HAVE_DARWIN_THREADS
-#include <sys/utsname.h>
-/** true if the F_FULLFSYNC option is available */
-bool srv_have_fullfsync = false;
-#endif /* HAVE_DARWIN_THREADS */
 
 /** true if a raw partition is in use */
 bool srv_start_raw_disk_in_use = false;
@@ -111,18 +109,12 @@ bool srv_is_being_started = false;
 /** true if the server was successfully started */
 bool srv_was_started = false;
 
-/** true if innobase_start_or_create_for_mysql() has been called */
-static bool srv_start_has_been_called = false;
-
 /** At a shutdown this value climbs from SRV_SHUTDOWN_NONE to
 SRV_SHUTDOWN_CLEANUP and then to SRV_SHUTDOWN_LAST_PHASE, and so on */
 enum srv_shutdown_state srv_shutdown_state = SRV_SHUTDOWN_NONE;
 
-/** Files comprising the system tablespace */
-static os_file_t files[1000];
-
 /** io_handler_thread parameters for thread identification */
-static ulint n[SRV_MAX_N_IO_THREADS + 6];
+static std::array<ulint, SRV_MAX_N_IO_THREADS + 6> n;
 
 /** io_handler_thread identifiers */
 static os_thread_id_t thread_ids[SRV_MAX_N_IO_THREADS + 6];
@@ -135,8 +127,8 @@ static char *data_path_buf;
 this variable. Since the function does a destructive read. */
 static char *log_path_buf;
 
-/** The system data file names */
-static char **srv_data_file_names = nullptr;
+/** The system data file name. */
+static std::string srv_system_file_name{};
 
 /** The system log file names */
 static char **srv_log_group_home_dirs = nullptr;
@@ -145,45 +137,10 @@ static char **srv_log_group_home_dirs = nullptr;
 to the signaled state. Then the threads will exit themselves in
 os_thread_event_wait().
 @return	true if all threads exited. */
-static bool srv_threads_shutdown();
+static bool srv_threads_shutdown() noexcept;
 
 /** FIXME: Make this configurable. */
 constexpr ulint OS_AIO_N_PENDING_IOS_PER_THREAD = 256;
-
-/**
- * Convert a numeric string that optionally ends in G or M, to a number
- * containing megabytes.
- *
- * @param str  in: string containing a quantity in bytes
- * @param megs out: the number in megabytes
- *
- * @return next character in string
- */
-static char *srv_parse_megabytes(char *str, ulint *megs) {
-  char *endp;
-  ulint size;
-
-  size = strtoul(str, &endp, 10);
-
-  str = endp;
-
-  switch (*str) {
-    case 'G':
-    case 'g':
-      size *= 1024;
-      /* fall through */
-    case 'M':
-    case 'm':
-      str++;
-      break;
-    default:
-      size /= 1024 * 1024;
-      break;
-  }
-
-  *megs = size;
-  return str;
-}
 
 /** Adds a slash or a backslash to the end of a string if it is missing
 and the string is not empty.
@@ -203,187 +160,6 @@ static char *srv_add_path_separator_if_needed(const char *str) {
   }
 
   return out_str;
-}
-
-bool srv_parse_data_file_paths_and_sizes(const char *usr_str) {
-  char *str;
-  char *path;
-  ulint size;
-  char *input_str;
-  ulint i = 0;
-
-  if (data_path_buf != nullptr) {
-    free(data_path_buf);
-    data_path_buf = nullptr;
-  }
-
-  data_path_buf = static_cast<char *>(malloc(strlen(usr_str) + 1));
-  strcpy(data_path_buf, usr_str);
-  str = data_path_buf;
-
-  srv_auto_extend_last_data_file = false;
-  srv_last_file_size_max = 0;
-  if (srv_data_file_names != nullptr) {
-    free(srv_data_file_names);
-    srv_data_file_names = nullptr;
-  }
-  if (srv_data_file_sizes != nullptr) {
-    free(srv_data_file_sizes);
-    srv_data_file_sizes = nullptr;
-  }
-  if (srv_data_file_is_raw_partition != nullptr) {
-    free(srv_data_file_is_raw_partition);
-    srv_data_file_is_raw_partition = nullptr;
-  }
-
-  input_str = str;
-
-  /* First calculate the number of data files and check syntax:
-  path:size[M | G];path:size[M | G]... . Note that a Windows path may
-  contain a drive name and a ':'. */
-
-  while (*str != '\0') {
-    path = str;
-
-    while ((*str != ':' && *str != '\0') || (*str == ':' && (*(str + 1) == '\\' || *(str + 1) == '/' || *(str + 1) == ':'))) {
-      str++;
-    }
-
-    if (*str == '\0') {
-      return false;
-    }
-
-    str++;
-
-    str = srv_parse_megabytes(str, &size);
-
-    if (0 == strncmp(str, ":autoextend", (sizeof ":autoextend") - 1)) {
-
-      str += (sizeof ":autoextend") - 1;
-
-      if (0 == strncmp(str, ":max:", (sizeof ":max:") - 1)) {
-
-        str += (sizeof ":max:") - 1;
-
-        str = srv_parse_megabytes(str, &size);
-      }
-
-      if (*str != '\0') {
-
-        return false;
-      }
-    }
-
-    if (strlen(str) >= 6 && *str == 'n' && *(str + 1) == 'e' && *(str + 2) == 'w') {
-      str += 3;
-    }
-
-    if (*str == 'r' && *(str + 1) == 'a' && *(str + 2) == 'w') {
-      str += 3;
-    }
-
-    if (size == 0) {
-      return false;
-    }
-
-    i++;
-
-    if (*str == ';') {
-      str++;
-    } else if (*str != '\0') {
-
-      return false;
-    }
-  }
-
-  if (i == 0) {
-    /* If data_file_path was defined it must contain
-    at least one data file definition */
-
-    return false;
-  }
-
-  ut_a(srv_data_file_names == nullptr);
-  srv_data_file_names = static_cast<char **>(malloc(i * sizeof(*srv_data_file_names)));
-
-  ut_a(srv_data_file_sizes == nullptr);
-  srv_data_file_sizes = static_cast<ulint *>(malloc(i * sizeof(ulint)));
-
-  ut_a(srv_data_file_is_raw_partition == nullptr);
-  srv_data_file_is_raw_partition = static_cast<ulint *>(malloc(i * sizeof(ulint)));
-
-  srv_n_data_files = i;
-
-  /* Then store the actual values to our arrays */
-
-  str = input_str;
-  i = 0;
-
-  while (*str != '\0') {
-    path = str;
-
-    /* Note that we must step over the ':' in a Windows path;
-    a Windows path normally looks like C:\ibdata\ibdata1:1G, but
-    a Windows raw partition may have a specification like
-    \\.\C::1Gnewraw or \\.\PHYSICALDRIVE2:1Gnewraw */
-
-    while ((*str != ':' && *str != '\0') || (*str == ':' && (*(str + 1) == '\\' || *(str + 1) == '/' || *(str + 1) == ':'))) {
-      str++;
-    }
-
-    if (*str == ':') {
-      /* Make path a null-terminated string */
-      *str = '\0';
-      str++;
-    }
-
-    str = srv_parse_megabytes(str, &size);
-
-    srv_data_file_names[i] = path;
-    srv_data_file_sizes[i] = size;
-
-    if (0 == strncmp(str, ":autoextend", (sizeof ":autoextend") - 1)) {
-
-      srv_auto_extend_last_data_file = true;
-
-      str += (sizeof ":autoextend") - 1;
-
-      if (0 == strncmp(str, ":max:", (sizeof ":max:") - 1)) {
-
-        str += (sizeof ":max:") - 1;
-
-        str = srv_parse_megabytes(str, &srv_last_file_size_max);
-      }
-
-      if (*str != '\0') {
-
-        return false;
-      }
-    }
-
-    (srv_data_file_is_raw_partition)[i] = 0;
-
-    if (strlen(str) >= 6 && *str == 'n' && *(str + 1) == 'e' && *(str + 2) == 'w') {
-      str += 3;
-      (srv_data_file_is_raw_partition)[i] = SRV_NEW_RAW;
-    }
-
-    if (*str == 'r' && *(str + 1) == 'a' && *(str + 2) == 'w') {
-      str += 3;
-
-      if ((srv_data_file_is_raw_partition)[i] == 0) {
-        (srv_data_file_is_raw_partition)[i] = SRV_RAW;
-      }
-    }
-
-    i++;
-
-    if (*str == ';') {
-      str++;
-    }
-  }
-
-  return true;
 }
 
 bool srv_parse_log_group_home_dirs(const char *usr_str) {
@@ -480,28 +256,12 @@ bool srv_parse_log_group_home_dirs(const char *usr_str) {
 }
 
 void srv_free_paths_and_sizes() {
-  if (srv_data_file_names != nullptr) {
-    free(srv_data_file_names);
-    srv_data_file_names = nullptr;
-  }
-
-  if (srv_data_file_sizes != nullptr) {
-    free(srv_data_file_sizes);
-    srv_data_file_sizes = nullptr;
-  }
-
-  if (srv_data_file_is_raw_partition != nullptr) {
-    free(srv_data_file_is_raw_partition);
-    srv_data_file_is_raw_partition = nullptr;
-  }
-
   if (srv_log_group_home_dirs != nullptr) {
-    ulint i;
-
-    for (i = 0; srv_log_group_home_dirs[i] != nullptr; ++i) {
+    for (ulint i = 0; srv_log_group_home_dirs[i] != nullptr; ++i) {
       free(srv_log_group_home_dirs[i]);
       srv_log_group_home_dirs[i] = nullptr;
     }
+
     free(srv_log_group_home_dirs);
     srv_log_group_home_dirs = nullptr;
   }
@@ -533,374 +293,190 @@ void *io_handler_thread(void *arg) {
 }
 
 /**
- * @brief Calculates the low 32 bits when a file size which is given as a number
- *        database pages is converted to the number of bytes.
+ * @brief Creates a log file in the log group.
  *
- * @param file_size  in: file size in database pages
- *
- * @return low 32 bytes of file size when expressed in bytes
- */
-static ulint srv_calc_low32(off_t file_size) {
-  return 0xFFFFFFFFUL & (file_size << UNIV_PAGE_SIZE_SHIFT);
-}
-
-/**
- * @brief Calculates the high 32 bits when a file size which is given as a number
- *        database pages is converted to the number of bytes.
- *
- * @param file_size  in: file size in database pages
- *
- * @return high 32 bytes of file size when expressed in bytes
- */
-static ulint srv_calc_high32(off_t file_size) {
-  return file_size >> (32 - UNIV_PAGE_SIZE_SHIFT);
-}
-
-/**
- * @brief Creates or opens the log files and closes them.
- *
- * @param create_new_db         true if we should create a new database
- * @param log_file_created      true if new log file created
- * @param log_file_has_been_opened true if a log file has been opened before:
- *                              then it is an error to try to create another log file
- * @param k                     Log group number
- * @param i                     log file number in group
+ * @param[in] filename          Log file name to create
  *
  * @return DB_SUCCESS or error code
  */
-static db_err open_or_create_log_file(
-  bool create_new_db,
-  bool *log_file_created,
-  bool log_file_has_been_opened,
-  ulint k,
-  ulint i
-) {
-  bool ret;
-  off_t size;
-  char name[10000];
+static db_err create_log_file(const std::string &filename) noexcept {
+  ut_a(!filename.empty());
 
-  UT_NOT_USED(create_new_db);
+  bool success{};
+  auto fh = os_file_create(filename.c_str(), OS_FILE_CREATE, OS_FILE_NORMAL, OS_LOG_FILE, &success);
 
-  *log_file_created = false;
+  if (!success) {
+    return os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS ? DB_ERROR : DB_TABLE_EXISTS;
+  }
 
-  ut_a(strlen(srv_log_group_home_dirs[k]) < (sizeof name) - 10 - sizeof "ib_logfile");
+  log_warn(std::format("Log file {} did not exist: creating a new log file", filename));
 
-  ut_snprintf(name, sizeof(name), "%s%s%lu", srv_log_group_home_dirs[k], "ib_logfile", (ulong)i);
+  log_info(std::format(
+    "Setting log file {} size to {} MB",
+    filename, srv_log_file_curr_size / (1024 * 1024)));
 
-  files[i] = os_file_create(name, OS_FILE_CREATE, OS_FILE_NORMAL, OS_LOG_FILE, &ret);
+  log_info("Database physically writes the file full: wait...");
 
-  if (ret == false) {
-    if (os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
-      ib_logger(
-        ib_stream,
-        "Error in creating"
-        " or opening %s\n",
-        name
-      );
+  success = os_file_set_size(filename.c_str(), fh, srv_log_file_curr_size);
 
-      return DB_ERROR;
-    }
+  {
+    auto success = os_file_close(fh);
+    ut_a(success);
+  }
 
-    files[i] = os_file_create(name, OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, &ret);
-
-    if (!ret) {
-      ib_logger(ib_stream, "Error in opening %s\n", name);
-
-      return DB_ERROR;
-    }
-
-    ret = os_file_get_size(files[i], &size);
-    ut_a(ret);
-
-    if (size != (off_t) srv_log_file_size) {
-
-      ib_logger(
-        ib_stream,
-        "Error: log file %s is of different size %lu bytes"
-        " than the configured %lu bytes!\n",
-        name, (ulong)size, (ulong)srv_log_file_size
-      );
-
-      return DB_ERROR;
-    }
+  if (!success) {
+    log_err(std::format("Can't create {}: probably out of disk space", filename));
+    return DB_ERROR;
   } else {
-    *log_file_created = true;
-
-    ut_print_timestamp(ib_stream);
-
-    ib_logger(
-      ib_stream,
-      "  Log file %s did not exist:"
-      " new to be created\n",
-      name
-    );
-    if (log_file_has_been_opened) {
-
-      return DB_ERROR;
-    }
-
-    ib_logger(ib_stream, "Setting log file %s size to %lu MB\n", name, (ulong)srv_log_file_size >> (20 - UNIV_PAGE_SIZE_SHIFT));
-
-    ib_logger(
-      ib_stream,
-      "Database physically writes the file"
-      " full: wait...\n"
-    );
-
-    ret = os_file_set_size(name, files[i], srv_calc_low32(srv_log_file_size), srv_calc_high32(srv_log_file_size));
-    if (!ret) {
-      ib_logger(
-        ib_stream,
-        "Error in creating %s:"
-        " probably out of disk space\n",
-        name
-      );
-
-      return DB_ERROR;
-    }
+    srv_fil->node_create(filename.c_str(), srv_log_file_size, SRV_LOG_SPACE_FIRST_ID, false);
+    return DB_SUCCESS;
   }
 
-  ret = os_file_close(files[i]);
-  ut_a(ret);
+}
 
-  if (i == 0) {
-    /* Create in memory the file space object which is for this log group */
+/**
+ * @brief Opens a log file.
+ *
+ * @param filename              Log file name to open
+ *
+ * @return DB_SUCCESS or error code
+ */
+static db_err open_log_file(const std::string &filename) noexcept {
+  ut_a(!filename.empty());
 
-    srv_fil->space_create(name, 2 * k + SRV_LOG_SPACE_FIRST_ID, 0, FIL_LOG);
+  bool success{};
+  auto fh = os_file_create(filename.c_str(), OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, &success);
+
+  if (!success) {
+    log_err("Cannot open log file ", filename);
+
+    return DB_ERROR;
   }
 
-  ut_a(srv_fil->validate());
+  off_t size{};
+  success = os_file_get_size(fh, &size);
+  ut_a(success);
 
-  srv_fil->node_create(name, srv_log_file_size, 2 * k + SRV_LOG_SPACE_FIRST_ID, false);
+  if (size != off_t(srv_log_file_curr_size)) {
 
-  if (i == 0) {
-    log_group_init(k, srv_n_log_files, srv_log_file_size * UNIV_PAGE_SIZE, 2 * k + SRV_LOG_SPACE_FIRST_ID);
+    log_err(std::format(
+      "Log file {} is of different size {} bytes than the configured {} bytes!",
+      filename, size, srv_log_file_curr_size
+    ));
+
+    return DB_ERROR;
   }
+
+  success = os_file_close(fh);
+  ut_a(success);
+
+  srv_fil->node_create(filename.c_str(), srv_log_file_size, SRV_LOG_SPACE_FIRST_ID, false);
 
   return DB_SUCCESS;
 }
 
 /**
- * @brief Creates or opens database data files and closes them.
- * 
- * @param[out] create_new_db    True if new database should be created
- * @param[out] min_flushed_lsn  Min of flushed lsn values in data files
- * @param[out] max_flushed_lsn  Max of flushed lsn values in data files
- * @param[out] sum_of_new_sizes Sum of sizes of the new files added
+ * @brief Creates the system tablespace.
  * 
  * @return DB_SUCCESS or error code
  */
-static db_err open_or_create_data_files(
-  bool *create_new_db,
-  uint64_t *min_flushed_lsn,
-  uint64_t *max_flushed_lsn,
-  ulint *sum_of_new_sizes
-) {
-  bool ret;
-  ulint i;
-  bool one_opened = false;
-  bool one_created = false;
-  off_t size;
-  ulint rounded_size_pages;
-  char name[PATH_MAX];
-  char home[1024];
+static db_err create_system_tablespace(const std::string &path) noexcept {
+  namespace fs = std::filesystem;
 
-  if (srv_n_data_files >= 1000) {
-    ib_logger(
-      ib_stream,
-      "can only have < 1000 data files\n"
-      "you have defined %lu\n",
-      (ulong)srv_n_data_files
-    );
+  ut_a(!path.empty());
+
+  fs::path filename(path);
+
+  {
+    auto home_dir = filename.parent_path();
+
+    if (fs::status(home_dir).type() != fs::file_type::directory) {
+      log_err(std::format(
+        "Data home directory '{}' does not exist, is not a directory"
+        " or you don't have read-write permissions. We require that"
+        " the home directory must exist and be readable and writeable",
+        home_dir.generic_string()));
+      return DB_ERROR;
+    }
+  }
+
+  if (fs::exists(filename) && fs::status(filename).type() == fs::file_type::regular) {
+    log_warn(std::format("System tablespace '{}' already exists", filename.generic_string()));
+    return DB_TABLE_EXISTS;
+  }
+
+  log_info(std::format(
+    "Creating the system tablespace: 'system.idb' of size {} MB ",
+    SYSTEM_IBD_FILE_INITIAL_SIZE/(1024 * 1024)
+  ));
+
+  bool success{};
+  auto fh = os_file_create(filename.c_str(), OS_FILE_CREATE, OS_FILE_NORMAL, OS_DATA_FILE, &success);
+
+  if (!success && os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
+    log_err(std::format("Can't create {}", filename.generic_string()));
     return DB_ERROR;
   }
 
-  *sum_of_new_sizes = 0;
+  success = os_file_set_size(filename.c_str(), fh, SYSTEM_IBD_FILE_INITIAL_SIZE);
+  ut_a(success);
 
-  *create_new_db = false;
+  success = os_file_close(fh);
+  ut_a(success);
 
-  /* Copy the path because we want to normalize it. */
-  strcpy(home, srv_data_home);
+  return DB_SUCCESS;
+}
 
-  /* We require that the user have a trailing '/' when setting the
-  srv_data_home variable. */
+/**
+ * @brief Opens the system tablespce, it must exist and be readable and writeable.
+ * 
+ * @param[in] path Path to the system tablespace
+ * @param[out] flushed_lsn  Max of flushed lsn values in data files
+ * 
+ * @return DB_SUCCESS or error code
+ */
+static db_err open_system_tablespace(const std::string &path, lsn_t &flushed_lsn) noexcept {
+  namespace fs = std::filesystem;
 
-  for (i = 0; i < srv_n_data_files; i++) {
-    bool is_absolute = false;
-    const char *ptr = srv_data_file_names[i];
+  ut_a(!path.empty());
 
-    /* We assume Unix file paths here. */
-    is_absolute = (*ptr == '/');
+  fs::path filename(path);
 
-    /* If the name is not absolute then the system files
-    are created relative to home. */
-    if (!is_absolute) {
+  /* Must exist if we've been asked to open the file. */
+  ut_a(fs::status(filename).type() == fs::file_type::regular);
 
-      ut_a(strlen(home) + strlen(srv_data_file_names[i]) < (sizeof name) - 1);
+  bool success{};
+  auto fh = os_file_create(filename.c_str(), OS_FILE_OPEN, OS_FILE_NORMAL, OS_DATA_FILE, &success);
 
-      ut_snprintf(name, sizeof(name), "%.1024s%.1024s", home, srv_data_file_names[i]);
-    } else {
-      ut_a(strlen(home) < (sizeof name) - 1);
-
-      ut_snprintf(name, sizeof(name), "%s", srv_data_file_names[i]);
-    }
-
-    if (srv_data_file_is_raw_partition[i] == 0) {
-
-      /* First we try to create the file: if it already
-      exists, ret will get value false */
-
-      files[i] = os_file_create(name, OS_FILE_CREATE, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
-
-      if (ret == false && os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
-        ib_logger(ib_stream, "Error in creating or opening %s\n", name);
-
-        return DB_ERROR;
-      }
-
-    } else if (srv_data_file_is_raw_partition[i] == SRV_NEW_RAW) {
-      /* The partition is opened, not created; then it is
-      written over */
-
-      srv_start_raw_disk_in_use = true;
-      srv_created_new_raw = true;
-
-      files[i] = os_file_create(name, OS_FILE_OPEN_RAW, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
-
-      if (!ret) {
-        ib_logger(ib_stream, "Error in opening %s\n", name);
-
-        return DB_ERROR;
-      }
-    } else if (srv_data_file_is_raw_partition[i] == SRV_RAW) {
-      srv_start_raw_disk_in_use = true;
-
-      ret = false;
-    } else {
-      ut_a(0);
-    }
-
-    if (ret == false) {
-      /* We open the data file */
-
-      if (one_created) {
-        ib_logger(ib_stream, "Data files can only be added at the end\n");
-        ib_logger(
-          ib_stream, "of a tablespace, but data file %s existed beforehand.\n",
-          name
-        );
-        return DB_ERROR;
-      }
-
-      if (srv_data_file_is_raw_partition[i] == SRV_RAW) {
-        files[i] = os_file_create(name, OS_FILE_OPEN_RAW, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
-      } else if (i == 0) {
-        files[i] = os_file_create(name, OS_FILE_OPEN_RETRY, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
-      } else {
-        files[i] = os_file_create(name, OS_FILE_OPEN, OS_FILE_NORMAL, OS_DATA_FILE, &ret);
-      }
-
-      if (!ret) {
-        ib_logger(ib_stream, "Error in opening %s\n", name);
-        os_file_get_last_error(true);
-
-        return DB_ERROR;
-      }
-
-      if (srv_data_file_is_raw_partition[i] == SRV_RAW) {
-
-        goto skip_size_check;
-      }
-
-      ret = os_file_get_size(files[i], &size);
-      ut_a(ret);
-      /* Round size downward to megabytes */
-
-      rounded_size_pages = size / (1024 * 1024) + 4096;
-
-      if (i == srv_n_data_files - 1 && srv_auto_extend_last_data_file) {
-
-        if (srv_data_file_sizes[i] > rounded_size_pages || (srv_last_file_size_max > 0 && srv_last_file_size_max < rounded_size_pages)) {
-
-          ib_logger(
-            ib_stream,
-            "Auto-extending data file %s is of a different size"
-            " %lu pages (rounded down to MB) than the configured"
-            " initial %lu pages, max %lu (relevant if non-zero) pages!\n",
-            name,
-            (ulong)rounded_size_pages,
-            (ulong)srv_data_file_sizes[i],
-            (ulong)srv_last_file_size_max
-          );
-
-          return DB_ERROR;
-        }
-
-        srv_data_file_sizes[i] = rounded_size_pages;
-      }
-
-      if (rounded_size_pages != srv_data_file_sizes[i]) {
-
-        ib_logger(
-          ib_stream,
-          "Data file %s is of a different size %lu pages (rounded down to MB)"
-          " than the configured %lu pages!\n",
-          name,
-          (ulong)rounded_size_pages,
-          (ulong)srv_data_file_sizes[i]
-        );
-
-        return DB_ERROR;
-      }
-    skip_size_check:
-      srv_fil->read_flushed_lsn_and_arch_log_no(files[i], one_opened, min_flushed_lsn, max_flushed_lsn);
-      one_opened = true;
-    } else {
-      /* We created the data file and now write it full of
-      zeros */
-
-      one_created = true;
-
-      if (i > 0) {
-        ib_logger(ib_stream, "Data file %s did not exist: new to be created\n", name);
-      } else {
-        ib_logger(
-          ib_stream,
-          "The first specified data file %s did not exist: a new database"
-          " to be created!\n",
-          name
-        );
-        *create_new_db = true;
-      }
-
-      ib_logger(
-        ib_stream, "  Setting file %s size to %lu MB\n", name, (ulong)(srv_data_file_sizes[i] >> (20 - UNIV_PAGE_SIZE_SHIFT))
-      );
-
-      ib_logger(ib_stream, "Database physically writes the file full: wait...\n");
-
-      ret = os_file_set_size(name, files[i], srv_calc_low32(srv_data_file_sizes[i]), srv_calc_high32(srv_data_file_sizes[i]));
-
-      if (!ret) {
-        ib_logger(ib_stream, "Error in creating %s: probably out of disk space\n", name);
-
-        return DB_ERROR;
-      }
-
-      *sum_of_new_sizes = *sum_of_new_sizes + srv_data_file_sizes[i];
-    }
-
-    ret = os_file_close(files[i]);
-    ut_a(ret);
-
-    if (i == 0) {
-      srv_fil->space_create(name, SYS_TABLESPACE, 0, FIL_TABLESPACE);
-    }
-
-    ut_a(srv_fil->validate());
-
-    srv_fil->node_create(name, srv_data_file_sizes[i], 0, srv_data_file_is_raw_partition[i] != 0);
+  if (!success && os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
+    log_err(std::format("Can't open {}", filename.generic_string()));
+    return DB_ERROR;
   }
+
+  off_t size{};
+
+  {
+    auto ret = os_file_get_size(fh, &size);
+    ut_a(ret);
+  }
+
+  /* Convert to number of pages. */
+  size /= UNIV_PAGE_SIZE;
+
+  srv_fil->read_flushed_lsn(fh, flushed_lsn);
+
+  {
+    auto success = os_file_close(fh);
+    ut_a(success);
+  }
+
+  {
+    auto success = srv_fil->space_create(filename.c_str(), SYS_TABLESPACE, 0, FIL_TABLESPACE);
+    ut_a(success);
+    ut_a(srv_fil->validate());
+  }
+
+  srv_fil->node_create(filename.c_str(), size, 0, false);
 
   return DB_SUCCESS;
 }
@@ -911,7 +487,7 @@ static db_err open_or_create_data_files(
  * 
  * @param err Current error code
  */
-static void srv_startup_abort(db_err err) {
+static void srv_startup_abort(db_err err) noexcept {
   /* This is currently required to inform the master thread only. Once
   we have contexts we can get rid of this global. */
   srv_fast_shutdown = IB_SHUTDOWN_NORMAL;
@@ -945,70 +521,36 @@ static void srv_startup_abort(db_err err) {
 }
 
 ib_err_t innobase_start_or_create() {
-  bool create_new_db;
-  bool log_file_created;
-  bool log_created = false;
-  bool log_opened = false;
-  uint64_t min_flushed_lsn;
-  uint64_t max_flushed_lsn;
-  ulint sum_of_new_sizes;
-  ulint sum_of_data_file_sizes;
-  ulint tablespace_size_in_header;
-  db_err err;
-  ulint i;
-  mtr_t mtr;
-  bool srv_file_per_table_original_value;
+  ut_a(!srv_was_started);
 
   // FIXME:
   ib_stream = stderr;
 
-  srv_file_per_table_original_value = srv_file_per_table;
-
-  if (sizeof(ulint) != sizeof(void *)) {
-    ib_logger(
-      ib_stream,
-      "Size of InnoDB's ulint is %lu, but size of void* is %lu."
-      " The sizes should be the same so that on a 64-bit platform"
-      " you can allocate more than 4 GB of memory.",
-      (ulong)sizeof(ulint),
-      (ulong)sizeof(void *)
-    );
-  }
+  static_assert(sizeof(ulint) == sizeof(uintptr_t));
 
   /* System tables are created in tablespace 0.  Thus, we must
   temporarily clear srv_file_per_table.  This is ok, because the
   server will not accept connections (which could modify
   file_per_table) until this function has returned. */
   srv_file_per_table = false;
-  IF_DEBUG(ib_logger(ib_stream, "!!!!!!!! UNIV_DEBUG switched on !!!!!!!!!\n");)
+  IF_DEBUG(log_warn("!!!!!!!! UNIV_DEBUG switched on !!!!!!!!!");)
 
-  IF_SYNC_DEBUG(ib_logger(ib_stream, "!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!\n");)
+  IF_SYNC_DEBUG(log_warn("!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!");)
 
 #ifdef UNIV_LOG_LSN_DEBUG
-  ib_logger(ib_stream, "!!!!!!!! UNIV_LOG_LSN_DEBUG switched on !!!!!!!!!\n");
+  log_warn("!!!!!!!! UNIV_LOG_LSN_DEBUG switched on !!!!!!!!!");
 #endif /* UNIV_LOG_LSN_DEBUG */
 
   if (likely(srv_use_sys_malloc)) {
-    ib_logger(ib_stream, "The InnoDB memory heap is disabled\n");
+    log_warn("The InnoDB memory heap is disabled");
   }
-
-  /* Print an error message if someone tries to start up InnoDB a
-  second time while it's already in state running. */
-  if (srv_was_started && srv_start_has_been_called) {
-    ib_logger(
-      ib_stream,
-      "Startup called second time during the process lifetime."
-      " more than once during the process lifetime.\n"
-    );
-  }
-
-  srv_start_has_been_called = true;
 
   ut_d(log_do_write = true);
 
   /*	yydebug = true; */
 
   srv_is_being_started = true;
+
   srv_startup_is_before_trx_rollback_phase = true;
 
   /* Note that the call srv_boot() also changes the values of
@@ -1020,21 +562,15 @@ ib_err_t innobase_start_or_create() {
   their time to enter InnoDB. */
 
   if (srv_buf_pool_size >= 1000 * 1024 * 1024) {
-
     /* If buffer pool is less than 1000 MB, assume fewer threads. */
-    srv_max_n_threads = 50000;
-
+    srv_max_n_threads = 8192;
   } else if (srv_buf_pool_size >= 8 * 1024 * 1024) {
-
-    srv_max_n_threads = 10000;
-
+    srv_max_n_threads = 4096;
   } else {
-
-    /* saves several MB of memory, especially in 64-bit computers */
-    srv_max_n_threads = 1000;
+    srv_max_n_threads = 128;
   }
 
-  err = srv_boot();
+  auto err = srv_boot();
 
   if (err != DB_SUCCESS) {
 
@@ -1053,41 +589,16 @@ ib_err_t innobase_start_or_create() {
 
   if (srv_buf_pool_size <= 5 * 1024 * 1024) {
 
-    ib_logger(
-      ib_stream,
-      "Warning: Small buffer pool size "
-      "(%luM), the flst_validate() debug function "
-      "can cause a deadlock if the buffer pool fills up.\n",
+    log_warn(std::format(
+      "Small buffer pool size ({}M), the flst_validate() debug function "
+      "can cause a deadlock if the buffer pool fills up.",
       srv_buf_pool_size / 1024 / 1024
-    );
+    ));
   }
 #endif /* UNIV_DEBUG */
 
   if (srv_n_log_files * srv_log_file_size >= 262144) {
-    ib_logger(ib_stream, "Combined size of log files must be < 4 GB\n"
-    );
-
-    return DB_ERROR;
-  }
-
-  sum_of_new_sizes = 0;
-
-  for (i = 0; i < srv_n_data_files; i++) {
-    if (sizeof(off_t) < 5 && srv_data_file_sizes[i] >= 262144) {
-      ib_logger(
-        ib_stream,
-        "File size must be < 4 GB with this binary"
-        " and operating system combination, in some OS's < 2 GB\n"
-      );
-
-      return DB_ERROR;
-    }
-    sum_of_new_sizes += srv_data_file_sizes[i];
-  }
-
-  if (sum_of_new_sizes < 10485760 / UNIV_PAGE_SIZE) {
-    ib_logger(ib_stream, "Tablespace size must be at least 10 MB\n");
-
+    log_err("Combined size of log files must be < 4 GB");
     return DB_ERROR;
   }
 
@@ -1112,10 +623,7 @@ ib_err_t innobase_start_or_create() {
 
     os_file_free();
 
-    ib_logger(
-      ib_stream,
-      "Fatal error: cannot allocate the memory for the file system\n"
-    );
+    log_err("Fatal error: cannot allocate the memory for the file system");
 
     return DB_OUT_OF_MEMORY;
   }
@@ -1131,10 +639,7 @@ ib_err_t innobase_start_or_create() {
 
     os_file_free();
 
-    ib_logger(
-      ib_stream,
-      "Fatal error: cannot allocate the memory for the buffer pool\n"
-    );
+    log_err("Fatal error: cannot allocate the memory for the buffer pool");
 
     return DB_OUT_OF_MEMORY;
   }
@@ -1147,51 +652,94 @@ ib_err_t innobase_start_or_create() {
 
   /* Create i/o-handler threads: */
 
-  for (i = 0; i < srv_n_file_io_threads; i++) {
+  for (ulint i{}; i < srv_n_file_io_threads; i++) {
     n[i] = i;
 
-    os_thread_create(io_handler_thread, n + i, thread_ids + i);
+    os_thread_create(io_handler_thread, &n[i], thread_ids + i);
   }
 
-  err = open_or_create_data_files(&create_new_db, &min_flushed_lsn, &max_flushed_lsn, &sum_of_new_sizes);
+  bool create_new_db{};
+  lsn_t max_flushed_lsn{};
 
-  if (err != DB_SUCCESS) {
-    ib_logger(
-      ib_stream,
-      "Could not open or create data files. If you tried to add"
-      " new data files, and it failed here, you should now set"
-      " data_file_path back to what it was, and remove the new"
-      " ibdata files InnoDB created in this failed attempt. InnoDB"
-      " only wrote those files full of zeros, but did not yet use"
-      " them in any way. But be careful: do not emove old data files"
-      " which contain your precious data!\n"
-    );
+  {
+    namespace fs = std::filesystem;
 
-    srv_startup_abort(err);
+    fs::path home(srv_data_home);
 
-    return err;
+    if (home.empty()) {
+      log_err("Data home directory is not set");
+      return DB_ERROR;
+    }
+
+    if (!fs::exists(home) || fs::status(home).type() != fs::file_type::directory) {
+      log_err("Data home directory does not exist or is not a directory");
+      return DB_ERROR;
+    }
+
+    fs::path filename(home);
+
+    filename /= "system.ibd";
+
+    if (!fs::exists(filename)) {
+      err = create_system_tablespace(filename);
+
+      if (err == DB_SUCCESS) {
+        create_new_db = true;
+      } else if (err != DB_TABLE_EXISTS) {
+        srv_startup_abort(err);
+        return DB_ERROR;
+      }
+    }
+
+    err = open_system_tablespace(filename, max_flushed_lsn);
+
+    if (err != DB_SUCCESS) {
+      srv_startup_abort(err);
+      return DB_ERROR;
+    }
   }
 
-  for (i = 0; i < srv_n_log_files; i++) {
+  bool log_opened{};
+  bool log_created{};
 
-    err = open_or_create_log_file(create_new_db, &log_file_created, log_opened, 0, i);
+  /* Note: Currently we support a single log group (0). */
+  std::string log_dir{srv_log_group_home_dirs[0]};
+
+  ut_a(srv_n_log_files >= 2);
+
+  auto success = srv_fil->space_create(log_dir.c_str(), SRV_LOG_SPACE_FIRST_ID, 0, FIL_LOG);
+  ut_a(success);
+  ut_a(srv_fil->validate());
+
+  for (ulint i{}; i < srv_n_log_files; ++i) {
+    namespace fs = std::filesystem;
+
+    fs::path filename(fs::path(log_dir) / std::format("ib_logfile{}", i));
+
+    if (fs::exists(filename) && fs::status(filename).type() == fs::file_type::regular) {
+      err = open_log_file(filename.generic_string());
+      log_opened = true;
+    } else {
+      err = create_log_file(filename.generic_string());
+      log_created = true;
+    }
 
     if (err != DB_SUCCESS) {
       srv_startup_abort(err);
       return err;
-    } else if (log_file_created) {
-      log_created = true;
-    } else {
-      log_opened = true;
     }
+
+    if (i == 0) {
+      log_group_init(i, srv_n_log_files, srv_log_file_size * UNIV_PAGE_SIZE, SRV_LOG_SPACE_FIRST_ID);
+    }
+
     if ((log_opened && create_new_db) || (log_opened && log_created)) {
-      ib_logger(
-        ib_stream,
+      log_err(
         "All log files must be created at the same time. All log files must be"
         " created also in database creation. If you want bigger or smaller"
         " log files, shut down the database and make sure there were no errors"
         " in shutdown. Then delete the existing log files. Reconfigure InnoDB"
-        " and start the database again.\n"
+        " and start the database again."
       );
 
       srv_startup_abort(DB_ERROR);
@@ -1199,67 +747,59 @@ ib_err_t innobase_start_or_create() {
     }
   }
 
-  /* Open all log files and data files in the system tablespace: we
-  keep them open until database shutdown */
+  /* Open all log files and the system tablespace: we keep them open
+  until database shutdown */
 
-  srv_fil->open_log_and_system_tablespace_files();
+  srv_fil->open_log_and_system_tablespace();
 
   if (log_created && !create_new_db) {
-    if (max_flushed_lsn != min_flushed_lsn) {
-      ib_logger(
-        ib_stream,
-        "Cannot initialize created  log files because data files were not in sync"
-        " with each other or the data files are corrupt.\n"
-      );
-
-      srv_startup_abort(DB_ERROR);
-      return DB_ERROR;
-    }
-
-    if (max_flushed_lsn < (uint64_t)1000) {
-      ib_logger(
-        ib_stream,
+    if (max_flushed_lsn < lsn_t(1000)) {
+      log_err(
         "Cannot initialize created log files because data files are corrupt,"
         " or new data files were created when the database was started previous"
-        " time but the database was not shut down normally after that.\n"
+        " time but the database was not shut down normally after that."
       );
 
       srv_startup_abort(DB_ERROR);
       return DB_ERROR;
     }
 
-    mutex_enter(&(log_sys->mutex));
+    mutex_enter(&log_sys->mutex);
 
     recv_reset_logs(max_flushed_lsn, true);
 
-    mutex_exit(&(log_sys->mutex));
+    mutex_exit(&log_sys->mutex);
   }
 
   trx_sys_file_format_init();
 
   if (create_new_db) {
+    mtr_t mtr;
+
     mtr_start(&mtr);
-    fsp_header_init(0, sum_of_new_sizes, &mtr);
+
+    fsp_header_init(SYS_TABLESPACE, SYSTEM_IBD_FILE_INITIAL_SIZE / UNIV_PAGE_SIZE, &mtr);
 
     mtr_commit(&mtr);
 
     trx_sys_create(srv_force_recovery);
+
     dict_create();
+
     srv_startup_is_before_trx_rollback_phase = false;
+
   } else {
 
-    /* Check if we support the max format that is stamped
-    on the system tablespace.
-    Note:  We are NOT allowed to make any modifications to
-    the TRX_SYS_PAGE_NO page before recovery  because this
-    page also contains the max_trx_id etc. important system
-    variables that are required for recovery.  We need to
-    ensure that we return the system to a state where normal
-    recovery is guaranteed to work. We do this by
-    invalidating the buffer cache, this will force the
-    reread of the page and restoration to its last known
-    consistent state, this is REQUIRED for the recovery
+    /* Check if we support the max format that is stamped on the system tablespace.
+
+    Note:  We are NOT allowed to make any modifications to the TRX_SYS_PAGE_NO page
+    before recovery  because this page also contains the max_trx_id etc. important system
+    variables that are required for recovery. We need to ensure that we return the
+    system to a state where normal recovery is guaranteed to work. We do this by
+    invalidating the buffer cache, this will force the reread of the page and
+    restoration to its last known consistent state, this is REQUIRED for the recovery
     process to work. */
+
     err = trx_sys_file_format_max_check(srv_check_file_format_at_startup);
 
     if (err != DB_SUCCESS) {
@@ -1270,26 +810,24 @@ ib_err_t innobase_start_or_create() {
     /* We always try to do a recovery, even if the database had
     been shut down normally: this is the normal startup path */
 
-    err =
-      recv_recovery_from_checkpoint_start(srv_force_recovery, LOG_CHECKPOINT, IB_UINT64_T_MAX, min_flushed_lsn, max_flushed_lsn);
+    err = recv_recovery_from_checkpoint_start(srv_force_recovery, max_flushed_lsn);
 
     if (err != DB_SUCCESS) {
       srv_startup_abort(err);
       return DB_ERROR;
     }
 
-    /* Since the insert buffer init is in dict_boot, and the
-    insert buffer is needed in any disk i/o, first we call
-    dict_boot(). Note that trx_sys_init_at_db_start() only needs
-    to access space 0, and the insert buffer at this stage already
-    works for space 0. */
+    /* Note that trx_sys_init_at_db_start() only needs to access the
+    system tablespace. */
 
     dict_boot();
+
     trx_sys_init_at_db_start(srv_force_recovery);
 
-    /* Initialize the fsp free limit global variable in the log
-    system */
+    /* Initialize the fsp free limit global variable in the log system */
     fsp_header_get_free_limit();
+
+    srv_startup_is_before_trx_rollback_phase = false;
 
     /* recv_recovery_from_checkpoint_finish needs trx lists which
     are initialized in trx_sys_init_at_db_start(). */
@@ -1322,32 +860,16 @@ ib_err_t innobase_start_or_create() {
     trx_sys_file_format_tag_init();
   }
 
-  if (!create_new_db && sum_of_new_sizes > 0) {
-    /* New data file(s) were added */
-    mtr_start(&mtr);
-
-    fsp_header_inc_size(0, sum_of_new_sizes, &mtr);
-
-    mtr_commit(&mtr);
-
-    /* Immediately write the log record about increased tablespace
-    size to disk, so that it is durable even if we crash
-    quickly */
-
-    log_buffer_flush_to_disk();
-  }
-
-  /* ib_logger(ib_stream, "Max allowed record size %lu\n",
-  page_get_free_space_of_empty() / 2); */
+  log_info("Max allowed record size ", page_get_free_space_of_empty() / 2);
 
   /* Create the thread which watches the timeouts for lock waits */
-  os_thread_create(&srv_lock_timeout_thread, nullptr, thread_ids + 2 + SRV_MAX_N_IO_THREADS);
+  os_thread_create(&srv_lock_timeout_thread, nullptr, &thread_ids[2 + SRV_MAX_N_IO_THREADS]);
 
   /* Create the thread which warns of long semaphore waits */
-  os_thread_create(&srv_error_monitor_thread, nullptr, thread_ids + 3 + SRV_MAX_N_IO_THREADS);
+  os_thread_create(&srv_error_monitor_thread, nullptr, &thread_ids[3 + SRV_MAX_N_IO_THREADS]);
 
   /* Create the thread which prints InnoDB monitor info */
-  os_thread_create(&srv_monitor_thread, nullptr, thread_ids + 4 + SRV_MAX_N_IO_THREADS);
+  os_thread_create(&srv_monitor_thread, nullptr, &thread_ids[4 + SRV_MAX_N_IO_THREADS]);
 
   srv_is_being_started = false;
 
@@ -1371,121 +893,19 @@ ib_err_t innobase_start_or_create() {
 
   os_thread_create(&srv_master_thread, nullptr, thread_ids + (1 + SRV_MAX_N_IO_THREADS));
 
-  sum_of_data_file_sizes = 0;
-
-  for (i = 0; i < srv_n_data_files; i++) {
-    sum_of_data_file_sizes += srv_data_file_sizes[i];
+  {
+    auto size = fsp_header_get_tablespace_size();
+    log_info(std::format("system.ibd file size in the header is {} pages", size));
   }
 
-  tablespace_size_in_header = fsp_header_get_tablespace_size();
-
-  if (!srv_auto_extend_last_data_file && sum_of_data_file_sizes != tablespace_size_in_header) {
-
-    ib_logger(
-      ib_stream,
-      "Tablespace size stored in header is %lu pages, but the sum of data"
-      " file sizes is %lu pages\n",
-      (ulong)tablespace_size_in_header,
-      (ulong)sum_of_data_file_sizes
-    );
-
-    if (srv_force_recovery == IB_RECOVERY_DEFAULT && sum_of_data_file_sizes < tablespace_size_in_header) {
-      /* This is a fatal error, the tail of a tablespace is
-      missing */
-
-      ib_logger(
-        ib_stream,
-        "Cannot start InnoDB. The tail of the system tablespace is missing."
-        " Have you set the data_file_path in an inappropriate way, removing"
-        " ibdata files from there? You can set force_recovery=1 to force"
-        " a startup if you are trying to recover a badly corrupt database.\n"
-      );
-
-      srv_startup_abort(DB_ERROR);
-      return DB_ERROR;
-    }
-  }
-
-  if (srv_auto_extend_last_data_file && sum_of_data_file_sizes < tablespace_size_in_header) {
-
-    ib_logger(
-      ib_stream,
-      "Tablespace size stored in header is %lu pages, but the sum of data file sizes"
-      " is only %lu pages\n",
-      (ulong)tablespace_size_in_header,
-      (ulong)sum_of_data_file_sizes
-    );
-
-    if (srv_force_recovery == IB_RECOVERY_DEFAULT) {
-
-      ib_logger(
-        ib_stream,
-        "Cannot start InnoDB. The tail of the system tablespace is missing. Have you set "
-        " data_file_path in aninappropriate way, removing ibdata files from there?"
-        " You can set force_recovery=1 in to force a startup if you are trying to"
-        " recover a badly corrupt database.\n"
-      );
-
-      srv_startup_abort(DB_ERROR);
-      return DB_ERROR;
-    }
-  }
-
-  if (srv_print_verbose_log) {
-    ib_logger(ib_stream, " InnoDB %s started; log sequence number %lu\n", VERSION, srv_start_lsn
-    );
-  }
+  log_info(std::format(
+    "InnoDB {} started; log sequence number {}",
+    VERSION, srv_start_lsn
+  ));
 
   if (srv_force_recovery != IB_RECOVERY_DEFAULT) {
-    ib_logger(ib_stream, "!!! force_recovery is set to %lu !!!\n", (ulong)srv_force_recovery);
+    log_warn(std::format("!!! force_recovery is set to {} !!!", (int) srv_force_recovery));
   }
-
-  if (trx_doublewrite_must_reset_space_ids) {
-    /* Actually, we did not change the undo log format between
-    4.0 and 4.1.1, and we would not need to run purge to
-    completion. Note also that the purge algorithm in 4.1.1
-    can process the history list again even after a full
-    purge, because our algorithm does not cut the end of the
-    history list in all cases so that it would become empty
-    after a full purge. That mean that we may purge 4.0 type
-    undo log even after this phase.
-
-    The insert buffer record format changed between 4.0 and
-    4.1.1. It is essential that the insert buffer is emptied
-    here! */
-
-    ib_logger(
-      ib_stream,
-      "You are upgrading to an InnoDB version which allows multiple"
-      " tablespaces. Wait for purge to run to completion...\n"
-    );
-
-    for (;;) {
-      os_thread_sleep(1000000);
-
-      if (0 == strcmp(srv_main_thread_op_info, "waiting for server activity")) {
-
-        break;
-      }
-    }
-    ib_logger(
-      ib_stream,
-      "Full purge and insert buffer merge"
-      " completed.\n"
-    );
-
-    trx_sys_mark_upgraded_to_multiple_tablespaces();
-
-    ib_logger(
-      ib_stream,
-      "You have now successfully upgraded to the multiple tablespaces"
-      " format. You should NOT DOWNGRAD to an earlier version of"
-      " InnoDB! But if you absolutely need to downgrade, check"
-      " the InnoDB website for details for instructions.\n"
-    );
-  }
-
-  srv_file_per_table = srv_file_per_table_original_value;
 
   srv_was_started = true;
 
@@ -1494,7 +914,7 @@ ib_err_t innobase_start_or_create() {
 
 /** Try to shutdown the InnoDB threads.
 @return	true if all threads exited. */
-static bool srv_threads_try_shutdown(Cond_var* lock_timeout_thread_event) {
+static bool srv_threads_try_shutdown(Cond_var* lock_timeout_thread_event) noexcept  {
   /* Let the lock timeout thread exit */
   os_event_set(lock_timeout_thread_event);
 
@@ -1520,7 +940,7 @@ static bool srv_threads_try_shutdown(Cond_var* lock_timeout_thread_event) {
 to the signaled state. Then the threads will exit themselves in
 os_thread_event_wait().
 @return	true if all threads exited. */
-static bool srv_threads_shutdown() {
+static bool srv_threads_shutdown() noexcept {
   srv_shutdown_state = SRV_SHUTDOWN_EXIT_THREADS;
 
   for (ulint i = 0; i < 1000; i++) {
@@ -1531,28 +951,16 @@ static bool srv_threads_shutdown() {
     }
   }
 
-  ib_logger(
-    ib_stream,
-    "%lu threads created by InnoDB had not exited at shutdown!",
+  log_warn(std::format(
+    "{} threads created by InnoDB had not exited at shutdown!",
     (ulong)os_thread_count.load(std::memory_order_relaxed)
-  );
+  ));
 
   return false;
 }
 
 db_err innobase_shutdown(ib_shutdown_t shutdown) {
-  if (!srv_was_started) {
-    if (srv_is_being_started) {
-      ib_logger(
-        ib_stream,
-        "Shutting down a not properly started or created database!\n"
-      );
-    }
-
-    ut_delete_all_mem();
-
-    return DB_SUCCESS;
-  }
+  ut_a(srv_was_started);
 
   /* This is currently required to inform the master thread only. Once
   we have contexts we can get rid of this global. */
@@ -1564,11 +972,9 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
   just free data structures after the shutdown. */
 
   if (shutdown == IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
+    log_warn(
       "User has requested a very fast shutdown without flushing"
-      "the InnoDB buffer pool to data files. At the next startup"
+      " the InnoDB buffer pool to data files. At the next startup"
       " InnoDB will do a crash recovery!"
     );
   }
@@ -1615,7 +1021,6 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
 
   log_mem_free();
 
-
   delete srv_buf_pool;
   srv_buf_pool = nullptr;
 
@@ -1631,14 +1036,13 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
   ut_delete_all_mem();
 
   if (os_thread_count != 0 || Cond_var::s_count != 0 || os_mutex_count() != 0) {
-    ib_logger(
-      ib_stream,
-      "Warning: some resources were not cleaned up in shutdown:"
-      " threads %lu, events %lu, os_mutexes %lu\n",
-      (ulong)os_thread_count.load(),
-      (ulong)Cond_var::s_count,
-      (ulong)os_mutex_count()
-    );
+    log_warn(std::format(
+      "Some resources were not cleaned up in shutdown:"
+      " threads {}, events {}, os_mutexes {}",
+      os_thread_count.load(),
+      Cond_var::s_count,
+      os_mutex_count()
+    ));
   }
 
   if (lock_latest_err_stream) {
@@ -1646,21 +1050,14 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
   }
 
   if (srv_print_verbose_log) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      " Shutdown completed; log sequence number %lu\n",
-      srv_shutdown_lsn
-    );
+    log_info("Shutdown completed; log sequence number ", srv_shutdown_lsn);
   }
 
   srv_was_started = false;
-  srv_start_has_been_called = false;
 
   srv_modules_var_init();
   srv_var_init();
 
-  srv_data_file_names = nullptr;
   srv_log_group_home_dirs = nullptr;
 
   return DB_SUCCESS;

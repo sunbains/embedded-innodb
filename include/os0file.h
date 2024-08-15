@@ -1,6 +1,7 @@
 /**********************************************************************
 Copyright (c) 1995, 2010, Innobase Oy. All Rights Reserved.
 Copyright (c) 2009, Percona Inc.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 Portions of this file contain modifications contributed and copyrighted
 by Percona Inc.. Those modifications are
@@ -293,11 +294,10 @@ int64_t os_file_get_size_as_iblonglong(os_file_t file);
  *
  * @param name Name of the file or path as a null-terminated string.
  * @param file Handle to a file.
- * @param size Least significant 32 bits of file size.
- * @param size_high Most significant 32 bits of size.
+ * @param desired_size size in bytes.
  * @return True if success.
  */
-bool os_file_set_size(const char *name, os_file_t file, ulint size, ulint size_high);
+bool os_file_set_size(const char *name, os_file_t file, off_t desired_size);
 
 /**
  * @brief Truncates a file at its current position.
@@ -452,7 +452,7 @@ void os_file_var_init();
 void os_file_refresh_stats();
 
 /** @return a text version of the path type. */
-[[nodiscard]] inline const char *get_path_status(const std::filesystem::path &path) {
+[[nodiscard]] inline const char *get_path_status(const std::filesystem::path &path) noexcept {
   namespace fs = std::filesystem;
 
   if (!fs::exists(path)) {
@@ -475,4 +475,32 @@ void os_file_refresh_stats();
 
   ut_error;
   return "Unknown file status";
+}
+
+/**
+ * @brief Get the permissions of a file in text representation.
+ * 
+ * @param[in] p File permissions.
+ * 
+ * @return Text representation of the file permissions.
+ */
+[[nodiscard]] inline std::string to_string(std::filesystem::perms p) noexcept {
+    using std::filesystem::perms;
+    std::ostringstream os{};
+
+    auto print = [=](std::ostream& os, char op, perms perm) {
+        os << (perms::none == (perm & p) ? '-' : op);
+    };
+
+    print(os, 'r', perms::owner_read);
+    print(os, 'w', perms::owner_write);
+    print(os, 'x', perms::owner_exec);
+    print(os, 'r', perms::group_read);
+    print(os, 'w', perms::group_write);
+    print(os, 'x', perms::group_exec);
+    print(os, 'r', perms::others_read);
+    print(os, 'w', perms::others_write);
+    print(os, 'x', perms::others_exec);
+
+    return os.str();
 }

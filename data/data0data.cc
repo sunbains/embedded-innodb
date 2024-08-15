@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -404,7 +405,7 @@ void dfield_print_also_hex(const dfield_t *dfield) {
 }
 
 /**
- * @brief Print a dfield value using ut_print_buf.
+ * @brief Print a dfield value using buf_to_hex_string.
  *
  * @param ib_stream Output stream.
  * @param dfield    Dfield to be printed.
@@ -415,7 +416,7 @@ static void dfield_print_raw(std::ostream &o, const dfield_t *dfield) {
   if (!dfield_is_null(dfield)) {
     ulint print_len = ut_min(len, 1000);
 
-    ut_print_buf(o, dfield_get_data(dfield), print_len);
+    buf_to_hex_string(o, dfield_get_data(dfield), print_len);
 
     if (len != print_len) {
       o << "(total " << len <<  (dfield_is_ext(dfield) ? ", external" : "");

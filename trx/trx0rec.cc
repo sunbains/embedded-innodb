@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -36,29 +37,25 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0undo.h"
 #include "ut0mem.h"
 
-/** Writes the mtr log entry of the inserted undo log record on the undo log
-page. */
-inline void trx_undof_page_add_undo_rec_log(
-  page_t *undo_page, /*!< in: undo log page */
-  ulint old_free,    /*!< in: start offset of the inserted entry */
-  ulint new_free,    /*!< in: end offset of the entry */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
-  byte *log_ptr;
-  const byte *log_end;
-  ulint len;
-
-  log_ptr = mlog_open(mtr, 11 + 13 + MLOG_BUF_MARGIN);
+/**
+ * Writes the mtr log entry of the inserted undo log record on the undo log
+ *
+ * @param undo_page The undo log page.
+ * @param old_free The start offset of the inserted entry.
+ * @param new_free The end offset of the entry.
+ * @param mtr The mtr (mini-transaction) object.
+ */
+inline void trx_undof_page_add_undo_rec_log(page_t *undo_page, ulint old_free, ulint new_free, mtr_t *mtr) noexcept {
+  auto log_ptr = mlog_open(mtr, 11 + 13 + MLOG_BUF_MARGIN);
 
   if (log_ptr == nullptr) {
 
     return;
   }
 
-  log_end = &log_ptr[11 + 13 + MLOG_BUF_MARGIN];
+  auto log_end = &log_ptr[11 + 13 + MLOG_BUF_MARGIN];
   log_ptr = mlog_write_initial_log_record_fast(undo_page, MLOG_UNDO_INSERT, log_ptr, mtr);
-  len = new_free - old_free - 4;
+  auto len = new_free - old_free - 4;
 
   mach_write_to_2(log_ptr, len);
   log_ptr += 2;
@@ -816,7 +813,7 @@ byte *trx_undo_update_rec_get_update(
         "Run also CHECK TABLE ",
         (ulong)dict_index_get_n_fields(index)
       );
-      ut_print_name(ib_stream, trx, true, index->table_name);
+      ut_print_name(index->table_name);
       ib_logger(
         ib_stream,
         "\n"
@@ -941,11 +938,7 @@ db_err trx_undo_report_row_operation(
   ulint flags, ulint op_type, que_thr_t *thr, dict_index_t *index, const dtuple_t *clust_entry, const upd_t *update,
   ulint cmpl_info, const rec_t *rec, roll_ptr_t *roll_ptr
 ) {
-  trx_t *trx;
   trx_undo_t *undo;
-  ulint page_no;
-  trx_rseg_t *rseg;
-  mtr_t mtr;
   db_err err = DB_SUCCESS;
   mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
@@ -961,13 +954,13 @@ db_err trx_undo_report_row_operation(
     return DB_SUCCESS;
   }
 
-  ut_ad(thr);
-  ut_ad((op_type != TRX_UNDO_INSERT_OP) || (clust_entry && !update && !rec));
+  ut_ad(thr != nullptr);
+  ut_ad(op_type != TRX_UNDO_INSERT_OP || (clust_entry && !update && !rec));
 
-  trx = thr_get_trx(thr);
-  rseg = trx->rseg;
+  auto trx = thr_get_trx(thr);
+  auto rseg = trx->rseg;
 
-  mutex_enter(&(trx->undo_mutex));
+  mutex_enter(&trx->undo_mutex);
 
   /* If the undo log is not assigned yet, assign one */
 
@@ -982,7 +975,7 @@ db_err trx_undo_report_row_operation(
 
     if (unlikely(!undo)) {
       /* Did not succeed */
-      mutex_exit(&(trx->undo_mutex));
+      mutex_exit(&trx->undo_mutex);
 
       return err;
     }
@@ -998,7 +991,7 @@ db_err trx_undo_report_row_operation(
 
     if (unlikely(!undo)) {
       /* Did not succeed */
-      mutex_exit(&(trx->undo_mutex));
+      mutex_exit(&trx->undo_mutex);
       return err;
     }
 
@@ -1009,7 +1002,9 @@ db_err trx_undo_report_row_operation(
     }
   }
 
-  page_no = undo->last_page_no;
+  auto page_no = undo->last_page_no;
+
+  mtr_t mtr;
 
   mtr_start(&mtr);
 
@@ -1063,9 +1058,11 @@ db_err trx_undo_report_row_operation(
       mutex_exit(&trx->undo_mutex);
 
       *roll_ptr = trx_undo_build_roll_ptr(op_type == TRX_UNDO_INSERT_OP, rseg->id, page_no, offset);
+
       if (likely_null(heap)) {
         mem_heap_free(heap);
       }
+
       return DB_SUCCESS;
     }
 
@@ -1079,20 +1076,23 @@ db_err trx_undo_report_row_operation(
     a pessimistic insert in a B-tree, and we must reserve the
     counterpart of the tree latch, which is the rseg mutex. */
 
-    mutex_enter(&(rseg->mutex));
+    mutex_enter(&rseg->mutex);
 
     page_no = trx_undo_add_page(trx, undo, &mtr);
 
-    mutex_exit(&(rseg->mutex));
+    mutex_exit(&rseg->mutex);
 
     if (unlikely(page_no == FIL_NULL)) {
       /* Did not succeed: out of space */
 
-      mutex_exit(&(trx->undo_mutex));
+      mutex_exit(&trx->undo_mutex);
+
       mtr_commit(&mtr);
+
       if (likely_null(heap)) {
         mem_heap_free(heap);
       }
+
       return DB_OUT_OF_FILE_SPACE;
     }
   }
@@ -1275,8 +1275,8 @@ db_err trx_undo_prev_version_build(
       (ulong)table_id,
       (ulong)index->table->id
     );
-    ut_print_buf(ib_stream, undo_rec, 150);
-    ib_logger(ib_stream, "\nindex record ");
+    log_warn_buf(undo_rec, 150);
+    log_warn("index record ");
     rec_print(index_rec);
     ib_logger(ib_stream, "\nrecord version ");
     rec_print(rec);

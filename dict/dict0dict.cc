@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -636,13 +637,13 @@ bool dict_table_rename_in_cache(dict_table_t *table, const char *new_name, bool 
         "  Error: dictionary cache"
         " already contains a table "
       );
-      ut_print_name(ib_stream, nullptr, true, new_name);
+      ut_print_name(new_name);
       ib_logger(
         ib_stream,
         "\n"
         "cannot rename table "
       );
-      ut_print_name(ib_stream, nullptr, true, old_name);
+      ut_print_name(old_name);
       ib_logger(ib_stream, "\n");
       return false;
     }
@@ -659,9 +660,9 @@ bool dict_table_rename_in_cache(dict_table_t *table, const char *new_name, bool 
         "  Error: trying to rename a"
         " TEMPORARY TABLE "
       );
-      ut_print_name(ib_stream, nullptr, true, old_name);
+      ut_print_name(old_name);
       ib_logger(ib_stream, " (");
-      ut_print_filename(ib_stream, table->dir_path_of_temp_table);
+      ut_print_filename(table->dir_path_of_temp_table);
       ib_logger(ib_stream, " )\n");
       return false;
     } else if (!srv_fil->rename_tablespace(old_name, table->space, new_name)) {
@@ -1252,7 +1253,7 @@ static bool dict_index_find_cols(dict_table_t *table, dict_index_t *index) {
 #ifdef UNIV_DEBUG
     /* It is an error not to find a matching column. */
     ib_logger(ib_stream, "Error: no matching column for ");
-    ut_print_name(ib_stream, nullptr, false, field->name);
+    ut_print_name(field->name);
     ib_logger(ib_stream, " in ");
     dict_index_name_print(ib_stream, nullptr, index);
     ib_logger(ib_stream, "!\n");
@@ -1809,7 +1810,7 @@ static void dict_foreign_error_report(ib_stream_t stderr, dict_foreign_t *fk, co
   ib_logger(ib_stream, "\n");
   if (fk->foreign_index) {
     ib_logger(ib_stream, "The index in the foreign key in table is ");
-    ut_print_name(ib_stream, nullptr, false, fk->foreign_index->name);
+    ut_print_name(fk->foreign_index->name);
     ib_logger(
       ib_stream,
       "\n"
@@ -2671,7 +2672,7 @@ col_loop1:
     mutex_enter(&dict_foreign_err_mutex);
     dict_foreign_error_report_low(ib_stream, name);
     ib_logger(ib_stream, "There is no index in table ");
-    ut_print_name(ib_stream, nullptr, true, name);
+    ut_print_name(name);
     ib_logger(
       ib_stream,
       " where the columns appear\n"
@@ -3086,10 +3087,10 @@ loop:
       " Error in dropping of a foreign key constraint"
       " of table "
     );
-    ut_print_name(ib_stream, nullptr, true, table->name);
+    ut_print_name(table->name);
     ib_logger(ib_stream, ",\nin SQL command\n%s", str);
     ib_logger(ib_stream, "\nCannot find a constraint with the given id ");
-    ut_print_name(ib_stream, nullptr, false, id);
+    ut_print_name(id);
     ib_logger(ib_stream, ".\n");
     mutex_exit(&dict_foreign_err_mutex);
 
@@ -3108,7 +3109,7 @@ syntax_error:
     " Syntax error in dropping of a"
     " foreign key constraint of table "
   );
-  ut_print_name(ib_stream, nullptr, true, table->name);
+  ut_print_name(table->name);
   ib_logger(
     ib_stream,
     ",\n"
@@ -3512,11 +3513,11 @@ void dict_print_info_on_foreign_key_in_create_format(
   }
 
   ib_logger(ib_stream, " CONSTRAINT ");
-  ut_print_name(ib_stream, trx, false, stripped_id);
+  ut_print_name(stripped_id);
   ib_logger(ib_stream, " FOREIGN KEY (");
 
   for (i = 0;;) {
-    ut_print_name(ib_stream, trx, false, foreign->foreign_col_names[i]);
+    ut_print_name(foreign->foreign_col_names[i]);
     if (++i < foreign->n_fields) {
       ib_logger(ib_stream, ", ");
     } else {
@@ -3528,15 +3529,15 @@ void dict_print_info_on_foreign_key_in_create_format(
 
   if (dict_tables_have_same_db(foreign->foreign_table_name, foreign->referenced_table_name)) {
     /* Do not print the database name of the referenced table */
-    ut_print_name(ib_stream, trx, true, dict_remove_db_name(foreign->referenced_table_name));
+    ut_print_name(dict_remove_db_name(foreign->referenced_table_name));
   } else {
-    ut_print_name(ib_stream, trx, true, foreign->referenced_table_name);
+    ut_print_name(foreign->referenced_table_name);
   }
 
   ib_logger(ib_stream, " (");
 
   for (i = 0;;) {
-    ut_print_name(ib_stream, trx, false, foreign->referenced_col_names[i]);
+    ut_print_name(foreign->referenced_col_names[i]);
     if (++i < foreign->n_fields) {
       ib_logger(ib_stream, ", ");
     } else {
@@ -3596,18 +3597,18 @@ void dict_print_info_on_foreign_keys(bool create_table_format, ib_stream_t ib_st
           ib_logger(ib_stream, " ");
         }
 
-        ut_print_name(ib_stream, trx, false, foreign->foreign_col_names[i]);
+        ut_print_name(foreign->foreign_col_names[i]);
       }
 
       ib_logger(ib_stream, ") REFER ");
-      ut_print_name(ib_stream, trx, true, foreign->referenced_table_name);
+      ut_print_name(foreign->referenced_table_name);
       ib_logger(ib_stream, "(");
 
       for (i = 0; i < foreign->n_fields; i++) {
         if (i) {
           ib_logger(ib_stream, " ");
         }
-        ut_print_name(ib_stream, trx, false, foreign->referenced_col_names[i]);
+        ut_print_name(foreign->referenced_col_names[i]);
       }
 
       ib_logger(ib_stream, ")");
@@ -3645,9 +3646,9 @@ void dict_print_info_on_foreign_keys(bool create_table_format, ib_stream_t ib_st
 
 void dict_index_name_print(ib_stream_t ib_stream, trx_t *trx, const dict_index_t *index) {
   ib_logger(ib_stream, "index ");
-  ut_print_name(ib_stream, trx, false, index->name);
+  ut_print_name(index->name);
   ib_logger(ib_stream, " of table ");
-  ut_print_name(ib_stream, trx, true, index->table_name);
+  ut_print_name(index->table_name);
 }
 
 void dict_ind_init() {

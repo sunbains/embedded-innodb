@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1994, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -680,7 +681,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_blo
 
     if (unlikely(offset >= UNIV_PAGE_SIZE)) {
 
-      recv_sys->found_corrupt_log = true;
+      recv_sys->m_found_corrupt_log = true;
 
       return (nullptr);
     }
@@ -694,7 +695,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_blo
   }
 
   if (unlikely(end_seg_len >= UNIV_PAGE_SIZE << 1)) {
-    recv_sys->found_corrupt_log = true;
+    recv_sys->m_found_corrupt_log = true;
 
     return (nullptr);
   }
@@ -786,9 +787,9 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_blo
       (ulong)(ptr - ptr2)
     );
 
-    ib_logger(ib_stream, "Dump of 300 bytes of log:\n");
-    ut_print_buf(ib_stream, ptr2, 300);
-    ib_logger(ib_stream, "\n");
+    log_warn("Dump of 300 bytes of log:");
+
+    log_warn_buf(ptr2, 300);
 
     buf_page_print(page, 0);
 
@@ -1048,7 +1049,6 @@ void page_copy_rec_list_end_to_created_page(
   ulint n_recs;
   ulint slot_index;
   ulint rec_size;
-  ulint log_mode;
   byte *log_ptr;
   ulint log_data_len;
   mem_heap_t *heap = nullptr;
@@ -1082,7 +1082,7 @@ void page_copy_rec_list_end_to_created_page(
 
   /* Individual inserts are logged in a shorter form */
 
-  log_mode = mtr_set_log_mode(mtr, MTR_LOG_SHORT_INSERTS);
+  auto log_mode = mtr_set_log_mode(mtr, MTR_LOG_SHORT_INSERTS);
 
   prev_rec = page_get_infimum_rec(new_page);
   heap_top = new_page + PAGE_SUPREMUM_END;

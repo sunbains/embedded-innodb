@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -47,7 +48,7 @@ void mlog_catenate_string(mtr_t *mtr, const byte *str, ulint len) {
   dyn_push_string(mlog, str, len);
 }
 
-void mlog_write_initial_log_record(const byte *ptr, byte type, mtr_t *mtr) {
+void mlog_write_initial_log_record(const byte *ptr, mlog_type_t type, mtr_t *mtr) {
   byte *log_ptr;
 
   ut_ad(type <= MLOG_BIGGEST_TYPE);
@@ -66,13 +67,13 @@ void mlog_write_initial_log_record(const byte *ptr, byte type, mtr_t *mtr) {
   mlog_close(mtr, log_ptr);
 }
 
-byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, byte *type, ulint *space, ulint *page_no) {
+byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, mlog_type_t *type, ulint *space, ulint *page_no) {
   if (end_ptr < ptr + 1) {
 
     return (nullptr);
   }
 
-  *type = (byte)((ulint)*ptr & ~MLOG_SINGLE_REC_FLAG);
+  *type = static_cast<mlog_type_t>((ulint)*ptr & ~MLOG_SINGLE_REC_FLAG);
   ut_ad(*type <= MLOG_BIGGEST_TYPE);
 
   ptr++;
@@ -94,7 +95,7 @@ byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, byte *type, ulint 
   return ptr;
 }
 
-byte *mlog_parse_nbytes(ulint type, byte *ptr, byte *end_ptr, byte *page) {
+byte *mlog_parse_nbytes(mlog_type_t type, byte *ptr, byte *end_ptr, byte *page) {
   ulint val;
   uint64_t dval;
 
@@ -109,7 +110,7 @@ byte *mlog_parse_nbytes(ulint type, byte *ptr, byte *end_ptr, byte *page) {
   ptr += 2;
 
   if (offset >= UNIV_PAGE_SIZE) {
-    recv_sys->found_corrupt_log = true;
+    recv_sys->m_found_corrupt_log = true;
 
     return (nullptr);
   }
@@ -160,14 +161,14 @@ byte *mlog_parse_nbytes(ulint type, byte *ptr, byte *end_ptr, byte *page) {
       break;
     default:
     corrupt:
-      recv_sys->found_corrupt_log = true;
+      recv_sys->m_found_corrupt_log = true;
       ptr = nullptr;
   }
 
   return (ptr);
 }
 
-void mlog_write_ulint(byte *ptr, ulint val, byte type, mtr_t *mtr) {
+void mlog_write_ulint(byte *ptr, ulint val, mlog_type_t type, mtr_t *mtr) {
   byte *log_ptr;
 
   switch (type) {
@@ -263,7 +264,7 @@ void mlog_log_string(byte *ptr, ulint len, mtr_t *mtr) {
 }
 
 byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
-  ut_a(page == nullptr || srv_fil->page_get_type(page) != FIL_PAGE_INDEX);
+  ut_a(page == nullptr || srv_fil->page_get_type(page) != FIL_PAGE_TYPE_INDEX);
 
   if (end_ptr < ptr + 4) {
 
@@ -276,7 +277,7 @@ byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
   ptr += 2;
 
   if (offset >= UNIV_PAGE_SIZE || len + offset > UNIV_PAGE_SIZE) {
-    recv_sys->found_corrupt_log = true;
+    recv_sys->m_found_corrupt_log = true;
 
     return (nullptr);
   }
@@ -293,7 +294,7 @@ byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
   return (ptr + len);
 }
 
-byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, dict_index_t *index, byte type, ulint size) {
+byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, dict_index_t *index, mlog_type_t type, ulint size) {
   auto log_ptr = mlog_open(mtr, 11 + size);
 
   if (log_ptr == nullptr) {
@@ -336,7 +337,7 @@ byte *mlog_parse_index(byte *ptr, const byte *end_ptr, dict_index_t **index) {
   return (ptr);
 }
 
-byte *mlog_write_initial_log_record_fast(const byte *ptr, byte type, byte *log_ptr, mtr_t *mtr) {
+byte *mlog_write_initial_log_record_fast(const byte *ptr, mlog_type_t type, byte *log_ptr, mtr_t *mtr) {
   ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));
   ut_ad(type <= MLOG_BIGGEST_TYPE);
   ut_ad(ptr && log_ptr);

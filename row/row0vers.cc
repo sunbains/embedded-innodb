@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -40,17 +41,7 @@ Created 2/6/1997 Heikki Tuuri
 #include "trx0trx.h"
 #include "trx0undo.h"
 
-/** Finds out if an active transaction has inserted or modified a secondary
-index record. NOTE: the kernel mutex is temporarily released in this
-function!
-@return NULL if committed, else the active transaction */
-
-trx_t *row_vers_impl_x_locked_off_kernel(
-  const rec_t *rec,    /*!< in: record in a secondary index */
-  dict_index_t *index, /*!< in: the secondary index */
-  const ulint *offsets
-) /*!< in: Phy_rec::get_col_offsets(index, rec) */
-{
+trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, dict_index_t *index, const ulint *offsets) {
   dict_index_t *clust_index;
   rec_t *clust_rec;
   ulint *clust_offsets;

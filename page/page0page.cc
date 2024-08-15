@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -206,7 +207,6 @@ byte *page_mem_alloc_heap(page_t *page, ulint need, ulint *heap_no) {
  * @param frame A buffer frame where the page is created.
  * @param mtr A mini-transaction handle.
  */
-/** Writes a log record of page creation. */
 inline void page_create_write_log(buf_frame_t *frame, mtr_t *mtr) {
   mlog_write_initial_log_record(frame, MLOG_PAGE_CREATE, mtr);
 }
@@ -236,7 +236,7 @@ page_t *page_create(buf_block_t *block, mtr_t *mtr) {
 
   auto page = block->get_frame();
 
-  srv_fil->page_set_type(page, FIL_PAGE_INDEX);
+  srv_fil->page_set_type(page, FIL_PAGE_TYPE_INDEX);
 
   auto heap = mem_heap_create(200);
 
@@ -481,8 +481,7 @@ rec_t *page_copy_rec_list_start(buf_block_t *new_block, buf_block_t *block, rec_
 inline void page_delete_rec_list_write_log(
   rec_t *rec,          /*!< in: record on page */
   dict_index_t *index, /*!< in: record descriptor */
-  byte type,           /*!< in: operation type:
-                         MLOG_LIST_END_DELETE, ... */
+  mlog_type_t type,     /*!< in: operation type: MLOG_LIST_END_DELETE, ... */
   mtr_t *mtr
 ) /*!< in: mtr */
 {

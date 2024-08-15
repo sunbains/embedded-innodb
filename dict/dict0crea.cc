@@ -1,5 +1,6 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -1166,9 +1167,9 @@ static db_err dict_foreign_eval_sql(
     mutex_enter(&dict_foreign_err_mutex);
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream, " Error in foreign key constraint creation for table ");
-    ut_print_name(ib_stream, trx, true, table->name);
+    ut_print_name(table->name);
     ib_logger(ib_stream, ".\nA foreign key constraint of name ");
-    ut_print_name(ib_stream, trx, true, foreign->id);
+    ut_print_name(foreign->id);
     ib_logger(
       ib_stream,
       "\nalready exists."
@@ -1203,7 +1204,7 @@ static db_err dict_foreign_eval_sql(
       " Internal error in foreign key constraint creation"
       " for table "
     );
-    ut_print_name(ib_stream, trx, true, table->name);
+    ut_print_name(table->name);
     ib_logger(
       ib_stream,
       ".\n"

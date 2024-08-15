@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -198,8 +199,7 @@ static void trx_free(trx_t *&trx) {
 
     trx_print(ib_stream, trx, 600);
 
-    ut_print_buf(ib_stream, trx, sizeof(trx_t));
-    ib_logger(ib_stream, "\n");
+    log_warn_buf(trx, sizeof(trx_t));
   }
 
   ut_a(trx->m_magic_n == TRX_MAGIC_N);
@@ -327,7 +327,8 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 
       if (undo->state != TRX_UNDO_ACTIVE) {
 
-        /* Prepared transactions are left in the prepared state waiting for a commit or abort decision from the client. */
+        /* Prepared transactions are left in the prepared state waiting for a commit
+        or abort decision from the client. */
 
         if (undo->state == TRX_UNDO_PREPARED) {
 
@@ -345,12 +346,9 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
           trx->m_conc_state = TRX_COMMITTED_IN_MEMORY;
         }
 
-        /* We give a dummy value for the trx no;
-        this should have no relevance since purge
-        is not interested in committed transaction
-        numbers, unless they are in the history
-        list, in which case it looks the number
-        from the disk based undo log structure */
+        /* We give a dummy value for the trx no; this should have no relevance since purge
+        is not interested in committed transaction numbers, unless they are in the history
+        list, in which case it looks the number from the disk based undo log structure */
 
         trx->m_no = trx->m_id;
       } else {
@@ -391,10 +389,8 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 
         if (undo->state != TRX_UNDO_ACTIVE) {
 
-          /* Prepared transactions are left in
-          the prepared state waiting for a
-          commit or abort decision from
-          the client. */
+          /* Prepared transactions are left in the prepared state waiting for a
+          commit or abort decision from the client. */
 
           if (undo->state == TRX_UNDO_PREPARED) {
             ib_logger(ib_stream, "Transaction %lu was in the XA prepared state.\n", TRX_ID_PREP_PRINTF(trx->m_id));
@@ -403,14 +399,7 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
 
               trx->m_conc_state = TRX_PREPARED;
             } else {
-              ib_logger(
-                ib_stream,
-                "Since"
-                " force_recovery"
-                " > 0, we will"
-                " do a rollback"
-                " anyway.\n"
-              );
+              log_info("Since force_recovery > 0, we will do a rollback anyway.");
 
               trx->m_conc_state = TRX_ACTIVE;
             }
@@ -453,13 +442,17 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
   }
 }
 
-/** Assigns a rollback segment to a transaction in a round-robin fashion.
-Skips the SYSTEM rollback segment if another is available.
-@return	assigned rollback segment id */
+/**
+ * Assigns a rollback segment to a transaction in a round-robin fashion.
+ * Skips the SYSTEM rollback segment if another is available.
+ * 
+ * @return	assigned rollback segment id
+*/
 inline ulint trx_assign_rseg() {
   trx_rseg_t *rseg = trx_sys->latest_rseg;
 
   ut_ad(mutex_own(&kernel_mutex));
+
 loop:
   /* Get next rseg in a round-robin fashion */
 

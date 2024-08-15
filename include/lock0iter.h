@@ -1,5 +1,6 @@
-/**
+/****************************************************************************
 Copyright (c) 2007, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -21,8 +22,7 @@ Lock queue iterator type and function prototypes.
 Created July 16, 2007 Vasil Dimov
 *******************************************************/
 
-#ifndef lock0iter_h
-#define lock0iter_h
+#pragma once
 
 #include "innodb0types.h"
 #include "lock0types.h"
@@ -58,4 +58,3 @@ receded (if not-nullptr is returned).
 
 const Lock *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter); /*!< in/out: iterator */
 
-#endif /* lock0iter_h */

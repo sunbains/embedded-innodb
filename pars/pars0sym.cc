@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -22,10 +23,6 @@ Created 12/15/1997 Heikki Tuuri
 *******************************************************/
 
 #include "pars0sym.h"
-
-#ifdef UNIV_NONINL
-#include "pars0sym.ic"
-#endif
 
 #include "mem0mem.h"
 #include "data0type.h"

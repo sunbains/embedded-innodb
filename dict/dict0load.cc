@@ -1,5 +1,6 @@
-/**
+/****************************************************************************
 Copyright (c) 1996, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -194,8 +195,9 @@ loop:
     mem_free(table_name);
 
     if (table == nullptr) {
+      std::string name{reinterpret_cast<const char *>(field), len};
       ib_logger(ib_stream, "Failed to load table ");
-      ut_print_namel(ib_stream, (char *)field, len);
+      ut_print_name(name);
       ib_logger(ib_stream, "\n");
     } else {
       /* The table definition was corrupt if there
@@ -314,7 +316,7 @@ loop:
 
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  Error: table ");
-      ut_print_filename(ib_stream, name);
+      ut_print_filename(name);
       ib_logger(
         ib_stream,
         "\n"
@@ -692,9 +694,9 @@ static ulint dict_load_indexes(dict_table_t *table, mem_heap_t *heap) {
     } else if ((type & DICT_CLUSTERED) == 0 && nullptr == dict_table_get_first_index(table)) {
 
       ib_logger(ib_stream, "Error: trying to load index ");
-      ut_print_name(ib_stream, nullptr, false, name_buf);
+      ut_print_name(name_buf);
       ib_logger(ib_stream, " for table ");
-      ut_print_name(ib_stream, nullptr, true, table->name);
+      ut_print_name(table->name);
       ib_logger(
         ib_stream,
         "\nbut the first index"
@@ -806,7 +808,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
 
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  Error: table ");
-      ut_print_filename(ib_stream, name);
+      ut_print_filename(name);
       ib_logger(
         ib_stream,
         "\n"
@@ -837,7 +839,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
     } else {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  error: space object of table");
-      ut_print_filename(ib_stream, name);
+      ut_print_filename(name);
       ib_logger(
         ib_stream,
         ",\n"

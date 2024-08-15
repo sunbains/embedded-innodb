@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1996, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -211,6 +212,7 @@ void trx_rseg_list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header
     if (page_no == FIL_NULL) {
 
       trx_sys_set_nth_rseg(trx_sys, i, nullptr);
+
     } else {
       auto space = trx_sysf_rseg_get_space(sys_header, i, mtr);
 

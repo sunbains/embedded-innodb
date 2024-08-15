@@ -1,6 +1,8 @@
-/** Copyright (c) 2008 Innobase Oy. All rights reserved.
+/***************************************************************************
+Copyright (c) 2008 Innobase Oy. All rights reserved.
 Copyright (c) 2008 Oracle. All rights reserved.
 Copyright (c) 2009 Oracle. All rights reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -40,7 +42,6 @@ const char *Progname = "ib_test";
 
 /* Runtime config */
 static const char log_group_home_dir[] = "log";
-static const char data_file_path[] = "ibdata1:32M:autoextend";
 
 static void create_directory(const char *path) {
   /* Try and create the log sub-directory */
@@ -303,13 +304,6 @@ void test_configure() {
                     "wrong number of mirrored log groups\n");
     exit(1);
   }
-
-  err = ib_cfg_set_text("data_file_path", data_file_path);
-
-  if (err != DB_SUCCESS) {
-    fprintf(stderr, "syntax error in data_file_path\n");
-    exit(1);
-  }
 }
 
 int gen_rand_text(char *ptr, int max_size) {
@@ -340,7 +334,6 @@ struct option ib_longopts[] = {
     {"ib-force-recovery", required_argument, nullptr, 7},
     {"ib-log-dir", required_argument, nullptr, 8},
     {"ib-data-dir", required_argument, nullptr, 9},
-    {"ib-data-file-path", required_argument, nullptr, 10},
     {"ib-disble-dblwr", no_argument, nullptr, 11},
     {"ib-disble-checksum", no_argument, nullptr, 12},
     {"ib-disble-file-per-table", no_argument, nullptr, 13},
@@ -365,7 +358,6 @@ void print_usage(const char *progname) {
           "[--ib-force-recovery 1-6]\n"
           "[--ib-log-dir path]\n"
           "[--ib-data-dir path]\n"
-          "[--ib-data-file-path string]\n"
           "[--ib-disble-dblwr]\n"
           "[--ib-disble-checksum]\n"
           "[--ib-disble-file-per-table]\n"
@@ -455,30 +447,24 @@ ib_err_t set_global_option(int opt, const char *arg) {
   }
 
   case 10: {
-    err = ib_cfg_set_text("data_file_path", arg);
-    assert(err == DB_SUCCESS);
-    break;
-  }
-
-  case 11: {
     err = ib_cfg_set_bool_off("doublewrite");
     assert(err == DB_SUCCESS);
     break;
   }
 
-  case 12: {
+  case 11: {
     err = ib_cfg_set_bool_off("checksum");
     assert(err == DB_SUCCESS);
     break;
   }
 
-  case 13: {
+  case 12: {
     err = ib_cfg_set_bool_off("file_per_table");
     assert(err == DB_SUCCESS);
     break;
   }
 
-  case 14: {
+  case 13: {
     ulint level;
 
     level = strtoul(arg, nullptr, 10);
@@ -487,13 +473,13 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
 
-  case 15: {
+  case 14: {
     err = ib_cfg_set_int("flush_method", arg);
     assert(err == DB_SUCCESS);
     break;
   }
 
-  case 16: {
+  case 15: {
     ulint threads;
 
     threads = strtoul(arg, nullptr, 10);
@@ -502,7 +488,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
 
-  case 17: {
+  case 16: {
     ulint threads;
 
     threads = strtoul(arg, nullptr, 10);
@@ -511,7 +497,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
 
-  case 18: {
+  case 17: {
     ulint n;
 
     n = strtoul(arg, nullptr, 10);
@@ -520,7 +506,7 @@ ib_err_t set_global_option(int opt, const char *arg) {
     break;
   }
 
-  case 19: {
+  case 18: {
     ulint secs;
 
     secs = strtoul(arg, nullptr, 10);

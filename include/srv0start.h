@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1995, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -28,10 +29,6 @@ Created 10/10/1995 Heikki Tuuri
 #include "ut0byte.h"
 
 /** Normalizes a directory path for Windows: converts slashes to backslashes. */
-
-/** Reads the data files and their sizes from a character string.
-@return	true if ok, false on parse error */
-bool srv_parse_data_file_paths_and_sizes(const char *str); /** in: the data file path string */
 
 /** Reads log group home directories from a character string.
 @return	true if ok, false on parse error */

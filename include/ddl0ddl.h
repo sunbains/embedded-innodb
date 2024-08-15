@@ -1,6 +1,7 @@
 /** Contains InnoDB DDL operations.
 
 (c) 2008 Oracle Corpn/Innobase Oy
+Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 Created 12 Oct 2008
 *******************************************************/

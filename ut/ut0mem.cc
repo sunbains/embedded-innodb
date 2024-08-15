@@ -1,5 +1,6 @@
 /****************************************************************************
 Copyright (c) 1994, 2010, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024 Sunny Bains. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -109,8 +110,6 @@ static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
 
     if (ptr == nullptr && retry_count < 60) {
       if (retry_count == 0) {
-        ut_print_timestamp(ib_stream);
-
         log_err(
           "Cannot allocate", n, " bytes of memory with malloc!"
           " Total allocated memory by InnoDB ",
@@ -148,7 +147,7 @@ static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
 
     UNIV_MEM_ALLOC(ret, n + sizeof(Mem_block));
 
-    Mem_block::s_total_memory += n + sizeof(Mem_block);
+    Mem_block::s_total_memory += size;
 
     UT_LIST_ADD_FIRST(Mem_block::s_blocks, mem_block);
 
@@ -164,11 +163,12 @@ static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
   }
 }
 
-void *ut_new(ulint n) {
-  return allocate(n, true, true);
+void *ut_new_func(ulint n, Source_location location) {
+  auto ptr = allocate(n, true, true);
+  return ptr;
 }
 
-void ut_delete(void *p) {
+void ut_delete_func(void *p, Source_location location) {
   auto ptr = reinterpret_cast<char*>(p);
 
   if (ptr == nullptr) {
@@ -180,7 +180,7 @@ void ut_delete(void *p) {
 
   auto block = reinterpret_cast<Mem_block *>(ptr - sizeof(Mem_block));
 
-  ut_a(Mem_block::s_total_memory.load(std::memory_order_acquire) >= block->m_size);
+  ut_a(Mem_block::s_total_memory.load(std::memory_order_acquire) >= block->m_size +  sizeof(Mem_block));
 
   Mem_block::s_total_memory.fetch_sub(block->m_size, std::memory_order_relaxed);
 
