@@ -213,7 +213,7 @@ void Recv_sys::clear_log_records() noexcept {
         recs->m_rec_head = recv->m_next;
         call_destructor(recv);
       }
-      call_destructor(&recs);
+      call_destructor(recs);
     }
     page_recs.clear();
   }
