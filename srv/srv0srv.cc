@@ -56,8 +56,7 @@ Created 10/8/1995 Heikki Tuuri
 #include "os0sync.h"
 #include "pars0pars.h"
 #include "que0que.h"
-#include "srv0que.h"
-#include "srv0start.h"
+#include "srv0srv.h"
 #include "sync0sync.h"
 #include "trx0purge.h"
 #include "usr0sess.h"
@@ -96,7 +95,7 @@ names, where the file name itself may also contain a path */
 char *srv_data_home = nullptr;
 
 /** We copy the argument passed to ib_cfg_set_text("log_group_home_dir")
-because srv_parse_log_group_home_dirs() parses it's input argument
+because parse_log_group_home_dirs() parses it's input argument
 destructively. The copy is done using ut_new(). */
 char *srv_log_group_home_dir = nullptr;
 
@@ -115,10 +114,6 @@ ulint srv_check_file_format_at_startup = DICT_TF_FORMAT_MAX;
 #if DICT_TF_FORMAT_51
 #error "DICT_TF_FORMAT_51 must be 0!"
 #endif
-
-/** If the last data file is auto-extended, we add this
-many pages to it at a time */
-ulong srv_auto_extend_increment = 8;
 
 ulint *srv_data_file_is_raw_partition = nullptr;
 
@@ -266,25 +261,28 @@ ulint srv_conc_n_waiting_threads = 0;
 
 struct srv_conc_slot_t {
   /** event to wait */
-  Cond_var* event;
+  Cond_var* m_event{};
 
   /** true if slot reserved */
-  bool reserved;
+  bool m_reserved{};
 
   /** true when another thread has already set the event
   and the thread in this slot is free to proceed; but
   reserved may still be true at that point */
-  bool wait_ended;
+  bool m_wait_ended{};
 
   /** queue node */
-  UT_LIST_NODE_T(srv_conc_slot_t) srv_conc_queue;
+  UT_LIST_NODE_T(srv_conc_slot_t) m_srv_conc_queue;
 };
 
 /** Queue of threads waiting to get in */
-static UT_LIST_BASE_NODE_T(srv_conc_slot_t, srv_conc_queue) srv_conc_queue;
+static UT_LIST_BASE_NODE_T(srv_conc_slot_t, m_srv_conc_queue) srv_conc_queue;
 
 /** Array of wait slots */
 static srv_conc_slot_t *srv_conc_slots;
+
+/** The system log file names */
+static char **srv_log_group_home_dirs = nullptr;
 
 /*-----------------------*/
 ib_shutdown_t srv_fast_shutdown = IB_SHUTDOWN_NORMAL;
@@ -294,7 +292,7 @@ bool srv_innodb_status = false;
 
 /* When estimating number of different key values in an index, sample
 this many index pages */
-unsigned long long srv_stats_sample_pages = 8;
+uint64_t srv_stats_sample_pages = 8;
 
 bool srv_use_doublewrite_buf = true;
 bool srv_use_checksums = true;
@@ -554,37 +552,37 @@ Unix.*/
 /** Thread slot in the thread table */
 struct srv_slot_t {
   /** thread id */
-  os_thread_id_t id;
+  os_thread_id_t m_id;
 
   /** thread handle */
-  os_thread_t handle;
+  os_thread_t m_handle;
 
   /** thread type: user, utility etc. */
-  srv_thread_type type;
+  srv_thread_type m_type;
 
   /** true if this slot is in use */
-  bool in_use;
+  bool m_in_use;
 
   /** true if the thread is waiting for the event of this slot */
-  bool suspended;
+  bool m_suspended;
 
   /** time when the thread was suspended */
-  ib_time_t suspend_time;
+  ib_time_t m_suspend_time;
 
   /** event used in suspending the thread when it has nothing to do */
-  Cond_var* event;
+  Cond_var* m_event;
 
   /*!< suspended query thread (only used for client threads) */
-  que_thr_t *thr;
+  que_thr_t *m_thr;
 };
 
 /** The server system struct */
 struct srv_sys_t {
   /** Server thread table */
-  srv_slot_t *threads;
+  srv_slot_t *m_threads{};
 
   /** Task queue */
-  UT_LIST_BASE_NODE_T(que_thr_t, queue) tasks;
+  UT_LIST_BASE_NODE_T(que_thr_t, queue) m_tasks{};
 };
 
 /** Table for client threads where they will be suspended to wait for locks */
@@ -612,14 +610,50 @@ are indexed by the type of the thread. */
 ulint srv_n_threads_active[SRV_MASTER + 1];
 static ulint srv_n_threads[SRV_MASTER + 1];
 
+/** The value passed to srv_parse_log_group_home_dirs() is copied to
+this variable. Since the function does a destructive read. */
+static char *log_path_buf;
+
+/** The value passed to parse_data_file_paths_and_sizes() is copied to
+this variable. Since the function does a destructive read. */
+static char *data_path_buf;
+
 /* global variable for indicating if we've paniced or not. If we have,
    we try not to do anything at all. */
 int srv_panic_status = 0;
+
 void *ib_panic_data = nullptr;
+
 ib_panic_handler_t ib_panic = nullptr;
 
-/** Prints counters for work done by srv_master_thread. */
-static void srv_print_master_thread_info() {
+/**
+ * Adds a slash or a backslash to the end of a string if it is missing
+ * and the string is not empty.
+ *
+ * @param[in] str                  Nul terminated char array.
+ * 
+ * @return	string which has the separator if the string is not empty.
+ *      The string is alloc'ed using malloc() and the caller is
+ *      responsible for freeing the string.
+ */
+static char *srv_add_path_separator_if_needed(const char *str) noexcept{
+  auto len = strlen(str);
+  auto out_str = static_cast<char *>(malloc(len + 2));
+
+  std::strcpy(out_str, str);
+
+  if (len > 0 && out_str[len - 1] != SRV_PATH_SEPARATOR) {
+    out_str[len] = SRV_PATH_SEPARATOR;
+    out_str[len + 1] = 0;
+  }
+
+  return out_str;
+}
+
+/**
+ * Prints counters for work done by srv_master_thread.
+ */
+static void srv_print_master_thread_info() noexcept {
   log_warn(std::format(
     "srv_master_thread loops: {} 1_second, {} sleeps, "
     "{} 10_second, {} background, {} flush",
@@ -633,8 +667,123 @@ static void srv_print_master_thread_info() {
   log_warn("srv_master_thread log flush and writes: ", srv_log_writes_and_flush);
 }
 
-void srv_var_init() {
-  srv_free_paths_and_sizes();
+bool InnoDB::parse_log_group_home_dirs(const char *usr_str) noexcept {
+  ulint i;
+  char *str;
+  char *path;
+  int n_bytes;
+  char *input_str;
+
+  if (log_path_buf != nullptr) {
+    ::free(log_path_buf);
+    log_path_buf = nullptr;
+  }
+
+  log_path_buf = static_cast<char *>(malloc(strlen(usr_str) + 1));
+
+  strcpy(log_path_buf, usr_str);
+  str = log_path_buf;
+
+  if (srv_log_group_home_dirs != nullptr) {
+
+    for (i = 0; srv_log_group_home_dirs[i] != nullptr; ++i) {
+      ::free(srv_log_group_home_dirs[i]);
+      srv_log_group_home_dirs[i] = nullptr;
+    }
+
+    ::free(srv_log_group_home_dirs);
+    srv_log_group_home_dirs = nullptr;
+  }
+
+  i = 0;
+  input_str = str;
+
+  /* First calculate the number of directories and check syntax:
+  path;path;... */
+
+  while (*str != '\0') {
+    path = str;
+
+    while (*str != ';' && *str != '\0') {
+      str++;
+    }
+
+    i++;
+
+    if (*str == ';') {
+      str++;
+    } else if (*str != '\0') {
+
+      return false;
+    }
+  }
+
+  if (i != 1) {
+    /* If log_group_home_dir was defined it must
+    contain exactly one path definition. */
+
+    return false;
+  }
+
+  /* Add sentinel element to the array. */
+  n_bytes = (i + 1) * sizeof(*srv_log_group_home_dirs);
+  srv_log_group_home_dirs = static_cast<char **>(malloc(n_bytes));
+  memset(srv_log_group_home_dirs, 0x0, n_bytes);
+
+  /* Then store the actual values to our array */
+
+  str = input_str;
+  i = 0;
+
+  while (*str != '\0') {
+    path = str;
+
+    while (*str != ';' && *str != '\0') {
+      str++;
+    }
+
+    if (*str == ';') {
+      *str = '\0';
+      str++;
+    }
+
+    /* Note that this memory is malloc() and so must be freed. */
+    srv_log_group_home_dirs[i] = srv_add_path_separator_if_needed(path);
+
+    i++;
+  }
+
+  /* We rely on this sentinel value during free. */
+  ut_a(i > 0);
+  ut_a(srv_log_group_home_dirs[i] == nullptr);
+
+  return true;
+}
+
+void InnoDB::free_paths_and_sizes() noexcept {
+  if (srv_log_group_home_dirs != nullptr) {
+    for (ulint i = 0; srv_log_group_home_dirs[i] != nullptr; ++i) {
+      ::free(srv_log_group_home_dirs[i]);
+      srv_log_group_home_dirs[i] = nullptr;
+    }
+
+    ::free(srv_log_group_home_dirs);
+    srv_log_group_home_dirs = nullptr;
+  }
+
+  if (data_path_buf != nullptr) {
+    ::free(data_path_buf);
+    data_path_buf = nullptr;
+  }
+
+  if (log_path_buf != nullptr) {
+    ::free(log_path_buf);
+    log_path_buf = nullptr;
+  }
+}
+
+void InnoDB::var_init() noexcept {
+  free_paths_and_sizes();
 
   ses_lock_wait_timeout = 1024 * 1024 * 1024;
   srv_lower_case_table_names = false;
@@ -656,7 +805,6 @@ void srv_var_init() {
   srv_file_format = 0;
   srv_check_file_format_at_startup = DICT_TF_FORMAT_MAX;
 
-  srv_auto_extend_increment = 8;
   srv_data_file_is_raw_partition = nullptr;
 
   srv_created_new_raw = false;
@@ -752,7 +900,7 @@ void srv_var_init() {
 static srv_slot_t *srv_table_get_nth_slot(ulint index) {
   ut_a(index < OS_THREAD_MAX_N);
 
-  return srv_sys->threads + index;
+  return srv_sys->m_threads + index;
 }
 
 ulint srv_get_n_threads() {
@@ -779,75 +927,74 @@ ulint srv_get_n_threads() {
  * @return reserved slot index
  */
 static ulint srv_table_reserve_slot(srv_thread_type type) {
-  srv_slot_t *slot;
-  ulint i;
-
   ut_a(type > 0);
   ut_a(type <= SRV_MASTER);
 
-  i = 0;
-  slot = srv_table_get_nth_slot(i);
+  ulint i = 0;
+  auto slot = srv_table_get_nth_slot(i);
 
-  while (slot->in_use) {
+  while (slot->m_in_use) {
     i++;
     slot = srv_table_get_nth_slot(i);
   }
 
-  ut_a(slot->in_use == false);
+  ut_a(slot->m_in_use == false);
 
-  slot->in_use = true;
-  slot->suspended = false;
-  slot->type = type;
-  slot->id = os_thread_get_curr_id();
-  slot->handle = os_thread_get_curr();
+  slot->m_type = type;
+  slot->m_in_use = true;
+  slot->m_suspended = false;
+  slot->m_id = os_thread_get_curr_id();
+  slot->m_handle = os_thread_get_curr();
 
   return i;
 }
 
-/** Suspends the calling thread to wait for the event in its thread slot.
-NOTE! The server mutex has to be reserved by the caller!
-@return	event for the calling thread to wait */
+/**
+ * Suspends the calling thread to wait for the event in its thread slot.
+ * NOTE! The server mutex has to be reserved by the caller!
+ * 
+ * @return	event for the calling thread to wait
+ */
 static Cond_var* srv_suspend_thread(srv_slot_t *slot) {
   ut_ad(mutex_own(&kernel_mutex));
 
-  auto type = slot->type;
+  auto type = slot->m_type;
 
   ut_ad(type >= SRV_WORKER);
   ut_ad(type <= SRV_MASTER);
 
-  auto event = slot->event;
+  auto event = slot->m_event;
 
-  slot->suspended = true;
+  slot->m_suspended = true;
 
   ut_ad(srv_n_threads_active[type] > 0);
 
-  srv_n_threads_active[type]--;
+  --srv_n_threads_active[type];
 
   os_event_reset(event);
 
   return event;
 }
 
-ulint srv_release_threads(srv_thread_type type, ulint n) {
-  srv_slot_t *slot;
-  ulint count = 0;
-
+ulint InnoDB::release_threads(srv_thread_type type, ulint n) noexcept {
   ut_ad(type >= SRV_WORKER);
   ut_ad(type <= SRV_MASTER);
   ut_ad(n > 0);
   ut_ad(mutex_own(&kernel_mutex));
 
+  ulint count = 0;
+
   for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
 
-    slot = srv_table_get_nth_slot(i);
+    auto slot = srv_table_get_nth_slot(i);
 
-    if (slot->in_use && slot->type == type && slot->suspended) {
+    if (slot->m_in_use && slot->m_type == type && slot->m_suspended) {
 
-      slot->suspended = false;
+      slot->m_suspended = false;
 
-      srv_n_threads_active[type]++;
+      ++srv_n_threads_active[type];
 
-      os_event_set(slot->event);
+      os_event_set(slot->m_event);
 
       ++count;
 
@@ -860,10 +1007,7 @@ ulint srv_release_threads(srv_thread_type type, ulint n) {
   return count;
 }
 
-void srv_init() {
-  srv_conc_slot_t *conc_slot;
-  srv_slot_t *slot;
-
+void InnoDB::init() noexcept {
   srv_sys = static_cast<srv_sys_t *>(mem_alloc(sizeof(srv_sys_t)));
 
   kernel_mutex_temp = static_cast<mutex_t *>(mem_alloc(sizeof(mutex_t)));
@@ -872,14 +1016,16 @@ void srv_init() {
 
   mutex_create(&srv_innodb_monitor_mutex, IF_DEBUG("monitor_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Source_location{});
 
-  srv_sys->threads = static_cast<srv_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
+  srv_sys->m_threads = static_cast<srv_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
+
+  srv_slot_t *slot;
 
   for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
     slot = srv_table_get_nth_slot(i);
-    slot->in_use = false;
-    slot->type = SRV_NONE;
-    slot->event = os_event_create(nullptr);
-    ut_a(slot->event);
+    slot->m_in_use = false;
+    slot->m_type = SRV_NONE;
+    slot->m_event = os_event_create(nullptr);
+    ut_a(slot->m_event);
   }
 
   srv_client_table = static_cast<srv_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
@@ -887,10 +1033,10 @@ void srv_init() {
   slot = srv_client_table;
 
   for (ulint i = 0; i < OS_THREAD_MAX_N; ++i, ++slot) {
-    slot->in_use = false;
-    slot->type = SRV_NONE;
-    slot->event = os_event_create(nullptr);
-    ut_a(slot->event);
+    slot->m_in_use = false;
+    slot->m_type = SRV_NONE;
+    slot->m_event = os_event_create(nullptr);
+    ut_a(slot->m_event);
   }
 
   srv_lock_timeout_thread_event = os_event_create(nullptr);
@@ -900,7 +1046,7 @@ void srv_init() {
     srv_n_threads[i] = 0;
   }
 
-  UT_LIST_INIT(srv_sys->tasks);
+  UT_LIST_INIT(srv_sys->m_tasks);
 
   /* Create dummy indexes for infimum and supremum records */
 
@@ -912,29 +1058,29 @@ void srv_init() {
 
   srv_conc_slots = static_cast<srv_conc_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_conc_slot_t)));
 
-  conc_slot = srv_conc_slots;
+  auto conc_slot = srv_conc_slots;
 
   for (ulint i = 0; i < OS_THREAD_MAX_N; ++i, ++conc_slot) {
-    conc_slot->reserved = false;
-    conc_slot->event = os_event_create(nullptr);
-    ut_a(conc_slot->event);
+    conc_slot->m_reserved = false;
+    conc_slot->m_event = os_event_create(nullptr);
+    ut_a(conc_slot->m_event);
   }
 }
 
-void srv_free() {
-  for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
+void InnoDB::free() noexcept {
+  for (ulint i{}; i < OS_THREAD_MAX_N; ++i) {
     auto slot = srv_table_get_nth_slot(i);
     auto conc_slot = srv_conc_slots + i;
 
-    os_event_free(slot->event);
-    os_event_free(conc_slot->event);
+    os_event_free(slot->m_event);
+    os_event_free(conc_slot->m_event);
   }
 
   os_event_free(srv_lock_timeout_thread_event);
   srv_lock_timeout_thread_event = nullptr;
 
-  mem_free(srv_sys->threads);
-  srv_sys->threads = nullptr;
+  mem_free(srv_sys->m_threads);
+  srv_sys->m_threads = nullptr;
 
   mem_free(srv_client_table);
   srv_client_table = nullptr;
@@ -952,7 +1098,7 @@ void srv_free() {
   srv_sys = nullptr;
 }
 
-void srv_general_init() {
+void InnoDB::general_init() noexcept {
   /* The order here is siginificant. */
   /* Reset the system variables in the recovery module. */
   recv_sys_var_init();
@@ -977,7 +1123,7 @@ static db_err srv_normalize_init_values() {
   return DB_SUCCESS;
 }
 
-void srv_modules_var_init() {
+void InnoDB::modules_var_init() noexcept {
   /* The order here shouldn't matter. None of the functions
   below should have any dependencies. */
   trx_var_init();
@@ -1000,8 +1146,7 @@ void srv_modules_var_init() {
   os_sync_var_init();
 }
 
-db_err srv_boot() {
-
+db_err InnoDB::boot() noexcept {
   /* Transform the init parameter values given by the user to
   use units we use inside */
 
@@ -1014,25 +1159,28 @@ db_err srv_boot() {
   /* Initialize synchronization primitives, memory management, and thread
   local storage */
 
-  srv_general_init();
+  InnoDB::general_init();
 
   /* Initialize this module */
 
-  srv_init();
+  InnoDB::init();
 
   return DB_SUCCESS;
 }
 
-/** Reserves a slot in the thread table for the current user OS thread.
-NOTE! The kernel mutex has to be reserved by the caller!
-@return	reserved slot */
+/**
+ * Reserves a slot in the thread table for the current user OS thread.
+ * NOTE! The kernel mutex has to be reserved by the caller!
+ * 
+ * @return	reserved slot
+ */
 static srv_slot_t *srv_table_reserve_slot_for_user_thread() {
   ut_ad(mutex_own(&kernel_mutex));
 
   ulint i{};
   auto slot = srv_client_table + i;
 
-  while (slot->in_use) {
+  while (slot->m_in_use) {
     i++;
 
     if (i >= OS_THREAD_MAX_N) {
@@ -1053,11 +1201,11 @@ static srv_slot_t *srv_table_reserve_slot_for_user_thread() {
         log_err(std::format(
           "Slot {}: thread id {}, type {}, in use {}, susp {}, time {}",
           i,
-          os_thread_pf(slot->id),
-          (ulong) slot->type,
-          slot->in_use,
-          slot->suspended,
-          difftime(ut_time(),slot->suspend_time)
+          os_thread_pf(slot->m_id),
+          (ulong) slot->m_type,
+          slot->m_in_use,
+          slot->m_suspended,
+          difftime(ut_time(),slot->m_suspend_time)
         ));
       }
 
@@ -1067,16 +1215,16 @@ static srv_slot_t *srv_table_reserve_slot_for_user_thread() {
     slot = srv_client_table + i;
   }
 
-  ut_a(slot->in_use == false);
+  ut_a(slot->m_in_use == false);
 
-  slot->in_use = true;
-  slot->id = os_thread_get_curr_id();
-  slot->handle = os_thread_get_curr();
+  slot->m_in_use = true;
+  slot->m_id = os_thread_get_curr_id();
+  slot->m_handle = os_thread_get_curr();
 
   return slot;
 }
 
-void srv_suspend_user_thread(que_thr_t *thr) {
+void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
   double wait_time;
   ulint had_dict_lock;
   int64_t start_time = 0;
@@ -1117,13 +1265,13 @@ void srv_suspend_user_thread(que_thr_t *thr) {
   ut_ad(thr->is_active == false);
 
   auto slot = srv_table_reserve_slot_for_user_thread();
-  auto event = slot->event;
+  auto event = slot->m_event;
 
-  slot->thr = thr;
+  slot->m_thr = thr;
 
   os_event_reset(event);
 
-  slot->suspend_time = ut_time();
+  slot->m_suspend_time = ut_time();
 
   if (thr->lock_state == QUE_THR_LOCK_ROW) {
     srv_n_lock_wait_count++;
@@ -1176,9 +1324,9 @@ void srv_suspend_user_thread(que_thr_t *thr) {
 
   /* Release the slot for others to use */
 
-  slot->in_use = false;
+  slot->m_in_use = false;
 
-  wait_time = ut_difftime(ut_time(), slot->suspend_time);
+  wait_time = ut_difftime(ut_time(), slot->m_suspend_time);
 
   if (thr->lock_state == QUE_THR_LOCK_ROW) {
     if (ut_usectime(&sec, &ms) == -1) {
@@ -1220,27 +1368,26 @@ void srv_suspend_user_thread(que_thr_t *thr) {
   }
 }
 
-void srv_release_user_thread_if_suspended(que_thr_t *thr) {
+void InnoDB::release_user_thread_if_suspended(que_thr_t *thr) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
-  for (ulint i = 0; i < OS_THREAD_MAX_N; i++) {
+  for (ulint i{}; i < OS_THREAD_MAX_N; ++i) {
 
     auto slot = srv_client_table + i;
 
-    if (slot->in_use && slot->thr == thr) {
-      /* Found */
+    if (slot->m_in_use && slot->m_thr == thr) {
 
-      os_event_set(slot->event);
+      os_event_set(slot->m_event);
 
       return;
     }
   }
-
-  /* not found */
 }
 
-/** Refreshes the values used to calculate per-second averages. */
-static void srv_refresh_innodb_monitor_stats() {
+/**
+ * Refreshes the values used to calculate per-second averages.
+ */
+static void srv_refresh_innodb_monitor_stats() noexcept {
   mutex_enter(&srv_innodb_monitor_mutex);
 
   srv_last_monitor_time = time(nullptr);
@@ -1259,21 +1406,21 @@ static void srv_refresh_innodb_monitor_stats() {
   mutex_exit(&srv_innodb_monitor_mutex);
 }
 
-bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_start, ulint *trx_end) {
-  double time_elapsed;
-  time_t current_time;
-  ulint n_reserved;
-  bool ret;
-
+bool InnoDB::printf_innodb_monitor(
+  ib_stream_t ib_stream,
+  bool nowait,
+  ulint *trx_start,
+  ulint *trx_end) noexcept
+{
   mutex_enter(&srv_innodb_monitor_mutex);
 
-  current_time = time(nullptr);
+  auto current_time = time(nullptr);
 
   /* We add 0.001 seconds to time_elapsed to prevent division
   by zero if two users happen to call SHOW INNODB STATUS at the same
   time */
 
-  time_elapsed = difftime(current_time, srv_last_monitor_time) + 0.001;
+  auto time_elapsed = difftime(current_time, srv_last_monitor_time) + 0.001;
 
   srv_last_monitor_time = time(nullptr);
 
@@ -1337,7 +1484,7 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_st
   /* Only if lock_print_info_summary proceeds correctly,
   before we call the lock_print_info_all_transactions
   to print all the lock information. */
-  ret = lock_print_info_summary(ib_stream, nowait);
+  auto ret = lock_print_info_summary(ib_stream, nowait);
 
   if (ret) {
     if (trx_start) {
@@ -1381,7 +1528,7 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_st
 
   log_warn(std::format("{} read views open inside InnoDB", UT_LIST_GET_LEN(trx_sys->view_list)));
 
-  n_reserved = srv_fil->space_get_n_reserved_extents(0);
+  auto n_reserved = srv_fil->space_get_n_reserved_extents(0);
 
   if (n_reserved > 0) {
     log_warn(std::format(
@@ -1437,9 +1584,7 @@ bool srv_printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_st
   return ret;
 }
 
-/** Function to pass InnoDB status variables to the client. */
-
-void srv_export_innodb_status(void) {
+void InnoDB::export_innodb_status() noexcept {
   mutex_enter(&srv_innodb_monitor_mutex);
 
   export_vars.innodb_data_pending_reads = os_n_pending_reads;
@@ -1500,21 +1645,18 @@ void srv_export_innodb_status(void) {
   mutex_exit(&srv_innodb_monitor_mutex);
 }
 
-void *srv_monitor_thread(void *) {
+void *InnoDB::monitor_thread(void *) noexcept {
   double time_elapsed;
   time_t current_time;
-  time_t last_table_monitor_time;
-  time_t last_tablespace_monitor_time;
-  time_t last_monitor_time;
-  ulint mutex_skipped;
-  bool last_srv_print_monitor;
 
   srv_last_monitor_time = time(nullptr);
-  last_table_monitor_time = time(nullptr);
-  last_tablespace_monitor_time = time(nullptr);
-  last_monitor_time = time(nullptr);
-  mutex_skipped = 0;
-  last_srv_print_monitor = srv_print_innodb_monitor;
+
+  ulint mutex_skipped{};
+  auto last_table_monitor_time = time(nullptr);
+  auto last_tablespace_monitor_time = time(nullptr);
+  auto last_monitor_time = time(nullptr);
+  auto last_srv_print_monitor = srv_print_innodb_monitor;
+
 loop:
   srv_monitor_active = true;
 
@@ -1541,8 +1683,8 @@ loop:
         last_srv_print_monitor = true;
       }
 
-      if (!srv_printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped), nullptr, nullptr)) {
-        mutex_skipped++;
+      if (!printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped), nullptr, nullptr)) {
+        ++mutex_skipped;
       } else {
         /* Reset the counter */
         mutex_skipped = 0;
@@ -1554,8 +1696,8 @@ loop:
     if (srv_innodb_status) {
       mutex_enter(&srv_monitor_file_mutex);
 
-      if (!srv_printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped), nullptr, nullptr)) {
-        mutex_skipped++;
+      if (!printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped), nullptr, nullptr)) {
+        ++mutex_skipped;
       } else {
         mutex_skipped = 0;
       }
@@ -1589,9 +1731,9 @@ loop:
 
       last_table_monitor_time = time(nullptr);
 
-      log_warn("===========================================");
 
       log_warn(
+        "===========================================\n"
         " INNODB TABLE MONITOR OUTPUT\n"
         "==========================================="
       );
@@ -1628,12 +1770,12 @@ exit_func:
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit. */
 
-  os_thread_exit(nullptr);
+  os_thread_exit();
 
   return nullptr;
 }
 
-void *srv_lock_timeout_thread(void *) {
+void *InnoDB::lock_timeout_thread(void *) noexcept {
   for (;;) {
     /* When someone is waiting for a lock, we wake up every second
     and check if a timeout has passed for a lock wait */
@@ -1653,10 +1795,10 @@ void *srv_lock_timeout_thread(void *) {
 
       auto slot = srv_client_table + i;
 
-      if (slot->in_use) {
+      if (slot->m_in_use) {
         some_waits = true;
-        auto wait_time = ut_difftime(ut_time(), slot->suspend_time);
-        auto trx = thr_get_trx(slot->thr);
+        auto wait_time = ut_difftime(ut_time(), slot->m_suspend_time);
+        auto trx = thr_get_trx(slot->m_thr);
         auto lock_wait_timeout = sess_lock_wait_timeout(trx);
 
         if (trx_is_interrupted(trx) ||
@@ -1685,7 +1827,7 @@ void *srv_lock_timeout_thread(void *) {
       /* We count the number of threads in os_thread_exit(). A created
       thread should always use that to exit and not use return() to exit. */
 
-      os_thread_exit(nullptr);
+      os_thread_exit();
 
       return nullptr;
     }
@@ -1696,24 +1838,18 @@ void *srv_lock_timeout_thread(void *) {
   }
 }
 
-void *srv_error_monitor_thread(void *) {
-  /* number of successive fatal timeouts observed */
+void *InnoDB::error_monitor_thread(void *) noexcept {
+  /* Number of successive fatal timeouts observed */
   ulint fatal_cnt = 0;
-  uint64_t old_lsn;
-  uint64_t new_lsn;
+  auto old_lsn = srv_start_lsn;
 
-  old_lsn = srv_start_lsn;
-
-#ifdef UNIV_DEBUG_THREAD_CREATION
-  log_warn("Error monitor thread starts, id ", os_thread_pf(os_thread_get_curr_id()));
-#endif
 loop:
   srv_error_monitor_active = true;
 
   /* Try to track a strange bug reported by Harald Fuchs and others,
   where the lsn seems to decrease at times */
 
-  new_lsn = log_sys->get_lsn();
+  auto new_lsn = log_sys->get_lsn();
 
   if (new_lsn < old_lsn) {
     log_err(std::format(
@@ -1773,50 +1909,45 @@ loop:
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit. */
 
-  os_thread_exit(nullptr);
+  os_thread_exit();
 
   return nullptr;
 }
 
-/** Tells the InnoDB server that there has been activity in the database
-and wakes up the master thread if it is suspended (not sleeping). Used
-in the client interface. Note that there is a small chance that the master
-thread stays suspended (we do not protect our operation with the kernel
-mutex, for performace reasons). */
-
-void srv_active_wake_master_thread(void) {
-  srv_activity_count++;
+void InnoDB::active_wake_master_thread() noexcept {
+  ++srv_activity_count;
 
   if (srv_n_threads_active[SRV_MASTER] == 0) {
 
     mutex_enter(&kernel_mutex);
 
-    srv_release_threads(SRV_MASTER, 1);
+    release_threads(SRV_MASTER, 1);
 
     mutex_exit(&kernel_mutex);
   }
 }
 
-/** Wakes up the master thread if it is suspended or being suspended. */
-
-void srv_wake_master_thread(void) {
-  srv_activity_count++;
+void InnoDB::wake_master_thread() noexcept {
+  ++srv_activity_count;
 
   mutex_enter(&kernel_mutex);
 
-  srv_release_threads(SRV_MASTER, 1);
+  release_threads(SRV_MASTER, 1);
 
   mutex_exit(&kernel_mutex);
 }
 
-/** The master thread is tasked to ensure that flush of log file happens
-once every second in the background. This is to ensure that not more
-than one second of trxs are lost in case of crash when
-innodb_flush_logs_at_trx_commit != 1 */
-static void srv_sync_log_buffer_in_background(void) {
-  time_t current_time = time(nullptr);
+/**
+ * The master thread is tasked to ensure that flush of log file happens
+ * once every second in the background. This is to ensure that not more
+ * than one second of trxs are lost in case of crash when
+ * innodb_flush_logs_at_trx_commit != 1
+ */
+static void srv_sync_log_buffer_in_background() {
+  auto current_time = time(nullptr);
 
   srv_main_thread_op_info = "flushing log";
+
   if (difftime(current_time, srv_last_log_flush_time) >= 1) {
     log_sys->buffer_sync_in_background(true);
     srv_last_log_flush_time = current_time;
@@ -1824,7 +1955,7 @@ static void srv_sync_log_buffer_in_background(void) {
   }
 }
 
-void *srv_master_thread(void*) {
+void *InnoDB::master_thread(void*) noexcept {
   Cond_var* event;
   ulint old_activity_count;
   ulint n_pages_purged = 0;
@@ -1968,7 +2099,8 @@ loop:
   n_pend_ios = srv_buf_pool->get_n_pending_ios() + log_sys->m_n_pending_writes;
   n_ios = log_sys->m_n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
 
-  srv_main_10_second_loops++;
+  ++srv_main_10_second_loops;
+
   if (n_pend_ios < SRV_PEND_IO_THRESHOLD && (n_ios - n_ios_very_old < SRV_PAST_IO_ACTIVITY)) {
 
     srv_main_thread_op_info = "flushing buffer pool pages";
@@ -2207,7 +2339,7 @@ suspend_thread:
     /* This is only extra safety, the thread should exit
     already when the event wait ends */
 
-    os_thread_exit(nullptr);
+    os_thread_exit();
     return nullptr;
   } else {
     /* When there is user activity, InnoDB will set the event and the
@@ -2217,20 +2349,15 @@ suspend_thread:
   }
 }
 
-/** Enqueues a task to server task queue and releases a worker thread, if there
-is a suspended one. */
-
-void srv_que_task_enqueue_low(que_thr_t *thr) /*!< in: query thread */
-{
-  ut_ad(thr);
+void InnoDB::que_task_enqueue_low(que_thr_t *thr) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
-  UT_LIST_ADD_LAST(srv_sys->tasks, thr);
+  UT_LIST_ADD_LAST(srv_sys->m_tasks, thr);
 
-  srv_release_threads(SRV_WORKER, 1);
+  release_threads(SRV_WORKER, 1);
 }
 
-void srv_panic(int panic_ib_error, char *fmt, ...) {
+void InnoDB::panic(int panic_ib_error, char *fmt, ...) noexcept {
   va_list ap;
   srv_panic_status = panic_ib_error;
 
@@ -2240,10 +2367,15 @@ void srv_panic(int panic_ib_error, char *fmt, ...) {
     ib_panic(ib_panic_data, panic_ib_error, fmt, ap);
     return;
   } else {
-    log_warn("Database forced shutdown! ib_err: ", panic_ib_error);
+    log_warn("Database forced shutdown! err: ", panic_ib_error);
     log_warn(fmt, ap);
-    exit(-1);
+    exit(EXIT_FAILURE);
   }
 
   va_end(ap);
+}
+
+std::string InnoDB::get_log_dir() noexcept {
+  /** FIXME: We currently only support a single log group. */
+  return srv_log_group_home_dirs[0];
 }

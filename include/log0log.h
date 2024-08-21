@@ -493,14 +493,6 @@ struct Log {
  void make_checkpoint_at(lsn_t lsn, bool write_always) noexcept;
  
  /**
-  * @brief Empties the logs and marks files at shutdown.
-  *
-  * @param recovery The recovery flag.
-  * @param shutdown The shutdown flag.
-  */
- static void empty_and_mark_files_at_shutdown(ib_recovery_t recovery, ib_shutdown_t shutdown) noexcept;
- 
- /**
   * @brief Reads a checkpoint info from a log group header to checkpoint_buf.
   *
   * @param group The log group.

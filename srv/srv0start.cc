@@ -37,7 +37,7 @@ Starts the InnoDB database server
 Created 2/16/1996 Heikki Tuuri
 *************************************************************************/
 
-#include "srv0start.h"
+#include "srv0srv.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "btr0pcur.h"
@@ -119,19 +119,9 @@ static std::array<ulint, SRV_MAX_N_IO_THREADS + 6> n;
 /** io_handler_thread identifiers */
 static os_thread_id_t thread_ids[SRV_MAX_N_IO_THREADS + 6];
 
-/** The value passed to srv_parse_data_file_paths_and_sizes() is copied to
-this variable. Since the function does a destructive read. */
-static char *data_path_buf;
-
-/** The value passed to srv_parse_log_group_home_dirs() is copied to
-this variable. Since the function does a destructive read. */
-static char *log_path_buf;
 
 /** The system data file name. */
 static std::string srv_system_file_name{};
-
-/** The system log file names */
-static char **srv_log_group_home_dirs = nullptr;
 
 /** All threads end up waiting for certain events. Put those events
 to the signaled state. Then the threads will exit themselves in
@@ -142,140 +132,14 @@ static bool srv_threads_shutdown() noexcept;
 /** FIXME: Make this configurable. */
 constexpr ulint OS_AIO_N_PENDING_IOS_PER_THREAD = 256;
 
-/** Adds a slash or a backslash to the end of a string if it is missing
-and the string is not empty.
-@param[in] str                  Nul terminated char array.
-@return	string which has the separator if the string is not empty.
-        The string is alloc'ed using malloc() and the caller is
-        responsible for freeing the string. */
-static char *srv_add_path_separator_if_needed(const char *str) {
-  auto len = strlen(str);
-  auto out_str = static_cast<char *>(malloc(len + 2));
+/**
+ * @brief Empties the logs and marks files at shutdown.
+ *
+ * @param recovery The recovery flag.
+ * @param shutdown The shutdown flag.
+ */
+static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutdown) noexcept;
 
-  std::strcpy(out_str, str);
-
-  if (len > 0 && out_str[len - 1] != SRV_PATH_SEPARATOR) {
-    out_str[len] = SRV_PATH_SEPARATOR;
-    out_str[len + 1] = 0;
-  }
-
-  return out_str;
-}
-
-bool srv_parse_log_group_home_dirs(const char *usr_str) {
-  ulint i;
-  char *str;
-  char *path;
-  int n_bytes;
-  char *input_str;
-
-  if (log_path_buf != nullptr) {
-    free(log_path_buf);
-    log_path_buf = nullptr;
-  }
-
-  log_path_buf = static_cast<char *>(malloc(strlen(usr_str) + 1));
-
-  strcpy(log_path_buf, usr_str);
-  str = log_path_buf;
-
-  if (srv_log_group_home_dirs != nullptr) {
-
-    for (i = 0; srv_log_group_home_dirs[i] != nullptr; ++i) {
-      free(srv_log_group_home_dirs[i]);
-      srv_log_group_home_dirs[i] = nullptr;
-    }
-
-    free(srv_log_group_home_dirs);
-    srv_log_group_home_dirs = nullptr;
-  }
-
-  i = 0;
-  input_str = str;
-
-  /* First calculate the number of directories and check syntax:
-  path;path;... */
-
-  while (*str != '\0') {
-    path = str;
-
-    while (*str != ';' && *str != '\0') {
-      str++;
-    }
-
-    i++;
-
-    if (*str == ';') {
-      str++;
-    } else if (*str != '\0') {
-
-      return false;
-    }
-  }
-
-  if (i != 1) {
-    /* If log_group_home_dir was defined it must
-    contain exactly one path definition. */
-
-    return false;
-  }
-
-  /* Add sentinel element to the array. */
-  n_bytes = (i + 1) * sizeof(*srv_log_group_home_dirs);
-  srv_log_group_home_dirs = static_cast<char **>(malloc(n_bytes));
-  memset(srv_log_group_home_dirs, 0x0, n_bytes);
-
-  /* Then store the actual values to our array */
-
-  str = input_str;
-  i = 0;
-
-  while (*str != '\0') {
-    path = str;
-
-    while (*str != ';' && *str != '\0') {
-      str++;
-    }
-
-    if (*str == ';') {
-      *str = '\0';
-      str++;
-    }
-
-    /* Note that this memory is malloc() and so must be freed. */
-    srv_log_group_home_dirs[i] = srv_add_path_separator_if_needed(path);
-
-    i++;
-  }
-
-  /* We rely on this sentinel value during free. */
-  ut_a(i > 0);
-  ut_a(srv_log_group_home_dirs[i] == nullptr);
-
-  return true;
-}
-
-void srv_free_paths_and_sizes() {
-  if (srv_log_group_home_dirs != nullptr) {
-    for (ulint i = 0; srv_log_group_home_dirs[i] != nullptr; ++i) {
-      free(srv_log_group_home_dirs[i]);
-      srv_log_group_home_dirs[i] = nullptr;
-    }
-
-    free(srv_log_group_home_dirs);
-    srv_log_group_home_dirs = nullptr;
-  }
-
-  if (data_path_buf != nullptr) {
-    free(data_path_buf);
-    data_path_buf = nullptr;
-  }
-
-  if (log_path_buf != nullptr) {
-    free(log_path_buf);
-    log_path_buf = nullptr;
-  }
-}
 
 void *io_handler_thread(void *arg) {
   auto segment = *((ulint *)arg);
@@ -287,7 +151,7 @@ void *io_handler_thread(void *arg) {
   The thread actually never comes here because it is exited in an
   os_event_wait(). */
 
-  os_thread_exit(nullptr);
+  os_thread_exit();
 
   return nullptr;
 }
@@ -494,7 +358,11 @@ static void srv_startup_abort(db_err err) noexcept {
 
   /* For fatal errors we want to avoid writing to the data files. */
   if (err != DB_FATAL) {
-    Log::empty_and_mark_files_at_shutdown(srv_force_recovery, srv_fast_shutdown);
+
+    /* Only if the redo log systemhas been initialized. */
+    if (log_sys != nullptr && UT_LIST_GET_LEN(log_sys->m_log_groups) > 0) {
+      srv_prepare_for_shutdown(srv_force_recovery, srv_fast_shutdown);
+    }
 
     srv_fil->close_all_files();
   }
@@ -521,7 +389,7 @@ static void srv_startup_abort(db_err err) noexcept {
   delete srv_buf_pool;
 }
 
-ib_err_t innobase_start_or_create() {
+ib_err_t InnoDB::start() noexcept {
   ut_a(!srv_was_started);
 
   // FIXME:
@@ -567,7 +435,7 @@ ib_err_t innobase_start_or_create() {
     srv_max_n_threads = 128;
   }
 
-  auto err = srv_boot();
+  auto err = InnoDB::boot();
 
   if (err != DB_SUCCESS) {
 
@@ -701,7 +569,7 @@ ib_err_t innobase_start_or_create() {
   bool log_created{};
 
   /* Note: Currently we support a single log group (0). */
-  std::string log_dir{srv_log_group_home_dirs[0]};
+  std::string log_dir{InnoDB::get_log_dir()};
 
   ut_a(srv_n_log_files >= 2);
 
@@ -861,13 +729,13 @@ ib_err_t innobase_start_or_create() {
   log_info("Max allowed record size ", page_get_free_space_of_empty() / 2);
 
   /* Create the thread which watches the timeouts for lock waits */
-  os_thread_create(&srv_lock_timeout_thread, nullptr, &thread_ids[2 + SRV_MAX_N_IO_THREADS]);
+  os_thread_create(&InnoDB::lock_timeout_thread, nullptr, &thread_ids[2 + SRV_MAX_N_IO_THREADS]);
 
   /* Create the thread which warns of long semaphore waits */
-  os_thread_create(&srv_error_monitor_thread, nullptr, &thread_ids[3 + SRV_MAX_N_IO_THREADS]);
+  os_thread_create(&InnoDB::error_monitor_thread, nullptr, &thread_ids[3 + SRV_MAX_N_IO_THREADS]);
 
   /* Create the thread which prints InnoDB monitor info */
-  os_thread_create(&srv_monitor_thread, nullptr, &thread_ids[4 + SRV_MAX_N_IO_THREADS]);
+  os_thread_create(&InnoDB::monitor_thread, nullptr, &thread_ids[4 + SRV_MAX_N_IO_THREADS]);
 
   srv_is_being_started = false;
 
@@ -889,7 +757,7 @@ ib_err_t innobase_start_or_create() {
   /* Create the master thread which does purge and other utility
   operations */
 
-  os_thread_create(&srv_master_thread, nullptr, thread_ids + (1 + SRV_MAX_N_IO_THREADS));
+  os_thread_create(&InnoDB::master_thread, nullptr, thread_ids + (1 + SRV_MAX_N_IO_THREADS));
 
   {
     auto size = fsp_header_get_tablespace_size();
@@ -920,7 +788,7 @@ static bool srv_threads_try_shutdown(Cond_var* lock_timeout_thread_event) noexce
   to do anything here */
 
   /* We wake the master thread so that it exits */
-  srv_wake_master_thread();
+  InnoDB::wake_master_thread();
 
   srv_aio->shutdown();
 
@@ -957,7 +825,161 @@ static bool srv_threads_shutdown() noexcept {
   return false;
 }
 
-db_err innobase_shutdown(ib_shutdown_t shutdown) {
+static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutdown) noexcept {
+  ut_a(log_sys != nullptr);
+  ut_a(UT_LIST_GET_LEN(log_sys->m_log_groups) > 0);
+
+  if (srv_print_verbose_log) {
+    log_info("Starting shutdown...");
+  }
+
+  /* Wait until the master thread and all other operations are idle: our
+  algorithm only works if the server is idle at shutdown */
+
+  srv_shutdown_state = SRV_SHUTDOWN_CLEANUP;
+
+  lsn_t lsn;
+
+  for (;;) {
+    os_thread_sleep(100000);
+
+    mutex_enter(&kernel_mutex);
+
+    /* We need the monitor threads to stop before we proceed with a
+    normal shutdown. In case of very fast shutdown, however, we can
+    proceed without waiting for monitor threads. */
+
+    if (shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH &&
+        (srv_error_monitor_active || srv_lock_timeout_active || srv_monitor_active)) {
+
+      mutex_exit(&kernel_mutex);
+      continue;
+    }
+
+    /* Check that there are no longer transactions. We need this wait even
+    for the 'very fast' shutdown, because the InnoDB layer may have
+    committed or prepared transactions and we don't want to lose them. */
+
+    if (trx_n_transactions > 0 ||
+        (trx_sys != nullptr && UT_LIST_GET_LEN(trx_sys->trx_list) > 0)) {
+
+      mutex_exit(&kernel_mutex);
+
+      continue;
+    }
+
+    if (shutdown == IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
+      /* In this fastest shutdown we do not flush the buffer pool:
+      it is essentially a 'crash' of the InnoDB server. Make sure
+      that the log is all flushed to disk, so that we can recover
+      all committed transactions in a crash recovery. We must not
+      write the lsn stamps to the data files, since at a startup
+      InnoDB deduces from the stamps if the previous shutdown was
+      clean. */
+
+      log_sys->buffer_flush_to_disk();
+
+      mutex_exit(&kernel_mutex);
+
+      return; /* We SKIP ALL THE REST !! */
+    }
+
+    /* Check that the master thread is suspended */
+    if (srv_n_threads_active[SRV_MASTER] != 0) {
+
+      mutex_exit(&kernel_mutex);
+
+      continue;
+    }
+
+    mutex_exit(&kernel_mutex);
+
+    log_sys->acquire();
+
+    if (log_sys->m_n_pending_checkpoint_writes || log_sys->m_n_pending_writes) {
+
+      log_sys->release();
+
+      continue;
+    }
+
+    log_sys->release();
+
+    if (srv_buf_pool->is_io_pending()) {
+
+      continue;
+    }
+
+    log_sys->make_checkpoint_at(IB_UINT64_T_MAX, true);
+
+    log_sys->acquire();
+
+    lsn = log_sys->m_lsn;
+
+    if (lsn != log_sys->m_last_checkpoint_lsn) {
+
+      log_sys->release();
+
+      continue;
+    }
+
+    log_sys->release();
+
+    mutex_enter(&kernel_mutex);
+
+    /* Check that the master thread has stayed suspended */
+    if (srv_n_threads_active[SRV_MASTER] != 0) {
+      log_warn("The master thread woke up during shutdown");
+
+      mutex_exit(&kernel_mutex);
+
+      continue;
+    }
+
+    mutex_exit(&kernel_mutex);
+
+    srv_fil->flush_file_spaces(FIL_TABLESPACE);
+    srv_fil->flush_file_spaces(FIL_LOG);
+
+    /* The call srv_fil->write_flushed_lsn_to_data_files() will pass the buffer
+    pool: therefore it is essential that the buffer pool has been
+    completely flushed to disk! (We do not call srv_fil->write... if the
+    'very fast' shutdown is enabled.) */
+
+    if (srv_buf_pool->all_freed()) {
+      break;
+    }
+  }
+
+  srv_shutdown_state = SRV_SHUTDOWN_LAST_PHASE;
+
+  /* Make some checks that the server really is quiet */
+  ut_a(lsn == log_sys->m_lsn);
+  ut_a(srv_buf_pool->all_freed());
+  ut_a(srv_n_threads_active[SRV_MASTER] == 0);
+
+  if (lsn < srv_start_lsn) {
+    log_err(std::format(
+      "Log sequence number at shutdown {} is lower than at startup {}",
+      lsn, srv_start_lsn
+    ));
+  }
+
+  srv_shutdown_lsn = lsn;
+
+  srv_fil->write_flushed_lsn_to_data_files(lsn);
+
+  srv_fil->flush_file_spaces(FIL_TABLESPACE);
+
+  srv_fil->close_all_files();
+
+  /* Make some checks that the server really is quiet */
+  ut_a(srv_n_threads_active[SRV_MASTER] == 0);
+  ut_a(srv_buf_pool->all_freed());
+  ut_a(lsn == log_sys->m_lsn);
+}
+
+db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
   ut_a(srv_was_started);
 
   /* This is currently required to inform the master thread only. Once
@@ -977,7 +999,10 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
     );
   }
 
-  Log::empty_and_mark_files_at_shutdown(srv_force_recovery, shutdown);
+  /* Only if the redo log systemhas been initialized. */
+  if (log_sys != nullptr && UT_LIST_GET_LEN(log_sys->m_log_groups) > 0) {
+    srv_prepare_for_shutdown(srv_force_recovery, shutdown);
+  }
 
   /* In a 'very fast' shutdown, we do not need to wait for these threads
   to die; all which counts is that we flushed the log; a 'very fast'
@@ -1005,7 +1030,7 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
   delete srv_fil;
   srv_fil = nullptr;
 
-  srv_free();
+  InnoDB::free();
 
   AIO::destroy(srv_aio);
 
@@ -1054,10 +1079,8 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
 
   srv_was_started = false;
 
-  srv_modules_var_init();
-  srv_var_init();
-
-  srv_log_group_home_dirs = nullptr;
+  InnoDB::modules_var_init();
+  InnoDB::var_init();
 
   return DB_SUCCESS;
 }

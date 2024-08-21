@@ -30,7 +30,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "log0recv.h"
 #include "os0sync.h"
 #include "srv0srv.h"
-#include "srv0start.h"
 #include "trx0sys.h"
 
 static char *srv_file_flush_method_str = nullptr;
@@ -340,10 +339,10 @@ static ib_err_t ib_cfg_var_set_log_group_home_dir(struct ib_cfg_var *cfg_var, co
 
   value_str = *(char **)value;
 
-  if (srv_parse_log_group_home_dirs(value_str)) {
-    return (DB_SUCCESS);
+  if (InnoDB::parse_log_group_home_dirs(value_str)) {
+    return DB_SUCCESS;
   } else {
-    return (DB_INVALID_INPUT);
+    return DB_INVALID_INPUT;
   }
 }
 
@@ -480,16 +479,6 @@ static const ib_cfg_var cfg_vars_defaults[] = {
    STRUCT_FLD(set, ib_cfg_var_set_generic),
    STRUCT_FLD(get, ib_cfg_var_get_generic),
    STRUCT_FLD(tank, &srv_mem_pool_size)},
-
-  {STRUCT_FLD(name, "autoextend_increment"),
-   STRUCT_FLD(type, IB_CFG_ULONG),
-   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
-   STRUCT_FLD(min_val, 1),
-   STRUCT_FLD(max_val, 1000),
-   STRUCT_FLD(validate, ib_cfg_var_validate_numeric),
-   STRUCT_FLD(set, ib_cfg_var_set_generic),
-   STRUCT_FLD(get, ib_cfg_var_get_generic),
-   STRUCT_FLD(tank, &srv_auto_extend_increment)},
 
   {STRUCT_FLD(name, "buffer_pool_size"),
    STRUCT_FLD(type, IB_CFG_ULINT),

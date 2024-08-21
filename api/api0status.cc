@@ -190,7 +190,7 @@ ib_err_t ib_status_get_i64(const char *name, int64_t *dst) {
   if (err == DB_SUCCESS) {
 
     /* Read the latest values into export_vars. */
-    srv_export_innodb_status();
+    InnoDB::export_innodb_status();
 
     switch (var->type) {
       case IB_STATUS_ULINT:

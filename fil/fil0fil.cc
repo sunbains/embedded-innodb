@@ -41,7 +41,6 @@ Created 10/25/1995 Heikki Tuuri
 #include "os0sync.h"
 #include "page0page.h"
 #include "srv0srv.h"
-#include "srv0start.h"
 #include "sync0sync.h"
 #include "ut0logger.h"
 

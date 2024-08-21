@@ -28,7 +28,6 @@ Created 5/11/1994 Heikki Tuuri
 
 #include "os0thread.h"
 #include "srv0srv.h"
-#include "srv0start.h"
 #include "ut0logger.h"
 
 #include <stdlib.h>

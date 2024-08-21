@@ -34,7 +34,7 @@ Created 5/27/1996 Heikki Tuuri
 #include "row0sel.h"
 #include "row0undo.h"
 #include "row0upd.h"
-#include "srv0que.h"
+#include "srv0srv.h"
 #include "trx0roll.h"
 #include "trx0trx.h"
 #include "usr0sess.h"
@@ -210,7 +210,7 @@ void que_thr_end_wait(que_thr_t *thr, que_thr_t **next_thr) {
     *next_thr = thr;
   } else {
     ut_a(0);
-    srv_que_task_enqueue_low(thr);
+    InnoDB::que_task_enqueue_low(thr);
   }
 }
 
@@ -234,9 +234,9 @@ void que_thr_end_wait_no_next_thr(que_thr_t *thr) {
   /* We let the OS thread (not just the query thread) to wait
   for the lock to be released: */
 
-  srv_release_user_thread_if_suspended(thr);
+  InnoDB::release_user_thread_if_suspended(thr);
 
-  /* srv_que_task_enqueue_low(thr); */
+  /* InnoDB::que_task_enqueue_low(thr); */
 }
 
 /** Inits a query thread for a command.
@@ -346,8 +346,8 @@ void que_fork_error_handle(trx_t *trx __attribute__((unused)), que_t *fork) {
 
   que_thr_move_to_run_state(thr);
 
-  ut_a(0);
-  srv_que_task_enqueue_low(thr);
+  ut_error;
+  InnoDB::que_task_enqueue_low(thr);
 }
 
 /** Tests if all the query threads in the same fork have a given state.
@@ -662,7 +662,7 @@ static void que_thr_dec_refer_count(
         *next_thr = thr;
       } else {
         ut_error;
-        srv_que_task_enqueue_low(thr);
+	InnoDB::que_task_enqueue_low(thr);
       }
 
       mutex_exit(&kernel_mutex);
@@ -1088,7 +1088,7 @@ loop:
       /* The ..._user_... function works also for InnoDB's
     internal threads. Let us wait that the lock wait ends. */
 
-      srv_suspend_user_thread(thr);
+      InnoDB::suspend_user_thread(thr);
 
       if (thr_get_trx(thr)->error_state != DB_SUCCESS) {
         /* thr was chosen as a deadlock victim or there was

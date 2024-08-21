@@ -25,7 +25,7 @@ Created 9/6/1995 Heikki Tuuri
 
 #include "os0sync.h"
 
-#include "srv0start.h"
+#include "srv0srv.h"
 #include "ut0mem.h"
 
 /** The number of microseconds in a second. */
@@ -187,7 +187,7 @@ void Cond_var::wait(int64_t reset_sig_count) {
   m_cond_var.wait(lk, [this, old_sig_count] {
     if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
       log_info("srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS");
-      os_thread_exit(nullptr);
+      os_thread_exit();
     }
     return m_is_set || m_signal_count != old_sig_count; }
   );
@@ -211,7 +211,7 @@ ulint Cond_var::wait_time(std::chrono::microseconds timeout, int64_t reset_sig_c
   auto ret = m_cond_var.wait_until(lk, timepoint, [this, reset_sig_count] {
     if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
       log_err("srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS");
-      os_thread_exit(nullptr);
+      os_thread_exit();
     }
     return m_is_set || m_signal_count != reset_sig_count; }
   );

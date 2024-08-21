@@ -32,8 +32,6 @@ Created 3/26/1996 Heikki Tuuri
 #include "pars0pars.h"
 #include "que0que.h"
 #include "row0undo.h"
-#include "srv0que.h"
-#include "srv0start.h"
 #include "trx0rec.h"
 #include "trx0rseg.h"
 #include "trx0trx.h"
@@ -62,7 +60,7 @@ db_err trx_general_rollback(trx_t *trx, bool partial, trx_savept_t *savept) {
   /* Tell Innobase server that there might be work for
   utility threads: */
 
-  srv_active_wake_master_thread();
+  InnoDB::active_wake_master_thread();
 
   heap = mem_heap_create(512);
 
@@ -102,7 +100,7 @@ db_err trx_general_rollback(trx_t *trx, bool partial, trx_savept_t *savept) {
   /* Tell Innobase server that there might be work for
   utility threads: */
 
-  srv_active_wake_master_thread();
+  InnoDB::active_wake_master_thread();
 
   return trx->error_state;
 }
@@ -326,7 +324,7 @@ void *trx_rollback_or_clean_all_recovered(void *) {
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit. */
 
-  os_thread_exit(nullptr);
+  os_thread_exit();
 
   return nullptr;
 }
@@ -738,10 +736,10 @@ void trx_rollback(trx_t *trx, trx_sig_t *sig, que_thr_t **next_thr) {
 
   if (next_thr && (*next_thr == nullptr)) {
     *next_thr = thr;
-    /*		srv_que_task_enqueue_low(thr2); */
+    /*		InnoDB::que_task_enqueue_low(thr2); */
   } else {
-    srv_que_task_enqueue_low(thr);
-    /*		srv_que_task_enqueue_low(thr2); */
+	  InnoDB::que_task_enqueue_low(thr);
+    /*		InnoDB::que_task_enqueue_low(thr2); */
   }
 }
 

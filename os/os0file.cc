@@ -45,7 +45,6 @@ Created 10/21/1995 Heikki Tuuri
 #include "fil0fil.h"
 #include "os0file.h"
 #include "srv0srv.h"
-#include "srv0start.h"
 #include "ut0mem.h"
 #include "os0sync.h"
 #include "os0thread.h"

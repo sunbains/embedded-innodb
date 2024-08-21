@@ -46,7 +46,6 @@ dict_index_t *dict_ind_compact;
 #include "que0que.h"
 #include "rem0cmp.h"
 #include "row0merge.h"
-#include "srv0start.h"
 #include "trx0undo.h"
 
 #include <ctype.h>

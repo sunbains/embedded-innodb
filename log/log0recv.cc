@@ -36,7 +36,6 @@ Created 9/20/1997 Heikki Tuuri
 #include "mtr0mtr.h"
 #include "page0cur.h"
 #include "srv0srv.h"
-#include "srv0start.h"
 #include "sync0sync.h"
 #include "trx0rec.h"
 #include "trx0roll.h"

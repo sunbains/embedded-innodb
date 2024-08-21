@@ -91,7 +91,7 @@ bool ib_handle_errors(db_err *new_err, trx_t *trx, que_thr_t *thr, trx_savept_t 
         }
         break;
       case DB_LOCK_WAIT:
-        srv_suspend_user_thread(thr);
+        InnoDB::suspend_user_thread(thr);
 
         if (trx->error_state != DB_SUCCESS) {
           que_thr_stop_client(thr);

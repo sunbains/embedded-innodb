@@ -43,7 +43,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "row0sel.h"
 #include "row0upd.h"
 #include "row0vers.h"
-#include "srv0start.h"
+#include "srv0srv.h"
 #include "trx0roll.h"
 #include "ut0counter.h"
 #include "ut0dbg.h"
@@ -376,7 +376,7 @@ static void ib_wake_master_thread() {
   ++ib_signal_counter;
 
   if ((ib_signal_counter % INNOBASE_WAKE_INTERVAL) == 0) {
-    srv_active_wake_master_thread();
+    InnoDB::active_wake_master_thread();
   }
 }
 
@@ -649,7 +649,7 @@ ib_err_t ib_startup(const char *format) {
     /* Set the highest file format id supported. */
     srv_file_format = db_format.id;
 
-    err = innobase_start_or_create();
+    err = InnoDB::start();
   }
 
   return err;
@@ -667,7 +667,7 @@ ib_err_t ib_shutdown(ib_shutdown_t flag) {
   db_format.id = 0;
   db_format.name = nullptr;
 
-  return innobase_shutdown(flag);
+  return InnoDB::shutdown(flag);
 }
 
 ib_err_t ib_trx_start(ib_trx_t ib_trx, ib_trx_level_t ib_trx_level) {

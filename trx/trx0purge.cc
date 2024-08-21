@@ -33,7 +33,6 @@ Created 3/26/1996 Heikki Tuuri
 #include "read0read.h"
 #include "row0purge.h"
 #include "row0upd.h"
-#include "srv0que.h"
 #include "trx0rec.h"
 #include "trx0roll.h"
 #include "trx0rseg.h"

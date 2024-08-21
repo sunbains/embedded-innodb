@@ -538,7 +538,7 @@ func_exit:
 
   trx->m_op_info = "";
 
-  srv_wake_master_thread();
+  InnoDB::wake_master_thread();
 
   return err;
 }
@@ -1041,7 +1041,7 @@ func_exit:
 
   trx->m_op_info = "";
 
-  srv_wake_master_thread();
+  InnoDB::wake_master_thread();
 
   return err;
 }

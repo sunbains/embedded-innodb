@@ -644,7 +644,7 @@ run_again:
 
     que_thr_stop_client(thr);
 
-    srv_suspend_user_thread(thr);
+    InnoDB::suspend_user_thread(thr);
 
     /* Note that a lock wait may also end in a lock wait timeout,
     or this transaction is picked as a victim in selective
@@ -1343,7 +1343,7 @@ do_possible_lock_wait:
 
     que_thr_stop_client(thr);
 
-    srv_suspend_user_thread(thr);
+    InnoDB::suspend_user_thread(thr);
 
     if (trx->error_state == DB_SUCCESS) {
 

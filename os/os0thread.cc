@@ -35,7 +35,7 @@ bool os_thread_eq(os_thread_id_t a, os_thread_id_t b) {
 }
 
 ulint os_thread_pf(os_thread_id_t a) {
-  return (ulint)a;
+  return ulint(a);
 }
 
 os_thread_id_t os_thread_get_curr_id() {
@@ -53,7 +53,7 @@ os_thread_t os_thread_create(void *(*f)(void *), void *arg, os_thread_id_t *thre
   auto ret = pthread_create(&pthread, &attr, f, arg);
 
   if (ret != 0) {
-    log_fatal("Error: pthread_create returned %d", ret);
+    log_fatal("pthread_create returned %d", ret, " : ", strerror(ret));
   }
 
   if (thread_id != nullptr) {
@@ -63,13 +63,8 @@ os_thread_t os_thread_create(void *(*f)(void *), void *arg, os_thread_id_t *thre
   return pthread;
 }
 
-void os_thread_exit(void *exit_value) {
+void os_thread_exit() {
   os_thread_count.fetch_sub(1, std::memory_order_relaxed);
-
-  auto ret = pthread_detach(pthread_self());
-  ut_a(ret == 0);
-
-  pthread_exit(exit_value);
 }
 
 os_thread_t os_thread_get_curr() {

@@ -37,7 +37,6 @@ Created 4/24/1996 Heikki Tuuri
 #include "page0page.h"
 #include "rem0cmp.h"
 #include "srv0srv.h"
-#include "srv0start.h"
 
 /**
  * Compare the name of an index column.
