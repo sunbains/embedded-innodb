@@ -1400,12 +1400,7 @@ static bool recv_parse_log_recs(bool store_to_hash) noexcept {
           break;
         }
 
-        if (
-          store_to_hash
-#ifdef UNIV_LOG_LSN_DEBUG
-          && type != MLOG_LSN
-#endif /* UNIV_LOG_LSN_DEBUG */
-        ) {
+        if (store_to_hash) {
           recv_sys->add_log_record(type, space, page_no, body, ptr + len, old_lsn, new_recovered_lsn);
         }
 
