@@ -807,7 +807,7 @@ ulint fsp_header_get_free_limit() {
 
   limit /= ((1024 * 1024) / UNIV_PAGE_SIZE);
 
-  log_fsp_current_free_limit_set_and_checkpoint(limit);
+  log_sys->fsp_current_free_limit_set_and_checkpoint(limit);
 
   mtr_commit(&mtr);
 
@@ -1011,7 +1011,7 @@ static void fsp_fill_free_list(bool init_space, space_id_t space, fsp_header_t *
     /* Update the free limit info in the log system and make
     a checkpoint */
     if (space == SYS_TABLESPACE) {
-      log_fsp_current_free_limit_set_and_checkpoint((i + FSP_EXTENT_SIZE) / ((1024 * 1024) / UNIV_PAGE_SIZE));
+      log_sys->fsp_current_free_limit_set_and_checkpoint((i + FSP_EXTENT_SIZE) / ((1024 * 1024) / UNIV_PAGE_SIZE));
     }
 
     if (unlikely(init_xdes)) {

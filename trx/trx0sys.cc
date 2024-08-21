@@ -157,7 +157,7 @@ void trx_sys_mark_upgraded_to_multiple_tablespaces() {
   mtr_commit(&mtr);
 
   /* Flush the modified pages to disk and make a checkpoint */
-  log_make_checkpoint_at(IB_UINT64_T_MAX, true);
+  log_sys->make_checkpoint_at(IB_UINT64_T_MAX, true);
 
   trx_sys_multiple_tablespace_format = true;
 }
@@ -282,7 +282,7 @@ db_err trx_sys_create_doublewrite_buf() {
   mtr_commit(&mtr);
 
   /* Flush the modified pages to disk and make a checkpoint */
-  log_make_checkpoint_at(IB_UINT64_T_MAX, true);
+  log_sys->make_checkpoint_at(IB_UINT64_T_MAX, true);
 
   log_info("Doublewrite buffer created");
 

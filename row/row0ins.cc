@@ -1794,7 +1794,7 @@ static db_err row_ins_index_entry_low(
   mtr_t mtr;
   mem_heap_t *heap = nullptr;
 
-  log_free_check();
+  log_sys->free_check();
 
   mtr_start(&mtr);
 

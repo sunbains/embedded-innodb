@@ -126,7 +126,8 @@ static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtupl
   mtr_t mtr;
   btr_pcur_t pcur;
 
-  log_free_check();
+  log_sys->free_check();
+
   mtr_start(&mtr);
 
   auto found = row_search_index_entry(index, entry, mode, &pcur, &mtr);

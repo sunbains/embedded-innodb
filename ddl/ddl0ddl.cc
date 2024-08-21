@@ -72,7 +72,7 @@ static db_err ddl_drop_table_in_background(const char *name) {
 
   dict_unlock_data_dictionary(trx);
 
-  log_buffer_flush_to_disk();
+  log_sys->buffer_flush_to_disk();
 
   trx_free_for_background(trx);
 

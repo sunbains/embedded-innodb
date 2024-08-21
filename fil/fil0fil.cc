@@ -2412,7 +2412,7 @@ bool Fil::aio_wait(ulint segment) {
   if (io_ctx.m_fil_node->m_space->m_type == FIL_TABLESPACE) {
     srv_buf_pool->io_complete(reinterpret_cast<buf_page_t *>(io_ctx.m_msg));
   } else {
-    log_io_complete(reinterpret_cast<log_group_t *>(io_ctx.m_msg));
+    log_sys->io_complete(reinterpret_cast<log_group_t *>(io_ctx.m_msg));
   }
 
   return true;

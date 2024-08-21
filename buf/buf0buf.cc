@@ -340,7 +340,7 @@ bool Buf_pool::is_corrupted(const byte *read_buf) {
   if (recv_lsn_checks_on) {
     lsn_t current_lsn;
 
-    if (log_peek_lsn(&current_lsn) && current_lsn < mach_read_from_8(read_buf + FIL_PAGE_LSN)) {
+    if (log_sys->peek_lsn(&current_lsn) && current_lsn < mach_read_from_8(read_buf + FIL_PAGE_LSN)) {
       log_err(std::format(
         "Page {}::{} log sequence number {} is in the future! Current system"
         " log sequence number is {}. Your database may be corrupt or you may have copied"

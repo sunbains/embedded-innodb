@@ -494,14 +494,15 @@ static void srv_startup_abort(db_err err) noexcept {
 
   /* For fatal errors we want to avoid writing to the data files. */
   if (err != DB_FATAL) {
-    logs_empty_and_mark_files_at_shutdown(srv_force_recovery, srv_fast_shutdown);
+    Log::empty_and_mark_files_at_shutdown(srv_force_recovery, srv_fast_shutdown);
 
     srv_fil->close_all_files();
   }
 
   srv_threads_shutdown();
 
-  log_shutdown();
+  log_sys->shutdown();
+
   lock_sys_close();
 
   srv_buf_pool->close();
@@ -513,7 +514,7 @@ static void srv_startup_abort(db_err err) noexcept {
 
   os_file_free();
 
-  log_mem_free();
+  Log::destroy(log_sys);
 
   AIO::destroy(srv_aio);
 
@@ -536,10 +537,6 @@ ib_err_t innobase_start_or_create() {
   IF_DEBUG(log_warn("!!!!!!!! UNIV_DEBUG switched on !!!!!!!!!");)
 
   IF_SYNC_DEBUG(log_warn("!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!");)
-
-#ifdef UNIV_LOG_LSN_DEBUG
-  log_warn("!!!!!!!! UNIV_LOG_LSN_DEBUG switched on !!!!!!!!!");
-#endif /* UNIV_LOG_LSN_DEBUG */
 
   if (likely(srv_use_sys_malloc)) {
     log_warn("The InnoDB memory heap is disabled");
@@ -646,7 +643,8 @@ ib_err_t innobase_start_or_create() {
 
   fsp_init();
 
-  innobase_log_init();
+  ut_a(log_sys == nullptr);
+  log_sys = Log::create();
 
   lock_sys_create(srv_lock_table_size);
 
@@ -730,7 +728,7 @@ ib_err_t innobase_start_or_create() {
     }
 
     if (i == 0) {
-      log_group_init(i, srv_n_log_files, srv_log_file_size * UNIV_PAGE_SIZE, SRV_LOG_SPACE_FIRST_ID);
+      log_sys->group_init(i, srv_n_log_files, srv_log_file_size * UNIV_PAGE_SIZE, SRV_LOG_SPACE_FIRST_ID);
     }
 
     if ((log_opened && create_new_db) || (log_opened && log_created)) {
@@ -764,11 +762,11 @@ ib_err_t innobase_start_or_create() {
       return DB_ERROR;
     }
 
-    mutex_enter(&log_sys->mutex);
+    log_sys->acquire();;
 
     recv_reset_logs(max_flushed_lsn, true);
 
-    mutex_exit(&log_sys->mutex);
+    log_sys->release();
   }
 
   trx_sys_file_format_init();
@@ -979,7 +977,7 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
     );
   }
 
-  logs_empty_and_mark_files_at_shutdown(srv_force_recovery, shutdown);
+  Log::empty_and_mark_files_at_shutdown(srv_force_recovery, shutdown);
 
   /* In a 'very fast' shutdown, we do not need to wait for these threads
   to die; all which counts is that we flushed the log; a 'very fast'
@@ -991,7 +989,8 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
 
   srv_threads_shutdown();
 
-  log_shutdown();
+  log_sys->shutdown();
+
   lock_sys_close();
   trx_sys_file_format_close();
   trx_sys_close();
@@ -1019,7 +1018,7 @@ db_err innobase_shutdown(ib_shutdown_t shutdown) {
   /* 5. Free all allocated memory */
   pars_close();
 
-  log_mem_free();
+  Log::destroy(log_sys);
 
   delete srv_buf_pool;
   srv_buf_pool = nullptr;

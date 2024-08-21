@@ -1036,7 +1036,7 @@ loop:
   more than about 4 pages, checks must be made also within the query
   step! */
 
-  log_free_check();
+  log_sys->free_check();
 
   /* Perform the actual query step: note that the query thread
   may change if, e.g., a subprocedure call is made */

@@ -1013,7 +1013,7 @@ void srv_modules_var_init() {
   os_proc_var_init();
   os_file_var_init();
   sync_var_init();
-  log_var_init();
+  Log::var_init();
   lock_var_init();
   dict_var_init();
   dfield_var_init();
@@ -1271,7 +1271,7 @@ static void srv_refresh_innodb_monitor_stats() {
 
   os_file_refresh_stats();
 
-  log_refresh_stats();
+  log_sys->refresh_stats();
 
   srv_buf_pool->refresh_io_stats();
 
@@ -1737,7 +1737,7 @@ loop:
   /* Try to track a strange bug reported by Harald Fuchs and others,
   where the lsn seems to decrease at times */
 
-  new_lsn = log_get_lsn();
+  new_lsn = log_sys->get_lsn();
 
   if (new_lsn < old_lsn) {
     log_err(std::format(
@@ -1842,7 +1842,7 @@ static void srv_sync_log_buffer_in_background(void) {
 
   srv_main_thread_op_info = "flushing log";
   if (difftime(current_time, srv_last_log_flush_time) >= 1) {
-    log_buffer_sync_in_background(true);
+    log_sys->buffer_sync_in_background(true);
     srv_last_log_flush_time = current_time;
     srv_log_writes_and_flush++;
   }
@@ -1879,7 +1879,7 @@ loop:
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
-  n_ios_very_old = log_sys->n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
+  n_ios_very_old = log_sys->m_n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
   mutex_enter(&kernel_mutex);
 
   /* Store the user activity counter at the start of this loop */
@@ -1933,11 +1933,11 @@ loop:
     srv_sync_log_buffer_in_background();
 
     srv_main_thread_op_info = "making checkpoint";
-    log_free_check();
+    log_sys->free_check();
 
-    n_pend_ios = srv_buf_pool->get_n_pending_ios() + log_sys->n_pending_writes;
+    n_pend_ios = srv_buf_pool->get_n_pending_ios() + log_sys->m_n_pending_writes;
 
-    n_ios = log_sys->n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
+    n_ios = log_sys->m_n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
 
     if (unlikely(srv_buf_pool->get_modified_ratio_pct() > srv_max_buf_pool_modified_pct)) {
 
@@ -1989,8 +1989,8 @@ loop:
   loop above requests writes for that case. The writes done here
   are not required, and may be disabled. */
 
-  n_pend_ios = srv_buf_pool->get_n_pending_ios() + log_sys->n_pending_writes;
-  n_ios = log_sys->n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
+  n_pend_ios = srv_buf_pool->get_n_pending_ios() + log_sys->m_n_pending_writes;
+  n_ios = log_sys->m_n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
 
   srv_main_10_second_loops++;
   if (n_pend_ios < SRV_PEND_IO_THRESHOLD && (n_ios - n_ios_very_old < SRV_PAST_IO_ACTIVITY)) {
@@ -2045,7 +2045,13 @@ loop:
 
   /* Make a new checkpoint about once in 10 seconds */
 
-  log_checkpoint(true, false);
+  {
+    auto success = log_sys->checkpoint(true, false);
+
+    if (!success) {
+      log_info("Checkpoint already running");
+    }
+  }
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
@@ -2151,7 +2157,13 @@ flush_loop:
 
   srv_main_thread_op_info = "making checkpoint";
 
-  log_checkpoint(true, false);
+  {
+    auto success = log_sys->checkpoint(true, false);
+
+    if (!success) {
+      log_info("Checkpoint already running");
+    } 
+  }
 
   if (srv_buf_pool->get_modified_ratio_pct() > srv_max_buf_pool_modified_pct) {
 

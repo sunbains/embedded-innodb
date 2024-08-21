@@ -1071,9 +1071,10 @@ static db_err row_upd_sec_index_entry(
 
   /* Build old index entry */
   entry = row_build_index_entry(node->row, node->ext, index, heap);
-  ut_a(entry);
+  ut_a(entry != nullptr);
 
-  log_free_check();
+  log_sys->free_check();
+
   mtr_start(&mtr);
 
   found = row_search_index_entry(index, entry, BTR_MODIFY_LEAF, &pcur, &mtr);

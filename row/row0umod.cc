@@ -277,7 +277,7 @@ static db_err row_undo_mod_del_mark_or_remove_sec_low(
   mtr_t mtr_vers;
   btr_pcur_t pcur;
 
-  log_free_check();
+  log_sys->free_check();
   mtr_start(&mtr);
 
   auto found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
@@ -399,7 +399,7 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
     return DB_SUCCESS;
   }
 
-  log_free_check();
+  log_sys->free_check();
   mtr_start(&mtr);
 
   if (unlikely(!row_search_index_entry(index, entry, mode, &pcur, &mtr))) {

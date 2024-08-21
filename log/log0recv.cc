@@ -264,7 +264,7 @@ void Recv_sys::close() noexcept {
  * @param checkpoint_lsn The LSN of the checkpoint from which recovery was started.
  */
 static void recv_truncate_group(log_group_t *group, lsn_t recovered_lsn, lsn_t limit_lsn, lsn_t checkpoint_lsn) noexcept {
-  auto finish_lsn1 = ut_uint64_align_down(checkpoint_lsn, IB_FILE_BLOCK_SIZE) + log_group_get_capacity(group);
+  auto finish_lsn1 = ut_uint64_align_down(checkpoint_lsn, IB_FILE_BLOCK_SIZE) + log_sys->group_get_capacity(group);
   auto finish_lsn2 = ut_uint64_align_up(recovered_lsn, IB_FILE_BLOCK_SIZE) + recv_sys->m_last_log_buf_size;
 
   lsn_t finish_lsn;
@@ -280,9 +280,9 @@ static void recv_truncate_group(log_group_t *group, lsn_t recovered_lsn, lsn_t l
     finish_lsn = finish_lsn1 < finish_lsn2 ? finish_lsn1 : finish_lsn2;
   }
 
-  ut_a(RECV_SCAN_SIZE <= log_sys->buf_size);
+  ut_a(RECV_SCAN_SIZE <= log_sys->m_buf_size);
 
-  memset(log_sys->buf, '\0', RECV_SCAN_SIZE);
+  memset(log_sys->m_buf, '\0', RECV_SCAN_SIZE);
 
   auto start_lsn = ut_uint64_align_down(recovered_lsn, IB_FILE_BLOCK_SIZE);
 
@@ -290,9 +290,9 @@ static void recv_truncate_group(log_group_t *group, lsn_t recovered_lsn, lsn_t l
     /* Copy the last incomplete log block to the log buffer and
     edit its data length: */
 
-    memcpy(log_sys->buf, recv_sys->m_last_block, IB_FILE_BLOCK_SIZE);
+    memcpy(log_sys->m_buf, recv_sys->m_last_block, IB_FILE_BLOCK_SIZE);
 
-    log_block_set_data_len(log_sys->buf, ulint(recovered_lsn - start_lsn));
+    log_sys->block_set_data_len(log_sys->m_buf, ulint(recovered_lsn - start_lsn));
   }
 
   if (start_lsn < finish_lsn) {
@@ -306,14 +306,14 @@ static void recv_truncate_group(log_group_t *group, lsn_t recovered_lsn, lsn_t l
 
       auto len = ulint(end_lsn - start_lsn);
 
-      log_group_write_buf(group, log_sys->buf, len, start_lsn, 0);
+      log_sys->group_write_buf(group, log_sys->m_buf, len, start_lsn, 0);
 
       if (end_lsn >= finish_lsn) {
 
         return;
       }
 
-      memset(log_sys->buf, '\0', RECV_SCAN_SIZE);
+      memset(log_sys->m_buf, '\0', RECV_SCAN_SIZE);
 
       start_lsn = end_lsn;
     }
@@ -334,7 +334,7 @@ static void recv_copy_group(log_group_t *up_to_date_group, log_group_t *group, l
     return;
   }
 
-  ut_a(RECV_SCAN_SIZE <= log_sys->buf_size);
+  ut_a(RECV_SCAN_SIZE <= log_sys->m_buf_size);
 
   auto start_lsn = ut_uint64_align_down(group->scanned_lsn, IB_FILE_BLOCK_SIZE);
 
@@ -345,11 +345,11 @@ static void recv_copy_group(log_group_t *up_to_date_group, log_group_t *group, l
       end_lsn = ut_uint64_align_up(recovered_lsn, IB_FILE_BLOCK_SIZE);
     }
 
-    log_group_read_log_seg(LOG_RECOVER, log_sys->buf, up_to_date_group, start_lsn, end_lsn);
+    log_sys->group_read_log_seg(LOG_RECOVER, log_sys->m_buf, up_to_date_group, start_lsn, end_lsn);
 
     auto len = (ulint)(end_lsn - start_lsn);
 
-    log_group_write_buf(group, log_sys->buf, len, start_lsn, 0);
+    log_sys->group_write_buf(group, log_sys->m_buf, len, start_lsn, 0);
 
     if (end_lsn >= recovered_lsn) {
 
@@ -379,9 +379,9 @@ static void recv_synchronize_groups(log_group_t *up_to_date_group) noexcept {
 
   ut_a(start_lsn != end_lsn);
 
-  log_group_read_log_seg(LOG_RECOVER, recv_sys->m_last_block, up_to_date_group, start_lsn, end_lsn);
+  log_sys->group_read_log_seg(LOG_RECOVER, recv_sys->m_last_block, up_to_date_group, start_lsn, end_lsn);
 
-  for (auto group : log_sys->log_groups) {
+  for (auto group : log_sys->m_log_groups) {
     if (group != up_to_date_group) {
 
       /* Copy log data if needed */
@@ -392,7 +392,7 @@ static void recv_synchronize_groups(log_group_t *up_to_date_group) noexcept {
     /* Update the fields in the group struct to correspond to
     recovered_lsn */
 
-    log_group_set_fields(group, recovered_lsn);
+    log_sys->group_set_fields(group, recovered_lsn);
   }
 
   /* Copy the checkpoint info to the groups; remember that we have
@@ -400,15 +400,15 @@ static void recv_synchronize_groups(log_group_t *up_to_date_group) noexcept {
   over the max checkpoint info, thus making the preservation of max
   checkpoint info on disk certain */
 
-  log_groups_write_checkpoint_info();
+  log_sys->groups_write_checkpoint_info();
 
-  mutex_exit(&log_sys->mutex);
+  log_sys->release();
 
   /* Wait for the checkpoint write to complete */
-  rw_lock_s_lock(&log_sys->checkpoint_lock);
-  rw_lock_s_unlock(&log_sys->checkpoint_lock);
+  rw_lock_s_lock(&log_sys->m_checkpoint_lock);
+  rw_lock_s_unlock(&log_sys->m_checkpoint_lock);
 
-  mutex_enter(&log_sys->mutex);
+  log_sys->acquire();
 }
 
 /**
@@ -447,14 +447,14 @@ static db_err recv_find_max_checkpoint(log_group_t **max_group, ulint *max_field
   *max_group = nullptr;
 
   uint64_t max_no{};
-  auto buf = log_sys->checkpoint_buf;
+  auto buf = log_sys->m_checkpoint_buf;
 
-  for (auto group : log_sys->log_groups) {
+  for (auto group : log_sys->m_log_groups) {
     group->state = LOG_GROUP_CORRUPTED;
 
     for (auto field = LOG_CHECKPOINT_1; field <= LOG_CHECKPOINT_2; field += LOG_CHECKPOINT_2 - LOG_CHECKPOINT_1) {
 
-      log_group_read_checkpoint_info(group, field);
+      log_sys->group_read_checkpoint_info(group, field);
 
       if (recv_check_cp_is_consistent(buf)) {
         group->state = LOG_GROUP_OK;
@@ -497,7 +497,7 @@ static db_err recv_find_max_checkpoint(log_group_t **max_group, ulint *max_field
  * @return true if the checksum is valid or if the block is in an old format, false otherwise
  */
 static bool is_log_block_checksum_ok(const byte *block) noexcept {
-  return log_block_calc_checksum(block) == log_block_get_checksum(block);
+  return Log::block_calc_checksum(block) == Log::block_get_checksum(block);
 }
 
 /**
@@ -534,11 +534,6 @@ static byte *recv_parse_or_apply_log_rec_body(
   }
 
   switch (type) {
-#ifdef UNIV_LOG_LSN_DEBUG
-    case MLOG_LSN:
-      /* The LSN is checked in recv_parse_log_rec(). */
-      break;
-#endif /* UNIV_LOG_LSN_DEBUG */
     case MLOG_1BYTE:
     case MLOG_2BYTES:
     case MLOG_4BYTES:
@@ -1078,7 +1073,7 @@ void recv_apply_log_recs(bool flush_and_free_pages) noexcept {
   if (flush_and_free_pages) {
     /* Flush all the file pages to disk and invalidate them in the buffer pool */
     mutex_exit(&recv_sys->m_mutex);
-    mutex_exit(&log_sys->mutex);
+    log_sys->release();
 
     auto n_pages = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
     ut_a(n_pages != ULINT_UNDEFINED);
@@ -1087,7 +1082,7 @@ void recv_apply_log_recs(bool flush_and_free_pages) noexcept {
 
     srv_buf_pool->invalidate();
 
-    mutex_enter(&log_sys->mutex);
+    log_sys->acquire();
     mutex_enter(&recv_sys->m_mutex);
   }
 
@@ -1153,13 +1148,6 @@ static ulint recv_parse_log_rec(
 
     return 0;
   }
-
-#ifdef UNIV_LOG_LSN_DEBUG
-  if (*type == MLOG_LSN) {
-    auto lsn = lsn_t(*space) << 32 | *page_no;
-    ut_a(lsn == recv_sys->m_recovered_lsn);
-  }
-#endif /* UNIV_LOG_LSN_DEBUG */
 
   new_ptr = recv_parse_or_apply_log_rec_body(*type, new_ptr, end_ptr, nullptr, nullptr);
 
@@ -1258,7 +1246,7 @@ static bool recv_parse_log_recs(bool store_to_hash) noexcept {
   page_no_t page_no;
   lsn_t new_recovered_lsn;
 
-  ut_ad(mutex_own(&log_sys->mutex));
+  ut_ad(mutex_own(&log_sys->m_mutex));
   ut_ad(recv_sys->m_parse_start_lsn != 0);
 
   for (;;) {
@@ -1320,11 +1308,6 @@ static bool recv_parse_log_recs(bool store_to_hash) noexcept {
         ut_a(space != SYS_TABLESPACE);
 
         /* In normal crash recovery we do not try to replay file operations */
-#ifdef UNIV_LOG_LSN_DEBUG
-      } else if (type == MLOG_LSN) {
-        /* Do not add these records to the hash table. The page number and space
-        id fields are misused for something else. */
-#endif /* UNIV_LOG_LSN_DEBUG */
       } else {
         recv_sys->add_log_record(type, space, page_no, body, ptr + len, old_lsn, recv_sys->m_recovered_lsn);
       }
@@ -1400,12 +1383,7 @@ static bool recv_parse_log_recs(bool store_to_hash) noexcept {
           break;
         }
 
-        if (
-          store_to_hash
-#ifdef UNIV_LOG_LSN_DEBUG
-          && type != MLOG_LSN
-#endif /* UNIV_LOG_LSN_DEBUG */
-        ) {
+        if (store_to_hash) {
           recv_sys->add_log_record(type, space, page_no, body, ptr + len, old_lsn, new_recovered_lsn);
         }
 
@@ -1436,7 +1414,7 @@ static bool recv_sys_add_to_parsing_buf(const byte *log_block, lsn_t scanned_lsn
     return false;
   }
 
-  auto data_len = log_block_get_data_len(log_block);
+  auto data_len = Log::block_get_data_len(log_block);
 
   if (recv_sys->m_parse_start_lsn >= scanned_lsn) {
 
@@ -1537,9 +1515,9 @@ static bool recv_scan_log_recs(
   auto scanned_lsn = start_lsn;
 
   do {
-    auto no = log_block_get_hdr_no(log_block);
+    auto no = Log::block_get_hdr_no(log_block);
     const auto checksum_ok{is_log_block_checksum_ok(log_block)};
-    const auto block_no{log_block_convert_lsn_to_no(scanned_lsn)};
+    const auto block_no{Log::block_convert_lsn_to_no(scanned_lsn)};
 
     if (no != block_no || !checksum_ok) {
       if (no == block_no && !checksum_ok) {
@@ -1547,8 +1525,8 @@ static bool recv_scan_log_recs(
           "Log block no {} at lsn {} has ok header, but checksum field contains {}, should be {}",
           no,
           scanned_lsn,
-          log_block_get_checksum(log_block),
-          log_block_calc_checksum(log_block)
+          Log::block_get_checksum(log_block),
+          Log::block_calc_checksum(log_block)
         ));
       }
 
@@ -1558,8 +1536,7 @@ static bool recv_scan_log_recs(
 
       break;
     }
-
-    if (log_block_get_flush_bit(log_block)) {
+    if (Log::block_get_flush_bit(log_block)) {
       /* This block was a start of a log flush operation: we know that the previous flush
       operation must have been completed for all log groups before this block can have been
       flushed to any of the groups. Therefore, we know that log data is contiguous up to
@@ -1570,13 +1547,13 @@ static bool recv_scan_log_recs(
       }
     }
 
-    auto data_len = log_block_get_data_len(log_block);
+    auto data_len = Log::block_get_data_len(log_block);
 
     if ((store_to_hash || data_len == IB_FILE_BLOCK_SIZE) &&
         scanned_lsn + data_len > recv_sys->m_scanned_lsn &&
         recv_sys->m_scanned_checkpoint_no > 0 &&
-        log_block_get_checkpoint_no(log_block) < recv_sys->m_scanned_checkpoint_no &&
-        recv_sys->m_scanned_checkpoint_no - log_block_get_checkpoint_no(log_block) > 0x80000000UL) {
+        Log::block_get_checkpoint_no(log_block) < recv_sys->m_scanned_checkpoint_no &&
+        recv_sys->m_scanned_checkpoint_no - Log::block_get_checkpoint_no(log_block) > 0x80000000UL) {
 
       /* Garbage from a log buffer flush which was made before the most recent database recovery */
 
@@ -1584,11 +1561,11 @@ static bool recv_scan_log_recs(
       break;
     }
 
-    if (recv_sys->m_parse_start_lsn == 0 && log_block_get_first_rec_group(log_block) > 0) {
+    if (recv_sys->m_parse_start_lsn == 0 && Log::block_get_first_rec_group(log_block) > 0) {
 
       /* We found a point from which to start the parsing of log records */
 
-      recv_sys->m_parse_start_lsn = scanned_lsn + log_block_get_first_rec_group(log_block);
+      recv_sys->m_parse_start_lsn = scanned_lsn + Log::block_get_first_rec_group(log_block);
       recv_sys->m_scanned_lsn = recv_sys->m_parse_start_lsn;
       recv_sys->m_recovered_lsn = recv_sys->m_parse_start_lsn;
     }
@@ -1623,7 +1600,7 @@ static bool recv_scan_log_recs(
       }
 
       recv_sys->m_scanned_lsn = scanned_lsn;
-      recv_sys->m_scanned_checkpoint_no = log_block_get_checkpoint_no(log_block);
+      recv_sys->m_scanned_checkpoint_no = Log::block_get_checkpoint_no(log_block);
     }
 
     if (data_len < IB_FILE_BLOCK_SIZE) {
@@ -1694,13 +1671,13 @@ static void recv_group_scan_log_recs(
   while (!finished) {
     auto end_lsn = start_lsn + RECV_SCAN_SIZE;
 
-    log_group_read_log_seg(LOG_RECOVER, log_sys->buf, group, start_lsn, end_lsn);
+    log_sys->group_read_log_seg(LOG_RECOVER, log_sys->m_buf, group, start_lsn, end_lsn);
 
     finished = recv_scan_log_recs(
       recovery,
       (srv_buf_pool->m_curr_size - recv_n_pool_free_frames) * UNIV_PAGE_SIZE,
       true,
-      log_sys->buf,
+      log_sys->m_buf,
       RECV_SCAN_SIZE,
       start_lsn,
       contiguous_lsn,
@@ -1796,7 +1773,7 @@ db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flu
 
   recv_sys->m_limit_lsn = IB_UINT64_T_MAX;
 
-  mutex_enter(&log_sys->mutex);
+  log_sys->acquire();
 
   /* Look for the latest checkpoint from any of the log groups */
 
@@ -1807,14 +1784,14 @@ db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flu
 
   if (err != DB_SUCCESS) {
 
-    mutex_exit(&log_sys->mutex);
+    log_sys->release();
 
     return err;
   }
 
-  log_group_read_checkpoint_info(max_cp_group, max_cp_field);
+  log_sys->group_read_checkpoint_info(max_cp_group, max_cp_field);
 
-  auto buf = log_sys->checkpoint_buf;
+  auto buf = log_sys->m_checkpoint_buf;
 
   lsn_t checkpoint_lsn = mach_read_from_8(buf + LOG_CHECKPOINT_LSN);
   auto checkpoint_no = mach_read_from_8(buf + LOG_CHECKPOINT_NO);
@@ -1835,11 +1812,11 @@ db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flu
   auto up_to_date_group = max_cp_group;
   auto contiguous_lsn = ut_uint64_align_down(recv_sys->m_scanned_lsn, IB_FILE_BLOCK_SIZE);
 
-  ut_ad(RECV_SCAN_SIZE <= log_sys->buf_size);
+  ut_ad(RECV_SCAN_SIZE <= log_sys->m_buf_size);
 
   lsn_t group_scanned_lsn{};
 
-  for (auto group : log_sys->log_groups) {
+  for (auto group : log_sys->m_log_groups) {
     auto old_scanned_lsn = recv_sys->m_scanned_lsn;
 
     recv_group_scan_log_recs(recovery, group, &contiguous_lsn, &group_scanned_lsn);
@@ -1877,7 +1854,7 @@ db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flu
 
   if (recv_sys->m_recovered_lsn < checkpoint_lsn) {
 
-    mutex_exit(&log_sys->mutex);
+    log_sys->release();
 
     ut_a(recv_sys->m_recovered_lsn >= LSN_MAX);
 
@@ -1887,8 +1864,8 @@ db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flu
   /* Synchronize the uncorrupted log groups to the most up-to-date log
   group; we also copy checkpoint info to groups */
 
-  log_sys->next_checkpoint_lsn = checkpoint_lsn;
-  log_sys->next_checkpoint_no = checkpoint_no + 1;
+  log_sys->m_next_checkpoint_lsn = checkpoint_lsn;
+  log_sys->m_next_checkpoint_no = checkpoint_no + 1;
 
   recv_synchronize_groups(up_to_date_group);
 
@@ -1898,18 +1875,18 @@ db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flu
     srv_start_lsn = recv_sys->m_recovered_lsn;
   }
 
-  log_sys->lsn = recv_sys->m_recovered_lsn;
+  log_sys->m_lsn = recv_sys->m_recovered_lsn;
 
-  memcpy(log_sys->buf, recv_sys->m_last_block, IB_FILE_BLOCK_SIZE);
+  memcpy(log_sys->m_buf, recv_sys->m_last_block, IB_FILE_BLOCK_SIZE);
 
-  log_sys->buf_free = ulint(log_sys->lsn % IB_FILE_BLOCK_SIZE);
-  log_sys->buf_next_to_write = log_sys->buf_free;
-  log_sys->written_to_some_lsn = log_sys->lsn;
-  log_sys->written_to_all_lsn = log_sys->lsn;
+  log_sys->m_buf_free = ulint(log_sys->m_lsn % IB_FILE_BLOCK_SIZE);
+  log_sys->m_buf_next_to_write = log_sys->m_buf_free;
+  log_sys->m_written_to_some_lsn = log_sys->m_lsn;
+  log_sys->m_written_to_all_lsn = log_sys->m_lsn;
 
-  log_sys->last_checkpoint_lsn = checkpoint_lsn;
+  log_sys->m_last_checkpoint_lsn = checkpoint_lsn;
 
-  log_sys->next_checkpoint_no = checkpoint_no + 1;
+  log_sys->m_next_checkpoint_no = checkpoint_no + 1;
 
   mutex_enter(&recv_sys->m_mutex);
 
@@ -1917,7 +1894,7 @@ db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flu
 
   mutex_exit(&recv_sys->m_mutex);
 
-  mutex_exit(&log_sys->mutex);
+  log_sys->release();
 
   recv_lsn_checks_on = true;
 
@@ -2001,12 +1978,12 @@ void recv_recovery_rollback_active() noexcept {
 }
 
 void recv_reset_logs(lsn_t lsn, bool new_logs_created) noexcept {
-  ut_ad(mutex_own(&log_sys->mutex));
+  ut_ad(mutex_own(&log_sys->m_mutex));
 
-  log_sys->lsn = ut_uint64_align_up(lsn, IB_FILE_BLOCK_SIZE);
+  log_sys->m_lsn = ut_uint64_align_up(lsn, IB_FILE_BLOCK_SIZE);
 
-  for (auto group : log_sys->log_groups) {
-    group->lsn = log_sys->lsn;
+  for (auto group : log_sys->m_log_groups) {
+    group->lsn = log_sys->m_lsn;
     group->lsn_offset = LOG_FILE_HDR_SIZE;
 
     if (!new_logs_created) {
@@ -2014,27 +1991,27 @@ void recv_reset_logs(lsn_t lsn, bool new_logs_created) noexcept {
     }
   }
 
-  log_sys->buf_next_to_write = 0;
-  log_sys->written_to_some_lsn = log_sys->lsn;
-  log_sys->written_to_all_lsn = log_sys->lsn;
+  log_sys->m_buf_next_to_write = 0;
+  log_sys->m_written_to_some_lsn = log_sys->m_lsn;
+  log_sys->m_written_to_all_lsn = log_sys->m_lsn;
 
-  log_sys->next_checkpoint_no = 0;
-  log_sys->last_checkpoint_lsn = 0;
+  log_sys->m_next_checkpoint_no = 0;
+  log_sys->m_last_checkpoint_lsn = 0;
 
-  log_block_init(log_sys->buf, log_sys->lsn);
-  log_block_set_first_rec_group(log_sys->buf, LOG_BLOCK_HDR_SIZE);
+  log_sys->block_init(log_sys->m_buf, log_sys->m_lsn);
+  log_sys->block_set_first_rec_group(log_sys->m_buf, LOG_BLOCK_HDR_SIZE);
 
-  log_sys->buf_free = LOG_BLOCK_HDR_SIZE;
-  log_sys->lsn += LOG_BLOCK_HDR_SIZE;
+  log_sys->m_buf_free = LOG_BLOCK_HDR_SIZE;
+  log_sys->m_lsn += LOG_BLOCK_HDR_SIZE;
 
-  mutex_exit(&log_sys->mutex);
+  log_sys->release();
 
   /* Reset the checkpoint fields in logs */
 
-  log_make_checkpoint_at(IB_UINT64_T_MAX, true);
-  log_make_checkpoint_at(IB_UINT64_T_MAX, true);
+  log_sys->make_checkpoint_at(IB_UINT64_T_MAX, true);
+  log_sys->make_checkpoint_at(IB_UINT64_T_MAX, true);
 
-  mutex_enter(&log_sys->mutex);
+  log_sys->acquire();
 }
 
 std::string to_string(Recv_addr_state s) noexcept {

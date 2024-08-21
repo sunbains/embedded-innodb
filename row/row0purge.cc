@@ -194,16 +194,16 @@ static bool row_purge_remove_sec_if_poss_low(
   btr_pcur_t pcur;
   btr_cur_t *btr_cur;
   bool success;
-  bool old_has = 0; /* remove warning */
-  bool found;
+  bool old_has{};
   db_err err;
   mtr_t mtr;
   mtr_t mtr_vers;
 
-  log_free_check();
+  log_sys->free_check();
+
   mtr_start(&mtr);
 
-  found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
+  auto found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
 
   if (!found) {
     /* Not found.  This is a legitimate condition.  In a

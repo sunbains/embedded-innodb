@@ -99,29 +99,29 @@ static void mtr_log_reserve_and_write(mtr_t *mtr, ulint recovery) {
 
   if (mlog->heap == nullptr) {
 
-    log_acquire();
+    log_sys->acquire();
 
-    mtr->end_lsn = log_reserve_and_write_fast(first_data, dyn_block_get_used(mlog), &mtr->start_lsn);
+    mtr->end_lsn = log_sys->reserve_and_write_fast(first_data, dyn_block_get_used(mlog), &mtr->start_lsn);
 
     if (mtr->end_lsn != 0) {
       /* We were able to successfully write to the log. */
       return;
     }
 
-    log_release();
+    log_sys->release();
   }
 
   data_size = dyn_array_get_data_size(mlog);
 
   /* Open the database log for log_write_low */
-  mtr->start_lsn = log_reserve_and_open(data_size);
+  mtr->start_lsn = log_sys->reserve_and_open(data_size);
 
   if (mtr->log_mode == MTR_LOG_ALL) {
 
     block = mlog;
 
     while (block != nullptr) {
-      log_write_low(dyn_block_get_data(block), dyn_block_get_used(block));
+      log_sys->write_low(dyn_block_get_data(block), dyn_block_get_used(block));
       block = dyn_array_get_next_block(mlog, block);
     }
   } else {
@@ -129,7 +129,7 @@ static void mtr_log_reserve_and_write(mtr_t *mtr, ulint recovery) {
     /* Do nothing */
   }
 
-  mtr->end_lsn = log_close(ib_recovery_t(recovery));
+  mtr->end_lsn = log_sys->close(ib_recovery_t(recovery));
 }
 
 void mtr_commit(mtr_t *mtr) {
@@ -157,7 +157,7 @@ void mtr_commit(mtr_t *mtr) {
   mtr_memo_pop_all(mtr);
 
   if (write_log) {
-    log_release();
+    log_sys->release();
   }
 
   mtr->state = MTR_COMMITTED;
@@ -166,23 +166,19 @@ void mtr_commit(mtr_t *mtr) {
 }
 
 void mtr_rollback_to_savepoint(mtr_t *mtr, ulint savepoint) {
-  mtr_memo_slot_t *slot;
-  dyn_array_t *memo;
-  ulint offset;
-
   ut_ad(mtr);
   ut_ad(mtr->magic_n == MTR_MAGIC_N);
   ut_ad(mtr->state == MTR_ACTIVE);
 
-  memo = &(mtr->memo);
+  auto memo = &mtr->memo;
 
-  offset = dyn_array_get_data_size(memo);
+  auto offset = dyn_array_get_data_size(memo);
   ut_ad(offset >= savepoint);
 
   while (offset > savepoint) {
     offset -= sizeof(mtr_memo_slot_t);
 
-    slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
+    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
 
     ut_ad(slot->type != MTR_MEMO_MODIFY);
     mtr_memo_slot_release(mtr, slot);

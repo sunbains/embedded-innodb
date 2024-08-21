@@ -132,16 +132,8 @@ enum mlog_type_t : byte {
   /** Log record about an .ibd file deletion */
   MLOG_FILE_DELETE = 35,
 
-#ifdef UNIV_LOG_LSN_DEBUG
-  /** Current LSN */
-  MLOG_LSN = 88,
-
-  /** Biggest value (used in assertions) */
-  MLOG_BIGGEST_TYPE = 48,
-#else
   /** Biggest value (used in assertions) */
   MLOG_BIGGEST_TYPE = 47,
-#endif /* UNIV_LOG_LSN_DEBUG */
 
   /** If the mtr contains only one log record for one page,
   i.e., write_initial_log_record has been called only once, this flag is ORed
@@ -278,10 +270,6 @@ inline const char *mlog_type_str(mlog_type_t type) noexcept {
       return "MLOG_FILE_RENAME";
     case MLOG_FILE_DELETE:
       return "MLOG_FILE_DELETE";
-#ifdef UNIV_LOG_LSN_DEBUG
-    case MLOG_LSN:
-      return "MLOG_LSN";
-#endif /* UNIV_LOG_LSN_DEBUG */
     default:
         log_fatal("Unknown mlog_type_t: ", (ulint) type);
     }
