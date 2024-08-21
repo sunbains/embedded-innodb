@@ -812,52 +812,40 @@ static void trx_undo_empty_header_page(space_id_t space, page_no_t hdr_page_no, 
 }
 
 void trx_undo_truncate_end(trx_t *trx, trx_undo_t *undo, undo_no_t limit) {
-  mtr_t mtr;
-
   ut_ad(mutex_own(&trx->undo_mutex));
   ut_ad(mutex_own(&trx->rseg->mutex));
 
-  page_t *undo_page;
-  trx_undo_rec_t *trunc_here{};
+  trx_undo_rec_t *trunc_here;
 
-  for (;;) {
+  do {
+    mtr_t mtr;
+
+    trunc_here = nullptr;
+
     mtr_start(&mtr);
 
-    auto last_page_no = undo->last_page_no;
-
-    undo_page = trx_undo_page_get(undo->space, last_page_no, &mtr);
-
+    const auto last_page_no = undo->last_page_no;
+    const auto undo_page = trx_undo_page_get(undo->space, last_page_no, &mtr);
     auto rec = trx_undo_page_get_last_rec(undo_page, undo->hdr_page_no, undo->hdr_offset);
 
-    for (;;) {
-      if (rec == nullptr) {
-        if (last_page_no == undo->hdr_page_no) {
+    while (rec != nullptr && trx_undo_rec_get_undo_no(rec) < limit) {
+      trunc_here = rec;
+      rec = trx_undo_page_get_prev_rec(trunc_here, undo->hdr_page_no, undo->hdr_offset);
+    }
 
-          break;
-        }
+    if (rec == nullptr && last_page_no != undo->hdr_page_no) {
+      trx_undo_free_page_in_rollback(trx, undo, last_page_no, &mtr);
+    }
 
-        trx_undo_free_page_in_rollback(trx, undo, last_page_no, &mtr);
-        break;
-      }
-
-      if (trx_undo_rec_get_undo_no(rec) >= limit) {
-        /* Truncate at least this record off, maybe more */
-        trunc_here = rec;
-      } else {
-        break;
-      }
-
-      rec = trx_undo_page_get_prev_rec(rec, undo->hdr_page_no, undo->hdr_offset);
+    if (trunc_here != nullptr) {
+      /* Do the actual truncate. */
+      mlog_write_ulint(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_FREE, trunc_here - undo_page, MLOG_2BYTES, &mtr);
+      trunc_here = nullptr;
     }
 
     mtr_commit(&mtr);
-  }
 
-  if (trunc_here != nullptr) {
-    mlog_write_ulint(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_FREE, trunc_here - undo_page, MLOG_2BYTES, &mtr);
-  }
-
-  mtr_commit(&mtr);
+  } while (trunc_here != nullptr);
 }
 
 void trx_undo_truncate_start(trx_rseg_t *rseg, ulint space, ulint hdr_page_no, ulint hdr_offset, undo_no_t limit) {
