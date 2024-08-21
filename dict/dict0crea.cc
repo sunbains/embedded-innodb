@@ -1067,7 +1067,7 @@ db_err dict_create_or_check_foreign_constraint_tables() {
 
   trx_start_if_not_started(trx);
 
-  ib_logger(ib_stream, "Creating foreign key constraint system tables\n");
+  log_info("Creating foreign key constraint system tables");
 
   /* NOTE: in dict_load_foreigns we use the fact that
   there are 2 secondary indexes on SYS_FOREIGN, and they
@@ -1132,11 +1132,7 @@ db_err dict_create_or_check_foreign_constraint_tables() {
   trx_free_for_client(trx);
 
   if (err == DB_SUCCESS) {
-    ib_logger(
-      ib_stream,
-      "Foreign key constraint system tables"
-      " created\n"
-    );
+    log_info("Foreign key constraint system tables created");
   }
 
   return err;

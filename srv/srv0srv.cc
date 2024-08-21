@@ -116,18 +116,6 @@ ulint srv_check_file_format_at_startup = DICT_TF_FORMAT_MAX;
 #error "DICT_TF_FORMAT_51 must be 0!"
 #endif
 
-ulint srv_n_data_files = 0;
-
-/** Size in database pages */
-ulint *srv_data_file_sizes = nullptr;
-
-/** If true, then we auto-extend the last data file */
-bool srv_auto_extend_last_data_file = false;
-
-/* if != 0, this tells the max size auto-extending may increase the
-last data file size */
-ulint srv_last_file_size_max = 0;
-
 /** If the last data file is auto-extended, we add this
 many pages to it at a time */
 ulong srv_auto_extend_increment = 8;
@@ -668,10 +656,6 @@ void srv_var_init() {
   srv_file_format = 0;
   srv_check_file_format_at_startup = DICT_TF_FORMAT_MAX;
 
-  srv_n_data_files = 0;
-
-  srv_auto_extend_last_data_file = false;
-  srv_last_file_size_max = 0;
   srv_auto_extend_increment = 8;
   srv_data_file_is_raw_partition = nullptr;
 
@@ -982,14 +966,6 @@ ulong srv_max_purge_lag = 0;
 /** Normalizes init parameter values to use units we use inside InnoDB.
 @return	DB_SUCCESS or error code */
 static db_err srv_normalize_init_values() {
-  auto n = srv_n_data_files;
-
-  for (ulint i = 0; i < n; i++) {
-    srv_data_file_sizes[i] = srv_data_file_sizes[i] * ((1024 * 1024) / UNIV_PAGE_SIZE);
-  }
-
-  srv_last_file_size_max = srv_last_file_size_max * ((1024 * 1024) / UNIV_PAGE_SIZE);
-
   srv_log_file_size = srv_log_file_curr_size / UNIV_PAGE_SIZE;
   srv_log_file_curr_size = srv_log_file_size * UNIV_PAGE_SIZE;
 

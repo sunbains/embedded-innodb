@@ -113,11 +113,9 @@ DICT_TF_FORMAT_MAX + 1 means no checking ie. false.  The default is to
 set it to the highest format we support. */
 extern ulint srv_check_file_format_at_startup;
 
-extern ulint srv_n_data_files;
 extern ulint *srv_data_file_sizes;
 extern ulint *srv_data_file_is_raw_partition;
 
-extern bool srv_auto_extend_last_data_file;
 extern ulint srv_last_file_size_max;
 extern ulong srv_auto_extend_increment;
 

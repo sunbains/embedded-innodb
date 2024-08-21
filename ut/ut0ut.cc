@@ -186,7 +186,7 @@ ulint ut_delay(ulint delay) {
 std::ostream &buf_to_hex_string(std::ostream &o, const void *buf, ulint len) {
   UNIV_MEM_ASSERT_RW(buf, len);
 
-  o << " buf = { len: " << len << ",\nhex = {\n";
+  o << " buf = { len: " << len << ",\nhex = { ";
 
   auto data = reinterpret_cast<const byte *>(buf);
 
@@ -194,7 +194,7 @@ std::ostream &buf_to_hex_string(std::ostream &o, const void *buf, ulint len) {
     o << std::format("{:#x}", *data);
   }
 
-  o << " },\nasc  = {\n";
+  o << " },\nasc = { ";
 
   data = reinterpret_cast<const byte *>(buf);
 
@@ -202,7 +202,7 @@ std::ostream &buf_to_hex_string(std::ostream &o, const void *buf, ulint len) {
     o << std::format("{}", *data);
   }
 
-   o << "}\n";
+   o << "} }";
 
    return o;
 }

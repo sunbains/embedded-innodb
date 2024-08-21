@@ -793,16 +793,16 @@ bool rec_validate(const rec_t *rec, const ulint *offsets) noexcept {
 std::ostream &rec_print(std::ostream &os, const rec_t *rec) noexcept {
   auto n = rec_get_n_fields(rec);
 
-  os << std::format("PHYSICAL RECORD: n_fields {}; {}-byte offsets; info bits {}\n",
+  os << std::format("PHYSICAL RECORD: n_fields {}; {}-byte offsets; info bits {}",
 		    n,
 		    (rec_get_1byte_offs_flag(rec) ? 1 : 2),
 		    rec_get_info_bits(rec));
 
-  for (ulint i = 0; i < n; i++) {
+  for (ulint i{}; i < n; ++i) {
+    os << std::format(" {}:", i);
+
     ulint len;
     auto data = rec_get_nth_field(rec, i, &len);
-
-    os << std::format(" {}:", i);
 
     if (len != UNIV_SQL_NULL) {
       buf_to_hex_string(os, data, std::max(len, 30UL));
@@ -810,8 +810,6 @@ std::ostream &rec_print(std::ostream &os, const rec_t *rec) noexcept {
     } else {
       os << std::format(" SQL NULL, size {} ", rec_get_nth_field_size(rec, i));
     }
-
-    os << ";\n";
   }
 
   rec_validate(rec);

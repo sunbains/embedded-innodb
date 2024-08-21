@@ -224,9 +224,6 @@ constexpr ulint XDES_SIZE = XDES_BITMAP + UT_BITS_IN_BYTES(FSP_EXTENT_SIZE * XDE
 /** Offset of the descriptor array on a descriptor page */
 constexpr ulint XDES_ARR_OFFSET = FSP_HEADER_OFFSET + FSP_HEADER_SIZE;
 
-/** Flag to indicate if we have printed the tablespace full error. */
-static bool fsp_tbs_full_error_printed = false;
-
 /** Returns an extent to the free list of a space.
 @param[in] space                Tablespace ID
 @param[in] page                 Page offset in the extent
@@ -860,93 +857,51 @@ static bool fsp_try_extend_data_file_with_pages(space_id_t space, page_no_t page
 
 /**
  * Tries to extend the last data file of a tablespace if it is auto-extending.
- * @param actual_increase out: actual increase in pages, where we measure the tablespace size from what the header field says; it may be the actual file size rounded down to megabyte
+ * 
+ * @param actual_increase out: actual increase in pages, where we measure the tablespace
+ *  size from what the header field says; it may be the actual file size rounded down
+ *  to megabyte
  * @param space in: space
  * @param header in: space header
  * @param mtr in: mtr
+ * 
  * @return false if not auto-extending
  */
 static bool fsp_try_extend_data_file(ulint *actual_increase, space_id_t space, fsp_header_t *header, mtr_t *mtr) {
-  ulint size;
-  ulint new_size;
-  ulint old_size;
-  ulint size_increase;
-  ulint actual_size;
-  bool success;
-
   *actual_increase = 0;
 
-  if (space == SYS_TABLESPACE && !srv_auto_extend_last_data_file) {
+  auto extent_size = FSP_EXTENT_SIZE;
+  auto size = mtr_read_ulint(header + FSP_SIZE, MLOG_4BYTES, mtr);
+  auto old_size = size;
 
-    /* We print the error message only once to avoid
-    spamming the error log. Note that we don't need
-    to reset the flag to false as dealing with this
-    error requires server restart. */
-    if (fsp_tbs_full_error_printed == false) {
-      ib_logger(
-        ib_stream,
-        "Error: Data file(s) ran out of space Please add another data file or"
-        " use \'autoextend\' for the last data file.\n"
-      );
-      fsp_tbs_full_error_printed = true;
+  /* We extend single-table tablespaces first one extent at a time, but for bigger
+  tablespaces more. It is not enough to extend always by one extent, because some
+  extents are frag page extents. */
+
+
+  if (size < extent_size) {
+    /* Let us first extend the file to extent_size */
+    auto success = fsp_try_extend_data_file_with_pages(space, extent_size - 1, header, mtr);
+
+    if (!success) {
+      auto new_size = mtr_read_ulint(header + FSP_SIZE, MLOG_4BYTES, mtr);
+
+      *actual_increase = new_size - old_size;
+
+      return false;
     }
-    return false;
+
+    size = extent_size;
   }
 
-  size = mtr_read_ulint(header + FSP_SIZE, MLOG_4BYTES, mtr);
+  page_no_t size_increase;
 
-  old_size = size;
-
-  if (space == 0) {
-    if (!srv_last_file_size_max) {
-      size_increase = SRV_AUTO_EXTEND_INCREMENT;
-    } else {
-      if (srv_last_file_size_max < srv_data_file_sizes[srv_n_data_files - 1]) {
-
-        ib_logger(
-          ib_stream,
-          "Error: Last data file size is %lu, max size allowed %lu\n",
-          (ulong)srv_data_file_sizes[srv_n_data_files - 1],
-          (ulong)srv_last_file_size_max
-        );
-      }
-
-      size_increase = srv_last_file_size_max - srv_data_file_sizes[srv_n_data_files - 1];
-      if (size_increase > SRV_AUTO_EXTEND_INCREMENT) {
-        size_increase = SRV_AUTO_EXTEND_INCREMENT;
-      }
-    }
+  if (size < 32 * extent_size) {
+    size_increase = extent_size;
   } else {
-    /* We extend single-table tablespaces first one extent
-    at a time, but for bigger tablespaces more. It is not
-    enough to extend always by one extent, because some
-    extents are frag page extents. */
-    ulint extent_size; /*!< one megabyte, in pages */
-
-    extent_size = FSP_EXTENT_SIZE;
-
-    if (size < extent_size) {
-      /* Let us first extend the file to extent_size */
-      success = fsp_try_extend_data_file_with_pages(space, extent_size - 1, header, mtr);
-      if (!success) {
-        new_size = mtr_read_ulint(header + FSP_SIZE, MLOG_4BYTES, mtr);
-
-        *actual_increase = new_size - old_size;
-
-        return false;
-      }
-
-      size = extent_size;
-    }
-
-    if (size < 32 * extent_size) {
-      size_increase = extent_size;
-    } else {
-      /* Below in fsp_fill_free_list() we assume
-      that we add at most FSP_FREE_ADD extents at
-      a time */
-      size_increase = FSP_FREE_ADD * extent_size;
-    }
+    /* Below in fsp_fill_free_list() we assume that we add at most FSP_FREE_ADD
+    extents at a time */
+    size_increase = FSP_FREE_ADD * extent_size;
   }
 
   if (size_increase == 0) {
@@ -954,11 +909,14 @@ static bool fsp_try_extend_data_file(ulint *actual_increase, space_id_t space, f
     return true;
   }
 
-  success = srv_fil->extend_space_to_desired_size(&actual_size, space, size + size_increase);
+  page_no_t actual_size;
+  auto success = srv_fil->extend_space_to_desired_size(&actual_size, space, size + size_increase);
+  ut_a(success);
+
   /* We ignore any fragments of a full megabyte when storing the size
   to the space header */
 
-  new_size = ut_calc_align_down(actual_size, (1024 * 1024) / UNIV_PAGE_SIZE);
+  auto new_size = ut_calc_align_down(actual_size, (1024 * 1024) / UNIV_PAGE_SIZE);
   mlog_write_ulint(header + FSP_SIZE, new_size, MLOG_4BYTES, mtr);
 
   *actual_increase = new_size - old_size;
@@ -971,8 +929,8 @@ limit. If an extent happens to contain an extent descriptor page, the extent
 is put to the FSP_FREE_FRAG list with the page marked as used.
 @param[in] init_space           true if this is a single-table tablespace and
                                 we are only initing the tablespace's first
-				extent descriptor page; then we do not allocate
-				more extents
+				                        extent descriptor page; then we do not allocate
+				                        more extents
 @param[in] space                Tablespace
 @param[in,out] header           Tablespace header page
 @param[in] mtr                  Mini-transaction covering the operation.  */
@@ -984,13 +942,7 @@ static void fsp_fill_free_list(bool init_space, space_id_t space, fsp_header_t *
   /* Check if we can fill free list from above the free list limit */
   auto size = mtr_read_ulint(header + FSP_SIZE, MLOG_4BYTES, mtr);
   auto limit = mtr_read_ulint(header + FSP_FREE_LIMIT, MLOG_4BYTES, mtr);
-  bool extend_file = size < limit + FSP_EXTENT_SIZE * FSP_FREE_ADD;
-
-  if (space == SYS_TABLESPACE) {
-    extend_file = extend_file && srv_auto_extend_last_data_file;
-  } else {
-    extend_file = extend_file && !init_space;
-  }
+  bool extend_file = (size < limit + FSP_EXTENT_SIZE * FSP_FREE_ADD) && !init_space;
 
   if (extend_file) {
     ulint actual_increase{};
@@ -1008,7 +960,7 @@ static void fsp_fill_free_list(bool init_space, space_id_t space, fsp_header_t *
 
     mlog_write_ulint(header + FSP_FREE_LIMIT, i + FSP_EXTENT_SIZE, MLOG_4BYTES, mtr);
 
-    /* Update the free limit info in the log system and make
+     /* Update the free limit info in the log system and make
     a checkpoint */
     if (space == SYS_TABLESPACE) {
       log_sys->fsp_current_free_limit_set_and_checkpoint((i + FSP_EXTENT_SIZE) / ((1024 * 1024) / UNIV_PAGE_SIZE));
@@ -1123,19 +1075,17 @@ static xdes_t *fsp_alloc_free_extent(space_id_t space, ulint hint, mtr_t *mtr) {
  * @return the page offset, FIL_NULL if no page could be allocated
  */
 static ulint fsp_alloc_free_page(space_id_t space, page_no_t hint, mtr_t *mtr) {
-  fil_addr_t first;
-  buf_block_t *block;
   ulint free;
   bool success;
-
-  ut_ad(mtr);
+  fil_addr_t first;
+  buf_block_t *block;
 
   auto header = fsp_get_space_header(space, mtr);
 
   /* Get the hinted descriptor */
   auto descr = xdes_get_descriptor_with_space_hdr(header, space, hint, mtr);
 
-  if (descr != nullptr && (xdes_get_state(descr, mtr) == XDES_FREE_FRAG)) {
+  if (descr != nullptr && xdes_get_state(descr, mtr) == XDES_FREE_FRAG) {
     /* Ok, we can take this extent */
   } else {
     /* Else take the first extent in free_frag list */
@@ -1154,7 +1104,7 @@ static ulint fsp_alloc_free_page(space_id_t space, page_no_t hint, mtr_t *mtr) {
       if (descr == nullptr) {
         /* No free space left */
 
-        return (FIL_NULL);
+        return FIL_NULL;
       }
 
       xdes_set_state(descr, XDES_FREE_FRAG, mtr);
@@ -1190,14 +1140,13 @@ static ulint fsp_alloc_free_page(space_id_t space, page_no_t hint, mtr_t *mtr) {
     ut_a(space != SYS_TABLESPACE);
 
     if (page_no >= FSP_EXTENT_SIZE) {
-      ib_logger(
-        ib_stream,
-        "Error: trying to extend a single-table tablespace %lu\n"
-        "by single page(s) though the space size %lu. Page no %lu.\n",
-        (ulong)space,
-        (ulong)space_size,
-        (ulong)page_no
-      );
+      log_err(std::format(
+        "Trying to extend a single-table tablespace {}"
+        " by single page(s) though the space size {}. Page no {}.",
+        space,
+        space_size,
+        page_no
+      ));
       return FIL_NULL;
     }
 
@@ -2232,14 +2181,10 @@ static bool fsp_reserve_free_pages(
   mtr_t *mtr
 ) /*!< in: mtr */
 {
-  xdes_t *descr;
-  ulint n_used;
-
-  ut_a(space != SYS_TABLESPACE);
   ut_a(size < FSP_EXTENT_SIZE / 2);
 
-  descr = xdes_get_descriptor_with_space_hdr(space_header, space, 0, mtr);
-  n_used = xdes_get_n_used(descr, mtr);
+  auto descr = xdes_get_descriptor_with_space_hdr(space_header, space, 0, mtr);
+  auto n_used = xdes_get_n_used(descr, mtr);
 
   ut_a(n_used <= size);
 

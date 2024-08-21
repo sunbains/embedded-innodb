@@ -410,7 +410,7 @@ void Fil::mutex_enter_and_prepare_for_io(space_id_t space_id) {
   for (;;) {
     mutex_enter(&m_mutex);
 
-    if (space_id == 0 || space_id >= SRV_LOG_SPACE_FIRST_ID) {
+    if (space_id == SYS_TABLESPACE || space_id >= SRV_LOG_SPACE_FIRST_ID) {
       /* We keep log files and system tablespace files always open;
       this is important in preventing deadlocks in this module, as
       a page read completion often performs another read from the
@@ -1458,7 +1458,7 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
     return DB_OUT_OF_FILE_SPACE;
   }
 
-  if (*space_id == 0) {
+  if (*space_id == SYS_TABLESPACE) {
     *space_id = assign_new_space_id();
   }
 
@@ -2130,14 +2130,6 @@ bool Fil::extend_space_to_desired_size(ulint *actual_size, space_id_t space_id, 
 
   *actual_size = space->m_size_in_pages;
 
-  if (space_id == 0) {
-    ulint pages_per_mb = (1024 * 1024) / page_size;
-
-    /* Keep the last data file size info up to date, rounded to
-    full megabytes */
-
-    srv_data_file_sizes[srv_n_data_files - 1] = (node->m_size_in_pages / pages_per_mb) * pages_per_mb;
-  }
 
   mutex_exit(&m_mutex);
 
