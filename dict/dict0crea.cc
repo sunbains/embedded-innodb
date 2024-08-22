@@ -240,11 +240,11 @@ static db_err dict_build_table_def_step(que_thr_t *thr, tab_node_t *node) {
       return err;
     }
 
-    mtr_start(&mtr);
+    mtr.start();
 
     srv_fsp->header_init(table->space, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
   } else {
     /* Create in the system tablespace: disallow new features */
@@ -544,7 +544,7 @@ static ulint dict_create_index_tree_step(ind_node_t *node) {
   the index and its root address is written to the index entry in
   sys_indexes */
 
-  mtr_start(&mtr);
+  mtr.start();
 
   search_tuple = dict_create_search_tuple(node->ind_row, node->heap);
 
@@ -561,7 +561,7 @@ static ulint dict_create_index_tree_step(ind_node_t *node) {
 
   pcur.close();
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   if (node->page_no == FIL_NULL) {
 
@@ -574,12 +574,12 @@ static ulint dict_create_index_tree_step(ind_node_t *node) {
 void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
   ulint len;
 
-  ut_ad(mutex_own(&(dict_sys->mutex)));
+  ut_ad(mutex_own(&dict_sys->mutex));
   auto ptr = rec_get_nth_field(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
 
   ut_ad(len == 4);
 
-  page_no_t root_page_no = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
+  auto root_page_no = mtr->read_ulint(ptr, MLOG_4BYTES);
 
   if (root_page_no == FIL_NULL) {
     /* The tree has already been freed */
@@ -591,7 +591,7 @@ void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
 
   ut_ad(len == 4);
 
-  space_id_t space = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
+  auto space = mtr->read_ulint(ptr, MLOG_4BYTES);
 
   if (srv_fil->space_get_flags(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
@@ -614,12 +614,12 @@ void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
   page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
 }
 
-ulint dict_truncate_index_tree(dict_table_t *table, ulint space, btr_pcur_t *pcur, mtr_t *mtr) {
-  bool drop = !space;
+ulint dict_truncate_index_tree(dict_table_t *table, space_id_t space, btr_pcur_t *pcur, mtr_t *mtr) {
+  ulint len;
   ulint type;
   uint64_t index_id;
-  ulint len;
   dict_index_t *index;
+  bool drop = space != SYS_TABLESPACE;
 
   ut_ad(mutex_own(&dict_sys->mutex));
   auto rec = pcur->get_rec();
@@ -627,18 +627,12 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space, btr_pcur_t *pcu
 
   ut_ad(len == 4);
 
-  auto root_page_no = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
+  auto root_page_no = mtr->read_ulint(ptr, MLOG_4BYTES);
 
   if (drop && root_page_no == FIL_NULL) {
     /* The tree has been freed. */
 
-    ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      "  Trying to TRUNCATE"
-      " a missing index of table %s!\n",
-      table->name
-    );
+    log_err(std::format("Trying to TRUNCATE a missing index of table {}!", table->name));
     drop = false;
   }
 
@@ -647,20 +641,14 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space, btr_pcur_t *pcu
   ut_ad(len == 4);
 
   if (drop) {
-    space = mtr_read_ulint(ptr, MLOG_4BYTES, mtr);
+    space = mtr->read_ulint(ptr, MLOG_4BYTES);
   }
 
   if (srv_fil->space_get_flags(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
 
-    ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      "  Trying to TRUNCATE"
-      " a missing .ibd file of table %s!\n",
-      table->name
-    );
+    log_err(std::format("Trying to TRUNCATE a missing .ibd file of table {}!", table->name));
 
     return FIL_NULL;
   }
@@ -691,8 +679,8 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space, btr_pcur_t *pcu
 
   /* We will temporarily write FIL_NULL to the PAGE_NO field
   in SYS_INDEXES, so that the database will not get into an
-  inconsistent state in case it crashes between the mtr_commit()
-  below and the following mtr_commit() call. */
+  inconsistent state in case it crashes between the mtr.commit()
+  below and the following mtr.commit() call. */
   page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
 
   /* We will need to commit the mini-transaction in order to avoid
@@ -700,9 +688,9 @@ ulint dict_truncate_index_tree(dict_table_t *table, ulint space, btr_pcur_t *pcu
   be freeing and allocating pages in the same mini-transaction. */
   pcur->store_position(mtr);
 
-  mtr_commit(mtr);
+  mtr->commit();
 
-  mtr_start(mtr);
+  mtr->start();
 
   pcur->restore_position(BTR_MODIFY_LEAF, mtr, Source_location{});
 

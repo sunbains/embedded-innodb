@@ -174,13 +174,13 @@ inline byte *mlog_open(mtr_t *mtr, ulint size) {
   /**
    * Set modifications flag to true.
    */
-  mtr->modifications = true;
+  mtr->m_modifications = true;
 
-  if (mtr_get_log_mode(mtr) == MTR_LOG_NONE) {
+  if (mtr->get_log_mode() == MTR_LOG_NONE) {
     return nullptr;
   }
 
-  auto mlog = &mtr->log;
+  auto mlog = &mtr->m_log;
 
   return dyn_array_open(mlog, size);
 }
@@ -192,9 +192,9 @@ inline byte *mlog_open(mtr_t *mtr, ulint size) {
  * @param ptr Buffer space from ptr up was not used.
  */
 inline void mlog_close(mtr_t *mtr, byte *ptr) {
-  ut_ad(mtr_get_log_mode(mtr) != MTR_LOG_NONE);
+  ut_ad(mtr->get_log_mode() != MTR_LOG_NONE);
 
-  auto mlog = &mtr->log;
+  auto mlog = &mtr->m_log;
 
   dyn_array_close(mlog, ptr);
 }
@@ -207,11 +207,11 @@ inline void mlog_close(mtr_t *mtr, byte *ptr) {
  * @param type MLOG_1BYTE, MLOG_2BYTES, or MLOG_4BYTES.
  */
 inline void mlog_catenate_ulint(mtr_t *mtr, ulint val, mlog_type_t type) {
-  if (mtr_get_log_mode(mtr) == MTR_LOG_NONE) {
+  if (mtr->get_log_mode() == MTR_LOG_NONE) {
     return;
   }
 
-  auto mlog = &mtr->log;
+  auto mlog = &mtr->m_log;
 
   /**
    * Assert that the type values are correct.
@@ -306,7 +306,7 @@ inline byte *mlog_write_initial_log_record_for_file_op(
   log_ptr += mach_write_compressed(log_ptr, space_id);
   log_ptr += mach_write_compressed(log_ptr, page_no);
 
-  mtr->n_log_recs++;
+  ++mtr->m_n_log_recs;
 
   return log_ptr;
 }

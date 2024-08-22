@@ -27,12 +27,25 @@ enum mtr_log_mode_t : byte {
  * @brief Types for the mlock objects to store in the mtr memo;
  * NOTE that the first 3 values must be RW_S_LATCH, RW_X_LATCH, RW_NO_LATCH
  */
-constexpr auto MTR_MEMO_PAGE_S_FIX = RW_S_LATCH;
-constexpr auto MTR_MEMO_PAGE_X_FIX = RW_X_LATCH;
-constexpr ulint MTR_MEMO_BUF_FIX = RW_NO_LATCH;
-constexpr ulint MTR_MEMO_MODIFY = 54;
-constexpr ulint MTR_MEMO_S_LOCK = 55;
-constexpr ulint MTR_MEMO_X_LOCK = 56;
+enum mtr_memo_type_t : byte {
+  /** Page is fixed in an S-latch */
+  MTR_MEMO_PAGE_S_FIX = RW_S_LATCH,
+
+  /** Page is fixed in an X-latch */
+  MTR_MEMO_PAGE_X_FIX = RW_X_LATCH,
+
+  /** Page is fixed in no latch */
+  MTR_MEMO_BUF_FIX = RW_NO_LATCH,
+
+  /** Page is modified */
+  MTR_MEMO_MODIFY = 54,
+
+  /** Page is locked in S-mode */
+  MTR_MEMO_S_LOCK = 55,
+
+  /** Page is locked in X-mode */
+  MTR_MEMO_X_LOCK = 56,
+};
 
 /** @name Log item types
 The log items are declared 'byte' so that the compiler can warn if val
@@ -171,40 +184,10 @@ constexpr ulint MTR_MAGIC_N = 54551;
 /* Type definition of a mini-transaction memo stack slot. */
 struct mtr_memo_slot_t {
   /** Type of the stored object (MTR_MEMO_S_LOCK, ...) */
-  ulint type;
+  mtr_memo_type_t m_type;
 
   /** Pointer to the object */
-  void *object;
-};
-
-/* Mini-transaction handle and buffer */
-struct mtr_t {
-  /** MTR_ACTIVE, MTR_COMMITTING, MTR_COMMITTED */
-  mtr_state_t state{MTR_UNDEFINED};
-
-  /** True if the mtr made modifications to buffer pool pages */
-  bool modifications;
-
-  /** Specifies which operations should be logged. */
-  mtr_log_mode_t log_mode{MTR_LOG_ALL};
-
-  /** Count of how many page initial log records have been written to the mtr log */
-  uint32_t n_log_recs;
-
-  /** Memo stack for locks etc. */
-  dyn_array_t memo;
-
-  /** Mini-transaction log */
-  dyn_array_t log;
-
-  /** Start lsn of the possible log entry for this mtr */
-  lsn_t start_lsn;
-
-  /** End lsn of the possible log entry for this mtr */
-  lsn_t end_lsn;
-
-  /** For debugging. */
-  ut_d(ulint magic_n;)
+  void *m_object;
 };
 
 /**

@@ -757,7 +757,7 @@ static ulint trx_undo_free_page(
 
   if (in_history) {
     auto rseg_header = trx_rsegf_get(space, rseg->page_no, mtr);
-    auto hist_size = mtr_read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, mtr);
+    auto hist_size = mtr->read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES);
     ut_ad(hist_size > 0);
 
     mlog_write_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, hist_size - 1, MLOG_4BYTES, mtr);
@@ -817,7 +817,7 @@ void trx_undo_truncate_end(trx_t *trx, trx_undo_t *undo, undo_no_t limit) {
 
     trunc_here = nullptr;
 
-    mtr_start(&mtr);
+    mtr.start();
 
     const auto last_page_no = undo->last_page_no;
     const auto undo_page = trx_undo_page_get(undo->space, last_page_no, &mtr);
@@ -838,7 +838,7 @@ void trx_undo_truncate_end(trx_t *trx, trx_undo_t *undo, undo_no_t limit) {
       trunc_here = nullptr;
     }
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
   } while (trunc_here != nullptr);
 }
@@ -858,14 +858,14 @@ void trx_undo_truncate_start(trx_rseg_t *rseg, ulint space, ulint hdr_page_no, u
   }
 
 loop:
-  mtr_start(&mtr);
+  mtr.start();
 
   rec = trx_undo_get_first_rec(space, hdr_page_no, hdr_offset, RW_X_LATCH, &mtr);
 
   if (rec == nullptr) {
     /* Already empty */
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
     return;
   }
@@ -875,7 +875,7 @@ loop:
   last_rec = trx_undo_page_get_last_rec(undo_page, hdr_page_no, hdr_offset);
   if (trx_undo_rec_get_undo_no(last_rec) >= limit) {
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
     return;
   }
@@ -888,7 +888,7 @@ loop:
     trx_undo_free_page(rseg, true, space, hdr_page_no, page_no, &mtr);
   }
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   goto loop;
 }
@@ -905,7 +905,7 @@ static void trx_undo_seg_free(trx_undo_t *undo) {
   auto rseg = undo->rseg;
 
   do {
-    mtr_start(&mtr);
+    mtr.start();
 
     ut_ad(!mutex_own(&kernel_mutex));
 
@@ -925,7 +925,7 @@ static void trx_undo_seg_free(trx_undo_t *undo) {
 
     mutex_exit(&rseg->mutex);
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
   } while (!finished);
 }
@@ -957,15 +957,15 @@ static trx_undo_t *trx_undo_mem_create_at_db_start(trx_rseg_t *rseg, ulint id, p
 
   auto undo_page = trx_undo_page_get(rseg->space, page_no, mtr);
   auto page_header = undo_page + TRX_UNDO_PAGE_HDR;
-  auto type = mtr_read_ulint(page_header + TRX_UNDO_PAGE_TYPE, MLOG_2BYTES, mtr);
+  auto type = mtr->read_ulint(page_header + TRX_UNDO_PAGE_TYPE, MLOG_2BYTES);
   auto seg_header = undo_page + TRX_UNDO_SEG_HDR;
   auto state = mach_read_from_2(seg_header + TRX_UNDO_STATE);
   auto offset = mach_read_from_2(seg_header + TRX_UNDO_LAST_LOG);
   auto undo_header = undo_page + offset;
-  auto trx_id = mtr_read_uint64(undo_header + TRX_UNDO_TRX_ID, mtr);
+  auto trx_id = mtr->read_uint64(undo_header + TRX_UNDO_TRX_ID);
 
 #ifdef WITH_XOPEN
-  xid_exists = mtr_read_ulint(undo_header + TRX_UNDO_XID_EXISTS, MLOG_1BYTE, mtr);
+  xid_exists = mtr->read_ulint(undo_header + TRX_UNDO_XID_EXISTS, MLOG_1BYTE);
 
   /* Read X/Open XA transaction identification if it exists, or
   set it to nullptr. */
@@ -988,9 +988,9 @@ static trx_undo_t *trx_undo_mem_create_at_db_start(trx_rseg_t *rseg, ulint id, p
 
   mutex_exit(&rseg->mutex);
 
-  undo->dict_operation = mtr_read_ulint(undo_header + TRX_UNDO_DICT_TRANS, MLOG_1BYTE, mtr);
+  undo->dict_operation = mtr->read_ulint(undo_header + TRX_UNDO_DICT_TRANS, MLOG_1BYTE);
 
-  undo->table_id = mtr_read_uint64(undo_header + TRX_UNDO_TABLE_ID, mtr);
+  undo->table_id = mtr->read_uint64(undo_header + TRX_UNDO_TABLE_ID);
   undo->state = state;
   undo->size = flst_get_len(seg_header + TRX_UNDO_PAGE_LIST, mtr);
 
@@ -1046,7 +1046,7 @@ ulint trx_undo_lists_init(ib_recovery_t recovery, trx_rseg_t *rseg) {
 
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   auto rseg_header = trx_rsegf_get_new(rseg->space, rseg->page_no, &mtr);
 
@@ -1065,15 +1065,15 @@ ulint trx_undo_lists_init(ib_recovery_t recovery, trx_rseg_t *rseg) {
       auto undo = trx_undo_mem_create_at_db_start(rseg, i, page_no, &mtr);
       size += undo->size;
 
-      mtr_commit(&mtr);
+      mtr.commit();
 
-      mtr_start(&mtr);
+      mtr.start();
 
       rseg_header = trx_rsegf_get(rseg->space, rseg->page_no, &mtr);
     }
   }
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return size;
 }
@@ -1372,7 +1372,7 @@ db_err trx_undo_assign_undo(trx_t *trx, ulint type) {
 
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   ut_ad(!mutex_own(&kernel_mutex));
 
@@ -1394,7 +1394,7 @@ db_err trx_undo_assign_undo(trx_t *trx, ulint type) {
     if (err != DB_SUCCESS) {
 
       mutex_exit(&rseg->mutex);
-      mtr_commit(&mtr);
+      mtr.commit();
 
       return err;
     }
@@ -1416,7 +1416,7 @@ db_err trx_undo_assign_undo(trx_t *trx, ulint type) {
 
   mutex_exit(&rseg->mutex);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return DB_SUCCESS;
 }

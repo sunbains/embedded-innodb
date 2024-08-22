@@ -254,7 +254,7 @@ lsn_t Log::reserve_and_open(ulint len) noexcept {
   return m_lsn;
 }
 
-void Log::write_low(byte *str, ulint str_len) noexcept {
+void Log::write_low(const byte *str, ulint str_len) noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   while (str_len > 0) {

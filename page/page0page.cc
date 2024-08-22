@@ -168,7 +168,7 @@ static bool page_dir_slot_check(page_dir_slot_t *slot) /*!< in: slot */
 void page_set_max_trx_id(buf_block_t *block, trx_id_t trx_id, mtr_t *mtr) {
   auto page = block->get_frame();
 
-  ut_ad(!mtr || mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(!mtr || mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   /* It is not necessary to write this change to the redo log, as
   during a database recovery we assume that the max trx id of every
@@ -652,7 +652,7 @@ void page_delete_rec_list_start(rec_t *rec, buf_block_t *block, dict_index_t *in
 
   /* Individual deletes are not logged */
 
-  auto log_mode = mtr_set_log_mode(mtr, MTR_LOG_NONE);
+  auto log_mode = mtr->set_log_mode(MTR_LOG_NONE);
 
   while (page_cur_get_rec(&cur1) != rec) {
     {
@@ -669,7 +669,8 @@ void page_delete_rec_list_start(rec_t *rec, buf_block_t *block, dict_index_t *in
 
   /* Restore log mode */
 
-  mtr_set_log_mode(mtr, log_mode);
+  auto old_mode = mtr->set_log_mode(log_mode);
+  ut_a(old_mode == MTR_LOG_NONE);
 }
 
 bool page_move_rec_list_end(buf_block_t *new_block, buf_block_t *block, rec_t *split_rec, dict_index_t *index, mtr_t *mtr) {

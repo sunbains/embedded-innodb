@@ -350,7 +350,7 @@ inline void btr_page_set_level(page_t *page, ulint level, mtr_t *mtr) {
 @param[in] page                 Index page
 @return	next page number */
 inline ulint btr_page_get_next(const page_t *page, mtr_t *mtr) {
-  ut_ad(mtr_memo_contains_page(mtr, page, MTR_MEMO_PAGE_X_FIX) || mtr_memo_contains_page(mtr, page, MTR_MEMO_PAGE_S_FIX));
+  ut_ad(mtr->memo_contains_page(page, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(page, MTR_MEMO_PAGE_S_FIX));
 
   return mach_read_from_4(page + FIL_PAGE_NEXT);
 }
@@ -409,8 +409,8 @@ inline ulint btr_node_ptr_get_child_page_no(const rec_t *rec, const ulint *offse
 @param[in] latch_mode           BTR_SEARCH_LEAF or BTR_MODIFY_LEAF
 @param[in,out] mtr              Mini-transaction */
 inline void btr_leaf_page_release(buf_block_t *block, ulint latch_mode, mtr_t *mtr) {
-  ut_ad(!mtr_memo_contains(mtr, block, MTR_MEMO_MODIFY));
+  ut_ad(!mtr->memo_contains(block, MTR_MEMO_MODIFY));
   ut_ad(latch_mode == BTR_SEARCH_LEAF || latch_mode == BTR_MODIFY_LEAF);
 
-  mtr_memo_release(mtr, block, latch_mode == BTR_SEARCH_LEAF ? MTR_MEMO_PAGE_S_FIX : MTR_MEMO_PAGE_X_FIX);
+  mtr->memo_release(block, latch_mode == BTR_SEARCH_LEAF ? MTR_MEMO_PAGE_S_FIX : MTR_MEMO_PAGE_X_FIX);
 }

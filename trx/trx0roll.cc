@@ -613,7 +613,7 @@ try_again:
   }
 
   *roll_ptr = trx_undo_build_roll_ptr(is_insert, (undo->rseg)->id, undo->top_page_no, undo->top_offset);
-  mtr_start(&mtr);
+  mtr.start();
 
   undo_rec = trx_roll_pop_top_rec(trx, undo, &mtr);
 
@@ -650,7 +650,7 @@ try_again:
 
     mutex_exit(&(trx->undo_mutex));
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
     goto try_again;
   }
@@ -659,7 +659,7 @@ try_again:
 
   mutex_exit(&(trx->undo_mutex));
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return undo_rec_copy;
 }

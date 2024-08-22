@@ -56,15 +56,15 @@ uint64_t dict_hdr_get_new_id(ulint type) {
 
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   auto dict_hdr = dict_hdr_get(&mtr);
 
-  auto id = mtr_read_uint64(dict_hdr + type, &mtr) + 1;
+  auto id = mtr.read_uint64(dict_hdr + type) + 1;
 
   mlog_write_uint64(dict_hdr + type, id, &mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return id;
 }
@@ -76,13 +76,13 @@ void dict_hdr_flush_row_id() {
 
   auto id = dict_sys->row_id;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   auto dict_hdr = dict_hdr_get(&mtr);
 
   mlog_write_uint64(dict_hdr + DICT_HDR_ROW_ID, id, &mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 }
 
 /**
@@ -169,14 +169,14 @@ void dict_boot() {
   dict_table_t *table;
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   /* Create the hash tables etc. */
   dict_init();
 
   auto heap = mem_heap_create(450);
 
-  mutex_enter(&(dict_sys->mutex));
+  mutex_enter(&dict_sys->mutex);
 
   /* Get the dictionary header */
   auto dict_hdr = dict_hdr_get(&mtr);
@@ -191,7 +191,7 @@ void dict_boot() {
   ..._MARGIN, it will immediately be updated to the disk-based
   header. */
 
-  dict_sys->row_id = ut_uint64_align_up(mtr_read_uint64(dict_hdr + DICT_HDR_ROW_ID, &mtr), DICT_HDR_ROW_ID_WRITE_MARGIN) +
+  dict_sys->row_id = ut_uint64_align_up(mtr.read_uint64(dict_hdr + DICT_HDR_ROW_ID), DICT_HDR_ROW_ID_WRITE_MARGIN) +
                      DICT_HDR_ROW_ID_WRITE_MARGIN;
 
   /* Insert into the dictionary cache the descriptions of the basic
@@ -226,7 +226,7 @@ void dict_boot() {
 
   index->id = DICT_TABLES_ID;
 
-  auto err = dict_index_add_to_cache(table, index, mtr_read_ulint(dict_hdr + DICT_HDR_TABLES, MLOG_4BYTES, &mtr), false);
+  auto err = dict_index_add_to_cache(table, index, mtr.read_ulint(dict_hdr + DICT_HDR_TABLES, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -234,7 +234,7 @@ void dict_boot() {
   dict_mem_index_add_field(index, "ID", 0);
 
   index->id = DICT_TABLE_IDS_ID;
-  err = dict_index_add_to_cache(table, index, mtr_read_ulint(dict_hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES, &mtr), false);
+  err = dict_index_add_to_cache(table, index, mtr.read_ulint(dict_hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -260,7 +260,7 @@ void dict_boot() {
   dict_mem_index_add_field(index, "POS", 0);
 
   index->id = DICT_COLUMNS_ID;
-  err = dict_index_add_to_cache(table, index, mtr_read_ulint(dict_hdr + DICT_HDR_COLUMNS, MLOG_4BYTES, &mtr), false);
+  err = dict_index_add_to_cache(table, index, mtr.read_ulint(dict_hdr + DICT_HDR_COLUMNS, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -295,7 +295,7 @@ void dict_boot() {
   dict_mem_index_add_field(index, "ID", 0);
 
   index->id = DICT_INDEXES_ID;
-  err = dict_index_add_to_cache(table, index, mtr_read_ulint(dict_hdr + DICT_HDR_INDEXES, MLOG_4BYTES, &mtr), false);
+  err = dict_index_add_to_cache(table, index, mtr.read_ulint(dict_hdr + DICT_HDR_INDEXES, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -316,10 +316,10 @@ void dict_boot() {
   dict_mem_index_add_field(index, "POS", 0);
 
   index->id = DICT_FIELDS_ID;
-  err = dict_index_add_to_cache(table, index, mtr_read_ulint(dict_hdr + DICT_HDR_FIELDS, MLOG_4BYTES, &mtr), false);
+  err = dict_index_add_to_cache(table, index, mtr.read_ulint(dict_hdr + DICT_HDR_FIELDS, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
-  mtr_commit(&mtr);
+  mtr.commit();
   /*-------------------------*/
 
   /* Load definitions of other indexes on system tables */
@@ -329,7 +329,7 @@ void dict_boot() {
   dict_load_sys_table(dict_sys->sys_indexes);
   dict_load_sys_table(dict_sys->sys_fields);
 
-  mutex_exit(&(dict_sys->mutex));
+  mutex_exit(&dict_sys->mutex);
 }
 
 /** Inserts the basic system table data into themselves in the database
@@ -339,11 +339,11 @@ static void dict_insert_initial_data() { }
 void dict_create() {
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   dict_hdr_create(&mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   dict_boot();
 

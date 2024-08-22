@@ -3097,7 +3097,7 @@ void lock_rec_print(ib_stream_t ib_stream, const Lock *lock) {
     ib_logger(ib_stream, " waiting");
   }
 
-  mtr_start(&mtr);
+  mtr.start();
 
   ib_logger(ib_stream, "\n");
 
@@ -3133,7 +3133,8 @@ void lock_rec_print(ib_stream_t ib_stream, const Lock *lock) {
     }
   }
 
-  mtr_commit(&mtr);
+  mtr.commit();
+
   if (likely_null(heap)) {
     mem_heap_free(heap);
   }
@@ -3337,7 +3338,7 @@ loop:
 
       lock_mutex_exit_kernel();
 
-      mtr_start(&mtr);
+      mtr.start();
 
       Buf_pool::Request req {
         .m_rw_latch = BUF_GET_NO_LATCH,
@@ -3351,7 +3352,7 @@ loop:
       /* We are simply trying to force a read here. */
       (void) srv_buf_pool->get(req, nullptr);
 
-      mtr_commit(&mtr);
+      mtr.commit();
 
       load_page_first = false;
 
@@ -3526,7 +3527,7 @@ static bool lock_rec_validate_page(space_id_t space, page_no_t page_no) {
 
   ut_ad(!mutex_own(&kernel_mutex));
 
-  mtr_start(&mtr);
+  mtr.start();
 
   Buf_pool::Request req {
     .m_rw_latch = RW_X_LATCH,
@@ -3613,7 +3614,7 @@ loop:
 function_exit:
   lock_mutex_exit_kernel();
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   if (likely_null(heap)) {
     mem_heap_free(heap);

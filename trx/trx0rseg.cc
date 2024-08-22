@@ -42,16 +42,10 @@ trx_rseg_t *trx_rseg_get_on_id(ulint id) {
 }
 
 ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t *mtr) {
-  ulint page_no;
-  trx_rsegf_t *rsegf;
-  trx_sysf_t *sys_header;
-  ulint i;
-  buf_block_t *block;
-
-  ut_ad(mtr);
   ut_ad(mutex_own(&kernel_mutex));
-  ut_ad(mtr_memo_contains(mtr, srv_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
-  sys_header = trx_sysf_get(mtr);
+  ut_ad(mtr->memo_contains(srv_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
+
+  auto sys_header = trx_sysf_get(mtr);
 
   *slot_no = trx_sysf_rseg_find_free(mtr);
 
@@ -61,7 +55,7 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
   }
 
   /* Allocate a new file segment for the rollback segment */
-  block = srv_fsp->fseg_create(space, 0, TRX_RSEG + TRX_RSEG_FSEG_HEADER, mtr);
+  auto block = srv_fsp->fseg_create(space, 0, TRX_RSEG + TRX_RSEG_FSEG_HEADER, mtr);
 
   if (block == nullptr) {
     /* No space left */
@@ -71,10 +65,10 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER_NEW));
 
-  page_no = block->get_page_no();
+  auto page_no = block->get_page_no();
 
   /* Get the rollback segment file page */
-  rsegf = trx_rsegf_get_new(space, page_no, mtr);
+  auto rsegf = trx_rsegf_get_new(space, page_no, mtr);
 
   /* Initialize max size field */
   mlog_write_ulint(rsegf + TRX_RSEG_MAX_SIZE, max_size, MLOG_4BYTES, mtr);
@@ -85,7 +79,7 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
   flst_init(rsegf + TRX_RSEG_HISTORY, mtr);
 
   /* Reset the undo log slots */
-  for (i = 0; i < TRX_RSEG_N_SLOTS; i++) {
+  for (ulint i = 0; i < TRX_RSEG_N_SLOTS; ++i) {
 
     trx_rsegf_set_nth_undo(rsegf, i, FIL_NULL, mtr);
   }
@@ -96,12 +90,10 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
   trx_sysf_rseg_set_space(sys_header, *slot_no, space, mtr);
   trx_sysf_rseg_set_page_no(sys_header, *slot_no, page_no, mtr);
 
-  return (page_no);
+  return page_no;
 }
 
-/** Free's an instance of the rollback segment in memory. */
-
-void trx_rseg_mem_free(trx_rseg_t *rseg) /*!< in, own: instance to free */
+void trx_rseg_mem_free(trx_rseg_t *rseg)
 {
   trx_undo_t *undo;
 
@@ -173,13 +165,13 @@ static trx_rseg_t *trx_rseg_mem_create(
 
   rseg_header = trx_rsegf_get_new(space, page_no, mtr);
 
-  rseg->max_size = mtr_read_ulint(rseg_header + TRX_RSEG_MAX_SIZE, MLOG_4BYTES, mtr);
+  rseg->max_size = mtr->read_ulint(rseg_header + TRX_RSEG_MAX_SIZE, MLOG_4BYTES);
 
   /* Initialize the undo log lists according to the rseg header */
 
   sum_of_undo_sizes = trx_undo_lists_init(recovery, rseg);
 
-  rseg->curr_size = mtr_read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, mtr) + 1 + sum_of_undo_sizes;
+  rseg->curr_size = mtr->read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES) + 1 + sum_of_undo_sizes;
 
   len = flst_get_len(rseg_header + TRX_RSEG_HISTORY, mtr);
   if (len > 0) {
@@ -191,8 +183,8 @@ static trx_rseg_t *trx_rseg_mem_create(
 
     undo_log_hdr = trx_undo_page_get(rseg->space, node_addr.m_page_no, mtr) + node_addr.m_boffset;
 
-    rseg->last_trx_no = mtr_read_uint64(undo_log_hdr + TRX_UNDO_TRX_NO, mtr);
-    rseg->last_del_marks = mtr_read_ulint(undo_log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES, mtr);
+    rseg->last_trx_no = mtr->read_uint64(undo_log_hdr + TRX_UNDO_TRX_NO);
+    rseg->last_del_marks = mtr->read_ulint(undo_log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES);
   } else {
     rseg->last_page_no = FIL_NULL;
   }

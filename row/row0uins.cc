@@ -51,7 +51,7 @@ static db_err row_undo_ins_remove_clust_rec(undo_node_t *node) {
   ulint n_tries{};
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   auto success = node->pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
   ut_a(success);
@@ -64,9 +64,9 @@ static db_err row_undo_ins_remove_clust_rec(undo_node_t *node) {
 
     dict_drop_index_tree(node->pcur.get_rec(), &mtr);
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
-    mtr_start(&mtr);
+    mtr.start();
 
     success = node->pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
     ut_a(success);
@@ -85,7 +85,7 @@ static db_err row_undo_ins_remove_clust_rec(undo_node_t *node) {
   }
 retry:
   /* If did not succeed, try pessimistic descent to tree */
-  mtr_start(&mtr);
+  mtr.start();
 
   success = node->pcur.restore_position(BTR_MODIFY_TREE, &mtr, Source_location{});
   ut_a(success);
@@ -128,7 +128,7 @@ static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtupl
 
   log_sys->free_check();
 
-  mtr_start(&mtr);
+  mtr.start();
 
   auto found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
   auto btr_cur = pcur.get_btr_cur();
@@ -137,7 +137,7 @@ static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtupl
     /* Not found */
 
     pcur.close();
-    mtr_commit(&mtr);
+    mtr.commit();
 
     return DB_SUCCESS;
   }
@@ -158,7 +158,7 @@ static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtupl
   }
 
   pcur.close();
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return err;
 }

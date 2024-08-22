@@ -162,13 +162,8 @@ static db_err row_upd_check_references_constraints(
   mtr_t *mtr
 ) /*!< in: mtr */
 {
-  dict_foreign_t *foreign;
-  mem_heap_t *heap;
-  dtuple_t *entry;
-  trx_t *trx;
-  const rec_t *rec;
-  ulint n_ext;
   db_err err;
+  ulint n_ext;
   bool got_s_lock = false;
 
   if (UT_LIST_GET_FIRST(table->referenced_list) == nullptr) {
@@ -176,18 +171,17 @@ static db_err row_upd_check_references_constraints(
     return DB_SUCCESS;
   }
 
-  trx = thr_get_trx(thr);
+  auto trx = thr_get_trx(thr);
 
-  rec = pcur->get_rec();
+  auto rec = pcur->get_rec();
   ut_ad(rec_offs_validate(rec, index, offsets));
 
-  heap = mem_heap_create(500);
+  auto heap = mem_heap_create(500);
+  auto entry = row_rec_to_index_entry(ROW_COPY_DATA, rec, index, offsets, &n_ext, heap);
 
-  entry = row_rec_to_index_entry(ROW_COPY_DATA, rec, index, offsets, &n_ext, heap);
+  mtr->commit();
 
-  mtr_commit(mtr);
-
-  mtr_start(mtr);
+  mtr->start();
 
   if (trx->m_dict_operation_lock_mode == 0) {
     got_s_lock = true;
@@ -195,9 +189,9 @@ static db_err row_upd_check_references_constraints(
     dict_freeze_data_dictionary(trx);
   }
 
-  foreign = UT_LIST_GET_FIRST(table->referenced_list);
+  auto foreign = UT_LIST_GET_FIRST(table->referenced_list);
 
-  while (foreign) {
+  while (foreign != nullptr) {
     /* Note that we may have an update which updates the index
     record, but does NOT update the first fields which are
     referenced in a foreign key constraint. Then the update does
@@ -211,11 +205,11 @@ static db_err row_upd_check_references_constraints(
       }
 
       if (foreign->foreign_table) {
-        mutex_enter(&(dict_sys->mutex));
+        mutex_enter(&dict_sys->mutex);
 
         (foreign->foreign_table->n_foreign_key_checks_running)++;
 
-        mutex_exit(&(dict_sys->mutex));
+        mutex_exit(&dict_sys->mutex);
       }
 
       /* NOTE that if the thread ends up waiting for a lock
@@ -232,7 +226,7 @@ static db_err row_upd_check_references_constraints(
 
         (foreign->foreign_table->n_foreign_key_checks_running)--;
 
-        mutex_exit(&(dict_sys->mutex));
+        mutex_exit(&dict_sys->mutex);
       }
 
       if (err != DB_SUCCESS) {
@@ -1075,7 +1069,7 @@ static db_err row_upd_sec_index_entry(
 
   log_sys->free_check();
 
-  mtr_start(&mtr);
+  mtr.start();
 
   found = row_search_index_entry(index, entry, BTR_MODIFY_LEAF, &pcur, &mtr);
   btr_cur = pcur.get_btr_cur();
@@ -1114,7 +1108,7 @@ static db_err row_upd_sec_index_entry(
   }
 
   pcur.close();
-  mtr_commit(&mtr);
+  mtr.commit();
 
   if (node->is_delete || err != DB_SUCCESS) {
 
@@ -1194,7 +1188,7 @@ static db_err row_upd_clust_rec_by_insert(
     err = btr_cur_del_mark_set_clust_rec(BTR_NO_LOCKING_FLAG, btr_cur, true, thr, mtr);
 
     if (err != DB_SUCCESS) {
-      mtr_commit(mtr);
+      mtr->commit();
       return err;
     }
 
@@ -1218,7 +1212,7 @@ static db_err row_upd_clust_rec_by_insert(
       /* NOTE that the following call loses the position of pcur ! */
       err = row_upd_check_references_constraints(node, pcur, table, index, offsets, thr, mtr);
       if (err != DB_SUCCESS) {
-        mtr_commit(mtr);
+        mtr->commit();
         if (likely_null(heap)) {
           mem_heap_free(heap);
         }
@@ -1227,7 +1221,7 @@ static db_err row_upd_clust_rec_by_insert(
     }
   }
 
-  mtr_commit(mtr);
+  mtr->commit();
 
   if (!heap) {
     heap = mem_heap_create(500);
@@ -1294,7 +1288,7 @@ static db_err row_upd_clust_rec(
     err = btr_cur_optimistic_update(BTR_NO_LOCKING_FLAG, btr_cur, node->update, node->cmpl_info, thr, mtr);
   }
 
-  mtr_commit(mtr);
+  mtr->commit();
 
   if (likely(err == DB_SUCCESS)) {
 
@@ -1308,7 +1302,7 @@ static db_err row_upd_clust_rec(
   /* We may have to modify the tree structure: do a pessimistic descent down the
    * index tree */
 
-  mtr_start(mtr);
+  mtr->start();
 
   /* NOTE: this transaction has an s-lock or x-lock on the record and
   therefore other transactions cannot modify the record when we have no
@@ -1322,14 +1316,14 @@ static db_err row_upd_clust_rec(
 
   err = btr_cur_pessimistic_update(BTR_NO_LOCKING_FLAG, btr_cur, &heap, &big_rec, node->update, node->cmpl_info, thr, mtr);
 
-  mtr_commit(mtr);
+  mtr->commit();
 
   if (err == DB_SUCCESS && big_rec) {
     ulint offsets_[REC_OFFS_NORMAL_SIZE];
     rec_t *rec;
     rec_offs_init(offsets_);
 
-    mtr_start(mtr);
+    mtr->start();
 
     ut_a(pcur->restore_position(BTR_MODIFY_TREE, mtr, Source_location{}));
 
@@ -1345,7 +1339,7 @@ static db_err row_upd_clust_rec(
 
     err = btr_store_big_rec_extern_fields(index, btr_cur_get_block(btr_cur), rec, offsets, big_rec, mtr);
 
-    mtr_commit(mtr);
+    mtr->commit();
   }
 
   if (likely_null(heap)) {
@@ -1394,7 +1388,7 @@ static db_err row_upd_del_mark_clust_rec(
     err = row_upd_check_references_constraints(node, pcur, index->table, index, offsets, thr, mtr);
   }
 
-  mtr_commit(mtr);
+  mtr->commit();
 
   return err;
 }
@@ -1429,7 +1423,7 @@ static db_err row_upd_clust_step(
   /* We have to restore the cursor to its position */
   mtr = &mtr_buf;
 
-  mtr_start(mtr);
+  mtr->start();
 
   /* If the restoration does not succeed, then the same
   transaction has deleted the record on which the cursor was,
@@ -1446,7 +1440,7 @@ static db_err row_upd_clust_step(
   if (!success) {
     err = DB_RECORD_NOT_FOUND;
 
-    mtr_commit(mtr);
+    mtr->commit();
 
     return err;
   }
@@ -1459,15 +1453,15 @@ static db_err row_upd_clust_step(
 
     dict_drop_index_tree(pcur->get_rec(), mtr);
 
-    mtr_commit(mtr);
+    mtr->commit();
 
-    mtr_start(mtr);
+    mtr->start();
 
     success = pcur->restore_position(BTR_MODIFY_LEAF, mtr, Source_location{});
     if (!success) {
       err = DB_ERROR;
 
-      mtr_commit(mtr);
+      mtr->commit();
 
       return err;
     }
@@ -1484,7 +1478,7 @@ static db_err row_upd_clust_step(
   if (!node->has_clust_rec_x_lock) {
     err = lock_clust_rec_modify_check_and_lock(0, pcur->get_block(), rec, index, offsets, thr);
     if (err != DB_SUCCESS) {
-      mtr_commit(mtr);
+      mtr->commit();
       goto exit_func;
     }
   }

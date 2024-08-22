@@ -162,8 +162,8 @@ rec_t *btr_get_prev_user_rec(rec_t *rec, mtr_t *mtr) {
     auto prev_page = prev_block->get_frame();
 
     /* The caller must already have a latch to the brother */
-    ut_ad(mtr_memo_contains(mtr, prev_block, MTR_MEMO_PAGE_S_FIX) ||
-          mtr_memo_contains(mtr, prev_block, MTR_MEMO_PAGE_X_FIX));
+    ut_ad(mtr->memo_contains(prev_block, MTR_MEMO_PAGE_S_FIX) ||
+          mtr->memo_contains(prev_block, MTR_MEMO_PAGE_X_FIX));
 
 #ifdef UNIV_BTR_DEBUG
     ut_a(btr_page_get_next(prev_page, mtr) == page_get_page_no(page));
@@ -206,8 +206,8 @@ rec_t *btr_get_next_user_rec(rec_t *rec, mtr_t *mtr) {
     auto next_page = next_block->get_frame();
 
     /* The caller must already have a latch to the brother */
-    ut_ad(mtr_memo_contains(mtr, next_block, MTR_MEMO_PAGE_S_FIX) ||
-          mtr_memo_contains(mtr, next_block, MTR_MEMO_PAGE_X_FIX));
+    ut_ad(mtr->memo_contains(next_block, MTR_MEMO_PAGE_S_FIX) ||
+          mtr->memo_contains(next_block, MTR_MEMO_PAGE_X_FIX));
 
 #ifdef UNIV_BTR_DEBUG
     ut_a(btr_page_get_prev(next_page, mtr) == page_get_page_no(page));
@@ -230,7 +230,7 @@ used in page reorganization).  @see btr_page_empty().
 static void btr_page_create(buf_block_t *block, dict_index_t *dict_index, ulint level, mtr_t *mtr) {
   auto page = block->get_frame();
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   page_create(block, mtr);
 
@@ -288,7 +288,7 @@ ulint btr_get_size(dict_index_t *dict_index, ulint flag) {
   ulint dummy;
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   mtr_s_lock(dict_index_get_lock(dict_index), &mtr);
 
@@ -311,13 +311,13 @@ ulint btr_get_size(dict_index_t *dict_index, ulint flag) {
     ut_error;
   }
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return n;
 }
 
 void btr_page_free_low(dict_index_t *dict_index, buf_block_t *block, ulint level, mtr_t *mtr) {
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
   /* The page gets invalid for optimistic searches: increment the frame
   modify clock */
 
@@ -392,7 +392,7 @@ static ulint *btr_page_get_father_node_ptr_func(ulint *offsets, mem_heap_t *heap
   auto page_no = btr_cur_get_block(cursor)->get_page_no();
   auto dict_index = btr_cur_get_index(cursor);
 
-  ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
+  ut_ad(mtr->memo_contains(dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
 
   ut_ad(dict_index_get_page(dict_index) != page_no);
 
@@ -549,7 +549,7 @@ void btr_free_but_not_root(ulint space, ulint root_page_no) {
   mtr_t mtr;
 
 leaf_loop:
-  mtr_start(&mtr);
+  mtr.start();
 
   root = btr_page_get(space, root_page_no, RW_X_LATCH, &mtr);
 #ifdef UNIV_BTR_DEBUG
@@ -562,14 +562,14 @@ leaf_loop:
 
   finished = srv_fsp->fseg_free_step(root + PAGE_HEADER + PAGE_BTR_SEG_LEAF, &mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   if (!finished) {
 
     goto leaf_loop;
   }
 top_loop:
-  mtr_start(&mtr);
+  mtr.start();
 
   root = btr_page_get(space, root_page_no, RW_X_LATCH, &mtr);
 
@@ -579,7 +579,7 @@ top_loop:
 
   finished = srv_fsp->fseg_free_step_not_header(root + PAGE_HEADER + PAGE_BTR_SEG_TOP, &mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   if (!finished) {
 
@@ -615,7 +615,7 @@ static bool btr_page_reorganize_low(
   bool success = false;
   auto page = block->get_frame();
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   auto data_size1 = page_get_data_size(page);
   auto max_ins_size1 = page_get_max_insert_size_after_reorganize(page, 1);
@@ -624,7 +624,7 @@ static bool btr_page_reorganize_low(
   mlog_open_and_write_index(mtr, page, dict_index, MLOG_PAGE_REORGANIZE, 0);
 
   /* Turn logging off */
-  auto log_mode = mtr_set_log_mode(mtr, MTR_LOG_NONE);
+  auto log_mode = mtr->set_log_mode(MTR_LOG_NONE);
 
   auto temp_block = srv_buf_pool->block_alloc();
   auto temp_page = temp_block->get_frame();
@@ -682,7 +682,8 @@ static bool btr_page_reorganize_low(
   srv_buf_pool->block_free(temp_block);
 
   /* Restore logging mode */
-  mtr_set_log_mode(mtr, log_mode);
+  auto old_mode = mtr->set_log_mode(log_mode);
+  ut_a(old_mode == MTR_LOG_NONE);
 
   return success;
 }
@@ -734,7 +735,7 @@ byte *btr_parse_page_reorganize(
 static void btr_page_empty(buf_block_t *block, dict_index_t *dict_index, ulint level, mtr_t *mtr) {
   auto page = block->get_frame();
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   /* Recreate the page: note that global data on page (possible
   segment headers, next page-field, etc.) is preserved intact */
@@ -770,8 +771,8 @@ rec_t *btr_root_raise_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ulint
 
   ut_a(dict_index_get_page(dict_index) == page_get_page_no(root));
 #endif /* UNIV_BTR_DEBUG */
-  ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
-  ut_ad(mtr_memo_contains(mtr, root_block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
+  ut_ad(mtr->memo_contains(root_block, MTR_MEMO_PAGE_X_FIX));
 
   /* Allocate a new page to the tree. Root splitting is done by first
   moving the root records to the new page, emptying the root, putting
@@ -1167,8 +1168,8 @@ static void btr_attach_half_pages(
   dtuple_t *node_ptr_upper;
   mem_heap_t *heap;
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(mtr_memo_contains(mtr, new_block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(new_block, MTR_MEMO_PAGE_X_FIX));
 
   /* Create a memory heap where the data tuple is stored */
   heap = mem_heap_create(1024);
@@ -1310,7 +1311,7 @@ func_start:
   mem_heap_empty(heap);
   offsets = nullptr;
 
-  ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(cursor->m_index), MTR_MEMO_X_LOCK));
+  ut_ad(mtr->memo_contains(dict_index_get_lock(cursor->m_index), MTR_MEMO_X_LOCK));
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(dict_index_get_lock(cursor->index), RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
@@ -1318,7 +1319,7 @@ func_start:
   block = btr_cur_get_block(cursor);
   page = block->get_frame();
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
   ut_ad(page_get_n_recs(page) >= 1);
 
   page_no = block->get_page_no();
@@ -1404,7 +1405,7 @@ func_start:
 
   if (insert_will_fit && page_is_leaf(page)) {
 
-    mtr_memo_release(mtr, dict_index_get_lock(cursor->m_index), MTR_MEMO_X_LOCK);
+    mtr->memo_release(dict_index_get_lock(cursor->m_index), MTR_MEMO_X_LOCK);
   }
 
   /* 5. Move then the records to the new page */
@@ -1507,7 +1508,7 @@ static void btr_level_list_remove(
   ulint next_page_no;
 
   ut_ad(page && mtr);
-  ut_ad(mtr_memo_contains_page(mtr, page, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(page, MTR_MEMO_PAGE_X_FIX));
   ut_ad(space == page_get_space_id(page));
   /* Get the previous and next page numbers of page */
 
@@ -1581,7 +1582,7 @@ void btr_node_ptr_delete(dict_index_t *dict_index, buf_block_t *block, mtr_t *mt
   db_err err;
   btr_cur_t cursor;
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   /* Delete node pointer on father page */
   btr_page_get_father(dict_index, block, mtr, &cursor);
@@ -1610,7 +1611,7 @@ static void btr_lift_page_up(dict_index_t *dict_index, buf_block_t *block, mtr_t
 
   ut_ad(btr_page_get_prev(page, mtr) == FIL_NULL);
   ut_ad(btr_page_get_next(page, mtr) == FIL_NULL);
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   page_level = btr_page_get_level(page, mtr);
   root_page_no = dict_index_get_page(dict_index);
@@ -1685,8 +1686,8 @@ bool btr_compress(btr_cur_t *cursor, mtr_t *mtr) {
   page = btr_cur_get_page(cursor);
   dict_index = btr_cur_get_index(cursor);
 
-  ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
   space = dict_index_get_space(dict_index);
 
   left_page_no = btr_page_get_prev(page, mtr);
@@ -1832,7 +1833,7 @@ static void btr_discard_only_page_on_level(
     ut_a(btr_page_get_prev(page, mtr) == FIL_NULL);
     ut_a(btr_page_get_next(page, mtr) == FIL_NULL);
 
-    ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+    ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
     btr_page_get_father(dict_index, block, mtr, &cursor);
     father = btr_cur_get_block(&cursor);
@@ -1879,8 +1880,8 @@ void btr_discard_page(btr_cur_t *cursor, mtr_t *mtr) {
   dict_index = btr_cur_get_index(cursor);
 
   ut_ad(dict_index_get_page(dict_index) != block->get_page_no());
-  ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
   space = dict_index_get_space(dict_index);
 
   /* Decide the page which will inherit the locks */
@@ -1956,7 +1957,7 @@ void btr_print_size(dict_index_t *index) /*!< in: index tree */
   ib_logger(ib_stream, "INFO OF THE NON-LEAF PAGE SEGMENT\n");
   fseg_print(seg, &mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 }
 
 /** Prints recursively index tree pages. */
@@ -1976,7 +1977,7 @@ static void btr_print_recursive(
   ulint i = 0;
   mtr_t mtr2;
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
   ib_logger(
     ib_stream, "NODE ON LEVEL %lu page number %lu\n", (ulong)btr_page_get_level(page, mtr), (ulong)block->get_page_no()
   );
@@ -2009,7 +2010,7 @@ static void btr_print_recursive(
       }
 
       btr_print_recursive(index, btr_node_ptr_get_child(node_ptr, index, *offsets, &mtr2), width, heap, offsets, &mtr2);
-      mtr_commit(&mtr2);
+      mtr2.commit();
     }
 
     page_cur_move_to_next(&cursor);
@@ -2047,7 +2048,7 @@ void btr_print_index(
     mem_heap_free(heap);
   }
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   btr_validate_index(index, nullptr);
 }
@@ -2069,7 +2070,7 @@ bool btr_check_node_ptr(
   btr_cur_t cursor;
   page_t *page = block->get_frame();
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
   if (dict_index_get_page(index) == block->get_page_no()) {
 
     return (true);
@@ -2265,7 +2266,7 @@ static bool btr_validate_level(
   ulint *offsets = nullptr;
   ulint *offsets2 = nullptr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   mtr_x_lock(dict_index_get_lock(dict_index), &mtr);
 
@@ -2298,7 +2299,7 @@ static bool btr_validate_level(
   level. */
 loop:
   if (trx_is_interrupted(trx)) {
-    mtr_commit(&mtr);
+    mtr.commit();
     mem_heap_free(heap);
     return (ret);
   }
@@ -2514,10 +2515,10 @@ node_ptr_fails:
   /* Commit the mini-transaction to release the latch on 'page'.
   Re-acquire the latch on right_page, which will become 'page'
   on the next loop.  The page has already been checked. */
-  mtr_commit(&mtr);
+  mtr.commit();
 
   if (right_page_no != FIL_NULL) {
-    mtr_start(&mtr);
+    mtr.start();
 
     block = btr_block_get(space, right_page_no, RW_X_LATCH, &mtr);
     page = block->get_frame();
@@ -2526,13 +2527,14 @@ node_ptr_fails:
   }
 
   mem_heap_free(heap);
-  return (ret);
+  return ret;
 }
 
 bool btr_validate_index(dict_index_t *dict_index, trx_t *trx) {
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
+
   mtr_x_lock(dict_index_get_lock(dict_index), &mtr);
 
   auto root = btr_root_get(dict_index, &mtr);
@@ -2541,13 +2543,13 @@ bool btr_validate_index(dict_index_t *dict_index, trx_t *trx) {
   for (ulint i = 0; i <= n && !trx_is_interrupted(trx); i++) {
     if (!btr_validate_level(dict_index, trx, n - i)) {
 
-      mtr_commit(&mtr);
+      mtr.commit();
 
       return (false);
     }
   }
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return true;
 }

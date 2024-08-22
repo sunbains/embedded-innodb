@@ -3048,7 +3048,7 @@ ib_err_t ib_cursor_delete_row(ib_crsr_t ib_crsr) {
     } else {
       mtr_t mtr;
 
-      mtr_start(&mtr);
+      mtr.start();
 
       if (pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{})) {
 
@@ -3057,7 +3057,7 @@ ib_err_t ib_cursor_delete_row(ib_crsr_t ib_crsr) {
         rec = nullptr;
       }
 
-      mtr_commit(&mtr);
+      mtr.commit();
     }
 
     if (rec && !rec_get_deleted_flag(rec)) {
@@ -3111,7 +3111,7 @@ ib_err_t ib_cursor_read_row(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl) {
       return DB_ERROR;
     }
 
-    mtr_start(&mtr);
+    mtr.start();
 
     if (pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{})) {
       auto rec = pcur->get_rec();
@@ -3126,7 +3126,7 @@ ib_err_t ib_cursor_read_row(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl) {
       err = DB_RECORD_NOT_FOUND;
     }
 
-    mtr_commit(&mtr);
+    mtr.commit();
   }
 
   return err;

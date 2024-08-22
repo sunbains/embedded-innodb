@@ -41,8 +41,8 @@ static void flst_add_to_empty(
 
   ut_ad(mtr && base && node);
   ut_ad(base != node);
-  ut_ad(mtr_memo_contains_page(mtr, base, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(mtr_memo_contains_page(mtr, node, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(node, MTR_MEMO_PAGE_X_FIX));
   len = flst_get_len(base, mtr);
   ut_a(len == 0);
 
@@ -76,8 +76,8 @@ void flst_add_last(
 
   ut_ad(mtr && base && node);
   ut_ad(base != node);
-  ut_ad(mtr_memo_contains_page(mtr, base, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(mtr_memo_contains_page(mtr, node, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(node, MTR_MEMO_PAGE_X_FIX));
   len = flst_get_len(base, mtr);
   last_addr = flst_get_last(base, mtr);
 
@@ -114,8 +114,8 @@ void flst_add_first(
 
   ut_ad(mtr && base && node);
   ut_ad(base != node);
-  ut_ad(mtr_memo_contains_page(mtr, base, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(mtr_memo_contains_page(mtr, node, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(node, MTR_MEMO_PAGE_X_FIX));
   len = flst_get_len(base, mtr);
   first_addr = flst_get_first(base, mtr);
 
@@ -156,9 +156,9 @@ void flst_insert_after(
   ut_ad(base != node1);
   ut_ad(base != node2);
   ut_ad(node2 != node1);
-  ut_ad(mtr_memo_contains_page(mtr, base, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(mtr_memo_contains_page(mtr, node1, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(mtr_memo_contains_page(mtr, node2, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(node1, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(node2, MTR_MEMO_PAGE_X_FIX));
 
   buf_ptr_get_fsp_addr(node1, &space, &node1_addr);
   buf_ptr_get_fsp_addr(node2, &space, &node2_addr);
@@ -206,9 +206,9 @@ void flst_insert_before(
   ut_ad(base != node2);
   ut_ad(base != node3);
   ut_ad(node2 != node3);
-  ut_ad(mtr_memo_contains_page(mtr, base, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(mtr_memo_contains_page(mtr, node2, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(mtr_memo_contains_page(mtr, node3, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(node2, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(node3, MTR_MEMO_PAGE_X_FIX));
 
   buf_ptr_get_fsp_addr(node2, &space, &node2_addr);
   buf_ptr_get_fsp_addr(node3, &space, &node3_addr);
@@ -253,8 +253,8 @@ void flst_remove(
   ulint len;
 
   ut_ad(mtr && node2 && base);
-  ut_ad(mtr_memo_contains_page(mtr, base, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(mtr_memo_contains_page(mtr, node2, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(node2, MTR_MEMO_PAGE_X_FIX));
 
   buf_ptr_get_fsp_addr(node2, &space, &node2_addr);
 
@@ -324,8 +324,8 @@ void flst_cut_end(
   ulint len;
 
   ut_ad(mtr && node2 && base);
-  ut_ad(mtr_memo_contains_page(mtr, base, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(mtr_memo_contains_page(mtr, node2, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(node2, MTR_MEMO_PAGE_X_FIX));
   ut_ad(n_nodes > 0);
 
   buf_ptr_get_fsp_addr(node2, &space, &node2_addr);
@@ -359,19 +359,18 @@ void flst_cut_end(
 }
 
 void flst_truncate_end(flst_base_node_t *base, flst_node_t *node2, ulint n_nodes, mtr_t *mtr) {
-  fil_addr_t node2_addr;
-  ulint len;
-  ulint space;
+  ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(node2, MTR_MEMO_PAGE_X_FIX));
 
-  ut_ad(mtr && node2 && base);
-  ut_ad(mtr_memo_contains_page(mtr, base, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(mtr_memo_contains_page(mtr, node2, MTR_MEMO_PAGE_X_FIX));
   if (n_nodes == 0) {
 
     ut_ad(srv_fil->addr_is_null(flst_get_next_addr(node2, mtr)));
 
     return;
   }
+
+  space_id_t space;
+  fil_addr_t node2_addr;
 
   buf_ptr_get_fsp_addr(node2, &space, &node2_addr);
 
@@ -381,30 +380,14 @@ void flst_truncate_end(flst_base_node_t *base, flst_node_t *node2, ulint n_nodes
   flst_write_addr(base + FLST_LAST, node2_addr, mtr);
 
   /* Update len of base node */
-  len = flst_get_len(base, mtr);
+  const auto len = flst_get_len(base, mtr);
   ut_ad(len >= n_nodes);
 
   mlog_write_ulint(base + FLST_LEN, len - n_nodes, MLOG_4BYTES, mtr);
 }
 
-/** Validates a file-based list.
-@return	true if ok */
-
-bool flst_validate(
-  const flst_base_node_t *base, /*!< in: pointer to base node of list */
-  mtr_t *mtr1
-) /*!< in: mtr */
-{
-  ulint space;
-  const flst_node_t *node;
-  fil_addr_t node_addr;
-  fil_addr_t base_addr;
-  ulint len;
-  ulint i;
-  mtr_t mtr2;
-
-  ut_ad(base);
-  ut_ad(mtr_memo_contains_page(mtr1, base, MTR_MEMO_PAGE_X_FIX));
+bool flst_validate(const flst_base_node_t *base, mtr_t *mtr1) {
+  ut_ad(mtr1->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
 
   /* We use two mini-transaction handles: the first is used to
   lock the base node, and prevent other threads from modifying the
@@ -414,63 +397,59 @@ bool flst_validate(
   in a deadlock. */
 
   /* Find out the space id */
+  space_id_t space;
+  fil_addr_t base_addr;
+
   buf_ptr_get_fsp_addr(base, &space, &base_addr);
 
-  len = flst_get_len(base, mtr1);
-  node_addr = flst_get_first(base, mtr1);
+  auto len = flst_get_len(base, mtr1);
+  auto node_addr = flst_get_first(base, mtr1);
 
-  for (i = 0; i < len; i++) {
-    mtr_start(&mtr2);
+  for (ulint i = 0; i < len; ++i) {
+    mtr_t mtr2;
 
-    node = fut_get_ptr(space, node_addr, RW_X_LATCH, &mtr2);
+    mtr2.start();
+
+    auto node = fut_get_ptr(space, node_addr, RW_X_LATCH, &mtr2);
     node_addr = flst_get_next_addr(node, &mtr2);
 
-    mtr_commit(&mtr2); /* Commit mtr2 each round to prevent buffer
-                       becoming full */
+    /* Commit mtr2 each round to prevent buffer becoming full */
+    mtr2.commit();
   }
 
   ut_a(srv_fil->addr_is_null(node_addr));
 
   node_addr = flst_get_last(base, mtr1);
 
-  for (i = 0; i < len; i++) {
-    mtr_start(&mtr2);
+  for (ulint i = 0; i < len; ++i) {
+    mtr_t mtr2;
 
-    node = fut_get_ptr(space, node_addr, RW_X_LATCH, &mtr2);
+    mtr2.start();
+
+    auto node = fut_get_ptr(space, node_addr, RW_X_LATCH, &mtr2);
     node_addr = flst_get_prev_addr(node, &mtr2);
 
-    mtr_commit(&mtr2); /* Commit mtr2 each round to prevent buffer
-                       becoming full */
+    /* Commit mtr2 each round to prevent buffer becoming full */
+    mtr2.commit();
   }
 
   ut_a(srv_fil->addr_is_null(node_addr));
 
-  return (true);
+  return true;
 }
 
-/** Prints info of a file-based list. */
+void flst_print(const flst_base_node_t *base, mtr_t *mtr) {
+  ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
 
-void flst_print(
-  const flst_base_node_t *base, /*!< in: pointer to base node of list */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
-  const buf_frame_t *frame;
-  ulint len;
+  auto frame = page_align((byte *)base);
+  auto len = flst_get_len(base, mtr);
 
-  ut_ad(base && mtr);
-  ut_ad(mtr_memo_contains_page(mtr, base, MTR_MEMO_PAGE_X_FIX));
-  frame = page_align((byte *)base);
-
-  len = flst_get_len(base, mtr);
-
-  ib_logger(
-    ib_stream,
+  log_info(std::format(
     "FILE-BASED LIST:\n"
-    "Base node in space %lu page %lu byte offset %lu; len %lu\n",
-    (ulong)page_get_space_id(frame),
-    (ulong)page_get_page_no(frame),
-    (ulong)page_offset(base),
-    (ulong)len
-  );
+    "Base node in space {} page {} byte offset {}; len {}",
+    page_get_space_id(frame),
+    page_get_page_no(frame),
+    page_offset(base),
+    len
+  ));
 }

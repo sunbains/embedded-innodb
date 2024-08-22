@@ -64,7 +64,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, dict_index_t *index, 
 
   mutex_exit(&kernel_mutex);
 
-  mtr_start(&mtr);
+  mtr.start();
 
   /* Search for the clustered index record: this is a time-consuming
   operation: therefore we release the kernel mutex; also, the release
@@ -87,7 +87,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, dict_index_t *index, 
     records before the clustered index record. */
 
     mutex_enter(&kernel_mutex);
-    mtr_commit(&mtr);
+    mtr.commit();
 
     return (nullptr);
   }
@@ -272,7 +272,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, dict_index_t *index, 
   } /* for (;;) */
 
 exit_func:
-  mtr_commit(&mtr);
+  mtr.commit();
   mem_heap_free(heap);
 
   return (trx);
@@ -335,7 +335,7 @@ bool row_vers_old_has_index_entry(
   const dtuple_t *entry;
   ulint err;
 
-  ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_X_FIX) || mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_S_FIX));
+  ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(rec, MTR_MEMO_PAGE_S_FIX));
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(!rw_lock_own(&(purge_sys->latch), RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
@@ -479,7 +479,7 @@ db_err row_vers_build_for_consistent_read(
   db_err err;
 
   ut_ad(dict_index_is_clust(index));
-  ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_X_FIX) || mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_S_FIX));
+  ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(rec, MTR_MEMO_PAGE_S_FIX));
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(!rw_lock_own(&(purge_sys->latch), RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
@@ -603,7 +603,7 @@ ulint row_vers_build_for_semi_consistent_read(
   trx_id_t rec_trx_id = 0;
 
   ut_ad(dict_index_is_clust(index));
-  ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_X_FIX) || mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_S_FIX));
+  ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(rec, MTR_MEMO_PAGE_S_FIX));
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(!rw_lock_own(&(purge_sys->latch), RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */

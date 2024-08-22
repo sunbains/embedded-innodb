@@ -910,7 +910,7 @@ static db_err row_merge_read_clustered_index(
     merge_buf[i] = row_merge_buf_create(index[i]);
   }
 
-  mtr_start(&mtr);
+  mtr.start();
 
   /* Find the clustered index and create a persistent cursor
   based on that. */
@@ -976,8 +976,11 @@ static db_err row_merge_read_clustered_index(
       }
 
       pcur.store_position(&mtr);
-      mtr_commit(&mtr);
-      mtr_start(&mtr);
+
+      mtr.commit();
+
+      mtr.start();
+
       pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
       has_next = pcur.move_to_next_user_rec(&mtr);
     }
@@ -1096,7 +1099,9 @@ static db_err row_merge_read_clustered_index(
 
 func_exit:
   pcur.close();
-  mtr_commit(&mtr);
+
+  mtr.commit();
+
   mem_heap_free(row_heap);
 
   if (likely_null(nonnull)) {

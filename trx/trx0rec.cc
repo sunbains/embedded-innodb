@@ -1006,7 +1006,7 @@ db_err trx_undo_report_row_operation(
 
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   for (;;) {
 
@@ -1041,11 +1041,11 @@ db_err trx_undo_report_row_operation(
       records stays identical to the original page */
 
       trx_undo_erase_page_end(undo_page, &mtr);
-      mtr_commit(&mtr);
+      mtr.commit();
     } else {
       /* Success */
 
-      mtr_commit(&mtr);
+      mtr.commit();
 
       undo->empty = false;
       undo->top_page_no = page_no;
@@ -1070,7 +1070,7 @@ db_err trx_undo_report_row_operation(
 
     /* We have to extend the undo log by one page */
 
-    mtr_start(&mtr);
+    mtr.start();
 
     /* When we add a page to an undo log, this is analogous to
     a pessimistic insert in a B-tree, and we must reserve the
@@ -1087,7 +1087,7 @@ db_err trx_undo_report_row_operation(
 
       mutex_exit(&trx->undo_mutex);
 
-      mtr_commit(&mtr);
+      mtr.commit();
 
       if (likely_null(heap)) {
         mem_heap_free(heap);
@@ -1111,20 +1111,20 @@ trx_undo_rec_t *trx_undo_get_undo_rec_low(roll_ptr_t roll_ptr, mem_heap_t *heap)
   trx_undo_decode_roll_ptr(roll_ptr, &is_insert, &rseg_id, &page_no, &offset);
   rseg = trx_rseg_get_on_id(rseg_id);
 
-  mtr_start(&mtr);
+  mtr.start();
 
   undo_page = trx_undo_page_get_s_latched(rseg->space, page_no, &mtr);
 
   undo_rec = trx_undo_rec_copy(undo_page + offset, heap);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return undo_rec;
 }
 
 db_err trx_undo_get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, trx_undo_rec_t **undo_rec, mem_heap_t *heap) {
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&(purge_sys->latch), RW_LOCK_SHARED));
+  ut_ad(rw_lock_own(&purge_sys->latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
   if (!trx_purge_update_undo_must_exist(trx_id)) {
@@ -1163,8 +1163,8 @@ db_err trx_undo_prev_version_build(
   ut_ad(rw_lock_own(&(purge_sys->latch), RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
   ut_ad(
-    mtr_memo_contains_page(index_mtr, index_rec, MTR_MEMO_PAGE_S_FIX) ||
-    mtr_memo_contains_page(index_mtr, index_rec, MTR_MEMO_PAGE_X_FIX)
+    index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_S_FIX) ||
+    index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_X_FIX)
   );
   ut_ad(rec_offs_validate(rec, index, offsets));
 

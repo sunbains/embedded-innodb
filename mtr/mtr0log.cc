@@ -24,10 +24,6 @@ Created 12/7/1995 Heikki Tuuri
 
 #include "mtr0log.h"
 
-#ifdef UNIV_NONINL
-#include "mtr0log.ic"
-#endif
-
 #include "buf0buf.h"
 #include "dict0boot.h"
 #include "dict0dict.h"
@@ -36,25 +32,21 @@ Created 12/7/1995 Heikki Tuuri
 #include "trx0sys.h"
 
 void mlog_catenate_string(mtr_t *mtr, const byte *str, ulint len) {
-  dyn_array_t *mlog;
-
-  if (mtr_get_log_mode(mtr) == MTR_LOG_NONE) {
+  if (mtr->get_log_mode() == MTR_LOG_NONE) {
 
     return;
   }
 
-  mlog = &(mtr->log);
+  auto mlog = &mtr->m_log;
 
   dyn_push_string(mlog, str, len);
 }
 
 void mlog_write_initial_log_record(const byte *ptr, mlog_type_t type, mtr_t *mtr) {
-  byte *log_ptr;
-
   ut_ad(type <= MLOG_BIGGEST_TYPE);
   ut_ad(type > MLOG_8BYTES);
 
-  log_ptr = mlog_open(mtr, 11);
+  auto log_ptr = mlog_open(mtr, 11);
 
   /* If no logging is requested, we may return now */
   if (log_ptr == nullptr) {
@@ -76,7 +68,7 @@ byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, mlog_type_t *type,
   *type = static_cast<mlog_type_t>((ulint)*ptr & ~MLOG_SINGLE_REC_FLAG);
   ut_ad(*type <= MLOG_BIGGEST_TYPE);
 
-  ptr++;
+  ++ptr;
 
   if (end_ptr < ptr + 2) {
 
@@ -107,12 +99,13 @@ byte *mlog_parse_nbytes(mlog_type_t type, byte *ptr, byte *end_ptr, byte *page) 
   }
 
   auto offset = mach_read_from_2(ptr);
+
   ptr += 2;
 
   if (offset >= UNIV_PAGE_SIZE) {
     recv_sys->m_found_corrupt_log = true;
 
-    return (nullptr);
+    return nullptr;
   }
 
   if (type == MLOG_8BYTES) {
@@ -120,21 +113,21 @@ byte *mlog_parse_nbytes(mlog_type_t type, byte *ptr, byte *end_ptr, byte *page) 
 
     if (ptr == nullptr) {
 
-      return (nullptr);
+      return nullptr;
     }
 
     if (page != nullptr) {
       mach_write_to_8(page + offset, dval);
     }
 
-    return (ptr);
+    return ptr;
   }
 
   val = mach_parse_compressed(ptr, end_ptr);
 
   if (ptr == nullptr) {
 
-    return (nullptr);
+    return nullptr;
   }
 
   switch (type) {
@@ -165,12 +158,10 @@ byte *mlog_parse_nbytes(mlog_type_t type, byte *ptr, byte *end_ptr, byte *page) 
       ptr = nullptr;
   }
 
-  return (ptr);
+  return ptr;
 }
 
 void mlog_write_ulint(byte *ptr, ulint val, mlog_type_t type, mtr_t *mtr) {
-  byte *log_ptr;
-
   switch (type) {
     case MLOG_1BYTE:
       mach_write_to_1(ptr, val);
@@ -185,7 +176,7 @@ void mlog_write_ulint(byte *ptr, ulint val, mlog_type_t type, mtr_t *mtr) {
       ut_error;
   }
 
-  log_ptr = mlog_open(mtr, 11 + 2 + 5);
+  auto log_ptr = mlog_open(mtr, 11 + 2 + 5);
 
   /* If no logging is requested, we may return now */
   if (log_ptr == nullptr) {
@@ -204,13 +195,9 @@ void mlog_write_ulint(byte *ptr, ulint val, mlog_type_t type, mtr_t *mtr) {
 }
 
 void mlog_write_uint64(byte *ptr, uint64_t val, mtr_t *mtr) {
-  byte *log_ptr;
-
-  ut_ad(ptr && mtr);
-
   mach_write_to_8(ptr, val);
 
-  log_ptr = mlog_open(mtr, 11 + 2 + 9);
+  auto log_ptr = mlog_open(mtr, 11 + 2 + 9);
 
   /* If no logging is requested, we may return now */
   if (log_ptr == nullptr) {
@@ -229,7 +216,6 @@ void mlog_write_uint64(byte *ptr, uint64_t val, mtr_t *mtr) {
 }
 
 void mlog_write_string(byte *ptr, const byte *str, ulint len, mtr_t *mtr) {
-  ut_ad(ptr && mtr);
   ut_a(len < UNIV_PAGE_SIZE);
 
   memcpy(ptr, str, len);
@@ -238,12 +224,9 @@ void mlog_write_string(byte *ptr, const byte *str, ulint len, mtr_t *mtr) {
 }
 
 void mlog_log_string(byte *ptr, ulint len, mtr_t *mtr) {
-  byte *log_ptr;
-
-  ut_ad(ptr && mtr);
   ut_ad(len <= UNIV_PAGE_SIZE);
 
-  log_ptr = mlog_open(mtr, 30);
+  auto log_ptr = mlog_open(mtr, 30);
 
   /* If no logging is requested, we may return now */
   if (log_ptr == nullptr) {
@@ -268,37 +251,39 @@ byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
 
   if (end_ptr < ptr + 4) {
 
-    return (nullptr);
+    return nullptr;
   }
 
   ulint offset = mach_read_from_2(ptr);
   ptr += 2;
+
   ulint len = mach_read_from_2(ptr);
   ptr += 2;
 
   if (offset >= UNIV_PAGE_SIZE || len + offset > UNIV_PAGE_SIZE) {
     recv_sys->m_found_corrupt_log = true;
 
-    return (nullptr);
+    return nullptr;
   }
 
   if (end_ptr < ptr + len) {
 
-    return (nullptr);
+    return nullptr;
   }
 
   if (page != nullptr) {
     memcpy(page + offset, ptr, len);
   }
 
-  return (ptr + len);
+  return ptr + len;
 }
 
 byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, dict_index_t *index, mlog_type_t type, ulint size) {
   auto log_ptr = mlog_open(mtr, 11 + size);
 
   if (log_ptr == nullptr) {
-    return (nullptr); /* logging is disabled */
+    /* logging is disabled */
+    return nullptr;
   }
 
   log_ptr = mlog_write_initial_log_record_fast(rec, type, log_ptr, mtr);
@@ -315,34 +300,25 @@ byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, dict_index_t *index
 }
 
 byte *mlog_parse_index(byte *ptr, const byte *end_ptr, dict_index_t **index) {
-  ulint n;
-  ulint n_uniq;
-  dict_table_t *table;
-  dict_index_t *ind;
 
-  n = n_uniq = 1;
+  auto table = dict_mem_table_create("LOG_DUMMY", DICT_HDR_SPACE, 1, 0);
+  auto ind = dict_mem_index_create("LOG_DUMMY", "LOG_DUMMY", DICT_HDR_SPACE, 0, 1);
 
-  table = dict_mem_table_create("LOG_DUMMY", DICT_HDR_SPACE, n, 0);
-  ind = dict_mem_index_create("LOG_DUMMY", "LOG_DUMMY", DICT_HDR_SPACE, 0, n);
+  ind->n_uniq = 1;
   ind->table = table;
-  ind->n_uniq = (unsigned int)n_uniq;
-  if (n_uniq != n) {
-    ut_a(n_uniq + DATA_ROLL_PTR <= n);
-    ind->type = DICT_CLUSTERED;
-  }
- 
+
   /* Avoid ut_ad(index->cached) in dict_index_get_n_unique_in_tree */
-  ind->cached = true;
   *index = ind;
-  return (ptr);
+  ind->cached = true;
+
+  return ptr;
 }
 
 byte *mlog_write_initial_log_record_fast(const byte *ptr, mlog_type_t type, byte *log_ptr, mtr_t *mtr) {
-  ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
   ut_ad(type <= MLOG_BIGGEST_TYPE);
-  ut_ad(ptr && log_ptr);
 
-  auto page = (const byte *)ut_align_down(ptr, UNIV_PAGE_SIZE);
+  auto page = static_cast<const byte *>(ut_align_down(ptr, UNIV_PAGE_SIZE));
   auto space = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
   auto offset = mach_read_from_4(page + FIL_PAGE_OFFSET);
 
@@ -355,36 +331,34 @@ byte *mlog_write_initial_log_record_fast(const byte *ptr, mlog_type_t type, byte
       /* Do nothing: we only come to this branch in an
       InnoDB database creation. We do not redo log
       anything for the doublewrite buffer pages. */
-      return (log_ptr);
+      return log_ptr;
     } else {
-      ib_logger(
-        ib_stream,
-        "Error: trying to redo log a record of type "
-        "%d on page %lu of space %lu in the "
-        "doublewrite buffer, continuing anyway.\n"
-        "Please post a bug report to "
-        "bugs.mysql.com.\n",
-        type,
+      log_err(std::format(
+        "Trying to redo log a record of type {} on page {} of space {} in the"
+        " doublewrite buffer, continuing anyway. Please create an issue on the"
+        " GitHub project page.",
+        ulong(type),
         offset,
         space
-      );
+      ));
     }
   }
 
   mach_write_to_1(log_ptr, type);
-  log_ptr++;
+
+  ++log_ptr;
   log_ptr += mach_write_compressed(log_ptr, space);
   log_ptr += mach_write_compressed(log_ptr, offset);
 
-  mtr->n_log_recs++;
+  ++mtr->m_n_log_recs;
 
 #ifdef UNIV_DEBUG
   /* We now assume that all x-latched pages have been modified! */
   auto block = srv_buf_pool->block_align(ptr);
 
-  if (!mtr_memo_contains(mtr, block, MTR_MEMO_MODIFY)) {
+  if (!mtr->memo_contains(block, MTR_MEMO_MODIFY)) {
 
-    mtr_memo_push(mtr, block, MTR_MEMO_MODIFY);
+    mtr->memo_push(block, MTR_MEMO_MODIFY);
   }
 #endif /* UNIV_DEBUG */
 

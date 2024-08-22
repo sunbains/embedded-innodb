@@ -137,7 +137,7 @@ void trx_sys_mark_upgraded_to_multiple_tablespaces() {
   doublewrite buffer. Let us mark to the trx_sys header that the upgrade
   has been done. */
 
-  mtr_start(&mtr);
+  mtr.start();
 
   Buf_pool::Request req {
     .m_rw_latch = RW_X_LATCH,
@@ -154,7 +154,7 @@ void trx_sys_mark_upgraded_to_multiple_tablespaces() {
   auto doublewrite = block->get_frame() + TRX_SYS_DOUBLEWRITE;
 
   mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED, TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N, MLOG_4BYTES, &mtr);
-  mtr_commit(&mtr);
+  mtr.commit();
 
   /* Flush the modified pages to disk and make a checkpoint */
   log_sys->make_checkpoint_at(IB_UINT64_T_MAX, true);
@@ -176,7 +176,7 @@ db_err trx_sys_create_doublewrite_buf() {
     .m_mtr = &mtr
   };
 
-  mtr_start(&mtr);
+  mtr.start();
 
   trx_doublewrite_buf_is_being_created = true;
 
@@ -187,7 +187,7 @@ db_err trx_sys_create_doublewrite_buf() {
   auto doublewrite = block->get_frame() + TRX_SYS_DOUBLEWRITE;
 
   if (mach_read_from_4(doublewrite + TRX_SYS_DOUBLEWRITE_MAGIC) == TRX_SYS_DOUBLEWRITE_MAGIC_N) {
-    mtr_commit(&mtr);
+    mtr.commit();
 
     trx_doublewrite_init(doublewrite);
     trx_doublewrite_buf_is_being_created = false;
@@ -279,7 +279,7 @@ db_err trx_sys_create_doublewrite_buf() {
 
   mlog_write_ulint(doublewrite + TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED, TRX_SYS_DOUBLEWRITE_SPACE_ID_STORED_N, MLOG_4BYTES, &mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   /* Flush the modified pages to disk and make a checkpoint */
   log_sys->make_checkpoint_at(IB_UINT64_T_MAX, true);
@@ -470,12 +470,12 @@ void trx_sys_flush_max_trx_id() {
 
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   auto sys_header = trx_sysf_get(&mtr);
 
   mlog_write_uint64(sys_header + TRX_SYS_TRX_ID_STORE, trx_sys->max_trx_id, &mtr);
-  mtr_commit(&mtr);
+  mtr.commit();
 }
 
 ulint trx_sysf_rseg_find_free(mtr_t *mtr) {
@@ -563,7 +563,7 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
   const char *unit = "";
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   ut_ad(trx_sys == nullptr);
 
@@ -586,8 +586,10 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
   to the disk-based header! Thus trx id values will not overlap when
   the database is repeatedly started! */
 
-  trx_sys->max_trx_id = ut_uint64_align_up(mtr_read_uint64(sys_header + TRX_SYS_TRX_ID_STORE, &mtr), TRX_SYS_TRX_ID_WRITE_MARGIN) +
-                        2 * TRX_SYS_TRX_ID_WRITE_MARGIN;
+  trx_sys->max_trx_id = ut_uint64_align_up(
+    mtr.read_uint64(
+      sys_header + TRX_SYS_TRX_ID_STORE),
+      TRX_SYS_TRX_ID_WRITE_MARGIN) + 2 * TRX_SYS_TRX_ID_WRITE_MARGIN;
 
 
   trx_dummy_sess = sess_open();
@@ -633,17 +635,17 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
 
   mutex_exit(&kernel_mutex);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 }
 
 void trx_sys_create(ib_recovery_t recovery) {
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   trx_sysf_create(&mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   trx_sys_init_at_db_start(recovery);
 }
@@ -659,7 +661,7 @@ void trx_sys_create(ib_recovery_t recovery) {
 static bool trx_sys_file_format_max_write(ulint format_id, const char **name) {
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   Buf_pool::Request req {
     .m_rw_latch = RW_X_LATCH,
@@ -684,7 +686,7 @@ static bool trx_sys_file_format_max_write(ulint format_id, const char **name) {
 
   mlog_write_uint64(ptr, (uint64_t(TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_HIGH) << 32) | tag_value_low, &mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return true;
 }
@@ -696,7 +698,7 @@ static ulint trx_sys_file_format_max_read() {
 
   /* Since this is called during the startup phase it's safe to
   read the value without a covering mutex. */
-  mtr_start(&mtr);
+  mtr.start();
 
   Buf_pool::Request req {
     .m_rw_latch = RW_X_LATCH,
@@ -713,7 +715,7 @@ static ulint trx_sys_file_format_max_read() {
 
   auto file_format_id = mach_read_from_8(ptr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   auto format_id = file_format_id - TRX_SYS_FILE_FORMAT_TAG_MAGIC_N_LOW;
 

@@ -286,14 +286,14 @@ void btr_cur_search_to_nth_level(
   /* Store the position of the tree latch we push to mtr so that we
   know how to release it when we have latched leaf node(s) */
 
-  savepoint = mtr_set_savepoint(mtr);
+  savepoint = mtr->set_savepoint();
 
   if (latch_mode == BTR_MODIFY_TREE) {
     mtr_x_lock(dict_index_get_lock(dict_index), mtr);
 
   } else if (latch_mode == BTR_CONT_MODIFY_TREE) {
     /* Do nothing */
-    ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
+    ut_ad(mtr->memo_contains(dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
   } else {
     mtr_s_lock(dict_index_get_lock(dict_index), mtr);
   }
@@ -400,7 +400,7 @@ void btr_cur_search_to_nth_level(
 
         /* Release the tree s-latch */
 
-        mtr_release_s_latch_at_savepoint(mtr, savepoint, dict_index_get_lock(dict_index));
+        mtr->release_s_latch_at_savepoint(savepoint, dict_index_get_lock(dict_index));
       }
 
       page_mode = mode;
@@ -484,7 +484,7 @@ void btr_cur_open_at_index_side_func(
   /* Store the position of the tree latch we push to mtr so that we
   know how to release it when we have latched the leaf node */
 
-  auto savepoint = mtr_set_savepoint(mtr);
+  auto savepoint = mtr->set_savepoint();
 
   if (latch_mode == BTR_MODIFY_TREE) {
     mtr_x_lock(dict_index_get_lock(dict_index), mtr);
@@ -532,7 +532,7 @@ void btr_cur_open_at_index_side_func(
 
         /* Release the tree s-latch */
 
-        mtr_release_s_latch_at_savepoint(mtr, savepoint, dict_index_get_lock(dict_index));
+        mtr->release_s_latch_at_savepoint(savepoint, dict_index_get_lock(dict_index));
       }
     }
 
@@ -679,7 +679,7 @@ static rec_t *btr_cur_insert_if_possible(
 
   block = btr_cur_get_block(cursor);
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
   page_cursor = btr_cur_get_page_cur(cursor);
 
   /* Now, try the insert */
@@ -804,7 +804,7 @@ db_err btr_cur_optimistic_insert(
   }
 #endif /* UNIV_DEBUG */
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
   max_size = page_get_max_insert_size_after_reorganize(page, 1);
   leaf = page_is_leaf(page);
 
@@ -921,8 +921,8 @@ db_err btr_cur_pessimistic_insert(
 
   *big_rec = nullptr;
 
-  ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(btr_cur_get_index(cursor)), MTR_MEMO_X_LOCK));
-  ut_ad(mtr_memo_contains(mtr, btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(dict_index_get_lock(btr_cur_get_index(cursor)), MTR_MEMO_X_LOCK));
+  ut_ad(mtr->memo_contains(btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
 
   /* Try first an optimistic insert; reset the cursor flag: we do not
   assume anything of how it was positioned */
@@ -1249,7 +1249,7 @@ db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor, const upd_t *up
   auto rec = btr_cur_get_rec(cursor);
   auto index = cursor->m_index;
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   auto heap = mem_heap_create(1024);
 
@@ -1421,7 +1421,7 @@ static void btr_cur_pess_upd_restore_supremum(
 #endif /* UNIV_BTR_DEBUG */
 
   /* We must already have an x-latch on prev_block! */
-  ut_ad(mtr_memo_contains(mtr, prev_block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(prev_block, MTR_MEMO_PAGE_X_FIX));
 
   lock_rec_reset_and_inherit_gap_locks(prev_block, block, PAGE_HEAP_NO_SUPREMUM, page_rec_get_heap_no(rec));
 }
@@ -1451,8 +1451,8 @@ db_err btr_cur_pessimistic_update(
   auto index = cursor->m_index;
   auto block = btr_cur_get_block(cursor);
 
-  ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(index), MTR_MEMO_X_LOCK));
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(dict_index_get_lock(index), MTR_MEMO_X_LOCK));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   auto optim_err = btr_cur_optimistic_update(flags, cursor, update, cmpl_info, thr, mtr);
 
@@ -1884,7 +1884,7 @@ bool btr_cur_optimistic_delete(btr_cur_t *cursor, mtr_t *mtr) {
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
 
-  ut_ad(mtr_memo_contains(mtr, btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
 
   /* This is intended only for leaf page deletions */
   auto block = btr_cur_get_block(cursor);
@@ -1928,8 +1928,8 @@ void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents, btr_cur_
   auto page = block->get_frame();
   auto index = btr_cur_get_index(cursor);
 
-  ut_ad(mtr_memo_contains(mtr, dict_index_get_lock(index), MTR_MEMO_X_LOCK));
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(dict_index_get_lock(index), MTR_MEMO_X_LOCK));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   if (!has_reserved_extents) {
     /* First reserve enough free space for the file segments
@@ -2064,7 +2064,7 @@ int64_t btr_estimate_n_rows_in_range(dict_index_t *index, const dtuple_t *tuple1
   ulint i;
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   cursor.path_arr = path1;
 
@@ -2075,9 +2075,9 @@ int64_t btr_estimate_n_rows_in_range(dict_index_t *index, const dtuple_t *tuple1
     btr_cur_open_at_index_side(true, index, BTR_SEARCH_LEAF | BTR_ESTIMATE, &cursor, 0, &mtr);
   }
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
-  mtr_start(&mtr);
+  mtr.start();
 
   cursor.path_arr = path2;
 
@@ -2088,7 +2088,7 @@ int64_t btr_estimate_n_rows_in_range(dict_index_t *index, const dtuple_t *tuple1
     btr_cur_open_at_index_side(false, index, BTR_SEARCH_LEAF | BTR_ESTIMATE, &cursor, 0, &mtr);
   }
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   /* We have the path information for the range in path1 and path2 */
 
@@ -2222,7 +2222,7 @@ void btr_estimate_number_of_different_key_vals(dict_index_t *index) {
 
   for (i = 0; i < n_sample_pages; i++) {
     rec_t *supremum;
-    mtr_start(&mtr);
+    mtr.start();
 
     btr_cur_open_at_rnd_pos(index, BTR_SEARCH_LEAF, &cursor, &mtr);
 
@@ -2308,7 +2308,7 @@ void btr_estimate_number_of_different_key_vals(dict_index_t *index) {
 
     total_external_size += btr_rec_get_externally_stored_len(rec, offsets_rec);
 
-    mtr_commit(&mtr);
+    mtr.commit();
   }
 
   /* If we saw k borders between different key values on
@@ -2587,9 +2587,9 @@ static void btr_blob_free(buf_block_t *block, bool, mtr_t *mtr) {
   auto space = block->get_space();
   auto page_no = block->get_page_no();
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
-  mtr_commit(mtr);
+  mtr->commit();
 
   buf_pool_mutex_enter();
   mutex_enter(&block->m_mutex);
@@ -2611,8 +2611,8 @@ db_err btr_store_big_rec_extern_fields(
   mtr_t *local_mtr __attribute__((unused))
 ) {
   ut_ad(rec_offs_validate(rec, index, offsets));
-  ut_ad(mtr_memo_contains(local_mtr, dict_index_get_lock(index), MTR_MEMO_X_LOCK));
-  ut_ad(mtr_memo_contains(local_mtr, rec_block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(local_mtr->memo_contains(dict_index_get_lock(index), MTR_MEMO_X_LOCK));
+  ut_ad(local_mtr->memo_contains(rec_block, MTR_MEMO_PAGE_X_FIX));
   ut_ad(rec_block->get_frame() == page_align(rec));
   ut_a(dict_index_is_clust(index));
 
@@ -2652,7 +2652,7 @@ db_err btr_store_big_rec_extern_fields(
       mtr_t mtr;
       ulint hint_page_no;
 
-      mtr_start(&mtr);
+      mtr.start();
 
       if (prev_page_no == FIL_NULL) {
         hint_page_no = 1 + rec_page_no;
@@ -2664,7 +2664,7 @@ db_err btr_store_big_rec_extern_fields(
 
       if (unlikely(block == nullptr)) {
 
-        mtr_commit(&mtr);
+        mtr.commit();
 
         return DB_OUT_OF_FILE_SPACE;
       }
@@ -2677,10 +2677,10 @@ db_err btr_store_big_rec_extern_fields(
         Buf_pool::Request req {
           .m_rw_latch = RW_X_LATCH,
           .m_page_id = { space_id, prev_page_no },
-	  .m_mode = BUF_GET,
-	  .m_file = __FILE__,
-	  .m_line = __LINE__,
-	  .m_mtr = &mtr
+	        .m_mode = BUF_GET,
+	        .m_file = __FILE__,
+	        .m_line = __LINE__,
+	        .m_mtr = &mtr
         };
 
         auto prev_block = srv_buf_pool->get(req, nullptr);
@@ -2742,7 +2742,7 @@ db_err btr_store_big_rec_extern_fields(
 
       prev_page_no = page_no;
 
-      mtr_commit(&mtr);
+      mtr.commit();
 
       if (extern_len == 0) {
         break;
@@ -2795,8 +2795,8 @@ void btr_free_externally_stored_field(
 ) {
 
 #ifdef UNIV_DEBUG
-  ut_ad(mtr_memo_contains(local_mtr, dict_index_get_lock(index), MTR_MEMO_X_LOCK));
-  ut_ad(mtr_memo_contains_page(local_mtr, field_ref, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(local_mtr->memo_contains(dict_index_get_lock(index), MTR_MEMO_X_LOCK));
+  ut_ad(local_mtr->memo_contains_page(field_ref, MTR_MEMO_PAGE_X_FIX));
   ut_ad(!rec || rec_offs_validate(rec, index, offsets));
 
   if (rec != nullptr) {
@@ -2835,7 +2835,7 @@ void btr_free_externally_stored_field(
   mtr_t mtr;
 
   for (;;) {
-    mtr_start(&mtr);
+    mtr.start();
 
     auto ptr{page_align(field_ref)};
 
@@ -2864,7 +2864,7 @@ void btr_free_externally_stored_field(
             (mach_read_from_1(field_ref + BTR_EXTERN_LEN) & BTR_EXTERN_INHERITED_FLAG))) {
 
       /* Do not free */
-      mtr_commit(&mtr);
+      mtr.commit();
 
       return;
     }
@@ -2915,7 +2915,7 @@ static void btr_rec_free_externally_stored_fields(
                             tree */
 {
   ut_ad(rec_offs_validate(rec, index, offsets));
-  ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
   /* Free possible externally stored fields in the record */
 
   auto n_fields = rec_offs_n_fields(offsets);
@@ -2946,7 +2946,7 @@ static void btr_rec_free_updated_extern_fields(
                             an X-latch to record page and to the tree */
 {
   ut_ad(rec_offs_validate(rec, index, offsets));
-  ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
 
   /* Free possible externally stored fields in the record */
 
@@ -2982,7 +2982,7 @@ static ulint btr_copy_blob_prefix(
   for (;;) {
     mtr_t mtr;
 
-    mtr_start(&mtr);
+    mtr.start();
 
     Buf_pool::Request req {
       .m_rw_latch = RW_S_LATCH,
@@ -3009,7 +3009,7 @@ static ulint btr_copy_blob_prefix(
 
     page_no = btr_blob_get_next_page_no(blob_header);
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
     if (page_no == FIL_NULL || copy_len != part_len) {
       return copied_len;

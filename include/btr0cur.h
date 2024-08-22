@@ -688,7 +688,7 @@ inline void btr_cur_position(dict_index_t *dict_index, rec_t *rec, buf_block_t *
  * @return True if merge is recommended.
  */
 inline bool btr_cur_compress_recommendation(btr_cur_t *cursor, mtr_t *mtr) {
-  ut_ad(mtr_memo_contains(mtr, btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
 
   auto page = btr_cur_get_page(cursor);
 
@@ -712,7 +712,7 @@ inline bool btr_cur_compress_recommendation(btr_cur_t *cursor, mtr_t *mtr) {
  * @return True if the record can be deleted without recommended merging.
  */
 inline bool btr_cur_delete_will_underflow(btr_cur_t *cursor, ulint rec_size, mtr_t *mtr) {
-  ut_ad(mtr_memo_contains(mtr, btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
 
   auto page = btr_cur_get_page(cursor);
 

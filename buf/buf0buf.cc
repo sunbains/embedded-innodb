@@ -300,7 +300,7 @@ void Buf_pool::release(buf_block_t *block, ulint rw_latch, mtr_t *mtr) {
   ut_a(block->get_state() == BUF_BLOCK_FILE_PAGE);
   ut_a(block->m_page.m_buf_fix_count > 0);
 
-  if (rw_latch == RW_X_LATCH && mtr->modifications) {
+  if (rw_latch == RW_X_LATCH && mtr->m_modifications) {
     buf_pool_mutex_enter();
 
     m_flusher->note_modification(block, mtr);
@@ -777,14 +777,14 @@ buf_block_t *Buf_pool::get(Request &req, buf_block_t *guess) {
   const auto &page_id{req.m_page_id};
 
   ut_ad(req.m_mtr != nullptr);
-  ut_ad(req.m_mtr->state == MTR_ACTIVE);
+  ut_ad(req.m_mtr->m_state == MTR_ACTIVE);
   ut_ad(req.m_rw_latch == RW_S_LATCH || req.m_rw_latch == RW_X_LATCH || req.m_rw_latch == RW_NO_LATCH);
   ut_ad(req.m_mode != BUF_GET_NO_LATCH || req.m_rw_latch == RW_NO_LATCH);
   ut_ad(req.m_mode == BUF_GET || req.m_mode == BUF_GET_IF_IN_POOL || req.m_mode == BUF_GET_NO_LATCH);
 
   ++m_stat.n_page_gets;
 
-  ulint fix_type;
+  mtr_memo_type_t fix_type;
 
   for (;;) {
     buf_pool_mutex_enter();
@@ -793,8 +793,8 @@ buf_block_t *Buf_pool::get(Request &req, buf_block_t *guess) {
 
     if (block != nullptr) {
       if (page_id.m_page_no != block->m_page.m_page_no ||
-	  page_id.m_space_id != block->m_page.m_space ||
-	  block->get_state() != BUF_BLOCK_FILE_PAGE) {
+	        page_id.m_space_id != block->m_page.m_space ||
+	        block->get_state() != BUF_BLOCK_FILE_PAGE) {
 
         block = guess = nullptr;
 
@@ -926,7 +926,7 @@ buf_block_t *Buf_pool::get(Request &req, buf_block_t *guess) {
       break;
   }
 
-  mtr_memo_push(req.m_mtr, block, fix_type);
+  req.m_mtr->memo_push(block, fix_type);
 
   if (access_time == 0) {
     /* In the case of a first access, try to apply linear read-ahead */
@@ -940,7 +940,7 @@ buf_block_t *Buf_pool::get(Request &req, buf_block_t *guess) {
 bool Buf_pool::try_get(Request& req) {
   ut_ad(req.m_guess != nullptr);
   ut_ad(req.m_mtr != nullptr);
-  ut_ad(req.m_mtr->state == MTR_ACTIVE);
+  ut_ad(req.m_mtr->m_state == MTR_ACTIVE);
   ut_ad(req.m_rw_latch == RW_S_LATCH || req.m_rw_latch == RW_X_LATCH);
 
   mutex_enter(&req.m_guess->m_mutex);
@@ -965,7 +965,7 @@ bool Buf_pool::try_get(Request& req) {
   set_accessed_make_young(&req.m_guess->m_page, access_time);
 
   bool success;
-  ulint fix_type;
+  mtr_memo_type_t fix_type;
 
   /* The "try" part. */
   if (req.m_rw_latch == RW_S_LATCH) {
@@ -1015,7 +1015,7 @@ bool Buf_pool::try_get(Request& req) {
 
   } else {
 
-    mtr_memo_push(req.m_mtr, req.m_guess, fix_type);
+    req.m_mtr->memo_push(req.m_guess, fix_type);
 
     ut_ad(++buf_dbg_counter % 5771 || validate());
     ut_ad(req.m_guess->m_page.m_buf_fix_count > 0);
@@ -1036,7 +1036,7 @@ bool Buf_pool::try_get(Request& req) {
 
 bool Buf_pool::try_get_known_nowait(Request& req) {
   ut_ad(req.m_mtr != nullptr);
-  ut_ad(req.m_mtr->state == MTR_ACTIVE);
+  ut_ad(req.m_mtr->m_state == MTR_ACTIVE);
   ut_ad(req.m_rw_latch == RW_S_LATCH || req.m_rw_latch == RW_X_LATCH);
 
   mutex_enter(&req.m_guess->m_mutex);
@@ -1083,7 +1083,7 @@ bool Buf_pool::try_get_known_nowait(Request& req) {
   }
 
   bool success;
-  ulint fix_type;
+  mtr_memo_type_t fix_type;
 
   /* This is the "nowait" part. */
   if (req.m_rw_latch == RW_S_LATCH) {
@@ -1107,7 +1107,7 @@ bool Buf_pool::try_get_known_nowait(Request& req) {
 
   } else {
 
-    mtr_memo_push(req.m_mtr, req.m_guess, fix_type);
+    req.m_mtr->memo_push(req.m_guess, fix_type);
 
     ut_ad(++buf_dbg_counter % 5771 || validate());
     ut_ad(req.m_guess->m_page.m_buf_fix_count > 0);
@@ -1122,7 +1122,7 @@ bool Buf_pool::try_get_known_nowait(Request& req) {
 
 const buf_block_t *Buf_pool::try_get_by_page_id(Request& req) {
   ut_ad(req.m_mtr != nullptr);
-  ut_ad(req.m_mtr->state == MTR_ACTIVE);
+  ut_ad(req.m_mtr->m_state == MTR_ACTIVE);
 
   const auto &page_id{req.m_page_id};
 
@@ -1173,7 +1173,7 @@ const buf_block_t *Buf_pool::try_get_by_page_id(Request& req) {
     return nullptr;
   }
 
-  mtr_memo_push(req.m_mtr, block, fix_type);
+  req.m_mtr->memo_push(block, fix_type);
 
   ut_ad(++buf_dbg_counter % 5771 || validate());
   ut_ad(block->m_page.m_buf_fix_count > 0);
@@ -1316,7 +1316,7 @@ buf_block_t *Buf_pool::create(space_id_t space, page_no_t page_no, mtr_t *mtr) {
   auto time_ms = ut_time_ms();
 
   ut_ad(mtr != nullptr);
-  ut_ad(mtr->state == MTR_ACTIVE);
+  ut_ad(mtr->m_state == MTR_ACTIVE);
 
   auto free_block = m_LRU->get_free_block();
 
@@ -1361,7 +1361,7 @@ buf_block_t *Buf_pool::create(space_id_t space, page_no_t page_no, mtr_t *mtr) {
 
   buf_pool_mutex_exit();
 
-  mtr_memo_push(mtr, block, MTR_MEMO_BUF_FIX);
+  mtr->memo_push(block, MTR_MEMO_BUF_FIX);
 
   mutex_exit(&block->m_mutex);
 

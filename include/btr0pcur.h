@@ -783,7 +783,7 @@ inline void btr_pcur_t::commit_specify_mtr(mtr_t *mtr) {
 
   m_latch_mode = BTR_NO_LATCHES;
 
-  mtr_commit(mtr);
+  mtr->commit();
 
   m_pos_state = Btr_pcur_positioned::WAS_POSITIONED;
 }

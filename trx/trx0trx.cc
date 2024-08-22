@@ -556,7 +556,7 @@ void trx_commit_off_kernel(trx_t *trx) {
 
     mutex_exit(&kernel_mutex);
 
-    mtr_start(&mtr);
+    mtr.start();
 
     /* Change the undo log segment states from TRX_UNDO_ACTIVE
     to some other state: these modifications to the file data
@@ -611,10 +611,9 @@ void trx_commit_off_kernel(trx_t *trx) {
     a transaction T1, T2 will always get a bigger transaction
     number and a bigger commit lsn than T1. */
 
-    /*--------------*/
-    mtr_commit(&mtr);
-    /*--------------*/
-    lsn = mtr.end_lsn;
+    mtr.commit();
+
+    lsn = mtr.m_end_lsn;
 
     mutex_enter(&kernel_mutex);
   }
@@ -1343,7 +1342,7 @@ void trx_prepare_off_kernel(trx_t *trx) {
 
     mutex_exit(&kernel_mutex);
 
-    mtr_start(&mtr);
+    mtr.start();
 
     /* Change the undo log segment states from TRX_UNDO_ACTIVE
     to TRX_UNDO_PREPARED: these modifications to the file data
@@ -1365,14 +1364,12 @@ void trx_prepare_off_kernel(trx_t *trx) {
       trx_undo_set_state_at_prepare(trx, trx->update_undo, &mtr);
     }
 
-    mutex_exit(&(rseg->mutex));
+    mutex_exit(&rseg->mutex);
 
-    /*--------------*/
-    mtr_commit(&mtr); /* This mtr commit makes the
-                      transaction prepared in the file-based
-                      world */
-    /*--------------*/
-    lsn = mtr.end_lsn;
+    /* This mtr commit makes the transaction prepared in the file-based world */
+    mtr.commit();
+
+    lsn = mtr.m_end_lsn;
 
     mutex_enter(&kernel_mutex);
   }

@@ -79,7 +79,7 @@ dyn_block_t *dyn_array_add_block(dyn_array_t *arr);
 /** Gets the first block in a dyn array.
 @param[in,out] arr              Dynamic array.
 @return first block in the instance. */
-inline dyn_block_t *dyn_array_get_first_block(dyn_array_t *arr) {
+inline const dyn_block_t *dyn_array_get_first_block(const dyn_array_t *arr) {
   return arr;
 }
 
@@ -99,7 +99,7 @@ inline dyn_block_t *dyn_array_get_last_block(dyn_array_t *arr) {
 @param[in,out] arr             Dynamic array
 @param[in,out] block           Block in the dynamic array
 @return	pointer to next, nullptr if end of list */
-inline dyn_block_t *dyn_array_get_next_block(dyn_array_t *arr, dyn_block_t *block) {
+inline const dyn_block_t *dyn_array_get_next_block(const dyn_array_t *arr, const dyn_block_t *block) {
   if (arr->heap == nullptr) {
 
     ut_ad(arr == block);
@@ -113,14 +113,21 @@ inline dyn_block_t *dyn_array_get_next_block(dyn_array_t *arr, dyn_block_t *bloc
 /** Gets the number of used bytes in a dyn array block.
 @param[in,out] block           Block to check
 @return	number of bytes used */
-inline ulint dyn_block_get_used(dyn_block_t *block) {
+inline ulint dyn_block_get_used(const dyn_block_t *block) {
   return block->used & ~DYN_BLOCK_FULL_FLAG;
 }
 
 /** Gets pointer to the start of data in a dyn array block.
 @param[in,out] block           Block to get the data from.
+@return	const pointer to data */
+inline const byte *dyn_block_get_data(const dyn_block_t *block) noexcept {
+  return block->data;
+}
+
+/** Gets pointer to the start of data in a dyn array block.
+@param[in,out] block           Block to get the data from.
 @return	pointer to data */
-inline byte *dyn_block_get_data(dyn_block_t *block) {
+inline byte *dyn_block_get_data(dyn_block_t *block) noexcept {
   return block->data;
 }
 
@@ -247,7 +254,7 @@ inline void dyn_array_close(dyn_array_t *arr, byte *ptr) {
 @param[in,out] arr              Dynamic array.
 @param[in] pos                  Position of element as bytes from array start
 @return	pointer to element */
-inline void *dyn_array_get_element(dyn_array_t *arr, ulint pos) {
+inline void *dyn_array_get_element(const dyn_array_t *arr, ulint pos) {
   ut_ad(arr->magic_n == DYN_BLOCK_MAGIC_N);
 
   /* Get the first array block */
@@ -270,13 +277,13 @@ inline void *dyn_array_get_element(dyn_array_t *arr, ulint pos) {
   ut_ad(block != nullptr);
   ut_ad(dyn_block_get_used(block) >= pos);
 
-  return block->data + pos;
+  return (void*) (block->data + pos);
 }
 
 /** Returns the size of stored data in a dyn array.
 @param[in,out] arr              Dynamic array.
 @return	data size in bytes */
-inline ulint dyn_array_get_data_size(dyn_array_t *arr) {
+inline ulint dyn_array_get_data_size(const dyn_array_t *arr) {
   ut_ad(arr->magic_n == DYN_BLOCK_MAGIC_N);
 
   if (arr->heap == nullptr) {

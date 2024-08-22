@@ -75,7 +75,7 @@ char *dict_get_first_table_name_in_db(const char *name) {
 
   heap = mem_heap_create(1000);
 
-  mtr_start(&mtr);
+  mtr.start();
 
   sys_tables = dict_table_get_low("SYS_TABLES");
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
@@ -94,7 +94,7 @@ loop:
     /* Not found */
 
     pcur.close();
-    mtr_commit(&mtr);
+    mtr.commit();
     mem_heap_free(heap);
 
     return (nullptr);
@@ -106,7 +106,8 @@ loop:
     /* Not found */
 
     pcur.close();
-    mtr_commit(&mtr);
+    mtr.commit();
+
     mem_heap_free(heap);
 
     return (nullptr);
@@ -119,7 +120,9 @@ loop:
     char *table_name = mem_strdupl((char *)field, len);
 
     pcur.close();
-    mtr_commit(&mtr);
+
+    mtr.commit();
+
     mem_heap_free(heap);
 
     return (table_name);
@@ -149,7 +152,7 @@ void dict_print(void) {
 
   mutex_enter(&(dict_sys->mutex));
 
-  mtr_start(&mtr);
+  mtr.start();
 
   sys_tables = dict_table_get_low("SYS_TABLES");
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
@@ -165,7 +168,8 @@ loop:
     /* end of index */
 
     pcur.close();
-    mtr_commit(&mtr);
+
+    mtr.commit();
 
     mutex_exit(&(dict_sys->mutex));
 
@@ -188,7 +192,7 @@ loop:
 
     pcur.store_position(&mtr);
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
     table = dict_table_get_low(table_name);
     mem_free(table_name);
@@ -209,7 +213,7 @@ loop:
       dict_table_print_low(table);
     }
 
-    mtr_start(&mtr);
+    mtr.start();
 
     pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
@@ -265,7 +269,7 @@ void dict_check_tablespaces_and_store_max_id(bool in_crash_recovery) {
 
   mutex_enter(&(dict_sys->mutex));
 
-  mtr_start(&mtr);
+  mtr.start();
 
   sys_tables = dict_table_get_low("SYS_TABLES");
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
@@ -281,7 +285,8 @@ loop:
     /* end of index */
 
     pcur.close();
-    mtr_commit(&mtr);
+
+    mtr.commit();
 
     /* We must make the tablespace cache aware of the biggest
     known space id */
@@ -334,7 +339,7 @@ loop:
 
     pcur.store_position(&mtr);
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
     if (space_id == 0) {
       /* The system tablespace always exists. */
@@ -375,7 +380,7 @@ loop:
       max_space_id = space_id;
     }
 
-    mtr_start(&mtr);
+    mtr.start();
 
     pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
@@ -407,7 +412,7 @@ static void dict_load_columns(dict_table_t *table, mem_heap_t *heap) {
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
-  mtr_start(&mtr);
+  mtr.start();
 
   sys_columns = dict_table_get_low("SYS_COLUMNS");
   sys_index = UT_LIST_GET_FIRST(sys_columns->indexes);
@@ -476,7 +481,8 @@ static void dict_load_columns(dict_table_t *table, mem_heap_t *heap) {
   }
 
   pcur.close();
-  mtr_commit(&mtr);
+
+  mtr.commit();
 }
 
 /**
@@ -501,7 +507,7 @@ static void dict_load_fields(dict_index_t *index, mem_heap_t *heap) {
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
-  mtr_start(&mtr);
+  mtr.start();
 
   sys_fields = dict_table_get_low("SYS_FIELDS");
   sys_index = UT_LIST_GET_FIRST(sys_fields->indexes);
@@ -569,7 +575,7 @@ static void dict_load_fields(dict_index_t *index, mem_heap_t *heap) {
 
   pcur.close();
 
-  mtr_commit(&mtr);
+  mtr.commit();
 }
 
 /**
@@ -605,7 +611,7 @@ static ulint dict_load_indexes(dict_table_t *table, mem_heap_t *heap) {
 
   auto is_sys_table = table->id < DICT_HDR_FIRST_ID;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   sys_indexes = dict_table_get_low("SYS_INDEXES");
   sys_index = UT_LIST_GET_FIRST(sys_indexes->indexes);
@@ -733,7 +739,8 @@ static ulint dict_load_indexes(dict_table_t *table, mem_heap_t *heap) {
 
 func_exit:
   pcur.close();
-  mtr_commit(&mtr);
+
+  mtr.commit();
 
   return error;
 }
@@ -760,7 +767,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
 
   heap = mem_heap_create(32000);
 
-  mtr_start(&mtr);
+  mtr.start();
 
   sys_tables = dict_table_get_low("SYS_TABLES");
   sys_index = UT_LIST_GET_FIRST(sys_tables->indexes);
@@ -778,7 +785,9 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
     /* Not found */
   err_exit:
     pcur.close();
-    mtr_commit(&mtr);
+
+    mtr.commit();
+
     mem_heap_free(heap);
 
     return (nullptr);
@@ -866,7 +875,8 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
   table->id = mach_read_from_8(field);
 
   pcur.close();
-  mtr_commit(&mtr);
+
+  mtr.commit();
 
   dict_load_columns(table, heap);
 
@@ -935,7 +945,7 @@ dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
   the dictionary mutex, and therefore no deadlocks can occur
   with other dictionary operations. */
 
-  mtr_start(&mtr);
+  mtr.start();
   /*---------------------------------------------------*/
   /* Get the secondary index based on ID for table SYS_TABLES */
   sys_tables = dict_sys->sys_tables;
@@ -959,7 +969,9 @@ dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
     /* Not found */
 
     pcur.close();
-    mtr_commit(&mtr);
+
+    mtr.commit();
+
     mem_heap_free(heap);
 
     return (nullptr);
@@ -977,7 +989,9 @@ dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
   if (table_id != mach_read_from_8(field)) {
 
     pcur.close();
-    mtr_commit(&mtr);
+
+    mtr.commit();
+
     mem_heap_free(heap);
 
     return (nullptr);
@@ -989,7 +1003,9 @@ dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
   table = dict_load_table(recovery, mem_heap_strdupl(heap, (char *)field, len));
 
   pcur.close();
-  mtr_commit(&mtr);
+
+  mtr.commit();
+
   mem_heap_free(heap);
 
   return (table);
@@ -1028,7 +1044,7 @@ static void dict_load_foreign_cols(const char *id, dict_foreign_t *foreign) {
   foreign->foreign_col_names = (const char **)mem_heap_alloc(foreign->heap, foreign->n_fields * sizeof(void *));
 
   foreign->referenced_col_names = (const char **)mem_heap_alloc(foreign->heap, foreign->n_fields * sizeof(void *));
-  mtr_start(&mtr);
+  mtr.start();
 
   sys_foreign_cols = dict_table_get_low("SYS_FOREIGN_COLS");
   sys_index = UT_LIST_GET_FIRST(sys_foreign_cols->indexes);
@@ -1067,7 +1083,7 @@ static void dict_load_foreign_cols(const char *id, dict_foreign_t *foreign) {
 
   pcur.close();
 
-  mtr_commit(&mtr);
+  mtr.commit();
 }
 
 /**
@@ -1096,7 +1112,7 @@ static db_err dict_load_foreign(const char *id, bool check_charsets) {
 
   heap2 = mem_heap_create(1000);
 
-  mtr_start(&mtr);
+  mtr.start();
 
   sys_foreign = dict_table_get_low("SYS_FOREIGN");
   sys_index = UT_LIST_GET_FIRST(sys_foreign->indexes);
@@ -1116,7 +1132,9 @@ static db_err dict_load_foreign(const char *id, bool check_charsets) {
     ib_logger(ib_stream, "Error A: cannot load foreign constraint %s\n", id);
 
     pcur.close();
-    mtr_commit(&mtr);
+
+    mtr.commit();
+
     mem_heap_free(heap2);
 
     return DB_ERROR;
@@ -1130,7 +1148,9 @@ static db_err dict_load_foreign(const char *id, bool check_charsets) {
     ib_logger(ib_stream, "Error B: cannot load foreign constraint %s\n", id);
 
     pcur.close();
-    mtr_commit(&mtr);
+
+    mtr.commit();
+
     mem_heap_free(heap2);
 
     return (DB_ERROR);
@@ -1162,7 +1182,7 @@ static db_err dict_load_foreign(const char *id, bool check_charsets) {
 
   pcur.close();
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   dict_load_foreign_cols(id, foreign);
 
@@ -1212,7 +1232,7 @@ db_err dict_load_foreigns(const char *table_name, bool check_charsets) {
     return (DB_ERROR);
   }
 
-  mtr_start(&mtr);
+  mtr.start();
 
   /* Get the secondary index based on FOR_NAME from table
   SYS_FOREIGN */
@@ -1278,7 +1298,7 @@ loop:
 
   pcur.store_position(&mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   /* Load the foreign constraint definition to the dictionary cache */
 
@@ -1291,7 +1311,7 @@ loop:
     return err;
   }
 
-  mtr_start(&mtr);
+  mtr.start();
 
   pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
 
@@ -1302,14 +1322,16 @@ next_rec:
 
 load_next_index:
   pcur.close();
-  mtr_commit(&mtr);
+
+  mtr.commit();
+
   mem_heap_free(heap);
 
   sec_index = dict_table_get_next_index(sec_index);
 
   if (sec_index != nullptr) {
 
-    mtr_start(&mtr);
+    mtr.start();
 
     goto start_load;
   }

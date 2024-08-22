@@ -527,7 +527,7 @@ inline ulint trx_sysf_rseg_get_space(trx_sysf_t *sys_header, ulint i, mtr_t *mtr
   ut_ad(i < TRX_SYS_N_RSEGS);
   ut_ad(mutex_own(&kernel_mutex));
 
-  return mtr_read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE, MLOG_4BYTES, mtr);
+  return mtr->read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE, MLOG_4BYTES);
 }
 
 /**
@@ -544,7 +544,7 @@ inline ulint trx_sysf_rseg_get_page_no(trx_sysf_t *sys_header, ulint i, mtr_t *m
   ut_ad(i < TRX_SYS_N_RSEGS);
   ut_ad(mutex_own(&kernel_mutex));
 
-  return mtr_read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_PAGE_NO, MLOG_4BYTES, mtr);
+  return mtr->read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_PAGE_NO, MLOG_4BYTES);
 }
 
 /**

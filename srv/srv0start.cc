@@ -643,11 +643,11 @@ ib_err_t InnoDB::start() noexcept {
   if (create_new_db) {
     mtr_t mtr;
 
-    mtr_start(&mtr);
+    mtr.start();
 
     srv_fsp->header_init(SYS_TABLESPACE, SYSTEM_IBD_FILE_INITIAL_SIZE / UNIV_PAGE_SIZE, &mtr);
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
     trx_sys_create(srv_force_recovery);
 

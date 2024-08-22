@@ -199,11 +199,10 @@ inline ulint trx_rsegf_get_nth_undo(
 ) /*!< in: mtr */
 {
   if (unlikely(n >= TRX_RSEG_N_SLOTS)) {
-    ib_logger(ib_stream, "Error: trying to get slot %lu of rseg\n", (ulong)n);
-    ut_error;
+    log_fatal(std::format("Trying to get slot {} of rseg", n));
   }
 
-  return (mtr_read_ulint(rsegf + TRX_RSEG_UNDO_SLOTS + n * TRX_RSEG_SLOT_SIZE, MLOG_4BYTES, mtr));
+  return mtr->read_ulint(rsegf + TRX_RSEG_UNDO_SLOTS + n * TRX_RSEG_SLOT_SIZE, MLOG_4BYTES);
 }
 
 /** Sets the file page number of the nth undo log slot. */
@@ -215,8 +214,7 @@ inline void trx_rsegf_set_nth_undo(
 ) /*!< in: mtr */
 {
   if (unlikely(n >= TRX_RSEG_N_SLOTS)) {
-    ib_logger(ib_stream, "Error: trying to set slot %lu of rseg\n", (ulong)n);
-    ut_error;
+    log_fatal(std::format("Trying to set slot {} of rseg", n));
   }
 
   mlog_write_ulint(rsegf + TRX_RSEG_UNDO_SLOTS + n * TRX_RSEG_SLOT_SIZE, page_no, MLOG_4BYTES, mtr);
@@ -229,18 +227,15 @@ inline ulint trx_rsegf_undo_find_free(
   mtr_t *mtr
 ) /*!< in: mtr */
 {
-  ulint i;
-  ulint page_no;
+  for (ulint i = 0; i < TRX_RSEG_N_SLOTS; i++) {
 
-  for (i = 0; i < TRX_RSEG_N_SLOTS; i++) {
-
-    page_no = trx_rsegf_get_nth_undo(rsegf, i, mtr);
+    auto page_no = trx_rsegf_get_nth_undo(rsegf, i, mtr);
 
     if (page_no == FIL_NULL) {
 
-      return (i);
+      return i;
     }
   }
 
-  return (ULINT_UNDEFINED);
+  return ULINT_UNDEFINED;
 }

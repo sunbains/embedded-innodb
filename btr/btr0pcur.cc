@@ -60,7 +60,7 @@ void btr_pcur_t::store_position(mtr_t *mtr) {
   auto page = page_align(rec);
   auto offs = page_offset(rec);
 
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_S_FIX) || mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_S_FIX) || mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
   ut_a(m_latch_mode != BTR_NO_LATCHES);
 
   if (unlikely(page_get_n_recs(page) == 0)) {
@@ -127,7 +127,7 @@ void btr_pcur_t::copy_stored_position(btr_pcur_t *src) {
 }
 
 bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location loc) {
-  ut_ad(mtr->state == MTR_ACTIVE);
+  ut_ad(mtr->m_state == MTR_ACTIVE);
 
   auto index = btr_cur_get_index(get_btr_cur());
 
@@ -335,9 +335,9 @@ void btr_pcur_t::move_backward_from_page(mtr_t *mtr) {
 
   store_position(mtr);
 
-  mtr_commit(mtr);
+  mtr->commit();
 
-  mtr_start(mtr);
+  mtr->start();
 
   restore_position(latch_mode2, mtr, Source_location{});
 

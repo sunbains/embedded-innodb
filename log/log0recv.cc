@@ -823,8 +823,12 @@ void recv_recover_page(bool just_read_in, buf_block_t *block) noexcept {
 
   mutex_exit(&recv_sys->m_mutex);
 
-  mtr_start(&mtr);
-  mtr_set_log_mode(&mtr, MTR_LOG_NONE);
+  mtr.start();
+
+  {
+    auto old_mode = mtr.set_log_mode(MTR_LOG_NONE);
+    ut_a(old_mode == MTR_LOG_ALL);
+  }
 
   auto page = block->m_frame;
 
@@ -938,9 +942,9 @@ void recv_recover_page(bool just_read_in, buf_block_t *block) noexcept {
   /* Make sure that committing mtr does not change the modification
   lsn values of page */
 
-  mtr.modifications = false;
+  mtr.m_modifications = false;
 
-  mtr_commit(&mtr);
+  mtr.commit();
 }
 
 /**
@@ -1021,7 +1025,7 @@ void recv_apply_log_recs(bool flush_and_free_pages) noexcept {
 
           mtr_t mtr;
 
-          mtr_start(&mtr);
+          mtr.start();
 
           Buf_pool::Request req {
             .m_rw_latch = RW_X_LATCH,
@@ -1037,7 +1041,7 @@ void recv_apply_log_recs(bool flush_and_free_pages) noexcept {
 
           recv_recover_page(false, block);
 
-          mtr_commit(&mtr);
+          mtr.commit();
         } else {
           recv_read_in_area(space_id, page_no);
         }

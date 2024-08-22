@@ -916,11 +916,11 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
         index = dict_table_get_next_index(index);
       } while (index != nullptr);
 
-      mtr_start(&mtr);
+      mtr.start();
 
       srv_fsp->header_init(space, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
 
-      mtr_commit(&mtr);
+      mtr.commit();
     }
   }
 
@@ -937,7 +937,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   sys_index = dict_table_get_first_index(dict_sys->sys_indexes);
   dict_index_copy_types(tuple, sys_index, 1);
 
-  mtr_start(&mtr);
+  mtr.start();
 
   pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &mtr, Source_location{});
 
@@ -980,8 +980,9 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
       The dict_truncate_index_tree() call has allocated
       a page in this mini-transaction, and the rest of
       this loop could latch another index page. */
-      mtr_commit(&mtr);
-      mtr_start(&mtr);
+      mtr.commit();
+
+      mtr.start();
 
       pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
     }
@@ -991,7 +992,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   }
 
   pcur.close();
-  mtr_commit(&mtr);
+  mtr.commit();
 
   mem_heap_free(heap);
 
@@ -1630,7 +1631,7 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
   trx->m_op_info = "dropping partially created indexes";
   dict_lock_data_dictionary(trx);
 
-  mtr_start(&mtr);
+  mtr.start();
 
   pcur.open_at_index_side(true, dict_table_get_first_index(dict_sys->sys_indexes), BTR_SEARCH_LEAF, true, 0, &mtr);
 
@@ -1682,13 +1683,13 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
       }
     }
 
-    mtr_start(&mtr);
+    mtr.start();
     pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
 
   pcur.close();
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   dict_unlock_data_dictionary(trx);
 
@@ -1712,7 +1713,7 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
 
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   btr_pcur_t pcur;
 
@@ -1765,12 +1766,14 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
       ut_a(err_commit == DB_SUCCESS);
     }
 
-    mtr_start(&mtr);
+    mtr.start();
     pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
 
   pcur.close();
-  mtr_commit(&mtr);
+
+  mtr.commit();
+
   mem_heap_free(heap);
 
   dict_unlock_data_dictionary(trx);

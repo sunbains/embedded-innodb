@@ -321,13 +321,13 @@ void PCursor::savepoint() noexcept {
 
   m_pcur->store_position(m_mtr);
 
-  mtr_commit(m_mtr);
+  m_mtr->commit();
 }
 
 void PCursor::resume() noexcept {
-  mtr_start(m_mtr);
+  m_mtr->start();
 
-  mtr_disable_redo_logging(m_mtr);
+  m_mtr->disable_redo_logging();
 
   /* Restore position on the record, or its predecessor if the record
   was purged meanwhile. */
@@ -345,7 +345,7 @@ dberr_t PCursor::move_to_user_rec() noexcept {
   const auto next_page_no = btr_page_get_next(page_cur_get_page(cur), m_mtr);
 
   if (next_page_no == FIL_NULL) {
-    mtr_commit(m_mtr);
+    m_mtr->commit();
     return DB_END_OF_INDEX;
   }
 
@@ -559,8 +559,9 @@ dberr_t Parallel_reader::Ctx::traverse() {
 
   mtr_t mtr;
 
-  mtr_start(&mtr);
-  mtr_disable_redo_logging(&mtr);
+  mtr.start();
+
+  mtr.disable_redo_logging();
 
   auto &from = m_range.first;
 
@@ -573,8 +574,8 @@ dberr_t Parallel_reader::Ctx::traverse() {
 
   err = traverse_recs(&pcursor, &mtr);
 
-  if (mtr_is_active(&mtr)) {
-    mtr_commit(&mtr);
+  if (mtr.is_active()) {
+    mtr.commit();
   }
 
   m_thread_ctx->m_pcursor = nullptr;
@@ -921,7 +922,7 @@ page_cur_t Parallel_reader::Scan_ctx::start_range(page_no_t page_no, mtr_t *mtr,
 
   /* Follow the left most pointer down on each page. */
   for (;;) {
-    auto savepoint = mtr_get_savepoint(mtr);
+    auto savepoint = mtr->get_savepoint();
 
     auto block = block_get_s_latched(page_id, mtr, __LINE__);
 
@@ -986,7 +987,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
 
   Page_id page_id(index->space, page_no);
 
-  Savepoint savepoint({mtr_get_savepoint(mtr), nullptr});
+  Savepoint savepoint({mtr->get_savepoint(), nullptr});
 
   auto block = block_get_s_latched(page_id, mtr, __LINE__);
 
@@ -1089,7 +1090,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
     /* We've created the persistent cursor, safe to release S latches on
     the blocks that are in this range (sub-tree). */
     for (auto &savepoint : savepoints) {
-      mtr_release_block_at_savepoint(mtr, savepoint.first, savepoint.second);
+      mtr->release_block_at_savepoint(savepoint.first, savepoint.second);
     }
 
     if (m_depth == 0 && depth == 0) {
@@ -1110,7 +1111,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
   savepoints.push_back(savepoint);
 
   for (auto &savepoint : savepoints) {
-    mtr_release_block_at_savepoint(mtr, savepoint.first, savepoint.second);
+    mtr->release_block_at_savepoint(savepoint.first, savepoint.second);
   }
 
   if (heap != nullptr) {
@@ -1125,9 +1126,9 @@ dberr_t Parallel_reader::Scan_ctx::partition( const Scan_range &scan_range, Para
 
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
-  mtr_disable_redo_logging(&mtr);
+  mtr.disable_redo_logging();
 
   dberr_t err{DB_SUCCESS};
 
@@ -1148,7 +1149,7 @@ dberr_t Parallel_reader::Scan_ctx::partition( const Scan_range &scan_range, Para
     }
   }
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return err;
 }

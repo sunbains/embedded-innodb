@@ -1216,7 +1216,7 @@ table_loop:
 
   /* Open a cursor to index, or restore an open cursor position */
 
-  mtr_start(&mtr);
+  mtr.start();
 
   if (consistent_read && plan->unique_search && !plan->pcur_is_open && !plan->must_get_clust && !plan->table->big_rows) {
 
@@ -1235,8 +1235,9 @@ table_loop:
 
     plan_reset_cursor(plan);
 
-    mtr_commit(&mtr);
-    mtr_start(&mtr);
+    mtr.commit();
+
+    mtr.start();
   }
 
   if (!plan->pcur_is_open) {
@@ -1645,7 +1646,7 @@ next_table:
     plan->pcur.store_position(&mtr);
   }
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   mtr_has_extra_clust_latch = false;
 
@@ -1685,7 +1686,7 @@ table_exhausted:
 
   plan->cursor_at_end = true;
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   mtr_has_extra_clust_latch = false;
 
@@ -1735,7 +1736,7 @@ stop_for_a_while:
   plan->stored_cursor_rec_processed = false;
   plan->pcur.store_position(&mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(sync_thread_levels_empty_gen(true));
@@ -1753,7 +1754,7 @@ commit_mtr_for_a_while:
   ut_ad(!search_latch_locked);
   plan->pcur.store_position(&mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   mtr_has_extra_clust_latch = false;
 
@@ -1772,7 +1773,7 @@ lock_wait_or_error:
   plan->stored_cursor_rec_processed = false;
   plan->pcur.store_position(&mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(sync_thread_levels_empty_gen(true));
@@ -2212,10 +2213,6 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
         rec_get_deleted_flag(rec)) &&
         !row_sel_sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index)) {
       clust_rec = nullptr;
-#ifdef UNIV_SEARCH_DEBUG
-    } else {
-      ut_a(clust_rec == NULL || row_sel_sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index));
-#endif
     }
   }
 
@@ -2434,11 +2431,7 @@ static ulint row_sel_try_search_shortcut_for_prebuilt(
 
   ut_ad(dict_index_is_clust(index));
 
-#ifndef UNIV_SEARCH_DEBUG
   pcur->open_with_no_init(index, search_tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, RW_S_LATCH, mtr, Source_location{});
-#else  /* UNIV_SEARCH_DEBUG */
-  pcur->open_with_no_init(index, search_tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, 0, mtr, Source_location{});
-#endif /* UNIV_SEARCH_DEBUG */
 
   rec = pcur->get_rec();
 
@@ -2505,7 +2498,7 @@ int row_unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) {
 
   if (prebuilt->new_rec_locks >= 1) {
 
-    mtr_start(&mtr);
+    mtr.start();
 
     /* Restore the cursor position and find the record */
 
@@ -2517,7 +2510,7 @@ int row_unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) {
 
     lock_rec_unlock(trx, pcur->get_block(), rec, prebuilt->select_lock_type);
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
     /* If the search was done through the clustered index, then
     we have not used clust_pcur at all, and we must NOT try to
@@ -2531,7 +2524,7 @@ int row_unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) {
   }
 
   if (prebuilt->new_rec_locks >= 1) {
-    mtr_start(&mtr);
+    mtr.start();
 
     /* Restore the cursor position and find the record */
 
@@ -2543,7 +2536,7 @@ int row_unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) {
 
     lock_rec_unlock(trx, clust_pcur->get_block(), rec, prebuilt->select_lock_type);
 
-    mtr_commit(&mtr);
+    mtr.commit();
   }
 
 func_exit:
@@ -2577,9 +2570,6 @@ db_err row_search_for_client(
   /* if the returned record was locked and we did a semi-consistent
   read (fetch the newest committed version), then this is set to
   true */
-#ifdef UNIV_SEARCH_DEBUG
-  ulint cnt = 0;
-#endif /* UNIV_SEARCH_DEBUG */
   ulint next_offs;
   bool same_user_rec;
   mtr_t mtr;
@@ -2732,7 +2722,7 @@ db_err row_search_for_client(
     unique_search = true;
   }
 
-  mtr_start(&mtr);
+  mtr.start();
 
   /*-------------------------------------------------------------*/
   /* PHASE 2: Try fast adaptive hash index search if possible */
@@ -2779,7 +2769,7 @@ db_err row_search_for_client(
             row_sel_row_cache_add(prebuilt, rec, offsets);
           }
 
-          mtr_commit(&mtr);
+          mtr.commit();
 
           srv_n_rows_read++;
 
@@ -2788,7 +2778,7 @@ db_err row_search_for_client(
           goto func_exit;
 
         case SEL_EXHAUSTED:
-          mtr_commit(&mtr);
+          mtr.commit();
 
           err = DB_RECORD_NOT_FOUND;
           goto func_exit;
@@ -2800,8 +2790,8 @@ db_err row_search_for_client(
           ut_ad(0);
       }
 
-      mtr_commit(&mtr);
-      mtr_start(&mtr);
+      mtr.commit();
+      mtr.start();
     }
   }
 
@@ -3406,14 +3396,11 @@ next_rec:
 
     pcur->store_position(&mtr);
 
-    mtr_commit(&mtr);
+    mtr.commit();
     mtr_has_extra_clust_latch = false;
 
-    mtr_start(&mtr);
+    mtr.start();
     if (row_sel_restore_position(&same_user_rec, BTR_SEARCH_LEAF, pcur, moves_up, &mtr)) {
-#ifdef UNIV_SEARCH_DEBUG
-      cnt++;
-#endif /* UNIV_SEARCH_DEBUG */
 
       goto rec_loop;
     }
@@ -3437,10 +3424,6 @@ next_rec:
     goto not_moved;
   }
 
-#ifdef UNIV_SEARCH_DEBUG
-  cnt++;
-#endif /* UNIV_SEARCH_DEBUG */
-
   goto rec_loop;
 
 lock_wait_or_error:
@@ -3448,7 +3431,7 @@ lock_wait_or_error:
 
   pcur->store_position(&mtr);
 
-  mtr_commit(&mtr);
+  mtr.commit();
   mtr_has_extra_clust_latch = false;
 
   trx->error_state = err;
@@ -3462,7 +3445,7 @@ lock_wait_or_error:
     /* It was a lock wait, and it ended */
 
     thr->lock_state = QUE_THR_LOCK_NOLOCK;
-    mtr_start(&mtr);
+    mtr.start();
 
     row_sel_restore_position(&same_user_rec, BTR_SEARCH_LEAF, pcur, moves_up, &mtr);
 
@@ -3494,27 +3477,18 @@ lock_wait_or_error:
 
   thr->lock_state = QUE_THR_LOCK_NOLOCK;
 
-#ifdef UNIV_SEARCH_DEBUG
-  /*	ib_logger(ib_stream, "Using ");
-  dict_index_name_print(ib_stream, index);
-  ib_logger(ib_stream, " cnt %lu ret value %lu err\n", cnt, err); */
-#endif /* UNIV_SEARCH_DEBUG */
   goto func_exit;
 
 normal_return:
   /*-------------------------------------------------------------*/
   que_thr_stop_for_client_no_error(thr, trx);
 
-  mtr_commit(&mtr);
+  mtr.commit();
+
   if (prebuilt->row_cache.n_cached > 0) {
     err = DB_SUCCESS;
   }
 
-#ifdef UNIV_SEARCH_DEBUG
-  /*	ib_logger(ib_strean, "Using ");
-  dict_index_name_print(ib_stream, index);
-  ib_logger(ib_stream, " cnt %lu ret value %lu err\n", cnt, err); */
-#endif /* UNIV_SEARCH_DEBUG */
   if (err == DB_SUCCESS) {
     srv_n_rows_read++;
   }

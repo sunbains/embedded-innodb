@@ -139,7 +139,7 @@ bool row_undo_search_clust_to_pcur(undo_node_t *node) {
 
   mtr_t mtr;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   auto clust_index = dict_table_get_first_index(node->table);
 

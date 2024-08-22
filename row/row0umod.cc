@@ -200,7 +200,7 @@ static db_err row_undo_mod_clust(undo_node_t *node, que_thr_t *thr) {
   auto more_vers = row_undo_mod_undo_also_prev_vers(node, &new_undo_no);
   auto pcur = &node->pcur;
 
-  mtr_start(&mtr);
+  mtr.start();
 
   /* Try optimistic processing of the record, keeping changes within
   the index page */
@@ -213,7 +213,7 @@ static db_err row_undo_mod_clust(undo_node_t *node, que_thr_t *thr) {
     /* We may have to modify tree structure: do a pessimistic
     descent down the index tree */
 
-    mtr_start(&mtr);
+    mtr.start();
 
     err = row_undo_mod_clust_low(node, thr, &mtr, BTR_MODIFY_TREE);
   }
@@ -222,7 +222,7 @@ static db_err row_undo_mod_clust(undo_node_t *node, que_thr_t *thr) {
 
   if (err == DB_SUCCESS && node->rec_type == TRX_UNDO_UPD_DEL_REC) {
 
-    mtr_start(&mtr);
+    mtr.start();
 
     err = row_undo_mod_remove_clust_low(node, thr, &mtr, BTR_MODIFY_LEAF);
     if (err != DB_SUCCESS) {
@@ -231,7 +231,7 @@ static db_err row_undo_mod_clust(undo_node_t *node, que_thr_t *thr) {
       /* We may have to modify tree structure: do a
       pessimistic descent down the index tree */
 
-      mtr_start(&mtr);
+      mtr.start();
 
       err = row_undo_mod_remove_clust_low(node, thr, &mtr, BTR_MODIFY_TREE);
     }
@@ -278,7 +278,7 @@ static db_err row_undo_mod_del_mark_or_remove_sec_low(
   btr_pcur_t pcur;
 
   log_sys->free_check();
-  mtr_start(&mtr);
+  mtr.start();
 
   auto found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
 
@@ -296,7 +296,7 @@ static db_err row_undo_mod_del_mark_or_remove_sec_low(
     records, then the undo will not find those records. */
 
     pcur.close();
-    mtr_commit(&mtr);
+    mtr.commit();
 
     return DB_SUCCESS;
   }
@@ -305,7 +305,7 @@ static db_err row_undo_mod_del_mark_or_remove_sec_low(
   which cannot be purged yet, requires its existence. If some requires,
   we should delete mark the record. */
 
-  mtr_start(&mtr_vers);
+  mtr_vers.start();
 
   success = node->pcur.restore_position(BTR_SEARCH_LEAF, &mtr_vers, Source_location{});
   ut_a(success);
@@ -345,7 +345,7 @@ static db_err row_undo_mod_del_mark_or_remove_sec_low(
 
   node->pcur.commit_specify_mtr(&mtr_vers);
   pcur.close();
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return err;
 }
@@ -400,7 +400,7 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
   }
 
   log_sys->free_check();
-  mtr_start(&mtr);
+  mtr.start();
 
   if (unlikely(!row_search_index_entry(index, entry, mode, &pcur, &mtr))) {
     ib_logger(ib_stream, " error in sec index entry del undo in\n ");
@@ -450,7 +450,7 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
   }
 
   pcur.close();
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return err;
 }

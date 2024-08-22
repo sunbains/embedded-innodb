@@ -578,7 +578,7 @@ static void page_cur_insert_rec_write_log(
     } while (i < min_rec_size);
   }
 
-  if (mtr_get_log_mode(mtr) != MTR_LOG_SHORT_INSERTS) {
+  if (mtr->get_log_mode() != MTR_LOG_SHORT_INSERTS) {
 
     log_ptr = mlog_open(mtr, 11 + 2 + 5 + 1 + 5 + 5 + MLOG_BUF_MARGIN);
     if (unlikely(!log_ptr)) {
@@ -1078,11 +1078,11 @@ void page_copy_rec_list_end_to_created_page(
 
   log_ptr = page_copy_rec_list_to_created_page_write_log(new_page, index, mtr);
 
-  log_data_len = dyn_array_get_data_size(&(mtr->log));
+  log_data_len = dyn_array_get_data_size(&mtr->m_log);
 
   /* Individual inserts are logged in a shorter form */
 
-  auto log_mode = mtr_set_log_mode(mtr, MTR_LOG_SHORT_INSERTS);
+  auto log_mode = mtr->set_log_mode(MTR_LOG_SHORT_INSERTS);
 
   prev_rec = page_get_infimum_rec(new_page);
   heap_top = new_page + PAGE_SUPREMUM_END;
@@ -1147,7 +1147,7 @@ void page_copy_rec_list_end_to_created_page(
     mem_heap_free(heap);
   }
 
-  log_data_len = dyn_array_get_data_size(&(mtr->log)) - log_data_len;
+  log_data_len = dyn_array_get_data_size(&mtr->m_log) - log_data_len;
 
   ut_a(log_data_len < 100 * UNIV_PAGE_SIZE);
 
@@ -1172,7 +1172,10 @@ void page_copy_rec_list_end_to_created_page(
 
   /* Restore the log mode */
 
-  mtr_set_log_mode(mtr, log_mode);
+  {
+    auto old_mode = mtr->set_log_mode(log_mode);
+    ut_a(old_mode == MTR_LOG_SHORT_INSERTS);
+  }
 }
 
 /** Writes log record of a record delete on a page. */

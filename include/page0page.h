@@ -613,7 +613,7 @@ inline trx_id_t page_get_max_trx_id(const page_t *page) {
  * @param[in,out] mtr mini-transaction
  */
 inline void page_update_max_trx_id(buf_block_t *block, trx_id_t trx_id, mtr_t *mtr) {
-  ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   /* During crash recovery, this function may be called on
   something else than a leaf page of a secondary index returns

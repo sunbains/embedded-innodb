@@ -396,7 +396,7 @@ struct Log {
   * @param str String to write.
   * @param str_len Length of the string.
   */
- void write_low(byte *str, ulint str_len) noexcept;
+ void write_low(const byte *str, ulint str_len) noexcept;
  
  /**
   * @brief Closes the log.

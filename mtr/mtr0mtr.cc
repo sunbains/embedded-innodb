@@ -30,120 +30,116 @@ Created 11/26/1995 Heikki Tuuri
 #include "mtr0log.h"
 #include "page0types.h"
 
-/** Releases the item in the slot given.
-@param[in,out] mtr              Release slot in this mtr.
-@param[in] slot                 Slot to release. */
-inline void mtr_memo_slot_release(mtr_t *mtr, mtr_memo_slot_t *slot) {
-  ut_ad(mtr && slot);
-
-  auto object = slot->object;
-  auto type = slot->type;
+/**
+ * Releases the item in the slot given.
+ * 
+ * @param[in,out] mtr           Release slot in this mtr.
+ * @param[in] slot              Slot to release.
+ * */
+inline void mtr_memo_slot_release(mtr_t *mtr, mtr_memo_slot_t *slot) noexcept {
+  auto object = slot->m_object;
+  auto type = slot->m_type;
 
   if (likely(object != nullptr)) {
     if (type <= MTR_MEMO_BUF_FIX) {
-      srv_buf_pool->release((buf_block_t *)object, type, mtr);
+      srv_buf_pool->release(static_cast<buf_block_t *>(object), type, mtr);
     } else if (type == MTR_MEMO_S_LOCK) {
-      rw_lock_s_unlock((rw_lock_t *)object);
+      rw_lock_s_unlock(static_cast<rw_lock_t *>(object));
 #ifdef UNIV_DEBUG
     } else if (type != MTR_MEMO_X_LOCK) {
       ut_ad(type == MTR_MEMO_MODIFY);
-      ut_ad(mtr_memo_contains(mtr, object, MTR_MEMO_PAGE_X_FIX));
+      ut_ad(mtr->memo_contains(object, MTR_MEMO_PAGE_X_FIX));
 #endif /* UNIV_DEBUG */
     } else {
-      rw_lock_x_unlock((rw_lock_t *)object);
+      rw_lock_x_unlock(static_cast<rw_lock_t *>(object));
     }
   }
 
-  slot->object = nullptr;
+  slot->m_object = nullptr;
 }
 
-void mtr_disable_redo_logging(mtr_t* mtr) {
+void mtr_t::disable_redo_logging() noexcept {
 
 }
 
-void mtr_memo_pop_all(mtr_t *mtr) {
-  ut_ad(mtr);
-  ut_ad(mtr->magic_n == MTR_MAGIC_N);
+static void mtr_memo_pop_all(mtr_t *mtr) noexcept {
+  ut_ad(mtr->m_magic_n == MTR_MAGIC_N);
 
   /* Currently only used in commit */
-  ut_ad(mtr->state == MTR_COMMITTING);
+  ut_ad(mtr->m_state == MTR_COMMITTING);
 
-  auto memo = &(mtr->memo);
-  auto offset = dyn_array_get_data_size(memo);
+  auto offset = dyn_array_get_data_size(&mtr->m_memo);
 
   while (offset > 0) {
     offset -= sizeof(mtr_memo_slot_t);
-    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
+    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&mtr->m_memo, offset));
 
     mtr_memo_slot_release(mtr, slot);
   }
 }
 
-/** Writes the contents of a mini-transaction log, if any, to the database log.
-@param[in, out] mtr             Mini-transaction used for the write
-@param[in] recovery             recovery flag */
-static void mtr_log_reserve_and_write(mtr_t *mtr, ulint recovery) {
-  dyn_block_t *block;
-  ulint data_size;
-
-  ut_ad(mtr);
-
-  auto mlog = &mtr->log;
+/**
+ * Writes the contents of a mini-transaction log, if any, to the database log.
+ * 
+ * @param[in,out] mtr           Mini-transaction used for the write
+ * @param[in,out] log           Log to write to
+ * @param[in] recovery          recovery flag
+ */
+static void mtr_log_reserve_and_write(mtr_t *mtr, Log* log, ulint recovery) noexcept {
+  auto mlog = &mtr->m_log;
   auto first_data = dyn_block_get_data(mlog);
 
-  if (mtr->n_log_recs > 1) {
+  if (mtr->m_n_log_recs > 1) {
     mlog_catenate_ulint(mtr, MLOG_MULTI_REC_END, MLOG_1BYTE);
   } else {
-    *first_data = (byte)((ulint)*first_data | MLOG_SINGLE_REC_FLAG);
+    *first_data = byte(ulint(*first_data) | MLOG_SINGLE_REC_FLAG);
   }
 
   if (mlog->heap == nullptr) {
 
-    log_sys->acquire();
+    log->acquire();
 
-    mtr->end_lsn = log_sys->reserve_and_write_fast(first_data, dyn_block_get_used(mlog), &mtr->start_lsn);
+    mtr->m_end_lsn = log->reserve_and_write_fast(first_data, dyn_block_get_used(mlog), &mtr->m_start_lsn);
 
-    if (mtr->end_lsn != 0) {
+    if (mtr->m_end_lsn != 0) {
       /* We were able to successfully write to the log. */
       return;
     }
 
-    log_sys->release();
+    log->release();
   }
 
-  data_size = dyn_array_get_data_size(mlog);
+  auto data_size = dyn_array_get_data_size(mlog);
 
   /* Open the database log for log_write_low */
-  mtr->start_lsn = log_sys->reserve_and_open(data_size);
+  mtr->m_start_lsn = log->reserve_and_open(data_size);
 
-  if (mtr->log_mode == MTR_LOG_ALL) {
+  if (mtr->m_log_mode == MTR_LOG_ALL) {
 
-    block = mlog;
+    const dyn_block_t *block = mlog;
 
     while (block != nullptr) {
-      log_sys->write_low(dyn_block_get_data(block), dyn_block_get_used(block));
+      log->write_low(dyn_block_get_data(block), dyn_block_get_used(block));
       block = dyn_array_get_next_block(mlog, block);
     }
   } else {
-    ut_ad(mtr->log_mode == MTR_LOG_NONE);
+    ut_ad(mtr->m_log_mode == MTR_LOG_NONE);
     /* Do nothing */
   }
 
-  mtr->end_lsn = log_sys->close(ib_recovery_t(recovery));
+  mtr->m_end_lsn = log->close(ib_recovery_t(recovery));
 }
 
-void mtr_commit(mtr_t *mtr) {
-  ut_ad(mtr);
-  ut_ad(mtr->magic_n == MTR_MAGIC_N);
-  ut_ad(mtr->state == MTR_ACTIVE);
+void mtr_t::commit() noexcept {
+  ut_ad(m_magic_n == MTR_MAGIC_N);
+  ut_ad(is_active());
 
-  mtr->state = MTR_COMMITTING;
+  m_state = MTR_COMMITTING;
 
-  /* This is a dirty read, for debugging. */
-  auto write_log = mtr->modifications && mtr->n_log_recs;
+  const auto write_log = m_modifications > 0 && m_n_log_recs > 0;
 
   if (write_log) {
-    mtr_log_reserve_and_write(mtr, srv_force_recovery);
+    mtr_log_reserve_and_write(this, log_sys, srv_force_recovery);
   }
 
   /* We first update the modification info to buffer pages, and only
@@ -154,62 +150,58 @@ void mtr_commit(mtr_t *mtr) {
   required when we insert modified buffer pages in to the flush list
   which must be sorted on oldest_modification. */
 
-  mtr_memo_pop_all(mtr);
+  mtr_memo_pop_all(this);
 
   if (write_log) {
     log_sys->release();
   }
 
-  mtr->state = MTR_COMMITTED;
-  dyn_array_free(&(mtr->memo));
-  dyn_array_free(&(mtr->log));
+  m_state = MTR_COMMITTED;
+
+  dyn_array_free(&m_memo);
+  dyn_array_free(&m_log);
 }
 
-void mtr_rollback_to_savepoint(mtr_t *mtr, ulint savepoint) {
-  ut_ad(mtr);
-  ut_ad(mtr->magic_n == MTR_MAGIC_N);
-  ut_ad(mtr->state == MTR_ACTIVE);
+void mtr_t::rollback_to_savepoint(ulint savepoint) noexcept {
+  ut_ad(m_magic_n == MTR_MAGIC_N);
+  ut_ad(is_active());
 
-  auto memo = &mtr->memo;
-
-  auto offset = dyn_array_get_data_size(memo);
+  auto offset = dyn_array_get_data_size(&m_memo);
   ut_ad(offset >= savepoint);
 
   while (offset > savepoint) {
     offset -= sizeof(mtr_memo_slot_t);
 
-    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
+    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&m_memo, offset));
+    ut_ad(slot->m_type != MTR_MEMO_MODIFY);
 
-    ut_ad(slot->type != MTR_MEMO_MODIFY);
-    mtr_memo_slot_release(mtr, slot);
+    mtr_memo_slot_release(this, slot);
   }
 }
 
-void mtr_memo_release(mtr_t *mtr, void *object, ulint type) {
-  ut_ad(mtr);
-  ut_ad(mtr->magic_n == MTR_MAGIC_N);
-  ut_ad(mtr->state == MTR_ACTIVE);
+void mtr_t::memo_release(void *object, ulint type) noexcept {
+  ut_ad(m_magic_n == MTR_MAGIC_N);
+  ut_ad(is_active());
 
-  auto memo = &mtr->memo;
-  auto offset = dyn_array_get_data_size(memo);
+  auto offset = dyn_array_get_data_size(&m_memo);
 
   while (offset > 0) {
     offset -= sizeof(mtr_memo_slot_t);
 
-    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(memo, offset));
+    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&m_memo, offset));
 
-    if ((object == slot->object) && (type == slot->type)) {
+    if (object == slot->m_object && type == slot->m_type) {
 
-      mtr_memo_slot_release(mtr, slot);
+      mtr_memo_slot_release(this, slot);
 
       break;
     }
   }
 }
 
-ulint mtr_read_ulint(const byte *ptr, ulint type, mtr_t *mtr __attribute__((unused))) {
-  ut_ad(mtr->state == MTR_ACTIVE);
-  ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_S_FIX) || mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));
+ulint mtr_t::read_ulint(const byte *ptr, ulint type) const noexcept {
+  ut_ad(is_active());
+  ut_ad(memo_contains_page(ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
   if (type == MLOG_1BYTE) {
     return mach_read_from_1(ptr);
   } else if (type == MLOG_2BYTES) {
@@ -220,41 +212,39 @@ ulint mtr_read_ulint(const byte *ptr, ulint type, mtr_t *mtr __attribute__((unus
   }
 }
 
-uint64_t mtr_read_uint64(const byte *ptr, mtr_t *mtr __attribute__((unused))) {
-  ut_ad(mtr->state == MTR_ACTIVE);
-  ut_ad(mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_S_FIX) || mtr_memo_contains_page(mtr, ptr, MTR_MEMO_PAGE_X_FIX));
+uint64_t mtr_t::read_uint64(const byte *ptr) const noexcept {
+  ut_ad(is_active());
+  ut_ad(memo_contains_page(ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
   return mach_read_from_8(ptr);
 }
 
 #ifdef UNIV_DEBUG
-bool mtr_memo_contains_page(mtr_t *mtr, const byte *ptr, ulint type) {
-  return mtr_memo_contains(mtr, srv_buf_pool->block_align(ptr), type);
+bool mtr_t::memo_contains_page(const byte *ptr, ulint type) const noexcept {
+  return memo_contains(srv_buf_pool->block_align(ptr), type);
 }
 
-void mtr_print(mtr_t *mtr) {
-  ib_logger(
-    ib_stream,
-    "Mini-transaction handle: memo size %lu bytes"
-    " log size %lu bytes\n",
-    (ulong)dyn_array_get_data_size(&(mtr->memo)),
-    (ulong)dyn_array_get_data_size(&(mtr->log))
+std::string mtr_t::to_string() const noexcept {
+  return std::format(
+    "Mini-transaction handle: memo size {} bytes log size {} bytes",
+    dyn_array_get_data_size(&m_memo),
+    dyn_array_get_data_size(&m_log)
   );
 }
 #endif /* UNIV_DEBUG */
 
-void mtr_release_block_at_savepoint(mtr_t *mtr, ulint savepoint, buf_block_t *block) {
-  ut_ad(mtr_is_active(mtr));
-  ut_ad(mtr->magic_n == MTR_MAGIC_N);
+void mtr_t::release_block_at_savepoint(ulint savepoint, buf_block_t *block) noexcept {
+  ut_ad(is_active());
+  ut_ad(m_magic_n == MTR_MAGIC_N);
 
-  auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&mtr->memo, savepoint));
+  auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&m_memo, savepoint));
 
-  ut_a(slot->object == block);
+  ut_a(slot->m_object == block);
 
-  buf_page_release_latch(block, slot->type);
+  buf_page_release_latch(block, slot->m_type);
 
   block->acquire_mutex();
   block->fix_dec();
   block->release_mutex();
 
-  slot->object = nullptr;
+  slot->m_object = nullptr;
 }

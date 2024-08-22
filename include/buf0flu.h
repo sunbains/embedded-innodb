@@ -188,20 +188,20 @@ struct Buf_flush {
   #endif /* UNIV_SYNC_DEBUG */
     ut_ad(buf_pool_mutex_own());
   
-    ut_ad(mtr->start_lsn != 0);
-    ut_ad(mtr->modifications);
-    ut_ad(block->m_page.m_newest_modification <= mtr->end_lsn);
+    ut_ad(mtr->m_start_lsn != 0);
+    ut_ad(mtr->m_modifications);
+    ut_ad(block->m_page.m_newest_modification <= mtr->m_end_lsn);
   
-    block->m_page.m_newest_modification = mtr->end_lsn;
+    block->m_page.m_newest_modification = mtr->m_end_lsn;
   
     if (!block->m_page.m_oldest_modification) {
   
-      block->m_page.m_oldest_modification = mtr->start_lsn;
+      block->m_page.m_oldest_modification = mtr->m_start_lsn;
       ut_ad(block->m_page.m_oldest_modification != 0);
   
       insert_into_flush_list(block);
     } else {
-      ut_ad(block->m_page.m_oldest_modification <= mtr->start_lsn);
+      ut_ad(block->m_page.m_oldest_modification <= mtr->m_start_lsn);
     }
   
     ++srv_buf_pool_write_requests;

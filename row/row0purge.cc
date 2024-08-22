@@ -94,7 +94,7 @@ static bool row_purge_remove_clust_if_poss_low(
   auto btr_cur = pcur->get_btr_cur();
   auto index = dict_table_get_first_index(node->table);
 
-  mtr_start(&mtr);
+  mtr.start();
 
   auto success = row_purge_reposition_pcur(mode, node, &mtr);
 
@@ -201,7 +201,7 @@ static bool row_purge_remove_sec_if_poss_low(
 
   log_sys->free_check();
 
-  mtr_start(&mtr);
+  mtr.start();
 
   auto found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
 
@@ -222,7 +222,7 @@ static bool row_purge_remove_sec_if_poss_low(
 
     pcur.close();
 
-    mtr_commit(&mtr);
+    mtr.commit();
 
     return (true);
   }
@@ -233,7 +233,7 @@ static bool row_purge_remove_sec_if_poss_low(
   which cannot be purged yet, requires its existence. If some requires,
   we should do nothing. */
 
-  mtr_start(&mtr_vers);
+  mtr_vers.start();
 
   success = row_purge_reposition_pcur(BTR_SEARCH_LEAF, node, &mtr_vers);
 
@@ -257,7 +257,7 @@ static bool row_purge_remove_sec_if_poss_low(
   }
 
   pcur.close();
-  mtr_commit(&mtr);
+  mtr.commit();
 
   return (success);
 }
@@ -384,7 +384,7 @@ skip_secondaries:
       ut_a(internal_offset < UNIV_PAGE_SIZE);
 
       trx_undo_decode_roll_ptr(node->roll_ptr, &is_insert, &rseg_id, &page_no, &offset);
-      mtr_start(&mtr);
+      mtr.start();
 
       /* We have to acquire an X-latch to the clustered
       index tree */
@@ -425,7 +425,7 @@ skip_secondaries:
       btr_free_externally_stored_field(
         index, data_field + dfield_get_len(&ufield->new_val) - BTR_EXTERN_FIELD_REF_SIZE, nullptr, nullptr, 0, RB_NONE, &mtr
       );
-      mtr_commit(&mtr);
+      mtr.commit();
     }
   }
 }

@@ -1136,11 +1136,11 @@ bool Fil::delete_tablespace(space_id_t id) {
       mtr_t mtr;
 
       /* Write a log record to replay during recovery. */
-      mtr_start(&mtr);
+      mtr.start();
 
       op_write_log(MLOG_FILE_DELETE, id, 0, 0, path, nullptr, &mtr);
 
-      mtr_commit(&mtr);
+      mtr.commit();
 
       success = os_file_delete(path);
 
@@ -1393,10 +1393,10 @@ retry:
   if (success) {
     mtr_t mtr;
 
-    mtr_start(&mtr);
+    mtr.start();
 
     op_write_log(MLOG_FILE_RENAME, id, 0, 0, old_name, new_name, &mtr);
-    mtr_commit(&mtr);
+    mtr.commit();
   }
 
   return success;
@@ -1535,7 +1535,7 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
   {
     mtr_t mtr;
 
-    mtr_start(&mtr);
+    mtr.start();
 
     op_write_log(
       MLOG_FILE_CREATE,
@@ -1546,7 +1546,7 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
       nullptr,
       &mtr);
 
-    mtr_commit(&mtr);
+    mtr.commit();
   }
 
   mem_free(path);

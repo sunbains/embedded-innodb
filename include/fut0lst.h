@@ -144,7 +144,7 @@ inline void flst_write_addr(
 ) /** in: mini-transaction handle */
 {
   ut_ad(faddr && mtr);
-  ut_ad(mtr_memo_contains_page(mtr, faddr, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(faddr, MTR_MEMO_PAGE_X_FIX));
   ut_a(addr.m_page_no == FIL_NULL || addr.m_boffset >= FIL_PAGE_DATA);
   ut_a(ut_align_offset(faddr, UNIV_PAGE_SIZE) >= FIL_PAGE_DATA);
 
@@ -161,8 +161,8 @@ inline fil_addr_t flst_read_addr(const fil_faddr_t *faddr, mtr_t *mtr) {
 
   ut_ad(faddr && mtr);
 
-  addr.m_page_no = mtr_read_ulint(faddr + FIL_ADDR_PAGE, MLOG_4BYTES, mtr);
-  addr.m_boffset = mtr_read_ulint(faddr + FIL_ADDR_BYTE, MLOG_2BYTES, mtr);
+  addr.m_page_no = mtr->read_ulint(faddr + FIL_ADDR_PAGE, MLOG_4BYTES);
+  addr.m_boffset = mtr->read_ulint(faddr + FIL_ADDR_BYTE, MLOG_2BYTES);
   ut_a(addr.m_page_no == FIL_NULL || addr.m_boffset >= FIL_PAGE_DATA);
   ut_a(ut_align_offset(faddr, UNIV_PAGE_SIZE) >= FIL_PAGE_DATA);
 
@@ -173,7 +173,7 @@ inline fil_addr_t flst_read_addr(const fil_faddr_t *faddr, mtr_t *mtr) {
 @param[in] base                 Pointer to the base node
 @param[in,out] mtr              Mini-transaction that covers the operation. */
 inline void flst_init(flst_base_node_t *base, mtr_t *mtr) {
-  ut_ad(mtr_memo_contains_page(mtr, base, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
 
   mlog_write_ulint(base + FLST_LEN, 0, MLOG_4BYTES, mtr);
   flst_write_addr(base + FLST_FIRST, fil_addr_null, mtr);
@@ -185,7 +185,7 @@ inline void flst_init(flst_base_node_t *base, mtr_t *mtr) {
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	length */
 inline ulint flst_get_len(const flst_base_node_t *base, mtr_t *mtr) {
-  return mtr_read_ulint(base + FLST_LEN, MLOG_4BYTES, mtr);
+  return mtr->read_ulint(base + FLST_LEN, MLOG_4BYTES);
 }
 
 /** Gets list first node address.

@@ -958,7 +958,7 @@ static db_err row_ins_foreign_check_on_constraint(
     cascade->pcur->store_position(mtr);
   }
 
-  mtr_commit(mtr);
+  mtr->commit();
 
   ut_a(cascade->pcur->get_rel_pos() == Btree_cursor_pos::ON);
 
@@ -985,7 +985,7 @@ static db_err row_ins_foreign_check_on_constraint(
   dict_unfreeze_data_dictionary(thr_get_trx(thr));
   dict_freeze_data_dictionary(thr_get_trx(thr));
 
-  mtr_start(mtr);
+  mtr->start();
 
   /* Restore pcur position */
 
@@ -1012,8 +1012,9 @@ nonstandard_exit_func:
 
   pcur->store_position(mtr);
 
-  mtr_commit(mtr);
-  mtr_start(mtr);
+  mtr->commit();
+
+  mtr->start();
 
   pcur->restore_position(BTR_SEARCH_LEAF, mtr, Source_location{});
 
@@ -1193,7 +1194,7 @@ run_again:
     }
   }
 
-  mtr_start(&mtr);
+  mtr.start();
 
   /* Store old value on n_fields_cmp */
 
@@ -1332,7 +1333,7 @@ run_again:
 
   pcur.close();
 
-  mtr_commit(&mtr);
+  mtr.commit();
 
   /* Restore old value */
   dtuple_set_n_fields_cmp(entry, n_fields_cmp);
@@ -1517,7 +1518,7 @@ static db_err row_ins_scan_sec_index_for_duplicate(
     }
   }
 
-  mtr_start(&mtr);
+  mtr.start();
 
   /* Store old value on n_fields_cmp */
 
@@ -1591,7 +1592,7 @@ static db_err row_ins_scan_sec_index_for_duplicate(
   if (likely_null(heap)) {
     mem_heap_free(heap);
   }
-  mtr_commit(&mtr);
+  mtr.commit();
 
   /* Restore old value */
   dtuple_set_n_fields_cmp(entry, n_fields_cmp);
@@ -1796,7 +1797,7 @@ static db_err row_ins_index_entry_low(
 
   log_sys->free_check();
 
-  mtr_start(&mtr);
+  mtr.start();
 
   cursor.thr = thr;
 
@@ -1828,9 +1829,9 @@ static db_err row_ins_index_entry_low(
         goto function_exit;
       }
     } else {
-      mtr_commit(&mtr);
+      mtr.commit();
       err = row_ins_scan_sec_index_for_duplicate(index, entry, thr);
-      mtr_start(&mtr);
+      mtr.start();
 
       if (err != DB_SUCCESS) {
 
@@ -1882,10 +1883,10 @@ static db_err row_ins_index_entry_low(
   }
 
 function_exit:
-  mtr_commit(&mtr);
+  mtr.commit();
 
   if (likely_null(big_rec)) {
-    mtr_start(&mtr);
+    mtr.start();
 
     btr_cur_search_to_nth_level(index, 0, entry, PAGE_CUR_LE, BTR_MODIFY_TREE, &cursor, 0, __FILE__, __LINE__, &mtr);
 
@@ -1906,7 +1907,7 @@ function_exit:
       dtuple_convert_back_big_rec(index, entry, big_rec);
     }
 
-    mtr_commit(&mtr);
+    mtr.commit();
   }
 
   if (likely_null(heap)) {
