@@ -680,7 +680,10 @@ struct export_var_struct {
 };
 
 struct Fil;
+struct FSP;
 
 extern Fil *srv_fil;
 
 extern AIO *srv_aio;
+
+extern FSP *srv_fsp;

@@ -327,8 +327,8 @@ void Fil::node_open_file(fil_node_t *node, fil_space_t *space, bool startup) {
 
     success = os_file_read(node->m_fh, page, UNIV_PAGE_SIZE, 0);
 
-    auto flags = fsp_header_get_flags(page);
-    auto space_id = fsp_header_get_space_id(page);
+    auto flags = srv_fsp->get_flags(page);
+    auto space_id = srv_fsp->get_space_id(page);
 
     ut_delete(ptr);
 
@@ -1491,7 +1491,7 @@ db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tabl
 
   memset(page, '\0', UNIV_PAGE_SIZE);
 
-  fsp_header_init_fields(page, *space_id, flags);
+  srv_fsp->init_fields(page, *space_id, flags);
 
   mach_write_to_4(page + FIL_PAGE_SPACE_ID, *space_id);
 
@@ -1598,8 +1598,8 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
 
     /* We have to read the tablespace id and flags from the file. */
 
-    space_id = fsp_header_get_space_id(page);
-    space_flags = fsp_header_get_flags(page);
+    space_id = srv_fsp->get_space_id(page);
+    space_flags = srv_fsp->get_flags(page);
 
     ut_delete(buf2);
 
@@ -1773,8 +1773,8 @@ void Fil::load_single_table_tablespace(ib_recovery_t recovery, const char *dbnam
 
     /* We have to read the tablespace id from the file */
 
-    space_id = fsp_header_get_space_id(page);
-    flags = fsp_header_get_flags(page);
+    space_id = srv_fsp->get_space_id(page);
+    flags = srv_fsp->get_flags(page);
   } else {
     space_id = ULINT_UNDEFINED;
     flags = 0;

@@ -908,14 +908,18 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
       and SYS_INDEXES.SPACE) are updated later in this
       function. */
       table->space = space;
+
       index = dict_table_get_first_index(table);
+
       do {
         index->space = space;
         index = dict_table_get_next_index(index);
-      } while (index);
+      } while (index != nullptr);
 
       mtr_start(&mtr);
-      fsp_header_init(space, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
+
+      srv_fsp->header_init(space, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
+
       mtr_commit(&mtr);
     }
   }

@@ -257,7 +257,7 @@ buf_block_t *btr_page_alloc(dict_index_t *dict_index, ulint hint_page_no, byte f
   reservation for free extents, and thus we know that a page can
   be allocated: */
 
-  auto new_page_no = fseg_alloc_free_page_general(seg_header, hint_page_no, file_direction, true, mtr);
+  auto new_page_no = srv_fsp->fseg_alloc_free_page_general(seg_header, hint_page_no, file_direction, true, mtr);
 
   if (new_page_no == FIL_NULL) {
 
@@ -284,7 +284,6 @@ buf_block_t *btr_page_alloc(dict_index_t *dict_index, ulint hint_page_no, byte f
 
 ulint btr_get_size(dict_index_t *dict_index, ulint flag) {
   fseg_header_t *seg_header;
-  page_t *root;
   ulint n;
   ulint dummy;
   mtr_t mtr;
@@ -293,28 +292,28 @@ ulint btr_get_size(dict_index_t *dict_index, ulint flag) {
 
   mtr_s_lock(dict_index_get_lock(dict_index), &mtr);
 
-  root = btr_root_get(dict_index, &mtr);
+  auto root = btr_root_get(dict_index, &mtr);
 
   if (flag == BTR_N_LEAF_PAGES) {
     seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_LEAF;
 
-    fseg_n_reserved_pages(seg_header, &n, &mtr);
+    srv_fsp->fseg_n_reserved_pages(seg_header, &n, &mtr);
 
   } else if (flag == BTR_TOTAL_SIZE) {
     seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_TOP;
 
-    n = fseg_n_reserved_pages(seg_header, &dummy, &mtr);
+    n = srv_fsp->fseg_n_reserved_pages(seg_header, &dummy, &mtr);
 
     seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_LEAF;
 
-    n += fseg_n_reserved_pages(seg_header, &dummy, &mtr);
+    n += srv_fsp->fseg_n_reserved_pages(seg_header, &dummy, &mtr);
   } else {
     ut_error;
   }
 
   mtr_commit(&mtr);
 
-  return (n);
+  return n;
 }
 
 void btr_page_free_low(dict_index_t *dict_index, buf_block_t *block, ulint level, mtr_t *mtr) {
@@ -334,7 +333,7 @@ void btr_page_free_low(dict_index_t *dict_index, buf_block_t *block, ulint level
     seg_header = root + PAGE_HEADER + PAGE_BTR_SEG_TOP;
   }
 
-  fseg_free_page(seg_header, block->get_space(), block->get_page_no(), mtr);
+  srv_fsp->fseg_free_page(seg_header, block->get_space(), block->get_page_no(), mtr);
 }
 
 void btr_page_free(dict_index_t *dict_index, buf_block_t *block, mtr_t *mtr) {
@@ -499,7 +498,7 @@ static void btr_page_get_father(
 }
 
 ulint btr_create(ulint type, ulint space, uint64_t index_id, dict_index_t *dict_index, mtr_t *mtr) {
-  auto block = fseg_create(space, 0, PAGE_HEADER + PAGE_BTR_SEG_TOP, mtr);
+  auto block = srv_fsp->fseg_create(space, 0, PAGE_HEADER + PAGE_BTR_SEG_TOP, mtr);
 
   if (block == nullptr) {
 
@@ -510,7 +509,7 @@ ulint btr_create(ulint type, ulint space, uint64_t index_id, dict_index_t *dict_
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE_NEW));
 
-  if (!fseg_create(space, page_no, PAGE_HEADER + PAGE_BTR_SEG_LEAF, mtr)) {
+  if (!srv_fsp->fseg_create(space, page_no, PAGE_HEADER + PAGE_BTR_SEG_LEAF, mtr)) {
     /* Not enough space for new segment, free root segment before return. */
     btr_free_root(space, page_no, mtr);
     return FIL_NULL;
@@ -561,7 +560,8 @@ leaf_loop:
   /* NOTE: page hash indexes are dropped when a page is freed inside
   fsp0fsp. */
 
-  finished = fseg_free_step(root + PAGE_HEADER + PAGE_BTR_SEG_LEAF, &mtr);
+  finished = srv_fsp->fseg_free_step(root + PAGE_HEADER + PAGE_BTR_SEG_LEAF, &mtr);
+
   mtr_commit(&mtr);
 
   if (!finished) {
@@ -572,11 +572,13 @@ top_loop:
   mtr_start(&mtr);
 
   root = btr_page_get(space, root_page_no, RW_X_LATCH, &mtr);
+
 #ifdef UNIV_BTR_DEBUG
   ut_a(btr_root_fseg_validate(FIL_PAGE_DATA + PAGE_BTR_SEG_TOP + root, space));
 #endif /* UNIV_BTR_DEBUG */
 
-  finished = fseg_free_step_not_header(root + PAGE_HEADER + PAGE_BTR_SEG_TOP, &mtr);
+  finished = srv_fsp->fseg_free_step_not_header(root + PAGE_HEADER + PAGE_BTR_SEG_TOP, &mtr);
+
   mtr_commit(&mtr);
 
   if (!finished) {
@@ -594,7 +596,7 @@ void btr_free_root(ulint space, ulint root_page_no, mtr_t *mtr) {
   ut_a(btr_root_fseg_validate(header, space));
 #endif /* UNIV_BTR_DEBUG */
 
-  while (!fseg_free_step(header, mtr))
+  while (!srv_fsp->fseg_free_step(header, mtr))
     ;
 }
 

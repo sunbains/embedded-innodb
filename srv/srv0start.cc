@@ -509,12 +509,13 @@ ib_err_t InnoDB::start() noexcept {
     return DB_OUT_OF_MEMORY;
   }
 
-  fsp_init();
-
   ut_a(log_sys == nullptr);
   log_sys = Log::create();
 
   lock_sys_create(srv_lock_table_size);
+
+  ut_a(srv_fsp == nullptr);
+  srv_fsp = FSP::create(log_sys, srv_fil, srv_buf_pool);
 
   /* Create i/o-handler threads: */
 
@@ -644,7 +645,7 @@ ib_err_t InnoDB::start() noexcept {
 
     mtr_start(&mtr);
 
-    fsp_header_init(SYS_TABLESPACE, SYSTEM_IBD_FILE_INITIAL_SIZE / UNIV_PAGE_SIZE, &mtr);
+    srv_fsp->header_init(SYS_TABLESPACE, SYSTEM_IBD_FILE_INITIAL_SIZE / UNIV_PAGE_SIZE, &mtr);
 
     mtr_commit(&mtr);
 
@@ -690,8 +691,10 @@ ib_err_t InnoDB::start() noexcept {
 
     trx_sys_init_at_db_start(srv_force_recovery);
 
-    /* Initialize the fsp free limit global variable in the log system */
-    fsp_header_get_free_limit();
+    {
+      auto free_limit = srv_fsp->init_system_space_free_limit();
+      log_info(std::format("Free limit of system.ibd set to {} MB", free_limit));
+    }
 
     srv_startup_is_before_trx_rollback_phase = false;
 
@@ -760,7 +763,7 @@ ib_err_t InnoDB::start() noexcept {
   os_thread_create(&InnoDB::master_thread, nullptr, thread_ids + (1 + SRV_MAX_N_IO_THREADS));
 
   {
-    auto size = fsp_header_get_tablespace_size();
+    const auto size = srv_fsp->get_system_space_size();
     log_info(std::format("system.ibd file size in the header is {} pages", size));
   }
 
@@ -1024,6 +1027,9 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
   dict_close();
 
   srv_buf_pool->close();
+
+  FSP::destroy(srv_fsp);
+  ut_a(srv_fsp == nullptr);
 
   srv_aio->shutdown();
 

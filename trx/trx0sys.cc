@@ -206,7 +206,7 @@ db_err trx_sys_create_doublewrite_buf() {
     return DB_FATAL;
   }
 
-  auto block2 = fseg_create(TRX_SYS_SPACE, TRX_SYS_PAGE_NO, TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_FSEG, &mtr);
+  auto block2 = srv_fsp->fseg_create(TRX_SYS_SPACE, TRX_SYS_PAGE_NO, TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_FSEG, &mtr);
 
   /* fseg_create acquires a second latch on the page, therefore we must declare it: */
 
@@ -228,7 +228,7 @@ db_err trx_sys_create_doublewrite_buf() {
   auto fseg_header = block->get_frame() + TRX_SYS_DOUBLEWRITE + TRX_SYS_DOUBLEWRITE_FSEG;
 
   for (ulint i = 0; i < 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2; i++) {
-    auto page_no = fseg_alloc_free_page(fseg_header, prev_page_no + 1, FSP_UP, &mtr);
+    auto page_no = srv_fsp->fseg_alloc_free_page(fseg_header, prev_page_no + 1, FSP_UP, &mtr);
 
     if (page_no == FIL_NULL) {
       log_err(
@@ -513,7 +513,7 @@ static void trx_sysf_create(mtr_t *mtr) {
   mutex_enter(&kernel_mutex);
 
   /* Create the trx sys file block in a new allocated file segment */
-  auto block = fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER, mtr);
+  auto block = srv_fsp->fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER, mtr);
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_SYS_HEADER));
 

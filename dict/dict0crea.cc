@@ -242,9 +242,10 @@ static db_err dict_build_table_def_step(que_thr_t *thr, tab_node_t *node) {
 
     mtr_start(&mtr);
 
-    fsp_header_init(table->space, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
+    srv_fsp->header_init(table->space, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
 
     mtr_commit(&mtr);
+
   } else {
     /* Create in the system tablespace: disallow new features */
   }

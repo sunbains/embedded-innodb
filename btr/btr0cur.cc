@@ -952,7 +952,8 @@ db_err btr_cur_pessimistic_insert(
 
     n_extents = cursor->tree_height / 16 + 3;
 
-    success = fsp_reserve_free_extents(&n_reserved, dict_index->space, n_extents, FSP_NORMAL, mtr);
+    success = srv_fsp->reserve_free_extents(&n_reserved, dict_index->space, n_extents, FSP_NORMAL, mtr);
+
     if (!success) {
       return DB_OUT_OF_FILE_SPACE;
     }
@@ -1480,7 +1481,7 @@ db_err btr_cur_pessimistic_update(
 
     auto reserve_flag = flags & BTR_NO_UNDO_LOG_FLAG ? FSP_CLEANING : FSP_NORMAL;
 
-    if (!fsp_reserve_free_extents(&n_reserved, index->space, n_extents, reserve_flag, mtr)) {
+    if (!srv_fsp->reserve_free_extents(&n_reserved, index->space, n_extents, reserve_flag, mtr)) {
       return DB_OUT_OF_FILE_SPACE;
     }
   }
@@ -1937,7 +1938,7 @@ void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents, btr_cur_
 
     n_extents = cursor->tree_height / 32 + 1;
 
-    auto success = fsp_reserve_free_extents(&n_reserved, index->space, n_extents, FSP_CLEANING, mtr);
+    auto success = srv_fsp->reserve_free_extents(&n_reserved, index->space, n_extents, FSP_CLEANING, mtr);
 
     if (!success) {
       *err = DB_OUT_OF_FILE_SPACE;

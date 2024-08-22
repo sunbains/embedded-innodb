@@ -354,7 +354,7 @@ struct Log {
   * @param lsn The log sequence number up to which the log should be checked.
   */
  void check_flush(lsn_t lsn) noexcept;
- 
+
  /**
   * @brief Sets the global variable log_fsp_current_free_limit.
   * Also makes a checkpoint, so that we know that the limit has been written to a log checkpoint field on disk.

@@ -652,7 +652,7 @@ static byte *recv_parse_or_apply_log_rec_body(
       break;
     case MLOG_INIT_FILE_PAGE:
       /* Allow anything in page_type when creating a page. */
-      ptr = fsp_parse_init_file_page(ptr, end_ptr, block);
+      ptr = srv_fsp->parse_init_file_page(ptr, end_ptr, block);
       break;
     case MLOG_WRITE_STRING:
       ut_ad(!page || page_type != FIL_PAGE_TYPE_ALLOCATED);

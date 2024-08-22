@@ -344,7 +344,7 @@ static db_err trx_undo_seg_create(
 
   ulint n_reserved;
   auto space = page_get_space_id(page_align(rseg_hdr));
-  auto success = fsp_reserve_free_extents(&n_reserved, space, 2, FSP_UNDO, mtr);
+  auto success = srv_fsp->reserve_free_extents(&n_reserved, space, 2, FSP_UNDO, mtr);
 
   if (!success) {
 
@@ -352,7 +352,7 @@ static db_err trx_undo_seg_create(
   }
 
   /* Allocate a new file segment for the undo log */
-  auto block = fseg_create_general(space, 0, TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, true, mtr);
+  auto block = srv_fsp->fseg_create_general(space, 0, TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, true, mtr);
 
   srv_fil->space_release_free_extents(space, n_reserved);
 
@@ -691,14 +691,14 @@ ulint trx_undo_add_page(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) {
 
   ulint n_reserved;
   auto header_page = trx_undo_page_get(undo->space, undo->hdr_page_no, mtr);
-  auto success = fsp_reserve_free_extents(&n_reserved, undo->space, 1, FSP_UNDO, mtr);
+  auto success = srv_fsp->reserve_free_extents(&n_reserved, undo->space, 1, FSP_UNDO, mtr);
 
   if (!success) {
 
     return FIL_NULL;
   }
 
-  auto page_no = fseg_alloc_free_page_general(
+  auto page_no = srv_fsp->fseg_alloc_free_page_general(
     header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, undo->top_page_no + 1, FSP_UP, true, mtr);
 
   srv_fil->space_release_free_extents(undo->space, n_reserved);
@@ -739,32 +739,27 @@ static ulint trx_undo_free_page(
                                undo log page; the caller must have reserved
                                the rollback segment mutex */
 {
-  page_t *header_page;
-  page_t *undo_page;
-  fil_addr_t last_addr;
-  trx_rsegf_t *rseg_header;
-  ulint hist_size;
-
   ut_a(hdr_page_no != page_no);
   ut_ad(!mutex_own(&kernel_mutex));
   ut_ad(mutex_own(&(rseg->mutex)));
 
-  undo_page = trx_undo_page_get(space, page_no, mtr);
+  auto undo_page = trx_undo_page_get(space, page_no, mtr);
 
-  header_page = trx_undo_page_get(space, hdr_page_no, mtr);
+  auto header_page = trx_undo_page_get(space, hdr_page_no, mtr);
 
   flst_remove(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST, undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
 
-  fseg_free_page(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, space, page_no, mtr);
+  srv_fsp->fseg_free_page(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, space, page_no, mtr);
 
-  last_addr = flst_get_last(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST, mtr);
-  rseg->curr_size--;
+  auto last_addr = flst_get_last(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST, mtr);
+
+  --rseg->curr_size;
 
   if (in_history) {
-    rseg_header = trx_rsegf_get(space, rseg->page_no, mtr);
-
-    hist_size = mtr_read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, mtr);
+    auto rseg_header = trx_rsegf_get(space, rseg->page_no, mtr);
+    auto hist_size = mtr_read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES, mtr);
     ut_ad(hist_size > 0);
+
     mlog_write_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, hist_size - 1, MLOG_4BYTES, mtr);
   }
 
@@ -919,7 +914,7 @@ static void trx_undo_seg_free(trx_undo_t *undo) {
     auto seg_header = trx_undo_page_get(undo->space, undo->hdr_page_no, &mtr) + TRX_UNDO_SEG_HDR;
     auto file_seg = seg_header + TRX_UNDO_FSEG_HEADER;
 
-    finished = fseg_free_step(file_seg, &mtr);
+    finished = srv_fsp->fseg_free_step(file_seg, &mtr);
 
     if (finished) {
       /* Update the rseg header */

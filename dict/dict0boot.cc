@@ -98,7 +98,7 @@ static bool dict_hdr_create(mtr_t *mtr) {
 
   /* Create the dictionary header file block in a new, allocated file
   segment in the system tablespace */
-  auto block = fseg_create(DICT_HDR_SPACE, 0, DICT_HDR + DICT_HDR_FSEG_HEADER, mtr);
+  auto block = srv_fsp->fseg_create(DICT_HDR_SPACE, 0, DICT_HDR + DICT_HDR_FSEG_HEADER, mtr);
 
   ut_a(DICT_HDR_PAGE_NO == block->get_page_no());
 

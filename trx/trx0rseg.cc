@@ -57,16 +57,16 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
 
   if (*slot_no == ULINT_UNDEFINED) {
 
-    return (FIL_NULL);
+    return FIL_NULL;
   }
 
   /* Allocate a new file segment for the rollback segment */
-  block = fseg_create(space, 0, TRX_RSEG + TRX_RSEG_FSEG_HEADER, mtr);
+  block = srv_fsp->fseg_create(space, 0, TRX_RSEG + TRX_RSEG_FSEG_HEADER, mtr);
 
   if (block == nullptr) {
     /* No space left */
 
-    return (FIL_NULL);
+    return FIL_NULL;
   }
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER_NEW));

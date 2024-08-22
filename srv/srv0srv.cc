@@ -1715,9 +1715,13 @@ loop:
         "================================================\n"
       );
 
-      fsp_print(0);
+      srv_fsp->print(0);
       log_warn("Validating tablespace");
-      fsp_validate(0);
+
+      {
+        auto success = srv_fsp->validate(0);
+        ut_a(success);
+      }
 
       log_warn(
         "Validation ok\n"
