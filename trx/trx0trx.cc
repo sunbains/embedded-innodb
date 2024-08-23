@@ -318,19 +318,19 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
       auto trx = trx_create(trx_dummy_sess);
 
       trx->m_is_recovered = true;
-      trx->m_id = undo->trx_id;
+      trx->m_id = undo->m_trx_id;
 #ifdef WITH_XOPEN
-      trx->m_xid = undo->xid;
+      trx->m_xid = undo->m_xid;
 #endif /* WITH_XOPEN */
       trx->insert_undo = undo;
       trx->rseg = rseg;
 
-      if (undo->state != TRX_UNDO_ACTIVE) {
+      if (undo->m_state != TRX_UNDO_ACTIVE) {
 
         /* Prepared transactions are left in the prepared state waiting for a commit
         or abort decision from the client. */
 
-        if (undo->state == TRX_UNDO_PREPARED) {
+        if (undo->m_state == TRX_UNDO_PREPARED) {
 
           ib_logger(ib_stream, "Transaction %lu was in the XA prepared state.\n", TRX_ID_PREP_PRINTF(trx->m_id));
 
@@ -359,40 +359,40 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
         trx->m_no = LSN_MAX;
       }
 
-      if (undo->dict_operation) {
+      if (undo->m_dict_operation) {
         trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
-        trx->table_id = undo->table_id;
+        trx->table_id = undo->m_table_id;
       }
 
-      if (!undo->empty) {
-        trx->undo_no = undo->top_undo_no + 1;
+      if (!undo->m_empty) {
+        trx->undo_no = undo->m_top_undo_no + 1;
       }
 
       trx_list_insert_ordered(trx);
 
-      undo = UT_LIST_GET_NEXT(undo_list, undo);
+      undo = UT_LIST_GET_NEXT(m_undo_list, undo);
     }
 
     undo = UT_LIST_GET_FIRST(rseg->update_undo_list);
 
     while (undo != nullptr) {
-      auto trx = trx_get_on_id(undo->trx_id);
+      auto trx = trx_get_on_id(undo->m_trx_id);
 
       if (nullptr == trx) {
         trx = trx_create(trx_dummy_sess);
 
         trx->m_is_recovered = true;
-        trx->m_id = undo->trx_id;
+        trx->m_id = undo->m_trx_id;
 #ifdef WITH_XOPEN
-        trx->m_xid = undo->xid;
+        trx->m_xid = undo->m_xid;
 #endif /* WITH_XOPEN */
 
-        if (undo->state != TRX_UNDO_ACTIVE) {
+        if (undo->m_state != TRX_UNDO_ACTIVE) {
 
           /* Prepared transactions are left in the prepared state waiting for a
           commit or abort decision from the client. */
 
-          if (undo->state == TRX_UNDO_PREPARED) {
+          if (undo->m_state == TRX_UNDO_PREPARED) {
             ib_logger(ib_stream, "Transaction %lu was in the XA prepared state.\n", TRX_ID_PREP_PRINTF(trx->m_id));
 
             if (recovery == IB_RECOVERY_DEFAULT) {
@@ -422,20 +422,20 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
         trx->rseg = rseg;
         trx_list_insert_ordered(trx);
 
-        if (undo->dict_operation) {
+        if (undo->m_dict_operation) {
           trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
-          trx->table_id = undo->table_id;
+          trx->table_id = undo->m_table_id;
         }
       }
 
       trx->update_undo = undo;
 
-      if (!undo->empty && undo->top_undo_no >= trx->undo_no) {
+      if (!undo->m_empty && undo->m_top_undo_no >= trx->undo_no) {
 
-        trx->undo_no = undo->top_undo_no + 1;
+        trx->undo_no = undo->m_top_undo_no + 1;
       }
 
-      undo = UT_LIST_GET_NEXT(undo_list, undo);
+      undo = UT_LIST_GET_NEXT(m_undo_list, undo);
     }
 
     rseg = UT_LIST_GET_NEXT(rseg_list, rseg);
@@ -567,7 +567,7 @@ void trx_commit_off_kernel(trx_t *trx) {
     mutex_enter(&(rseg->mutex));
 
     if (trx->insert_undo != nullptr) {
-      trx_undo_set_state_at_finish(rseg, trx, trx->insert_undo, &mtr);
+      srv_undo->set_state_at_finish(rseg, trx, trx->insert_undo, &mtr);
     }
 
     undo = trx->update_undo;
@@ -582,17 +582,17 @@ void trx_commit_off_kernel(trx_t *trx) {
       because only a single OS thread is allowed to do the
       transaction commit for this transaction. */
 
-      update_hdr_page = trx_undo_set_state_at_finish(rseg, trx, undo, &mtr);
+      update_hdr_page = srv_undo->set_state_at_finish(rseg, trx, undo, &mtr);
 
       /* We have to do the cleanup for the update log while
       holding the rseg mutex because update log headers
       have to be put to the history list in the order of
       the trx number. */
 
-      trx_undo_update_cleanup(trx, update_hdr_page, &mtr);
+      srv_undo->update_cleanup(trx, update_hdr_page, &mtr);
     }
 
-    mutex_exit(&(rseg->mutex));
+    mutex_exit(&rseg->mutex);
 
     /* The following call commits the mini-transaction, making the
     whole transaction committed in the file-based world, at this
@@ -669,7 +669,7 @@ void trx_commit_off_kernel(trx_t *trx) {
 
     if (trx->insert_undo != nullptr) {
 
-      trx_undo_insert_cleanup(trx);
+      srv_undo->insert_cleanup(trx);
     }
 
     /* NOTE that we could possibly make a group commit more
@@ -752,7 +752,7 @@ void trx_commit_off_kernel(trx_t *trx) {
 void trx_cleanup_at_db_startup(trx_t *trx) {
   if (trx->insert_undo != nullptr) {
 
-    trx_undo_insert_cleanup(trx);
+    srv_undo->insert_cleanup(trx);
   }
 
   trx->m_conc_state = TRX_NOT_STARTED;
@@ -1357,11 +1357,11 @@ void trx_prepare_off_kernel(trx_t *trx) {
       because only a single OS thread is allowed to do the
       transaction prepare for this transaction. */
 
-      trx_undo_set_state_at_prepare(trx, trx->insert_undo, &mtr);
+      srv_undo->set_state_at_prepare(trx, trx->insert_undo, &mtr);
     }
 
     if (trx->update_undo) {
-      trx_undo_set_state_at_prepare(trx, trx->update_undo, &mtr);
+      srv_undo->set_state_at_prepare(trx, trx->update_undo, &mtr);
     }
 
     mutex_exit(&rseg->mutex);
