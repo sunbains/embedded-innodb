@@ -628,16 +628,16 @@ static byte *recv_parse_or_apply_log_rec_body(
       break;
     case MLOG_UNDO_INIT:
       /* Allow anything in page_type when creating a page. */
-      ptr = Undo::parse_page_init(ptr, end_ptr, page, mtr);
+      ptr = trx_undo_parse_page_init(ptr, end_ptr, page, mtr);
       break;
     case MLOG_UNDO_HDR_DISCARD:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
-      ptr = Undo::parse_discard_latest(ptr, IF_DEBUG(end_ptr,) page, mtr);
+      ptr = trx_undo_parse_discard_latest(ptr, end_ptr, page, mtr);
       break;
     case MLOG_UNDO_HDR_CREATE:
     case MLOG_UNDO_HDR_REUSE:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
-      ptr = Undo::parse_page_header(type, ptr, end_ptr, page, mtr);
+      ptr = trx_undo_parse_page_header(type, ptr, end_ptr, page, mtr);
       break;
     case MLOG_REC_MIN_MARK:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);

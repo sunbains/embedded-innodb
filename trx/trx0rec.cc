@@ -597,7 +597,7 @@ static ulint trx_undo_page_report_modify(
         /* Notify purge that it eventually has to
         free the old externally stored field */
 
-        trx->update_undo->m_del_marks = true;
+        trx->update_undo->del_marks = true;
 
         *type_cmpl_ptr |= TRX_UNDO_UPD_EXTERN;
       } else {
@@ -633,7 +633,7 @@ static ulint trx_undo_page_report_modify(
   if (!update || !(cmpl_info & UPD_NODE_NO_ORD_CHANGE)) {
     byte *old_ptr = ptr;
 
-    trx->update_undo->m_del_marks = true;
+    trx->update_undo->del_marks = true;
 
     if (trx_undo_left(undo_page, ptr) < 5) {
 
@@ -968,7 +968,7 @@ db_err trx_undo_report_row_operation(
 
     if (trx->insert_undo == nullptr) {
 
-      err = srv_undo->assign_undo(trx, TRX_UNDO_INSERT);
+      err = trx_undo_assign_undo(trx, TRX_UNDO_INSERT);
     }
 
     undo = trx->insert_undo;
@@ -984,7 +984,7 @@ db_err trx_undo_report_row_operation(
 
     if (trx->update_undo == nullptr) {
 
-      err = srv_undo->assign_undo(trx, TRX_UNDO_UPDATE);
+      err = trx_undo_assign_undo(trx, TRX_UNDO_UPDATE);
     }
 
     undo = trx->update_undo;
@@ -1002,7 +1002,7 @@ db_err trx_undo_report_row_operation(
     }
   }
 
-  auto page_no = undo->m_last_page_no;
+  auto page_no = undo->last_page_no;
 
   mtr_t mtr;
 
@@ -1012,14 +1012,14 @@ db_err trx_undo_report_row_operation(
 
     Buf_pool::Request req {
       .m_rw_latch = RW_X_LATCH,
-      .m_page_id = { undo->m_space, page_no },
+      .m_page_id = { undo->space, page_no },
       .m_mode = BUF_GET,
       .m_file = __FILE__,
       .m_line = __LINE__,
       .m_mtr = &mtr
     };
 
-    auto undo_block = srv_buf_pool->get(req, undo->m_guess_block);
+    auto undo_block = srv_buf_pool->get(req, undo->guess_block);
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(undo_block, SYNC_TRX_UNDO_PAGE));
 
@@ -1047,11 +1047,11 @@ db_err trx_undo_report_row_operation(
 
       mtr.commit();
 
-      undo->m_empty = false;
-      undo->m_top_page_no = page_no;
-      undo->m_top_offset = offset;
-      undo->m_top_undo_no = trx->undo_no;
-      undo->m_guess_block = undo_block;
+      undo->empty = false;
+      undo->top_page_no = page_no;
+      undo->top_offset = offset;
+      undo->top_undo_no = trx->undo_no;
+      undo->guess_block = undo_block;
 
       ++trx->undo_no;
 
@@ -1066,7 +1066,7 @@ db_err trx_undo_report_row_operation(
       return DB_SUCCESS;
     }
 
-    ut_ad(page_no == undo->m_last_page_no);
+    ut_ad(page_no == undo->last_page_no);
 
     /* We have to extend the undo log by one page */
 
@@ -1078,7 +1078,7 @@ db_err trx_undo_report_row_operation(
 
     mutex_enter(&rseg->mutex);
 
-    page_no = srv_undo->add_page(trx, undo, &mtr);
+    page_no = trx_undo_add_page(trx, undo, &mtr);
 
     mutex_exit(&rseg->mutex);
 
@@ -1113,7 +1113,7 @@ trx_undo_rec_t *trx_undo_get_undo_rec_low(roll_ptr_t roll_ptr, mem_heap_t *heap)
 
   mtr.start();
 
-  undo_page = srv_undo->page_get_s_latched(rseg->space, page_no, &mtr);
+  undo_page = trx_undo_page_get_s_latched(rseg->space, page_no, &mtr);
 
   undo_rec = trx_undo_rec_copy(undo_page + offset, heap);
 

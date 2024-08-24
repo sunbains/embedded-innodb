@@ -62,7 +62,7 @@ void mlog_write_initial_log_record(const byte *ptr, mlog_type_t type, mtr_t *mtr
 byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, mlog_type_t *type, ulint *space, ulint *page_no) {
   if (end_ptr < ptr + 1) {
 
-    return nullptr;
+    return (nullptr);
   }
 
   *type = static_cast<mlog_type_t>((ulint)*ptr & ~MLOG_SINGLE_REC_FLAG);
@@ -72,14 +72,14 @@ byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, mlog_type_t *type,
 
   if (end_ptr < ptr + 2) {
 
-    return nullptr;
+    return (nullptr);
   }
 
   *space = static_cast<space_id_t>(mach_parse_compressed(ptr, end_ptr));
 
   if (ptr == nullptr) {
 
-    return nullptr;
+    return (nullptr);
   }
 
   *page_no = static_cast<page_no_t>(mach_parse_compressed(ptr, end_ptr));
@@ -95,7 +95,7 @@ byte *mlog_parse_nbytes(mlog_type_t type, byte *ptr, byte *end_ptr, byte *page) 
 
   if (end_ptr < ptr + 2) {
 
-    return nullptr;
+    return (nullptr);
   }
 
   auto offset = mach_read_from_2(ptr);
