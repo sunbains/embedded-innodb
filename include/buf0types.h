@@ -31,8 +31,8 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include <optional>
 #include <set>
 #include <sstream>
+#include <unordered_map>
 
-#include "hash0hash.h"
 #include "sync0mutex.h"
 #include "sync0rw.h"
 #include "ut0mem.h"
@@ -308,9 +308,6 @@ struct buf_page_t {
   buffer pool */
   uint32_t m_access_time{};
 
-  /** node used in chaining to Buf_pool::page_hash */
-  buf_page_t *m_hash;
-
   /** @name Page flushing fields
   All these are protected by buf_pool_mutex. */
   /* @{ */
@@ -522,55 +519,12 @@ struct buf_pool_stat_t {
   ulint n_pages_not_made_young{};
 };
 
-struct Page_id {
-
-  Page_id(Page_id &&) = default;
-  Page_id(const Page_id &) = default;
-  Page_id &operator=(Page_id &&) = default;
-  Page_id &operator=(const Page_id &) = default;
-
-  Page_id() : m_space_id(NULL_SPACE_ID), m_page_no(NULL_PAGE_NO) {}
-
-  Page_id(space_id_t space_id, page_no_t page_no) : m_space_id(space_id), m_page_no(page_no) {}
-
-  bool operator==(const Page_id &rhs) const { return m_space_id == rhs.m_space_id && m_page_no == rhs.m_page_no; }
-
-  bool operator!=(const Page_id &rhs) const { return !(*this == rhs); }
-
-  std::string to_string() const {
-    std::ostringstream oss{};
-
-    oss << "{ m_space_id: " << m_space_id << ", m_page_no: " << m_page_no << " }";
-
-    return oss.str();
-  }
-
-  /** @return true if values have not been set. */
-  bool is_null() const {
-    if (m_space_id == NULL_SPACE_ID) {
-      /* Both must be null or not null. */
-      ut_a(m_page_no == NULL_PAGE_NO);
-      return true;
-    } else {
-      ut_a(m_page_no != NULL_PAGE_NO);
-      return false;
-    }
-  }
-
-  /** Tablespace ID. */
-  space_id_t m_space_id{NULL_SPACE_ID};
-
-  /** Page number in the tablespace. */
-  page_no_t m_page_no{NULL_PAGE_NO};
-};
-
-static_assert(std::is_standard_layout<Page_id>::value, "Page_id must have a standard layout");
-
 /** @brief The buffer pool structure.
 
 NOTE! The definition appears here only for other modules of this
 directory (buf) to see it. Do not use from outside! */
 struct Buf_pool {
+  using page_hash_t = std::unordered_map<Page_id, buf_page_t *, Page_id_hash>;
 
   struct Request {
     /** RW_S_LATCH or RW_X_LATCH */
@@ -872,7 +826,7 @@ struct Buf_pool {
 
   /** hash table of buf_page_t or buf_block_t file pages,
   buf_page_t::in_file() == true, indexed by (m_nspace_id, m_page_no) */
-  hash_table_t *m_page_hash;
+  page_hash_t *m_page_hash;
 
   ulint m_n_pend_reads; /** number of pending read operations */
 
@@ -941,7 +895,7 @@ struct Buf_pool {
   0 if LRU_old == nullptr; NOTE: LRU_old_len must be adjusted whenever LRU_old
   shrinks or grows! */
   ulint m_LRU_old_len;
-  
+
   std::unique_ptr<Buf_LRU> m_LRU;
 
   std::unique_ptr<Buf_flush> m_flusher;

@@ -344,7 +344,7 @@ bool Buf_pool::is_corrupted(const byte *read_buf) {
       log_err(std::format(
         "Page {}::{} log sequence number {} is in the future! Current system"
         " log sequence number is {}. Your database may be corrupt or you may have copied"
-        " the InnoDB tablespace but not the InnoDB log files.", 
+        " the InnoDB tablespace but not the InnoDB log files.",
         mach_read_from_4(read_buf + FIL_PAGE_SPACE_ID),
         mach_read_from_4(read_buf + FIL_PAGE_OFFSET),
         mach_read_from_8(read_buf + FIL_PAGE_LSN),
@@ -597,7 +597,7 @@ bool Buf_pool::open(uint64_t pool_size) {
 
   srv_buf_pool_curr_size = m_curr_size * UNIV_PAGE_SIZE;
 
-  m_page_hash = hash_create(2 * m_curr_size);
+  m_page_hash = new page_hash_t{};
 
   m_last_printout_time = ut_time();
 
@@ -627,8 +627,7 @@ bool Buf_pool::open(uint64_t pool_size) {
 }
 
 void Buf_pool::close() {
-  hash_table_free(m_page_hash);
-  m_page_hash = nullptr;
+  delete m_page_hash;
 
   for (ulint i = BUF_FLUSH_LRU; i < BUF_FLUSH_N_TYPES; i++) {
     os_event_free(m_no_flush[i]);
@@ -1069,7 +1068,7 @@ bool Buf_pool::try_get_known_nowait(Request& req) {
 
   } else if (!buf_page_is_accessed(&req.m_guess->m_page)) {
 
-    /* Above, we do a dirty read on purpose, to avoid mutex contention. 
+    /* Above, we do a dirty read on purpose, to avoid mutex contention.
     The field buf_page_t::access_time is only used for heuristic purposes.
     Writes to the field must be protected by mutex, however. */
 
@@ -1250,7 +1249,8 @@ void Buf_pool::page_init(space_id_t space, page_no_t page_no, buf_block_t *block
   ut_ad(!block->m_page.m_in_page_hash);
   ut_d(block->m_page.m_in_page_hash = true);
 
-  HASH_INSERT(buf_page_t, m_hash, m_page_hash, buf_page_address_fold(space, page_no), &block->m_page);
+  auto result = m_page_hash->emplace(Page_id(space, page_no), &block->m_page);
+  ut_a(!result.second);
 }
 
 buf_page_t *Buf_pool::init_for_read(db_err *err, space_id_t space, page_no_t page_no, int64_t tablespace_version) {
@@ -1805,7 +1805,7 @@ ulint Buf_pool::get_latched_pages_number() {
 #endif /* UNIV_DEBUG */
 
 ulint Buf_pool::get_n_pending_ios() {
-  return 
+  return
     m_n_pend_reads + m_n_flush[BUF_FLUSH_LRU] + m_n_flush[BUF_FLUSH_LIST] +
     m_n_flush[BUF_FLUSH_SINGLE_PAGE];
 }

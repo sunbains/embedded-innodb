@@ -32,18 +32,13 @@ Created 11/5/1995 Heikki Tuuri
 
 #include "buf0buf.h"
 #include "buf0flu.h"
-#include "buf0rea.h"
 #include "fil0fil.h"
-#include "hash0hash.h"
 #include "log0recv.h"
 #include "os0file.h"
 #include "os0sync.h"
 #include "srv0srv.h"
-#include "sync0rw.h"
 #include "sync0sync.h"
-#include "ut0byte.h"
 #include "ut0lst.h"
-#include "ut0rnd.h"
 
 /** The number of blocks from the LRU_old pointer onward, including
 the block pointed to, must be Buf_LRU::old_ratio/OLD_RATIO_DIV
@@ -774,7 +769,7 @@ buf_page_state Buf_LRU::block_remove_hashed_page(buf_page_t *bpage) {
   ut_ad(bpage->m_in_page_hash);
   ut_d(bpage->m_in_page_hash = false);
 
-  HASH_DELETE(buf_page_t, m_hash, srv_buf_pool->m_page_hash, buf_page_address_fold(bpage->m_space, bpage->m_page_no), bpage);
+  srv_buf_pool->m_page_hash->erase(Page_id(bpage->m_space, bpage->m_page_no));
 
   switch (bpage->get_state()) {
     case BUF_BLOCK_FILE_PAGE:
@@ -967,7 +962,9 @@ void Buf_LRU::print() {
       case BUF_BLOCK_FILE_PAGE:
         frame = reinterpret_cast<buf_block_t *>(bpage)->get_frame();
 
-        ib_logger(ib_stream, "\ntype %lu index id %lu\n", (ulong)srv_fil->page_get_type(frame), (ulong)btr_page_get_index_id(frame));
+        ib_logger(
+          ib_stream, "\ntype %lu index id %lu\n", (ulong)srv_fil->page_get_type(frame), (ulong)btr_page_get_index_id(frame)
+        );
         break;
 
       default:
