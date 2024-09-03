@@ -487,11 +487,11 @@ void trx_roll_try_truncate(trx_t *trx) {
   }
 
   if (trx->insert_undo) {
-    trx_undo_truncate_end(trx, trx->insert_undo, limit);
+    srv_undo->truncate_end(trx, trx->insert_undo, limit);
   }
 
   if (trx->update_undo) {
-    trx_undo_truncate_end(trx, trx->update_undo, limit);
+    srv_undo->truncate_end(trx, trx->update_undo, limit);
   }
 }
 
@@ -504,55 +504,32 @@ static trx_undo_rec_t *trx_roll_pop_top_rec(
   mtr_t *mtr
 ) /*!< in: mtr */
 {
-  page_t *undo_page;
-  ulint offset;
-  trx_undo_rec_t *prev_rec;
-  page_t *prev_rec_page;
+  ut_ad(mutex_own(&trx->undo_mutex));
 
-  ut_ad(mutex_own(&(trx->undo_mutex)));
+  auto undo_page = srv_undo->page_get_s_latched(undo->m_space, undo->m_top_page_no, mtr);
+  auto offset = undo->m_top_offset;
+  auto prev_rec = srv_undo->get_prev_rec(undo_page + offset, undo->m_hdr_page_no, undo->m_hdr_offset, mtr);
 
-  undo_page = trx_undo_page_get_s_latched(undo->space, undo->top_page_no, mtr);
-  offset = undo->top_offset;
-
-  /*ib_logger(ib_stream, "Thread %lu undoing trx %lu undo record %lu\n",
-  os_thread_get_curr_id(), trx->id,
-  undo->top_undo_no); */
-
-  prev_rec = trx_undo_get_prev_rec(undo_page + offset, undo->hdr_page_no, undo->hdr_offset, mtr);
   if (prev_rec == nullptr) {
 
-    undo->empty = true;
+    undo->m_empty = true;
   } else {
-    prev_rec_page = page_align(prev_rec);
+    auto prev_rec_page = page_align(prev_rec);
 
     if (prev_rec_page != undo_page) {
 
-      trx->pages_undone++;
+      ++trx->pages_undone;
     }
 
-    undo->top_page_no = page_get_page_no(prev_rec_page);
-    undo->top_offset = prev_rec - prev_rec_page;
-    undo->top_undo_no = trx_undo_rec_get_undo_no(prev_rec);
+    undo->m_top_page_no = page_get_page_no(prev_rec_page);
+    undo->m_top_offset = prev_rec - prev_rec_page;
+    undo->m_top_undo_no = trx_undo_rec_get_undo_no(prev_rec);
   }
 
   return undo_page + offset;
 }
 
-/** Pops the topmost record when the two undo logs of a transaction are seen
-as a single stack of records ordered by their undo numbers. Inserts the
-undo number of the popped undo record to the array of currently processed
-undo numbers in the transaction. When the query thread finishes processing
-of this undo record, it must be released with trx_undo_rec_release.
-@return undo log record copied to heap, nullptr if none left, or if the
-undo number of the top record would be less than the limit */
-
-trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(
-  trx_t *trx,           /*!< in: transaction */
-  undo_no_t limit,      /*!< in: least undo number we need */
-  roll_ptr_t *roll_ptr, /*!< out: roll pointer to undo record */
-  mem_heap_t *heap
-) /*!< in: memory heap where copied */
-{
+trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(trx_t *trx, undo_no_t limit, roll_ptr_t *roll_ptr, mem_heap_t *heap) {
   trx_undo_t *undo;
   trx_undo_t *ins_undo;
   trx_undo_t *upd_undo;
@@ -560,48 +537,48 @@ trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(
   trx_undo_rec_t *undo_rec_copy;
   undo_no_t undo_no;
   bool is_insert;
-  trx_rseg_t *rseg;
   ulint progress_pct;
   mtr_t mtr;
 
-  rseg = trx->rseg;
+  auto rseg = trx->rseg;
+
 try_again:
-  mutex_enter(&(trx->undo_mutex));
+  mutex_enter(&trx->undo_mutex);
 
   if (trx->pages_undone >= TRX_ROLL_TRUNC_THRESHOLD) {
-    mutex_enter(&(rseg->mutex));
+    mutex_enter(&rseg->mutex);
 
     trx_roll_try_truncate(trx);
 
-    mutex_exit(&(rseg->mutex));
+    mutex_exit(&rseg->mutex);
   }
 
   ins_undo = trx->insert_undo;
   upd_undo = trx->update_undo;
 
-  if (!ins_undo || ins_undo->empty) {
+  if (!ins_undo || ins_undo->m_empty) {
     undo = upd_undo;
-  } else if (!upd_undo || upd_undo->empty) {
+  } else if (!upd_undo || upd_undo->m_empty) {
     undo = ins_undo;
-  } else if (upd_undo->top_undo_no > ins_undo->top_undo_no) {
+  } else if (upd_undo->m_top_undo_no > ins_undo->m_top_undo_no) {
     undo = upd_undo;
   } else {
     undo = ins_undo;
   }
 
-  if (!undo || undo->empty || limit > undo->top_undo_no) {
+  if (undo == nullptr || undo->m_empty || limit > undo->m_top_undo_no) {
 
     if ((trx->undo_no_arr)->n_used == 0) {
       /* Rollback is ending */
 
-      mutex_enter(&(rseg->mutex));
+      mutex_enter(&rseg->mutex);
 
       trx_roll_try_truncate(trx);
 
-      mutex_exit(&(rseg->mutex));
+      mutex_exit(&rseg->mutex);
     }
 
-    mutex_exit(&(trx->undo_mutex));
+    mutex_exit(&trx->undo_mutex);
 
     return nullptr;
   }
@@ -612,7 +589,8 @@ try_again:
     is_insert = false;
   }
 
-  *roll_ptr = trx_undo_build_roll_ptr(is_insert, (undo->rseg)->id, undo->top_page_no, undo->top_offset);
+  *roll_ptr = trx_undo_build_roll_ptr(is_insert, undo->m_rseg->id, undo->m_top_page_no, undo->m_top_offset);
+
   mtr.start();
 
   undo_rec = trx_roll_pop_top_rec(trx, undo, &mtr);

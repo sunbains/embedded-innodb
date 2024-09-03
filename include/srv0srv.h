@@ -681,6 +681,9 @@ struct export_var_struct {
 
 struct Fil;
 struct FSP;
+struct Undo;
+
+extern Undo *srv_undo;
 
 extern Fil *srv_fil;
 

@@ -696,7 +696,7 @@ private:
    */
   void fseg_mark_page_used(fseg_inode_t *seg_inode, space_id_t space, page_no_t page, mtr_t *mtr) noexcept;
 
-private:
+public:
   /** Redo log to use. */
   Log *m_log{};
 

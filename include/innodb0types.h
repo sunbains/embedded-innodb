@@ -167,6 +167,12 @@ constexpr ulint IB_FILE_BLOCK_SIZE = 512;
 #define IF_SYNC_DEBUG(...)
 #endif /* UNIV_SYNC_DEBUG */
 
+#ifdef WITH_XOPEN
+#define IF_XA(...) __VA_ARGS__
+#else
+#define IF_XA(...)
+#endif /* WITH_XOPEN */
+
 struct Source_location {
   /** Constructor/
    * @param file      File name

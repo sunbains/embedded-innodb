@@ -517,6 +517,9 @@ ib_err_t InnoDB::start() noexcept {
   ut_a(srv_fsp == nullptr);
   srv_fsp = FSP::create(log_sys, srv_fil, srv_buf_pool);
 
+  ut_a(srv_undo == nullptr);
+  srv_undo = Undo::create(srv_fsp);
+
   /* Create i/o-handler threads: */
 
   for (ulint i{}; i < srv_n_file_io_threads; i++) {
@@ -1025,6 +1028,9 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
 
   /* Must be called before Buf_pool::close(). */
   dict_close();
+
+  Undo::destroy(srv_undo);
+  ut_a(srv_undo == nullptr);
 
   srv_buf_pool->close();
 

@@ -450,7 +450,7 @@ struct Fil {
    * @param[in,out] page          File page
    * @param[in] type - type
    */
-  void page_set_type(byte *page, ulint type);
+  static void page_set_type(byte *page, ulint type);
 
   /**
    * Gets the file page type.
@@ -458,7 +458,7 @@ struct Fil {
    * @return type; NOTE that if the type has not been written to page, the
    *         return value not defined
    */
-  Fil_page_type page_get_type(const byte *page);
+  static Fil_page_type page_get_type(const byte *page);
 
   /**
    * Reset variables.

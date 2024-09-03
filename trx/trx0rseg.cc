@@ -95,34 +95,32 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
 
 void trx_rseg_mem_free(trx_rseg_t *rseg)
 {
-  trx_undo_t *undo;
-
   mutex_free(&rseg->mutex);
 
   /* There can't be any active transactions. */
   ut_a(UT_LIST_GET_LEN(rseg->update_undo_list) == 0);
   ut_a(UT_LIST_GET_LEN(rseg->insert_undo_list) == 0);
 
-  undo = UT_LIST_GET_FIRST(rseg->update_undo_cached);
+  auto undo = UT_LIST_GET_FIRST(rseg->update_undo_cached);
 
   while (undo != nullptr) {
-    trx_undo_t *prev_undo = undo;
+    auto prev_undo = undo;
 
-    undo = UT_LIST_GET_NEXT(undo_list, undo);
+    undo = UT_LIST_GET_NEXT(m_undo_list, undo);
     UT_LIST_REMOVE(rseg->update_undo_cached, prev_undo);
 
-    trx_undo_mem_free(prev_undo);
+    Undo::delete_undo(prev_undo);
   }
 
   undo = UT_LIST_GET_FIRST(rseg->insert_undo_cached);
 
   while (undo != nullptr) {
-    trx_undo_t *prev_undo = undo;
+    auto prev_undo = undo;
 
-    undo = UT_LIST_GET_NEXT(undo_list, undo);
+    undo = UT_LIST_GET_NEXT(m_undo_list, undo);
     UT_LIST_REMOVE(rseg->insert_undo_cached, prev_undo);
 
-    trx_undo_mem_free(prev_undo);
+    Undo::delete_undo(prev_undo);
   }
 
   trx_sys_set_nth_rseg(trx_sys, rseg->id, nullptr);
@@ -143,12 +141,6 @@ static trx_rseg_t *trx_rseg_mem_create(
   mtr_t *mtr
 ) /*!< in: mtr */
 {
-  trx_rsegf_t *rseg_header;
-  trx_ulogf_t *undo_log_hdr;
-  fil_addr_t node_addr;
-  ulint sum_of_undo_sizes;
-  ulint len;
-
   ut_ad(mutex_own(&kernel_mutex));
 
   auto rseg = static_cast<trx_rseg_t *>(mem_alloc(sizeof(trx_rseg_t)));
@@ -163,25 +155,27 @@ static trx_rseg_t *trx_rseg_mem_create(
 
   trx_sys_set_nth_rseg(trx_sys, id, rseg);
 
-  rseg_header = trx_rsegf_get_new(space, page_no, mtr);
+  auto rseg_header = trx_rsegf_get_new(space, page_no, mtr);
 
   rseg->max_size = mtr->read_ulint(rseg_header + TRX_RSEG_MAX_SIZE, MLOG_4BYTES);
 
   /* Initialize the undo log lists according to the rseg header */
 
-  sum_of_undo_sizes = trx_undo_lists_init(recovery, rseg);
+  auto sum_of_undo_sizes = srv_undo->lists_init(recovery, rseg);
 
   rseg->curr_size = mtr->read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES) + 1 + sum_of_undo_sizes;
 
-  len = flst_get_len(rseg_header + TRX_RSEG_HISTORY, mtr);
+  auto len = flst_get_len(rseg_header + TRX_RSEG_HISTORY, mtr);
+
   if (len > 0) {
     trx_sys->rseg_history_len += len;
 
-    node_addr = trx_purge_get_log_from_hist(flst_get_last(rseg_header + TRX_RSEG_HISTORY, mtr));
+    auto node_addr = trx_purge_get_log_from_hist(flst_get_last(rseg_header + TRX_RSEG_HISTORY, mtr));
+
     rseg->last_page_no = node_addr.m_page_no;
     rseg->last_offset = node_addr.m_boffset;
 
-    undo_log_hdr = trx_undo_page_get(rseg->space, node_addr.m_page_no, mtr) + node_addr.m_boffset;
+    auto undo_log_hdr = srv_undo->page_get(rseg->space, node_addr.m_page_no, mtr) + node_addr.m_boffset;
 
     rseg->last_trx_no = mtr->read_uint64(undo_log_hdr + TRX_UNDO_TRX_NO);
     rseg->last_del_marks = mtr->read_ulint(undo_log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES);
@@ -189,7 +183,7 @@ static trx_rseg_t *trx_rseg_mem_create(
     rseg->last_page_no = FIL_NULL;
   }
 
-  return (rseg);
+  return rseg;
 }
 
 void trx_rseg_list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header, mtr_t *mtr) {
@@ -197,16 +191,16 @@ void trx_rseg_list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header
 
   trx_sys->rseg_history_len = 0;
 
-  for (ulint i = 0; i < TRX_SYS_N_RSEGS; i++) {
+  for (ulint i{}; i < TRX_SYS_N_RSEGS; ++i) {
 
-    auto page_no = trx_sysf_rseg_get_page_no(sys_header, i, mtr);
+    const auto page_no = trx_sysf_rseg_get_page_no(sys_header, i, mtr);
 
     if (page_no == FIL_NULL) {
 
       trx_sys_set_nth_rseg(trx_sys, i, nullptr);
 
     } else {
-      auto space = trx_sysf_rseg_get_space(sys_header, i, mtr);
+      const auto space = trx_sysf_rseg_get_space(sys_header, i, mtr);
 
       trx_rseg_mem_create(recovery, i, space, page_no, mtr);
     }
