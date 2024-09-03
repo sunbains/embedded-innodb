@@ -1130,7 +1130,6 @@ void InnoDB::modules_var_init() noexcept {
   trx_sys_var_init();
   rw_lock_var_init();
   que_var_init();
-  trx_purge_var_init();
   pars_var_init();
   os_proc_var_init();
   os_file_var_init();
@@ -2127,7 +2126,7 @@ loop:
     }
 
     srv_main_thread_op_info = "purging";
-    n_pages_purged = trx_purge();
+    n_pages_purged = trx_sys->m_purge->run();
 
     /* Flush logs if needed */
     srv_sync_log_buffer_in_background();
@@ -2213,7 +2212,7 @@ background_loop:
     }
 
     srv_main_thread_op_info = "purging";
-    n_pages_purged = trx_purge();
+    n_pages_purged = trx_sys->m_purge->run();
 
     /* Flush logs if needed */
     srv_sync_log_buffer_in_background();

@@ -284,26 +284,30 @@ void read_view_close_for_read_committed(trx_t *trx) {
   mutex_exit(&kernel_mutex);
 }
 
-void read_view_print(const read_view_t *view) {
+std::string to_string(const read_view_t *view) noexcept {
+  std::string str{};
+
   if (view->type == VIEW_HIGH_GRANULARITY) {
-    ib_logger(ib_stream, "High-granularity read view undo_n:o %lu %lu\n", (ulong)view->undo_no, (ulong)view->undo_no);
+    str = std::format("High-granularity read view undo_n:o {} {}\n", view->undo_no, view->undo_no);
   } else {
-    ib_logger(ib_stream, "Normal read view\n");
+    str = "Normal read view\n";
   }
 
-  ib_logger(ib_stream, "Read view low limit trx n:o %lu %lu\n", (ulong)view->low_limit_no, (ulong)view->low_limit_no);
+  str += std::format("Read view low limit trx n:o {} {}\n", view->low_limit_no, view->low_limit_no);
 
-  ib_logger(ib_stream, "Read view up limit trx id %lu\n", TRX_ID_PREP_PRINTF(view->up_limit_id));
+  str += std::format("Read view up limit trx id {}\n", view->up_limit_id);
 
-  ib_logger(ib_stream, "Read view low limit trx id %lu\n", TRX_ID_PREP_PRINTF(view->low_limit_id));
+  str += std::format("Read view low limit trx id {}\n", view->low_limit_id);
 
-  ib_logger(ib_stream, "Read view individually stored trx ids:\n");
+  str += "Read view individually stored trx ids:\n";
 
-  auto n_ids = view->n_trx_ids;
+  const auto n_ids = view->n_trx_ids;
 
-  for (ulint i = 0; i < n_ids; i++) {
-    ib_logger(ib_stream, "Read view trx id %lu\n", TRX_ID_PREP_PRINTF(read_view_get_nth_trx_id(view, i)));
+  for (ulint i{}; i < n_ids; ++i) {
+    str += std::format("Read view trx id {}\n", read_view_get_nth_trx_id(view, i));
   }
+
+  return str;
 }
 
 cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {

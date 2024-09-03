@@ -65,7 +65,7 @@ void read_view_close_for_read_committed(trx_t *trx);
 /** Prints a read view to stderr.
  * @param view read view
  */
-void read_view_print(const read_view_t *view);
+std::string to_string(const read_view_t *view) noexcept;
 
 /** Create a consistent cursor view to be used in cursors. In this
  * consistent read view modifications done by the creating transaction or future

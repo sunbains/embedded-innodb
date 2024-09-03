@@ -162,7 +162,7 @@ int main() {
 
   kernel_mutex_enter();
 
-  trx_sys = static_cast<trx_sys_t *>(mem_alloc(sizeof(trx_sys_t)));
+  trx_sys = static_cast<Trx_sys *>(mem_alloc(sizeof(Trx_sys)));
 
   UT_LIST_INIT(trx_sys->client_trx_list);
 

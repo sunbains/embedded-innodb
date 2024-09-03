@@ -540,7 +540,7 @@ static ulint row_purge(
 
   trx = thr_get_trx(thr);
 
-  node->undo_rec = trx_purge_fetch_next_rec(&roll_ptr, &(node->reservation), node->heap);
+  node->undo_rec = trx_sys->m_purge->fetch_next_rec(&roll_ptr, &node->reservation, node->heap);
   if (!node->undo_rec) {
     /* Purge completed for this query thread */
 
@@ -584,7 +584,7 @@ static ulint row_purge(
   }
 
   /* Do some cleanup */
-  trx_purge_rec_release(node->reservation);
+  trx_sys->m_purge->rec_release(node->reservation);
   mem_heap_empty(node->heap);
 
   thr->run_node = node;

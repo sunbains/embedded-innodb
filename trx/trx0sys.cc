@@ -46,7 +46,7 @@ struct file_format_t {
 };
 
 /** The transaction system */
-trx_sys_t *trx_sys = nullptr;
+Trx_sys *trx_sys = nullptr;
 
 /** The doublewrite buffer */
 trx_doublewrite_t *trx_doublewrite = nullptr;
@@ -569,7 +569,9 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
 
   mutex_enter(&kernel_mutex);
 
-  trx_sys = static_cast<trx_sys_t *>(mem_alloc(sizeof(trx_sys_t)));
+  auto ptr = static_cast<Trx_sys *>(mem_zalloc(sizeof(Trx_sys)));
+
+  trx_sys = new (ptr) Trx_sys();
 
   UT_LIST_INIT(trx_sys->client_trx_list);
 
@@ -631,7 +633,11 @@ void trx_sys_init_at_db_start(ib_recovery_t recovery) {
 
   UT_LIST_INIT(trx_sys->view_list);
 
-  trx_purge_sys_create();
+  {
+    ut_a(trx_sys->m_purge == nullptr);
+    auto ptr = ut_new(sizeof(Purge_sys));
+    trx_sys->m_purge = new (ptr) Purge_sys();
+  }
 
   mutex_exit(&kernel_mutex);
 
@@ -832,7 +838,8 @@ void trx_sys_close() {
   sess_close(trx_dummy_sess);
   trx_dummy_sess = nullptr;
 
-  trx_purge_sys_close();
+  call_destructor(trx_sys->m_purge);
+  ut_delete(trx_sys->m_purge);
 
   /* This is required only because it's a pre-condition for many
   of the functions that we need to call. */
@@ -881,9 +888,10 @@ void trx_sys_close() {
   ut_a(UT_LIST_GET_LEN(trx_sys->view_list) == 0);
   ut_a(UT_LIST_GET_LEN(trx_sys->client_trx_list) == 0);
 
+  call_destructor(trx_sys);
   mem_free(trx_sys);
-
   trx_sys = nullptr;
+
   mutex_exit(&kernel_mutex);
 }
 

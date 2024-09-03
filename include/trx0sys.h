@@ -148,7 +148,7 @@ page is updated */
 constexpr ulint TRX_SYS_TRX_ID_WRITE_MARGIN = 256;
 
 /** The transaction system */
-extern trx_sys_t *trx_sys;
+extern Trx_sys *trx_sys;
 
 /** The following is set to true when we are upgrading from pre-4.1
 format data files to the multiple tablespaces format data files */
@@ -207,13 +207,13 @@ ulint trx_sysf_rseg_find_free(mtr_t *mtr); /** in: mtr */
 /** Gets the pointer in the nth slot of the rseg array.
 @return	pointer to rseg object, NULL if slot not in use */
 inline trx_rseg_t *trx_sys_get_nth_rseg(
-  trx_sys_t *sys, /** in: trx system */
+  Trx_sys *sys, /** in: trx system */
   ulint n
 ); /** in: index of slot */
 
 /** Sets the pointer in the nth slot of the rseg array. */
 inline void trx_sys_set_nth_rseg(
-  trx_sys_t *sys, /** in: trx system */
+  Trx_sys *sys, /** in: trx system */
   ulint n,        /** in: index of slot */
   trx_rseg_t *rseg
 ); /** in: pointer to rseg object,
@@ -399,10 +399,13 @@ struct trx_doublewrite_t {
 
 /** The transaction system central memory data structure; protected by the
 kernel mutex */
-struct trx_sys_t {
+struct Trx_sys {
   /** The smallest number not yet assigned as a transaction
   id or transaction number */
   trx_id_t max_trx_id;
+
+  /** Purge system. */
+  Purge_sys *m_purge{};
 
   /** List of active and committed in memory transactions,
   sorted on trx id, biggest first */
@@ -469,7 +472,7 @@ inline bool trx_sys_hdr_page(space_id_t space, page_no_t page_no) {
  * 
  * @return	pointer to rseg object, NULL if slot not in use
  */
-inline trx_rseg_t *trx_sys_get_nth_rseg(trx_sys_t *sys, ulint n) {
+inline trx_rseg_t *trx_sys_get_nth_rseg(Trx_sys *sys, ulint n) {
   ut_ad(mutex_own(&(kernel_mutex)));
   ut_ad(n < TRX_SYS_N_RSEGS);
 
@@ -483,7 +486,7 @@ inline trx_rseg_t *trx_sys_get_nth_rseg(trx_sys_t *sys, ulint n) {
  * @param[in] n	Index of slot
  * @param[in] rseg	Pointer to rseg object, NULL if slot not in use
  */
-inline void trx_sys_set_nth_rseg(trx_sys_t *sys, ulint n, trx_rseg_t *rseg) {
+inline void trx_sys_set_nth_rseg(Trx_sys *sys, ulint n, trx_rseg_t *rseg) {
   ut_ad(n < TRX_SYS_N_RSEGS);
 
   sys->rseg_array[n] = rseg;

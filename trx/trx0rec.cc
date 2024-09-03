@@ -1127,7 +1127,7 @@ db_err trx_undo_get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, trx_undo_rec_
   ut_ad(rw_lock_own(&purge_sys->latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
-  if (!trx_purge_update_undo_must_exist(trx_id)) {
+  if (!trx_sys->m_purge->update_undo_must_exist(trx_id)) {
 
     /* It may be that the necessary undo log has already been
     deleted */
@@ -1291,7 +1291,8 @@ db_err trx_undo_prev_version_build(
       (ulong)roll_ptr
     );
 
-    trx_purge_sys_print();
+    log_info(trx_sys->m_purge->to_string());
+
     return DB_ERROR;
   }
 

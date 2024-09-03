@@ -3205,8 +3205,8 @@ bool lock_print_info_summary(ib_stream_t ib_stream, bool nowait) {
   ib_logger(
     ib_stream,
     "Purge done for trx's n:o < %lu undo n:o < %lu\n",
-    TRX_ID_PREP_PRINTF(purge_sys->purge_trx_no),
-    TRX_ID_PREP_PRINTF(purge_sys->purge_undo_no)
+    TRX_ID_PREP_PRINTF(trx_sys->m_purge->m_purge_trx_no),
+    TRX_ID_PREP_PRINTF(trx_sys->m_purge->m_purge_undo_no)
   );
 
   ib_logger(ib_stream, "History list length %lu\n", (ulong)trx_sys->rseg_history_len);

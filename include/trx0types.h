@@ -44,7 +44,7 @@ constexpr ulint TRX_ID_MAX_LEN  = 17;
 struct trx_t;
 
 /** Transaction system */
-struct trx_sys_t;
+struct Trx_sys;
 
 /** Doublewrite information */
 struct trx_doublewrite_t;
@@ -65,7 +65,7 @@ struct trx_undo_arr_t;
 struct trx_undo_inf_t;
 
 /** The control structure used in the purge operation */
-struct trx_purge_t;
+struct Purge_sys;
 
 /** Rollback command node in a query graph */
 struct roll_node_t;
