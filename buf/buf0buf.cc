@@ -1250,7 +1250,7 @@ void Buf_pool::page_init(space_id_t space, page_no_t page_no, buf_block_t *block
   ut_d(block->m_page.m_in_page_hash = true);
 
   auto result = m_page_hash->emplace(Page_id(space, page_no), &block->m_page);
-  ut_a(!result.second);
+  ut_a(result.second);
 }
 
 buf_page_t *Buf_pool::init_for_read(db_err *err, space_id_t space, page_no_t page_no, int64_t tablespace_version) {
