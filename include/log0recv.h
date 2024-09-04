@@ -27,6 +27,7 @@ Created 9/20/1997 Heikki Tuuri
 #include "innodb0types.h"
 
 #include "api0api.h"
+#include "buf0dblwr.h"
 #include "buf0types.h"
 #include "log0log.h"
 #include "srv0srv.h"
@@ -51,19 +52,21 @@ void recv_recover_page(bool just_read_in, buf_block_t *block) noexcept;
  * recv_recovery_from_checkpoint_finish should be called later to complete
  * the recovery and free the resources used in it.
  * 
- * @param[in] recovery             Recovery flag
- * @param[in] max_flushed_lsn      Max flushed lsn read from system.idb 
+ * @param[in,out] dblwr         Doublewrite buffer for recovering pages
+ * @param[in] recovery          Recovery flag
+ * @param[in] max_flushed_lsn   Max flushed lsn read from system.idb 
  * 
  * @return	error code or DB_SUCCESS
  */
-db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flushed_lsn) noexcept;
+db_err recv_recovery_from_checkpoint_start(DBLWR* dblwr, ib_recovery_t recovery, lsn_t max_flushed_lsn) noexcept;
 
 /**
  * Completes recovery from a checkpoint.
  * 
- * @param[in] recovery             Recovery flag
+ * @param[in,out] dblwr         Doublewrite buffer to use
+ * @param[in] recovery          Recovery flag
  */
-void recv_recovery_from_checkpoint_finish(ib_recovery_t recovery) noexcept;
+void recv_recovery_from_checkpoint_finish(DBLWR *dblwr, ib_recovery_t recovery) noexcept;
 
 /**
  * Initiates the rollback of active transactions.
@@ -90,12 +93,13 @@ void recv_sys_var_init() noexcept;
 /**
  * Empties the log record storage, applying them to appropriate pages.
  *
+ * @param[in,out] dblwr         The doublewrite buffer to use
  * @param[in] flush_and_free_pages If true the application all file pages
  * are flushed to disk and invalidated in buffer pool: this alternative
  * means that no new log records can be generated during the application;
  * the caller must in this case own the log mutex;
 */
-void recv_apply_log_recs(bool flush_and_free_pages) noexcept;
+void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept;
 
 /**
  * Block of log record data, variable size struct, see note.
@@ -218,7 +222,7 @@ struct Recv_sys {
   * @param body Pointer to the log record body.
   * @param rec_end Pointer to the end of the log record.
   * @param start_lsn The start LSN of the mtr.
-  *  @param end_lsn The end LSN of the mtr.
+  * @param end_lsn The end LSN of the mtr.
   */
   void add_log_record(mlog_type_t type, space_id_t space, page_no_t page_no, byte *body, byte *rec_end, lsn_t start_lsn, lsn_t end_lsn) noexcept;
 

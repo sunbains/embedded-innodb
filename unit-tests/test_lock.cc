@@ -162,9 +162,9 @@ int main() {
 
   kernel_mutex_enter();
 
-  trx_sys = static_cast<Trx_sys *>(mem_alloc(sizeof(Trx_sys)));
+  srv_trx_sys = static_cast<Trx_sys *>(mem_alloc(sizeof(Trx_sys)));
 
-  UT_LIST_INIT(trx_sys->client_trx_list);
+  UT_LIST_INIT(srv_trx_sys->m_client_trx_list);
 
   trx_dummy_sess = sess_open();
 
@@ -176,8 +176,8 @@ int main() {
   // Shutdown
   lock_sys_close();
 
-  mem_free(trx_sys);
-  trx_sys = nullptr;
+  mem_free(srv_trx_sys);
+  srv_trx_sys = nullptr;
 
   mutex_free(&kernel_mutex);
 

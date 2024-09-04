@@ -96,7 +96,7 @@ void trx_free_(trx_t *trx);
 void trx_free_for_background(trx_t *trx);
 
 /**
- * Creates trx objects for transactions and initializes the trx list of trx_sys at database start.
+ * Creates trx objects for transactions and initializes the trx list of srv_trx_sys at database start.
  * Rollback segment and undo log lists must already exist when this function is called,
  * because the lists of transactions to be rolled back or cleaned up are built based on the undo log lists.
  *

@@ -251,46 +251,6 @@ static ib_err_t ib_cfg_var_get_data_file_path(const struct ib_cfg_var *cfg_var, 
   return DB_UNSUPPORTED;
 }
 
-/** Set the value of the config variable "file_format".
- * 
- * @param cfg_var - in/out: configuration variable to manipulate, must be "file_format"
- * @param value - in: value to set, must point to char* variable
- * 
- * @return DB_SUCCESS if set successfully
- */
-static ib_err_t ib_cfg_var_set_file_format(struct ib_cfg_var *cfg_var, const void *value) {
-  ulint format_id;
-
-  ut_a(strcasecmp(cfg_var->name, "file_format") == 0);
-  ut_a(cfg_var->type == IB_CFG_TEXT);
-
-  format_id = trx_sys_file_format_name_to_id(*(char **)value);
-
-  if (format_id > DICT_TF_FORMAT_MAX) {
-    return (DB_INVALID_INPUT);
-  }
-
-  srv_file_format = format_id;
-
-  return (DB_SUCCESS);
-}
-
-/** Retrieve the value of the config variable "file_format".
- * 
- * @param cfg_var - in: configuration variable whose value to retrieve, must be "file_format"
- * @param value - out: place to store the retrieved value, must point to char* variable
- * 
- * @return DB_SUCCESS if retrieved successfully
- */
-static ib_err_t ib_cfg_var_get_file_format(const struct ib_cfg_var *cfg_var, void *value) {
-  ut_a(strcasecmp(cfg_var->name, "file_format") == 0);
-  ut_a(cfg_var->type == IB_CFG_TEXT);
-
-  *(const char **)value = trx_sys_file_format_id_to_name(srv_file_format);
-
-  return (DB_SUCCESS);
-}
-
 /* @} */
 
 /**
@@ -529,19 +489,6 @@ static const ib_cfg_var cfg_vars_defaults[] = {
    STRUCT_FLD(set, ib_cfg_var_set_generic),
    STRUCT_FLD(get, ib_cfg_var_get_generic),
    STRUCT_FLD(tank, &srv_use_doublewrite_buf)},
-
-  {STRUCT_FLD(name, "file_format"),
-   STRUCT_FLD(type, IB_CFG_TEXT),
-   STRUCT_FLD(flag, IB_CFG_FLAG_NONE),
-   STRUCT_FLD(min_val, 0),
-   STRUCT_FLD(max_val, 0),
-   STRUCT_FLD(
-     validate, nullptr /* validation is done inside
-				     ib_cfg_var_set_file_format */
-   ),
-   STRUCT_FLD(set, ib_cfg_var_set_file_format),
-   STRUCT_FLD(get, ib_cfg_var_get_file_format),
-   STRUCT_FLD(tank, nullptr)},
 
   {STRUCT_FLD(name, "file_io_threads"),
    STRUCT_FLD(type, IB_CFG_ULINT),

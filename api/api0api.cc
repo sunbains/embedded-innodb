@@ -624,35 +624,12 @@ ib_err_t ib_init() {
   return ib_err;
 }
 
-ib_err_t ib_startup(const char *format) {
-  ib_err_t err = DB_SUCCESS;
+ib_err_t ib_startup(const char *) {
 
   db_format.id = 0;
   db_format.name = nullptr;
 
-  /* Validate the file format if set by the user. */
-  if (format != nullptr) {
-    db_format.id = trx_sys_file_format_name_to_id(format);
-
-    /* Check if format name was found. */
-    if (db_format.id > DICT_TF_FORMAT_MAX) {
-      err = DB_UNSUPPORTED;
-
-      ib_logger(ib_stream, "format '%s' unknown.", format);
-    }
-  }
-
-  if (err == DB_SUCCESS) {
-
-    db_format.name = trx_sys_file_format_id_to_name(db_format.id);
-
-    /* Set the highest file format id supported. */
-    srv_file_format = db_format.id;
-
-    err = InnoDB::start();
-  }
-
-  return err;
+  return InnoDB::start();
 }
 
 ib_err_t ib_shutdown(ib_shutdown_t flag) {
@@ -1970,25 +1947,6 @@ ib_err_t ib_table_create(ib_trx_t ib_trx, const ib_tbl_sch_t ib_tbl_sch, ib_id_t
   }
 
   if (table != nullptr) {
-    /* We update the highest file format in the system
-    table space, if this table has a higher file format
-    setting. */
-
-    auto format_id = dict_table_get_format(table);
-
-    const char *format = nullptr;
-
-    trx_sys_file_format_max_upgrade(&format, format_id);
-
-    if (format != nullptr && format_id > db_format.id) {
-
-      db_format.name = trx_sys_file_format_id_to_name(format_id);
-
-      db_format.id = trx_sys_file_format_name_to_id(format);
-
-      ut_a(db_format.id <= DICT_TF_FORMAT_MAX);
-    }
-
     dict_table_decrement_handle_count(table, true);
   }
 

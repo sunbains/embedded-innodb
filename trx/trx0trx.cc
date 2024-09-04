@@ -164,7 +164,7 @@ trx_t *trx_allocate_for_client(void *arg) {
 
   trx_n_transactions++;
 
-  UT_LIST_ADD_FIRST(trx_sys->client_trx_list, trx);
+  UT_LIST_ADD_FIRST(srv_trx_sys->m_client_trx_list, trx);
 
   mutex_exit(&kernel_mutex);
 
@@ -249,7 +249,7 @@ static void trx_free(trx_t *&trx) {
 void trx_free_for_client(trx_t *&trx) {
   mutex_enter(&kernel_mutex);
 
-  UT_LIST_REMOVE(trx_sys->client_trx_list, trx);
+  UT_LIST_REMOVE(srv_trx_sys->m_client_trx_list, trx);
 
   trx_free(trx);
 
@@ -276,7 +276,7 @@ static void trx_list_insert_ordered(trx_t *trx) /*!< in: trx handle */
 {
   ut_ad(mutex_own(&kernel_mutex));
 
-  auto trx2 = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  auto trx2 = UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list);
 
   while (trx2 != nullptr) {
     if (trx->m_id >= trx2->m_id) {
@@ -291,24 +291,24 @@ static void trx_list_insert_ordered(trx_t *trx) /*!< in: trx handle */
     trx2 = UT_LIST_GET_PREV(trx_list, trx2);
 
     if (trx2 == nullptr) {
-      UT_LIST_ADD_FIRST(trx_sys->trx_list, trx);
+      UT_LIST_ADD_FIRST(srv_trx_sys->m_trx_list, trx);
     } else {
-      UT_LIST_INSERT_AFTER(trx_sys->trx_list, trx2, trx);
+      UT_LIST_INSERT_AFTER(srv_trx_sys->m_trx_list, trx2, trx);
     }
   } else {
-    UT_LIST_ADD_LAST(trx_sys->trx_list, trx);
+    UT_LIST_ADD_LAST(srv_trx_sys->m_trx_list, trx);
   }
 }
 
 void trx_lists_init_at_db_start(ib_recovery_t recovery) {
   ut_ad(mutex_own(&kernel_mutex));
 
-  UT_LIST_INIT(trx_sys->trx_list);
+  UT_LIST_INIT(srv_trx_sys->m_trx_list);
 
   /* Look from the rollback segments if there exist undo logs for
   transactions */
 
-  auto rseg = UT_LIST_GET_FIRST(trx_sys->rseg_list);
+  auto rseg = UT_LIST_GET_FIRST(srv_trx_sys->m_rseg_list);
 
   while (rseg != nullptr) {
     auto undo = UT_LIST_GET_FIRST(rseg->insert_undo_list);
@@ -376,9 +376,9 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
     undo = UT_LIST_GET_FIRST(rseg->update_undo_list);
 
     while (undo != nullptr) {
-      auto trx = trx_get_on_id(undo->m_trx_id);
+      auto trx = srv_trx_sys->get_on_id(undo->m_trx_id);
 
-      if (nullptr == trx) {
+      if (trx == nullptr) {
         trx = trx_create(trx_dummy_sess);
 
         trx->m_is_recovered = true;
@@ -449,7 +449,7 @@ void trx_lists_init_at_db_start(ib_recovery_t recovery) {
  * @return	assigned rollback segment id
 */
 inline ulint trx_assign_rseg() {
-  trx_rseg_t *rseg = trx_sys->latest_rseg;
+  trx_rseg_t *rseg = srv_trx_sys->m_latest_rseg;
 
   ut_ad(mutex_own(&kernel_mutex));
 
@@ -459,17 +459,17 @@ loop:
   rseg = UT_LIST_GET_NEXT(rseg_list, rseg);
 
   if (rseg == nullptr) {
-    rseg = UT_LIST_GET_FIRST(trx_sys->rseg_list);
+    rseg = UT_LIST_GET_FIRST(srv_trx_sys->m_rseg_list);
   }
 
   /* If it is the SYSTEM rollback segment, and there exist others, skip
   it */
 
-  if ((rseg->id == TRX_SYS_SYSTEM_RSEG_ID) && (UT_LIST_GET_LEN(trx_sys->rseg_list) > 1)) {
+  if ((rseg->id == TRX_SYS_SYSTEM_RSEG_ID) && (UT_LIST_GET_LEN(srv_trx_sys->m_rseg_list) > 1)) {
     goto loop;
   }
 
-  trx_sys->latest_rseg = rseg;
+  srv_trx_sys->m_latest_rseg = rseg;
 
   return rseg->id;
 }
@@ -496,9 +496,9 @@ bool trx_start_low(trx_t *trx, ulint rseg_id) {
     rseg_id = trx_assign_rseg();
   }
 
-  rseg = trx_sys_get_nth_rseg(trx_sys, rseg_id);
+  rseg = srv_trx_sys->get_nth_rseg(rseg_id);
 
-  trx->m_id = trx_sys_get_new_trx_id();
+  trx->m_id = srv_trx_sys->get_new_trx_id();
 
   /* The initial value for trx->no: LSN_MAX is used in read_view_open_now: */
 
@@ -514,7 +514,7 @@ bool trx_start_low(trx_t *trx, ulint rseg_id) {
   trx->m_must_flush_log_later = false;
 #endif /* WITH_XOPEN */
 
-  UT_LIST_ADD_FIRST(trx_sys->trx_list, trx);
+  UT_LIST_ADD_FIRST(srv_trx_sys->m_trx_list, trx);
 
   return true;
 }
@@ -574,7 +574,7 @@ void trx_commit_off_kernel(trx_t *trx) {
 
     if (undo) {
       mutex_enter(&kernel_mutex);
-      trx->m_no = trx_sys_get_new_trx_no();
+      trx->m_no = srv_trx_sys->get_new_trx_no();
 
       mutex_exit(&kernel_mutex);
 
@@ -746,7 +746,7 @@ void trx_commit_off_kernel(trx_t *trx) {
   ut_ad(UT_LIST_GET_LEN(trx->wait_thrs) == 0);
   ut_ad(UT_LIST_GET_LEN(trx->trx_locks) == 0);
 
-  UT_LIST_REMOVE(trx_sys->trx_list, trx);
+  UT_LIST_REMOVE(srv_trx_sys->m_trx_list, trx);
 }
 
 void trx_cleanup_at_db_startup(trx_t *trx) {
@@ -760,7 +760,7 @@ void trx_cleanup_at_db_startup(trx_t *trx) {
   trx->undo_no = 0;
   trx->last_sql_stat_start.least_undo_no = 0;
 
-  UT_LIST_REMOVE(trx_sys->trx_list, trx);
+  UT_LIST_REMOVE(srv_trx_sys->m_trx_list, trx);
 }
 
 read_view_t *trx_assign_read_view(trx_t *trx) {
@@ -1454,7 +1454,7 @@ int trx_recover(XID *xid_list, ulint len) {
 
   mutex_enter(&kernel_mutex);
 
-  auto trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  auto trx = UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list);
 
   while (trx != nullptr) {
     if (trx->m_conc_state == TRX_PREPARED) {
@@ -1541,7 +1541,7 @@ trx_t *trx_get_trx_by_xid(XID *xid) {
 
   mutex_enter(&kernel_mutex);
 
-  auto trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  auto trx = UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list);
 
   while (trx != nullptr) {
     /* Compare two X/Open XA transaction id's: their

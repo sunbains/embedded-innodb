@@ -1369,7 +1369,7 @@ buf_block_t *Buf_pool::create(space_id_t space, page_no_t page_no, mtr_t *mtr) {
   such can exist if the page belonged to an index which was dropped */
 
   /* Flush pages from the end of the LRU list if necessary */
-  m_flusher->free_margin();
+  m_flusher->free_margin(srv_dblwr);
 
   auto frame = block->m_frame;
 
@@ -1412,7 +1412,7 @@ void Buf_pool::io_complete(buf_page_t *bpage) {
     auto read_page_no = mach_read_from_4(frame + FIL_PAGE_OFFSET);
     auto read_space_id = mach_read_from_4(frame + FIL_PAGE_SPACE_ID);
 
-    if (bpage->m_space == TRX_SYS_SPACE && trx_doublewrite_page_inside(bpage->m_page_no)) {
+    if (bpage->m_space == TRX_SYS_SPACE && srv_dblwr->is_page_inside(bpage->m_page_no)) {
 
       ut_print_timestamp(ib_stream);
       ib_logger(

@@ -2176,7 +2176,7 @@ que_thr_t *row_ins_step(que_thr_t *thr) {
   operation, and there is no need to set it again here. But we
   must write trx->id to node->trx_id. */
 
-  trx_write_trx_id(node->trx_id_buf, trx->m_id);
+  srv_trx_sys->write_trx_id(node->trx_id_buf, trx->m_id);
 
   if (node->state == INS_NODE_SET_IX_LOCK) {
 

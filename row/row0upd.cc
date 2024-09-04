@@ -291,7 +291,7 @@ void row_upd_rec_sys_fields_in_recovery(rec_t *rec, const ulint *offsets, ulint 
 
   static_assert(DATA_TRX_ID + 1 == DATA_ROLL_PTR, "error DATA_TRX_ID + 1 != DATA_ROLL_PTR");
 
-  trx_write_trx_id(field, trx_id);
+  srv_trx_sys->write_trx_id(field, trx_id);
   trx_write_roll_ptr(field + DATA_TRX_ID_LEN, roll_ptr);
 }
 
@@ -304,7 +304,7 @@ void row_upd_index_entry_sys_field(const dtuple_t *entry, dict_index_t *index, u
   auto field = dfield_get_data(dfield);
 
   if (type == DATA_TRX_ID) {
-    trx_write_trx_id((byte *)field, val);
+    srv_trx_sys->write_trx_id(reinterpret_cast<byte *>(field), val);
   } else {
     ut_ad(type == DATA_ROLL_PTR);
     trx_write_roll_ptr((byte *)field, val);

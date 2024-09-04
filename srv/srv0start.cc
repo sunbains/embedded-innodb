@@ -43,6 +43,7 @@ Created 2/16/1996 Heikki Tuuri
 #include "btr0pcur.h"
 
 #include "buf0buf.h"
+#include "buf0dblwr.h"
 #include "buf0flu.h"
 #include "buf0rea.h"
 #include "data0data.h"
@@ -641,8 +642,6 @@ ib_err_t InnoDB::start() noexcept {
     log_sys->release();
   }
 
-  trx_sys_file_format_init();
-
   if (create_new_db) {
     mtr_t mtr;
 
@@ -652,35 +651,92 @@ ib_err_t InnoDB::start() noexcept {
 
     mtr.commit();
 
-    trx_sys_create(srv_force_recovery);
+    ut_a(srv_trx_sys == nullptr);
+    srv_trx_sys = Trx_sys::create(srv_fsp);
+
+    err = srv_trx_sys->create_system_tablespace();
+
+    if (err == DB_SUCCESS) {
+      err = srv_trx_sys->start(srv_force_recovery);
+    }
+
+    if (err != DB_SUCCESS) {
+      srv_startup_abort(err);
+      return DB_ERROR;
+    }
 
     dict_create();
 
     srv_startup_is_before_trx_rollback_phase = false;
 
+    /* Create the doublewrite buffer for the system tablespace */
+    {
+      ut_a(srv_dblwr == nullptr);
+      srv_dblwr = DBLWR::create(srv_fsp);
+
+      if (srv_dblwr == nullptr) {
+        srv_startup_abort(DB_OUT_OF_MEMORY);
+        return DB_ERROR;
+      }
+
+      err = srv_dblwr->initialize();
+
+      if (err != DB_SUCCESS) {
+        srv_startup_abort(err);
+        return DB_ERROR;
+      }
+
+      /* Flush the modified pages to disk and make a checkpoint */
+      log_sys->make_checkpoint_at(IB_UINT64_T_MAX, true);
+    }
+
   } else {
-
-    /* Check if we support the max format that is stamped on the system tablespace.
-
-    Note:  We are NOT allowed to make any modifications to the TRX_SYS_PAGE_NO page
-    before recovery  because this page also contains the max_trx_id etc. important system
-    variables that are required for recovery. We need to ensure that we return the
-    system to a state where normal recovery is guaranteed to work. We do this by
-    invalidating the buffer cache, this will force the reread of the page and
-    restoration to its last known consistent state, this is REQUIRED for the recovery
-    process to work. */
-
-    err = trx_sys_file_format_max_check(srv_check_file_format_at_startup);
 
     if (err != DB_SUCCESS) {
       srv_startup_abort(err);
-      return err;
+      return DB_ERROR;
+    }
+
+    /* Setup the doublewrite buffer, open and restore. */
+    ut_a(srv_dblwr == nullptr);
+    srv_dblwr = DBLWR::create(srv_fsp);
+
+    if (srv_dblwr == nullptr) {
+      srv_startup_abort(DB_ERROR);
+      return DB_ERROR;
+    }
+
+    std::pair<page_no_t, page_no_t> offsets{};
+
+    if (!DBLWR::check_if_exists(srv_fil, offsets)) {
+      err = srv_dblwr->initialize();
+
+      if (err != DB_SUCCESS) {
+        srv_startup_abort(err);
+        return DB_ERROR;
+      }
+    } else {
+      srv_dblwr->m_block1 = offsets.first;
+      srv_dblwr->m_block2 = offsets.second;
+    }
+
+    log_warn("Reading tablespace information from the .ibd files...");
+
+    /* Recursively scan to a depth of 2. InnoDB needs to do this because the DD
+    can't be accessed until recovery is done. So we have this simplistic scheme. */
+    srv_fil->load_single_table_tablespaces(srv_data_home, srv_force_recovery, 2);
+
+    /* We always instantiate the DBLWR buffer. Restore the pages in data files,
+     * and restore them from the doublewrite buffer if possible */
+    if (srv_force_recovery < IB_RECOVERY_NO_LOG_REDO) {
+      log_warn("Restoring possible half-written data pages from the doublewrite buffer...");
+      srv_dblwr->recover_pages();
     }
 
     /* We always try to do a recovery, even if the database had
     been shut down normally: this is the normal startup path */
 
-    err = recv_recovery_from_checkpoint_start(srv_force_recovery, max_flushed_lsn);
+    err = recv_recovery_from_checkpoint_start(srv_dblwr, srv_force_recovery, max_flushed_lsn);
 
     if (err != DB_SUCCESS) {
       srv_startup_abort(err);
@@ -692,7 +748,10 @@ ib_err_t InnoDB::start() noexcept {
 
     dict_boot();
 
-    trx_sys_init_at_db_start(srv_force_recovery);
+    ut_a(srv_trx_sys == nullptr);
+    srv_trx_sys = Trx_sys::create(srv_fsp);
+
+    err = srv_trx_sys->start(srv_force_recovery);
 
     {
       auto free_limit = srv_fsp->init_system_space_free_limit();
@@ -704,7 +763,7 @@ ib_err_t InnoDB::start() noexcept {
     /* recv_recovery_from_checkpoint_finish needs trx lists which
     are initialized in trx_sys_init_at_db_start(). */
 
-    recv_recovery_from_checkpoint_finish(srv_force_recovery);
+    recv_recovery_from_checkpoint_finish(srv_dblwr, srv_force_recovery);
 
     if (srv_force_recovery <= IB_RECOVERY_NO_TRX_UNDO) {
       /* In a crash recovery, we check that the info in data
@@ -722,14 +781,8 @@ ib_err_t InnoDB::start() noexcept {
     }
 
     srv_startup_is_before_trx_rollback_phase = false;
-    recv_recovery_rollback_active();
 
-    /* It is possible that file_format tag has never
-    been set. In this case we initialize it to minimum
-    value.  Important to note that we can do it ONLY after
-    we have finished the recovery process so that the
-    image of TRX_SYS_PAGE_NO is not stale. */
-    trx_sys_file_format_tag_init();
+    recv_recovery_rollback_active();
   }
 
   log_info("Max allowed record size ", page_get_free_space_of_empty() / 2);
@@ -745,15 +798,8 @@ ib_err_t InnoDB::start() noexcept {
 
   srv_is_being_started = false;
 
-  if (trx_doublewrite == nullptr) {
-    /* Create the doublewrite buffer to a new tablespace */
-
-    err = trx_sys_create_doublewrite_buf();
-  }
-
-  if (err == DB_SUCCESS) {
-    err = dict_create_or_check_foreign_constraint_tables();
-  }
+  ut_a(err == DB_SUCCESS);
+  err = dict_create_or_check_foreign_constraint_tables();
 
   if (err != DB_SUCCESS) {
     srv_startup_abort(err);
@@ -867,7 +913,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
     committed or prepared transactions and we don't want to lose them. */
 
     if (trx_n_transactions > 0 ||
-        (trx_sys != nullptr && UT_LIST_GET_LEN(trx_sys->trx_list) > 0)) {
+        (srv_trx_sys != nullptr && UT_LIST_GET_LEN(srv_trx_sys->m_trx_list) > 0)) {
 
       mutex_exit(&kernel_mutex);
 
@@ -1023,8 +1069,8 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
   log_sys->shutdown();
 
   lock_sys_close();
-  trx_sys_file_format_close();
-  trx_sys_close();
+
+  Trx_sys::destroy(srv_trx_sys);
 
   /* Must be called before Buf_pool::close(). */
   dict_close();

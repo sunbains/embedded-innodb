@@ -1069,7 +1069,7 @@ void Undo::update_cleanup(trx_t *trx, page_t *undo_page, mtr_t *mtr) noexcept {
 
   ut_ad(mutex_own(&rseg->mutex));
 
-  trx_sys->m_purge->add_update_undo_to_history(trx, undo_page, mtr);
+  srv_trx_sys->m_purge->add_update_undo_to_history(trx, undo_page, mtr);
 
   UT_LIST_REMOVE(rseg->update_undo_list, undo);
 

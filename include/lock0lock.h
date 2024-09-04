@@ -680,41 +680,50 @@ inline ulint lock_rec_hash(
   return (hash_calc_hash(lock_rec_fold(space, page_no), lock_sys->rec_hash));
 }
 
-/** Checks if some transaction has an implicit x-lock on a record in a clustered
-index.
-@return	transaction which has the x-lock, or NULL */
-inline trx_t *lock_clust_rec_some_has_impl(
-  const rec_t *rec,         /*!< in: user record */
-  dict_index_t *dict_index, /*!< in: clustered index */
-  const ulint *offsets
-) /*!< in: Phy_rec::get_col_offsets(rec, index) */
-{
-  trx_id_t trx_id;
-
+/**
+ * @brief Checks if some transaction has an implicit x-lock on a record in a clustered index.
+ *
+ * This function checks if there is an active transaction that holds an implicit
+ * exclusive lock on the given record in a clustered index.
+ *
+ * @param[in] rec The user record to check
+ * @param[in] dict_index The clustered index containing the record
+ * @param[in] offsets The column offsets for the record, obtained from Phy_rec::get_col_offsets(rec, index)
+ *
+ * @return A pointer to the transaction that holds the implicit x-lock, or NULL if no such transaction exists
+ *
+ * @note This function assumes that the kernel mutex is held by the caller.
+ * @note The index must be a clustered index.
+ * @note The record must be a user record (not a supremum/infinimum record).
+ */
+inline const trx_t *lock_clust_rec_some_has_impl(const rec_t *rec, dict_index_t *dict_index, const ulint *offsets) {
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(dict_index_is_clust(dict_index));
   ut_ad(page_rec_is_user_rec(rec));
 
-  trx_id = row_get_rec_trx_id(rec, dict_index, offsets);
+  auto trx_id = row_get_rec_trx_id(rec, dict_index, offsets);
 
-  if (trx_is_active(trx_id)) {
+  if (srv_trx_sys->is_active(trx_id)) {
     /* The modifying or inserting transaction is active */
 
-    return (trx_get_on_id(trx_id));
+    return srv_trx_sys->get_on_id(trx_id);
+  } else {
+    return nullptr;
   }
-
-  return (nullptr);
 }
 
-/** Gets the heap_no of the smallest user record on a page.
-@return	heap_no of smallest user record, or PAGE_HEAP_NO_SUPREMUM */
-inline ulint lock_get_min_heap_no(const buf_block_t *block) /*!< in: buffer block */
-{
+/**
+ * Gets the heap_no of the smallest user record on a page.
+ * 
+ * @param[in] block buffer block
+ * 
+ * @return	heap_no of smallest user record, or PAGE_HEAP_NO_SUPREMUM
+ */
+inline ulint lock_get_min_heap_no(const buf_block_t *block) {
   const page_t *page = block->m_frame;
 
   return rec_get_heap_no(page + rec_get_next_offs(page + PAGE_INFIMUM));
 }
-
 
 #ifdef UNIT_TESTING
 /** Creates a new record lock and inserts it to the lock queue. Does NOT check

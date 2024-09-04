@@ -182,8 +182,8 @@ void Purge_sys::free_segment(trx_rseg_t *rseg, fil_addr_t hdr_addr, ulint n_remo
 
   mutex_enter(&kernel_mutex);
 
-  ut_ad(trx_sys->rseg_history_len >= n_removed_logs);
-  trx_sys->rseg_history_len -= n_removed_logs;
+  ut_ad(srv_trx_sys->m_rseg_history_len >= n_removed_logs);
+  srv_trx_sys->m_rseg_history_len -= n_removed_logs;
 
   mutex_exit(&kernel_mutex);
 
@@ -244,8 +244,8 @@ void Purge_sys::truncate_rseg_history(trx_rseg_t *rseg, trx_id_t limit_trx_no, u
     if (cmp >= 0) {
       mutex_enter(&kernel_mutex);
 
-      ut_a(trx_sys->rseg_history_len >= n_removed_logs);
-      trx_sys->rseg_history_len -= n_removed_logs;
+      ut_a(srv_trx_sys->m_rseg_history_len >= n_removed_logs);
+      srv_trx_sys->m_rseg_history_len -= n_removed_logs;
 
       mutex_exit(&kernel_mutex);
 
@@ -317,7 +317,7 @@ void Purge_sys::truncate_history() noexcept {
 
   ut_ad(limit_trx_no <= m_view->low_limit_no);
 
-  for (auto rseg : trx_sys->rseg_list) {
+  for (auto rseg : srv_trx_sys->m_rseg_list) {
     truncate_rseg_history(rseg, limit_trx_no, limit_undo_no);
   }
 }
@@ -382,11 +382,11 @@ void Purge_sys::rseg_get_next_history_log(trx_rseg_t *rseg) noexcept {
     size pieces, and if we here reach the head of the list, the
     list cannot be longer than 20 000 undo logs now. */
 
-    if (trx_sys->rseg_history_len > 20000) {
+    if (srv_trx_sys->m_rseg_history_len > 20000) {
         log_warn(std::format(
           "Purge reached the head of the history list, but its length is still"
           " reported as {}! Please submit a detailed bug report.",
-          trx_sys->rseg_history_len
+          srv_trx_sys->m_rseg_history_len
         ));
     }
 
@@ -433,7 +433,7 @@ void Purge_sys::choose_next_log() noexcept {
   trx_rseg_t *min_rseg{};
   auto min_trx_no = LSN_MAX;
 
-  for (auto rseg : trx_sys->rseg_list) {
+  for (auto rseg : srv_trx_sys->m_rseg_list) {
     mutex_enter(&rseg->mutex);
 
     if (rseg->last_page_no != FIL_NULL) {
@@ -696,7 +696,7 @@ void Purge_sys::add_update_undo_to_history(trx_t *trx, page_t *undo_page, mtr_t 
   flst_add_first(rseg_header + TRX_RSEG_HISTORY, undo_header + TRX_UNDO_HISTORY_NODE, mtr);
 
   mutex_enter(&kernel_mutex);
-  ++trx_sys->rseg_history_len;
+  ++srv_trx_sys->m_rseg_history_len;
   mutex_exit(&kernel_mutex);
 
   /* Write the trx number to the undo log header */
@@ -759,8 +759,8 @@ ulint Purge_sys::run() noexcept {
   /* If we cannot advance the 'purge view' because of an old
   'consistent read view', then the DML statements cannot be delayed.
   Also, srv_max_purge_lag <= 0 means 'infinity'. */
-  if (srv_max_purge_lag > 0 && !UT_LIST_GET_LAST(trx_sys->view_list)) {
-    float ratio = (float)trx_sys->rseg_history_len / srv_max_purge_lag;
+  if (srv_max_purge_lag > 0 && !UT_LIST_GET_LAST(srv_trx_sys->m_view_list)) {
+    float ratio = (float)srv_trx_sys->m_rseg_history_len / srv_max_purge_lag;
     if (ratio > (float)ULINT_MAX / 10000) {
       /* Avoid overflow: maximum delay is 4295 seconds */
       srv_dml_needed_delay = ULINT_MAX;

@@ -57,7 +57,7 @@ struct read_view_t {
   /** trx id of creating transaction, or 0 used in purge */
   trx_id_t creator_trx_id;
 
-  /** List of read views in trx_sys */
+  /** List of read views in srv_trx_sys */
   UT_LIST_NODE_T(read_view_t) view_list;
 };
 

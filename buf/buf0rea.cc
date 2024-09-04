@@ -73,10 +73,7 @@ static db_err buf_read_page(
   ut_a(io_request == IO_request::Async_read ||
        io_request == IO_request::Sync_read);
 
-  if (trx_doublewrite &&
-      space == TRX_SYS_SPACE &&
-      ((page_no >= trx_doublewrite->block1 && page_no < trx_doublewrite->block1 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) ||
-       (page_no >= trx_doublewrite->block2 && page_no < trx_doublewrite->block2 + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE))) {
+  if (srv_dblwr != nullptr && space == TRX_SYS_SPACE && srv_dblwr->is_page_inside(page_no)) {
 
     log_warn(std::format("Trying to read the doublewrite buffer page {}", page_no));
 
@@ -142,7 +139,7 @@ bool buf_read_page(ulint space, ulint offset) {
   }
 
   /* Flush pages from the end of the LRU list if necessary */
-  srv_buf_pool->m_flusher->free_margin();
+  srv_buf_pool->m_flusher->free_margin(srv_dblwr);
 
   /* Increment number of I/O operations used for LRU policy. */
   srv_buf_pool->m_LRU->stat_inc_io();
@@ -154,8 +151,8 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   buf_page_t *bpage;
   buf_frame_t *frame;
   buf_page_t *pred_bpage = nullptr;
-  ulint pred_offset;
-  ulint succ_offset;
+  page_no_t pred_offset;
+  page_no_t succ_offset;
   ulint count;
   int asc_or_desc;
   ulint new_offset;
@@ -179,7 +176,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
     return 0;
   }
 
-  if (trx_sys_hdr_page(space, offset)) {
+  if (Trx_sys::is_hdr_page(space, offset)) {
     /* Don't do a read-ahead in the system area. Being cautious. */
     return 0;
   }
@@ -341,7 +338,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   }
 
   /* Flush pages from the end of the LRU list if necessary */
-  srv_buf_pool->m_flusher->free_margin();
+  srv_buf_pool->m_flusher->free_margin(srv_dblwr);
 
   /* Read ahead is considered one I/O operation for the purpose of LRU policy decision. */
   srv_buf_pool->m_LRU->stat_inc_io();
@@ -388,5 +385,5 @@ void buf_read_recv_pages(bool sync, space_id_t space, const page_no_t *page_nos,
   }
 
   /* Flush pages from the end of the LRU list if necessary */
-  srv_buf_pool->m_flusher->free_margin();
+  srv_buf_pool->m_flusher->free_margin(srv_dblwr);
 }

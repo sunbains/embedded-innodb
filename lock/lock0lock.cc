@@ -428,7 +428,7 @@ bool lock_check_trx_id_sanity(trx_id_t trx_id, const rec_t *rec, dict_index_t *i
   /* A sanity check: the trx_id in rec must be smaller than the global
   trx id counter */
 
-  if (trx_id >= trx_sys->max_trx_id) {
+  if (trx_id >= srv_trx_sys->m_max_trx_id) {
     log_err("Transaction id associated" " with record");
     rec_print(rec);
     log_info("in ");
@@ -436,8 +436,8 @@ bool lock_check_trx_id_sanity(trx_id_t trx_id, const rec_t *rec, dict_index_t *i
     log_err(std::format(
       "\nis {} which is higher than the global trx id counter {}"
       " The table is corrupt. You have to do dump + drop + reimport.",
-      TRX_ID_PREP_PRINTF(trx_id),
-      TRX_ID_PREP_PRINTF(trx_sys->max_trx_id)
+      trx_id,
+      srv_trx_sys->m_max_trx_id
     ));
 
     is_ok = false;
@@ -1026,7 +1026,7 @@ to precise_mode.
 @param[in] heap_no,             Heap number of the record
 @param[in] trx                  Transaction
 @return	lock or nullptr */
-inline Lock *lock_rec_has_expl(ulint precise_mode, const buf_block_t *block, ulint heap_no, trx_t *trx) {
+inline Lock *lock_rec_has_expl(ulint precise_mode, const buf_block_t *block, ulint heap_no, const trx_t *trx) {
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad((precise_mode & LOCK_MODE_MASK) == LOCK_S || (precise_mode & LOCK_MODE_MASK) == LOCK_X);
   ut_ad(!(precise_mode & LOCK_INSERT_INTENTION));
@@ -1176,7 +1176,7 @@ static trx_t *lock_sec_rec_some_has_impl_off_kernel(const rec_t *rec, dict_index
   max trx id to the log, and therefore during recovery, this value
   for a page may be incorrect. */
 
-  if (page_get_max_trx_id(page) < trx_list_get_min_trx_id() && !recv_recovery_on) {
+  if (page_get_max_trx_id(page) < srv_trx_sys->get_min_trx_id() && !recv_recovery_on) {
 
     return nullptr;
   }
@@ -1281,21 +1281,17 @@ static Lock *lock_rec_create(
   const buf_block_t *block,
   ulint heap_no,
   dict_index_t *index,
-  trx_t *trx) {
-  const page_t *page;
-  ulint space;
-  ulint n_bits;
-  ulint page_no;
+  const trx_t *trx) {
 
   ut_ad(mutex_own(&kernel_mutex));
 
-  space = block->get_space();
-  page_no = block->get_page_no();
-  page = block->m_frame;
+  auto space = block->get_space();
+  auto page_no = block->get_page_no();
+  auto page = block->m_frame;
 
-  n_bits = page_dir_get_n_heap(page);
+  auto n_bits = page_dir_get_n_heap(page);
 
-  return (lock_rec_create_low(type_mode, space, page_no, heap_no, n_bits, index, trx));
+  return lock_rec_create_low(type_mode, space, page_no, heap_no, n_bits, index, const_cast<trx_t*>(trx));
 }
 
 /** Enqueues a waiting request for a lock which cannot be granted immediately.
@@ -1398,7 +1394,7 @@ which does NOT check for deadlocks or lock compatibility!
 @param[in] index                Index of record
 @param[in] trx                  Ttransaction
 @return	lock where the bit was set */
-static Lock *lock_rec_add_to_queue(ulint type_mode, const buf_block_t *block, ulint heap_no, dict_index_t *index, trx_t *trx) {
+static Lock *lock_rec_add_to_queue(ulint type_mode, const buf_block_t *block, ulint heap_no, dict_index_t *index, const trx_t *trx) {
   Lock *lock;
 
   ut_ad(mutex_own(&kernel_mutex));
@@ -2317,7 +2313,7 @@ retry:
   does not produce a cycle. First mark all active transactions
   with 0: */
 
-  mark_trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  mark_trx = UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list);
 
   while (mark_trx) {
     mark_trx->m_deadlock_mark = 0;
@@ -3200,20 +3196,21 @@ bool lock_print_info_summary(ib_stream_t ib_stream, bool nowait) {
     "------------\n"
   );
 
-  ib_logger(ib_stream, "Trx id counter %lu\n", TRX_ID_PREP_PRINTF(trx_sys->max_trx_id));
+  ib_logger(ib_stream, "Trx id counter %lu\n", srv_trx_sys->m_max_trx_id);
 
   ib_logger(
     ib_stream,
     "Purge done for trx's n:o < %lu undo n:o < %lu\n",
-    TRX_ID_PREP_PRINTF(trx_sys->m_purge->m_purge_trx_no),
-    TRX_ID_PREP_PRINTF(trx_sys->m_purge->m_purge_undo_no)
+    TRX_ID_PREP_PRINTF(srv_trx_sys->m_purge->m_purge_trx_no),
+    TRX_ID_PREP_PRINTF(srv_trx_sys->m_purge->m_purge_undo_no)
   );
 
-  ib_logger(ib_stream, "History list length %lu\n", (ulong)trx_sys->rseg_history_len);
+  ib_logger(ib_stream, "History list length %lu\n", (ulong)srv_trx_sys->m_rseg_history_len);
 
 #ifdef PRINT_NUM_OF_LOCK_STRUCTS
   ib_logger(ib_stream, "Total number of lock structs in row lock hash table %lu\n", (ulong)lock_get_n_rec_locks());
 #endif /* PRINT_NUM_OF_LOCK_STRUCTS */
+
   return true;
 }
 
@@ -3230,19 +3227,15 @@ void lock_print_info_all_transactions(ib_stream_t ib_stream) {
 
   /* First print info on non-active transactions */
 
-  trx = UT_LIST_GET_FIRST(trx_sys->client_trx_list);
-
-  while (trx) {
+  for (auto trx : srv_trx_sys->m_client_trx_list) {
     if (trx->m_conc_state == TRX_NOT_STARTED) {
       ib_logger(ib_stream, "---");
       trx_print(ib_stream, trx, 600);
     }
-
-    trx = UT_LIST_GET_NEXT(client_trx_list, trx);
   }
 
 loop:
-  trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  trx = UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list);
 
   i = 0;
 
@@ -3251,9 +3244,9 @@ loop:
   obsolete now and we must loop through the trx list to
   get probably the same trx, or some other trx. */
 
-  while (trx && (i < nth_trx)) {
+  while (trx != nullptr && i < nth_trx) {
     trx = UT_LIST_GET_NEXT(trx_list, trx);
-    i++;
+    ++i;
   }
 
   if (trx == nullptr) {
@@ -3446,7 +3439,7 @@ static bool lock_rec_queue_validate(const buf_block_t *block, const rec_t *rec, 
           ut_error;
       }
 
-      ut_a(trx_in_trx_list(lock->trx));
+      ut_a(srv_trx_sys->in_trx_list(lock->trx));
 
       if (lock_get_wait(lock)) {
         ut_a(lock_rec_has_to_wait_in_queue(lock));
@@ -3468,7 +3461,7 @@ static bool lock_rec_queue_validate(const buf_block_t *block, const rec_t *rec, 
 
     auto impl_trx = lock_clust_rec_some_has_impl(rec, index, offsets);
 
-    if (impl_trx && lock_rec_other_has_expl_req(LOCK_S, 0, LOCK_WAIT, block, heap_no, impl_trx)) {
+    if (impl_trx != nullptr && lock_rec_other_has_expl_req(LOCK_S, 0, LOCK_WAIT, block, heap_no, impl_trx)) {
 
       ut_a(lock_rec_has_expl(LOCK_X | LOCK_REC_NOT_GAP, block, heap_no, impl_trx));
     }
@@ -3482,9 +3475,9 @@ static bool lock_rec_queue_validate(const buf_block_t *block, const rec_t *rec, 
       lock->trx->m_conc_state == TRX_COMMITTED_IN_MEMORY
     );
 
-    ut_a(trx_in_trx_list(lock->trx));
+    ut_a(srv_trx_sys->in_trx_list(lock->trx));
 
-    if (index) {
+    if (index != nullptr) {
       ut_a(lock->index == index);
     }
 
@@ -3548,7 +3541,7 @@ static bool lock_rec_validate_page(space_id_t space, page_no_t page_no) {
 loop:
   lock = lock_rec_get_first_on_page_addr(space, page_no);
 
-  if (!lock) {
+  if (lock == nullptr) {
     goto function_exit;
   }
 
@@ -3561,7 +3554,8 @@ loop:
     }
   }
 
-  ut_a(trx_in_trx_list(lock->trx));
+  ut_a(srv_trx_sys->in_trx_list(lock->trx));
+
   ut_a(
     lock->trx->m_conc_state == TRX_ACTIVE || lock->trx->m_conc_state == TRX_PREPARED || lock->trx->m_conc_state == TRX_COMMITTED_IN_MEMORY
   );
@@ -3626,7 +3620,6 @@ function_exit:
 @return	true if ok */
 static bool lock_validate() {
   Lock *lock;
-  trx_t *trx;
   uint64_t limit;
   ulint space;
   ulint page_no;
@@ -3634,12 +3627,12 @@ static bool lock_validate() {
 
   lock_mutex_enter_kernel();
 
-  trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  auto trx = UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list);
 
-  while (trx) {
+  while (trx != nullptr) {
     lock = UT_LIST_GET_FIRST(trx->trx_locks);
 
-    while (lock) {
+    while (lock != nullptr) {
       if (lock_get_type_low(lock) & LOCK_TABLE) {
 
         lock_table_queue_validate(lock->un_member.tab_lock.table);
@@ -3658,8 +3651,8 @@ static bool lock_validate() {
     for (;;) {
       lock = (Lock *)HASH_GET_FIRST(lock_sys->rec_hash, i);
 
-      while (lock) {
-        ut_a(trx_in_trx_list(lock->trx));
+      while (lock != nullptr) {
+        ut_a(srv_trx_sys->in_trx_list(lock->trx));
 
         space = lock->un_member.rec_lock.space;
         page_no = lock->un_member.rec_lock.page_no;
@@ -3804,11 +3797,11 @@ static void lock_rec_convert_impl_to_expl(
   const ulint *offsets
 ) /*!< in: Phy_rec::get_col_offsets(rec, index) */
 {
-  trx_t *impl_trx;
-
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
+
+  const trx_t *impl_trx;
 
   if (dict_index_is_clust(index)) {
     impl_trx = lock_clust_rec_some_has_impl(rec, index, offsets);
@@ -3816,7 +3809,7 @@ static void lock_rec_convert_impl_to_expl(
     impl_trx = lock_sec_rec_some_has_impl_off_kernel(rec, index, offsets);
   }
 
-  if (impl_trx) {
+  if (impl_trx != nullptr) {
     ulint heap_no = page_rec_get_heap_no(rec);
 
     /* If the transaction has no explicit x-lock set on the
@@ -3953,7 +3946,7 @@ db_err lock_sec_rec_read_check_and_lock(
   if the max trx id for the page >= min trx id for the trx list or a
   database recovery is running. */
 
-  if ((page_get_max_trx_id(block->m_frame) >= trx_list_get_min_trx_id() || recv_recovery_on) && !page_rec_is_supremum(rec)) {
+  if ((page_get_max_trx_id(block->m_frame) >= srv_trx_sys->get_min_trx_id() || recv_recovery_on) && !page_rec_is_supremum(rec)) {
 
     lock_rec_convert_impl_to_expl(block, rec, index, offsets);
   }

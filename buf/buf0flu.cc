@@ -22,6 +22,7 @@ The database buffer srv_buf_pool flush algorithm
 Created 11/11/1995 Heikki Tuuri
 *******************************************************/
 
+#include "buf0dblwr.h"
 #include "buf0flu.h"
 #include "buf0buf.h"
 #include "buf0lru.h"
@@ -338,33 +339,33 @@ void Buf_flush::sync_datafiles() {
   return;
 }
 
-void Buf_flush::buffered_writes() {
-  byte *write_buf;
+void Buf_flush::buffered_writes(DBLWR *dblwr) {
   ulint len;
   ulint len2;
+  byte *write_buf;
 
-  if (!srv_use_doublewrite_buf || trx_doublewrite == nullptr) {
+  if (!srv_use_doublewrite_buf || dblwr == nullptr) {
     /* Sync the writes to the disk. */
     sync_datafiles();
     return;
   }
 
-  mutex_enter(&(trx_doublewrite->mutex));
+  mutex_enter(&dblwr->m_mutex);
 
   /* Write first to doublewrite buffer blocks. We use synchronous
   aio and thus know that file write has been completed when the
   control returns. */
 
-  if (trx_doublewrite->first_free == 0) {
+  if (dblwr->m_first_free == 0) {
 
-    mutex_exit(&trx_doublewrite->mutex);
+    mutex_exit(&dblwr->m_mutex);
 
     return;
   }
 
-  for (ulint i = 0; i < trx_doublewrite->first_free; i++) {
+  for (ulint i{}; i < dblwr->m_first_free; ++i) {
 
-    auto block = reinterpret_cast<const buf_block_t *>(trx_doublewrite->buf_block_arr[i]);
+    auto block = reinterpret_cast<const buf_block_t *>(dblwr->m_bpages[i]);
 
     if (block->get_state() != BUF_BLOCK_FILE_PAGE) {
       /* No simple validate for compressed pages exists. */
@@ -391,19 +392,20 @@ void Buf_flush::buffered_writes() {
     }
   }
 
-  /* increment the doublewrite flushed pages counter */
-  srv_dblwr_pages_written += trx_doublewrite->first_free;
-  srv_dblwr_writes++;
+  /* Increment the doublewrite flushed pages counter */
+  srv_dblwr_pages_written += dblwr->m_first_free;
+  ++srv_dblwr_writes;
 
-  len = ut_min(TRX_SYS_DOUBLEWRITE_BLOCK_SIZE, trx_doublewrite->first_free) * UNIV_PAGE_SIZE;
+  len = ut_min(SYS_DOUBLEWRITE_BLOCK_SIZE, dblwr->m_first_free) * UNIV_PAGE_SIZE;
 
-  write_buf = trx_doublewrite->write_buf;
-  ulint i = 0;
+  write_buf = dblwr->m_write_buf;
 
-  srv_fil->io(IO_request::Sync_write, false, TRX_SYS_SPACE, trx_doublewrite->block1, 0, len, write_buf, nullptr);
+  ulint i{};
+
+  srv_fil->io(IO_request::Sync_write, false, TRX_SYS_SPACE, dblwr->m_block1, 0, len, write_buf, nullptr);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
-    const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
+    const buf_block_t *block = reinterpret_cast<buf_block_t *>(dblwr->m_bpages[i]);
 
     if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
         unlikely(
@@ -417,19 +419,19 @@ void Buf_flush::buffered_writes() {
     }
   }
 
-  if (trx_doublewrite->first_free <= TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) {
+  if (dblwr->m_first_free <= SYS_DOUBLEWRITE_BLOCK_SIZE) {
     goto flush;
   }
 
-  len = (trx_doublewrite->first_free - TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) * UNIV_PAGE_SIZE;
+  len = (dblwr->m_first_free - SYS_DOUBLEWRITE_BLOCK_SIZE) * UNIV_PAGE_SIZE;
 
-  write_buf = trx_doublewrite->write_buf + TRX_SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE;
-  ut_ad(i == TRX_SYS_DOUBLEWRITE_BLOCK_SIZE);
+  write_buf = dblwr->m_write_buf + SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE;
+  ut_ad(i == SYS_DOUBLEWRITE_BLOCK_SIZE);
 
-  srv_fil->io(IO_request::Sync_write, false, TRX_SYS_SPACE, trx_doublewrite->block2, 0, len, (void *)write_buf, nullptr);
+  srv_fil->io(IO_request::Sync_write, false, TRX_SYS_SPACE, dblwr->m_block2, 0, len, (void *)write_buf, nullptr);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
-    const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
+    const buf_block_t *block = reinterpret_cast<buf_block_t *>(dblwr->m_bpages[i]);
 
     if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
         unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4))) {
@@ -449,8 +451,8 @@ flush:
   and in recovery we will find them in the doublewrite buffer
   blocks. Next do the writes to the intended positions. */
 
-  for (i = 0; i < trx_doublewrite->first_free; i++) {
-    const buf_block_t *block = (buf_block_t *)trx_doublewrite->buf_block_arr[i];
+  for (i = 0; i < dblwr->m_first_free; ++i) {
+    const buf_block_t *block = reinterpret_cast<buf_block_t *>(dblwr->m_bpages[i]);
 
     ut_a(block->m_page.in_file());
 
@@ -460,9 +462,9 @@ flush:
       log_err(std::format(
         "The page to be written seems corrupt! The lsn fields do not match! Noticed in the buffer pool"
         " after posting and flushing the doublewrite buffer. Page buf fix count {}, io fix {}, state {}",
-        (int)block->m_page.m_buf_fix_count,
-        (int)buf_block_get_io_fix(block),
-        (int)block->get_state()
+        int(block->m_page.m_buf_fix_count),
+        int(buf_block_get_io_fix(block)),
+        int(block->get_state())
       ));
     }
 
@@ -486,42 +488,40 @@ flush:
   sync_datafiles();
 
   /* We can now reuse the doublewrite memory buffer: */
-  trx_doublewrite->first_free = 0;
+  dblwr->m_first_free = 0;
 
-  mutex_exit(&(trx_doublewrite->mutex));
+  mutex_exit(&dblwr->m_mutex);
 }
 
-void Buf_flush::post_to_doublewrite_buf(buf_page_t *bpage) {
-try_again:
-  mutex_enter(&trx_doublewrite->mutex);
+void Buf_flush::post_to_doublewrite_buf(DBLWR *dblwr, buf_page_t *bpage) {
+  for (;;) {
+    mutex_enter(&dblwr->m_mutex);
 
-  ut_a(bpage->in_file());
+    ut_a(bpage->in_file());
 
-  if (trx_doublewrite->first_free >= 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) {
-    mutex_exit(&trx_doublewrite->mutex);
+    if (dblwr->m_first_free < 2 * SYS_DOUBLEWRITE_BLOCK_SIZE) {
+      break;
+    }
 
-    buffered_writes();
+    mutex_exit(&dblwr->m_mutex);
 
-    goto try_again;
+    buffered_writes(dblwr);
   }
 
   ut_a(bpage->get_state() == BUF_BLOCK_FILE_PAGE);
 
-  memcpy(trx_doublewrite->write_buf + UNIV_PAGE_SIZE * trx_doublewrite->first_free, ((buf_block_t *)bpage)->m_frame, UNIV_PAGE_SIZE);
+  memcpy(dblwr->m_write_buf + UNIV_PAGE_SIZE * dblwr->m_first_free, reinterpret_cast<buf_block_t *>(bpage)->m_frame, UNIV_PAGE_SIZE);
 
-  trx_doublewrite->buf_block_arr[trx_doublewrite->first_free] = bpage;
+  dblwr->m_bpages[dblwr->m_first_free] = bpage;
 
-  trx_doublewrite->first_free++;
+  ++dblwr->m_first_free;
 
-  if (trx_doublewrite->first_free >= 2 * TRX_SYS_DOUBLEWRITE_BLOCK_SIZE) {
-    mutex_exit(&(trx_doublewrite->mutex));
-
-    buffered_writes();
-
-    return;
+  if (dblwr->m_first_free >= 2 * SYS_DOUBLEWRITE_BLOCK_SIZE) {
+    mutex_exit(&dblwr->m_mutex);
+    buffered_writes(dblwr);
+  } else {
+    mutex_exit(&dblwr->m_mutex);
   }
-
-  mutex_exit(&trx_doublewrite->mutex);
 }
 
 void Buf_flush::init_for_writing(byte *page, lsn_t newest_lsn) {
@@ -542,7 +542,7 @@ void Buf_flush::init_for_writing(byte *page, lsn_t newest_lsn) {
   mach_write_to_4(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM, BUF_NO_CHECKSUM_MAGIC);
 }
 
-void Buf_flush::write_block_low(buf_page_t *bpage) {
+void Buf_flush::write_block_low(DBLWR *dblwr, buf_page_t *bpage) {
   page_t *frame = nullptr;
 
   ut_ad(bpage->in_file());
@@ -574,10 +574,10 @@ void Buf_flush::write_block_low(buf_page_t *bpage) {
       break;
   }
 
-  if (!srv_use_doublewrite_buf || !trx_doublewrite) {
+  if (!srv_use_doublewrite_buf || dblwr == nullptr) {
     srv_fil->io(IO_request::Async_write, true, bpage->get_space(), bpage->get_page_no(), 0, UNIV_PAGE_SIZE, frame, bpage);
   } else {
-    post_to_doublewrite_buf(bpage);
+    post_to_doublewrite_buf(dblwr, bpage);
   }
 }
 
@@ -607,7 +607,7 @@ inline static bool free_page_if_truncated(buf_page_t *bpage) {
   return false;
 }
 
-void Buf_flush::page(buf_page_t *bpage, buf_flush flush_type) {
+void Buf_flush::page(DBLWR *dblwr, buf_page_t *bpage, buf_flush flush_type) {
   mutex_t *block_mutex;
 
   ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
@@ -652,7 +652,7 @@ void Buf_flush::page(buf_page_t *bpage, buf_flush flush_type) {
       m_flush_list or LRU_list. */
 
       if (!is_s_latched) {
-        buffered_writes();
+        buffered_writes(dblwr);
 
         rw_lock_s_lock_gen(&((buf_block_t *)bpage)->m_rw_lock, BUF_IO_WRITE);
       }
@@ -686,14 +686,13 @@ void Buf_flush::page(buf_page_t *bpage, buf_flush flush_type) {
   m_oldest_modification != 0.  Thus, it cannot be relocated in the
   buffer pool or removed from m_flush_list or LRU_list. */
 
-  write_block_low(bpage);
+  write_block_low(dblwr, bpage);
 }
 
-ulint Buf_flush::try_neighbors(ulint space, ulint offset, buf_flush flush_type) {
-  buf_page_t *bpage;
-  ulint low, high;
-  ulint count = 0;
-  ulint i;
+ulint Buf_flush::try_neighbors(DBLWR* dblwr, space_id_t space, page_no_t page_no, buf_flush flush_type) {
+  ulint count{};
+  page_no_t low;
+  page_no_t high;
 
   ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
 
@@ -701,16 +700,16 @@ ulint Buf_flush::try_neighbors(ulint space, ulint offset, buf_flush flush_type) 
     /* If there is little space, it is better not to flush any
     block except from the end of the LRU list */
 
-    low = offset;
-    high = offset + 1;
+    low = page_no;
+    high = page_no + 1;
   } else {
     /* When flushed, dirty blocks are searched in neighborhoods of
     this size, and flushed along with the original page. */
 
     ulint area = std::min(srv_buf_pool->get_read_ahead_area(), srv_buf_pool->m_curr_size / 16);
 
-    low = (offset / area) * area;
-    high = (offset / area + 1) * area;
+    low = (page_no / area) * area;
+    high = (page_no / area + 1) * area;
   }
 
   /* ib_logger(ib_stream, "Flush area: low %lu high %lu\n", low, high); */
@@ -721,45 +720,47 @@ ulint Buf_flush::try_neighbors(ulint space, ulint offset, buf_flush flush_type) 
 
   buf_pool_mutex_enter();
 
-  for (i = low; i < high; i++) {
+  for (auto i = low; i < high; ++i) {
 
-    bpage = srv_buf_pool->hash_get_page(space, i);
+    auto bpage = srv_buf_pool->hash_get_page(space, i);
 
-    if (!bpage) {
+    if (bpage == nullptr) {
 
       continue;
     }
 
-    mutex_t *block_mtx = buf_page_get_mutex(bpage);
-    mutex_enter(block_mtx);
-    if (free_page_if_truncated(bpage)) {
-      mutex_exit(block_mtx);
-      continue;
+    {
+      auto block_mutex = buf_page_get_mutex(bpage);
+
+      mutex_enter(block_mutex);
+
+      if (free_page_if_truncated(bpage)) {
+        mutex_exit(block_mutex);
+        continue;
+      }
+
+      mutex_exit(block_mutex);
     }
-    mutex_exit(block_mtx);
 
     ut_a(bpage->in_file());
 
     /* We avoid flushing 'non-old' blocks in an LRU flush,
     because the flushed blocks are soon freed */
 
-    if (flush_type != BUF_FLUSH_LRU || i == offset || buf_page_is_old(bpage)) {
-      mutex_t *block_mutex = buf_page_get_mutex(bpage);
+    if (flush_type != BUF_FLUSH_LRU || i == page_no || buf_page_is_old(bpage)) {
+      auto block_mutex = buf_page_get_mutex(bpage);
 
       mutex_enter(block_mutex);
 
-      if (ready_for_flush(bpage, flush_type) && (i == offset || !bpage->m_buf_fix_count)) {
-        /* We only try to flush those
-        neighbors != offset where the buf fix count is
-        zero, as we then know that we probably can
-        latch the page without a semaphore wait.
-        Semaphore waits are expensive because we must
-        flush the doublewrite buffer before we start
-        waiting. */
+      if (ready_for_flush(bpage, flush_type) && (i == page_no|| bpage->m_buf_fix_count == 0)) {
+        /* We only try to flush those neighbors != page_no where the buf fix count is
+        zero, as we then know that we probably can latch the page without a semaphore wait.
+        Semaphore waits are expensive because we must flush the doublewrite buffer before
+        we start waiting. */
 
-        page(bpage, flush_type);
+        page(dblwr, bpage, flush_type);
         ut_ad(!mutex_own(block_mutex));
-        count++;
+        ++count;
 
         buf_pool_mutex_enter();
       } else {
@@ -773,11 +774,11 @@ ulint Buf_flush::try_neighbors(ulint space, ulint offset, buf_flush flush_type) 
   return count;
 }
 
-ulint Buf_flush::batch(buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
+ulint Buf_flush::batch(DBLWR *dblwr, buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
   buf_page_t *bpage;
   ulint page_count = 0;
   space_id_t space;
-  page_no_t offset;
+  page_no_t page_no;
 
   ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
   IF_SYNC_DEBUG(ut_ad(flush_type != BUF_FLUSH_LIST || sync_thread_levels_empty_gen(true));)
@@ -840,12 +841,12 @@ ulint Buf_flush::batch(buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
 
       if (ready) {
         space = bpage->get_space();
-        offset = bpage->get_page_no();
+        page_no = bpage->get_page_no();
 
         buf_pool_mutex_exit();
 
         /* Try to flush also all the neighbors */
-        page_count += try_neighbors(space, offset, flush_type);
+        page_count += try_neighbors(dblwr, space, page_no, flush_type);
 
         buf_pool_mutex_enter();
         goto flush_next;
@@ -876,7 +877,7 @@ ulint Buf_flush::batch(buf_flush flush_type, ulint min_n, uint64_t lsn_limit) {
 
   buf_pool_mutex_exit();
 
-  buffered_writes();
+  buffered_writes(dblwr);
 
   srv_buf_pool_flushed += page_count;
 
@@ -937,12 +938,12 @@ ulint Buf_flush::LRU_recommendation() {
   }
 }
 
-void Buf_flush::free_margin() {
+void Buf_flush::free_margin(DBLWR *dblwr) {
   auto n_to_flush = LRU_recommendation();
 
   if (n_to_flush > 0) {
 
-    const auto n_flushed = batch(BUF_FLUSH_LRU, n_to_flush, 0);
+    const auto n_flushed = batch(dblwr, BUF_FLUSH_LRU, n_to_flush, 0);
 
     if (n_flushed == ULINT_UNDEFINED) {
       /* There was an LRU type flush batch already running;

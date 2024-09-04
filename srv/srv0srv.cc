@@ -1127,7 +1127,6 @@ void InnoDB::modules_var_init() noexcept {
   /* The order here shouldn't matter. None of the functions
   below should have any dependencies. */
   trx_var_init();
-  trx_sys_var_init();
   rw_lock_var_init();
   que_var_init();
   pars_var_init();
@@ -1525,7 +1524,7 @@ bool InnoDB::printf_innodb_monitor(
   );
   log_warn(std::format("{} queries in queue", srv_conc_n_waiting_threads));
 
-  log_warn(std::format("{} read views open inside InnoDB", UT_LIST_GET_LEN(trx_sys->view_list)));
+  log_warn(std::format("{} read views open inside InnoDB", UT_LIST_GET_LEN(srv_trx_sys->m_view_list)));
 
   auto n_reserved = srv_fil->space_get_n_reserved_extents(0);
 
@@ -2055,7 +2054,7 @@ loop:
       buffer pool under the limit wished by the user */
 
       srv_main_thread_op_info = "flushing buffer pool pages";
-      n_pages_flushed = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+      n_pages_flushed = srv_buf_pool->m_flusher->batch(srv_dblwr, BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
 
       /* If we had to do the flush, it may have taken
       even more than 1 second, and also, there may be more
@@ -2073,7 +2072,7 @@ loop:
       if (n_flush) {
         srv_main_thread_op_info = "flushing buffer pool pages";
         n_flush = std::min(PCT_IO(100), n_flush);
-        n_pages_flushed = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
+        n_pages_flushed = srv_buf_pool->m_flusher->batch(srv_dblwr, BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
 
         if (n_flush == PCT_IO(100)) {
           skip_sleep = true;
@@ -2107,7 +2106,7 @@ loop:
   if (n_pend_ios < SRV_PEND_IO_THRESHOLD && (n_ios - n_ios_very_old < SRV_PAST_IO_ACTIVITY)) {
 
     srv_main_thread_op_info = "flushing buffer pool pages";
-    srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_ULONGLONG_MAX);
+    srv_buf_pool->m_flusher->batch(srv_dblwr, BUF_FLUSH_LIST, PCT_IO(100), IB_ULONGLONG_MAX);
 
     /* Flush logs if needed */
     srv_sync_log_buffer_in_background();
@@ -2126,7 +2125,7 @@ loop:
     }
 
     srv_main_thread_op_info = "purging";
-    n_pages_purged = trx_sys->m_purge->run();
+    n_pages_purged = srv_trx_sys->m_purge->run();
 
     /* Flush logs if needed */
     srv_sync_log_buffer_in_background();
@@ -2143,13 +2142,13 @@ loop:
     (> 70 %), we assume we can afford reserving the disk(s) for
     the time it requires to flush 100 pages */
 
-    n_pages_flushed = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+    n_pages_flushed = srv_buf_pool->m_flusher->batch(srv_dblwr, BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
   } else {
     /* Otherwise, we only flush a small number of pages so that
     we do not unnecessarily use much disk i/o capacity from
     other work */
 
-    n_pages_flushed = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(10), IB_UINT64_T_MAX);
+    n_pages_flushed = srv_buf_pool->m_flusher->batch(srv_dblwr, BUF_FLUSH_LIST, PCT_IO(10), IB_UINT64_T_MAX);
   }
 
   srv_main_thread_op_info = "making checkpoint";
@@ -2212,7 +2211,7 @@ background_loop:
     }
 
     srv_main_thread_op_info = "purging";
-    n_pages_purged = trx_sys->m_purge->run();
+    n_pages_purged = srv_trx_sys->m_purge->run();
 
     /* Flush logs if needed */
     srv_sync_log_buffer_in_background();
@@ -2243,7 +2242,7 @@ flush_loop:
   srv_main_thread_op_info = "flushing buffer pool pages";
   srv_main_flush_loops++;
   if (srv_fast_shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
-    n_pages_flushed = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
+    n_pages_flushed = srv_buf_pool->m_flusher->batch(srv_dblwr, BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
   } else {
     /* In the fastest shutdown we do not flush the buffer pool
     to data files: we set n_pages_flushed to 0 artificially. */

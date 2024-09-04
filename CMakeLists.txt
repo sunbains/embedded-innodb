@@ -165,7 +165,7 @@ SET(CMAKE_EXTRA_INCLUDE_FILES)
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include)
 
 SET(INNODB_SOURCES  btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
-      buf/buf0buf.cc
+      buf/buf0buf.cc buf/buf0dblwr.cc
       buf/buf0flu.cc buf/buf0lru.cc buf/buf0rea.cc
       data/data0data.cc data/data0type.cc
       dict/dict0boot.cc dict/dict0crea.cc dict/dict0dict.cc

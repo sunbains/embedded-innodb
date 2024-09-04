@@ -977,10 +977,10 @@ bool Log::preflush_pool_modified_pages(lsn_t new_oldest, bool sync) noexcept {
     and we could not make a new checkpoint on the basis of the
     info on the buffer pool only. */
 
-    recv_apply_log_recs(false);
+    recv_apply_log_recs(srv_dblwr, false);
   }
 
-  auto n_pages = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, new_oldest);
+  auto n_pages = srv_buf_pool->m_flusher->batch(srv_dblwr, BUF_FLUSH_LIST, ULINT_MAX, new_oldest);
 
   if (sync) {
     srv_buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
@@ -1115,7 +1115,7 @@ void Log::groups_write_checkpoint_info(void) noexcept {
 
 bool Log::checkpoint(bool sync, bool write_always) noexcept {
   if (recv_recovery_on) {
-    recv_apply_log_recs(false);
+    recv_apply_log_recs(srv_dblwr, false);
   }
 
   if (srv_unix_file_flush_method != SRV_UNIX_NOSYNC) {

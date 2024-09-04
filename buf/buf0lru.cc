@@ -369,7 +369,7 @@ loop:
 
   /* No free block was found: try to flush the LRU list */
 
-  srv_buf_pool->m_flusher->free_margin();
+  srv_buf_pool->m_flusher->free_margin(srv_dblwr);
   ++srv_buf_pool_wait_free;
 
   buf_pool_mutex_enter();

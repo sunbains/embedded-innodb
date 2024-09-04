@@ -425,7 +425,7 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
       trx_id_t rec_trx_id;
 
       if (m_config.m_index->trx_id_offset > 0) {
-        rec_trx_id = trx_read_trx_id(rec + m_config.m_index->trx_id_offset);
+        rec_trx_id = srv_trx_sys->read_trx_id(rec + m_config.m_index->trx_id_offset);
       } else {
         rec_trx_id = row_get_rec_trx_id(rec, m_config.m_index, offsets);
       }

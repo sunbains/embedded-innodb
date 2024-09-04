@@ -259,19 +259,10 @@ static void trx_rollback_active(
   trx_roll_crash_recv_trx = nullptr;
 }
 
-/** Rollback or clean up any incomplete transactions which were
-encountered in crash recovery.  If the transaction already was
-committed, then we clean up a possible insert undo log. If the
-transaction was not yet committed, then we roll it back. */
-
-void trx_rollback_or_clean_recovered(bool all) /*!< in: false=roll back dictionary transactions;
-               true=roll back all non-PREPARED transactions */
-{
-  trx_t *trx;
-
+void trx_rollback_or_clean_recovered(bool all) {
   mutex_enter(&kernel_mutex);
 
-  if (!UT_LIST_GET_FIRST(trx_sys->trx_list)) {
+  if (!UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list)) {
     goto leave_function;
   }
 
@@ -284,7 +275,7 @@ void trx_rollback_or_clean_recovered(bool all) /*!< in: false=roll back dictiona
 loop:
   mutex_enter(&kernel_mutex);
 
-  for (trx = UT_LIST_GET_FIRST(trx_sys->trx_list); trx; trx = UT_LIST_GET_NEXT(trx_list, trx)) {
+  for (auto trx : srv_trx_sys->m_trx_list) {
     if (!trx->m_is_recovered) {
       continue;
     }

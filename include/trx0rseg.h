@@ -54,7 +54,7 @@ ulint trx_rseg_header_create(space_id_t space, ulint max_size, ulint *slot_no, m
 
 /**
  * Creates the memory copies for rollback segments and initializes the
- * rseg list and array in trx_sys at a database startup.
+ * rseg list and array in srv_trx_sys at a database startup.
  * 
  * @param[in] recovery Recovery flag.
  * @param[in] sys_header The trx system header.

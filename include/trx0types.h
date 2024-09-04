@@ -47,7 +47,7 @@ struct trx_t;
 struct Trx_sys;
 
 /** Doublewrite information */
-struct trx_doublewrite_t;
+struct DBLWR;
 
 /** Signal */
 struct trx_sig_t;

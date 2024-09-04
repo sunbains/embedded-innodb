@@ -160,7 +160,6 @@ enum ib_recovery_t {
 
   /** Do not do the log roll-forward in connection with recovery */
   IB_RECOVERY_NO_LOG_REDO
-
 };
 
 /* FIXME: This is set to true if the user has requested it. */
@@ -682,6 +681,8 @@ struct export_var_struct {
 struct Fil;
 struct FSP;
 struct Undo;
+struct DBLWR;
+struct Trx_sys;
 
 extern Undo *srv_undo;
 
@@ -690,3 +691,7 @@ extern Fil *srv_fil;
 extern AIO *srv_aio;
 
 extern FSP *srv_fsp;
+
+extern DBLWR *srv_dblwr;
+
+extern Trx_sys *srv_trx_sys;

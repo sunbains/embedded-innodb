@@ -54,7 +54,9 @@ void mlog_write_initial_log_record(const byte *ptr, mlog_type_t type, mtr_t *mtr
     return;
   }
 
-  log_ptr = mlog_write_initial_log_record_fast(ptr, type, log_ptr, mtr);
+  if (!mtr->m_dblwr_create_in_progress) {
+    log_ptr = mlog_write_initial_log_record_fast(ptr, type, log_ptr, mtr);
+  }
 
   mlog_close(mtr, log_ptr);
 }
@@ -322,27 +324,10 @@ byte *mlog_write_initial_log_record_fast(const byte *ptr, mlog_type_t type, byte
   auto space = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
   auto offset = mach_read_from_4(page + FIL_PAGE_OFFSET);
 
-  /* check whether the page is in the doublewrite buffer;
-  the doublewrite buffer is located in pages
-  FSP_EXTENT_SIZE, ..., 3 * FSP_EXTENT_SIZE - 1 in the
-  system tablespace */
-  if (space == SYS_TABLESPACE && offset >= FSP_EXTENT_SIZE && offset < 3 * FSP_EXTENT_SIZE) {
-    if (trx_doublewrite_buf_is_being_created) {
-      /* Do nothing: we only come to this branch in an
-      InnoDB database creation. We do not redo log
-      anything for the doublewrite buffer pages. */
-      return log_ptr;
-    } else {
-      log_err(std::format(
-        "Trying to redo log a record of type {} on page {} of space {} in the"
-        " doublewrite buffer, continuing anyway. Please create an issue on the"
-        " GitHub project page.",
-        ulong(type),
-        offset,
-        space
-      ));
-    }
-  }
+  /* check whether the page is in the doublewrite buffer; the doublewrite buffer
+   * is located in pages FSP_EXTENT_SIZE, ..., 3 * FSP_EXTENT_SIZE - 1 in the
+   * system tablespace */
+  ut_a(space != SYS_TABLESPACE || offset < FSP_EXTENT_SIZE || offset >= 3 * FSP_EXTENT_SIZE);
 
   mach_write_to_1(log_ptr, type);
 

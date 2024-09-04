@@ -45,17 +45,21 @@ inline void mtr_memo_slot_release(mtr_t *mtr, mtr_memo_slot_t *slot) noexcept {
       srv_buf_pool->release(static_cast<buf_block_t *>(object), type, mtr);
     } else if (type == MTR_MEMO_S_LOCK) {
       rw_lock_s_unlock(static_cast<rw_lock_t *>(object));
-#ifdef UNIV_DEBUG
-    } else if (type != MTR_MEMO_X_LOCK) {
-      ut_ad(type == MTR_MEMO_MODIFY);
-      ut_ad(mtr->memo_contains(object, MTR_MEMO_PAGE_X_FIX));
-#endif /* UNIV_DEBUG */
+#ifndef UNIV_DEBUG
     } else {
       rw_lock_x_unlock(static_cast<rw_lock_t *>(object));
     }
-  }
+#else
+    } else if (type == MTR_MEMO_X_LOCK) {
+      rw_lock_x_unlock(static_cast<rw_lock_t *>(object));
+    } else {
+      ut_ad(type == MTR_MEMO_MODIFY);
+      ut_ad(mtr->memo_contains(object, MTR_MEMO_PAGE_X_FIX));
+    }
+#endif /* !UNIV_DEBUG */
 
-  slot->m_object = nullptr;
+    slot->m_object = nullptr;
+  }
 }
 
 void mtr_t::disable_redo_logging() noexcept {

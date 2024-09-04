@@ -27,6 +27,7 @@ Created 9/20/1997 Heikki Tuuri
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "buf0buf.h"
+#include "buf0dblwr.h"
 #include "buf0flu.h"
 #include "buf0rea.h"
 #include "ddl0ddl.h"
@@ -100,9 +101,10 @@ lsn_t recv_max_page_lsn;
  * Initialize crash recovery environment. Can be called iff
  * recv_needed_recovery == false.
  * 
- * @param recovery The recovery flag.
+ * @param[in,out] dblwr Doublewrite instance to use for recovery
+ * @param[in] recovery The recovery flag.
  */
-static void recv_start_crash_recovery(ib_recovery_t recovery) noexcept;
+static void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept;
 
 static std::string to_string(const Recv_sys::Tablespace_map &log_records) noexcept {
   std::string str{};
@@ -543,7 +545,7 @@ static byte *recv_parse_or_apply_log_rec_body(
         write is not OK. */
 
         /* NOTE: There may be bogus assertion failures for dict_hdr_create(), trx_rseg_header_create(),
-        trx_sys_create_doublewrite_buf(), and trx_sysf_create(). These are only called during database creation. */
+        and trx_sysf_create(). These are only called during database creation. */
 
        ulint  offs = mach_read_from_2(ptr);
 
@@ -986,7 +988,7 @@ static ulint recv_read_in_area(space_id_t space, page_no_t start_page_no) noexce
   return n;
 }
 
-void recv_apply_log_recs(bool flush_and_free_pages) noexcept {
+void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept {
   for (;;) {
     mutex_enter(&recv_sys->m_mutex);
 
@@ -1078,7 +1080,7 @@ void recv_apply_log_recs(bool flush_and_free_pages) noexcept {
     mutex_exit(&recv_sys->m_mutex);
     log_sys->release();
 
-    auto n_pages = srv_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
+    auto n_pages = srv_buf_pool->m_flusher->batch(dblwr, BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
     ut_a(n_pages != ULINT_UNDEFINED);
 
     srv_buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
@@ -1482,22 +1484,24 @@ static void recv_sys_justify_left_parsing_buf() noexcept {
  * apply log records automatically when the stored records table becomes full.
  * 
  * 
- * @param[in] recovery           Recovery flag
- * @param[in] available_memory   We let the storage of recs to grow to this
- *                               size, at the maximum
- * @param[in] store_to_hash      true if the records should be stored;
- *                               this is set to false if just debug
- * 				                       checking is needed
- * @param[in] buf                Buffer containing a log segment or garbage
- * @param[in] len                Buffer length
- * @param[in] start_lsn          Buffer start lsn
+ * @param[in] dblwr             Doublewrite buffer to use
+ * @param[in] recovery          Recovery flag
+ * @param[in] available_memory  We let the storage of recs to grow to this
+ *                              size, at the maximum
+ * @param[in] store_to_hash     true if the records should be stored;
+ *                              this is set to false if just debug
+ * 				                      checking is needed
+ * @param[in] buf               Buffer containing a log segment or garbage
+ * @param[in] len               Buffer length
+ * @param[in] start_lsn         Buffer start lsn
  * @param[in,out] contiguous_lsn It is known that all log groups contain
- *                               contiguouslog data up to this lsn
+ *                              contiguouslog data up to this lsn
  * @param[out] group_scanned_lsn Scanning succeeded up to this lsn
  * 
  * @return true if limit_lsn has been reached, or not able to scan any more in this log group.
  */
 static bool recv_scan_log_recs(
+  DBLWR* dblwr,
   ib_recovery_t recovery,
   ulint available_memory,
   bool store_to_hash,
@@ -1581,9 +1585,8 @@ static bool recv_scan_log_recs(
       environment before parsing these log records. */
 
       if (!recv_needed_recovery) {
-
         log_info("Log scan progressed past the checkpoint lsn ", recv_sys->m_scanned_lsn);
-        recv_start_crash_recovery(recovery);
+        recv_start_crash_recovery(dblwr, recovery);
       }
 
       /* We were able to find more log data: add it to the parsing buffer if parse_start_lsn is already
@@ -1638,7 +1641,7 @@ static bool recv_scan_log_recs(
 
       /* Hash table of log records has grown too big: empty it. */
 
-      recv_apply_log_recs(true);
+      recv_apply_log_recs(dblwr, true);
     }
 
     if (recv_sys->m_recovered_offset > RECV_PARSING_BUF_SIZE / 4) {
@@ -1655,13 +1658,15 @@ static bool recv_scan_log_recs(
  * Scans log from a buffer and stores new log data to the parsing buffer.
  * Parses and hashes the log records if new data found.
  * 
- * @param recovery The recovery flag.
- * @param group The log group.
- * @param contiguous_lsn The LSN up to which the log data is known to be contiguous.
- * @param group_scanned_lsn The LSN up to which the log data has been scanned.
+ * @param[in] dblwr Doublewrite buffer to use
+ * @param[in] recovery The recovery flag.
+ * @param[in] group The log group.
+ * @param[in] contiguous_lsn The LSN up to which the log data is known to be contiguous.
+ * @param[in] group_scanned_lsn The LSN up to which the log data has been scanned.
  * 
  */
 static void recv_group_scan_log_recs(
+  DBLWR* dblwr,
   ib_recovery_t recovery,
   log_group_t *group,
   lsn_t *contiguous_lsn,
@@ -1677,6 +1682,7 @@ static void recv_group_scan_log_recs(
     log_sys->group_read_log_seg(LOG_RECOVER, log_sys->m_buf, group, start_lsn, end_lsn);
 
     finished = recv_scan_log_recs(
+      dblwr,
       recovery,
       (srv_buf_pool->m_curr_size - recv_n_pool_free_frames) * UNIV_PAGE_SIZE,
       true,
@@ -1690,25 +1696,12 @@ static void recv_group_scan_log_recs(
   }
 }
 
-static void recv_start_crash_recovery(ib_recovery_t recovery)  noexcept {
+static void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery)  noexcept {
   ut_a(!recv_needed_recovery);
 
   recv_needed_recovery = true;
 
   log_warn("Database was not shut down normally! Starting crash recovery.");
-
-  log_warn("Reading tablespace information from the .ibd files...");
-
-  /* Recursively scan to a depth of 2. */
-  srv_fil->load_single_table_tablespaces(srv_data_home, recovery, 2);
-
-  /* If we are using the doublewrite method, we will check if there are half-written
-  pages in data files, and restore them from the doublewrite buffer if possible */
-
-  if (recovery < IB_RECOVERY_NO_LOG_REDO) {
-    log_warn("Restoring possible half-written data pages from the doublewrite buffer...");
-    trx_sys_doublewrite_init_or_restore_pages(true);
-  }
 }
 
 /**
@@ -1719,7 +1712,7 @@ static void recv_start_crash_recovery(ib_recovery_t recovery)  noexcept {
  * @param checkpoint_lsn The checkpoint LSN.
  * @param max_flushed_lsn The maximum flushed LSN from data files.
  */
-static void recv_init_crash_recovery(ib_recovery_t recovery, lsn_t checkpoint_lsn, lsn_t max_flushed_lsn) noexcept {
+static void recv_init_crash_recovery(DBLWR* dblwr, ib_recovery_t recovery, lsn_t checkpoint_lsn, lsn_t max_flushed_lsn) noexcept {
   /* NOTE: we always do a 'recovery' at startup, but only if there is something wrong we
   will print a message to the user about recovery: */
 
@@ -1745,17 +1738,12 @@ static void recv_init_crash_recovery(ib_recovery_t recovery, lsn_t checkpoint_ls
         "The log sequence number in 'system.idb' file does not match"
         " the log sequence number in the ib_logfiles!");
 
-      recv_start_crash_recovery(recovery);
+      recv_start_crash_recovery(dblwr, recovery);
     }
-  }
-
-  if (!recv_needed_recovery) {
-    /* Init the doublewrite buffer memory structure */
-    trx_sys_doublewrite_init_or_restore_pages(false);
   }
 }
 
-db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flushed_lsn) noexcept {
+db_err recv_recovery_from_checkpoint_start(DBLWR *dblwr, ib_recovery_t recovery, lsn_t max_flushed_lsn) noexcept {
   ut_a(recv_sys == nullptr);
 
   recv_sys = static_cast<Recv_sys *>(mem_alloc(sizeof(Recv_sys)));
@@ -1822,7 +1810,7 @@ db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flu
   for (auto group : log_sys->m_log_groups) {
     auto old_scanned_lsn = recv_sys->m_scanned_lsn;
 
-    recv_group_scan_log_recs(recovery, group, &contiguous_lsn, &group_scanned_lsn);
+    recv_group_scan_log_recs(dblwr, recovery, group, &contiguous_lsn, &group_scanned_lsn);
 
     group->scanned_lsn = group_scanned_lsn;
 
@@ -1833,7 +1821,7 @@ db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flu
     }
   }
 
-  recv_init_crash_recovery(recovery, checkpoint_lsn, max_flushed_lsn);
+  recv_init_crash_recovery(dblwr, recovery, checkpoint_lsn, max_flushed_lsn);
 
   /* We currently have only one log group */
   if (group_scanned_lsn < checkpoint_lsn) {
@@ -1908,12 +1896,12 @@ db_err recv_recovery_from_checkpoint_start(ib_recovery_t recovery, lsn_t max_flu
   return DB_SUCCESS;
 }
 
-void recv_recovery_from_checkpoint_finish(ib_recovery_t recovery) noexcept {
+void recv_recovery_from_checkpoint_finish(DBLWR *dblwr, ib_recovery_t recovery) noexcept {
   /* Apply the hashed log records to the respective file pages */
 
   if (recovery < IB_RECOVERY_NO_LOG_REDO) {
 
-    recv_apply_log_recs(false);
+    recv_apply_log_recs(dblwr, false);
   }
 
   if (recv_sys->m_found_corrupt_log) {

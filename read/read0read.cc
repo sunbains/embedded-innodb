@@ -159,7 +159,7 @@ read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *h
 
   ut_ad(mutex_own(&kernel_mutex));
 
-  old_view = UT_LIST_GET_LAST(trx_sys->view_list);
+  old_view = UT_LIST_GET_LAST(srv_trx_sys->m_view_list);
 
   if (old_view == nullptr) {
 
@@ -205,7 +205,7 @@ read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *h
     view_copy->up_limit_id = old_view->up_limit_id;
   }
 
-  UT_LIST_ADD_LAST(trx_sys->view_list, view_copy);
+  UT_LIST_ADD_LAST(srv_trx_sys->m_view_list, view_copy);
 
   return view_copy;
 }
@@ -213,7 +213,7 @@ read_view_t *read_view_oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *h
 read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
   ut_ad(mutex_own(&kernel_mutex));
 
-  auto view = read_view_create_low(UT_LIST_GET_LEN(trx_sys->trx_list), heap);
+  auto view = read_view_create_low(UT_LIST_GET_LEN(srv_trx_sys->m_trx_list), heap);
 
   view->creator_trx_id = cr_trx_id;
   view->type = VIEW_NORMAL;
@@ -221,13 +221,13 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
 
   /* No future transactions should be visible in the view */
 
-  view->low_limit_no = trx_sys->max_trx_id;
+  view->low_limit_no = srv_trx_sys->m_max_trx_id;
   view->low_limit_id = view->low_limit_no;
 
   ulint n = 0;
 
   /* No active transaction should be visible, except cr_trx */
-  for (auto trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  for (auto trx = UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list);
        trx != nullptr;
        trx = UT_LIST_GET_NEXT(trx_list, trx)) {
 
@@ -239,7 +239,7 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
 
       ++n;
 
-      /* NOTE that a transaction whose trx number is < trx_sys->max_trx_id can still be active, if it is
+      /* NOTE that a transaction whose trx number is < srv_trx_sys->m_max_trx_id can still be active, if it is
       in the middle of its commit! Note that when a transaction starts, we initialize trx->no to LSN_MAX. */
 
       if (view->low_limit_no > trx->m_no) {
@@ -258,7 +258,7 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
     view->up_limit_id = view->low_limit_id;
   }
 
-  UT_LIST_ADD_FIRST(trx_sys->view_list, view);
+  UT_LIST_ADD_FIRST(srv_trx_sys->m_view_list, view);
 
   return view;
 }
@@ -266,7 +266,7 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
 void read_view_close(read_view_t *view) {
   ut_ad(mutex_own(&kernel_mutex));
 
-  UT_LIST_REMOVE(trx_sys->view_list, view);
+  UT_LIST_REMOVE(srv_trx_sys->m_view_list, view);
 }
 
 void read_view_close_for_read_committed(trx_t *trx) {
@@ -327,7 +327,7 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
 
   mutex_enter(&kernel_mutex);
 
-  curview->read_view = read_view_create_low(UT_LIST_GET_LEN(trx_sys->trx_list), curview->heap);
+  curview->read_view = read_view_create_low(UT_LIST_GET_LEN(srv_trx_sys->m_trx_list), curview->heap);
 
   auto view = curview->read_view;
   view->creator_trx_id = cr_trx->m_id;
@@ -336,11 +336,11 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
 
   /* No future transactions should be visible in the view */
 
-  view->low_limit_no = trx_sys->max_trx_id;
+  view->low_limit_no = srv_trx_sys->m_max_trx_id;
   view->low_limit_id = view->low_limit_no;
 
   ulint n = 0;
-  auto trx = UT_LIST_GET_FIRST(trx_sys->trx_list);
+  auto trx = UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list);
 
   /* No active transaction should be visible */
 
@@ -353,7 +353,7 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
       n++;
 
       /* NOTE that a transaction whose trx number is <
-      trx_sys->max_trx_id can still be active, if it is
+      srv_trx_sys->m_max_trx_id can still be active, if it is
       in the middle of its commit! Note that when a
       transaction starts, we initialize trx->no to
       LSN_MAX. */
@@ -376,7 +376,7 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
     view->up_limit_id = view->low_limit_id;
   }
 
-  UT_LIST_ADD_FIRST(trx_sys->view_list, view);
+  UT_LIST_ADD_FIRST(srv_trx_sys->m_view_list, view);
 
   mutex_exit(&kernel_mutex);
 

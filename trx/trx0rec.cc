@@ -506,7 +506,7 @@ static ulint trx_undo_page_report_modify(
   field = rec_get_nth_field(rec, offsets, dict_index_get_sys_col_pos(index, DATA_TRX_ID), &flen);
   ut_ad(flen == DATA_TRX_ID_LEN);
 
-  trx_id = trx_read_trx_id(field);
+  trx_id = srv_trx_sys->read_trx_id(field);
 
   /* If it is an update of a delete marked record, then we are
   allowed to ignore blob prefixes if the delete marking was done
@@ -773,7 +773,7 @@ byte *trx_undo_update_rec_get_update(
 
   upd_field = upd_get_nth_field(update, n_fields);
   buf = mem_heap_alloc(heap, DATA_TRX_ID_LEN);
-  trx_write_trx_id(buf, trx_id);
+  srv_trx_sys->write_trx_id(buf, trx_id);
 
   upd_field_set_field_no(upd_field, dict_index_get_sys_col_pos(index, DATA_TRX_ID), index, trx);
   dfield_set_data(&(upd_field->new_val), buf, DATA_TRX_ID_LEN);
@@ -1127,7 +1127,7 @@ db_err trx_undo_get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, trx_undo_rec_
   ut_ad(rw_lock_own(&purge_sys->latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
-  if (!trx_sys->m_purge->update_undo_must_exist(trx_id)) {
+  if (!srv_trx_sys->m_purge->update_undo_must_exist(trx_id)) {
 
     /* It may be that the necessary undo log has already been
     deleted */
@@ -1291,7 +1291,7 @@ db_err trx_undo_prev_version_build(
       (ulong)roll_ptr
     );
 
-    log_info(trx_sys->m_purge->to_string());
+    log_info(srv_trx_sys->m_purge->to_string());
 
     return DB_ERROR;
   }

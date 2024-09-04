@@ -30,7 +30,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0undo.h"
 
 trx_rseg_t *trx_rseg_get_on_id(ulint id) {
-  auto rseg = UT_LIST_GET_FIRST(trx_sys->rseg_list);
+  auto rseg = UT_LIST_GET_FIRST(srv_trx_sys->m_rseg_list);
   ut_ad(rseg != nullptr);
 
   while (rseg->id != id) {
@@ -45,9 +45,9 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(mtr->memo_contains(srv_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
 
-  auto sys_header = trx_sysf_get(mtr);
+  auto sys_header = srv_trx_sys->read_header(mtr);
 
-  *slot_no = trx_sysf_rseg_find_free(mtr);
+  *slot_no = srv_trx_sys->frseg_find_free(mtr);
 
   if (*slot_no == ULINT_UNDEFINED) {
 
@@ -87,8 +87,8 @@ ulint trx_rseg_header_create(ulint space, ulint max_size, ulint *slot_no, mtr_t 
   /* Add the rollback segment info to the free slot in the trx system
   header */
 
-  trx_sysf_rseg_set_space(sys_header, *slot_no, space, mtr);
-  trx_sysf_rseg_set_page_no(sys_header, *slot_no, page_no, mtr);
+  srv_trx_sys->frseg_set_space(sys_header, *slot_no, space, mtr);
+  srv_trx_sys->frseg_set_page_no(sys_header, *slot_no, page_no, mtr);
 
   return page_no;
 }
@@ -123,7 +123,7 @@ void trx_rseg_mem_free(trx_rseg_t *rseg)
     Undo::delete_undo(prev_undo);
   }
 
-  trx_sys_set_nth_rseg(trx_sys, rseg->id, nullptr);
+  srv_trx_sys->set_nth_rseg(rseg->id, nullptr);
 
   mem_free(rseg);
 }
@@ -151,9 +151,9 @@ static trx_rseg_t *trx_rseg_mem_create(
 
   mutex_create(&rseg->mutex, IF_DEBUG("rseg_mutex",) IF_SYNC_DEBUG(SYNC_RSEG,) Source_location{});
 
-  UT_LIST_ADD_LAST(trx_sys->rseg_list, rseg);
+  UT_LIST_ADD_LAST(srv_trx_sys->m_rseg_list, rseg);
 
-  trx_sys_set_nth_rseg(trx_sys, id, rseg);
+  srv_trx_sys->set_nth_rseg(id, rseg);
 
   auto rseg_header = trx_rsegf_get_new(space, page_no, mtr);
 
@@ -168,7 +168,7 @@ static trx_rseg_t *trx_rseg_mem_create(
   auto len = flst_get_len(rseg_header + TRX_RSEG_HISTORY, mtr);
 
   if (len > 0) {
-    trx_sys->rseg_history_len += len;
+    srv_trx_sys->m_rseg_history_len += len;
 
     auto node_addr = trx_purge_get_log_from_hist(flst_get_last(rseg_header + TRX_RSEG_HISTORY, mtr));
 
@@ -187,20 +187,20 @@ static trx_rseg_t *trx_rseg_mem_create(
 }
 
 void trx_rseg_list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header, mtr_t *mtr) {
-  UT_LIST_INIT(trx_sys->rseg_list);
+  UT_LIST_INIT(srv_trx_sys->m_rseg_list);
 
-  trx_sys->rseg_history_len = 0;
+  srv_trx_sys->m_rseg_history_len = 0;
 
   for (ulint i{}; i < TRX_SYS_N_RSEGS; ++i) {
 
-    const auto page_no = trx_sysf_rseg_get_page_no(sys_header, i, mtr);
+    const auto page_no = srv_trx_sys->frseg_get_page_no(sys_header, i, mtr);
 
     if (page_no == FIL_NULL) {
 
-      trx_sys_set_nth_rseg(trx_sys, i, nullptr);
+      srv_trx_sys->set_nth_rseg(i, nullptr);
 
     } else {
-      const auto space = trx_sysf_rseg_get_space(sys_header, i, mtr);
+      const auto space = srv_trx_sys->frseg_get_space(sys_header, i, mtr);
 
       trx_rseg_mem_create(recovery, i, space, page_no, mtr);
     }

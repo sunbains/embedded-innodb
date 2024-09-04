@@ -281,18 +281,16 @@ inline trx_id_t row_get_rec_trx_id(
   const ulint *offsets
 ) /*!< in: Phy_rec::get_col_offsets(rec, index) */
 {
-  ulint offset;
-
   ut_ad(dict_index_is_clust(dict_index));
   ut_ad(rec_offs_validate(rec, dict_index, offsets));
 
-  offset = dict_index->trx_id_offset;
+  auto offset = dict_index->trx_id_offset;
 
-  if (!offset) {
+  if (offset == 0) {
     offset = row_get_trx_id_offset(rec, dict_index, offsets);
   }
 
-  return (trx_read_trx_id(rec + offset));
+  return Trx_sys::read_trx_id(rec + offset);
 }
 
 /** Reads the roll pointer field from a clustered index record.

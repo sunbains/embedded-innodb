@@ -39,6 +39,12 @@ Created 11/26/1995 Heikki Tuuri
 
 /* Mini-transaction handle and buffer */
 struct mtr_t {
+  #ifdef UNIV_DEBUG
+  /** Destructor to check for dangling mtrs. */
+  ~mtr_t() noexcept {
+    ut_a(m_state == MTR_UNDEFINED || m_state == MTR_COMMITTED);
+  }
+  #endif /* UNIV_DEBUG */
   /**
    * @brief Starts a mini-transaction and creates a mini-transaction handle and a buffer in the memory buffer given by the caller.
    * 
@@ -56,6 +62,11 @@ struct mtr_t {
     ut_d(m_magic_n = MTR_MAGIC_N);
 
     return this;
+  }
+
+  /** Set the doublewrtite create flag. */
+  inline void dblwr_create_in_progresss() noexcept {
+    m_dblwr_create_in_progress = true;
   }
 
   /**
@@ -291,6 +302,9 @@ struct mtr_t {
 
   /** Mini-transaction state. */
   mtr_state_t m_state{MTR_UNDEFINED};
+
+  /** True if the doublewrite is being created. */
+  bool m_dblwr_create_in_progress{};
 
   /** True if the mtr made modifications to buffer pool pages */
   bool m_modifications;
