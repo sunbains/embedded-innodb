@@ -703,7 +703,7 @@ static void fseg_print_low(FSP::fseg_inode_t *inode, mtr_t *mtr) noexcept {
 
   auto n_used = mtr->read_ulint(inode + FSEG_NOT_FULL_N_USED, MLOG_4BYTES);
   auto n_frag = fseg_get_n_frag_pages(inode, mtr);
-  auto  n_free = flst_get_len(inode + FSEG_FREE, mtr);
+  auto n_free = flst_get_len(inode + FSEG_FREE, mtr);
   auto n_not_full = flst_get_len(inode + FSEG_NOT_FULL, mtr);
   auto n_full = flst_get_len(inode + FSEG_FULL, mtr);
 
@@ -745,7 +745,7 @@ bool FSP::try_extend_data_file_with_pages(space_id_t space, page_no_t page_no, f
 
   ut_a(page_no >= size);
 
-  ulint actual_size;
+  page_no_t actual_size;
   auto success = m_fil->extend_space_to_desired_size(&actual_size, space, page_no + 1);
 
   /* actual_size now has the space size in pages; it may be less than
@@ -1297,7 +1297,7 @@ void FSP::fill_free_list(bool init_space, space_id_t space, fsp_header_t *header
 
         Buf_pool::Request req {
           .m_rw_latch = RW_X_LATCH,
-          .m_page_id = { space, i },
+          .m_page_id = { space, static_cast<page_no_t>(i) },
           .m_mode = BUF_GET,
           .m_file = __FILE__,
           .m_line = __LINE__,
@@ -1422,7 +1422,7 @@ ulint FSP::alloc_free_page(space_id_t space, page_no_t hint, mtr_t *mtr) noexcep
     ut_error;
   }
 
-  auto page_no = xdes_get_offset(descr) + free;
+  page_no_t page_no = xdes_get_offset(descr) + free;
 
   auto space_size = mtr->read_ulint(header + FSP_SIZE, MLOG_4BYTES);
 
@@ -1569,8 +1569,8 @@ FSP::xdes_t *FSP::xdes_get_descriptor(space_id_t space_id, page_no_t page_no, mt
 bool FSP::alloc_seg_inode_page(fsp_header_t *space_header, mtr_t *mtr) noexcept {
   ut_ad(page_offset(space_header) == FSP_HEADER_OFFSET);
 
-  auto space = page_get_space_id(page_align(space_header));
-  auto page_no = alloc_free_page(space, 0, mtr);
+  space_id_t space = page_get_space_id(page_align(space_header));
+  page_no_t page_no = alloc_free_page(space, 0, mtr);
 
   if (page_no == FIL_NULL) {
 
@@ -1658,7 +1658,7 @@ FSP::fseg_inode_t *FSP::alloc_seg_inode(fsp_header_t *space_header, mtr_t *mtr) 
   return inode;
 }
 
-ulint FSP::fseg_alloc_free_page_low(
+page_no_t FSP::fseg_alloc_free_page_low(
   space_id_t space,
   fseg_inode_t *seg_inode,
   page_no_t hint,
@@ -1688,7 +1688,7 @@ ulint FSP::fseg_alloc_free_page_low(
   }
 
   /* The allocated page offset, FIL_NULL if could not be allocated */
-  ulint ret_page;
+  page_no_t ret_page;
 
   /* the extent of the allocated page */
   FSP::xdes_t *ret_descr;
@@ -1941,7 +1941,7 @@ space_id_t FSP::get_space_id(const page_t *page) noexcept {
 
   if (id != fsp_id) {
     log_err(std::format("space id in fsp header {}, but in the page header {}", fsp_id, id));
-    return ULINT_UNDEFINED;
+    return ULINT32_UNDEFINED;
   } else {
     return id;
   }
@@ -2120,14 +2120,14 @@ ulint FSP::fseg_n_reserved_pages(fseg_header_t *header, ulint *used, mtr_t *mtr)
   return fseg_n_reserved_pages_low(inode, used, mtr);
 }
 
-ulint FSP::fseg_alloc_free_page_general(
+page_no_t FSP::fseg_alloc_free_page_general(
   fseg_header_t *seg_header,
   page_no_t hint,
   byte direction,
   bool reserved,
   mtr_t *mtr) noexcept
 {
-  auto space = page_get_space_id(page_align(seg_header));
+  space_id_t space = page_get_space_id(page_align(seg_header));
   auto latch = m_fil->space_get_latch(space);
 
   ut_ad(!mutex_own(&kernel_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
@@ -2156,7 +2156,7 @@ ulint FSP::fseg_alloc_free_page_general(
   return page_no;
 }
 
-ulint FSP::fseg_alloc_free_page(
+page_no_t FSP::fseg_alloc_free_page(
   fseg_header_t *seg_header,
   page_no_t hint,
   byte direction,
@@ -2346,7 +2346,7 @@ void FSP::fseg_mark_page_used(fseg_inode_t *seg_inode, space_id_t space, page_no
   }
 }
 
-void FSP::fseg_free_page(fseg_header_t *seg_header, space_id_t space, ulint page, mtr_t *mtr) noexcept {
+void FSP::fseg_free_page(fseg_header_t *seg_header, space_id_t space, page_no_t page, mtr_t *mtr) noexcept {
   auto latch = m_fil->space_get_latch(space);
 
   ut_ad(!mutex_own(&kernel_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));

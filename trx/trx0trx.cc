@@ -197,7 +197,7 @@ static void trx_free(trx_t *&trx) {
       (ulong)trx->client_n_tables_locked
     );
 
-    trx_print(ib_stream, trx, 600);
+    log_info(trx_to_string(trx, 600));
 
     log_warn_buf(trx, sizeof(trx_t));
   }
@@ -653,7 +653,7 @@ void trx_commit_off_kernel(trx_t *trx) {
 
   trx->m_is_recovered = false;
 
-  lock_release_off_kernel(trx);
+  srv_lock_sys->release_off_kernel(trx);
 
   if (trx->global_read_view) {
     read_view_close(trx->global_read_view);
@@ -1239,89 +1239,85 @@ void trx_mark_sql_stat_end(trx_t *trx) {
   trx->last_sql_stat_start.least_undo_no = trx->undo_no;
 }
 
-void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len) {
-  bool newline;
+std::string trx_to_string(trx_t *trx, ulint max_query_len) noexcept {
+  std::ostringstream os;
 
-  ib_logger(ib_stream, "TRANSACTION %lu", TRX_ID_PREP_PRINTF(trx->m_id));
+  os << "TRANSACTION " << trx->m_id;
 
   switch (trx->m_conc_state) {
     case TRX_NOT_STARTED:
-      ib_logger(ib_stream, ", not started");
+      os << ", not started";
       break;
     case TRX_ACTIVE:
-      ib_logger(ib_stream, ", ACTIVE %lu sec", (ulong)difftime(time(nullptr), trx->m_start_time));
+      os << ", ACTIVE " << difftime(time(nullptr), trx->m_start_time) << " sec";
       break;
     case TRX_PREPARED:
       ib_logger(ib_stream, ", ACTIVE (PREPARED) %lu sec", (ulong)difftime(time(nullptr), trx->m_start_time));
       break;
     case TRX_COMMITTED_IN_MEMORY:
-      ib_logger(ib_stream, ", COMMITTED IN MEMORY");
+      os << ", COMMITTED IN MEMORY";
       break;
     default:
-      ib_logger(ib_stream, " state %lu", (ulong)trx->m_conc_state);
+      os << " state " << trx->m_conc_state;
   }
 
   if (*trx->m_op_info) {
-    ib_logger(ib_stream, " %s", trx->m_op_info);
+    os << trx->m_op_info;
   }
 
   if (trx->m_is_recovered) {
-    ib_logger(ib_stream, " recovered trx");
+    os << " recovered trx";
   }
 
   if (trx->m_is_purge) {
-    ib_logger(ib_stream, " purge trx");
+    os << " purge trx";
   }
 
-  ib_logger(ib_stream, "\n");
+  os << "\n";
 
   if (trx->n_client_tables_in_use > 0 || trx->client_n_tables_locked > 0) {
-
-    ib_logger(
-      ib_stream, "Client tables in use %lu, locked %lu\n", (ulong)trx->n_client_tables_in_use, (ulong)trx->client_n_tables_locked
-    );
+    os << std::format("Client tables in use {}, locked {}\n", trx->n_client_tables_in_use, trx->client_n_tables_locked);
   }
 
-  newline = true;
+  auto newline{true};
 
   switch (trx->m_que_state) {
     case TRX_QUE_RUNNING:
       newline = false;
       break;
     case TRX_QUE_LOCK_WAIT:
-      ib_logger(ib_stream, "LOCK WAIT ");
+      os << "LOCK WAIT ";
       break;
     case TRX_QUE_ROLLING_BACK:
-      ib_logger(ib_stream, "ROLLING BACK ");
+      os << "ROLLING BACK ";
       break;
     case TRX_QUE_COMMITTING:
-      ib_logger(ib_stream, "COMMITTING ");
+      os << "COMMITTING ";
       break;
     default:
-      ib_logger(ib_stream, "que state %lu ", (ulong)trx->m_que_state);
+      os << "que state " << trx->m_que_state;
   }
 
   if (0 < UT_LIST_GET_LEN(trx->trx_locks) || mem_heap_get_size(trx->lock_heap) > 400) {
     newline = true;
 
-    ib_logger(
-      ib_stream,
-      "%lu lock struct(s), heap size %lu,"
-      " %lu row lock(s)",
-      (ulong)UT_LIST_GET_LEN(trx->trx_locks),
-      (ulong)mem_heap_get_size(trx->lock_heap),
-      (ulong)lock_number_of_rows_locked(trx)
+    os << std::format("{} lock struct(s), heap size {}, {} row lock(s)",
+      UT_LIST_GET_LEN(trx->trx_locks),
+      mem_heap_get_size(trx->lock_heap),
+      srv_lock_sys->number_of_rows_locked(trx)
     );
   }
 
   if (trx->undo_no > 0) {
     newline = true;
-    ib_logger(ib_stream, ", undo log entries %lu", (ulong)trx->undo_no);
+    os << ", undo log entries " << trx->undo_no;
   }
 
   if (newline) {
-    ib_logger(ib_stream, "\n");
+    os << "\n";
   }
+
+  return os.str();
 }
 
 int trx_weight_cmp(const trx_t *a, const trx_t *b) {

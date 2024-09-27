@@ -591,7 +591,7 @@ void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
 
   ut_ad(len == 4);
 
-  auto space = mtr->read_ulint(ptr, MLOG_4BYTES);
+  auto space = static_cast<space_id_t>(mtr->read_ulint(ptr, MLOG_4BYTES));
 
   if (srv_fil->space_get_flags(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
@@ -614,7 +614,7 @@ void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
   page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
 }
 
-ulint dict_truncate_index_tree(dict_table_t *table, space_id_t space, btr_pcur_t *pcur, mtr_t *mtr) {
+page_no_t dict_truncate_index_tree(dict_table_t *table, space_id_t space, btr_pcur_t *pcur, mtr_t *mtr) {
   ulint len;
   ulint type;
   uint64_t index_id;
@@ -1054,7 +1054,7 @@ db_err dict_create_or_check_foreign_constraint_tables() {
     ut_a(err_commit == DB_SUCCESS);
   }
 
-  trx_start_if_not_started(trx);
+  (void) trx_start_if_not_started(trx);
 
   log_info("Creating foreign key constraint system tables");
 
@@ -1144,7 +1144,7 @@ static db_err dict_foreign_eval_sql(
   dict_foreign_t *foreign,
   trx_t *trx
 ) {
-  trx_start_if_not_started(trx);
+  (void) trx_start_if_not_started(trx);
 
   auto err = que_eval_sql(info, sql, false, trx);
 

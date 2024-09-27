@@ -1156,7 +1156,7 @@ trx_undo_rec_t *Undo::get_next_rec(trx_undo_rec_t *rec, page_no_t page_no, ulint
   }
 }
 
-trx_undo_rec_t *Undo::get_first_rec(ulint space, ulint page_no, ulint offset, ulint mode, mtr_t *mtr) noexcept {
+trx_undo_rec_t *Undo::get_first_rec(space_id_t space, page_no_t page_no, ulint offset, ulint mode, mtr_t *mtr) noexcept {
   auto undo_page = mode == RW_S_LATCH ? page_get_s_latched(space, page_no, mtr) : page_get(space, page_no, mtr);
   auto rec = trx_undo_page_get_first_rec(undo_page, page_no, offset);
 
@@ -1283,7 +1283,7 @@ void Undo::truncate_end(trx_t *trx, trx_undo_t *undo, undo_no_t limit) noexcept 
   } while (trunc_here != nullptr);
 }
 
-void Undo::truncate_start(trx_rseg_t *rseg, ulint space, ulint hdr_page_no, ulint hdr_offset, undo_no_t limit) noexcept {
+void Undo::truncate_start(trx_rseg_t *rseg, space_id_t space, page_no_t hdr_page_no, ulint hdr_offset, undo_no_t limit) noexcept {
   ut_ad(mutex_own(&rseg->mutex));
 
   if (limit == 0) {

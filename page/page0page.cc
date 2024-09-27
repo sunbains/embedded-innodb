@@ -97,28 +97,11 @@ ulint page_dir_find_owner_slot(const rec_t *rec) {
   while (likely(*(uint16_t *)slot != rec_offs_bytes)) {
 
     if (unlikely(slot == first_slot)) {
-      ib_logger(
-        ib_stream,
-        "Probable data corruption on"
-        " page %lu\n"
-        "Original record ",
-        (ulong)page_get_page_no(page)
-      );
+      log_err(std::format("Probable data corruption on page {}. Original record ", page_get_page_no(page)));
+      log_err(rec_to_string(rec));
 
-      rec_print(rec);
-
-      ib_logger(
-        ib_stream,
-        "\n"
-        "on that page.\n"
-        "Cannot find the dir slot for record "
-      );
-      rec_print(page + mach_decode_2(rec_offs_bytes));
-      ib_logger(
-        ib_stream,
-        "\n"
-        "on that page!\n"
-      );
+      log_err("on that page. Cannot find the dir slot for record on that page.");
+      log_err(rec_to_string(page + mach_decode_2(rec_offs_bytes)));
 
       buf_page_print(page, 0);
 
@@ -417,7 +400,7 @@ rec_t *page_copy_rec_list_end(buf_block_t *new_block, buf_block_t *block, rec_t 
 
   /* Update the lock table and possible hash index */
 
-  lock_move_rec_list_end(new_block, block, rec);
+  srv_lock_sys->move_rec_list_end(new_block, block, rec);
 
   return ret;
 }
@@ -472,7 +455,7 @@ rec_t *page_copy_rec_list_start(buf_block_t *new_block, buf_block_t *block, rec_
 
   /* Update the lock table and possible hash index */
 
-  lock_move_rec_list_start(new_block, block, rec, ret);
+  srv_lock_sys->move_rec_list_start(new_block, block, rec, ret);
 
   return ret;
 }
@@ -1450,11 +1433,10 @@ bool page_validate(page_t *page, dict_index_t *index) {
           index->name
         ));
 
-        ib_logger(ib_stream, "\nprevious record ");
-        rec_print(old_rec);
-        ib_logger(ib_stream, "\nrecord ");
-        rec_print(rec);
-        ib_logger(ib_stream, "\n");
+        log_err("previous record ");
+        log_err(rec_to_string(old_rec));
+        log_err("record ");
+        log_err(rec_to_string(rec));
 
         goto func_exit;
       }
@@ -1468,7 +1450,7 @@ bool page_validate(page_t *page, dict_index_t *index) {
     offs = page_offset(rec_get_start(rec, offsets));
     i = rec_offs_size(offsets);
     if (unlikely(offs + i >= UNIV_PAGE_SIZE)) {
-      ib_logger(ib_stream, "record offset out of bounds\n");
+      log_err("record offset out of bounds\n");
       goto func_exit;
     }
 
@@ -1476,7 +1458,7 @@ bool page_validate(page_t *page, dict_index_t *index) {
       if (unlikely(buf[offs + i])) {
         /* No other record may overlap this */
 
-        ib_logger(ib_stream, "Record overlaps another\n");
+        log_err("Record overlaps another\n");
         goto func_exit;
       }
 

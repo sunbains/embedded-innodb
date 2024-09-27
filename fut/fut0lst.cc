@@ -27,17 +27,22 @@ Created 11/28/1995 Heikki Tuuri
 #include "buf0buf.h"
 #include "page0page.h"
 
-/** Adds a node to an empty list. */
-static void flst_add_to_empty(
-  flst_base_node_t *base, /*!< in: pointer to base
-                                                      node of empty list */
-  flst_node_t *node,      /*!< in: node to add */
-  mtr_t *mtr
-) /*!< in: mini-transaction handle */
-{
-  ulint space;
-  fil_addr_t node_addr;
+/**
+ * @brief Adds a node to an empty list.
+ *
+ * This function adds a node to a list that is currently empty. It updates
+ * the first and last pointers of the base node to point to the new node,
+ * and sets the previous and next pointers of the new node to null.
+ * Additionally, it increments the length of the list.
+ *
+ * @param[in] base Pointer to the base node of the empty list.
+ * @param[in] node Pointer to the node to add.
+ * @param[in] mtr Pointer to the mini-transaction handle.
+ */
+static void flst_add_to_empty(flst_base_node_t *base, flst_node_t *node, mtr_t *mtr) {
   ulint len;
+  space_id_t space;
+  fil_addr_t node_addr;
 
   ut_ad(mtr && base && node);
   ut_ad(base != node);
@@ -60,17 +65,10 @@ static void flst_add_to_empty(
   mlog_write_ulint(base + FLST_LEN, len + 1, MLOG_4BYTES, mtr);
 }
 
-/** Adds a node as the last node in a list. */
-
-void flst_add_last(
-  flst_base_node_t *base, /*!< in: pointer to base node of list */
-  flst_node_t *node,      /*!< in: node to add */
-  mtr_t *mtr
-) /*!< in: mini-transaction handle */
-{
-  ulint space;
-  fil_addr_t node_addr;
+void flst_add_last(flst_base_node_t *base, flst_node_t *node, mtr_t *mtr) {
   ulint len;
+  space_id_t space;
+  fil_addr_t node_addr;
   fil_addr_t last_addr;
   flst_node_t *last_node;
 
@@ -98,15 +96,8 @@ void flst_add_last(
   }
 }
 
-/** Adds a node as the first node in a list. */
-
-void flst_add_first(
-  flst_base_node_t *base, /*!< in: pointer to base node of list */
-  flst_node_t *node,      /*!< in: node to add */
-  mtr_t *mtr
-) /*!< in: mini-transaction handle */
-{
-  ulint space;
+void flst_add_first(flst_base_node_t *base, flst_node_t *node, mtr_t *mtr) {
+  space_id_t space;
   fil_addr_t node_addr;
   ulint len;
   fil_addr_t first_addr;
@@ -136,21 +127,13 @@ void flst_add_first(
   }
 }
 
-/** Inserts a node after another in a list. */
-
-void flst_insert_after(
-  flst_base_node_t *base, /*!< in: pointer to base node of list */
-  flst_node_t *node1,     /*!< in: node to insert after */
-  flst_node_t *node2,     /*!< in: node to add */
-  mtr_t *mtr
-) /*!< in: mini-transaction handle */
-{
-  ulint space;
+void flst_insert_after(flst_base_node_t *base, flst_node_t *node1, flst_node_t *node2, mtr_t *mtr) {
+  ulint len;
+  space_id_t space;
   fil_addr_t node1_addr;
   fil_addr_t node2_addr;
   flst_node_t *node3;
   fil_addr_t node3_addr;
-  ulint len;
 
   ut_ad(mtr && node1 && node2 && base);
   ut_ad(base != node1);
@@ -186,21 +169,13 @@ void flst_insert_after(
   mlog_write_ulint(base + FLST_LEN, len + 1, MLOG_4BYTES, mtr);
 }
 
-/** Inserts a node before another in a list. */
-
-void flst_insert_before(
-  flst_base_node_t *base, /*!< in: pointer to base node of list */
-  flst_node_t *node2,     /*!< in: node to insert */
-  flst_node_t *node3,     /*!< in: node to insert before */
-  mtr_t *mtr
-) /*!< in: mini-transaction handle */
-{
-  ulint space;
+void flst_insert_before(flst_base_node_t *base, flst_node_t *node2, flst_node_t *node3, mtr_t *mtr) {
+  ulint len;
+  space_id_t space;
   flst_node_t *node1;
   fil_addr_t node1_addr;
   fil_addr_t node2_addr;
   fil_addr_t node3_addr;
-  ulint len;
 
   ut_ad(mtr && node2 && node3 && base);
   ut_ad(base != node2);
@@ -236,21 +211,12 @@ void flst_insert_before(
   mlog_write_ulint(base + FLST_LEN, len + 1, MLOG_4BYTES, mtr);
 }
 
-/** Removes a node. */
-
-void flst_remove(
-  flst_base_node_t *base, /*!< in: pointer to base node of list */
-  flst_node_t *node2,     /*!< in: node to remove */
-  mtr_t *mtr
-) /*!< in: mini-transaction handle */
-{
-  ulint space;
-  flst_node_t *node1;
-  fil_addr_t node1_addr;
-  fil_addr_t node2_addr;
-  flst_node_t *node3;
-  fil_addr_t node3_addr;
+void flst_remove(flst_base_node_t *base, flst_node_t *node2, mtr_t *mtr) {
   ulint len;
+  space_id_t space;
+  flst_node_t *node1;
+  flst_node_t *node3;
+  fil_addr_t node2_addr;
 
   ut_ad(mtr && node2 && base);
   ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
@@ -258,8 +224,8 @@ void flst_remove(
 
   buf_ptr_get_fsp_addr(node2, &space, &node2_addr);
 
-  node1_addr = flst_get_prev_addr(node2, mtr);
-  node3_addr = flst_get_next_addr(node2, mtr);
+  auto node1_addr = flst_get_prev_addr(node2, mtr);
+  auto node3_addr = flst_get_next_addr(node2, mtr);
 
   if (!srv_fil->addr_is_null(node1_addr)) {
 
@@ -305,21 +271,9 @@ void flst_remove(
   mlog_write_ulint(base + FLST_LEN, len - 1, MLOG_4BYTES, mtr);
 }
 
-/** Cuts off the tail of the list, including the node given. The number of
-nodes which will be removed must be provided by the caller, as this function
-does not measure the length of the tail. */
-
-void flst_cut_end(
-  flst_base_node_t *base, /*!< in: pointer to base node of list */
-  flst_node_t *node2,     /*!< in: first node to remove */
-  ulint n_nodes,          /*!< in: number of nodes to remove,
-                            must be >= 1 */
-  mtr_t *mtr
-) /*!< in: mini-transaction handle */
-{
-  ulint space;
+void flst_cut_end(flst_base_node_t *base, flst_node_t *node2, ulint n_nodes, mtr_t *mtr) {
+  space_id_t space;
   flst_node_t *node1;
-  fil_addr_t node1_addr;
   fil_addr_t node2_addr;
   ulint len;
 
@@ -330,7 +284,7 @@ void flst_cut_end(
 
   buf_ptr_get_fsp_addr(node2, &space, &node2_addr);
 
-  node1_addr = flst_get_prev_addr(node2, mtr);
+  auto node1_addr = flst_get_prev_addr(node2, mtr);
 
   if (!srv_fil->addr_is_null(node1_addr)) {
 

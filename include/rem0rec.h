@@ -226,23 +226,20 @@ void rec_copy_prefix_to_dtuple(
 bool rec_validate(const rec_t *rec, const ulint *offsets) noexcept;
 
 /**
- * @brief Prints the contents of a physical record to the specified stream.
- *
- * This function prints the contents of a physical record log_info().
+ * @brief Prints the contents of a physical record to log_info().
  *
  * @param rec The physical record to be printed.
  */
-void rec_print(const rec_t *rec) noexcept;
+void rec_log_info(const rec_t *rec) noexcept;
 
 /**
- * Prints a physical record.
+ * @brief Converts a physical record to a string.
  * 
- * @param[in,out] os output stream
- * @param[in] rec physical record to print
+ * @param[in] rec The physical record to convert to a string.
  * 
- * @return output stream
+ * @return A string representation of the record.
  */
-std::ostream &rec_print(std::ostream &os, const rec_t *rec) noexcept;
+std::string rec_to_string(const rec_t *rec) noexcept;
 
 /**
  * Print the Rec_offset to the output stream.
@@ -253,7 +250,7 @@ std::ostream &rec_print(std::ostream &os, const rec_t *rec) noexcept;
  * @return the output stream
  */
 inline std::ostream &operator<<(std::ostream &os, const rec_t* rec) noexcept {
-  rec_print(os, rec);
+  os << rec_to_string(rec);
   return os;
 }
 

@@ -220,7 +220,6 @@ extern ulint srv_n_rows_deleted;
 extern ulint srv_n_rows_read;
 
 extern bool srv_print_innodb_monitor;
-extern bool srv_print_innodb_lock_monitor;
 extern bool srv_print_innodb_tablespace_monitor;
 extern bool srv_print_verbose_log;
 extern bool srv_print_innodb_table_monitor;
@@ -683,6 +682,7 @@ struct FSP;
 struct Undo;
 struct DBLWR;
 struct Trx_sys;
+struct Lock_sys;
 
 extern Undo *srv_undo;
 
@@ -695,3 +695,5 @@ extern FSP *srv_fsp;
 extern DBLWR *srv_dblwr;
 
 extern Trx_sys *srv_trx_sys;
+
+extern Lock_sys *srv_lock_sys;

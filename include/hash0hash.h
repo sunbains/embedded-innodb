@@ -356,14 +356,18 @@ inline ulint hash_get_n_cells(hash_table_t *table) /*!< in: table */
   return (table->n_cells);
 }
 
-/** Calculates the hash value from a folded value.
-@return	hashed value */
-inline ulint hash_calc_hash(
-  ulint fold, /*!< in: folded value */
-  hash_table_t *table
-) /*!< in: hash table */
-{
-  ut_ad(table);
+/**
+ * @brief Calculates the hash value from a folded value.
+ *
+ * This function takes a folded value and a hash table, and calculates
+ * the hash value based on the number of cells in the hash table.
+ *
+ * @param[in] fold The folded value.
+ * @param[in] table The hash table.
+ * 
+ * @return The calculated hash value.
+ */
+inline ulint hash_calc_hash(ulint fold, hash_table_t *table) {
   ut_ad(table->magic_n == HASH_TABLE_MAGIC_N);
   return (ut_hash_ulint(fold, table->n_cells));
 }

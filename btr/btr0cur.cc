@@ -246,8 +246,8 @@ void btr_cur_search_to_nth_level(
   page_cur_t *page_cursor;
   page_t *page;
   rec_t *node_ptr;
-  ulint page_no;
-  ulint space;
+  page_no_t page_no;
+  space_id_t space;
   ulint up_match;
   ulint up_bytes;
   ulint low_match;
@@ -334,9 +334,9 @@ void btr_cur_search_to_nth_level(
   /* Loop and search until we arrive at the desired level */
 
   for (;;) {
-    buf_block_t *block;
     ulint rw_latch;
     ulint buf_mode;
+    buf_block_t *block;
 
     rw_latch = RW_NO_LATCH;
     buf_mode = BUF_GET;
@@ -730,7 +730,7 @@ inline db_err btr_cur_ins_lock_and_undo(
   rec = btr_cur_get_rec(cursor);
   dict_index = cursor->m_index;
 
-  err = lock_rec_insert_check_and_lock(flags, rec, btr_cur_get_block(cursor), dict_index, thr, mtr, inherit);
+  err = srv_lock_sys->rec_insert_check_and_lock(flags, rec, btr_cur_get_block(cursor), dict_index, thr, mtr, inherit);
 
   if (err != DB_SUCCESS) {
 
@@ -897,7 +897,7 @@ db_err btr_cur_optimistic_insert(
 
   if (!(flags & BTR_NO_LOCKING_FLAG) && inherit) {
 
-    lock_update_insert(block, *rec);
+    srv_lock_sys->update_insert(block, *rec);
   }
 
   *big_rec = big_rec_vec;
@@ -998,7 +998,7 @@ db_err btr_cur_pessimistic_insert(
 
   if (!(flags & BTR_NO_LOCKING_FLAG)) {
 
-    lock_update_insert(btr_cur_get_block(cursor), *rec);
+    srv_lock_sys->update_insert(btr_cur_get_block(cursor), *rec);
   }
 
   if (n_extents > 0) {
@@ -1038,7 +1038,7 @@ inline db_err btr_cur_upd_lock_and_undo(
 
   if (!dict_index_is_clust(dict_index)) {
     /* We do undo logging only when we update a clustered index record */
-    return lock_sec_rec_modify_check_and_lock(flags, btr_cur_get_block(cursor), rec, dict_index, thr, mtr);
+    return srv_lock_sys->sec_rec_modify_check_and_lock(flags, btr_cur_get_block(cursor), rec, dict_index, thr, mtr);
   }
 
   /* Check if we have to wait for a lock: enqueue an explicit lock request if yes */
@@ -1057,7 +1057,7 @@ inline db_err btr_cur_upd_lock_and_undo(
       offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
     }
 
-    err = lock_clust_rec_modify_check_and_lock(flags, btr_cur_get_block(cursor), rec, dict_index, offsets, thr);
+    err = srv_lock_sys->clust_rec_modify_check_and_lock(flags, btr_cur_get_block(cursor), rec, dict_index, offsets, thr);
 
     if (likely_null(heap)) {
       mem_heap_free(heap);
@@ -1193,9 +1193,9 @@ db_err btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, const upd_t *upda
   }
 
 #ifdef UNIV_DEBUG
-  if (btr_cur_print_record_ops && thr) {
+  if (btr_cur_print_record_ops && thr != nullptr) {
     btr_cur_trx_report(trx, dict_index, "update ");
-    rec_print(rec);
+    log_err(rec_to_string(rec));
   }
 #endif /* UNIV_DEBUG */
 
@@ -1264,7 +1264,7 @@ db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor, const upd_t *up
 #ifdef UNIV_DEBUG
   if (btr_cur_print_record_ops && thr != nullptr) {
     btr_cur_trx_report(thr_get_trx(thr), index, "update ");
-    rec_print(rec);
+    log_err(rec_to_string(rec));
   }
 #endif /* UNIV_DEBUG */
 
@@ -1347,7 +1347,7 @@ db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor, const upd_t *up
   explicit locks on rec, before deleting rec (see the comment in
   btr_cur_pessimistic_update). */
 
-  lock_rec_store_on_page_infimum(block, rec);
+  srv_lock_sys->rec_store_on_page_infimum(block, rec);
 
   /* The call to row_rec_to_index_entry(ROW_COPY_DATA, ...) above
   invokes rec_offs_make_valid() to point to the copied record that
@@ -1372,7 +1372,7 @@ db_err btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor, const upd_t *up
 
   /* Restore the old explicit lock state on the record */
 
-  lock_rec_restore_from_page_infimum(block, rec, block);
+  srv_lock_sys->rec_restore_from_page_infimum(block, rec, block);
 
   page_cur_move_to_next(page_cursor);
 
@@ -1423,7 +1423,7 @@ static void btr_cur_pess_upd_restore_supremum(
   /* We must already have an x-latch on prev_block! */
   ut_ad(mtr->memo_contains(prev_block, MTR_MEMO_PAGE_X_FIX));
 
-  lock_rec_reset_and_inherit_gap_locks(prev_block, block, PAGE_HEAP_NO_SUPREMUM, page_rec_get_heap_no(rec));
+  srv_lock_sys->rec_reset_and_inherit_gap_locks(prev_block, block, PAGE_HEAP_NO_SUPREMUM, page_rec_get_heap_no(rec));
 }
 
 db_err btr_cur_pessimistic_update(
@@ -1563,7 +1563,7 @@ db_err btr_cur_pessimistic_update(
   delete the lock structs set on the root page even if the root
   page carries just node pointers. */
 
-  lock_rec_store_on_page_infimum(block, rec);
+  srv_lock_sys->rec_store_on_page_infimum(block, rec);
 
   page_cursor = btr_cur_get_page_cur(cursor);
 
@@ -1574,7 +1574,7 @@ db_err btr_cur_pessimistic_update(
   rec = btr_cur_insert_if_possible(cursor, new_entry, n_ext, mtr);
 
   if (rec != nullptr) {
-    lock_rec_restore_from_page_infimum(btr_cur_get_block(cursor), rec, block);
+    srv_lock_sys->rec_restore_from_page_infimum(btr_cur_get_block(cursor), rec, block);
 
     {
       Phy_rec record{index, rec};
@@ -1630,7 +1630,7 @@ db_err btr_cur_pessimistic_update(
     btr_cur_unmark_extern_fields(rec, index, offsets, mtr);
   }
 
-  lock_rec_restore_from_page_infimum(btr_cur_get_block(cursor), rec, block);
+  srv_lock_sys->rec_restore_from_page_infimum(btr_cur_get_block(cursor), rec, block);
 
   /* If necessary, restore also the correct lock state for a new,
   preceding supremum record created in a page split. While the old
@@ -1771,14 +1771,14 @@ db_err btr_cur_del_mark_set_clust_rec(ulint flags, btr_cur_t *cursor, bool val, 
 #ifdef UNIV_DEBUG
   if (btr_cur_print_record_ops && thr != nullptr) {
     btr_cur_trx_report(thr_get_trx(thr), index, "del mark ");
-    rec_print(rec);
+    log_err(rec_to_string(rec));
   }
 #endif /* UNIV_DEBUG */
 
   ut_ad(dict_index_is_clust(index));
   ut_ad(!rec_get_deleted_flag(rec));
 
-  auto err = lock_clust_rec_modify_check_and_lock(flags, btr_cur_get_block(cursor), rec, index, offsets, thr);
+  auto err = srv_lock_sys->clust_rec_modify_check_and_lock(flags, btr_cur_get_block(cursor), rec, index, offsets, thr);
 
   if (err == DB_SUCCESS) {
     roll_ptr_t roll_ptr;
@@ -1858,13 +1858,13 @@ db_err btr_cur_del_mark_set_sec_rec(ulint flags, btr_cur_t *cursor, bool val, qu
   auto rec = btr_cur_get_rec(cursor);
 
 #ifdef UNIV_DEBUG
-  if (btr_cur_print_record_ops && thr) {
+  if (btr_cur_print_record_ops && thr != nullptr) {
     btr_cur_trx_report(thr_get_trx(thr), cursor->m_index, "del mark ");
-    rec_print(rec);
+    log_err(rec_to_string(rec));
   }
 #endif /* UNIV_DEBUG */
 
-  auto err = lock_sec_rec_modify_check_and_lock(flags, btr_cur_get_block(cursor), rec, cursor->m_index, thr, mtr);
+  auto err = srv_lock_sys->sec_rec_modify_check_and_lock(flags, btr_cur_get_block(cursor), rec, cursor->m_index, thr, mtr);
 
   if (err != DB_SUCCESS) {
 
@@ -1904,7 +1904,7 @@ bool btr_cur_optimistic_delete(btr_cur_t *cursor, mtr_t *mtr) {
   if (!rec_offs_any_extern(offsets) && btr_cur_delete_will_underflow(cursor, rec_offs_size(offsets), mtr)) {
     auto page = block->get_frame();
 
-    lock_update_delete(block, rec);
+    srv_lock_sys->update_delete(block, rec);
 
     page_get_max_insert_size_after_reorganize(page, 1);
 
@@ -1969,7 +1969,7 @@ void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents, btr_cur_
     *err = DB_SUCCESS;
 
   } else {
-    lock_update_delete(block, rec);
+    srv_lock_sys->update_delete(block, rec);
 
     const auto level = btr_page_get_level(page, mtr);
 
@@ -2965,18 +2965,20 @@ static void btr_rec_free_updated_extern_fields(
   }
 }
 
-/** Copies the prefix of a BLOB.  The clustered index record
-that points to this BLOB must be protected by a lock or a page latch.
-@return	number of bytes written to buf */
-static ulint btr_copy_blob_prefix(
-  byte *buf,      /*!< out: the externally stored part of
-                    the field, or a prefix of it */
-  ulint len,      /*!< in: length of buf, in bytes */
-  ulint space_id, /*!< in: space id of the BLOB pages */
-  ulint page_no,  /*!< in: page number of the first BLOB page */
-  ulint offset
-) /*!< in: offset on the first BLOB page */
-{
+/**
+ * Copies the prefix of a BLOB.
+ * 
+ * The clustered index record that points to this BLOB must be protected by a lock or a page latch.
+ * 
+ * @param[out] buf       The externally stored part of the field, or a prefix of it.
+ * @param[in]  len       Length of buf, in bytes.
+ * @param[in]  space_id  Space id of the BLOB pages.
+ * @param[in]  page_no   Page number of the first BLOB page.
+ * @param[in]  offset    Offset on the first BLOB page.
+ * 
+ * @return Number of bytes written to buf.
+ */
+static ulint btr_copy_blob_prefix(byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset) {
   ulint copied_len = 0;
 
   for (;;) {

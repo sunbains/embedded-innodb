@@ -8,7 +8,6 @@
 #include "innodb0types.h"
 
 #include "lock0lock.h"
-#include "lock0priv.h"
 #include "trx0trx.h"
 #include "srv0srv.h"
 
@@ -68,7 +67,7 @@ void trx_setup(trx_t* trx, int n_row_locks) {
     std::cout << "REC LOCK CREATE: " << i << "\n";
 
     /* Pass nullptr index handle. */
-    lock_rec_create_low(mode, space, page_no, heap_no, REC_BITMAP_SIZE, nullptr, trx);
+    (void) srv_lock_sys->rec_create_low({space, page_no}, mode, heap_no, REC_BITMAP_SIZE, nullptr, trx);
 
     kernel_mutex_exit();
   }
@@ -100,7 +99,7 @@ void run_1() {
   start = time(nullptr);
 
   for (auto &trx : trxs) {
-    if (lock_trx_has_no_waiters(trx)) {
+    if (srv_lock_sys->trx_has_no_waiters(trx)) {
       ++no_waiters;
       std::cout << "Trx " << trx->m_id << " has no waiters\n";
     }
@@ -112,7 +111,7 @@ void run_1() {
 
     kernel_mutex_enter();
 
-    lock_release_off_kernel(trx);
+    srv_lock_sys->release_off_kernel(trx);
 
     kernel_mutex_exit();
 
@@ -158,11 +157,11 @@ int main() {
 
   srv_lock_timeout_thread_event = os_event_create(nullptr);
 
-  lock_sys_create(1024 * 1024);
+  srv_trx_sys = Trx_sys::create(srv_fsp); 
+
+  srv_lock_sys = Lock_sys::create(srv_trx_sys, 1024 * 1024);
 
   kernel_mutex_enter();
-
-  srv_trx_sys = static_cast<Trx_sys *>(mem_alloc(sizeof(Trx_sys)));
 
   UT_LIST_INIT(srv_trx_sys->m_client_trx_list);
 
@@ -174,10 +173,9 @@ int main() {
   test::run_1();
 
   // Shutdown
-  lock_sys_close();
+  Lock_sys::destroy(srv_lock_sys);
 
-  mem_free(srv_trx_sys);
-  srv_trx_sys = nullptr;
+  Trx_sys::destroy(srv_trx_sys);
 
   mutex_free(&kernel_mutex);
 

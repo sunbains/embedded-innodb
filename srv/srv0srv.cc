@@ -331,7 +331,6 @@ ulint srv_n_lock_max_wait_time = 0;
 ib_stream on startup/shutdown */
 bool srv_print_verbose_log = true;
 bool srv_print_innodb_monitor = false;
-bool srv_print_innodb_lock_monitor = false;
 bool srv_print_innodb_tablespace_monitor = false;
 bool srv_print_innodb_table_monitor = false;
 
@@ -1134,7 +1133,6 @@ void InnoDB::modules_var_init() noexcept {
   os_file_var_init();
   sync_var_init();
   Log::var_init();
-  lock_var_init();
   dict_var_init();
   dfield_var_init();
   dtype_var_init();
@@ -1469,7 +1467,7 @@ bool InnoDB::printf_innodb_monitor(
   mutex_exit(&dict_foreign_err_mutex);
 #endif /* WITH_FOREIGN_KEY */
 
-  lock_print_info_all_transactions(ib_stream);
+  srv_lock_sys->print_info_all_transactions();
 
   log_warn(
     "--------\n"
@@ -1482,7 +1480,7 @@ bool InnoDB::printf_innodb_monitor(
   /* Only if lock_print_info_summary proceeds correctly,
   before we call the lock_print_info_all_transactions
   to print all the lock information. */
-  auto ret = lock_print_info_summary(ib_stream, nowait);
+  auto ret = srv_lock_sys->print_info_summary(nowait);
 
   if (ret) {
     if (trx_start) {
@@ -1495,7 +1493,7 @@ bool InnoDB::printf_innodb_monitor(
       }
     }
 
-    lock_print_info_all_transactions(ib_stream);
+    srv_lock_sys->print_info_all_transactions();
 
     if (trx_end) {
       auto t = ftell(ib_stream);
@@ -1755,7 +1753,7 @@ loop:
   }
 
   if (srv_print_innodb_monitor ||
-      srv_print_innodb_lock_monitor ||
+      srv_lock_sys->is_print_lock_monitor_set() ||
       srv_print_innodb_tablespace_monitor ||
        srv_print_innodb_table_monitor) {
 
@@ -1813,7 +1811,7 @@ void *InnoDB::lock_timeout_thread(void *) noexcept {
           already been granted: in that case do nothing */
   
           if (trx->wait_lock) {
-            lock_cancel_waiting_and_release(trx->wait_lock);
+            srv_lock_sys->cancel_waiting_and_release(trx->wait_lock);
           }
         }
       }

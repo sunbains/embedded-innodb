@@ -833,7 +833,7 @@ inline int page_cmp_dtuple_rec_with_match(
  * 
  * @return	page number
  */
-inline ulint page_get_page_no(const page_t *page) {
+inline page_no_t page_get_page_no(const page_t *page) {
   ut_ad(page == page_align((page_t *)page));
   return mach_read_from_4(page + FIL_PAGE_OFFSET);
 }
@@ -845,7 +845,7 @@ inline ulint page_get_page_no(const page_t *page) {
  * 
  * @return	space id
  */
-inline ulint page_get_space_id(const page_t *page) {
+inline space_id_t page_get_space_id(const page_t *page) {
   ut_ad(page == page_align((page_t *)page));
 
   return mach_read_from_4(page + FIL_PAGE_SPACE_ID);

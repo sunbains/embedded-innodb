@@ -333,7 +333,7 @@ static void row_purge_upd_exist_or_extern(purge_node_t *node) /*!< in: row purge
   dict_index_t *index;
   bool is_insert;
   ulint rseg_id;
-  ulint page_no;
+  page_no_t page_no;
   ulint offset;
   ulint i;
   mtr_t mtr;

@@ -227,7 +227,7 @@ struct FSP {
    * 
    * @return	the allocated page offset FIL_NULL if no page could be allocated
    */
-  [[nodiscard]] ulint fseg_alloc_free_page(fseg_header_t *seg_header, page_no_t hint, byte direction, mtr_t *mtr) noexcept;
+  [[nodiscard]] page_no_t fseg_alloc_free_page(fseg_header_t *seg_header, page_no_t hint, byte direction, mtr_t *mtr) noexcept;
 
   /**
    * Allocates a single free page from a segment. This function implements
@@ -248,7 +248,7 @@ struct FSP {
    * 
    * @return	allocated page offset, FIL_NULL if no page could be allocated
    */
-  [[nodiscard]] ulint fseg_alloc_free_page_general(fseg_header_t *seg_header, page_no_t hint, byte direction, bool reserved, mtr_t *mtr) noexcept;
+  [[nodiscard]] page_no_t fseg_alloc_free_page_general(fseg_header_t *seg_header, page_no_t hint, byte direction, bool reserved, mtr_t *mtr) noexcept;
 
   /**
    * Reserves free pages from a tablespace. All mini-transactions which may
@@ -574,7 +574,7 @@ private:
    * 
    * @return	the allocated page number, FIL_NULL if no page could be allocated
    */
-  ulint fseg_alloc_free_page_low(space_id_t space, fseg_inode_t *seg_inode, page_no_t hint, byte direction, mtr_t *mtr) noexcept;
+  page_no_t fseg_alloc_free_page_low(space_id_t space, fseg_inode_t *seg_inode, page_no_t hint, byte direction, mtr_t *mtr) noexcept;
 
   /**
    * Tries to extend a single-table tablespace so that a page would fit in the data file.

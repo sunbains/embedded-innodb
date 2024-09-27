@@ -27,34 +27,54 @@ Created July 16, 2007 Vasil Dimov
 #include "innodb0types.h"
 #include "lock0types.h"
 
-typedef struct lock_queue_iterator_struct {
-  const Lock *current_lock;
-  /* In case this is a record lock queue (not table lock queue)
+struct Lock_sys;
+
+/**
+ * @brief Iterator for traversing lock queues.
+ *
+ * This struct provides an iterator for traversing lock queues. It can iterate over record
+ * locks or table locks. The iterator maintains the current position in the queue and
+ * provides methods to move forward or backward in the queue.
+ */
+struct Lock_iterator {
+  explicit Lock_iterator(Lock_sys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
+
+  /**
+   * @brief Initialize lock queue iterator.
+   *
+   * This function initializes the lock queue iterator so that it starts to iterate from
+   * the specified lock. The bit_no parameter specifies the record number within the heap
+   * where the record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
+   * 1. If the lock is a table lock, thus we have a table lock queue;
+   * 2. If the lock is a record lock and it is a wait lock. In this case, bit_no is 
+   *    calculated in this function by using lock_rec_find_set_bit(). There is exactly 
+   *    one bit set in the bitmap of a wait lock.
+   *
+   * @param[out] iter The iterator to initialize.
+   * @param[in] lock The lock to start from.
+   * @param[in] bit_no The record number in the heap.
+   */
+  void reset(const Lock *lock, ulint bit_no) noexcept;
+
+  /**
+   * @brief Get the previous lock in the lock queue.
+   *
+   * This function retrieves the previous lock in the lock queue. If there are no more locks
+   * (i.e., the current lock is the first one), it returns nullptr. The iterator is receded
+   * (if not-nullptr is returned).
+   *
+   * @return The previous lock or nullptr.
+   */
+  const Lock *prev() noexcept;
+
+  /** In case this is a record lock queue (not table lock queue)
   then bit_no is the record number within the heap in which the
   record is stored. */
-  ulint bit_no;
-} lock_queue_iterator_t;
+  ulint m_bit_no{ULINT_UNDEFINED};
 
-/** Initialize lock queue iterator so that it starts to iterate from
-"lock". bit_no specifies the record number within the heap where the
-record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
-1. If the lock is a table lock, thus we have a table lock queue;
-2. If the lock is a record lock and it is a wait lock. In this case
-   bit_no is calculated in this function by using
-   lock_rec_find_set_bit(). There is exactly one bit set in the bitmap
-   of a wait lock. */
+  /** The current lock in the lock queue. */
+  const Lock *m_current_lock{nullptr};
 
-void lock_queue_iterator_reset(
-  lock_queue_iterator_t *iter, /*!< out: iterator */
-  const Lock *lock,          /*!< in: lock to start from */
-  ulint bit_no
-); /*!< in: record number in the
-                                 heap */
-
-/** Gets the previous lock in the lock queue, returns nullptr if there are no
-more locks (i.e. the current lock is the first one). The iterator is
-receded (if not-nullptr is returned).
-@return	previous lock or nullptr */
-
-const Lock *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter); /*!< in/out: iterator */
-
+  /** The lock system. */
+  Lock_sys *m_lock_sys{};
+};

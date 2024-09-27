@@ -1140,7 +1140,7 @@ static ulint recv_parse_log_rec(
   if (*ptr == MLOG_DUMMY_RECORD) {
     *type = static_cast<mlog_type_t>(*ptr);
 
-    *space = ULINT_UNDEFINED - 1; /* For debugging */
+    *space = ULINT32_UNDEFINED - 1; /* For debugging */
 
     return 1;
   }

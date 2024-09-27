@@ -1099,23 +1099,21 @@ db_err trx_undo_report_row_operation(
 }
 
 trx_undo_rec_t *trx_undo_get_undo_rec_low(roll_ptr_t roll_ptr, mem_heap_t *heap) {
-  trx_undo_rec_t *undo_rec;
-  ulint rseg_id;
-  ulint page_no;
   ulint offset;
-  const page_t *undo_page;
-  trx_rseg_t *rseg;
+  ulint rseg_id;
   bool is_insert;
-  mtr_t mtr;
+  page_no_t page_no;
 
   trx_undo_decode_roll_ptr(roll_ptr, &is_insert, &rseg_id, &page_no, &offset);
-  rseg = trx_rseg_get_on_id(rseg_id);
+  auto rseg = trx_rseg_get_on_id(rseg_id);
+
+  mtr_t mtr;
 
   mtr.start();
 
-  undo_page = srv_undo->page_get_s_latched(rseg->space, page_no, &mtr);
+  auto undo_page = srv_undo->page_get_s_latched(rseg->space, page_no, &mtr);
 
-  undo_rec = trx_undo_rec_copy(undo_page + offset, heap);
+  auto undo_rec = trx_undo_rec_copy(undo_page + offset, heap);
 
   mtr.commit();
 
@@ -1178,10 +1176,9 @@ db_err trx_undo_prev_version_build(
       "index record ",
       index->name
     );
-    rec_print(index_rec);
-    ib_logger(ib_stream, "\nrecord version ");
-    rec_print(rec);
-    ib_logger(ib_stream, "\n");
+    log_err(rec_to_string(index_rec));
+    log_err("record version ");
+    log_err(rec_to_string(rec));
     return DB_ERROR;
   }
 
@@ -1277,19 +1274,15 @@ db_err trx_undo_prev_version_build(
     );
     log_warn_buf(undo_rec, 150);
     log_warn("index record ");
-    rec_print(index_rec);
-    ib_logger(ib_stream, "\nrecord version ");
-    rec_print(rec);
-    ib_logger(
-      ib_stream,
-      "\n"
-      "Record trx id %lu, update rec trx id %lu\n"
-      "Roll ptr in rec %lu, in update rec %lu\n",
-      TRX_ID_PREP_PRINTF(rec_trx_id),
-      TRX_ID_PREP_PRINTF(trx_id),
-      (ulong)old_roll_ptr,
-      (ulong)roll_ptr
-    );
+    log_warn(rec_to_string(index_rec));
+    log_warn("record version ");
+    log_warn(rec_to_string(rec));
+    log_warn(std::format("Record trx id {}, update rec trx id {} Roll ptr in rec {}, in update rec {}",
+      rec_trx_id,
+      trx_id,
+      old_roll_ptr,
+      roll_ptr
+    ));
 
     log_info(srv_trx_sys->m_purge->to_string());
 

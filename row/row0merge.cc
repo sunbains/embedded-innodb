@@ -851,11 +851,11 @@ static int row_merge_cmp(
 
 #ifdef UNIV_DEBUG
   if (row_merge_print_cmp) {
-    ib_logger(ib_stream, "row_merge_cmp1 ");
-    rec_print(mrec1);
-    ib_logger(ib_stream, "\nrow_merge_cmp2 ");
-    rec_print(mrec2);
-    ib_logger(ib_stream, "\nrow_merge_cmp=%d\n", cmp);
+    log_err("row_merge_cmp1 ");
+    log_err(rec_to_string(mrec1));
+    log_err("row_merge_cmp2 ");
+    log_err(rec_to_string(mrec2));
+    log_err("row_merge_cmp=%d", cmp);
   }
 #endif /* UNIV_DEBUG */
 

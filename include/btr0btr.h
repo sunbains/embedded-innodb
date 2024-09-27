@@ -62,7 +62,7 @@ rec_t *btr_get_next_user_rec(rec_t *rec, mtr_t *mtr);
 @param[in,out] index            index
 @param[in,out] mtr              Mini-transaction handle
 @return	page number of the created root, FIL_NULL if did not succeed */
-ulint btr_create(ulint type, ulint space, uint64_t index_id, dict_index_t *index, mtr_t *mtr);
+page_no_t btr_create(ulint type, space_id_t space, uint64_t index_id, dict_index_t *index, mtr_t *mtr);
 
 /** Frees a B-tree except the root page, which MUST be freed after this
 by calling btr_free_root.
@@ -349,7 +349,7 @@ inline void btr_page_set_level(page_t *page, ulint level, mtr_t *mtr) {
 /** Gets the next index page number.
 @param[in] page                 Index page
 @return	next page number */
-inline ulint btr_page_get_next(const page_t *page, mtr_t *mtr) {
+inline page_no_t btr_page_get_next(const page_t *page, mtr_t *mtr) {
   ut_ad(mtr->memo_contains_page(page, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(page, MTR_MEMO_PAGE_S_FIX));
 
   return mach_read_from_4(page + FIL_PAGE_NEXT);
@@ -359,14 +359,14 @@ inline ulint btr_page_get_next(const page_t *page, mtr_t *mtr) {
 @param[in,out] page             Index page
 @param[in] next                 Next page number
 @param[in,out]                  Mini-transaction. */
-inline void btr_page_set_next(page_t *page, ulint next, mtr_t *mtr) {
+inline void btr_page_set_next(page_t *page, page_no_t next, mtr_t *mtr) {
   mlog_write_ulint(page + FIL_PAGE_NEXT, next, MLOG_4BYTES, mtr);
 }
 
 /** Gets the previous index page number.
 @param[in] page                 Index page
 @return	prev page number */
-inline ulint btr_page_get_prev(const page_t *page, mtr_t *) {
+inline page_no_t btr_page_get_prev(const page_t *page, mtr_t *) {
   return mach_read_from_4(page + FIL_PAGE_PREV);
 }
 
@@ -374,7 +374,7 @@ inline ulint btr_page_get_prev(const page_t *page, mtr_t *) {
 @param[in,out] page             Index page
 @param[in] prev                 Prev page number
 @param[in,out]                  Mini-transaction. */
-inline void btr_page_set_prev(page_t *page, ulint prev, mtr_t *mtr) {
+inline void btr_page_set_prev(page_t *page, page_no_t prev, mtr_t *mtr) {
   mlog_write_ulint(page + FIL_PAGE_PREV, prev, MLOG_4BYTES, mtr);
 }
 

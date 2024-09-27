@@ -41,19 +41,20 @@ Created 4/20/1996 Heikki Tuuri
 /** Gets the offset of the trx id field, in bytes relative to the origin of
 a clustered index record.
 @return	offset of DATA_TRX_ID */
-
 ulint row_get_trx_id_offset(
   const rec_t *rec,    /*!< in: record */
-  dict_index_t *index, /*!< in: clustered index */
+  const dict_index_t *index, /*!< in: clustered index */
   const ulint *offsets
 ); /*!< in: Phy_rec::get_col_offsets(rec, index) */
+
 /** Reads the trx id field from a clustered index record.
 @return	value of the field */
 inline trx_id_t row_get_rec_trx_id(
   const rec_t *rec,    /*!< in: record */
-  dict_index_t *index, /*!< in: clustered index */
+  const dict_index_t *index, /*!< in: clustered index */
   const ulint *offsets
 ); /*!< in: Phy_rec::get_col_offsets(rec, index) */
+
 /** Reads the roll pointer field from a clustered index record.
 @return	value of the field */
 inline roll_ptr_t row_get_rec_roll_ptr(
@@ -61,6 +62,7 @@ inline roll_ptr_t row_get_rec_roll_ptr(
   dict_index_t *index, /*!< in: clustered index */
   const ulint *offsets
 ); /*!< in: Phy_rec::get_col_offsets(rec, index) */
+
 /** When an insert or purge to a table is performed, this function builds
 the entry to be inserted into or purged from an index on the table.
 @return index entry which should be inserted or purged, or NULL if the
@@ -74,12 +76,12 @@ dtuple_t *row_build_index_entry(
                          or NULL */
   dict_index_t *index, /*!< in: index on the table */
   mem_heap_t *heap
-); /*!< in: memory heap from which the memory for
-                         the index entry is allocated */
+);
+/*!< in: memory heap from which the memory for the index entry is allocated */
+
 /** An inverse function to row_build_index_entry. Builds a row from a
 record in a clustered index.
 @return	own: row built; see the NOTE below! */
-
 dtuple_t *row_build(
   ulint type,                /*!< in: ROW_COPY_POINTERS or
                                                ROW_COPY_DATA; the latter
@@ -119,7 +121,6 @@ dtuple_t *row_build(
 /** Converts an index record to a typed data tuple.
 @return index entry built; does not set info_bits, and the data fields
 in the entry will point directly to rec */
-
 dtuple_t *row_rec_to_index_entry_low(
   const rec_t *rec,          /*!< in: record in the index */
   const dict_index_t *index, /*!< in: index */
@@ -127,8 +128,8 @@ dtuple_t *row_rec_to_index_entry_low(
   ulint *n_ext,              /*!< out: number of externally
                                stored columns */
   mem_heap_t *heap
-); /*!< in: memory heap from which
-                               the memory needed is allocated */
+); /*!< in: memory heap from which the memory needed is allocated */
+
 /** Converts an index record to a typed data tuple. NOTE that externally
 stored (often big) fields are NOT copied to heap.
 @return	own: index entry built; see the NOTE below! */
@@ -277,7 +278,7 @@ ulint row_raw_format(
 @return	value of the field */
 inline trx_id_t row_get_rec_trx_id(
   const rec_t *rec,         /*!< in: record */
-  dict_index_t *dict_index, /*!< in: clustered index */
+  const dict_index_t *dict_index, /*!< in: clustered index */
   const ulint *offsets
 ) /*!< in: Phy_rec::get_col_offsets(rec, index) */
 {

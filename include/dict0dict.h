@@ -911,16 +911,16 @@ inline ulint dict_index_get_min_size(const dict_index_t *dict_index) {
 /** Gets the space id of the root of the index tree.
  * @param dict_index in: dict_index
  * @return space id */
-inline ulint dict_index_get_space(const dict_index_t *dict_index) {
+inline space_id_t dict_index_get_space(const dict_index_t *dict_index) {
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
 
-  return (dict_index->space);
+  return dict_index->space;
 }
 
 /** Sets the space id of the root of the index tree.
  * @param dict_index in/out: dict_index
  * @param space in: space id */
-inline void dict_index_set_space(dict_index_t *dict_index, ulint space) {
+inline void dict_index_set_space(dict_index_t *dict_index, space_id_t space) {
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
 
   dict_index->space = space;
@@ -929,7 +929,7 @@ inline void dict_index_set_space(dict_index_t *dict_index, ulint space) {
 /** Gets the page number of the root of the index tree.
  * @param dict_index in: dict_index
  * @return page number */
-inline ulint dict_index_get_page(const dict_index_t *dict_index) {
+inline page_no_t dict_index_get_page(const dict_index_t *dict_index) {
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
 
   return dict_index->page;
@@ -938,7 +938,7 @@ inline ulint dict_index_get_page(const dict_index_t *dict_index) {
 /** Sets the page number of the root of index tree.
  * @param dict_index in/out: dict_index
  * @param page in: page number */
-inline void dict_index_set_page(dict_index_t *dict_index, ulint page) {
+inline void dict_index_set_page(dict_index_t *dict_index, page_no_t page) {
   ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
 
   dict_index->page = page;

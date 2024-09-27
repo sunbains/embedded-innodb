@@ -50,7 +50,7 @@ trx_rseg_t *trx_rseg_get_on_id(ulint id);
  * 
  * @return	page number of the created segment, FIL_NULL if fail
  */
-ulint trx_rseg_header_create(space_id_t space, ulint max_size, ulint *slot_no, mtr_t *mtr);
+page_no_t trx_rseg_header_create(space_id_t space, ulint max_size, ulint *slot_no, mtr_t *mtr);
 
 /**
  * Creates the memory copies for rollback segments and initializes the

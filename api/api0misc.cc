@@ -165,7 +165,7 @@ db_err ib_trx_lock_table_with_retry(trx_t *trx, dict_table_t *table, enum Lock_m
     thr->run_node = thr;
     thr->prev_node = thr->common.parent;
 
-    auto err = lock_table(0, table, mode, thr);
+    auto err = srv_lock_sys->lock_table(0, table, mode, thr);
 
     trx->error_state = err;
 

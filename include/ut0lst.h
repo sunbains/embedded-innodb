@@ -80,25 +80,48 @@ template <typename Type, typename NodeGetter>
 struct ut_list_base {
   using elem_type = Type;
   using node_type = ut_list_node<elem_type>;
-  static const node_type &get_node(const elem_type &e) {
+
+  /** Copy constructor.
+   * 
+   * This is required to copy the count explicitly.
+   */
+  ut_list_base(const ut_list_base &rhs) noexcept
+    : m_first_element{rhs.m_first_element},
+      m_last_element{rhs.m_last_element} {
+    count.store(rhs.count.load(std::memory_order_acquire));
+  }
+
+  static const node_type &get_node(const elem_type &e) noexcept {
     return NodeGetter::get_node(e);
   }
-  static node_type &get_node(elem_type &e) {
+
+  static node_type &get_node(elem_type &e) noexcept {
     return const_cast<node_type &>(get_node(const_cast<const elem_type &>(e)));
   }
-  static const elem_type *next(const elem_type &e) { return get_node(e).next; }
+
+  static const elem_type *next(const elem_type &e) noexcept { return get_node(e).next; }
+
   static elem_type *next(elem_type &e) {
     return const_cast<elem_type *>(next(const_cast<const elem_type &>(e)));
   }
-  static const elem_type *prev(const elem_type &e) { return get_node(e).prev; }
-  static elem_type *prev(elem_type &e) {
+
+  static const elem_type *prev(const elem_type &e) noexcept { return get_node(e).prev; }
+
+  static elem_type *prev(elem_type &e) noexcept {
     return const_cast<elem_type *>(prev(const_cast<const elem_type &>(e)));
   }
 
   /** Pointer to list start, nullptr if empty. */
-  elem_type *first_element{nullptr};
+  elem_type *m_first_element{nullptr};
+
   /** Pointer to list end, nullptr if empty. */
-  elem_type *last_element{nullptr};
+  elem_type *m_last_element{nullptr};
+
+  ut_list_base() = default;
+  ut_list_base(ut_list_base &&) = delete;
+  ut_list_base &operator=(ut_list_base &&) = delete;
+  ut_list_base &operator=(const ut_list_base &) = delete;
+
 #ifdef UNIV_DEBUG
   /** UT_LIST_INITIALISED if the list was initialised with the constructor. It
   is used to detect if the ut_list_base object is used directly after
@@ -112,6 +135,107 @@ struct ut_list_base {
     return count.load(std::memory_order_acquire);
   }
 
+  /** Returns the number of nodes currently present in the list. */
+  inline size_t size() const {
+    return get_length();
+  }
+
+  /** Returns true if the list is empty. */
+  inline bool empty() const noexcept {
+    return size() == 0;
+  }
+
+  inline void push_back(elem_type *elem) noexcept {
+    ut_ad(UT_LIST_IS_INITIALISED(*this));
+
+    auto &elem_node = get_node(*elem);
+
+    elem_node.next = nullptr;
+    elem_node.prev = m_last_element;
+
+    if (m_last_element != nullptr) {
+      ut_ad(m_last_element != elem);
+
+      get_node(*m_last_element).next = elem;
+    }
+
+    m_last_element = elem;
+
+    if (m_first_element == nullptr) {
+      m_first_element = elem;
+    }
+
+    update_length(1);
+  }
+
+  void push_front(elem_type *elem) noexcept {
+    ut_ad(UT_LIST_IS_INITIALISED(*this));
+
+    auto &elem_node = get_node(*elem);
+
+    elem_node.prev = nullptr;
+    elem_node.next = m_first_element;
+
+    if (m_first_element != nullptr) {
+      ut_ad(m_first_element != elem);
+
+      get_node(*m_first_element).prev = elem;
+    }
+
+    m_first_element = elem;
+
+    if (m_last_element == nullptr) {
+      m_last_element = elem;
+    }
+
+    update_length(1);
+  }
+
+  void remove(elem_type *elem) noexcept {
+    ut_a(!empty());
+    ut_ad(UT_LIST_IS_INITIALISED(*this));
+
+    auto &node = get_node(*elem);
+
+    if (node.next != nullptr) {
+      get_node(*node.next).prev = node.prev;
+    } else {
+      m_last_element = node.prev;
+    }
+
+    if (node.prev != nullptr) {
+      get_node(*node.prev).next = node.next;
+    } else {
+      m_first_element = node.next;
+    }
+
+    node.next = nullptr;
+    node.prev = nullptr;
+
+    update_length(-1);
+  }
+
+  elem_type *front() noexcept {
+    ut_ad(UT_LIST_IS_INITIALISED(*this));
+    ut_ad(m_first_element != nullptr || empty());
+
+    return m_first_element;
+  }
+
+  const elem_type *front() const noexcept {
+    ut_ad(UT_LIST_IS_INITIALISED(*this));
+    ut_ad(m_first_element != nullptr || empty());
+
+    return m_first_element;
+  }
+
+  elem_type *back() noexcept {
+    ut_ad(UT_LIST_IS_INITIALISED(*this));
+    ut_ad(m_last_element != nullptr || empty());
+
+    return m_last_element;
+  }
+
   /** Updates the length of the list by the amount specified.
    @param diff the value by which to increase the length. Can be negative. */
   void update_length(int diff) {
@@ -119,17 +243,17 @@ struct ut_list_base {
     count.store(get_length() + diff, std::memory_order_release);
   }
 
-  void clear() {
+  void clear() noexcept {
     ut_ad(UT_LIST_IS_INITIALISED(*this));
-    first_element = nullptr;
-    last_element = nullptr;
+    m_first_element = nullptr;
+    m_last_element = nullptr;
     count.store(0);
   }
 
-  void reverse() {
-    Type *tmp = first_element;
-    first_element = last_element;
-    last_element = tmp;
+  void reverse() noexcept {
+    Type *tmp = m_first_element;
+    m_first_element = m_last_element;
+    m_last_element = tmp;
   }
 
  private:
@@ -160,9 +284,9 @@ struct ut_list_base {
  public:
   using iterator = base_iterator<elem_type>;
   using const_iterator = base_iterator<const elem_type>;
-  iterator begin() { return first_element; }
+  iterator begin() { return m_first_element; }
   iterator end() { return nullptr; }
-  const_iterator begin() const { return first_element; }
+  const_iterator begin() const { return m_first_element; }
   const_iterator end() const { return nullptr; }
 
   /** A helper wrapper class for the list, which exposes begin(),end() iterators
@@ -200,12 +324,12 @@ struct ut_list_base {
         was removed from the list during loop, which is violation of the
         contract with the user of .removable(). */
         ut_ad(!m_prev_elem || next(*m_prev_elem) ||
-            m_list.last_element == m_prev_elem);
+            m_list.m_last_element == m_prev_elem);
         /* The reason this is so complicated is that we want to support cases in
         which the body of the loop removed not only the current element, but
         also some elements even further after it. */
         auto here =
-            m_prev_elem == nullptr ? m_list.first_element : next(*m_prev_elem);
+            m_prev_elem == nullptr ? m_list.m_first_element : next(*m_prev_elem);
         if (here != m_elem) {
           m_elem = here;
         } else {
@@ -216,7 +340,7 @@ struct ut_list_base {
       }
     };
     Removable(ut_list_base &list) : m_list{list} {}
-    iterator begin() { return iterator{m_list, m_list.first_element}; }
+    iterator begin() { return iterator{m_list, m_list.m_first_element}; }
     iterator end() { return iterator{m_list, nullptr}; }
   };
   /** Returns a wrapper which lets you remove current item or items after it.
@@ -292,26 +416,7 @@ UT_LIST_NODE_GETTER_DEFINITION(t,m) once t::m is defined. */
  @param elem the element to add */
 template <typename List>
 void ut_list_prepend(List &list, typename List::elem_type *elem) {
-  auto &elem_node = List::get_node(*elem);
-
-  ut_ad(UT_LIST_IS_INITIALISED(list));
-
-  elem_node.prev = nullptr;
-  elem_node.next = list.first_element;
-
-  if (list.first_element != nullptr) {
-    ut_ad(list.first_element != elem);
-
-    List::get_node(*list.first_element).prev = elem;
-  }
-
-  list.first_element = elem;
-
-  if (list.last_element == nullptr) {
-    list.last_element = elem;
-  }
-
-  list.update_length(1);
+  list.push_front(elem);
 }
 
 /** Adds the node as the first element in a two-way linked list.
@@ -325,26 +430,7 @@ void ut_list_prepend(List &list, typename List::elem_type *elem) {
  */
 template <typename List>
 void ut_list_append(List &list, typename List::elem_type *elem) {
-  auto &elem_node = List::get_node(*elem);
-
-  ut_ad(UT_LIST_IS_INITIALISED(list));
-
-  elem_node.next = nullptr;
-  elem_node.prev = list.last_element;
-
-  if (list.last_element != nullptr) {
-    ut_ad(list.last_element != elem);
-
-    List::get_node(*list.last_element).next = elem;
-  }
-
-  list.last_element = elem;
-
-  if (list.first_element == nullptr) {
-    list.first_element = elem;
-  }
-
-  list.update_length(1);
+  list.push_back(elem);
 }
 
 /** Adds the node as the last element in a two-way linked list.
@@ -369,11 +455,11 @@ void ut_list_insert(List &list, typename List::elem_type *elem1,
 
   elem2_node.prev = elem1;
   elem2_node.next = elem1_node.next;
-  ut_ad((elem2_node.next == nullptr) == (list.last_element == elem1));
+  ut_ad((elem2_node.next == nullptr) == (list.m_last_element == elem1));
   if (elem2_node.next != nullptr) {
     List::get_node(*elem2_node.next).prev = elem2;
   } else {
-    list.last_element = elem2;
+    list.m_last_element = elem2;
   }
 
   elem1_node.next = elem2;
@@ -394,26 +480,7 @@ void ut_list_insert(List &list, typename List::elem_type *elem1,
 */
 template <typename List>
 void ut_list_remove(List &list, typename List::elem_type *elem) {
-  ut_a(list.get_length() > 0);
-  ut_ad(UT_LIST_IS_INITIALISED(list));
-
-  auto &node = List::get_node(*elem);
-  if (node.next != nullptr) {
-    List::get_node(*node.next).prev = node.prev;
-  } else {
-    list.last_element = node.prev;
-  }
-
-  if (node.prev != nullptr) {
-    List::get_node(*node.prev).next = node.next;
-  } else {
-    list.first_element = node.next;
-  }
-
-  node.next = nullptr;
-  node.prev = nullptr;
-
-  list.update_length(-1);
+  list.remove(elem);
 }
 
 /** Removes a node from a two-way linked list.
@@ -453,7 +520,7 @@ inline auto ut_list_get_len(List& list) {
 template <typename List>
 inline auto ut_list_get_first(List& list) {
   ut_ad(UT_LIST_IS_INITIALISED(list));
-  return list.first_element;
+  return list.m_first_element;
 }
 
 /** Gets the last node in a two-way list.
@@ -464,7 +531,7 @@ inline auto ut_list_get_first(List& list) {
 template <typename List>
 inline auto ut_list_get_last(List& list) {
   ut_ad(UT_LIST_IS_INITIALISED(list));
-  return list.last_element;
+  return list.m_last_element;
 }
 
 struct NullValidate {
@@ -512,7 +579,7 @@ void ut_list_validate(const List &list, Functor &functor) {
   /* Validate the list backwards. */
   size_t count = 0;
 
-  for (auto elem = list.last_element; elem != nullptr;
+  for (auto elem = list.m_last_element; elem != nullptr;
        elem = List::prev(*elem)) {
     ++count;
   }

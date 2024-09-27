@@ -475,29 +475,12 @@ inline buf_block_t *buf_page_get_block(buf_page_t *bpage) {
  * @param space Pointer to store the space id.
  * @param addr Pointer to store the page offset and byte offset.
  */
-inline void buf_ptr_get_fsp_addr(const void *ptr, ulint *space, fil_addr_t *addr) {
+inline void buf_ptr_get_fsp_addr(const void *ptr, space_id_t *space, fil_addr_t *addr) {
   auto page = reinterpret_cast<const page_t *>(ut_align_down(ptr, UNIV_PAGE_SIZE));
 
   *space = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
   addr->m_page_no = mach_read_from_4(page + FIL_PAGE_OFFSET);
   addr->m_boffset = ut_align_offset(ptr, UNIV_PAGE_SIZE);
-}
-
-/**
- * Gets the hash value of the page the pointer is pointing to. This can be used in searches in the lock hash table.
- *
- * @param block Pointer to the buffer block.
- * @return Lock hash value.
- */
-inline ulint buf_block_get_lock_hash_val(const buf_block_t *block) {
-  ut_ad(block->m_page.in_file());
-
-  IF_SYNC_DEBUG(ut_ad(
-                  rw_lock_own(&(((buf_block_t *)block)->m_rw_lock), RW_LOCK_EXCLUSIVE) ||
-                  rw_lock_own(&(((buf_block_t *)block)->m_rw_lock), RW_LOCK_SHARED)
-  );)
-
-  return block->m_lock_hash_val;
 }
 
 /**

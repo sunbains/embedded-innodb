@@ -143,15 +143,15 @@ struct Fil {
    @return end of log record, or nullptr if the record was not completely
    contained between ptr and end_ptr
 
-   @param[in] ptr                  buffer containing the log record body,
-                                   or an initial segment of it.
-   @param[in] end_ptr              Buffer end
-   @param[in] type                 The type of this log record.
-   @param[in] space_id             The space id of the tablespace in question, or
-                                   0 if the log record should only be parsed but
-                                   not replayed
-   @param[in] log_flags            redo log flags (stored in the page number
-                                   parameter) */
+   @param[in] ptr               buffer containing the log record body,
+                                or an initial segment of it.
+   @param[in] end_ptr           Buffer end
+   @param[in] type              The type of this log record.
+   @param[in] space_id          The space id of the tablespace in question, or
+                                0 if the log record should only be parsed but
+                                not replayed
+   @param[in] log_flags         redo log flags (stored in the page number
+                                parameter) */
    byte *op_log_parse_or_replay(
      byte *ptr,
      byte *end_ptr,
@@ -161,7 +161,7 @@ struct Fil {
 
    /** Deletes a single-table tablespace. The tablespace must be cached in the
    memory cache.
-   @param[in] space_id             Tablespace ID
+   @param[in] space_id          Tablespace ID
    @return	true if success */
    bool delete_tablespace(space_id_t space_id);
 
@@ -174,20 +174,20 @@ struct Fil {
    3. When the user does IMPORT TABLESPACE, the tablespace will have the same id
       as it originally had.
 
-   @param[in] id                   Tablespace ID
+   @param[in] space_id          Tablespace ID
    @return	true if success */
-   bool discard_tablespace(ulint id);
+   bool discard_tablespace(space_id_t space_id);
 
    /** Renames a single-table tablespace. The tablespace must be cached in the
    tablespace memory cache.
 
-   @param[in] old_name             Old table name in the standard
-                                   databasename/tablename format of
-                                   InnoDB, or nullptr if we do the rename
-                                   based on the space id only
-   @param[in] space_id             Tablepace id
-   @param[in] new_name             New table name in the standard
-                                   databasename/tablename format of InnoDB
+   @param[in] old_name          Old table name in the standard
+                                databasename/tablename format of
+                                InnoDB, or nullptr if we do the rename
+                                based on the space id only
+   @param[in] space_id          Tablepace id
+   @param[in] new_name          New table name in the standard
+                                databasename/tablename format of InnoDB
 
    @return	true if success */
    bool rename_tablespace(const char *old_name, space_id_t space_id, const char *new_name);
@@ -198,16 +198,16 @@ struct Fil {
         CREATE TEMPORARY TABLE
   we place in the configured TEMP dir of the application.
 
-  @param[in,out] space_id,        Space id; if this is != 0, then this is an
-                                  input parameter, otherwise output
-  @param[in] tablename            The table name in the usual
-                                  databasename/tablename format of InnoDB,
-                                  or a dir path to a temp table
-  @param[in] is_temp              true if a table created with
-                                  CREATE TEMPORARY TABLE
-  @param[in] flags                Tablespace flags
-  @param[in] size);               The initial size of the tablespace file
-                                  in pages, must be >= FIL_IBD_FILE_INITIAL_SIZE
+  @param[in,out] space_id,      Space id; if this is != 0, then this is an
+                                input parameter, otherwise output
+  @param[in] tablename          The table name in the usual
+                                databasename/tablename format of InnoDB,
+                                or a dir path to a temp table
+  @param[in] is_temp            true if a table created with
+                                CREATE TEMPORARY TABLE
+  @param[in] flags              Tablespace flags
+  @param[in] size);             The initial size of the tablespace file
+                                in pages, must be >= FIL_IBD_FILE_INITIAL_SIZE
   @return	DB_SUCCESS or error code */
   db_err create_new_single_table_tablespace(
     space_id_t *space_id,
@@ -311,7 +311,7 @@ struct Fil {
    * the number of pages given. The tablespace must be cached
    * in the memory cache. If the space is big enough already, does nothing.
    *
-   * @param[out]actual_size       Size of the space after extension;
+   * @param[out]actual_size       Size of the space after extension in pages;
    *                              if we ran out of disk space this may be
    *                              lower than the desired size
    * @param[in] space_id          space id
@@ -321,7 +321,7 @@ struct Fil {
    *
    * @return true if success
    */
-  bool extend_space_to_desired_size(ulint *actual_size, space_id_t space_id, ulint size_after_extend);
+  bool extend_space_to_desired_size(page_no_t *actual_size, space_id_t space_id, page_no_t size_after_extend);
 
   /**
    * Tries to reserve free extents in a file space.
@@ -551,10 +551,10 @@ private:
   /**
    * @brief Returns the table space by a given id, nullptr if not found.
    * 
-   * @param id space id
+   * @param space_id space id
    * @return Fil::fil_space_t* table space, nullptr if not found
    */
-  fil_space_t *space_get_by_id(space_id_t id);
+  fil_space_t *space_get_by_id(space_id_t space_id);
 
   /**
    * @brief Returns the table space by a given name, nullptr if not found.

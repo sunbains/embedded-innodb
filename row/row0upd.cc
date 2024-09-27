@@ -1081,13 +1081,10 @@ static db_err row_upd_sec_index_entry(
     dict_index_name_print(ib_stream, trx, index);
     ib_logger(ib_stream, "\ntuple ");
     dtuple_print(ib_stream, entry);
-    ib_logger(ib_stream, "\nrecord ");
-    rec_print(rec);
-    ib_logger(ib_stream, "\n");
-
-    trx_print(ib_stream, trx, 0);
-
-    ib_logger(ib_stream, "Submit a detailed bug report");
+    log_err("record ");
+    log_err(rec_to_string(rec));
+    log_info(trx_to_string(trx, 0));
+    log_err("Submit a detailed bug report");
   } else {
     /* Delete mark the old index record; it can already be
     delete marked if we return after a lock wait in
@@ -1476,7 +1473,7 @@ static db_err row_upd_clust_step(
   }
 
   if (!node->has_clust_rec_x_lock) {
-    err = lock_clust_rec_modify_check_and_lock(0, pcur->get_block(), rec, index, offsets, thr);
+    err = srv_lock_sys->clust_rec_modify_check_and_lock(0, pcur->get_block(), rec, index, offsets, thr);
     if (err != DB_SUCCESS) {
       mtr->commit();
       goto exit_func;
@@ -1652,7 +1649,7 @@ que_thr_t *row_upd_step(que_thr_t *thr) {
       /* It may be that the current session has not yet
       started its transaction, or it has been committed: */
 
-      err = lock_table(0, node->table, LOCK_IX, thr);
+      err = srv_lock_sys->lock_table(0, node->table, LOCK_IX, thr);
 
       if (err != DB_SUCCESS) {
 

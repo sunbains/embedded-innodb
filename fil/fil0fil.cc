@@ -1402,7 +1402,7 @@ retry:
   return success;
 }
 
-db_err Fil::create_new_single_table_tablespace(ulint *space_id, const char *tablename, bool is_temp, ulint flags, ulint size) {
+db_err Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *tablename, bool is_temp, ulint flags, ulint size) {
   bool success;
 
   ut_a(flags == 0);
@@ -1776,11 +1776,11 @@ void Fil::load_single_table_tablespace(ib_recovery_t recovery, const char *dbnam
     space_id = srv_fsp->get_space_id(page);
     flags = srv_fsp->get_flags(page);
   } else {
-    space_id = ULINT_UNDEFINED;
+    space_id = FIL_NULL;
     flags = 0;
   }
 
-  if (space_id == ULINT_UNDEFINED || space_id == SYS_TABLESPACE) {
+  if (space_id == FIL_NULL || space_id == SYS_TABLESPACE) {
 
     log_warn(std::format("Tablespace id {} in file {} is not sensible\n", space_id, filepath));
 
@@ -2050,22 +2050,22 @@ ulint Fil::get_space_id_for_table(const char *name) {
 
   auto fil_namespace = space_get_by_name(path);
 
-  space_id_t id;
+  space_id_t space_id;
 
   if (fil_namespace != nullptr) {
-    id = fil_namespace->m_id;
+    space_id = fil_namespace->m_id;
   } else {
-    id = ULINT_UNDEFINED;
+    space_id = FIL_NULL;
   }
 
   mem_free(path);
 
   mutex_exit(&m_mutex);
 
-  return id;
+  return space_id;
 }
 
-bool Fil::extend_space_to_desired_size(ulint *actual_size, space_id_t space_id, ulint size_after_extend) {
+bool Fil::extend_space_to_desired_size(page_no_t *actual_size, space_id_t space_id, page_no_t size_after_extend) {
   mutex_enter_and_prepare_for_io(space_id);
 
   auto space = space_get_by_id(space_id);
@@ -2527,12 +2527,12 @@ void Fil::flush_file_spaces(ulint purpose) {
     }
   }
 
-  space_ids.push_back(ULINT_UNDEFINED);
+  space_ids.push_back(FIL_NULL);
 
   mutex_exit(&m_mutex);
 
   for (auto space_id : space_ids) {
-    if (space_id == ULINT_UNDEFINED) {
+    if (space_id == FIL_NULL) {
       break;
     }
     flush(space_id);

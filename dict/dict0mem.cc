@@ -30,7 +30,7 @@ Created 1/8/1996 Heikki Tuuri
 /** initial memory heap size when creating a table or index object */
 constexpr ulint DICT_HEAP_SIZE = 100;
 
-dict_table_t *dict_mem_table_create(const char *name, ulint space, ulint n_cols, ulint flags) {
+dict_table_t *dict_mem_table_create(const char *name, space_id_t space, ulint n_cols, ulint flags) {
   ut_ad(name != nullptr);
   ut_a(!(flags & (~0UL << DICT_TF2_BITS)));
 
@@ -138,7 +138,7 @@ void dict_mem_table_add_col(dict_table_t *table, mem_heap_t *heap, const char *n
   col->mbmaxlen = (unsigned int)mbmaxlen;
 }
 
-dict_index_t *dict_mem_index_create(const char *table_name, const char *index_name, ulint space, ulint type, ulint n_fields) {
+dict_index_t *dict_mem_index_create(const char *table_name, const char *index_name, space_id_t space, ulint type, ulint n_fields) {
   ut_ad(table_name != nullptr);
   ut_ad(index_name != nullptr);
 

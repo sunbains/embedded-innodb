@@ -242,10 +242,10 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     stop monitor prints */
 
     srv_print_innodb_monitor = false;
-    srv_print_innodb_lock_monitor = false;
+    srv_lock_sys->unset_print_lock_monitor();
   } else if (namelen == sizeof S_innodb_lock_monitor && !memcmp(table_name, S_innodb_lock_monitor, sizeof S_innodb_lock_monitor)) {
     srv_print_innodb_monitor = false;
-    srv_print_innodb_lock_monitor = false;
+    srv_lock_sys->unset_print_lock_monitor();
   } else if (namelen == sizeof S_innodb_tablespace_monitor && !memcmp(table_name, S_innodb_tablespace_monitor, sizeof S_innodb_tablespace_monitor)) {
 
     srv_print_innodb_tablespace_monitor = false;
@@ -392,7 +392,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
 
   /* Remove any locks there are on the table or its records */
 
-  lock_remove_all_on_table(table, true);
+  srv_lock_sys->remove_all_on_table(table, true);
 
   trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
   trx->table_id = table->id;
@@ -615,7 +615,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
   } else if (STR_EQ(table_name, table_name_len, S_innodb_lock_monitor)) {
 
     srv_print_innodb_monitor = true;
-    srv_print_innodb_lock_monitor = true;
+    srv_lock_sys->set_print_lock_monitor();
     os_event_set(srv_lock_timeout_thread_event);
   } else if (STR_EQ(table_name, table_name_len, S_innodb_tablespace_monitor)) {
 
@@ -754,6 +754,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   uint64_t new_id;
   ulint recreate_space = 0;
   pars_info_t *info = nullptr;
+  page_no_t root_page_no;
 
   /* How do we prevent crashes caused by ongoing operations on
   the table? Old operations could try to access non-existent
@@ -873,7 +874,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   }
 
   /* Remove all locks except the table-level S and X locks. */
-  lock_remove_all_on_table(table, false);
+  srv_lock_sys->remove_all_on_table(table, false);
 
   trx->table_id = table->id;
 
@@ -945,7 +946,6 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     rec_t *rec;
     const byte *field;
     ulint len;
-    ulint root_page_no;
 
     if (!pcur.is_on_user_rec()) {
       /* The end of SYS_INDEXES has been reached. */
@@ -967,8 +967,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
       goto next_rec;
     }
 
-    /* This call may commit and restart mtr
-    and reposition pcur. */
+    /* This call may commit and restart mtr and reposition pcur. */
     root_page_no = dict_truncate_index_tree(table, recreate_space, &pcur, &mtr);
 
     rec = pcur.get_rec();
@@ -1079,7 +1078,7 @@ db_err ddl_drop_index(dict_table_t *table, dict_index_t *index, trx_t *trx) {
 
   pars_info_add_uint64_literal(info, "indexid", index->id);
 
-  trx_start_if_not_started(trx);
+  (void) trx_start_if_not_started(trx);
   trx->m_op_info = "dropping index";
 
   ut_a(trx->m_dict_operation_lock_mode == RW_X_LATCH);

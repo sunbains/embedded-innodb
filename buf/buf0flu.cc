@@ -593,7 +593,7 @@ inline static bool free_page_if_truncated(buf_page_t *bpage) {
   bool page_from_flush_list = bpage->m_oldest_modification != 0;
 
   if (table_truncated) {
-    ib_logger(ib_stream, "freeing a page from truncated table, tablespace_id: %lu, page_no: %lu\n", space, bpage->m_page_no);
+    log_err(std::format("freeing a page from truncated table, tablespace_id: {}, page_no: {}", space, bpage->m_page_no));
     // free up the page.
     srv_buf_pool->m_LRU->free_block(bpage, nullptr);
 

@@ -138,7 +138,7 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
     log_warn_buf(this, sizeof(btr_pcur_t));
 
     if (m_trx_if_known != nullptr) {
-      trx_print(ib_stream, m_trx_if_known, 0);
+      log_err(trx_to_string(m_trx_if_known, 0));
     }
 
     ut_error;

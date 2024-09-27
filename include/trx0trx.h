@@ -286,8 +286,10 @@ void trx_end_signal_handling(trx_t *trx);
  * @param[in] ib_stream Output stream.
  * @param[in] trx Transaction.
  * @param[in] max_query_len Max query length to print, or 0 to use the default max length.
+ *
+ * @return String representation of the transaction.
  */
-void trx_print(ib_stream_t ib_stream, trx_t *trx, ulint max_query_len);
+std::string trx_to_string(trx_t *trx, ulint max_query_len) noexcept;
 
 /**
  * Determines if the currently running transaction has been interrupted.
@@ -339,7 +341,7 @@ void trx_var_init();
  *
  * @param[in] trx Transaction.
  */
-inline bool trx_start_if_not_started(trx_t *trx) {
+[[nodiscard]] inline bool trx_start_if_not_started(trx_t *trx) noexcept {
   ut_ad(trx->m_conc_state != TRX_COMMITTED_IN_MEMORY);
 
   if (trx->m_conc_state == TRX_NOT_STARTED) {
@@ -355,7 +357,7 @@ inline bool trx_start_if_not_started(trx_t *trx) {
  * @param[in] trx Trx object.
  * @return The error info.
  */
-[[nodiscard]] inline const dict_index_t *trx_get_error_info(const trx_t *trx) {
+[[nodiscard]] inline const dict_index_t *trx_get_error_info(const trx_t *trx) noexcept {
   return trx->error_info;
 }
 
@@ -365,7 +367,7 @@ inline bool trx_start_if_not_started(trx_t *trx) {
  * @param[in] trx Transaction.
  * @return Transaction's id.
  */
-[[nodiscard]] inline uint64_t trx_get_id(const trx_t *trx) {
+[[nodiscard]] inline trx_id_t trx_get_id(const trx_t *trx) noexcept {
   return trx->m_id;
 }
 
@@ -376,7 +378,7 @@ inline bool trx_start_if_not_started(trx_t *trx) {
  * @param[in] trx Transaction.
  * @return String in the data segment.
  */
-[[nodiscard]] inline const char *trx_get_que_state_str(const trx_t *trx) {
+[[nodiscard]] inline const char *trx_get_que_state_str(const trx_t *trx) noexcept {
   /* be sure to adjust TRX_QUE_STATE_STR_MAX_LEN if you change this */
   switch (trx->m_que_state) {
     case TRX_QUE_RUNNING:

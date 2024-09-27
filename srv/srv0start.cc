@@ -372,8 +372,6 @@ static void srv_startup_abort(db_err err) noexcept {
 
   log_sys->shutdown();
 
-  lock_sys_close();
-
   srv_buf_pool->close();
 
   srv_aio->shutdown();
@@ -513,10 +511,14 @@ ib_err_t InnoDB::start() noexcept {
   ut_a(log_sys == nullptr);
   log_sys = Log::create();
 
-  lock_sys_create(srv_lock_table_size);
-
   ut_a(srv_fsp == nullptr);
   srv_fsp = FSP::create(log_sys, srv_fil, srv_buf_pool);
+
+  ut_a(srv_trx_sys == nullptr);
+  srv_trx_sys = Trx_sys::create(srv_fsp);
+
+  ut_a(srv_lock_sys == nullptr);
+  srv_lock_sys = Lock_sys::create(srv_trx_sys, srv_lock_table_size);
 
   ut_a(srv_undo == nullptr);
   srv_undo = Undo::create(srv_fsp);
@@ -651,9 +653,6 @@ ib_err_t InnoDB::start() noexcept {
 
     mtr.commit();
 
-    ut_a(srv_trx_sys == nullptr);
-    srv_trx_sys = Trx_sys::create(srv_fsp);
-
     err = srv_trx_sys->create_system_tablespace();
 
     if (err == DB_SUCCESS) {
@@ -747,9 +746,6 @@ ib_err_t InnoDB::start() noexcept {
     system tablespace. */
 
     dict_boot();
-
-    ut_a(srv_trx_sys == nullptr);
-    srv_trx_sys = Trx_sys::create(srv_fsp);
 
     err = srv_trx_sys->start(srv_force_recovery);
 
@@ -912,8 +908,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
     for the 'very fast' shutdown, because the InnoDB layer may have
     committed or prepared transactions and we don't want to lose them. */
 
-    if (trx_n_transactions > 0 ||
-        (srv_trx_sys != nullptr && UT_LIST_GET_LEN(srv_trx_sys->m_trx_list) > 0)) {
+    if (trx_n_transactions > 0 || (srv_trx_sys != nullptr && UT_LIST_GET_LEN(srv_trx_sys->m_trx_list) > 0)) {
 
       mutex_exit(&kernel_mutex);
 
@@ -1068,7 +1063,7 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
 
   log_sys->shutdown();
 
-  lock_sys_close();
+  Lock_sys::destroy(srv_lock_sys);
 
   Trx_sys::destroy(srv_trx_sys);
 
@@ -1127,13 +1122,7 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
     ));
   }
 
-  if (lock_latest_err_stream) {
-    fclose(lock_latest_err_stream);
-  }
-
-  if (srv_print_verbose_log) {
-    log_info("Shutdown completed; log sequence number ", srv_shutdown_lsn);
-  }
+  log_info("Shutdown completed; log sequence number ", srv_shutdown_lsn);
 
   srv_was_started = false;
 

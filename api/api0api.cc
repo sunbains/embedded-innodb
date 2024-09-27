@@ -4140,7 +4140,7 @@ ib_err_t ib_table_lock(ib_trx_t ib_trx, ib_id_t table_id, ib_lck_mode_t ib_lck_m
 
   ut_a(ib_lck_mode == IB_LOCK_IS || ib_lck_mode == IB_LOCK_IX);
 
-  auto err = lock_table(0, table, (enum Lock_mode)ib_lck_mode, thr);
+  auto err = srv_lock_sys->lock_table(0, table, (enum Lock_mode)ib_lck_mode, thr);
 
   trx->error_state = err;
 
@@ -4898,7 +4898,7 @@ static dberr_t check_table(trx_t *trx, dict_index_t *index, size_t n_threads) {
 
         n_corrupt.inc(1, id);
         prev_tuple->print(dtuple_os);
-        rec_print(rec_os, rec);
+        rec_os << rec_to_string(rec);
 
         log_err(std::format(
           "Index records in a wrong order in index {} of table {}: {}, {}",
@@ -4916,7 +4916,7 @@ static dberr_t check_table(trx_t *trx, dict_index_t *index, size_t n_threads) {
         std::ostringstream dtuple_os{};
 
         n_dups.inc(1, id);
-        rec_print(rec_os, rec);
+        rec_os << rec_to_string(rec);
         prev_tuple->print(dtuple_os);
 
         log_err(

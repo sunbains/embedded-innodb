@@ -823,14 +823,13 @@ buf_block_t *Buf_pool::get(Request &req, buf_block_t *guess) {
 
       } else {
 
-        ib_logger(
-          ib_stream,
-          "Error: Unable to read tablespace %lu page no %lu into the buffer pool after"
-          " %lu attempts. The most probable cause of this error may be that the table"
+        log_err(std::format(
+          "Unable to read tablespace {} page no {} into the buffer pool after"
+          " {} attempts. The most probable cause of this error may be that the table"
           " has been corrupted. You can try to fix this problem by using innodb_force_recovery."
           " Please see reference manual for more details. Aborting...",
           page_id.m_space_id, page_id.m_page_no, BUF_PAGE_READ_MAX_RETRIES
-        );
+        ));
 
         ut_error;
       }
@@ -1218,8 +1217,6 @@ void Buf_pool::page_init(space_id_t space, page_no_t page_no, buf_block_t *block
 
   block->m_check_index_page_at_flush = false;
 
-  block->m_lock_hash_val = lock_rec_hash(space, page_no);
-
   /* Insert into the hash table of file pages */
 
   auto hash_page = hash_get_page(space, page_no);
@@ -1249,8 +1246,8 @@ void Buf_pool::page_init(space_id_t space, page_no_t page_no, buf_block_t *block
   ut_ad(!block->m_page.m_in_page_hash);
   ut_d(block->m_page.m_in_page_hash = true);
 
-  auto result = m_page_hash->emplace(Page_id(space, page_no), &block->m_page);
-  ut_a(result.second);
+  auto it = m_page_hash->emplace(Page_id(space, page_no), &block->m_page);
+  ut_a(it.second);
 }
 
 buf_page_t *Buf_pool::init_for_read(db_err *err, space_id_t space, page_no_t page_no, int64_t tablespace_version) {

@@ -797,12 +797,6 @@ void trx_finish_rollback_off_kernel(que_t *graph, trx_t *trx, que_thr_t **next_t
     return;
   }
 
-#ifdef UNIV_DEBUG
-  if (lock_print_waits) {
-    ib_logger(ib_stream, "Trx %lu rollback finished\n", (ulong)trx->m_id);
-  }
-#endif /* UNIV_DEBUG */
-
   trx_commit_off_kernel(trx);
 
   /* Remove all TRX_SIG_TOTAL_ROLLBACK signals from the signal queue and

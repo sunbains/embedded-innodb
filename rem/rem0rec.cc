@@ -790,37 +790,37 @@ bool rec_validate(const rec_t *rec, const ulint *offsets) noexcept {
   return true;
 }
 
-std::ostream &rec_print(std::ostream &os, const rec_t *rec) noexcept {
+std::string rec_to_string(const rec_t *rec) noexcept {
   auto n = rec_get_n_fields(rec);
 
-  os << std::format("PHYSICAL RECORD: n_fields {}; {}-byte offsets; info bits {}",
+ auto str =  std::format("PHYSICAL RECORD: n_fields {}; {}-byte offsets; info bits {}",
 		    n,
 		    (rec_get_1byte_offs_flag(rec) ? 1 : 2),
 		    rec_get_info_bits(rec));
 
   for (ulint i{}; i < n; ++i) {
-    os << std::format(" {}:", i);
+    str +=std::format(" {}:", i);
 
     ulint len;
     auto data = rec_get_nth_field(rec, i, &len);
 
     if (len != UNIV_SQL_NULL) {
+      std::ostringstream os{};
+
       buf_to_hex_string(os, data, std::max(len, 30UL));
-      os << std::format("; len: {} ", len);
+
+      str += os.str();
+      str += std::format("; len: {} ", len);
     } else {
-      os << std::format(" SQL NULL, size {} ", rec_get_nth_field_size(rec, i));
+      str += std::format(" SQL NULL, size {} ", rec_get_nth_field_size(rec, i));
     }
   }
 
-  rec_validate(rec);
+  IF_DEBUG(rec_validate(rec));
 
-  return os;
+  return str;
 }
 
-void rec_print(const rec_t *rec) noexcept {
-  std::ostringstream os{};
-
-  rec_print(os, rec);
-
-  log_info("{}", os.str().c_str());
+void rec_info_info(const rec_t *rec) noexcept {
+  log_info("{}", rec_to_string(rec));
 }

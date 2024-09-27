@@ -262,7 +262,7 @@ dberr_t Trx_sys::create_system_tablespace() noexcept {
 
   /* Reset the rollback segment slots */
   for (ulint i{}; i < TRX_SYS_N_RSEGS; ++i) {
-    frseg_set_space(sys_header, i, ULINT_UNDEFINED, &mtr);
+    frseg_set_space(sys_header, i, ULINT32_UNDEFINED, &mtr);
     frseg_set_page_no(sys_header, i, FIL_NULL, &mtr);
   }
 

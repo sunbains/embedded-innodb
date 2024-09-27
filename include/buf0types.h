@@ -396,6 +396,15 @@ struct buf_block_t {
   [[nodiscard]] page_no_t get_page_no() const { return m_page.get_page_no(); }
 
   /**
+   * Gets the page id of a block.
+   *
+   * @return The page id.
+   */
+  [[nodiscard]] Page_id get_page_id() const noexcept {
+    return {get_space(), get_page_no()};
+  }
+
+  /**
   * Gets the state of a block.
   *
   * @return The state of the block.
@@ -442,11 +451,6 @@ struct buf_block_t {
 
   /** RW lock protoecting the buffer frame state changes. */
   mutable rw_lock_t m_rw_lock;
-
-  /** hashed value of the page address in the record lock hash table;
-  protected by buf_block_t::lock (or buf_block_t::mutex, buf_pool_mutex
-  in Buf_pool::get(), Buf_pool::init_for_read() and Buf_pool::create()) */
-  uint32_t m_lock_hash_val;
 
   /** true if we know that this is an index page, and want the database
   to check its consistency before flush; note that there may be pages in the
@@ -524,7 +528,7 @@ struct buf_pool_stat_t {
 NOTE! The definition appears here only for other modules of this
 directory (buf) to see it. Do not use from outside! */
 struct Buf_pool {
-  using page_hash_t = std::unordered_map<Page_id, buf_page_t *, Page_id_hash>;
+  using page_hash_t = Page_id_hash<buf_page_t *>;
 
   struct Request {
     /** RW_S_LATCH or RW_X_LATCH */

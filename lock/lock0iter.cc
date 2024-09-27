@@ -23,30 +23,26 @@ lock queues.
 Created July 16, 2007 Vasil Dimov
 *******************************************************/
 
-#define LOCK_MODULE_IMPLEMENTATION
-
-#include "lock0iter.h"
 #include "innodb0types.h"
+#include "lock0iter.h"
 #include "lock0lock.h"
-#include "lock0priv.h"
 #include "ut0dbg.h"
 #include "ut0lst.h"
 
-void lock_queue_iterator_reset(lock_queue_iterator_t *iter, const Lock *lock, ulint bit_no) {
-  iter->current_lock = lock;
+void Lock_iterator::reset(const Lock *lock, ulint bit_no) noexcept {
+  m_current_lock = lock;
 
   if (bit_no != ULINT_UNDEFINED) {
-
-    iter->bit_no = bit_no;
+    m_bit_no = bit_no;
   } else {
 
-    switch (lock_get_type_low(lock)) {
+    switch (lock->type()) {
       case LOCK_TABLE:
-        iter->bit_no = ULINT_UNDEFINED;
+        m_bit_no = ULINT_UNDEFINED;
         break;
       case LOCK_REC:
-        iter->bit_no = lock_rec_find_set_bit(lock);
-        ut_a(iter->bit_no != ULINT_UNDEFINED);
+        m_bit_no = lock->rec_find_set_bit();
+        ut_a(m_bit_no != ULINT_UNDEFINED);
         break;
       default:
         ut_error;
@@ -54,24 +50,23 @@ void lock_queue_iterator_reset(lock_queue_iterator_t *iter, const Lock *lock, ul
   }
 }
 
-const Lock *lock_queue_iterator_get_prev(lock_queue_iterator_t *iter) {
+const Lock *Lock_iterator::prev() noexcept {
   const Lock *prev_lock;
 
-  switch (lock_get_type_low(iter->current_lock)) {
+  switch (m_current_lock->type()) {
     case LOCK_REC:
-      prev_lock = lock_rec_get_prev(iter->current_lock, iter->bit_no);
+      prev_lock = m_lock_sys->rec_get_prev(m_current_lock, m_bit_no);
       break;
     case LOCK_TABLE:
-      prev_lock = UT_LIST_GET_PREV(un_member.tab_lock.locks, iter->current_lock);
+      prev_lock = UT_LIST_GET_PREV(m_table.m_locks, m_current_lock);
       break;
     default:
       ut_error;
   }
 
   if (prev_lock != nullptr) {
-
-    iter->current_lock = prev_lock;
+    m_current_lock = prev_lock;
   }
 
-  return (prev_lock);
+  return prev_lock;
 }

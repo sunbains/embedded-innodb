@@ -516,54 +516,53 @@ static void row_ins_set_detailed(
   trx_set_detailed_error(trx, "foreign key error");
 }
 
-/** Reports a foreign key error associated with an update or a delete of a
-parent table index entry. */
+/**
+ * Reports a foreign key error associated with an update or a delete of a
+ * parent table index entry.
+ *
+ * @param[in] errstr Error string from the viewpoint of the parent table.
+ * @param[in] thr Query thread whose run_node is an update node.
+ * @param[in] foreign Foreign key constraint.
+ * @param[in] rec A matching index record in the child table.
+ * @param[in] entry Index entry in the parent table.
+ */
 static void row_ins_foreign_report_err(
-  const char *errstr,      /*!< in: error string from the viewpoint
-                             of the parent table */
-  que_thr_t *thr,          /*!< in: query thread whose run_node
-                             is an update node */
-  dict_foreign_t *foreign, /*!< in: foreign key constraint */
-  const rec_t *rec,        /*!< in: a matching index record in the
-                             child table */
+  const char *errstr,
+  que_thr_t *thr,
+  dict_foreign_t *foreign,
+  const rec_t *rec,
   const dtuple_t *entry
-) /*!< in: index entry in the parent
-                             table */
-{
-  trx_t *trx = thr_get_trx(thr);
+) {
+  auto trx = thr_get_trx(thr);
 
   row_ins_set_detailed(trx, foreign);
 
   mutex_enter(&dict_foreign_err_mutex);
-  ut_print_timestamp(ib_stream);
-  ib_logger(ib_stream, " Transaction:\n");
-  trx_print(ib_stream, trx, 600);
 
-  ib_logger(ib_stream, "Foreign key constraint fails for table ");
-  ut_print_name(foreign->foreign_table_name);
-  ib_logger(ib_stream, ":\n");
+  log_info(" Transaction:");
+  log_info(trx_to_string(trx, 600));
+  log_info("Foreign key constraint fails for table ", foreign->foreign_table_name, ": ");
   dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign, true);
-  ib_logger(ib_stream, "\n%s", errstr);
-  ib_logger(ib_stream, " in parent table, in index ");
-  ut_print_name(foreign->referenced_index->name);
-  if (entry) {
-    ib_logger(ib_stream, " tuple:\n");
+  log_info(errstr);
+  log_info(" in parent table, in index ", foreign->referenced_index->name);
+
+  if (entry != nullptr) {
+    log_err(" tuple:");
     dtuple_print(ib_stream, entry);
   }
-  ib_logger(ib_stream, "\nBut in child table ");
-  ut_print_name(foreign->foreign_table_name);
-  ib_logger(ib_stream, ", in index ");
-  ut_print_name(foreign->foreign_index->name);
-  if (rec) {
-    ib_logger(ib_stream, ", there is a record:\n");
-    rec_print(rec);
+
+  log_err("\nBut in child table ", foreign->foreign_table_name, ", in index ", foreign->foreign_index->name);
+
+  if (rec != nullptr) {
+    log_err(", there is a record:");
+    log_err(rec_to_string(rec));
   } else {
-    ib_logger(ib_stream, ", the record is not available\n");
+    log_err(", the record is not available");
   }
-  ib_logger(ib_stream, "\n");
 
   mutex_exit(&dict_foreign_err_mutex);
 }
+
 
 /** Reports a foreign key error to ib_stream when we are trying to add an index
 entry to a child table. Note that the adding may be the result of an update,
@@ -581,37 +580,34 @@ static void row_ins_foreign_report_add_err(
   row_ins_set_detailed(trx, foreign);
 
   mutex_enter(&dict_foreign_err_mutex);
-  ut_print_timestamp(ib_stream);
-  ib_logger(ib_stream, " Transaction:\n");
-  trx_print(ib_stream, trx, 600);
-  ib_logger(ib_stream, "Foreign key constraint fails for table ");
-  ut_print_name(foreign->foreign_table_name);
-  ib_logger(ib_stream, ":\n");
+
+  log_err(" Transaction:");
+  log_err(trx_to_string(trx, 600));
+  log_err("Foreign key constraint fails for table ", foreign->foreign_table_name, ":");
   dict_print_info_on_foreign_key_in_create_format(ib_stream, trx, foreign, true);
-  ib_logger(ib_stream, "\nTrying to add in child table, in index ");
-  ut_print_name(foreign->foreign_index->name);
-  if (entry) {
-    ib_logger(ib_stream, " tuple:\n");
+  log_err("Trying to add in child table, in index ", foreign->foreign_index->name);
+
+  if (entry != nullptr) {
+    log_err(" tuple:");
     /* TODO: DB_TRX_ID and DB_ROLL_PTR may be uninitialized.
     It would be better to only display the user columns. */
     dtuple_print(ib_stream, entry);
   }
-  ib_logger(ib_stream, "\nBut in parent table ");
-  ut_print_name(foreign->referenced_table_name);
-  ib_logger(ib_stream, ", in index ");
-  ut_print_name(foreign->referenced_index->name);
-  ib_logger(ib_stream, ",\nthe closest match we can find is record:\n");
-  if (rec && page_rec_is_supremum(rec)) {
+
+  log_err("But in parent table ", foreign->referenced_table_name, ", in index ", foreign->referenced_index->name);
+  log_err(", the closest match we can find is record:");
+
+  if (rec != nullptr && page_rec_is_supremum(rec)) {
     /* If the cursor ended on a supremum record, it is better
     to report the previous record in the error message, so that
     the user gets a more descriptive error message. */
     rec = page_rec_get_prev_const(rec);
   }
 
-  if (rec) {
-    rec_print(rec);
+  if (rec != nullptr) {
+    log_err(rec_to_string(rec));
   }
-  ib_logger(ib_stream, "\n");
+  log_err("\n");
 
   mutex_exit(&dict_foreign_err_mutex);
 }
@@ -841,19 +837,14 @@ static db_err row_ins_foreign_check_on_constraint(
 
     if (!page_rec_is_user_rec(clust_rec) || cascade->pcur->get_low_match() < dict_index_get_n_unique(clust_index)) {
 
-      ib_logger(ib_stream, "error in cascade of a foreign key op\n");
+      log_err("error in cascade of a foreign key op");
       dict_index_name_print(ib_stream, trx, index);
 
-      ib_logger(ib_stream, "\nrecord ");
-      rec_print(rec);
-      ib_logger(ib_stream, "\nclustered record ");
-      rec_print(clust_rec);
-      ib_logger(
-        ib_stream,
-        "\n"
-        "Submit a detailed bug report, check the "
-        "TBD website for details"
-      );
+      log_err("record ");
+      log_err(rec_to_string(rec));
+      log_err("clustered record ");
+      log_err(rec_to_string(clust_rec));
+      log_err("Submit a detailed bug report, check the Embedded InnoDB website for details");
 
       err = DB_SUCCESS;
 
@@ -863,14 +854,14 @@ static db_err row_ins_foreign_check_on_constraint(
 
   /* Set an X-lock on the row to delete or update in the child table */
 
-  err = lock_table(0, table, LOCK_IX, thr);
+  err = srv_lock_sys->lock_table(0, table, LOCK_IX, thr);
 
   if (err == DB_SUCCESS) {
     /* Here it suffices to use a LOCK_REC_NOT_GAP type lock;
     we already have a normal shared lock on the appropriate
     gap if the search criterion was not unique */
 
-    err = lock_clust_rec_read_check_and_lock_alt(0, clust_block, clust_rec, clust_index, LOCK_X, LOCK_REC_NOT_GAP, thr);
+    err = srv_lock_sys->clust_rec_read_check_and_lock_alt(0, clust_block, clust_rec, clust_index, LOCK_X, LOCK_REC_NOT_GAP, thr);
   }
 
   if (err != DB_SUCCESS) {
@@ -1039,9 +1030,9 @@ static db_err row_ins_set_shared_rec_lock(
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   if (dict_index_is_clust(index)) {
-    err = lock_clust_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_S, type, thr);
+    err = srv_lock_sys->clust_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_S, type, thr);
   } else {
-    err = lock_sec_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_S, type, thr);
+    err = srv_lock_sys->sec_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_S, type, thr);
   }
 
   return err;
@@ -1065,9 +1056,9 @@ static db_err row_ins_set_exclusive_rec_lock(
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   if (dict_index_is_clust(index)) {
-    err = lock_clust_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_X, type, thr);
+    err = srv_lock_sys->clust_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_X, type, thr);
   } else {
-    err = lock_sec_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_X, type, thr);
+    err = srv_lock_sys->sec_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_X, type, thr);
   }
 
   return err;
@@ -1155,7 +1146,7 @@ run_again:
       mutex_enter(&dict_foreign_err_mutex);
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, " Transaction:\n");
-      trx_print(ib_stream, trx, 600);
+      log_info(trx_to_string(trx, 600));
       ib_logger(ib_stream, "Foreign key constraint fails for table ");
       ut_print_name(foreign->foreign_table_name);
       ib_logger(ib_stream, ":\n");
@@ -1186,7 +1177,7 @@ run_again:
     /* We already have a LOCK_IX on table, but not necessarily
     on check_table */
 
-    err = lock_table(0, check_table, LOCK_IS, thr);
+    err = srv_lock_sys->lock_table(0, check_table, LOCK_IS, thr);
 
     if (err != DB_SUCCESS) {
 
@@ -2189,7 +2180,7 @@ que_thr_t *row_ins_step(que_thr_t *thr) {
       goto same_trx;
     }
 
-    err = lock_table(0, node->table, LOCK_IX, thr);
+    err = srv_lock_sys->lock_table(0, node->table, LOCK_IX, thr);
 
     if (err != DB_SUCCESS) {
 

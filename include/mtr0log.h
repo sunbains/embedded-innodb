@@ -116,7 +116,7 @@ byte *mlog_write_initial_log_record_fast(const byte *ptr, mlog_type_t type, byte
  * @param page_no Page number.
  * @return Parsed record end, nullptr if not a complete record.
  */
-byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, mlog_type_t *type, ulint *space, ulint *page_no);
+byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, mlog_type_t *type, space_id_t *space, page_no_t *page_no);
 
 /**
  * @brief Parses a log record written by mlog_write_ulint or mlog_write_uint64.

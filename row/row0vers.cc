@@ -113,7 +113,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, dict_index_t *index, 
     goto exit_func;
   }
 
-  if (!lock_check_trx_id_sanity(trx_id, clust_rec, clust_index, clust_offsets, true)) {
+  if (!srv_lock_sys->check_trx_id_sanity(trx_id, clust_rec, clust_index, clust_offsets, true)) {
     /* Corruption noticed: try to avoid a crash by returning */
     goto exit_func;
   }

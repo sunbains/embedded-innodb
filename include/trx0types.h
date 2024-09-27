@@ -448,7 +448,7 @@ struct trx_t {
   mem_heap_t *lock_heap;
 
   /** Locks reserved by the transaction */
-  UT_LIST_BASE_NODE_T_EXTERN(Lock, trx_locks) trx_locks;
+  UT_LIST_BASE_NODE_T_EXTERN(Lock, m_trx_locks) trx_locks;
 
   /** Memory heap for the global read view */
   mem_heap_t *global_read_view_heap;

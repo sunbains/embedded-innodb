@@ -753,7 +753,7 @@ static db_err row_sel_get_clust_rec(
       lock_type = LOCK_ORDINARY;
     }
 
-    err = lock_clust_rec_read_check_and_lock(
+    err = srv_lock_sys->clust_rec_read_check_and_lock(
       0, plan->clust_pcur.get_block(), clust_rec, index, offsets, node->row_lock_mode, lock_type, thr
     );
 
@@ -767,7 +767,7 @@ static db_err row_sel_get_clust_rec(
 
     old_vers = nullptr;
 
-    if (!lock_clust_rec_cons_read_sees(clust_rec, index, offsets, node->read_view)) {
+    if (!srv_lock_sys->clust_rec_cons_read_sees(clust_rec, index, offsets, node->read_view)) {
 
       err = row_sel_build_prev_vers(node->read_view, index, clust_rec, &offsets, &heap, &plan->old_vers_heap, &old_vers, mtr);
 
@@ -851,9 +851,9 @@ inline db_err sel_set_rec_lock(
   }
 
   if (dict_index_is_clust(index)) {
-    err = lock_clust_rec_read_check_and_lock(0, block, rec, index, offsets, mode, type, thr);
+    err = srv_lock_sys->clust_rec_read_check_and_lock(0, block, rec, index, offsets, mode, type, thr);
   } else {
-    err = lock_sec_rec_read_check_and_lock(0, block, rec, index, offsets, mode, type, thr);
+    err = srv_lock_sys->sec_rec_read_check_and_lock(0, block, rec, index, offsets, mode, type, thr);
   }
 
   return err;
@@ -1083,11 +1083,11 @@ static ulint row_sel_try_search_shortcut(sel_node_t *node, plan_t *plan, mtr_t *
   }
 
   if (dict_index_is_clust(index)) {
-    if (!lock_clust_rec_cons_read_sees(rec, index, offsets, node->read_view)) {
+    if (!srv_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, node->read_view)) {
       ret = SEL_RETRY;
       goto func_exit;
     }
-  } else if (!lock_sec_rec_cons_read_sees(rec, node->read_view)) {
+  } else if (!srv_lock_sys->sec_rec_cons_read_sees(rec, node->read_view)) {
 
     ret = SEL_RETRY;
     goto func_exit;
@@ -1443,7 +1443,7 @@ skip_lock:
 
     if (dict_index_is_clust(index)) {
 
-      if (!lock_clust_rec_cons_read_sees(rec, index, offsets, node->read_view)) {
+      if (!srv_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, node->read_view)) {
 
         err = row_sel_build_prev_vers(node->read_view, index, rec, &offsets, &heap, &plan->old_vers_heap, &old_vers, &mtr);
 
@@ -1480,7 +1480,7 @@ skip_lock:
 
         rec = old_vers;
       }
-    } else if (!lock_sec_rec_cons_read_sees(rec, node->read_view)) {
+    } else if (!srv_lock_sys->sec_rec_cons_read_sees(rec, node->read_view)) {
       cons_read_requires_clust_rec = true;
     }
   }
@@ -1828,7 +1828,7 @@ que_thr_t *row_sel_step(que_thr_t *thr) {
       table_node = node->table_list;
 
       while (table_node) {
-        err = lock_table(0, table_node->table, i_lock_mode, thr);
+        err = srv_lock_sys->lock_table(0, table_node->table, i_lock_mode, thr);
         if (err != DB_SUCCESS) {
           thr_get_trx(thr)->error_state = err;
 
@@ -2108,35 +2108,15 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
     trx. */
 
     if (!rec_get_deleted_flag(rec) || prebuilt->select_lock_type != LOCK_NONE) {
-      ut_print_timestamp(ib_stream);
-      ib_logger(
-        ib_stream,
-        "  error clustered record"
-        " for sec rec not found\n"
-        ""
-      );
+      log_err("Clustered record for sec rec not found");
       dict_index_name_print(ib_stream, trx, sec_index);
-      ib_logger(
-        ib_stream,
-        "\n"
-        "sec index record "
-      );
-      rec_print(rec);
-      ib_logger(
-        ib_stream,
-        "\n"
-        "clust index record "
-      );
-      rec_print(clust_rec);
-      ib_logger(ib_stream, "\n");
-      trx_print(ib_stream, trx, 600);
+      log_err("sec index record ");
+      log_err(rec_to_string(rec));
+      log_err("clust index record\nclust index record ");
+      log_err(rec_to_string(clust_rec));
+      log_err(trx_to_string(trx, 600));
 
-      ib_logger(
-        ib_stream,
-        "\n"
-        "Submit a detailed bug report, check the"
-        "InnoDB website for details"
-      );
+      log_err("Submit a detailed bug report, check the Embedded InnoDB website for details");
     }
 
     clust_rec = nullptr;
@@ -2155,7 +2135,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
     the clust rec with a unique condition, hence
     we set a LOCK_REC_NOT_GAP type lock */
 
-    err = lock_clust_rec_read_check_and_lock(
+    err = srv_lock_sys->clust_rec_read_check_and_lock(
       0,
       prebuilt->clust_pcur->get_block(),
       clust_rec,
@@ -2178,7 +2158,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
     /* If the isolation level allows reading of uncommitted data,
     then we never look for an earlier version */
 
-    if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !lock_clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->read_view)) {
+    if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !srv_lock_sys->clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->read_view)) {
 
       /* The following call returns 'offsets' associated with
       'old_vers' */
@@ -2458,7 +2438,7 @@ static ulint row_sel_try_search_shortcut_for_prebuilt(
     *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, heap, Source_location{});
   }
 
-  if (!lock_clust_rec_cons_read_sees(rec, index, *offsets, trx->read_view)) {
+  if (!srv_lock_sys->clust_rec_cons_read_sees(rec, index, *offsets, trx->read_view)) {
 
     return SEL_RETRY;
   }
@@ -2508,7 +2488,7 @@ int row_unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) {
 
     rec = pcur->get_rec();
 
-    lock_rec_unlock(trx, pcur->get_block(), rec, prebuilt->select_lock_type);
+    srv_lock_sys->rec_unlock(trx, pcur->get_block(), rec, prebuilt->select_lock_type);
 
     mtr.commit();
 
@@ -2534,7 +2514,7 @@ int row_unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) {
 
     rec = clust_pcur->get_rec();
 
-    lock_rec_unlock(trx, clust_pcur->get_block(), rec, prebuilt->select_lock_type);
+    srv_lock_sys->rec_unlock(trx, clust_pcur->get_block(), rec, prebuilt->select_lock_type);
 
     mtr.commit();
   }
@@ -2880,7 +2860,7 @@ db_err row_search_for_client(
         " perform a consistent read\n"
         "but the read view is not assigned!\n"
       );
-      trx_print(ib_stream, trx, 600);
+      log_info(trx_to_string(trx, 600));
       ib_logger(ib_stream, "\n");
       ut_a(0);
     }
@@ -2899,7 +2879,7 @@ db_err row_search_for_client(
     } else {
       lck_mode = LOCK_IX;
     }
-    err = lock_table(0, index->table, lck_mode, thr);
+    err = srv_lock_sys->lock_table(0, index->table, lck_mode, thr);
 
     if (err != DB_SUCCESS) {
 
@@ -3163,7 +3143,7 @@ rec_loop:
       high force recovery level set, we try to avoid crashes
       by skipping this lookup */
 
-      if (likely(recovery < IB_RECOVERY_NO_UNDO_LOG_SCAN) && !lock_clust_rec_cons_read_sees(rec, index, offsets, trx->read_view)) {
+      if (likely(recovery < IB_RECOVERY_NO_UNDO_LOG_SCAN) && !srv_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, trx->read_view)) {
 
         rec_t *old_vers;
         /* The following call returns 'offsets'
@@ -3185,7 +3165,7 @@ rec_loop:
 
         rec = old_vers;
       }
-    } else if (!lock_sec_rec_cons_read_sees(rec, trx->read_view)) {
+    } else if (!srv_lock_sys->sec_rec_cons_read_sees(rec, trx->read_view)) {
       /* We are looking into a non-clustered index,
       and to get the right version of the record we
       have to look also into the clustered index: this
