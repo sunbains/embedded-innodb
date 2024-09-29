@@ -30,7 +30,6 @@ Created 10/25/1995 Heikki Tuuri
 #include "dict0dict.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
-#include "hash0hash.h"
 #include "log0recv.h"
 #include "mach0data.h"
 #include "mem0mem.h"

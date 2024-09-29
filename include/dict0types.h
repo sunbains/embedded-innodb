@@ -27,11 +27,10 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "innodb0types.h"
 
-#include <string>
+#include <string_view>
 #include <unordered_map>
 #include "data0types.h"
 #include "fsp0types.h"
-#include "hash0hash.h"
 #include "lock0types.h"
 #include "mem0types.h"
 #include "rem0types.h"
@@ -454,12 +453,6 @@ struct dict_table_t {
   The final string will be allocated from table->heap. */
   const char *col_names;
 
-  /** Hash chain node */
-  hash_node_t name_hash;
-
-  /** Hash chain node */
-  hash_node_t id_hash;
-
   /** List of indexes of the table */
   UT_LIST_BASE_NODE_T(dict_index_t, indexes) indexes;
 
@@ -541,7 +534,7 @@ struct dict_sys_t {
   uint64_t row_id;
 
   /** Hash table of the tables, based on name */
-  std::unordered_map<std::string, dict_table_t *> *table_hash;
+  std::unordered_map<std::string_view, dict_table_t *> *table_hash;
 
   /** Hash table of the tables, based on id */
   std::unordered_map<std::uint64_t, dict_table_t *> *table_id_hash;
