@@ -1378,8 +1378,11 @@ void Lock_sys::rec_dequeue_from_page(Lock *lock) noexcept {
 
   rec_locks.remove(lock);
 
+  bool rec_locks_empty{};
+
   if (rec_locks.empty()) {
     m_rec_locks.erase(it);
+    rec_locks_empty = true;
   } 
 
   auto trx = lock->m_trx;
@@ -1389,9 +1392,9 @@ void Lock_sys::rec_dequeue_from_page(Lock *lock) noexcept {
   /* Check if waiting locks in the queue can now be granted: grant
   locks if there are no conflicting locks ahead. */
 
-  if (auto it = m_rec_locks.find(lock->page_id()); it != m_rec_locks.end()) {
-    for (auto lock : it->second) {
-      if (lock->is_waiting() && !rec_has_to_wait_in_queue(it->second, lock, lock->rec_find_set_bit())) {
+  if (!rec_locks_empty) {
+    for (auto lock : rec_locks) {
+      if (lock->is_waiting() && !rec_has_to_wait_in_queue(rec_locks, lock, lock->rec_find_set_bit())) {
         /* Grant the lock */
         grant(lock);
       }
