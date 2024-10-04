@@ -31,7 +31,6 @@ Created 1/8/1996 Heikki Tuuri
 #include "dict0load.h"
 #include "dict0mem.h"
 #include "dict0types.h"
-#include "hash0hash.h"
 #include "mem0mem.h"
 #include "rem0types.h"
 #include "srv0srv.h"
@@ -970,14 +969,10 @@ inline dict_table_t *dict_table_check_if_in_cache_low(const char *table_name) {
   ut_ad(table_name);
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
-  /* Look for the table name in the hash table */
-  auto table_fold = ut_fold_string(table_name);
-
-  dict_table_t *table;
-
-  HASH_SEARCH(
-    name_hash, dict_sys->table_hash, table_fold, dict_table_t *, table, ut_ad(table->cached), !strcmp(table->name, table_name)
-  );
+  dict_table_t *table{nullptr};
+  if (const auto it = dict_sys->table_hash->find(table_name); it != dict_sys->table_hash->end()) {
+   table = it->second;
+  }
 
   return table;
 }
@@ -1013,11 +1008,10 @@ inline dict_table_t *dict_table_get_on_id_low(ib_recovery_t recovery, uint64_t t
   ut_ad(mutex_own(&dict_sys->mutex));
 
   /* Look for the table name in the hash table */
-  auto fold = ut_uint64_fold(table_id);
-
-  dict_table_t *table;
-
-  HASH_SEARCH(id_hash, dict_sys->table_id_hash, fold, dict_table_t *, table, ut_ad(table->cached), table->id == table_id);
+  dict_table_t *table{nullptr};
+  if (const auto it = dict_sys->table_id_hash->find(table_id); it != dict_sys->table_id_hash->end()) {
+   table = it->second;
+  }
 
   if (table == nullptr) {
     table = dict_load_table_on_id(recovery, table_id);
