@@ -613,7 +613,7 @@ static byte *recv_parse_or_apply_log_rec_body(
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
-        ptr = btr_parse_page_reorganize(ptr, end_ptr, index, block, mtr);
+        ptr = srv_btree_sys->parse_page_reorganize(ptr, end_ptr, index, block, mtr);
       }
       break;
     case MLOG_PAGE_CREATE:
@@ -643,7 +643,7 @@ static byte *recv_parse_or_apply_log_rec_body(
       break;
     case MLOG_REC_MIN_MARK:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
-      ptr = btr_parse_set_min_rec_mark(ptr, end_ptr, page, mtr);
+      ptr = srv_btree_sys->parse_set_min_rec_mark(ptr, end_ptr, page, mtr);
       break;
     case MLOG_REC_DELETE:
       ut_ad(!page || page_type == FIL_PAGE_TYPE_INDEX);

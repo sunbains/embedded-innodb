@@ -46,15 +46,6 @@ constexpr ulint BTR_KEEP_SYS_FLAG = 4;
 #define BTR_CUR_ADAPT
 #define BTR_CUR_HASH_ADAPT
 
-#ifdef UNIV_DEBUG
-
-/*** Returns the page cursor component of a tree cursor.
-@return	pointer to page cursor component */
-inline page_cur_t *btr_cur_get_page_cur(const btr_cur_t *cursor); /*!< in: tree cursor */
-#else                                                             /* UNIV_DEBUG */
-#define btr_cur_get_page_cur(cursor) (&(cursor)->m_page_cur)
-#endif /* UNIV_DEBUG */
-
 /**
  * Searches to the nth level of the index tree.
  *
@@ -611,23 +602,30 @@ earlier version of the row.  In rollback we are not allowed to free an
 inherited external field. */
 constexpr ulint BTR_EXTERN_INHERITED_FLAG = 64;
 
-#ifdef UNIV_DEBUG
 /**
  * Returns the page cursor component of a tree cursor.
  * @param cursor The tree cursor.
  * @return Pointer to the page cursor component.
  */
-inline page_cur_t *btr_cur_get_page_cur(const btr_cur_t *cursor) {
-  return &((btr_cur_t *)cursor)->m_page_cur;
+[[nodiscard]] inline page_cur_t *btr_cur_get_page_cur(btr_cur_t *cursor) noexcept {
+  return &cursor->m_page_cur;
 }
-#endif /* UNIV_DEBUG */
+
+/**
+ * Returns the page cursor component of a tree cursor.
+ * @param cursor The tree cursor.
+ * @return Pointer to the page cursor component.
+ */
+[[nodiscard]] inline const page_cur_t *btr_cur_get_page_cur(const btr_cur_t *cursor) noexcept {
+  return &cursor->m_page_cur;
+}
 
 /**
  * Returns the buffer block on which the tree cursor is positioned.
  * @param cursor The tree cursor.
  * @return Pointer to the buffer block.
  */
-inline buf_block_t *btr_cur_get_block(btr_cur_t *cursor) {
+[[nodiscard]] inline buf_block_t *btr_cur_get_block(btr_cur_t *cursor) noexcept {
   return page_cur_get_block(btr_cur_get_page_cur(cursor));
 }
 
@@ -636,7 +634,7 @@ inline buf_block_t *btr_cur_get_block(btr_cur_t *cursor) {
  * @param cursor The tree cursor.
  * @return Pointer to the record.
  */
-inline rec_t *btr_cur_get_rec(btr_cur_t *cursor) {
+[[nodiscard]] inline rec_t *btr_cur_get_rec(btr_cur_t *cursor) noexcept {
   return page_cur_get_rec(&(cursor->m_page_cur));
 }
 
@@ -644,7 +642,7 @@ inline rec_t *btr_cur_get_rec(btr_cur_t *cursor) {
  * Invalidates a tree cursor by setting the record pointer to nullptr.
  * @param cursor The tree cursor.
  */
-inline void btr_cur_invalidate(btr_cur_t *cursor) {
+inline void btr_cur_invalidate(btr_cur_t *cursor) noexcept {
   page_cur_invalidate(&(cursor->m_page_cur));
 }
 
@@ -653,7 +651,7 @@ inline void btr_cur_invalidate(btr_cur_t *cursor) {
  * @param cursor The tree cursor.
  * @return Pointer to the page.
  */
-inline page_t *btr_cur_get_page(btr_cur_t *cursor) {
+[[nodiscard]] inline page_t *btr_cur_get_page(btr_cur_t *cursor) noexcept {
   return page_align(page_cur_get_rec(&(cursor->m_page_cur)));
 }
 
@@ -662,7 +660,7 @@ inline page_t *btr_cur_get_page(btr_cur_t *cursor) {
  * @param cursor The B-tree cursor.
  * @return The index.
  */
-inline dict_index_t *btr_cur_get_index(btr_cur_t *cursor) {
+[[nodiscard]] inline dict_index_t *btr_cur_get_index(btr_cur_t *cursor) noexcept {
   return cursor->m_index;
 }
 
@@ -673,7 +671,7 @@ inline dict_index_t *btr_cur_get_index(btr_cur_t *cursor) {
  * @param block The buffer block of the record.
  * @param cursor The output cursor.
  */
-inline void btr_cur_position(dict_index_t *dict_index, rec_t *rec, buf_block_t *block, btr_cur_t *cursor) {
+inline void btr_cur_position(dict_index_t *dict_index, rec_t *rec, buf_block_t *block, btr_cur_t *cursor) noexcept{
   ut_ad(page_align(rec) == block->m_frame);
 
   page_cur_position(rec, block, btr_cur_get_page_cur(cursor));
@@ -687,12 +685,13 @@ inline void btr_cur_position(dict_index_t *dict_index, rec_t *rec, buf_block_t *
  * @param mtr The minit-transaction
  * @return True if merge is recommended.
  */
-inline bool btr_cur_compress_recommendation(btr_cur_t *cursor, mtr_t *mtr) {
+[[nodiscard]] inline bool btr_cur_compress_recommendation(btr_cur_t *cursor, mtr_t *mtr) noexcept{
   ut_ad(mtr->memo_contains(btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
 
   auto page = btr_cur_get_page(cursor);
 
-  if (page_get_data_size(page) < BTR_CUR_PAGE_LOW_FILL_LIMIT || (btr_page_get_next(page, mtr) == FIL_NULL && btr_page_get_prev(page, mtr) == FIL_NULL)) {
+  if (page_get_data_size(page) < BTR_CUR_PAGE_LOW_FILL_LIMIT ||
+      (Btree::page_get_next(page, mtr) == FIL_NULL && Btree::page_get_prev(page, mtr) == FIL_NULL)) {
 
     // The page fillfactor has dropped below a predefined minimum value
     // OR the level in the B-tree contains just one page: we recommend
@@ -711,17 +710,17 @@ inline bool btr_cur_compress_recommendation(btr_cur_t *cursor, mtr_t *mtr) {
  * @param mtr The mini-transaction
  * @return True if the record can be deleted without recommended merging.
  */
-inline bool btr_cur_delete_will_underflow(btr_cur_t *cursor, ulint rec_size, mtr_t *mtr) {
+[[nodiscard]] inline bool btr_cur_delete_will_underflow(btr_cur_t *cursor, ulint rec_size, mtr_t *mtr) noexcept {
   ut_ad(mtr->memo_contains(btr_cur_get_block(cursor), MTR_MEMO_PAGE_X_FIX));
 
   auto page = btr_cur_get_page(cursor);
 
-  if ((page_get_data_size(page) - rec_size < BTR_CUR_PAGE_LOW_FILL_LIMIT) || (btr_page_get_next(page, mtr) == FIL_NULL && btr_page_get_prev(page, mtr) == FIL_NULL) || page_get_n_recs(page) < 2) {
+  if ((page_get_data_size(page) - rec_size < BTR_CUR_PAGE_LOW_FILL_LIMIT) ||
+      (Btree::page_get_next(page, mtr) == FIL_NULL && Btree::page_get_prev(page, mtr) == FIL_NULL) ||
+      page_get_n_recs(page) < 2) {
 
-    // The page fillfactor will drop below a predefined minimum value,
-    // OR the level in the B-tree contains just one page,
-    // OR the page will become empty: we recommend merge if this is
-    // not the root page.
+    /* The page fillfactor will drop below a predefined minimum value, OR the level in the B-tree contains just one page,
+    OR the page will become empty: we recommend merge if this is not the root page. */
     return dict_index_get_page(cursor->m_index) == page_get_page_no(page);
   } else {
     return true;

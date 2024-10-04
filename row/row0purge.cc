@@ -402,7 +402,7 @@ skip_secondaries:
       latching order if we would only later latch the
       root page of such a tree! */
 
-      btr_root_get(index, &mtr);
+      (void) srv_btree_sys->root_get(index, &mtr);
 
       /* We assume in purge of externally stored fields
       that the space id of the undo log record is 0! */

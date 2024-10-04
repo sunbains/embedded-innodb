@@ -3009,7 +3009,7 @@ rec_loop:
   }
 
   if (unlikely(recovery != IB_RECOVERY_DEFAULT)) {
-    if (!rec_validate(rec, offsets) || !btr_index_rec_validate(rec, index, false)) {
+    if (!rec_validate(rec, offsets) || !srv_btree_sys->index_rec_validate(rec, index, false)) {
       ib_logger(
         ib_stream,
         "Index corruption: rec offs %lu"

@@ -186,30 +186,30 @@ static void btr_cur_latch_leaves(page_t *page, ulint space, ulint page_no, ulint
     case BTR_SEARCH_LEAF:
     case BTR_MODIFY_LEAF:
       mode = latch_mode == BTR_SEARCH_LEAF ? RW_S_LATCH : RW_X_LATCH;
-      get_block = btr_block_get(space, page_no, mode, mtr);
+      get_block = srv_btree_sys->block_get(space, page_no, mode, mtr);
       get_block->m_check_index_page_at_flush = true;
       return;
     case BTR_MODIFY_TREE:
       /* x-latch also brothers from left to right */
-      left_page_no = btr_page_get_prev(page, mtr);
+      left_page_no = srv_btree_sys->page_get_prev(page, mtr);
 
       if (left_page_no != FIL_NULL) {
-        get_block = btr_block_get(space, left_page_no, RW_X_LATCH, mtr);
+        get_block = srv_btree_sys->block_get(space, left_page_no, RW_X_LATCH, mtr);
 #ifdef UNIV_BTR_DEBUG
-        ut_a(btr_page_get_next(get_block->get_frame(), mtr) == page_get_page_no(page));
+        ut_a(srv_btree_sys->page_get_next(get_block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
         get_block->m_check_index_page_at_flush = true;
       }
 
-      get_block = btr_block_get(space, page_no, RW_X_LATCH, mtr);
+      get_block = srv_btree_sys->block_get(space, page_no, RW_X_LATCH, mtr);
       get_block->m_check_index_page_at_flush = true;
 
-      right_page_no = btr_page_get_next(page, mtr);
+      right_page_no = srv_btree_sys->page_get_next(page, mtr);
 
       if (right_page_no != FIL_NULL) {
-        get_block = btr_block_get(space, right_page_no, RW_X_LATCH, mtr);
+        get_block = srv_btree_sys->block_get(space, right_page_no, RW_X_LATCH, mtr);
 #ifdef UNIV_BTR_DEBUG
-        ut_a(btr_page_get_prev(get_block->get_frame(), mtr) == page_get_page_no(page));
+        ut_a(srv_btree_sys->page_get_prev(get_block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
         get_block->m_check_index_page_at_flush = true;
       }
@@ -220,18 +220,18 @@ static void btr_cur_latch_leaves(page_t *page, ulint space, ulint page_no, ulint
     case BTR_MODIFY_PREV:
       mode = latch_mode == BTR_SEARCH_PREV ? RW_S_LATCH : RW_X_LATCH;
       /* latch also left brother */
-      left_page_no = btr_page_get_prev(page, mtr);
+      left_page_no = srv_btree_sys->page_get_prev(page, mtr);
 
       if (left_page_no != FIL_NULL) {
-        get_block = btr_block_get(space, left_page_no, mode, mtr);
+        get_block = srv_btree_sys->block_get(space, left_page_no, mode, mtr);
         cursor->left_block = get_block;
 #ifdef UNIV_BTR_DEBUG
-        ut_a(btr_page_get_next(get_block->get_frame(), mtr) == page_get_page_no(page));
+        ut_a(srv_btree_sys->page_get_next(get_block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
         get_block->m_check_index_page_at_flush = true;
       }
 
-      get_block = btr_block_get(space, page_no, mode, mtr);
+      get_block = srv_btree_sys->block_get(space, page_no, mode, mtr);
       get_block->m_check_index_page_at_flush = true;
       return;
   }
@@ -380,12 +380,12 @@ void btr_cur_search_to_nth_level(
       buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
     }
 
-    ut_ad(dict_index->id == btr_page_get_index_id(page));
+    ut_ad(dict_index->id == srv_btree_sys->page_get_index_id(page));
 
     if (unlikely(height == ULINT_UNDEFINED)) {
       /* We are in the root node */
 
-      height = btr_page_get_level(page, mtr);
+      height = srv_btree_sys->page_get_level(page, mtr);
       root_height = height;
       cursor->tree_height = root_height + 1;
     }
@@ -414,13 +414,13 @@ void btr_cur_search_to_nth_level(
 
     /* If this is the desired level, leave the loop */
 
-    ut_ad(height == btr_page_get_level(page_cur_get_page(page_cursor), mtr));
+    ut_ad(height == srv_btree_sys->page_get_level(page_cur_get_page(page_cursor), mtr));
 
     if (level == height) {
 
       if (level > 0) {
         /* x-latch the page */
-        page = btr_page_get(space, page_no, RW_X_LATCH, mtr);
+        page = srv_btree_sys->page_get(space, page_no, RW_X_LATCH, mtr);
       }
 
       break;
@@ -439,7 +439,7 @@ void btr_cur_search_to_nth_level(
     }
 
     /* Go to the child node */
-    page_no = btr_node_ptr_get_child_page_no(node_ptr, offsets);
+    page_no = srv_btree_sys->node_ptr_get_child_page_no(node_ptr, offsets);
   }
 
   if (likely_null(heap)) {
@@ -514,14 +514,14 @@ void btr_cur_open_at_index_side_func(
     auto block = srv_buf_pool->get(req, nullptr);
     auto page = block->get_frame();
 
-    ut_ad(dict_index->id == btr_page_get_index_id(page));
+    ut_ad(dict_index->id == srv_btree_sys->page_get_index_id(page));
 
     block->m_check_index_page_at_flush = true;
 
     if (height == ULINT_UNDEFINED) {
       /* We are in the root node */
 
-      height = btr_page_get_level(page, mtr);
+      height = srv_btree_sys->page_get_level(page, mtr);
       root_height = height;
     }
 
@@ -573,7 +573,7 @@ void btr_cur_open_at_index_side_func(
     }
 
     /* Go to the child node */
-    page_no = btr_node_ptr_get_child_page_no(node_ptr, offsets);
+    page_no = srv_btree_sys->node_ptr_get_child_page_no(node_ptr, offsets);
   }
 
   if (likely_null(heap)) {
@@ -617,12 +617,12 @@ void btr_cur_open_at_rnd_pos_func(dict_index_t *dict_index, ulint latch_mode, bt
     auto block = srv_buf_pool->get(req, nullptr);
     auto page = block->get_frame();
 
-    ut_ad(dict_index->id == btr_page_get_index_id(page));
+    ut_ad(dict_index->id == srv_btree_sys->page_get_index_id(page));
 
     if (height == ULINT_UNDEFINED) {
       /* We are in the root node */
 
-      height = btr_page_get_level(page, mtr);
+      height = srv_btree_sys->page_get_level(page, mtr);
     }
 
     if (height == 0) {
@@ -649,7 +649,7 @@ void btr_cur_open_at_rnd_pos_func(dict_index_t *dict_index, ulint latch_mode, bt
     }
 
     /* Go to the child node */
-    page_no = btr_node_ptr_get_child_page_no(node_ptr, offsets);
+    page_no = srv_btree_sys->node_ptr_get_child_page_no(node_ptr, offsets);
   }
 
   if (likely_null(heap)) {
@@ -688,7 +688,7 @@ static rec_t *btr_cur_insert_if_possible(
   if (unlikely(!rec)) {
     /* If record did not fit, reorganize */
 
-    if (btr_page_reorganize(block, cursor->m_index, mtr)) {
+    if (srv_btree_sys->page_reorganize(block, cursor->m_index, mtr)) {
 
       page_cur_search(block, cursor->m_index, tuple, PAGE_CUR_LE, page_cursor);
 
@@ -773,9 +773,7 @@ static void btr_cur_trx_report(trx_t *trx, const dict_index_t *index, const char
 }
 #endif /* UNIV_DEBUG */
 
-db_err btr_cur_optimistic_insert(
-  ulint flags, btr_cur_t *cursor, dtuple_t *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
-) {
+db_err btr_cur_optimistic_insert(ulint flags, btr_cur_t *cursor, dtuple_t *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr) {
   big_rec_t *big_rec_vec = nullptr;
   page_cur_t *page_cursor;
   ulint max_size;
@@ -828,7 +826,10 @@ db_err btr_cur_optimistic_insert(
   level, check if we have to split the page to reserve enough free space
   for future updates of records. */
 
-  if (dict_index_is_clust(dict_index) && page_get_n_recs(page) >= 2 && likely(leaf) && dict_index_get_space_reserve() + rec_size > max_size && (btr_page_get_split_rec_to_right(cursor, &dummy_rec) || btr_page_get_split_rec_to_left(cursor, &dummy_rec))) {
+  if (dict_index_is_clust(dict_index) && page_get_n_recs(page) >= 2 &&
+       likely(leaf) && dict_index_get_space_reserve() + rec_size > max_size &&
+       (srv_btree_sys->page_get_split_rec_to_right(cursor, dummy_rec) ||
+        srv_btree_sys->page_get_split_rec_to_left(cursor, dummy_rec))) {
 
     if (big_rec_vec) {
       dtuple_convert_back_big_rec(dict_index, entry, big_rec_vec);
@@ -874,7 +875,7 @@ db_err btr_cur_optimistic_insert(
 
   if (unlikely(!*rec) && likely(!reorg)) {
     /* If the record did not fit, reorganize */
-    auto success = btr_page_reorganize(block, dict_index, mtr);
+    auto success = srv_btree_sys->page_reorganize(block, dict_index, mtr);
     ut_a(success);
 
     ut_ad(page_get_max_insert_size(page, 1) == max_size);
@@ -985,9 +986,9 @@ db_err btr_cur_pessimistic_insert(
   if (dict_index_get_page(dict_index) == btr_cur_get_block(cursor)->get_page_no()) {
 
     /* The page is the root page */
-    *rec = btr_root_raise_and_insert(cursor, entry, n_ext, mtr);
+    *rec = srv_btree_sys->root_raise_and_insert(cursor, entry, n_ext, mtr);
   } else {
-    *rec = btr_page_split_and_insert(cursor, entry, n_ext, mtr);
+    *rec = srv_btree_sys->page_split_and_insert(cursor, entry, n_ext, mtr);
   }
 
   if (likely_null(heap)) {
@@ -1401,7 +1402,7 @@ static void btr_cur_pess_upd_restore_supremum(
   }
 
   auto space = block->get_space();
-  auto prev_page_no = btr_page_get_prev(page, mtr);
+  auto prev_page_no = srv_btree_sys->page_get_prev(page, mtr);
 
   ut_ad(prev_page_no != FIL_NULL);
 
@@ -1417,7 +1418,7 @@ static void btr_cur_pess_upd_restore_supremum(
   auto prev_block = srv_buf_pool->get(req, nullptr);
 
 #ifdef UNIV_BTR_DEBUG
-  ut_a(btr_page_get_next(prev_block->get_frame(), mtr) == page_get_page_no(page));
+  ut_a(srv_btree_sys->page_get_next(prev_block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
 
   /* We must already have an x-latch on prev_block! */
@@ -1964,26 +1965,26 @@ void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents, btr_cur_
     /* If there is only one record, drop the whole page in
     btr_discard_page, if this is not the root page */
 
-    btr_discard_page(cursor, mtr);
+    srv_btree_sys->discard_page(cursor, mtr);
 
     *err = DB_SUCCESS;
 
   } else {
     srv_lock_sys->update_delete(block, rec);
 
-    const auto level = btr_page_get_level(page, mtr);
+    const auto level = srv_btree_sys->page_get_level(page, mtr);
 
     if (level > 0 && rec == page_rec_get_next(page_get_infimum_rec(page))) {
 
       auto next_rec = page_rec_get_next(rec);
 
-      if (btr_page_get_prev(page, mtr) == FIL_NULL) {
+      if (srv_btree_sys->page_get_prev(page, mtr) == FIL_NULL) {
 
         /* If we delete the leftmost node pointer on a
         non-leaf level, we must mark the new leftmost node
         pointer as the predefined minimum record */
 
-        btr_set_min_rec_mark(next_rec, mtr);
+        srv_btree_sys->set_min_rec_mark(next_rec, mtr);
 
       } else {
 
@@ -1992,17 +1993,17 @@ void btr_cur_pessimistic_delete(db_err *err, bool has_reserved_extents, btr_cur_
         so that it is equal to the new leftmost node pointer
         on the page */
 
-        btr_node_ptr_delete(index, block, mtr);
+        srv_btree_sys->node_ptr_delete(index, block, mtr);
 
         auto node_ptr = dict_index_build_node_ptr(index, next_rec, block->get_page_no(), heap, level);
 
-        btr_insert_on_non_leaf_level(index, level + 1, node_ptr, mtr);
+        srv_btree_sys->insert_on_non_leaf_level(index, level + 1, node_ptr, mtr, Source_location{});
       }
     }
 
     page_cur_delete_rec(btr_cur_get_page_cur(cursor), index, offsets, mtr);
 
-    ut_ad(btr_check_node_ptr(index, block, mtr));
+    ut_ad(srv_btree_sys->check_node_ptr(index, block, mtr));
 
     *err = DB_SUCCESS;
   }
@@ -2294,7 +2295,7 @@ void btr_estimate_number_of_different_key_vals(dict_index_t *index) {
       algorithm grossly underestimated the number of rows
       in the table. */
 
-      if (btr_page_get_prev(page, &mtr) != FIL_NULL || btr_page_get_next(page, &mtr) != FIL_NULL) {
+      if (srv_btree_sys->page_get_prev(page, &mtr) != FIL_NULL || srv_btree_sys->page_get_next(page, &mtr) != FIL_NULL) {
 
         n_diff[n_cols]++;
       }
@@ -2660,7 +2661,7 @@ db_err btr_store_big_rec_extern_fields(
         hint_page_no = prev_page_no + 1;
       }
 
-      auto block = btr_page_alloc(index, hint_page_no, FSP_NO_DIR, 0, &mtr);
+      auto block = srv_btree_sys->page_alloc(index, hint_page_no, FSP_NO_DIR, 0, &mtr);
 
       if (unlikely(block == nullptr)) {
 
@@ -2887,7 +2888,7 @@ void btr_free_externally_stored_field(
     because we did not store it on the page (we save the
     space overhead from an index page header. */
 
-    btr_page_free_low(index, ext_block, 0, &mtr);
+    srv_btree_sys->page_free_low(index, ext_block, 0, &mtr);
 
     mlog_write_ulint(field_ref + BTR_EXTERN_PAGE_NO, next_page_no, MLOG_4BYTES, &mtr);
 

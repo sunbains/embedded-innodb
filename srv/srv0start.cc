@@ -520,6 +520,9 @@ ib_err_t InnoDB::start() noexcept {
   ut_a(srv_lock_sys == nullptr);
   srv_lock_sys = Lock_sys::create(srv_trx_sys, srv_lock_table_size);
 
+  ut_a(srv_btree_sys == nullptr);
+  srv_btree_sys = Btree::create(srv_lock_sys, srv_fsp, srv_buf_pool);
+
   ut_a(srv_undo == nullptr);
   srv_undo = Undo::create(srv_fsp);
 
@@ -1062,6 +1065,8 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
   srv_threads_shutdown();
 
   log_sys->shutdown();
+
+  Btree::destroy(srv_btree_sys);
 
   Lock_sys::destroy(srv_lock_sys);
 

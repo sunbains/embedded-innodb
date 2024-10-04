@@ -680,6 +680,7 @@ struct export_var_struct {
 struct Fil;
 struct FSP;
 struct Undo;
+struct Btree;
 struct DBLWR;
 struct Trx_sys;
 struct Lock_sys;
@@ -693,6 +694,8 @@ extern AIO *srv_aio;
 extern FSP *srv_fsp;
 
 extern DBLWR *srv_dblwr;
+
+extern Btree *srv_btree_sys;
 
 extern Trx_sys *srv_trx_sys;
 

@@ -963,7 +963,7 @@ void Buf_LRU::print() {
         frame = reinterpret_cast<buf_block_t *>(bpage)->get_frame();
 
         ib_logger(
-          ib_stream, "\ntype %lu index id %lu\n", (ulong)srv_fil->page_get_type(frame), (ulong)btr_page_get_index_id(frame)
+          ib_stream, "\ntype %lu index id %lu\n", (ulong)srv_fil->page_get_type(frame), (ulong)srv_btree_sys->page_get_index_id(frame)
         );
         break;
 

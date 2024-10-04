@@ -3262,6 +3262,7 @@ Lock_sys *Lock_sys::create(Trx_sys *trx_sys, ulint n_cells) noexcept {
 }
 
 void Lock_sys::destroy(Lock_sys *&lock_sys) noexcept {
+  call_destructor(lock_sys);
   ut_delete(lock_sys);
   lock_sys = nullptr;
 }

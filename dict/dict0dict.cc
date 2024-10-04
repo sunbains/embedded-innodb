@@ -544,21 +544,13 @@ void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap) {
   table->big_rows = row_len >= BIG_ROW_SIZE;
 
   /* Look for a table with the same name: error if such exists */
-  {
-    dict_table_t *table2{nullptr};
-    if (const auto it = dict_sys->table_hash->find(table->name); it != dict_sys->table_hash->end()) {
-      table2 = it->second;
-    }
-    ut_a(table2 == nullptr);
+  if (const auto it = dict_sys->table_hash->find(table->name); it != dict_sys->table_hash->end()) {
+    ut_a(it->second == nullptr);
   }
 
   /* Look for a table with the same id: error if such exists */
-  {
-    dict_table_t *table2;
-    if (const auto it = dict_sys->table_id_hash->find(table->id); it != dict_sys->table_id_hash->end()) {
-      table2 = it->second;
-    }
-    ut_a(table2 == nullptr);
+  if (const auto it = dict_sys->table_id_hash->find(table->id); it != dict_sys->table_id_hash->end()) {
+    ut_a(it->second == nullptr);
   }
 
   /* Add table to hash table of tables */
@@ -3252,13 +3244,13 @@ void dict_update_statistics_low(dict_table_t *table, bool has_dict_mutex __attri
   }
 
   while (index) {
-    size = btr_get_size(index, BTR_TOTAL_SIZE);
+    size = srv_btree_sys->get_size(index, BTR_TOTAL_SIZE);
 
     index->stat_index_size = size;
 
     sum_of_index_sizes += size;
 
-    size = btr_get_size(index, BTR_N_LEAF_PAGES);
+    size = srv_btree_sys->get_size(index, BTR_N_LEAF_PAGES);
 
     if (size == 0) {
       /* The root node of the tree is a leaf */

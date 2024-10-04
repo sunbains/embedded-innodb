@@ -68,8 +68,8 @@ void btr_pcur_t::store_position(mtr_t *mtr) {
     we do not store the modify_clock, but always do a search
     if we restore the cursor position */
 
-    ut_a(btr_page_get_next(page, mtr) == FIL_NULL);
-    ut_a(btr_page_get_prev(page, mtr) == FIL_NULL);
+    ut_a(srv_btree_sys->page_get_next(page, mtr) == FIL_NULL);
+    ut_a(srv_btree_sys->page_get_prev(page, mtr) == FIL_NULL);
 
     m_old_stored = true;
 
@@ -273,7 +273,7 @@ void btr_pcur_t::release_leaf(mtr_t *mtr) {
 
   auto block = get_block();
 
-  btr_leaf_page_release(block, m_latch_mode, mtr);
+  srv_btree_sys->leaf_page_release(block, m_latch_mode, mtr);
 
   m_latch_mode = BTR_NO_LATCHES;
 
@@ -288,21 +288,21 @@ void btr_pcur_t::move_to_next_page(mtr_t *mtr) {
   m_old_stored = false;
 
   auto page = get_page();
-  auto next_page_no = btr_page_get_next(page, mtr);
+  auto next_page_no = srv_btree_sys->page_get_next(page, mtr);
   auto space_id = get_block()->get_space();
 
   ut_ad(next_page_no != FIL_NULL);
 
-  auto next_block = btr_block_get(space_id, next_page_no, m_latch_mode, mtr);
+  auto next_block = srv_btree_sys->block_get(space_id, next_page_no, m_latch_mode, mtr);
   auto next_page = next_block->get_frame();
 
 #ifdef UNIV_BTR_DEBUG
-  ut_a(btr_page_get_prev(next_page, mtr) == get_block()->get_page_no());
+  ut_a(srv_btree_sys->page_get_prev(next_page, mtr) == get_block()->get_page_no());
 #endif /* UNIV_BTR_DEBUG */
 
   next_block->m_check_index_page_at_flush = true;
 
-  btr_leaf_page_release(get_block(), m_latch_mode, mtr);
+  srv_btree_sys->leaf_page_release(get_block(), m_latch_mode, mtr);
 
   page_cur_set_before_first(next_block, get_page_cur());
 
@@ -342,7 +342,7 @@ void btr_pcur_t::move_backward_from_page(mtr_t *mtr) {
   restore_position(latch_mode2, mtr, Source_location{});
 
   auto page = get_page();
-  auto prev_page_no = btr_page_get_prev(page, mtr);
+  auto prev_page_no = srv_btree_sys->page_get_prev(page, mtr);
 
   if (prev_page_no == FIL_NULL) {
      ;
@@ -350,7 +350,7 @@ void btr_pcur_t::move_backward_from_page(mtr_t *mtr) {
 
     auto prev_block = get_btr_cur()->left_block;
 
-    btr_leaf_page_release(get_block(), latch_mode, mtr);
+      srv_btree_sys->leaf_page_release(get_block(), latch_mode, mtr);
 
     page_cur_set_after_last(prev_block, get_page_cur());
   } else {
@@ -361,7 +361,7 @@ void btr_pcur_t::move_backward_from_page(mtr_t *mtr) {
 
     auto prev_block = get_btr_cur()->left_block;
 
-    btr_leaf_page_release(prev_block, latch_mode, mtr);
+    srv_btree_sys->leaf_page_release(prev_block, latch_mode, mtr);
   }
 
   m_latch_mode = latch_mode;

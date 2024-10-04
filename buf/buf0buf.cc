@@ -37,6 +37,7 @@ Created 11/5/1995 Heikki Tuuri
 #include "buf0rea.h"
 #include "dict0dict.h"
 #include "fil0fil.h"
+#include "hash0hash.h"
 #include "lock0lock.h"
 #include "log0log.h"
 #include "log0recv.h"
@@ -401,10 +402,10 @@ void buf_page_print(const byte *read_buf, ulint) {
     case FIL_PAGE_TYPE_INDEX:
       log_warn(std::format(
         "Page may be an index page where index id is {}",
-        btr_page_get_index_id(read_buf)
+        srv_btree_sys->page_get_index_id(read_buf)
       ));
 
-      index = dict_index_find_on_id_low(btr_page_get_index_id(read_buf));
+      index = dict_index_find_on_id_low(srv_btree_sys->page_get_index_id(read_buf));
 
       if (index != nullptr) {
         ib_logger(ib_stream, "(");
@@ -1193,7 +1194,7 @@ void Buf_pool::page_init_low(buf_page_t *bpage) {
   bpage->m_access_time = 0;
   bpage->m_newest_modification = 0;
   bpage->m_oldest_modification = 0;
-  HASH_INVALIDATE(bpage, hash);
+  HASH_INVALIDATE(bpage, m_page_hash);
 
   ut_d(bpage->m_file_page_was_freed = false);
 }
@@ -1722,7 +1723,7 @@ void Buf_pool::print() {
 
       if (srv_fil->page_get_type(frame) == FIL_PAGE_TYPE_INDEX) {
 
-        id = btr_page_get_index_id(frame);
+        id = srv_btree_sys->page_get_index_id(frame);
 
         /* Look for the id in the index_ids array */
         ulint j = 0;

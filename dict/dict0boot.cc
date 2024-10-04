@@ -116,7 +116,7 @@ static bool dict_hdr_create(mtr_t *mtr) {
 
   /* Create the B-tree roots for the clustered indexes of the basic system tables */
 
-  auto root_page_no = btr_create(
+  auto root_page_no = srv_btree_sys->create(
     DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLES_ID, dict_ind_redundant, mtr);
 
   if (root_page_no == FIL_NULL) {
@@ -126,7 +126,7 @@ static bool dict_hdr_create(mtr_t *mtr) {
 
   mlog_write_ulint(dict_header + DICT_HDR_TABLES, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = btr_create(DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLE_IDS_ID, dict_ind_redundant, mtr);
+  root_page_no = srv_btree_sys->create(DICT_UNIQUE, DICT_HDR_SPACE, DICT_TABLE_IDS_ID, dict_ind_redundant, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -135,7 +135,7 @@ static bool dict_hdr_create(mtr_t *mtr) {
 
   mlog_write_ulint(dict_header + DICT_HDR_TABLE_IDS, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = btr_create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_COLUMNS_ID, dict_ind_redundant, mtr);
+  root_page_no = srv_btree_sys->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_COLUMNS_ID, dict_ind_redundant, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -144,7 +144,7 @@ static bool dict_hdr_create(mtr_t *mtr) {
 
   mlog_write_ulint(dict_header + DICT_HDR_COLUMNS, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = btr_create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_INDEXES_ID, dict_ind_redundant, mtr);
+  root_page_no = srv_btree_sys->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_INDEXES_ID, dict_ind_redundant, mtr);
 
   if (root_page_no == FIL_NULL) {
 
@@ -153,7 +153,7 @@ static bool dict_hdr_create(mtr_t *mtr) {
 
   mlog_write_ulint(dict_header + DICT_HDR_INDEXES, root_page_no, MLOG_4BYTES, mtr);
 
-  root_page_no = btr_create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_FIELDS_ID, dict_ind_redundant, mtr);
+  root_page_no = srv_btree_sys->create(DICT_CLUSTERED | DICT_UNIQUE, DICT_HDR_SPACE, DICT_FIELDS_ID, dict_ind_redundant, mtr);
 
   if (root_page_no == FIL_NULL) {
 

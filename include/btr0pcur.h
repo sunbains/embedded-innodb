@@ -645,7 +645,7 @@ inline bool btr_pcur_t::is_before_first_in_tree(mtr_t *m) {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  if (btr_page_get_prev(get_page(), m) != FIL_NULL) {
+  if (Btree::page_get_prev(get_page(), m) != FIL_NULL) {
     return false;
   } else {
     return page_cur_is_before_first(get_page_cur());
@@ -656,7 +656,7 @@ inline bool btr_pcur_t::is_after_last_in_tree(mtr_t *m) {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  if (btr_page_get_next(get_page(), m) != FIL_NULL) {
+  if (Btree::page_get_next(get_page(), m) != FIL_NULL) {
     return false;
   } else {
     return page_cur_is_after_last(get_page_cur());

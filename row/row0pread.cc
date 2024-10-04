@@ -342,7 +342,7 @@ void PCursor::resume() noexcept {
 
 dberr_t PCursor::move_to_user_rec() noexcept {
   auto cur = m_pcur->get_page_cur();
-  const auto next_page_no = btr_page_get_next(page_cur_get_page(cur), m_mtr);
+  const auto next_page_no = srv_btree_sys->page_get_next(page_cur_get_page(cur), m_mtr);
 
   if (next_page_no == FIL_NULL) {
     m_mtr->commit();
@@ -366,7 +366,7 @@ dberr_t PCursor::move_to_user_rec() noexcept {
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
 
   if (page_is_leaf(block->get_frame())) {
-    btr_leaf_page_release(page_cur_get_block(cur), RW_S_LATCH, m_mtr);
+    srv_btree_sys->leaf_page_release(page_cur_get_block(cur), RW_S_LATCH, m_mtr);
   }
 
   page_cur_set_before_first(block, cur);
@@ -527,7 +527,7 @@ Parallel_reader::Scan_ctx::create_persistent_cursor(const page_cur_t &page_curso
 
   iter->m_pcur->open_on_user_rec(page_cursor, PAGE_CUR_GE, BTR_ALREADY_S_LATCHED | BTR_SEARCH_LEAF);
 
-  ut_ad(btr_page_get_level(iter->m_pcur->get_block()->get_frame(), mtr) == m_config.m_read_level);
+  ut_ad(srv_btree_sys->page_get_level(iter->m_pcur->get_block()->get_frame(), mtr) == m_config.m_read_level);
 
   iter->m_pcur->store_position(mtr);
 
@@ -904,7 +904,7 @@ page_no_t Parallel_reader::Scan_ctx::search(const buf_block_t *block, const dtup
     offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
   }
 
-  auto page_no = btr_node_ptr_get_child_page_no(rec, offsets);
+  auto page_no = srv_btree_sys->node_ptr_get_child_page_no(rec, offsets);
 
   if (heap != nullptr) {
     mem_heap_free(heap);
@@ -926,7 +926,7 @@ page_cur_t Parallel_reader::Scan_ctx::start_range(page_no_t page_no, mtr_t *mtr,
 
     auto block = block_get_s_latched(page_id, mtr, __LINE__);
 
-    height = btr_page_get_level(block->get_frame(), mtr);
+    height = srv_btree_sys->page_get_level(block->get_frame(), mtr);
 
     savepoints.push_back({savepoint, block});
 
@@ -992,7 +992,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
   auto block = block_get_s_latched(page_id, mtr, __LINE__);
 
   /* read_level requested should be less than the tree height. */
-  ut_ad(m_config.m_read_level < btr_page_get_level(block->get_frame(), mtr) + 1);
+  ut_ad(m_config.m_read_level < srv_btree_sys->page_get_level(block->get_frame(), mtr) + 1);
 
   savepoint.second = block;
 
@@ -1023,7 +1023,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
 
   mem_heap_t *heap{};
 
-  const auto at_level = btr_page_get_level(block->get_frame(), mtr);
+  const auto at_level = srv_btree_sys->page_get_level(block->get_frame(), mtr);
 
   Savepoints savepoints{};
 
@@ -1050,7 +1050,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
 
     /* Split the tree one level below the root if read_level requested is below the root level. */
     if (at_level > m_config.m_read_level) {
-      auto page_no = btr_node_ptr_get_child_page_no(rec, offsets);
+      auto page_no = srv_btree_sys->node_ptr_get_child_page_no(rec, offsets);
 
       if (depth < split_level) {
         /* Need to create a range starting at a lower level in the tree. */

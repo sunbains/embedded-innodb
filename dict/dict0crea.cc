@@ -552,7 +552,7 @@ static ulint dict_create_index_tree_step(ind_node_t *node) {
 
   pcur.move_to_next_user_rec(&mtr);
 
-  node->page_no = btr_create(index->type, index->space, index->id, index, &mtr);
+  node->page_no = srv_btree_sys->create(index->type, index->space, index->id, index, &mtr);
 
   /* printf("Created a new index tree in space %lu root page %lu\n",
   index->space, index->page_no); */
@@ -603,13 +603,13 @@ void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
   /* We free all the pages but the root page first; this operation
   may span several mini-transactions */
 
-  btr_free_but_not_root(space, root_page_no);
+  srv_btree_sys->free_but_not_root(space, root_page_no);
 
   /* Then we free the root page in the same mini-transaction where
   we write FIL_NULL to the appropriate field in the SYS_INDEXES
   record: this mini-transaction marks the B-tree totally freed */
 
-  btr_free_root(space, root_page_no, mtr);
+  srv_btree_sys->free_root(space, root_page_no, mtr);
 
   page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
 }
@@ -665,16 +665,16 @@ page_no_t dict_truncate_index_tree(dict_table_t *table, space_id_t space, btr_pc
     /* We free all the pages but the root page first; this operation
     may span several mini-transactions */
 
-    btr_free_but_not_root(space, root_page_no);
+    srv_btree_sys->free_but_not_root(space, root_page_no);
 
     /* Then we free the root page in the same mini-transaction where
     we create the b-tree and write its new root page number to the
     appropriate field in the SYS_INDEXES record: this mini-transaction
     marks the B-tree totally truncated */
 
-    btr_page_get(space, root_page_no, RW_X_LATCH, mtr);
+    (void) srv_btree_sys->page_get(space, root_page_no, RW_X_LATCH, mtr);
 
-    btr_free_root(space, root_page_no, mtr);
+    srv_btree_sys->free_root(space, root_page_no, mtr);
   }
 
   /* We will temporarily write FIL_NULL to the PAGE_NO field
@@ -697,7 +697,7 @@ page_no_t dict_truncate_index_tree(dict_table_t *table, space_id_t space, btr_pc
   /* Find the index corresponding to this SYS_INDEXES record. */
   for (index = UT_LIST_GET_FIRST(table->indexes); index; index = UT_LIST_GET_NEXT(indexes, index)) {
     if (index->id == index_id) {
-      root_page_no = btr_create(type, space, index_id, index, mtr);
+      root_page_no = srv_btree_sys->create(type, space, index_id, index, mtr);
       index->page = (unsigned int)root_page_no;
       return root_page_no;
     }
