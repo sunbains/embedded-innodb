@@ -1194,7 +1194,6 @@ void Buf_pool::page_init_low(buf_page_t *bpage) {
   bpage->m_access_time = 0;
   bpage->m_newest_modification = 0;
   bpage->m_oldest_modification = 0;
-  HASH_INVALIDATE(bpage, m_page_hash);
 
   ut_d(bpage->m_file_page_was_freed = false);
 }
