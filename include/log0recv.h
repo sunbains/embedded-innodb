@@ -44,7 +44,7 @@ Created 9/20/1997 Heikki Tuuri
                                 freshly read page
  * @param[in,out] block         buffer block
 */
-void recv_recover_page(bool just_read_in, buf_block_t *block) noexcept;
+void recv_recover_page(bool just_read_in, Buf_block *block) noexcept;
 
 /**
  * Recovers from a checkpoint. When this function returns, the database is able

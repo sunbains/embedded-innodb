@@ -26,6 +26,7 @@ Completed by Sunny Bains and Marko Makela
 #include "row0merge.h"
 #include "api0misc.h"
 #include "btr0btr.h"
+#include "btr0blob.h"
 #include "data0data.h"
 #include "data0type.h"
 #include "ddl0ddl.h"
@@ -887,7 +888,7 @@ static db_err row_merge_read_clustered_index(
   row_merge_block_t *block
 ) {
   mem_heap_t *row_heap;
-  btr_pcur_t pcur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
   mtr_t mtr;
   db_err err = DB_SUCCESS;
   ulint i;
@@ -981,7 +982,7 @@ static db_err row_merge_read_clustered_index(
 
       mtr.start();
 
-      pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+      (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
       has_next = pcur.move_to_next_user_rec(&mtr);
     }
 
@@ -1464,6 +1465,7 @@ static void row_merge_copy_blobs(
 ) /*!< in/out: memory heap */
 {
   ulint i;
+  Blob blob(srv_fsp, srv_btree_sys);
   ulint n_fields = dtuple_get_n_fields(tuple);
 
   for (i = 0; i < n_fields; i++) {
@@ -1482,7 +1484,7 @@ static void row_merge_copy_blobs(
     be freed between the time the BLOB pointers are read
     (row_merge_read_clustered_index()) and dereferenced
     (below). */
-    data = btr_rec_copy_externally_stored_field(mrec, offsets, i, &len, heap);
+    data = blob.copy_externally_stored_field(mrec, offsets, i, &len, heap);
 
     dfield_set_data(field, data, len);
   }

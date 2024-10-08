@@ -147,10 +147,10 @@ bool buf_read_page(ulint space, ulint offset) {
   return err == DB_SUCCESS;
 }
 
-ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
-  buf_page_t *bpage;
+ulint buf_read_ahead_linear(Buf_pool *buf_pool, space_id_t space, page_no_t offset) {
+  Buf_page *bpage;
   buf_frame_t *frame;
-  buf_page_t *pred_bpage = nullptr;
+  Buf_page *pred_bpage = nullptr;
   page_no_t pred_offset;
   page_no_t succ_offset;
   ulint count;
@@ -187,17 +187,17 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
 
   auto tablespace_version = srv_fil->space_get_version(space);
 
-  buf_pool_mutex_enter();
+  buf_pool->mutex_acquire();
 
   if (high > srv_fil->space_get_size(space)) {
-    buf_pool_mutex_exit();
+    buf_pool->mutex_release();
     /* The area is not whole, return */
 
     return 0;
   }
 
   if (srv_buf_pool->m_n_pend_reads > srv_buf_pool->m_curr_size / BUF_READ_AHEAD_PEND_LIMIT) {
-    buf_pool_mutex_exit();
+    buf_pool->mutex_release();
 
     return 0;
   }
@@ -214,7 +214,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
 
   /* How many out of order accessed pages can we ignore
   when working out the access pattern for linear readahead */
-  threshold = ut_min((64 - srv_read_ahead_threshold), srv_buf_pool->get_read_ahead_area());
+  threshold = ut_min((64 - srv_config.m_read_ahead_threshold), srv_buf_pool->get_read_ahead_area());
 
   fail_count = 0;
 
@@ -242,7 +242,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
 
     if (fail_count > threshold) {
       /* Too many failures: return */
-      buf_pool_mutex_exit();
+      buf_pool->mutex_release();
       return 0;
     }
 
@@ -257,7 +257,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   bpage = srv_buf_pool->hash_get_page(space, offset);
 
   if (bpage == nullptr) {
-    buf_pool_mutex_exit();
+    buf_pool->mutex_release();
 
     return 0;
   }
@@ -280,7 +280,7 @@ ulint buf_read_ahead_linear(space_id_t space, page_no_t offset) {
   pred_offset = srv_fil->page_get_prev(frame);
   succ_offset = srv_fil->page_get_next(frame);
 
-  buf_pool_mutex_exit();
+  buf_pool->mutex_release();
 
   if (offset == low && succ_offset == offset + 1) {
 

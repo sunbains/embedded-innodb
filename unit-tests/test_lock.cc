@@ -136,7 +136,7 @@ int main() {
 
   os_sync_init();
 
-  srv_max_n_threads = N_TRXS;
+  srv_config.m_max_n_threads = N_TRXS;
 
   sync_init();
 
@@ -145,12 +145,12 @@ int main() {
   mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex",) IF_SYNC_DEBUG(SYNC_KERNEL,) Source_location{});
 
   {
-    srv_buf_pool_size = 64 * 1024 * 1024;
+    srv_config.m_buf_pool_size = 64 * 1024 * 1024;
 
     srv_buf_pool = new (std::nothrow) Buf_pool();
     ut_a(srv_buf_pool != nullptr);
 
-    auto success = srv_buf_pool->open(srv_buf_pool_size);
+    auto success = srv_buf_pool->open(srv_config.m_buf_pool_size);
     ut_a(success);
   }
 

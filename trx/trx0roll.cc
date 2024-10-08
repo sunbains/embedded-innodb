@@ -295,7 +295,7 @@ loop:
         if (all || trx_get_dict_operation(trx) != TRX_DICT_OP_NONE) {
           mutex_exit(&kernel_mutex);
           // FIXME: Need to get rid of this global access
-          trx_rollback_active(srv_force_recovery, trx);
+          trx_rollback_active(srv_config.m_force_recovery, trx);
           goto loop;
         }
     }

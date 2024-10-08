@@ -169,7 +169,7 @@ constexpr ulint PAGE_DIR_SLOT_MIN_N_OWNED = 4;
  * @param[in] trx_id transaction ID
  * @param[in] mtr mini-transaction
  */
-void page_set_max_trx_id(buf_block_t *block, trx_id_t trx_id, mtr_t *mtr);
+void page_set_max_trx_id(Buf_block *block, trx_id_t trx_id, mtr_t *mtr);
 
 #define page_get_infimum_rec(page) ((page) + page_get_infimum_offset(page))
 
@@ -285,7 +285,7 @@ byte *page_mem_alloc_heap(page_t *page, ulint need, ulint *heap_no);
  * 
  * @return	pointer to the page
  */
-page_t *page_create(buf_block_t *block, mtr_t *mtr);
+page_t *page_create(Buf_block *block, mtr_t *mtr);
 
 /**
  * Differs from page_copy_rec_list_end, because this function does not
@@ -298,8 +298,8 @@ page_t *page_create(buf_block_t *block, mtr_t *mtr);
  * @param[in,out] mtr mini-transaction
  */
 void page_copy_rec_list_end_no_locks(
-  buf_block_t *new_block,
-  buf_block_t *block,
+  Buf_block *new_block,
+  Buf_block *block,
   rec_t *rec,
   dict_index_t *index,
   mtr_t *mtr
@@ -318,8 +318,8 @@ void page_copy_rec_list_end_no_locks(
  * @return pointer to the original successor of the infimum record on new_page.
  */
 rec_t *page_copy_rec_list_end(
-  buf_block_t *new_block,
-  buf_block_t *block,
+  Buf_block *new_block,
+  Buf_block *block,
   rec_t *rec,
   dict_index_t *index,
   mtr_t *mtr
@@ -339,8 +339,8 @@ rec_t *page_copy_rec_list_end(
  * @return pointer to the original predecessor of the supremum record on new_page
  */
 rec_t *page_copy_rec_list_start(
-  buf_block_t *new_block,
-  buf_block_t *block,
+  Buf_block *new_block,
+  Buf_block *block,
   rec_t *rec,
   dict_index_t *index,
   mtr_t *mtr
@@ -359,7 +359,7 @@ rec_t *page_copy_rec_list_start(
  */
 void page_delete_rec_list_end(
   rec_t *rec,
-  buf_block_t *block,
+  Buf_block *block,
   dict_index_t *index,
   ulint n_recs,
   ulint size,
@@ -375,7 +375,7 @@ void page_delete_rec_list_end(
  * @param[in] index containing the record
  * @param[in,out] mtr mini-transaction
  */
-void page_delete_rec_list_start(rec_t *rec, buf_block_t *block, dict_index_t *index, mtr_t *mtr);
+void page_delete_rec_list_start(rec_t *rec, Buf_block *block, dict_index_t *index, mtr_t *mtr);
 
 /**
  * Moves record list end to another page. Moved records include split_rec.
@@ -389,8 +389,8 @@ void page_delete_rec_list_start(rec_t *rec, buf_block_t *block, dict_index_t *in
  * @return true on success
  */
 bool page_move_rec_list_end(
-  buf_block_t *new_block,
-  buf_block_t *block,
+  Buf_block *new_block,
+  Buf_block *block,
   rec_t *split_rec,
   dict_index_t *index,
   mtr_t *mtr
@@ -409,8 +409,8 @@ bool page_move_rec_list_end(
  * @return	true on success
  */
 bool page_move_rec_list_start(
-  buf_block_t *new_block,
-  buf_block_t *block,
+  Buf_block *new_block,
+  Buf_block *block,
   rec_t *split_rec,
   dict_index_t *index,
   mtr_t *mtr
@@ -450,7 +450,7 @@ byte *page_parse_delete_rec_list(
   byte type,
   byte *ptr,
   byte *end_ptr,
-  buf_block_t *block,
+  Buf_block *block,
   dict_index_t *index,
   mtr_t *mtr
 );
@@ -465,7 +465,7 @@ byte *page_parse_delete_rec_list(
  * 
  * @return	end of log record or NULL
  */
-byte *page_parse_create(byte *ptr, byte *end_ptr, buf_block_t *block, mtr_t *mtr);
+byte *page_parse_create(byte *ptr, byte *end_ptr, Buf_block *block, mtr_t *mtr);
 
 /**
  * Prints record contents including the data relevant only in
@@ -493,7 +493,7 @@ void page_dir_print(page_t *page, ulint pr_n);
  * @param[in] index dictionary index of the page
  * @param[in] pr_n print n first and last entries in directory
  */
-void page_print_list(buf_block_t *block, dict_index_t *index, ulint pr_n);
+void page_print_list(Buf_block *block, dict_index_t *index, ulint pr_n);
 
 /**
  * Prints the info in a page header.
@@ -511,7 +511,7 @@ void page_header_print(const page_t *page);
  * @param[in] dn print dn first and last entries in directory
  * @param[in] rn print rn first and last records in directory
  */
-void page_print(buf_block_t *block, dict_index_t *index, ulint dn, ulint rn);
+void page_print(Buf_block *block, dict_index_t *index, ulint dn, ulint rn);
 
 /**
  * The following is used to validate a record on a page. This function
@@ -612,7 +612,7 @@ inline trx_id_t page_get_max_trx_id(const page_t *page) {
  * @param[in] trx_id transaction id
  * @param[in,out] mtr mini-transaction
  */
-inline void page_update_max_trx_id(buf_block_t *block, trx_id_t trx_id, mtr_t *mtr) {
+inline void page_update_max_trx_id(Buf_block *block, trx_id_t trx_id, mtr_t *mtr) {
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   /* During crash recovery, this function may be called on

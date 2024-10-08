@@ -165,7 +165,7 @@ struct FSP {
    * @return the block where the segment header is placed, x-latched, nullptr if
    *  could not create segment because of lack of space
    */
-  buf_block_t *fseg_create(
+  Buf_block *fseg_create(
     space_id_t space,
     page_no_t page_no,
     ulint byte_offset,
@@ -192,7 +192,7 @@ struct FSP {
    * @return the block where the segment header is placed, x-latched, nullptr
    *  if could not create segment because of lack of space
   */
-  [[nodiscard]] buf_block_t *fseg_create_general(
+  [[nodiscard]] Buf_block *fseg_create_general(
     space_id_t space,
     page_no_t page_no,
     ulint byte_offset,
@@ -352,7 +352,7 @@ struct FSP {
    * 
    * @return	end of log record or nullptr
    */
-  [[nodiscard]] byte *parse_init_file_page(byte *ptr, byte *end_ptr, buf_block_t *block) noexcept;
+  [[nodiscard]] byte *parse_init_file_page(byte *ptr, byte *end_ptr, Buf_block *block) noexcept;
 
   /**
    * Validates the file space system and its segments.
@@ -461,7 +461,7 @@ private:
    * 
    * @return pointer to the extent descriptor
    */
-  inline xdes_t *xdes_lst_get_descriptor(space_id_t space, fil_addr_t lst_node, mtr_t *mtr) noexcept;
+  inline xdes_t *xdes_lst_get_descriptor(space_id_t space, Fil_addr lst_node, mtr_t *mtr) noexcept;
 
   /**
    * @brief Gets pointer to the extent descriptor of a page. The page where the extent

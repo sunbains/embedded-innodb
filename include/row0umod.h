@@ -37,4 +37,4 @@ Created 2/27/1997 Heikki Tuuri
 @param[in,out] node             Row undo node.
 @param[in,out] thr              Query thread.
 @return	DB_SUCCESS or error code */
-db_err row_undo_mod(undo_node_t *node, que_thr_t *thr);
+db_err row_undo_mod(Undo_node *node, que_thr_t *thr);

@@ -1069,7 +1069,7 @@ Lock *Lock_sys::rec_create_low(Page_id page_id, Lock_mode type_mode, ulint heap_
   return lock;
 }
 
-Lock *Lock_sys::rec_create(Lock_mode type_mode, const buf_block_t *block, ulint heap_no, dict_index_t *index, const trx_t *trx) noexcept {
+Lock *Lock_sys::rec_create(Lock_mode type_mode, const Buf_block *block, ulint heap_no, dict_index_t *index, const trx_t *trx) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   auto page = block->m_frame;
@@ -1078,7 +1078,7 @@ Lock *Lock_sys::rec_create(Lock_mode type_mode, const buf_block_t *block, ulint 
   return rec_create_low(block->get_page_id(), type_mode, heap_no, n_bits, index, const_cast<trx_t*>(trx));
 }
 
-db_err Lock_sys::rec_enqueue_waiting(Lock_mode type_mode, const buf_block_t *block, ulint heap_no, dict_index_t *index, que_thr_t *thr) noexcept {
+db_err Lock_sys::rec_enqueue_waiting(Lock_mode type_mode, const Buf_block *block, ulint heap_no, dict_index_t *index, que_thr_t *thr) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   /* Test if there already is some other reason to suspend thread:
@@ -1137,7 +1137,7 @@ db_err Lock_sys::rec_enqueue_waiting(Lock_mode type_mode, const buf_block_t *blo
   }
 }
 
-Lock *Lock_sys::rec_add_to_queue(Lock_mode type_mode, const buf_block_t *block, ulint heap_no, dict_index_t *index, const trx_t *trx) noexcept {
+Lock *Lock_sys::rec_add_to_queue(Lock_mode type_mode, const Buf_block *block, ulint heap_no, dict_index_t *index, const trx_t *trx) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
 #ifdef UNIV_DEBUG
@@ -1205,7 +1205,7 @@ Lock *Lock_sys::rec_add_to_queue(Lock_mode type_mode, const buf_block_t *block, 
   return rec_create(type_mode, block, heap_no, index, trx);
 }
 
-bool Lock_sys::rec_lock_fast(bool impl, Lock_mode mode, const buf_block_t *block, ulint heap_no, dict_index_t *index, que_thr_t *thr) noexcept {
+bool Lock_sys::rec_lock_fast(bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, dict_index_t *index, que_thr_t *thr) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_S || table_has(thr_get_trx(thr), index->table, LOCK_IS));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_X || table_has(thr_get_trx(thr), index->table, LOCK_IX));
@@ -1251,7 +1251,7 @@ bool Lock_sys::rec_lock_fast(bool impl, Lock_mode mode, const buf_block_t *block
   return true;
 }
 
-db_err Lock_sys::rec_lock_slow(bool impl, Lock_mode mode, const buf_block_t *block, ulint heap_no, dict_index_t *index, que_thr_t *thr) noexcept {
+db_err Lock_sys::rec_lock_slow(bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, dict_index_t *index, que_thr_t *thr) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_S || table_has(thr_get_trx(thr), index->table, LOCK_IS));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_X || table_has(thr_get_trx(thr), index->table, LOCK_IX));
@@ -1291,7 +1291,7 @@ db_err Lock_sys::rec_lock_slow(bool impl, Lock_mode mode, const buf_block_t *blo
   return err;
 }
 
-db_err Lock_sys::rec_lock(bool impl, Lock_mode mode, const buf_block_t *block, ulint heap_no, dict_index_t *index, que_thr_t *thr) noexcept {
+db_err Lock_sys::rec_lock(bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, dict_index_t *index, que_thr_t *thr) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_S || table_has(thr_get_trx(thr), index->table, LOCK_IS));
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_X || table_has(thr_get_trx(thr), index->table, LOCK_IX));
@@ -1449,7 +1449,7 @@ void Lock_sys::rec_reset_and_release_wait(Page_id page_id, ulint heap_no) noexce
   }
 }
 
-void Lock_sys::rec_inherit_to_gap(const buf_block_t *heir_block, const buf_block_t *block, ulint heir_heap_no, ulint heap_no) noexcept {
+void Lock_sys::rec_inherit_to_gap(const Buf_block *heir_block, const Buf_block *block, ulint heir_heap_no, ulint heap_no) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   /* If session is using READ COMMITTED isolation level, we do not want locks set by an UPDATE or a DELETE to be inherited as gap type locks.
@@ -1463,7 +1463,7 @@ void Lock_sys::rec_inherit_to_gap(const buf_block_t *heir_block, const buf_block
   }
 }
 
-void Lock_sys::rec_inherit_to_gap_if_gap_lock(const buf_block_t *block, ulint heir_heap_no, ulint heap_no) noexcept {
+void Lock_sys::rec_inherit_to_gap_if_gap_lock(const Buf_block *block, ulint heir_heap_no, ulint heap_no) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   if (auto it = m_rec_locks.find(block->get_page_id()); it != m_rec_locks.end()) {
@@ -1475,7 +1475,7 @@ void Lock_sys::rec_inherit_to_gap_if_gap_lock(const buf_block_t *block, ulint he
   }
 }
 
-void Lock_sys::rec_move(const buf_block_t *receiver, const buf_block_t *donator, ulint receiver_heap_no, ulint donator_heap_no) noexcept {
+void Lock_sys::rec_move(const Buf_block *receiver, const Buf_block *donator, ulint receiver_heap_no, ulint donator_heap_no) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   IF_DEBUG({
@@ -1509,7 +1509,7 @@ void Lock_sys::rec_move(const buf_block_t *receiver, const buf_block_t *donator,
   }
 }
 
-void Lock_sys::move_reorganize_page(const buf_block_t *block, const buf_block_t *oblock) noexcept {
+void Lock_sys::move_reorganize_page(const Buf_block *block, const Buf_block *oblock) noexcept {
   UT_LIST_BASE_NODE_T(Lock, m_trx_locks) old_locks;
 
   mutex_enter(&kernel_mutex);
@@ -1596,7 +1596,7 @@ void Lock_sys::move_reorganize_page(const buf_block_t *block, const buf_block_t 
   ut_ad(rec_validate_page(block->get_page_id()));
 }
 
-void Lock_sys::move_rec_list_end(const buf_block_t *new_block, const buf_block_t *block, const rec_t *rec) noexcept {
+void Lock_sys::move_rec_list_end(const Buf_block *new_block, const Buf_block *block, const rec_t *rec) noexcept {
   mutex_enter(&kernel_mutex);
 
   /* Note: when we move locks from record to record, waiting locks
@@ -1653,7 +1653,7 @@ void Lock_sys::move_rec_list_end(const buf_block_t *new_block, const buf_block_t
   ut_ad(rec_validate_page(new_block->get_page_id()));
 }
 
-void Lock_sys::move_rec_list_start(const buf_block_t *new_block, const buf_block_t *block, const rec_t *rec, const rec_t *old_end) noexcept {
+void Lock_sys::move_rec_list_start(const Buf_block *new_block, const Buf_block *block, const rec_t *rec, const rec_t *old_end) noexcept {
   ut_ad(block->m_frame == page_align(rec));
   ut_ad(new_block->m_frame == page_align(old_end));
 
@@ -1713,7 +1713,7 @@ void Lock_sys::move_rec_list_start(const buf_block_t *new_block, const buf_block
   ut_ad(rec_validate_page(block->get_page_id()));
 }
 
-void Lock_sys::update_split_right(const buf_block_t *right_block, const buf_block_t *left_block) noexcept {
+void Lock_sys::update_split_right(const Buf_block *right_block, const Buf_block *left_block) noexcept {
   const ulint heap_no = get_min_heap_no(right_block);
 
   mutex_enter(&kernel_mutex);
@@ -1731,7 +1731,7 @@ void Lock_sys::update_split_right(const buf_block_t *right_block, const buf_bloc
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::update_merge_right(const buf_block_t *right_block, const rec_t *orig_succ, const buf_block_t *left_block) noexcept {
+void Lock_sys::update_merge_right(const Buf_block *right_block, const rec_t *orig_succ, const Buf_block *left_block) noexcept {
   mutex_enter(&kernel_mutex);
 
   /* Inherit the locks from the supremum of the left page to the
@@ -1750,7 +1750,7 @@ void Lock_sys::update_merge_right(const buf_block_t *right_block, const rec_t *o
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::update_root_raise(const buf_block_t *block, const buf_block_t *root) noexcept {
+void Lock_sys::update_root_raise(const Buf_block *block, const Buf_block *root) noexcept {
   mutex_enter(&kernel_mutex);
 
   /* Move the locks on the supremum of the root to the supremum of block */
@@ -1759,7 +1759,7 @@ void Lock_sys::update_root_raise(const buf_block_t *block, const buf_block_t *ro
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::update_copy_and_discard(const buf_block_t *new_block, const buf_block_t *block) noexcept {
+void Lock_sys::update_copy_and_discard(const Buf_block *new_block, const Buf_block *block) noexcept {
   mutex_enter(&kernel_mutex);
 
   /* Move the locks on the supremum of the old page to the supremum
@@ -1771,7 +1771,7 @@ void Lock_sys::update_copy_and_discard(const buf_block_t *new_block, const buf_b
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::update_split_left(const buf_block_t *right_block, const buf_block_t *left_block) noexcept {
+void Lock_sys::update_split_left(const Buf_block *right_block, const Buf_block *left_block) noexcept {
   const ulint heap_no = get_min_heap_no(right_block);
 
   mutex_enter(&kernel_mutex);
@@ -1784,7 +1784,7 @@ void Lock_sys::update_split_left(const buf_block_t *right_block, const buf_block
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::update_merge_left(const buf_block_t *left_block, const rec_t *orig_pred, const buf_block_t *right_block) noexcept {
+void Lock_sys::update_merge_left(const Buf_block *left_block, const rec_t *orig_pred, const Buf_block *right_block) noexcept {
   const rec_t *left_next_rec;
 
   ut_ad(left_block->m_frame == page_align(orig_pred));
@@ -1816,7 +1816,7 @@ void Lock_sys::update_merge_left(const buf_block_t *left_block, const rec_t *ori
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::rec_reset_and_inherit_gap_locks(const buf_block_t *heir_block, const buf_block_t *block, ulint heir_heap_no, ulint heap_no) noexcept {
+void Lock_sys::rec_reset_and_inherit_gap_locks(const Buf_block *heir_block, const Buf_block *block, ulint heir_heap_no, ulint heap_no) noexcept {
   mutex_enter(&kernel_mutex);
 
   rec_reset_and_release_wait(heir_block->get_page_id(), heir_heap_no);
@@ -1826,7 +1826,7 @@ void Lock_sys::rec_reset_and_inherit_gap_locks(const buf_block_t *heir_block, co
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::update_discard(const buf_block_t *heir_block, ulint heir_heap_no, const buf_block_t *block) noexcept {
+void Lock_sys::update_discard(const Buf_block *heir_block, ulint heir_heap_no, const Buf_block *block) noexcept {
   const auto page = block->m_frame;
 
   mutex_enter(&kernel_mutex);
@@ -1860,7 +1860,7 @@ void Lock_sys::update_discard(const buf_block_t *heir_block, ulint heir_heap_no,
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::update_insert(const buf_block_t *block, const rec_t *rec) noexcept {
+void Lock_sys::update_insert(const Buf_block *block, const rec_t *rec) noexcept {
   ut_ad(block->m_frame == page_align(rec));
 
   /* Inherit the gap-locking locks for rec, in gap mode, from the next
@@ -1876,7 +1876,7 @@ void Lock_sys::update_insert(const buf_block_t *block, const rec_t *rec) noexcep
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::update_delete(const buf_block_t *block, const rec_t *rec) noexcept {
+void Lock_sys::update_delete(const Buf_block *block, const rec_t *rec) noexcept {
   const page_t *page = block->m_frame;
 
   ut_ad(page == page_align(rec));
@@ -1897,7 +1897,7 @@ void Lock_sys::update_delete(const buf_block_t *block, const rec_t *rec) noexcep
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::rec_store_on_page_infimum(const buf_block_t *block, const rec_t *rec) noexcept {
+void Lock_sys::rec_store_on_page_infimum(const Buf_block *block, const rec_t *rec) noexcept {
   const auto heap_no = page_rec_get_heap_no(rec);
 
   ut_ad(block->m_frame == page_align(rec));
@@ -1909,7 +1909,7 @@ void Lock_sys::rec_store_on_page_infimum(const buf_block_t *block, const rec_t *
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::rec_restore_from_page_infimum(const buf_block_t *block, const rec_t *rec, const buf_block_t *donator) noexcept {
+void Lock_sys::rec_restore_from_page_infimum(const Buf_block *block, const rec_t *rec, const Buf_block *donator) noexcept {
   const auto heap_no = page_rec_get_heap_no(rec);
 
   mutex_enter(&kernel_mutex);
@@ -2313,7 +2313,7 @@ void Lock_sys::table_dequeue(Lock *in_lock) noexcept {
   }
 }
 
-void Lock_sys::rec_unlock(trx_t *trx, const buf_block_t *block, const rec_t *rec, Lock_mode Lock_mode) noexcept {
+void Lock_sys::rec_unlock(trx_t *trx, const Buf_block *block, const rec_t *rec, Lock_mode Lock_mode) noexcept {
   ut_ad(block->m_frame == page_align(rec));
 
   const auto heap_no = page_rec_get_heap_no(rec);
@@ -2706,7 +2706,7 @@ bool Lock_sys::table_queue_validate(dict_table_t *table) noexcept {
   return true;
 }
 
-bool Lock_sys::rec_queue_validate(const buf_block_t *block, const rec_t *rec, const dict_index_t *index, const ulint *offsets) noexcept {
+bool Lock_sys::rec_queue_validate(const Buf_block *block, const rec_t *rec, const dict_index_t *index, const ulint *offsets) noexcept {
   ut_ad(block->get_frame() == page_align(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
 
@@ -2933,7 +2933,7 @@ bool Lock_sys::validate() noexcept {
 }
 #endif /* UNIV_DEBUG */
 
-db_err Lock_sys::rec_insert_check_and_lock(ulint flags, const rec_t *rec, buf_block_t *block, dict_index_t *index, que_thr_t *thr, mtr_t *mtr, bool *inherit) noexcept {
+db_err Lock_sys::rec_insert_check_and_lock(ulint flags, const rec_t *rec, Buf_block *block, dict_index_t *index, que_thr_t *thr, mtr_t *mtr, bool *inherit) noexcept {
   ut_ad(block->m_frame == page_align(rec));
 
   if (flags & BTR_NO_LOCKING_FLAG) {
@@ -3022,7 +3022,7 @@ db_err Lock_sys::rec_insert_check_and_lock(ulint flags, const rec_t *rec, buf_bl
   return err;
 }
 
-void Lock_sys::rec_convert_impl_to_expl(const buf_block_t *block, const rec_t *rec, dict_index_t *index, const ulint *offsets) noexcept {
+void Lock_sys::rec_convert_impl_to_expl(const Buf_block *block, const rec_t *rec, dict_index_t *index, const ulint *offsets) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
@@ -3048,7 +3048,7 @@ void Lock_sys::rec_convert_impl_to_expl(const buf_block_t *block, const rec_t *r
   }
 }
 
-db_err Lock_sys::clust_rec_modify_check_and_lock(ulint flags, const buf_block_t *block, const rec_t *rec, dict_index_t *index, const ulint *offsets, que_thr_t *thr) noexcept {
+db_err Lock_sys::clust_rec_modify_check_and_lock(ulint flags, const Buf_block *block, const rec_t *rec, dict_index_t *index, const ulint *offsets, que_thr_t *thr) noexcept {
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_ad(dict_index_is_clust(index));
   ut_ad(block->m_frame == page_align(rec));
@@ -3077,7 +3077,7 @@ db_err Lock_sys::clust_rec_modify_check_and_lock(ulint flags, const buf_block_t 
   return err;
 }
 
-db_err Lock_sys::sec_rec_modify_check_and_lock(ulint flags, buf_block_t *block, const rec_t *rec, dict_index_t *index, que_thr_t *thr, mtr_t *mtr) noexcept {
+db_err Lock_sys::sec_rec_modify_check_and_lock(ulint flags, Buf_block *block, const rec_t *rec, dict_index_t *index, que_thr_t *thr, mtr_t *mtr) noexcept {
   ut_ad(!dict_index_is_clust(index));
   ut_ad(block->m_frame == page_align(rec));
 
@@ -3128,7 +3128,7 @@ db_err Lock_sys::sec_rec_modify_check_and_lock(ulint flags, buf_block_t *block, 
   return err;
 }
 
-db_err Lock_sys::sec_rec_read_check_and_lock(ulint flags, const buf_block_t *block, const rec_t *rec, dict_index_t *index, const ulint *offsets, enum Lock_mode mode, ulint gap_mode, que_thr_t *thr) noexcept {
+db_err Lock_sys::sec_rec_read_check_and_lock(ulint flags, const Buf_block *block, const rec_t *rec, dict_index_t *index, const ulint *offsets, enum Lock_mode mode, ulint gap_mode, que_thr_t *thr) noexcept {
   ut_ad(!dict_index_is_clust(index));
   ut_ad(block->m_frame == page_align(rec));
   ut_ad(page_rec_is_user_rec(rec) || page_rec_is_supremum(rec));
@@ -3165,7 +3165,7 @@ db_err Lock_sys::sec_rec_read_check_and_lock(ulint flags, const buf_block_t *blo
   return err;
 }
 
-db_err Lock_sys::clust_rec_read_check_and_lock(ulint flags, const buf_block_t *block, const rec_t *rec, dict_index_t *index, const ulint *offsets, enum Lock_mode mode, ulint gap_mode, que_thr_t *thr) noexcept {
+db_err Lock_sys::clust_rec_read_check_and_lock(ulint flags, const Buf_block *block, const rec_t *rec, dict_index_t *index, const ulint *offsets, enum Lock_mode mode, ulint gap_mode, que_thr_t *thr) noexcept {
   ut_ad(dict_index_is_clust(index));
   ut_ad(block->m_frame == page_align(rec));
   ut_ad(page_rec_is_user_rec(rec) || page_rec_is_supremum(rec));
@@ -3198,7 +3198,7 @@ db_err Lock_sys::clust_rec_read_check_and_lock(ulint flags, const buf_block_t *b
   return err;
 }
 
-db_err Lock_sys::clust_rec_read_check_and_lock_alt(ulint flags, const buf_block_t *block, const rec_t *rec, dict_index_t *index, Lock_mode mode, ulint gap_mode, que_thr_t *thr) noexcept {
+db_err Lock_sys::clust_rec_read_check_and_lock_alt(ulint flags, const Buf_block *block, const rec_t *rec, dict_index_t *index, Lock_mode mode, ulint gap_mode, que_thr_t *thr) noexcept {
   mem_heap_t *tmp_heap{};
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;

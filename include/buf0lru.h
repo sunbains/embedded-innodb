@@ -81,8 +81,9 @@ struct Buf_LRU {
 
   /** Constructor
   @param[in] old_threshold_ms   Move the blocks to the "new" list after this threshold. */
-  explicit Buf_LRU()
-    : m_old_ratio(s_old_ratio),
+  explicit Buf_LRU(Buf_pool *buf_pool)
+    : m_buf_pool(buf_pool),
+      m_old_ratio(s_old_ratio),
       m_old_threshold_ms(s_old_threshold_ms) {}
 
   /**
@@ -127,7 +128,7 @@ struct Buf_LRU {
    * 
    * @return FREED if freed, CANNOT_RELOCATE or NOT_FREED otherwise.
    */
-  Block_status free_block(buf_page_t *bpage, bool *buf_pool_mutex_released);
+  Block_status free_block(Buf_page *bpage, bool *buf_pool_mutex_released);
 
   /**
    * Try to free a replaceable block.
@@ -146,7 +147,7 @@ struct Buf_LRU {
    *
    * @return A free control block, or nullptr if the buf_block->free list is empty.
    */
-  buf_block_t *get_free_only();
+  Buf_block *get_free_only();
   
   /**
    * Returns a free block from the buf_pool. The block is taken off the
@@ -155,14 +156,14 @@ struct Buf_LRU {
    *
    * @return The free control block, in state BUF_BLOCK_READY_FOR_USE.
    */
-  buf_block_t *get_free_block();
+  Buf_block *get_free_block();
   
   /**
    * Puts a block back to the free list.
    * 
    * @param block The block to be freed. Must not contain a file page.
    */
-  void block_free_non_file_page(buf_block_t *block);
+  void block_free_non_file_page(Buf_block *block);
   
   /**
    * Adds a block to the LRU list.
@@ -172,21 +173,21 @@ struct Buf_LRU {
    *            else put to the start. If the LRU list is very short, added to the 
    *            start regardless of this parameter.
    */
-  void add_block(buf_page_t *bpage, bool old);
+  void add_block(Buf_page *bpage, bool old);
   
   /**
    * Moves a block to the start of the LRU list.
    * 
    * @param bpage The control block to be moved.
    */
-  void make_block_young(buf_page_t *bpage);
+  void make_block_young(Buf_page *bpage);
   
   /**
    * Moves a block to the end of the LRU list.
    * 
    * @param bpage The control block to be moved.
    */
-  void make_block(buf_page_t *bpage);
+  void make_block(Buf_page *bpage);
   
   /**
    * Update the historical stats that we are collecting for LRU eviction policy 
@@ -241,21 +242,7 @@ struct Buf_LRU {
    *               during the initialization of InnoDB.
    * @return The updated old_pct.
    */
-  static ulint old_ratio_update(ulint old_pct, bool adjust);
-
-public:
-  /** Current operation counters. Not protected by any mutex. Cleared by stat_update(). */
-  Stat m_stat_cur{};
-
-  /** Running sum of past values of buf_LRU_stat_cur. Updated by stat_update().
-  Protected by buf_pool_mutex. */
-  Stat m_stat_sum{};
-
-  /** Configure on startup. */
-  static ulint s_old_threshold_ms;
-
-  /** Configuration for startup. */
-  static ulint s_old_ratio;
+  ulint old_ratio_update(ulint old_pct, bool adjust);
 
 private:
   /** Takes a block out of the LRU list and page hash table.
@@ -265,7 +252,7 @@ private:
                                 may or may not be a hash index to the page
   @return the new state of the block BUF_BLOCK_REMOVE_HASH otherwise */
   /** Puts a file page whose has no hash index to the free list. */
-  void block_free_hashed_page(buf_block_t *block);
+  void block_free_hashed_page(Buf_block *block);
   
   /** Takes a block out of the LRU list and page hash table.
   
@@ -273,7 +260,7 @@ private:
                                 be in a state where it can be freed; there
                                 may or may not be a hash index to the page
   @return the new state of the block BUF_BLOCK_REMOVE_HASH otherwise */
-  buf_page_state block_remove_hashed_page(buf_page_t *bpage);
+  Buf_page_state block_remove_hashed_page(Buf_page *bpage);
 
   /** Try to free a clean page from the common LRU list.
 
@@ -298,18 +285,18 @@ private:
 
   /** Removes a block from the LRU list.
   @param[in] bpage                Buffer lock to remove */
-  void remove_block(buf_page_t *bpage);
+  void remove_block(Buf_page *bpage);
 
   /** Adds a block to the LRU list end.
   @param[in] bpage                Buffer lock to add */
-  void add_block_to_end_low(buf_page_t *bpage);
+  void add_block_to_end_low(Buf_page *bpage);
 
   /** Adds a block to the LRU list.
   @param[in] bpage              Buffer lock to add
   @param[in] old                true if should be put to the old blocks in the LRU list,
                                 else put to the start; if the LRU list is very short, the
 				block is added to the start, regardless of this parameter */
-  void add_block_low(buf_page_t *bpage, bool old);
+  void add_block_low(Buf_page *bpage, bool old);
 
 private:
 
@@ -320,6 +307,9 @@ private:
   /* @} */
   
   /** @name Heuristics for detecting index scan @{ */
+
+  /** The buffer pool. */
+  Buf_pool *m_buf_pool{};
 
   /** Reserve this much/OLD_RATIO_DIV of the buffer pool for "old" blocks.
   Protected by buf_pool_mutex. */
@@ -338,4 +328,20 @@ private:
   /** If we switch on the monitor thread because there are too few available
   frames in the buffer pool, we set this to true */
   bool m_switched_on_monitor{};
+
+public:
+
+  /** Current operation counters. Not protected by any mutex. Cleared by stat_update(). */
+  Stat m_stat_cur{};
+
+  /** Running sum of past values of buf_LRU_stat_cur. Updated by stat_update().
+  Protected by buf_pool_mutex. */
+  Stat m_stat_sum{};
+
+  /** Configure on startup. */
+  static ulint s_old_threshold_ms;
+
+  /** Configuration for startup. */
+  static ulint s_old_ratio;
+
 };

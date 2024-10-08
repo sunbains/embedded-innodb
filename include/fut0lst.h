@@ -32,7 +32,7 @@ Created 11/28/1995 Heikki Tuuri
 #include "mtr0log.h"
 #include "mtr0mtr.h"
 
-struct fil_addr_t;
+struct Fil_addr;
 
 /* The C 'types' of base node and list node: these should be used to
 write self-documenting code. Of course, the sizeof macro cannot be
@@ -139,7 +139,7 @@ void flst_print(
 /** Writes a file address. */
 inline void flst_write_addr(
   fil_faddr_t *faddr, /** in: pointer to file faddress */
-  fil_addr_t addr,    /** in: file address */
+  Fil_addr addr,    /** in: file address */
   mtr_t *mtr
 ) /** in: mini-transaction handle */
 {
@@ -156,8 +156,8 @@ inline void flst_write_addr(
 @param[in] faddr                Pointer to file faddress
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
-inline fil_addr_t flst_read_addr(const fil_faddr_t *faddr, mtr_t *mtr) {
-  fil_addr_t addr;
+inline Fil_addr flst_read_addr(const fil_faddr_t *faddr, mtr_t *mtr) {
+  Fil_addr addr;
 
   ut_ad(faddr && mtr);
 
@@ -192,7 +192,7 @@ inline ulint flst_get_len(const flst_base_node_t *base, mtr_t *mtr) {
 @param[in] base                 Pointer to the base node
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
-inline fil_addr_t flst_get_first(const flst_base_node_t *base, mtr_t *mtr) {
+inline Fil_addr flst_get_first(const flst_base_node_t *base, mtr_t *mtr) {
   return flst_read_addr(base + FLST_FIRST, mtr);
 }
 
@@ -200,7 +200,7 @@ inline fil_addr_t flst_get_first(const flst_base_node_t *base, mtr_t *mtr) {
 @param[in] base                 Pointer to the base node
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
-inline fil_addr_t flst_get_last(const flst_base_node_t *base, mtr_t *mtr) {
+inline Fil_addr flst_get_last(const flst_base_node_t *base, mtr_t *mtr) {
   return flst_read_addr(base + FLST_LAST, mtr);
 }
 
@@ -208,7 +208,7 @@ inline fil_addr_t flst_get_last(const flst_base_node_t *base, mtr_t *mtr) {
 @param[in] node                 Pointer to the node
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
-inline fil_addr_t flst_get_next_addr(const flst_node_t *node, mtr_t *mtr) {
+inline Fil_addr flst_get_next_addr(const flst_node_t *node, mtr_t *mtr) {
   return flst_read_addr(node + FLST_NEXT, mtr);
 }
 
@@ -216,6 +216,6 @@ inline fil_addr_t flst_get_next_addr(const flst_node_t *node, mtr_t *mtr) {
 @param[in] node                 Pointer to the node node
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
-inline fil_addr_t flst_get_prev_addr(const flst_node_t *node, mtr_t *mtr) {
+inline Fil_addr flst_get_prev_addr(const flst_node_t *node, mtr_t *mtr) {
   return flst_read_addr(node + FLST_PREV, mtr);
 }

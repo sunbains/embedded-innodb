@@ -421,7 +421,7 @@ inline ulint xdes_get_offset(FSP::xdes_t *descr) noexcept {
  * 
  * @param[in] block             Pointer to block
  */
-static void fsp_init_file_page_low(buf_block_t *block) noexcept {
+static void fsp_init_file_page_low(Buf_block *block) noexcept {
   auto page = block->get_frame();
 
   block->m_check_index_page_at_flush = false;
@@ -442,7 +442,7 @@ static void fsp_init_file_page_low(buf_block_t *block) noexcept {
  * @param[in] block             Pointer to block
  * @param[in] mtr               Mini-transaction handle
  */
-static void fsp_init_file_page(buf_block_t *block, mtr_t *mtr) noexcept {
+static void fsp_init_file_page(Buf_block *block, mtr_t *mtr) noexcept {
   fsp_init_file_page_low(block);
 
   mlog_write_initial_log_record(block->get_frame(), MLOG_INIT_FILE_PAGE, mtr);
@@ -557,7 +557,7 @@ void FSP::free_seg_inode(space_id_t space, fseg_inode_t *inode, mtr_t *mtr) noex
  * @return A pointer to the file segment inode if found - x-latched, otherwise nullptr.
  */
 static FSP::fseg_inode_t *fseg_inode_try_get(fseg_header_t *header, space_id_t space, mtr_t *mtr) noexcept {
-  fil_addr_t inode_addr;
+  Fil_addr inode_addr;
 
   inode_addr.m_page_no = mach_read_from_4(header + FSEG_HDR_PAGE_NO);
   inode_addr.m_boffset = mach_read_from_2(header + FSEG_HDR_OFFSET);
@@ -1249,7 +1249,7 @@ FSP::fsp_header_t *FSP::get_space_header(space_id_t id, mtr_t *mtr) noexcept {
   return header;
 }
 
-FSP::xdes_t *FSP::xdes_lst_get_descriptor(space_id_t space, fil_addr_t lst_node, mtr_t *mtr) noexcept {
+FSP::xdes_t *FSP::xdes_lst_get_descriptor(space_id_t space, Fil_addr lst_node, mtr_t *mtr) noexcept {
   ut_ad(mtr->memo_contains(m_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
   auto descr = fut_get_ptr(space, lst_node, RW_X_LATCH, mtr) - XDES_FLST_NODE;
 
@@ -1287,7 +1287,7 @@ void FSP::fill_free_list(bool init_space, space_id_t space, fsp_header_t *header
 
     if (unlikely(init_xdes)) {
 
-      buf_block_t *block;
+      Buf_block *block;
 
       /* We are going to initialize a new descriptor page:
       the prior contents of the pages should be ignored. */
@@ -1747,7 +1747,7 @@ page_no_t FSP::fseg_alloc_free_page_low(
   } else if (reserved - used > 0) {
 
     /* 5. We take any unused page from the segment */
-    fil_addr_t first;
+    Fil_addr first;
 
     if (flst_get_len(seg_inode + FSEG_NOT_FULL, mtr) > 0) {
       first = flst_get_first(seg_inode + FSEG_NOT_FULL, mtr);
@@ -1870,7 +1870,7 @@ page_no_t FSP::fseg_alloc_free_page_low(
   return ret_page;
 }
 
-byte *FSP::parse_init_file_page(byte *ptr, byte *, buf_block_t *block) noexcept {
+byte *FSP::parse_init_file_page(byte *ptr, byte *, Buf_block *block) noexcept {
   if (block != nullptr) {
     fsp_init_file_page_low(block);
   }
@@ -1987,7 +1987,7 @@ ulint FSP::get_system_space_size() noexcept {
   return size;
 }
 
-buf_block_t *FSP::fseg_create_general(
+Buf_block *FSP::fseg_create_general(
   space_id_t space_id,
   page_no_t page_no,
   ulint byte_offset,
@@ -1998,7 +1998,7 @@ buf_block_t *FSP::fseg_create_general(
 
   auto latch = m_fil->space_get_latch(space_id);
 
-  buf_block_t *block{};
+  Buf_block *block{};
   fseg_header_t *header{};
 
   if (page_no != 0) {
@@ -2103,7 +2103,7 @@ buf_block_t *FSP::fseg_create_general(
   return block;
 }
 
-buf_block_t *FSP::fseg_create(space_id_t space, page_no_t page, ulint byte_offset, mtr_t *mtr) noexcept {
+Buf_block *FSP::fseg_create(space_id_t space, page_no_t page, ulint byte_offset, mtr_t *mtr) noexcept {
   return fseg_create_general(space, page, byte_offset, false, mtr);
 }
 
@@ -2621,7 +2621,7 @@ bool FSP::validate(space_id_t space) noexcept {
   while (!m_fil->addr_is_null(node_addr)) {
 
     ulint n{};
-    fil_addr_t next_node_addr;
+    Fil_addr next_node_addr;
 
     do {
       mtr.start();
@@ -2666,7 +2666,7 @@ bool FSP::validate(space_id_t space) noexcept {
   while (!m_fil->addr_is_null(node_addr)) {
 
     ulint n{};
-    fil_addr_t next_node_addr;
+    Fil_addr next_node_addr;
 
 
     do {
@@ -2774,7 +2774,7 @@ void FSP::print(space_id_t space) noexcept {
   while (!m_fil->addr_is_null(node_addr)) {
 
     ulint n{};
-    fil_addr_t next_node_addr;
+    Fil_addr next_node_addr;
 
     do {
 
@@ -2813,7 +2813,7 @@ void FSP::print(space_id_t space) noexcept {
   while (!m_fil->addr_is_null(node_addr)) {
 
     ulint n{};
-    fil_addr_t next_node_addr;
+    Fil_addr next_node_addr;
 
     do {
 

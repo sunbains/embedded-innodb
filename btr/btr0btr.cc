@@ -113,7 +113,7 @@ bool Btree::root_fseg_validate(const fseg_header_t *seg_header, space_id_t space
 }
 #endif /* UNIV_BTR_DEBUG */
 
-buf_block_t *Btree::root_block_get(dict_index_t *dict_index, mtr_t *mtr) noexcept {
+Buf_block *Btree::root_block_get(dict_index_t *dict_index, mtr_t *mtr) noexcept {
   auto space = dict_index_get_space(dict_index);
   auto root_page_no = dict_index_get_page(dict_index);
   auto block = block_get(space, root_page_no, RW_X_LATCH, mtr);
@@ -220,7 +220,7 @@ rec_t *Btree::get_next_user_rec(rec_t *rec, mtr_t *mtr) noexcept {
   }
 }
 
-void Btree::page_create(buf_block_t *block, dict_index_t *dict_index, ulint level, mtr_t *mtr) noexcept {
+void Btree::page_create(Buf_block *block, dict_index_t *dict_index, ulint level, mtr_t *mtr) noexcept {
   auto page = block->get_frame();
 
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
@@ -235,7 +235,7 @@ void Btree::page_create(buf_block_t *block, dict_index_t *dict_index, ulint leve
   page_set_index_id(page, dict_index->id, mtr);
 }
 
-buf_block_t *Btree::page_alloc(dict_index_t *dict_index, page_no_t hint_page_no, byte file_direction, ulint level, mtr_t *mtr) noexcept {
+Buf_block *Btree::page_alloc(dict_index_t *dict_index, page_no_t hint_page_no, byte file_direction, ulint level, mtr_t *mtr) noexcept {
   auto root = root_get(dict_index, mtr);
 
   fseg_header_t *seg_header;
@@ -310,7 +310,7 @@ ulint Btree::get_size(dict_index_t *dict_index, ulint flag) noexcept{
   return n;
 }
 
-void Btree::page_free_low(dict_index_t *dict_index, buf_block_t *block, ulint level, mtr_t *mtr) noexcept {
+void Btree::page_free_low(dict_index_t *dict_index, Buf_block *block, ulint level, mtr_t *mtr) noexcept {
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
   /* The page gets invalid for optimistic searches: increment the frame
   modify clock */
@@ -330,7 +330,7 @@ void Btree::page_free_low(dict_index_t *dict_index, buf_block_t *block, ulint le
   m_fsp->fseg_free_page(seg_header, block->get_space(), block->get_page_no(), mtr);
 }
 
-void Btree::page_free(dict_index_t *dict_index, buf_block_t *block, mtr_t *mtr) noexcept {
+void Btree::page_free(dict_index_t *dict_index, Buf_block *block, mtr_t *mtr) noexcept {
   const auto level = page_get_level(block->get_frame(), mtr);
 
   page_free_low(dict_index, block, level, mtr);
@@ -350,7 +350,7 @@ void Btree::node_ptr_set_child_page_no(rec_t *rec, const ulint *offsets, ulint p
   mlog_write_ulint(rec + offset, page_no, MLOG_4BYTES, mtr);
 }
 
-buf_block_t *Btree::node_ptr_get_child(const rec_t *node_ptr, dict_index_t *dict_index, const ulint *offsets, mtr_t *mtr) noexcept {
+Buf_block *Btree::node_ptr_get_child(const rec_t *node_ptr, dict_index_t *dict_index, const ulint *offsets, mtr_t *mtr) noexcept {
   ut_ad(rec_offs_validate(node_ptr, dict_index, offsets));
   const auto space = page_get_space_id(page_align(node_ptr));
   const auto page_no = node_ptr_get_child_page_no(node_ptr, offsets);
@@ -358,22 +358,22 @@ buf_block_t *Btree::node_ptr_get_child(const rec_t *node_ptr, dict_index_t *dict
   return block_get(space, page_no, RW_X_LATCH, mtr);
 }
 
-ulint *Btree::page_get_father_node_ptr(ulint *offsets, mem_heap_t *heap, btr_cur_t *cursor, mtr_t *mtr, Source_location location) noexcept {
-  const auto page_no = btr_cur_get_block(cursor)->get_page_no();
-  const auto dict_index = btr_cur_get_index(cursor);
+ulint *Btree::page_get_father_node_ptr(ulint *offsets, mem_heap_t *heap, Btree_cursor *btr_cur, mtr_t *mtr, Source_location loc) noexcept {
+  const auto page_no = btr_cur->get_block()->get_page_no();
+  const auto dict_index = btr_cur->get_index();
 
   ut_ad(mtr->memo_contains(dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
 
   ut_ad(dict_index_get_page(dict_index) != page_no);
 
-  const auto level = page_get_level(btr_cur_get_page(cursor), mtr);
-  const auto user_rec = btr_cur_get_rec(cursor);
+  const auto level = page_get_level(btr_cur->get_page(), mtr);
+  const auto user_rec = btr_cur->get_rec();
   ut_a(page_rec_is_user_rec(user_rec));
   const auto tuple = dict_index_build_node_ptr(dict_index, user_rec, 0, heap, level);
 
-  btr_cur_search_to_nth_level(dict_index, level + 1, tuple, PAGE_CUR_LE, BTR_CONT_MODIFY_TREE, cursor, 0, location.m_from.file_name(), location.m_from.line(), mtr);
+  btr_cur->search_to_nth_level(nullptr,dict_index, level + 1, tuple, PAGE_CUR_LE, BTR_CONT_MODIFY_TREE, mtr, loc);
 
-  const auto node_ptr = btr_cur_get_rec(cursor);
+  const auto node_ptr = btr_cur->get_rec();
 
   {
     Phy_rec record{dict_index, node_ptr};
@@ -418,22 +418,22 @@ ulint *Btree::page_get_father_node_ptr(ulint *offsets, mem_heap_t *heap, btr_cur
   return offsets;
 }
 
-ulint *Btree::page_get_father_block(ulint *offsets, mem_heap_t *heap, dict_index_t *dict_index, buf_block_t *block, mtr_t *mtr, btr_cur_t *cursor) noexcept {
+ulint *Btree::page_get_father_block(ulint *offsets, mem_heap_t *heap, dict_index_t *dict_index, Buf_block *block, mtr_t *mtr, Btree_cursor *btr_cur) noexcept {
   const auto rec = page_rec_get_next(page_get_infimum_rec(block->get_frame()));
 
-  btr_cur_position(dict_index, rec, block, cursor);
+  btr_cur->position(dict_index, rec, block);
 
-  return page_get_father_node_ptr(offsets, heap, cursor, mtr, Source_location{});
+  return page_get_father_node_ptr(offsets, heap, btr_cur, mtr, Source_location{});
 }
 
-void Btree::page_get_father(dict_index_t *dict_index, buf_block_t *block, mtr_t *mtr, btr_cur_t *cursor) noexcept {
+void Btree::page_get_father(dict_index_t *dict_index, Buf_block *block, mtr_t *mtr, Btree_cursor *btr_cur) noexcept {
   auto rec = page_rec_get_next(page_get_infimum_rec(block->get_frame()));
 
-  btr_cur_position(dict_index, rec, block, cursor);
+  btr_cur->position(dict_index, rec, block);
 
   auto heap = mem_heap_create(100);
 
-  (void) page_get_father_node_ptr(nullptr, heap, cursor, mtr, Source_location{});
+  (void) page_get_father_node_ptr(nullptr, heap, btr_cur, mtr, Source_location{});
 
   mem_heap_free(heap);
 }
@@ -533,7 +533,7 @@ void Btree::free_root(space_id_t space, page_no_t root_page_no, mtr_t *mtr) noex
   while (!m_fsp->fseg_free_step(header, mtr)) {}
 }
 
-bool Btree::page_reorganize_low(bool recovery, buf_block_t *block, dict_index_t *dict_index, mtr_t *mtr) noexcept {
+bool Btree::page_reorganize_low(bool recovery, Buf_block *block, dict_index_t *dict_index, mtr_t *mtr) noexcept {
   bool success{};
   auto page{block->get_frame()};
 
@@ -603,11 +603,11 @@ bool Btree::page_reorganize_low(bool recovery, buf_block_t *block, dict_index_t 
   return success;
 }
 
-bool Btree::page_reorganize(buf_block_t *block, dict_index_t *dict_index, mtr_t *mtr) noexcept {
+bool Btree::page_reorganize(Buf_block *block, dict_index_t *dict_index, mtr_t *mtr) noexcept {
   return page_reorganize_low(false, block, dict_index, mtr);
 }
 
-byte *Btree::parse_page_reorganize(byte *ptr, byte *, dict_index_t *dict_index, buf_block_t *block, mtr_t *mtr) noexcept {
+byte *Btree::parse_page_reorganize(byte *ptr, byte *, dict_index_t *dict_index, Buf_block *block, mtr_t *mtr) noexcept {
   /* The record is empty, except for the record initial part */
 
   if (likely(block != nullptr)) {
@@ -617,7 +617,7 @@ byte *Btree::parse_page_reorganize(byte *ptr, byte *, dict_index_t *dict_index, 
   return ptr;
 }
 
-void Btree::page_empty(buf_block_t *block, dict_index_t *dict_index, ulint level, mtr_t *mtr) noexcept {
+void Btree::page_empty(Buf_block *block, dict_index_t *dict_index, ulint level, mtr_t *mtr) noexcept {
   auto page = block->get_frame();
 
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
@@ -633,10 +633,10 @@ void Btree::page_empty(buf_block_t *block, dict_index_t *dict_index, ulint level
   block->m_check_index_page_at_flush = true;
 }
 
-rec_t *Btree::root_raise_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ulint n_ext, mtr_t *mtr) noexcept {
-  const auto root = btr_cur_get_page(cursor);
-  const auto root_block = btr_cur_get_block(cursor);
-  const auto dict_index = btr_cur_get_index(cursor);
+rec_t *Btree::root_raise_and_insert(Btree_cursor *btr_cur, const dtuple_t *tuple, ulint n_ext, mtr_t *mtr) noexcept {
+  const auto root = btr_cur->get_page();
+  const auto root_block = btr_cur->get_block();
+  const auto dict_index = btr_cur->get_index();
 
 #ifdef UNIV_BTR_DEBUG
   auto space = dict_index_get_space(dict_index);
@@ -694,7 +694,7 @@ rec_t *Btree::root_raise_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
   page_set_next(root, FIL_NULL, mtr);
   page_set_prev(root, FIL_NULL, mtr);
 
-  auto page_cursor = btr_cur_get_page_cur(cursor);
+  auto page_cursor = btr_cur->get_page_cur();
 
   /* Insert node pointer to the root */
 
@@ -713,12 +713,12 @@ rec_t *Btree::root_raise_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
   page_cur_search(new_block, dict_index, tuple, PAGE_CUR_LE, page_cursor);
 
   /* Split the child and insert tuple */
-  return page_split_and_insert(cursor, tuple, n_ext, mtr);
+  return page_split_and_insert(btr_cur, tuple, n_ext, mtr);
 }
 
-bool Btree::page_get_split_rec_to_left(btr_cur_t *cursor, rec_t *&split_rec) noexcept {
-  const auto page = btr_cur_get_page(cursor);
-  const auto insert_point = btr_cur_get_rec(cursor);
+bool Btree::page_get_split_rec_to_left(Btree_cursor *btr_cur, rec_t *&split_rec) noexcept {
+  const auto page = btr_cur->get_page();
+  const auto insert_point = btr_cur->get_rec();
 
   if (page_header_get_ptr(page, PAGE_LAST_INSERT) == page_rec_get_next(insert_point)) {
 
@@ -741,9 +741,9 @@ bool Btree::page_get_split_rec_to_left(btr_cur_t *cursor, rec_t *&split_rec) noe
   return false;
 }
 
-bool Btree::page_get_split_rec_to_right(btr_cur_t *cursor, rec_t *&split_rec) noexcept {
-  const auto page = btr_cur_get_page(cursor);
-  const auto insert_point = btr_cur_get_rec(cursor);
+bool Btree::page_get_split_rec_to_right(Btree_cursor *btr_cur, rec_t *&split_rec) noexcept {
+  const auto page = btr_cur->get_page();
+  const auto insert_point = btr_cur->get_rec();
 
   /* We use eager heuristics: if the new insert would be right after
   the previous insert on the same page, we assume that there is a
@@ -785,9 +785,9 @@ bool Btree::page_get_split_rec_to_right(btr_cur_t *cursor, rec_t *&split_rec) no
   return false;
 }
 
-rec_t *Btree::page_get_split_rec(btr_cur_t *cursor, const dtuple_t *tuple, ulint n_ext) noexcept {
-  const auto page = btr_cur_get_page(cursor);
-  const auto insert_size = rec_get_converted_size(cursor->m_index, tuple, n_ext);
+rec_t *Btree::page_get_split_rec(Btree_cursor *btr_cur, const dtuple_t *tuple, ulint n_ext) noexcept {
+  const auto page = btr_cur->get_page();
+  const auto insert_size = rec_get_converted_size(btr_cur->get_index(), tuple, n_ext);
   const auto free_space = page_get_free_space_of_empty();
 
   /* free_space is now the free space of a created new page */
@@ -802,7 +802,7 @@ rec_t *Btree::page_get_split_rec(btr_cur_t *cursor, const dtuple_t *tuple, ulint
   ulint incl_data{};
   ulint *offsets{};
   mem_heap_t *heap{};
-  auto ins_rec = btr_cur_get_rec(cursor);
+  auto ins_rec = btr_cur->get_rec();
   auto rec = page_get_infimum_rec(page);
 
   /* We start to include records to the left half, and when the
@@ -829,7 +829,7 @@ rec_t *Btree::page_get_split_rec(btr_cur_t *cursor, const dtuple_t *tuple, ulint
       /* Include tuple */
       incl_data += insert_size;
     } else {
-      Phy_rec record{cursor->m_index, rec};
+      Phy_rec record{btr_cur->get_index(), rec};
 
       offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
 
@@ -870,13 +870,13 @@ rec_t *Btree::page_get_split_rec(btr_cur_t *cursor, const dtuple_t *tuple, ulint
   return rec;
 }
 
-bool Btree::page_insert_fits(btr_cur_t *cursor, const rec_t *split_rec, const ulint *offsets, const dtuple_t *tuple, ulint n_ext, mem_heap_t *heap) noexcept {
-  auto page = btr_cur_get_page(cursor);
+bool Btree::page_insert_fits(Btree_cursor *btr_cur, const rec_t *split_rec, const ulint *offsets, const dtuple_t *tuple, ulint n_ext, mem_heap_t *heap) noexcept {
+  auto page = btr_cur->get_page();
 
   ut_ad(!split_rec == !offsets);
-  ut_ad(!offsets || rec_offs_validate(split_rec, cursor->m_index, offsets));
+  ut_ad(!offsets || rec_offs_validate(split_rec, btr_cur->get_index(), offsets));
 
-  const auto insert_size = rec_get_converted_size(cursor->m_index, tuple, n_ext);
+  const auto insert_size = rec_get_converted_size(btr_cur->get_index(), tuple, n_ext);
   const auto free_space = page_get_free_space_of_empty();
 
   /* free_space is now the free space of a created new page */
@@ -894,9 +894,9 @@ bool Btree::page_insert_fits(btr_cur_t *cursor, const rec_t *split_rec, const ul
   if (split_rec == nullptr) {
 
     rec = page_rec_get_next(page_get_infimum_rec(page));
-    end_rec = page_rec_get_next(btr_cur_get_rec(cursor));
+    end_rec = page_rec_get_next(btr_cur->get_rec());
 
-  } else if (cmp_dtuple_rec(cursor->m_index->cmp_ctx, tuple, split_rec, offsets) >= 0) {
+  } else if (cmp_dtuple_rec(btr_cur->get_index()->cmp_ctx, tuple, split_rec, offsets) >= 0) {
 
     rec = page_rec_get_next(page_get_infimum_rec(page));
     end_rec = split_rec;
@@ -918,7 +918,7 @@ bool Btree::page_insert_fits(btr_cur_t *cursor, const rec_t *split_rec, const ul
   ulint *offs{};
 
   while (rec != end_rec) {
-    Phy_rec record{cursor->m_index, rec};
+    Phy_rec record{btr_cur->get_index(), rec};
 
     /* In this loop we calculate the amount of reserved
     space after rec is removed from page. */
@@ -942,20 +942,20 @@ bool Btree::page_insert_fits(btr_cur_t *cursor, const rec_t *split_rec, const ul
   return false;
 }
 
-void Btree::insert_on_non_leaf_level(dict_index_t *dict_index, ulint level, dtuple_t *tuple, mtr_t *mtr, Source_location location) noexcept {
+void Btree::insert_on_non_leaf_level(dict_index_t *dict_index, ulint level, dtuple_t *tuple, mtr_t *mtr, Source_location loc) noexcept {
   rec_t *rec;
-  btr_cur_t cursor;
+  Btree_cursor btr_cur(srv_fsp, srv_btree_sys, srv_lock_sys);
   big_rec_t *dummy_big_rec;
 
   ut_ad(level > 0);
 
-  btr_cur_search_to_nth_level(dict_index, level, tuple, PAGE_CUR_LE, BTR_CONT_MODIFY_TREE, &cursor, 0, location.m_from.file_name(), location.m_from.line(), mtr);
+  btr_cur.search_to_nth_level(nullptr, dict_index, level, tuple, PAGE_CUR_LE, BTR_CONT_MODIFY_TREE, mtr, loc);
 
-  const auto err = btr_cur_pessimistic_insert(BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG | BTR_NO_UNDO_LOG_FLAG, &cursor, tuple, &rec, &dummy_big_rec, 0, nullptr, mtr);
+  const auto err = btr_cur.pessimistic_insert(BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG | BTR_NO_UNDO_LOG_FLAG, tuple, &rec, &dummy_big_rec, 0, nullptr, mtr);
   ut_a(err == DB_SUCCESS);
 }
 
-void Btree::attach_half_pages(dict_index_t *dict_index, buf_block_t *block, rec_t *split_rec, buf_block_t *new_block, ulint direction, mtr_t *mtr) noexcept {
+void Btree::attach_half_pages(dict_index_t *dict_index, Buf_block *block, rec_t *split_rec, Buf_block *new_block, ulint direction, mtr_t *mtr) noexcept {
   page_t *lower_page;
   page_t *upper_page;
   ulint lower_page_no;
@@ -971,7 +971,7 @@ void Btree::attach_half_pages(dict_index_t *dict_index, buf_block_t *block, rec_
   /* Based on split direction, decide upper and lower pages */
   if (direction == FSP_DOWN) {
 
-    btr_cur_t cursor;
+    Btree_cursor btr_cur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
     lower_page = new_block->get_frame();
     lower_page_no = new_block->get_page_no();
@@ -979,12 +979,12 @@ void Btree::attach_half_pages(dict_index_t *dict_index, buf_block_t *block, rec_
     upper_page_no = block->get_page_no();
 
     /* Look up the index for the node pointer to page */
-    auto offsets = page_get_father_block(nullptr, heap, dict_index, block, mtr, &cursor);
+    auto offsets = page_get_father_block(nullptr, heap, dict_index, block, mtr, &btr_cur);
 
     /* Replace the address of the old child node (= page) with the
     address of the new lower half */
 
-    node_ptr_set_child_page_no(btr_cur_get_rec(&cursor), offsets, lower_page_no, mtr);
+    node_ptr_set_child_page_no(btr_cur.get_rec(), offsets, lower_page_no, mtr);
     mem_heap_empty(heap);
 
   } else {
@@ -1046,11 +1046,11 @@ void Btree::attach_half_pages(dict_index_t *dict_index, buf_block_t *block, rec_
   page_set_next(upper_page, next_page_no, mtr);
 }
 
-bool Btree::page_tuple_smaller(btr_cur_t *cursor, const dtuple_t *tuple, ulint *offsets, ulint n_uniq, mem_heap_t **heap) noexcept {
+bool Btree::page_tuple_smaller(Btree_cursor *btr_cur, const dtuple_t *tuple, ulint *offsets, ulint n_uniq, mem_heap_t **heap) noexcept {
   page_cur_t pcur;
 
   /* Read the first user record in the page. */
-  auto block = btr_cur_get_block(cursor);
+  auto block = btr_cur->get_block();
 
   page_cur_set_before_first(block, &pcur);
   page_cur_move_to_next(&pcur);
@@ -1058,20 +1058,20 @@ bool Btree::page_tuple_smaller(btr_cur_t *cursor, const dtuple_t *tuple, ulint *
   auto first_rec = page_cur_get_rec(&pcur);
 
   {
-    Phy_rec record{cursor->m_index, first_rec};
+    Phy_rec record{btr_cur->get_index(), first_rec};
 
     offsets = record.get_col_offsets(offsets, n_uniq, heap, Source_location{});
   }
 
-  return cmp_dtuple_rec(cursor->m_index->cmp_ctx, tuple, first_rec, offsets) < 0;
+  return cmp_dtuple_rec(btr_cur->get_index()->cmp_ctx, tuple, first_rec, offsets) < 0;
 }
 
-rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ulint n_ext, mtr_t *mtr) noexcept {
-  buf_block_t *left_block;
-  buf_block_t *right_block;
+rec_t *Btree::page_split_and_insert(Btree_cursor *btr_cur, const dtuple_t *tuple, ulint n_ext, mtr_t *mtr) noexcept {
+  Buf_block *left_block;
+  Buf_block *right_block;
 
   auto heap = mem_heap_create(1024);
-  const auto n_uniq = dict_index_get_n_unique_in_tree(cursor->m_index);
+  const auto n_uniq = dict_index_get_n_unique_in_tree(btr_cur->get_index());
 
   ulint n_iterations{};
 
@@ -1082,13 +1082,13 @@ rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
 
     ulint *offsets = nullptr;
 
-    ut_ad(mtr->memo_contains(dict_index_get_lock(cursor->m_index), MTR_MEMO_X_LOCK));
+    ut_ad(mtr->memo_contains(dict_index_get_lock(btr_cur->get_index()), MTR_MEMO_X_LOCK));
 
   #ifdef UNIV_SYNC_DEBUG
-    ut_ad(rw_lock_own(dict_index_get_lock(cursor->index), RW_LOCK_EX));
+    ut_ad(rw_lock_own(dict_index_get_lock(btr_cur->get_index()), RW_LOCK_EX));
   #endif /* UNIV_SYNC_DEBUG */
 
-    auto block = btr_cur_get_block(cursor);
+    auto block = btr_cur->get_block();
     auto page = block->get_frame();
 
     ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
@@ -1109,18 +1109,18 @@ rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
 
       direction = FSP_UP;
       hint_page_no = page_no + 1;
-      split_rec = page_get_split_rec(cursor, tuple, n_ext);
+      split_rec = page_get_split_rec(btr_cur, tuple, n_ext);
 
       if (unlikely(split_rec == nullptr)) {
-        insert_left = page_tuple_smaller(cursor, tuple, offsets, n_uniq, &heap);
+        insert_left = page_tuple_smaller(btr_cur, tuple, offsets, n_uniq, &heap);
       }
 
-    } else if (page_get_split_rec_to_right(cursor, split_rec)) {
+    } else if (page_get_split_rec_to_right(btr_cur, split_rec)) {
 
       direction = FSP_UP;
       hint_page_no = page_no + 1;
 
-    } else if (page_get_split_rec_to_left(cursor, split_rec)) {
+    } else if (page_get_split_rec_to_left(btr_cur, split_rec)) {
 
       direction = FSP_DOWN;
       hint_page_no = page_no - 1;
@@ -1139,7 +1139,7 @@ rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
 
       if (page_get_n_recs(page) > 1) {
         split_rec = page_get_middle_rec(page);
-      } else if (page_tuple_smaller(cursor, tuple, offsets, n_uniq, &heap)) {
+      } else if (page_tuple_smaller(btr_cur, tuple, offsets, n_uniq, &heap)) {
         split_rec = page_rec_get_next(page_get_infimum_rec(page));
       } else {
         split_rec = nullptr;
@@ -1147,9 +1147,9 @@ rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
     }
 
     /* 2. Allocate a new page to the index */
-    auto new_block = page_alloc(cursor->m_index, hint_page_no, direction, page_get_level(page, mtr), mtr);
+    auto new_block = page_alloc(btr_cur->get_index(), hint_page_no, direction, page_get_level(page, mtr), mtr);
 
-    page_create(new_block, cursor->m_index, page_get_level(page, mtr), mtr);
+    page_create(new_block, btr_cur->get_index(), page_get_level(page, mtr), mtr);
 
     /* 3. Calculate the first record on the upper half-page, and the
     first record (move_limit) on original page which ends up on the
@@ -1162,24 +1162,24 @@ rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
     if (split_rec != nullptr) {
       first_rec = move_limit = split_rec;
 
-      Phy_rec record{cursor->m_index, split_rec};
+      Phy_rec record{btr_cur->get_index(), split_rec};
 
       offsets = record.get_col_offsets(offsets, n_uniq, &heap, Source_location{});
 
-      insert_left = cmp_dtuple_rec(cursor->m_index->cmp_ctx, tuple, split_rec, offsets) < 0;
+      insert_left = cmp_dtuple_rec(btr_cur->get_index()->cmp_ctx, tuple, split_rec, offsets) < 0;
 
     } else {
 
-      buf = reinterpret_cast<byte *>(mem_alloc(rec_get_converted_size(cursor->m_index, tuple, n_ext)));
+      buf = reinterpret_cast<byte *>(mem_alloc(rec_get_converted_size(btr_cur->get_index(), tuple, n_ext)));
 
-      first_rec = rec_convert_dtuple_to_rec(buf, cursor->m_index, tuple, n_ext);
+      first_rec = rec_convert_dtuple_to_rec(buf, btr_cur->get_index(), tuple, n_ext);
 
-      move_limit = page_rec_get_next(btr_cur_get_rec(cursor));
+      move_limit = page_rec_get_next(btr_cur->get_rec());
     }
 
     /* 4. Do first the modifications in the tree structure */
 
-    attach_half_pages(cursor->m_index, block, first_rec, new_block, direction, mtr);
+    attach_half_pages(btr_cur->get_index(), block, first_rec, new_block, direction, mtr);
 
     /* If the split is made on the leaf level and the insert will fit
     on the appropriate half-page, we may release the tree x-latch.
@@ -1189,15 +1189,15 @@ rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
     bool insert_will_fit;
 
     if (split_rec != nullptr) {
-      insert_will_fit = page_insert_fits(cursor, split_rec, offsets, tuple, n_ext, heap);
+      insert_will_fit = page_insert_fits(btr_cur, split_rec, offsets, tuple, n_ext, heap);
     } else {
       mem_free(buf);
-      insert_will_fit = page_insert_fits(cursor, nullptr, nullptr, tuple, n_ext, heap);
+      insert_will_fit = page_insert_fits(btr_cur, nullptr, nullptr, tuple, n_ext, heap);
     }
 
     if (insert_will_fit && page_is_leaf(page)) {
 
-      mtr->memo_release(dict_index_get_lock(cursor->m_index), MTR_MEMO_X_LOCK);
+      mtr->memo_release(dict_index_get_lock(btr_cur->get_index()), MTR_MEMO_X_LOCK);
     }
 
     /* 5. Move then the records to the new page */
@@ -1211,7 +1211,7 @@ rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
       direction == FSP_DOWN
   #endif /* UNIV_BTR_AVOID_COPY */
     ) {
-      auto success{page_move_rec_list_start(new_block, block, move_limit, cursor->m_index, mtr)};
+      auto success{page_move_rec_list_start(new_block, block, move_limit, btr_cur->get_index(), mtr)};
       ut_a(success);
 
       left_block = new_block;
@@ -1228,7 +1228,7 @@ rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
 
     } else {
 
-      auto success{page_move_rec_list_end(new_block, block, move_limit, cursor->m_index, mtr)};
+      auto success{page_move_rec_list_end(new_block, block, move_limit, btr_cur->get_index(), mtr)};
       ut_a(success);
 
       left_block = block;
@@ -1246,17 +1246,17 @@ rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
     auto insert_block = insert_left ? left_block : right_block;
 
     /* 7. Reposition the cursor for insert and try insertion */
-    auto page_cursor = btr_cur_get_page_cur(cursor);
+    auto page_cursor = btr_cur->get_page_cur();
 
-    page_cur_search(insert_block, cursor->m_index, tuple, PAGE_CUR_LE, page_cursor);
+    page_cur_search(insert_block, btr_cur->get_index(), tuple, PAGE_CUR_LE, page_cursor);
 
-    rec = page_cur_tuple_insert(page_cursor, tuple, cursor->m_index, n_ext, mtr);
+    rec = page_cur_tuple_insert(page_cursor, tuple, btr_cur->get_index(), n_ext, mtr);
 
     if (unlikely(rec == nullptr)) {
 
       /* 8. If insert did not fit, try page reorganization */
 
-      if (unlikely(!page_reorganize(insert_block, cursor->m_index, mtr))) {
+      if (unlikely(!page_reorganize(insert_block, btr_cur->get_index(), mtr))) {
 
         ++n_iterations;
 
@@ -1267,9 +1267,9 @@ rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
 
       } else {
 
-        page_cur_search(insert_block, cursor->m_index, tuple, PAGE_CUR_LE, page_cursor);
+        page_cur_search(insert_block, btr_cur->get_index(), tuple, PAGE_CUR_LE, page_cursor);
 
-        rec = page_cur_tuple_insert(page_cursor, tuple, cursor->m_index, n_ext, mtr);
+        rec = page_cur_tuple_insert(page_cursor, tuple, btr_cur->get_index(), n_ext, mtr);
 
         if (unlikely(rec == nullptr)) {
           /* The insert did not fit on the page: loop back to the start of the function for a new split */
@@ -1286,8 +1286,8 @@ rec_t *Btree::page_split_and_insert(btr_cur_t *cursor, const dtuple_t *tuple, ul
     break;
   }
 
-  ut_ad(page_validate(left_block->get_frame(), cursor->m_index));
-  ut_ad(page_validate(right_block->get_frame(), cursor->m_index));
+  ut_ad(page_validate(left_block->get_frame(), btr_cur->get_index()));
+  ut_ad(page_validate(right_block->get_frame(), btr_cur->get_index()));
 
   mem_heap_free(heap);
 
@@ -1358,23 +1358,23 @@ void Btree::set_min_rec_mark(rec_t *rec, mtr_t *mtr) noexcept {
   set_min_rec_mark_log(rec, MLOG_REC_MIN_MARK, mtr);
 }
 
-void Btree::node_ptr_delete(dict_index_t *dict_index, buf_block_t *block, mtr_t *mtr) noexcept {
-  btr_cur_t cursor;
+void Btree::node_ptr_delete(dict_index_t *dict_index, Buf_block *block, mtr_t *mtr) noexcept {
+  Btree_cursor btr_cur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   /* Delete node pointer on father page */
-  page_get_father(dict_index, block, mtr, &cursor);
+  page_get_father(dict_index, block, mtr, &btr_cur);
 
 
   db_err err;
-  btr_cur_pessimistic_delete(&err, true, &cursor, RB_NONE, mtr);
+  btr_cur.pessimistic_delete(&err, true,RB_NONE, mtr);
   ut_a(err == DB_SUCCESS);
 }
 
-void Btree::lift_page_up(dict_index_t *dict_index, buf_block_t *block, mtr_t *mtr) noexcept {
+void Btree::lift_page_up(dict_index_t *dict_index, Buf_block *block, mtr_t *mtr) noexcept {
   auto page = block->get_frame();
-  std::array<buf_block_t *, BTR_MAX_DEPTH> blocks;
+  std::array<Buf_block *, BTR_MAX_DEPTH> blocks;
 
   ut_ad(page_get_prev(page, mtr) == FIL_NULL);
   ut_ad(page_get_next(page, mtr) == FIL_NULL);
@@ -1385,15 +1385,15 @@ void Btree::lift_page_up(dict_index_t *dict_index, buf_block_t *block, mtr_t *mt
 
    /* Last used index in blocks[] */
   ulint n_blocks{};
-  buf_block_t *father_block;
+  Buf_block *father_block;
   IF_DEBUG(page_t *father_page;)
 
   {
-    btr_cur_t cursor;
+    Btree_cursor btr_cur(srv_fsp, srv_btree_sys, srv_lock_sys);
     auto heap = mem_heap_create(100);
-    auto offsets = page_get_father_block(nullptr, heap, dict_index, block, mtr, &cursor);
+    auto offsets = page_get_father_block(nullptr, heap, dict_index, block, mtr, &btr_cur);
 
-    father_block = btr_cur_get_block(&cursor);
+    father_block = btr_cur.get_block();
 
     IF_DEBUG(father_page = father_block->get_frame();)
 
@@ -1407,9 +1407,9 @@ void Btree::lift_page_up(dict_index_t *dict_index, buf_block_t *block, mtr_t *mt
     for (auto b = father_block; b->get_page_no() != root_page_no;) {
       ut_a(n_blocks < BTR_MAX_DEPTH);
 
-      offsets = page_get_father_block(offsets, heap, dict_index, b, mtr, &cursor);
+      offsets = page_get_father_block(offsets, heap, dict_index, b, mtr, &btr_cur);
 
-      blocks[n_blocks++] = b = btr_cur_get_block(&cursor);
+      blocks[n_blocks++] = b = btr_cur.get_block();
     }
 
     mem_heap_free(heap);
@@ -1435,13 +1435,13 @@ void Btree::lift_page_up(dict_index_t *dict_index, buf_block_t *block, mtr_t *mt
   ut_ad(check_node_ptr(dict_index, father_block, mtr));
 }
 
-bool Btree::compress(btr_cur_t *cursor, mtr_t *mtr) noexcept {
+bool Btree::compress(Btree_cursor *cursor, mtr_t *mtr) noexcept {
   page_t *merge_page;
-  btr_cur_t father_cursor;
+  Btree_cursor btr_cur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
-  auto block = btr_cur_get_block(cursor);
-  auto page = btr_cur_get_page(cursor);
-  auto dict_index = btr_cur_get_index(cursor);
+  auto block = btr_cur.get_block();
+  auto page = btr_cur.get_page();
+  auto dict_index = btr_cur.get_index();
 
   ut_ad(mtr->memo_contains(dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
@@ -1451,11 +1451,11 @@ bool Btree::compress(btr_cur_t *cursor, mtr_t *mtr) noexcept {
   const auto right_page_no = page_get_next(page, mtr);
 
   auto heap = mem_heap_create(100);
-  auto offsets = page_get_father_block(nullptr, heap, dict_index, block, mtr, &father_cursor);
+  auto offsets = page_get_father_block(nullptr, heap, dict_index, block, mtr, &btr_cur);
 
   /* Decide the page to which we try to merge and which will inherit the locks */
 
-  buf_block_t *merge_block;
+  Buf_block *merge_block;
   const auto is_left = left_page_no != FIL_NULL;
 
   if (is_left) {
@@ -1553,7 +1553,7 @@ bool Btree::compress(btr_cur_t *cursor, mtr_t *mtr) noexcept {
     /* Replace the address of the old child node (= page) with the
     address of the merge page to the right */
 
-    node_ptr_set_child_page_no(btr_cur_get_rec(&father_cursor), offsets, right_page_no, mtr);
+    node_ptr_set_child_page_no(btr_cur.get_rec(), offsets, right_page_no, mtr);
     node_ptr_delete(dict_index, merge_block, mtr);
 
     m_lock_sys->update_merge_right(merge_block, orig_succ, block);
@@ -1570,14 +1570,14 @@ bool Btree::compress(btr_cur_t *cursor, mtr_t *mtr) noexcept {
   return true;
 }
 
-void Btree::discard_only_page_on_level(dict_index_t *dict_index, buf_block_t *block, mtr_t *mtr) noexcept {
+void Btree::discard_only_page_on_level(dict_index_t *dict_index, Buf_block *block, mtr_t *mtr) noexcept {
   ulint page_level{};
 
   /* Save the PAGE_MAX_TRX_ID from the leaf page. */
   const auto max_trx_id = page_get_max_trx_id(block->get_frame());
 
   while (block->get_page_no() != dict_index_get_page(dict_index)) {
-    btr_cur_t cursor;
+    Btree_cursor btr_cur(srv_fsp, srv_btree_sys, srv_lock_sys);
     const auto page = block->get_frame();
 
     ut_a(page_get_n_recs(page) == 1);
@@ -1587,8 +1587,8 @@ void Btree::discard_only_page_on_level(dict_index_t *dict_index, buf_block_t *bl
 
     ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
-    page_get_father(dict_index, block, mtr, &cursor);
-    auto father = btr_cur_get_block(&cursor);
+    page_get_father(dict_index, block, mtr, &btr_cur);
+    auto father = btr_cur.get_block();
 
     m_lock_sys->update_discard(father, PAGE_HEAP_NO_SUPREMUM, block);
 
@@ -1618,9 +1618,9 @@ void Btree::discard_only_page_on_level(dict_index_t *dict_index, buf_block_t *bl
   page_empty(block, dict_index, 0, mtr);
 }
 
-void Btree::discard_page(btr_cur_t *cursor, mtr_t *mtr) noexcept{
-  const auto block = btr_cur_get_block(cursor);
-  const auto dict_index = btr_cur_get_index(cursor);
+void Btree::discard_page(Btree_cursor *btr_cur, mtr_t *mtr) noexcept{
+  const auto block = btr_cur->get_block();
+  const auto dict_index = btr_cur->get_index();
 
   ut_ad(dict_index_get_page(dict_index) != block->get_page_no());
   ut_ad(mtr->memo_contains(dict_index_get_lock(dict_index), MTR_MEMO_X_LOCK));
@@ -1634,7 +1634,7 @@ void Btree::discard_page(btr_cur_t *cursor, mtr_t *mtr) noexcept{
   const auto right_page_no = page_get_next(block->get_frame(), mtr);
 
   page_t *merge_page;
-  buf_block_t *merge_block;
+  Buf_block *merge_block;
 
   if (left_page_no != FIL_NULL) {
     merge_block = block_get(space, left_page_no, RW_X_LATCH, mtr);
@@ -1704,7 +1704,7 @@ void Btree::print_size(dict_index_t *index) noexcept {
   mtr.commit();
 }
 
-void Btree::print_recursive(dict_index_t *index, buf_block_t *block, ulint width, mem_heap_t **heap, ulint **offsets, mtr_t *mtr) noexcept {
+void Btree::print_recursive(dict_index_t *index, Buf_block *block, ulint width, mem_heap_t **heap, ulint **offsets, mtr_t *mtr) noexcept {
   ulint i{};
   const page_t *page = block->get_frame();
 
@@ -1780,7 +1780,7 @@ void Btree::print_index(dict_index_t *index, ulint width) noexcept {
 #endif /* UNIV_BTR_PRINT */
 
 #ifdef UNIV_DEBUG
-bool Btree::check_node_ptr(dict_index_t *index, buf_block_t *block, mtr_t *mtr) noexcept {
+bool Btree::check_node_ptr(dict_index_t *index, Buf_block *block, mtr_t *mtr) noexcept {
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
   if (dict_index_get_page(index) == block->get_page_no()) {
@@ -1788,15 +1788,15 @@ bool Btree::check_node_ptr(dict_index_t *index, buf_block_t *block, mtr_t *mtr) 
     return true;
   }
 
-  btr_cur_t cursor;
+  Btree_cursor btr_cur(srv_fsp, srv_btree_sys, srv_lock_sys);
   const auto page = block->get_frame();
   auto heap = mem_heap_create(256);
-  const auto offsets = page_get_father_block(nullptr, heap, index, block, mtr, &cursor);
+  const auto offsets = page_get_father_block(nullptr, heap, index, block, mtr, &btr_cur);
 
   if (!page_is_leaf(page)) {
     const auto tuple = dict_index_build_node_ptr(index, page_rec_get_next(page_get_infimum_rec(page)), 0, heap, page_get_level(page, mtr));
 
-    ut_a(!cmp_dtuple_rec(index->cmp_ctx, tuple, btr_cur_get_rec(&cursor), offsets));
+    ut_a(!cmp_dtuple_rec(index->cmp_ctx, tuple, btr_cur.get_rec(), offsets));
   }
 
   mem_heap_free(heap);
@@ -1877,7 +1877,7 @@ bool Btree::index_rec_validate(const rec_t *rec, const dict_index_t *dict_index,
   return true;
 }
 
-bool Btree::index_page_validate(buf_block_t *block, dict_index_t *dict_index) noexcept {
+bool Btree::index_page_validate(Buf_block *block, dict_index_t *dict_index) noexcept {
   page_cur_t cur;
 
   page_cur_set_before_first(block, &cur);
@@ -1900,7 +1900,7 @@ bool Btree::index_page_validate(buf_block_t *block, dict_index_t *dict_index) no
   return true;
 }
 
-void Btree::validate_report1(dict_index_t *dict_index, ulint level, const buf_block_t *block) noexcept {
+void Btree::validate_report1(dict_index_t *dict_index, ulint level, const Buf_block *block) noexcept {
   log_err(std::format("Page {} of {}", block->get_page_no(), dict_index->name));
 
   if (level > 0) {
@@ -1908,7 +1908,7 @@ void Btree::validate_report1(dict_index_t *dict_index, ulint level, const buf_bl
   }
 }
 
-void Btree::validate_report2(const dict_index_t *dict_index, ulint level, const buf_block_t *block1, const buf_block_t *block2) noexcept {
+void Btree::validate_report2(const dict_index_t *dict_index, ulint level, const Buf_block *block1, const Buf_block *block2) noexcept {
   log_err(std::format("Pages {} and {} of {}", block1->get_page_no(), block2->get_page_no(), dict_index->name));
 
   if (level > 0) {
@@ -1919,12 +1919,12 @@ void Btree::validate_report2(const dict_index_t *dict_index, ulint level, const 
 bool Btree::validate_level(dict_index_t *dict_index, trx_t *trx, ulint level) noexcept {
   rec_t *rec;
   bool ret{true};
-  btr_cur_t node_cur;
+  Btree_cursor node_cur(srv_fsp, srv_btree_sys, srv_lock_sys);
   page_cur_t cursor;
   page_t *right_page{};
-  btr_cur_t right_node_cur;
+  Btree_cursor right_node_cur(srv_fsp, srv_btree_sys, srv_lock_sys);
   ulint *offsets2 = nullptr;
-  buf_block_t *right_block{};
+  Buf_block *right_block{};
   mem_heap_t *heap = mem_heap_create(256);
 
   mtr_t mtr;
@@ -1958,7 +1958,7 @@ bool Btree::validate_level(dict_index_t *dict_index, trx_t *trx, ulint level) no
     page = block->get_frame();
   }
 
-  auto node_ptr_fails = [this](mtr_t &mtr, Page_id page_id, buf_block_t *&block, page_t *&page) -> bool {
+  auto node_ptr_fails = [this](mtr_t &mtr, Page_id page_id, Buf_block *&block, page_t *&page) -> bool {
     /* Commit the mini-transaction to release the latch on 'page'. Re-acquire the latch on right_page,
     which will become 'page' on the next loop.  The page has already been checked. */
     mtr.commit();
@@ -2077,15 +2077,15 @@ bool Btree::validate_level(dict_index_t *dict_index, trx_t *trx, ulint level) no
 
       offsets = page_get_father_block(offsets, heap, dict_index, block, &mtr, &node_cur);
 
-      const auto father_page = btr_cur_get_page(&node_cur);
+      const auto father_page = node_cur.get_page();
 
-      auto node_ptr = btr_cur_get_rec(&node_cur);
+      auto node_ptr = node_cur.get_rec();
 
-      btr_cur_position(dict_index, page_rec_get_prev(page_get_supremum_rec(page)), block, &node_cur);
+      node_cur.position(dict_index, page_rec_get_prev(page_get_supremum_rec(page)), block);
 
       offsets = page_get_father_node_ptr(offsets, heap, &node_cur, &mtr, Source_location{});
 
-      if (unlikely(node_ptr != btr_cur_get_rec(&node_cur)) ||
+      if (unlikely(node_ptr != node_cur.get_rec()) ||
         unlikely(node_ptr_get_child_page_no(node_ptr, offsets) != block->get_page_no())) {
 
         validate_report1(dict_index, level, block);
@@ -2097,7 +2097,7 @@ bool Btree::validate_level(dict_index_t *dict_index, trx_t *trx, ulint level) no
 
         log_err("node ptr: ", rec_to_string(node_ptr));
 
-        rec = btr_cur_get_rec(&node_cur);
+        rec = node_cur.get_rec();
 
         log_err("node ptr child page n:o ", node_ptr_get_child_page_no(rec, offsets));
 
@@ -2153,7 +2153,7 @@ bool Btree::validate_level(dict_index_t *dict_index, trx_t *trx, ulint level) no
 
         if (right_node_ptr != page_get_supremum_rec(father_page)) {
 
-          if (btr_cur_get_rec(&right_node_cur) != right_node_ptr) {
+          if (right_node_cur.get_rec() != right_node_ptr) {
             ret = false;
 
             log_err("Node pointer to the right page is wrong");
@@ -2165,9 +2165,9 @@ bool Btree::validate_level(dict_index_t *dict_index, trx_t *trx, ulint level) no
             buf_page_print(right_page, 0);
           }
         } else {
-          const auto right_father_page = btr_cur_get_page(&right_node_cur);
+          const auto right_father_page = right_node_cur.get_page();
 
-          if (btr_cur_get_rec(&right_node_cur) != page_rec_get_next(page_get_infimum_rec(right_father_page))) {
+          if (right_node_cur.get_rec() != page_rec_get_next(page_get_infimum_rec(right_father_page))) {
             ret = false;
 
             log_err("Node pointer 2 to the right page is wrong");

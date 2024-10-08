@@ -208,7 +208,7 @@ static db_err dict_build_table_def_step(que_thr_t *thr, tab_node_t *node) {
 
   thr_get_trx(thr)->table_id = table->id;
 
-  if (srv_file_per_table) {
+  if (srv_config.m_file_per_table) {
     /* We create a new single-table tablespace for the table.
     We initially let it be 4 pages:
     - page 0 is the fsp header and an extent descriptor page,
@@ -531,7 +531,7 @@ static ulint dict_create_index_tree_step(ind_node_t *node) {
   dict_index_t *index;
   dict_table_t *sys_indexes;
   dtuple_t *search_tuple;
-  btr_pcur_t pcur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
   mtr_t mtr;
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
@@ -550,7 +550,7 @@ static ulint dict_create_index_tree_step(ind_node_t *node) {
 
   pcur.open(UT_LIST_GET_FIRST(sys_indexes->indexes), search_tuple, PAGE_CUR_L, BTR_MODIFY_LEAF, &mtr, Source_location{});
 
-  pcur.move_to_next_user_rec(&mtr);
+  (void) pcur.move_to_next_user_rec(&mtr);
 
   node->page_no = srv_btree_sys->create(index->type, index->space, index->id, index, &mtr);
 
@@ -614,7 +614,7 @@ void dict_drop_index_tree(rec_t *rec, mtr_t *mtr) {
   page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, FIL_NULL, mtr);
 }
 
-page_no_t dict_truncate_index_tree(dict_table_t *table, space_id_t space, btr_pcur_t *pcur, mtr_t *mtr) {
+page_no_t dict_truncate_index_tree(dict_table_t *table, space_id_t space, Btree_pcursor *pcur, mtr_t *mtr) {
   ulint len;
   ulint type;
   uint64_t index_id;
@@ -692,7 +692,7 @@ page_no_t dict_truncate_index_tree(dict_table_t *table, space_id_t space, btr_pc
 
   mtr->start();
 
-  pcur->restore_position(BTR_MODIFY_LEAF, mtr, Source_location{});
+  (void) pcur->restore_position(BTR_MODIFY_LEAF, mtr, Source_location{});
 
   /* Find the index corresponding to this SYS_INDEXES record. */
   for (index = UT_LIST_GET_FIRST(table->indexes); index; index = UT_LIST_GET_NEXT(indexes, index)) {

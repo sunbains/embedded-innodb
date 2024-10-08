@@ -40,4 +40,4 @@ if it figures out that an index record will be removed in the purge
 anyway, it will remove it in the rollback.
 @param[in,out] node             Row undo node that will undo the fresh insert.
 @return	DB_SUCCESS */
-db_err row_undo_ins(undo_node_t *node);
+db_err row_undo_ins(Undo_node *node);

@@ -926,7 +926,7 @@ upd_node_t *pars_update_statement(
 {
   sym_node_t *table_sym;
   sel_node_t *sel_node;
-  plan_t *plan;
+  Plan *plan;
 
   table_sym = node->table_sym;
 

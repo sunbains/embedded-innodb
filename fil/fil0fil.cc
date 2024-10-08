@@ -105,7 +105,7 @@ Fil *srv_fil;
 extern AIO *srv_aio;
 
 /** The null file address */
-constexpr fil_addr_t fil_addr_null = {FIL_NULL, 0};
+constexpr Fil_addr fil_addr_null = {FIL_NULL, 0};
 
 Fil::Fil(ulint max_n_open) {
   ut_a(max_n_open > 0);
@@ -926,7 +926,7 @@ void Fil::read_flushed_lsn(os_file_t fh, lsn_t &flushed_lsn) {
 }
 
 void Fil::create_directory_for_tablename(const char *name) {
-  auto len = strlen(srv_data_home);
+  auto len = strlen(srv_config.m_data_home);
   ut_a(len > 0);
 
   auto namend = strchr(name, '/');
@@ -934,7 +934,7 @@ void Fil::create_directory_for_tablename(const char *name) {
 
   auto path = (char *)mem_alloc(len + (namend - name) + 2);
 
-  strncpy(path, srv_data_home, len);
+  strncpy(path, srv_config.m_data_home, len);
   ut_a(path[len - 1] == SRV_PATH_SEPARATOR);
 
   strncpy(path + len, name, namend - name);
@@ -1260,11 +1260,11 @@ bool Fil::rename_tablespace_in_mem(fil_space_t *space, fil_node_t *node, const c
 
 char *Fil::make_ibd_name(const char *name, bool is_temp) {
   ulint namelen = strlen(name);
-  auto dirlen = strlen(srv_data_home);
+  auto dirlen = strlen(srv_config.m_data_home);
   auto sz = dirlen + namelen + sizeof("/.ibd");
   auto filename = static_cast<char *>(mem_alloc(sz));
 
-  std::snprintf(filename, sz, "%s%s.ibd", normalize_path(srv_data_home), name);
+  std::snprintf(filename, sz, "%s%s.ibd", normalize_path(srv_config.m_data_home), name);
 
   return filename;
 }
@@ -1637,7 +1637,7 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
 void Fil::load_single_table_tablespace(ib_recovery_t recovery, const char *dbname, const char *filename) {
   char dir[OS_FILE_MAX_PATH];
 
-  strcpy(dir, srv_data_home);
+  strcpy(dir, srv_config.m_data_home);
 
   auto ptr = normalize_path(dir);
   auto len = strlen(dbname) + strlen(filename) + strlen(dir) + 3;
@@ -1789,12 +1789,12 @@ void Fil::load_single_table_tablespace(ib_recovery_t recovery, const char *dbnam
 
   if (!success) {
 
-    if (srv_force_recovery > 0) {
+    if (srv_config.m_force_recovery > 0) {
 
       log_warn(std::format(
         "innodb_force_recovery was set to {}. Continuing crash recovery"
         " even though the tablespace creation of this table failed.",
-        to_int(srv_force_recovery)
+        to_int(srv_config.m_force_recovery)
       ));
 
       goto func_exit;
@@ -2400,7 +2400,7 @@ bool Fil::aio_wait(ulint segment) {
   open, and use a special i/o thread to serve insert buffer requests. */
 
   if (io_ctx.m_fil_node->m_space->m_type == FIL_TABLESPACE) {
-    srv_buf_pool->io_complete(reinterpret_cast<buf_page_t *>(io_ctx.m_msg));
+    srv_buf_pool->io_complete(reinterpret_cast<Buf_page *>(io_ctx.m_msg));
   } else {
     log_sys->io_complete(reinterpret_cast<log_group_t *>(io_ctx.m_msg));
   }
@@ -2567,7 +2567,7 @@ bool Fil::validate() {
   return true;
 }
 
-bool Fil::addr_is_null(const fil_addr_t& addr) {
+bool Fil::addr_is_null(const Fil_addr& addr) {
   return addr.m_page_no == FIL_NULL;
 }
 
@@ -2591,7 +2591,7 @@ bool Fil::rmdir(const char *dbname) {
   bool success{};
   char dir[OS_FILE_MAX_PATH];
 
-  std::snprintf(dir, sizeof(dir), "%s%s", srv_data_home, dbname);
+  std::snprintf(dir, sizeof(dir), "%s%s", srv_config.m_data_home, dbname);
 
   if (::rmdir(dbname) != 0) {
     log_err("Removing directory: ", dbname);
@@ -2604,7 +2604,7 @@ bool Fil::rmdir(const char *dbname) {
 bool Fil::mkdir(const char *dbname) {
   char dir[OS_FILE_MAX_PATH];
 
-  std::snprintf(dir, sizeof(dir), "%s%s", srv_data_home, dbname);
+  std::snprintf(dir, sizeof(dir), "%s%s", srv_config.m_data_home, dbname);
 
   /* If exists (false) then don't return error. */
   return os_file_create_directory(dir, false);

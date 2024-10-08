@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "api0api.h"
 #include "api0misc.h"
 #include "api0ucode.h"
+#include "btr0blob.h"
 #include "btr0pcur.h"
 #include "ddl0ddl.h"
 #include "dict0crea.h"
@@ -285,7 +286,7 @@ static int ib_default_compare(
 /** Check if the Innodb persistent cursor is positioned.
 @param[in] pcur                 InnoDB persistent cursor
 @return	true if positioned */
-static bool ib_btr_cursor_is_positioned(const btr_pcur_t *pcur) {
+static bool ib_btr_cursor_is_positioned(const Btree_pcursor *pcur) {
   return pcur->m_old_stored &&
          (pcur->m_pos_state == Btr_pcur_positioned::IS_POSITIONED || pcur->m_pos_state == Btr_pcur_positioned::WAS_POSITIONED);
 }
@@ -312,7 +313,7 @@ static dict_table_t *ib_open_table_by_id(ib_id_t tid, bool locked) {
     dict_mutex_enter();
   }
 
-  auto table = dict_table_get_using_id(srv_force_recovery, table_id, true);
+  auto table = dict_table_get_using_id(srv_config.m_force_recovery, table_id, true);
 
   if (table != nullptr && table->ibd_file_missing) {
 
@@ -489,7 +490,9 @@ static void ib_read_tuple(const rec_t *rec, ib_tuple_t *tuple) {
     /* Fetch and copy any externally stored column. */
     if (rec_offs_nth_extern(offsets, i)) {
 
-      data = btr_rec_copy_externally_stored_field(copy, offsets, i, &len, tuple->heap);
+      Blob blob(srv_fsp, srv_btree_sys);
+
+      data = blob.copy_externally_stored_field(copy, offsets, i, &len, tuple->heap);
 
       ut_a(len != UNIV_SQL_NULL);
     }
@@ -2347,7 +2350,7 @@ ib_err_t ib_cursor_open_index_using_name(ib_crsr_t ib_open_crsr, const char *ind
   }
 
   /* We want to increment the ref count, so we do a redundant search. */
-  table = dict_table_get_using_id(srv_force_recovery, cursor->prebuilt->table->id, true);
+  table = dict_table_get_using_id(srv_config.m_force_recovery, cursor->prebuilt->table->id, true);
   ut_a(table != nullptr);
 
   if (trx != nullptr && !ib_schema_lock_is_exclusive((ib_trx_t)trx)) {
@@ -2830,7 +2833,7 @@ static ib_err_t ib_update_row_with_lock_retry(que_thr_t *thr, upd_node_t *node, 
  *
  * @return DB_SUCCESS or err code
  */
-static ib_err_t ib_execute_update_query_graph(ib_cursor_t *cursor, btr_pcur_t *pcur) {
+static ib_err_t ib_execute_update_query_graph(ib_cursor_t *cursor, Btree_pcursor *pcur) {
   trx_t *trx = cursor->prebuilt->trx;
   dict_table_t *table = cursor->prebuilt->table;
   ib_qry_proc_t *q_proc = &cursor->q_proc;
@@ -2894,7 +2897,7 @@ ib_err_t ib_cursor_update_row(ib_crsr_t ib_crsr, const ib_tpl_t ib_old_tpl, cons
 
   IB_CHECK_PANIC();
 
-  btr_pcur_t *pcur;
+  Btree_pcursor *pcur;
 
   if (dict_index_is_clust(prebuilt->index)) {
     pcur = cursor->prebuilt->pcur;
@@ -2929,7 +2932,7 @@ ib_err_t ib_cursor_update_row(ib_crsr_t ib_crsr, const ib_tpl_t ib_old_tpl, cons
  *
  * @return DB_SUCCESS or err code
  */
-static ib_err_t ib_delete_row(ib_cursor_t *cursor, btr_pcur_t *pcur, const rec_t *rec) {
+static ib_err_t ib_delete_row(ib_cursor_t *cursor, Btree_pcursor *pcur, const rec_t *rec) {
   dict_table_t *table = cursor->prebuilt->table;
   dict_index_t *dict_index = dict_table_get_first_index(table);
 
@@ -2977,7 +2980,7 @@ static ib_err_t ib_delete_row(ib_cursor_t *cursor, btr_pcur_t *pcur, const rec_t
 
 ib_err_t ib_cursor_delete_row(ib_crsr_t ib_crsr) {
   ib_err_t err;
-  btr_pcur_t *pcur;
+  Btree_pcursor *pcur;
   dict_index_t *dict_index;
   ib_cursor_t *cursor = (ib_cursor_t *)ib_crsr;
   row_prebuilt_t *prebuilt = cursor->prebuilt;
@@ -3056,7 +3059,7 @@ ib_err_t ib_cursor_read_row(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl) {
     }
   } else {
     mtr_t mtr;
-    btr_pcur_t *pcur;
+    Btree_pcursor *pcur;
     row_prebuilt_t *prebuilt = cursor->prebuilt;
 
     if (prebuilt->need_to_access_clustered && tuple->type == TPL_ROW) {
@@ -3102,7 +3105,7 @@ ib_err_t ib_cursor_prev(ib_crsr_t ib_crsr) {
 
   row_sel_row_cache_next(prebuilt);
 
-  err = row_search_for_client(srv_force_recovery, IB_CUR_L, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_PREV);
+  err = row_search_for_client(srv_config.m_force_recovery, IB_CUR_L, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_PREV);
 
   return err;
 }
@@ -3118,7 +3121,7 @@ ib_err_t ib_cursor_next(ib_crsr_t ib_crsr) {
 
   row_sel_row_cache_next(prebuilt);
 
-  return row_search_for_client(srv_force_recovery, IB_CUR_G, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_NEXT);
+  return row_search_for_client(srv_config.m_force_recovery, IB_CUR_G, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_NEXT);
 }
 
 /**
@@ -3138,7 +3141,7 @@ static ib_err_t ib_cursor_position(ib_cursor_t *cursor, ib_srch_mode_t mode) {
   uses the search_tuple fields to work out what to do. */
   dtuple_set_n_fields(prebuilt->search_tuple, 0);
 
-  return row_search_for_client(srv_force_recovery, mode, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_MOVETO);
+  return row_search_for_client(srv_config.m_force_recovery, mode, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_MOVETO);
 }
 
 ib_err_t ib_cursor_first(ib_crsr_t ib_crsr) {
@@ -3179,7 +3182,7 @@ ib_err_t ib_cursor_moveto(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl, ib_srch_mode_t ib_
 
   ut_a(prebuilt->select_lock_type <= LOCK_NUM);
 
-  auto err = row_search_for_client(srv_force_recovery, ib_srch_mode, prebuilt, (ib_match_t)cursor->match_mode, ROW_SEL_MOVETO);
+  auto err = row_search_for_client(srv_config.m_force_recovery, ib_srch_mode, prebuilt, (ib_match_t)cursor->match_mode, ROW_SEL_MOVETO);
 
   *result = prebuilt->result;
 
@@ -3983,7 +3986,7 @@ bool ib_database_create(const char *dbname) {
   }
 
   /* Only necessary if file per table is set. */
-  if (srv_file_per_table) {
+  if (srv_config.m_file_per_table) {
     return srv_fil->mkdir(dbname);
   }
 
@@ -4016,7 +4019,7 @@ ib_err_t ib_database_drop(const char *dbname) {
   auto err = ddl_drop_database(ptr, (trx_t *)ib_trx);
 
   /* Only necessary if file per table is set. */
-  if (err == DB_SUCCESS && srv_file_per_table) {
+  if (err == DB_SUCCESS && srv_config.m_file_per_table) {
     srv_fil->rmdir(ptr);
   }
 
@@ -4834,7 +4837,7 @@ static dberr_t check_table(trx_t *trx, dict_index_t *index, size_t n_threads) {
 
   using Tuples = std::vector<dtuple_t *>;
   using Heaps = std::vector<mem_heap_t *>;
-  using Blocks = std::vector<const buf_block_t *>;
+  using Blocks = std::vector<const Buf_block *>;
 
   Heaps heaps;
   Tuples prev_tuples;

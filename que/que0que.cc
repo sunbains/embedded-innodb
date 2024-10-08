@@ -383,7 +383,7 @@ static void que_graph_free_stat_list(que_node_t *node) {
 void que_graph_free_recursive(que_node_t *node) {
   que_fork_t *fork;
   que_thr_t *thr;
-  undo_node_t *undo;
+  Undo_node *undo;
   sel_node_t *sel;
   ins_node_t *ins;
   upd_node_t *upd;
@@ -431,7 +431,7 @@ void que_graph_free_recursive(que_node_t *node) {
       break;
     case QUE_NODE_UNDO:
 
-      undo = static_cast<undo_node_t *>(node);
+      undo = static_cast<Undo_node *>(node);
 
       mem_heap_free(undo->heap);
 

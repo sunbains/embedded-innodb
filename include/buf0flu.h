@@ -34,8 +34,8 @@ Created 11/5/1995 Heikki Tuuri
 #include <array>
 
 struct DBLWR;
-struct buf_page_t;
-struct buf_block_t;
+struct Buf_page;
+struct Buf_block;
 
 struct Buf_flush {
   /** Number of intervals for which we keep the history of these stats.
@@ -43,12 +43,18 @@ struct Buf_flush {
   srv_error_monitor_thread() calls buf_pool->m_flusher->stat_update(). */
   static constexpr ulint STAT_N_INTERVAL = 20;
 
+  /** Constructor
+   * 
+   * @param buf_pool The buffer pool.
+   */
+  explicit Buf_flush(Buf_pool *buf_pool) : m_buf_pool(buf_pool) {}
+
   /**
   * Remove a block from the flush list of modified blocks.
   *
   * @param bpage Pointer to the block in question.
   */
-  void remove(buf_page_t *bpage);
+  void remove(Buf_page *bpage);
 
   /**
   * Relocates a buffer control block on the flush_list.
@@ -57,14 +63,14 @@ struct Buf_flush {
   * @param bpage Pointer to the control block being moved.
   * @param dpage Pointer to the destination block.
   */
-  void relocate_on_flush_list(buf_page_t *bpage, buf_page_t *dpage);
+  void relocate_on_flush_list(Buf_page *bpage, Buf_page *dpage);
 
   /**
   * Updates the flush system data structures when a write is completed.
   *
   * @param bpage Pointer to the block in question.
   */
-  void write_complete(buf_page_t *bpage);
+  void write_complete(Buf_page *bpage);
 
   /**
    * Flushes pages from the end of the LRU list if there is too small
@@ -123,7 +129,7 @@ struct Buf_flush {
    * @param bpage The buffer control block, must be bpage->in_file() and in the LRU list.
    * @return True if the block can be replaced immediately.
    */
-  bool ready_for_replace(buf_page_t *bpage);
+  bool ready_for_replace(Buf_page *bpage);
 
   /**
    * @brief Update the historical stats that we are collecting for flush rate
@@ -149,23 +155,22 @@ struct Buf_flush {
 #endif /* UNIV_DEBUG */
 
   /**
-   * @brief Initialize the red-black tree to speed up insertions into the flush_list
-   * during recovery process. Should be called at the start of recovery
-   * process before any page has been read/written.
+   * @brief Initialize the flush_list during recovery process. Should be
+   * called at the start of recovery process before any page has been read/written.
    */
-  void init_flush_rbt();
+  void init_flush_list();
 
   /**
-   * @brief Frees up the red-black tree.
+   * @brief Frees up the recovery flush_list.
    */
-  void free_flush_rbt();
+  void free_flush_list();
 
   /**
    * @brief Inserts a modified block into the flush list.
    *
    * @param block The block which is modified.
    */
-  void insert_into_flush_list(buf_block_t *block);
+  void insert_into_flush_list(Buf_block *block);
 
   /**
    * @brief Inserts a modified block into the flush list in the right sorted position.
@@ -174,7 +179,7 @@ struct Buf_flush {
    *
    * @param block The block which is modified.
    */
-  void insert_sorted_into_flush_list(buf_block_t *block);
+  void insert_sorted_into_flush_list(Buf_block *block);
 
   /**
    * @brief This function should be called at a mini-transaction commit, if a page was
@@ -184,14 +189,13 @@ struct Buf_flush {
    * @param block The block which is modified.
    * @param mtr The mini-transaction.
    */
-  void note_modification( buf_block_t *block, mtr_t *mtr) {
-    ut_ad(block);
+  void note_modification(Buf_block *block, mtr_t *mtr) {
     ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
     ut_ad(block->m_page.m_buf_fix_count > 0);
   #ifdef UNIV_SYNC_DEBUG
-    ut_ad(rw_lock_own(&(block->lock), RW_LOCK_EX));
+    ut_ad(rw_lock_own(&block->m_lock, RW_LOCK_EX));
   #endif /* UNIV_SYNC_DEBUG */
-    ut_ad(buf_pool_mutex_own());
+    ut_ad(mutex_own(&m_buf_pool->m_mutex));
   
     ut_ad(mtr->m_start_lsn != 0);
     ut_ad(mtr->m_modifications);
@@ -209,7 +213,7 @@ struct Buf_flush {
       ut_ad(block->m_page.m_oldest_modification <= mtr->m_start_lsn);
     }
   
-    ++srv_buf_pool_write_requests;
+    ++m_buf_pool->m_write_requests;
   }
   
   /**
@@ -219,7 +223,7 @@ struct Buf_flush {
    * @param start_lsn The start LSN of the first MTR in a set of MTRs.
    * @param end_lsn The end LSN of the last MTR in the set of MTRs.
    */
-  void recv_note_modification( buf_block_t *block, uint64_t start_lsn, uint64_t end_lsn) {
+  void recv_note_modification( Buf_block *block, uint64_t start_lsn, uint64_t end_lsn) {
     ut_ad(block);
     ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
     ut_ad(block->m_page.m_buf_fix_count > 0);
@@ -228,7 +232,7 @@ struct Buf_flush {
     ut_ad(rw_lock_own(&(block->lock), RW_LOCK_EX));
   #endif /* UNIV_SYNC_DEBUG */
   
-    buf_pool_mutex_enter();
+    m_buf_pool->mutex_acquire();
   
     ut_ad(block->m_page.m_newest_modification <= end_lsn);
   
@@ -245,7 +249,7 @@ struct Buf_flush {
       ut_ad(block->m_page.m_oldest_modification <= start_lsn);
     }
   
-    buf_pool_mutex_exit();
+    m_buf_pool->mutex_release();
   }
 
   /** When free_margin is called, it tries to make this many blocks
@@ -289,13 +293,13 @@ private:
    * @param bpage The bpage to be inserted.
    * @return Pointer to the predecessor or nullptr if no predecessor.
    */
-  buf_page_t *insert_in_flush_rbt(buf_page_t *bpage);
+  Buf_page *insert_in_flush_rbt(Buf_page *bpage);
 
   /**
    * @brief Delete a bpage from the m_recovery_flush_list.
    * @param bpage The bpage to be removed.
    */
-  void delete_from_flush_rbt(buf_page_t *bpage);
+  void delete_from_flush_rbt(Buf_page *bpage);
 
   /**
    * @brief Compare two modified blocks in the buffer pool. The key for comparison is: key = <oldest_modification, space, offset>
@@ -309,7 +313,7 @@ private:
    *
    * @return < 0 if b2 < b1, 0 if b2 == b1, > 0 if b2 > b1
    */
-  static bool block_cmp(const buf_page_t *b1, const buf_page_t *b2);
+  static bool block_cmp(const Buf_page *b1, const Buf_page *b2);
 
   /**
    * @brief Flush a batch of writes to the datafiles that have already been written by the OS.
@@ -332,7 +336,7 @@ private:
    *
    * @param bpage The buffer block to write.
    */
-  void post_to_doublewrite_buf(DBLWR *dblwr, buf_page_t *bpage);
+  void post_to_doublewrite_buf(DBLWR *dblwr, Buf_page *bpage);
 
   /**
    * @brief Does an asynchronous write of a buffer page.
@@ -341,7 +345,7 @@ private:
    * @param[in,out] dblwr The doublewrite buffer to use
    * @param bpage The buffer block to write.
    */
-  void write_block_low(DBLWR *dblwr, buf_page_t *bpage);
+  void write_block_low(DBLWR *dblwr, Buf_page *bpage);
 
   /**
    * @brief Writes a flushable page asynchronously from the buffer pool to a file.
@@ -352,7 +356,7 @@ private:
    * @param bpage The buffer control block.
    * @param flush_type The flush type.
    */
-  void page(DBLWR *dblwr, buf_page_t *bpage, buf_flush flush_type);
+  void page(DBLWR *dblwr, Buf_page *bpage, buf_flush flush_type);
 
   /**
    * @brief Flushes to disk all flushable pages within the flush area.
@@ -379,16 +383,21 @@ private:
    * @param flush_type Flush type (BUF_FLUSH_LRU or BUF_FLUSH_LIST)
    * @return True if can flush immediately
    */
-  bool ready_for_flush(buf_page_t *bpage, buf_flush flush_type);
+  bool ready_for_flush(Buf_page *bpage, buf_flush flush_type);
 
 
 private:
+  /**
+   * @brief The buffer pool.
+   */
+  Buf_pool *m_buf_pool{};
+
   /** Sampled values buf_pool->m_flusher->stat_cur.
   Not protected by any mutex.  Updated by buf_pool->m_flusher->stat_update(). */
-  std::array<Stat, STAT_N_INTERVAL> m_stats;
+  std::array<Stat, STAT_N_INTERVAL> m_stats{};
 
   /** Cursor to m_stats[]. Updated in a round-robin fashion. */
-  ulint m_stat_ind;
+  ulint m_stat_ind{};
 
   /** Values at start of the current interval. Reset by stat_update(). */
   Stat m_stat_cur;

@@ -24,6 +24,7 @@ Created 12/27/1996 Heikki Tuuri
 
 #include "row0upd.h"
 
+#include "btr0blob.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "buf0lru.h"
@@ -153,7 +154,7 @@ pcur position!
 @return	DB_SUCCESS or an error code */
 static db_err row_upd_check_references_constraints(
   upd_node_t *node,    /*!< in: row update node */
-  btr_pcur_t *pcur,    /*!< in: cursor positioned on a record; NOTE: the
+  Btree_pcursor *pcur,    /*!< in: cursor positioned on a record; NOTE: the
                          cursor position is lost in this function! */
   dict_table_t *table, /*!< in: table in question */
   dict_index_t *index, /*!< in: index of the cursor */
@@ -654,7 +655,9 @@ static byte *row_upd_ext_fetch(
 {
   byte *buf = mem_heap_alloc(heap, *len);
 
-  *len = btr_copy_externally_stored_field_prefix(buf, *len, data, local_len);
+  Blob blob(srv_fsp, srv_btree_sys);
+
+  *len = blob.copy_externally_stored_field_prefix(buf, *len, data, local_len);
   /* We should never update records containing a half-deleted BLOB. */
   ut_a(*len);
 
@@ -1049,8 +1052,8 @@ static db_err row_upd_sec_index_entry(
   bool found;
   dict_index_t *index;
   dtuple_t *entry;
-  btr_pcur_t pcur;
-  btr_cur_t *btr_cur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
+  Btree_cursor *btr_cur;
   mem_heap_t *heap;
   rec_t *rec;
   db_err err = DB_SUCCESS;
@@ -1072,9 +1075,10 @@ static db_err row_upd_sec_index_entry(
   mtr.start();
 
   found = row_search_index_entry(index, entry, BTR_MODIFY_LEAF, &pcur, &mtr);
+
   btr_cur = pcur.get_btr_cur();
 
-  rec = btr_cur_get_rec(btr_cur);
+  rec = btr_cur->get_rec();
 
   if (unlikely(!found)) {
     ib_logger(ib_stream, "Error in sec index entry update in\n");
@@ -1092,7 +1096,7 @@ static db_err row_upd_sec_index_entry(
 
     if (!rec_get_deleted_flag(rec)) {
 
-      err = btr_cur_del_mark_set_sec_rec(0, btr_cur, true, thr, &mtr);
+      err = btr_cur->del_mark_set_sec_rec(0, true, thr, &mtr);
 
       if (err == DB_SUCCESS && check_ref) {
         Phy_rec record{index, rec};
@@ -1160,8 +1164,8 @@ static db_err row_upd_clust_rec_by_insert(
 ) /*!< in: mtr; gets committed here */
 {
   mem_heap_t *heap = nullptr;
-  btr_pcur_t *pcur;
-  btr_cur_t *btr_cur;
+  Btree_pcursor *pcur;
+  Btree_cursor *btr_cur;
   trx_t *trx;
   dict_table_t *table;
   dtuple_t *entry;
@@ -1175,6 +1179,8 @@ static db_err row_upd_clust_rec_by_insert(
   pcur = node->pcur;
   btr_cur = pcur->get_btr_cur();
 
+  Blob blob(srv_fsp, srv_btree_sys);
+
   if (node->state != UPD_NODE_INSERT_CLUSTERED) {
     rec_t *rec;
     dict_index_t *index;
@@ -1182,7 +1188,7 @@ static db_err row_upd_clust_rec_by_insert(
     ulint *offsets;
     rec_offs_init(offsets_);
 
-    err = btr_cur_del_mark_set_clust_rec(BTR_NO_LOCKING_FLAG, btr_cur, true, thr, mtr);
+    err = btr_cur->del_mark_set_clust_rec(BTR_NO_LOCKING_FLAG, true, thr, mtr);
 
     if (err != DB_SUCCESS) {
       mtr->commit();
@@ -1194,7 +1200,7 @@ static db_err row_upd_clust_rec_by_insert(
     free those externally stored fields even if the delete marked
     record is removed from the index tree, or updated. */
 
-    rec = btr_cur_get_rec(btr_cur);
+    rec = btr_cur->get_rec();
     index = dict_table_get_first_index(table);
 
     {
@@ -1203,7 +1209,7 @@ static db_err row_upd_clust_rec_by_insert(
       offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
     }
 
-    btr_cur_mark_extern_inherited_fields(rec, index, offsets, node->update, mtr);
+    blob.mark_extern_inherited_fields(rec, index, offsets, node->update, mtr);
 
     if (check_ref) {
       /* NOTE that the following call loses the position of pcur ! */
@@ -1235,12 +1241,12 @@ static db_err row_upd_clust_rec_by_insert(
     extern fields marked as not-owned in entry (marked in the
     if-branch above). We must unmark them. */
 
-    btr_cur_unmark_dtuple_extern_fields(entry);
+    blob.unmark_dtuple_extern_fields(entry);
 
     /* We must mark non-updated extern fields in entry as
     inherited, so that a possible rollback will not free them. */
 
-    btr_cur_mark_dtuple_inherited_extern(entry, node->update);
+    blob.mark_dtuple_inherited_extern(entry, node->update);
   }
 
   err = row_ins_index_entry(index, entry, node->upd_ext ? node->upd_ext->n_ext : 0, true, thr);
@@ -1263,8 +1269,8 @@ static db_err row_upd_clust_rec(
 {
   mem_heap_t *heap = nullptr;
   big_rec_t *big_rec = nullptr;
-  btr_pcur_t *pcur;
-  btr_cur_t *btr_cur;
+  Btree_pcursor *pcur;
+  Btree_cursor *btr_cur;
   db_err err;
 
   ut_ad(node);
@@ -1280,9 +1286,9 @@ static db_err row_upd_clust_rec(
   record to update */
 
   if (node->cmpl_info & UPD_NODE_NO_SIZE_CHANGE) {
-    err = btr_cur_update_in_place(BTR_NO_LOCKING_FLAG, btr_cur, node->update, node->cmpl_info, thr, mtr);
+    err = btr_cur->update_in_place(BTR_NO_LOCKING_FLAG, node->update, node->cmpl_info, thr, mtr);
   } else {
-    err = btr_cur_optimistic_update(BTR_NO_LOCKING_FLAG, btr_cur, node->update, node->cmpl_info, thr, mtr);
+    err = btr_cur->optimistic_update(BTR_NO_LOCKING_FLAG, node->update, node->cmpl_info, thr, mtr);
   }
 
   mtr->commit();
@@ -1311,7 +1317,7 @@ static db_err row_upd_clust_rec(
 
   ut_ad(!rec_get_deleted_flag(pcur->get_rec()));
 
-  err = btr_cur_pessimistic_update(BTR_NO_LOCKING_FLAG, btr_cur, &heap, &big_rec, node->update, node->cmpl_info, thr, mtr);
+  err = btr_cur->pessimistic_update(BTR_NO_LOCKING_FLAG, &heap, &big_rec, node->update, node->cmpl_info, thr, mtr);
 
   mtr->commit();
 
@@ -1324,7 +1330,7 @@ static db_err row_upd_clust_rec(
 
     ut_a(pcur->restore_position(BTR_MODIFY_TREE, mtr, Source_location{}));
 
-    rec = btr_cur_get_rec(btr_cur);
+    rec = btr_cur->get_rec();
 
     ulint *offsets{};
 
@@ -1334,7 +1340,9 @@ static db_err row_upd_clust_rec(
       offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
     }
 
-    err = btr_store_big_rec_extern_fields(index, btr_cur_get_block(btr_cur), rec, offsets, big_rec, mtr);
+    Blob blob(srv_fsp, srv_btree_sys);
+
+    err = blob.store_big_rec_extern_fields(index, btr_cur->get_block(), rec, offsets, big_rec, mtr);
 
     mtr->commit();
   }
@@ -1377,7 +1385,7 @@ static db_err row_upd_del_mark_clust_rec(
   /* Mark the clustered index record deleted; we do not have to check
   locks, because we assume that we have an x-lock on the record */
 
-  err = btr_cur_del_mark_set_clust_rec(BTR_NO_LOCKING_FLAG, btr_cur, true, thr, mtr);
+  err = btr_cur->del_mark_set_clust_rec(BTR_NO_LOCKING_FLAG, true, thr, mtr);
 
   if (err == DB_SUCCESS && check_ref) {
     /* NOTE that the following call loses the position of pcur ! */
@@ -1399,7 +1407,7 @@ static db_err row_upd_clust_step(
 ) /*!< in: query thread */
 {
   dict_index_t *index;
-  btr_pcur_t *pcur;
+  Btree_pcursor *pcur;
   bool success;
   bool check_ref;
   db_err err;
@@ -1731,7 +1739,7 @@ upd_node_t *row_create_update_node(dict_table_t *table, mem_heap_t *heap) {
   node->is_delete = false;
   node->searched_update = false;
   node->select = nullptr;
-  node->pcur = new btr_pcur_t();
+  node->pcur = new Btree_pcursor(srv_fsp, srv_btree_sys, srv_lock_sys);
   node->table = table;
 
   node->update = upd_create(dict_table_get_n_cols(table), heap);

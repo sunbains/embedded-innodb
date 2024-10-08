@@ -58,7 +58,7 @@ enum Purge_state {
  * @param[in,out] node_addr  File address of the history list node of the log.
  * 
  * @return	file address of the log */
-inline fil_addr_t trx_purge_get_log_from_hist(fil_addr_t node_addr) noexcept {
+inline Fil_addr trx_purge_get_log_from_hist(Fil_addr node_addr) noexcept {
   node_addr.m_boffset -= TRX_UNDO_HISTORY_NODE;
 
   return node_addr;
@@ -168,7 +168,7 @@ private:
    * @param[in] n_removed_logs    Count of how many undo logs we will cut off from the
    *                              end of the history list.
    */
-  void free_segment(trx_rseg_t *rseg, fil_addr_t hdr_addr, ulint n_removed_logs) noexcept;
+  void free_segment(trx_rseg_t *rseg, Fil_addr hdr_addr, ulint n_removed_logs) noexcept;
 
   /**
    * Removes unnecessary history data from a rollback segment.

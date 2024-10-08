@@ -24,6 +24,7 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "trx0rec.h"
 
+#include "btr0blob.h"
 #include "dict0dict.h"
 #include "fsp0fsp.h"
 #include "mach0data.h"
@@ -377,7 +378,8 @@ static byte *trx_undo_page_fetch_ext(
                        out: used length of ext_buf */
 {
   /* Fetch the BLOB. */
-  ulint ext_len = btr_copy_externally_stored_field_prefix(ext_buf, REC_MAX_INDEX_COL_LEN, field, *len);
+  Blob blob(srv_fsp, srv_btree_sys);
+  ulint ext_len = blob.copy_externally_stored_field_prefix(ext_buf, REC_MAX_INDEX_COL_LEN, field, *len);
   /* BLOBs should always be nonempty. */
   ut_a(ext_len);
   /* Append the BLOB pointer to the prefix. */
@@ -1299,7 +1301,10 @@ db_err trx_undo_prev_version_build(
     fields. Store the info: */
 
     entry = row_rec_to_index_entry(ROW_COPY_DATA, rec, index, offsets, &n_ext, heap);
-    n_ext += btr_push_update_extern_fields(entry, update, heap);
+
+    Blob blob(srv_fsp, srv_btree_sys);
+
+    n_ext += blob.push_update_extern_fields(entry, update, heap);
     /* The page containing the clustered index record
     corresponding to entry is latched in mtr.  Thus the
     following call is safe. */

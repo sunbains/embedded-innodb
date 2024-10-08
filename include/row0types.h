@@ -27,7 +27,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "innodb0types.h"
 
-typedef struct plan_struct plan_t;
+struct Plan;
 
 typedef struct upd_struct upd_t;
 
@@ -47,9 +47,9 @@ typedef struct row_printf_node_struct row_printf_node_t;
 
 typedef struct sel_buf_struct sel_buf_t;
 
-typedef struct undo_node_struct undo_node_t;
+struct Undo_node;
 
-typedef struct purge_node_struct purge_node_t;
+struct purge_node_t;
 
 typedef struct row_ext_struct row_ext_t;
 

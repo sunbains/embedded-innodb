@@ -98,7 +98,7 @@ que_thr_t *dict_create_index_step(que_thr_t *thr);
  * 
  * @return New root page number, or FIL_NULL on failure.
  */
-page_no_t dict_truncate_index_tree(dict_table_t *table, space_id_t space, btr_pcur_t *pcur, mtr_t *mtr);
+page_no_t dict_truncate_index_tree(dict_table_t *table, space_id_t space, Btree_pcursor *pcur, mtr_t *mtr);
 
 /**
  * Drops the index tree associated with a row in the SYS_INDEXES table.

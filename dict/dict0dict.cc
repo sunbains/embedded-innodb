@@ -3212,8 +3212,8 @@ ulint dict_index_calc_min_rec_len(const dict_index_t *index) {
 }
 
 void dict_update_statistics_low(dict_table_t *table, bool has_dict_mutex __attribute__((unused))) {
-  dict_index_t *index;
   ulint size;
+  dict_index_t *index;
   ulint sum_of_index_sizes = 0;
 
   if (table->ibd_file_missing) {
@@ -3227,7 +3227,7 @@ void dict_update_statistics_low(dict_table_t *table, bool has_dict_mutex __attri
   /* If we have set a high innodb_force_recovery level, do not calculate
   statistics, as a badly corrupted index can cause a crash in it. */
 
-  if (srv_force_recovery > IB_RECOVERY_NO_TRX_UNDO) {
+  if (srv_config.m_force_recovery > IB_RECOVERY_NO_TRX_UNDO) {
 
     return;
   }
@@ -3243,7 +3243,9 @@ void dict_update_statistics_low(dict_table_t *table, bool has_dict_mutex __attri
     return;
   }
 
-  while (index) {
+  Btree_cursor btr_cur(srv_fsp, srv_btree_sys, srv_lock_sys);
+
+  while (index != nullptr) {
     size = srv_btree_sys->get_size(index, BTR_TOTAL_SIZE);
 
     index->stat_index_size = size;
@@ -3259,7 +3261,7 @@ void dict_update_statistics_low(dict_table_t *table, bool has_dict_mutex __attri
 
     index->stat_n_leaf_pages = size;
 
-    btr_estimate_number_of_different_key_vals(index);
+    btr_cur.estimate_number_of_different_key_vals(index);
 
     index = dict_table_get_next_index(index);
   }

@@ -24,6 +24,7 @@ Created 3/14/1997 Heikki Tuuri
 
 #include "row0purge.h"
 
+#include "btr0blob.h"
 #include "fsp0fsp.h"
 #include "log0log.h"
 #include "mach0data.h"
@@ -38,25 +39,19 @@ Created 3/14/1997 Heikki Tuuri
 #include "trx0trx.h"
 #include "trx0undo.h"
 
-/** Creates a purge node to a query graph.
-@return	own: purge node */
-
-purge_node_t *row_purge_node_create(
-  que_thr_t *parent, /*!< in: parent node, i.e., a thr node */
-  mem_heap_t *heap
-) /*!< in: memory heap where created */
-{
+purge_node_t *row_purge_node_create(que_thr_t *parent, mem_heap_t *heap) {
   ut_ad(parent);
   ut_ad(heap);
 
-  auto node = reinterpret_cast<purge_node_t *>(mem_heap_alloc(heap, sizeof(purge_node_t)));
+  auto ptr = mem_heap_alloc(heap, sizeof(purge_node_t));
+  auto node = new (ptr) purge_node_t();
 
   node->common.type = QUE_NODE_PURGE;
   node->common.parent = parent;
 
   node->heap = mem_heap_create(256);
 
-  return (node);
+  return node;
 }
 
 /** Repositions the pcur in the purge node on the clustered index record,
@@ -131,10 +126,10 @@ static bool row_purge_remove_clust_if_poss_low(
   }
 
   if (mode == BTR_MODIFY_LEAF) {
-    success = btr_cur_optimistic_delete(btr_cur, &mtr);
+    success = btr_cur->optimistic_delete(&mtr);
   } else {
     ut_ad(mode == BTR_MODIFY_TREE);
-    btr_cur_pessimistic_delete(&err, false, btr_cur, RB_NONE, &mtr);
+    btr_cur->pessimistic_delete(&err, false, RB_NONE, &mtr);
 
     if (err == DB_SUCCESS) {
       success = true;
@@ -191,8 +186,8 @@ static bool row_purge_remove_sec_if_poss_low(
 ) /*!< in: latch mode BTR_MODIFY_LEAF
                                              or BTR_MODIFY_TREE */
 {
-  btr_pcur_t pcur;
-  btr_cur_t *btr_cur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
+  Btree_cursor *btr_cur;
   bool success;
   bool old_has{};
   db_err err;
@@ -247,10 +242,10 @@ static bool row_purge_remove_sec_if_poss_low(
     /* Remove the index record */
 
     if (mode == BTR_MODIFY_LEAF) {
-      success = btr_cur_optimistic_delete(btr_cur, &mtr);
+      success = btr_cur->optimistic_delete(&mtr);
     } else {
       ut_ad(mode == BTR_MODIFY_TREE);
-      btr_cur_pessimistic_delete(&err, false, btr_cur, RB_NONE, &mtr);
+      btr_cur->pessimistic_delete(&err, false, RB_NONE, &mtr);
       success = err == DB_SUCCESS;
       ut_a(success || err == DB_OUT_OF_FILE_SPACE);
     }
@@ -338,6 +333,8 @@ static void row_purge_upd_exist_or_extern(purge_node_t *node) /*!< in: row purge
   ulint i;
   mtr_t mtr;
 
+  Blob blob(srv_fsp, srv_btree_sys);
+
   ut_ad(node);
 
   if (node->rec_type == TRX_UNDO_UPD_DEL_REC) {
@@ -369,7 +366,7 @@ skip_secondaries:
     const upd_field_t *ufield = upd_get_nth_field(node->update, i);
 
     if (dfield_is_ext(&ufield->new_val)) {
-      buf_block_t *block;
+      Buf_block *block;
       ulint internal_offset;
       byte *data_field;
 
@@ -422,7 +419,7 @@ skip_secondaries:
       data_field = block->get_frame() + offset + internal_offset;
 
       ut_a(dfield_get_len(&ufield->new_val) >= BTR_EXTERN_FIELD_REF_SIZE);
-      btr_free_externally_stored_field(
+      blob.free_externally_stored_field(
         index, data_field + dfield_get_len(&ufield->new_val) - BTR_EXTERN_FIELD_REF_SIZE, nullptr, nullptr, 0, RB_NONE, &mtr
       );
       mtr.commit();
@@ -482,7 +479,7 @@ static bool row_purge_parse_undo_rec(
   mutex_enter(&(dict_sys->mutex));
 
   // FIXME: srv_force_recovery should be passed in as an arg
-  node->table = dict_table_get_on_id_low(ib_recovery_t(srv_force_recovery), table_id);
+  node->table = dict_table_get_on_id_low(srv_config.m_force_recovery, table_id);
 
   mutex_exit(&(dict_sys->mutex));
 

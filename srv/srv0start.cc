@@ -178,11 +178,11 @@ static db_err create_log_file(const std::string &filename) noexcept {
 
   log_info(std::format(
     "Setting log file {} size to {} MB",
-    filename, srv_log_file_curr_size / (1024 * 1024)));
+    filename, srv_config.m_log_file_curr_size / (1024 * 1024)));
 
   log_info("Database physically writes the file full: wait...");
 
-  success = os_file_set_size(filename.c_str(), fh, srv_log_file_curr_size);
+  success = os_file_set_size(filename.c_str(), fh, srv_config.m_log_file_curr_size);
 
   {
     auto success = os_file_close(fh);
@@ -193,7 +193,7 @@ static db_err create_log_file(const std::string &filename) noexcept {
     log_err(std::format("Can't create {}: probably out of disk space", filename));
     return DB_ERROR;
   } else {
-    srv_fil->node_create(filename.c_str(), srv_log_file_size, SRV_LOG_SPACE_FIRST_ID, false);
+    srv_fil->node_create(filename.c_str(), srv_config.m_log_file_size, SRV_LOG_SPACE_FIRST_ID, false);
     return DB_SUCCESS;
   }
 
@@ -222,11 +222,11 @@ static db_err open_log_file(const std::string &filename) noexcept {
   success = os_file_get_size(fh, &size);
   ut_a(success);
 
-  if (size != off_t(srv_log_file_curr_size)) {
+  if (size != off_t(srv_config.m_log_file_curr_size)) {
 
     log_err(std::format(
       "Log file {} is of different size {} bytes than the configured {} bytes!",
-      filename, size, srv_log_file_curr_size
+      filename, size, srv_config.m_log_file_curr_size
     ));
 
     return DB_ERROR;
@@ -235,7 +235,7 @@ static db_err open_log_file(const std::string &filename) noexcept {
   success = os_file_close(fh);
   ut_a(success);
 
-  srv_fil->node_create(filename.c_str(), srv_log_file_size, SRV_LOG_SPACE_FIRST_ID, false);
+  srv_fil->node_create(filename.c_str(), srv_config.m_log_file_size, SRV_LOG_SPACE_FIRST_ID, false);
 
   return DB_SUCCESS;
 }
@@ -355,14 +355,14 @@ static db_err open_system_tablespace(const std::string &path, lsn_t &flushed_lsn
 static void srv_startup_abort(db_err err) noexcept {
   /* This is currently required to inform the master thread only. Once
   we have contexts we can get rid of this global. */
-  srv_fast_shutdown = IB_SHUTDOWN_NORMAL;
+  srv_config.m_fast_shutdown = IB_SHUTDOWN_NORMAL;
 
   /* For fatal errors we want to avoid writing to the data files. */
   if (err != DB_FATAL) {
 
     /* Only if the redo log systemhas been initialized. */
     if (log_sys != nullptr && UT_LIST_GET_LEN(log_sys->m_log_groups) > 0) {
-      srv_prepare_for_shutdown(srv_force_recovery, srv_fast_shutdown);
+      srv_prepare_for_shutdown(srv_config.m_force_recovery, srv_config.m_fast_shutdown);
     }
 
     srv_fil->close_all_files();
@@ -396,16 +396,17 @@ ib_err_t InnoDB::start() noexcept {
 
   static_assert(sizeof(ulint) == sizeof(uintptr_t));
 
-  /* System tables are created in tablespace 0.  Thus, we must
-  temporarily clear srv_file_per_table.  This is ok, because the
-  server will not accept connections (which could modify
-  file_per_table) until this function has returned. */
-  srv_file_per_table = false;
+  /* System tables are created in tablespace 0. Thus, we must
+  temporarily clear m_config.m_file_per_table.  This is ok,
+  because the server will not accept connections (which could
+  modify m_config.m_file_per_table) until this function has returned. */
+  srv_config.m_file_per_table = false;
+
   IF_DEBUG(log_warn("!!!!!!!! UNIV_DEBUG switched on !!!!!!!!!");)
 
   IF_SYNC_DEBUG(log_warn("!!!!!!!! UNIV_SYNC_DEBUG switched on !!!!!!!!!");)
 
-  if (likely(srv_use_sys_malloc)) {
+  if (likely(srv_config.m_use_sys_malloc)) {
     log_warn("The InnoDB memory heap is disabled");
   }
 
@@ -425,13 +426,13 @@ ib_err_t InnoDB::start() noexcept {
   maximum number of threads that can wait in the 'srv_conc array' for
   their time to enter InnoDB. */
 
-  if (srv_buf_pool_size >= 1000 * 1024 * 1024) {
+  if (srv_config.m_buf_pool_size >= 1000 * 1024 * 1024) {
     /* If buffer pool is less than 1000 MB, assume fewer threads. */
-    srv_max_n_threads = 8192;
-  } else if (srv_buf_pool_size >= 8 * 1024 * 1024) {
-    srv_max_n_threads = 4096;
+    srv_config.m_max_n_threads = 8192;
+  } else if (srv_config.m_buf_pool_size >= 8 * 1024 * 1024) {
+    srv_config.m_max_n_threads = 4096;
   } else {
-    srv_max_n_threads = 128;
+    srv_config.m_max_n_threads = 128;
   }
 
   auto err = InnoDB::boot();
@@ -443,25 +444,25 @@ ib_err_t InnoDB::start() noexcept {
 
   /* file_io_threads used to be user settable, now it's just a
      sum of read_io_threads and write_io_threads */
-  srv_n_file_io_threads = 1 + srv_n_read_io_threads + srv_n_write_io_threads;
+  const auto n_file_io_threads = 1 + srv_config.m_n_read_io_threads + srv_config.m_n_write_io_threads;
 
-  ut_a(srv_n_file_io_threads <= SRV_MAX_N_IO_THREADS);
+  ut_a(n_file_io_threads <= SRV_MAX_N_IO_THREADS);
 
 #ifdef UNIV_DEBUG
   /* We have observed deadlocks with a 5MB buffer pool but
   the actual lower limit could very well be a little higher. */
 
-  if (srv_buf_pool_size <= 5 * 1024 * 1024) {
+  if (srv_config.m_buf_pool_size <= 5 * 1024 * 1024) {
 
     log_warn(std::format(
       "Small buffer pool size ({}M), the flst_validate() debug function "
       "can cause a deadlock if the buffer pool fills up.",
-      srv_buf_pool_size / 1024 / 1024
+      srv_config.m_buf_pool_size / 1024 / 1024
     ));
   }
 #endif /* UNIV_DEBUG */
 
-  if (srv_n_log_files * srv_log_file_size >= 262144) {
+  if (srv_config.m_n_log_files * srv_config.m_log_file_size >= 262144) {
     log_err("Combined size of log files must be < 4 GB");
     return DB_ERROR;
   }
@@ -470,7 +471,7 @@ ib_err_t InnoDB::start() noexcept {
 
   os_file_init();
 
-  srv_aio = AIO::create(io_limit, srv_n_read_io_threads, srv_n_write_io_threads);
+  srv_aio = AIO::create(io_limit, srv_config.m_n_read_io_threads, srv_config.m_n_write_io_threads);
 
   if (srv_aio == nullptr) {
     log_err("Failed to create an AIO instance.");
@@ -480,7 +481,7 @@ ib_err_t InnoDB::start() noexcept {
 
   ut_a(srv_fil == nullptr);
 
-  srv_fil = new (std::nothrow) Fil(srv_max_n_open_files);
+  srv_fil = new (std::nothrow) Fil(srv_config.m_max_n_open_files);
 
   if (srv_fil == nullptr) {
     AIO::destroy(srv_aio);
@@ -494,7 +495,7 @@ ib_err_t InnoDB::start() noexcept {
 
   srv_buf_pool = new (std::nothrow) Buf_pool();
 
-  if (!srv_buf_pool->open(srv_buf_pool_size)) {
+  if (!srv_buf_pool->open(srv_config.m_buf_pool_size)) {
     /* Shutdown all sub-systems that have been initialized. */
     delete srv_fil;
     srv_fil = nullptr;
@@ -518,7 +519,7 @@ ib_err_t InnoDB::start() noexcept {
   srv_trx_sys = Trx_sys::create(srv_fsp);
 
   ut_a(srv_lock_sys == nullptr);
-  srv_lock_sys = Lock_sys::create(srv_trx_sys, srv_lock_table_size);
+  srv_lock_sys = Lock_sys::create(srv_trx_sys, srv_config.m_lock_table_size);
 
   ut_a(srv_btree_sys == nullptr);
   srv_btree_sys = Btree::create(srv_lock_sys, srv_fsp, srv_buf_pool);
@@ -528,7 +529,7 @@ ib_err_t InnoDB::start() noexcept {
 
   /* Create i/o-handler threads: */
 
-  for (ulint i{}; i < srv_n_file_io_threads; i++) {
+  for (ulint i{}; i < n_file_io_threads; ++i) {
     n[i] = i;
 
     os_thread_create(io_handler_thread, &n[i], thread_ids + i);
@@ -540,7 +541,7 @@ ib_err_t InnoDB::start() noexcept {
   {
     namespace fs = std::filesystem;
 
-    fs::path home(srv_data_home);
+    fs::path home(srv_config.m_data_home);
 
     if (home.empty()) {
       log_err("Data home directory is not set");
@@ -581,13 +582,13 @@ ib_err_t InnoDB::start() noexcept {
   /* Note: Currently we support a single log group (0). */
   std::string log_dir{InnoDB::get_log_dir()};
 
-  ut_a(srv_n_log_files >= 2);
+  ut_a(srv_config.m_n_log_files >= 2);
 
   auto success = srv_fil->space_create(log_dir.c_str(), SRV_LOG_SPACE_FIRST_ID, 0, FIL_LOG);
   ut_a(success);
   ut_a(srv_fil->validate());
 
-  for (ulint i{}; i < srv_n_log_files; ++i) {
+  for (ulint i{}; i < srv_config.m_n_log_files; ++i) {
     namespace fs = std::filesystem;
 
     fs::path filename(fs::path(log_dir) / std::format("ib_logfile{}", i));
@@ -606,7 +607,7 @@ ib_err_t InnoDB::start() noexcept {
     }
 
     if (i == 0) {
-      log_sys->group_init(i, srv_n_log_files, srv_log_file_size * UNIV_PAGE_SIZE, SRV_LOG_SPACE_FIRST_ID);
+      log_sys->group_init(i, srv_config.m_n_log_files, srv_config.m_log_file_size * UNIV_PAGE_SIZE, SRV_LOG_SPACE_FIRST_ID);
     }
 
     if ((log_opened && create_new_db) || (log_opened && log_created)) {
@@ -659,7 +660,7 @@ ib_err_t InnoDB::start() noexcept {
     err = srv_trx_sys->create_system_tablespace();
 
     if (err == DB_SUCCESS) {
-      err = srv_trx_sys->start(srv_force_recovery);
+      err = srv_trx_sys->start(srv_config.m_force_recovery);
     }
 
     if (err != DB_SUCCESS) {
@@ -726,11 +727,11 @@ ib_err_t InnoDB::start() noexcept {
 
     /* Recursively scan to a depth of 2. InnoDB needs to do this because the DD
     can't be accessed until recovery is done. So we have this simplistic scheme. */
-    srv_fil->load_single_table_tablespaces(srv_data_home, srv_force_recovery, 2);
+    srv_fil->load_single_table_tablespaces(srv_config.m_data_home, srv_config.m_force_recovery, 2);
 
     /* We always instantiate the DBLWR buffer. Restore the pages in data files,
      * and restore them from the doublewrite buffer if possible */
-    if (srv_force_recovery < IB_RECOVERY_NO_LOG_REDO) {
+    if (srv_config.m_force_recovery < IB_RECOVERY_NO_LOG_REDO) {
       log_warn("Restoring possible half-written data pages from the doublewrite buffer...");
       srv_dblwr->recover_pages();
     }
@@ -738,7 +739,7 @@ ib_err_t InnoDB::start() noexcept {
     /* We always try to do a recovery, even if the database had
     been shut down normally: this is the normal startup path */
 
-    err = recv_recovery_from_checkpoint_start(srv_dblwr, srv_force_recovery, max_flushed_lsn);
+    err = recv_recovery_from_checkpoint_start(srv_dblwr, srv_config.m_force_recovery, max_flushed_lsn);
 
     if (err != DB_SUCCESS) {
       srv_startup_abort(err);
@@ -750,7 +751,7 @@ ib_err_t InnoDB::start() noexcept {
 
     dict_boot();
 
-    err = srv_trx_sys->start(srv_force_recovery);
+    err = srv_trx_sys->start(srv_config.m_force_recovery);
 
     {
       auto free_limit = srv_fsp->init_system_space_free_limit();
@@ -762,9 +763,9 @@ ib_err_t InnoDB::start() noexcept {
     /* recv_recovery_from_checkpoint_finish needs trx lists which
     are initialized in trx_sys_init_at_db_start(). */
 
-    recv_recovery_from_checkpoint_finish(srv_dblwr, srv_force_recovery);
+    recv_recovery_from_checkpoint_finish(srv_dblwr, srv_config.m_force_recovery);
 
-    if (srv_force_recovery <= IB_RECOVERY_NO_TRX_UNDO) {
+    if (srv_config.m_force_recovery <= IB_RECOVERY_NO_TRX_UNDO) {
       /* In a crash recovery, we check that the info in data
       dictionary is consistent with what we already know
       about space id's from the call of
@@ -820,8 +821,8 @@ ib_err_t InnoDB::start() noexcept {
     VERSION, srv_start_lsn
   ));
 
-  if (srv_force_recovery != IB_RECOVERY_DEFAULT) {
-    log_warn(std::format("!!! force_recovery is set to {} !!!", (int) srv_force_recovery));
+  if (srv_config.m_force_recovery != IB_RECOVERY_DEFAULT) {
+    log_warn(std::format("!!! force_recovery is set to {} !!!", (int) srv_config.m_force_recovery));
   }
 
   srv_was_started = true;
@@ -1034,7 +1035,7 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
 
   /* This is currently required to inform the master thread only. Once
   we have contexts we can get rid of this global. */
-  srv_fast_shutdown = shutdown;
+  srv_config.m_fast_shutdown = shutdown;
 
   /* 1. Flush the buffer pool to disk, write the current lsn to
   the tablespace header(s), and copy all log data to archive.
@@ -1051,7 +1052,7 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
 
   /* Only if the redo log systemhas been initialized. */
   if (log_sys != nullptr && UT_LIST_GET_LEN(log_sys->m_log_groups) > 0) {
-    srv_prepare_for_shutdown(srv_force_recovery, shutdown);
+    srv_prepare_for_shutdown(srv_config.m_force_recovery, shutdown);
   }
 
   /* In a 'very fast' shutdown, we do not need to wait for these threads
@@ -1108,7 +1109,7 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
 
   /* This variable should come from the user and should not be
   malloced by InnoDB. */
-  srv_data_home = nullptr;
+  srv_config.m_data_home = nullptr;
 
   /* This variable should come from the user and should not be
   malloced by InnoDB. */

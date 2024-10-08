@@ -67,7 +67,7 @@ bool buf_read_page(ulint space, ulint offset);
  *  want access to this page (see NOTE 3 above).
  * @return The number of page read requests issued.
  */
-ulint buf_read_ahead_linear(space_id_t space, page_no_t page_no);
+ulint buf_read_ahead_linear(Buf_pool *buf_pool, space_id_t space, page_no_t page_no);
 
 /**
  * @brief Issues read requests for pages which recovery wants to read in.

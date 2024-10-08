@@ -472,7 +472,7 @@ void row_build_row_ref_in_tuple(
   }
 }
 
-bool row_search_on_row_ref(btr_pcur_t *pcur, ulint mode, const dict_table_t *table, const dtuple_t *ref, mtr_t *mtr) {
+bool row_search_on_row_ref(Btree_pcursor *pcur, ulint mode, const dict_table_t *table, const dtuple_t *ref, mtr_t *mtr) {
   ut_ad(dtuple_check_typed(ref));
 
   auto index = dict_table_get_first_index(table);
@@ -494,7 +494,7 @@ bool row_search_on_row_ref(btr_pcur_t *pcur, ulint mode, const dict_table_t *tab
 }
 
 rec_t *row_get_clust_rec(ulint mode, const rec_t *rec, dict_index_t *index, dict_index_t **clust_index, mtr_t *mtr) {
-  btr_pcur_t pcur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   ut_ad(!dict_index_is_clust(index));
 
@@ -517,7 +517,7 @@ rec_t *row_get_clust_rec(ulint mode, const rec_t *rec, dict_index_t *index, dict
   return clust_rec;
 }
 
-bool row_search_index_entry(dict_index_t *index, const dtuple_t *entry, ulint mode, btr_pcur_t *pcur, mtr_t *mtr) {
+bool row_search_index_entry(dict_index_t *index, const dtuple_t *entry, ulint mode, Btree_pcursor *pcur, mtr_t *mtr) {
   ut_ad(dtuple_check_typed(entry));
 
   pcur->open(index, entry, PAGE_CUR_LE, mode, mtr, Source_location{});

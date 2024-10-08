@@ -212,7 +212,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
 
   ut_a(name != nullptr);
 
-  if (srv_created_new_raw) {
+  if (srv_config.m_created_new_raw) {
     ib_logger(
       ib_stream,
       "A new raw disk partition was initialized:\n"
@@ -513,7 +513,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     dict_table_remove_from_cache(table);
 
     // FIXME: srv_force_recovery should be passed in as an arg
-    if (dict_load_table(srv_force_recovery, name) != nullptr) {
+    if (dict_load_table(srv_config.m_force_recovery, name) != nullptr) {
       log_err(std::format("Not able to remove table {} from the dictionary cache", name));
       err = DB_ERROR;
     }
@@ -562,7 +562,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
   ut_ad(mutex_own(&(dict_sys->mutex)));
   ut_ad(trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
-  if (srv_created_new_raw) {
+  if (srv_config.m_created_new_raw) {
     ib_logger(
       ib_stream,
       "A new raw disk partition was initialized:\n"
@@ -749,7 +749,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   dtuple_t *tuple;
   dfield_t *dfield;
   dict_index_t *sys_index;
-  btr_pcur_t pcur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
   mtr_t mtr;
   uint64_t new_id;
   ulint recreate_space = 0;
@@ -794,7 +794,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   redo log records on the truncated tablespace, we will assign
   a new tablespace identifier to the truncated tablespace. */
 
-  if (srv_created_new_raw) {
+  if (srv_config.m_created_new_raw) {
     ib_logger(
       ib_stream,
       "A new raw disk partition was initialized:\n"
@@ -983,11 +983,11 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
 
       mtr.start();
 
-      pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
+      (void) pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
     }
 
   next_rec:
-    pcur.move_to_next_user_rec(&mtr);
+    (void) pcur.move_to_next_user_rec(&mtr);
   }
 
   pcur.close();
@@ -1158,7 +1158,7 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
   ut_a(old_name != nullptr);
   ut_a(new_name != nullptr);
 
-  if (srv_created_new_raw || srv_force_recovery != IB_RECOVERY_DEFAULT) {
+  if (srv_config.m_created_new_raw || srv_config.m_force_recovery != IB_RECOVERY_DEFAULT) {
     ib_logger(
       ib_stream,
       "A new raw disk partition was initialized or\n"
@@ -1388,7 +1388,7 @@ db_err ddl_rename_index(const char *table_name, const char *old_name, const char
   ut_a(old_name != nullptr);
   ut_a(table_name != nullptr);
 
-  if (srv_created_new_raw || srv_force_recovery != IB_RECOVERY_DEFAULT) {
+  if (srv_config.m_created_new_raw || srv_config.m_force_recovery != IB_RECOVERY_DEFAULT) {
     ib_logger(
       ib_stream,
       "A new raw disk partition was initialized or\n"
@@ -1617,7 +1617,7 @@ loop:
 
 void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
   trx_t *trx;
-  btr_pcur_t pcur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
   mtr_t mtr;
   bool started;
 
@@ -1641,7 +1641,7 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
     dict_table_t *table;
     uint64_t table_id;
 
-    pcur.move_to_next_user_rec(&mtr);
+    (void) pcur.move_to_next_user_rec(&mtr);
 
     if (!pcur.is_on_user_rec()) {
       break;
@@ -1683,7 +1683,7 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
     }
 
     mtr.start();
-    pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+    (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
 
   pcur.close();
@@ -1714,7 +1714,7 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
 
   mtr.start();
 
-  btr_pcur_t pcur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   pcur.open_at_index_side(true, dict_table_get_first_index(dict_sys->sys_tables), BTR_SEARCH_LEAF, true, 0, &mtr);
 
@@ -1725,7 +1725,7 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
     dict_table_t *table;
     const char *table_name;
 
-    pcur.move_to_next_user_rec(&mtr);
+    (void) pcur.move_to_next_user_rec(&mtr);
 
     if (!pcur.is_on_user_rec()) {
       break;
@@ -1766,7 +1766,8 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
     }
 
     mtr.start();
-    pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+
+    (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
 
   pcur.close();

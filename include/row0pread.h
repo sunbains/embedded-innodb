@@ -43,8 +43,8 @@ Created 2018-01-27 by Sunny Bains. */
 struct trx_t;
 struct mtr_t;
 class PCursor;
-struct btr_pcur_t;
-struct buf_block_t;
+struct Btree_pcursor;
+struct Buf_block;
 struct dict_table_t;
 
 #include "btr0cur.h"
@@ -493,11 +493,11 @@ class Parallel_reader::Scan_ctx {
     const dtuple_t *m_tuple{};
 
     /** Persistent cursor.*/
-    btr_pcur_t *m_pcur{};
+    Btree_pcursor *m_pcur{};
   };
 
   /** mtr_t savepoint. */
-  using Savepoint = std::pair<ulint, buf_block_t *>;
+  using Savepoint = std::pair<ulint, Buf_block *>;
 
   /** For releasing the S latches after processing the blocks. */
   using Savepoints = std::vector<Savepoint>;
@@ -526,7 +526,7 @@ class Parallel_reader::Scan_ctx {
   @param[in,out]  mtr           Mini-transaction covering the fetch.
   @param[in]      line          Line from where called.
   @return the block fetched from the buffer pool. */
-  [[nodiscard]] buf_block_t *block_get_s_latched(const Page_id &page_id, mtr_t *mtr, ulint line) const;
+  [[nodiscard]] Buf_block *block_get_s_latched(const Page_id &page_id, mtr_t *mtr, ulint line) const;
 
   /** Partition the B+Tree for parallel read.
   @param[in] scan_range Range for partitioning.
@@ -540,7 +540,7 @@ class Parallel_reader::Scan_ctx {
   @param[in]  block             Page to look in.
   @param[in] key                Key of the first record in the range.
   @return the left child page number. */
-  [[nodiscard]] page_no_t search(const buf_block_t *block, const dtuple_t *key) const;
+  [[nodiscard]] page_no_t search(const Buf_block *block, const dtuple_t *key) const;
 
   /** Traverse from given sub-tree page number to start of the scan range
   from the given page number.
@@ -755,7 +755,7 @@ class Parallel_reader::Ctx {
   Thread_ctx *m_thread_ctx{};
 
   /** Current block. */
-  const buf_block_t *m_block{};
+  const Buf_block *m_block{};
 
   /** Current row. */
   const rec_t *m_rec{};

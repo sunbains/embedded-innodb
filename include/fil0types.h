@@ -13,7 +13,7 @@ struct Fil;
 
 /** File space address
 An address stored in a file page is a string of bytes */
-struct fil_addr_t {
+struct Fil_addr {
   /** page number within a space */
   page_no_t m_page_no;
 
@@ -41,7 +41,7 @@ constexpr ulint FIL_ADDR_BYTE = 4;
 constexpr ulint FIL_ADDR_SIZE = 6;
 
 /** The null file address */
-extern const fil_addr_t fil_addr_null;
+extern const Fil_addr fil_addr_null;
 
 /** The byte offsets on a file page for various variables @{ */
 

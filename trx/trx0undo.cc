@@ -611,7 +611,7 @@ void Undo::seg_free(trx_undo_t *undo) noexcept {
 
 trx_undo_t *Undo::mem_create_at_db_start(trx_rseg_t *rseg, ulint id, page_no_t page_no, mtr_t *mtr) noexcept {
   page_t *last_page;
-  fil_addr_t last_addr;
+  Fil_addr last_addr;
 
 #ifdef WITH_XOPEN
   XID xid;

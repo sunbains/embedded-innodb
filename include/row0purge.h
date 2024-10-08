@@ -47,7 +47,9 @@ que_thr_t *row_purge_step(que_thr_t *thr); /** in: query thread */
 
 /* Purge node structure */
 
-struct purge_node_struct {
+struct purge_node_t {
+  purge_node_t() : pcur(srv_fsp, srv_btree_sys, srv_lock_sys) {}
+
   /** node type: QUE_NODE_PURGE */
   que_common_t common;
 
@@ -70,7 +72,7 @@ struct purge_node_struct {
   ulint rec_type;
 
   /** persistent cursor used in searching the clustered index record */
-  btr_pcur_t pcur;
+  Btree_pcursor pcur;
 
   /* true if the clustered index record determined by ref was found in the clustered index, and we were able to position pcur on it */
   bool found_clust;

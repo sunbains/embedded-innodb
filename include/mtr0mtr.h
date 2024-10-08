@@ -104,7 +104,7 @@ struct mtr_t {
    * @param[in] savepoint       The savepoint.
    * @param[in] block           The block to release.
    */
-  void release_block_at_savepoint(ulint savepoint, buf_block_t *block) noexcept;
+  void release_block_at_savepoint(ulint savepoint, Buf_block *block) noexcept;
 
   /**
    * @brief Releases an object in the memo stack.

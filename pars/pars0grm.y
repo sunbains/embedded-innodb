@@ -29,8 +29,6 @@ Created 12/14/1997 Heikki Tuuri
 /* The value of the semantic attribute is a pointer to a query tree node
 que_node_t */
 
-#include "univ.i"
-#include <math.h>				/* Can't be before univ.i */
 #include "pars0pars.h"
 #include "mem0mem.h"
 #include "que0types.h"
@@ -391,7 +389,7 @@ update_statement_start:
 	PARS_UPDATE_TOKEN PARS_ID_TOKEN
 	PARS_SET_TOKEN
 	column_assignment_list	{ $$ = pars_update_statement_start(
-                                         FALSE,
+                                         false,
                                          static_cast<sym_node_t*>($2),
                                          static_cast<col_assign_node_t*>($4)); }
 ;
@@ -415,7 +413,7 @@ update_statement_positioned:
 delete_statement_start:
 	PARS_DELETE_TOKEN PARS_FROM_TOKEN
 	PARS_ID_TOKEN		{ $$ = pars_update_statement_start(
-                                         TRUE,
+                                         true,
                                          static_cast<sym_node_t*>($3),
                                          nullptr); }
 ;
@@ -694,8 +692,6 @@ procedure_definition:
 
 %%
 /** Release any resources used by the parser. */
-UNIV_INTERN
-void
-pars_close() {
+void pars_close() {
   pars_lexer_close();
 }

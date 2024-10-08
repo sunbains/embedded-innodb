@@ -60,16 +60,16 @@ static bool name_of_col_is(
 }
 
 char *dict_get_first_table_name_in_db(const char *name) {
+  mtr_t mtr;
+  ulint len;
   dict_table_t *sys_tables;
-  btr_pcur_t pcur;
   dict_index_t *sys_index;
   dtuple_t *tuple;
   mem_heap_t *heap;
   dfield_t *dfield;
   const rec_t *rec;
   const byte *field;
-  ulint len;
-  mtr_t mtr;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
@@ -128,7 +128,7 @@ loop:
     return (table_name);
   }
 
-  pcur.move_to_next_user_rec(&mtr);
+  (void) pcur.move_to_next_user_rec(&mtr);
 
   goto loop;
 }
@@ -137,11 +137,11 @@ void dict_print(void) {
   dict_table_t *sys_tables;
   dict_index_t *sys_index;
   dict_table_t *table;
-  btr_pcur_t pcur;
   const rec_t *rec;
   const byte *field;
   ulint len;
   mtr_t mtr;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   /* Enlarge the fatal semaphore wait timeout during the InnoDB table
   monitor printout */
@@ -160,7 +160,7 @@ void dict_print(void) {
   pcur.open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
 loop:
-  pcur.move_to_next_user_rec(&mtr);
+  (void) pcur.move_to_next_user_rec(&mtr);
 
   rec = pcur.get_rec();
 
@@ -215,7 +215,7 @@ loop:
 
     mtr.start();
 
-    pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+    (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
 
   goto loop;
@@ -262,10 +262,10 @@ static ulint dict_sys_tables_get_flags(const rec_t *rec) {
 void dict_check_tablespaces_and_store_max_id(bool in_crash_recovery) {
   dict_table_t *sys_tables;
   dict_index_t *sys_index;
-  btr_pcur_t pcur;
   const rec_t *rec;
   ulint max_space_id = 0;
   mtr_t mtr;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   mutex_enter(&(dict_sys->mutex));
 
@@ -277,7 +277,7 @@ void dict_check_tablespaces_and_store_max_id(bool in_crash_recovery) {
   pcur.open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
 loop:
-  pcur.move_to_next_user_rec(&mtr);
+  (void) pcur.move_to_next_user_rec(&mtr);
 
   rec = pcur.get_rec();
 
@@ -382,7 +382,7 @@ loop:
 
     mtr.start();
 
-    pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+    (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
   }
 
   goto loop;
@@ -396,7 +396,6 @@ loop:
 static void dict_load_columns(dict_table_t *table, mem_heap_t *heap) {
   dict_table_t *sys_columns;
   dict_index_t *sys_index;
-  btr_pcur_t pcur;
   dtuple_t *tuple;
   dfield_t *dfield;
   const rec_t *rec;
@@ -409,6 +408,7 @@ static void dict_load_columns(dict_table_t *table, mem_heap_t *heap) {
   ulint col_len;
   ulint i;
   mtr_t mtr;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
@@ -477,7 +477,7 @@ static void dict_load_columns(dict_table_t *table, mem_heap_t *heap) {
     ut_a(name_of_col_is(sys_columns, sys_index, 8, "PREC"));
 
     dict_mem_table_add_col(table, heap, name, mtype, prtype, col_len);
-    pcur.move_to_next_user_rec(&mtr);
+    (void) pcur.move_to_next_user_rec(&mtr);
   }
 
   pcur.close();
@@ -493,7 +493,6 @@ static void dict_load_columns(dict_table_t *table, mem_heap_t *heap) {
 static void dict_load_fields(dict_index_t *index, mem_heap_t *heap) {
   dict_table_t *sys_fields;
   dict_index_t *sys_index;
-  btr_pcur_t pcur;
   dtuple_t *tuple;
   dfield_t *dfield;
   ulint pos_and_prefix_len;
@@ -504,6 +503,7 @@ static void dict_load_fields(dict_index_t *index, mem_heap_t *heap) {
   byte *buf;
   ulint i;
   mtr_t mtr;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
@@ -570,7 +570,7 @@ static void dict_load_fields(dict_index_t *index, mem_heap_t *heap) {
     dict_mem_index_add_field(index, mem_heap_strdupl(heap, (char *)field, len), prefix_len);
 
   next_rec:
-    pcur.move_to_next_user_rec(&mtr);
+    (void) pcur.move_to_next_user_rec(&mtr);
   }
 
   pcur.close();
@@ -590,7 +590,6 @@ static ulint dict_load_indexes(dict_table_t *table, mem_heap_t *heap) {
   dict_table_t *sys_indexes;
   dict_index_t *sys_index;
   dict_index_t *index;
-  btr_pcur_t pcur;
   dtuple_t *tuple;
   dfield_t *dfield;
   const rec_t *rec;
@@ -605,6 +604,7 @@ static ulint dict_load_indexes(dict_table_t *table, mem_heap_t *heap) {
   byte *buf;
   uint64_t id;
   mtr_t mtr;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
   ulint error = DB_SUCCESS;
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
@@ -734,7 +734,7 @@ static ulint dict_load_indexes(dict_table_t *table, mem_heap_t *heap) {
     }
 
   next_rec:
-    pcur.move_to_next_user_rec(&mtr);
+    (void) pcur.move_to_next_user_rec(&mtr);
   }
 
 func_exit:
@@ -749,7 +749,7 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
   bool ibd_file_missing = false;
   dict_table_t *table;
   dict_table_t *sys_tables;
-  btr_pcur_t pcur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
   dict_index_t *sys_index;
   dtuple_t *tuple;
   mem_heap_t *heap;
@@ -927,7 +927,6 @@ dict_table_t *dict_load_table(ib_recovery_t recovery, const char *name) {
 
 dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
   byte id_buf[8];
-  btr_pcur_t pcur;
   mem_heap_t *heap;
   dtuple_t *tuple;
   dfield_t *dfield;
@@ -938,6 +937,7 @@ dict_table_t *dict_load_table_on_id(ib_recovery_t recovery, uint64_t table_id) {
   ulint len;
   dict_table_t *table;
   mtr_t mtr;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   ut_ad(mutex_own(&(dict_sys->mutex)));
 
@@ -1030,7 +1030,7 @@ void dict_load_sys_table(dict_table_t *table) {
 static void dict_load_foreign_cols(const char *id, dict_foreign_t *foreign) {
   dict_table_t *sys_foreign_cols;
   dict_index_t *sys_index;
-  btr_pcur_t pcur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
   dtuple_t *tuple;
   dfield_t *dfield;
   const rec_t *rec;
@@ -1078,7 +1078,7 @@ static void dict_load_foreign_cols(const char *id, dict_foreign_t *foreign) {
     field = rec_get_nth_field(rec, 5, &len);
     foreign->referenced_col_names[i] = mem_heap_strdupl(foreign->heap, (char *)field, len);
 
-    pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(&mtr);
   }
 
   pcur.close();
@@ -1097,7 +1097,7 @@ static void dict_load_foreign_cols(const char *id, dict_foreign_t *foreign) {
 static db_err dict_load_foreign(const char *id, bool check_charsets) {
   dict_foreign_t *foreign;
   dict_table_t *sys_foreign;
-  btr_pcur_t pcur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
   dict_index_t *sys_index;
   dtuple_t *tuple;
   mem_heap_t *heap2;
@@ -1204,7 +1204,7 @@ static db_err dict_load_foreign(const char *id, bool check_charsets) {
 }
 
 db_err dict_load_foreigns(const char *table_name, bool check_charsets) {
-  btr_pcur_t pcur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
   mem_heap_t *heap;
   dtuple_t *tuple;
   dfield_t *dfield;
@@ -1313,10 +1313,10 @@ loop:
 
   mtr.start();
 
-  pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+  (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
 
 next_rec:
-  pcur.move_to_next_user_rec(&mtr);
+  (void) pcur.move_to_next_user_rec(&mtr);
 
   goto loop;
 

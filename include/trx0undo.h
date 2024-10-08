@@ -268,7 +268,7 @@ struct trx_undo_t {
   undo_no_t m_top_undo_no;
 
   /** Guess for the buffer block where the top page might reside */
-  buf_block_t *m_guess_block;
+  Buf_block *m_guess_block;
 
   /** Undo log instances in the rollback segment are chained into lists */
   UT_LIST_NODE_T(trx_undo_t) m_undo_list;

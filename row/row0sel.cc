@@ -34,6 +34,7 @@ Created 12/19/1997 Heikki Tuuri
 
 #include "api0misc.h"
 #include "api0ucode.h"
+#include "btr0blob.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "buf0lru.h"
@@ -97,7 +98,9 @@ static bool row_sel_sec_rec_is_for_blob(
   ulint len;
   byte buf[DICT_MAX_INDEX_COL_LEN];
 
-  len = btr_copy_externally_stored_field_prefix(buf, sizeof buf, clust_field, clust_len);
+  Blob blob(srv_fsp, srv_btree_sys);
+
+  len = blob.copy_externally_stored_field_prefix(buf, sizeof buf, clust_field, clust_len);
 
   if (unlikely(len == 0)) {
     /* The BLOB was being deleted as the server crashed.
@@ -232,18 +235,15 @@ sel_node_t *sel_node_create(mem_heap_t *heap) {
   node->common.type = QUE_NODE_SELECT;
   node->state = SEL_NODE_OPEN;
 
-  node->plans = nullptr;
+  node->m_plans = nullptr;
 
   return node;
 }
 
 void sel_node_free_private(sel_node_t *node) {
-  ulint i;
-  plan_t *plan;
-
-  if (node->plans != nullptr) {
-    for (i = 0; i < node->n_tables; i++) {
-      plan = sel_node_get_nth_plan(node, i);
+  if (node->m_plans != nullptr) {
+    for (ulint i = 0; i < node->n_tables; i++) {
+      auto plan = sel_node_get_nth_plan(node, i);
 
       plan->pcur.close();
       plan->clust_pcur.close();
@@ -363,6 +363,8 @@ static void row_sel_fetch_columns(
     index_type = SYM_SEC_FIELD_NO;
   }
 
+  Blob blob(srv_fsp, srv_btree_sys);
+
   while (column) {
     mem_heap_t *heap = nullptr;
     bool needs_copy;
@@ -378,7 +380,7 @@ static void row_sel_fetch_columns(
 
         heap = mem_heap_create(1);
 
-        data = btr_rec_copy_externally_stored_field(rec, offsets, field_no, &len, heap);
+        data = blob.copy_externally_stored_field(rec, offsets, field_no, &len, heap);
 
         ut_a(len != UNIV_SQL_NULL);
 
@@ -445,7 +447,7 @@ void sel_col_prefetch_buf_free(sel_buf_t *prefetch_buf) {
  *
  * @param plan  in: plan node for a table
  */
-static void sel_pop_prefetched_row(plan_t *plan) {
+static void sel_pop_prefetched_row(Plan *plan) {
   sym_node_t *column;
   sel_buf_t *sel_buf;
   dfield_t *val;
@@ -505,7 +507,7 @@ static void sel_pop_prefetched_row(plan_t *plan) {
  *
  * @param plan  in: plan node for a table
  */
-inline void sel_push_prefetched_row(plan_t *plan) {
+inline void sel_push_prefetched_row(Plan *plan) {
   sym_node_t *column;
   sel_buf_t *sel_buf;
   dfield_t *val;
@@ -578,7 +580,7 @@ inline void sel_push_prefetched_row(plan_t *plan) {
  *
  * @return      true if row passed the tests
  */
-inline bool row_sel_test_end_conds(plan_t *plan) {
+inline bool row_sel_test_end_conds(Plan *plan) {
   func_node_t *cond;
 
   /* All conditions in end_conds are comparisons of a column to an
@@ -612,7 +614,7 @@ inline bool row_sel_test_end_conds(plan_t *plan) {
  *
  * @return      true if row passed the tests
  */
-inline bool row_sel_test_other_conds(plan_t *plan) {
+inline bool row_sel_test_other_conds(Plan *plan) {
   for (func_node_t *cond = UT_LIST_GET_FIRST(plan->other_conds);
         cond != nullptr;
         cond = UT_LIST_GET_NEXT(func_node_list, cond)) {
@@ -681,7 +683,7 @@ static db_err row_sel_build_prev_vers(
  */
 static db_err row_sel_get_clust_rec(
   sel_node_t *node,
-  plan_t *plan,
+  Plan *plan,
   rec_t *rec,
   que_thr_t *thr,
   rec_t **out_rec,
@@ -831,7 +833,7 @@ err_exit:
  * @return DB_SUCCESS or error code
  */
 inline db_err sel_set_rec_lock(
-  const buf_block_t *block,
+  const Buf_block *block,
   const rec_t *rec,
   dict_index_t *index,
   const ulint *offsets,
@@ -866,9 +868,7 @@ inline db_err sel_set_rec_lock(
  * @param search_latch_locked   in: true if the thread currently has the search latch locked in s-mode
  * @param mtr                   in: mtr
  */
-static void row_sel_open_pcur(plan_t *plan, bool search_latch_locked, mtr_t *mtr) {
-  dict_index_t *index;
-  func_node_t *cond;
+static void row_sel_open_pcur(Plan *plan, bool search_latch_locked, mtr_t *mtr) {
   que_node_t *exp;
   ulint n_fields;
   ulint has_search_latch = 0; /* RW_S_LATCH or 0 */
@@ -878,13 +878,13 @@ static void row_sel_open_pcur(plan_t *plan, bool search_latch_locked, mtr_t *mtr
     has_search_latch = RW_S_LATCH;
   }
 
-  index = plan->index;
+  auto index = plan->index;
 
   /* Calculate the value of the search tuple: the exact match columns
   get their expressions evaluated when we evaluate the right sides of
   end_conds */
 
-  cond = UT_LIST_GET_FIRST(plan->end_conds);
+  auto cond = UT_LIST_GET_FIRST(plan->end_conds);
 
   while (cond) {
     eval_exp(que_node_get_next(cond->args));
@@ -937,7 +937,7 @@ static void row_sel_open_pcur(plan_t *plan, bool search_latch_locked, mtr_t *mtr
  * descending cursor) without processing again the current cursor
  * record
  */
-static bool row_sel_restore_pcur_pos(plan_t *plan, mtr_t *mtr) {
+static bool row_sel_restore_pcur_pos(Plan *plan, mtr_t *mtr) {
   bool equal_position;
 
   ut_ad(!plan->cursor_at_end);
@@ -1020,7 +1020,7 @@ static bool row_sel_restore_pcur_pos(plan_t *plan, mtr_t *mtr) {
  *
  * @param plan in: plan
  */
-inline void plan_reset_cursor(plan_t *plan)
+inline void plan_reset_cursor(Plan *plan)
 {
   plan->pcur_is_open = false;
   plan->cursor_at_end = false;
@@ -1038,7 +1038,7 @@ inline void plan_reset_cursor(plan_t *plan)
  *
  * @return SEL_FOUND, SEL_EXHAUSTED, SEL_RETRY
  */
-static ulint row_sel_try_search_shortcut(sel_node_t *node, plan_t *plan, mtr_t *mtr) {
+static ulint row_sel_try_search_shortcut(sel_node_t *node, Plan *plan, mtr_t *mtr) {
   dict_index_t *index;
   rec_t *rec;
   mem_heap_t *heap = nullptr;
@@ -1137,7 +1137,7 @@ func_exit:
  */
 static db_err row_sel(sel_node_t *node, que_thr_t *thr) {
   dict_index_t *index;
-  plan_t *plan;
+  Plan *plan;
   mtr_t mtr;
   bool moved;
   rec_t *rec;
@@ -2227,7 +2227,7 @@ err_exit:
 static bool row_sel_restore_position(
   bool *same_user_rec,
   ulint latch_mode,
-  btr_pcur_t *pcur,
+  Btree_pcursor *pcur,
   bool moves_up,
   mtr_t *mtr
 ) {
@@ -2245,7 +2245,7 @@ static bool row_sel_restore_position(
     }
 
     if (moves_up) {
-      pcur->move_to_next(mtr);
+      (void) pcur->move_to_next(mtr);
     }
 
     return true;
@@ -2258,7 +2258,7 @@ static bool row_sel_restore_position(
     }
 
     if (pcur->is_on_user_rec()) {
-      pcur->move_to_prev(mtr);
+      (void) pcur->move_to_prev(mtr);
     }
 
     return true;
@@ -2267,7 +2267,7 @@ static bool row_sel_restore_position(
   ut_ad(relative_position == Btree_cursor_pos::BEFORE || relative_position == Btree_cursor_pos::BEFORE_FIRST_IN_TREE);
 
   if (moves_up && pcur->is_on_user_rec()) {
-    pcur->move_to_next(mtr);
+    (void) pcur->move_to_next(mtr);
   }
 
   return true;
@@ -2405,7 +2405,7 @@ static ulint row_sel_try_search_shortcut_for_prebuilt(
 ) {
   dict_index_t *index = prebuilt->index;
   const dtuple_t *search_tuple = prebuilt->search_tuple;
-  btr_pcur_t *pcur = prebuilt->pcur;
+  Btree_pcursor *pcur = prebuilt->pcur;
   trx_t *trx = prebuilt->trx;
   const rec_t *rec;
 
@@ -2454,8 +2454,8 @@ static ulint row_sel_try_search_shortcut_for_prebuilt(
 }
 
 int row_unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) {
-  btr_pcur_t *pcur = prebuilt->pcur;
-  btr_pcur_t *clust_pcur = prebuilt->clust_pcur;
+  Btree_pcursor *pcur = prebuilt->pcur;
+  Btree_pcursor *clust_pcur = prebuilt->clust_pcur;
   trx_t *trx = prebuilt->trx;
   rec_t *rec;
   mtr_t mtr;
@@ -2483,7 +2483,7 @@ int row_unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) {
     /* Restore the cursor position and find the record */
 
     if (!has_latches_on_recs) {
-      pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+      (void) pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
     }
 
     rec = pcur->get_rec();
@@ -2509,7 +2509,7 @@ int row_unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) {
     /* Restore the cursor position and find the record */
 
     if (!has_latches_on_recs) {
-      clust_pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+      (void)clust_pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
     }
 
     rec = clust_pcur->get_rec();
@@ -2534,7 +2534,7 @@ db_err row_search_for_client(
 ) {
   dict_index_t *index = prebuilt->index;
   const dtuple_t *search_tuple = prebuilt->search_tuple;
-  btr_pcur_t *pcur = prebuilt->pcur;
+  Btree_pcursor *pcur = prebuilt->pcur;
   trx_t *trx = prebuilt->trx;
   dict_index_t *clust_index;
   que_thr_t *thr;
@@ -2955,7 +2955,7 @@ rec_loop:
         "\nrec address %p,"
         " buf block fix count %lu\n",
         (void *)rec,
-        (ulong)btr_cur_get_block(pcur->get_btr_cur())->m_page.m_buf_fix_count
+        (ulong)pcur->get_block()->m_page.m_buf_fix_count
       );
       ib_logger(
         ib_stream,

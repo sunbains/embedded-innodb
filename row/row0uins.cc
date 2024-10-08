@@ -45,15 +45,15 @@ Created 2/25/1997 Heikki Tuuri
 record, now it is detached.
 @param[in,out] node             Undo node.
 @return	DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
-static db_err row_undo_ins_remove_clust_rec(undo_node_t *node) {
-  btr_cur_t *btr_cur;
+static db_err row_undo_ins_remove_clust_rec(Undo_node *node) {
+  Btree_cursor *btr_cur;
   db_err err;
   ulint n_tries{};
   mtr_t mtr;
 
   mtr.start();
 
-  auto success = node->pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
+  auto success = node->m_pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
   ut_a(success);
 
   if (node->table->id == DICT_INDEXES_ID) {
@@ -62,21 +62,21 @@ static db_err row_undo_ins_remove_clust_rec(undo_node_t *node) {
     /* Drop the index tree associated with the row in
     SYS_INDEXES table: */
 
-    dict_drop_index_tree(node->pcur.get_rec(), &mtr);
+    dict_drop_index_tree(node->m_pcur.get_rec(), &mtr);
 
     mtr.commit();
 
     mtr.start();
 
-    success = node->pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
+    success = node->m_pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
     ut_a(success);
   }
 
-  btr_cur = node->pcur.get_btr_cur();
+  btr_cur = node->m_pcur.get_btr_cur();
 
-  success = btr_cur_optimistic_delete(btr_cur, &mtr);
+  success = btr_cur->optimistic_delete(&mtr);
 
-  node->pcur.commit_specify_mtr(&mtr);
+  node->m_pcur.commit_specify_mtr(&mtr);
 
   if (success) {
     trx_undo_rec_release(node->trx, node->undo_no);
@@ -87,10 +87,10 @@ retry:
   /* If did not succeed, try pessimistic descent to tree */
   mtr.start();
 
-  success = node->pcur.restore_position(BTR_MODIFY_TREE, &mtr, Source_location{});
+  success = node->m_pcur.restore_position(BTR_MODIFY_TREE, &mtr, Source_location{});
   ut_a(success);
 
-  btr_cur_pessimistic_delete(&err, false, btr_cur, trx_is_recv(node->trx) ? RB_RECOVERY : RB_NORMAL, &mtr);
+  btr_cur->pessimistic_delete(&err, false, trx_is_recv(node->trx) ? RB_RECOVERY : RB_NORMAL, &mtr);
 
   /* The delete operation may fail if we have little
   file space left: TODO: easiest to crash the database
@@ -98,7 +98,7 @@ retry:
 
   if (err == DB_OUT_OF_FILE_SPACE && n_tries < BTR_CUR_RETRY_DELETE_N_TIMES) {
 
-    node->pcur.commit_specify_mtr(&mtr);
+    node->m_pcur.commit_specify_mtr(&mtr);
 
     ++n_tries;
 
@@ -107,7 +107,7 @@ retry:
     goto retry;
   }
 
-  node->pcur.commit_specify_mtr(&mtr);
+  node->m_pcur.commit_specify_mtr(&mtr);
 
   trx_undo_rec_release(node->trx, node->undo_no);
 
@@ -124,7 +124,7 @@ retry:
 static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtuple_t *entry) {
   db_err err;
   mtr_t mtr;
-  btr_pcur_t pcur;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   log_sys->free_check();
 
@@ -143,7 +143,7 @@ static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtupl
   }
 
   if (mode == BTR_MODIFY_LEAF) {
-    auto success = btr_cur_optimistic_delete(btr_cur, &mtr);
+    auto success = btr_cur->optimistic_delete(&mtr);
     err = success ? DB_SUCCESS : DB_FAIL;
   } else {
     ut_ad(mode == BTR_MODIFY_TREE);
@@ -154,7 +154,7 @@ static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtupl
     deleting a record that contains externally stored
     columns. */
     ut_ad(!dict_index_is_clust(index));
-    btr_cur_pessimistic_delete(&err, false, btr_cur, RB_NORMAL, &mtr);
+    btr_cur->pessimistic_delete(&err, false, RB_NORMAL, &mtr);
   }
 
   pcur.close();
@@ -200,7 +200,7 @@ static db_err row_undo_ins_remove_sec(dict_index_t *index, dtuple_t *entry) {
 /** Parses the row reference and other info in a fresh insert undo record.
 @param[in] recovery             Recovery flag
 @param[in,out] node             Ros undo node. */
-static void row_undo_ins_parse_undo_rec(ib_recovery_t recovery, undo_node_t *node) {
+static void row_undo_ins_parse_undo_rec(ib_recovery_t recovery, Undo_node *node) {
   ulint type;
   ulint dummy;
   uint64_t table_id;
@@ -213,7 +213,7 @@ static void row_undo_ins_parse_undo_rec(ib_recovery_t recovery, undo_node_t *nod
   node->rec_type = type;
 
   node->update = nullptr;
-  node->table = dict_table_get_on_id(ib_recovery_t(srv_force_recovery), table_id, node->trx);
+  node->table = dict_table_get_on_id(srv_config.m_force_recovery, table_id, node->trx);
 
   /* Skip the UNDO if we can't find the table or the .ibd file. */
   if (unlikely(node->table == nullptr)) {
@@ -239,11 +239,10 @@ static void row_undo_ins_parse_undo_rec(ib_recovery_t recovery, undo_node_t *nod
   }
 }
 
-db_err row_undo_ins(undo_node_t *node) {
-  ut_ad(node);
+db_err row_undo_ins(Undo_node *node) {
   ut_ad(node->state == UNDO_NODE_INSERT);
 
-  row_undo_ins_parse_undo_rec(ib_recovery_t(srv_force_recovery), node);
+  row_undo_ins_parse_undo_rec(srv_config.m_force_recovery, node);
 
   if (!node->table || !row_undo_search_clust_to_pcur(node)) {
     trx_undo_rec_release(node->trx, node->undo_no);

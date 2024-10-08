@@ -286,7 +286,7 @@ struct upd_node_struct {
   sel_node_t *select;       /*!< query graph subtree implementing a base
                             table cursor: the rows returned will be
                             updated */
-  btr_pcur_t *pcur;         /*!< persistent cursor placed on the clustered
+  Btree_pcursor *pcur;         /*!< persistent cursor placed on the clustered
                             index record which should be updated or
                             deleted; the cursor is stored in the graph
                             of 'select' field above, except in the case

@@ -42,7 +42,7 @@ inline void mtr_memo_slot_release(mtr_t *mtr, mtr_memo_slot_t *slot) noexcept {
 
   if (likely(object != nullptr)) {
     if (type <= MTR_MEMO_BUF_FIX) {
-      srv_buf_pool->release(static_cast<buf_block_t *>(object), type, mtr);
+      srv_buf_pool->release(static_cast<Buf_block *>(object), type, mtr);
     } else if (type == MTR_MEMO_S_LOCK) {
       rw_lock_s_unlock(static_cast<rw_lock_t *>(object));
 #ifndef UNIV_DEBUG
@@ -143,7 +143,7 @@ void mtr_t::commit() noexcept {
   const auto write_log = m_modifications > 0 && m_n_log_recs > 0;
 
   if (write_log) {
-    mtr_log_reserve_and_write(this, log_sys, srv_force_recovery);
+    mtr_log_reserve_and_write(this, log_sys, srv_config.m_force_recovery);
   }
 
   /* We first update the modification info to buffer pages, and only
@@ -236,7 +236,7 @@ std::string mtr_t::to_string() const noexcept {
 }
 #endif /* UNIV_DEBUG */
 
-void mtr_t::release_block_at_savepoint(ulint savepoint, buf_block_t *block) noexcept {
+void mtr_t::release_block_at_savepoint(ulint savepoint, Buf_block *block) noexcept {
   ut_ad(is_active());
   ut_ad(m_magic_n == MTR_MAGIC_N);
 

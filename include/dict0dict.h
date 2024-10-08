@@ -990,7 +990,7 @@ inline dict_table_t *dict_table_get_low(const char *table_name) {
 
   if (table == nullptr) {
     // FIXME: srv_force_recovery should be passed in as an arg
-    table = dict_load_table(static_cast<ib_recovery_t>(srv_force_recovery), table_name);
+    table = dict_load_table(srv_config.m_force_recovery, table_name);
   }
 
   ut_ad(table == nullptr || table->cached);

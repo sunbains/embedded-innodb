@@ -270,9 +270,6 @@ void test_configure() {
   err = ib_cfg_set_int("flush_log_at_trx_commit", 1);
   assert(err == DB_SUCCESS);
 
-  err = ib_cfg_set_int("file_io_threads", 4);
-  assert(err == DB_READONLY);
-
   err = ib_cfg_set_int("lock_wait_timeout", 60);
   assert(err == DB_SUCCESS);
 

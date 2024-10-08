@@ -520,7 +520,7 @@ static byte *recv_parse_or_apply_log_rec_body(
   mlog_type_t type,
   byte *ptr,
   byte *end_ptr,
-  buf_block_t *block,
+  Buf_block *block,
   mtr_t *mtr) noexcept
 {
   page_t *page{};
@@ -581,17 +581,17 @@ static byte *recv_parse_or_apply_log_rec_body(
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
-        ptr = btr_cur_parse_del_mark_set_clust_rec(ptr, end_ptr, page, index);
+        ptr = Btree_cursor::parse_del_mark_set_clust_rec(ptr, end_ptr, page, index);
       }
     case MLOG_REC_SEC_DELETE_MARK:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
-      ptr = btr_cur_parse_del_mark_set_sec_rec(ptr, end_ptr, page);
+      ptr = Btree_cursor::parse_del_mark_set_sec_rec(ptr, end_ptr, page);
       break;
     case MLOG_REC_UPDATE_IN_PLACE:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
-        ptr = btr_cur_parse_update_in_place(ptr, end_ptr, page, index);
+        ptr = Btree_cursor::parse_update_in_place(ptr, end_ptr, page, index);
       }
       break;
     case MLOG_LIST_END_DELETE:
@@ -798,7 +798,7 @@ static void recv_data_copy_to_buf(byte *buf, Log_record *recv) noexcept {
   }
 }
 
-void recv_recover_page(bool just_read_in, buf_block_t *block) noexcept {
+void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
   mtr_t mtr;
 
   mutex_enter(&recv_sys->m_mutex);
@@ -1221,7 +1221,7 @@ static void recv_report_corrupt_log(byte *ptr, byte type, space_id_t space, page
     log_warn_buf(recv_sys->m_buf + recv_previous_parsed_rec_offset - 100, ptr - recv_sys->m_buf + 200 - recv_previous_parsed_rec_offset);
   }
 
-  if (!srv_force_recovery) {
+  if (!srv_config.m_force_recovery) {
     log_fatal("Set innodb_force_recovery to ignore this error.");
   }
 
@@ -1597,7 +1597,7 @@ static bool recv_scan_log_recs(
 
         recv_sys->m_found_corrupt_log = true;
 
-        if (!srv_force_recovery) {
+        if (!srv_config.m_force_recovery) {
           log_fatal("Set innodb_force_recovery to ignore this error.");
         }
 
@@ -1931,7 +1931,7 @@ void recv_recovery_from_checkpoint_finish(DBLWR *dblwr, ib_recovery_t recovery) 
   recv_sys = nullptr;
 
   /* Free up the flush_rbt. */
-  srv_buf_pool->m_flusher->free_flush_rbt();
+  srv_buf_pool->m_flusher->free_flush_list();
 
   /* Roll back any recovered data dictionary transactions, so
   that the data dictionary tables will be free of any locks.
@@ -1957,10 +1957,10 @@ void recv_recovery_rollback_active() noexcept {
   sync_order_checks_on = true;
 #endif
 
-  ddl_drop_all_temp_indexes(ib_recovery_t(srv_force_recovery));
-  ddl_drop_all_temp_tables(ib_recovery_t(srv_force_recovery));
+  ddl_drop_all_temp_indexes(ib_recovery_t(srv_config.m_force_recovery));
+  ddl_drop_all_temp_tables(ib_recovery_t(srv_config.m_force_recovery));
 
-  if (srv_force_recovery < IB_RECOVERY_NO_TRX_UNDO) {
+  if (srv_config.m_force_recovery < IB_RECOVERY_NO_TRX_UNDO) {
     /* Rollback the uncommitted transactions which have no user
     session */
 

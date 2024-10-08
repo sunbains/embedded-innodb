@@ -38,7 +38,7 @@ Created 12/13/1995 Heikki Tuuri
 @param[in,out] mtr              Mini-transaction to track block fetch.
 @return pointer to a byte in a frame; the file page in the frame is
 bufferfixed and latched */
-inline byte *fut_get_ptr(space_id_t space_id, fil_addr_t addr, ulint rw_latch, mtr_t *mtr) {
+inline byte *fut_get_ptr(space_id_t space_id, Fil_addr addr, ulint rw_latch, mtr_t *mtr) {
   ut_ad(addr.m_boffset < UNIV_PAGE_SIZE);
   ut_ad(rw_latch == RW_S_LATCH || rw_latch == RW_X_LATCH);
 

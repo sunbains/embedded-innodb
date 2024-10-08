@@ -205,7 +205,7 @@ class PCursor {
   @param[in,out] pcur           Persistent cursor in use.
   @param[in] mtr                Mini-transaction used by the persistent cursor.
   @param[in] read_level         Read level where the block should be present. */
-  PCursor(btr_pcur_t *pcur, mtr_t *mtr, size_t read_level)
+  PCursor(Btree_pcursor *pcur, mtr_t *mtr, size_t read_level)
       : m_mtr(mtr), m_pcur(pcur), m_read_level(read_level) {}
 
   /** Create a savepoint and commit the mini-transaction.*/
@@ -256,7 +256,7 @@ class PCursor {
 
           case Btr_pcur_positioned::IS_POSITIONED:
             if (m_pcur->is_on_user_rec()) {
-              m_pcur->move_to_next(m_mtr);
+              (void) m_pcur->move_to_next(m_mtr);
             }
             break;
 
@@ -290,14 +290,14 @@ class PCursor {
   mtr_t *m_mtr{};
 
   /** Persistent cursor. */
-  btr_pcur_t *m_pcur{};
+  Btree_pcursor *m_pcur{};
 
   /** Level where the cursor is positioned or need to be positioned in case of
   restore. */
   size_t m_read_level{};
 };
 
-buf_block_t *Parallel_reader::Scan_ctx::block_get_s_latched(const Page_id &page_id, mtr_t *mtr, ulint line) const {
+Buf_block *Parallel_reader::Scan_ctx::block_get_s_latched(const Page_id &page_id, mtr_t *mtr, ulint line) const {
   /* We never scan undo tablespaces. */
   Buf_pool::Request req {
     .m_rw_latch = RW_S_LATCH,
@@ -498,7 +498,7 @@ Parallel_reader::Scan_ctx::create_persistent_cursor(const page_cur_t &page_curso
 
   std::shared_ptr<Iter> iter = std::make_shared<Iter>();
 
-  iter->m_heap = mem_heap_create(sizeof(btr_pcur_t) + (UNIV_PAGE_SIZE / 16));
+  iter->m_heap = mem_heap_create(sizeof(Btree_pcursor) + (UNIV_PAGE_SIZE / 16));
 
   auto rec = page_cursor.m_rec;
 
@@ -514,11 +514,11 @@ Parallel_reader::Scan_ctx::create_persistent_cursor(const page_cur_t &page_curso
     return iter;
   }
 
-  void *ptr = mem_heap_alloc(iter->m_heap, sizeof(btr_pcur_t));
+  void *ptr = mem_heap_alloc(iter->m_heap, sizeof(Btree_pcursor));
 
-  ::new (ptr) btr_pcur_t();
+  ::new (ptr) Btree_pcursor(srv_fsp, srv_btree_sys, srv_lock_sys);
 
-  iter->m_pcur = reinterpret_cast<btr_pcur_t *>(ptr);
+  iter->m_pcur = reinterpret_cast<Btree_pcursor *>(ptr);
 
   iter->m_pcur->init(m_config.m_read_level);
 
@@ -873,7 +873,7 @@ void Parallel_reader::worker(Parallel_reader::Thread_ctx *thread_ctx) {
   ut_a(is_error_set() || (m_n_completed == m_ctx_id && is_queue_empty()));
 }
 
-page_no_t Parallel_reader::Scan_ctx::search(const buf_block_t *block, const dtuple_t *key) const {
+page_no_t Parallel_reader::Scan_ctx::search(const Buf_block *block, const dtuple_t *key) const {
   ut_ad(index_s_own());
 
   page_cur_t page_cursor;
@@ -1139,7 +1139,7 @@ dberr_t Parallel_reader::Scan_ctx::partition( const Scan_range &scan_range, Para
 
     ut_a(iter->m_heap == nullptr);
 
-    iter->m_heap = mem_heap_create(sizeof(btr_pcur_t) + (UNIV_PAGE_SIZE / 16));
+    iter->m_heap = mem_heap_create(sizeof(Btree_pcursor) + (UNIV_PAGE_SIZE / 16));
 
     iter->m_tuple = dtuple_copy(scan_range.m_end, iter->m_heap);
 

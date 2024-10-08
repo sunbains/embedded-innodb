@@ -166,7 +166,7 @@ struct DBLWR {
 
    /** Array to store pointers to the buffer blocks which have been
   cached to write_buf */
-  std::vector<buf_page_t*> m_bpages{};
+  std::vector<Buf_page*> m_bpages{};
 };
 
 /** Doublewrite system */

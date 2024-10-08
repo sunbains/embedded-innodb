@@ -42,7 +42,7 @@ Created 11/28/1995 Heikki Tuuri
 static void flst_add_to_empty(flst_base_node_t *base, flst_node_t *node, mtr_t *mtr) {
   ulint len;
   space_id_t space;
-  fil_addr_t node_addr;
+  Fil_addr node_addr;
 
   ut_ad(mtr && base && node);
   ut_ad(base != node);
@@ -68,8 +68,8 @@ static void flst_add_to_empty(flst_base_node_t *base, flst_node_t *node, mtr_t *
 void flst_add_last(flst_base_node_t *base, flst_node_t *node, mtr_t *mtr) {
   ulint len;
   space_id_t space;
-  fil_addr_t node_addr;
-  fil_addr_t last_addr;
+  Fil_addr node_addr;
+  Fil_addr last_addr;
   flst_node_t *last_node;
 
   ut_ad(mtr && base && node);
@@ -98,9 +98,9 @@ void flst_add_last(flst_base_node_t *base, flst_node_t *node, mtr_t *mtr) {
 
 void flst_add_first(flst_base_node_t *base, flst_node_t *node, mtr_t *mtr) {
   space_id_t space;
-  fil_addr_t node_addr;
+  Fil_addr node_addr;
   ulint len;
-  fil_addr_t first_addr;
+  Fil_addr first_addr;
   flst_node_t *first_node;
 
   ut_ad(mtr && base && node);
@@ -130,10 +130,10 @@ void flst_add_first(flst_base_node_t *base, flst_node_t *node, mtr_t *mtr) {
 void flst_insert_after(flst_base_node_t *base, flst_node_t *node1, flst_node_t *node2, mtr_t *mtr) {
   ulint len;
   space_id_t space;
-  fil_addr_t node1_addr;
-  fil_addr_t node2_addr;
+  Fil_addr node1_addr;
+  Fil_addr node2_addr;
   flst_node_t *node3;
-  fil_addr_t node3_addr;
+  Fil_addr node3_addr;
 
   ut_ad(mtr && node1 && node2 && base);
   ut_ad(base != node1);
@@ -173,9 +173,9 @@ void flst_insert_before(flst_base_node_t *base, flst_node_t *node2, flst_node_t 
   ulint len;
   space_id_t space;
   flst_node_t *node1;
-  fil_addr_t node1_addr;
-  fil_addr_t node2_addr;
-  fil_addr_t node3_addr;
+  Fil_addr node1_addr;
+  Fil_addr node2_addr;
+  Fil_addr node3_addr;
 
   ut_ad(mtr && node2 && node3 && base);
   ut_ad(base != node2);
@@ -216,7 +216,7 @@ void flst_remove(flst_base_node_t *base, flst_node_t *node2, mtr_t *mtr) {
   space_id_t space;
   flst_node_t *node1;
   flst_node_t *node3;
-  fil_addr_t node2_addr;
+  Fil_addr node2_addr;
 
   ut_ad(mtr && node2 && base);
   ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
@@ -274,7 +274,7 @@ void flst_remove(flst_base_node_t *base, flst_node_t *node2, mtr_t *mtr) {
 void flst_cut_end(flst_base_node_t *base, flst_node_t *node2, ulint n_nodes, mtr_t *mtr) {
   space_id_t space;
   flst_node_t *node1;
-  fil_addr_t node2_addr;
+  Fil_addr node2_addr;
   ulint len;
 
   ut_ad(mtr && node2 && base);
@@ -324,7 +324,7 @@ void flst_truncate_end(flst_base_node_t *base, flst_node_t *node2, ulint n_nodes
   }
 
   space_id_t space;
-  fil_addr_t node2_addr;
+  Fil_addr node2_addr;
 
   buf_ptr_get_fsp_addr(node2, &space, &node2_addr);
 
@@ -352,7 +352,7 @@ bool flst_validate(const flst_base_node_t *base, mtr_t *mtr1) {
 
   /* Find out the space id */
   space_id_t space;
-  fil_addr_t base_addr;
+  Fil_addr base_addr;
 
   buf_ptr_get_fsp_addr(base, &space, &base_addr);
 

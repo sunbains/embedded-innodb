@@ -214,7 +214,7 @@ reference.
 @return	true if found */
 
 bool row_search_on_row_ref(
-  btr_pcur_t *pcur,          /*!< out: persistent cursor, which
+  Btree_pcursor *pcur,          /*!< out: persistent cursor, which
                                               must be closed by the caller */
   ulint mode,                /*!< in: BTR_MODIFY_LEAF, ... */
   const dict_table_t *table, /*!< in: table */
@@ -239,7 +239,7 @@ bool row_search_index_entry(
   dict_index_t *index,   /*!< in: index */
   const dtuple_t *entry, /*!< in: index entry */
   ulint mode,            /*!< in: BTR_MODIFY_LEAF, ... */
-  btr_pcur_t *pcur,      /*!< in/out: persistent cursor, which must
+  Btree_pcursor *pcur,      /*!< in/out: persistent cursor, which must
                            be closed by the caller */
   mtr_t *mtr
 ); /*!< in: mtr */

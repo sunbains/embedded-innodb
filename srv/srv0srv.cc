@@ -89,58 +89,15 @@ const char *srv_main_thread_op_info = "";
 
 /* Server parameters which are read from the initfile */
 
-/* The following three are dir paths which are catenated before file
-names, where the file name itself may also contain a path */
 
-char *srv_data_home = nullptr;
-
-/** We copy the argument passed to ib_cfg_set_text("log_group_home_dir")
-because parse_log_group_home_dirs() parses it's input argument
-destructively. The copy is done using ut_new(). */
 char *srv_log_group_home_dir = nullptr;
-
-/** store to its own file each table created by an user; data
-dictionary tables are in the system tablespace 0 */
-bool srv_file_per_table;
-
-/** The file format to use on new *.ibd files. */
-ulint srv_file_format = 0;
-
-/** Whether to check file format during startup a value of
-DICT_TF_FORMAT_MAX + 1 means no checking ie. false.  The default is to
-set it to the highest format we support. */
-ulint srv_check_file_format_at_startup = DICT_TF_FORMAT_MAX;
 
 #if DICT_TF_FORMAT_51
 #error "DICT_TF_FORMAT_51 must be 0!"
 #endif
 
-ulint *srv_data_file_is_raw_partition = nullptr;
-
-/* If the following is true we do not allow inserts etc. This protects
-the user from forgetting the 'newraw' keyword. */
-bool srv_created_new_raw = false;
-
-ulint srv_n_log_files = ULINT_MAX;
-
-/** Size in database pages */
-ulint srv_log_file_size = ULINT_MAX;
-
-ulint srv_log_file_curr_size = ULINT_MAX;
-
 /** Size in database pages */
 ulint srv_log_buffer_size = ULINT_MAX;
-
-ulint srv_log_buffer_curr_size = ULINT_MAX;
-
-ulong srv_flush_log_at_trx_commit = 1;
-
-/** Try to flush dirty pages so as to avoid IO bursts at
-the checkpoints. */
-bool srv_adaptive_flushing = true;
-
-/** Use os/external memory allocator */
-bool srv_use_sys_malloc = false;
 
 /** Maximum number of times allowed to conditionally acquire
 mutex before switching to blocking wait on the mutex */
@@ -152,46 +109,6 @@ srv_printf_innodb_monitor() will request mutex acquisition
 with mutex_enter(), which will wait until it gets the mutex. */
 #define MUTEX_NOWAIT(mutex_skipped) ((mutex_skipped) < MAX_MUTEX_NOWAIT)
 
-/** Requested size in kilobytes of the buffer pool. */
-ulint srv_buf_pool_size = ULINT_MAX;
-
-/** previously requested size of the buffer pool. */
-ulint srv_buf_pool_old_size;
-
-/** Current size in kilobytes of the buffer pool. */
-ulint srv_buf_pool_curr_size = 0;
-
-/** Memory pool size in bytes */
-ulint srv_mem_pool_size = ULINT_MAX;
-
-ulint srv_lock_table_size = ULINT_MAX;
-
-/** This parameter is deprecated. Use srv_n_io_[read|write]_threads
-instead. */
-ulint srv_n_file_io_threads = ULINT_MAX;
-
-ulint srv_n_read_io_threads = ULINT_MAX;
-
-ulint srv_n_write_io_threads = ULINT_MAX;
-
-/** User settable value of the number of pages that must be present
-in the buffer cache and accessed sequentially for InnoDB to trigger a
-readahead request. */
-ulong srv_read_ahead_threshold = 56;
-
-ulint srv_unix_file_flush_method = SRV_UNIX_FSYNC;
-
-ulint srv_max_n_open_files = 300;
-
-/** Number of IO operations per second the server can do */
-ulong srv_io_capacity = 200;
-
-/** The InnoDB main thread tries to keep the ratio of modified pages
-in the buffer pool to all database pages in the buffer pool smaller than
-the following number. But it is not guaranteed that the value stays below
-that during a time of heavy update/insert activity. */
-
-ulong srv_max_buf_pool_modified_pct = 75;
 
 /** Variable counts amount of data read in total (in bytes) */
 ulint srv_data_read = 0;
@@ -223,9 +140,6 @@ ulint srv_dblwr_writes = 0;
 doublewrite buffer */
 ulint srv_dblwr_pages_written = 0;
 
-/** In this variable we store the number of write requests issued */
-ulint srv_buf_pool_write_requests = 0;
-
 /** Here we store the number of times when we had to wait for a free page
 in the buffer pool. It happens when the buffer pool is full and we need
 to make a flush, in order to be able to read or create a page. */
@@ -242,22 +156,8 @@ ulint srv_buf_pool_reads = 0;
 /** Structure to pass status variables to the client */
 export_struc export_vars;
 
-/* If the following is != 0 we do not allow inserts etc. This protects
-the user from forgetting the force_recovery keyword. */
-
-ib_recovery_t srv_force_recovery = IB_RECOVERY_DEFAULT;
-
-/* We are prepared for a situation that we have this many threads waiting for
-a semaphore inside InnoDB. innobase_start_or_create() sets the
-value. */
-ulint srv_max_n_threads = 0;
-
 /** This mutex protects srv_conc data structures */
 static std::mutex srv_conc_mutex;
-
-/** Number of OS threads waiting in the FIFO for a permission to enter
-InnoDB */
-ulint srv_conc_n_waiting_threads = 0;
 
 struct srv_conc_slot_t {
   /** event to wait */
@@ -283,22 +183,6 @@ static srv_conc_slot_t *srv_conc_slots;
 
 /** The system log file names */
 static char **srv_log_group_home_dirs = nullptr;
-
-/*-----------------------*/
-ib_shutdown_t srv_fast_shutdown = IB_SHUTDOWN_NORMAL;
-
-/** Generate a innodb_status.<pid> file if this is true. */
-bool srv_innodb_status = false;
-
-/* When estimating number of different key values in an index, sample
-this many index pages */
-uint64_t srv_stats_sample_pages = 8;
-
-bool srv_use_doublewrite_buf = true;
-bool srv_use_checksums = true;
-
-bool srv_set_thread_priorities = true;
-int srv_query_thread_priority = 0;
 
 /*-------------------------------------------*/
 ulong srv_n_spin_wait_rounds = 30;
@@ -379,6 +263,8 @@ intervals. Following macros define thresholds for these conditions. */
 #define SRV_PEND_IO_THRESHOLD (PCT_IO(3))
 #define SRV_RECENT_IO_ACTIVITY (PCT_IO(5))
 #define SRV_PAST_IO_ACTIVITY (PCT_IO(200))
+
+Config srv_config{};
 
 /*
         IMPLEMENTATION OF THE SERVER MAIN PROGRAM
@@ -796,37 +682,7 @@ void InnoDB::var_init() noexcept {
   srv_error_monitor_active = false;
   srv_main_thread_op_info = "";
 
-  srv_adaptive_flushing = true;
-
-  srv_use_sys_malloc = false;
-
-  srv_file_per_table = false;
-  srv_file_format = 0;
-  srv_check_file_format_at_startup = DICT_TF_FORMAT_MAX;
-
-  srv_data_file_is_raw_partition = nullptr;
-
-  srv_created_new_raw = false;
-
-  srv_n_log_files = ULINT_MAX;
-  srv_log_file_size = ULINT_MAX;
-  srv_log_file_curr_size = ULINT_MAX;
   srv_log_buffer_size = ULINT_MAX;
-  srv_log_buffer_curr_size = ULINT_MAX;
-  srv_flush_log_at_trx_commit = 1;
-
-  srv_buf_pool_size = ULINT_MAX;
-  srv_buf_pool_old_size = 0;
-  srv_buf_pool_curr_size = 0;
-  srv_mem_pool_size = ULINT_MAX;
-  srv_lock_table_size = ULINT_MAX;
-  srv_n_file_io_threads = ULINT_MAX;
-
-  srv_unix_file_flush_method = SRV_UNIX_FSYNC;
-
-  srv_max_n_open_files = 300;
-
-  srv_max_buf_pool_modified_pct = 90;
 
   srv_data_read = 0;
 
@@ -846,17 +702,11 @@ void InnoDB::var_init() noexcept {
 
   srv_dblwr_pages_written = 0;
 
-  srv_buf_pool_write_requests = 0;
-
   srv_buf_pool_wait_free = 0;
 
   srv_buf_pool_flushed = 0;
 
   srv_buf_pool_reads = 0;
-
-  srv_force_recovery = IB_RECOVERY_DEFAULT;
-
-  srv_max_n_threads = 0;
 
   srv_conc_slots = nullptr;
   srv_last_monitor_time = 0;
@@ -865,12 +715,7 @@ void InnoDB::var_init() noexcept {
   srv_main_thread_process_no = 0;
 #endif /* UNIV_LINUX */
 
-  srv_conc_n_waiting_threads = 0;
-
-  srv_use_doublewrite_buf = true;
-  srv_use_checksums = true;
   srv_print_verbose_log = true;
-  srv_innodb_status = false;
   ses_rollback_on_timeout = false;
 
   srv_start_lsn = 0;
@@ -879,15 +724,12 @@ void InnoDB::var_init() noexcept {
   srv_lock_timeout_thread_event = nullptr;
   kernel_mutex_temp = nullptr;
 
-  srv_data_home = nullptr;
-
   memset(srv_n_threads_active, 0x0, sizeof(srv_n_threads_active));
   memset(srv_n_threads, 0x0, sizeof(srv_n_threads));
 
   memset(&export_vars, 0x0, sizeof(export_vars));
 
   srv_shutdown_state = SRV_SHUTDOWN_NONE;
-  srv_fast_shutdown = IB_SHUTDOWN_NORMAL;
 }
 
 /**
@@ -1105,19 +947,16 @@ void InnoDB::general_init() noexcept {
   sync_init();
 }
 
-/* Maximum allowable purge history length.  <=0 means 'infinite'. */
-ulong srv_max_purge_lag = 0;
-
 /** Normalizes init parameter values to use units we use inside InnoDB.
 @return	DB_SUCCESS or error code */
 static db_err srv_normalize_init_values() {
-  srv_log_file_size = srv_log_file_curr_size / UNIV_PAGE_SIZE;
-  srv_log_file_curr_size = srv_log_file_size * UNIV_PAGE_SIZE;
+  srv_config.m_log_file_size = srv_config.m_log_file_curr_size / UNIV_PAGE_SIZE;
+  srv_config.m_log_file_curr_size = srv_config.m_log_file_size * UNIV_PAGE_SIZE;
 
-  srv_log_buffer_size = srv_log_buffer_curr_size / UNIV_PAGE_SIZE;
-  srv_log_buffer_curr_size = srv_log_buffer_size * UNIV_PAGE_SIZE;
+  srv_config.m_log_buffer_size = srv_config.m_log_buffer_curr_size / UNIV_PAGE_SIZE;
+  srv_config.m_log_buffer_curr_size = srv_config.m_log_buffer_size * UNIV_PAGE_SIZE;
 
-  srv_lock_table_size = 5 * (srv_buf_pool_size / UNIV_PAGE_SIZE);
+  srv_config.m_lock_table_size = 5 * (srv_config.m_buf_pool_size / UNIV_PAGE_SIZE);
 
   return DB_SUCCESS;
 }
@@ -1136,8 +975,6 @@ void InnoDB::modules_var_init() noexcept {
   dict_var_init();
   dfield_var_init();
   dtype_var_init();
-  srv_buf_pool->init();
-  btr_cur_var_init();
   ut_mem_var_init();
   os_sync_var_init();
 }
@@ -1520,7 +1357,6 @@ bool InnoDB::printf_innodb_monitor(
     "ROW OPERATIONS\n"
     "--------------\n"
   );
-  log_warn(std::format("{} queries in queue", srv_conc_n_waiting_threads));
 
   log_warn(std::format("{} read views open inside InnoDB", UT_LIST_GET_LEN(srv_trx_sys->m_view_list)));
 
@@ -1592,7 +1428,7 @@ void InnoDB::export_innodb_status() noexcept {
   export_vars.innodb_data_writes = os_n_file_writes;
   export_vars.innodb_data_written = srv_data_written;
   export_vars.innodb_buffer_pool_read_requests = srv_buf_pool->m_stat.n_page_gets;
-  export_vars.innodb_buffer_pool_write_requests = srv_buf_pool_write_requests;
+  export_vars.innodb_buffer_pool_write_requests = srv_buf_pool->m_write_requests;
   export_vars.innodb_buffer_pool_wait_free = srv_buf_pool_wait_free;
   export_vars.innodb_buffer_pool_pages_flushed = srv_buf_pool_flushed;
   export_vars.innodb_buffer_pool_reads = srv_buf_pool_reads;
@@ -1689,7 +1525,7 @@ loop:
       last_srv_print_monitor = false;
     }
 
-    if (srv_innodb_status) {
+    if (srv_config.m_status) {
       mutex_enter(&srv_monitor_file_mutex);
 
       if (!printf_innodb_monitor(ib_stream, MUTEX_NOWAIT(mutex_skipped), nullptr, nullptr)) {
@@ -1994,7 +1830,7 @@ loop:
 
   mutex_exit(&kernel_mutex);
 
-  if (srv_force_recovery >= IB_RECOVERY_NO_BACKGROUND) {
+  if (srv_config.m_force_recovery >= IB_RECOVERY_NO_BACKGROUND) {
 
     goto suspend_thread;
   }
@@ -2031,7 +1867,7 @@ loop:
 
     srv_main_thread_op_info = "";
 
-    if (srv_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > SRV_SHUTDOWN_NONE) {
+    if (srv_config.m_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > SRV_SHUTDOWN_NONE) {
 
       goto background_loop;
     }
@@ -2046,7 +1882,7 @@ loop:
 
     n_ios = log_sys->m_n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
 
-    if (unlikely(srv_buf_pool->get_modified_ratio_pct() > srv_max_buf_pool_modified_pct)) {
+    if (unlikely(srv_buf_pool->get_modified_ratio_pct() > srv_config.m_max_buf_pool_modified_pct)) {
 
       /* Try to keep the number of modified pages in the
       buffer pool under the limit wished by the user */
@@ -2060,7 +1896,8 @@ loop:
       iteration of this loop. */
 
       skip_sleep = true;
-    } else if (srv_adaptive_flushing) {
+
+    } else if (srv_config.m_adaptive_flushing) {
 
       /* Try to keep the rate of flushing of dirty
       pages such that redo log generation does not
@@ -2117,7 +1954,7 @@ loop:
   were active */
   do {
 
-    if (srv_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > 0) {
+    if (srv_config.m_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > 0) {
 
       goto background_loop;
     }
@@ -2134,7 +1971,7 @@ loop:
 
   /* Flush a few oldest pages to make a new checkpoint younger */
 
-  if (srv_buf_pool->get_modified_ratio_pct() > 70) {
+  if (srv_buf_pool->get_modified_ratio_pct() > srv_config.m_max_buf_pool_modified_pct) {
 
     /* If there are lots of modified pages in the buffer pool
     (> 70 %), we assume we can afford reserving the disk(s) for
@@ -2203,7 +2040,7 @@ background_loop:
 
   /* Run a full purge */
   do {
-    if (srv_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > 0) {
+    if (srv_config.m_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > 0) {
 
       break;
     }
@@ -2239,7 +2076,7 @@ background_loop:
 flush_loop:
   srv_main_thread_op_info = "flushing buffer pool pages";
   srv_main_flush_loops++;
-  if (srv_fast_shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
+  if (srv_config.m_fast_shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {
     n_pages_flushed = srv_buf_pool->m_flusher->batch(srv_dblwr, BUF_FLUSH_LIST, PCT_IO(100), IB_UINT64_T_MAX);
   } else {
     /* In the fastest shutdown we do not flush the buffer pool
@@ -2273,7 +2110,7 @@ flush_loop:
     } 
   }
 
-  if (srv_buf_pool->get_modified_ratio_pct() > srv_max_buf_pool_modified_pct) {
+  if (srv_buf_pool->get_modified_ratio_pct() > srv_config.m_max_buf_pool_modified_pct) {
 
     /* Try to keep the number of modified pages in the
     buffer pool under the limit wished by the user */
@@ -2292,7 +2129,7 @@ flush_loop:
 
   /* Keep looping in the background loop if still work to do */
 
-  if (srv_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > 0) {
+  if (srv_config.m_fast_shutdown != IB_SHUTDOWN_NORMAL && srv_shutdown_state > 0) {
     if (n_tables_to_drop + n_pages_flushed != 0) {
 
       /* If we are doing a fast shutdown (= the default) we do not do purge.

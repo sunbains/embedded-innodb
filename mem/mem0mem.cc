@@ -232,7 +232,7 @@ char *mem_heap_printf(mem_heap_t *heap, const char *format, ...) {
 }
 
 mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const char *file_name, ulint line) {
-  buf_block_t *buf_block = nullptr;
+  Buf_block *buf_block = nullptr;
   mem_block_t *block;
   ulint len;
 
@@ -260,7 +260,7 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const 
       buffer pool, but must get the free block from
       the heap header free block field */
 
-      buf_block = reinterpret_cast<buf_block_t *>(heap->free_block);
+      buf_block = reinterpret_cast<Buf_block *>(heap->free_block);
       heap->free_block = nullptr;
 
       if (unlikely(buf_block == nullptr)) {
@@ -350,7 +350,7 @@ mem_block_t *mem_heap_add_block(mem_heap_t *heap, ulint n) {
 }
 
 void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
-  auto buf_block = reinterpret_cast<buf_block_t *>(block->buf_block);
+  auto buf_block = reinterpret_cast<Buf_block *>(block->buf_block);
 
   if (block->magic_n != MEM_BLOCK_MAGIC_N) {
     ut_error;
@@ -365,7 +365,7 @@ void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
   auto len = block->len;
   block->magic_n = MEM_FREED_BLOCK_MAGIC_N;
 
-  if (!srv_use_sys_malloc) {
+  if (!srv_config.m_use_sys_malloc) {
     UNIV_MEM_ASSERT_AND_FREE(block, len);
   }
   if (type == MEM_HEAP_DYNAMIC || len < UNIV_PAGE_SIZE / 2) {
@@ -378,7 +378,7 @@ void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
 
 void mem_heap_free_block_free(mem_heap_t *heap) {
   if (likely_null(heap->free_block)) {
-    srv_buf_pool->block_free(static_cast<buf_block_t *>(heap->free_block));
+    srv_buf_pool->block_free(static_cast<Buf_block *>(heap->free_block));
     heap->free_block = nullptr;
   }
 }

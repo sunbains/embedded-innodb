@@ -171,10 +171,10 @@ struct row_prebuilt_struct {
   trx_t *trx;
 
   /** Persistent cursor used in selects and updates */
-  btr_pcur_t *pcur;
+  Btree_pcursor *pcur;
 
   /** Persistent cursor used in some selects and updates */
-  btr_pcur_t *clust_pcur;
+  Btree_pcursor *clust_pcur;
 
   /** Dummy query graph used in selects */
   que_fork_t *sel_graph;

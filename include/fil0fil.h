@@ -426,7 +426,7 @@ struct Fil {
    * @param[in] addr              Address
    * @return true if undefined
    */
-  bool addr_is_null(const fil_addr_t& addr);
+  bool addr_is_null(const Fil_addr& addr);
 
   /**
    * Get the predecessor of a file page.

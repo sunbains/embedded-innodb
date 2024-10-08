@@ -22,6 +22,7 @@ Caching of externally stored column prefixes
 Created September 2006 Marko Makela
 *******************************************************/
 
+#include "btr0blob.h"
 #include "btr0cur.h"
 #include "row0ext.h"
 
@@ -30,6 +31,7 @@ Created September 2006 Marko Makela
 @param[in] i                    Index of ext->extp[]
 @paramp[in] dfield              Data field. */
 static void row_ext_cache_fill(row_ext_t *ext, ulint i, const dfield_t *dfield) {
+  Blob blob(srv_fsp, srv_btree_sys);
   auto field = (const byte *)dfield_get_data(dfield);
   auto f_len = dfield_get_len(dfield);
   auto buf = ext->buf + i * REC_MAX_INDEX_COL_LEN;
@@ -48,7 +50,7 @@ static void row_ext_cache_fill(row_ext_t *ext, ulint i, const dfield_t *dfield) 
     access a half-deleted BLOB if the server previously
     crashed during the execution of
     btr_free_externally_stored_field(). */
-    ext->len[i] = btr_copy_externally_stored_field_prefix(buf, REC_MAX_INDEX_COL_LEN, field, f_len);
+    ext->len[i] = blob.copy_externally_stored_field_prefix(buf, REC_MAX_INDEX_COL_LEN, field, f_len);
   }
 }
 

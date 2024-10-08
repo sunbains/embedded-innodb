@@ -148,7 +148,7 @@ static bool page_dir_slot_check(page_dir_slot_t *slot) /*!< in: slot */
   return (true);
 }
 
-void page_set_max_trx_id(buf_block_t *block, trx_id_t trx_id, mtr_t *mtr) {
+void page_set_max_trx_id(Buf_block *block, trx_id_t trx_id, mtr_t *mtr) {
   auto page = block->get_frame();
 
   ut_ad(!mtr || mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
@@ -194,7 +194,7 @@ inline void page_create_write_log(buf_frame_t *frame, mtr_t *mtr) {
   mlog_write_initial_log_record(frame, MLOG_PAGE_CREATE, mtr);
 }
 
-byte *page_parse_create(byte *ptr, byte *, buf_block_t *block, mtr_t *mtr) {
+byte *page_parse_create(byte *ptr, byte *, Buf_block *block, mtr_t *mtr) {
   ut_ad(ptr != nullptr);
 
   /* The record is empty, except for the record initial part */
@@ -206,7 +206,7 @@ byte *page_parse_create(byte *ptr, byte *, buf_block_t *block, mtr_t *mtr) {
   return ptr;
 }
 
-page_t *page_create(buf_block_t *block, mtr_t *mtr) {
+page_t *page_create(Buf_block *block, mtr_t *mtr) {
   ut_ad(block != nullptr);
 
   page_create_write_log(block->get_frame(), mtr);
@@ -316,7 +316,7 @@ page_t *page_create(buf_block_t *block, mtr_t *mtr) {
   return page;
 }
 
-void page_copy_rec_list_end_no_locks(buf_block_t *new_block, buf_block_t *block, rec_t *rec, dict_index_t *index, mtr_t *mtr) {
+void page_copy_rec_list_end_no_locks(Buf_block *new_block, Buf_block *block, rec_t *rec, dict_index_t *index, mtr_t *mtr) {
   page_t *new_page = new_block->get_frame();
   page_cur_t cur1;
   rec_t *cur2;
@@ -377,7 +377,7 @@ void page_copy_rec_list_end_no_locks(buf_block_t *new_block, buf_block_t *block,
   }
 }
 
-rec_t *page_copy_rec_list_end(buf_block_t *new_block, buf_block_t *block, rec_t *rec, dict_index_t *index, mtr_t *mtr) {
+rec_t *page_copy_rec_list_end(Buf_block *new_block, Buf_block *block, rec_t *rec, dict_index_t *index, mtr_t *mtr) {
   page_t *new_page = new_block->get_frame();
   page_t *page = page_align(rec);
   rec_t *ret = page_rec_get_next(page_get_infimum_rec(new_page));
@@ -405,7 +405,7 @@ rec_t *page_copy_rec_list_end(buf_block_t *new_block, buf_block_t *block, rec_t 
   return ret;
 }
 
-rec_t *page_copy_rec_list_start(buf_block_t *new_block, buf_block_t *block, rec_t *rec, dict_index_t *index, mtr_t *mtr) {
+rec_t *page_copy_rec_list_start(Buf_block *new_block, Buf_block *block, rec_t *rec, dict_index_t *index, mtr_t *mtr) {
   page_t *new_page = new_block->get_frame();
   page_cur_t cur1;
   rec_t *cur2;
@@ -479,7 +479,7 @@ inline void page_delete_rec_list_write_log(
   }
 }
 
-byte *page_parse_delete_rec_list(byte type, byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr) {
+byte *page_parse_delete_rec_list(byte type, byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr) {
   ut_ad(type == MLOG_LIST_END_DELETE || type == MLOG_LIST_START_DELETE);
 
   /* Read the record offset as a 2-byte ulint */
@@ -509,7 +509,7 @@ byte *page_parse_delete_rec_list(byte type, byte *ptr, byte *end_ptr, buf_block_
   return ptr;
 }
 
-void page_delete_rec_list_end(rec_t *rec, buf_block_t *block, dict_index_t *index, ulint n_recs, ulint size, mtr_t *mtr) {
+void page_delete_rec_list_end(rec_t *rec, Buf_block *block, dict_index_t *index, ulint n_recs, ulint size, mtr_t *mtr) {
   page_dir_slot_t *slot;
   ulint slot_index;
   rec_t *last_rec;
@@ -615,7 +615,7 @@ void page_delete_rec_list_end(rec_t *rec, buf_block_t *block, dict_index_t *inde
   page_header_set_field(page, PAGE_N_RECS, (ulint)(page_get_n_recs(page) - n_recs));
 }
 
-void page_delete_rec_list_start(rec_t *rec, buf_block_t *block, dict_index_t *index, mtr_t *mtr) {
+void page_delete_rec_list_start(rec_t *rec, Buf_block *block, dict_index_t *index, mtr_t *mtr) {
   page_cur_t cur1;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
@@ -656,7 +656,7 @@ void page_delete_rec_list_start(rec_t *rec, buf_block_t *block, dict_index_t *in
   ut_a(old_mode == MTR_LOG_NONE);
 }
 
-bool page_move_rec_list_end(buf_block_t *new_block, buf_block_t *block, rec_t *split_rec, dict_index_t *index, mtr_t *mtr) {
+bool page_move_rec_list_end(Buf_block *new_block, Buf_block *block, rec_t *split_rec, dict_index_t *index, mtr_t *mtr) {
   page_t *new_page = new_block->get_frame();
   ulint old_data_size;
   ulint new_data_size;
@@ -680,7 +680,7 @@ bool page_move_rec_list_end(buf_block_t *new_block, buf_block_t *block, rec_t *s
   return (true);
 }
 
-bool page_move_rec_list_start(buf_block_t *new_block, buf_block_t *block, rec_t *split_rec, dict_index_t *index, mtr_t *mtr) {
+bool page_move_rec_list_start(Buf_block *new_block, Buf_block *block, rec_t *split_rec, dict_index_t *index, mtr_t *mtr) {
   if (unlikely(!page_copy_rec_list_start(new_block, block, split_rec, index, mtr))) {
     return (false);
   }
@@ -992,7 +992,7 @@ void page_dir_print(page_t *page, ulint pr_n) {
   );
 }
 
-void page_print_list(buf_block_t *block, dict_index_t *index, ulint pr_n) {
+void page_print_list(Buf_block *block, dict_index_t *index, ulint pr_n) {
   page_t *page = block->m_frame;
   page_cur_t cur;
   ulint count;
@@ -1087,7 +1087,7 @@ void page_header_print(const page_t *page) {
   );
 }
 
-void page_print(buf_block_t *block, dict_index_t *index, ulint dn, ulint rn) {
+void page_print(Buf_block *block, dict_index_t *index, ulint dn, ulint rn) {
   page_t *page = block->m_frame;
 
   page_header_print(page);

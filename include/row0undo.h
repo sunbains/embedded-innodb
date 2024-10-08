@@ -36,7 +36,7 @@ Created 1/8/1997 Heikki Tuuri
 
 /** Creates a row undo node to a query graph.
 @return	own: undo node */
-undo_node_t *row_undo_node_create(
+Undo_node *row_undo_node_create(
   /** in: transaction */
   trx_t *trx,
 
@@ -54,7 +54,7 @@ by the caller in any case.
 @return true if found; NOTE the node->pcur must be closed by the
 caller, regardless of the return value
 @param[in,out] node             Row undo node. */
-bool row_undo_search_clust_to_pcur(undo_node_t *node);
+bool row_undo_search_clust_to_pcur(Undo_node *node);
 
 /** Undoes a row operation in a table. This is a high-level function used
 in SQL execution graphs.
@@ -95,7 +95,13 @@ enum undo_exec {
 };
 
 /** Undo node structure */
-struct undo_node_struct {
+struct Undo_node {
+
+  Undo_node() = delete;
+
+  Undo_node(FSP *fsp, Btree *btree, Lock_sys *lock_sys) noexcept
+   : m_pcur(fsp, btree, lock_sys) {}
+
   /** node type: QUE_NODE_UNDO */
   que_common_t common;
 
@@ -124,7 +130,7 @@ struct undo_node_struct {
   trx_id_t new_trx_id;
 
   /** persistent cursor used in searching the clustered index record */
-  btr_pcur_t pcur;
+  Btree_pcursor m_pcur;
 
   /** table where undo is done */
   dict_table_t *table;

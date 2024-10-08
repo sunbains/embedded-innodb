@@ -125,7 +125,7 @@ que_t *Purge_sys::graph_build() noexcept {
   return fork;
 }
 
-void Purge_sys::free_segment(trx_rseg_t *rseg, fil_addr_t hdr_addr, ulint n_removed_logs) noexcept {
+void Purge_sys::free_segment(trx_rseg_t *rseg, Fil_addr hdr_addr, ulint n_removed_logs) noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   mtr_t mtr;
@@ -758,9 +758,9 @@ ulint Purge_sys::run() noexcept {
 
   /* If we cannot advance the 'purge view' because of an old
   'consistent read view', then the DML statements cannot be delayed.
-  Also, srv_max_purge_lag <= 0 means 'infinity'. */
-  if (srv_max_purge_lag > 0 && !UT_LIST_GET_LAST(srv_trx_sys->m_view_list)) {
-    float ratio = (float)srv_trx_sys->m_rseg_history_len / srv_max_purge_lag;
+  Also, srv_config.m_max_purge_lag <= 0 means 'infinity'. */
+  if (srv_config.m_max_purge_lag > 0 && !UT_LIST_GET_LAST(srv_trx_sys->m_view_list)) {
+    float ratio = (float)srv_trx_sys->m_rseg_history_len / srv_config.m_max_purge_lag;
     if (ratio > (float)ULINT_MAX / 10000) {
       /* Avoid overflow: maximum delay is 4295 seconds */
       srv_dml_needed_delay = ULINT_MAX;

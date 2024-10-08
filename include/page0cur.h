@@ -102,7 +102,7 @@ void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *o
  * @param cursor Out: Page cursor.
  */
 void page_cur_search_with_match(
-  const buf_block_t *block, const dict_index_t *index, const dtuple_t *tuple, ulint mode, ulint *iup_matched_fields,
+  const Buf_block *block, const dict_index_t *index, const dtuple_t *tuple, ulint mode, ulint *iup_matched_fields,
   ulint *iup_matched_bytes, ulint *ilow_matched_fields, ulint *ilow_matched_bytes, page_cur_t *cursor
 );
 
@@ -113,7 +113,7 @@ void page_cur_search_with_match(
  * @param block In: Page.
  * @param cursor Out: Page cursor.
  */
-void page_cur_open_on_rnd_user_rec(buf_block_t *block, page_cur_t *cursor);
+void page_cur_open_on_rnd_user_rec(Buf_block *block, page_cur_t *cursor);
 
 /**
  * @brief Parses a log record of a record insert on a page.
@@ -126,7 +126,7 @@ void page_cur_open_on_rnd_user_rec(buf_block_t *block, page_cur_t *cursor);
  * @param mtr In: MTR or NULL.
  * @return End of log record or NULL.
  */
-byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr);
+byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr);
 
 /**
  * @brief Parses a log record of copying a record list end to a new created page.
@@ -138,7 +138,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_blo
  * @param mtr In: MTR or NULL.
  * @return End of log record or NULL.
  */
-byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr);
+byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr);
 
 /**
  * @brief Parses log record of a record delete on a page.
@@ -150,7 +150,7 @@ byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, buf_blo
  * @param mtr In: MTR or NULL.
  * @return Pointer to record end or NULL.
  */
-byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr);
+byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr);
 
 /** Index page cursor */
 struct page_cur_t {
@@ -164,7 +164,7 @@ struct page_cur_t {
   ulint *m_offsets{};
 
   /** Pointer to the current block containing rec. */
-  buf_block_t *m_block{};
+  Buf_block *m_block{};
 };
 
 /**
@@ -185,7 +185,7 @@ inline page_t *page_cur_get_page(page_cur_t *cur) {
  * @param cur In: Page cursor.
  * @return Buffer block.
  */
-inline buf_block_t *page_cur_get_block(page_cur_t *cur) {
+inline Buf_block *page_cur_get_block(page_cur_t *cur) {
   ut_ad(page_align(cur->m_rec) == cur->m_block->get_frame());
 
   return cur->m_block;
@@ -209,7 +209,7 @@ inline rec_t *page_cur_get_rec(page_cur_t *cur) {
  * @param block In: Index page.
  * @param cur In: Cursor.
  */
-inline void page_cur_set_before_first(buf_block_t *block, page_cur_t *cur) {
+inline void page_cur_set_before_first(Buf_block *block, page_cur_t *cur) {
   cur->m_block = block;
   cur->m_rec = page_get_infimum_rec(cur->m_block->get_frame());
 }
@@ -220,8 +220,8 @@ inline void page_cur_set_before_first(buf_block_t *block, page_cur_t *cur) {
  * @param block In: Index page.
  * @param cur In: Cursor.
  */
-inline void page_cur_set_before_first(const buf_block_t *block, page_cur_t *cur) {
-  page_cur_set_before_first(const_cast<buf_block_t *>(block), cur);
+inline void page_cur_set_before_first(const Buf_block *block, page_cur_t *cur) {
+  page_cur_set_before_first(const_cast<Buf_block *>(block), cur);
 }
 
 /**
@@ -230,7 +230,7 @@ inline void page_cur_set_before_first(const buf_block_t *block, page_cur_t *cur)
  * @param block In: Index page.
  * @param cur In: Cursor.
  */
-inline void page_cur_set_after_last(buf_block_t *block, page_cur_t *cur) {
+inline void page_cur_set_after_last(Buf_block *block, page_cur_t *cur) {
   cur->m_block = block;
   cur->m_rec = page_get_supremum_rec(cur->m_block->get_frame());
 }
@@ -241,8 +241,8 @@ inline void page_cur_set_after_last(buf_block_t *block, page_cur_t *cur) {
  * @param block In: Index page.
  * @param cur In: Cursor.
  */
-inline void page_cur_set_after_last(const buf_block_t *block, page_cur_t *cur) {
-  cur->m_block = const_cast<buf_block_t *>(block);
+inline void page_cur_set_after_last(const Buf_block *block, page_cur_t *cur) {
+  cur->m_block = const_cast<Buf_block *>(block);
   cur->m_rec = page_get_supremum_rec(cur->m_block->get_frame());
 }
 
@@ -275,11 +275,11 @@ inline bool page_cur_is_after_last(const page_cur_t *cur) {
  * @param block In: Buffer block containing the record.
  * @param cur Out: Page cursor.
  */
-inline void page_cur_position(const rec_t *rec, const buf_block_t *block, page_cur_t *cur) {
+inline void page_cur_position(const rec_t *rec, const Buf_block *block, page_cur_t *cur) {
   ut_ad(page_align(rec) == block->get_frame());
 
   cur->m_rec = const_cast<rec_t *>(rec);
-  cur->m_block = const_cast<buf_block_t *>(block);
+  cur->m_block = const_cast<Buf_block *>(block);
 }
 
 /**
@@ -325,7 +325,7 @@ inline void page_cur_move_to_prev(page_cur_t *cur) {
  * @return Number of matched fields on the left.
  */
 inline ulint page_cur_search(
-  const buf_block_t *block, const dict_index_t *dict_index, const dtuple_t *tuple, ulint mode, page_cur_t *cursor
+  const Buf_block *block, const dict_index_t *dict_index, const dtuple_t *tuple, ulint mode, page_cur_t *cursor
 ) {
   ulint low_matched_fields = 0;
   ulint low_matched_bytes = 0;

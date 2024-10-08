@@ -67,7 +67,7 @@ static uint64_t page_cur_lcg_prng(void) {
 /** Tries a search shortcut based on the last insert.
 @return	true on success */
 static bool page_cur_try_search_shortcut(
-  const buf_block_t *block,  /*!< in: index page */
+  const Buf_block *block,  /*!< in: index page */
   const dict_index_t *index, /*!< in: record descriptor */
   const dtuple_t *tuple,     /*!< in: data tuple */
   ulint *iup_matched_fields,
@@ -218,7 +218,7 @@ static bool page_cur_rec_field_extends(
 #endif /* PAGE_CUR_LE_OR_EXTENDS */
 
 void page_cur_search_with_match(
-  const buf_block_t *block, const dict_index_t *index, const dtuple_t *tuple, ulint mode, ulint *iup_matched_fields,
+  const Buf_block *block, const dict_index_t *index, const dtuple_t *tuple, ulint mode, ulint *iup_matched_fields,
   ulint *iup_matched_bytes, ulint *ilow_matched_fields, ulint *ilow_matched_bytes, page_cur_t *cursor
 ) {
   ulint up;
@@ -481,7 +481,7 @@ void page_cur_search_with_match(
   }
 }
 
-void page_cur_open_on_rnd_user_rec(buf_block_t *block, page_cur_t *cursor) {
+void page_cur_open_on_rnd_user_rec(Buf_block *block, page_cur_t *cursor) {
   ulint rnd;
   ulint n_recs = page_get_n_recs(block->get_frame());
 
@@ -647,7 +647,7 @@ static void page_cur_insert_rec_write_log(
   }
 }
 
-byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr) {
+byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr) {
   page_t *page;
   rec_t *cursor_rec;
   byte buf1[1024];
@@ -991,7 +991,7 @@ static byte *page_copy_rec_list_to_created_page_write_log(
   return log_ptr;
 }
 
-byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr) {
+byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr) {
   byte *rec_end;
   ulint log_data_len;
   page_t *page;
@@ -1199,7 +1199,7 @@ static void page_cur_delete_rec_write_log(
   mlog_close(mtr, log_ptr + 2);
 }
 
-byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, buf_block_t *block, dict_index_t *index, mtr_t *mtr) {
+byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr) {
   ulint offset;
   page_cur_t cursor;
 

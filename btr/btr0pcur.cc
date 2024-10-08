@@ -27,12 +27,12 @@ Created 2/23/1996 Heikki Tuuri
 #include "btr0types.h"
 #include "trx0trx.h"
 
-btr_pcur_t::btr_pcur_t() : m_btr_cur() {
+Btree_pcursor::Btree_pcursor(FSP *fsp, Btree *btree, Lock_sys *lock_sys) noexcept : m_btr_cur(fsp, btree, lock_sys) {
   m_btr_cur.m_index = nullptr;
   init(0);
 }
 
-btr_pcur_t::~btr_pcur_t() {
+Btree_pcursor::~Btree_pcursor() noexcept {
   if (m_old_rec_buf != nullptr) {
     mem_free(m_old_rec_buf);
 
@@ -48,12 +48,12 @@ btr_pcur_t::~btr_pcur_t() {
   m_pos_state = Btr_pcur_positioned::UNSET;
 }
 
-void btr_pcur_t::store_position(mtr_t *mtr) {
+void Btree_pcursor::store_position(mtr_t *mtr) noexcept {
   ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   auto block = get_block();
-  auto index = btr_cur_get_index(get_btr_cur());
+  auto index = m_btr_cur.m_index;
   auto page_cursor = get_page_cur();
 
   auto rec = page_cur_get_rec(page_cursor);
@@ -68,8 +68,8 @@ void btr_pcur_t::store_position(mtr_t *mtr) {
     we do not store the modify_clock, but always do a search
     if we restore the cursor position */
 
-    ut_a(srv_btree_sys->page_get_next(page, mtr) == FIL_NULL);
-    ut_a(srv_btree_sys->page_get_prev(page, mtr) == FIL_NULL);
+    ut_a(m_btr_cur.m_btree->page_get_next(page, mtr) == FIL_NULL);
+    ut_a(m_btr_cur.m_btree->page_get_prev(page, mtr) == FIL_NULL);
 
     m_old_stored = true;
 
@@ -107,7 +107,7 @@ void btr_pcur_t::store_position(mtr_t *mtr) {
   m_modify_clock = buf_block_get_modify_clock(block);
 }
 
-void btr_pcur_t::copy_stored_position(btr_pcur_t *src) {
+void Btree_pcursor::copy_stored_position(Btree_pcursor *src) noexcept {
   if (m_old_rec_buf != nullptr) {
     mem_free(m_old_rec_buf);
   }
@@ -126,16 +126,16 @@ void btr_pcur_t::copy_stored_position(btr_pcur_t *src) {
   m_old_n_fields = src->m_old_n_fields;
 }
 
-bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location loc) {
+bool Btree_pcursor::restore_position(ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept {
   ut_ad(mtr->m_state == MTR_ACTIVE);
 
-  auto index = btr_cur_get_index(get_btr_cur());
+  auto index = m_btr_cur.m_index;
 
   if (unlikely(!m_old_stored) ||
       unlikely(m_pos_state != Btr_pcur_positioned::WAS_POSITIONED &&
                m_pos_state != Btr_pcur_positioned::IS_POSITIONED)) {
 
-    log_warn_buf(this, sizeof(btr_pcur_t));
+    log_warn_buf(this, sizeof(Btree_pcursor));
 
     if (m_trx_if_known != nullptr) {
       log_err(trx_to_string(m_trx_if_known, 0));
@@ -149,7 +149,7 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
 
     /* In these cases we do not try an optimistic restoration, but always do a search */
 
-    btr_cur_open_at_index_side(m_rel_pos == Btree_cursor_pos::BEFORE_FIRST_IN_TREE, index, latch_mode, get_btr_cur(), m_read_level, mtr);
+    m_btr_cur.open_at_index_side(nullptr, m_rel_pos == Btree_cursor_pos::BEFORE_FIRST_IN_TREE, index, latch_mode, m_read_level, mtr, loc);
 
     m_block_when_stored = get_block();
 
@@ -267,20 +267,20 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr, Source_location 
   return ret;
 }
 
-void btr_pcur_t::release_leaf(mtr_t *mtr) {
+void Btree_pcursor::release_leaf(mtr_t *mtr) noexcept {
   ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   auto block = get_block();
 
-  srv_btree_sys->leaf_page_release(block, m_latch_mode, mtr);
+  m_btr_cur.m_btree->leaf_page_release(block, m_latch_mode, mtr);
 
   m_latch_mode = BTR_NO_LATCHES;
 
   m_pos_state = Btr_pcur_positioned::WAS_POSITIONED;
 }
 
-void btr_pcur_t::move_to_next_page(mtr_t *mtr) {
+void Btree_pcursor::move_to_next_page(mtr_t *mtr) noexcept {
   ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
   ut_ad(is_after_last_on_page());
@@ -288,28 +288,28 @@ void btr_pcur_t::move_to_next_page(mtr_t *mtr) {
   m_old_stored = false;
 
   auto page = get_page();
-  auto next_page_no = srv_btree_sys->page_get_next(page, mtr);
-  auto space_id = get_block()->get_space();
+  const auto space_id = get_block()->get_space();
+  const auto next_page_no = m_btr_cur.m_btree->page_get_next(page, mtr);
 
   ut_ad(next_page_no != FIL_NULL);
 
-  auto next_block = srv_btree_sys->block_get(space_id, next_page_no, m_latch_mode, mtr);
+  auto next_block = m_btr_cur.m_btree->block_get(space_id, next_page_no, m_latch_mode, mtr);
   auto next_page = next_block->get_frame();
 
 #ifdef UNIV_BTR_DEBUG
-  ut_a(srv_btree_sys->page_get_prev(next_page, mtr) == get_block()->get_page_no());
+  ut_a(m_btr_cur.m_btree->page_get_prev(next_page, mtr) == get_block()->get_page_no());
 #endif /* UNIV_BTR_DEBUG */
 
   next_block->m_check_index_page_at_flush = true;
 
-  srv_btree_sys->leaf_page_release(get_block(), m_latch_mode, mtr);
+  m_btr_cur.m_btree->leaf_page_release(get_block(), m_latch_mode, mtr);
 
   page_cur_set_before_first(next_block, get_page_cur());
 
   page_check_dir(next_page);
 }
 
-void btr_pcur_t::move_backward_from_page(mtr_t *mtr) {
+void Btree_pcursor::move_backward_from_page(mtr_t *mtr) noexcept {
   ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
   ut_ad(is_before_first_on_page());
@@ -339,18 +339,18 @@ void btr_pcur_t::move_backward_from_page(mtr_t *mtr) {
 
   mtr->start();
 
-  restore_position(latch_mode2, mtr, Source_location{});
+  (void) restore_position(latch_mode2, mtr, Source_location{});
 
   auto page = get_page();
-  auto prev_page_no = srv_btree_sys->page_get_prev(page, mtr);
+  auto prev_page_no = m_btr_cur.m_btree->page_get_prev(page, mtr);
 
   if (prev_page_no == FIL_NULL) {
      ;
   } else if (is_before_first_on_page()) {
 
-    auto prev_block = get_btr_cur()->left_block;
+    auto prev_block = m_btr_cur.m_left_block;
 
-      srv_btree_sys->leaf_page_release(get_block(), latch_mode, mtr);
+    m_btr_cur.m_btree->leaf_page_release(get_block(), latch_mode, mtr);
 
     page_cur_set_after_last(prev_block, get_page_cur());
   } else {
@@ -359,9 +359,9 @@ void btr_pcur_t::move_backward_from_page(mtr_t *mtr) {
     a page. Cursor repositioning acquired a latch also on the
     previous page, but we do not need the latch: release it. */
 
-    auto prev_block = get_btr_cur()->left_block;
+    auto prev_block = m_btr_cur.m_left_block;
 
-    srv_btree_sys->leaf_page_release(prev_block, latch_mode, mtr);
+    m_btr_cur.m_btree->leaf_page_release(prev_block, latch_mode, mtr);
   }
 
   m_latch_mode = latch_mode;
@@ -369,21 +369,21 @@ void btr_pcur_t::move_backward_from_page(mtr_t *mtr) {
   m_old_stored = false;
 }
 
-void btr_pcur_t::open_on_user_rec(
+void Btree_pcursor::open_on_user_rec(
   dict_index_t *index,
   const dtuple_t *tuple,
   ib_srch_mode_t search_mode,
   ulint latch_mode,
   mtr_t *mtr,
   Source_location loc
-) {
+) noexcept {
   open(index, tuple, search_mode, latch_mode, mtr, loc);
 
   if (search_mode == PAGE_CUR_GE || search_mode == PAGE_CUR_G) {
 
     if (is_after_last_on_page()) {
 
-      move_to_next_user_rec(mtr);
+      (void) move_to_next_user_rec(mtr);
     }
   } else {
     ut_ad(search_mode == PAGE_CUR_LE || search_mode == PAGE_CUR_L);
@@ -394,10 +394,8 @@ void btr_pcur_t::open_on_user_rec(
   }
 }
 
-void btr_pcur_t::open_on_user_rec(const page_cur_t &page_cursor, ib_srch_mode_t mode, ulint latch_mode) {
-  auto btr_cur = get_btr_cur();
-
-  btr_cur->m_index = const_cast<dict_index_t *>(page_cursor.m_index);
+void Btree_pcursor::open_on_user_rec(const page_cur_t &page_cursor, ib_srch_mode_t mode, ulint latch_mode) noexcept {
+  m_btr_cur.m_index = const_cast<dict_index_t *>(page_cursor.m_index);
 
   auto page_cur = get_page_cur();
 

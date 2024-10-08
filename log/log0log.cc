@@ -629,7 +629,7 @@ void Log::io_complete(log_group_t *group) noexcept {
     /* It was a checkpoint write */
     group = reinterpret_cast<log_group_t *>(uintptr_t(group) - 1);
 
-    if (srv_unix_file_flush_method != SRV_UNIX_O_DSYNC && srv_unix_file_flush_method != SRV_UNIX_NOSYNC) {
+    if (srv_config.m_unix_file_flush_method != SRV_UNIX_O_DSYNC && srv_config.m_unix_file_flush_method != SRV_UNIX_NOSYNC) {
 
       srv_fil->flush(group->space_id);
     }
@@ -642,9 +642,9 @@ void Log::io_complete(log_group_t *group) noexcept {
   /* We currently use synchronous writing of the logs and cannot end up here! */
   ut_error;
 
-  if (srv_unix_file_flush_method != SRV_UNIX_O_DSYNC &&
-      srv_unix_file_flush_method != SRV_UNIX_NOSYNC &&
-      srv_flush_log_at_trx_commit != 2) {
+  if (srv_config.m_unix_file_flush_method != SRV_UNIX_O_DSYNC &&
+      srv_config.m_unix_file_flush_method != SRV_UNIX_NOSYNC &&
+      srv_config.m_flush_log_at_trx_commit != 2) {
 
     srv_fil->flush(group->space_id);
   }
@@ -894,7 +894,7 @@ void Log::write_up_to(lsn_t lsn, ulint wait, bool flush_to_disk) noexcept {
 
     release();
 
-    if (srv_unix_file_flush_method == SRV_UNIX_O_DSYNC) {
+    if (srv_config.m_unix_file_flush_method == SRV_UNIX_O_DSYNC) {
       /* O_DSYNC means the OS did not buffer the log file at all:
       so we have also flushed to disk what we have written */
       m_flushed_to_disk_lsn = m_write_lsn;
@@ -1118,7 +1118,7 @@ bool Log::checkpoint(bool sync, bool write_always) noexcept {
     recv_apply_log_recs(srv_dblwr, false);
   }
 
-  if (srv_unix_file_flush_method != SRV_UNIX_NOSYNC) {
+  if (srv_config.m_unix_file_flush_method != SRV_UNIX_NOSYNC) {
     srv_fil->flush_file_spaces(FIL_TABLESPACE);
   }
 

@@ -114,8 +114,10 @@ doing the purge. Similarly, during a rollback, a record can be removed
 if the stored roll ptr in the undo log points to a trx already (being) purged,
 or if the roll ptr is nullptr, i.e., it was a fresh insert. */
 
-undo_node_t *row_undo_node_create(trx_t *trx, que_thr_t *parent, mem_heap_t *heap) {
-  auto undo = reinterpret_cast<undo_node_t *>(mem_heap_alloc(heap, sizeof(undo_node_t)));
+Undo_node *row_undo_node_create(trx_t *trx, que_thr_t *parent, mem_heap_t *heap) {
+  auto ptr = mem_heap_alloc(heap, sizeof(Undo_node));
+
+  auto undo = new (ptr) Undo_node(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   undo->common.type = QUE_NODE_UNDO;
   undo->common.parent = parent;
@@ -123,14 +125,14 @@ undo_node_t *row_undo_node_create(trx_t *trx, que_thr_t *parent, mem_heap_t *hea
   undo->state = UNDO_NODE_FETCH_NEXT;
   undo->trx = trx;
 
-  undo->pcur.init(0);
+  undo->m_pcur.init(0);
 
   undo->heap = mem_heap_create(256);
 
   return undo;
 }
 
-bool row_undo_search_clust_to_pcur(undo_node_t *node) {
+bool row_undo_search_clust_to_pcur(Undo_node *node) {
   bool ret;
   mem_heap_t *heap{};
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
@@ -143,9 +145,9 @@ bool row_undo_search_clust_to_pcur(undo_node_t *node) {
 
   auto clust_index = dict_table_get_first_index(node->table);
 
-  auto found = row_search_on_row_ref(&(node->pcur), BTR_MODIFY_LEAF, node->table, node->ref, &mtr);
+  auto found = row_search_on_row_ref(&node->m_pcur, BTR_MODIFY_LEAF, node->table, node->ref, &mtr);
 
-  auto rec = node->pcur.get_rec();
+  auto rec = node->m_pcur.get_rec();
 
   {
     Phy_rec record{clust_index, rec};
@@ -174,12 +176,12 @@ bool row_undo_search_clust_to_pcur(undo_node_t *node) {
       node->undo_ext = nullptr;
     }
 
-    node->pcur.store_position(&mtr);
+    node->m_pcur.store_position(&mtr);
 
     ret = true;
   }
 
-  node->pcur.commit_specify_mtr(&mtr);
+  node->m_pcur.commit_specify_mtr(&mtr);
 
   if (likely_null(heap)) {
     mem_heap_free(heap);
@@ -193,7 +195,7 @@ parent node, which is always a query thread node.
 @param[in,out] node             Row undo node.
 @param[in,out] thr              Query thread.
 @return	DB_SUCCESS if operation successfully completed, else error code */
-static db_err row_undo(undo_node_t *node, que_thr_t *thr) {
+static db_err row_undo(Undo_node *node, que_thr_t *thr) {
   roll_ptr_t roll_ptr;
 
   auto trx = node->trx;
@@ -269,7 +271,7 @@ static db_err row_undo(undo_node_t *node, que_thr_t *thr) {
   }
 
   /* Do some cleanup */
-  node->pcur.close();
+  node->m_pcur.close();
 
   mem_heap_empty(node->heap);
 
@@ -283,7 +285,7 @@ que_thr_t *row_undo_step(que_thr_t *thr) {
 
   auto trx = thr_get_trx(thr);
 
-  auto node = static_cast<undo_node_t *>(thr->run_node);
+  auto node = static_cast<Undo_node *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_UNDO);
 

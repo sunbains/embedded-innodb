@@ -27,7 +27,7 @@ Created 2/23/1996 Heikki Tuuri
 #include "btr0cur.h"
 
 struct mtr_t;
-struct buf_block_t;
+struct Buf_block;
 
 /* Relative positions for a stored cursor position */
 enum class Btree_cursor_pos : uint8_t {
@@ -72,7 +72,7 @@ enum class Btr_pcur_positioned {
 
 /* The persistent B-tree cursor structure. This is used mainly for SQL
 selects, updates, and deletes. */
-struct btr_pcur_t {
+struct Btree_pcursor {
   struct Ctx {
     dict_index_t *m_dict_index{};
     const dtuple_t *m_tuple{};
@@ -82,22 +82,27 @@ struct btr_pcur_t {
     Source_location m_loc{};
   };
 
-  /** @brief Constructor. */
-  btr_pcur_t();
+  /** @brief Constructor.
+   * 
+   * @param[in] fsp             The file segment manager.
+   * @param[in] btree           The B-tree.
+   * @param[in] lock_sys        The lock system.
+   */
+  Btree_pcursor(FSP *fsp, Btree *btree, Lock_sys *lock_sys) noexcept;
 
   /**
    * @brief Destructor.
    */
-  ~btr_pcur_t();
+  ~Btree_pcursor() noexcept;
 
   /**
    * @brief Copies the stored position of a persistent cursor to this persistent cursor.
    *
    * This function copies the stored position information from one persistent cursor to another.
    *
-   * @param src The persistent cursor from which the position information is copied.
+   * @param[in] src             The persistent cursor from which the position information is copied.
    */
-  void copy_stored_position(btr_pcur_t *src);
+  void copy_stored_position(Btree_pcursor *src) noexcept;
 
   /**
    * @brief Opens a persistent cursor on the first or last user record satisfying the search condition.
@@ -107,21 +112,22 @@ struct btr_pcur_t {
    * If no such user record exists, the cursor is positioned after the last record in the tree for PAGE_CUR_G or PAGE_CUR_GE mode,
    * and before the first record in the tree for PAGE_CUR_L or PAGE_CUR_LE mode.
    *
-   * @param index The index on which the search is performed.
-   * @param tuple The tuple on which the search is done.
-   * @param mode The search mode (PAGE_CUR_L, PAGE_CUR_LE, PAGE_CUR_G, or PAGE_CUR_GE).
-   * @param latch_mode The latching mode (BTR_SEARCH_LEAF or BTR_MODIFY_LEAF).
-   * @param file The file name where the function is called.
-   * @param line The line number where the function is called.
-   * @param mtr The mtr (mini-transaction) object.
+   * @param[in] index           The index on which the search is performed.
+   * @param[in] tuple           The tuple on which the search is done.
+   * @param[in] mode            The search mode (PAGE_CUR_L, PAGE_CUR_LE, PAGE_CUR_G, or PAGE_CUR_GE).
+   * @param[in] latch_mode      The latching mode (BTR_SEARCH_LEAF or BTR_MODIFY_LEAF).
+   * @param[in] mtr             The mtr (mini-transaction) object.
+   * @param[in] loc             The callers location
    */
-  void open_on_user_rec(dict_index_t *index, const dtuple_t *tuple, ib_srch_mode_t mode, ulint latch_mode, mtr_t *mtr, Source_location loc);
+  void open_on_user_rec(dict_index_t *index, const dtuple_t *tuple, ib_srch_mode_t mode, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept;
   
    /** Allows setting the persistent cursor manually.
-    * @param[in] cursor      Page cursor where positioned.
-    * @param[in] mode        PAGE_CUR_L, ...
-    * @param[in] latch_mode  BTR_SEARCH_LEAF or BTR_MODIFY_LEAF */
-  void open_on_user_rec(const page_cur_t &cursor, ib_srch_mode_t mode, ulint latch_mode);
+    * 
+    * @param[in] page_cursor    Page cursor where positioned.
+    * @param[in] mode           PAGE_CUR_L, ...
+    * @param[in] latch_mode     BTR_SEARCH_LEAF or BTR_MODIFY_LEAF
+    */
+  void open_on_user_rec(const page_cur_t &page_cursor, ib_srch_mode_t mode, ulint latch_mode) noexcept;
 
 
   /**
@@ -135,10 +141,9 @@ struct btr_pcur_t {
    * NOTE that the page where the cursor is positioned must not be empty
    * if the index tree is not totally empty!
    *
-   * @param cursor The persistent cursor.
-   * @param mtr The mtr (mini-transaction) object.
+   * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void store_position(mtr_t *mtr);
+  void store_position(mtr_t *mtr) noexcept;
 
   /**
    * @brief Restores the stored position of a persistent cursor.
@@ -154,13 +159,14 @@ struct btr_pcur_t {
    * (4) The cursor was positioned before the first or after the last in an empty tree: restores to before first or after
    *     the last in the tree.
    *
-   * @param latch_mode The latching mode (BTR_SEARCH_LEAF, ...).
-   * @param mtr The mtr (mini-transaction) object.
-   * @param loc The callers location
+   * @param[in] latch_mode      The latching mode (BTR_SEARCH_LEAF, ...).
+   * @param[in] mtr             The mtr (mini-transaction) object.
+   * @param[in] loc             The callers location
+   * 
    * @return True if the cursor position was stored when it was on a user record and it can be restored on a user record
    *         whose ordering fields are identical to the ones of the original user record.
    */
-  bool restore_position(ulint latch_mode, mtr_t *mtr, Source_location loc);
+  [[nodiscard]] bool restore_position(ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept;
 
   /**
    * @brief Releases the page latch and bufferfix reserved by the cursorif the latch mode is BTR_LEAF_SEARCH or BTR_LEAF_MODIFY.
@@ -168,9 +174,9 @@ struct btr_pcur_t {
    * Note: In the case of BTR_LEAF_MODIFY, there should not exist changes made by the current mini-transaction to the
    * data protected by the cursor latch, as then the latch must not be released until mtr_commit.
    * 
-   * @param mtr The mtr (mini-transaction) object.
+   * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void release_leaf(mtr_t *mtr);
+  void release_leaf(mtr_t *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the first record on the next page.
@@ -178,9 +184,9 @@ struct btr_pcur_t {
    * 
    * Note: There must not be modifications on the current page, as then the x-latch can be released only in mtr_commit.
    * 
-   * @param mtr The mtr (mini-transaction) object.
+   * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void move_to_next_page(mtr_t *mtr);
+  void move_to_next_page(mtr_t *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor backward if it is on the first record of the page.
@@ -192,165 +198,171 @@ struct btr_pcur_t {
    * but it may happen that the cursor is not positioned on the last record of any page,
    * because the structure of the tree may have changed while the cursor had no latches.
    * 
-   * @param mtr The mtr (mini-transaction) object.
+   * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void move_backward_from_page(mtr_t *mtr);
+  void move_backward_from_page(mtr_t *mtr) noexcept;
 
   /**
    * @brief Gets the rel_pos field for a cursor whose position has been stored.
    * 
    * @return The rel_pos field value.
    */
-  Btree_cursor_pos get_rel_pos() const;
+  [[nodiscard]] Btree_cursor_pos get_rel_pos() const noexcept;
 
   /**
    * @brief Sets the mtr field for a persistent cursor.
    * 
-   * @param mtr The mtr to set.
+   * @param[in] mtr             The mtr to set.
    */
-  void set_mtr(mtr_t *mtr);
+  void set_mtr(mtr_t *mtr) noexcept;
 
   /**
    * @brief Gets the mtr field for a persistent cursor.
    * 
    * @return The mtr field.
    */
-  mtr_t *get_mtr();
+  [[nodiscard]] mtr_t *get_mtr() noexcept;
 
   /**
    * @brief Returns the page of a persistent cursor.
    * 
    * @return Pointer to the page.
    */
-  page_t *get_page();
+  [[nodiscard]] page_t *get_page() noexcept;
 
   /**
    * @brief Returns the buffer block of a persistent cursor.
    * 
    * @return Pointer to the block.
    */
-  buf_block_t *get_block();
+  [[nodiscard]] Buf_block *get_block() noexcept;
 
   /**
    * @brief The index of the persistent cursor.
    * 
    * @return the index being traversed.
    */
-  dict_index_t *get_index() {
-    return get_btr_cur()->m_index;
+  [[nodiscard]] dict_index_t *get_index()  noexcept{
+    return m_btr_cur.m_index;
   }
+
   /**
    * @brief Returns the record of a persistent cursor.
    * 
    * @return Pointer to the record.
    */
-  rec_t *get_rec();
+  [[nodiscard]] rec_t *get_rec() noexcept;
 
   /**
    * @brief Gets the up_match value for a pcur after a search.
    * 
    * @return Number of matched fields at the cursor or to the right if search mode was PAGE_CUR_GE, otherwise undefined.
    */
-  ulint get_up_match();
+  [[nodiscard]] ulint get_up_match() noexcept;
 
   /**
    * @brief Gets the low_match value for a persistent cursor after a search.
    * 
    * @return Number of matched fields at the cursor or to the right if search mode was PAGE_CUR_LE, otherwise undefined.
    */
-  ulint get_low_match();
+  [[nodiscard]] ulint get_low_match() noexcept;
 
   /**
    * @brief Checks if the persistent cursor is after the last user record on a page.
    * 
    * @return True if the cursor is after the last user record, false otherwise.
    */
-  bool is_after_last_on_page() const;
+  [[nodiscard]] bool is_after_last_on_page() const noexcept;
 
   /**
    * @brief Checks if the persistent cursor is before the first user record on a page.
    * 
    * @return True if the cursor is before the first user record, false otherwise.
    */
-  bool is_before_first_on_page() const;
+  [[nodiscard]] bool is_before_first_on_page() const noexcept;
 
   /**
    * @brief Checks if the persistent cursor is on a user record.
    * 
    * @return True if the cursor is on a user record, false otherwise.
    */
-  bool is_on_user_rec() const;
+  [[nodiscard]] bool is_on_user_rec() const noexcept;
 
   /**
    * @brief Checks if the persistent cursor is before the first user record in the index tree.
    * 
-   * @param mtr The mtr.
+   * @param[in] mtr             The mtr.
+   * 
    * @return True if the cursor is before the first user record in the index tree, false otherwise.
    */
-  bool is_before_first_in_tree(mtr_t *mtr);
+  [[nodiscard]] bool is_before_first_in_tree(mtr_t *mtr) noexcept;
 
   /**
    * @brief Checks if the persistent cursor is after the last user record in the index tree.
    * 
-   * @param mtr The mtr.
+   * @param[in] mtr             The mtr.
    * @return True if the cursor is after the last user record in the index tree, false otherwise.
    */
-  bool is_after_last_in_tree(mtr_t *mtr);
+  [[nodiscard]] bool is_after_last_in_tree(mtr_t *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the next record on the same page.
    */
-  void move_to_next_on_page();
+  void move_to_next_on_page() noexcept;
 
   /**
    * @brief Moves the persistent cursor to the previous record on the same page.
    * 
    */
-  void move_to_prev_on_page();
+  void move_to_prev_on_page() noexcept;
 
   /**
    * @brief Moves the persistent cursor to the last record on the same page.
    * 
-   * @param mtr The mtr.
+   * @param[in] mtr             The mtr.
    */
-  void move_to_last_on_page(mtr_t *mtr);
+  void move_to_last_on_page(mtr_t *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the next user record in the tree.
    * If no user records are left, the cursor ends up 'after last in tree'.
    * 
-   * @param mtr The mtr.
+   * @param[in] mtr             The mtr.
+   * 
    * @return True if the cursor moved forward, ending on a user record.
    */
-  bool move_to_next_user_rec(mtr_t *mtr);
+  [[nodiscard]] bool move_to_next_user_rec(mtr_t *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the previous user record in the tree. If no
    * user records are left, the cursor ends up 'before first in tree.
    * NOTE: The function may release the page lock.
    * 
-   * @param mtr The mtr.
+   * @param[in] mtr             The mtr.
+   * 
    * @return True if the cursor moved backward, ending on a user record.
    */
-  bool move_to_prev_user_rec(mtr_t *mtr);
+  [[nodiscard]] bool move_to_prev_user_rec(mtr_t *mtr) noexcept;
 
   /**
    * Moves the persistent cursor to the next record in the tree. If no records
    * are left, the cursor stays 'after last in tree'.
    *
-   * @param mtr The mtr
+   * @param[in] mtr             The mtr
+   * 
    * @return True if the cursor was not after last in tree
    */
-  bool move_to_next(mtr_t *mtr);
+  [[nodiscard]] bool move_to_next(mtr_t *mtr) noexcept;
 
   /**
    * Moves the persistent cursor to the previous record in the tree. If no
    * records are left, the cursor stays 'before first in tree'.
    *
-   * @param mtr The mtr.
+   * @param[in] mtr             The mtr.
+   * 
    * @return True if the cursor was not before first in tree.
    */
-  bool move_to_prev(mtr_t *mtr);
+  [[nodiscard]] bool move_to_prev(mtr_t *mtr) noexcept;
 
   /**
    * Commits the mtr and sets the pcur latch mode to BTR_NO_LATCHES,
@@ -359,24 +371,26 @@ struct btr_pcur_t {
    * release_leaf. Function store_position should be used before calling
    * this, if restoration of cursor is wanted later.
    *
-   * @param mtr The mtr to commit.
+   * @param[in] mtr             The mtr to commit.
    */
-  void commit_specify_mtr(mtr_t *mtr);
+  void commit_specify_mtr(mtr_t *mtr) noexcept;
 
   /**
    * Sets the persistent cursor latch mode to BTR_NO_LATCHES.
    */
-  void detach(); 
+  void detach() noexcept; 
 
   /**
    * Tests if a cursor is detached, that is the latch mode is BTR_NO_LATCHES.
    *
    * @return True if the cursor is detached.
    */
-  bool is_detached();
+  [[nodiscard]] bool is_detached() const noexcept;
 
-  /** Free old_rec_buf. */
-  void free_rec_buf() {
+  /**
+   * Free old_rec_buf.
+   */
+  void free_rec_buf() noexcept {
     mem_free(m_old_rec_buf);
     m_old_rec_buf = nullptr;
   }
@@ -384,103 +398,104 @@ struct btr_pcur_t {
    * @brief Initializes the persistent cursor.
    *
    * This function sets the old_rec_buf field to nullptr.
-   * @param[in]  read_level  read level where the cursor would be positioned or
-   * re-positioned.
+   * 
+   * @param[in] read_level      Read level where the cursor would be positioned or re-positioned.
    */
-  void init(ulint read_level);
+  void init(ulint read_level) noexcept;
 
   /**
    * @brief Initializes and opens a persistent cursor to an index tree.
    *        It should be closed with close.
    *
-   * @param dict_index The dict_index.
-   * @param tuple The tuple on which search is done.
-   * @param search_mode The search mode (PAGE_CUR_L, ...).
-   *             NOTE that if the search is made using a unique prefix of a record,
-   *             mode should be PAGE_CUR_LE, not PAGE_CUR_GE, as the latter may
-   *             end up on the previous page from the record!
-   * @param latch_mode The latch mode (BTR_SEARCH_LEAF, ...).
-   * @param mtr The mtr.
-   * @param file The file name.
-   * @param line The line where called.
+   * @param[in] dict_index      The dict_index.
+   * @param[in] tuple           The tuple on which search is done.
+   * @param[in] search_mode     The search mode (PAGE_CUR_L, ...).
+   *                            NOTE that if the search is made using a unique prefix of a record,
+   *                            mode should be PAGE_CUR_LE, not PAGE_CUR_GE, as the latter may
+   *                            end up on the previous page from the record!
+   * @param[in] latch_mode      The latch mode (BTR_SEARCH_LEAF, ...).
+   * @param[in] mtr             The mtr.
+   * @param[in] loc             The source location.
    */
-  void open(
-    dict_index_t *dict_index, const dtuple_t *tuple, ib_srch_mode_t search_mode, ulint latch_mode, mtr_t* mtr, Source_location loc);
+  void open(dict_index_t *dict_index, const dtuple_t *tuple, ib_srch_mode_t search_mode, ulint latch_mode, mtr_t* mtr, Source_location loc) noexcept;
 
   /**
    * @brief Opens a persistent cursor to an index tree without initializing the cursor.
    *
-   * @param dict_index The dict_index.
-   * @param tuple The tuple on which the search is done.
-   * @param search_mode The search mode (PAGE_CUR_L, ...).
-   * @param latch_mode The latch mode (BTR_SEARCH_LEAF, ...).
-   * @param has_search_latch The latch mode the caller currently has on btr_search_latch: RW_S_LATCH, or 0.
-   * @param mtr The mtr.
-   * @param file The file name.
-   * @param line The line where called.
+   * @param[in] dict_index      The dict_index.
+   * @param[in] tuple           The tuple on which the search is done.
+   * @param[in] search_mode     The search mode (PAGE_CUR_L, ...).
+   * @param[in] latch_mode      The latch mode (BTR_SEARCH_LEAF, ...).
+   * @param[in] has_search_latch The latch mode the caller currently has on btr_search_latch: RW_S_LATCH, or 0.
+   * @param[in] mtr             The mtr.
+   * @param[in] loc             The source location.
    */
   void open_with_no_init(
-    dict_index_t *dict_index, const dtuple_t *tuple, ib_srch_mode_t search_mode, ulint latch_mode,
-    ulint has_search_latch, mtr_t *mtr, Source_location loc);
+    dict_index_t *dict_index,
+    const dtuple_t *tuple,
+    ib_srch_mode_t search_mode,
+    ulint latch_mode,
+    ulint has_search_latch,
+    mtr_t *mtr,
+    Source_location loc) noexcept;
 
   /**
    * @brief Opens a persistent cursor at either end of an index.
    *
-   * @param from_left True if open to the low end, false if open to the high end.
-   * @param dict_index The dict_index.
-   * @param latch_mode The latch mode.
-   * @param do_init True if the cursor should be initialized.
-   * @param[in] level read level where the cursor would be positioned or re-positioned.
-   * @param mtr The mtr.
+   * @param[in] from_left       True if open to the low end, false if open to the high end.
+   * @param[in] dict_index      The dict_index.
+   * @param[in] latch_mode      The latch mode.
+   * @param[in] do_init         True if the cursor should be initialized.
+   * @param[in] level           read level where the cursor would be positioned or re-positioned.
+   * @param[in] mtr             The mtr.
    */
-  void open_at_index_side(bool from_left, dict_index_t *dict_index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr);
+  void open_at_index_side(bool from_left, dict_index_t *dict_index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr) noexcept;
 
   /**
    * @brief Positions a cursor at a randomly chosen position within a B-tree.
    *
-   * @param dict_index The dict_index.
-   * @param latch_mode The latch mode (BTR_SEARCH_LEAF, ...).
-   * @param mtr The mtr.
-   * @param file The file name.
-   * @param line The line where called.
+   * @param[in] dict_index      The dict_index.
+   * @param[in] latch_mode      The latch mode (BTR_SEARCH_LEAF, ...).
+   * @param[in] mtr             The mtr.
+   * @param[in] loc             The source location.
    */
-  void set_random_position(dict_index_t *dict_index, ulint latch_mode, mtr_t* mtr, Source_location loc);
+  void set_random_position(dict_index_t *dict_index, ulint latch_mode, mtr_t* mtr, Source_location loc) noexcept;
 
   /**
    * @brief Frees the possible memory heap of a persistent cursor and sets the latch mode of the persistent cursor to BTR_NO_LATCHES.
    */
-  void close();
+  void close() noexcept;
 
   /**
    * @brief Returns the btr cursor component of a persistent cursor.
    * 
    * @return Pointer to btr cursor component.
    */
-  btr_cur_t *get_btr_cur();
+  [[nodiscard]] Btree_cursor *get_btr_cur() noexcept;
   
   /**
    * @brief Returns the btr cursor component of a persistent cursor.
    * 
    * @return Pointer to btr cursor component.
    */
-  const btr_cur_t *get_btr_cur() const;
+  [[nodiscard]] const Btree_cursor *get_btr_cur() const noexcept;
 
   /**
    * @brief Returns the page cursor component of a persistent cursor.
    * 
    * @return Pointer to page cursor component.
    */
-  page_cur_t *get_page_cur();
+  [[nodiscard]] page_cur_t *get_page_cur() noexcept;
 
   /**
    * @brief Returns the page cursor component of a persistent cursor.
    * 
    * @return Pointer to page cursor component.
    */
-  const page_cur_t *get_page_cur() const;
+  [[nodiscard]] const page_cur_t *get_page_cur() const noexcept;
 
   /** a B-tree cursor */
-  btr_cur_t m_btr_cur;
+  Btree_cursor m_btr_cur;
 
   /** See the TODO note below. 
   BTR_SEARCH_LEAF, BTR_MODIFY_LEAF, BTR_MODIFY_TREE, or BTR_NO_LATCHES,
@@ -505,7 +520,7 @@ struct btr_pcur_t {
   Btree_cursor_pos m_rel_pos{Btree_cursor_pos::UNSET};
 
   /** buffer block when the position was stored */
-  buf_block_t *m_block_when_stored{};
+  Buf_block *m_block_when_stored{};
 
   /** the modify clock value of the buffer block when the cursor position
   was stored */
@@ -539,7 +554,7 @@ struct btr_pcur_t {
   ulint m_read_level{};
 };
 
-inline Btree_cursor_pos btr_pcur_t::get_rel_pos() const {
+inline Btree_cursor_pos Btree_pcursor::get_rel_pos() const noexcept {
   ut_ad(m_old_rec != nullptr);
   ut_ad(m_old_stored);
 
@@ -549,99 +564,95 @@ inline Btree_cursor_pos btr_pcur_t::get_rel_pos() const {
   return m_rel_pos;
 }
 
-inline void btr_pcur_t::set_mtr(mtr_t *mtr) {
+inline void Btree_pcursor::set_mtr(mtr_t *mtr) noexcept {
   m_mtr = mtr;
 }
 
-inline mtr_t *btr_pcur_t::get_mtr() {
+inline mtr_t *Btree_pcursor::get_mtr() noexcept {
   return m_mtr;
 }
 
-inline const btr_cur_t *btr_pcur_t::get_btr_cur() const {
-  return reinterpret_cast<const btr_cur_t *>(&m_btr_cur);
+inline const Btree_cursor *Btree_pcursor::get_btr_cur() const noexcept {
+  return &m_btr_cur;
 }
 
-inline btr_cur_t *btr_pcur_t::get_btr_cur() {
-  return reinterpret_cast<btr_cur_t *>(&m_btr_cur);
+inline Btree_cursor *Btree_pcursor::get_btr_cur() noexcept {
+  return &m_btr_cur;
 }
 
-inline const page_cur_t *btr_pcur_t::get_page_cur() const {
-  return btr_cur_get_page_cur(get_btr_cur());
+inline const page_cur_t *Btree_pcursor::get_page_cur() const noexcept {
+  return m_btr_cur.get_page_cur();
 }
 
-inline page_cur_t *btr_pcur_t::get_page_cur() {
-  return btr_cur_get_page_cur(get_btr_cur());
+inline page_cur_t *Btree_pcursor::get_page_cur() noexcept {
+  return m_btr_cur.get_page_cur();
 }
 
-inline page_t *btr_pcur_t::get_page() {
+inline page_t *Btree_pcursor::get_page() noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
-  return btr_cur_get_page(get_btr_cur());
+  return m_btr_cur.get_page();
 }
 
-inline buf_block_t *btr_pcur_t::get_block() {
+inline Buf_block *Btree_pcursor::get_block() noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
-  return btr_cur_get_block(get_btr_cur());
+  return m_btr_cur.get_block();
 }
 
-inline rec_t *btr_pcur_t::get_rec() {
+inline rec_t *Btree_pcursor::get_rec() noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  return btr_cur_get_rec(get_btr_cur());
+  return m_btr_cur.get_rec();
 }
 
-inline ulint btr_pcur_t::get_up_match() {
+inline ulint Btree_pcursor::get_up_match() noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED ||
         m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
-  auto btr_cur = get_btr_cur();
+  ut_ad(m_btr_cur.m_up_match != ULINT_UNDEFINED);
 
-  ut_ad(btr_cur->up_match != ULINT_UNDEFINED);
-
-  return btr_cur->up_match;
+  return m_btr_cur.m_up_match;
 }
 
-inline ulint btr_pcur_t::get_low_match() {
+inline ulint Btree_pcursor::get_low_match() noexcept {
   /**
    * @note The cursor must be either in the WAS_POSITIONED or IS_POSITIONED state.
    */
   ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED ||
         m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
-  auto btr_cur = get_btr_cur();
-
   /**
    * @note The low_match value must not be undefined.
    */
-  ut_ad(btr_cur->low_match != ULINT_UNDEFINED);
+  ut_ad(m_btr_cur.m_low_match != ULINT_UNDEFINED);
 
-  return btr_cur->low_match;
+  return m_btr_cur.m_low_match;
 }
 
-inline bool btr_pcur_t::is_after_last_on_page() const {
+inline bool Btree_pcursor::is_after_last_on_page() const noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   return page_cur_is_after_last(get_page_cur());
 }
 
-inline bool btr_pcur_t::is_before_first_on_page() const {
+inline bool Btree_pcursor::is_before_first_on_page() const noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   return page_cur_is_before_first(get_page_cur());
 }
 
-inline bool btr_pcur_t::is_on_user_rec() const {
+inline bool Btree_pcursor::is_on_user_rec() const noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   return !is_before_first_on_page() && !is_after_last_on_page();
 }
 
-inline bool btr_pcur_t::is_before_first_in_tree(mtr_t *m) {
+inline bool Btree_pcursor::is_before_first_in_tree(mtr_t *m) noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -652,7 +663,7 @@ inline bool btr_pcur_t::is_before_first_in_tree(mtr_t *m) {
   }
 }
 
-inline bool btr_pcur_t::is_after_last_in_tree(mtr_t *m) {
+inline bool Btree_pcursor::is_after_last_in_tree(mtr_t *m) noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -663,7 +674,7 @@ inline bool btr_pcur_t::is_after_last_in_tree(mtr_t *m) {
   }
 }
 
-inline void btr_pcur_t::move_to_next_on_page() {
+inline void Btree_pcursor::move_to_next_on_page() noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -672,7 +683,7 @@ inline void btr_pcur_t::move_to_next_on_page() {
   m_old_stored = false;
 }
 
-inline void btr_pcur_t::move_to_prev_on_page() {
+inline void Btree_pcursor::move_to_prev_on_page() noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -681,7 +692,7 @@ inline void btr_pcur_t::move_to_prev_on_page() {
   m_old_stored = false;
 }
 
-inline void btr_pcur_t::move_to_last_on_page(mtr_t *) {
+inline void Btree_pcursor::move_to_last_on_page(mtr_t *mtr) noexcept {
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
   page_cur_set_after_last(get_block(), get_page_cur());
@@ -689,7 +700,7 @@ inline void btr_pcur_t::move_to_last_on_page(mtr_t *) {
   m_old_stored = false;
 }
 
-inline bool btr_pcur_t::move_to_next_user_rec(mtr_t *mtr) {
+inline bool Btree_pcursor::move_to_next_user_rec(mtr_t *mtr) noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -710,7 +721,7 @@ inline bool btr_pcur_t::move_to_next_user_rec(mtr_t *mtr) {
   }
 }
 
-inline bool btr_pcur_t::move_to_prev_user_rec(mtr_t *mtr) {
+inline bool Btree_pcursor::move_to_prev_user_rec(mtr_t *mtr) noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -732,7 +743,7 @@ inline bool btr_pcur_t::move_to_prev_user_rec(mtr_t *mtr) {
   }
 }
 
-inline bool btr_pcur_t::move_to_next(mtr_t *mtr) {
+inline bool Btree_pcursor::move_to_next(mtr_t *mtr) noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -755,7 +766,7 @@ inline bool btr_pcur_t::move_to_next(mtr_t *mtr) {
   return true;
 }
 
-inline bool btr_pcur_t::move_to_prev(mtr_t *mtr) {
+inline bool Btree_pcursor::move_to_prev(mtr_t *mtr) noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -778,7 +789,7 @@ inline bool btr_pcur_t::move_to_prev(mtr_t *mtr) {
   return true;
 }
 
-inline void btr_pcur_t::commit_specify_mtr(mtr_t *mtr) {
+inline void Btree_pcursor::commit_specify_mtr(mtr_t *mtr) noexcept {
   ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   m_latch_mode = BTR_NO_LATCHES;
@@ -788,26 +799,31 @@ inline void btr_pcur_t::commit_specify_mtr(mtr_t *mtr) {
   m_pos_state = Btr_pcur_positioned::WAS_POSITIONED;
 }
 
-inline void btr_pcur_t::detach() {
+inline void Btree_pcursor::detach() noexcept {
   ut_a(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   m_latch_mode = BTR_NO_LATCHES;
   m_pos_state = Btr_pcur_positioned::WAS_POSITIONED;
 }
 
-inline bool btr_pcur_t::is_detached() {
+inline bool Btree_pcursor::is_detached() const noexcept {
   return m_latch_mode == BTR_NO_LATCHES;
 }
 
-inline void btr_pcur_t::init(ulint read_level) {
+inline void Btree_pcursor::init(ulint read_level) noexcept {
   m_old_stored = false;
   m_old_rec_buf = nullptr;
   m_old_rec = nullptr;
   m_read_level = read_level;
 }
 
-inline void btr_pcur_t::open(
-  dict_index_t *dict_index, const dtuple_t *tuple, ib_srch_mode_t search_mode, ulint latch_mode, mtr_t* mtr, Source_location loc) {
+inline void Btree_pcursor::open(
+  dict_index_t *dict_index,
+  const dtuple_t *tuple,
+  ib_srch_mode_t search_mode,
+  ulint latch_mode,
+  mtr_t* mtr,
+  Source_location loc) noexcept {
 
   init(0);
 
@@ -815,67 +831,64 @@ inline void btr_pcur_t::open(
   m_search_mode = search_mode;
 
   /* Search with the tree cursor */
-  auto btr_cur = get_btr_cur();
-
-  btr_cur_search_to_nth_level(dict_index, m_read_level, tuple, search_mode, latch_mode, btr_cur, 0, loc.m_from.file_name(), loc.m_from.line(), mtr);
+  m_btr_cur.search_to_nth_level(nullptr, dict_index, m_read_level, tuple, search_mode, latch_mode, mtr, loc);
 
   m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
 
   m_trx_if_known = nullptr;
 }
 
-inline void btr_pcur_t::open_with_no_init(
-  dict_index_t *dict_index, const dtuple_t *tuple, ib_srch_mode_t search_mode, ulint latch_mode, ulint has_search_latch,
-  mtr_t* mtr, Source_location loc) {
+inline void Btree_pcursor::open_with_no_init(
+  dict_index_t *dict_index,
+  const dtuple_t *tuple,
+  ib_srch_mode_t search_mode,
+  ulint latch_mode,
+  ulint has_search_latch,
+  mtr_t* mtr,
+  Source_location loc) noexcept {
 
   m_latch_mode = latch_mode;
   m_search_mode = search_mode;
 
   /* Search with the tree cursor */
-  auto btr_cur = get_btr_cur();
 
-  btr_cur_search_to_nth_level(dict_index, m_read_level, tuple, search_mode, latch_mode, btr_cur, has_search_latch, loc.m_from.file_name(), loc.m_from.line() , mtr);
+  m_btr_cur.search_to_nth_level(nullptr, dict_index, m_read_level, tuple, search_mode, latch_mode, mtr, loc);
 
-  m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
   m_old_stored = false;
   m_trx_if_known = nullptr;
+  m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
 }
 
-inline void btr_pcur_t::open_at_index_side(bool from_left, dict_index_t *dict_index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr) {
+inline void Btree_pcursor::open_at_index_side(bool from_left, dict_index_t *dict_index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr) noexcept {
   m_latch_mode = latch_mode;
-
-  if (from_left) {
-    m_search_mode = PAGE_CUR_G;
-  } else {
-    m_search_mode = PAGE_CUR_L;
-  }
+  m_search_mode = from_left ? PAGE_CUR_G : PAGE_CUR_L;
 
   if (do_init) {
     init(level);
   }
 
-  btr_cur_open_at_index_side(from_left, dict_index, latch_mode, get_btr_cur(), m_read_level, mtr);
+  m_btr_cur.open_at_index_side(nullptr, from_left, dict_index, latch_mode, m_read_level, mtr, Source_location{});
 
   m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
   m_old_stored = false;
   m_trx_if_known = nullptr;
 }
 
-inline void btr_pcur_t::set_random_position(dict_index_t *dict_index, ulint latch_mode, mtr_t *mtr, Source_location loc) {
+inline void Btree_pcursor::set_random_position(dict_index_t *dict_index, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept {
 
   m_latch_mode = latch_mode;
   m_search_mode = PAGE_CUR_G;
 
   init(0);
 
-  btr_cur_open_at_rnd_pos(dict_index, latch_mode, get_btr_cur(), mtr);
+  m_btr_cur.open_at_rnd_pos(dict_index, latch_mode, mtr, loc);
 
   m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
   m_old_stored = false;
   m_trx_if_known = nullptr;
 }
 
-inline void btr_pcur_t::close() {
+inline void Btree_pcursor::close() noexcept {
   if (m_old_rec_buf != nullptr) {
     mem_free(m_old_rec_buf);
     m_old_rec = nullptr;

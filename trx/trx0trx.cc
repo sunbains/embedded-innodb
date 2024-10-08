@@ -705,10 +705,10 @@ void trx_commit_off_kernel(trx_t *trx) {
       trx->m_must_flush_log_later = true;
     } else
 #endif /* WITH_XOPEN */
-      if (srv_flush_log_at_trx_commit == 0) {
+      if (srv_config.m_flush_log_at_trx_commit == 0) {
         /* Do nothing */
-      } else if (srv_flush_log_at_trx_commit == 1) {
-        if (srv_unix_file_flush_method == SRV_UNIX_NOSYNC) {
+      } else if (srv_config.m_flush_log_at_trx_commit == 1) {
+        if (srv_config.m_unix_file_flush_method == SRV_UNIX_NOSYNC) {
           /* Write the log but do not flush it to disk */
 
           log_sys->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
@@ -718,7 +718,7 @@ void trx_commit_off_kernel(trx_t *trx) {
 
           log_sys->write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
         }
-      } else if (srv_flush_log_at_trx_commit == 2) {
+      } else if (srv_config.m_flush_log_at_trx_commit == 2) {
 
         /* Write the log but do not flush it to disk */
 
@@ -1393,10 +1393,10 @@ void trx_prepare_off_kernel(trx_t *trx) {
 
     mutex_exit(&kernel_mutex);
 
-    if (srv_flush_log_at_trx_commit == 0) {
+    if (srv_config.m_flush_log_at_trx_commit == 0) {
       /* Do nothing */
-    } else if (srv_flush_log_at_trx_commit == 1) {
-      if (srv_unix_file_flush_method == SRV_UNIX_NOSYNC) {
+    } else if (srv_config.m_flush_log_at_trx_commit == 1) {
+      if (srv_config.m_unix_file_flush_method == SRV_UNIX_NOSYNC) {
         /* Write the log but do not flush it to disk */
 
         log_sys->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
@@ -1406,7 +1406,7 @@ void trx_prepare_off_kernel(trx_t *trx) {
 
         log_sys->write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
       }
-    } else if (srv_flush_log_at_trx_commit == 2) {
+    } else if (srv_config.m_flush_log_at_trx_commit == 2) {
 
       /* Write the log but do not flush it to disk */
 
@@ -1500,10 +1500,10 @@ ulint trx_commit_flush_log(trx_t *trx) {
 
   if (!trx->m_must_flush_log_later) {
     /* Do nothing */
-  } else if (srv_flush_log_at_trx_commit == 0) {
+  } else if (srv_config.m_flush_log_at_trx_commit == 0) {
     /* Do nothing */
-  } else if (srv_flush_log_at_trx_commit == 1) {
-    if (srv_unix_file_flush_method == SRV_UNIX_NOSYNC) {
+  } else if (srv_config.m_flush_log_at_trx_commit == 1) {
+    if (srv_config.m_unix_file_flush_method == SRV_UNIX_NOSYNC) {
       /* Write the log but do not flush it to disk */
 
       log_sys->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
@@ -1513,7 +1513,7 @@ ulint trx_commit_flush_log(trx_t *trx) {
 
       log_sys->write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
     }
-  } else if (srv_flush_log_at_trx_commit == 2) {
+  } else if (srv_config.m_flush_log_at_trx_commit == 2) {
 
     /* Write the log but do not flush it to disk */
 

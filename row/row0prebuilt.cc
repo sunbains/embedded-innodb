@@ -53,8 +53,8 @@ row_prebuilt_t *row_prebuilt_create(dict_table_t *table) {
 
   prebuilt->sql_stat_start = true;
 
-  prebuilt->pcur = new (std::nothrow) btr_pcur_t();
-  prebuilt->clust_pcur = new (std::nothrow) btr_pcur_t();
+  prebuilt->pcur = new (std::nothrow) Btree_pcursor(srv_fsp, srv_btree_sys, srv_lock_sys);
+  prebuilt->clust_pcur = new (std::nothrow) Btree_pcursor(srv_fsp, srv_btree_sys, srv_lock_sys);
 
   prebuilt->select_lock_type = LOCK_NONE;
 

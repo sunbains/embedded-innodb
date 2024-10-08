@@ -170,47 +170,110 @@ extern ulint ses_lock_wait_timeout;
 /* FIXME: This is a session variable. */
 extern bool ses_rollback_on_timeout;
 
-extern char *srv_data_home;
-extern char *srv_log_group_home_dir;
-extern bool srv_file_per_table;
-extern ulint srv_file_format;
-extern ulint srv_check_file_format_at_startup;
-extern ulint *srv_data_file_is_raw_partition;
-extern bool srv_created_new_raw;
-extern ulint srv_n_log_files;
-extern ulint srv_log_file_size;
-extern ulint srv_log_file_curr_size;
-extern ulint srv_log_buffer_size;
-extern ulint srv_log_buffer_curr_size;
-extern ulong srv_flush_log_at_trx_commit;
-extern bool srv_adaptive_flushing;
-extern bool srv_use_sys_malloc;
-extern ulint srv_buf_pool_size;
-extern ulint srv_buf_pool_old_size;
-extern ulint srv_buf_pool_curr_size;
-extern ulint srv_mem_pool_size;
-extern ulint srv_lock_table_size;
-extern ulint srv_n_file_io_threads;
-extern ulong srv_read_ahead_threshold;
-extern ulint srv_n_read_io_threads;
-extern ulint srv_n_write_io_threads;
-extern ulong srv_io_capacity;
-extern ulint srv_unix_file_flush_method;
-extern ulint srv_max_n_open_files;
-extern ulint srv_max_dirty_pages_pct;
-extern ib_recovery_t srv_force_recovery;
-extern ulong srv_thread_concurrency;
-extern ulint srv_max_n_threads;
-extern ulint srv_conc_n_waiting_threads;
-extern ib_shutdown_t srv_fast_shutdown;
-extern bool srv_innodb_status;
-extern uint64_t srv_stats_sample_pages;
-extern bool srv_use_doublewrite_buf;
-extern bool srv_use_checksums;
-extern bool srv_set_thread_priorities;
-extern int srv_query_thread_priority;
-extern ulong srv_max_buf_pool_modified_pct;
-extern ulong srv_max_purge_lag;
+struct Config {
+  /** Location of the system tablespace. */
+  char *m_data_home{};
+
+  /** Location of the redo log group files. */
+  char *m_log_group_home_dir{};
+
+  /** Whether to create a new file for each table. */
+  bool m_file_per_table{};
+
+  /** Whether a new raw disk partition was initialized. */
+  bool m_created_new_raw{};
+
+  /** Number of log files. */
+  ulint m_n_log_files{ULINT_MAX};
+
+  /** Size of each log file, in pages. */
+  ulint m_log_file_size{ULINT_MAX};
+
+  /** Current size of the log file, in pages. */
+   ulint m_log_file_curr_size{ULINT_MAX};
+
+  /** Size of the log buffer, in pages. */
+  ulint m_log_buffer_size{ULINT_MAX};
+
+  /** Current size of the log buffer, in pages. */
+  ulint m_log_buffer_curr_size{ULINT_MAX};
+
+  /** Whether to flush the log at transaction commit. */
+  ulong m_flush_log_at_trx_commit{1};
+  
+  /** Whether to use adaptive flushing. */
+  bool m_adaptive_flushing{true};
+
+  /** Whether to use sys malloc. */
+  bool m_use_sys_malloc{true};
+
+  /** Size of the buffer pool, in pages. */
+  ulint m_buf_pool_size{ULINT_MAX};
+
+  /** Old size of the buffer pool, in pages. */
+  ulint m_buf_pool_old_size{ULINT_MAX};
+  
+  /** Current size of the buffer pool, in pages. */
+  ulint m_buf_pool_curr_size{};
+
+  /** Memory pool size in bytes */
+  ulint m_mem_pool_size{ULINT_MAX};
+
+  /** Size of the lock table, in pages. */
+  ulint m_lock_table_size{ULINT_MAX};
+  
+  /** Number of read I/O threads. */
+  ulint m_n_read_io_threads{ULINT_MAX};
+
+  /** Number of write I/O threads. */
+  ulint m_n_write_io_threads{ULINT_MAX};
+
+  /** User settable value of the number of pages that must be present
+   * in the buffer cache and accessed sequentially for InnoDB to trigger a
+   * readahead request. */
+  ulong m_read_ahead_threshold{56};
+
+  /** Number of IO operations per second the server can do */ 
+  ulong m_io_capacity{200};
+  
+  /** File flush method. */
+  ulint m_unix_file_flush_method{SRV_UNIX_FSYNC};
+  
+  /** Maximum number of open files. */  
+  ulint m_max_n_open_files{1024};
+
+  /** We are prepared for a situation that we have this many threads waiting
+   * for a semaphore inside InnoDB. innobase_start_or_create() sets the value. */
+  ulint m_max_n_threads{0};
+
+  /** Force recovery. */
+  ib_recovery_t m_force_recovery{IB_RECOVERY_DEFAULT};
+
+  /** Fast shutdown. */
+  ib_shutdown_t m_fast_shutdown{IB_SHUTDOWN_NORMAL};
+
+  /** Generate a innodb_status.<pid> file if this is true. */
+  bool m_status{false};
+  
+  /** When estimating number of different key values in an index, sample
+   * this many index pages */
+  uint64_t m_stats_sample_pages{8};
+  
+  /** Whether to use doublewrite buffer. */
+  bool m_use_doublewrite_buf{true};
+  
+  /** Whether to use checksums. */
+  bool m_use_checksums{true};
+
+  /** The InnoDB main thread tries to keep the ratio of modified pages
+   * in the buffer pool to all database pages in the buffer pool smaller than
+   * the following number. But it is not guaranteed that the value stays below
+   * that during a time of heavy update/insert activity. */
+  ulong m_max_buf_pool_modified_pct{90};
+  
+  /* Maximum allowable purge history length. <= 0 means 'infinite'. */
+  ulong m_max_purge_lag{0};
+};
 
 /*-------------------------------------------*/
 
@@ -261,7 +324,7 @@ extern mutex_t *kernel_mutex_temp;
  * capacity. PCT_IO(5) -> returns the number of IO operations that
  * is 5% of the max where max is srv_io_capacity.
  */
-#define PCT_IO(p) ((ulong)(srv_io_capacity * ((double)p / 100.0)))
+#define PCT_IO(p) ((ulong)(srv_config.m_io_capacity * ((double)p / 100.0)))
 
 constexpr ulint SRV_MAX_N_IO_THREADS = 32;
 
@@ -297,9 +360,6 @@ extern ulint srv_dblwr_writes;
 /* here we store the number of pages that have been flushed to the
 doublewrite buffer */
 extern ulint srv_dblwr_pages_written;
-
-/* in this variable we store the number of write requests issued */
-extern ulint srv_buf_pool_write_requests;
 
 /* here we store the number of times when we had to wait for a free page
 in the buffer pool. It happens when the buffer pool is full and we need
@@ -700,3 +760,5 @@ extern Btree *srv_btree_sys;
 extern Trx_sys *srv_trx_sys;
 
 extern Lock_sys *srv_lock_sys;
+
+extern Config srv_config;

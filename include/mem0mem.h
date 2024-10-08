@@ -143,7 +143,7 @@ struct mem_block_info_t {
   void *free_block;
 
   /** if this block has been allocated from the buffer pool, this contains
-  the buf_block_t handle; otherwise, this is NULL */
+  the Buf_block handle; otherwise, this is NULL */
   void *buf_block;
 
   /* List of all mem blocks allocated; protected by the mem_comm_pool mutex */

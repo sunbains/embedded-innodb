@@ -32,10 +32,10 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "sync0rw.h"
 
 /** Persistent cursor */
-struct btr_pcur_t;
+struct Btree_pcursor;
 
 /** B-tree cursor */
-struct btr_cur_t;
+struct Btree_cursor;
 
 /** The size of a reference to data stored on a different page.
 The reference is stored at the end of the prefix of the field
