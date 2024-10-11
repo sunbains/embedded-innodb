@@ -25,7 +25,7 @@ Created 2/6/1997 Heikki Tuuri
 #include "row0vers.h"
 
 #include "btr0btr.h"
-#include "dict0boot.h"
+#include "dict0store.h"
 #include "dict0dict.h"
 #include "lock0lock.h"
 #include "mach0data.h"
@@ -41,16 +41,16 @@ Created 2/6/1997 Heikki Tuuri
 #include "trx0trx.h"
 #include "trx0undo.h"
 
-trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, dict_index_t *index, const ulint *offsets) {
-  dict_index_t *clust_index;
+trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, const Index *index, const ulint *offsets) {
+  Index *clust_index;
   rec_t *clust_rec;
   ulint *clust_offsets;
   rec_t *version;
   trx_id_t trx_id;
   mem_heap_t *heap;
   mem_heap_t *heap2;
-  dtuple_t *row;
-  dtuple_t *entry = nullptr; /* assignment to eliminate compiler
+  DTuple *row;
+  DTuple *entry = nullptr; /* assignment to eliminate compiler
                           warning */
   trx_t *trx;
   ulint rec_del;
@@ -97,7 +97,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, dict_index_t *index, 
   {
     Phy_rec record{clust_index, clust_rec};
 
-    clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+    clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
   }
 
   trx_id = row_get_rec_trx_id(clust_rec, clust_index, clust_offsets);
@@ -118,7 +118,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, dict_index_t *index, 
     goto exit_func;
   }
 
-  ut_ad(index->table == clust_index->table);
+  ut_ad(index->m_table == clust_index->m_table);
 
   /* We look up if some earlier version, which was modified by the trx_id
   transaction, of the clustered index record would require rec to be in
@@ -180,7 +180,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, dict_index_t *index, 
     {
       Phy_rec record{clust_index, prev_version};
 
-      clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+      clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
     }
 
     vers_del = rec_get_deleted_flag(prev_version);
@@ -228,7 +228,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, dict_index_t *index, 
 
     /* We check if entry and rec are identified in the alphabetical
     ordering */
-    if (0 == cmp_dtuple_rec(index->cmp_ctx, entry, rec, offsets)) {
+    if (cmp_dtuple_rec(index->m_cmp_ctx, entry, rec, offsets) == 0) {
       /* The delete marks of rec and prev_version should be
       equal for rec to be in the state required by
       prev_version */
@@ -246,7 +246,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, dict_index_t *index, 
 
       dtuple_set_types_binary(entry, dtuple_get_n_fields(entry));
 
-      if (0 != cmp_dtuple_rec(index->cmp_ctx, entry, rec, offsets)) {
+      if (cmp_dtuple_rec(index->m_cmp_ctx, entry, rec, offsets) != 0) {
 
         trx = srv_trx_sys->get_on_id(trx_id);
 
@@ -306,49 +306,31 @@ bool row_vers_must_preserve_del_marked(
   return (false);
 }
 
-/** Finds out if a version of the record, where the version >= the current
-purge view, should have ientry as its secondary index entry. We check
-if there is any not delete marked version of the record where the trx
-id >= purge view, and the secondary index entry and ientry are identified in
-the alphabetical ordering; exactly in this case we return true.
-@return	true if earlier version should have */
-
-bool row_vers_old_has_index_entry(
-  bool also_curr,      /*!< in: true if also rec is included in the
-                           versions to search; otherwise only versions
-                           prior to it are searched */
-  const rec_t *rec,    /*!< in: record in the clustered index; the
-                            caller must have a latch on the page */
-  mtr_t *mtr,          /*!< in: mtr holding the latch on rec; it will
-                            also hold the latch on purge_view */
-  dict_index_t *index, /*!< in: the secondary index */
-  const dtuple_t *ientry
-) /*!< in: the secondary index entry */
-{
+bool row_vers_old_has_index_entry(bool also_curr, const rec_t *rec, mtr_t *mtr, Index *index, const DTuple *ientry) {
   const rec_t *version;
   rec_t *prev_version;
-  dict_index_t *clust_index;
   ulint *clust_offsets;
-  mem_heap_t *heap;
   mem_heap_t *heap2;
-  const dtuple_t *row;
-  const dtuple_t *entry;
+  const DTuple *row;
+  const DTuple *entry;
   ulint err;
 
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(rec, MTR_MEMO_PAGE_S_FIX));
+
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(!rw_lock_own(&(purge_sys->latch), RW_LOCK_SHARED));
+  ut_ad(!rw_lock_own(&srv_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
+
   mtr_s_lock(&srv_trx_sys->m_purge->m_latch, mtr);
 
-  clust_index = dict_table_get_first_index(index->table);
+  auto clust_index = index->m_table->get_first_index();
 
-  heap = mem_heap_create(1024);
+  auto heap = mem_heap_create(1024);
 
   {
     Phy_rec record{clust_index, rec};
 
-    clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+    clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
   }
 
 
@@ -382,7 +364,7 @@ bool row_vers_old_has_index_entry(
     the clustered index record has already been updated to
     a different binary value in a char field, but the
     collation identifies the old and new value anyway! */
-    if (entry && !dtuple_coll_cmp(index->cmp_ctx, ientry, entry)) {
+    if (entry && !dtuple_coll_cmp(index->m_cmp_ctx, ientry, entry)) {
 
       mem_heap_free(heap);
 
@@ -409,7 +391,7 @@ bool row_vers_old_has_index_entry(
     {
       Phy_rec record{clust_index, prev_version};
 
-      clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+      clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
     }
 
     if (!rec_get_deleted_flag(prev_version)) {
@@ -433,7 +415,7 @@ bool row_vers_old_has_index_entry(
       a char field, but the collation identifies the old
       and new value anyway! */
 
-      if (entry != nullptr && !dtuple_coll_cmp(index->cmp_ctx, ientry, entry)) {
+      if (entry != nullptr && !dtuple_coll_cmp(index->m_cmp_ctx, ientry, entry)) {
 
         mem_heap_free(heap);
 
@@ -445,59 +427,43 @@ bool row_vers_old_has_index_entry(
   }
 }
 
-/** Constructs the version of a clustered index record which a consistent
-read should see. We assume that the trx id stored in rec is such that
-the consistent read should not see rec in its present version.
-@return	DB_SUCCESS or DB_MISSING_HISTORY */
-
 db_err row_vers_build_for_consistent_read(
-  const rec_t *rec,         /*!< in: record in a clustered index; the
-                              caller must have a latch on the page; this
-                              latch locks the top of the stack of versions
-                              of this records */
-  mtr_t *mtr,               /*!< in: mtr holding the latch on rec */
-  dict_index_t *index,      /*!< in: the clustered index */
-  ulint **offsets,          /*!< in/out: offsets returned by
-                              Phy_rec::get_col_offsets(index, rec) */
-  read_view_t *view,        /*!< in: the consistent read view */
-  mem_heap_t **offset_heap, /*!< in/out: memory heap from which
-                          the offsets are allocated */
-  mem_heap_t *in_heap,      /*!< in: memory heap from which the memory for
-                              *old_vers is allocated; memory for possible
-                              intermediate versions is allocated and freed
-                              locally within the function */
+  const rec_t *rec,
+  mtr_t *mtr,
+  Index *index,
+  ulint **offsets,
+  read_view_t *view,
+  mem_heap_t **offset_heap,
+  mem_heap_t *in_heap,
   rec_t **old_vers
-) /*!< out, own: old version, or NULL if the
-                             record does not exist in the view, that is,
-                             it was freshly inserted afterwards */
-{
-  const rec_t *version;
+) {
   rec_t *prev_version;
-  trx_id_t trx_id;
   mem_heap_t *heap = nullptr;
   byte *buf;
   db_err err;
 
-  ut_ad(dict_index_is_clust(index));
+  ut_ad(index->is_clustered());
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(rec, MTR_MEMO_PAGE_S_FIX));
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(!rw_lock_own(&(purge_sys->latch), RW_LOCK_SHARED));
+  ut_ad(!rw_lock_own(&srv_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
   ut_ad(rec_offs_validate(rec, index, *offsets));
 
-  trx_id = row_get_rec_trx_id(rec, index, *offsets);
+  auto trx_id = row_get_rec_trx_id(rec, index, *offsets);
 
   ut_ad(!read_view_sees_trx_id(view, trx_id));
 
   rw_lock_s_lock(&srv_trx_sys->m_purge->m_latch);
-  version = rec;
+
+  auto version = rec;
 
   for (;;) {
     mem_heap_t *heap2 = heap;
     trx_undo_rec_t *undo_rec;
     roll_ptr_t roll_ptr;
     undo_no_t undo_no;
+
     heap = mem_heap_create(1024);
 
     /* If we have high-granularity consistent read view and
@@ -527,7 +493,7 @@ db_err row_vers_build_for_consistent_read(
 
     err = trx_undo_prev_version_build(rec, mtr, version, index, *offsets, heap, &prev_version);
 
-    if (heap2) {
+    if (heap2 != nullptr) {
       mem_heap_free(heap2); /* free version */
     }
 
@@ -546,7 +512,7 @@ db_err row_vers_build_for_consistent_read(
     {
       Phy_rec record{index, prev_version};
 
-      *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Source_location{});
+      *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Current_location());
     }
 
     trx_id = row_get_rec_trx_id(prev_version, index, *offsets);
@@ -573,36 +539,22 @@ db_err row_vers_build_for_consistent_read(
   return (err);
 }
 
-/** Constructs the last committed version of a clustered index record,
-which should be seen by a semi-consistent read.
-@return	DB_SUCCESS or DB_MISSING_HISTORY */
-
 ulint row_vers_build_for_semi_consistent_read(
-  const rec_t *rec,         /*!< in: record in a clustered index; the
-                              caller must have a latch on the page; this
-                              latch locks the top of the stack of versions
-                              of this records */
-  mtr_t *mtr,               /*!< in: mtr holding the latch on rec */
-  dict_index_t *index,      /*!< in: the clustered index */
-  ulint **offsets,          /*!< in/out: offsets returned by Phy_rec::get_col_offsets(index, rec) */
-  mem_heap_t **offset_heap, /*!< in/out: memory heap from which
-                          the offsets are allocated */
-  mem_heap_t *in_heap,      /*!< in: memory heap from which the memory for
-                              *old_vers is allocated; memory for possible
-                              intermediate versions is allocated and freed
-                              locally within the function */
+  const rec_t *rec,
+  mtr_t *mtr,
+  Index *index,
+  ulint **offsets,
+  mem_heap_t **offset_heap,
+  mem_heap_t *in_heap,
   const rec_t **old_vers
-) /*!< out: rec, old version, or NULL if the
-                             record does not exist in the view, that is,
-                             it was freshly inserted afterwards */
-{
+) {
   const rec_t *version;
   mem_heap_t *heap = nullptr;
   byte *buf;
   ulint err;
   trx_id_t rec_trx_id = 0;
 
-  ut_ad(dict_index_is_clust(index));
+  ut_ad(index->is_clustered());
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(rec, MTR_MEMO_PAGE_S_FIX));
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(!rw_lock_own(&(purge_sys->latch), RW_LOCK_SHARED));
@@ -660,7 +612,7 @@ ulint row_vers_build_for_semi_consistent_read(
         {
           Phy_rec record{index, version};
 
-          *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Source_location{});
+          *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Current_location());
         }
       }
 
@@ -697,7 +649,7 @@ ulint row_vers_build_for_semi_consistent_read(
     {
       Phy_rec record{index, version};
 
-      *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Source_location{});
+      *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Current_location());
     }
   } /* for (;;) */
 

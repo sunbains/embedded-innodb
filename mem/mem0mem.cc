@@ -106,15 +106,16 @@ char *mem_heap_strcat(mem_heap_t *heap, const char *s1, const char *s2) {
   return s;
 }
 
-/** Helper function for mem_heap_printf.
-@return	length of formatted string, including terminating NUL */
-static ulint mem_heap_printf_low(
-  char *buf,          /*!< in/out: buffer to store formatted string
-                               in, or nullptr to just calculate length */
-  const char *format, /*!< in: format string */
-  va_list ap
-) /*!< in: arguments */
-{
+/**
+ * @brief Helper function for mem_heap_printf.
+ * 
+ * @param[in,out] buf Buffer to store formatted string, or nullptr to just calculate length.
+ * @param[in] format Format string.
+ * @param[in] ap Arguments.
+ * 
+ * @return Length of formatted string, including terminating NUL.
+ */
+static ulint mem_heap_printf_low(char *buf, const char *format, va_list ap) noexcept {
   ulint len = 0;
 
   while (*format) {
@@ -231,11 +232,7 @@ char *mem_heap_printf(mem_heap_t *heap, const char *format, ...) {
   return (str);
 }
 
-mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const char *file_name, ulint line) {
-  Buf_block *buf_block = nullptr;
-  mem_block_t *block;
-  ulint len;
-
+mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, Source_location loc) {
   ut_ad((type == MEM_HEAP_DYNAMIC) || (type == MEM_HEAP_BUFFER) || (type == MEM_HEAP_BUFFER + MEM_HEAP_BTR_SEARCH));
 
   if (heap && heap->magic_n != MEM_BLOCK_MAGIC_N) {
@@ -244,7 +241,10 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const 
 
   /* In dynamic allocation, calculate the size: block header + data. */
 
-  len = mem_block_header_size() + MEM_SPACE_NEEDED(n);
+  mem_block_t *block;
+  Buf_block *buf_block;
+
+  auto len = mem_block_header_size() + MEM_SPACE_NEEDED(n);
 
   if (type == MEM_HEAP_DYNAMIC || len < UNIV_PAGE_SIZE / 2) {
 
@@ -271,16 +271,14 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const 
       buf_block = srv_buf_pool->block_alloc();
     }
 
-    block = (mem_block_t *)buf_block->m_frame;
+    block = reinterpret_cast<mem_block_t *>(buf_block->m_frame);
   }
 
-  ut_ad(block);
   block->buf_block = buf_block;
   block->free_block = nullptr;
 
   block->magic_n = MEM_BLOCK_MAGIC_N;
-  ut_strlcpy_rev(block->file_name, file_name, sizeof(block->file_name));
-  block->line = line;
+  block->m_loc = loc;
 
   mem_block_set_len(block, len);
   mem_block_set_type(block, type);
@@ -306,19 +304,15 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, const 
 }
 
 mem_block_t *mem_heap_add_block(mem_heap_t *heap, ulint n) {
-  mem_block_t *block;
-  mem_block_t *new_block;
-  ulint new_size;
-
   ut_ad(mem_heap_check(heap));
 
-  block = UT_LIST_GET_LAST(heap->base);
+  auto block = UT_LIST_GET_LAST(heap->base);
 
   /* We have to allocate a new block. The size is always at least
   doubled until the standard size is reached. After that the size
   stays the same, except in cases where the caller needs more space. */
 
-  new_size = 2 * mem_block_get_len(block);
+  auto new_size = 2 * mem_block_get_len(block);
 
   if (heap->type != MEM_HEAP_DYNAMIC) {
     /* From the buffer pool we allocate buffer frames */
@@ -336,17 +330,18 @@ mem_block_t *mem_heap_add_block(mem_heap_t *heap, ulint n) {
     new_size = n;
   }
 
-  new_block = mem_heap_create_block(heap, new_size, heap->type, heap->file_name, heap->line);
+  auto new_block = mem_heap_create_block(heap, new_size, heap->type, heap->m_loc);
+
   if (new_block == nullptr) {
 
-    return (nullptr);
+    return nullptr;
   }
 
   /* Add the new block as the last block */
 
   UT_LIST_INSERT_AFTER(heap->base, block, new_block);
 
-  return (new_block);
+  return new_block;
 }
 
 void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
@@ -363,6 +358,7 @@ void mem_heap_block_free(mem_heap_t *heap, mem_block_t *block) {
 
   auto type = heap->type;
   auto len = block->len;
+
   block->magic_n = MEM_FREED_BLOCK_MAGIC_N;
 
   if (!srv_config.m_use_sys_malloc) {

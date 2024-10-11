@@ -30,7 +30,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "ut0ut.h"
 #include "ut0lst.h"
 
-struct dict_index_t;
+struct Index;
 
 constexpr ulint DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL = 8;
 
@@ -183,7 +183,7 @@ dtype_read_for_order_and_null_size()
 dtype_new_read_for_order_and_null_size()
 sym_tab_add_null_lit() */
 
-/* The following are used in two places, dtype_t and  dict_field_t, we
+/* The following are used in two places, dtype_t and  Field, we
 want to ensure that they are identical and also want to ensure that
 all bit-fields can be packed tightly in both structs. */
 #define DTYPE_FIELDS   \
@@ -225,7 +225,7 @@ struct dfield_t {
 };
 
 /** Structure for an SQL data tuple of fields (logical record) */
-struct dtuple_t {
+struct DTuple {
   /** Print the tuple to the output stream.
   @param[in,out] out            Stream to output to.
   @return stream */
@@ -238,7 +238,7 @@ struct dtuple_t {
   /** Ignore at most n trailing default fields if this is a tuple
   from instant index
   @param[in]    index   clustered index object for this tuple */
-  void ignore_trailing_default(const dict_index_t *index);
+  void ignore_trailing_default(const Index *index);
 
   /** Compare a data tuple to a physical record.
   @param[in]    rec             record
@@ -249,7 +249,7 @@ struct dtuple_t {
   @retval 0 if dtuple is equal to rec
   @retval negative if dtuple is less than rec
   @retval positive if dtuple is greater than rec */
-  int compare(const rec_t *rec, const dict_index_t *index, const ulint *offsets, ulint *matched_fields) const;
+  int compare(const rec_t *rec, const Index *index, const ulint *offsets, ulint *matched_fields) const;
 
   /** Compare a data tuple to a physical record.
   @param[in]    rec             record
@@ -259,7 +259,7 @@ struct dtuple_t {
   @retval 0 if dtuple is equal to rec
   @retval negative if dtuple is less than rec
   @retval positive if dtuple is greater than rec */
-  inline int compare(const rec_t *rec, const dict_index_t *index, const ulint *offsets) const {
+  inline int compare(const rec_t *rec, const Index *index, const ulint *offsets) const {
     ulint matched_fields{};
 
     return compare(rec, index, offsets, &matched_fields);
@@ -290,7 +290,7 @@ struct dtuple_t {
   dfield_t *fields;
 
   /** data tuples can be linked into a list using this field */
-  UT_LIST_NODE_T(dtuple_t) tuple_list;
+  UT_LIST_NODE_T(DTuple) tuple_list;
 
   /** Magic number, used in debug assertions */
   IF_DEBUG(ulint magic_n;)

@@ -354,7 +354,7 @@ bool Buf_pool::is_corrupted(const byte *read_buf) {
 }
 
 void buf_page_print(const byte *read_buf, ulint) {
-  dict_index_t *index;
+  Index *index;
   auto size = UNIV_PAGE_SIZE;
 
   ib_logger(ib_stream, "  Page dump in ascii and hex (%lu bytes):\n", (ulong)size);
@@ -385,11 +385,11 @@ void buf_page_print(const byte *read_buf, ulint) {
         srv_btree_sys->page_get_index_id(read_buf)
       ));
 
-      index = dict_index_find_on_id_low(srv_btree_sys->page_get_index_id(read_buf));
+      index = srv_dict_sys->index_find_on_id(srv_btree_sys->page_get_index_id(read_buf));
 
       if (index != nullptr) {
         ib_logger(ib_stream, "(");
-        dict_index_name_print(ib_stream, nullptr, index);
+        srv_dict_sys->index_name_print(nullptr, index);
         ib_logger(ib_stream, ")\n");
       }
       break;
@@ -440,7 +440,7 @@ void Buf_pool::block_init(Buf_block *block, byte *frame) {
   ut_d(block->m_page.m_in_free_list = false);
   ut_d(block->m_page.m_in_LRU_list = false);
 
-  mutex_create(&block->m_mutex, IF_DEBUG("block_mutex",) IF_SYNC_DEBUG(SYNC_BUF_BLOCK,) Source_location{});
+  mutex_create(&block->m_mutex, IF_DEBUG("block_mutex",) IF_SYNC_DEBUG(SYNC_BUF_BLOCK,) Current_location());
 
   rw_lock_create(&block->m_rw_lock, SYNC_LEVEL_VARYING);
   ut_ad(rw_lock_validate(&(block->m_rw_lock)));
@@ -553,7 +553,7 @@ bool Buf_pool::open(uint64_t pool_size) {
 
   /* 1. Initialize general fields
   ------------------------------- */
-  mutex_create(&m_mutex, IF_DEBUG("buffer_pool",) IF_SYNC_DEBUG(SYNC_BUF_POOL,) Source_location{});
+  mutex_create(&m_mutex, IF_DEBUG("buffer_pool",) IF_SYNC_DEBUG(SYNC_BUF_POOL,) Current_location());
 
   mutex_acquire();
 
@@ -1649,7 +1649,7 @@ bool Buf_pool::validate() {
 
 void Buf_pool::print() {
   uint64_t id;
-  dict_index_t *index;
+  Index *index;
 
   auto size = m_curr_size;
 
@@ -1725,13 +1725,13 @@ void Buf_pool::print() {
   mutex_release();
 
   for (ulint i = 0; i < n_found; i++) {
-    index = dict_index_get_if_in_cache(index_ids[i]);
+    index = srv_dict_sys->index_get_if_in_cache(index_ids[i]);
 
     ib_logger(ib_stream, "Block count for index %lu in buffer is about %lu", (ulong)index_ids[i], (ulong)counts[i]);
 
     if (index) {
       ib_logger(ib_stream, " ");
-      dict_index_name_print(ib_stream, nullptr, index);
+      srv_dict_sys->index_name_print(nullptr, index);
     }
 
     ib_logger(ib_stream, "\n");

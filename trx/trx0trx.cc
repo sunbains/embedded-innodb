@@ -99,7 +99,7 @@ trx_t* trx_create_low(sess_t *sess) {
   trx->n_client_tables_in_use = 0;
   trx->client_n_tables_locked = 0;
 
-  mutex_create(&trx->undo_mutex, IF_DEBUG("trc_undo_mutex",) IF_SYNC_DEBUG(SYNC_TRX_UNDO,) Source_location{});
+  mutex_create(&trx->undo_mutex, IF_DEBUG("trc_undo_mutex",) IF_SYNC_DEBUG(SYNC_TRX_UNDO,) Current_location());
 
   trx->rseg = nullptr;
 
@@ -1164,8 +1164,8 @@ void trx_sig_remove(trx_t *trx, trx_sig_t *sig) {
   }
 }
 
-commit_node_t *commit_node_create(mem_heap_t *heap) {
-  auto node = reinterpret_cast<commit_node_t *>(mem_heap_alloc(heap, sizeof(commit_node_t)));
+Commit_node *commit_node_create(mem_heap_t *heap) {
+  auto node = reinterpret_cast<Commit_node *>(mem_heap_alloc(heap, sizeof(Commit_node)));
 
   node->common.type = QUE_NODE_COMMIT;
   node->state = COMMIT_NODE_SEND;
@@ -1174,7 +1174,7 @@ commit_node_t *commit_node_create(mem_heap_t *heap) {
 }
 
 que_thr_t *trx_commit_step(que_thr_t *thr) {
-  auto node = static_cast<commit_node_t *>(thr->run_node);
+  auto node = static_cast<Commit_node *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_COMMIT);
 

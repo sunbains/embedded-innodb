@@ -42,7 +42,7 @@ Created 7/1/1994 Heikki Tuuri
  * 
  * @return True if the columns are equal, false otherwise.
  */
-bool cmp_cols_are_equal(const dict_col_t *col1, const dict_col_t *col2, bool check_charsets) noexcept;
+bool cmp_cols_are_equal(const Column *col1, const Column *col2, bool check_charsets) noexcept;
 
 /**
  * Compares two data fields.
@@ -132,7 +132,7 @@ inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfiel
  */
 int cmp_dtuple_rec_with_match(
   void *cmp_ctx,
-  const dtuple_t *dtuple,
+  const DTuple *dtuple,
   const rec_t *rec,
   const ulint *offsets,
   ulint *matched_fields,
@@ -152,7 +152,7 @@ int cmp_dtuple_rec_with_match(
  */
 int cmp_dtuple_rec(
   void *cmp_ctx,
-  const dtuple_t *dtuple,
+  const DTuple *dtuple,
   const rec_t *rec,
   const ulint *offsets
 ) noexcept;
@@ -170,7 +170,7 @@ int cmp_dtuple_rec(
  */
 bool cmp_dtuple_is_prefix_of_rec(
   void *cmp_ctx,
-  const dtuple_t *dtuple,
+  const DTuple *dtuple,
   const rec_t *rec,
   const ulint *offsets
 ) noexcept;
@@ -192,7 +192,7 @@ int cmp_rec_rec_simple(
   const rec_t *rec2,
   const ulint *offsets1,
   const ulint *offsets2,
-  const dict_index_t *index
+  const Index *index
 ) noexcept;
 
 /**
@@ -219,7 +219,7 @@ int cmp_rec_rec_with_match(
   const rec_t *rec2,
   const ulint *offsets1,
   const ulint *offsets2,
-  dict_index_t *index,
+  const Index *index,
   ulint *matched_fields,
   ulint *matched_bytes
 ) noexcept;
@@ -242,7 +242,7 @@ inline int cmp_rec_rec(
   const rec_t *rec2,
   const ulint *offsets1,
   const ulint *offsets2,
-  dict_index_t *index
+  const Index *index
 ) noexcept;
 
 /**
@@ -315,10 +315,10 @@ inline int cmp_rec_rec(
   const rec_t *rec2,
   const ulint *offsets1,
   const ulint *offsets2,
-  dict_index_t *dict_index
+  const Index *index
 ) noexcept {
   ulint match_f{};
   ulint match_b{};
 
-  return cmp_rec_rec_with_match(rec1, rec2, offsets1, offsets2, dict_index, &match_f, &match_b);
+  return cmp_rec_rec_with_match(rec1, rec2, offsets1, offsets2, index, &match_f, &match_b);
 }

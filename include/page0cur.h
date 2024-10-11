@@ -64,7 +64,7 @@ constexpr auto PAGE_CUR_DBG = 6;
  * @param mtr Mini-transaction handle, or NULL.
  * @return Pointer to record if succeed, NULL otherwise.
  */
-rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const rec_t *rec, ulint *offsets, mtr_t *mtr);
+rec_t *page_cur_insert_rec_low(rec_t *current_rec, const Index *index, const rec_t *rec, ulint *offsets, mtr_t *mtr);
 
 /**
  * @brief Copies records from page to a newly created page, from a given record
@@ -75,7 +75,7 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const re
  * @param index Record descriptor.
  * @param mtr MTR.
  */
-void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, dict_index_t *index, mtr_t *mtr);
+void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const Index *index, mtr_t *mtr);
 
 /**
  * @brief Deletes a record at the page cursor. The cursor is moved to the
@@ -86,7 +86,7 @@ void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, dict_i
  * @param offsets In: Phy_rec::get_col_offsets(cursor->rec, index).
  * @param mtr Mini-transaction handle.
  */
-void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *offsets, mtr_t *mtr);
+void page_cur_delete_rec(page_cur_t *cursor, const Index *index, const ulint *offsets, mtr_t *mtr);
 
 /**
  * @brief Searches the right position for a page cursor.
@@ -102,7 +102,7 @@ void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *o
  * @param cursor Out: Page cursor.
  */
 void page_cur_search_with_match(
-  const Buf_block *block, const dict_index_t *index, const dtuple_t *tuple, ulint mode, ulint *iup_matched_fields,
+  const Buf_block *block, const Index *index, const DTuple *tuple, ulint mode, ulint *iup_matched_fields,
   ulint *iup_matched_bytes, ulint *ilow_matched_fields, ulint *ilow_matched_bytes, page_cur_t *cursor
 );
 
@@ -126,7 +126,7 @@ void page_cur_open_on_rnd_user_rec(Buf_block *block, page_cur_t *cursor);
  * @param mtr In: MTR or NULL.
  * @return End of log record or NULL.
  */
-byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr);
+byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr);
 
 /**
  * @brief Parses a log record of copying a record list end to a new created page.
@@ -138,7 +138,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
  * @param mtr In: MTR or NULL.
  * @return End of log record or NULL.
  */
-byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr);
+byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr);
 
 /**
  * @brief Parses log record of a record delete on a page.
@@ -150,12 +150,12 @@ byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_blo
  * @param mtr In: MTR or NULL.
  * @return Pointer to record end or NULL.
  */
-byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr);
+byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr);
 
 /** Index page cursor */
 struct page_cur_t {
   /** Index the cursor is on. */
-  const dict_index_t *m_index{};
+  const Index *m_index{};
 
   /** pointer to a record on page */
   rec_t *m_rec{};
@@ -318,14 +318,14 @@ inline void page_cur_move_to_prev(page_cur_t *cur) {
  * @brief Searches the right position for a page cursor.
  * 
  * @param block In: Buffer block.
- * @param dict_index In: Record descriptor.
+ * @param index In: Record descriptor.
  * @param tuple In: Data tuple.
  * @param mode In: Search mode (PAGE_CUR_L, PAGE_CUR_LE, PAGE_CUR_G, or PAGE_CUR_GE).
  * @param cursor Out: Page cursor.
  * @return Number of matched fields on the left.
  */
 inline ulint page_cur_search(
-  const Buf_block *block, const dict_index_t *dict_index, const dtuple_t *tuple, ulint mode, page_cur_t *cursor
+  const Buf_block *block, const Index *index, const DTuple *tuple, ulint mode, page_cur_t *cursor
 ) {
   ulint low_matched_fields = 0;
   ulint low_matched_bytes = 0;
@@ -335,7 +335,7 @@ inline ulint page_cur_search(
   ut_ad(dtuple_check_typed(tuple));
 
   page_cur_search_with_match(
-    block, dict_index, tuple, mode, &up_matched_fields, &up_matched_bytes, &low_matched_fields, &low_matched_bytes, cursor
+    block, index, tuple, mode, &up_matched_fields, &up_matched_bytes, &low_matched_fields, &low_matched_bytes, cursor
   );
 
   return low_matched_fields;
@@ -349,22 +349,22 @@ inline ulint page_cur_search(
  * 
  * @param cursor In/Out: Page cursor.
  * @param tuple In: Pointer to a data tuple.
- * @param dict_index In: Record descriptor.
+ * @param index In: Record descriptor.
  * @param n_ext In: Number of externally stored columns.
  * @param mtr In: Mini-transaction handle, or NULL.
  * @return Pointer to the inserted record if successful, NULL otherwise.
  */
-inline rec_t *page_cur_tuple_insert(page_cur_t *cursor, const dtuple_t *tuple, dict_index_t *dict_index, ulint n_ext, mtr_t *mtr) {
-  const auto size = rec_get_converted_size(dict_index, tuple, n_ext);
+inline rec_t *page_cur_tuple_insert(page_cur_t *cursor, const DTuple *tuple, const Index *index, ulint n_ext, mtr_t *mtr) {
+  const auto size = rec_get_converted_size(index, tuple, n_ext);
   auto heap = mem_heap_create(size + (4 + REC_OFFS_HEADER_SIZE + dtuple_get_n_fields(tuple)) * sizeof(ulint));
-  auto rec = rec_convert_dtuple_to_rec((byte *)mem_heap_alloc(heap, size), dict_index, tuple, n_ext);
+  auto rec = rec_convert_dtuple_to_rec((byte *)mem_heap_alloc(heap, size), index, tuple, n_ext);
 
   {
-    Phy_rec record(dict_index, rec);
+    Phy_rec record(index, rec);
 
-    auto offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+    auto offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
 
-    rec = page_cur_insert_rec_low(cursor->m_rec, dict_index, rec, offsets, mtr);
+    rec = page_cur_insert_rec_low(cursor->m_rec, index, rec, offsets, mtr);
   }
 
   mem_heap_free(heap);
@@ -380,11 +380,11 @@ inline rec_t *page_cur_tuple_insert(page_cur_t *cursor, const dtuple_t *tuple, d
  * 
  * @param cursor In/Out: Page cursor.
  * @param rec In: Record to insert.
- * @param dict_index In: Record descriptor.
+ * @param index In: Record descriptor.
  * @param offsets In/Out: Offsets of the record.
  * @param mtr In: Mini-transaction handle, or NULL.
  * @return Pointer to the inserted record if successful, NULL otherwise.
  */
-inline rec_t *page_cur_rec_insert(page_cur_t *cursor, const rec_t *rec, dict_index_t *dict_index, ulint *offsets, mtr_t *mtr) {
-  return page_cur_insert_rec_low(cursor->m_rec, dict_index, rec, offsets, mtr);
+inline rec_t *page_cur_rec_insert(page_cur_t *cursor, const rec_t *rec, Index *index, ulint *offsets, mtr_t *mtr) {
+  return page_cur_insert_rec_low(cursor->m_rec, index, rec, offsets, mtr);
 }

@@ -28,22 +28,22 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "innodb0types.h"
 #include "ut0lst.h"
 
-typedef struct pars_user_func_struct pars_user_func_t;
-typedef struct pars_bound_lit_struct pars_bound_lit_t;
-typedef struct pars_bound_id_struct pars_bound_id_t;
-typedef struct sym_node_struct sym_node_t;
-typedef struct pars_res_word_struct pars_res_word_t;
-typedef struct func_node_struct func_node_t;
-typedef struct order_node_struct order_node_t;
-typedef struct proc_node_struct proc_node_t;
-typedef struct elsif_node_struct elsif_node_t;
-typedef struct if_node_struct if_node_t;
-typedef struct while_node_struct while_node_t;
-typedef struct for_node_struct for_node_t;
-typedef struct exit_node_struct exit_node_t;
-typedef struct return_node_struct return_node_t;
-typedef struct assign_node_struct assign_node_t;
-typedef struct col_assign_node_struct col_assign_node_t;
+using pars_user_func_t = struct pars_user_func_struct;
+using pars_bound_lit_t = struct pars_bound_lit_struct;
+using pars_bound_id_t = struct pars_bound_id_struct;
+using sym_node_t = struct sym_node_struct;
+using pars_res_word_t = struct pars_res_word_struct;
+using func_node_t = struct func_node_struct;
+using order_node_t = struct order_node_struct;
+using proc_node_t = struct proc_node_struct;
+using elsif_node_t = struct elsif_node_struct;
+using if_node_t = struct if_node_struct;
+using while_node_t = struct while_node_struct;
+using for_node_t = struct for_node_struct;
+using exit_node_t = struct exit_node_struct;
+using return_node_t = struct return_node_struct;
+using assign_node_t = struct assign_node_struct;
+using col_assign_node_t = struct col_assign_node_struct;
 
 using sym_node_list_t = UT_LIST_BASE_NODE_T_EXTERN(sym_node_t, col_var_list);
 using func_node_list_t = UT_LIST_BASE_NODE_T_EXTERN(func_node_t, func_node_list);

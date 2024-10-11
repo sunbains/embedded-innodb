@@ -285,7 +285,7 @@ byte *page_mem_alloc_heap(page_t *page, ulint need, ulint *heap_no);
  * 
  * @return	pointer to the page
  */
-page_t *page_create(Buf_block *block, mtr_t *mtr);
+page_t *page_create(const Index *index, Buf_block *block, mtr_t *mtr);
 
 /**
  * Differs from page_copy_rec_list_end, because this function does not
@@ -301,7 +301,7 @@ void page_copy_rec_list_end_no_locks(
   Buf_block *new_block,
   Buf_block *block,
   rec_t *rec,
-  dict_index_t *index,
+  const Index *index,
   mtr_t *mtr
 );
 
@@ -321,7 +321,7 @@ rec_t *page_copy_rec_list_end(
   Buf_block *new_block,
   Buf_block *block,
   rec_t *rec,
-  dict_index_t *index,
+  const Index *index,
   mtr_t *mtr
 );
 
@@ -342,7 +342,7 @@ rec_t *page_copy_rec_list_start(
   Buf_block *new_block,
   Buf_block *block,
   rec_t *rec,
-  dict_index_t *index,
+  Index *index,
   mtr_t *mtr
 );
 
@@ -360,7 +360,7 @@ rec_t *page_copy_rec_list_start(
 void page_delete_rec_list_end(
   rec_t *rec,
   Buf_block *block,
-  dict_index_t *index,
+  Index *index,
   ulint n_recs,
   ulint size,
   mtr_t *mtr
@@ -375,7 +375,7 @@ void page_delete_rec_list_end(
  * @param[in] index containing the record
  * @param[in,out] mtr mini-transaction
  */
-void page_delete_rec_list_start(rec_t *rec, Buf_block *block, dict_index_t *index, mtr_t *mtr);
+void page_delete_rec_list_start(rec_t *rec, Buf_block *block, Index *index, mtr_t *mtr);
 
 /**
  * Moves record list end to another page. Moved records include split_rec.
@@ -392,7 +392,7 @@ bool page_move_rec_list_end(
   Buf_block *new_block,
   Buf_block *block,
   rec_t *split_rec,
-  dict_index_t *index,
+  Index *index,
   mtr_t *mtr
 );
 
@@ -412,7 +412,7 @@ bool page_move_rec_list_start(
   Buf_block *new_block,
   Buf_block *block,
   rec_t *split_rec,
-  dict_index_t *index,
+  Index *index,
   mtr_t *mtr
 );
 
@@ -451,7 +451,7 @@ byte *page_parse_delete_rec_list(
   byte *ptr,
   byte *end_ptr,
   Buf_block *block,
-  dict_index_t *index,
+  Index *index,
   mtr_t *mtr
 );
 
@@ -465,7 +465,7 @@ byte *page_parse_delete_rec_list(
  * 
  * @return	end of log record or NULL
  */
-byte *page_parse_create(byte *ptr, byte *end_ptr, Buf_block *block, mtr_t *mtr);
+byte *page_parse_create(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr);
 
 /**
  * Prints record contents including the data relevant only in
@@ -493,7 +493,7 @@ void page_dir_print(page_t *page, ulint pr_n);
  * @param[in] index dictionary index of the page
  * @param[in] pr_n print n first and last entries in directory
  */
-void page_print_list(Buf_block *block, dict_index_t *index, ulint pr_n);
+void page_print_list(Buf_block *block, Index *index, ulint pr_n);
 
 /**
  * Prints the info in a page header.
@@ -511,7 +511,7 @@ void page_header_print(const page_t *page);
  * @param[in] dn print dn first and last entries in directory
  * @param[in] rn print rn first and last records in directory
  */
-void page_print(Buf_block *block, dict_index_t *index, ulint dn, ulint rn);
+void page_print(Buf_block *block, Index *index, ulint dn, ulint rn);
 
 /**
  * The following is used to validate a record on a page. This function
@@ -551,7 +551,7 @@ bool page_simple_validate(page_t *page);
  * 
  * @return	true if ok
  */
-bool page_validate(page_t *page, dict_index_t *index);
+bool page_validate(page_t *page, Index *index);
 
 /**
  * Looks in the page record list for a record with the given heap number.
@@ -804,7 +804,7 @@ inline bool page_rec_is_infimum(const rec_t *rec) {
  */
 inline int page_cmp_dtuple_rec_with_match(
   void *cmp_ctx,
-  const dtuple_t *dtuple,
+  const DTuple *dtuple,
   const rec_t *rec,
   const ulint *offsets,
   ulint *matched_fields,
@@ -1039,7 +1039,7 @@ inline const rec_t *page_rec_get_next_low(const rec_t *rec) {
  * 
  * @return	pointer to next record
  */
-inline rec_t *page_rec_get_next(rec_t *rec) {
+inline rec_t *page_rec_get_next(const rec_t *rec) {
   auto ptr = const_cast<rec_t *>(page_rec_get_next_low(rec));
   return reinterpret_cast<rec_t *>(ptr);
 }
@@ -1246,11 +1246,11 @@ inline ulint page_get_max_insert_size_after_reorganize(const page_t *page, ulint
  * 
  * @param[in,out] page index page
  * @param[in] rec pointer to the record
- * @param[in] dict_index index of rec
+ * @param[in] index index of rec
  * @param[in] offsets array returned by Phy_rec::get_col_offsets()
  */
-inline void page_mem_free(page_t *page, rec_t *rec, dict_index_t *dict_index, const ulint *offsets) {
-  ut_ad(rec_offs_validate(rec, dict_index, offsets));
+inline void page_mem_free(page_t *page, rec_t *rec, const Index *index, const ulint *offsets) {
+  ut_ad(rec_offs_validate(rec, index, offsets));
 
   auto free_rec = page_header_get_ptr(page, PAGE_FREE);
 

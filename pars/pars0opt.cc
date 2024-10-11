@@ -28,7 +28,6 @@ Created 12/21/1997 Heikki Tuuri
 #include "row0ins.h"
 #include "row0upd.h"
 #include "dict0dict.h"
-#include "dict0mem.h"
 #include "que0que.h"
 #include "pars0grm.h"
 #include "pars0pars.h"
@@ -237,7 +236,7 @@ static que_node_t *opt_look_for_col_in_cond_before(
     sel_node_t *sel_node,     
     ulint nth_table,          
     ulint *op) noexcept
-  {
+{
   if (search_cond == nullptr) {
 
     return nullptr;
@@ -301,19 +300,19 @@ static que_node_t *opt_look_for_col_in_cond_before(
  * @return The calculated goodness.
  */
 static ulint
-opt_calc_index_goodness(dict_index_t *index,sel_node_t *sel_node, ulint nth_table, que_node_t **index_plan, ulint *last_op) {
+opt_calc_index_goodness(Index *index,sel_node_t *sel_node, ulint nth_table, que_node_t **index_plan, ulint *last_op) {
   ulint goodness{};
 
   /* Note that as higher level node pointers in the B-tree contain
   page addresses as the last field, we must not put more fields in
-  the search tuple than dict_index_get_n_unique_in_tree(index); see
+  the search tuple than index_get_n_unique_in_tree(index); see
   the note in btr_cur_search_to_nth_level. */
 
-  const auto n_fields = dict_index_get_n_unique_in_tree(index);
+  const auto n_fields = index->get_n_unique_in_tree();
 
-  for (ulint i = 0; i < n_fields; i++) {
-    ulint op;
-    const auto col_no = dict_index_get_nth_col_no(index, i);
+  for (ulint i{}; i < n_fields; ++i) {
+    ulint op{};
+    const auto col_no = index->get_nth_table_col_no(i);
 
     auto exp = opt_look_for_col_in_cond_before(
         OPT_EQUAL, col_no, static_cast<func_node_t *>(sel_node->search_cond),
@@ -343,18 +342,18 @@ opt_calc_index_goodness(dict_index_t *index,sel_node_t *sel_node, ulint nth_tabl
     }
   }
 
-  if (goodness >= 4 * dict_index_get_n_unique(index)) {
+  if (goodness >= 4 * index->get_n_unique()) {
 
     goodness += 1024;
 
-    if (dict_index_is_clust(index)) {
+    if (index->is_clustered()) {
 
       goodness += 1024;
     }
   }
 
   /* We have to test for goodness here, as last_op may note be set */
-  if (goodness > 0 && dict_index_is_clust(index)) {
+  if (goodness > 0 && index->is_clustered()) {
 
     ++goodness;
   }
@@ -465,14 +464,15 @@ static void opt_check_order_by(sel_node_t *sel_node) noexcept {
   for (ulint i{}; i < sel_node->n_tables; ++i) {
 
     auto plan = sel_node_get_nth_plan(sel_node, i);
+    auto index = plan->index;
 
     if (i < sel_node->n_tables - 1) {
-      ut_a(dict_index_get_n_unique(plan->index) <= plan->n_exact_match);
+      ut_a(index->get_n_unique() <= plan->n_exact_match);
     } else {
       ut_a(plan->table == order_table);
 
-      ut_a(dict_index_get_n_unique(plan->index) <= plan->n_exact_match ||
-           dict_index_get_nth_col_no(plan->index, plan->n_exact_match) == order_col_no);
+      ut_a(index->get_n_unique() <= plan->n_exact_match ||
+           index->get_nth_table_col_no(plan->n_exact_match) == order_col_no);
     }
   }
 }
@@ -487,14 +487,12 @@ static void opt_check_order_by(sel_node_t *sel_node) noexcept {
  * @param[in] i The index of the current table in the select statement.
  * @param[in] table The table for which the index is being optimized.
  */
-static void opt_search_plan_for_table(sel_node_t *sel_node, ulint i, dict_table_t *table) noexcept {
-  ulint n_fields;
-  ulint goodness;
-  ulint last_op = 75946965; /* Eliminate a Purify warning */
+static void opt_search_plan_for_table(sel_node_t *sel_node, ulint i, Table *table) noexcept {
+  using Que_nodes = std::array<que_node_t*, 256>;
+  ulint last_op{}; /* Eliminate a Purify warning */
   ulint best_last_op{};
-  que_node_t *index_plan[256];
-  que_node_t *best_index_plan[256];
-
+  Que_nodes index_plan{};
+  Que_nodes best_index_plan{};
   auto plan = sel_node_get_nth_plan(sel_node, i);
 
   plan->table = table;
@@ -505,42 +503,37 @@ static void opt_search_plan_for_table(sel_node_t *sel_node, ulint i, dict_table_
   /* Calculate goodness for each index of the table */
 
   ulint best_goodness{};
-  auto index = dict_table_get_first_index(table);
-  auto best_index = index;
+  auto best_index = table->get_clustered_index();
 
-  /* should be do ... until ? comment by Jani */
-  while (index != nullptr) {
-    goodness = opt_calc_index_goodness(index, sel_node, i, index_plan, &last_op);
+  for (const auto index : table->m_indexes) {
+    auto goodness = opt_calc_index_goodness(index, sel_node, i, index_plan.data(), &last_op);
 
     if (goodness > best_goodness) {
 
       best_index = index;
       best_goodness = goodness;
-      n_fields = opt_calc_n_fields_from_goodness(goodness);
+      const auto n_fields = opt_calc_n_fields_from_goodness(goodness);
 
-      memcpy(best_index_plan, index_plan, n_fields * sizeof(void *));
+      memcpy(best_index_plan.data(), index_plan.data(), n_fields * sizeof(Que_nodes::value_type));
 
       best_last_op = last_op;
     }
-
-    index = dict_table_get_next_index(index);
   }
 
   plan->index = best_index;
 
-  n_fields = opt_calc_n_fields_from_goodness(best_goodness);
+  const auto n_fields = opt_calc_n_fields_from_goodness(best_goodness);
 
   if (n_fields == 0) {
     plan->tuple = nullptr;
     plan->n_exact_match = 0;
   } else {
     plan->tuple = dtuple_create(pars_sym_tab_global->heap, n_fields);
-    dict_index_copy_types(plan->tuple, plan->index, n_fields);
+    plan->index->copy_types(plan->tuple, n_fields);
 
-    plan->tuple_exps = reinterpret_cast<que_node_t **>(
-        mem_heap_alloc(pars_sym_tab_global->heap, n_fields * sizeof(void *)));
+    plan->tuple_exps = reinterpret_cast<que_node_t **>(mem_heap_alloc(pars_sym_tab_global->heap, n_fields * sizeof(void *)));
 
-    memcpy(plan->tuple_exps, best_index_plan, n_fields * sizeof(void *));
+    memcpy(plan->tuple_exps, best_index_plan.data(), n_fields * sizeof(void *));
 
     if (best_last_op == '=') {
       plan->n_exact_match = n_fields;
@@ -551,8 +544,7 @@ static void opt_search_plan_for_table(sel_node_t *sel_node, ulint i, dict_table_
     plan->mode = opt_op_to_search_mode(sel_node->asc, best_last_op);
   }
 
-  if (dict_index_is_clust(best_index) &&
-      plan->n_exact_match >= dict_index_get_n_unique(best_index)) {
+  if (best_index->is_clustered() && plan->n_exact_match >= best_index->get_n_unique()) {
 
     plan->unique_search = true;
   } else {
@@ -635,10 +627,10 @@ static ulint opt_classify_comparison(sel_node_t *sel_node, ulint i, func_node_t 
   range from the opposite side of the search tuple already BEFORE we
   access the table, it is classified as OPT_END_COND */
 
-  if (dict_index_get_n_fields(plan->index) > plan->n_exact_match &&
+  if (plan->index->get_n_fields() > plan->n_exact_match &&
       opt_look_for_col_in_comparison_before(
           OPT_COMPARISON,
-          dict_index_get_nth_col_no(plan->index, plan->n_exact_match), cond,
+          plan->index->get_nth_table_col_no(plan->n_exact_match), cond,
           sel_node, i, &op)) {
 
     if (sel_node->asc && (op == '<' || op == PARS_LE_TOKEN)) {
@@ -704,8 +696,8 @@ static void opt_find_test_conds(sel_node_t *sel_node, ulint i, func_node_t *cond
  * @param[in] cond The first in a list of comparison conditions, or NULL.
  * @param[in] table The table to which the conditions apply.
  */
-static void opt_normalize_cmp_conds(func_node_t *cond, dict_table_t *table) noexcept {
-  while (cond != nullptr) {
+static void opt_normalize_cmp_conds(func_node_t *cond, Table *table) noexcept {
+  for( ; cond != nullptr; cond = UT_LIST_GET_NEXT(cond_list, cond)) {
     auto arg1 = cond->args;
     auto arg2 = que_node_get_next(arg1);
 
@@ -725,8 +717,6 @@ static void opt_normalize_cmp_conds(func_node_t *cond, dict_table_t *table) noex
         cond->func = opt_invert_cmp_op(cond->func);
       }
     }
-
-    cond = UT_LIST_GET_NEXT(cond_list, cond);
   }
 }
 
@@ -754,13 +744,7 @@ static void opt_determine_and_normalize_test_conds(sel_node_t *sel_node, ulint i
   ut_a(UT_LIST_GET_LEN(plan->end_conds) >= plan->n_exact_match);
 }
 
-void opt_find_all_cols(
-    bool copy_val,
-    dict_index_t *index,
-    sym_node_list_t *col_list,
-    Plan *plan,
-    que_node_t *exp)
-{
+void opt_find_all_cols(bool copy_val, Index *index, sym_node_list_t *col_list, Plan *plan, que_node_t *exp) {
   if (exp == nullptr) {
 
     return;
@@ -787,27 +771,24 @@ void opt_find_all_cols(
     return;
   }
 
-  if (sym_node->table != index->table) {
+  if (sym_node->table != index->m_table) {
 
     return;
   }
 
-  /* Look for an occurrence of the same column in the plan column
-  list */
+  /* Look for an occurrence of the same column in the plan column list */
 
   for (auto col_node : *col_list) {
     if (col_node->col_no == sym_node->col_no) {
 
       if (col_node == sym_node) {
-        /* sym_node was already in a list: do
-        nothing */
-
+        /* sym_node was already in a list: do nothing */
         return;
       }
 
       /* Put an indirection */
-      sym_node->indirection = col_node;
       sym_node->alias = col_node;
+      sym_node->indirection = col_node;
 
       return;
     }
@@ -821,14 +802,13 @@ void opt_find_all_cols(
 
   /* Fill in the field_no fields in sym_node */
 
-  sym_node->field_nos[SYM_CLUST_FIELD_NO] = dict_index_get_nth_col_pos(
-      dict_table_get_first_index(index->table), sym_node->col_no);
+  sym_node->field_nos[SYM_CLUST_FIELD_NO] = index->get_clustered_index()->get_nth_field_pos(sym_node->col_no);
 
-  if (!dict_index_is_clust(index)) {
+  if (!index->is_clustered()) {
 
     ut_a(plan != nullptr);
 
-    const auto col_pos = dict_index_get_nth_col_pos(index, sym_node->col_no);
+    const auto col_pos = index->get_nth_field_pos(sym_node->col_no);
 
     if (col_pos == ULINT_UNDEFINED) {
 
@@ -892,7 +872,7 @@ static void opt_find_copy_cols(sel_node_t *sel_node, ulint i, func_node_t *searc
  * @param[in] sel_node The select node containing the query.
  * @param[in] i The index of the current table in the join.
  */
-static void opt_classify_cols(sel_node_t *sel_node, ulint i) {
+static void opt_classify_cols(sel_node_t *sel_node, ulint i) noexcept {
   auto plan = sel_node_get_nth_plan(sel_node, i);
 
   /* The final value of the following field will depend on the
@@ -935,35 +915,34 @@ static void opt_clust_access(sel_node_t *sel_node, ulint n) {
 
   plan->no_prefetch = false;
 
-  if (dict_index_is_clust(index)) {
+  if (index->is_clustered()) {
     plan->clust_map = nullptr;
     plan->clust_ref = nullptr;
 
     return;
   }
 
-  auto table = index->table;
-  auto clust_index = dict_table_get_first_index(table);
-  const auto n_fields = dict_index_get_n_unique(clust_index);
+  auto table = index->m_table;
+  auto clust_index = table->get_clustered_index();
+  const auto n_fields = clust_index->get_n_unique();
   auto heap = pars_sym_tab_global->heap;
 
   plan->clust_ref = dtuple_create(heap, n_fields);
 
-  dict_index_copy_types(plan->clust_ref, clust_index, n_fields);
+  clust_index->copy_types(plan->clust_ref, n_fields);
 
   plan->clust_map = reinterpret_cast<ulint *>(mem_heap_alloc(heap, n_fields * sizeof(ulint)));
 
   for (ulint i{}; i < n_fields; ++i) {
-    const auto pos = dict_index_get_nth_field_pos(index, clust_index, i);
+    const auto pos = index->get_nth_field_pos(clust_index, i);
 
     ut_a(pos != ULINT_UNDEFINED);
 
     /* We optimize here only queries to InnoDB's internal system
     tables, and they should not contain column prefix indexes. */
 
-    if (dict_index_get_nth_field(index, pos)->prefix_len != 0 ||
-        dict_index_get_nth_field(clust_index, i)->prefix_len != 0) {
-      log_err(std::format("Table {} has prefix_len != 0", index->table_name));
+    if (index->get_nth_field(pos)->m_prefix_len != 0 || clust_index->get_nth_field(i)->m_prefix_len != 0) {
+      log_err(std::format("Table {} has prefix_len != 0", index->m_table->m_name));
     }
 
     plan->clust_map[i] = pos;
@@ -976,8 +955,8 @@ void opt_search_plan(sel_node_t *sel_node) {
   auto ptr = mem_heap_alloc(pars_sym_tab_global->heap, sel_node->n_tables * sizeof(Plan));
   sel_node->m_plans = reinterpret_cast<Plan *>(ptr);
 
-  for (ulint i = 0; i < sel_node->n_tables; ++i) {
-    new (&sel_node->m_plans[i]) Plan(srv_fsp, srv_btree_sys, srv_lock_sys);
+  for (ulint i{}; i < sel_node->n_tables; ++i) {
+    new (&sel_node->m_plans[i]) Plan(srv_fsp, srv_btree_sys);
   }
 
   /* Analyze the search condition to find out what we know at each
@@ -994,7 +973,7 @@ void opt_search_plan(sel_node_t *sel_node) {
     sel_node->asc = order_by->asc;
   }
 
-  for (ulint i = 0; i < sel_node->n_tables; ++i) {
+  for (ulint i{}; i < sel_node->n_tables; ++i) {
 
     auto table = table_node->table;
 
@@ -1012,7 +991,7 @@ void opt_search_plan(sel_node_t *sel_node) {
 
   table_node = sel_node->table_list;
 
-  for (ulint i = 0; i < sel_node->n_tables; ++i) {
+  for (ulint i{}; i < sel_node->n_tables; ++i) {
 
     /* Classify the table columns into those we only need to access
     but not copy, and to those we must copy to dynamic memory */
@@ -1065,9 +1044,10 @@ void opt_print_query_plan(sel_node_t *sel_node) {
 
     log_info(std::format(
       "Table {}; exact m. {}, match {}, end conds {}",
-      plan->table->name,
+      plan->table->m_name,
       plan->n_exact_match,
       n_fields,
-      UT_LIST_GET_LEN(plan->end_conds)));
+      plan->end_conds.size()
+    ));
   }
 }

@@ -32,7 +32,7 @@ Created 12/9/1995 Heikki Tuuri
 #include "log0log.h"
 #include "buf0buf.h"
 #include "buf0flu.h"
-#include "dict0boot.h"
+#include "dict0store.h"
 #include "fil0fil.h"
 #include "log0recv.h"
 #include "mem0mem.h"
@@ -112,7 +112,7 @@ constexpr ulint LOG_UNLOCK_NONE_FLUSHED_LOCK = 1;
 constexpr ulint LOG_UNLOCK_FLUSH_LOCK = 2;
 
 Log::Log() noexcept {
-  mutex_create(&m_mutex, IF_DEBUG("log_sys_mutex",) IF_SYNC_DEBUG(SYNC_LOG,) Source_location{});
+  mutex_create(&m_mutex, IF_DEBUG("log_sys_mutex",) IF_SYNC_DEBUG(SYNC_LOG,) Current_location());
 
   acquire();
 

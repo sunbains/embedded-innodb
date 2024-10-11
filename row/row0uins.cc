@@ -22,18 +22,15 @@ Fresh insert undo
 Created 2/25/1997 Heikki Tuuri
 *******************************************************/
 
-#include "row0uins.h"
-
 #include "btr0btr.h"
-#include "dict0boot.h"
-#include "dict0crea.h"
 #include "dict0dict.h"
-
+#include "dict0dict.h"
 #include "log0log.h"
 #include "mach0data.h"
 #include "que0que.h"
 #include "row0row.h"
 #include "row0undo.h"
+#include "row0uins.h"
 #include "row0upd.h"
 #include "row0vers.h"
 #include "trx0rec.h"
@@ -53,22 +50,22 @@ static db_err row_undo_ins_remove_clust_rec(Undo_node *node) {
 
   mtr.start();
 
-  auto success = node->m_pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
+  auto success = node->m_pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Current_location());
   ut_a(success);
 
-  if (node->table->id == DICT_INDEXES_ID) {
+  if (node->table->m_id == DICT_INDEXES_ID) {
     ut_ad(node->trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
     /* Drop the index tree associated with the row in
     SYS_INDEXES table: */
 
-    dict_drop_index_tree(node->m_pcur.get_rec(), &mtr);
+    srv_dict_sys->m_store.drop_index_tree(node->m_pcur.get_rec(), &mtr);
 
     mtr.commit();
 
     mtr.start();
 
-    success = node->m_pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
+    success = node->m_pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Current_location());
     ut_a(success);
   }
 
@@ -87,7 +84,7 @@ retry:
   /* If did not succeed, try pessimistic descent to tree */
   mtr.start();
 
-  success = node->m_pcur.restore_position(BTR_MODIFY_TREE, &mtr, Source_location{});
+  success = node->m_pcur.restore_position(BTR_MODIFY_TREE, &mtr, Current_location());
   ut_a(success);
 
   btr_cur->pessimistic_delete(&err, false, trx_is_recv(node->trx) ? RB_RECOVERY : RB_NORMAL, &mtr);
@@ -114,26 +111,31 @@ retry:
   return err;
 }
 
-/** Removes a secondary index entry if found.
-@param[in,out] mode             BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
-                                depending on whether we wish optimistic or
-                                pessimistic descent down the index tree
-@param[in] index                Remove entry from this index
-@param[in] entry                Index entry to remove
-@return	DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE */
-static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtuple_t *entry) {
+/**
+ * Removes a secondary index entry if found.
+ * 
+ * @param[in,out] mode             BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
+ *                                depending on whether we wish optimistic or
+ *                                pessimistic descent down the index tree
+ * @param[in] index                Remove entry from this index
+ * @param[in] entry                Index entry to remove
+ * 
+ * @return	DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE
+ */
+static db_err row_undo_ins_remove_sec_low(ulint mode, Index *index, DTuple *entry) {
   db_err err;
-  mtr_t mtr;
-  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys);
 
   log_sys->free_check();
+
+  mtr_t mtr;
 
   mtr.start();
 
   auto found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
   auto btr_cur = pcur.get_btr_cur();
 
-  if (!found) {
+  if (unlikely(!found)) {
     /* Not found */
 
     pcur.close();
@@ -153,7 +155,7 @@ static db_err row_undo_ins_remove_sec_low(ulint mode, dict_index_t *index, dtupl
     between RB_NORMAL and RB_RECOVERY only matters when
     deleting a record that contains externally stored
     columns. */
-    ut_ad(!dict_index_is_clust(index));
+    ut_ad(!index->is_clustered());
     btr_cur->pessimistic_delete(&err, false, RB_NORMAL, &mtr);
   }
 
@@ -168,7 +170,7 @@ optimistic, then pessimistic descent down the tree.
 @param[in,out] index            Remove entry from this secondary index.
 @param[in] entry                Entry to remove.
 @return	DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
-static db_err row_undo_ins_remove_sec(dict_index_t *index, dtuple_t *entry) {
+static db_err row_undo_ins_remove_sec(Index *index, DTuple *entry) {
 
   /* Try first optimistic descent to the B-tree */
 
@@ -213,21 +215,21 @@ static void row_undo_ins_parse_undo_rec(ib_recovery_t recovery, Undo_node *node)
   node->rec_type = type;
 
   node->update = nullptr;
-  node->table = dict_table_get_on_id(srv_config.m_force_recovery, table_id, node->trx);
+  node->table = srv_dict_sys->table_get_on_id(srv_config.m_force_recovery, table_id, node->trx);
 
   /* Skip the UNDO if we can't find the table or the .ibd file. */
   if (unlikely(node->table == nullptr)) {
-  } else if (unlikely(node->table->ibd_file_missing)) {
+  } else if (unlikely(node->table->m_ibd_file_missing)) {
     node->table = nullptr;
   } else {
-    auto clust_index = dict_table_get_first_index(node->table);
+    auto clust_index = node->table->get_first_index();
 
     if (clust_index != nullptr) {
       ptr = trx_undo_rec_get_row_ref(ptr, clust_index, &node->ref, node->heap);
     } else {
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  table ");
-      ut_print_name(node->table->name);
+      ut_print_name(node->table->m_name);
       ib_logger(
         ib_stream,
         " has no indexes, "
@@ -250,15 +252,17 @@ db_err row_undo_ins(Undo_node *node) {
     return DB_SUCCESS;
   }
 
-  /* Iterate over all the indexes and undo the insert.*/
+  /* Iterate over all the secondary indexes and undo the insert.*/
 
-  /* Skip the clustered index (the first index) */
-  node->index = dict_table_get_next_index(dict_table_get_first_index(node->table));
+  for (auto index : node->table->m_indexes) {
+    /* Skip the clustered index (the first index) */
+    if (index->is_clustered()) {
+      continue;
+    }
 
-  while (node->index != nullptr) {
     auto entry = row_build_index_entry(node->row, node->ext, node->index, node->heap);
 
-    if (unlikely(!entry)) {
+    if (unlikely(entry == nullptr)) {
       /* The database must have crashed after
       inserting a clustered index record but before
       writing all the externally stored columns of
@@ -277,8 +281,6 @@ db_err row_undo_ins(Undo_node *node) {
         return err;
       }
     }
-
-    node->index = dict_table_get_next_index(node->index);
   }
 
   return row_undo_ins_remove_clust_rec(node);

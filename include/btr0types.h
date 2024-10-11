@@ -25,8 +25,6 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #pragma once
 
-#include "innodb0types.h"
-
 #include "page0types.h"
 #include "rem0types.h"
 #include "sync0rw.h"

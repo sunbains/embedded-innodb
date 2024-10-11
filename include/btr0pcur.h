@@ -74,21 +74,20 @@ enum class Btr_pcur_positioned {
 selects, updates, and deletes. */
 struct Btree_pcursor {
   struct Ctx {
-    dict_index_t *m_dict_index{};
-    const dtuple_t *m_tuple{};
+    Index *m_index{};
+    const DTuple *m_tuple{};
     ib_srch_mode_t m_search_mode{};
     ulint m_latch_mode{};
     mtr_t* m_mtr{};
-    Source_location m_loc{};
+    Source_location m_loc{Current_location()};
   };
 
   /** @brief Constructor.
    * 
    * @param[in] fsp             The file segment manager.
    * @param[in] btree           The B-tree.
-   * @param[in] lock_sys        The lock system.
    */
-  Btree_pcursor(FSP *fsp, Btree *btree, Lock_sys *lock_sys) noexcept;
+  Btree_pcursor(FSP *fsp, Btree *btree) noexcept;
 
   /**
    * @brief Destructor.
@@ -119,7 +118,7 @@ struct Btree_pcursor {
    * @param[in] mtr             The mtr (mini-transaction) object.
    * @param[in] loc             The callers location
    */
-  void open_on_user_rec(dict_index_t *index, const dtuple_t *tuple, ib_srch_mode_t mode, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept;
+  void open_on_user_rec(Index *index, const DTuple *tuple, ib_srch_mode_t mode, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept;
   
    /** Allows setting the persistent cursor manually.
     * 
@@ -228,7 +227,7 @@ struct Btree_pcursor {
    * 
    * @return Pointer to the page.
    */
-  [[nodiscard]] page_t *get_page() noexcept;
+  [[nodiscard]] page_t *get_page_no() noexcept;
 
   /**
    * @brief Returns the buffer block of a persistent cursor.
@@ -242,8 +241,8 @@ struct Btree_pcursor {
    * 
    * @return the index being traversed.
    */
-  [[nodiscard]] dict_index_t *get_index()  noexcept{
-    return m_btr_cur.m_index;
+  [[nodiscard]] const Index *get_index()  noexcept{
+    return static_cast<const Index *>(m_btr_cur.m_index);
   }
 
   /**
@@ -407,7 +406,7 @@ struct Btree_pcursor {
    * @brief Initializes and opens a persistent cursor to an index tree.
    *        It should be closed with close.
    *
-   * @param[in] dict_index      The dict_index.
+   * @param[in] index      The index.
    * @param[in] tuple           The tuple on which search is done.
    * @param[in] search_mode     The search mode (PAGE_CUR_L, ...).
    *                            NOTE that if the search is made using a unique prefix of a record,
@@ -417,12 +416,12 @@ struct Btree_pcursor {
    * @param[in] mtr             The mtr.
    * @param[in] loc             The source location.
    */
-  void open(dict_index_t *dict_index, const dtuple_t *tuple, ib_srch_mode_t search_mode, ulint latch_mode, mtr_t* mtr, Source_location loc) noexcept;
+  void open(const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, mtr_t* mtr, Source_location loc) noexcept;
 
   /**
    * @brief Opens a persistent cursor to an index tree without initializing the cursor.
    *
-   * @param[in] dict_index      The dict_index.
+   * @param[in] index      The index.
    * @param[in] tuple           The tuple on which the search is done.
    * @param[in] search_mode     The search mode (PAGE_CUR_L, ...).
    * @param[in] latch_mode      The latch mode (BTR_SEARCH_LEAF, ...).
@@ -431,8 +430,8 @@ struct Btree_pcursor {
    * @param[in] loc             The source location.
    */
   void open_with_no_init(
-    dict_index_t *dict_index,
-    const dtuple_t *tuple,
+    const Index *index,
+    const DTuple *tuple,
     ib_srch_mode_t search_mode,
     ulint latch_mode,
     ulint has_search_latch,
@@ -443,23 +442,23 @@ struct Btree_pcursor {
    * @brief Opens a persistent cursor at either end of an index.
    *
    * @param[in] from_left       True if open to the low end, false if open to the high end.
-   * @param[in] dict_index      The dict_index.
+   * @param[in] index           The index.
    * @param[in] latch_mode      The latch mode.
    * @param[in] do_init         True if the cursor should be initialized.
    * @param[in] level           read level where the cursor would be positioned or re-positioned.
    * @param[in] mtr             The mtr.
    */
-  void open_at_index_side(bool from_left, dict_index_t *dict_index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr) noexcept;
+  void open_at_index_side(bool from_left, const Index *index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr) noexcept;
 
   /**
    * @brief Positions a cursor at a randomly chosen position within a B-tree.
    *
-   * @param[in] dict_index      The dict_index.
+   * @param[in] index      The index.
    * @param[in] latch_mode      The latch mode (BTR_SEARCH_LEAF, ...).
    * @param[in] mtr             The mtr.
    * @param[in] loc             The source location.
    */
-  void set_random_position(dict_index_t *dict_index, ulint latch_mode, mtr_t* mtr, Source_location loc) noexcept;
+  void set_random_position(const Index *index, ulint latch_mode, mtr_t* mtr, Source_location loc) noexcept;
 
   /**
    * @brief Frees the possible memory heap of a persistent cursor and sets the latch mode of the persistent cursor to BTR_NO_LATCHES.
@@ -588,10 +587,10 @@ inline page_cur_t *Btree_pcursor::get_page_cur() noexcept {
   return m_btr_cur.get_page_cur();
 }
 
-inline page_t *Btree_pcursor::get_page() noexcept {
+inline page_t *Btree_pcursor::get_page_no() noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
-  return m_btr_cur.get_page();
+  return m_btr_cur.get_page_no();
 }
 
 inline Buf_block *Btree_pcursor::get_block() noexcept {
@@ -656,7 +655,7 @@ inline bool Btree_pcursor::is_before_first_in_tree(mtr_t *m) noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  if (Btree::page_get_prev(get_page(), m) != FIL_NULL) {
+  if (Btree::page_get_prev(get_page_no(), m) != FIL_NULL) {
     return false;
   } else {
     return page_cur_is_before_first(get_page_cur());
@@ -667,7 +666,7 @@ inline bool Btree_pcursor::is_after_last_in_tree(mtr_t *m) noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  if (Btree::page_get_next(get_page(), m) != FIL_NULL) {
+  if (Btree::page_get_next(get_page_no(), m) != FIL_NULL) {
     return false;
   } else {
     return page_cur_is_after_last(get_page_cur());
@@ -818,8 +817,8 @@ inline void Btree_pcursor::init(ulint read_level) noexcept {
 }
 
 inline void Btree_pcursor::open(
-  dict_index_t *dict_index,
-  const dtuple_t *tuple,
+  const Index *index,
+  const DTuple *tuple,
   ib_srch_mode_t search_mode,
   ulint latch_mode,
   mtr_t* mtr,
@@ -831,7 +830,7 @@ inline void Btree_pcursor::open(
   m_search_mode = search_mode;
 
   /* Search with the tree cursor */
-  m_btr_cur.search_to_nth_level(nullptr, dict_index, m_read_level, tuple, search_mode, latch_mode, mtr, loc);
+  m_btr_cur.search_to_nth_level(nullptr, index, m_read_level, tuple, search_mode, latch_mode, mtr, loc);
 
   m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
 
@@ -839,8 +838,8 @@ inline void Btree_pcursor::open(
 }
 
 inline void Btree_pcursor::open_with_no_init(
-  dict_index_t *dict_index,
-  const dtuple_t *tuple,
+  const Index *index,
+  const DTuple *tuple,
   ib_srch_mode_t search_mode,
   ulint latch_mode,
   ulint has_search_latch,
@@ -852,14 +851,14 @@ inline void Btree_pcursor::open_with_no_init(
 
   /* Search with the tree cursor */
 
-  m_btr_cur.search_to_nth_level(nullptr, dict_index, m_read_level, tuple, search_mode, latch_mode, mtr, loc);
+  m_btr_cur.search_to_nth_level(nullptr, index, m_read_level, tuple, search_mode, latch_mode, mtr, loc);
 
   m_old_stored = false;
   m_trx_if_known = nullptr;
   m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
 }
 
-inline void Btree_pcursor::open_at_index_side(bool from_left, dict_index_t *dict_index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr) noexcept {
+inline void Btree_pcursor::open_at_index_side(bool from_left, const Index *index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr) noexcept {
   m_latch_mode = latch_mode;
   m_search_mode = from_left ? PAGE_CUR_G : PAGE_CUR_L;
 
@@ -867,21 +866,21 @@ inline void Btree_pcursor::open_at_index_side(bool from_left, dict_index_t *dict
     init(level);
   }
 
-  m_btr_cur.open_at_index_side(nullptr, from_left, dict_index, latch_mode, m_read_level, mtr, Source_location{});
+  m_btr_cur.open_at_index_side(nullptr, from_left, index, latch_mode, m_read_level, mtr, Current_location());
 
   m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
   m_old_stored = false;
   m_trx_if_known = nullptr;
 }
 
-inline void Btree_pcursor::set_random_position(dict_index_t *dict_index, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept {
+inline void Btree_pcursor::set_random_position(const Index *index, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept {
 
   m_latch_mode = latch_mode;
   m_search_mode = PAGE_CUR_G;
 
   init(0);
 
-  m_btr_cur.open_at_rnd_pos(dict_index, latch_mode, mtr, loc);
+  m_btr_cur.open_at_rnd_pos(index, latch_mode, mtr, loc);
 
   m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
   m_old_stored = false;

@@ -11,8 +11,7 @@ Created 12 Oct 2008.
 #include "api0misc.h"
 #include "btr0pcur.h"
 #include "ddl0ddl.h"
-#include "dict0boot.h"
-#include "dict0crea.h"
+#include "dict0store.h"
 #include "dict0load.h"
 #include "lock0lock.h"
 #include "log0log.h"
@@ -63,14 +62,14 @@ static db_err ddl_drop_table_in_background(const char *name) {
 
   /* Try to drop the table in InnoDB */
 
-  dict_lock_data_dictionary(trx);
+  srv_dict_sys->lock_data_dictionary(trx);
 
   auto err = ddl_drop_table(name, trx, false);
 
   auto err_commit = trx_commit(trx);
   ut_a(err_commit == DB_SUCCESS);
 
-  dict_unlock_data_dictionary(trx);
+  srv_dict_sys->unlock_data_dictionary(trx);
 
   log_sys->buffer_flush_to_disk();
 
@@ -80,69 +79,55 @@ static db_err ddl_drop_table_in_background(const char *name) {
 }
 
 ulint ddl_drop_tables_in_background() {
-  ddl_drop_t *drop;
-  dict_table_t *table;
-  ulint n_tables;
-  ulint n_tables_dropped = 0;
+  ulint n_tables_dropped{};
 
-loop:
-  mutex_enter(&kernel_mutex);
+  for (;;) {
+    mutex_enter(&kernel_mutex);
 
-  if (!ddl_drop_list_inited) {
+    if (!ddl_drop_list_inited) {
+      UT_LIST_INIT(ddl_drop_list);
+      ddl_drop_list_inited = true;
+    }
 
-    UT_LIST_INIT(ddl_drop_list);
-    ddl_drop_list_inited = true;
+    auto drop = UT_LIST_GET_FIRST(ddl_drop_list);
+    const auto n_tables = UT_LIST_GET_LEN(ddl_drop_list);
+
+    mutex_exit(&kernel_mutex);
+
+    if (drop == nullptr) {
+      /* All tables dropped */
+      return n_tables + n_tables_dropped;
+    }
+
+    srv_dict_sys->mutex_acquire();
+
+    auto table = srv_dict_sys->table_get(drop->table_name);
+
+    srv_dict_sys->mutex_release();
+
+    if (table != nullptr) {
+      if (DB_SUCCESS != ddl_drop_table_in_background(drop->table_name)) {
+        /* If the DROP fails for some table, we return, and let the
+        main thread retry later */
+
+        return n_tables + n_tables_dropped;
+      }
+
+      ++n_tables_dropped;
+    }
+
+    mutex_enter(&kernel_mutex);
+
+    UT_LIST_REMOVE(ddl_drop_list, drop);
+
+    log_info(std::format("Dropped table {} in background drop queue.", drop->table_name));
+
+    mem_free(drop->table_name);
+
+    mem_free(drop);
+
+    mutex_exit(&kernel_mutex);
   }
-
-  drop = UT_LIST_GET_FIRST(ddl_drop_list);
-
-  n_tables = UT_LIST_GET_LEN(ddl_drop_list);
-
-  mutex_exit(&kernel_mutex);
-
-  if (drop == nullptr) {
-    /* All tables dropped */
-
-    return n_tables + n_tables_dropped;
-  }
-
-  mutex_enter(&(dict_sys->mutex));
-  table = dict_table_get_low(drop->table_name);
-  mutex_exit(&(dict_sys->mutex));
-
-  if (table == nullptr) {
-    /* If for some reason the table has already been dropped
-    through some other mechanism, do not try to drop it */
-
-    goto already_dropped;
-  }
-
-  if (DB_SUCCESS != ddl_drop_table_in_background(drop->table_name)) {
-    /* If the DROP fails for some table, we return, and let the
-    main thread retry later */
-
-    return n_tables + n_tables_dropped;
-  }
-
-  n_tables_dropped++;
-
-already_dropped:
-  mutex_enter(&kernel_mutex);
-
-  UT_LIST_REMOVE(ddl_drop_list, drop);
-
-  ut_print_timestamp(ib_stream);
-  ib_logger(ib_stream, "  Dropped table ");
-  ut_print_name(drop->table_name);
-  ib_logger(ib_stream, " in background drop queue.\n");
-
-  mem_free(drop->table_name);
-
-  mem_free(drop);
-
-  mutex_exit(&kernel_mutex);
-
-  goto loop;
 }
 
 ulint ddl_get_background_drop_list_len_low() {
@@ -202,8 +187,8 @@ static bool ddl_add_table_to_background_drop_list(const char *name) {
 }
 
 db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
-  dict_foreign_t *foreign;
-  dict_table_t *table;
+  Foreign *foreign;
+  Table *table;
   ulint space_id;
   enum db_err err;
   const char *table_name;
@@ -261,26 +246,19 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     return DB_SCHEMA_NOT_LOCKED;
   }
 
-  ut_ad(mutex_own(&(dict_sys->mutex)));
+  ut_ad(mutex_own(&srv_dict_sys->m_mutex));
+
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&dict_operation_lock, RW_LOCK_EX));
+  ut_ad(rw_lock_own(&srv_dict_sys->m_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
 
-  table = dict_table_get_low(name);
+  table = srv_dict_sys->table_get(name);
 
-  if (!table) {
+  if (table == nullptr) {
     err = DB_TABLE_NOT_FOUND;
-    ut_print_timestamp(ib_stream);
-
-    ib_logger(ib_stream, "  Error: table ");
-    ut_print_name(name);
-    ib_logger(
-      ib_stream,
-      " does not exist in the InnoDB internal\n"
-      "data dictionary though the client is"
-      " trying to drop it.\n"
-      "You can look for further help on the\n"
-      "InnoDB website. Check the site for details\n"
+    log_err(
+      "Table ", name, " does not exist in the InnoDB internal data dictionary though the client is trying to drop it."
+      " You can look for further help on the Embedded InnoDB website. Check the site for details"
     );
     goto func_exit;
   }
@@ -288,28 +266,22 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
   /* Check if the table is referenced by foreign key constraints from
   some other table (not the table itself) */
 
-  foreign = UT_LIST_GET_FIRST(table->referenced_list);
+  foreign = UT_LIST_GET_FIRST(table->m_referenced_list);
 
-  while (foreign && foreign->foreign_table == table) {
+  while (foreign && foreign->m_foreign_table == table) {
   check_next_foreign:
-    foreign = UT_LIST_GET_NEXT(referenced_list, foreign);
+    foreign = UT_LIST_GET_NEXT(m_referenced_list, foreign);
   }
 
-  if (foreign && trx->m_check_foreigns && !(drop_db && dict_tables_have_same_db(name, foreign->foreign_table_name))) {
+  if (foreign && trx->m_check_foreigns && !(drop_db && srv_dict_sys->tables_have_same_db(name, foreign->m_foreign_table_name))) {
     /* We only allow dropping a referenced table if
     FOREIGN_KEY_CHECKS is set to 0 */
 
     err = DB_CANNOT_DROP_CONSTRAINT;
 
-    mutex_enter(&dict_foreign_err_mutex);
-    ut_print_timestamp(ib_stream);
-
-    ib_logger(ib_stream, "  Cannot drop table ");
-    ut_print_name(name);
-    ib_logger(ib_stream, "\nbecause it is referenced by ");
-    ut_print_name(foreign->foreign_table_name);
-    ib_logger(ib_stream, "\n");
-    mutex_exit(&dict_foreign_err_mutex);
+    mutex_enter(&srv_dict_sys->m_foreign_err_mutex);
+    log_err(std::format("Cannot drop table {} because it is referenced by {}", name, foreign->m_foreign_table_name));
+    mutex_exit(&srv_dict_sys->m_foreign_err_mutex);
 
     goto func_exit;
   }
@@ -318,28 +290,15 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
     goto check_next_foreign;
   }
 
-  if (table->n_handles_opened > 0) {
-    bool added;
-
-    added = ddl_add_table_to_background_drop_list(table->name);
+  if (table->m_n_handles_opened > 0) {
+    auto added = ddl_add_table_to_background_drop_list(table->m_name);
 
     if (added) {
-      ut_print_timestamp(ib_stream);
-      ib_logger(
-        ib_stream,
-        "  Warning: Client is"
-        " trying to drop table (%lu) ",
-        (ulint)table->id
-      );
-      ut_print_name(table->name);
-      ib_logger(
-        ib_stream,
-        "\n"
-        "though there are still"
-        " open handles to it.\n"
-        "Adding the table to the"
-        " background drop queue.\n"
-      );
+      log_warn(std::format(
+        "Client is trying to drop table {} : {} though there are still open handles to it."
+        " Adding the table to the background drop queue.",
+        table->m_id, table->m_name
+      ));
 
       /* We return DB_SUCCESS though the drop will
       happen lazily later */
@@ -358,28 +317,19 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
   they can cope with the table having been dropped here? Foreign key
   checks take an IS or IX lock on the table. */
 
-  if (table->n_foreign_key_checks_running > 0) {
+  if (table->m_n_foreign_key_checks_running > 0) {
 
-    const char *table_name = table->name;
-    bool added;
-
-    added = ddl_add_table_to_background_drop_list(table_name);
+    const char *table_name = table->m_name;
+    auto added = ddl_add_table_to_background_drop_list(table_name);
 
     if (added) {
-      ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  You are trying to drop table ");
-      ut_print_name(table_name);
-      ib_logger(
-        ib_stream,
-        "\n"
-        "though there is a"
-        " foreign key check running on it.\n"
-        "Adding the table to"
-        " the background drop queue.\n"
-      );
+      log_warn(std::format(
+        "You are trying to drop table {} : {} though there is a foreign key check running on it."
+        " Adding the table to the background drop queue.",
+        table->m_id, table->m_name
+      ));
 
-      /* We return DB_SUCCESS though the drop will
-      happen lazily later */
+      /* We return DB_SUCCESS though the drop will happen lazily later */
 
       err = DB_SUCCESS;
     } else {
@@ -395,7 +345,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
   srv_lock_sys->remove_all_on_table(table, true);
 
   trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
-  trx->table_id = table->id;
+  trx->table_id = table->m_id;
 
   /* We use the private SQL parser of Innobase to generate the
   query graphs needed in deleting the dictionary data from system
@@ -480,7 +430,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
   if (err != DB_SUCCESS) {
 
     if (err != DB_OUT_OF_FILE_SPACE) {
-      ib_logger(ib_stream, "Error: unexpected err: %d", err);
+      log_err("Unexpected err: {}", (int) err);
       ut_error;
     }
 
@@ -492,28 +442,27 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db) {
   } else {
     bool is_path;
     const char *name_or_path;
-    mem_heap_t *heap;
 
-    heap = mem_heap_create(200);
+    auto heap = mem_heap_create(200);
 
     /* Clone the name, in case it has been allocated
     from table->heap, which will be freed by
     dict_table_remove_from_cache(table) below. */
     name = mem_heap_strdup(heap, name);
-    space_id = table->space;
+    space_id = table->m_space_id;
 
-    if (table->dir_path_of_temp_table != nullptr) {
+    if (table->m_dir_path_of_temp_table != nullptr) {
       is_path = true;
-      name_or_path = mem_heap_strdup(heap, table->dir_path_of_temp_table);
+      name_or_path = mem_heap_strdup(heap, table->m_dir_path_of_temp_table);
     } else {
       is_path = false;
       name_or_path = name;
     }
 
-    dict_table_remove_from_cache(table);
+    srv_dict_sys->table_remove_from_cache(table);
 
     // FIXME: srv_force_recovery should be passed in as an arg
-    if (dict_load_table(srv_config.m_force_recovery, name) != nullptr) {
+    if (srv_dict_sys->m_loader.load_table(srv_config.m_force_recovery, name) != nullptr) {
       log_err(std::format("Not able to remove table {} from the dictionary cache", name));
       err = DB_ERROR;
     }
@@ -548,8 +497,8 @@ the above strings. */
 #define STR_EQ(str1, str1_len, str2_onstack) \
   ((str1_len) == sizeof(str2_onstack) && memcmp(str1, str2_onstack, sizeof(str2_onstack)) == 0)
 
-db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
-  tab_node_t *node;
+db_err ddl_create_table(Table *table, trx_t *trx) {
+  Table_node *node;
   mem_heap_t *heap;
   que_thr_t *thr;
   const char *table_name;
@@ -557,22 +506,18 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
   db_err err;
   ulint i;
 
-  IF_SYNC_DEBUG(ut_ad(rw_lock_own(&dict_operation_lock, RW_LOCK_EX));)
+  IF_SYNC_DEBUG(ut_ad(rw_lock_own(&srv_dict_sys->m_lock, RW_LOCK_EX));)
 
-  ut_ad(mutex_own(&(dict_sys->mutex)));
+  ut_ad(mutex_own(&srv_dict_sys->m_mutex));
   ut_ad(trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
   if (srv_config.m_created_new_raw) {
-    ib_logger(
-      ib_stream,
-      "A new raw disk partition was initialized:\n"
-      "we do not allow database modifications"
-      " by the user.\n"
-      "Shut down the database and edit your config "
-      "file so that newraw is replaced with raw.\n"
+    log_err(
+      "A new raw disk partition was initialized: we do not allow database modifications"
+      " by the user. Shut down the database and edit your config file so that newraw is replaced with raw."
     );
-  err_exit:
-    dict_mem_table_free(table);
+
+    Table::destroy(table, Current_location());
 
     return DB_ERROR;
 
@@ -580,25 +525,25 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
     Certain table names starting with 'innodb_' have their special
     meaning regardless of the database name.  Thus, we need to
     ignore the database name prefix in the comparisons. */
-  } else if (strchr(table->name, '/') == nullptr) {
-    ib_logger(ib_stream, "  Error: table ");
-    ut_print_name(table->name);
-    ib_logger(ib_stream, "not prefixed with a database name and '/'\n");
-    goto err_exit;
+  } else if (strchr(table->m_name, '/') == nullptr) {
+    log_err("Table {} not prefixed with a database name and '/'", table->m_name);
+    Table::destroy(table, Current_location());
+
+    return DB_ERROR;
   }
 
   trx->m_op_info = "creating table";
 
   /* Check that no reserved column names are used. */
-  for (i = 0; i < dict_table_get_n_user_cols(table); i++) {
-    if (dict_col_name_is_reserved(dict_table_get_col_name(table, i))) {
-
-      goto err_exit;
+  for (i = 0; i < table->get_n_user_cols(); i++) {
+    if (Dict::col_name_is_reserved(table->get_col_name(i))) {
+      Table::destroy(table, Current_location());
+      return DB_ERROR;
     }
   }
 
-  table_name = strchr(table->name, '/');
-  table_name++;
+  table_name = strchr(table->m_name, '/');
+  ++table_name;
   table_name_len = strlen(table_name) + 1;
 
   if (STR_EQ(table_name, table_name_len, S_innodb_monitor)) {
@@ -629,25 +574,15 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
     /* We define here a debugging feature intended for
     developers */
 
-    ib_logger(
-      ib_stream,
-      "Validating InnoDB memory:\n"
-      "to use this feature you must compile InnoDB with\n"
-      "UNIV_MEM_DEBUG defined in innodb0types.h and"
-      " the server must be\n"
-      "quiet because allocation from a mem heap"
-      " is not protected\n"
-      "by any semaphore.\n"
-    );
+    log_info(
+      "Validating InnoDB memory: to use this feature you must compile InnoDB with UNIV_MEM_DEBUG defined in innodb0types.h and"
+      " the server must be quiet because allocation from a mem heap is not protected by any semaphore.");
+
 #ifdef UNIV_MEM_DEBUG
     ut_a(mem_validate());
-    ib_logger(ib_stream, "Memory validated\n");
+    log_info("Memory validated");
 #else  /* UNIV_MEM_DEBUG */
-    ib_logger(
-      ib_stream,
-      "Memory NOT validated (recompile with "
-      "UNIV_MEM_DEBUG)\n"
-    );
+    log_info("Memory NOT validated (recompile with UNIV_MEM_DEBUG)n");
 #endif /* UNIV_MEM_DEBUG */
   }
 
@@ -655,7 +590,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
 
   trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
 
-  node = tab_create_graph_create(table, heap, false);
+  node = Table_node::create(srv_dict_sys, table, heap, false);
 
   thr = pars_complete_graph_for_exec(node, trx, heap);
 
@@ -674,29 +609,23 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
     case DB_OUT_OF_FILE_SPACE:
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, "  Warning: cannot create table ");
-      ut_print_name(table->name);
+      ut_print_name(table->m_name);
       ib_logger(ib_stream, " because tablespace full\n");
 
-      if (dict_table_get_low(table->name)) {
+      if (srv_dict_sys->table_get(table->m_name)) {
 
-        ddl_drop_table(table->name, trx, false);
+        ddl_drop_table(table->m_name, trx, false);
       }
       break;
 
     case DB_DUPLICATE_KEY:
-      ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, "  Error: table ");
-      ut_print_name(table->name);
-      ib_logger(
-        ib_stream,
-        " already exists in InnoDB internal\n"
-        "data dictionary.\n"
-        "You can look for further help on\n"
-        "the InnoDB website\n"
-      );
+      log_err(std::format(
+        "Table {} already exists in InnoDB internal data dictionary. You can look for further help on"
+        " the Embedded InnoDB website",
+        table->m_name
+      ));
 
-      /* We may also get err == DB_ERROR if the .ibd file for the
-    table already exists */
+      /* We may also get err == DB_ERROR if the .ibd file for the table already exists */
 
       break;
 
@@ -711,21 +640,21 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx) {
   return err;
 }
 
-db_err ddl_create_index(dict_index_t *index, trx_t *trx) {
+db_err ddl_create_index(Index *index, trx_t *trx) {
   db_err err;
   que_thr_t *thr;
-  ind_node_t *node;
+  Index_node *node;
   mem_heap_t *heap;
 
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&dict_operation_lock, RW_LOCK_EX));
+  ut_ad(rw_lock_own(&srv_dict_sys->m_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
-  ut_ad(mutex_own(&(dict_sys->mutex)));
+  ut_ad(mutex_own(&srv_dict_sys->m_mutex));
 
   /* This heap is destroyed when the query graph is freed. */
   heap = mem_heap_create(512);
 
-  node = ind_create_graph_create(index, heap, false);
+  node = Index_node::create(srv_dict_sys, index, heap, false);
   thr = pars_complete_graph_for_exec(node, trx, heap);
 
   auto tmp = que_fork_start_command(static_cast<que_fork_t *>(que_node_get_parent(thr)));
@@ -741,20 +670,20 @@ db_err ddl_create_index(dict_index_t *index, trx_t *trx) {
   return err;
 }
 
-enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
-  dict_foreign_t *foreign;
+db_err ddl_truncate_table(Table *table, trx_t *trx) {
+  Foreign *foreign;
   enum db_err err;
   mem_heap_t *heap;
   byte *buf;
-  dtuple_t *tuple;
+  DTuple *tuple;
   dfield_t *dfield;
-  dict_index_t *sys_index;
-  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
+  Index *sys_index;
   mtr_t mtr;
   uint64_t new_id;
   ulint recreate_space = 0;
   pars_info_t *info = nullptr;
   page_no_t root_page_no;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys);
 
   /* How do we prevent crashes caused by ongoing operations on
   the table? Old operations could try to access non-existent
@@ -795,13 +724,9 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   a new tablespace identifier to the truncated tablespace. */
 
   if (srv_config.m_created_new_raw) {
-    ib_logger(
-      ib_stream,
-      "A new raw disk partition was initialized:\n"
-      "we do not allow database modifications"
-      " by the user.\n"
-      "Shut down server and edit config file so "
-      "that newraw is replaced with raw.\n"
+    log_info(
+      "A new raw disk partition was initialized: we do not allow database modifications"
+      " by the user. Shut down server and edit config file so that newraw is replaced with raw."
     );
 
     return DB_ERROR;
@@ -815,7 +740,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
 
   /* Prevent foreign key checks etc. while we are truncating the
   table */
-  ut_ad(mutex_own(&(dict_sys->mutex)));
+  ut_ad(mutex_own(&srv_dict_sys->m_mutex));
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(&dict_operation_lock, RW_LOCK_EX));
@@ -824,29 +749,24 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   /* Check if the table is referenced by foreign key constraints from
   some other table (not the table itself) */
 
-  foreign = UT_LIST_GET_FIRST(table->referenced_list);
+  foreign = UT_LIST_GET_FIRST(table->m_referenced_list);
 
-  while (foreign && foreign->foreign_table == table) {
-    foreign = UT_LIST_GET_NEXT(referenced_list, foreign);
+  while (foreign && foreign->m_foreign_table == table) {
+    foreign = UT_LIST_GET_NEXT(m_referenced_list, foreign);
   }
 
-  if (foreign && trx->m_check_foreigns) {
-    /* We only allow truncating a referenced table if
-    FOREIGN_KEY_CHECKS is set to 0 */
+  if (foreign != nullptr && trx->m_check_foreigns) {
+    /* We only allow truncating a referenced table if FOREIGN_KEY_CHECKS is set to 0 */
 
-    mutex_enter(&dict_foreign_err_mutex);
-    ut_print_timestamp(ib_stream);
+    mutex_enter(&srv_dict_sys->m_foreign_err_mutex);
 
-    ib_logger(ib_stream, "  Cannot truncate table ");
-    ut_print_name(table->name);
-    ib_logger(
-      ib_stream,
-      " by DROP+CREATE\n"
-      "because it is referenced by "
-    );
-    ut_print_name(foreign->foreign_table_name);
-    ib_logger(ib_stream, "\n");
-    mutex_exit(&dict_foreign_err_mutex);
+    log_err(std::format(
+      "Cannot truncate table {} by DROP+CREATE because it is referenced by {}",
+      table->m_name,
+      foreign->m_foreign_table_name
+    ));
+
+    mutex_exit(&srv_dict_sys->m_foreign_err_mutex);
 
     err = DB_ERROR;
     goto func_exit;
@@ -858,16 +778,12 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   they can cope with the table having been truncated here? Foreign key
   checks take an IS or IX lock on the table. */
 
-  if (table->n_foreign_key_checks_running > 0) {
-    ut_print_timestamp(ib_stream);
-    ib_logger(ib_stream, "  Cannot truncate table ");
-    ut_print_name(table->name);
-    ib_logger(
-      ib_stream,
-      " by DROP+CREATE\n"
-      "because there is a foreign key check"
-      " running on it.\n"
-    );
+  if (table->m_n_foreign_key_checks_running > 0) {
+    log_err(std::format(
+      "Cannot truncate table {} by DROP+CREATE because there is a foreign key check running on it.",
+      table->m_name
+    ));
+
     err = DB_ERROR;
 
     goto func_exit;
@@ -876,50 +792,38 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   /* Remove all locks except the table-level S and X locks. */
   srv_lock_sys->remove_all_on_table(table, false);
 
-  trx->table_id = table->id;
+  trx->table_id = table->m_id;
 
-  if (table->space && !table->dir_path_of_temp_table) {
+  if (table->m_space_id && !table->m_dir_path_of_temp_table) {
     /* Discard and create the single-table tablespace. */
-    auto space = table->space;
-    ulint flags = srv_fil->space_get_flags(space);
+    auto space_id = table->m_space_id;
+    ulint flags = srv_fil->space_get_flags(space_id);
 
-    if (flags != ULINT_UNDEFINED && srv_fil->discard_tablespace(space)) {
+    if (flags != ULINT_UNDEFINED && srv_fil->discard_tablespace(space_id)) {
+      space_id = SYS_TABLESPACE;
 
-      dict_index_t *index;
-
-      space = 0;
-
-      if (srv_fil->create_new_single_table_tablespace(&space, table->name, false, flags, FIL_IBD_FILE_INITIAL_SIZE) != DB_SUCCESS) {
-        ut_print_timestamp(ib_stream);
-        ib_logger(
-          ib_stream,
-          "  TRUNCATE TABLE %s failed to"
-          " create a new tablespace\n",
-          table->name
-        );
-        table->ibd_file_missing = 1;
+      if (srv_fil->create_new_single_table_tablespace(&space_id, table->m_name, false, flags, FIL_IBD_FILE_INITIAL_SIZE) != DB_SUCCESS) {
+        log_err(std::format("TRUNCATE TABLE {} failed to create a new tablespace", table->m_name));
+        table->m_ibd_file_missing = true;
         err = DB_ERROR;
         goto func_exit;
       }
 
-      recreate_space = space;
+      recreate_space = space_id;
 
       /* Replace the space_id in the data dictionary cache.
       The persisent data dictionary (SYS_TABLES.SPACE
       and SYS_INDEXES.SPACE) are updated later in this
       function. */
-      table->space = space;
+      table->m_space_id = space_id;
 
-      index = dict_table_get_first_index(table);
-
-      do {
-        index->space = space;
-        index = dict_table_get_next_index(index);
-      } while (index != nullptr);
+      for (auto index : table->m_indexes) {
+        index->m_page_id.m_space_id = space_id;
+      }
 
       mtr.start();
 
-      srv_fsp->header_init(space, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
+      srv_fsp->header_init(space_id, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
 
       mtr.commit();
     }
@@ -932,15 +836,15 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
   dfield = dtuple_get_nth_field(tuple, 0);
 
   buf = mem_heap_alloc(heap, 8);
-  mach_write_to_8(buf, table->id);
+  mach_write_to_8(buf, table->m_id);
 
   dfield_set_data(dfield, buf, 8);
-  sys_index = dict_table_get_first_index(dict_sys->sys_indexes);
-  dict_index_copy_types(tuple, sys_index, 1);
+  sys_index = srv_dict_sys->m_sys_indexes->get_first_index();
+  sys_index->copy_types(tuple, 1);
 
   mtr.start();
 
-  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &mtr, Source_location{});
+  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &mtr, Current_location());
 
   for (;;) {
     rec_t *rec;
@@ -968,22 +872,20 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     }
 
     /* This call may commit and restart mtr and reposition pcur. */
-    root_page_no = dict_truncate_index_tree(table, recreate_space, &pcur, &mtr);
+    root_page_no = srv_dict_sys->m_store.truncate_index_tree(table, recreate_space, &pcur, &mtr);
 
     rec = pcur.get_rec();
 
     if (root_page_no != FIL_NULL) {
       page_rec_write_index_page_no(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, root_page_no, &mtr);
-      /* We will need to commit and restart the
-      mini-transaction in order to avoid deadlocks.
-      The dict_truncate_index_tree() call has allocated
-      a page in this mini-transaction, and the rest of
+      /* We will need to commit and restart the mini-transaction in order to avoid deadlocks.
+      The dict_truncate_index_tree() call has allocated a page in this mini-transaction, and the rest of
       this loop could latch another index page. */
       mtr.commit();
 
       mtr.start();
 
-      (void) pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Source_location{});
+      (void) pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Current_location());
     }
 
   next_rec:
@@ -995,12 +897,12 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
 
   mem_heap_free(heap);
 
-  new_id = dict_hdr_get_new_id(DICT_HDR_TABLE_ID);
+  new_id = srv_dict_sys->m_store.hdr_get_new_id(Dict_id_type::TABLE_ID);
 
   info = pars_info_create();
 
-  pars_info_add_int4_literal(info, "space", (lint)table->space);
-  pars_info_add_uint64_literal(info, "old_id", table->id);
+  pars_info_add_int4_literal(info, "space", (lint)table->m_space_id);
+  pars_info_add_uint64_literal(info, "old_id", table->m_id);
   pars_info_add_uint64_literal(info, "new_id", new_id);
 
   err = que_eval_sql(
@@ -1027,7 +929,7 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     trx->error_state = DB_SUCCESS;
     ut_print_timestamp(ib_stream);
     ib_logger(ib_stream, "  Unable to assign a new identifier to table ");
-    ut_print_name(table->name);
+    ut_print_name(table->m_name);
     ib_logger(
       ib_stream,
       "\n"
@@ -1036,10 +938,10 @@ enum db_err ddl_truncate_table(dict_table_t *table, trx_t *trx) {
     );
     err = DB_ERROR;
   } else {
-    dict_table_change_id_in_cache(table, new_id);
+    srv_dict_sys->table_change_id_in_cache(table, new_id);
   }
 
-  dict_update_statistics(table);
+  srv_dict_sys->update_statistics(table);
 
 func_exit:
 
@@ -1050,7 +952,7 @@ func_exit:
   return err;
 }
 
-db_err ddl_drop_index(dict_table_t *table, dict_index_t *index, trx_t *trx) {
+db_err ddl_drop_index(Table *table, Index *index, trx_t *trx) {
   db_err err = DB_SUCCESS;
   pars_info_t *info = pars_info_create();
 
@@ -1076,7 +978,7 @@ db_err ddl_drop_index(dict_table_t *table, dict_index_t *index, trx_t *trx) {
 
   ut_ad(index && table && trx);
 
-  pars_info_add_uint64_literal(info, "indexid", index->id);
+  pars_info_add_uint64_literal(info, "indexid", index->m_id);
 
   (void) trx_start_if_not_started(trx);
   trx->m_op_info = "dropping index";
@@ -1090,20 +992,22 @@ db_err ddl_drop_index(dict_table_t *table, dict_index_t *index, trx_t *trx) {
   /* Replace this index with another equivalent index for all
   foreign key constraints on this table where this index is used */
 
-  dict_table_replace_index_in_foreign_list(table, index);
-  dict_index_remove_from_cache(table, index);
+  table->replace_index_in_foreign_list(index);
+  srv_dict_sys->index_remove_from_cache(table, index);
 
   trx->m_op_info = "";
   return err;
 }
 
-/** Delete a single constraint.
-@return	error code or DB_SUCCESS */
-static db_err ddl_delete_constraint_low(
-  const char *id, /*!< in: constraint id */
-  trx_t *trx
-) /*!< in: transaction handle */
-{
+/**
+ * @brief Delete a single constraint.
+ * 
+ * @param[in] id Constraint id
+ * @param[in] trx Transaction handle
+ * 
+ * @return Error code or DB_SUCCESS
+ */
+static db_err ddl_delete_constraint_low(const char *id, trx_t *trx) noexcept {
   pars_info_t *info = pars_info_create();
 
   pars_info_add_str_literal(info, "id", id);
@@ -1123,13 +1027,14 @@ static db_err ddl_delete_constraint_low(
 /**
  * Delete a single constraint.
  *
- * @param id constraint id
- * @param database_name database name, with the trailing '/'
- * @param heap memory heap
- * @param trx transaction handle
+ * @param[in] id constraint id
+ * @param[in] database_name database name, with the trailing '/'
+ * @param[in] heap memory heap
+ * @param[in] trx transaction handle
+ * 
  * @return error code or DB_SUCCESS
  */
-static db_err ddl_delete_constraint(const char *id, const char *database_name, mem_heap_t *heap, trx_t *trx) {
+static db_err ddl_delete_constraint(const char *id, const char *database_name, mem_heap_t *heap, trx_t *trx) noexcept {
   /* New format constraints have ids <databasename>/<constraintname>. */
   auto err = ddl_delete_constraint_low(mem_heap_strcat(heap, database_name, id), trx);
 
@@ -1148,7 +1053,7 @@ static db_err ddl_delete_constraint(const char *id, const char *database_name, m
 }
 
 db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) {
-  dict_table_t *table;
+  Table *table;
   db_err err = DB_ERROR;
   mem_heap_t *heap = nullptr;
   const char **constraints_to_drop = nullptr;
@@ -1159,13 +1064,10 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
   ut_a(new_name != nullptr);
 
   if (srv_config.m_created_new_raw || srv_config.m_force_recovery != IB_RECOVERY_DEFAULT) {
-    ib_logger(
-      ib_stream,
-      "A new raw disk partition was initialized or\n"
-      "innodb_force_recovery is on: we do not allow\n"
-      "database modifications by the user. Shut down\n"
-      "the server and ensure that newraw is replaced\n"
-      "with raw, and innodb_force_... is removed.\n"
+    log_err(
+      "A new raw disk partition was initialized or innodb_force_recovery is on: we do not allow"
+      " database modifications by the user. Shut down the server and ensure that newraw is replaced"
+      " with raw, and innodb_force_... is removed."
     );
 
     goto func_exit;
@@ -1173,12 +1075,12 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
 
   trx->m_op_info = "renaming table";
 
-  table = dict_table_get_low(old_name);
+  table = srv_dict_sys->table_get(old_name);
 
   if (!table) {
     err = DB_TABLE_NOT_FOUND;
     goto func_exit;
-  } else if (table->ibd_file_missing) {
+  } else if (table->m_ibd_file_missing) {
     err = DB_TABLE_NOT_FOUND;
     goto func_exit;
   }
@@ -1281,14 +1183,10 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
   } else if (n_constraints_to_drop > 0) {
     /* Drop some constraints of tmp tables. */
 
-    ulint i;
-    char *db_name;
-    ulint db_name_len;
+    auto db_name_len = Dict::get_db_name_len(old_name) + 1;
+    auto db_name = mem_heap_strdupl(heap, old_name, db_name_len);
 
-    db_name_len = dict_get_db_name_len(old_name) + 1;
-    db_name = mem_heap_strdupl(heap, old_name, db_name_len);
-
-    for (i = 0; i < n_constraints_to_drop; i++) {
+    for (ulint i = 0; i < n_constraints_to_drop; i++) {
       err = ddl_delete_constraint(constraints_to_drop[i], db_name, heap, trx);
 
       if (err != DB_SUCCESS) {
@@ -1299,25 +1197,12 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
 
   if (err != DB_SUCCESS) {
     if (err == DB_DUPLICATE_KEY) {
-      ut_print_timestamp(ib_stream);
-      ib_logger(
-        ib_stream,
-        "  Error; possible reasons:\n"
-        "1) Table rename would cause"
-        " two FOREIGN KEY constraints\n"
-        "to have the same internal name"
-        " in case-insensitive comparison.\n"
-        " trying to rename table.\n"
-        "If table "
-      );
-      ut_print_name(new_name);
-      ib_logger(
-        ib_stream,
-        " is a temporary table, then it can be that\n"
-        "there are still queries running"
-        " on the table, and it will be\n"
-        "dropped automatically when"
-        " the queries end.\n"
+      log_err(
+        "possible reasons: 1) Table rename would cause two FOREIGN KEY constraints"
+        "to have the same internal name  in case-insensitive comparison. trying"
+        " to rename table. If table ", new_name, " is a temporary table, then it can be that"
+        "there are still queries running on the table, and it will be dropped automatically"
+        "when the queries end."
       );
     }
     trx->error_state = DB_SUCCESS;
@@ -1327,7 +1212,7 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
     /* The following call will also rename the .ibd data file if
     the table is stored in a single-table tablespace */
 
-    if (!dict_table_rename_in_cache(table, new_name, true)) {
+    if (!srv_dict_sys->table_rename_in_cache(table, new_name, true)) {
       trx->error_state = DB_SUCCESS;
       trx_general_rollback(trx, false, nullptr);
       trx->error_state = DB_SUCCESS;
@@ -1337,29 +1222,19 @@ db_err ddl_rename_table(const char *old_name, const char *new_name, trx_t *trx) 
     /* We only want to switch off some of the type checking in
     an ALTER, not in a RENAME. */
 
-    err = dict_load_foreigns(new_name, trx->m_check_foreigns);
+    err = srv_dict_sys->m_loader.load_foreigns(new_name, trx->m_check_foreigns);
 
     if (err != DB_SUCCESS) {
       bool ret;
 
       ut_print_timestamp(ib_stream);
 
-      ib_logger(
-        ib_stream,
-        "  Error: in RENAME TABLE"
-        " table "
-      );
-      ut_print_name(new_name);
-      ib_logger(
-        ib_stream,
-        "\n"
-        "is referenced in"
-        " foreign key constraints\n"
-        "which are not compatible"
+      log_err(
+        "RENAME TABLE table ", new_name, "is referenced in foreign key constraints which are not compatible"
         " with the new table definition.\n"
       );
 
-      ret = dict_table_rename_in_cache(table, old_name, false);
+      ret = srv_dict_sys->table_rename_in_cache(table, old_name, false);
       ut_a(ret);
 
       trx->error_state = DB_SUCCESS;
@@ -1380,7 +1255,7 @@ func_exit:
 }
 
 db_err ddl_rename_index(const char *table_name, const char *old_name, const char *new_name, trx_t *trx) {
-  dict_table_t *table;
+  Table *table;
   pars_info_t *info = nullptr;
   db_err err = DB_ERROR;
 
@@ -1403,9 +1278,9 @@ db_err ddl_rename_index(const char *table_name, const char *old_name, const char
 
   trx->m_op_info = "renaming index";
 
-  table = dict_table_get_low(table_name);
+  table = srv_dict_sys->table_get(table_name);
 
-  if (!table || table->ibd_file_missing) {
+  if (!table || table->m_ibd_file_missing) {
     err = DB_TABLE_NOT_FOUND;
     goto func_exit;
   }
@@ -1440,22 +1315,17 @@ db_err ddl_rename_index(const char *table_name, const char *old_name, const char
   );
 
   if (err == DB_SUCCESS) {
-    dict_index_t *index;
+    for (auto index : table->m_indexes) {
 
-    index = dict_table_get_first_index(table);
-
-    do {
-      /* FIXME: We are leaking memory here, well sort
-      of, since the previous name allocation will not
+      /* FIXME: We are leaking memory here, well sort of, since the previous name allocation will not
       be freed till the index instance is destroyed. */
-      if (strcasecmp(index->name, old_name) == 0) {
-        index->name = mem_heap_strdup(index->heap, new_name);
+      if (strcasecmp(index->m_name, old_name) == 0) {
+        index->m_name = mem_heap_strdup(index->m_heap, new_name);
 
         break;
       }
 
-      index = dict_table_get_next_index(index);
-    } while (index);
+    }
 
   } else {
     trx->error_state = DB_SUCCESS;
@@ -1476,7 +1346,7 @@ func_exit:
  * @param trx transaction handle
  * @return error code or DB_SUCCESS
  */
-static enum db_err ddl_drop_all_foreign_keys_in_db(const char *name, trx_t *trx) {
+static db_err ddl_drop_all_foreign_keys_in_db(const char *name, trx_t *trx) noexcept {
   db_err err;
 
   ut_a(name[strlen(name) - 1] == '/');
@@ -1536,38 +1406,24 @@ db_err ddl_drop_database(const char *name, trx_t *trx) {
   trx->m_op_info = "dropping database";
 
 loop:
-  dict_lock_data_dictionary(trx);
+  srv_dict_sys->lock_data_dictionary(trx);
 
-  while ((table_name = dict_get_first_table_name_in_db(name))) {
-    dict_table_t *table;
+  while ((table_name = srv_dict_sys->m_loader.get_first_table_name_in_db(name)) != nullptr) {
+    Table *table;
 
     ut_a(memcmp(table_name, name, namelen) == 0);
 
-    table = dict_table_get_low(table_name);
+    table = srv_dict_sys->table_get(table_name);
 
     ut_a(table);
 
     /* Wait until the user does not have any queries running on
     the table */
 
-    if (table->n_handles_opened > 0) {
-      dict_unlock_data_dictionary(trx);
+    if (table->m_n_handles_opened > 0) {
+      srv_dict_sys->unlock_data_dictionary(trx);
 
-      ut_print_timestamp(ib_stream);
-      ib_logger(
-        ib_stream,
-        "  Warning: The client is trying to"
-        " drop database "
-      );
-      ut_print_name(name);
-      ib_logger(
-        ib_stream,
-        "\n"
-        "though there are still"
-        " open handles to table "
-      );
-      ut_print_name(table_name);
-      ib_logger(ib_stream, ".\n");
+      log_warn("The client is trying to drop database ", name , " though there are still open handles to table ", table_name);
 
       os_thread_sleep(1000000);
 
@@ -1579,11 +1435,7 @@ loop:
     err = ddl_drop_table(table_name, trx, true);
 
     if (err != DB_SUCCESS) {
-      ib_logger(ib_stream, "DROP DATABASE ");
-      ut_print_name(name);
-      ib_logger(ib_stream, " failed with error %lu for table ", (ulint)err);
-      ut_print_name(table_name);
-      ib_logger(ib_stream, "\n");
+      log_err("DROP DATABASE ", name , " failed with error ", err , " for table ", table_name);
       mem_free(table_name);
       break;
     }
@@ -1592,23 +1444,15 @@ loop:
   }
 
   if (err == DB_SUCCESS) {
-    /* After dropping all tables try to drop all leftover
-    foreign keys in case orphaned ones exist */
+    /* After dropping all tables try to drop all leftover foreign keys in case orphaned ones exist */
     err = ddl_drop_all_foreign_keys_in_db(name, trx);
 
     if (err != DB_SUCCESS) {
-      ib_logger(ib_stream, "DROP DATABASE ");
-      ut_print_name(name);
-      ib_logger(
-        ib_stream,
-        " failed with error %d while "
-        "dropping all foreign keys",
-        err
-      );
+      log_err("DROP DATABASE ", name , " failed with error ", err , " while dropping all foreign keys");
     }
   }
 
-  dict_unlock_data_dictionary(trx);
+  srv_dict_sys->unlock_data_dictionary(trx);
 
   trx->m_op_info = "";
 
@@ -1616,29 +1460,28 @@ loop:
 }
 
 void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
-  trx_t *trx;
-  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
-  mtr_t mtr;
-  bool started;
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys);
 
-  /* Load the table definitions that contain partially defined
-  indexes, so that the data dictionary information can be checked
-  when accessing the tablename.ibd files. */
-  trx = trx_allocate_for_background();
-  started = trx_start(trx, ULINT_UNDEFINED);
+  /* Load the table definitions that contain partially defined indexes, so that the data dictionary
+  information can be checked * when accessing the tablename.ibd files. */
+  auto trx = trx_allocate_for_background();
+  auto started = trx_start(trx, ULINT_UNDEFINED);
   ut_a(started);
+
   trx->m_op_info = "dropping partially created indexes";
-  dict_lock_data_dictionary(trx);
+  srv_dict_sys->lock_data_dictionary(trx);
+
+  mtr_t mtr;
 
   mtr.start();
 
-  pcur.open_at_index_side(true, dict_table_get_first_index(dict_sys->sys_indexes), BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.open_at_index_side(true, srv_dict_sys->m_sys_indexes->get_clustered_index(), BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
     const rec_t *rec;
     ulint len;
     const byte *field;
-    dict_table_t *table;
+    Table *table;
     uint64_t table_id;
 
     (void) pcur.move_to_next_user_rec(&mtr);
@@ -1667,30 +1510,27 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery) {
 
     pcur.commit_specify_mtr(&mtr);
 
-    table = dict_load_table_on_id(recovery, table_id);
+    table = srv_dict_sys->m_loader.load_table_on_id(recovery, table_id);
 
-    if (table) {
-      dict_index_t *index;
-
-      for (index = dict_table_get_first_index(table); index; index = dict_table_get_next_index(index)) {
-
-        if (*index->name == TEMP_INDEX_PREFIX) {
+    if (table != nullptr) {
+      for (auto index : table->m_indexes) {
+        if (*index->m_name == TEMP_INDEX_PREFIX) {
           ddl_drop_index(table, index, trx);
           auto err_commit = trx_commit(trx);
-	  ut_a(err_commit == DB_SUCCESS);
+          ut_a(err_commit == DB_SUCCESS);
         }
       }
     }
 
     mtr.start();
-    (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+    (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
   }
 
   pcur.close();
 
   mtr.commit();
 
-  dict_unlock_data_dictionary(trx);
+  srv_dict_sys->unlock_data_dictionary(trx);
 
   auto err_commit = trx_commit(trx);
   ut_a(err_commit == DB_SUCCESS);
@@ -1706,7 +1546,7 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
   }
 
   trx->m_op_info = "dropping temporary tables";
-  dict_lock_data_dictionary(trx);
+  srv_dict_sys->lock_data_dictionary(trx);
 
   auto heap = mem_heap_create(200);
 
@@ -1714,15 +1554,15 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
 
   mtr.start();
 
-  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys);
 
-  pcur.open_at_index_side(true, dict_table_get_first_index(dict_sys->sys_tables), BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.open_at_index_side(true, srv_dict_sys->m_sys_tables->get_clustered_index(), BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
     const rec_t *rec;
     ulint len;
     const byte *field;
-    dict_table_t *table;
+    Table *table;
     const char *table_name;
 
     (void) pcur.move_to_next_user_rec(&mtr);
@@ -1757,7 +1597,7 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
     pcur.store_position(&mtr);
     pcur.commit_specify_mtr(&mtr);
 
-    table = dict_load_table(recovery, table_name);
+    table = srv_dict_sys->m_loader.load_table(recovery, table_name);
 
     if (table != nullptr) {
       ddl_drop_table(table_name, trx, false);
@@ -1767,7 +1607,7 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
 
     mtr.start();
 
-    (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Source_location{});
+    (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
   }
 
   pcur.close();
@@ -1776,7 +1616,7 @@ void ddl_drop_all_temp_tables(ib_recovery_t recovery) {
 
   mem_heap_free(heap);
 
-  dict_unlock_data_dictionary(trx);
+  srv_dict_sys->unlock_data_dictionary(trx);
 
   auto err_commit = trx_commit(trx);
   ut_a(err_commit == DB_SUCCESS);

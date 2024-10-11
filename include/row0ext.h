@@ -41,7 +41,7 @@ row_ext_t *row_ext_create(
                            in the InnoDB table object, as reported by
                            dict_col_get_no(); NOT relative to the records
                            in the clustered index */
-  const dtuple_t *tuple, /*!< in: data tuple containing the field
+  const DTuple *tuple, /*!< in: data tuple containing the field
                            references of the externally stored
                            columns; must be indexed by col_no;
                            the clustered index record must be

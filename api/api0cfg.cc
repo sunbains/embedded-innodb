@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "buf0lru.h"
 #include "db0err.h"
-#include "dict0mem.h"
+#include "dict0dict.h"
 #include "innodb0types.h"
 #include "log0recv.h"
 #include "os0sync.h"

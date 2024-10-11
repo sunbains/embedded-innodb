@@ -72,7 +72,7 @@ static pars_info_t *ib_exec_vsql(int n_args, va_list ap) {
         auto n = va_arg(ap, const char *);
 
         auto prtype = s ? 0 : DATA_UNSIGNED;
-        auto p = mem_heap_alloc(info->heap, l);
+        auto p = mem_heap_alloc(info->m_heap, l);
 
         switch (l) {
           case 1: {
@@ -134,13 +134,9 @@ ib_err_t ib_exec_sql( const char *sql, ulint n_args, ...) {
   ut_a(success);
   trx->m_op_info = "exec client sql";
 
-  dict_mutex_enter();
-
   /* Note that we've already acquired the dictionary mutex. */
-  auto err = que_eval_sql(info, sql, false, trx);
+  auto err = que_eval_sql(info, sql, true, trx);
   ut_a(err == DB_SUCCESS);
-
-  dict_mutex_exit();
 
   if (err != DB_SUCCESS) {
     trx_general_rollback(trx, false, nullptr);

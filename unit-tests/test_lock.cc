@@ -142,7 +142,7 @@ int main() {
 
   kernel_mutex_temp = static_cast<mutex_t *>(mem_alloc(sizeof(mutex_t)));
 
-  mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex",) IF_SYNC_DEBUG(SYNC_KERNEL,) Source_location{});
+  mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex",) IF_SYNC_DEBUG(SYNC_KERNEL,) Current_location());
 
   {
     srv_config.m_buf_pool_size = 64 * 1024 * 1024;

@@ -54,12 +54,12 @@ struct Btree {
   /**
    * Gets the root node of a tree and x-latches it.
    * 
-   * @param[in] index           Index tree.
+   * @param[in] page_id         Page id.
    * @param[in,out]             Mini-transaction.
    * 
    * @return	root page, x-latched
    */
-  [[nodiscard]] page_t *root_get(dict_index_t *index, mtr_t *mtr) noexcept;
+  [[nodiscard]] page_t *root_get(Page_id page_id, mtr_t *mtr) noexcept;
 
   /**
    * Gets pointer to the previous user record in the tree. It is assumed
@@ -95,7 +95,7 @@ struct Btree {
    * 
    * @return	page number of the created root, FIL_NULL if did not succeed
    */
-  [[nodiscard]] page_no_t create(ulint type, space_id_t space, uint64_t index_id, dict_index_t *index, mtr_t *mtr) noexcept;
+  [[nodiscard]] page_no_t create(ulint type, space_id_t space, uint64_t index_id, Index *index, mtr_t *mtr) noexcept;
 
   /**
    * Frees a B-tree except the root page, which MUST be freed after this
@@ -132,7 +132,7 @@ struct Btree {
    * 
    * @return	inserted record
    */
-  [[nodiscard]] rec_t *root_raise_and_insert(Btree_cursor *cursor, const dtuple_t *tuple, ulint n_ext, mtr_t *mtr) noexcept;
+  [[nodiscard]] rec_t *root_raise_and_insert(Btree_cursor *cursor, const DTuple *tuple, ulint n_ext, mtr_t *mtr) noexcept;
 
   /**
    * Reorganizes an index page.
@@ -148,7 +148,7 @@ struct Btree {
    * 
    * @return	true on success, false on failure
    */
-  [[nodiscard]] bool page_reorganize(Buf_block *block, dict_index_t *index, mtr_t *mtr) noexcept;
+  [[nodiscard]] bool page_reorganize(Buf_block *block, const Index *index, mtr_t *mtr) noexcept;
 
   /**
    * Decides if the page should be split at the convergence point of
@@ -192,7 +192,7 @@ struct Btree {
    * 
    * @return inserted record
    */
-  [[nodiscard]] rec_t *page_split_and_insert(Btree_cursor *cursor, const dtuple_t *tuple, ulint n_ext, mtr_t *mtr) noexcept;
+  [[nodiscard]] rec_t *page_split_and_insert(Btree_cursor *cursor, const DTuple *tuple, ulint n_ext, mtr_t *mtr) noexcept;
 
   /**
    * Inserts a data tuple to a tree on a non-leaf level. It is assumed
@@ -205,7 +205,7 @@ struct Btree {
    * @param[in] line            Line where called
    * @param[in,out] mtr         Mini-transaction.
    */
-  void insert_on_non_leaf_level(dict_index_t *index, ulint level, dtuple_t *tuple, mtr_t *mtr, Source_location location) noexcept;
+  void insert_on_non_leaf_level(Index *index, ulint level, DTuple *tuple, mtr_t *mtr, Source_location location) noexcept;
 
   /**
    * Sets a record as the predefined minimum record.
@@ -222,7 +222,7 @@ struct Btree {
    * @param[in,out] block       Page whose node pointer is deleted
    * @param[in,out] mtr         Mini-transaction.
    */
-  void node_ptr_delete(dict_index_t *index, Buf_block *block, mtr_t *mtr) noexcept;
+  void node_ptr_delete(Index *index, Buf_block *block, mtr_t *mtr) noexcept;
 
   #ifdef UNIV_DEBUG
   /**
@@ -232,7 +232,7 @@ struct Btree {
    * @param[in,out] mtr         Mini-transaction
    * @return	true
    */
-  [[nodiscard]] bool check_node_ptr(dict_index_t *index, Buf_block *block, mtr_t *mtr) noexcept;
+  [[nodiscard]] bool check_node_ptr(Index *index, Buf_block *block, mtr_t *mtr) noexcept;
   #endif /* UNIV_DEBUG */
 
   /**
@@ -289,7 +289,7 @@ struct Btree {
    * 
    * @return	end of log record or nullptr
    */
-  [[nodiscard]] byte *parse_page_reorganize(byte *ptr, byte *end_ptr, dict_index_t *index, Buf_block *block, mtr_t *mtr) noexcept;
+  [[nodiscard]] byte *parse_page_reorganize(byte *ptr, byte *end_ptr, Index *index, Buf_block *block, mtr_t *mtr) noexcept;
 
   /**
    * Gets the number of pages in a B-tree.
@@ -299,7 +299,7 @@ struct Btree {
    * 
    * @return	number of pages
    */
-  [[nodiscard]] ulint get_size(dict_index_t *index, ulint flag) noexcept;
+  [[nodiscard]] ulint get_size(const Index *index, ulint flag) noexcept;
 
   /**
    * Allocates a new file page to be used in an index tree. NOTE: we assume
@@ -313,7 +313,7 @@ struct Btree {
    * 
    * @return	new allocated block, x-latched; nullptr if out of space
    */
-  [[nodiscard]] Buf_block *page_alloc(dict_index_t *index, page_no_t hint_page_no, byte file_direction, ulint level, mtr_t *mtr) noexcept;
+  [[nodiscard]] Buf_block *page_alloc(const Index *index, page_no_t hint_page_no, byte file_direction, ulint level, mtr_t *mtr) noexcept;
 
   /**
    * Frees a file page used in an index tree. NOTE: cannot free field external
@@ -323,7 +323,7 @@ struct Btree {
    * @param[in,out] block       Block to be freed, x-latched
    * @param[in,out] mtr         Mini-transaction.
    */
-  void page_free(dict_index_t *index, Buf_block *block, mtr_t *mtr) noexcept;
+  void page_free(const Index *index, Buf_block *block, mtr_t *mtr) noexcept;
 
   /**
    * Frees a file page used in an index tree. Can be used also to BLOB
@@ -335,7 +335,7 @@ struct Btree {
    * @param[in] level           Page level
    * @param[in,out] mtr         Mini-transaction
    */
-  void page_free_low(dict_index_t *index, Buf_block *block, ulint level, mtr_t *mtr) noexcept;
+  void page_free_low(const Index *index, Buf_block *block, ulint level, mtr_t *mtr) noexcept;
 
   #ifdef UNIV_BTR_PRINT
   /**
@@ -343,7 +343,7 @@ struct Btree {
    * 
    * @param[in] index           Index
    */
-  void print_size(dict_index_t *index) noexcept;
+  void print_size(Index *index) noexcept;
 
   /**
    * Prints directories and other info of all nodes in the index.
@@ -351,7 +351,7 @@ struct Btree {
    * @param[in] index           Index
    * @param[in] width           Print this many entries from start and end
    */
-  void print_index(dict_index_t *index, ulint width) noexcept;
+  void print_index(Index *index, ulint width) noexcept;
   #endif /* UNIV_BTR_PRINT */
 
   /**
@@ -363,7 +363,7 @@ struct Btree {
    *                            record and page on error
    * @return	true if ok
    */
-  [[nodiscard]] bool index_rec_validate(const rec_t *rec, const dict_index_t *index, bool dump_on_error) noexcept;
+  [[nodiscard]] bool index_rec_validate(const rec_t *rec, const Index *index, bool dump_on_error) noexcept;
 
   /**
    * Checks the consistency of an index tree.
@@ -373,7 +373,7 @@ struct Btree {
    * 
    * @return	true if ok
    */
-  [[nodiscard]] bool validate_index(dict_index_t *index, trx_t *trx) noexcept;
+  [[nodiscard]] bool validate_index(Index *index, trx_t *trx) noexcept;
 
   /**
    * Gets a buffer page and declares its latching order level.
@@ -607,22 +607,22 @@ private:
   /**
    * Gets the root node of a tree and x-latches it.
    *
-   * @param[in,out] dict_index  Dict index tree.
+   * @param[in,out] index       An index
    * @param[in,out] mtr         Mini-tranaction covering the operation.
    * @return root page, x-latched
    */
-  [[nodiscard]] Buf_block *root_block_get(dict_index_t *dict_index, mtr_t *mtr) noexcept;
+  [[nodiscard]] Buf_block *root_block_get(Page_id page_id, mtr_t *mtr) noexcept;
 
   /**
    * Creates a new index page (not the root, and also not
    * used in page reorganization).  @see page_empty().
    *
    * @param[in,out] block       Page to be created.
-   * @param[in,out] dict_index  The index in which to create
+   * @param[in,out] index       The index in which to create
    * @param[in] level           Btree level of the page
    * @param[in,out] mtr         Mini-transaction coverring the operation.
    */
-   void page_create(Buf_block *block, dict_index_t *dict_index, ulint level, mtr_t *mtr) noexcept;
+   void page_create(Buf_block *block, Index *index, ulint level, mtr_t *mtr) noexcept;
 
   /**
    * Sets the child node file address in a node pointer.
@@ -638,20 +638,20 @@ private:
    * Returns the child page of a node pointer and x-latches it.
    *
    * @param[in] node_ptr        Node pointer
-   * @param[in,out] dict_index  Dict index tree
+   * @param[in,out] index       Dict index tree
    * @param[in] offsets         returned by Phy_rec::get_col_offsets()
    * @param[in,out] mtr         Mini-transaction covering the operation.
    * 
    * @return child page, x-latched
    */
-  [[nodiscard]] Buf_block *node_ptr_get_child(const rec_t *node_ptr, dict_index_t *dict_index, const ulint *offsets, mtr_t *mtr) noexcept;
+  [[nodiscard]] Buf_block *node_ptr_get_child(const rec_t *node_ptr, Index *index, const ulint *offsets, mtr_t *mtr) noexcept;
 
   /**
    * Returns the upper level node pointer to a page. It is assumed that mtr holds
    * an x-latch on the tree.
    *
    * @param[in] node_ptr        Node pointer
-   * @param[in,out] dict_index  Dict index tree
+   * @param[in,out] index       Dict index tree
    * @param[in] offsets         Array returned by Phy_rec::get_col_offsets()
    * @param[in,out] mtr         Mini-transaction covering the operation.
    * 
@@ -665,25 +665,25 @@ private:
    *
    * @param[in] offsets         Work area for the return value.
    * @param[in] heap            Memory heap to use.
-   * @param[in] dict_index      B-tree index.
+   * @param[in] index           B-tree index.
    * @param[in] block           Child page in the index.
    * @param[in] mtr             Mini-transaction handle.
    * @param[out] cursor         Cursor on node pointer record, its page x-latched.
    *
    * @return Rec::get_col_offsets() of the node pointer record.
    */
-  [[nodiscard]] ulint *page_get_father_block(ulint *offsets, mem_heap_t *heap, dict_index_t *dict_index, Buf_block *block, mtr_t *mtr, Btree_cursor *cursor) noexcept;
+  [[nodiscard]] ulint *page_get_father_block(ulint *offsets, mem_heap_t *heap, Index *index, Buf_block *block, mtr_t *mtr, Btree_cursor *cursor) noexcept;
 
   /**
    * Seeks to the upper level node pointer to a page.
    * It is assumed that mtr holds an x-latch on the tree.
    *
-   * @param[in] dict_index      B-tree index
+   * @param[in] index           B-tree index
    * @param[in] block           Child page in the index
    * @param[in] mtr             Mini-transaction handle
    * @param[out] cursor         Cursor on node pointer record, its page x-latched
    */
-  void page_get_father(dict_index_t *dict_index, Buf_block *block, mtr_t *mtr, Btree_cursor *cursor) noexcept;
+  void page_get_father(Index *index, Buf_block *block, mtr_t *mtr, Btree_cursor *cursor) noexcept;
 
   /**
    * Reorganizes an index page.
@@ -692,12 +692,12 @@ private:
    *                            i.e., there cannot exist locks on the page, and a hash
    *                            index cannot be used.
    * @param[in] block           Page to be reorganized.
-   * @param[in] dict_index      Record descriptor.
+   * @param[in] index           Record descriptor.
    * @param[in] mtr             Mini-transaction handle.
    *
    * @return True on success, false on failure.
    */
-  [[nodiscard]] bool page_reorganize_low(bool recovery, Buf_block *block, dict_index_t *dict_index, mtr_t *mtr) noexcept;
+  [[nodiscard]] bool page_reorganize_low(bool recovery, Buf_block *block, const Index *index, mtr_t *mtr) noexcept;
 
   /**
    * Empties an index page.
@@ -706,7 +706,7 @@ private:
    * @param[in] level           Btree level of the page
    * @param[in,out] mtr         Min-transaction covering the operation.
    */
-  void page_empty(Buf_block *block, dict_index_t *dict_index, ulint level, mtr_t *mtr) noexcept;
+  void page_empty(Buf_block *block, Index *index, ulint level, mtr_t *mtr) noexcept;
 
   /**
    * Calculates a split record such that the tuple will certainly fit on
@@ -720,7 +720,7 @@ private:
    * @return split record, or nullptr if tuple will be the first record on
    *  the lower or upper half-page (determined by btr_page_tuple_smaller())
    */
-  [[nodiscard]] rec_t *page_get_split_rec(Btree_cursor *cursor, const dtuple_t *tuple, ulint n_ext) noexcept;
+  [[nodiscard]] rec_t *page_get_split_rec(Btree_cursor *cursor, const DTuple *tuple, ulint n_ext) noexcept;
 
   /**
    * Returns true if the insert fits on the appropriate half-page with the
@@ -735,20 +735,20 @@ private:
    * @param[in] heap            Temporary memory heap.
    * @return	true if fits
    */
-  [[nodiscard]] bool page_insert_fits(Btree_cursor *cursor, const rec_t *split_rec, const ulint *offsets, const dtuple_t *tuple, ulint n_ext, mem_heap_t *heap) noexcept;
+  [[nodiscard]] bool page_insert_fits(Btree_cursor *cursor, const rec_t *split_rec, const ulint *offsets, const DTuple *tuple, ulint n_ext, mem_heap_t *heap) noexcept;
 
   /**
    * Attaches the halves of an index page on the appropriate level in an
    * index tree.
    *
-   * @param[in] dict_index      The index tree.
+   * @param[in] index           The index tree.
    * @param[in,out] block       Page to be split.
    * @param[in] split_rec       First record on upper half page.
    * @param[in,out] new_block   The new half page.
    * @param[in] direction       FSP_UP or FSP_DOWN.
    * @param[in] mtr             Mini-transaction handle.
    */
-  void attach_half_pages(dict_index_t *dict_index, Buf_block *block, rec_t *split_rec, Buf_block *new_block, ulint direction, mtr_t *mtr) noexcept;
+  void attach_half_pages(Index *index, Buf_block *block, rec_t *split_rec, Buf_block *new_block, ulint direction, mtr_t *mtr) noexcept;
 
   /**
    * Determine if a tuple is smaller than any record on the page.
@@ -761,7 +761,7 @@ private:
    * 
    * @return true if smaller
    */
-  [[nodiscard]] bool page_tuple_smaller(Btree_cursor *cursor, const dtuple_t *tuple, ulint *offsets, ulint n_uniq, mem_heap_t **heap) noexcept;
+  [[nodiscard]] bool page_tuple_smaller(Btree_cursor *cursor, const DTuple *tuple, ulint *offsets, ulint n_uniq, mem_heap_t **heap) noexcept;
 
   /**
    * Removes a page from the level list of pages.
@@ -786,12 +786,12 @@ private:
    * If page is the only on its level, this function moves its records to the
    * father page, thus reducing the tree height.
    *
-   * @param[in] dict_index        Index tree
+   * @param[in] index             Index tree
    * @param[in] block             Page which is the only on its level; must not be empty;
    *                              use btr_discard_only_page_on_level if the last record from the page should be removed
    * @param[in] mtr               The mini-transaction handle.
    */
-  void lift_page_up(dict_index_t *dict_index, Buf_block *block, mtr_t *mtr) noexcept;
+  void lift_page_up(Index *index, Buf_block *block, mtr_t *mtr) noexcept;
 
   /**
    * Discards a page that is the only page on its level. This will empty
@@ -799,11 +799,11 @@ private:
    * should never be reached, because btr_compress(), which is invoked in
    * delete operations, calls btr_lift_page_up() to flatten the B-tree.
    *
-   * @param[in] dict_index      The index tree.
+   * @param[in] index           The index tree.
    * @param[in] block           The page which is the only on its level.
    * @param[in] mtr             The mini-transaction handle.
    */
-  void discard_only_page_on_level(dict_index_t *dict_index, Buf_block *block, mtr_t *mtr) noexcept;
+  void discard_only_page_on_level(Index *index, Buf_block *block, mtr_t *mtr) noexcept;
 
 //#ifdef UNIV_BTR_PRINT
   /**
@@ -811,7 +811,7 @@ private:
    *
    * @param[in] index  The index tree to print the size information for.
    */
-  void print_size(dict_index_t *index) noexcept;
+  void print_size(Index *index) noexcept;
 
   /**
    * Prints recursively index tree pages.
@@ -823,7 +823,7 @@ private:
    * @param[in,out] offsets     Buffer for Phy_rec::get_col_offsets().
    * @param[in] mtr             The mini-transaction handle.
    */
-  void print_recursive(dict_index_t *index, Buf_block *block, ulint width, mem_heap_t **heap, ulint **offsets, mtr_t *mtr) noexcept;
+  void print_recursive(Index *index, Buf_block *block, ulint width, mem_heap_t **heap, ulint **offsets, mtr_t *mtr) noexcept;
 
   /**
    * Prints the index tree.
@@ -831,7 +831,7 @@ private:
    * @param[in] index           The index tree to print.
    * @param[in] width          Print this many entries from start and end.
    */
-  void print_index(dict_index_t *index, ulint width) noexcept;
+  void print_index(Index *index, ulint width) noexcept;
 //#endif /* UNIV_BTR_PRINT */
 
   /**
@@ -839,50 +839,50 @@ private:
    *
    * @param[in] page            The index page containing the record.
    * @param[in] rec             The index record to display information for.
-   * @param[in] dict_index      The index to which the record belongs.
+   * @param[in] index           The index to which the record belongs.
    */
-  void index_rec_validate_report(const page_t *page, const rec_t *rec, const dict_index_t *dict_index) noexcept;
+  void index_rec_validate_report(const page_t *page, const rec_t *rec, const Index *index) noexcept;
 
   /**
    * Checks the size and number of fields in records based on the definition of
    * the index.
    * 
    * @param[in] block           Index page
-   * @param[in] dict_index      Index tree
+   * @param[in] index           Index tree
    * 
    * @return true if ok
    */
-  [[nodiscard]] bool index_page_validate(Buf_block *block, dict_index_t *dict_index) noexcept;
+  [[nodiscard]] bool index_page_validate(Buf_block *block, Index *index) noexcept;
 
   /**
    * Report an error on a single page of an index tree.
    *
-   * @param[in] dict_index      The index tree.
+   * @param[in] index           The index tree.
    * @param[in] level           The B-tree level.
    * @param[in] block           The index page.
    */
-  void validate_report1(dict_index_t *dict_index, ulint level, const Buf_block *block) noexcept; 
+  void validate_report1(Index *index, ulint level, const Buf_block *block) noexcept; 
 
   /**
    * Report an error on two pages of an index tree.
    *
-   * @param[in] dict_index      The index tree.
+   * @param[in] index           The index tree.
    * @param[in] level           The B-tree level.
    * @param[in] block1          The first index page.
    * @param[in] block2          The second index page.
    */
-  void validate_report2(const dict_index_t *dict_index, ulint level, const Buf_block *block1, const Buf_block *block2) noexcept;
+  void validate_report2(const Index *index, ulint level, const Buf_block *block1, const Buf_block *block2) noexcept;
 
   /**
    * Validates index tree level.
    *
-   * @param[in] dict_index      The index tree.
+   * @param[in] index           The index tree.
    * @param[in] trx             The transaction or nullptr.
    * @param[in] level           The level number.
    * 
    * @return true if ok.
    */
-  [[nodiscard]] bool validate_level(dict_index_t *dict_index, trx_t *trx, ulint level) noexcept;
+  [[nodiscard]] bool validate_level(Index *index, trx_t *trx, ulint level) noexcept;
 
   /** Lock manager to use */
   Lock_sys *m_lock_sys{};

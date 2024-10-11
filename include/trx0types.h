@@ -71,7 +71,7 @@ struct Purge_sys;
 struct roll_node_t;
 
 /** Commit command node in a query graph */
-struct commit_node_t;
+struct Commit_node;
 
 /** SAVEPOINT command node in a query graph */
 struct trx_named_savept_t;
@@ -83,7 +83,7 @@ struct trx_savept_t;
 struct Lock;
 
 struct sess_t;
-struct dict_index_t;
+struct Index;
 struct read_view_t;
 
 /** Rollback contexts */
@@ -246,7 +246,7 @@ enum commit_node_state {
 };
 
 /** Commit command node in a query graph */
-struct commit_node_t {
+struct Commit_node {
 
   /** Node type: QUE_NODE_COMMIT */
   que_common_t common;
@@ -396,7 +396,7 @@ struct trx_t {
    /** If the error number indicates a duplicate key error, a
    pointer to the problematic index is stored here */
 
-  const dict_index_t *error_info;
+  const Index *error_info;
 
   // FIXME: Remove this, it's MySQL specific.
   /** if the index creation fails to a duplicate key error,

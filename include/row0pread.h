@@ -45,7 +45,7 @@ struct mtr_t;
 class PCursor;
 struct Btree_pcursor;
 struct Buf_block;
-struct dict_table_t;
+struct Table;
 
 #include "btr0cur.h"
 #include "db0err.h"
@@ -156,14 +156,14 @@ class Parallel_reader {
     /** Constructor.
     @param[in] start            Start key
     @param[in] end              End key. */
-    Scan_range(const dtuple_t *start, const dtuple_t *end)
+    Scan_range(const DTuple *start, const DTuple *end)
         : m_start(start), m_end(end) {}
 
     /** Start of the scan, can be nullptr for -infinity. */
-    const dtuple_t *m_start{};
+    const DTuple *m_start{};
 
     /** End of the scan, can be null for +infinity. */
-    const dtuple_t *m_end{};
+    const DTuple *m_end{};
 
     /** Convert the instance to a string representation. */
     [[nodiscard]] std::string to_string() const;
@@ -177,7 +177,7 @@ class Parallel_reader {
     @param[in] read_level     Btree level from which records need to be read.
     @param[in] partition_id   Partition id if the index to be scanned.
                               belongs to a partitioned table. */
-    Config(const Scan_range &scan_range, dict_index_t *index,
+    Config(const Scan_range &scan_range, Index *index,
            size_t read_level = 0,
            size_t partition_id = std::numeric_limits<size_t>::max())
         : m_scan_range(scan_range),
@@ -196,7 +196,7 @@ class Parallel_reader {
     const Scan_range m_scan_range;
 
     /** (Cluster) Index in table to scan. */
-    dict_index_t *m_index{};
+    Index *m_index{};
 
     /** Tablespace page size. */
     const ulint m_page_size;
@@ -490,7 +490,7 @@ class Parallel_reader::Scan_ctx {
 
     /** Tuple representation inside m_rec, for two Iter instances in a range
     m_tuple will be [first->m_tuple, second->m_tuple). */
-    const dtuple_t *m_tuple{};
+    const DTuple *m_tuple{};
 
     /** Persistent cursor.*/
     Btree_pcursor *m_pcur{};
@@ -540,7 +540,7 @@ class Parallel_reader::Scan_ctx {
   @param[in]  block             Page to look in.
   @param[in] key                Key of the first record in the range.
   @return the left child page number. */
-  [[nodiscard]] page_no_t search(const Buf_block *block, const dtuple_t *key) const;
+  [[nodiscard]] page_no_t search(const Buf_block *block, const DTuple *key) const;
 
   /** Traverse from given sub-tree page number to start of the scan range
   from the given page number.
@@ -549,7 +549,7 @@ class Parallel_reader::Scan_ctx {
   @param[in]      key           Key of the first record in the range.
   @param[in,out]  savepoints    Blocks S latched and accessed.
   @return the leaf node page cursor. */
-  [[nodiscard]] page_cur_t start_range(page_no_t page_no, mtr_t *mtr, const dtuple_t *key, Savepoints &savepoints) const;
+  [[nodiscard]] page_cur_t start_range(page_no_t page_no, mtr_t *mtr, const DTuple *key, Savepoints &savepoints) const;
 
   /** Create and add the range to the scan ranges.
   @param[in,out]  ranges        Ranges to scan.
@@ -681,7 +681,7 @@ class Parallel_reader::Ctx {
   [[nodiscard]] const trx_t *trx() const { return m_scan_ctx->m_trx; }
 
   /** @return the index being scanned. */
-  [[nodiscard]] const dict_index_t *index() const {
+  [[nodiscard]] const Index *index() const {
     return m_scan_ctx->m_config.m_index;
   }
 

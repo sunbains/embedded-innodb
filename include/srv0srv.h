@@ -375,7 +375,7 @@ reading of a disk page */
 extern ulint srv_buf_pool_reads;
 
 /* In this structure we store status variables to be passed to the client. */
-typedef struct export_var_struct export_struc;
+typedef struct Export_vars export_struc;
 
 /** Status variables to be passed to MySQL */
 extern export_struc export_vars;
@@ -601,7 +601,7 @@ struct InnoDB {
 };
 
 /** In this structure we store status variables to be passed to the client. */
-struct export_var_struct {
+struct Export_vars {
   /** Pending reads */
   ulint innodb_data_pending_reads;      
 
@@ -741,6 +741,7 @@ struct Fil;
 struct FSP;
 struct Undo;
 struct Btree;
+struct Dict;
 struct DBLWR;
 struct Trx_sys;
 struct Lock_sys;
@@ -758,6 +759,8 @@ extern DBLWR *srv_dblwr;
 extern Btree *srv_btree_sys;
 
 extern Trx_sys *srv_trx_sys;
+
+extern Dict *srv_dict_sys;
 
 extern Lock_sys *srv_lock_sys;
 

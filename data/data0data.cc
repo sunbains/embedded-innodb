@@ -74,7 +74,7 @@ bool dfield_data_is_binary_equal(const dfield_t *field, ulint len, const byte *d
   return (true);
 }
 
-int dtuple_coll_cmp(void *cmp_ctx, const dtuple_t *tuple1, const dtuple_t *tuple2) {
+int dtuple_coll_cmp(void *cmp_ctx, const DTuple *tuple1, const DTuple *tuple2) {
   ulint n_fields;
   ulint i;
 
@@ -106,7 +106,7 @@ int dtuple_coll_cmp(void *cmp_ctx, const dtuple_t *tuple1, const dtuple_t *tuple
   return (0);
 }
 
-void dtuple_set_n_fields(dtuple_t *tuple, ulint n_fields) {
+void dtuple_set_n_fields(DTuple *tuple, ulint n_fields) {
   ut_ad(tuple);
 
   tuple->n_fields = n_fields;
@@ -128,7 +128,7 @@ static bool dfield_check_typed_no_assert(const dfield_t *field) /*!< in: data fi
   return (true);
 }
 
-bool dtuple_check_typed_no_assert(const dtuple_t *tuple) {
+bool dtuple_check_typed_no_assert(const DTuple *tuple) {
   const dfield_t *field;
   ulint i;
 
@@ -168,7 +168,7 @@ bool dfield_check_typed(const dfield_t *field) {
   return (true);
 }
 
-bool dtuple_check_typed(const dtuple_t *tuple) {
+bool dtuple_check_typed(const DTuple *tuple) {
   const dfield_t *field;
   ulint i;
 
@@ -182,7 +182,7 @@ bool dtuple_check_typed(const dtuple_t *tuple) {
   return (true);
 }
 
-bool dtuple_validate(const dtuple_t *tuple) {
+bool dtuple_validate(const DTuple *tuple) {
   const dfield_t *field;
   ulint n_fields;
   ulint len;
@@ -426,7 +426,7 @@ static void dfield_print_raw(std::ostream &o, const dfield_t *dfield) {
   }
 }
 
-std::ostream &dtuple_print(std::ostream &o, const dtuple_t *tuple) {
+std::ostream &dtuple_print(std::ostream &o, const DTuple *tuple) {
   const auto n_fields = dtuple_get_n_fields(tuple);
 
   o << "DATA TUPLE: " << n_fields << " fields;\n";
@@ -442,7 +442,7 @@ std::ostream &dtuple_print(std::ostream &o, const dtuple_t *tuple) {
   return o;
 }
 
-void dtuple_print(ib_stream_t ib_stream, const dtuple_t *tuple) {
+void dtuple_print(ib_stream_t ib_stream, const DTuple *tuple) {
   std::ostringstream os{};
 
   dtuple_print(os, tuple);
@@ -450,24 +450,21 @@ void dtuple_print(ib_stream_t ib_stream, const dtuple_t *tuple) {
 }
 
 
-std::ostream &dtuple_t::print(std::ostream &o) const {
+std::ostream &DTuple::print(std::ostream &o) const {
   dtuple_print(o, this);
   return o;
 }
 
-big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n_ext) {
+big_rec_t *dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ext) {
   mem_heap_t *heap;
   big_rec_t *vector;
-  dfield_t *dfield;
-  dict_field_t *ifield;
   ulint n_fields;
   ulint local_prefix_len;
 
-  if (unlikely(!dict_index_is_clust(index))) {
+  if (unlikely(!index->is_clustered())) {
     return (nullptr);
   }
 
-  ut_a(dict_table_get_format(index->table) == DICT_TF_FORMAT_V1);
   auto local_len = BTR_EXTERN_FIELD_REF_SIZE + DICT_MAX_INDEX_COL_LEN;
 
   ut_a(dtuple_check_typed_no_assert(entry));
@@ -501,16 +498,16 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n
     byte *data;
     big_rec_field_t *b;
 
-    for (i = dict_index_get_n_unique_in_tree(index); i < dtuple_get_n_fields(entry); i++) {
+    for (i = index->get_n_unique_in_tree(); i < dtuple_get_n_fields(entry); i++) {
       ulint savings;
 
-      dfield = dtuple_get_nth_field(entry, i);
-      ifield = dict_index_get_nth_field(index, i);
+      auto dfield = dtuple_get_nth_field(entry, i);
+      auto ifield = index->get_nth_field(i);
 
       /* Skip fixed-length, nullptr, externally stored,
       or short columns */
 
-      if (ifield->fixed_len || dfield_is_null(dfield) || dfield_is_ext(dfield) || dfield_get_len(dfield) <= local_len || dfield_get_len(dfield) <= BTR_EXTERN_FIELD_REF_SIZE * 2) {
+      if (ifield->m_fixed_len || dfield_is_null(dfield) || dfield_is_ext(dfield) || dfield_get_len(dfield) <= local_len || dfield_get_len(dfield) <= BTR_EXTERN_FIELD_REF_SIZE * 2) {
         goto skip_field;
       }
 
@@ -531,7 +528,7 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n
       there we always store locally columns whose
       length is up to local_len == 788 bytes.
       @see rec_init_offsets_comp_ordinary */
-      if (ifield->col->mtype != DATA_BLOB && ifield->col->len < 256) {
+      if (ifield->m_col->mtype != DATA_BLOB && ifield->m_col->len < 256) {
         goto skip_field;
       }
 
@@ -556,8 +553,8 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n
     we can calculate all ordering fields in all indexes
     from locally stored data. */
 
-    dfield = dtuple_get_nth_field(entry, longest_i);
-    ifield = dict_index_get_nth_field(index, longest_i);
+    auto dfield = dtuple_get_nth_field(entry, longest_i);
+    // auto ifield = index->get_nth_field(longest_i);
     local_prefix_len = local_len - BTR_EXTERN_FIELD_REF_SIZE;
 
     b = &vector->fields[n_fields];
@@ -582,10 +579,10 @@ big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n
   }
 
   vector->n_fields = n_fields;
-  return (vector);
+  return vector;
 }
 
-void dtuple_convert_back_big_rec(dict_index_t *index __attribute__((unused)), dtuple_t *entry, big_rec_t *vector) {
+void dtuple_convert_back_big_rec(DTuple *entry, big_rec_t *vector) {
   big_rec_field_t *b = vector->fields;
   const big_rec_field_t *const end = b + vector->n_fields;
 
@@ -621,7 +618,7 @@ std::ostream &dfield_t::print(std::ostream &out) const {
   return out;
 }
 
-int dtuple_t::compare(const rec_t *rec, const dict_index_t *, const ulint *offsets, ulint *matched_fields) const {
+int DTuple::compare(const rec_t *rec, const Index *, const ulint *offsets, ulint *matched_fields) const {
   ulint matched_bytes{};
 
   return cmp_dtuple_rec_with_match(nullptr, this, rec, offsets, matched_fields, &matched_bytes);

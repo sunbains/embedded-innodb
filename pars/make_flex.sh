@@ -21,11 +21,9 @@ set -eu
 TMPFILE=_flex_tmp.cc
 OUTFILE=lexyy.cc
 
-flex -o ${TMPFILE} pars0lex.l
+rm -f ${OUTFILE}
 
-#flex assigns a pointer to an int in one place without a cast, resulting in
-#a warning on Win64.Add the cast.Also define some symbols as static.
-touch ${OUTFILE}
+flex -o ${TMPFILE} pars0lex.l
 
 sed -e '
 s/'"$TMPFILE"'/'"$OUTFILE"'/;

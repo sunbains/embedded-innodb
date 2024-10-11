@@ -34,12 +34,12 @@ Created 02/03/2009 Sunny Bains
 #include "row0ins.h"
 #include "row0merge.h"
 
-row_prebuilt_t *row_prebuilt_create(dict_table_t *table) {
+row_prebuilt_t *row_prebuilt_create(Table *table) {
   ulint sz;
-  dtuple_t *ref;
+  DTuple *ref;
   ulint ref_len;
   ib_row_cache_t *row_cache;
-  dict_index_t *clust_index;
+  Index *clust_index;
 
   auto heap = mem_heap_create(128);
   auto prebuilt = reinterpret_cast<row_prebuilt_t *>(mem_heap_zalloc(heap, sizeof(row_prebuilt_t)));
@@ -53,23 +53,23 @@ row_prebuilt_t *row_prebuilt_create(dict_table_t *table) {
 
   prebuilt->sql_stat_start = true;
 
-  prebuilt->pcur = new (std::nothrow) Btree_pcursor(srv_fsp, srv_btree_sys, srv_lock_sys);
-  prebuilt->clust_pcur = new (std::nothrow) Btree_pcursor(srv_fsp, srv_btree_sys, srv_lock_sys);
+  prebuilt->pcur = new (std::nothrow) Btree_pcursor(srv_fsp, srv_btree_sys);
+  prebuilt->clust_pcur = new (std::nothrow) Btree_pcursor(srv_fsp, srv_btree_sys);
 
   prebuilt->select_lock_type = LOCK_NONE;
 
-  prebuilt->search_tuple = dtuple_create(heap, 2 * dict_table_get_n_cols(table));
+  prebuilt->search_tuple = dtuple_create(heap, 2 * table->get_n_cols());
 
-  clust_index = dict_table_get_first_index(table);
+  clust_index = table->get_first_index();
 
   /* Make sure that search_tuple is long enough for clustered index */
-  ut_a(2 * dict_table_get_n_cols(table) >= clust_index->n_fields);
+  ut_a(2 * table->get_n_cols() >= clust_index->get_n_fields());
 
-  ref_len = dict_index_get_n_unique(clust_index);
+  ref_len = clust_index->get_n_unique();
 
   ref = dtuple_create(heap, ref_len);
 
-  dict_index_copy_types(ref, clust_index, ref_len);
+  clust_index->copy_types(ref, ref_len);
 
   prebuilt->clust_ref = ref;
 
@@ -97,7 +97,7 @@ void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
       (ulong)prebuilt->magic_n,
       (ulong)prebuilt->magic_n2
     );
-    ut_print_name(prebuilt->table->name);
+    ut_print_name(prebuilt->table->m_name);
     ib_logger(ib_stream, "\n");
 
     ut_error;
@@ -130,7 +130,7 @@ void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
   mem_heap_free(row_cache->heap);
 
   if (prebuilt->table != nullptr) {
-    dict_table_decrement_handle_count(prebuilt->table, dict_locked);
+    srv_dict_sys->table_decrement_handle_count(prebuilt->table, dict_locked);
   }
 
   mem_heap_free(prebuilt->heap);
@@ -187,7 +187,7 @@ void row_prebuilt_update_trx(
       "table handle. Magic n %lu, table name",
       (ulong)prebuilt->magic_n
     );
-    ut_print_name(prebuilt->table->name);
+    ut_print_name(prebuilt->table->m_name);
     ib_logger(ib_stream, "\n");
 
     ut_error;

@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "api0misc.h"
 #include "dict0dict.h"
-#include "dict0mem.h"
+#include "dict0dict.h"
 #include "innodb0types.h"
 #include "lock0lock.h"
 #include "pars0pars.h"
@@ -145,7 +145,7 @@ bool ib_handle_errors(db_err *new_err, trx_t *trx, que_thr_t *thr, trx_savept_t 
   }
 }
 
-db_err ib_trx_lock_table_with_retry(trx_t *trx, dict_table_t *table, enum Lock_mode mode) {
+db_err ib_trx_lock_table_with_retry(trx_t *trx, Table *table, enum Lock_mode mode) {
   auto heap = mem_heap_create(512);
 
   trx->m_op_info = "setting table lock";
@@ -203,8 +203,8 @@ db_err ib_trx_lock_table_with_retry(trx_t *trx, dict_table_t *table, enum Lock_m
    ut_error;
 }
 
-void ib_update_statistics_if_needed(dict_table_t *table) {
-  auto counter = table->stat_modified_counter++;
+void ib_update_statistics_if_needed(Table *table) {
+  auto counter = table->m_stats.m_modified_counter++;
 
   /* Calculate new statistics if 1 / 16 of table has been modified
   since the last time a statistics batch was run, or if
@@ -212,9 +212,9 @@ void ib_update_statistics_if_needed(dict_table_t *table) {
   We calculate statistics at most every 16th round, since we may have
   a counter table which is very small and updated very often. */
 
-  if (counter > 2000000000 || ((int64_t)counter > 16 + table->stat_n_rows / 16)) {
+  if (counter > 2000000000 || ((int64_t)counter > 16 + table->m_stats.m_n_rows / 16)) {
 
-    dict_update_statistics(table);
+    srv_dict_sys->update_statistics(table);
   }
 }
 

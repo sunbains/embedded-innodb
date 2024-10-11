@@ -178,7 +178,7 @@ Recv_sys::~Recv_sys() noexcept {
 }
 
 Recv_sys::Recv_sys() noexcept {
-  mutex_create(&recv_sys->m_mutex, IF_DEBUG("Recv_sys::m_mutex",) IF_SYNC_DEBUG(SYNC_RECV,) Source_location{});
+  mutex_create(&recv_sys->m_mutex, IF_DEBUG("Recv_sys::m_mutex",) IF_SYNC_DEBUG(SYNC_RECV,) Current_location());
 }
 
 void Recv_sys::open(ulint available_memory) noexcept {
@@ -507,12 +507,12 @@ static bool is_log_block_checksum_ok(const byte *block) noexcept {
  * Tries to parse a single log record body and also applies it to a page if
  * specified. File ops are parsed, but not applied in this function.
  *
- * @param type The type of the log record.
- * @param ptr Pointer to the buffer containing the log record.
- * @param end_ptr Pointer to the end of the buffer.
- * @param block Pointer to the buffer block or nullptr; if not nullptr,
+ * @param[in] type The type of the log record.
+ * @param[in] ptr Pointer to the buffer containing the log record.
+ * @param[in] end_ptr Pointer to the end of the buffer.
+ * @param[in] block Pointer to the buffer block or nullptr; if not nullptr,
  *  then the log record is applied to the page, and the log record should be complete then.
- * @param mtr Pointer to the mtr or nullptr; should be non-nullptr if and only if block is non-nullptr.
+ * @param[in] mtr Pointer to the mtr or nullptr; should be non-nullptr if and only if block is non-nullptr.
  * 
  * @return	log record end, nullptr if not a complete record
  */
@@ -524,7 +524,7 @@ static byte *recv_parse_or_apply_log_rec_body(
   mtr_t *mtr) noexcept
 {
   page_t *page{};
-  dict_index_t *index{};
+  Index *index{};
   ut_d(Fil_page_type page_type{FIL_PAGE_TYPE_ALLOCATED});
 
   ut_ad(!block == !mtr);
@@ -573,14 +573,14 @@ static byte *recv_parse_or_apply_log_rec_body(
     case MLOG_REC_INSERT:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
-      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
+      if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
         ptr = page_cur_parse_insert_rec(false, ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_REC_CLUST_DELETE_MARK:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
-      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
+      if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
         ptr = Btree_cursor::parse_del_mark_set_clust_rec(ptr, end_ptr, page, index);
       }
     case MLOG_REC_SEC_DELETE_MARK:
@@ -590,7 +590,7 @@ static byte *recv_parse_or_apply_log_rec_body(
     case MLOG_REC_UPDATE_IN_PLACE:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
-      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
+      if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
         ptr = Btree_cursor::parse_update_in_place(ptr, end_ptr, page, index);
       }
       break;
@@ -598,27 +598,29 @@ static byte *recv_parse_or_apply_log_rec_body(
     case MLOG_LIST_START_DELETE:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
-      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
+      if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
         ptr = page_parse_delete_rec_list(type, ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_LIST_END_COPY_CREATED:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
-      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
+      if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
         ptr = page_parse_copy_rec_list_to_created_page(ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_PAGE_REORGANIZE:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
-      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
+      if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
         ptr = srv_btree_sys->parse_page_reorganize(ptr, end_ptr, index, block, mtr);
       }
       break;
     case MLOG_PAGE_CREATE:
-      /* Allow anything in page_type when creating a page. */
-      ptr = page_parse_create(ptr, end_ptr, block, mtr);
+      if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
+        /* Allow anything in page_type when creating a page. */
+        ptr = page_parse_create(ptr, end_ptr, block, index, mtr);
+      }
       break;
     case MLOG_UNDO_INSERT:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
@@ -648,7 +650,7 @@ static byte *recv_parse_or_apply_log_rec_body(
     case MLOG_REC_DELETE:
       ut_ad(!page || page_type == FIL_PAGE_TYPE_INDEX);
 
-      if ((ptr = mlog_parse_index(ptr, end_ptr, &index)) != nullptr) {
+      if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
         ptr = page_cur_parse_delete_rec(ptr, end_ptr, block, index, mtr);
       }
       break;
@@ -670,9 +672,11 @@ static byte *recv_parse_or_apply_log_rec_body(
       recv_sys->m_found_corrupt_log = true;
   }
 
+  // Get rid of the dummy index, it's too cosstly to create and destroy so frequently.
   if (index != nullptr) {
-    dict_mem_index_free(index);
-    dict_mem_table_free(index->table);
+    auto table = index->m_table;
+    Index::destroy(index, Current_location());
+    Table::destroy(table, Current_location());
   }
 
   return ptr;

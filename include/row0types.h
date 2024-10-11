@@ -28,39 +28,26 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "innodb0types.h"
 
 struct Plan;
-
-typedef struct upd_struct upd_t;
-
-typedef struct upd_field_struct upd_field_t;
-
-typedef struct upd_node_struct upd_node_t;
-
-typedef struct del_node_struct del_node_t;
-
-typedef struct ins_node_struct ins_node_t;
-
-typedef struct open_node_struct open_node_t;
-
-typedef struct fetch_node_struct fetch_node_t;
-
-typedef struct row_printf_node_struct row_printf_node_t;
-
-typedef struct sel_buf_struct sel_buf_t;
-
 struct Undo_node;
-
+struct Insert_node;
 struct purge_node_t;
 
-typedef struct row_ext_struct row_ext_t;
-
-typedef void *table_handle_t;
-
-typedef struct row_prebuilt_struct row_prebuilt_t;
+using upd_t = struct upd_struct;
+using upd_field_t = struct upd_field_struct;
+using upd_node_t = struct upd_node_struct;
+using del_node_t = struct del_node_struct;
+using ins_node_t = Insert_node;
+using open_node_t = struct open_node_struct;
+using fetch_node_t = struct fetch_node_struct;
+using row_printf_node_t = struct row_printf_node_struct;
+using sel_buf_t = struct sel_buf_struct;
+using row_ext_t = struct row_ext_struct;
+using table_handle_t = void *;
+using row_prebuilt_t = struct row_prebuilt_struct;
 
 /* Insert node types */
 enum ib_ins_mode_t {
-  /* The first two modes are only
-  used by the internal SQL parser */
+  /* The first two modes are only used by the internal SQL parser */
 
   /** INSERT INTO ... SELECT ... */
   INS_SEARCHED,

@@ -39,7 +39,7 @@ function!
 @return nullptr if committed, else the active transaction */
 trx_t *row_vers_impl_x_locked_off_kernel(
   const rec_t *rec,    /*!< in: record in a secondary index */
-  dict_index_t *index, /*!< in: the secondary index */
+  const Index *index, /*!< in: the secondary index */
   const ulint *offsets
 ); /*!< in: Phy_rec::get_col_offsets(rec, index) */
 
@@ -67,8 +67,8 @@ bool row_vers_old_has_index_entry(
                              caller must have a latch on the page */
   mtr_t *mtr,          /*!< in: mtr holding the latch on rec; it will
                              also hold the latch on purge_view */
-  dict_index_t *index, /*!< in: the secondary index */
-  const dtuple_t *ientry
+  Index *index, /*!< in: the secondary index */
+  const DTuple *ientry
 ); /*!< in: the secondary index entry */
 
 /** Constructs the version of a clustered index record which a consistent
@@ -82,7 +82,7 @@ db_err row_vers_build_for_consistent_read(
                               of this records */
   mtr_t *mtr,               /*!< in: mtr holding the latch on rec; it will
                               also hold the latch on purge_view */
-  dict_index_t *index,      /*!< in: the clustered index */
+  Index *index,      /*!< in: the clustered index */
   ulint **offsets,          /*!< in/out: offsets returned by
                               Phy_rec::get_col_offsets(rec, index) */
   read_view_t *view,        /*!< in: the consistent read view */
@@ -106,7 +106,7 @@ ulint row_vers_build_for_semi_consistent_read(
                               latch locks the top of the stack of versions
                               of this records */
   mtr_t *mtr,               /*!< in: mtr holding the latch on rec */
-  dict_index_t *index,      /*!< in: the clustered index */
+  Index *index,      /*!< in: the clustered index */
   ulint **offsets,          /*!< in/out: offsets returned by
                               Phy_rec::get_col_offsets(rec, index) */
   mem_heap_t **offset_heap, /*!< in/out: memory heap from which

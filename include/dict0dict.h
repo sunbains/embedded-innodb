@@ -24,13 +24,9 @@ Created 1/8/1996 Heikki Tuuri
 
 #pragma once
 
-#include "innodb0types.h"
-
 #include "data0data.h"
-#include "data0type.h"
 #include "dict0load.h"
-#include "dict0mem.h"
-#include "dict0types.h"
+#include "dict0store.h"
 #include "mem0mem.h"
 #include "rem0types.h"
 #include "srv0srv.h"
@@ -42,1000 +38,909 @@ Created 1/8/1996 Heikki Tuuri
 #include "ut0mem.h"
 #include "ut0rnd.h"
 
-/** dummy index for ROW_FORMAT=REDUNDANT supremum and infimum records */
-extern dict_index_t *dict_ind_redundant;
-
-/** dummy index for ROW_FORMAT=COMPACT supremum and infimum records */
-extern dict_index_t *dict_ind_compact;
-
-/* Buffers for storing detailed information about the latest foreign key
-and unique key errors */
-extern ib_stream_t dict_foreign_err_file;
-
-extern mutex_t dict_foreign_err_mutex; /* mutex protecting the buffers */
-
-/** the dictionary system */
-extern dict_sys_t *dict_sys;
-
-/** the data dictionary rw-latch protecting dict_sys */
-extern rw_lock_t dict_operation_lock;
-
-/** Inits dict_ind_redundant and dict_ind_compact. */
-void dict_ind_init();
-
-/** Closes the data dictionary module. */
-void dict_close();
-
-/** Makes all characters in a NUL-terminated UTF-8 string lower case.
-@param a string to put in lower case */
-void dict_casedn_str(char *a);
-
-/** Get the database name length in a table name.
-@param name table name in the form dbname '/' tablename
-@return database name length */
-ulint dict_get_db_name_len(const char *name);
-
-/** Return the end of table name where we have removed dbname and '/'.
-@param name table name in the form dbname '/' tablename
-@return table name */
-const char *dict_remove_db_name(const char *name);
-
-/** Returns a table object based on table id.
-@param recovery recovery flag
-@param table_id table id
-@param trx transaction handle
-@return table, NULL if does not exist */
-dict_table_t *dict_table_get_on_id(ib_recovery_t recovery, uint64_t table_id, trx_t *trx);
-
-/** Decrements the count of open handles to a table.
-@param table table
-@param dict_locked true if data dictionary locked */
-void dict_table_decrement_handle_count(dict_table_t *table, bool dict_locked);
-
-/** Increments the count of open client handles to a table.
-@param table table
-@param dict_locked true if data dictionary locked */
-void dict_table_increment_handle_count(dict_table_t *table, bool dict_locked);
-
-/** Inits the data dictionary module. */
-void dict_init();
-
-/**
- * @brief Returns a table object and optionally increments its open handle count.
- * 
- * @param table_name The table name.
- * @param inc_count Whether to increment the open handle count on the table.
- * @return The table object, or NULL if it does not exist.
- */
-dict_table_t *dict_table_get(const char *table_name, bool inc_count);
-
-/**
- * @brief Returns a table instance based on table id.
- * 
- * @param recovery The recovery flag.
- * @param table_id The table id.
- * @param ref_count Whether to increment open handle count if true.
- * @return The table object, or NULL if it does not exist.
- */
-dict_table_t *dict_table_get_using_id(ib_recovery_t recovery, uint64_t table_id, bool ref_count);
-
-/**
- * @brief Returns an index object based on table and index id, and memoryfixes it.
- * 
- * @param table The table.
- * @param index_id The index id.
- * @return The index object, or NULL if it does not exist.
- */
-dict_index_t *dict_index_get_on_id_low(dict_table_t *table, uint64_t index_id);
-
-/**
- * @brief Checks if the given column name is reserved for InnoDB system columns.
- * 
- * @param name The column name.
- * @return true if the name is reserved, false otherwise.
- */
-bool dict_col_name_is_reserved(const char *name);
-
-/**
- * @brief Adds system columns to a table object.
- * 
- * @param table The table object.
- * @param heap The temporary heap.
- */
-void dict_table_add_system_columns(dict_table_t *table, mem_heap_t *heap);
-
-/**
- * @brief Adds a table object to the dictionary cache.
- * 
- * @param table The table object.
- * @param heap The temporary heap.
- */
-void dict_table_add_to_cache(dict_table_t *table, mem_heap_t *heap);
-
-/**
- * @brief Removes a table object from the dictionary cache.
- * 
- * @param table The table object.
- */
-void dict_table_remove_from_cache(dict_table_t *table);
-
-/**
- * @brief Renames a table object.
- * 
- * @param table The table object.
- * @param new_name The new name.
- * @param rename_also_foreigns Whether to preserve the original table name in constraints which reference it.
- * @return true if success, false otherwise.
- */
-bool dict_table_rename_in_cache(dict_table_t *table, const char *new_name, bool rename_also_foreigns);
-
-/**
- * @brief Removes an index from the dictionary cache.
- * 
- * @param table The table object.
- * @param index The index object.
- */
-void dict_index_remove_from_cache(dict_table_t *table, dict_index_t *index);
-
-/**
- * @brief Changes the id of a table object in the dictionary cache.
- * 
- * @param table The table object.
- * @param new_id The new id to set.
- */
-void dict_table_change_id_in_cache(dict_table_t *table, uint64_t new_id);
-
-/**
- * @brief Adds a foreign key constraint object to the dictionary cache.
- * 
- * @param foreign The foreign key constraint object.
- * @param check_charsets Whether to check charset compatibility.
- * @return DB_SUCCESS or error code.
- */
-db_err dict_foreign_add_to_cache(dict_foreign_t *foreign, bool check_charsets);
-
-/**
- * @brief Checks if the index is referenced by a foreign key.
- * 
- * @param table The InnoDB table.
- * @param index The InnoDB index.
- * @return Pointer to foreign key struct if index is defined for foreign key, otherwise NULL.
- */
-dict_foreign_t *dict_table_get_referenced_constraint(dict_table_t *table, dict_index_t *index);
-
-/**
- * @brief Checks if a table is referenced by foreign keys.
- * 
- * @param table The InnoDB table.
- * @return true if table is referenced by a foreign key, false otherwise.
- */
-bool dict_table_is_referenced_by_foreign_key(const dict_table_t *table);
-
-/**
- * @brief Replaces the index in the foreign key list that matches this index's definition with an equivalent index.
- * 
- * @param table The table object.
- * @param index The index to be replaced.
- */
-void dict_table_replace_index_in_foreign_list(dict_table_t *table, dict_index_t *index);
-
-/**
- * @brief Checks if an index is defined for a foreign key constraint.
- * 
- * @param table The InnoDB table.
- * @param index The InnoDB index.
- * @return Pointer to foreign key struct if index is defined for foreign key, otherwise NULL.
- */
-dict_foreign_t *dict_table_get_foreign_constraint(dict_table_t *table, dict_index_t *index);
-
-/**
- * @brief Scans a table create SQL string and adds the foreign key constraints declared in the string to the data dictionary.
- * 
- * @param trx The transaction.
- * @param sql_string The table create statement where foreign keys are declared.
- * @param name The table full name in the normalized form.
- * @param reject_fks Whether to fail with error code DB_CANNOT_ADD_CONSTRAINT if any foreign keys are found.
- * @return Error code or DB_SUCCESS.
- */
-db_err dict_create_foreign_constraints(trx_t *trx, const char *sql_string, const char *name, bool reject_fks);
-
-/**
- * @brief Parses the CONSTRAINT id's to be dropped in an ALTER TABLE statement.
- * 
- * @param heap The heap from which memory can be allocated.
- * @param trx The transaction.
- * @param table The table.
- * @param n The number of constraints to drop.
- * @param constraints_to_drop The id's of the constraints to drop.
- * @return DB_SUCCESS or DB_CANNOT_DROP_CONSTRAINT if syntax error or the constraint id does not match.
- */
-db_err dict_foreign_parse_drop_constraints(mem_heap_t *heap, trx_t *trx, dict_table_t *table, ulint *n, const char ***constraints_to_drop);
-
-/**
- * @brief Finds an index that is equivalent to the one passed in and is not marked for deletion.
- * 
- * @param foreign The foreign key.
- * @return The index equivalent to foreign->foreign_index, or NULL.
- */
-dict_index_t *dict_foreign_find_equiv_index(dict_foreign_t *foreign);
-
-/**
- * @brief Returns an index object by matching on the name and column names, and if more than one index matches, returns the index with the max id.
- * 
- * @param table The table.
- * @param name The index name to find.
- * @param columns The array of column names.
- * @param n_cols The number of columns.
- * @return The matching index, or NULL if not found.
- */
-dict_index_t *dict_table_get_index_by_max_id(dict_table_t *table, const char *name, const char **columns, ulint n_cols);
-
-/**
- * @brief Returns a column's name.
- * 
- * @param table The table.
- * @param col_nr The column number.
- * @return The column name. Note: not guaranteed to stay valid if table is modified in any way.
- */
-const char *dict_table_get_col_name(const dict_table_t *table, ulint col_nr);
-
-/**
- * @brief Returns a column's ordinal value.
- * 
- * @param table The table.
- * @param name The column name.
- * @return The column pos. -1 if not found. Note: not guaranteed to stay valid if table is modified in any way.
- */
-int dict_table_get_col_no(const dict_table_t *table, const char *name);
-
-/**
- * @brief Prints a table definition.
- * 
- * @param table The table.
- */
-void dict_table_print(dict_table_t *table);
-
-/**
- * @brief Prints a table data.
- * 
- * @param table The table.
- */
-void dict_table_print_low(dict_table_t *table);
-
-/**
- * @brief Prints a table data when we know the table name.
- * 
- * @param name The table name.
- */
-void dict_table_print_by_name(const char *name);
-
-/**
- * @brief Outputs info on foreign keys of a table.
- * 
- * @param create_table_format Whether to print in a format suitable to be inserted into a CREATE TABLE.
- * @param ib_stream The stream where to print.
- * @param trx The transaction.
- * @param table The table.
- */
-void dict_print_info_on_foreign_keys(bool create_table_format, ib_stream_t ib_stream, trx_t *trx, dict_table_t *table);
-
-/**
- * @brief Outputs info on a foreign key of a table in a format suitable for CREATE TABLE.
- * 
- * @param stream The file where to print.
- * @param trx The transaction.
- * @param foreign The foreign key constraint.
- * @param add_newline Whether to add a newline.
- */
-void dict_print_info_on_foreign_key_in_create_format(ib_stream_t stream, trx_t *trx, dict_foreign_t *foreign, bool add_newline);
-
-/**
- * @brief Displays the names of the index and the table.
- * 
- * @param stream The output stream.
- * @param trx The transaction.
- * @param index The index to print.
- */
-void dict_index_name_print(ib_stream_t stream, trx_t *trx, const dict_index_t *index);
-
-/**
- * Checks if a column is in the ordering columns of the clustered index of a table.
- * Column prefixes are treated like whole columns.
- * @param table The table.
- * @param n The column number.
- * @return True if the column, or its prefix, is in the clustered key.
- */
-bool dict_table_col_in_clustered_key(const dict_table_t *table, ulint n);
-
-/**
- * Copies types of columns contained in table to tuple and sets all fields of the
- * tuple to the SQL NULL value. This function should be called right after dtuple_create().
- * @param tuple The data tuple.
- * @param table The table.
- */
-void dict_table_copy_types(dtuple_t *tuple, const dict_table_t *table);
-
-/**
- * Looks for an index with the given id. NOTE that we do not reserve the
- * dictionary mutex: this function is for emergency purposes like printing
- * info of a corrupt database page!
- * @param id The index id.
- * @return The index or NULL if not found from cache.
- */
-dict_index_t *dict_index_find_on_id_low(uint64_t id);
-
-/**
- * Adds an index to the dictionary cache.
- * @param table The table on which the index is.
- * @param index The index.
- * @param page_no The root page number of the index.
- * @param strict True to refuse to create the index if records could be too big to fit in a B-tree page.
- * @return DB_SUCCESS, DB_TOO_BIG_RECORD, or DB_CORRUPTION.
- */
-db_err dict_index_add_to_cache(dict_table_t *table, dict_index_t *index, ulint page_no, bool strict);
-
-/**
- * Looks for column n in an index.
- * @param index index
- * @param n column number
- * @return position in internal representation of the index; ULINT_UNDEFINED if not contained
- */
-ulint dict_index_get_nth_col_pos(const dict_index_t *index, ulint n);
-
-/**
- * Returns true if the index contains a column or a prefix of that column.
- * @param index index
- * @param n column number
- * @return true if contains the column or its prefix
- */
-bool dict_index_contains_col_or_prefix(const dict_index_t *index, ulint n);
-
-/**
- * Looks for a matching field in an index. The column has to be the same.
- * The column in index must be complete, or must contain a prefix longer
- * than the column in index2. That is, we must be able to construct the
- * prefix in index2 from the prefix in index.
- * @param index index from which to search
- * @param index2 index
- * @param n field number in index2
- * @return position in internal representation of the index; ULINT_UNDEFINED if not contained
- */
-ulint dict_index_get_nth_field_pos(const dict_index_t *index, const dict_index_t *index2, ulint n);
-
-/**
- * Looks for column n position in the clustered index.
- * @param table table
- * @param n column number
- * @return position in internal representation of the clustered index
- */
-ulint dict_table_get_nth_col_pos(const dict_table_t *table, ulint n);
-
-/**
- * Adds a column to index.
- * @param index index
- * @param table table
- * @param col column
- * @param prefix_len column prefix length
- */
-void dict_index_add_col(dict_index_t *index, const dict_table_t *table, dict_col_t *col, ulint prefix_len);
-
-/**
- * Copies types of fields contained in index to tuple.
- * @param tuple data tuple
- * @param index index
- * @param n_fields number of field types to copy
- */
-void dict_index_copy_types(dtuple_t *tuple, const dict_index_t *index, ulint n_fields);
-
-/**
- * Returns an index object if it is found in the dictionary cache.
- * Assumes that dict_sys->mutex is already being held.
- * @param index_id index id
- * @return index, NULL if not found
- */
-dict_index_t *dict_index_get_if_in_cache_low(uint64_t index_id);
-
-/**
- * Returns an index object if it is found in the dictionary cache.
- * @param index_id index id
- * @return index, NULL if not found
- */
-dict_index_t *dict_index_get_if_in_cache(uint64_t index_id);
-
-/**
- * Checks that a tuple has n_fields_cmp value in a sensible range,
- * so that no comparison can occur with the page number field in a node pointer.
- * @param index index tree
- * @param tuple tuple used in a search
- * @return true if ok
- */
-bool dict_index_check_search_tuple(const dict_index_t *index, const dtuple_t *tuple);
-
-/**
- * Builds a node pointer out of a physical record and a page number.
- * @param index index
- * @param rec record for which to build node pointer
- * @param page_no page number to put in node pointer
- * @param heap memory heap where pointer created
- * @param level level of rec in tree: 0 means leaf level
- * @return own: node pointer
- */
-dtuple_t *dict_index_build_node_ptr(const dict_index_t *index, const rec_t *rec, ulint page_no, mem_heap_t *heap, ulint level);
-
-/**
- * Copies an initial segment of a physical record, long enough to specify an index entry uniquely.
- * @param index index
- * @param rec record for which to copy prefix
- * @param n_fields number of fields copied
- * @param buf memory buffer for the copied prefix, or NULL.
- * @param buf_size buffer size
- * @return pointer to the prefix record
- */
-rec_t *dict_index_copy_rec_order_prefix(const dict_index_t *index, const rec_t *rec, ulint *n_fields, byte *&buf, ulint &buf_size);
-
-/**
- * Builds a typed data tuple out of a physical record.
- * @param index index
- * @param rec record for which to build data tuple
- * @param n_fields number of data fields
- * @param heap memory heap where tuple created
- * @return own: data tuple
- */
-dtuple_t *dict_index_build_data_tuple(dict_index_t *index, rec_t *rec, ulint n_fields, mem_heap_t *heap);
-
-/**
- * Calculates the minimum record length in an index.
- * @param index index
- * @return minimum record length
- */
-ulint dict_index_calc_min_rec_len(const dict_index_t *index);
-
-/**
- * Calculates new estimates for table and index statistics. The statistics are used in query optimization.
- * @param table table
- * @param has_dict_mutex true if the caller has the dictionary mutex
- */
-void dict_update_statistics_low(dict_table_t *table, bool has_dict_mutex);
-
-/**
- * Calculates new estimates for table and index statistics. The statistics are used in query optimization.
- * @param table table
- */
-void dict_update_statistics(dict_table_t *table);
-
-/**
- * Reserves the dictionary system mutex.
- */
-void dict_mutex_enter();
-
-/**
- * Releases the dictionary system mutex.
- */
-void dict_mutex_exit();
-
-/**
- * Lock the appropriate mutex to protect index->stat_n_diff_key_vals[].
- * index->id is used to pick the right mutex and it should not change before dict_index_stat_mutex_exit() is called on this index.
- * @param index index
- */
-void dict_index_stat_mutex_enter(const dict_index_t *index);
-
-/**
- * Unlock the appropriate mutex that protects index->stat_n_diff_key_vals[].
- * @param index index
- */
-void dict_index_stat_mutex_exit(const dict_index_t *index);
-
-/**
- * Checks if the database name in two table names is the same.
- * @param name1 table name in the form dbname '/' tablename
- * @param name2 table name in the form dbname '/' tablename
- * @return true if same db name
- */
-bool dict_tables_have_same_db(const char *name1, const char *name2);
-
-/**
- * Get index by name
- * @param table table
- * @param name name of the index to find
- * @return index, NULL if does not exist
- */
-dict_index_t *dict_table_get_index_on_name(dict_table_t *table, const char *name);
-
-/**
- * In case there is more than one index with the same name return the index with the min(id).
- * @param table table
- * @param name name of the index to find
- * @return index, NULL if does not exist
- */
-dict_index_t *dict_table_get_index_on_name_and_min_id(dict_table_t *table, const char *name);
-
-/**
- * Locks the data dictionary exclusively for performing a table create or other data dictionary modification operation.
- * @param trx transaction
- */
-void dict_lock_data_dictionary(trx_t *trx);
-
-/**
- * Unlocks the data dictionary exclusive lock.
- * @param trx transaction
- */
-void dict_unlock_data_dictionary(trx_t *trx);
-
-/**
- * Locks the data dictionary in shared mode from modifications,
- * for performing foreign key check, rollback, or other operation
- * invisible to users.
- * @param trx transaction
- */
-void dict_freeze_data_dictionary(trx_t *trx);
-
-/**
- * Unlocks the data dictionary shared lock.
- * @param trx transaction
- */
-void dict_unfreeze_data_dictionary(trx_t *trx);
-
-/** Reset dict variables. */
-void dict_var_init();
-
-/**
- * Gets the column data type.
- * @param col column
- * @param type data type
- */
-inline void dict_col_copy_type(const dict_col_t *col, dtype_t *type) {
-  ut_ad(col && type);
-
-  type->mtype = col->mtype;
-  type->prtype = col->prtype;
-  type->len = col->len;
-  type->mbminlen = col->mbminlen;
-  type->mbmaxlen = col->mbmaxlen;
-}
-
-#ifdef UNIV_DEBUG
-/**
- * Assert that a column and a data type match.
- * @param col column
- * @param type data type
- * @return true
- */
-inline bool dict_col_type_assert_equal(const dict_col_t *col, const dtype_t *type) {
-  ut_ad(col->mtype == type->mtype);
-  ut_ad(col->prtype == type->prtype);
-  ut_ad(col->len == type->len);
-  ut_ad(col->mbminlen == type->mbminlen);
-  ut_ad(col->mbmaxlen == type->mbmaxlen);
-
-  return true;
-}
-#endif /* UNIV_DEBUG */
-
-/**
- * Returns the minimum size of the column.
- * @param col column
- * @return minimum size
- */
-inline ulint dict_col_get_min_size(const dict_col_t *col) {
-  return dtype_get_min_size_low(col->mtype, col->prtype, col->len, col->mbminlen, col->mbmaxlen);
-}
-
-/**
- * Returns the maximum size of the column.
- * @param col column
- * @return maximum size
- */
-inline ulint dict_col_get_max_size(const dict_col_t *col) {
-  return dtype_get_max_size_low(col->mtype, col->len);
-}
-
-/**
- * Returns the size of a fixed size column, 0 if not a fixed size column.
- * @param col column
- * @return fixed size, or 0
- */
-inline ulint dict_col_get_fixed_size(const dict_col_t *col) {
-  return dtype_get_fixed_size_low(col->mtype, col->prtype, col->len, col->mbminlen, col->mbmaxlen);
-}
-
-/**
- * Returns the ROW_FORMAT=REDUNDANT stored SQL NULL size of a column.
- * For fixed length types it is the fixed length of the type, otherwise 0.
- * @param col column
- * @param comp nonzero=ROW_FORMAT=COMPACT
- * @return SQL null storage size in ROW_FORMAT=REDUNDANT
- */
-inline ulint dict_col_get_sql_null_size(const dict_col_t *col) {
-  return dict_col_get_fixed_size(col);
-}
-
-/**
- * Gets the column number.
- * @param col column
- * @return col->ind, table column position (starting from 0)
- */
-inline ulint dict_col_get_no(const dict_col_t *col) {
-  return col->ind;
-}
-
-/**
- * Check whether the index is the clustered index.
- * @return nonzero for clustered index, zero for other indexes
- */
-inline bool dict_index_is_clust(const dict_index_t *dict_index) {
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
-
-  return unlikely(dict_index->type & DICT_CLUSTERED) > 0;
-}
-
-/**
- * Gets the column position in the clustered index.
- *
- * @param col table column
- * @param clust_index clustered index
- * @return column position in the clustered index
- */
-inline ulint dict_col_get_clust_pos(const dict_col_t *col, const dict_index_t *clust_index) {
-  ut_ad(dict_index_is_clust(clust_index));
-
-  for (ulint i = 0; i < clust_index->n_def; i++) {
-    const auto field = &clust_index->fields[i];
-
-    if (!field->prefix_len && field->col == col) {
-      return i;
+#include <string_view>
+#include <unordered_map>
+
+struct FSP;
+struct mtr_t;
+struct Table;
+struct Index;
+struct Buf_pool;
+struct Btree;
+
+/** Data dictionary system. */
+struct Dict {
+  /** Responsible for data dictionary persistence. */
+  struct Store;
+
+  /**
+   * Constructor.
+   * 
+   * @param[in] btree B-tree system.
+   */
+  explicit Dict(Btree *btree) noexcept;
+
+  /** Destructor. */
+  ~Dict() noexcept;
+
+  /**
+   * Creates a data dictionary.
+   * 
+   * @param[in] fsp File space manager.
+   * @param[in] btree B-tree system.
+   * 
+   * @return Data dictionary.
+   */
+  [[nodiscard]] static Dict *create(Btree *btree) noexcept;
+
+  /**
+   * Closes the data dictionary module.
+   * 
+   * @param[in,out] dict Data dictionary.
+   */
+  static void destroy(Dict *&dict) noexcept;
+
+  /**
+   * Makes all characters in a NUL-terminated UTF-8 string lower case.
+   * 
+   * @param[in,out] a string to put in lower case 
+   */
+  static void casedn_str(char *a) noexcept;
+
+  /**
+   * Creates an instance of the data dictionary.
+   * 
+   * @return DB_SUCCESS or error code.
+   */
+  db_err create_instance() noexcept {
+    return m_store.create_instance();
+  }
+
+  /**
+   * Get the database name length in a table name.
+   * 
+   * @param[in] name table name in the form dbname '/' tablename
+   * 
+   * @return database name length
+   */
+  [[nodiscard]] static ulint get_db_name_len(const char *name) noexcept;
+
+  /**
+   *  Return the end of table name where we have removed dbname and '/'.
+   * 
+   * @param name table name in the form dbname '/' tablename
+   * 
+   * @return table name
+   */
+  [[nodiscard]] static const char *remove_db_name(const char *name) noexcept;
+
+  /**
+   * Opens the data dictionary.
+   * 
+   * @param[in] in_crash_recovery Whether to open in crash recovery mode.
+   * 
+   * @return DB_SUCCESS or error code.
+   */
+  [[nodiscard]] db_err open(bool in_crash_recovery) noexcept {
+    return m_loader.open(in_crash_recovery);
+  }
+
+  /**
+   * Inits Dict::m_dummy_index, dummy index template required for recovery.
+   */
+  [[nodiscard]]static Index *create_dummy_index() noexcept;
+
+  /**
+   * Destroys Dict::m_dummy_index, dummy index template required for recovery.
+   */
+  static void destroy_dummy_index(Index *&index) noexcept;
+
+  /**
+   * Returns a table object based on table id.
+   * 
+   * @param[in] recovery recovery flag
+   * @param[in] table_id table id
+   * @param[in] trx transaction handle
+   * 
+   * @return table, NULL if does not exist
+   */
+  [[nodiscard]] Table *table_get_on_id(ib_recovery_t recovery, Dict_id table_id, trx_t *trx) noexcept;
+
+  /**
+   * Decrements the count of open handles to a table.
+   * 
+   * @param[in] table table
+   * @param[in] dict_locked true if data dictionary locked
+   */
+  void table_decrement_handle_count(Table *table, bool dict_locked) noexcept;
+
+  /**
+   * Increments the count of open client handles to a table.
+   * 
+   * @param[in] table table
+   * @param[in] dict_locked true if data dictionary locked
+   */
+  void table_increment_handle_count(Table *table, bool dict_locked) noexcept;
+
+  /**
+   * @brief Returns a table object and optionally increments its open handle count.
+   * 
+   * @param[in] table_name The table name.
+   * @param[in] inc_count Whether to increment the open handle count on the table.
+   * 
+   * @return The table object, or NULL if it does not exist.
+   */
+  [[nodiscard]] Table *table_get(const char *table_name, bool inc_count) noexcept;
+
+  /**
+   * Returns a table instance based on table id.
+   * 
+   * @param[in] recovery The recovery flag.
+   * @param[in] table_id The table id.
+   * @param[in] ref_count Whether to increment open handle count if true.
+   * 
+   * @return The table object, or NULL if it does not exist.
+   */
+  [[nodiscard]] Table *table_get_using_id(ib_recovery_t recovery, Dict_id table_id, bool ref_count) noexcept;
+
+  /**
+   * @brief Checks if the given column name is reserved for InnoDB system columns.
+   * 
+   * @param[in] name The column name.
+   * 
+   * @return true if the name is reserved, false otherwise.
+   */
+  [[nodiscard]] static bool col_name_is_reserved(const char *name) noexcept;
+
+  /**
+   * @brief Adds a table object to the dictionary cache.
+   * 
+   * @param[in] table The table object.
+   */
+  void table_add_to_cache(Table *table) noexcept;
+
+  /**
+   * @brief Removes a table object from the dictionary cache.
+   * 
+   * @param table The table object.
+   */
+  void table_remove_from_cache(Table *table) noexcept;
+
+  /**
+   * @brief Renames a table object.
+   * 
+   * @param[in] table The table object.
+   * @param[in] new_name The new name.
+   * @param[in] rename_also_foreigns Whether to preserve the original table name in constraints which reference it.
+   * @return true if success, false otherwise.
+   */
+  [[nodiscard]] bool table_rename_in_cache(Table *table, const char *new_name, bool rename_also_foreigns) noexcept;
+
+  /**
+   * @brief Removes an index from the dictionary cache.
+   * 
+   * @param[in] table The table object.
+   * @param[in] index The index object.
+   */
+  void index_remove_from_cache(Table *table, Index *index) noexcept;
+
+  /**
+   * @brief Changes the id of a table object in the dictionary cache.
+   * 
+   * @param[in] table The table object.
+   * @param[in] new_id The new id to set.
+   */
+  void table_change_id_in_cache(Table *table, Dict_id new_id) noexcept;
+
+  /**
+   * @brief Adds a foreign key constraint object to the dictionary cache.
+   * 
+   * @param[in] foreign The foreign key constraint object.
+   * @param[in] check_charsets Whether to check charset compatibility.
+   * 
+   * @return DB_SUCCESS or error code.
+   */
+  [[nodiscard]] db_err foreign_add_to_cache(Foreign *foreign, bool check_charsets) noexcept;
+
+  /**
+   * @brief Scans a table create SQL string and adds the foreign key constraints declared in the string to the data dictionary.
+   * 
+   * @param[in] trx The transaction.
+   * @param[in] sql_string The table create statement where foreign keys are declared.
+   * @param[in] name The table full name in the normalized form.
+   * @param[in] reject_fks Whether to fail with error code DB_CANNOT_ADD_CONSTRAINT if any foreign keys are found.
+   * 
+   * @return Error code or DB_SUCCESS.
+   */
+  [[nodiscard]] db_err create_foreign_constraints(trx_t *trx, const char *sql_string, const char *name, bool reject_fks) noexcept;
+
+  /**
+   * @brief Parses the CONSTRAINT id's to be dropped in an ALTER TABLE statement.
+   * 
+   * @param[in] heap The heap from which memory can be allocated.
+   * @param[in] trx The transaction.
+   * @param[in] table The table.
+   * @param[in] n The number of constraints to drop.
+   * @param[in] constraints_to_drop The id's of the constraints to drop.
+   * 
+   * @return DB_SUCCESS or DB_CANNOT_DROP_CONSTRAINT if syntax error or the constraint id does not match.
+   */
+  [[nodiscard]] db_err foreign_parse_drop_constraints(mem_heap_t *heap, trx_t *trx, Table *table, ulint *n, const char ***constraints_to_drop) noexcept;
+
+  /**
+   * @brief Finds an index that is equivalent to the one passed in and is not marked for deletion.
+   * 
+   * @param[in] foreign The foreign key.
+   * 
+   * @return The index equivalent to foreign->foreign_index, or NULL.
+   */
+  [[nodiscard]] Index *foreign_find_equiv_index(Foreign *foreign) noexcept;
+
+  /**
+   * @brief Prints a table data.
+   * 
+   * @param[in] table The table.
+   */
+  void table_print(Table *table) noexcept;
+
+  /**
+   * @brief Prints a table data when we know the table name.
+   * 
+   * @param[in] name The table name.
+   */
+  void table_print_by_name(const char *name) noexcept;
+
+  /**
+   * @brief Outputs info on foreign keys of a table.
+   * 
+   * @param[in] create_table_format Whether to print in a format suitable to be inserted into a CREATE TABLE.
+   * @param[in] trx The transaction.
+   * @param[in] table The table.
+   */
+  void print_info_on_foreign_keys(bool create_table_format, trx_t *trx, Table *table) noexcept;
+
+  /**
+   * @brief Outputs info on a foreign key of a table in a format suitable for CREATE TABLE.
+   * 
+   * @param[in] trx The transaction.
+   * @param[in] foreign The foreign key constraint.
+   * @param[in] add_newline Whether to add a newline.
+   */
+  void print_info_on_foreign_key_in_create_format(trx_t *trx, const Foreign *foreign, bool add_newline) noexcept;
+
+  /**
+   * @brief Displays the names of the index and the table.
+   * 
+   * @param[in] stream The output stream.
+   * @param[in] trx The transaction.
+   * @param[in] index The index to print.
+   */
+  void index_name_print(trx_t *trx, const Index *index) noexcept;
+
+  /**
+   * @brief Returns a string representation of the dictionary.
+   * 
+   * @return The string representation.
+   */
+  std::string to_string() noexcept;
+
+  /**
+   * Checks if a column is in the ordering columns of the clustered index of a table.
+   * Column prefixes are treated like whole columns.
+   * 
+   * @param[in] table The table.
+   * @param[in] n The column number.
+   * 
+   * @return True if the column, or its prefix, is in the clustered key.
+   */
+  [[nodiscard]] bool table_col_in_clustered_key(const Table *table, ulint n) noexcept;
+
+  /**
+   * Looks for an index with the given id. NOTE that we do not reserve the
+   * dictionary mutex: this function is for emergency purposes like printing
+   * info of a corrupt database page!
+   * 
+   * @param[in] id The index id.
+   * 
+   * @return The index or NULL if not found from cache.
+   */
+  [[nodiscard]] Index *index_find_on_id(Dict_id id) noexcept;
+
+  /**
+   * Adds an index to the dictionary cache.
+   * 
+   * @param[in] index The index.
+   * @param[in] page_no The root page number of the index.
+   * @param[in] strict True to refuse to create the index if records could be too big to fit in a B-tree page.
+   * 
+   * @return DB_SUCCESS, DB_TOO_BIG_RECORD, or DB_CORRUPTION.
+   */
+  [[nodiscard]] db_err index_add_to_cache(Index *index, ulint page_no, bool strict) noexcept;
+
+  /**
+   * Returns an index instance if it is found in the dictionary cache.
+   * 
+   * @param[in] index_id index id
+   * 
+   * @return index, NULL if not found
+   */
+  [[nodiscard]] Index *index_get_if_in_cache(Dict_id index_id) noexcept;
+
+  /**
+   * Builds a node pointer out of a physical record and a page number.
+   * 
+   * @param[in] index index
+   * @param[in] rec record for which to build node pointer
+   * @param[in] page_no page number to put in node pointer
+   * @param[in] heap memory heap where pointer created
+   * @param[in] level level of rec in tree: 0 means leaf level
+   * 
+   * @return own: node pointer
+   */
+  [[nodiscard]] DTuple *index_build_node_ptr(const Index *index, const rec_t *rec, ulint page_no, mem_heap_t *heap, ulint level) noexcept;
+
+  /**
+   * Copies an initial segment of a physical record, long enough to specify an index entry uniquely.
+   * 
+   * @param[in] index index
+   * @param[in] rec record for which to copy prefix
+   * @param[in,out] n_fields number of fields copied
+   * @param[in,out] buf memory buffer for the copied prefix, or NULL.
+   * @param[in,out] buf_size buffer size
+   * 
+   * @return pointer to the prefix record
+   */
+  [[nodiscard]] rec_t *index_copy_rec_order_prefix(const Index *index, const rec_t *rec, ulint *n_fields, byte *&buf, ulint &buf_size) noexcept;
+
+  /**
+   * Builds a typed data tuple out of a physical record.
+   * 
+   * @param[in] index index
+   * @param[in] rec record for which to build data tuple
+   * @param[in] n_fields number of data fields
+   * @param[in] heap memory heap where tuple created
+   * 
+   * @return own: data tuple
+   */
+  [[nodiscard]] DTuple *index_build_data_tuple(Index *index, rec_t *rec, ulint n_fields, mem_heap_t *heap) noexcept;
+
+  /**
+   * Calculates the minimum record length in an index.
+   * 
+   * @param[in] index index
+   * 
+   * @return minimum record length
+   */
+  [[nodiscard]] ulint index_calc_min_rec_len(const Index *index) noexcept;
+
+  /**
+   * Calculates new estimates for table and index statistics. The statistics are used in query optimization.
+   * 
+   * @param[in] table table
+   * @param[in,out] stats Store the latatest statistics here.
+   */
+  void update_statistics(Table *table) noexcept;
+
+  /**
+   * Reserves the dictionary system mutex.
+   */
+  void mutex_acquire() noexcept;
+
+  /**
+   * Releases the dictionary system mutex.
+   */
+  void mutex_release() noexcept;
+
+  /**
+   * Lock the appropriate mutex to protect index->stat_n_diff_key_vals[].
+   * index->id is used to pick the right mutex and it should not change before
+   * index_stat_mutex_exit() is called on this index.
+   * 
+   * @param[in] index index
+   */
+  void index_stat_mutex_enter(const Index *index) noexcept;
+
+  /**
+   * Unlock the appropriate mutex that protects index->stat_n_diff_key_vals[].
+   * 
+   * @param[in] index index
+   */
+  void index_stat_mutex_exit(const Index *index) noexcept;
+
+  /**
+   * Checks if the database name in two table names is the same.
+   * 
+   * @param[in] name1 table name in the form dbname '/' tablename
+   * @param[in] name2 table name in the form dbname '/' tablename
+   * 
+   * @return true if same db name
+   */
+  [[nodiscard]] bool tables_have_same_db(const char *name1, const char *name2) noexcept;
+
+  /**
+   * Get index by name
+   * 
+   * @param[in] table table
+   * @param[in] name name of the index to find
+   * 
+   * @return index, NULL if does not exist
+   */
+  [[nodiscard]] Index *table_get_index_on_name(Table *table, const char *name) noexcept;
+
+  /**
+   * In case there is more than one index with the same name return the index with the min(id).
+   * 
+   * @param[in] table table
+   * @param[in] name name of the index to find
+   * 
+   * @return index, NULL if does not exist
+   */
+  [[nodiscard]] Index *table_get_index_on_name_and_min_id(Table *table, const char *name) noexcept;
+
+  /**
+   * Locks the data dictionary exclusively for performing a table create or other data dictionary modification operation.
+   * 
+   * @param[in] trx transaction
+   */
+  void lock_data_dictionary(trx_t *trx) noexcept;
+
+  /**
+   * Unlocks the data dictionary exclusive lock.
+   * 
+   * @param[in] trx transaction
+   */
+  void unlock_data_dictionary(trx_t *trx) noexcept;
+
+  /**
+   * Locks the data dictionary in shared mode from modifications,
+   * for performing foreign key check, rollback, or other operation
+   * invisible to users.
+   * 
+   * @param[in] trx transaction
+   */
+  void freeze_data_dictionary(trx_t *trx) noexcept;
+
+  /**
+   * Unlocks the data dictionary shared lock.
+   * 
+   * @param[in] trx transaction
+   */
+  void unfreeze_data_dictionary(trx_t *trx) noexcept;
+
+  /** Reset dict variables. */
+  void var_init() noexcept;
+
+  /**
+   * Returns free space reserved for future updates of records. This is
+   * relevant only in the case of many consecutive inserts, as updates
+   * which make the records bigger might fragment the index.
+   * 
+   * @return	number of free bytes on page, reserved for updates
+   */
+  [[nodiscard]] constexpr static inline ulint index_get_space_reserve() noexcept {
+    return UNIV_PAGE_SIZE / 16;
+  }
+
+  /**
+   * @brief Checks if a table is in the dictionary cache.
+   * 
+   * @param[in] table_name table name
+   * 
+   * @return table, NULL if not found
+   */
+  [[nodiscard]] inline Table *table_check_if_in_cache(const char *table_name) noexcept {
+    ut_ad(mutex_own(&m_mutex));
+
+    if (const auto it = m_tables.find(table_name); it != m_tables.end()) {
+      return  it->second;
+    } else {
+      return nullptr;
     }
   }
 
-  return ULINT_UNDEFINED;
-}
+  /**
+   * @brief Gets a table; loads it to the dictionary cache if necessary. A low-level function.
+   * 
+   * @param[in] table_name table name
+   * 
+   * @return table, NULL if not found
+   */
+  inline Table *table_get(const char *table_name) noexcept {
+    ut_ad(mutex_own(&m_mutex));
 
-/**
- * Check whether the index is unique.
- * @return nonzero for unique index, zero for other indexes
- */
-inline ulint dict_index_is_unique(const dict_index_t *dict_index) {
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
+    auto table = table_check_if_in_cache(table_name);
 
-  return unlikely(dict_index->type & DICT_UNIQUE);
-}
+    if (table == nullptr) {
+      table = m_loader.load_table(srv_config.m_force_recovery, table_name);
+    }
 
-/**
- * Check whether the index is a secondary index tree.
- * @return nonzero zero for other indexes
- */
-inline bool dict_index_is_sec(const dict_index_t *dict_index) {
-  ut_ad(dict_index);
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
+    ut_ad(table == nullptr || table->m_cached);
 
-  return likely(!(dict_index->type & DICT_CLUSTERED));
-}
-
-/**
- * Gets the number of user-defined columns in a table in the dictionary cache.
- * @return number of user-defined (e.g., not ROW_ID) columns of a table
- */
-inline ulint dict_table_get_n_user_cols(const dict_table_t *table) {
-  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
-
-  return table->n_cols - DATA_N_SYS_COLS;
-}
-
-/**
- * Gets the number of system columns in a table in the dictionary cache.
- * @param table table
- * @return number of system (e.g., ROW_ID) columns of a table
- */
-inline ulint dict_table_get_n_sys_cols(const dict_table_t *IF_DEBUG(table))
-{
-  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
-  ut_ad(table->cached);
-
-  return DATA_N_SYS_COLS;
-}
-
-/**
- * Gets the number of all columns (also system) in a table in the dictionary cache.
- * @param table table
- * @return number of columns of a table
- */
-inline ulint dict_table_get_n_cols(const dict_table_t *table) {
-  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
-
-  return table->n_cols;
-}
-
-/** Gets the nth column of a table.
- * @param table in: table
- * @param pos in: position of column
- * @return pointer to column object */
-inline dict_col_t *dict_table_get_nth_col(const dict_table_t *table, ulint pos) {
-  ut_ad(pos < table->n_def);
-  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
-
-  return const_cast<dict_col_t *>(table->cols) + pos;
-}
-
-/** Gets the given system column of a table.
- * @param table in: table
- * @param sys in: DATA_ROW_ID, ...
- * @return pointer to column object */
-inline dict_col_t *dict_table_get_sys_col(const dict_table_t *table, ulint sys) {
-  ut_ad(sys < DATA_N_SYS_COLS);
-  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
-
-  auto col = dict_table_get_nth_col(table, table->n_cols - DATA_N_SYS_COLS + sys);
-  ut_ad(col->mtype == DATA_SYS);
-  ut_ad(col->prtype == (sys | DATA_NOT_NULL));
-
-  return col;
-}
-
-/** Gets the given system column number of a table.
- * @param table in: table
- * @param sys in: DATA_ROW_ID, ...
- * @return column number */
-inline ulint dict_table_get_sys_col_no(const dict_table_t *table, ulint sys) {
-  ut_ad(sys < DATA_N_SYS_COLS);
-  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
-
-  return table->n_cols - DATA_N_SYS_COLS + sys;
-}
-
-/** Determine the file format of a table.
- * @param table in: table
- * @return file format version */
-inline ulint dict_table_get_format(const dict_table_t *table) {
-  return (table->flags & DICT_TF_FORMAT_MASK) >> DICT_TF_FORMAT_SHIFT;
-}
-
-/** Determine the file format of a table.
- * @param table in/out: table
- * @param format in: file format version */
-inline void dict_table_set_format(dict_table_t *table, ulint format) {
-  table->flags = (table->flags & ~DICT_TF_FORMAT_MASK) | (format << DICT_TF_FORMAT_SHIFT);
-}
-
-/** Gets the number of fields in the internal representation of an index,
- * including fields added by the dictionary system.
- * @param dict_index in: an internal representation of index (in the dictionary cache)
- * @return number of fields */
-inline ulint dict_index_get_n_fields(const dict_index_t *dict_index) {
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
-
-  return dict_index->n_fields;
-}
-
-/** Gets the number of fields in the internal representation of an index
- * that uniquely determine the position of an index entry in the index, if
- * we do not take multiversioning into account: in the B-tree use the value
- * returned by dict_index_get_n_unique_in_tree.
- * @param dict_index in: an internal representation of index (in the dictionary cache)
- * @return number of fields */
-inline ulint dict_index_get_n_unique(const dict_index_t *dict_index) {
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
-  ut_ad(dict_index->cached == 1);
-
-  return dict_index->n_uniq;
-}
-
-/** Gets the number of fields in the internal representation of an index
- * which uniquely determine the position of an index entry in the index, if
- * we also take multiversioning into account.
- * @param dict_index in: an internal representation of index (in the dictionary cache)
- * @return number of fields */
-inline ulint dict_index_get_n_unique_in_tree(const dict_index_t *dict_index) {
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
-  ut_ad(dict_index->cached);
-
-  if (dict_index_is_clust(dict_index)) {
-    return dict_index_get_n_unique(dict_index);
-  } else {
-    return dict_index_get_n_fields(dict_index);
-  }
-}
-
-/** Gets the number of user-defined ordering fields in the index. In the
- * internal representation of clustered indexes we add the row id to the ordering
- * fields to make a clustered index unique, but this function returns the number of
- * fields the user defined in the index as ordering fields.
- * @param dict_index in: an internal representation of index (in the dictionary cache)
- * @return number of fields */
-inline ulint dict_index_get_n_ordering_defined_by_user(const dict_index_t *dict_index) {
-  return dict_index->n_user_defined_cols;
-}
-
-/** Gets the nth field of an index.
- * @param index in: index
- * @param pos in: position of field
- * @return pointer to field object */
-inline dict_field_t *dict_index_get_nth_field(const dict_index_t *index, ulint pos) {
-  ut_ad(pos < index->n_def);
-  ut_ad(index->magic_n == DICT_INDEX_MAGIC_N);
-
-  return const_cast<dict_field_t *>(&index->fields[pos]);
-}
-
-/** Returns the position of a system column in an index.
- * @param dict_index in: index
- * @param type in: DATA_ROW_ID, ...
- * @return position, ULINT_UNDEFINED if not contained */
-inline ulint dict_index_get_sys_col_pos(const dict_index_t *dict_index, ulint type) {
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
-
-  if (dict_index_is_clust(dict_index)) {
-    return dict_col_get_clust_pos(dict_table_get_sys_col(dict_index->table, type), dict_index);
-  } else {
-    return dict_index_get_nth_col_pos(dict_index, dict_table_get_sys_col_no(dict_index->table, type));
-  }
-}
-
-/** Gets the field column.
- * @param field in: index field
- * @return field->col, pointer to the table column */
-inline const dict_col_t *dict_field_get_col(const dict_field_t *field) {
-  return field->col;
-}
-
-/** Gets pointer to the nth column in an index.
- * @param dict_index in: index
- * @param pos in: position of the field
- * @return column */
-inline const dict_col_t *dict_index_get_nth_col(const dict_index_t *dict_index, ulint pos) {
-  return dict_field_get_col(dict_index_get_nth_field(dict_index, pos));
-}
-
-/** Gets the column number the nth field in an index.
- * @param dict_index in: index
- * @param pos in: position of the field
- * @return column number */
-inline ulint dict_index_get_nth_col_no(const dict_index_t *dict_index, ulint pos) {
-  return dict_col_get_no(dict_index_get_nth_col(dict_index, pos));
-}
-
-/** Returns the minimum data size of an index record.
- * @param dict_index in: dict_index
- * @return minimum data size in bytes */
-inline ulint dict_index_get_min_size(const dict_index_t *dict_index) {
-  ulint size = 0;
-  ulint n = dict_index_get_n_fields(dict_index);
-
-  while (n--) {
-    size += dict_col_get_min_size(dict_index_get_nth_col(dict_index, n));
+    return table;
   }
 
-  return size;
-}
+  /**
+   * @brief Returns a table object based on table id.
+   * 
+   * @param[in] recovery recovery flag
+   * @param[in] table_id table id
+   * 
+   * @return table, NULL if does not exist
+   */
+  inline Table *table_get_on_id(ib_recovery_t recovery, Dict_id table_id) noexcept {
+    ut_ad(mutex_own(&m_mutex));
 
-/** Gets the space id of the root of the index tree.
- * @param dict_index in: dict_index
- * @return space id */
-inline space_id_t dict_index_get_space(const dict_index_t *dict_index) {
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
+    /* Look for the table name in the hash table */
+    Table *table{};
 
-  return dict_index->space;
-}
+    if (const auto it = m_table_ids.find(table_id); it != m_table_ids.end()) {
+      table = it->second;
+    } else {
+      table = m_loader.load_table_on_id(recovery, table_id);
+    }
 
-/** Sets the space id of the root of the index tree.
- * @param dict_index in/out: dict_index
- * @param space in: space id */
-inline void dict_index_set_space(dict_index_t *dict_index, space_id_t space) {
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
+    ut_ad(table == nullptr || table->m_cached);
 
-  dict_index->space = space;
-}
-
-/** Gets the page number of the root of the index tree.
- * @param dict_index in: dict_index
- * @return page number */
-inline page_no_t dict_index_get_page(const dict_index_t *dict_index) {
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
-
-  return dict_index->page;
-}
-
-/** Sets the page number of the root of index tree.
- * @param dict_index in/out: dict_index
- * @param page in: page number */
-inline void dict_index_set_page(dict_index_t *dict_index, page_no_t page) {
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
-
-  dict_index->page = page;
-}
-
-/** Gets the read-write lock of the index tree.
- * @param dict_index in: dict_index
- * @return read-write lock */
-inline rw_lock_t *dict_index_get_lock(dict_index_t *dict_index) {
-  ut_ad(dict_index->magic_n == DICT_INDEX_MAGIC_N);
-
-  return &dict_index->lock;
-}
-
-/** Returns free space reserved for future updates of records. This is
-relevant only in the case of many consecutive inserts, as updates
-which make the records bigger might fragment the index.
-@return	number of free bytes on page, reserved for updates */
-inline ulint dict_index_get_space_reserve() {
-  return UNIV_PAGE_SIZE / 16;
-}
-
-/**
- * @brief Checks if a table is in the dictionary cache.
- * @param table_name in: table name
- * @return table, NULL if not found
- */
-inline dict_table_t *dict_table_check_if_in_cache_low(const char *table_name) {
-  ut_ad(table_name);
-  ut_ad(mutex_own(&(dict_sys->mutex)));
-
-  dict_table_t *table{nullptr};
-  if (const auto it = dict_sys->table_hash->find(table_name); it != dict_sys->table_hash->end()) {
-   table = it->second;
+    return table;
   }
 
-  return table;
-}
+#ifdef UNIT_TEST
+private:
+#endif /* UNIT_TEST */
 
-/**
- * @brief Gets a table; loads it to the dictionary cache if necessary. A low-level function.
- * @param table_name in: table name
- * @return table, NULL if not found
- */
-inline dict_table_t *dict_table_get_low(const char *table_name) {
-  ut_ad(table_name != nullptr);
-  ut_ad(mutex_own(&(dict_sys->mutex)));
+  
+  /**
+   * @brief Builds the dictionary cache representation for a clustered index.
+   *
+   * @param[in] index User representation of a clustered index
+   * 
+   * @return own: the internal representation of the clustered index
+   */
+  [[nodiscard]] Index *build_cluster_index(Index *index) noexcept;
 
-  auto table = dict_table_check_if_in_cache_low(table_name);
+  /**
+   * @brief Builds the dictionary cache representation for a non-clustered index, containing also system fields not defined by the user.
+   *
+   * @param[in] index User representation of a non-clustered index
+   * 
+   * @return own: the internal representation of the non-clustered index
+   */
+  [[nodiscard]] Index *build_secondary_index(Index *index) noexcept;
 
-  if (table == nullptr) {
-    // FIXME: srv_force_recovery should be passed in as an arg
-    table = dict_load_table(srv_config.m_force_recovery, table_name);
+  /**
+   * @brief  Removes a foreign constraint struct from the dictionary cache.
+   * 
+   * @param[in] foreign foreign constraint
+   */
+  static void foreign_remove_from_cache(Foreign *&foreign) noexcept;
+
+  /**
+   * @brief Prints a column data.
+   *
+   * @param[in] table Table
+   * @param[in] col Column
+   */
+  [[nodiscard]] static std::string col_to_string(const Table *table, const Column *col) noexcept;
+
+  /**
+   * @brief Prints an index data.
+   *
+   * @param[in] index Index
+   */
+  [[nodiscard]] static std::string index_to_string(Index *index) noexcept;
+
+  /**
+   * @brief Prints a field data.
+   *
+   * @param[in] field field
+   */
+  [[nodiscard]] static std::string field_to_string(const Field *field) noexcept;
+
+  /**
+   * @brief Creates the file page for the dictionary header. This function is called only at the database creation.
+   * 
+   * @param[in] mtr mtr
+   * 
+   * @return true if succeed
+   */
+  [[nodiscard]] bool hdr_create(mtr_t *mtr) noexcept;
+
+  /**
+   * @brief If an undo log record for this table might not fit on a single page, return true.
+   * 
+   * @param[in] table The table.
+   * @param[in] new_index The index.
+   * 
+   * @return true if the undo log record could become too big.
+   */
+  [[nodiscard]] static bool index_too_big_for_undo(const Table *table, const Index *new_index) noexcept;
+
+  /**
+   * @brief If a record of this index might not fit on a single B-tree page, return true.
+   * 
+   * @param[in] table The table.
+   * @param[in] new_index The index.
+   * 
+   * @return true if the index record could become too big
+   */
+  [[nodiscard]] static bool index_too_big_for_tree(const Table *table, const Index *new_index) noexcept;
+
+  /**
+   * @brief Prints a column data.
+   *
+   * @param[in] table The table containing the column.
+   * @param[in] col The column to print.
+   */
+  void col_print(const Table *table, const Column *col) noexcept;
+
+  /**
+   * @brief Prints an index data.
+   * 
+   * @param[in] index in: index
+   */
+  void index_print(Index *index) noexcept;
+
+  /**
+   * @brief Prints a field data.
+   *
+   * @param[in] field Pointer to the field to be printed.
+   */
+  void field_print(const Field *field) noexcept;
+
+  /**
+   * @brief Report an error in a foreign key definition.
+   * 
+   * @param[in] name the table name
+   */
+  void foreign_error_report(const char *name) noexcept {
+    log_err(" Foreign key constraint of table ", name);
   }
 
-  ut_ad(table == nullptr || table->cached);
+  /**
+   * @brief Report an error in a foreign key definition.
+   * 
+   * @param[in] fk foreign key constraint
+   * @param[in] msg the error message
+   */
+  void foreign_error_report(Foreign *fk, const char *msg) noexcept;
 
-  return table;
-}
+  /**
+   * @brief Scans from pointer onwards. Stops if is at the start of a copy of 'string'
+   * where characters are compared without case sensitivity, and only outside `` or "" quotes. Stops also at NUL.
+   * 
+   * @param[in] ptr scan from
+   * @param[in] string look for this
+   * 
+   * @return scanned up to this
+   */
+  const char *scan_to(const char *ptr, const char *string) noexcept;
 
-/**
- * @brief Returns a table object based on table id.
- * @param recovery in: recovery flag
- * @param table_id in: table id
- * @return table, NULL if does not exist
- */
-inline dict_table_t *dict_table_get_on_id_low(ib_recovery_t recovery, uint64_t table_id) {
-  ut_ad(mutex_own(&dict_sys->mutex));
+  /**
+   * @brief Accepts a specified string. Comparisons are case-insensitive.
+   * 
+   * @param[in] cs character set of ptr
+   * @param[in] ptr scan from this
+   * @param[in] string accept only this string as the next non-whitespace string
+   * @param[out] success true if accepted
+   * 
+   * @return if string was accepted, the pointer is moved after that, else ptr is returned
+   */
+  const char *accept(const charset_t *cs, const char *ptr, const char *string, bool *success) noexcept;
 
-  /* Look for the table name in the hash table */
-  dict_table_t *table{nullptr};
-  if (const auto it = dict_sys->table_id_hash->find(table_id); it != dict_sys->table_id_hash->end()) {
-   table = it->second;
-  }
+  /**
+   * @brief Scans an id. For the lexical definition of an 'id', see the code below.
+   * Strips backquotes or double quotes from around the id.
+   * 
+   * @param[in] cs the character set of ptr
+   * @param[in] ptr scanned to
+   * @param[in] heap heap where to allocate the id (nullptr=id will not be allocated,
+   *   but it will point to string near ptr)
+   * @param[out] id the id; nullptr if no id was scannable
+   * @param[in] table_id true=convert the allocated id as a table name; false=convert to UTF-8
+   * @param[in] accept_also_dot true if also a dot can appear in a non-quoted id; in a quoted id
+   *   it can appear always
+   * 
+   * @return scanned to
+   */
+  const char *scan_id(const charset_t *cs, const char *ptr, mem_heap_t *heap, const char **id, bool table_id, bool accept_also_dot) noexcept;
 
-  if (table == nullptr) {
-    table = dict_load_table_on_id(recovery, table_id);
-  }
+  /**
+   * @brief Tries to scan a column name.
+   * 
+   * @param[in] cs The character set of ptr.
+   * @param[in] ptr Scanned to.
+   * @param[out] success True if success.
+   * @param[in] table Table in which the column is.
+   * @param[out] column Pointer to column if success.
+   * @param[in] heap Heap where to allocate.
+   * @param[out] name The column name; nullptr if no name was scannable.
+   * 
+   * @return Scanned to.
+   */
+  const char *scan_col(const charset_t *cs, const char *ptr, bool *success, Table *table, const Column **column, mem_heap_t *heap, const char **name) noexcept;
 
-  ut_ad(table == nullptr || table->cached);
+  /**
+   * @brief Scans a table name from an SQL string.
+   * 
+   * @param[in] cs The character set of ptr.
+   * @param[in] ptr Scanned to.
+   * @param[out] table Table object or nullptr.
+   * @param[in] name Foreign key table name.
+   * @param[out] success True if ok name found.
+   * @param[in] heap Heap where to allocate the id.
+   * @param[out] ref_name The table name; nullptr if no name was scannable.
+   * 
+   * @return Scanned to.
+   */
+  const char *scan_table_name(const charset_t *cs, const char *ptr, Table **table, const char *name, bool *success, mem_heap_t *heap, const char **ref_name) noexcept;
 
-  return table;
-}
+  /**
+   * @brief Skips one id. The id is allowed to contain also '.'.
+   * 
+   * @param[in] cs The character set of ptr.
+   * @param[in] ptr Scanned to.
+   * @param[out] success True if success, false if just spaces left in string or a syntax error.
+   * 
+   * @return Scanned to.
+   */
+  const char *skip_word(const charset_t *cs, const char *ptr, bool *success) noexcept;
 
-/** Gets the first index on the table (the clustered index).
- * @param[in] table  Get the first index for this table
-@return        index, nullptr if none exists */
-inline dict_index_t *dict_table_get_first_index(const dict_table_t *table) {
-  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
+  /**
+   * @brief Removes comments from an SQL string.
+   * 
+   * A comment is either:
+   * (a) '#' to the end of the line,
+   * (b) '--[space]' to the end of the line, or
+   * (c) '[slash][asterisk]' till the next '[asterisk][slash]' (like the familiar
+   * C comment syntax).
+   * 
+   * @param[in] sql_string The input SQL string.
+   * 
+   * @return A new SQL string stripped of comments. The caller must free this with mem_free().
+    */
+  char *strip_comments(const char *sql_string) noexcept;
 
-  return UT_LIST_GET_FIRST(((dict_table_t *)table)->indexes);
-}
+  /**
+   * @brief Finds the highest [number] for foreign key constraints of the table. Looks
+   * only at the >= 4.0.18-format id's, which are of the form
+   * databasename/tablename_ibfk_[number].
+   *
+   * @param[in] table Table in the dictionary memory cache
+   * 
+   * @return highest number, 0 if table has no new format foreign key constraints
+   */
+  ulint table_get_highest_foreign_id(Table *table) noexcept;
 
-/** Gets the next index on the table.
- * @param[in] table  Get index after this one
-@return        index, nullptr if none left */
-inline dict_index_t *dict_table_get_next_index(const dict_index_t *index) {
-  ut_ad(index->magic_n == DICT_INDEX_MAGIC_N);
+  /**
+   * @brief Reports a simple foreign key create clause syntax error.
+   *
+   * @param[in] name Table name
+   * @param[in] start_of_latest_foreign Start of the foreign key clause in the SQL string
+   * @param[in] ptr Place of the syntax error
+   */
+  void foreign_report_syntax_err(const char *name, const char *start_of_latest_foreign, const char *ptr) noexcept;
 
-  return UT_LIST_GET_NEXT(indexes, (dict_index_t *)index);
-}
+  /**
+   * Scans a table create SQL string and adds to the data dictionary the foreign
+   * key constraints declared in the string. This function should be called after
+   * the indexes for a table have been created. Each foreign key constraint must
+   * be accompanied with indexes in both participating tables. The indexes are
+   * allowed to contain more fields than mentioned in the constraint.
+   *
+   * @param[in] trx Transaction
+   * @param[in] heap Memory heap
+   * @param[in] cs The character set of sql_string
+   * @param[in] sql_string CREATE TABLE or ALTER TABLE statement where foreign keys are declared like:
+   *   FOREIGN KEY (a, b) REFERENCES table2(c, d), table2 can be written also with the database
+   *   name before it: test.table2; the default database is the database of parameter name
+   * @param[in] name Table full name in the normalized form database_name/table_name
+   * @param[in] reject_fks If true, fail with error code DB_CANNOT_ADD_CONSTRAINT if any foreign keys are found.
+   *
+   * @return error code or DB_SUCCESS
+   */
+  db_err create_foreign_constraints(trx_t *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks) noexcept;
+
+  /**
+   * @brief Prints info of a foreign key constraint.
+   * 
+   * @param[in] foreign in: foreign key constraint
+   */
+  void foreign_print(Foreign *foreign) noexcept;
+
+public:
+  /**
+   * mutex protecting the data dictionary; protects also the disk-based
+   * dictionary system tables; this mutex serializes CREATE TABLE and
+   * DROP TABLE, as well as reading the dictionary data for a table from 
+   * system tables.
+   */
+  mutable mutex_t m_mutex{};
+
+  struct Stats_mutex {
+    /** Constructor */
+    Stats_mutex() noexcept {
+      for (auto &mutex : m_mutexes) {
+        mutex_create(&mutex, IF_DEBUG("Dict::Stats_mutex",) IF_SYNC_DEBUG(SYNC_INDEX_TREE,) Current_location());
+      }
+    }
+
+    /** Destructor */
+    ~Stats_mutex() {
+      for (auto &mutex : m_mutexes) {
+        mutex_free(&mutex);
+      }
+    }
+
+    /**
+     * @brief Get the mutex that protects index->stat_n_diff_key_vals[]
+     * 
+     * @param[in] index Index ID.
+     * 
+     * @return mutex for the index stat slot.
+     */
+    [[nodiscard]] inline auto get_mutex(Dict_id id) const noexcept {
+      return &m_mutexes[ut_uint64_fold(id) % DICT_INDEX_STAT_MUTEX_SIZE];
+    }
+
+    void enter(Dict_id id) noexcept {
+      mutex_enter(get_mutex(id));
+    }
+
+    void exit(Dict_id id) noexcept {
+      mutex_exit(get_mutex(id));
+    }
+
+    /** Mutex protecting Index::Stats::m_n_diff_key_vals[] */
+    mutable std::array<mutex_t, DICT_INDEX_STAT_MUTEX_SIZE> m_mutexes;
+  };
+
+  /** Mutex protecting Index::Stats::m_n_diff_key_vals */
+  Stats_mutex m_stats_mutex{};
+
+  /**
+   * @brief the data dictionary rw-latch protecting dict_sys
+   * 
+   * table create, drop, etc. reserve this in X-mode; implicit or
+   * backround operations purge, rollback, foreign key checks reserve this
+   * in S-mode; we cannot trust that the client protects implicit or background
+   * operations a table drop since the client does not know about them; therefore
+   * we need this; NOTE: a transaction which reserves this must keep book
+   * on the mode in trx_t::m_dict_operation_lock_mode */
+  mutable rw_lock_t m_lock{};
+
+  /** Mutex protecting the foreign and unique error buffers */
+  mutable mutex_t m_foreign_err_mutex{};
+
+  /** Hash table of the tables, based on name */
+  std::unordered_map<std::string_view, Table *> m_tables{};
+
+  /** Hash table of the tables, based on id */
+  std::unordered_map<Dict_id, Table *> m_table_ids{};
+
+  /** LRU list of tables */
+  UT_LIST_BASE_NODE_T(Table, m_table_LRU) m_table_LRU{};
+
+  /** Varying space in bytes occupied by the data dictionary table and index objects */
+  ulint m_size{};
+
+  /** SYS_TABLES table */
+  Table *m_sys_tables{};
+
+  /** SYS_COLUMNS table */
+  Table *m_sys_columns{};
+
+  /** SYS_INDEXES table */
+  Table *m_sys_indexes{};
+
+  /** SYS_FIELDS table */
+  Table *m_sys_fields{};
+
+  /** Dummy index for ROW_FORMAT=REDUNDANT supremum and infimum records */
+  Index *m_dummy_index{};
+
+  /** Data dictionary booting/creation. */
+  Dict_store m_store;
+
+  /** Data dictionary loading. */
+  Dict_load m_loader;
+};

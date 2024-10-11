@@ -269,7 +269,7 @@ void trx_end_signal_handling(trx_t *trx);
  * @param[in] heap Mem heap where created.
  * @return Commit node struct.
  */
-[[nodiscard]] commit_node_t *commit_node_create(mem_heap_t *heap);
+[[nodiscard]] Commit_node *commit_node_create(mem_heap_t *heap);
 
 /**
  * Performs an execution step for a commit type node in a query graph.
@@ -357,7 +357,7 @@ void trx_var_init();
  * @param[in] trx Trx object.
  * @return The error info.
  */
-[[nodiscard]] inline const dict_index_t *trx_get_error_info(const trx_t *trx) noexcept {
+[[nodiscard]] inline const Index *trx_get_error_info(const trx_t *trx) noexcept {
   return trx->error_info;
 }
 

@@ -25,7 +25,7 @@ Created 12/7/1995 Heikki Tuuri
 #include "mtr0log.h"
 
 #include "buf0buf.h"
-#include "dict0boot.h"
+#include "dict0store.h"
 #include "dict0dict.h"
 #include "log0recv.h"
 #include "page0page.h"
@@ -280,7 +280,7 @@ byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
   return ptr + len;
 }
 
-byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, dict_index_t *index, mlog_type_t type, ulint size) {
+byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, mlog_type_t type, ulint size) {
   auto log_ptr = mlog_open(mtr, 11 + size);
 
   if (log_ptr == nullptr) {
@@ -301,17 +301,16 @@ byte *mlog_open_and_write_index(mtr_t *mtr, const byte *rec, dict_index_t *index
   return log_ptr;
 }
 
-byte *mlog_parse_index(byte *ptr, const byte *end_ptr, dict_index_t **index) {
+byte *mlog_parse_index(byte *ptr, const byte *end_ptr, Index *&index) {
 
-  auto table = dict_mem_table_create("LOG_DUMMY", DICT_HDR_SPACE, 1, 0);
-  auto ind = dict_mem_index_create("LOG_DUMMY", "LOG_DUMMY", DICT_HDR_SPACE, 0, 1);
+  auto table = Table::create("LOG_DUMMY", DICT_HDR_SPACE, 1, 0, false, Current_location());
+  auto ind = Index::create(table, "LOG_DUMMY", DICT_HDR_SPACE, 0, 1);
 
-  ind->n_uniq = 1;
-  ind->table = table;
+  ind->m_n_uniq = 1;
 
-  /* Avoid ut_ad(index->cached) in dict_index_get_n_unique_in_tree */
-  *index = ind;
-  ind->cached = true;
+  /* Avoid ut_ad(index->cached) in Index::get_n_unique_in_tree() */
+  index = ind;
+  ind->m_cached = true;
 
   return ptr;
 }

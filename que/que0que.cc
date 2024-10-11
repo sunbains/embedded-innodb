@@ -22,13 +22,11 @@ Query graph
 Created 5/27/1996 Heikki Tuuri
 *******************************************************/
 
-#include "que0que.h"
-
-#include "dict0crea.h"
 #include "eval0eval.h"
 #include "eval0proc.h"
 #include "log0log.h"
 #include "pars0types.h"
+#include "que0que.h"
 #include "row0ins.h"
 #include "row0purge.h"
 #include "row0sel.h"
@@ -387,8 +385,8 @@ void que_graph_free_recursive(que_node_t *node) {
   sel_node_t *sel;
   ins_node_t *ins;
   upd_node_t *upd;
-  tab_node_t *cre_tab;
-  ind_node_t *cre_ind;
+  Table_node *cre_tab;
+  Index_node *cre_ind;
   purge_node_t *purge;
 
   if (node == nullptr) {
@@ -480,23 +478,23 @@ void que_graph_free_recursive(que_node_t *node) {
 
       break;
     case QUE_NODE_CREATE_TABLE:
-      cre_tab = static_cast<tab_node_t *>(node);
+      cre_tab = static_cast<Table_node *>(node);
 
-      que_graph_free_recursive(cre_tab->tab_def);
-      que_graph_free_recursive(cre_tab->col_def);
-      que_graph_free_recursive(cre_tab->commit_node);
+      que_graph_free_recursive(cre_tab->m_tab_def);
+      que_graph_free_recursive(cre_tab->m_col_def);
+      que_graph_free_recursive(cre_tab->m_commit_node);
 
-      mem_heap_free(cre_tab->heap);
+      mem_heap_free(cre_tab->m_heap);
 
       break;
     case QUE_NODE_CREATE_INDEX:
-      cre_ind = static_cast<ind_node_t *>(node);
+      cre_ind = static_cast<Index_node *>(node);
 
-      que_graph_free_recursive(cre_ind->ind_def);
-      que_graph_free_recursive(cre_ind->field_def);
-      que_graph_free_recursive(cre_ind->commit_node);
+      que_graph_free_recursive(cre_ind->m_ind_def);
+      que_graph_free_recursive(cre_ind->m_field_def);
+      que_graph_free_recursive(cre_ind->m_commit_node);
 
-      mem_heap_free(cre_ind->heap);
+      mem_heap_free(cre_ind->m_heap);
 
       break;
     case QUE_NODE_PROC:
@@ -553,7 +551,7 @@ void que_graph_free(que_t *graph) {
     sym_tab_free_private(graph->sym_tab);
   }
 
-  if (graph->info && graph->info->graph_owns_us) {
+  if (graph->info != nullptr && graph->info->m_graph_owns_us) {
     pars_info_free(graph->info);
   }
 
@@ -999,9 +997,9 @@ inline que_thr_t *que_thr_step(que_thr_t *thr) {
   } else if (type == QUE_NODE_ROLLBACK) {
     thr = trx_rollback_step(thr);
   } else if (type == QUE_NODE_CREATE_TABLE) {
-    thr = dict_create_table_step(thr);
+    thr = srv_dict_sys->m_store.create_table_step(thr);
   } else if (type == QUE_NODE_CREATE_INDEX) {
-    thr = dict_create_index_step(thr);
+    thr = srv_dict_sys->m_store.create_index_step(thr);
   } else if (type == QUE_NODE_ROW_PRINTF) {
     thr = row_printf_step(thr);
   } else {
@@ -1030,39 +1028,38 @@ static void que_run_threads_low(que_thr_t *thr) {
   ut_a(thr_get_trx(thr)->error_state == DB_SUCCESS);
   ut_ad(!mutex_own(&kernel_mutex));
 
-loop:
-  /* Check that there is enough space in the log to accommodate
-  possible log entries by this query step; if the operation can touch
-  more than about 4 pages, checks must be made also within the query
-  step! */
+  for (;;) {
+    /* Check that there is enough space in the log to accommodate
+    possible log entries by this query step; if the operation can touch
+    more than about 4 pages, checks must be made also within the query
+    step! */
 
-  log_sys->free_check();
+    log_sys->free_check();
 
-  /* Perform the actual query step: note that the query thread
-  may change if, e.g., a subprocedure call is made */
+    /* Perform the actual query step: note that the query thread
+    may change if, e.g., a subprocedure call is made */
 
-  /*-------------------------*/
-  next_thr = que_thr_step(thr);
-  /*-------------------------*/
+    /*-------------------------*/
+    next_thr = que_thr_step(thr);
+    /*-------------------------*/
 
-  ut_a(!next_thr || (thr_get_trx(next_thr)->error_state == DB_SUCCESS));
+    ut_a(!next_thr || (thr_get_trx(next_thr)->error_state == DB_SUCCESS));
 
-  if (next_thr != thr) {
-    ut_a(next_thr == nullptr);
+    if (next_thr != thr) {
+      ut_a(next_thr == nullptr);
 
-    /* This can change next_thr to a non-nullptr value if there was
-    a lock wait that already completed. */
-    que_thr_dec_refer_count(thr, &next_thr);
+      /* This can change next_thr to a non-nullptr value if there was
+      a lock wait that already completed. */
+      que_thr_dec_refer_count(thr, &next_thr);
 
-    if (next_thr == nullptr) {
+      if (next_thr == nullptr) {
 
-      return;
+        return;
+      }
+
+      thr = next_thr;
     }
-
-    thr = next_thr;
-  }
-
-  goto loop;
+  } 
 }
 
 void que_run_threads(que_thr_t *thr) {
@@ -1120,13 +1117,13 @@ db_err que_eval_sql(pars_info_t *info, const char *sql, bool reserve_dict_mutex,
   ut_a(trx->error_state == DB_SUCCESS);
 
   if (reserve_dict_mutex) {
-    mutex_enter(&dict_sys->mutex);
+    srv_dict_sys->mutex_acquire();
   }
 
   graph = pars_sql(info, sql);
 
   if (reserve_dict_mutex) {
-    mutex_exit(&dict_sys->mutex);
+    srv_dict_sys->mutex_release();
   }
 
   ut_a(graph);

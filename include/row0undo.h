@@ -100,7 +100,7 @@ struct Undo_node {
   Undo_node() = delete;
 
   Undo_node(FSP *fsp, Btree *btree, Lock_sys *lock_sys) noexcept
-   : m_pcur(fsp, btree, lock_sys) {}
+   : m_pcur(fsp, btree) {}
 
   /** node type: QUE_NODE_UNDO */
   que_common_t common;
@@ -133,7 +133,7 @@ struct Undo_node {
   Btree_pcursor m_pcur;
 
   /** table where undo is done */
-  dict_table_t *table;
+  Table *table;
 
   /** compiler analysis of an update */
   ulint cmpl_info;
@@ -142,22 +142,22 @@ struct Undo_node {
   upd_t *update;
 
   /** row reference to the next row to handle */
-  dtuple_t *ref;
+  DTuple *ref;
 
   /** a copy (also fields copied to heap) of the row to handle */
-  dtuple_t *row;
+  DTuple *row;
 
   /** nullptr, or prefixes of the externally stored columns of the row */
   row_ext_t *ext;
 
   /** nullptr, or the row after undo */
-  dtuple_t *undo_row;
+  DTuple *undo_row;
 
   /** nullptr, or prefixes of the externally stored columns of undo_row */
   row_ext_t *undo_ext;
 
   /** the next index whose record should be handled */
-  dict_index_t *index;
+  Index *index;
 
   /** memory heap used as auxiliary storage for row; this must be emptied
   after undo is tried on a row */

@@ -33,8 +33,8 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 struct Lock;
 struct trx_t;
 struct Buf_pool;
-struct dict_table_t;
-struct dict_index_t;
+struct Table;
+struct Index;
 
 /** Lock types */
 /* @{ */
@@ -123,7 +123,7 @@ using Lock_mode_type = typename std::underlying_type<Lock_mode>::type;
 /** A table lock */
 struct Table_lock {
   /** Database table in dictionary cache */
-  dict_table_t *m_table;
+  Table *m_table;
 
   /** List of locks on the same table */
   UT_LIST_NODE_T(Lock) m_locks;
@@ -137,7 +137,7 @@ struct Rec_lock {
   using List_node = UT_LIST_NODE_T(Lock);
 
   /** Index record lock */
-  dict_index_t *m_index;
+  const Index *m_index;
 
   /** Page ID. */
   Page_id m_page_id;
@@ -447,7 +447,7 @@ struct Lock {
    *
    * @return dict_table_t* Pointer to the table associated with the lock.
    */
-  [[nodiscard]] inline const dict_table_t *table() const noexcept;
+  [[nodiscard]] inline const Table *table() const noexcept;
 
   /**
    * @brief Gets the id of the table on which the lock is.
@@ -475,7 +475,7 @@ struct Lock {
    *
    * @return The index on which the record lock is.
    */
-  [[nodiscard]] inline const dict_index_t *rec_index() const noexcept {
+  [[nodiscard]] inline const Index *rec_index() const noexcept {
     ut_a(type() == LOCK_REC);
     return m_rec.m_index;
   }
@@ -487,9 +487,8 @@ struct Lock {
    *
    * @return The index on which the record lock is.
    */
-  [[nodiscard]] inline dict_index_t *rec_index() noexcept {
-    ut_a(type() == LOCK_REC);
-    return m_rec.m_index;
+  [[nodiscard]] inline Index *rec_index() noexcept {
+    return const_cast<Index *>(const_cast<const Lock *>(this)->rec_index());
   }
 
   /**
@@ -680,7 +679,7 @@ static_assert(std::is_standard_layout<Lock>::value, "Lock must have a standard l
 /** Lock operation struct */
 struct Lock_op {
   /** Table to be locked */
-  dict_table_t *m_table;
+  Table *m_table;
 
     /** Lock mode */
   Lock_mode mode;

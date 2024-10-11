@@ -165,7 +165,7 @@ static void trx_rollback_active(
   que_fork_t *fork;
   que_thr_t *thr;
   roll_node_t *roll_node;
-  dict_table_t *table;
+  Table *table;
   int64_t rows_to_undo;
   const char *unit = "";
   bool dictionary_locked = false;
@@ -208,7 +208,7 @@ static void trx_rollback_active(
   mutex_exit(&kernel_mutex);
 
   if (trx_get_dict_operation(trx) != TRX_DICT_OP_NONE) {
-    dict_lock_data_dictionary(trx);
+    srv_dict_sys->lock_data_dictionary(trx);
     dictionary_locked = true;
   }
 
@@ -235,12 +235,12 @@ static void trx_rollback_active(
 
     log_info(std::format("Dropping table with id {} {} in recovery if it exists", trx->table_id, trx->table_id));
 
-    table = dict_table_get_on_id_low(recovery, trx->table_id);
+    table = srv_dict_sys->table_get_on_id(recovery, trx->table_id);
 
     if (table != nullptr) {
-      log_info(std::format("Table found: dropping table {} in recovery", table->name));
+      log_info(std::format("Table found: dropping table {} in recovery", table->m_name));
 
-      auto err = ddl_drop_table(table->name, trx, true);
+      auto err = ddl_drop_table(table->m_name, trx, true);
       auto err_commit = trx_commit(trx);
       ut_a(err_commit == DB_SUCCESS);
 
@@ -249,7 +249,7 @@ static void trx_rollback_active(
   }
 
   if (dictionary_locked) {
-    dict_unlock_data_dictionary(trx);
+    srv_dict_sys->unlock_data_dictionary(trx);
   }
 
   log_info(std::format("Rolling back of trx id {} completed", TRX_ID_PREP_PRINTF(trx->m_id)));

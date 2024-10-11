@@ -66,7 +66,7 @@ has more fields than the other. */
  */
 static int cmp_debug_dtuple_rec_with_match(
   void *cmp_ctx,
-  const dtuple_t *dtuple,
+  const DTuple *dtuple,
   const rec_t *rec,
   const ulint *offsets,
   ulint *matched_fields) noexcept; 
@@ -87,7 +87,7 @@ inline ulint cmp_collate(ulint code) noexcept {
   return code;
 }
 
-bool cmp_cols_are_equal(const dict_col_t *col1, const dict_col_t *col2, bool check_charsets) noexcept {
+bool cmp_cols_are_equal(const Column *col1, const Column *col2, bool check_charsets) noexcept {
   if (dtype_is_non_binary_string_type(col1->mtype, col1->prtype) && dtype_is_non_binary_string_type(col2->mtype, col2->prtype)) {
 
     /* Both are non-binary string types: they can be compared if
@@ -385,7 +385,7 @@ int cmp_data_data_slow(
 
 int cmp_dtuple_rec_with_match(
   void *cmp_ctx,
-  const dtuple_t *dtuple,
+  const DTuple *dtuple,
   const rec_t *rec,
   const ulint *offsets,
   ulint *matched_fields,
@@ -586,7 +586,7 @@ order_resolved:
   return ret;
 }
 
-int cmp_dtuple_rec(void *cmp_ctx, const dtuple_t *dtuple, const rec_t *rec, const ulint *offsets) noexcept  {
+int cmp_dtuple_rec(void *cmp_ctx, const DTuple *dtuple, const rec_t *rec, const ulint *offsets) noexcept  {
   ulint matched_fields = 0;
   ulint matched_bytes = 0;
 
@@ -594,7 +594,7 @@ int cmp_dtuple_rec(void *cmp_ctx, const dtuple_t *dtuple, const rec_t *rec, cons
   return cmp_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets, &matched_fields, &matched_bytes);
 }
 
-bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const dtuple_t *dtuple, const rec_t *rec, const ulint *offsets)  noexcept {
+bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const rec_t *rec, const ulint *offsets)  noexcept {
   ulint n_fields;
   ulint matched_fields = 0;
   ulint matched_bytes = 0;
@@ -626,7 +626,7 @@ int cmp_rec_rec_simple(
   const rec_t *rec2,
   const ulint *offsets1,
   const ulint *offsets2,
-  const dict_index_t *index) noexcept 
+  const Index *index) noexcept 
 {
   ulint rec1_f_len;
   const byte *rec1_b_ptr;
@@ -636,7 +636,7 @@ int cmp_rec_rec_simple(
   ulint rec2_byte;
   ulint cur_field;
 
-  auto n_uniq = dict_index_get_n_unique(index);
+  auto n_uniq = index->get_n_unique();
 
   ut_ad(rec_offs_n_fields(offsets1) >= n_uniq);
   ut_ad(rec_offs_n_fields(offsets2) >= n_uniq);
@@ -650,7 +650,7 @@ int cmp_rec_rec_simple(
     ulint cur_bytes;
 
     {
-      const dict_col_t *col = dict_index_get_nth_col(index, cur_field);
+      const auto col = index->get_nth_col(cur_field);
 
       mtype = col->mtype;
       prtype = col->prtype;
@@ -684,7 +684,7 @@ int cmp_rec_rec_simple(
 
       int ret;
 
-      ret = cmp_whole_field(index->cmp_ctx, mtype, prtype, rec1_b_ptr, (unsigned)rec1_f_len, rec2_b_ptr, (unsigned)rec2_f_len);
+      ret = cmp_whole_field(index->m_cmp_ctx, mtype, prtype, rec1_b_ptr, (unsigned)rec1_f_len, rec2_b_ptr, (unsigned)rec2_f_len);
 
       if (ret) {
         return ret;
@@ -754,7 +754,7 @@ int cmp_rec_rec_with_match(
   const rec_t *rec2,
   const ulint *offsets1,
   const ulint *offsets2,
-  dict_index_t *index,
+  const Index *index,
   ulint *matched_fields,
   ulint *matched_bytes
 ) noexcept 
@@ -780,7 +780,7 @@ int cmp_rec_rec_with_match(
 
   while ((cur_field < rec1_n_fields) && (cur_field < rec2_n_fields)) {
 
-    const dict_col_t *col = dict_index_get_nth_col(index, cur_field);
+    const auto col = index->get_nth_col(cur_field);
 
     auto mtype = col->mtype;
     uint16_t prtype = col->prtype;
@@ -839,7 +839,7 @@ int cmp_rec_rec_with_match(
         (mtype == DATA_BLOB && 0 == (prtype & DATA_BINARY_TYPE) &&
 	      dtype_get_charset_coll(prtype) != DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL)) {
 
-      ret = cmp_whole_field(index->cmp_ctx, mtype, prtype, rec1_b_ptr, (unsigned)rec1_f_len, rec2_b_ptr, (unsigned)rec2_f_len);
+      ret = cmp_whole_field(index->m_cmp_ctx, mtype, prtype, rec1_b_ptr, (unsigned)rec1_f_len, rec2_b_ptr, (unsigned)rec2_f_len);
 
       if (ret != 0) {
         cur_bytes = 0;
@@ -955,7 +955,7 @@ order_resolved:
  *  respectively, when only the common first fields are compared */
 static int cmp_debug_dtuple_rec_with_match(
   void *cmp_ctx,
-  const dtuple_t *dtuple,
+  const DTuple *dtuple,
   const rec_t *rec,
   const ulint *offsets,
   ulint *matched_fields) noexcept 

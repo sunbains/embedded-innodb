@@ -47,7 +47,7 @@ Created 10/8/1995 Heikki Tuuri
 #include "buf0flu.h"
 #include "buf0lru.h"
 #include "ddl0ddl.h"
-#include "dict0boot.h"
+#include "dict0store.h"
 #include "dict0load.h"
 #include "lock0lock.h"
 #include "log0recv.h"
@@ -853,9 +853,9 @@ void InnoDB::init() noexcept {
 
   kernel_mutex_temp = static_cast<mutex_t *>(mem_alloc(sizeof(mutex_t)));
 
-  mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex",) IF_SYNC_DEBUG(SYNC_KERNEL,) Source_location{});
+  mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex",) IF_SYNC_DEBUG(SYNC_KERNEL,) Current_location());
 
-  mutex_create(&srv_innodb_monitor_mutex, IF_DEBUG("monitor_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Source_location{});
+  mutex_create(&srv_innodb_monitor_mutex, IF_DEBUG("monitor_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Current_location());
 
   srv_sys->m_threads = static_cast<srv_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
 
@@ -888,10 +888,6 @@ void InnoDB::init() noexcept {
   }
 
   UT_LIST_INIT(srv_sys->m_tasks);
-
-  /* Create dummy indexes for infimum and supremum records */
-
-  dict_ind_init();
 
   /* Init the server concurrency restriction data structures */
 
@@ -972,7 +968,6 @@ void InnoDB::modules_var_init() noexcept {
   os_file_var_init();
   sync_var_init();
   Log::var_init();
-  dict_var_init();
   dfield_var_init();
   dtype_var_init();
   ut_mem_var_init();
@@ -1127,11 +1122,11 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
   switch (had_dict_lock) {
     case RW_S_LATCH:
       /* Release foreign key check latch */
-      dict_unfreeze_data_dictionary(trx);
+      srv_dict_sys->unfreeze_data_dictionary(trx);
       break;
     case RW_X_LATCH:
       /* Release fast index creation latch */
-      dict_unlock_data_dictionary(trx);
+      srv_dict_sys->unlock_data_dictionary(trx);
       break;
   }
 
@@ -1146,10 +1141,10 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
 
   switch (had_dict_lock) {
     case RW_S_LATCH:
-      dict_freeze_data_dictionary(trx);
+      srv_dict_sys->freeze_data_dictionary(trx);
       break;
     case RW_X_LATCH:
-      dict_lock_data_dictionary(trx);
+      srv_dict_sys->lock_data_dictionary(trx);
       break;
   }
 
@@ -1348,7 +1343,7 @@ bool InnoDB::printf_innodb_monitor(
     "----------------------\n"
   );
   log_warn("Total memory allocated ", ut_total_allocated_memory());
-  log_warn("Dictionary memory allocated ", dict_sys->size);
+  log_warn("Dictionary memory allocated ", srv_dict_sys->m_size);
 
   srv_buf_pool->print_io(ib_stream);
 
@@ -1574,7 +1569,7 @@ loop:
         "==========================================="
       );
 
-      dict_print();
+      srv_dict_sys->to_string();
 
       log_warn(
         "-----------------------------------\n"

@@ -48,7 +48,7 @@ que_thr_t *row_purge_step(que_thr_t *thr); /** in: query thread */
 /* Purge node structure */
 
 struct purge_node_t {
-  purge_node_t() : pcur(srv_fsp, srv_btree_sys, srv_lock_sys) {}
+  purge_node_t() : pcur(srv_fsp, srv_btree_sys) {}
 
   /** node type: QUE_NODE_PURGE */
   que_common_t common;
@@ -78,7 +78,7 @@ struct purge_node_t {
   bool found_clust;
 
   /** table where purge is done */
-  dict_table_t *table;
+  Table *table;
 
   /* compiler analysis info of an update */
   ulint cmpl_info;
@@ -87,13 +87,13 @@ struct purge_node_t {
   upd_t *update;
 
   /** nullptr, or row reference to the next row to handle */
-  dtuple_t *ref;
+  DTuple *ref;
 
   /** nullptr, or a copy (also fields copied to heap) of the indexed fields of the row to handle */
-  dtuple_t *row;
+  DTuple *row;
 
   /** nullptr, or the next index whose record should be handled */
-  dict_index_t *index;
+  Index *index;
 
   /** memory heap used as auxiliary storage for row; this must be emptied after a successful purge of a row */
   mem_heap_t *heap;

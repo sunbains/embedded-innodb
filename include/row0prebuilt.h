@@ -29,7 +29,7 @@ Created 02/03/2009 Sunny Bains
 #include "row0sel.h"
 
 struct trx_t;
-struct dict_table_t;
+struct Table;
 
 constexpr ulint FETCH_CACHE_SIZE = 6;
 
@@ -53,7 +53,7 @@ constexpr ulint ROW_PREBUILT_FETCH_MAGIC_N = 465765687;
  * @param table Innobase table handle
  * @return own: a prebuilt struct
  */
-row_prebuilt_t *row_prebuilt_create(dict_table_t *table);
+row_prebuilt_t *row_prebuilt_create(Table *table);
 
 /**
  * Free a prebuilt struct for a user table handle.
@@ -162,10 +162,10 @@ struct row_prebuilt_struct {
   mem_heap_t *heap;
 
   /** Table handle */
-  dict_table_t *table;
+  Table *table;
 
   /** Current index for a search, if any */
-  dict_index_t *index;
+  Index *index;
 
   /** Current transaction handle */
   trx_t *trx;
@@ -180,14 +180,14 @@ struct row_prebuilt_struct {
   que_fork_t *sel_graph;
 
   /** Prebuilt dtuple used in selects */
-  dtuple_t *search_tuple;
+  DTuple *search_tuple;
 
   /** if the clustered index was generated, the row id of the last row
    * fetched is stored here */
   byte row_id[DATA_ROW_ID_LEN];
 
   /** Prebuilt dtuple used in sel/upd/del */
-  dtuple_t *clust_ref;
+  DTuple *clust_ref;
 
   /** LOCK_NONE, LOCK_S, or LOCK_X */
   Lock_mode select_lock_type;
@@ -198,7 +198,7 @@ struct row_prebuilt_struct {
   /** Rows cached by select read ahead */
   ib_row_cache_t row_cache;
 
-  /** Result of the last compare in row_search_for_client(). */
+  /** Result of the last compare in row_search_mvcc(). */
   int result;
 
   /** This should be the same as magic_n */

@@ -110,7 +110,7 @@ constexpr Fil_addr fil_addr_null = {FIL_NULL, 0};
 Fil::Fil(ulint max_n_open) {
   ut_a(max_n_open > 0);
 
-  mutex_create(&m_mutex, IF_DEBUG("Fil::mutex", ) IF_SYNC_DEBUG(SYNC_ANY_LATCH, ) Source_location{});
+  mutex_create(&m_mutex, IF_DEBUG("Fil::mutex", ) IF_SYNC_DEBUG(SYNC_ANY_LATCH, ) Current_location());
 
   m_max_n_open = max_n_open;
 

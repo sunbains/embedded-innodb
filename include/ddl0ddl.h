@@ -33,7 +33,7 @@ ulint ddl_get_background_drop_list_len_low();
  *
  * @return Error code or DB_SUCCESS.
  */
-db_err ddl_create_table(dict_table_t *table, trx_t *trx);
+db_err ddl_create_table(Table *table, trx_t *trx);
 
 /**
  * @brief Does an index creation operation.
@@ -42,7 +42,7 @@ db_err ddl_create_table(dict_table_t *table, trx_t *trx);
  * @param trx - Transaction handle.
  * @return Error number or DB_SUCCESS.
  */
-db_err ddl_create_index(dict_index_t *index, trx_t *trx);
+db_err ddl_create_index(Index *index, trx_t *trx);
 
 /**
  * @brief Drops a table but does not commit the transaction. If the
@@ -68,7 +68,7 @@ db_err ddl_drop_table(const char *name, trx_t *trx, bool drop_db);
  *
  * @return Error code or DB_SUCCESS.
  */
-db_err ddl_drop_index(dict_table_t *table, dict_index_t *index, trx_t *trx);
+db_err ddl_drop_index(Table *table, Index *index, trx_t *trx);
 
 /**
  * @brief The master thread in srv0srv.c calls this regularly to drop tables which
@@ -87,7 +87,7 @@ ulint ddl_drop_tables_in_background();
  *
  * @return Error code or DB_SUCCESS.
  */
-db_err ddl_truncate_table(dict_table_t *table, trx_t *trx);
+db_err ddl_truncate_table(Table *table, trx_t *trx);
 
 /**
  * @brief Renames a table.
@@ -136,7 +136,7 @@ void ddl_drop_all_temp_indexes(ib_recovery_t recovery);
  */
 void ddl_drop_all_temp_tables(ib_recovery_t recovery);
 
-inline DDL_index_status dict_index_t::get_online_ddl_status() const {
+inline DDL_index_status Index::get_online_ddl_status() const {
 auto ddl_status = static_cast<DDL_index_status>(m_ddl_status);
 
 #ifdef UNIV_DEBUG
@@ -153,7 +153,7 @@ auto ddl_status = static_cast<DDL_index_status>(m_ddl_status);
   return ddl_status;
 }
 
-inline bool dict_index_t::is_online_ddl_in_progress() const {
+inline bool Index::is_online_ddl_in_progress() const {
 #ifdef UNIV_DEBUG
   if (is_clustered()) {
     switch (get_online_ddl_status()) {

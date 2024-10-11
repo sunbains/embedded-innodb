@@ -14,13 +14,17 @@
 #define FLEX_BETA
 #endif
 
+    /* The c++ scanner is a mess. The FlexLexer.h header file relies on the
+     * following macro. This is required in order to pass the c++-multiple-scanners
+     * test in the regression suite. We get reports that it breaks inheritance.
+     * We will address this in a future release of flex, or omit the C++ scanner
+     * altogether.
+     */
+    #define yyFlexLexer yyFlexLexer
+
 /* First, we deal with  platform-specific or compiler-specific issues. */
 
 /* begin standard C headers. */
-#include <stdio.h>
-#include <string.h>
-#include <errno.h>
-#include <stdlib.h>
 
 /* end standard C headers. */
 
@@ -93,6 +97,12 @@ typedef unsigned int flex_uint32_t;
 #endif /* ! FLEXINT_H */
 
 /* begin standard C++ headers. */
+#include <iostream>
+#include <errno.h>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+/* end standard C++ headers. */
 
 /* TODO: this is always defined, so inline it */
 #define yyconst const
@@ -155,7 +165,7 @@ typedef struct yy_buffer_state *YY_BUFFER_STATE;
 typedef size_t yy_size_t;
 #endif
 
-static FILE *yyin, *yyout;
+static int yyleng;
 
 #define EOB_ACT_CONTINUE_SCAN 0
 #define EOB_ACT_END_OF_FILE 1
@@ -183,7 +193,8 @@ static FILE *yyin, *yyout;
 #define YY_STRUCT_YY_BUFFER_STATE
 struct yy_buffer_state
 	{
-	FILE *yy_input_file;
+
+	std::streambuf* yy_input_file;
 
 	char *yy_ch_buf;		/* input buffer */
 	char *yy_buf_pos;		/* current position in input buffer */
@@ -244,11 +255,6 @@ struct yy_buffer_state
 	};
 #endif /* !YY_STRUCT_YY_BUFFER_STATE */
 
-/* Stack of input buffers. */
-static size_t yy_buffer_stack_top = 0; /**< index of top of stack. */
-static size_t yy_buffer_stack_max = 0; /**< capacity of stack. */
-static YY_BUFFER_STATE * yy_buffer_stack = NULL; /**< Stack as an array. */
-
 /* We provide macros for accessing buffer states in case in the
  * future we want to put the buffer states in a more general
  * "scanner state".
@@ -262,38 +268,6 @@ static YY_BUFFER_STATE * yy_buffer_stack = NULL; /**< Stack as an array. */
  * NULL or when we need an lvalue. For internal use only.
  */
 #define YY_CURRENT_BUFFER_LVALUE (yy_buffer_stack)[(yy_buffer_stack_top)]
-
-/* yy_hold_char holds the character lost when yytext is formed. */
-static char yy_hold_char;
-static int yy_n_chars;		/* number of characters read into yy_ch_buf */
-static int yyleng;
-
-/* Points to current character in buffer. */
-static char *yy_c_buf_p = NULL;
-static int yy_init = 0;		/* whether we need to initialize */
-static int yy_start = 0;	/* start state number */
-
-/* Flag which is used to allow yywrap()'s to do buffer switches
- * instead of setting up a fresh yyin.  A bit of a hack ...
- */
-static int yy_did_buffer_switch_on_eof;
-
-static void yyrestart ( FILE *input_file  );
-static void yy_switch_to_buffer ( YY_BUFFER_STATE new_buffer  );
-static YY_BUFFER_STATE yy_create_buffer ( FILE *file, int size  );
-static void yy_delete_buffer ( YY_BUFFER_STATE b  );
-static void yy_flush_buffer ( YY_BUFFER_STATE b  );
-static void yypush_buffer_state ( YY_BUFFER_STATE new_buffer  );
-static void yypop_buffer_state ( void );
-
-static void yyensure_buffer_stack ( void );
-static void yy_load_buffer_state ( void );
-static void yy_init_buffer ( YY_BUFFER_STATE b, FILE *file  );
-#define YY_FLUSH_BUFFER yy_flush_buffer( YY_CURRENT_BUFFER )
-
-YY_BUFFER_STATE yy_scan_buffer ( char *base, yy_size_t size  );
-YY_BUFFER_STATE yy_scan_string ( const char *yy_str  );
-YY_BUFFER_STATE yy_scan_bytes ( const char *bytes, int len  );
 
 static void *yyalloc ( yy_size_t  );
 static void *yyrealloc ( void *, yy_size_t  );
@@ -321,24 +295,14 @@ static void yyfree ( void *  );
 #define YY_AT_BOL() (YY_CURRENT_BUFFER_LVALUE->yy_at_bol)
 
 /* Begin user sect3 */
-
-#define yywrap() (/*CONSTCOND*/1)
 #define YY_SKIP_YYWRAP
 typedef flex_uint8_t YY_CHAR;
 
-typedef int yy_state_type;
-
-static int yylineno = 1;
-
-#ifdef yytext_ptr
-#undef yytext_ptr
-#endif
 #define yytext_ptr yytext
 
-static yy_state_type yy_get_previous_state ( void );
-static yy_state_type yy_try_NUL_trans ( yy_state_type current_state  );
-static int yy_get_next_buffer ( void );
-static void yynoreturn yy_fatal_error ( const char* msg  );
+#include <FlexLexer.h>
+
+int yyFlexLexer::yywrap() { return 1; }
 
 /* Done after the current pattern has been matched and before the
  * corresponding action - sets up yytext.
@@ -663,11 +627,6 @@ static const flex_int16_t yy_chk[499] =
 
     } ;
 
-static yy_state_type yy_last_accepting_state;
-static char *yy_last_accepting_cpos;
-
-static int yy_flex_debug = 0;
-
 /* The intent behind this definition is that it'll catch
  * any uses of REJECT which flex missed.
  */
@@ -675,11 +634,11 @@ static int yy_flex_debug = 0;
 #define yymore() yymore_used_but_not_detected
 #define YY_MORE_ADJ 0
 #define YY_RESTORE_YY_MORE_OFFSET
-static char *yytext;
 #line 1 "pars0lex.l"
 /*****************************************************************************
 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024, Sunny Bains. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -714,7 +673,7 @@ Created 12/14/1997 Heikki Tuuri
 *******************************************************/
 #define YY_NO_INPUT 1
 #define YY_NO_UNISTD_H 1
-#line 53 "pars0lex.l"
+#line 55 "pars0lex.l"
 #define YYSTYPE que_node_t*
 
 #include "pars0pars.h"
@@ -729,35 +688,46 @@ Created 12/14/1997 Heikki Tuuri
 #define exit(A)        ut_error
 
 /* Note: We cast result from int to yy_size_t */
-#define YY_INPUT(buf, result, max_size) \
-        ((result) = pars_get_lex_chars(buf, max_size))
+#define YY_INPUT(buf, result, max_size) ((result) = pars_get_lex_chars(buf, max_size))
 
 /* String buffer for removing quotes */
-static ulint	stringbuf_len_alloc = 0; /* Allocated length */
-static ulint	stringbuf_len = 0; /* Current length */
-static char*	stringbuf; /* Start of buffer */
 
-/** Appends a string to the buffer. */
-static
-void
-string_append(
-	const char*	str,	/*!< in: string to be appended */
-	ulint		len)	/*!< in: length of the string */
-{
-	if (stringbuf == NULL) {
-		stringbuf = (char*) ut_new(1);
-		stringbuf_len_alloc = 1;
-	}
+/* Allocated length */
+static ulint stringbuf_len_alloc = 0;
 
-	if (stringbuf_len + len > stringbuf_len_alloc) {
-		while (stringbuf_len + len > stringbuf_len_alloc) {
-			stringbuf_len_alloc <<= 1;
-		}
-		stringbuf = (char*) ut_realloc(stringbuf, stringbuf_len_alloc);
-	}
+/* Current length */
+static ulint stringbuf_len = 0;
 
-	memcpy(stringbuf + stringbuf_len, str, len);
-	stringbuf_len += len;
+/* Start of buffer */
+static char* stringbuf;
+
+static yyFlexLexer *pars_scanner{};
+
+/**
+ * Appends a string to the buffer.
+ *
+ * @param[in] str String to be appended
+ * @param[in] len Length of string.
+ */
+static void string_append(const char* str, ulint len) {
+
+  // Disable compiler warning about unused variable.
+  (void) yyleng;
+
+  if (stringbuf == NULL) {
+    stringbuf = (char*) ut_new(1);
+    stringbuf_len_alloc = 1;
+  }
+
+  if (stringbuf_len + len > stringbuf_len_alloc) {
+    while (stringbuf_len + len > stringbuf_len_alloc) {
+      stringbuf_len_alloc <<= 1;
+    }
+    stringbuf = (char*) ut_realloc(stringbuf, stringbuf_len_alloc);
+  }
+
+  memcpy(stringbuf + stringbuf_len, str, len);
+  stringbuf_len += len;
 }
 
 void pars_lexer_var_init() {
@@ -770,9 +740,14 @@ void pars_lexer_var_init() {
   }
 }
 
-#line 781 "lexyy.cc"
+void create_pars_scanner() {
+ ut_a(pars_scanner == nullptr);
+ pars_scanner = new yyFlexLexer();
+}
 
-#line 783 "lexyy.cc"
+#line 749 "lexyy.cc"
+
+#line 751 "lexyy.cc"
 
 #define INITIAL 0
 #define comment 1
@@ -791,55 +766,6 @@ void pars_lexer_var_init() {
 #define YY_EXTRA_TYPE void *
 #endif
 
-static int yy_init_globals ( void );
-
-/* Accessor methods to globals.
-   These are made visible to non-reentrant scanners for convenience. */
-
-#define MY_ATTRIBUTE(a) __attribute__((unused))
-
-MY_ATTRIBUTE((unused)) static int yylex_destroy ( void );
-
-MY_ATTRIBUTE((unused)) static int yyget_debug ( void );
-
-MY_ATTRIBUTE((unused)) static void yyset_debug ( int debug_flag  );
-
-YY_EXTRA_TYPE yyget_extra ( void );
-
-// MY_ATTRIBUTE((unused)) static void yyset_extra ( YY_EXTRA_TYPE user_defined  );
-
-MY_ATTRIBUTE((unused)) static FILE *yyget_in ( void );
-
-MY_ATTRIBUTE((unused)) static void yyset_in  ( FILE * _in_str  );
-
-MY_ATTRIBUTE((unused)) static FILE *yyget_out ( void );
-
-MY_ATTRIBUTE((unused)) static void yyset_out  ( FILE * _out_str  );
-
-MY_ATTRIBUTE((unused)) static int yyget_leng ( void );
-
-MY_ATTRIBUTE((unused)) static char *yyget_text ( void );
-
-MY_ATTRIBUTE((unused)) static int yyget_lineno ( void );
-
-MY_ATTRIBUTE((unused)) static void yyset_lineno ( int _line_number  );
-
-/* Macros after this point can all be overridden by user definitions in
- * section 1.
- */
-
-#ifndef YY_SKIP_YYWRAP
-#ifdef __cplusplus
-extern "C" int yywrap ( void );
-#else
-extern int yywrap ( void );
-#endif
-#endif
-
-#ifndef YY_NO_UNPUT
-    
-#endif
-
 #ifndef yytext_ptr
 static void yy_flex_strncpy ( char *, const char *, int );
 #endif
@@ -849,11 +775,6 @@ static int yy_flex_strlen ( const char * );
 #endif
 
 #ifndef YY_NO_INPUT
-#ifdef __cplusplus
-static int yyinput ( void );
-#else
-static int input ( void );
-#endif
 
 #endif
 
@@ -869,10 +790,7 @@ static int input ( void );
 
 /* Copy whatever the last rule matched to the standard output. */
 #ifndef ECHO
-/* This used to be an fputs(), but since the string might contain NUL's,
- * we now use fwrite().
- */
-#define ECHO do { if (fwrite( yytext, (size_t) yyleng, 1, yyout )) {} } while (0)
+#define ECHO LexerOutput( yytext, yyleng )
 #endif
 
 /* Gets input and stuffs it into "buf".  number of characters read, or YY_NULL,
@@ -880,34 +798,9 @@ static int input ( void );
  */
 #ifndef YY_INPUT
 #define YY_INPUT(buf,result,max_size) \
-	if ( YY_CURRENT_BUFFER_LVALUE->yy_is_interactive ) \
-		{ \
-		int c = '*'; \
-		int n; \
-		for ( n = 0; n < max_size && \
-			     (c = getc( yyin )) != EOF && c != '\n'; ++n ) \
-			buf[n] = (char) c; \
-		if ( c == '\n' ) \
-			buf[n++] = (char) c; \
-		if ( c == EOF && ferror( yyin ) ) \
-			YY_FATAL_ERROR( "input in flex scanner failed" ); \
-		result = n; \
-		} \
-	else \
-		{ \
-		errno=0; \
-		while ( (result = (int) fread(buf, 1, (yy_size_t) max_size, yyin)) == 0 && ferror(yyin)) \
-			{ \
-			if( errno != EINTR) \
-				{ \
-				YY_FATAL_ERROR( "input in flex scanner failed" ); \
-				break; \
-				} \
-			errno=0; \
-			clearerr(yyin); \
-			} \
-		}\
 \
+	if ( (int)(result = LexerInput( (char *) buf, max_size )) < 0 ) \
+		YY_FATAL_ERROR( "input in flex scanner failed" );
 
 #endif
 
@@ -926,7 +819,7 @@ static int input ( void );
 
 /* Report a fatal error. */
 #ifndef YY_FATAL_ERROR
-#define YY_FATAL_ERROR(msg) yy_fatal_error( msg )
+#define YY_FATAL_ERROR(msg) LexerError( msg )
 #endif
 
 /* end tables serialization structures and prototypes */
@@ -936,10 +829,7 @@ static int input ( void );
  */
 #ifndef YY_DECL
 #define YY_DECL_IS_OURS 1
-
-int yylex ();
-
-#define YY_DECL int yylex ()
+#define YY_DECL int yyFlexLexer::yylex()
 #endif /* !YY_DECL */
 
 /* Code executed at the beginning of each rule, after yytext and yyleng
@@ -977,10 +867,10 @@ YY_DECL
 			(yy_start) = 1;	/* first start state */
 
 		if ( ! yyin )
-			yyin = stdin;
+			yyin.rdbuf(std::cin.rdbuf());
 
 		if ( ! yyout )
-			yyout = stdout;
+			yyout.rdbuf(std::cout.rdbuf());
 
 		if ( ! YY_CURRENT_BUFFER ) {
 			yyensure_buffer_stack ();
@@ -992,10 +882,10 @@ YY_DECL
 		}
 
 	{
-#line 118 "pars0lex.l"
+#line 136 "pars0lex.l"
 
 
-#line 1004 "lexyy.cc"
+#line 889 "lexyy.cc"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1050,933 +940,933 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 120 "pars0lex.l"
+#line 138 "pars0lex.l"
 {
-			yylval = sym_tab_add_int_lit(pars_sym_tab_global,
-								atoi(yytext));
-			return(PARS_INT_LIT);
+      yylval = sym_tab_add_int_lit(pars_sym_tab_global, atoi(YYText()));
+      return(PARS_INT_LIT);
 }
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 126 "pars0lex.l"
+#line 143 "pars0lex.l"
 {
-			ut_error;	/* not implemented */
+      ut_error;  /* not implemented */
 
-			return(PARS_FLOAT_LIT);
+      return(PARS_FLOAT_LIT);
 }
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 132 "pars0lex.l"
+#line 149 "pars0lex.l"
 {
-			ulint	type;
+      ulint  type;
 
-			yylval = sym_tab_add_bound_lit(pars_sym_tab_global,
-				yytext + 1, &type);
+      yylval = sym_tab_add_bound_lit(pars_sym_tab_global, YYText() + 1, &type);
 
-			return((int) type);
+      return((int) type);
 }
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 141 "pars0lex.l"
+#line 157 "pars0lex.l"
 {
-			yylval = sym_tab_add_bound_id(pars_sym_tab_global,
-				yytext + 1);
+      yylval = sym_tab_add_bound_id(pars_sym_tab_global, YYText() + 1);
 
-			return(PARS_ID_TOKEN);
+      return(PARS_ID_TOKEN);
 }
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 148 "pars0lex.l"
+#line 163 "pars0lex.l"
 {
 /* Quoted character string literals are handled in an explicit
 start state 'quoted'.  This state is entered and the buffer for
 the scanned string is emptied upon encountering a starting quote.
 
 In the state 'quoted', only two actions are possible (defined below). */
-			BEGIN(quoted);
-			stringbuf_len = 0;
+      BEGIN(quoted);
+      stringbuf_len = 0;
 }
 	YY_BREAK
 case 6:
 /* rule 6 can match eol */
 YY_RULE_SETUP
-#line 157 "pars0lex.l"
+#line 172 "pars0lex.l"
 {
-			/* Got a sequence of characters other than "'":
-			append to string buffer */
-			string_append(yytext, yyleng);
+      /* Got a sequence of characters other than "'":
+      append to string buffer */
+      string_append(YYText(), YYLeng());
 }
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 162 "pars0lex.l"
+#line 177 "pars0lex.l"
 {
-			/* Got a sequence of "'" characters:
-			append half of them to string buffer,
-			as "''" represents a single "'".
-			We apply truncating division,
-			so that "'''" will result in "'". */
+      /* Got a sequence of "'" characters:
+      append half of them to string buffer,
+      as "''" represents a single "'".
+      We apply truncating division,
+      so that "'''" will result in "'". */
 
-			string_append(yytext, yyleng / 2);
+      string_append(YYText(), YYLeng() / 2);
 
-			/* If we got an odd number of quotes, then the
-			last quote we got is the terminating quote.
-			At the end of the string, we return to the
-			initial start state and report the scanned
-			string literal. */
+      /* If we got an odd number of quotes, then the
+      last quote we got is the terminating quote.
+      At the end of the string, we return to the
+      initial start state and report the scanned
+      string literal. */
 
-			if (yyleng % 2) {
-				BEGIN(INITIAL);
-				yylval = sym_tab_add_str_lit(
-					pars_sym_tab_global,
-					(byte*) stringbuf, stringbuf_len);
-				return(PARS_STR_LIT);
-			}
+      if (YYLeng() % 2) {
+        BEGIN(INITIAL);
+        yylval = sym_tab_add_str_lit(
+          pars_sym_tab_global,
+          (byte*) stringbuf, stringbuf_len);
+        return(PARS_STR_LIT);
+      }
 }
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 186 "pars0lex.l"
+#line 201 "pars0lex.l"
 {
 /* Quoted identifiers are handled in an explicit start state 'id'.
 This state is entered and the buffer for the scanned string is emptied
 upon encountering a starting quote.
 
 In the state 'id', only two actions are possible (defined below). */
-			BEGIN(id);
-			stringbuf_len = 0;
+      BEGIN(id);
+      stringbuf_len = 0;
 }
 	YY_BREAK
 case 9:
 /* rule 9 can match eol */
 YY_RULE_SETUP
-#line 195 "pars0lex.l"
+#line 210 "pars0lex.l"
 {
-			/* Got a sequence of characters other than '"':
-			append to string buffer */
-			string_append(yytext, yyleng);
+      /* Got a sequence of characters other than '"':
+      append to string buffer */
+      string_append(YYText(), YYLeng());
 }
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 200 "pars0lex.l"
+#line 215 "pars0lex.l"
 {
-			/* Got a sequence of '"' characters:
-			append half of them to string buffer,
-			as '""' represents a single '"'.
-			We apply truncating division,
-			so that '"""' will result in '"'. */
+      /* Got a sequence of '"' characters:
+      append half of them to string buffer,
+      as '""' represents a single '"'.
+      We apply truncating division,
+      so that '"""' will result in '"'. */
 
-			string_append(yytext, yyleng / 2);
+      string_append(YYText(), YYLeng() / 2);
 
-			/* If we got an odd number of quotes, then the
-			last quote we got is the terminating quote.
-			At the end of the string, we return to the
-			initial start state and report the scanned
-			identifier. */
+      /* If we got an odd number of quotes, then the
+      last quote we got is the terminating quote.
+      At the end of the string, we return to the
+      initial start state and report the scanned
+      identifier. */
 
-			if (yyleng % 2) {
-				BEGIN(INITIAL);
-				yylval = sym_tab_add_id(
-					pars_sym_tab_global,
-					(byte*) stringbuf, stringbuf_len);
+      if (YYLeng() % 2) {
+        BEGIN(INITIAL);
+        yylval = sym_tab_add_id(
+          pars_sym_tab_global,
+          (byte*) stringbuf, stringbuf_len);
 
-				return(PARS_ID_TOKEN);
-			}
+        return(PARS_ID_TOKEN);
+      }
 }
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 225 "pars0lex.l"
+#line 240 "pars0lex.l"
 {
-			yylval = sym_tab_add_null_lit(pars_sym_tab_global);
+      yylval = sym_tab_add_null_lit(pars_sym_tab_global);
 
-			return(PARS_NULL_LIT);
+      return(PARS_NULL_LIT);
 }
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 231 "pars0lex.l"
+#line 246 "pars0lex.l"
 {
-			/* Implicit cursor name */
-			yylval = sym_tab_add_str_lit(pars_sym_tab_global,
-							(byte*) yytext, yyleng);
-			return(PARS_SQL_TOKEN);
+      /* Implicit cursor name */
+      yylval = sym_tab_add_str_lit(pars_sym_tab_global, (byte*) YYText(), YYLeng());
+      return(PARS_SQL_TOKEN);
 }
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 238 "pars0lex.l"
+#line 252 "pars0lex.l"
 {
-			return(PARS_AND_TOKEN);
+      return(PARS_AND_TOKEN);
 }
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 242 "pars0lex.l"
+#line 256 "pars0lex.l"
 {
-			return(PARS_OR_TOKEN);
+      return(PARS_OR_TOKEN);
 }
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 246 "pars0lex.l"
+#line 260 "pars0lex.l"
 {
-			return(PARS_NOT_TOKEN);
+      return(PARS_NOT_TOKEN);
 }
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 250 "pars0lex.l"
+#line 264 "pars0lex.l"
 {
-			return(PARS_PROCEDURE_TOKEN);
+      return(PARS_PROCEDURE_TOKEN);
 }
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 254 "pars0lex.l"
+#line 268 "pars0lex.l"
 {
-			return(PARS_IN_TOKEN);
+      return(PARS_IN_TOKEN);
 }
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 258 "pars0lex.l"
+#line 272 "pars0lex.l"
 {
-			return(PARS_OUT_TOKEN);
+      return(PARS_OUT_TOKEN);
 }
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 262 "pars0lex.l"
+#line 276 "pars0lex.l"
 {
-	 		return(PARS_BINARY_TOKEN);
+       return(PARS_BINARY_TOKEN);
 }
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 266 "pars0lex.l"
+#line 280 "pars0lex.l"
 {
-	 		return(PARS_BLOB_TOKEN);
+       return(PARS_BLOB_TOKEN);
 }
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
-#line 270 "pars0lex.l"
+#line 284 "pars0lex.l"
 {
-	 		return(PARS_INT_TOKEN);
+       return(PARS_INT_TOKEN);
 }
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 274 "pars0lex.l"
+#line 288 "pars0lex.l"
 {
-	 		return(PARS_INT_TOKEN);
+       return(PARS_INT_TOKEN);
 }
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
-#line 278 "pars0lex.l"
+#line 292 "pars0lex.l"
 {
-	 		return(PARS_FLOAT_TOKEN);
+       return(PARS_FLOAT_TOKEN);
 }
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
-#line 282 "pars0lex.l"
+#line 296 "pars0lex.l"
 {
-	 		return(PARS_CHAR_TOKEN);
+       return(PARS_CHAR_TOKEN);
 }
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
-#line 286 "pars0lex.l"
+#line 300 "pars0lex.l"
 {
-			return(PARS_IS_TOKEN);
+      return(PARS_IS_TOKEN);
 }
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
-#line 290 "pars0lex.l"
+#line 304 "pars0lex.l"
 {
-			return(PARS_BEGIN_TOKEN);
+      return(PARS_BEGIN_TOKEN);
 }
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
-#line 294 "pars0lex.l"
+#line 308 "pars0lex.l"
 {
-			return(PARS_END_TOKEN);
+      return(PARS_END_TOKEN);
 }
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
-#line 298 "pars0lex.l"
+#line 312 "pars0lex.l"
 {
-			return(PARS_IF_TOKEN);
+      return(PARS_IF_TOKEN);
 }
 	YY_BREAK
 case 29:
 YY_RULE_SETUP
-#line 302 "pars0lex.l"
+#line 316 "pars0lex.l"
 {
-			return(PARS_THEN_TOKEN);
+      return(PARS_THEN_TOKEN);
 }
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
-#line 306 "pars0lex.l"
+#line 320 "pars0lex.l"
 {
-			return(PARS_ELSE_TOKEN);
+      return(PARS_ELSE_TOKEN);
 }
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
-#line 310 "pars0lex.l"
+#line 324 "pars0lex.l"
 {
-			return(PARS_ELSIF_TOKEN);
+      return(PARS_ELSIF_TOKEN);
 }
 	YY_BREAK
 case 32:
 YY_RULE_SETUP
-#line 314 "pars0lex.l"
+#line 328 "pars0lex.l"
 {
-			return(PARS_LOOP_TOKEN);
+      return(PARS_LOOP_TOKEN);
 }
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
-#line 318 "pars0lex.l"
+#line 332 "pars0lex.l"
 {
-			return(PARS_WHILE_TOKEN);
+      return(PARS_WHILE_TOKEN);
 }
 	YY_BREAK
 case 34:
 YY_RULE_SETUP
-#line 322 "pars0lex.l"
+#line 336 "pars0lex.l"
 {
-			return(PARS_RETURN_TOKEN);
+      return(PARS_RETURN_TOKEN);
 }
 	YY_BREAK
 case 35:
 YY_RULE_SETUP
-#line 326 "pars0lex.l"
+#line 340 "pars0lex.l"
 {
-			return(PARS_SELECT_TOKEN);
+      return(PARS_SELECT_TOKEN);
 }
 	YY_BREAK
 case 36:
 YY_RULE_SETUP
-#line 330 "pars0lex.l"
+#line 344 "pars0lex.l"
 {
-			return(PARS_SUM_TOKEN);
+      return(PARS_SUM_TOKEN);
 }
 	YY_BREAK
 case 37:
 YY_RULE_SETUP
-#line 334 "pars0lex.l"
+#line 348 "pars0lex.l"
 {
-			return(PARS_COUNT_TOKEN);
+      return(PARS_COUNT_TOKEN);
 }
 	YY_BREAK
 case 38:
 YY_RULE_SETUP
-#line 338 "pars0lex.l"
+#line 352 "pars0lex.l"
 {
-			return(PARS_DISTINCT_TOKEN);
+      return(PARS_DISTINCT_TOKEN);
 }
 	YY_BREAK
 case 39:
 YY_RULE_SETUP
-#line 342 "pars0lex.l"
+#line 356 "pars0lex.l"
 {
-			return(PARS_FROM_TOKEN);
+      return(PARS_FROM_TOKEN);
 }
 	YY_BREAK
 case 40:
 YY_RULE_SETUP
-#line 346 "pars0lex.l"
+#line 360 "pars0lex.l"
 {
-			return(PARS_WHERE_TOKEN);
+      return(PARS_WHERE_TOKEN);
 }
 	YY_BREAK
 case 41:
 YY_RULE_SETUP
-#line 350 "pars0lex.l"
+#line 364 "pars0lex.l"
 {
-			return(PARS_FOR_TOKEN);
+      return(PARS_FOR_TOKEN);
 }
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
-#line 354 "pars0lex.l"
+#line 368 "pars0lex.l"
 {
-			return(PARS_READ_TOKEN);
+      return(PARS_READ_TOKEN);
 }
 	YY_BREAK
 case 43:
 YY_RULE_SETUP
-#line 358 "pars0lex.l"
+#line 372 "pars0lex.l"
 {
-			return(PARS_ORDER_TOKEN);
+      return(PARS_ORDER_TOKEN);
 }
 	YY_BREAK
 case 44:
 YY_RULE_SETUP
-#line 362 "pars0lex.l"
+#line 376 "pars0lex.l"
 {
-			return(PARS_BY_TOKEN);
+      return(PARS_BY_TOKEN);
 }
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
-#line 366 "pars0lex.l"
+#line 380 "pars0lex.l"
 {
-			return(PARS_ASC_TOKEN);
+      return(PARS_ASC_TOKEN);
 }
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
-#line 370 "pars0lex.l"
+#line 384 "pars0lex.l"
 {
-			return(PARS_DESC_TOKEN);
+      return(PARS_DESC_TOKEN);
 }
 	YY_BREAK
 case 47:
 YY_RULE_SETUP
-#line 374 "pars0lex.l"
+#line 388 "pars0lex.l"
 {
-			return(PARS_INSERT_TOKEN);
+      return(PARS_INSERT_TOKEN);
 }
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
-#line 378 "pars0lex.l"
+#line 392 "pars0lex.l"
 {
-			return(PARS_INTO_TOKEN);
+      return(PARS_INTO_TOKEN);
 }
 	YY_BREAK
 case 49:
 YY_RULE_SETUP
-#line 382 "pars0lex.l"
+#line 396 "pars0lex.l"
 {
-			return(PARS_VALUES_TOKEN);
+      return(PARS_VALUES_TOKEN);
 }
 	YY_BREAK
 case 50:
 YY_RULE_SETUP
-#line 386 "pars0lex.l"
+#line 400 "pars0lex.l"
 {
-			return(PARS_UPDATE_TOKEN);
+      return(PARS_UPDATE_TOKEN);
 }
 	YY_BREAK
 case 51:
 YY_RULE_SETUP
-#line 390 "pars0lex.l"
+#line 404 "pars0lex.l"
 {
-			return(PARS_SET_TOKEN);
+      return(PARS_SET_TOKEN);
 }
 	YY_BREAK
 case 52:
 YY_RULE_SETUP
-#line 394 "pars0lex.l"
+#line 408 "pars0lex.l"
 {
-			return(PARS_DELETE_TOKEN);
+      return(PARS_DELETE_TOKEN);
 }
 	YY_BREAK
 case 53:
 YY_RULE_SETUP
-#line 398 "pars0lex.l"
+#line 412 "pars0lex.l"
 {
-			return(PARS_CURRENT_TOKEN);
+      return(PARS_CURRENT_TOKEN);
 }
 	YY_BREAK
 case 54:
 YY_RULE_SETUP
-#line 402 "pars0lex.l"
+#line 416 "pars0lex.l"
 {
-			return(PARS_OF_TOKEN);
+      return(PARS_OF_TOKEN);
 }
 	YY_BREAK
 case 55:
 YY_RULE_SETUP
-#line 406 "pars0lex.l"
+#line 420 "pars0lex.l"
 {
-			return(PARS_CREATE_TOKEN);
+      return(PARS_CREATE_TOKEN);
 }
 	YY_BREAK
 case 56:
 YY_RULE_SETUP
-#line 410 "pars0lex.l"
+#line 424 "pars0lex.l"
 {
-			return(PARS_TABLE_TOKEN);
+      return(PARS_TABLE_TOKEN);
 }
 	YY_BREAK
 case 57:
 YY_RULE_SETUP
-#line 414 "pars0lex.l"
+#line 428 "pars0lex.l"
 {
-	 		return(PARS_INDEX_TOKEN);
+       return(PARS_INDEX_TOKEN);
 }
 	YY_BREAK
 case 58:
 YY_RULE_SETUP
-#line 418 "pars0lex.l"
+#line 432 "pars0lex.l"
 {
-	 		return(PARS_UNIQUE_TOKEN);
+       return(PARS_UNIQUE_TOKEN);
 }
 	YY_BREAK
 case 59:
 YY_RULE_SETUP
-#line 422 "pars0lex.l"
+#line 436 "pars0lex.l"
 {
-	 		return(PARS_CLUSTERED_TOKEN);
+       return(PARS_CLUSTERED_TOKEN);
 }
 	YY_BREAK
 case 60:
 YY_RULE_SETUP
-#line 426 "pars0lex.l"
+#line 440 "pars0lex.l"
 {
-			return(PARS_DOES_NOT_FIT_IN_MEM_TOKEN);
+      return(PARS_DOES_NOT_FIT_IN_MEM_TOKEN);
 }
 	YY_BREAK
 case 61:
 YY_RULE_SETUP
-#line 430 "pars0lex.l"
+#line 444 "pars0lex.l"
 {
-	 		return(PARS_ON_TOKEN);
+       return(PARS_ON_TOKEN);
 }
 	YY_BREAK
 case 62:
 YY_RULE_SETUP
-#line 434 "pars0lex.l"
+#line 448 "pars0lex.l"
 {
-			return(PARS_DECLARE_TOKEN);
+      return(PARS_DECLARE_TOKEN);
 }
 	YY_BREAK
 case 63:
 YY_RULE_SETUP
-#line 438 "pars0lex.l"
+#line 452 "pars0lex.l"
 {
-			return(PARS_CURSOR_TOKEN);
+      return(PARS_CURSOR_TOKEN);
 }
 	YY_BREAK
 case 64:
 YY_RULE_SETUP
-#line 442 "pars0lex.l"
+#line 456 "pars0lex.l"
 {
-			return(PARS_OPEN_TOKEN);
+      return(PARS_OPEN_TOKEN);
 }
 	YY_BREAK
 case 65:
 YY_RULE_SETUP
-#line 446 "pars0lex.l"
+#line 460 "pars0lex.l"
 {
-			return(PARS_FETCH_TOKEN);
+      return(PARS_FETCH_TOKEN);
 }
 	YY_BREAK
 case 66:
 YY_RULE_SETUP
-#line 450 "pars0lex.l"
+#line 464 "pars0lex.l"
 {
-			return(PARS_CLOSE_TOKEN);
+      return(PARS_CLOSE_TOKEN);
 }
 	YY_BREAK
 case 67:
 YY_RULE_SETUP
-#line 454 "pars0lex.l"
+#line 468 "pars0lex.l"
 {
-			return(PARS_NOTFOUND_TOKEN);
+      return(PARS_NOTFOUND_TOKEN);
 }
 	YY_BREAK
 case 68:
 YY_RULE_SETUP
-#line 458 "pars0lex.l"
+#line 472 "pars0lex.l"
 {
-			return(PARS_TO_CHAR_TOKEN);
+      return(PARS_TO_CHAR_TOKEN);
 }
 	YY_BREAK
 case 69:
 YY_RULE_SETUP
-#line 462 "pars0lex.l"
+#line 476 "pars0lex.l"
 {
-			return(PARS_TO_NUMBER_TOKEN);
+      return(PARS_TO_NUMBER_TOKEN);
 }
 	YY_BREAK
 case 70:
 YY_RULE_SETUP
-#line 466 "pars0lex.l"
+#line 480 "pars0lex.l"
 {
-			return(PARS_TO_BINARY_TOKEN);
+      return(PARS_TO_BINARY_TOKEN);
 }
 	YY_BREAK
 case 71:
 YY_RULE_SETUP
-#line 470 "pars0lex.l"
+#line 484 "pars0lex.l"
 {
-			return(PARS_BINARY_TO_NUMBER_TOKEN);
+      return(PARS_BINARY_TO_NUMBER_TOKEN);
 }
 	YY_BREAK
 case 72:
 YY_RULE_SETUP
-#line 474 "pars0lex.l"
+#line 488 "pars0lex.l"
 {
-			return(PARS_SUBSTR_TOKEN);
+      return(PARS_SUBSTR_TOKEN);
 }
 	YY_BREAK
 case 73:
 YY_RULE_SETUP
-#line 478 "pars0lex.l"
+#line 492 "pars0lex.l"
 {
-			return(PARS_REPLSTR_TOKEN);
+      return(PARS_REPLSTR_TOKEN);
 }
 	YY_BREAK
 case 74:
 YY_RULE_SETUP
-#line 482 "pars0lex.l"
+#line 496 "pars0lex.l"
 {
-			return(PARS_CONCAT_TOKEN);
+      return(PARS_CONCAT_TOKEN);
 }
 	YY_BREAK
 case 75:
 YY_RULE_SETUP
-#line 486 "pars0lex.l"
+#line 500 "pars0lex.l"
 {
-			return(PARS_INSTR_TOKEN);
+      return(PARS_INSTR_TOKEN);
 }
 	YY_BREAK
 case 76:
 YY_RULE_SETUP
-#line 490 "pars0lex.l"
+#line 504 "pars0lex.l"
 {
-			return(PARS_LENGTH_TOKEN);
+      return(PARS_LENGTH_TOKEN);
 }
 	YY_BREAK
 case 77:
 YY_RULE_SETUP
-#line 494 "pars0lex.l"
+#line 508 "pars0lex.l"
 {
-			return(PARS_SYSDATE_TOKEN);
+      return(PARS_SYSDATE_TOKEN);
 }
 	YY_BREAK
 case 78:
 YY_RULE_SETUP
-#line 498 "pars0lex.l"
+#line 512 "pars0lex.l"
 {
-			return(PARS_PRINTF_TOKEN);
+      return(PARS_PRINTF_TOKEN);
 }
 	YY_BREAK
 case 79:
 YY_RULE_SETUP
-#line 502 "pars0lex.l"
+#line 516 "pars0lex.l"
 {
-			return(PARS_ASSERT_TOKEN);
+      return(PARS_ASSERT_TOKEN);
 }
 	YY_BREAK
 case 80:
 YY_RULE_SETUP
-#line 506 "pars0lex.l"
+#line 520 "pars0lex.l"
 {
-			return(PARS_RND_TOKEN);
+      return(PARS_RND_TOKEN);
 }
 	YY_BREAK
 case 81:
 YY_RULE_SETUP
-#line 510 "pars0lex.l"
+#line 524 "pars0lex.l"
 {
-			return(PARS_RND_STR_TOKEN);
+      return(PARS_RND_STR_TOKEN);
 }
 	YY_BREAK
 case 82:
 YY_RULE_SETUP
-#line 514 "pars0lex.l"
+#line 528 "pars0lex.l"
 {
-			return(PARS_ROW_PRINTF_TOKEN);
+      return(PARS_ROW_PRINTF_TOKEN);
 }
 	YY_BREAK
 case 83:
 YY_RULE_SETUP
-#line 518 "pars0lex.l"
+#line 532 "pars0lex.l"
 {
-			return(PARS_COMMIT_TOKEN);
+      return(PARS_COMMIT_TOKEN);
 }
 	YY_BREAK
 case 84:
 YY_RULE_SETUP
-#line 522 "pars0lex.l"
+#line 536 "pars0lex.l"
 {
-			return(PARS_ROLLBACK_TOKEN);
+      return(PARS_ROLLBACK_TOKEN);
 }
 	YY_BREAK
 case 85:
 YY_RULE_SETUP
-#line 526 "pars0lex.l"
+#line 540 "pars0lex.l"
 {
-			return(PARS_WORK_TOKEN);
+      return(PARS_WORK_TOKEN);
 }
 	YY_BREAK
 case 86:
 YY_RULE_SETUP
-#line 530 "pars0lex.l"
+#line 544 "pars0lex.l"
 {
-			return(PARS_UNSIGNED_TOKEN);
+      return(PARS_UNSIGNED_TOKEN);
 }
 	YY_BREAK
 case 87:
 YY_RULE_SETUP
-#line 534 "pars0lex.l"
+#line 548 "pars0lex.l"
 {
-			return(PARS_EXIT_TOKEN);
+      return(PARS_EXIT_TOKEN);
 }
 	YY_BREAK
 case 88:
 YY_RULE_SETUP
-#line 538 "pars0lex.l"
+#line 552 "pars0lex.l"
 {
-			return(PARS_FUNCTION_TOKEN);
+      return(PARS_FUNCTION_TOKEN);
 }
 	YY_BREAK
 case 89:
 YY_RULE_SETUP
-#line 542 "pars0lex.l"
+#line 556 "pars0lex.l"
 {
-			return(PARS_LOCK_TOKEN);
+      return(PARS_LOCK_TOKEN);
 }
 	YY_BREAK
 case 90:
 YY_RULE_SETUP
-#line 546 "pars0lex.l"
+#line 560 "pars0lex.l"
 {
-			return(PARS_SHARE_TOKEN);
+      return(PARS_SHARE_TOKEN);
 }
 	YY_BREAK
 case 91:
 YY_RULE_SETUP
-#line 550 "pars0lex.l"
+#line 564 "pars0lex.l"
 {
-			return(PARS_MODE_TOKEN);
+      return(PARS_MODE_TOKEN);
 }
 	YY_BREAK
 case 92:
 YY_RULE_SETUP
-#line 554 "pars0lex.l"
+#line 568 "pars0lex.l"
 {
-			yylval = sym_tab_add_id(pars_sym_tab_global,
-							(byte*)yytext,
-							strlen(yytext));
-			return(PARS_ID_TOKEN);
+      yylval = sym_tab_add_id(pars_sym_tab_global,
+              (byte*)YYText(),
+              strlen(YYText()));
+      return(PARS_ID_TOKEN);
 }
 	YY_BREAK
 case 93:
 YY_RULE_SETUP
-#line 561 "pars0lex.l"
+#line 575 "pars0lex.l"
 {
-			return(PARS_DDOT_TOKEN);
+      return(PARS_DDOT_TOKEN);
 }
 	YY_BREAK
 case 94:
 YY_RULE_SETUP
-#line 565 "pars0lex.l"
+#line 579 "pars0lex.l"
 {
-			return(PARS_ASSIGN_TOKEN);
+      return(PARS_ASSIGN_TOKEN);
 }
 	YY_BREAK
 case 95:
 YY_RULE_SETUP
-#line 569 "pars0lex.l"
+#line 583 "pars0lex.l"
 {
-			return(PARS_LE_TOKEN);
+      return(PARS_LE_TOKEN);
 }
 	YY_BREAK
 case 96:
 YY_RULE_SETUP
-#line 573 "pars0lex.l"
+#line 587 "pars0lex.l"
 {
-			return(PARS_GE_TOKEN);
+      return(PARS_GE_TOKEN);
 }
 	YY_BREAK
 case 97:
 YY_RULE_SETUP
-#line 577 "pars0lex.l"
+#line 591 "pars0lex.l"
 {
-			return(PARS_NE_TOKEN);
+      return(PARS_NE_TOKEN);
 }
 	YY_BREAK
 case 98:
 YY_RULE_SETUP
-#line 581 "pars0lex.l"
+#line 595 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 99:
 YY_RULE_SETUP
-#line 586 "pars0lex.l"
+#line 600 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 100:
 YY_RULE_SETUP
-#line 591 "pars0lex.l"
+#line 605 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 101:
 YY_RULE_SETUP
-#line 596 "pars0lex.l"
+#line 610 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 102:
 YY_RULE_SETUP
-#line 601 "pars0lex.l"
+#line 615 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 103:
 YY_RULE_SETUP
-#line 606 "pars0lex.l"
+#line 620 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 104:
 YY_RULE_SETUP
-#line 611 "pars0lex.l"
+#line 625 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 105:
 YY_RULE_SETUP
-#line 616 "pars0lex.l"
+#line 630 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 106:
 YY_RULE_SETUP
-#line 621 "pars0lex.l"
+#line 635 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 107:
 YY_RULE_SETUP
-#line 626 "pars0lex.l"
+#line 640 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 108:
 YY_RULE_SETUP
-#line 631 "pars0lex.l"
+#line 645 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 109:
 YY_RULE_SETUP
-#line 636 "pars0lex.l"
+#line 650 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 110:
 YY_RULE_SETUP
-#line 641 "pars0lex.l"
+#line 655 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 111:
 YY_RULE_SETUP
-#line 646 "pars0lex.l"
+#line 660 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 112:
 YY_RULE_SETUP
-#line 651 "pars0lex.l"
+#line 665 "pars0lex.l"
 {
 
-			return((int)(*yytext));
+      return((int)(*YYText()));
 }
 	YY_BREAK
 case 113:
 YY_RULE_SETUP
-#line 656 "pars0lex.l"
+#line 670 "pars0lex.l"
 BEGIN(comment); /* eat up comment */
 	YY_BREAK
 case 114:
 /* rule 114 can match eol */
 YY_RULE_SETUP
-#line 658 "pars0lex.l"
+#line 672 "pars0lex.l"
 
 	YY_BREAK
 case 115:
 /* rule 115 can match eol */
 YY_RULE_SETUP
-#line 659 "pars0lex.l"
+#line 673 "pars0lex.l"
 
 	YY_BREAK
 case 116:
 YY_RULE_SETUP
-#line 660 "pars0lex.l"
+#line 674 "pars0lex.l"
 BEGIN(INITIAL);
 	YY_BREAK
 case 117:
 /* rule 117 can match eol */
 YY_RULE_SETUP
-#line 662 "pars0lex.l"
+#line 676 "pars0lex.l"
 /* eat up whitespace */
 	YY_BREAK
 case 118:
 YY_RULE_SETUP
-#line 665 "pars0lex.l"
+#line 679 "pars0lex.l"
 {
-			fprintf(stderr,"Unrecognized character: %02x\n",
-				*yytext);
+      log_err(std::format("Unrecognized character: {:x}\n", *YYText()));
 
-			ut_error;
+      ut_error;
 
-			return(0);
+      return(0);
 }
 	YY_BREAK
-case 119:
-YY_RULE_SETUP
-#line 674 "pars0lex.l"
-YY_FATAL_ERROR( "flex scanner jammed" );
-	YY_BREAK
-#line 1980 "lexyy.cc"
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(comment):
 case YY_STATE_EOF(quoted):
 case YY_STATE_EOF(id):
-	yyterminate();
+#line 687 "pars0lex.l"
+{
+  pars_lexer_close();
+  return 0;
+}
+	YY_BREAK
+case 119:
+YY_RULE_SETUP
+#line 692 "pars0lex.l"
+YY_FATAL_ERROR( "flex scanner jammed" );
+	YY_BREAK
+#line 1870 "lexyy.cc"
 
 	case YY_END_OF_BUFFER:
 		{
@@ -1999,7 +1889,7 @@ case YY_STATE_EOF(id):
 			 * back-up) that will match for the new input source.
 			 */
 			(yy_n_chars) = YY_CURRENT_BUFFER_LVALUE->yy_n_chars;
-			YY_CURRENT_BUFFER_LVALUE->yy_input_file = yyin;
+			YY_CURRENT_BUFFER_LVALUE->yy_input_file = yyin.rdbuf();
 			YY_CURRENT_BUFFER_LVALUE->yy_buffer_status = YY_BUFFER_NORMAL;
 			}
 
@@ -2109,6 +1999,126 @@ case YY_STATE_EOF(id):
 	} /* end of user's declarations */
 } /* end of yylex */
 
+/* The contents of this function are C++ specific, so the () macro is not used.
+ * This constructor simply maintains backward compatibility.
+ * DEPRECATED
+ */
+yyFlexLexer::yyFlexLexer( std::istream* arg_yyin, std::ostream* arg_yyout ):
+	yyin(arg_yyin ? arg_yyin->rdbuf() : std::cin.rdbuf()),
+	yyout(arg_yyout ? arg_yyout->rdbuf() : std::cout.rdbuf())
+{
+	ctor_common();
+}
+
+/* The contents of this function are C++ specific, so the () macro is not used.
+ */
+yyFlexLexer::yyFlexLexer( std::istream& arg_yyin, std::ostream& arg_yyout ):
+	yyin(arg_yyin.rdbuf()),
+	yyout(arg_yyout.rdbuf())
+{
+	ctor_common();
+}
+
+/* The contents of this function are C++ specific, so the () macro is not used.
+ */
+void yyFlexLexer::ctor_common()
+{
+	yy_c_buf_p = 0;
+	yy_init = 0;
+	yy_start = 0;
+	yy_flex_debug = 0;
+	yylineno = 1;	// this will only get updated if %option yylineno
+
+	yy_did_buffer_switch_on_eof = 0;
+
+	yy_looking_for_trail_begin = 0;
+	yy_more_flag = 0;
+	yy_more_len = 0;
+	yy_more_offset = yy_prev_more_offset = 0;
+
+	yy_start_stack_ptr = yy_start_stack_depth = 0;
+	yy_start_stack = NULL;
+
+	yy_buffer_stack = NULL;
+	yy_buffer_stack_top = 0;
+	yy_buffer_stack_max = 0;
+
+	yy_state_buf = 0;
+
+}
+
+/* The contents of this function are C++ specific, so the () macro is not used.
+ */
+yyFlexLexer::~yyFlexLexer()
+{
+	delete [] yy_state_buf;
+	yyfree( yy_start_stack  );
+	yy_delete_buffer( YY_CURRENT_BUFFER );
+	yyfree( yy_buffer_stack  );
+}
+
+/* The contents of this function are C++ specific, so the () macro is not used.
+ */
+void yyFlexLexer::switch_streams( std::istream& new_in, std::ostream& new_out )
+{
+	// was if( new_in )
+	yy_delete_buffer( YY_CURRENT_BUFFER );
+	yy_switch_to_buffer( yy_create_buffer( new_in, YY_BUF_SIZE  ) );
+
+	// was if( new_out )
+	yyout.rdbuf(new_out.rdbuf());
+}
+
+/* The contents of this function are C++ specific, so the () macro is not used.
+ */
+void yyFlexLexer::switch_streams( std::istream* new_in, std::ostream* new_out )
+{
+	if( ! new_in ) {
+		new_in = &yyin;
+	}
+
+	if ( ! new_out ) {
+		new_out = &yyout;
+	}
+
+	switch_streams(*new_in, *new_out);
+}
+
+#ifdef YY_INTERACTIVE
+int yyFlexLexer::LexerInput( char* buf, int /* max_size */ )
+#else
+int yyFlexLexer::LexerInput( char* buf, int max_size )
+#endif
+{
+	if ( yyin.eof() || yyin.fail() )
+		return 0;
+
+#ifdef YY_INTERACTIVE
+	yyin.get( buf[0] );
+
+	if ( yyin.eof() )
+		return 0;
+
+	if ( yyin.bad() )
+		return -1;
+
+	return 1;
+
+#else
+	(void) yyin.read( buf, max_size );
+
+	if ( yyin.bad() )
+		return -1;
+	else
+		return yyin.gcount();
+#endif
+}
+
+void yyFlexLexer::LexerOutput( const char* buf, int size )
+{
+	(void) yyout.write( buf, size );
+}
+
 /* yy_get_next_buffer - try to read in a new buffer
  *
  * Returns a code representing an action:
@@ -2116,7 +2126,7 @@ case YY_STATE_EOF(id):
  *	EOB_ACT_CONTINUE_SCAN - continue scanning from current position
  *	EOB_ACT_END_OF_FILE - end of file
  */
-static int yy_get_next_buffer (void)
+int yyFlexLexer::yy_get_next_buffer()
 {
     	char *dest = YY_CURRENT_BUFFER_LVALUE->yy_ch_buf;
 	char *source = (yytext_ptr);
@@ -2254,7 +2264,7 @@ static int yy_get_next_buffer (void)
 
 /* yy_get_previous_state - get the state just before the EOB char was reached */
 
-    static yy_state_type yy_get_previous_state (void)
+    yy_state_type yyFlexLexer::yy_get_previous_state()
 {
 	yy_state_type yy_current_state;
 	char *yy_cp;
@@ -2286,7 +2296,7 @@ static int yy_get_next_buffer (void)
  * synopsis
  *	next_state = yy_try_NUL_trans( current_state );
  */
-    static yy_state_type yy_try_NUL_trans  (yy_state_type yy_current_state )
+    yy_state_type yyFlexLexer::yy_try_NUL_trans( yy_state_type yy_current_state )
 {
 	int yy_is_jam;
     	char *yy_cp = (yy_c_buf_p);
@@ -2310,16 +2320,45 @@ static int yy_get_next_buffer (void)
 }
 
 #ifndef YY_NO_UNPUT
+    void yyFlexLexer::yyunput( int c, char* yy_bp)
+{
+	char *yy_cp;
+    
+    yy_cp = (yy_c_buf_p);
 
+	/* undo effects of setting up yytext */
+	*yy_cp = (yy_hold_char);
+
+	if ( yy_cp < YY_CURRENT_BUFFER_LVALUE->yy_ch_buf + 2 )
+		{ /* need to shift things up to make room */
+		/* +2 for EOB chars. */
+		int number_to_move = (yy_n_chars) + 2;
+		char *dest = &YY_CURRENT_BUFFER_LVALUE->yy_ch_buf[
+					YY_CURRENT_BUFFER_LVALUE->yy_buf_size + 2];
+		char *source =
+				&YY_CURRENT_BUFFER_LVALUE->yy_ch_buf[number_to_move];
+
+		while ( source > YY_CURRENT_BUFFER_LVALUE->yy_ch_buf )
+			*--dest = *--source;
+
+		yy_cp += (int) (dest - source);
+		yy_bp += (int) (dest - source);
+		YY_CURRENT_BUFFER_LVALUE->yy_n_chars =
+			(yy_n_chars) = (int) YY_CURRENT_BUFFER_LVALUE->yy_buf_size;
+
+		if ( yy_cp < YY_CURRENT_BUFFER_LVALUE->yy_ch_buf + 2 )
+			YY_FATAL_ERROR( "flex scanner push-back overflow" );
+		}
+
+	*--yy_cp = (char) c;
+
+	(yytext_ptr) = yy_bp;
+	(yy_hold_char) = *yy_cp;
+	(yy_c_buf_p) = yy_cp;
+}
 #endif
 
-#ifndef YY_NO_INPUT
-#ifdef __cplusplus
-    static int yyinput (void)
-#else
-    static int input  (void)
-#endif
-
+    int yyFlexLexer::yyinput()
 {
 	int c;
     
@@ -2385,14 +2424,13 @@ static int yy_get_next_buffer (void)
 
 	return c;
 }
-#endif	/* ifndef YY_NO_INPUT */
 
 /** Immediately switch to a different input stream.
  * @param input_file A readable stream.
  * 
  * @note This function does not reset the start condition to @c INITIAL .
  */
-    static void yyrestart  (FILE * input_file )
+    void yyFlexLexer::yyrestart( std::istream& input_file )
 {
     
 	if ( ! YY_CURRENT_BUFFER ){
@@ -2405,11 +2443,24 @@ static int yy_get_next_buffer (void)
 	yy_load_buffer_state(  );
 }
 
+/** Delegate to the new version that takes an istream reference.
+ * @param input_file A readable stream.
+ * 
+ * @note This function does not reset the start condition to @c INITIAL .
+ */
+void yyFlexLexer::yyrestart( std::istream* input_file )
+{
+	if( ! input_file ) {
+		input_file = &yyin;
+	}
+	yyrestart( *input_file );
+}
+
 /** Switch to a different input buffer.
  * @param new_buffer The new input buffer.
  * 
  */
-    MY_ATTRIBUTE((unused)) static void yy_switch_to_buffer  (YY_BUFFER_STATE  new_buffer )
+    void yyFlexLexer::yy_switch_to_buffer( YY_BUFFER_STATE new_buffer )
 {
     
 	/* TODO. We should be able to replace this entire function body
@@ -2440,11 +2491,11 @@ static int yy_get_next_buffer (void)
 	(yy_did_buffer_switch_on_eof) = 1;
 }
 
-static void yy_load_buffer_state  (void)
+    void yyFlexLexer::yy_load_buffer_state()
 {
     	(yy_n_chars) = YY_CURRENT_BUFFER_LVALUE->yy_n_chars;
 	(yytext_ptr) = (yy_c_buf_p) = YY_CURRENT_BUFFER_LVALUE->yy_buf_pos;
-	yyin = YY_CURRENT_BUFFER_LVALUE->yy_input_file;
+	yyin.rdbuf(YY_CURRENT_BUFFER_LVALUE->yy_input_file);
 	(yy_hold_char) = *(yy_c_buf_p);
 }
 
@@ -2454,7 +2505,7 @@ static void yy_load_buffer_state  (void)
  * 
  * @return the allocated buffer state.
  */
-    static YY_BUFFER_STATE yy_create_buffer  (FILE * file, int  size )
+    YY_BUFFER_STATE yyFlexLexer::yy_create_buffer( std::istream& file, int size )
 {
 	YY_BUFFER_STATE b;
     
@@ -2478,11 +2529,22 @@ static void yy_load_buffer_state  (void)
 	return b;
 }
 
+/** Delegate creation of buffers to the new version that takes an istream reference.
+ * @param file A readable stream.
+ * @param size The character buffer size in bytes. When in doubt, use @c YY_BUF_SIZE.
+ * 
+ * @return the allocated buffer state.
+ */
+	YY_BUFFER_STATE yyFlexLexer::yy_create_buffer( std::istream* file, int size )
+{
+	return yy_create_buffer( *file, size );
+}
+
 /** Destroy the buffer.
  * @param b a buffer created with yy_create_buffer()
  * 
  */
-    static void yy_delete_buffer (YY_BUFFER_STATE  b )
+    void yyFlexLexer::yy_delete_buffer( YY_BUFFER_STATE b )
 {
     
 	if ( ! b )
@@ -2501,14 +2563,14 @@ static void yy_load_buffer_state  (void)
  * This function is sometimes called more than once on the same buffer,
  * such as during a yyrestart() or at EOF.
  */
-    static void yy_init_buffer  (YY_BUFFER_STATE  b, FILE * file )
+    void yyFlexLexer::yy_init_buffer( YY_BUFFER_STATE b, std::istream& file )
 
 {
 	int oerrno = errno;
     
 	yy_flush_buffer( b );
 
-	b->yy_input_file = file;
+	b->yy_input_file = file.rdbuf();
 	b->yy_fill_buffer = 1;
 
     /* If b is the current buffer, then yy_init_buffer was _probably_
@@ -2520,8 +2582,7 @@ static void yy_load_buffer_state  (void)
         b->yy_bs_column = 0;
     }
 
-        b->yy_is_interactive = 0;
-    
+	b->yy_is_interactive = 0;
 	errno = oerrno;
 }
 
@@ -2529,7 +2590,7 @@ static void yy_load_buffer_state  (void)
  * @param b the buffer state to be flushed, usually @c YY_CURRENT_BUFFER.
  * 
  */
-    static void yy_flush_buffer (YY_BUFFER_STATE  b )
+    void yyFlexLexer::yy_flush_buffer( YY_BUFFER_STATE b )
 {
     	if ( ! b )
 		return;
@@ -2558,7 +2619,7 @@ static void yy_load_buffer_state  (void)
  *  @param new_buffer The new state.
  *  
  */
-MY_ATTRIBUTE((unused)) static void yypush_buffer_state (YY_BUFFER_STATE new_buffer )
+void yyFlexLexer::yypush_buffer_state (YY_BUFFER_STATE new_buffer)
 {
     	if (new_buffer == NULL)
 		return;
@@ -2588,7 +2649,7 @@ MY_ATTRIBUTE((unused)) static void yypush_buffer_state (YY_BUFFER_STATE new_buff
  *  The next element becomes the new top.
  *  
  */
-MY_ATTRIBUTE((unused)) static void yypop_buffer_state (void)
+void yyFlexLexer::yypop_buffer_state (void)
 {
     	if (!YY_CURRENT_BUFFER)
 		return;
@@ -2607,7 +2668,7 @@ MY_ATTRIBUTE((unused)) static void yypop_buffer_state (void)
 /* Allocates the stack if it does not exist.
  *  Guarantees space for at least one push.
  */
-static void yyensure_buffer_stack (void)
+void yyFlexLexer::yyensure_buffer_stack(void)
 {
 	yy_size_t num_to_alloc;
     
@@ -2650,13 +2711,51 @@ static void yyensure_buffer_stack (void)
 	}
 }
 
+    void yyFlexLexer::yy_push_state( int _new_state )
+{
+    	if ( (yy_start_stack_ptr) >= (yy_start_stack_depth) )
+		{
+		yy_size_t new_size;
+
+		(yy_start_stack_depth) += YY_START_STACK_INCR;
+		new_size = (yy_size_t) (yy_start_stack_depth) * sizeof( int );
+
+		if ( ! (yy_start_stack) )
+			(yy_start_stack) = (int *) yyalloc( new_size  );
+
+		else
+			(yy_start_stack) = (int *) yyrealloc(
+					(void *) (yy_start_stack), new_size  );
+
+		if ( ! (yy_start_stack) )
+			YY_FATAL_ERROR( "out of memory expanding start-condition stack" );
+		}
+
+	(yy_start_stack)[(yy_start_stack_ptr)++] = YY_START;
+
+	BEGIN(_new_state);
+}
+
+    void yyFlexLexer::yy_pop_state()
+{
+    	if ( --(yy_start_stack_ptr) < 0 )
+		YY_FATAL_ERROR( "start-condition stack underflow" );
+
+	BEGIN((yy_start_stack)[(yy_start_stack_ptr)]);
+}
+
+    int yyFlexLexer::yy_top_state()
+{
+    	return (yy_start_stack)[(yy_start_stack_ptr) - 1];
+}
+
 #ifndef YY_EXIT_FAILURE
 #define YY_EXIT_FAILURE 2
 #endif
 
-static void yynoreturn yy_fatal_error (const char* msg )
+void yyFlexLexer::LexerError( const char* msg )
 {
-			fprintf( stderr, "%s\n", msg );
+    	std::cerr << msg << std::endl;
 	exit( YY_EXIT_FAILURE );
 }
 
@@ -2678,134 +2777,6 @@ static void yynoreturn yy_fatal_error (const char* msg )
 	while ( 0 )
 
 /* Accessor  methods (get/set functions) to struct members. */
-
-/** Get the current line number.
- * 
- */
-MY_ATTRIBUTE((unused)) static int yyget_lineno  (void)
-{
-    
-    return yylineno;
-}
-
-/** Get the input stream.
- * 
- */
-MY_ATTRIBUTE((unused)) static FILE *yyget_in  (void)
-{
-        return yyin;
-}
-
-/** Get the output stream.
- * 
- */
-MY_ATTRIBUTE((unused)) static FILE *yyget_out  (void)
-{
-        return yyout;
-}
-
-/** Get the length of the current token.
- * 
- */
-MY_ATTRIBUTE((unused)) static int yyget_leng  (void)
-{
-        return yyleng;
-}
-
-/** Get the current token.
- * 
- */
-
-MY_ATTRIBUTE((unused)) static char *yyget_text  (void)
-{
-        return yytext;
-}
-
-/** Set the current line number.
- * @param _line_number line number
- * 
- */
-MY_ATTRIBUTE((unused)) static void yyset_lineno (int  _line_number )
-{
-    
-    yylineno = _line_number;
-}
-
-/** Set the input stream. This does not discard the current
- * input buffer.
- * @param _in_str A readable stream.
- * 
- * @see yy_switch_to_buffer
- */
-MY_ATTRIBUTE((unused)) static void yyset_in (FILE *  _in_str )
-{
-        yyin = _in_str ;
-}
-
-MY_ATTRIBUTE((unused)) static void yyset_out (FILE *  _out_str )
-{
-        yyout = _out_str ;
-}
-
-MY_ATTRIBUTE((unused)) static int yyget_debug  (void)
-{
-        return yy_flex_debug;
-}
-
-MY_ATTRIBUTE((unused)) static void yyset_debug (int  _bdebug )
-{
-        yy_flex_debug = _bdebug ;
-}
-
-static int yy_init_globals (void)
-{
-        /* Initialization is the same as for the non-reentrant scanner.
-     * This function is called from yylex_destroy(), so don't allocate here.
-     */
-
-    (yy_buffer_stack) = NULL;
-    (yy_buffer_stack_top) = 0;
-    (yy_buffer_stack_max) = 0;
-    (yy_c_buf_p) = NULL;
-    (yy_init) = 0;
-    (yy_start) = 0;
-
-/* Defined in main.c */
-#ifdef YY_STDINIT
-    yyin = stdin;
-    yyout = stdout;
-#else
-    yyin = NULL;
-    yyout = NULL;
-#endif
-
-    /* For future reference: Set errno on error, since we are called by
-     * yylex_init()
-     */
-    return 0;
-}
-
-/* yylex_destroy is for both reentrant and non-reentrant scanners. */
-MY_ATTRIBUTE((unused)) static int yylex_destroy  (void)
-{
-    
-    /* Pop the buffer stack, destroying each element. */
-	while(YY_CURRENT_BUFFER){
-		yy_delete_buffer( YY_CURRENT_BUFFER  );
-		YY_CURRENT_BUFFER_LVALUE = NULL;
-		yypop_buffer_state();
-	}
-
-	/* Destroy the stack itself. */
-	yyfree((yy_buffer_stack) );
-	(yy_buffer_stack) = NULL;
-
-    /* Reset the globals. This is important in a non-reentrant scanner so the next time
-     * yylex() is called, initialization will occur. */
-    yy_init_globals( );
-
-    return 0;
-}
 
 /*
  * Internal utility routines.
@@ -2857,16 +2828,28 @@ static void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
-#line 674 "pars0lex.l"
+#line 692 "pars0lex.l"
 
 
-/** Release any resources used by the lexer. */
+extern "C" int yylex() {
+  if (pars_scanner == nullptr) {
+    create_pars_scanner();
+  }
+  return pars_scanner->yylex();
+}
+
+/**
+ * Release any resources used by the lexer.
+ */
 void pars_lexer_close() {
-  yylex_destroy();
+  delete pars_scanner;
+  pars_scanner = nullptr;
+
   if (stringbuf != nullptr) {
     free(stringbuf);
     stringbuf = nullptr;
   }
+
   stringbuf_len_alloc = stringbuf_len = 0;
 }
 

@@ -180,7 +180,7 @@ ulint rec_get_nth_field_offs(const rec_t *rec, ulint n, ulint *len) noexcept;
  */
 rec_t *rec_copy_prefix_to_buf(
   const rec_t *rec,
-  const dict_index_t *index,
+  const Index *index,
   ulint n_fields,
   byte *&buf,
   ulint &buf_size) noexcept;
@@ -196,8 +196,8 @@ rec_t *rec_copy_prefix_to_buf(
  */
 rec_t *rec_convert_dtuple_to_rec(
   byte *buf,
-  const dict_index_t *index,
-  const dtuple_t *dtuple,
+  const Index *index,
+  const DTuple *dtuple,
   ulint n_ext) noexcept;
 
 /**
@@ -210,9 +210,9 @@ rec_t *rec_convert_dtuple_to_rec(
  * @param heap[in]       The memory heap.
  */
 void rec_copy_prefix_to_dtuple(
-  dtuple_t *tuple,
+  DTuple *tuple,
   const rec_t *rec,
-  const dict_index_t *index,
+  const Index *index,
   ulint n_fields,
   mem_heap_t *heap) noexcept;
 
@@ -382,12 +382,12 @@ inline const rec_t *rec_get_next_ptr_const(const rec_t *rec) noexcept {
 /**
  * The following function is used to get the pointer of the next chained record on the same page.
  *
- * @param rec The current physical record.
- * @param comp A flag indicating whether the page format is compact or not.
- *             Nonzero value indicates compact format.
+ * @param[in] rec The current physical record.
+ * @param[in] comp A flag indicating whether the page format is compact or not.
+ *                Nonzero value indicates compact format.
  * @return	pointer to the next chained record, or nullptr if none
  */
-inline rec_t *rec_get_next_ptr(rec_t *rec) noexcept {
+inline rec_t *rec_get_next_ptr(const rec_t *rec) noexcept {
   return reinterpret_cast<rec_t*>(const_cast<rec_t *>(rec_get_next_ptr_const(rec)));
 }
 
@@ -460,7 +460,7 @@ inline void rec_set_n_fields(rec_t *rec, ulint n_fields) noexcept {
  * 
  * @return	number of data fields
  */
-inline ulint rec_get_n_fields(const rec_t *rec, const dict_index_t *) noexcept {
+inline ulint rec_get_n_fields(const rec_t *rec, const Index *) noexcept {
   return rec_get_n_fields(rec);
 }
 
@@ -485,7 +485,6 @@ inline ulint rec_get_n_owned(const rec_t *rec) noexcept {
 inline void rec_set_n_owned(rec_t *rec, ulint n_owned) noexcept {
   rec_set_bit_field_1(rec, n_owned, REC_N_OWNED, REC_N_OWNED_MASK, REC_N_OWNED_SHIFT);
 }
-
 
 /**
  * The following function is used to retrieve the info bits of a record.
@@ -697,12 +696,12 @@ inline T rec_offs_base(T offsets) noexcept {
  * Validates offsets returned by Phy_rec::get_col_offsets().
  * 
  * @param[in] rec	record or nullptr
- * @param[in] dict_index	record descriptor or nullptr
+ * @param[in] index	record descriptor or nullptr
  * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
  * 
  * @return	true if valid
  */
-inline bool rec_offs_validate(const rec_t *rec, const dict_index_t *dict_index, const ulint *offsets) noexcept {
+inline bool rec_offs_validate(const rec_t *rec, const Index *index, const ulint *offsets) noexcept {
   ulint last = ULINT_MAX;
   ulint i = rec_offs_n_fields(offsets);
 
@@ -710,12 +709,12 @@ inline bool rec_offs_validate(const rec_t *rec, const dict_index_t *dict_index, 
     ut_ad((ulint)rec == offsets[2]);
     ut_a(rec_get_n_fields(rec) >= i);
   }
-  if (dict_index != nullptr) {
-    ut_ad((ulint)dict_index == offsets[3]);
+  if (index != nullptr) {
+    ut_ad((ulint)index == offsets[3]);
 
-    const auto max_n_fields = ut_max(dict_index_get_n_fields(dict_index), dict_index_get_n_unique_in_tree(dict_index) + 1);
+    const auto max_n_fields = ut_max(index->get_n_fields(), index->get_n_unique_in_tree() + 1);
 
-    ut_a(!dict_index->n_def || i <= max_n_fields);
+    ut_a(index->m_n_defined == 0 || i <= max_n_fields);
   }
 
   while (i--) {
@@ -735,7 +734,7 @@ inline bool rec_offs_validate(const rec_t *rec, const dict_index_t *dict_index, 
  * @param[in] index	record descriptor
  * @param[out] offsets	array returned by Phy_rec::get_col_offsets()
  */
-inline void rec_offs_make_valid(const rec_t *rec, const dict_index_t *index, ulint *offsets) noexcept {
+inline void rec_offs_make_valid(const rec_t *rec, const Index *index, ulint *offsets) noexcept {
   ut_ad(rec_get_n_fields(rec, index) >= rec_offs_n_fields(offsets));
 
   offsets[2] = reinterpret_cast<uintptr_t>(rec);
@@ -1196,13 +1195,13 @@ inline ulint rec_get_converted_extra_size(ulint data_size, ulint n_fields, ulint
  * The following function returns the size of a data tuple when converted to
  * a physical record.
  * 
- * @param[in,out] dict_index	record descriptor
+ * @param[in,out] index	record descriptor
  * @param[in] dtuple	data tuple
  * @param[in] n_ext	number of externally stored columns
  * 
  * @return	size
  */
-inline ulint rec_get_converted_size(const dict_index_t *dict_index, const dtuple_t *dtuple, ulint n_ext) noexcept {
+inline ulint rec_get_converted_size(const Index *index, const DTuple *dtuple, ulint n_ext) noexcept {
   ut_ad(dtuple_check_typed(dtuple));
 
   const auto data_size = dtuple_get_data_size(dtuple);
@@ -1365,7 +1364,7 @@ struct Phy_rec {
    * @param[in] index The index that contains the record.
    * @param[in] rec The record in the index.
    */
-  explicit Phy_rec(const dict_index_t *index, const rec_t *rec) noexcept
+  explicit Phy_rec(const Index *index, const rec_t *rec) noexcept
     : m_index(index), m_rec(rec) {}
 
   /**
@@ -1401,7 +1400,7 @@ struct Phy_rec {
    * 
    * @return The size of the record, pair.first = header size, pair.second = data size.
    */
-  static Size get_encoded_size(dict_index_t * index, ulint status, const DFields& dfields) noexcept;
+  static Size get_encoded_size(Index * index, ulint status, const DFields& dfields) noexcept;
 
   /** Encode the data from dfields into m_rec.
    * 
@@ -1410,11 +1409,11 @@ struct Phy_rec {
    * @param[in] status The status of the record REC_STATUS_xxx.
    * @param[in] dfields The data fields and type information of the columns
    */
-  static void encode(dict_index_t *index, rec_t *rec, ulint status, const DFields& dfields) noexcept ;
+  static void encode(Index *index, rec_t *rec, ulint status, const DFields& dfields) noexcept ;
 
 private:
   /** Record belongs to this index. */
-  const dict_index_t *m_index{};
+  const Index *m_index{};
 
   /** Record byte array */
   const rec_t *m_rec{};

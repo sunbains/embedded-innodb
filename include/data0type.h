@@ -382,12 +382,13 @@ inline void dtype_new_read_for_order_and_null_size(dtype_t *type, const byte *bu
 /**
  * Returns the size of a fixed size data type, 0 if not a fixed size type.
  *
- * @param mtype     main type
- * @param prtype    precise type
- * @param len       length
- * @param mbminlen  minimum length of a multibyte char
- * @param mbmaxlen  maximum length of a multibyte char
- * @return          fixed size, or 0
+ * @param[in] mtype     main type
+ * @param[in] prtype    precise type
+ * @param[in] len       length
+ * @param[in] mbminlen  minimum length of a multibyte char
+ * @param[in] mbmaxlen  maximum length of a multibyte char
+ * 
+ * @return fixed size, or 0
  */
 inline ulint dtype_get_fixed_size_low(ulint mtype, ulint prtype, ulint len, ulint mbminlen, ulint mbmaxlen) {
   switch (mtype) {
@@ -404,8 +405,7 @@ inline ulint dtype_get_fixed_size_low(ulint mtype, ulint prtype, ulint len, ulin
           ut_ad(len == DATA_ROLL_PTR_LEN);
           break;
         default:
-          ut_ad(0);
-          return 0;
+          ut_error;
       })
 
     case DATA_CHAR:
@@ -442,12 +442,7 @@ inline ulint dtype_get_fixed_size_low(ulint mtype, ulint prtype, ulint len, ulin
  * @param mbmaxlen  maximum length of a multibyte char
  * @return          minimum size
  */
-inline ulint dtype_get_min_size_low(
-  ulint mtype,
-  ulint prtype,
-  ulint len,
-  ulint mbminlen,
-  ulint mbmaxlen) {
+inline ulint dtype_get_min_size_low(ulint mtype, ulint prtype, ulint len, ulint mbminlen, ulint mbmaxlen) {
   switch (mtype) {
     case DATA_SYS:
       IF_DEBUG(

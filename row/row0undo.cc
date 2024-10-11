@@ -143,7 +143,7 @@ bool row_undo_search_clust_to_pcur(Undo_node *node) {
 
   mtr.start();
 
-  auto clust_index = dict_table_get_first_index(node->table);
+  auto clust_index = node->table->get_first_index();
 
   auto found = row_search_on_row_ref(&node->m_pcur, BTR_MODIFY_LEAF, node->table, node->ref, &mtr);
 
@@ -152,7 +152,7 @@ bool row_undo_search_clust_to_pcur(Undo_node *node) {
   {
     Phy_rec record{clust_index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location{});
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
   }
 
   if (!found || node->roll_ptr != row_get_rec_roll_ptr(rec, clust_index, offsets)) {
@@ -251,7 +251,7 @@ static db_err row_undo(Undo_node *node, que_thr_t *thr) {
 
   if (locked_data_dict) {
 
-    dict_lock_data_dictionary(trx);
+    srv_dict_sys->lock_data_dictionary(trx);
     ut_a(trx->m_dict_operation_lock_mode != 0);
   }
 
@@ -267,7 +267,7 @@ static db_err row_undo(Undo_node *node, que_thr_t *thr) {
 
   if (locked_data_dict) {
 
-    dict_unlock_data_dictionary(trx);
+    srv_dict_sys->unlock_data_dictionary(trx);
   }
 
   /* Do some cleanup */

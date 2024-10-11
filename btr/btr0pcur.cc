@@ -23,11 +23,10 @@ Created 2/23/1996 Heikki Tuuri
 *******************************************************/
 
 #include "btr0pcur.h"
-
 #include "btr0types.h"
 #include "trx0trx.h"
 
-Btree_pcursor::Btree_pcursor(FSP *fsp, Btree *btree, Lock_sys *lock_sys) noexcept : m_btr_cur(fsp, btree, lock_sys) {
+Btree_pcursor::Btree_pcursor(FSP *fsp, Btree *btree) noexcept : m_btr_cur(fsp, btree) {
   m_btr_cur.m_index = nullptr;
   init(0);
 }
@@ -101,7 +100,7 @@ void Btree_pcursor::store_position(mtr_t *mtr) noexcept {
   }
 
   m_old_stored = true;
-  m_old_rec = dict_index_copy_rec_order_prefix(index, rec, &m_old_n_fields, m_old_rec_buf, m_buf_size);
+  m_old_rec = index->copy_rec_order_prefix(rec, &m_old_n_fields, m_old_rec_buf, m_buf_size);
 
   m_block_when_stored = block;
   m_modify_clock = buf_block_get_modify_clock(block);
@@ -185,9 +184,8 @@ bool Btree_pcursor::restore_position(ulint latch_mode, mtr_t *mtr, Source_locati
         Phy_rec record(index, rec);
         Phy_rec old_record(index, m_old_rec);
         auto heap = mem_heap_create(256);
-        auto offsets2 = record.get_col_offsets(nullptr, m_old_n_fields, &heap, Source_location{});
-        auto offsets1 = old_record.get_col_offsets(nullptr, m_old_n_fields, &heap, Source_location{});
-
+        auto offsets2 = record.get_col_offsets(nullptr, m_old_n_fields, &heap, Current_location());
+        auto offsets1 = old_record.get_col_offsets(nullptr, m_old_n_fields, &heap, Current_location());
         ut_ad(!cmp_rec_rec(m_old_rec, rec, offsets1, offsets2, index));
         mem_heap_free(heap);
 #endif /* UNIV_DEBUG */
@@ -210,7 +208,7 @@ bool Btree_pcursor::restore_position(ulint latch_mode, mtr_t *mtr, Source_locati
   /* If optimistic restoration did not succeed, open the cursor anew */
 
   auto heap = mem_heap_create(256);
-  auto tuple = dict_index_build_data_tuple(index, m_old_rec, m_old_n_fields, heap);
+  auto tuple = index->build_data_tuple(m_old_rec, m_old_n_fields, heap);
 
   /* Save the old search mode of the cursor */
   ib_srch_mode_t search_mode;
@@ -237,10 +235,10 @@ bool Btree_pcursor::restore_position(ulint latch_mode, mtr_t *mtr, Source_locati
   {
     Phy_rec record(index, rec);
 
-    offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Source_location{});
+    offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
   }
 
-  if (m_rel_pos == Btree_cursor_pos::ON && is_on_user_rec() && cmp_dtuple_rec(index->cmp_ctx, tuple, rec, offsets) == 0) {
+  if (m_rel_pos == Btree_cursor_pos::ON && is_on_user_rec() && cmp_dtuple_rec(index->m_cmp_ctx, tuple, rec, offsets) == 0) {
 
     /* We have to store the NEW value for the modify clock, since
     the cursor can now be on a different page! But we can retain
@@ -287,7 +285,7 @@ void Btree_pcursor::move_to_next_page(mtr_t *mtr) noexcept {
 
   m_old_stored = false;
 
-  auto page = get_page();
+  auto page = get_page_no();
   const auto space_id = get_block()->get_space();
   const auto next_page_no = m_btr_cur.m_btree->page_get_next(page, mtr);
 
@@ -339,9 +337,9 @@ void Btree_pcursor::move_backward_from_page(mtr_t *mtr) noexcept {
 
   mtr->start();
 
-  (void) restore_position(latch_mode2, mtr, Source_location{});
+  (void) restore_position(latch_mode2, mtr, Current_location());
 
-  auto page = get_page();
+  auto page = get_page_no();
   auto prev_page_no = m_btr_cur.m_btree->page_get_prev(page, mtr);
 
   if (prev_page_no == FIL_NULL) {
@@ -370,8 +368,8 @@ void Btree_pcursor::move_backward_from_page(mtr_t *mtr) noexcept {
 }
 
 void Btree_pcursor::open_on_user_rec(
-  dict_index_t *index,
-  const dtuple_t *tuple,
+  Index *index,
+  const DTuple *tuple,
   ib_srch_mode_t search_mode,
   ulint latch_mode,
   mtr_t *mtr,
@@ -395,7 +393,7 @@ void Btree_pcursor::open_on_user_rec(
 }
 
 void Btree_pcursor::open_on_user_rec(const page_cur_t &page_cursor, ib_srch_mode_t mode, ulint latch_mode) noexcept {
-  m_btr_cur.m_index = const_cast<dict_index_t *>(page_cursor.m_index);
+  m_btr_cur.m_index = const_cast<Index *>(page_cursor.m_index);
 
   auto page_cur = get_page_cur();
 

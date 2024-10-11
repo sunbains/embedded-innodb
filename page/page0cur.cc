@@ -68,8 +68,8 @@ static uint64_t page_cur_lcg_prng(void) {
 @return	true on success */
 static bool page_cur_try_search_shortcut(
   const Buf_block *block,  /*!< in: index page */
-  const dict_index_t *index, /*!< in: record descriptor */
-  const dtuple_t *tuple,     /*!< in: data tuple */
+  const Index *index, /*!< in: record descriptor */
+  const DTuple *tuple,     /*!< in: data tuple */
   ulint *iup_matched_fields,
   /*!< in/out: already matched
     fields in upper limit record */
@@ -110,7 +110,7 @@ static bool page_cur_try_search_shortcut(
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, dtuple_get_n_fields(tuple), &heap, Source_location());
+    offsets = record.get_col_offsets(offsets, dtuple_get_n_fields(tuple), &heap, Current_location());
   }
 
   ut_ad(rec);
@@ -121,7 +121,7 @@ static bool page_cur_try_search_shortcut(
   up_match = low_match;
   up_bytes = low_bytes;
 
-  if (page_cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, rec, offsets, &low_match, &low_bytes) < 0) {
+  if (page_cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, rec, offsets, &low_match, &low_bytes) < 0) {
 
     goto exit_func;
   }
@@ -131,10 +131,10 @@ static bool page_cur_try_search_shortcut(
   {
     Phy_rec record{index, next_rec};
 
-    offsets = record.get_col_offsets(offsets, dtuple_get_n_fields(tuple), &heap, Source_location());
+    offsets = record.get_col_offsets(offsets, dtuple_get_n_fields(tuple), &heap, Current_location());
   }
 
-  if (page_cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, next_rec, offsets, &up_match, &up_bytes) >= 0) {
+  if (page_cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, next_rec, offsets, &up_match, &up_bytes) >= 0) {
 
     goto exit_func;
   }
@@ -218,7 +218,7 @@ static bool page_cur_rec_field_extends(
 #endif /* PAGE_CUR_LE_OR_EXTENDS */
 
 void page_cur_search_with_match(
-  const Buf_block *block, const dict_index_t *index, const dtuple_t *tuple, ulint mode, ulint *iup_matched_fields,
+  const Buf_block *block, const Index *index, const DTuple *tuple, ulint mode, ulint *iup_matched_fields,
   ulint *iup_matched_bytes, ulint *ilow_matched_fields, ulint *ilow_matched_bytes, page_cur_t *cursor
 ) {
   ulint up;
@@ -316,10 +316,10 @@ void page_cur_search_with_match(
     {
       Phy_rec record{index, mid_rec};
 
-      offsets = record.get_col_offsets(offsets, dtuple_get_n_fields_cmp(tuple), &heap, Source_location());
+      offsets = record.get_col_offsets(offsets, dtuple_get_n_fields_cmp(tuple), &heap, Current_location());
     }
 
-    cmp = cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, mid_rec, offsets, &cur_matched_fields, &cur_matched_bytes);
+    cmp = cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, mid_rec, offsets, &cur_matched_fields, &cur_matched_bytes);
 
     if (likely(cmp > 0)) {
     low_slot_match:
@@ -372,10 +372,10 @@ void page_cur_search_with_match(
     {
       Phy_rec record{index, mid_rec};
 
-      offsets = record.get_col_offsets(offsets, dtuple_get_n_fields_cmp(tuple), &heap, Source_location());
+      offsets = record.get_col_offsets(offsets, dtuple_get_n_fields_cmp(tuple), &heap, Current_location());
     }
 
-    cmp = cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, mid_rec, offsets, &cur_matched_fields, &cur_matched_bytes);
+    cmp = cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, mid_rec, offsets, &cur_matched_fields, &cur_matched_bytes);
 
     if (likely(cmp > 0)) {
     low_rec_match:
@@ -418,7 +418,7 @@ void page_cur_search_with_match(
   {
     Phy_rec record{index, low_rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location()); 
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location()); 
   }
 
   dbg_cmp = page_cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, low_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
@@ -445,7 +445,7 @@ void page_cur_search_with_match(
   {
     Phy_rec record{index, up_rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location()); 
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location()); 
   }
 
   dbg_cmp = page_cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, up_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
@@ -499,16 +499,16 @@ void page_cur_open_on_rnd_user_rec(Buf_block *block, page_cur_t *cursor) {
   } while (rnd--);
 }
 
-/** Writes the log record of a record insert on a page. */
-static void page_cur_insert_rec_write_log(
-  rec_t *insert_rec,   /*!< in: inserted physical record */
-  ulint rec_size,      /*!< in: insert_rec size */
-  rec_t *cursor_rec,   /*!< in: record the
-                         cursor is pointing to */
-  dict_index_t *index, /*!< in: record descriptor */
-  mtr_t *mtr
-) /*!< in: mini-transaction handle */
-{
+/**
+ * @brief Writes the log record of a record insert on a page.
+ *
+ * @param[in] insert_rec Inserted physical record.
+ * @param[in] rec_size Size of the inserted record.
+ * @param[in] cursor_rec Record the cursor is pointing to.
+ * @param[in] index Record descriptor.
+ * @param[in] mtr Mini-transaction handle.
+ */
+static void page_cur_insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec_t *cursor_rec, const Index *index, mtr_t *mtr) {
   byte *log_ptr;
   const byte *log_end;
 
@@ -533,13 +533,13 @@ static void page_cur_insert_rec_write_log(
     {
       Phy_rec record{index, cursor_rec};
 
-      cur_offs = record.get_col_offsets(cur_offs_, ULINT_UNDEFINED, &heap, Source_location());
+      cur_offs = record.get_col_offsets(cur_offs_, ULINT_UNDEFINED, &heap, Current_location());
     }
 
     {
       Phy_rec record{index, insert_rec};
 
-      ins_offs = record.get_col_offsets(ins_offs_, ULINT_UNDEFINED, &heap, Source_location());
+      ins_offs = record.get_col_offsets(ins_offs_, ULINT_UNDEFINED, &heap, Current_location());
     }
 
     extra_size = rec_offs_extra_size(ins_offs);
@@ -647,7 +647,7 @@ static void page_cur_insert_rec_write_log(
   }
 }
 
-byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr) {
+byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr) {
   page_t *page;
   rec_t *cursor_rec;
   byte buf1[1024];
@@ -752,7 +752,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
   {
     Phy_rec record{index, cursor_rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location());
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
   }
 
   if (!(end_seg_len & 0x1UL)) {
@@ -806,7 +806,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
   {
     Phy_rec record{index, buf + origin_offset};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location());
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
   }
 
   if (unlikely(!page_cur_rec_insert(&cursor, buf + origin_offset, index, offsets, mtr))) {
@@ -827,7 +827,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
   return (ptr + end_seg_len);
 }
 
-rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const rec_t *rec, ulint *offsets, mtr_t *mtr) {
+rec_t *page_cur_insert_rec_low(rec_t *current_rec, const Index *index, const rec_t *rec, ulint *offsets, mtr_t *mtr) {
   byte *insert_buf;
   ulint rec_size;
   page_t *page;       /*!< the relevant page */
@@ -874,7 +874,7 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const re
     {
       Phy_rec record{index, free_rec};
 
-      foffsets = record.get_col_offsets(foffsets, ULINT_UNDEFINED, &heap, Source_location());
+      foffsets = record.get_col_offsets(foffsets, ULINT_UNDEFINED, &heap, Current_location());
     }
 
     if (rec_offs_size(foffsets) < rec_size) {
@@ -973,16 +973,16 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, dict_index_t *index, const re
   return (insert_rec);
 }
 
-/** Writes a log record of copying a record list end to a new created page.
-@return 4-byte field where to write the log data length, or nullptr if
-logging is disabled */
-static byte *page_copy_rec_list_to_created_page_write_log(
-  page_t *page,        /*!< in: index page */
-  dict_index_t *index, /*!< in: record descriptor */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
-  auto log_ptr = mlog_open_and_write_index(mtr, page, index, MLOG_LIST_END_COPY_CREATED, 4);
+/**
+ * @brief Writes a log record of copying a record list end to a newly created page.
+ *
+ * @param[in] page Index page.
+ * @param[in] mtr Mini-transaction.
+ * 
+ * @return 4-byte field where to write the log data length, or nullptr if logging is disabled.
+ */
+static byte *page_copy_rec_list_to_created_page_write_log(page_t *page, mtr_t *mtr) {
+  auto log_ptr = mlog_open_and_write_index(mtr, page, MLOG_LIST_END_COPY_CREATED, 4);
 
   if (likely(log_ptr != nullptr)) {
     mlog_close(mtr, log_ptr + 4);
@@ -991,7 +991,7 @@ static byte *page_copy_rec_list_to_created_page_write_log(
   return log_ptr;
 }
 
-byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr) {
+byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr) {
   byte *rec_end;
   ulint log_data_len;
   page_t *page;
@@ -1031,16 +1031,7 @@ byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_blo
   return (rec_end);
 }
 
-/** Copies records from page to a newly created page, from a given record
-onward, including that record. Infimum and supremum records are not copied. */
-
-void page_copy_rec_list_end_to_created_page(
-  page_t *new_page,    /*!< in/out: index page to copy to */
-  rec_t *rec,          /*!< in: first record to copy */
-  dict_index_t *index, /*!< in: record descriptor */
-  mtr_t *mtr
-) /*!< in: mtr */
-{
+void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const Index *index, mtr_t *mtr) {
   page_dir_slot_t *slot = 0; /* remove warning */
   byte *heap_top;
   rec_t *insert_rec = 0; /* remove warning */
@@ -1076,7 +1067,7 @@ void page_copy_rec_list_end_to_created_page(
   page_header_set_ptr(new_page, PAGE_HEAP_TOP, new_page + UNIV_PAGE_SIZE - 1);
 #endif /* UNIV_DEBUG */
 
-  log_ptr = page_copy_rec_list_to_created_page_write_log(new_page, index, mtr);
+  log_ptr = page_copy_rec_list_to_created_page_write_log(new_page, mtr);
 
   log_data_len = dyn_array_get_data_size(&mtr->m_log);
 
@@ -1093,7 +1084,7 @@ void page_copy_rec_list_end_to_created_page(
   do {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Source_location());
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
 
     insert_rec = rec_copy(heap_top, rec, offsets);
 
@@ -1178,16 +1169,17 @@ void page_copy_rec_list_end_to_created_page(
   }
 }
 
-/** Writes log record of a record delete on a page. */
-static void page_cur_delete_rec_write_log(
-  rec_t *rec,          /*!< in: record to be deleted */
-  dict_index_t *index, /*!< in: record descriptor */
-  mtr_t *mtr
-) /*!< in: mini-transaction handle */
-{
-  auto log_ptr = mlog_open_and_write_index(mtr, rec, index, MLOG_REC_DELETE, 2);
+/**
+ * @brief Writes log record of a record delete on a page.
+ * 
+ * @param[in] rec Record to be deleted.
+ * @param[in] index Record descriptor.
+ * @param[in] mtr Mini-transaction handle.
+ */
+static void page_cur_delete_rec_write_log(rec_t *rec, mtr_t *mtr) {
+  auto log_ptr = mlog_open_and_write_index(mtr, rec, MLOG_REC_DELETE, 2);
 
-  if (!log_ptr) {
+  if (unlikely(log_ptr == nullptr)) {
     /* Logging in mtr is switched off during crash recovery:
     in that case mlog_open returns nullptr */
     return;
@@ -1199,7 +1191,7 @@ static void page_cur_delete_rec_write_log(
   mlog_close(mtr, log_ptr + 2);
 }
 
-byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, dict_index_t *index, mtr_t *mtr) {
+byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr) {
   ulint offset;
   page_cur_t cursor;
 
@@ -1214,7 +1206,7 @@ byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, dict
 
   ut_a(offset <= UNIV_PAGE_SIZE);
 
-  if (block) {
+  if (unlikely(block == nullptr)) {
     page_t *page = block->get_frame();
     mem_heap_t *heap = nullptr;
     ulint offsets_[REC_OFFS_NORMAL_SIZE];
@@ -1228,7 +1220,7 @@ byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, dict
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location());
+      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
     }
 
     page_cur_delete_rec(&cursor, index, offsets, mtr);
@@ -1241,7 +1233,7 @@ byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, dict
   return ptr;
 }
 
-void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *offsets, mtr_t *mtr) {
+void page_cur_delete_rec(page_cur_t *cursor, const Index *index, const ulint *offsets, mtr_t *mtr) {
   page_dir_slot_t *cur_dir_slot;
   page_dir_slot_t *prev_slot;
   page_t *page;
@@ -1268,7 +1260,7 @@ void page_cur_delete_rec(page_cur_t *cursor, dict_index_t *index, const ulint *o
   cur_n_owned = page_dir_slot_get_n_owned(cur_dir_slot);
 
   /* 0. Write the log record */
-  page_cur_delete_rec_write_log(current_rec, index, mtr);
+  page_cur_delete_rec_write_log(current_rec, mtr);
 
   /* 1. Reset the last insert info in the page header and increment
   the modify clock for the frame */

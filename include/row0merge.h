@@ -31,7 +31,7 @@ Created 13/06/2005 Jan Lindstrom
 #include "srv0srv.h"
 
 struct trx_t;
-struct dict_table_t;
+struct Table;
 
 /** Index field definition */
 struct merge_index_field_t {
@@ -66,7 +66,7 @@ struct merge_index_def_t {
  *
  * @return error code or DB_SUCCESS
  */
-db_err row_merge_lock_table(trx_t *trx, dict_table_t *table, Lock_mode mode);
+db_err row_merge_lock_table(trx_t *trx, Table *table, Lock_mode mode);
 
 /**
  * Drop an index from the InnoDB system tables. The data dictionary must
@@ -77,7 +77,7 @@ db_err row_merge_lock_table(trx_t *trx, dict_table_t *table, Lock_mode mode);
  * @param table in: table
  * @param trx   in: transaction handle
  */
-void row_merge_drop_index(dict_index_t *index, dict_table_t *table, trx_t *trx);
+void row_merge_drop_index(Index *index, Table *table, trx_t *trx);
 
 /**
  * Drop those indexes which were created before an error occurred when
@@ -90,7 +90,7 @@ void row_merge_drop_index(dict_index_t *index, dict_table_t *table, trx_t *trx);
  * @param index       in: indexes to drop
  * @param num_created in: number of elements in index[]
  */
-void row_merge_drop_indexes(trx_t *trx, dict_table_t *table, dict_index_t **index, ulint num_created);
+void row_merge_drop_indexes(trx_t *trx, Table *table, Index **index, ulint num_created);
 
 /**
  * Drop all partially created indexes during crash recovery.
@@ -112,8 +112,8 @@ void row_merge_drop_temp_indexes(ib_recovery_t recovery);
  * @return error code or DB_SUCCESS
  */
 db_err row_merge_rename_tables(
-  dict_table_t *old_table,
-  dict_table_t *new_table,
+  Table *old_table,
+  Table *new_table,
   const char *tmp_name,
   trx_t *trx
 );
@@ -129,10 +129,10 @@ db_err row_merge_rename_tables(
  *
  * @return table, or nullptr on error
  */
-dict_table_t *row_merge_create_temporary_table(
+Table *row_merge_create_temporary_table(
   const char *table_name,
   const merge_index_def_t *index_def,
-  const dict_table_t *table,
+  const Table *table,
   trx_t *trx
 );
 
@@ -146,7 +146,7 @@ dict_table_t *row_merge_create_temporary_table(
  *
  * @return DB_SUCCESS if all OK
  */
-db_err row_merge_rename_indexes( trx_t *trx, dict_table_t *table);
+db_err row_merge_rename_indexes( trx_t *trx, Table *table);
 
 /**
  * Create the index and load in to the dictionary.
@@ -157,9 +157,9 @@ db_err row_merge_rename_indexes( trx_t *trx, dict_table_t *table);
  *
  * @return index, or nullptr on error
  */
-dict_index_t *row_merge_create_index(
+Index *row_merge_create_index(
   trx_t *trx,
-  dict_table_t *table,
+  Table *table,
   const merge_index_def_t *index_def
 );
 
@@ -171,7 +171,7 @@ dict_index_t *row_merge_create_index(
  *
  * @return true if index can be used by the transaction else false
  */
-bool row_merge_is_index_usable(const trx_t *trx, const dict_index_t *index);
+bool row_merge_is_index_usable(const trx_t *trx, const Index *index);
 
 /**
  * If there are views that refer to the old table name then we "attach" to
@@ -182,7 +182,7 @@ bool row_merge_is_index_usable(const trx_t *trx, const dict_index_t *index);
  *
  * @return DB_SUCCESS or error code
  */
-db_err row_merge_drop_table(trx_t *trx, dict_table_t *table);
+db_err row_merge_drop_table(trx_t *trx, Table *table);
 
 /**
  * Build indexes on a table by reading a clustered index,
@@ -201,9 +201,9 @@ db_err row_merge_drop_table(trx_t *trx, dict_table_t *table);
  */
 db_err row_merge_build_indexes(
   trx_t *trx,
-  dict_table_t *old_table,
-  dict_table_t *new_table,
-  dict_index_t **indexes,
+  Table *old_table,
+  Table *new_table,
+  Index **indexes,
   ulint n_indexes,
   table_handle_t table
 );

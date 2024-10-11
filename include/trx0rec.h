@@ -61,8 +61,8 @@ byte *trx_undo_rec_get_row_ref(
                                     log record must be preserved as long as the
                                     row reference is used, as we do NOT copy the
                                     data in the record! */
-  dict_index_t *index, /*!< in: clustered index */
-  dtuple_t **ref,      /*!< out, own: row reference */
+  Index *index, /*!< in: clustered index */
+  DTuple **ref,      /*!< out, own: row reference */
   mem_heap_t *heap /*!< in: memory heap from which the memory needed is allocated */);
 
 /** Skips a row reference from an undo log record.
@@ -70,7 +70,7 @@ byte *trx_undo_rec_get_row_ref(
 byte *trx_undo_rec_skip_row_ref(
   byte *ptr, /*!< in: remaining part in update undo log
                           record, at the start of the row reference */
-  dict_index_t *index /*!< in: clustered index */);
+  Index *index /*!< in: clustered index */);
 
 /** Reads from an undo log update record the system field values of the old
 version.
@@ -93,7 +93,7 @@ byte *trx_undo_update_rec_get_update(
                          be preserved as long as the update vector is
                          used, as we do NOT copy the data in the
                          record! */
-  dict_index_t *index, /*!< in: clustered index */
+  Index *index, /*!< in: clustered index */
   ulint type,          /*!< in: TRX_UNDO_UPD_EXIST_REC,
                          TRX_UNDO_UPD_DEL_REC, or
                          TRX_UNDO_DEL_MARK_REC; in the last case,
@@ -118,37 +118,42 @@ byte *trx_undo_rec_get_partial_row(
                          be preserved as long as the partial row is
                          used, as we do NOT copy the data in the
                          record! */
-  dict_index_t *index, /*!< in: clustered index */
-  dtuple_t **row,      /*!< out, own: partial row */
+  Index *index, /*!< in: clustered index */
+  DTuple **row,      /*!< out, own: partial row */
   bool ignore_prefix,  /*!< in: flag to indicate if we
                    expect blob prefixes in undo. Used
                    only in the assertion. */
   mem_heap_t *heap /*!< in: memory heap from which the memory needed is allocated */
   );
 
-/** Writes information to an undo log about an insert, update, or a delete
-marking of a clustered index record. This information is used in a rollback of
-the transaction and in consistent reads that must look to the history of this
-transaction.
-@return	DB_SUCCESS or error code */
+/**
+ * @brief Writes information to an undo log about an insert, update, or a delete
+ * marking of a clustered index record. This information is used in a rollback of
+ * the transaction and in consistent reads that must look to the history of this
+ * transaction.
+ * 
+ * @param[in] flags If BTR_NO_UNDO_LOG_FLAG bit is set, does nothing
+ * @param[in] op_type TRX_UNDO_INSERT_OP or TRX_UNDO_MODIFY_OP
+ * @param[in] thr Query thread
+ * @param[in] index Clustered index
+ * @param[in] clust_entry In the case of an insert, index entry to insert into the clustered index, otherwise nullptr
+ * @param[in] update In the case of an update, the update vector, otherwise nullptr
+ * @param[in] cmpl_info Compiler info on secondary index updates
+ * @param[in] rec In the case of an update or delete marking, the record in the clustered index, otherwise nullptr
+ * @param[out] roll_ptr Rollback pointer to the inserted undo log record, 0 if BTR_NO_UNDO_LOG flag was specified
+ * 
+ * @return DB_SUCCESS or error code
+ */
 db_err trx_undo_report_row_operation(
-  ulint flags,                 /*!< in: if BTR_NO_UNDO_LOG_FLAG bit is
-                                 set, does nothing */
-  ulint op_type,               /*!< in: TRX_UNDO_INSERT_OP or
-                                 TRX_UNDO_MODIFY_OP */
-  que_thr_t *thr,              /*!< in: query thread */
-  dict_index_t *index,         /*!< in: clustered index */
-  const dtuple_t *clust_entry, /*!< in: in the case of an insert,
-                                 index entry to insert into the
-                                 clustered index, otherwise nullptr */
-  const upd_t *update,         /*!< in: in the case of an update,
-                                 the update vector, otherwise nullptr */
-  ulint cmpl_info,             /*!< in: compiler info on secondary
-                                 index updates */
-  const rec_t *rec,            /*!< in: case of an update or delete
-                                 marking, the record in the clustered
-                                 index, otherwise nullptr */
-  roll_ptr_t *roll_ptr         /*!< out: rollback pointer to the inserted undo log record, 0 if BTR_NO_UNDO_LOG flag was specified */
+  ulint flags,
+  ulint op_type,
+  que_thr_t *thr,
+  const Index *index,
+  const DTuple *clust_entry,
+  const upd_t *update,
+  ulint cmpl_info,
+  const rec_t *rec,
+  roll_ptr_t *roll_ptr
   );
 
 /** Copies an undo record to heap. This function can be called if we know that
@@ -188,7 +193,7 @@ db_err trx_undo_prev_version_build(
   mtr_t *index_mtr,       /*!< in: mtr which contains the latch to
                           index_rec page and purge_view */
   const rec_t *rec,       /*!< in: version of a clustered index record */
-  dict_index_t *index,    /*!< in: clustered index */
+  Index *index,    /*!< in: clustered index */
   ulint *offsets,         /*!< in: Phy_rec::get_col_offsets(rec, index) */
   mem_heap_t *heap,       /*!< in: memory heap from which the memory
                             needed is allocated */

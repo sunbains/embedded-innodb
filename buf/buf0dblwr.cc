@@ -33,7 +33,7 @@ DBLWR::DBLWR(FSP *fsp)
     m_block2(ULINT32_UNDEFINED) {
 
 
-  mutex_create(&m_mutex, IF_DEBUG("DBLWR::m_mutex",) IF_SYNC_DEBUG(SYNC_DOUBLEWRITE,) Source_location{});
+  mutex_create(&m_mutex, IF_DEBUG("DBLWR::m_mutex",) IF_SYNC_DEBUG(SYNC_DOUBLEWRITE,) Current_location());
 
   m_ptr = static_cast<byte *>(ut_new((1 + 2 * SYS_DOUBLEWRITE_BLOCK_SIZE) * UNIV_PAGE_SIZE));
 

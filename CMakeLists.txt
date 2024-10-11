@@ -169,8 +169,7 @@ SET(INNODB_SOURCES
       buf/buf0buf.cc buf/buf0dblwr.cc
       buf/buf0flu.cc buf/buf0lru.cc buf/buf0rea.cc
       data/data0data.cc data/data0type.cc
-      dict/dict0boot.cc dict/dict0crea.cc dict/dict0dict.cc
-      dict/dict0load.cc dict/dict0mem.cc
+      dict/dict0dict.cc dict/dict0fk.cc dict/dict0load.cc dict/dict0store.cc
       dyn/dyn0dyn.cc
       eval/eval0eval.cc eval/eval0proc.cc
       fil/fil0fil.cc

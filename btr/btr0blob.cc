@@ -48,7 +48,7 @@ ulint Blob::get_externally_stored_len(rec_t *rec, const ulint *offsets) noexcept
   return total_extern_len / UNIV_PAGE_SIZE;
 }
 
-void Blob::set_ownership_of_extern_field(rec_t *rec, dict_index_t *index, const ulint *offsets, ulint i, bool val, mtr_t *mtr) noexcept {
+void Blob::set_ownership_of_extern_field(rec_t *rec, const Index *index, const ulint *offsets, ulint i, bool val, mtr_t *mtr) noexcept {
   ulint local_len;
 
   auto data = (byte *)rec_get_nth_field(rec, offsets, i, &local_len);
@@ -72,7 +72,7 @@ void Blob::set_ownership_of_extern_field(rec_t *rec, dict_index_t *index, const 
   }
 }
 
-void Blob::mark_extern_inherited_fields(rec_t *rec, dict_index_t *index, const ulint *offsets, const upd_t *update, mtr_t *mtr) noexcept {
+void Blob::mark_extern_inherited_fields(rec_t *rec, Index *index, const ulint *offsets, const upd_t *update, mtr_t *mtr) noexcept {
   ut_ad(rec_offs_validate(rec, nullptr, offsets));
 
   if (!rec_offs_any_extern(offsets)) {
@@ -101,7 +101,7 @@ void Blob::mark_extern_inherited_fields(rec_t *rec, dict_index_t *index, const u
   }
 }
 
-void Blob::mark_dtuple_inherited_extern(dtuple_t *entry, const upd_t *update) noexcept {
+void Blob::mark_dtuple_inherited_extern(DTuple *entry, const upd_t *update) noexcept {
   for (ulint i = 0; i < dtuple_get_n_fields(entry); i++) {
     auto dfield = dtuple_get_nth_field(entry, i);
 
@@ -125,7 +125,7 @@ void Blob::mark_dtuple_inherited_extern(dtuple_t *entry, const upd_t *update) no
   }
 }
 
-void Blob::unmark_extern_fields(rec_t *rec, dict_index_t *index,  const ulint *offsets, mtr_t *mtr) noexcept {
+void Blob::unmark_extern_fields(rec_t *rec, const Index *index, const ulint *offsets, mtr_t *mtr) noexcept {
   const auto n = rec_offs_n_fields(offsets);
 
   if (!rec_offs_any_extern(offsets)) {
@@ -140,7 +140,7 @@ void Blob::unmark_extern_fields(rec_t *rec, dict_index_t *index,  const ulint *o
   }
 }
 
-void Blob::unmark_dtuple_extern_fields(dtuple_t *entry) noexcept {
+void Blob::unmark_dtuple_extern_fields(DTuple *entry) noexcept {
   for (ulint i = 0; i < dtuple_get_n_fields(entry); ++i) {
     auto dfield = dtuple_get_nth_field(entry, i);
 
@@ -153,7 +153,7 @@ void Blob::unmark_dtuple_extern_fields(dtuple_t *entry) noexcept {
   }
 }
 
-ulint Blob::push_update_extern_fields(dtuple_t *tuple, const upd_t *update, mem_heap_t *heap) noexcept {
+ulint Blob::push_update_extern_fields(DTuple *tuple, const upd_t *update, mem_heap_t *heap) noexcept {
   ulint n;
   ulint n_pushed = 0;
   const upd_field_t *uf;
@@ -240,7 +240,7 @@ void Blob::blob_free(Buf_block *block, mtr_t *mtr) noexcept {
 }
 
 db_err Blob::store_big_rec_extern_fields(
-  dict_index_t *index,
+  const Index *index,
   Buf_block *rec_block,
   rec_t *rec,
   const ulint *offsets,
@@ -249,10 +249,10 @@ db_err Blob::store_big_rec_extern_fields(
 ) noexcept {
 
   ut_ad(rec_offs_validate(rec, index, offsets));
-  ut_ad(local_mtr->memo_contains(dict_index_get_lock(index), MTR_MEMO_X_LOCK));
+  ut_ad(local_mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
   ut_ad(local_mtr->memo_contains(rec_block, MTR_MEMO_PAGE_X_FIX));
   ut_ad(rec_block->get_frame() == page_align(rec));
-  ut_a(dict_index_is_clust(index));
+  ut_a(index->is_clustered());
 
   const auto space_id = rec_block->get_space();
   const auto rec_page_no = rec_block->get_page_no();
@@ -421,7 +421,7 @@ void Blob::check_blob_fil_page_type(space_id_t space_id, page_no_t page_no, cons
 }
 
 void Blob::free_externally_stored_field(
-  dict_index_t *index,
+  const Index *index,
   byte *field_ref,
   const rec_t *rec,
   const ulint *offsets,
@@ -431,7 +431,7 @@ void Blob::free_externally_stored_field(
 ) noexcept {
 
 #ifdef UNIV_DEBUG
-  ut_ad(local_mtr->memo_contains(dict_index_get_lock(index), MTR_MEMO_X_LOCK));
+  ut_ad(local_mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
   ut_ad(local_mtr->memo_contains_page(field_ref, MTR_MEMO_PAGE_X_FIX));
   ut_ad(!rec || rec_offs_validate(rec, index, offsets));
 
@@ -459,7 +459,7 @@ void Blob::free_externally_stored_field(
 
   auto space_id = mach_read_from_4(field_ref + BTR_EXTERN_SPACE_ID);
 
-  if (unlikely(space_id != dict_index_get_space(index))) {
+  if (unlikely(space_id != index->get_space_id())) {
     /* This must be an undo log record in the system tablespace,
     that is, in row_purge_upd_exist_or_extern().
     Currently, externally stored records are stored in the
@@ -538,7 +538,7 @@ void Blob::free_externally_stored_field(
   }
 }
 
-void Blob::free_externally_stored_fields(dict_index_t *index, rec_t *rec, const ulint *offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept {
+void Blob::free_externally_stored_fields(Index *index, rec_t *rec, const ulint *offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept {
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
   /* Free possible externally stored fields in the record */
@@ -558,7 +558,7 @@ void Blob::free_externally_stored_fields(dict_index_t *index, rec_t *rec, const 
 }
 
 void Blob::free_updated_extern_fields(
-  dict_index_t *index,    
+  const Index *index,    
   rec_t *rec,             
   const ulint *offsets,   
   const upd_t *update,    

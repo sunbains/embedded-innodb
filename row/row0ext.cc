@@ -54,7 +54,7 @@ static void row_ext_cache_fill(row_ext_t *ext, ulint i, const dfield_t *dfield) 
   }
 }
 
-row_ext_t *row_ext_create(ulint n_ext, const ulint *ext, const dtuple_t *tuple, mem_heap_t *heap) {
+row_ext_t *row_ext_create(ulint n_ext, const ulint *ext, const DTuple *tuple, mem_heap_t *heap) {
   auto row_ext = reinterpret_cast<row_ext_t *>(mem_heap_alloc(heap, (sizeof(row_ext_t)) + (n_ext - 1) * sizeof(row_ext_t::len)));
 
   row_ext->n_ext = n_ext;

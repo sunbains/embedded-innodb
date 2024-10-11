@@ -30,7 +30,7 @@ Created 5/30/1994 Heikki Tuuri
 #include "mem0mem.h"
 #include "ut0rnd.h"
 
-struct dict_index_t;
+struct Index;
 
 /** Storage for overflow data in a big record, that is, a clustered
 index record which needs external storage of data fields */
@@ -65,7 +65,7 @@ bool dfield_data_is_binary_equal(const dfield_t *field, ulint len, const byte *d
  * @param tuple - tuple
  * @param n_fields - number of fields
  */
-void dtuple_set_n_fields(dtuple_t *tuple, ulint n_fields);
+void dtuple_set_n_fields(DTuple *tuple, ulint n_fields);
 
 /**
  * @brief Compare two data tuples, respecting the collation of character fields.
@@ -74,7 +74,7 @@ void dtuple_set_n_fields(dtuple_t *tuple, ulint n_fields);
  * @param tuple2 - tuple 2
  * @return 1, 0, -1 if tuple1 is greater, equal, less, respectively, than tuple2
  */
-int dtuple_coll_cmp(void *cmp_ctx, const dtuple_t *tuple1, const dtuple_t *tuple2);
+int dtuple_coll_cmp(void *cmp_ctx, const DTuple *tuple1, const DTuple *tuple2);
 
 /**
  * @brief Checks that a data field is typed. Asserts an error if not.
@@ -88,14 +88,14 @@ bool dfield_check_typed(const dfield_t *field);
  * @param tuple - tuple
  * @return true if ok
  */
-bool dtuple_check_typed(const dtuple_t *tuple);
+bool dtuple_check_typed(const DTuple *tuple);
 
 /**
  * @brief Checks that a data tuple is typed.
  * @param tuple - tuple
  * @return true if ok
  */
-bool dtuple_check_typed_no_assert(const dtuple_t *tuple);
+bool dtuple_check_typed_no_assert(const DTuple *tuple);
 
 #ifdef UNIV_DEBUG
 /**
@@ -104,7 +104,7 @@ bool dtuple_check_typed_no_assert(const dtuple_t *tuple);
  * @param tuple - tuple
  * @return true if ok
  */
-bool dtuple_validate(const dtuple_t *tuple);
+bool dtuple_validate(const DTuple *tuple);
 #endif /* UNIV_DEBUG */
 
 /** Pretty prints a dfield value according to its data type.
@@ -122,7 +122,7 @@ void dfield_print_also_hex(const dfield_t *dfield);
  * @param ib_stream - output stream
  * @param tuple - tuple
  */
-void dtuple_print(ib_stream_t ib_stream, const dtuple_t *tuple);
+void dtuple_print(ib_stream_t ib_stream, const DTuple *tuple);
 
 /** Moves parts of long fields in entry to the big record vector so that
  * the size of tuple drops below the maximum record size allowed in the
@@ -135,16 +135,17 @@ void dtuple_print(ib_stream_t ib_stream, const dtuple_t *tuple);
  * shorten the entry enough, i.e., if there are too many fixed-length or
  * short fields in entry or the index is clustered
  */
-big_rec_t *dtuple_convert_big_rec(dict_index_t *index, dtuple_t *entry, ulint *n_ext);
+big_rec_t *dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ext);
 
 /** Puts back to entry the data stored in vector. Note that to ensure the
  * fields in entry can accommodate the data, vector must have been created
  * from entry with dtuple_convert_big_rec.
+ * 
  * @param index - index
  * @param entry - entry whose data was put to vector
  * @param vector - big rec vector; it is freed in this function
  */
-void dtuple_convert_back_big_rec(dict_index_t *index, dtuple_t *entry, big_rec_t *vector);
+void dtuple_convert_back_big_rec(DTuple *entry, big_rec_t *vector);
 
 /** Reset dfield variables. */
 void dfield_var_init();
@@ -321,7 +322,7 @@ inline bool dfield_datas_are_binary_equal(const dfield_t *field1, const dfield_t
  * @param tuple The tuple to retrieve the information bits from.
  * @return The information bits of the tuple.
  */
-inline ulint dtuple_get_info_bits(const dtuple_t *tuple) {
+inline ulint dtuple_get_info_bits(const DTuple *tuple) {
   return tuple->info_bits;
 }
 
@@ -331,7 +332,7 @@ inline ulint dtuple_get_info_bits(const dtuple_t *tuple) {
  * @param tuple The tuple to set the info bits for.
  * @param info_bits The info bits to set.
  */
-inline void dtuple_set_info_bits(dtuple_t *tuple, ulint info_bits) {
+inline void dtuple_set_info_bits(DTuple *tuple, ulint info_bits) {
   tuple->info_bits = info_bits;
 }
 
@@ -341,7 +342,7 @@ inline void dtuple_set_info_bits(dtuple_t *tuple, ulint info_bits) {
  * @param tuple The tuple to retrieve the number of fields from.
  * @return The number of fields for comparison in the tuple.
  */
-inline ulint dtuple_get_n_fields_cmp(const dtuple_t *tuple) {
+inline ulint dtuple_get_n_fields_cmp(const DTuple *tuple) {
   return tuple->n_fields_cmp;
 }
 
@@ -351,7 +352,7 @@ inline ulint dtuple_get_n_fields_cmp(const dtuple_t *tuple) {
  * @param tuple The tuple to modify.
  * @param n_fields_cmp The number of fields used in comparisons.
  */
-inline void dtuple_set_n_fields_cmp(dtuple_t *tuple, ulint n_fields_cmp) {
+inline void dtuple_set_n_fields_cmp(DTuple *tuple, ulint n_fields_cmp) {
   ut_ad(n_fields_cmp <= tuple->n_fields);
 
   tuple->n_fields_cmp = n_fields_cmp;
@@ -363,7 +364,7 @@ inline void dtuple_set_n_fields_cmp(dtuple_t *tuple, ulint n_fields_cmp) {
  * @param tuple The tuple to retrieve the number of fields from.
  * @return The number of fields in the tuple.
  */
-inline ulint dtuple_get_n_fields(const dtuple_t *tuple) {
+inline ulint dtuple_get_n_fields(const DTuple *tuple) {
   return tuple->n_fields;
 }
 
@@ -374,7 +375,7 @@ inline ulint dtuple_get_n_fields(const dtuple_t *tuple) {
  * @param n The index of the field to retrieve.
  * @return A pointer to the nth field.
  */
-inline dfield_t *dtuple_get_nth_field(const dtuple_t *tuple, ulint n) {
+inline dfield_t *dtuple_get_nth_field(const DTuple *tuple, ulint n) {
   ut_ad(n < tuple->n_fields);
 
   return static_cast<dfield_t *>(&tuple->fields[n]);
@@ -387,11 +388,11 @@ inline dfield_t *dtuple_get_nth_field(const dtuple_t *tuple, ulint n) {
  * @param n_fields The number of fields.
  * @return The created tuple.
  */
-inline dtuple_t *dtuple_create(mem_heap_t *heap, ulint n_fields) {
+inline DTuple *dtuple_create(mem_heap_t *heap, ulint n_fields) {
   ut_ad(heap);
 
-  const ulint sz = sizeof(dtuple_t) + n_fields * sizeof(dfield_t);
-  auto tuple = reinterpret_cast<dtuple_t *>(mem_heap_alloc(heap, sz));
+  const ulint sz = sizeof(DTuple) + n_fields * sizeof(dfield_t);
+  auto tuple = reinterpret_cast<DTuple *>(mem_heap_alloc(heap, sz));
 
   tuple->info_bits = 0;
   tuple->n_fields = n_fields;
@@ -426,7 +427,7 @@ inline dtuple_t *dtuple_create(mem_heap_t *heap, ulint n_fields) {
  * @param n_fields Number of fields.
  * @return Data tuple.
  */
-inline const dtuple_t *dtuple_from_fields(dtuple_t *tuple, const dfield_t *fields, ulint n_fields) {
+inline const DTuple *dtuple_from_fields(DTuple *tuple, const dfield_t *fields, ulint n_fields) {
   tuple->info_bits = 0;
   tuple->n_fields = tuple->n_fields_cmp = n_fields;
   tuple->fields = (dfield_t *)fields;
@@ -443,9 +444,9 @@ inline const dtuple_t *dtuple_from_fields(dtuple_t *tuple, const dfield_t *field
  * @param heap The memory heap where the tuple is created.
  * @return A copy of the tuple.
  */
-inline dtuple_t *dtuple_copy(const dtuple_t *tuple, mem_heap_t *heap) {
+inline DTuple *dtuple_copy(const DTuple *tuple, mem_heap_t *heap) {
   ulint n_fields = dtuple_get_n_fields(tuple);
-  dtuple_t *new_tuple = dtuple_create(heap, n_fields);
+  DTuple *new_tuple = dtuple_create(heap, n_fields);
 
   for (ulint i = 0; i < n_fields; i++) {
     dfield_copy(dtuple_get_nth_field(new_tuple, i), dtuple_get_nth_field(tuple, i));
@@ -462,7 +463,7 @@ inline dtuple_t *dtuple_copy(const dtuple_t *tuple, mem_heap_t *heap) {
  * @param tuple The typed data tuple.
  * @return The sum of data lengths.
  */
-inline ulint dtuple_get_data_size(const dtuple_t *tuple) {
+inline ulint dtuple_get_data_size(const DTuple *tuple) {
   ut_ad(dtuple_check_typed(tuple));
   ut_ad(tuple->magic_n == DATA_TUPLE_MAGIC_N);
 
@@ -485,7 +486,7 @@ inline ulint dtuple_get_data_size(const dtuple_t *tuple) {
 
 /** Computes the number of externally stored fields in a data tuple.
 @return	number of externally stored fields */
-inline ulint dtuple_get_n_ext(const dtuple_t *tuple) /*!< in: tuple */
+inline ulint dtuple_get_n_ext(const DTuple *tuple) /*!< in: tuple */
 {
   ulint n_ext = 0;
   ulint n_fields = tuple->n_fields;
@@ -507,7 +508,7 @@ inline ulint dtuple_get_n_ext(const dtuple_t *tuple) /*!< in: tuple */
  * @param tuple The data tuple.
  * @param n The number of fields to set.
  */
-inline void dtuple_set_types_binary(dtuple_t *tuple, ulint n) {
+inline void dtuple_set_types_binary(DTuple *tuple, ulint n) {
   for (ulint i = 0; i < n; i++) {
     auto dfield_type = dfield_get_type(dtuple_get_nth_field(tuple, i));
     dtype_set(dfield_type, DATA_BINARY, 0, 0);
@@ -523,7 +524,7 @@ inline void dtuple_set_types_binary(dtuple_t *tuple, ulint n) {
  * @param tree_id Index tree id.
  * @return The folded value.
  */
-inline ulint dtuple_fold(const dtuple_t *tuple, ulint n_fields, ulint n_bytes, uint64_t tree_id) {
+inline ulint dtuple_fold(const DTuple *tuple, ulint n_fields, ulint n_bytes, uint64_t tree_id) {
   ut_ad(tuple->magic_n == DATA_TUPLE_MAGIC_N);
   ut_ad(dtuple_check_typed(tuple));
 
@@ -573,7 +574,7 @@ inline void data_write_sql_null(byte *data, ulint len) {
  * @param tuple The dtuple.
  * @return True if some field is SQL null.
  */
-inline bool dtuple_contains_null(const dtuple_t *tuple) {
+inline bool dtuple_contains_null(const DTuple *tuple) {
   auto n = dtuple_get_n_fields(tuple);
 
   for (ulint i = 0; i < n; i++) {
@@ -595,7 +596,7 @@ inline void dtuple_big_rec_free(big_rec_t *vector) {
   mem_heap_free(vector->heap);
 }
 
-inline size_t dtuple_t::get_n_ext() const {
+inline size_t DTuple::get_n_ext() const {
   size_t n_ext = 0;
   for (uint32_t i = 0; i < n_fields; ++i) {
     if (dfield_is_ext(&fields[i])) {
@@ -605,7 +606,7 @@ inline size_t dtuple_t::get_n_ext() const {
   return n_ext;
 }
 
-inline bool dtuple_t::has_ext() const {
+inline bool DTuple::has_ext() const {
   for (uint32_t i = 0; i < n_fields; ++i) {
     if (dfield_is_ext(&fields[i])) {
       return true;
@@ -618,4 +619,4 @@ inline bool dtuple_t::has_ext() const {
  * @param o Output stream
  * @param tuple Tuple to print
 */
-std::ostream &dtuple_print(std::ostream &o, const dtuple_t *tuple);
+std::ostream &dtuple_print(std::ostream &o, const DTuple *tuple);

@@ -609,7 +609,7 @@ Purge_sys::Purge_sys() noexcept {
 
   rw_lock_create(&m_latch, SYNC_PURGE_LATCH);
 
-  mutex_create(&m_mutex, IF_DEBUG("Purge_sys::m_mutex",) IF_SYNC_DEBUG(SYNC_PURGE_SYS,) Source_location{});
+  mutex_create(&m_mutex, IF_DEBUG("Purge_sys::m_mutex",) IF_SYNC_DEBUG(SYNC_PURGE_SYS,) Current_location());
 
   m_heap = mem_heap_create(256);
 

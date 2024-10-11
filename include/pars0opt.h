@@ -57,7 +57,7 @@ void opt_search_plan(sel_node_t *sel_node);
  * @param[in] plan Plan or nullptr.
  * @param[in] exp Expression or condition.
  */
-void opt_find_all_cols(bool copy_val, dict_index_t *index, sym_node_list_t *col_list, Plan *plan, que_node_t *exp);
+void opt_find_all_cols(bool copy_val, Index *index, sym_node_list_t *col_list, Plan *plan, que_node_t *exp);
 
 /**
  * @brief Prints information about a query plan.

@@ -111,7 +111,7 @@ void Phy_rec::get_col_offsets(ulint *offsets) const noexcept {
   ulint any_ext{};
   ulint null_mask{1};
   auto nulls = m_rec - 1;
-  auto lens = nulls - UT_BITS_IN_BYTES(m_index->n_nullable);
+  auto lens = nulls - UT_BITS_IN_BYTES(m_index->m_n_nullable);
 
 #ifdef UNIV_DEBUG
   offsets[2] = reinterpret_cast<uintptr_t>(m_rec);
@@ -124,9 +124,9 @@ void Phy_rec::get_col_offsets(ulint *offsets) const noexcept {
 
   /* Read the lengths of fields 0..n */
   for (ulint i{}; i < rec_offs_n_fields(offsets); ++i) {
-    const auto field = dict_index_get_nth_field(m_index, i);
+    const auto field = m_index->get_nth_field(i);
 
-    if (!(dict_field_get_col(field)->prtype & DATA_NOT_NULL)) {
+    if (!(field->get_col()->prtype & DATA_NOT_NULL)) {
       /* Nullable field => read the null flag */
 
       if (unlikely(!(byte)null_mask)) {
@@ -145,13 +145,13 @@ void Phy_rec::get_col_offsets(ulint *offsets) const noexcept {
       null_mask <<= 1;
     }
 
-    if (unlikely(field->fixed_len == 0)) {
+    if (unlikely(field->m_fixed_len == 0)) {
       ulint len = *lens;
 
       --lens;
 
       /* Variable-length field: read the length */
-      const auto col = dict_field_get_col(field);
+      const auto col = field->get_col();
 
       /* If the maximum length of the field is up to 255 bytes, the actual
       length is always stored in one byte. If the maximum length is more than
@@ -169,7 +169,7 @@ void Phy_rec::get_col_offsets(ulint *offsets) const noexcept {
           offs += len & 0x3fff;
 
           if (unlikely(len & 0x4000)) {
-            ut_ad(dict_index_is_clust(m_index));
+            ut_ad(m_index->is_clustered());
             any_ext = REC_OFFS_EXTERNAL;
             set_field_len(i, offs | REC_OFFS_EXTERNAL);
           } else {
@@ -182,7 +182,7 @@ void Phy_rec::get_col_offsets(ulint *offsets) const noexcept {
       offs += len;
       set_field_len(i, offs);
     } else {
-      offs += field->fixed_len;
+      offs += field->m_fixed_len;
       set_field_len(i, offs);
     }
   }
@@ -201,7 +201,7 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
 
   if (unlikely(offsets == nullptr) || unlikely(rec_offs_get_n_alloc(offsets) < size)) {
     if (unlikely(*heap == nullptr)) {
-      *heap = mem_heap_create_func(size * sizeof(ulint), MEM_HEAP_DYNAMIC, sl.m_from.file_name(), sl.m_from.line());
+      *heap = mem_heap_create_func(size * sizeof(ulint), MEM_HEAP_DYNAMIC, std::move(sl));
     }
     offsets = reinterpret_cast<ulint *>(mem_heap_alloc(*heap, size * sizeof(ulint)));
     rec_offs_set_n_alloc(offsets, size);
@@ -278,19 +278,19 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
   return offsets;
 }
 
-void Phy_rec::encode(dict_index_t *index, rec_t *rec, ulint status, const DFields& dfields) noexcept {
+void Phy_rec::encode(Index *index, rec_t *rec, ulint status, const DFields& dfields) noexcept {
   ulint null_mask = 1;
   ulint n_node_ptr_field;
 
   ut_ad(dfields.second > 0);
-  ut_ad(dfields.second <= dict_index_get_n_fields(index));
+  ut_ad(dfields.second <= index->get_n_fields());
 
   switch (expect(status, REC_STATUS_ORDINARY)) {
     case REC_STATUS_ORDINARY:
       n_node_ptr_field = ULINT_UNDEFINED;
       break;
     case REC_STATUS_NODE_PTR:
-      ut_ad(dfields.second == dict_index_get_n_unique_in_tree(index) + 1);
+      ut_ad(dfields.second == index->get_n_unique() + 1);
       n_node_ptr_field = dfields.second - 1;
       break;
     case REC_STATUS_INFIMUM:
@@ -305,7 +305,7 @@ void Phy_rec::encode(dict_index_t *index, rec_t *rec, ulint status, const DField
 
   auto end = rec;
   auto nulls = rec - 1;
-  auto lens = nulls - UT_BITS_IN_BYTES(index->n_nullable);
+  auto lens = nulls - UT_BITS_IN_BYTES(index->m_n_nullable);
 
   /* Clear the SQL-null flags */
   memset(lens + 1, 0, nulls - lens);
@@ -328,7 +328,7 @@ void Phy_rec::encode(dict_index_t *index, rec_t *rec, ulint status, const DField
 
     if (!(dtype_get_prtype(type) & DATA_NOT_NULL)) {
       /* Nullable field */
-      ut_ad(index->n_nullable > 0);
+      ut_ad(index->m_n_nullable > 0);
 
       if (unlikely(!(byte)null_mask)) {
         nulls--;
@@ -349,8 +349,8 @@ void Phy_rec::encode(dict_index_t *index, rec_t *rec, ulint status, const DField
     /* only nullable fields can be null */
     ut_ad(!dfield_is_null(field));
 
-    const auto ifield = dict_index_get_nth_field(index, i);
-    const auto fixed_len = ifield->fixed_len;
+    const auto ifield = index->get_nth_field(i);
+    const auto fixed_len = ifield->m_fixed_len;
 
     /* If the maximum length of a variable-length field
     is up to 255 bytes, the actual length is always stored
@@ -365,7 +365,7 @@ void Phy_rec::encode(dict_index_t *index, rec_t *rec, ulint status, const DField
 
     } else if (dfield_is_ext(field)) {
 
-      ut_ad(ifield->col->len >= 256 || ifield->col->mtype == DATA_BLOB);
+      ut_ad(ifield->m_col->len >= 256 || ifield->m_col->mtype == DATA_BLOB);
       ut_ad(len <= REC_MAX_INDEX_COL_LEN + BTR_EXTERN_FIELD_REF_SIZE);
 
       *lens-- = (byte)(len >> 8) | 0xc0;
@@ -393,8 +393,8 @@ void Phy_rec::encode(dict_index_t *index, rec_t *rec, ulint status, const DField
   }
 }
 
-Phy_rec::Size Phy_rec::get_encoded_size(dict_index_t* index, ulint, const DFields& dfields) noexcept {
-  Size size{UT_BITS_IN_BYTES(index->n_nullable), 0};
+Phy_rec::Size Phy_rec::get_encoded_size(Index* index, ulint, const DFields& dfields) noexcept {
+  Size size{UT_BITS_IN_BYTES(index->m_n_nullable), 0};
 
   ut_ad(dfields.second > 0);
 
@@ -402,10 +402,10 @@ Phy_rec::Size Phy_rec::get_encoded_size(dict_index_t* index, ulint, const DField
   for (ulint i{}; i < dfields.second; ++i) {
     const auto dfield{&dfields.first[i]};
     const auto len = dfield_get_len(dfield);
-    const auto dict_field{dict_index_get_nth_field(index, i)};
-    const auto col = dict_field_get_col(dict_field);
+    const auto dict_field{index->get_nth_field(i)};
+    const auto col = dict_field->get_col();
 
-    ut_ad(dict_col_type_assert_equal(col, dfield_get_type(dfield)));
+    ut_ad(col->assert_equal(dfield_get_type(dfield)));
 
     if (dfield_is_null(dfield)) {
       /* No length is stored for NULL fields. */
@@ -420,10 +420,10 @@ Phy_rec::Size Phy_rec::get_encoded_size(dict_index_t* index, ulint, const DField
     the actual length is stored in one byte for 0..127.  The length will be encoded in
     two bytes when it is 128 or more, or when the field is stored externally. */
 
-    if (dict_field->fixed_len) {
-      ut_ad(len == dict_field->fixed_len);
-      /* dict_index_add_col() should guarantee this */
-      ut_ad(!dict_field->prefix_len || dict_field->fixed_len == dict_field->prefix_len);
+    if (dict_field->m_fixed_len) {
+      ut_ad(len == dict_field->m_fixed_len);
+      /* index_add_col() should guarantee this */
+      ut_ad(!dict_field->m_prefix_len || dict_field->m_fixed_len == dict_field->m_prefix_len);
     } else if (dfield_is_ext(dfield)) {
       ut_ad(col->len >= 256 || col->mtype == DATA_BLOB);
       size.first += 2;
@@ -516,7 +516,7 @@ void rec_set_nth_field_sql_null(rec_t *rec, ulint n) noexcept {
   rec_set_nth_field_null_bit(rec, n, true);
 }
 
-rec_t *rec_convert_dtuple_to_rec(byte *buf, const dict_index_t *index, const dtuple_t *dtuple, ulint n_ext) noexcept {
+rec_t *rec_convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dtuple, ulint n_ext) noexcept {
 
   ut_ad(dtuple_validate(dtuple));
   ut_ad(dtuple_check_typed(dtuple));
@@ -614,7 +614,7 @@ rec_t *rec_convert_dtuple_to_rec(byte *buf, const dict_index_t *index, const dtu
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});  
+      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());  
     }
 
     ut_ad(rec_validate(rec, offsets));
@@ -633,7 +633,7 @@ rec_t *rec_convert_dtuple_to_rec(byte *buf, const dict_index_t *index, const dtu
   return rec;
 }
 
-void rec_copy_prefix_to_dtuple(dtuple_t *tuple, const rec_t *rec, const dict_index_t *index, ulint n_fields, mem_heap_t *heap) noexcept {
+void rec_copy_prefix_to_dtuple(DTuple *tuple, const rec_t *rec, const Index *index, ulint n_fields, mem_heap_t *heap) noexcept {
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
@@ -641,7 +641,7 @@ void rec_copy_prefix_to_dtuple(dtuple_t *tuple, const rec_t *rec, const dict_ind
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, n_fields, &heap, Source_location{});
+    offsets = record.get_col_offsets(offsets, n_fields, &heap, Current_location());
   }
 
   ut_ad(rec_validate(rec, offsets));
@@ -664,7 +664,7 @@ void rec_copy_prefix_to_dtuple(dtuple_t *tuple, const rec_t *rec, const dict_ind
   }
 }
 
-rec_t *rec_copy_prefix_to_buf(const rec_t *rec, const dict_index_t *index, ulint n_fields, byte *&buf, ulint &buf_size) noexcept {
+rec_t *rec_copy_prefix_to_buf(const rec_t *rec, const Index *index, ulint n_fields, byte *&buf, ulint &buf_size) noexcept {
   prefetch_rw(buf);
 
   ut_ad(rec_validate(rec));

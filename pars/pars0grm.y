@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1997, 2009, Innobase Oy. All Rights Reserved.
+Copyright (c) 2024, Sunny Bains. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -39,8 +40,8 @@ que_node_t */
 
 /* #define __STDC__ */
 
-int
-yylex();
+extern "C" int yylex();
+
 %}
 
 %token PARS_INT_LIT
@@ -276,20 +277,11 @@ exp_list:
 select_item:
 	exp			{ $$ = $1; }
 	| PARS_COUNT_TOKEN '(' '*' ')'
-				{ $$ = pars_func(&pars_count_token,
-				          que_node_list_add_last(nullptr,
-					    sym_tab_add_int_lit(
-						pars_sym_tab_global, 1))); }
+				{ $$ = pars_func(&pars_count_token, que_node_list_add_last(nullptr, sym_tab_add_int_lit( pars_sym_tab_global, 1))); }
 	| PARS_COUNT_TOKEN '(' PARS_DISTINCT_TOKEN PARS_ID_TOKEN ')'
-				{ $$ = pars_func(&pars_count_token,
-					    que_node_list_add_last(nullptr,
-						pars_func(&pars_distinct_token,
-						     que_node_list_add_last(
-								nullptr, $4)))); }
+				{ $$ = pars_func(&pars_count_token, que_node_list_add_last(nullptr, pars_func(&pars_distinct_token, que_node_list_add_last( nullptr, $4)))); }
 	| PARS_SUM_TOKEN '(' exp ')'
-				{ $$ = pars_func(&pars_sum_token,
-						que_node_list_add_last(nullptr,
-									$3)); }
+				{ $$ = pars_func(&pars_sum_token, que_node_list_add_last(nullptr, $3)); }
 ;
 
 select_item_list:
@@ -332,9 +324,7 @@ order_direction:
 order_by_clause:
 	/* Nothing */		{ $$ = nullptr; }
 	| PARS_ORDER_TOKEN PARS_BY_TOKEN PARS_ID_TOKEN order_direction
-				{ $$ = pars_order_by(
-                                          static_cast<sym_node_t*>($3),
-                                          static_cast<pars_res_word_t*>($4)); }
+				{ $$ = pars_order_by(static_cast<sym_node_t*>($3), static_cast<pars_res_word_t*>($4)); }
 ;
 
 select_statement:
@@ -359,18 +349,13 @@ insert_statement_start:
 
 insert_statement:
 	insert_statement_start PARS_VALUES_TOKEN '(' exp_list ')'
-				{ $$ = pars_insert_statement(
-                                         static_cast<sym_node_t*>($1), $4, nullptr); }
+				{ $$ = pars_insert_statement( static_cast<sym_node_t*>($1), $4, nullptr); }
 	| insert_statement_start select_statement
-				{ $$ = pars_insert_statement(
-                                         static_cast<sym_node_t*>($1),
-                                         nullptr,
-                                         static_cast<sel_node_t*>($2)); }
+				{ $$ = pars_insert_statement( static_cast<sym_node_t*>($1), nullptr, static_cast<sel_node_t*>($2)); }
 ;
 
 column_assignment:
-	PARS_ID_TOKEN '=' exp	{ $$ = pars_column_assignment(
-                                         static_cast<sym_node_t*>($1), $3); }
+	PARS_ID_TOKEN '=' exp	{ $$ = pars_column_assignment( static_cast<sym_node_t*>($1), $3); }
 ;
 
 column_assignment_list:
@@ -388,62 +373,41 @@ cursor_positioned:
 update_statement_start:
 	PARS_UPDATE_TOKEN PARS_ID_TOKEN
 	PARS_SET_TOKEN
-	column_assignment_list	{ $$ = pars_update_statement_start(
-                                         false,
-                                         static_cast<sym_node_t*>($2),
-                                         static_cast<col_assign_node_t*>($4)); }
+	column_assignment_list	{ $$ = pars_update_statement_start( false, static_cast<sym_node_t*>($2), static_cast<col_assign_node_t*>($4)); }
 ;
 
 update_statement_searched:
 	update_statement_start
-	search_condition	{ $$ = pars_update_statement(
-                                         static_cast<upd_node_t*>($1),
-                                         nullptr,
-                                         static_cast<que_node_t*>($2)); }
+	search_condition	{ $$ = pars_update_statement( static_cast<upd_node_t*>($1), nullptr, static_cast<que_node_t*>($2)); }
 ;
 
 update_statement_positioned:
 	update_statement_start
-	cursor_positioned	{ $$ = pars_update_statement(
-                                         static_cast<upd_node_t*>($1), 
-                                         static_cast<sym_node_t*>($2),
-                                         nullptr); }
+	cursor_positioned	{ $$ = pars_update_statement( static_cast<upd_node_t*>($1), static_cast<sym_node_t*>($2), nullptr); }
 ;
 
 delete_statement_start:
 	PARS_DELETE_TOKEN PARS_FROM_TOKEN
-	PARS_ID_TOKEN		{ $$ = pars_update_statement_start(
-                                         true,
-                                         static_cast<sym_node_t*>($3),
-                                         nullptr); }
+	PARS_ID_TOKEN		{ $$ = pars_update_statement_start( true, static_cast<sym_node_t*>($3), nullptr); }
 ;
 
 delete_statement_searched:
         delete_statement_start
-        search_condition        { $$ = pars_update_statement(
-                                        static_cast<upd_node_t*>($1),
-                                        nullptr,
-                                        static_cast<que_node_t*>($2)); }
+        search_condition        { $$ = pars_update_statement( static_cast<upd_node_t*>($1), nullptr, static_cast<que_node_t*>($2)); }
 ;
 
 delete_statement_positioned:
         delete_statement_start
-        cursor_positioned       { $$ = pars_update_statement(
-                                        static_cast<upd_node_t*>($1),
-                                        static_cast<sym_node_t*>($2),
-                                        nullptr); }
+        cursor_positioned       { $$ = pars_update_statement( static_cast<upd_node_t*>($1), static_cast<sym_node_t*>($2), nullptr); }
 ;
 
 assignment_statement:
         PARS_ID_TOKEN PARS_ASSIGN_TOKEN exp
-                                { $$ = pars_assignment_statement(
-                                        static_cast<sym_node_t*>($1),
-                                        static_cast<que_node_t*>($3)); }
+                                { $$ = pars_assignment_statement( static_cast<sym_node_t*>($1), static_cast<que_node_t*>($3)); }
 
 row_printf_statement:
 	PARS_ROW_PRINTF_TOKEN select_statement
-				{ $$ = pars_row_printf_statement(
-                                         static_cast<sel_node_t*>($2)); }
+				{ $$ = pars_row_printf_statement( static_cast<sel_node_t*>($2)); }
 ;
 
 elsif_element:
@@ -483,10 +447,7 @@ for_statement:
 	exp PARS_DDOT_TOKEN exp
 	PARS_LOOP_TOKEN statement_list
 	PARS_END_TOKEN PARS_LOOP_TOKEN
-				{ $$ = pars_for_statement(
-                                         static_cast<sym_node_t*>($2),
-                                         $4, $6, $8); }
-;
+				{ $$ = pars_for_statement(static_cast<sym_node_t*>($2), $4, $6, $8); } ;
 
 exit_statement:
 	PARS_EXIT_TOKEN		{ $$ = pars_exit_statement(); }
@@ -498,37 +459,24 @@ return_statement:
 
 open_cursor_statement:
 	PARS_OPEN_TOKEN PARS_ID_TOKEN
-				{ $$ = pars_open_statement(
-					ROW_SEL_OPEN_CURSOR,
-                                        static_cast<sym_node_t*>($2)); }
+				{ $$ = pars_open_statement(ROW_SEL_OPEN_CURSOR, static_cast<sym_node_t*>($2)); }
 ;
 
 close_cursor_statement:
 	PARS_CLOSE_TOKEN PARS_ID_TOKEN
-				{ $$ = pars_open_statement(
-					ROW_SEL_CLOSE_CURSOR,
-                                        static_cast<sym_node_t*>($2)); }
+				{ $$ = pars_open_statement(ROW_SEL_CLOSE_CURSOR, static_cast<sym_node_t*>($2)); }
 ;
 
 fetch_statement:
         PARS_FETCH_TOKEN PARS_ID_TOKEN PARS_INTO_TOKEN variable_list
-                                { $$ = pars_fetch_statement(
-                                        static_cast<sym_node_t*>($2),
-                                        static_cast<sym_node_t*>($4), nullptr); }
+                                { $$ = pars_fetch_statement( static_cast<sym_node_t*>($2), static_cast<sym_node_t*>($4), nullptr); }
         | PARS_FETCH_TOKEN PARS_ID_TOKEN PARS_INTO_TOKEN user_function_call
-                                { $$ = pars_fetch_statement(
-                                        static_cast<sym_node_t*>($2),
-                                        nullptr,
-                                        static_cast<sym_node_t*>($4)); }
+                                { $$ = pars_fetch_statement( static_cast<sym_node_t*>($2), nullptr, static_cast<sym_node_t*>($4)); }
 ;
 
 column_def:
         PARS_ID_TOKEN type_name opt_column_len opt_unsigned opt_not_null
-                                { $$ = pars_column_def(
-                                        static_cast<sym_node_t*>($1),
-                                        static_cast<pars_res_word_t*>($2),
-                                        static_cast<sym_node_t*>($3),
-                                        $4, $5); }
+                                { $$ = pars_column_def( static_cast<sym_node_t*>($1), static_cast<pars_res_word_t*>($2), static_cast<sym_node_t*>($3), $4, $5); }
 ;
 
 column_def_list:
@@ -567,9 +515,7 @@ not_fit_in_memory:
 create_table:
 	PARS_CREATE_TOKEN PARS_TABLE_TOKEN
 	PARS_ID_TOKEN '(' column_def_list ')'
-	not_fit_in_memory	{ $$ = pars_create_table(
-                                         static_cast<sym_node_t*>($3),
-                                         static_cast<sym_node_t*>($5), $7); }
+	not_fit_in_memory	{ $$ = pars_create_table(static_cast<sym_node_t*>($3), static_cast<sym_node_t*>($5), $7); }
 ;
 
 column_list:
@@ -594,11 +540,8 @@ create_index:
 	PARS_INDEX_TOKEN
 	PARS_ID_TOKEN PARS_ON_TOKEN PARS_ID_TOKEN
 	'(' column_list ')'	{ $$ = pars_create_index(
-                                        static_cast<pars_res_word_t*>($2),
-                                        static_cast<pars_res_word_t*>($3),
-                                        static_cast<sym_node_t*>($5),
-                                        static_cast<sym_node_t*>($7),
-                                        static_cast<sym_node_t*>($9)); }
+                                        static_cast<pars_res_word_t*>($2), static_cast<pars_res_word_t*>($3),
+                                        static_cast<sym_node_t*>($5), static_cast<sym_node_t*>($7), static_cast<sym_node_t*>($9)); }
 ;
 
 commit_statement:
@@ -621,15 +564,9 @@ type_name:
 
 parameter_declaration:
         PARS_ID_TOKEN PARS_IN_TOKEN type_name
-                                { $$ = pars_parameter_declaration(
-                                        static_cast<sym_node_t*>($1),
-                                        PARS_INPUT,
-                                        static_cast<pars_res_word_t*>($3)); }
+                                { $$ = pars_parameter_declaration(static_cast<sym_node_t*>($1), PARS_INPUT, static_cast<pars_res_word_t*>($3)); }
         | PARS_ID_TOKEN PARS_OUT_TOKEN type_name
-                                { $$ = pars_parameter_declaration(
-                                        static_cast<sym_node_t*>($1),
-                                        PARS_OUTPUT,
-                                        static_cast<pars_res_word_t*>($3)); }
+                                { $$ = pars_parameter_declaration(static_cast<sym_node_t*>($1), PARS_OUTPUT, static_cast<pars_res_word_t*>($3)); }
 ;
 
 parameter_declaration_list:
@@ -641,9 +578,7 @@ parameter_declaration_list:
 
 variable_declaration:
         PARS_ID_TOKEN type_name ';'
-                                { $$ = pars_variable_declaration(
-                                        static_cast<sym_node_t*>($1),
-                                        static_cast<pars_res_word_t*>($2)); }
+                                { $$ = pars_variable_declaration(static_cast<sym_node_t*>($1), static_cast<pars_res_word_t*>($2)); }
 ;
 
 variable_declaration_list:
@@ -655,15 +590,11 @@ variable_declaration_list:
 cursor_declaration:
         PARS_DECLARE_TOKEN PARS_CURSOR_TOKEN PARS_ID_TOKEN
         PARS_IS_TOKEN select_statement ';'
-                                { $$ = pars_cursor_declaration(
-                                        static_cast<sym_node_t*>($3),
-                                        static_cast<sel_node_t*>($5)); }
+                                { $$ = pars_cursor_declaration( static_cast<sym_node_t*>($3), static_cast<sel_node_t*>($5)); }
 ;
 
 function_declaration:
-        PARS_DECLARE_TOKEN PARS_FUNCTION_TOKEN PARS_ID_TOKEN ';'
-                                { $$ = pars_function_declaration(
-                                        static_cast<sym_node_t*>($3)); }
+        PARS_DECLARE_TOKEN PARS_FUNCTION_TOKEN PARS_ID_TOKEN ';'{ $$ = pars_function_declaration( static_cast<sym_node_t*>($3)); }
 ;
 
 declaration:
@@ -684,10 +615,7 @@ procedure_definition:
         declaration_list
         PARS_BEGIN_TOKEN
         statement_list
-        PARS_END_TOKEN          { $$ = pars_procedure_definition(
-                                        static_cast<sym_node_t*>($2),
-                                        static_cast<sym_node_t*>($4),
-                                        $10); }
+        PARS_END_TOKEN          { $$ = pars_procedure_definition(static_cast<sym_node_t*>($2), static_cast<sym_node_t*>($4), $10); }
 ;
 
 %%

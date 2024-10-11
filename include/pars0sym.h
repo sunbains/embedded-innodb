@@ -31,89 +31,152 @@ Created 12/15/1997 Heikki Tuuri
 #include "row0types.h"
 #include "usr0types.h"
 
-/** Creates a symbol table for a single stored procedure or query.
-@return	own: symbol table */
+/**
+ * @brief Creates a symbol table for a single stored procedure or query.
+ * 
+ * @param[in] heap Memory heap where to create the symbol table.
+ * @return Pointer to the created symbol table.
+ */
+sym_tab_t *sym_tab_create(mem_heap_t *heap);
 
-sym_tab_t *sym_tab_create(mem_heap_t *heap); /** in: memory heap where to create */
 /** Frees the memory allocated dynamically AFTER parsing phase for variables
 etc. in the symbol table. Does not free the mem heap where the table was
 originally created. Frees also SQL explicit cursor definitions. */
-
 void sym_tab_free_private(sym_tab_t *sym_tab); /** in, own: symbol table */
-/** Adds an integer literal to a symbol table.
-@return	symbol table node */
 
-sym_node_t *sym_tab_add_int_lit(
-  sym_tab_t *sym_tab, /** in: symbol table */
-  ulint val
-); /** in: integer value */
-/** Adds an string literal to a symbol table.
-@return	symbol table node */
+/**
+ * @brief Adds an integer literal to a symbol table.
+ * 
+ * @param[in] sym_tab Symbol table to add the integer literal to.
+ * @param[in] val Integer value to add.
+ * 
+ * @return Pointer to the symbol table node.
+ */
+sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, ulint val);
 
-sym_node_t *sym_tab_add_str_lit(
-  sym_tab_t *sym_tab, /** in: symbol table */
-  byte *str,          /** in: string with no quotes around
-                                           it */
-  ulint len
-); /** in: string length */
-/** Add a bound literal to a symbol table.
-@return	symbol table node */
+/**
+ * @brief Adds an string literal to a symbol table.
+ * 
+ * @param[in] sym_tab Symbol table to add the string literal to.
+ * @param[in] str String to add.
+ * @param[in] len Length of the string.
+ * 
+ * @return Pointer to the symbol table node.
+ */
+sym_node_t *sym_tab_add_int_lit(sym_tab_t *sym_tab, ulint val);
 
-sym_node_t *sym_tab_add_bound_lit(
-  sym_tab_t *sym_tab, /** in: symbol table */
-  const char *name,   /** in: name of bound literal */
-  ulint *lit_type
-); /** out: type of literal (PARS_*_LIT) */
-/** Adds an SQL null literal to a symbol table.
-@return	symbol table node */
+/**
+ * @brief Adds an string literal to a symbol table.
+ * 
+ * @param[in] sym_tab Symbol table to add the string literal to.
+ * @param[in] str String to add.
+ * @param[in] len Length of the string.
+ * 
+ * @return Pointer to the symbol table node.
+ */
+sym_node_t *sym_tab_add_str_lit(sym_tab_t *sym_tab, byte *str, ulint len);
 
-sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab); /** in: symbol table */
-/** Adds an identifier to a symbol table.
-@return	symbol table node */
+/**
+ * Add a bound literal to a symbol table.
+ * 
+ * @param[in] sym_tab Symbol table to add the bound literal to.
+ * @param[in] name Name of the bound literal.
+ * @param[out] lit_type Type of the literal (PARS_*_LIT).
+ * 
+ * @return Pointer to the symbol table node.
+ */
+sym_node_t *sym_tab_add_bound_lit(sym_tab_t *sym_tab, const char *name, ulint *lit_type);
 
-sym_node_t *sym_tab_add_id(
-  sym_tab_t *sym_tab, /** in: symbol table */
-  byte *name,         /** in: identifier name */
-  ulint len
-); /** in: identifier length */
+/**
+ * @brief Adds an SQL null literal to a symbol table.
+ * 
+ * @param[in] sym_tab Symbol table to add the null literal to.
+ * 
+ * @return Pointer to the symbol table node.
+ */
+sym_node_t *sym_tab_add_null_lit(sym_tab_t *sym_tab);
 
-/** Add a bound identifier to a symbol table.
-@return	symbol table node */
+/**
+ * @brief Adds an identifier to a symbol table.
+ * 
+ * @param[in] sym_tab Symbol table to add the identifier to.
+ * @param[in] name Name of the identifier.
+ * @param[in] len Length of the identifier.
+ * 
+ * @return Pointer to the symbol table node.
+ */
+sym_node_t *sym_tab_add_id(sym_tab_t *sym_tab, byte *name, ulint len);
 
-sym_node_t *sym_tab_add_bound_id(
-  sym_tab_t *sym_tab, /** in: symbol table */
-  const char *name
-); /** in: name of bound id */
+/**
+ * @brief Add a bound identifier to a symbol table.
+ * 
+ * @param[in] sym_tab Symbol table to add the bound identifier to.
+ * @param[in] name Name of the bound identifier.
+ * 
+ * @return Pointer to the symbol table node.
+ */
+sym_node_t *sym_tab_add_bound_id(sym_tab_t *sym_tab, const char *name);
 
 /** Index of sym_node_struct::field_nos corresponding to the clustered index */
-#define SYM_CLUST_FIELD_NO 0
+constexpr ulint SYM_CLUST_FIELD_NO = 0;
+
 /** Index of sym_node_struct::field_nos corresponding to a secondary index */
-#define SYM_SEC_FIELD_NO 1
+constexpr ulint SYM_SEC_FIELD_NO = 1;
 
 /** Types of a symbol table node */
 enum sym_tab_entry {
-  SYM_VAR = 91,       /** declared parameter or local
-                      variable of a procedure */
-  SYM_IMPLICIT_VAR,   /** storage for a intermediate result
-                      of a calculation */
-  SYM_LIT,            /** literal */
-  SYM_TABLE,          /** database table name */
-  SYM_COLUMN,         /** database table name */
-  SYM_CURSOR,         /** named cursor */
-  SYM_PROCEDURE_NAME, /** stored procedure name */
-  SYM_INDEX,          /** database index name */
-  SYM_FUNCTION        /** user function name */
+  /**
+   * @brief Declared parameter or local variable of a procedure.
+   */
+  SYM_VAR = 91,
+
+  /**
+   * @brief Storage for an intermediate result of a calculation.
+   */
+  SYM_IMPLICIT_VAR,
+
+  /**
+   * @brief Literal.
+   */
+  SYM_LIT,
+
+  /**
+   * @brief Database table name.
+   */
+  SYM_TABLE,
+
+  /**
+   * @brief Database column name.
+   */
+  SYM_COLUMN,
+
+  /**
+   * @brief Named cursor.
+   */
+  SYM_CURSOR,
+
+  /**
+   * @brief Stored procedure name.
+   */
+  SYM_PROCEDURE_NAME,
+
+  /**
+   * @brief Database index name.
+   */
+  SYM_INDEX,
+
+  /**
+   * @brief User function name.
+   */
+  SYM_FUNCTION
 };
 
 /** Symbol table node */
 struct sym_node_struct {
-  que_common_t common; /** node type:
-                       QUE_NODE_SYMBOL */
-  /* NOTE: if the data field in 'common.val' is not nullptr and the symbol
+ /* NOTE: if the data field in 'common.val' is not nullptr and the symbol
   table node is not for a temporary column, the memory for the value has
   been allocated from dynamic memory and it should be freed when the
   symbol table is discarded */
-
   /* 'alias' and 'indirection' are almost the same, but not quite.
   'alias' always points to the primary instance of the variable, while
   'indirection' does the same only if we should use the primary
@@ -126,68 +189,59 @@ struct sym_node_struct {
 
   TODO: It would be cleaner to make 'indirection' a boolean field and
   always use 'alias' to refer to the primary node. */
+  
+   /** Node type: QUE_NODE_SYMBOL */
+  que_common_t common;
 
-  sym_node_t *indirection; /** pointer to
-                           another symbol table
-                           node which contains
-                           the value for this
-                           node, nullptr otherwise */
-  sym_node_t *alias;       /** pointer to
-                           another symbol table
-                           node for which this
-                           node is an alias,
-                           nullptr otherwise */
-  UT_LIST_NODE_T(sym_node_t)
-  col_var_list;                  /** list of table
-                                 columns or a list of
-                                 input variables for an
-                                 explicit cursor */
-  bool copy_val;                 /** true if a column
-                                  and its value should
-                                  be copied to dynamic
-                                  memory when fetched */
-  ulint field_nos[2];            /** if a column, in
-                                 the position
-                                 SYM_CLUST_FIELD_NO is
-                                 the field number in the
-                                 clustered index; in
-                                 the position
-                                 SYM_SEC_FIELD_NO
-                                 the field number in the
-                                 non-clustered index to
-                                 use first; if not found
-                                 from the index, then
-                                 ULINT_UNDEFINED */
-  bool resolved;                 /** true if the
-                                  meaning of a variable
-                                  or a column has been
-                                  resolved; for literals
-                                  this is always true */
-  enum sym_tab_entry token_type; /** type of the
-                                 parsed token */
-  const char *name;              /** name of an id */
-  ulint name_len;                /** id name length */
-  dict_table_t *table;           /** table definition
-                                 if a table id or a
-                                 column id */
-  ulint col_no;                  /** column number if a
-                                 column */
-  sel_buf_t *prefetch_buf;       /** nullptr, or a buffer
-                                 for cached column
-                                 values for prefetched
-                                 rows */
-  sel_node_t *cursor_def;        /** cursor definition
-                                 select node if a
-                                 named cursor */
-  ulint param_type;              /** PARS_INPUT,
-                                 PARS_OUTPUT, or
-                                 PARS_NOT_PARAM if not a
-                                 procedure parameter */
-  sym_tab_t *sym_table;          /** back pointer to
-                                 the symbol table */
-  UT_LIST_NODE_T(sym_node_t)
-  sym_list; /** list of symbol
-            nodes */
+  /** Pointer to another symbol table node which contains the value for this node, nullptr otherwise */
+  sym_node_t *indirection;
+
+  /** Pointer to another symbol table node for which this node is an alias, nullptr otherwise */
+  sym_node_t *alias;
+
+  /** List of table columns or a list of input variables for an explicit cursor */
+  UT_LIST_NODE_T(sym_node_t) col_var_list;
+
+  /** True if a column and its value should be copied to dynamic memory when fetched */
+  bool copy_val;
+
+  /** If a column, in the position SYM_CLUST_FIELD_NO is the field number in the clustered
+   * index; in the position SYM_SEC_FIELD_NO the field number in the non-clustered index
+   * to use first; if not found from the index, then ULINT_UNDEFINED */
+  ulint field_nos[2];
+
+  /** True if the meaning of a variable or a column has been resolved; for literals this is always true */
+  bool resolved;
+
+  /** Type of the parsed token */
+  sym_tab_entry token_type;
+
+  /** Name of an id */
+  const char *name;
+
+  /** Id name length */
+  ulint name_len;
+
+  /** Table definition if a table id or a column id */
+  Table *table;
+
+  /** Column number if a column */
+  ulint col_no;
+
+  /** nullptr, or a buffer for cached column values for prefetched rows */
+  sel_buf_t *prefetch_buf;
+
+  /** Cursor definition select node if a named cursor */
+  sel_node_t *cursor_def;
+
+  /** PARS_INPUT, PARS_OUTPUT, or PARS_NOT_PARAM if not a procedure parameter */
+  ulint param_type;
+
+  /** Back pointer to the symbol table */
+  sym_tab_t *sym_table;
+
+  /** List of symbol nodes */
+  UT_LIST_NODE_T(sym_node_t) sym_list;
 };
 
 UT_LIST_NODE_GETTER_DEFINITION(sym_node_t, col_var_list);

@@ -181,7 +181,7 @@ void row_sel_prebuild_graph(row_prebuilt_t *prebuilt); /*!< in: prebuilt handle 
  * @return DB_SUCCESS, DB_RECORD_NOT_FOUND, DB_END_OF_INDEX, DB_DEADLOCK,
  *         DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD.
  */
-db_err row_search_for_client(ib_recovery_t recovery, ib_srch_mode_t mode, row_prebuilt_t *prebuilt, ib_match_t match_mode, ib_cur_op_t direction);
+db_err row_search_mvcc(ib_recovery_t recovery, ib_srch_mode_t mode, row_prebuilt_t *prebuilt, ib_match_t match_mode, ib_cur_op_t direction);
 
 /**
  * @brief Reads the current row from the fetch cache.
@@ -229,18 +229,18 @@ struct sel_buf_struct {
 
 /** Query plan */
 struct Plan {
-  Plan(FSP *fsp, Btree *btree, Lock_sys *lock_sys) noexcept
-  : pcur{fsp, btree, lock_sys},
-    clust_pcur{fsp, btree, lock_sys} { }
+  Plan(FSP *fsp, Btree *btree) noexcept
+  : pcur{fsp, btree},
+    clust_pcur{fsp, btree} { }
 
   /** Table struct in the dictionary cache */
-  dict_table_t *table;
+  Table *table;
 
   /** table index used in the search */
-  dict_index_t *index;
+  Index *index;
 
   /** persistent cursor used to search the index */
-  Btree_pcursor pcur{srv_fsp, srv_btree_sys, srv_lock_sys};
+  Btree_pcursor pcur{srv_fsp, srv_btree_sys};
 
   /** true if cursor traveling upwards */
   bool asc{};
@@ -262,7 +262,7 @@ struct Plan {
   que_node_t **tuple_exps{};
 
   /** search tuple */
-  dtuple_t *tuple{};
+  DTuple *tuple{};
 
   /** search mode: PAGE_CUR_G, ... */
   ib_srch_mode_t mode{};
@@ -306,10 +306,10 @@ struct Plan {
   ulint *clust_map{};
 
   /** the reference to the clustered index entry is built here if index is a non-clustered index */
-  dtuple_t *clust_ref{};
+  DTuple *clust_ref{};
 
   /** if index is non-clustered, we use this pcur to search the clustered index */
-  Btree_pcursor clust_pcur{srv_fsp, srv_btree_sys, srv_lock_sys};
+  Btree_pcursor clust_pcur{srv_fsp, srv_btree_sys};
 
   /** memory heap used in building an old version of a row, or nullptr */
   mem_heap_t *old_vers_heap{};

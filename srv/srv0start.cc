@@ -37,19 +37,15 @@ Starts the InnoDB database server
 Created 2/16/1996 Heikki Tuuri
 *************************************************************************/
 
-#include "srv0srv.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "btr0pcur.h"
-
 #include "buf0buf.h"
 #include "buf0dblwr.h"
 #include "buf0flu.h"
 #include "buf0rea.h"
 #include "data0data.h"
 #include "data0type.h"
-#include "dict0boot.h"
-#include "dict0crea.h"
 #include "dict0dict.h"
 #include "dict0load.h"
 #include "fil0fil.h"
@@ -79,6 +75,7 @@ Created 2/16/1996 Heikki Tuuri
 #include "trx0roll.h"
 #include "trx0sys.h"
 #include "trx0trx.h"
+#include "srv0srv.h"
 #include "usr0sess.h"
 #include "ut0mem.h"
 
@@ -668,7 +665,23 @@ ib_err_t InnoDB::start() noexcept {
       return DB_ERROR;
     }
 
-    dict_create();
+    ut_a(srv_dict_sys == nullptr);
+    srv_dict_sys = Dict::create(srv_btree_sys);
+
+    if (srv_dict_sys == nullptr) {
+      srv_startup_abort(DB_OUT_OF_MEMORY);
+      return DB_ERROR;
+    }
+
+    if (auto err = srv_dict_sys->create_instance(); err != DB_SUCCESS) {
+      srv_startup_abort(err);
+      return DB_ERROR;
+    }
+
+    if (auto err = srv_dict_sys->open(false); err != DB_SUCCESS) {
+      srv_startup_abort(err);
+      return DB_ERROR;
+    }
 
     srv_startup_is_before_trx_rollback_phase = false;
 
@@ -746,11 +759,6 @@ ib_err_t InnoDB::start() noexcept {
       return DB_ERROR;
     }
 
-    /* Note that trx_sys_init_at_db_start() only needs to access the
-    system tablespace. */
-
-    dict_boot();
-
     err = srv_trx_sys->start(srv_config.m_force_recovery);
 
     {
@@ -765,11 +773,20 @@ ib_err_t InnoDB::start() noexcept {
 
     recv_recovery_from_checkpoint_finish(srv_dblwr, srv_config.m_force_recovery);
 
+    ut_a(srv_dict_sys == nullptr);
+
+    srv_dict_sys = Dict::create(srv_btree_sys);
+
+    if (srv_dict_sys == nullptr) {
+      srv_startup_abort(DB_OUT_OF_MEMORY);
+      return DB_ERROR;
+    }
+
     if (srv_config.m_force_recovery <= IB_RECOVERY_NO_TRX_UNDO) {
       /* In a crash recovery, we check that the info in data
       dictionary is consistent with what we already know
       about space id's from the call of
-      srv_fil->load_single_table_tablespaces().
+      Fil::load_single_table_tablespaces().
 
       In a normal startup, we create the space objects for
       every table in the InnoDB data dictionary that has
@@ -777,7 +794,10 @@ ib_err_t InnoDB::start() noexcept {
 
       We also determine the maximum tablespace id used. */
 
-      dict_check_tablespaces_and_store_max_id(recv_needed_recovery);
+      if (auto err = srv_dict_sys->open(recv_needed_recovery); err != DB_SUCCESS) {
+        srv_startup_abort(err);
+        return DB_ERROR;
+      }
     }
 
     srv_startup_is_before_trx_rollback_phase = false;
@@ -799,7 +819,7 @@ ib_err_t InnoDB::start() noexcept {
   srv_is_being_started = false;
 
   ut_a(err == DB_SUCCESS);
-  err = dict_create_or_check_foreign_constraint_tables();
+  err = srv_dict_sys->m_store.create_or_check_foreign_constraint_tables();
 
   if (err != DB_SUCCESS) {
     srv_startup_abort(err);
@@ -830,8 +850,11 @@ ib_err_t InnoDB::start() noexcept {
   return DB_SUCCESS;
 }
 
-/** Try to shutdown the InnoDB threads.
-@return	true if all threads exited. */
+/**
+ * Try to shutdown the InnoDB threads.
+ * 
+ * @return	true if all threads exited.
+ */
 static bool srv_threads_try_shutdown(Cond_var* lock_timeout_thread_event) noexcept  {
   /* Let the lock timeout thread exit */
   os_event_set(lock_timeout_thread_event);
@@ -854,14 +877,17 @@ static bool srv_threads_try_shutdown(Cond_var* lock_timeout_thread_event) noexce
   }
 }
 
-/** All threads end up waiting for certain events. Put those events
-to the signaled state. Then the threads will exit themselves in
-os_thread_event_wait().
-@return	true if all threads exited. */
+/**
+ * All threads end up waiting for certain events. Put those events
+ * to the signaled state. Then the threads will exit themselves in
+ * os_thread_event_wait().
+ * 
+ * @return	true if all threads exited.
+ */
 static bool srv_threads_shutdown() noexcept {
   srv_shutdown_state = SRV_SHUTDOWN_EXIT_THREADS;
 
-  for (ulint i = 0; i < 1000; i++) {
+  for (ulint i{}; i < 1000; ++i) {
 
     if (srv_threads_try_shutdown(srv_lock_timeout_thread_event)) {
 
@@ -1074,7 +1100,8 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
   Trx_sys::destroy(srv_trx_sys);
 
   /* Must be called before Buf_pool::close(). */
-  dict_close();
+  Dict::destroy(srv_dict_sys);
+  ut_a(srv_dict_sys == nullptr);
 
   Undo::destroy(srv_undo);
   ut_a(srv_undo == nullptr);

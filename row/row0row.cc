@@ -42,40 +42,40 @@ Created 4/20/1996 Heikki Tuuri
 #include "trx0undo.h"
 #include "ut0mem.h"
 
-ulint row_get_trx_id_offset(const rec_t *rec __attribute__((unused)), const dict_index_t *index, const ulint *offsets) {
+ulint row_get_trx_id_offset(const rec_t *rec __attribute__((unused)), const Index *index, const ulint *offsets) {
 
-  ut_ad(dict_index_is_clust(index));
+  ut_ad(index->is_clustered());
   ut_ad(rec_offs_validate(rec, index, offsets));
 
-  auto pos = dict_index_get_sys_col_pos(index, DATA_TRX_ID);
+  const auto pos = index->get_sys_col_field_pos(DATA_TRX_ID);
 
   ulint len;
-
-  auto offset = rec_get_nth_field_offs(offsets, pos, &len);
+  const auto offset = rec_get_nth_field_offs(offsets, pos, &len);
 
   ut_ad(len == DATA_TRX_ID_LEN);
 
-  return (offset);
+  return offset;
 }
 
-dtuple_t *row_build_index_entry(const dtuple_t *row, row_ext_t *ext, dict_index_t *index, mem_heap_t *heap) {
+DTuple *row_build_index_entry(const DTuple *row, row_ext_t *ext, const Index *index, mem_heap_t *heap) {
   ut_ad(dtuple_check_typed(row));
 
-  auto entry_len = dict_index_get_n_fields(index);
+  const auto entry_len = index->get_n_fields();
   auto entry = dtuple_create(heap, entry_len);
 
-  dtuple_set_n_fields_cmp(entry, dict_index_get_n_unique_in_tree(index));
-  if (dict_index_is_clust(index)) {
+  dtuple_set_n_fields_cmp(entry, index->get_n_unique_in_tree());
+
+  if (index->is_clustered()) {
     /* Do not fetch externally stored columns to
     the clustered index.  Such columns are handled
     at a higher level. */
     ext = nullptr;
   }
 
-  for (ulint i = 0; i < entry_len; i++) {
-    const dict_field_t *ind_field = dict_index_get_nth_field(index, i);
-    const dict_col_t *col = ind_field->col;
-    ulint col_no = dict_col_get_no(col);
+  for (ulint i{}; i < entry_len; ++i) {
+    const auto ind_field = index->get_nth_field(i);
+    const auto col = ind_field->m_col;
+    ulint col_no = col->get_no();
     dfield_t *dfield = dtuple_get_nth_field(entry, i);
     const dfield_t *dfield2 = dtuple_get_nth_field(row, col_no);
     ulint len = dfield_get_len(dfield2);
@@ -86,99 +86,93 @@ dtuple_t *row_build_index_entry(const dtuple_t *row, row_ext_t *ext, dict_index_
     } else if (likely_null(ext)) {
       /* See if the column is stored externally. */
       const byte *buf = row_ext_lookup(ext, col_no, &len);
+
       if (likely_null(buf)) {
         if (unlikely(buf == field_ref_zero)) {
-          return (nullptr);
+          return nullptr;
         }
         dfield_set_data(dfield, buf, len);
       }
+
     } else if (dfield_is_ext(dfield)) {
       ut_a(len >= BTR_EXTERN_FIELD_REF_SIZE);
       len -= BTR_EXTERN_FIELD_REF_SIZE;
-      ut_a(ind_field->prefix_len <= len || dict_index_is_clust(index));
+      ut_a(ind_field->m_prefix_len <= len || index->is_clustered());
     }
 
     /* If a column prefix index, take only the prefix */
-    if (ind_field->prefix_len > 0 && !dfield_is_null(dfield)) {
-      ut_ad(col->ord_part);
+    if (ind_field->m_prefix_len > 0 && !dfield_is_null(dfield)) {
+      ut_ad(col->m_ord_part);
+
       len = dtype_get_at_most_n_mbchars(
-        col->prtype, col->mbminlen, col->mbmaxlen, ind_field->prefix_len, len, (char *)dfield_get_data(dfield)
+        col->prtype, col->mbminlen, col->mbmaxlen, ind_field->m_prefix_len, len, (char *)dfield_get_data(dfield)
       );
+
       dfield_set_len(dfield, len);
     }
   }
 
   ut_ad(dtuple_check_typed(entry));
 
-  return (entry);
+  return entry;
 }
 
-dtuple_t *row_build(
-  ulint type,
-  const dict_index_t *index,
-  const rec_t *rec,
-  const ulint *offsets,
-  const dict_table_t *col_table,
-  row_ext_t **ext,
-  mem_heap_t *heap
-) {
-  dtuple_t *row;
-  const dict_table_t *table;
-  ulint n_fields;
-  ulint n_ext_cols;
-  ulint *ext_cols = nullptr; /* remove warning */
-  ulint len;
-  ulint row_len;
-  byte *buf;
-  ulint i;
-  ulint j;
-  mem_heap_t *tmp_heap = nullptr;
+DTuple *row_build(ulint type, const Index *index, const rec_t *rec, const ulint *offsets, const Table *col_table, row_ext_t **ext, mem_heap_t *heap) {
+  mem_heap_t *tmp_heap{};
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   rec_offs_init(offsets_);
 
   ut_ad(index && rec && heap);
-  ut_ad(dict_index_is_clust(index));
+  ut_ad(index->is_clustered());
 
   if (offsets == nullptr) {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &tmp_heap, Source_location{});
+    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &tmp_heap, Current_location());
   } else {
     ut_ad(rec_offs_validate(rec, index, offsets));
   }
 
   if (type != ROW_COPY_POINTERS) {
     /* Take a copy of rec to heap */
-    buf = mem_heap_alloc(heap, rec_offs_size(offsets));
+    auto buf = mem_heap_alloc(heap, rec_offs_size(offsets));
+
     rec = rec_copy(buf, rec, offsets);
+
     /* Avoid a debug assertion in rec_offs_validate(). */
     ut_d(rec_offs_make_valid(rec, index, (ulint *)offsets));
   }
 
-  table = index->table;
-  row_len = dict_table_get_n_cols(table);
+  auto table = index->m_table;
+  auto row_len = table->get_n_cols();
+  auto row = dtuple_create(heap, row_len);
 
-  row = dtuple_create(heap, row_len);
-
-  dict_table_copy_types(row, table);
+  table->copy_types(row);
 
   dtuple_set_info_bits(row, rec_get_info_bits(rec));
 
-  n_fields = rec_offs_n_fields(offsets);
-  n_ext_cols = rec_offs_n_extern(offsets);
-  if (n_ext_cols) {
+  const auto n_fields = rec_offs_n_fields(offsets);
+  const auto n_ext_cols = rec_offs_n_extern(offsets);
+
+  ulint *ext_cols;
+
+  if (unlikely(n_ext_cols > 0)) {
     ext_cols = reinterpret_cast<ulint *>(mem_heap_alloc(heap, n_ext_cols * sizeof(*ext_cols)));
+  } else {
+    ext_cols = nullptr;
   }
 
-  for (i = j = 0; i < n_fields; i++) {
-    dict_field_t *ind_field = dict_index_get_nth_field(index, i);
-    const dict_col_t *col = dict_field_get_col(ind_field);
-    ulint col_no = dict_col_get_no(col);
-    dfield_t *dfield = dtuple_get_nth_field(row, col_no);
+  ulint j{};
 
-    if (ind_field->prefix_len == 0) {
+  for (ulint i{}, j = 0; i < n_fields; ++i) {
+    const auto ind_field = index->get_nth_field(i);
+    Column const *col = ind_field->m_col;
+    const ulint col_no = col->get_no();
+    auto dfield = dtuple_get_nth_field(row, col_no);
 
-      const byte *field = rec_get_nth_field(rec, offsets, i, &len);
+    if (ind_field->m_prefix_len == 0) {
+      ulint len;
+      const auto field = rec_get_nth_field(rec, offsets, i, &len);
 
       dfield_set_data(dfield, field, len);
     }
@@ -187,13 +181,12 @@ dtuple_t *row_build(
       dfield_set_ext(dfield);
 
       if (likely_null(col_table)) {
-        ut_a(col_no < dict_table_get_n_cols(col_table));
-        col = dict_table_get_nth_col(col_table, col_no);
+        ut_a(col_no < col_table->get_n_cols());
+        col = col_table->get_nth_col(col_no);
       }
 
-      if (col->ord_part) {
-        /* We will have to fetch prefixes of
-        externally stored columns that are
+      if (col->m_ord_part > 0) {
+        /* We will have to fetch prefixes of externally stored columns that are
         referenced by column prefixes. */
         ext_cols[j++] = col_no;
       }
@@ -202,53 +195,39 @@ dtuple_t *row_build(
 
   ut_ad(dtuple_check_typed(row));
 
-  if (j) {
+  if (j > 0) {
     *ext = row_ext_create(j, ext_cols, row, heap);
   } else {
     *ext = nullptr;
   }
 
-  if (tmp_heap) {
+  if (tmp_heap != nullptr) {
     mem_heap_free(tmp_heap);
   }
 
-  return (row);
+  return row;
 }
 
-dtuple_t *row_rec_to_index_entry_low(
-  const rec_t *rec,
-  const dict_index_t *index,
-  const ulint *offsets,
-  ulint *n_ext,
-  mem_heap_t *heap
-) {
-  dtuple_t *entry;
-  dfield_t *dfield;
-  ulint i;
-  const byte *field;
-  ulint len;
-  ulint rec_len;
-
-  ut_ad(rec && heap && index);
+DTuple *row_rec_to_index_entry_low(const rec_t *rec, const Index *index, const ulint *offsets, ulint *n_ext, mem_heap_t *heap) {
   /* Because this function may be invoked by row0merge.c
   on a record whose header is in different format, the check
   rec_offs_validate(rec, index, offsets) must be avoided here. */
-  ut_ad(n_ext);
+  ut_ad(n_ext != nullptr);
+
   *n_ext = 0;
 
-  rec_len = rec_offs_n_fields(offsets);
+  const auto rec_len = rec_offs_n_fields(offsets);
+  auto entry = dtuple_create(heap, rec_len);
 
-  entry = dtuple_create(heap, rec_len);
+  dtuple_set_n_fields_cmp(entry, index->get_n_unique_in_tree());
+  ut_ad(rec_len == index->get_n_fields());
 
-  dtuple_set_n_fields_cmp(entry, dict_index_get_n_unique_in_tree(index));
-  ut_ad(rec_len == dict_index_get_n_fields(index));
+  index->copy_types(entry, rec_len);
 
-  dict_index_copy_types(entry, index, rec_len);
-
-  for (i = 0; i < rec_len; i++) {
-
-    dfield = dtuple_get_nth_field(entry, i);
-    field = rec_get_nth_field(rec, offsets, i, &len);
+  for (ulint i{}; i < rec_len; ++i) {
+    ulint len;
+    auto dfield = dtuple_get_nth_field(entry, i);
+    auto field = rec_get_nth_field(rec, offsets, i, &len);
 
     dfield_set_data(dfield, field, len);
 
@@ -263,14 +242,7 @@ dtuple_t *row_rec_to_index_entry_low(
   return entry;
 }
 
-dtuple_t *row_rec_to_index_entry(
-  ulint type,
-  const rec_t *rec,
-  const dict_index_t *index,
-  ulint *offsets,
-  ulint *n_ext,
-  mem_heap_t *heap) {
-
+DTuple *row_rec_to_index_entry(ulint type, const rec_t *rec, const Index *index, ulint *offsets, ulint *n_ext, mem_heap_t *heap) {
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   if (type == ROW_COPY_DATA) {
@@ -290,30 +262,20 @@ dtuple_t *row_rec_to_index_entry(
   return entry;
 }
 
-dtuple_t *row_build_row_ref(ulint type, dict_index_t *index, const rec_t *rec, mem_heap_t *heap) {
-  dict_table_t *table;
-  dict_index_t *clust_index;
-  dfield_t *dfield;
-  dtuple_t *ref;
-  const byte *field;
-  ulint len;
-  ulint ref_len;
-  ulint pos;
-  byte *buf;
-  ulint clust_col_prefix_len;
-  ulint i;
-  mem_heap_t *tmp_heap = nullptr;
+DTuple *row_build_row_ref(ulint type, const Index *index, const rec_t *rec, mem_heap_t *heap) {
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
 
   ut_ad(index && rec && heap);
-  ut_ad(!dict_index_is_clust(index));
+  ut_ad(!index->is_clustered());
+
+  mem_heap_t *tmp_heap{};
 
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &tmp_heap, Source_location{});
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &tmp_heap, Current_location());
   }
 
   /* Secondary indexes must not contain externally stored columns. */
@@ -322,31 +284,27 @@ dtuple_t *row_build_row_ref(ulint type, dict_index_t *index, const rec_t *rec, m
   if (type == ROW_COPY_DATA) {
     /* Take a copy of rec to heap */
 
-    buf = mem_heap_alloc(heap, rec_offs_size(offsets));
+    auto buf = mem_heap_alloc(heap, rec_offs_size(offsets));
 
     rec = rec_copy(buf, rec, offsets);
     /* Avoid a debug assertion in rec_offs_validate(). */
     ut_d(rec_offs_make_valid(rec, index, offsets));
   }
 
-  table = index->table;
+  auto table = index->m_table;
+  auto clust_index = table->get_clustered_index();
+  const auto n_unique = clust_index->get_n_unique();
+  auto dtuple = dtuple_create(heap, n_unique);
 
-  clust_index = dict_table_get_first_index(table);
+  clust_index->copy_types(dtuple, n_unique);
 
-  ref_len = dict_index_get_n_unique(clust_index);
-
-  ref = dtuple_create(heap, ref_len);
-
-  dict_index_copy_types(ref, clust_index, ref_len);
-
-  for (i = 0; i < ref_len; i++) {
-    dfield = dtuple_get_nth_field(ref, i);
-
-    pos = dict_index_get_nth_field_pos(index, clust_index, i);
+  for (ulint i{}; i < n_unique; ++i) {
+    auto dfield = dtuple_get_nth_field(dtuple, i);
+    auto pos = index->get_nth_field_pos(clust_index, i);
 
     ut_a(pos != ULINT_UNDEFINED);
-
-    field = rec_get_nth_field(rec, offsets, pos, &len);
+    ulint len;
+    const auto field = rec_get_nth_field(rec, offsets, pos, &len);
 
     dfield_set_data(dfield, field, len);
 
@@ -355,7 +313,7 @@ dtuple_t *row_build_row_ref(ulint type, dict_index_t *index, const rec_t *rec, m
     column, or the full column, and we must adjust the length
     accordingly. */
 
-    clust_col_prefix_len = dict_index_get_nth_field(clust_index, i)->prefix_len;
+    auto clust_col_prefix_len = index->get_nth_field(i)->m_prefix_len;
 
     if (clust_col_prefix_len > 0) {
       if (len != UNIV_SQL_NULL) {
@@ -370,79 +328,62 @@ dtuple_t *row_build_row_ref(ulint type, dict_index_t *index, const rec_t *rec, m
     }
   }
 
-  ut_ad(dtuple_check_typed(ref));
-  if (tmp_heap) {
+  ut_ad(dtuple_check_typed(dtuple));
+  if (tmp_heap != nullptr) {
     mem_heap_free(tmp_heap);
   }
 
-  return (ref);
+  return dtuple;
 }
 
-void row_build_row_ref_in_tuple(
-  dtuple_t *ref,
-  const rec_t *rec,
-  const dict_index_t *index,
-  ulint *offsets,
-  trx_t *trx
-) {
-  const dict_index_t *clust_index;
-  dfield_t *dfield;
-  const byte *field;
-  ulint len;
-  ulint ref_len;
-  ulint pos;
-  ulint clust_col_prefix_len;
-  ulint i;
-  mem_heap_t *heap = nullptr;
+void row_build_row_ref_in_tuple(DTuple *ref, const rec_t *rec, const Index *index, ulint *offsets, trx_t *trx) {
+  mem_heap_t *heap{};
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   rec_offs_init(offsets_);
 
-  ut_a(ref);
-  ut_a(index);
-  ut_a(rec);
-  ut_ad(!dict_index_is_clust(index));
+  ut_ad(!index->is_clustered());
 
-  if (unlikely(!index->table)) {
+  if (unlikely(index->m_table == nullptr)) {
     ib_logger(ib_stream, "table ");
   notfound:
-    ut_print_name(index->table_name);
+    ut_print_name(index->m_table->m_name);
     ib_logger(ib_stream, " for index ");
-    ut_print_name(index->name);
+    ut_print_name(index->m_name);
     ib_logger(ib_stream, " not found\n");
     ut_error;
   }
 
-  clust_index = dict_table_get_first_index(index->table);
+  auto clust_index = index->get_clustered_index();
 
   if (unlikely(!clust_index)) {
     ib_logger(ib_stream, "clust index for table ");
     goto notfound;
   }
 
-  if (!offsets) {
+  if (offsets == nullptr) {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Source_location{});
+    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
   } else {
     ut_ad(rec_offs_validate(rec, index, offsets));
   }
 
   /* Secondary indexes must not contain externally stored columns. */
   ut_ad(!rec_offs_any_extern(offsets));
-  ref_len = dict_index_get_n_unique(clust_index);
+  auto n_unique = clust_index->get_n_unique();
 
-  ut_ad(ref_len == dtuple_get_n_fields(ref));
+  ut_ad(n_unique == dtuple_get_n_fields(ref));
 
-  dict_index_copy_types(ref, clust_index, ref_len);
+  clust_index->copy_types(ref, n_unique);
 
-  for (i = 0; i < ref_len; i++) {
-    dfield = dtuple_get_nth_field(ref, i);
-
-    pos = dict_index_get_nth_field_pos(index, clust_index, i);
+  for (ulint i{}; i < n_unique; ++i) {
+    auto dfield = dtuple_get_nth_field(ref, i);
+    auto pos = index->get_nth_field_pos(clust_index, i);
 
     ut_a(pos != ULINT_UNDEFINED);
 
-    field = rec_get_nth_field(rec, offsets, pos, &len);
+    ulint len;
+    const auto field = rec_get_nth_field(rec, offsets, pos, &len);
 
     dfield_set_data(dfield, field, len);
 
@@ -451,7 +392,7 @@ void row_build_row_ref_in_tuple(
     column, or the full column, and we must adjust the length
     accordingly. */
 
-    clust_col_prefix_len = dict_index_get_nth_field(clust_index, i)->prefix_len;
+    const auto clust_col_prefix_len = index->get_nth_field(i)->m_prefix_len;
 
     if (clust_col_prefix_len > 0) {
       if (len != UNIV_SQL_NULL) {
@@ -472,14 +413,14 @@ void row_build_row_ref_in_tuple(
   }
 }
 
-bool row_search_on_row_ref(Btree_pcursor *pcur, ulint mode, const dict_table_t *table, const dtuple_t *ref, mtr_t *mtr) {
+bool row_search_on_row_ref(Btree_pcursor *pcur, ulint mode, const Table *table, const DTuple *ref, mtr_t *mtr) {
   ut_ad(dtuple_check_typed(ref));
 
-  auto index = dict_table_get_first_index(table);
+  auto index = table->get_first_index();
 
-  ut_a(dtuple_get_n_fields(ref) == dict_index_get_n_unique(index));
+  ut_a(dtuple_get_n_fields(ref) == index->get_n_unique());
 
-  pcur->open(index, ref, PAGE_CUR_LE, mode, mtr, Source_location{});
+  pcur->open(index, ref, PAGE_CUR_LE, mode, mtr, Current_location());
 
   auto low_match = pcur->get_low_match();
 
@@ -493,12 +434,12 @@ bool row_search_on_row_ref(Btree_pcursor *pcur, ulint mode, const dict_table_t *
   return low_match == dtuple_get_n_fields(ref);
 }
 
-rec_t *row_get_clust_rec(ulint mode, const rec_t *rec, dict_index_t *index, dict_index_t **clust_index, mtr_t *mtr) {
-  Btree_pcursor pcur(srv_fsp, srv_btree_sys, srv_lock_sys);
+rec_t *row_get_clust_rec(ulint mode, const rec_t *rec, const Index *index, Index **clust_index, mtr_t *mtr) {
+  Btree_pcursor pcur(srv_fsp, srv_btree_sys);
 
-  ut_ad(!dict_index_is_clust(index));
+  ut_ad(!index->is_clustered());
 
-  auto table = index->table;
+  auto table = index->m_table;
 
   auto heap = mem_heap_create(256);
 
@@ -512,15 +453,15 @@ rec_t *row_get_clust_rec(ulint mode, const rec_t *rec, dict_index_t *index, dict
 
   pcur.close();
 
-  *clust_index = dict_table_get_first_index(table);
+  *clust_index = table->get_first_index();
 
   return clust_rec;
 }
 
-bool row_search_index_entry(dict_index_t *index, const dtuple_t *entry, ulint mode, Btree_pcursor *pcur, mtr_t *mtr) {
+bool row_search_index_entry(Index *index, const DTuple *entry, ulint mode, Btree_pcursor *pcur, mtr_t *mtr) {
   ut_ad(dtuple_check_typed(entry));
 
-  pcur->open(index, entry, PAGE_CUR_LE, mode, mtr, Source_location{});
+  pcur->open(index, entry, PAGE_CUR_LE, mode, mtr, Current_location());
 
   auto low_match = pcur->get_low_match();
 

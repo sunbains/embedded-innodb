@@ -203,7 +203,7 @@ Sync_check::Sync_check(ulint n, ulint p) : m_protection(p) {
   if (m_protection == SYNC_ARRAY_OS_MUTEX) {
     m_os_mutex = os_mutex_create(nullptr);
   } else if (m_protection == SYNC_ARRAY_MUTEX) {
-    mutex_create(&m_mutex, IF_DEBUG("sync_array_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Source_location{});
+    mutex_create(&m_mutex, IF_DEBUG("sync_array_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Current_location());
   } else {
     ut_error;
   }

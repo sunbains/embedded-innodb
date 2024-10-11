@@ -111,9 +111,8 @@ struct Btree_cursor {
    *
    * @param[in] fsp             The file segment manager.
    * @param[in] btree           The B-tree.
-   * @param[in] lock_sys        The lock system.
    */
-  Btree_cursor(FSP *fsp, Btree *btree, Lock_sys *lock_sys) : m_fsp(fsp), m_btree(btree), m_lock_sys(lock_sys) {}
+  Btree_cursor(FSP *fsp, Btree *btree) : m_fsp(fsp), m_btree(btree), m_lock_sys(btree->m_lock_sys) {}
   /**
    * Searches to the nth level of the index tree.
    *
@@ -146,9 +145,9 @@ struct Btree_cursor {
    */
   void search_to_nth_level(
     Paths *paths,
-    dict_index_t *index,
+    const Index *index,
     ulint level,
-    const dtuple_t *tuple,
+    const DTuple *tuple,
     ulint mode,
     ulint latch_mode,
     mtr_t *mtr,
@@ -170,7 +169,7 @@ struct Btree_cursor {
   void open_at_index_side(
     Paths *paths,
     bool from_left,
-    dict_index_t *index,
+    const Index *index,
     ulint latch_mode,
     ulint level,
     mtr_t *mtr,
@@ -184,7 +183,7 @@ struct Btree_cursor {
    * @param[in] mtr             The mini-transaction handle.
    * @param[in] loc             The source location.
    */
-  void open_at_rnd_pos(dict_index_t *index, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept;
+  void open_at_rnd_pos(const Index *index, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept;
 
   /**
    * Tries to perform an insert to a page in an index tree, next to cursor.
@@ -207,7 +206,7 @@ struct Btree_cursor {
    *
    * @return DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number
    */
-  [[nodiscard]] db_err optimistic_insert( ulint flags, dtuple_t *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err optimistic_insert(ulint flags, DTuple *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr) noexcept;
 
   /**
    * Performs an insert on a page of an index tree. It is assumed that mtr holds an x-latch
@@ -226,7 +225,7 @@ struct Btree_cursor {
    *
    * @return          DB_SUCCESS or error number
    */
-  [[nodiscard]] db_err pessimistic_insert(ulint flags, dtuple_t *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err pessimistic_insert(ulint flags, DTuple *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr) noexcept;
 
   /**
    * Updates a record when the update causes no size changes in its fields.
@@ -348,7 +347,7 @@ struct Btree_cursor {
    *
    * @return End of log record or nullptr
    */
-  [[nodiscard]] static byte *parse_update_in_place(byte *ptr, byte *end_ptr, page_t *page, dict_index_t *index) noexcept;
+  [[nodiscard]] static byte *parse_update_in_place(byte *ptr, byte *end_ptr, page_t *page, Index *index) noexcept;
 
   /**
    * Parses the redo log record for delete marking or unmarking of a clustered index record.
@@ -360,7 +359,7 @@ struct Btree_cursor {
    *
    * @return End of log record or nullptr
    */
-  [[nodiscard]] static byte *parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_t *page, dict_index_t *index) noexcept;
+  [[nodiscard]] static byte *parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_t *page, Index *index) noexcept;
 
   /**
    * Parses the redo log record for delete marking or unmarking of a secondary index record.
@@ -384,17 +383,15 @@ struct Btree_cursor {
    *
    * @return         estimated number of rows
    */
-  [[nodiscard]] int64_t estimate_n_rows_in_range(dict_index_t *index, const dtuple_t *tuple1, ulint mode1, const dtuple_t *tuple2, ulint mode2) noexcept;
+  [[nodiscard]] int64_t estimate_n_rows_in_range(Index *index, const DTuple *tuple1, ulint mode1, const DTuple *tuple2, ulint mode2) noexcept;
 
   /**
    * Estimates the number of different key values in a given index, for each n-column prefix of the index
-   * where n <= dict_index_get_n_unique(index). The estimates are stored in the array index->stat_n_diff_key_vals.
+   * where n <= Dict::index_get_n_unique(index). The estimates are stored in the array index->stat_n_diff_key_vals.
    *
    * @param[in] index           Index
    */
-  void estimate_number_of_different_key_vals(dict_index_t *index) noexcept;
-
-  
+  void estimate_number_of_different_key_vals(const Index *index) noexcept;
 
   /**
    * Returns the page cursor component of a tree cursor.
@@ -444,7 +441,7 @@ struct Btree_cursor {
    * 
    * @return Pointer to the page.
    */
-  [[nodiscard]] inline page_t *get_page() noexcept {
+  [[nodiscard]] inline page_t *get_page_no() noexcept {
     return page_align(page_cur_get_rec(&m_page_cur));
   }
 
@@ -453,23 +450,23 @@ struct Btree_cursor {
    * 
    * @return The index.
    */
-  [[nodiscard]] inline dict_index_t *get_index() noexcept {
-    return m_index;
+  [[nodiscard]] inline Index *get_index() noexcept {
+    return const_cast<Index *>(m_index);
   }
 
   /**
    * Positions a tree cursor at a given record.
    * 
-   * @param[in] dict_index      The dictionary index.
+   * @param[in] index           The dictionary index.
    * @param[in] rec             The record in the tree.
    * @param[in] block           The buffer block of the record.
    */
-  inline void position(dict_index_t *dict_index, rec_t *rec, Buf_block *block) noexcept {
+  inline void position(const Index *index, rec_t *rec, Buf_block *block) noexcept {
     ut_ad(page_align(rec) == block->m_frame);
 
     page_cur_position(rec, block, &m_page_cur);
 
-    m_index = dict_index;
+    m_index = index;
   }
 
   /**
@@ -482,7 +479,7 @@ struct Btree_cursor {
   [[nodiscard]] inline bool compress_recommendation(mtr_t *mtr) noexcept {
     ut_ad(mtr->memo_contains(get_block(), MTR_MEMO_PAGE_X_FIX));
 
-    auto page = get_page();
+    auto page = get_page_no();
 
     if (page_get_data_size(page) < BTR_CUR_PAGE_LOW_FILL_LIMIT ||
         (Btree::page_get_next(page, mtr) == FIL_NULL && Btree::page_get_prev(page, mtr) == FIL_NULL)) {
@@ -490,7 +487,7 @@ struct Btree_cursor {
       // The page fillfactor has dropped below a predefined minimum value
       // OR the level in the B-tree contains just one page: we recommend
       // merge if this is not the root page.
-      return dict_index_get_page(m_index) != page_get_page_no(page);
+      return m_index->get_page_no() != page_get_page_no(page);
     } else {
       return false;
     }
@@ -509,7 +506,7 @@ struct Btree_cursor {
   [[nodiscard]] inline bool delete_will_underflow(ulint rec_size, mtr_t *mtr) noexcept {
     ut_ad(mtr->memo_contains(get_block(), MTR_MEMO_PAGE_X_FIX));
 
-    auto page = get_page();
+    auto page = get_page_no();
 
     if ((page_get_data_size(page) - rec_size < BTR_CUR_PAGE_LOW_FILL_LIMIT) ||
         (Btree::page_get_next(page, mtr) == FIL_NULL && Btree::page_get_prev(page, mtr) == FIL_NULL) ||
@@ -517,7 +514,7 @@ struct Btree_cursor {
 
       /* The page fillfactor will drop below a predefined minimum value, OR the level in the B-tree contains just one page,
       OR the page will become empty: we recommend merge if this is not the root page. */
-      return dict_index_get_page(m_index) == page_get_page_no(page);
+      return m_index->get_page_no() == page_get_page_no(page);
     } else {
       return true;
     }
@@ -565,7 +562,7 @@ private:
      *
      * @return Pointer to inserted record if succeed, else nullptr
      */
-  [[nodiscard]] rec_t *insert_if_possible(const dtuple_t *tuple, ulint n_ext, mtr_t *mtr) noexcept;
+  [[nodiscard]] rec_t *insert_if_possible(const DTuple *tuple, ulint n_ext, mtr_t *mtr) noexcept;
 
   /**
    * For an insert, checks the locks and does the undo logging if desired.
@@ -578,7 +575,7 @@ private:
    *
    * @return DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number.
    */
-  [[nodiscard]] inline db_err ins_lock_and_undo(ulint flags, const dtuple_t *entry, que_thr_t *thr, mtr_t *mtr, bool *inherit) noexcept;
+  [[nodiscard]] inline db_err ins_lock_and_undo(ulint flags, const DTuple *entry, que_thr_t *thr, mtr_t *mtr, bool *inherit) noexcept;
 
   #ifdef UNIV_DEBUG
   /**
@@ -588,7 +585,7 @@ private:
    * @param[in] index           The index.
    * @param[in] op              The operation.
    */
-  void trx_report(trx_t *trx, const dict_index_t *index, const char *op) noexcept;
+  void trx_report(trx_t *trx, const Index *index, const char *op) noexcept;
   #endif /* UNIV_DEBUG */
 
   /**
@@ -617,7 +614,7 @@ private:
    *
    * @param[in] flags           Flags for the operation.
    * @param[in] rec             The record to be updated.
-   * @param[in] dict_index      The index where the cursor is positioned.
+   * @param[in] index           The index where the cursor is positioned.
    * @param[in] update          The update vector.
    * @param[in] trx             The transaction.
    * @param[in] roll_ptr        The roll pointer.
@@ -626,7 +623,7 @@ private:
   inline void update_in_place_log(
     ulint flags,
     rec_t *rec,
-    dict_index_t *dict_index,
+    const Index *index,
     const upd_t *update,
     trx_t *trx,
     roll_ptr_t roll_ptr,
@@ -662,7 +659,7 @@ private:
   inline void del_mark_set_clust_rec_log(
     ulint flags,
     rec_t *rec,
-    dict_index_t *index,
+    const Index *index,
     bool val,
     trx_t *trx,
     roll_ptr_t roll_ptr,
@@ -720,7 +717,7 @@ private:
 #endif /* UNIT_TESTING */
 
   /** Index where positioned */
-  dict_index_t *m_index{};
+  const Index *m_index{};
 
   /** Page cursor */
   page_cur_t m_page_cur{};

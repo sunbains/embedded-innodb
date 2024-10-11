@@ -1059,16 +1059,16 @@ void sync_init() {
 
   /* Init the mutex list and create the mutex to protect it. */
   UT_LIST_INIT(mutex_list);
-  mutex_create(&mutex_list_mutex, IF_DEBUG("mutex_list_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Source_location{});
+  mutex_create(&mutex_list_mutex, IF_DEBUG("mutex_list_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Current_location());
 
-  IF_SYNC_DEBUG(mutex_create(&sync_thread_mutex, IF_DEBUG("sync_thread", ) SYNC_NO_ORDER_CHECK, Source_location{});)
+  IF_SYNC_DEBUG(mutex_create(&sync_thread_mutex, IF_DEBUG("sync_thread", ) SYNC_NO_ORDER_CHECK, Current_location());)
 
   /* Init the rw-lock list and create the mutex to protect it. */
 
   UT_LIST_INIT(rw_lock_list);
-  mutex_create(&rw_lock_list_mutex, IF_DEBUG("rw_lock_list_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Source_location{});
+  mutex_create(&rw_lock_list_mutex, IF_DEBUG("rw_lock_list_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Current_location());
 
-  IF_SYNC_DEBUG(mutex_create(&rw_lock_debug_mutex, "rw_lock_debug_mutex", SYNC_NO_ORDER_CHECK, Source_location{});
+  IF_SYNC_DEBUG(mutex_create(&rw_lock_debug_mutex, "rw_lock_debug_mutex", SYNC_NO_ORDER_CHECK, Current_location());
 
                 rw_lock_debug_event = os_event_create(nullptr);
                 rw_lock_debug_m_waiters = false;)

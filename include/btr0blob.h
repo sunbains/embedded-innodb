@@ -32,7 +32,7 @@ struct mtr_t;
 struct Btree;
 struct Buf_pool;
 struct Buf_block;
-struct dict_index_t;
+struct Index;
 using rec_t = byte;
 
 /** The structure of a BLOB part header */
@@ -111,7 +111,7 @@ struct Blob {
    * @param[in] val             Value to set.
    * @param[in] mtr             Mini-transaction handle, or nullptr if not logged.
    */
-  void set_ownership_of_extern_field(rec_t *rec, dict_index_t *index, const ulint *offsets, ulint i, bool val, mtr_t *mtr) noexcept;
+  void set_ownership_of_extern_field(rec_t *rec, const Index *index, const ulint *offsets, ulint i, bool val, mtr_t *mtr) noexcept;
 
   /** Returns the length of a BLOB part stored on the header page.
    * 
@@ -144,7 +144,7 @@ struct Blob {
    * @param[in] rb_ctx          The rollback context.
    * @param[in] mtr             The mini-transaction handle which contains an X-latch to the record page and to the tree.
    */
-  void free_updated_extern_fields(dict_index_t *index, rec_t *rec, const ulint *offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept;
+  void free_updated_extern_fields(const Index *index, rec_t *rec, const ulint *offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept;
 
   /**
    * Frees the externally stored fields of a record in the given index.
@@ -155,7 +155,7 @@ struct Blob {
    * @param[in] rb_ctx          The rollback context.
    * @param[in] mtr             The mini-transaction handle which contains an X-latch to record page and to the index tree
    */
-  void free_externally_stored_fields(dict_index_t *index, rec_t *rec, const ulint *offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept;
+  void free_externally_stored_fields(Index *index, rec_t *rec, const ulint *offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept;
 
   /**
    * Gets the externally stored size of a record, in units of a database page.
@@ -250,7 +250,7 @@ struct Blob {
    * @param[in] update          Update entry
    * @param[in] mtr             Mtr
    */
-  void mark_extern_inherited_fields(rec_t *rec, dict_index_t *index, const ulint *offsets, const upd_t *update, mtr_t *mtr) noexcept;
+  void mark_extern_inherited_fields(rec_t *rec, Index *index, const ulint *offsets, const upd_t *update, mtr_t *mtr) noexcept;
 
   /**
    * The complement of the previous function: in an update entry may inherit
@@ -260,14 +260,14 @@ struct Blob {
    * @param[in,out] entry       Clustered index entry
    * @param[in] update          Update entry
    */
-  void mark_dtuple_inherited_extern(dtuple_t *entry, const upd_t *update) noexcept;
+  void mark_dtuple_inherited_extern(DTuple *entry, const upd_t *update) noexcept;
 
   /**
    * Marks all extern fields in a dtuple as owned by the record.
    *
    * @param[in,out] entry         Clustered index entry
    */
-  void unmark_dtuple_extern_fields(dtuple_t *entry) noexcept;
+  void unmark_dtuple_extern_fields(DTuple *entry) noexcept;
 
   /**
    * Stores the fields in big_rec_vec to the tablespace and puts pointers to them in rec.
@@ -285,7 +285,7 @@ struct Blob {
    * @return  DB_SUCCESS or error
    */
   [[nodiscard]] db_err store_big_rec_extern_fields(
-    dict_index_t *index,
+    const Index *index,
     Buf_block *rec_block,
     rec_t *rec,
     const ulint *offsets,
@@ -309,7 +309,7 @@ struct Blob {
    * @param[in] local_mtr       Mtr containing the latch to data an an X-latch to the index tree
    */
   void free_externally_stored_field(
-    dict_index_t *index,
+    const Index *index,
     byte *field_ref,
     const rec_t *rec,
     const ulint *offsets,
@@ -353,7 +353,7 @@ struct Blob {
    *
    * @return number of flagged external columns
    */
-  [[nodiscard]] ulint push_update_extern_fields(dtuple_t *tuple, const upd_t *update, mem_heap_t *heap) noexcept;
+  [[nodiscard]] ulint push_update_extern_fields(DTuple *tuple, const upd_t *update, mem_heap_t *heap) noexcept;
 
   /**
    * Marks all extern fields in a record as owned by the record. This function
@@ -365,7 +365,7 @@ struct Blob {
    * @param[in] offsets         The array returned by Phy_rec::get_col_offsets().
    * @param[in] mtr             The mtr, or nullptr if not logged.
    */
-  void unmark_extern_fields(rec_t *rec, dict_index_t *index, const ulint *offsets, mtr_t *mtr) noexcept;
+  void unmark_extern_fields(rec_t *rec, const Index *index, const ulint *offsets, mtr_t *mtr) noexcept;
 
   /**
    * The file space handler.
