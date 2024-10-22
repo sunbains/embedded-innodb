@@ -1961,8 +1961,8 @@ void recv_recovery_rollback_active() noexcept {
   sync_order_checks_on = true;
 #endif
 
-  ddl_drop_all_temp_indexes(ib_recovery_t(srv_config.m_force_recovery));
-  ddl_drop_all_temp_tables(ib_recovery_t(srv_config.m_force_recovery));
+  (void) srv_dict_sys->m_ddl.drop_all_temp_indexes(ib_recovery_t(srv_config.m_force_recovery));
+  (void) srv_dict_sys->m_ddl.drop_all_temp_tables(ib_recovery_t(srv_config.m_force_recovery));
 
   if (srv_config.m_force_recovery < IB_RECOVERY_NO_TRX_UNDO) {
     /* Rollback the uncommitted transactions which have no user

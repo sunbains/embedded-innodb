@@ -1916,7 +1916,7 @@ ib_err_t ib_table_create(ib_trx_t ib_trx, const ib_tbl_sch_t ib_tbl_sch, ib_id_t
   }
 
   /* Create the table using the prototype in the data dictionary. */
-  err = ddl_create_table(table, ddl_trx);
+  err = srv_dict_sys->m_ddl.create_table(table, ddl_trx);
 
   table = nullptr;
 
@@ -1966,7 +1966,7 @@ ib_err_t ib_table_rename(ib_trx_t ib_trx, const char *old_name, const char *new_
   auto normalized_new_name = static_cast<char *>(mem_alloc(strlen(new_name) + 1));
   ib_normalize_table_name(normalized_new_name, new_name);
 
-  err = ddl_rename_table(normalized_old_name, normalized_new_name, trx);
+  err = srv_dict_sys->m_ddl.rename_table(normalized_old_name, normalized_new_name, trx);
 
   mem_free(normalized_old_name);
   mem_free(normalized_new_name);
@@ -2157,7 +2157,13 @@ ib_err_t ib_table_drop(ib_trx_t ib_trx, const char *name) {
   auto normalized_name = static_cast<char *>(mem_alloc(strlen(name) + 1));
   ib_normalize_table_name(normalized_name, name);
 
-  auto err = ddl_drop_table(normalized_name, (trx_t *)ib_trx, false);
+  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+
+  db_err err;
+
+  if ((err = srv_dict_sys->m_ddl.drop_table(normalized_name, trx, false)) != DB_SUCCESS) {
+    log_err("DROP table failed with error ", err , " while dropping table ", normalized_name);
+  }
 
   mem_free(normalized_name);
 
@@ -2187,7 +2193,7 @@ ib_err_t ib_index_drop(ib_trx_t ib_trx, ib_id_t index_id) {
   ib_err_t err;
 
   if (index != nullptr) {
-    err = ddl_drop_index(table, index, (trx_t *)ib_trx);
+    err = srv_dict_sys->m_ddl.drop_index(table, index, (trx_t *)ib_trx);
   } else {
     err = DB_TABLE_NOT_FOUND;
   }
@@ -3787,7 +3793,7 @@ ib_err_t ib_cursor_truncate(ib_crsr_t *ib_crsr, ib_id_t *table_id) {
 
     /* This function currently commits the transaction
     on success. */
-    err = ddl_truncate_table(table, trx);
+    err = srv_dict_sys->m_ddl.truncate_table(table, trx);
 
     if (err == DB_SUCCESS) {
       *table_id = table->m_id;
@@ -3939,7 +3945,7 @@ ib_err_t ib_database_drop(const char *dbname) {
     ptr[len] = '/';
   }
 
-  auto err = ddl_drop_database(ptr, (trx_t *)ib_trx);
+  auto err = srv_dict_sys->m_ddl.drop_database(ptr, (trx_t *)ib_trx);
 
   /* Only necessary if file per table is set. */
   if (err == DB_SUCCESS && srv_config.m_file_per_table) {

@@ -22,20 +22,8 @@ Data dictionary system
 Created 1/8/1996 Heikki Tuuri
 ***********************************************************************/
 
-#include "api0ucode.h"
-#include "btr0btr.h"
-#include "btr0cur.h"
-#include "buf0buf.h"
-#include "data0type.h"
 #include "dict0dict.h"
-#include "mach0data.h"
 #include "page0page.h"
-#include "pars0pars.h"
-#include "pars0sym.h"
-#include "que0que.h"
-#include "rem0cmp.h"
-#include "rem0rec.h"
-#include "row0merge.h"
 #include "trx0undo.h"
 
 #include <ctype.h>
@@ -44,7 +32,7 @@ Created 1/8/1996 Heikki Tuuri
 Dict *srv_dict_sys{};
 
 Dict::Dict(Btree *btree) noexcept
-  : m_stats_mutex(), m_tables(), m_table_ids(), m_store(this, btree), m_loader(this) {
+  : m_stats_mutex(), m_tables(), m_table_ids(), m_store(this, btree), m_loader(this), m_ddl{this} {
   mutex_create(&m_mutex, IF_DEBUG("dict_mutex",) IF_SYNC_DEBUG(SYNC_DICT,) Current_location());
 
   m_size = 0;
@@ -1372,8 +1360,6 @@ Table::~Table() noexcept {
 
 Table *Table::create(const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing, Source_location loc) noexcept {
   ut_a(!(flags & (~0UL << DICT_TF2_BITS)));
-
-  log_info(std::format("create table {} at {}", name, loc.to_string()));
 
   auto heap = mem_heap_create_func(DICT_HEAP_SIZE, MEM_HEAP_DYNAMIC, std::move(loc));
   auto ptr = mem_heap_zalloc(heap, sizeof(Table));

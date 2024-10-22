@@ -240,11 +240,12 @@ static void trx_rollback_active(
     if (table != nullptr) {
       log_info(std::format("Table found: dropping table {} in recovery", table->m_name));
 
-      auto err = ddl_drop_table(table->m_name, trx, true);
+      if (auto err = srv_dict_sys->m_ddl.drop_table(table->m_name, trx, true); err != DB_SUCCESS) {
+        log_fatal("DROP table failed with error ", err , " while dropping table ", table->m_name);
+      }
+
       auto err_commit = trx_commit(trx);
       ut_a(err_commit == DB_SUCCESS);
-
-      ut_a(err == (int)DB_SUCCESS);
     }
   }
 

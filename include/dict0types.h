@@ -480,7 +480,7 @@ struct Index {
   *
   * @return The status.
   */
-  [[nodiscard]] DDL_index_status get_online_ddl_status() const;
+  [[nodiscard]] DDL_index_status get_online_ddl_status() const noexcept;
 
   /** Determines if a secondary index is being created online, or if the
   * table is being rebuilt online, allowing concurrent modifications
@@ -489,7 +489,7 @@ struct Index {
   * if this is a clustered index and the table is being or has been rebuilt online
   * @retval false if the index has been created or the table has been
   * rebuilt completely */
-  [[nodiscard]] bool is_online_ddl_in_progress() const;
+  [[nodiscard]] bool is_online_ddl_in_progress() const noexcept;
 
   /**
    * Gets the page number of the root of the index tree.

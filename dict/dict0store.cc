@@ -1011,14 +1011,18 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
 
   if (sys_foreign != nullptr) {
     log_warn("Dropping incompletely created SYS_FOREIGN table");
-    ddl_drop_table("SYS_FOREIGN", trx, true);
+    if (auto err = m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true); err != DB_SUCCESS) {
+      log_warn("DROP table failed with error ", err , " while dropping table SYS_FOREIGN");
+    }
     auto err_commit = trx_commit(trx);
     ut_a(err_commit == DB_SUCCESS);
   }
 
   if (sys_foreign_cols != nullptr) {
     log_warn("Dropping incompletely created SYS_FOREIGN_COLS table");
-    ddl_drop_table("SYS_FOREIGN_COLS", trx, true);
+    if (auto err = m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true); err != DB_SUCCESS) {
+      log_warn("DROP table failed with error ", err , " while dropping table SYS_FOREIGN_COLS");
+    }
     auto err_commit = trx_commit(trx);
     ut_a(err_commit == DB_SUCCESS);
   }
@@ -1053,8 +1057,8 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
 
     log_err("Creation failed tablespace is full dropping incompletely created SYS_FOREIGN tables");
 
-    ddl_drop_table("SYS_FOREIGN", trx, true);
-    ddl_drop_table("SYS_FOREIGN_COLS", trx, true);
+    (void) m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true);
+    (void) m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true);
 
     auto err_commit = trx_commit(trx);
     ut_a(err_commit == DB_SUCCESS);

@@ -25,6 +25,7 @@ Created 1/8/1996 Heikki Tuuri
 #pragma once
 
 #include "data0data.h"
+#include "ddl0ddl.h"
 #include "dict0load.h"
 #include "dict0store.h"
 #include "mem0mem.h"
@@ -943,4 +944,7 @@ public:
 
   /** Data dictionary loading. */
   Dict_load m_loader;
+
+  /** Data dictionary DDL operations. */
+  DDL m_ddl;
 };

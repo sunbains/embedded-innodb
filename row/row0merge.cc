@@ -1632,7 +1632,9 @@ void row_merge_drop_index(
 ) /*!< in: transaction handle */
 {
   if (index != nullptr) {
-    ddl_drop_index(table, index, trx);
+    if (auto err = srv_dict_sys->m_ddl.drop_index(table, index, trx); err != DB_SUCCESS) {
+      log_warn("DROP INDEX failed with error ", err , " while dropping index ", index->m_name);
+    }
   }
 }
 
@@ -1721,7 +1723,7 @@ Table *row_merge_create_temporary_table(const char *table_name, const merge_inde
     new_table->add_col(col_name, col->mtype, row_merge_col_prtype(col, col_name, index_def), col->len);
   }
 
-  err = ddl_create_table(new_table, trx);
+  err = srv_dict_sys->m_ddl.create_table(new_table, trx);
 
   if (err != DB_SUCCESS) {
     trx->error_state = err;
@@ -1850,7 +1852,7 @@ Index *row_merge_create_index(trx_t *trx, Table *table, const merge_index_def_t 
   /* Add the index to SYS_INDEXES, using the index prototype. */
   index->m_table = table;
 
-  auto err = ddl_create_index(index, trx);
+  auto err = srv_dict_sys->m_ddl.create_index(index, trx);
 
   if (err == DB_SUCCESS) {
 
@@ -1876,7 +1878,7 @@ db_err row_merge_drop_table(trx_t *trx, Table *table) {
   /* There must be no open transactions on the table. */
   ut_a(table->m_n_handles_opened == 0);
 
-  auto err = ddl_drop_table(table->m_name, trx, false);
+  auto err = srv_dict_sys->m_ddl.drop_table(table->m_name, trx, false);
   auto err_commit = trx_commit(trx);
   ut_a(err_commit == DB_SUCCESS);
 

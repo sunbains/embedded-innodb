@@ -1858,7 +1858,7 @@ loop:
 
     srv_main_thread_op_info = "doing background drop tables";
 
-    ddl_drop_tables_in_background();
+    (void) srv_dict_sys->m_ddl.drop_tables_in_background();
 
     srv_main_thread_op_info = "";
 
@@ -2020,7 +2020,7 @@ background_loop:
   srv_main_background_loops++;
   srv_main_thread_op_info = "doing background drop tables";
 
-  n_tables_to_drop = ddl_drop_tables_in_background();
+  n_tables_to_drop = srv_dict_sys->m_ddl.drop_tables_in_background();
 
   if (n_tables_to_drop > 0) {
     /* Do not monopolize the CPU even if there are tables waiting
@@ -2148,7 +2148,7 @@ suspend_thread:
 
   mutex_enter(&kernel_mutex);
 
-  if (ddl_get_background_drop_list_len_low() > 0) {
+  if (srv_dict_sys->m_ddl.get_background_drop_list_len() > 0) {
     mutex_exit(&kernel_mutex);
 
     goto loop;
