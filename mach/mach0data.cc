@@ -64,19 +64,6 @@ uint32_t mach_parse_compressed(byte *&ptr, const byte *end_ptr) {
     return static_cast<uint32_t>(val);
   }
 
-  /* Workaround GCC bug
-  https://gcc.gnu.org/bugzilla/show_bug.cgi?id=77673:
-  the compiler moves mach_read_from_4 right to the beginning of the
-  function, causing and out-of-bounds read if we are reading a short
-  integer close to the end of buffer. */
-#if defined(__GNUC__) && (__GNUC__ >= 5) && !defined(__clang__)
-#define DEPLOY_FENCE
-#endif
-
-#ifdef DEPLOY_FENCE
-  __atomic_thread_fence(__ATOMIC_ACQUIRE);
-#endif
-
   if (val < 0xC0) {
     /* 10nnnnnn nnnnnnnn (14 bits) */
     if (end_ptr >= ptr + 2) {
@@ -88,10 +75,6 @@ uint32_t mach_parse_compressed(byte *&ptr, const byte *end_ptr) {
     ptr = nullptr;
     return 0;
   }
-
-#ifdef DEPLOY_FENCE
-  __atomic_thread_fence(__ATOMIC_ACQUIRE);
-#endif
 
   if (val < 0xE0) {
     /* 110nnnnn nnnnnnnn nnnnnnnn (21 bits) */
@@ -105,10 +88,6 @@ uint32_t mach_parse_compressed(byte *&ptr, const byte *end_ptr) {
     return 0;
   }
 
-#ifdef DEPLOY_FENCE
-  __atomic_thread_fence(__ATOMIC_ACQUIRE);
-#endif
-
   if (val < 0xF0) {
     /* 1110nnnn nnnnnnnn nnnnnnnn nnnnnnnn (28 bits) */
     if (end_ptr >= ptr + 4) {
@@ -120,10 +99,6 @@ uint32_t mach_parse_compressed(byte *&ptr, const byte *end_ptr) {
     ptr = nullptr;
     return 0;
   }
-
-#ifdef DEPLOY_FENCE
-  __atomic_thread_fence(__ATOMIC_ACQUIRE);
-#endif
 
   if (val < 0xF8) {
     ut_ad(val == 0xF0);
@@ -140,10 +115,6 @@ uint32_t mach_parse_compressed(byte *&ptr, const byte *end_ptr) {
     return 0;
   }
 
-#ifdef DEPLOY_FENCE
-  __atomic_thread_fence(__ATOMIC_ACQUIRE);
-#endif
-
   if (val < 0xFC) {
     /* 111110nn nnnnnnnn (10 bits) (extended) */
     if (end_ptr >= ptr + 2) {
@@ -154,10 +125,6 @@ uint32_t mach_parse_compressed(byte *&ptr, const byte *end_ptr) {
     ptr = nullptr;
     return 0;
   }
-
-#ifdef DEPLOY_FENCE
-  __atomic_thread_fence(__ATOMIC_ACQUIRE);
-#endif
 
   if (val < 0xFE) {
     /* 1111110n nnnnnnnn nnnnnnnn (17 bits) (extended) */
@@ -170,12 +137,6 @@ uint32_t mach_parse_compressed(byte *&ptr, const byte *end_ptr) {
     ptr = nullptr;
     return 0;
   }
-
-#ifdef DEPLOY_FENCE
-  __atomic_thread_fence(__ATOMIC_ACQUIRE);
-#endif
-
-#undef DEPLOY_FENCE
 
   ut_ad(val == 0xFE);
 
