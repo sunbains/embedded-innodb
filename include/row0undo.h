@@ -38,7 +38,7 @@ Created 1/8/1997 Heikki Tuuri
 @return	own: undo node */
 Undo_node *row_undo_node_create(
   /** in: transaction */
-  trx_t *trx,
+  Trx *trx,
 
   /** in: parent node, i.e., a thr node */
   que_thr_t *parent,
@@ -109,7 +109,7 @@ struct Undo_node {
   undo_exec state;
 
   /** trx for which undo is done */
-  trx_t *trx;
+  Trx *trx;
 
   /** roll pointer to undo log record */
   roll_ptr_t roll_ptr;

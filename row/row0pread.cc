@@ -190,7 +190,7 @@ Parallel_reader::Parallel_reader(size_t max_threads)
   m_sig_count = m_event->reset();
 }
 
-Parallel_reader::Scan_ctx::Scan_ctx(Parallel_reader *reader, size_t id, trx_t *trx, const Parallel_reader::Config &config, F &&f)
+Parallel_reader::Scan_ctx::Scan_ctx(Parallel_reader *reader, size_t id, Trx *trx, const Parallel_reader::Config &config, F &&f)
     : m_id(id), m_config(config), m_trx(trx), m_f(f), m_reader(reader) {}
 
 /** Persistent cursor wrapper around btr_pcur_t */
@@ -411,10 +411,10 @@ dberr_t PCursor::move_to_next_block(Index *index) {
 }
 
 bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr) {
-  ut_ad(m_trx == nullptr || m_trx->read_view != nullptr);
+  ut_ad(m_trx == nullptr || m_trx->m_read_view != nullptr);
 
-  if (m_trx != nullptr && m_trx->read_view != nullptr) {
-    auto view = m_trx->read_view;
+  if (m_trx != nullptr && m_trx->m_read_view != nullptr) {
+    auto view = m_trx->m_read_view;
 
     if (m_config.m_index->is_clustered()) {
       trx_id_t rec_trx_id;
@@ -615,7 +615,7 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
 
       mem_heap_empty(heap);
 
-      if (!(m_n_pages % TRX_IS_INTERRUPTED_PROBE) && trx_is_interrupted(trx())) {
+      if (!(m_n_pages % TRX_IS_INTERRUPTED_PROBE) && trx()->is_interrupted()) {
         err = DB_INTERRUPTED;
         break;
       }
@@ -815,7 +815,7 @@ void Parallel_reader::worker(Parallel_reader::Thread_ctx *thread_ctx) {
       }
 
       /* Check for trx interrupted (useful in the case of small tables). */
-      if (err == DB_SUCCESS && trx_is_interrupted(ctx->trx())) {
+      if (err == DB_SUCCESS && ctx->trx()->is_interrupted()) {
         err = DB_INTERRUPTED;
         scan_ctx->set_error_state(err);
         break;
@@ -1312,7 +1312,7 @@ dberr_t Parallel_reader::run(size_t n_threads) {
   return DB_SUCCESS;
 }
 
-dberr_t Parallel_reader::add_scan(trx_t *trx, const Parallel_reader::Config &config, Parallel_reader::F &&f) {
+dberr_t Parallel_reader::add_scan(Trx *trx, const Parallel_reader::Config &config, Parallel_reader::F &&f) {
   // clang-format off
 
   auto scan_ctx = std::make_shared<Scan_ctx>(this, m_scan_ctx_id, trx, config, std::move(f));

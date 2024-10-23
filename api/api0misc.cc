@@ -54,19 +54,19 @@ int ib_create_tempfile(const char *) {
 @return	true if interrupted */
 ib_trx_is_interrupted_handler_t ib_trx_is_interrupted = nullptr;
 
-bool trx_is_interrupted(const trx_t *trx) {
-  if (trx->m_client_ctx && ib_trx_is_interrupted != nullptr) {
+bool trx_is_interrupted(const Trx *trx) {
+  if (trx->m_client_ctx != nullptr && ib_trx_is_interrupted != nullptr) {
     return ib_trx_is_interrupted(trx->m_client_ctx);
   }
   return false;
 }
 
-bool ib_handle_errors(db_err *new_err, trx_t *trx, que_thr_t *thr, trx_savept_t *savept) {
+bool ib_handle_errors(db_err *new_err, Trx *trx, que_thr_t *thr, trx_savept_t *savept) {
   for (;;) {
-    auto err = trx->error_state;
+    auto err = trx->m_error_state;
     ut_a(err != DB_SUCCESS);
 
-    trx->error_state = DB_SUCCESS;
+    trx->m_error_state = DB_SUCCESS;
 
     switch (err) {
       case DB_LOCK_WAIT_TIMEOUT:
@@ -93,7 +93,7 @@ bool ib_handle_errors(db_err *new_err, trx_t *trx, que_thr_t *thr, trx_savept_t 
       case DB_LOCK_WAIT:
         InnoDB::suspend_user_thread(thr);
 
-        if (trx->error_state != DB_SUCCESS) {
+        if (trx->m_error_state != DB_SUCCESS) {
           que_thr_stop_client(thr);
 
           continue;
@@ -133,19 +133,19 @@ bool ib_handle_errors(db_err *new_err, trx_t *trx, que_thr_t *thr, trx_savept_t 
         log_fatal("Unknown error code ", (ulint) err);
     }
 
-    if (trx->error_state != DB_SUCCESS) {
-      *new_err = trx->error_state;
+    if (trx->m_error_state != DB_SUCCESS) {
+      *new_err = trx->m_error_state;
     } else {
       *new_err = err;
     }
 
-    trx->error_state = DB_SUCCESS;
+    trx->m_error_state = DB_SUCCESS;
 
     return false;
   }
 }
 
-db_err ib_trx_lock_table_with_retry(trx_t *trx, Table *table, enum Lock_mode mode) {
+db_err ib_trx_lock_table_with_retry(Trx *trx, Table *table, enum Lock_mode mode) {
   auto heap = mem_heap_create(512);
 
   trx->m_op_info = "setting table lock";
@@ -167,7 +167,7 @@ db_err ib_trx_lock_table_with_retry(trx_t *trx, Table *table, enum Lock_mode mod
 
     auto err = srv_lock_sys->lock_table(0, table, mode, thr);
 
-    trx->error_state = err;
+    trx->m_error_state = err;
 
     if (likely(err == DB_SUCCESS)) {
       que_thr_stop_for_client_no_error(thr, trx);
@@ -188,7 +188,7 @@ db_err ib_trx_lock_table_with_retry(trx_t *trx, Table *table, enum Lock_mode mod
 
         /* There was a lock wait but the thread was not
         in a ready to run or running state. */
-        trx->error_state = DB_LOCK_WAIT;
+        trx->m_error_state = DB_LOCK_WAIT;
 
         continue;
       }

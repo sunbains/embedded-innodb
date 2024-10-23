@@ -489,10 +489,10 @@ static ulint row_ins_cascade_calc_update_vec(upd_node_t *node, const Foreign *fo
  * @param trx Transaction.
  * @param foreign Foreign key constraint.
  */
-static void row_ins_set_detailed(trx_t *trx, const Foreign *foreign) {
+static void row_ins_set_detailed(Trx *trx, const Foreign *foreign) {
   ut_print_name(foreign->m_foreign_table_name);
   srv_dict_sys->print_info_on_foreign_key_in_create_format(trx, foreign, false);
-  trx_set_detailed_error(trx, "foreign key error");
+  trx->set_detailed_error("foreign key error");
 }
 
 /**
@@ -519,7 +519,7 @@ static void row_ins_foreign_report_err(
   mutex_enter(&srv_dict_sys->m_foreign_err_mutex);
 
   log_info(" Transaction:");
-  log_info(trx_to_string(trx, 600));
+  log_info(trx->to_string(600));
   log_info("Foreign key constraint fails for table ", foreign->m_foreign_table_name, ": ");
   srv_dict_sys->print_info_on_foreign_key_in_create_format(trx, foreign, true);
   log_info(errstr);
@@ -553,13 +553,13 @@ static void row_ins_foreign_report_err(
  * @param[in] rec A record in the parent table that does not match the entry due to the error.
  * @param[in] entry Index entry to insert in the child table.
  */
-static void row_ins_foreign_report_add_err(trx_t *trx, const Foreign *foreign, const rec_t *rec, const DTuple *entry) {
+static void row_ins_foreign_report_add_err(Trx *trx, const Foreign *foreign, const rec_t *rec, const DTuple *entry) {
   row_ins_set_detailed(trx, foreign);
 
   mutex_enter(&srv_dict_sys->m_foreign_err_mutex);
 
   log_err(" Transaction:");
-  log_err(trx_to_string(trx, 600));
+  log_err(trx->to_string(600));
   log_err("Foreign key constraint fails for table ", foreign->m_foreign_table_name, ":");
   srv_dict_sys->print_info_on_foreign_key_in_create_format(trx, foreign, true);
   log_err("Trying to add in child table, in index ", foreign->m_foreign_index->m_name);
@@ -607,7 +607,7 @@ run_again:
 
   row_upd_step(thr);
 
-  auto err = trx->error_state;
+  auto err = trx->m_error_state;
 
   /* Note that the cascade node is a subnode of another InnoDB
   query graph node. We do a normal lock wait in this node, but
@@ -624,9 +624,9 @@ run_again:
     or this transaction is picked as a victim in selective
     deadlock resolution */
 
-    if (trx->error_state != DB_SUCCESS) {
+    if (trx->m_error_state != DB_SUCCESS) {
 
-      return trx->error_state;
+      return trx->m_error_state;
     }
 
     /* Retry operation after a normal lock wait */
@@ -681,7 +681,7 @@ static db_err row_ins_foreign_check_on_constraint(que_thr_t *thr, const Foreign 
   ulint n_to_update;
   db_err err;
   ulint i;
-  trx_t *trx;
+  Trx *trx;
   mem_heap_t *tmp_heap = nullptr;
 
   ut_a(thr);
@@ -1056,7 +1056,7 @@ db_err row_ins_check_foreign_constraint(bool check_ref, const Foreign *foreign, 
   db_err err;
   ulint i;
   mtr_t mtr;
-  trx_t *trx = thr_get_trx(thr);
+  Trx *trx = thr_get_trx(thr);
   mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
@@ -1126,7 +1126,7 @@ run_again:
       mutex_enter(&srv_dict_sys->m_foreign_err_mutex);
       ut_print_timestamp(ib_stream);
       ib_logger(ib_stream, " Transaction:\n");
-      log_info(trx_to_string(trx, 600));
+      log_info(trx->to_string(600));
       ib_logger(ib_stream, "Foreign key constraint fails for table ");
       ut_print_name(foreign->m_foreign_table_name);
       ib_logger(ib_stream, ":\n");
@@ -1299,18 +1299,18 @@ run_again:
 
 do_possible_lock_wait:
   if (err == DB_LOCK_WAIT) {
-    trx->error_state = static_cast<db_err>(err);
+    trx->m_error_state = static_cast<db_err>(err);
 
     que_thr_stop_client(thr);
 
     InnoDB::suspend_user_thread(thr);
 
-    if (trx->error_state == DB_SUCCESS) {
+    if (trx->m_error_state == DB_SUCCESS) {
 
       goto run_again;
     }
 
-    err = trx->error_state;
+    err = trx->m_error_state;
   }
 
 exit_func:
@@ -1336,7 +1336,7 @@ exit_func:
  */
 static db_err row_ins_check_foreign_constraints(const Table *table, const Index *index, DTuple *entry, que_thr_t *thr) {
   db_err err;
-  trx_t *trx;
+  Trx *trx;
   bool got_s_lock = false;
 
   trx = thr_get_trx(thr);
@@ -1532,7 +1532,7 @@ static db_err row_ins_scan_sec_index_for_duplicate(const Index *index, DTuple *e
       if (row_ins_dupl_error_with_rec(rec, entry, index, offsets)) {
         err = DB_DUPLICATE_KEY;
 
-        thr_get_trx(thr)->error_info = index;
+        thr_get_trx(thr)->m_error_info = index;
 
         break;
       }
@@ -1572,7 +1572,7 @@ static db_err row_ins_duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *en
   db_err err;
   rec_t *rec;
   ulint n_unique;
-  trx_t *trx = thr_get_trx(thr);
+  Trx *trx = thr_get_trx(thr);
   mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
@@ -1632,7 +1632,7 @@ static db_err row_ins_duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *en
       }
 
       if (row_ins_dupl_error_with_rec(rec, entry, btr_cur->m_index, offsets)) {
-        trx->error_info = btr_cur->m_index;
+        trx->m_error_info = btr_cur->m_index;
         err = DB_DUPLICATE_KEY;
         goto func_exit;
       }
@@ -1666,7 +1666,7 @@ static db_err row_ins_duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *en
       }
 
       if (row_ins_dupl_error_with_rec(rec, entry, btr_cur->m_index, offsets)) {
-        trx->error_info = btr_cur->m_index;
+        trx->m_error_info = btr_cur->m_index;
         err = DB_DUPLICATE_KEY;
         goto func_exit;
       }
@@ -2102,7 +2102,7 @@ que_thr_t *row_ins_step(que_thr_t *thr) {
   it has used this table handle to do a search. In that case, we
   have already set the IX lock on the table during the search
   operation, and there is no need to set it again here. But we
-  must write trx->id to node->trx_id. */
+  must write trx->m_id to node->trx_id. */
 
   srv_trx_sys->write_trx_id(node->trx_id_buf, trx->m_id);
 
@@ -2122,8 +2122,8 @@ que_thr_t *row_ins_step(que_thr_t *thr) {
     }
   };
 
-  auto error = [thr, sel_node](ins_node_t *node, trx_t *trx, db_err err) noexcept -> que_thr_t * {
-    trx->error_state = static_cast<db_err>(err);
+  auto error = [thr, sel_node](ins_node_t *node, Trx *trx, db_err err) noexcept -> que_thr_t * {
+    trx->m_error_state = static_cast<db_err>(err);
 
     if (err != DB_SUCCESS) {
       /* err == DB_LOCK_WAIT or SQL error detected */

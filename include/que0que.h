@@ -44,7 +44,7 @@ extern bool que_trace_on;
 
 void que_graph_publish(
   que_t *graph, /*!< in: graph */
-  sess_t *sess
+  Session *sess
 ); /*!< in: session */
 /** Creates a query graph fork node.
 @return	own: fork node */
@@ -87,7 +87,7 @@ the n_active_thrs counters of the query graph and transaction if thr was
 not active. */
 void que_thr_move_to_run_state_for_client(
   que_thr_t *thr, /*!< in: an query thread */
-  trx_t *trx
+  Trx *trx
 ); /*!< in: transaction */
 
 /** The query thread is stopped and made inactive, except in the case where
@@ -102,7 +102,7 @@ void que_run_threads(que_thr_t *thr); /*!< in: query thread */
 handling routine. (Currently, just returns the control to the root of the
 graph so that the graph can communicate an error message to the client.) */
 void que_fork_error_handle(
-  trx_t *trx, /*!< in: trx */
+  Trx *trx, /*!< in: trx */
   que_t *fork
 ); /*!< in: query graph which was run before signal
                   handling started, NULL not allowed */
@@ -154,7 +154,7 @@ db_err que_eval_sql(
   bool reserve_dict_mutex,
   /*!< in: if true, acquire/release
                     dict_sys->mutex around call to pars_sql. */
-  trx_t *trx
+  Trx *trx
 ); /*!< in: trx */
 
 /** Moves a thread from another state to the QUE_THR_RUNNING state. Increments
@@ -169,14 +169,14 @@ select, when there is no error or lock wait.
 TODO: Currently only called from row0merge, needs to be removed. */
 void que_thr_stop_for_client_no_error(
   que_thr_t *thr, /*!< in: query thread */
-  trx_t *trx
+  Trx *trx
 ); /*!< in: transaction */
 
 /** Reset the variables. */
 void que_var_init(void);
 
 /** Gets the trx of a query thread. */
-inline trx_t *thr_get_trx(que_thr_t *thr) /*!< in: query thread */
+inline Trx *thr_get_trx(que_thr_t *thr) /*!< in: query thread */
 {
   ut_ad(thr);
 
@@ -318,42 +318,46 @@ inline ulint que_node_list_get_len(que_node_t *node_list) /*!< in: node list, or
   return (len);
 }
 
-/** Gets the parent node of a query graph node.
-@return	parent node or NULL */
-inline que_node_t *que_node_get_parent(que_node_t *node) /*!< in: node */
-{
+/**
+ * @brief Gets the parent node of a query graph node.
+ * 
+ * @param[in] node The query graph node.
+ * 
+ * @return The parent node or NULL.
+ */
+inline que_node_t *que_node_get_parent(que_node_t *node) {
   return (((que_common_t *)node)->parent);
 }
 
-/** Checks if graph, trx, or session is in a state where the query thread should
-be stopped.
-@return true if should be stopped; NOTE that if the peek is made
-without reserving the kernel mutex, then another peek with the mutex
-reserved is necessary before deciding the actual stopping */
-inline bool que_thr_peek_stop(que_thr_t *thr) /*!< in: query thread */
-{
-  trx_t *trx;
-  que_t *graph;
+/**
+ * @brief Checks if graph, trx, or session is in a state where the query thread should be stopped.
+ * 
+ * @param[in] thr The query thread.
+ * 
+ * @return true if the query thread should be stopped.
+ * 
+ * @note If the peek is made without reserving the kernel mutex, then another peek with the
+ * mutex reserved is necessary before deciding the actual stopping.
+ */
+inline bool que_thr_peek_stop(que_thr_t *thr) {
+  auto graph = thr->graph;
+  auto trx = graph->trx;
 
-  graph = thr->graph;
-  trx = graph->trx;
+  if (graph->state != QUE_FORK_ACTIVE || trx->m_que_state == TRX_QUE_LOCK_WAIT || (!trx->m_signals.empty() && trx->m_que_state == TRX_QUE_RUNNING)) {
 
-  if (graph->state != QUE_FORK_ACTIVE || trx->m_que_state == TRX_QUE_LOCK_WAIT || (UT_LIST_GET_LEN(trx->signals) > 0 && trx->m_que_state == TRX_QUE_RUNNING)) {
-
-    return (true);
+    return true;
   }
 
-  return (false);
+  return false;
 }
 
-/** Returns true if the query graph is for a SELECT statement.
-@return	true if a select */
-inline bool que_graph_is_select(que_t *graph) /*!< in: graph */
-{
-  if (graph->fork_type == QUE_FORK_SELECT_SCROLL || graph->fork_type == QUE_FORK_SELECT_NON_SCROLL) {
-
-    return (true);
-  }
-
-  return (false);
+/**
+ * @brief Returns true if the query graph is for a SELECT statement.
+ * 
+ * @param[in] graph The query graph.
+ * 
+ * @return true if the query graph is for a SELECT statement.
+ */
+inline bool que_graph_is_select(que_t *graph) {
+  return graph->fork_type == QUE_FORK_SELECT_SCROLL || graph->fork_type == QUE_FORK_SELECT_NON_SCROLL;
 }

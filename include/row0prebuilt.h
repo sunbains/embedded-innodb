@@ -28,7 +28,7 @@ Created 02/03/2009 Sunny Bains
 #include "lock0types.h"
 #include "row0sel.h"
 
-struct trx_t;
+struct Trx;
 struct Table;
 
 constexpr ulint FETCH_CACHE_SIZE = 6;
@@ -76,7 +76,7 @@ void row_prebuilt_reset(row_prebuilt_t *prebuilt);
  * @param prebuilt in/out: prebuilt struct handle
  * @param trx transaction handle
  */
-void row_prebuilt_update_trx(row_prebuilt_t *prebuilt, trx_t *trx);
+void row_prebuilt_update_trx(row_prebuilt_t *prebuilt, Trx *trx);
 
 /* An InnoDB cached row. */
 struct ib_cached_row_t {
@@ -168,7 +168,7 @@ struct row_prebuilt_struct {
   Index *index;
 
   /** Current transaction handle */
-  trx_t *trx;
+  Trx *trx;
 
   /** Persistent cursor used in selects and updates */
   Btree_pcursor *pcur;

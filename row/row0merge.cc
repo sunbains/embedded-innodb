@@ -896,7 +896,7 @@ static int row_merge_cmp(
  * @return DB_SUCCESS or error
  */
 static db_err row_merge_read_clustered_index(
-  trx_t *trx,
+  Trx *trx,
   table_handle_t table,
   const Table *old_table,
   const Table *new_table,
@@ -1009,7 +1009,7 @@ static db_err row_merge_read_clustered_index(
 
     if (pcur.is_after_last_on_page()) {
       if (unlikely(trx_is_interrupted(trx))) {
-        trx->error_key_num = ULINT_UNDEFINED;
+        trx->m_error_key_num = ULINT_UNDEFINED;
         return func_exit(DB_INTERRUPTED);
       }
 
@@ -1053,7 +1053,7 @@ static db_err row_merge_read_clustered_index(
           ut_a(!(field_type->prtype & DATA_NOT_NULL));
 
           if (dfield_is_null(field)) {
-            trx->error_key_num = i;
+            trx->m_error_key_num = i;
             return func_exit(DB_PRIMARY_KEY_IS_NULL);
           }
 
@@ -1093,7 +1093,7 @@ static db_err row_merge_read_clustered_index(
 
           if (dup.n_dup) {
             err = DB_DUPLICATE_KEY;
-            trx->error_key_num = i;
+            trx->m_error_key_num = i;
             return func_exit(DB_DUPLICATE_KEY);
           }
         } else {
@@ -1104,7 +1104,7 @@ static db_err row_merge_read_clustered_index(
       row_merge_buf_write(buf, file, block);
 
       if (!row_merge_write(file->fd, file->offset++, block)) {
-        trx->error_key_num = i;
+        trx->m_error_key_num = i;
         return func_exit(DB_OUT_OF_FILE_SPACE);
       }
 
@@ -1335,7 +1335,7 @@ done0:
 /** Merge disk files.
 @return	DB_SUCCESS or error code */
 static __attribute__((nonnull)) db_err row_merge(
-  trx_t *trx,                /*!< in: transaction */
+  Trx *trx,                /*!< in: transaction */
   const Index *index, /*!< in: index being created */
   merge_file_t *file,        /*!< in/out: file containing
                                      index entries */
@@ -1440,7 +1440,7 @@ static __attribute__((nonnull)) db_err row_merge(
 /** Merge disk files.
 @return	DB_SUCCESS or error code */
 static db_err row_merge_sort(
-  trx_t *trx,                /*!< in: transaction */
+  Trx *trx,                /*!< in: transaction */
   const Index *index, /*!< in: index being created */
   merge_file_t *file,        /*!< in/out: file containing
                                           index entries */
@@ -1519,7 +1519,7 @@ static void row_merge_copy_blobs(
  * 
  * @return DB_SUCCESS or error number.
  */
-static db_err row_merge_insert_index_tuples(trx_t *trx, Index *index, Table *table, int fd, row_merge_block_t *block) {
+static db_err row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table, int fd, row_merge_block_t *block) {
   mrec_buf_t buf;
   const byte *b;
   que_thr_t *thr;
@@ -1598,7 +1598,7 @@ static db_err row_merge_insert_index_tuples(trx_t *trx, Index *index, Table *tab
         }
 
         thr->lock_state = QUE_THR_LOCK_ROW;
-        trx->error_state = err;
+        trx->m_error_state = err;
         que_thr_stop_client(thr);
         thr->lock_state = QUE_THR_LOCK_NOLOCK;
       } while (ib_handle_errors(&err, trx, thr, nullptr));
@@ -1628,7 +1628,7 @@ will not be committed. */
 void row_merge_drop_index(
   Index *index, /*!< in: index to be removed */
   Table *table, /*!< in: table */
-  trx_t *trx
+  Trx *trx
 ) /*!< in: transaction handle */
 {
   if (index != nullptr) {
@@ -1644,7 +1644,7 @@ exclusively by the caller, because the transaction will not be
 committed. */
 
 void row_merge_drop_indexes(
-  trx_t *trx,           /*!< in: transaction */
+  Trx *trx,           /*!< in: transaction */
   Table *table,  /*!< in: table containing the indexes */
   Index **index, /*!< in: indexes to drop */
   ulint num_created
@@ -1705,7 +1705,7 @@ inline ulint row_merge_col_prtype(
   return prtype;
 }
 
-Table *row_merge_create_temporary_table(const char *table_name, const merge_index_def_t *index_def, const Table *table, trx_t *trx) {
+Table *row_merge_create_temporary_table(const char *table_name, const merge_index_def_t *index_def, const Table *table, Trx *trx) {
   db_err err;
   const auto n_cols = table->get_n_user_cols();
 
@@ -1726,14 +1726,14 @@ Table *row_merge_create_temporary_table(const char *table_name, const merge_inde
   err = srv_dict_sys->m_ddl.create_table(new_table, trx);
 
   if (err != DB_SUCCESS) {
-    trx->error_state = err;
+    trx->m_error_state = err;
     new_table = nullptr;
   }
 
   return (new_table);
 }
 
-db_err row_merge_rename_indexes(trx_t *trx, Table *table) {
+db_err row_merge_rename_indexes(Trx *trx, Table *table) {
   db_err err = DB_SUCCESS;
   pars_info_t *info = pars_info_create();
 
@@ -1771,7 +1771,7 @@ db_err row_merge_rename_indexes(trx_t *trx, Table *table) {
   return err;
 }
 
-db_err row_merge_rename_tables(Table *old_table, Table *new_table, const char *tmp_name, trx_t *trx) {
+db_err row_merge_rename_tables(Table *old_table, Table *new_table, const char *tmp_name, Trx *trx) {
   db_err err = DB_ERROR;
   pars_info_t *info;
   const char *old_name = old_table->m_name;
@@ -1823,9 +1823,9 @@ db_err row_merge_rename_tables(Table *old_table, Table *new_table, const char *t
 
   if (err != DB_SUCCESS) {
   err_exit:
-    trx->error_state = DB_SUCCESS;
+    trx->m_error_state = DB_SUCCESS;
     trx_general_rollback(trx, false, nullptr);
-    trx->error_state = DB_SUCCESS;
+    trx->m_error_state = DB_SUCCESS;
   }
 
   trx->m_op_info = "";
@@ -1833,7 +1833,7 @@ db_err row_merge_rename_tables(Table *old_table, Table *new_table, const char *t
   return (err);
 }
 
-Index *row_merge_create_index(trx_t *trx, Table *table, const merge_index_def_t *index_def) {
+Index *row_merge_create_index(Trx *trx, Table *table, const merge_index_def_t *index_def) {
   const auto n_fields = index_def->n_fields;
 
   /* Create the index prototype, using the passed in def, this is not
@@ -1870,23 +1870,23 @@ Index *row_merge_create_index(trx_t *trx, Table *table, const merge_index_def_t 
   return index;
 }
 
-bool row_merge_is_index_usable(const trx_t *trx, const Index *index) {
-  return !trx->read_view || read_view_sees_trx_id(trx->read_view, index->m_trx_id);
+bool row_merge_is_index_usable(const Trx *trx, const Index *index) {
+  return !trx->m_read_view || read_view_sees_trx_id(trx->m_read_view, index->m_trx_id);
 }
 
-db_err row_merge_drop_table(trx_t *trx, Table *table) {
+db_err row_merge_drop_table(Trx *trx, Table *table) {
   /* There must be no open transactions on the table. */
   ut_a(table->m_n_handles_opened == 0);
 
   auto err = srv_dict_sys->m_ddl.drop_table(table->m_name, trx, false);
-  auto err_commit = trx_commit(trx);
+  auto err_commit = trx->commit();
   ut_a(err_commit == DB_SUCCESS);
 
   return err;
 }
 
 db_err row_merge_build_indexes(
-  trx_t *trx,
+  Trx *trx,
   Table *old_table,
   Table *new_table,
   Index **indexes,
@@ -1937,7 +1937,7 @@ db_err row_merge_build_indexes(
     row_merge_file_destroy(&merge_files[i]);
 
     if (err != DB_SUCCESS) {
-      trx->error_key_num = i;
+      trx->m_error_key_num = i;
       goto func_exit;
     }
   }

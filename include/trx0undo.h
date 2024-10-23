@@ -393,7 +393,7 @@ struct Undo {
    * 
    * @return	page number if success, else FIL_NULL
    */
-  ulint add_page(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
+  ulint add_page(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
 
   /**
    * Truncates an undo log from the start. This function is used during a purge
@@ -417,7 +417,7 @@ struct Undo {
    * @param[in] undo Undo log
    * @param[in] limit All undo records with undo number >= this value should be truncated
    */
-  void truncate_end(trx_t *trx, trx_undo_t *undo, undo_no_t limit) noexcept;
+  void truncate_end(Trx *trx, trx_undo_t *undo, undo_no_t limit) noexcept;
 
   /**
    * Initializes the undo log lists for a rollback segment memory copy.
@@ -441,7 +441,7 @@ struct Undo {
    * @return DB_SUCCESS if undo log assign successful, possible error codes
    *  are: DB_TOO_MANY_CONCURRENT_TRXS DB_OUT_OF_FILE_SPACE DB_OUT_OF_MEMORY
    */
-  db_err assign_undo(trx_t *trx, ulint type) noexcept;
+  db_err assign_undo(Trx *trx, ulint type) noexcept;
 
   /**
    * Sets the state of the undo log segment at a transaction finish.
@@ -453,7 +453,7 @@ struct Undo {
    * 
    * @return	undo log segment header page, x-latched
    */
-  page_t *set_state_at_finish(trx_rseg_t *rseg, trx_t *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
+  page_t *set_state_at_finish(trx_rseg_t *rseg, Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
 
   /**
    * Sets the state of the undo log segment at a transaction prepare.
@@ -464,7 +464,7 @@ struct Undo {
    * 
    * @return	undo log segment header page, x-latched
    */
-  page_t *set_state_at_prepare(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
+  page_t *set_state_at_prepare(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
 
   /**
    * Adds the update undo log header as the first in the history list, and
@@ -475,7 +475,7 @@ struct Undo {
    * @param[in] undo_page Update undo log header page, x-latched
    * @param[in] mtr Mini-transaction handle
    */
-  void update_cleanup(trx_t *trx, page_t *undo_page, mtr_t *mtr) noexcept;
+  void update_cleanup(Trx *trx, page_t *undo_page, mtr_t *mtr) noexcept;
 
   /**
    * Frees or caches an insert undo log after a transaction commit or rollback.
@@ -484,7 +484,7 @@ struct Undo {
    * 
    * @param[in] trx Transaction
    */
-  void insert_cleanup(trx_t *trx) noexcept;
+  void insert_cleanup(Trx *trx) noexcept;
 
   /**
    * Parses the redo log entry of an undo log page initialization.
@@ -580,7 +580,7 @@ private:
    * @param[in] page_no The page number to free: must not be the header page.
    * @param[in] mtr The mini-transaction handle. The caller must have reserved the rollback segment mutex.
    */
-  void free_page_in_rollback(trx_t *trx __attribute__((unused)), trx_undo_t *undo, page_no_t page_no, mtr_t *mtr) noexcept;
+  void free_page_in_rollback(Trx *trx __attribute__((unused)), trx_undo_t *undo, page_no_t page_no, mtr_t *mtr) noexcept;
 
   /**
    * Empties an undo log header page of undo records for that undo log. Other
@@ -626,7 +626,7 @@ private:
    * 
    * @return	the undo log memory object, nullptr if none cached
    */
-  trx_undo_t *reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid,) mtr_t *mtr) noexcept;
+  trx_undo_t *reuse_cached(Trx *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid,) mtr_t *mtr) noexcept;
 
   /**
    * Marks an undo log header as a header of a data dictionary operation
@@ -635,7 +635,7 @@ private:
    * @param[in] undo The undo log memory object.
    * @param[in] mtr The mini-transaction handle.
    */
-  void mark_as_dict_operation(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
+  void mark_as_dict_operation(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
 
 public:
   FSP* m_fsp{};

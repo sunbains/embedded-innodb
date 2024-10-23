@@ -585,7 +585,7 @@ private:
    * @param[in] index           The index.
    * @param[in] op              The operation.
    */
-  void trx_report(trx_t *trx, const Index *index, const char *op) noexcept;
+  void trx_report(Trx *trx, const Index *index, const char *op) noexcept;
   #endif /* UNIV_DEBUG */
 
   /**
@@ -625,7 +625,7 @@ private:
     rec_t *rec,
     const Index *index,
     const upd_t *update,
-    trx_t *trx,
+    Trx *trx,
     roll_ptr_t roll_ptr,
     mtr_t *mtr
   ) noexcept;
@@ -661,7 +661,7 @@ private:
     rec_t *rec,
     const Index *index,
     bool val,
-    trx_t *trx,
+    Trx *trx,
     roll_ptr_t roll_ptr,
     mtr_t *mtr) noexcept;
 

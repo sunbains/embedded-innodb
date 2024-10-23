@@ -467,7 +467,7 @@ struct Lock_sys {
    * @param[in] rec Record for which the lock is set.
    * @param[in] lock_mode Lock mode, either LOCK_S or LOCK_X.
    */
-  void rec_unlock(trx_t *trx, const Buf_block *block, const rec_t *rec, Lock_mode lock_mode) noexcept;
+  void rec_unlock(Trx *trx, const Buf_block *block, const rec_t *rec, Lock_mode lock_mode) noexcept;
 
   /**
    * @brief Releases transaction locks and releases other transactions waiting because of these locks.
@@ -477,7 +477,7 @@ struct Lock_sys {
    *
    * @param[in] trx The transaction whose locks are to be released.
    */
-  void release_off_kernel(trx_t *trx) noexcept;
+  void release_off_kernel(Trx *trx) noexcept;
 
   /**
    * @brief Cancels a waiting lock request and releases possible other transactions waiting behind it.
@@ -516,7 +516,7 @@ struct Lock_sys {
    *         dest if there is no source table;
    *         NULL if the transaction is locking more than two tables or an inconsistency is found.
    */
-  [[nodiscard]] Table *get_src_table(trx_t *trx, Table *dest, Lock_mode *mode) noexcept;
+  [[nodiscard]] Table *get_src_table(Trx *trx, Table *dest, Lock_mode *mode) noexcept;
 
   /**
    * @brief Determine if the given table is exclusively "owned" by the given transaction.
@@ -529,7 +529,7 @@ struct Lock_sys {
    * 
    * @return true if the table is only locked by the transaction with LOCK_IX and possibly LOCK_AUTO_INC.
    */
-  [[nodiscard]] bool is_table_exclusive(Table *table, trx_t *trx) noexcept;
+  [[nodiscard]] bool is_table_exclusive(Table *table, Trx *trx) noexcept;
 
   /**
    * @brief Checks that a transaction id is sensible, i.e., not in the future.
@@ -587,17 +587,6 @@ struct Lock_sys {
    */
   void print_info_all_transactions() noexcept;
 
-  /**
-   * @brief Returns the approximate number of record locks for a transaction.
-   *
-   * This function calculates the approximate number of record locks (bits set in the bitmap)
-   * for the specified transaction. Note that since delete-marked records may be removed,
-   * the record count will not be precise.
-   *
-   * @param[in] trx The transaction for which the number of record locks is to be calculated.
-   * @return The approximate number of record locks for the transaction.
-   */
-  [[nodiscard]] ulint number_of_rows_locked(trx_t *trx) const noexcept;
   
   /**
    * @brief Checks if some transaction has an implicit x-lock on a record in a clustered index.
@@ -615,7 +604,7 @@ struct Lock_sys {
    * @note The index must be a clustered index.
    * @note The record must be a user record (not a supremum/infinimum record).
    */
-  [[nodiscard]] inline const trx_t *clust_rec_some_has_impl(const rec_t *rec, const Index *index, const ulint *offsets) noexcept {
+  [[nodiscard]] inline const Trx *clust_rec_some_has_impl(const rec_t *rec, const Index *index, const ulint *offsets) noexcept {
     ut_ad(mutex_own(&kernel_mutex));
     ut_ad(index->is_clustered());
     ut_ad(page_rec_is_user_rec(rec));
@@ -755,7 +744,7 @@ private:
    * 
    * @return A pointer to the created lock.
    */
-  [[nodiscard]] Lock *rec_create_low(Page_id page_id, Lock_mode type_mode, ulint heap_no, ulint n_bits, const Index *index, trx_t *trx) noexcept;
+  [[nodiscard]] Lock *rec_create_low(Page_id page_id, Lock_mode type_mode, ulint heap_no, ulint n_bits, const Index *index, Trx *trx) noexcept;
 
 
 #ifdef UNIV_DEBUG
@@ -799,7 +788,7 @@ private:
    * 
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] const Lock *rec_other_has_expl_req(Page_id page_id, Lock_mode mode, ulint gap, ulint wait, ulint heap_no, const trx_t *trx) const noexcept;
+  [[nodiscard]] const Lock *rec_other_has_expl_req(Page_id page_id, Lock_mode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx) const noexcept;
 
 #endif /* UNIV_DEBUG */
 
@@ -819,7 +808,7 @@ private:
    *         if a deadlock was detected but other transaction(s) were chosen
    *         as victim(s).
    */
-  [[nodiscard]] bool deadlock_occurs(Lock *lock, trx_t *trx) noexcept;
+  [[nodiscard]] bool deadlock_occurs(Lock *lock, Trx *trx) noexcept;
 
   /**
    * @brief Looks recursively for a deadlock.
@@ -842,7 +831,7 @@ private:
    *         In this case, the search must be repeated as there may be another deadlock.
    * @return LOCK_EXCEED_MAX_DEPTH if the lock search exceeds the maximum steps or depth.
    */
-  [[nodiscard]] ulint deadlock_recursive(trx_t *start, trx_t *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept;
+  [[nodiscard]] ulint deadlock_recursive(Trx *start, Trx *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept;
 
   /**
    * @brief Gets the wait flag of a lock.
@@ -883,7 +872,7 @@ private:
    * 
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] inline Lock *table_has(trx_t *trx, Table *table, Lock_mode mode) noexcept;
+  [[nodiscard]] inline Lock *table_has(Trx *trx, Table *table, Lock_mode mode) noexcept;
 
   /**
    * @brief Checks if a transaction has a GRANTED explicit lock on a record that is stronger or equal to the specified mode.
@@ -899,7 +888,7 @@ private:
    * 
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] inline const Lock *rec_has_expl(Page_id page_id, ulint precise_mode, ulint heap_no, const trx_t *trx) const noexcept;
+  [[nodiscard]] inline const Lock *rec_has_expl(Page_id page_id, ulint precise_mode, ulint heap_no, const Trx *trx) const noexcept;
 
   /**
    * @brief Checks if some other transaction has a conflicting explicit lock request in the queue.
@@ -914,7 +903,7 @@ private:
    * 
    * @return A pointer to the conflicting lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] Lock *rec_other_has_conflicting(Page_id page_id, Lock_mode mode, ulint heap_no, trx_t *trx) noexcept;
+  [[nodiscard]] Lock *rec_other_has_conflicting(Page_id page_id, Lock_mode mode, ulint heap_no, Trx *trx) noexcept;
 
   /**
    * @brief Finds a similar record lock on the same page for the same transaction.
@@ -930,7 +919,7 @@ private:
    * 
    * @return A pointer to the similar lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] inline Lock *rec_find_similar_on_page(Lock_mode type_mode, ulint heap_no, Lock *lock, const trx_t *trx) noexcept;
+  [[nodiscard]] inline Lock *rec_find_similar_on_page(Lock_mode type_mode, ulint heap_no, Lock *lock, const Trx *trx) noexcept;
 
   /**
    * @brief Checks if some transaction has an implicit x-lock on a record in a secondary index.
@@ -945,7 +934,7 @@ private:
    * 
    * @return A pointer to the transaction that has the x-lock, or nullptr if no such transaction exists.
    */
-  [[nodiscard]] trx_t *sec_rec_some_has_impl_off_kernel(const rec_t *rec, const Index *index, const ulint *offsets) noexcept;
+  [[nodiscard]] Trx *sec_rec_some_has_impl_off_kernel(const rec_t *rec, const Index *index, const ulint *offsets) noexcept;
 
   /**
    * @brief Creates a new record lock and inserts it into the lock queue.
@@ -962,7 +951,7 @@ private:
    * 
    * @return The created lock.
    */
-  [[nodiscard]] Lock *rec_create(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const trx_t *trx) noexcept;
+  [[nodiscard]] Lock *rec_create(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx) noexcept;
 
   /**
    * @brief Enqueues a waiting request for a lock which cannot be granted immediately and checks for deadlocks.
@@ -1001,7 +990,7 @@ private:
    * 
    * @return Lock where the bit was set.
    */
-  [[nodiscard]] Lock *rec_add_to_queue(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const trx_t *trx) noexcept;
+  [[nodiscard]] Lock *rec_add_to_queue(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx) noexcept;
 
   /**
    * @brief Fast routine for locking a record in the most common cases.
@@ -1208,7 +1197,7 @@ private:
    * @param[in] trx Transaction.
    * @return Lock* New lock object.
    */
-  [[nodiscard]] inline Lock *table_create(Table *table, Lock_mode type_mode, trx_t *trx) noexcept;
+  [[nodiscard]] inline Lock *table_create(Table *table, Lock_mode type_mode, Trx *trx) noexcept;
 
   /**
    * @brief Removes a table lock request from the queue and the trx list of locks.
@@ -1244,7 +1233,7 @@ private:
    * @param[in] mode  Lock mode.
    * @return          Lock or nullptr.
    */
-  [[nodiscard]] inline Lock *table_other_has_incompatible(trx_t *trx, ulint wait, Table *table, Lock_mode mode) noexcept;
+  [[nodiscard]] inline Lock *table_other_has_incompatible(Trx *trx, ulint wait, Table *table, Lock_mode mode) noexcept;
 
   /**
    * @brief Checks if a waiting table lock request still has to wait in a queue.
@@ -1283,7 +1272,7 @@ private:
    * @param[in] trx             Transaction.
    * @param[in] remove_sx_locks Also removes table S and X locks.
    */
-  void remove_all_on_table_for_trx(Table *table, trx_t *trx, bool remove_sx_locks) noexcept;
+  void remove_all_on_table_for_trx(Table *table, Trx *trx, bool remove_sx_locks) noexcept;
 
   /**
    * @brief Calculates the number of record lock structs in the record lock hash table.
@@ -1362,7 +1351,7 @@ private:
    * 
    * @return true if no other transaction is waiting on its locks, false otherwise.
    */
-  [[nodiscard]] bool trx_has_no_waiters(const trx_t *trx) noexcept;
+  [[nodiscard]] bool trx_has_no_waiters(const Trx *trx) noexcept;
 
 #ifndef UNIT_TESTING
 private:

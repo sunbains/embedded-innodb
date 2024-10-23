@@ -29,7 +29,7 @@ Created 2/16/1997 Heikki Tuuri
 #include "read0types.h"
 #include "ut0byte.h"
 
-struct trx_t;
+struct Trx;
 
 /**
  * Opens a read view where exactly the transactions serialized before this
@@ -60,7 +60,7 @@ void read_view_close(read_view_t *view);
  * statement end if the trx isolation level is <= TRX_ISO_READ_COMMITTED.
  * @param trx trx which has a read view
  */
-void read_view_close_for_read_committed(trx_t *trx);
+void read_view_close_for_read_committed(Trx *trx);
 
 /** Prints a read view to stderr.
  * @param view read view
@@ -73,14 +73,14 @@ std::string to_string(const read_view_t *view) noexcept;
  * @param cr_trx trx where cursor view is created
  * @return cursor view
  */
-cursor_view_t *read_cursor_view_create(trx_t *cr_trx);
+cursor_view_t *read_cursor_view_create(Trx *cr_trx);
 
 /** Close a given consistent cursor view and restore global read view
  * back to a transaction read view.
  * @param trx trx
  * @param curview cursor view to be closed
  */
-void read_cursor_view_close(trx_t *trx, cursor_view_t *curview);
+void read_cursor_view_close(Trx *trx, cursor_view_t *curview);
 
 /**
  * This function sets a given consistent cursor view to a transaction
@@ -90,7 +90,7 @@ void read_cursor_view_close(trx_t *trx, cursor_view_t *curview);
  * @param trx in: transaction where cursor is set
  * @param curview in: consistent cursor view to be set
  */
-void read_cursor_set(trx_t *trx, cursor_view_t *curview);
+void read_cursor_set(Trx *trx, cursor_view_t *curview);
 
 /** Read view types @{ */
 

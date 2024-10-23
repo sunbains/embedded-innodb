@@ -12,7 +12,7 @@ Created 12 Oct 2008
 #include "srv0srv.h"
 
 struct Log;
-struct trx_t;
+struct Trx;
 struct Dict;
 
 /** Data Dictionary Layer DDL operations. */
@@ -43,7 +43,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err create_table(Table *table, trx_t *trx) noexcept;
+  [[nodiscard]] db_err create_table(Table *table, Trx *trx) noexcept;
 
   /**
    * @brief Does an index creation operation.
@@ -55,7 +55,7 @@ struct DDL {
    *
    * @return Error number or DB_SUCCESS.
    */
-  [[nodiscard]] db_err create_index(Index *index, trx_t *trx) noexcept;
+  [[nodiscard]] db_err create_index(Index *index, Trx *trx) noexcept;
 
   /**
    * @brief Drops a table but does not commit the transaction. If the
@@ -70,7 +70,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err drop_table(const char *name, trx_t *trx, bool drop_db) noexcept;
+  [[nodiscard]] db_err drop_table(const char *name, Trx *trx, bool drop_db) noexcept;
 
   /**
    * @brief Drops an index.
@@ -81,7 +81,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err drop_index(Table *table, Index *index, trx_t *trx) noexcept;
+  [[nodiscard]] db_err drop_index(Table *table, Index *index, Trx *trx) noexcept;
 
   /**
    * @brief The master thread in srv0srv.c calls this regularly to drop tables which
@@ -100,7 +100,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err truncate_table(Table *table, trx_t *trx) noexcept;
+  [[nodiscard]] db_err truncate_table(Table *table, Trx *trx) noexcept;
 
   /**
    * @brief Renames a table.
@@ -111,7 +111,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err rename_table(const char *old_name, const char *new_name, trx_t *trx) noexcept;
+  [[nodiscard]] db_err rename_table(const char *old_name, const char *new_name, Trx *trx) noexcept;
 
   /**
    * @brief Renames an index.
@@ -123,7 +123,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err rename_index(const char *table_name, const char *old_name, const char *new_name, trx_t *trx) noexcept;
+  [[nodiscard]] db_err rename_index(const char *table_name, const char *old_name, const char *new_name, Trx *trx) noexcept;
 
   /**
    * @brief Drops a database.
@@ -133,7 +133,7 @@ struct DDL {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err drop_database(const char *name, trx_t *trx) noexcept;
+  [[nodiscard]] db_err drop_database(const char *name, Trx *trx) noexcept;
 
   /**
    * @brief Drop all partially created indexes.
@@ -187,7 +187,7 @@ private:
    * 
    * @return Error code or DB_SUCCESS
    */
-  [[nodiscard]] db_err delete_foreign_constraint(const char *id, trx_t *trx) noexcept;
+  [[nodiscard]] db_err delete_foreign_constraint(const char *id, Trx *trx) noexcept;
 
   /**
    * @brief Delete a single constraint.
@@ -199,7 +199,7 @@ private:
    *
    * @return error code or DB_SUCCESS
    */
-  [[nodiscard]] db_err delete_constraint(const char *id, const char *database_name, mem_heap_t *heap, trx_t *trx) noexcept;
+  [[nodiscard]] db_err delete_constraint(const char *id, const char *database_name, mem_heap_t *heap, Trx *trx) noexcept;
 
   /**
    * @brief Drop all foreign keys in a database, see Bug#18942.
@@ -209,7 +209,7 @@ private:
    *
    * @return error code or DB_SUCCESS
    */
-  [[nodiscard]] db_err drop_all_foreign_keys_in_db(const char *name, trx_t *trx) noexcept;
+  [[nodiscard]] db_err drop_all_foreign_keys_in_db(const char *name, Trx *trx) noexcept;
 
 #ifndef UNIT_TEST 
 private:

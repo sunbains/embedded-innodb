@@ -54,7 +54,7 @@ Created 12/27/1996 Heikki Tuuri
  * 
  * @return New pointer to mlog.
  */
-byte *row_upd_write_sys_vals_to_log(const Index *index, trx_t *trx, roll_ptr_t roll_ptr, byte *log_ptr, mtr_t *mtr);
+byte *row_upd_write_sys_vals_to_log(const Index *index, Trx *trx, roll_ptr_t roll_ptr, byte *log_ptr, mtr_t *mtr);
 
 /**
  * @brief Sets the trx id or roll ptr field of a clustered index entry.
@@ -122,7 +122,7 @@ void row_upd_rec_in_place(rec_t *rec, const Index *index, const ulint *offsets, 
  * 
  * @return Update vector of differing fields.
  */
-upd_t *row_upd_build_sec_rec_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, trx_t *trx, mem_heap_t *heap);
+upd_t *row_upd_build_sec_rec_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap);
 
 /**
  * @brief Builds an update vector from those fields, excluding the roll ptr and
@@ -137,7 +137,7 @@ upd_t *row_upd_build_sec_rec_difference_binary(const Index *index, const DTuple 
  * 
  * @return Update vector of differing fields, excluding roll ptr and trx id.
  */
-upd_t *row_upd_build_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, trx_t *trx, mem_heap_t *heap);
+upd_t *row_upd_build_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap);
 
 /**
  * @brief Replaces the new column values stored in the update vector to the index
@@ -477,7 +477,7 @@ inline upd_field_t *upd_get_nth_field(const upd_t *update, ulint n) noexcept {
  * @param[in] index      Dictionary index.
  * @param[in] trx             Transaction.
  */
-inline void upd_field_set_field_no(upd_field_t *upd_field, ulint field_no, const Index *index, trx_t *trx) noexcept {
+inline void upd_field_set_field_no(upd_field_t *upd_field, ulint field_no, const Index *index, Trx *trx) noexcept {
   upd_field->field_no = field_no;
   upd_field->orig_len = 0;
 
@@ -522,7 +522,7 @@ inline const upd_field_t *upd_get_field_by_field_no(const upd_t *update, ulint n
  * @param[in] trx           Transaction.
  * @param[in] roll_ptr      Roll pointer of the undo log record.
  */
-inline void row_upd_rec_sys_fields(rec_t *rec, const Index *index, const ulint *offsets, trx_t *trx, roll_ptr_t roll_ptr) {
+inline void row_upd_rec_sys_fields(rec_t *rec, const Index *index, const ulint *offsets, Trx *trx, roll_ptr_t roll_ptr) {
   ulint offset = index->m_trx_id_offset;
 
   if (offset == 0) {

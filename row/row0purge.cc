@@ -438,7 +438,7 @@ skip_secondaries:
  */
 static bool row_purge_parse_undo_rec(purge_node_t *node, bool *updated_extern, que_thr_t *thr) {
   byte *ptr;
-  trx_t *trx;
+  Trx *trx;
   undo_no_t undo_no;
   uint64_t table_id;
   trx_id_t trx_id;
@@ -527,7 +527,7 @@ static ulint row_purge(purge_node_t *node, que_thr_t *thr) {
   roll_ptr_t roll_ptr;
   bool purge_needed;
   bool updated_extern;
-  trx_t *trx;
+  Trx *trx;
 
   ut_ad(node && thr);
 

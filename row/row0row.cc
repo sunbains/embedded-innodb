@@ -336,7 +336,7 @@ DTuple *row_build_row_ref(ulint type, const Index *index, const rec_t *rec, mem_
   return dtuple;
 }
 
-void row_build_row_ref_in_tuple(DTuple *ref, const rec_t *rec, const Index *index, ulint *offsets, trx_t *trx) {
+void row_build_row_ref_in_tuple(DTuple *ref, const rec_t *rec, const Index *index, ulint *offsets, Trx *trx) {
   mem_heap_t *heap{};
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   rec_offs_init(offsets_);

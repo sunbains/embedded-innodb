@@ -110,7 +110,7 @@ static bool row_upd_changes_first_fields_binary(DTuple *entry, const Index *inde
  * 
  * @return true if the index is referenced, false otherwise.
  */
-static bool row_upd_index_is_referenced(const Index *index, trx_t *trx) noexcept {
+static bool row_upd_index_is_referenced(const Index *index, Trx *trx) noexcept {
   bool is_referenced{};
   auto table = index->m_table;
 
@@ -351,7 +351,7 @@ void row_upd_rec_in_place(rec_t *rec, const Index *index, const ulint *offsets, 
   }
 }
 
-byte *row_upd_write_sys_vals_to_log(const Index *index, trx_t *trx, roll_ptr_t roll_ptr, byte *log_ptr, mtr_t *mtr __attribute__((unused))) {
+byte *row_upd_write_sys_vals_to_log(const Index *index, Trx *trx, roll_ptr_t roll_ptr, byte *log_ptr, mtr_t *mtr __attribute__((unused))) {
   ut_ad(index->is_clustered());
 
   log_ptr += mach_write_compressed(log_ptr, index->get_sys_col_field_pos(DATA_TRX_ID));
@@ -488,7 +488,7 @@ byte *row_upd_index_parse(byte *ptr, byte *end_ptr, mem_heap_t *heap, upd_t **up
   return ptr;
 }
 
-upd_t *row_upd_build_sec_rec_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, trx_t *trx, mem_heap_t *heap) {
+upd_t *row_upd_build_sec_rec_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap) {
   ulint offsets_[REC_OFFS_SMALL_SIZE];
   const ulint *offsets;
   rec_offs_init(offsets_);
@@ -539,7 +539,7 @@ upd_t *row_upd_build_sec_rec_difference_binary(const Index *index, const DTuple 
   return update;
 }
 
-upd_t *row_upd_build_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, trx_t *trx, mem_heap_t *heap) {
+upd_t *row_upd_build_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap) {
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   const ulint *offsets;
   rec_offs_init(offsets_);
@@ -951,7 +951,7 @@ static void row_upd_store_row(upd_node_t *node) {
  */
 static db_err row_upd_sec_index_entry(upd_node_t *node, que_thr_t *thr) {
   db_err err = DB_SUCCESS;
-  trx_t *trx = thr_get_trx(thr);
+  auto trx = thr_get_trx(thr);
   Btree_pcursor pcur(srv_fsp, srv_btree_sys);
 
   auto index = node->index;
@@ -979,7 +979,7 @@ static db_err row_upd_sec_index_entry(upd_node_t *node, que_thr_t *thr) {
     dtuple_print(ib_stream, entry);
     log_err("record ");
     log_err(rec_to_string(rec));
-    log_info(trx_to_string(trx, 0));
+    log_info(trx->to_string(0));
     log_err("Submit a detailed bug report");
   } else {
     /* Delete mark the old index record; it can already be
@@ -1599,7 +1599,7 @@ que_thr_t *row_upd_step(que_thr_t *thr) {
   err = row_upd(node, thr);
 
 error_handling:
-  trx->error_state = err;
+  trx->m_error_state = err;
 
   if (err != DB_SUCCESS) {
     return nullptr;

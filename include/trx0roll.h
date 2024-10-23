@@ -37,11 +37,11 @@ Created 3/26/1996 Heikki Tuuri
 in crash recovery.
 @return true if trx is an incomplete transaction that is being rolled
 back in crash recovery */
-bool trx_is_recv(const trx_t *trx); /*!< in: transaction */
+bool trx_is_recv(const Trx *trx); /*!< in: transaction */
 
 /** Returns a transaction savepoint taken at this point in time.
 @return	savepoint */
-trx_savept_t trx_savept_take(trx_t *trx); /*!< in: transaction */
+trx_savept_t trx_savept_take(Trx *trx); /*!< in: transaction */
 
 /** Creates an undo number array. */
 trx_undo_arr_t *trx_undo_arr_create(void);
@@ -57,7 +57,7 @@ inline trx_undo_inf_t *trx_undo_arr_get_nth_info(
 ); /*!< in: position */
 
 /** Tries truncate the undo logs. */
-void trx_roll_try_truncate(trx_t *trx); /*!< in/out: transaction */
+void trx_roll_try_truncate(Trx *trx); /*!< in/out: transaction */
 /** Pops the topmost record when the two undo logs of a transaction are seen
 as a single stack of records ordered by their undo numbers. Inserts the
 undo number of the popped undo record to the array of currently processed
@@ -66,7 +66,7 @@ of this undo record, it must be released with trx_undo_rec_release.
 @return undo log record copied to heap, nullptr if none left, or if the
 undo number of the top record would be less than the limit */
 trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(
-  trx_t *trx,           /*!< in: transaction */
+  Trx *trx,           /*!< in: transaction */
   undo_no_t limit,      /*!< in: least undo number we need */
   roll_ptr_t *roll_ptr, /*!< out: roll pointer to undo record */
   mem_heap_t *heap /*!< in: memory heap where copied */
@@ -77,18 +77,18 @@ called if the query thread gets the undo log record not using the pop
 function above.
 @return	true if succeeded */
 bool trx_undo_rec_reserve(
-  trx_t *trx, /*!< in/out: transaction */
+  Trx *trx, /*!< in/out: transaction */
   undo_no_t undo_no); /*!< in: undo number of the record */
 
 /** Releases a reserved undo record. */
 void trx_undo_rec_release(
-  trx_t *trx, /*!< in/out: transaction */
+  Trx *trx, /*!< in/out: transaction */
   undo_no_t undo_no
 ); /*!< in: undo number */
 
 /** Starts a rollback operation. */
 void trx_rollback(
-  trx_t *trx,     /*!< in: transaction */
+  Trx *trx,     /*!< in: transaction */
   trx_sig_t *sig, /*!< in: signal starting the rollback */
   que_thr_t **next_thr /*!< in/out: next query thread to run; if the value
 			 which is passed in is a pointer to a nullptr pointer, then
@@ -113,7 +113,7 @@ void *trx_rollback_or_clean_all_recovered(void *);
 /** Finishes a transaction rollback. */
 void trx_finish_rollback_off_kernel(
   que_t *graph, /*!< in: undo graph which can now be freed */
-  trx_t *trx,   /*!< in: transaction */
+  Trx *trx,   /*!< in: transaction */
   que_thr_t **next_thr /*!< in/out: next query thread to run; if the value which is passed
 			 in is a pointer to a nullptr pointer, then the calling function can
 			 start running a new query thread; if this parameter is nullptr, it is ignored */
@@ -124,7 +124,7 @@ performed by executing this query graph like a query subprocedure call.
 The reply about the completion of the rollback will be sent by this
 graph.
 @return	own: the query graph */
-que_t *trx_roll_graph_build(trx_t *trx); /*!< in: trx handle */
+que_t *trx_roll_graph_build(Trx *trx); /*!< in: trx handle */
 
 /** Creates a rollback command node struct.
 @return	own: rollback node struct */
@@ -137,7 +137,7 @@ que_thr_t *trx_rollback_step(que_thr_t *thr); /*!< in: query thread */
 /** Rollback a user transaction.
 @return	error code or DB_SUCCESS */
 db_err trx_general_rollback(
-  trx_t *trx,   /*!< in: transaction handle */
+  Trx *trx,   /*!< in: transaction handle */
   bool partial, /*!< in: true if partial rollback requested */
   trx_savept_t *savept /*!< in: pointer to savepoint undo number, if partial rollback requested */
   );
@@ -145,7 +145,7 @@ db_err trx_general_rollback(
 /** Frees savepoint structs starting from savep, if savep == nullptr then
 free all savepoints. */
 void trx_roll_savepoints_free(
-  trx_t *trx, /*!< in: transaction handle */
+  Trx *trx, /*!< in: transaction handle */
   trx_named_savept_t *savep /*!< in: free all savepoints > this one; if this is nullptr, free all savepoints of trx */
   );
 

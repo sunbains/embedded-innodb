@@ -129,8 +129,8 @@ ib_err_t ib_exec_sql( const char *sql, ulint n_args, ...) {
   /* We use the private SQL parser of Innobase to generate
   the query graphs needed to execute the SQL statement. */
 
-  auto trx = trx_allocate_for_client(nullptr);
-  auto success = trx_start(trx, ULINT_UNDEFINED);
+  auto trx = srv_trx_sys->create_user_trx(nullptr);
+  auto success = trx->start(ULINT_UNDEFINED);
   ut_a(success);
   trx->m_op_info = "exec client sql";
 
@@ -141,12 +141,12 @@ ib_err_t ib_exec_sql( const char *sql, ulint n_args, ...) {
   if (err != DB_SUCCESS) {
     trx_general_rollback(trx, false, nullptr);
   } else {
-    auto commit_err = trx_commit(trx);
+    auto commit_err = trx->commit();
     ut_a(commit_err == DB_SUCCESS);
   }
 
   trx->m_op_info = "";
-  trx_free_for_client(trx);
+  srv_trx_sys->destroy_user_trx(trx);
 
   return err;
 }
@@ -163,8 +163,8 @@ ib_err_t ib_exec_ddl_sql(const char *sql, ulint n_args, ...) {
   /* We use the private SQL parser of Innobase to generate
   the query graphs needed to execute the SQL statement. */
 
-  auto trx = trx_allocate_for_background();
-  auto started = trx_start(trx, ULINT_UNDEFINED);
+  auto trx = srv_trx_sys->create_background_trx(nullptr);
+  auto started = trx->start(ULINT_UNDEFINED);
   ut_a(started);
 
   trx->m_op_info = "exec client ddl sql";
@@ -183,12 +183,12 @@ ib_err_t ib_exec_ddl_sql(const char *sql, ulint n_args, ...) {
   if (err != DB_SUCCESS) {
     trx_general_rollback(trx, false, nullptr);
   } else {
-    auto commit_err = trx_commit(trx);
+    auto commit_err = trx->commit();
     ut_a(commit_err == DB_SUCCESS);
   }
 
   trx->m_op_info = "";
-  trx_free_for_background(trx);
+  srv_trx_sys->destroy_background_trx(trx);
 
   return err;
 }

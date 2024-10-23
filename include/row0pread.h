@@ -40,7 +40,7 @@ Created 2018-01-27 by Sunny Bains. */
 #include "row0sel.h"
 
 // Forward declarations
-struct trx_t;
+struct Trx;
 struct mtr_t;
 class PCursor;
 struct Btree_pcursor;
@@ -304,7 +304,7 @@ class Parallel_reader {
   @param[in]      f           Callback function.
   (default is 0 which is leaf level)
   @return error. */
-  [[nodiscard]] dberr_t add_scan(trx_t *trx, const Config &config, F &&f);
+  [[nodiscard]] dberr_t add_scan(Trx *trx, const Config &config, F &&f);
 
   /** Wait for the join of threads spawned by the parallel reader. */
   void join() {
@@ -468,7 +468,7 @@ class Parallel_reader::Scan_ctx {
   @param[in]  trx             Transaction covering the scan.
   @param[in]  config          Range scan config.
   @param[in]  f               Callback function. */
-  Scan_ctx(Parallel_reader *reader, size_t id, trx_t *trx, const Parallel_reader::Config &config, F &&f);
+  Scan_ctx(Parallel_reader *reader, size_t id, Trx *trx, const Parallel_reader::Config &config, F &&f);
 
   /** Destructor. */
   ~Scan_ctx() = default;
@@ -632,7 +632,7 @@ class Parallel_reader::Scan_ctx {
   Config m_config;
 
   /** Covering transaction. */
-  const trx_t *m_trx{};
+  const Trx *m_trx{};
 
   /** Callback function. */
   F m_f;
@@ -678,7 +678,7 @@ class Parallel_reader::Ctx {
   [[nodiscard]] size_t scan_id() const { return m_scan_ctx->id(); }
 
   /** @return the covering transaction. */
-  [[nodiscard]] const trx_t *trx() const { return m_scan_ctx->m_trx; }
+  [[nodiscard]] const Trx *trx() const { return m_scan_ctx->m_trx; }
 
   /** @return the index being scanned. */
   [[nodiscard]] const Index *index() const {

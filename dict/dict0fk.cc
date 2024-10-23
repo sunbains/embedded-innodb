@@ -600,7 +600,7 @@ void Dict::foreign_report_syntax_err(const char *name, const char *start_of_late
   mutex_exit(&m_foreign_err_mutex);
 }
 
-db_err Dict::create_foreign_constraints(trx_t *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks) noexcept {
+db_err Dict::create_foreign_constraints(Trx *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks) noexcept {
   ulint i{};
   Table *referenced_table;
   Table *table_to_alter;
@@ -1112,7 +1112,7 @@ try_find_index:
   goto loop;
 }
 
-db_err Dict::create_foreign_constraints(trx_t *trx, const char *sql_string, const char *name, bool reject_fks) noexcept {
+db_err Dict::create_foreign_constraints(Trx *trx, const char *sql_string, const char *name, bool reject_fks) noexcept {
   auto str = strip_comments(sql_string);
   auto heap = mem_heap_create(10000);
   auto cs = ib_ucode_get_connection_charset();
@@ -1124,7 +1124,7 @@ db_err Dict::create_foreign_constraints(trx_t *trx, const char *sql_string, cons
   return err;
 }
 
-db_err Dict::foreign_parse_drop_constraints(mem_heap_t *heap, trx_t *trx, Table *table, ulint *n, const char ***constraints_to_drop) noexcept {
+db_err Dict::foreign_parse_drop_constraints(mem_heap_t *heap, Trx *trx, Table *table, ulint *n, const char ***constraints_to_drop) noexcept {
   bool success;
   const char *id;
 
@@ -1134,7 +1134,7 @@ db_err Dict::foreign_parse_drop_constraints(mem_heap_t *heap, trx_t *trx, Table 
 
   *constraints_to_drop = reinterpret_cast<const char **>(mem_heap_alloc(heap, 1000 * sizeof(char *)));
 
-  auto str = strip_comments(*trx->client_query_str);
+  auto str = strip_comments(*trx->m_client_query_str);
   char const *ptr = str;
 
   ut_ad(mutex_own(&m_mutex));
@@ -1472,7 +1472,7 @@ void Dict::field_print(const Field *field) noexcept {
   }
 }
 
-void Dict::print_info_on_foreign_key_in_create_format(trx_t *trx, const Foreign *foreign, bool add_newline) noexcept {
+void Dict::print_info_on_foreign_key_in_create_format(Trx *trx, const Foreign *foreign, bool add_newline) noexcept {
   const char *stripped_id;
 
   if (strchr(foreign->m_id, '/')) {
@@ -1554,7 +1554,7 @@ void Dict::print_info_on_foreign_key_in_create_format(trx_t *trx, const Foreign 
   log_err(str);
 }
 
-void Dict::print_info_on_foreign_keys(bool create_table_format, trx_t *trx, Table *table) noexcept {
+void Dict::print_info_on_foreign_keys(bool create_table_format, Trx *trx, Table *table) noexcept {
   std::string str{};
 
   mutex_enter(&m_mutex);

@@ -41,7 +41,7 @@ Created 2/6/1997 Heikki Tuuri
 #include "trx0trx.h"
 #include "trx0undo.h"
 
-trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, const Index *index, const ulint *offsets) {
+Trx *row_vers_impl_x_locked_off_kernel(const rec_t *rec, const Index *index, const ulint *offsets) {
   Index *clust_index;
   rec_t *clust_rec;
   ulint *clust_offsets;
@@ -52,7 +52,7 @@ trx_t *row_vers_impl_x_locked_off_kernel(const rec_t *rec, const Index *index, c
   DTuple *row;
   DTuple *entry = nullptr; /* assignment to eliminate compiler
                           warning */
-  trx_t *trx;
+  Trx *trx;
   ulint rec_del;
   ulint err;
   mtr_t mtr;
@@ -571,7 +571,7 @@ ulint row_vers_build_for_semi_consistent_read(
   version = rec;
 
   for (;;) {
-    trx_t *version_trx;
+    Trx *version_trx;
     mem_heap_t *heap2;
     rec_t *prev_version;
     trx_id_t version_trx_id;

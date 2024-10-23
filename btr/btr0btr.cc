@@ -1914,7 +1914,7 @@ void Btree::validate_report2(const Index *index, ulint level, const Buf_block *b
   }
 }
 
-bool Btree::validate_level(Index *index, trx_t *trx, ulint level) noexcept {
+bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
   rec_t *rec;
   bool ret{true};
   page_cur_t cursor;
@@ -1978,7 +1978,7 @@ bool Btree::validate_level(Index *index, trx_t *trx, ulint level) noexcept {
 
   do {
 
-    if (trx_is_interrupted(trx)) {
+    if (trx->is_interrupted()) {
       mtr.commit();
       mem_heap_free(heap);
       return (ret);
@@ -2201,7 +2201,7 @@ bool Btree::validate_level(Index *index, trx_t *trx, ulint level) noexcept {
   return ret;
 }
 
-bool Btree::validate_index(Index *index, trx_t *trx) noexcept {
+bool Btree::validate_index(Index *index, Trx *trx) noexcept {
   mtr_t mtr;
 
   mtr.start();
@@ -2211,7 +2211,7 @@ bool Btree::validate_index(Index *index, trx_t *trx) noexcept {
   const auto root = root_get(index->m_page_id, &mtr);
   const auto n = page_get_level(root, &mtr);
 
-  for (ulint i = 0; i <= n && !trx_is_interrupted(trx); ++i) {
+  for (ulint i = 0; i <= n && !trx->is_interrupted(); ++i) {
     if (!validate_level(index, trx, n - i)) {
 
       mtr.commit();

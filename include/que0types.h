@@ -115,7 +115,7 @@ constexpr ulint QUE_CUR_END = 3;
 constexpr ulint QUE_THR_MAGIC_N = 8476583;
 constexpr ulint QUE_THR_MAGIC_FREED = 123461526;
 
-struct trx_t;
+struct Trx;
 struct sym_tab_t;
 struct pars_info_t;
 struct sel_node_t;
@@ -219,7 +219,7 @@ struct que_fork_t {
   ulint n_active_thrs;
 
   /** transaction: this is set only in the root node */
-  trx_t *trx;
+  Trx *trx;
 
   /** State of the fork node */
   ulint state;

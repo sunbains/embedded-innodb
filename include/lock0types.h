@@ -31,7 +31,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "ut0lst.h"
 
 struct Lock;
-struct trx_t;
+struct Trx;
 struct Buf_pool;
 struct Table;
 struct Index;
@@ -206,7 +206,7 @@ struct Lock {
    *
    * @param[in] trx The transaction that is waiting for the lock.
    */
-  inline void set_trx_wait(trx_t *trx) noexcept;
+  inline void set_trx_wait(Trx *trx) noexcept;
 
   /**
    * @brief Gets the wait flag of a lock.
@@ -275,7 +275,7 @@ struct Lock {
    * 
    * @return true if the new lock has to wait for lock to be removed, false otherwise.
    */
-  [[nodiscard]] inline bool rec_blocks(const trx_t *trx,  Lock_mode_type type_mode, bool lock_is_on_supremum) const noexcept;
+  [[nodiscard]] inline bool rec_blocks(const Trx *trx,  Lock_mode_type type_mode, bool lock_is_on_supremum) const noexcept;
 
   /**
    * @brief Checks if a lock request lock1 has to wait for request lock2.
@@ -657,7 +657,7 @@ struct Lock {
     Rec_lock m_rec;
   };
 
-  trx_t *m_trx;
+  Trx *m_trx;
 
   /** List of the locks of the transaction */
   UT_LIST_NODE_T(Lock) m_trx_locks;

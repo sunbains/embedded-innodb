@@ -25,31 +25,57 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #pragma once
 
-#include "innodb0types.h"
-
 #include "que0types.h"
 #include "ut0lst.h"
 
-struct trx_t;
-
-/** Session states */
-constexpr ulint SESS_ACTIVE = 1;
-
-/** Session contains an error message which has not yet been
-communicated to the client */
-constexpr ulint SESS_ERROR = 2;
+struct Trx;
 
 /** The session handle. All fields are protected by the kernel mutex */
-struct sess_t {
+struct Session {
+  enum class State : uint8_t {
+    /** Session is not initialized */
+    NONE = 0,
+
+    /** Session states */
+    ACTIVE = 1,
+
+    /** Session contains an error message which has not yet been
+    communicated to the client */
+    ERROR = 2
+  };
+
+  /** Constructor 
+   * 
+   * @param trx Transaction instance permanently assigned for the session
+   */
+  explicit Session(Trx *trx) noexcept : m_state(State::ACTIVE), m_trx(trx) {}
+
+  /** Destructor */
+  ~Session() = default;
+
+  /**
+   * Creates a session instance
+   * 
+   * @param trx Transaction instance permanently assigned for the session
+   */
+  [[nodiscard]] static Session *create(Trx *trx) noexcept;
+
+  /**
+   * Destroys a session instance
+   * 
+   * @param[in,out] sess Session instance to destroy
+  */
+  static void destroy(Session *&sess) noexcept;
+
   /** State of the session */
-  ulint state;
+  State m_state{State::NONE};
 
   /** Transaction object permanently assigned for the session:
   the transaction instance designated by the trx id changes, but
   the memory structure is preserved */
-  trx_t *trx;
+  Trx *m_trx{};
 
   /** Query graphs belonging to this session */
-  UT_LIST_BASE_NODE_T_EXTERN(que_t, graphs) graphs;
+  UT_LIST_BASE_NODE_T_EXTERN(que_t, graphs) m_graphs{};
 };
 

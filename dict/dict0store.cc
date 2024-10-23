@@ -323,7 +323,7 @@ db_err Dict_store::build_table_def_step(que_thr_t *thr, Table_node *node) noexce
 
   table->m_id = hdr_get_new_id(Dict_id_type::TABLE_ID);
 
-  thr_get_trx(thr)->table_id = table->m_id;
+  thr_get_trx(thr)->m_table_id = table->m_id;
 
   if (srv_config.m_file_per_table) {
     /* We create a new single-table tablespace for the table.
@@ -547,7 +547,7 @@ db_err Dict_store::build_index_def_step(que_thr_t *thr, Index_node *node) noexce
   }
 
   node->m_table = index->m_table;
-  trx->table_id = index->m_table->m_id;
+  trx->m_table_id = index->m_table->m_id;
 
   ut_ad(!index->m_table->m_indexes.empty() || index->is_clustered());
 
@@ -770,7 +770,7 @@ que_thr_t *Dict_store::create_table_step(que_thr_t *thr) noexcept {
   }
 
   auto clean_up = [&](db_err err) -> que_thr_t * {
-    trx->error_state = err;
+    trx->m_error_state = err;
 
     if (err == DB_SUCCESS) {
       /* Ok: do nothing */
@@ -864,7 +864,7 @@ que_thr_t *Dict_store::create_index_step(que_thr_t *thr) noexcept {
   }
 
   auto clean_up = [&](db_err err) -> que_thr_t * {
-    trx->error_state = err;
+    trx->m_error_state = err;
 
     if (err == DB_SUCCESS) {
       /* Ok: do nothing */
@@ -1001,8 +1001,8 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
 
   m_dict->mutex_release();
 
-  auto trx = trx_allocate_for_client(nullptr);
-  auto started = trx_start(trx, ULINT_UNDEFINED);
+  auto trx = srv_trx_sys->create_user_trx(nullptr);
+  auto started = trx->start(ULINT_UNDEFINED);
   ut_a(started);
 
   trx->m_op_info = "creating foreign key sys tables";
@@ -1014,7 +1014,7 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
     if (auto err = m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true); err != DB_SUCCESS) {
       log_warn("DROP table failed with error ", err , " while dropping table SYS_FOREIGN");
     }
-    auto err_commit = trx_commit(trx);
+    auto err_commit = trx->commit();
     ut_a(err_commit == DB_SUCCESS);
   }
 
@@ -1023,11 +1023,11 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
     if (auto err = m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true); err != DB_SUCCESS) {
       log_warn("DROP table failed with error ", err , " while dropping table SYS_FOREIGN_COLS");
     }
-    auto err_commit = trx_commit(trx);
+    auto err_commit = trx->commit();
     ut_a(err_commit == DB_SUCCESS);
   }
 
-  (void) trx_start_if_not_started(trx);
+  (void) trx->start_if_not_started();
 
   log_info("Creating foreign key constraint system tables");
 
@@ -1060,7 +1060,7 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
     (void) m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true);
     (void) m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true);
 
-    auto err_commit = trx_commit(trx);
+    auto err_commit = trx->commit();
     ut_a(err_commit == DB_SUCCESS);
 
     err = DB_MUST_GET_MORE_FILE_SPACE;
@@ -1068,7 +1068,7 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
 
   m_dict->unlock_data_dictionary(trx);
 
-  trx_free_for_client(trx);
+  srv_trx_sys->destroy_user_trx(trx);
 
   if (err == DB_SUCCESS) {
     log_info("Foreign key constraint system tables created");
@@ -1077,8 +1077,8 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
   return err;
 }
 
-db_err Dict_store::foreign_eval_sql(pars_info_t *info, const char *sql, Table *table, Foreign *foreign, trx_t *trx) noexcept {
-  (void) trx_start_if_not_started(trx);
+db_err Dict_store::foreign_eval_sql(pars_info_t *info, const char *sql, Table *table, Foreign *foreign, Trx *trx) noexcept {
+    (void) trx->start_if_not_started();
 
   auto err = que_eval_sql(info, sql, false, trx);
 
@@ -1109,7 +1109,7 @@ db_err Dict_store::foreign_eval_sql(pars_info_t *info, const char *sql, Table *t
   }
 }
 
-db_err Dict_store::add_foreign_field_to_dictionary(ulint field_nr, Table *table, Foreign *foreign, trx_t *trx) noexcept {
+db_err Dict_store::add_foreign_field_to_dictionary(ulint field_nr, Table *table, Foreign *foreign, Trx *trx) noexcept {
   auto info = pars_info_create();
 
   pars_info_add_str_literal(info, "id", foreign->m_id);
@@ -1132,7 +1132,7 @@ db_err Dict_store::add_foreign_field_to_dictionary(ulint field_nr, Table *table,
   );
 }
 
-db_err Dict_store::add_foreign_to_dictionary(ulint *id_nr, Table *table, Foreign *foreign, trx_t *trx) noexcept {
+db_err Dict_store::add_foreign_to_dictionary(ulint *id_nr, Table *table, Foreign *foreign, Trx *trx) noexcept {
   auto info = pars_info_create();
 
   if (foreign->m_id == nullptr) {
@@ -1193,7 +1193,7 @@ db_err Dict_store::add_foreign_to_dictionary(ulint *id_nr, Table *table, Foreign
   return err;
 }
 
-db_err Dict_store::add_foreigns_to_dictionary(ulint start_id, Table *table, trx_t *trx) noexcept {
+db_err Dict_store::add_foreigns_to_dictionary(ulint start_id, Table *table, Trx *trx) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   if (m_dict->table_get("SYS_FOREIGN") == nullptr) {
@@ -1234,7 +1234,7 @@ Table_node *Table_node::create(Dict *dict, Table *table, mem_heap_t *heap, bool 
   node->m_col_def->common.parent = node;
 
   if (commit) {
-    node->m_commit_node = commit_node_create(heap);
+    node->m_commit_node = Trx::commit_node_create(heap);
     node->m_commit_node->common.parent = node;
   } else {
     node->m_commit_node = nullptr;
@@ -1262,7 +1262,7 @@ Index_node *Index_node::create(Dict *dict, Index *index, mem_heap_t *heap, bool 
   node->m_field_def->common.parent = node;
 
   if (commit) {
-    node->m_commit_node = commit_node_create(heap);
+    node->m_commit_node = Trx::commit_node_create(heap);
     node->m_commit_node->common.parent = node;
   } else {
     node->m_commit_node = nullptr;

@@ -938,7 +938,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
     for the 'very fast' shutdown, because the InnoDB layer may have
     committed or prepared transactions and we don't want to lose them. */
 
-    if (trx_n_transactions > 0 || (srv_trx_sys != nullptr && UT_LIST_GET_LEN(srv_trx_sys->m_trx_list) > 0)) {
+    if (srv_trx_sys != nullptr && (srv_trx_sys->m_n_user_trx > 0 || !srv_trx_sys->m_trx_list.empty())) {
 
       mutex_exit(&kernel_mutex);
 

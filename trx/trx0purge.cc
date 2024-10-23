@@ -602,7 +602,7 @@ trx_undo_rec_t *Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
   return rec_copy;
 }
 
-Purge_sys::Purge_sys() noexcept {
+Purge_sys::Purge_sys(Trx *trx) noexcept : m_trx(trx) {
   ut_ad(mutex_own(&kernel_mutex));
 
   m_state = PURGE_STATE_OFF;
@@ -615,13 +615,10 @@ Purge_sys::Purge_sys() noexcept {
 
   m_arr = trx_undo_arr_create();
 
-  m_sess = sess_open();
+  m_trx->m_is_purge = true;
 
-  m_trx = m_sess->trx;
-
-  m_trx->m_is_purge = 1;
-
-  ut_a(trx_start_low(m_trx, ULINT_UNDEFINED));
+  auto success = m_trx->start_low(ULINT_UNDEFINED);
+  ut_a(success);
 
   m_query = graph_build();
 
@@ -633,10 +630,8 @@ Purge_sys::~Purge_sys() noexcept {
 
   que_graph_free(m_query);
 
-  ut_a(m_sess->trx->m_is_purge);
-  m_sess->trx->m_conc_state = TRX_NOT_STARTED;
-  sess_close(m_sess);
-  m_sess = nullptr;
+  ut_a(m_trx->m_is_purge);
+  m_trx->m_conc_state = TRX_NOT_STARTED;
 
   if (m_view != nullptr) {
     /* Because acquiring the kernel mutex is a pre-condition
@@ -665,10 +660,10 @@ bool Purge_sys::update_undo_must_exist(trx_id_t trx_id) noexcept {
   return !read_view_sees_trx_id(m_view, trx_id);
 }
 
-void Purge_sys::add_update_undo_to_history(trx_t *trx, page_t *undo_page, mtr_t *mtr) noexcept {
+void Purge_sys::add_update_undo_to_history(Trx *trx, page_t *undo_page, mtr_t *mtr) noexcept {
   ulint hist_size;
 
-  auto undo = trx->update_undo;
+  auto undo = trx->m_update_undo;
   auto rseg = undo->m_rseg;
 
   ut_ad(mutex_own(&rseg->mutex));
@@ -730,7 +725,7 @@ ulint Purge_sys::run() noexcept {
 
   mutex_enter(&m_mutex);
 
-  if (m_trx->n_active_thrs > 0) {
+  if (m_trx->m_n_active_thrs > 0) {
 
     mutex_exit(&m_mutex);
 

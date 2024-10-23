@@ -335,7 +335,7 @@ Lock_sys *srv_lock_sys{};
  * 
  * @param[in] trx The transaction to validate.
  */
-static inline void validate_trx_state(const trx_t *trx) noexcept {
+static inline void validate_trx_state(const Trx *trx) noexcept {
   switch (trx->m_conc_state) {
     case TRX_ACTIVE:
     case TRX_PREPARED:
@@ -378,24 +378,24 @@ constexpr ulint LOCK_VICTIM_IS_OTHER = 2;
 constexpr ulint LOCK_EXCEED_MAX_DEPTH = 3;
 
 trx_id_t Lock::trx_id() const noexcept {
-  return trx_get_id(m_trx);
+  return m_trx->m_id;
 }
 
-void Lock::set_trx_wait(trx_t *trx) noexcept {
-  ut_ad(trx->wait_lock == nullptr);
+void Lock::set_trx_wait(Trx *trx) noexcept {
+  ut_ad(trx->m_wait_lock == nullptr);
 
-  trx->wait_lock = this;
+  trx->m_wait_lock = this;
   m_type_mode = Lock_mode(Lock_mode_type(m_type_mode) | LOCK_WAIT);
 }
 
 void Lock::reset() noexcept {
   ut_ad(is_waiting());
-  ut_ad(m_trx->wait_lock == this);
+  ut_ad(m_trx->m_wait_lock == this);
 
   /* Reset the back pointer in trx to this waiting lock request */
 
   m_type_mode  = Lock_mode(Lock_mode_type(m_type_mode) & ~LOCK_WAIT);
-  m_trx->wait_lock = nullptr;
+  m_trx->m_wait_lock = nullptr;
 }
 
 bool Lock::mode_stronger_or_eq(Lock_mode lhs, Lock_mode rhs) noexcept {
@@ -412,7 +412,7 @@ bool Lock::mode_compatible(Lock_mode lhs, Lock_mode rhs) noexcept {
   return Lock_compatibility_matrix[lhs][rhs];
 }
 
-bool Lock::rec_blocks(const trx_t *trx, Lock_mode_type type_mode, bool lock_is_on_supremum) const noexcept {
+bool Lock::rec_blocks(const Trx *trx, Lock_mode_type type_mode, bool lock_is_on_supremum) const noexcept {
   ut_ad(type() == LOCK_REC);
 
   if (trx != m_trx && !mode_compatible(Lock_mode(LOCK_MODE_MASK & type_mode), mode())) {
@@ -743,12 +743,12 @@ bool Lock_sys::sec_rec_cons_read_sees(const rec_t *rec, read_view_t *view) const
   return max_trx_id < view->up_limit_id;
 }
 
-Table *Lock_sys::get_src_table(trx_t *trx, Table *dest, Lock_mode *mode) noexcept {
+Table *Lock_sys::get_src_table(Trx *trx, Table *dest, Lock_mode *mode) noexcept {
   Table *src{};
 
   *mode = LOCK_NONE;
 
-  for (auto lock : trx->trx_locks) {
+  for (auto lock : trx->m_trx_locks) {
     if (!(lock->type() & LOCK_TABLE)) {
       /* We are only interested in table locks. */
       continue;
@@ -795,7 +795,7 @@ Table *Lock_sys::get_src_table(trx_t *trx, Table *dest, Lock_mode *mode) noexcep
   return src;
 }
 
-bool Lock_sys::is_table_exclusive(Table *table, trx_t *trx) noexcept {
+bool Lock_sys::is_table_exclusive(Table *table, Trx *trx) noexcept {
   mutex_enter(&kernel_mutex);
 
   for (auto lock : table->m_locks) {
@@ -863,7 +863,7 @@ const Lock *Lock_sys::rec_get_prev(const Lock *in_lock, ulint heap_no) noexcept 
   return nullptr;
 }
 
-Lock *Lock_sys::table_has(trx_t *trx, Table *table, Lock_mode mode) noexcept {
+Lock *Lock_sys::table_has(Trx *trx, Table *table, Lock_mode mode) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   /* Look for stronger locks the same trx already has on the table */
@@ -884,7 +884,7 @@ Lock *Lock_sys::table_has(trx_t *trx, Table *table, Lock_mode mode) noexcept {
   return nullptr;
 }
 
-const Lock *Lock_sys::rec_has_expl(Page_id page_id, ulint precise_mode, ulint heap_no, const trx_t *trx) const noexcept {
+const Lock *Lock_sys::rec_has_expl(Page_id page_id, ulint precise_mode, ulint heap_no, const Trx *trx) const noexcept {
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad((precise_mode & LOCK_MODE_MASK) == LOCK_S || (precise_mode & LOCK_MODE_MASK) == LOCK_X);
   ut_ad(!(precise_mode & LOCK_INSERT_INTENTION));
@@ -910,7 +910,7 @@ const Lock *Lock_sys::rec_has_expl(Page_id page_id, ulint precise_mode, ulint he
 }
 
 #ifdef UNIV_DEBUG
-const Lock *Lock_sys::rec_other_has_expl_req(Page_id page_id, Lock_mode mode, ulint gap, ulint wait, ulint heap_no, const trx_t *trx) const  noexcept {
+const Lock *Lock_sys::rec_other_has_expl_req(Page_id page_id, Lock_mode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx) const  noexcept {
   ut_ad(mutex_own(&kernel_mutex));
   ut_ad(mode == LOCK_X || mode == LOCK_S);
   ut_ad(gap == 0 || gap == LOCK_GAP);
@@ -935,7 +935,7 @@ const Lock *Lock_sys::rec_other_has_expl_req(Page_id page_id, Lock_mode mode, ul
 }
 #endif /* UNIV_DEBUG */
 
-Lock *Lock_sys::rec_other_has_conflicting(Page_id page_id, Lock_mode mode, ulint heap_no, trx_t *trx) noexcept {
+Lock *Lock_sys::rec_other_has_conflicting(Page_id page_id, Lock_mode mode, ulint heap_no, Trx *trx) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   if (auto it = m_rec_locks.find(page_id); likely(it != m_rec_locks.end())) {
@@ -949,7 +949,7 @@ Lock *Lock_sys::rec_other_has_conflicting(Page_id page_id, Lock_mode mode, ulint
   return nullptr;
 }
 
-Lock *Lock_sys::rec_find_similar_on_page(Lock_mode type_mode, ulint heap_no, Lock *lock, const trx_t *trx) noexcept {
+Lock *Lock_sys::rec_find_similar_on_page(Lock_mode type_mode, ulint heap_no, Lock *lock, const Trx *trx) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   for (/* No op */;lock != nullptr; lock = lock->next()) {
@@ -961,7 +961,7 @@ Lock *Lock_sys::rec_find_similar_on_page(Lock_mode type_mode, ulint heap_no, Loc
   return nullptr;
 }
 
-trx_t *Lock_sys::sec_rec_some_has_impl_off_kernel(const rec_t *rec, const Index *index, const ulint *offsets) noexcept {
+Trx *Lock_sys::sec_rec_some_has_impl_off_kernel(const rec_t *rec, const Index *index, const ulint *offsets) noexcept {
   const page_t *page = page_align(rec);
 
   ut_ad(mutex_own(&kernel_mutex));
@@ -994,25 +994,9 @@ trx_t *Lock_sys::sec_rec_some_has_impl_off_kernel(const rec_t *rec, const Index 
   return row_vers_impl_x_locked_off_kernel(rec, index, offsets);
 }
 
-ulint Lock_sys::number_of_rows_locked(trx_t *trx) const noexcept {
-  ulint n_records{};
 
-  for (auto lock : trx->trx_locks) {
-    if (lock->type() == LOCK_REC) {
-      const auto n_bits = lock->rec_get_n_bits();
 
-      for (ulint i{}; i < n_bits; ++i) {
-        if (lock->rec_is_nth_bit_set(i)) {
-          ++n_records;
-        }
-      }
-    }
-  }
-
-  return n_records;
-}
-
-Lock *Lock_sys::rec_create_low(Page_id page_id, Lock_mode type_mode, ulint heap_no, ulint n_bits, const Index *index, trx_t *trx) noexcept {
+Lock *Lock_sys::rec_create_low(Page_id page_id, Lock_mode type_mode, ulint heap_no, ulint n_bits, const Index *index, Trx *trx) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   /* If rec is the supremum record, then we reset the gap and
@@ -1028,9 +1012,9 @@ Lock *Lock_sys::rec_create_low(Page_id page_id, Lock_mode type_mode, ulint heap_
   /* Make lock bitmap bigger by a safety margin */
   const auto n_bytes = 1 + (n_bits + LOCK_PAGE_BITMAP_MARGIN) / 8;
 
-  auto lock = reinterpret_cast<Lock *>(mem_heap_alloc(trx->lock_heap, sizeof(Lock) + n_bytes));
+  auto lock = reinterpret_cast<Lock *>(mem_heap_alloc(trx->m_lock_heap, sizeof(Lock) + n_bytes));
 
-  trx->trx_locks.push_back(lock);
+  trx->m_trx_locks.push_back(lock);
 
   lock->m_trx = trx;
 
@@ -1069,13 +1053,13 @@ Lock *Lock_sys::rec_create_low(Page_id page_id, Lock_mode type_mode, ulint heap_
   return lock;
 }
 
-Lock *Lock_sys::rec_create(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const trx_t *trx) noexcept {
+Lock *Lock_sys::rec_create(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   auto page = block->m_frame;
   const auto n_bits = page_dir_get_n_heap(page);
 
-  return rec_create_low(block->get_page_id(), type_mode, heap_no, n_bits, index, const_cast<trx_t*>(trx));
+  return rec_create_low(block->get_page_id(), type_mode, heap_no, n_bits, index, const_cast<Trx*>(trx));
 }
 
 db_err Lock_sys::rec_enqueue_waiting(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr) noexcept {
@@ -1094,7 +1078,7 @@ db_err Lock_sys::rec_enqueue_waiting(Lock_mode type_mode, const Buf_block *block
 
   auto trx = thr_get_trx(thr);
 
-  switch (trx_get_dict_operation(trx)) {
+  switch (trx->get_dict_operation()) {
     case TRX_DICT_OP_NONE:
       break;
     case TRX_DICT_OP_TABLE:
@@ -1118,7 +1102,7 @@ db_err Lock_sys::rec_enqueue_waiting(Lock_mode type_mode, const Buf_block *block
 
     return DB_DEADLOCK;
 
-  } else if (unlikely(trx->wait_lock == nullptr)) {
+  } else if (unlikely(trx->m_wait_lock == nullptr)) {
     /* If there was a deadlock but we chose another transaction as a
     victim, it is possible that we already have the lock now granted! */
 
@@ -1126,9 +1110,9 @@ db_err Lock_sys::rec_enqueue_waiting(Lock_mode type_mode, const Buf_block *block
 
   } else {
 
-    trx->wait_started = time(nullptr);
+    trx->m_wait_started = time(nullptr);
     trx->m_que_state = TRX_QUE_LOCK_WAIT;
-    trx->was_chosen_as_deadlock_victim = false;
+    trx->m_was_chosen_as_deadlock_victim = false;
 
     const auto success = que_thr_stop(thr);
     ut_a(success);
@@ -1137,7 +1121,7 @@ db_err Lock_sys::rec_enqueue_waiting(Lock_mode type_mode, const Buf_block *block
   }
 }
 
-Lock *Lock_sys::rec_add_to_queue(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const trx_t *trx) noexcept {
+Lock *Lock_sys::rec_add_to_queue(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
 #ifdef UNIV_DEBUG
@@ -1348,7 +1332,7 @@ void Lock_sys::grant(Lock *lock) noexcept {
   for it */
 
   if (lock->m_trx->m_que_state == TRX_QUE_LOCK_WAIT) {
-    trx_end_lock_wait(lock->m_trx);
+    lock->m_trx->end_lock_wait();
   }
 }
 
@@ -1363,7 +1347,7 @@ void Lock_sys::rec_cancel(Lock *lock) noexcept {
   lock->reset();
 
   /* The following function releases the trx from lock wait */
-  trx_end_lock_wait(lock->m_trx);
+  lock->m_trx->end_lock_wait();
 }
 
 void Lock_sys::rec_dequeue_from_page(Lock *lock) noexcept {
@@ -1387,7 +1371,7 @@ void Lock_sys::rec_dequeue_from_page(Lock *lock) noexcept {
 
   auto trx = lock->m_trx;
 
-  trx->trx_locks.remove(lock);
+  trx->m_trx_locks.remove(lock);
 
   /* Check if waiting locks in the queue can now be granted: grant
   locks if there are no conflicting locks ahead. */
@@ -1410,7 +1394,7 @@ void Lock_sys::rec_discard(Lock *in_lock) noexcept {
   const auto n = m_rec_locks.erase(in_lock->page_id());
   ut_a(n == 1);
 
-  trx->trx_locks.remove(in_lock);
+  trx->m_trx_locks.remove(in_lock);
 }
 
 void Lock_sys::rec_free_all_from_discard_page(Page_id page_id) noexcept {
@@ -1919,10 +1903,9 @@ void Lock_sys::rec_restore_from_page_infimum(const Buf_block *block, const rec_t
   mutex_exit(&kernel_mutex);
 }
 
-bool Lock_sys::deadlock_occurs(Lock *lock, trx_t *trx) noexcept {
+bool Lock_sys::deadlock_occurs(Lock *lock, Trx *trx) noexcept {
   ulint ret;
   ulint cost{};
-  trx_t *mark_trx;
 
   ut_ad(mutex_own(&kernel_mutex));
 
@@ -1931,11 +1914,8 @@ retry:
   does not produce a cycle. First mark all active transactions
   with 0: */
 
-  mark_trx = m_trx_sys->m_trx_list.front();
-
-  while (mark_trx != nullptr) {
+  for (auto mark_trx : m_trx_sys->m_trx_list) {
     mark_trx->m_deadlock_mark = 0;
-    mark_trx = UT_LIST_GET_NEXT(trx_list, mark_trx);
   }
 
   ret = deadlock_recursive(trx, trx, lock, &cost, 0);
@@ -1950,7 +1930,7 @@ retry:
       log_info("TOO DEEP OR LONG SEARCH IN THE LOCK TABLE WAITS-FOR GRAPH, WE WILL ROLL BACK FOLLOWING TRANSACTION");
       log_info("\n*** TRANSACTION:\n");
 
-      log_info(trx_to_string(trx, 3000));
+      log_info(trx->to_string(3000));
 
       log_info("*** WAITING FOR THIS LOCK TO BE GRANTED:n");
 
@@ -1971,7 +1951,7 @@ retry:
   return true;
 }
 
-ulint Lock_sys::deadlock_recursive(trx_t *start, trx_t *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept {
+ulint Lock_sys::deadlock_recursive(Trx *start, Trx *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept {
   ulint ret;
   ut_ad(mutex_own(&kernel_mutex));
 
@@ -2038,7 +2018,7 @@ ulint Lock_sys::deadlock_recursive(trx_t *start, trx_t *trx, Lock *wait_lock, ul
 
         log_info("\n*** (1) TRANSACTION:");
 
-        log_info(trx_to_string(wait_lock->m_trx, 3000));
+        log_info(wait_lock->m_trx->to_string(3000));
 
         log_info("*** (1) WAITING FOR THIS LOCK TO BE GRANTED:");
 
@@ -2046,7 +2026,7 @@ ulint Lock_sys::deadlock_recursive(trx_t *start, trx_t *trx, Lock *wait_lock, ul
 
         log_info("*** (2) TRANSACTION:");
 
-        log_info(trx_to_string(found_lock->m_trx, 3000));
+        log_info(found_lock->m_trx->to_string(3000));
 
         log_info("*** (2) HOLDS THE LOCK(S):");
 
@@ -2056,9 +2036,9 @@ ulint Lock_sys::deadlock_recursive(trx_t *start, trx_t *trx, Lock *wait_lock, ul
 
         log_info(wait_lock->to_string(m_buf_pool));
 
-        log_info(start->wait_lock->to_string(m_buf_pool));
+        log_info(start->m_wait_lock->to_string(m_buf_pool));
 
-        if (trx_weight_cmp(wait_lock->m_trx, start) >= 0) {
+        if (Trx::weight_cmp(wait_lock->m_trx, start) >= 0) {
           /* Our recursion starting point transaction is 'smaller', let us
           choose 'start' as the victim and roll back it */
 
@@ -2072,7 +2052,7 @@ ulint Lock_sys::deadlock_recursive(trx_t *start, trx_t *trx, Lock *wait_lock, ul
 
         log_info("*** WE ROLL BACK TRANSACTION (1)");
 
-        wait_lock->m_trx->was_chosen_as_deadlock_victim = true;
+        wait_lock->m_trx->m_was_chosen_as_deadlock_victim = true;
 
         cancel_waiting_and_release(wait_lock);
 
@@ -2094,7 +2074,7 @@ ulint Lock_sys::deadlock_recursive(trx_t *start, trx_t *trx, Lock *wait_lock, ul
 
         /* Another trx ahead has requested lock	in an incompatible mode, and is itself waiting for a lock */
 
-        ret = deadlock_recursive(start, lock_trx, lock_trx->wait_lock, cost, depth + 1);
+        ret = deadlock_recursive(start, lock_trx, lock_trx->m_wait_lock, cost, depth + 1);
 
         if (ret != 0) {
 
@@ -2118,12 +2098,12 @@ ulint Lock_sys::deadlock_recursive(trx_t *start, trx_t *trx, Lock *wait_lock, ul
   } /* end of the 'for (;;)'-loop */
 }
 
-Lock *Lock_sys::table_create(Table *table, Lock_mode type_mode, trx_t *trx) noexcept {
+Lock *Lock_sys::table_create(Table *table, Lock_mode type_mode, Trx *trx) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
-  auto lock = reinterpret_cast<Lock *>(mem_heap_alloc(trx->lock_heap, sizeof(Lock)));
+  auto lock = reinterpret_cast<Lock *>(mem_heap_alloc(trx->m_lock_heap, sizeof(Lock)));
 
-  trx->trx_locks.push_back(lock);
+  trx->m_trx_locks.push_back(lock);
 
   lock->m_trx = trx;
   lock->m_type_mode = Lock_mode(Lock_mode_type(type_mode) | LOCK_TABLE);
@@ -2146,7 +2126,7 @@ void Lock_sys::table_remove_low(Lock *lock) noexcept {
   auto trx = lock->m_trx;
   auto table = lock->m_table.m_table;
 
-  trx->trx_locks.remove(lock);
+  trx->m_trx_locks.remove(lock);
   table->m_locks.remove(lock);
 }
 
@@ -2165,7 +2145,7 @@ void Lock_sys::table_remove_low(Lock *lock) noexcept {
 
   auto trx = thr_get_trx(thr);
 
-  switch (trx_get_dict_operation(trx)) {
+  switch (trx->get_dict_operation()) {
     case TRX_DICT_OP_NONE:
       break;
     case TRX_DICT_OP_TABLE:
@@ -2191,7 +2171,7 @@ void Lock_sys::table_remove_low(Lock *lock) noexcept {
     return DB_DEADLOCK;
   }
 
-  if (trx->wait_lock == nullptr) {
+  if (trx->m_wait_lock == nullptr) {
     /* Deadlock resolution chose another transaction as a victim,
     and we accidentally got our lock granted! */
 
@@ -2199,8 +2179,8 @@ void Lock_sys::table_remove_low(Lock *lock) noexcept {
   }
 
   trx->m_que_state = TRX_QUE_LOCK_WAIT;
-  trx->was_chosen_as_deadlock_victim = false;
-  trx->wait_started = time(nullptr);
+  trx->m_was_chosen_as_deadlock_victim = false;
+  trx->m_wait_started = time(nullptr);
 
   const auto success = que_thr_stop(thr);
   ut_a(success);
@@ -2208,7 +2188,7 @@ void Lock_sys::table_remove_low(Lock *lock) noexcept {
   return DB_LOCK_WAIT;
 }
 
-Lock *Lock_sys::table_other_has_incompatible(trx_t *trx, ulint wait, Table *table, Lock_mode mode) noexcept {
+Lock *Lock_sys::table_other_has_incompatible(Trx *trx, ulint wait, Table *table, Lock_mode mode) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   auto lock = table->m_locks.back();
@@ -2313,7 +2293,7 @@ void Lock_sys::table_dequeue(Lock *in_lock) noexcept {
   }
 }
 
-void Lock_sys::rec_unlock(trx_t *trx, const Buf_block *block, const rec_t *rec, Lock_mode Lock_mode) noexcept {
+void Lock_sys::rec_unlock(Trx *trx, const Buf_block *block, const rec_t *rec, Lock_mode Lock_mode) noexcept {
   ut_ad(block->m_frame == page_align(rec));
 
   const auto heap_no = page_rec_get_heap_no(rec);
@@ -2355,11 +2335,11 @@ void Lock_sys::rec_unlock(trx_t *trx, const Buf_block *block, const rec_t *rec, 
   mutex_exit(&kernel_mutex);
 }
 
-void Lock_sys::release_off_kernel(trx_t *trx) noexcept {
+void Lock_sys::release_off_kernel(Trx *trx) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   ulint count{};
-  auto lock = trx->trx_locks.back();
+  auto lock = trx->m_trx_locks.back();
 
   while (lock != nullptr) {
 
@@ -2387,10 +2367,10 @@ void Lock_sys::release_off_kernel(trx_t *trx) noexcept {
       count = 0;
     }
 
-    lock = trx->trx_locks.back();
+    lock = trx->m_trx_locks.back();
   }
 
-  mem_heap_empty(trx->lock_heap);
+  mem_heap_empty(trx->m_lock_heap);
 }
 
 void Lock_sys::cancel_waiting_and_release(Lock *lock) noexcept {
@@ -2411,16 +2391,16 @@ void Lock_sys::cancel_waiting_and_release(Lock *lock) noexcept {
 
   /* The following function releases the trx from lock wait */
 
-  trx_end_lock_wait(lock->m_trx);
+  lock->m_trx->end_lock_wait();
 }
 
 /* True if a lock mode is S or X */
 #define IS_LOCK_S_OR_X(lock) (lock->mode() == LOCK_S || lock->mode() == LOCK_X)
 
-void Lock_sys::remove_all_on_table_for_trx(Table *table, trx_t *trx, bool remove_sx_locks) noexcept {
+void Lock_sys::remove_all_on_table_for_trx(Table *table, Trx *trx, bool remove_sx_locks) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
-  auto lock = trx->trx_locks.back();
+  auto lock = trx->m_trx_locks.back();
 
   while (lock != nullptr) {
     auto prev_lock = UT_LIST_GET_PREV(m_trx_locks, lock);
@@ -2542,7 +2522,7 @@ void Lock_sys::print_info_all_transactions() noexcept {
   for (auto trx : m_trx_sys->m_client_trx_list) {
     if (trx->m_conc_state == TRX_NOT_STARTED) {
       log_info("---");
-      log_info(trx_to_string(trx, 600));
+      log_info(trx->to_string(600));
     }
   }
 
@@ -2550,7 +2530,7 @@ void Lock_sys::print_info_all_transactions() noexcept {
 
   for (;;) {
     ulint i{};
-    trx_t *trx{};
+    Trx *trx{};
 
     /* Since we temporarily release the kernel mutex when
     reading a database page in below, variable trx may be
@@ -2576,12 +2556,12 @@ void Lock_sys::print_info_all_transactions() noexcept {
 
     if (nth_lock == 0) {
       log_info("---");
-      log_info(trx_to_string(trx, 600));
+      log_info(trx->to_string(600));
 
-      if (trx->read_view) {
+      if (trx->m_read_view) {
         log_info(std::format("Trx read view will not see trx with id >= {}, sees < {}",
-          trx->read_view->low_limit_id,
-          trx->read_view->up_limit_id
+          trx->m_read_view->low_limit_id,
+          trx->m_read_view->up_limit_id
         ));
       }
 
@@ -2589,7 +2569,7 @@ void Lock_sys::print_info_all_transactions() noexcept {
         log_info(std::format(
           "------- TRX HAS BEEN WAITING {} SEC FOR THIS LOCK TO BE GRANTED:",
           difftime(time(nullptr),
-          trx->wait_started)
+          trx->m_wait_started)
         ));
 
         log_info(lock->to_string(m_buf_pool));
@@ -2608,7 +2588,7 @@ void Lock_sys::print_info_all_transactions() noexcept {
     /* Look at the note about the trx loop above why we loop here:
     lock may be an obsolete pointer now. */
 
-    lock = trx->trx_locks.front();
+    lock = trx->m_trx_locks.front();
 
     while (lock != nullptr && i < nth_lock) {
       lock = UT_LIST_GET_NEXT(m_trx_locks, lock);
@@ -2907,7 +2887,7 @@ bool Lock_sys::validate() noexcept {
 
   for (auto trx : m_trx_sys->m_trx_list) {
 
-    for (auto lock : trx->trx_locks) {
+    for (auto lock : trx->m_trx_locks) {
 
       if (lock->type() == LOCK_TABLE) {
         (void) table_queue_validate(lock->m_table.m_table);
@@ -3027,7 +3007,7 @@ void Lock_sys::rec_convert_impl_to_expl(const Buf_block *block, const rec_t *rec
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
 
-  const trx_t *impl_trx;
+  const Trx *impl_trx;
 
   if (index->is_clustered()) {
     impl_trx = clust_rec_some_has_impl(rec, index, offsets);
@@ -3219,10 +3199,10 @@ db_err Lock_sys::clust_rec_read_check_and_lock_alt(ulint flags, const Buf_block 
   return err;
 }
 
-bool Lock_sys::trx_has_no_waiters(const trx_t *trx) noexcept {
+bool Lock_sys::trx_has_no_waiters(const Trx *trx) noexcept {
   mutex_enter(&kernel_mutex);
 
-  for (auto lock = UT_LIST_GET_LAST(trx->trx_locks); lock != nullptr; lock = UT_LIST_GET_PREV(m_trx_locks, lock)) {
+  for (auto lock = UT_LIST_GET_LAST(trx->m_trx_locks); lock != nullptr; lock = UT_LIST_GET_PREV(m_trx_locks, lock)) {
 
     if (lock->type() == LOCK_REC) {
 

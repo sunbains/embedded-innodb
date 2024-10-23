@@ -125,7 +125,7 @@ struct Trx_sys {
    * 
    * @return new Trx_sys instance.
    */
-  static Trx_sys *create(FSP *fsp) noexcept;
+  [[nodiscard]] static Trx_sys *create(FSP *fsp) noexcept;
 
   /** 
    * Destroy a transaction system instance.
@@ -139,21 +139,21 @@ struct Trx_sys {
    * 
    * @return DB_SUCCESS or error code.
   */
-  dberr_t start(ib_recovery_t recovery) noexcept;
+  [[nodiscard]] dberr_t start(ib_recovery_t recovery) noexcept;
 
   /**
    * Create a new system tablespace.
    * 
    * @return DB_SUCCESS or error code.
    */
-  db_err create_system_tablespace() noexcept;
+  [[nodiscard]] db_err create_system_tablespace() noexcept;
 
   /**
    * Open an existing database instance.
    * 
    * @return DB_SUCCESS or error code.
    */
-  db_err open_system_tablespace() noexcept;
+  [[nodiscard]] db_err open_system_tablespace() noexcept;
 
   /**
    * Looks for a free slot for a rollback segment in the trx system file copy.
@@ -162,14 +162,14 @@ struct Trx_sys {
    * 
    * @return	slot index or ULINT_UNDEFINED if not found
    */
-  ulint frseg_find_free(mtr_t *mtr) noexcept;
+  [[nodiscard]] ulint frseg_find_free(mtr_t *mtr) noexcept;
 
   /**
    * Checks that trx is in the trx list.
    * 
    * @return	true if is in
    */
-  bool in_trx_list(trx_t *in_trx) noexcept;
+  [[nodiscard]] bool in_trx_list(Trx *in_trx) noexcept;
 
   /**
    * Writes the value of max_trx_id to the file based trx system header.
@@ -183,7 +183,7 @@ struct Trx_sys {
    * 
    * @return	the trx handle or NULL if not found
    */
-  trx_t *get_on_id(trx_id_t trx_id) noexcept {
+  [[nodiscard]] Trx *get_on_id(trx_id_t trx_id) noexcept {
     ut_ad(mutex_own(&kernel_mutex));
 
     for (const auto trx : m_trx_list) {
@@ -204,7 +204,7 @@ struct Trx_sys {
    * 
    * @return	the minimum trx id, or Trx_sys::max_trx_id if the trx list is empty
    */
-  trx_id_t get_min_trx_id() const noexcept {
+  [[nodiscard]] trx_id_t get_min_trx_id() const noexcept {
     ut_ad(mutex_own(&kernel_mutex));
 
     auto trx = UT_LIST_GET_LAST(m_trx_list);
@@ -219,7 +219,7 @@ struct Trx_sys {
    * 
    * @return	true if active
    */
-  bool is_active(trx_id_t trx_id) const noexcept {
+  [[nodiscard]] bool is_active(trx_id_t trx_id) const noexcept {
     ut_ad(mutex_own(&kernel_mutex));
 
     if (trx_id < get_min_trx_id()) {
@@ -247,7 +247,7 @@ struct Trx_sys {
    * 
    * @return	new, allocated trx id
    */
-  trx_id_t get_new_trx_id() noexcept {
+  [[nodiscard]] trx_id_t get_new_trx_id() noexcept {
     ut_ad(mutex_own(&kernel_mutex));
 
     /* VERY important: after the database is started, max_trx_id value is
@@ -274,11 +274,23 @@ struct Trx_sys {
    * 
    * @return	new, allocated trx number
    */
-  trx_id_t get_new_trx_no() noexcept {
+  [[nodiscard]] trx_id_t get_new_trx_no() noexcept {
     ut_ad(mutex_own(&kernel_mutex));
 
     return get_new_trx_id();
   }
+
+  /**
+     * This function is used to find number of prepared transactions and
+     * their transaction objects for a recovery. This function is used to
+     * recover any X/Open XA distributed transactions.
+     *
+     * @param[in,out] xid_list Prepared transactions.
+     * @param[in] len Number of slots in xid_list.
+     *
+     * @return Number of prepared transactions.
+     */
+    [[nodiscard]] int recover(XID *xid_list, ulint len) noexcept;
 
   /**
    * Gets a pointer to the transaction system header and x-latches its page.
@@ -287,7 +299,7 @@ struct Trx_sys {
    * 
    * @return	pointer to system header, page x-latched.
    */
-  trx_sysf_t *read_header(mtr_t *mtr) noexcept {
+  [[nodiscard]] trx_sysf_t *read_header(mtr_t *mtr) noexcept {
     ut_ad(mtr != nullptr);
 
     Buf_pool::Request req {
@@ -312,7 +324,7 @@ struct Trx_sys {
    * 
    * @return	pointer to rseg object, NULL if slot not in use
    */
-  trx_rseg_t *get_nth_rseg(ulint n) noexcept {
+  [[nodiscard]] trx_rseg_t *get_nth_rseg(ulint n) noexcept {
     ut_ad(mutex_own(&kernel_mutex));
     ut_ad(n < m_rsegs.size());
 
@@ -333,6 +345,65 @@ struct Trx_sys {
   }
 
   /**
+   * @brief Inserts the trx handle in the trx system trx list in the right position.
+   *
+   * The list is sorted on the trx id so that the biggest id is at the list start.
+   * This function is used at the database startup to insert incomplete transactions to the list.
+   *
+   * @param[in]  trx The transaction handle to insert.
+   */
+  void trx_list_insert_ordered(Trx *trx) noexcept ;
+
+  /**
+   * Creates trx objects for transactions and initializes the trx list of srv_trx_sys at database start.
+   * Rollback segment and undo log lists must already exist when this function is called,
+   * because the lists of transactions to be rolled back or cleaned up are built based on the undo log lists.
+   *
+   * @param[in] recovery The recovery flag.
+   */
+  void trx_lists_init_at_db_start(ib_recovery_t recovery) noexcept;
+
+  /**
+   * Assigns a rollback segment to a transaction in a round-robin fashion.
+   * Skips the SYSTEM rollback segment if another is available.
+   * 
+   * @return	assigned rollback segment id
+   */
+  [[nodiscard]] ulint trx_assign_rseg() noexcept;
+
+  /**
+   * Creates a background transaction instance.
+   *
+   * @param[in] arg	Any context that needs to be passed to the trx.
+   * 
+   * @return own: transaction object
+   */
+  [[nodiscard]] Trx *create_background_trx(void *arg) noexcept;
+
+  /**
+   * Frees a background transaction instance.
+   *
+   * @param[in] trx The transaction object to be freed.
+   */
+  void destroy_background_trx(Trx *&trx) noexcept;
+
+  /**
+   * Creates a user transaction instance.
+   *
+   * @param[in] arg	Any context that needs to be passed to the trx.
+   * 
+   * @return own: transaction object
+   */
+  [[nodiscard]] Trx *create_user_trx(void *arg) noexcept;
+
+  /**
+   * Frees a client transaction instance.
+   *
+   * @param[in] trx The transaction object to be freed.
+   */
+  void destroy_user_trx(Trx *&trx) noexcept;
+
+  /**
    * Checks if a page address is the trx sys header page.
    * 
    * @param[in] space	Tablespace ID
@@ -340,8 +411,8 @@ struct Trx_sys {
    * 
    * @return	true if trx sys header page
    */
-  static bool is_hdr_page(space_id_t space, page_no_t page_no) noexcept {
-    return space == TRX_SYS_SPACE && page_no == TRX_SYS_PAGE_NO;
+  [[nodiscard]] static bool is_hdr_page(space_id_t space_id, page_no_t page_no) noexcept {
+    return space_id == TRX_SYS_SPACE && page_no == TRX_SYS_PAGE_NO;
   }
 
   /** Gets the space of the nth rollback segment slot in the trx system file copy.
@@ -352,7 +423,7 @@ struct Trx_sys {
    * 
    * @return	space id
    */
-  static ulint frseg_get_space(trx_sysf_t *sys_header, ulint i, mtr_t *mtr) noexcept {
+  [[nodiscard]] static space_id_t frseg_get_space(trx_sysf_t *sys_header, ulint i, mtr_t *mtr) noexcept {
     ut_ad(i < TRX_SYS_N_RSEGS);
     ut_ad(mutex_own(&kernel_mutex));
 
@@ -368,7 +439,7 @@ struct Trx_sys {
    * 
    * @return	page number, FIL_NULL if slot unused
    */
-  static ulint frseg_get_page_no(trx_sysf_t *sys_header, ulint i, mtr_t *mtr) noexcept {
+  [[nodiscard]] static page_no_t frseg_get_page_no(trx_sysf_t *sys_header, ulint i, mtr_t *mtr) noexcept {
     ut_ad(i < TRX_SYS_N_RSEGS);
     ut_ad(mutex_own(&kernel_mutex));
 
@@ -426,17 +497,32 @@ struct Trx_sys {
    * some future version, this function should be used instead of
    * mach_read_...
    * 
-   * @param[in]	ptr	Pointer to memory from where to read
+   * @param[in]	ptr	Pointer to memory from where to rckgrouneadestroy_background_trxd
    * 
    * @return	id
    * */
-  static trx_id_t read_trx_id(const byte *ptr) noexcept {
+  [[nodiscard]] static trx_id_t read_trx_id(const byte *ptr) noexcept {
     static_assert(DATA_TRX_ID_LEN == 6, "error DATA_TRX_ID_LEN != 6");
 
     return mach_read_from_6(ptr);
   }
 
+#ifdef WITH_XOPEN
+  /**
+   * This function is used to find one X/Open XA distributed transaction
+   * which is in the prepared state
+   * 
+   * @param[in] xid X/Open XA transaction identification
+   * 
+   * @return trx or nullptr
+   */
+  [[nodiscard]] Trx *get_trx_by_xid(XID *xid) noexcept;
+#endif /* WITH_XOPEN */
+
+#ifdef UNIT_TEST
 private:
+#endif /* UNIT_TEST */
+
   /**
    * Creates the file page for the transaction system. This function is called
    * only at the database creation, before init().
@@ -444,6 +530,31 @@ private:
    * @param[in,out] mtr              Mini-transaction covering the operation.
    */
   void create_new_instance(mtr_t *mtr) noexcept;
+
+  /**
+   * Creates trx objects for transactions and initializes the trx list of srv_trx_sys at database start.
+   * Rollback segment and undo log lists must already exist when this function is called,
+   * because the lists of transactions to be rolled back or cleaned up are built based on the undo log lists.
+   *
+   * @param[in] recovery The recovery flag.
+   */
+  void init_at_db_start(ib_recovery_t recovery) noexcept;
+
+  /**
+   * Creates a transaction instance.
+   *
+   * @param[in] arg Any context that needs to be passed to the trx.
+   * 
+   * @return own: transaction object
+   */
+  [[nodiscard]] Trx *create_trx(void *arg) noexcept;
+
+  /**
+   * Destroys a transaction instance.
+   *
+   * @param[in] trx The transaction object to be freed.
+   */
+  void destroy_trx(Trx *&trx) noexcept;
 
 public:
   /** The smallest number not yet assigned as a transaction
@@ -455,10 +566,10 @@ public:
 
   /** List of active and committed in memory transactions,
   sorted on trx id, biggest first */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_t, trx_list) m_trx_list{};
+  UT_LIST_BASE_NODE_T_EXTERN(Trx, m_trx_list) m_trx_list{};
 
   /** List of transactions created for users */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_t, client_trx_list) m_client_trx_list{};
+  UT_LIST_BASE_NODE_T_EXTERN(Trx, m_client_trx_list) m_client_trx_list{};
 
   /** List of rollback segment objects */
   UT_LIST_BASE_NODE_T_EXTERN(trx_rseg_t, rseg_list) m_rseg_list{};
@@ -477,6 +588,14 @@ public:
   /** The following is true when we are using the database in the file per table
    * format, we have successfully upgraded, or have created a new database installation */
   bool m_multiple_tablespace_format{};
+
+  /** Number of transactions currently allocated for the client: protected by
+  the kernel mutex */
+  ulint m_n_user_trx{};
+
+  /** Number of background transactions currently allocated: protected by
+   * the kernel mutex */
+  ulint m_n_background_trx{};
 
   /** File space management instance. */
   FSP *m_fsp{};

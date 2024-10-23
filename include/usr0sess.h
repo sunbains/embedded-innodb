@@ -25,12 +25,3 @@ Created 6/25/1996 Heikki Tuuri
 #pragma once
 
 #include "usr0types.h"
-
-/** Opens a session.
-@return	own: session object */
-[[nodiscard]] sess_t *sess_open();
-
-/** Closes a session, freeing the memory occupied by it.
-@param[in,own] sess    Session to free. */
-void sess_close(sess_t *sess);
-

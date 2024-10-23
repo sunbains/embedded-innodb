@@ -114,7 +114,7 @@ doing the purge. Similarly, during a rollback, a record can be removed
 if the stored roll ptr in the undo log points to a trx already (being) purged,
 or if the roll ptr is nullptr, i.e., it was a fresh insert. */
 
-Undo_node *row_undo_node_create(trx_t *trx, que_thr_t *parent, mem_heap_t *heap) {
+Undo_node *row_undo_node_create(Trx *trx, que_thr_t *parent, mem_heap_t *heap) {
   auto ptr = mem_heap_alloc(heap, sizeof(Undo_node));
 
   auto undo = new (ptr) Undo_node(srv_fsp, srv_btree_sys, srv_lock_sys);
@@ -202,7 +202,7 @@ static db_err row_undo(Undo_node *node, que_thr_t *thr) {
 
   if (node->state == UNDO_NODE_FETCH_NEXT) {
 
-    node->undo_rec = trx_roll_pop_top_rec_of_trx(trx, trx->roll_limit, &roll_ptr, node->heap);
+    node->undo_rec = trx_roll_pop_top_rec_of_trx(trx, trx->m_roll_limit, &roll_ptr, node->heap);
     if (!node->undo_rec) {
       /* Rollback completed for this query thread */
 
@@ -291,18 +291,15 @@ que_thr_t *row_undo_step(que_thr_t *thr) {
 
   auto err = row_undo(node, thr);
 
-  trx->error_state = err;
+  trx->m_error_state = err;
 
   if (err != DB_SUCCESS) {
     /* SQL error detected */
 
-    ib_logger(ib_stream, "Fatal error %lu in rollback.\n", (ulong)err);
+    log_err(std::format("Fatal error {} in rollback.", (ulong)err));
 
     if (err == DB_OUT_OF_FILE_SPACE) {
-      log_fatal(
-        "Error 13 means out of tablespace.\n"
-        "Consider increasing your tablespace.\n"
-      );
+      log_fatal("Error 13 means out of tablespace. Consider increasing your tablespace.");
     }
 
     ut_error;

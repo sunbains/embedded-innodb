@@ -960,7 +960,6 @@ static db_err srv_normalize_init_values() {
 void InnoDB::modules_var_init() noexcept {
   /* The order here shouldn't matter. None of the functions
   below should have any dependencies. */
-  trx_var_init();
   rw_lock_var_init();
   que_var_init();
   pars_var_init();
@@ -1070,7 +1069,7 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
 
   mutex_enter(&kernel_mutex);
 
-  trx->error_state = DB_SUCCESS;
+  trx->m_error_state = DB_SUCCESS;
 
   if (thr->state == QUE_THR_RUNNING) {
 
@@ -1079,10 +1078,10 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
     /* The lock has already been released or this transaction
     was chosen as a deadlock victim: no need to suspend */
 
-    if (trx->was_chosen_as_deadlock_victim) {
+    if (trx->m_was_chosen_as_deadlock_victim) {
 
-      trx->error_state = DB_DEADLOCK;
-      trx->was_chosen_as_deadlock_victim = false;
+      trx->m_error_state = DB_DEADLOCK;
+      trx->m_was_chosen_as_deadlock_victim = false;
     }
 
     mutex_exit(&kernel_mutex);
@@ -1176,10 +1175,10 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
     }
   }
 
-  if (trx->was_chosen_as_deadlock_victim) {
+  if (trx->m_was_chosen_as_deadlock_victim) {
 
-    trx->error_state = DB_DEADLOCK;
-    trx->was_chosen_as_deadlock_victim = false;
+    trx->m_error_state = DB_DEADLOCK;
+    trx->m_was_chosen_as_deadlock_victim = false;
   }
 
   mutex_exit(&kernel_mutex);
@@ -1190,9 +1189,9 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
   innodb_lock_wait_timeout, because trx->m_client_ctx == nullptr. */
   lock_wait_timeout = sess_lock_wait_timeout(trx);
 
-  if (trx_is_interrupted(trx) || (lock_wait_timeout < 100000000 && wait_time > (double)lock_wait_timeout)) {
+  if (trx->is_interrupted() || (lock_wait_timeout < 100000000 && wait_time > (double)lock_wait_timeout)) {
 
-    trx->error_state = DB_LOCK_WAIT_TIMEOUT;
+    trx->m_error_state = DB_LOCK_WAIT_TIMEOUT;
   }
 }
 
@@ -1632,7 +1631,7 @@ void *InnoDB::lock_timeout_thread(void *) noexcept {
         auto trx = thr_get_trx(slot->m_thr);
         auto lock_wait_timeout = sess_lock_wait_timeout(trx);
 
-        if (trx_is_interrupted(trx) ||
+        if (trx->is_interrupted() ||
             (lock_wait_timeout < 100000000 &&
              (wait_time > (double)lock_wait_timeout || wait_time < 0))) {
 
@@ -1641,8 +1640,8 @@ void *InnoDB::lock_timeout_thread(void *) noexcept {
           other transactions waiting behind; it is possible that the lock has
           already been granted: in that case do nothing */
   
-          if (trx->wait_lock) {
-            srv_lock_sys->cancel_waiting_and_release(trx->wait_lock);
+          if (trx->m_wait_lock) {
+            srv_lock_sys->cancel_waiting_and_release(trx->m_wait_lock);
           }
         }
       }

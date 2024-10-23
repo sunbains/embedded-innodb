@@ -207,7 +207,7 @@ struct ib_index_def_t {
   std::vector<ib_key_col_t *> *cols;
 
   /* User transacton covering the DDL operations */
-  trx_t *usr_trx;
+  Trx *usr_trx;
 };
 
 /* InnoDB table schema used during table creation */
@@ -666,13 +666,13 @@ ib_err_t ib_shutdown(ib_shutdown_t flag) {
 
 ib_err_t ib_trx_start(ib_trx_t ib_trx, ib_trx_level_t ib_trx_level) {
   ib_err_t err = DB_SUCCESS;
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   ut_a(ib_trx_level >= IB_TRX_READ_UNCOMMITTED);
   ut_a(ib_trx_level <= IB_TRX_SERIALIZABLE);
 
   if (trx->m_conc_state == TRX_NOT_STARTED) {
-    auto started = trx_start(trx, ULINT_UNDEFINED);
+    auto started = trx->start(ULINT_UNDEFINED);
     ut_a(started);
 
     trx->m_isolation_level = static_cast<Trx_isolation>(ib_trx_level);
@@ -686,13 +686,13 @@ ib_err_t ib_trx_start(ib_trx_t ib_trx, ib_trx_level_t ib_trx_level) {
 }
 
 void ib_trx_set_client_data(ib_trx_t ib_trx, void *client_data) {
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   trx->m_client_ctx = client_data;
 }
 
 ib_trx_t ib_trx_begin(ib_trx_level_t ib_trx_level) {
-  auto trx = trx_allocate_for_client(nullptr);
+  auto trx = srv_trx_sys->create_user_trx(nullptr);
   auto started = ib_trx_start((ib_trx_t)trx, ib_trx_level);
 
   ut_a(started);
@@ -701,28 +701,28 @@ ib_trx_t ib_trx_begin(ib_trx_level_t ib_trx_level) {
 }
 
 ib_trx_state_t ib_trx_state(ib_trx_t ib_trx) {
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   return static_cast<ib_trx_state_t>(trx->m_conc_state);
 }
 
 ib_err_t ib_trx_release(ib_trx_t ib_trx) {
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   IB_CHECK_PANIC();
 
   ut_ad(trx != nullptr);
-  trx_free_for_client(trx);
+  srv_trx_sys->destroy_user_trx(trx);
 
   return DB_SUCCESS;
 }
 
 ib_err_t ib_trx_commit(ib_trx_t ib_trx) {
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   IB_CHECK_PANIC();
 
-  auto err = trx_commit(trx);
+  auto err = trx->commit();
   ut_a(err == DB_SUCCESS);
 
   err = ib_schema_unlock(ib_trx);
@@ -737,7 +737,7 @@ ib_err_t ib_trx_commit(ib_trx_t ib_trx) {
 }
 
 ib_err_t ib_trx_rollback(ib_trx_t ib_trx) {
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   IB_CHECK_PANIC();
 
@@ -1291,7 +1291,7 @@ ib_err_t ib_index_schema_create(ib_trx_t ib_usr_trx, const char *name, const cha
 
         index_def->cols = new std::vector<ib_key_col_t *>();
 
-        index_def->usr_trx = reinterpret_cast<trx_t *>(ib_usr_trx);
+        index_def->usr_trx = reinterpret_cast<Trx *>(ib_usr_trx);
 
         *ib_idx_sch = reinterpret_cast<ib_idx_sch_t>(index_def);
       }
@@ -1443,17 +1443,17 @@ static const index_def_t *ib_copy_index_definition(ib_index_def_t *ib_index_def,
  * 
  * @return DB_SUCCESS or err code.
  */
-static ib_err_t ib_build_secondary_index(trx_t *usr_trx, Table *table, ib_index_def_t *ib_index_def, bool create, Index **index) noexcept {
+static ib_err_t ib_build_secondary_index(Trx *usr_trx, Table *table, ib_index_def_t *ib_index_def, bool create, Index **index) noexcept {
   ib_err_t err;
-  trx_t *ddl_trx;
+  Trx *ddl_trx;
 
   IB_CHECK_PANIC();
 
   ut_a(usr_trx->m_conc_state != TRX_NOT_STARTED);
 
   if (!create) {
-    ddl_trx = trx_allocate_for_client(nullptr);
-    const auto started = trx_start(ddl_trx, ULINT_UNDEFINED);
+    ddl_trx = srv_trx_sys->create_user_trx(nullptr);
+    const auto started = ddl_trx->start(ULINT_UNDEFINED);
     ut_a(started);
   } else {
     ddl_trx = usr_trx;
@@ -1479,7 +1479,7 @@ static ib_err_t ib_build_secondary_index(trx_t *usr_trx, Table *table, ib_index_
   if (!create) {
     /* Flag this transaction as a dictionary operation, so that
     the data dictionary will be locked in crash recovery. */
-    trx_set_dict_operation(ddl_trx, TRX_DICT_OP_INDEX);
+    ddl_trx->set_dict_operation(TRX_DICT_OP_INDEX);
   }
 
   *index = row_merge_create_index(ddl_trx, table, index_def);
@@ -1491,15 +1491,15 @@ static ib_err_t ib_build_secondary_index(trx_t *usr_trx, Table *table, ib_index_
     ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
   }
 
-  err = ddl_trx->error_state;
+  err = ddl_trx->m_error_state;
 
   if (!create) {
     /* Commit the data dictionary transaction in order to release
     the table locks on the system tables. */
-    auto err = trx_commit(ddl_trx);
+    auto err = ddl_trx->commit();
     ut_a(err == DB_SUCCESS);
 
-    trx_free_for_client(ddl_trx);
+    srv_trx_sys->destroy_user_trx(ddl_trx);
   }
 
   ut_a(usr_trx->m_conc_state != TRX_NOT_STARTED);
@@ -1576,7 +1576,7 @@ static void ib_index_create_def(const Index *index, index_def_t *index_def, mem_
  *
  * @return index definitions or nullptr
  */
-static index_def_t *ib_table_create_index_defs(trx_t *trx, const Table *table, mem_heap_t *heap, ulint *n_indexes) noexcept {
+static index_def_t *ib_table_create_index_defs(Trx *trx, const Table *table, mem_heap_t *heap, ulint *n_indexes) noexcept {
   auto sz = sizeof(index_def_t) * UT_LIST_GET_LEN(table->m_indexes);
   auto index_defs = reinterpret_cast<index_def_t *>(mem_heap_zalloc(heap, sz));
   auto err = ib_schema_lock_exclusive((ib_trx_t)trx);
@@ -1613,7 +1613,7 @@ static index_def_t *ib_table_create_index_defs(trx_t *trx, const Table *table, m
  * 
  * @return DB_SUCCESS or err code
  */
-static ib_err_t ib_create_cluster_index(trx_t *trx, Table *table, ib_index_def_t *ib_index_def, Index **index) noexcept {
+static ib_err_t ib_create_cluster_index(Trx *trx, Table *table, ib_index_def_t *ib_index_def, Index **index) noexcept {
   IB_CHECK_PANIC();
 
   ut_a(!ib_index_def->cols->empty());
@@ -1623,14 +1623,14 @@ static ib_err_t ib_create_cluster_index(trx_t *trx, Table *table, ib_index_def_t
 
   trx->m_op_info = "creating clustered index";
 
-  trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
+  trx->set_dict_operation(TRX_DICT_OP_TABLE);
 
   auto err = ib_trx_lock_table_with_retry(trx, table, LOCK_X);
 
   if (err == DB_SUCCESS) {
     *index = row_merge_create_index(trx, table, index_def);
 
-    err = trx->error_state;
+    err = trx->m_error_state;
   }
 
   trx->m_op_info = "";
@@ -1651,7 +1651,7 @@ static ib_err_t ib_create_cluster_index(trx_t *trx, Table *table, ib_index_def_t
  *
  * @return DB_SUCCESS or error code
  */
-static ib_err_t ib_table_clone_indexes(trx_t *trx, Table *src_table, Table *new_table, mem_heap_t *heap) noexcept {
+static ib_err_t ib_table_clone_indexes(Trx *trx, Table *src_table, Table *new_table, mem_heap_t *heap) noexcept {
   ulint n_index_defs = 0;
   auto index_defs = ib_table_create_index_defs(trx, src_table, heap, &n_index_defs);
 
@@ -1662,7 +1662,7 @@ static ib_err_t ib_table_clone_indexes(trx_t *trx, Table *src_table, Table *new_
     auto index = row_merge_create_index(trx, new_table, &index_defs[i]);
 
     if (index == nullptr) {
-      return trx->error_state;
+      return trx->m_error_state;
     }
   }
 
@@ -1683,7 +1683,7 @@ static ib_err_t ib_table_clone_indexes(trx_t *trx, Table *src_table, Table *new_
  *
  * @return DB_SUCCESS or error code
  */
-static ib_err_t ib_table_clone(trx_t *trx, Table *src_table, Table **new_table, ib_index_def_t *ib_index_def, mem_heap_t *heap) noexcept {
+static ib_err_t ib_table_clone(Trx *trx, Table *src_table, Table **new_table, ib_index_def_t *ib_index_def, mem_heap_t *heap) noexcept {
   auto new_table_name = ib_table_create_temp_name(heap, '1', src_table->m_name);
   auto err = ib_schema_lock_exclusive((ib_trx_t)trx);
 
@@ -1698,9 +1698,9 @@ static ib_err_t ib_table_clone(trx_t *trx, Table *src_table, Table **new_table, 
   *new_table = row_merge_create_temporary_table(new_table_name, index_def, src_table, trx);
 
   if (unlikely(new_table == nullptr)) {
-    err = trx->error_state;
+    err = trx->m_error_state;
   } else {
-    trx->table_id = (*new_table)->m_id;
+    trx->m_table_id = (*new_table)->m_id;
 
     err = ib_table_clone_indexes(trx, src_table, *new_table, heap);
   }
@@ -1721,7 +1721,7 @@ static ib_err_t ib_table_clone(trx_t *trx, Table *src_table, Table **new_table, 
  *
  * @return DB_SUCCESS or error code
  */
-static ib_err_t ib_table_copy(trx_t *trx, Table *src_table, Table *dst_table, mem_heap_t *heap) noexcept {
+static ib_err_t ib_table_copy(Trx *trx, Table *src_table, Table *dst_table, mem_heap_t *heap) noexcept {
   auto err = ib_schema_lock_exclusive((ib_trx_t)trx);
 
   if (err != DB_SUCCESS) {
@@ -1758,7 +1758,7 @@ static ib_err_t ib_table_copy(trx_t *trx, Table *src_table, Table *dst_table, me
  *
  * @return DB_SUCCESS or err code
  */
-static ib_err_t ib_create_default_cluster_index(trx_t *trx, Table *table, Index **index) noexcept {
+static ib_err_t ib_create_default_cluster_index(Trx *trx, Table *table, Index **index) noexcept {
   index_def_t index_def;
 
   index_def.n_fields = 0;
@@ -1768,7 +1768,7 @@ static ib_err_t ib_create_default_cluster_index(trx_t *trx, Table *table, Index 
 
   trx->m_op_info = "creating default clustered index";
 
-  trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
+  trx->set_dict_operation(TRX_DICT_OP_TABLE);
 
   ut_a(ib_schema_lock_is_exclusive((ib_trx_t)trx));
 
@@ -1777,7 +1777,7 @@ static ib_err_t ib_create_default_cluster_index(trx_t *trx, Table *table, Index 
   if (err == DB_SUCCESS) {
     *index = row_merge_create_index(trx, table, &index_def);
 
-    err = trx->error_state;
+    err = trx->m_error_state;
   }
 
   trx->m_op_info = "";
@@ -1795,7 +1795,7 @@ static ib_err_t ib_create_default_cluster_index(trx_t *trx, Table *table, Index 
  *
  * @return DB_SUCCESS or err code
  */
-static ib_err_t ib_create_indexes(trx_t *ddl_trx, Table *table, const std::vector<ib_index_def_t *> &indexes) noexcept {
+static ib_err_t ib_create_indexes(Trx *ddl_trx, Table *table, const std::vector<ib_index_def_t *> &indexes) noexcept {
   ib_err_t err = DB_ERROR;
   Index *index = nullptr;
   ib_index_def_t *ib_clust_index_def = nullptr;
@@ -1858,7 +1858,7 @@ static ib_err_t ib_table_get_id_low(const char *table_name, ib_id_t *table_id) n
 }
 
 ib_err_t ib_table_create(ib_trx_t ib_trx, const ib_tbl_sch_t ib_tbl_sch, ib_id_t *id) {
-  auto ddl_trx = (trx_t *)ib_trx;
+  auto ddl_trx = (Trx *)ib_trx;
   const auto table_def = (const ib_table_def_t *)ib_tbl_sch;
 
   IB_CHECK_PANIC();
@@ -1948,7 +1948,7 @@ ib_err_t ib_table_create(ib_trx_t ib_trx, const ib_tbl_sch_t ib_tbl_sch, ib_id_t
 
 ib_err_t ib_table_rename(ib_trx_t ib_trx, const char *old_name, const char *new_name) {
   ib_err_t err;
-  trx_t *trx = (trx_t *)ib_trx;
+  Trx *trx = (Trx *)ib_trx;
 
   IB_CHECK_PANIC();
 
@@ -2008,7 +2008,7 @@ static ib_err_t ib_create_primary_index(ib_idx_sch_t ib_idx_sch, ib_id_t *index_
   /* This transaction should be the only one operating on the table. */
   ut_a(table->m_n_handles_opened == 1);
 
-  trx_set_dict_operation(usr_trx, TRX_DICT_OP_TABLE);
+  usr_trx->set_dict_operation(TRX_DICT_OP_TABLE);
 
   ut_a(!ib_index_def->cols->empty());
 
@@ -2059,7 +2059,7 @@ static ib_err_t ib_create_primary_index(ib_idx_sch_t ib_idx_sch, ib_id_t *index_
  * @return DB_SUCCESS or err code
  */
 static ib_err_t ib_create_secondary_index(ib_idx_sch_t ib_idx_sch, ib_id_t *index_id) {
-  trx_t *ddl_trx{};
+  Trx *ddl_trx{};
   Index *index{};
   auto ib_index_def = reinterpret_cast<ib_index_def_t *>(ib_idx_sch);
   auto usr_trx = ib_index_def->usr_trx;
@@ -2088,8 +2088,8 @@ static ib_err_t ib_create_secondary_index(ib_idx_sch_t ib_idx_sch, ib_id_t *inde
     } else {
       bool started;
 
-      ddl_trx = trx_allocate_for_client(nullptr);
-      started = trx_start(ddl_trx, ULINT_UNDEFINED);
+      ddl_trx = srv_trx_sys->create_user_trx(nullptr);
+      started = ddl_trx->start(ULINT_UNDEFINED);
       ut_a(started);
     }
   }
@@ -2116,7 +2116,7 @@ static ib_err_t ib_create_secondary_index(ib_idx_sch_t ib_idx_sch, ib_id_t *inde
     *index_id <<= 32;
     *index_id |= index->m_id;
 
-    auto err = trx_commit(ddl_trx);
+    auto err = ddl_trx->commit();
     ut_a(err == DB_SUCCESS);
   } else if (ddl_trx != nullptr) {
     trx_general_rollback(ddl_trx, false, nullptr);
@@ -2124,7 +2124,7 @@ static ib_err_t ib_create_secondary_index(ib_idx_sch_t ib_idx_sch, ib_id_t *inde
 
   if (ddl_trx != nullptr) {
     ddl_trx->m_op_info = "";
-    trx_free_for_client(ddl_trx);
+    srv_trx_sys->destroy_user_trx(ddl_trx);
   }
 
   return err;
@@ -2157,7 +2157,7 @@ ib_err_t ib_table_drop(ib_trx_t ib_trx, const char *name) {
   auto normalized_name = static_cast<char *>(mem_alloc(strlen(name) + 1));
   ib_normalize_table_name(normalized_name, name);
 
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   db_err err;
 
@@ -2193,7 +2193,7 @@ ib_err_t ib_index_drop(ib_trx_t ib_trx, ib_id_t index_id) {
   ib_err_t err;
 
   if (index != nullptr) {
-    err = srv_dict_sys->m_ddl.drop_index(table, index, (trx_t *)ib_trx);
+    err = srv_dict_sys->m_ddl.drop_index(table, index, (Trx *)ib_trx);
   } else {
     err = DB_TABLE_NOT_FOUND;
   }
@@ -2213,7 +2213,7 @@ ib_err_t ib_index_drop(ib_trx_t ib_trx, ib_id_t index_id) {
  *
  * @return DB_SUCCESS or err code
  */
-static ib_err_t ib_create_cursor(ib_crsr_t *ib_crsr, Table *table, ib_id_t index_id, trx_t *trx) noexcept {
+static ib_err_t ib_create_cursor(ib_crsr_t *ib_crsr, Table *table, ib_id_t index_id, Trx *trx) noexcept {
   ib_err_t err = DB_SUCCESS;
   const Dict_id id = index_id;
 
@@ -2254,13 +2254,13 @@ static ib_err_t ib_create_cursor(ib_crsr_t *ib_crsr, Table *table, ib_id_t index
   ut_a(prebuilt->index != nullptr);
 
   if (prebuilt->trx != nullptr) {
-    ++prebuilt->trx->n_client_tables_in_use;
+    ++prebuilt->trx->m_n_client_tables_in_use;
 
     prebuilt->index_usable = row_merge_is_index_usable(prebuilt->trx, prebuilt->index);
 
     /* Assign a read view if the transaction does not have it yet */
 
-    auto rv = trx_assign_read_view(prebuilt->trx);
+    auto rv = prebuilt->trx->assign_read_view();
     ut_a(rv != nullptr);
   }
 
@@ -2285,7 +2285,7 @@ ib_err_t ib_cursor_open_table_using_id(ib_id_t table_id, ib_trx_t ib_trx, ib_crs
     return DB_TABLE_NOT_FOUND;
   }
 
-  return ib_create_cursor(ib_crsr, table, 0, (trx_t *)ib_trx);
+  return ib_create_cursor(ib_crsr, table, 0, (Trx *)ib_trx);
 }
 
 ib_err_t ib_cursor_open_index_using_id(ib_id_t index_id, ib_trx_t ib_trx, ib_crsr_t *ib_crsr) {
@@ -2306,7 +2306,7 @@ ib_err_t ib_cursor_open_index_using_id(ib_id_t index_id, ib_trx_t ib_trx, ib_crs
   }
 
   /* We only return the lower 32 bits of the uint64_t. */
-  auto err = ib_create_cursor(ib_crsr, table, index_id & 0xFFFFFFFFULL, (trx_t *)ib_trx);
+  auto err = ib_create_cursor(ib_crsr, table, index_id & 0xFFFFFFFFULL, (Trx *)ib_trx);
 
   if (ib_crsr != nullptr) {
     auto cursor = *(ib_cursor_t **)ib_crsr;
@@ -2408,7 +2408,7 @@ ib_err_t ib_cursor_open_table(const char *name, ib_trx_t ib_trx, ib_crsr_t *ib_c
   }
 
   if (table != nullptr) {
-    err = ib_create_cursor(ib_crsr, table, 0, (trx_t *)ib_trx);
+    err = ib_create_cursor(ib_crsr, table, 0, (Trx *)ib_trx);
   } else {
     err = DB_TABLE_NOT_FOUND;
   }
@@ -2435,9 +2435,9 @@ ib_err_t ib_cursor_reset(ib_crsr_t ib_crsr) {
 
   IB_CHECK_PANIC();
 
-  if (prebuilt->trx != nullptr && prebuilt->trx->n_client_tables_in_use > 0) {
+  if (prebuilt->trx != nullptr && prebuilt->trx->m_n_client_tables_in_use > 0) {
 
-    --prebuilt->trx->n_client_tables_in_use;
+    --prebuilt->trx->m_n_client_tables_in_use;
   }
 
   /* The fields in this data structure are allocated from
@@ -2454,15 +2454,15 @@ ib_err_t ib_cursor_reset(ib_crsr_t ib_crsr) {
 ib_err_t ib_cursor_close(ib_crsr_t ib_crsr) {
   ib_cursor_t *cursor = (ib_cursor_t *)ib_crsr;
   row_prebuilt_t *prebuilt = cursor->prebuilt;
-  trx_t *trx = prebuilt->trx;
+  Trx *trx = prebuilt->trx;
 
   IB_CHECK_PANIC();
 
   ib_qry_proc_free(&cursor->q_proc);
 
   /* The transaction could have been detached from the cursor. */
-  if (trx != nullptr && trx->n_client_tables_in_use > 0) {
-    --trx->n_client_tables_in_use;
+  if (trx != nullptr && trx->m_n_client_tables_in_use > 0) {
+    --trx->m_n_client_tables_in_use;
   }
 
   if (trx != nullptr && ib_schema_lock_is_exclusive((ib_trx_t)trx)) {
@@ -2498,7 +2498,7 @@ static ib_err_t ib_insert_row_with_lock_retry(que_thr_t *thr, ins_node_t *node, 
 
     row_ins_step(thr);
 
-    err = trx->error_state;
+    err = trx->m_error_state;
 
     if (err != DB_SUCCESS) {
       que_thr_stop_client(thr);
@@ -2776,7 +2776,7 @@ static ib_err_t ib_update_row_with_lock_retry(que_thr_t *thr, upd_node_t *node, 
 
     row_upd_step(thr);
 
-    err = trx->error_state;
+    err = trx->m_error_state;
 
     if (err != DB_SUCCESS) {
       que_thr_stop_client(thr);
@@ -2852,7 +2852,7 @@ static ib_err_t ib_execute_update_query_graph(ib_cursor_t *cursor, Btree_pcursor
     ib_update_statistics_if_needed(table);
 
   } else if (err == DB_RECORD_NOT_FOUND) {
-    trx->error_state = DB_SUCCESS;
+    trx->m_error_state = DB_SUCCESS;
   }
 
   ib_wake_master_thread();
@@ -3165,15 +3165,15 @@ void ib_cursor_attach_trx(ib_crsr_t ib_crsr, ib_trx_t ib_trx) {
   ut_a(prebuilt->trx == nullptr);
 
   row_prebuilt_reset(prebuilt);
-  row_prebuilt_update_trx(prebuilt, (trx_t *)ib_trx);
+  row_prebuilt_update_trx(prebuilt, (Trx *)ib_trx);
 
   /* Assign a read view if the transaction does not have it yet */
-  auto rv = trx_assign_read_view(prebuilt->trx);
+  auto rv = prebuilt->trx->assign_read_view();
   ut_a(rv == nullptr);
 
   ut_a(prebuilt->trx->m_conc_state != TRX_NOT_STARTED);
 
-  ++prebuilt->trx->n_client_tables_in_use;
+  ++prebuilt->trx->m_n_client_tables_in_use;
 }
 
 void ib_set_client_compare(ib_client_cmp_t client_cmp_func) {
@@ -3780,7 +3780,7 @@ ib_err_t ib_cursor_truncate(ib_crsr_t *ib_crsr, ib_id_t *table_id) {
   auto err = ib_cursor_lock(*ib_crsr, IB_LOCK_X);
 
   if (err == DB_SUCCESS) {
-    trx_t *trx;
+    Trx *trx;
     Table *table = prebuilt->table;
 
     /* We are going to free the cursor and the prebuilt. Store
@@ -3817,7 +3817,7 @@ ib_err_t ib_table_truncate(const char *table_name, ib_id_t *table_id) {
 
   if (table != nullptr && table->get_first_index()) {
     srv_dict_sys->table_increment_handle_count(table, true);
-    err = ib_create_cursor(&ib_crsr, table, 0, reinterpret_cast<trx_t *>(ib_trx));
+    err = ib_create_cursor(&ib_crsr, table, 0, reinterpret_cast<Trx *>(ib_trx));
   } else {
     err = DB_TABLE_NOT_FOUND;
   }
@@ -3945,7 +3945,7 @@ ib_err_t ib_database_drop(const char *dbname) {
     ptr[len] = '/';
   }
 
-  auto err = srv_dict_sys->m_ddl.drop_database(ptr, (trx_t *)ib_trx);
+  auto err = srv_dict_sys->m_ddl.drop_database(ptr, (Trx *)ib_trx);
 
   /* Only necessary if file per table is set. */
   if (err == DB_SUCCESS && srv_config.m_file_per_table) {
@@ -3974,7 +3974,7 @@ bool ib_cursor_is_positioned(const ib_crsr_t ib_crsr) {
 
 ib_err_t ib_schema_lock_shared(ib_trx_t ib_trx) {
   ib_err_t err = DB_SUCCESS;
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   IB_CHECK_PANIC();
 
@@ -3988,7 +3988,7 @@ ib_err_t ib_schema_lock_shared(ib_trx_t ib_trx) {
 
 ib_err_t ib_schema_lock_exclusive(ib_trx_t ib_trx) {
   ib_err_t err = DB_SUCCESS;
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   IB_CHECK_PANIC();
 
@@ -4003,20 +4003,20 @@ ib_err_t ib_schema_lock_exclusive(ib_trx_t ib_trx) {
 }
 
 bool ib_schema_lock_is_exclusive(const ib_trx_t ib_trx) {
-  const auto trx = reinterpret_cast<const trx_t *>(ib_trx);
+  const auto trx = reinterpret_cast<const Trx *>(ib_trx);
 
   return trx->m_dict_operation_lock_mode == RW_X_LATCH;
 }
 
 bool ib_schema_lock_is_shared(const ib_trx_t ib_trx) {
-  const auto trx = reinterpret_cast<const trx_t *>(ib_trx);
+  const auto trx = reinterpret_cast<const Trx *>(ib_trx);
 
   return trx->m_dict_operation_lock_mode == RW_S_LATCH;
 }
 
 ib_err_t ib_schema_unlock(ib_trx_t ib_trx) {
   ib_err_t err = DB_SUCCESS;
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   IB_CHECK_PANIC();
 
@@ -4043,7 +4043,7 @@ ib_err_t ib_cursor_lock(ib_crsr_t ib_crsr, ib_lck_mode_t ib_lck_mode) {
 }
 
 ib_err_t ib_table_lock(ib_trx_t ib_trx, ib_id_t table_id, ib_lck_mode_t ib_lck_mode) {
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   IB_CHECK_PANIC();
 
@@ -4074,7 +4074,7 @@ ib_err_t ib_table_lock(ib_trx_t ib_trx, ib_id_t table_id, ib_lck_mode_t ib_lck_m
 
   auto err = srv_lock_sys->lock_table(0, table, (enum Lock_mode)ib_lck_mode, thr);
 
-  trx->error_state = err;
+  trx->m_error_state = err;
 
   srv_dict_sys->table_decrement_handle_count(table, false);
 
@@ -4090,8 +4090,8 @@ ib_err_t ib_cursor_unlock(ib_crsr_t ib_crsr) {
 
   IB_CHECK_PANIC();
 
-  if (prebuilt->trx->client_n_tables_locked > 0) {
-    --prebuilt->trx->client_n_tables_locked;
+  if (prebuilt->trx->m_client_n_tables_locked > 0) {
+    --prebuilt->trx->m_client_n_tables_locked;
     err = DB_SUCCESS;
   } else {
     err = DB_ERROR;
@@ -4138,7 +4138,7 @@ void ib_cursor_set_simple_select(ib_crsr_t ib_crsr) {
 }
 
 void ib_savepoint_take(ib_trx_t ib_trx, const void *name, ulint name_len) {
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   ut_a(trx);
   ut_a(name != nullptr);
@@ -4146,14 +4146,14 @@ void ib_savepoint_take(ib_trx_t ib_trx, const void *name, ulint name_len) {
 
   ut_a(trx->m_conc_state != TRX_NOT_STARTED);
 
-  auto it = std::find_if(trx->trx_savepoints.begin(), trx->trx_savepoints.end(), [name, name_len](const auto &savep) {
+  auto it = std::find_if(trx->m_trx_savepoints.begin(), trx->m_trx_savepoints.end(), [name, name_len](const auto &savep) {
     return name_len == savep->name_len && 0 == memcmp(savep->name, name, name_len);
   });
 
-  if (it != trx->trx_savepoints.end()) {
+  if (it != trx->m_trx_savepoints.end()) {
     auto savep = *it;
     /* There is a savepoint with the same name: free that */
-    trx->trx_savepoints.remove(savep);
+    trx->m_trx_savepoints.remove(savep);
     mem_free(savep);
   }
 
@@ -4166,21 +4166,21 @@ void ib_savepoint_take(ib_trx_t ib_trx, const void *name, ulint name_len) {
   savep->name_len = name_len;
   memcpy(savep->name, name, name_len);
 
-  trx->trx_savepoints.push_back(savep);
+  trx->m_trx_savepoints.push_back(savep);
 }
 
 ib_err_t ib_savepoint_release(ib_trx_t ib_trx, const void *name, ulint name_len) {
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   IB_CHECK_PANIC();
 
-  auto it = std::find_if(trx->trx_savepoints.begin(), trx->trx_savepoints.end(), [name, name_len](const auto &savep) {
+  auto it = std::find_if(trx->m_trx_savepoints.begin(), trx->m_trx_savepoints.end(), [name, name_len](const auto &savep) {
     return name_len == savep->name_len && memcmp(savep->name, name, name_len) == 0;
   });
 
-  if (it != trx->trx_savepoints.end()) {
+  if (it != trx->m_trx_savepoints.end()) {
     auto savep = *it;
-    trx->trx_savepoints.remove(savep);
+    trx->m_trx_savepoints.remove(savep);
     mem_free(savep);
     return DB_SUCCESS;
   } else {
@@ -4189,7 +4189,7 @@ ib_err_t ib_savepoint_release(ib_trx_t ib_trx, const void *name, ulint name_len)
 }
 
 ib_err_t ib_savepoint_rollback(ib_trx_t ib_trx, const void *name, ulint name_len) {
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   IB_CHECK_PANIC();
 
@@ -4209,21 +4209,21 @@ ib_err_t ib_savepoint_rollback(ib_trx_t ib_trx, const void *name, ulint name_len
   trx_named_savept_t *savep;
 
   if (name == nullptr || name_len == 0) {
-    auto it = std::find_if(trx->trx_savepoints.begin(), trx->trx_savepoints.end(), [](const auto &savep) {
+    auto it = std::find_if(trx->m_trx_savepoints.begin(), trx->m_trx_savepoints.end(), [](const auto &savep) {
       return true;
     });
 
-    if (it == trx->trx_savepoints.end()) {
+    if (it == trx->m_trx_savepoints.end()) {
       return DB_NO_SAVEPOINT;
     }
 
     savep = *it;
 
   } else {
-    savep = trx->trx_savepoints.front();
+    savep = trx->m_trx_savepoints.front();
   }
 
-  trx->trx_savepoints.remove(savep);
+  trx->m_trx_savepoints.remove(savep);
   mem_free(savep);
 
   /* We can now free all savepoints strictly later than this one */
@@ -4235,7 +4235,7 @@ ib_err_t ib_savepoint_rollback(ib_trx_t ib_trx, const void *name, ulint name_len
 
   /* Store the current undo_no of the transaction so that we know where
   to roll back if we have to roll back the next SQL statement: */
-  trx_mark_sql_stat_end(trx);
+  trx->mark_sql_stat_end();
 
   trx->m_op_info = "";
 
@@ -4424,7 +4424,7 @@ ib_err_t ib_schema_tables_iterate(ib_trx_t ib_trx, ib_schema_visitor_table_all_t
 
   if (table != nullptr) {
     srv_dict_sys->table_increment_handle_count(table, true);
-    err = ib_create_cursor(&ib_crsr, table, 0, (trx_t *)ib_trx);
+    err = ib_create_cursor(&ib_crsr, table, 0, (Trx *)ib_trx);
   } else {
     return DB_TABLE_NOT_FOUND;
   }
@@ -4607,14 +4607,14 @@ void ib_set_trx_is_interrupted_handler(ib_trx_is_interrupted_handler_t handler) 
 }
 
 ib_err_t ib_get_duplicate_key(ib_trx_t ib_trx, const char **table_name, const char **index_name) {
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
-  if (trx->error_info == nullptr) {
+  if (trx->m_error_info == nullptr) {
     return DB_ERROR;
   }
 
-  *table_name = trx->error_info->get_table_name();
-  *index_name = trx->error_info->m_name;
+  *table_name = trx->m_error_info->get_table_name();
+  *index_name = trx->m_error_info->m_name;
 
   return DB_SUCCESS;
 }
@@ -4684,7 +4684,7 @@ ib_err_t ib_parallel_select_count_star(ib_trx_t ib_trx, std::vector<ib_crsr_t> &
   ut_a(n_threads > 1);
   ut_a(!ib_crsrs.empty());
 
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   ut::Sharded_counter<Parallel_reader::MAX_THREADS> n_recs{};
 
@@ -4734,7 +4734,7 @@ ib_err_t ib_parallel_select_count_star(ib_trx_t ib_trx, std::vector<ib_crsr_t> &
   return err;
 }
 
-static dberr_t check_table(trx_t *trx, Index *index, size_t n_threads) {
+static dberr_t check_table(Trx *trx, Index *index, size_t n_threads) {
   ut_a(n_threads > 1);
 
   using Shards = ut::Sharded_counter<Parallel_reader::MAX_THREADS>;
@@ -4888,7 +4888,7 @@ static dberr_t check_table(trx_t *trx, Index *index, size_t n_threads) {
 }
 
 ib_err_t ib_check_table(ib_trx_t *ib_trx, ib_crsr_t ib_crsr, size_t n_threads) {
-  auto trx = reinterpret_cast<trx_t *>(ib_trx);
+  auto trx = reinterpret_cast<Trx *>(ib_trx);
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
   auto prebuilt = cursor->prebuilt;
   auto index = prebuilt->index;
@@ -4907,10 +4907,10 @@ ib_err_t ib_check_table(ib_trx_t *ib_trx, ib_crsr_t ib_crsr, size_t n_threads) {
   }
 
   if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && prebuilt->select_lock_type == LOCK_NONE && index->is_clustered() &&
-      trx->client_n_tables_locked == 0) {
+      trx->m_client_n_tables_locked == 0) {
     n_threads = Parallel_reader::available_threads(n_threads, false);
 
-    auto rv = trx_assign_read_view(trx);
+    auto rv = trx->assign_read_view();
     ut_a(rv != nullptr);
 
     auto trx = prebuilt->trx;

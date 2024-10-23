@@ -145,7 +145,7 @@ struct Dict {
    * 
    * @return table, NULL if does not exist
    */
-  [[nodiscard]] Table *table_get_on_id(ib_recovery_t recovery, Dict_id table_id, trx_t *trx) noexcept;
+  [[nodiscard]] Table *table_get_on_id(ib_recovery_t recovery, Dict_id table_id, Trx *trx) noexcept;
 
   /**
    * Decrements the count of open handles to a table.
@@ -253,7 +253,7 @@ struct Dict {
    * 
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err create_foreign_constraints(trx_t *trx, const char *sql_string, const char *name, bool reject_fks) noexcept;
+  [[nodiscard]] db_err create_foreign_constraints(Trx *trx, const char *sql_string, const char *name, bool reject_fks) noexcept;
 
   /**
    * @brief Parses the CONSTRAINT id's to be dropped in an ALTER TABLE statement.
@@ -266,7 +266,7 @@ struct Dict {
    * 
    * @return DB_SUCCESS or DB_CANNOT_DROP_CONSTRAINT if syntax error or the constraint id does not match.
    */
-  [[nodiscard]] db_err foreign_parse_drop_constraints(mem_heap_t *heap, trx_t *trx, Table *table, ulint *n, const char ***constraints_to_drop) noexcept;
+  [[nodiscard]] db_err foreign_parse_drop_constraints(mem_heap_t *heap, Trx *trx, Table *table, ulint *n, const char ***constraints_to_drop) noexcept;
 
   /**
    * @brief Finds an index that is equivalent to the one passed in and is not marked for deletion.
@@ -298,7 +298,7 @@ struct Dict {
    * @param[in] trx The transaction.
    * @param[in] table The table.
    */
-  void print_info_on_foreign_keys(bool create_table_format, trx_t *trx, Table *table) noexcept;
+  void print_info_on_foreign_keys(bool create_table_format, Trx *trx, Table *table) noexcept;
 
   /**
    * @brief Outputs info on a foreign key of a table in a format suitable for CREATE TABLE.
@@ -307,7 +307,7 @@ struct Dict {
    * @param[in] foreign The foreign key constraint.
    * @param[in] add_newline Whether to add a newline.
    */
-  void print_info_on_foreign_key_in_create_format(trx_t *trx, const Foreign *foreign, bool add_newline) noexcept;
+  void print_info_on_foreign_key_in_create_format(Trx *trx, const Foreign *foreign, bool add_newline) noexcept;
 
   /**
    * @brief Displays the names of the index and the table.
@@ -316,7 +316,7 @@ struct Dict {
    * @param[in] trx The transaction.
    * @param[in] index The index to print.
    */
-  void index_name_print(trx_t *trx, const Index *index) noexcept;
+  void index_name_print(Trx *trx, const Index *index) noexcept;
 
   /**
    * @brief Returns a string representation of the dictionary.
@@ -483,14 +483,14 @@ struct Dict {
    * 
    * @param[in] trx transaction
    */
-  void lock_data_dictionary(trx_t *trx) noexcept;
+  void lock_data_dictionary(Trx *trx) noexcept;
 
   /**
    * Unlocks the data dictionary exclusive lock.
    * 
    * @param[in] trx transaction
    */
-  void unlock_data_dictionary(trx_t *trx) noexcept;
+  void unlock_data_dictionary(Trx *trx) noexcept;
 
   /**
    * Locks the data dictionary in shared mode from modifications,
@@ -499,14 +499,14 @@ struct Dict {
    * 
    * @param[in] trx transaction
    */
-  void freeze_data_dictionary(trx_t *trx) noexcept;
+  void freeze_data_dictionary(Trx *trx) noexcept;
 
   /**
    * Unlocks the data dictionary shared lock.
    * 
    * @param[in] trx transaction
    */
-  void unfreeze_data_dictionary(trx_t *trx) noexcept;
+  void unfreeze_data_dictionary(Trx *trx) noexcept;
 
   /** Reset dict variables. */
   void var_init() noexcept;
@@ -839,7 +839,7 @@ private:
    *
    * @return error code or DB_SUCCESS
    */
-  db_err create_foreign_constraints(trx_t *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks) noexcept;
+  db_err create_foreign_constraints(Trx *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks) noexcept;
 
   /**
    * @brief Prints info of a foreign key constraint.

@@ -533,7 +533,7 @@ struct Btree_pcursor {
 
   /** the transaction, if we know it; otherwise this field is not defined;
   can ONLY BE USED in error prints in fatal assertion failures! */
-  trx_t *m_trx_if_known{};
+  Trx *m_trx_if_known{};
 
   /*-----------------------------*/
   /* NOTE that the following fields may possess dynamically allocated

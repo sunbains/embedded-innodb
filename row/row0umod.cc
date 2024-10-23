@@ -61,7 +61,7 @@ that it should be undone in the same rollback.
 @return	true if also previous modify or insert of this row should be undone */
 inline bool row_undo_mod_undo_also_prev_vers(Undo_node *node, undo_no_t *undo_no) {
   trx_undo_rec_t *undo_rec;
-  trx_t *trx;
+  Trx *trx;
 
   trx = node->trx;
 
@@ -75,7 +75,7 @@ inline bool row_undo_mod_undo_also_prev_vers(Undo_node *node, undo_no_t *undo_no
 
   *undo_no = trx_undo_rec_get_undo_no(undo_rec);
 
-  return trx->roll_limit <= *undo_no;
+  return trx->m_roll_limit <= *undo_no;
 }
 
 /** Undoes a modify in a clustered index record.
@@ -390,7 +390,7 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
   mem_heap_t *heap;
   db_err err = DB_SUCCESS;
   big_rec_t *dummy_big_rec;
-  trx_t *trx = thr_get_trx(thr);
+  Trx *trx = thr_get_trx(thr);
 
   /* Ignore indexes that are being created. */
   if (unlikely(*index->m_name == TEMP_INDEX_PREFIX)) {
@@ -408,7 +408,7 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
     dtuple_print(ib_stream, entry);
     ib_logger(ib_stream, "\n record ");
     log_err(rec_to_string(pcur.get_rec()));
-    log_info(trx_to_string(trx, 0));
+    log_info(trx->to_string(0));
     ib_logger(ib_stream, "\nSubmit a detailed bug report, check the TBD website for details");
   } else {
     auto btr_cur = pcur.get_btr_cur();

@@ -245,7 +245,7 @@ ulint Index::get_nth_field_pos(const Index *index, ulint col_no) const noexcept 
   return ULINT_UNDEFINED;
 }
 
-Table *Dict::table_get_on_id(ib_recovery_t recovery, Dict_id table_id, trx_t *trx) noexcept {
+Table *Dict::table_get_on_id(ib_recovery_t recovery, Dict_id table_id, Trx *trx) noexcept {
   if (table_id <= DICT_FIELDS_ID || trx->m_dict_operation_lock_mode == RW_X_LATCH) {
     /* It is a system table which will always exist in the table
     cache: we avoid acquiring the dictionary mutex, because
@@ -1390,7 +1390,7 @@ void Foreign::destroy(Foreign *&foreign) noexcept {
   heap = nullptr;
 }
 
-void Dict::index_name_print(trx_t *trx, const Index *index) noexcept {
+void Dict::index_name_print(Trx *trx, const Index *index) noexcept {
   std::ostringstream os{};
 
   os << "index " << index->m_name << " of table " << index->m_table->m_name;
@@ -1426,7 +1426,7 @@ void Dict::destroy_dummy_index(Index *&index) noexcept {
   index = nullptr;
 }
 
-void Dict::freeze_data_dictionary(trx_t *trx) noexcept {
+void Dict::freeze_data_dictionary(Trx *trx) noexcept {
   ut_a(trx->m_dict_operation_lock_mode == 0);
 
   rw_lock_s_lock(&m_lock);
@@ -1434,7 +1434,7 @@ void Dict::freeze_data_dictionary(trx_t *trx) noexcept {
   trx->m_dict_operation_lock_mode = RW_S_LATCH;
 }
 
-void Dict::unfreeze_data_dictionary(trx_t *trx) noexcept {
+void Dict::unfreeze_data_dictionary(Trx *trx) noexcept {
   ut_a(trx->m_dict_operation_lock_mode == RW_S_LATCH);
 
   rw_lock_s_unlock(&m_lock);
@@ -1442,7 +1442,7 @@ void Dict::unfreeze_data_dictionary(trx_t *trx) noexcept {
   trx->m_dict_operation_lock_mode = 0;
 }
 
-void Dict::lock_data_dictionary(trx_t *trx) noexcept {
+void Dict::lock_data_dictionary(Trx *trx) noexcept {
   ut_a(trx->m_dict_operation_lock_mode == 0 || trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
   /* Serialize data dictionary operations with dictionary mutex:
@@ -1455,7 +1455,7 @@ void Dict::lock_data_dictionary(trx_t *trx) noexcept {
   mutex_acquire();
 }
 
-void Dict::unlock_data_dictionary(trx_t *trx) noexcept {
+void Dict::unlock_data_dictionary(Trx *trx) noexcept {
   ut_a(trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
   /* Serialize data dictionary operations with dictionary mutex:

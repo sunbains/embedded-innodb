@@ -1194,7 +1194,7 @@ row_printf_node_t *pars_row_printf_statement(sel_node_t *sel_node) {
 }
 
 Commit_node *pars_commit_statement() {
-  return commit_node_create(pars_sym_tab_global->heap);
+  return Trx::commit_node_create(pars_sym_tab_global->heap);
 }
 
 roll_node_t *pars_rollback_statement() {
@@ -1369,7 +1369,7 @@ que_t *pars_sql(pars_info_t *info, const char *str) {
   return graph;
 }
 
-que_thr_t *pars_complete_graph_for_exec(que_node_t *node, trx_t *trx, mem_heap_t *heap) {
+que_thr_t *pars_complete_graph_for_exec(que_node_t *node, Trx *trx, mem_heap_t *heap) {
   auto fork = que_fork_create(nullptr, nullptr, QUE_FORK_USER_INTERFACE, heap);
 
   fork->trx = trx;
@@ -1380,7 +1380,7 @@ que_thr_t *pars_complete_graph_for_exec(que_node_t *node, trx_t *trx, mem_heap_t
 
   que_node_set_parent(node, thr);
 
-  trx->graph = nullptr;
+  trx->m_graph = nullptr;
 
   return thr;
 }

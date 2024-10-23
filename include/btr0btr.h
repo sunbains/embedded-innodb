@@ -373,7 +373,7 @@ struct Btree {
    * 
    * @return	true if ok
    */
-  [[nodiscard]] bool validate_index(Index *index, trx_t *trx) noexcept;
+  [[nodiscard]] bool validate_index(Index *index, Trx *trx) noexcept;
 
   /**
    * Gets a buffer page and declares its latching order level.
@@ -882,7 +882,7 @@ private:
    * 
    * @return true if ok.
    */
-  [[nodiscard]] bool validate_level(Index *index, trx_t *trx, ulint level) noexcept;
+  [[nodiscard]] bool validate_level(Index *index, Trx *trx, ulint level) noexcept;
 
   /** Lock manager to use */
   Lock_sys *m_lock_sys{};

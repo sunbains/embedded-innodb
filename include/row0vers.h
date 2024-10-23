@@ -37,7 +37,7 @@ Created 2/6/1997 Heikki Tuuri
 index record. NOTE: the kernel mutex is temporarily released in this
 function!
 @return nullptr if committed, else the active transaction */
-trx_t *row_vers_impl_x_locked_off_kernel(
+Trx *row_vers_impl_x_locked_off_kernel(
   const rec_t *rec,    /*!< in: record in a secondary index */
   const Index *index, /*!< in: the secondary index */
   const ulint *offsets

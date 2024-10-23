@@ -710,7 +710,7 @@ static db_err row_sel_get_clust_rec(
     /* If this session is using READ COMMITTED isolation level
     we lock only the record, i.e., next-key locking is
     not used. */
-    trx_t *trx;
+    Trx *trx;
     ulint lock_type;
 
     trx = thr_get_trx(thr);
@@ -811,7 +811,7 @@ inline db_err sel_set_rec_lock(
 
   auto trx = thr_get_trx(thr);
 
-  if (trx->trx_locks.size() > 10000) {
+  if (trx->m_trx_locks.size() > 10000) {
     if (srv_buf_pool->m_LRU->buf_pool_running_out()) {
 
       return DB_LOCK_TABLE_FULL;
@@ -1261,7 +1261,7 @@ rec_loop:
 
       rec_t *next_rec = page_rec_get_next(rec);
       ulint lock_type;
-      trx_t *trx;
+      Trx *trx;
 
       trx = thr_get_trx(thr);
 
@@ -1316,7 +1316,7 @@ skip_lock:
     not used. */
 
     ulint lock_type;
-    trx_t *trx;
+    Trx *trx;
 
     {
       Phy_rec record{index, rec};
@@ -1778,7 +1778,7 @@ que_thr_t *row_sel_step(que_thr_t *thr) {
 
     if (node->consistent_read) {
       /* Assign a read view for the query */
-      node->read_view = trx_assign_read_view(thr_get_trx(thr));
+      node->read_view = thr_get_trx(thr)->assign_read_view();
     } else {
       if (node->set_x_locks) {
         i_lock_mode = LOCK_IX;
@@ -1791,7 +1791,7 @@ que_thr_t *row_sel_step(que_thr_t *thr) {
       while (table_node) {
         err = srv_lock_sys->lock_table(0, table_node->table, i_lock_mode, thr);
         if (err != DB_SUCCESS) {
-          thr_get_trx(thr)->error_state = err;
+          thr_get_trx(thr)->m_error_state = err;
 
           return nullptr;
         }
@@ -1828,7 +1828,7 @@ que_thr_t *row_sel_step(que_thr_t *thr) {
   thr->graph->last_sel_node = node;
 
   if (err != DB_SUCCESS) {
-    thr_get_trx(thr)->error_state = err;
+    thr_get_trx(thr)->m_error_state = err;
 
     return nullptr;
   }
@@ -1875,7 +1875,7 @@ que_thr_t *fetch_step(que_thr_t *thr) {
   if (sel_node->state == SEL_NODE_CLOSED) {
     ib_logger(ib_stream, "Error: fetch called on a closed cursor\n");
 
-    thr_get_trx(thr)->error_state = DB_ERROR;
+    thr_get_trx(thr)->m_error_state = DB_ERROR;
 
     return nullptr;
   }
@@ -2038,7 +2038,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
   const rec_t *clust_rec;
   rec_t *old_vers;
   ulint err;
-  trx_t *trx;
+  Trx *trx;
 
   *out_rec = nullptr;
   trx = thr_get_trx(thr);
@@ -2074,7 +2074,7 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
       log_err(rec_to_string(rec));
       log_err("clust index record\nclust index record ");
       log_err(rec_to_string(clust_rec));
-      log_err(trx_to_string(trx, 600));
+      log_err(trx->to_string(600));
 
       log_err("Submit a detailed bug report, check the Embedded InnoDB website for details");
     }
@@ -2118,13 +2118,11 @@ static ulint row_sel_get_clust_rec_with_prebuilt(
     /* If the isolation level allows reading of uncommitted data,
     then we never look for an earlier version */
 
-    if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !srv_lock_sys->clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->read_view)) {
+    if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !srv_lock_sys->clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->m_read_view)) {
 
       /* The following call returns 'offsets' associated with
       'old_vers' */
-      err = row_sel_build_prev_vers(
-        trx->read_view, clust_index, clust_rec, offsets, offset_heap, &prebuilt->old_vers_heap, &old_vers, mtr
-      );
+      err = row_sel_build_prev_vers(trx->m_read_view, clust_index, clust_rec, offsets, offset_heap, &prebuilt->old_vers_heap, &old_vers, mtr);
 
       if (err != DB_SUCCESS || old_vers == nullptr) {
 
@@ -2366,7 +2364,7 @@ static ulint row_sel_try_search_shortcut_for_prebuilt(
   Index *index = prebuilt->index;
   const DTuple *search_tuple = prebuilt->search_tuple;
   Btree_pcursor *pcur = prebuilt->pcur;
-  trx_t *trx = prebuilt->trx;
+  Trx *trx = prebuilt->trx;
   const rec_t *rec;
 
   ut_ad(index->is_clustered());
@@ -2398,7 +2396,7 @@ static ulint row_sel_try_search_shortcut_for_prebuilt(
     *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, heap, Current_location());
   }
 
-  if (!srv_lock_sys->clust_rec_cons_read_sees(rec, index, *offsets, trx->read_view)) {
+  if (!srv_lock_sys->clust_rec_cons_read_sees(rec, index, *offsets, trx->m_read_view)) {
 
     return SEL_RETRY;
   }
@@ -2416,7 +2414,7 @@ static ulint row_sel_try_search_shortcut_for_prebuilt(
 int row_unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) {
   Btree_pcursor *pcur = prebuilt->pcur;
   Btree_pcursor *clust_pcur = prebuilt->clust_pcur;
-  trx_t *trx = prebuilt->trx;
+  Trx *trx = prebuilt->trx;
   rec_t *rec;
   mtr_t mtr;
 
@@ -2484,7 +2482,7 @@ db_err row_search_mvcc(ib_recovery_t recovery, ib_srch_mode_t mode, row_prebuilt
   Index *index = prebuilt->index;
   const DTuple *search_tuple = prebuilt->search_tuple;
   Btree_pcursor *pcur = prebuilt->pcur;
-  trx_t *trx = prebuilt->trx;
+  Trx *trx = prebuilt->trx;
   Index *clust_index;
   que_thr_t *thr;
   const rec_t *rec;
@@ -2544,7 +2542,7 @@ db_err row_search_mvcc(ib_recovery_t recovery, ib_srch_mode_t mode, row_prebuilt
 	print until the cursor lock count is done correctly.
 	See bugs #12263 and #12456!*/
 
-	if (trx->n_tables_in_use == 0
+	if (trx->m_n_tables_in_use == 0
 	    && unlikely(prebuilt->select_lock_type == LOCK_NONE)) {
 		/* Note that if the client uses an InnoDB temp table that it
 		created inside LOCK TABLES, then n_client_tables_in_use can
@@ -2655,8 +2653,8 @@ db_err row_search_mvcc(ib_recovery_t recovery, ib_srch_mode_t mode, row_prebuilt
 
     unique_search_from_clust_index = true;
 
-    if (trx->client_n_tables_locked == 0 && prebuilt->select_lock_type == LOCK_NONE &&
-        trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && trx->read_view) {
+    if (trx->m_client_n_tables_locked == 0 && prebuilt->select_lock_type == LOCK_NONE &&
+        trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && trx->m_read_view) {
 
       /* This is a SELECT query done as a consistent read,
       and the read view has already been allocated:
@@ -2788,7 +2786,7 @@ db_err row_search_mvcc(ib_recovery_t recovery, ib_srch_mode_t mode, row_prebuilt
   if (!prebuilt->sql_stat_start) {
     /* No need to set an intention lock or assign a read view */
 
-    if (trx->read_view == nullptr && prebuilt->select_lock_type == LOCK_NONE) {
+    if (trx->m_read_view == nullptr && prebuilt->select_lock_type == LOCK_NONE) {
 
       ib_logger(
         ib_stream,
@@ -2796,7 +2794,7 @@ db_err row_search_mvcc(ib_recovery_t recovery, ib_srch_mode_t mode, row_prebuilt
         " perform a consistent read\n"
         "but the read view is not assigned!\n"
       );
-      log_info(trx_to_string(trx, 600));
+      log_info(trx->to_string(600));
       ib_logger(ib_stream, "\n");
       ut_a(0);
     }
@@ -2804,7 +2802,7 @@ db_err row_search_mvcc(ib_recovery_t recovery, ib_srch_mode_t mode, row_prebuilt
     /* This is a consistent read */
     /* Assign a read view for the query */
 
-    auto rv = trx_assign_read_view(trx);
+    auto rv = trx->assign_read_view();
     ut_a(rv != nullptr);
 
     prebuilt->sql_stat_start = false;
@@ -3079,13 +3077,13 @@ rec_loop:
       high force recovery level set, we try to avoid crashes
       by skipping this lookup */
 
-      if (likely(recovery < IB_RECOVERY_NO_UNDO_LOG_SCAN) && !srv_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, trx->read_view)) {
+      if (likely(recovery < IB_RECOVERY_NO_UNDO_LOG_SCAN) && !srv_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, trx->m_read_view)) {
 
         rec_t *old_vers;
         /* The following call returns 'offsets'
         associated with 'old_vers' */
         err = (db_err
-        )row_sel_build_prev_vers(trx->read_view, clust_index, rec, &offsets, &heap, &prebuilt->old_vers_heap, &old_vers, &mtr);
+        )row_sel_build_prev_vers(trx->m_read_view, clust_index, rec, &offsets, &heap, &prebuilt->old_vers_heap, &old_vers, &mtr);
 
         if (err != DB_SUCCESS) {
 
@@ -3101,7 +3099,7 @@ rec_loop:
 
         rec = old_vers;
       }
-    } else if (!srv_lock_sys->sec_rec_cons_read_sees(rec, trx->read_view)) {
+    } else if (!srv_lock_sys->sec_rec_cons_read_sees(rec, trx->m_read_view)) {
       /* We are looking into a non-clustered index,
       and to get the right version of the record we
       have to look also into the clustered index: this
@@ -3350,7 +3348,7 @@ lock_wait_or_error:
   mtr.commit();
   mtr_has_extra_clust_latch = false;
 
-  trx->error_state = err;
+  trx->m_error_state = err;
 
   /* Stop the dummy thread we created for this query. */
   que_thr_stop_client(thr);

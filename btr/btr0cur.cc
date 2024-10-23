@@ -613,7 +613,7 @@ inline db_err Btree_cursor::ins_lock_and_undo(ulint flags, const DTuple *entry, 
 }
 
 #ifdef UNIV_DEBUG
-void Btree_cursor::trx_report(trx_t *trx, const Index *index, const char *op) noexcept{
+void Btree_cursor::trx_report(Trx *trx, const Index *index, const char *op) noexcept{
   log_info(std::format("Trx with id {} op {} going to {} ", trx->m_id, op, index->m_name));
 }
 #endif /* UNIV_DEBUG */
@@ -902,7 +902,7 @@ db_err Btree_cursor::upd_lock_and_undo(
   return err;
 }
 
-void Btree_cursor::update_in_place_log(ulint flags, rec_t *rec, const Index *index, const upd_t *update, trx_t *trx, roll_ptr_t roll_ptr, mtr_t *mtr) noexcept {
+void Btree_cursor::update_in_place_log(ulint flags, rec_t *rec, const Index *index, const upd_t *update, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr) noexcept {
   ut_ad(flags < 256);
 
   auto log_ptr = mlog_open_and_write_index(
@@ -1053,7 +1053,7 @@ db_err Btree_cursor::update_in_place(ulint flags, const upd_t *update, ulint cmp
 db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint cmpl_info, que_thr_t *thr, mtr_t *mtr) noexcept {
   ulint i;
   db_err err;
-  trx_t *trx;
+  Trx *trx;
   ulint n_ext;
   ulint max_size;
   ulint new_rec_size;
@@ -1469,7 +1469,7 @@ return_after_reservations:
   return err;
 }
 
-void Btree_cursor::del_mark_set_clust_rec_log(ulint flags, rec_t *rec, const Index *index, bool val, trx_t *trx, roll_ptr_t roll_ptr, mtr_t *mtr) noexcept {
+void Btree_cursor::del_mark_set_clust_rec_log(ulint flags, rec_t *rec, const Index *index, bool val, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr) noexcept {
   ut_ad(flags < 256);
 
   auto log_ptr = mlog_open_and_write_index(

@@ -227,10 +227,7 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
   ulint n = 0;
 
   /* No active transaction should be visible, except cr_trx */
-  for (auto trx = UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list);
-       trx != nullptr;
-       trx = UT_LIST_GET_NEXT(trx_list, trx)) {
-
+  for (auto trx: srv_trx_sys->m_trx_list) {
     ut_ad(trx->m_magic_n == TRX_MAGIC_N);
 
     if (trx->m_id != cr_trx_id && (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED)) {
@@ -269,17 +266,17 @@ void read_view_close(read_view_t *view) {
   UT_LIST_REMOVE(srv_trx_sys->m_view_list, view);
 }
 
-void read_view_close_for_read_committed(trx_t *trx) {
-  ut_a(trx->global_read_view);
+void read_view_close_for_read_committed(Trx *trx) {
+  ut_a(trx->m_global_read_view);
 
   mutex_enter(&kernel_mutex);
 
-  read_view_close(trx->global_read_view);
+  read_view_close(trx->m_global_read_view);
 
-  mem_heap_empty(trx->global_read_view_heap);
+  mem_heap_empty(trx->m_global_read_view_heap);
 
-  trx->read_view = nullptr;
-  trx->global_read_view = nullptr;
+  trx->m_read_view = nullptr;
+  trx->m_global_read_view = nullptr;
 
   mutex_exit(&kernel_mutex);
 }
@@ -310,7 +307,7 @@ std::string to_string(const read_view_t *view) noexcept {
   return str;
 }
 
-cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
+cursor_view_t *read_cursor_view_create(Trx *cr_trx) {
   ut_a(cr_trx != nullptr);
 
   /* Use larger heap than in trx_create when creating a read_view because cursors are quite long. */
@@ -322,8 +319,8 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
 
   /* Drop cursor tables from consideration when evaluating the need of
   auto-commit */
-  curview->n_client_tables_in_use = cr_trx->n_client_tables_in_use;
-  cr_trx->n_client_tables_in_use = 0;
+  curview->n_client_tables_in_use = cr_trx->m_n_client_tables_in_use;
+  cr_trx->m_n_client_tables_in_use = 0;
 
   mutex_enter(&kernel_mutex);
 
@@ -332,7 +329,7 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
   auto view = curview->read_view;
   view->creator_trx_id = cr_trx->m_id;
   view->type = VIEW_HIGH_GRANULARITY;
-  view->undo_no = cr_trx->undo_no;
+  view->undo_no = cr_trx->m_undo_no;
 
   /* No future transactions should be visible in the view */
 
@@ -340,12 +337,9 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
   view->low_limit_id = view->low_limit_no;
 
   ulint n = 0;
-  auto trx = UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list);
-
   /* No active transaction should be visible */
 
-  while (trx) {
-
+  for (auto trx: srv_trx_sys->m_trx_list) {
     if (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED) {
 
       read_view_set_nth_trx_id(view, n, trx->m_id);
@@ -363,8 +357,6 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
         view->low_limit_no = trx->m_no;
       }
     }
-
-    trx = UT_LIST_GET_NEXT(trx_list, trx);
   }
 
   view->n_trx_ids = n;
@@ -383,31 +375,31 @@ cursor_view_t *read_cursor_view_create(trx_t *cr_trx) {
   return curview;
 }
 
-void read_cursor_view_close(trx_t *trx, cursor_view_t *curview) {
+void read_cursor_view_close(Trx *trx, cursor_view_t *curview) {
   ut_a(curview->read_view);
   ut_a(curview->heap);
 
   /* Add cursor's tables to the global count of active tables that
   belong to this transaction */
-  trx->n_client_tables_in_use += curview->n_client_tables_in_use;
+  trx->m_n_client_tables_in_use += curview->n_client_tables_in_use;
 
   mutex_enter(&kernel_mutex);
 
   read_view_close(curview->read_view);
-  trx->read_view = trx->global_read_view;
+  trx->m_read_view = trx->m_global_read_view;
 
   mutex_exit(&kernel_mutex);
 
   mem_heap_free(curview->heap);
 }
 
-void read_cursor_set(trx_t *trx, cursor_view_t *curview) {
+void read_cursor_set(Trx *trx, cursor_view_t *curview) {
   mutex_enter(&kernel_mutex);
 
   if (likely(curview != nullptr)) {
-    trx->read_view = curview->read_view;
+    trx->m_read_view = curview->read_view;
   } else {
-    trx->read_view = trx->global_read_view;
+    trx->m_read_view = trx->m_global_read_view;
   }
 
   mutex_exit(&kernel_mutex);

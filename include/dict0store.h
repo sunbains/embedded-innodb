@@ -181,7 +181,7 @@ struct Dict_store {
  * 
  * @return error code or DB_SUCCESS
  */
-  [[nodiscard]] db_err add_foreign_to_dictionary(ulint *id_nr, Table *table, Foreign *foreign, trx_t *trx) noexcept;
+  [[nodiscard]] db_err add_foreign_to_dictionary(ulint *id_nr, Table *table, Foreign *foreign, Trx *trx) noexcept;
 
   /**
    * @brief Creates the foreign key constraints system tables inside InnoDB
@@ -294,7 +294,7 @@ struct Dict_store {
    * 
    * @return error code or DB_SUCCESS
    */
-  [[nodiscard]] db_err foreign_eval_sql(pars_info_t *info, const char *sql, Table *table, Foreign *foreign, trx_t *trx) noexcept;
+  [[nodiscard]] db_err foreign_eval_sql(pars_info_t *info, const char *sql, Table *table, Foreign *foreign, Trx *trx) noexcept;
 
 /**
  * @brief Add a single foreign key field definition to the data dictionary tables in the database.
@@ -306,7 +306,7 @@ struct Dict_store {
    * 
    * @return error code or DB_SUCCESS
    */
-  [[nodiscard]] db_err add_foreign_field_to_dictionary(ulint field_nr, Table *table, Foreign *foreign, trx_t *trx) noexcept;
+  [[nodiscard]] db_err add_foreign_field_to_dictionary(ulint field_nr, Table *table, Foreign *foreign, Trx *trx) noexcept;
 
 /**
    * Adds foreign key definitions to data dictionary tables in the database.
@@ -328,7 +328,7 @@ struct Dict_store {
    *
    * @return Error code or DB_SUCCESS.
    */
-  [[nodiscard]] db_err add_foreigns_to_dictionary(ulint start_id, Table *table, trx_t *trx) noexcept;
+  [[nodiscard]] db_err add_foreigns_to_dictionary(ulint start_id, Table *table, Trx *trx) noexcept;
 
   /**
    * Truncates the index tree associated with a row in the SYS_INDEXES table.

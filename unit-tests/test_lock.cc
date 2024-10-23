@@ -29,13 +29,13 @@ namespace test {
 
 /** Creates and initializes a transaction instance
 @return	own: the transaction */
-trx_t* trx_create() {
+Trx* trx_create() {
 #if 0
-  auto trx = reinterpret_cast<trx_t*>(::malloc(sizeof(trx_t)));
+  auto trx = reinterpret_cast<Trx*>(::malloc(sizeof(Trx)));
 
   trx_init(trx);
 #else
-  auto trx = trx_allocate_for_client(nullptr);
+  auto trx = srv_trx_sys->create_user_trx(nullptr);
 #endif
 
   return trx;
@@ -43,15 +43,15 @@ trx_t* trx_create() {
 
 /** Free the transaction object.
 @param[in,own] trx              Free the transaction. */
-void trx_free(trx_t*& trx) {
-  trx_free_for_client(trx);
+void trx_free(Trx*& trx) {
+  srv_trx_sys->destroy_user_trx(trx);
   ut_a(trx == nullptr);
 }
 
 /** Setup the test transaction for the simulation.
 @param[in,out] trx              Transaction to setup.
 @param[in] n_row_locks          Number of row locks to create. */
-void trx_setup(trx_t* trx, int n_row_locks) {
+void trx_setup(Trx* trx, int n_row_locks) {
   for (int i = 0; i < n_row_locks; ++i) {
     auto mode = LOCK_S;
     space_id_t space = random() % 100;
@@ -82,7 +82,7 @@ void run_1() {
   std::cout << "Creating " << N_TRXS << " trxs with " << N_ROW_LOCKS << " random row locks\n";
 
   auto start = time(nullptr);
-  auto trxs = std::vector<trx_t*>{};
+  auto trxs = std::vector<Trx*>{};
   
   trxs.resize(N_TRXS);
 
@@ -164,8 +164,6 @@ int main() {
   kernel_mutex_enter();
 
   UT_LIST_INIT(srv_trx_sys->m_client_trx_list);
-
-  trx_dummy_sess = sess_open();
 
   kernel_mutex_exit();
 

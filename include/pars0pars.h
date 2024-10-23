@@ -485,7 +485,7 @@ que_fork_t *pars_stored_procedure_call(sym_node_t *sym_node);
  * 
  * @return que_thr_t* Query thread node to run.
  */
-que_thr_t *pars_complete_graph_for_exec(que_node_t *node, trx_t *trx, mem_heap_t *heap);
+que_thr_t *pars_complete_graph_for_exec(que_node_t *node, Trx *trx, mem_heap_t *heap);
 
 /**
  * @brief Create parser info struct.

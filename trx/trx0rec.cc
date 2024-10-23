@@ -176,7 +176,7 @@ static ulint trx_undo_page_set_next_prev_and_add(page_t *undo_page, byte *ptr, m
  * 
  * @return Offset of the inserted entry on the page if succeed, 0 if fail
  */
-static ulint trx_undo_page_report_insert(page_t *undo_page, trx_t *trx, const Index *index, const DTuple *clust_entry, mtr_t *mtr) {
+static ulint trx_undo_page_report_insert(page_t *undo_page, Trx *trx, const Index *index, const DTuple *clust_entry, mtr_t *mtr) {
   ulint first_free;
   byte *ptr;
   ulint i;
@@ -203,7 +203,7 @@ static ulint trx_undo_page_report_insert(page_t *undo_page, trx_t *trx, const In
   *ptr = TRX_UNDO_INSERT_REC;
   ++ptr;
 
-  ptr += mach_uint64_write_much_compressed(ptr, trx->undo_no);
+  ptr += mach_uint64_write_much_compressed(ptr, trx->m_undo_no);
   ptr += mach_uint64_write_much_compressed(ptr, index->m_table->m_id);
   /*----------------------------------------*/
   /* Store then the fields required to uniquely determine the record
@@ -435,7 +435,7 @@ static byte *trx_undo_page_report_modify_ext(
  */
 static ulint trx_undo_page_report_modify(
   page_t *undo_page,
-  trx_t *trx,
+  Trx *trx,
   const Index *index,
   const rec_t *rec,
   const ulint *offsets,
@@ -493,7 +493,7 @@ static ulint trx_undo_page_report_modify(
   type_cmpl_ptr = ptr;
 
   *ptr++ = (byte)type_cmpl;
-  ptr += mach_uint64_write_much_compressed(ptr, trx->undo_no);
+  ptr += mach_uint64_write_much_compressed(ptr, trx->m_undo_no);
 
   ptr += mach_uint64_write_much_compressed(ptr, table->m_id);
 
@@ -597,7 +597,7 @@ static ulint trx_undo_page_report_modify(
         /* Notify purge that it eventually has to
         free the old externally stored field */
 
-        trx->update_undo->m_del_marks = true;
+        trx->m_update_undo->m_del_marks = true;
 
         *type_cmpl_ptr |= TRX_UNDO_UPD_EXTERN;
       } else {
@@ -633,7 +633,7 @@ static ulint trx_undo_page_report_modify(
   if (!update || !(cmpl_info & UPD_NODE_NO_ORD_CHANGE)) {
     byte *old_ptr = ptr;
 
-    trx->update_undo->m_del_marks = true;
+    trx->m_update_undo->m_del_marks = true;
 
     if (trx_undo_left(undo_page, ptr) < 5) {
 
@@ -747,7 +747,7 @@ inline byte *trx_undo_update_rec_get_field_no(
 }
 
 byte *trx_undo_update_rec_get_update(
-  byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, trx_t *trx, mem_heap_t *heap,
+  byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, mem_heap_t *heap,
   upd_t **upd
 ) {
   upd_field_t *upd_field;
@@ -955,40 +955,40 @@ db_err trx_undo_report_row_operation(
   ut_ad(op_type != TRX_UNDO_INSERT_OP || (clust_entry && !update && !rec));
 
   auto trx = thr_get_trx(thr);
-  auto rseg = trx->rseg;
+  auto rseg = trx->m_rseg;
 
-  mutex_enter(&trx->undo_mutex);
+  mutex_enter(&trx->m_undo_mutex);
 
   /* If the undo log is not assigned yet, assign one */
 
   if (op_type == TRX_UNDO_INSERT_OP) {
 
-    if (trx->insert_undo == nullptr) {
+    if (trx->m_insert_undo == nullptr) {
 
       err = srv_undo->assign_undo(trx, TRX_UNDO_INSERT);
     }
 
-    undo = trx->insert_undo;
+    undo = trx->m_insert_undo;
 
     if (unlikely(!undo)) {
       /* Did not succeed */
-      mutex_exit(&trx->undo_mutex);
+      mutex_exit(&trx->m_undo_mutex);
 
       return err;
     }
   } else {
     ut_ad(op_type == TRX_UNDO_MODIFY_OP);
 
-    if (trx->update_undo == nullptr) {
+    if (trx->m_update_undo == nullptr) {
 
       err = srv_undo->assign_undo(trx, TRX_UNDO_UPDATE);
     }
 
-    undo = trx->update_undo;
+    undo = trx->m_update_undo;
 
     if (unlikely(!undo)) {
       /* Did not succeed */
-      mutex_exit(&trx->undo_mutex);
+      mutex_exit(&trx->m_undo_mutex);
       return err;
     }
 
@@ -1047,12 +1047,12 @@ db_err trx_undo_report_row_operation(
       undo->m_empty = false;
       undo->m_top_page_no = page_no;
       undo->m_top_offset = offset;
-      undo->m_top_undo_no = trx->undo_no;
+      undo->m_top_undo_no = trx->m_undo_no;
       undo->m_guess_block = undo_block;
 
-      ++trx->undo_no;
+      ++trx->m_undo_no;
 
-      mutex_exit(&trx->undo_mutex);
+      mutex_exit(&trx->m_undo_mutex);
 
       *roll_ptr = trx_undo_build_roll_ptr(op_type == TRX_UNDO_INSERT_OP, rseg->id, page_no, offset);
 
@@ -1082,7 +1082,7 @@ db_err trx_undo_report_row_operation(
     if (unlikely(page_no == FIL_NULL)) {
       /* Did not succeed: out of space */
 
-      mutex_exit(&trx->undo_mutex);
+      mutex_exit(&trx->m_undo_mutex);
 
       mtr.commit();
 

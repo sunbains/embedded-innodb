@@ -559,9 +559,9 @@ ulint Undo::free_page(trx_rseg_t *rseg, bool in_history, space_id_t space, page_
   return last_addr.m_page_no;
 }
 
-void Undo::free_page_in_rollback(trx_t *trx __attribute__((unused)), trx_undo_t *undo, page_no_t page_no, mtr_t *mtr) noexcept {
+void Undo::free_page_in_rollback(Trx *trx __attribute__((unused)), trx_undo_t *undo, page_no_t page_no, mtr_t *mtr) noexcept {
   ut_ad(undo->m_hdr_page_no != page_no);
-  ut_ad(mutex_own(&trx->undo_mutex));
+  ut_ad(mutex_own(&trx->m_undo_mutex));
 
   const auto last_page_no = free_page(undo->m_rseg, false, undo->m_space, undo->m_hdr_page_no, page_no, mtr);
 
@@ -804,7 +804,7 @@ static void trx_undo_mem_init_for_reuse(
  *  or DB_OUT_OF_MEMORY
  */
 static db_err trx_undo_create(
-  trx_t *trx,
+  Trx *trx,
   trx_rseg_t *rseg,
   ulint type,
   trx_id_t trx_id,
@@ -853,7 +853,7 @@ static db_err trx_undo_create(
   return err;
 }
 
-trx_undo_t *Undo::reuse_cached( trx_t *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid,) mtr_t *mtr) noexcept {
+trx_undo_t *Undo::reuse_cached( Trx *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid,) mtr_t *mtr) noexcept {
   ut_ad(mutex_own(&rseg->mutex));
 
   trx_undo_t *undo;
@@ -919,10 +919,10 @@ trx_undo_t *Undo::reuse_cached( trx_t *trx, trx_rseg_t *rseg, ulint type, trx_id
   return undo;
 }
 
-void Undo::mark_as_dict_operation(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
+void Undo::mark_as_dict_operation(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
   auto hdr_page = page_get(undo->m_space, undo->m_hdr_page_no, mtr);
 
-  switch (trx_get_dict_operation(trx)) {
+  switch (trx->get_dict_operation()) {
     case TRX_DICT_OP_NONE:
       ut_error;
     case TRX_DICT_OP_INDEX:
@@ -930,7 +930,7 @@ void Undo::mark_as_dict_operation(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) noex
       undo->m_table_id = 0;
       break;
     case TRX_DICT_OP_TABLE:
-      undo->m_table_id = trx->table_id;
+      undo->m_table_id = trx->m_table_id;
       break;
   }
 
@@ -941,10 +941,10 @@ void Undo::mark_as_dict_operation(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) noex
   undo->m_dict_operation = true;
 }
 
-db_err Undo::assign_undo(trx_t *trx, ulint type) noexcept {
-  auto rseg = trx->rseg;
+db_err Undo::assign_undo(Trx *trx, ulint type) noexcept {
+  auto rseg = trx->m_rseg;
 
-  ut_ad(mutex_own(&trx->undo_mutex));
+  ut_ad(mutex_own(&trx->m_undo_mutex));
 
   mtr_t mtr;
 
@@ -978,15 +978,15 @@ db_err Undo::assign_undo(trx_t *trx, ulint type) noexcept {
 
   if (type == TRX_UNDO_INSERT) {
     UT_LIST_ADD_FIRST(rseg->insert_undo_list, undo);
-    ut_ad(trx->insert_undo == nullptr);
-    trx->insert_undo = undo;
+    ut_ad(trx->m_insert_undo == nullptr);
+    trx->m_insert_undo = undo;
   } else {
     UT_LIST_ADD_FIRST(rseg->update_undo_list, undo);
-    ut_ad(trx->update_undo == nullptr);
-    trx->update_undo = undo;
+    ut_ad(trx->m_update_undo == nullptr);
+    trx->m_update_undo = undo;
   }
 
-  if (trx_get_dict_operation(trx) != TRX_DICT_OP_NONE) {
+  if (trx->get_dict_operation() != TRX_DICT_OP_NONE) {
     mark_as_dict_operation(trx, undo, &mtr);
   }
 
@@ -997,7 +997,7 @@ db_err Undo::assign_undo(trx_t *trx, ulint type) noexcept {
   return DB_SUCCESS;
 }
 
-page_t *Undo::set_state_at_finish(trx_rseg_t *rseg, trx_t *trx __attribute__((unused)), trx_undo_t *undo, mtr_t *mtr) noexcept {
+page_t *Undo::set_state_at_finish(trx_rseg_t *rseg, Trx *trx __attribute__((unused)), trx_undo_t *undo, mtr_t *mtr) noexcept {
   ut_ad(mutex_own(&rseg->mutex));
 
   if (undo->m_id >= TRX_RSEG_N_SLOTS) {
@@ -1034,7 +1034,7 @@ page_t *Undo::set_state_at_finish(trx_rseg_t *rseg, trx_t *trx __attribute__((un
   return undo_page;
 }
 
-page_t *Undo::set_state_at_prepare(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
+page_t *Undo::set_state_at_prepare(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
   if (undo->m_id >= TRX_RSEG_N_SLOTS) {
     log_fatal("undo->m_id is ", undo->m_id);
   }
@@ -1063,9 +1063,9 @@ page_t *Undo::set_state_at_prepare(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) noe
   return undo_page;
 }
 
-void Undo::update_cleanup(trx_t *trx, page_t *undo_page, mtr_t *mtr) noexcept {
-  auto undo = trx->update_undo;
-  auto rseg = trx->rseg;
+void Undo::update_cleanup(Trx *trx, page_t *undo_page, mtr_t *mtr) noexcept {
+  auto undo = trx->m_update_undo;
+  auto rseg = trx->m_rseg;
 
   ut_ad(mutex_own(&rseg->mutex));
 
@@ -1073,7 +1073,7 @@ void Undo::update_cleanup(trx_t *trx, page_t *undo_page, mtr_t *mtr) noexcept {
 
   UT_LIST_REMOVE(rseg->update_undo_list, undo);
 
-  trx->update_undo = nullptr;
+  trx->m_update_undo = nullptr;
 
   if (undo->m_state == TRX_UNDO_CACHED) {
     UT_LIST_ADD_FIRST(rseg->update_undo_cached, undo);
@@ -1084,17 +1084,17 @@ void Undo::update_cleanup(trx_t *trx, page_t *undo_page, mtr_t *mtr) noexcept {
   }
 }
 
-void Undo::insert_cleanup(trx_t *trx) noexcept {
-  auto undo = trx->insert_undo;
+void Undo::insert_cleanup(Trx *trx) noexcept {
+  auto undo = trx->m_insert_undo;
   ut_ad(undo != nullptr);
 
-  auto rseg = trx->rseg;
+  auto rseg = trx->m_rseg;
 
   mutex_enter(&rseg->mutex);
 
   UT_LIST_REMOVE(rseg->insert_undo_list, undo);
 
-  trx->insert_undo = nullptr;
+  trx->m_insert_undo = nullptr;
 
   if (undo->m_state == TRX_UNDO_CACHED) {
     UT_LIST_ADD_FIRST(rseg->insert_undo_cached, undo);
@@ -1204,12 +1204,12 @@ byte *Undo::parse_page_header(ulint type, byte *ptr, byte *end_ptr, page_t *page
   return ptr;
 }
 
-ulint Undo::add_page(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
-  ut_ad(mutex_own(&trx->undo_mutex));
+ulint Undo::add_page(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
+  ut_ad(mutex_own(&trx->m_undo_mutex));
   ut_ad(!mutex_own(&kernel_mutex));
-  ut_ad(mutex_own(&trx->rseg->mutex));
+  ut_ad(mutex_own(&trx->m_rseg->mutex));
 
-  auto rseg = trx->rseg;
+  auto rseg = trx->m_rseg;
 
   if (rseg->curr_size == rseg->max_size) {
 
@@ -1246,9 +1246,9 @@ ulint Undo::add_page(trx_t *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
   return page_no;
 }
 
-void Undo::truncate_end(trx_t *trx, trx_undo_t *undo, undo_no_t limit) noexcept {
-  ut_ad(mutex_own(&trx->undo_mutex));
-  ut_ad(mutex_own(&trx->rseg->mutex));
+void Undo::truncate_end(Trx *trx, trx_undo_t *undo, undo_no_t limit) noexcept {
+  ut_ad(mutex_own(&trx->m_undo_mutex));
+  ut_ad(mutex_own(&trx->m_rseg->mutex));
 
   trx_undo_rec_t *trunc_here;
 

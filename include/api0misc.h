@@ -14,7 +14,7 @@ Copyright (c) 2024 Sunny Bains. All rights reserved.
 
 /** Determines if the currently running transaction has been interrupted.
 @return	true if interrupted */
-bool trx_is_interrupted(const trx_t *trx); /*!< in: transaction */
+bool trx_is_interrupted(const Trx *trx); /*!< in: transaction */
 
 /** Create a temporary file using the OS specific function. */
 int ib_create_tempfile(const char *filename); /*!< in: temp filename prefix */
@@ -29,7 +29,7 @@ bool ib_handle_errors(
                                               no new error, the value of
                                               trx->error_state at the entry of
                                               this  function */
-  trx_t *trx,           /*!< in: transaction */
+  Trx *trx,           /*!< in: transaction */
   que_thr_t *thr,       /*!< in: query thread */
   trx_savept_t *savept
 ); /*!< in: savepoint or nullptr */
@@ -37,7 +37,7 @@ bool ib_handle_errors(
 /** Sets a lock on a table.
 @return	error code or DB_SUCCESS */
 enum db_err ib_trx_lock_table_with_retry(
-  trx_t *trx,          /*!< in/out: transaction */
+  Trx *trx,          /*!< in/out: transaction */
   Table *table, /*!< in: table to lock */
   enum Lock_mode mode
 ); /*!< in: lock mode */

@@ -71,8 +71,10 @@ struct Purge_sys {
  
   /**
    * Constructor.
+   * 
+   * @param trx Transaction instance permanently assigned for the purge
    */
-  explicit Purge_sys() noexcept;
+  explicit Purge_sys(Trx *trx) noexcept;
 
   /**
    * Destructor.
@@ -99,7 +101,7 @@ struct Purge_sys {
    * @param[in] undo_page         Update undo log header page, x-latched.
    * @param[in] mtr               Mini-transaction.
    */
-  static void add_update_undo_to_history(trx_t *trx, page_t *undo_page, mtr_t *mtr) noexcept;
+  static void add_update_undo_to_history(Trx *trx, page_t *undo_page, mtr_t *mtr) noexcept;
 
   /**
    * Fetches the next undo log record from the history list to purge. It must be
@@ -227,11 +229,11 @@ public:
   Purge_state m_state{PURGE_STATE_UNKNOWN};
 
   /** System session running the purge query */
-  sess_t *m_sess{};
+  Session *m_sess{};
 
   /** System transaction running the purge query:
    * this trx is not in the trx list of the trx system and it never ends */
-  trx_t *m_trx{};
+  Trx *m_trx{};
 
   /** The query graph which will do the parallelized purge operation */
   que_t *m_query{};

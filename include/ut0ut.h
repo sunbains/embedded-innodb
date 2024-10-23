@@ -198,7 +198,7 @@ std::ostream &buf_to_hex_string(std::ostream &o, const void *buf, ulint len);
 void ut_print_filename(const std::string &name) noexcept; /*!< in: name to print */
 
 /* Forward declaration of transaction handle */
-struct trx_t;
+struct Trx;
 
 /** Outputs a fixed-length string, quoted as an SQL identifier.
 If the string contains a slash '/', the string will be

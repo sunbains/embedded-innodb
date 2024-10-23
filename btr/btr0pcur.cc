@@ -137,7 +137,7 @@ bool Btree_pcursor::restore_position(ulint latch_mode, mtr_t *mtr, Source_locati
     log_warn_buf(this, sizeof(Btree_pcursor));
 
     if (m_trx_if_known != nullptr) {
-      log_err(trx_to_string(m_trx_if_known, 0));
+      log_err(m_trx_if_known->to_string(0));
     }
 
     ut_error;

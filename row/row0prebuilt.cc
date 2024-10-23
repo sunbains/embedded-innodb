@@ -166,7 +166,7 @@ struct. */
 
 void row_prebuilt_update_trx(
   row_prebuilt_t *prebuilt, /*!< in/out: prebuilt struct handle */
-  trx_t *trx
+  Trx *trx
 ) /*!< in: transaction handle */
 {
   ut_a(trx != nullptr);
