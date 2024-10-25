@@ -2974,8 +2974,8 @@ ib_err_t ib_cursor_delete_row(ib_crsr_t ib_crsr) {
   if (ib_btr_cursor_is_positioned(pcur)) {
     const rec_t *rec;
 
-    if (!row_sel_row_cache_is_empty(prebuilt)) {
-      rec = row_sel_row_cache_get(prebuilt);
+    if (!Row_sel::is_cache_empty(prebuilt)) {
+      rec = Row_sel::cache_get_row(prebuilt);
       ut_a(rec != nullptr);
     } else {
       mtr_t mtr;
@@ -3016,10 +3016,10 @@ ib_err_t ib_cursor_read_row(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl) {
   /* When searching with IB_EXACT_MATCH set, row_search_mvcc()
   will not position the persistent cursor but will copy the record
   found into the row cache. It should be the only entry. */
-  if (!ib_cursor_is_positioned(ib_crsr) && row_sel_row_cache_is_empty(cursor->prebuilt)) {
+  if (!ib_cursor_is_positioned(ib_crsr) && Row_sel::is_cache_empty(cursor->prebuilt)) {
     err = DB_RECORD_NOT_FOUND;
-  } else if (!row_sel_row_cache_is_empty(cursor->prebuilt)) {
-    auto rec = row_sel_row_cache_get(cursor->prebuilt);
+  } else if (!Row_sel::is_cache_empty(cursor->prebuilt)) {
+    auto rec = Row_sel::cache_get_row(cursor->prebuilt);
     ut_a(rec != nullptr);
 
     if (!rec_get_deleted_flag(rec)) {
@@ -3073,9 +3073,9 @@ ib_err_t ib_cursor_prev(ib_crsr_t ib_crsr) {
   /* We want to move to the next record */
   dtuple_set_n_fields(prebuilt->search_tuple, 0);
 
-  row_sel_row_cache_next(prebuilt);
+  Row_sel::cache_next(prebuilt);
 
-  return row_search_mvcc(srv_config.m_force_recovery, IB_CUR_L, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_PREV);
+  return srv_row_sel->mvcc_fetch(srv_config.m_force_recovery, IB_CUR_L, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_PREV);
 }
 
 ib_err_t ib_cursor_next(ib_crsr_t ib_crsr) {
@@ -3087,9 +3087,9 @@ ib_err_t ib_cursor_next(ib_crsr_t ib_crsr) {
   /* We want to move to the next record */
   dtuple_set_n_fields(prebuilt->search_tuple, 0);
 
-  row_sel_row_cache_next(prebuilt);
+  Row_sel::cache_next(prebuilt);
 
-  return row_search_mvcc(srv_config.m_force_recovery, IB_CUR_G, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_NEXT);
+  return srv_row_sel->mvcc_fetch(srv_config.m_force_recovery, IB_CUR_G, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_NEXT);
 }
 
 /**
@@ -3109,7 +3109,7 @@ static ib_err_t ib_cursor_position(ib_cursor_t *cursor, ib_srch_mode_t mode) {
   uses the search_tuple fields to work out what to do. */
   dtuple_set_n_fields(prebuilt->search_tuple, 0);
 
-  return row_search_mvcc(srv_config.m_force_recovery, mode, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_MOVETO);
+  return srv_row_sel->mvcc_fetch(srv_config.m_force_recovery, mode, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_MOVETO);
 }
 
 ib_err_t ib_cursor_first(ib_crsr_t ib_crsr) {
@@ -3150,7 +3150,7 @@ ib_err_t ib_cursor_moveto(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl, ib_srch_mode_t ib_
 
   ut_a(prebuilt->select_lock_type <= LOCK_NUM);
 
-  auto err = row_search_mvcc(srv_config.m_force_recovery, ib_srch_mode, prebuilt, (ib_match_t)cursor->match_mode, ROW_SEL_MOVETO);
+  auto err = srv_row_sel->mvcc_fetch(srv_config.m_force_recovery, ib_srch_mode, prebuilt, (ib_match_t)cursor->match_mode, ROW_SEL_MOVETO);
 
   *result = prebuilt->result;
 
@@ -4061,7 +4061,7 @@ ib_err_t ib_table_lock(ib_trx_t ib_trx, ib_id_t table_id, ib_lck_mode_t ib_lck_m
 
   ib_qry_proc_t q_proc;
 
-  q_proc.node.sel = sel_node_create(heap);
+  q_proc.node.sel = sel_node_t::create(heap);
 
   auto thr = pars_complete_graph_for_exec(q_proc.node.sel, trx, heap);
 
@@ -4798,7 +4798,7 @@ static dberr_t check_table(Trx *trx, Index *index, size_t n_threads) {
       bool contains_null = false;
       const auto n_ordering = index->get_n_ordering_defined_by_user();
 
-      for (size_t i = 0; i < n_ordering; ++i) {
+      for (size_t i{}; i < n_ordering; ++i) {
         const auto nth_field = dtuple_get_nth_field(prev_tuple, i);
 
         if (UNIV_SQL_NULL == dfield_get_len(nth_field)) {

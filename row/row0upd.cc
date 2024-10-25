@@ -1370,7 +1370,7 @@ que_thr_t *Row_update::step(que_thr_t *thr) noexcept {
 
     if (node->m_searched_update) {
       /* Reset the cursor */
-      sel_node->state = SEL_NODE_OPEN;
+      sel_node->m_state = SEL_NODE_OPEN;
 
       /* Fetch a row to update */
 
@@ -1382,7 +1382,7 @@ que_thr_t *Row_update::step(que_thr_t *thr) noexcept {
 
   /* sel_node is nullptr if we are in the client interface */
 
-  if (sel_node != nullptr && sel_node->state != SEL_NODE_FETCH) {
+  if (sel_node != nullptr && sel_node->m_state != SEL_NODE_FETCH) {
 
     if (!node->m_searched_update) {
       /* An explicit cursor should be positioned on a row
@@ -1395,7 +1395,7 @@ que_thr_t *Row_update::step(que_thr_t *thr) noexcept {
       goto error_handling;
     }
 
-    ut_ad(sel_node->state == SEL_NODE_NO_MORE_ROWS);
+    ut_ad(sel_node->m_state == SEL_NODE_NO_MORE_ROWS);
 
     /* No more rows to update, or the select node performed the
     updates directly in-place */

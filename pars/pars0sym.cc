@@ -52,7 +52,7 @@ void sym_tab_free_private(sym_tab_t *sym_tab) {
     eval_node_free_val_buf(sym);
 
     if (sym->prefetch_buf) {
-      sel_col_prefetch_buf_free(sym->prefetch_buf);
+      srv_row_sel->free_prefetch_buf(sym->prefetch_buf);
     }
 
     if (sym->cursor_def) {

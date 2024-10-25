@@ -690,6 +690,14 @@ ib_err_t InnoDB::start() noexcept {
         srv_startup_abort(DB_OUT_OF_MEMORY);
         return DB_ERROR;
       }
+
+      ut_a(srv_row_sel == nullptr);
+      srv_row_sel = Row_sel::create(srv_dict_sys, srv_lock_sys);
+
+      if (srv_row_sel == nullptr) {
+        srv_startup_abort(DB_OUT_OF_MEMORY);
+        return DB_ERROR;
+      }
     }
 
     if (auto err = srv_dict_sys->create_instance(); err != DB_SUCCESS) {
@@ -814,6 +822,14 @@ ib_err_t InnoDB::start() noexcept {
       srv_row_ins = Row_insert::create(srv_dict_sys, srv_lock_sys, srv_row_upd);
 
       if (srv_row_ins == nullptr) {
+        srv_startup_abort(DB_OUT_OF_MEMORY);
+        return DB_ERROR;
+      }
+
+      ut_a(srv_row_sel == nullptr);
+      srv_row_sel = Row_sel::create(srv_dict_sys, srv_lock_sys);
+
+      if (srv_row_sel == nullptr) {
         srv_startup_abort(DB_OUT_OF_MEMORY);
         return DB_ERROR;
       }
@@ -1133,6 +1149,8 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
   Row_insert::destroy(srv_row_ins);
 
   Row_update::destroy(srv_row_upd);
+
+  Row_sel::destroy(srv_row_sel);
 
   /* Must be called before Buf_pool::close(). */
   Dict::destroy(srv_dict_sys);

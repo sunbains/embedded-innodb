@@ -434,7 +434,7 @@ void que_graph_free_recursive(que_node_t *node) {
 
       sel = static_cast<sel_node_t *>(node);
 
-      sel_node_free_private(sel);
+      sel->clear();
 
       break;
     case QUE_NODE_INSERT:
@@ -954,13 +954,13 @@ inline que_thr_t *que_thr_step(que_thr_t *thr) {
   } else if (type == QUE_NODE_ASSIGNMENT) {
     assign_step(thr);
   } else if (type == QUE_NODE_SELECT) {
-    thr = row_sel_step(thr);
+    thr = srv_row_sel->step(thr);
   } else if (type == QUE_NODE_INSERT) {
     thr = srv_row_ins->step(thr);
   } else if (type == QUE_NODE_UPDATE) {
     thr = srv_row_upd->step(thr);
   } else if (type == QUE_NODE_FETCH) {
-    thr = fetch_step(thr);
+    thr = srv_row_sel->fetch_step(thr);
   } else if (type == QUE_NODE_OPEN) {
     thr = open_step(thr);
   } else if (type == QUE_NODE_FUNC) {
@@ -991,7 +991,7 @@ inline que_thr_t *que_thr_step(que_thr_t *thr) {
   } else if (type == QUE_NODE_CREATE_INDEX) {
     thr = srv_dict_sys->m_store.create_index_step(thr);
   } else if (type == QUE_NODE_ROW_PRINTF) {
-    thr = row_printf_step(thr);
+    thr = srv_row_sel->printf_step(thr);
   } else {
     ut_error;
   }

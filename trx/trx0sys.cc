@@ -409,7 +409,7 @@ void Trx_sys::init_at_db_start(ib_recovery_t recovery) noexcept {
 
     while (undo != nullptr) {
 
-      auto trx = Trx::create(this, nullptr, nullptr);
+      auto trx = create_trx(nullptr);
 
       trx->m_is_recovered = true;
       trx->m_id = undo->m_trx_id;

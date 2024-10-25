@@ -150,8 +150,8 @@ db_err ib_trx_lock_table_with_retry(Trx *trx, Table *table, enum Lock_mode mode)
 
   trx->m_op_info = "setting table lock";
 
-  auto node = sel_node_create(heap);
-  auto thr = pars_complete_graph_for_exec(node, trx, heap);
+  auto sel_node = sel_node_t::create(heap);
+  auto thr = pars_complete_graph_for_exec(sel_node, trx, heap);
 
   thr->graph->state = QUE_FORK_ACTIVE;
 

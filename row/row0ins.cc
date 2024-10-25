@@ -1725,7 +1725,7 @@ inline void Row_insert::get_row_from_select(ins_node_t *node) noexcept {
   auto row = node->m_row;
 
   ulint i{};
-  auto list_node = node->m_select->select_list;
+  auto list_node = node->m_select->m_select_list;
 
   while (list_node != nullptr) {
     auto dfield = dtuple_get_nth_field(row, i);
@@ -1815,7 +1815,7 @@ que_thr_t *Row_insert::step(que_thr_t *thr) noexcept {
 
     if (node->m_ins_type == INS_SEARCHED) {
       /* Reset the cursor */
-      sel_node->state = SEL_NODE_OPEN;
+      sel_node->m_state = SEL_NODE_OPEN;
 
       /* Fetch a row to insert */
       thr->run_node = sel_node;
@@ -1872,9 +1872,9 @@ que_thr_t *Row_insert::step(que_thr_t *thr) noexcept {
     }
   }
 
-  if (node->m_ins_type == INS_SEARCHED && sel_node->state != SEL_NODE_FETCH) {
+  if (node->m_ins_type == INS_SEARCHED && sel_node->m_state != SEL_NODE_FETCH) {
 
-    ut_ad(sel_node->state == SEL_NODE_NO_MORE_ROWS);
+    ut_ad(sel_node->m_state == SEL_NODE_NO_MORE_ROWS);
 
     /* No more rows to insert */
     thr->run_node = parent;

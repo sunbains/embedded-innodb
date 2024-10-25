@@ -312,7 +312,7 @@ inline void eval_notfound(func_node_t *func_node) /*!< in: function node */
     sel_node = cursor->alias->cursor_def;
   }
 
-  if (sel_node->state == SEL_NODE_NO_MORE_ROWS) {
+  if (sel_node->m_state == SEL_NODE_NO_MORE_ROWS) {
     bool_val = true;
   } else {
     bool_val = false;

@@ -25,8 +25,6 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #pragma once
 
-#include "innodb0types.h"
-
 struct Plan;
 struct Undo_node;
 struct Insert_node;
@@ -36,15 +34,16 @@ struct upd_t;
 struct upd_field_t;
 struct upd_node_t;
 
-using del_node_t = struct del_node_struct;
+struct sel_buf_t;
+
+using table_handle_t = void *;
 using ins_node_t = Insert_node;
+using row_ext_t = struct row_ext_struct;
+using del_node_t = struct del_node_struct;
 using open_node_t = struct open_node_struct;
 using fetch_node_t = struct fetch_node_struct;
-using row_printf_node_t = struct row_printf_node_struct;
-using sel_buf_t = struct sel_buf_struct;
-using row_ext_t = struct row_ext_struct;
-using table_handle_t = void *;
 using row_prebuilt_t = struct row_prebuilt_struct;
+using row_printf_node_t = struct row_printf_node_struct;
 
 /* Insert node types */
 enum ib_ins_mode_t {

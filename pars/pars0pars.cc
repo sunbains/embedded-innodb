@@ -357,11 +357,11 @@ static void pars_resolve_func_data_type(func_node_t *node) {
  * 
  * It is an error if some identifier cannot be resolved here.
  * 
- * @param[in] select_node Select node or nullptr; if this is not nullptr then the variable
- *                    sym nodes are added to the copy_variables list of select_node.
+ * @param[in] sel_node Select node or nullptr; if this is not nullptr then the variable
+ *                    sym nodes are added to the copy_variables list of sel_node.
  * @param[in] exp_node Expression node.
  */
-static void pars_resolve_exp_variables_and_types(sel_node_t *select_node, que_node_t *exp_node) {
+static void pars_resolve_exp_variables_and_types(sel_node_t *sel_node, que_node_t *exp_node) {
   ut_a(exp_node != nullptr);
 
   if (que_node_get_type(exp_node) == QUE_NODE_FUNC) {
@@ -369,7 +369,7 @@ static void pars_resolve_exp_variables_and_types(sel_node_t *select_node, que_no
     auto arg = func_node->args;
 
     while (arg != nullptr) {
-      pars_resolve_exp_variables_and_types(select_node, arg);
+      pars_resolve_exp_variables_and_types(sel_node, arg);
 
       arg = que_node_get_next(arg);
     }
@@ -407,8 +407,8 @@ static void pars_resolve_exp_variables_and_types(sel_node_t *select_node, que_no
   sym_node->indirection = *it;
   sym_node->token_type = SYM_IMPLICIT_VAR;
 
-  if (select_node != nullptr) {
-    select_node->copy_variables.push_back(sym_node);
+  if (sel_node != nullptr) {
+    sel_node->m_copy_variables.push_back(sym_node);
   }
 
   dfield_set_type(que_node_get_val(sym_node), que_node_get_data_type(*it));
@@ -421,12 +421,12 @@ static void pars_resolve_exp_variables_and_types(sel_node_t *select_node, que_no
  * It is an error if some identifier cannot be resolved here. 
  * It also resolves the data types of functions.
  * 
- * @param[in] select_node The select node or nullptr.
+ * @param[in] sel_node The select node or nullptr.
  * @param[in] exp_node The expression list first node, or nullptr.
  */
-static void pars_resolve_exp_list_variables_and_types(sel_node_t *select_node, que_node_t *exp_node) noexcept {
+static void pars_resolve_exp_list_variables_and_types(sel_node_t *sel_node, que_node_t *exp_node) noexcept {
   while (exp_node != nullptr) {
-    pars_resolve_exp_variables_and_types(select_node, exp_node);
+    pars_resolve_exp_variables_and_types(sel_node, exp_node);
 
     exp_node = que_node_get_next(exp_node);
   }
@@ -555,12 +555,12 @@ static ulint pars_retrieve_table_list_defs(sym_node_t *sym_node) noexcept {
 /**
  * @brief Adds all columns to the select list if the query is SELECT * FROM ...
  * 
- * @param[in] select_node The select node already containing the table list.
+ * @param[in] sel_node The select node already containing the table list.
  */
-static void pars_select_all_columns(sel_node_t *select_node) noexcept {
-  select_node->select_list = nullptr;
+static void pars_select_all_columns(sel_node_t *sel_node) noexcept {
+  sel_node->m_select_list = nullptr;
 
-  auto table_node = select_node->table_list;
+  auto table_node = sel_node->m_table_list;
 
   while (table_node != nullptr) {
     auto table = table_node->table;
@@ -570,7 +570,7 @@ static void pars_select_all_columns(sel_node_t *select_node) noexcept {
 
       auto col_node = sym_tab_add_id(pars_sym_tab_global, (byte *)col_name, strlen(col_name));
 
-      select_node->select_list = que_node_list_add_last(select_node->select_list, col_node);
+      sel_node->m_select_list = que_node_list_add_last(sel_node->m_select_list, col_node);
     }
 
     table_node = reinterpret_cast<sym_node_t *>(que_node_get_next(table_node));
@@ -578,14 +578,14 @@ static void pars_select_all_columns(sel_node_t *select_node) noexcept {
 }
 
 sel_node_t *pars_select_list(que_node_t *select_list, sym_node_t *into_list) {
-  auto node = sel_node_create(pars_sym_tab_global->heap);
+  auto sel_node = sel_node_t::create(pars_sym_tab_global->heap);
 
-  node->select_list = select_list;
-  node->into_list = into_list;
+  sel_node->m_select_list = select_list;
+  sel_node->m_into_list = into_list;
 
   pars_resolve_exp_list_variables_and_types(nullptr, into_list);
 
-  return node;
+  return sel_node;
 }
 
 /**
@@ -593,13 +593,13 @@ sel_node_t *pars_select_list(que_node_t *select_list, sym_node_t *into_list) {
  * 
  * This function determines if the select list contains only aggregate function items.
  * 
- * @param[in] select_node The select node already containing the select list.
+ * @param[in] sel_node The select node already containing the select list.
  */
-static void pars_check_aggregate(sel_node_t *select_node) noexcept {
+static void pars_check_aggregate(sel_node_t *sel_node) noexcept {
   ulint n_nodes{};
   ulint n_aggregate_nodes{};
 
-  auto exp_node = select_node->select_list;
+  auto exp_node = sel_node->m_select_list;
 
   while (exp_node != nullptr) {
 
@@ -621,64 +621,64 @@ static void pars_check_aggregate(sel_node_t *select_node) noexcept {
   if (n_aggregate_nodes > 0) {
     ut_a(n_nodes == n_aggregate_nodes);
 
-    select_node->is_aggregate = true;
+    sel_node->m_is_aggregate = true;
   } else {
-    select_node->is_aggregate = false;
+    sel_node->m_is_aggregate = false;
   }
 }
 
-sel_node_t *pars_select_statement(sel_node_t *select_node, sym_node_t *table_list, que_node_t *search_cond, pars_res_word_t *for_update, pars_res_word_t *lock_shared, order_node_t *order_by) {
-  select_node->state = SEL_NODE_OPEN;
+sel_node_t *pars_select_statement(sel_node_t *sel_node, sym_node_t *table_list, que_node_t *search_cond, pars_res_word_t *for_update, pars_res_word_t *lock_shared, order_node_t *order_by) {
+  sel_node->m_state = SEL_NODE_OPEN;
 
-  select_node->table_list = table_list;
-  select_node->n_tables = pars_retrieve_table_list_defs(table_list);
+  sel_node->m_table_list = table_list;
+  sel_node->m_n_tables = pars_retrieve_table_list_defs(table_list);
 
-  if (select_node->select_list == &pars_star_denoter) {
+  if (sel_node->m_select_list == &pars_star_denoter) {
 
     /* SELECT * FROM ... */
-    pars_select_all_columns(select_node);
+    pars_select_all_columns(sel_node);
   }
 
-  if (select_node->into_list) {
-    ut_a(que_node_list_get_len(select_node->into_list) ==
-         que_node_list_get_len(select_node->select_list));
+  if (sel_node->m_into_list) {
+    ut_a(que_node_list_get_len(sel_node->m_into_list) ==
+         que_node_list_get_len(sel_node->m_select_list));
   }
 
-  UT_LIST_INIT(select_node->copy_variables);
+  UT_LIST_INIT(sel_node->m_copy_variables);
 
-  pars_resolve_exp_list_columns(table_list, select_node->select_list);
-  pars_resolve_exp_list_variables_and_types(select_node, select_node->select_list);
-  pars_check_aggregate(select_node);
+  pars_resolve_exp_list_columns(table_list, sel_node->m_select_list);
+  pars_resolve_exp_list_variables_and_types(sel_node, sel_node->m_select_list);
+  pars_check_aggregate(sel_node);
 
-  select_node->search_cond = search_cond;
+  sel_node->m_search_cond = search_cond;
 
   if (search_cond != nullptr) {
     pars_resolve_exp_columns(table_list, search_cond);
-    pars_resolve_exp_variables_and_types(select_node, search_cond);
+    pars_resolve_exp_variables_and_types(sel_node, search_cond);
   }
 
   if (for_update != nullptr) {
     ut_a(!lock_shared);
 
-    select_node->set_x_locks = true;
-    select_node->row_lock_mode = LOCK_X;
+    sel_node->m_set_x_locks = true;
+    sel_node->m_row_lock_mode = LOCK_X;
 
-    select_node->consistent_read = false;
-    select_node->read_view = nullptr;
+    sel_node->m_consistent_read = false;
+    sel_node->m_read_view = nullptr;
   } else if (lock_shared) {
-    select_node->set_x_locks = false;
-    select_node->row_lock_mode = LOCK_S;
+    sel_node->m_set_x_locks = false;
+    sel_node->m_row_lock_mode = LOCK_S;
 
-    select_node->consistent_read = false;
-    select_node->read_view = nullptr;
+    sel_node->m_consistent_read = false;
+    sel_node->m_read_view = nullptr;
   } else {
-    select_node->set_x_locks = false;
-    select_node->row_lock_mode = LOCK_S;
+    sel_node->m_set_x_locks = false;
+    sel_node->m_row_lock_mode = LOCK_S;
 
-    select_node->consistent_read = true;
+    sel_node->m_consistent_read = true;
   }
 
-  select_node->order_by = order_by;
+  sel_node->m_order_by = order_by;
 
   if (order_by != nullptr) {
     pars_resolve_exp_columns(table_list, order_by->column);
@@ -687,21 +687,21 @@ sel_node_t *pars_select_statement(sel_node_t *select_node, sym_node_t *table_lis
   /* The final value of the following fields depend on the environment
   where the select statement appears: */
 
-  select_node->can_get_updated = false;
-  select_node->explicit_cursor = nullptr;
+  sel_node->m_can_get_updated = false;
+  sel_node->m_explicit_cursor = nullptr;
 
-  opt_search_plan(select_node);
+  opt_search_plan(sel_node);
 
-  return select_node;
+  return sel_node;
 }
 
-que_node_t *pars_cursor_declaration(sym_node_t *sym_node, sel_node_t *select_node) {
+que_node_t *pars_cursor_declaration(sym_node_t *sym_node, sel_node_t *sel_node) {
   sym_node->resolved = true;
   sym_node->token_type = SYM_CURSOR;
-  sym_node->cursor_def = select_node;
+  sym_node->cursor_def = sel_node;
 
-  select_node->state = SEL_NODE_CLOSED;
-  select_node->explicit_cursor = sym_node;
+  sel_node->m_state = SEL_NODE_CLOSED;
+  sel_node->m_explicit_cursor = sym_node;
 
   return sym_node;
 }
@@ -829,7 +829,7 @@ upd_node_t *pars_update_statement(upd_node_t *node, sym_node_t *cursor_sym, que_
     pars_select_statement(sel_node, table_sym, search_cond, nullptr,
                           &pars_share_token, nullptr);
     node->m_searched_update = true;
-    sel_node->common.parent = node;
+    sel_node->m_common.parent = node;
   }
 
   node->m_select = sel_node;
@@ -845,73 +845,67 @@ upd_node_t *pars_update_statement(upd_node_t *node, sym_node_t *cursor_sym, que_
 
   if (node->m_searched_update) {
     node->m_has_clust_rec_x_lock = true;
-    sel_node->set_x_locks = true;
-    sel_node->row_lock_mode = LOCK_X;
+    sel_node->m_set_x_locks = true;
+    sel_node->m_row_lock_mode = LOCK_X;
   } else {
-    node->m_has_clust_rec_x_lock = sel_node->set_x_locks;
+    node->m_has_clust_rec_x_lock = sel_node->m_set_x_locks;
   }
 
-  ut_a(sel_node->n_tables == 1);
-  ut_a(sel_node->consistent_read == false);
-  ut_a(sel_node->order_by == nullptr);
-  ut_a(sel_node->is_aggregate == false);
+  ut_a(sel_node->m_n_tables == 1);
+  ut_a(sel_node->m_consistent_read == false);
+  ut_a(sel_node->m_order_by == nullptr);
+  ut_a(sel_node->m_is_aggregate == false);
 
-  sel_node->can_get_updated = true;
+  sel_node->m_can_get_updated = true;
 
   node->m_state = UPD_NODE_UPDATE_CLUSTERED;
 
-  auto plan = sel_node_get_nth_plan(sel_node, 0);
+  auto plan = sel_node->get_nth_plan(0);
 
-  plan->no_prefetch = true;
+  plan->m_no_prefetch = true;
 
-  if (!plan->index->is_clustered()) {
-    plan->must_get_clust = true;
-    node->m_pcur = &(plan->clust_pcur);
+  if (!plan->m_index->is_clustered()) {
+    plan->m_must_get_clust = true;
+    node->m_pcur = &plan->m_clust_pcur;
   } else {
-    node->m_pcur = &(plan->pcur);
+    node->m_pcur = &plan->m_pcur;
   }
 
   return node;
 }
 
-ins_node_t *pars_insert_statement(sym_node_t *table_sym, que_node_t *values_list, sel_node_t *select) {
-  ut_a(values_list || select);
-  ut_a(!values_list || !select);
+ins_node_t *pars_insert_statement(sym_node_t *table_sym, que_node_t *values_list, sel_node_t *sel_node) {
+  ut_a(values_list != nullptr || sel_node != nullptr);
+  ut_a(values_list == nullptr || sel_node == nullptr);
 
-  ib_ins_mode_t ins_type;
-
-  if (values_list != nullptr) {
-    ins_type = INS_VALUES;
-  } else {
-    ins_type = INS_SEARCHED;
-  }
+  auto ins_type = values_list != nullptr ? INS_VALUES : INS_SEARCHED;
 
   pars_retrieve_table_def(table_sym);
 
-  auto node = reinterpret_cast<ins_node_t *>(srv_row_ins->node_create(ins_type, table_sym->table, pars_sym_tab_global->heap));
-  auto row = dtuple_create(pars_sym_tab_global->heap, node->m_table->get_n_cols());
+  auto ins_node = reinterpret_cast<ins_node_t *>(srv_row_ins->node_create(ins_type, table_sym->table, pars_sym_tab_global->heap));
+  auto row = dtuple_create(pars_sym_tab_global->heap, ins_node->m_table->get_n_cols());
 
   table_sym->table->copy_types(row);
 
-  srv_row_ins->set_new_row(node, row);
+  srv_row_ins->set_new_row(ins_node, row);
 
-  node->m_select = select;
+  ins_node->m_select = sel_node;
 
-  if (select != nullptr) {
-    select->common.parent = node;
+  if (sel_node != nullptr) {
+    sel_node->m_common.parent = ins_node;
 
-    ut_a(que_node_list_get_len(select->select_list) == table_sym->table->get_n_user_cols());
+    ut_a(que_node_list_get_len(sel_node->m_select_list) == table_sym->table->get_n_user_cols());
   }
 
-  node->m_values_list = values_list;
+  ins_node->m_values_list = values_list;
 
-  if (node->m_values_list != nullptr) {
+  if (values_list != nullptr) {
     pars_resolve_exp_list_variables_and_types(nullptr, values_list);
 
     ut_a(que_node_list_get_len(values_list) == table_sym->table->get_n_user_cols());
   }
 
-  return node;
+  return ins_node;
 }
 
 /**
@@ -1131,42 +1125,43 @@ fetch_node_t *pars_fetch_statement(sym_node_t *cursor, sym_node_t *into_list, sy
   /* Logical XOR. */
   ut_a(!into_list != !user_func);
 
-  auto node = reinterpret_cast<fetch_node_t *>(mem_heap_alloc(pars_sym_tab_global->heap, sizeof(fetch_node_t)));
+  auto ptr = mem_heap_alloc(pars_sym_tab_global->heap, sizeof(fetch_node_t));
+  auto fetch_node = new (ptr) fetch_node_t();
 
-  node->common.type = QUE_NODE_FETCH;
+  fetch_node->m_common.type = QUE_NODE_FETCH;
 
   pars_resolve_exp_variables_and_types(nullptr, cursor);
 
   if (into_list != nullptr) {
     pars_resolve_exp_list_variables_and_types(nullptr, into_list);
-    node->into_list = into_list;
-    node->func = nullptr;
+    fetch_node->m_into_list = into_list;
+    fetch_node->m_func = nullptr;
   } else {
     pars_resolve_exp_variables_and_types(nullptr, user_func);
 
-    node->func = pars_info_get_user_func(pars_sym_tab_global->info, user_func->name);
-    ut_a(node->func);
+    fetch_node->m_func = pars_info_get_user_func(pars_sym_tab_global->info, user_func->name);
+    ut_a(fetch_node->m_func);
 
-    node->into_list = nullptr;
+    fetch_node->m_into_list = nullptr;
   }
 
   auto cursor_decl = cursor->alias;
 
   ut_a(cursor_decl->token_type == SYM_CURSOR);
 
-  node->cursor_def = cursor_decl->cursor_def;
+  fetch_node->m_cursor_def = cursor_decl->cursor_def;
 
   if (into_list) {
-    ut_a(que_node_list_get_len(into_list) == que_node_list_get_len(node->cursor_def->select_list));
+    ut_a(que_node_list_get_len(into_list) == que_node_list_get_len(fetch_node->m_cursor_def->m_select_list));
   }
 
-  return node;
+  return fetch_node;
 }
 
 open_node_t *pars_open_statement(ulint type, sym_node_t *cursor) {
-  auto node = reinterpret_cast<open_node_t *>(mem_heap_alloc(pars_sym_tab_global->heap, sizeof(open_node_t)));
+  auto open_node = reinterpret_cast<open_node_t *>(mem_heap_alloc(pars_sym_tab_global->heap, sizeof(open_node_t)));
 
-  node->common.type = QUE_NODE_OPEN;
+  open_node->m_common.type = QUE_NODE_OPEN;
 
   pars_resolve_exp_variables_and_types(nullptr, cursor);
 
@@ -1174,22 +1169,22 @@ open_node_t *pars_open_statement(ulint type, sym_node_t *cursor) {
 
   ut_a(cursor_decl->token_type == SYM_CURSOR);
 
-  node->op_type = static_cast<open_node_op>(type);
-  node->cursor_def = cursor_decl->cursor_def;
+  open_node->m_op_type = static_cast<open_node_op>(type);
+  open_node->m_cursor_def = cursor_decl->cursor_def;
 
-  return node;
+  return open_node;
 }
 
 row_printf_node_t *pars_row_printf_statement(sel_node_t *sel_node) {
-  auto node = reinterpret_cast<row_printf_node_t *>(mem_heap_alloc(pars_sym_tab_global->heap, sizeof(row_printf_node_t)));
+  auto row_printf_node = reinterpret_cast<row_printf_node_t *>(mem_heap_alloc(pars_sym_tab_global->heap, sizeof(row_printf_node_t)));
 
-  node->common.type = QUE_NODE_ROW_PRINTF;
+  row_printf_node->m_common.type = QUE_NODE_ROW_PRINTF;
 
-  node->sel_node = sel_node;
+  row_printf_node->m_sel_node = sel_node;
 
-  sel_node->common.parent = node;
+  sel_node->m_common.parent = row_printf_node;
 
-  return node;
+  return row_printf_node;
 }
 
 Commit_node *pars_commit_statement() {
@@ -1201,13 +1196,7 @@ roll_node_t *pars_rollback_statement() {
 }
 
 sym_node_t *pars_column_def(sym_node_t *sym_node, pars_res_word_t *type, sym_node_t *len, void *is_unsigned, void *is_not_null) {
-  ulint len2;
-
-  if (len != nullptr) {
-    len2 = eval_node_get_int_val(len);
-  } else {
-    len2 = 0;
-  }
+  auto len2 = len != nullptr ? eval_node_get_int_val(len) : 0;
 
   pars_set_dfield_type(que_node_get_val(sym_node), type, len2, is_unsigned != nullptr, is_not_null != nullptr);
 
