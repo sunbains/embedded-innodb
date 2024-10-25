@@ -745,6 +745,7 @@ struct Dict;
 struct DBLWR;
 struct Trx_sys;
 struct Lock_sys;
+struct Row_update;
 
 extern Undo *srv_undo;
 
@@ -763,5 +764,7 @@ extern Trx_sys *srv_trx_sys;
 extern Dict *srv_dict_sys;
 
 extern Lock_sys *srv_lock_sys;
+
+extern Row_update *srv_row_upd;
 
 extern Config srv_config;

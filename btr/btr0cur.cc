@@ -605,7 +605,7 @@ inline db_err Btree_cursor::ins_lock_and_undo(ulint flags, const DTuple *entry, 
 
     if (!(flags & BTR_KEEP_SYS_FLAG)) {
 
-      row_upd_index_entry_sys_field(entry, index, DATA_ROLL_PTR, roll_ptr);
+      srv_row_upd->index_entry_sys_field(entry, index, DATA_ROLL_PTR, roll_ptr);
     }
   }
 
@@ -927,11 +927,11 @@ void Btree_cursor::update_in_place_log(ulint flags, rec_t *rec, const Index *ind
   mach_write_to_1(log_ptr, flags);
   log_ptr++;
 
-  log_ptr = row_upd_write_sys_vals_to_log(index, trx, roll_ptr, log_ptr, mtr);
+  log_ptr = srv_row_upd->write_sys_vals_to_log(index, trx, roll_ptr, log_ptr, mtr);
   mach_write_to_2(log_ptr, page_offset(rec));
   log_ptr += 2;
 
-  row_upd_index_write_log(update, log_ptr, mtr);
+  srv_row_upd->index_write_log(update, log_ptr, mtr);
 }
 
 byte *Btree_cursor::parse_update_in_place(byte *ptr, byte *end_ptr, page_t *page, Index *index) noexcept {
@@ -948,7 +948,7 @@ byte *Btree_cursor::parse_update_in_place(byte *ptr, byte *end_ptr, page_t *page
   auto flags = mach_read_from_1(ptr);
   ++ptr;
 
-  ptr = row_upd_parse_sys_vals(ptr, end_ptr, &pos, &trx_id, &roll_ptr);
+  ptr = srv_row_upd->parse_sys_vals(ptr, end_ptr, &pos, &trx_id, &roll_ptr);
 
   if (ptr == nullptr) {
 
@@ -967,7 +967,7 @@ byte *Btree_cursor::parse_update_in_place(byte *ptr, byte *end_ptr, page_t *page
 
   auto heap = mem_heap_create(256);
 
-  ptr = row_upd_index_parse(ptr, end_ptr, heap, &update);
+  ptr = srv_row_upd->index_parse(ptr, end_ptr, heap, &update);
 
   if (ptr != nullptr && page != nullptr) {
     auto rec = page + rec_offset;
@@ -975,10 +975,10 @@ byte *Btree_cursor::parse_update_in_place(byte *ptr, byte *end_ptr, page_t *page
     auto offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
 
     if (!(flags & BTR_KEEP_SYS_FLAG)) {
-      row_upd_rec_sys_fields_in_recovery(rec, offsets, pos, trx_id, roll_ptr);
+      srv_row_upd->rec_sys_fields_in_recovery(rec, offsets, pos, trx_id, roll_ptr);
     }
 
-    row_upd_rec_in_place(rec, index, offsets, update);
+    srv_row_upd->rec_in_place(rec, index, offsets, update);
   }
 
   mem_heap_free(heap);
@@ -1026,12 +1026,12 @@ db_err Btree_cursor::update_in_place(ulint flags, const upd_t *update, ulint cmp
   }
 
   if (!(flags & BTR_KEEP_SYS_FLAG)) {
-    row_upd_rec_sys_fields(rec, index, offsets, trx, roll_ptr);
+    Row_update::rec_sys_fields(rec, index, offsets, trx, roll_ptr);
   }
 
   was_delete_marked = rec_get_deleted_flag(rec);
 
-  row_upd_rec_in_place(rec, index, offsets, update);
+  srv_row_upd->rec_in_place(rec, index, offsets, update);
 
   update_in_place_log(flags, rec, index, update, trx, roll_ptr, mtr);
 
@@ -1085,7 +1085,7 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
   }
 #endif /* UNIV_DEBUG */
 
-  if (!row_upd_changes_field_size_or_external(index, offsets, update)) {
+  if (!srv_row_upd->changes_field_size_or_external(index, offsets, update)) {
 
     /* The simplest and the most common case: the update does not
     change the size of any field and none of the updated fields is
@@ -1105,8 +1105,8 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
     return DB_OVERFLOW;
   }
 
-  for (i = 0; i < upd_get_n_fields(update); i++) {
-    if (dfield_is_ext(&upd_get_nth_field(update, i)->new_val)) {
+  for (i = 0; i < Row_update::upd_get_n_fields(update); i++) {
+    if (dfield_is_ext(&update->get_nth_field(i)->m_new_val)) {
 
       goto any_extern;
     }
@@ -1122,7 +1122,7 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
   /* The page containing the clustered index record
   corresponding to new_entry is latched in mtr.
   Thus the following call is safe. */
-  row_upd_index_replace_new_col_vals_index_pos(new_entry, index, update, false, heap);
+  srv_row_upd->index_replace_new_col_vals_index_pos(new_entry, index, update, false, heap);
   old_rec_size = rec_offs_size(offsets);
   new_rec_size = rec_get_converted_size(index, new_entry, 0);
 
@@ -1180,8 +1180,8 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
   trx = thr_get_trx(thr);
 
   if (!(flags & BTR_KEEP_SYS_FLAG)) {
-    row_upd_index_entry_sys_field(new_entry, index, DATA_ROLL_PTR, roll_ptr);
-    row_upd_index_entry_sys_field(new_entry, index, DATA_TRX_ID, trx->m_id);
+    srv_row_upd->index_entry_sys_field(new_entry, index, DATA_ROLL_PTR, roll_ptr);
+    srv_row_upd->index_entry_sys_field(new_entry, index, DATA_TRX_ID, trx->m_id);
   }
 
   /* There are no externally stored columns in new_entry */
@@ -1324,11 +1324,11 @@ db_err Btree_cursor::pessimistic_update(
   stored fields cannot have been purged yet, because then the
   purge would also have removed the clustered index record
   itself.  Thus the following call is safe. */
-  row_upd_index_replace_new_col_vals_index_pos(new_entry, index, update, false, *heap);
+  srv_row_upd->index_replace_new_col_vals_index_pos(new_entry, index, update, false, *heap);
 
   if (!(flags & BTR_KEEP_SYS_FLAG)) {
-    row_upd_index_entry_sys_field(new_entry, index, DATA_ROLL_PTR, roll_ptr);
-    row_upd_index_entry_sys_field(new_entry, index, DATA_TRX_ID, trx->m_id);
+    srv_row_upd->index_entry_sys_field(new_entry, index, DATA_ROLL_PTR, roll_ptr);
+    srv_row_upd->index_entry_sys_field(new_entry, index, DATA_TRX_ID, trx->m_id);
   }
 
   Blob blob{m_fsp, m_btree};
@@ -1490,7 +1490,7 @@ void Btree_cursor::del_mark_set_clust_rec_log(ulint flags, rec_t *rec, const Ind
   mach_write_to_1(log_ptr, (ulint)val);
   ++log_ptr;
 
-  log_ptr = row_upd_write_sys_vals_to_log(index, trx, roll_ptr, log_ptr, mtr);
+  log_ptr = srv_row_upd->write_sys_vals_to_log(index, trx, roll_ptr, log_ptr, mtr);
 
   mach_write_to_2(log_ptr, page_offset(rec));
 
@@ -1515,7 +1515,7 @@ byte *Btree_cursor::parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_
   trx_id_t trx_id;
   roll_ptr_t roll_ptr;
 
-  ptr = row_upd_parse_sys_vals(ptr, end_ptr, &pos, &trx_id, &roll_ptr);
+  ptr = srv_row_upd->parse_sys_vals(ptr, end_ptr, &pos, &trx_id, &roll_ptr);
 
   if (ptr == nullptr) {
 
@@ -1550,7 +1550,7 @@ byte *Btree_cursor::parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_
         offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
       }
 
-      row_upd_rec_sys_fields_in_recovery(rec, offsets, pos, trx_id, roll_ptr);
+      srv_row_upd->rec_sys_fields_in_recovery(rec, offsets, pos, trx_id, roll_ptr);
 
       if (likely_null(heap)) {
         mem_heap_free(heap);
@@ -1600,7 +1600,7 @@ db_err Btree_cursor::del_mark_set_clust_rec(ulint flags, bool val, que_thr_t *th
       auto trx = thr_get_trx(thr);
 
       if (!(flags & BTR_KEEP_SYS_FLAG)) {
-        row_upd_rec_sys_fields(rec, index, offsets, trx, roll_ptr);
+        Row_update::rec_sys_fields(rec, index, offsets, trx, roll_ptr);
       }
 
       del_mark_set_clust_rec_log(flags, rec, index, val, trx, roll_ptr, mtr);

@@ -32,9 +32,10 @@ struct Undo_node;
 struct Insert_node;
 struct purge_node_t;
 
-using upd_t = struct upd_struct;
-using upd_field_t = struct upd_field_struct;
-using upd_node_t = struct upd_node_struct;
+struct upd_t;
+struct upd_field_t;
+struct upd_node_t;
+
 using del_node_t = struct del_node_struct;
 using ins_node_t = Insert_node;
 using open_node_t = struct open_node_struct;

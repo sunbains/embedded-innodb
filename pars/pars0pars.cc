@@ -717,12 +717,11 @@ que_node_t * pars_function_declaration(sym_node_t *sym_node) {
 }
 
 upd_node_t *pars_update_statement_start(bool is_delete, sym_node_t *table_sym, col_assign_node_t *col_assign_list) {
-  auto node = upd_node_create(pars_sym_tab_global->heap);
+  auto node = srv_row_upd->node_create(pars_sym_tab_global->heap);
 
-  node->is_delete = is_delete;
-
-  node->table_sym = table_sym;
-  node->col_assign_list = col_assign_list;
+  node->m_is_delete = is_delete;
+  node->m_table_sym = table_sym;
+  node->m_col_assign_list = col_assign_list;
 
   return node;
 }
@@ -748,9 +747,9 @@ col_assign_node_t *pars_column_assignment(sym_node_t *column, que_node_t *exp) {
  * @param[in] node The update node containing the assignment list.
  */
 static void pars_process_assign_list(upd_node_t *node) noexcept {
-  auto table_sym = node->table_sym;
-  auto col_assign_list = reinterpret_cast<col_assign_node_t *>(node->col_assign_list);
-  auto clust_index = node->table->get_first_index();
+  auto table_sym = node->m_table_sym;
+  auto col_assign_list = reinterpret_cast<col_assign_node_t *>(node->m_col_assign_list);
+  auto clust_index = node->m_table->get_first_index();
 
   ulint n_assigns{};
   auto assign_node = col_assign_list;
@@ -767,26 +766,26 @@ static void pars_process_assign_list(upd_node_t *node) noexcept {
     /* Add to the update node all the columns found in assignment
     values as columns to copy: therefore, true */
 
-    opt_find_all_cols(true, clust_index, &node->columns, nullptr, assign_node->val);
+    opt_find_all_cols(true, clust_index, &node->m_columns, nullptr, assign_node->val);
     ++n_assigns;
 
     assign_node = reinterpret_cast<col_assign_node_t *>(que_node_get_next(assign_node));
   }
 
-  node->update = upd_create(n_assigns, pars_sym_tab_global->heap);
+  node->m_update = Row_update::upd_create(n_assigns, pars_sym_tab_global->heap);
 
   assign_node = col_assign_list;
 
   auto changes_field_size = UPD_NODE_NO_SIZE_CHANGE;
 
   for (ulint i{}; i < n_assigns; ++i) {
-    auto upd_field = upd_get_nth_field(node->update, i);
+    auto upd_field = node->m_update->get_nth_field(i);
     auto col_sym = assign_node->col;
 
-    upd_field_set_field_no(upd_field, clust_index->get_nth_field_pos(col_sym->col_no), clust_index, nullptr);
-    upd_field->exp = assign_node->val;
+    upd_field->set_field_no(clust_index->get_nth_field_pos(col_sym->col_no), clust_index, nullptr);
+    upd_field->m_exp = assign_node->val;
 
-    if (clust_index->get_nth_col(upd_field->field_no)->get_fixed_size() == 0) {
+    if (clust_index->get_nth_col(upd_field->m_field_no)->get_fixed_size() == 0) {
       changes_field_size = 0;
     }
 
@@ -797,20 +796,20 @@ static void pars_process_assign_list(upd_node_t *node) noexcept {
 
   auto changes_ord_field = UPD_NODE_NO_ORD_CHANGE;
 
-  if (row_upd_changes_some_index_ord_field_binary(node->table, node->update)) {
+  if (srv_row_upd->changes_some_index_ord_field_binary(node->m_table, node->m_update)) {
     changes_ord_field = 0;
   }
 
-  node->cmpl_info = changes_ord_field | changes_field_size;
+  node->m_cmpl_info = changes_ord_field | changes_field_size;
 }
 
 upd_node_t *pars_update_statement(upd_node_t *node, sym_node_t *cursor_sym, que_node_t *search_cond) {
-  auto table_sym = node->table_sym;
+  auto table_sym = node->m_table_sym;
 
   pars_retrieve_table_def(table_sym);
-  node->table = table_sym->table;
+  node->m_table = table_sym->table;
 
-  UT_LIST_INIT(node->columns);
+  UT_LIST_INIT(node->m_columns);
 
   /* Make the single table node into a list of table nodes of length 1 */
 
@@ -823,33 +822,33 @@ upd_node_t *pars_update_statement(upd_node_t *node, sym_node_t *cursor_sym, que_
 
     sel_node = cursor_sym->alias->cursor_def;
 
-    node->searched_update = false;
+    node->m_searched_update = false;
   } else {
     sel_node = pars_select_list(nullptr, nullptr);
 
     pars_select_statement(sel_node, table_sym, search_cond, nullptr,
                           &pars_share_token, nullptr);
-    node->searched_update = true;
+    node->m_searched_update = true;
     sel_node->common.parent = node;
   }
 
-  node->select = sel_node;
+  node->m_select = sel_node;
 
-  ut_a(!node->is_delete || (node->col_assign_list == nullptr));
-  ut_a(node->is_delete || (node->col_assign_list != nullptr));
+  ut_a(!node->m_is_delete || (node->m_col_assign_list == nullptr));
+  ut_a(node->m_is_delete || (node->m_col_assign_list != nullptr));
 
-  if (node->is_delete) {
-    node->cmpl_info = 0;
+  if (node->m_is_delete) {
+    node->m_cmpl_info = 0;
   } else {
     pars_process_assign_list(node);
   }
 
-  if (node->searched_update) {
-    node->has_clust_rec_x_lock = true;
+  if (node->m_searched_update) {
+    node->m_has_clust_rec_x_lock = true;
     sel_node->set_x_locks = true;
     sel_node->row_lock_mode = LOCK_X;
   } else {
-    node->has_clust_rec_x_lock = sel_node->set_x_locks;
+    node->m_has_clust_rec_x_lock = sel_node->set_x_locks;
   }
 
   ut_a(sel_node->n_tables == 1);
@@ -859,7 +858,7 @@ upd_node_t *pars_update_statement(upd_node_t *node, sym_node_t *cursor_sym, que_
 
   sel_node->can_get_updated = true;
 
-  node->state = UPD_NODE_UPDATE_CLUSTERED;
+  node->m_state = UPD_NODE_UPDATE_CLUSTERED;
 
   auto plan = sel_node_get_nth_plan(sel_node, 0);
 
@@ -867,9 +866,9 @@ upd_node_t *pars_update_statement(upd_node_t *node, sym_node_t *cursor_sym, que_
 
   if (!plan->index->is_clustered()) {
     plan->must_get_clust = true;
-    node->pcur = &(plan->clust_pcur);
+    node->m_pcur = &(plan->clust_pcur);
   } else {
-    node->pcur = &(plan->pcur);
+    node->m_pcur = &(plan->pcur);
   }
 
   return node;

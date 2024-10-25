@@ -88,8 +88,8 @@ void Blob::mark_extern_inherited_fields(rec_t *rec, Index *index, const ulint *o
       /* Check it is not in updated fields */
 
       if (update) {
-        for (ulint j = 0; j < upd_get_n_fields(update); j++) {
-          if (upd_get_nth_field(update, j)->field_no == i) {
+        for (ulint j = 0; j < Row_update::upd_get_n_fields(update); j++) {
+          if (update->get_nth_field(j)->m_field_no == i) {
 
             continue;
           }
@@ -111,8 +111,8 @@ void Blob::mark_dtuple_inherited_extern(DTuple *entry, const upd_t *update) noex
 
     /* Check if it is in updated fields */
 
-    for (ulint j = 0; j < upd_get_n_fields(update); j++) {
-      if (upd_get_nth_field(update, j)->field_no == i) {
+    for (ulint j = 0; j < Row_update::upd_get_n_fields(update); j++) {
+      if (update->get_nth_field(j)->m_field_no == i) {
 
         continue;
       }
@@ -158,18 +158,18 @@ ulint Blob::push_update_extern_fields(DTuple *tuple, const upd_t *update, mem_he
   ulint n_pushed = 0;
   const upd_field_t *uf;
 
-  n = upd_get_n_fields(update);
+  n = Row_update::upd_get_n_fields(update);
 
-  for (uf = update->fields; n--; ++uf) {
-    if (dfield_is_ext(&uf->new_val)) {
-      auto field = dtuple_get_nth_field(tuple, uf->field_no);
+  for (uf = update->m_fields; n--; ++uf) {
+    if (dfield_is_ext(&uf->m_new_val)) {
+      auto field = dtuple_get_nth_field(tuple, uf->m_field_no);
 
       if (!dfield_is_ext(field)) {
         dfield_set_ext(field);
         n_pushed++;
       }
 
-      switch (uf->orig_len) {
+      switch (uf->m_orig_len) {
         byte *data;
         ulint len;
         byte *buf;
@@ -186,20 +186,20 @@ ulint Blob::push_update_extern_fields(DTuple *tuple, const upd_t *update, mem_he
           break;
         default:
           /* Reconstruct the original locally stored part of the column.  The data will have to be copied. */
-          ut_a(uf->orig_len > BTR_EXTERN_FIELD_REF_SIZE);
+          ut_a(uf->m_orig_len > BTR_EXTERN_FIELD_REF_SIZE);
 
           data = (byte *)dfield_get_data(field);
           len = dfield_get_len(field);
 
-          buf = (byte *)mem_heap_alloc(heap, uf->orig_len);
+          buf = (byte *)mem_heap_alloc(heap, uf->m_orig_len);
 
           /* Copy the locally stored prefix. */
-          memcpy(buf, data, uf->orig_len - BTR_EXTERN_FIELD_REF_SIZE);
+          memcpy(buf, data, uf->m_orig_len - BTR_EXTERN_FIELD_REF_SIZE);
 
           /* Copy the BLOB pointer. */
-          memcpy(buf + uf->orig_len - BTR_EXTERN_FIELD_REF_SIZE, data + len - BTR_EXTERN_FIELD_REF_SIZE, BTR_EXTERN_FIELD_REF_SIZE);
+          memcpy(buf + uf->m_orig_len - BTR_EXTERN_FIELD_REF_SIZE, data + len - BTR_EXTERN_FIELD_REF_SIZE, BTR_EXTERN_FIELD_REF_SIZE);
 
-          dfield_set_data(field, buf, uf->orig_len);
+          dfield_set_data(field, buf, uf->m_orig_len);
           dfield_set_ext(field);
       }
     }
@@ -570,17 +570,17 @@ void Blob::free_updated_extern_fields(
 
   /* Free possible externally stored fields in the record */
 
-  const auto n_fields = upd_get_n_fields(update);
+  const auto n_fields = Row_update::upd_get_n_fields(update);
 
   for (ulint i = 0; i < n_fields; i++) {
-    const upd_field_t *ufield = upd_get_nth_field(update, i);
+    auto ufield = update->get_nth_field(i);
 
-    if (rec_offs_nth_extern(offsets, ufield->field_no)) {
+    if (rec_offs_nth_extern(offsets, ufield->m_field_no)) {
       ulint len;
-      auto data = (byte *)rec_get_nth_field(rec, offsets, ufield->field_no, &len);
+      auto data = (byte *)rec_get_nth_field(rec, offsets, ufield->m_field_no, &len);
       ut_a(len >= BTR_EXTERN_FIELD_REF_SIZE);
 
-      free_externally_stored_field(index, data + len - BTR_EXTERN_FIELD_REF_SIZE, rec, offsets, ufield->field_no, rb_ctx, mtr);
+      free_externally_stored_field(index, data + len - BTR_EXTERN_FIELD_REF_SIZE, rec, offsets, ufield->m_field_no, rb_ctx, mtr);
     }
   }
 }

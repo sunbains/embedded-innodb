@@ -173,7 +173,7 @@ static db_err row_ins_sec_index_entry_by_modify(ulint mode, Btree_cursor *btr_cu
   difference. */
 
   auto heap = mem_heap_create(1024);
-  auto update = row_upd_build_sec_rec_difference_binary(btr_cur->m_index, entry, rec, thr_get_trx(thr), heap);
+  auto update = srv_row_upd->build_sec_rec_difference_binary(btr_cur->m_index, entry, rec, thr_get_trx(thr), heap);
 
   if (likely(mode == BTR_MODIFY_LEAF)) {
     /* Try an optimistic updating of the record, keeping changes
@@ -243,7 +243,7 @@ static db_err row_ins_clust_index_entry_by_modify(ulint mode, Btree_cursor *btr_
   NOTE that this vector may NOT contain system columns trx_id or
   roll_ptr */
 
-  update = row_upd_build_difference_binary(btr_cur->m_index, entry, rec, thr_get_trx(thr), *heap);
+  update = srv_row_upd->build_difference_binary(btr_cur->m_index, entry, rec, thr_get_trx(thr), *heap);
 
   if (mode == BTR_MODIFY_LEAF) {
     /* Try optimistic updating of the record, keeping changes
@@ -289,7 +289,7 @@ static bool row_ins_cascade_ancestor_updates_table(que_node_t *node, Table *tabl
 
     auto upd_node = static_cast<upd_node_t *>(parent);
 
-    if (upd_node->table == table && upd_node->is_delete == false) {
+    if (upd_node->m_table == table && !upd_node->m_is_delete) {
 
       return true;
     }
@@ -310,12 +310,12 @@ static bool row_ins_cascade_ancestor_updates_table(que_node_t *node, Table *tabl
  * @return Number of ancestors.
  */
 static ulint row_ins_cascade_n_ancestors(que_node_t *node) {
-  ulint n_ancestors = 0;
+  ulint n_ancestors{};
 
   auto parent = que_node_get_parent(node);
 
   while (que_node_get_type(parent) == QUE_NODE_UPDATE) {
-    n_ancestors++;
+    ++n_ancestors;
 
     parent = que_node_get_parent(parent);
 
@@ -336,7 +336,7 @@ static ulint row_ins_cascade_n_ancestors(que_node_t *node) {
  *         The returned value is ULINT_UNDEFINED if the column type in the child table is too short to fit the new value in the parent table, indicating the update fails.
  */
 static ulint row_ins_cascade_calc_update_vec(upd_node_t *node, const Foreign *foreign, mem_heap_t *heap) {
-  upd_node_t *cascade = node->cascade_node;
+  upd_node_t *cascade = node->m_cascade_node;
   Table *table = foreign->m_foreign_table;
   Index *index = foreign->m_foreign_index;
   upd_t *update;
@@ -361,15 +361,15 @@ static ulint row_ins_cascade_calc_update_vec(upd_node_t *node, const Foreign *fo
   spaces if the column is a fixed length CHAR or FIXBINARY column) as
   the referenced index record will get in the update. */
 
-  parent_table = node->table;
+  parent_table = node->m_table;
   ut_a(parent_table == foreign->m_foreign_table);
   parent_index = foreign->m_foreign_index;
-  parent_update = node->update;
+  parent_update = node->m_update;
 
-  update = cascade->update;
+  update = cascade->m_update;
 
-  update->info_bits = 0;
-  update->n_fields = foreign->m_n_fields;
+  update->m_info_bits = 0;
+  update->m_n_fields = foreign->m_n_fields;
 
   n_fields_updated = 0;
 
@@ -377,10 +377,10 @@ static ulint row_ins_cascade_calc_update_vec(upd_node_t *node, const Foreign *fo
 
     parent_field_no = parent_table->get_nth_col_pos(parent_index->get_nth_table_col_no(i));
 
-    for (j = 0; j < parent_update->n_fields; j++) {
-      parent_ufield = parent_update->fields + j;
+    for (j = 0; j < parent_update->m_n_fields; j++) {
+      parent_ufield = parent_update->m_fields + j;
 
-      if (parent_ufield->field_no == parent_field_no) {
+      if (parent_ufield->m_field_no == parent_field_no) {
 
         ulint min_size;
         const Column *col;
@@ -392,21 +392,21 @@ static ulint row_ins_cascade_calc_update_vec(upd_node_t *node, const Foreign *fo
         updated. Let us make the update vector
         field for the child table. */
 
-        ufield = update->fields + n_fields_updated;
+        ufield = update->m_fields + n_fields_updated;
 
-        ufield->field_no = table->get_nth_col_pos(col->get_no());
-        ufield->exp = nullptr;
+        ufield->m_field_no = table->get_nth_col_pos(col->get_no());
+        ufield->m_exp = nullptr;
 
-        ufield->new_val = parent_ufield->new_val;
-        ufield_len = dfield_get_len(&ufield->new_val);
+        ufield->m_new_val = parent_ufield->m_new_val;
+        ufield_len = dfield_get_len(&ufield->m_new_val);
 
         /* Clear the "external storage" flag */
-        dfield_set_len(&ufield->new_val, ufield_len);
+        dfield_set_len(&ufield->m_new_val, ufield_len);
 
         /* Do not allow a NOT NULL column to be
         updated as NULL */
 
-        if (dfield_is_null(&ufield->new_val) && (col->prtype & DATA_NOT_NULL)) {
+        if (dfield_is_null(&ufield->m_new_val) && (col->prtype & DATA_NOT_NULL)) {
 
           return ULINT_UNDEFINED;
         }
@@ -414,9 +414,9 @@ static ulint row_ins_cascade_calc_update_vec(upd_node_t *node, const Foreign *fo
         /* If the new value would not fit in the
         column, do not allow the update */
 
-        if (!dfield_is_null(&ufield->new_val) &&
+        if (!dfield_is_null(&ufield->m_new_val) &&
             dtype_get_at_most_n_mbchars(
-                col->prtype, col->mbminlen, col->mbmaxlen, col->len, ufield_len, (const char*)dfield_get_data(&ufield->new_val)
+                col->prtype, col->mbminlen, col->mbmaxlen, col->len, ufield_len, (const char*)dfield_get_data(&ufield->m_new_val)
             ) < ufield_len) {
 
           return ULINT_UNDEFINED;
@@ -443,7 +443,7 @@ static ulint row_ins_cascade_calc_update_vec(upd_node_t *node, const Foreign *fo
           pad_start = padded_data + ufield_len;
           pad_end = padded_data + min_size;
 
-          memcpy(padded_data, dfield_get_data(&ufield->new_val), dfield_get_len(&ufield->new_val));
+          memcpy(padded_data, dfield_get_data(&ufield->m_new_val), dfield_get_len(&ufield->m_new_val));
 
           switch (expect(col->mbminlen, 1)) {
             default:
@@ -470,7 +470,7 @@ static ulint row_ins_cascade_calc_update_vec(upd_node_t *node, const Foreign *fo
               break;
           }
 
-          dfield_set_data(&ufield->new_val, padded_data, min_size);
+          dfield_set_data(&ufield->m_new_val, padded_data, min_size);
         }
 
         n_fields_updated++;
@@ -478,7 +478,7 @@ static ulint row_ins_cascade_calc_update_vec(upd_node_t *node, const Foreign *fo
     }
   }
 
-  update->n_fields = n_fields_updated;
+  update->m_n_fields = n_fields_updated;
 
   return n_fields_updated;
 }
@@ -505,13 +505,7 @@ static void row_ins_set_detailed(Trx *trx, const Foreign *foreign) {
  * @param[in] rec A matching index record in the child table.
  * @param[in] entry Index entry in the parent table.
  */
-static void row_ins_foreign_report_err(
-  const char *errstr,
-  que_thr_t *thr,
-  const Foreign *foreign,
-  const rec_t *rec,
-  const DTuple *entry
-) {
+static void row_ins_foreign_report_err(const char *errstr, que_thr_t *thr, const Foreign *foreign, const rec_t *rec, const DTuple *entry) {
   auto trx = thr_get_trx(thr);
 
   row_ins_set_detailed(trx, foreign);
@@ -605,7 +599,7 @@ run_again:
   thr->run_node = node;
   thr->prev_node = node;
 
-  row_upd_step(thr);
+  (void) srv_row_upd->step(thr);
 
   auto err = trx->m_error_state;
 
@@ -639,14 +633,14 @@ run_again:
     return err;
   }
 
-  if (node->is_delete) {
+  if (node->m_is_delete) {
     if (table->m_stats.m_n_rows > 0) {
       --table->m_stats.m_n_rows;
     }
 
-    srv_n_rows_deleted++;
+    ++srv_n_rows_deleted;
   } else {
-    srv_n_rows_updated++;
+    ++srv_n_rows_updated;
   }
 
   ib_update_statistics_if_needed(table);
@@ -693,14 +687,14 @@ static db_err row_ins_foreign_check_on_constraint(que_thr_t *thr, const Foreign 
 
   node = static_cast<upd_node_t *>(thr->run_node);
 
-  if (node->is_delete && 0 == (foreign->m_type & (DICT_FOREIGN_ON_DELETE_CASCADE | DICT_FOREIGN_ON_DELETE_SET_NULL))) {
+  if (node->m_is_delete && 0 == (foreign->m_type & (DICT_FOREIGN_ON_DELETE_CASCADE | DICT_FOREIGN_ON_DELETE_SET_NULL))) {
 
     row_ins_foreign_report_err("Trying to delete", thr, foreign, pcur->get_rec(), entry);
 
     return DB_ROW_IS_REFERENCED;
   }
 
-  if (!node->is_delete && 0 == (foreign->m_type & (DICT_FOREIGN_ON_UPDATE_CASCADE | DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
+  if (!node->m_is_delete && 0 == (foreign->m_type & (DICT_FOREIGN_ON_UPDATE_CASCADE | DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
     /* This is an UPDATE */
 
     row_ins_foreign_report_err("Trying to update", thr, foreign, pcur->get_rec(), entry);
@@ -708,14 +702,14 @@ static db_err row_ins_foreign_check_on_constraint(que_thr_t *thr, const Foreign 
     return DB_ROW_IS_REFERENCED;
   }
 
-  if (node->cascade_node == nullptr) {
+  if (node->m_cascade_node == nullptr) {
     /* Extend our query graph by creating a child to current
     update node. The child is used in the cascade or set null
     operation. */
 
-    node->cascade_heap = mem_heap_create(128);
-    node->cascade_node = row_create_update_node(table, node->cascade_heap);
-    que_node_set_parent(node->cascade_node, node);
+    node->m_cascade_heap = mem_heap_create(128);
+    node->m_cascade_node = srv_row_upd->create_update_node(table, node->m_cascade_heap);
+    que_node_set_parent(node->m_cascade_node, node);
   }
 
   /* Initialize cascade_node to do the operation we want. Note that we
@@ -723,22 +717,22 @@ static db_err row_ins_foreign_check_on_constraint(que_thr_t *thr, const Foreign 
   SQL DELETE: the table of the cascade node may change if there are
   several child tables to the table where the delete is done! */
 
-  cascade = node->cascade_node;
+  cascade = node->m_cascade_node;
 
-  cascade->table = table;
+  cascade->m_table = table;
 
-  cascade->foreign = foreign;
+  cascade->m_foreign = foreign;
 
-  if (node->is_delete && (foreign->m_type & DICT_FOREIGN_ON_DELETE_CASCADE)) {
-    cascade->is_delete = true;
+  if (node->m_is_delete && (foreign->m_type & DICT_FOREIGN_ON_DELETE_CASCADE)) {
+    cascade->m_is_delete = true;
   } else {
-    cascade->is_delete = false;
+    cascade->m_is_delete = false;
 
-    if (foreign->m_n_fields > cascade->update_n_fields) {
+    if (foreign->m_n_fields > cascade->m_update_n_fields) {
       /* We have to make the update vector longer */
 
-      cascade->update = upd_create(foreign->m_n_fields, node->cascade_heap);
-      cascade->update_n_fields = foreign->m_n_fields;
+      cascade->m_update = Row_update::upd_create(foreign->m_n_fields, node->m_cascade_heap);
+      cascade->m_update_n_fields = foreign->m_n_fields;
     }
   }
 
@@ -750,7 +744,7 @@ static db_err row_ins_foreign_check_on_constraint(que_thr_t *thr, const Foreign 
   table may still be incomplete, and we must avoid seeing the indexes
   of the parent table in an inconsistent state! */
 
-  if (!cascade->is_delete && row_ins_cascade_ancestor_updates_table(cascade, table)) {
+  if (!cascade->m_is_delete && row_ins_cascade_ancestor_updates_table(cascade, table)) {
 
     /* We do not know if this would break foreign key
     constraints, but play safe and return an error */
@@ -758,9 +752,7 @@ static db_err row_ins_foreign_check_on_constraint(que_thr_t *thr, const Foreign 
     err = DB_ROW_IS_REFERENCED;
 
     row_ins_foreign_report_err(
-      "Trying an update, possibly causing a cyclic"
-      " cascaded update\n"
-      "in the child table,",
+      "Trying an update, possibly causing a cyclic cascaded update in the child table,",
       thr,
       foreign,
       pcur->get_rec(),
@@ -801,12 +793,12 @@ static db_err row_ins_foreign_check_on_constraint(que_thr_t *thr, const Foreign 
 
     ref = row_build_row_ref(ROW_COPY_POINTERS, index, rec, tmp_heap);
 
-    cascade->pcur->open_with_no_init(clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, false, mtr, Current_location());
+    cascade->m_pcur->open_with_no_init(clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, false, mtr, Current_location());
 
-    clust_rec = cascade->pcur->get_rec();
-    clust_block = cascade->pcur->get_block();
+    clust_rec = cascade->m_pcur->get_rec();
+    clust_block = cascade->m_pcur->get_block();
 
-    if (!page_rec_is_user_rec(clust_rec) || cascade->pcur->get_low_match() < clust_index->get_n_unique()) {
+    if (!page_rec_is_user_rec(clust_rec) || cascade->m_pcur->get_low_match() < clust_index->get_n_unique()) {
 
       log_err("error in cascade of a foreign key op");
       srv_dict_sys->index_name_print(trx, index);
@@ -849,27 +841,27 @@ static db_err row_ins_foreign_check_on_constraint(que_thr_t *thr, const Foreign 
     goto nonstandard_exit_func;
   }
 
-  if ((node->is_delete && (foreign->m_type & DICT_FOREIGN_ON_DELETE_SET_NULL)) || (!node->is_delete && (foreign->m_type & DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
+  if ((node->m_is_delete && (foreign->m_type & DICT_FOREIGN_ON_DELETE_SET_NULL)) || (!node->m_is_delete && (foreign->m_type & DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
 
     /* Build the appropriate update vector which sets
     foreign->n_fields first fields in rec to SQL NULL */
 
-    update = cascade->update;
+    update = cascade->m_update;
 
-    update->info_bits = 0;
-    update->n_fields = foreign->m_n_fields;
+    update->m_info_bits = 0;
+    update->m_n_fields = foreign->m_n_fields;
 
     for (i = 0; i < foreign->m_n_fields; i++) {
-      auto ufield = &update->fields[i];
+      auto ufield = &update->m_fields[i];
 
-      ufield->field_no = table->get_nth_col_pos(index->get_nth_table_col_no(i));
-      ufield->orig_len = 0;
-      ufield->exp = nullptr;
-      dfield_set_null(&ufield->new_val);
+      ufield->m_field_no = table->get_nth_col_pos(index->get_nth_table_col_no(i));
+      ufield->m_orig_len = 0;
+      ufield->m_exp = nullptr;
+      dfield_set_null(&ufield->m_new_val);
     }
   }
 
-  if (!node->is_delete && (foreign->m_type & DICT_FOREIGN_ON_UPDATE_CASCADE)) {
+  if (!node->m_is_delete && (foreign->m_type & DICT_FOREIGN_ON_UPDATE_CASCADE)) {
 
     /* Build the appropriate update vector which sets changing
     foreign->n_fields first fields in rec to new values */
@@ -882,12 +874,8 @@ static db_err row_ins_foreign_check_on_constraint(que_thr_t *thr, const Foreign 
       err = DB_ROW_IS_REFERENCED;
 
       row_ins_foreign_report_err(
-        "Trying a cascaded update where the"
-        " updated value in the child\n"
-        "table would not fit in the length"
-        " of the column, or the value would\n"
-        "be NULL and the column is"
-        " declared as not NULL in the child table,",
+        "Trying a cascaded update where the updated value in the child table would not fit in the length"
+        " of the column, or the value would be NULL and the column is declared as not NULL in the child table.",
         thr,
         foreign,
         pcur->get_rec(),
@@ -897,7 +885,7 @@ static db_err row_ins_foreign_check_on_constraint(que_thr_t *thr, const Foreign 
       goto nonstandard_exit_func;
     }
 
-    if (cascade->update->n_fields == 0) {
+    if (cascade->m_update->m_n_fields == 0) {
 
       /* The update does not change any columns referred
       to in this foreign key constraint: no need to do
@@ -915,27 +903,21 @@ static db_err row_ins_foreign_check_on_constraint(que_thr_t *thr, const Foreign 
   pcur->store_position(mtr);
 
   if (index == clust_index) {
-    cascade->pcur->copy_stored_position(pcur);
+    cascade->m_pcur->copy_stored_position(pcur);
   } else {
-    cascade->pcur->store_position(mtr);
+    cascade->m_pcur->store_position(mtr);
   }
 
   mtr->commit();
 
-  ut_a(cascade->pcur->get_rel_pos() == Btree_cursor_pos::ON);
+  ut_a(cascade->m_pcur->get_rel_pos() == Btree_cursor_pos::ON);
 
-  cascade->state = UPD_NODE_UPDATE_CLUSTERED;
+  cascade->m_state = UPD_NODE_UPDATE_CLUSTERED;
 
   err = row_update_cascade_client(thr, cascade, foreign->m_foreign_table);
 
   if (foreign->m_foreign_table->m_n_foreign_key_checks_running == 0) {
-    ib_logger(
-      ib_stream,
-      "error: table %s has the counter 0"
-      " though there is\n"
-      "a FOREIGN KEY check running on it.\n",
-      foreign->m_foreign_table->m_name
-    );
+    log_err(std::format("Table {} has the counter 0 though there is a FOREIGN KEY check running on it.", foreign->m_foreign_table->m_name));
   }
 
   /* Release the data dictionary latch for a while, so that we do not
@@ -1090,22 +1072,15 @@ run_again:
   if (que_node_get_type(thr->run_node) == QUE_NODE_UPDATE) {
     upd_node = static_cast<upd_node_t *>(thr->run_node);
 
-    if (!upd_node->is_delete && upd_node->foreign == foreign) {
-      /* If a cascaded update is done as defined by a
-      foreign key constraint, do not check that
-      constraint for the child row. In ON UPDATE CASCADE
-      the update of the parent row is only half done when
-      we come here: if we would check the constraint here
-      for the child row it would fail.
+    if (!upd_node->m_is_delete && upd_node->m_foreign == foreign) {
+      /* If a cascaded update is done as defined by a foreign key constraint, do not check that
+      constraint for the child row. In ON UPDATE CASCADE the update of the parent row is only half done when
+      we come here: if we would check the constraint here for the child row it would fail.
 
-      A QUESTION remains: if in the child table there are
-      several constraints which refer to the same parent
-      table, we should merge all updates to the child as
-      one update? And the updates can be contradictory!
-      Currently we just perform the update associated
-      with each foreign key constraint, one after
-      another, and the user has problems predicting in
-      which order they are performed. */
+      A QUESTION remains: if in the child table there are several constraints which refer to the same parent
+      table, we should merge all updates to the child as one update? And the updates can be contradictory!
+      Currently we just perform the update associated with each foreign key constraint, one after
+      another, and the user has problems predicting in which order they are performed. */
 
       goto exit_func;
     }
@@ -1124,24 +1099,11 @@ run_again:
       row_ins_set_detailed(trx, foreign);
 
       mutex_enter(&srv_dict_sys->m_foreign_err_mutex);
-      ut_print_timestamp(ib_stream);
-      ib_logger(ib_stream, " Transaction:\n");
-      log_info(trx->to_string(600));
-      ib_logger(ib_stream, "Foreign key constraint fails for table ");
-      ut_print_name(foreign->m_foreign_table_name);
-      ib_logger(ib_stream, ":\n");
+      log_err(std::format(" Transaction: {} foreign key constraint fails for table {}: ", trx->to_string(600), foreign->m_foreign_table_name));
       srv_dict_sys->print_info_on_foreign_key_in_create_format(trx, foreign, true);
-      ib_logger(ib_stream, "\nTrying to add to index ");
-      ut_print_name(foreign->m_foreign_index->m_name);
-      ib_logger(ib_stream, " tuple:\n");
+      log_err("Trying to add to index {}", foreign->m_foreign_index->m_name, " tuple: ");
       dtuple_print(ib_stream, entry);
-      ib_logger(ib_stream, "\nBut the parent table ");
-      ut_print_name(foreign->m_referenced_table_name);
-      ib_logger(
-        ib_stream,
-        "\nor its .ibd file does"
-        " not currently exist!\n"
-      );
+      log_err("\nBut the parent table {}", foreign->m_referenced_table_name, " does not currently exist! Or, it's .ibd file is missing.");
       mutex_exit(&srv_dict_sys->m_foreign_err_mutex);
 
       err = DB_NO_REFERENCED_ROW;
@@ -1150,8 +1112,8 @@ run_again:
     goto exit_func;
   }
 
-  ut_a(check_table);
-  ut_a(check_index);
+  ut_a(check_table != nullptr);
+  ut_a(check_index != nullptr);
 
   if (check_table != table) {
     /* We already have a LOCK_IX on table, but not necessarily
@@ -1336,10 +1298,9 @@ exit_func:
  */
 static db_err row_ins_check_foreign_constraints(const Table *table, const Index *index, DTuple *entry, que_thr_t *thr) {
   db_err err;
-  Trx *trx;
   bool got_s_lock = false;
 
-  trx = thr_get_trx(thr);
+  auto trx = thr_get_trx(thr);
 
   for (auto foreign : table->m_foreign_list) {
     if (foreign->m_foreign_index == index) {
@@ -1362,10 +1323,8 @@ static db_err row_ins_check_foreign_constraints(const Table *table, const Index 
         srv_dict_sys->mutex_release();
       }
 
-      /* NOTE that if the thread ends up waiting for a lock
-      we will release dict_operation_lock temporarily!
-      But the counter on the table protects the referenced
-      table from being dropped while the check is running. */
+      /* NOTE that if the thread ends up waiting for a lock we will release dict_operation_lock temporarily!
+      But the counter on the table protects the referenced table from being dropped while the check is running. */
 
       err = row_ins_check_foreign_constraint(true, foreign, table, entry, thr);
 

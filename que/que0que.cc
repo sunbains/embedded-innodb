@@ -457,20 +457,20 @@ void que_graph_free_recursive(que_node_t *node) {
 
       upd = static_cast<upd_node_t *>(node);
 
-      if (upd->in_client_interface) {
+      if (upd->m_in_client_interface) {
 
-        delete upd->pcur;
+        delete upd->m_pcur;
       }
 
-      que_graph_free_recursive(upd->cascade_node);
+      que_graph_free_recursive(upd->m_cascade_node);
 
-      if (upd->cascade_heap) {
-        mem_heap_free(upd->cascade_heap);
+      if (upd->m_cascade_heap) {
+        mem_heap_free(upd->m_cascade_heap);
       }
 
-      que_graph_free_recursive(upd->select);
+      que_graph_free_recursive(upd->m_select);
 
-      mem_heap_free(upd->heap);
+      mem_heap_free(upd->m_heap);
 
       break;
     case QUE_NODE_CREATE_TABLE:
@@ -556,10 +556,17 @@ void que_graph_free(que_t *graph) {
   mem_heap_free(graph->heap);
 }
 
-/** Performs an execution step on a thr node.
-@return	query thread to run next, or nullptr if none
-@param[in,out]                  Query thread where run_node must
-                                be the thread node itself */
+/**
+ * @brief Performs an execution step on a thr node.
+ *
+ * This function executes a step on the given query thread node. If the control
+ * to the node came from above, it is passed on to the child node. If the thread
+ * execution is completed, the state is set to QUE_THR_COMPLETED.
+ *
+ * @param[in,out] thr Query thread where run_node must be the thread node itself.
+ * 
+ * @return Query thread to run next, or nullptr if none.
+ */
 static que_thr_t *que_thr_node_step(que_thr_t *thr) {
   ut_ad(thr->run_node == thr);
 
@@ -609,23 +616,20 @@ void que_thr_move_to_run_state(que_thr_t *thr) {
   thr->state = QUE_THR_RUNNING;
 }
 
-/** Decrements the query thread reference counts in the query graph and the
-transaction. May start signal handling, e.g., a rollback.
-
-*** NOTE ***:
-This and que_thr_stop_client are the only functions where the reference
-count can be decremented and this function may only be called from inside
-que_run_threads or que_thr_check_if_switch! These restrictions exist to make
-the rollback code easier to maintain. */
-static void que_thr_dec_refer_count(
-  que_thr_t *thr, /*!< in: query thread */
-  que_thr_t **next_thr
-) /*!< in/out: next query thread to run;
-                          if the value which is passed in is
-                          a pointer to a nullptr pointer, then the
-                          calling function can start running
-                          a new query thread */
-{
+/**
+ * @brief Decrements the query thread reference counts in the query graph and the transaction.
+ * 
+ * This function may start signal handling, e.g., a rollback.
+ * 
+ * @note This and que_thr_stop_client are the only functions where the reference count can be decremented.
+ * This function may only be called from inside que_run_threads or que_thr_check_if_switch.
+ * These restrictions exist to make the rollback code easier to maintain.
+ * 
+ * @param[in] thr Query thread.
+ * @param[in,out] next_thr Next query thread to run. If the value which is passed in is a pointer to a nullptr pointer,
+ *   then the calling function can start running a new query thread.
+ */
+static void que_thr_dec_refer_count(que_thr_t *thr, que_thr_t **next_thr) {
   auto fork = static_cast<que_fork_t *>(thr->common.parent);
   auto trx = thr_get_trx(thr);
 
@@ -638,25 +642,18 @@ static void que_thr_dec_refer_count(
     auto stopped = que_thr_stop(thr);
 
     if (!stopped) {
-      /* The reason for the thr suspension or wait was
-      already canceled before we came here: continue
-      running the thread */
-
-      /* ib_logger(ib_stream,
-              "!!!!!!!! Wait already ended: continue thr\n");
-      */
+      /* The reason for the thr suspension or wait was already canceled
+      before we came here: continue running the thread */
 
       if (next_thr && *next_thr == nullptr) {
-        /* Normally srv_suspend_user_thread resets
-        the state to DB_SUCCESS before waiting, but
-        in this case we have to do it here,
-        otherwise nobody does it. */
+        /* Normally srv_suspend_user_thread resets the state to DB_SUCCESS
+        before waiting, but in this case we have to do it here, otherwise
+        nobody does it. */
         trx->m_error_state = DB_SUCCESS;
 
         *next_thr = thr;
       } else {
         ut_error;
-	InnoDB::que_task_enqueue_low(thr);
       }
 
       mutex_exit(&kernel_mutex);
@@ -805,9 +802,8 @@ void que_thr_stop_client(que_thr_t *thr) {
 
       thr->state = QUE_THR_COMPLETED;
     } else {
-      /* It must have been a lock wait but the lock was
-      already released, or this transaction was chosen
-      as a victim in selective deadlock resolution */
+      /* It must have been a lock wait but the lock was already released, or this
+      transaction was chosen as a victim in selective deadlock resolution */
 
       mutex_exit(&kernel_mutex);
 
@@ -962,7 +958,7 @@ inline que_thr_t *que_thr_step(que_thr_t *thr) {
   } else if (type == QUE_NODE_INSERT) {
     thr = row_ins_step(thr);
   } else if (type == QUE_NODE_UPDATE) {
-    thr = row_upd_step(thr);
+    thr = srv_row_upd->step(thr);
   } else if (type == QUE_NODE_FETCH) {
     thr = fetch_step(thr);
   } else if (type == QUE_NODE_OPEN) {

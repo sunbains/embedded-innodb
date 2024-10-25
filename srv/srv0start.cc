@@ -673,6 +673,12 @@ ib_err_t InnoDB::start() noexcept {
       return DB_ERROR;
     }
 
+    {
+      // FIXME: These should be created in a separate DML related function
+      ut_a(srv_row_upd == nullptr);
+      srv_row_upd = Row_update::create(srv_dict_sys, srv_lock_sys);
+    }
+
     if (auto err = srv_dict_sys->create_instance(); err != DB_SUCCESS) {
       srv_startup_abort(err);
       return DB_ERROR;
@@ -780,6 +786,12 @@ ib_err_t InnoDB::start() noexcept {
     if (srv_dict_sys == nullptr) {
       srv_startup_abort(DB_OUT_OF_MEMORY);
       return DB_ERROR;
+    }
+
+    {
+      // FIXME: These should be created in a separate DML related function
+      ut_a(srv_row_upd == nullptr);
+      srv_row_upd = Row_update::create(srv_dict_sys, srv_lock_sys);
     }
 
     if (srv_config.m_force_recovery <= IB_RECOVERY_NO_TRX_UNDO) {
@@ -1093,23 +1105,22 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
 
   log_sys->shutdown();
 
+  Row_update::destroy(srv_row_upd);
+
+  /* Must be called before Buf_pool::close(). */
+  Dict::destroy(srv_dict_sys);
+
   Btree::destroy(srv_btree_sys);
 
   Lock_sys::destroy(srv_lock_sys);
 
   Trx_sys::destroy(srv_trx_sys);
 
-  /* Must be called before Buf_pool::close(). */
-  Dict::destroy(srv_dict_sys);
-  ut_a(srv_dict_sys == nullptr);
-
   Undo::destroy(srv_undo);
-  ut_a(srv_undo == nullptr);
 
   srv_buf_pool->close();
 
   FSP::destroy(srv_fsp);
-  ut_a(srv_fsp == nullptr);
 
   srv_aio->shutdown();
 

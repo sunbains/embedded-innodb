@@ -417,9 +417,9 @@ static db_err row_undo_mod_del_unmark_sec_and_undo_update(ulint mode, que_thr_t 
     ut_a(err == DB_SUCCESS);
     heap = mem_heap_create(100);
 
-    update = row_upd_build_sec_rec_difference_binary(index, entry, btr_cur->get_rec(), trx, heap);
+    update = srv_row_upd->build_sec_rec_difference_binary(index, entry, btr_cur->get_rec(), trx, heap);
 
-    if (upd_get_n_fields(update) == 0) {
+    if (Row_update::upd_get_n_fields(update) == 0) {
 
       /* Do nothing */
 
@@ -550,7 +550,7 @@ static db_err row_undo_mod_upd_exist_sec(Undo_node *node, que_thr_t *thr) {
   for (; node->index != nullptr; node->index = node->index->get_next()) {
     auto index = node->index;
 
-    if (row_upd_changes_ord_field_binary(node->row, node->index, node->update)) {
+    if (srv_row_upd->changes_ord_field_binary(node->row, node->index, node->update)) {
 
       /* Build the newest version of the index entry */
       auto entry = row_build_index_entry(node->row, node->ext, index, heap);

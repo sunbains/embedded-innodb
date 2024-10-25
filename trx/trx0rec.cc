@@ -564,11 +564,11 @@ static ulint trx_undo_page_report_modify(
       return 0;
     }
 
-    ptr += mach_write_compressed(ptr, upd_get_n_fields(update));
+    ptr += mach_write_compressed(ptr, Row_update::upd_get_n_fields(update));
 
-    for (ulint i = 0; i < upd_get_n_fields(update); i++) {
+    for (ulint i = 0; i < Row_update::upd_get_n_fields(update); i++) {
 
-      ulint pos = upd_get_nth_field(update, i)->field_no;
+      auto pos = update->get_nth_field(i)->m_field_no;
 
       /* Write field number to undo log */
       if (trx_undo_left(undo_page, ptr) < 5) {
@@ -750,11 +750,8 @@ byte *trx_undo_update_rec_get_update(
   byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, mem_heap_t *heap,
   upd_t **upd
 ) {
-  upd_field_t *upd_field;
-  upd_t *update;
   ulint n_fields;
   byte *buf;
-  ulint i;
 
   ut_a(index->is_clustered());
 
@@ -764,29 +761,29 @@ byte *trx_undo_update_rec_get_update(
     n_fields = 0;
   }
 
-  update = upd_create(n_fields + 2, heap);
+  auto update = Row_update::upd_create(n_fields + 2, heap);
 
-  update->info_bits = info_bits;
+  update->m_info_bits = info_bits;
 
   /* Store first trx id and roll ptr to update vector */
 
-  upd_field = upd_get_nth_field(update, n_fields);
+  auto upd_field = update->get_nth_field(n_fields);
   buf = mem_heap_alloc(heap, DATA_TRX_ID_LEN);
   srv_trx_sys->write_trx_id(buf, trx_id);
 
-  upd_field_set_field_no(upd_field, index->get_sys_col_field_pos(DATA_TRX_ID), index, trx);
-  dfield_set_data(&(upd_field->new_val), buf, DATA_TRX_ID_LEN);
+  upd_field->set_field_no(index->get_sys_col_field_pos(DATA_TRX_ID), index, trx);
+  dfield_set_data(&upd_field->m_new_val, buf, DATA_TRX_ID_LEN);
 
-  upd_field = upd_get_nth_field(update, n_fields + 1);
+  upd_field = update->get_nth_field(n_fields + 1);
   buf = mem_heap_alloc(heap, DATA_ROLL_PTR_LEN);
   trx_write_roll_ptr(buf, roll_ptr);
 
-  upd_field_set_field_no(upd_field, index->get_sys_col_field_pos(DATA_ROLL_PTR), index, trx);
-  dfield_set_data(&(upd_field->new_val), buf, DATA_ROLL_PTR_LEN);
+  upd_field->set_field_no(index->get_sys_col_field_pos(DATA_ROLL_PTR), index, trx);
+  dfield_set_data(&upd_field->m_new_val, buf, DATA_ROLL_PTR_LEN);
 
   /* Store then the updated ordinary columns to the update vector */
 
-  for (i = 0; i < n_fields; i++) {
+  for (ulint i{}; i < n_fields; ++i) {
 
     ulint len;
     byte *field;
@@ -795,53 +792,35 @@ byte *trx_undo_update_rec_get_update(
     ptr = trx_undo_update_rec_get_field_no(ptr, &field_no);
 
     if (field_no >= index->get_n_fields()) {
-      ib_logger(
-        ib_stream,
-        "Error: trying to access"
-        " update undo rec field %lu in ",
-        (ulong)field_no
-      );
-      // index_name_print(ib_stream, trx, index);
-      ib_logger(
-        ib_stream,
-        "\n"
-        "but index has only %lu fields\n"
-        "Submit a detailed bug report, "
-        "check the InnoDB website for details\n"
-        "Run also CHECK TABLE ",
-        (ulong)index->get_n_fields()
-      );
-      ut_print_name(index->m_table->m_name);
-      ib_logger(
-        ib_stream,
-        "\n"
-        "n_fields = %lu, i = %lu, ptr %p\n",
-        (ulong)n_fields,
-        (ulong)i,
-        ptr
-      );
+      log_err(std::format(
+        "Trying to access update undo rec field {} in {} but index has only {} fields."
+        " Submit a detailed bug report, check the Embedded InnoDB website for details."
+        " : n_fields = {}, i = {}, ptr {}",
+        field_no, index->m_name, index->get_n_fields(), n_fields, i, (void*) ptr
+      ));
+
       return nullptr;
     }
 
-    upd_field = upd_get_nth_field(update, i);
+    upd_field = update->get_nth_field(i);
 
-    upd_field_set_field_no(upd_field, field_no, index, trx);
+    upd_field->set_field_no(field_no, index, trx);
 
     ulint orig_len;
 
     ptr = trx_undo_rec_get_col_val(ptr, &field, &len, &orig_len);
 
-    upd_field->orig_len = orig_len;
+    upd_field->m_orig_len = orig_len;
 
     if (len == UNIV_SQL_NULL) {
-      dfield_set_null(&upd_field->new_val);
+      dfield_set_null(&upd_field->m_new_val);
     } else if (len < UNIV_EXTERN_STORAGE_FIELD) {
-      dfield_set_data(&upd_field->new_val, field, len);
+      dfield_set_data(&upd_field->m_new_val, field, len);
     } else {
       len -= UNIV_EXTERN_STORAGE_FIELD;
 
-      dfield_set_data(&upd_field->new_val, field, len);
-      dfield_set_ext(&upd_field->new_val);
+      dfield_set_data(&upd_field->m_new_val, field, len);
+      dfield_set_ext(&upd_field->m_new_val);
     }
   }
 
@@ -1155,7 +1134,7 @@ db_err trx_undo_prev_version_build(
   bool dummy_extern;
   byte *buf;
 #ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&(purge_sys->latch), RW_LOCK_SHARED));
+  ut_ad(rw_lock_own(&purge_sys->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
   ut_ad(
     index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_S_FIX) ||
@@ -1164,18 +1143,16 @@ db_err trx_undo_prev_version_build(
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   if (!index->is_clustered()) {
-    ib_logger(
-      ib_stream,
-      "Error: trying to access"
-      " update undo rec for non-clustered index %s\n"
-      "Submit a detailed bug report, "
-      "check the InnoDB website for details\n"
+    log_err(std::format(
+      "Trying to access update undo rec for non-clustered index {}"
+      " Submit a detailed bug report, check the Embedded InnoDB website for details"
       "index record ",
       index->m_name
-    );
+    ));
     log_err(rec_to_string(index_rec));
     log_err("record version ");
     log_err(rec_to_string(rec));
+
     return DB_ERROR;
   }
 
@@ -1235,58 +1212,39 @@ db_err trx_undo_prev_version_build(
   if (table_id != index->m_table->m_id) {
     ptr = nullptr;
 
-    ib_logger(
-      ib_stream,
-      "Error: trying to access update undo rec"
-      " for table %s\n"
-      "but the table id in the"
-      " undo record is wrong\n"
-      "Submit a detailed bug report, "
-      "check InnoDB website for details\n"
-      "Run also CHECK TABLE %s\n",
+    log_err(std::format(
+      "Trying to access update undo rec for table {} but the table id in the"
+      " undo record is wrong. Submit a detailed bug report, check Embedded InnoDB"
+      " website for details. Run also CHECK TABLE {}",
       index->m_table->m_name,
       index->m_table->m_name
-    );
+    ));
   }
 
   if (ptr == nullptr) {
     /* The record was corrupted, return an error; these printfs
     should catch an elusive bug in row_vers_old_has_index_entry */
 
-    ib_logger(
-      ib_stream,
-      "table %s, index %s, n_uniq %lu\n"
-      "undo rec address %p, type %lu cmpl_info %lu\n"
-      "undo rec table id %lu,"
-      " index table id %lu\n"
-      "dump of 150 bytes in undo rec: ",
-      index->m_table->m_name,
-      index->m_name,
-      (ulong)index->get_n_unique(),
-      undo_rec,
-      (ulong)type,
-      (ulong)cmpl_info,
-      (ulong)table_id,
-      (ulong)index->m_table->m_id
-    );
+    log_err(std::format(
+      "Table {}, index {}, n_uniq {} undo rec address {}, type {}, cmpl_info {}, undo rec table id {}, index table id {}",
+      " dump of 150 bytes in undo rec: ",
+      index->m_table->m_name, index->m_name, index->get_n_unique(), (void*) undo_rec,
+      type, cmpl_info, table_id, index->m_table->m_id));
+
     log_warn_buf(undo_rec, 150);
     log_warn("index record ");
     log_warn(rec_to_string(index_rec));
     log_warn("record version ");
     log_warn(rec_to_string(rec));
     log_warn(std::format("Record trx id {}, update rec trx id {} Roll ptr in rec {}, in update rec {}",
-      rec_trx_id,
-      trx_id,
-      old_roll_ptr,
-      roll_ptr
-    ));
+      rec_trx_id, trx_id, old_roll_ptr, roll_ptr));
 
     log_info(srv_trx_sys->m_purge->to_string());
 
     return DB_ERROR;
   }
 
-  if (row_upd_changes_field_size_or_external(index, offsets, update)) {
+  if (srv_row_upd->changes_field_size_or_external(index, offsets, update)) {
     ulint n_ext;
 
     /* We have to set the appropriate extern storage bits in the
@@ -1303,7 +1261,7 @@ db_err trx_undo_prev_version_build(
     /* The page containing the clustered index record
     corresponding to entry is latched in mtr.  Thus the
     following call is safe. */
-    row_upd_index_replace_new_col_vals(entry, index, update, heap);
+    srv_row_upd->index_replace_new_col_vals(entry, index, update, heap);
 
     buf = mem_heap_alloc(heap, rec_get_converted_size(index, entry, n_ext));
 
@@ -1312,7 +1270,7 @@ db_err trx_undo_prev_version_build(
     buf = mem_heap_alloc(heap, rec_offs_size(offsets));
     *old_vers = rec_copy(buf, rec, offsets);
     ut_d(rec_offs_make_valid(*old_vers, index, offsets));
-    row_upd_rec_in_place(*old_vers, index, offsets, update);
+    srv_row_upd->rec_in_place(*old_vers, index, offsets, update);
   }
 
   return DB_SUCCESS;

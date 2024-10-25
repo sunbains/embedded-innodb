@@ -348,7 +348,7 @@ static void row_purge_upd_exist_or_extern(purge_node_t *node) {
   for(;node->index != nullptr; node->index = node->index->get_next()) {
     auto index = node->index;
 
-    if (row_upd_changes_ord_field_binary(nullptr, node->index, node->update)) {
+    if (srv_row_upd->changes_ord_field_binary(nullptr, node->index, node->update)) {
       /* Build the older version of the index entry */
       auto entry = row_build_index_entry(node->row, nullptr, index, heap);
       ut_a(entry);
@@ -361,11 +361,11 @@ static void row_purge_upd_exist_or_extern(purge_node_t *node) {
 
 skip_secondaries:
   /* Free possible externally stored fields */
-  for (ulint i = 0; i < upd_get_n_fields(node->update); i++) {
+  for (ulint i = 0; i < Row_update::upd_get_n_fields(node->update); i++) {
 
-    const upd_field_t *ufield = upd_get_nth_field(node->update, i);
+    auto ufield = node->update->get_nth_field(i);
 
-    if (dfield_is_ext(&ufield->new_val)) {
+    if (dfield_is_ext(&ufield->m_new_val)) {
       Buf_block *block;
       ulint internal_offset;
       byte *data_field;
@@ -376,7 +376,7 @@ skip_secondaries:
       can calculate from node->roll_ptr the file
       address of the new_val data */
 
-      internal_offset = ((const byte *)dfield_get_data(&ufield->new_val)) - node->undo_rec;
+      internal_offset = ((const byte *)dfield_get_data(&ufield->m_new_val)) - node->undo_rec;
 
       ut_a(internal_offset < UNIV_PAGE_SIZE);
 
@@ -418,9 +418,9 @@ skip_secondaries:
 
       data_field = block->get_frame() + offset + internal_offset;
 
-      ut_a(dfield_get_len(&ufield->new_val) >= BTR_EXTERN_FIELD_REF_SIZE);
+      ut_a(dfield_get_len(&ufield->m_new_val) >= BTR_EXTERN_FIELD_REF_SIZE);
       blob.free_externally_stored_field(
-        index, data_field + dfield_get_len(&ufield->new_val) - BTR_EXTERN_FIELD_REF_SIZE, nullptr, nullptr, 0, RB_NONE, &mtr
+        index, data_field + dfield_get_len(&ufield->m_new_val) - BTR_EXTERN_FIELD_REF_SIZE, nullptr, nullptr, 0, RB_NONE, &mtr
       );
       mtr.commit();
     }

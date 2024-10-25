@@ -170,7 +170,7 @@ bool row_undo_search_clust_to_pcur(Undo_node *node) {
     node->row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr, &node->ext, node->heap);
     if (node->update) {
       node->undo_row = dtuple_copy(node->row, node->heap);
-      row_upd_replace(node->undo_row, &node->undo_ext, clust_index, node->update, node->heap);
+      srv_row_upd->replace(node->undo_row, &node->undo_ext, clust_index, node->update, node->heap);
     } else {
       node->undo_row = nullptr;
       node->undo_ext = nullptr;

@@ -2661,14 +2661,14 @@ static upd_t *ib_update_vector_create(ib_cursor_t *cursor) {
   ut_a(trx->m_conc_state != TRX_NOT_STARTED);
 
   if (node->upd == nullptr) {
-    node->upd = row_create_update_node(table, heap);
+    node->upd = srv_row_upd->create_update_node(table, heap);
   }
 
   grph->upd = static_cast<que_fork_t *>(que_node_get_parent(pars_complete_graph_for_exec(node->upd, trx, heap)));
 
   grph->upd->state = QUE_FORK_ACTIVE;
 
-  return node->upd->update;
+  return node->upd->m_update;
 }
 
 /**
@@ -2686,16 +2686,16 @@ static void ib_update_col(ib_cursor_t *cursor, upd_field_t *upd_field, ulint col
   auto data_len = dfield_get_len(dfield);
 
   if (data_len == UNIV_SQL_NULL) {
-    dfield_set_null(&upd_field->new_val);
+    dfield_set_null(&upd_field->m_new_val);
   } else {
-    dfield_copy_data(&upd_field->new_val, dfield);
+    dfield_copy_data(&upd_field->m_new_val, dfield);
   }
 
-  upd_field->exp = nullptr;
+  upd_field->m_exp = nullptr;
 
-  upd_field->orig_len = 0;
+  upd_field->m_orig_len = 0;
 
-  upd_field->field_no = index->get_clustered_field_pos(&table->m_cols[col_no]);
+  upd_field->m_field_no = index->get_clustered_field_pos(&table->m_cols[col_no]);
 }
 
 /**
@@ -2739,7 +2739,7 @@ static ib_err_t ib_calc_diff(ib_cursor_t *cursor, upd_t *upd, const ib_tuple_t *
         (!dfield_is_null(old_dfield) &&
          memcmp(dfield_get_data(new_dfield), dfield_get_data(old_dfield), dfield_get_len(old_dfield)) != 0)) {
 
-      auto upd_field = &upd->fields[n_changed];
+      auto upd_field = &upd->m_fields[n_changed];
 
       ib_update_col(cursor, upd_field, i, new_dfield);
 
@@ -2748,8 +2748,8 @@ static ib_err_t ib_calc_diff(ib_cursor_t *cursor, upd_t *upd, const ib_tuple_t *
   }
 
   if (err == DB_SUCCESS) {
-    upd->info_bits = 0;
-    upd->n_fields = n_changed;
+    upd->m_info_bits = 0;
+    upd->m_n_fields = n_changed;
   }
 
   return err;
@@ -2774,7 +2774,7 @@ static ib_err_t ib_update_row_with_lock_retry(que_thr_t *thr, upd_node_t *node, 
     thr->run_node = node;
     thr->prev_node = node;
 
-    row_upd_step(thr);
+    (void) srv_row_upd->step(thr);
 
     err = trx->m_error_state;
 
@@ -2820,15 +2820,15 @@ static ib_err_t ib_execute_update_query_graph(ib_cursor_t *cursor, Btree_pcursor
   ib_delay_dml_if_needed();
 
   ut_a(pcur->get_index()->is_clustered());
-  node->pcur->copy_stored_position(pcur);
+  node->m_pcur->copy_stored_position(pcur);
 
-  ut_a(node->pcur->get_rel_pos() == Btree_cursor_pos::ON);
+  ut_a(node->m_pcur->get_rel_pos() == Btree_cursor_pos::ON);
 
   auto savept = trx_savept_take(trx);
 
   auto thr = que_fork_get_first_thr(q_proc->grph.upd);
 
-  node->state = UPD_NODE_UPDATE_CLUSTERED;
+  node->m_state = UPD_NODE_UPDATE_CLUSTERED;
 
   que_thr_move_to_run_state(thr);
 
@@ -2838,7 +2838,7 @@ static ib_err_t ib_execute_update_query_graph(ib_cursor_t *cursor, Btree_pcursor
 
     que_thr_stop_for_client_no_error(thr, trx);
 
-    if (node->is_delete) {
+    if (node->m_is_delete) {
 
       if (table->m_stats.m_n_rows > 0) {
         --table->m_stats.m_n_rows;
@@ -2888,7 +2888,7 @@ ib_err_t ib_cursor_update_row(ib_crsr_t ib_crsr, const ib_tpl_t ib_old_tpl, cons
 
   if (err == DB_SUCCESS) {
     /* Note that this is not a delete. */
-    cursor->q_proc.node.upd->is_delete = false;
+    cursor->q_proc.node.upd->m_is_delete = false;
 
     err = ib_execute_update_query_graph(cursor, pcur);
   }
@@ -2923,25 +2923,25 @@ static ib_err_t ib_delete_row(ib_cursor_t *cursor, Btree_pcursor *pcur, const re
 
   ib_read_tuple(rec, tuple);
 
-  upd->n_fields = ib_tuple_get_n_cols(ib_tpl);
+  upd->m_n_fields = ib_tuple_get_n_cols(ib_tpl);
 
-  for (ulint i{}; i < upd->n_fields; ++i) {
-    auto upd_field = &upd->fields[i];
+  for (ulint i{}; i < upd->m_n_fields; ++i) {
+    auto upd_field = &upd->m_fields[i];
     auto dfield = dtuple_get_nth_field(tuple->ptr, i);
 
-    dfield_copy_data(&upd_field->new_val, dfield);
+    dfield_copy_data(&upd_field->m_new_val, dfield);
 
-    upd_field->exp = nullptr;
+    upd_field->m_exp = nullptr;
 
-    upd_field->orig_len = 0;
+    upd_field->m_orig_len = 0;
 
-    upd->info_bits = 0;
+    upd->m_info_bits = 0;
 
-    upd_field->field_no = index->get_clustered_field_pos(&table->m_cols[i]);
+    upd_field->m_field_no = index->get_clustered_field_pos(&table->m_cols[i]);
   }
 
   /* Note that this is a delete. */
-  cursor->q_proc.node.upd->is_delete = true;
+  cursor->q_proc.node.upd->m_is_delete = true;
 
   auto err = ib_execute_update_query_graph(cursor, pcur);
 
