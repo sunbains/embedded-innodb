@@ -2496,7 +2496,7 @@ static ib_err_t ib_insert_row_with_lock_retry(que_thr_t *thr, ins_node_t *node, 
     thr->run_node = node;
     thr->prev_node = node;
 
-    row_ins_step(thr);
+    (void) srv_row_ins->step(thr);
 
     err = trx->m_error_state;
 
@@ -2569,15 +2569,15 @@ static void ib_insert_query_graph_create(ib_cursor_t *cursor) noexcept {
     auto heap = cursor->query_heap;
     auto table = cursor->prebuilt->table;
 
-    node->ins = row_ins_node_create(INS_DIRECT, table, heap);
+    node->ins = srv_row_ins->node_create(INS_DIRECT, table, heap);
 
-    node->ins->select = nullptr;
-    node->ins->values_list = nullptr;
+    node->ins->m_select = nullptr;
+    node->ins->m_values_list = nullptr;
 
     auto row = dtuple_create(heap, table->get_n_cols());
     table->copy_types(row);
 
-    row_ins_node_set_new_row(node->ins, row);
+    srv_row_ins->set_new_row(node->ins, row);
 
     grph->ins = static_cast<que_fork_t *>(que_node_get_parent(pars_complete_graph_for_exec(node->ins, trx, heap)));
 
@@ -2603,8 +2603,8 @@ ib_err_t ib_cursor_insert_row(ib_crsr_t ib_crsr, const ib_tpl_t ib_tpl) {
   q_proc = &cursor->q_proc;
   node = &q_proc->node;
 
-  node->ins->state = INS_NODE_ALLOC_ROW_ID;
-  dst_dtuple = node->ins->row;
+  node->ins->m_state = INS_NODE_ALLOC_ROW_ID;
+  dst_dtuple = node->ins->m_row;
 
   n_fields = dtuple_get_n_fields(src_tuple->ptr);
   ut_ad(n_fields == dtuple_get_n_fields(dst_dtuple));

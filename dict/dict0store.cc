@@ -371,14 +371,14 @@ db_err Dict_store::build_table_def_step(que_thr_t *thr, Table_node *node) noexce
 
   auto row = create_sys_tables_tuple(table, node->m_heap);
 
-  row_ins_node_set_new_row(node->m_tab_def, row);
+  srv_row_ins->set_new_row(node->m_tab_def, row);
 
   return DB_SUCCESS;
 }
 
 db_err Dict_store::build_col_def_step(Table_node *node) noexcept {
   auto row = create_sys_columns_tuple(node->m_table, node->m_col_no, node->m_heap);
-  row_ins_node_set_new_row(node->m_col_def, row);
+  srv_row_ins->set_new_row(node->m_col_def, row);
 
   return DB_SUCCESS;
 }
@@ -563,7 +563,7 @@ db_err Dict_store::build_index_def_step(que_thr_t *thr, Index_node *node) noexce
 
   node->m_ind_row = row;
 
-  row_ins_node_set_new_row(node->m_ind_def, row);
+  srv_row_ins->set_new_row(node->m_ind_def, row);
 
   /* Note that the index was created by this transaction. */
   index->m_trx_id = trx->m_id;
@@ -576,7 +576,7 @@ db_err Dict_store::build_field_def_step(Index_node *node) noexcept {
 
   auto row = create_sys_fields_tuple(index, node->m_field_no, node->m_heap);
 
-  row_ins_node_set_new_row(node->m_field_def, row);
+  srv_row_ins->set_new_row(node->m_field_def, row);
 
   return DB_SUCCESS;
 }
@@ -1227,11 +1227,11 @@ Table_node *Table_node::create(Dict *dict, Table *table, mem_heap_t *heap, bool 
   node->m_state = TABLE_BUILD_TABLE_DEF;
   node->m_heap = mem_heap_create(256);
 
-  node->m_tab_def = row_ins_node_create(INS_DIRECT, dict->m_sys_tables, heap);
-  node->m_tab_def->common.parent = node;
+  node->m_tab_def = srv_row_ins->node_create(INS_DIRECT, dict->m_sys_tables, heap);
+  node->m_tab_def->m_common.parent = node;
 
-  node->m_col_def = row_ins_node_create(INS_DIRECT, dict->m_sys_columns, heap);
-  node->m_col_def->common.parent = node;
+  node->m_col_def = srv_row_ins->node_create(INS_DIRECT, dict->m_sys_columns, heap);
+  node->m_col_def->m_common.parent = node;
 
   if (commit) {
     node->m_commit_node = Trx::commit_node_create(heap);
@@ -1255,11 +1255,11 @@ Index_node *Index_node::create(Dict *dict, Index *index, mem_heap_t *heap, bool 
   node->m_page_no = FIL_NULL;
   node->m_heap = mem_heap_create(256);
 
-  node->m_ind_def = row_ins_node_create(INS_DIRECT, dict->m_sys_indexes, heap);
-  node->m_ind_def->common.parent = node;
+  node->m_ind_def = srv_row_ins->node_create(INS_DIRECT, dict->m_sys_indexes, heap);
+  node->m_ind_def->m_common.parent = node;
 
-  node->m_field_def = row_ins_node_create(INS_DIRECT, dict->m_sys_fields, heap);
-  node->m_field_def->common.parent = node;
+  node->m_field_def = srv_row_ins->node_create(INS_DIRECT, dict->m_sys_fields, heap);
+  node->m_field_def->m_common.parent = node;
 
   if (commit) {
     node->m_commit_node = Trx::commit_node_create(heap);

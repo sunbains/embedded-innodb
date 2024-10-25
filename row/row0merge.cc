@@ -1540,7 +1540,7 @@ static db_err row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table
   trx->m_op_info = "inserting index entries";
 
   graph_heap = mem_heap_create(500);
-  node = row_ins_node_create(INS_DIRECT, table, graph_heap);
+  node = srv_row_ins->node_create(INS_DIRECT, table, graph_heap);
 
   thr = pars_complete_graph_for_exec(node, trx, graph_heap);
 
@@ -1580,9 +1580,9 @@ static db_err row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table
         row_merge_copy_blobs(mrec, offsets, dtuple, tuple_heap);
       }
 
-      node->row = dtuple;
-      node->table = table;
-      node->trx_id = trx->m_id;
+      node->m_row = dtuple;
+      node->m_table = table;
+      node->m_trx_id = trx->m_id;
 
       ut_ad(dtuple_validate(dtuple));
 
@@ -1590,7 +1590,7 @@ static db_err row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table
         thr->run_node = thr;
         thr->prev_node = thr->common.parent;
 
-        err = row_ins_index_entry(index, dtuple, 0, false, thr);
+        err = srv_row_ins->index_entry(index, dtuple, 0, false, thr);
 
         if (likely(err == DB_SUCCESS)) {
 

@@ -888,14 +888,14 @@ ins_node_t *pars_insert_statement(sym_node_t *table_sym, que_node_t *values_list
 
   pars_retrieve_table_def(table_sym);
 
-  auto node = reinterpret_cast<ins_node_t *>(row_ins_node_create(ins_type, table_sym->table, pars_sym_tab_global->heap));
-  auto row = dtuple_create(pars_sym_tab_global->heap, node->table->get_n_cols());
+  auto node = reinterpret_cast<ins_node_t *>(srv_row_ins->node_create(ins_type, table_sym->table, pars_sym_tab_global->heap));
+  auto row = dtuple_create(pars_sym_tab_global->heap, node->m_table->get_n_cols());
 
   table_sym->table->copy_types(row);
 
-  row_ins_node_set_new_row(node, row);
+  srv_row_ins->set_new_row(node, row);
 
-  node->select = select;
+  node->m_select = select;
 
   if (select != nullptr) {
     select->common.parent = node;
@@ -903,9 +903,9 @@ ins_node_t *pars_insert_statement(sym_node_t *table_sym, que_node_t *values_list
     ut_a(que_node_list_get_len(select->select_list) == table_sym->table->get_n_user_cols());
   }
 
-  node->values_list = values_list;
+  node->m_values_list = values_list;
 
-  if (node->values_list != nullptr) {
+  if (node->m_values_list != nullptr) {
     pars_resolve_exp_list_variables_and_types(nullptr, values_list);
 
     ut_a(que_node_list_get_len(values_list) == table_sym->table->get_n_user_cols());

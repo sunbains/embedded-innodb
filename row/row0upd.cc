@@ -187,7 +187,7 @@ db_err Row_update::check_references_constraints(upd_node_t *node, Btree_pcursor 
       But the counter on the table protects 'foreign' from
       being dropped while the check is running. */
 
-      err = row_ins_check_foreign_constraint(false, foreign, table, entry, thr);
+      err = srv_row_ins->check_foreign_constraint(false, foreign, table, entry, thr);
 
       if (foreign->m_foreign_table) {
         m_dict->mutex_acquire();
@@ -899,7 +899,7 @@ db_err Row_update::sec_index_entry(upd_node_t *node, que_thr_t *thr) noexcept {
   ut_a(entry);
 
   /* Insert new index entry */
-  err = row_ins_index_entry(index, entry, 0, true, thr);
+  err = srv_row_ins->index_entry(index, entry, 0, true, thr);
 
 func_exit:
   mem_heap_free(heap);
@@ -1000,7 +1000,7 @@ db_err Row_update::clust_rec_by_insert(upd_node_t *node, const Index *index, que
     blob.mark_dtuple_inherited_extern(entry, node->m_update);
   }
 
-  err = row_ins_index_entry(index, entry, node->m_upd_ext ? node->m_upd_ext->n_ext : 0, true, thr);
+  err = srv_row_ins->index_entry(index, entry, node->m_upd_ext ? node->m_upd_ext->n_ext : 0, true, thr);
 
   mem_heap_free(heap);
 

@@ -677,6 +677,19 @@ ib_err_t InnoDB::start() noexcept {
       // FIXME: These should be created in a separate DML related function
       ut_a(srv_row_upd == nullptr);
       srv_row_upd = Row_update::create(srv_dict_sys, srv_lock_sys);
+
+      if (srv_row_upd == nullptr) {
+        srv_startup_abort(DB_OUT_OF_MEMORY);
+        return DB_ERROR;
+      }
+
+      ut_a(srv_row_ins == nullptr);
+      srv_row_ins = Row_insert::create(srv_dict_sys, srv_lock_sys, srv_row_upd);
+
+      if (srv_row_ins == nullptr) {
+        srv_startup_abort(DB_OUT_OF_MEMORY);
+        return DB_ERROR;
+      }
     }
 
     if (auto err = srv_dict_sys->create_instance(); err != DB_SUCCESS) {
@@ -789,9 +802,21 @@ ib_err_t InnoDB::start() noexcept {
     }
 
     {
-      // FIXME: These should be created in a separate DML related function
       ut_a(srv_row_upd == nullptr);
       srv_row_upd = Row_update::create(srv_dict_sys, srv_lock_sys);
+
+      if (srv_row_upd == nullptr) {
+        srv_startup_abort(DB_OUT_OF_MEMORY);
+        return DB_ERROR;
+      }
+
+      ut_a(srv_row_ins == nullptr);
+      srv_row_ins = Row_insert::create(srv_dict_sys, srv_lock_sys, srv_row_upd);
+
+      if (srv_row_ins == nullptr) {
+        srv_startup_abort(DB_OUT_OF_MEMORY);
+        return DB_ERROR;
+      }
     }
 
     if (srv_config.m_force_recovery <= IB_RECOVERY_NO_TRX_UNDO) {
@@ -1104,6 +1129,8 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
   srv_threads_shutdown();
 
   log_sys->shutdown();
+
+  Row_insert::destroy(srv_row_ins);
 
   Row_update::destroy(srv_row_upd);
 

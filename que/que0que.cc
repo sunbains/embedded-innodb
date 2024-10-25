@@ -441,9 +441,9 @@ void que_graph_free_recursive(que_node_t *node) {
 
       ins = static_cast<ins_node_t *>(node);
 
-      que_graph_free_recursive(ins->select);
+      que_graph_free_recursive(ins->m_select);
 
-      mem_heap_free(ins->entry_sys_heap);
+      mem_heap_free(ins->m_entry_sys_heap);
 
       break;
     case QUE_NODE_PURGE:
@@ -956,7 +956,7 @@ inline que_thr_t *que_thr_step(que_thr_t *thr) {
   } else if (type == QUE_NODE_SELECT) {
     thr = row_sel_step(thr);
   } else if (type == QUE_NODE_INSERT) {
-    thr = row_ins_step(thr);
+    thr = srv_row_ins->step(thr);
   } else if (type == QUE_NODE_UPDATE) {
     thr = srv_row_upd->step(thr);
   } else if (type == QUE_NODE_FETCH) {
