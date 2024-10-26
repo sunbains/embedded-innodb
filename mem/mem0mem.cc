@@ -242,7 +242,7 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n, ulint type, Source
   /* In dynamic allocation, calculate the size: block header + data. */
 
   mem_block_t *block;
-  Buf_block *buf_block;
+  Buf_block *buf_block{};
 
   auto len = mem_block_header_size() + MEM_SPACE_NEEDED(n);
 
