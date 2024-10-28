@@ -59,8 +59,40 @@ MESSAGE(STATUS "UNIX: " ${UNIX})
 SET(IB_LANG "english")
 
 # Check for programs required to build InnoDB e.g., Bison and Flex
-FIND_PROGRAM(FLEX flex)
-FIND_PROGRAM(BISON bison)
+FIND_PROGRAM(FLEX flex REQUIRED)
+FIND_PROGRAM(BISON bison REQUIRED)
+
+# Include Flex and Bison CMake modules
+FIND_PACKAGE(FLEX REQUIRED)
+FIND_PACKAGE(BISON REQUIRED)
+
+# Debug output
+MESSAGE(STATUS "Flex executable: ${FLEX_EXECUTABLE}")
+
+# If flex include dir not found, try to find it manually
+if(NOT FLEX_INCLUDE_DIR)
+  # Try to find FlexLexer.h in common locations
+  find_path(FLEX_INCLUDE_DIR
+          NAMES FlexLexer.h
+          PATHS
+          /nix/store/*/include
+          /run/current-system/sw/include
+          ENV CPATH
+          PATH_SUFFIXES flex
+  )
+
+  if(NOT FLEX_INCLUDE_DIR)
+    message(FATAL_ERROR "Could not find FlexLexer.h. Please install flex development files.")
+  endif()
+endif()
+
+MESSAGE(STATUS "Flex include dir: ${FLEX_INCLUDE_DIR}")
+
+# Include flex directory
+INCLUDE_DIRECTORIES(${FLEX_INCLUDE_DIR})
+
+# Set up Flex/Bison generation
+FLEX_TARGET(Scanner pars/pars0lex.l ${CMAKE_CURRENT_BINARY_DIR}/lexyy.cc)
 
 INCLUDE(CheckTypeSize)
 

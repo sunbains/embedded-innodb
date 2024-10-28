@@ -1,0 +1,130 @@
+# Build directories
+cmake-build-*/
+install
+bin
+lib
+*.d
+*.o
+*.o[ls]
+*.obj
+*.so
+*.dylib
+*.dll
+*.exe
+*.a
+*.lib
+ib0config.h
+
+# CMake
+.cmake
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+
+# IDE - CLion
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# IDE - VSCode
+.vscode/
+*.code-workspace
+.history/
+
+# IDE - Neovim
+.nvimrc
+.vim/
+.nvim/
+*.swp
+*.swo
+Session.vim
+.netrwhist
+
+# IDE - Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Operating System
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and databases
+*.log
+*.db
+
+# Generated files
+*.generated.*
+*_generated.h
+*_generated.cpp
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+*.temp
+
+# Specific tool files
+compile_flags.txt
+.clangd/
+.cache/
+.ccls-cache/
+
+# Ninja build system
+.ninja_deps
+.ninja_log
+build.ninja
+
+# Valgrind
+callgrind.out.*
+cachegrind.out.*
+massif.out.*
+
+*.rej
+*.orig
+/*.patch
+
+/src/liburing.a
+/src/liburing.so*
+/src/liburing-ffi.a
+/src/liburing-ffi.so*
+/src/include/liburing/compat.h
+/src/include/liburing/io_uring_version.h
+
+/examples/io_uring-close-test
+/examples/io_uring-cp
+/examples/io_uring-test
+/examples/io_uring-udp
+/examples/link-cp
+/examples/napi-busy-poll-client
+/examples/napi-busy-poll-server
+/examples/ucontext-cp
+/examples/poll-bench
+/examples/proxy
+/examples/send-zerocopy
+/examples/rsrc-update-bench
+
+/test/*.t
+/test/*.dmesg
+/test/output/
+
+config-host.h
+config-host.mak
+config.log
+
+liburing.pc
+liburing-ffi.pc
+
+cscope.out
