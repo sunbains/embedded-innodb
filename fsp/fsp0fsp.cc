@@ -708,6 +708,7 @@ static void fseg_print_low(FSP::fseg_inode_t *inode, mtr_t *mtr) noexcept {
   auto n_full = flst_get_len(inode + FSEG_FULL, mtr);
 
   log_info(
+    std::format(
     "SEGMENT id {} {} space {}; page {}; res {} used {}; full ext {}"
     " fragm pages {}; free extents {}; not full extents {}: pages {}\n",
     seg_id_high,
@@ -720,7 +721,7 @@ static void fseg_print_low(FSP::fseg_inode_t *inode, mtr_t *mtr) noexcept {
     n_frag,
     n_free,
     n_not_full,
-    n_used
+    n_used)
   );
 
   ut_ad(mach_read_from_4(inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);

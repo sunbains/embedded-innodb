@@ -1495,7 +1495,7 @@ bool Btree::compress(Btree_cursor *cursor, mtr_t *mtr) noexcept {
   if (data_size > max_ins_size_reorg) {
     /* No space for merge */
     return err_clean_up();
-  
+
   }
 
   ut_ad(page_validate(merge_page, index));
@@ -1693,7 +1693,7 @@ void Btree::print_size(Index *index) noexcept {
 
   mtr.start();
 
-  const auto root = root_get(index, &mtr);
+  const auto root = root_get(index->m_page_id, &mtr);
   const auto seg = root + PAGE_HEADER + PAGE_BTR_SEG_TOP;
 
   log_info("NON-LEAF PAGE SEGMENT");
@@ -1763,7 +1763,7 @@ void Btree::print_index(Index *index, ulint width) noexcept {
 
   mtr.start();
 
-  const auto root = root_block_get(index, &mtr);
+  const auto root = root_block_get(index->m_page_id, &mtr);
 
   print_recursive(index, root, width, &heap, &offsets, &mtr);
 
