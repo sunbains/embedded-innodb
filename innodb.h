@@ -1878,6 +1878,7 @@ enum Level {
   Info,
   Warn,
   Error,
+  Fatal
 };
 
 extern int level;

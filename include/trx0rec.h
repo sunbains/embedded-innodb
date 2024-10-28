@@ -28,29 +28,41 @@ Created 3/26/1996 Heikki Tuuri
 #include "dict0types.h"
 #include "innodb0types.h"
 #include "mtr0mtr.h"
+#include "que0types.h"
 #include "rem0types.h"
 #include "row0types.h"
 #include "trx0types.h"
 
-#include "que0types.h"
+struct Undo_rec_pars {
+  /** TRX_UNDO_INSERT_REC, TRX_UNDO_UPD_EXIST_REC, TRX_UNDO_UPD_DEL_REC, TRX_UNDO_DEL_MARK_REC */
+  ulint m_type{ULINT_UNDEFINED};
+
+  /** Compiler info, relevant only for update type records */ 
+  ulint m_cmpl_info{ULINT_UNDEFINED};
+
+  /** Table id */
+  Dict_id m_table_id{DICT_ID_NULL};
+
+  /** Undo log record number */
+  undo_no_t m_undo_no{TRX_ID_UNDEFINED};
+
+  /** True if we updated an externally stored field */
+  bool m_extern{false};
+};
 
 /* FIXME: From merge */
 /** Returns the start of the undo record data area. */
 #define trx_undo_rec_get_ptr(undo_rec, undo_no) ((undo_rec) + trx_undo_rec_get_offset(undo_no))
 
-/** Reads from an undo log record the general parameters.
-@return	remaining part of undo log record after reading these values */
-byte *trx_undo_rec_get_pars(
-  trx_undo_rec_t *undo_rec, /*!< in: undo log record */
-  ulint *type,              /*!< out: undo record type:
-                                                TRX_UNDO_INSERT_REC, ... */
-  ulint *cmpl_info,         /*!< out: compiler info, relevant only
-                                        for update type records */
-  bool *updated_extern,     /*!< out: true if we updated an
-                                             externally stored fild */
-  undo_no_t *undo_no,       /*!< out: undo log record number */
-  uint64_t *table_id
-); /*!< out: table id */
+/**
+ * @brief Reads from an undo log record the general parameters.
+ *
+ * @param[in] undo_rec Undo log record.
+ * @param[out] pars Parsed undo record.
+ * 
+ * @return Pointer to the remaining part of the undo log record after reading these values.
+ */
+byte *trx_undo_rec_get_pars(trx_undo_rec_t *undo_rec, Undo_rec_pars &undo_rec_pars) noexcept;
 
 /** Builds a row reference from an undo log record.
 @return	pointer to remaining part of undo record */

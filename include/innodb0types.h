@@ -143,19 +143,22 @@ constexpr const char SRV_PATH_SEPARATOR = '/';
 /** Page number type. FIXME: Change to uint32_t later. */
 using page_no_t = uint32_t;
 
+constexpr auto NULL_PAGE_NO = std::numeric_limits<page_no_t>::max();
+
 /** Table space ID type. FIXME: Change to uint32_t later. */
 using space_id_t = uint32_t;
+
+constexpr auto NULL_SPACE_ID = std::numeric_limits<space_id_t>::max();
 
 /** Log sequence number. */
 using lsn_t = uint64_t;
 
+constexpr auto LSN_MAX = std::numeric_limits<lsn_t>::max() - 1;
+constexpr auto LSN_UNDEFINED = std::numeric_limits<lsn_t>::max();
+
 /** Transaction identifier (DB_TRX_ID, DATA_TRX_ID) */
 using trx_id_t = uint64_t;
-
-constexpr auto NULL_PAGE_NO = std::numeric_limits<page_no_t>::max();
-constexpr auto NULL_SPACE_ID = std::numeric_limits<space_id_t>::max();
-
-constexpr auto LSN_MAX = std::numeric_limits<lsn_t>::max();
+constexpr trx_id_t TRX_ID_UNDEFINED = std::numeric_limits<trx_id_t>::max();
 
 constexpr ulint IB_FILE_BLOCK_SIZE = 512;
 

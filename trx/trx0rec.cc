@@ -235,7 +235,7 @@ static ulint trx_undo_page_report_insert(page_t *undo_page, Trx *trx, const Inde
   return trx_undo_page_set_next_prev_and_add(undo_page, ptr, mtr);
 }
 
-byte *trx_undo_rec_get_pars(trx_undo_rec_t *undo_rec, ulint *type, ulint *cmpl_info, bool *updated_extern, undo_no_t *undo_no, uint64_t *table_id) {
+byte *trx_undo_rec_get_pars(trx_undo_rec_t *undo_rec, Undo_rec_pars &undo_rec_pars) noexcept {
 
   auto ptr = undo_rec + 2;
   ulint type_cmpl = mach_read_from_1(ptr);
@@ -243,20 +243,20 @@ byte *trx_undo_rec_get_pars(trx_undo_rec_t *undo_rec, ulint *type, ulint *cmpl_i
   ptr++;
 
   if (type_cmpl & TRX_UNDO_UPD_EXTERN) {
-    *updated_extern = true;
+    undo_rec_pars.m_extern = true;
     type_cmpl -= TRX_UNDO_UPD_EXTERN;
   } else {
-    *updated_extern = false;
+    undo_rec_pars.m_extern = false;
   }
 
-  *type = type_cmpl & (TRX_UNDO_CMPL_INFO_MULT - 1);
-  *cmpl_info = type_cmpl / TRX_UNDO_CMPL_INFO_MULT;
+  undo_rec_pars.m_type = type_cmpl & (TRX_UNDO_CMPL_INFO_MULT - 1);
+  undo_rec_pars.m_cmpl_info = type_cmpl / TRX_UNDO_CMPL_INFO_MULT;
 
-  *undo_no = mach_uint64_read_much_compressed(ptr);
-  ptr += mach_uint64_get_much_compressed_size(*undo_no);
+  undo_rec_pars.m_undo_no = mach_uint64_read_much_compressed(ptr);
+  ptr += mach_uint64_get_much_compressed_size(undo_rec_pars.m_undo_no);
 
-  *table_id = mach_uint64_read_much_compressed(ptr);
-  ptr += mach_uint64_get_much_compressed_size(*table_id);
+  undo_rec_pars.m_table_id = mach_uint64_read_much_compressed(ptr);
+  ptr += mach_uint64_get_much_compressed_size(undo_rec_pars.m_table_id);
 
   return ptr;
 }
@@ -1118,28 +1118,25 @@ db_err trx_undo_prev_version_build(
   const rec_t *index_rec, mtr_t *index_mtr __attribute__((unused)), const rec_t *rec, Index *index, ulint *offsets,
   mem_heap_t *heap, rec_t **old_vers
 ) {
-  trx_undo_rec_t *undo_rec = nullptr;
+  byte *buf;
+  upd_t *update;
   DTuple *entry;
-  trx_id_t rec_trx_id;
-  ulint type;
-  undo_no_t undo_no;
-  uint64_t table_id;
+  ulint info_bits;
   trx_id_t trx_id;
+  trx_id_t rec_trx_id;
   roll_ptr_t roll_ptr;
   roll_ptr_t old_roll_ptr;
-  upd_t *update;
-  byte *ptr;
-  ulint info_bits;
-  ulint cmpl_info;
-  bool dummy_extern;
-  byte *buf;
+  trx_undo_rec_t *undo_rec{};
+
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(&purge_sys->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
+
   ut_ad(
     index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_S_FIX) ||
     index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_X_FIX)
   );
+
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   if (!index->is_clustered()) {
@@ -1179,7 +1176,8 @@ db_err trx_undo_prev_version_build(
     return err;
   }
 
-  ptr = trx_undo_rec_get_pars(undo_rec, &type, &cmpl_info, &dummy_extern, &undo_no, &table_id);
+  Undo_rec_pars pars;
+  auto ptr = trx_undo_rec_get_pars(undo_rec, pars);
 
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
 
@@ -1207,9 +1205,9 @@ db_err trx_undo_prev_version_build(
 
   ptr = trx_undo_rec_skip_row_ref(ptr, index);
 
-  ptr = trx_undo_update_rec_get_update(ptr, index, type, trx_id, roll_ptr, info_bits, nullptr, heap, &update);
+  ptr = trx_undo_update_rec_get_update(ptr, index, pars.m_type, trx_id, roll_ptr, info_bits, nullptr, heap, &update);
 
-  if (table_id != index->m_table->m_id) {
+  if (pars.m_table_id != index->m_table->m_id) {
     ptr = nullptr;
 
     log_err(std::format(
@@ -1229,7 +1227,7 @@ db_err trx_undo_prev_version_build(
       "Table {}, index {}, n_uniq {} undo rec address {}, type {}, cmpl_info {}, undo rec table id {}, index table id {}",
       " dump of 150 bytes in undo rec: ",
       index->m_table->m_name, index->m_name, index->get_n_unique(), (void*) undo_rec,
-      type, cmpl_info, table_id, index->m_table->m_id));
+      pars.m_type, pars.m_cmpl_info, pars.m_table_id, index->m_table->m_id));
 
     log_warn_buf(undo_rec, 150);
     log_warn("index record ");
@@ -1258,6 +1256,7 @@ db_err trx_undo_prev_version_build(
     Blob blob(srv_fsp, srv_btree_sys);
 
     n_ext += blob.push_update_extern_fields(entry, update, heap);
+
     /* The page containing the clustered index record
     corresponding to entry is latched in mtr.  Thus the
     following call is safe. */
@@ -1266,7 +1265,9 @@ db_err trx_undo_prev_version_build(
     buf = mem_heap_alloc(heap, rec_get_converted_size(index, entry, n_ext));
 
     *old_vers = rec_convert_dtuple_to_rec(buf, index, entry, n_ext);
+
   } else {
+
     buf = mem_heap_alloc(heap, rec_offs_size(offsets));
     *old_vers = rec_copy(buf, rec, offsets);
     ut_d(rec_offs_make_valid(*old_vers, index, offsets));

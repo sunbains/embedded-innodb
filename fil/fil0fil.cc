@@ -2235,6 +2235,7 @@ void Fil::node_complete_io(fil_node_t *node, IO_request io_request) {
     len,
     (int)io_request
   ));
+  ut_error;
 }
 
 db_err Fil::io(

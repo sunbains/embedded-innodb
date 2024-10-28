@@ -427,7 +427,7 @@ void que_graph_free_recursive(que_node_t *node) {
 
       undo = static_cast<Undo_node *>(node);
 
-      mem_heap_free(undo->heap);
+      mem_heap_free(undo->m_heap);
 
       break;
     case QUE_NODE_SELECT:
@@ -977,7 +977,7 @@ inline que_thr_t *que_thr_step(que_thr_t *thr) {
   } else if (type == QUE_NODE_COMMIT) {
     thr = Trx::commit_step(thr);
   } else if (type == QUE_NODE_UNDO) {
-    thr = row_undo_step(thr);
+    thr = srv_row_undo->step(thr);
   } else if (type == QUE_NODE_PURGE) {
     thr = row_purge_step(thr);
   } else if (type == QUE_NODE_RETURN) {

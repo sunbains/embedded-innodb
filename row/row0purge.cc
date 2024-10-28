@@ -130,7 +130,7 @@ static bool row_purge_remove_clust_if_poss_low(purge_node_t *node, ulint mode) {
     success = btr_cur->optimistic_delete(&mtr);
   } else {
     ut_ad(mode == BTR_MODIFY_TREE);
-    btr_cur->pessimistic_delete(&err, false, RB_NONE, &mtr);
+    err = btr_cur->pessimistic_delete(false, RB_NONE, &mtr);
 
     if (err == DB_SUCCESS) {
       success = true;
@@ -249,7 +249,7 @@ static bool row_purge_remove_sec_if_poss_low(purge_node_t *node, Index *index, c
       success = btr_cur->optimistic_delete(&mtr);
     } else {
       ut_ad(mode == BTR_MODIFY_TREE);
-      btr_cur->pessimistic_delete(&err, false, RB_NONE, &mtr);
+      err = btr_cur->pessimistic_delete(false, RB_NONE, &mtr);
       success = err == DB_SUCCESS;
       ut_a(success || err == DB_OUT_OF_FILE_SPACE);
     }
@@ -437,36 +437,31 @@ skip_secondaries:
  * @return                  True if purge operation required. NOTE that then the CALLER must unfreeze data dictionary!
  */
 static bool row_purge_parse_undo_rec(purge_node_t *node, bool *updated_extern, que_thr_t *thr) {
-  byte *ptr;
-  Trx *trx;
-  undo_no_t undo_no;
-  uint64_t table_id;
-  trx_id_t trx_id;
-  roll_ptr_t roll_ptr;
-  ulint info_bits;
-  ulint type;
-  ulint cmpl_info;
+  Undo_rec_pars pars;
+  auto trx = thr_get_trx(thr);
 
-  ut_ad(node && thr);
+  auto ptr = trx_undo_rec_get_pars(node->undo_rec, pars);
 
-  trx = thr_get_trx(thr);
+  node->rec_type = pars.m_type;
 
-  ptr = trx_undo_rec_get_pars(node->undo_rec, &type, &cmpl_info, updated_extern, &undo_no, &table_id);
-  node->rec_type = type;
+  if (pars.m_type == TRX_UNDO_UPD_DEL_REC && !pars.m_extern) {
 
-  if (type == TRX_UNDO_UPD_DEL_REC && !(*updated_extern)) {
-
-    return (false);
+    return false;
   }
 
+  trx_id_t trx_id;
+  ulint info_bits;
+  roll_ptr_t roll_ptr;
+
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
+
   node->table = nullptr;
 
-  if (type == TRX_UNDO_UPD_EXIST_REC && cmpl_info & UPD_NODE_NO_ORD_CHANGE && !(*updated_extern)) {
+  if (pars.m_type == TRX_UNDO_UPD_EXIST_REC && (pars.m_cmpl_info & UPD_NODE_NO_ORD_CHANGE) && !pars.m_extern) {
 
     /* Purge requires no changes to indexes: we may return */
 
-    return (false);
+    return false;
   }
 
   /* Prevent DROP TABLE etc. from running when we are doing the purge
@@ -477,7 +472,7 @@ static bool row_purge_parse_undo_rec(purge_node_t *node, bool *updated_extern, q
   srv_dict_sys->mutex_acquire();
 
   // FIXME: srv_force_recovery should be passed in as an arg
-  node->table = srv_dict_sys->table_get_on_id(srv_config.m_force_recovery, table_id);
+  node->table = srv_dict_sys->table_get_on_id(pars.m_table_id);
 
   srv_dict_sys->mutex_release();
 
@@ -489,7 +484,7 @@ static bool row_purge_parse_undo_rec(purge_node_t *node, bool *updated_extern, q
     return false;
   }
 
-  auto clust_index = node->table->get_first_index();
+  auto clust_index = node->table->get_clustered_index();
 
   if (clust_index == nullptr) {
     /* The table was corrupt in the data dictionary */
@@ -501,12 +496,12 @@ static bool row_purge_parse_undo_rec(purge_node_t *node, bool *updated_extern, q
 
   ptr = trx_undo_rec_get_row_ref(ptr, clust_index, &node->ref, node->heap);
 
-  ptr = trx_undo_update_rec_get_update(ptr, clust_index, type, trx_id, roll_ptr, info_bits, trx, node->heap, &(node->update));
+  ptr = trx_undo_update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, node->heap, &node->update);
 
   /* Read to the partial row the fields that occur in indexes */
 
-  if (!(cmpl_info & UPD_NODE_NO_ORD_CHANGE)) {
-    ptr = trx_undo_rec_get_partial_row(ptr, clust_index, &node->row, type == TRX_UNDO_UPD_DEL_REC, node->heap);
+  if (!(pars.m_cmpl_info & UPD_NODE_NO_ORD_CHANGE)) {
+    ptr = trx_undo_rec_get_partial_row(ptr, clust_index, &node->row, pars.m_type == TRX_UNDO_UPD_DEL_REC, node->heap);
   }
 
   return true;

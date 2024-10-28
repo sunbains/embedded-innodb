@@ -714,7 +714,7 @@ que_t *trx_roll_graph_build(Trx *trx) {
   auto thr = que_thr_create(fork, heap);
   /*	thr2 = que_thr_create(fork, heap); */
 
-  thr->child = row_undo_node_create(trx, thr, heap);
+  thr->child = srv_row_undo->create_undo_node(trx, thr, heap);
   /*	thr2->child = row_undo_node_create(trx, thr2, heap); */
 
   return fork;

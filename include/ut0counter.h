@@ -84,7 +84,7 @@ struct CPU_indexer {
      if (getcpu(&cpu, nullptr) != 0) {
       cpu = 0;
       if (!(m_n_errors++ % 10000)) {
-        log_err("getcpu() failed: ", strerror(errno)) 
+        log_err("getcpu() failed: ", strerror(errno)); 
       }
      }
     return cpu;

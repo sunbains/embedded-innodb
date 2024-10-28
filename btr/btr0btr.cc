@@ -1365,8 +1365,7 @@ void Btree::node_ptr_delete(Index *index, Buf_block *block, mtr_t *mtr) noexcept
   page_get_father(index, block, mtr, &btr_cur);
 
 
-  db_err err;
-  btr_cur.pessimistic_delete(&err, true,RB_NONE, mtr);
+  auto err = btr_cur.pessimistic_delete(true,RB_NONE, mtr);
   ut_a(err == DB_SUCCESS);
 }
 
