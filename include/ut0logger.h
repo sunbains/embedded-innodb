@@ -39,7 +39,9 @@ inline std::string func_name(const char *filename, int line) noexcept {
     --ptr;
   }
 
-  std::string location{ptr};
+  assert(ptr != filename && *ptr == '/');
+
+  std::string location{ptr + 1};
   location.push_back(':');
   location.append(std::format("{}", line));
 
