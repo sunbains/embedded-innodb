@@ -139,7 +139,7 @@ struct ib_qry_proc_t {
 };
 
 /* Cursor instance for traversing tables/indexes. This will eventually
-become row_prebuilt_t. */
+become Prebuilt. */
 struct ib_cursor_t {
   /** Instance heap */
   mem_heap_t *heap;
@@ -154,7 +154,7 @@ struct ib_cursor_t {
   ib_match_mode_t match_mode;
 
   /** For reading rows */
-  row_prebuilt_t *prebuilt;
+  Prebuilt *prebuilt;
 };
 
 /* InnoDB table columns used during table and index schema creation. */
@@ -2237,30 +2237,30 @@ static ib_err_t ib_create_cursor(ib_crsr_t *ib_crsr, Table *table, ib_id_t index
     return DB_OUT_OF_MEMORY;
   }
 
-  cursor->prebuilt = row_prebuilt_create(table);
+  cursor->prebuilt = Prebuilt::create(srv_fsp, srv_btree_sys, table);
 
   auto prebuilt = cursor->prebuilt;
 
-  prebuilt->trx = trx;
-  prebuilt->table = table;
-  prebuilt->select_lock_type = LOCK_NONE;
+  prebuilt->m_trx = trx;
+  prebuilt->m_table = table;
+  prebuilt->m_select_lock_type = LOCK_NONE;
 
   if (index_id > 0) {
-    prebuilt->index = table->index_get_on_id(id);
+    prebuilt->m_index = table->index_get_on_id(id);
   } else {
-    prebuilt->index = table->get_first_index();
+    prebuilt->m_index = table->get_first_index();
   }
 
-  ut_a(prebuilt->index != nullptr);
+  ut_a(prebuilt->m_index != nullptr);
 
-  if (prebuilt->trx != nullptr) {
-    ++prebuilt->trx->m_n_client_tables_in_use;
+  if (prebuilt->m_trx != nullptr) {
+    ++prebuilt->m_trx->m_n_client_tables_in_use;
 
-    prebuilt->index_usable = row_merge_is_index_usable(prebuilt->trx, prebuilt->index);
+    prebuilt->m_index_usable = row_merge_is_index_usable(prebuilt->m_trx, prebuilt->m_index);
 
     /* Assign a read view if the transaction does not have it yet */
 
-    auto rv = prebuilt->trx->assign_read_view();
+    auto rv = prebuilt->m_trx->assign_read_view();
     ut_a(rv != nullptr);
   }
 
@@ -2311,7 +2311,7 @@ ib_err_t ib_cursor_open_index_using_id(ib_id_t index_id, ib_trx_t ib_trx, ib_crs
   if (ib_crsr != nullptr) {
     auto cursor = *(ib_cursor_t **)ib_crsr;
 
-    if (cursor->prebuilt->index == nullptr) {
+    if (cursor->prebuilt->m_index == nullptr) {
       auto crsr_err = ib_cursor_close(*ib_crsr);
       ut_a(crsr_err == DB_SUCCESS);
 
@@ -2327,7 +2327,7 @@ ib_err_t ib_cursor_open_index_using_name(ib_crsr_t ib_open_crsr, const char *ind
   ib_id_t index_id = 0;
   ib_err_t err = DB_TABLE_NOT_FOUND;
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_open_crsr);
-  auto trx = cursor->prebuilt->trx;
+  auto trx = cursor->prebuilt->m_trx;
 
   IB_CHECK_PANIC();
 
@@ -2336,7 +2336,7 @@ ib_err_t ib_cursor_open_index_using_name(ib_crsr_t ib_open_crsr, const char *ind
   }
 
   /* We want to increment the ref count, so we do a redundant search. */
-  table = srv_dict_sys->table_get_using_id(srv_config.m_force_recovery, cursor->prebuilt->table->m_id, true);
+  table = srv_dict_sys->table_get_using_id(srv_config.m_force_recovery, cursor->prebuilt->m_table->m_id, true);
   ut_a(table != nullptr);
 
   if (trx != nullptr && !ib_schema_lock_is_exclusive((ib_trx_t)trx)) {
@@ -2353,7 +2353,7 @@ ib_err_t ib_cursor_open_index_using_name(ib_crsr_t ib_open_crsr, const char *ind
   *ib_crsr = nullptr;
 
   if (index_id > 0) {
-    err = ib_create_cursor(ib_crsr, table, index_id, cursor->prebuilt->trx);
+    err = ib_create_cursor(ib_crsr, table, index_id, cursor->prebuilt->m_trx);
   }
 
   if (*ib_crsr != nullptr) {
@@ -2361,7 +2361,7 @@ ib_err_t ib_cursor_open_index_using_name(ib_crsr_t ib_open_crsr, const char *ind
 
     cursor = *(ib_cursor_t **)ib_crsr;
 
-    if (cursor->prebuilt->index == nullptr) {
+    if (cursor->prebuilt->m_index == nullptr) {
       err = ib_cursor_close(*ib_crsr);
       ut_a(err == DB_SUCCESS);
       *ib_crsr = nullptr;
@@ -2431,13 +2431,13 @@ static void ib_qry_proc_free(ib_qry_proc_t *q_proc) {
 
 ib_err_t ib_cursor_reset(ib_crsr_t ib_crsr) {
   ib_cursor_t *cursor = (ib_cursor_t *)ib_crsr;
-  row_prebuilt_t *prebuilt = cursor->prebuilt;
+  Prebuilt *prebuilt = cursor->prebuilt;
 
   IB_CHECK_PANIC();
 
-  if (prebuilt->trx != nullptr && prebuilt->trx->m_n_client_tables_in_use > 0) {
+  if (prebuilt->m_trx != nullptr && prebuilt->m_trx->m_n_client_tables_in_use > 0) {
 
-    --prebuilt->trx->m_n_client_tables_in_use;
+    --prebuilt->m_trx->m_n_client_tables_in_use;
   }
 
   /* The fields in this data structure are allocated from
@@ -2446,15 +2446,15 @@ ib_err_t ib_cursor_reset(ib_crsr_t ib_crsr) {
 
   mem_heap_empty(cursor->query_heap);
 
-  row_prebuilt_reset(prebuilt);
+  prebuilt->clear();
 
   return DB_SUCCESS;
 }
 
 ib_err_t ib_cursor_close(ib_crsr_t ib_crsr) {
   ib_cursor_t *cursor = (ib_cursor_t *)ib_crsr;
-  row_prebuilt_t *prebuilt = cursor->prebuilt;
-  Trx *trx = prebuilt->trx;
+  Prebuilt *prebuilt = cursor->prebuilt;
+  Trx *trx = prebuilt->m_trx;
 
   IB_CHECK_PANIC();
 
@@ -2466,9 +2466,9 @@ ib_err_t ib_cursor_close(ib_crsr_t ib_crsr) {
   }
 
   if (trx != nullptr && ib_schema_lock_is_exclusive((ib_trx_t)trx)) {
-    row_prebuilt_free(cursor->prebuilt, true);
+    Prebuilt::destroy(srv_dict_sys, cursor->prebuilt, true);
   } else {
-    row_prebuilt_free(cursor->prebuilt, false);
+    Prebuilt::destroy(srv_dict_sys, cursor->prebuilt, false);
   }
 
   mem_heap_free(cursor->query_heap);
@@ -2560,14 +2560,14 @@ static ib_err_t ib_execute_insert_query_graph(Table *table, que_fork_t *ins_grap
 static void ib_insert_query_graph_create(ib_cursor_t *cursor) noexcept {
   auto q_proc = &cursor->q_proc;
   auto node = &q_proc->node;
-  auto trx = cursor->prebuilt->trx;
+  auto trx = cursor->prebuilt->m_trx;
 
   ut_a(trx->m_conc_state != TRX_NOT_STARTED);
 
   if (node->ins == nullptr) {
     auto grph = &q_proc->grph;
     auto heap = cursor->query_heap;
-    auto table = cursor->prebuilt->table;
+    auto table = cursor->prebuilt->m_table;
 
     node->ins = srv_row_ins->node_create(INS_DIRECT, table, heap);
 
@@ -2651,9 +2651,9 @@ ib_err_t ib_cursor_insert_row(ib_crsr_t ib_crsr, const ib_tpl_t ib_tpl) {
  * @return update vector
  */
 static upd_t *ib_update_vector_create(ib_cursor_t *cursor) {
-  auto trx = cursor->prebuilt->trx;
+  auto trx = cursor->prebuilt->m_trx;
   auto heap = cursor->query_heap;
-  auto table = cursor->prebuilt->table;
+  auto table = cursor->prebuilt->m_table;
   auto q_proc = &cursor->q_proc;
   auto grph = &q_proc->grph;
   auto node = &q_proc->node;
@@ -2680,7 +2680,7 @@ static upd_t *ib_update_vector_create(ib_cursor_t *cursor) {
  * @param[in] dfield in: updated dfield
  */
 static void ib_update_col(ib_cursor_t *cursor, upd_field_t *upd_field, ulint col_no, dfield_t *dfield) {
-  auto table = cursor->prebuilt->table;
+  auto table = cursor->prebuilt->m_table;
   auto index = table->get_first_index();
 
   auto data_len = dfield_get_len(dfield);
@@ -2807,8 +2807,8 @@ static ib_err_t ib_update_row_with_lock_retry(que_thr_t *thr, upd_node_t *node, 
  * @return DB_SUCCESS or err code
  */
 static ib_err_t ib_execute_update_query_graph(ib_cursor_t *cursor, Btree_pcursor *pcur) noexcept {
-  auto trx = cursor->prebuilt->trx;
-  auto table = cursor->prebuilt->table;
+  auto trx = cursor->prebuilt->m_trx;
+  auto table = cursor->prebuilt->m_table;
   auto q_proc = &cursor->q_proc;
 
   /* The transaction must be running. */
@@ -2872,10 +2872,10 @@ ib_err_t ib_cursor_update_row(ib_crsr_t ib_crsr, const ib_tpl_t ib_old_tpl, cons
 
   Btree_pcursor *pcur;
 
-  if (prebuilt->index->is_clustered()) {
-    pcur = prebuilt->pcur;
-  } else if (prebuilt->need_to_access_clustered && prebuilt->clust_pcur != nullptr) {
-    pcur = prebuilt->clust_pcur;
+  if (prebuilt->m_index->is_clustered()) {
+    pcur = prebuilt->m_pcur;
+  } else if (prebuilt->m_need_to_access_clustered && prebuilt->m_clust_pcur != nullptr) {
+    pcur = prebuilt->m_clust_pcur;
   } else {
     return DB_ERROR;
   }
@@ -2906,7 +2906,7 @@ ib_err_t ib_cursor_update_row(ib_crsr_t ib_crsr, const ib_tpl_t ib_old_tpl, cons
  * @return DB_SUCCESS or err code
  */
 static ib_err_t ib_delete_row(ib_cursor_t *cursor, Btree_pcursor *pcur, const rec_t *rec) {
-  auto table = cursor->prebuilt->table;
+  auto table = cursor->prebuilt->m_table;
   auto index = table->get_first_index();
 
   IB_CHECK_PANIC();
@@ -2958,24 +2958,24 @@ ib_err_t ib_cursor_delete_row(ib_crsr_t ib_crsr) {
 
   IB_CHECK_PANIC();
 
-  auto index = prebuilt->index->m_table->get_first_index();
+  auto index = prebuilt->m_index->m_table->get_first_index();
 
   /* Check whether this is a secondary index cursor */
-  if (index != prebuilt->index) {
-    if (prebuilt->need_to_access_clustered) {
-      pcur = prebuilt->clust_pcur;
+  if (index != prebuilt->m_index) {
+    if (prebuilt->m_need_to_access_clustered) {
+      pcur = prebuilt->m_clust_pcur;
     } else {
       return DB_ERROR;
     }
   } else {
-    pcur = prebuilt->pcur;
+    pcur = prebuilt->m_pcur;
   }
 
   if (ib_btr_cursor_is_positioned(pcur)) {
     const rec_t *rec;
 
-    if (!Row_sel::is_cache_empty(prebuilt)) {
-      rec = Row_sel::cache_get_row(prebuilt);
+    if (!prebuilt->m_row_cache.is_cache_empty()) {
+      rec = prebuilt->m_row_cache.cache_get_row();
       ut_a(rec != nullptr);
     } else {
       mtr_t mtr;
@@ -3011,15 +3011,15 @@ ib_err_t ib_cursor_read_row(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl) {
 
   IB_CHECK_PANIC();
 
-  ut_a(cursor->prebuilt->trx->m_conc_state != TRX_NOT_STARTED);
+  ut_a(cursor->prebuilt->m_trx->m_conc_state != TRX_NOT_STARTED);
 
   /* When searching with IB_EXACT_MATCH set, row_search_mvcc()
   will not position the persistent cursor but will copy the record
   found into the row cache. It should be the only entry. */
-  if (!ib_cursor_is_positioned(ib_crsr) && Row_sel::is_cache_empty(cursor->prebuilt)) {
+  if (!ib_cursor_is_positioned(ib_crsr) && cursor->prebuilt->m_row_cache.is_cache_empty()) {
     err = DB_RECORD_NOT_FOUND;
-  } else if (!Row_sel::is_cache_empty(cursor->prebuilt)) {
-    auto rec = Row_sel::cache_get_row(cursor->prebuilt);
+  } else if (!cursor->prebuilt->m_row_cache.is_cache_empty()) {
+    auto rec = cursor->prebuilt->m_row_cache.cache_get_row();
     ut_a(rec != nullptr);
 
     if (!rec_get_deleted_flag(rec)) {
@@ -3033,10 +3033,10 @@ ib_err_t ib_cursor_read_row(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl) {
     Btree_pcursor *pcur;
     auto prebuilt = cursor->prebuilt;
 
-    if (prebuilt->need_to_access_clustered && tuple->type == TPL_ROW) {
-      pcur = prebuilt->clust_pcur;
+    if (prebuilt->m_need_to_access_clustered && tuple->type == TPL_ROW) {
+      pcur = prebuilt->m_clust_pcur;
     } else {
-      pcur = prebuilt->pcur;
+      pcur = prebuilt->m_pcur;
     }
 
     if (pcur == nullptr) {
@@ -3071,9 +3071,9 @@ ib_err_t ib_cursor_prev(ib_crsr_t ib_crsr) {
   IB_CHECK_PANIC();
 
   /* We want to move to the next record */
-  dtuple_set_n_fields(prebuilt->search_tuple, 0);
+  dtuple_set_n_fields(prebuilt->m_search_tuple, 0);
 
-  Row_sel::cache_next(prebuilt);
+  prebuilt->m_row_cache.cache_next();
 
   return srv_row_sel->mvcc_fetch(srv_config.m_force_recovery, IB_CUR_L, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_PREV);
 }
@@ -3085,9 +3085,9 @@ ib_err_t ib_cursor_next(ib_crsr_t ib_crsr) {
   IB_CHECK_PANIC();
 
   /* We want to move to the next record */
-  dtuple_set_n_fields(prebuilt->search_tuple, 0);
+  dtuple_set_n_fields(prebuilt->m_search_tuple, 0);
 
-  Row_sel::cache_next(prebuilt);
+  prebuilt->m_row_cache.cache_next();
 
   return srv_row_sel->mvcc_fetch(srv_config.m_force_recovery, IB_CUR_G, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_NEXT);
 }
@@ -3107,7 +3107,7 @@ static ib_err_t ib_cursor_position(ib_cursor_t *cursor, ib_srch_mode_t mode) {
 
   /* We want to position at one of the ends, row_search_mvcc()
   uses the search_tuple fields to work out what to do. */
-  dtuple_set_n_fields(prebuilt->search_tuple, 0);
+  dtuple_set_n_fields(prebuilt->m_search_tuple, 0);
 
   return srv_row_sel->mvcc_fetch(srv_config.m_force_recovery, mode, prebuilt, ROW_SEL_DEFAULT, ROW_SEL_MOVETO);
 }
@@ -3132,13 +3132,13 @@ ib_err_t ib_cursor_moveto(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl, ib_srch_mode_t ib_
   auto tuple = reinterpret_cast<ib_tuple_t *>(ib_tpl);
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
   auto prebuilt = cursor->prebuilt;
-  auto search_tuple = prebuilt->search_tuple;
+  auto search_tuple = prebuilt->m_search_tuple;
 
   IB_CHECK_PANIC();
 
   ut_a(tuple->type == TPL_KEY);
 
-  auto n_fields = prebuilt->index->get_n_ordering_defined_by_user();
+  auto n_fields = prebuilt->m_index->get_n_ordering_defined_by_user();
 
   dtuple_set_n_fields(search_tuple, n_fields);
   dtuple_set_n_fields_cmp(search_tuple, n_fields);
@@ -3148,11 +3148,11 @@ ib_err_t ib_cursor_moveto(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl, ib_srch_mode_t ib_
     dfield_copy(dtuple_get_nth_field(search_tuple, i), dtuple_get_nth_field(tuple->ptr, i));
   }
 
-  ut_a(prebuilt->select_lock_type <= LOCK_NUM);
+  ut_a(prebuilt->m_select_lock_type <= LOCK_NUM);
 
   auto err = srv_row_sel->mvcc_fetch(srv_config.m_force_recovery, ib_srch_mode, prebuilt, (ib_match_t)cursor->match_mode, ROW_SEL_MOVETO);
 
-  *result = prebuilt->result;
+  *result = prebuilt->m_result;
 
   return err;
 }
@@ -3162,18 +3162,18 @@ void ib_cursor_attach_trx(ib_crsr_t ib_crsr, ib_trx_t ib_trx) {
   auto prebuilt = cursor->prebuilt;
 
   ut_a(ib_trx != nullptr);
-  ut_a(prebuilt->trx == nullptr);
+  ut_a(prebuilt->m_trx == nullptr);
 
-  row_prebuilt_reset(prebuilt);
-  row_prebuilt_update_trx(prebuilt, (Trx *)ib_trx);
+  prebuilt->clear();
+  prebuilt->update_trx((Trx *)ib_trx);
 
   /* Assign a read view if the transaction does not have it yet */
-  auto rv = prebuilt->trx->assign_read_view();
+  auto rv = prebuilt->m_trx->assign_read_view();
   ut_a(rv != nullptr);
 
-  ut_a(prebuilt->trx->m_conc_state != TRX_NOT_STARTED);
+  ut_a(prebuilt->m_trx->m_conc_state != TRX_NOT_STARTED);
 
-  ++prebuilt->trx->m_n_client_tables_in_use;
+  ++prebuilt->m_trx->m_n_client_tables_in_use;
 }
 
 void ib_set_client_compare(ib_client_cmp_t client_cmp_func) {
@@ -3628,13 +3628,13 @@ ib_err_t ib_tuple_get_cluster_key(ib_crsr_t ib_crsr, ib_tpl_t *ib_dst_tpl, const
 
   IB_CHECK_PANIC();
 
-  auto clust_index = cursor->prebuilt->table->get_first_index();
+  auto clust_index = cursor->prebuilt->m_table->get_clustered_index();
 
   /* We need to ensure that the src tuple belongs to the same table
   as the open cursor and that it's not a tuple for a cluster index. */
   if (src_tuple->type != TPL_KEY) {
     return DB_ERROR;
-  } else if (src_tuple->index->m_table != cursor->prebuilt->table) {
+  } else if (src_tuple->index->m_table != cursor->prebuilt->m_table) {
     return DB_DATA_MISMATCH;
   } else if (src_tuple->index == clust_index) {
     return DB_ERROR;
@@ -3714,7 +3714,7 @@ ib_err_t ib_tuple_copy(ib_tpl_t ib_dst_tpl, const ib_tpl_t ib_src_tpl) {
 
 ib_tpl_t ib_sec_search_tuple_create(ib_crsr_t ib_crsr) {
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
-  auto index = cursor->prebuilt->index;
+  auto index = cursor->prebuilt->m_index;
 
   const auto n_cols = index->get_n_unique_in_tree();
   return ib_key_tuple_new(index, n_cols);
@@ -3722,7 +3722,7 @@ ib_tpl_t ib_sec_search_tuple_create(ib_crsr_t ib_crsr) {
 
 ib_tpl_t ib_sec_read_tuple_create(ib_crsr_t ib_crsr) {
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
-  auto index = cursor->prebuilt->index;
+  auto index = cursor->prebuilt->m_index;
   const auto n_cols = index->get_n_fields();
 
   return ib_row_tuple_new(index, n_cols);
@@ -3730,7 +3730,7 @@ ib_tpl_t ib_sec_read_tuple_create(ib_crsr_t ib_crsr) {
 
 ib_tpl_t ib_clust_search_tuple_create(ib_crsr_t ib_crsr) {
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
-  auto index = cursor->prebuilt->table->get_first_index();
+  auto index = cursor->prebuilt->m_table->get_clustered_index();
   const auto n_cols = index->get_n_ordering_defined_by_user();
 
   return ib_key_tuple_new(index, n_cols);
@@ -3739,9 +3739,9 @@ ib_tpl_t ib_clust_search_tuple_create(ib_crsr_t ib_crsr) {
 ib_tpl_t ib_clust_read_tuple_create(ib_crsr_t ib_crsr) {
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
 
-  auto index = cursor->prebuilt->table->get_first_index();
+  auto index = cursor->prebuilt->m_table->get_clustered_index();
 
-  const auto n_cols = cursor->prebuilt->table->get_n_cols();
+  const auto n_cols = cursor->prebuilt->m_table->get_n_cols();
   return ib_row_tuple_new(index, n_cols);
 }
 
@@ -3773,7 +3773,7 @@ ib_err_t ib_cursor_truncate(ib_crsr_t *ib_crsr, ib_id_t *table_id) {
 
   IB_CHECK_PANIC();
 
-  ut_a(ib_schema_lock_is_exclusive((ib_trx_t)prebuilt->trx));
+  ut_a(ib_schema_lock_is_exclusive((ib_trx_t)prebuilt->m_trx));
 
   *table_id = 0;
 
@@ -3781,11 +3781,11 @@ ib_err_t ib_cursor_truncate(ib_crsr_t *ib_crsr, ib_id_t *table_id) {
 
   if (err == DB_SUCCESS) {
     Trx *trx;
-    Table *table = prebuilt->table;
+    Table *table = prebuilt->m_table;
 
     /* We are going to free the cursor and the prebuilt. Store
     the transaction handle locally. */
-    trx = prebuilt->trx;
+    trx = prebuilt->m_trx;
     err = ib_cursor_close(*ib_crsr);
     ut_a(err == DB_SUCCESS);
 
@@ -3967,9 +3967,9 @@ ib_err_t ib_database_drop(const char *dbname) {
 
 bool ib_cursor_is_positioned(const ib_crsr_t ib_crsr) {
   const ib_cursor_t *cursor = (const ib_cursor_t *)ib_crsr;
-  const row_prebuilt_t *prebuilt = cursor->prebuilt;
+  const Prebuilt *prebuilt = cursor->prebuilt;
 
-  return ib_btr_cursor_is_positioned(prebuilt->pcur);
+  return ib_btr_cursor_is_positioned(prebuilt->m_pcur);
 }
 
 ib_err_t ib_schema_lock_shared(ib_trx_t ib_trx) {
@@ -4034,8 +4034,8 @@ ib_err_t ib_schema_unlock(ib_trx_t ib_trx) {
 ib_err_t ib_cursor_lock(ib_crsr_t ib_crsr, ib_lck_mode_t ib_lck_mode) {
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
   auto prebuilt = cursor->prebuilt;
-  auto trx = prebuilt->trx;
-  auto table = prebuilt->table;
+  auto trx = prebuilt->m_trx;
+  auto table = prebuilt->m_table;
 
   IB_CHECK_PANIC();
 
@@ -4090,8 +4090,8 @@ ib_err_t ib_cursor_unlock(ib_crsr_t ib_crsr) {
 
   IB_CHECK_PANIC();
 
-  if (prebuilt->trx->m_client_n_tables_locked > 0) {
-    --prebuilt->trx->m_client_n_tables_locked;
+  if (prebuilt->m_trx->m_client_n_tables_locked > 0) {
+    --prebuilt->m_trx->m_client_n_tables_locked;
     err = DB_SUCCESS;
   } else {
     err = DB_ERROR;
@@ -4116,8 +4116,8 @@ ib_err_t ib_cursor_set_lock_mode(ib_crsr_t ib_crsr, ib_lck_mode_t ib_lck_mode) {
   }
 
   if (err == DB_SUCCESS) {
-    prebuilt->select_lock_type = (enum Lock_mode)ib_lck_mode;
-    ut_a(prebuilt->trx->m_conc_state != TRX_NOT_STARTED);
+    prebuilt->m_select_lock_type = (enum Lock_mode)ib_lck_mode;
+    ut_a(prebuilt->m_trx->m_conc_state != TRX_NOT_STARTED);
   }
 
   return err;
@@ -4127,14 +4127,14 @@ void ib_cursor_set_cluster_access(ib_crsr_t ib_crsr) {
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
   auto prebuilt = cursor->prebuilt;
 
-  prebuilt->need_to_access_clustered = true;
+  prebuilt->m_need_to_access_clustered = true;
 }
 
 void ib_cursor_set_simple_select(ib_crsr_t ib_crsr) {
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
   auto prebuilt = cursor->prebuilt;
 
-  prebuilt->simple_select = true;
+  prebuilt->m_simple_select = true;
 }
 
 void ib_savepoint_take(ib_trx_t ib_trx, const void *name, ulint name_len) {
@@ -4534,7 +4534,7 @@ ib_err_t ib_tuple_write_u64(ib_tpl_t ib_tpl, int col_no, uint64_t val) {
 void ib_cursor_stmt_begin(ib_crsr_t ib_crsr) {
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
 
-  cursor->prebuilt->sql_stat_start = true;
+  cursor->prebuilt->m_sql_stat_start = true;
 }
 
 ib_err_t ib_tuple_write_double(ib_tpl_t ib_tpl, int col_no, double val) {
@@ -4621,7 +4621,7 @@ ib_err_t ib_get_duplicate_key(ib_trx_t ib_trx, const char **table_name, const ch
 
 ib_err_t ib_get_table_statistics(ib_crsr_t ib_crsr, ib_table_stats_t *table_stats, size_t sizeof_ib_table_stats_t) {
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
-  auto table = cursor->prebuilt->table;
+  auto table = cursor->prebuilt->m_table;
 
   if (!table->m_stats.m_initialized) {
     srv_dict_sys->update_statistics(table);
@@ -4637,7 +4637,7 @@ ib_err_t ib_get_table_statistics(ib_crsr_t ib_crsr, ib_table_stats_t *table_stat
 
 ib_err_t ib_get_index_stat_n_diff_key_vals(ib_crsr_t ib_crsr, const char *index_name, uint64_t *ncols, int64_t **n_diff) {
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
-  auto table = cursor->prebuilt->table;
+  auto table = cursor->prebuilt->m_table;
 
   if (!table->m_stats.m_initialized) {
     srv_dict_sys->update_statistics(table);
@@ -4664,7 +4664,7 @@ ib_err_t ib_get_index_stat_n_diff_key_vals(ib_crsr_t ib_crsr, const char *index_
 
 ib_err_t ib_update_table_statistics(ib_crsr_t crsr) {
   auto cursor = reinterpret_cast<ib_cursor_t *>(crsr);
-  auto table = cursor->prebuilt->table;
+  auto table = cursor->prebuilt->m_table;
 
   srv_dict_sys->update_statistics(table);
 
@@ -4698,7 +4698,7 @@ ib_err_t ib_parallel_select_count_star(ib_trx_t ib_trx, std::vector<ib_crsr_t> &
 
   for (auto &ib_crsr : ib_crsrs) {
     auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
-    Parallel_reader::Config config(full_scan, cursor->prebuilt->index);
+    Parallel_reader::Config config(full_scan, cursor->prebuilt->m_index);
 
     err = reader.add_scan(trx, config, [&](const Parallel_reader::Ctx *ctx) {
       n_recs.inc(1, ctx->thread_id());
@@ -4891,9 +4891,9 @@ ib_err_t ib_check_table(ib_trx_t *ib_trx, ib_crsr_t ib_crsr, size_t n_threads) {
   auto trx = reinterpret_cast<Trx *>(ib_trx);
   auto cursor = reinterpret_cast<ib_cursor_t *>(ib_crsr);
   auto prebuilt = cursor->prebuilt;
-  auto index = prebuilt->index;
+  auto index = prebuilt->m_index;
 
-  ut_a(prebuilt->trx->m_conc_state == TRX_NOT_STARTED);
+  ut_a(prebuilt->m_trx->m_conc_state == TRX_NOT_STARTED);
 
   if (index->is_clustered()) {
     /* The clustered index of a table is always available. During online ALTER TABLE
@@ -4906,16 +4906,16 @@ ib_err_t ib_check_table(ib_trx_t *ib_trx, ib_crsr_t ib_crsr, size_t n_threads) {
     return DB_DDL_IN_PROGRESS;
   }
 
-  if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && prebuilt->select_lock_type == LOCK_NONE && index->is_clustered() &&
+  if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && prebuilt->m_select_lock_type == LOCK_NONE && index->is_clustered() &&
       trx->m_client_n_tables_locked == 0) {
     n_threads = Parallel_reader::available_threads(n_threads, false);
 
     auto rv = trx->assign_read_view();
     ut_a(rv != nullptr);
 
-    auto trx = prebuilt->trx;
+    auto trx = prebuilt->m_trx;
 
-    ut_a(prebuilt->table == index->m_table);
+    ut_a(prebuilt->m_table == index->m_table);
 
     std::vector<Index *> indexes;
 

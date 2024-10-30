@@ -1671,21 +1671,21 @@ que_thr_t *Row_sel::printf_step(que_thr_t *thr) noexcept {
   return thr;
 }
 
-void Row_sel::prebuild_graph(row_prebuilt_t *prebuilt) noexcept{
-  ut_ad(prebuilt->trx != nullptr);
+void Prebuilt::prebuild_graph() noexcept{
+  ut_ad(m_trx != nullptr);
 
-  if (prebuilt->sel_graph == nullptr) {
+  if (m_sel_graph == nullptr) {
 
-    auto sel_node = sel_node_t::create(prebuilt->heap);
-    auto thr = pars_complete_graph_for_exec(sel_node, prebuilt->trx, prebuilt->heap);
-    prebuilt->sel_graph = static_cast<que_fork_t *>(que_node_get_parent(thr));
+    auto sel_node = sel_node_t::create(m_heap);
+    auto thr = pars_complete_graph_for_exec(sel_node, m_trx, m_heap);
 
-    prebuilt->sel_graph->state = QUE_FORK_ACTIVE;
+    m_sel_graph = static_cast<que_fork_t *>(que_node_get_parent(thr));
+    m_sel_graph->state = QUE_FORK_ACTIVE;
   }
 }
 
 db_err Row_sel::get_clust_rec_with_prebuilt(
-  row_prebuilt_t *prebuilt,
+  Prebuilt *prebuilt,
   Index *sec_index,
   const rec_t *rec,
   que_thr_t *thr,
@@ -1696,13 +1696,13 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
 
   *out_rec = nullptr;
 
-  auto func_exit = [this](row_prebuilt_t *prebuilt, const rec_t **out_rec, const rec_t *clust_rec, mtr_t *mtr) noexcept {
+  auto func_exit = [this](Prebuilt *prebuilt, const rec_t **out_rec, const rec_t *clust_rec, mtr_t *mtr) noexcept {
     *out_rec = clust_rec;
 
-    if (prebuilt->select_lock_type != LOCK_NONE) {
+    if (prebuilt->m_select_lock_type != LOCK_NONE) {
       /* We may use the cursor in update or in unlock_row(): store its position */
 
-      prebuilt->clust_pcur->store_position(mtr);
+      prebuilt->m_clust_pcur->store_position(mtr);
     }
 
     return DB_SUCCESS;
@@ -1710,20 +1710,20 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
 
   auto trx = thr_get_trx(thr);
 
-  row_build_row_ref_in_tuple(prebuilt->clust_ref, rec, sec_index, *offsets, trx);
+  row_build_row_ref_in_tuple(prebuilt->m_clust_ref, rec, sec_index, *offsets, trx);
 
   auto clust_index = sec_index->m_table->get_clustered_index();
 
-  prebuilt->clust_pcur->open_with_no_init(clust_index, prebuilt->clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Current_location());
+  prebuilt->m_clust_pcur->open_with_no_init(clust_index, prebuilt->m_clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Current_location());
 
-  const rec_t *clust_rec = prebuilt->clust_pcur->get_rec();
+  const rec_t *clust_rec = prebuilt->m_clust_pcur->get_rec();
 
-  prebuilt->clust_pcur->m_trx_if_known = trx;
+  prebuilt->m_clust_pcur->m_trx_if_known = trx;
 
   /* Note: only if the search ends up on a non-infimum record is the
   low_match value the real match to the search tuple */
 
-  if (!page_rec_is_user_rec(clust_rec) || prebuilt->clust_pcur->get_low_match() < clust_index->get_n_unique()) {
+  if (!page_rec_is_user_rec(clust_rec) || prebuilt->m_clust_pcur->get_low_match() < clust_index->get_n_unique()) {
 
     /* In a rare case it is possible that no clust rec is found
     for a delete-marked secondary index record: if in row0umod.c
@@ -1734,7 +1734,7 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
     clustered index record did not exist in the read view of
     trx. */
 
-    if (!rec_get_deleted_flag(rec) || prebuilt->select_lock_type != LOCK_NONE) {
+    if (!rec_get_deleted_flag(rec) || prebuilt->m_select_lock_type != LOCK_NONE) {
       log_err("Clustered record for sec rec not found");
       m_dict->index_name_print(trx, sec_index);
       log_err("sec index record ");
@@ -1757,12 +1757,12 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
     *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Current_location());
   }
 
-  if (prebuilt->select_lock_type != LOCK_NONE) {
+  if (prebuilt->m_select_lock_type != LOCK_NONE) {
     /* Try to place a lock on the index record; we are searching the clust rec with a unique condition, hence
     we set a LOCK_REC_NOT_GAP type lock */
 
-    auto block = prebuilt->clust_pcur->get_block();
-    const auto lock_type = prebuilt->select_lock_type;
+    auto block = prebuilt->m_clust_pcur->get_block();
+    const auto lock_type = prebuilt->m_select_lock_type;
 
     const auto err = m_lock_sys->clust_rec_read_check_and_lock(0, block, clust_rec, clust_index, *offsets, lock_type, LOCK_REC_NOT_GAP, thr);
 
@@ -1789,7 +1789,7 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
         .m_cluster_offsets = *offsets,
         .m_consistent_read_view = trx->m_read_view,
         .m_cluster_offset_heap = *offset_heap,
-        .m_old_row_heap = prebuilt->old_vers_heap,
+        .m_old_row_heap = prebuilt->m_old_vers_heap,
         .m_old_rec = old_vers
       };
 
@@ -1859,93 +1859,13 @@ bool Row_sel::restore_position(bool *same_user_rec, ulint latch_mode, Btree_pcur
   return true;
 }
 
-void Row_sel::cache_reset(row_prebuilt_t *prebuilt) noexcept {
-  prebuilt->row_cache.first = 0;
-  prebuilt->row_cache.n_cached = 0;
-}
-
-bool Row_sel::is_cache_empty(row_prebuilt_t *prebuilt) noexcept {
-  return prebuilt->row_cache.n_cached == 0;
-}
-
-bool Row_sel::is_cache_fetch_in_progress(row_prebuilt_t *prebuilt) noexcept {
-  return prebuilt->row_cache.first > 0 && prebuilt->row_cache.first < prebuilt->row_cache.n_size;
-}
-
-bool Row_sel::is_cache_full(row_prebuilt_t *prebuilt) noexcept {
-  ut_a(prebuilt->row_cache.n_cached <= prebuilt->row_cache.n_size);
-  return prebuilt->row_cache.n_cached == prebuilt->row_cache.n_size - 1;
-}
-
-const rec_t *Row_sel::cache_get_row(row_prebuilt_t *prebuilt) noexcept {
-  ut_ad(!is_cache_empty(prebuilt));
-
-  auto row = &prebuilt->row_cache.ptr[prebuilt->row_cache.first];
-
-  return row->rec;
-}
-
-void Row_sel::cache_next(row_prebuilt_t *prebuilt) noexcept {
-  if (!is_cache_empty(prebuilt)) {
-    --prebuilt->row_cache.n_cached;
-    ++prebuilt->row_cache.first;
-    ;
-
-    if (is_cache_empty(prebuilt)) {
-      prebuilt->row_cache.first = 0;
-    }
-  }
-}
-
-inline void Row_sel::cache_add_row(row_prebuilt_t *prebuilt, const rec_t *rec, const ulint *offsets) noexcept {
-  auto row_cache = &prebuilt->row_cache;
-
-  ut_a(row_cache->first == 0);
-  ut_ad(!is_cache_full(prebuilt));
+inline void Prebuilt::Row_cache::add_row(const rec_t *rec, const ulint *offsets) noexcept {
+  ut_a(m_first == 0);
+  ut_ad(!is_cache_full());
   ut_ad(rec_offs_validate(rec, nullptr, offsets));
 
-  auto row = &prebuilt->row_cache.ptr[row_cache->n_cached];
-
-  /* Get the size of the physical record in the page */
-  const auto rec_len = rec_offs_size(offsets);
-
-  /* Check if there is enough space for the record being added to the cache. Free existing memory if it won't fit. */
-  if (row->max_len < rec_len) {
-    if (row->ptr != nullptr) {
-
-      ut_a(row->max_len > 0);
-      ut_a(row->rec_len > 0);
-      mem_free(row->ptr);
-
-      row->ptr = nullptr;
-      row->rec = nullptr;
-      row->max_len = 0;
-      row->rec_len = 0;
-
-    } else {
-
-      ut_a(row->ptr == nullptr);
-      ut_a(row->rec == nullptr);
-      ut_a(row->max_len == 0);
-      ut_a(row->rec_len == 0);
-    }
-  }
-
-  row->rec_len = rec_len;
-
-  if (row->ptr == nullptr) {
-    row->max_len = row->rec_len * 2;
-    row->ptr = static_cast<byte *>(mem_alloc(row->max_len));
-  }
-
-  ut_a(row->max_len >= row->rec_len);
-
-  /* Note that the pointer returned by rec_copy() is actually an offset into cache->ptr, to the start of the record data. */
-  row->rec = rec_copy(row->ptr, rec, offsets);
-
-  ++row_cache->n_cached;
-
-  ut_a(row_cache->n_cached < row_cache->n_size);
+  ut_a(m_n_cached < m_n_size - 1);
+  m_cached_rows[m_n_cached++].add_row(rec, offsets);
 }
 
 /**
@@ -1962,11 +1882,11 @@ inline void Row_sel::cache_add_row(row_prebuilt_t *prebuilt, const rec_t *rec, c
  *
  * @return Search_status::FOUND, Search_status::EXHAUSTED, Search_status::RETRY
  */
-Search_status Row_sel::try_search_shortcut_for_prebuilt(const rec_t **out_rec, row_prebuilt_t *prebuilt, ulint **offsets, mem_heap_t **heap, mtr_t *mtr) noexcept {
-  auto trx = prebuilt->trx;
-  auto pcur = prebuilt->pcur;
-  auto index = prebuilt->index;
-  auto search_tuple = prebuilt->search_tuple;
+Search_status Row_sel::try_search_shortcut_for_prebuilt(const rec_t **out_rec, Prebuilt *prebuilt, ulint **offsets, mem_heap_t **heap, mtr_t *mtr) noexcept {
+  auto trx = prebuilt->m_trx;
+  auto pcur = prebuilt->m_pcur;
+  auto index = prebuilt->m_index;
+  auto search_tuple = prebuilt->m_search_tuple;
 
   ut_ad(index->is_clustered());
 
@@ -2011,8 +1931,8 @@ Search_status Row_sel::try_search_shortcut_for_prebuilt(const rec_t **out_rec, r
   return Search_status::FOUND;
 }
 
-db_err Row_sel::unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) noexcept{
-  auto trx = prebuilt->trx;
+db_err Row_sel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) noexcept{
+  auto trx = prebuilt->m_trx;
 
   if (unlikely(trx->m_isolation_level != TRX_ISO_READ_COMMITTED)) {
 
@@ -2023,10 +1943,10 @@ db_err Row_sel::unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_
 
   trx->m_op_info = "unlock_row";
 
-  if (prebuilt->new_rec_locks >= 1) {
+  if (prebuilt->m_new_rec_locks >= 1) {
 
     mtr_t mtr;
-    auto pcur = prebuilt->pcur;
+    auto pcur = prebuilt->m_pcur;
 
     mtr.start();
 
@@ -2038,7 +1958,7 @@ db_err Row_sel::unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_
 
     auto rec = pcur->get_rec();
 
-    m_lock_sys->rec_unlock(trx, pcur->get_block(), rec, prebuilt->select_lock_type);
+    m_lock_sys->rec_unlock(trx, pcur->get_block(), rec, prebuilt->m_select_lock_type);
 
     mtr.commit();
 
@@ -2047,7 +1967,7 @@ db_err Row_sel::unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_
     reset locks on clust_pcur. The values in clust_pcur may be
     garbage! */
 
-    if (prebuilt->index->is_clustered()) {
+    if (prebuilt->m_index->is_clustered()) {
 
       trx->m_op_info = "";
 
@@ -2055,9 +1975,9 @@ db_err Row_sel::unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_
     }
   }
 
-  if (prebuilt->new_rec_locks >= 1) {
+  if (prebuilt->m_new_rec_locks >= 1) {
     mtr_t mtr;
-    auto clust_pcur = prebuilt->clust_pcur;
+    auto clust_pcur = prebuilt->m_clust_pcur;
 
     mtr.start();
 
@@ -2069,7 +1989,7 @@ db_err Row_sel::unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_
 
     auto rec = clust_pcur->get_rec();
 
-    m_lock_sys->rec_unlock(trx, clust_pcur->get_block(), rec, prebuilt->select_lock_type);
+    m_lock_sys->rec_unlock(trx, clust_pcur->get_block(), rec, prebuilt->m_select_lock_type);
 
     mtr.commit();
   }
@@ -2079,11 +1999,11 @@ db_err Row_sel::unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_
   return DB_SUCCESS;
 }
 
-db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_prebuilt_t *prebuilt, ib_match_t match_mode, ib_cur_op_t direction) noexcept {
-  auto index = prebuilt->index;
-  const auto search_tuple = prebuilt->search_tuple;
-  auto pcur = prebuilt->pcur;
-  auto trx = prebuilt->trx;
+db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, Prebuilt *prebuilt, ib_match_t match_mode, ib_cur_op_t direction) noexcept {
+  auto index = prebuilt->m_index;
+  const auto search_tuple = prebuilt->m_search_tuple;
+  auto pcur = prebuilt->m_pcur;
+  auto trx = prebuilt->m_trx;
 
   Index *clust_index;
   que_thr_t *thr;
@@ -2108,33 +2028,33 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
 
   rec_offs_init(offsets_);
 
-  prebuilt->result = -1;
+  prebuilt->m_result = -1;
 
   ut_ad(index && pcur && search_tuple);
 
-  if (unlikely(prebuilt->table->m_ibd_file_missing)) {
+  if (unlikely(prebuilt->m_table->m_ibd_file_missing)) {
     log_err(std::format(
       "The client is trying to use a table handle but the .ibd file for"
       " table {} does not exist. Have you deleted the .ibd file"
       " from the database directory under the datadir, or have you discarded the"
       " tablespace? Check the InnoDB website for details on how you can resolve"
       "the problem.",
-      prebuilt->table->m_name
+      prebuilt->m_table->m_name
     ));
 
     return DB_ERROR;
   }
 
-  if (unlikely(!prebuilt->index_usable)) {
+  if (unlikely(!prebuilt->m_index_usable)) {
 
     return DB_MISSING_HISTORY;
   }
 
-  if (unlikely(prebuilt->magic_n != ROW_PREBUILT_ALLOCATED)) {
+  if (unlikely(prebuilt->m_magic_n != ROW_PREBUILT_ALLOCATED)) {
     log_fatal(std::format(
       "Trying to free a corrupt table handle. Magic n {}, table name {}",
-      prebuilt->magic_n,
-      prebuilt->table->m_name
+      prebuilt->m_magic_n,
+      prebuilt->m_table->m_name
     ));
   }
 
@@ -2143,7 +2063,7 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
 	print until the cursor lock count is done correctly.
 	See bugs #12263 and #12456!*/
 
-	if (trx->m_n_tables_in_use == 0 && unlikely(prebuilt->select_lock_type == LOCK_NONE)) {
+	if (trx->m_n_tables_in_use == 0 && unlikely(prebuilt->m_select_lock_type == LOCK_NONE)) {
 		/* Note that if the client uses an InnoDB temp table that it
 		created inside LOCK TABLES, then n_client_tables_in_use can
 		be zero; in that case select_lock_type is set to LOCK_X in
@@ -2157,7 +2077,7 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
   /* Reset the new record lock info if session is using a
   READ COMMITED isolation level. Then we are able to remove
   the record locks set here on an individual row. */
-  prebuilt->new_rec_locks = 0;
+  prebuilt->m_new_rec_locks = 0;
 
   /*-------------------------------------------------------------*/
   /* PHASE 1: Try to pop the row from the prefetch cache */
@@ -2165,38 +2085,38 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
   if (unlikely(direction == ROW_SEL_MOVETO)) {
     trx->m_op_info = "starting index read";
 
-    cache_reset(prebuilt);
+    prebuilt->m_row_cache.clear();
 
-    if (prebuilt->sel_graph == nullptr) {
+    if (prebuilt->m_sel_graph == nullptr) {
       /* Build a dummy select query graph */
-      prebuild_graph(prebuilt);
+      prebuilt->prebuild_graph();
     }
   } else {
     trx->m_op_info = "fetching rows";
 
     /* Is this the first row being fetched by the cursor ? */
-    if (is_cache_empty(prebuilt)) {
-      prebuilt->row_cache.direction = direction;
+    if (prebuilt->m_row_cache.is_cache_empty()) {
+      prebuilt->m_row_cache.m_direction = direction;
     }
 
-    if (unlikely(direction != prebuilt->row_cache.direction)) {
+    if (unlikely(direction != prebuilt->m_row_cache.m_direction)) {
 
-      if (!is_cache_empty(prebuilt)) {
+      if (!prebuilt->m_row_cache.is_cache_empty()) {
         ut_error;
         /* TODO: scrollable cursor: restore cursor to the place of the latest returned row,
         or better: prevent caching for a scroll cursor! */
       }
 
-      cache_reset(prebuilt);
+      prebuilt->m_row_cache.clear();
 
-    } else if (likely(!is_cache_empty(prebuilt))) {
+    } else if (likely(!prebuilt->m_row_cache.is_cache_empty())) {
       err = DB_SUCCESS;
 
       ++srv_n_rows_read;
 
       goto func_exit;
 
-    } else if (is_cache_fetch_in_progress(prebuilt)) {
+    } else if (prebuilt->m_row_cache.is_cache_fetch_in_progress()) {
 
       /* The previous returned row was popped from the fetch cache, but the cache was not full at the time of the
       popping: no more rows can exist in the result set */
@@ -2241,7 +2161,7 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
 
     unique_search_from_clust_index = true;
 
-    if (trx->m_client_n_tables_locked == 0 && prebuilt->select_lock_type == LOCK_NONE &&
+    if (trx->m_client_n_tables_locked == 0 && prebuilt->m_select_lock_type == LOCK_NONE &&
         trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && trx->m_read_view) {
 
       /* This is a SELECT query done as a consistent read, and the read view has already been allocated:
@@ -2258,16 +2178,16 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
          must read in the record found into the pre-fetch cache for the user to access. */
           if (match_mode == ROW_SEL_EXACT) {
             /* There can be no previous entries when doing a search with this match mode set. */
-            ut_a(is_cache_empty(prebuilt));
+            ut_a(prebuilt->m_row_cache.is_cache_empty());
 
-            cache_add_row(prebuilt, rec, offsets);
+            prebuilt->m_row_cache.add_row(rec, offsets);
           }
 
           mtr.commit();
 
           ++srv_n_rows_read;
 
-          prebuilt->result = 0;
+          prebuilt->m_result = 0;
 
           err = DB_SUCCESS;
 
@@ -2297,7 +2217,7 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
 
   ut_a(trx->m_conc_state != TRX_NOT_STARTED);
 
-  if (trx->m_isolation_level <= TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE && prebuilt->simple_select) {
+  if (trx->m_isolation_level <= TRX_ISO_READ_COMMITTED && prebuilt->m_select_lock_type != LOCK_NONE && prebuilt->m_simple_select) {
     /* It is a plain locking SELECT and the isolation level is low: do not lock gaps */
 
     set_also_gap_locks = false;
@@ -2314,7 +2234,7 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
     moves_up = true;
   }
 
-  thr = que_fork_get_first_thr(prebuilt->sel_graph);
+  thr = que_fork_get_first_thr(prebuilt->m_sel_graph);
 
   que_thr_move_to_run_state_for_client(thr, trx);
 
@@ -2335,7 +2255,7 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
 
     rec = pcur->get_rec();
 
-    if (!moves_up && !page_rec_is_supremum(rec) && set_also_gap_locks && trx->m_isolation_level != TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+    if (!moves_up && !page_rec_is_supremum(rec) && set_also_gap_locks && trx->m_isolation_level != TRX_ISO_READ_COMMITTED && prebuilt->m_select_lock_type != LOCK_NONE) {
 
       /* Try to place a gap lock on the next index record to prevent phantoms in ORDER BY ... DESC queries */
       const rec_t *next = page_rec_get_next_const(rec);
@@ -2346,7 +2266,7 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
         offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
       }
 
-      err = set_rec_lock(pcur->get_block(), next, index, offsets, prebuilt->select_lock_type, LOCK_GAP, thr);
+      err = set_rec_lock(pcur->get_block(), next, index, offsets, prebuilt->m_select_lock_type, LOCK_GAP, thr);
 
       if (err != DB_SUCCESS) {
 
@@ -2359,25 +2279,25 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
     pcur->open_at_index_side(false, index, BTR_SEARCH_LEAF, false, 0, &mtr);
   }
 
-  if (!prebuilt->sql_stat_start) {
+  if (!prebuilt->m_sql_stat_start) {
     /* No need to set an intention lock or assign a read view */
 
-    if (trx->m_read_view == nullptr && prebuilt->select_lock_type == LOCK_NONE) {
+    if (trx->m_read_view == nullptr && prebuilt->m_select_lock_type == LOCK_NONE) {
 
       log_err("The client is trying to perform a consistent read but the read view is not assigned!n");
       log_info(trx->to_string(600));
       ut_error;
     }
-  } else if (prebuilt->select_lock_type == LOCK_NONE) {
+  } else if (prebuilt->m_select_lock_type == LOCK_NONE) {
     /* This is a consistent read,  assign a read view for the query */
 
     auto rv = trx->assign_read_view();
     ut_a(rv != nullptr);
 
-    prebuilt->sql_stat_start = false;
+    prebuilt->m_sql_stat_start = false;
 
   } else {
-    auto lck_mode = prebuilt->select_lock_type == LOCK_S ? LOCK_IS : LOCK_IX;
+    auto lck_mode = prebuilt->m_select_lock_type == LOCK_S ? LOCK_IS : LOCK_IX;
 
     err = m_lock_sys->lock_table(0, index->m_table, lck_mode, thr);
 
@@ -2385,7 +2305,7 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, row_preb
 
       goto lock_wait_or_error;
     }
-    prebuilt->sql_stat_start = false;
+    prebuilt->m_sql_stat_start = false;
   }
 
 rec_loop:
@@ -2404,7 +2324,7 @@ rec_loop:
 
   if (page_rec_is_supremum(rec)) {
 
-    if (set_also_gap_locks && trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+    if (set_also_gap_locks && trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->m_select_lock_type != LOCK_NONE) {
 
       /* Try to place a lock on the index record */
 
@@ -2417,7 +2337,7 @@ rec_loop:
         offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
       }
 
-      const auto lock_type = prebuilt->select_lock_type;
+      const auto lock_type = prebuilt->m_select_lock_type;
 
       err = set_rec_lock(pcur->get_block(), rec, index, offsets, lock_type, LOCK_ORDINARY, thr);
 
@@ -2500,8 +2420,8 @@ rec_loop:
 
     result = cmp_dtuple_rec(cmp_ctx, search_tuple, rec, offsets);
 
-    if (is_cache_empty(prebuilt)) {
-      prebuilt->result = result;
+    if (prebuilt->m_row_cache.is_cache_empty()) {
+      prebuilt->m_result = result;
     }
 
     if (result != 0) {
@@ -2513,14 +2433,14 @@ rec_loop:
 
     if (!cmp_dtuple_is_prefix_of_rec(cmp_ctx, search_tuple, rec, offsets)) {
 
-      prebuilt->result = -1;
+      prebuilt->m_result = -1;
 
     not_found:
-      if (set_also_gap_locks && trx->m_isolation_level != TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+      if (set_also_gap_locks && trx->m_isolation_level != TRX_ISO_READ_COMMITTED && prebuilt->m_select_lock_type != LOCK_NONE) {
 
         /* Try to place a gap lock on the index record only if this session is not using a READ COMMITTED isolation level. */
 
-        const auto lock_type = prebuilt->select_lock_type;
+        const auto lock_type = prebuilt->m_select_lock_type;
         err = set_rec_lock(pcur->get_block(), rec, index, offsets, lock_type, LOCK_GAP, thr);
 
         if (err != DB_SUCCESS) {
@@ -2540,7 +2460,7 @@ rec_loop:
   /* We are ready to look at a possible new index entry in the result
   set: the cursor is now placed on a user record */
 
-  if (prebuilt->select_lock_type != LOCK_NONE) {
+  if (prebuilt->m_select_lock_type != LOCK_NONE) {
     int result = -1;
 
     /* Try to place a lock on the index record; note that delete marked records are a special case in a unique search. If there
@@ -2572,14 +2492,14 @@ rec_loop:
       lock_type = LOCK_REC_NOT_GAP;
     }
 
-    if (is_cache_empty(prebuilt)) {
-      prebuilt->result = result;
+    if (prebuilt->m_row_cache.is_cache_empty()) {
+      prebuilt->m_result = result;
     }
 
     {
       auto block = pcur->get_block();
 
-      err = set_rec_lock(block, rec, index, offsets, prebuilt->select_lock_type, lock_type, thr);
+      err = set_rec_lock(block, rec, index, offsets, prebuilt->m_select_lock_type, lock_type, thr);
     }
 
     if (err != DB_SUCCESS) {
@@ -2608,7 +2528,7 @@ rec_loop:
           .m_cluster_offsets = offsets,
           .m_consistent_read_view = trx->m_read_view,
           .m_cluster_offset_heap = heap,
-          .m_old_row_heap = prebuilt->old_vers_heap,
+          .m_old_row_heap = prebuilt->m_old_vers_heap,
           .m_old_rec = old_vers
         };
 
@@ -2635,9 +2555,9 @@ rec_loop:
 
       ut_ad(index != clust_index);
 
-      if (direction == ROW_SEL_MOVETO && is_cache_empty(prebuilt)) {
+      if (direction == ROW_SEL_MOVETO && prebuilt->m_row_cache.is_cache_empty()) {
 
-        prebuilt->result = cmp_dtuple_rec(cmp_ctx, search_tuple, rec, offsets);
+        prebuilt->m_result = cmp_dtuple_rec(cmp_ctx, search_tuple, rec, offsets);
       }
 
       goto requires_clust_rec;
@@ -2652,7 +2572,7 @@ rec_loop:
 
     /* The record is delete-marked: we can skip it */
 
-    if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+    if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->m_select_lock_type != LOCK_NONE) {
 
       /* No need to keep a lock on a delete-marked record if we do not want to use next-key locking. */
 
@@ -2667,22 +2587,22 @@ rec_loop:
     applicable to unique secondary indexes. Current behaviour is to widen the scope of a lock on an already delete marked record
     if the same record is deleted twice by the same transaction */
     if (index == clust_index && unique_search) {
-      prebuilt->result = -1;
+      prebuilt->m_result = -1;
       err = DB_RECORD_NOT_FOUND;
 
       goto normal_return;
     }
 
     goto next_rec;
-  } else if (direction == ROW_SEL_MOVETO && is_cache_empty(prebuilt)) {
+  } else if (direction == ROW_SEL_MOVETO && prebuilt->m_row_cache.is_cache_empty()) {
 
-    prebuilt->result = cmp_dtuple_rec(cmp_ctx, search_tuple, rec, offsets);
+    prebuilt->m_result = cmp_dtuple_rec(cmp_ctx, search_tuple, rec, offsets);
   }
 
   /* Get the clustered index record if needed, if we did not do the
   search using the clustered index. */
 
-  if (index != clust_index && prebuilt->need_to_access_clustered) {
+  if (index != clust_index && prebuilt->m_need_to_access_clustered) {
 
   requires_clust_rec:
     /* We use a 'goto' to the preceding label if a consistent
@@ -2709,23 +2629,23 @@ rec_loop:
 
     if (clust_rec == nullptr) {
       /* The record did not exist in the read view */
-      ut_ad(prebuilt->select_lock_type == LOCK_NONE);
+      ut_ad(prebuilt->m_select_lock_type == LOCK_NONE);
 
       goto next_rec;
     }
 
-    if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+    if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->m_select_lock_type != LOCK_NONE) {
       /* Note that both the secondary index record
       and the clustered index record were locked. */
-      ut_ad(prebuilt->new_rec_locks == 1);
-      prebuilt->new_rec_locks = 2;
+      ut_ad(prebuilt->m_new_rec_locks == 1);
+      prebuilt->m_new_rec_locks = 2;
     }
 
     if (unlikely(rec_get_deleted_flag(clust_rec))) {
 
       /* The record is delete marked: we can skip it */
 
-      if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->select_lock_type != LOCK_NONE) {
+      if (trx->m_isolation_level == TRX_ISO_READ_COMMITTED && prebuilt->m_select_lock_type != LOCK_NONE) {
 
         /* No need to keep a lock on a delete-marked
         record if we do not want to use next-key
@@ -2737,11 +2657,11 @@ rec_loop:
       goto next_rec;
     }
 
-    if (is_cache_empty(prebuilt)) {
-      prebuilt->result = cmp_dtuple_rec(cmp_ctx, search_tuple, clust_rec, offsets);
+    if (prebuilt->m_row_cache.is_cache_empty()) {
+      prebuilt->m_result = cmp_dtuple_rec(cmp_ctx, search_tuple, clust_rec, offsets);
     }
 
-    if (prebuilt->need_to_access_clustered) {
+    if (prebuilt->m_need_to_access_clustered) {
 
       result_rec = clust_rec;
 
@@ -2760,8 +2680,8 @@ rec_loop:
   } else {
     result_rec = rec;
 
-    if (is_cache_empty(prebuilt)) {
-      prebuilt->result = cmp_dtuple_rec(cmp_ctx, search_tuple, rec, offsets);
+    if (prebuilt->m_row_cache.is_cache_empty()) {
+      prebuilt->m_result = cmp_dtuple_rec(cmp_ctx, search_tuple, rec, offsets);
     }
   }
 
@@ -2773,18 +2693,18 @@ rec_loop:
   /* At this point, the clustered index record is protected by a page latch that was acquired when
   pcur was positioned.  The latch will not be released until mtr_commit(&mtr). */
 
-  if ((match_mode == ROW_SEL_EXACT || prebuilt->row_cache.n_cached >= prebuilt->row_cache.n_size - 1) &&
-      prebuilt->select_lock_type == LOCK_NONE && !prebuilt->clust_index_was_generated) {
+  if ((match_mode == ROW_SEL_EXACT || prebuilt->m_row_cache.m_n_cached >= prebuilt->m_row_cache.m_n_size - 1) &&
+      prebuilt->m_select_lock_type == LOCK_NONE && !prebuilt->m_clust_index_was_generated) {
 
     /* Inside an update, for example, we do not cache rows, since we may use the cursor position
     to do the actual update, that is why we require ...lock_type == LOCK_NONE.
 
     FIXME: How do we handle scrollable cursors ? */
 
-    cache_add_row(prebuilt, result_rec, offsets);
+    prebuilt->m_row_cache.add_row(result_rec, offsets);
 
     /* An exact match means a unique lookup, no need to fill the cache with more records. */
-    if (unique_search || is_cache_full(prebuilt)) {
+    if (unique_search || prebuilt->m_row_cache.is_cache_full()) {
 
       goto got_row;
     }
@@ -2792,8 +2712,8 @@ rec_loop:
     goto next_rec;
   }
 
-  ut_a(!is_cache_full(prebuilt));
-  cache_add_row(prebuilt, result_rec, offsets);
+  ut_a(!prebuilt->m_row_cache.is_cache_full());
+  prebuilt->m_row_cache.add_row(result_rec, offsets);
 
   /* From this point on, 'offsets' are invalid. */
 got_row:
@@ -2803,7 +2723,7 @@ got_row:
   return 'end of file'. Exceptions are locking reads and where the user can move the cursor with
   PREV or NEXT even after a unique search. */
 
-  if (!unique_search_from_clust_index || prebuilt->select_lock_type != LOCK_NONE) {
+  if (!unique_search_from_clust_index || prebuilt->m_select_lock_type != LOCK_NONE) {
 
     /* Inside an update always store the cursor position */
 
@@ -2815,7 +2735,7 @@ got_row:
   goto normal_return;
 
 next_rec:
-  prebuilt->new_rec_locks = 0;
+  prebuilt->m_new_rec_locks = 0;
 
   /*-------------------------------------------------------------*/
   /* PHASE 5: Move the cursor to the next index record */
@@ -2844,7 +2764,7 @@ next_rec:
 
       err = match_mode != ROW_SEL_DEFAULT ? DB_RECORD_NOT_FOUND : DB_END_OF_INDEX;
 
-      prebuilt->result = -1;
+      prebuilt->m_result = -1;
       goto normal_return;
     }
   } else if (unlikely(!pcur->move_to_prev(&mtr))) {
@@ -2888,7 +2808,7 @@ lock_wait_or_error:
       other user. But that is no problem, because in rec_loop we will again try to set a lock, and
       new_rec_lock_info in trx will be right at the end. */
 
-      prebuilt->new_rec_locks = 0;
+      prebuilt->m_new_rec_locks = 0;
     }
 
     mode = static_cast<ib_srch_mode_t>(pcur->m_search_mode);
@@ -2906,7 +2826,7 @@ normal_return:
 
   mtr.commit();
 
-  if (prebuilt->row_cache.n_cached > 0) {
+  if (prebuilt->m_row_cache.m_n_cached > 0) {
     err = DB_SUCCESS;
   }
 

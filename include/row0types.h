@@ -26,6 +26,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #pragma once
 
 struct Plan;
+struct Prebuilt;
 struct Undo_node;
 struct Insert_node;
 struct purge_node_t;
@@ -42,7 +43,6 @@ using row_ext_t = struct row_ext_struct;
 using del_node_t = struct del_node_struct;
 using open_node_t = struct open_node_struct;
 using fetch_node_t = struct fetch_node_struct;
-using row_prebuilt_t = struct row_prebuilt_struct;
 using row_printf_node_t = struct row_printf_node_struct;
 
 /* Insert node types */
@@ -74,6 +74,9 @@ enum ib_ins_state_t {
 
 /* Flags for positioning the cursor. */
 enum ib_cur_op_t {
+  /** Undefined cursor operation */
+  ROW_SEL_UNDEFINED,
+
   /** Required when openeing a cursor */
   ROW_SEL_MOVETO,
 

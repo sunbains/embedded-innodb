@@ -34,170 +34,143 @@ Created 02/03/2009 Sunny Bains
 #include "row0ins.h"
 #include "row0merge.h"
 
-row_prebuilt_t *row_prebuilt_create(Table *table) {
-  ulint sz;
-  DTuple *ref;
-  ulint ref_len;
-  ib_row_cache_t *row_cache;
-  Index *clust_index;
+Prebuilt::Prebuilt(FSP *fsp, Btree *btree, Table *table, mem_heap_t *heap) noexcept
+: m_table(table) {
 
-  auto heap = mem_heap_create(128);
-  auto prebuilt = reinterpret_cast<row_prebuilt_t *>(mem_heap_zalloc(heap, sizeof(row_prebuilt_t)));
+  m_magic_n = ROW_PREBUILT_ALLOCATED; 
+  m_heap = heap;
 
-  prebuilt->magic_n = ROW_PREBUILT_ALLOCATED;
-  prebuilt->magic_n2 = ROW_PREBUILT_ALLOCATED;
+  {
+    auto ptr = ut_new(sizeof(Btree_pcursor));
+    m_pcur = new (ptr) Btree_pcursor(fsp, btree);
+  }
 
-  prebuilt->heap = heap;
+  {
+    auto ptr = ut_new(sizeof(Btree_pcursor));
+    m_clust_pcur = new (ptr) Btree_pcursor(fsp, btree);
+  }
 
-  prebuilt->table = table;
+  m_search_tuple = dtuple_create(m_heap, 2 * m_table->get_n_cols());
 
-  prebuilt->sql_stat_start = true;
-
-  prebuilt->pcur = new (std::nothrow) Btree_pcursor(srv_fsp, srv_btree_sys);
-  prebuilt->clust_pcur = new (std::nothrow) Btree_pcursor(srv_fsp, srv_btree_sys);
-
-  prebuilt->select_lock_type = LOCK_NONE;
-
-  prebuilt->search_tuple = dtuple_create(heap, 2 * table->get_n_cols());
-
-  clust_index = table->get_first_index();
+  auto clust_index = m_table->get_clustered_index();
 
   /* Make sure that search_tuple is long enough for clustered index */
-  ut_a(2 * table->get_n_cols() >= clust_index->get_n_fields());
+  ut_a(2 * m_table->get_n_cols() >= clust_index->get_n_fields());
 
-  ref_len = clust_index->get_n_unique();
+  const auto ref_len = clust_index->get_n_unique();
 
-  ref = dtuple_create(heap, ref_len);
+  m_clust_ref = dtuple_create(m_heap, ref_len);
 
-  clust_index->copy_types(ref, ref_len);
+  clust_index->copy_types(m_clust_ref, ref_len);
 
-  prebuilt->clust_ref = ref;
+  m_row_cache.m_n_max = FETCH_CACHE_SIZE;
+  m_row_cache.m_n_size = m_row_cache.m_n_max;
 
-  row_cache = &prebuilt->row_cache;
+  {
+    const auto sz = sizeof(*m_row_cache.m_cached_rows) * m_row_cache.m_n_max;
 
-  row_cache->n_max = FETCH_CACHE_SIZE;
-  row_cache->n_size = row_cache->n_max;
+    m_row_cache.m_heap = mem_heap_create(sz);
 
-  sz = sizeof(*row_cache->ptr) * row_cache->n_max;
+    auto ptr = mem_heap_zalloc(m_row_cache.m_heap, sz);
 
-  row_cache->heap = mem_heap_create(sz);
+    m_row_cache.m_cached_rows = new (ptr) Cached_row[m_row_cache.m_n_max];
+  }
 
-  row_cache->ptr = reinterpret_cast<ib_cached_row_t *>(mem_heap_zalloc(row_cache->heap, sz));
-
-  return (prebuilt);
+  m_magic_n2 = ROW_PREBUILT_ALLOCATED;
 }
 
-void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
-  if (prebuilt->magic_n != ROW_PREBUILT_ALLOCATED || prebuilt->magic_n2 != ROW_PREBUILT_ALLOCATED) {
-    ib_logger(
-      ib_stream,
-      "Error: trying to free a corrupt\n"
-      "table handle. Magic n %lu,"
-      " magic n2 %lu, table name",
-      (ulong)prebuilt->magic_n,
-      (ulong)prebuilt->magic_n2
-    );
-    ut_print_name(prebuilt->table->m_name);
-    ib_logger(ib_stream, "\n");
-
-    ut_error;
+Prebuilt::~Prebuilt() noexcept {
+  if (m_magic_n != ROW_PREBUILT_ALLOCATED || m_magic_n2 != ROW_PREBUILT_ALLOCATED) {
+      log_fatal(std::format(
+        "Trying to free a corrupt table handle. Magic n {}, magic n2 {}, table name {}",
+        m_magic_n, m_magic_n2, m_table->m_name
+      ));
   }
 
-  prebuilt->magic_n = ROW_PREBUILT_FREED;
-  prebuilt->magic_n2 = ROW_PREBUILT_FREED;
+  m_magic_n = ROW_PREBUILT_FREED;
+  m_magic_n2 = ROW_PREBUILT_FREED;
 
-  delete prebuilt->pcur;
-  delete prebuilt->clust_pcur;
+  ut_delete(m_pcur);
+  ut_delete(m_clust_pcur);
 
-  if (prebuilt->sel_graph) {
-    que_graph_free_recursive(prebuilt->sel_graph);
+  if (m_sel_graph != nullptr) {
+    que_graph_free_recursive(m_sel_graph);
   }
 
-  if (prebuilt->old_vers_heap) {
-    mem_heap_free(prebuilt->old_vers_heap);
+  if (m_old_vers_heap != nullptr) {
+    mem_heap_free(m_old_vers_heap);
   }
 
-  auto row_cache = &prebuilt->row_cache;
+  for (ulint i{}; i < m_row_cache.m_n_max; ++i) {
+    auto &cached_row = m_row_cache.m_cached_rows[i];
 
-  for (ulint i = 0; i < row_cache->n_max; i++) {
-    ib_cached_row_t *row = &row_cache->ptr[i];
-
-    if (row->ptr != nullptr) {
-      mem_free(row->ptr);
+    if (cached_row.m_ptr != nullptr) {
+      mem_free(cached_row.m_ptr);
     }
   }
 
-  mem_heap_free(row_cache->heap);
-
-  if (prebuilt->table != nullptr) {
-    srv_dict_sys->table_decrement_handle_count(prebuilt->table, dict_locked);
-  }
-
-  mem_heap_free(prebuilt->heap);
+  mem_heap_free(m_row_cache.m_heap);
 }
 
-void row_prebuilt_reset(row_prebuilt_t *prebuilt) {
-  ut_a(prebuilt->magic_n == ROW_PREBUILT_ALLOCATED);
-  ut_a(prebuilt->magic_n2 == ROW_PREBUILT_ALLOCATED);
+Prebuilt *Prebuilt::create(FSP *fsp, Btree *btree, Table *table) noexcept {
+  auto heap = mem_heap_create(128);
+  auto ptr = reinterpret_cast<Prebuilt *>(mem_heap_zalloc(heap, sizeof(Prebuilt)));
 
-  prebuilt->sql_stat_start = true;
-  prebuilt->client_has_locked = false;
-  prebuilt->need_to_access_clustered = false;
+  return new (ptr) Prebuilt(fsp, btree, table, heap);
+}
 
-  prebuilt->index_usable = false;
-
-  prebuilt->simple_select = false;
-  prebuilt->select_lock_type = LOCK_NONE;
-
-  if (prebuilt->old_vers_heap) {
-    mem_heap_free(prebuilt->old_vers_heap);
-    prebuilt->old_vers_heap = nullptr;
+void Prebuilt::destroy(Dict *dict, Prebuilt *prebuilt, bool dict_locked) noexcept{
+  if (prebuilt->m_table != nullptr) {
+    dict->table_decrement_handle_count(prebuilt->m_table, dict_locked);
   }
 
-  prebuilt->trx = nullptr;
+  call_destructor(prebuilt);
 
-  if (prebuilt->sel_graph) {
-    prebuilt->sel_graph->trx = nullptr;
+  mem_heap_free(prebuilt->m_heap);
+}
+
+void Prebuilt::clear() noexcept {
+  ut_a(m_magic_n == ROW_PREBUILT_ALLOCATED);
+  ut_a(m_magic_n2 == ROW_PREBUILT_ALLOCATED);
+
+  m_index_usable = false;
+  m_simple_select = false;
+  m_sql_stat_start = true;
+  m_client_has_locked = false;
+  m_need_to_access_clustered = false;
+  m_select_lock_type = LOCK_NONE;
+
+  if (m_old_vers_heap != nullptr) {
+    mem_heap_free(m_old_vers_heap);
+    m_old_vers_heap = nullptr;
+  }
+
+  m_trx = nullptr;
+
+  if (m_sel_graph != nullptr) {
+    m_sel_graph->trx = nullptr;
   }
 }
 
-/** Updates the transaction pointers in query graphs stored in the prebuilt
-struct. */
-
-void row_prebuilt_update_trx(
-  row_prebuilt_t *prebuilt, /*!< in/out: prebuilt struct handle */
-  Trx *trx
-) /*!< in: transaction handle */
-{
+void Prebuilt::update_trx(Trx *trx) noexcept {
   ut_a(trx != nullptr);
 
   if (trx->m_magic_n != TRX_MAGIC_N) {
-    ib_logger(
-      ib_stream,
-      "Error: trying to use a corrupt\n"
-      "trx handle. Magic n %lu\n",
-      (ulong)trx->m_magic_n
-    );
 
-    ut_error;
-  } else if (prebuilt->magic_n != ROW_PREBUILT_ALLOCATED) {
-    ib_logger(
-      ib_stream,
-      "Error: trying to use a corrupt\n"
-      "table handle. Magic n %lu, table name",
-      (ulong)prebuilt->magic_n
-    );
-    ut_print_name(prebuilt->table->m_name);
-    ib_logger(ib_stream, "\n");
+    log_fatal(std::format("Trying to use a corrupt trx handle. Magic n {}", trx->m_magic_n));
 
-    ut_error;
+  } else if (m_magic_n != ROW_PREBUILT_ALLOCATED) {
+
+    log_fatal(std::format("Trying to use a corrupt table handle: {}. Magic n {}, table name", m_table->m_name, m_magic_n));
+
   } else {
-    prebuilt->trx = trx;
 
-    if (prebuilt->sel_graph) {
-      prebuilt->sel_graph->trx = trx;
+    m_trx = trx;
+
+    if (m_sel_graph != nullptr) {
+      m_sel_graph->trx = trx;
     }
 
-    prebuilt->index_usable = row_merge_is_index_usable(prebuilt->trx, prebuilt->index);
+    m_index_usable = row_merge_is_index_usable(m_trx, m_index);
   }
 }

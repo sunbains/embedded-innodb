@@ -148,15 +148,6 @@ struct Row_sel {
   [[nodiscard]] que_thr_t *printf_step(que_thr_t *thr) noexcept;
 
   /**
-   * @brief Builds a dummy query graph used in selects.
-   *
-   * This function constructs a dummy query graph for use in select operations.
-   *
-   * @param[in] prebuilt The prebuilt handle.
-   */
-  void prebuild_graph(row_prebuilt_t *prebuilt) noexcept;
-
-  /**
    * @brief This function performs multiple operations including:
    * 
    * 1. Move to/Search for a record
@@ -183,12 +174,7 @@ struct Row_sel {
    * @return DB_SUCCESS, DB_RECORD_NOT_FOUND, DB_END_OF_INDEX, DB_DEADLOCK,
    *         DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD.
    */
-  [[nodiscard]] db_err mvcc_fetch(
-    ib_recovery_t recovery,
-    ib_srch_mode_t mode,
-    row_prebuilt_t *prebuilt,
-    ib_match_t match_mode,
-    ib_cur_op_t direction) noexcept;
+  [[nodiscard]] db_err mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, Prebuilt *prebuilt, ib_match_t match_mode, ib_cur_op_t direction) noexcept;
 
   /**
    * @brief Unlocks a row for a client.
@@ -198,67 +184,9 @@ struct Row_sel {
    *
    * @return DB_SUCCESS.
    */
-  [[nodiscard]] db_err unlock_for_client(row_prebuilt_t *prebuilt, bool has_latches_on_recs) noexcept; 
+  [[nodiscard]] db_err unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) noexcept; 
 
-  /**
-   * @brief Resets the fetch cache.
-   *
-   * @param[in] prebuilt prebuilt struct.
-   */
-  inline static void cache_reset(row_prebuilt_t *prebuilt) noexcept;
-
-  /**
-   * @brief Checks if the fetch cache is empty.
-   *
-   * @param[in] prebuilt prebuilt struct.
-   * 
-   * @return true if the fetch cache is empty.
-   */
-  [[nodiscard]] static bool is_cache_empty(row_prebuilt_t *prebuilt) noexcept;
-
-  /**
-   * @brief Checks if the fetch cache is fetching in progress.
-   *
-   * @param[in] prebuilt prebuilt struct.
-   * 
-   * @return true if the fetch cache is fetching in progress.
-   */
-  [[nodiscard]] static bool is_cache_fetch_in_progress(row_prebuilt_t *prebuilt) noexcept;
-
-  /**
-   * @brief Checks if the fetch cache is full.
-   *
-   * @param[in] prebuilt prebuilt struct.
-   * 
-   * @return true if the fetch cache is full.
-   */
-  [[nodiscard]] static bool is_cache_full(row_prebuilt_t *prebuilt) noexcept;
-
-  /**
-   * @brief Gets a row from the fetch cache.
-   *
-   * @param[in] prebuilt prebuilt struct.
-   * 
-   * @return a pointer to the row.
-   */
-  [[nodiscard]] static const rec_t *cache_get_row(row_prebuilt_t *prebuilt) noexcept;
-
-  /**
-   * @brief Moves to the next row in the fetch cache.
-   *
-   * @param[in] prebuilt prebuilt struct.
-   */
-  static void cache_next(row_prebuilt_t *prebuilt) noexcept;
-
-  /**
-   * @brief Add a record to the fetch cache.
-   * 
-   * @param[in] prebuilt prebuilt struct
-   * @param[in] rec record to push; must be protected by a page latch
-   * @param[in] offsets Phy_rec::get_col_offsets()
-   */
-  inline static void cache_add_row(row_prebuilt_t *prebuilt, const rec_t *rec, const ulint *offsets) noexcept;
-
+  
 #ifdef UNIT_TEST
   private:
 #endif /* UNIT_TEST */
@@ -325,7 +253,7 @@ struct Row_sel {
    * @return DB_SUCCESS or error code
    */
   [[nodiscard]] db_err get_clust_rec_with_prebuilt(
-    row_prebuilt_t *prebuilt,
+    Prebuilt *prebuilt,
     Index *sec_index,
     const rec_t *rec,
     que_thr_t *thr,
@@ -424,7 +352,7 @@ struct Row_sel {
    */
   [[nodiscard]] Search_status try_search_shortcut_for_prebuilt(
     const rec_t **out_rec,
-    row_prebuilt_t *prebuilt,
+    Prebuilt *prebuilt,
     ulint **offsets,
     mem_heap_t **heap,
     mtr_t *mtr) noexcept;
