@@ -1361,7 +1361,7 @@ std::string Foreign::to_string() const noexcept {
   std::string str;
 
   return str;
-} 
+}
 
 std::string Table::to_string(Dict *dict) noexcept {
   std::string str;
@@ -1452,8 +1452,8 @@ void Dict::index_print(Index *index) noexcept {
   log_err("");
 
 #ifdef UNIV_BTR_PRINT
-  Btree::print_size(index);
-  Btree::print_index(index, 7);
+  m_store.m_btree->print_size(index);
+  m_store.m_btree->print_index(index, 7);
 #endif /* UNIV_BTR_PRINT */
 }
 

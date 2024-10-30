@@ -337,23 +337,6 @@ struct Btree {
    */
   void page_free_low(const Index *index, Buf_block *block, ulint level, mtr_t *mtr) noexcept;
 
-  #ifdef UNIV_BTR_PRINT
-  /**
-   * Prints size info of a B-tree.
-   * 
-   * @param[in] index           Index
-   */
-  void print_size(Index *index) noexcept;
-
-  /**
-   * Prints directories and other info of all nodes in the index.
-   * 
-   * @param[in] index           Index
-   * @param[in] width           Print this many entries from start and end
-   */
-  void print_index(Index *index, ulint width) noexcept;
-  #endif /* UNIV_BTR_PRINT */
-
   /**
    * Checks the size and number of fields in a record based on the definition of
    * the index.
@@ -805,7 +788,7 @@ private:
    */
   void discard_only_page_on_level(Index *index, Buf_block *block, mtr_t *mtr) noexcept;
 
-//#ifdef UNIV_BTR_PRINT
+#ifdef UNIV_BTR_PRINT
   /**
    * Prints the size information of the B-tree index.
    *
@@ -832,7 +815,7 @@ private:
    * @param[in] width          Print this many entries from start and end.
    */
   void print_index(Index *index, ulint width) noexcept;
-//#endif /* UNIV_BTR_PRINT */
+#endif /* UNIV_BTR_PRINT */
 
   /**
    * Display identification information for a record.
