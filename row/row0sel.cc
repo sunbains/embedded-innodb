@@ -451,32 +451,23 @@ inline bool Plan::test_other_conds() noexcept {
   return true;
 }
 
-[[nodiscard]] db_err Row_sel::build_prev_vers(
-  read_view_t *read_view,
-  Index *index,
-  const rec_t *rec,
-  ulint **offsets,
-  mem_heap_t **offset_heap,
-  mem_heap_t **old_vers_heap,
-  rec_t **old_vers,
-  mtr_t *mtr) noexcept {
-
-  if (*old_vers_heap != nullptr) {
-    mem_heap_empty(*old_vers_heap);
+[[nodiscard]] db_err Row_sel::build_prev_vers(Row_vers::Row &row) noexcept {
+  if (row.m_old_row_heap != nullptr) {
+    mem_heap_empty(row.m_old_row_heap);
   } else {
-    *old_vers_heap = mem_heap_create(512);
+    row.m_old_row_heap = mem_heap_create(512);
   }
 
-  return row_vers_build_for_consistent_read(rec, mtr, index, offsets, read_view, offset_heap, *old_vers_heap, old_vers);
+  return srv_row_vers->build_for_consistent_read(row);
 }
 
-db_err Plan::get_clust_rec(sel_node_t *sel_node, rec_t *rec, que_thr_t *thr, rec_t **out_rec, mtr_t *mtr) noexcept {
+db_err Plan::get_clust_rec(sel_node_t *sel_node, const rec_t *rec, que_thr_t *thr, const rec_t *&out_rec, mtr_t *mtr) noexcept {
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets{};
 
   rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
 
-  *out_rec = nullptr;
+  out_rec = nullptr;
 
   auto func_exit = [&heap](db_err err) -> auto {
     if (unlikely(heap != nullptr)) {
@@ -500,7 +491,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, rec_t *rec, que_thr_t *thr, rec
 
   m_clust_pcur.open_with_no_init(index, m_clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Current_location());
 
-  auto clust_rec = m_clust_pcur.get_rec();
+  const rec_t *clust_rec = m_clust_pcur.get_rec();
 
   /* Note: only if the search ends up on a non-infimum record is the
   low_match value the real match to the search tuple */
@@ -543,11 +534,22 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, rec_t *rec, que_thr_t *thr, rec
   } else {
     /* This is a non-locking consistent read: if necessary, fetch a previous version of the record */
 
-    rec_t *old_vers{};
+    const rec_t *old_vers{};
 
     if (!m_lock_sys->clust_rec_cons_read_sees(clust_rec, index, offsets, sel_node->m_read_view)) {
 
-      const auto err = m_sel->build_prev_vers(sel_node->m_read_view, index, clust_rec, &offsets, &heap, &m_old_vers_heap, &old_vers, mtr);
+      Row_vers::Row row {
+        .m_cluster_rec = clust_rec,
+        .m_mtr = mtr,
+        .m_cluster_index = index,
+        .m_cluster_offsets = offsets,
+        .m_consistent_read_view = sel_node->m_read_view,
+        .m_cluster_offset_heap = heap,
+        .m_old_row_heap = m_old_row_heap,
+        .m_old_rec = old_vers
+      };
+
+      const auto err = m_sel->build_prev_vers(row);
 
       if (unlikely(err != DB_SUCCESS)) {
 
@@ -578,7 +580,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, rec_t *rec, que_thr_t *thr, rec
 
   m_sel->fetch_columns(index, clust_rec, offsets, m_columns.front());
 
-  *out_rec = clust_rec;
+  out_rec = clust_rec;
 
   if (unlikely(heap != nullptr)) {
     mem_heap_free(heap);
@@ -796,13 +798,13 @@ Search_status Plan::try_search_shortcut(sel_node_t *sel_node, mtr_t *mtr) noexce
 }
 
 db_err Row_sel::select(sel_node_t *sel_node, que_thr_t *thr) noexcept {
-  Index *index;
-  Plan *plan;
   mtr_t mtr;
+  Plan *plan;
   bool moved;
-  rec_t *rec;
-  rec_t *old_vers;
-  rec_t *clust_rec;
+  Index *index;
+  const rec_t *rec;
+  const rec_t *old_vers;
+  const rec_t *clust_rec;
 
   /* The following flag becomes true when we are doing a
   consistent read from a non-clustered index and we must look
@@ -1097,7 +1099,18 @@ skip_lock:
 
       if (!m_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, sel_node->m_read_view)) {
 
-        err = build_prev_vers(sel_node->m_read_view, index, rec, &offsets, &heap, &plan->m_old_vers_heap, &old_vers, &mtr);
+        Row_vers::Row row {
+          .m_cluster_rec = rec,
+          .m_mtr = &mtr,
+          .m_cluster_index = index,
+          .m_cluster_offsets = offsets,
+          .m_consistent_read_view = sel_node->m_read_view,
+          .m_cluster_offset_heap = heap,
+          .m_old_row_heap = plan->m_old_row_heap,
+          .m_old_rec = old_vers
+      };
+
+        err = build_prev_vers(row);
 
         if (err != DB_SUCCESS) {
 
@@ -1173,7 +1186,7 @@ skip_lock:
 
     /* It was a non-clustered index and we must fetch also the clustered index record */
 
-    err = plan->get_clust_rec(sel_node, rec, thr, &clust_rec, &mtr);
+    err = plan->get_clust_rec(sel_node, rec, thr, clust_rec, &mtr);
 
     mtr_has_extra_clust_latch = true;
 
@@ -1703,7 +1716,7 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
 
   prebuilt->clust_pcur->open_with_no_init(clust_index, prebuilt->clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Current_location());
 
-  auto clust_rec = prebuilt->clust_pcur->get_rec();
+  const rec_t *clust_rec = prebuilt->clust_pcur->get_rec();
 
   prebuilt->clust_pcur->m_trx_if_known = trx;
 
@@ -1762,16 +1775,26 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
     /* This is a non-locking consistent read: if necessary, fetch
     a previous version of the record */
 
-    rec_t *old_vers{};
+    const rec_t *old_vers{};
 
     /* If the isolation level allows reading of uncommitted data,
     then we never look for an earlier version */
 
     if (trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !m_lock_sys->clust_rec_cons_read_sees(clust_rec, clust_index, *offsets, trx->m_read_view)) {
 
-      /* The following call returns 'offsets' associated with
-      'old_vers' */
-      const auto err = build_prev_vers(trx->m_read_view, clust_index, clust_rec, offsets, offset_heap, &prebuilt->old_vers_heap, &old_vers, mtr);
+      Row_vers::Row row {
+        .m_cluster_rec = clust_rec,
+        .m_mtr = mtr,
+        .m_cluster_index = clust_index,
+        .m_cluster_offsets = *offsets,
+        .m_consistent_read_view = trx->m_read_view,
+        .m_cluster_offset_heap = *offset_heap,
+        .m_old_row_heap = prebuilt->old_vers_heap,
+        .m_old_rec = old_vers
+      };
+
+      /* The following call returns 'offsets' associated with 'old_vers' */
+      const auto err = build_prev_vers(row);
 
       if (err != DB_SUCCESS || old_vers == nullptr) {
 
@@ -2576,10 +2599,21 @@ rec_loop:
 
       if (likely(recovery < IB_RECOVERY_NO_UNDO_LOG_SCAN) && !srv_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, trx->m_read_view)) {
 
-        rec_t *old_vers;
+        const rec_t *old_vers;
+
+        Row_vers::Row row {
+          .m_cluster_rec = rec,
+          .m_mtr = &mtr,
+          .m_cluster_index = clust_index,
+          .m_cluster_offsets = offsets,
+          .m_consistent_read_view = trx->m_read_view,
+          .m_cluster_offset_heap = heap,
+          .m_old_row_heap = prebuilt->old_vers_heap,
+          .m_old_rec = old_vers
+        };
 
         /* The following call returns 'offsets' associated with 'old_vers' */
-        err = build_prev_vers(trx->m_read_view, clust_index, rec, &offsets, &heap, &prebuilt->old_vers_heap, &old_vers, &mtr);
+        err = build_prev_vers(row);
 
         if (err != DB_SUCCESS) {
 

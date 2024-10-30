@@ -626,7 +626,7 @@ void Row_update::index_replace_new_col_vals_index_pos(DTuple *entry, const Index
   for (ulint i{}; i < n_fields; ++i) {
     auto field = index->get_nth_field(i);
     auto col = field->get_col();
-    auto uf = update->get_nth_field(i);
+    auto uf = update->get_field(i);
 
     if (uf != nullptr) {
       index_replace_new_col_val(dtuple_get_nth_field(entry, i), field, col, uf, heap);

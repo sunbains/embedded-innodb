@@ -536,7 +536,7 @@ db_err Undo_node::remove_clustered_index_record(que_thr_t *thr, mtr_t *mtr, ulin
 
   /* Find out if we can remove the whole clustered index record */
 
-  if (m_rec_type == TRX_UNDO_UPD_DEL_REC && !row_vers_must_preserve_del_marked(m_new_trx_id, mtr)) {
+  if (m_rec_type == TRX_UNDO_UPD_DEL_REC && !srv_row_vers->must_preserve_del_marked(m_new_trx_id, mtr)) {
 
     /* Ok, we can remove */
 
@@ -578,7 +578,7 @@ db_err Undo_node::remove_clustered_index_record_low(que_thr_t *thr, mtr_t *mtr, 
 
     return DB_SUCCESS;
 
-  } else if (m_rec_type != TRX_UNDO_UPD_DEL_REC || row_vers_must_preserve_del_marked(m_new_trx_id, mtr)) {
+  } else if (m_rec_type != TRX_UNDO_UPD_DEL_REC || srv_row_vers->must_preserve_del_marked(m_new_trx_id, mtr)) {
 
     /* We cannot remove the whole clustered index record */
 
@@ -692,7 +692,7 @@ db_err Undo_node::delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, In
       ut_a(success);
     }
 
-    if (row_vers_old_has_index_entry(false, m_pcur.get_rec(), &mtr_vers, index, entry)) {
+    if (srv_row_vers->old_has_index_entry(false, m_pcur.get_rec(), &mtr_vers, index, entry)) {
 
       err = btr_cur->del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, true, thr, &mtr);
       ut_ad(err == DB_SUCCESS);

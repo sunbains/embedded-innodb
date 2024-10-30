@@ -746,6 +746,7 @@ struct DBLWR;
 struct Trx_sys;
 struct Lock_sys;
 struct Row_sel;
+struct Row_vers;
 struct Row_undo;
 struct Row_update;
 struct Row_insert;
@@ -767,6 +768,8 @@ extern Trx_sys *srv_trx_sys;
 extern Dict *srv_dict_sys;
 
 extern Lock_sys *srv_lock_sys;
+
+extern Row_vers *srv_row_vers;
 
 extern Row_sel *srv_row_sel;
 

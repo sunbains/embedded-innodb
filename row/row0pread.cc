@@ -426,9 +426,21 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
       }
 
       if (m_trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !view->changes_visible(rec_trx_id)) {
-        rec_t *old_vers;
+        const rec_t *old_vers;
 
-        row_vers_build_for_consistent_read(rec, mtr, m_config.m_index, &offsets, view, &heap, heap, &old_vers);
+        Row_vers::Row row {
+          .m_cluster_rec = rec,
+          .m_mtr = mtr,
+          .m_cluster_index = m_config.m_index,
+          .m_cluster_offsets = offsets,
+          .m_consistent_read_view = view,
+          .m_cluster_offset_heap = heap,
+          .m_old_row_heap = heap,
+          .m_old_rec = old_vers
+        };
+
+        auto err = srv_row_vers->build_for_consistent_read(row);
+        ut_a(err == DB_SUCCESS);
 
         rec = old_vers;
 

@@ -32,6 +32,7 @@ Created 12/19/1997 Heikki Tuuri
 #include "pars0sym.h"
 #include "que0que.h"
 #include "read0read.h"
+#include "row0vers.h"
 #include "row0types.h"
 #include "trx0types.h"
 
@@ -353,26 +354,11 @@ struct Row_sel {
     /**
      * Builds a previous version of a clustered index record for a consistent read
      *
-     * @param[in] read_view read view
-     * @param[in] index plan node for table
-     * @param[in] rec record in a clustered index
-     * @param[in, out] offsets  offsets returned by Rec:get_offsets(plan->index, rec)
-     * @param[in, out] offset_heap   memory heap from which the offsets are allocated
-     * @param[out] old_vers_heap old version heap to use
-     * @param[out] old_vers old version, or NULL if the record does not exist in the view: i.e., it was freshly inserted afterwards
-     * @param [in] mtr mtr
+     * @param[in,out] row Row_vers::Row.
      * 
      * @return DB_SUCCESS or error code
      */
-  [[nodiscard]] db_err build_prev_vers(
-    read_view_t *read_view,
-    Index *index,
-    const rec_t *rec,
-    ulint **offsets,
-    mem_heap_t **offset_heap,
-    mem_heap_t **old_vers_heap,
-    rec_t **old_vers,
-    mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err build_prev_vers(Row_vers::Row &row) noexcept;
 
   /**
    * @brief Returns true if the user-defined column values in a secondary index record
@@ -572,7 +558,7 @@ struct Plan {
    * 
    * @return          DB_SUCCESS or error code
    */
-  [[nodiscard]] db_err get_clust_rec(sel_node_t *sel_node, rec_t *rec, que_thr_t *thr, rec_t **out_rec, mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err get_clust_rec(sel_node_t *sel_node, const rec_t *rec, que_thr_t *thr, const rec_t *&out_rec, mtr_t *mtr) noexcept;
 
   /**
    * Tries to do a shortcut to fetch a clustered index record with a unique key,
@@ -591,9 +577,9 @@ struct Plan {
   void close() noexcept {
     m_clust_pcur.close();
 
-    if (likely(m_old_vers_heap != nullptr)) {
-      mem_heap_free(m_old_vers_heap);
-      m_old_vers_heap = nullptr;
+    if (likely(m_old_row_heap != nullptr)) {
+      mem_heap_free(m_old_row_heap);
+      m_old_row_heap = nullptr;
     }
   }
 
@@ -676,7 +662,7 @@ struct Plan {
   Btree_pcursor m_clust_pcur{srv_fsp, srv_btree_sys};
 
   /** memory heap used in building an old version of a row, or nullptr */
-  mem_heap_t *m_old_vers_heap{};
+  mem_heap_t *m_old_row_heap{};
 
   /** lock system */
   Lock_sys *m_lock_sys{};

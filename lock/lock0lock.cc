@@ -991,7 +991,7 @@ Trx *Lock_sys::sec_rec_some_has_impl_off_kernel(const rec_t *rec, const Index *i
     return nullptr;
   }
 
-  return row_vers_impl_x_locked_off_kernel(rec, index, offsets);
+  return srv_row_vers->impl_x_locked_off_kernel(rec, index, offsets);
 }
 
 

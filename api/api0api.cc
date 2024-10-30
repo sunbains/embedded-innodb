@@ -3169,7 +3169,7 @@ void ib_cursor_attach_trx(ib_crsr_t ib_crsr, ib_trx_t ib_trx) {
 
   /* Assign a read view if the transaction does not have it yet */
   auto rv = prebuilt->trx->assign_read_view();
-  ut_a(rv == nullptr);
+  ut_a(rv != nullptr);
 
   ut_a(prebuilt->trx->m_conc_state != TRX_NOT_STARTED);
 

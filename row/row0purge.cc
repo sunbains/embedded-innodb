@@ -237,7 +237,7 @@ static bool row_purge_remove_sec_if_poss_low(purge_node_t *node, Index *index, c
   success = row_purge_reposition_pcur(BTR_SEARCH_LEAF, node, &mtr_vers);
 
   if (success) {
-    old_has = row_vers_old_has_index_entry(true, node->pcur.get_rec(), &mtr_vers, index, entry);
+    old_has = srv_row_vers->old_has_index_entry(true, node->pcur.get_rec(), &mtr_vers, index, entry);
   }
 
   pcur.commit_specify_mtr(&mtr_vers);
