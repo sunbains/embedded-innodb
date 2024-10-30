@@ -1723,7 +1723,7 @@ bool Btree_cursor::optimistic_delete(mtr_t *mtr) noexcept {
   return deleted;
 }
 
-void Btree_cursor::pessimistic_delete(db_err *err, bool has_reserved_extents, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept {
+db_err Btree_cursor::pessimistic_delete(bool has_reserved_extents, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept {
   ulint n_extents{};
   ulint n_reserved{};
 
@@ -1733,6 +1733,8 @@ void Btree_cursor::pessimistic_delete(db_err *err, bool has_reserved_extents, tr
 
   ut_ad(mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
+
+  db_err err{DB_SUCCESS};
 
   if (!has_reserved_extents) {
     /* First reserve enough free space for the file segments
@@ -1744,12 +1746,13 @@ void Btree_cursor::pessimistic_delete(db_err *err, bool has_reserved_extents, tr
     auto success = m_fsp->reserve_free_extents(&n_reserved, index->get_space_id(), n_extents, FSP_CLEANING, mtr);
 
     if (!success) {
-      *err = DB_OUT_OF_FILE_SPACE;
+      err = DB_OUT_OF_FILE_SPACE;
     }
   }
 
-  auto heap = mem_heap_create(1024);
   auto rec = get_rec();
+  auto heap = mem_heap_create(1024);
+
   ulint *offsets{};
 
   {
@@ -1771,7 +1774,7 @@ void Btree_cursor::pessimistic_delete(db_err *err, bool has_reserved_extents, tr
 
     m_btree->discard_page(this, mtr);
 
-    *err = DB_SUCCESS;
+    err = DB_SUCCESS;
 
   } else {
     m_lock_sys->update_delete(block, rec);
@@ -1809,7 +1812,7 @@ void Btree_cursor::pessimistic_delete(db_err *err, bool has_reserved_extents, tr
 
     ut_ad(m_btree->check_node_ptr(index, block, mtr));
 
-    *err = DB_SUCCESS;
+    err = DB_SUCCESS;
   }
 
   mem_heap_free(heap);
@@ -1817,6 +1820,8 @@ void Btree_cursor::pessimistic_delete(db_err *err, bool has_reserved_extents, tr
   if (n_extents > 0) {
     m_fsp->m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
   }
+
+  return err;
 }
 
 void Btree_cursor::add_path_info(Paths *path, ulint height, ulint root_height) noexcept {

@@ -810,7 +810,7 @@ void Impl::shutdown() noexcept {
       handler->shutdown();
     }
 
-    log_info(to_string())
+    log_info(to_string());
     m_shutdown = true;
   }
 }

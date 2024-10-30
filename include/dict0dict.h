@@ -563,6 +563,23 @@ struct Dict {
   /**
    * @brief Returns a table object based on table id.
    * 
+   * @param[in] table_id table id
+   * 
+   * @return table, nullptr if does not exist
+   */
+  inline Table *table_get_on_id(Dict_id table_id) noexcept {
+    ut_ad(mutex_own(&m_mutex));
+
+    if (const auto it = m_table_ids.find(table_id); it != m_table_ids.end()) {
+      return it->second;
+    } else {
+      return nullptr;
+    }
+  }
+
+  /**
+   * @brief Returns a table object based on table id.
+   * 
    * @param[in] recovery recovery flag
    * @param[in] table_id table id
    * 
@@ -572,17 +589,13 @@ struct Dict {
     ut_ad(mutex_own(&m_mutex));
 
     /* Look for the table name in the hash table */
-    Table *table{};
-
-    if (const auto it = m_table_ids.find(table_id); it != m_table_ids.end()) {
-      table = it->second;
+    if (auto table = table_get_on_id(table_id); table != nullptr) {
+      return table;
     } else {
       table = m_loader.load_table_on_id(recovery, table_id);
+      ut_ad(table == nullptr || table->m_cached);
+      return table;
     }
-
-    ut_ad(table == nullptr || table->m_cached);
-
-    return table;
   }
 
 #ifdef UNIT_TEST

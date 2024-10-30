@@ -135,6 +135,7 @@ static_assert(
 
 using Dict_id = uint64_t;
 
+constexpr Dict_id DICT_ID_NULL = std::numeric_limits<Dict_id>::max();
 
 /** The ids for the basic system tables and their indexes */
 constexpr Dict_id DICT_TABLES_ID = 1;
@@ -1223,7 +1224,7 @@ struct Table {
    * 
    * @return secondary index, nullptr if none exists
    */
-  [[nodiscard]] inline const Index *get_secondary_index() const noexcept {
+  [[nodiscard]] inline const Index *get_first_secondary_index() const noexcept {
     ut_ad(m_magic_n == DICT_TABLE_MAGIC_N);
 
     return get_first_index()->get_next();
@@ -1234,7 +1235,7 @@ struct Table {
    * 
    * @return secondary index, nullptr if none exists
    */
-  [[nodiscard]] inline Index *get_secondary_index() noexcept {
+  [[nodiscard]] inline Index *get_first_secondary_index() noexcept {
     ut_ad(m_magic_n == DICT_TABLE_MAGIC_N);
     return get_first_index()->get_next();
   }

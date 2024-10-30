@@ -254,6 +254,7 @@ inline const char *mlog_type_str(mlog_type_t type) noexcept {
     case MLOG_FILE_DELETE:
       return "MLOG_FILE_DELETE";
     default:
-        log_fatal("Unknown mlog_type_t: ", (ulint) type);
-    }
+      log_fatal("Unknown mlog_type_t: ", (ulint) type);
+      return "UNKNOWN";
+  }
 }

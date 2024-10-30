@@ -376,7 +376,7 @@ struct Row_update {
    * 
    * @return Update vector of differing fields.
    */
-  [[nodiscard]] upd_t *build_sec_rec_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap) noexcept;
+  [[nodiscard]] static upd_t *build_sec_rec_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap) noexcept;
 
   /**
    * @brief Builds an update vector from those fields, excluding the roll ptr and
@@ -428,7 +428,7 @@ struct Row_update {
    * @param[in] update     An update vector built for the clustered index.
    * @param[in] heap       Memory heap.
    */
-  void replace(DTuple *row, row_ext_t **ext, const Index *index, const upd_t *update, mem_heap_t *heap) noexcept;
+  static void replace(DTuple *row, row_ext_t **ext, const Index *index, const upd_t *update, mem_heap_t *heap) noexcept;
 
   /**
    * @brief Checks if an update vector changes an ordering field of an index record.
@@ -443,7 +443,7 @@ struct Row_update {
    * 
    * @return true if update vector changes an ordering field in the index record.
    */
-  [[nodiscard]] bool changes_ord_field_binary(const DTuple *row, Index *index, const upd_t *update) noexcept;
+  [[nodiscard]] static bool changes_ord_field_binary(const DTuple *row, Index *index, const upd_t *update) noexcept;
 
   /**
    * @brief Checks if an update vector changes an ordering field of an index record.

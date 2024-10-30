@@ -1740,7 +1740,8 @@ static void recv_init_crash_recovery(DBLWR* dblwr, ib_recovery_t recovery, lsn_t
     if (!recv_needed_recovery) {
       log_err(
         "The log sequence number in 'system.idb' file does not match"
-        " the log sequence number in the ib_logfiles!");
+        " the log sequence number in the ib_logfiles! Checkooint LSN: ",
+        checkpoint_lsn, ", max_flushed_LSN: ", max_flushed_lsn);
 
       recv_start_crash_recovery(dblwr, recovery);
     }
@@ -2022,7 +2023,8 @@ std::string to_string(Recv_addr_state s) noexcept {
     case RECV_PROCESSED:
       return "RECV_PROCESSED";
     default:
-      log_fatal("Unknown recv_addr_state: {}", s);
+      log_fatal(std::format("Unknown recv_addr_state: {}", (int) s));
+      return "UNKNOWN";
   }
 }
 

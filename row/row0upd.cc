@@ -441,20 +441,21 @@ byte *Row_update::index_parse(byte *ptr, byte *end_ptr, mem_heap_t *heap, upd_t 
 }
 
 upd_t *Row_update::build_sec_rec_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap) noexcept {
-  ulint offsets_[REC_OFFS_SMALL_SIZE];
-  const ulint *offsets;
-  rec_offs_init(offsets_);
-
   /* This function is used only for a secondary index */
-  ut_a(index->is_clustered());
+  ut_a(!index->is_clustered());
 
   ulint n_diff{};
   const auto update = upd_create(dtuple_get_n_fields(entry), heap);
 
+  ulint *offsets;
+  std::array<ulint, REC_OFFS_SMALL_SIZE> rec_offsets;
+
+  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
   }
 
   for (ulint i{}; i < dtuple_get_n_fields(entry); ++i) {
@@ -492,9 +493,9 @@ upd_t *Row_update::build_sec_rec_difference_binary(const Index *index, const DTu
 }
 
 upd_t *Row_update::build_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap) noexcept {
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  const ulint *offsets;
-  rec_offs_init(offsets_);
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
+
+  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
 
   /* This function is used only for a clustered index */
   ut_a(index->is_clustered());
@@ -505,10 +506,12 @@ upd_t *Row_update::build_difference_binary(const Index *index, const DTuple *ent
   const auto roll_ptr_pos = index->get_sys_col_field_pos(DATA_ROLL_PTR);
   const auto trx_id_pos = index->get_sys_col_field_pos(DATA_TRX_ID);
 
+  ulint *offsets;
+
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
   }
 
   for (ulint i{}; i < dtuple_get_n_fields(entry); ++i) {
@@ -800,9 +803,7 @@ inline void Row_update::eval_new_vals(upd_t *update) noexcept {
 
 void Row_update::store_row(upd_node_t *node) noexcept {
   mem_heap_t *heap{};
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  const ulint *offsets;
-  rec_offs_init(offsets_);
+
 
   ut_ad(node->m_pcur->m_latch_mode != BTR_NO_LATCHES);
 
@@ -814,10 +815,18 @@ void Row_update::store_row(upd_node_t *node) noexcept {
 
   auto rec = node->m_pcur->get_rec();
 
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
+
+  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+
+  ulint *offsets;
+
+  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+
   {
     Phy_rec record{clust_index, rec};
 
-    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
   }
 
   node->m_row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr, &node->m_ext, node->m_heap);
@@ -918,7 +927,7 @@ inline db_err Row_update::sec_step(upd_node_t *node, que_thr_t *thr) noexcept {
   return DB_SUCCESS;
 }
 
-db_err Row_update::clust_rec_by_insert(upd_node_t *node, const Index *index, que_thr_t *thr, bool check_ref, mtr_t *mtr) noexcept {
+db_err Row_update::clust_rec_by_insert(upd_node_t *upd_node, const Index *index, que_thr_t *thr, bool check_ref, mtr_t *mtr) noexcept {
   db_err err;
   DTuple *entry;
   mem_heap_t *heap{};
@@ -926,18 +935,15 @@ db_err Row_update::clust_rec_by_insert(upd_node_t *node, const Index *index, que
   ut_ad(index->is_clustered());
 
   auto trx = thr_get_trx(thr);
-  auto table = node->m_table;
-  auto pcur = node->m_pcur;
+  auto table = upd_node->m_table;
+  auto pcur = upd_node->m_pcur;
   auto btr_cur = pcur->get_btr_cur();
 
   Blob blob(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
-  if (node->m_state != UPD_NODE_INSERT_CLUSTERED) {
+  if (upd_node->m_state != UPD_NODE_INSERT_CLUSTERED) {
     rec_t *rec;
     Index *index;
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
-    ulint *offsets;
-    rec_offs_init(offsets_);
 
     err = btr_cur->del_mark_set_clust_rec(BTR_NO_LOCKING_FLAG, true, thr, mtr);
 
@@ -954,19 +960,25 @@ db_err Row_update::clust_rec_by_insert(upd_node_t *node, const Index *index, que
     rec = btr_cur->get_rec();
     index = table->get_first_index();
 
+    ulint *offsets;
+    std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
+
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
+      rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+      offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
     }
 
-    blob.mark_extern_inherited_fields(rec, index, offsets, node->m_update, mtr);
+    blob.mark_extern_inherited_fields(rec, index, offsets, upd_node->m_update, mtr);
 
     if (check_ref) {
       /* NOTE that the following call loses the position of pcur ! */
-      err = check_references_constraints(node, pcur, table, index, offsets, thr, mtr);
+      err = check_references_constraints(upd_node, pcur, table, index, offsets, thr, mtr);
+
       if (err != DB_SUCCESS) {
         mtr->commit();
+
         if (likely_null(heap)) {
           mem_heap_free(heap);
         }
@@ -977,17 +989,17 @@ db_err Row_update::clust_rec_by_insert(upd_node_t *node, const Index *index, que
 
   mtr->commit();
 
-  if (!heap) {
+  if (likely(heap == nullptr)) {
     heap = mem_heap_create(500);
   }
-  node->m_state = UPD_NODE_INSERT_CLUSTERED;
+  upd_node->m_state = UPD_NODE_INSERT_CLUSTERED;
 
-  entry = row_build_index_entry(node->m_upd_row, node->m_upd_ext, index, heap);
+  entry = row_build_index_entry(upd_node->m_upd_row, upd_node->m_upd_ext, index, heap);
   ut_a(entry);
 
   index_entry_sys_field(entry, index, DATA_TRX_ID, trx->m_id);
 
-  if (node->m_upd_ext) {
+  if (upd_node->m_upd_ext) {
     /* If we return from a lock wait, for example, we may have
     extern fields marked as not-owned in entry (marked in the
     if-branch above). We must unmark them. */
@@ -997,24 +1009,24 @@ db_err Row_update::clust_rec_by_insert(upd_node_t *node, const Index *index, que
     /* We must mark non-updated extern fields in entry as
     inherited, so that a possible rollback will not free them. */
 
-    blob.mark_dtuple_inherited_extern(entry, node->m_update);
+    blob.mark_dtuple_inherited_extern(entry, upd_node->m_update);
   }
 
-  err = srv_row_ins->index_entry(index, entry, node->m_upd_ext ? node->m_upd_ext->n_ext : 0, true, thr);
+  err = srv_row_ins->index_entry(index, entry, upd_node->m_upd_ext ? upd_node->m_upd_ext->n_ext : 0, true, thr);
 
   mem_heap_free(heap);
 
   return err;
 }
 
-db_err Row_update::clust_rec(upd_node_t *node, const Index *index, que_thr_t *thr, mtr_t *mtr) noexcept {
+db_err Row_update::clust_rec(upd_node_t *upd_node, const Index *index, que_thr_t *thr, mtr_t *mtr) noexcept {
   mem_heap_t *heap = nullptr;
   big_rec_t *big_rec = nullptr;
   db_err err;
 
   ut_ad(index->is_clustered());
 
-  auto pcur = node->m_pcur;
+  auto pcur = upd_node->m_pcur;
   auto btr_cur = pcur->get_btr_cur();
 
   ut_ad(!rec_get_deleted_flag(pcur->get_rec()));
@@ -1023,10 +1035,10 @@ db_err Row_update::clust_rec(upd_node_t *node, const Index *index, que_thr_t *th
   the page; we do not check locks because we assume the x-lock on the
   record to update */
 
-  if (node->m_cmpl_info & UPD_NODE_NO_SIZE_CHANGE) {
-    err = btr_cur->update_in_place(BTR_NO_LOCKING_FLAG, node->m_update, node->m_cmpl_info, thr, mtr);
+  if (upd_node->m_cmpl_info & UPD_NODE_NO_SIZE_CHANGE) {
+    err = btr_cur->update_in_place(BTR_NO_LOCKING_FLAG, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
   } else {
-    err = btr_cur->optimistic_update(BTR_NO_LOCKING_FLAG, node->m_update, node->m_cmpl_info, thr, mtr);
+    err = btr_cur->optimistic_update(BTR_NO_LOCKING_FLAG, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
   }
 
   mtr->commit();
@@ -1055,14 +1067,13 @@ db_err Row_update::clust_rec(upd_node_t *node, const Index *index, que_thr_t *th
 
   ut_ad(!rec_get_deleted_flag(pcur->get_rec()));
 
-  err = btr_cur->pessimistic_update(BTR_NO_LOCKING_FLAG, &heap, &big_rec, node->m_update, node->m_cmpl_info, thr, mtr);
+  err = btr_cur->pessimistic_update(BTR_NO_LOCKING_FLAG, &heap, &big_rec, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
 
   mtr->commit();
 
   if (err == DB_SUCCESS && big_rec) {
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
     rec_t *rec;
-    rec_offs_init(offsets_);
+
 
     mtr->start();
 
@@ -1071,11 +1082,12 @@ db_err Row_update::clust_rec(upd_node_t *node, const Index *index, que_thr_t *th
     rec = btr_cur->get_rec();
 
     ulint *offsets{};
+    std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
     }
 
     Blob blob(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
@@ -1130,9 +1142,9 @@ db_err Row_update::clust_step(upd_node_t *node, que_thr_t *thr) noexcept {
   db_err err;
   rec_t *rec;
   mem_heap_t *heap{};
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets;
-  rec_offs_init(offsets_);
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
+
+  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
 
   auto index = node->m_table->get_first_index();
   auto check_ref = index_is_referenced(index, thr_get_trx(thr));
@@ -1183,10 +1195,14 @@ db_err Row_update::clust_step(upd_node_t *node, que_thr_t *thr) noexcept {
 
   rec = pcur->get_rec();
 
+  ulint *offsets;
+
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
+    rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+
+    offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
   }
 
   if (!node->m_has_clust_rec_x_lock) {

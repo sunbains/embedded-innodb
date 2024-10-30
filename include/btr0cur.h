@@ -327,15 +327,14 @@ struct Btree_cursor {
    * Cursor on the record to delete; if compression does not occur, the cursor stays valid: it
    * points to Successor of deleted record on function exit
    *
-   * @param[out] err            DB_SUCCESS or DB_OUT_OF_FILE_SPACE; the latter may occur because we may have to update node pointers
-   *                             on upper levels, and in the case of variable length keys these may actually grow in size
    * @param[in] has_reserved_extents true if the caller has already reserved enough free extents so that he knows that the operation will succeed
    * @param[in] rb_ctx          Rollback context
    * @param[in] mtr             Mini-transaction handle
    *
-   * @return                     true if compression occurred
+   * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE; the latter may occur because we may have to update node pointers
+   *   on upper levels, and in the case of variable length keys these may actually grow in size
    */
-  void pessimistic_delete(db_err *err, bool has_reserved_extents, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err pessimistic_delete(bool has_reserved_extents, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept;
 
   /**
    * Parses a redo log record of updating a record in-place.
