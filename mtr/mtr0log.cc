@@ -32,14 +32,11 @@ Created 12/7/1995 Heikki Tuuri
 #include "trx0sys.h"
 
 void mlog_catenate_string(mtr_t *mtr, const byte *str, ulint len) {
-  if (mtr->get_log_mode() == MTR_LOG_NONE) {
-
+  if (mtr->m_log_mode == MTR_LOG_NONE) {
     return;
   }
 
-  auto mlog = &mtr->m_log;
-
-  dyn_push_string(mlog, str, len);
+  mtr->m_log.push_string(str, len);
 }
 
 void mlog_write_initial_log_record(const byte *ptr, mlog_type_t type, mtr_t *mtr) {

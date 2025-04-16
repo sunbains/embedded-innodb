@@ -1069,7 +1069,7 @@ void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const 
 
   log_ptr = page_copy_rec_list_to_created_page_write_log(new_page, mtr);
 
-  log_data_len = dyn_array_get_data_size(&mtr->m_log);
+  log_data_len = mtr->m_log.get_data_size();
 
   /* Individual inserts are logged in a shorter form */
 
@@ -1138,7 +1138,7 @@ void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const 
     mem_heap_free(heap);
   }
 
-  log_data_len = dyn_array_get_data_size(&mtr->m_log) - log_data_len;
+  log_data_len = mtr->m_log.get_data_size() - log_data_len;
 
   ut_a(log_data_len < 100 * UNIV_PAGE_SIZE);
 

@@ -36,24 +36,18 @@ Created 11/26/1995 Heikki Tuuri
 #include "sync0sync.h"
 #include "ut0byte.h"
 
-
 /* Mini-transaction handle and buffer */
 struct mtr_t {
-  #ifdef UNIV_DEBUG
+#ifdef UNIV_DEBUG
   /** Destructor to check for dangling mtrs. */
-  ~mtr_t() noexcept {
-    ut_a(m_state == MTR_UNDEFINED || m_state == MTR_COMMITTED);
-  }
-  #endif /* UNIV_DEBUG */
+  ~mtr_t() noexcept { ut_a(m_state == MTR_UNDEFINED || m_state == MTR_COMMITTED); }
+#endif /* UNIV_DEBUG */
   /**
    * @brief Starts a mini-transaction and creates a mini-transaction handle and a buffer in the memory buffer given by the caller.
-   * 
+   *
    * @return mtr buffer which also acts as the mtr handle.
    */
   inline mtr_t *start() noexcept {
-    dyn_array_create(&m_memo);
-    dyn_array_create(&m_log);
-
     m_log_mode = MTR_LOG_ALL;
     m_modifications = false;
     m_n_log_recs = 0;
@@ -65,13 +59,11 @@ struct mtr_t {
   }
 
   /** Set the doublewrtite create flag. */
-  inline void dblwr_create_in_progresss() noexcept {
-    m_dblwr_create_in_progress = true;
-  }
+  inline void dblwr_create_in_progresss() noexcept { m_dblwr_create_in_progress = true; }
 
   /**
    * @brief Releases the latches stored in an mtr memo down to a savepoint.
-   * 
+   *
    * @note The mtr must not have made changes to buffer pages after the savepoint,
    * as these can be handled only by mtr_commit.
    *
@@ -84,7 +76,7 @@ struct mtr_t {
    *
    * @param[in,out] ptr         Pointer from where to read.
    * @param[in] type            Type of the value to read (MLOG_1BYTE, MLOG_2BYTES, MLOG_4BYTES).
-   * 
+   *
    * @return The value read.
    */
   [[nodiscard]] ulint read_ulint(const byte *ptr, ulint type) const noexcept;
@@ -93,14 +85,14 @@ struct mtr_t {
    * @brief Reads 8 bytes from a file page buffered in the buffer pool.
    *
    * @param[in] ptr             Pointer from where to read.
-   * 
+   *
    * @return The value read.
    */
   [[nodiscard]] uint64_t read_uint64(const byte *ptr) const noexcept;
 
   /**
    * Releases the block in an mtr memo after a savepoint.
-   * 
+   *
    * @param[in] savepoint       The savepoint.
    * @param[in] block           The block to release.
    */
@@ -116,17 +108,17 @@ struct mtr_t {
 
   /**
    * @brief Pushes an object to an mtr memo stack.
-   * 
+   *
    * @param[in] object          The object.
    * @param[in] type            The object type: MTR_MEMO_S_LOCK, ...
    */
-  void memo_push(void *object, mtr_memo_type_t type) noexcept { 
+  void memo_push(void *object, mtr_memo_type_t type) noexcept {
     ut_ad(type >= MTR_MEMO_PAGE_S_FIX);
     ut_ad(type <= MTR_MEMO_X_LOCK);
     ut_ad(m_magic_n == MTR_MAGIC_N);
     ut_ad(m_state == MTR_ACTIVE);
 
-    auto slot = reinterpret_cast<mtr_memo_slot_t *>(dyn_array_push(&m_memo, sizeof(mtr_memo_slot_t)));
+    auto slot = reinterpret_cast<mtr_memo_slot_t *>(m_memo.push(sizeof(mtr_memo_slot_t)));
 
     slot->m_type = type;
     slot->m_object = object;
@@ -134,7 +126,7 @@ struct mtr_t {
 
   /**
    * @brief Sets and returns a savepoint in mtr.
-   * 
+   *
    * @return Savepoint.
    */
   [[nodiscard]] ulint set_savepoint() noexcept {
@@ -142,21 +134,19 @@ struct mtr_t {
     ut_ad(m_state == MTR_ACTIVE);
 
     // FIXME: This can become expensive multi-block mtrs
-    return dyn_array_get_data_size(&m_memo);
+    return m_memo.get_data_size();
   }
 
   /**
    * @brief Gets a savepoint.
-   * 
+   *
    * @return Savepoint.
    */
-  [[nodiscard]] ulint get_savepoint() noexcept {
-    return set_savepoint();
-  }
+  [[nodiscard]] ulint get_savepoint() noexcept { return set_savepoint(); }
 
   /**
    * @brief Releases the (index tree) s-latch stored in an mtr memo after a savepoint.
-   * 
+   *
    * @param[in] savepoint       The savepoint.
    * @param[in] lock            The latch to release.
    */
@@ -164,9 +154,9 @@ struct mtr_t {
     ut_ad(m_magic_n == MTR_MAGIC_N);
     ut_ad(m_state == MTR_ACTIVE);
 
-    ut_ad(dyn_array_get_data_size(&m_memo) > savepoint);
+    ut_ad(m_memo.get_data_size() > savepoint);
 
-    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&m_memo, savepoint));
+    auto slot = static_cast<mtr_memo_slot_t *>(m_memo.get_element(savepoint));
 
     ut_ad(slot->m_object == lock);
     ut_ad(slot->m_type == MTR_MEMO_S_LOCK);
@@ -175,9 +165,10 @@ struct mtr_t {
 
     slot->m_object = nullptr;
   }
+
   /**
    * @brief Gets the logging mode of a mini-transaction.
-   * 
+   *
    * @param mtr The mtr.
    * @return Logging mode: MTR_LOG_NONE, ...
    */
@@ -190,7 +181,7 @@ struct mtr_t {
 
   /**
    * @brief Changes the logging mode of a mini-transaction.
-   * 
+   *
    * @param mtr The mtr.
    * @param mode Logging mode: MTR_LOG_NONE, ...
    * @return Old mode.
@@ -215,7 +206,7 @@ struct mtr_t {
 
   /**
    * @brief Locks a lock in s-mode.
-   * 
+   *
    * @param[in] lock            The rw-lock.
    * @param[in] file            The file name.
    * @param[in] line            The line number.
@@ -228,7 +219,7 @@ struct mtr_t {
 
   /**
    * @brief Locks a lock in x-mode.
-   * 
+   *
    * @param[in] lock            The rw-lock.
    * @param[in] file            The file name.
    * @param[in] line The line number.
@@ -240,17 +231,15 @@ struct mtr_t {
   }
 
   /* @return true if the mtr is active. */
-  [[nodiscard]] inline bool is_active() const noexcept {
-    return m_state == MTR_ACTIVE;
-  }
+  [[nodiscard]] inline bool is_active() const noexcept { return m_state == MTR_ACTIVE; }
 
-  #ifdef UNIV_DEBUG
+#ifdef UNIV_DEBUG
   /**
    * Checks if memo contains the given page.
-   * 
+   *
    * @param[in] ptr             Pointer to buffer frame.
    * @param[in] type            Type of object.
-   * 
+   *
    * @return	true if contains
    */
   bool memo_contains_page(const byte *ptr, ulint type) const noexcept;
@@ -262,22 +251,22 @@ struct mtr_t {
 
   /**
    * @brief Checks if the mtr memo contains the given item.
-   * 
+   *
    * @param[in] object          The object to search.
    * @param[in] type            The type of object.
-   * 
+   *
    * @return True if the memo contains the item, false otherwise.
    */
   [[nodiscard]] bool memo_contains(const void *object, ulint type) const noexcept {
     ut_ad(m_magic_n == MTR_MAGIC_N);
     ut_ad(m_state == MTR_ACTIVE || m_state == MTR_COMMITTING);
 
-    auto offset = dyn_array_get_data_size(&m_memo);
+    auto offset = m_memo.get_data_size();
 
     while (offset > 0) {
       offset -= sizeof(mtr_memo_slot_t);
 
-      auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&m_memo, offset));
+      auto slot = static_cast<mtr_memo_slot_t *>(m_memo.get_element(offset));
 
       if (object == slot->m_object && type == slot->m_type) {
         return true;
@@ -286,7 +275,7 @@ struct mtr_t {
 
     return false;
   }
-  #endif /* UNIV_DEBUG */
+#endif /* UNIV_DEBUG */
 
   /**
    * @brief Commits a mini-transaction.
@@ -316,10 +305,10 @@ struct mtr_t {
   uint32_t m_n_log_recs;
 
   /** Memo stack for locks etc. */
-  dyn_array_t m_memo;
+  Dyn_array m_memo;
 
   /** Mini-transaction log */
-  dyn_array_t m_log;
+  Dyn_array m_log;
 
   /** Start lsn of the possible log entry for this mtr */
   lsn_t m_start_lsn;

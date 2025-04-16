@@ -23,16 +23,18 @@ Created 11/26/1995 Heikki Tuuri
 *******************************************************/
 
 #include "mtr0mtr.h"
-
 #include "buf0buf.h"
+#include "buf0types.h"
 #include "log0log.h"
 #include "log0recv.h"
 #include "mtr0log.h"
 #include "page0types.h"
+#include "sync0rw.h"
+#include "sync0sync.h"
 
 /**
  * Releases the item in the slot given.
- * 
+ *
  * @param[in,out] mtr           Release slot in this mtr.
  * @param[in] slot              Slot to release.
  * */
@@ -63,7 +65,8 @@ inline void mtr_memo_slot_release(mtr_t *mtr, mtr_memo_slot_t *slot) noexcept {
 }
 
 void mtr_t::disable_redo_logging() noexcept {
-
+  ut_ad(m_magic_n == MTR_MAGIC_N);
+  m_log_mode = MTR_LOG_NONE;
 }
 
 static void mtr_memo_pop_all(mtr_t *mtr) noexcept {
@@ -72,11 +75,11 @@ static void mtr_memo_pop_all(mtr_t *mtr) noexcept {
   /* Currently only used in commit */
   ut_ad(mtr->m_state == MTR_COMMITTING);
 
-  auto offset = dyn_array_get_data_size(&mtr->m_memo);
+  auto offset = mtr->m_memo.get_data_size();
 
   while (offset > 0) {
     offset -= sizeof(mtr_memo_slot_t);
-    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&mtr->m_memo, offset));
+    auto slot = static_cast<mtr_memo_slot_t *>(mtr->m_memo.get_element(offset));
 
     mtr_memo_slot_release(mtr, slot);
   }
@@ -84,14 +87,14 @@ static void mtr_memo_pop_all(mtr_t *mtr) noexcept {
 
 /**
  * Writes the contents of a mini-transaction log, if any, to the database log.
- * 
+ *
  * @param[in,out] mtr           Mini-transaction used for the write
  * @param[in,out] log           Log to write to
  * @param[in] recovery          recovery flag
  */
-static void mtr_log_reserve_and_write(mtr_t *mtr, Log* log, ulint recovery) noexcept {
+static void mtr_log_reserve_and_write(mtr_t *mtr, Log *log, ulint recovery) noexcept {
   auto mlog = &mtr->m_log;
-  auto first_data = dyn_block_get_data(mlog);
+  auto first_data = mlog->get_data();
 
   if (mtr->m_n_log_recs > 1) {
     mlog_catenate_ulint(mtr, MLOG_MULTI_REC_END, MLOG_1BYTE);
@@ -99,11 +102,11 @@ static void mtr_log_reserve_and_write(mtr_t *mtr, Log* log, ulint recovery) noex
     *first_data = byte(ulint(*first_data) | MLOG_SINGLE_REC_FLAG);
   }
 
-  if (mlog->heap == nullptr) {
+  if (mlog->single_block()) {
 
     log->acquire();
 
-    mtr->m_end_lsn = log->reserve_and_write_fast(first_data, dyn_block_get_used(mlog), &mtr->m_start_lsn);
+    mtr->m_end_lsn = log->reserve_and_write_fast(first_data, mlog->get_used(mlog->get_first_block()), &mtr->m_start_lsn);
 
     if (mtr->m_end_lsn != 0) {
       /* We were able to successfully write to the log. */
@@ -113,18 +116,18 @@ static void mtr_log_reserve_and_write(mtr_t *mtr, Log* log, ulint recovery) noex
     log->release();
   }
 
-  auto data_size = dyn_array_get_data_size(mlog);
+  auto data_size = mlog->get_data_size();
 
   /* Open the database log for log_write_low */
   mtr->m_start_lsn = log->reserve_and_open(data_size);
 
   if (mtr->m_log_mode == MTR_LOG_ALL) {
 
-    const dyn_block_t *block = mlog;
+    auto block = mlog->get_first_block();
 
     while (block != nullptr) {
-      log->write_low(dyn_block_get_data(block), dyn_block_get_used(block));
-      block = dyn_array_get_next_block(mlog, block);
+      log->write_low(mlog->get_data(block), mlog->get_used(block));
+      block = mlog->get_next_block(block);
     }
   } else {
     ut_ad(mtr->m_log_mode == MTR_LOG_NONE);
@@ -135,8 +138,8 @@ static void mtr_log_reserve_and_write(mtr_t *mtr, Log* log, ulint recovery) noex
 }
 
 void mtr_t::commit() noexcept {
-  ut_ad(m_magic_n == MTR_MAGIC_N);
   ut_ad(is_active());
+  ut_ad(m_magic_n == MTR_MAGIC_N);
 
   m_state = MTR_COMMITTING;
 
@@ -161,22 +164,19 @@ void mtr_t::commit() noexcept {
   }
 
   m_state = MTR_COMMITTED;
-
-  dyn_array_free(&m_memo);
-  dyn_array_free(&m_log);
 }
 
 void mtr_t::rollback_to_savepoint(ulint savepoint) noexcept {
   ut_ad(m_magic_n == MTR_MAGIC_N);
   ut_ad(is_active());
 
-  auto offset = dyn_array_get_data_size(&m_memo);
+  auto offset = m_memo.get_data_size();
   ut_ad(offset >= savepoint);
 
   while (offset > savepoint) {
     offset -= sizeof(mtr_memo_slot_t);
 
-    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&m_memo, offset));
+    auto slot = static_cast<mtr_memo_slot_t *>(m_memo.get_element(offset));
     ut_ad(slot->m_type != MTR_MEMO_MODIFY);
 
     mtr_memo_slot_release(this, slot);
@@ -187,12 +187,12 @@ void mtr_t::memo_release(void *object, ulint type) noexcept {
   ut_ad(m_magic_n == MTR_MAGIC_N);
   ut_ad(is_active());
 
-  auto offset = dyn_array_get_data_size(&m_memo);
+  auto offset = m_memo.get_data_size();
 
   while (offset > 0) {
     offset -= sizeof(mtr_memo_slot_t);
 
-    auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&m_memo, offset));
+    auto slot = static_cast<mtr_memo_slot_t *>(m_memo.get_element(offset));
 
     if (object == slot->m_object && type == slot->m_type) {
 
@@ -229,9 +229,7 @@ bool mtr_t::memo_contains_page(const byte *ptr, ulint type) const noexcept {
 
 std::string mtr_t::to_string() const noexcept {
   return std::format(
-    "Mini-transaction handle: memo size {} bytes log size {} bytes",
-    dyn_array_get_data_size(&m_memo),
-    dyn_array_get_data_size(&m_log)
+    "Mini-transaction handle: memo size {} bytes log size {} bytes", m_memo.get_data_size(), m_log.get_data_size()
   );
 }
 #endif /* UNIV_DEBUG */
@@ -240,7 +238,7 @@ void mtr_t::release_block_at_savepoint(ulint savepoint, Buf_block *block) noexce
   ut_ad(is_active());
   ut_ad(m_magic_n == MTR_MAGIC_N);
 
-  auto slot = static_cast<mtr_memo_slot_t *>(dyn_array_get_element(&m_memo, savepoint));
+  auto slot = static_cast<mtr_memo_slot_t *>(m_memo.get_element(savepoint));
 
   ut_a(slot->m_object == block);
 

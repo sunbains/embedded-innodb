@@ -26,298 +26,363 @@ Created 2/5/1996 Heikki Tuuri
 
 #include "innodb0types.h"
 #include "mem0mem.h"
-#include "ut0lst.h"
+#include "ut0slst.h"
+
+#include <array>
 
 /** This is the initial 'payload' size of a dynamic array;
 this must be > MLOG_BUF_MARGIN + 30! */
-constexpr ulint DYN_ARRAY_DATA_SIZE = 512;
+constexpr uint32_t DYN_ARRAY_DATA_SIZE = 512;
 
 /** Value of dyn_block_struct::magic_n */
-constexpr ulint DYN_BLOCK_MAGIC_N = 375767;
+constexpr uint32_t DYN_BLOCK_MAGIC_N = 375767;
 
 /** Flag for dyn_block_struct::used that indicates a full block */
-constexpr ulint DYN_BLOCK_FULL_FLAG = 0x1000000UL;
+constexpr uint32_t DYN_BLOCK_FULL_FLAG = 0x1000000UL;
 
-/** @brief A block in a dynamically allocated array.
-NOTE! Do not access the fields of the struct directly: the definition
-appears here only for the compiler to know its size! */
-struct dyn_block_t {
-  /** in the first block this is != nullptr if dynamic
-  allocation has been needed */
-  mem_heap_t *heap;
+/** @brief A dynamically allocated array that grows as needed.
+ * This class provides functionality for managing a dynamic array that can grow
+ * as needed. It maintains a list of blocks where data is stored.
+ */
+template <size_t N = DYN_ARRAY_DATA_SIZE>
+struct Dynamic_array {
+  /** @brief A block in a dynamically allocated array. */
+  struct Block {
+    Block() : m_used(0), m_magic_n(DYN_BLOCK_MAGIC_N) {}
 
-  /** Number of data bytes used in this block; DYN_BLOCK_FULL_FLAG
-  is set when the block becomes full */
-  ulint used;
+    ~Block() noexcept { ut_ad(m_magic_n == DYN_BLOCK_MAGIC_N); }
 
-  /** Storage for array elements */
-  byte data[DYN_ARRAY_DATA_SIZE];
+    /** Gets the number of used bytes in a dyn array block.
+     * @param[in] block Block to check
+     * @return number of bytes used */
+    uint32_t get_used() const noexcept {
+      ut_ad(m_magic_n == DYN_BLOCK_MAGIC_N);
 
-  /** storage for array elements */
-  UT_LIST_NODE_T(dyn_block_t) list;
-
-  /** linear list node: used in all blocks */
-  UT_LIST_BASE_NODE_T(dyn_block_t, list) base;
-
-#ifdef UNIV_DEBUG
-  /** Only in the debug version: if dyn array is opened, this
-  is the buffer end offset, else this is 0 */
-  ulint buf_end;
-
-  /** magic number (DYN_BLOCK_MAGIC_N) */
-  ulint magic_n;
-#endif /* UNIV_DEBUG */
-};
-
-using dyn_array_t = dyn_block_t;
-
-/** Adds a new block to a dyn array.
-@param[in,out] arr              Dynamic array.
-@return	created block */
-dyn_block_t *dyn_array_add_block(dyn_array_t *arr);
-
-/** Gets the first block in a dyn array.
-@param[in,out] arr              Dynamic array.
-@return first block in the instance. */
-inline const dyn_block_t *dyn_array_get_first_block(const dyn_array_t *arr) {
-  return arr;
-}
-
-/** Gets the last block in a dyn array. 
-@param[in,out] arr              Dynamic array.
-@return last block in the instance. */
-inline dyn_block_t *dyn_array_get_last_block(dyn_array_t *arr) {
-  if (arr->heap == nullptr) {
-
-    return arr;
-  } else {
-    return UT_LIST_GET_LAST(arr->base);
-  }
-}
-
-/** Gets the next block in a dyn array.
-@param[in,out] arr             Dynamic array
-@param[in,out] block           Block in the dynamic array
-@return	pointer to next, nullptr if end of list */
-inline const dyn_block_t *dyn_array_get_next_block(const dyn_array_t *arr, const dyn_block_t *block) {
-  if (arr->heap == nullptr) {
-
-    ut_ad(arr == block);
-    return nullptr;
-
-  } else {
-    return UT_LIST_GET_NEXT(list, block);
-  }
-}
-
-/** Gets the number of used bytes in a dyn array block.
-@param[in,out] block           Block to check
-@return	number of bytes used */
-inline ulint dyn_block_get_used(const dyn_block_t *block) {
-  return block->used & ~DYN_BLOCK_FULL_FLAG;
-}
-
-/** Gets pointer to the start of data in a dyn array block.
-@param[in,out] block           Block to get the data from.
-@return	const pointer to data */
-inline const byte *dyn_block_get_data(const dyn_block_t *block) noexcept {
-  return block->data;
-}
-
-/** Gets pointer to the start of data in a dyn array block.
-@param[in,out] block           Block to get the data from.
-@return	pointer to data */
-inline byte *dyn_block_get_data(dyn_block_t *block) noexcept {
-  return block->data;
-}
-
-// FIXME: Replace with placement new
-/** Initializes a dynamic array.
-@param[in,out] arr              pointer to a memory buffer of size
-                                sizeof(dyn_array_t)
-@return	initialized dyn array */
-inline dyn_array_t *dyn_array_create(dyn_array_t *arr) {
-  static_assert(DYN_ARRAY_DATA_SIZE < DYN_BLOCK_FULL_FLAG, "error DYN_ARRAY_DATA_SIZE >= DYN_BLOCK_FULL_FLAG");
-
-  arr->heap = nullptr;
-  arr->used = 0;
-
-#ifdef UNIV_DEBUG
-  arr->buf_end = 0;
-  arr->magic_n = DYN_BLOCK_MAGIC_N;
-#endif /* UNIV_DEBUG */
-
-  return arr;
-}
-
-/** Frees a dynamic array.
-@param[in,out] arr              Dynamic array. */
-inline void dyn_array_free(dyn_array_t *arr) {
-  if (arr->heap != nullptr) {
-    mem_heap_free(arr->heap);
-  }
-
-#ifdef UNIV_DEBUG
-  arr->magic_n = 0;
-#endif /* UNIV_DEBUG */
-}
-
-/** Makes room on top of a dyn array and returns a pointer to the added element.
-The caller must copy the element to the pointer returned.
-@param[in,out] arr              Dynamic array.
-@param[in] size                 Size of the element to push.
-@return	pointer to the element */
-inline void *dyn_array_push(dyn_array_t *arr, ulint size) {
-  ut_ad(size > 0);
-  ut_ad(size <= DYN_ARRAY_DATA_SIZE);
-  ut_ad(arr->magic_n == DYN_BLOCK_MAGIC_N);
-
-  auto block = arr;
-  auto used = block->used;
-
-  if (used + size > DYN_ARRAY_DATA_SIZE) {
-    /* Get the last array block */
-
-    block = dyn_array_get_last_block(arr);
-    used = block->used;
-
-    if (used + size > DYN_ARRAY_DATA_SIZE) {
-      block = dyn_array_add_block(arr);
-      used = block->used;
+      return m_used & ~DYN_BLOCK_FULL_FLAG;
     }
-  }
 
-  block->used = used + size;
-  ut_ad(block->used <= DYN_ARRAY_DATA_SIZE);
+    /** Sets the full flag for a block.
+     * @param[in] block Block to set the full flag for. */
+    void set_full() noexcept {
+      ut_ad(m_used <= N);
+      ut_ad(m_magic_n == DYN_BLOCK_MAGIC_N);
 
-  return (block->data) + used;
-}
-
-/** Makes room on top of a dyn array and returns a pointer to a buffer in it.
-After copying the elements, the caller must close the buffer using
-dyn_array_close.
-@param[in,out] arr              Dynamic array.
-@param[in] size                 Size in bytes of the buffer; MUST be smaller
-                                than DYN_ARRAY_DATA_SIZE!
-@return	pointer to the buffer */
-inline byte *dyn_array_open(dyn_array_t *arr, ulint size) {
-  ut_ad(size);
-  ut_ad(size <= DYN_ARRAY_DATA_SIZE);
-  ut_ad(arr->magic_n == DYN_BLOCK_MAGIC_N);
-
-  auto block = arr;
-  auto used = block->used;
-
-  if (used + size > DYN_ARRAY_DATA_SIZE) {
-    /* Get the last array block */
-
-    block = dyn_array_get_last_block(arr);
-    used = block->used;
-
-    if (used + size > DYN_ARRAY_DATA_SIZE) {
-      block = dyn_array_add_block(arr);
-      used = block->used;
-      ut_a(size <= DYN_ARRAY_DATA_SIZE);
+      m_used |= DYN_BLOCK_FULL_FLAG;
     }
+
+    byte *get_data() noexcept { return m_buffer.data(); }
+
+    const byte *get_data() const noexcept { return m_buffer.data(); }
+
+    /** Number of data bytes used in this block; DYN_BLOCK_FULL_FLAG
+    is set when the block becomes full */
+    uint32_t m_used;
+
+    std::array<byte, N> m_buffer;
+
+    UT_SLIST_NODE_T(Block) m_node;
+
+#ifdef UNIV_DEBUG
+    /** Magic number (DYN_BLOCK_MAGIC_N) */
+    uint32_t m_magic_n = DYN_BLOCK_MAGIC_N;
+#endif /* UNIV_DEBUG */
+  };
+
+  UT_SLIST_NODE_GETTER_DEF(Block, m_node)
+
+  /** Constructor */
+  Dynamic_array() : m_block() { m_blocks.push_back(&m_block); }
+
+  /** Destructor */
+  ~Dynamic_array() {
+    ut_ad(m_block.m_magic_n == DYN_BLOCK_MAGIC_N);
+    for (auto block : m_blocks) {
+      call_destructor(block);
+    }
+    if (m_heap != nullptr) {
+      mem_heap_free(m_heap);
+      m_heap = nullptr;
+    }
+  };
+
+  /** Gets the first block in a dyn array.
+   * @return first block in the instance. */
+  const Block *get_first_block() const noexcept {
+    ut_ad(m_block.m_magic_n == DYN_BLOCK_MAGIC_N);
+
+    return m_blocks.front();
   }
 
-  ut_ad(block->used <= DYN_ARRAY_DATA_SIZE);
+  /** Gets the last block in a dyn array.
+   * @return last block in the instance. */
+  Block *get_last_block() noexcept { return m_blocks.back(); }
 
-#ifdef UNIV_DEBUG
-  ut_ad(arr->buf_end == 0);
-  arr->buf_end = used + size;
-#endif /* UNIV_DEBU */
+  /** Gets the next block in a dyn array.
+   * @param[in] block Block in the dynamic array
+   * @return pointer to next, nullptr if end of list */
+  const Block *get_next_block(const Block *block) const noexcept {
+    ut_ad(block->m_magic_n == DYN_BLOCK_MAGIC_N);
 
-  return (block->data) + used;
-}
+    return block->m_node.m_next;
+  }
 
-/** Closes the buffer returned by dyn_array_open.
-@param[in,out] arr              Dynamic array.
-@param[in] ptr                  Buffer space from ptr up was not used. */
-inline void dyn_array_close(dyn_array_t *arr, byte *ptr) {
-  ut_ad(arr->magic_n == DYN_BLOCK_MAGIC_N);
+  /** Gets the number of used bytes in a dyn array block.
+   * @param[in] block Block to check
+   * @return number of bytes used */
+  auto get_used(const Block *block) const noexcept { return block->get_used(); }
 
-  auto block = dyn_array_get_last_block(arr);
+  /** Gets pointer to the start of data in a dyn array block.
+   * @param[in] block Block to get the data from.
+   * @return const pointer to data */
+  auto get_data(const Block *block) const noexcept {
+    ut_ad(block->m_magic_n == DYN_BLOCK_MAGIC_N);
 
-  ut_ad(arr->buf_end + block->data >= ptr);
+    return block->get_data();
+  }
 
-  block->used = ptr - block->data;
+  /** Gets pointer to the start of data in a dyn array block.
+   * @param[in] block Block to get the data from.
+   * @return pointer to data */
+  auto get_data(Block *block) noexcept { return block->get_data(); }
 
-  ut_ad(block->used <= DYN_ARRAY_DATA_SIZE);
+  /** Gets pointer to the start of data in the first block of the dyn array.
+   * @return pointer to data */
+  auto get_data() noexcept { return m_block.get_data(); }
 
-#ifdef UNIV_DEBUG
-  arr->buf_end = 0;
-#endif /* UNIV_DEBUG */
-}
+  /** Makes room on top of a dyn array and returns a pointer to a buffer in it.
+   * After copying the elements, the caller must close the buffer using close().
+   * @param[in] size Size in bytes of the buffer; MUST be smaller than N!
+   * @return pointer to the buffer */
+  byte *open(ulint size) noexcept {
+    ut_ad(!m_is_open);
+    ut_ad(size > 0);
+    ut_ad(size <= N);
+    ut_ad(m_block.m_magic_n == DYN_BLOCK_MAGIC_N);
 
-/** Returns pointer to an element in dyn array.
-@param[in,out] arr              Dynamic array.
-@param[in] pos                  Position of element as bytes from array start
-@return	pointer to element */
-inline void *dyn_array_get_element(const dyn_array_t *arr, ulint pos) {
-  ut_ad(arr->magic_n == DYN_BLOCK_MAGIC_N);
+    auto block = &m_block;
+    auto used = block->m_used;
 
-  /* Get the first array block */
-  auto block = dyn_array_get_first_block(arr);
+    if (used + size > N) {
+      /* Get the last array block */
+      block = get_last_block();
+      used = block->m_used;
 
-  if (arr->heap != nullptr) {
-    auto used = dyn_block_get_used(block);
+      if (used + size > N) {
+        block->set_full();
+        block = add_block();
+        used = block->m_used;
+        ut_a(size <= N);
+      }
+    }
+
+    ut_ad(block->m_used <= N);
+    ut_ad(m_buf_end == 0);
+    ut_d(m_buf_end = used + size);
+
+    ut_d(m_is_open = true);
+
+    return block->get_data() + used;
+  }
+
+  /** Closes the buffer returned by open().
+   * @param[in] ptr Buffer space from ptr up was not used. */
+  void close(byte *ptr) noexcept {
+    ut_ad(m_is_open);
+    ut_ad(m_block.m_magic_n == DYN_BLOCK_MAGIC_N);
+
+    auto block = get_last_block();
+
+    ut_ad(m_buf_end + block->get_data() >= ptr);
+
+    block->m_used = ptr - block->get_data();
+
+    ut_ad(block->m_used <= N);
+
+    ut_d(m_buf_end = 0);
+    ut_d(m_is_open = false);
+  }
+
+  /** Returns pointer to an element in dyn array.
+   * @param[in] pos Position of element as bytes from array start
+   * @return pointer to element */
+  void *get_element(ulint pos) const noexcept {
+    ut_a(m_heap != nullptr || m_blocks.size() == 1);
+    ut_ad(m_block.m_magic_n == DYN_BLOCK_MAGIC_N);
+
+    /* Get the first array block */
+    auto block = get_first_block();
+    auto used = block->get_used();
 
     while (pos >= used) {
       pos -= used;
+      block = get_next_block(block);
+      used = block->get_used();
+    }
 
-      block = UT_LIST_GET_NEXT(list, block);
+    ut_ad(block != nullptr);
+    ut_ad(block->get_used() >= pos);
 
-      ut_ad(block);
+    return (void *)(block->get_data() + pos);
+  }
 
-      used = dyn_block_get_used(block);
+  /** Returns the size of stored data in a dyn array.
+   * @return data size in bytes */
+  ulint get_data_size() const noexcept {
+    ut_ad(m_block.m_magic_n == DYN_BLOCK_MAGIC_N);
+
+    if (m_heap == nullptr) [[likely]] {
+      return m_block.m_used;
+    }
+
+    ulint sum{};
+    auto block = get_first_block();
+
+    while (block != nullptr) {
+      sum += block->get_used();
+      block = get_next_block(block);
+    }
+
+    return sum;
+  }
+
+  /** Makes room on top of a dyn array and returns a pointer to the added element.
+   * The caller must copy the element to the pointer returned.
+   * @param[in] size Size of the element to push.
+   * @return pointer to the element, and space available in the current block */
+  void *push(ulint size) noexcept {
+    ut_ad(size > 0);
+    ut_ad(size <= N);
+    ut_ad(m_block.m_magic_n == DYN_BLOCK_MAGIC_N);
+
+    auto block = get_last_block();
+    auto used = block->m_used;
+
+    ut_ad(!(used & DYN_BLOCK_FULL_FLAG));
+
+    if (used + size <= N) [[likely]] {
+      block->m_used += size;
+      return block->get_data() + used;
+    } else {
+      block->set_full();
+      block = add_block();
+      block->m_used = size;
+      return block->get_data();
     }
   }
 
-  ut_ad(block != nullptr);
-  ut_ad(dyn_block_get_used(block) >= pos);
+  /** Pushes n bytes to a dyn array.
+   * Note: we don't pack the block because we try and avoid double
+   * copying in the caller. This means if the len is greater than N,
+   * we can loop forever.
+   * @param[in] str String to write
+   * @param[in] len String length. */
+  void push_string(const byte *str, ulint len) noexcept {
+    ut_a(len > 0);
 
-  return (void*) (block->data + pos);
-}
+    while (len > 0) {
+      ulint n_copied{len};
 
-/** Returns the size of stored data in a dyn array.
-@param[in,out] arr              Dynamic array.
-@return	data size in bytes */
-inline ulint dyn_array_get_data_size(const dyn_array_t *arr) {
-  ut_ad(arr->magic_n == DYN_BLOCK_MAGIC_N);
+      if (len > N) [[unlikely]] {
+        n_copied = N;
+      }
 
-  if (arr->heap == nullptr) {
+      auto ptr = push(n_copied);
 
-    return arr->used;
+      memcpy(ptr, str, n_copied);
+
+      str += n_copied;
+      len -= n_copied;
+    }
   }
 
-  ulint sum{};
-  auto block = dyn_array_get_first_block(arr);
+  bool single_block() const noexcept { return m_heap == nullptr; }
 
-  while (block != nullptr) {
-    sum += dyn_block_get_used(block);
-    block = dyn_array_get_next_block(arr, block);
-  }
+#ifdef UNIV_DEBUG
+  void eq(ulint pos, const void *ptr, ulint size) const noexcept {
+    ut_ad(m_block.m_magic_n == DYN_BLOCK_MAGIC_N);
+    ut_ad(m_heap != nullptr || m_blocks.size() == 1);
 
-  return sum;
-}
+    /* Get the first array block */
+    auto block = get_first_block();
+    auto used = block->get_used();
 
-/** Pushes n bytes to a dyn array.
-@param[in,out] arr              Dynamic array.
-@param[in] str                  String to write
-@param[in] len                  String length. */
-inline void dyn_push_string(dyn_array_t *arr, const byte *str, ulint len) {
+    ut_ad(used > 0);
 
-  while (len > 0) {
-    ulint n_copied{len};
-
-    if (unlikely(len > DYN_ARRAY_DATA_SIZE)) {
-      n_copied = DYN_ARRAY_DATA_SIZE;
+    while (pos >= used) {
+      pos -= used;
+      block = get_next_block(block);
+      used = block->get_used();
     }
 
-    memcpy(dyn_array_push(arr, n_copied), str, n_copied);
+    ut_ad(block != nullptr);
+    ut_ad(block->get_used() >= pos);
 
-    str += n_copied;
-    len -= n_copied;
+    auto len{size};
+    auto p{reinterpret_cast<const byte *>(ptr)};
+    const byte *start = block->get_data() + pos;
+
+    while (len > 0) {
+      ut_a(*start == *p);
+
+      ++p;
+      ++start;
+      --len;
+
+      if (len > 0 && start == block->get_data() + block->get_used()) {
+        block = get_next_block(block);
+        start = block->get_data();
+      }
+    }
   }
-}
+#endif /* UNIV_DEBUG */
+
+ private:
+  /** Adds a new block to a dyn array.
+   * @return created block */
+  Block *add_block() noexcept {
+    ut_ad(m_block.m_magic_n == DYN_BLOCK_MAGIC_N);
+
+    if (m_heap == nullptr) {
+      create_heap();
+    }
+
+    auto block = get_last_block();
+    ut_a(block->m_used & DYN_BLOCK_FULL_FLAG);
+
+    block = new (mem_heap_alloc(m_heap, sizeof(Block))) Block();
+
+    m_blocks.push_back(block);
+
+    return block;
+  }
+
+  void create_heap() noexcept {
+    ut_ad(m_heap == nullptr);
+    ut_ad(m_blocks.size() == 1);
+
+    m_heap = mem_heap_create(sizeof(Block));
+  }
+
+ private:
+#ifdef UNIV_DEBUG
+  /** CHeck whether the open/close sequence is correct. */
+  bool m_is_open{false};
+
+  /** if opened, this is the buffer end offset, else this is 0 */
+  uint32_t m_buf_end{};
+#endif /* UNIV_DEBUG */
+
+  /** The first block of the dynamic array */
+  Block m_block;
+
+  /** In the first block this is != nullptr if dynamic
+  allocation has been needed */
+  mem_heap_t *m_heap{};
+
+  using Blocks = UT_SLIST_BASE_NODE_T(Block, m_node);
+
+  /** List of all blocks */
+  Blocks m_blocks;
+};
+
+using Dyn_array = Dynamic_array<DYN_ARRAY_DATA_SIZE>;

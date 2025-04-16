@@ -3,12 +3,12 @@
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; version 2 of the License.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
@@ -27,6 +27,7 @@ SET (LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/lib)
 SET (EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
 INCLUDE(ExternalProject)
+INCLUDE(FetchContent)
 
 SET(UNIT_TESTING true)
 
@@ -202,7 +203,6 @@ SET(INNODB_SOURCES
       buf/buf0flu.cc buf/buf0lru.cc buf/buf0rea.cc
       data/data0data.cc data/data0type.cc
       dict/dict0dict.cc dict/dict0fk.cc dict/dict0load.cc dict/dict0store.cc
-      dyn/dyn0dyn.cc
       eval/eval0eval.cc eval/eval0proc.cc
       fil/fil0fil.cc
       fsp/fsp0fsp.cc
@@ -247,10 +247,29 @@ IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
   ADD_LIBRARY(innodb STATIC ${INNODB_SOURCES})
 ENDIF(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
+# Configure Google Test if unit testing is enabled
 IF(UNIT_TESTING)
   MESSAGE(STATUS "UNIT TESTING is enabled")
   ADD_DEFINITIONS("-DUNIT_TESTING")
-  SUBDIRS(unit-tests)
+
+  # Download and build Google Test
+  FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG release-1.12.1
+  )
+
+  # For Windows: Prevent overriding the parent project's compiler/linker settings
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
+  FetchContent_MakeAvailable(googletest)
+
+  # Enable testing
+  enable_testing()
+
+  # Add test directories
+  ADD_SUBDIRECTORY(unit-tests)
+  ADD_SUBDIRECTORY(tests)
 ELSE(UNIT_TESTING)
   MESSAGE(STATUS "UNIT_TESTING is disabled")
 ENDIF(UNIT_TESTING)
@@ -261,8 +280,6 @@ IF(NOT DISABLE_XA)
 ELSE(NOT DISABLE_XA)
   MESSAGE(STATUS "XA is disabled")
 ENDIF(NOT DISABLE_XA)
-
-SUBDIRS(tests)
 
 CONFIGURE_FILE(
   ${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.cmake
