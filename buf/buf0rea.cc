@@ -27,6 +27,7 @@ Created 11/5/1995 Heikki Tuuri
 #include "fil0fil.h"
 #include "mtr0mtr.h"
 
+#include <algorithm>
 #include "buf0buf.h"
 #include "buf0flu.h"
 #include "buf0lru.h"
@@ -46,32 +47,25 @@ constexpr ulint BUF_READ_AHEAD_PEND_LIMIT = 2;
  * the buffer srv_buf_pool if it is not already there, in which case does nothing.
  * Sets the io_fix flag and sets an exclusive lock on the buffer frame. The flag
  * is cleared and the x-lock released by an i/o-handler thread.
- * 
+ *
  * @param[out] err out: DB_SUCCESS or DB_TABLESPACE_DELETED if we are trying to
  *  read from a non-existent tablespace, or a tablespace which is just now being dropped
- * 
+ *
  * @param[in] batch in: if a batch operation is required.
- * 
+ *
  * @param[in] space in: space id
- * 
+ *
  * @param[in] tablespace_version in: if the space memory object has this timestamp different from
  *  what we are giving here, treat the tablespace as dropped; this is a timestamp we use to stop
  *  dangling page reads from a tablespace which we have DISCARDed + IMPORTed back
- * 
+ *
  * @param[in] page_no_t in: page number
- * 
+ *
  * @return DB_SUCCESS if a request was posted to the IO layer, DB_FAIL the request was not posted
  *  or error code from the IO layer.
  */
-static db_err buf_read_page(
-  IO_request io_request,
-  bool batch,
-  space_id_t space,
-  page_no_t page_no,
-  int64_t tablespace_version
-) {
-  ut_a(io_request == IO_request::Async_read ||
-       io_request == IO_request::Sync_read);
+static db_err buf_read_page(IO_request io_request, bool batch, space_id_t space, page_no_t page_no, int64_t tablespace_version) {
+  ut_a(io_request == IO_request::Async_read || io_request == IO_request::Sync_read);
 
   if (srv_dblwr != nullptr && space == TRX_SYS_SPACE && srv_dblwr->is_page_inside(page_no)) {
 
@@ -98,15 +92,7 @@ static db_err buf_read_page(
 
   ut_a(bpage->get_state() == BUF_BLOCK_FILE_PAGE);
 
-  err = srv_fil->io(
-    io_request,
-    batch,
-    space,
-    page_no,
-    0,
-    UNIV_PAGE_SIZE,
-    buf_page_get_block(bpage)->get_frame(),
-    bpage);
+  err = srv_fil->io(io_request, batch, space, page_no, 0, UNIV_PAGE_SIZE, buf_page_get_block(bpage)->get_frame(), bpage);
 
   ut_a(err == DB_SUCCESS);
 
@@ -130,12 +116,12 @@ bool buf_read_page(ulint space, ulint offset) {
 
   } else if (err == DB_TABLESPACE_DELETED) {
 
-    log_err(
-      std::format(
-        "Trying to access tablespace {} page no. {}, but the "
-        " tablespace does not exist or is being dropped.",
-        space, offset)
-    );
+    log_err(std::format(
+      "Trying to access tablespace {} page no. {}, but the "
+      " tablespace does not exist or is being dropped.",
+      space,
+      offset
+    ));
   }
 
   /* Flush pages from the end of the LRU list if necessary */
@@ -214,7 +200,7 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, space_id_t space, page_no_t offs
 
   /* How many out of order accessed pages can we ignore
   when working out the access pattern for linear readahead */
-  threshold = ut_min((64 - srv_config.m_read_ahead_threshold), srv_buf_pool->get_read_ahead_area());
+  threshold = std::min<ulint>((64 - srv_config.m_read_ahead_threshold), srv_buf_pool->get_read_ahead_area());
 
   fail_count = 0;
 
@@ -326,11 +312,12 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, space_id_t space, page_no_t offs
 
     } else if (err == DB_TABLESPACE_DELETED) {
 
-      log_info(
-        std::format(
-          "Lnear readahead trying to access tablespace {} page {},but the tablespace does not"
-          " exist or is just being dropped.", space, i)
-      );
+      log_info(std::format(
+        "Lnear readahead trying to access tablespace {} page {},but the tablespace does not"
+        " exist or is just being dropped.",
+        space,
+        i
+      ));
 
     } else {
       ut_a(err == DB_FAIL);
@@ -368,12 +355,12 @@ void buf_read_recv_pages(bool sync, space_id_t space, const page_no_t *page_nos,
 
       if (count > 1000) {
 
-        log_err(
-          std::format(
-            "Waited for 10 seconds for pending reads to the buffer pool to"
-            " be finished. Number of pending reads {}. pending pread calls {}",
-            srv_buf_pool->m_n_pend_reads, os_file_n_pending_preads.load())
-	);
+        log_err(std::format(
+          "Waited for 10 seconds for pending reads to the buffer pool to"
+          " be finished. Number of pending reads {}. pending pread calls {}",
+          srv_buf_pool->m_n_pend_reads,
+          os_file_n_pending_preads.load()
+        ));
       }
     }
 

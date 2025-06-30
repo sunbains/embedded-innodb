@@ -29,7 +29,7 @@ Created 5/30/1994 Heikki Tuuri
 /** Initializes the mem block list at database startup. */
 void ut_mem_init();
 
-#define ut_new(n) ut_new_func(n, Source_location(std::source_location::current()))    
+#define ut_new(n) ut_new_func(n, Source_location(std::source_location::current()))
 #define ut_delete(ptr) ut_delete_func(ptr, Source_location(std::source_location::current()))
 #define ut_realloc(ptr, n) ut_realloc_func(ptr, n, Source_location(std::source_location::current()))
 
@@ -98,28 +98,3 @@ void ut_allocated_memory(ulint size);
 
 /** Memory was deallocated externally, @see os0proc.cc */
 void ut_deallocated_memory(ulint size);
-
-/**
- * Copies up to size - 1 characters from the NUL-terminated string src to
- * dst, NUL-terminating the result. Returns strlen(src), so truncation
- * occurred if the return value >= size.
- *
- * @param dst Destination buffer
- * @param src Source buffer
- * @param size Size of destination buffer
- *
- * @return strlen(src)
- */
-ulint ut_strlcpy(char *dst, const char *src, ulint size);
-
-/**
- * Like ut_strlcpy, but if src doesn't fit in dst completely, copies the last
- * (size - 1) bytes of src, not the first.
- *
- * @param dst Destination buffer
- * @param src Source buffer
- * @param size Size of destination buffer
- *
- * @return strlen(src)
- */
-ulint ut_strlcpy_rev(char *dst, const char *src, ulint size);

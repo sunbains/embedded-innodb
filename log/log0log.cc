@@ -112,7 +112,7 @@ constexpr ulint LOG_UNLOCK_NONE_FLUSHED_LOCK = 1;
 constexpr ulint LOG_UNLOCK_FLUSH_LOCK = 2;
 
 Log::Log() noexcept {
-  mutex_create(&m_mutex, IF_DEBUG("log_sys_mutex",) IF_SYNC_DEBUG(SYNC_LOG,) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("log_sys_mutex", ) IF_SYNC_DEBUG(SYNC_LOG, ) Current_location());
 
   acquire();
 
@@ -346,8 +346,7 @@ lsn_t Log::close(ib_recovery_t recovery) noexcept {
     }
   }
 
-  if (checkpoint_age > m_max_modified_age_async ||
-      (oldest_lsn > 0 && lsn - oldest_lsn > m_max_modified_age_async) ||
+  if (checkpoint_age > m_max_modified_age_async || (oldest_lsn > 0 && lsn - oldest_lsn > m_max_modified_age_async) ||
       checkpoint_age > m_max_checkpoint_age_async) {
 
     m_check_flush_or_checkpoint = true;
@@ -403,7 +402,9 @@ uint64_t Log::group_calc_lsn_offset(lsn_t lsn, const log_group_t *group) noexcep
 
 IF_DEBUG(bool log_debug_writes = false;)
 
-ulint Log::calc_where_lsn_is(off_t *log_file_offset, lsn_t first_header_lsn, lsn_t lsn, ulint n_log_files, off_t log_file_size) noexcept {
+ulint Log::calc_where_lsn_is(
+  off_t *log_file_offset, lsn_t first_header_lsn, lsn_t lsn, ulint n_log_files, off_t log_file_size
+) noexcept {
   const int64_t capacity = log_file_size - LOG_FILE_HDR_SIZE;
 
   if (lsn < first_header_lsn) {
@@ -433,11 +434,10 @@ bool Log::calc_max_ages() noexcept {
 
   ut_a(UT_LIST_GET_FIRST(m_log_groups) != nullptr);
 
-
   for (auto group : m_log_groups) {
     auto capacity = group_get_capacity(group);
 
-    smallest_capacity = std::min(smallest_capacity, capacity);
+    smallest_capacity = std::min<ulint>(smallest_capacity, capacity);
   }
 
   /* Add extra safety */
@@ -459,7 +459,7 @@ bool Log::calc_max_ages() noexcept {
     margin = smallest_capacity - free;
   }
 
-  margin = std::min(margin, m_adm_checkpoint_interval);
+  margin = std::min<ulint>(margin, m_adm_checkpoint_interval);
 
   margin = margin - margin / 10; /* Add still some extra safety */
 
@@ -488,7 +488,7 @@ bool Log::calc_max_ages() noexcept {
   return success;
 }
 
-Log* Log::create() noexcept {
+Log *Log::create() noexcept {
   ut_a(log_sys == nullptr);
 
   log_sys = static_cast<log_t *>(mem_alloc(sizeof(Log)));
@@ -642,8 +642,7 @@ void Log::io_complete(log_group_t *group) noexcept {
   /* We currently use synchronous writing of the logs and cannot end up here! */
   ut_error;
 
-  if (srv_config.m_unix_file_flush_method != SRV_UNIX_O_DSYNC &&
-      srv_config.m_unix_file_flush_method != SRV_UNIX_NOSYNC &&
+  if (srv_config.m_unix_file_flush_method != SRV_UNIX_O_DSYNC && srv_config.m_unix_file_flush_method != SRV_UNIX_NOSYNC &&
       srv_config.m_flush_log_at_trx_commit != 2) {
 
     srv_fil->flush(group->space_id);
@@ -804,9 +803,7 @@ void Log::write_up_to(lsn_t lsn, ulint wait, bool flush_to_disk) noexcept {
       return;
     }
 
-    if (!flush_to_disk &&
-        (m_written_to_all_lsn >= lsn ||
-         (m_written_to_some_lsn >= lsn && wait != LOG_WAIT_ALL_GROUPS))) {
+    if (!flush_to_disk && (m_written_to_all_lsn >= lsn || (m_written_to_some_lsn >= lsn && wait != LOG_WAIT_ALL_GROUPS))) {
       release();
       return;
     }
@@ -1323,14 +1320,14 @@ bool Log::peek_lsn(lsn_t *lsn) noexcept {
 void Log::print() noexcept {
   acquire();
 
-   log_info(std::format(
+  log_info(std::format(
     "Log sequence number {}\n"
     "Log flushed up to   {}\n"
     "Last checkpoint at  {}\n",
     m_lsn,
     m_flushed_to_disk_lsn,
     m_last_checkpoint_lsn
-   ));
+  ));
 
   auto current_time = time(nullptr);
   auto time_elapsed = 0.001 + difftime(current_time, m_last_printout_time);

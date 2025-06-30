@@ -37,6 +37,7 @@ Created 10/21/1995 Heikki Tuuri
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <vector>
 
@@ -44,10 +45,10 @@ Created 10/21/1995 Heikki Tuuri
 #include "buf0buf.h"
 #include "fil0fil.h"
 #include "os0file.h"
-#include "srv0srv.h"
-#include "ut0mem.h"
 #include "os0sync.h"
 #include "os0thread.h"
+#include "srv0srv.h"
+#include "ut0mem.h"
 
 /** Umask for creating files */
 constexpr lint CREATE_MASK = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
@@ -109,14 +110,16 @@ ulint os_file_get_last_error(bool report_all_errors) {
       if (srv_is_being_started) {
         log_err(
           "If you are installing InnoDB, remember that you must create"
-          " directories yourself, InnoDB does not create them.");
+          " directories yourself, InnoDB does not create them."
+        );
       }
 
     } else if (errno == EACCES) {
 
       log_err(
         "The error means your application does not have the access rights to"
-        " the directory.");
+        " the directory."
+      );
 
     } else {
 
@@ -262,9 +265,9 @@ static int os_file_lock(int fd, const char *name) {
 }
 #endif /* USE_FILE_LOCK */
 
-void os_file_init() { /* Do nothing. */}
+void os_file_init() { /* Do nothing. */ }
 
-void os_file_free() { /* Do Nothing. */}
+void os_file_free() { /* Do Nothing. */ }
 
 FILE *os_file_create_tmpfile() {
   FILE *file = nullptr;
@@ -276,10 +279,7 @@ FILE *os_file_create_tmpfile() {
 
   if (file == nullptr) {
     ut_print_timestamp(ib_stream);
-    ib_logger(
-      ib_stream,
-      "Unable to create temporary file; errno: %d\n", errno
-    );
+    ib_logger(ib_stream, "Unable to create temporary file; errno: %d\n", errno);
     if (fd >= 0) {
       close(fd);
     }
@@ -396,11 +396,15 @@ void os_file_set_nocache(int fd, const char *file_name, const char *operation_na
   if (fcntl(fd, F_SETFL, O_DIRECT) == -1) {
     auto errno_save = errno;
 
-    ib_logger(ib_stream, "  Failed to set O_DIRECT on file %s: %s: %s, continuing anyway\n",
-              file_name, operation_name, strerror(errno_save)
+    ib_logger(
+      ib_stream, "  Failed to set O_DIRECT on file %s: %s: %s, continuing anyway\n", file_name, operation_name, strerror(errno_save)
     );
     if (errno_save == EINVAL) {
-      ib_logger(ib_stream, "  O_DIRECT is known to result in " "'Invalid argument' on Linux on tmpfs.");
+      ib_logger(
+        ib_stream,
+        "  O_DIRECT is known to result in "
+        "'Invalid argument' on Linux on tmpfs."
+      );
     }
   }
 }
@@ -454,7 +458,7 @@ os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, uli
       }
 
       if (retry) {
-       continue; 
+        continue;
       } else {
         return file /* -1 */;
       }
@@ -541,7 +545,7 @@ bool os_file_set_size(const char *name, os_file_t file, off_t desired_size) {
   ut_a(desired_size >= off_t(UNIV_PAGE_SIZE));
 
   /* Write up to 1 megabyte at a time. */
-  auto buf_size = ut_min(64, ulint(desired_size / UNIV_PAGE_SIZE)) * UNIV_PAGE_SIZE;
+  auto buf_size = std::min<ulint>(64, ulint(desired_size / UNIV_PAGE_SIZE)) * UNIV_PAGE_SIZE;
   auto ptr = static_cast<byte *>(ut_new(buf_size + UNIV_PAGE_SIZE));
   auto buf = static_cast<byte *>(ut_align(ptr, UNIV_PAGE_SIZE));
 
@@ -708,7 +712,7 @@ static ssize_t os_file_pwrite(os_file_t file, const void *buf, ulint n, off_t of
 }
 
 bool os_file_read(os_file_t file, void *p, ulint n, off_t off) {
-  auto ptr = static_cast<char*>(p);
+  auto ptr = static_cast<char *>(p);
 
   os_bytes_read_since_printout += n;
 
@@ -738,7 +742,7 @@ bool os_file_read(os_file_t file, void *p, ulint n, off_t off) {
 }
 
 bool os_file_read_no_error_handling(os_file_t file, void *p, ulint n, off_t off) {
-  auto ptr = static_cast<char*>(p);
+  auto ptr = static_cast<char *>(p);
 
   os_bytes_read_since_printout += n;
 
@@ -779,7 +783,7 @@ void os_file_read_string(FILE *file, char *str, ulint size) {
 }
 
 bool os_file_write(const char *name, os_file_t file, const void *p, ulint n, off_t off) {
-  auto ptr = static_cast<const char*>(p);
+  auto ptr = static_cast<const char *>(p);
 
   do {
     auto n_bytes = os_file_pwrite(file, ptr, n, off);
@@ -792,11 +796,17 @@ bool os_file_write(const char *name, os_file_t file, const void *p, ulint n, off
         default:
           if (os_file_handle_error(name, "write")) {
             if (!os_has_said_disk_full) {
-              log_err(
-                std::format("Write to file {} failed at offset {}. {} bytes should have been written,"
-                            " only {} were written. Operating system error number {} - '{}'."
-                            " Check that the disk is not full or a disk quota exceeded.",
-                            name, off, n, n_bytes, errno, strerror(errno)));
+              log_err(std::format(
+                "Write to file {} failed at offset {}. {} bytes should have been written,"
+                " only {} were written. Operating system error number {} - '{}'."
+                " Check that the disk is not full or a disk quota exceeded.",
+                name,
+                off,
+                n,
+                n_bytes,
+                errno,
+                strerror(errno)
+              ));
             }
 
             os_has_said_disk_full = true;
@@ -957,7 +967,8 @@ void os_file_print(ib_stream_t ib_stream) {
 
   if (os_file_n_pending_preads != 0 || os_file_n_pending_pwrites != 0) {
     ib_logger(
-      ib_stream, "%lu pending preads, %lu pending pwrites\n",
+      ib_stream,
+      "%lu pending preads, %lu pending pwrites\n",
       (ulong)os_file_n_pending_preads.load(),
       (ulong)os_file_n_pending_pwrites
     );

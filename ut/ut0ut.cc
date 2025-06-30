@@ -39,6 +39,7 @@ Created 5/11/1994 Heikki Tuuri
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
+#include <cstdarg>
 
 #include "api0ucode.h"
 #include "trx0trx.h"
@@ -48,7 +49,7 @@ static bool ut_always_false = false;
 
 #include <sys/time.h>
 
-ulint ut_get_high32(ulint a) {
+ulint ut_get_high32(ulint a) noexcept {
   auto i = (int64_t)a;
 
   i = i >> 32;
@@ -56,11 +57,11 @@ ulint ut_get_high32(ulint a) {
   return (ulint)i;
 }
 
-ib_time_t ut_time() {
+ib_time_t ut_time() noexcept {
   return time(nullptr);
 }
 
-int ut_usectime(ulint *sec, ulint *ms) {
+int ut_usectime(ulint *sec, ulint *ms) noexcept {
   int ret;
   struct timeval tv;
   int errno_gettimeofday;
@@ -88,7 +89,7 @@ int ut_usectime(ulint *sec, ulint *ms) {
   return ret;
 }
 
-uint64_t ut_time_us(uint64_t *tloc) {
+uint64_t ut_time_us(uint64_t *tloc) noexcept {
   struct timeval tv;
 
   gettimeofday(&tv, nullptr);
@@ -102,7 +103,7 @@ uint64_t ut_time_us(uint64_t *tloc) {
   return us;
 }
 
-ulint ut_time_ms() {
+ulint ut_time_ms() noexcept {
   struct timeval tv;
 
   gettimeofday(&tv, nullptr);
@@ -110,11 +111,11 @@ ulint ut_time_ms() {
   return (ulint)tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
-double ut_difftime(ib_time_t time2, ib_time_t time1) {
+double ut_difftime(ib_time_t time2, ib_time_t time1) noexcept {
   return difftime(time2, time1);
 }
 
-void ut_print_timestamp(ib_stream_t ib_stream) {
+void ut_print_timestamp(ib_stream_t ib_stream) noexcept {
   time_t tm;
   struct tm cal_tm;
   struct tm *cal_tm_ptr;
@@ -140,7 +141,7 @@ void ut_print_timestamp(ib_stream_t ib_stream) {
   );
 }
 
-void ut_sprintf_timestamp(char *buf) {
+void ut_sprintf_timestamp(char *buf) noexcept {
   struct tm cal_tm;
   struct tm *cal_tm_ptr;
   time_t tm;
@@ -166,7 +167,7 @@ void ut_sprintf_timestamp(char *buf) {
   );
 }
 
-ulint ut_delay(ulint delay) {
+ulint ut_delay(ulint delay) noexcept {
   ulint i, j;
 
   j = 0;
@@ -183,7 +184,7 @@ ulint ut_delay(ulint delay) {
   return j;
 }
 
-std::ostream &buf_to_hex_string(std::ostream &o, const void *buf, ulint len) {
+std::ostream &buf_to_hex_string(std::ostream &o, const void *buf, ulint len) noexcept {
   UNIV_MEM_ASSERT_RW(buf, len);
 
   o << " buf = { len: " << len << ",\nhex = { ";
@@ -202,9 +203,9 @@ std::ostream &buf_to_hex_string(std::ostream &o, const void *buf, ulint len) {
     o << std::format("{}", *data);
   }
 
-   o << "} }";
+  o << "} }";
 
-   return o;
+  return o;
 }
 
 void log_warn_buf(const void *buf, ulint len) noexcept {
@@ -215,7 +216,7 @@ void log_warn_buf(const void *buf, ulint len) noexcept {
   log_warn(os.str().c_str());
 }
 
-ulint ut_2_power_up(ulint n) {
+ulint ut_2_power_up(ulint n) noexcept {
   ulint res = 1;
 
   ut_ad(n > 0);
@@ -233,4 +234,71 @@ void ut_print_name(const std::string &name) noexcept {
 
 void ut_print_filename(const std::string &name) noexcept {
   ut_print_name(name);
+}
+
+void ut_print_buf(const void *buf, ulint len) noexcept {
+  std::ostringstream os{};
+  buf_to_hex_string(os, buf, len);
+  log_info(os.str());
+}
+
+int ut_snprintf(char *str, size_t size, const char *format, ...) noexcept {
+  va_list ap;
+  va_start(ap, format);
+  int result = vsnprintf(str, size, format, ap);
+  va_end(ap);
+  return result;
+}
+
+ulint ut_format_name(char *buf, ulint buf_size, const char *name) noexcept {
+  if (buf_size == 0) {
+    return 0;
+  }
+
+  const char *slash = strchr(name, '/');
+  if (slash == nullptr) {
+    // No slash, just quote the name
+    return snprintf(buf, buf_size, "\"%s\"", name);
+  } else {
+    // Has slash, format as "database"."table"
+    const char *table = slash + 1;
+    return snprintf(buf, buf_size, "\"%.*s\".\"%s\"", (int)(slash - name), name, table);
+  }
+}
+
+size_t ut_strlcat(char *dst, const char *src, size_t size) noexcept {
+  size_t dst_len = strlen(dst);
+  size_t src_len = strlen(src);
+
+  if (dst_len >= size) {
+    return size + src_len;
+  }
+
+  size_t copy_len = size - dst_len - 1;
+  if (src_len < copy_len) {
+    copy_len = src_len;
+  }
+
+  memcpy(dst + dst_len, src, copy_len);
+  dst[dst_len + copy_len] = '\0';
+
+  return dst_len + src_len;
+}
+
+size_t ut_strlen(const char *str) noexcept {
+  return strlen(str);
+}
+
+int ut_strcmp(const char *str1, const char *str2) noexcept {
+  return strcmp(str1, str2);
+}
+
+int ut_strncmp(const char *str1, const char *str2, size_t n) noexcept {
+  return strncmp(str1, str2, n);
+}
+
+char *ut_strncpy(char *dst, const char *src, size_t n) noexcept {
+  strncpy(dst, src, n);
+  dst[n - 1] = '\0';  // Ensure null termination
+  return dst;
 }

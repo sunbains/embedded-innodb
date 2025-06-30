@@ -22,9 +22,10 @@ The database buffer buf pool flush algorithm
 Created 11/11/1995 Heikki Tuuri
 *******************************************************/
 
-#include "buf0dblwr.h"
 #include "buf0flu.h"
+#include <algorithm>
 #include "buf0buf.h"
+#include "buf0dblwr.h"
 #include "buf0lru.h"
 #include "buf0rea.h"
 #include "fil0fil.h"
@@ -186,7 +187,7 @@ bool Buf_flush::ready_for_replace(Buf_page *bpage) {
     return bpage->m_oldest_modification == 0 && buf_page_get_io_fix(bpage) == BUF_IO_NONE && bpage->m_buf_fix_count == 0;
   }
 
-  log_err("Buffer block state ", (ulong) bpage->get_state(), " in the LRU list!");
+  log_err("Buffer block state ", (ulong)bpage->get_state(), " in the LRU list!");
   log_warn_buf(bpage, sizeof(Buf_page));
 
   return false;
@@ -268,7 +269,7 @@ void Buf_flush::relocate_on_flush_list(Buf_page *bpage, Buf_page *dpage) {
     prev_b = insert_in_flush_rbt(dpage);
   }
 
-  /* Must be done after we have removed it from the m_recoevry_flush_list 
+  /* Must be done after we have removed it from the m_recoevry_flush_list
   because we assert on in_flush_list in comparison function. */
   ut_d(bpage->m_in_flush_list = false);
 
@@ -369,15 +370,15 @@ void Buf_flush::buffered_writes(DBLWR *dblwr) {
     }
 
     if (block->m_check_index_page_at_flush && unlikely(!page_simple_validate(block->m_frame))) {
-        buf_page_print(block->m_frame, 0);
+      buf_page_print(block->m_frame, 0);
 
-        log_fatal(std::format(
-          "Apparent corruption of an index page n:o {} in space {}"
-          " to be written to data file. We intentionally crash server"
-          " to prevent corrupt data from ending up in data files.",
-          block->get_page_no(),
-          block->get_space()
-        ));
+      log_fatal(std::format(
+        "Apparent corruption of an index page n:o {} in space {}"
+        " to be written to data file. We intentionally crash server"
+        " to prevent corrupt data from ending up in data files.",
+        block->get_page_no(),
+        block->get_space()
+      ));
     }
   }
 
@@ -385,7 +386,7 @@ void Buf_flush::buffered_writes(DBLWR *dblwr) {
   srv_dblwr_pages_written += dblwr->m_first_free;
   ++srv_dblwr_writes;
 
-  len = ut_min(SYS_DOUBLEWRITE_BLOCK_SIZE, dblwr->m_first_free) * UNIV_PAGE_SIZE;
+  len = std::min<ulint>(SYS_DOUBLEWRITE_BLOCK_SIZE, dblwr->m_first_free) * UNIV_PAGE_SIZE;
 
   write_buf = dblwr->m_write_buf;
 
@@ -397,8 +398,7 @@ void Buf_flush::buffered_writes(DBLWR *dblwr) {
     const Buf_block *block = reinterpret_cast<Buf_block *>(dblwr->m_bpages[i]);
 
     if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
-        unlikely(
-          memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4)
+        unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4)
         )) {
 
       log_err(
@@ -423,7 +423,8 @@ void Buf_flush::buffered_writes(DBLWR *dblwr) {
     const Buf_block *block = reinterpret_cast<Buf_block *>(dblwr->m_bpages[i]);
 
     if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
-        unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4))) {
+        unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4)
+        )) {
       log_err(
         "The page to be written seems corrupt! The lsn fields do not match!"
         " Noticed in the doublewrite block2."
@@ -676,7 +677,7 @@ void Buf_flush::page(DBLWR *dblwr, Buf_page *bpage, buf_flush flush_type) {
   write_block_low(dblwr, bpage);
 }
 
-ulint Buf_flush::try_neighbors(DBLWR* dblwr, space_id_t space, page_no_t page_no, buf_flush flush_type) {
+ulint Buf_flush::try_neighbors(DBLWR *dblwr, space_id_t space, page_no_t page_no, buf_flush flush_type) {
   ulint count{};
   page_no_t low;
   page_no_t high;
@@ -693,7 +694,7 @@ ulint Buf_flush::try_neighbors(DBLWR* dblwr, space_id_t space, page_no_t page_no
     /* When flushed, dirty blocks are searched in neighborhoods of
     this size, and flushed along with the original page. */
 
-    ulint area = std::min(m_buf_pool->get_read_ahead_area(), m_buf_pool->m_curr_size / 16);
+    ulint area = std::min<ulint>(m_buf_pool->get_read_ahead_area(), m_buf_pool->m_curr_size / 16);
 
     low = (page_no / area) * area;
     high = (page_no / area + 1) * area;
@@ -739,7 +740,7 @@ ulint Buf_flush::try_neighbors(DBLWR* dblwr, space_id_t space, page_no_t page_no
 
       mutex_enter(block_mutex);
 
-      if (ready_for_flush(bpage, flush_type) && (i == page_no|| bpage->m_buf_fix_count == 0)) {
+      if (ready_for_flush(bpage, flush_type) && (i == page_no || bpage->m_buf_fix_count == 0)) {
         /* We only try to flush those neighbors != page_no where the buf fix count is
         zero, as we then know that we probably can latch the page without a semaphore wait.
         Semaphore waits are expensive because we must flush the doublewrite buffer before
@@ -988,7 +989,7 @@ ulint Buf_flush::get_desired_flush_rate() {
   interval i.e.: 4G of redo in 1 second. We can safely consider this as infinity
   because if we ever come close to 4G we'll start a synchronous flush of dirty pages.
 
-  Redo_avg below is average at which redo is generated in past STAT_N_INTERVAL 
+  Redo_avg below is average at which redo is generated in past STAT_N_INTERVAL
   redo generated in the current interval. */
   auto redo_avg = ulint(m_stat_sum.m_redo / STAT_N_INTERVAL + (lsn - m_stat_cur.m_redo));
 

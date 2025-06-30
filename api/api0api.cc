@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <algorithm>
 #include <vector>
 
 #include "api0api.h"
@@ -266,13 +267,15 @@ constexpr ulint INNOBASE_WAKE_INTERVAL = 32;
  * @param[in] p1_len Packed key length
  * @param[in] p2 Packed key
  * @param[in] p2_len Packed key length
- * 
+ *
  * @return 1 if a is greater, 0 if equal, -1 if less than b
  */
-static int ib_default_compare(const ib_col_meta_t *ib_col_meta, const ib_byte_t *p1, ulint p1_len, const ib_byte_t *p2, ulint p2_len){
+static int ib_default_compare(
+  const ib_col_meta_t *ib_col_meta, const ib_byte_t *p1, ulint p1_len, const ib_byte_t *p2, ulint p2_len
+) {
   (void)ib_col_meta;
 
-  auto ret = memcmp(p1, p2, ut_min(p1_len, p2_len));
+  auto ret = memcmp(p1, p2, std::min<ulint>(p1_len, p2_len));
 
   if (ret == 0) {
     ret = p1_len - p2_len;
@@ -282,9 +285,9 @@ static int ib_default_compare(const ib_col_meta_t *ib_col_meta, const ib_byte_t 
 }
 
 /** Check if the Innodb persistent cursor is positioned.
- * 
+ *
  * @param[in] pcur                 InnoDB persistent cursor
- * 
+ *
  * @return	true if positioned
  */
 static bool ib_btr_cursor_is_positioned(const Btree_pcursor *pcur) noexcept {
@@ -301,7 +304,7 @@ static void ib_delay_dml_if_needed() {
 
 /**
  * Open a table using the table id, if found then increment table ref count.
- * 
+ *
  * @param tid - table id to lookup
  * @param locked - true if own dict mutex
  * @return table instance if found
@@ -335,9 +338,9 @@ static Table *ib_open_table_by_id(ib_id_t tid, bool locked) noexcept {
 
 /**
  * Open a table using the table name, if found then increment table ref count.
- * 
+ *
  * @param[in] name  Table name
- * 
+ *
  * @return	table instance if found */
 static Table *ib_open_table_by_name(const char *name) {
   auto table = srv_dict_sys->table_get(name, true);
@@ -356,9 +359,9 @@ static Table *ib_open_table_by_name(const char *name) {
 
 /**
  * Find table using table name.
- * 
+ *
  * @param[in] name - table name to lookup
- * 
+ *
  * @return table instance if found
  */
 static Table *ib_lookup_table_by_name(const char *name) {
@@ -425,7 +428,7 @@ ulint ib_varchar_len(const dtype_t*	dtype, ib_byte_t*	ptr, ulint len) {
 
 /**
  * Calculate the max row size of the columns in a cluster index.
- * 
+ *
  * @return	max row length
  */
 static ulint ib_get_max_row_len(Index *index) {
@@ -479,7 +482,7 @@ static void ib_read_tuple(const rec_t *rec, ib_tuple_t *tuple) noexcept {
   /* Avoid a debug assertion in rec_offs_validate(). */
   ut_d(rec_offs_make_valid(rec, dindex, (ulint *)offsets));
 
-  auto n_index_fields = ut_min(rec_offs_n_fields(offsets), dtuple_get_n_fields(dtuple));
+  auto n_index_fields = std::min<ulint>(rec_offs_n_fields(offsets), dtuple_get_n_fields(dtuple));
 
   for (ulint i{}; i < n_index_fields; ++i) {
     dfield_t *dfield;
@@ -563,7 +566,7 @@ static ib_tpl_t ib_key_tuple_new_low(const Index *index, ulint n_cols, mem_heap_
  *
  * @param[in] index The index of the tuple.
  * @param[in] n_cols The number of user-defined columns.
- * 
+ *
  * @return Tuple instance created, or nullptr.
  */
 static ib_tpl_t ib_key_tuple_new(const Index *index, ulint n_cols) noexcept {
@@ -582,7 +585,7 @@ static ib_tpl_t ib_key_tuple_new(const Index *index, ulint n_cols) noexcept {
  * @param[in] index The index of the tuple.
  * @param[in] n_cols The number of columns in the tuple.
  * @param[in] heap The memory heap.
- * 
+ *
  * @return Tuple instance created, or nullptr.
  */
 static ib_tpl_t ib_row_tuple_new_low(const Index *index, ulint n_cols, mem_heap_t *heap) noexcept {
@@ -610,7 +613,7 @@ static ib_tpl_t ib_row_tuple_new_low(const Index *index, ulint n_cols, mem_heap_
  *
  * @param[in] index The index of the tuple.
  * @param[in] n_cols The number of columns in the tuple.
- * 
+ *
  * @return Tuple instance created, or nullptr.
  */
 static ib_tpl_t ib_row_tuple_new(const Index *index, ulint n_cols) noexcept {
@@ -764,7 +767,7 @@ ib_err_t ib_trx_rollback(ib_trx_t ib_trx) {
  * @param[in] ib_col_type The column type.
  * @param[in] ib_col_attr The column attribute.
  * @param[in] len The length of the column.
- * 
+ *
  * @return True if the combination is valid, false otherwise.
  */
 static bool ib_check_col_is_ok(const char *name, ib_col_type_t ib_col_type, ib_col_attr_t ib_col_attr, ulint len) {
@@ -796,7 +799,7 @@ static bool ib_check_col_is_ok(const char *name, ib_col_type_t ib_col_type, ib_c
  *
  * @param[in] indexes Vector of indexes.
  * @param[in] name Index name.
- * 
+ *
  * @return Index definition if found, else nullptr.
  */
 static const ib_index_def_t *ib_table_find_index(const std::vector<ib_index_def_t *> &indexes, const char *name) {
@@ -813,7 +816,7 @@ static const ib_index_def_t *ib_table_find_index(const std::vector<ib_index_def_
  * Get the InnoDB internal precise type from the schema column definition.
  *
  * @param[in] ib_col The column definition.
- * 
+ *
  * @return The precise type in API format.
  */
 static ulint ib_col_get_prtype(const ib_col_t *ib_col) {
@@ -848,7 +851,7 @@ static ulint ib_col_get_prtype(const ib_col_t *ib_col) {
  * Get the InnoDB internal main type from the schema column definition.
  *
  * @param[in] ib_col The column list head
- * 
+ *
  * @return The main type.
  */
 static ulint ib_col_get_mtype(const ib_col_t *ib_col) noexcept {
@@ -861,7 +864,7 @@ static ulint ib_col_get_mtype(const ib_col_t *ib_col) noexcept {
  *
  * @param[in] cols                 Column list.
  * @param[in] name                 Column name to file.
- * 
+ *
  * @return The column definition if found, else nullptr.
  * @return	col. def. if found else nullptr
  */
@@ -894,7 +897,9 @@ static const ib_key_col_t *ib_index_find_col(const std::vector<ib_key_col_t *> &
   return nullptr;
 }
 
-ib_err_t ib_table_schema_add_col(ib_tbl_sch_t ib_tbl_sch, const char *name, ib_col_type_t ib_col_type, ib_col_attr_t ib_col_attr, uint16_t client_type, ulint len) {
+ib_err_t ib_table_schema_add_col(
+  ib_tbl_sch_t ib_tbl_sch, const char *name, ib_col_type_t ib_col_type, ib_col_attr_t ib_col_attr, uint16_t client_type, ulint len
+) {
   ib_err_t err = DB_SUCCESS;
   ib_table_def_t *table_def = (ib_table_def_t *)ib_tbl_sch;
 
@@ -1062,7 +1067,7 @@ static void ib_normalize_table_name(char *norm_name, const char *name) {
  * we only do a simple check for the presence of a '/'.
  *
  * @param[in] name The table name to check.
- * 
+ *
  * @return DB_SUCCESS or err code.
  */
 static ib_err_t ib_table_name_check(const char *name) noexcept {
@@ -1142,7 +1147,7 @@ ib_err_t ib_table_schema_create(const char *name, ib_tbl_sch_t *ib_tbl_sch, ib_t
  *
  * @param[in] ib_index_def The index definition.
  * @param[in] name The column name to search.
- * 
+ *
  * @return -1 or column number.
  */
 static int ib_index_get_col_no(const ib_index_def_t *ib_index_def, const char *name) {
@@ -1170,7 +1175,7 @@ static int ib_index_get_col_no(const ib_index_def_t *ib_index_def, const char *n
  *
  * @param[in] ib_index_def The index definition.
  * @param[in] name The column name to check.
- * 
+ *
  * @return True if allowed.
  */
 static int ib_index_is_prefix_allowed(const ib_index_def_t *ib_index_def, const char *name) noexcept {
@@ -1305,7 +1310,7 @@ ib_err_t ib_index_schema_create(ib_trx_t ib_usr_trx, const char *name, const cha
  * Get an index definition that is tagged as a clustered index.
  *
  * @param[in] indexes The index defs. to search.
- * 
+ *
  * @return Cluster index schema.
  */
 static ib_index_def_t *ib_find_clustered_index(const std::vector<ib_index_def_t *> &indexes) {
@@ -1367,7 +1372,7 @@ void ib_index_schema_delete(ib_idx_sch_t ib_idx_sch) {
  * Convert the table definition table attributes to the internal format.
  *
  * @param[in] table_def The table definition.
- * 
+ *
  * @return Flags.
  */
 static ulint ib_table_def_get_flags(const ib_table_def_t *table_def) {
@@ -1388,7 +1393,7 @@ static ulint ib_table_def_get_flags(const ib_table_def_t *table_def) {
  *
  * @param[in] ib_index_def Key definition for index.
  * @param[in] clustered True if clustered index.
- * 
+ *
  * @return Converted index definition.
  */
 static const index_def_t *ib_copy_index_definition(ib_index_def_t *ib_index_def, bool clustered) {
@@ -1440,10 +1445,12 @@ static const index_def_t *ib_copy_index_definition(ib_index_def_t *ib_index_def,
  * @param[in] ib_index_def The index definition.
  * @param[in] create True if part of table create.
  * @param[out] index The index created.
- * 
+ *
  * @return DB_SUCCESS or err code.
  */
-static ib_err_t ib_build_secondary_index(Trx *usr_trx, Table *table, ib_index_def_t *ib_index_def, bool create, Index **index) noexcept {
+static ib_err_t ib_build_secondary_index(
+  Trx *usr_trx, Table *table, ib_index_def_t *ib_index_def, bool create, Index **index
+) noexcept {
   ib_err_t err;
   Trx *ddl_trx;
 
@@ -1522,10 +1529,10 @@ static ib_err_t ib_build_secondary_index(Trx *usr_trx, Table *table, ib_index_de
  * @param[in] heap Memory heap.
  * @param[in] id Identifier [0-9a-zA-Z].
  * @param[in] table_name Table name.
- * 
+ *
  * @return Temporary tablename.
  */
-static char *ib_table_create_temp_name(mem_heap_t *heap, char id, const char *table_name) noexcept{
+static char *ib_table_create_temp_name(mem_heap_t *heap, char id, const char *table_name) noexcept {
   static const char suffix[] = "# ";
 
   const auto len = strlen(table_name);
@@ -1610,7 +1617,7 @@ static index_def_t *ib_table_create_index_defs(Trx *trx, const Table *table, mem
  * @param[in] table in: parent table of index
  * @param[in] ib_index_def in: index definition
  * @param[out] index out: index created
- * 
+ *
  * @return DB_SUCCESS or err code
  */
 static ib_err_t ib_create_cluster_index(Trx *trx, Table *table, ib_index_def_t *ib_index_def, Index **index) noexcept {
@@ -1683,7 +1690,9 @@ static ib_err_t ib_table_clone_indexes(Trx *trx, Table *src_table, Table *new_ta
  *
  * @return DB_SUCCESS or error code
  */
-static ib_err_t ib_table_clone(Trx *trx, Table *src_table, Table **new_table, ib_index_def_t *ib_index_def, mem_heap_t *heap) noexcept {
+static ib_err_t ib_table_clone(
+  Trx *trx, Table *src_table, Table **new_table, ib_index_def_t *ib_index_def, mem_heap_t *heap
+) noexcept {
   auto new_table_name = ib_table_create_temp_name(heap, '1', src_table->m_name);
   auto err = ib_schema_lock_exclusive((ib_trx_t)trx);
 
@@ -2162,7 +2171,7 @@ ib_err_t ib_table_drop(ib_trx_t ib_trx, const char *name) {
   db_err err;
 
   if ((err = srv_dict_sys->m_ddl.drop_table(normalized_name, trx, false)) != DB_SUCCESS) {
-    log_err("DROP table failed with error ", err , " while dropping table ", normalized_name);
+    log_err("DROP table failed with error ", err, " while dropping table ", normalized_name);
   }
 
   mem_free(normalized_name);
@@ -2496,7 +2505,7 @@ static ib_err_t ib_insert_row_with_lock_retry(que_thr_t *thr, ins_node_t *node, 
     thr->run_node = node;
     thr->prev_node = node;
 
-    (void) srv_row_ins->step(thr);
+    (void)srv_row_ins->step(thr);
 
     err = trx->m_error_state;
 
@@ -2774,7 +2783,7 @@ static ib_err_t ib_update_row_with_lock_retry(que_thr_t *thr, upd_node_t *node, 
     thr->run_node = node;
     thr->prev_node = node;
 
-    (void) srv_row_upd->step(thr);
+    (void)srv_row_upd->step(thr);
 
     err = trx->m_error_state;
 
@@ -3150,7 +3159,8 @@ ib_err_t ib_cursor_moveto(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl, ib_srch_mode_t ib_
 
   ut_a(prebuilt->m_select_lock_type <= LOCK_NUM);
 
-  auto err = srv_row_sel->mvcc_fetch(srv_config.m_force_recovery, ib_srch_mode, prebuilt, (ib_match_t)cursor->match_mode, ROW_SEL_MOVETO);
+  auto err =
+    srv_row_sel->mvcc_fetch(srv_config.m_force_recovery, ib_srch_mode, prebuilt, (ib_match_t)cursor->match_mode, ROW_SEL_MOVETO);
 
   *result = prebuilt->m_result;
 
@@ -3188,10 +3198,10 @@ void ib_cursor_set_match_mode(ib_crsr_t ib_crsr, ib_match_mode_t match_mode) {
 
 /**
  * @brief Get the dfield instance for the column in the tuple.
- * 
+ *
  * @param[in] tuple Tuple instance.
  * @param[in] col_no Column number in the tuple.
- * 
+ *
  * @return dfield_t* dfield instance in the tuple.
  */
 static dfield_t *ib_col_get_dfield(ib_tuple_t *tuple, ulint col_no) noexcept {
@@ -3200,16 +3210,15 @@ static dfield_t *ib_col_get_dfield(ib_tuple_t *tuple, ulint col_no) noexcept {
 
 /**
  * @brief Predicate to check whether a column type contains variable length data.
- * 
+ *
  * @param[in] dtype Column type.
- * 
+ *
  * @return true if the column type contains variable length data, false otherwise.
  */
 static bool ib_col_is_capped(const dtype_t *dtype) noexcept {
-  return dtype_get_len(dtype) > 0 &&
-         (dtype_get_mtype(dtype) == DATA_VARCHAR || dtype_get_mtype(dtype) == DATA_CHAR ||
-          dtype_get_mtype(dtype) == DATA_CLIENT || dtype_get_mtype(dtype) == DATA_VARCLIENT ||
-          dtype_get_mtype(dtype) == DATA_FIXBINARY || dtype_get_mtype(dtype) == DATA_BINARY);
+  return dtype_get_len(dtype) > 0 && (dtype_get_mtype(dtype) == DATA_VARCHAR || dtype_get_mtype(dtype) == DATA_CHAR ||
+                                      dtype_get_mtype(dtype) == DATA_CLIENT || dtype_get_mtype(dtype) == DATA_VARCLIENT ||
+                                      dtype_get_mtype(dtype) == DATA_FIXBINARY || dtype_get_mtype(dtype) == DATA_BINARY);
 }
 
 ib_err_t ib_col_set_value(ib_tpl_t ib_tpl, ulint col_no, const void *s, ulint len) {
@@ -3242,7 +3251,7 @@ ib_err_t ib_col_set_value(ib_tpl_t ib_tpl, ulint col_no, const void *s, ulint le
   for that. */
   if (ib_col_is_capped(dtype)) {
 
-    len = ut_min(len, dtype_get_len(dtype));
+    len = std::min<ulint>(len, dtype_get_len(dtype));
 
     if (dst == nullptr) {
       dst = mem_heap_alloc(tuple->heap, dtype_get_len(dtype));
@@ -3392,7 +3401,7 @@ static ulint ib_col_copy_value_low(ib_tpl_t ib_tpl, ulint i, void *dst, ulint le
         }
         break;
       default:
-        data_len = ut_min(data_len, len);
+        data_len = std::min<ulint>(data_len, len);
         memcpy(dst, data, data_len);
     }
   } else {
@@ -4209,9 +4218,7 @@ ib_err_t ib_savepoint_rollback(ib_trx_t ib_trx, const void *name, ulint name_len
   trx_named_savept_t *savep;
 
   if (name == nullptr || name_len == 0) {
-    auto it = std::find_if(trx->m_trx_savepoints.begin(), trx->m_trx_savepoints.end(), [](const auto &savep) {
-      return true;
-    });
+    auto it = std::find_if(trx->m_trx_savepoints.begin(), trx->m_trx_savepoints.end(), [](const auto &savep) { return true; });
 
     if (it == trx->m_trx_savepoints.end()) {
       return DB_NO_SAVEPOINT;
@@ -4253,7 +4260,7 @@ static void ib_table_get_format(const Table *table, ib_tbl_fmt_t *tbl_fmt, ulint
   *page_size = 0;
 
   if (table->m_flags == DICT_TF_FORMAT_V1) {
-      *tbl_fmt = IB_TBL_V1;
+    *tbl_fmt = IB_TBL_V1;
   } else {
     *tbl_fmt = IB_TBL_UNKNOWN;
   }
@@ -4833,9 +4840,9 @@ static dberr_t check_table(Trx *trx, Index *index, size_t n_threads) {
         rec_os << rec_to_string(rec);
         prev_tuple->print(dtuple_os);
 
-        log_err(
-          std::format("Duplicate key in {} of table {}: {}, {}", index->m_name, index->m_table->m_name, dtuple_os.str(), rec_os.str())
-        );
+        log_err(std::format(
+          "Duplicate key in {} of table {}: {}, {}", index->m_name, index->m_table->m_name, dtuple_os.str(), rec_os.str()
+        ));
       }
     }
 

@@ -47,8 +47,8 @@ Created 10/8/1995 Heikki Tuuri
 #include "buf0flu.h"
 #include "buf0lru.h"
 #include "ddl0ddl.h"
-#include "dict0store.h"
 #include "dict0load.h"
+#include "dict0store.h"
 #include "lock0lock.h"
 #include "log0recv.h"
 #include "mem0mem.h"
@@ -89,7 +89,6 @@ const char *srv_main_thread_op_info = "";
 
 /* Server parameters which are read from the initfile */
 
-
 char *srv_log_group_home_dir = nullptr;
 
 #if DICT_TF_FORMAT_51
@@ -108,7 +107,6 @@ acquisition attempts exceeds maximum allowed value. If so,
 srv_printf_innodb_monitor() will request mutex acquisition
 with mutex_enter(), which will wait until it gets the mutex. */
 #define MUTEX_NOWAIT(mutex_skipped) ((mutex_skipped) < MAX_MUTEX_NOWAIT)
-
 
 /** Variable counts amount of data read in total (in bytes) */
 ulint srv_data_read = 0;
@@ -161,7 +159,7 @@ static std::mutex srv_conc_mutex;
 
 struct srv_conc_slot_t {
   /** event to wait */
-  Cond_var* m_event{};
+  Cond_var *m_event{};
 
   /** true if slot reserved */
   bool m_reserved{};
@@ -455,7 +453,7 @@ struct srv_slot_t {
   ib_time_t m_suspend_time;
 
   /** event used in suspending the thread when it has nothing to do */
-  Cond_var* m_event;
+  Cond_var *m_event;
 
   /*!< suspended query thread (only used for client threads) */
   que_thr_t *m_thr;
@@ -467,13 +465,13 @@ struct srv_sys_t {
   srv_slot_t *m_threads{};
 
   /** Task queue */
-  UT_LIST_BASE_NODE_T(que_thr_t, queue) m_tasks{};
+  UT_LIST_BASE_NODE_T(que_thr_t, queue) m_tasks {};
 };
 
 /** Table for client threads where they will be suspended to wait for locks */
 static srv_slot_t *srv_client_table = nullptr;
 
-Cond_var* srv_lock_timeout_thread_event;
+Cond_var *srv_lock_timeout_thread_event;
 
 static srv_sys_t *srv_sys = nullptr;
 
@@ -516,12 +514,12 @@ ib_panic_handler_t ib_panic = nullptr;
  * and the string is not empty.
  *
  * @param[in] str                  Nul terminated char array.
- * 
+ *
  * @return	string which has the separator if the string is not empty.
  *      The string is alloc'ed using malloc() and the caller is
  *      responsible for freeing the string.
  */
-static char *srv_add_path_separator_if_needed(const char *str) noexcept{
+static char *srv_add_path_separator_if_needed(const char *str) noexcept {
   auto len = strlen(str);
   auto out_str = static_cast<char *>(malloc(len + 2));
 
@@ -793,10 +791,10 @@ static ulint srv_table_reserve_slot(srv_thread_type type) {
 /**
  * Suspends the calling thread to wait for the event in its thread slot.
  * NOTE! The server mutex has to be reserved by the caller!
- * 
+ *
  * @return	event for the calling thread to wait
  */
-static Cond_var* srv_suspend_thread(srv_slot_t *slot) {
+static Cond_var *srv_suspend_thread(srv_slot_t *slot) {
   ut_ad(mutex_own(&kernel_mutex));
 
   auto type = slot->m_type;
@@ -853,9 +851,9 @@ void InnoDB::init() noexcept {
 
   kernel_mutex_temp = static_cast<mutex_t *>(mem_alloc(sizeof(mutex_t)));
 
-  mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex",) IF_SYNC_DEBUG(SYNC_KERNEL,) Current_location());
+  mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex", ) IF_SYNC_DEBUG(SYNC_KERNEL, ) Current_location());
 
-  mutex_create(&srv_innodb_monitor_mutex, IF_DEBUG("monitor_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Current_location());
+  mutex_create(&srv_innodb_monitor_mutex, IF_DEBUG("monitor_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Current_location());
 
   srv_sys->m_threads = static_cast<srv_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
 
@@ -998,7 +996,7 @@ db_err InnoDB::boot() noexcept {
 /**
  * Reserves a slot in the thread table for the current user OS thread.
  * NOTE! The kernel mutex has to be reserved by the caller!
- * 
+ *
  * @return	reserved slot
  */
 static srv_slot_t *srv_table_reserve_slot_for_user_thread() {
@@ -1029,10 +1027,10 @@ static srv_slot_t *srv_table_reserve_slot_for_user_thread() {
           "Slot {}: thread id {}, type {}, in use {}, susp {}, time {}",
           i,
           os_thread_pf(slot->m_id),
-          (ulong) slot->m_type,
+          (ulong)slot->m_type,
           slot->m_in_use,
           slot->m_suspended,
-          difftime(ut_time(),slot->m_suspend_time)
+          difftime(ut_time(), slot->m_suspend_time)
         ));
       }
 
@@ -1233,12 +1231,7 @@ static void srv_refresh_innodb_monitor_stats() noexcept {
   mutex_exit(&srv_innodb_monitor_mutex);
 }
 
-bool InnoDB::printf_innodb_monitor(
-  ib_stream_t ib_stream,
-  bool nowait,
-  ulint *trx_start,
-  ulint *trx_end) noexcept
-{
+bool InnoDB::printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_start, ulint *trx_end) noexcept {
   mutex_enter(&srv_innodb_monitor_mutex);
 
   auto current_time = time(nullptr);
@@ -1357,18 +1350,12 @@ bool InnoDB::printf_innodb_monitor(
   auto n_reserved = srv_fil->space_get_n_reserved_extents(0);
 
   if (n_reserved > 0) {
-    log_warn(std::format(
-      "{} tablespace extents now reserved for B-tree split operationsn",
-      n_reserved
-    ));
+    log_warn(std::format("{} tablespace extents now reserved for B-tree split operationsn", n_reserved));
   }
 
 #ifdef UNIV_LINUX
   log_warn(std::format(
-    "Main thread process no. {}, id {}, state: {}",
-    srv_main_thread_process_no,
-    srv_main_thread_id,
-    srv_main_thread_op_info
+    "Main thread process no. {}, id {}, state: {}", srv_main_thread_process_no, srv_main_thread_id, srv_main_thread_op_info
   ));
 #else
   log_warn(std::format("Main thread id {}, state: {}", srv_main_thread_id, srv_main_thread_op_info));
@@ -1561,7 +1548,6 @@ loop:
 
       last_table_monitor_time = time(nullptr);
 
-
       log_warn(
         "===========================================\n"
         " INNODB TABLE MONITOR OUTPUT\n"
@@ -1582,10 +1568,8 @@ loop:
     goto exit_func;
   }
 
-  if (srv_print_innodb_monitor ||
-      srv_lock_sys->is_print_lock_monitor_set() ||
-      srv_print_innodb_tablespace_monitor ||
-       srv_print_innodb_table_monitor) {
+  if (srv_print_innodb_monitor || srv_lock_sys->is_print_lock_monitor_set() || srv_print_innodb_tablespace_monitor ||
+      srv_print_innodb_table_monitor) {
 
     goto loop;
   }
@@ -1631,15 +1615,13 @@ void *InnoDB::lock_timeout_thread(void *) noexcept {
         auto trx = thr_get_trx(slot->m_thr);
         auto lock_wait_timeout = sess_lock_wait_timeout(trx);
 
-        if (trx->is_interrupted() ||
-            (lock_wait_timeout < 100000000 &&
-             (wait_time > (double)lock_wait_timeout || wait_time < 0))) {
+        if (trx->is_interrupted() || (lock_wait_timeout < 100000000 && (wait_time > (double)lock_wait_timeout || wait_time < 0))) {
 
           /* Timeout exceeded or a wrap-around in system time counter:
           cancel the lock request queued by the transaction and release possible
           other transactions waiting behind; it is possible that the lock has
           already been granted: in that case do nothing */
-  
+
           if (trx->m_wait_lock) {
             srv_lock_sys->cancel_waiting_and_release(trx->m_wait_lock);
           }
@@ -1785,8 +1767,8 @@ static void srv_sync_log_buffer_in_background() {
   }
 }
 
-void *InnoDB::master_thread(void*) noexcept {
-  Cond_var* event;
+void *InnoDB::master_thread(void *) noexcept {
+  Cond_var *event;
   ulint old_activity_count;
   ulint n_pages_purged = 0;
   ulint n_pages_flushed;
@@ -1857,7 +1839,7 @@ loop:
 
     srv_main_thread_op_info = "doing background drop tables";
 
-    (void) srv_dict_sys->m_ddl.drop_tables_in_background();
+    (void)srv_dict_sys->m_ddl.drop_tables_in_background();
 
     srv_main_thread_op_info = "";
 
@@ -1900,7 +1882,7 @@ loop:
 
       if (n_flush) {
         srv_main_thread_op_info = "flushing buffer pool pages";
-        n_flush = std::min(PCT_IO(100), n_flush);
+        n_flush = std::min<ulint>(PCT_IO(100), n_flush);
         n_pages_flushed = srv_buf_pool->m_flusher->batch(srv_dblwr, BUF_FLUSH_LIST, n_flush, IB_ULONGLONG_MAX);
 
         if (n_flush == PCT_IO(100)) {
@@ -2101,7 +2083,7 @@ flush_loop:
 
     if (!success) {
       log_info("Checkpoint already running");
-    } 
+    }
   }
 
   if (srv_buf_pool->get_modified_ratio_pct() > srv_config.m_max_buf_pool_modified_pct) {

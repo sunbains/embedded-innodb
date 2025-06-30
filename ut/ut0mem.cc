@@ -31,6 +31,7 @@ Created 5/11/1994 Heikki Tuuri
 #include "ut0logger.h"
 
 #include <stdlib.h>
+#include <algorithm>
 
 /** The value of ut_mem_block_struct::magic_n.  Used in detecting
 memory corruption. */
@@ -90,12 +91,12 @@ void ut_mem_init() {
 
 static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
   if (srv_config.m_use_sys_malloc) {
-    auto ptr = new char [n];
+    auto ptr = new char[n];
     ut_a(ptr != nullptr || !assert_on_error);
     return ptr;
   }
 
-   /* check alignment ok */
+  /* check alignment ok */
   ut_ad((sizeof(Mem_block) % 8) == 0);
   ut_a(ut_mem_block_list_inited);
 
@@ -110,19 +111,26 @@ static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
     if (ptr == nullptr && retry_count < 60) {
       if (retry_count == 0) {
         log_err(
-          "Cannot allocate", n, " bytes of memory with malloc!"
+          "Cannot allocate",
+          n,
+          " bytes of memory with malloc!"
           " Total allocated memory by InnoDB ",
           Mem_block::s_total_memory.load(std::memory_order_acquire),
-          " bytes. Operating system errno:", errno, " '", strerror(errno), "'.");
+          " bytes. Operating system errno:",
+          errno,
+          " '",
+          strerror(errno),
+          "'."
+        );
       }
 
       Mem_block::s_mutex.unlock();
 
       /* Sleep for a second and retry the allocation; maybe this is
       just a temporary shortage of memory */
-  
+
       os_thread_sleep(1000000);
-  
+
       ++retry_count;
 
       continue;
@@ -152,7 +160,7 @@ static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
 
     Mem_block::s_mutex.unlock();
 
-    ptr = reinterpret_cast<char*>(mem_block + 1);
+    ptr = reinterpret_cast<char *>(mem_block + 1);
 
     if (set_to_zero) {
       memset(ptr, 0x0, n);
@@ -168,18 +176,18 @@ void *ut_new_func(ulint n, Source_location location) {
 }
 
 void ut_delete_func(void *p, Source_location location) {
-  auto ptr = reinterpret_cast<char*>(p);
+  auto ptr = reinterpret_cast<char *>(p);
 
   if (ptr == nullptr) {
     return;
   } else if (srv_config.m_use_sys_malloc) {
-    delete [] ptr;
+    delete[] ptr;
     return;
   }
 
   auto block = reinterpret_cast<Mem_block *>(ptr - sizeof(Mem_block));
 
-  ut_a(Mem_block::s_total_memory.load(std::memory_order_acquire) >= block->m_size +  sizeof(Mem_block));
+  ut_a(Mem_block::s_total_memory.load(std::memory_order_acquire) >= block->m_size + sizeof(Mem_block));
 
   Mem_block::s_total_memory.fetch_sub(block->m_size, std::memory_order_relaxed);
 
@@ -188,11 +196,11 @@ void ut_delete_func(void *p, Source_location location) {
   UT_LIST_REMOVE(Mem_block::s_blocks, block);
 
   call_destructor(block);
-  delete [] reinterpret_cast<char*>(block);
+  delete[] reinterpret_cast<char *>(block);
 }
 
 void *ut_realloc_func(void *p, ulint n, Source_location location) {
-  auto ptr = reinterpret_cast<char*>(p);
+  auto ptr = reinterpret_cast<char *>(p);
 
   if (ptr == nullptr) {
     return ut_new(n);
@@ -202,7 +210,7 @@ void *ut_realloc_func(void *p, ulint n, Source_location location) {
     ut_delete(p);
     return nullptr;
   } else if (srv_config.m_use_sys_malloc) {
-    delete [] ptr;
+    delete[] ptr;
     return ut_new_func(n, location);
   }
 
@@ -211,7 +219,7 @@ void *ut_realloc_func(void *p, ulint n, Source_location location) {
   ut_a(block->m_magic_n == UT_MEM_MAGIC_N);
 
   auto old_size = block->m_size - sizeof(Mem_block);
-  auto min_size  = n < old_size ? n : old_size;
+  auto min_size = n < old_size ? n : old_size;
 
   auto new_ptr = ut_new(n);
 
@@ -243,13 +251,11 @@ void ut_delete_all_mem() {
 
     call_destructor(block);
 
-    delete [] reinterpret_cast<char*>(block);
+    delete[] reinterpret_cast<char *>(block);
   }
 
   if (Mem_block::s_total_memory != 0) {
-    log_warn("After shutdown total allocated memory is ",
-              Mem_block::s_total_memory.load(std::memory_order_acquire),
-              " bytes");
+    log_warn("After shutdown total allocated memory is ", Mem_block::s_total_memory.load(std::memory_order_acquire), " bytes");
   }
 
   ut_mem_block_list_inited = false;
@@ -263,11 +269,11 @@ void ut_deallocated_memory(ulint size) {
   Mem_block::s_total_memory.fetch_sub(size, std::memory_order_relaxed);
 }
 
-ulint ut_strlcpy(char *dst, const char *src, ulint size) {
+ulint ut_strlcpy(char *dst, const char *src, ulint size) noexcept {
   ulint src_size = strlen(src);
 
   if (size != 0) {
-    ulint n = ut_min(src_size, size - 1);
+    ulint n = std::min<ulint>(src_size, size - 1);
 
     memcpy(dst, src, n);
     dst[n] = '\0';
@@ -280,7 +286,7 @@ ulint ut_strlcpy_rev(char *dst, const char *src, ulint size) {
   ulint src_size = strlen(src);
 
   if (size != 0) {
-    ulint n = ut_min(src_size, size - 1);
+    ulint n = std::min<ulint>(src_size, size - 1);
 
     memcpy(dst, src + src_size - n, n + 1);
   }

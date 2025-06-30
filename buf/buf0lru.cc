@@ -409,7 +409,7 @@ void Buf_LRU::old_adjust_len() {
 
   auto old_len = srv_buf_pool->m_LRU_old_len;
 
-  auto new_len = std::min(
+  auto new_len = std::min<ulint>(
     UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) * m_old_ratio / OLD_RATIO_DIV,
     UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) - (OLD_TOLERANCE + NON_MIN_LEN)
   );
@@ -872,7 +872,7 @@ bool Buf_LRU::validate() {
 
     const auto old_len = srv_buf_pool->m_LRU_old_len;
 
-    const auto new_len = std::min(
+    const auto new_len = std::min<ulint>(
       UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) * m_old_ratio / OLD_RATIO_DIV,
       UT_LIST_GET_LEN(srv_buf_pool->m_LRU_list) - (OLD_TOLERANCE + NON_MIN_LEN)
     );
@@ -963,7 +963,10 @@ void Buf_LRU::print() {
         frame = reinterpret_cast<Buf_block *>(bpage)->get_frame();
 
         ib_logger(
-          ib_stream, "\ntype %lu index id %lu\n", (ulong)srv_fil->page_get_type(frame), (ulong)srv_btree_sys->page_get_index_id(frame)
+          ib_stream,
+          "\ntype %lu index id %lu\n",
+          (ulong)srv_fil->page_get_type(frame),
+          (ulong)srv_btree_sys->page_get_index_id(frame)
         );
         break;
 

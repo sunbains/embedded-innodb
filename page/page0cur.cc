@@ -22,6 +22,7 @@ The page cursor
 Created 10/4/1994 Heikki Tuuri
 *************************************************************************/
 
+#include <algorithm>
 #include "innodb0types.h"
 
 #include "log0recv.h"
@@ -67,9 +68,9 @@ static uint64_t page_cur_lcg_prng(void) {
 /** Tries a search shortcut based on the last insert.
 @return	true on success */
 static bool page_cur_try_search_shortcut(
-  const Buf_block *block,  /*!< in: index page */
-  const Index *index, /*!< in: record descriptor */
-  const DTuple *tuple,     /*!< in: data tuple */
+  const Buf_block *block, /*!< in: index page */
+  const Index *index,     /*!< in: record descriptor */
+  const DTuple *tuple,    /*!< in: data tuple */
   ulint *iup_matched_fields,
   /*!< in/out: already matched
     fields in upper limit record */
@@ -202,11 +203,12 @@ static bool page_cur_rec_field_extends(
 
   rec_f = rec_get_nth_field(rec, offsets, n, &rec_f_len);
 
-  if (type->mtype == DATA_VARCHAR || type->mtype == DATA_CHAR || type->mtype == DATA_FIXBINARY || type->mtype == DATA_BINARY || type->mtype == DATA_BLOB || type->mtype == DATA_VARCLIENT || type->mtype == DATA_CLIENT) {
+  if (type->mtype == DATA_VARCHAR || type->mtype == DATA_CHAR || type->mtype == DATA_FIXBINARY || type->mtype == DATA_BINARY ||
+      type->mtype == DATA_BLOB || type->mtype == DATA_VARCLIENT || type->mtype == DATA_CLIENT) {
 
     if (dfield_get_len(dfield) != UNIV_SQL_NULL && rec_f_len != UNIV_SQL_NULL && rec_f_len >= dfield_get_len(dfield) &&
         !cmp_data_data_slow(
-            type->mtype, type->prtype, dfield_get_data(dfield), dfield_get_len(dfield), rec_f, dfield_get_len(dfield)
+          type->mtype, type->prtype, dfield_get_data(dfield), dfield_get_len(dfield), rec_f, dfield_get_len(dfield)
         )) {
 
       return (true);
@@ -218,8 +220,8 @@ static bool page_cur_rec_field_extends(
 #endif /* PAGE_CUR_LE_OR_EXTENDS */
 
 void page_cur_search_with_match(
-  const Buf_block *block, const Index *index, const DTuple *tuple, ulint mode, ulint *iup_matched_fields,
-  ulint *iup_matched_bytes, ulint *ilow_matched_fields, ulint *ilow_matched_bytes, page_cur_t *cursor
+  const Buf_block *block, const Index *index, const DTuple *tuple, ulint mode, ulint *iup_matched_fields, ulint *iup_matched_bytes,
+  ulint *ilow_matched_fields, ulint *ilow_matched_bytes, page_cur_t *cursor
 ) {
   ulint up;
   ulint low;
@@ -262,7 +264,8 @@ void page_cur_search_with_match(
   page_check_dir(page);
 
 #ifdef PAGE_CUR_ADAPT
-  if (page_is_leaf(page) && mode == PAGE_CUR_LE && page_header_get_field(page, PAGE_N_DIRECTION) > 3 && page_header_get_ptr(page, PAGE_LAST_INSERT) && page_header_get_field(page, PAGE_DIRECTION) == PAGE_RIGHT) {
+  if (page_is_leaf(page) && mode == PAGE_CUR_LE && page_header_get_field(page, PAGE_N_DIRECTION) > 3 &&
+      page_header_get_ptr(page, PAGE_LAST_INSERT) && page_header_get_field(page, PAGE_DIRECTION) == PAGE_RIGHT) {
 
     if (page_cur_try_search_shortcut(
           block, index, tuple, iup_matched_fields, iup_matched_bytes, ilow_matched_fields, ilow_matched_bytes, cursor
@@ -339,10 +342,9 @@ void page_cur_search_with_match(
       up_matched_fields = cur_matched_fields;
       up_matched_bytes = cur_matched_bytes;
 
-    } else if (
-      mode == PAGE_CUR_G || mode == PAGE_CUR_LE
+    } else if (mode == PAGE_CUR_G || mode == PAGE_CUR_LE
 #ifdef PAGE_CUR_LE_OR_EXTENDS
-      || mode == PAGE_CUR_LE_OR_EXTENDS
+               || mode == PAGE_CUR_LE_OR_EXTENDS
 #endif /* PAGE_CUR_LE_OR_EXTENDS */
     ) {
 
@@ -394,10 +396,9 @@ void page_cur_search_with_match(
       up_rec = mid_rec;
       up_matched_fields = cur_matched_fields;
       up_matched_bytes = cur_matched_bytes;
-    } else if (
-      mode == PAGE_CUR_G || mode == PAGE_CUR_LE
+    } else if (mode == PAGE_CUR_G || mode == PAGE_CUR_LE
 #ifdef PAGE_CUR_LE_OR_EXTENDS
-      || mode == PAGE_CUR_LE_OR_EXTENDS
+               || mode == PAGE_CUR_LE_OR_EXTENDS
 #endif /* PAGE_CUR_LE_OR_EXTENDS */
     ) {
 
@@ -418,7 +419,7 @@ void page_cur_search_with_match(
   {
     Phy_rec record{index, low_rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location()); 
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
   }
 
   dbg_cmp = page_cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, low_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
@@ -445,7 +446,7 @@ void page_cur_search_with_match(
   {
     Phy_rec record{index, up_rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location()); 
+    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
   }
 
   dbg_cmp = page_cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, up_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
@@ -556,7 +557,7 @@ static void page_cur_insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec
   auto ins_ptr = insert_rec - extra_size;
 
   if (cur_extra_size == extra_size) {
-    ulint min_rec_size = ut_min(cur_rec_size, rec_size);
+    ulint min_rec_size = std::min<ulint>(cur_rec_size, rec_size);
 
     const byte *cur_ptr = cursor_rec - cur_extra_size;
 
@@ -978,7 +979,7 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, const Index *index, const rec
  *
  * @param[in] page Index page.
  * @param[in] mtr Mini-transaction.
- * 
+ *
  * @return 4-byte field where to write the log data length, or nullptr if logging is disabled.
  */
 static byte *page_copy_rec_list_to_created_page_write_log(page_t *page, mtr_t *mtr) {
@@ -1171,7 +1172,7 @@ void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const 
 
 /**
  * @brief Writes log record of a record delete on a page.
- * 
+ *
  * @param[in] rec Record to be deleted.
  * @param[in] index Record descriptor.
  * @param[in] mtr Mini-transaction handle.

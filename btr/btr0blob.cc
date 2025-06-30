@@ -16,11 +16,12 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-#include "btr0btr.h"
 #include "btr0blob.h"
+#include <algorithm>
+#include "btr0btr.h"
 #include "buf0lru.h"
-#include "mtr0mtr.h"
 #include "mtr0log.h"
+#include "mtr0mtr.h"
 #include "row0types.h"
 #include "row0upd.h"
 
@@ -48,7 +49,9 @@ ulint Blob::get_externally_stored_len(rec_t *rec, const ulint *offsets) noexcept
   return total_extern_len / UNIV_PAGE_SIZE;
 }
 
-void Blob::set_ownership_of_extern_field(rec_t *rec, const Index *index, const ulint *offsets, ulint i, bool val, mtr_t *mtr) noexcept {
+void Blob::set_ownership_of_extern_field(
+  rec_t *rec, const Index *index, const ulint *offsets, ulint i, bool val, mtr_t *mtr
+) noexcept {
   ulint local_len;
 
   auto data = (byte *)rec_get_nth_field(rec, offsets, i, &local_len);
@@ -197,7 +200,9 @@ ulint Blob::push_update_extern_fields(DTuple *tuple, const upd_t *update, mem_he
           memcpy(buf, data, uf->m_orig_len - BTR_EXTERN_FIELD_REF_SIZE);
 
           /* Copy the BLOB pointer. */
-          memcpy(buf + uf->m_orig_len - BTR_EXTERN_FIELD_REF_SIZE, data + len - BTR_EXTERN_FIELD_REF_SIZE, BTR_EXTERN_FIELD_REF_SIZE);
+          memcpy(
+            buf + uf->m_orig_len - BTR_EXTERN_FIELD_REF_SIZE, data + len - BTR_EXTERN_FIELD_REF_SIZE, BTR_EXTERN_FIELD_REF_SIZE
+          );
 
           dfield_set_data(field, buf, uf->m_orig_len);
           dfield_set_ext(field);
@@ -240,11 +245,7 @@ void Blob::blob_free(Buf_block *block, mtr_t *mtr) noexcept {
 }
 
 db_err Blob::store_big_rec_extern_fields(
-  const Index *index,
-  Buf_block *rec_block,
-  rec_t *rec,
-  const ulint *offsets,
-  big_rec_t *big_rec_vec,
+  const Index *index, Buf_block *rec_block, rec_t *rec, const ulint *offsets, big_rec_t *big_rec_vec,
   mtr_t *local_mtr __attribute__((unused))
 ) noexcept {
 
@@ -313,13 +314,13 @@ db_err Blob::store_big_rec_extern_fields(
 
       if (prev_page_no != FIL_NULL) {
 
-        Buf_pool::Request req {
+        Buf_pool::Request req{
           .m_rw_latch = RW_X_LATCH,
-          .m_page_id = { space_id, prev_page_no },
-	        .m_mode = BUF_GET,
-	        .m_file = __FILE__,
-	        .m_line = __LINE__,
-	        .m_mtr = &mtr
+          .m_page_id = {space_id, prev_page_no},
+          .m_mode = BUF_GET,
+          .m_file = __FILE__,
+          .m_line = __LINE__,
+          .m_mtr = &mtr
         };
 
         auto prev_block = m_fsp->m_buf_pool->get(req, nullptr);
@@ -354,9 +355,9 @@ db_err Blob::store_big_rec_extern_fields(
 
       extern_len -= store_len;
 
-      Buf_pool::Request req {
+      Buf_pool::Request req{
         .m_rw_latch = RW_X_LATCH,
-        .m_page_id = { space_id, rec_page_no },
+        .m_page_id = {space_id, rec_page_no},
         .m_mode = BUF_GET,
         .m_file = __FILE__,
         .m_line = __LINE__,
@@ -410,23 +411,13 @@ void Blob::check_blob_fil_page_type(space_id_t space_id, page_no_t page_no, cons
     }
 
     log_fatal(std::format(
-      "FIL_PAGE_TYPE={} on BLOB: {} space: {} page: {} flags: {}",
-      (ulong) type,
-      read ? "read" : "purge",
-      space_id,
-      page_no,
-      flags
+      "FIL_PAGE_TYPE={} on BLOB: {} space: {} page: {} flags: {}", (ulong)type, read ? "read" : "purge", space_id, page_no, flags
     ));
   }
 }
 
 void Blob::free_externally_stored_field(
-  const Index *index,
-  byte *field_ref,
-  const rec_t *rec,
-  const ulint *offsets,
-  ulint i,
-  trx_rb_ctx rb_ctx,
+  const Index *index, byte *field_ref, const rec_t *rec, const ulint *offsets, ulint i, trx_rb_ctx rb_ctx,
   mtr_t *local_mtr __attribute__((unused))
 ) noexcept {
 
@@ -475,9 +466,9 @@ void Blob::free_externally_stored_field(
 
     auto ptr{page_align(field_ref)};
 
-    Buf_pool::Request req {
+    Buf_pool::Request req{
       .m_rw_latch = RW_X_LATCH,
-      .m_page_id = { page_get_space_id(ptr), page_get_page_no(ptr) },
+      .m_page_id = {page_get_space_id(ptr), page_get_page_no(ptr)},
       .m_mode = BUF_GET,
       .m_file = __FILE__,
       .m_line = __LINE__,
@@ -485,8 +476,8 @@ void Blob::free_externally_stored_field(
     };
 
     IF_SYNC_DEBUG({
-     auto rec_block = m_fsp->m_buf_pool->get(req, nullptr);
-     buf_block_dbg_add_level(rec_block, SYNC_NO_ORDER_CHECK)
+      auto rec_block = m_fsp->m_buf_pool->get(req, nullptr);
+      buf_block_dbg_add_level(rec_block, SYNC_NO_ORDER_CHECK)
     });
 
     auto page_no = mach_read_from_4(field_ref + BTR_EXTERN_PAGE_NO);
@@ -558,12 +549,7 @@ void Blob::free_externally_stored_fields(Index *index, rec_t *rec, const ulint *
 }
 
 void Blob::free_updated_extern_fields(
-  const Index *index,    
-  rec_t *rec,             
-  const ulint *offsets,   
-  const upd_t *update,    
-  trx_rb_ctx rb_ctx, 
-  mtr_t *mtr
+  const Index *index, rec_t *rec, const ulint *offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr
 ) noexcept {
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
@@ -585,7 +571,7 @@ void Blob::free_updated_extern_fields(
   }
 }
 
-ulint Blob::copy_blob_prefix(byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset) noexcept{
+ulint Blob::copy_blob_prefix(byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset) noexcept {
   ulint copied_len = 0;
 
   for (;;) {
@@ -593,9 +579,9 @@ ulint Blob::copy_blob_prefix(byte *buf, ulint len, space_id_t space_id, page_no_
 
     mtr.start();
 
-    Buf_pool::Request req {
+    Buf_pool::Request req{
       .m_rw_latch = RW_S_LATCH,
-      .m_page_id = { space_id, page_no },
+      .m_page_id = {space_id, page_no},
       .m_mode = BUF_GET,
       .m_file = __FILE__,
       .m_line = __LINE__,
@@ -611,7 +597,7 @@ ulint Blob::copy_blob_prefix(byte *buf, ulint len, space_id_t space_id, page_no_
 
     const auto blob_header = page + offset;
     auto part_len = blob_get_part_len(blob_header);
-    auto copy_len = ut_min(part_len, len - copied_len);
+    auto copy_len = std::min<ulint>(part_len, len - copied_len);
 
     memcpy(buf + copied_len, blob_header + BTR_BLOB_HDR_SIZE, copy_len);
     copied_len += copy_len;
@@ -633,7 +619,9 @@ ulint Blob::copy_blob_prefix(byte *buf, ulint len, space_id_t space_id, page_no_
   }
 }
 
-ulint Blob::copy_externally_stored_field_prefix_low(byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset) noexcept {
+ulint Blob::copy_externally_stored_field_prefix_low(
+  byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset
+) noexcept {
   if (unlikely(len == 0)) {
     return 0;
   }

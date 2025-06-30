@@ -31,6 +31,7 @@ Created 5/30/1994 Heikki Tuuri
 #include "rem0rec.h"
 
 #include <ctype.h>
+#include <algorithm>
 
 #ifdef UNIV_DEBUG
 /** Dummy variable to catch access to uninitialized fields.  In the
@@ -414,12 +415,12 @@ static void dfield_print_raw(std::ostream &o, const dfield_t *dfield) {
   ulint len = dfield_get_len(dfield);
 
   if (!dfield_is_null(dfield)) {
-    ulint print_len = ut_min(len, 1000);
+    ulint print_len = std::min<ulint>(len, 1000);
 
     buf_to_hex_string(o, dfield_get_data(dfield), print_len);
 
     if (len != print_len) {
-      o << "(total " << len <<  (dfield_is_ext(dfield) ? ", external" : "");
+      o << "(total " << len << (dfield_is_ext(dfield) ? ", external" : "");
     }
   } else {
     o << " SQL nullptr";
@@ -448,7 +449,6 @@ void dtuple_print(ib_stream_t ib_stream, const DTuple *tuple) {
   dtuple_print(os, tuple);
   ib_logger(ib_stream, "%s", os.str().c_str());
 }
-
 
 std::ostream &DTuple::print(std::ostream &o) const {
   dtuple_print(o, this);
@@ -507,7 +507,8 @@ big_rec_t *dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ex
       /* Skip fixed-length, nullptr, externally stored,
       or short columns */
 
-      if (ifield->m_fixed_len || dfield_is_null(dfield) || dfield_is_ext(dfield) || dfield_get_len(dfield) <= local_len || dfield_get_len(dfield) <= BTR_EXTERN_FIELD_REF_SIZE * 2) {
+      if (ifield->m_fixed_len || dfield_is_null(dfield) || dfield_is_ext(dfield) || dfield_get_len(dfield) <= local_len ||
+          dfield_get_len(dfield) <= BTR_EXTERN_FIELD_REF_SIZE * 2) {
         goto skip_field;
       }
 
@@ -607,10 +608,10 @@ void dtuple_convert_back_big_rec(DTuple *entry, big_rec_t *vector) {
 }
 
 std::ostream &dfield_t::print(std::ostream &out) const {
-  out << "dfield_t { data:" << (void *)data << ", ext=" << (ulint) ext << " ";
+  out << "dfield_t { data:" << (void *)data << ", ext=" << (ulint)ext << " ";
 
   if (dfield_is_ext(this)) {
-    out << (static_cast<byte*>(data) + len - BTR_EXTERN_FIELD_REF_SIZE);
+    out << (static_cast<byte *>(data) + len - BTR_EXTERN_FIELD_REF_SIZE);
   }
 
   out << ", len=" << len << ", type=TBD" << "}";

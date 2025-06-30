@@ -20,10 +20,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <ctype.h>
 
-
 #ifdef HAVE_STRINGS_H
 #include <strings.h>
 #endif /* HAVE_STRINGS_H */
+
+#include <algorithm>
 
 #include "api0ucode.h"
 #include "ut0mem.h"
@@ -106,10 +107,9 @@ int ib_utf8_isspace(const charset_t *cs, char c) {
   return isspace(c);
 }
 
-ulint ib_ucode_get_storage_size( const charset_t *cs, ulint prefix_len, ulint str_len, const char *str)
-{
+ulint ib_ucode_get_storage_size(const charset_t *cs, ulint prefix_len, ulint str_len, const char *str) {
   /* FIXME: Do we really need this function?  Can't we assume
   that all strings are UTF-8?  (We still may want to support
   different collations.) */
-  return ut_min(prefix_len, str_len);
+  return std::min<ulint>(prefix_len, str_len);
 }
