@@ -69,14 +69,14 @@ struct Trx {
    * @param[in] trx_sys The owning transaction system.
    * @param[in] sess The session.
    * @param[in] arg Any context that needs to be passed to the trx.
-   * 
+   *
    * @return The transaction object.
    */
   [[nodiscard]] static Trx *create(Trx_sys *trx_sys, Session *sess, void *arg) noexcept;
 
   /**
    * Destroys a transaction instance..
-   * 
+   *
    * @param[in,own] trx              Transaction instance to free.
    */
   static void destroy(Trx *&trx) noexcept;
@@ -133,12 +133,10 @@ struct Trx {
    * is estimated as the number of altered rows + the number of locked rows.
    *
    * @param[in] t Transaction.
-   * 
+   *
    * @return Transaction weight.
    */
-  [[nodiscard]] inline ulint weight() const noexcept {
-    return m_undo_no + m_trx_locks.size();
-  }
+  [[nodiscard]] inline ulint weight() const noexcept { return m_undo_no + m_trx_locks.size(); }
 
   /**
    * Starts the transaction if it is not yet started.
@@ -160,20 +158,16 @@ struct Trx {
    *
    * @return The error info.
    */
-  [[nodiscard]] inline const Index *get_error_info() const noexcept {
-    return m_error_info;
-  }
+  [[nodiscard]] inline const Index *get_error_info() const noexcept { return m_error_info; }
 
   /**
    * Retrieves transacion's id, represented as unsigned long long.
    *
    * @param[in] trx Transaction.
-   * 
+   *
    * @return Transaction's id.
    */
-  [[nodiscard]] inline trx_id_t get_id() const noexcept {
-    return m_id;
-  }
+  [[nodiscard]] inline trx_id_t get_id() const noexcept { return m_id; }
 
   /**
    * Retrieves transaction's que state in a human readable string.
@@ -202,10 +196,10 @@ struct Trx {
    *
    * @return Dictionary operation mode.
    */
-  [[nodiscard]] inline trx_dict_op_t get_dict_operation() const noexcept{
+  [[nodiscard]] inline trx_dict_op_t get_dict_operation() const noexcept {
     const auto op = static_cast<trx_dict_op_t>(m_dict_operation);
 
-  #ifdef UNIV_DEBUG
+#ifdef UNIV_DEBUG
     switch (op) {
       case TRX_DICT_OP_NONE:
       case TRX_DICT_OP_TABLE:
@@ -213,7 +207,7 @@ struct Trx {
         return op;
     }
     ut_error;
-  #endif /* UNIV_DEBUG */
+#endif /* UNIV_DEBUG */
 
     return static_cast<trx_dict_op_t>(expect(op, TRX_DICT_OP_NONE));
   }
@@ -224,7 +218,7 @@ struct Trx {
    * @param[in] op Operation, not TRX_DICT_OP_NONE.
    */
   inline void set_dict_operation(trx_dict_op_t op) noexcept {
-  #ifdef UNIV_DEBUG
+#ifdef UNIV_DEBUG
     const auto old_op = get_dict_operation();
 
     switch (op) {
@@ -245,7 +239,7 @@ struct Trx {
         ut_ad(old_op == TRX_DICT_OP_NONE);
         break;
     }
-  #endif /* UNIV_DEBUG */
+#endif /* UNIV_DEBUG */
 
     m_dict_operation = op;
   }
@@ -351,7 +345,7 @@ struct Trx {
    * Performs an execution step for a commit type node in a query graph.
    *
    * @param[in] thr Query thread.
-   * 
+   *
    * @return Query thread to run next, or nullptr.
    */
   [[nodiscard]] static que_thr_t *commit_step(que_thr_t *thr) noexcept;
@@ -380,7 +374,7 @@ struct Trx {
    *
    * @param[in] lhs The first transaction to be compared.
    * @param[in] rh The second transaction to be compared.
-   * 
+   *
    * @return <0, 0 or >0; similar to strcmp(3).
    */
   [[nodiscard]] static int weight_cmp(const Trx *lhs, const Trx *rhs) noexcept;
@@ -399,7 +393,7 @@ struct Trx {
   static void free_for_client(Trx *&trx) noexcept;
 
 #ifdef UNIV_TEST
-private:
+ private:
 #endif /* UNIV_TEST */
   /**
    *  @brief Inserts the trx handle in the trx system trx list in the right position.
@@ -413,9 +407,9 @@ private:
 
   /**
    * @brief Commits a transaction.
-   * 
+   *
    * @note The kernel mutex is temporarily released.
-   * 
+   *
    * @param[in,out] next_thr Next query thread to run. If the value passed in is a pointer to
    *  a nullptr pointer, then the calling function can start running a new query thread.
    */
@@ -426,25 +420,25 @@ private:
    *
    * @param[in] type the signal type.
    * @param[in] sender trx_sig_self or trx_sig_other_sess.
-   * 
+   *
    * @return true if the signal can be queued, false otherwise.
    */
   bool sig_is_compatible(ulint type, ulint sender) noexcept;
 
   /**
    * @brief Moves the query threads in the lock wait list to the SUSPENDED state.
-   * 
+   *
    * This function changes the state of all query threads in the lock wait list
    * of the given transaction to QUE_THR_SUSPENDED and updates the transaction
    * state to TRX_QUE_RUNNING.
-   * 
+   *
    * @param[in] trx The transaction in the TRX_QUE_LOCK_WAIT state.
    */
   void lock_wait_to_suspended() noexcept;
 
   /**
    * @brief Moves the query threads in the sig reply wait list of trx to the SUSPENDED state.
-   * 
+   *
    * @param[in] trx The transaction.
    */
   void sig_reply_wait_to_suspended() noexcept;
@@ -465,7 +459,7 @@ private:
    */
   void prepare_for_commit() noexcept;
 
-public:
+ public:
   IF_DEBUG(ulint m_magic_n{TRX_MAGIC_N};)
 
   /** Transaction start id. See m_no below too. */
@@ -480,7 +474,7 @@ public:
    * TRX_ACTIVE, TRX_COMMITTED_IN_MEMORY, ... */
   Trx_status m_conc_state{TRX_NOT_STARTED};
 
-   /** TRX_ISO_REPEATABLE_READ, ... */
+  /** TRX_ISO_REPEATABLE_READ, ... */
   Trx_isolation m_isolation_level{TRX_ISO_REPEATABLE_READ};
 
   /** Normally true, but if the user wants to suppress foreign key
@@ -491,7 +485,7 @@ public:
   /** X/Open XA transaction identification to identify a transaction branch */
   XID m_xid{};
 
- /** Normally we do the XA two-phase commit steps, but by setting this to
+  /** Normally we do the XA two-phase commit steps, but by setting this to
   false, one can save CPU time and about 150 bytes in the undo log size
   as then we skip XA steps */
   ulint m_support_xa{};
@@ -577,7 +571,7 @@ public:
   is NOT protected by the kernel mutex */
   db_err m_error_state{DB_SUCCESS};
 
-   /** If the error number indicates a duplicate key error, a
+  /** If the error number indicates a duplicate key error, a
    pointer to the problematic index is stored here */
   const Index *m_error_info{};
 
@@ -644,7 +638,7 @@ public:
   (i.e.  same as global_read_view) or read view associated to a cursor */
   read_view_t *m_read_view{};
 
-   /** Savepoints set with SAVEPOINT ..., oldest first */
+  /** Savepoints set with SAVEPOINT ..., oldest first */
   UT_LIST_BASE_NODE_T_EXTERN(trx_named_savept_t, trx_savepoints) m_trx_savepoints;
 
   /** Mutex protecting the fields in this section (down to undo_no_arr),
@@ -655,7 +649,7 @@ public:
   /** Next undo log record number to assign; since the undo log is private
   for a transaction, this is a simple ascending sequence with no gaps;
   thus it represents the number of modified/inserted rows in a transaction */
-  undo_no_t m_undo_no;
+  undo_no_t m_undo_no{};
 
   /** Undo_no when the last sql statement was started: in case of an error,
   trx is rolled back down to this undo number; see note at undo_mutex! */
