@@ -18,7 +18,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.5 FATAL_ERROR)
 
 PROJECT (EMBEDDED_INNODB)
 
-SET(CMAKE_BUILD_TYPE debug)
+SET(CMAKE_BUILD_TYPE Debug)
 SET(CMAKE_CXX_STANDARD 23)
 SET(CMAKE_CXX_STANDARD_REQUIRED True)
 
@@ -234,11 +234,11 @@ SET(INNODB_SOURCES
       api/api0api.cc api/api0misc.cc api/api0ucode.cc
       api/api0cfg.cc api/api0status.cc api/api0sql.cc)
 
-IF(CMAKE_BUILD_TYPE MATCHES debug)
+IF(CMAKE_BUILD_TYPE MATCHES Debug)
   ADD_DEFINITIONS(-O0 -g -Wall -DUNIV_DEBUG -Werror -Wno-interference-size)
 ELSEIF(CMAKE_BUILD_TYPE MATCHES Release)
-	ADD_DEFINITIONS(-g -O2 -Wall -Werror -Wno-interference-size -UNDEBUG)
-ENDIF(CMAKE_BUILD_TYPE MATCHES debug)
+	ADD_DEFINITIONS(-g -O0 -Wall -Werror -Wno-interference-size -UNDEBUG)
+ENDIF(CMAKE_BUILD_TYPE MATCHES Debug)
 
 
 IF(CMAKE_SYSTEM_NAME MATCHES "Linux")

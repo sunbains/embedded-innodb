@@ -189,12 +189,7 @@ static void trx_rollback_active(
     unit = "M";
   }
 
-  log_info(std::format(
-    "Rolling back trx with id {}, {} rows to undo",
-    TRX_ID_PREP_PRINTF(trx->m_id),
-    rows_to_undo,
-    unit
-  ));
+  log_info(std::format("Rolling back trx with id {}, {} rows to undo", TRX_ID_PREP_PRINTF(trx->m_id), rows_to_undo, unit));
 
   mutex_exit(&kernel_mutex);
 
@@ -232,7 +227,7 @@ static void trx_rollback_active(
       log_info(std::format("Table found: dropping table {} in recovery", table->m_name));
 
       if (auto err = srv_dict_sys->m_ddl.drop_table(table->m_name, trx, true); err != DB_SUCCESS) {
-        log_fatal("DROP table failed with error ", err , " while dropping table ", table->m_name);
+        log_fatal("DROP table failed with error ", err, " while dropping table ", table->m_name);
       }
 
       auto err_commit = trx->commit();
@@ -341,7 +336,7 @@ void trx_undo_arr_free(trx_undo_arr_t *arr) {
  *
  * @param[in] trx The transaction.
  * @param[in] undo_no The undo number.
- * 
+ *
  * @return false if the record already existed in the array.
  */
 static bool trx_undo_arr_store_info(Trx *trx, undo_no_t undo_no) {
@@ -478,11 +473,11 @@ void trx_roll_try_truncate(Trx *trx) {
 /**
  * @brief Pops the topmost undo log record in a single undo log and updates the info
  * about the topmost record in the undo log memory struct.
- * 
+ *
  * @param trx Pointer to the transaction.
  * @param undo Pointer to the undo log.
  * @param mtr Pointer to the mini-transaction.
- * 
+ *
  * @return Pointer to the undo log record, the page s-latched.
  */
 static trx_undo_rec_t *trx_roll_pop_top_rec(Trx *trx, trx_undo_t *undo, mtr_t *mtr) {
@@ -521,6 +516,7 @@ trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(Trx *trx, undo_no_t limit, roll_ptr_
   mtr_t mtr;
 
   auto rseg = trx->m_rseg;
+  ulint retry = 0;
 
 try_again:
   mutex_enter(&trx->m_undo_mutex);
@@ -577,6 +573,7 @@ try_again:
 
   undo_no = trx_undo_rec_get_undo_no(undo_rec);
 
+  log_info(retry, ". trx_id: ", trx->m_id, " undo_no: ", undo_no, " trx->m_undo_no: ", trx->m_undo_no);
   ut_ad(undo_no + 1 == trx->m_undo_no);
 
   /* We print rollback progress info if we are in a crash recovery
@@ -606,9 +603,11 @@ try_again:
   if (!trx_undo_arr_store_info(trx, undo_no)) {
     /* A query thread is already processing this undo log record */
 
-    mutex_exit(&(trx->m_undo_mutex));
+    mutex_exit(&trx->m_undo_mutex);
 
     mtr.commit();
+
+    ++retry;
 
     goto try_again;
   }
@@ -696,7 +695,7 @@ void trx_rollback(Trx *trx, trx_sig_t *sig, que_thr_t **next_thr) {
     *next_thr = thr;
     /*		InnoDB::que_task_enqueue_low(thr2); */
   } else {
-	  InnoDB::que_task_enqueue_low(thr);
+    InnoDB::que_task_enqueue_low(thr);
     /*		InnoDB::que_task_enqueue_low(thr2); */
   }
 }
@@ -744,7 +743,7 @@ static void trx_finish_error_processing(Trx *trx) /*!< in: transaction */
 
 /**
  * @brief Finishes a partial rollback operation.
- * 
+ *
  * @param[in] trx Pointer to the transaction.
  * @param[in/out] next_thr Pointer to the next query thread to run. If the value
  *   which is passed in is a pointer to a nullptr pointer, then the calling

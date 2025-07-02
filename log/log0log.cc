@@ -683,11 +683,10 @@ void Log::group_file_header_flush(log_group_t *group, ulint nth_file, lsn_t star
 
     ++srv_os_log_pending_writes;
 
-    srv_fil->io(
+    srv_fil->log_io(
       IO_request::Sync_log_write,
       false,
-      group->space_id,
-      dest_offset / UNIV_PAGE_SIZE,
+      Page_id(group->space_id, dest_offset / UNIV_PAGE_SIZE),
       dest_offset % UNIV_PAGE_SIZE,
       IB_FILE_BLOCK_SIZE,
       buf,
@@ -737,11 +736,10 @@ void Log::group_write_buf(log_group_t *group, byte *buf, ulint len, lsn_t start_
       ++m_n_log_ios;
       ++srv_os_log_pending_writes;
 
-      srv_fil->io(
+      srv_fil->log_io(
         IO_request::Sync_log_write,
         false,
-        group->space_id,
-        next_offset / UNIV_PAGE_SIZE,
+        Page_id(group->space_id, next_offset / UNIV_PAGE_SIZE),
         next_offset % UNIV_PAGE_SIZE,
         write_len,
         buf,
@@ -1070,11 +1068,10 @@ void Log::group_checkpoint(log_group_t *group) noexcept {
     ++m_n_log_ios;
 
     /* Send the log file write request */
-    srv_fil->io(
+    srv_fil->log_io(
       IO_request::Async_log_write,
       false,
-      group->space_id,
-      write_offset / UNIV_PAGE_SIZE,
+      Page_id(group->space_id, write_offset / UNIV_PAGE_SIZE),
       write_offset % UNIV_PAGE_SIZE,
       IB_FILE_BLOCK_SIZE,
       buf,
@@ -1090,11 +1087,10 @@ void Log::group_read_checkpoint_info(log_group_t *group, ulint field) noexcept {
 
   ++m_n_log_ios;
 
-  srv_fil->io(
+  srv_fil->log_io(
     IO_request::Sync_log_read,
     false,
-    group->space_id,
-    field / UNIV_PAGE_SIZE,
+    Page_id(group->space_id, field / UNIV_PAGE_SIZE),
     field % UNIV_PAGE_SIZE,
     IB_FILE_BLOCK_SIZE,
     m_checkpoint_buf,
@@ -1270,11 +1266,10 @@ void Log::group_read_log_seg(ulint type, byte *buf, log_group_t *group, lsn_t st
 
     ++m_n_log_ios;
 
-    srv_fil->io(
+    srv_fil->log_io(
       type == LOG_RECOVER ? IO_request::Sync_log_read : IO_request::Async_log_read,
       false,
-      group->space_id,
-      source_offset / UNIV_PAGE_SIZE,
+      Page_id(group->space_id, source_offset / UNIV_PAGE_SIZE),
       source_offset % UNIV_PAGE_SIZE,
       len,
       buf,

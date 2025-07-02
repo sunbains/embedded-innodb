@@ -47,7 +47,7 @@ extern mutex_t buf_pool_mutex;
  * @param page_no   in: page number
  * @return          control block if found in page hash table, otherwise nullptr
  */
-Buf_page *buf_page_set_file_page_was_freed(space_id_t space, page_no_t page_no);
+Buf_page *buf_page_set_file_page_was_freed(const Page_id &page_id);
 
 /** Flag to forbid the release of the buffer pool mutex.
 Protected by buf_pool_mutex. */
@@ -63,6 +63,8 @@ extern ulint buf_pool_mutex_exit_forbidden;
 @return		true if l is a buf_block_t::lock */
 #define buf_pool_is_block_lock(l) buf_pool->pointer_is_block_field((const void *)(l))
 
+#endif /* UNIV_DEBUG */
+
 /**
  * @brief Prints a page to stderr.
  *
@@ -70,7 +72,6 @@ extern ulint buf_pool_mutex_exit_forbidden;
  * @param ulint
  */
 void buf_page_print(const byte *read_buf, ulint);
-#endif /* UNIV_DEBUG */
 
 /*** Let us list the consistency conditions for different control block states.
 
@@ -263,13 +264,12 @@ inline void buf_page_set_flush_type(Buf_page *bpage, buf_flush flush_type) {
  * Map a block to a file page.
  *
  * @param block Pointer to the control block.
- * @param space Tablespace ID.
- * @param page_no Page number.
+ * @param page_id The page ID containing space and page number.
  */
-inline void buf_block_set_file_page(Buf_block *block, space_id_t space, page_no_t page_no) {
+inline void buf_block_set_file_page(Buf_block *block, const Page_id &page_id) {
   buf_block_set_state(block, BUF_BLOCK_FILE_PAGE);
-  block->m_page.m_space = space;
-  block->m_page.m_page_no = page_no;
+  block->m_page.m_space = page_id.space_id();
+  block->m_page.m_page_no = page_id.page_no();
 }
 
 /**
@@ -448,12 +448,11 @@ inline byte *buf_frame_copy(byte *buf, const buf_frame_t *frame) {
 /**
  * @brief Calculates a folded value of a file page address to use in the page hash table.
  *
- * @param space Space id.
- * @param page_no Page number within space.
+ * @param page_id The page ID containing space and page number.
  * @return The folded value.
  */
-inline ulint buf_page_address_fold(space_id_t space, page_no_t page_no) {
-  return (space << 20) + space + page_no;
+inline ulint buf_page_address_fold(const Page_id &page_id) {
+  return (page_id.space_id() << 20) + page_id.space_id() + page_id.page_no();
 }
 
 /**
@@ -536,32 +535,46 @@ inline void Buf_block::fix_dec() {
   IF_SYNC_DEBUG(rw_lock_s_unlock(&m_debug_latch));
 }
 
-inline Buf_page *Buf_pool::hash_get_page(space_id_t space_id, page_no_t page_no) {
+/**
+ * @brief Gets a page from the hash table.
+ *
+ * @param page_id The page ID containing space and page number.
+ * @return The page if found, nullptr otherwise.
+ */
+inline Buf_page *Buf_pool::hash_get_page(const Page_id &page_id) {
   ut_ad(mutex_own(&m_mutex));
 
-  // Look for the page in the hash table
-  Buf_page *bpage{nullptr};
-  if (auto it = m_page_hash->find(Page_id(space_id, page_no)); it != m_page_hash->end()) {
-    bpage = it->second;
-  }
-
-  if (bpage != nullptr) {
+  if (auto it = m_page_hash->find(page_id); it != m_page_hash->end()) {
+    auto bpage = it->second;
     ut_a(bpage->in_file());
     ut_ad(bpage->m_in_page_hash);
     UNIV_MEM_ASSERT_RW(bpage, sizeof(*bpage));
+
+    return bpage;
   }
-
-  return bpage;
+  return nullptr;
 }
 
-inline Buf_block *Buf_pool::hash_get_block(space_id_t space, page_no_t page_no) {
-  return buf_page_get_block(hash_get_page(space, page_no));
+/**
+ * @brief Gets a block from the hash table.
+ *
+ * @param page_id The page ID containing space and page number.
+ * @return The block if found, nullptr otherwise.
+ */
+inline Buf_block *Buf_pool::hash_get_block(const Page_id &page_id) {
+  return buf_page_get_block(hash_get_page(page_id));
 }
 
-inline bool Buf_pool::peek(space_id_t space_id, page_no_t page_no) {
+/**
+ * @brief Checks if a page exists in the buffer pool without acquiring locks.
+ *
+ * @param page_id The page ID containing space and page number.
+ * @return true if the page exists, false otherwise.
+ */
+inline bool Buf_pool::peek(const Page_id &page_id) {
   mutex_enter(&m_mutex);
 
-  auto bpage = hash_get_page(space_id, page_no);
+  auto bpage = hash_get_page(page_id);
 
   mutex_exit(&m_mutex);
 

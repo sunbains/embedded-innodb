@@ -859,11 +859,11 @@ db_err Fil::write_lsn_and_arch_no_to_file(ulint sum_of_sizes, lsn_t lsn) {
   auto ptr = static_cast<byte *>(mem_alloc(2 * UNIV_PAGE_SIZE));
   auto buf = static_cast<byte *>(ut_align(ptr, UNIV_PAGE_SIZE));
 
-  io(IO_request::Sync_read, false, SYS_TABLESPACE, sum_of_sizes, 0, UNIV_PAGE_SIZE, buf, nullptr);
+  data_io(IO_request::Sync_read, false, Page_id(SYS_TABLESPACE, sum_of_sizes), 0, UNIV_PAGE_SIZE, buf, nullptr);
 
   mach_write_to_8(buf + FIL_PAGE_FILE_FLUSH_LSN, lsn);
 
-  io(IO_request::Sync_read, false, SYS_TABLESPACE, sum_of_sizes, 0, UNIV_PAGE_SIZE, buf, nullptr);
+  data_io(IO_request::Sync_read, false, Page_id(SYS_TABLESPACE, sum_of_sizes), 0, UNIV_PAGE_SIZE, buf, nullptr);
 
   mem_free(ptr);
 
@@ -2185,15 +2185,15 @@ void Fil::node_complete_io(fil_node_t *node, IO_request io_request) {
 }
 
 [[noreturn]] void Fil::report_invalid_page_access(
-  ulint block_offset, space_id_t space_id, const char *space_name, ulint byte_offset, ulint len, IO_request io_request
+  const Page_id &page_id, const char *space_name, ulint byte_offset, ulint len, IO_request io_request
 ) {
   log_fatal(std::format(
     "Trying to access page number {} in space {}, space name {}, which is"
     " outside the tablespace bounds. Byte offset {}, len {}, i/o type {}."
     " If you get this error at server startup, please check that your config"
     " file matches the ibdata files that you have in the server.",
-    block_offset,
-    space_id,
+    page_id.page_no(),
+    page_id.space_id(),
     space_name,
     byte_offset,
     len,
@@ -2202,9 +2202,8 @@ void Fil::node_complete_io(fil_node_t *node, IO_request io_request) {
   ut_error;
 }
 
-db_err Fil::io(
-  IO_request io_request, bool batched, space_id_t space_id, page_no_t page_no, ulint byte_offset, ulint len, void *buf,
-  void *message
+db_err Fil::log_io(
+  IO_request io_request, bool batched, const Page_id &page_id, ulint byte_offset, ulint len, void *buf, void *message
 ) {
   ut_ad(len > 0);
   ut_ad(buf != nullptr);
@@ -2217,9 +2216,6 @@ db_err Fil::io(
   bool is_sync_request{};
 
   switch (io_request) {
-    case IO_request::None:
-      ut_error;
-      break;
     case IO_request::Sync_log_read:
       is_sync_request = true;
       // fallthrough
@@ -2232,27 +2228,21 @@ db_err Fil::io(
     case IO_request::Async_log_write:
       break;
 
+    case IO_request::None:
     case IO_request::Sync_read:
-      is_sync_request = true;
-      // falthrough
     case IO_request::Async_read:
-      srv_data_read += len;
-      break;
-
     case IO_request::Sync_write:
-      is_sync_request = true;
-      // falthrough
     case IO_request::Async_write:
-      srv_data_written += len;
+      ut_error;
       break;
   }
 
   /* Reserve the Fil::system mutex and make sure that we can open at
   least one file while holding it, if the file is not already open */
 
-  mutex_enter_and_prepare_for_io(space_id);
+  mutex_enter_and_prepare_for_io(page_id.space_id());
 
-  auto space = space_get_by_id(space_id);
+  auto space = space_get_by_id(page_id.space_id());
 
   if (space == nullptr) {
     mutex_exit(&m_mutex);
@@ -2261,19 +2251,23 @@ db_err Fil::io(
       "Trying to do i/o to a tablespace which does not exist."
       " i/o type {}, space id {}, page no. {}, i/o length {} bytes",
       (int)io_request,
-      space_id,
-      page_no,
+      page_id.space_id(),
+      page_id.page_no(),
       len
     ));
 
     return DB_TABLESPACE_DELETED;
   }
 
+  auto page_no = page_id.page_no();
+
+  ut_a(UT_LIST_GET_LEN(space->m_chain) >= 2);
+
   auto fil_node = UT_LIST_GET_FIRST(space->m_chain);
 
   for (;;) {
     if (unlikely(fil_node == nullptr)) {
-      report_invalid_page_access(page_no, space_id, space->m_name, byte_offset, len, io_request);
+      report_invalid_page_access(page_id, space->m_name, byte_offset, len, io_request);
     }
 
     if (space->m_id != SYS_TABLESPACE && fil_node->m_size_in_pages == 0) {
@@ -2298,7 +2292,7 @@ db_err Fil::io(
   single-table tablespace */
   if (fil_node->m_size_in_pages <= page_no && space->m_id != SYS_TABLESPACE && space->m_type == FIL_TABLESPACE) {
 
-    report_invalid_page_access(page_no, space_id, space->m_name, byte_offset, len, io_request);
+    report_invalid_page_access(Page_id(space->m_id, page_no), space->m_name, byte_offset, len, io_request);
   }
 
   /* Now we have made the changes in the data structures of Fil::system */
@@ -2309,6 +2303,120 @@ db_err Fil::io(
   off_t off = (off_t(page_no) * off_t(UNIV_PAGE_SIZE)) + byte_offset;
 
   ut_a(fil_node->m_size_in_pages - page_no >= ((byte_offset + len + (UNIV_PAGE_SIZE - 1)) / UNIV_PAGE_SIZE));
+
+  /* Do aio */
+
+  ut_a(byte_offset % IB_FILE_BLOCK_SIZE == 0);
+  ut_a((len % IB_FILE_BLOCK_SIZE) == 0);
+
+  IO_ctx io_ctx = {.m_batch = batched, .m_fil_node = fil_node, .m_msg = message, .m_io_request = io_request};
+
+  /* Queue the aio request */
+  auto err = srv_aio->submit(std::move(io_ctx), buf, len, off);
+  ut_a(err == DB_SUCCESS);
+
+  if (is_sync_request) {
+    /* The i/o operation is already completed when we return from os_aio: */
+
+    mutex_enter(&m_mutex);
+
+    node_complete_io(fil_node, io_request);
+
+    mutex_exit(&m_mutex);
+
+    ut_ad(validate());
+  }
+
+  return DB_SUCCESS;
+}
+
+db_err Fil::data_io(
+  IO_request io_request, bool batched, const Page_id &page_id, ulint byte_offset, ulint len, void *buf, void *message
+) {
+
+  ut_ad(len > 0);
+  ut_ad(buf != nullptr);
+  ut_ad(byte_offset < UNIV_PAGE_SIZE);
+
+  static_assert((1 << UNIV_PAGE_SIZE_SHIFT) == UNIV_PAGE_SIZE, "error (1 << UNIV_PAGE_SIZE_SHIFT) != UNIV_PAGE_SIZE");
+
+  ut_ad(validate());
+
+  bool is_sync_request{};
+
+  switch (io_request) {
+    case IO_request::None:
+    case IO_request::Sync_log_read:
+    case IO_request::Async_log_read:
+    case IO_request::Sync_log_write:
+    case IO_request::Async_log_write:
+      ut_error;
+      break;
+
+    case IO_request::Sync_read:
+      is_sync_request = true;
+      // falthrough
+    case IO_request::Async_read:
+      srv_data_read += len;
+      break;
+
+    case IO_request::Sync_write:
+      is_sync_request = true;
+      // falthrough
+    case IO_request::Async_write:
+      srv_data_written += len;
+      break;
+  }
+
+  /* Reserve the Fil::system mutex and make sure that we can open at
+  least one file while holding it, if the file is not already open */
+
+  mutex_enter_and_prepare_for_io(page_id.space_id());
+
+  auto space = space_get_by_id(page_id.space_id());
+
+  if (space == nullptr) {
+    mutex_exit(&m_mutex);
+
+    log_err(std::format(
+      "Trying to do i/o to a tablespace which does not exist."
+      " i/o type {}, space id {}, page no. {}, i/o length {} bytes",
+      (int)io_request,
+      page_id.space_id(),
+      page_id.page_no(),
+      len
+    ));
+
+    return DB_TABLESPACE_DELETED;
+  }
+
+  /* Only one data file per space is supported */
+  ut_a(UT_LIST_GET_LEN(space->m_chain) == 1);
+
+  auto fil_node = UT_LIST_GET_FIRST(space->m_chain);
+
+  if (unlikely(fil_node == nullptr)) {
+    report_invalid_page_access(page_id, space->m_name, byte_offset, len, io_request);
+  }
+
+  /* Open file if closed */
+  node_prepare_for_io(fil_node, space);
+
+  /* Check that at least the start offset is within the bounds of a
+  single-table tablespace */
+  if (fil_node->m_size_in_pages <= page_id.page_no() && space->m_id != SYS_TABLESPACE && space->m_type == FIL_TABLESPACE) {
+
+    report_invalid_page_access(page_id, space->m_name, byte_offset, len, io_request);
+  }
+
+  /* Now we have made the changes in the data structures of Fil::system */
+  mutex_exit(&m_mutex);
+
+  /* Calculate the low 32 bits and the high 32 bits of the file offset */
+
+  const off_t off = (off_t(page_id.page_no()) * off_t(UNIV_PAGE_SIZE)) + byte_offset;
+
+  ut_a(fil_node->m_size_in_pages - page_id.page_no() >= ((byte_offset + len + (UNIV_PAGE_SIZE - 1)) / UNIV_PAGE_SIZE));
 
   /* Do aio */
 

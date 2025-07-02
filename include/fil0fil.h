@@ -129,7 +129,7 @@ struct Fil {
   @param[out] flushed_lsn          Maximum flushed LSN */
   void read_flushed_lsn(os_file_t fh, lsn_t &max_flushed_lsn);
 
-   /** Parses the body of a log record written about an .ibd file operation. That
+  /** Parses the body of a log record written about an .ibd file operation. That
    is, the log record part after the standard (type, space id, page no) header of
    the log record.
 
@@ -152,20 +152,15 @@ struct Fil {
                                 not replayed
    @param[in] log_flags         redo log flags (stored in the page number
                                 parameter) */
-   byte *op_log_parse_or_replay(
-     byte *ptr,
-     byte *end_ptr,
-     ulint type,
-     space_id_t space_id,
-     ulint log_flags);
+  byte *op_log_parse_or_replay(byte *ptr, byte *end_ptr, ulint type, space_id_t space_id, ulint log_flags);
 
-   /** Deletes a single-table tablespace. The tablespace must be cached in the
+  /** Deletes a single-table tablespace. The tablespace must be cached in the
    memory cache.
    @param[in] space_id          Tablespace ID
    @return	true if success */
-   bool delete_tablespace(space_id_t space_id);
+  bool delete_tablespace(space_id_t space_id);
 
-   /** Discards a single-table tablespace. The tablespace must be cached in the
+  /** Discards a single-table tablespace. The tablespace must be cached in the
    memory cache. Discarding is like deleting a tablespace, but
 
    1. We do not drop the table from the data dictionary;
@@ -176,9 +171,9 @@ struct Fil {
 
    @param[in] space_id          Tablespace ID
    @return	true if success */
-   bool discard_tablespace(space_id_t space_id);
+  bool discard_tablespace(space_id_t space_id);
 
-   /** Renames a single-table tablespace. The tablespace must be cached in the
+  /** Renames a single-table tablespace. The tablespace must be cached in the
    tablespace memory cache.
 
    @param[in] old_name          Old table name in the standard
@@ -190,7 +185,7 @@ struct Fil {
                                 databasename/tablename format of InnoDB
 
    @return	true if success */
-   bool rename_tablespace(const char *old_name, space_id_t space_id, const char *new_name);
+  bool rename_tablespace(const char *old_name, space_id_t space_id, const char *new_name);
 
   /** Creates a new single-table tablespace in a database directory.
   The datadir is the current directory of a running program. We can
@@ -209,12 +204,7 @@ struct Fil {
   @param[in] size);             The initial size of the tablespace file
                                 in pages, must be >= FIL_IBD_FILE_INITIAL_SIZE
   @return	DB_SUCCESS or error code */
-  db_err create_new_single_table_tablespace(
-    space_id_t *space_id,
-    const char *tablename,
-    bool is_temp,
-    ulint flags,
-    ulint size);
+  db_err create_new_single_table_tablespace(space_id_t *space_id, const char *tablename, bool is_temp, ulint flags, ulint size);
 
   /**
    * Tries to open a single-table tablespace and optionally checks the space id
@@ -300,11 +290,8 @@ struct Fil {
    * @return true if a matching tablespace exists in the memory cache
    */
   bool space_for_table_exists_in_mem(
-    space_id_t id,
-    const char *name,
-    bool is_temp,
-    bool mark_space,
-    bool print_error_if_does_not_exist);
+    space_id_t id, const char *name, bool is_temp, bool mark_space, bool print_error_if_does_not_exist
+  );
 
   /**
    * Tries to extend a data file so that it would accommodate
@@ -360,8 +347,7 @@ struct Fil {
    *                              because i/os are not actually handled until
    *                              all have been posted: use with great
    *                              caution!
-   * @param space_id              in: space id
-   * @param block_offset          in: offset in number of blocks
+   * @param page_id               in: space id and page no
    * @param byte_offset           in: remainder of offset in bytes; in
    *                              aio this must be divisible by the OS block size
    * @param len                   in: how many bytes to read or write; this
@@ -375,22 +361,43 @@ struct Fil {
    * @return DB_SUCCESS, or DB_T ABLESPACE_DELETED if we are trying to do
    *         i/o on a tablespace which does not exist
    */
-  db_err io(
-    IO_request io_request,
-    bool batched,
-    space_id_t space_id,
-    page_no_t page_no,
-    ulint byte_offset,
-    ulint len,
-    void *buf,
-    void *message);
+  db_err data_io(
+    IO_request io_request, bool batched, const Page_id &page_id, ulint byte_offset, ulint len, void *buf, void *message
+  );
+
+  /**
+   * Reads or writes data. This operation is asynchronous (aio).
+   * @param io_request            in: IO_request type.
+   * @param batched               in: if simulated aio and we want to post a
+   *                              batch of i/os; NOTE that a simulated batch
+   *                              may introduce hidden chances of deadlocks,
+   *                              because i/os are not actually handled until
+   *                              all have been posted: use with great
+   *                              caution!
+   * @param page_id               in: space id and page no
+   * @param byte_offset           in: remainder of offset in bytes; in
+   *                              aio this must be divisible by the OS block size
+   * @param len                   in: how many bytes to read or write; this
+   *                              must not cross a file boundary; in aio this
+   *                              must be a block size multiple
+   * @param buf                   in/out: buffer where to store read data
+   *                              or from where to write; in aio this must be
+   *                              appropriately aligned
+   * @param message               in: message for aio handler if non-sync
+   *                             aio used, else ignored
+   * @return DB_SUCCESS, or DB_T ABLESPACE_DELETED if we are trying to do
+   *         i/o on a tablespace which does not exist
+   */
+  db_err log_io(
+    IO_request io_request, bool batched, const Page_id &page_id, ulint byte_offset, ulint len, void *buf, void *message
+  );
 
   /**
    * Waits for an aio operation to complete. This function is used to write the
    * handler for completed requests. The aio array of pending requests is divided
    * into segments (see os0file.c for more info). The thread specifies which
    * segment it wants to wait for.
-   * 
+   *
    * @param[in] segment           The number of the segmentto wait for
    * @return false if AIO reaper was shutdown
    */
@@ -399,7 +406,7 @@ struct Fil {
   /**
    * Flushes to disk possible writes cached by the OS. If the space does not
    * exist or is being dropped, does not do anything.
-   * 
+   *
    * @param[in] space_id          File space id (this can be a group of log files or
    *  a tablespace of the database)
    */
@@ -408,29 +415,29 @@ struct Fil {
   /**
    * Flushes to disk writes in file spaces of the given type possibly cached by
    * the OS.
-   * 
+   *
    * @param[in] purpose           FIL_TABLESPACE, FIL_LOG
    */
   void flush_file_spaces(ulint purpose);
 
   /**
    * Checks the consistency of the tablespace cache.
-   * 
+   *
    * @return true if ok
    */
   bool validate();
 
   /**
    * Returns true if file address is undefined.
-   * 
+   *
    * @param[in] addr              Address
    * @return true if undefined
    */
-  bool addr_is_null(const Fil_addr& addr);
+  bool addr_is_null(const Fil_addr &addr);
 
   /**
    * Get the predecessor of a file page.
-   * 
+   *
    * @param[in] page - file page
    * @return FIL_PAGE_PREV
    */
@@ -438,7 +445,7 @@ struct Fil {
 
   /**
    * Get the successor of a file page.
-   * 
+   *
    * @param[in] page               File page
    * @return FIL_PAGE_NEXT
    */
@@ -446,7 +453,7 @@ struct Fil {
 
   /**
    * Sets the file page type.
-   * 
+   *
    * @param[in,out] page          File page
    * @param[in] type - type
    */
@@ -462,7 +469,7 @@ struct Fil {
 
   /**
    * Reset variables.
-   */ 
+   */
   void var_init();
 
   /**
@@ -480,26 +487,20 @@ struct Fil {
   bool mkdir(const char *dbname); /** in: database name */
 
   /** @return Number of pending redo log flushes */
-  ulint get_pending_log_flushes() const {
-    return m_n_pending_log_flushes;
-  }
+  ulint get_pending_log_flushes() const { return m_n_pending_log_flushes; }
 
   /** @return Number of pending tablespace flushes */
-  ulint get_pending_tablespace_flushes() const {
-    return m_n_pending_tablespace_flushes;
-  }
+  ulint get_pending_tablespace_flushes() const { return m_n_pending_tablespace_flushes; }
 
   /** @return The number of fsyncs done to the log */
-  ulint get_log_flushes() const {
-    return m_n_log_flushes;
-  }
+  ulint get_log_flushes() const { return m_n_log_flushes; }
 
-private:
+ private:
   /**
    * @brief Frees a space object from the tablespace memory cache. Closes the files in
    * the chain but does not delete them. There must not be any pending i/o's or
    * flushes on the files.
-   * 
+   *
    * @param id - in: space id
    * @param own_mutex - in: true if own m_mutex
    * @return true if success
@@ -508,9 +509,9 @@ private:
 
   /**
    * @brief Remove extraneous '.' && '\' && '/' characters from the prefix.
-   * 
+   *
    * Note: Currently it will not handle paths like: ../a/b.
-   * 
+   *
    * @param ptr - in: path to normalize
    * @return pointer to normalized path
    */
@@ -518,20 +519,20 @@ private:
 
   /**
    * @brief Compare two table names.
-   * 
+   *
    * It will compare the two table names using the canonical names.
    * e.g., ./a/b == a/b. TODO: /path/to/a/b == a/b if both /path/to/a/b and a/b refer to the same file.
-   * 
+   *
    * @param name1 - in: table name to compare
    * @param name2 - in: table name to compare
-   * 
+   *
    * @return = 0 if name1 == name2 < 0 if name1 < name2 > 0 if name1 > name2
    */
   int tablename_compare(const char *name1, const char *name2);
 
   /**
    * @brief Updates the data structures when an i/o operation finishes.
-   * 
+   *
    * @param node - file node
    * @param system - tablespace memory cache
    * @param io_request - IO_request::Write or IO_request::Read; marks the node as
@@ -542,7 +543,7 @@ private:
   /**
    * @brief Checks if a single-table tablespace for a given table name
    * exists in the tablespace memory cache.
-   * 
+   *
    * @param name - table name in the standard 'databasename/tablename' format
    * @return space id, ULINT_UNDEFINED if not found
    */
@@ -550,7 +551,7 @@ private:
 
   /**
    * @brief Returns the table space by a given id, nullptr if not found.
-   * 
+   *
    * @param space_id space id
    * @return Fil::fil_space_t* table space, nullptr if not found
    */
@@ -558,7 +559,7 @@ private:
 
   /**
    * @brief Returns the table space by a given name, nullptr if not found.
-   * 
+   *
    * @param name in: space name
    * @return Fil::fil_space_t* table space, nullptr if not found
    */
@@ -566,11 +567,11 @@ private:
 
   /**
   * @brief Checks if all the file nodes in a space are flushed.
-  * 
+  *
   * @param space in: space
   * @return true if all are flushed
   */
-  bool space_is_flushed(fil_space_t *space) ;
+  bool space_is_flushed(fil_space_t *space);
 
   /**
    * Opens a the file of a node of a tablespace.
@@ -644,13 +645,7 @@ private:
   * @param mtr       in: mini-transaction handle
   */
   void op_write_log(
-    mlog_type_t type,
-    space_id_t space_id,
-    ulint log_flags,
-    ulint flags,
-    const char *name,
-    const char *new_name,
-    mtr_t *mtr
+    mlog_type_t type, space_id_t space_id, ulint log_flags, ulint flags, const char *name, const char *new_name, mtr_t *mtr
   );
 
   /**
@@ -670,7 +665,7 @@ private:
   /**
   * @brief Allocates a file name for a single-table tablespace.
   * The string must be freed by caller with mem_free().
-  * 
+  *
   * @param name The table name or a dir path of a TEMPORARY table.
   * @param is_temp True if it is a dir path.
   * @return char* The allocated file name.
@@ -686,11 +681,11 @@ private:
 
   /** Scan the given directory and load the tablespaces. So that we can map the physical files back
    * to their names that are stored in the data dictionary.
-   * 
+   *
    * @param dir The directory to scan
    * @param recovery The recovery flag
    * @param max_depth The maximum depth of the directory tree to scan
-   * @param depth The current depth of the directory tree 
+   * @param depth The current depth of the directory tree
    */
   db_err scan_and_load_tablespaces(const std::string &dir, ib_recovery_t recovery, ulint max_depth, ulint depth);
 
@@ -706,25 +701,19 @@ private:
   void node_prepare_for_io(fil_node_t *node, fil_space_t *space);
 
   /**
-  * @brief Report information about an invalid page access.
-  *
-  * @param block_offset   in: block offset
-  * @param space_id       in: space id
-  * @param space_name     in: space name
-  * @param byte_offset    in: byte offset
-  * @param len            in: I/O length
-  * @param io_request     in: I/O request type
-  */
+   * @brief Report information about an invalid page access.
+   *
+   * @param page_id        in: page ID containing space and page number
+   * @param space_name     in: space name
+   * @param byte_offset    in: byte offset
+   * @param len            in: I/O length
+   * @param io_request     in: I/O request type
+   */
   [[noreturn]] void report_invalid_page_access(
-    ulint block_offset,
-    space_id_t space_id,
-    const char *space_name,
-    ulint byte_offset,
-    ulint len,
-    IO_request io_request
+    const Page_id &page_id, const char *space_name, ulint byte_offset, ulint len, IO_request io_request
   );
 
-private:
+ private:
   /** The number of fsyncs done to the log */
   ulint m_n_log_flushes{};
 
@@ -743,10 +732,10 @@ private:
   mutable mutex_t m_mutex{};
 
   /** Map from space id to tablespace instance. */
-  std::unordered_map<space_id_t, fil_space_t*> m_space_by_id{};
+  std::unordered_map<space_id_t, fil_space_t *> m_space_by_id{};
 
   /** Map from space name to the tablespace instance */
-  std::unordered_map<std::string_view, fil_space_t*> m_space_by_name{};
+  std::unordered_map<std::string_view, fil_space_t *> m_space_by_name{};
 
   /** Number of files currently open */
   ulint m_n_open{};

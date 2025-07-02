@@ -735,7 +735,7 @@ Buf_page_state Buf_LRU::block_remove_hashed_page(Buf_page *bpage) {
       break;
   }
 
-  auto hashed_bpage = srv_buf_pool->hash_get_page(bpage->m_space, bpage->m_page_no);
+  auto hashed_bpage = srv_buf_pool->hash_get_page(Page_id(bpage->m_space, bpage->m_page_no));
 
   if (unlikely(bpage != hashed_bpage)) {
     ib_logger(ib_stream, "Error: page %lu %lu not found in the hash table ", (ulong)bpage->m_space, (ulong)bpage->m_page_no);

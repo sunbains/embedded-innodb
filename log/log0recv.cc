@@ -100,7 +100,7 @@ lsn_t recv_max_page_lsn;
 /**
  * Initialize crash recovery environment. Can be called iff
  * recv_needed_recovery == false.
- * 
+ *
  * @param[in,out] dblwr Doublewrite instance to use for recovery
  * @param[in] recovery The recovery flag.
  */
@@ -112,14 +112,9 @@ static std::string to_string(const Recv_sys::Tablespace_map &log_records) noexce
   for (const auto &[space_id, log_records_map] : log_records) {
     str += "{";
     for (const auto &[page_no, log_record] : log_records_map) {
-      str += std::format(
-        " space_id: {}, page_no: {}, log_records: {{\n",
-        space_id,
-        page_no
-      );
+      str += std::format(" space_id: {}, page_no: {}, log_records: {{\n", space_id, page_no);
 
       str += log_record->to_string() + "},\n";
-
     }
     str += "},\n";
   }
@@ -168,7 +163,6 @@ Recv_sys::~Recv_sys() noexcept {
   if (m_buf != nullptr) {
     ut_delete(m_buf);
     m_buf = nullptr;
-
   }
 
   if (m_last_block_buf_start != nullptr) {
@@ -178,7 +172,7 @@ Recv_sys::~Recv_sys() noexcept {
 }
 
 Recv_sys::Recv_sys() noexcept {
-  mutex_create(&recv_sys->m_mutex, IF_DEBUG("Recv_sys::m_mutex",) IF_SYNC_DEBUG(SYNC_RECV,) Current_location());
+  mutex_create(&recv_sys->m_mutex, IF_DEBUG("Recv_sys::m_mutex", ) IF_SYNC_DEBUG(SYNC_RECV, ) Current_location());
 }
 
 void Recv_sys::open(ulint available_memory) noexcept {
@@ -324,7 +318,7 @@ static void recv_truncate_group(log_group_t *group, lsn_t recovered_lsn, lsn_t l
 /**
  * Copies the log segment between group->recovered_lsn and recovered_lsn from
  * the most up-to-date log group to group, so that it contains the latest log data.
- * 
+ *
  * @param up_to_date_group The most up-to-date log group.
  * @param group The log group to copy to.
  * @param recovered_lsn The LSN up to which recovery has succeeded.
@@ -416,7 +410,7 @@ static void recv_synchronize_groups(log_group_t *up_to_date_group) noexcept {
  * Checks if the given buffer containing checkpoint information is consistent.
  *
  * @param buf The buffer containing the checkpoint info.
- * 
+ *
  * @return true if the checkpoint is consistent, false otherwise.
  */
 static bool recv_check_cp_is_consistent(const byte *buf) noexcept {
@@ -440,7 +434,7 @@ static bool recv_check_cp_is_consistent(const byte *buf) noexcept {
  *
  * @param[out] max_group Pointer to the maximum group found
  * @param[out] max_field Pointer to the maximum field found (LOG_CHECKPOINT_1 or LOG_CHECKPOINT_2)
- * 
+ *
  * @return DB_SUCCESS if a valid checkpoint is found, DB_ERROR otherwise
  */
 static db_err recv_find_max_checkpoint(log_group_t **max_group, ulint *max_field) noexcept {
@@ -492,9 +486,9 @@ static db_err recv_find_max_checkpoint(log_group_t **max_group, ulint *max_field
 
 /**
  * Checks if the log block checksum is valid.
- * 
+ *
  * @param block Pointer to a log block
- * 
+ *
  * @return true if the checksum is valid or if the block is in an old format, false otherwise
  */
 static bool is_log_block_checksum_ok(const byte *block) noexcept {
@@ -503,7 +497,7 @@ static bool is_log_block_checksum_ok(const byte *block) noexcept {
 
 /**
  * Parses and applies a log record body.
- * 
+ *
  * Tries to parse a single log record body and also applies it to a page if
  * specified. File ops are parsed, but not applied in this function.
  *
@@ -513,16 +507,10 @@ static bool is_log_block_checksum_ok(const byte *block) noexcept {
  * @param[in] block Pointer to the buffer block or nullptr; if not nullptr,
  *  then the log record is applied to the page, and the log record should be complete then.
  * @param[in] mtr Pointer to the mtr or nullptr; should be non-nullptr if and only if block is non-nullptr.
- * 
+ *
  * @return	log record end, nullptr if not a complete record
  */
-static byte *recv_parse_or_apply_log_rec_body(
-  mlog_type_t type,
-  byte *ptr,
-  byte *end_ptr,
-  Buf_block *block,
-  mtr_t *mtr) noexcept
-{
+static byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_ptr, Buf_block *block, mtr_t *mtr) noexcept {
   page_t *page{};
   Index *index{};
   ut_d(Fil_page_type page_type{FIL_PAGE_TYPE_ALLOCATED});
@@ -547,7 +535,7 @@ static byte *recv_parse_or_apply_log_rec_body(
         /* NOTE: There may be bogus assertion failures for dict_hdr_create(), trx_rseg_header_create(),
         and trx_sysf_create(). These are only called during database creation. */
 
-       ulint  offs = mach_read_from_2(ptr);
+        ulint offs = mach_read_from_2(ptr);
 
         switch (type) {
           default:
@@ -636,7 +624,7 @@ static byte *recv_parse_or_apply_log_rec_body(
       break;
     case MLOG_UNDO_HDR_DISCARD:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
-      ptr = Undo::parse_discard_latest(ptr, IF_DEBUG(end_ptr,) page, mtr);
+      ptr = Undo::parse_discard_latest(ptr, IF_DEBUG(end_ptr, ) page, mtr);
       break;
     case MLOG_UNDO_HDR_CREATE:
     case MLOG_UNDO_HDR_REUSE:
@@ -684,10 +672,10 @@ static byte *recv_parse_or_apply_log_rec_body(
 
 /**
  * Gets the hashed file address struct for a page.
- * 
+ *
  * @param space The space id.
  * @param page_no The page number.
- * 
+ *
  * @return	file address struct, nullptr if not found from the hash table
  */
 static Page_log_records *recv_get_log_record(space_id_t space, page_no_t page_no) noexcept {
@@ -704,14 +692,8 @@ static Page_log_records *recv_get_log_record(space_id_t space, page_no_t page_no
 }
 
 void Recv_sys::add_log_record(
-  mlog_type_t type,
-  space_id_t space,
-  page_no_t page_no,
-  byte *body,
-  byte *rec_end,
-  lsn_t start_lsn,
-  lsn_t end_lsn) noexcept
-{
+  mlog_type_t type, space_id_t space, page_no_t page_no, byte *body, byte *rec_end, lsn_t start_lsn, lsn_t end_lsn
+) noexcept {
   if (srv_fil->tablespace_deleted_or_being_deleted_in_mem(space, -1)) {
     /* The tablespace does not exist any more: do not store the
     log record */
@@ -847,13 +829,8 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
     rw_lock_x_lock_move_ownership(&block->m_rw_lock);
   }
 
-  Buf_pool::Request req {
-    .m_rw_latch  = RW_X_LATCH,
-    .m_guess = block,
-    .m_mode = BUF_KEEP_OLD,
-    .m_file = __FILE__,
-    .m_line = __LINE__,
-    .m_mtr = &mtr
+  Buf_pool::Request req{
+    .m_rw_latch = RW_X_LATCH, .m_guess = block, .m_mode = BUF_KEEP_OLD, .m_file = __FILE__, .m_line = __LINE__, .m_mtr = &mtr
   };
 
   auto success = srv_buf_pool->try_get_known_nowait(req);
@@ -880,7 +857,7 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
 
   ut_a(log_record->m_rec_head != nullptr);
 
-  for (auto recv{log_record->m_rec_head}; recv != nullptr; recv = recv->m_next) {  
+  for (auto recv{log_record->m_rec_head}; recv != nullptr; recv = recv->m_next) {
     byte *buf;
     byte *ptr{};
 
@@ -956,10 +933,10 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
 /**
  * Reads in pages which have hashed log records, from an area around a given
  * page number.
- * 
+ *
  * @param space The space id.
  * @param start_page_no The start page number.
- * 
+ *
  * @return	number of pages found
  */
 static ulint recv_read_in_area(space_id_t space, page_no_t start_page_no) noexcept {
@@ -968,10 +945,10 @@ static ulint recv_read_in_area(space_id_t space, page_no_t start_page_no) noexce
 
   ulint n = 0;
 
-  for (auto page_no  = low_limit; page_no < low_limit + RECV_READ_AHEAD_AREA; ++page_no) {
+  for (auto page_no = low_limit; page_no < low_limit + RECV_READ_AHEAD_AREA; ++page_no) {
     auto log_record = recv_get_log_record(space, page_no);
 
-    if (log_record != nullptr && !srv_buf_pool->peek(space, page_no)) {
+    if (log_record != nullptr && !srv_buf_pool->peek(Page_id(space, page_no))) {
 
       mutex_enter(&recv_sys->m_mutex);
 
@@ -987,7 +964,7 @@ static ulint recv_read_in_area(space_id_t space, page_no_t start_page_no) noexce
     }
   }
 
-  buf_read_recv_pages(false, space, page_nos.data(), n);
+  buf_read_recv_pages(false, Page_id(space, 0), page_nos.data(), n);
 
   return n;
 }
@@ -1008,7 +985,7 @@ void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept {
   recv_sys->m_apply_log_recs = true;
   recv_sys->m_apply_batch_on = true;
 
-  const ulint n_total{ recv_sys->m_n_log_records };
+  const ulint n_total{recv_sys->m_n_log_records};
 
   ulint n_recs{};
   bool printed_header{};
@@ -1027,15 +1004,15 @@ void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept {
 
         mutex_exit(&recv_sys->m_mutex);
 
-        if (srv_buf_pool->peek(space_id, page_no)) {
+        if (srv_buf_pool->peek(Page_id(space_id, page_no))) {
 
           mtr_t mtr;
 
           mtr.start();
 
-          Buf_pool::Request req {
+          Buf_pool::Request req{
             .m_rw_latch = RW_X_LATCH,
-            .m_page_id = { space_id, page_no },
+            .m_page_id = {space_id, page_no},
             .m_mode = BUF_GET,
             .m_file = __FILE__,
             .m_line = __LINE__,
@@ -1055,7 +1032,7 @@ void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept {
         mutex_enter(&recv_sys->m_mutex);
       }
 
-      const auto pct { (n_recs * 100) / n_total };
+      const auto pct{(n_recs * 100) / n_total};
 
       if (printed_header && pct != ((n_recs + 1) * 100) / n_total) {
         log_info_msg(std::format("{} ", pct));
@@ -1109,24 +1086,19 @@ void recv_apply_log_recs(DBLWR *dblwr, bool flush_and_free_pages) noexcept {
 
 /**
  * Tries to parse a single log record and returns its length.
- * 
+ *
  * @param ptr Pointer to the buffer.
  * @param end_ptr Pointer to the end of the buffer.
  * @param type Pointer to the type of the log record.
  * @param space Pointer to the space id.
  * @param page_no Pointer to the page number.
  * @param body Pointer to the log record body.
- * 
+ *
  * @return	length of the record, or 0 if the record was not complete
  */
 static ulint recv_parse_log_rec(
-  byte *ptr,
-  byte *end_ptr,
-  mlog_type_t *type,
-  space_id_t *space,
-  page_no_t *page_no,
-  byte **body) noexcept
-{
+  byte *ptr, byte *end_ptr, mlog_type_t *type, space_id_t *space, page_no_t *page_no, byte **body
+) noexcept {
   *body = nullptr;
 
   if (ptr == end_ptr) {
@@ -1174,7 +1146,7 @@ static ulint recv_parse_log_rec(
 
 /**
  * Calculates the new value for lsn when more data is added to the log.
- * 
+ *
  * @param lsn The old lsn.
  * @param len The length of the data added, excluding log block headers.
  */
@@ -1192,7 +1164,7 @@ static lsn_t recv_calc_lsn_on_data_add(lsn_t lsn, uint64_t len) noexcept {
 
 /**
  * Prints diagnostic info of corrupt log.
- * 
+ *
  * @param[in] ptr Pointer to the corrupt log record.
  * @param[in] type The type of the log record.
  * @param[in] space The space id.
@@ -1209,20 +1181,23 @@ static void recv_report_corrupt_log(byte *ptr, byte type, space_id_t space, page
     space,
     page_no,
     recv_sys->m_recovered_lsn,
-    (ulong) recv_previous_parsed_rec_type,
+    (ulong)recv_previous_parsed_rec_type,
     recv_previous_parsed_rec_is_multi,
     ptr - recv_sys->m_buf,
     recv_previous_parsed_rec_offset
   ));
 
-  if (ulint(ptr - recv_sys->m_buf + 100) > recv_previous_parsed_rec_offset && ulint(ptr - recv_sys->m_buf + 100 - recv_previous_parsed_rec_offset) < 200000) {
+  if (ulint(ptr - recv_sys->m_buf + 100) > recv_previous_parsed_rec_offset &&
+      ulint(ptr - recv_sys->m_buf + 100 - recv_previous_parsed_rec_offset) < 200000) {
     log_err(
       "Hex dump of corrupt log starting 100 bytes before the start"
       " of the previous log rec, and ending 100 bytes after the start"
       " of the corrupt rec:"
     );
 
-    log_warn_buf(recv_sys->m_buf + recv_previous_parsed_rec_offset - 100, ptr - recv_sys->m_buf + 200 - recv_previous_parsed_rec_offset);
+    log_warn_buf(
+      recv_sys->m_buf + recv_previous_parsed_rec_offset - 100, ptr - recv_sys->m_buf + 200 - recv_previous_parsed_rec_offset
+    );
   }
 
   if (!srv_config.m_force_recovery) {
@@ -1240,7 +1215,7 @@ static void recv_report_corrupt_log(byte *ptr, byte type, space_id_t space, page
 /**
  * Parses log records from a buffer and stores them to a hash table to wait
  * merging to file pages.
- * 
+ *
  * @param store_to_hash true if the records should be stored to the hash table;
  *  this is set to false if just debug checking is needed
  * @return	currently always returns false
@@ -1307,7 +1282,7 @@ static bool recv_parse_log_recs(bool store_to_hash) noexcept {
 
       if (type == MLOG_DUMMY_RECORD) {
         /* Do nothing */
- 
+
       } else if (!store_to_hash) {
         /* In debug checking, update a replicate page according to
         the log record, and check that it becomes identical with the
@@ -1405,10 +1380,10 @@ static bool recv_parse_log_recs(bool store_to_hash) noexcept {
 /**
  * Adds data from a new log block to the parsing buffer of recv_sys if
  * recv_sys->m_parse_start_lsn is non-zero.
- * 
+ *
  * @param log_block Pointer to the log block.
  * @param scanned_lsn The LSN up to which the data has been scanned.
- * 
+ *
  * @return	true if more data added
  */
 static bool recv_sys_add_to_parsing_buf(const byte *log_block, lsn_t scanned_lsn) noexcept {
@@ -1486,8 +1461,8 @@ static void recv_sys_justify_left_parsing_buf() noexcept {
  * Scans log from a buffer and stores new log data to the parsing buffer.
  * Parses and stores the log records if new data found.  This function will
  * apply log records automatically when the stored records table becomes full.
- * 
- * 
+ *
+ *
  * @param[in] dblwr             Doublewrite buffer to use
  * @param[in] recovery          Recovery flag
  * @param[in] available_memory  We let the storage of recs to grow to this
@@ -1501,19 +1476,12 @@ static void recv_sys_justify_left_parsing_buf() noexcept {
  * @param[in,out] contiguous_lsn It is known that all log groups contain
  *                              contiguouslog data up to this lsn
  * @param[out] group_scanned_lsn Scanning succeeded up to this lsn
- * 
+ *
  * @return true if limit_lsn has been reached, or not able to scan any more in this log group.
  */
 static bool recv_scan_log_recs(
-  DBLWR* dblwr,
-  ib_recovery_t recovery,
-  ulint available_memory,
-  bool store_to_hash,
-  const byte *buf,
-  ulint len,
-  lsn_t start_lsn,
-  lsn_t *contiguous_lsn,
-  lsn_t *group_scanned_lsn
+  DBLWR *dblwr, ib_recovery_t recovery, ulint available_memory, bool store_to_hash, const byte *buf, ulint len, lsn_t start_lsn,
+  lsn_t *contiguous_lsn, lsn_t *group_scanned_lsn
 ) noexcept {
 
   ut_ad(len >= IB_FILE_BLOCK_SIZE);
@@ -1560,10 +1528,8 @@ static bool recv_scan_log_recs(
 
     auto data_len = Log::block_get_data_len(log_block);
 
-    if ((store_to_hash || data_len == IB_FILE_BLOCK_SIZE) &&
-        scanned_lsn + data_len > recv_sys->m_scanned_lsn &&
-        recv_sys->m_scanned_checkpoint_no > 0 &&
-        Log::block_get_checkpoint_no(log_block) < recv_sys->m_scanned_checkpoint_no &&
+    if ((store_to_hash || data_len == IB_FILE_BLOCK_SIZE) && scanned_lsn + data_len > recv_sys->m_scanned_lsn &&
+        recv_sys->m_scanned_checkpoint_no > 0 && Log::block_get_checkpoint_no(log_block) < recv_sys->m_scanned_checkpoint_no &&
         recv_sys->m_scanned_checkpoint_no - Log::block_get_checkpoint_no(log_block) > 0x80000000UL) {
 
       /* Garbage from a log buffer flush which was made before the most recent database recovery */
@@ -1621,7 +1587,6 @@ static bool recv_scan_log_recs(
 
     } else {
       log_block += IB_FILE_BLOCK_SIZE;
-
     }
   } while (log_block < buf + len && !finished);
 
@@ -1661,21 +1626,17 @@ static bool recv_scan_log_recs(
 /**
  * Scans log from a buffer and stores new log data to the parsing buffer.
  * Parses and hashes the log records if new data found.
- * 
+ *
  * @param[in] dblwr Doublewrite buffer to use
  * @param[in] recovery The recovery flag.
  * @param[in] group The log group.
  * @param[in] contiguous_lsn The LSN up to which the log data is known to be contiguous.
  * @param[in] group_scanned_lsn The LSN up to which the log data has been scanned.
- * 
+ *
  */
 static void recv_group_scan_log_recs(
-  DBLWR* dblwr,
-  ib_recovery_t recovery,
-  log_group_t *group,
-  lsn_t *contiguous_lsn,
-  lsn_t *group_scanned_lsn) noexcept
-{
+  DBLWR *dblwr, ib_recovery_t recovery, log_group_t *group, lsn_t *contiguous_lsn, lsn_t *group_scanned_lsn
+) noexcept {
 
   bool finished = false;
   auto start_lsn = *contiguous_lsn;
@@ -1700,7 +1661,7 @@ static void recv_group_scan_log_recs(
   }
 }
 
-static void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery)  noexcept {
+static void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept {
   ut_a(!recv_needed_recovery);
 
   recv_needed_recovery = true;
@@ -1711,12 +1672,12 @@ static void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery)  noe
 /**
  * Compare the checkpoint lsn with the lsn recorded in the data files
  * and start crash recovery if required.
- * 
+ *
  * @param recovery The recovery flag.
  * @param checkpoint_lsn The checkpoint LSN.
  * @param max_flushed_lsn The maximum flushed LSN from data files.
  */
-static void recv_init_crash_recovery(DBLWR* dblwr, ib_recovery_t recovery, lsn_t checkpoint_lsn, lsn_t max_flushed_lsn) noexcept {
+static void recv_init_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery, lsn_t checkpoint_lsn, lsn_t max_flushed_lsn) noexcept {
   /* NOTE: we always do a 'recovery' at startup, but only if there is something wrong we
   will print a message to the user about recovery: */
 
@@ -1741,7 +1702,10 @@ static void recv_init_crash_recovery(DBLWR* dblwr, ib_recovery_t recovery, lsn_t
       log_err(
         "The log sequence number in 'system.idb' file does not match"
         " the log sequence number in the ib_logfiles! Checkooint LSN: ",
-        checkpoint_lsn, ", max_flushed_LSN: ", max_flushed_lsn);
+        checkpoint_lsn,
+        ", max_flushed_LSN: ",
+        max_flushed_lsn
+      );
 
       recv_start_crash_recovery(dblwr, recovery);
     }
@@ -1962,8 +1926,8 @@ void recv_recovery_rollback_active() noexcept {
   sync_order_checks_on = true;
 #endif
 
-  (void) srv_dict_sys->m_ddl.drop_all_temp_indexes(ib_recovery_t(srv_config.m_force_recovery));
-  (void) srv_dict_sys->m_ddl.drop_all_temp_tables(ib_recovery_t(srv_config.m_force_recovery));
+  (void)srv_dict_sys->m_ddl.drop_all_temp_indexes(ib_recovery_t(srv_config.m_force_recovery));
+  (void)srv_dict_sys->m_ddl.drop_all_temp_tables(ib_recovery_t(srv_config.m_force_recovery));
 
   if (srv_config.m_force_recovery < IB_RECOVERY_NO_TRX_UNDO) {
     /* Rollback the uncommitted transactions which have no user
@@ -2023,7 +1987,7 @@ std::string to_string(Recv_addr_state s) noexcept {
     case RECV_PROCESSED:
       return "RECV_PROCESSED";
     default:
-      log_fatal(std::format("Unknown recv_addr_state: {}", (int) s));
+      log_fatal(std::format("Unknown recv_addr_state: {}", (int)s));
       return "UNKNOWN";
   }
 }
@@ -2049,7 +2013,7 @@ std::string Page_log_records::to_string() const noexcept {
   for (auto lr = m_rec_head; lr != nullptr; lr = lr->m_next) {
     str += lr->to_string();
     str += ", ";
-  } 
+  }
 
   return str;
 }

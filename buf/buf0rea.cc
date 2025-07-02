@@ -64,12 +64,12 @@ constexpr ulint BUF_READ_AHEAD_PEND_LIMIT = 2;
  * @return DB_SUCCESS if a request was posted to the IO layer, DB_FAIL the request was not posted
  *  or error code from the IO layer.
  */
-static db_err buf_read_page(IO_request io_request, bool batch, space_id_t space, page_no_t page_no, int64_t tablespace_version) {
+static db_err buf_read_page(IO_request io_request, bool batch, const Page_id &page_id, int64_t tablespace_version) {
   ut_a(io_request == IO_request::Async_read || io_request == IO_request::Sync_read);
 
-  if (srv_dblwr != nullptr && space == TRX_SYS_SPACE && srv_dblwr->is_page_inside(page_no)) {
+  if (srv_dblwr != nullptr && page_id.space_id() == TRX_SYS_SPACE && srv_dblwr->is_page_inside(page_id.page_no())) {
 
-    log_warn(std::format("Trying to read the doublewrite buffer page {}", page_no));
+    log_warn(std::format("Trying to read the doublewrite buffer page {}", page_id.page_no()));
 
     return DB_FAIL;
   }
@@ -80,7 +80,7 @@ static db_err buf_read_page(IO_request io_request, bool batch, space_id_t space,
   or is being dropped; if we succeed in initing the page in the buffer
   pool for read, then DISCARD cannot proceed until the read has
   completed */
-  auto bpage = srv_buf_pool->init_for_read(&err, space, page_no, tablespace_version);
+  auto bpage = srv_buf_pool->init_for_read(&err, page_id, tablespace_version);
 
   if (bpage == nullptr) {
     /* The bpage can be nullptr if the page is already in the buffer pool. */
@@ -92,7 +92,7 @@ static db_err buf_read_page(IO_request io_request, bool batch, space_id_t space,
 
   ut_a(bpage->get_state() == BUF_BLOCK_FILE_PAGE);
 
-  err = srv_fil->io(io_request, batch, space, page_no, 0, UNIV_PAGE_SIZE, buf_page_get_block(bpage)->get_frame(), bpage);
+  err = srv_fil->data_io(io_request, batch, page_id, 0, UNIV_PAGE_SIZE, buf_page_get_block(bpage)->get_frame(), bpage);
 
   ut_a(err == DB_SUCCESS);
 
@@ -106,9 +106,9 @@ static db_err buf_read_page(IO_request io_request, bool batch, space_id_t space,
   return DB_SUCCESS;
 }
 
-bool buf_read_page(ulint space, ulint offset) {
-  auto tablespace_version = srv_fil->space_get_version(space);
-  auto err = buf_read_page(IO_request::Sync_read, false, space, offset, tablespace_version);
+bool buf_read_page(const Page_id &page_id) {
+  auto tablespace_version = srv_fil->space_get_version(page_id.space_id());
+  auto err = buf_read_page(IO_request::Sync_read, false, page_id, tablespace_version);
 
   if (err == DB_SUCCESS) {
 
@@ -119,8 +119,8 @@ bool buf_read_page(ulint space, ulint offset) {
     log_err(std::format(
       "Trying to access tablespace {} page no. {}, but the "
       " tablespace does not exist or is being dropped.",
-      space,
-      offset
+      page_id.space_id(),
+      page_id.page_no()
     ));
   }
 
@@ -133,7 +133,7 @@ bool buf_read_page(ulint space, ulint offset) {
   return err == DB_SUCCESS;
 }
 
-ulint buf_read_ahead_linear(Buf_pool *buf_pool, space_id_t space, page_no_t offset) {
+ulint buf_read_ahead_linear(Buf_pool *buf_pool, const Page_id &page_id) {
   Buf_page *bpage;
   buf_frame_t *frame;
   Buf_page *pred_bpage = nullptr;
@@ -147,6 +147,8 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, space_id_t space, page_no_t offs
   ulint i;
   const ulint buf_read_ahead_linear_area = srv_buf_pool->get_read_ahead_area();
   ulint threshold;
+  auto space = page_id.space_id();
+  auto offset = page_id.page_no();
 
   if (unlikely(srv_startup_is_before_trx_rollback_phase)) {
     /* No read-ahead to avoid thread deadlocks */
@@ -204,8 +206,12 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, space_id_t space, page_no_t offs
 
   fail_count = 0;
 
+  Page_id current_page_id(space, low);
+
   for (i = low; i < high; i++) {
-    bpage = srv_buf_pool->hash_get_page(space, i);
+    current_page_id.set_page_no(i);
+
+    bpage = srv_buf_pool->hash_get_page(current_page_id);
 
     if (bpage == nullptr || !buf_page_is_accessed(bpage)) {
       /* Not accessed */
@@ -240,7 +246,7 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, space_id_t space, page_no_t offs
   /* If we got this far, we know that enough pages in the area have
   been accessed in the right order: linear read-ahead can be sensible */
 
-  bpage = srv_buf_pool->hash_get_page(space, offset);
+  bpage = srv_buf_pool->hash_get_page(page_id);
 
   if (bpage == nullptr) {
     buf_pool->mutex_release();
@@ -304,7 +310,7 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, space_id_t space, page_no_t offs
     /* It is only sensible to do read-ahead in the non-sync
     aio mode: hence false as the first parameter */
 
-    err = buf_read_page(IO_request::Async_read, true, space, i, tablespace_version);
+    err = buf_read_page(IO_request::Async_read, true, Page_id(space, i), tablespace_version);
 
     if (err == DB_SUCCESS) {
 
@@ -335,7 +341,8 @@ ulint buf_read_ahead_linear(Buf_pool *buf_pool, space_id_t space, page_no_t offs
   return count;
 }
 
-void buf_read_recv_pages(bool sync, space_id_t space, const page_no_t *page_nos, ulint n_stored) {
+void buf_read_recv_pages(bool sync, const Page_id &page_id, const page_no_t *page_nos, ulint n_stored) {
+  auto space = page_id.space_id();
   if (srv_fil->space_get_size(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
@@ -365,9 +372,9 @@ void buf_read_recv_pages(bool sync, space_id_t space, const page_no_t *page_nos,
     }
 
     if ((i + 1 == n_stored) && sync) {
-      buf_read_page(IO_request::Sync_read, false, space, page_nos[i], tablespace_version);
+      buf_read_page(IO_request::Sync_read, false, Page_id(space, page_nos[i]), tablespace_version);
     } else {
-      buf_read_page(IO_request::Async_read, true, space, page_nos[i], tablespace_version);
+      buf_read_page(IO_request::Async_read, true, Page_id(space, page_nos[i]), tablespace_version);
     }
   }
 

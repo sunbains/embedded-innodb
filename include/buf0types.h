@@ -230,6 +230,13 @@ struct Buf_page {
   }
 
   /**
+   * Gets the page id of a page.
+   *
+   * @return Page id.
+   */
+  [[nodiscard]] Page_id get_page_id() const noexcept { return {get_space(), get_page_no()}; }
+
+  /**
   * Gets the state of a block.
   *
   * @param bpage Pointer to the control block.
@@ -397,9 +404,7 @@ struct Buf_block {
    *
    * @return The page id.
    */
-  [[nodiscard]] Page_id get_page_id() const noexcept {
-    return {get_space(), get_page_no()};
-  }
+  [[nodiscard]] Page_id get_page_id() const noexcept { return {get_space(), get_page_no()}; }
 
   /**
   * Gets the state of a block.
@@ -623,7 +628,7 @@ struct Buf_pool {
   /*** Given a tablespace id and page number tries to get that page. If the page is not in
   the buffer pool it is not loaded and nullptr is returned. Suitable for using when holding
   the kernel mutex.
-  @param[in,out] req       Request 
+  @param[in,out] req       Request
   @return page or nullptr */
   const Buf_block *try_get_by_page_id(Request &req);
 
@@ -631,24 +636,31 @@ struct Buf_pool {
    * This is the general function used to get access to a database page.
    *
    * @param[in,out] req    Request
-   * @param[in] guess      Hint 
-   * 
+   * @param[in] guess      Hint
+   *
    * @return          pointer to the block or nullptr
    */
   Buf_block *get(Request &req, Buf_block *guess);
 
   /**
-   * Initializes a page to the buffer buf_pool. The page is usually not read
+   * @brief Initializes a page to the buffer buf_pool. The page is usually not read
    * from a file even if it cannot be found in the buffer buf_pool. This is
    * one of the functions which perform to a block a state transition
    * NOT_USED => FILE_PAGE (the other is Buf_pool::get).
    *
-   * @param space     in: space id
-   * @param page_no   in: page_no of the page within space in units of a page
+   * @param page_id   in: page ID containing space and page number
    * @param mtr       in: mini-transaction handle
    * @return          pointer to the block, page bufferfixed
    */
-  [[nodiscard]] Buf_block *create(space_id_t space, page_no_t page_no, mtr_t *mtr);
+  [[nodiscard]] Buf_block *create(const Page_id &page_id, mtr_t *mtr);
+
+  /**
+   * @brief Inits a page to the buffer buf_pool.
+   *
+   * @param page_id in: page ID containing space and page number
+   * @param block in: block to init
+   */
+  void page_init(const Page_id &page_id, Buf_block *block);
 
   /**
    * Moves a page to the start of the buffer pool LRU list. This high-level
@@ -662,10 +674,9 @@ struct Buf_pool {
   /**
    * Resets the check_index_page_at_flush field of a page if found in the buffer pool.
    *
-   * @param space     in: space id
-   * @param page_no   in: page number
+   * @param page_id   in: page ID containing space and page number
    */
-  void check_index_page_at_flush(space_id_t space, page_no_t page_no);
+  void check_index_page_at_flush(const Page_id &page_id);
 
   /**
    * Gets the current size of the buffer pool in bytes.
@@ -682,7 +693,7 @@ struct Buf_pool {
   */
   [[nodiscard]] uint64_t get_oldest_modification() const;
 
-  /** 
+  /**
   * @brief The size in pages of the area which the read-ahead algorithms read if invoked
   */
   [[nodiscard]] ulint get_read_ahead_area() const { return std::min(ulint(64), ut_2_power_up(m_curr_size / 32)); }
@@ -719,35 +730,32 @@ struct Buf_pool {
    * @brief Returns the control block of a file page, nullptr if not found.
    *
    * This function retrieves the control block of a file page based on
-   * the space id and page_no.
+   * the page ID.
    *
-   * @param space_id The space id of the page.
-   * @param page_no Page number within the space
+   * @param page_id The page ID containing space and page number.
    * @return The control block of the file page, nullptr if not found.
   */
-  [[nodiscard]] Buf_page *hash_get_page(space_id_t space_id, page_no_t page_no);
+  [[nodiscard]] Buf_page *hash_get_page(const Page_id &page_id);
 
   /**
    * @brief Returns the control block of a file page.
    *
-   * This function retrieves the control block of a file page based on the space id and page_no.
+   * This function retrieves the control block of a file page based on the page ID.
    *
-   * @param space The space id of the page.
-   * @param page_no Page number within the space.n
+   * @param page_id The page ID containing space and page number.
    * @return The control block of the file page, nullptr if not found.
    */
-  [[nodiscard]] Buf_block *hash_get_block(space_id_t space, page_no_t page_no);
+  [[nodiscard]] Buf_block *hash_get_block(const Page_id &page_id);
 
   /**
    * @brief Checks if the page can be found in the buffer pool hash table.
    *
    * Note that it is possible that the page is not yet read from disk.
    *
-   * @param space_id The space id of the page.
-   * @param page_no Page number within the space
+   * @param page_id The page ID containing space and page number.
    * @return true if found in the page hash table, false otherwise.
    */
-  [[nodiscard]] bool peek(space_id_t space_id, page_no_t page_no);
+  [[nodiscard]] bool peek(const Page_id &page_id);
 
   /** Gets the current length of the free list of buffer blocks.
   @return	length of the free list */
@@ -773,17 +781,16 @@ struct Buf_pool {
    * The io-handler must take care that the flag is cleared and the lock released later.
    *
    * @param[out] err - Pointer to the error code (DB_SUCCESS or DB_TABLESPACE_DELETED).
-   * @param space - The space id.
+   * @param page_id - The page ID containing space and page number.
    * @param[in] tablespace_version - Prevents reading from a wrong version of the
    *  tablespace in case we have done DISCARD + IMPORT.
-   * @param page_no - The page number.
    * @return Pointer to the block or nullptr.
    */
-  Buf_page *init_for_read(db_err *err, space_id_t space, page_no_t page_no, int64_t tablespace_version);
+  Buf_page *init_for_read(db_err *err, const Page_id &page_id, int64_t tablespace_version);
 
   /**
    * @brief Completes an asynchronous read or write request of a file page to or from the buffer pool.
-   * 
+   *
    * @param bpage Pointer to the block in question.
    */
   void io_complete(Buf_page *bpage);
@@ -791,9 +798,7 @@ struct Buf_pool {
   /**
    * @brief Acquires the buffer pool mutex.
    */
-  void mutex_acquire() noexcept {
-    mutex_enter(&m_mutex);
-  }
+  void mutex_acquire() noexcept { mutex_enter(&m_mutex); }
 
 #ifdef UNIV_DEBUG
   /** Prints info of the buffer pool data structure. */
@@ -804,11 +809,10 @@ struct Buf_pool {
    * This function should be called when we free a file page and want the
    * debug version to check that it is not accessed any more unless reallocated.
    *
-   * @param space     in: space id
-   * @param page_no   in: page number
+   * @param page_id   in: page ID containing space and page number
    * @return          control block if found in page hash table, otherwise nullptr
    */
-  Buf_page *set_file_page_was_freed(space_id_t space, page_no_t page_no);
+  Buf_page *set_file_page_was_freed(const Page_id &page_id);
 
   /** Returns the number of latched pages in the buffer pool.
   @return        number of latched pages */
@@ -820,12 +824,10 @@ struct Buf_pool {
 
   /**
    * @brief Checks if the buffer pool mutex is owned.
-   * 
+   *
    * @return True if the buffer pool mutex is owned, false otherwise.
    */
-  [[nodiscard]] bool mutex_is_owned() const noexcept {
-    return mutex_own(&m_mutex);
-  }
+  [[nodiscard]] bool mutex_is_owned() const noexcept { return mutex_own(&m_mutex); }
 
   /** Forbid the release of the buffer pool mutex. */
   inline void mutex_exit_forbid() noexcept {
@@ -847,19 +849,17 @@ struct Buf_pool {
   }
 
 #else /* UNIV_DEBUG */
-  /** Forbid the release of the buffer pool mutex. */
-  #define mutex_exit_forbid() ((void)0)
+/** Forbid the release of the buffer pool mutex. */
+#define mutex_exit_forbid() ((void)0)
 
-  /** Allow the release of the buffer pool mutex. */
-  #define mutex_exit_allow() ((void)0)
+/** Allow the release of the buffer pool mutex. */
+#define mutex_exit_allow() ((void)0)
 
   /** Release the buffer pool mutex. */
-  inline void mutex_release() noexcept {
-    mutex_exit(&m_mutex);
-  }
+  inline void mutex_release() noexcept { mutex_exit(&m_mutex); }
 
 #endif /* UNIV_DEBUG */
-  /* @} */
+       /* @} */
  private:
   /**
    * @brief Sets the time of the first access of a page and moves a page to the
@@ -875,7 +875,7 @@ struct Buf_pool {
 
   /**
    * @brief Inits a page to the buffer buf_pool.
-   * 
+   *
    * @param space in: space id
    * @param page_no in: Page number within space
    * @param block in: block to init
@@ -901,7 +901,7 @@ struct Buf_pool {
 
   /**
    * @brief Checks that all file pages in the buffer chunk are in a replaceable state.
-   * 
+   *
    * @param[in] chunk Chunk being checked.
    * @return Address of a non-free block, or nullptr if all freed.
    */
@@ -909,7 +909,7 @@ struct Buf_pool {
 
   /**
    * @brief Initializes a buffer control block when the buf_pool is created.
-   * 
+   *
    * @param block Pointer to the control block.
    * @param frame Pointer to the buffer frame.
    */
@@ -917,13 +917,12 @@ struct Buf_pool {
 
   /**
    * @brief Initialize some fields of a control block.
-   * 
+   *
    * @param bpage The block to initialize.
    */
   void page_init_low(Buf_page *bpage);
 
-  public:
-
+ public:
   /** mutex protecting the buffer pool struct and control blocks, except the
   read-write lock in them */
   mutable mutex_t m_mutex{};
@@ -1007,10 +1006,10 @@ struct Buf_pool {
   /* @{ */
 
   /** base node of the free block list */
-  UT_LIST_BASE_NODE_T(Buf_page, m_list) m_free_list{};
+  UT_LIST_BASE_NODE_T(Buf_page, m_list) m_free_list {};
 
   /** base node of the LRU list */
-  UT_LIST_BASE_NODE_T(Buf_page, m_LRU_list) m_LRU_list{};
+  UT_LIST_BASE_NODE_T(Buf_page, m_LRU_list) m_LRU_list {};
 
   /** pointer to the about m_LRU->old_ratio/BUF_LRU_RATIO_DIV oldest
   blocks in the LRU list; nullptr if LRU length less than BUF_LRU_MIN_LEN;
