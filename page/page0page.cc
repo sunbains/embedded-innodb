@@ -194,7 +194,7 @@ inline void page_create_write_log(buf_frame_t *frame, mtr_t *mtr) {
   mlog_write_initial_log_record(frame, MLOG_PAGE_CREATE, mtr);
 }
 
-byte *page_parse_create(byte *ptr, byte *, Buf_block *block, Index *index,mtr_t *mtr) {
+byte *page_parse_create(byte *ptr, byte *, Buf_block *block, Index *index, mtr_t *mtr) {
   ut_ad(ptr != nullptr);
 
   /* The record is empty, except for the record initial part */
@@ -249,7 +249,7 @@ page_t *page_create(const Index *index, Buf_block *block, mtr_t *mtr) {
   {
     Phy_rec record{index, infimum_rec};
 
-    offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
 
     heap_top = rec_get_end(infimum_rec, offsets);
   }
@@ -273,7 +273,7 @@ page_t *page_create(const Index *index, Buf_block *block, mtr_t *mtr) {
   {
     Phy_rec record{index, supremum_rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
 
     heap_top = rec_get_end(supremum_rec, offsets);
   }
@@ -317,37 +317,37 @@ page_t *page_create(const Index *index, Buf_block *block, mtr_t *mtr) {
 }
 
 void page_copy_rec_list_end_no_locks(Buf_block *new_block, Buf_block *block, rec_t *rec, const Index *index, mtr_t *mtr) {
-  page_t *new_page = new_block->get_frame();
-  page_cur_t cur1;
-  rec_t *cur2;
-  mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  mem_heap_t *heap{};
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto *offsets = offsets_.data();
+  auto new_page = new_block->get_frame();
+
   rec_offs_init(offsets_);
 
-  page_cur_position(rec, block, &cur1);
+  Page_cursor cursor{};
+  cursor.position(rec, block);
 
-  if (page_cur_is_before_first(&cur1)) {
+  if (cursor.is_before_first()) {
 
-    page_cur_move_to_next(&cur1);
+    cursor.move_to_next();
   }
 
   ut_a(mach_read_from_2(new_page + UNIV_PAGE_SIZE - 10) == PAGE_INFIMUM);
 
-  cur2 = page_get_infimum_rec(new_block->get_frame());
+  auto last_rec = page_get_infimum_rec(new_block->get_frame());
 
   /* Copy records from the original page to the new page */
 
-  while (!page_cur_is_after_last(&cur1)) {
-    auto cur1_rec = page_cur_get_rec(&cur1);
+  while (!cursor.is_after_last()) {
+    auto cursor_rec = cursor.get_rec();
 
     {
-      Phy_rec record{index, cur1_rec};
+      Phy_rec record{index, cursor_rec};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
-    auto ins_rec = page_cur_insert_rec_low(cur2, index, cur1_rec, offsets, mtr);
+    auto ins_rec = cursor.insert_rec_low(last_rec, index, cursor_rec, offsets, mtr);
 
     if (unlikely(ins_rec == nullptr)) {
       /* Track an assertion failure reported on the mailing
@@ -355,21 +355,15 @@ void page_copy_rec_list_end_no_locks(Buf_block *new_block, Buf_block *block, rec
 
       buf_page_print(new_page, 0);
       buf_page_print(page_align(rec), 0);
-      ut_print_timestamp(ib_stream);
 
-      ib_logger(
-        ib_stream,
-        "rec offset %lu, cur1 offset %lu,"
-        " cur2 offset %lu\n",
-        (ulong)page_offset(rec),
-        (ulong)page_offset(page_cur_get_rec(&cur1)),
-        (ulong)page_offset(cur2)
-      );
+      log_err(std::format(
+        "rec offset {}, cursor offset {}, rec offset {}", page_offset(rec), page_offset(cursor.get_rec()), page_offset(last_rec)
+      ));
       ut_error;
     }
 
-    page_cur_move_to_next(&cur1);
-    cur2 = ins_rec;
+    cursor.move_to_next();
+    last_rec = ins_rec;
   }
 
   if (likely_null(heap)) {
@@ -389,7 +383,7 @@ rec_t *page_copy_rec_list_end(Buf_block *new_block, Buf_block *block, rec_t *rec
   predefined supremum record. */
 
   if (page_dir_get_n_heap(new_page) == PAGE_HEAP_NO_USER_LOW) {
-    page_copy_rec_list_end_to_created_page(new_page, rec, index, mtr);
+    copy_rec_list_end_to_created_page(new_page, rec, index, mtr);
   } else {
     page_copy_rec_list_end_no_locks(new_block, block, rec, index, mtr);
   }
@@ -406,13 +400,12 @@ rec_t *page_copy_rec_list_end(Buf_block *new_block, Buf_block *block, rec_t *rec
 }
 
 rec_t *page_copy_rec_list_start(Buf_block *new_block, Buf_block *block, rec_t *rec, Index *index, mtr_t *mtr) {
+  mem_heap_t *heap{};
   page_t *new_page = new_block->get_frame();
-  page_cur_t cur1;
-  rec_t *cur2;
-  mem_heap_t *heap = nullptr;
-  rec_t *ret = page_rec_get_prev(page_get_supremum_rec(new_page));
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  auto first_rec = page_rec_get_prev(page_get_supremum_rec(new_page));
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto *offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   /* Here, "ret" may be pointing to a user record or the
@@ -420,29 +413,30 @@ rec_t *page_copy_rec_list_start(Buf_block *new_block, Buf_block *block, rec_t *r
 
   if (page_rec_is_infimum(rec)) {
 
-    return (ret);
+    return first_rec;
   }
 
-  page_cur_set_before_first(block, &cur1);
-  page_cur_move_to_next(&cur1);
+  Page_cursor cursor{};
 
-  cur2 = ret;
+  cursor.set_before_first(block);
+  cursor.move_to_next();
+
+  auto cur_rec = first_rec;
 
   /* Copy records from the original page to the new page */
 
-  while (page_cur_get_rec(&cur1) != rec) {
-    auto cur1_rec = page_cur_get_rec(&cur1);
+  while (cursor.get_rec() != rec) {
 
     {
-      Phy_rec record{index, cur1_rec};
+      Phy_rec record{index, cursor.get_rec()};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
-    cur2 = page_cur_insert_rec_low(cur2, index, cur1_rec, offsets, mtr);
-    ut_a(cur2);
+    cur_rec = cursor.insert_rec_low(cur_rec, index, cursor.get_rec(), offsets, mtr);
+    ut_a(cur_rec != nullptr);
 
-    page_cur_move_to_next(&cur1);
+    cursor.move_to_next();
   }
 
   if (likely_null(heap)) {
@@ -455,14 +449,14 @@ rec_t *page_copy_rec_list_start(Buf_block *new_block, Buf_block *block, rec_t *r
 
   /* Update the lock table and possible hash index */
 
-  srv_lock_sys->move_rec_list_start(new_block, block, rec, ret);
+  srv_lock_sys->move_rec_list_start(new_block, block, rec, first_rec);
 
-  return ret;
+  return first_rec;
 }
 
 /**
  * @brief Writes a log record of a record list end or start deletion.
- * 
+ *
  * @param[in] rec Record on page.
  * @param[in] index Record descriptor.
  * @param[in] type Operation type: MLOG_LIST_END_DELETE, MLOG_LIST_START_DELETE.
@@ -517,9 +511,11 @@ void page_delete_rec_list_end(rec_t *rec, Buf_block *block, Index *index, ulint 
   rec_t *prev_rec;
   ulint n_owned;
   page_t *page = page_align(rec);
-  mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  mem_heap_t *heap{};
+
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto *offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   ut_ad(size == ULINT_UNDEFINED || size < UNIV_PAGE_SIZE);
@@ -559,7 +555,7 @@ void page_delete_rec_list_end(rec_t *rec, Buf_block *block, Index *index, ulint 
       {
         Phy_rec record{index, rec2};
 
-        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+        offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
 
       auto s = rec_offs_size(offsets);
@@ -617,10 +613,8 @@ void page_delete_rec_list_end(rec_t *rec, Buf_block *block, Index *index, ulint 
 }
 
 void page_delete_rec_list_start(rec_t *rec, Buf_block *block, Index *index, mtr_t *mtr) {
-  page_cur_t cur1;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  mem_heap_t *heap = nullptr;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto *offsets = offsets_.data();
 
   rec_offs_init(offsets_);
 
@@ -631,20 +625,23 @@ void page_delete_rec_list_start(rec_t *rec, Buf_block *block, Index *index, mtr_
 
   page_delete_rec_list_write_log(rec, index, MLOG_LIST_START_DELETE, mtr);
 
-  page_cur_set_before_first(block, &cur1);
-  page_cur_move_to_next(&cur1);
+  Page_cursor cursor{};
+
+  cursor.set_before_first(block);
+  cursor.move_to_next();
 
   /* Individual deletes are not logged */
 
+  mem_heap_t *heap{};
   auto log_mode = mtr->set_log_mode(MTR_LOG_NONE);
 
-  while (page_cur_get_rec(&cur1) != rec) {
+  while (cursor.get_rec() != rec) {
     {
-      Phy_rec record{index, page_cur_get_rec(&cur1)};
+      Phy_rec record{index, cursor.get_rec()};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
-    page_cur_delete_rec(&cur1, index, offsets, mtr);
+    cursor.delete_rec(index, offsets, mtr);
   }
 
   if (unlikely(heap != nullptr)) {
@@ -692,10 +689,9 @@ bool page_move_rec_list_start(Buf_block *new_block, Buf_block *block, rec_t *spl
 }
 
 void page_rec_write_index_page_no(rec_t *rec, ulint i, ulint page_no, mtr_t *mtr) {
-  byte *data;
   ulint len;
 
-  data = rec_get_nth_field(rec, i, &len);
+  auto data = rec_get_nth_field(rec, i, &len);
 
   ut_ad(len == 4);
 
@@ -704,10 +700,10 @@ void page_rec_write_index_page_no(rec_t *rec, ulint i, ulint page_no, mtr_t *mtr
 
 /**
  * @brief Deletes a slot from the directory and updates the n_owned fields in the records.
- * 
+ *
  * This function updates the n_owned fields in the records, so that the first slot after
  * the deleted ones inherits the records of the deleted slots.
- * 
+ *
  * @param[in,out] page The index page.
  * @param[in] slot_no The slot to be deleted.
  */
@@ -747,10 +743,10 @@ inline void page_dir_delete_slot(page_t *page, ulint slot_no) {
 
 /**
  * @brief Adds a slot to the directory.
- * 
+ *
  * This function adds a slot to the directory but does not set the record pointers
  * in the added slots or update n_owned values. This is the responsibility of the caller.
- * 
+ *
  * @param[in,out] page The index page.
  * @param[in] start The slot above which the new slots are added.
  */
@@ -920,7 +916,8 @@ ulint page_rec_get_n_recs_before(const rec_t *rec) {
 }
 
 void page_rec_print(const rec_t *rec, const ulint *offsets) {
-  log_info(std::format("n_owned: {}; heap_no: {}; next rec: {}", rec_get_n_owned(rec), rec_get_heap_no(rec), rec_get_next_offs(rec)));
+  log_info(std::format("n_owned: {}; heap_no: {}; next rec: {}", rec_get_n_owned(rec), rec_get_heap_no(rec), rec_get_next_offs(rec))
+  );
 
   page_rec_check(rec);
   rec_validate(rec, offsets);
@@ -929,109 +926,105 @@ void page_rec_print(const rec_t *rec, const ulint *offsets) {
 void page_dir_print(page_t *page, ulint pr_n) {
   auto n = page_dir_get_n_slots(page);
 
-  ib_logger(
-    ib_stream,
+  log_info(std::format(
     "--------------------------------\n"
     "PAGE DIRECTORY\n"
-    "Page address %p\n"
-    "Directory stack top at offs: %lu; number of slots: %lu\n",
-    page,
-    (ulong)page_offset(page_dir_get_nth_slot(page, n - 1)),
-    (ulong)n
-  );
+    "Page address {}\n"
+    "Directory stack top at offs: {}; number of slots: {}\n",
+    (void *)page,
+    page_offset(page_dir_get_nth_slot(page, n - 1)),
+    n
+  ));
 
   for (ulint i = 0; i < n; i++) {
     auto slot = page_dir_get_nth_slot(page, i);
 
     if ((i == pr_n) && (i < n - pr_n)) {
-      ib_logger(ib_stream, "    ...   \n");
+      log_info("    ...   \n");
     }
     if ((i < pr_n) || (i >= n - pr_n)) {
-      ib_logger(
-        ib_stream,
-        "Contents of slot: %lu: n_owned: %lu,"
-        " rec offs: %lu\n",
-        (ulong)i,
-        (ulong)page_dir_slot_get_n_owned(slot),
-        (ulong)page_offset(page_dir_slot_get_rec(slot))
-      );
+      log_info(std::format(
+        "Contents of slot: {}: n_owned: {},"
+        " rec offs: {}\n",
+        i,
+        page_dir_slot_get_n_owned(slot),
+        page_offset(page_dir_slot_get_rec(slot))
+      ));
     }
   }
-  ib_logger(
-    ib_stream,
-    "Total of %lu records\n"
+  log_info(std::format(
+    "Total of {} records\n"
     "--------------------------------\n",
-    (ulong)(PAGE_HEAP_NO_USER_LOW + page_get_n_recs(page))
-  );
+    PAGE_HEAP_NO_USER_LOW + page_get_n_recs(page)
+  ));
 }
 
 void page_print_list(Buf_block *block, Index *index, ulint pr_n) {
-  page_t *page = block->m_frame;
-  page_cur_t cur;
-  ulint count;
-  ulint n_recs;
-  mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  auto page = block->m_frame;
+  mem_heap_t *heap{};
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto *offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
-  ib_logger(
-    ib_stream,
+  log_info(std::format(
     "--------------------------------\n"
     "PAGE RECORD LIST\n"
-    "Page address %p\n",
-    page
-  );
+    "Page address {}\n",
+    (void *)page
+  ));
 
-  n_recs = page_get_n_recs(page);
+  auto n_recs = page_get_n_recs(page);
 
-  page_cur_set_before_first(block, &cur);
-  count = 0;
+  ulint count{};
+  Page_cursor cursor{};
+
+  cursor.set_before_first(block);
+
   for (;;) {
 
     {
-      Phy_rec record{index, cur.m_rec};
+      Phy_rec record{index, cursor.get_rec()};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
-    page_rec_print(cur.m_rec, offsets);
+    page_rec_print(cursor.get_rec(), offsets);
 
     if (count == pr_n) {
       break;
     }
-    if (page_cur_is_after_last(&cur)) {
+    if (cursor.is_after_last()) {
       break;
     }
-    page_cur_move_to_next(&cur);
-    count++;
+    cursor.move_to_next();
+    ++count;
   }
 
   if (n_recs > 2 * pr_n) {
-    ib_logger(ib_stream, " ... \n");
+    log_info(" ... \n");
   }
 
-  while (!page_cur_is_after_last(&cur)) {
-    page_cur_move_to_next(&cur);
+  while (!cursor.is_after_last()) {
+    cursor.move_to_next();
 
     if (count + pr_n >= n_recs) {
       {
-        Phy_rec record{index, cur.m_rec};
+        Phy_rec record{index, cursor.get_rec()};
 
-        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+        offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
 
-      page_rec_print(cur.m_rec, offsets);
+      page_rec_print(cursor.get_rec(), offsets);
     }
-    count++;
+    ++count;
   }
 
-  ib_logger(
-    ib_stream,
-    "Total of %lu records \n"
+  log_info(std::format(
+    "Total of {} records \n"
     "--------------------------------\n",
-    (ulong)(count + 1)
-  );
+    count + 1
+  ));
 
   if (likely_null(heap)) {
     mem_heap_free(heap);
@@ -1039,29 +1032,28 @@ void page_print_list(Buf_block *block, Index *index, ulint pr_n) {
 }
 
 void page_header_print(const page_t *page) {
-  ib_logger(
-    ib_stream,
+  log_info(std::format(
     "--------------------------------\n"
     "PAGE HEADER INFO\n"
-    "Page address %p, n records %lu \n"
-    "n dir slots %lu, heap top %lu\n"
-    "Page n heap %lu, free %lu, garbage %lu\n"
-    "Page last insert %lu, direction %lu, n direction %lu\n",
-    page,
-    (ulong)page_header_get_field(page, PAGE_N_RECS),
-    (ulong)page_header_get_field(page, PAGE_N_DIR_SLOTS),
-    (ulong)page_header_get_field(page, PAGE_HEAP_TOP),
-    (ulong)page_dir_get_n_heap(page),
-    (ulong)page_header_get_field(page, PAGE_FREE),
-    (ulong)page_header_get_field(page, PAGE_GARBAGE),
-    (ulong)page_header_get_field(page, PAGE_LAST_INSERT),
-    (ulong)page_header_get_field(page, PAGE_DIRECTION),
-    (ulong)page_header_get_field(page, PAGE_N_DIRECTION)
-  );
+    "Page address {}, n records {} \n"
+    "n dir slots {}, heap top {}\n"
+    "Page n heap {}, free {}, garbage {}\n"
+    "Page last insert {}, direction {}, n direction {}",
+    (void *)page,
+    page_header_get_field(page, PAGE_N_RECS),
+    page_header_get_field(page, PAGE_N_DIR_SLOTS),
+    page_header_get_field(page, PAGE_HEAP_TOP),
+    page_dir_get_n_heap(page),
+    page_header_get_field(page, PAGE_FREE),
+    page_header_get_field(page, PAGE_GARBAGE),
+    page_header_get_field(page, PAGE_LAST_INSERT),
+    page_header_get_field(page, PAGE_DIRECTION),
+    page_header_get_field(page, PAGE_N_DIRECTION)
+  ));
 }
 
 void page_print(Buf_block *block, Index *index, ulint dn, ulint rn) {
-  page_t *page = block->m_frame;
+  auto page = block->m_frame;
 
   page_header_print(page);
   page_dir_print(page, dn);
@@ -1069,28 +1061,23 @@ void page_print(Buf_block *block, Index *index, ulint dn, ulint rn) {
 }
 
 bool page_rec_validate(rec_t *rec, const ulint *offsets) {
-  ulint n_owned;
-  ulint heap_no;
-  page_t *page;
 
-  page = page_align(rec);
+  auto page = page_align(rec);
 
   page_rec_check(rec);
   rec_validate(rec, offsets);
 
-  n_owned = rec_get_n_owned(rec);
-  heap_no = rec_get_heap_no(rec);
+  auto n_owned = rec_get_n_owned(rec);
+  auto heap_no = rec_get_heap_no(rec);
 
   if (unlikely(!(n_owned <= PAGE_DIR_SLOT_MAX_N_OWNED))) {
-    ib_logger(ib_stream, "Dir slot of rec %lu, n owned too big %lu\n", (ulong)page_offset(rec), (ulong)n_owned);
-    return (false);
+    log_info(std::format("Dir slot of rec {}, n owned too big {}", page_offset(rec), n_owned));
+    return false;
   }
 
   if (unlikely(!(heap_no < page_dir_get_n_heap(page)))) {
-    ib_logger(
-      ib_stream, "Heap no of rec %lu too big %lu %lu\n", (ulong)page_offset(rec), (ulong)heap_no, (ulong)page_dir_get_n_heap(page)
-    );
-    return (false);
+    log_info(std::format("Heap no of rec {}, too big {}, {}", page_offset(rec), heap_no, page_dir_get_n_heap(page)));
+    return false;
   }
 
   return (true);
@@ -1107,21 +1094,13 @@ void page_check_dir(const page_t *page) {
 
   if (unlikely(!page_rec_is_infimum_low(infimum_offs))) {
 
-    ib_logger(
-      ib_stream,
-      "Page directory corruption:"
-      " infimum not pointed to\n"
-    );
+    log_info("Page directory corruption: infimum not pointed to");
     buf_page_print(page, 0);
   }
 
   if (unlikely(!page_rec_is_supremum_low(supremum_offs))) {
 
-    ib_logger(
-      ib_stream,
-      "Page directory corruption:"
-      " supremum not pointed to\n"
-    );
+    log_info("Page directory corruption: supremum not pointed to");
     buf_page_print(page, 0);
   }
 }
@@ -1142,7 +1121,7 @@ bool page_simple_validate(page_t *page) {
   n_slots = page_dir_get_n_slots(page);
 
   if (unlikely(n_slots > UNIV_PAGE_SIZE / 4)) {
-    ib_logger(ib_stream, "Nonsensical number %lu of page dir slots\n", (ulong)n_slots);
+    log_info(std::format("Nonsensical number {} of page dir slots", n_slots));
 
     goto func_exit;
   }
@@ -1151,13 +1130,11 @@ bool page_simple_validate(page_t *page) {
 
   if (unlikely(rec_heap_top > page_dir_get_nth_slot(page, n_slots - 1))) {
 
-    ib_logger(
-      ib_stream,
-      "Record heap and dir overlap on a page,"
-      " heap top %lu, dir %lu\n",
-      (ulong)page_header_get_field(page, PAGE_HEAP_TOP),
-      (ulong)page_offset(page_dir_get_nth_slot(page, n_slots - 1))
-    );
+    log_info(std::format(
+      "Record heap and dir overlap on a page, heap top {}, dir {}",
+      page_header_get_field(page, PAGE_HEAP_TOP),
+      page_offset(page_dir_get_nth_slot(page, n_slots - 1))
+    ));
 
     goto func_exit;
   }
@@ -1174,13 +1151,7 @@ bool page_simple_validate(page_t *page) {
 
   for (;;) {
     if (unlikely(rec > rec_heap_top)) {
-      ib_logger(
-        ib_stream,
-        "Record %lu is above"
-        " rec heap top %lu\n",
-        (ulong)(rec - page),
-        (ulong)(rec_heap_top - page)
-      );
+      log_info(std::format("Record {} is above rec heap top {}", rec - page, rec_heap_top - page));
 
       goto func_exit;
     }
@@ -1189,25 +1160,13 @@ bool page_simple_validate(page_t *page) {
       /* This is a record pointed to by a dir slot */
       if (unlikely(rec_get_n_owned(rec) != own_count)) {
 
-        ib_logger(
-          ib_stream,
-          "Wrong owned count %lu, %lu,"
-          " rec %lu\n",
-          (ulong)rec_get_n_owned(rec),
-          (ulong)own_count,
-          (ulong)(rec - page)
-        );
+        log_info(std::format("Wrong owned count {}, {}, rec {}", rec_get_n_owned(rec), own_count, rec - page));
 
         goto func_exit;
       }
 
       if (unlikely(page_dir_slot_get_rec(slot) != rec)) {
-        ib_logger(
-          ib_stream,
-          "Dir slot does not point"
-          " to right rec %lu\n",
-          (ulong)(rec - page)
-        );
+        log_info(std::format("Dir slot does not point to right rec {}", rec - page));
 
         goto func_exit;
       }
@@ -1234,12 +1193,7 @@ bool page_simple_validate(page_t *page) {
     count++;
 
     if (unlikely(count > UNIV_PAGE_SIZE)) {
-      ib_logger(
-        ib_stream,
-        "Page record list appears"
-        " to be circular %lu\n",
-        (ulong)count
-      );
+      log_info(std::format("Page record list appears to be circular {}", count));
       goto func_exit;
     }
 
@@ -1248,23 +1202,18 @@ bool page_simple_validate(page_t *page) {
   }
 
   if (unlikely(rec_get_n_owned(rec) == 0)) {
-    ib_logger(ib_stream, "n owned is zero in a supremum rec\n");
+    log_info("n owned is zero in a supremum rec");
 
     goto func_exit;
   }
 
   if (unlikely(slot_no != n_slots - 1)) {
-    ib_logger(ib_stream, "n slots wrong %lu, %lu\n", (ulong)slot_no, (ulong)(n_slots - 1));
+    log_info(std::format("n slots wrong {}, {}", slot_no, n_slots - 1));
     goto func_exit;
   }
 
   if (unlikely(page_header_get_field(page, PAGE_N_RECS) + PAGE_HEAP_NO_USER_LOW != count + 1)) {
-    ib_logger(
-      ib_stream,
-      "n recs wrong %lu %lu\n",
-      (ulong)page_header_get_field(page, PAGE_N_RECS) + PAGE_HEAP_NO_USER_LOW,
-      (ulong)(count + 1)
-    );
+    log_info(std::format("n recs wrong {}, {}", page_header_get_field(page, PAGE_N_RECS) + PAGE_HEAP_NO_USER_LOW, count + 1));
 
     goto func_exit;
   }
@@ -1274,24 +1223,13 @@ bool page_simple_validate(page_t *page) {
 
   while (rec != nullptr) {
     if (unlikely(rec < page + FIL_PAGE_DATA || rec >= page + UNIV_PAGE_SIZE)) {
-      ib_logger(
-        ib_stream,
-        "Free list record has"
-        " a nonsensical offset %lu\n",
-        (ulong)(rec - page)
-      );
+      log_info(std::format("Free list record has a nonsensical offset {}", rec - page));
 
       goto func_exit;
     }
 
     if (unlikely(rec > rec_heap_top)) {
-      ib_logger(
-        ib_stream,
-        "Free list record %lu"
-        " is above rec heap top %lu\n",
-        (ulong)(rec - page),
-        (ulong)(rec_heap_top - page)
-      );
+      log_info(std::format("Free list record {} is above rec heap top {}", rec - page, rec_heap_top - page));
 
       goto func_exit;
     }
@@ -1299,12 +1237,7 @@ bool page_simple_validate(page_t *page) {
     count++;
 
     if (unlikely(count > UNIV_PAGE_SIZE)) {
-      ib_logger(
-        ib_stream,
-        "Page free list appears"
-        " to be circular %lu\n",
-        (ulong)count
-      );
+      log_info(std::format("Page free list appears to be circular {}", count));
       goto func_exit;
     }
 
@@ -1313,7 +1246,7 @@ bool page_simple_validate(page_t *page) {
 
   if (unlikely(page_dir_get_n_heap(page) != count + 1)) {
 
-    ib_logger(ib_stream, "N heap is wrong %lu, %lu\n", (ulong)page_dir_get_n_heap(page), (ulong)(count + 1));
+    log_info(std::format("N heap is wrong {}, {}", page_dir_get_n_heap(page), count + 1));
 
     goto func_exit;
   }
@@ -1360,16 +1293,14 @@ bool page_validate(page_t *page, Index *index) {
 
   if (unlikely(!(page_header_get_ptr(page, PAGE_HEAP_TOP) <= page_dir_get_nth_slot(page, n_slots - 1)))) {
 
-    ib_logger(
-      ib_stream,
-      "Record heap and dir overlap"
-      " on space %lu page %lu index %s, %p, %p\n",
-      (ulong)page_get_space_id(page),
-      (ulong)page_get_page_no(page),
+    log_info(std::format(
+      "Record heap and dir overlap on space {} page {} index {}, {}, {}",
+      page_get_space_id(page),
+      page_get_page_no(page),
       index->m_name,
-      page_header_get_ptr(page, PAGE_HEAP_TOP),
-      page_dir_get_nth_slot(page, n_slots - 1)
-    );
+      (void *)page_header_get_ptr(page, PAGE_HEAP_TOP),
+      (void *)page_dir_get_nth_slot(page, n_slots - 1)
+    ));
 
     goto func_exit;
   }
@@ -1388,7 +1319,7 @@ bool page_validate(page_t *page, Index *index) {
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     if (unlikely(!page_rec_validate(rec, offsets))) {
@@ -1400,10 +1331,7 @@ bool page_validate(page_t *page, Index *index) {
       if (unlikely(cmp_rec_rec(rec, old_rec, offsets, old_offsets, index)) != 1) {
 
         log_warn(std::format(
-          "Records in wrong orderon space {} page {} index {}\n",
-          page_get_space_id(page),
-          page_get_page_no(page),
-          index->m_name
+          "Records in wrong order on space {} page {} index {}\n", page_get_space_id(page), page_get_page_no(page), index->m_name
         ));
 
         log_err("previous record ");
@@ -1443,16 +1371,12 @@ bool page_validate(page_t *page, Index *index) {
     if (unlikely(rec_own_count)) {
       /* This is a record pointed to by a dir slot */
       if (unlikely(rec_own_count != own_count)) {
-        ib_logger(ib_stream, "Wrong owned count %lu, %lu\n", (ulong)rec_own_count, (ulong)own_count);
+        log_info(std::format("Wrong owned count {}, {}", rec_own_count, own_count));
         goto func_exit;
       }
 
       if (page_dir_slot_get_rec(slot) != rec) {
-        ib_logger(
-          ib_stream,
-          "Dir slot does not"
-          " point to right rec\n"
-        );
+        log_info("Dir slot does not point to right rec");
         goto func_exit;
       }
 
@@ -1483,27 +1407,22 @@ bool page_validate(page_t *page, Index *index) {
   }
 
   if (unlikely(rec_get_n_owned(rec) == 0)) {
-    ib_logger(ib_stream, "n owned is zero\n");
+    log_info("n owned is zero");
     goto func_exit;
   }
 
   if (unlikely(slot_no != n_slots - 1)) {
-    ib_logger(ib_stream, "n slots wrong %lu %lu\n", (ulong)slot_no, (ulong)(n_slots - 1));
+    log_info(std::format("n slots wrong {}, {}", slot_no, n_slots - 1));
     goto func_exit;
   }
 
   if (unlikely(page_header_get_field(page, PAGE_N_RECS) + PAGE_HEAP_NO_USER_LOW != count + 1)) {
-    ib_logger(
-      ib_stream,
-      "n recs wrong %lu %lu\n",
-      (ulong)page_header_get_field(page, PAGE_N_RECS) + PAGE_HEAP_NO_USER_LOW,
-      (ulong)(count + 1)
-    );
+    log_info(std::format("n recs wrong {}, {}", page_header_get_field(page, PAGE_N_RECS) + PAGE_HEAP_NO_USER_LOW, count + 1));
     goto func_exit;
   }
 
   if (unlikely(data_size != page_get_data_size(page))) {
-    ib_logger(ib_stream, "Summed data size %lu, returned by func %lu\n", (ulong)data_size, (ulong)page_get_data_size(page));
+    log_info(std::format("Summed data size {}, returned by func {}", data_size, page_get_data_size(page)));
     goto func_exit;
   }
 
@@ -1514,7 +1433,7 @@ bool page_validate(page_t *page, Index *index) {
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location()); 
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     if (unlikely(!page_rec_validate(rec, offsets))) {
@@ -1526,18 +1445,14 @@ bool page_validate(page_t *page, Index *index) {
     offs = page_offset(rec_get_start(rec, offsets));
     i = rec_offs_size(offsets);
     if (unlikely(offs + i >= UNIV_PAGE_SIZE)) {
-      ib_logger(ib_stream, "record offset out of bounds\n");
+      log_info("record offset out of bounds");
       goto func_exit;
     }
 
     while (i--) {
 
       if (unlikely(buf[offs + i])) {
-        ib_logger(
-          ib_stream,
-          "Record overlaps another"
-          " in free list\n"
-        );
+        log_info("Record overlaps another in free list");
         goto func_exit;
       }
 
@@ -1548,7 +1463,7 @@ bool page_validate(page_t *page, Index *index) {
   }
 
   if (unlikely(page_dir_get_n_heap(page) != count + 1)) {
-    ib_logger(ib_stream, "N heap is wrong %lu %lu\n", (ulong)page_dir_get_n_heap(page), (ulong)count + 1);
+    log_info(std::format("N heap is wrong {}, {}", page_dir_get_n_heap(page), count + 1));
     goto func_exit;
   }
 
@@ -1559,14 +1474,9 @@ func_exit:
 
   if (unlikely(ret == false)) {
   func_exit2:
-    ib_logger(
-      ib_stream,
-      "Apparent corruption"
-      " in space %lu page %lu index %s\n",
-      (ulong)page_get_space_id(page),
-      (ulong)page_get_page_no(page),
-      index->m_name
-    );
+    log_info(std::format(
+      "Apparent corruption in space {} page {} index {}", page_get_space_id(page), page_get_page_no(page), index->m_name
+    ));
     buf_page_print(page, 0);
   }
 

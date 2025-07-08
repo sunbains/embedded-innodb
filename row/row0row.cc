@@ -117,18 +117,21 @@ DTuple *row_build_index_entry(const DTuple *row, row_ext_t *ext, const Index *in
   return entry;
 }
 
-DTuple *row_build(ulint type, const Index *index, const rec_t *rec, const ulint *offsets, const Table *col_table, row_ext_t **ext, mem_heap_t *heap) {
+DTuple *row_build(
+  ulint type, const Index *index, const rec_t *rec, const ulint *offsets, const Table *col_table, row_ext_t **ext, mem_heap_t *heap
+) {
   mem_heap_t *tmp_heap{};
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+
   rec_offs_init(offsets_);
 
-  ut_ad(index && rec && heap);
   ut_ad(index->is_clustered());
+  ut_ad(rec != nullptr && heap != nullptr);
 
   if (offsets == nullptr) {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &tmp_heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets_.data(), &tmp_heap, Current_location());
   } else {
     ut_ad(rec_offs_validate(rec, index, offsets));
   }
@@ -263,8 +266,9 @@ DTuple *row_rec_to_index_entry(ulint type, const rec_t *rec, const Index *index,
 }
 
 DTuple *row_build_row_ref(ulint type, const Index *index, const rec_t *rec, mem_heap_t *heap) {
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   ut_ad(index && rec && heap);
@@ -275,7 +279,7 @@ DTuple *row_build_row_ref(ulint type, const Index *index, const rec_t *rec, mem_
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &tmp_heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &tmp_heap, Current_location());
   }
 
   /* Secondary indexes must not contain externally stored columns. */
@@ -338,7 +342,8 @@ DTuple *row_build_row_ref(ulint type, const Index *index, const rec_t *rec, mem_
 
 void row_build_row_ref_in_tuple(DTuple *ref, const rec_t *rec, const Index *index, ulint *offsets, Trx *trx) {
   mem_heap_t *heap{};
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+
   rec_offs_init(offsets_);
 
   ut_ad(!index->is_clustered());
@@ -363,7 +368,7 @@ void row_build_row_ref_in_tuple(DTuple *ref, const rec_t *rec, const Index *inde
   if (offsets == nullptr) {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   } else {
     ut_ad(rec_offs_validate(rec, index, offsets));
   }

@@ -34,4 +34,4 @@ Created 2/2/1994 Heikki Tuuri
 using page_t = byte;
 
 /** Index page cursor */
-struct page_cur_t;
+struct Page_cursor;

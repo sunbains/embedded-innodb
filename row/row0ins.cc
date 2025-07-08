@@ -101,7 +101,7 @@ void Row_insert::create_entry_list(ins_node_t *node) noexcept {
 
 /**
  * @brief Adds system field buffers to a row.
- * 
+ *
  * @param[in,out] node Insert node to initialize.
  */
 void Row_insert::alloc_sys_fields(ins_node_t *node) noexcept {
@@ -270,7 +270,7 @@ db_err Row_insert::clust_index_entry_by_modify(ulint mode, Btree_cursor *btr_cur
 
       return DB_LOCK_TABLE_FULL;
 
-    } else {  
+    } else {
 
       return btr_cur->pessimistic_update(0, heap, big_rec, update, 0, thr, mtr);
     }
@@ -906,10 +906,11 @@ db_err Row_insert::check_foreign_constraint(bool check_ref, const Foreign *forei
   mtr_t mtr;
   Trx *trx = thr_get_trx(thr);
   mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  rec_offs_init(offsets_);
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
   Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
+
+  rec_offs_init(offsets_);
 
 run_again:
 
@@ -1018,7 +1019,7 @@ run_again:
     {
       Phy_rec record{check_index, rec};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     if (page_rec_is_supremum(rec)) {
@@ -1241,11 +1242,11 @@ db_err Row_insert::scan_sec_index_for_duplicate(const Index *index, DTuple *entr
   unsigned allow_duplicates;
   mtr_t mtr;
   mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  rec_offs_init(offsets_);
-
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
   const auto n_unique = index->get_n_unique();
+
+  rec_offs_init(offsets_);
 
   /* If the secondary index is unique, but one of the fields in the
   n_unique first fields is NULL, a unique key violation cannot occur,
@@ -1284,7 +1285,7 @@ db_err Row_insert::scan_sec_index_for_duplicate(const Index *index, DTuple *entr
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     if (allow_duplicates) {
@@ -1346,8 +1347,9 @@ db_err Row_insert::duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *entry
   rec_t *rec;
   Trx *trx = thr_get_trx(thr);
   mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   UT_NOT_USED(mtr);
@@ -1378,7 +1380,7 @@ db_err Row_insert::duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *entry
       {
         Phy_rec record{btr_cur->m_index, rec};
 
-        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+        offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
 
       /* We set a lock on the possible duplicate: this
@@ -1419,7 +1421,7 @@ db_err Row_insert::duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *entry
       {
         Phy_rec record{btr_cur->m_index, rec};
 
-        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+        offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
 
       if (trx->m_duplicates & TRX_DUP_IGNORE) {
@@ -1596,7 +1598,7 @@ function_exit:
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
     }
 
     Blob blob(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);

@@ -459,8 +459,8 @@ static ulint ib_get_max_row_len(Index *index) {
  * @param[in] tuple         Tuple to read into
  */
 static void ib_read_tuple(const rec_t *rec, ib_tuple_t *tuple) noexcept {
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
   DTuple *dtuple = tuple->ptr;
   const Index *dindex = tuple->index;
 
@@ -469,7 +469,7 @@ static void ib_read_tuple(const rec_t *rec, ib_tuple_t *tuple) noexcept {
   {
     Phy_rec record{dindex, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &tuple->heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &tuple->heap, Current_location());
   }
 
   auto rec_meta_data = rec_get_info_bits(rec);

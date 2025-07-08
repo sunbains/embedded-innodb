@@ -76,14 +76,15 @@ static bool row_purge_reposition_pcur(ulint latch_mode, purge_node_t *node, mtr_
  *
  * @param[in] node Row purge node.
  * @param[in] mode BTR_MODIFY_LEAF or BTR_MODIFY_TREE.
- * 
+ *
  * @return true if success, or if not found, or if modified after the delete marking.
  */
 static bool row_purge_remove_clust_if_poss_low(purge_node_t *node, ulint mode) {
   mtr_t mtr;
   db_err err;
   mem_heap_t *heap{};
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+
   rec_offs_init(offsets_);
 
   auto pcur = &node->pcur;
@@ -103,12 +104,12 @@ static bool row_purge_remove_clust_if_poss_low(purge_node_t *node, ulint mode) {
   }
 
   auto rec = pcur->get_rec();
-  ulint *offsets{};
+  auto offsets = offsets_.data();
 
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
   if (node->roll_ptr != row_get_rec_roll_ptr(rec, index, offsets)) {
@@ -148,7 +149,7 @@ static bool row_purge_remove_clust_if_poss_low(purge_node_t *node, ulint mode) {
 
 /**
  * @brief Removes a clustered index record if it has not been modified after the delete marking.
- * 
+ *
  * @param[in] node Pointer to the row purge node.
  */
 static void row_purge_remove_clust_if_poss(purge_node_t *node) {
@@ -181,12 +182,12 @@ retry:
 
 /**
  * @brief Removes a secondary index entry if possible.
- * 
+ *
  * @param[in] node Pointer to the row purge node.
  * @param[in] index Pointer to the index.
  * @param[in] entry Pointer to the index entry.
  * @param[in] mode Latch mode, either BTR_MODIFY_LEAF or BTR_MODIFY_TREE.
- * 
+ *
  * @return true if success or if not found.
  */
 static bool row_purge_remove_sec_if_poss_low(purge_node_t *node, Index *index, const DTuple *entry, ulint mode) {
@@ -300,7 +301,7 @@ retry:
 
 /**
  * @brief Purges a delete marking of a record.
- * 
+ *
  * @param[in] node Pointer to the row purge node.
  */
 static void row_purge_del_mark(purge_node_t *node) {
@@ -323,10 +324,10 @@ static void row_purge_del_mark(purge_node_t *node) {
 
 /**
  * @brief Purges an update of an existing record.
- * 
+ *
  * This function purges an update of an existing record. It also purges an update
  * of a delete marked record if that record contained an externally stored field.
- * 
+ *
  * @param[in] node Pointer to the row purge node.
  */
 static void row_purge_upd_exist_or_extern(purge_node_t *node) {
@@ -433,7 +434,7 @@ skip_secondaries:
  * @param[in] node          Row undo node.
  * @param[out] updated_extern  True if an externally stored field was updated.
  * @param[in] thr           Query thread.
- * 
+ *
  * @return                  True if purge operation required. NOTE that then the CALLER must unfreeze data dictionary!
  */
 static bool row_purge_parse_undo_rec(purge_node_t *node, bool *updated_extern, que_thr_t *thr) {
@@ -515,7 +516,7 @@ static bool row_purge_parse_undo_rec(purge_node_t *node, bool *updated_extern, q
  *
  * @param[in] node Row purge node.
  * @param[in] thr Query thread.
- * 
+ *
  * @return DB_SUCCESS if operation successfully completed, else error code.
  */
 static ulint row_purge(purge_node_t *node, que_thr_t *thr) {

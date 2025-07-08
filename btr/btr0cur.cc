@@ -42,10 +42,9 @@ Created 10/16/1994 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#include "btr0cur.h"
-
-#include "btr0btr.h"
 #include "btr0blob.h"
+#include "btr0btr.h"
+#include "btr0cur.h"
 #include "buf0lru.h"
 #include "dict0types.h"
 #include "lock0lock.h"
@@ -60,15 +59,13 @@ Created 10/16/1994 Heikki Tuuri
 #include "trx0rec.h"
 #include "trx0roll.h"
 
-
 /** In the optimistic insert, if the insert does not fit, but this much space
 can be released by page reorganize, then it is reorganized */
 constexpr ulint BTR_CUR_PAGE_REORGANIZE_LIMIT = UNIV_PAGE_SIZE / 32;
 
-
 /**
  * The following function is used to set the deleted bit of a record.
- * 
+ *
  * @param[in,out] rec The physical record.
  * @param[in] flag true  to delete mark the record
  */
@@ -140,7 +137,9 @@ void Btree_cursor::latch_leaves(page_t *page, space_id_t space, page_no_t page_n
   ut_error;
 }
 
-void Btree_cursor::search_to_nth_level(Paths *paths, const Index *index, ulint level, const DTuple *tuple, ulint mode, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept{
+void Btree_cursor::search_to_nth_level(
+  Paths *paths, const Index *index, ulint level, const DTuple *tuple, ulint mode, ulint latch_mode, mtr_t *mtr, Source_location loc
+) noexcept {
   page_t *page;
   rec_t *node_ptr;
   page_no_t page_no;
@@ -152,13 +151,13 @@ void Btree_cursor::search_to_nth_level(Paths *paths, const Index *index, ulint l
   ulint height;
   ulint savepoint;
   ulint page_mode;
-  page_cur_t *page_cursor;
   IF_DEBUG(ulint insert_planned;)
   ulint estimate;
   ulint root_height{};
   mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   /* Currently, PAGE_CUR_LE is the only search mode used for searches
@@ -167,11 +166,7 @@ void Btree_cursor::search_to_nth_level(Paths *paths, const Index *index, ulint l
   ut_ad(index->check_search_tuple(tuple));
   ut_ad(dtuple_check_typed(tuple));
 
-  IF_DEBUG(
-    m_up_match = ULINT_UNDEFINED;
-    m_low_match = ULINT_UNDEFINED;
-    insert_planned = latch_mode & BTR_INSERT;
-  )
+  IF_DEBUG(m_up_match = ULINT_UNDEFINED; m_low_match = ULINT_UNDEFINED; insert_planned = latch_mode & BTR_INSERT;)
 
   estimate = latch_mode & BTR_ESTIMATE;
   latch_mode = latch_mode & ~(BTR_INSERT | BTR_ESTIMATE);
@@ -196,7 +191,7 @@ void Btree_cursor::search_to_nth_level(Paths *paths, const Index *index, ulint l
     mtr_s_lock(index->get_lock(), mtr);
   }
 
-  page_cursor = get_page_cur();
+  auto page_cursor = get_page_cur();
 
   space = index->get_space_id();
   page_no = index->get_page_no();
@@ -246,9 +241,9 @@ void Btree_cursor::search_to_nth_level(Paths *paths, const Index *index, ulint l
 
   retry_page_get:
 
-    Buf_pool::Request req {
+    Buf_pool::Request req{
       .m_rw_latch = rw_latch,
-      .m_page_id = { space, page_no },
+      .m_page_id = {space, page_no},
       .m_mode = buf_mode,
       .m_file = loc.m_from.file_name(),
       .m_line = loc.m_from.line(),
@@ -304,7 +299,7 @@ void Btree_cursor::search_to_nth_level(Paths *paths, const Index *index, ulint l
       page_mode = mode;
     }
 
-    page_cur_search_with_match(block, index, tuple, page_mode, &up_match, &up_bytes, &low_match, &low_bytes, page_cursor);
+    page_cursor->search_with_match(block, index, tuple, page_mode, &up_match, &up_bytes, &low_match, &low_bytes);
 
     if (estimate) {
       add_path_info(paths, height, root_height);
@@ -312,7 +307,7 @@ void Btree_cursor::search_to_nth_level(Paths *paths, const Index *index, ulint l
 
     /* If this is the desired level, leave the loop */
 
-    ut_ad(height == m_btree->page_get_level(page_cur_get_page(page_cursor), mtr));
+    ut_ad(height == m_btree->page_get_level(page_cursor->get_page(), mtr));
 
     if (level == height) {
 
@@ -328,12 +323,12 @@ void Btree_cursor::search_to_nth_level(Paths *paths, const Index *index, ulint l
 
     height--;
 
-    node_ptr = page_cur_get_rec(page_cursor);
+    node_ptr = page_cursor->get_rec();
 
     {
       Phy_rec record{m_index, node_ptr};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     /* Go to the child node */
@@ -357,18 +352,13 @@ void Btree_cursor::search_to_nth_level(Paths *paths, const Index *index, ulint l
 }
 
 void Btree_cursor::open_at_index_side(
-  Paths *paths,
-  bool from_left,
-  const Index *index,
-  ulint latch_mode,
-  ulint level,
-  mtr_t *mtr,
-  Source_location loc
+  Paths *paths, bool from_left, const Index *index, ulint latch_mode, ulint level, mtr_t *mtr, Source_location loc
 ) noexcept {
   ulint root_height{};
   mem_heap_t *heap{};
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   ut_a(level != ULINT_UNDEFINED);
@@ -397,10 +387,10 @@ void Btree_cursor::open_at_index_side(
   auto height = ULINT_UNDEFINED;
 
   for (;;) {
-  
-    Buf_pool::Request req {
+
+    Buf_pool::Request req{
       .m_rw_latch = RW_NO_LATCH,
-      .m_page_id = { space, page_no },
+      .m_page_id = {space, page_no},
       .m_mode = BUF_GET,
       .m_file = loc.m_from.file_name(),
       .m_line = loc.m_from.line(),
@@ -433,9 +423,9 @@ void Btree_cursor::open_at_index_side(
     }
 
     if (from_left) {
-      page_cur_set_before_first(block, page_cursor);
+      page_cursor->set_before_first(block);
     } else {
-      page_cur_set_after_last(block, page_cursor);
+      page_cursor->set_after_last(block);
     }
 
     if (height == 0 || height == level) {
@@ -449,9 +439,9 @@ void Btree_cursor::open_at_index_side(
     ut_ad(height > 0);
 
     if (from_left) {
-      page_cur_move_to_next(page_cursor);
+      page_cursor->move_to_next();
     } else {
-      page_cur_move_to_prev(page_cursor);
+      page_cursor->move_to_prev();
     }
 
     if (estimate) {
@@ -460,12 +450,12 @@ void Btree_cursor::open_at_index_side(
 
     --height;
 
-    auto node_ptr = page_cur_get_rec(page_cursor);
+    auto node_ptr = page_cursor->get_rec();
 
     {
       Phy_rec record{m_index, node_ptr};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     /* Go to the child node */
@@ -480,8 +470,9 @@ void Btree_cursor::open_at_index_side(
 void Btree_cursor::open_at_rnd_pos(const Index *index, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept {
   rec_t *node_ptr;
   mem_heap_t *heap{};
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   if (latch_mode == BTR_MODIFY_TREE) {
@@ -501,9 +492,9 @@ void Btree_cursor::open_at_rnd_pos(const Index *index, ulint latch_mode, mtr_t *
 
   for (;;) {
 
-    Buf_pool::Request req {
+    Buf_pool::Request req{
       .m_rw_latch = RW_NO_LATCH,
-      .m_page_id = { space, page_no },
+      .m_page_id = {space, page_no},
       .m_mode = BUF_GET,
       .m_file = loc.m_from.file_name(),
       .m_line = loc.m_from.line(),
@@ -525,7 +516,7 @@ void Btree_cursor::open_at_rnd_pos(const Index *index, ulint latch_mode, mtr_t *
       latch_leaves(page, space, page_no, latch_mode, mtr);
     }
 
-    page_cur_open_on_rnd_user_rec(block, page_cursor);
+    page_cursor->open_on_rnd_user_rec(block);
 
     if (height == 0) {
 
@@ -536,12 +527,12 @@ void Btree_cursor::open_at_rnd_pos(const Index *index, ulint latch_mode, mtr_t *
 
     --height;
 
-    node_ptr = page_cur_get_rec(page_cursor);
+    node_ptr = page_cursor->get_rec();
 
     {
       Phy_rec record{m_index, node_ptr};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     /* Go to the child node */
@@ -562,23 +553,25 @@ rec_t *Btree_cursor::insert_if_possible(const DTuple *tuple, ulint n_ext, mtr_t 
   auto page_cursor = get_page_cur();
 
   /* Now, try the insert */
-  auto rec = page_cur_tuple_insert(page_cursor, tuple, m_index, n_ext, mtr);
+  auto rec = page_cursor->tuple_insert(tuple, m_index, n_ext, mtr);
 
   if (unlikely(rec == nullptr)) {
     /* If record did not fit, reorganize */
 
     if (m_btree->page_reorganize(block, m_index, mtr)) {
 
-      page_cur_search(block, m_index, tuple, PAGE_CUR_LE, page_cursor);
+      page_cursor->search(block, m_index, tuple, PAGE_CUR_LE);
 
-      rec = page_cur_tuple_insert(page_cursor, tuple, m_index, n_ext, mtr);
+      rec = page_cursor->tuple_insert(tuple, m_index, n_ext, mtr);
     }
   }
 
   return rec;
 }
 
-inline db_err Btree_cursor::ins_lock_and_undo(ulint flags, const DTuple *entry, que_thr_t *thr, mtr_t *mtr, bool *inherit) noexcept {
+inline db_err Btree_cursor::ins_lock_and_undo(
+  ulint flags, const DTuple *entry, que_thr_t *thr, mtr_t *mtr, bool *inherit
+) noexcept {
   /* Check if we have to wait for a lock: enqueue an explicit lock request if yes */
 
   auto rec = get_rec();
@@ -613,14 +606,15 @@ inline db_err Btree_cursor::ins_lock_and_undo(ulint flags, const DTuple *entry, 
 }
 
 #ifdef UNIV_DEBUG
-void Btree_cursor::trx_report(Trx *trx, const Index *index, const char *op) noexcept{
+void Btree_cursor::trx_report(Trx *trx, const Index *index, const char *op) noexcept {
   log_info(std::format("Trx with id {} op {} going to {} ", trx->m_id, op, index->m_name));
 }
 #endif /* UNIV_DEBUG */
 
-db_err Btree_cursor::optimistic_insert(ulint flags, DTuple *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr) noexcept {
+db_err Btree_cursor::optimistic_insert(
+  ulint flags, DTuple *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
+) noexcept {
   big_rec_t *big_rec_vec = nullptr;
-  page_cur_t *page_cursor;
   ulint max_size;
   rec_t *dummy_rec;
   bool leaf;
@@ -670,19 +664,19 @@ db_err Btree_cursor::optimistic_insert(ulint flags, DTuple *entry, rec_t **rec, 
   level, check if we have to split the page to reserve enough free space
   for future updates of records. */
 
-  if (index->is_clustered() && page_get_n_recs(page) >= 2 &&
-       likely(leaf) && Dict::index_get_space_reserve() + rec_size > max_size &&
-       (m_btree->page_get_split_rec_to_right(this, dummy_rec) ||
-        m_btree->page_get_split_rec_to_left(this, dummy_rec))) {
+  if (index->is_clustered() && page_get_n_recs(page) >= 2 && likely(leaf) &&
+      Dict::index_get_space_reserve() + rec_size > max_size &&
+      (m_btree->page_get_split_rec_to_right(this, dummy_rec) || m_btree->page_get_split_rec_to_left(this, dummy_rec))) {
 
-    if (big_rec_vec) {
+    if (big_rec_vec != nullptr) {
       dtuple_convert_back_big_rec(entry, big_rec_vec);
     }
 
     return DB_FAIL;
   }
 
-  if (unlikely(max_size < BTR_CUR_PAGE_REORGANIZE_LIMIT || max_size < rec_size) && likely(page_get_n_recs(page) > 1) && page_get_max_insert_size(page, 1) < rec_size) {
+  if (unlikely(max_size < BTR_CUR_PAGE_REORGANIZE_LIMIT || max_size < rec_size) && likely(page_get_n_recs(page) > 1) &&
+      page_get_max_insert_size(page, 1) < rec_size) {
 
     if (big_rec_vec != nullptr) {
       dtuple_convert_back_big_rec(entry, big_rec_vec);
@@ -703,16 +697,16 @@ db_err Btree_cursor::optimistic_insert(ulint flags, DTuple *entry, rec_t **rec, 
     return err;
   }
 
-  page_cursor = get_page_cur();
+  auto page_cursor = get_page_cur();
 
   /* Now, try the insert */
 
   {
-    const auto page_cursor_rec = page_cur_get_rec(page_cursor);
+    const auto page_cursor_rec = page_cursor->get_rec();
 
-    *rec = page_cur_tuple_insert(page_cursor, entry, index, n_ext, mtr);
+    *rec = page_cursor->tuple_insert(entry, index, n_ext, mtr);
 
-    reorg = page_cursor_rec != page_cur_get_rec(page_cursor);
+    reorg = page_cursor_rec != page_cursor->get_rec();
 
     ut_a(!reorg);
   }
@@ -726,9 +720,9 @@ db_err Btree_cursor::optimistic_insert(ulint flags, DTuple *entry, rec_t **rec, 
 
     reorg = true;
 
-    page_cur_search(block, index, entry, PAGE_CUR_LE, page_cursor);
+    page_cursor->search(block, index, entry, PAGE_CUR_LE);
 
-    *rec = page_cur_tuple_insert(page_cursor, entry, index, n_ext, mtr);
+    *rec = page_cursor->tuple_insert(entry, index, n_ext, mtr);
 
     if (unlikely(!*rec)) {
       log_err(std::format("Cannot insert tuple into {}: ", index->m_name));
@@ -747,7 +741,9 @@ db_err Btree_cursor::optimistic_insert(ulint flags, DTuple *entry, rec_t **rec, 
   return DB_SUCCESS;
 }
 
-db_err Btree_cursor::pessimistic_insert(ulint flags, DTuple *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr) noexcept {
+db_err Btree_cursor::pessimistic_insert(
+  ulint flags, DTuple *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
+) noexcept {
   db_err err;
   bool success;
   bool dummy_inh;
@@ -850,12 +846,7 @@ db_err Btree_cursor::pessimistic_insert(ulint flags, DTuple *entry, rec_t **rec,
 }
 
 db_err Btree_cursor::upd_lock_and_undo(
-  ulint flags,
-  const upd_t *update,
-  ulint cmpl_info,
-  que_thr_t *thr,
-  mtr_t *mtr,
-  roll_ptr_t *roll_ptr
+  ulint flags, const upd_t *update, ulint cmpl_info, que_thr_t *thr, mtr_t *mtr, roll_ptr_t *roll_ptr
 ) noexcept {
   ut_ad(update && thr && roll_ptr);
 
@@ -872,15 +863,16 @@ db_err Btree_cursor::upd_lock_and_undo(
   auto err = DB_SUCCESS;
 
   if (!(flags & BTR_NO_LOCKING_FLAG)) {
-    ulint *offsets;
     mem_heap_t *heap = nullptr;
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
+    std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+    auto offsets = offsets_.data();
+
     rec_offs_init(offsets_);
 
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     err = m_lock_sys->clust_rec_modify_check_and_lock(flags, get_block(), rec, index, offsets, thr);
@@ -902,15 +894,12 @@ db_err Btree_cursor::upd_lock_and_undo(
   return err;
 }
 
-void Btree_cursor::update_in_place_log(ulint flags, rec_t *rec, const Index *index, const upd_t *update, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr) noexcept {
+void Btree_cursor::update_in_place_log(
+  ulint flags, rec_t *rec, const Index *index, const upd_t *update, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr
+) noexcept {
   ut_ad(flags < 256);
 
-  auto log_ptr = mlog_open_and_write_index(
-    mtr,
-    rec,
-    MLOG_REC_UPDATE_IN_PLACE,
-    1 + DATA_ROLL_PTR_LEN + 14 + 2 + MLOG_BUF_MARGIN
-  );
+  auto log_ptr = mlog_open_and_write_index(mtr, rec, MLOG_REC_UPDATE_IN_PLACE, 1 + DATA_ROLL_PTR_LEN + 14 + 2 + MLOG_BUF_MARGIN);
 
   if (log_ptr == nullptr) {
     /* Logging in mtr is switched off during crash recovery */
@@ -972,7 +961,7 @@ byte *Btree_cursor::parse_update_in_place(byte *ptr, byte *end_ptr, page_t *page
   if (ptr != nullptr && page != nullptr) {
     auto rec = page + rec_offset;
     Phy_rec record{index, rec};
-    auto offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
+    auto offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
 
     if (!(flags & BTR_KEEP_SYS_FLAG)) {
       srv_row_upd->rec_sys_fields_in_recovery(rec, offsets, pos, trx_id, roll_ptr);
@@ -990,8 +979,9 @@ db_err Btree_cursor::update_in_place(ulint flags, const upd_t *update, ulint cmp
   mem_heap_t *heap{};
   roll_ptr_t roll_ptr{};
   ulint was_delete_marked;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   auto rec = get_rec();
@@ -1004,7 +994,7 @@ db_err Btree_cursor::update_in_place(ulint flags, const upd_t *update, ulint cmp
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
 #ifdef UNIV_DEBUG
@@ -1059,7 +1049,6 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
   ulint new_rec_size;
   ulint old_rec_size;
   roll_ptr_t roll_ptr;
-  page_cur_t *page_cursor;
 
   auto block = get_block();
   auto page = block->get_frame();
@@ -1075,7 +1064,7 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
   }
 
 #ifdef UNIV_DEBUG
@@ -1111,8 +1100,6 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
       goto any_extern;
     }
   }
-
-  page_cursor = get_page_cur();
 
   auto new_entry = row_rec_to_index_entry(ROW_COPY_DATA, rec, index, offsets, &n_ext, heap);
 
@@ -1167,15 +1154,17 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
 
   m_lock_sys->rec_store_on_page_infimum(block, rec);
 
+  auto page_cursor = get_page_cur();
+
   /* The call to row_rec_to_index_entry(ROW_COPY_DATA, ...) above
   invokes rec_offs_make_valid() to point to the copied record that
   the fields of new_entry point to.  We have to undo it here. */
   ut_ad(rec_offs_validate(nullptr, index, offsets));
-  ut_d(rec_offs_make_valid(page_cur_get_rec(page_cursor), index, offsets));
+  ut_d(rec_offs_make_valid(page_cursor->get_rec(), index, offsets));
 
-  page_cur_delete_rec(page_cursor, index, offsets, mtr);
+  page_cursor->delete_rec(index, offsets, mtr);
 
-  page_cur_move_to_prev(page_cursor);
+  page_cursor->move_to_prev();
 
   trx = thr_get_trx(thr);
 
@@ -1194,7 +1183,7 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
 
   m_lock_sys->rec_restore_from_page_infimum(block, rec, block);
 
-  page_cur_move_to_next(page_cursor);
+  page_cursor->move_to_next();
 
   mem_heap_free(heap);
 
@@ -1215,9 +1204,9 @@ void Btree_cursor::pess_upd_restore_supremum(Buf_block *block, const rec_t *rec,
 
   ut_ad(prev_page_no != FIL_NULL);
 
-  Buf_pool::Request req {
+  Buf_pool::Request req{
     .m_rw_latch = RW_NO_LATCH,
-    .m_page_id = { space, prev_page_no },
+    .m_page_id = {space, prev_page_no},
     .m_mode = BUF_GET_NO_LATCH,
     .m_file = __FILE__,
     .m_line = __LINE__,
@@ -1237,24 +1226,17 @@ void Btree_cursor::pess_upd_restore_supremum(Buf_block *block, const rec_t *rec,
 }
 
 db_err Btree_cursor::pessimistic_update(
-  ulint flags,
-  mem_heap_t **heap,
-  big_rec_t **big_rec,
-  const upd_t *update,
-  ulint cmpl_info,
-  que_thr_t *thr,
-  mtr_t *mtr
+  ulint flags, mem_heap_t **heap, big_rec_t **big_rec, const upd_t *update, ulint cmpl_info, que_thr_t *thr, mtr_t *mtr
 ) noexcept {
 
   big_rec_t *big_rec_vec = nullptr;
   big_rec_t *dummy_big_rec;
-  page_cur_t *page_cursor;
   roll_ptr_t roll_ptr;
   bool was_first;
-  ulint n_extents = 0;
+  ulint n_extents{};
   ulint n_reserved;
   ulint n_ext;
-  ulint *offsets = nullptr;
+  ulint *offsets{};
 
   *big_rec = nullptr;
 
@@ -1305,7 +1287,7 @@ db_err Btree_cursor::pessimistic_update(
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, heap, Current_location()); 
+    offsets = record.get_all_col_offsets(nullptr, heap, Current_location());
   }
 
   auto trx = thr_get_trx(thr);
@@ -1341,7 +1323,6 @@ db_err Btree_cursor::pessimistic_update(
     updated the primary key to another value, and then
     update it back again. */
 
-
     ut_ad(big_rec_vec == nullptr);
 
     blob.free_updated_extern_fields(index, rec, offsets, update, trx_is_recv(trx) ? RB_RECOVERY : RB_NORMAL, mtr);
@@ -1353,8 +1334,10 @@ db_err Btree_cursor::pessimistic_update(
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, heap, Current_location());
   }
+
+  Page_cursor *page_cursor{};
 
   n_ext += blob.push_update_extern_fields(new_entry, update, *heap);
 
@@ -1381,9 +1364,9 @@ db_err Btree_cursor::pessimistic_update(
 
   page_cursor = get_page_cur();
 
-  page_cur_delete_rec(page_cursor, index, offsets, mtr);
+  page_cursor->delete_rec(index, offsets, mtr);
 
-  page_cur_move_to_prev(page_cursor);
+  page_cursor->move_to_prev();
 
   rec = insert_if_possible(new_entry, n_ext, mtr);
 
@@ -1393,7 +1376,7 @@ db_err Btree_cursor::pessimistic_update(
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, heap, Current_location());
     }
 
     if (!rec_get_deleted_flag(rec)) {
@@ -1412,12 +1395,14 @@ db_err Btree_cursor::pessimistic_update(
 
   /* Was the record to be updated positioned as the first user
   record on its page? */
-  was_first = page_cur_is_before_first(page_cursor);
+  was_first = page_cursor->is_before_first();
 
   /* The first parameter means that no lock checking and undo logging
   is made in the insert */
 
-  err = pessimistic_insert(BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG, new_entry, &rec, &dummy_big_rec, n_ext, nullptr, mtr);
+  err = pessimistic_insert(
+    BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG, new_entry, &rec, &dummy_big_rec, n_ext, nullptr, mtr
+  );
 
   ut_a(rec != nullptr);
   ut_a(err == DB_SUCCESS);
@@ -1439,7 +1424,7 @@ db_err Btree_cursor::pessimistic_update(
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, heap, Current_location());
     }
 
     Blob blob{m_fsp, m_btree};
@@ -1469,15 +1454,12 @@ return_after_reservations:
   return err;
 }
 
-void Btree_cursor::del_mark_set_clust_rec_log(ulint flags, rec_t *rec, const Index *index, bool val, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr) noexcept {
+void Btree_cursor::del_mark_set_clust_rec_log(
+  ulint flags, rec_t *rec, const Index *index, bool val, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr
+) noexcept {
   ut_ad(flags < 256);
 
-  auto log_ptr = mlog_open_and_write_index(
-    mtr,
-    rec,
-    MLOG_REC_CLUST_DELETE_MARK,
-    1 + 1 + DATA_ROLL_PTR_LEN + 14 + 2
-  );
+  auto log_ptr = mlog_open_and_write_index(mtr, rec, MLOG_REC_CLUST_DELETE_MARK, 1 + 1 + DATA_ROLL_PTR_LEN + 14 + 2);
 
   if (log_ptr == nullptr) {
     /* Logging in mtr is switched off during crash recovery */
@@ -1499,7 +1481,7 @@ void Btree_cursor::del_mark_set_clust_rec_log(ulint flags, rec_t *rec, const Ind
   mlog_close(mtr, log_ptr);
 }
 
-byte *Btree_cursor::parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_t *page, Index *index) noexcept{
+byte *Btree_cursor::parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_t *page, Index *index) noexcept {
   if (end_ptr < ptr + 2) {
 
     return nullptr;
@@ -1539,15 +1521,15 @@ byte *Btree_cursor::parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_
 
     if (!(flags & BTR_KEEP_SYS_FLAG)) {
       mem_heap_t *heap = nullptr;
-      ulint offsets_[REC_OFFS_NORMAL_SIZE];
-      rec_offs_init(offsets_);
+      std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+      auto offsets = offsets_.data();
 
-      ulint *offsets;
+      rec_offs_init(offsets_);
 
       {
         Phy_rec record{index, rec};
 
-        offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
+        offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
 
       srv_row_upd->rec_sys_fields_in_recovery(rec, offsets, pos, trx_id, roll_ptr);
@@ -1562,8 +1544,9 @@ byte *Btree_cursor::parse_del_mark_set_clust_rec(byte *ptr, byte *end_ptr, page_
 }
 
 db_err Btree_cursor::del_mark_set_clust_rec(ulint flags, bool val, que_thr_t *thr, mtr_t *mtr) noexcept {
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   auto rec = get_rec();
@@ -1574,7 +1557,7 @@ db_err Btree_cursor::del_mark_set_clust_rec(ulint flags, bool val, que_thr_t *th
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
 #ifdef UNIV_DEBUG
@@ -1683,8 +1666,9 @@ db_err Btree_cursor::del_mark_set_sec_rec(ulint flags, bool val, que_thr_t *thr,
 
 bool Btree_cursor::optimistic_delete(mtr_t *mtr) noexcept {
   mem_heap_t *heap{};
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   ut_ad(mtr->memo_contains(get_block(), MTR_MEMO_PAGE_X_FIX));
@@ -1699,7 +1683,7 @@ bool Btree_cursor::optimistic_delete(mtr_t *mtr) noexcept {
   {
     Phy_rec record{m_index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
   bool deleted{};
@@ -1711,7 +1695,7 @@ bool Btree_cursor::optimistic_delete(mtr_t *mtr) noexcept {
 
     page_get_max_insert_size_after_reorganize(page, 1);
 
-    page_cur_delete_rec(get_page_cur(), m_index, offsets, mtr);
+    get_page_cur()->delete_rec(m_index, offsets, mtr);
 
     deleted = true;
   }
@@ -1758,7 +1742,7 @@ db_err Btree_cursor::pessimistic_delete(bool has_reserved_extents, trx_rb_ctx rb
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
   }
 
   if (rec_offs_any_extern(offsets)) {
@@ -1808,7 +1792,7 @@ db_err Btree_cursor::pessimistic_delete(bool has_reserved_extents, trx_rb_ctx rb
       }
     }
 
-    page_cur_delete_rec(get_page_cur(), index, offsets, mtr);
+    get_page_cur()->delete_rec(index, offsets, mtr);
 
     ut_ad(m_btree->check_node_ptr(index, block, mtr));
 
@@ -1848,7 +1832,9 @@ void Btree_cursor::add_path_info(Paths *path, ulint height, ulint root_height) n
   slot->m_n_recs = page_get_n_recs(page_align(rec));
 }
 
-int64_t Btree_cursor::estimate_n_rows_in_range(Index *index, const DTuple *tuple1, ulint mode1, const DTuple *tuple2, ulint mode2) noexcept {
+int64_t Btree_cursor::estimate_n_rows_in_range(
+  Index *index, const DTuple *tuple1, ulint mode1, const DTuple *tuple2, ulint mode2
+) noexcept {
   Paths path1;
 
   mtr_t mtr;
@@ -1978,10 +1964,11 @@ void Btree_cursor::estimate_number_of_different_key_vals(const Index *index) noe
   uint64_t add_on;
   mtr_t mtr;
   mem_heap_t *heap = nullptr;
-  ulint offsets_rec_[REC_OFFS_NORMAL_SIZE];
-  ulint offsets_next_rec_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets_rec = offsets_rec_;
-  ulint *offsets_next_rec = offsets_next_rec_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_rec_{};
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_next_rec_{};
+  auto offsets_rec = offsets_rec_.data();
+  auto offsets_next_rec = offsets_next_rec_.data();
+
   rec_offs_init(offsets_rec_);
   rec_offs_init(offsets_next_rec_);
 
@@ -2028,7 +2015,7 @@ void Btree_cursor::estimate_number_of_different_key_vals(const Index *index) noe
 
       Phy_rec record{index, rec};
 
-      offsets_rec = record.get_col_offsets(offsets_rec, ULINT_UNDEFINED, &heap, Current_location());
+      offsets_rec = record.get_all_col_offsets(offsets_rec, &heap, Current_location());
     }
 
     while (rec != supremum) {
@@ -2044,7 +2031,7 @@ void Btree_cursor::estimate_number_of_different_key_vals(const Index *index) noe
       {
         Phy_rec record{index, next_rec};
 
-        offsets_next_rec = record.get_col_offsets(offsets_next_rec, ULINT_UNDEFINED, &heap, Current_location());
+        offsets_next_rec = record.get_all_col_offsets(offsets_next_rec, &heap, Current_location());
       }
 
       cmp_rec_rec_with_match(rec, next_rec, offsets_rec, offsets_next_rec, index, &matched_fields, &matched_bytes);
@@ -2055,7 +2042,6 @@ void Btree_cursor::estimate_number_of_different_key_vals(const Index *index) noe
 
         ++n_diff[j];
       }
-
 
       total_external_size += blob.get_externally_stored_len(rec, offsets_rec);
 
@@ -2090,7 +2076,7 @@ void Btree_cursor::estimate_number_of_different_key_vals(const Index *index) noe
     {
       Phy_rec record{index, rec};
 
-      offsets_rec = record.get_col_offsets(offsets_rec, ULINT_UNDEFINED, &heap, Current_location());
+      offsets_rec = record.get_all_col_offsets(offsets_rec, &heap, Current_location());
     }
 
     total_external_size += blob.get_externally_stored_len(rec, offsets_rec);
@@ -2138,5 +2124,3 @@ void Btree_cursor::estimate_number_of_different_key_vals(const Index *index) noe
     mem_heap_free(heap);
   }
 }
-
-

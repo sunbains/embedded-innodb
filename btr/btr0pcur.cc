@@ -38,7 +38,6 @@ Btree_pcursor::~Btree_pcursor() noexcept {
     m_old_rec_buf = nullptr;
   }
 
-
   m_old_rec = nullptr;
   m_old_n_fields = 0;
   m_latch_mode = BTR_NO_LATCHES;
@@ -55,7 +54,7 @@ void Btree_pcursor::store_position(mtr_t *mtr) noexcept {
   auto index = m_btr_cur.m_index;
   auto page_cursor = get_page_cur();
 
-  auto rec = page_cur_get_rec(page_cursor);
+  auto rec = page_cursor->get_rec();
   auto page = page_align(rec);
   auto offs = page_offset(rec);
 
@@ -115,7 +114,7 @@ void Btree_pcursor::copy_stored_position(Btree_pcursor *src) noexcept {
 
   if (src->m_old_rec_buf != nullptr) {
 
-    m_old_rec_buf = static_cast<byte*>(mem_alloc(src->m_buf_size));
+    m_old_rec_buf = static_cast<byte *>(mem_alloc(src->m_buf_size));
 
     memcpy(m_old_rec_buf, src->m_old_rec_buf, src->m_buf_size);
 
@@ -131,8 +130,7 @@ bool Btree_pcursor::restore_position(ulint latch_mode, mtr_t *mtr, Source_locati
   auto index = m_btr_cur.m_index;
 
   if (unlikely(!m_old_stored) ||
-      unlikely(m_pos_state != Btr_pcur_positioned::WAS_POSITIONED &&
-               m_pos_state != Btr_pcur_positioned::IS_POSITIONED)) {
+      unlikely(m_pos_state != Btr_pcur_positioned::WAS_POSITIONED && m_pos_state != Btr_pcur_positioned::IS_POSITIONED)) {
 
     log_warn_buf(this, sizeof(Btree_pcursor));
 
@@ -143,12 +141,13 @@ bool Btree_pcursor::restore_position(ulint latch_mode, mtr_t *mtr, Source_locati
     ut_error;
   }
 
-  if (unlikely(m_rel_pos == Btree_cursor_pos::AFTER_LAST_IN_TREE ||
-      m_rel_pos == Btree_cursor_pos::BEFORE_FIRST_IN_TREE)) {
+  if (unlikely(m_rel_pos == Btree_cursor_pos::AFTER_LAST_IN_TREE || m_rel_pos == Btree_cursor_pos::BEFORE_FIRST_IN_TREE)) {
 
     /* In these cases we do not try an optimistic restoration, but always do a search */
 
-    m_btr_cur.open_at_index_side(nullptr, m_rel_pos == Btree_cursor_pos::BEFORE_FIRST_IN_TREE, index, latch_mode, m_read_level, mtr, loc);
+    m_btr_cur.open_at_index_side(
+      nullptr, m_rel_pos == Btree_cursor_pos::BEFORE_FIRST_IN_TREE, index, latch_mode, m_read_level, mtr, loc
+    );
 
     m_block_when_stored = get_block();
 
@@ -162,7 +161,7 @@ bool Btree_pcursor::restore_position(ulint latch_mode, mtr_t *mtr, Source_locati
 
     /* Try optimistic restoration */
 
-    Buf_pool::Request req {
+    Buf_pool::Request req{
       .m_rw_latch = latch_mode,
       .m_guess = m_block_when_stored,
       .m_modify_clock = m_modify_clock,
@@ -235,7 +234,7 @@ bool Btree_pcursor::restore_position(ulint latch_mode, mtr_t *mtr, Source_locati
   {
     Phy_rec record(index, rec);
 
-    offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
   }
 
   if (m_rel_pos == Btree_cursor_pos::ON && is_on_user_rec() && cmp_dtuple_rec(index->m_cmp_ctx, tuple, rec, offsets) == 0) {
@@ -255,9 +254,9 @@ bool Btree_pcursor::restore_position(ulint latch_mode, mtr_t *mtr, Source_locati
     to the cursor because it can now be on a different page, the record
      under it may have been removed, etc. */
 
-     store_position(mtr);
+    store_position(mtr);
 
-     ret = false;
+    ret = false;
   }
 
   mem_heap_free(heap);
@@ -302,7 +301,7 @@ void Btree_pcursor::move_to_next_page(mtr_t *mtr) noexcept {
 
   m_btr_cur.m_btree->leaf_page_release(get_block(), m_latch_mode, mtr);
 
-  page_cur_set_before_first(next_block, get_page_cur());
+  get_page_cur()->set_before_first(next_block);
 
   page_check_dir(next_page);
 }
@@ -328,7 +327,6 @@ void Btree_pcursor::move_backward_from_page(mtr_t *mtr) noexcept {
 
     latch_mode2 = 0; /* To eliminate compiler warning */
     ut_error;
-
   }
 
   store_position(mtr);
@@ -337,20 +335,20 @@ void Btree_pcursor::move_backward_from_page(mtr_t *mtr) noexcept {
 
   mtr->start();
 
-  (void) restore_position(latch_mode2, mtr, Current_location());
+  (void)restore_position(latch_mode2, mtr, Current_location());
 
   auto page = get_page_no();
   auto prev_page_no = m_btr_cur.m_btree->page_get_prev(page, mtr);
 
   if (prev_page_no == FIL_NULL) {
-     ;
+    ;
   } else if (is_before_first_on_page()) {
 
     auto prev_block = m_btr_cur.m_left_block;
 
     m_btr_cur.m_btree->leaf_page_release(get_block(), latch_mode, mtr);
 
-    page_cur_set_after_last(prev_block, get_page_cur());
+    get_page_cur()->set_after_last(prev_block);
   } else {
 
     /* The repositioned cursor did not end on an infimum record on
@@ -368,12 +366,7 @@ void Btree_pcursor::move_backward_from_page(mtr_t *mtr) noexcept {
 }
 
 void Btree_pcursor::open_on_user_rec(
-  Index *index,
-  const DTuple *tuple,
-  ib_srch_mode_t search_mode,
-  ulint latch_mode,
-  mtr_t *mtr,
-  Source_location loc
+  Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, mtr_t *mtr, Source_location loc
 ) noexcept {
   open(index, tuple, search_mode, latch_mode, mtr, loc);
 
@@ -381,7 +374,7 @@ void Btree_pcursor::open_on_user_rec(
 
     if (is_after_last_on_page()) {
 
-      (void) move_to_next_user_rec(mtr);
+      (void)move_to_next_user_rec(mtr);
     }
   } else {
     ut_ad(search_mode == PAGE_CUR_LE || search_mode == PAGE_CUR_L);
@@ -392,17 +385,17 @@ void Btree_pcursor::open_on_user_rec(
   }
 }
 
-void Btree_pcursor::open_on_user_rec(const page_cur_t &page_cursor, ib_srch_mode_t mode, ulint latch_mode) noexcept {
+void Btree_pcursor::open_on_user_rec(const Page_cursor &page_cursor, ib_srch_mode_t mode, ulint latch_mode) noexcept {
   m_btr_cur.m_index = const_cast<Index *>(page_cursor.m_index);
 
   auto page_cur = get_page_cur();
 
-  memcpy(page_cur, &page_cursor, sizeof(*page_cur));
+  *page_cur = page_cursor;
 
   m_search_mode = mode;
-  
+
   m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
-  
+
   m_latch_mode = BTR_LATCH_MODE_WITHOUT_FLAGS(latch_mode);
 
   m_trx_if_known = nullptr;

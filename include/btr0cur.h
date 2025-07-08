@@ -393,40 +393,40 @@ struct Btree_cursor {
    *
    * @return Pointer to the page cursor component.
    */
-  [[nodiscard]] inline page_cur_t *get_page_cur() noexcept { return &m_page_cur; }
+  [[nodiscard]] inline Page_cursor *get_page_cur() noexcept { return &m_page_cur; }
 
   /**
    * Returns the page cursor component of a tree cursor.
    *
    * @return Pointer to the page cursor component.
    */
-  [[nodiscard]] inline const page_cur_t *get_page_cur() const noexcept { return &m_page_cur; }
+  [[nodiscard]] inline const Page_cursor *get_page_cur() const noexcept { return &m_page_cur; }
 
   /**
    * Returns the buffer block on which the tree cursor is positioned.
    *
    * @return Pointer to the buffer block.
    */
-  [[nodiscard]] inline Buf_block *get_block() noexcept { return page_cur_get_block(&m_page_cur); }
+  [[nodiscard]] inline Buf_block *get_block() noexcept { return m_page_cur.get_block(); }
 
   /**
    * Returns the record pointer of a tree cursor.
    *
    * @return Pointer to the record.
    */
-  [[nodiscard]] inline rec_t *get_rec() noexcept { return page_cur_get_rec(&m_page_cur); }
+  [[nodiscard]] inline rec_t *get_rec() noexcept { return m_page_cur.get_rec(); }
 
   /**
    * Invalidates a tree cursor by setting the record pointer to nullptr.
    */
-  inline void invalidate() noexcept { page_cur_invalidate(&m_page_cur); }
+  inline void invalidate() noexcept { m_page_cur.invalidate(); }
 
   /**
    * Returns the page of a tree cursor.
    *
    * @return Pointer to the page.
    */
-  [[nodiscard]] inline page_t *get_page_no() noexcept { return page_align(page_cur_get_rec(&m_page_cur)); }
+  [[nodiscard]] inline page_t *get_page_no() noexcept { return page_align(m_page_cur.get_rec()); }
 
   /**
    * Returns the index of a cursor.
@@ -445,7 +445,7 @@ struct Btree_cursor {
   inline void position(const Index *index, rec_t *rec, Buf_block *block) noexcept {
     ut_ad(page_align(rec) == block->m_frame);
 
-    page_cur_position(rec, block, &m_page_cur);
+    m_page_cur.position(rec, block);
 
     m_index = index;
   }
@@ -673,7 +673,7 @@ struct Btree_cursor {
   const Index *m_index{};
 
   /** Page cursor */
-  page_cur_t m_page_cur{};
+  Page_cursor m_page_cur{};
 
   /** This field is used to store a pointer to the left neighbor page, in the
   * cases BTR_SEARCH_PREV and BTR_MODIFY_PREV */

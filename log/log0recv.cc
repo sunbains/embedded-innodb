@@ -562,7 +562,7 @@ static byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte 
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = page_cur_parse_insert_rec(false, ptr, end_ptr, block, index, mtr);
+        ptr = Page_cursor::parse_insert_rec(false, ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_REC_CLUST_DELETE_MARK:
@@ -594,7 +594,7 @@ static byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte 
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = page_parse_copy_rec_list_to_created_page(ptr, end_ptr, block, index, mtr);
+        ptr = Page_cursor::parse_copy_rec_list_to_created_page(ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_PAGE_REORGANIZE:
@@ -639,7 +639,7 @@ static byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte 
       ut_ad(!page || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = page_cur_parse_delete_rec(ptr, end_ptr, block, index, mtr);
+        ptr = Page_cursor::parse_delete_rec(ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_INIT_FILE_PAGE:

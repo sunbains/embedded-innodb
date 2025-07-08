@@ -65,7 +65,7 @@ constexpr ulint SEL_COST_LIMIT = 100;
 
 Row_sel *srv_row_sel;
 
-Row_sel::Row_sel(Dict *dict, Lock_sys *lock_sys) noexcept 
+Row_sel::Row_sel(Dict *dict, Lock_sys *lock_sys) noexcept
   : m_dict(dict), m_lock_sys(lock_sys) {}
 
 Row_sel *Row_sel::create(Dict *dict, Lock_sys *lock_sys) noexcept {
@@ -135,13 +135,13 @@ bool Row_sel::sec_rec_is_for_clust_rec(const rec_t *sec_rec, Index *sec_index, c
   {
     Phy_rec record{clust_index, clust_rec};
 
-    clust_offs = record.get_col_offsets(clust_offs, ULINT_UNDEFINED, &heap, Current_location());
+    clust_offs = record.get_all_col_offsets(clust_offs, &heap, Current_location());
   }
 
   {
     Phy_rec record{sec_index, sec_rec};
 
-    sec_offs = record.get_col_offsets(sec_offs, ULINT_UNDEFINED, &heap, Current_location());
+    sec_offs = record.get_all_col_offsets(sec_offs, &heap, Current_location());
   }
 
 
@@ -173,7 +173,7 @@ bool Row_sel::sec_rec_is_for_clust_rec(const rec_t *sec_rec, Index *sec_index, c
             mem_heap_free(heap);
           }
           return false;
-        } else {  
+        } else {
           continue;
         }
       }
@@ -482,7 +482,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const rec_t *rec, que_thr_t *th
   {
     Phy_rec record{m_pcur.get_btr_cur()->m_index, rec};
 
-    offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(rec_offsets.data(), &heap, Current_location());
   }
 
   row_build_row_ref_fast(m_clust_ref, m_clust_map, rec, offsets);
@@ -514,7 +514,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const rec_t *rec, que_thr_t *th
   {
     Phy_rec record{index, clust_rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
   if (sel_node->m_read_view == nullptr) {
@@ -759,7 +759,7 @@ Search_status Plan::try_search_shortcut(sel_node_t *sel_node, mtr_t *mtr) noexce
   {
     Phy_rec record{m_index, rec};
 
-    offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(rec_offsets.data(), &heap, Current_location());
   }
 
   auto lock_sys = m_sel->m_lock_sys;
@@ -951,7 +951,7 @@ rec_loop:
       {
         Phy_rec record{index, next_rec};
 
-        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+        offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
 
       ulint lock_type;
@@ -1007,7 +1007,7 @@ skip_lock:
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     ulint lock_type;
@@ -1088,7 +1088,7 @@ skip_lock:
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
   if (consistent_read) {
@@ -1121,7 +1121,7 @@ skip_lock:
           {
             Phy_rec record{index, rec};
 
-            offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+            offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
           }
 
           /* Fetch the columns needed in test conditions. The clustered
@@ -1445,7 +1445,7 @@ func_exit:
   if (likely_null(heap)) {
     mem_heap_free(heap);
   }
-  return err; 
+  return err;
 }
 
 que_thr_t *Row_sel::step(que_thr_t *thr) noexcept {
@@ -1754,7 +1754,7 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
   {
     Phy_rec record{clust_index, clust_rec};
 
-    *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, offset_heap, Current_location());
+    *offsets = record.get_all_col_offsets(*offsets, offset_heap, Current_location());
   }
 
   if (prebuilt->m_select_lock_type != LOCK_NONE) {
@@ -1877,7 +1877,7 @@ inline void Prebuilt::Row_cache::add_row(const rec_t *rec, const ulint *offsets)
  * @param[out] out_rec record if found
  * @param[in] prebuilt prebuilt struct
  * @param[in,out] offsets for Rec:get_offsets(*out_rec)
- * @param[in,out] heap heap for Phy_rec::get_col_offsets()
+ * @param[in,out] heap heap for Phy_rec::get_all_col_offsets()
  * @param[in] mtr started mtr
  *
  * @return Search_status::FOUND, Search_status::EXHAUSTED, Search_status::RETRY
@@ -1914,7 +1914,7 @@ Search_status Row_sel::try_search_shortcut_for_prebuilt(const rec_t **out_rec, P
   {
     Phy_rec record{index, rec};
 
-    *offsets = record.get_col_offsets(*offsets, ULINT_UNDEFINED, heap, Current_location());
+    *offsets = record.get_all_col_offsets(*offsets, heap, Current_location());
   }
 
   if (!m_lock_sys->clust_rec_cons_read_sees(rec, index, *offsets, trx->m_read_view)) {
@@ -2022,8 +2022,8 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, Prebuilt
   bool same_user_rec;
   mtr_t mtr;
   mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
   void *cmp_ctx = index->m_cmp_ctx;
 
   rec_offs_init(offsets_);
@@ -2263,7 +2263,7 @@ db_err Row_sel::mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, Prebuilt
       {
         Phy_rec record{index, next};
 
-        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+        offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
 
       err = set_rec_lock(pcur->get_block(), next, index, offsets, prebuilt->m_select_lock_type, LOCK_GAP, thr);
@@ -2334,7 +2334,7 @@ rec_loop:
       {
         Phy_rec record{index, rec};
 
-        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+        offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
 
       const auto lock_type = prebuilt->m_select_lock_type;
@@ -2395,7 +2395,7 @@ rec_loop:
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
   if (unlikely(recovery != IB_RECOVERY_DEFAULT)) {
@@ -2672,7 +2672,7 @@ rec_loop:
       {
         Phy_rec record{index, rec};
 
-        offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+        offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
       }
 
       result_rec = rec;

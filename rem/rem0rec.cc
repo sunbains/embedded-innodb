@@ -30,7 +30,7 @@ Created 5/30/1994 Heikki Tuuri
 #include "mtr0mtr.h"
 #include "rem0rec.h"
 
-/*			PHYSICAL RECORD 
+/*			PHYSICAL RECORD
 
 The physical record, which is the data type of all the records
 found in index pages of the database, has the following format
@@ -101,7 +101,7 @@ the corresponding canonical strings have the same property. */
  * Validates a record.
  *
  * @param rec The physical record to validate.
- * 
+ *
  * @return true if the record is valid, false otherwise.
  */
 static bool rec_validate(const rec_t *rec) noexcept;
@@ -215,13 +215,13 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
   in the record:
 
      offsets[1] == n_fields.
-  
+
   The rest of the array will be initialized by this function.
 
   For externally stored columns:
-  
+
      offsets[0] == extra size, if REC_OFFS_EXTERNAL is set
-    
+
   offsets[1..n_fields] will be set to offsets past the end of fields 0..n_fields,
   or to the beginning of fields 1..n_fields+1. When the high-order bit of the offset
   at [i+1] is set (REC_OFFS_SQL_NULL), the field i is NULL. When the second
@@ -606,15 +606,15 @@ rec_t *rec_convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dt
 #ifdef UNIV_DEBUG
   {
     mem_heap_t *heap{};
-    const ulint *offsets;
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
+    std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+    auto offsets = offsets_.data();
 
     rec_offs_init(offsets_);
 
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());  
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     ut_ad(rec_validate(rec, offsets));
@@ -634,8 +634,9 @@ rec_t *rec_convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dt
 }
 
 void rec_copy_prefix_to_dtuple(DTuple *tuple, const rec_t *rec, const Index *index, ulint n_fields, mem_heap_t *heap) noexcept {
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   {
@@ -700,9 +701,9 @@ rec_t *rec_copy_prefix_to_buf(const rec_t *rec, const Index *index, ulint n_fiel
 
 /**
  * Validates the consistency of a physical record.
- * 
+ *
  * @param[in] rec  Record to validate.
- * 
+ *
  * @return	true if ok
  */
 static bool rec_validate(const rec_t *rec) noexcept {

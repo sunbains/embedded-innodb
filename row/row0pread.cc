@@ -33,7 +33,6 @@ Created 2018-01-27 by Sunny Bains */
 
 #include "btr0pcur.h"
 #include "dict0dict.h"
-#include "dict0dict.h"
 #include "os0thread-create.h"
 #include "row0pread.h"
 #include "row0row.h"
@@ -178,13 +177,10 @@ db_err Parallel_reader::Ctx::split() {
 }
 
 Parallel_reader::Parallel_reader(size_t max_threads)
-    : m_max_threads(max_threads),
-      m_n_threads(max_threads),
-      m_ctxs(),
-      m_sync(max_threads == 0) {
+    : m_max_threads(max_threads), m_n_threads(max_threads), m_ctxs(), m_sync(max_threads == 0) {
   m_n_completed = 0;
 
-  mutex_create(&m_mutex, IF_DEBUG("parallel_read_mutex",) IF_SYNC_DEBUG(SYNC_PARALLEL_READ,) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("parallel_read_mutex", ) IF_SYNC_DEBUG(SYNC_PARALLEL_READ, ) Current_location());
 
   m_event = Cond_var::create("parallel_reader");
   m_sig_count = m_event->reset();
@@ -200,8 +196,7 @@ class PCursor {
   @param[in,out] pcur           Persistent cursor in use.
   @param[in] mtr                Mini-transaction used by the persistent cursor.
   @param[in] read_level         Read level where the block should be present. */
-  PCursor(Btree_pcursor *pcur, mtr_t *mtr, size_t read_level)
-      : m_mtr(mtr), m_pcur(pcur), m_read_level(read_level) {}
+  PCursor(Btree_pcursor *pcur, mtr_t *mtr, size_t read_level) : m_mtr(mtr), m_pcur(pcur), m_read_level(read_level) {}
 
   /** Create a savepoint and commit the mini-transaction.*/
   void savepoint() noexcept;
@@ -221,9 +216,9 @@ class PCursor {
     auto equal = m_pcur->restore_position(MODE, m_mtr, Current_location());
 
     switch (relative) {
-       case Btree_cursor_pos::ON:
+      case Btree_cursor_pos::ON:
         if (!equal) {
-          page_cur_move_to_next(m_pcur->get_page_cur());
+          m_pcur->get_page_cur()->move_to_next();
         }
         break;
 
@@ -251,7 +246,7 @@ class PCursor {
 
           case Btr_pcur_positioned::IS_POSITIONED:
             if (m_pcur->is_on_user_rec()) {
-              (void) m_pcur->move_to_next(m_mtr);
+              (void)m_pcur->move_to_next(m_mtr);
             }
             break;
 
@@ -264,9 +259,7 @@ class PCursor {
   }
 
   /** @return the current page cursor. */
-  [[nodiscard]] page_cur_t *get_page_cursor() noexcept {
-    return m_pcur->get_page_cur();
-  }
+  [[nodiscard]] Page_cursor *get_page_cursor() noexcept { return m_pcur->get_page_cur(); }
 
   /** Restore from a saved position.
   @return DB_SUCCESS or error code. */
@@ -276,9 +269,7 @@ class PCursor {
   [[nodiscard]] dberr_t move_to_user_rec() noexcept;
 
   /** @return true if cursor is after last on page. */
-  [[nodiscard]] bool is_after_last_on_page() const noexcept {
-    return m_pcur->is_after_last_on_page();
-  }
+  [[nodiscard]] bool is_after_last_on_page() const noexcept { return m_pcur->is_after_last_on_page(); }
 
  private:
   /** Mini-transaction. */
@@ -294,13 +285,8 @@ class PCursor {
 
 Buf_block *Parallel_reader::Scan_ctx::block_get_s_latched(const Page_id &page_id, mtr_t *mtr, ulint line) const {
   /* We never scan undo tablespaces. */
-  Buf_pool::Request req {
-    .m_rw_latch = RW_S_LATCH,
-    .m_page_id = page_id,
-    .m_mode = BUF_GET,
-    .m_file = __FILE__,
-    .m_line = ulint(line),
-    .m_mtr = mtr
+  Buf_pool::Request req{
+    .m_rw_latch = RW_S_LATCH, .m_page_id = page_id, .m_mode = BUF_GET, .m_file = __FILE__, .m_line = ulint(line), .m_mtr = mtr
   };
 
   auto block = srv_buf_pool->get(req, nullptr);
@@ -337,19 +323,19 @@ void PCursor::resume() noexcept {
 
 dberr_t PCursor::move_to_user_rec() noexcept {
   auto cur = m_pcur->get_page_cur();
-  const auto next_page_no = srv_btree_sys->page_get_next(page_cur_get_page(cur), m_mtr);
+  const auto next_page_no = srv_btree_sys->page_get_next(cur->get_page(), m_mtr);
 
   if (next_page_no == FIL_NULL) {
     m_mtr->commit();
     return DB_END_OF_INDEX;
   }
 
-  auto block = page_cur_get_block(cur);
+  auto block = cur->get_block();
   const Page_id page_id{block->get_space(), block->get_page_no()};
 
-  Buf_pool::Request req {
+  Buf_pool::Request req{
     .m_rw_latch = RW_S_LATCH,
-    .m_page_id = { page_id.m_space_id, next_page_no },
+    .m_page_id = {page_id.m_space_id, next_page_no},
     .m_mode = BUF_GET,
     .m_file = __FILE__,
     .m_line = __LINE__,
@@ -361,16 +347,16 @@ dberr_t PCursor::move_to_user_rec() noexcept {
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
 
   if (page_is_leaf(block->get_frame())) {
-    srv_btree_sys->leaf_page_release(page_cur_get_block(cur), RW_S_LATCH, m_mtr);
+    srv_btree_sys->leaf_page_release(cur->get_block(), RW_S_LATCH, m_mtr);
   }
 
-  page_cur_set_before_first(block, cur);
+  cur->set_before_first(block);
 
   /* Skip the infimum record. */
-  page_cur_move_to_next(cur);
+  cur->move_to_next();
 
   /* Page can't be empty unless it is a root page. */
-  ut_ad(!page_cur_is_after_last(cur));
+  ut_ad(!cur->is_after_last());
 
   return DB_SUCCESS;
 }
@@ -428,7 +414,7 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
       if (m_trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !view->changes_visible(rec_trx_id)) {
         const rec_t *old_vers;
 
-        Row_vers::Row row {
+        Row_vers::Row row{
           .m_cluster_rec = rec,
           .m_mtr = mtr,
           .m_cluster_index = m_config.m_index,
@@ -460,9 +446,7 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
     return false;
   }
 
-  ut_ad(m_trx == nullptr ||
-        m_trx->m_isolation_level == TRX_ISO_READ_UNCOMMITTED ||
-        !rec_offs_any_null_extern(rec, offsets));
+  ut_ad(m_trx == nullptr || m_trx->m_isolation_level == TRX_ISO_READ_UNCOMMITTED || !rec_offs_any_null_extern(rec, offsets));
 
   return true;
 }
@@ -471,7 +455,7 @@ void Parallel_reader::Scan_ctx::copy_row(const rec_t *rec, Iter *iter) const {
   {
     Phy_rec record{m_config.m_index, rec};
 
-    iter->m_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &iter->m_heap, Current_location());
+    iter->m_offsets = record.get_all_col_offsets(nullptr, &iter->m_heap, Current_location());
   }
 
   /* Copy the row from the page to the scan iterator. The copy should use
@@ -499,8 +483,9 @@ void Parallel_reader::Scan_ctx::copy_row(const rec_t *rec, Iter *iter) const {
   iter->m_tuple = tuple;
 }
 
-std::shared_ptr<Parallel_reader::Scan_ctx::Iter>
-Parallel_reader::Scan_ctx::create_persistent_cursor(const page_cur_t &page_cursor, mtr_t *mtr) const {
+std::shared_ptr<Parallel_reader::Scan_ctx::Iter> Parallel_reader::Scan_ctx::create_persistent_cursor(
+  const Page_cursor &page_cursor, mtr_t *mtr
+) const {
   ut_ad(index_s_own());
 
   std::shared_ptr<Iter> iter = std::make_shared<Iter>();
@@ -551,8 +536,8 @@ bool Parallel_reader::Ctx::move_to_next_node(PCursor *pcursor) {
     return false;
   } else {
     /* Page can't be empty unless it is a root page. */
-    ut_ad(!page_cur_is_after_last(cur));
-    ut_ad(!page_cur_is_before_first(cur));
+    ut_ad(!cur->is_after_last());
+    ut_ad(!cur->is_before_first());
     return true;
   }
 }
@@ -613,7 +598,7 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
   auto cur = pcursor->get_page_cursor();
 
   while (err == DB_SUCCESS) {
-    if (page_cur_is_after_last(cur)) {
+    if (cur->is_after_last()) {
       call_end_page = false;
 
       if (m_scan_ctx->m_reader->m_finish_callback) {
@@ -657,17 +642,17 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
       }
     }
 
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
-    ulint *offsets = offsets_;
+    std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+    auto offsets = offsets_.data();
 
     rec_offs_init(offsets_);
 
-    const rec_t *rec = page_cur_get_rec(cur);
+    const rec_t *rec = cur->get_rec();
 
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     if (end_tuple != nullptr) {
@@ -712,7 +697,7 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
 
     m_first_rec = false;
 
-    page_cur_move_to_next(cur);
+    cur->move_to_next();
   }
 
   if (err != DB_SUCCESS) {
@@ -883,32 +868,32 @@ void Parallel_reader::worker(Parallel_reader::Thread_ctx *thread_ctx) {
 page_no_t Parallel_reader::Scan_ctx::search(const Buf_block *block, const DTuple *key) const {
   ut_ad(index_s_own());
 
-  page_cur_t page_cursor;
+  Page_cursor page_cursor;
   const auto index = m_config.m_index;
 
   if (key != nullptr) {
-    page_cur_search(block, index, key, PAGE_CUR_LE, &page_cursor);
+    page_cursor.search(block, index, key, PAGE_CUR_LE);
   } else {
-    page_cur_set_before_first(block, &page_cursor);
+    page_cursor.set_before_first(block);
   }
 
-  if (page_rec_is_infimum(page_cur_get_rec(&page_cursor))) {
-    page_cur_move_to_next(&page_cursor);
+  if (page_rec_is_infimum(page_cursor.get_rec())) {
+    page_cursor.move_to_next();
   }
 
-  const auto rec = page_cur_get_rec(&page_cursor);
+  const auto rec = page_cursor.get_rec();
 
   mem_heap_t *heap = nullptr;
 
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  auto offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
 
   rec_offs_init(offsets_);
 
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
   auto page_no = srv_btree_sys->node_ptr_get_child_page_no(rec, offsets);
@@ -920,7 +905,7 @@ page_no_t Parallel_reader::Scan_ctx::search(const Buf_block *block, const DTuple
   return page_no;
 }
 
-page_cur_t Parallel_reader::Scan_ctx::start_range(page_no_t page_no, mtr_t *mtr, const DTuple *key, Savepoints &savepoints) const {
+Page_cursor Parallel_reader::Scan_ctx::start_range(page_no_t page_no, mtr_t *mtr, const DTuple *key, Savepoints &savepoints) const {
   ut_ad(index_s_own());
 
   ulint height{};
@@ -942,23 +927,23 @@ page_cur_t Parallel_reader::Scan_ctx::start_range(page_no_t page_no, mtr_t *mtr,
       continue;
     }
 
-    page_cur_t page_cursor;
+    Page_cursor page_cursor;
 
     if (key != nullptr) {
-      page_cur_search(block, index, key, PAGE_CUR_GE, &page_cursor);
+      page_cursor.search(block, index, key, PAGE_CUR_GE);
     } else {
-      page_cur_set_before_first(block, &page_cursor);
+      page_cursor.set_before_first(block);
     }
 
-    if (page_rec_is_infimum(page_cur_get_rec(&page_cursor))) {
-      page_cur_move_to_next(&page_cursor);
+    if (page_rec_is_infimum(page_cursor.get_rec())) {
+      page_cursor.move_to_next();
     }
 
     return page_cursor;
   }
 }
 
-void Parallel_reader::Scan_ctx::create_range(Ranges &ranges, page_cur_t &leaf_page_cursor, mtr_t *mtr) const {
+void Parallel_reader::Scan_ctx::create_range(Ranges &ranges, Page_cursor &leaf_page_cursor, mtr_t *mtr) const {
   leaf_page_cursor.m_index = m_config.m_index;
 
   auto iter = create_persistent_cursor(leaf_page_cursor, mtr);
@@ -973,12 +958,8 @@ void Parallel_reader::Scan_ctx::create_range(Ranges &ranges, page_cur_t &leaf_pa
 }
 
 dberr_t Parallel_reader::Scan_ctx::create_ranges(
-  const Scan_range &scan_range,
-  page_no_t page_no,
-  size_t depth,
-  const size_t split_level,
-  Ranges &ranges,
-  mtr_t *mtr) {
+  const Scan_range &scan_range, page_no_t page_no, size_t depth, const size_t split_level, Ranges &ranges, mtr_t *mtr
+) {
 
   ut_ad(index_s_own());
   ut_a(page_no != FIL_NULL);
@@ -1003,29 +984,29 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
 
   savepoint.second = block;
 
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  auto offsets = offsets_;
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
 
   rec_offs_init(offsets_);
 
-  page_cur_t page_cursor;
+  Page_cursor page_cursor;
 
   page_cursor.m_index = index;
 
   auto start = scan_range.m_start;
 
   if (start != nullptr) {
-    page_cur_search(block, index, start, PAGE_CUR_LE, &page_cursor);
+    page_cursor.search(block, index, start, PAGE_CUR_LE);
 
-    if (page_cur_is_after_last(&page_cursor)) {
+    if (page_cursor.is_after_last()) {
       return DB_SUCCESS;
-    } else if (page_cur_is_before_first((&page_cursor))) {
-      page_cur_move_to_next(&page_cursor);
+    } else if (page_cursor.is_before_first()) {
+      page_cursor.move_to_next();
     }
   } else {
-    page_cur_set_before_first(block, &page_cursor);
+    page_cursor.set_before_first(block);
     /* Skip the infimum record. */
-    page_cur_move_to_next(&page_cursor);
+    page_cursor.move_to_next();
   }
 
   mem_heap_t *heap{};
@@ -1034,8 +1015,8 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
 
   Savepoints savepoints{};
 
-  while (!page_cur_is_after_last(&page_cursor)) {
-    const auto rec = page_cur_get_rec(&page_cursor);
+  while (!page_cursor.is_after_last()) {
+    const auto rec = page_cursor.get_rec();
 
     if (heap == nullptr) {
       heap = mem_heap_create(UNIV_PAGE_SIZE / 4);
@@ -1044,7 +1025,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
     const auto end = scan_range.m_end;
@@ -1053,7 +1034,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
       break;
     }
 
-    page_cur_t level_page_cursor;
+    Page_cursor level_page_cursor;
 
     /* Split the tree one level below the root if read_level requested is below the root level. */
     if (at_level > m_config.m_read_level) {
@@ -1063,7 +1044,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
         /* Need to create a range starting at a lower level in the tree. */
         create_ranges(scan_range, page_no, depth + 1, split_level, ranges, mtr);
 
-        page_cur_move_to_next(&page_cursor);
+        page_cursor.move_to_next();
         continue;
       }
 
@@ -1075,14 +1056,14 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
       proceed. */
 
       if (start != nullptr) {
-        page_cur_search(block, index, start, PAGE_CUR_GE, &page_cursor);
-        ut_a(!page_rec_is_infimum(page_cur_get_rec(&page_cursor)));
+        page_cursor.search(block, index, start, PAGE_CUR_GE);
+        ut_a(!page_rec_is_infimum(page_cursor.get_rec()));
       } else {
-        page_cur_set_before_first(block, &page_cursor);
+        page_cursor.set_before_first(block);
 
         /* Skip the infimum record. */
-        page_cur_move_to_next(&page_cursor);
-        ut_a(!page_cur_is_after_last(&page_cursor));
+        page_cursor.move_to_next();
+        ut_a(!page_cursor.is_after_last());
       }
 
       /* Since we are already at the requested level use the current page
@@ -1090,7 +1071,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
       memcpy(&level_page_cursor, &page_cursor, sizeof(level_page_cursor));
     }
 
-    if (!page_rec_is_supremum(page_cur_get_rec(&level_page_cursor))) {
+    if (!page_rec_is_supremum(level_page_cursor.get_rec())) {
       create_range(ranges, level_page_cursor, mtr);
     }
 
@@ -1112,7 +1093,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
 
     start = nullptr;
 
-    page_cur_move_to_next(&page_cursor);
+    page_cursor.move_to_next();
   }
 
   savepoints.push_back(savepoint);
@@ -1128,7 +1109,9 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
   return DB_SUCCESS;
 }
 
-dberr_t Parallel_reader::Scan_ctx::partition( const Scan_range &scan_range, Parallel_reader::Scan_ctx::Ranges &ranges, size_t split_level) {
+dberr_t Parallel_reader::Scan_ctx::partition(
+  const Scan_range &scan_range, Parallel_reader::Scan_ctx::Ranges &ranges, size_t split_level
+) {
   ut_ad(index_s_own());
 
   mtr_t mtr;

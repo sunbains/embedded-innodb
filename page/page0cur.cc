@@ -32,26 +32,12 @@ Created 10/4/1994 Heikki Tuuri
 #include "ut0ut.h"
 
 #ifdef PAGE_CUR_ADAPT
-#ifdef UNIV_SEARCH_PERF_STAT
-static ulint page_cur_short_succ = 0;
-#endif /* UNIV_SEARCH_PERF_STAT */
+uint64_t Page_cursor::lcg_prng() {
+  constexpr uint64_t LCG_c{12345};
+  constexpr uint64_t LCG_a{1103515245};
 
-/** This is a linear congruential generator PRNG. Returns a pseudo random
-number between 0 and 2^64-1 inclusive. The formula and the constants
-being used are:
-X[n+1] = (a * X[n] + c) mod m
-where:
-X[0] = ut_time_us(nullptr)
-a = 1103515245 (3^5 * 5 * 7 * 129749)
-c = 12345 (3 * 5 * 823)
-m = 18446744073709551616 (2^64)
-
-@return	number between 0 and 2^64-1 */
-static uint64_t page_cur_lcg_prng(void) {
-#define LCG_a 1103515245
-#define LCG_c 12345
-  static uint64_t lcg_current = 0;
-  static bool initialized = false;
+  static bool initialized{};
+  static uint64_t lcg_current{};
 
   if (!initialized) {
     lcg_current = (uint64_t)ut_time_us(nullptr);
@@ -62,51 +48,25 @@ static uint64_t page_cur_lcg_prng(void) {
   64 bit and this will be done anyway */
   lcg_current = LCG_a * lcg_current + LCG_c;
 
-  return (lcg_current);
+  return lcg_current;
 }
 
-/** Tries a search shortcut based on the last insert.
-@return	true on success */
-static bool page_cur_try_search_shortcut(
-  const Buf_block *block, /*!< in: index page */
-  const Index *index,     /*!< in: record descriptor */
-  const DTuple *tuple,    /*!< in: data tuple */
-  ulint *iup_matched_fields,
-  /*!< in/out: already matched
-    fields in upper limit record */
-  ulint *iup_matched_bytes,
-  /*!< in/out: already matched
-    bytes in a field not yet
-    completely matched */
-  ulint *ilow_matched_fields,
-  /*!< in/out: already matched
-    fields in lower limit record */
-  ulint *ilow_matched_bytes,
-  /*!< in/out: already matched
-    bytes in a field not yet
-    completely matched */
-  page_cur_t *cursor
-) /*!< out: page cursor */
-{
-  const rec_t *rec;
-  const rec_t *next_rec;
-  ulint low_match;
-  ulint low_bytes;
-  ulint up_match;
-  ulint up_bytes;
-#ifdef UNIV_SEARCH_DEBUG
-  page_cur_t cursor2;
-#endif
-  bool success = false;
-  page_t *page = block->get_frame();
-  mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+bool Page_cursor::try_search_shortcut(
+  const Buf_block *block, const Index *index, const DTuple *tuple, ulint *iup_matched_fields, ulint *iup_matched_bytes,
+  ulint *ilow_matched_fields, ulint *ilow_matched_bytes
+) {
+  bool success{};
+  mem_heap_t *heap{};
+  const rec_t *next_rec{};
+  auto page = block->get_frame();
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   ut_ad(dtuple_check_typed(tuple));
 
-  rec = page_header_get_ptr(page, PAGE_LAST_INSERT);
+  auto rec = page_header_get_ptr(page, PAGE_LAST_INSERT);
 
   {
     Phy_rec record{index, rec};
@@ -114,13 +74,16 @@ static bool page_cur_try_search_shortcut(
     offsets = record.get_col_offsets(offsets, dtuple_get_n_fields(tuple), &heap, Current_location());
   }
 
-  ut_ad(rec);
+  ut_ad(rec != nullptr);
   ut_ad(page_rec_is_user_rec(rec));
+
+  ulint low_match;
+  ulint low_bytes;
 
   ut_pair_min(&low_match, &low_bytes, *ilow_matched_fields, *ilow_matched_bytes, *iup_matched_fields, *iup_matched_bytes);
 
-  up_match = low_match;
-  up_bytes = low_bytes;
+  auto up_match = low_match;
+  auto up_bytes = low_bytes;
 
   if (page_cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, rec, offsets, &low_match, &low_bytes) < 0) {
 
@@ -140,13 +103,15 @@ static bool page_cur_try_search_shortcut(
     goto exit_func;
   }
 
-  page_cur_position(rec, block, cursor);
+  position(rec, block);
 
 #ifdef UNIV_SEARCH_DEBUG
-  page_cur_search_with_match(
-    block, index, tuple, PAGE_CUR_DBG, iup_matched_fields, iup_matched_bytes, ilow_matched_fields, ilow_matched_bytes, &cursor2
+  Page_cursor cursor{};
+
+  cursor.search_with_match(
+    block, index, tuple, PAGE_CUR_DBG, iup_matched_fields, iup_matched_bytes, ilow_matched_fields, ilow_matched_bytes
   );
-  ut_a(cursor2.rec == cursor->rec);
+  ut_a(cursor.m_rec == m_rec);
 
   if (!page_rec_is_supremum(next_rec)) {
 
@@ -156,7 +121,8 @@ static bool page_cur_try_search_shortcut(
 
   ut_a(*ilow_matched_fields == low_match);
   ut_a(*ilow_matched_bytes == low_bytes);
-#endif
+#endif /* UNIV_SEARCH_DEBUG */
+
   if (!page_rec_is_supremum(next_rec)) {
 
     *iup_matched_fields = up_match;
@@ -167,39 +133,29 @@ static bool page_cur_try_search_shortcut(
   *ilow_matched_bytes = low_bytes;
 
 #ifdef UNIV_SEARCH_PERF_STAT
-  page_cur_short_succ++;
-#endif
+  ++m_short_succ;
+#endif /* UNIV_SEARCH_PERF_STAT */
+
   success = true;
+
 exit_func:
   if (likely_null(heap)) {
     mem_heap_free(heap);
   }
-  return (success);
+
+  return success;
 }
 
 #endif
 
 #ifdef PAGE_CUR_LE_OR_EXTENDS
-/** Checks if the nth field in a record is a character type field which extends
-the nth field in tuple, i.e., the field is longer or equal in length and has
-common first characters.
-@return	true if rec field extends tuple field */
-static bool page_cur_rec_field_extends(
-  const dtuple_t *tuple, /*!< in: data tuple */
-  const rec_t *rec,      /*!< in: record */
-  const ulint *offsets,  /*!< in: array returned by Phy_rec::get_col_offsets() */
-  ulint n
-) /*!< in: compare nth field */
-{
-  const dtype_t *type;
-  const dfield_t *dfield;
-  const byte *rec_f;
+bool Page_cursor::rec_field_extends(const dtuple_t *tuple, const rec_t *rec, const ulint *offsets, ulint n) {
   ulint rec_f_len;
 
   ut_ad(rec_offs_validate(rec, nullptr, offsets));
-  dfield = dtuple_get_nth_field(tuple, n);
+  auto dfield = dtuple_get_nth_field(tuple, n);
 
-  type = dfield_get_type(dfield);
+  auto type = dfield_get_type(dfield);
 
   rec_f = rec_get_nth_field(rec, offsets, n, &rec_f_len);
 
@@ -211,45 +167,43 @@ static bool page_cur_rec_field_extends(
           type->mtype, type->prtype, dfield_get_data(dfield), dfield_get_len(dfield), rec_f, dfield_get_len(dfield)
         )) {
 
-      return (true);
+      return true;
     }
   }
 
-  return (false);
+  return false;
 }
 #endif /* PAGE_CUR_LE_OR_EXTENDS */
 
-void page_cur_search_with_match(
+void Page_cursor::search_with_match(
   const Buf_block *block, const Index *index, const DTuple *tuple, ulint mode, ulint *iup_matched_fields, ulint *iup_matched_bytes,
-  ulint *ilow_matched_fields, ulint *ilow_matched_bytes, page_cur_t *cursor
+  ulint *ilow_matched_fields, ulint *ilow_matched_bytes
 ) {
-  ulint up;
-  ulint low;
-  ulint mid;
-  page_t *page;
-  const page_dir_slot_t *slot;
   const rec_t *up_rec;
   const rec_t *low_rec;
-  const rec_t *mid_rec;
-  ulint up_matched_fields;
-  ulint up_matched_bytes;
-  ulint low_matched_fields;
-  ulint low_matched_bytes;
   ulint cur_matched_fields;
   ulint cur_matched_bytes;
-  int cmp;
+  const page_dir_slot_t *slot;
+
 #ifdef UNIV_SEARCH_DEBUG
   int dbg_cmp;
   ulint dbg_matched_fields;
   ulint dbg_matched_bytes;
-#endif
-  mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+#endif /* UNIV_SEARCH_DEBUG */
+
+  mem_heap_t *heap{};
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
-  ut_ad(block && tuple && iup_matched_fields && iup_matched_bytes && ilow_matched_fields && ilow_matched_bytes && cursor);
+  ut_ad(
+    block != nullptr && tuple != nullptr && iup_matched_fields != nullptr && iup_matched_bytes != nullptr &&
+    ilow_matched_fields != nullptr && ilow_matched_bytes != nullptr
+  );
+
   ut_ad(dtuple_validate(tuple));
+
 #ifdef UNIV_DEBUG
 #ifdef PAGE_CUR_DBG
   if (mode != PAGE_CUR_DBG)
@@ -259,7 +213,8 @@ void page_cur_search_with_match(
 #endif /* PAGE_CUR_LE_OR_EXTENDS */
       ut_ad(mode == PAGE_CUR_L || mode == PAGE_CUR_LE || mode == PAGE_CUR_G || mode == PAGE_CUR_GE);
 #endif /* UNIV_DEBUG */
-  page = block->get_frame();
+
+  auto page = block->get_frame();
 
   page_check_dir(page);
 
@@ -267,9 +222,7 @@ void page_cur_search_with_match(
   if (page_is_leaf(page) && mode == PAGE_CUR_LE && page_header_get_field(page, PAGE_N_DIRECTION) > 3 &&
       page_header_get_ptr(page, PAGE_LAST_INSERT) && page_header_get_field(page, PAGE_DIRECTION) == PAGE_RIGHT) {
 
-    if (page_cur_try_search_shortcut(
-          block, index, tuple, iup_matched_fields, iup_matched_bytes, ilow_matched_fields, ilow_matched_bytes, cursor
-        )) {
+    if (try_search_shortcut(block, index, tuple, iup_matched_fields, iup_matched_bytes, ilow_matched_fields, ilow_matched_bytes)) {
       return;
     }
   }
@@ -277,8 +230,8 @@ void page_cur_search_with_match(
   if (mode == PAGE_CUR_DBG) {
     mode = PAGE_CUR_LE;
   }
-#endif
-#endif
+#endif /* PAGE_CUR_DBG */
+#endif /* PAGE_CUR_ADAPT */
 
   /* The following flag does not work for non-latin1 char sets because
   cmp_full_field does not tell how many bytes matched */
@@ -292,25 +245,25 @@ void page_cur_search_with_match(
   the page. We want to position the cursor on the first X which
   satisfies the condition. */
 
-  up_matched_fields = *iup_matched_fields;
-  up_matched_bytes = *iup_matched_bytes;
-  low_matched_fields = *ilow_matched_fields;
-  low_matched_bytes = *ilow_matched_bytes;
+  auto up_matched_fields = *iup_matched_fields;
+  auto up_matched_bytes = *iup_matched_bytes;
+  auto low_matched_fields = *ilow_matched_fields;
+  auto low_matched_bytes = *ilow_matched_bytes;
 
   /* Perform binary search. First the search is done through the page
   directory, after that as a linear search in the list of records
   owned by the upper limit directory slot. */
 
-  low = 0;
-  up = page_dir_get_n_slots(page) - 1;
+  ulint low{};
+  auto up = page_dir_get_n_slots(page) - 1;
 
   /* Perform binary search until the lower and upper limit directory
   slots come to the distance 1 of each other */
 
   while (up - low > 1) {
-    mid = (low + up) / 2;
+    auto mid = (low + up) >> 1;
     slot = page_dir_get_nth_slot(page, mid);
-    mid_rec = page_dir_slot_get_rec(slot);
+    auto mid_rec = page_dir_slot_get_rec(slot);
 
     ut_pair_min(
       &cur_matched_fields, &cur_matched_bytes, low_matched_fields, low_matched_bytes, up_matched_fields, up_matched_bytes
@@ -322,7 +275,7 @@ void page_cur_search_with_match(
       offsets = record.get_col_offsets(offsets, dtuple_get_n_fields_cmp(tuple), &heap, Current_location());
     }
 
-    cmp = cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, mid_rec, offsets, &cur_matched_fields, &cur_matched_bytes);
+    auto cmp = cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, mid_rec, offsets, &cur_matched_fields, &cur_matched_bytes);
 
     if (likely(cmp > 0)) {
     low_slot_match:
@@ -332,7 +285,7 @@ void page_cur_search_with_match(
 
     } else if (expect(cmp, -1)) {
 #ifdef PAGE_CUR_LE_OR_EXTENDS
-      if (mode == PAGE_CUR_LE_OR_EXTENDS && page_cur_rec_field_extends(tuple, mid_rec, offsets, cur_matched_fields)) {
+      if (mode == PAGE_CUR_LE_OR_EXTENDS && rec_field_extends(tuple, mid_rec, offsets, cur_matched_fields)) {
 
         goto low_slot_match;
       }
@@ -365,7 +318,7 @@ void page_cur_search_with_match(
 
   while (page_rec_get_next_const(low_rec) != up_rec) {
 
-    mid_rec = page_rec_get_next_const(low_rec);
+    auto mid_rec = page_rec_get_next_const(low_rec);
 
     ut_pair_min(
       &cur_matched_fields, &cur_matched_bytes, low_matched_fields, low_matched_bytes, up_matched_fields, up_matched_bytes
@@ -377,7 +330,7 @@ void page_cur_search_with_match(
       offsets = record.get_col_offsets(offsets, dtuple_get_n_fields_cmp(tuple), &heap, Current_location());
     }
 
-    cmp = cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, mid_rec, offsets, &cur_matched_fields, &cur_matched_bytes);
+    auto cmp = cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, mid_rec, offsets, &cur_matched_fields, &cur_matched_bytes);
 
     if (likely(cmp > 0)) {
     low_rec_match:
@@ -387,7 +340,7 @@ void page_cur_search_with_match(
 
     } else if (expect(cmp, -1)) {
 #ifdef PAGE_CUR_LE_OR_EXTENDS
-      if (mode == PAGE_CUR_LE_OR_EXTENDS && page_cur_rec_field_extends(tuple, mid_rec, offsets, cur_matched_fields)) {
+      if (mode == PAGE_CUR_LE_OR_EXTENDS && rec_field_extends(tuple, mid_rec, offsets, cur_matched_fields)) {
 
         goto low_rec_match;
       }
@@ -419,10 +372,10 @@ void page_cur_search_with_match(
   {
     Phy_rec record{index, low_rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
-  dbg_cmp = page_cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, low_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
+  dbg_cmp = page_cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, low_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
 
   if (mode == PAGE_CUR_G) {
     ut_a(dbg_cmp >= 0);
@@ -446,10 +399,10 @@ void page_cur_search_with_match(
   {
     Phy_rec record{index, up_rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
-  dbg_cmp = page_cmp_dtuple_rec_with_match(index->cmp_ctx, tuple, up_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
+  dbg_cmp = page_cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, up_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
 
   if (mode == PAGE_CUR_G) {
     ut_a(dbg_cmp == -1);
@@ -466,81 +419,72 @@ void page_cur_search_with_match(
     ut_a(up_matched_fields == dbg_matched_fields);
     ut_a(up_matched_bytes == dbg_matched_bytes);
   }
-#endif
+#endif /* UNIV_SEARCH_DEBUG */
+
   if (mode <= PAGE_CUR_GE) {
-    page_cur_position(up_rec, block, cursor);
+    position(up_rec, block);
   } else {
-    page_cur_position(low_rec, block, cursor);
+    position(low_rec, block);
   }
 
   *iup_matched_fields = up_matched_fields;
   *iup_matched_bytes = up_matched_bytes;
   *ilow_matched_fields = low_matched_fields;
   *ilow_matched_bytes = low_matched_bytes;
+
   if (likely_null(heap)) {
     mem_heap_free(heap);
   }
 }
 
-void page_cur_open_on_rnd_user_rec(Buf_block *block, page_cur_t *cursor) {
-  ulint rnd;
-  ulint n_recs = page_get_n_recs(block->get_frame());
+void Page_cursor::open_on_rnd_user_rec(Buf_block *block) {
+  const ulint n_recs = page_get_n_recs(block->get_frame());
 
-  page_cur_set_before_first(block, cursor);
+  set_before_first(block);
 
-  if (unlikely(n_recs == 0)) {
+  if (unlikely(n_recs > 0)) {
+    auto rnd = (ulint)(lcg_prng() % n_recs);
 
-    return;
+    do {
+      move_to_next();
+    } while (rnd--);
   }
-
-  rnd = (ulint)(page_cur_lcg_prng() % n_recs);
-
-  do {
-    page_cur_move_to_next(cursor);
-  } while (rnd--);
 }
 
-/**
- * @brief Writes the log record of a record insert on a page.
- *
- * @param[in] insert_rec Inserted physical record.
- * @param[in] rec_size Size of the inserted record.
- * @param[in] cursor_rec Record the cursor is pointing to.
- * @param[in] index Record descriptor.
- * @param[in] mtr Mini-transaction handle.
- */
-static void page_cur_insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec_t *cursor_rec, const Index *index, mtr_t *mtr) {
+void Page_cursor::insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec_t *cursor_rec, const Index *index, mtr_t *mtr) {
   byte *log_ptr;
   const byte *log_end;
 
   ut_a(rec_size < UNIV_PAGE_SIZE);
   ut_ad(page_align(insert_rec) == page_align(cursor_rec));
 
-  ulint extra_size{0};
-  ulint cur_extra_size{0};
-  ulint cur_rec_size{0};
+  ulint extra_size{};
+  ulint cur_rec_size{};
+  ulint cur_extra_size{};
 
   {
-    mem_heap_t *heap = nullptr;
-    ulint cur_offs_[REC_OFFS_NORMAL_SIZE];
-    ulint ins_offs_[REC_OFFS_NORMAL_SIZE];
-
-    ulint *cur_offs;
-    ulint *ins_offs;
+    mem_heap_t *heap{};
+    std::array<ulint, REC_OFFS_NORMAL_SIZE> cur_offs_{};
+    std::array<ulint, REC_OFFS_NORMAL_SIZE> ins_offs_{};
 
     rec_offs_init(cur_offs_);
     rec_offs_init(ins_offs_);
 
+    auto cur_offs = cur_offs_.data();
+    auto ins_offs = ins_offs_.data();
+
+    rec_offs_init(cur_offs_);
+
     {
       Phy_rec record{index, cursor_rec};
 
-      cur_offs = record.get_col_offsets(cur_offs_, ULINT_UNDEFINED, &heap, Current_location());
+      cur_offs = record.get_all_col_offsets(cur_offs, &heap, Current_location());
     }
 
     {
       Phy_rec record{index, insert_rec};
 
-      ins_offs = record.get_col_offsets(ins_offs_, ULINT_UNDEFINED, &heap, Current_location());
+      ins_offs = record.get_all_col_offsets(ins_offs, &heap, Current_location());
     }
 
     extra_size = rec_offs_extra_size(ins_offs);
@@ -553,7 +497,7 @@ static void page_cur_insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec
     }
   }
 
-  ulint i = 0;
+  ulint i{};
   auto ins_ptr = insert_rec - extra_size;
 
   if (cur_extra_size == extra_size) {
@@ -566,9 +510,9 @@ static void page_cur_insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec
 
     do {
       if (*ins_ptr == *cur_ptr) {
-        i++;
-        ins_ptr++;
-        cur_ptr++;
+        ++i;
+        ++ins_ptr;
+        ++cur_ptr;
       } else if ((i < extra_size) && (i >= extra_size - page_rec_get_base_extra_size(insert_rec))) {
         i = extra_size;
         ins_ptr = insert_rec;
@@ -582,6 +526,7 @@ static void page_cur_insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec
   if (mtr->get_log_mode() != MTR_LOG_SHORT_INSERTS) {
 
     log_ptr = mlog_open(mtr, 11 + 2 + 5 + 1 + 5 + 5 + MLOG_BUF_MARGIN);
+
     if (unlikely(!log_ptr)) {
       /* Logging in mtr is switched off during crash recovery: in that case
       mlog_open returns nullptr */
@@ -591,14 +536,18 @@ static void page_cur_insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec
     log_ptr = mlog_write_initial_log_record_fast(insert_rec, MLOG_REC_INSERT, log_ptr, mtr);
 
     log_end = &log_ptr[2 + 5 + 1 + 5 + 5 + MLOG_BUF_MARGIN];
+
     /* Write the cursor rec offset as a 2-byte ulint */
     mach_write_to_2(log_ptr, page_offset(cursor_rec));
+
     log_ptr += 2;
+
   } else {
     log_ptr = mlog_open(mtr, 5 + 1 + 5 + 5 + MLOG_BUF_MARGIN);
-    if (!log_ptr) {
-      /* Logging in mtr is switched off during crash
-      recovery: in that case mlog_open returns nullptr */
+
+    if (unlikely(log_ptr == nullptr)) {
+      /* Logging in mtr is switched off during crash recovery: in that case
+      mlog_open returns nullptr */
       return;
     }
     log_end = &log_ptr[5 + 1 + 5 + 5 + MLOG_BUF_MARGIN];
@@ -617,7 +566,7 @@ static void page_cur_insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec
 
     /* Write the info bits */
     mach_write_to_1(log_ptr, rec_get_info_and_status_bits(insert_rec));
-    log_ptr++;
+    ++log_ptr;
 
     /* Write the record origin offset */
     log_ptr += mach_write_compressed(log_ptr, extra_size);
@@ -648,20 +597,19 @@ static void page_cur_insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec
   }
 }
 
-byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr) {
-  page_t *page;
-  rec_t *cursor_rec;
-  byte buf1[1024];
+byte *Page_cursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr) {
   byte *buf;
-  byte *ptr2 = ptr;
-  ulint info_and_status_bits = 0; /* remove warning */
-  page_cur_t cursor;
-  mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  auto ptr2 = ptr;
+  rec_t *cursor_rec;
+  mem_heap_t *heap{};
+  ulint info_and_status_bits{};
+  std::array<byte, 1024> buf_{};
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
-  page = block ? block->get_frame() : nullptr;
+  auto page = block ? block->get_frame() : nullptr;
 
   if (is_short) {
     cursor_rec = page_rec_get_prev(page_get_supremum_rec(page));
@@ -672,7 +620,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
 
     if (unlikely(end_ptr < ptr + 2)) {
 
-      return (nullptr);
+      return nullptr;
     }
 
     offset = mach_read_from_2(ptr);
@@ -684,7 +632,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
 
       recv_sys->m_found_corrupt_log = true;
 
-      return (nullptr);
+      return nullptr;
     }
   }
 
@@ -692,13 +640,13 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
 
   if (ptr == nullptr) {
 
-    return (nullptr);
+    return nullptr;
   }
 
   if (unlikely(end_seg_len >= UNIV_PAGE_SIZE << 1)) {
     recv_sys->m_found_corrupt_log = true;
 
-    return (nullptr);
+    return nullptr;
   }
 
   ulint origin_offset;
@@ -709,7 +657,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
 
     if (end_ptr < ptr + 1) {
 
-      return (nullptr);
+      return nullptr;
     }
 
     info_and_status_bits = mach_read_from_1(ptr);
@@ -719,7 +667,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
 
     if (ptr == nullptr) {
 
-      return (nullptr);
+      return nullptr;
     }
 
     ut_a(origin_offset < UNIV_PAGE_SIZE);
@@ -728,7 +676,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
 
     if (ptr == nullptr) {
 
-      return (nullptr);
+      return nullptr;
     }
 
     ut_a(mismatch_index < UNIV_PAGE_SIZE);
@@ -739,12 +687,12 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
 
   if (unlikely(end_ptr < ptr + (end_seg_len >> 1))) {
 
-    return (nullptr);
+    return nullptr;
   }
 
   if (!block) {
 
-    return (ptr + (end_seg_len >> 1));
+    return ptr + (end_seg_len >> 1);
   }
 
   /* Read from the log the inserted index record end segment which
@@ -753,7 +701,7 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
   {
     Phy_rec record{index, cursor_rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
   if (!(end_seg_len & 0x1UL)) {
@@ -764,8 +712,8 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
 
   end_seg_len >>= 1;
 
-  if (mismatch_index + end_seg_len < sizeof buf1) {
-    buf = buf1;
+  if (mismatch_index + end_seg_len < buf_.size()) {
+    buf = buf_.data();
   } else {
     buf = static_cast<byte *>(mem_alloc(mismatch_index + end_seg_len));
   }
@@ -773,20 +721,17 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
   /* Build the inserted record to buf */
 
   if (unlikely(mismatch_index >= UNIV_PAGE_SIZE)) {
-    ib_logger(
-      ib_stream,
-      "Is short %lu, info_and_status_bits %lu, offset %lu, "
-      "o_offset %lu\n"
-      "mismatch index %lu, end_seg_len %lu\n"
-      "parsed len %lu\n",
-      (ulong)is_short,
-      (ulong)info_and_status_bits,
-      (ulong)page_offset(cursor_rec),
-      (ulong)origin_offset,
-      (ulong)mismatch_index,
-      (ulong)end_seg_len,
-      (ulong)(ptr - ptr2)
-    );
+    log_warn(std::format(
+      "Is short {}, info_and_status_bits {}, offset {}, "
+      "o_offset {} mismatch index {}, end_seg_len {} parsed len {}",
+      is_short,
+      info_and_status_bits,
+      page_offset(cursor_rec),
+      origin_offset,
+      mismatch_index,
+      end_seg_len,
+      (void *)(ptr - ptr2)
+    ));
 
     log_warn("Dump of 300 bytes of log:");
 
@@ -802,21 +747,23 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
 
   rec_set_info_bits(buf + origin_offset, info_and_status_bits);
 
-  page_cur_position(cursor_rec, block, &cursor);
+  Page_cursor cursor;
+
+  cursor.position(cursor_rec, block);
 
   {
     Phy_rec record{index, buf + origin_offset};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
   }
 
-  if (unlikely(!page_cur_rec_insert(&cursor, buf + origin_offset, index, offsets, mtr))) {
+  if (unlikely(!cursor.rec_insert(buf + origin_offset, index, offsets, mtr))) {
     /* The redo log record should only have been written
     after the write was successful. */
     ut_error;
   }
 
-  if (buf != buf1) {
+  if (buf != buf_.data()) {
 
     mem_free(buf);
   }
@@ -825,29 +772,23 @@ byte *page_cur_parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_blo
     mem_heap_free(heap);
   }
 
-  return (ptr + end_seg_len);
+  return ptr + end_seg_len;
 }
 
-rec_t *page_cur_insert_rec_low(rec_t *current_rec, const Index *index, const rec_t *rec, ulint *offsets, mtr_t *mtr) {
+rec_t *Page_cursor::insert_rec_low(rec_t *current_rec, const Index *index, const rec_t *rec, ulint *offsets, mtr_t *mtr) {
   byte *insert_buf;
-  ulint rec_size;
-  page_t *page;       /*!< the relevant page */
-  rec_t *last_insert; /*!< cursor position at previous
-                      insert */
-  rec_t *free_rec;    /*!< a free record that was reused,
-                      or nullptr */
-  rec_t *insert_rec;  /*!< inserted record */
-  ulint heap_no;      /*!< heap number of the inserted
-                      record */
+  rec_t *last_insert; /* Cursor position at previous insert */
+  rec_t *insert_rec;  /* Inserted record */
+  ulint heap_no;      /* Heap number of the inserted record */
 
   ut_ad(rec_offs_validate(rec, index, offsets));
 
-  page = page_align(current_rec);
+  auto page = page_align(current_rec);
 
   ut_ad(!page_rec_is_supremum(current_rec));
 
   /* 1. Get the size of the physical record in the page */
-  rec_size = rec_offs_size(offsets);
+  auto rec_size = rec_offs_size(offsets);
 
 #ifdef UNIV_DEBUG_VALGRIND
   {
@@ -861,24 +802,26 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, const Index *index, const rec
   }
 #endif /* UNIV_DEBUG_VALGRIND */
 
-  /* 2. Try to find suitable space from page memory management */
+  /* 2. Try to find suitable space from page memory management
+  A free record that was reused, or nullptr */
 
-  free_rec = page_header_get_ptr(page, PAGE_FREE);
+  auto free_rec = page_header_get_ptr(page, PAGE_FREE);
+
   if (likely_null(free_rec)) {
+    mem_heap_t *heap{};
+    std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+    auto offsets = offsets_.data();
+
+    rec_offs_init(offsets_);
+
     /* Try to allocate from the head of the free list. */
-    ulint foffsets_[REC_OFFS_NORMAL_SIZE];
-    ulint *foffsets = foffsets_;
-    mem_heap_t *heap = nullptr;
-
-    rec_offs_init(foffsets_);
-
     {
       Phy_rec record{index, free_rec};
 
-      foffsets = record.get_col_offsets(foffsets, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
-    if (rec_offs_size(foffsets) < rec_size) {
+    if (rec_offs_size(offsets) < rec_size) {
       if (likely_null(heap)) {
         mem_heap_free(heap);
       }
@@ -886,7 +829,7 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, const Index *index, const rec
       goto use_heap;
     }
 
-    insert_buf = free_rec - rec_offs_extra_size(foffsets);
+    insert_buf = free_rec - rec_offs_extra_size(offsets);
 
     heap_no = rec_get_heap_no(free_rec);
     page_mem_alloc_free(page, rec_get_next_ptr(free_rec), rec_size);
@@ -895,12 +838,14 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, const Index *index, const rec
       mem_heap_free(heap);
     }
   } else {
+
   use_heap:
+
     free_rec = nullptr;
     insert_buf = page_mem_alloc_heap(page, rec_size, &heap_no);
 
     if (unlikely(insert_buf == nullptr)) {
-      return (nullptr);
+      return nullptr;
     }
   }
 
@@ -968,10 +913,10 @@ rec_t *page_cur_insert_rec_low(rec_t *current_rec, const Index *index, const rec
 
   /* 9. Write log record of the insert */
   if (likely(mtr != nullptr)) {
-    page_cur_insert_rec_write_log(insert_rec, rec_size, current_rec, index, mtr);
+    insert_rec_write_log(insert_rec, rec_size, current_rec, index, mtr);
   }
 
-  return (insert_rec);
+  return insert_rec;
 }
 
 /**
@@ -992,14 +937,14 @@ static byte *page_copy_rec_list_to_created_page_write_log(page_t *page, mtr_t *m
   return log_ptr;
 }
 
-byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr) {
+byte *Page_cursor::parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr) {
   byte *rec_end;
   ulint log_data_len;
   page_t *page;
 
   if (ptr + 4 > end_ptr) {
 
-    return (nullptr);
+    return nullptr;
   }
 
   log_data_len = mach_read_from_4(ptr);
@@ -1009,16 +954,16 @@ byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_blo
 
   if (rec_end > end_ptr) {
 
-    return (nullptr);
+    return nullptr;
   }
 
-  if (!block) {
+  if (block == nullptr) {
 
-    return (rec_end);
+    return rec_end;
   }
 
   while (ptr < rec_end) {
-    ptr = page_cur_parse_insert_rec(true, ptr, end_ptr, block, index, mtr);
+    ptr = parse_insert_rec(true, ptr, end_ptr, block, index, mtr);
   }
 
   ut_a(ptr == rec_end);
@@ -1029,23 +974,14 @@ byte *page_parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, Buf_blo
   page_header_set_field(page, PAGE_DIRECTION, PAGE_NO_DIRECTION);
   page_header_set_field(page, PAGE_N_DIRECTION, 0);
 
-  return (rec_end);
+  return rec_end;
 }
 
-void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const Index *index, mtr_t *mtr) {
-  page_dir_slot_t *slot = 0; /* remove warning */
-  byte *heap_top;
-  rec_t *insert_rec = 0; /* remove warning */
-  rec_t *prev_rec;
-  ulint count;
-  ulint n_recs;
-  ulint slot_index;
-  ulint rec_size;
-  byte *log_ptr;
-  ulint log_data_len;
-  mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+void Page_cursor::copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const Index *index, mtr_t *mtr) {
+  page_dir_slot_t *slot{};
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  auto offsets = offsets_.data();
+
   rec_offs_init(offsets_);
 
   ut_ad(page_dir_get_n_heap(new_page) == PAGE_HEAP_NO_USER_LOW);
@@ -1068,24 +1004,28 @@ void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const 
   page_header_set_ptr(new_page, PAGE_HEAP_TOP, new_page + UNIV_PAGE_SIZE - 1);
 #endif /* UNIV_DEBUG */
 
-  log_ptr = page_copy_rec_list_to_created_page_write_log(new_page, mtr);
+  auto log_ptr = page_copy_rec_list_to_created_page_write_log(new_page, mtr);
 
-  log_data_len = mtr->m_log.get_data_size();
+  auto log_data_len = mtr->m_log.get_data_size();
 
   /* Individual inserts are logged in a shorter form */
 
   auto log_mode = mtr->set_log_mode(MTR_LOG_SHORT_INSERTS);
 
-  prev_rec = page_get_infimum_rec(new_page);
-  heap_top = new_page + PAGE_SUPREMUM_END;
-  count = 0;
-  slot_index = 0;
-  n_recs = 0;
+  ulint count{};
+  ulint n_recs{};
+  ulint slot_index{};
+
+  auto prev_rec = page_get_infimum_rec(new_page);
+  auto heap_top = new_page + PAGE_SUPREMUM_END;
+
+  mem_heap_t *heap{};
+  rec_t *insert_rec{};
 
   do {
     Phy_rec record{index, rec};
 
-    offsets = record.get_col_offsets(offsets, ULINT_UNDEFINED, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
 
     insert_rec = rec_copy(heap_top, rec, offsets);
 
@@ -1094,12 +1034,12 @@ void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const 
     rec_set_n_owned(insert_rec, 0);
     rec_set_heap_no(insert_rec, PAGE_HEAP_NO_USER_LOW + n_recs);
 
-    count++;
-    n_recs++;
+    ++count;
+    ++n_recs;
 
     if (unlikely(count == (PAGE_DIR_SLOT_MAX_N_OWNED + 1) / 2)) {
 
-      slot_index++;
+      ++slot_index;
 
       slot = page_dir_get_nth_slot(new_page, slot_index);
 
@@ -1109,18 +1049,19 @@ void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const 
       count = 0;
     }
 
-    rec_size = rec_offs_size(offsets);
+    auto rec_size = rec_offs_size(offsets);
 
     ut_ad(heap_top < new_page + UNIV_PAGE_SIZE);
 
     heap_top += rec_size;
 
-    page_cur_insert_rec_write_log(insert_rec, rec_size, prev_rec, index, mtr);
+    insert_rec_write_log(insert_rec, rec_size, prev_rec, index, mtr);
     prev_rec = insert_rec;
     rec = page_rec_get_next(rec);
+
   } while (!page_rec_is_supremum(rec));
 
-  if ((slot_index > 0) && (count + 1 + (PAGE_DIR_SLOT_MAX_N_OWNED + 1) / 2 <= PAGE_DIR_SLOT_MAX_N_OWNED)) {
+  if (slot_index > 0 && (count + 1 + (PAGE_DIR_SLOT_MAX_N_OWNED + 1) / 2 <= PAGE_DIR_SLOT_MAX_N_OWNED)) {
     /* We can merge the two last dir slots. This operation is
     here to make this function imitate exactly the equivalent
     task made using page_cur_insert_rec, which we use in database
@@ -1132,7 +1073,7 @@ void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const 
 
     page_dir_slot_set_n_owned(slot, 0);
 
-    slot_index--;
+    --slot_index;
   }
 
   if (likely_null(heap)) {
@@ -1170,14 +1111,7 @@ void page_copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const 
   }
 }
 
-/**
- * @brief Writes log record of a record delete on a page.
- *
- * @param[in] rec Record to be deleted.
- * @param[in] index Record descriptor.
- * @param[in] mtr Mini-transaction handle.
- */
-static void page_cur_delete_rec_write_log(rec_t *rec, mtr_t *mtr) {
+void Page_cursor::delete_rec_write_log(rec_t *rec, mtr_t *mtr) {
   auto log_ptr = mlog_open_and_write_index(mtr, rec, MLOG_REC_DELETE, 2);
 
   if (unlikely(log_ptr == nullptr)) {
@@ -1192,39 +1126,37 @@ static void page_cur_delete_rec_write_log(rec_t *rec, mtr_t *mtr) {
   mlog_close(mtr, log_ptr + 2);
 }
 
-byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr) {
-  ulint offset;
-  page_cur_t cursor;
-
+byte *Page_cursor::parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr) {
   if (end_ptr < ptr + 2) {
 
-    return (nullptr);
+    return nullptr;
   }
 
   /* Read the cursor rec offset as a 2-byte ulint */
-  offset = mach_read_from_2(ptr);
+  auto offset = mach_read_from_2(ptr);
   ptr += 2;
 
   ut_a(offset <= UNIV_PAGE_SIZE);
 
-  if (unlikely(block == nullptr)) {
-    page_t *page = block->get_frame();
-    mem_heap_t *heap = nullptr;
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
-    rec_t *rec = page + offset;
+  if (unlikely(block != nullptr)) {
+    mem_heap_t *heap{};
+    auto page = block->get_frame();
+    std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+    auto offsets = offsets_.data();
+    auto rec = page + offset;
+
     rec_offs_init(offsets_);
 
-    page_cur_position(rec, block, &cursor);
-
-    ulint *offsets{};
+    Page_cursor cursor;
+    cursor.position(rec, block);
 
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_col_offsets(offsets_, ULINT_UNDEFINED, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
-    page_cur_delete_rec(&cursor, index, offsets, mtr);
+    cursor.delete_rec(index, offsets, mtr);
 
     if (unlikely(heap != nullptr)) {
       mem_heap_free(heap);
@@ -1234,34 +1166,24 @@ byte *page_cur_parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, Inde
   return ptr;
 }
 
-void page_cur_delete_rec(page_cur_t *cursor, const Index *index, const ulint *offsets, mtr_t *mtr) {
-  page_dir_slot_t *cur_dir_slot;
-  page_dir_slot_t *prev_slot;
-  page_t *page;
-  rec_t *current_rec;
-  rec_t *prev_rec = nullptr;
-  rec_t *next_rec;
-  ulint cur_slot_no;
-  ulint cur_n_owned;
-  rec_t *rec;
+void Page_cursor::delete_rec(const Index *index, const ulint *offsets, mtr_t *mtr) {
+  ut_ad(mtr != nullptr);
 
-  ut_ad(cursor && mtr);
+  auto page = get_page();
+  auto current_rec = m_rec;
 
-  page = page_cur_get_page(cursor);
-
-  current_rec = cursor->m_rec;
   ut_ad(rec_offs_validate(current_rec, index, offsets));
 
   /* The record must not be the supremum or infimum record. */
   ut_ad(page_rec_is_user_rec(current_rec));
 
   /* Save to local variables some data associated with current_rec */
-  cur_slot_no = page_dir_find_owner_slot(current_rec);
-  cur_dir_slot = page_dir_get_nth_slot(page, cur_slot_no);
-  cur_n_owned = page_dir_slot_get_n_owned(cur_dir_slot);
+  auto cur_slot_no = page_dir_find_owner_slot(current_rec);
+  auto cur_dir_slot = page_dir_get_nth_slot(page, cur_slot_no);
+  auto cur_n_owned = page_dir_slot_get_n_owned(cur_dir_slot);
 
   /* 0. Write the log record */
-  page_cur_delete_rec_write_log(current_rec, mtr);
+  delete_rec_write_log(current_rec, mtr);
 
   /* 1. Reset the last insert info in the page header and increment
   the modify clock for the frame */
@@ -1271,26 +1193,28 @@ void page_cur_delete_rec(page_cur_t *cursor, const Index *index, const ulint *of
   /* The page gets invalid for optimistic searches: increment the
   frame modify clock */
 
-  buf_block_modify_clock_inc(page_cur_get_block(cursor));
+  buf_block_modify_clock_inc(get_block());
 
   /* 2. Find the next and the previous record. Note that the cursor is
   left at the next record. */
 
   ut_ad(cur_slot_no > 0);
-  prev_slot = page_dir_get_nth_slot(page, cur_slot_no - 1);
 
-  rec = (rec_t *)page_dir_slot_get_rec(prev_slot);
+  auto prev_slot = page_dir_get_nth_slot(page, cur_slot_no - 1);
+  auto rec = const_cast<rec_t *>(page_dir_slot_get_rec(prev_slot));
 
   /* rec now points to the record of the previous directory slot. Look
   for the immediate predecessor of current_rec in a loop. */
+
+  rec_t *prev_rec{};
 
   while (current_rec != rec) {
     prev_rec = rec;
     rec = page_rec_get_next(rec);
   }
 
-  page_cur_move_to_next(cursor);
-  next_rec = cursor->m_rec;
+  move_to_next();
+  auto next_rec = m_rec;
 
   /* 3. Remove the record from the linked list of records */
 
