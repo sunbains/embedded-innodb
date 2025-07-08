@@ -383,7 +383,7 @@ rec_t *page_copy_rec_list_end(Buf_block *new_block, Buf_block *block, rec_t *rec
   predefined supremum record. */
 
   if (page_dir_get_n_heap(new_page) == PAGE_HEAP_NO_USER_LOW) {
-    copy_rec_list_end_to_created_page(new_page, rec, index, mtr);
+    Page_cursor::copy_rec_list_end_to_created_page(new_page, rec, index, mtr);
   } else {
     page_copy_rec_list_end_no_locks(new_block, block, rec, index, mtr);
   }
