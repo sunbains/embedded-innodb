@@ -155,9 +155,8 @@ void ut_sprintf_timestamp(char *buf) noexcept {
   cal_tm_ptr = localtime(&tm);
 #endif /* HAVE_LOCALTIME_R */
 
-  sprintf(
-    buf,
-    "%02d%02d%02d %2d:%02d:%02d",
+  auto timestamp = std::format(
+    "{:02d}{:02d}{:02d} {:2d}:{:02d}:{:02d}",
     cal_tm_ptr->tm_year % 100,
     cal_tm_ptr->tm_mon + 1,
     cal_tm_ptr->tm_mday,
@@ -165,6 +164,7 @@ void ut_sprintf_timestamp(char *buf) noexcept {
     cal_tm_ptr->tm_min,
     cal_tm_ptr->tm_sec
   );
+  std::strcpy(buf, timestamp.c_str());
 }
 
 ulint ut_delay(ulint delay) noexcept {

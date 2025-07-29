@@ -282,20 +282,21 @@ void Phy_rec::encode(Index *index, rec_t *rec, ulint status, const DFields& dfie
   ulint null_mask = 1;
   ulint n_node_ptr_field;
 
-  ut_ad(dfields.second > 0);
-  ut_ad(dfields.second <= index->get_n_fields());
+  auto [dfield_array, n_fields] = dfields;
+  ut_ad(n_fields > 0);
+  ut_ad(n_fields <= index->get_n_fields());
 
   switch (expect(status, REC_STATUS_ORDINARY)) {
     case REC_STATUS_ORDINARY:
       n_node_ptr_field = ULINT_UNDEFINED;
       break;
     case REC_STATUS_NODE_PTR:
-      ut_ad(dfields.second == index->get_n_unique() + 1);
-      n_node_ptr_field = dfields.second - 1;
+      ut_ad(n_fields == index->get_n_unique() + 1);
+      n_node_ptr_field = n_fields - 1;
       break;
     case REC_STATUS_INFIMUM:
     case REC_STATUS_SUPREMUM:
-      ut_ad(dfields.second == 1);
+      ut_ad(n_fields == 1);
       n_node_ptr_field = ULINT_UNDEFINED;
       break;
     default:
@@ -314,7 +315,7 @@ void Phy_rec::encode(Index *index, rec_t *rec, ulint status, const DFields& dfie
 
   ulint i{};
 
-  for (auto field = dfields.first; i < dfields.second; ++i, ++field) {
+  for (auto field = dfield_array; i < n_fields; ++i, ++field) {
     const auto len = dfield_get_len(field);
     const auto type = dfield_get_type(field);
 

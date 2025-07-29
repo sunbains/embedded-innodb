@@ -31,7 +31,7 @@ INCLUDE_DIRECTORIES(
 )
 
 # Set up dyn0dyn-t test
-add_executable(dyn0dyn-t dyn0dyn-t.cc)
+add_executable(dyn0dyn-t dyn0dyn-t.cc unit_test_logger.cc)
 
 # Link against Google Test and InnoDB
 target_link_libraries(dyn0dyn-t PRIVATE
@@ -44,7 +44,7 @@ target_link_libraries(dyn0dyn-t PRIVATE
 add_test(NAME dyn0dyn-t COMMAND dyn0dyn-t)
 
 # Set up ut0slst-t test
-add_executable(ut0slst-t ut0slst-t.cc)
+add_executable(ut0slst-t ut0slst-t.cc unit_test_logger.cc)
 
 # Link against Google Test and InnoDB
 target_link_libraries(ut0slst-t PRIVATE
@@ -57,7 +57,7 @@ target_link_libraries(ut0slst-t PRIVATE
 add_test(NAME ut0slst-t COMMAND ut0slst-t)
 
 # Set up test_lock test
-add_executable(test_lock test_lock.cc unit-test.cc)
+add_executable(test_lock test_lock.cc unit-test.cc unit_test_logger.cc)
 
 # Link test_lock
 target_link_libraries(test_lock PRIVATE ${LIBS})

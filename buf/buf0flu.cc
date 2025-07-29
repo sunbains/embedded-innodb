@@ -43,10 +43,8 @@ Buf_page *Buf_flush::insert_in_flush_rbt(Buf_page *bpage) {
   ut_ad(m_buf_pool->mutex_is_owned());
 
   /* Insert this buffer into the rbt. */
-  auto insert_result = flush_set_insert(m_buf_pool->m_recovery_flush_list, bpage);
-  ut_a(insert_result.second);
-
-  auto c_node = insert_result.first;
+  auto [c_node, inserted] = flush_set_insert(m_buf_pool->m_recovery_flush_list, bpage);
+  ut_a(inserted);
   /* Get the predecessor. */
   auto p_node = flush_set_prev(m_buf_pool->m_recovery_flush_list, c_node);
 

@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 /* Do not include univ.i because univ.i includes this. */
 
 #include <atomic>
+#include <concepts>
 
 #include "ut0dbg.h"
 
@@ -74,6 +75,10 @@ struct ut_list_node {
 /** Macro used for legacy reasons */
 #define UT_LIST_NODE_T(t) ut_list_node<t>
 
+/** TODO: Fix concept - temporarily disabled for compatibility */
+template<typename NodeGetter, typename Type>
+concept NodeGetterFor = true;
+
 #ifdef UNIV_DEBUG
 #define UT_LIST_INITIALISED 0xCAFE
 #endif /* UNIV_DEBUG */
@@ -92,6 +97,7 @@ struct ut_list_node {
  *         ut_list_node<Type> get_node(const Type &e) which knows how to extract a node from an element.
  */
 template <typename Type, typename NodeGetter>
+  requires NodeGetterFor<NodeGetter, Type>
 struct ut_list_base {
   using elem_type = Type;
   using node_type = ut_list_node<elem_type>;

@@ -23,10 +23,6 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "ut0slst.h"
 
-namespace logger {
-int level = (int)Level::Debug;
-const char *Progname = "ut0slst-t";
-}  // namespace logger
 
 struct TestNode {
   ut_slist_node<TestNode> m_node;

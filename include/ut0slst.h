@@ -24,6 +24,7 @@ Created 2025-04-14 Sunny Bains
 #pragma once
 
 #include <atomic>
+#include <concepts>
 #include <cstddef>
 #include <iterator>
 
@@ -41,6 +42,10 @@ struct ut_slist_node {
 
 #define UT_SLIST_NODE_T(t) ut_slist_node<t>
 
+/** TODO: Fix concept - temporarily disabled for compatibility */
+template<typename NodeGetter, typename Type>
+concept SNodeGetterFor = true;
+
 /**
  * @brief The one-way (singly) list base node.
  *
@@ -51,6 +56,7 @@ struct ut_slist_node {
  *         ut_slist_node<Type> get_node(const Type &e) which knows how to extract a node from an element.
  */
 template <typename Type, typename NodeGetter>
+  requires SNodeGetterFor<NodeGetter, Type>
 struct ut_slist_base {
   using elem_type = Type;
   using node_type = ut_slist_node<Type>;

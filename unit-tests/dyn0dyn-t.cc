@@ -27,10 +27,6 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "gtest/gtest.h"
 
-namespace logger {
-int level = (int)Level::Debug;
-const char *Progname = "dyn0dyn-t";
-}  // namespace logger
 
 class DynArrayTest : public ::testing::Test {
  protected:

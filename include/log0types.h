@@ -3,6 +3,7 @@
 #pragma once
 
 #include "innodb0types.h"
+#include "log0config.h"
 
 #include "sync0rw.h"
 #include "sync0sync.h"
@@ -19,65 +20,7 @@ extern bool log_debug_writes;
 constexpr bool log_do_write = true;
 #endif /* UNIV_DEBUG */
 
-/** Wait modes for log_write_up_to @{ */
-constexpr ulint LOG_NO_WAIT = 91;
-constexpr ulint LOG_WAIT_ONE_GROUP = 92;
-constexpr ulint LOG_WAIT_ALL_GROUPS = 93;
-/* @} */
-
-/* Values used as flags */
-constexpr ulint LOG_FLUSH = 7652559;
-constexpr ulint LOG_CHECKPOINT = 78656949;
-constexpr ulint LOG_RECOVER = 98887331;
-
-/* The counting of lsn's starts from this value: this must be non-zero */
-constexpr auto LOG_START_LSN = lsn_t(16 * IB_FILE_BLOCK_SIZE);
-
 #define LOG_BUFFER_SIZE (srv_config.m_log_buffer_size * UNIV_PAGE_SIZE)
-
-/* Offsets of a log block header */
-
-/** block number which must be > 0 and is allowed to wrap around at 2G; the
-highest bit is set to 1 if this is the first log block in a log flush write
-segment */
-constexpr ulint LOG_BLOCK_HDR_NO = 0;
-
-/** Mask used to get the highest bit in the preceding field */
-constexpr ulint LOG_BLOCK_FLUSH_BIT_MASK = 0x80000000UL;
-
-/** Number of bytes of log written to this block */
-constexpr ulint LOG_BLOCK_HDR_DATA_LEN = 4;
-
-/* offset of the first start of an mtr log record group in this log block,
-0 if none; if the value is the same as LOG_BLOCK_HDR_DATA_LEN, it means
-that the first rec group has not yet been catenated to this log block, but
-if it will, it will start at this offset; an archive recovery can
-start parsing the log records starting from this offset in this log block,
-if value not 0 */
-constexpr ulint LOG_BLOCK_FIRST_REC_GROUP = 6;
-
-/* 4 lower bytes of the value of log_sys->next_checkpoint_no when the
-log block was last written to: if the block has not yet been written full,
-this value is only updated before a log buffer flush */
-constexpr ulint LOG_BLOCK_CHECKPOINT_NO = 8;
-
-/* size of the log block header in bytes */
-constexpr ulint LOG_BLOCK_HDR_SIZE = 12;
-
-/* Offsets of a log block trailer from the end of the block */
-
-/** 4 byte checksum of the log block contents. */
-constexpr ulint LOG_BLOCK_CHECKSUM = 4;
-
-/** trailer size in bytes */
-constexpr ulint LOG_BLOCK_TRL_SIZE = 4;
-
-/** Maximum number of log groups in log_group_struct::checkpoint_buf */
-constexpr ulint LOG_MAX_N_GROUPS = 32;
-
-/*@{ Offsets for a checkpoint field */
-constexpr ulint LOG_CHECKPOINT_NO = 0;
-constexpr ulint LOG_CHECKPOINT_LSN = 8;
 constexpr ulint LOG_CHECKPOINT_OFFSET = 16;
 constexpr ulint LOG_CHECKPOINT_LOG_BUF_SIZE = 20;
 constexpr ulint LOG_CHECKPOINT_UNUSED_LSN = 24;

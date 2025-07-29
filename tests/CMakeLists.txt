@@ -20,33 +20,37 @@ PROJECT (TESTS)
 
 SET(LIBS innodb pthread m uring)
 
+# Set binary output directory to bin/
+SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
+
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/../include)
+INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/../)
 
-ADD_EXECUTABLE(ib_cfg ib_cfg.cc test0aux.cc)
-ADD_EXECUTABLE(ib_cursor ib_cursor.cc test0aux.cc)
-ADD_EXECUTABLE(ib_ddl ib_ddl.cc test0aux.cc)
-ADD_EXECUTABLE(ib_dict ib_dict.cc test0aux.cc)
-ADD_EXECUTABLE(ib_dict-2 ib_dict-2.cc test0aux.cc)
-ADD_EXECUTABLE(ib_drop ib_drop.cc test0aux.cc)
-ADD_EXECUTABLE(ib_index ib_index.cc test0aux.cc)
-ADD_EXECUTABLE(ib_logger ib_logger.cc test0aux.cc)
-ADD_EXECUTABLE(ib_recover ib_recover.cc test0aux.cc)
-ADD_EXECUTABLE(ib_shutdown ib_shutdown.cc test0aux.cc)
-ADD_EXECUTABLE(ib_status ib_status.cc test0aux.cc)
-ADD_EXECUTABLE(ib_tablename ib_tablename.cc test0aux.cc)
-ADD_EXECUTABLE(ib_test1 ib_test1.cc test0aux.cc)
-ADD_EXECUTABLE(ib_test2 ib_test2.cc test0aux.cc)
-ADD_EXECUTABLE(ib_test3 ib_test3.cc test0aux.cc)
-ADD_EXECUTABLE(ib_test5 ib_test5.cc test0aux.cc)
-ADD_EXECUTABLE(ib_types ib_types.cc test0aux.cc)
-ADD_EXECUTABLE(ib_update ib_update.cc test0aux.cc)
-ADD_EXECUTABLE(ib_search ib_search.cc test0aux.cc)
-ADD_EXECUTABLE(ib_parallel_reader ib_parallel_reader.cc test0aux.cc)
+ADD_EXECUTABLE(ib_cfg ib_cfg.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_cursor ib_cursor.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_ddl ib_ddl.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_dict ib_dict.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_dict-2 ib_dict-2.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_drop ib_drop.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_index ib_index.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_logger ib_logger.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_recover ib_recover.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_shutdown ib_shutdown.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_status ib_status.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_tablename ib_tablename.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_test1 ib_test1.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_test2 ib_test2.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_test3 ib_test3.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_test5 ib_test5.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_types ib_types.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_update ib_update.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_search ib_search.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_parallel_reader ib_parallel_reader.cc test0aux.cc test_logger.cc)
 
-ADD_EXECUTABLE(ib_deadlock ib_deadlock.cc test0aux.cc)
-ADD_EXECUTABLE(ib_mt_drv ib_mt_drv.cc ib_mt_base.cc ib_mt_t1.cc ib_mt_t2.cc test0aux.cc)
-ADD_EXECUTABLE(ib_mt_stress ib_mt_stress.cc test0aux.cc)
-ADD_EXECUTABLE(ib_perf1 ib_perf1.cc test0aux.cc)
+ADD_EXECUTABLE(ib_deadlock ib_deadlock.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_mt_drv ib_mt_drv.cc ib_mt_base.cc ib_mt_t1.cc ib_mt_t2.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_mt_stress ib_mt_stress.cc test0aux.cc test_logger.cc)
+ADD_EXECUTABLE(ib_perf1 ib_perf1.cc test0aux.cc test_logger.cc)
 
 LINK_DIRECTORIES(${EMBEDDED_INNODB})
 
@@ -75,3 +79,31 @@ TARGET_LINK_LIBRARIES(ib_deadlock PRIVATE ${LIBS})
 TARGET_LINK_LIBRARIES(ib_mt_drv PRIVATE ${LIBS})
 TARGET_LINK_LIBRARIES(ib_mt_stress PRIVATE ${LIBS})
 TARGET_LINK_LIBRARIES(ib_perf1 PRIVATE ${LIBS})
+
+# Log_core unit tests - minimal dependencies
+SET(CMAKE_CXX_STANDARD 20)
+SET(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+ADD_EXECUTABLE(test_log0core_simple
+    test_log0core_simple.cc 
+    test_logger.cc
+)
+
+# Simple Log_core integration test using the public API
+TARGET_LINK_LIBRARIES(test_log0core_simple PRIVATE ${CMAKE_SOURCE_DIR}/../lib/libinnodb.a pthread m uring)
+
+# Enable testing
+ENABLE_TESTING()
+
+# Add simple Log_core integration test
+ADD_TEST(NAME Log_coreSimpleTest COMMAND test_log0core_simple)
+
+# Custom target to run just Log_core tests
+ADD_CUSTOM_TARGET(test_logcore
+    COMMAND test_log0core_simple
+    DEPENDS test_log0core_simple
+)
+
+# Note: The previous standalone Log_core implementation has been removed
+# Tests should work against the real production code, not reimplemented stubs
+# For proper Log_core testing, use integration tests that exercise the full system

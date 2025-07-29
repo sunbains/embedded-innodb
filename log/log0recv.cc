@@ -128,33 +128,23 @@ void recv_sys_var_init() noexcept {
   ut_a(recv_sys == nullptr);
 
   recv_lsn_checks_on = false;
-
   recv_n_pool_free_frames = 256;
-
   recv_recovery_on = false;
-
   recv_needed_recovery = false;
-
-  recv_lsn_checks_on = false;
-
   recv_scan_print_counter = 0;
-
   recv_previous_parsed_rec_type = 999999;
-
   recv_previous_parsed_rec_offset = 0;
-
   recv_previous_parsed_rec_is_multi = 0;
-
   recv_max_parsed_page_no = 0;
-
-  recv_n_pool_free_frames = 256;
-
   recv_max_page_lsn = 0;
 }
 
 Recv_sys::~Recv_sys() noexcept {
   mutex_free(&m_mutex);
+  cleanup_resources();
+}
 
+void Recv_sys::cleanup_resources() noexcept {
   if (m_heap != nullptr) {
     mem_heap_free(m_heap);
     m_heap = nullptr;
@@ -235,18 +225,8 @@ void Recv_sys::reset() noexcept {
 
 void Recv_sys::close() noexcept {
   mutex_enter(&m_mutex);
-
-  mem_heap_free(m_heap);
-  m_heap = nullptr;
-
-  mem_free(m_last_block_buf_start);
-  m_last_block_buf_start = nullptr;
-
-  ut_delete(m_buf);
-  m_buf = nullptr;
-
+  cleanup_resources();
   clear_log_records();
-
   mutex_exit(&m_mutex);
 }
 
@@ -292,19 +272,13 @@ static void recv_truncate_group(log_group_t *group, lsn_t recovered_lsn, lsn_t l
 
   if (start_lsn < finish_lsn) {
     for (;;) {
-      auto end_lsn = start_lsn + RECV_SCAN_SIZE;
-
-      if (end_lsn > finish_lsn) {
-
-        end_lsn = finish_lsn;
-      }
+      const auto end_lsn = std::min(start_lsn + RECV_SCAN_SIZE, finish_lsn);
 
       auto len = ulint(end_lsn - start_lsn);
 
       log_sys->group_write_buf(group, log_sys->m_buf, len, start_lsn, 0);
 
       if (end_lsn >= finish_lsn) {
-
         return;
       }
 
@@ -334,8 +308,7 @@ static void recv_copy_group(log_group_t *up_to_date_group, log_group_t *group, l
   auto start_lsn = ut_uint64_align_down(group->scanned_lsn, IB_FILE_BLOCK_SIZE);
 
   for (;;) {
-    auto end_lsn = start_lsn + RECV_SCAN_SIZE;
-
+    auto end_lsn = std::min(start_lsn + RECV_SCAN_SIZE, recovered_lsn);
     if (end_lsn > recovered_lsn) {
       end_lsn = ut_uint64_align_up(recovered_lsn, IB_FILE_BLOCK_SIZE);
     }
@@ -347,7 +320,6 @@ static void recv_copy_group(log_group_t *up_to_date_group, log_group_t *group, l
     log_sys->group_write_buf(group, log_sys->m_buf, len, start_lsn, 0);
 
     if (end_lsn >= recovered_lsn) {
-
       return;
     }
 
@@ -737,21 +709,11 @@ void Recv_sys::add_log_record(
   be allocated */
 
   while (rec_end > body) {
-
-    auto len = ulint(rec_end - body);
-
-    if (len > RECV_DATA_BLOCK_SIZE) {
-      len = RECV_DATA_BLOCK_SIZE;
-    }
-
+    const auto len = std::min(ulint(rec_end - body), ulint(RECV_DATA_BLOCK_SIZE));
     auto recv_data = reinterpret_cast<Log_record_data *>(mem_heap_alloc(m_heap, sizeof(Log_record_data) + len));
-
     *prev_field = recv_data;
-
     memcpy(recv_data + 1, body, len);
-
     prev_field = &recv_data->m_next;
-
     body += len;
   }
 
@@ -764,22 +726,14 @@ void Recv_sys::add_log_record(
  * @param recv The log record.
  */
 static void recv_data_copy_to_buf(byte *buf, Log_record *recv) noexcept {
-  ulint part_len;
-
   auto len = recv->m_len;
   auto recv_data = recv->m_data;
 
   while (len > 0) {
-    if (len > RECV_DATA_BLOCK_SIZE) {
-      part_len = RECV_DATA_BLOCK_SIZE;
-    } else {
-      part_len = len;
-    }
-
+    const auto part_len = (len > RECV_DATA_BLOCK_SIZE) ? RECV_DATA_BLOCK_SIZE : len;
     memcpy(buf, reinterpret_cast<byte *>(recv_data) + sizeof(Log_record_data), part_len);
     buf += part_len;
     len -= part_len;
-
     recv_data = recv_data->m_next;
   }
 }
@@ -864,12 +818,8 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
     end_lsn = recv->m_end_lsn;
 
     if (recv->m_len > RECV_DATA_BLOCK_SIZE) {
-      /* We have to copy the record body to a separate buffer */
-
       ptr = buf = static_cast<byte *>(mem_alloc(recv->m_len));
-
       recv_data_copy_to_buf(buf, recv);
-
     } else {
       buf = reinterpret_cast<byte *>(recv->m_data) + sizeof(Log_record_data);
     }
@@ -897,8 +847,7 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept {
       mach_write_to_8(UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + page, end_lsn);
     }
 
-    if (recv->m_len > RECV_DATA_BLOCK_SIZE) {
-      ut_a(ptr != nullptr && ptr == buf);
+    if (ptr != nullptr) {
       mem_free(ptr);
     }
   }
@@ -1256,10 +1205,8 @@ static bool recv_parse_log_recs(bool store_to_hash) noexcept {
 
       if (len == 0 || recv_sys->m_found_corrupt_log) {
         if (recv_sys->m_found_corrupt_log) {
-
           recv_report_corrupt_log(ptr, type, space, page_no);
         }
-
         return false;
       }
 
@@ -1305,12 +1252,9 @@ static bool recv_parse_log_recs(bool store_to_hash) noexcept {
         auto len = recv_parse_log_rec(ptr, end_ptr, &type, &space, &page_no, &body);
 
         if (len == 0 || recv_sys->m_found_corrupt_log) {
-
           if (recv_sys->m_found_corrupt_log) {
-
             recv_report_corrupt_log(ptr, type, space, page_no);
           }
-
           return false;
         }
 
@@ -1350,7 +1294,6 @@ static bool recv_parse_log_recs(bool store_to_hash) noexcept {
         len = recv_parse_log_rec(ptr, end_ptr, &type, &space, &page_no, &body);
 
         if (recv_sys->m_found_corrupt_log) {
-
           recv_report_corrupt_log(ptr, type, space, page_no);
         }
 
@@ -1502,17 +1445,10 @@ static bool recv_scan_log_recs(
       if (no == block_no && !checksum_ok) {
         log_warn(std::format(
           "Log block no {} at lsn {} has ok header, but checksum field contains {}, should be {}",
-          no,
-          scanned_lsn,
-          Log::block_get_checksum(log_block),
-          Log::block_calc_checksum(log_block)
+          no, scanned_lsn, Log::block_get_checksum(log_block), Log::block_calc_checksum(log_block)
         ));
       }
-
-      /* Garbage or an incompletely written log block */
-
       finished = true;
-
       break;
     }
     if (Log::block_get_flush_bit(log_block)) {
@@ -1532,19 +1468,16 @@ static bool recv_scan_log_recs(
         recv_sys->m_scanned_checkpoint_no > 0 && Log::block_get_checkpoint_no(log_block) < recv_sys->m_scanned_checkpoint_no &&
         recv_sys->m_scanned_checkpoint_no - Log::block_get_checkpoint_no(log_block) > 0x80000000UL) {
 
-      /* Garbage from a log buffer flush which was made before the most recent database recovery */
-
       finished = true;
       break;
     }
 
     if (recv_sys->m_parse_start_lsn == 0 && Log::block_get_first_rec_group(log_block) > 0) {
 
-      /* We found a point from which to start the parsing of log records */
-
-      recv_sys->m_parse_start_lsn = scanned_lsn + Log::block_get_first_rec_group(log_block);
-      recv_sys->m_scanned_lsn = recv_sys->m_parse_start_lsn;
-      recv_sys->m_recovered_lsn = recv_sys->m_parse_start_lsn;
+      const auto parse_start_lsn = scanned_lsn + Log::block_get_first_rec_group(log_block);
+      recv_sys->m_parse_start_lsn = parse_start_lsn;
+      recv_sys->m_scanned_lsn = parse_start_lsn;
+      recv_sys->m_recovered_lsn = parse_start_lsn;
     }
 
     scanned_lsn += data_len;
@@ -1580,11 +1513,8 @@ static bool recv_scan_log_recs(
     }
 
     if (data_len < IB_FILE_BLOCK_SIZE) {
-      /* Log data for this group ends here */
-
       finished = true;
       break;
-
     } else {
       log_block += IB_FILE_BLOCK_SIZE;
     }
@@ -1596,7 +1526,6 @@ static bool recv_scan_log_recs(
     recv_scan_print_counter++;
 
     if (finished || (recv_scan_print_counter % 80 == 0)) {
-
       log_info("Doing recovery: scanned up to log sequence number ", *group_scanned_lsn);
     }
   }
@@ -1607,15 +1536,10 @@ static bool recv_scan_log_recs(
     recv_parse_log_recs(store_to_hash);
 
     if (store_to_hash && mem_heap_get_size(recv_sys->m_heap) > available_memory) {
-
-      /* Hash table of log records has grown too big: empty it. */
-
       recv_apply_log_recs(dblwr, true);
     }
 
     if (recv_sys->m_recovered_offset > RECV_PARSING_BUF_SIZE / 4) {
-      /* Move parsing buffer data to the buffer start */
-
       recv_sys_justify_left_parsing_buf();
     }
   }

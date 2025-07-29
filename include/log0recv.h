@@ -214,6 +214,11 @@ struct Recv_sys {
   void clear_log_records() noexcept;
 
   /**
+   * Cleans up allocated resources.
+   */
+  void cleanup_resources() noexcept;
+
+  /**
   * Adds a new log record to the map of log records.
   * 
   * @param type The type of the log record.
