@@ -26,7 +26,6 @@ Created for testing and minimal coupling
 #include <cstring>
 #include <ctime>
 
-// Minimal dependencies
 #include "mach0data.h"
 #include "mem0mem.h"
 #include "ut0ut.h"

@@ -25,9 +25,9 @@ Created for testing and minimal coupling
 
 #include "log0types.h"
 
-/** Log_core - Core logging functionality with minimal dependencies
- * This class provides the essential log buffer management and block operations
- * without requiring external subsystems like buffer pool, file system, etc.
+/** Log_core - Core WAL functionality with minimal dependencies
+ * This class provides the essential WAL buffer management and block operations
+ * without requiring external subsystems like file system, etc.
  */
 struct Log_core {
   /**
