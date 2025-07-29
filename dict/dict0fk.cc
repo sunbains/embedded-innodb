@@ -22,7 +22,6 @@ Data dictionary foreign key system
 Created 2024-Oct-15 by Sunny Bains
 ***********************************************************************/
 
-#include "dict0dict.h"
 #include "api0ucode.h"
 #include "btr0btr.h"
 #include "btr0cur.h"
@@ -48,7 +47,9 @@ void Dict::foreign_remove_from_cache(Foreign *&foreign) noexcept {
   Foreign::destroy(foreign);
 }
 
-Index *Table::foreign_find_index(const char **columns, ulint n_cols, Index *types_idx, bool check_charsets, bool check_null) noexcept {
+Index *Table::foreign_find_index(
+  const char **columns, ulint n_cols, Index *types_idx, bool check_charsets, bool check_null
+) noexcept {
   for (auto index = get_first_index(); index != nullptr; index = index->get_next()) {
 
     /* Ignore matches that refer to the same instance or the index is to be dropped */
@@ -168,7 +169,9 @@ db_err Dict::foreign_add_to_cache(Foreign *foreign, bool check_charsets) noexcep
   bool added_to_referenced_list{};
 
   if (for_in_cache->m_referenced_table == nullptr && ref_table) {
-    index = ref_table->foreign_find_index(for_in_cache->m_referenced_col_names, for_in_cache->m_n_fields, for_in_cache->m_foreign_index, check_charsets, false);
+    index = ref_table->foreign_find_index(
+      for_in_cache->m_referenced_col_names, for_in_cache->m_n_fields, for_in_cache->m_foreign_index, check_charsets, false
+    );
 
     if (index == nullptr) {
       log_err(
@@ -252,7 +255,7 @@ const char *Dict::scan_to(const char *ptr, const char *string) noexcept {
   return ptr;
 }
 
-const char *Dict::accept(const charset_t *cs, const char *ptr, const char *string, bool *success) noexcept{
+const char *Dict::accept(const charset_t *cs, const char *ptr, const char *string, bool *success) noexcept {
   auto old_ptr = ptr;
 
   *success = false;
@@ -273,7 +276,9 @@ const char *Dict::accept(const charset_t *cs, const char *ptr, const char *strin
   }
 }
 
-const char *Dict::scan_id(const charset_t *cs, const char *ptr, mem_heap_t *heap, const char **id, bool table_id, bool accept_also_dot) noexcept {
+const char *Dict::scan_id(
+  const charset_t *cs, const char *ptr, mem_heap_t *heap, const char **id, bool table_id, bool accept_also_dot
+) noexcept {
   ulint len{};
   char quote = '\0';
 
@@ -311,7 +316,8 @@ const char *Dict::scan_id(const charset_t *cs, const char *ptr, mem_heap_t *heap
     }
   } else {
 
-    while (!ib_utf8_isspace(cs, *ptr) && *ptr != '(' && *ptr != ')' && (accept_also_dot || *ptr != '.') && *ptr != ',' && *ptr != '\0') {
+    while (!ib_utf8_isspace(cs, *ptr) && *ptr != '(' && *ptr != ')' && (accept_also_dot || *ptr != '.') && *ptr != ',' &&
+           *ptr != '\0') {
       ptr++;
     }
 
@@ -368,7 +374,9 @@ const char *Dict::scan_id(const charset_t *cs, const char *ptr, mem_heap_t *heap
   return ptr;
 }
 
-const char *Dict::scan_col(const charset_t *cs, const char *ptr, bool *success, Table *table, const Column **column, mem_heap_t *heap, const char **name) noexcept {
+const char *Dict::scan_col(
+  const charset_t *cs, const char *ptr, bool *success, Table *table, const Column **column, mem_heap_t *heap, const char **name
+) noexcept {
 
   *success = false;
 
@@ -402,7 +410,9 @@ const char *Dict::scan_col(const charset_t *cs, const char *ptr, bool *success, 
   return ptr;
 }
 
-const char *Dict::scan_table_name(const charset_t *cs, const char *ptr, Table **table, const char *name, bool *success, mem_heap_t *heap, const char **ref_name) noexcept {
+const char *Dict::scan_table_name(
+  const charset_t *cs, const char *ptr, Table **table, const char *name, bool *success, mem_heap_t *heap, const char **ref_name
+) noexcept {
   const char *scan_name;
   ulint database_name_len = 0;
   const char *table_name = nullptr;
@@ -570,8 +580,7 @@ ulint Dict::table_get_highest_foreign_id(Table *table) noexcept {
   const auto len = strlen(table->m_name);
 
   for (auto foreign : table->m_foreign_list) {
-    if (strlen(foreign->m_id) > (sizeof(dict_ibfk) - 1) + len &&
-        memcmp(foreign->m_id, table->m_name, len) == 0 &&
+    if (strlen(foreign->m_id) > (sizeof(dict_ibfk) - 1) + len && memcmp(foreign->m_id, table->m_name, len) == 0 &&
         memcmp(foreign->m_id + len, dict_ibfk, (sizeof dict_ibfk) - 1) == 0 &&
         foreign->m_id[len + ((sizeof dict_ibfk) - 1)] != '0') {
       /* It is of the >= 4.0.18 format */
@@ -600,7 +609,9 @@ void Dict::foreign_report_syntax_err(const char *name, const char *start_of_late
   mutex_exit(&m_foreign_err_mutex);
 }
 
-db_err Dict::create_foreign_constraints(Trx *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks) noexcept {
+db_err Dict::create_foreign_constraints(
+  Trx *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks
+) noexcept {
   ulint i{};
   Table *referenced_table;
   Table *table_to_alter;
@@ -809,8 +820,12 @@ col_loop1:
     foreign_error_report(name);
 
     log_err(
-      "There is no index in table ", name, " where the columns appears as"
-      " the first columns. Constraint:\n", start_of_latest_foreign, ". See"
+      "There is no index in table ",
+      name,
+      " where the columns appears as"
+      " the first columns. Constraint:\n",
+      start_of_latest_foreign,
+      ". See"
       " Embedded InnoDB website for details for correct foreign key definition."
     );
 
@@ -868,11 +883,7 @@ col_loop1:
 
     foreign_error_report(name);
 
-    log_err(std::format(
-      "{}:\nCannot resolve table name close to:\n{}",
-      start_of_latest_foreign,
-      ptr
-    ));
+    log_err(std::format("{}:\nCannot resolve table name close to:\n{}", start_of_latest_foreign, ptr));
 
     mutex_exit(&m_foreign_err_mutex);
 
@@ -1029,7 +1040,10 @@ scan_on_conditions:
 
       foreign_error_report(name);
 
-      log_err(std::format("{}:\nYou have defined a SET nullptr condition though some of the columns are defined as NOT nullptr.", start_of_latest_foreign));
+      log_err(std::format(
+        "{}:\nYou have defined a SET nullptr condition though some of the columns are defined as NOT nullptr.",
+        start_of_latest_foreign
+      ));
 
       mutex_exit(&m_foreign_err_mutex);
 
@@ -1077,7 +1091,8 @@ try_find_index:
 
       foreign_error_report(name);
 
-      log_err(std::format("{} - Cannot find an index in the referenced table where the referenced columns appear as the"
+      log_err(std::format(
+        "{} - Cannot find an index in the referenced table where the referenced columns appear as the"
         " first columns, or column types in the table and the referenced table do not match for constraint."
         " See Emnbedded InnoDB website for details for correct foreign key definition.",
         start_of_latest_foreign
@@ -1124,7 +1139,9 @@ db_err Dict::create_foreign_constraints(Trx *trx, const char *sql_string, const 
   return err;
 }
 
-db_err Dict::foreign_parse_drop_constraints(mem_heap_t *heap, Trx *trx, Table *table, ulint *n, const char ***constraints_to_drop) noexcept {
+db_err Dict::foreign_parse_drop_constraints(
+  mem_heap_t *heap, Trx *trx, Table *table, ulint *n, const char ***constraints_to_drop
+) noexcept {
   bool success;
   const char *id;
 
@@ -1190,7 +1207,7 @@ db_err Dict::foreign_parse_drop_constraints(mem_heap_t *heap, Trx *trx, Table *t
         table->m_name,
         id,
         str
-        ));
+      ));
 
       mutex_exit(&m_foreign_err_mutex);
 
@@ -1202,7 +1219,9 @@ db_err Dict::foreign_parse_drop_constraints(mem_heap_t *heap, Trx *trx, Table *t
 
   mutex_enter(&m_foreign_err_mutex);
 
-  log_err(std::format("Syntax error in dropping of a foreign key constraint of table {} close to: {} in SQL command: {}", table->m_name, ptr, str));
+  log_err(std::format(
+    "Syntax error in dropping of a foreign key constraint of table {} close to: {} in SQL command: {}", table->m_name, ptr, str
+  ));
 
   mutex_exit(&m_foreign_err_mutex);
 
@@ -1210,8 +1229,6 @@ db_err Dict::foreign_parse_drop_constraints(mem_heap_t *heap, Trx *trx, Table *t
 
   return DB_CANNOT_DROP_CONSTRAINT;
 }
-
-
 
 DTuple *Dict::index_build_node_ptr(const Index *index, const rec_t *rec, ulint page_no, mem_heap_t *heap, ulint level) noexcept {
   const auto n_unique = index->get_n_unique_in_tree();
@@ -1251,7 +1268,9 @@ void Dict::update_statistics(Table *table) noexcept {
   if (table->m_ibd_file_missing) {
     log_err(std::format(
       "Cannot calculate statistics for table {} because the .ibd file is missing. For help,"
-      " please refer to the InnoDB website for details", table->m_name));
+      " please refer to the InnoDB website for details",
+      table->m_name
+    ));
 
     return;
   }
@@ -1376,8 +1395,8 @@ std::string Table::to_string(Dict *dict) noexcept {
     m_name,
     m_id,
     m_id,
-    (ulong) m_flags,
-    (ulong) m_n_cols,
+    (ulong)m_flags,
+    (ulong)m_n_cols,
     m_indexes.size(),
     m_stats.m_n_rows
   );
@@ -1435,10 +1454,10 @@ void Dict::index_print(Index *index) noexcept {
     "   FIELDS: ",
     index->m_name,
     index->m_id,
-    (int) index->m_n_user_defined_cols,
-    (int) index->m_n_fields,
-    (int) index->m_n_uniq,
-    (int) index->m_type,
+    (int)index->m_n_user_defined_cols,
+    (int)index->m_n_fields,
+    (int)index->m_n_uniq,
+    (int)index->m_type,
     index->m_page_id.to_string(),
     n_vals,
     index->m_stats.m_n_leaf_pages,
@@ -1468,7 +1487,7 @@ void Dict::field_print(const Field *field) noexcept {
   log_err(" ", field->m_name);
 
   if (field->m_prefix_len != 0) {
-    log_err("( " , field->m_prefix_len, " )");
+    log_err("( ", field->m_prefix_len, " )");
   }
 }
 

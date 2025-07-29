@@ -33,7 +33,7 @@ struct Table;
 constexpr ulint FETCH_CACHE_SIZE = 6;
 
 /* After fetching this many rows, we start caching them in fetch_cache */
-constexpr ulint FETCH_CACHE_THRESHOLD  = 4;
+constexpr ulint FETCH_CACHE_THRESHOLD = 4;
 
 /* Values for hint_need_to_fetch_extra_cols */
 constexpr ulint ROW_RETRIEVE_PRIMARY_KEY = 1;
@@ -192,18 +192,14 @@ struct Prebuilt {
      * 
      * @return true if the cache is empty.
      */
-    [[nodiscard]] inline  bool is_cache_empty() const noexcept {
-      return m_n_cached == 0;
-    }
+    [[nodiscard]] inline bool is_cache_empty() const noexcept { return m_n_cached == 0; }
 
     /**
      * Check if the cache is fetching in progress.
      * 
      * @return true if the cache is fetching in progress.
      */
-    [[nodiscard]] inline bool is_cache_fetch_in_progress() const noexcept {
-      return m_first > 0 && m_first < m_n_size;
-    }
+    [[nodiscard]] inline bool is_cache_fetch_in_progress() const noexcept { return m_first > 0 && m_first < m_n_size; }
 
     /**
      * Check if the cache is full.

@@ -25,14 +25,14 @@ Completed by Sunny Bains and Marko Makela
 
 #include "row0merge.h"
 #include "api0misc.h"
-#include "btr0btr.h"
 #include "btr0blob.h"
+#include "btr0btr.h"
 #include "data0data.h"
 #include "data0type.h"
 #include "ddl0ddl.h"
-#include "dict0store.h"
 #include "dict0dict.h"
 #include "dict0load.h"
+#include "dict0store.h"
 #include "lock0lock.h"
 #include "log0log.h"
 #include "mach0data.h"
@@ -342,9 +342,9 @@ static bool row_merge_buf_add(row_merge_buf_t *buf, const DTuple *row, const row
 
 /** Structure for reporting duplicate records. */
 struct row_merge_dup_t {
-  const Index *index; /*!< index being sorted */
-  table_handle_t table;      /*!< table object */
-  ulint n_dup;               /*!< number of duplicates */
+  const Index *index;   /*!< index being sorted */
+  table_handle_t table; /*!< table object */
+  ulint n_dup;          /*!< number of duplicates */
 };
 
 /** Report a duplicate key. */
@@ -426,13 +426,13 @@ UT_SORT_FUNCTION_BODY().
 
 /** Merge sort the tuple buffer in main memory. */
 static void row_merge_tuple_sort(
-  void *cmp_ctx,           /*!< in: compare context, required
+  void *cmp_ctx,         /*!< in: compare context, required
                              for BLOBs and user defined types */
-  ulint n_field,           /*!< in: number of fields */
-  row_merge_dup_t *dup,    /*!< in/out: for reporting duplicates */
+  ulint n_field,         /*!< in: number of fields */
+  row_merge_dup_t *dup,  /*!< in/out: for reporting duplicates */
   const dfield_t **rows, /*!< in/out: rows */
-  const dfield_t **aux,    /*!< in/out: work area */
-  ulint low,               /*!< in: lower bound of the
+  const dfield_t **aux,  /*!< in/out: work area */
+  ulint low,             /*!< in: lower bound of the
                              sorting area, inclusive */
   ulint high
 ) /*!< in: upper bound of the
@@ -504,7 +504,7 @@ static void row_merge_buf_write(
 @return	memory heap */
 static mem_heap_t *row_merge_heap_create(
   const Index *index, /*!< in: record descriptor */
-  ulint **offsets1,          /*!< out: offsets */
+  ulint **offsets1,   /*!< out: offsets */
   ulint **offsets2
 ) /*!< out: offsets */
 {
@@ -590,13 +590,7 @@ static bool row_merge_write(
  * @return Pointer to the next record, or nullptr on end of list (non-NULL on I/O error).
  */
 static const byte *row_merge_read_rec(
-  row_merge_block_t *block,
-  mrec_buf_t *buf,
-  const byte *b,
-  const Index *index,
-  int fd,
-  ulint *foffs,
-  const mrec_t **mrec,
+  row_merge_block_t *block, mrec_buf_t *buf, const byte *b, const Index *index, int fd, ulint *foffs, const mrec_t **mrec,
   ulint *offsets
 ) {
   ulint extra_size;
@@ -896,15 +890,9 @@ static int row_merge_cmp(
  * @return DB_SUCCESS or error
  */
 static db_err row_merge_read_clustered_index(
-  Trx *trx,
-  table_handle_t table,
-  const Table *old_table,
-  const Table *new_table,
-  Index **index,
-  merge_file_t *files,
-  ulint n_index,
-  row_merge_block_t *block) noexcept
-{
+  Trx *trx, table_handle_t table, const Table *old_table, const Table *new_table, Index **index, merge_file_t *files, ulint n_index,
+  row_merge_block_t *block
+) noexcept {
   ulint *nonnull{};
   ulint n_nonnull{};
   db_err err = DB_SUCCESS;
@@ -1019,7 +1007,7 @@ static db_err row_merge_read_clustered_index(
 
       mtr.start();
 
-      (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
       has_next = pcur.move_to_next_user_rec(&mtr);
     }
 
@@ -1157,15 +1145,15 @@ static db_err row_merge_read_clustered_index(
 /** Merge two blocks of records on disk and write a bigger block.
 @return	DB_SUCCESS or error code */
 static db_err row_merge_blocks(
-  const Index *index, /*!< in: index being created */
-  const merge_file_t *file,  /*!< in: file containing
+  const Index *index,       /*!< in: index being created */
+  const merge_file_t *file, /*!< in: file containing
                                             index entries */
-  row_merge_block_t *block,  /*!< in/out: 3 buffers */
-  ulint *foffs0,             /*!< in/out: offset of first
+  row_merge_block_t *block, /*!< in/out: 3 buffers */
+  ulint *foffs0,            /*!< in/out: offset of first
                                             source list in the file */
-  ulint *foffs1,             /*!< in/out: offset of second
+  ulint *foffs1,            /*!< in/out: offset of second
                                             source list in the file */
-  merge_file_t *of,          /*!< in/out: output file */
+  merge_file_t *of,         /*!< in/out: output file */
   table_handle_t table
 ) /*!< in/out: Client table, for
                                             reporting erroneous key value
@@ -1271,7 +1259,9 @@ done1:
  * 
  * @return true on success, false on failure.
  */
-static bool row_merge_blocks_copy(const Index *index, const merge_file_t *file, row_merge_block_t *block, ulint *foffs0, merge_file_t *of) {
+static bool row_merge_blocks_copy(
+  const Index *index, const merge_file_t *file, row_merge_block_t *block, ulint *foffs0, merge_file_t *of
+) {
   mem_heap_t *heap; /*!< memory heap for offsets0, offsets1 */
 
   mrec_buf_t buf[3];   /*!< buffer for handling
@@ -1335,13 +1325,13 @@ done0:
 /** Merge disk files.
 @return	DB_SUCCESS or error code */
 static __attribute__((nonnull)) db_err row_merge(
-  Trx *trx,                /*!< in: transaction */
-  const Index *index, /*!< in: index being created */
-  merge_file_t *file,        /*!< in/out: file containing
+  Trx *trx,                 /*!< in: transaction */
+  const Index *index,       /*!< in: index being created */
+  merge_file_t *file,       /*!< in/out: file containing
                                      index entries */
-  ulint *half,               /*!< in/out: half the file */
-  row_merge_block_t *block,  /*!< in/out: 3 buffers */
-  int *tmpfd,                /*!< in/out: temporary file handle */
+  ulint *half,              /*!< in/out: half the file */
+  row_merge_block_t *block, /*!< in/out: 3 buffers */
+  int *tmpfd,               /*!< in/out: temporary file handle */
   table_handle_t table
 ) /*!< in/out: Client table, for
                                      reporting erroneous key value
@@ -1440,12 +1430,12 @@ static __attribute__((nonnull)) db_err row_merge(
 /** Merge disk files.
 @return	DB_SUCCESS or error code */
 static db_err row_merge_sort(
-  Trx *trx,                /*!< in: transaction */
-  const Index *index, /*!< in: index being created */
-  merge_file_t *file,        /*!< in/out: file containing
+  Trx *trx,                 /*!< in: transaction */
+  const Index *index,       /*!< in: index being created */
+  merge_file_t *file,       /*!< in/out: file containing
                                           index entries */
-  row_merge_block_t *block,  /*!< in/out: 3 buffers */
-  int *tmpfd,                /*!< in/out: temporary file handle */
+  row_merge_block_t *block, /*!< in/out: 3 buffers */
+  int *tmpfd,               /*!< in/out: temporary file handle */
   table_handle_t table
 ) /*!< in/out: User table, for
                                           reporting erroneous key value
@@ -1478,7 +1468,7 @@ static db_err row_merge_sort(
 static void row_merge_copy_blobs(
   const mrec_t *mrec,   /*!< in: merge record */
   const ulint *offsets, /*!< in: offsets of mrec */
-  DTuple *tuple,      /*!< in/out: data tuple */
+  DTuple *tuple,        /*!< in/out: data tuple */
   mem_heap_t *heap
 ) /*!< in/out: memory heap */
 {
@@ -1633,7 +1623,7 @@ void row_merge_drop_index(
 {
   if (index != nullptr) {
     if (auto err = srv_dict_sys->m_ddl.drop_index(table, index, trx); err != DB_SUCCESS) {
-      log_warn("DROP INDEX failed with error ", err , " while dropping index ", index->m_name);
+      log_warn("DROP INDEX failed with error ", err, " while dropping index ", index->m_name);
     }
   }
 }
@@ -1644,7 +1634,7 @@ exclusively by the caller, because the transaction will not be
 committed. */
 
 void row_merge_drop_indexes(
-  Trx *trx,           /*!< in: transaction */
+  Trx *trx,      /*!< in: transaction */
   Table *table,  /*!< in: table containing the indexes */
   Index **index, /*!< in: indexes to drop */
   ulint num_created
@@ -1678,8 +1668,8 @@ static void row_merge_file_destroy(merge_file_t *merge_file) /*!< out: merge fil
 if a column must be constrained NOT NULL.
 @return	col->prtype, possibly ORed with DATA_NOT_NULL */
 inline ulint row_merge_col_prtype(
-  const Column *col, /*!< in: column */
-  const char *col_name,  /*!< in: name of the column */
+  const Column *col,    /*!< in: column */
+  const char *col_name, /*!< in: name of the column */
   const merge_index_def_t *index_def
 ) /*!< in: the index definition
                                         of the primary key */
@@ -1813,7 +1803,8 @@ db_err row_merge_rename_tables(Table *old_table, Table *new_table, const char *t
   /* The following calls will also rename the .ibd data files if
   the tables are stored in a single-table tablespace */
 
-  if (!srv_dict_sys->table_rename_in_cache(old_table, tmp_name, false) || !srv_dict_sys->table_rename_in_cache(new_table, old_name, false)) {
+  if (!srv_dict_sys->table_rename_in_cache(old_table, tmp_name, false) ||
+      !srv_dict_sys->table_rename_in_cache(new_table, old_name, false)) {
 
     err = DB_ERROR;
     goto err_exit;
@@ -1846,7 +1837,7 @@ Index *row_merge_create_index(Trx *trx, Table *table, const merge_index_def_t *i
   for (ulint i{}; i < n_fields; ++i) {
     auto ifield = &index_def->fields[i];
 
-    (void) index->add_field(ifield->field_name, ifield->prefix_len);
+    (void)index->add_field(ifield->field_name, ifield->prefix_len);
   }
 
   /* Add the index to SYS_INDEXES, using the index prototype. */
@@ -1886,13 +1877,8 @@ db_err row_merge_drop_table(Trx *trx, Table *table) {
 }
 
 db_err row_merge_build_indexes(
-  Trx *trx,
-  Table *old_table,
-  Table *new_table,
-  Index **indexes,
-  ulint n_indexes,
-  table_handle_t table)
-{
+  Trx *trx, Table *old_table, Table *new_table, Index **indexes, ulint n_indexes, table_handle_t table
+) {
   ut_ad(trx);
   ut_ad(old_table);
   ut_ad(new_table);

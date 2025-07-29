@@ -89,8 +89,7 @@ Macro for memory buffer allocation */
  * @param heap memory heap
  * @param format format string
  * @return heap-allocated formatted string */
-[[nodiscard]] char *mem_heap_printf(mem_heap_t *heap, const char *format, ...)
-  __attribute__((format(printf, 2, 3)));
+[[nodiscard]] char *mem_heap_printf(mem_heap_t *heap, const char *format, ...) __attribute__((format(printf, 2, 3)));
 
 /**
  * Goes through the list of all allocated mem blocks, checks their magic
@@ -312,8 +311,7 @@ inline void mem_heap_free_heap_top(mem_heap_t *heap, byte *old_top) {
   auto block = UT_LIST_GET_LAST(heap->base);
 
   while (block != nullptr) {
-    if (reinterpret_cast<byte *>(block) + mem_block_get_free(block) >= old_top &&
-         reinterpret_cast<byte *>(block) <= old_top) {
+    if (reinterpret_cast<byte *>(block) + mem_block_get_free(block) >= old_top && reinterpret_cast<byte *>(block) <= old_top) {
       /* Found the right block */
 
       break;
@@ -380,8 +378,7 @@ inline void mem_heap_empty(mem_heap_t *heap) {
  * @param[in] heap Memory heap.
  * @param[in] n Size of the topmost element.
 */
-inline void mem_heap_free_top( mem_heap_t *heap, ulint n)
-{
+inline void mem_heap_free_top(mem_heap_t *heap, ulint n) {
   ut_ad(mem_heap_check(heap));
 
   auto block = UT_LIST_GET_LAST(heap->base);

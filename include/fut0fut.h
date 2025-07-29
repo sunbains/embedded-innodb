@@ -42,9 +42,9 @@ inline byte *fut_get_ptr(space_id_t space_id, Fil_addr addr, ulint rw_latch, mtr
   ut_ad(addr.m_boffset < UNIV_PAGE_SIZE);
   ut_ad(rw_latch == RW_S_LATCH || rw_latch == RW_X_LATCH);
 
-  Buf_pool::Request req {
+  Buf_pool::Request req{
     .m_rw_latch = rw_latch,
-    .m_page_id = { space_id, addr.m_page_no },
+    .m_page_id = {space_id, addr.m_page_no},
     .m_mode = BUF_GET,
     .m_file = __FILE__,
     .m_line = __LINE__,

@@ -22,8 +22,8 @@ Sessions
 Created 6/25/1996 Heikki Tuuri
 *******************************************************/
 
-#include "srv0srv.h"
 #include "usr0sess.h"
+#include "srv0srv.h"
 
 Session *Session::create(Trx *trx) noexcept {
   auto ptr = ut_new(sizeof(Session));

@@ -22,6 +22,7 @@ Insert into a table
 Created 4/20/1996 Heikki Tuuri
 *******************************************************/
 
+#include "row0ins.h"
 #include "api0misc.h"
 #include "btr0blob.h"
 #include "btr0btr.h"
@@ -35,7 +36,6 @@ Created 4/20/1996 Heikki Tuuri
 #include "mach0data.h"
 #include "que0que.h"
 #include "rem0cmp.h"
-#include "row0ins.h"
 #include "row0row.h"
 #include "row0sel.h"
 #include "row0upd.h"
@@ -48,10 +48,9 @@ constexpr ulint ROW_INS_NEXT = 2;
 Row_insert *srv_row_ins;
 
 Row_insert::Row_insert(Dict *dict, Lock_sys *lock_sys, Row_update *row_upd) noexcept
-  : m_dict(dict), m_lock_sys(lock_sys), m_row_upd(row_upd) {
-}
+    : m_dict(dict), m_lock_sys(lock_sys), m_row_upd(row_upd) {}
 
-Row_insert* Row_insert::create(Dict *dict, Lock_sys *lock_sys, Row_update *row_upd) noexcept {
+Row_insert *Row_insert::create(Dict *dict, Lock_sys *lock_sys, Row_update *row_upd) noexcept {
   auto ptr = ut_new(sizeof(Row_insert));
 
   return new (ptr) Row_insert(dict, lock_sys, row_upd);
@@ -178,7 +177,9 @@ void Row_insert::set_new_row(ins_node_t *node, DTuple *row) noexcept {
  * @param[in] mtr               Must be committed before latching any further pages
  * @return DB_SUCCESS or error code
  */
-db_err Row_insert::sec_index_entry_by_modify(ulint mode, Btree_cursor *btr_cur, const DTuple *entry, que_thr_t *thr, mtr_t *mtr) noexcept {
+db_err Row_insert::sec_index_entry_by_modify(
+  ulint mode, Btree_cursor *btr_cur, const DTuple *entry, que_thr_t *thr, mtr_t *mtr
+) noexcept {
   db_err err;
   auto rec = btr_cur->get_rec();
 
@@ -227,7 +228,9 @@ db_err Row_insert::sec_index_entry_by_modify(ulint mode, Btree_cursor *btr_cur, 
   return err;
 }
 
-db_err Row_insert::clust_index_entry_by_modify(ulint mode, Btree_cursor *btr_cur, mem_heap_t **heap, big_rec_t **big_rec, const DTuple *entry, que_thr_t *thr, mtr_t *mtr) noexcept {
+db_err Row_insert::clust_index_entry_by_modify(
+  ulint mode, Btree_cursor *btr_cur, mem_heap_t **heap, big_rec_t **big_rec, const DTuple *entry, que_thr_t *thr, mtr_t *mtr
+) noexcept {
   ut_ad(btr_cur->m_index->is_clustered());
 
   *big_rec = nullptr;
@@ -373,11 +376,14 @@ ulint Row_insert::cascade_calc_update_vec(upd_node_t *node, const Foreign *forei
         /* If the new value would not fit in the
         column, do not allow the update */
 
-        if (!dfield_is_null(&ufield->m_new_val) &&
-            dtype_get_at_most_n_mbchars(
-                col->prtype, col->mbminlen, col->mbmaxlen, col->len, ufield_len,
-                reinterpret_cast<const char *>(dfield_get_data(&ufield->m_new_val))
-            ) < ufield_len) {
+        if (!dfield_is_null(&ufield->m_new_val) && dtype_get_at_most_n_mbchars(
+                                                     col->prtype,
+                                                     col->mbminlen,
+                                                     col->mbmaxlen,
+                                                     col->len,
+                                                     ufield_len,
+                                                     reinterpret_cast<const char *>(dfield_get_data(&ufield->m_new_val))
+                                                   ) < ufield_len) {
 
           return ULINT_UNDEFINED;
         }
@@ -453,7 +459,9 @@ void Row_insert::set_detailed(Trx *trx, const Foreign *foreign) noexcept {
   trx->set_detailed_error("foreign key error");
 }
 
-void Row_insert::foreign_report_err(const char *errstr, que_thr_t *thr, const Foreign *foreign, const rec_t *rec, const DTuple *entry) noexcept {
+void Row_insert::foreign_report_err(
+  const char *errstr, que_thr_t *thr, const Foreign *foreign, const rec_t *rec, const DTuple *entry
+) noexcept {
   auto trx = thr_get_trx(thr);
 
   set_detailed(trx, foreign);
@@ -527,7 +535,7 @@ db_err Row_insert::update_cascade_client(que_thr_t *thr, upd_node_t *node, Table
     thr->run_node = node;
     thr->prev_node = node;
 
-    (void) m_row_upd->step(thr);
+    (void)m_row_upd->step(thr);
 
     auto err = trx->m_error_state;
 
@@ -575,7 +583,9 @@ db_err Row_insert::update_cascade_client(que_thr_t *thr, upd_node_t *node, Table
   return DB_SUCCESS;
 }
 
-db_err Row_insert::foreign_check_on_constraint(que_thr_t *thr, const Foreign *foreign, Btree_pcursor *pcur, DTuple *entry, mtr_t *mtr) noexcept {
+db_err Row_insert::foreign_check_on_constraint(
+  que_thr_t *thr, const Foreign *foreign, Btree_pcursor *pcur, DTuple *entry, mtr_t *mtr
+) noexcept {
   Table *table = foreign->m_foreign_table;
   const Index *index;
   const Index *clust_index;
@@ -661,11 +671,7 @@ db_err Row_insert::foreign_check_on_constraint(que_thr_t *thr, const Foreign *fo
     err = DB_ROW_IS_REFERENCED;
 
     foreign_report_err(
-      "Trying an update, possibly causing a cyclic cascaded update in the child table,",
-      thr,
-      foreign,
-      pcur->get_rec(),
-      entry
+      "Trying an update, possibly causing a cyclic cascaded update in the child table,", thr, foreign, pcur->get_rec(), entry
     );
 
     goto nonstandard_exit_func;
@@ -750,7 +756,8 @@ db_err Row_insert::foreign_check_on_constraint(que_thr_t *thr, const Foreign *fo
     goto nonstandard_exit_func;
   }
 
-  if ((node->m_is_delete && (foreign->m_type & DICT_FOREIGN_ON_DELETE_SET_NULL)) || (!node->m_is_delete && (foreign->m_type & DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
+  if ((node->m_is_delete && (foreign->m_type & DICT_FOREIGN_ON_DELETE_SET_NULL)) ||
+      (!node->m_is_delete && (foreign->m_type & DICT_FOREIGN_ON_UPDATE_SET_NULL))) {
 
     /* Build the appropriate update vector which sets
     foreign->n_fields first fields in rec to SQL NULL */
@@ -826,7 +833,9 @@ db_err Row_insert::foreign_check_on_constraint(que_thr_t *thr, const Foreign *fo
   err = update_cascade_client(thr, cascade, foreign->m_foreign_table);
 
   if (foreign->m_foreign_table->m_n_foreign_key_checks_running == 0) {
-    log_err(std::format("Table {} has the counter 0 though there is a FOREIGN KEY check running on it.", foreign->m_foreign_table->m_name));
+    log_err(
+      std::format("Table {} has the counter 0 though there is a FOREIGN KEY check running on it.", foreign->m_foreign_table->m_name)
+    );
   }
 
   /* Release the data dictionary latch for a while, so that we do not
@@ -842,7 +851,7 @@ db_err Row_insert::foreign_check_on_constraint(que_thr_t *thr, const Foreign *fo
 
   /* Restore pcur position */
 
-  (void) pcur->restore_position(BTR_SEARCH_LEAF, mtr, Current_location());
+  (void)pcur->restore_position(BTR_SEARCH_LEAF, mtr, Current_location());
 
   if (tmp_heap != nullptr) {
     mem_heap_free(tmp_heap);
@@ -869,12 +878,14 @@ nonstandard_exit_func:
 
   mtr->start();
 
-  (void) pcur->restore_position(BTR_SEARCH_LEAF, mtr, Current_location());
+  (void)pcur->restore_position(BTR_SEARCH_LEAF, mtr, Current_location());
 
   return err;
 }
 
-db_err Row_insert::set_shared_rec_lock(ulint type, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr) noexcept {
+db_err Row_insert::set_shared_rec_lock(
+  ulint type, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr
+) noexcept {
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   if (index->is_clustered()) {
@@ -884,7 +895,9 @@ db_err Row_insert::set_shared_rec_lock(ulint type, const Buf_block *block, const
   }
 }
 
-db_err Row_insert::set_exclusive_rec_lock(ulint type, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr) noexcept {
+db_err Row_insert::set_exclusive_rec_lock(
+  ulint type, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr
+) noexcept {
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   if (index->is_clustered()) {
@@ -894,7 +907,9 @@ db_err Row_insert::set_exclusive_rec_lock(ulint type, const Buf_block *block, co
   }
 }
 
-db_err Row_insert::check_foreign_constraint(bool check_ref, const Foreign *foreign, const Table *table, DTuple *entry, que_thr_t *thr) noexcept {
+db_err Row_insert::check_foreign_constraint(
+  bool check_ref, const Foreign *foreign, const Table *table, DTuple *entry, que_thr_t *thr
+) noexcept {
   upd_node_t *upd_node;
   Table *check_table;
   Index *check_index;
@@ -967,11 +982,15 @@ run_again:
       set_detailed(trx, foreign);
 
       mutex_enter(&m_dict->m_foreign_err_mutex);
-      log_err(std::format(" Transaction: {} foreign key constraint fails for table {}: ", trx->to_string(600), foreign->m_foreign_table_name));
+      log_err(std::format(
+        " Transaction: {} foreign key constraint fails for table {}: ", trx->to_string(600), foreign->m_foreign_table_name
+      ));
       m_dict->print_info_on_foreign_key_in_create_format(trx, foreign, true);
       log_err("Trying to add to index {}", foreign->m_foreign_index->m_name, " tuple: ");
       dtuple_print(ib_stream, entry);
-      log_err("\nBut the parent table {}", foreign->m_referenced_table_name, " does not currently exist! Or, it's .ibd file is missing.");
+      log_err(
+        "\nBut the parent table {}", foreign->m_referenced_table_name, " does not currently exist! Or, it's .ibd file is missing."
+      );
       mutex_exit(&m_dict->m_foreign_err_mutex);
 
       err = DB_NO_REFERENCED_ROW;
@@ -1160,7 +1179,7 @@ db_err Row_insert::check_foreign_constraints(const Table *table, const Index *in
     if (foreign->m_foreign_index == index) {
 
       if (foreign->m_referenced_table == nullptr) {
-        (void) m_dict->table_get(foreign->m_referenced_table_name, false);
+        (void)m_dict->table_get(foreign->m_referenced_table_name, false);
       }
 
       if (0 == trx->m_dict_operation_lock_mode) {
@@ -1511,7 +1530,7 @@ db_err Row_insert::index_entry_low(ulint mode, const Index *index, DTuple *entry
 
   const auto n_unique = index->get_n_unique();
 
-  if (index->is_unique() && (btr_cur.m_up_match >= n_unique ||btr_cur.m_low_match >= n_unique)) {
+  if (index->is_unique() && (btr_cur.m_up_match >= n_unique || btr_cur.m_low_match >= n_unique)) {
 
     if (index->is_clustered()) {
       /* Note that the following may return also

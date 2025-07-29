@@ -84,6 +84,6 @@ void ib_utf8_convert_from_id(
   char *to,            /*!< out: converted identifier */
   const char *from,    /*!< in: identifier to convert */
   ulint to_len
-);     /*!< in: length of 'to', in bytes;
+); /*!< in: length of 'to', in bytes;
                          should be at least
                          3 * strlen(to) + 1 */

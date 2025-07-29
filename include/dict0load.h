@@ -31,6 +31,7 @@ Created 4/24/1996 Heikki Tuuri
 
 struct Dict_load {
   explicit Dict_load(Dict *dict) noexcept : m_dict{dict} {}
+
   /**
    * In a crash recovery we already have all the tablespace objects created.
    * This function compares the space id information in the InnoDB data dictionary
@@ -121,9 +122,8 @@ struct Dict_load {
   db_err load_system_tables() noexcept;
 
 #ifndef UNIT_TEST
-private:
+ private:
 #endif /* !UNIT_TEST */
-
 
   /**
    * @brief Loads a system table.
@@ -161,7 +161,7 @@ private:
    * @param[in] table The table.
    * @param[in] heap The memory heap for temporary storage.
    */
-  [[nodiscard]] db_err load_columns(Table *table, mem_heap_t *heap) noexcept;  
+  [[nodiscard]] db_err load_columns(Table *table, mem_heap_t *heap) noexcept;
 
   /**
    * @brief Loads definitions for table foreign keys.
@@ -188,7 +188,7 @@ private:
    * @return DB_SUCCESS if ok, DB_CORRUPTION if corruption of dictionary table or
    *   DB_UNSUPPORTED if table has unknown index type
    */
-   [[nodiscard]] db_err load_indexes(Table *table, mem_heap_t *heap) noexcept;
+  [[nodiscard]] db_err load_indexes(Table *table, mem_heap_t *heap) noexcept;
 
   /**
    * @brief Loads foreign key constraint col names (also for the referenced table).
@@ -208,11 +208,9 @@ private:
    */
   [[nodiscard]] db_err load_foreign(const char *id, bool check_charsets) noexcept;
 
-private:
-  
-
+ private:
 #ifndef UNIT_TEST
-private:
+ private:
 #endif /* !UNIT_TEST */
 
   /**

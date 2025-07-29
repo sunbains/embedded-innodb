@@ -35,6 +35,7 @@ Created 12/9/1995 Heikki Tuuri
 #include "log0types.h"
 #include "mach0data.h"
 #include "mtr0mtr.h"
+#include "os0aio.h"
 #include "os0file.h"
 #include "srv0srv.h"
 #include "sync0rw.h"
@@ -45,6 +46,26 @@ struct Log;
 struct log_group_t;
 
 extern Log *log_sys;
+
+// Forward declarations for log I/O
+class Page_id;
+
+/**
+ * Log I/O operation for WAL files
+ * @param io_request            in: IO_request type.
+ * @param batched               in: if simulated aio and we want to post a
+ *                              batch of i/os
+ * @param page_id               in: space id and page no
+ * @param byte_offset           in: remainder of offset in bytes
+ * @param len                   in: how many bytes to read or write
+ * @param buf                   in/out: buffer where to store read data
+ *                              or from where to write
+ * @param message               in: message for aio handler if non-sync
+ *                             aio used, else ignored
+ * @return DB_SUCCESS, or DB_TABLESPACE_DELETED if we are trying to do
+ *         i/o on a tablespace which does not exist
+ */
+db_err log_io(IO_request io_request, bool batched, const Page_id &page_id, ulint byte_offset, ulint len, void *buf, void *message);
 
 struct Log {
 
@@ -117,165 +138,163 @@ struct Log {
   * @param log_block The log block.
   * @param n The log block number: must be > 0 and < LOG_BLOCK_FLUSH_BIT_MASK.
   */
- static void block_set_hdr_no(byte *log_block, ulint n) noexcept{
-   ut_ad(n > 0);
-   ut_ad(n < LOG_BLOCK_FLUSH_BIT_MASK);
+  static void block_set_hdr_no(byte *log_block, ulint n) noexcept {
+    ut_ad(n > 0);
+    ut_ad(n < LOG_BLOCK_FLUSH_BIT_MASK);
 
-   mach_write_to_4(log_block + LOG_BLOCK_HDR_NO, n);
- }
+    mach_write_to_4(log_block + LOG_BLOCK_HDR_NO, n);
+  }
 
- /**
+  /**
   * Gets the data length of a log block.
   *
   * @param log_block The log block.
   * @return The log block data length measured as a byte offset from the block start.
   */
- [[nodiscard]] static ulint block_get_data_len(const byte *log_block) noexcept {
-   return mach_read_from_2(log_block + LOG_BLOCK_HDR_DATA_LEN);
- }
- 
- /**
+  [[nodiscard]] static ulint block_get_data_len(const byte *log_block) noexcept {
+    return mach_read_from_2(log_block + LOG_BLOCK_HDR_DATA_LEN);
+  }
+
+  /**
   * Sets the data length of a log block.
   *
   * @param log_block The log block.
   * @param len The data length.
   */
- static void block_set_data_len(byte *log_block, ulint len) noexcept {
-   mach_write_to_2(log_block + LOG_BLOCK_HDR_DATA_LEN, len);
- }
- 
- /**
+  static void block_set_data_len(byte *log_block, ulint len) noexcept { mach_write_to_2(log_block + LOG_BLOCK_HDR_DATA_LEN, len); }
+
+  /**
   * Gets the offset of the first mtr log record group in a log block.
   *
   * @param log_block The log block.
   * 
   * @return The first mtr log record group byte offset from the block start, 0 if none.
   */
- [[nodiscard]] static ulint block_get_first_rec_group(const byte *log_block) noexcept {
-   return mach_read_from_2(log_block + LOG_BLOCK_FIRST_REC_GROUP);
- }
- 
- /**
+  [[nodiscard]] static ulint block_get_first_rec_group(const byte *log_block) noexcept {
+    return mach_read_from_2(log_block + LOG_BLOCK_FIRST_REC_GROUP);
+  }
+
+  /**
   * Sets the offset of the first mtr log record group in a log block.
   *
   * @param log_block The log block.
   * @param offset The offset, 0 if none.
   */
- static void block_set_first_rec_group(byte *log_block, ulint offset) noexcept {
-   mach_write_to_2(log_block + LOG_BLOCK_FIRST_REC_GROUP, offset);
- }
- 
- /**
+  static void block_set_first_rec_group(byte *log_block, ulint offset) noexcept {
+    mach_write_to_2(log_block + LOG_BLOCK_FIRST_REC_GROUP, offset);
+  }
+
+  /**
   * Gets the checkpoint number field of a log block.
   *
   * @param log_block The log block.
   * @return The checkpoint number (4 lowest bytes).
   */
- [[nodiscard]] static ulint block_get_checkpoint_no(const byte *log_block) noexcept {
-   return mach_read_from_4(log_block + LOG_BLOCK_CHECKPOINT_NO);
- }
- 
- /**
+  [[nodiscard]] static ulint block_get_checkpoint_no(const byte *log_block) noexcept {
+    return mach_read_from_4(log_block + LOG_BLOCK_CHECKPOINT_NO);
+  }
+
+  /**
   * Sets the checkpoint number field of a log block.
   *
   * @param log_block The log block.
   * @param no The checkpoint number.
   */
- static void block_set_checkpoint_no(byte *log_block, uint64_t no) noexcept {
-   mach_write_to_4(log_block + LOG_BLOCK_CHECKPOINT_NO, (ulint)no);
- }
- 
- /**
+  static void block_set_checkpoint_no(byte *log_block, uint64_t no) noexcept {
+    mach_write_to_4(log_block + LOG_BLOCK_CHECKPOINT_NO, (ulint)no);
+  }
+
+  /**
   * Converts a lsn to a log block number.
   *
   * @param lsn The lsn of a byte within the block.
   * @return The log block number, it is > 0 and <= 1G.
   */
- [[nodiscard]] static ulint block_convert_lsn_to_no(lsn_t lsn) noexcept {
-   return ((ulint)(lsn / IB_FILE_BLOCK_SIZE) & 0x3FFFFFFFUL) + 1;
- }
- 
- /**
+  [[nodiscard]] static ulint block_convert_lsn_to_no(lsn_t lsn) noexcept {
+    return ((ulint)(lsn / IB_FILE_BLOCK_SIZE) & 0x3FFFFFFFUL) + 1;
+  }
+
+  /**
   * Calculates the checksum for a log block.
   *
   * @param block The log block.
   * @return The checksum.
   */
- [[nodiscard]] static uint32_t block_calc_checksum(const byte *block) noexcept {
-   uint32_t sh = 0;   // Shift value.
-   uint32_t sum = 1;  // Checksum value.
- 
-   for (ulint i = 0; i < IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE; i++) {
-     auto b = uint32_t(block[i]);
- 
-     sum &= 0x7FFFFFFFUL;
-     sum += b;
-     sum += b << sh;
-     sh++;
- 
-     if (sh > 24) {
-       sh = 0;
-     }
-   }
- 
-   return sum;
- }
- 
- /**
+  [[nodiscard]] static uint32_t block_calc_checksum(const byte *block) noexcept {
+    uint32_t sh = 0;   // Shift value.
+    uint32_t sum = 1;  // Checksum value.
+
+    for (ulint i = 0; i < IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE; i++) {
+      auto b = uint32_t(block[i]);
+
+      sum &= 0x7FFFFFFFUL;
+      sum += b;
+      sum += b << sh;
+      sh++;
+
+      if (sh > 24) {
+        sh = 0;
+      }
+    }
+
+    return sum;
+  }
+
+  /**
   * Gets a log block checksum field value.
   *
   * @param log_block The log block.
   * @return The checksum.
   */
- [[nodiscard]] static uint32_t block_get_checksum(const byte *log_block) noexcept {
-   return mach_read_from_4(log_block + IB_FILE_BLOCK_SIZE - LOG_BLOCK_CHECKSUM);
- }
- 
- /**
+  [[nodiscard]] static uint32_t block_get_checksum(const byte *log_block) noexcept {
+    return mach_read_from_4(log_block + IB_FILE_BLOCK_SIZE - LOG_BLOCK_CHECKSUM);
+  }
+
+  /**
   * Sets a log block checksum field value.
   *
   * @param log_block The log block.
   * @param checksum The checksum.
   */
- static void block_set_checksum(byte *log_block, ulint checksum) noexcept {
-   mach_write_to_4(log_block + IB_FILE_BLOCK_SIZE - LOG_BLOCK_CHECKSUM, checksum);
- }
- 
- /**
+  static void block_set_checksum(byte *log_block, ulint checksum) noexcept {
+    mach_write_to_4(log_block + IB_FILE_BLOCK_SIZE - LOG_BLOCK_CHECKSUM, checksum);
+  }
+
+  /**
   * Initializes a log block in the log buffer.
   *
   * @param log_block Pointer to the log buffer.
   * @param lsn LSN within the log block.
   */
- void block_init(byte *log_block, lsn_t lsn) const noexcept {
-   ut_ad(mutex_own(&m_mutex));
- 
-   const auto no = block_convert_lsn_to_no(lsn);
- 
-   block_set_hdr_no(log_block, no);
- 
-   block_set_data_len(log_block, LOG_BLOCK_HDR_SIZE);
-   block_set_first_rec_group(log_block, 0);
- }
- 
- /**
+  void block_init(byte *log_block, lsn_t lsn) const noexcept {
+    ut_ad(mutex_own(&m_mutex));
+
+    const auto no = block_convert_lsn_to_no(lsn);
+
+    block_set_hdr_no(log_block, no);
+
+    block_set_data_len(log_block, LOG_BLOCK_HDR_SIZE);
+    block_set_first_rec_group(log_block, 0);
+  }
+
+  /**
   * Initializes a log block in the log buffer in the old format, where there was no checksum yet.
   *
   * @param log_block Pointer to the log buffer.
   * @param lsn LSN within the log block.
   */
- void block_init_in_old_format(byte *log_block, lsn_t lsn) const noexcept {
-   ut_ad(mutex_own(&m_mutex));
- 
-   const auto no = block_convert_lsn_to_no(lsn);
- 
-   block_set_hdr_no(log_block, no);
-   mach_write_to_4(log_block + IB_FILE_BLOCK_SIZE - LOG_BLOCK_CHECKSUM, no);
-   block_set_data_len(log_block, LOG_BLOCK_HDR_SIZE);
-   block_set_first_rec_group(log_block, 0);
- }
- 
- /**
+  void block_init_in_old_format(byte *log_block, lsn_t lsn) const noexcept {
+    ut_ad(mutex_own(&m_mutex));
+
+    const auto no = block_convert_lsn_to_no(lsn);
+
+    block_set_hdr_no(log_block, no);
+    mach_write_to_4(log_block + IB_FILE_BLOCK_SIZE - LOG_BLOCK_CHECKSUM, no);
+    block_set_data_len(log_block, LOG_BLOCK_HDR_SIZE);
+    block_set_first_rec_group(log_block, 0);
+  }
+
+  /**
   * Reserves space in the log buffer and writes a string to the log.
   * The log must be released with log_release().
   *
@@ -284,86 +303,84 @@ struct Log {
   * @param start_lsn[out] The start lsn of the log record.
   * @return The end lsn of the log record, or zero if it did not succeed.
   */
- [[nodiscard]] lsn_t reserve_and_write_fast(const void *str, ulint len, lsn_t *start_lsn) noexcept {
-   auto data_len = len + m_buf_free % IB_FILE_BLOCK_SIZE;
- 
-   if (data_len >= IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE) {
-     /* The string does not fit within the current log block
+  [[nodiscard]] lsn_t reserve_and_write_fast(const void *str, ulint len, lsn_t *start_lsn) noexcept {
+    auto data_len = len + m_buf_free % IB_FILE_BLOCK_SIZE;
+
+    if (data_len >= IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE) {
+      /* The string does not fit within the current log block
      or the log block would become full */
-     return 0;
-   }
- 
-   *start_lsn = m_lsn;
- 
-   memcpy(m_buf + m_buf_free, str, len);
- 
-   block_set_data_len(static_cast<byte *>(ut_align_down(m_buf + m_buf_free, IB_FILE_BLOCK_SIZE)), data_len);
- 
-   m_buf_free += len;
- 
-   ut_ad(m_buf_free <= m_buf_size);
- 
-   m_lsn += len;
- 
-   return m_lsn;
- }
- 
- /** Gets the current lsn.
+      return 0;
+    }
+
+    *start_lsn = m_lsn;
+
+    memcpy(m_buf + m_buf_free, str, len);
+
+    block_set_data_len(static_cast<byte *>(ut_align_down(m_buf + m_buf_free, IB_FILE_BLOCK_SIZE)), data_len);
+
+    m_buf_free += len;
+
+    ut_ad(m_buf_free <= m_buf_size);
+
+    m_lsn += len;
+
+    return m_lsn;
+  }
+
+  /** Gets the current lsn.
   * 
   * @return	current lsn
   */
- [[nodiscard]] lsn_t get_lsn() const noexcept {
-   acquire();
- 
-   auto lsn = m_lsn;
- 
-   release();
- 
-   return lsn;
- }
- 
- /**
+  [[nodiscard]] lsn_t get_lsn() const noexcept {
+    acquire();
+
+    auto lsn = m_lsn;
+
+    release();
+
+    return lsn;
+  }
+
+  /**
   * Gets the log group capacity.
   * It is OK to read the value without holding mutex because it is constant.
   *
   * @return The log group capacity.
   */
- [[nodiscard]] ulint get_capacity() const noexcept{
-   return m_log_group_capacity;
- }
- 
- /**
+  [[nodiscard]] ulint get_capacity() const noexcept { return m_log_group_capacity; }
+
+  /**
   * Checks if there is a need for a log buffer flush or a new checkpoint, and does this if yes.
   * Any database operation should call this when it has modified more than about 4 pages.
   * NOTE that this function may only be called when the OS thread owns no synchronization objects except the dictionary mutex.
   */
- void free_check() noexcept;
- 
- /**
+  void free_check() noexcept;
+
+  /**
   * @brief Completes an i/o to a log file.
   *
   * @param group The log group.
   */
- void io_complete(log_group_t *group) noexcept;
- 
- /**
+  void io_complete(log_group_t *group) noexcept;
+
+  /**
   * @brief Checks that the log has been written to the log file up to the last log entry written by the transaction.
   * If there is a flush running, it waits and checks if the flush flushed enough.
   * If not, starts a new flush.
   *
   * @param lsn The log sequence number up to which the log should be checked.
   */
- void check_flush(lsn_t lsn) noexcept;
+  void check_flush(lsn_t lsn) noexcept;
 
- /**
+  /**
   * @brief Sets the global variable log_fsp_current_free_limit.
   * Also makes a checkpoint, so that we know that the limit has been written to a log checkpoint field on disk.
   *
   * @param limit The limit to set.
   */
- void fsp_current_free_limit_set_and_checkpoint(ulint limit) noexcept;
- 
- /**
+  void fsp_current_free_limit_set_and_checkpoint(ulint limit) noexcept;
+
+  /**
   * @brief Calculates where in log files we find a specified lsn.
   *
   * @param log_file_offset[out] Offset in that file (including the header).
@@ -373,45 +390,42 @@ struct Log {
   * @param log_file_size Log file size (including the header).
   * @return Log file number.
   */
- [[nodiscard]] ulint calc_where_lsn_is(
-    off_t *log_file_offset,
-    lsn_t first_header_lsn,
-    lsn_t lsn,
-    ulint n_log_files,
-    off_t log_file_size) noexcept;
- 
- /**
+  [[nodiscard]] ulint calc_where_lsn_is(
+    off_t *log_file_offset, lsn_t first_header_lsn, lsn_t lsn, ulint n_log_files, off_t log_file_size
+  ) noexcept;
+
+  /**
   * @brief Opens the log for log_write_low.
   * The log must be closed with log_close and released with log_release.
   *
   * @param len Length of data to be catenated.
   * @return Start lsn of the log record.
   */
- [[nodiscard]] lsn_t reserve_and_open(ulint len) noexcept;
- 
- /**
+  [[nodiscard]] lsn_t reserve_and_open(ulint len) noexcept;
+
+  /**
   * @brief Writes to the log the string given.
   * It is assumed that the caller holds the log mutex.
   *
   * @param str String to write.
   * @param str_len Length of the string.
   */
- void write_low(const byte *str, ulint str_len) noexcept;
- 
- /**
+  void write_low(const byte *str, ulint str_len) noexcept;
+
+  /**
   * @brief Closes the log.
   *
   * @param recovery Recovery flag.
   * @return Lsn.
   */
- [[nodiscard]] lsn_t close(ib_recovery_t recovery) noexcept;
- 
- /**
+  [[nodiscard]] lsn_t close(ib_recovery_t recovery) noexcept;
+
+  /**
   * @brief Initializes the log.
   */
- void innobase_log_init() noexcept;
- 
- /**
+  void innobase_log_init() noexcept;
+
+  /**
   * @brief Inits a log group to the log system.
   *
   * @param id The group id.
@@ -419,9 +433,9 @@ struct Log {
   * @param file_size The log file size in bytes.
   * @param space_id The space id of the file space which contains the log files of this group.
   */
- void group_init(ulint id, ulint n_files, off_t file_size, space_id_t space_id) noexcept;
- 
- /**
+  void group_init(ulint id, ulint n_files, off_t file_size, space_id_t space_id) noexcept;
+
+  /**
   * @brief Checks that the log has been written to the log
   * file up to the last log entry written by the transaction. If there is
   * a flush running, it waits and checks if the flush flushed enough.
@@ -435,14 +449,14 @@ struct Log {
   * 
   * @param flush_to_disk True if we want the written log also to be flushed to disk.
   */
- void write_up_to(lsn_t lsn, ulint wait, bool flush_to_disk) noexcept;
- 
- /**
+  void write_up_to(lsn_t lsn, ulint wait, bool flush_to_disk) noexcept;
+
+  /**
   * @brief Does a synchronous flush of the log buffer to disk.
   */
- void buffer_flush_to_disk() noexcept;
- 
- /**
+  void buffer_flush_to_disk() noexcept;
+
+  /**
   * @brief Writes the log buffer to the log file and if 'flush' is set
   * it forces a flush of the log file as well. This is meant to be
   * called from background master thread only as it does not wait
@@ -450,9 +464,9 @@ struct Log {
   *
   * @param flush True if the logs should be flushed to disk.
   */
- void buffer_sync_in_background(bool flush) noexcept;
- 
- /**
+  void buffer_sync_in_background(bool flush) noexcept;
+
+  /**
   * @brief Advances the smallest lsn for which there are unflushed
   * dirty blocks in the buffer pool and also may make a new checkpoint.
   * Note: This function may only be called if the calling thread
@@ -463,9 +477,9 @@ struct Log {
   * @return False if there was a flush batch of the same type running,
   * which means that we could not start this flush batch.
   */
- [[nodiscard]] bool preflush_pool_modified_pages(lsn_t new_oldest, bool sync) noexcept;
- 
- /**
+  [[nodiscard]] bool preflush_pool_modified_pages(lsn_t new_oldest, bool sync) noexcept;
+
+  /**
   * @brief Makes a checkpoint.
   * Note: This function does not flush dirty blocks from the buffer pool,
   * it only checks the lsn of the oldest modification in the pool and
@@ -479,9 +493,9 @@ struct Log {
   * 
   * @return True if success, false if a checkpoint write was already running.
   */
- [[nodiscard]] bool checkpoint(bool sync, bool write_always) noexcept;
- 
- /**
+  [[nodiscard]] bool checkpoint(bool sync, bool write_always) noexcept;
+
+  /**
   * @brief Makes a checkpoint at a given lsn or later.
   *
   * @param lsn Make a checkpoint at this or a later lsn. Use IB_UINT64_T_MAX
@@ -490,17 +504,17 @@ struct Log {
   * have a greater lsn than the previous one: if not, then no physical write is done.
   * By setting this parameter true, a physical write will always be made to log files.
   */
- void make_checkpoint_at(lsn_t lsn, bool write_always) noexcept;
- 
- /**
+  void make_checkpoint_at(lsn_t lsn, bool write_always) noexcept;
+
+  /**
   * @brief Reads a checkpoint info from a log group header to checkpoint_buf.
   *
   * @param group The log group.
   * @param field The field indicating the checkpoint (LOG_CHECKPOINT_1 or LOG_CHECKPOINT_2).
   */
- void group_read_checkpoint_info(log_group_t *group, ulint field) noexcept;
- 
- /**
+  void group_read_checkpoint_info(log_group_t *group, ulint field) noexcept;
+
+  /**
   * @brief Gets information from a checkpoint about a log group.
   *
   * @param buf The buffer containing checkpoint info.
@@ -508,21 +522,21 @@ struct Log {
   * @param file_no The archived file number (output parameter).
   * @param offset The archived file offset (output parameter).
   */
- void checkpoint_get_nth_group_info(const byte *buf, ulint n, ulint *file_no, ulint *offset) noexcept;
- 
- /**
+  void checkpoint_get_nth_group_info(const byte *buf, ulint n, ulint *file_no, ulint *offset) noexcept;
+
+  /**
   * Writes checkpoint info to groups.
   */
- void groups_write_checkpoint_info() noexcept;
- 
- /**
+  void groups_write_checkpoint_info() noexcept;
+
+  /**
   * Checks that there is enough free space in the log to start a new query step.
   * Flushes the log buffer or makes a new checkpoint if necessary. NOTE: this
   * function may only be called if the calling thread owns no synchronization
   * objects! */
- void check_margins() noexcept;
- 
- /**
+  void check_margins() noexcept;
+
+  /**
   * Reads a specified log segment to a buffer.
   *
   * @param type The type of log segment to read.
@@ -531,9 +545,9 @@ struct Log {
   * @param start_lsn The start lsn of the log segment to read.
   * @param end_lsn The end lsn of the log segment to read.
   */
- void group_read_log_seg(ulint type, byte *buf, log_group_t *group, lsn_t start_lsn, lsn_t end_lsn) noexcept;
- 
- /**
+  void group_read_log_seg(ulint type, byte *buf, log_group_t *group, lsn_t start_lsn, lsn_t end_lsn) noexcept;
+
+  /**
   * Writes a buffer to a log file group.
   *
   * @param group The log group to write to.
@@ -543,9 +557,9 @@ struct Log {
   * @param new_data_offset The start offset of new data in the buffer. This
   *   parameter is used to decide if we have to write a new log file header.
   */
- void group_write_buf(log_group_t *group, byte *buf, ulint len, lsn_t start_lsn, ulint new_data_offset) noexcept;
- 
- /**
+  void group_write_buf(log_group_t *group, byte *buf, ulint len, lsn_t start_lsn, ulint new_data_offset) noexcept;
+
+  /**
   * Sets the field values in a log group to correspond to a given lsn.
   * For this function to work, the values must already be correctly initialized
   * to correspond to some lsn, for instance, a checkpoint lsn.
@@ -553,9 +567,9 @@ struct Log {
   * @param group The log group to set the field values for.
   * @param lsn The lsn for which the values should be set.
   */
- void group_set_fields(log_group_t *group, lsn_t lsn) noexcept;
- 
- /**
+  void group_set_fields(log_group_t *group, lsn_t lsn) noexcept;
+
+  /**
   * Calculates the data capacity of a log group, when the log file headers are
   * not included.
   * 
@@ -563,51 +577,51 @@ struct Log {
   * 
   * @return	capacity in bytes
   */
- [[nodiscard]] ulint group_get_capacity(const log_group_t *group) noexcept;
- 
- /**
+  [[nodiscard]] ulint group_get_capacity(const log_group_t *group) noexcept;
+
+  /**
   * @brief Prints information of the log.
   */
- void print() noexcept;
- 
- /**
+  void print() noexcept;
+
+  /**
   * @brief Peeks the current lsn.
   *
   * @param lsn The output parameter where the current lsn will be stored if the function returns true.
   * @return True if success, false if could not get the log system mutex.
   */
- [[nodiscard]] bool peek_lsn(lsn_t *lsn) noexcept;
- 
- /**
+  [[nodiscard]] bool peek_lsn(lsn_t *lsn) noexcept;
+
+  /**
   * Refreshes the statistics used to print per-second averages.
   */
- void refresh_stats() noexcept;
- 
- /**
+  void refresh_stats() noexcept;
+
+  /**
   * Shutdown log system but doesn't release all the memory.
   */
- void shutdown() noexcept;
- 
- /**
+  void shutdown() noexcept;
+
+  /**
   * Reset the variables.
   */
- static void var_init() noexcept;
- 
- /**
+  static void var_init() noexcept;
+
+  /**
   * Create the log instance.
   * 
   * @return The log instance.
   */
- [[nodiscard]] static Log* create() noexcept;
+  [[nodiscard]] static Log *create() noexcept;
 
- /**
+  /**
   *  Free the log system data structures.
   * 
   * @param[in,own] log Log instance to destroy.
   */
- static void destroy(Log *&log) noexcept;
+  static void destroy(Log *&log) noexcept;
 
-private:
+ private:
   /**
    * Returns the oldest modified block LSN in the pool, or m_lsn if none exists.
    * 
@@ -643,15 +657,15 @@ private:
    */
   [[nodiscard]] uint64_t group_calc_lsn_offset(lsn_t lsn, const log_group_t *group) noexcept;
 
-   /**
+  /**
     * Calculates the recommended highest values for lsn - last_checkpoint_lsn,
     * lsn - buf_get_oldest_modification(), and lsn - max_archive_lsn_age.
     * 
     * @return error value false if the smallest log group is too small to
     *  accommodate the number of OS threads in the database server */
-   [[nodiscard]] bool calc_max_ages() noexcept;
+  [[nodiscard]] bool calc_max_ages() noexcept;
 
-   /**
+  /**
     * Does the unlockings needed in flush I/O completion.
     *
     * @param code Any ORed combination of LOG_UNLOCK_FLUSH_LOCK and LOG_UNLOCK_NONE_FLUSHED_LOCK
@@ -699,7 +713,7 @@ private:
    *
    * @param block Pointer to a log block
    */
-  void block_store_checksum(byte *block) noexcept; 
+  void block_store_checksum(byte *block) noexcept;
 
   /**
    * Tries to establish a big enough margin of free space in
@@ -723,7 +737,7 @@ private:
    *
    * @param[in,out] group Log group.
    */
-  void group_checkpoint(log_group_t *group) noexcept; 
+  void group_checkpoint(log_group_t *group) noexcept;
 
   /**
    * Tries to establish a big enough margin of free space in the log groups, such
@@ -732,15 +746,14 @@ private:
    */
   void checkpoint_margin() noexcept;
 
-   /**
+  /**
     * Closes a log group.
     * 
     * @param[in,own] group            Log group to close.
     */
-   void group_close(log_group_t *group) noexcept;
+  void group_close(log_group_t *group) noexcept;
 
-  
-public:
+ public:
   /**
    * Padding to prevent other memory update hotspots from residing on
    * the same memory cache line
@@ -830,7 +843,7 @@ public:
   running; a thread should wait for this without owning the log
   mutex, but NOTE that to set or reset this event, the thread MUST
   own the log mutex! */
-  Cond_var* m_no_flush_event{};
+  Cond_var *m_no_flush_event{};
 
   /** During a flush, this is first false and becomes true when one
   log group has been written or flushed */
@@ -841,7 +854,7 @@ public:
   committed when this is set; a thread should wait for this without owning
   the log mutex, but NOTE that to set or reset this event, the thread
   MUST own the log mutex! */
-  Cond_var* m_one_flushed_event{};
+  Cond_var *m_one_flushed_event{};
 
   /** Number of log i/os initiated thus far */
   ulint m_n_log_ios{};
@@ -900,5 +913,5 @@ public:
   /** Checkpoint header is read to this buffer */
   byte *m_checkpoint_buf{};
 };
-   
+
 using log_t = Log;

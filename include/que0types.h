@@ -32,7 +32,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 /* Query fork (or graph) types */
 constexpr ulint QUE_FORK_SELECT_NON_SCROLL = 1 /* forward-only cursor */;
-constexpr ulint QUE_FORK_SELECT_SCROLL = 2     /* scrollable cursor */;
+constexpr ulint QUE_FORK_SELECT_SCROLL = 2 /* scrollable cursor */;
 constexpr ulint QUE_FORK_INSERT = 3;
 constexpr ulint QUE_FORK_UPDATE = 4;
 constexpr ulint QUE_FORK_ROLLBACK = 5;
@@ -272,4 +272,3 @@ struct que_fork_t {
 };
 
 UT_LIST_NODE_GETTER_DEFINITION(que_t, graphs);
-

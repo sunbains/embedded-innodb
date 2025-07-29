@@ -130,7 +130,7 @@ extern const char *srv_main_thread_op_info;
 
 /* When this event is set the lock timeout and InnoDB monitor
 thread starts running */
-extern Cond_var* srv_lock_timeout_thread_event;
+extern Cond_var *srv_lock_timeout_thread_event;
 
 /** Alternatives for srv_force_recovery. Non-zero values are intended
 to help the user get a damaged database up so that he can dump intact
@@ -190,7 +190,7 @@ struct Config {
   ulint m_log_file_size{ULINT_MAX};
 
   /** Current size of the log file, in pages. */
-   ulint m_log_file_curr_size{ULINT_MAX};
+  ulint m_log_file_curr_size{ULINT_MAX};
 
   /** Size of the log buffer, in pages. */
   ulint m_log_buffer_size{ULINT_MAX};
@@ -200,7 +200,7 @@ struct Config {
 
   /** Whether to flush the log at transaction commit. */
   ulong m_flush_log_at_trx_commit{1};
-  
+
   /** Whether to use adaptive flushing. */
   bool m_adaptive_flushing{true};
 
@@ -212,7 +212,7 @@ struct Config {
 
   /** Old size of the buffer pool, in pages. */
   ulint m_buf_pool_old_size{ULINT_MAX};
-  
+
   /** Current size of the buffer pool, in pages. */
   ulint m_buf_pool_curr_size{};
 
@@ -221,7 +221,7 @@ struct Config {
 
   /** Size of the lock table, in pages. */
   ulint m_lock_table_size{ULINT_MAX};
-  
+
   /** Number of read I/O threads. */
   ulint m_n_read_io_threads{ULINT_MAX};
 
@@ -233,13 +233,13 @@ struct Config {
    * readahead request. */
   ulong m_read_ahead_threshold{56};
 
-  /** Number of IO operations per second the server can do */ 
+  /** Number of IO operations per second the server can do */
   ulong m_io_capacity{200};
-  
+
   /** File flush method. */
   ulint m_unix_file_flush_method{SRV_UNIX_FSYNC};
-  
-  /** Maximum number of open files. */  
+
+  /** Maximum number of open files. */
   ulint m_max_n_open_files{1024};
 
   /** We are prepared for a situation that we have this many threads waiting
@@ -254,14 +254,14 @@ struct Config {
 
   /** Generate a innodb_status.<pid> file if this is true. */
   bool m_status{false};
-  
+
   /** When estimating number of different key values in an index, sample
    * this many index pages */
   uint64_t m_stats_sample_pages{8};
-  
+
   /** Whether to use doublewrite buffer. */
   bool m_use_doublewrite_buf{true};
-  
+
   /** Whether to use checksums. */
   bool m_use_checksums{true};
 
@@ -270,7 +270,7 @@ struct Config {
    * the following number. But it is not guaranteed that the value stays below
    * that during a time of heavy update/insert activity. */
   ulong m_max_buf_pool_modified_pct{90};
-  
+
   /* Maximum allowable purge history length. <= 0 means 'infinite'. */
   ulong m_max_purge_lag{0};
 };
@@ -455,7 +455,7 @@ struct InnoDB {
    * 
    * @return	a dummy parameter
    */
-  static os_thread_ret_t master_thread(void*) noexcept;
+  static os_thread_ret_t master_thread(void *) noexcept;
 
   /**
    * Tells the Innobase server that there has been activity in the database
@@ -489,7 +489,7 @@ struct InnoDB {
    * @param[in,out] thr	query thread associated with the client OS thread
    */
   static void release_user_thread_if_suspended(que_thr_t *thr) noexcept;
-  
+
   /**
    * A thread which wakes up threads whose lock wait may have lasted too long.
    * 
@@ -530,11 +530,7 @@ struct InnoDB {
    * @return false if not all information printed due to failure to obtain
    *  necessary mutex
    */
-  [[nodiscard]] static bool printf_innodb_monitor(
-    ib_stream_t ib_stream,
-    bool nowait,
-    ulint *trx_start,
-    ulint *trx_end) noexcept;
+  [[nodiscard]] static bool printf_innodb_monitor(ib_stream_t ib_stream, bool nowait, ulint *trx_start, ulint *trx_end) noexcept;
 
   /**
    * Function to pass InnoDB status variables to client
@@ -561,7 +557,7 @@ struct InnoDB {
    * 
    * @param[in] thr	query thread.
    */
-  static void que_task_enqueue_low(que_thr_t *thr) noexcept; 
+  static void que_task_enqueue_low(que_thr_t *thr) noexcept;
 
   /**
    * Reads log group home directories from a character string.
@@ -603,138 +599,138 @@ struct InnoDB {
 /** In this structure we store status variables to be passed to the client. */
 struct Export_vars {
   /** Pending reads */
-  ulint innodb_data_pending_reads;      
+  ulint innodb_data_pending_reads;
 
   /** Pending writes */
-  ulint innodb_data_pending_writes;     
+  ulint innodb_data_pending_writes;
 
   /** Pending fsyncs */
-  ulint innodb_data_pending_fsyncs;     
+  ulint innodb_data_pending_fsyncs;
 
   /** Number of fsyncs so far */
-  ulint innodb_data_fsyncs;             
+  ulint innodb_data_fsyncs;
 
   /** Data bytes read */
-  ulint innodb_data_read;               
+  ulint innodb_data_read;
 
   /** I/O write requests */
-  ulint innodb_data_writes;             
+  ulint innodb_data_writes;
 
   /** Data bytes written */
-  ulint innodb_data_written;            
+  ulint innodb_data_written;
 
   /** I/O read requests */
-  ulint innodb_data_reads;              
+  ulint innodb_data_reads;
 
   /** Buffer pool size */
-  ulint innodb_buffer_pool_pages_total; 
+  ulint innodb_buffer_pool_pages_total;
 
   /** Data pages */
-  ulint innodb_buffer_pool_pages_data;  
+  ulint innodb_buffer_pool_pages_data;
 
   /** Dirty data pages */
-  ulint innodb_buffer_pool_pages_dirty; 
+  ulint innodb_buffer_pool_pages_dirty;
 
   /** Miscellanous pages */
-  ulint innodb_buffer_pool_pages_misc;  
+  ulint innodb_buffer_pool_pages_misc;
 
   /** Free pages */
-  ulint innodb_buffer_pool_pages_free;  
+  ulint innodb_buffer_pool_pages_free;
 
 #ifdef UNIV_DEBUG
   /** Latched pages */
-  ulint innodb_buffer_pool_pages_latched;      
+  ulint innodb_buffer_pool_pages_latched;
 #endif /* UNIV_DEBUG */
 
   /** Buf_pool::stat.n_page_gets */
-  ulint innodb_buffer_pool_read_requests;      
+  ulint innodb_buffer_pool_read_requests;
 
   /** srv_buf_pool_reads */
-  ulint innodb_buffer_pool_reads;              
+  ulint innodb_buffer_pool_reads;
 
   /** srv_buf_pool_wait_free */
-  ulint innodb_buffer_pool_wait_free;          
+  ulint innodb_buffer_pool_wait_free;
 
   /** srv_buf_pool_flushed */
-  ulint innodb_buffer_pool_pages_flushed;      
+  ulint innodb_buffer_pool_pages_flushed;
 
   /** srv_buf_pool_write_requests */
-  ulint innodb_buffer_pool_write_requests;     
+  ulint innodb_buffer_pool_write_requests;
 
   /** srv_read_ahead */
-  ulint innodb_buffer_pool_read_ahead;         
+  ulint innodb_buffer_pool_read_ahead;
 
   /** srv_read_ahead evicted*/
-  ulint innodb_buffer_pool_read_ahead_evicted; 
+  ulint innodb_buffer_pool_read_ahead_evicted;
 
   /** srv_dblwr_pages_written */
-  ulint innodb_dblwr_pages_written;            
+  ulint innodb_dblwr_pages_written;
 
   /** srv_dblwr_writes */
-  ulint innodb_dblwr_writes;                   
+  ulint innodb_dblwr_writes;
 
   /** Always true for now */
-  bool innodb_have_atomic_builtins;            
+  bool innodb_have_atomic_builtins;
 
   /** srv_log_waits */
-  ulint innodb_log_waits;                      
+  ulint innodb_log_waits;
 
   /** srv_log_write_requests */
-  ulint innodb_log_write_requests;             
+  ulint innodb_log_write_requests;
 
   /** srv_log_writes */
-  ulint innodb_log_writes;                     
+  ulint innodb_log_writes;
 
   /** srv_os_log_written */
-  ulint innodb_os_log_written;                 
+  ulint innodb_os_log_written;
 
   /** Fil::n_log_flushes */
-  ulint innodb_os_log_fsyncs;                  
+  ulint innodb_os_log_fsyncs;
 
   /** srv_os_log_pending_writes */
-  ulint innodb_os_log_pending_writes;          
+  ulint innodb_os_log_pending_writes;
 
   /** Fil::n_pending_log_flushes */
-  ulint innodb_os_log_pending_fsyncs;          
+  ulint innodb_os_log_pending_fsyncs;
 
   /** UNIV_PAGE_SIZE */
-  ulint innodb_page_size;                      
+  ulint innodb_page_size;
 
   /** Buf_pool::stat.n_pages_created */
-  ulint innodb_pages_created;                  
+  ulint innodb_pages_created;
 
   /** Buf_pool::stat.n_pages_read */
-  ulint innodb_pages_read;                     
+  ulint innodb_pages_read;
 
   /** Buf_pool::stat.n_pages_written */
-  ulint innodb_pages_written;                  
+  ulint innodb_pages_written;
 
   /** srv_n_lock_wait_count */
-  ulint innodb_row_lock_waits;                 
+  ulint innodb_row_lock_waits;
 
   /** srv_n_lock_wait_current_count */
-  ulint innodb_row_lock_current_waits;         
+  ulint innodb_row_lock_current_waits;
 
   /** srv_n_lock_wait_time / 1000 */
-  int64_t innodb_row_lock_time;                
+  int64_t innodb_row_lock_time;
 
   /** srv_n_lock_wait_time / 1000 / srv_n_lock_wait_count */
-  ulint innodb_row_lock_time_avg;              
+  ulint innodb_row_lock_time_avg;
 
   /** srv_n_lock_max_wait_time / 1000 */
-  ulint innodb_row_lock_time_max;              
+  ulint innodb_row_lock_time_max;
 
   /** srv_n_rows_read */
-  ulint innodb_rows_read;                      
+  ulint innodb_rows_read;
 
   /** srv_n_rows_inserted */
-  ulint innodb_rows_inserted;                  
+  ulint innodb_rows_inserted;
 
   /** srv_n_rows_updated */
-  ulint innodb_rows_updated;                   
+  ulint innodb_rows_updated;
 
   /** srv_n_rows_deleted */
-  ulint innodb_rows_deleted;                   
+  ulint innodb_rows_deleted;
 };
 
 struct Fil;

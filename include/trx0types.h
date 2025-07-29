@@ -25,10 +25,10 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #pragma once
 
-#include "ut0byte.h"
 #include "que0types.h"
 #include "sync0mutex.h"
 #include "trx0xa.h"
+#include "ut0byte.h"
 
 /** Prepare trx_t::id for being printed via printf(3) */
 #define TRX_ID_PREP_PRINTF(id) id
@@ -38,7 +38,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 /** maximum length that a formatted trx_t::id could take, not including
 the terminating NUL character. */
-constexpr ulint TRX_ID_MAX_LEN  = 17;
+constexpr ulint TRX_ID_MAX_LEN = 17;
 
 /** Transaction */
 struct Trx;
@@ -88,7 +88,7 @@ struct read_view_t;
 
 /** Rollback contexts */
 enum trx_rb_ctx {
-   /** No rollback */
+  /** No rollback */
   RB_NONE = 0,
 
   /** Normal rollback */
@@ -100,7 +100,7 @@ enum trx_rb_ctx {
   be purged. */
   RB_RECOVERY_PURGE_REC,
 
- /** Rolling back an incomplete transaction, in crash recovery */
+  /** Rolling back an incomplete transaction, in crash recovery */
   RB_RECOVERY
 };
 
@@ -129,7 +129,7 @@ using undo_no_t = uint64_t;
 
 /** Transaction savepoint */
 struct trx_savept_t {
-   /** Least undo number to undo */
+  /** Least undo number to undo */
   undo_no_t least_undo_no;
 };
 
@@ -173,7 +173,7 @@ enum Trx_status {
 constexpr ulint TRX_QUE_RUNNING = 0;
 
 /** transaction is waiting for a lock */
-constexpr ulint TRX_QUE_LOCK_WAIT = 1 ;
+constexpr ulint TRX_QUE_LOCK_WAIT = 1;
 
 /** transaction is rolling back */
 constexpr ulint TRX_QUE_ROLLING_BACK = 2;
@@ -194,11 +194,11 @@ enum Trx_isolation {
     NOT the gaps before them, and thus allow free inserting;
     each consistent read reads its own snapshot */
   TRX_ISO_READ_COMMITTED,
-  
+
   /** this is the default; all consistent reads in the same trx read the same
   snapshot; full next-key locking used in locking reads to block insertions into gaps */
   TRX_ISO_REPEATABLE_READ,
-  
+
   /** all plain SELECTs are converted to LOCK IN SHARE MODE reads */
   TRX_ISO_SERIALIZABLE,
 };
@@ -238,7 +238,7 @@ enum Trx_signal_origin {
 
 /** Commit node states */
 enum commit_node_state {
-   /** about to send a commit signal to the transaction */
+  /** about to send a commit signal to the transaction */
   COMMIT_NODE_SEND = 1,
 
   /** Commit signal sent to the transaction, waiting for completion */
@@ -259,9 +259,7 @@ struct Commit_node {
 struct trx_sig_t {
 
   /** Next signal in the queue */
-  trx_sig_t *next() noexcept {
-    return signals.m_next;
-  }
+  trx_sig_t *next() noexcept { return signals.m_next; }
 
   /* Signal type */
   unsigned type : 3;

@@ -37,8 +37,8 @@ Created 9/11/1995 Heikki Tuuri
 
 #include "os0sync.h"
 #include "sync0sync.h"
-#include "ut0rnd.h"
 #include "ut0lst.h"
+#include "ut0rnd.h"
 
 /** Latch types; these are used also in btr0btr.h: keep the numerical values
 smaller than 30 and the order of the numerical values like below! */
@@ -72,7 +72,7 @@ extern mutex_t rw_lock_debug_mutex;
 
 /** If deadlock detection does not get immediately the mutex it may wait for
  * this event */
-extern Cond_var* rw_lock_debug_event;
+extern Cond_var *rw_lock_debug_event;
 
 /** This is set to true, if there may be waiters for the event */
 extern bool rw_lock_debug_waiters;
@@ -326,11 +326,11 @@ struct rw_lock_struct {
   value iff recursive flag is set. */
 
   /** Used by sync0arr.c for thread queueing */
-  Cond_var* m_event;
+  Cond_var *m_event;
 
   /** Event for next-writer to wait on. A thread
   must decrement m_lock_word before waiting. */
-  Cond_var* m_wait_ex_event;
+  Cond_var *m_wait_ex_event;
 
   /** Event for next-writer to wait on. A thread
   must decrement m_lock_word before waiting. */
@@ -633,7 +633,8 @@ inline bool rw_lock_x_lock_func_nowait(rw_lock_t *lock, const char *file_name, u
 
   if (lock->m_lock_word.compare_exchange_strong(x_lock_decr, 0)) {
     rw_lock_set_writer_id_and_recursion_flag(lock, true);
-  } else if (lock->m_recursive.load(std::memory_order_acquire) && lock->m_writer_thread.load(std::memory_order_relaxed) == std::this_thread::get_id()) {
+  } else if (lock->m_recursive.load(std::memory_order_acquire) &&
+             lock->m_writer_thread.load(std::memory_order_relaxed) == std::this_thread::get_id()) {
     /* Relock: this lock_word modification is safe since no other
     threads can modify (lock, unlock, or reserve) m_lock_word while
     there is an exclusive writer and this is the writer thread. */

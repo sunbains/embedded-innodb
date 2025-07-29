@@ -43,7 +43,7 @@ struct ut_slist_node {
 #define UT_SLIST_NODE_T(t) ut_slist_node<t>
 
 /** TODO: Fix concept - temporarily disabled for compatibility */
-template<typename NodeGetter, typename Type>
+template <typename NodeGetter, typename Type>
 concept SNodeGetterFor = true;
 
 /**

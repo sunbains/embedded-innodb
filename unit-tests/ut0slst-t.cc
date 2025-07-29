@@ -23,7 +23,6 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "ut0slst.h"
 
-
 struct TestNode {
   ut_slist_node<TestNode> m_node;
   int value{};

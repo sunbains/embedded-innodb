@@ -68,7 +68,7 @@ inline Fil_addr trx_purge_get_log_from_hist(Fil_addr node_addr) noexcept {
  * The control structure used in the purge operation
  */
 struct Purge_sys {
- 
+
   /**
    * Constructor.
    * 
@@ -91,7 +91,6 @@ struct Purge_sys {
    *  returns false, it is possible that the undo log still exists in the
    *  system */
   bool update_undo_must_exist(trx_id_t trx_id) noexcept;
-
 
   /**
    * Adds the update undo log as the first log in the history list. Removes the
@@ -135,8 +134,7 @@ struct Purge_sys {
    */
   std::string to_string() noexcept;
 
-private:
-
+ private:
   /**
    * Stores info of an undo log record during a purge.
    * 
@@ -224,7 +222,7 @@ private:
    */
   trx_undo_rec_t *get_next_rec(mem_heap_t *heap) noexcept;
 
-public:
+ public:
   /** Purge system state */
   Purge_state m_state{PURGE_STATE_UNKNOWN};
 

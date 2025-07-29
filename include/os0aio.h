@@ -29,7 +29,7 @@ constexpr ulint WRITE = 2;
 
 using Queue_id = ulint;
 
-} // namespace aio
+}  // namespace aio
 
 /** Types for aio operations @{ */
 enum class IO_request {
@@ -38,10 +38,12 @@ enum class IO_request {
   Async_write,
   Async_log_read,
   Async_log_write,
+  Async_log_flush,
   Sync_read,
   Sync_write,
   Sync_log_read,
   Sync_log_write,
+  Sync_log_flush,
 };
 
 struct IO_ctx {
@@ -53,6 +55,7 @@ struct IO_ctx {
       case IO_request::Sync_write:
       case IO_request::Sync_log_read:
       case IO_request::Sync_log_write:
+      case IO_request::Sync_log_flush:
         return true;
       default:
         return false;
@@ -63,8 +66,10 @@ struct IO_ctx {
     switch (m_io_request) {
       case IO_request::Async_log_read:
       case IO_request::Async_log_write:
+      case IO_request::Async_log_flush:
       case IO_request::Sync_log_read:
       case IO_request::Sync_log_write:
+      case IO_request::Sync_log_flush:
         return true;
       default:
         return false;
@@ -83,9 +88,7 @@ struct IO_ctx {
     }
   }
 
-  bool is_shutdown() const noexcept {
-    return m_io_request == IO_request::None && m_fil_node == nullptr && m_ret == 0;
-  }
+  bool is_shutdown() const noexcept { return m_io_request == IO_request::None && m_fil_node == nullptr && m_ret == 0; }
 
   void shutdown() noexcept {
     m_ret = 0;
@@ -96,7 +99,7 @@ struct IO_ctx {
   }
 
   /** IO file operation result. */
-  int m_ret{-1}; 
+  int m_ret{-1};
 
   /**  Batch mode, we need to wake up the IO handler threads after posting the batch. */
   bool m_batch{};
@@ -122,7 +125,7 @@ struct AIO {
   * 
   * @retval AIO* Pointer to the created instance. Call destroy() below to delete it.
   */
-  static AIO* create(ulint n_slots, ulint n_read_queues, ulint n_write_queues) noexcept;
+  static AIO *create(ulint n_slots, ulint n_read_queues, ulint n_write_queues) noexcept;
 
   /** Destroy an instance that was created using AIO::create()
    * @param[own] aio The instance to destroy.
@@ -142,7 +145,7 @@ struct AIO {
   *                             to read or write.
   * @return DB_SUCCESS or error code.
   */
-  [[nodiscard]] virtual db_err submit(IO_ctx&& io_ctx, void *buf, ulint n, off_t off) noexcept = 0;
+  [[nodiscard]] virtual db_err submit(IO_ctx &&io_ctx, void *buf, ulint n, off_t off) noexcept = 0;
 
   /**
   * @brief Reaps requests that have completed. It's a blocking function.
@@ -171,8 +174,8 @@ struct AIO {
   virtual std::string to_string() noexcept = 0;
 };
 
-inline const char* to_string(IO_request request) noexcept {
-  switch(request) {
+inline const char *to_string(IO_request request) noexcept {
+  switch (request) {
     case IO_request::None:
       return "None";
       break;
@@ -188,6 +191,9 @@ inline const char* to_string(IO_request request) noexcept {
     case IO_request::Async_log_write:
       return "Async_log_write";
       break;
+    case IO_request::Async_log_flush:
+      return "Async_log_flush";
+      break;
     case IO_request::Sync_read:
       return "Sync_read";
       break;
@@ -199,6 +205,9 @@ inline const char* to_string(IO_request request) noexcept {
       break;
     case IO_request::Sync_log_write:
       return "Sync_log_write";
+      break;
+    case IO_request::Sync_log_flush:
+      return "Sync_log_flush";
       break;
   }
   ut_error;

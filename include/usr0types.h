@@ -78,4 +78,3 @@ struct Session {
   /** Query graphs belonging to this session */
   UT_LIST_BASE_NODE_T_EXTERN(que_t, graphs) m_graphs{};
 };
-

@@ -370,9 +370,9 @@ int reverse_compare(
     equal, less than b, respectively */
     const ib_col_meta_t *col_meta, /*!< in: column meta data */
     const ib_byte_t *p1,           /*!< in: key */
-    ulint p1_len,             /*!< in: key length */
+    ulint p1_len,                  /*!< in: key length */
     const ib_byte_t *p2,           /*!< in: key */
-    ulint p2_len)             /*!< in: key length */
+    ulint p2_len)                  /*!< in: key length */
 {
   int ret;
 

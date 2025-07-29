@@ -25,10 +25,10 @@ Created 3/26/1996 Heikki Tuuri
 #pragma once
 
 #include "innodb0types.h"
-#include "trx0sys.h"
-#include "trx0types.h"
 #include "mtr0log.h"
 #include "srv0srv.h"
+#include "trx0sys.h"
+#include "trx0types.h"
 
 /**
  * Looks for a rollback segment, based on the rollback segment id.
@@ -79,14 +79,14 @@ constexpr auto TRX_RSEG_MAX_N_TRXS = TRX_RSEG_N_SLOTS / 2;
 struct trx_rseg_t {
   /** Rollback segment id == the index of its slot in the trx
    * system file copy */
-  ulint id;        
+  ulint id;
 
   /** mutex protecting the fields in this struct except id;
    * NOTE that the latching order must always be kernel mutex -> rseg mutex */
-  mutex_t mutex;   
+  mutex_t mutex;
 
   /** Space where the rollback segment is header is placed */
-  space_id_t space;     
+  space_id_t space;
 
   /** Page number of the rollback segment header */
   page_no_t page_no;
@@ -113,7 +113,7 @@ struct trx_rseg_t {
 
   /** Page number of the last not yet purged log header i
    * the history list; FIL_NULL if all list purged */
-  page_no_t last_page_no; 
+  page_no_t last_page_no;
 
   /** Byte offset of the last not yet purged log header */
   ulint last_offset;
@@ -168,9 +168,9 @@ constexpr ulint TRX_RSEG_UNDO_SLOTS = 8 + FLST_BASE_NODE_SIZE + FSEG_HEADER_SIZE
  * @return	rollback segment header, page x-latched
  */
 inline trx_rsegf_t *trx_rsegf_get(space_id_t space_id, page_no_t page_no, mtr_t *mtr) noexcept {
-  Buf_pool::Request req {
+  Buf_pool::Request req{
     .m_rw_latch = RW_X_LATCH,
-    .m_page_id = { space_id, page_no },
+    .m_page_id = {space_id, page_no},
     .m_mode = BUF_GET,
     .m_file = __FILE__,
     .m_line = __LINE__,
@@ -194,10 +194,10 @@ inline trx_rsegf_t *trx_rsegf_get(space_id_t space_id, page_no_t page_no, mtr_t 
  * 
  * @return	rollback segment header, page x-latched
  */
-inline trx_rsegf_t *trx_rsegf_get_new(space_id_t space_id, page_no_t page_no, mtr_t *mtr)  noexcept {
-  Buf_pool::Request req {
+inline trx_rsegf_t *trx_rsegf_get_new(space_id_t space_id, page_no_t page_no, mtr_t *mtr) noexcept {
+  Buf_pool::Request req{
     .m_rw_latch = RW_X_LATCH,
-    .m_page_id = { space_id, page_no },
+    .m_page_id = {space_id, page_no},
     .m_mode = BUF_GET,
     .m_file = __FILE__,
     .m_line = __LINE__,
@@ -221,7 +221,7 @@ inline trx_rsegf_t *trx_rsegf_get_new(space_id_t space_id, page_no_t page_no, mt
  * 
  * @return	page number of the undo log segment
  */
-inline ulint trx_rsegf_get_nth_undo(trx_rsegf_t *rsegf, ulint n, mtr_t *mtr)  noexcept {
+inline ulint trx_rsegf_get_nth_undo(trx_rsegf_t *rsegf, ulint n, mtr_t *mtr) noexcept {
   if (unlikely(n >= TRX_RSEG_N_SLOTS)) {
     log_fatal(std::format("Trying to get slot {} of rseg", n));
   }

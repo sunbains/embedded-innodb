@@ -93,8 +93,7 @@ page_no_t trx_rseg_header_create(space_id_t space, ulint max_size, ulint *slot_n
   return page_no;
 }
 
-void trx_rseg_mem_free(trx_rseg_t *rseg)
-{
+void trx_rseg_mem_free(trx_rseg_t *rseg) {
   mutex_free(&rseg->mutex);
 
   /* There can't be any active transactions. */
@@ -149,7 +148,7 @@ static trx_rseg_t *trx_rseg_mem_create(
   rseg->space = space;
   rseg->page_no = page_no;
 
-  mutex_create(&rseg->mutex, IF_DEBUG("rseg_mutex",) IF_SYNC_DEBUG(SYNC_RSEG,) Current_location());
+  mutex_create(&rseg->mutex, IF_DEBUG("rseg_mutex", ) IF_SYNC_DEBUG(SYNC_RSEG, ) Current_location());
 
   UT_LIST_ADD_LAST(srv_trx_sys->m_rseg_list, rseg);
 

@@ -34,10 +34,9 @@ Created 02/03/2009 Sunny Bains
 #include "row0ins.h"
 #include "row0merge.h"
 
-Prebuilt::Prebuilt(FSP *fsp, Btree *btree, Table *table, mem_heap_t *heap) noexcept
-: m_table(table) {
+Prebuilt::Prebuilt(FSP *fsp, Btree *btree, Table *table, mem_heap_t *heap) noexcept : m_table(table) {
 
-  m_magic_n = ROW_PREBUILT_ALLOCATED; 
+  m_magic_n = ROW_PREBUILT_ALLOCATED;
   m_heap = heap;
 
   {
@@ -81,10 +80,9 @@ Prebuilt::Prebuilt(FSP *fsp, Btree *btree, Table *table, mem_heap_t *heap) noexc
 
 Prebuilt::~Prebuilt() noexcept {
   if (m_magic_n != ROW_PREBUILT_ALLOCATED || m_magic_n2 != ROW_PREBUILT_ALLOCATED) {
-      log_fatal(std::format(
-        "Trying to free a corrupt table handle. Magic n {}, magic n2 {}, table name {}",
-        m_magic_n, m_magic_n2, m_table->m_name
-      ));
+    log_fatal(std::format(
+      "Trying to free a corrupt table handle. Magic n {}, magic n2 {}, table name {}", m_magic_n, m_magic_n2, m_table->m_name
+    ));
   }
 
   m_magic_n = ROW_PREBUILT_FREED;
@@ -119,7 +117,7 @@ Prebuilt *Prebuilt::create(FSP *fsp, Btree *btree, Table *table) noexcept {
   return new (ptr) Prebuilt(fsp, btree, table, heap);
 }
 
-void Prebuilt::destroy(Dict *dict, Prebuilt *prebuilt, bool dict_locked) noexcept{
+void Prebuilt::destroy(Dict *dict, Prebuilt *prebuilt, bool dict_locked) noexcept {
   if (prebuilt->m_table != nullptr) {
     dict->table_decrement_handle_count(prebuilt->m_table, dict_locked);
   }

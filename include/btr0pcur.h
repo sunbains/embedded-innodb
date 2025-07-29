@@ -78,7 +78,7 @@ struct Btree_pcursor {
     const DTuple *m_tuple{};
     ib_srch_mode_t m_search_mode{};
     ulint m_latch_mode{};
-    mtr_t* m_mtr{};
+    mtr_t *m_mtr{};
     Source_location m_loc{Current_location()};
   };
 
@@ -118,16 +118,17 @@ struct Btree_pcursor {
    * @param[in] mtr             The mtr (mini-transaction) object.
    * @param[in] loc             The callers location
    */
-  void open_on_user_rec(Index *index, const DTuple *tuple, ib_srch_mode_t mode, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept;
+  void open_on_user_rec(
+    Index *index, const DTuple *tuple, ib_srch_mode_t mode, ulint latch_mode, mtr_t *mtr, Source_location loc
+  ) noexcept;
 
-   /** Allows setting the persistent cursor manually.
+  /** Allows setting the persistent cursor manually.
     *
     * @param[in] page_cursor    Page cursor where positioned.
     * @param[in] mode           PAGE_CUR_L, ...
     * @param[in] latch_mode     BTR_SEARCH_LEAF or BTR_MODIFY_LEAF
     */
   void open_on_user_rec(const Page_cursor &page_cursor, ib_srch_mode_t mode, ulint latch_mode) noexcept;
-
 
   /**
    * @brief Stores the position of the cursor.
@@ -241,9 +242,7 @@ struct Btree_pcursor {
    *
    * @return the index being traversed.
    */
-  [[nodiscard]] const Index *get_index()  noexcept{
-    return static_cast<const Index *>(m_btr_cur.m_index);
-  }
+  [[nodiscard]] const Index *get_index() noexcept { return static_cast<const Index *>(m_btr_cur.m_index); }
 
   /**
    * @brief Returns the record of a persistent cursor.
@@ -393,6 +392,7 @@ struct Btree_pcursor {
     mem_free(m_old_rec_buf);
     m_old_rec_buf = nullptr;
   }
+
   /**
    * @brief Initializes the persistent cursor.
    *
@@ -416,7 +416,9 @@ struct Btree_pcursor {
    * @param[in] mtr             The mtr.
    * @param[in] loc             The source location.
    */
-  void open(const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, mtr_t* mtr, Source_location loc) noexcept;
+  void open(
+    const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, mtr_t *mtr, Source_location loc
+  ) noexcept;
 
   /**
    * @brief Opens a persistent cursor to an index tree without initializing the cursor.
@@ -430,13 +432,9 @@ struct Btree_pcursor {
    * @param[in] loc             The source location.
    */
   void open_with_no_init(
-    const Index *index,
-    const DTuple *tuple,
-    ib_srch_mode_t search_mode,
-    ulint latch_mode,
-    ulint has_search_latch,
-    mtr_t *mtr,
-    Source_location loc) noexcept;
+    const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, ulint has_search_latch, mtr_t *mtr,
+    Source_location loc
+  ) noexcept;
 
   /**
    * @brief Opens a persistent cursor at either end of an index.
@@ -458,7 +456,7 @@ struct Btree_pcursor {
    * @param[in] mtr             The mtr.
    * @param[in] loc             The source location.
    */
-  void set_random_position(const Index *index, ulint latch_mode, mtr_t* mtr, Source_location loc) noexcept;
+  void set_random_position(const Index *index, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept;
 
   /**
    * @brief Frees the possible memory heap of a persistent cursor and sets the latch mode of the persistent cursor to BTR_NO_LATCHES.
@@ -557,8 +555,7 @@ inline Btree_cursor_pos Btree_pcursor::get_rel_pos() const noexcept {
   ut_ad(m_old_rec != nullptr);
   ut_ad(m_old_stored);
 
-  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED ||
-        m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED || m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   return m_rel_pos;
 }
@@ -607,8 +604,7 @@ inline rec_t *Btree_pcursor::get_rec() noexcept {
 }
 
 inline ulint Btree_pcursor::get_up_match() noexcept {
-  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED ||
-        m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED || m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   ut_ad(m_btr_cur.m_up_match != ULINT_UNDEFINED);
 
@@ -619,8 +615,7 @@ inline ulint Btree_pcursor::get_low_match() noexcept {
   /**
    * @note The cursor must be either in the WAS_POSITIONED or IS_POSITIONED state.
    */
-  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED ||
-        m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
+  ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED || m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
 
   /**
    * @note The low_match value must not be undefined.
@@ -817,12 +812,8 @@ inline void Btree_pcursor::init(ulint read_level) noexcept {
 }
 
 inline void Btree_pcursor::open(
-  const Index *index,
-  const DTuple *tuple,
-  ib_srch_mode_t search_mode,
-  ulint latch_mode,
-  mtr_t* mtr,
-  Source_location loc) noexcept {
+  const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, mtr_t *mtr, Source_location loc
+) noexcept {
 
   init(0);
 
@@ -838,13 +829,9 @@ inline void Btree_pcursor::open(
 }
 
 inline void Btree_pcursor::open_with_no_init(
-  const Index *index,
-  const DTuple *tuple,
-  ib_srch_mode_t search_mode,
-  ulint latch_mode,
-  ulint has_search_latch,
-  mtr_t* mtr,
-  Source_location loc) noexcept {
+  const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, ulint has_search_latch, mtr_t *mtr,
+  Source_location loc
+) noexcept {
 
   m_latch_mode = latch_mode;
   m_search_mode = search_mode;
@@ -858,7 +845,9 @@ inline void Btree_pcursor::open_with_no_init(
   m_pos_state = Btr_pcur_positioned::IS_POSITIONED;
 }
 
-inline void Btree_pcursor::open_at_index_side(bool from_left, const Index *index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr) noexcept {
+inline void Btree_pcursor::open_at_index_side(
+  bool from_left, const Index *index, ulint latch_mode, bool do_init, ulint level, mtr_t *mtr
+) noexcept {
   m_latch_mode = latch_mode;
   m_search_mode = from_left ? PAGE_CUR_G : PAGE_CUR_L;
 

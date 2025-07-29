@@ -114,10 +114,10 @@ static pars_info_t *ib_exec_vsql(int n_args, va_list ap) {
     }
   }
 
- return info;
+  return info;
 }
 
-ib_err_t ib_exec_sql( const char *sql, ulint n_args, ...) {
+ib_err_t ib_exec_sql(const char *sql, ulint n_args, ...) {
   va_list ap;
 
   va_start(ap, n_args);

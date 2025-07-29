@@ -101,7 +101,7 @@ void read_cursor_set(Trx *trx, cursor_view_t *curview);
  * @param n in: position
  * @return trx id
  */
-inline trx_id_t read_view_get_nth_trx_id( const read_view_t *view, ulint n) {
+inline trx_id_t read_view_get_nth_trx_id(const read_view_t *view, ulint n) {
   ut_ad(n < view->n_trx_ids);
 
   return view->trx_ids[n];
@@ -160,4 +160,3 @@ inline bool read_view_sees_trx_id(const read_view_t *view, trx_id_t trx_id) {
 [[nodiscard]] inline bool read_view_t::changes_visible(trx_id_t id) const {
   return read_view_sees_trx_id(this, id);
 }
-

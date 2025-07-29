@@ -624,144 +624,8 @@ ulint Log::sys_check_flush_completion() noexcept {
   return 0;
 }
 
-void Log::io_complete(log_group_t *group) noexcept {
-  if (uintptr_t(group) & 0x1UL) {
-    /* It was a checkpoint write */
-    group = reinterpret_cast<log_group_t *>(uintptr_t(group) - 1);
-
-    if (srv_config.m_unix_file_flush_method != SRV_UNIX_O_DSYNC && srv_config.m_unix_file_flush_method != SRV_UNIX_NOSYNC) {
-
-      srv_fil->flush(group->space_id);
-    }
-
-    io_complete_checkpoint();
-
-    return;
-  }
-
-  /* We currently use synchronous writing of the logs and cannot end up here! */
-  ut_error;
-
-  if (srv_config.m_unix_file_flush_method != SRV_UNIX_O_DSYNC && srv_config.m_unix_file_flush_method != SRV_UNIX_NOSYNC &&
-      srv_config.m_flush_log_at_trx_commit != 2) {
-
-    srv_fil->flush(group->space_id);
-  }
-
-  acquire();
-
-  ut_a(group->n_pending_writes > 0);
-  ut_a(m_n_pending_writes > 0);
-
-  --group->n_pending_writes;
-  --m_n_pending_writes;
-
-  auto unlock = group_check_flush_completion(group);
-  unlock |= sys_check_flush_completion();
-
-  flush_do_unlocks(unlock);
-
-  release();
-}
-
-void Log::group_file_header_flush(log_group_t *group, ulint nth_file, lsn_t start_lsn) noexcept {
-  ut_ad(mutex_own(&m_mutex));
-  ut_a(nth_file < group->n_files);
-
-  auto buf = group->file_header_bufs[nth_file];
-
-  mach_write_to_4(buf + LOG_GROUP_ID, group->id);
-  mach_write_to_8(buf + LOG_FILE_START_LSN, start_lsn);
-
-  /* Wipe over possible label of ibbackup --restore */
-  memcpy(buf + LOG_FILE_WAS_CREATED_BY_HOT_BACKUP, "    ", 4);
-
-  auto dest_offset = nth_file * group->file_size;
-
-  if (log_do_write) {
-    ++m_n_log_ios;
-
-    ++srv_os_log_pending_writes;
-
-    srv_fil->log_io(
-      IO_request::Sync_log_write,
-      false,
-      Page_id(group->space_id, dest_offset / UNIV_PAGE_SIZE),
-      dest_offset % UNIV_PAGE_SIZE,
-      IB_FILE_BLOCK_SIZE,
-      buf,
-      nullptr
-    );
-
-    --srv_os_log_pending_writes;
-  }
-}
-
 void Log::block_store_checksum(byte *block) noexcept {
   block_set_checksum(block, block_calc_checksum(block));
-}
-
-void Log::group_write_buf(log_group_t *group, byte *buf, ulint len, lsn_t start_lsn, ulint new_data_offset) noexcept {
-  ut_ad(mutex_own(&m_mutex));
-  ut_a(len % IB_FILE_BLOCK_SIZE == 0);
-  ut_a(((ulint)start_lsn) % IB_FILE_BLOCK_SIZE == 0);
-
-  auto write_header = new_data_offset == 0;
-
-  while (len > 0) {
-    auto next_offset = group_calc_lsn_offset(start_lsn, group);
-
-    if ((next_offset % group->file_size == LOG_FILE_HDR_SIZE) && write_header) {
-      /* We start to write a new log file instance in the group */
-      group_file_header_flush(group, next_offset / group->file_size, start_lsn);
-      srv_os_log_written += IB_FILE_BLOCK_SIZE;
-      ++srv_log_writes;
-    }
-
-    ulint write_len;
-
-    if ((next_offset % group->file_size) + len > group->file_size) {
-      write_len = group->file_size - (next_offset % group->file_size);
-    } else {
-      write_len = len;
-    }
-
-    // Calculate the checksums for each log block and write them
-    // to the trailer fields of the log blocks
-    for (ulint i = 0; i < write_len / IB_FILE_BLOCK_SIZE; i++) {
-      block_store_checksum(buf + i * IB_FILE_BLOCK_SIZE);
-    }
-
-    if (log_do_write) {
-      ++m_n_log_ios;
-      ++srv_os_log_pending_writes;
-
-      srv_fil->log_io(
-        IO_request::Sync_log_write,
-        false,
-        Page_id(group->space_id, next_offset / UNIV_PAGE_SIZE),
-        next_offset % UNIV_PAGE_SIZE,
-        write_len,
-        buf,
-        nullptr
-      );
-
-      --srv_os_log_pending_writes;
-
-      srv_os_log_written += write_len;
-
-      ++srv_log_writes;
-    }
-
-    if (write_len < len) {
-      start_lsn += write_len;
-      len -= write_len;
-      buf += write_len;
-      write_header = true;
-    } else {
-      break;
-    }
-  }
 }
 
 void Log::write_up_to(lsn_t lsn, ulint wait, bool flush_to_disk) noexcept {
@@ -1068,7 +932,7 @@ void Log::group_checkpoint(log_group_t *group) noexcept {
     ++m_n_log_ios;
 
     /* Send the log file write request */
-    srv_fil->log_io(
+    log_io(
       IO_request::Async_log_write,
       false,
       Page_id(group->space_id, write_offset / UNIV_PAGE_SIZE),
@@ -1080,22 +944,6 @@ void Log::group_checkpoint(log_group_t *group) noexcept {
 
     ut_ad(((ulint)group & 0x1UL) == 0);
   }
-}
-
-void Log::group_read_checkpoint_info(log_group_t *group, ulint field) noexcept {
-  ut_ad(mutex_own(&m_mutex));
-
-  ++m_n_log_ios;
-
-  srv_fil->log_io(
-    IO_request::Sync_log_read,
-    false,
-    Page_id(group->space_id, field / UNIV_PAGE_SIZE),
-    field % UNIV_PAGE_SIZE,
-    IB_FILE_BLOCK_SIZE,
-    m_checkpoint_buf,
-    nullptr
-  );
 }
 
 void Log::groups_write_checkpoint_info(void) noexcept {
@@ -1248,37 +1096,6 @@ void Log::checkpoint_margin() noexcept {
     }
 
     break;
-  }
-}
-
-void Log::group_read_log_seg(ulint type, byte *buf, log_group_t *group, lsn_t start_lsn, lsn_t end_lsn) noexcept {
-  ut_ad(mutex_own(&m_mutex));
-
-  auto source_offset = group_calc_lsn_offset(start_lsn, group);
-  auto len = (ulint)(end_lsn - start_lsn);
-
-  ut_ad(len != 0);
-
-  while (len > 0) {
-    if ((source_offset % group->file_size) + len > group->file_size) {
-      len = group->file_size - (source_offset % group->file_size);
-    }
-
-    ++m_n_log_ios;
-
-    srv_fil->log_io(
-      type == LOG_RECOVER ? IO_request::Sync_log_read : IO_request::Async_log_read,
-      false,
-      Page_id(group->space_id, source_offset / UNIV_PAGE_SIZE),
-      source_offset % UNIV_PAGE_SIZE,
-      len,
-      buf,
-      nullptr
-    );
-
-    start_lsn += len;
-    buf += len;
-    len = (ulint)(end_lsn - start_lsn);
   }
 }
 

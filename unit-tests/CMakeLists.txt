@@ -64,3 +64,29 @@ target_link_libraries(test_lock PRIVATE ${LIBS})
 
 # Add test_lock to CTest
 add_test(NAME test_lock COMMAND test_lock)
+
+# Set up test_log_io test
+add_executable(test_log_io test_log_io.cc unit_test_logger.cc)
+
+# Link against Google Test and InnoDB
+target_link_libraries(test_log_io PRIVATE
+    GTest::gtest_main
+    GTest::gtest
+    ${LIBS}
+)
+
+# Add test to CTest
+add_test(NAME test_log_io COMMAND test_log_io)
+
+# Set up test_log_io_uring test
+add_executable(test_log_io_uring test_log_io_uring.cc unit_test_logger.cc)
+
+# Link against Google Test and InnoDB
+target_link_libraries(test_log_io_uring PRIVATE
+    GTest::gtest_main
+    GTest::gtest
+    ${LIBS}
+)
+
+# Add test to CTest
+add_test(NAME test_log_io_uring COMMAND test_log_io_uring)

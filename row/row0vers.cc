@@ -22,8 +22,8 @@ Row versions
 Created 2/6/1997 Heikki Tuuri
 *******************************************************/
 
-#include "lock0lock.h"
 #include "row0vers.h"
+#include "lock0lock.h"
 #include "trx0purge.h"
 #include "trx0rec.h"
 #include "trx0trx.h"
@@ -125,7 +125,6 @@ Trx *Row_vers::impl_x_locked_off_kernel(const rec_t *rec, const Index *index, co
   rec. Note that if clust_rec itself would require rec to be in a
   different state, then the trx_id transaction has not yet had time to
   modify rec, and does not necessarily have an implicit x-lock on rec. */
-
 
   trx = nullptr;
 
@@ -274,7 +273,7 @@ bool Row_vers::must_preserve_del_marked(trx_id_t trx_id, mtr_t *mtr) noexcept {
 
   mtr_s_lock(&m_trx_sys->m_purge->m_latch, mtr);
 
-    /* A purge operation is not yet allowed to remove this delete marked record  (if true) */
+  /* A purge operation is not yet allowed to remove this delete marked record  (if true) */
   return m_trx_sys->m_purge->update_undo_must_exist(trx_id);
 }
 
@@ -303,7 +302,6 @@ bool Row_vers::old_has_index_entry(bool also_curr, const rec_t *rec, mtr_t *mtr,
 
     clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
   }
-
 
   if (also_curr && !rec_get_deleted_flag(rec)) {
     row_ext_t *ext;
@@ -393,7 +391,10 @@ bool Row_vers::old_has_index_entry(bool also_curr, const rec_t *rec, mtr_t *mtr,
 
 db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
   ut_ad(row.m_cluster_index->is_clustered());
-  ut_ad(row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) || row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX));
+  ut_ad(
+    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) ||
+    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX)
+  );
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(!rw_lock_own(&m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
@@ -444,7 +445,9 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
 
     rec_t *prev_version;
 
-    err = trx_undo_prev_version_build(row.m_cluster_rec, row.m_mtr, version, row.m_cluster_index, row.m_cluster_offsets, heap, &prev_version);
+    err = trx_undo_prev_version_build(
+      row.m_cluster_rec, row.m_mtr, version, row.m_cluster_index, row.m_cluster_offsets, heap, &prev_version
+    );
 
     if (clust_heap != nullptr) {
       mem_heap_free(clust_heap);
@@ -464,7 +467,8 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
     {
       Phy_rec record{row.m_cluster_index, prev_version};
 
-      row.m_cluster_offsets = record.get_col_offsets(row.m_cluster_offsets, ULINT_UNDEFINED, &row.m_cluster_offset_heap, Current_location());
+      row.m_cluster_offsets =
+        record.get_col_offsets(row.m_cluster_offsets, ULINT_UNDEFINED, &row.m_cluster_offset_heap, Current_location());
     }
 
     trx_id = row_get_rec_trx_id(prev_version, row.m_cluster_index, row.m_cluster_offsets);
@@ -495,7 +499,10 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
 
 db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
   ut_ad(row.m_cluster_index->is_clustered());
-  ut_ad(row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) || row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX));
+  ut_ad(
+    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) ||
+    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX)
+  );
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(!rw_lock_own(&m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
@@ -527,7 +534,8 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
 
     mutex_exit(&kernel_mutex);
 
-    if (version_trx == nullptr || version_trx->m_conc_state == TRX_NOT_STARTED || version_trx->m_conc_state == TRX_COMMITTED_IN_MEMORY) {
+    if (version_trx == nullptr || version_trx->m_conc_state == TRX_NOT_STARTED ||
+        version_trx->m_conc_state == TRX_COMMITTED_IN_MEMORY) {
 
       /* We found a version that belongs to a committed transaction: return it. */
 
@@ -549,7 +557,8 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
         {
           Phy_rec record{row.m_cluster_index, version};
 
-          row.m_cluster_offsets = record.get_col_offsets(row.m_cluster_offsets, ULINT_UNDEFINED, &row.m_cluster_offset_heap, Current_location());
+          row.m_cluster_offsets =
+            record.get_col_offsets(row.m_cluster_offsets, ULINT_UNDEFINED, &row.m_cluster_offset_heap, Current_location());
         }
       }
 
@@ -568,7 +577,9 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
 
     heap = mem_heap_create(1024);
 
-    err = trx_undo_prev_version_build(row.m_cluster_rec, row.m_mtr, version, row.m_cluster_index, row.m_cluster_offsets, heap, &prev_version);
+    err = trx_undo_prev_version_build(
+      row.m_cluster_rec, row.m_mtr, version, row.m_cluster_index, row.m_cluster_offsets, heap, &prev_version
+    );
 
     if (cluster_heap != nullptr) {
       mem_heap_free(cluster_heap);
@@ -592,7 +603,8 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
     {
       Phy_rec record{row.m_cluster_index, version};
 
-      row.m_cluster_offsets = record.get_col_offsets(row.m_cluster_offsets, ULINT_UNDEFINED, &row.m_cluster_offset_heap, Current_location());
+      row.m_cluster_offsets =
+        record.get_col_offsets(row.m_cluster_offsets, ULINT_UNDEFINED, &row.m_cluster_offset_heap, Current_location());
     }
   }
 

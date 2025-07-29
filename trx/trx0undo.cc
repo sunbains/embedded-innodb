@@ -94,7 +94,7 @@ of the list and release undo log segments. In stepping through the list,
 s-latches on the undo log pages are enough, but in a truncate, x-latches must
 be obtained on the rollback segment and individual pages. */
 
-Undo* srv_undo{};
+Undo *srv_undo{};
 
 /**
  * Creates a new undo log in the rollback segment memory object.
@@ -109,7 +109,9 @@ Undo* srv_undo{};
  * 
  * @return A pointer to the newly created trx_undo_t object.
  */
-static trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type, trx_id_t trx_id, const XID *xid, page_no_t page_no, ulint offset);
+static trx_undo_t *trx_undo_mem_create(
+  trx_rseg_t *rseg, ulint id, ulint type, trx_id_t trx_id, const XID *xid, page_no_t page_no, ulint offset
+);
 
 /**
  * Initializes a cached insert undo log header page for new use. NOTE that this
@@ -133,7 +135,9 @@ static ulint trx_undo_insert_header_reuse(page_t *undo_page, trx_id_t trx_id, mt
  */
 static void trx_undo_discard_latest_update_undo(page_t *undo_page, mtr_t *mtr);
 
-trx_undo_rec_t *Undo::get_next_rec_from_next_page(space_id_t space, page_t *undo_page, page_no_t page_no, ulint offset, ulint mode, mtr_t *mtr) noexcept {
+trx_undo_rec_t *Undo::get_next_rec_from_next_page(
+  space_id_t space, page_t *undo_page, page_no_t page_no, ulint offset, ulint mode, mtr_t *mtr
+) noexcept {
   if (page_no == page_get_page_no(undo_page)) {
 
     auto log_hdr = undo_page + offset;
@@ -210,7 +214,9 @@ void trx_undo_page_init(page_t *undo_page, ulint type, mtr_t *mtr) noexcept {
  * @return A db_err indicating the success or failure of the operation.
  *  (DB_TOO_MANY_CONCURRENT_TRXS DB_OUT_OF_FILE_SPACE)
  */
-static db_err trx_undo_seg_create(trx_rseg_t *rseg __attribute__((unused)), trx_rsegf_t *rseg_hdr, ulint type, ulint *id, page_t **undo_page, mtr_t *mtr) noexcept {
+static db_err trx_undo_seg_create(
+  trx_rseg_t *rseg __attribute__((unused)), trx_rsegf_t *rseg_hdr, ulint type, ulint *id, page_t **undo_page, mtr_t *mtr
+) noexcept {
   ut_ad(mutex_own(&rseg->mutex));
 
   auto slot_no = trx_rsegf_undo_find_free(rseg_hdr, mtr);
@@ -352,8 +358,8 @@ static void trx_undo_write_xid(
 #ifdef WITH_XOPEN
   const XID *xid,
 #endif /* WITH_XOPEN */
-  mtr_t *mtr)
-{
+  mtr_t *mtr
+) {
 #ifdef WITH_XOPEN
   mlog_write_ulint(log_hdr + TRX_UNDO_XA_FORMAT, (ulint)xid->formatID, MLOG_4BYTES, mtr);
 
@@ -491,7 +497,7 @@ inline void trx_undo_discard_latest_log(page_t *undo_page, mtr_t *mtr) {
   mlog_write_initial_log_record(undo_page, MLOG_UNDO_HDR_DISCARD, mtr);
 }
 
-byte *Undo::parse_discard_latest(byte *ptr, IF_DEBUG(byte *end_ptr,) page_t *page, mtr_t *mtr) noexcept {
+byte *Undo::parse_discard_latest(byte *ptr, IF_DEBUG(byte *end_ptr, ) page_t *page, mtr_t *mtr) noexcept {
   ut_ad(end_ptr != nullptr);
 
   if (page != nullptr) {
@@ -532,7 +538,9 @@ static void trx_undo_discard_latest_update_undo(page_t *undo_page, mtr_t *mtr) {
   trx_undo_discard_latest_log(undo_page, mtr);
 }
 
-ulint Undo::free_page(trx_rseg_t *rseg, bool in_history, space_id_t space, page_no_t hdr_page_no, page_no_t page_no, mtr_t *mtr) noexcept {
+ulint Undo::free_page(
+  trx_rseg_t *rseg, bool in_history, space_id_t space, page_no_t hdr_page_no, page_no_t page_no, mtr_t *mtr
+) noexcept {
   ut_a(hdr_page_no != page_no);
   ut_ad(!mutex_own(&kernel_mutex));
   ut_ad(mutex_own(&rseg->mutex));
@@ -694,7 +702,7 @@ trx_undo_t *Undo::mem_create_at_db_start(trx_rseg_t *rseg, ulint id, page_no_t p
     if (state != TRX_UNDO_CACHED) {
       UT_LIST_ADD_LAST(rseg->update_undo_list, undo);
     } else {
-    UT_LIST_ADD_LAST(rseg->update_undo_cached, undo);
+      UT_LIST_ADD_LAST(rseg->update_undo_cached, undo);
     }
   }
 
@@ -714,7 +722,9 @@ trx_undo_t *Undo::mem_create_at_db_start(trx_rseg_t *rseg, ulint id, page_no_t p
  * 
  * @return	own: the undo log memory object
  */
-static trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type, trx_id_t trx_id, const XID *xid, page_no_t page_no, ulint offset) {
+static trx_undo_t *trx_undo_mem_create(
+  trx_rseg_t *rseg, ulint id, ulint type, trx_id_t trx_id, const XID *xid, page_no_t page_no, ulint offset
+) {
   ut_ad(mutex_own(&rseg->mutex));
 
   if (id >= TRX_RSEG_N_SLOTS) {
@@ -763,13 +773,12 @@ static trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type, t
  * @param[in] offset The undo log header byte offset on page.
  */
 static void trx_undo_mem_init_for_reuse(
-  trx_undo_t *undo,
-  trx_id_t trx_id,
+  trx_undo_t *undo, trx_id_t trx_id,
 #ifdef WITH_XOPEN
   const XID *xid,
 #endif /* WITH_XOPEN */
-  ulint offset)
-{
+  ulint offset
+) {
   ut_ad(mutex_own(&undo->m_rseg->mutex));
 
   if (unlikely(undo->m_id >= TRX_RSEG_N_SLOTS)) {
@@ -804,14 +813,8 @@ static void trx_undo_mem_init_for_reuse(
  *  or DB_OUT_OF_MEMORY
  */
 static db_err trx_undo_create(
-  Trx *trx,
-  trx_rseg_t *rseg,
-  ulint type,
-  trx_id_t trx_id,
-  const XID *xid,
-  trx_undo_t **undo,
-  mtr_t *mtr)
-{
+  Trx *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, const XID *xid, trx_undo_t **undo, mtr_t *mtr
+) {
   ut_ad(mutex_own(&rseg->mutex));
 
   if (rseg->curr_size == rseg->max_size) {
@@ -853,7 +856,9 @@ static db_err trx_undo_create(
   return err;
 }
 
-trx_undo_t *Undo::reuse_cached( Trx *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid,) mtr_t *mtr) noexcept {
+trx_undo_t *Undo::reuse_cached(
+  Trx *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid, ) mtr_t *mtr
+) noexcept {
   ut_ad(mutex_own(&rseg->mutex));
 
   trx_undo_t *undo;
@@ -1016,8 +1021,7 @@ page_t *Undo::set_state_at_finish(trx_rseg_t *rseg, Trx *trx __attribute__((unus
     transactions that required the slots of a different type
     would fail for lack of slots. */
 
-    if (UT_LIST_GET_LEN(rseg->update_undo_list) < 500 &&
-        UT_LIST_GET_LEN(rseg->insert_undo_list) < 500) {
+    if (UT_LIST_GET_LEN(rseg->update_undo_list) < 500 && UT_LIST_GET_LEN(rseg->insert_undo_list) < 500) {
       undo->m_state = TRX_UNDO_CACHED;
     } else {
       undo->m_state = TRX_UNDO_TO_FREE;
@@ -1226,7 +1230,8 @@ ulint Undo::add_page(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
   }
 
   auto page_no = m_fsp->fseg_alloc_free_page_general(
-    header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, undo->m_top_page_no + 1, FSP_UP, true, mtr);
+    header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, undo->m_top_page_no + 1, FSP_UP, true, mtr
+  );
 
   m_fsp->m_fil->space_release_free_extents(undo->m_space, n_reserved);
 

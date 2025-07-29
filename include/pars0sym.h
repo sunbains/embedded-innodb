@@ -173,7 +173,7 @@ enum sym_tab_entry {
 
 /** Symbol table node */
 struct sym_node_struct {
- /* NOTE: if the data field in 'common.val' is not nullptr and the symbol
+  /* NOTE: if the data field in 'common.val' is not nullptr and the symbol
   table node is not for a temporary column, the memory for the value has
   been allocated from dynamic memory and it should be freed when the
   symbol table is discarded */
@@ -189,8 +189,8 @@ struct sym_node_struct {
 
   TODO: It would be cleaner to make 'indirection' a boolean field and
   always use 'alias' to refer to the primary node. */
-  
-   /** Node type: QUE_NODE_SYMBOL */
+
+  /** Node type: QUE_NODE_SYMBOL */
   que_common_t common;
 
   /** Pointer to another symbol table node which contains the value for this node, nullptr otherwise */

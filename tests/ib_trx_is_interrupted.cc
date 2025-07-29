@@ -126,7 +126,7 @@ insert_random_rows(ib_crsr_t crsr) /*!< in, out: cursor to use for write */
   int32_t i;
   ib_err_t err;
   ib_tpl_t tpl;
-  char *ptr = (char*) malloc(8192);
+  char *ptr = (char *)malloc(8192);
 
   tpl = ib_clust_read_tuple_create(crsr);
   assert(tpl != nullptr);

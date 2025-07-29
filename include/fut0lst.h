@@ -139,7 +139,7 @@ void flst_print(
 /** Writes a file address. */
 inline void flst_write_addr(
   fil_faddr_t *faddr, /** in: pointer to file faddress */
-  Fil_addr addr,    /** in: file address */
+  Fil_addr addr,      /** in: file address */
   mtr_t *mtr
 ) /** in: mini-transaction handle */
 {

@@ -82,8 +82,8 @@ void *os_mem_alloc_large(ulint *n) {
     ptr = NULL;
   } else {);
 
-  ut_a(block->m_magic_n == UT_MEM_MAGIC_N);
-  ut_a(ut_total_allocated_memory >= block->m_size);
+    ut_a(block->m_magic_n == UT_MEM_MAGIC_N);
+    ut_a(ut_total_allocated_memory >= block->m_size);
     ptr = shmat(shmid, NULL, 0);
     if (ptr == (void *)-1) {
       ib_logger(

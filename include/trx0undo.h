@@ -26,14 +26,13 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "innodb0types.h"
 
+#include "data0type.h"
 #include "mtr0mtr.h"
+#include "page0page.h"
 #include "page0types.h"
 #include "trx0sys.h"
 #include "trx0types.h"
 #include "trx0xa.h"
-#include "data0type.h"
-#include "page0page.h"
-
 
 /* Types of an undo log segment */
 
@@ -92,7 +91,7 @@ constexpr ulint TRX_UNDO_PAGE_HDR_SIZE = 6 + FLST_NODE_SIZE;
 /** An update undo segment with just one page can be reused if it has
 at most this many bytes used; we must leave space at least for one new undo
 log header on the page */
-constexpr auto TRX_UNDO_PAGE_REUSE_LIMIT  = 3 * UNIV_PAGE_SIZE / 4;
+constexpr auto TRX_UNDO_PAGE_REUSE_LIMIT = 3 * UNIV_PAGE_SIZE / 4;
 
 /* An update undo log segment may contain several undo logs on its first page
 if the undo logs took so little space that the segment could be cached and
@@ -141,7 +140,7 @@ constexpr ulint TRX_UNDO_TRX_ID = 0;
  * in a history list */
 constexpr ulint TRX_UNDO_TRX_NO = 8;
 
- /** Defined only in an update undo log: true if the transaction may have
+/** Defined only in an update undo log: true if the transaction may have
   * done delete markings of records, and thus purge is necessary */
 constexpr ulint TRX_UNDO_DEL_MARKS = 16;
 
@@ -199,9 +198,6 @@ constexpr auto TRX_UNDO_XA_XID = TRX_UNDO_XA_BQUAL_LEN + 4;
 /*--------------------------------------------------------------*/
 /*!< Total size of the undo log header with the XA XID */
 constexpr auto TRX_UNDO_LOG_XA_HDR_SIZE = TRX_UNDO_XA_XID + XIDDATASIZE;
-
-
-
 
 /** Transaction undo log memory object; this is protected by the undo_mutex
 in the corresponding transaction object */
@@ -288,7 +284,7 @@ struct Undo {
    * 
    * @param[in] fsp File space management.
    */
-  static Undo* create(FSP *fsp) noexcept;
+  static Undo *create(FSP *fsp) noexcept;
 
   /** 
    * Destroy the undo instance.
@@ -297,7 +293,7 @@ struct Undo {
    */
   static void destroy(Undo *&undo) noexcept;
 
- /**
+  /**
    * Gets an undo log page and x-latches it.
    * 
    * @param[in] space_id Tablspace ID.
@@ -307,9 +303,9 @@ struct Undo {
    * @return	pointer to page x-latched
    */
   inline page_t *page_get(space_id_t space_id, page_no_t page_no, mtr_t *mtr) noexcept {
-    Buf_pool::Request req {
+    Buf_pool::Request req{
       .m_rw_latch = RW_X_LATCH,
-      .m_page_id = { space_id, page_no },
+      .m_page_id = {space_id, page_no},
       .m_mode = BUF_GET,
       .m_file = __FILE__,
       .m_line = __LINE__,
@@ -331,10 +327,10 @@ struct Undo {
    * 
    * @return	pointer to page s-latched
    */
-  inline page_t *page_get_s_latched(space_id_t  space_id, page_no_t page_no, mtr_t *mtr) noexcept {
-    Buf_pool::Request req {
+  inline page_t *page_get_s_latched(space_id_t space_id, page_no_t page_no, mtr_t *mtr) noexcept {
+    Buf_pool::Request req{
       .m_rw_latch = RW_S_LATCH,
-      .m_page_id = { space_id, page_no },
+      .m_page_id = {space_id, page_no},
       .m_mode = BUF_GET,
       .m_file = __FILE__,
       .m_line = __LINE__,
@@ -521,7 +517,7 @@ struct Undo {
    * 
    * @return	end of log record or NULL
    */
-  static byte *parse_discard_latest(byte *ptr, IF_DEBUG(byte *end_ptr,) page_t *page, mtr_t *mtr) noexcept;
+  static byte *parse_discard_latest(byte *ptr, IF_DEBUG(byte *end_ptr, ) page_t *page, mtr_t *mtr) noexcept;
 
   /**
    * Frees an undo log memory copy.
@@ -530,8 +526,7 @@ struct Undo {
    */
   static void delete_undo(trx_undo_t *&undo) noexcept;
 
-private:
-
+ private:
   /**
    * Gets the previous record in an undo log from the previous page.
    * 
@@ -556,7 +551,9 @@ private:
    * 
    * @return	undo log record, the page latched, nullptr if none
    */
-  trx_undo_rec_t *get_next_rec_from_next_page(space_id_t space, page_t *undo_page, page_no_t page_no, ulint offset, ulint mode, mtr_t *mtr) noexcept;
+  trx_undo_rec_t *get_next_rec_from_next_page(
+    space_id_t space, page_t *undo_page, page_no_t page_no, ulint offset, ulint mode, mtr_t *mtr
+  ) noexcept;
 
   /**
    * Frees an undo log page that is not the header page.
@@ -570,7 +567,9 @@ private:
    * 
    * @return	last page number in remaining log
    */
-  ulint free_page(trx_rseg_t *rseg, bool in_history, space_id_t space, page_no_t hdr_page_no, page_no_t page_no, mtr_t *mtr) noexcept;
+  ulint free_page(
+    trx_rseg_t *rseg, bool in_history, space_id_t space, page_no_t hdr_page_no, page_no_t page_no, mtr_t *mtr
+  ) noexcept;
 
   /**
    * Frees an undo log page when there is also the memory object for the undo log.
@@ -626,7 +625,7 @@ private:
    * 
    * @return	the undo log memory object, nullptr if none cached
    */
-  trx_undo_t *reuse_cached(Trx *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid,) mtr_t *mtr) noexcept;
+  trx_undo_t *reuse_cached(Trx *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid, ) mtr_t *mtr) noexcept;
 
   /**
    * Marks an undo log header as a header of a data dictionary operation
@@ -637,8 +636,8 @@ private:
    */
   void mark_as_dict_operation(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
 
-public:
-  FSP* m_fsp{};
+ public:
+  FSP *m_fsp{};
 };
 
 /* @} */
@@ -658,10 +657,8 @@ static_assert(DATA_ROLL_PTR_LEN == 7, "error DATA_ROLL_PTR_LEN != 7");
 inline roll_ptr_t trx_undo_build_roll_ptr(bool is_insert, ulint rseg_id, space_id_t page_no, ulint offset) {
   ut_ad(rseg_id < 128);
 
-  return static_cast<roll_ptr_t>(is_insert) << 55 |
-         static_cast<roll_ptr_t>(rseg_id) << 48 |
-         static_cast<roll_ptr_t>(page_no) << 16 |
-         offset;
+  return static_cast<roll_ptr_t>(is_insert) << 55 | static_cast<roll_ptr_t>(rseg_id) << 48 |
+         static_cast<roll_ptr_t>(page_no) << 16 | offset;
 }
 
 /**

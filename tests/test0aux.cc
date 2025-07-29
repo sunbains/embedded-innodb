@@ -35,7 +35,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #define COMMENT '#'
 
-
 /* Runtime config */
 static const char log_group_home_dir[] = "log";
 

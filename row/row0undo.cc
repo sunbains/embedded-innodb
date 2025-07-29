@@ -22,11 +22,11 @@ Row undo
 Created 1/8/1997 Heikki Tuuri
 *******************************************************/
 
+#include "row0undo.h"
 #include "fsp0fsp.h"
 #include "mach0data.h"
 #include "que0que.h"
 #include "row0row.h"
-#include "row0undo.h"
 #include "row0upd.h"
 #include "row0vers.h"
 #include "srv0srv.h"
@@ -208,7 +208,7 @@ void Row_undo::destroy(Row_undo *&row_undo) noexcept {
 }
 
 Undo_node::Undo_node(Dict *dict, Trx *trx, que_thr_t *parent) noexcept
-: m_trx{}, m_pcur(dict->m_store.m_fsp, dict->m_store.m_btree), m_dict(dict) {
+    : m_trx{}, m_pcur(dict->m_store.m_fsp, dict->m_store.m_btree), m_dict(dict) {
 
   m_common.parent = parent;
   m_common.type = QUE_NODE_UNDO;
@@ -374,7 +374,7 @@ db_err Undo_node::fetch_undo_log_and_undo(que_thr_t *thr) noexcept {
     m_roll_ptr = roll_ptr;
     m_undo_no = trx_undo_rec_get_undo_no(m_undo_rec);
 
-    m_state = trx_undo_roll_ptr_is_insert(roll_ptr) ?UNDO_NODE_INSERT : UNDO_NODE_MODIFY;
+    m_state = trx_undo_roll_ptr_is_insert(roll_ptr) ? UNDO_NODE_INSERT : UNDO_NODE_MODIFY;
 
   } else if (m_state == UNDO_NODE_PREV_VERS) {
 
@@ -387,7 +387,7 @@ db_err Undo_node::fetch_undo_log_and_undo(que_thr_t *thr) noexcept {
     m_roll_ptr = roll_ptr;
     m_undo_no = trx_undo_rec_get_undo_no(m_undo_rec);
 
-    m_state =   trx_undo_roll_ptr_is_insert(roll_ptr) ? UNDO_NODE_INSERT : UNDO_NODE_MODIFY;
+    m_state = trx_undo_roll_ptr_is_insert(roll_ptr) ? UNDO_NODE_INSERT : UNDO_NODE_MODIFY;
   }
 
   /* Prevent DROP TABLE etc. while we are rolling back this row.
@@ -727,7 +727,6 @@ db_err Undo_node::delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, In
     records, then the undo will not find those records. */
 
     err = DB_SUCCESS;
-
   }
 
   pcur.close();
@@ -745,7 +744,9 @@ db_err Undo_node::delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, In
   }
 }
 
-db_err Undo_node::del_unmark_secondary_index_and_undo_update(ulint mode, que_thr_t *thr, Index *index, const DTuple *entry) noexcept {
+db_err Undo_node::del_unmark_secondary_index_and_undo_update(
+  ulint mode, que_thr_t *thr, Index *index, const DTuple *entry
+) noexcept {
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
   auto trx = thr_get_trx(thr);
@@ -953,7 +954,7 @@ void Undo_node::parse_insert_undo_rec(ib_recovery_t recovery) noexcept {
 
   /* Skip the UNDO if we can't find the table or the .ibd file. */
   if (unlikely(m_table == nullptr)) {
-   /* Table was dropped. */ 
+    /* Table was dropped. */
   } else if (unlikely(m_table->m_ibd_file_missing)) {
     /* We skip undo operations to missing .ibd files */
     m_table = nullptr;
@@ -1045,7 +1046,8 @@ db_err Undo_node::undo_update(que_thr_t *thr) noexcept {
       break;
 
     default:
-      ut_error;;
+      ut_error;
+      ;
   }
 
   if (err != DB_SUCCESS) {

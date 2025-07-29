@@ -27,7 +27,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "api0misc.h"
 #include "dict0dict.h"
-#include "dict0dict.h"
 #include "innodb0types.h"
 #include "lock0lock.h"
 #include "pars0pars.h"
@@ -101,7 +100,7 @@ bool ib_handle_errors(db_err *new_err, Trx *trx, que_thr_t *thr, trx_savept_t *s
 
         *new_err = err;
 
-         /* Operation needs to be retried. */
+        /* Operation needs to be retried. */
         return true;
 
       case DB_DEADLOCK:
@@ -127,10 +126,11 @@ bool ib_handle_errors(db_err *new_err, Trx *trx, que_thr_t *thr, trx_savept_t *s
           " a case of widespread corruption, dump all InnoDB tables"
           " and recreate the whole InnoDB tablespace. If the server"
           " crashes after the startup or when you dump the tables,"
-          " check the InnoDB website for help.");
+          " check the InnoDB website for help."
+        );
         break;
       default:
-        log_fatal("Unknown error code ", (ulint) err);
+        log_fatal("Unknown error code ", (ulint)err);
     }
 
     if (trx->m_error_state != DB_SUCCESS) {
@@ -200,7 +200,7 @@ db_err ib_trx_lock_table_with_retry(Trx *trx, Table *table, enum Lock_mode mode)
     return err;
   }
 
-   ut_error;
+  ut_error;
 }
 
 void ib_update_statistics_if_needed(Table *table) {

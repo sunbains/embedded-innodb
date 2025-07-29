@@ -22,6 +22,7 @@ The transaction
 Created 3/26/1996 Heikki Tuuri
 *******************************************************/
 
+#include "trx0trx.h"
 #include "api0misc.h"
 #include "api0ucode.h"
 #include "lock0lock.h"
@@ -32,7 +33,6 @@ Created 3/26/1996 Heikki Tuuri
 #include "srv0srv.h"
 #include "trx0roll.h"
 #include "trx0rseg.h"
-#include "trx0trx.h"
 #include "trx0undo.h"
 #include "trx0xa.h"
 #include "usr0sess.h"
@@ -40,13 +40,12 @@ Created 3/26/1996 Heikki Tuuri
 /* Threads with unknown id. */
 os_thread_id_t NULL_THREAD_ID;
 
-Trx::Trx(Trx_sys *trx_sys, Session *sess, void *arg) noexcept 
- : m_client_ctx(arg), m_sess(sess), m_trx_sys(trx_sys) {
+Trx::Trx(Trx_sys *trx_sys, Session *sess, void *arg) noexcept : m_client_ctx(arg), m_sess(sess), m_trx_sys(trx_sys) {
 
   m_op_info = "";
   m_start_time = ::time(nullptr);
 
-  mutex_create(&m_undo_mutex, IF_DEBUG("trx_undo_mutex",) IF_SYNC_DEBUG(SYNC_TRX_UNDO,) Current_location());
+  mutex_create(&m_undo_mutex, IF_DEBUG("trx_undo_mutex", ) IF_SYNC_DEBUG(SYNC_TRX_UNDO, ) Current_location());
 
   m_lock_heap = mem_heap_create_in_buffer(256);
 
@@ -112,7 +111,7 @@ Trx::~Trx() noexcept {
   ut_a(m_read_view == nullptr);
 }
 
-Trx* Trx::create(Trx_sys *trx_sys, Session *sess, void *arg) noexcept {
+Trx *Trx::create(Trx_sys *trx_sys, Session *sess, void *arg) noexcept {
   auto ptr = mem_alloc(sizeof(Trx));
   return new (ptr) Trx(trx_sys, sess, arg);
 }
@@ -390,7 +389,7 @@ void Trx::commit_off_kernel() noexcept {
   m_trx_sys->m_trx_list.remove(this);
 }
 
-void Trx::cleanup_at_db_startup() noexcept{
+void Trx::cleanup_at_db_startup() noexcept {
   if (m_insert_undo != nullptr) {
     srv_undo->insert_cleanup(this);
   }
@@ -422,7 +421,7 @@ read_view_t *Trx::assign_read_view() noexcept {
   return m_read_view;
 }
 
-void Trx::handle_commit_sig_off_kernel(que_thr_t *&next_thr) noexcept{
+void Trx::handle_commit_sig_off_kernel(que_thr_t *&next_thr) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   m_que_state = TRX_QUE_COMMITTING;
@@ -695,7 +694,7 @@ void Trx::sig_start_handling(que_thr_t *&next_thr) noexcept {
   }
 }
 
-void Trx::sig_reply(trx_sig_t *sig, que_thr_t *&next_thr) noexcept{
+void Trx::sig_reply(trx_sig_t *sig, que_thr_t *&next_thr) noexcept {
   ut_ad(mutex_own(&kernel_mutex));
 
   if (sig->receiver != nullptr) {
@@ -823,7 +822,7 @@ ulint Trx::number_of_rows_locked() const noexcept {
 
   os << "TRANSACTION " << m_id;
 
-  const auto active_time= difftime(time(nullptr), m_start_time);
+  const auto active_time = difftime(time(nullptr), m_start_time);
 
   switch (m_conc_state) {
     case TRX_NOT_STARTED:
@@ -839,7 +838,7 @@ ulint Trx::number_of_rows_locked() const noexcept {
       os << ", COMMITTED IN MEMORY";
       break;
     default:
-      os << " state " << (ulong) m_conc_state;
+      os << " state " << (ulong)m_conc_state;
   }
 
   if (*m_op_info) {
@@ -878,8 +877,8 @@ ulint Trx::number_of_rows_locked() const noexcept {
 
   if (!m_trx_locks.empty() || mem_heap_get_size(m_lock_heap) > 400) {
 
-    os << std::format("{} lock struct(s), heap size {}, {} row lock(s)",
-      m_trx_locks.size(), mem_heap_get_size(m_lock_heap), number_of_rows_locked()
+    os << std::format(
+      "{} lock struct(s), heap size {}, {} row lock(s)", m_trx_locks.size(), mem_heap_get_size(m_lock_heap), number_of_rows_locked()
     );
   }
 

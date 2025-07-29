@@ -465,7 +465,7 @@ struct srv_sys_t {
   srv_slot_t *m_threads{};
 
   /** Task queue */
-  UT_LIST_BASE_NODE_T(que_thr_t, queue) m_tasks {};
+  UT_LIST_BASE_NODE_T(que_thr_t, queue) m_tasks{};
 };
 
 /** Table for client threads where they will be suspended to wait for locks */

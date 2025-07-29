@@ -27,7 +27,7 @@ Created 2025-07-26 by Sunny Bains
 #include "innodb.h"
 
 /** Type alias for expected results with InnoDB error codes */
-template<typename T>
+template <typename T>
 using Expected = std::expected<T, ib_err_t>;
 
 /** Type alias for void expected results */
@@ -39,18 +39,18 @@ constexpr auto make_unexpected(ib_err_t err) noexcept {
 }
 
 /** Helper macro for early return on error */
-#define TRY_EXPECTED(expr) \
-  do { \
-    auto result = (expr); \
-    if (!result) { \
+#define TRY_EXPECTED(expr)                    \
+  do {                                        \
+    auto result = (expr);                     \
+    if (!result) {                            \
       return make_unexpected(result.error()); \
-    } \
+    }                                         \
   } while (0)
 
 /** Helper macro for early return on error with value extraction */
-#define TRY_EXPECTED_VALUE(var, expr) \
-  auto var##_result = (expr); \
-  if (!var##_result) { \
+#define TRY_EXPECTED_VALUE(var, expr)             \
+  auto var##_result = (expr);                     \
+  if (!var##_result) {                            \
     return make_unexpected(var##_result.error()); \
-  } \
+  }                                               \
   auto var = std::move(*var##_result)

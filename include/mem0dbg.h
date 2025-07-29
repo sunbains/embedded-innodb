@@ -52,7 +52,9 @@ check fields at the both ends of the field. */
  * @param ph_size out: physical size of the heap, if a nullptr pointer is passed as this argument, it is ignored
  * @param n_blocks out: number of blocks in the heap, if a nullptr pointer is passed as this argument, it is ignored
  */
-void mem_heap_validate_or_print(mem_heap_t *heap, byte *top, bool print, bool *error, ulint *us_size, ulint *ph_size, ulint *n_blocks);
+void mem_heap_validate_or_print(
+  mem_heap_t *heap, byte *top, bool print, bool *error, ulint *us_size, ulint *ph_size, ulint *n_blocks
+);
 
 /**
  * Validates the contents of a memory heap.

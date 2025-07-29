@@ -141,7 +141,8 @@ static const ib_status_t status_vars[] = {
 
   {"have_atomic_builtins", IB_STATUS_IBOOL, &export_vars.innodb_have_atomic_builtins},
 
-  {nullptr, IB_STATUS_UNDEF, 0}};
+  {nullptr, IB_STATUS_UNDEF, 0}
+};
 
 ib_err_t ib_status_get_all(const char ***names, uint32_t *names_num) {
   uint32_t i;

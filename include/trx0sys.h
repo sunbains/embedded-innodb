@@ -27,20 +27,20 @@ Created 3/26/1996 Heikki Tuuri
 #include "innodb0types.h"
 
 #include "buf0buf.h"
+#include "data0type.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
 #include "mem0mem.h"
+#include "mtr0log.h"
 #include "mtr0mtr.h"
 #include "page0types.h"
 #include "read0types.h"
+#include "srv0srv.h"
 #include "sync0sync.h"
+#include "trx0trx.h"
 #include "trx0types.h"
 #include "ut0byte.h"
 #include "ut0lst.h"
-#include "data0type.h"
-#include "mtr0log.h"
-#include "srv0srv.h"
-#include "trx0trx.h"
 
 /* The typedef for rseg slot in the file copy */
 using trx_sysf_rseg_t = byte;
@@ -133,7 +133,6 @@ struct Trx_sys {
    * @param[in] recovery        Recovery flag
    */
   static void destroy(Trx_sys *&srv_trx_sys) noexcept;
-
 
   /** Start the transaction system.
    * 
@@ -290,7 +289,7 @@ struct Trx_sys {
      *
      * @return Number of prepared transactions.
      */
-    [[nodiscard]] int recover(XID *xid_list, ulint len) noexcept;
+  [[nodiscard]] int recover(XID *xid_list, ulint len) noexcept;
 
   /**
    * Gets a pointer to the transaction system header and x-latches its page.
@@ -302,9 +301,9 @@ struct Trx_sys {
   [[nodiscard]] trx_sysf_t *read_header(mtr_t *mtr) noexcept {
     ut_ad(mtr != nullptr);
 
-    Buf_pool::Request req {
+    Buf_pool::Request req{
       .m_rw_latch = RW_X_LATCH,
-      .m_page_id = { TRX_SYS_SPACE, TRX_SYS_PAGE_NO },
+      .m_page_id = {TRX_SYS_SPACE, TRX_SYS_PAGE_NO},
       .m_mode = BUF_GET,
       .m_file = __FILE__,
       .m_line = __LINE__,
@@ -352,7 +351,7 @@ struct Trx_sys {
    *
    * @param[in]  trx The transaction handle to insert.
    */
-  void trx_list_insert_ordered(Trx *trx) noexcept ;
+  void trx_list_insert_ordered(Trx *trx) noexcept;
 
   /**
    * Creates trx objects for transactions and initializes the trx list of srv_trx_sys at database start.
@@ -520,7 +519,7 @@ struct Trx_sys {
 #endif /* WITH_XOPEN */
 
 #ifdef UNIT_TEST
-private:
+ private:
 #endif /* UNIT_TEST */
 
   /**
@@ -556,7 +555,7 @@ private:
    */
   void destroy_trx(Trx *&trx) noexcept;
 
-public:
+ public:
   /** The smallest number not yet assigned as a transaction
   id or transaction number */
   trx_id_t m_max_trx_id{};

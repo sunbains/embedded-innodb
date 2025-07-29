@@ -37,7 +37,7 @@ struct Undo_rec_pars {
   /** TRX_UNDO_INSERT_REC, TRX_UNDO_UPD_EXIST_REC, TRX_UNDO_UPD_DEL_REC, TRX_UNDO_DEL_MARK_REC */
   ulint m_type{ULINT_UNDEFINED};
 
-  /** Compiler info, relevant only for update type records */ 
+  /** Compiler info, relevant only for update type records */
   ulint m_cmpl_info{ULINT_UNDEFINED};
 
   /** Table id */
@@ -67,22 +67,24 @@ byte *trx_undo_rec_get_pars(trx_undo_rec_t *undo_rec, Undo_rec_pars &undo_rec_pa
 /** Builds a row reference from an undo log record.
 @return	pointer to remaining part of undo record */
 byte *trx_undo_rec_get_row_ref(
-  byte *ptr,           /*!< in: remaining part of a copy of an undo
+  byte *ptr,       /*!< in: remaining part of a copy of an undo
                                     log record, at the start of the row
                                     reference; NOTE that this copy of the undo
                                     log record must be preserved as long as the
                                     row reference is used, as we do NOT copy the
                                     data in the record! */
-  Index *index, /*!< in: clustered index */
-  DTuple **ref,      /*!< out, own: row reference */
-  mem_heap_t *heap /*!< in: memory heap from which the memory needed is allocated */);
+  Index *index,    /*!< in: clustered index */
+  DTuple **ref,    /*!< out, own: row reference */
+  mem_heap_t *heap /*!< in: memory heap from which the memory needed is allocated */
+);
 
 /** Skips a row reference from an undo log record.
 @return	pointer to remaining part of undo record */
 byte *trx_undo_rec_skip_row_ref(
-  byte *ptr, /*!< in: remaining part in update undo log
+  byte *ptr,   /*!< in: remaining part in update undo log
                           record, at the start of the row reference */
-  Index *index /*!< in: clustered index */);
+  Index *index /*!< in: clustered index */
+);
 
 /** Reads from an undo log update record the system field values of the old
 version.
@@ -93,7 +95,8 @@ byte *trx_undo_update_rec_get_sys_cols(
                                             general parameters */
   trx_id_t *trx_id,     /*!< out: trx id */
   roll_ptr_t *roll_ptr, /*!< out: roll ptr */
-  ulint *info_bits /*!< out: info bits state */);
+  ulint *info_bits      /*!< out: info bits state */
+);
 
 /** Builds an update vector based on a remaining part of an undo log record.
 @return remaining part of the record, nullptr if an error detected, which
@@ -105,7 +108,7 @@ byte *trx_undo_update_rec_get_update(
                          be preserved as long as the update vector is
                          used, as we do NOT copy the data in the
                          record! */
-  Index *index, /*!< in: clustered index */
+  Index *index,        /*!< in: clustered index */
   ulint type,          /*!< in: TRX_UNDO_UPD_EXIST_REC,
                          TRX_UNDO_UPD_DEL_REC, or
                          TRX_UNDO_DEL_MARK_REC; in the last case,
@@ -114,29 +117,30 @@ byte *trx_undo_update_rec_get_update(
   trx_id_t trx_id,     /*!< in: transaction id from this undorecord */
   roll_ptr_t roll_ptr, /*!< in: roll pointer from this undo record */
   ulint info_bits,     /*!< in: info bits from this undo record */
-  Trx *trx,          /*!< in: transaction */
+  Trx *trx,            /*!< in: transaction */
   mem_heap_t *heap,    /*!< in: memory heap from which the memory
                          needed is allocated */
-  upd_t **upd /*!< out, own: update vector */);
+  upd_t **upd          /*!< out, own: update vector */
+);
 
 /** Builds a partial row from an update undo log record. It contains the
 columns which occur as ordering in any index of the table.
 @return	pointer to remaining part of undo record */
 byte *trx_undo_rec_get_partial_row(
-  byte *ptr,           /*!< in: remaining part in update undo log
+  byte *ptr,          /*!< in: remaining part in update undo log
                          record of a suitable type, at the start of
                          the stored index columns;
                          NOTE that this copy of the undo log record must
                          be preserved as long as the partial row is
                          used, as we do NOT copy the data in the
                          record! */
-  Index *index, /*!< in: clustered index */
-  DTuple **row,      /*!< out, own: partial row */
-  bool ignore_prefix,  /*!< in: flag to indicate if we
+  Index *index,       /*!< in: clustered index */
+  DTuple **row,       /*!< out, own: partial row */
+  bool ignore_prefix, /*!< in: flag to indicate if we
                    expect blob prefixes in undo. Used
                    only in the assertion. */
-  mem_heap_t *heap /*!< in: memory heap from which the memory needed is allocated */
-  );
+  mem_heap_t *heap    /*!< in: memory heap from which the memory needed is allocated */
+);
 
 /**
  * @brief Writes information to an undo log about an insert, update, or a delete
@@ -157,24 +161,17 @@ byte *trx_undo_rec_get_partial_row(
  * @return DB_SUCCESS or error code
  */
 db_err trx_undo_report_row_operation(
-  ulint flags,
-  ulint op_type,
-  que_thr_t *thr,
-  const Index *index,
-  const DTuple *clust_entry,
-  const upd_t *update,
-  ulint cmpl_info,
-  const rec_t *rec,
-  roll_ptr_t *roll_ptr
-  );
+  ulint flags, ulint op_type, que_thr_t *thr, const Index *index, const DTuple *clust_entry, const upd_t *update, ulint cmpl_info,
+  const rec_t *rec, roll_ptr_t *roll_ptr
+);
 
 /** Copies an undo record to heap. This function can be called if we know that
 the undo log record exists.
 @return	own: copy of the record */
 trx_undo_rec_t *trx_undo_get_undo_rec_low(
   roll_ptr_t roll_ptr, /*!< in: roll pointer to record */
-  mem_heap_t *heap /*!< in: memory heap where copied */
-  );
+  mem_heap_t *heap     /*!< in: memory heap where copied */
+);
 
 /** Copies an undo record to heap.
 
@@ -189,8 +186,8 @@ db_err trx_undo_get_undo_rec(
                                the roll pointer: it points to an
                                undo log of this transaction */
   trx_undo_rec_t **undo_rec, /*!< out, own: copy of the record */
-  mem_heap_t *heap /*!< in: memory heap where copied */
-  );
+  mem_heap_t *heap           /*!< in: memory heap where copied */
+);
 
 /** Build a previous version of a clustered index record. This function checks
 that the caller has a latch on the index page of the clustered index record
@@ -205,19 +202,21 @@ db_err trx_undo_prev_version_build(
   mtr_t *index_mtr,       /*!< in: mtr which contains the latch to
                           index_rec page and purge_view */
   const rec_t *rec,       /*!< in: version of a clustered index record */
-  Index *index,    /*!< in: clustered index */
+  Index *index,           /*!< in: clustered index */
   ulint *offsets,         /*!< in: Phy_rec::get_col_offsets(rec, index) */
   mem_heap_t *heap,       /*!< in: memory heap from which the memory
                             needed is allocated */
-  rec_t **old_vers /*!< out, own: previous version, or nullptr if rec is the first inserted version, or if history data has been deleted */
-  );
+  rec_t **
+    old_vers /*!< out, own: previous version, or nullptr if rec is the first inserted version, or if history data has been deleted */
+);
 
 /** Parses a redo log record of adding an undo log record.
 @return	end of log record or nullptr */
 byte *trx_undo_parse_add_undo_rec(
   byte *ptr,     /*!< in: buffer */
   byte *end_ptr, /*!< in: buffer end */
-  page_t *page /*!< in: page or nullptr */);
+  page_t *page   /*!< in: page or nullptr */
+);
 
 /** Parses a redo log record of erasing of an undo page end.
 @return	end of log record or nullptr */
@@ -225,7 +224,8 @@ byte *trx_undo_parse_erase_page_end(
   byte *ptr,     /*!< in: buffer */
   byte *end_ptr, /*!< in: buffer end */
   page_t *page,  /*!< in: page or nullptr */
-  mtr_t *mtr /*!< in: mtr or nullptr */);
+  mtr_t *mtr     /*!< in: mtr or nullptr */
+);
 
 /* Types of an undo log record: these have to be smaller than 16, as the
 compilation info multiplied by 16 is ORed to this value in an undo log
@@ -272,7 +272,7 @@ inline ulint trx_undo_rec_get_cmpl_info(const trx_undo_rec_t *undo_rec) /*!< in:
 @return        true if extern */
 inline bool trx_undo_rec_get_extern_storage(const trx_undo_rec_t *undo_rec) /*!< in: undo log record */
 {
- return (mach_read_from_1(undo_rec + 2) & TRX_UNDO_UPD_EXTERN) != 0;
+  return (mach_read_from_1(undo_rec + 2) & TRX_UNDO_UPD_EXTERN) != 0;
 }
 
 /** Reads the undo log record number.
@@ -297,5 +297,3 @@ inline trx_undo_rec_t *trx_undo_rec_copy(const trx_undo_rec_t *undo_rec, mem_hea
   const auto len = mach_read_from_2(undo_rec) - ut_align_offset(undo_rec, UNIV_PAGE_SIZE);
   return reinterpret_cast<trx_undo_rec_t *>(mem_heap_dup(heap, undo_rec, len));
 }
-
-

@@ -111,12 +111,7 @@ void row_merge_drop_temp_indexes(ib_recovery_t recovery);
  *
  * @return error code or DB_SUCCESS
  */
-db_err row_merge_rename_tables(
-  Table *old_table,
-  Table *new_table,
-  const char *tmp_name,
-  Trx *trx
-);
+db_err row_merge_rename_tables(Table *old_table, Table *new_table, const char *tmp_name, Trx *trx);
 
 /**
  * Create a temporary table for creating a primary key, using the definition
@@ -129,12 +124,7 @@ db_err row_merge_rename_tables(
  *
  * @return table, or nullptr on error
  */
-Table *row_merge_create_temporary_table(
-  const char *table_name,
-  const merge_index_def_t *index_def,
-  const Table *table,
-  Trx *trx
-);
+Table *row_merge_create_temporary_table(const char *table_name, const merge_index_def_t *index_def, const Table *table, Trx *trx);
 
 /**
  * Rename the temporary indexes in the dictionary to permanent ones. The
@@ -146,7 +136,7 @@ Table *row_merge_create_temporary_table(
  *
  * @return DB_SUCCESS if all OK
  */
-db_err row_merge_rename_indexes( Trx *trx, Table *table);
+db_err row_merge_rename_indexes(Trx *trx, Table *table);
 
 /**
  * Create the index and load in to the dictionary.
@@ -157,11 +147,7 @@ db_err row_merge_rename_indexes( Trx *trx, Table *table);
  *
  * @return index, or nullptr on error
  */
-Index *row_merge_create_index(
-  Trx *trx,
-  Table *table,
-  const merge_index_def_t *index_def
-);
+Index *row_merge_create_index(Trx *trx, Table *table, const merge_index_def_t *index_def);
 
 /**
  * Check if a transaction can use an index.
@@ -200,10 +186,5 @@ db_err row_merge_drop_table(Trx *trx, Table *table);
  * @return DB_SUCCESS or error code
  */
 db_err row_merge_build_indexes(
-  Trx *trx,
-  Table *old_table,
-  Table *new_table,
-  Index **indexes,
-  ulint n_indexes,
-  table_handle_t table
+  Trx *trx, Table *old_table, Table *new_table, Index **indexes, ulint n_indexes, table_handle_t table
 );

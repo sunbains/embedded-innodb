@@ -47,14 +47,14 @@ struct Log_core {
    * @param start_lsn Output parameter for start LSN
    * @return End LSN if successful, 0 if not enough space
    */
-  lsn_t reserve_and_write_fast(const void* str, ulint len, lsn_t* start_lsn) noexcept;
+  lsn_t reserve_and_write_fast(const void *str, ulint len, lsn_t *start_lsn) noexcept;
 
   /**
    * Write to log buffer, handling block boundaries
    * @param str String to write
    * @param str_len Length of string
    */
-  void write_low(const byte* str, ulint str_len) noexcept;
+  void write_low(const byte *str, ulint str_len) noexcept;
 
   /**
    * Get current LSN
@@ -72,7 +72,7 @@ struct Log_core {
    * Get log buffer pointer
    * @return Pointer to log buffer
    */
-  const byte* get_buf() const noexcept;
+  const byte *get_buf() const noexcept;
 
   /**
    * Get log buffer size
@@ -99,7 +99,7 @@ struct Log_core {
    * @param log_block Block to initialize
    * @param lsn LSN for the block
    */
-  static void block_init(byte* log_block, lsn_t lsn) noexcept;
+  static void block_init(byte *log_block, lsn_t lsn) noexcept;
 
   /**
    * Convert LSN to block number
@@ -113,71 +113,71 @@ struct Log_core {
    * @param log_block Block to modify
    * @param n Header number
    */
-  static void block_set_hdr_no(byte* log_block, ulint n) noexcept;
+  static void block_set_hdr_no(byte *log_block, ulint n) noexcept;
 
   /**
    * Get block header number
    * @param log_block Block to read from
    * @return Header number
    */
-  static ulint block_get_hdr_no(const byte* log_block) noexcept;
+  static ulint block_get_hdr_no(const byte *log_block) noexcept;
 
   /**
    * Set block data length
    * @param log_block Block to modify
    * @param len Data length
    */
-  static void block_set_data_len(byte* log_block, ulint len) noexcept;
+  static void block_set_data_len(byte *log_block, ulint len) noexcept;
 
   /**
    * Get block data length
    * @param log_block Block to read from
    * @return Data length
    */
-  static ulint block_get_data_len(const byte* log_block) noexcept;
+  static ulint block_get_data_len(const byte *log_block) noexcept;
 
   /**
    * Set first record group offset
    * @param log_block Block to modify
    * @param offset Offset to set
    */
-  static void block_set_first_rec_group(byte* log_block, ulint offset) noexcept;
+  static void block_set_first_rec_group(byte *log_block, ulint offset) noexcept;
 
   /**
    * Get first record group offset
    * @param log_block Block to read from
    * @return First record group offset
    */
-  static ulint block_get_first_rec_group(const byte* log_block) noexcept;
+  static ulint block_get_first_rec_group(const byte *log_block) noexcept;
 
   /**
    * Calculate block checksum
    * @param block Block to calculate checksum for
    * @return Calculated checksum
    */
-  static uint32_t block_calc_checksum(const byte* block) noexcept;
+  static uint32_t block_calc_checksum(const byte *block) noexcept;
 
   /**
    * Set block checksum
    * @param log_block Block to modify
    * @param checksum Checksum to set
    */
-  static void block_set_checksum(byte* log_block, ulint checksum) noexcept;
+  static void block_set_checksum(byte *log_block, ulint checksum) noexcept;
 
   /**
    * Get block checksum
    * @param log_block Block to read from
    * @return Block checksum
    */
-  static uint32_t block_get_checksum(const byte* log_block) noexcept;
+  static uint32_t block_get_checksum(const byte *log_block) noexcept;
 
   /**
    * Store calculated checksum in block
    * @param block Block to update
    */
-  void block_store_checksum(byte* block) noexcept;
+  void block_store_checksum(byte *block) noexcept;
 
-private:
+ private:
   /** Log sequence number */
   lsn_t m_lsn{};
 
@@ -185,10 +185,10 @@ private:
   ulint m_buf_free{};
 
   /** Unaligned log buffer pointer */
-  byte* m_buf_ptr{};
+  byte *m_buf_ptr{};
 
   /** Log buffer (aligned) */
-  byte* m_buf{};
+  byte *m_buf{};
 
   /** Log buffer size in bytes */
   ulint m_buf_size{};

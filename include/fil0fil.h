@@ -41,6 +41,11 @@ struct mtr_t;
 
 struct Fil {
 
+  // Friend function for log I/O operations
+  friend db_err log_io(
+    IO_request io_request, bool batched, const Page_id &page_id, ulint byte_offset, ulint len, void *buf, void *message
+  );
+
   /** Constructor
    *  @param[in] max_n_open Maxium number of open files
    */
@@ -362,33 +367,6 @@ struct Fil {
    *         i/o on a tablespace which does not exist
    */
   db_err data_io(
-    IO_request io_request, bool batched, const Page_id &page_id, ulint byte_offset, ulint len, void *buf, void *message
-  );
-
-  /**
-   * Reads or writes data. This operation is asynchronous (aio).
-   * @param io_request            in: IO_request type.
-   * @param batched               in: if simulated aio and we want to post a
-   *                              batch of i/os; NOTE that a simulated batch
-   *                              may introduce hidden chances of deadlocks,
-   *                              because i/os are not actually handled until
-   *                              all have been posted: use with great
-   *                              caution!
-   * @param page_id               in: space id and page no
-   * @param byte_offset           in: remainder of offset in bytes; in
-   *                              aio this must be divisible by the OS block size
-   * @param len                   in: how many bytes to read or write; this
-   *                              must not cross a file boundary; in aio this
-   *                              must be a block size multiple
-   * @param buf                   in/out: buffer where to store read data
-   *                              or from where to write; in aio this must be
-   *                              appropriately aligned
-   * @param message               in: message for aio handler if non-sync
-   *                             aio used, else ignored
-   * @return DB_SUCCESS, or DB_T ABLESPACE_DELETED if we are trying to do
-   *         i/o on a tablespace which does not exist
-   */
-  db_err log_io(
     IO_request io_request, bool batched, const Page_id &page_id, ulint byte_offset, ulint len, void *buf, void *message
   );
 

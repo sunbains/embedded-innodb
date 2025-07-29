@@ -38,10 +38,7 @@ struct Bounded_channel {
   using Type = T;
   using Pos = std::size_t;
 
-  explicit Bounded_channel(size_t n) noexcept
-      : m_ptr(ut_new(sizeof(Cell) * n)),
-        m_ring(new (m_ptr) Cell[n]),
-        m_capacity(n - 1) {
+  explicit Bounded_channel(size_t n) noexcept : m_ptr(ut_new(sizeof(Cell) * n)), m_ring(new(m_ptr) Cell[n]), m_capacity(n - 1) {
     /* Should be a power of 2 */
     ut_a(n >= 2 && (n & (n - 1)) == 0);
 
@@ -64,7 +61,7 @@ struct Bounded_channel {
     must be a size which is a power of 2. This also allows the sequence
     to double as a ticket/lock. */
     auto pos{m_epos.load(std::memory_order_relaxed)};
-    Cell* cell;
+    Cell *cell;
 
     for (;;) {
       cell = &m_ring[pos & m_capacity];
@@ -101,7 +98,7 @@ struct Bounded_channel {
 
   [[nodiscard]] bool dequeue(T &data) noexcept {
     auto pos{m_dpos.load(std::memory_order_relaxed)};
-    Cell* cell;
+    Cell *cell;
 
     for (;;) {
       cell = &m_ring[pos & m_capacity];
@@ -146,7 +143,7 @@ struct Bounded_channel {
     for (;;) {
       auto cell{&m_ring[pos & m_capacity]};
       const auto seq{cell->m_pos.load(std::memory_order_acquire)};
-      auto diff{ (intptr_t)seq - (intptr_t)(pos + 1)};
+      auto diff{(intptr_t)seq - (intptr_t)(pos + 1)};
 
       if (diff == 0) {
         return false;
@@ -160,7 +157,7 @@ struct Bounded_channel {
     ut_error;
     return false;
   }
-  
+
   /** @return true if the Bounded_channel is full. */
   [[nodiscard]] bool full() const noexcept {
     auto pos{m_epos.load(std::memory_order_relaxed)};
@@ -192,9 +189,9 @@ struct Bounded_channel {
     std::atomic<Pos> m_pos{};
   };
 
-  void* m_ptr{};
+  void *m_ptr{};
   Pad m_pad0;
-  Cell* const m_ring{};
+  Cell *const m_ring{};
   Pos const m_capacity{};
   Pad m_pad1;
   std::atomic<Pos> m_epos{};
@@ -202,9 +199,8 @@ struct Bounded_channel {
   std::atomic<Pos> m_dpos{};
   Pad m_pad3;
 
-  Bounded_channel(Bounded_channel&&) = delete;
-  Bounded_channel(const Bounded_channel&) = delete;
-  Bounded_channel& operator=(Bounded_channel&&) = delete;
-  Bounded_channel& operator=(const Bounded_channel&) = delete;
+  Bounded_channel(Bounded_channel &&) = delete;
+  Bounded_channel(const Bounded_channel &) = delete;
+  Bounded_channel &operator=(Bounded_channel &&) = delete;
+  Bounded_channel &operator=(const Bounded_channel &) = delete;
 };
-

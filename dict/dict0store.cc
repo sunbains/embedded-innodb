@@ -24,35 +24,34 @@ Modified 2024-Oct-15 Sunny Bains
 *******************************************************/
 
 #include "btr0btr.h"
-#include "buf0flu.h"
 #include "btr0pcur.h"
+#include "buf0flu.h"
+#include "ddl0ddl.h"
 #include "dict0dict.h"
 #include "dict0load.h"
-#include "ddl0ddl.h"
 #include "log0recv.h"
 #include "os0file.h"
-#include "que0que.h"
 #include "pars0pars.h"
+#include "que0que.h"
 #include "row0ins.h"
 #include "srv0srv.h"
 #include "trx0trx.h"
 
-Dict_store::Dict_store(Dict *dict, Btree *btree) noexcept
-  : m_dict{dict}, m_fsp{btree->m_fsp}, m_btree{btree} {}
+Dict_store::Dict_store(Dict *dict, Btree *btree) noexcept : m_dict{dict}, m_fsp{btree->m_fsp}, m_btree{btree} {}
 
 void Dict_store::destroy(Dict_store *dict_store) noexcept {
   ut_delete(dict_store);
 }
 
 Dict_store::hdr_t *Dict_store::hdr_get(mtr_t *mtr) noexcept {
-  Buf_pool::Request req {
-      .m_rw_latch = RW_X_LATCH,
-      .m_page_id = { DICT_HDR_SPACE, DICT_HDR_PAGE_NO },
-      .m_mode = BUF_GET,
-      .m_file = __FILE__,
-      .m_line = __LINE__,
-      .m_mtr = mtr
-    };
+  Buf_pool::Request req{
+    .m_rw_latch = RW_X_LATCH,
+    .m_page_id = {DICT_HDR_SPACE, DICT_HDR_PAGE_NO},
+    .m_mode = BUF_GET,
+    .m_file = __FILE__,
+    .m_line = __LINE__,
+    .m_mtr = mtr
+  };
 
   auto block = m_fsp->m_buf_pool->get(req, nullptr);
   auto header = DICT_HDR + block->get_frame();
@@ -601,7 +600,7 @@ db_err Dict_store::create_index_tree_step(Index_node *node) noexcept {
 
   pcur.open(sys_indexes->m_indexes.front(), search_tuple, PAGE_CUR_L, BTR_MODIFY_LEAF, &mtr, Current_location());
 
-  (void) pcur.move_to_next_user_rec(&mtr);
+  (void)pcur.move_to_next_user_rec(&mtr);
 
   node->m_page_no = m_btree->create(index->m_type, index->m_page_id.m_space_id, index->m_id, index, &mtr);
 
@@ -720,7 +719,7 @@ page_no_t Dict_store::truncate_index_tree(Table *table, space_id_t space_id, Btr
     appropriate field in the SYS_INDEXES record: this mini-transaction
     marks the B-tree totally truncated */
 
-    (void) m_btree->page_get(space_id, root_page_no, RW_X_LATCH, mtr);
+    (void)m_btree->page_get(space_id, root_page_no, RW_X_LATCH, mtr);
 
     m_btree->free_root(space_id, root_page_no, mtr);
   }
@@ -740,7 +739,7 @@ page_no_t Dict_store::truncate_index_tree(Table *table, space_id_t space_id, Btr
 
   mtr->start();
 
-  (void) pcur->restore_position(BTR_MODIFY_LEAF, mtr, Current_location());
+  (void)pcur->restore_position(BTR_MODIFY_LEAF, mtr, Current_location());
 
   /* Find the index corresponding to this SYS_INDEXES record. */
   for (auto index : table->m_indexes) {
@@ -911,7 +910,6 @@ que_thr_t *Dict_store::create_index_step(que_thr_t *thr) noexcept {
             return clean_up(err);
           }
 
-          
           ++node->m_field_no;
           thr->run_node = node->m_field_def;
 
@@ -982,7 +980,8 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
   auto sys_foreign = m_dict->table_get("SYS_FOREIGN");
   auto sys_foreign_cols = m_dict->table_get("SYS_FOREIGN_COLS");
 
-  if (sys_foreign != nullptr && sys_foreign_cols != nullptr && sys_foreign->m_indexes.size() == 3 && sys_foreign_cols->m_indexes.size() == 1) {
+  if (sys_foreign != nullptr && sys_foreign_cols != nullptr && sys_foreign->m_indexes.size() == 3 &&
+      sys_foreign_cols->m_indexes.size() == 1) {
 
     /* Foreign constraint system tables have already been created, and they are ok */
 
@@ -1012,7 +1011,7 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
   if (sys_foreign != nullptr) {
     log_warn("Dropping incompletely created SYS_FOREIGN table");
     if (auto err = m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true); err != DB_SUCCESS) {
-      log_warn("DROP table failed with error ", err , " while dropping table SYS_FOREIGN");
+      log_warn("DROP table failed with error ", err, " while dropping table SYS_FOREIGN");
     }
     auto err_commit = trx->commit();
     ut_a(err_commit == DB_SUCCESS);
@@ -1021,13 +1020,13 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
   if (sys_foreign_cols != nullptr) {
     log_warn("Dropping incompletely created SYS_FOREIGN_COLS table");
     if (auto err = m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true); err != DB_SUCCESS) {
-      log_warn("DROP table failed with error ", err , " while dropping table SYS_FOREIGN_COLS");
+      log_warn("DROP table failed with error ", err, " while dropping table SYS_FOREIGN_COLS");
     }
     auto err_commit = trx->commit();
     ut_a(err_commit == DB_SUCCESS);
   }
 
-  (void) trx->start_if_not_started();
+  (void)trx->start_if_not_started();
 
   log_info("Creating foreign key constraint system tables");
 
@@ -1057,8 +1056,8 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
 
     log_err("Creation failed tablespace is full dropping incompletely created SYS_FOREIGN tables");
 
-    (void) m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true);
-    (void) m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true);
+    (void)m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true);
+    (void)m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true);
 
     auto err_commit = trx->commit();
     ut_a(err_commit == DB_SUCCESS);
@@ -1078,7 +1077,7 @@ db_err Dict_store::create_or_check_foreign_constraint_tables() noexcept {
 }
 
 db_err Dict_store::foreign_eval_sql(pars_info_t *info, const char *sql, Table *table, Foreign *foreign, Trx *trx) noexcept {
-    (void) trx->start_if_not_started();
+  (void)trx->start_if_not_started();
 
   auto err = que_eval_sql(info, sql, false, trx);
 
@@ -1092,7 +1091,9 @@ db_err Dict_store::foreign_eval_sql(pars_info_t *info, const char *sql, Table *t
       " standard latin1_swedish_ci collation. If you create tables or databases whose names differ only in"
       " the character case, then collisions in constraint names can occur. Workaround: name your constraints"
       " explicitly with unique names.",
-      table->m_name, foreign->m_id));
+      table->m_name,
+      foreign->m_id
+    ));
 
     mutex_exit(&m_dict->m_foreign_err_mutex);
 

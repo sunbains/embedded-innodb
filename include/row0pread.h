@@ -156,8 +156,7 @@ class Parallel_reader {
     /** Constructor.
     @param[in] start            Start key
     @param[in] end              End key. */
-    Scan_range(const DTuple *start, const DTuple *end)
-        : m_start(start), m_end(end) {}
+    Scan_range(const DTuple *start, const DTuple *end) : m_start(start), m_end(end) {}
 
     /** Start of the scan, can be nullptr for -infinity. */
     const DTuple *m_start{};
@@ -177,9 +176,9 @@ class Parallel_reader {
     @param[in] read_level     Btree level from which records need to be read.
     @param[in] partition_id   Partition id if the index to be scanned.
                               belongs to a partitioned table. */
-    Config(const Scan_range &scan_range, Index *index,
-           size_t read_level = 0,
-           size_t partition_id = std::numeric_limits<size_t>::max())
+    Config(
+      const Scan_range &scan_range, Index *index, size_t read_level = 0, size_t partition_id = std::numeric_limits<size_t>::max()
+    )
         : m_scan_range(scan_range),
           m_index(index),
           m_page_size(UNIV_PAGE_SIZE),
@@ -190,7 +189,7 @@ class Parallel_reader {
     @param[in] config           Instance to copy from. */
     Config(const Config &config)
 
-        = default;
+      = default;
 
     /** Range to scan. */
     const Scan_range m_scan_range;
@@ -318,9 +317,7 @@ class Parallel_reader {
   [[nodiscard]] dberr_t get_error_state() const { return m_err; }
 
   /** @return true if the tree is empty, else false. */
-  [[nodiscard]] bool is_tree_empty() const {
-    return m_ctx_id.load(std::memory_order_relaxed) == 0;
-  }
+  [[nodiscard]] bool is_tree_empty() const { return m_ctx_id.load(std::memory_order_relaxed) == 0; }
 
   /** Set the callback that must be called before any processing.
   @param[in] f                  Call before first row is processed.*/
@@ -345,15 +342,11 @@ class Parallel_reader {
   [[nodiscard]] size_t max_threads() const { return m_max_threads; }
 
   /** @return true if in error state. */
-  [[nodiscard]] bool is_error_set() const {
-    return m_err.load(std::memory_order_relaxed) != DB_SUCCESS;
-  }
+  [[nodiscard]] bool is_error_set() const { return m_err.load(std::memory_order_relaxed) != DB_SUCCESS; }
 
   /** Set the error state.
   @param[in] err                Error state to set to. */
-  void set_error_state(dberr_t err) {
-    m_err.store(err, std::memory_order_relaxed);
-  }
+  void set_error_state(dberr_t err) { m_err.store(err, std::memory_order_relaxed); }
 
   /** Set the number of threads to be spawned.
   @param[in]  n_threads number of threads to be spawned. */
@@ -423,7 +416,7 @@ class Parallel_reader {
   Scan_ctxs m_scan_ctxs{};
 
   /** For signalling worker threads about events. */
-  Cond_var* m_event{};
+  Cond_var *m_event{};
 
   /** Value returned by previous call of os_event_reset() on m_event. */
   uint64_t m_sig_count;
@@ -512,14 +505,10 @@ class Parallel_reader::Scan_ctx {
 
   /** Set the error state.
   @param[in] err                Error state to set to. */
-  void set_error_state(dberr_t err) {
-    m_err.store(err, std::memory_order_relaxed);
-  }
+  void set_error_state(dberr_t err) { m_err.store(err, std::memory_order_relaxed); }
 
   /** @return true if in error state. */
-  [[nodiscard]] bool is_error_set() const {
-    return m_err.load(std::memory_order_relaxed) != DB_SUCCESS;
-  }
+  [[nodiscard]] bool is_error_set() const { return m_err.load(std::memory_order_relaxed) != DB_SUCCESS; }
 
   /** Fetch a block from the buffer pool and acquire an S latch on it.
   @param[in]      page_id       Page ID.
@@ -565,7 +554,9 @@ class Parallel_reader::Scan_ctx {
   @param[in]      split_level   Sub-range starting level (0 == root).
   @param[in,out]  ranges        Ranges to scan.
   @param[in,out]  mtr           Mini-transaction */
-  dberr_t create_ranges(const Scan_range &scan_range, page_no_t page_no, size_t depth, const size_t split_level, Ranges &ranges, mtr_t *mtr);
+  dberr_t create_ranges(
+    const Scan_range &scan_range, page_no_t page_no, size_t depth, const size_t split_level, Ranges &ranges, mtr_t *mtr
+  );
 
   /** Build a dtuple_t from rec_t.
   @param[in]      rec           Build the dtuple from this record.
@@ -607,9 +598,7 @@ class Parallel_reader::Scan_ctx {
 
   /** Release unused threads back to the pool.
   @param[in] unused_threads     Number of threads to "release". */
-  void release_threads(size_t unused_threads) {
-    m_reader->release_threads(unused_threads);
-  }
+  void release_threads(size_t unused_threads) { m_reader->release_threads(unused_threads); }
 
   /** S lock the index. */
   void index_s_lock();
@@ -618,9 +607,7 @@ class Parallel_reader::Scan_ctx {
   void index_s_unlock();
 
   /** @return true if at least one thread owns the S latch on the index. */
-  bool index_s_own() const {
-    return m_s_locks.load(std::memory_order_acquire) > 0;
-  }
+  bool index_s_own() const { return m_s_locks.load(std::memory_order_acquire) > 0; }
 
  private:
   using Config = Parallel_reader::Config;
@@ -664,8 +651,7 @@ class Parallel_reader::Ctx {
   @param[in]    id              Thread ID.
   @param[in]    scan_ctx        Scan context.
   @param[in]    range           Range that the thread has to read. */
-  Ctx(size_t id, Scan_ctx *scan_ctx, const Scan_ctx::Range &range)
-      : m_id(id), m_range(range), m_scan_ctx(scan_ctx) {}
+  Ctx(size_t id, Scan_ctx *scan_ctx, const Scan_ctx::Range &range) : m_id(id), m_range(range), m_scan_ctx(scan_ctx) {}
 
   /** Destructor. */
   ~Ctx() = default;
@@ -681,9 +667,7 @@ class Parallel_reader::Ctx {
   [[nodiscard]] const Trx *trx() const { return m_scan_ctx->m_trx; }
 
   /** @return the index being scanned. */
-  [[nodiscard]] const Index *index() const {
-    return m_scan_ctx->m_config.m_index;
-  }
+  [[nodiscard]] const Index *index() const { return m_scan_ctx->m_config.m_index; }
 
   /** @return ID of the thread processing this context */
   [[nodiscard]] size_t thread_id() const { return m_thread_ctx->m_thread_id; }
@@ -694,9 +678,7 @@ class Parallel_reader::Ctx {
   /** @return the partition id of the index.
   @note this is std::numeric_limits<size_t>::max() if the index does not
   belong to a partition. */
-  [[nodiscard]] size_t partition_id() const {
-    return m_scan_ctx->m_config.m_partition_id;
-  }
+  [[nodiscard]] size_t partition_id() const { return m_scan_ctx->m_config.m_partition_id; }
 
   /** Build an old version of the row if required.
   @param[in,out]  rec           Current row read from the index. This can
@@ -707,8 +689,7 @@ class Parallel_reader::Ctx {
                                 built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
-  bool is_rec_visible(const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap,
-                      mtr_t *mtr) {
+  bool is_rec_visible(const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr) {
     return m_scan_ctx->check_visibility(rec, offsets, heap, mtr);
   }
 
@@ -733,9 +714,7 @@ class Parallel_reader::Ctx {
   [[nodiscard]] dberr_t split();
 
   /** @return true if in error state. */
-  [[nodiscard]] bool is_error_set() const {
-    return m_scan_ctx->m_reader->is_error_set() || m_scan_ctx->is_error_set();
-  }
+  [[nodiscard]] bool is_error_set() const { return m_scan_ctx->m_reader->is_error_set() || m_scan_ctx->is_error_set(); }
 
  private:
   /** Context ID. */

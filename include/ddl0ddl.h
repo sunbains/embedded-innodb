@@ -149,11 +149,11 @@ struct DDL {
    */
   void drop_all_temp_tables(ib_recovery_t recovery) noexcept;
 
-#ifndef UNIT_TEST 
-private:
+#ifndef UNIT_TEST
+ private:
 #endif /* UNIT_TEST */
 
-/**
+  /**
  * @brief Drops a table as a background operation.
    * On Unix in ALTER TABLE the table handler does not remove the table before all
    * handles to it has been removed. Furhermore, the call to the drop table must be
@@ -211,8 +211,8 @@ private:
    */
   [[nodiscard]] db_err drop_all_foreign_keys_in_db(const char *name, Trx *trx) noexcept;
 
-#ifndef UNIT_TEST 
-private:
+#ifndef UNIT_TEST
+ private:
 #endif /* UNIT_TEST */
 
   /**

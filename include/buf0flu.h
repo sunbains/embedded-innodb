@@ -26,8 +26,8 @@ Created 11/5/1995 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#include "buf0types.h"
 #include "buf0buf.h"
+#include "buf0types.h"
 #include "mtr0mtr.h"
 #include "ut0byte.h"
 
@@ -192,30 +192,30 @@ struct Buf_flush {
   void note_modification(Buf_block *block, mtr_t *mtr) {
     ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
     ut_ad(block->m_page.m_buf_fix_count > 0);
-  #ifdef UNIV_SYNC_DEBUG
+#ifdef UNIV_SYNC_DEBUG
     ut_ad(rw_lock_own(&block->m_lock, RW_LOCK_EX));
-  #endif /* UNIV_SYNC_DEBUG */
+#endif /* UNIV_SYNC_DEBUG */
     ut_ad(mutex_own(&m_buf_pool->m_mutex));
-  
+
     ut_ad(mtr->m_start_lsn != 0);
     ut_ad(mtr->m_modifications);
     ut_ad(block->m_page.m_newest_modification <= mtr->m_end_lsn);
-  
+
     block->m_page.m_newest_modification = mtr->m_end_lsn;
-  
+
     if (!block->m_page.m_oldest_modification) {
-  
+
       block->m_page.m_oldest_modification = mtr->m_start_lsn;
       ut_ad(block->m_page.m_oldest_modification != 0);
-  
+
       insert_into_flush_list(block);
     } else {
       ut_ad(block->m_page.m_oldest_modification <= mtr->m_start_lsn);
     }
-  
+
     ++m_buf_pool->m_write_requests;
   }
-  
+
   /**
    * @brief This function should be called when recovery has modified a buffer page.
    *
@@ -223,46 +223,42 @@ struct Buf_flush {
    * @param start_lsn The start LSN of the first MTR in a set of MTRs.
    * @param end_lsn The end LSN of the last MTR in the set of MTRs.
    */
-  void recv_note_modification( Buf_block *block, uint64_t start_lsn, uint64_t end_lsn) {
+  void recv_note_modification(Buf_block *block, uint64_t start_lsn, uint64_t end_lsn) {
     ut_ad(block);
     ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
     ut_ad(block->m_page.m_buf_fix_count > 0);
-  
-  #ifdef UNIV_SYNC_DEBUG
+
+#ifdef UNIV_SYNC_DEBUG
     ut_ad(rw_lock_own(&(block->lock), RW_LOCK_EX));
-  #endif /* UNIV_SYNC_DEBUG */
-  
+#endif /* UNIV_SYNC_DEBUG */
+
     m_buf_pool->mutex_acquire();
-  
+
     ut_ad(block->m_page.m_newest_modification <= end_lsn);
-  
+
     block->m_page.m_newest_modification = end_lsn;
-  
+
     if (!block->m_page.m_oldest_modification) {
-  
+
       block->m_page.m_oldest_modification = start_lsn;
-  
+
       ut_ad(block->m_page.m_oldest_modification != 0);
-  
+
       insert_sorted_into_flush_list(block);
     } else {
       ut_ad(block->m_page.m_oldest_modification <= start_lsn);
     }
-  
+
     m_buf_pool->mutex_release();
   }
 
   /** When free_margin is called, it tries to make this many blocks
   available to replacement in the free list and at the end of the LRU list (to
   make sure that a read-ahead batch can be read efficiently in a single sweep). */
-  auto get_free_block_margin() const {
-    return 5 + srv_buf_pool->get_read_ahead_area();
-  }
+  auto get_free_block_margin() const { return 5 + srv_buf_pool->get_read_ahead_area(); }
 
   /** Extra margin to apply above the free block margin */
-  auto get_extra_margin() const {
-    return get_free_block_margin() / 4 + 100;
-  }
+  auto get_extra_margin() const { return get_free_block_margin() / 4 + 100; }
 
 #if defined UNIV_DEBUG
   /** Validates the flush list.
@@ -281,12 +277,12 @@ struct Buf_flush {
   struct Stat {
     /** Amount of redo generated. */
     uint64_t m_redo{};
-  
+
     /** Number of pages flushed. */
     ulint m_n_flushed{};
   };
 
-private:
+ private:
   /**
    * @brief Insert a block in the m_recovery_flush_list and returns a pointer to its predecessor or nullptr if no predecessor.
    * The ordering is maintained on the basis of the <oldest_modification, space, offset> key.
@@ -385,8 +381,7 @@ private:
    */
   bool ready_for_flush(Buf_page *bpage, buf_flush flush_type);
 
-
-private:
+ private:
   /**
    * @brief The buffer pool.
    */
@@ -409,6 +404,5 @@ private:
   /** Number of pages flushed through non m_flush_list flushes. */
   ulint m_LRU_flush_page_count{};
 
-/* @} */
-
+  /* @} */
 };

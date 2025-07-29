@@ -27,8 +27,8 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "innodb0types.h"
 #include "mem0mem.h"
 #include "rem0types.h"
-#include "ut0ut.h"
 #include "ut0lst.h"
+#include "ut0ut.h"
 
 struct Index;
 
@@ -186,18 +186,18 @@ sym_tab_add_null_lit() */
 /* The following are used in two places, dtype_t and  Field, we
 want to ensure that they are identical and also want to ensure that
 all bit-fields can be packed tightly in both structs. */
-#define DTYPE_FIELDS   \
-  /** Main data type */ \
-  uint8_t mtype; \
-  /* The remaining fields do not affect alphabetical ordering: */ \
-  /** Length of the column in bytes. */ \
-  uint16_t len; \
+#define DTYPE_FIELDS                                                  \
+  /** Main data type */                                               \
+  uint8_t mtype;                                                      \
+  /* The remaining fields do not affect alphabetical ordering: */     \
+  /** Length of the column in bytes. */                               \
+  uint16_t len;                                                       \
   /** Precise type; user data type, charset code, flags to indicate \
-   * nullability, signedness, whether this is a binary string */  \
-  unsigned prtype : 24; \
-  /** Minimum length of a character, in bytes */ \
-  unsigned mbminlen : 2; \
-  /** Maximum length of bytes to store the string length) */ \
+   * nullability, signedness, whether this is a binary string */ \
+  unsigned prtype : 24;                                               \
+  /** Minimum length of a character, in bytes */                      \
+  unsigned mbminlen : 2;                                              \
+  /** Maximum length of bytes to store the string length) */          \
   unsigned mbmaxlen : 3;
 
 struct dtype_t {
@@ -304,7 +304,7 @@ struct big_rec_field_t {
   /** Stored data length, in bytes */
   ulint len;
 
-   /** Stored data */
+  /** Stored data */
   const void *data;
 };
 

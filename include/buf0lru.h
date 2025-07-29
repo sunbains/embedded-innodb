@@ -37,21 +37,21 @@ struct Buf_LRU {
   static constexpr ulint STAT_N_INTERVAL = 50;
 
   /** @name Heuristics for detecting index scan @{ */
-  
+
   /** The denominator of buf_LRU_old_ratio. */
   static constexpr ulint OLD_RATIO_DIV = 1024;
-  
+
   /** Maximum value of buf_LRU_old_ratio.
   @see m_old_adjust_len
   @see m_old_ratio_update */
   static constexpr ulint OLD_RATIO_MAX = OLD_RATIO_DIV;
-  
+
   /** Minimum value of buf_LRU_old_ratio.
   @see buf_LRU_old_adjust_len
   @see buf_LRU_old_ratio_update
   The minimum must exceed (OLD_TOLERANCE + 5) * OLD_RATIO_DIV / OLD_MIN_LEN. */
   static constexpr ulint OLD_RATIO_MIN = 51;
-  
+
   /** Minimum LRU list length for which the LRU_old pointer is defined.  8 megabytes of 16k pages */
   static constexpr ulint OLD_MIN_LEN = 512;
 
@@ -64,7 +64,7 @@ struct Buf_LRU {
     uncompressed frame but the control block cannot be
     relocated */
     CANNOT_RELOCATE,
-  
+
     /** Not freed because of some other reason */
     NOT_FREED
   };
@@ -81,10 +81,7 @@ struct Buf_LRU {
 
   /** Constructor
   @param[in] old_threshold_ms   Move the blocks to the "new" list after this threshold. */
-  explicit Buf_LRU(Buf_pool *buf_pool)
-    : m_buf_pool(buf_pool),
-      m_old_ratio(s_old_ratio),
-      m_old_threshold_ms(s_old_threshold_ms) {}
+  explicit Buf_LRU(Buf_pool *buf_pool) : m_buf_pool(buf_pool), m_old_ratio(s_old_ratio), m_old_threshold_ms(s_old_threshold_ms) {}
 
   /**
    * Tries to remove LRU flushed blocks from the end of the LRU list and put
@@ -148,7 +145,7 @@ struct Buf_LRU {
    * @return A free control block, or nullptr if the buf_block->free list is empty.
    */
   Buf_block *get_free_only();
-  
+
   /**
    * Returns a free block from the buf_pool. The block is taken off the
    * free list. If it is empty, blocks are moved from the end of the
@@ -157,14 +154,14 @@ struct Buf_LRU {
    * @return The free control block, in state BUF_BLOCK_READY_FOR_USE.
    */
   Buf_block *get_free_block();
-  
+
   /**
    * Puts a block back to the free list.
    * 
    * @param block The block to be freed. Must not contain a file page.
    */
   void block_free_non_file_page(Buf_block *block);
-  
+
   /**
    * Adds a block to the LRU list.
    * 
@@ -174,65 +171,55 @@ struct Buf_LRU {
    *            start regardless of this parameter.
    */
   void add_block(Buf_page *bpage, bool old);
-  
+
   /**
    * Moves a block to the start of the LRU list.
    * 
    * @param bpage The control block to be moved.
    */
   void make_block_young(Buf_page *bpage);
-  
+
   /**
    * Moves a block to the end of the LRU list.
    * 
    * @param bpage The control block to be moved.
    */
   void make_block(Buf_page *bpage);
-  
+
   /**
    * Update the historical stats that we are collecting for LRU eviction policy 
    * at the end of each interval.
    */
   void stat_update();
-  
+
   /**
    * Reset buffer LRU variables.
    */
   void var_init();
-  #if defined UNIV_DEBUG
-  
+#if defined UNIV_DEBUG
+
   /*** Validates the LRU list.
   @return	true */
   bool validate();
-  
+
   /*** Prints the LRU list. */
   void print();
-  
-  #endif /* UNIV_DEBUG */
-  
+
+#endif /* UNIV_DEBUG */
+
   /** Maximum LRU list search length in buf_pool->m_flusher->LRU_recommendation() */
-  static ulint get_free_search_len () {
-    return 5 + 2 * srv_buf_pool->get_read_ahead_area();
-  }
+  static ulint get_free_search_len() { return 5 + 2 * srv_buf_pool->get_read_ahead_area(); }
 
   /** Increments the I/O counter in buf_LRU_stat_cur. */
-  void stat_inc_io() {
-    ++m_stat_cur.m_io;
-  }
+  void stat_inc_io() { ++m_stat_cur.m_io; }
 
   /** @return the old theshold in ms at which we can move the block to new area of the list. */
-  auto get_old_threshold_ms() const {
-    return m_old_threshold_ms;
-  }
+  auto get_old_threshold_ms() const { return m_old_threshold_ms; }
 
   /** @return the old theshold in ms at which we can move the block to new area of the list. */
-  auto get_old_threshold_ms_ptr() {
-    return &m_old_threshold_ms;
-  }
+  auto get_old_threshold_ms_ptr() { return &m_old_threshold_ms; }
 
-  auto get_old_ratio() const {
-    return m_old_ratio;
-  }
+  auto get_old_ratio() const { return m_old_ratio; }
 
   /**
    * Updates buf_LRU_old_ratio.
@@ -244,7 +231,7 @@ struct Buf_LRU {
    */
   ulint old_ratio_update(ulint old_pct, bool adjust);
 
-private:
+ private:
   /** Takes a block out of the LRU list and page hash table.
 
   @param[in,out] bpage          block, must contain a file page and
@@ -253,7 +240,7 @@ private:
   @return the new state of the block BUF_BLOCK_REMOVE_HASH otherwise */
   /** Puts a file page whose has no hash index to the free list. */
   void block_free_hashed_page(Buf_block *block);
-  
+
   /** Takes a block out of the LRU list and page hash table.
   
   @param[in,out] bpage          block, must contain a file page and
@@ -298,14 +285,13 @@ private:
 				block is added to the start, regardless of this parameter */
   void add_block_low(Buf_page *bpage, bool old);
 
-private:
-
+ private:
   static_assert(OLD_RATIO_MIN < OLD_RATIO_MAX, "error OLD_RATIO_MIN >= OLD_RATIO_MAX");
-  
+
   static_assert(OLD_RATIO_MAX <= OLD_RATIO_DIV, "error OLD_RATIO_MAX > OLD_RATIO_DIV");
-  
+
   /* @} */
-  
+
   /** @name Heuristics for detecting index scan @{ */
 
   /** The buffer pool. */
@@ -314,7 +300,7 @@ private:
   /** Reserve this much/OLD_RATIO_DIV of the buffer pool for "old" blocks.
   Protected by buf_pool_mutex. */
   ulint m_old_ratio{};
-  
+
   /** Move blocks to "new" LRU list only if the first access was at least this
   many milliseconds ago.  Not protected by any mutex or latch. */
   ulint m_old_threshold_ms{};
@@ -329,8 +315,7 @@ private:
   frames in the buffer pool, we set this to true */
   bool m_switched_on_monitor{};
 
-public:
-
+ public:
   /** Current operation counters. Not protected by any mutex. Cleared by stat_update(). */
   Stat m_stat_cur{};
 
@@ -343,5 +328,4 @@ public:
 
   /** Configuration for startup. */
   static ulint s_old_ratio;
-
 };

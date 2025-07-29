@@ -27,8 +27,8 @@ Created 1/16/1996 Heikki Tuuri
 #include "innodb0types.h"
 
 #include "api0ucode.h"
-#include "mach0data.h"
 #include "data0types.h"
+#include "mach0data.h"
 
 struct dtype_t;
 extern ulint data_client_default_charset_coll;
@@ -47,14 +47,7 @@ extern ulint data_client_default_charset_coll;
  *
  * @return length of the prefix, in bytes
  */
-ulint dtype_get_at_most_n_mbchars(
-  ulint prtype,
-  ulint mbminlen,
-  ulint mbmaxlen,
-  ulint prefix_len,
-  ulint data_len,
-  const char *str
-);
+ulint dtype_get_at_most_n_mbchars(ulint prtype, ulint mbminlen, ulint mbmaxlen, ulint prefix_len, ulint data_len, const char *str);
 
 /**
  * Checks if a data main type is a string type. Also a BLOB is considered a string type.
@@ -123,7 +116,6 @@ inline ulint dtype_get_attrib(const dtype_t *type);
  * Reset dtype variables.
  */
 void dtype_var_init();
-
 
 /**
  * Gets the client charset-collation code for user string types.
@@ -362,13 +354,13 @@ inline void dtype_new_read_for_order_and_null_size(dtype_t *type, const byte *bu
   type->len = mach_read_from_2(buf + 2);
 
 #if MULTIBYTE_CHARSET
-  // FIXME: 
+  // FIXME:
   ulint charset_coll = mach_read_from_2(buf + 4) & 0x7fff;
 #endif /* MULTIBYTE_CHARSET */
 
   if (dtype_is_string_type(type->mtype)) {
 #if MULTIBYTE_CHARSET
-/* FIXME: This is probably MySQL specific too. */
+    /* FIXME: This is probably MySQL specific too. */
     ut_a(charset_coll > 0);
     ut_a(charset_coll < 256);
     type->prtype = dtype_form_prtype(type->prtype, charset_coll);
@@ -393,8 +385,7 @@ inline void dtype_new_read_for_order_and_null_size(dtype_t *type, const byte *bu
 inline ulint dtype_get_fixed_size_low(ulint mtype, ulint prtype, ulint len, ulint mbminlen, ulint mbmaxlen) {
   switch (mtype) {
     case DATA_SYS:
-      IF_DEBUG(
-      switch (prtype & DATA_CLIENT_TYPE_MASK) {
+      IF_DEBUG(switch (prtype & DATA_CLIENT_TYPE_MASK) {
         case DATA_ROW_ID:
           ut_ad(len == DATA_ROW_ID_LEN);
           break;
@@ -445,8 +436,7 @@ inline ulint dtype_get_fixed_size_low(ulint mtype, ulint prtype, ulint len, ulin
 inline ulint dtype_get_min_size_low(ulint mtype, ulint prtype, ulint len, ulint mbminlen, ulint mbmaxlen) {
   switch (mtype) {
     case DATA_SYS:
-      IF_DEBUG(
-      switch (prtype & DATA_CLIENT_TYPE_MASK) {
+      IF_DEBUG(switch (prtype & DATA_CLIENT_TYPE_MASK) {
         case DATA_ROW_ID:
           ut_ad(len == DATA_ROW_ID_LEN);
           break;

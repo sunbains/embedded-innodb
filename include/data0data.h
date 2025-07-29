@@ -181,7 +181,7 @@ inline void *dfield_get_data(const dfield_t *field) /*!< in: field */
   ut_ad(field);
   ut_ad((field->len == UNIV_SQL_NULL) || (field->data != &data_error));
 
-  return const_cast<void*>(field->data);
+  return const_cast<void *>(field->data);
 }
 
 /**

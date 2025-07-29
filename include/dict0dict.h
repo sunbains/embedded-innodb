@@ -93,9 +93,7 @@ struct Dict {
    * 
    * @return DB_SUCCESS or error code.
    */
-  db_err create_instance() noexcept {
-    return m_store.create_instance();
-  }
+  db_err create_instance() noexcept { return m_store.create_instance(); }
 
   /**
    * Get the database name length in a table name.
@@ -122,14 +120,12 @@ struct Dict {
    * 
    * @return DB_SUCCESS or error code.
    */
-  [[nodiscard]] db_err open(bool in_crash_recovery) noexcept {
-    return m_loader.open(in_crash_recovery);
-  }
+  [[nodiscard]] db_err open(bool in_crash_recovery) noexcept { return m_loader.open(in_crash_recovery); }
 
   /**
    * Inits Dict::m_dummy_index, dummy index template required for recovery.
    */
-  [[nodiscard]]static Index *create_dummy_index() noexcept;
+  [[nodiscard]] static Index *create_dummy_index() noexcept;
 
   /**
    * Destroys Dict::m_dummy_index, dummy index template required for recovery.
@@ -266,7 +262,9 @@ struct Dict {
    * 
    * @return DB_SUCCESS or DB_CANNOT_DROP_CONSTRAINT if syntax error or the constraint id does not match.
    */
-  [[nodiscard]] db_err foreign_parse_drop_constraints(mem_heap_t *heap, Trx *trx, Table *table, ulint *n, const char ***constraints_to_drop) noexcept;
+  [[nodiscard]] db_err foreign_parse_drop_constraints(
+    mem_heap_t *heap, Trx *trx, Table *table, ulint *n, const char ***constraints_to_drop
+  ) noexcept;
 
   /**
    * @brief Finds an index that is equivalent to the one passed in and is not marked for deletion.
@@ -378,7 +376,9 @@ struct Dict {
    * 
    * @return own: node pointer
    */
-  [[nodiscard]] DTuple *index_build_node_ptr(const Index *index, const rec_t *rec, ulint page_no, mem_heap_t *heap, ulint level) noexcept;
+  [[nodiscard]] DTuple *index_build_node_ptr(
+    const Index *index, const rec_t *rec, ulint page_no, mem_heap_t *heap, ulint level
+  ) noexcept;
 
   /**
    * Copies an initial segment of a physical record, long enough to specify an index entry uniquely.
@@ -391,7 +391,9 @@ struct Dict {
    * 
    * @return pointer to the prefix record
    */
-  [[nodiscard]] rec_t *index_copy_rec_order_prefix(const Index *index, const rec_t *rec, ulint *n_fields, byte *&buf, ulint &buf_size) noexcept;
+  [[nodiscard]] rec_t *index_copy_rec_order_prefix(
+    const Index *index, const rec_t *rec, ulint *n_fields, byte *&buf, ulint &buf_size
+  ) noexcept;
 
   /**
    * Builds a typed data tuple out of a physical record.
@@ -518,9 +520,7 @@ struct Dict {
    * 
    * @return	number of free bytes on page, reserved for updates
    */
-  [[nodiscard]] constexpr static inline ulint index_get_space_reserve() noexcept {
-    return UNIV_PAGE_SIZE / 16;
-  }
+  [[nodiscard]] constexpr static inline ulint index_get_space_reserve() noexcept { return UNIV_PAGE_SIZE / 16; }
 
   /**
    * @brief Checks if a table is in the dictionary cache.
@@ -533,7 +533,7 @@ struct Dict {
     ut_ad(mutex_own(&m_mutex));
 
     if (const auto it = m_tables.find(table_name); it != m_tables.end()) {
-      return  it->second;
+      return it->second;
     } else {
       return nullptr;
     }
@@ -599,10 +599,9 @@ struct Dict {
   }
 
 #ifdef UNIT_TEST
-private:
+ private:
 #endif /* UNIT_TEST */
 
-  
   /**
    * @brief Builds the dictionary cache representation for a clustered index.
    *
@@ -706,9 +705,7 @@ private:
    * 
    * @param[in] name the table name
    */
-  void foreign_error_report(const char *name) noexcept {
-    log_err(" Foreign key constraint of table ", name);
-  }
+  void foreign_error_report(const char *name) noexcept { log_err(" Foreign key constraint of table ", name); }
 
   /**
    * @brief Report an error in a foreign key definition.
@@ -756,7 +753,9 @@ private:
    * 
    * @return scanned to
    */
-  const char *scan_id(const charset_t *cs, const char *ptr, mem_heap_t *heap, const char **id, bool table_id, bool accept_also_dot) noexcept;
+  const char *scan_id(
+    const charset_t *cs, const char *ptr, mem_heap_t *heap, const char **id, bool table_id, bool accept_also_dot
+  ) noexcept;
 
   /**
    * @brief Tries to scan a column name.
@@ -771,7 +770,9 @@ private:
    * 
    * @return Scanned to.
    */
-  const char *scan_col(const charset_t *cs, const char *ptr, bool *success, Table *table, const Column **column, mem_heap_t *heap, const char **name) noexcept;
+  const char *scan_col(
+    const charset_t *cs, const char *ptr, bool *success, Table *table, const Column **column, mem_heap_t *heap, const char **name
+  ) noexcept;
 
   /**
    * @brief Scans a table name from an SQL string.
@@ -786,7 +787,9 @@ private:
    * 
    * @return Scanned to.
    */
-  const char *scan_table_name(const charset_t *cs, const char *ptr, Table **table, const char *name, bool *success, mem_heap_t *heap, const char **ref_name) noexcept;
+  const char *scan_table_name(
+    const charset_t *cs, const char *ptr, Table **table, const char *name, bool *success, mem_heap_t *heap, const char **ref_name
+  ) noexcept;
 
   /**
    * @brief Skips one id. The id is allowed to contain also '.'.
@@ -852,7 +855,9 @@ private:
    *
    * @return error code or DB_SUCCESS
    */
-  db_err create_foreign_constraints(Trx *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks) noexcept;
+  db_err create_foreign_constraints(
+    Trx *trx, mem_heap_t *heap, const charset_t *cs, const char *sql_string, const char *name, bool reject_fks
+  ) noexcept;
 
   /**
    * @brief Prints info of a foreign key constraint.
@@ -861,7 +866,7 @@ private:
    */
   void foreign_print(Foreign *foreign) noexcept;
 
-public:
+ public:
   /**
    * mutex protecting the data dictionary; protects also the disk-based
    * dictionary system tables; this mutex serializes CREATE TABLE and
@@ -874,7 +879,7 @@ public:
     /** Constructor */
     Stats_mutex() noexcept {
       for (auto &mutex : m_mutexes) {
-        mutex_create(&mutex, IF_DEBUG("Dict::Stats_mutex",) IF_SYNC_DEBUG(SYNC_INDEX_TREE,) Current_location());
+        mutex_create(&mutex, IF_DEBUG("Dict::Stats_mutex", ) IF_SYNC_DEBUG(SYNC_INDEX_TREE, ) Current_location());
       }
     }
 
@@ -896,13 +901,9 @@ public:
       return &m_mutexes[ut_uint64_fold(id) % DICT_INDEX_STAT_MUTEX_SIZE];
     }
 
-    void enter(Dict_id id) noexcept {
-      mutex_enter(get_mutex(id));
-    }
+    void enter(Dict_id id) noexcept { mutex_enter(get_mutex(id)); }
 
-    void exit(Dict_id id) noexcept {
-      mutex_exit(get_mutex(id));
-    }
+    void exit(Dict_id id) noexcept { mutex_exit(get_mutex(id)); }
 
     /** Mutex protecting Index::Stats::m_n_diff_key_vals[] */
     mutable std::array<mutex_t, DICT_INDEX_STAT_MUTEX_SIZE> m_mutexes;

@@ -343,7 +343,8 @@ inline bool que_thr_peek_stop(que_thr_t *thr) {
   auto graph = thr->graph;
   auto trx = graph->trx;
 
-  if (graph->state != QUE_FORK_ACTIVE || trx->m_que_state == TRX_QUE_LOCK_WAIT || (!trx->m_signals.empty() && trx->m_que_state == TRX_QUE_RUNNING)) {
+  if (graph->state != QUE_FORK_ACTIVE || trx->m_que_state == TRX_QUE_LOCK_WAIT ||
+      (!trx->m_signals.empty() && trx->m_que_state == TRX_QUE_RUNNING)) {
 
     return true;
   }

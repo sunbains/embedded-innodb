@@ -22,11 +22,11 @@ Query graph
 Created 5/27/1996 Heikki Tuuri
 *******************************************************/
 
+#include "que0que.h"
 #include "eval0eval.h"
 #include "eval0proc.h"
 #include "log0log.h"
 #include "pars0types.h"
-#include "que0que.h"
 #include "row0ins.h"
 #include "row0purge.h"
 #include "row0sel.h"
@@ -1049,7 +1049,7 @@ static void que_run_threads_low(que_thr_t *thr) {
 
       thr = next_thr;
     }
-  } 
+  }
 }
 
 void que_run_threads(que_thr_t *thr) {

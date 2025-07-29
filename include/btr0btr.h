@@ -43,8 +43,7 @@ struct Btree {
    * @param[in] fsp             File space.
    * @param[in] buf_pool        Buffer pool.
    */
-  Btree(Lock_sys *lock_sys, FSP *fsp, Buf_pool *buf_pool) noexcept
-  : m_lock_sys{lock_sys}, m_fsp{fsp}, m_buf_pool{buf_pool} {}
+  Btree(Lock_sys *lock_sys, FSP *fsp, Buf_pool *buf_pool) noexcept : m_lock_sys{lock_sys}, m_fsp{fsp}, m_buf_pool{buf_pool} {}
 
   /**
    * Destructor.
@@ -224,7 +223,7 @@ struct Btree {
    */
   void node_ptr_delete(Index *index, Buf_block *block, mtr_t *mtr) noexcept;
 
-  #ifdef UNIV_DEBUG
+#ifdef UNIV_DEBUG
   /**
    * Checks that the node pointer to a page is appropriate.
    * @param[in,out] index       Index tree
@@ -233,7 +232,7 @@ struct Btree {
    * @return	true
    */
   [[nodiscard]] bool check_node_ptr(Index *index, Buf_block *block, mtr_t *mtr) noexcept;
-  #endif /* UNIV_DEBUG */
+#endif /* UNIV_DEBUG */
 
   /**
    *  Tries to merge the page first to the left immediate brother if such a
@@ -313,7 +312,9 @@ struct Btree {
    * 
    * @return	new allocated block, x-latched; nullptr if out of space
    */
-  [[nodiscard]] Buf_block *page_alloc(const Index *index, page_no_t hint_page_no, byte file_direction, ulint level, mtr_t *mtr) noexcept;
+  [[nodiscard]] Buf_block *page_alloc(
+    const Index *index, page_no_t hint_page_no, byte file_direction, ulint level, mtr_t *mtr
+  ) noexcept;
 
   /**
    * Frees a file page used in an index tree. NOTE: cannot free field external
@@ -368,10 +369,10 @@ struct Btree {
    * 
    * @return	buffer block
    */
-  [[nodiscard]]inline Buf_block *block_get(space_id_t space_id, page_no_t page_no, ulint rw_latch, mtr_t *mtr) noexcept {
-    Buf_pool::Request req {
+  [[nodiscard]] inline Buf_block *block_get(space_id_t space_id, page_no_t page_no, ulint rw_latch, mtr_t *mtr) noexcept {
+    Buf_pool::Request req{
       .m_rw_latch = rw_latch,
-      .m_page_id = { space_id, page_no },
+      .m_page_id = {space_id, page_no},
       .m_mode = BUF_GET,
       .m_file = __FILE__,
       .m_line = __LINE__,
@@ -443,9 +444,7 @@ struct Btree {
    * 
    * @return	level, leaf level == 0
    */
-  [[nodiscard]] inline ulint page_get_level(const page_t *page, mtr_t *) noexcept {
-    return page_get_level_low(page);
-  }
+  [[nodiscard]] inline ulint page_get_level(const page_t *page, mtr_t *) noexcept { return page_get_level_low(page); }
 
   /**
    * Sets the node level field in an index page.
@@ -569,7 +568,7 @@ struct Btree {
   static void destroy(Btree *&btree) noexcept;
 
 #ifdef UNIT_TEST
-private:
+ private:
 #endif /* UNIT_TEST */
 
 #ifdef UNIV_BTR_DEBUG
@@ -585,7 +584,7 @@ private:
    * @return Returns true if the root file segment is valid, otherwise false.
    */
   [[nodiscard]] static bool root_fseg_validate(const fseg_header_t *seg_header, space_id_t space) noexcept;
-  #endif /* UNIV_BTR_DEBUG */
+#endif /* UNIV_BTR_DEBUG */
 
   /**
    * Gets the root node of a tree and x-latches it.
@@ -605,7 +604,7 @@ private:
    * @param[in] level           Btree level of the page
    * @param[in,out] mtr         Mini-transaction coverring the operation.
    */
-   void page_create(Buf_block *block, Index *index, ulint level, mtr_t *mtr) noexcept;
+  void page_create(Buf_block *block, Index *index, ulint level, mtr_t *mtr) noexcept;
 
   /**
    * Sets the child node file address in a node pointer.
@@ -640,7 +639,9 @@ private:
    * 
    * @return The father node pointer as an array of offsets.
    */
-  [[nodiscard]] ulint *page_get_father_node_ptr(ulint *offsets, mem_heap_t *heap, Btree_cursor *cursor, mtr_t *mtr, Source_location location) noexcept;
+  [[nodiscard]] ulint *page_get_father_node_ptr(
+    ulint *offsets, mem_heap_t *heap, Btree_cursor *cursor, mtr_t *mtr, Source_location location
+  ) noexcept;
 
   /**
    * Returns the upper level node pointer to a page.
@@ -655,7 +656,9 @@ private:
    *
    * @return Rec::get_col_offsets() of the node pointer record.
    */
-  [[nodiscard]] ulint *page_get_father_block(ulint *offsets, mem_heap_t *heap, Index *index, Buf_block *block, mtr_t *mtr, Btree_cursor *cursor) noexcept;
+  [[nodiscard]] ulint *page_get_father_block(
+    ulint *offsets, mem_heap_t *heap, Index *index, Buf_block *block, mtr_t *mtr, Btree_cursor *cursor
+  ) noexcept;
 
   /**
    * Seeks to the upper level node pointer to a page.
@@ -718,7 +721,9 @@ private:
    * @param[in] heap            Temporary memory heap.
    * @return	true if fits
    */
-  [[nodiscard]] bool page_insert_fits(Btree_cursor *cursor, const rec_t *split_rec, const ulint *offsets, const DTuple *tuple, ulint n_ext, mem_heap_t *heap) noexcept;
+  [[nodiscard]] bool page_insert_fits(
+    Btree_cursor *cursor, const rec_t *split_rec, const ulint *offsets, const DTuple *tuple, ulint n_ext, mem_heap_t *heap
+  ) noexcept;
 
   /**
    * Attaches the halves of an index page on the appropriate level in an
@@ -731,7 +736,9 @@ private:
    * @param[in] direction       FSP_UP or FSP_DOWN.
    * @param[in] mtr             Mini-transaction handle.
    */
-  void attach_half_pages(Index *index, Buf_block *block, rec_t *split_rec, Buf_block *new_block, ulint direction, mtr_t *mtr) noexcept;
+  void attach_half_pages(
+    Index *index, Buf_block *block, rec_t *split_rec, Buf_block *new_block, ulint direction, mtr_t *mtr
+  ) noexcept;
 
   /**
    * Determine if a tuple is smaller than any record on the page.
@@ -744,7 +751,9 @@ private:
    * 
    * @return true if smaller
    */
-  [[nodiscard]] bool page_tuple_smaller(Btree_cursor *cursor, const DTuple *tuple, ulint *offsets, ulint n_uniq, mem_heap_t **heap) noexcept;
+  [[nodiscard]] bool page_tuple_smaller(
+    Btree_cursor *cursor, const DTuple *tuple, ulint *offsets, ulint n_uniq, mem_heap_t **heap
+  ) noexcept;
 
   /**
    * Removes a page from the level list of pages.
@@ -844,7 +853,7 @@ private:
    * @param[in] level           The B-tree level.
    * @param[in] block           The index page.
    */
-  void validate_report1(Index *index, ulint level, const Buf_block *block) noexcept; 
+  void validate_report1(Index *index, ulint level, const Buf_block *block) noexcept;
 
   /**
    * Report an error on two pages of an index tree.

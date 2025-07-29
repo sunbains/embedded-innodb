@@ -58,13 +58,13 @@ two elements from the array and returns 1, if the first is bigger,
     ut_ad(ARR);                                                                           \
     ut_ad(AUX_ARR);                                                                       \
                                                                                           \
-    if ((LOW) == (HIGH)-1) {                                                              \
+    if ((LOW) == (HIGH) - 1) {                                                            \
       return;                                                                             \
-    } else if ((LOW) == (HIGH)-2) {                                                       \
-      if (CMP_FUN((CMP_CTX), (ARR)[LOW], (ARR)[(HIGH)-1]) > 0) {                          \
+    } else if ((LOW) == (HIGH) - 2) {                                                     \
+      if (CMP_FUN((CMP_CTX), (ARR)[LOW], (ARR)[(HIGH) - 1]) > 0) {                        \
         (AUX_ARR)[LOW] = (ARR)[LOW];                                                      \
-        (ARR)[LOW] = (ARR)[(HIGH)-1];                                                     \
-        (ARR)[(HIGH)-1] = (AUX_ARR)[LOW];                                                 \
+        (ARR)[LOW] = (ARR)[(HIGH) - 1];                                                   \
+        (ARR)[(HIGH) - 1] = (AUX_ARR)[LOW];                                               \
       }                                                                                   \
       return;                                                                             \
     }                                                                                     \

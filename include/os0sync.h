@@ -40,8 +40,8 @@ Created 9/6/1995 Heikki Tuuri
 
 #include <atomic>
 #include <chrono>
-#include <mutex>
 #include <condition_variable>
+#include <mutex>
 
 /** An asynchronous signal sent between threads */
 struct Cond_var {
@@ -54,7 +54,7 @@ struct Cond_var {
    * does not * want to pass any signal_count value. To distinguish
    * between the two cases we initialize signal_count to 1 here.
    */
-  Cond_var() : m_is_set(), m_signal_count(1) { }
+  Cond_var() : m_is_set(), m_signal_count(1) {}
 
   /**
    * Destructor
@@ -113,13 +113,13 @@ struct Cond_var {
    * @param[in] name the name of the event, if nullptr the event is created without a name
    * @return the event handle
    */
-  static Cond_var* create(const char *name);
+  static Cond_var *create(const char *name);
 
   /**
    * Frees an event object.
    * @param[in] event event to free
    */
-  static void destroy(Cond_var* event);
+  static void destroy(Cond_var *event);
 
   /** This mutex protects the next fields */
   std::mutex m_mutex{};

@@ -37,9 +37,7 @@ messages to stderr. It should simply startup and shutdown InnoDB. */
 #define TABLE "t"
 
 /** Just ignore all messages. */
-static int null_logger(ib_msg_stream_t, const char *, ...) {
-  return 0;
-}
+static int null_logger(ib_msg_stream_t, const char *, ...) { return 0; }
 
 int main(int argc, char *argv[]) {
   ib_err_t err;

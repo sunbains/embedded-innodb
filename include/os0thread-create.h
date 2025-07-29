@@ -35,8 +35,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "os0thread.h"
 
 #include <atomic>
-#include <future>
 #include <functional>
+#include <future>
 
 /** Number of threads active. */
 extern std::atomic_int os_thread_count;
@@ -49,7 +49,7 @@ struct Runnable {
   @param[in] args               Variable number of args to F
   @retval f return value. */
   template <typename F, typename... Args>
-  void operator()(F &&f, Args &&... args) {
+  void operator()(F &&f, Args &&...args) {
     auto task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
 
     std::atomic_thread_fence(std::memory_order_release);
@@ -79,7 +79,7 @@ start the thread by calling start() on any of those objects.
 @param[in]	args      Zero or more args
 @return thread instance. */
 template <typename F, typename... Args>
-std::thread create_detached_thread(F &&f, Args &&... args) {
+std::thread create_detached_thread(F &&f, Args &&...args) {
   std::thread thread(std::move(Runnable()), f, args...);
 
   thread.detach();
@@ -96,7 +96,7 @@ start the thread by calling start() on any of those objects.
 @param[in]	args      Zero or more args
 @return thread instance. */
 template <typename F, typename... Args>
-std::thread create_joinable_thread(F &&f, Args &&... args) {
+std::thread create_joinable_thread(F &&f, Args &&...args) {
   std::thread thread(std::move(Runnable()), f, args...);
 
   return thread;
@@ -107,7 +107,7 @@ std::thread create_joinable_thread(F &&f, Args &&... args) {
 @param[in]	f        Callable instance
 @param[in]	args     Zero or more args */
 template <typename Container, typename F, typename... Args>
-void par_for(const Container &c, size_t n, F &&f, Args &&... args) {
+void par_for(const Container &c, size_t n, F &&f, Args &&...args) {
   if (c.empty()) {
     return;
   }

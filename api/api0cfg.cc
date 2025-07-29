@@ -95,31 +95,31 @@ static ib_err_t ib_cfg_assign(ib_cfg_type_t type, void *dst, const void *src) {
   switch (type) {
     case IB_CFG_IBOOL: {
 
-      *static_cast<bool*>(dst) = *const_cast<bool*>(static_cast<const bool *>(src));
+      *static_cast<bool *>(dst) = *const_cast<bool *>(static_cast<const bool *>(src));
       return DB_SUCCESS;
     }
 
     case IB_CFG_ULINT: {
 
-      *static_cast<ulint *>(dst) = *const_cast<ulint*>(static_cast<const ulint *>(src));
+      *static_cast<ulint *>(dst) = *const_cast<ulint *>(static_cast<const ulint *>(src));
       return DB_SUCCESS;
     }
 
     case IB_CFG_ULONG: {
 
-      *static_cast<ulong *>(dst) = *const_cast<ulong*>(static_cast<const ulong *>(src));
+      *static_cast<ulong *>(dst) = *const_cast<ulong *>(static_cast<const ulong *>(src));
       return DB_SUCCESS;
     }
 
     case IB_CFG_TEXT: {
 
-      *static_cast<char **>(dst) = *static_cast<char**>(const_cast<void*>(src));
+      *static_cast<char **>(dst) = *static_cast<char **>(const_cast<void *>(src));
       return DB_SUCCESS;
     }
 
     case IB_CFG_CB: {
 
-      *reinterpret_cast<ib_cb_t*>(dst) = *reinterpret_cast<ib_cb_t*>(const_cast<void*>((src)));
+      *reinterpret_cast<ib_cb_t *>(dst) = *reinterpret_cast<ib_cb_t *>(const_cast<void *>((src)));
 
       return DB_SUCCESS;
     }
@@ -967,4 +967,3 @@ ib_err_t ib_cfg_shutdown() {
 
   return DB_SUCCESS;
 }
-

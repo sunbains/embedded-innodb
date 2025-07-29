@@ -23,8 +23,8 @@ lock queues.
 Created July 16, 2007 Vasil Dimov
 *******************************************************/
 
-#include "innodb0types.h"
 #include "lock0iter.h"
+#include "innodb0types.h"
 #include "lock0lock.h"
 #include "ut0dbg.h"
 #include "ut0lst.h"

@@ -227,7 +227,7 @@ read_view_t *read_view_open_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
   ulint n = 0;
 
   /* No active transaction should be visible, except cr_trx */
-  for (auto trx: srv_trx_sys->m_trx_list) {
+  for (auto trx : srv_trx_sys->m_trx_list) {
     ut_ad(trx->m_magic_n == TRX_MAGIC_N);
 
     if (trx->m_id != cr_trx_id && (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED)) {
@@ -339,7 +339,7 @@ cursor_view_t *read_cursor_view_create(Trx *cr_trx) {
   ulint n = 0;
   /* No active transaction should be visible */
 
-  for (auto trx: srv_trx_sys->m_trx_list) {
+  for (auto trx : srv_trx_sys->m_trx_list) {
     if (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED) {
 
       read_view_set_nth_trx_id(view, n, trx->m_id);

@@ -103,7 +103,7 @@ char *Dict_load::get_first_table_name_in_db(const char *name) noexcept {
       return table_name;
     }
 
-    (void) pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(&mtr);
   }
 }
 
@@ -132,7 +132,7 @@ std::string Dict_load::to_string() noexcept {
   pcur.open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
-    (void) pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(&mtr);
 
     const auto rec = pcur.get_rec();
 
@@ -184,7 +184,7 @@ std::string Dict_load::to_string() noexcept {
 
       mtr.start();
 
-      (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
     }
   }
 
@@ -243,7 +243,7 @@ db_err Dict_load::open(bool in_crash_recovery) noexcept {
   auto fil = fsp->m_fil;
 
   for (;;) {
-    (void) pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(&mtr);
 
     const auto rec = pcur.get_rec();
 
@@ -274,7 +274,7 @@ db_err Dict_load::open(bool in_crash_recovery) noexcept {
 
         std::string str{};
 
-        str +=  std::format("Table {} in InnoDB data dictionary has unknown type {:x}.", name, flags);
+        str += std::format("Table {} in InnoDB data dictionary has unknown type {:x}.", name, flags);
 
         log_err(str);
 
@@ -319,7 +319,7 @@ db_err Dict_load::open(bool in_crash_recovery) noexcept {
 
         mtr.start();
 
-        (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+        (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
       }
     }
   }
@@ -402,7 +402,7 @@ db_err Dict_load::load_columns(Table *table, mem_heap_t *heap) noexcept {
 
     table->add_col(name, mtype, prtype, col_len);
 
-    (void) pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(&mtr);
   }
 
   pcur.close();
@@ -449,7 +449,7 @@ db_err Dict_load::load_fields(Index *index, mem_heap_t *heap) noexcept {
     by ALTER TABLE ADD INDEX. */
 
     if (rec_get_deleted_flag(rec)) {
-      (void) pcur.move_to_next_user_rec(&mtr);
+      (void)pcur.move_to_next_user_rec(&mtr);
       continue;
     }
 
@@ -483,9 +483,9 @@ db_err Dict_load::load_fields(Index *index, mem_heap_t *heap) noexcept {
 
     field = rec_get_nth_field(rec, 4, &len);
 
-    (void) index->add_field(mem_heap_strdupl(heap, reinterpret_cast<char *>(field), len), prefix_len);
+    (void)index->add_field(mem_heap_strdupl(heap, reinterpret_cast<char *>(field), len), prefix_len);
 
-    (void) pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(&mtr);
   }
 
   pcur.close();
@@ -543,7 +543,7 @@ db_err Dict_load::load_indexes(Table *table, mem_heap_t *heap) noexcept {
       break;
     } else if (rec_get_deleted_flag(rec)) {
       /* Skip delete marked records */
-      (void) pcur.move_to_next_user_rec(&mtr);
+      (void)pcur.move_to_next_user_rec(&mtr);
       continue;
     }
 
@@ -598,7 +598,8 @@ db_err Dict_load::load_indexes(Table *table, mem_heap_t *heap) noexcept {
 
       return DB_CORRUPTION;
 
-    } else if (is_sys_table && ((type & DICT_CLUSTERED) || (table == m_dict->m_sys_tables && name_len == sizeof("ID_IND") - 1 && memcmp(name_buf, "ID_IND", name_len) == 0))) {
+    } else if (is_sys_table && ((type & DICT_CLUSTERED) || (table == m_dict->m_sys_tables && name_len == sizeof("ID_IND") - 1 &&
+                                                            memcmp(name_buf, "ID_IND", name_len) == 0))) {
 
       /* The index was created in memory already at booting of the database server */
 
@@ -626,7 +627,7 @@ db_err Dict_load::load_indexes(Table *table, mem_heap_t *heap) noexcept {
       }
     }
 
-    (void) pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(&mtr);
   }
 
   cleanup();
@@ -786,7 +787,7 @@ Table *Dict_load::load_table(ib_recovery_t recovery, const char *name) noexcept 
   return table;
 }
 
-Table *Dict_load::load_table_on_id(ib_recovery_t recovery, Dict_id table_id) noexcept{
+Table *Dict_load::load_table_on_id(ib_recovery_t recovery, Dict_id table_id) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
   auto fsp = m_dict->m_store.m_fsp;
@@ -884,8 +885,10 @@ db_err Dict_load::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
   auto btree = m_dict->m_store.m_btree;
   Btree_pcursor pcur(fsp, btree);
 
-  foreign->m_foreign_col_names = reinterpret_cast<const char **>(mem_heap_alloc(foreign->m_heap, foreign->m_n_fields * sizeof(void *)));
-  foreign->m_referenced_col_names = reinterpret_cast<const char **>(mem_heap_alloc(foreign->m_heap, foreign->m_n_fields * sizeof(void *)));
+  foreign->m_foreign_col_names =
+    reinterpret_cast<const char **>(mem_heap_alloc(foreign->m_heap, foreign->m_n_fields * sizeof(void *)));
+  foreign->m_referenced_col_names =
+    reinterpret_cast<const char **>(mem_heap_alloc(foreign->m_heap, foreign->m_n_fields * sizeof(void *)));
 
   mtr_t mtr;
 
@@ -1067,7 +1070,7 @@ db_err Dict_load::load_foreigns(const char *table_name, bool check_charsets) noe
 
     pcur.open_on_user_rec(sec_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
-    for (auto rec = pcur.get_rec(); ; !pcur.is_on_user_rec(), (void) pcur.move_to_next_user_rec(&mtr)) {
+    for (auto rec = pcur.get_rec();; !pcur.is_on_user_rec(), (void)pcur.move_to_next_user_rec(&mtr)) {
 
       /* Now we have the record in the secondary index containing a table
       name and a foreign constraint ID */
@@ -1119,7 +1122,7 @@ db_err Dict_load::load_foreigns(const char *table_name, bool check_charsets) noe
 
       mtr.start();
 
-      (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
     }
 
     mem_heap_free(heap);
@@ -1151,8 +1154,8 @@ db_err Dict_load::load_system_tables() noexcept {
   time asks for a new row id, then because the counter is now divisible by ..._MARGIN,
   it will immediately be updated to the disk-based header. */
 
-
-  store.m_row_id = ut_uint64_align_up(mtr.read_uint64(hdr + DICT_HDR_ROW_ID), DICT_HDR_ROW_ID_WRITE_MARGIN) + DICT_HDR_ROW_ID_WRITE_MARGIN;
+  store.m_row_id =
+    ut_uint64_align_up(mtr.read_uint64(hdr + DICT_HDR_ROW_ID), DICT_HDR_ROW_ID_WRITE_MARGIN) + DICT_HDR_ROW_ID_WRITE_MARGIN;
 
   /* Insert into the dictionary cache the descriptions of the basic system tables */
 
@@ -1182,9 +1185,9 @@ db_err Dict_load::load_system_tables() noexcept {
 
   m_dict->m_sys_tables = table;
 
-  auto index = Index::create(table, "CLUST_IND", Page_id { DICT_HDR_SPACE, NULL_PAGE_NO }, DICT_UNIQUE | DICT_CLUSTERED, 1);
+  auto index = Index::create(table, "CLUST_IND", Page_id{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 1);
 
-  (void) index->add_field("NAME", 0);
+  (void)index->add_field("NAME", 0);
 
   index->m_id = DICT_TABLES_ID;
 
@@ -1192,9 +1195,9 @@ db_err Dict_load::load_system_tables() noexcept {
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
-  index = Index::create(table, "ID_IND", Page_id { DICT_HDR_SPACE, NULL_PAGE_NO }, DICT_UNIQUE, 1);
+  index = Index::create(table, "ID_IND", Page_id{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE, 1);
 
-  (void) index->add_field("ID", 0);
+  (void)index->add_field("ID", 0);
 
   index->m_id = DICT_TABLE_IDS_ID;
 
@@ -1218,10 +1221,10 @@ db_err Dict_load::load_system_tables() noexcept {
 
   m_dict->m_sys_columns = table;
 
-  index = Index::create(table, "CLUST_IND", Page_id { DICT_HDR_SPACE, NULL_PAGE_NO }, DICT_UNIQUE | DICT_CLUSTERED, 2);
+  index = Index::create(table, "CLUST_IND", Page_id{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
 
-  (void) index->add_field("TABLE_ID", 0);
-  (void) index->add_field("POS", 0);
+  (void)index->add_field("TABLE_ID", 0);
+  (void)index->add_field("POS", 0);
 
   index->m_id = DICT_COLUMNS_ID;
 
@@ -1255,10 +1258,10 @@ db_err Dict_load::load_system_tables() noexcept {
 
   m_dict->m_sys_indexes = table;
 
-  index = Index::create(table, "CLUST_IND", Page_id { DICT_HDR_SPACE, NULL_PAGE_NO }, DICT_UNIQUE | DICT_CLUSTERED, 2);
+  index = Index::create(table, "CLUST_IND", Page_id{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
 
-  (void) index->add_field("TABLE_ID", 0);
-  (void) index->add_field("ID", 0);
+  (void)index->add_field("TABLE_ID", 0);
+  (void)index->add_field("ID", 0);
 
   index->m_id = DICT_INDEXES_ID;
 
@@ -1278,10 +1281,10 @@ db_err Dict_load::load_system_tables() noexcept {
 
   m_dict->m_sys_fields = table;
 
-  index = Index::create(table, "CLUST_IND", Page_id { DICT_HDR_SPACE, NULL_PAGE_NO }, DICT_UNIQUE | DICT_CLUSTERED, 2);
+  index = Index::create(table, "CLUST_IND", Page_id{DICT_HDR_SPACE, NULL_PAGE_NO}, DICT_UNIQUE | DICT_CLUSTERED, 2);
 
-  (void) index->add_field("INDEX_ID", 0);
-  (void) index->add_field("POS", 0);
+  (void)index->add_field("INDEX_ID", 0);
+  (void)index->add_field("POS", 0);
 
   index->m_id = DICT_FIELDS_ID;
 

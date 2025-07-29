@@ -87,13 +87,9 @@ constexpr size_t BTR_LATCH_FOR_DELETE = 32768;
 free the pages of externally stored fields. */
 constexpr size_t BTR_MODIFY_EXTERNAL = 65536;
 
-#define BTR_LATCH_MODE_WITHOUT_FLAGS(latch_mode) \
-  ((latch_mode) & \
-   ~(BTR_INSERT | BTR_DELETE_MARK | BTR_DELETE | \
-     BTR_ESTIMATE | \
-     BTR_ALREADY_S_LATCHED | \
-     BTR_LATCH_FOR_INSERT | BTR_LATCH_FOR_DELETE | BTR_MODIFY_EXTERNAL))
-
+#define BTR_LATCH_MODE_WITHOUT_FLAGS(latch_mode)                                                                              \
+  ((latch_mode) & ~(BTR_INSERT | BTR_DELETE_MARK | BTR_DELETE | BTR_ESTIMATE | BTR_ALREADY_S_LATCHED | BTR_LATCH_FOR_INSERT | \
+                    BTR_LATCH_FOR_DELETE | BTR_MODIFY_EXTERNAL))
 
 /** @brief Maximum depth of a B-tree in InnoDB.
 

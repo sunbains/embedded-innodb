@@ -33,6 +33,7 @@ struct mtr_t;
 struct Index;
 struct DTuple;
 struct read_view_t;
+struct Lock_sys;
 
 struct Row_vers {
 
@@ -149,7 +150,7 @@ struct Row_vers {
   [[nodiscard]] db_err build_for_semi_consistent_read(Row &row) noexcept;
 
 #ifndef UNIT_TEST
-  private:
+ private:
 #endif /* !UNIT_TEST */
 
   /** The transaction system */

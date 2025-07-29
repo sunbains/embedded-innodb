@@ -670,7 +670,8 @@ void eval_func(func_node_t *func_node) /*!< in: function node */
     /* The functions are not defined for SQL null argument
     values, except for eval_cmp and notfound */
 
-    if (dfield_is_null(que_node_get_val(arg)) && (func_class != PARS_FUNC_CMP) && (func != PARS_NOTFOUND_TOKEN) && (func != PARS_PRINTF_TOKEN)) {
+    if (dfield_is_null(que_node_get_val(arg)) && (func_class != PARS_FUNC_CMP) && (func != PARS_NOTFOUND_TOKEN) &&
+        (func != PARS_PRINTF_TOKEN)) {
       ut_error;
     }
 

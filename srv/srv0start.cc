@@ -68,15 +68,14 @@ Created 2/16/1996 Heikki Tuuri
 #include "row0ins.h"
 #include "row0row.h"
 #include "row0sel.h"
-#include "row0upd.h"
 #include "row0undo.h"
+#include "row0upd.h"
 #include "srv0srv.h"
 #include "sync0sync.h"
 #include "trx0purge.h"
 #include "trx0roll.h"
 #include "trx0sys.h"
 #include "trx0trx.h"
-#include "srv0srv.h"
 #include "usr0sess.h"
 #include "ut0mem.h"
 
@@ -118,7 +117,6 @@ static std::array<ulint, SRV_MAX_N_IO_THREADS + 6> n;
 /** io_handler_thread identifiers */
 static os_thread_id_t thread_ids[SRV_MAX_N_IO_THREADS + 6];
 
-
 /** The system data file name. */
 static std::string srv_system_file_name{};
 
@@ -139,11 +137,10 @@ constexpr ulint OS_AIO_N_PENDING_IOS_PER_THREAD = 256;
  */
 static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutdown) noexcept;
 
-
 void *io_handler_thread(void *arg) {
   auto segment = *((ulint *)arg);
 
-  while (srv_fil->aio_wait(segment)) { }
+  while (srv_fil->aio_wait(segment)) {}
 
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit.
@@ -174,9 +171,7 @@ static db_err create_log_file(const std::string &filename) noexcept {
 
   log_warn(std::format("Log file {} did not exist: creating a new log file", filename));
 
-  log_info(std::format(
-    "Setting log file {} size to {} MB",
-    filename, srv_config.m_log_file_curr_size / (1024 * 1024)));
+  log_info(std::format("Setting log file {} size to {} MB", filename, srv_config.m_log_file_curr_size / (1024 * 1024)));
 
   log_info("Database physically writes the file full: wait...");
 
@@ -194,7 +189,6 @@ static db_err create_log_file(const std::string &filename) noexcept {
     srv_fil->node_create(filename.c_str(), srv_config.m_log_file_size, SRV_LOG_SPACE_FIRST_ID, false);
     return DB_SUCCESS;
   }
-
 }
 
 /**
@@ -223,8 +217,7 @@ static db_err open_log_file(const std::string &filename) noexcept {
   if (size != off_t(srv_config.m_log_file_curr_size)) {
 
     log_err(std::format(
-      "Log file {} is of different size {} bytes than the configured {} bytes!",
-      filename, size, srv_config.m_log_file_curr_size
+      "Log file {} is of different size {} bytes than the configured {} bytes!", filename, size, srv_config.m_log_file_curr_size
     ));
 
     return DB_ERROR;
@@ -258,7 +251,8 @@ static db_err create_system_tablespace(const std::string &path) noexcept {
         "Data home directory '{}' does not exist, is not a directory"
         " or you don't have read-write permissions. We require that"
         " the home directory must exist and be readable and writeable",
-        home_dir.generic_string()));
+        home_dir.generic_string()
+      ));
       return DB_ERROR;
     }
   }
@@ -268,10 +262,8 @@ static db_err create_system_tablespace(const std::string &path) noexcept {
     return DB_TABLE_EXISTS;
   }
 
-  log_info(std::format(
-    "Creating the system tablespace: 'system.idb' of size {} MB ",
-    SYSTEM_IBD_FILE_INITIAL_SIZE/(1024 * 1024)
-  ));
+  log_info(std::format("Creating the system tablespace: 'system.idb' of size {} MB ", SYSTEM_IBD_FILE_INITIAL_SIZE / (1024 * 1024))
+  );
 
   bool success{};
   auto fh = os_file_create(filename.c_str(), OS_FILE_CREATE, OS_FILE_NORMAL, OS_DATA_FILE, &success);
@@ -639,7 +631,8 @@ ib_err_t InnoDB::start() noexcept {
       return DB_ERROR;
     }
 
-    log_sys->acquire();;
+    log_sys->acquire();
+    ;
 
     recv_reset_logs(max_flushed_lsn, true);
 
@@ -922,13 +915,10 @@ ib_err_t InnoDB::start() noexcept {
     log_info(std::format("system.ibd file size in the header is {} pages", size));
   }
 
-  log_info(std::format(
-    "InnoDB {} started; log sequence number {}",
-    VERSION, srv_start_lsn
-  ));
+  log_info(std::format("InnoDB {} started; log sequence number {}", VERSION, srv_start_lsn));
 
   if (srv_config.m_force_recovery != IB_RECOVERY_DEFAULT) {
-    log_warn(std::format("!!! force_recovery is set to {} !!!", (int) srv_config.m_force_recovery));
+    log_warn(std::format("!!! force_recovery is set to {} !!!", (int)srv_config.m_force_recovery));
   }
 
   srv_was_started = true;
@@ -941,7 +931,7 @@ ib_err_t InnoDB::start() noexcept {
  * 
  * @return	true if all threads exited.
  */
-static bool srv_threads_try_shutdown(Cond_var* lock_timeout_thread_event) noexcept  {
+static bool srv_threads_try_shutdown(Cond_var *lock_timeout_thread_event) noexcept {
   /* Let the lock timeout thread exit */
   os_event_set(lock_timeout_thread_event);
 
@@ -981,10 +971,9 @@ static bool srv_threads_shutdown() noexcept {
     }
   }
 
-  log_warn(std::format(
-    "{} threads created by InnoDB had not exited at shutdown!",
-    (ulong)os_thread_count.load(std::memory_order_relaxed)
-  ));
+  log_warn(
+    std::format("{} threads created by InnoDB had not exited at shutdown!", (ulong)os_thread_count.load(std::memory_order_relaxed))
+  );
 
   return false;
 }
@@ -1013,8 +1002,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
     normal shutdown. In case of very fast shutdown, however, we can
     proceed without waiting for monitor threads. */
 
-    if (shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH &&
-        (srv_error_monitor_active || srv_lock_timeout_active || srv_monitor_active)) {
+    if (shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH && (srv_error_monitor_active || srv_lock_timeout_active || srv_monitor_active)) {
 
       mutex_exit(&kernel_mutex);
       continue;
@@ -1122,10 +1110,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
   ut_a(srv_n_threads_active[SRV_MASTER] == 0);
 
   if (lsn < srv_start_lsn) {
-    log_err(std::format(
-      "Log sequence number at shutdown {} is lower than at startup {}",
-      lsn, srv_start_lsn
-    ));
+    log_err(std::format("Log sequence number at shutdown {} is lower than at startup {}", lsn, srv_start_lsn));
   }
 
   srv_shutdown_lsn = lsn;

@@ -331,7 +331,7 @@ bool Purge_sys::truncate_if_arr_empty() noexcept {
 
     return true;
 
-  } else  {
+  } else {
 
     return false;
   }
@@ -383,11 +383,11 @@ void Purge_sys::rseg_get_next_history_log(trx_rseg_t *rseg) noexcept {
     list cannot be longer than 20 000 undo logs now. */
 
     if (srv_trx_sys->m_rseg_history_len > 20000) {
-        log_warn(std::format(
-          "Purge reached the head of the history list, but its length is still"
-          " reported as {}! Please submit a detailed bug report.",
-          srv_trx_sys->m_rseg_history_len
-        ));
+      log_warn(std::format(
+        "Purge reached the head of the history list, but its length is still"
+        " reported as {}! Please submit a detailed bug report.",
+        srv_trx_sys->m_rseg_history_len
+      ));
     }
 
     mutex_exit(&kernel_mutex);
@@ -444,7 +444,7 @@ void Purge_sys::choose_next_log() noexcept {
         space = rseg->space;
         min_trx_no = rseg->last_trx_no;
 
-	      /* We assume in purge of externally stored fields that space id == 0 */
+        /* We assume in purge of externally stored fields that space id == 0 */
         ut_a(space == SYS_TABLESPACE);
 
         page_no = rseg->last_page_no;
@@ -609,7 +609,7 @@ Purge_sys::Purge_sys(Trx *trx) noexcept : m_trx(trx) {
 
   rw_lock_create(&m_latch, SYNC_PURGE_LATCH);
 
-  mutex_create(&m_mutex, IF_DEBUG("Purge_sys::m_mutex",) IF_SYNC_DEBUG(SYNC_PURGE_SYS,) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("Purge_sys::m_mutex", ) IF_SYNC_DEBUG(SYNC_PURGE_SYS, ) Current_location());
 
   m_heap = mem_heap_create(256);
 

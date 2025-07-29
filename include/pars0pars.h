@@ -228,12 +228,8 @@ que_node_t *pars_function_declaration(sym_node_t *sym_node);
  * @return sel_node_t* Select node in a query tree.
  */
 sel_node_t *pars_select_statement(
-  sel_node_t *select_node,
-  sym_node_t *table_list,
-  que_node_t *search_cond,
-  pars_res_word_t *for_update,
-  pars_res_word_t *consistent_read,
-  order_node_t *order_by
+  sel_node_t *select_node, sym_node_t *table_list, que_node_t *search_cond, pars_res_word_t *for_update,
+  pars_res_word_t *consistent_read, order_node_t *order_by
 );
 
 /**
@@ -320,7 +316,9 @@ if_node_t *pars_if_statement(que_node_t *cond, que_node_t *stat_list, que_node_t
  * 
  * @return for_node_t* For-statement node.
  */
-for_node_t *pars_for_statement(sym_node_t *loop_var, que_node_t *loop_start_limit, que_node_t *loop_end_limit, que_node_t *stat_list);
+for_node_t *pars_for_statement(
+  sym_node_t *loop_var, que_node_t *loop_start_limit, que_node_t *loop_end_limit, que_node_t *stat_list
+);
 
 /**
  * @brief Parses a while-statement.
@@ -448,8 +446,9 @@ Table_node *pars_create_table(sym_node_t *table_sym, sym_node_t *column_defs, vo
  * 
  * @return Index_node* Index create subgraph.
  */
-Index_node *pars_create_index(pars_res_word_t *unique_def, pars_res_word_t *clustered_def, sym_node_t *index_sym, sym_node_t *table_sym, sym_node_t *column_list);
-
+Index_node *pars_create_index(
+  pars_res_word_t *unique_def, pars_res_word_t *clustered_def, sym_node_t *index_sym, sym_node_t *table_sym, sym_node_t *column_list
+);
 
 /**
  * @brief Parses a procedure definition.
@@ -763,10 +762,10 @@ struct proc_node_struct {
 struct elsif_node_struct {
   /** type: QUE_NODE_ELSIF */
   que_common_t common;
-  
+
   /** if condition */
   que_node_t *cond;
-  
+
   /** statement list */
   que_node_t *stat_list;
 };
@@ -775,16 +774,16 @@ struct elsif_node_struct {
 struct if_node_struct {
   /** type: QUE_NODE_IF */
   que_common_t common;
-  
+
   /** if condition */
   que_node_t *cond;
-  
+
   /** statement list */
   que_node_t *stat_list;
-  
+
   /** else-part statement list */
   que_node_t *else_part;
-  
+
   /** elsif element list */
   elsif_node_t *elsif_list;
 };
@@ -793,10 +792,10 @@ struct if_node_struct {
 struct while_node_struct {
   /** type: QUE_NODE_WHILE */
   que_common_t common;
-  
+
   /** while condition */
   que_node_t *cond;
-  
+
   /** statement list */
   que_node_t *stat_list;
 };
@@ -873,4 +872,3 @@ struct col_assign_node_struct {
    */
   que_node_t *val;
 };
-

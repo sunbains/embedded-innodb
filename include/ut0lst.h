@@ -76,7 +76,7 @@ struct ut_list_node {
 #define UT_LIST_NODE_T(t) ut_list_node<t>
 
 /** TODO: Fix concept - temporarily disabled for compatibility */
-template<typename NodeGetter, typename Type>
+template <typename NodeGetter, typename Type>
 concept NodeGetterFor = true;
 
 #ifdef UNIV_DEBUG
@@ -106,35 +106,21 @@ struct ut_list_base {
    * 
    * This is required to copy the count explicitly.
    */
-  ut_list_base(const ut_list_base &rhs) noexcept
-    : m_first_element{rhs.m_first_element},
-      m_last_element{rhs.m_last_element} {
+  ut_list_base(const ut_list_base &rhs) noexcept : m_first_element{rhs.m_first_element}, m_last_element{rhs.m_last_element} {
     count.store(rhs.count.load(std::memory_order_acquire));
   }
 
-  static const node_type &get_node(const elem_type &e) noexcept {
-    return NodeGetter::get_node(e);
-  }
+  static const node_type &get_node(const elem_type &e) noexcept { return NodeGetter::get_node(e); }
 
-  static node_type &get_node(elem_type &e) noexcept {
-    return const_cast<node_type &>(get_node(const_cast<const elem_type &>(e)));
-  }
+  static node_type &get_node(elem_type &e) noexcept { return const_cast<node_type &>(get_node(const_cast<const elem_type &>(e))); }
 
-  static const elem_type *next(const elem_type &e) noexcept {
-    return get_node(e).m_next;
-  }
+  static const elem_type *next(const elem_type &e) noexcept { return get_node(e).m_next; }
 
-  static elem_type *next(elem_type &e) noexcept {
-    return const_cast<elem_type *>(next(const_cast<const elem_type &>(e)));
-  }
+  static elem_type *next(elem_type &e) noexcept { return const_cast<elem_type *>(next(const_cast<const elem_type &>(e))); }
 
-  static const elem_type *prev(const elem_type &e) noexcept {
-    return get_node(e).m_prev;
-  }
+  static const elem_type *prev(const elem_type &e) noexcept { return get_node(e).m_prev; }
 
-  static elem_type *prev(elem_type &e) noexcept {
-    return const_cast<elem_type *>(prev(const_cast<const elem_type &>(e)));
-  }
+  static elem_type *prev(elem_type &e) noexcept { return const_cast<elem_type *>(prev(const_cast<const elem_type &>(e))); }
 
   /** Pointer to list start, nullptr if empty. */
   elem_type *m_first_element{nullptr};
@@ -150,20 +136,16 @@ struct ut_list_base {
   /**
    * Returns number of nodes currently present in the list.
    */
-  size_t get_length() const noexcept{
+  size_t get_length() const noexcept {
     ut_ad(UT_LIST_IS_INITIALISED(*this));
     return count.load(std::memory_order_acquire);
   }
 
   /** Returns the number of nodes currently present in the list. */
-  inline size_t size() const noexcept {
-    return get_length();
-  }
+  inline size_t size() const noexcept { return get_length(); }
 
   /** Returns true if the list is empty. */
-  inline bool empty() const noexcept {
-    return size() == 0;
-  }
+  inline bool empty() const noexcept { return size() == 0; }
 
   inline void push_back(elem_type *elem) noexcept {
     ut_ad(UT_LIST_IS_INITIALISED(*this));
@@ -294,25 +276,19 @@ struct ut_list_base {
 
   template <typename E>
   struct base_iterator {
-    using pointer = E*;
+    using pointer = E *;
     using value_type = E;
-    using reference = E&;
+    using reference = E &;
     using difference_type = std::ptrdiff_t;
     using iterator_category = std::forward_iterator_tag;
 
     base_iterator(E *elem) : m_elem(elem) {}
 
-    bool operator==(const base_iterator &other) const {
-      return m_elem == other.m_elem;
-    }
+    bool operator==(const base_iterator &other) const { return m_elem == other.m_elem; }
 
-    bool operator!=(const base_iterator &other) const {
-      return !(*this == other);
-    }
+    bool operator!=(const base_iterator &other) const { return !(*this == other); }
 
-    E *operator*() const {
-      return m_elem;
-    }
+    E *operator*() const { return m_elem; }
 
     base_iterator &operator++() {
       m_elem = next(*m_elem);
@@ -325,21 +301,13 @@ struct ut_list_base {
   using iterator = base_iterator<elem_type>;
   using const_iterator = base_iterator<const elem_type>;
 
-  iterator begin() {
-    return m_first_element;
-  }
+  iterator begin() { return m_first_element; }
 
-  iterator end() {
-    return nullptr;
-  }
+  iterator end() { return nullptr; }
 
-  const_iterator begin() const {
-    return m_first_element;
-  }
+  const_iterator begin() const { return m_first_element; }
 
-  const_iterator end() const {
-    return nullptr;
-  }
+  const_iterator end() const { return nullptr; }
 
   /** A helper wrapper class for the list, which exposes begin(),end() iterators
   which let you remove the current item or items after it during the loop, while
@@ -349,25 +317,16 @@ struct ut_list_base {
   struct Removable {
 
     struct iterator {
-      iterator(ut_list_base &list, elem_type *elem)
-          : m_list{list},
-            m_elem{elem},
-            m_prev_elem{elem ? prev(*elem) : nullptr} {
+      iterator(ut_list_base &list, elem_type *elem) : m_list{list}, m_elem{elem}, m_prev_elem{elem ? prev(*elem) : nullptr} {
         // We haven't really tested any other case yet:
         ut_ad(m_prev_elem == nullptr);
       }
 
-      bool operator==(const iterator &other) const {
-        return m_elem == other.m_elem;
-      }
+      bool operator==(const iterator &other) const { return m_elem == other.m_elem; }
 
-      bool operator!=(const iterator &other) const {
-        return !(*this == other);
-      }
+      bool operator!=(const iterator &other) const { return !(*this == other); }
 
-      elem_type *operator*() const {
-        return m_elem;
-      }
+      elem_type *operator*() const { return m_elem; }
 
       iterator &operator++() {
         /* if m_prev_elem existed before, then it should still belong to the
@@ -398,13 +357,9 @@ struct ut_list_base {
 
     Removable(ut_list_base &list) : m_list{list} {}
 
-    iterator begin() {
-      return iterator{m_list, m_list.m_first_element};
-    }
+    iterator begin() { return iterator{m_list, m_list.m_first_element}; }
 
-    iterator end() {
-      return iterator{m_list, nullptr};
-    }
+    iterator end() { return iterator{m_list, nullptr}; }
 
     ut_list_base &m_list;
   };
@@ -431,16 +386,12 @@ struct ut_list_base {
    * 
    * @see Removable
    */
-  Removable removable() {
-    return Removable{*this};
-  }
+  Removable removable() { return Removable{*this}; }
 };
 
 template <typename Type, ut_list_node<Type> Type::*node_ptr>
 struct ut_list_base_explicit_getter {
-  static const ut_list_node<Type> &get_node(const Type &element) {
-    return element.*node_ptr;
-  }
+  static const ut_list_node<Type> &get_node(const Type &element) { return element.*node_ptr; }
 };
 
 /**
@@ -448,8 +399,7 @@ struct ut_list_base_explicit_getter {
  * NOTE: In cases in which definition of t is not yet in scope and thus you can't
  * refer to t::m at this point yet, use UT_LIST_BASE_NODE_T_EXTERN macro instead.
  */
-#define UT_LIST_BASE_NODE_T(t, m) \
-  ut_list_base<t, ut_list_base_explicit_getter<t, &t::m>>
+#define UT_LIST_BASE_NODE_T(t, m) ut_list_base<t, ut_list_base_explicit_getter<t, &t::m>>
 
 /**
  * A helper for the UT_LIST_BASE_NODE_T_EXTERN which builds a name of a node
@@ -470,8 +420,7 @@ struct ut_list_base_explicit_getter {
  * in code which knows that get_node exists also knows its implementation.
  */
 #define UT_LIST_NODE_GETTER_DEFINITION(t, m) \
-  struct UT_LIST_NODE_GETTER(t, m)           \
-      : public ut_list_base_explicit_getter<t, &t::m> {}
+  struct UT_LIST_NODE_GETTER(t, m) : public ut_list_base_explicit_getter<t, &t::m> {}
 
 /**
  * A variant of UT_LIST_BASE_NODE_T to be used in rare cases where the full
@@ -480,8 +429,7 @@ struct ut_list_base_explicit_getter {
  * forward declare UT_LIST_NODE_GETTER(t,m) struct to be defined later by the
  * UT_LIST_NODE_GETTER_DEFINITION(t,m) once t::m is defined.
  */
-#define UT_LIST_BASE_NODE_T_EXTERN(t, m) \
-  ut_list_base<t, struct UT_LIST_NODE_GETTER(t, m)>
+#define UT_LIST_BASE_NODE_T_EXTERN(t, m) ut_list_base<t, struct UT_LIST_NODE_GETTER(t, m)>
 
 /**
  * Initializes the base node of a two-way list.
@@ -540,8 +488,7 @@ void ut_list_append(List &list, typename List::elem_type *elem) {
  * @param[in] elem2 node being inserted after ELEM1
  */
 template <typename List>
-void ut_list_insert(List &list, typename List::elem_type *elem1,
-                    typename List::elem_type *elem2) {
+void ut_list_insert(List &list, typename List::elem_type *elem1, typename List::elem_type *elem2) {
   ut_ad(elem1 != elem2);
   ut_ad(elem1 != nullptr);
   ut_ad(elem2 != nullptr);
@@ -571,8 +518,7 @@ void ut_list_insert(List &list, typename List::elem_type *elem1,
  * @param[in] elem1 node after which elem2 is inserted
  * @param[in] elem2 node being inserted after elem1
  */
-#define UT_LIST_INSERT_AFTER(LIST, ELEM1, ELEM2) \
-  ut_list_insert(LIST, ELEM1, ELEM2)
+#define UT_LIST_INSERT_AFTER(LIST, ELEM1, ELEM2) ut_list_insert(LIST, ELEM1, ELEM2)
 
 /**
  * Removes a node from a two-way linked list.
@@ -624,7 +570,7 @@ void ut_list_remove(List &list, typename List::elem_type *elem) {
 #define UT_LIST_GET_LEN(BASE) (BASE).get_length()
 
 template <typename List>
-inline auto ut_list_get_len(List& list) {
+inline auto ut_list_get_len(List &list) {
   ut_ad(UT_LIST_IS_INITIALISED(list));
   return list.get_length();
 }
@@ -639,7 +585,7 @@ inline auto ut_list_get_len(List& list) {
 #define UT_LIST_GET_FIRST(BASE) ut_list_get_first(BASE)
 
 template <typename List>
-inline auto ut_list_get_first(List& list) {
+inline auto ut_list_get_first(List &list) {
   ut_ad(UT_LIST_IS_INITIALISED(list));
   return list.m_first_element;
 }
@@ -654,7 +600,7 @@ inline auto ut_list_get_first(List& list) {
 #define UT_LIST_GET_LAST(BASE) ut_list_get_last(BASE)
 
 template <typename List>
-inline auto ut_list_get_last(List& list) {
+inline auto ut_list_get_last(List &list) {
   ut_ad(UT_LIST_IS_INITIALISED(list));
   return list.m_last_element;
 }
@@ -687,8 +633,7 @@ template <typename List>
 void ut_list_reverse(List &list) {
   ut_ad(UT_LIST_IS_INITIALISED(list));
   // NOTE: we use List::prev to iterate forward as .reverse() swaps arrows
-  for (auto elem = list.first_element; elem != nullptr;
-       elem = List::prev(*elem)) {
+  for (auto elem = list.first_element; elem != nullptr; elem = List::prev(*elem)) {
     List::get_node(*elem).reverse();
   }
 
@@ -709,8 +654,7 @@ void ut_list_validate(const List &list, Functor &functor) {
   /* Validate the list backwards. */
   size_t count = 0;
 
-  for (auto elem = list.m_last_element; elem != nullptr;
-       elem = List::prev(*elem)) {
+  for (auto elem = list.m_last_element; elem != nullptr; elem = List::prev(*elem)) {
     ++count;
   }
 

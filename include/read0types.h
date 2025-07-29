@@ -15,7 +15,6 @@ constexpr ulint VIEW_HIGH_GRANULARITY = 2;
 
 /* @} */
 
-
 /** Read view lists the trx ids of those transactions for which a consistent
 read should not see the modifications to the database. */
 struct read_view_t {

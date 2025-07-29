@@ -87,7 +87,6 @@ struct Row_undo {
   Dict *m_dict{};
 };
 
-
 /* A single query thread will try to perform the undo for all successive
 versions of a clustered index record, if the transaction has modified it
 several times during the execution which is rolled back. It may happen
@@ -215,9 +214,9 @@ struct Undo_node {
    * 
    * @return true if also previous modify or insert of this row should be undone
    */
-    [[nodiscard]] inline bool undo_previous_version(undo_no_t *undo_no) noexcept;
+  [[nodiscard]] inline bool undo_previous_version(undo_no_t *undo_no) noexcept;
 
-/**
+  /**
  * @brief Undoes a modify in a clustered index record.
  *
  * @param[in,out] thr           Query thread.
@@ -259,7 +258,7 @@ struct Undo_node {
    * 
    * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
-   [[nodiscard]] db_err remove_clustered_index_record_low(que_thr_t *thr, mtr_t *mtr, ulint mode) noexcept;
+  [[nodiscard]] db_err remove_clustered_index_record_low(que_thr_t *thr, mtr_t *mtr, ulint mode) noexcept;
 
   /**
    * @brief Delete marks or removes a secondary index entry if found.
@@ -271,7 +270,9 @@ struct Undo_node {
    * 
    * @return DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] db_err delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, Index *index, DTuple *entry, ulint mode) noexcept;
+  [[nodiscard]] db_err delete_mark_or_remove_secondary_index_entry(
+    que_thr_t *thr, Index *index, DTuple *entry, ulint mode
+  ) noexcept;
 
   /**
    * @brief Delete marks or removes a secondary index entry if found.
@@ -291,7 +292,7 @@ struct Undo_node {
      */
   [[nodiscard]] db_err delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, Index *index, DTuple *entry) noexcept;
 
-/**
+  /**
  * Delete unmarks a secondary index entry which must be found. It might not be
  * delete-marked at the moment, but it does not harm to unmark it anyway. We also
  * need to update the fields of the secondary index record if we updated its
@@ -304,7 +305,9 @@ struct Undo_node {
  * 
  * @return DB_FAIL or DB_SUCCESS or DB_OUT_OF_FILE_SPACE
  */
-  [[nodiscard]] db_err del_unmark_secondary_index_and_undo_update(ulint mode, que_thr_t *thr, Index *index, const DTuple *entry) noexcept;
+  [[nodiscard]] db_err del_unmark_secondary_index_and_undo_update(
+    ulint mode, que_thr_t *thr, Index *index, const DTuple *entry
+  ) noexcept;
 
   /**
    * @brief Undoes a modify in a clustered index record.

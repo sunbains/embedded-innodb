@@ -47,4 +47,3 @@ using col_assign_node_t = struct col_assign_node_struct;
 
 using sym_node_list_t = UT_LIST_BASE_NODE_T_EXTERN(sym_node_t, col_var_list);
 using func_node_list_t = UT_LIST_BASE_NODE_T_EXTERN(func_node_t, func_node_list);
-

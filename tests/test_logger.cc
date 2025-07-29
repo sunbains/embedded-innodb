@@ -8,6 +8,6 @@ Logger symbol definitions for tests
 
 // Logger symbol definitions for tests
 namespace logger {
-  int level = static_cast<int>(Debug);  // Default to Debug level for tests
-  const char* Progname = "innodb-test";
-}
+int level = static_cast<int>(Debug); // Default to Debug level for tests
+const char *Progname = "innodb-test";
+} // namespace logger

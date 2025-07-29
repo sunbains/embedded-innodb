@@ -64,11 +64,11 @@ void sync_array_free(Sync_check *arr); /** in, own: sync wait array */
 /** Reserves a wait array cell for waiting for an object.
 The event of the cell is reset to nonsignalled state. */
 void sync_array_reserve_cell(
-  Sync_check *arr, /** in: wait array */
-  void *object,      /** in: pointer to the object to wait for */
-  ulint type,        /** in: lock request type */
-  const char *file,  /** in: file where requested */
-  ulint line,        /** in: line where requested */
+  Sync_check *arr,  /** in: wait array */
+  void *object,     /** in: pointer to the object to wait for */
+  ulint type,       /** in: lock request type */
+  const char *file, /** in: file where requested */
+  ulint line,       /** in: line where requested */
   ulint *index
 ); /** out: index of the reserved cell */
 

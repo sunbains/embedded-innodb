@@ -163,7 +163,7 @@ constexpr byte MLOG_FILE_FLAG_TEMP = 1;
 /** Number of slots in memo */
 constexpr ulint MTR_BUF_MEMO_SIZE = 200;
 
-enum mtr_state_t : byte{
+enum mtr_state_t : byte {
   /** State is undefinedd. */
   MTR_UNDEFINED = 0,
 
@@ -254,7 +254,7 @@ inline const char *mlog_type_str(mlog_type_t type) noexcept {
     case MLOG_FILE_DELETE:
       return "MLOG_FILE_DELETE";
     default:
-      log_fatal("Unknown mlog_type_t: ", (ulint) type);
+      log_fatal("Unknown mlog_type_t: ", (ulint)type);
       return "UNKNOWN";
   }
 }

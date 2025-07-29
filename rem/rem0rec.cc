@@ -22,8 +22,8 @@ Record manager
 Created 5/30/1994 Heikki Tuuri
 *************************************************************************/
 
-#include <sstream>
 #include <format>
+#include <sstream>
 
 #include "btr0types.h"
 #include "mtr0log.h"
@@ -278,7 +278,7 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
   return offsets;
 }
 
-void Phy_rec::encode(Index *index, rec_t *rec, ulint status, const DFields& dfields) noexcept {
+void Phy_rec::encode(Index *index, rec_t *rec, ulint status, const DFields &dfields) noexcept {
   ulint null_mask = 1;
   ulint n_node_ptr_field;
 
@@ -394,7 +394,7 @@ void Phy_rec::encode(Index *index, rec_t *rec, ulint status, const DFields& dfie
   }
 }
 
-Phy_rec::Size Phy_rec::get_encoded_size(Index* index, ulint, const DFields& dfields) noexcept {
+Phy_rec::Size Phy_rec::get_encoded_size(Index *index, ulint, const DFields &dfields) noexcept {
   Size size{UT_BITS_IN_BYTES(index->m_n_nullable), 0};
 
   ut_ad(dfields.second > 0);
@@ -671,7 +671,6 @@ rec_t *rec_copy_prefix_to_buf(const rec_t *rec, const Index *index, ulint n_fiel
 
   ut_ad(rec_validate(rec));
 
-
   ulint area_start;
   const auto area_end = rec_get_field_start_offs(rec, n_fields);
 
@@ -795,13 +794,12 @@ bool rec_validate(const rec_t *rec, const ulint *offsets) noexcept {
 std::string rec_to_string(const rec_t *rec) noexcept {
   auto n = rec_get_n_fields(rec);
 
- auto str =  std::format("PHYSICAL RECORD: n_fields {}; {}-byte offsets; info bits {}",
-		    n,
-		    (rec_get_1byte_offs_flag(rec) ? 1 : 2),
-		    rec_get_info_bits(rec));
+  auto str = std::format(
+    "PHYSICAL RECORD: n_fields {}; {}-byte offsets; info bits {}", n, (rec_get_1byte_offs_flag(rec) ? 1 : 2), rec_get_info_bits(rec)
+  );
 
   for (ulint i{}; i < n; ++i) {
-    str +=std::format(" {}:", i);
+    str += std::format(" {}:", i);
 
     ulint len;
     auto data = rec_get_nth_field(rec, i, &len);

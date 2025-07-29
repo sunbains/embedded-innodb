@@ -146,7 +146,7 @@ struct Dict_store {
    */
   que_thr_t *create_index_step(que_thr_t *thr) noexcept;
 
- /**
+  /**
    * @brief Based on a table object, this function builds the entry to be inserted in the SYS_TABLES system table.
    * 
    * @param[in] table The table object.
@@ -167,7 +167,7 @@ struct Dict_store {
    */
   [[nodiscard]] DTuple *create_sys_columns_tuple(const Table *table, ulint i, mem_heap_t *heap) noexcept;
 
-/**
+  /**
  * @brief Add a single foreign key definition to the data dictionary tables in the database.
  * We also generate names to constraints that were not named by the user.
  * A generated constraint has a name of the format databasename/tablename_ibfk_NUMBER,
@@ -296,7 +296,7 @@ struct Dict_store {
    */
   [[nodiscard]] db_err foreign_eval_sql(pars_info_t *info, const char *sql, Table *table, Foreign *foreign, Trx *trx) noexcept;
 
-/**
+  /**
  * @brief Add a single foreign key field definition to the data dictionary tables in the database.
  * 
    * @param field_nr foreign field number
@@ -308,7 +308,7 @@ struct Dict_store {
    */
   [[nodiscard]] db_err add_foreign_field_to_dictionary(ulint field_nr, Table *table, Foreign *foreign, Trx *trx) noexcept;
 
-/**
+  /**
    * Adds foreign key definitions to data dictionary tables in the database.
    * We look at table->foreign_list, and also generate names to constraints
    * that were not named by the user. A generated constraint has a name of

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/ bin / bash
 #
 #Copyright(c) 2006, 2009, Innobase Oy.All Rights Reserved.
 #
@@ -16,17 +16,19 @@
 #
 #generate parser files from bison input files.
 
-set - eu
-OUTFILE=pars0grm.cc
-TMPFILE=${OUTFILE}.tab.cc
+set - eu OUTFILE = pars0grm.cc TMPFILE = ${OUTFILE}.tab.cc
 
-bison -d pars0grm.y -o ${TMPFILE}
-mv pars0grm.cc.tab.hh ../include/pars0grm.h
+                                             bison -
+                                         d pars0grm.y -
+                                         o ${TMPFILE} mv pars0grm.cc.tab.hh../
+                                             include /
+                                             pars0grm.h
 
-sed -e '
-s/'"$TMPFILE"'/'"$OUTFILE"'/;
-s/pars0grm.cc.tab.hh/pars0grm.h/;
-s/^\(\(YYSTYPE\| int\) yy\(char\|nerrs\)\)/static \1/;
+                                                 sed -
+                                         e ' s / '"$TMPFILE"' / '"$OUTFILE"' /
+    ;
+s / pars0grm.cc.tab.hh / pars0grm.h / ;
+s / ^\(\(YYSTYPE\| int\) yy\(char\| nerrs\)\) / static \1 / ;
 ' < "${TMPFILE}" > "${OUTFILE}"
 
-rm "${TMPFILE}"
+    rm "${TMPFILE}"

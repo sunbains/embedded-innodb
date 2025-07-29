@@ -155,7 +155,7 @@ static ib_err_t insert_rows(ib_crsr_t crsr, int start, int count) {
   int i;
   ib_err_t err;
   ib_tpl_t tpl = nullptr;
-  char *ptr = reinterpret_cast<char*>(malloc(8192));
+  char *ptr = reinterpret_cast<char *>(malloc(8192));
 
   tpl = ib_clust_read_tuple_create(crsr);
   assert(tpl != nullptr);

@@ -79,4 +79,3 @@ constexpr lint XAER_DUPID = -8;
 constexpr lint XAER_OUTSIDE = -9;
 
 /* @} */
-

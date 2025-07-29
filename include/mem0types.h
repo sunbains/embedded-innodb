@@ -36,10 +36,10 @@ constexpr ulint MEM_BLOCK_START_SIZE = 64;
 
 /** If a memory heap is allowed to grow into the buffer pool, the following
 is the maximum size for a single allocated buffer: */
-constexpr auto MEM_MAX_ALLOC_IN_BUF  = UNIV_PAGE_SIZE - 200;
+constexpr auto MEM_MAX_ALLOC_IN_BUF = UNIV_PAGE_SIZE - 200;
 
 [[nodiscard]] inline constexpr ulint mem_block_standard_size() {
- return UNIV_PAGE_SIZE >= 16384 ? 8000 : MEM_MAX_ALLOC_IN_BUF;
+  return UNIV_PAGE_SIZE >= 16384 ? 8000 : MEM_MAX_ALLOC_IN_BUF;
 }
 
 #define MEM_BLOCK_STANDARD_SIZE mem_block_standard_size()

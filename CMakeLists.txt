@@ -211,6 +211,9 @@ SET(INNODB_SOURCES
       pars/pars0pars.cc pars/pars0sym.cc
       lock/lock0lock.cc lock/lock0iter.cc
       log/log0log.cc log/log0recv.cc
+      log/log_buffer.cc log/log_checkpoint.cc log/log_core.cc 
+      log/log_group.cc log/log_write.cc log/log_io.cc log/log_io_uring.cc
+      log/recv_parse.cc log/recv_recovery.cc log/recv_scan.cc
       mach/mach0data.cc
       mem/mem0mem.cc
       mtr/mtr0log.cc mtr/mtr0mtr.cc
@@ -245,6 +248,8 @@ IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
   ADD_DEFINITIONS(-DUNIV_LINUX)
   # Static build for now
   ADD_LIBRARY(innodb STATIC ${INNODB_SOURCES})
+  # Link with liburing
+  TARGET_LINK_LIBRARIES(innodb uring)
 ENDIF(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
 # Configure Google Test if unit testing is enabled

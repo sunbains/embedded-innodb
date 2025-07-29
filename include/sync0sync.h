@@ -75,7 +75,7 @@ corresponding function. */
 
 /** NOTE! The following macro should be used in mutex locking, not the
 corresponding function. */
-#define mutex_enter_nowait(M) mutex_enter_nowait_func((M) IF_SYNC_DEBUG(, __FILE__, __LINE__))
+#define mutex_enter_nowait(M) mutex_enter_nowait_func((M)IF_SYNC_DEBUG(, __FILE__, __LINE__))
 
 /** NOTE! Use the corresponding macro in the header file, not this function
 directly. Tries to lock the mutex for the current thread. If the lock is not
@@ -399,7 +399,7 @@ extern bool sync_order_checks_on;
 extern bool sync_initialized;
 
 /** Global list of database mutexes (not OS mutexes) created. */
-using ut_mutex_list_base_node_t  = UT_LIST_BASE_NODE_T(mutex_t, list);
+using ut_mutex_list_base_node_t = UT_LIST_BASE_NODE_T(mutex_t, list);
 
 /** Global list of database mutexes (not OS mutexes) created. */
 extern ut_mutex_list_base_node_t mutex_list;

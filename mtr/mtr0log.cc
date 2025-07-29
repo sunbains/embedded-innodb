@@ -25,8 +25,8 @@ Created 12/7/1995 Heikki Tuuri
 #include "mtr0log.h"
 
 #include "buf0buf.h"
-#include "dict0store.h"
 #include "dict0dict.h"
+#include "dict0store.h"
 #include "log0recv.h"
 #include "page0page.h"
 #include "trx0sys.h"

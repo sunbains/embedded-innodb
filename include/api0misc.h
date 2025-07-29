@@ -29,7 +29,7 @@ bool ib_handle_errors(
                                               no new error, the value of
                                               trx->error_state at the entry of
                                               this  function */
-  Trx *trx,           /*!< in: transaction */
+  Trx *trx,             /*!< in: transaction */
   que_thr_t *thr,       /*!< in: query thread */
   trx_savept_t *savept
 ); /*!< in: savepoint or nullptr */
@@ -37,7 +37,7 @@ bool ib_handle_errors(
 /** Sets a lock on a table.
 @return	error code or DB_SUCCESS */
 enum db_err ib_trx_lock_table_with_retry(
-  Trx *trx,          /*!< in/out: transaction */
+  Trx *trx,     /*!< in/out: transaction */
   Table *table, /*!< in: table to lock */
   enum Lock_mode mode
 ); /*!< in: lock mode */

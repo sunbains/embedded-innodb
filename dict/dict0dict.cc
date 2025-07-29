@@ -31,9 +31,8 @@ Created 1/8/1996 Heikki Tuuri
 /** The dictionary system */
 Dict *srv_dict_sys{};
 
-Dict::Dict(Btree *btree) noexcept
-  : m_stats_mutex(), m_tables(), m_table_ids(), m_store(this, btree), m_loader(this), m_ddl{this} {
-  mutex_create(&m_mutex, IF_DEBUG("dict_mutex",) IF_SYNC_DEBUG(SYNC_DICT,) Current_location());
+Dict::Dict(Btree *btree) noexcept : m_stats_mutex(), m_tables(), m_table_ids(), m_store(this, btree), m_loader(this), m_ddl{this} {
+  mutex_create(&m_mutex, IF_DEBUG("dict_mutex", ) IF_SYNC_DEBUG(SYNC_DICT, ) Current_location());
 
   m_size = 0;
 
@@ -41,7 +40,7 @@ Dict::Dict(Btree *btree) noexcept
 
   rw_lock_create(&m_lock, SYNC_DICT_OPERATION);
 
-  mutex_create(&m_foreign_err_mutex, IF_DEBUG("dict_foreign_mutex",) IF_SYNC_DEBUG(SYNC_ANY_LATCH,) Current_location());
+  mutex_create(&m_foreign_err_mutex, IF_DEBUG("dict_foreign_mutex", ) IF_SYNC_DEBUG(SYNC_ANY_LATCH, ) Current_location());
 }
 
 Dict::~Dict() noexcept {
@@ -235,10 +234,10 @@ ulint Index::get_nth_field_pos(const Index *index, ulint col_no) const noexcept 
     const auto this_field = get_nth_field(i);
 
     if (this_field->m_col == check_field->m_col &&
-        (this_field->m_prefix_len == 0 ||
-        (this_field->m_prefix_len >= check_field->m_prefix_len && check_field->m_prefix_len != 0))) {
+        (this_field->m_prefix_len == 0 || (this_field->m_prefix_len >= check_field->m_prefix_len && check_field->m_prefix_len != 0)
+        )) {
 
-      return i; 
+      return i;
     }
   }
 
@@ -345,7 +344,7 @@ void Table::add_system_columns() noexcept {
   ut_ad(m_n_fields == m_n_cols - DATA_N_SYS_COLS);
   ut_ad(m_magic_n == DICT_TABLE_MAGIC_N);
 
-/* This check reminds that if a new system column is added to
+  /* This check reminds that if a new system column is added to
   the program, it should be dealt with here */
   static_assert(DATA_ROW_ID == 0, "error DATA_ROW_ID != 0");
   static_assert(DATA_TRX_ID == 1, "error DATA_TRX_ID != 1");
@@ -507,7 +506,8 @@ bool Dict::table_rename_in_cache(Table *table, const char *new_name, bool rename
 
       auto old_id = mem_strdup(foreign->m_id);
 
-      if (strlen(foreign->m_id) > strlen(old_name) + (sizeof(dict_ibfk) - 1) && memcmp(foreign->m_id, old_name, strlen(old_name) == 0) &&
+      if (strlen(foreign->m_id) > strlen(old_name) + (sizeof(dict_ibfk) - 1) &&
+          memcmp(foreign->m_id, old_name, strlen(old_name) == 0) &&
           !memcmp(foreign->m_id + strlen(old_name), dict_ibfk, (sizeof dict_ibfk) - 1)) {
 
         /* This is a generated >= 4.0.18 format id */
@@ -787,8 +787,7 @@ bool Dict::index_too_big_for_tree(const Table *table, const Index *new_index) no
     and a node pointer field.  When we have processed the
     unique columns, rec_max_size equals the size of the
     node pointer record minus the node pointer column. */
-    if (i + 1 == new_index->get_n_unique_in_tree() &&
-        rec_max_size + REC_NODE_PTR_SIZE >= page_ptr_max) {
+    if (i + 1 == new_index->get_n_unique_in_tree() && rec_max_size + REC_NODE_PTR_SIZE >= page_ptr_max) {
 
       return true;
     }
@@ -851,7 +850,7 @@ db_err Dict::index_add_to_cache(Index *index, ulint page_no, bool strict) noexce
     for (ulint i{}; i < n_ord; ++i) {
       const auto field = new_index->get_nth_field(i);
       const Column *col = field->get_col();
-      
+
       /* In dtuple_convert_big_rec(), variable-length columns
       that are longer than BTR_EXTERN_FIELD_REF_SIZE * 2
       may be chosen for external storage.  If the column appears
@@ -862,9 +861,9 @@ db_err Dict::index_add_to_cache(Index *index, ulint page_no, bool strict) noexce
       capacity of the undo log whenever new_index includes
       a co  lumn prefix on a column that may be stored externally. */
 
-      if (field->m_prefix_len > 0                /* Prefix index */
-          && col->m_ord_part == 0                /* Not yet ordering column */
-          && col->get_fixed_size() == 0          /* Variable-length */
+      if (field->m_prefix_len > 0       /* Prefix index */
+          && col->m_ord_part == 0       /* Not yet ordering column */
+          && col->get_fixed_size() == 0 /* Variable-length */
           && col->get_max_size() > BTR_EXTERN_FIELD_REF_SIZE * 2 /* Long enough */) {
 
         if (index_too_big_for_undo(table, new_index)) {
@@ -943,15 +942,13 @@ bool Table::link_cols(Index *index) noexcept {
   for (ulint i{}; i < index->get_n_fields(); ++i) {
     auto field = index->get_nth_field(i);
 
-    auto col = std::find_if(begin, end, [field](const auto col) -> auto {
-      return strcmp(col.m_name, field->m_name) == 0;
-    });
+    auto col = std::find_if(begin, end, [field](const auto col) -> auto { return strcmp(col.m_name, field->m_name) == 0; });
 
     if (col == end) {
       log_err("Column ", field->m_name, " in index ", index->m_name, " not found in table ", m_name);
     } else {
       ++n_found;
-      field->m_col = const_cast<Column*>(col);
+      field->m_col = const_cast<Column *>(col);
     }
   }
 
@@ -1097,7 +1094,7 @@ Index::Index(mem_heap_t *heap, Table *table, const char *index_name, Page_id pag
   ut_d(m_magic_n = DICT_INDEX_MAGIC_N);
 }
 
-Index * Index::create(Table *table, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept {
+Index *Index::create(Table *table, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept {
   ut_ad(table->m_name != nullptr);
   ut_ad(index_name != nullptr);
 
@@ -1119,7 +1116,7 @@ Index * Index::create(Table *table, const char *index_name, Page_id page_id, uli
   return index;
 }
 
-Index * Index::create(const char* table_name, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept {
+Index *Index::create(const char *table_name, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept {
   ut_ad(table_name != nullptr);
   ut_ad(index_name != nullptr);
 
@@ -1358,7 +1355,9 @@ Table::~Table() noexcept {
   ut_ad(m_magic_n == DICT_TABLE_MAGIC_N);
 }
 
-Table *Table::create(const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing, Source_location loc) noexcept {
+Table *Table::create(
+  const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing, Source_location loc
+) noexcept {
   ut_a(!(flags & (~0UL << DICT_TF2_BITS)));
 
   auto heap = mem_heap_create_func(DICT_HEAP_SIZE, MEM_HEAP_DYNAMIC, std::move(loc));
@@ -1400,7 +1399,6 @@ void Dict::index_name_print(Trx *trx, const Index *index) noexcept {
 
 Index *Dict::create_dummy_index() noexcept {
   Index *index{};
-
 
   /* Create dummy table and index for REDUNDANT infimum and supremum */
   auto table = Table::create("SYS_DUMMY", DICT_HDR_SPACE, 1, 0, false, Current_location());

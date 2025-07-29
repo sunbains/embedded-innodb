@@ -346,7 +346,7 @@ static void row_purge_upd_exist_or_extern(purge_node_t *node) {
     goto skip_secondaries;
   }
 
-  for(;node->index != nullptr; node->index = node->index->get_next()) {
+  for (; node->index != nullptr; node->index = node->index->get_next()) {
     auto index = node->index;
 
     if (srv_row_upd->changes_ord_field_binary(nullptr, node->index, node->update)) {
@@ -400,14 +400,14 @@ skip_secondaries:
       latching order if we would only later latch the
       root page of such a tree! */
 
-      (void) srv_btree_sys->root_get(index->m_page_id, &mtr);
+      (void)srv_btree_sys->root_get(index->m_page_id, &mtr);
 
       /* We assume in purge of externally stored fields
       that the space id of the undo log record is 0! */
 
-      Buf_pool::Request req {
+      Buf_pool::Request req{
         .m_rw_latch = RW_X_LATCH,
-        .m_page_id = { SYS_TABLESPACE, page_no },
+        .m_page_id = {SYS_TABLESPACE, page_no},
         .m_mode = BUF_GET,
         .m_file = __FILE__,
         .m_line = __LINE__,

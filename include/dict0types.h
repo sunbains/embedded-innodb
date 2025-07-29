@@ -266,9 +266,7 @@ struct Column {
    * 
    * @return The column number.
    */
-  [[nodiscard]] inline ulint get_no() const noexcept {
-    return m_ind;
-  }
+  [[nodiscard]] inline ulint get_no() const noexcept { return m_ind; }
 
   /**
    * Returns the ROW_FORMAT=REDUNDANT stored SQL NULL size of a column.
@@ -276,10 +274,8 @@ struct Column {
    * 
    * @return SQL null storage size in ROW_FORMAT=REDUNDANT
    */
-  [[nodiscard]] inline ulint get_sql_null_size() const noexcept {
-    return get_fixed_size();
-  }
-  #ifdef UNIV_DEBUG
+  [[nodiscard]] inline ulint get_sql_null_size() const noexcept { return get_fixed_size(); }
+#ifdef UNIV_DEBUG
 
   /**
    * Gets the column data type.
@@ -326,11 +322,9 @@ struct Column {
    * 
    * @return maximum size
    */
-  [[nodiscard]] inline ulint get_max_size() const noexcept {
-    return dtype_get_max_size_low(mtype, len);
-  }
+  [[nodiscard]] inline ulint get_max_size() const noexcept { return dtype_get_max_size_low(mtype, len); }
 
-  #endif /* UNIV_DEBUG */
+#endif /* UNIV_DEBUG */
   /* @{ */
   DTYPE_FIELDS
   /* @} */
@@ -343,7 +337,6 @@ struct Column {
 
   /** Nonzero if this column appears in the ordering fields of an index */
   unsigned m_ord_part : 1;
-
 };
 
 /** @brief DICT_MAX_INDEX_COL_LEN is measured in bytes and is the maximum
@@ -368,9 +361,7 @@ struct Field {
    * 
    * @return field->col, pointer to the table column
    */
-  [[nodiscard]] inline const Column *get_col() const noexcept {
-    return m_col;
-  }
+  [[nodiscard]] inline const Column *get_col() const noexcept { return m_col; }
 
   /**
    * Gets the field column.
@@ -379,9 +370,7 @@ struct Field {
    * 
    * @return field->col, pointer to the table column
    */
-  [[nodiscard]] inline Column *get_col() noexcept {
-    return const_cast<Column *>(static_cast<const Field *>(this)->get_col());
-  }
+  [[nodiscard]] inline Column *get_col() noexcept { return const_cast<Column *>(static_cast<const Field *>(this)->get_col()); }
 
   /** Pointer to the table column */
   Column *m_col{};
@@ -400,7 +389,7 @@ struct Field {
   uint32_t m_fixed_len{};
 };
 
-/** Data structure for an index. */ 
+/** Data structure for an index. */
 struct Index {
 
   /**
@@ -428,7 +417,7 @@ struct Index {
    */
   [[nodiscard]] static Index *create(Table *table, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept;
 
-/**
+  /**
    * @brief Creates an instance of an index without a parent table. Used in the SQL parser.
    * 
    * @param[in] table_name Parent table name
@@ -439,7 +428,9 @@ struct Index {
    * 
    * @return The created index object.
    */
-  [[nodiscard]] static Index *create(const char* table_name, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept;
+  [[nodiscard]] static Index *create(
+    const char *table_name, const char *index_name, Page_id page_id, ulint type, ulint n_fields
+  ) noexcept;
 
   /**
    * @brief Destroys an index instance.
@@ -456,7 +447,7 @@ struct Index {
   /**
    * @brief Destructor for an index instance.
    */
-  ~Index() = default; 
+  ~Index() = default;
 
   [[nodiscard]] bool is_clustered() const noexcept {
     ut_ad(m_magic_n == DICT_INDEX_MAGIC_N);
@@ -540,6 +531,7 @@ struct Index {
 
     return m_n_uniq;
   }
+
   /**
    * Gets the number of fields in the internal representation of an index
    * which uniquely determine the position of an index entry in the index, if
@@ -562,9 +554,7 @@ struct Index {
    * 
    * @return number of fields
    */
-  [[nodiscard]] inline ulint get_n_ordering_defined_by_user() const noexcept {
-    return m_n_user_defined_cols;
-  }
+  [[nodiscard]] inline ulint get_n_ordering_defined_by_user() const noexcept { return m_n_user_defined_cols; }
 
   /**
    * Gets the nth field of an index.
@@ -639,10 +629,8 @@ struct Index {
    * 
    * @return index, nullptr if none left
    */
-  [[nodiscard]] inline Index *get_next() noexcept {
-    return const_cast<Index *>(static_cast<const Index *>(this)->get_next());
-  }
-  
+  [[nodiscard]] inline Index *get_next() noexcept { return const_cast<Index *>(static_cast<const Index *>(this)->get_next()); }
+
   /**
    * Returns the minimum size of the column.
    * 
@@ -663,7 +651,7 @@ struct Index {
    */
   [[nodiscard]] inline ulint get_min_size() const noexcept;
 
-/**
+  /**
    * Gets the column position in the clustered index.
    *
    * @param[in] col table column
@@ -719,16 +707,14 @@ struct Index {
     return (m_type & DICT_UNIQUE) != 0;
   }
 
-/**
+  /**
    * Gets the column number in the owning table using the nth field in an index.
    * 
    * @param[in] pos position of the field
    * 
    * @return column number
    */
-  [[nodiscard]] inline ulint get_nth_table_col_no(ulint pos) const noexcept {
-    return m_fields[pos].m_col->m_ind;
-  }
+  [[nodiscard]] inline ulint get_nth_table_col_no(ulint pos) const noexcept { return m_fields[pos].m_col->m_ind; }
 
   /**
    * @brief Converts an index to a string representation.
@@ -805,7 +791,7 @@ struct Index {
    * 
    * @return The error code.
    */
-   [[nodiscard]] db_err add_to_cache(Table *table, page_no_t page_no, bool strict) noexcept;
+  [[nodiscard]] db_err add_to_cache(Table *table, page_no_t page_no, bool strict) noexcept;
 
   /**
    * Calculates the minimum record length in an index.
@@ -819,9 +805,7 @@ struct Index {
    * 
    * @return The read-write lock.
    */
-  [[nodiscard]] inline rw_lock_t *get_lock() const noexcept {
-    return &m_lock;
-  }
+  [[nodiscard]] inline rw_lock_t *get_lock() const noexcept { return &m_lock; }
 
   /**
    * Builds a typed data tuple out of a physical record.
@@ -834,7 +818,7 @@ struct Index {
    */
   [[nodiscard]] DTuple *build_data_tuple(rec_t *rec, ulint n_fields, mem_heap_t *heap) const noexcept;
 
-/**
+  /**
    * Copies an initial segment of a physical record, long enough to specify an index entry uniquely.
    * 
    * @param[in] rec record for which to copy prefix
@@ -859,7 +843,7 @@ struct Index {
   [[nodiscard]] DTuple *build_node_ptr(const rec_t *rec, ulint page_no, mem_heap_t *heap, ulint level) const noexcept;
 
 #ifdef UNIV_DEBUG
-/**
+  /**
    * Checks that a tuple has n_fields_cmp value in a sensible range,
    * so that no comparison can occur with the page number field in a node pointer.
    * 
@@ -984,7 +968,7 @@ struct Foreign {
    * 
    * @param[in] heap The memory heap.
    */
-  Foreign(mem_heap_t *heap) noexcept : m_heap(heap) { }
+  Foreign(mem_heap_t *heap) noexcept : m_heap(heap) {}
 
   /**
    * Destructor
@@ -996,7 +980,7 @@ struct Foreign {
    * 
    * @return The created foreign key constraint object.
    */
-  [[nodiscard]] static Foreign* create() noexcept;
+  [[nodiscard]] static Foreign *create() noexcept;
 
   /**
    * @brief Destroys a foreign key constraint memory instance.
@@ -1118,7 +1102,9 @@ struct Table {
    * 
     * @return The created table object.
    */
-  [[nodiscard]] static Table *create(const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing, Source_location loc) noexcept;
+  [[nodiscard]] static Table *create(
+    const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing, Source_location loc
+  ) noexcept;
 
   /**
    * @brief Destroys a table memory instance.
@@ -1284,9 +1270,7 @@ struct Table {
    * 
    * @return number of system (e.g., ROW_ID) columns of a table
    */
-  [[nodiscard]] constexpr inline ulint get_n_sys_cols() const noexcept {
-    return DATA_N_SYS_COLS;
-  }
+  [[nodiscard]] constexpr inline ulint get_n_sys_cols() const noexcept { return DATA_N_SYS_COLS; }
 
   /** Gets the nth column of a table.
    * 
@@ -1357,18 +1341,14 @@ struct Table {
    * 
    * @return file format version
    */
-  [[nodiscard]] inline ulint get_format() const noexcept {
-    return (m_flags & DICT_TF_FORMAT_MASK) >> DICT_TF_FORMAT_SHIFT;
-  }
+  [[nodiscard]] inline ulint get_format() const noexcept { return (m_flags & DICT_TF_FORMAT_MASK) >> DICT_TF_FORMAT_SHIFT; }
 
   /**
    * Sets the file format of a table.
    * 
    * @param[in] format file format version
    */
-  inline void set_format(ulint format) noexcept {
-    m_flags = (m_flags & ~DICT_TF_FORMAT_MASK) | (format << DICT_TF_FORMAT_SHIFT);
-  }
+  inline void set_format(ulint format) noexcept { m_flags = (m_flags & ~DICT_TF_FORMAT_MASK) | (format << DICT_TF_FORMAT_SHIFT); }
 
   /**
    * @brief Adds a column definition to a table.
@@ -1385,9 +1365,7 @@ struct Table {
    * 
    * @return True if the table is referenced by a foreign key, false otherwise.
    */
-  [[nodiscard]] inline bool is_referenced_by_foreign_key() const noexcept {
-    return !m_referenced_list.empty();
-  }
+  [[nodiscard]] inline bool is_referenced_by_foreign_key() const noexcept { return !m_referenced_list.empty(); }
 
   /**
    * @brief Gets the referenced constraint for an index.
@@ -1463,7 +1441,7 @@ struct Table {
    * @return The matching index, or NULL if not found.
    */
   [[nodiscard]] Index *get_index_by_max_id(const char *name, const char **columns, ulint n_cols) noexcept;
-  
+
   /**
    * @brief Tries to find an index whose first fields are the columns in the array,
    * in the same order and is not marked for deletion and is not the same
@@ -1477,7 +1455,9 @@ struct Table {
    * 
    * @return The matching index, or nullptr if not found.
    */
-  [[nodiscard]] Index *foreign_find_index(const char **columns, ulint n_cols, Index *types_idx, bool check_charsets, bool check_null) noexcept;
+  [[nodiscard]] Index *foreign_find_index(
+    const char **columns, ulint n_cols, Index *types_idx, bool check_charsets, bool check_null
+  ) noexcept;
 
   /**
    * @brief Gets an index by its name.
@@ -1558,9 +1538,7 @@ struct Table {
    * 
    * @return The number of columns.
    */
-  [[nodiscard]] inline ulint get_n_cols() const noexcept {
-    return m_n_cols;
-  }
+  [[nodiscard]] inline ulint get_n_cols() const noexcept { return m_n_cols; }
 
   /**
    * Finds all the columns of the index in the table and links the
@@ -1583,9 +1561,9 @@ struct Table {
 
   // Disable copying and moving
   Table(Table &&) = delete;
-  Table(const Table&) = delete;
+  Table(const Table &) = delete;
   Table &operator=(Table &&) = delete;
-  Table &operator=(const Table&) = delete;
+  Table &operator=(const Table &) = delete;
 
   /**
    * @brief Data structure for table statistics.
@@ -1697,7 +1675,7 @@ struct Table {
 
   /** Table statistics */
   Stats m_stats;
-  
+
   /* @} */
 
   /** Value of dict_table_struct::magic_n */
@@ -1770,6 +1748,7 @@ inline void Foreign::drop_constraint() noexcept {
 [[nodiscard]] inline Index *Index::get_clustered_index() noexcept {
   return const_cast<Index *>(static_cast<const Index *>(this)->get_clustered_index());
 }
+
 /** Table create node structure */
 struct Table_node {
   /**
@@ -1787,7 +1766,7 @@ struct Table_node {
   /** Node type: QUE_NODE_TABLE_CREATE */
   que_common_t m_common;
 
-   /** Table to create, built as a memory data structure
+  /** Table to create, built as a memory data structure
     * with dict_mem_... functions */
   Table *m_table{};
 
@@ -1862,7 +1841,7 @@ struct Index_node {
   /** Root page number of the index */
   page_no_t m_page_no{NULL_PAGE_NO};
 
-   /** Table which owns the index */
+  /** Table which owns the index */
   Table *m_table{};
 
   /** Index definition row built */

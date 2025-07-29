@@ -233,10 +233,7 @@ void sync_var_init() {
   sync_primary_wait_array = nullptr;
   sync_initialized = false;
 
-  IF_SYNC_DEBUG(
-    sync_thread_level_arrays = NULL;
-    sync_order_checks_on = false;
-  )
+  IF_SYNC_DEBUG(sync_thread_level_arrays = NULL; sync_order_checks_on = false;)
 }
 
 void mutex_create(mutex_t *mutex, IF_DEBUG(const char *cmutex_name, ) IF_SYNC_DEBUG(ulint level, ) Source_location loc) {
@@ -326,8 +323,7 @@ bool mutex_validate(const mutex_t *mutex) {
 bool mutex_own(const mutex_t *mutex) {
   ut_ad(mutex_validate(mutex));
 
-  return mutex_get_lock_word(mutex) == 1 &&
-         os_thread_eq(mutex->thread_id, os_thread_get_curr_id());
+  return mutex_get_lock_word(mutex) == 1 && os_thread_eq(mutex->thread_id, os_thread_get_curr_id());
 }
 #endif /* UNIV_DEBUG */
 
@@ -809,7 +805,8 @@ void sync_thread_add_level(void *latch, ulint level) {
     return;
   }
 
-  if ((latch == (void *)&sync_thread_mutex) || (latch == (void *)&mutex_list_mutex) || (latch == (void *)&rw_lock_debug_mutex) || (latch == (void *)&rw_lock_list_mutex)) {
+  if ((latch == (void *)&sync_thread_mutex) || (latch == (void *)&mutex_list_mutex) || (latch == (void *)&rw_lock_debug_mutex) ||
+      (latch == (void *)&rw_lock_list_mutex)) {
 
     return;
   }
@@ -982,7 +979,8 @@ bool sync_thread_reset_level(void *latch) /*!< in: pointer to a mutex or an rw-l
     return (false);
   }
 
-  if ((latch == (void *)&sync_thread_mutex) || (latch == (void *)&mutex_list_mutex) || (latch == (void *)&rw_lock_debug_mutex) || (latch == (void *)&rw_lock_list_mutex)) {
+  if ((latch == (void *)&sync_thread_mutex) || (latch == (void *)&mutex_list_mutex) || (latch == (void *)&rw_lock_debug_mutex) ||
+      (latch == (void *)&rw_lock_list_mutex)) {
 
     return (false);
   }
@@ -1096,8 +1094,8 @@ void sync_close() {
 
 void sync_print_wait_info(ib_stream_t ib_stream) {
   IF_SYNC_DEBUG(
-    ib_logger(ib_stream, "Mutex exits %lu, rws exits %lu, rwx exits %lu\n",
-            mutex_exit_count, rw_s_exit_count, rw_x_exit_count);)
+    ib_logger(ib_stream, "Mutex exits %lu, rws exits %lu, rwx exits %lu\n", mutex_exit_count, rw_s_exit_count, rw_x_exit_count);
+  )
 
   ib_logger(
     ib_stream,

@@ -94,7 +94,7 @@ struct DBLWR {
    * 
    * @return and instance or nullptr if there is an error.
    */
-  static DBLWR* create(FSP *fsp) noexcept;
+  static DBLWR *create(FSP *fsp) noexcept;
 
   /**
    * Destroy an instance of DBLWR.
@@ -140,7 +140,7 @@ struct DBLWR {
    * @note offsets.first and offsets.second will be set to ULINT32_UNDEFINED
    * if the doublewrite buffer has not been created yet.
    */
-  static bool check_if_exists(Fil* fil, std::pair<page_no_t, page_no_t> &offsets) noexcept;
+  static bool check_if_exists(Fil *fil, std::pair<page_no_t, page_no_t> &offsets) noexcept;
 
   /** Filespace manager for IO. */
   FSP *m_fsp{};
@@ -164,9 +164,9 @@ struct DBLWR {
   /** pointer to write_buf, but unaligned */
   byte *m_ptr{};
 
-   /** Array to store pointers to the buffer blocks which have been
+  /** Array to store pointers to the buffer blocks which have been
   cached to write_buf */
-  std::vector<Buf_page*> m_bpages{};
+  std::vector<Buf_page *> m_bpages{};
 };
 
 /** Doublewrite system */

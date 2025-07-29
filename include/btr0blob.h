@@ -18,8 +18,8 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #pragma once
 
-#include "innodb0types.h"
 #include "btr0types.h"
+#include "innodb0types.h"
 #include "mem0types.h"
 #include "page0types.h"
 #include "rem0rec.h"
@@ -62,35 +62,35 @@ extern const byte field_ref_zero[BTR_EXTERN_FIELD_REF_SIZE];
   We store locally a long enough prefix of each column so that we can determine
   the ordering parts of each index record without looking into the externally
   stored part. */
-  /*-------------------------------------- @{ */
+/*-------------------------------------- @{ */
 
-  /** space id where stored */
-  constexpr ulint BTR_EXTERN_SPACE_ID = 0;
+/** space id where stored */
+constexpr ulint BTR_EXTERN_SPACE_ID = 0;
 
-  /** page no where stored */
-  constexpr ulint BTR_EXTERN_PAGE_NO = 4;
+/** page no where stored */
+constexpr ulint BTR_EXTERN_PAGE_NO = 4;
 
-  /** offset of BLOB header on that page */
-  constexpr ulint BTR_EXTERN_OFFSET = 8;
+/** offset of BLOB header on that page */
+constexpr ulint BTR_EXTERN_OFFSET = 8;
 
-  /** 8 bytes containing the length of the externally stored part of the
+/** 8 bytes containing the length of the externally stored part of the
   BLOB. The 2 highest bits are reserved to the flags below. */
-  constexpr ulint BTR_EXTERN_LEN = 12;
+constexpr ulint BTR_EXTERN_LEN = 12;
 
-  /** The most significant bit of BTR_EXTERN_LEN (i.e., the most
+/** The most significant bit of BTR_EXTERN_LEN (i.e., the most
   significant bit of the byte at smallest address) is set to 1 if this
   field does not 'own' the externally stored field; only the owner field
   is allowed to free the field in purge! */
-  constexpr ulint BTR_EXTERN_OWNER_FLAG = 128;
+constexpr ulint BTR_EXTERN_OWNER_FLAG = 128;
 
-  /** If the second most significant bit of BTR_EXTERN_LEN (i.e., the
+/** If the second most significant bit of BTR_EXTERN_LEN (i.e., the
   second most significant bit of the byte at smallest address) is 1 then
   it means that the externally stored field was inherited from an
   earlier version of the row.  In rollback we are not allowed to free an
   inherited external field. */
-  constexpr ulint BTR_EXTERN_INHERITED_FLAG = 64;
-  /* } */
+constexpr ulint BTR_EXTERN_INHERITED_FLAG = 64;
 
+/* } */
 
 struct Blob {
 
@@ -134,7 +134,7 @@ struct Blob {
    */
   void blob_free(Buf_block *block, mtr_t *mtr) noexcept;
 
- /** Frees the externally stored fields for a record, if the field is mentioned
+  /** Frees the externally stored fields for a record, if the field is mentioned
    * in the update vector.
    * 
    * @param[in] index           The index of the record.
@@ -144,7 +144,9 @@ struct Blob {
    * @param[in] rb_ctx          The rollback context.
    * @param[in] mtr             The mini-transaction handle which contains an X-latch to the record page and to the tree.
    */
-  void free_updated_extern_fields(const Index *index, rec_t *rec, const ulint *offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept;
+  void free_updated_extern_fields(
+    const Index *index, rec_t *rec, const ulint *offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr
+  ) noexcept;
 
   /**
    * Frees the externally stored fields of a record in the given index.
@@ -208,7 +210,9 @@ struct Blob {
    * 
    * @return Number of bytes written to buf.
    */
-  [[nodiscard]] ulint copy_externally_stored_field_prefix_low(byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset) noexcept;
+  [[nodiscard]] ulint copy_externally_stored_field_prefix_low(
+    byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset
+  ) noexcept;
 
   /**
    * Copies an externally stored field of a record to mem heap.
@@ -222,7 +226,7 @@ struct Blob {
    *
    * @return The whole field copied to heap
    */
-  [[nodiscard]] byte *copy_externally_stored_field(ulint *len,const byte *data, ulint local_len, mem_heap_t *heap) noexcept;
+  [[nodiscard]] byte *copy_externally_stored_field(ulint *len, const byte *data, ulint local_len, mem_heap_t *heap) noexcept;
 
   /**
    * Copies an externally stored field of a record to mem heap.
@@ -236,9 +240,11 @@ struct Blob {
    * 
    * @return The whole field copied to heap
    */
-  [[nodiscard]] byte *copy_externally_stored_field(const rec_t *rec, const ulint *offsets, ulint no, ulint *len, mem_heap_t *heap) noexcept;
+  [[nodiscard]] byte *copy_externally_stored_field(
+    const rec_t *rec, const ulint *offsets, ulint no, ulint *len, mem_heap_t *heap
+  ) noexcept;
 
-/**
+  /**
    * Marks not updated extern fields as not-owned by this record. The ownership
    * is transferred to the updated record which is inserted elsewhere in the
    * index tree. In purge only the owner of externally stored field is allowed
@@ -285,12 +291,7 @@ struct Blob {
    * @return  DB_SUCCESS or error
    */
   [[nodiscard]] db_err store_big_rec_extern_fields(
-    const Index *index,
-    Buf_block *rec_block,
-    rec_t *rec,
-    const ulint *offsets,
-    big_rec_t *big_rec_vec,
-    mtr_t *local_mtr
+    const Index *index, Buf_block *rec_block, rec_t *rec, const ulint *offsets, big_rec_t *big_rec_vec, mtr_t *local_mtr
   ) noexcept;
 
   /**
@@ -309,13 +310,7 @@ struct Blob {
    * @param[in] local_mtr       Mtr containing the latch to data an an X-latch to the index tree
    */
   void free_externally_stored_field(
-    const Index *index,
-    byte *field_ref,
-    const rec_t *rec,
-    const ulint *offsets,
-    ulint i,
-    enum trx_rb_ctx rb_ctx,
-    mtr_t *local_mtr
+    const Index *index, byte *field_ref, const rec_t *rec, const ulint *offsets, ulint i, enum trx_rb_ctx rb_ctx, mtr_t *local_mtr
   ) noexcept;
 
   /**
@@ -341,7 +336,9 @@ struct Blob {
    *
    * @return the field copied to heap
    */
-  [[nodiscard]] byte *rec_copy_externally_stored_field(const rec_t *rec, const ulint *offsets, ulint no, ulint *len, mem_heap_t *heap) noexcept;
+  [[nodiscard]] byte *rec_copy_externally_stored_field(
+    const rec_t *rec, const ulint *offsets, ulint no, ulint *len, mem_heap_t *heap
+  ) noexcept;
 
   /**
    * Flags the data tuple fields that are marked as extern storage in the update vector.
@@ -371,7 +368,6 @@ struct Blob {
    * The file space handler.
    */
   FSP *m_fsp{};
-
 
   /**
    * The B-tree handler.

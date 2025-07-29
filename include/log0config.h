@@ -84,4 +84,3 @@ constexpr ulint LOG_MAX_N_GROUPS = 32;
 constexpr ulint LOG_CHECKPOINT_NO = 0;
 constexpr ulint LOG_CHECKPOINT_LSN = 8;
 /*@} */
-

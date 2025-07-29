@@ -28,13 +28,13 @@ Created 2025-07-26 by Sunny Bains
 #include <type_traits>
 
 /** Concept for types that can be hashed */
-template<typename T>
+template <typename T>
 concept Hashable = requires(T a) {
   { std::hash<T>{}(a) } -> std::convertible_to<std::size_t>;
 };
 
 /** Concept for types that are comparable */
-template<typename T>
+template <typename T>
 concept Comparable = requires(T a, T b) {
   { a == b } -> std::convertible_to<bool>;
   { a != b } -> std::convertible_to<bool>;
@@ -42,22 +42,22 @@ concept Comparable = requires(T a, T b) {
 };
 
 /** Concept for types that are page-like (have space_id and page_no) */
-template<typename T>
+template <typename T>
 concept PageLike = requires(T a) {
   { a.space_id() } -> std::convertible_to<space_id_t>;
   { a.page_no() } -> std::convertible_to<page_no_t>;
 };
 
 /** Concept for types that can be used as buffer pool keys */
-template<typename T>
+template <typename T>
 concept BufferPoolKey = PageLike<T> && Hashable<T> && Comparable<T>;
 
 /** Concept for arithmetic types (extends std::integral and std::floating_point) */
-template<typename T>
+template <typename T>
 concept Arithmetic = std::integral<T> || std::floating_point<T>;
 
 /** Concept for types that can be formatted */
-template<typename T>
+template <typename T>
 concept Formattable = requires(T a) {
   { a.to_string() } -> std::convertible_to<std::string>;
 };

@@ -8,28 +8,28 @@
 #include "innodb0types.h"
 
 #include "lock0lock.h"
-#include "trx0trx.h"
 #include "srv0srv.h"
+#include "trx0trx.h"
 
 constexpr int N_TRXS = 8;
 constexpr int N_ROW_LOCKS = 1;
 constexpr int REC_BITMAP_SIZE = 104;
 
-#define kernel_mutex_enter() \
-  do { \
+#define kernel_mutex_enter()        \
+  do {                              \
     mutex_enter(kernel_mutex_temp); \
-  } while(false)
+  } while (false)
 
-#define kernel_mutex_exit() \
-  do { \
+#define kernel_mutex_exit()        \
+  do {                             \
     mutex_exit(kernel_mutex_temp); \
-  } while(false)
+  } while (false)
 
 namespace test {
 
 /** Creates and initializes a transaction instance
 @return	own: the transaction */
-Trx* trx_create() {
+Trx *trx_create() {
 #if 0
   auto trx = reinterpret_cast<Trx*>(::malloc(sizeof(Trx)));
 
@@ -43,7 +43,7 @@ Trx* trx_create() {
 
 /** Free the transaction object.
 @param[in,own] trx              Free the transaction. */
-void trx_free(Trx*& trx) {
+void trx_free(Trx *&trx) {
   srv_trx_sys->destroy_user_trx(trx);
   ut_a(trx == nullptr);
 }
@@ -51,7 +51,7 @@ void trx_free(Trx*& trx) {
 /** Setup the test transaction for the simulation.
 @param[in,out] trx              Transaction to setup.
 @param[in] n_row_locks          Number of row locks to create. */
-void trx_setup(Trx* trx, int n_row_locks) {
+void trx_setup(Trx *trx, int n_row_locks) {
   for (int i = 0; i < n_row_locks; ++i) {
     auto mode = LOCK_S;
     space_id_t space = random() % 100;
@@ -67,7 +67,7 @@ void trx_setup(Trx* trx, int n_row_locks) {
     std::cout << "REC LOCK CREATE: " << i << "\n";
 
     /* Pass nullptr index handle. */
-    (void) srv_lock_sys->rec_create_low({space, page_no}, mode, heap_no, REC_BITMAP_SIZE, nullptr, trx);
+    (void)srv_lock_sys->rec_create_low({space, page_no}, mode, heap_no, REC_BITMAP_SIZE, nullptr, trx);
 
     kernel_mutex_exit();
   }
@@ -82,8 +82,8 @@ void run_1() {
   std::cout << "Creating " << N_TRXS << " trxs with " << N_ROW_LOCKS << " random row locks\n";
 
   auto start = time(nullptr);
-  auto trxs = std::vector<Trx*>{};
-  
+  auto trxs = std::vector<Trx *>{};
+
   trxs.resize(N_TRXS);
 
   for (auto &trx : trxs) {
@@ -118,13 +118,11 @@ void run_1() {
     trx_free(trx);
   }
 
-  std::cout
-    << no_waiters << " trx had no waiters. Total time to check: " << int(end - start)
-    << "secs avg" << (int((end - start) * 1000) / N_TRXS) << "\n";
-
+  std::cout << no_waiters << " trx had no waiters. Total time to check: " << int(end - start) << "secs avg"
+            << (int((end - start) * 1000) / N_TRXS) << "\n";
 }
 
-} // namespace test
+}  // namespace test
 
 int main() {
   srandom(time(nullptr));
@@ -142,7 +140,7 @@ int main() {
 
   kernel_mutex_temp = static_cast<mutex_t *>(mem_alloc(sizeof(mutex_t)));
 
-  mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex",) IF_SYNC_DEBUG(SYNC_KERNEL,) Current_location());
+  mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex", ) IF_SYNC_DEBUG(SYNC_KERNEL, ) Current_location());
 
   {
     srv_config.m_buf_pool_size = 64 * 1024 * 1024;
@@ -154,10 +152,9 @@ int main() {
     ut_a(success);
   }
 
-
   srv_lock_timeout_thread_event = os_event_create(nullptr);
 
-  srv_trx_sys = Trx_sys::create(srv_fsp); 
+  srv_trx_sys = Trx_sys::create(srv_fsp);
 
   srv_lock_sys = Lock_sys::create(srv_trx_sys, 1024 * 1024);
 

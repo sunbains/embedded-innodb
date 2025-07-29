@@ -69,8 +69,7 @@ struct FSP {
    * @param[in] fil             Fil instance
    * @param[in] buf_pool        Buffer pool instance
    */
-  FSP(Log *log, Fil *fil, Buf_pool *buf_pool) noexcept
-    : m_log(log), m_fil(fil), m_buf_pool(buf_pool) {}
+  FSP(Log *log, Fil *fil, Buf_pool *buf_pool) noexcept : m_log(log), m_fil(fil), m_buf_pool(buf_pool) {}
 
   /**
    * Create an instance of the FSP class.
@@ -81,7 +80,7 @@ struct FSP {
    * 
    * @return Instance of the FSP class
    */
-  [[nodiscard]] static FSP *create(Log * log, Fil *fil, Buf_pool *buf_pool) noexcept;
+  [[nodiscard]] static FSP *create(Log *log, Fil *fil, Buf_pool *buf_pool) noexcept;
 
   /**
    * Destroy an instance of the FSP class.
@@ -165,11 +164,7 @@ struct FSP {
    * @return the block where the segment header is placed, x-latched, nullptr if
    *  could not create segment because of lack of space
    */
-  Buf_block *fseg_create(
-    space_id_t space,
-    page_no_t page_no,
-    ulint byte_offset,
-    mtr_t *mtr) noexcept;
+  Buf_block *fseg_create(space_id_t space, page_no_t page_no, ulint byte_offset, mtr_t *mtr) noexcept;
 
   /**
    * Creates a new segment.
@@ -193,11 +188,7 @@ struct FSP {
    *  if could not create segment because of lack of space
   */
   [[nodiscard]] Buf_block *fseg_create_general(
-    space_id_t space,
-    page_no_t page_no,
-    ulint byte_offset,
-    bool has_done_reservation,
-    mtr_t *mtr
+    space_id_t space, page_no_t page_no, ulint byte_offset, bool has_done_reservation, mtr_t *mtr
   ) noexcept;
 
   /**
@@ -248,7 +239,9 @@ struct FSP {
    * 
    * @return	allocated page offset, FIL_NULL if no page could be allocated
    */
-  [[nodiscard]] page_no_t fseg_alloc_free_page_general(fseg_header_t *seg_header, page_no_t hint, byte direction, bool reserved, mtr_t *mtr) noexcept;
+  [[nodiscard]] page_no_t fseg_alloc_free_page_general(
+    fseg_header_t *seg_header, page_no_t hint, byte direction, bool reserved, mtr_t *mtr
+  ) noexcept;
 
   /**
    * Reserves free pages from a tablespace. All mini-transactions which may
@@ -308,12 +301,7 @@ struct FSP {
    * @param[in] page_no          page offset
    * @param[in,out] mtr          mtr handle
    */
-  void fseg_free_page(
-    fseg_header_t *seg_header,
-    space_id_t space,
-    page_no_t page_no,
-    mtr_t *mtr
-  ) noexcept;
+  void fseg_free_page(fseg_header_t *seg_header, space_id_t space, page_no_t page_no, mtr_t *mtr) noexcept;
 
   /**
    * Frees part of a segment. This function can be used to free a segment
@@ -370,7 +358,7 @@ struct FSP {
    */
   void print(space_id_t space) noexcept;
 
-  #ifdef UNIV_DEBUG
+#ifdef UNIV_DEBUG
   /**
    * Validates a segment.
    * 
@@ -380,7 +368,7 @@ struct FSP {
    * @return	true if ok
    */
   [[nodiscard]] bool fseg_validate(fseg_header_t *header, mtr_t *mtr) noexcept;
-  #endif /* UNIV_DEBUG */
+#endif /* UNIV_DEBUG */
 
   /**
    * Writes info of a segment.
@@ -397,9 +385,7 @@ struct FSP {
    * 
    * @return	true if a descriptor page
    */
-  [[nodiscard]] bool descr_page(page_no_t page_no) noexcept {
-    return (page_no & (UNIV_PAGE_SIZE - 1)) == FSP_XDES_OFFSET;
-  }
+  [[nodiscard]] bool descr_page(page_no_t page_no) noexcept { return (page_no & (UNIV_PAGE_SIZE - 1)) == FSP_XDES_OFFSET; }
 
   /**
    * Reads the file space size stored in the header page.
@@ -410,7 +396,7 @@ struct FSP {
    */
   [[nodiscard]] ulint get_size_low(page_t *page) noexcept;
 
-private:
+ private:
   /**
    * Returns an extent to the free list of a space.
    * 
@@ -448,7 +434,7 @@ private:
    *
    * @return pointer to the space header, page x-locked
    */
-  inline fsp_header_t *get_space_header(space_id_t id, mtr_t *mtr)  noexcept;
+  inline fsp_header_t *get_space_header(space_id_t id, mtr_t *mtr) noexcept;
 
   /**
    * @brief Gets pointer to the extent descriptor if the file address
@@ -574,7 +560,9 @@ private:
    * 
    * @return	the allocated page number, FIL_NULL if no page could be allocated
    */
-  page_no_t fseg_alloc_free_page_low(space_id_t space, fseg_inode_t *seg_inode, page_no_t hint, byte direction, mtr_t *mtr) noexcept;
+  page_no_t fseg_alloc_free_page_low(
+    space_id_t space, fseg_inode_t *seg_inode, page_no_t hint, byte direction, mtr_t *mtr
+  ) noexcept;
 
   /**
    * Tries to extend a single-table tablespace so that a page would fit in the data file.
@@ -696,7 +684,7 @@ private:
    */
   void fseg_mark_page_used(fseg_inode_t *seg_inode, space_id_t space, page_no_t page, mtr_t *mtr) noexcept;
 
-public:
+ public:
   /** Redo log to use. */
   Log *m_log{};
 

@@ -95,6 +95,7 @@ static_assert(
   !((LOCK_WAIT | LOCK_GAP | LOCK_REC_NOT_GAP | LOCK_INSERT_INTENTION) & LOCK_TYPE_MASK),
   "Lock types should be independent bits and be maskable by LOCK_TYPE_MASK"
 );
+
 /* @} */
 
 /* Basic lock modes */
@@ -103,7 +104,7 @@ enum Lock_mode : lock_type_t {
   LOCK_IS = 0,
 
   /* Intention exclusive */
-  LOCK_IX,             
+  LOCK_IX,
 
   /* Shared */
   LOCK_S,
@@ -182,9 +183,7 @@ struct Lock {
    *
    * @return The mode of the lock as a Lock_mode enum.
    */
-  [[nodiscard]] inline Lock_mode mode() const noexcept {
-    return static_cast<Lock_mode>(m_type_mode & LOCK_MODE_MASK);
-  }
+  [[nodiscard]] inline Lock_mode mode() const noexcept { return static_cast<Lock_mode>(m_type_mode & LOCK_MODE_MASK); }
 
   /**
    * @brief Gets the precise type mode of a lock.
@@ -194,9 +193,7 @@ struct Lock {
    *
    * @return The type mode of the lock as a lock_type_t.
    */
-  [[nodiscard]] inline lock_type_t precise_mode() const noexcept {
-    return m_type_mode;
-  }
+  [[nodiscard]] inline lock_type_t precise_mode() const noexcept { return m_type_mode; }
 
   /**
    * @brief Sets the wait flag of a lock and the back pointer in trx to lock.
@@ -215,9 +212,7 @@ struct Lock {
    *
    * @return true if the lock is waiting, false otherwise.
    */
-  [[nodiscard]] inline bool is_waiting() const noexcept {
-    return (m_type_mode & LOCK_WAIT) != 0;
-  }
+  [[nodiscard]] inline bool is_waiting() const noexcept { return (m_type_mode & LOCK_WAIT) != 0; }
 
   /**
    * @brief Gets the gap flag of a record lock.
@@ -275,7 +270,7 @@ struct Lock {
    * 
    * @return true if the new lock has to wait for lock to be removed, false otherwise.
    */
-  [[nodiscard]] inline bool rec_blocks(const Trx *trx,  Lock_mode_type type_mode, bool lock_is_on_supremum) const noexcept;
+  [[nodiscard]] inline bool rec_blocks(const Trx *trx, Lock_mode_type type_mode, bool lock_is_on_supremum) const noexcept;
 
   /**
    * @brief Checks if a lock request lock1 has to wait for request lock2.
@@ -415,7 +410,7 @@ struct Lock {
 
     ut_ad((rec_get_n_bits() % 8) == 0);
 
-    memset(reinterpret_cast<byte*>(&this[1]), 0, n_bytes);
+    memset(reinterpret_cast<byte *>(&this[1]), 0, n_bytes);
   }
 
   /**
@@ -487,9 +482,7 @@ struct Lock {
    *
    * @return The index on which the record lock is.
    */
-  [[nodiscard]] inline Index *rec_index() noexcept {
-    return const_cast<Index *>(const_cast<const Lock *>(this)->rec_index());
-  }
+  [[nodiscard]] inline Index *rec_index() noexcept { return const_cast<Index *>(const_cast<const Lock *>(this)->rec_index()); }
 
   /**
    * @brief Gets the name of the index on which the record lock is.
@@ -547,7 +540,7 @@ struct Lock {
    * @return The lock mode as a human-readable string.
    */
   [[nodiscard]] inline const char *get_mode_str() const noexcept;
-  
+
   /**
    * @brief Gets the page id of a lock.
    *
@@ -603,9 +596,9 @@ struct Lock {
    *
    * @return A pointer to the next lock in the list.
    */
-  [[nodiscard]] Lock* next() const noexcept {
+  [[nodiscard]] Lock *next() const noexcept {
     ut_ad(type() == LOCK_REC);
-    return UT_LIST_GET_NEXT(m_rec.m_rec_locks, const_cast<Lock*>(this));
+    return UT_LIST_GET_NEXT(m_rec.m_rec_locks, const_cast<Lock *>(this));
   }
 
   /**
@@ -615,9 +608,9 @@ struct Lock {
    *
    * @return A pointer to the previous lock in the list.
    */
-  [[nodiscard]] Lock* prev() const noexcept {
+  [[nodiscard]] Lock *prev() const noexcept {
     ut_ad(type() == LOCK_REC);
-    return UT_LIST_GET_PREV(m_rec.m_rec_locks, const_cast<Lock*>(this));
+    return UT_LIST_GET_PREV(m_rec.m_rec_locks, const_cast<Lock *>(this));
   }
 
   /**
@@ -681,7 +674,7 @@ struct Lock_op {
   /** Table to be locked */
   Table *m_table;
 
-    /** Lock mode */
+  /** Lock mode */
   Lock_mode mode;
 };
 

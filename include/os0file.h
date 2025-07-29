@@ -35,8 +35,8 @@ Created 10/21/1995 Heikki Tuuri
 
 #include "innodb0types.h"
 
-#include <filesystem>
 #include <atomic>
+#include <filesystem>
 
 /** File node of a tablespace or the log data space */
 struct fil_node_t;
@@ -186,7 +186,7 @@ bool os_file_create_directory(const char *pathname, bool fail_if_exists);
  * @return os_file_t    Own handle to the file, not defined if error, error number can be
  *                      retrieved with os_file_get_last_error.
  */
-os_file_t os_file_create_simple(const char *name, ulint create_mode, ulint access_type, bool *success); 
+os_file_t os_file_create_simple(const char *name, ulint create_mode, ulint access_type, bool *success);
 
 /**
  * @brief A simple function to open or create a file.
@@ -200,12 +200,7 @@ os_file_t os_file_create_simple(const char *name, ulint create_mode, ulint acces
  * @return os_file_t    Own handle to the file, not defined if error, error number can be
  *                      retrieved with os_file_get_last_error.
  */
-os_file_t os_file_create_simple_no_error_handling(
-  const char *name,
-  ulint create_mode,
-  ulint access_type,
-  bool *success
-);
+os_file_t os_file_create_simple_no_error_handling(const char *name, ulint create_mode, ulint access_type, bool *success);
 
 /**
  * @brief Tries to disable OS caching on an opened file descriptor.
@@ -485,22 +480,22 @@ void os_file_refresh_stats();
  * @return Text representation of the file permissions.
  */
 [[nodiscard]] inline std::string to_string(std::filesystem::perms p) noexcept {
-    using std::filesystem::perms;
-    std::ostringstream os{};
+  using std::filesystem::perms;
+  std::ostringstream os{};
 
-    auto print = [=](std::ostream& os, char op, perms perm) {
-        os << (perms::none == (perm & p) ? '-' : op);
-    };
+  auto print = [=](std::ostream &os, char op, perms perm) {
+    os << (perms::none == (perm & p) ? '-' : op);
+  };
 
-    print(os, 'r', perms::owner_read);
-    print(os, 'w', perms::owner_write);
-    print(os, 'x', perms::owner_exec);
-    print(os, 'r', perms::group_read);
-    print(os, 'w', perms::group_write);
-    print(os, 'x', perms::group_exec);
-    print(os, 'r', perms::others_read);
-    print(os, 'w', perms::others_write);
-    print(os, 'x', perms::others_exec);
+  print(os, 'r', perms::owner_read);
+  print(os, 'w', perms::owner_write);
+  print(os, 'x', perms::owner_exec);
+  print(os, 'r', perms::group_read);
+  print(os, 'w', perms::group_write);
+  print(os, 'x', perms::group_exec);
+  print(os, 'r', perms::others_read);
+  print(os, 'w', perms::others_write);
+  print(os, 'x', perms::others_exec);
 
-    return os.str();
+  return os.str();
 }

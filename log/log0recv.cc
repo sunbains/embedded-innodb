@@ -104,7 +104,7 @@ lsn_t recv_max_page_lsn;
  * @param[in,out] dblwr Doublewrite instance to use for recovery
  * @param[in] recovery The recovery flag.
  */
-static void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept;
+void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept;
 
 static std::string to_string(const Recv_sys::Tablespace_map &log_records) noexcept {
   std::string str{};
@@ -482,7 +482,7 @@ static bool is_log_block_checksum_ok(const byte *block) noexcept {
  *
  * @return	log record end, nullptr if not a complete record
  */
-static byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_ptr, Buf_block *block, mtr_t *mtr) noexcept {
+byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_ptr, Buf_block *block, mtr_t *mtr) noexcept {
   page_t *page{};
   Index *index{};
   ut_d(Fil_page_type page_type{FIL_PAGE_TYPE_ALLOCATED});
@@ -1169,7 +1169,7 @@ static void recv_report_corrupt_log(byte *ptr, byte type, space_id_t space, page
  *  this is set to false if just debug checking is needed
  * @return	currently always returns false
  */
-static bool recv_parse_log_recs(bool store_to_hash) noexcept {
+bool recv_parse_log_recs(bool store_to_hash) noexcept {
   ulint len;
   lsn_t old_lsn;
   ulint total_len;
@@ -1445,7 +1445,10 @@ static bool recv_scan_log_recs(
       if (no == block_no && !checksum_ok) {
         log_warn(std::format(
           "Log block no {} at lsn {} has ok header, but checksum field contains {}, should be {}",
-          no, scanned_lsn, Log::block_get_checksum(log_block), Log::block_calc_checksum(log_block)
+          no,
+          scanned_lsn,
+          Log::block_get_checksum(log_block),
+          Log::block_calc_checksum(log_block)
         ));
       }
       finished = true;
@@ -1585,7 +1588,7 @@ static void recv_group_scan_log_recs(
   }
 }
 
-static void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept {
+void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept {
   ut_a(!recv_needed_recovery);
 
   recv_needed_recovery = true;

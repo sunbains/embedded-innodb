@@ -22,6 +22,7 @@ Transaction system
 Created 3/26/1996 Heikki Tuuri
 *******************************************************/
 
+#include "trx0sys.h"
 #include "buf0dblwr.h"
 #include "fsp0fsp.h"
 #include "log0log.h"
@@ -31,24 +32,20 @@ Created 3/26/1996 Heikki Tuuri
 #include "srv0srv.h"
 #include "trx0purge.h"
 #include "trx0rseg.h"
-#include "trx0sys.h"
 #include "trx0trx.h"
 #include "trx0undo.h"
 
 /** The transaction system */
 Trx_sys *srv_trx_sys{};
 
-Trx_sys::Trx_sys(FSP *fsp) noexcept : m_fsp(fsp) { }
+Trx_sys::Trx_sys(FSP *fsp) noexcept : m_fsp(fsp) {}
 
 Trx_sys::~Trx_sys() noexcept {
   /* Check that all read views are closed except read view owned
   by a purge. */
 
   if (m_view_list.size() > 1) {
-    log_err(std::format(
-      "All read views were not closed before shutdown: {} read views open",
-      m_view_list.size() - 1
-    ));
+    log_err(std::format("All read views were not closed before shutdown: {} read views open", m_view_list.size() - 1));
   }
 
   auto purge_trx = m_purge->m_trx;
@@ -119,13 +116,10 @@ dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
    * to the disk-based header! Thus trx id values will not overlap when
    * the database is repeatedly started! */
 
-  m_max_trx_id = ut_uint64_align_up(
-    mtr.read_uint64(sys_header + TRX_SYS_TRX_ID_STORE),
-    TRX_SYS_TRX_ID_WRITE_MARGIN) + 2 * TRX_SYS_TRX_ID_WRITE_MARGIN;
-
+  m_max_trx_id = ut_uint64_align_up(mtr.read_uint64(sys_header + TRX_SYS_TRX_ID_STORE), TRX_SYS_TRX_ID_WRITE_MARGIN) +
+                 2 * TRX_SYS_TRX_ID_WRITE_MARGIN;
 
   init_at_db_start(recovery);
-
 
   int64_t rows_to_undo{};
 
@@ -144,7 +138,9 @@ dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
     log_info(std::format(
       "{} transaction(s) which must be rolled back or cleaned up"
       " in total {}s row operations to undo",
-      m_trx_list.size(), rows_to_undo, unit
+      m_trx_list.size(),
+      rows_to_undo,
+      unit
     ));
 
     log_info(std::format("Trx id counter is {}", m_max_trx_id));
@@ -534,7 +530,7 @@ void Trx_sys::init_at_db_start(ib_recovery_t recovery) noexcept {
   }
 }
 
-int Trx_sys::recover(XID *xid_list, ulint len) noexcept{
+int Trx_sys::recover(XID *xid_list, ulint len) noexcept {
   ut_ad(len > 0);
 
   /* We should set those transactions which are in the prepared state

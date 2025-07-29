@@ -200,7 +200,9 @@ struct Lock_sys {
    * @param[in] heir_heap_no Heap number of the inheriting record.
    * @param[in] heap_no Heap number of the donating record.
    */
-  void rec_reset_and_inherit_gap_locks(const Buf_block *heir_block, const Buf_block *block, ulint heir_heap_no, ulint heap_no) noexcept;
+  void rec_reset_and_inherit_gap_locks(
+    const Buf_block *heir_block, const Buf_block *block, ulint heir_heap_no, ulint heap_no
+  ) noexcept;
 
   /**
    * @brief Updates the lock table when a page is discarded.
@@ -296,7 +298,9 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err rec_insert_check_and_lock(ulint flags, const rec_t *rec, Buf_block *block, const Index *index, que_thr_t *thr, mtr_t *mtr, bool *inherit) noexcept;
+  [[nodiscard]] db_err rec_insert_check_and_lock(
+    ulint flags, const rec_t *rec, Buf_block *block, const Index *index, que_thr_t *thr, mtr_t *mtr, bool *inherit
+  ) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate modify (update,
@@ -316,7 +320,9 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err clust_rec_modify_check_and_lock(ulint flags, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr) noexcept;
+  [[nodiscard]] db_err clust_rec_modify_check_and_lock(
+    ulint flags, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate modify
@@ -338,7 +344,9 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err sec_rec_modify_check_and_lock(ulint flags, Buf_block *block, const rec_t *rec, const Index *index, que_thr_t *thr, mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err sec_rec_modify_check_and_lock(
+    ulint flags, Buf_block *block, const rec_t *rec, const Index *index, que_thr_t *thr, mtr_t *mtr
+  ) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate read, or passing
@@ -360,7 +368,10 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err sec_rec_read_check_and_lock(ulint flags, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, Lock_mode mode, ulint gap_mode, que_thr_t *thr) noexcept;
+  [[nodiscard]] db_err sec_rec_read_check_and_lock(
+    ulint flags, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, Lock_mode mode, ulint gap_mode,
+    que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate read, or passing
@@ -382,7 +393,10 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err clust_rec_read_check_and_lock(ulint flags, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, Lock_mode mode, ulint gap_mode, que_thr_t *thr) noexcept;
+  [[nodiscard]] db_err clust_rec_read_check_and_lock(
+    ulint flags, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, Lock_mode mode, ulint gap_mode,
+    que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief Checks if locks of other transactions prevent an immediate read, or passing
@@ -406,7 +420,9 @@ struct Lock_sys {
    *
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_DEADLOCK, or DB_QUE_THR_SUSPENDED.
    */
-  [[nodiscard]] db_err clust_rec_read_check_and_lock_alt(ulint flags, const Buf_block *block, const rec_t *rec, const Index *index, Lock_mode mode, ulint gap_mode, que_thr_t *thr) noexcept;
+  [[nodiscard]] db_err clust_rec_read_check_and_lock_alt(
+    ulint flags, const Buf_block *block, const rec_t *rec, const Index *index, Lock_mode mode, ulint gap_mode, que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief Checks if a record is visible in a consistent read.
@@ -422,7 +438,8 @@ struct Lock_sys {
    *
    * @return true if the record is visible, or false if an earlier version of the record should be retrieved.
    */
-  [[nodiscard]] bool clust_rec_cons_read_sees(const rec_t *rec, Index *index, const ulint *offsets, read_view_t *view) const noexcept;
+  [[nodiscard]] bool clust_rec_cons_read_sees(const rec_t *rec, Index *index, const ulint *offsets, read_view_t *view)
+    const noexcept;
 
   /**
    * @brief Checks that a non-clustered index record is seen in a consistent read.
@@ -544,7 +561,9 @@ struct Lock_sys {
    * 
    * @return true if the transaction id is sensible, false otherwise.
    */
-  [[nodiscard]] bool check_trx_id_sanity(trx_id_t trx_id, const rec_t *rec, const Index *index, const ulint *offsets, bool has_kernel_mutex) noexcept;
+  [[nodiscard]] bool check_trx_id_sanity(
+    trx_id_t trx_id, const rec_t *rec, const Index *index, const ulint *offsets, bool has_kernel_mutex
+  ) noexcept;
 
   /**
    * @brief Prints information about a table lock.
@@ -587,7 +606,6 @@ struct Lock_sys {
    */
   void print_info_all_transactions() noexcept;
 
-  
   /**
    * @brief Checks if some transaction has an implicit x-lock on a record in a clustered index.
    *
@@ -652,9 +670,7 @@ struct Lock_sys {
    * 
    * @return The type of the lock, which can be LOCK_TABLE or LOCK_REC.
    */
-  [[nodiscard]] inline ulint get_type_low(const Lock *lock) const noexcept {
-    return lock->type();
-  }
+  [[nodiscard]] inline ulint get_type_low(const Lock *lock) const noexcept { return lock->type(); }
 
 #ifdef UNIV_DEBUG
   /**
@@ -675,13 +691,9 @@ struct Lock_sys {
    * This function sets the print InnoDB lock monitor flag to true, indicating that
    * the InnoDB lock monitor should print information about lock requests and waits.
    */
-  void set_print_lock_monitor() noexcept {
-    m_print_lock_monitor = true;
-  }
+  void set_print_lock_monitor() noexcept { m_print_lock_monitor = true; }
 
-  void unset_print_lock_monitor() noexcept {
-    m_print_lock_monitor = false;
-  }
+  void unset_print_lock_monitor() noexcept { m_print_lock_monitor = false; }
 
   /**
    * @brief Checks if the print InnoDB lock monitor flag is set.
@@ -691,9 +703,7 @@ struct Lock_sys {
    *
    * @return true if the print InnoDB lock monitor flag is set, false otherwise.
    */
-  [[nodiscard]] bool is_print_lock_monitor_set() const noexcept {
-    return m_print_lock_monitor;
-  }
+  [[nodiscard]] bool is_print_lock_monitor_set() const noexcept { return m_print_lock_monitor; }
 
   /**
    * @brief Creates a new instance of the Lock_sys class.
@@ -709,7 +719,6 @@ struct Lock_sys {
    */
   [[nodiscard]] static Lock_sys *create(Trx_sys *trx_sys, ulint n_cells) noexcept;
 
-
   /**
    * @brief Destroys the Lock_sys instance and deallocates its memory.
    *
@@ -723,7 +732,7 @@ struct Lock_sys {
   static void destroy(Lock_sys *&lock_sys) noexcept;
 
 #ifndef UNIT_TESTING
-private:
+ private:
 #endif /* !UNIT_TESTING */
 
   /**
@@ -744,8 +753,9 @@ private:
    * 
    * @return A pointer to the created lock.
    */
-  [[nodiscard]] Lock *rec_create_low(Page_id page_id, Lock_mode type_mode, ulint heap_no, ulint n_bits, const Index *index, Trx *trx) noexcept;
-
+  [[nodiscard]] Lock *rec_create_low(
+    Page_id page_id, Lock_mode type_mode, ulint heap_no, ulint n_bits, const Index *index, Trx *trx
+  ) noexcept;
 
 #ifdef UNIV_DEBUG
   /**
@@ -788,7 +798,9 @@ private:
    * 
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] const Lock *rec_other_has_expl_req(Page_id page_id, Lock_mode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx) const noexcept;
+  [[nodiscard]] const Lock *rec_other_has_expl_req(
+    Page_id page_id, Lock_mode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx
+  ) const noexcept;
 
 #endif /* UNIV_DEBUG */
 
@@ -951,7 +963,9 @@ private:
    * 
    * @return The created lock.
    */
-  [[nodiscard]] Lock *rec_create(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx) noexcept;
+  [[nodiscard]] Lock *rec_create(
+    Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx
+  ) noexcept;
 
   /**
    * @brief Enqueues a waiting request for a lock which cannot be granted immediately and checks for deadlocks.
@@ -972,7 +986,9 @@ private:
    * @return DB_QUE_THR_SUSPENDED if the query thread should be stopped.
    * @return DB_SUCCESS if there was a deadlock but another transaction was chosen as a victim, and the lock was granted immediately.
    */
-  [[nodiscard]] db_err rec_enqueue_waiting(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr) noexcept;
+  [[nodiscard]] db_err rec_enqueue_waiting(
+    Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief Adds a record lock request in the record queue.
@@ -990,7 +1006,9 @@ private:
    * 
    * @return Lock where the bit was set.
    */
-  [[nodiscard]] Lock *rec_add_to_queue(Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx) noexcept;
+  [[nodiscard]] Lock *rec_add_to_queue(
+    Lock_mode type_mode, const Buf_block *block, ulint heap_no, const Index *index, const Trx *trx
+  ) noexcept;
 
   /**
    * @brief Fast routine for locking a record in the most common cases.
@@ -1011,7 +1029,9 @@ private:
    * 
    * @return true if locking succeeded.
    */
-  [[nodiscard]] inline bool rec_lock_fast(bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr) noexcept;
+  [[nodiscard]] inline bool rec_lock_fast(
+    bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief General, slower routine for locking a record.
@@ -1031,7 +1051,9 @@ private:
    * 
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
-  [[nodiscard]] db_err rec_lock_slow(bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr) noexcept;
+  [[nodiscard]] db_err rec_lock_slow(
+    bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief Tries to lock the specified record in the mode requested.
@@ -1052,7 +1074,9 @@ private:
    * 
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
-  [[nodiscard]] db_err rec_lock(bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr) noexcept;
+  [[nodiscard]] db_err rec_lock(
+    bool impl, Lock_mode mode, const Buf_block *block, ulint heap_no, const Index *index, que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief Checks if a waiting record lock request still has to wait in a queue.
@@ -1284,7 +1308,7 @@ private:
    */
   [[nodiscard]] ulint get_n_rec_locks() noexcept;
 
-  #ifdef UNIV_DEBUG
+#ifdef UNIV_DEBUG
   /**
    * @brief Validates the lock queue on a table.
    *
@@ -1311,7 +1335,9 @@ private:
    * @param[in] offsets Column offsets obtained from Phy_rec::get_col_offsets(rec, index).
    * @return true if the lock queue is valid, false otherwise.
    */
-  [[nodiscard]] bool rec_queue_validate(const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets) noexcept;
+  [[nodiscard]] bool rec_queue_validate(
+    const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets
+  ) noexcept;
 
   /**
    * @brief Validates the lock system.
@@ -1354,9 +1380,8 @@ private:
   [[nodiscard]] bool trx_has_no_waiters(const Trx *trx) noexcept;
 
 #ifndef UNIT_TESTING
-private:
+ private:
 #endif /* !UNIT_TESTING */
-
 
   /**
    * @brief The lock table.
@@ -1365,7 +1390,7 @@ private:
    * The key is the page ID, and the value is the list of locks on that page.
    */
   Page_id_hash<Rec_locks> m_rec_locks{};
-  
+
   /**
    * @brief The buffer pool.
    *

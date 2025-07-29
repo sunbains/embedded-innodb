@@ -24,18 +24,18 @@ Created 12/27/1996 Heikki Tuuri
 
 #pragma once
 
+#include "btr0pcur.h"
 #include "btr0types.h"
 #include "data0data.h"
 #include "dict0types.h"
 #include "innodb0types.h"
-#include "row0types.h"
-#include "trx0types.h"
-#include "btr0pcur.h"
+#include "mtr0log.h"
 #include "pars0types.h"
 #include "que0types.h"
-#include "mtr0log.h"
 #include "row0row.h"
+#include "row0types.h"
 #include "trx0trx.h"
+#include "trx0types.h"
 #include "trx0undo.h"
 
 struct Lock_sys;
@@ -89,10 +89,9 @@ struct upd_field_t {
     m_field_no = field_no;
 
     if (unlikely(m_field_no >= index->get_n_fields())) {
-      log_err(std::format(
-        "Trying to access field {} in but index only has %lu fields",
-        m_field_no, index->m_name, index->get_n_fields()
-      ));
+      log_err(
+        std::format("Trying to access field {} in but index only has %lu fields", m_field_no, index->m_name, index->get_n_fields())
+      );
     }
 
     index->get_nth_col(m_field_no)->copy_type(dfield_get_type(&m_new_val));
@@ -376,7 +375,9 @@ struct Row_update {
    * 
    * @return Update vector of differing fields.
    */
-  [[nodiscard]] static upd_t *build_sec_rec_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap) noexcept;
+  [[nodiscard]] static upd_t *build_sec_rec_difference_binary(
+    const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap
+  ) noexcept;
 
   /**
    * @brief Builds an update vector from those fields, excluding the roll ptr and
@@ -391,7 +392,9 @@ struct Row_update {
    * 
    * @return Update vector of differing fields, excluding roll ptr and trx id.
    */
-  [[nodiscard]] upd_t *build_difference_binary(const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap) noexcept;
+  [[nodiscard]] upd_t *build_difference_binary(
+    const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap
+  ) noexcept;
 
   /**
    * @brief Replaces the new column values stored in the update vector to the index
@@ -404,7 +407,9 @@ struct Row_update {
    * @param[in] order_only If true, limit the replacement to ordering fields of index; note that this does not work for non-clustered indexes.
    * @param[in] heap       Memory heap for allocating and copying the new values.
    */
-  void index_replace_new_col_vals_index_pos(DTuple *entry, const Index *index, const upd_t *update, bool order_only, mem_heap_t *heap) noexcept;
+  void index_replace_new_col_vals_index_pos(
+    DTuple *entry, const Index *index, const upd_t *update, bool order_only, mem_heap_t *heap
+  ) noexcept;
 
   /**
    * @brief Replaces the new column values stored in the update vector to the index
@@ -547,12 +552,8 @@ struct Row_update {
    * 
    * @return Number of fields.
    */
-  inline static ulint upd_get_n_fields(const upd_t *update) noexcept {
-    return update->m_n_fields;
-  }
+  inline static ulint upd_get_n_fields(const upd_t *update) noexcept { return update->m_n_fields; }
 
-  
-  
   /**
    * @brief Updates the trx id and roll ptr field in a clustered index record when
    * a row is updated or marked deleted.
@@ -578,7 +579,7 @@ struct Row_update {
   }
 
 #ifdef UNIT_TEST
-private:
+ private:
 #endif /* UNIT_TEST */
 
   /**
@@ -626,13 +627,8 @@ private:
    * @return DB_SUCCESS or an error code.
    */
   [[nodiscard]] db_err check_references_constraints(
-    upd_node_t *node,
-    Btree_pcursor *pcur,
-    Table *table,
-    const Index *index,
-    ulint *offsets,
-    que_thr_t *thr,
-    mtr_t *mtr) noexcept;
+    upd_node_t *node, Btree_pcursor *pcur, Table *table, const Index *index, ulint *offsets, que_thr_t *thr, mtr_t *mtr
+  ) noexcept;
 
   /**
   * @brief Fetch a prefix of an externally stored column.
@@ -658,7 +654,9 @@ private:
    * @param[in] uf Update field.
    * @param[in] heap Memory heap for allocating and copying the new value.
    */
-  void index_replace_new_col_val(dfield_t *dfield, const Field *field, const Column *col, const upd_field_t *uf, mem_heap_t *heap) noexcept;
+  void index_replace_new_col_val(
+    dfield_t *dfield, const Field *field, const Column *col, const upd_field_t *uf, mem_heap_t *heap
+  ) noexcept;
 
   /**
    * Copies the column values from a record. 
@@ -718,7 +716,9 @@ private:
    * 
    * @return DB_SUCCESS if operation successfully completed, else error code or DB_LOCK_WAIT.
    */
-  [[nodiscard]] db_err clust_rec_by_insert(upd_node_t *node, const Index *index, que_thr_t *thr, bool check_ref, mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err clust_rec_by_insert(
+    upd_node_t *node, const Index *index, que_thr_t *thr, bool check_ref, mtr_t *mtr
+  ) noexcept;
 
   /**
    * @brief Updates a clustered index record of a row when the ordering fields do not change.
@@ -744,7 +744,9 @@ private:
    * 
    * @return DB_SUCCESS if operation successfully completed, else error code.
    */
-  [[nodiscard]] db_err del_mark_clust_rec(upd_node_t *node, const Index *index, ulint *offsets, que_thr_t *thr, bool check_ref, mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err del_mark_clust_rec(
+    upd_node_t *node, const Index *index, ulint *offsets, que_thr_t *thr, bool check_ref, mtr_t *mtr
+  ) noexcept;
 
   /**
    * @brief Updates the clustered index record.
@@ -780,5 +782,3 @@ private:
    */
   Lock_sys *m_lock_sys{};
 };
-
-

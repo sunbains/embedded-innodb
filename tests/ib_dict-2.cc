@@ -32,7 +32,8 @@ CREATE TABLE t (
         INDEX(C(255), B(255)),
         INDEX(B(5), C(10), A));
 
-The test will create all the relevant sub-directories in the current working directory. */
+The test will create all the relevant sub-directories in the current working
+directory. */
 
 #include <assert.h>
 #include <stdio.h>

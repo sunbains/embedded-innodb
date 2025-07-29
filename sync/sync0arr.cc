@@ -76,7 +76,7 @@ struct Sync_cell {
   bool can_wake_up();
 
   /** Returns the event that the thread owning the cell waits for. */
-  Cond_var* get_event();
+  Cond_var *get_event();
 
   /** Reports info of a wait array cell.
   @param[in,out] stream         Where to print */
@@ -203,7 +203,7 @@ Sync_check::Sync_check(ulint n, ulint p) : m_protection(p) {
   if (m_protection == SYNC_ARRAY_OS_MUTEX) {
     m_os_mutex = os_mutex_create(nullptr);
   } else if (m_protection == SYNC_ARRAY_MUTEX) {
-    mutex_create(&m_mutex, IF_DEBUG("sync_array_mutex",) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK,) Current_location());
+    mutex_create(&m_mutex, IF_DEBUG("sync_array_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Current_location());
   } else {
     ut_error;
   }
@@ -272,7 +272,7 @@ void sync_array_free(Sync_check *arr) {
 }
 
 /** Returns the event that the thread owning the cell waits for. */
-Cond_var* Sync_cell::get_event() {
+Cond_var *Sync_cell::get_event() {
   if (m_request_type == SYNC_MUTEX) {
     return reinterpret_cast<mutex_t *>(m_wait_object)->event;
   } else if (m_request_type == RW_LOCK_WAIT_EX) {
@@ -382,7 +382,11 @@ void Sync_cell::print(ib_stream_t ib_stream) {
   ib_logger(
     ib_stream,
     "--Thread %lu has waited at %s line %lu for %.2f seconds the semaphore:\n",
-    (ulong)os_thread_pf(m_thread), m_file, (ulong)m_line, difftime(time(nullptr), m_reservation_time));
+    (ulong)os_thread_pf(m_thread),
+    m_file,
+    (ulong)m_line,
+    difftime(time(nullptr), m_reservation_time)
+  );
 
   if (type == SYNC_MUTEX) {
     /* We use m_old_wait_mutex in case the cell has already been freed meanwhile */
@@ -395,9 +399,13 @@ void Sync_cell::print(ib_stream_t ib_stream) {
       "Last time reserved in file %s line %lu, "
 #endif /* UNIV_SYNC_DEBUG */
       "waiters flag %lu\n",
-      (void *)mutex, mutex->cfile_name, (ulong)mutex->cline, (ulong)mutex->lock_word,
+      (void *)mutex,
+      mutex->cfile_name,
+      (ulong)mutex->cline,
+      (ulong)mutex->lock_word,
 #ifdef UNIV_SYNC_DEBUG
-      mutex->file_name, (ulong)mutex->line,
+      mutex->file_name,
+      (ulong)mutex->line,
 #endif /* UNIV_SYNC_DEBUG */
       (ulong)mutex->m_waiters.load()
     );
@@ -424,7 +432,8 @@ void Sync_cell::print(ib_stream_t ib_stream) {
       ib_logger(
         ib_stream,
         "a writer (thread id %lu) has reserved it in mode %s",
-        (ulong)thread_id, writer == RW_LOCK_EX ? " exclusive" : " wait exclusive"
+        (ulong)thread_id,
+        writer == RW_LOCK_EX ? " exclusive" : " wait exclusive"
       );
     }
 
@@ -457,7 +466,7 @@ void Sync_cell::print(ib_stream_t ib_stream) {
 @return	pointer to cell or nullptr if not found */
 Sync_cell *find_thead(os_thread_id_t thread) {
 
-  for (auto& cell : m_cells) {
+  for (auto &cell : m_cells) {
     if (cell.m_wait_object != nullptr && os_thread_eq(cell.m_thread, thread)) {
 
       return cell;
@@ -531,8 +540,13 @@ bool Sync_check::detect_deadlock(Sync_cell *start, Sync_cell *cell, ulint depth)
 
       if (deadlock_step(start, thread, 0, depth)) {
         ib_logger(
-          ib_stream, "Mutex %p owned by thread %lu file %s " "line %lu\n",
-          mutex, (ulong)os_thread_pf(mutex->thread_id), mutex->file_name, (ulong)mutex->line
+          ib_stream,
+          "Mutex %p owned by thread %lu file %s "
+          "line %lu\n",
+          mutex,
+          (ulong)os_thread_pf(mutex->thread_id),
+          mutex->file_name,
+          (ulong)mutex->line
         );
 
         cell->print(ib_stream);
@@ -553,8 +567,7 @@ bool Sync_check::detect_deadlock(Sync_cell *start, Sync_cell *cell, ulint depth)
       auto thread = debug->thread_id;
 
       if (((debug->lock_type == RW_LOCK_EX) && !os_thread_eq(thread, cell->m_thread)) ||
-          ((debug->lock_type == RW_LOCK_WAIT_EX) && !os_thread_eq(thread, cell->m_thread)) ||
-	  debug->lock_type == RW_LOCK_SHARED) {
+          ((debug->lock_type == RW_LOCK_WAIT_EX) && !os_thread_eq(thread, cell->m_thread)) || debug->lock_type == RW_LOCK_SHARED) {
 
         /* The (wait) x-lock request can block infinitely only if someone (can be also cell
         thread) is holding s-lock, or someone (cannot be cell thread) (wait) x-lock, and
@@ -741,7 +754,11 @@ bool sync_array_print_long_waits() {
     os_thread_sleep(30000000);
 
     srv_print_innodb_monitor = old_val;
-    ib_logger(ib_stream, "###### Diagnostic info printed to the " "standard error stream");
+    ib_logger(
+      ib_stream,
+      "###### Diagnostic info printed to the "
+      "standard error stream"
+    );
   }
 
   return fatal;

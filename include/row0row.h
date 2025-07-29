@@ -26,16 +26,16 @@ Created 4/20/1996 Heikki Tuuri
 
 #include "btr0types.h"
 #include "data0data.h"
+#include "dict0dict.h"
 #include "dict0types.h"
 #include "innodb0types.h"
 #include "mtr0mtr.h"
 #include "que0types.h"
 #include "read0types.h"
+#include "rem0rec.h"
 #include "rem0types.h"
 #include "row0types.h"
 #include "trx0types.h"
-#include "dict0dict.h"
-#include "rem0rec.h"
 #include "trx0undo.h"
 
 constexpr ulint ROW_COPY_DATA = 1;
@@ -115,7 +115,9 @@ DTuple *row_build_index_entry(const DTuple *row, row_ext_t *ext, const Index *in
  * 
  * @return own: row built; see the NOTE below!
  */
-DTuple *row_build(ulint type, const Index *index, const rec_t *rec, const ulint *offsets, const Table *col_table, row_ext_t **ext, mem_heap_t *heap);
+DTuple *row_build(
+  ulint type, const Index *index, const rec_t *rec, const ulint *offsets, const Table *col_table, row_ext_t **ext, mem_heap_t *heap
+);
 
 /**
  * @brief Converts an index record to a typed data tuple.

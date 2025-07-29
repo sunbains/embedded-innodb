@@ -1,6 +1,6 @@
 /** Copyright (c) 2024 Sunny Bains. All rights reserved. */
 
-/** Test the parallel reder code. It does the following: 
+/** Test the parallel reder code. It does the following:
 the following:
 
 Create a database
@@ -38,11 +38,11 @@ Run elect SELECT COUNT((*) FROM T1;
 using lint = long int;
 
 /** Test parameters. For now hard coded. */
-constexpr const char* DATABASE = "test";
-constexpr const char* TABLE = "t1";
+constexpr const char *DATABASE = "test";
+constexpr const char *TABLE = "t1";
 
 /** Total number of parallel read threads 64. */
-constexpr lint NUM_THREADS  = 64;
+constexpr lint NUM_THREADS = 64;
 
 /** Initial number of rows. */
 constexpr lint NUMBER_OF_ROWS = 1000000;
@@ -56,7 +56,7 @@ constexpr lint NUMBER_OF_UNIQUE_VARCHARS = 512;
 constexpr auto ISOLATION_LEVEL = IB_TRX_REPEATABLE_READ;
 
 /** Text column field length */
-constexpr lint TEXT_LEN  = 128;
+constexpr lint TEXT_LEN = 128;
 
 struct Rnd_str {
   char *m_ptr{};
@@ -66,8 +66,7 @@ struct Rnd_str {
 static constexpr char PRE_STR[][128] = {
     "kljakdjdouusdfljqwpeoljlkjpipoi66546s5df4654sf654fs654sf64i"
     "fydf645R546sf6ufujhftl;a",
-    "pox",
-    "sd"};
+    "pox", "sd"};
 
 static std::vector<Rnd_str> random_strings{};
 
@@ -166,7 +165,8 @@ static ib_err_t create_table(const char *dbname, const char *name) {
   return err;
 }
 
-static ib_err_t open_table(const char *dbname,const char *name, ib_trx_t ib_trx, ib_crsr_t *crsr) {
+static ib_err_t open_table(const char *dbname, const char *name,
+                           ib_trx_t ib_trx, ib_crsr_t *crsr) {
   char table_name[IB_MAX_TABLE_NAME_LEN];
 
   snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -191,7 +191,8 @@ static ib_err_t insert_one_row(ib_crsr_t crsr, ib_tpl_t tpl, Generator g) {
   ut_a(err == DB_SUCCESS);
 
   auto i = random() % random_strings.size();
-  err = ib_col_set_value(tpl, 1, random_strings[i].m_ptr, random_strings[i].m_len);
+  err = ib_col_set_value(tpl, 1, random_strings[i].m_ptr,
+                         random_strings[i].m_len);
   ut_a(err == DB_SUCCESS);
 
   return ib_cursor_insert_row(crsr, tpl);
@@ -397,7 +398,7 @@ static void set_options(int argc, char *argv[]) {
     switch (opt) {
 
     case USER_OPT + 1:
-      drop  = true;
+      drop = true;
       break;
 
     case USER_OPT + 2:
@@ -405,7 +406,8 @@ static void set_options(int argc, char *argv[]) {
       break;
 
     default:
-      /* If it's an InnoDB parameter, then we let the auxillary function handle it. */
+      /* If it's an InnoDB parameter, then we let the auxillary function handle
+       * it. */
       if (set_global_option(opt, optarg) != DB_SUCCESS) {
         print_usage(argv[0]);
         exit(EXIT_FAILURE);
@@ -416,7 +418,8 @@ static void set_options(int argc, char *argv[]) {
   free(longopts);
 }
 
-static void startup(int argc, char*argv[], const std::string& db, const std::string &table) {
+static void startup(int argc, char *argv[], const std::string &db,
+                    const std::string &table) {
   srandom(time(nullptr));
 
   auto err = ib_init();
@@ -447,7 +450,7 @@ static void startup(int argc, char*argv[], const std::string& db, const std::str
   assert(err == DB_SUCCESS || err == DB_TABLE_EXISTS);
 }
 
-static void shutdown(const std::string& db, const std::string& table) {
+static void shutdown(const std::string &db, const std::string &table) {
   if (drop) {
     log_info("Dropping table ", table);
     auto err = drop_table(db.c_str(), table.c_str());

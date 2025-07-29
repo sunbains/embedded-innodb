@@ -58,7 +58,7 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept;
  * 
  * @return	error code or DB_SUCCESS
  */
-db_err recv_recovery_from_checkpoint_start(DBLWR* dblwr, ib_recovery_t recovery, lsn_t max_flushed_lsn) noexcept;
+db_err recv_recovery_from_checkpoint_start(DBLWR *dblwr, ib_recovery_t recovery, lsn_t max_flushed_lsn) noexcept;
 
 /**
  * Completes recovery from a checkpoint.
@@ -182,7 +182,7 @@ struct Page_log_records {
 
 /** Recovery system data structure */
 struct Recv_sys {
-  using Page_log_records_map = std::unordered_map<page_no_t, Page_log_records*>;
+  using Page_log_records_map = std::unordered_map<page_no_t, Page_log_records *>;
   using Tablespace_map = std::unordered_map<space_id_t, Page_log_records_map>;
 
   /** Constructor */
@@ -229,7 +229,9 @@ struct Recv_sys {
   * @param start_lsn The start LSN of the mtr.
   * @param end_lsn The end LSN of the mtr.
   */
-  void add_log_record(mlog_type_t type, space_id_t space, page_no_t page_no, byte *body, byte *rec_end, lsn_t start_lsn, lsn_t end_lsn) noexcept;
+  void add_log_record(
+    mlog_type_t type, space_id_t space, page_no_t page_no, byte *body, byte *rec_end, lsn_t start_lsn, lsn_t end_lsn
+  ) noexcept;
 
   /** @return string representation of the data.  */
   std::string to_string() const noexcept;
@@ -318,6 +320,9 @@ extern ib_cb_t recv_pre_rollback_hook;
 /** Maximum page number encountered in the redo log */
 extern ulint recv_max_parsed_page_no;
 
+/** Maximum page LSN encountered during recovery */
+extern lsn_t recv_max_page_lsn;
+
 /** This many frames must be left free in the buffer pool when we scan
 the log and store the scanned log records in the buffer pool: we will
 use these free frames to read in pages when we start applying the
@@ -329,3 +334,25 @@ constexpr ulint RECV_PARSING_BUF_SIZE = 2 * 1024 * 1024;
 
 /** Size of block reads when the log groups are scanned forward to do a roll-forward */
 constexpr ulint RECV_SCAN_SIZE = 4 * UNIV_PAGE_SIZE;
+
+/** Parse log records from buffer
+ * @param[in] store_to_hash  Whether to store parsed records to hash table
+ * @return true if successful
+ */
+bool recv_parse_log_recs(bool store_to_hash) noexcept;
+
+/** Parse or apply a log record body
+ * @param[in] type  Log record type
+ * @param[in] ptr  Pointer to log record body
+ * @param[in] end_ptr  End of log record buffer
+ * @param[in] block  Buffer block for applying (nullptr for parsing only)
+ * @param[in] mtr  Mini-transaction for applying (nullptr for parsing only)
+ * @return next position in buffer or nullptr on error
+ */
+byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_ptr, Buf_block *block, mtr_t *mtr) noexcept;
+
+/** Start crash recovery
+ * @param[in,out] dblwr Doublewrite instance to use for recovery
+ * @param[in] recovery The recovery flag
+ */
+void recv_start_crash_recovery(DBLWR *dblwr, ib_recovery_t recovery) noexcept;

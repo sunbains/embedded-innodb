@@ -32,8 +32,8 @@ Created 12/19/1997 Heikki Tuuri
 #include "pars0sym.h"
 #include "que0que.h"
 #include "read0read.h"
-#include "row0vers.h"
 #include "row0types.h"
+#include "row0vers.h"
 #include "trx0types.h"
 
 struct Dict;
@@ -42,12 +42,7 @@ struct Lock_sys;
 struct sel_buf_t;
 struct sel_node_t;
 
-enum class Search_status {
-  UNDEFINED = -1,
-  FOUND = 0,
-  EXHAUSTED = 1,
-  RETRY = 2
-};
+enum class Search_status { UNDEFINED = -1, FOUND = 0, EXHAUSTED = 1, RETRY = 2 };
 
 struct Row_sel {
   /*  *
@@ -79,7 +74,7 @@ struct Row_sel {
    * @param[in, own] sel_buf The prefetch buffer to be freed.
      */
   static void free_prefetch_buf(sel_buf_t *sel_buf) noexcept;
-  
+
   /**
    * @brief Performs a select step.
    *
@@ -174,7 +169,9 @@ struct Row_sel {
    * @return DB_SUCCESS, DB_RECORD_NOT_FOUND, DB_END_OF_INDEX, DB_DEADLOCK,
    *         DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD.
    */
-  [[nodiscard]] db_err mvcc_fetch(ib_recovery_t recovery, ib_srch_mode_t mode, Prebuilt *prebuilt, ib_match_t match_mode, ib_cur_op_t direction) noexcept;
+  [[nodiscard]] db_err mvcc_fetch(
+    ib_recovery_t recovery, ib_srch_mode_t mode, Prebuilt *prebuilt, ib_match_t match_mode, ib_cur_op_t direction
+  ) noexcept;
 
   /**
    * @brief Unlocks a row for a client.
@@ -184,11 +181,10 @@ struct Row_sel {
    *
    * @return DB_SUCCESS.
    */
-  [[nodiscard]] db_err unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) noexcept; 
+  [[nodiscard]] db_err unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) noexcept;
 
-  
 #ifdef UNIT_TEST
-  private:
+ private:
 #endif /* UNIT_TEST */
 
   /**
@@ -204,7 +200,9 @@ struct Row_sel {
    *
    * @return DB_SUCCESS or error code
    */
-  [[nodiscard]] db_err set_rec_lock(const Buf_block *block, const rec_t *rec, Index *index, const ulint *offsets, Lock_mode mode, ulint type, que_thr_t *thr) noexcept;
+  [[nodiscard]] db_err set_rec_lock(
+    const Buf_block *block, const rec_t *rec, Index *index, const ulint *offsets, Lock_mode mode, ulint type, que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief Fetches the column values from a record.
@@ -253,14 +251,9 @@ struct Row_sel {
    * @return DB_SUCCESS or error code
    */
   [[nodiscard]] db_err get_clust_rec_with_prebuilt(
-    Prebuilt *prebuilt,
-    Index *sec_index,
-    const rec_t *rec,
-    que_thr_t *thr,
-    const rec_t **out_rec,
-    ulint **offsets,
-    mem_heap_t **offset_heap,
-    mtr_t *mtr) noexcept;
+    Prebuilt *prebuilt, Index *sec_index, const rec_t *rec, que_thr_t *thr, const rec_t **out_rec, ulint **offsets,
+    mem_heap_t **offset_heap, mtr_t *mtr
+  ) noexcept;
 
   /**
    * @brief Restores cursor position after it has been stored. We have to take into
@@ -277,9 +270,11 @@ struct Row_sel {
    * @return true if we may need to process the record the cursor is now positioned on
    * (i.e. we should not go to the next record yet)
    */
-  [[nodiscard]] bool restore_position(bool *same_user_rec, ulint latch_mode, Btree_pcursor *pcur, bool moves_up, mtr_t *mtr) noexcept;
+  [[nodiscard]] bool restore_position(
+    bool *same_user_rec, ulint latch_mode, Btree_pcursor *pcur, bool moves_up, mtr_t *mtr
+  ) noexcept;
 
-    /**
+  /**
      * Builds a previous version of a clustered index record for a consistent read
      *
      * @param[in,out] row Row_vers::Row.
@@ -306,7 +301,9 @@ struct Row_sel {
    *  clustered record, when compared with collation; false if not equal or if the
    * clustered record has been marked for deletion
    */
-  [[nodiscard]] bool sec_rec_is_for_clust_rec(const rec_t *sec_rec, Index *sec_index, const rec_t *clust_rec, Index *clust_index) noexcept;
+  [[nodiscard]] bool sec_rec_is_for_clust_rec(
+    const rec_t *sec_rec, Index *sec_index, const rec_t *clust_rec, Index *clust_index
+  ) noexcept;
 
   /**
    * @brief Returns true if the user-defined column in a secondary index record
@@ -327,14 +324,9 @@ struct Row_sel {
    * @return true if the columns are equal
    */
   [[nodiscard]] bool sec_rec_is_for_blob(
-    ulint mtype,
-    ulint prtype,
-    ulint mbminlen,
-    ulint mbmaxlen,
-    const byte *clust_field,
-    ulint clust_len,
-    const byte *sec_field,
-    ulint sec_len) noexcept;
+    ulint mtype, ulint prtype, ulint mbminlen, ulint mbmaxlen, const byte *clust_field, ulint clust_len, const byte *sec_field,
+    ulint sec_len
+  ) noexcept;
 
   /**
    * Tries to do a shortcut to fetch a clustered index record with a unique key,
@@ -351,13 +343,10 @@ struct Row_sel {
    * @return Search_status::FOUND, Search_status::EXHAUSTED, Search_status::RETRY
    */
   [[nodiscard]] Search_status try_search_shortcut_for_prebuilt(
-    const rec_t **out_rec,
-    Prebuilt *prebuilt,
-    ulint **offsets,
-    mem_heap_t **heap,
-    mtr_t *mtr) noexcept;
+    const rec_t **out_rec, Prebuilt *prebuilt, ulint **offsets, mem_heap_t **heap, mtr_t *mtr
+  ) noexcept;
 
-public:
+ public:
   /** Dictionary */
   Dict *m_dict{};
 
@@ -382,7 +371,7 @@ struct sel_buf_t {
    *
    * This function clears the prefetch buffer, freeing the dynamically
    * allocated memory for data stored there.
-   */ 
+   */
   void clear() noexcept {
     if (m_val_buf_size > 0) {
       mem_free(m_data);
@@ -394,7 +383,7 @@ struct sel_buf_t {
   byte *m_data{};
 
   /** data length or UNIV_SQL_NULL */
-  ulint m_len{}; 
+  ulint m_len{};
 
   /** size of memory buffer allocated for data: this can be more than len;
    * this is defined when data != nullptr */
@@ -410,10 +399,7 @@ struct Plan {
    * @param[in] btree The B-tree.
    */
   Plan(FSP *fsp, Btree *btree, Lock_sys *lock_sys, Row_sel *row_sel) noexcept
-  : m_pcur{fsp, btree},
-    m_clust_pcur{fsp, btree},
-    m_lock_sys{lock_sys},
-    m_sel{row_sel} { }
+      : m_pcur{fsp, btree}, m_clust_pcur{fsp, btree}, m_lock_sys{lock_sys}, m_sel{row_sel} {}
 
   /**
    * Pops the column values for a prefetched, cached row from the column prefetch
@@ -486,7 +472,9 @@ struct Plan {
    * 
    * @return          DB_SUCCESS or error code
    */
-  [[nodiscard]] db_err get_clust_rec(sel_node_t *sel_node, const rec_t *rec, que_thr_t *thr, const rec_t *&out_rec, mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err get_clust_rec(
+    sel_node_t *sel_node, const rec_t *rec, que_thr_t *thr, const rec_t *&out_rec, mtr_t *mtr
+  ) noexcept;
 
   /**
    * Tries to do a shortcut to fetch a clustered index record with a unique key,
@@ -602,13 +590,13 @@ struct Plan {
 /** Select node states */
 enum sel_node_state {
   /** it is a declared cursor which is not currently open */
-  SEL_NODE_CLOSED,     
+  SEL_NODE_CLOSED,
 
   /** intention locks not yet set on tables */
-  SEL_NODE_OPEN,       
+  SEL_NODE_OPEN,
 
   /** intention locks have been set */
-  SEL_NODE_FETCH,      
+  SEL_NODE_FETCH,
 
   /** cursor has reached the result set end */
   SEL_NODE_NO_MORE_ROWS
@@ -686,9 +674,7 @@ struct sel_node_t {
    * which means that it will start fetching from the start of the result set again,
    * regardless of where it was before, and it will set intention locks on the tables.
    */
-  inline void reset_cursor() noexcept {
-    m_state = SEL_NODE_OPEN;
-  }
+  inline void reset_cursor() noexcept { m_state = SEL_NODE_OPEN; }
 
   /** node type: QUE_NODE_SELECT */
   que_common_t m_common{};
@@ -700,43 +686,43 @@ struct sel_node_t {
   que_node_t *m_select_list{};
 
   /** variables list or nullptr */
-  sym_node_t *m_into_list{};    
+  sym_node_t *m_into_list{};
 
   /** table list */
-  sym_node_t *m_table_list{};   
+  sym_node_t *m_table_list{};
 
   /** true if the rows should be fetched in an ascending order */
-  bool m_asc{};                 
+  bool m_asc{};
 
   /** true if the cursor is for update or delete, which means that a row x-lock should be placed on the cursor row */
-  bool m_set_x_locks{};         
+  bool m_set_x_locks{};
 
   /** LOCK_X or LOCK_S */
-  Lock_mode m_row_lock_mode{};  
+  Lock_mode m_row_lock_mode{};
 
   /** number of tables */
-  uint32_t m_n_tables{};           
+  uint32_t m_n_tables{};
 
   /** number of the next table to access in the join */
-  uint32_t m_fetch_table{};        
+  uint32_t m_fetch_table{};
 
   /** array of n_tables many plan nodes containing the search plan and the search data structures */
-  Plan *m_plans{};            
+  Plan *m_plans{};
 
   /** search condition */
-  que_node_t *m_search_cond{};  
+  que_node_t *m_search_cond{};
 
   /** if the query is a non-locking consistent read, its read view is placed here, otherwise nullptr */
-  read_view_t *m_read_view{};   
+  read_view_t *m_read_view{};
 
   /** true if the select is a consistent, non-locking read */
-  bool m_consistent_read{};     
+  bool m_consistent_read{};
 
   /** order by column definition, or nullptr */
-  order_node_t *m_order_by{};   
+  order_node_t *m_order_by{};
 
   /** true if the select list consists of aggregate functions */
-  bool m_is_aggregate{};        
+  bool m_is_aggregate{};
 
   /** true if the aggregate row has already been fetched for the current cursor */
   bool m_aggregate_already_fetched{};
@@ -744,7 +730,7 @@ struct sel_node_t {
   /** this is true if the select is in a single-table explicit cursor which can get updated within the stored
    * procedure, or in a searched update or delete; NOTE that to determine of an explicit cursor if it can
    * get updated, the parser checks from a stored procedure if it contains positioned update or delete statements */
-  bool m_can_get_updated{};       
+  bool m_can_get_updated{};
 
   /** not nullptr if an explicit cursor */
   sym_node_t *m_explicit_cursor{};
@@ -757,13 +743,13 @@ struct sel_node_t {
 /** Fetch statement node */
 struct fetch_node_struct {
   /** type: QUE_NODE_FETCH */
-  que_common_t m_common;   
+  que_common_t m_common;
 
   /** cursor definition */
   sel_node_t *m_cursor_def{};
 
   /** variables to set */
-  sym_node_t *m_into_list{}; 
+  sym_node_t *m_into_list{};
 
   /** User callback function or nullptr.  The first argument to the function is a sel_node_t*, containing the
    * results of the SELECT operation for one row. If the function returns nullptr, it is not interested in
@@ -790,13 +776,13 @@ struct open_node_struct {
   open_node_op m_op_type{};
 
   /** cursor definition */
-  sel_node_t *m_cursor_def{};   
+  sel_node_t *m_cursor_def{};
 };
 
 /** Row printf statement node */
 struct row_printf_node_struct {
   /** type: QUE_NODE_ROW_PRINTF */
-  que_common_t m_common{}; 
+  que_common_t m_common{};
 
   /** select */
   sel_node_t *m_sel_node{};

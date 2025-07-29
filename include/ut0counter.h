@@ -34,14 +34,12 @@ limitations under the License.
 namespace ut {
 
 /** Struct housing an cache-line aligned atomic int*/
-template <typename T=uint64_t>
+template <typename T = uint64_t>
 struct Counter {
   using Type = T;
   using Value = std::atomic<Type>;
 
-  [[nodiscard]] Value &get_ref() {
-    return m_val;
-  }
+  [[nodiscard]] Value &get_ref() { return m_val; }
 
   alignas(hardware_destructive_interference_size) Value m_val;
 };
@@ -63,12 +61,10 @@ concept has_get_index = requires(T t) {
 
 /** Struct with a get_index method using the hash of the thread id.
  @tparam total_buckets total number of buckets*/
-struct Thread_id_indexer{
+struct Thread_id_indexer {
   explicit Thread_id_indexer() : m_hash{} {}
 
-  [[nodiscard]] std::size_t get_index() const {
-    return m_hash(std::this_thread::get_id());
-  }
+  [[nodiscard]] std::size_t get_index() const { return m_hash(std::this_thread::get_id()); }
 
  private:
   /** Note: This may result in collisions that could cause problems. */
@@ -80,13 +76,13 @@ struct Thread_id_indexer{
 struct CPU_indexer {
   [[nodiscard]] std::size_t get_index() const {
 #ifdef UNIV_LINUX
-     uint cpu;
-     if (getcpu(&cpu, nullptr) != 0) {
+    uint cpu;
+    if (getcpu(&cpu, nullptr) != 0) {
       cpu = 0;
       if (!(m_n_errors++ % 10000)) {
-        log_err("getcpu() failed: ", strerror(errno)); 
+        log_err("getcpu() failed: ", strerror(errno));
       }
-     }
+    }
     return cpu;
 #else
     static_assert(false, "Need Linux getcpu() equivalent");
@@ -100,13 +96,11 @@ struct CPU_indexer {
  @tparam shards total number of counters
  @tparam T type supporting get_index method to select the appropriate shard
  @tparam Int type of the integer */
-template <std::int32_t Shards, typename T = Dummy_indexer, typename Int=uint64_t>
+template <std::int32_t Shards, typename T = Dummy_indexer, typename Int = uint64_t>
   requires has_get_index<T>
 struct Counters {
 
-  void inc(Int value, size_t index) {
-    m_counters[index].get_ref().fetch_add(value, std::memory_order_relaxed);
-  }
+  void inc(Int value, size_t index) { m_counters[index].get_ref().fetch_add(value, std::memory_order_relaxed); }
 
   void inc(Int value = 1) {
     const auto index = m_indexer.get_index() % Shards;
@@ -126,7 +120,7 @@ struct Counters {
   /** Reset the counter. */
   void clear() {
     for (auto &counter : m_counters) {
-     counter.get_ref().store(0, std::memory_order_release);
+      counter.get_ref().store(0, std::memory_order_release);
     }
   }
 
@@ -144,4 +138,4 @@ using Thread_id_sharded_counter = Counters<Shards, Thread_id_indexer>;
 template <std::int32_t Shards>
 using CPU_sharded_counter = Counters<Shards, CPU_indexer>;
 
-} // namespace ut
+}  // namespace ut

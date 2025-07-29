@@ -6,9 +6,9 @@ Copyright (c) 2024 Sunny Bains. All rights reserved.
 Created 12 Oct 2008.
 *******************************************************/
 
+#include "ddl0ddl.h"
 #include "api0misc.h"
 #include "btr0pcur.h"
-#include "ddl0ddl.h"
 #include "dict0dict.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
@@ -18,7 +18,6 @@ Created 12 Oct 2008.
 #include "srv0srv.h"
 #include "trx0roll.h"
 #include "ut0lst.h"
-
 
 /* Magic table names for invoking various monitor threads */
 static const char S_innodb_monitor[] = "innodb_monitor";
@@ -138,7 +137,8 @@ db_err DDL::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
   ut_a(in_name != nullptr);
 
   if (srv_config.m_created_new_raw) {
-    log_warn("A new raw disk partition was initialized: we do not allow database modifications"
+    log_warn(
+      "A new raw disk partition was initialized: we do not allow database modifications"
       " by the user. Shut down the server and edit your config file so that newraw is replaced"
       " with raw."
     );
@@ -165,16 +165,19 @@ db_err DDL::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
     srv_print_innodb_monitor = false;
     m_dict->m_store.m_btree->m_lock_sys->unset_print_lock_monitor();
 
-  } else if (namelen == sizeof(S_innodb_lock_monitor) && memcmp(table_name, S_innodb_lock_monitor, sizeof(S_innodb_lock_monitor)) == 0) {
+  } else if (namelen == sizeof(S_innodb_lock_monitor) &&
+             memcmp(table_name, S_innodb_lock_monitor, sizeof(S_innodb_lock_monitor)) == 0) {
 
     srv_print_innodb_monitor = false;
     m_dict->m_store.m_btree->m_lock_sys->unset_print_lock_monitor();
 
-  } else if (namelen == sizeof(S_innodb_tablespace_monitor) && memcmp(table_name, S_innodb_tablespace_monitor, sizeof(S_innodb_tablespace_monitor)) == 0) {
+  } else if (namelen == sizeof(S_innodb_tablespace_monitor) &&
+             memcmp(table_name, S_innodb_tablespace_monitor, sizeof(S_innodb_tablespace_monitor)) == 0) {
 
     srv_print_innodb_tablespace_monitor = false;
 
-  } else if (namelen == sizeof(S_innodb_table_monitor) && memcmp(table_name, S_innodb_table_monitor, sizeof(S_innodb_table_monitor)) == 0) {
+  } else if (namelen == sizeof(S_innodb_table_monitor) &&
+             memcmp(table_name, S_innodb_table_monitor, sizeof(S_innodb_table_monitor)) == 0) {
 
     srv_print_innodb_table_monitor = false;
   }
@@ -204,7 +207,9 @@ db_err DDL::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
 
   if (table == nullptr) {
     log_err(
-      "Table ", in_name, " does not exist in the InnoDB internal data dictionary though the client is trying to drop it."
+      "Table ",
+      in_name,
+      " does not exist in the InnoDB internal data dictionary though the client is trying to drop it."
       " You can look for further help on the Embedded InnoDB website. Check the site for details"
     );
 
@@ -240,7 +245,8 @@ db_err DDL::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
       log_warn(std::format(
         "Client is trying to drop table id: {} name: {} though there are still open handles to it."
         " Adding the table to the background drop queue.",
-        table->m_id, table->m_name
+        table->m_id,
+        table->m_name
       ));
 
       /* We return DB_SUCCESS though the drop will
@@ -267,7 +273,8 @@ db_err DDL::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
       log_warn(std::format(
         "You are trying to drop table id: {} name: {} though there is a foreign key check running on it."
         " Adding the table to the background drop queue.",
-        table->m_id, table->m_name
+        table->m_id,
+        table->m_name
       ));
 
       /* We return DB_SUCCESS though the drop will happen lazily later */
@@ -350,7 +357,7 @@ db_err DDL::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
   if (err != DB_SUCCESS) {
 
     if (err != DB_OUT_OF_FILE_SPACE) {
-      log_fatal("Unexpected err: {}", (int) err);
+      log_fatal("Unexpected err: {}", (int)err);
     }
 
     err = DB_MUST_GET_MORE_FILE_SPACE;
@@ -441,7 +448,7 @@ db_err DDL::create_table(Table *table, Trx *trx) noexcept {
   trx->m_op_info = "creating table";
 
   /* Check that no reserved column names are used. */
-  for (ulint i {}; i < table->get_n_user_cols(); ++i) {
+  for (ulint i{}; i < table->get_n_user_cols(); ++i) {
     if (Dict::col_name_is_reserved(table->get_col_name(i))) {
       Table::destroy(table, Current_location());
       return DB_ERROR;
@@ -490,7 +497,8 @@ db_err DDL::create_table(Table *table, Trx *trx) noexcept {
 
     log_info(
       "Validating InnoDB memory: to use this feature you must compile InnoDB with UNIV_MEM_DEBUG defined in innodb0types.h and"
-      " the server must be quiet because allocation from a mem heap is not protected by any semaphore.");
+      " the server must be quiet because allocation from a mem heap is not protected by any semaphore."
+    );
 
 #ifdef UNIV_MEM_DEBUG
     ut_a(mem_validate());
@@ -555,7 +563,7 @@ db_err DDL::create_table(Table *table, Trx *trx) noexcept {
   return err;
 }
 
-db_err DDL::create_index(Index *index, Trx *trx) noexcept{
+db_err DDL::create_index(Index *index, Trx *trx) noexcept {
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(&m_dict->m_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
@@ -578,7 +586,7 @@ db_err DDL::create_index(Index *index, Trx *trx) noexcept{
   return err;
 }
 
-db_err DDL::truncate_table(Table *table, Trx *trx) noexcept{
+db_err DDL::truncate_table(Table *table, Trx *trx) noexcept {
   /* How do we prevent crashes caused by ongoing operations on
   the table? Old operations could try to access non-existent
   pages.
@@ -660,9 +668,7 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept{
     mutex_enter(&m_dict->m_foreign_err_mutex);
 
     log_err(std::format(
-      "Cannot truncate table {} by DROP+CREATE because it is referenced by {}",
-      table->m_name,
-      foreign->m_foreign_table_name
+      "Cannot truncate table {} by DROP+CREATE because it is referenced by {}", table->m_name, foreign->m_foreign_table_name
     ));
 
     mutex_exit(&m_dict->m_foreign_err_mutex);
@@ -677,10 +683,9 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept{
   checks take an IS or IX lock on the table. */
 
   if (table->m_n_foreign_key_checks_running > 0) {
-    log_err(std::format(
-      "Cannot truncate table {} by DROP+CREATE because there is a foreign key check running on it.",
-      table->m_name
-    ));
+    log_err(
+      std::format("Cannot truncate table {} by DROP+CREATE because there is a foreign key check running on it.", table->m_name)
+    );
 
     return func_exit(DB_ERROR);
   }
@@ -702,7 +707,8 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept{
     if (flags != ULINT_UNDEFINED && fsp->m_fil->discard_tablespace(space_id)) {
       space_id = SYS_TABLESPACE;
 
-      if (fsp->m_fil->create_new_single_table_tablespace(&space_id, table->m_name, false, flags, FIL_IBD_FILE_INITIAL_SIZE) != DB_SUCCESS) {
+      if (fsp->m_fil->create_new_single_table_tablespace(&space_id, table->m_name, false, flags, FIL_IBD_FILE_INITIAL_SIZE) !=
+          DB_SUCCESS) {
         log_err(std::format("TRUNCATE TABLE {} failed to create a new tablespace", table->m_name));
         table->m_ibd_file_missing = true;
         return func_exit(DB_ERROR);
@@ -778,11 +784,11 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept{
 
         mtr.start();
 
-        (void) pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Current_location());
+        (void)pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Current_location());
       }
     }
 
-    (void) pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(&mtr);
   }
 
   pcur.close();
@@ -820,7 +826,11 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept{
 
     trx->m_error_state = DB_SUCCESS;
 
-    log_err("Unable to assign a new identifier to table ", table->m_name, "after truncating it. Background processes may corrupt the table!");
+    log_err(
+      "Unable to assign a new identifier to table ",
+      table->m_name,
+      "after truncating it. Background processes may corrupt the table!"
+    );
 
     err = DB_ERROR;
 
@@ -843,7 +853,8 @@ db_err DDL::drop_index(Table *table, Index *index, Trx *trx) noexcept {
     "PROCEDURE DROP_INDEX_PROC () IS\n"
     "BEGIN\n"
     /* Rename the index, so that it will be dropped by row_merge_drop_temp_indexes() at crash recovery if the server crashes before this trx is committed. */
-    "UPDATE SYS_INDEXES SET NAME=CONCAT('" TEMP_INDEX_PREFIX_STR "', NAME) WHERE ID = :indexid;\n"
+    "UPDATE SYS_INDEXES SET NAME=CONCAT('" TEMP_INDEX_PREFIX_STR
+    "', NAME) WHERE ID = :indexid;\n"
     "COMMIT WORK;\n"
     /* Drop the field definitions of the index. */
     "DELETE FROM SYS_FIELDS WHERE INDEX_ID = :indexid;\n"
@@ -851,12 +862,11 @@ db_err DDL::drop_index(Table *table, Index *index, Trx *trx) noexcept {
     "DELETE FROM SYS_INDEXES WHERE ID = :indexid;\n"
     "END;\n";
 
-
   auto info = pars_info_create();
 
   pars_info_add_uint64_literal(info, "indexid", index->m_id);
 
-  (void) trx->start_if_not_started();
+  (void)trx->start_if_not_started();
   trx->m_op_info = "dropping index";
 
   ut_a(trx->m_dict_operation_lock_mode == RW_X_LATCH);
@@ -1016,7 +1026,6 @@ db_err DDL::rename_table(const char *old_name, const char *new_name, Trx *trx) n
       false,
       trx
     );
-
   }
 
   if (err != DB_SUCCESS) {
@@ -1025,7 +1034,9 @@ db_err DDL::rename_table(const char *old_name, const char *new_name, Trx *trx) n
         "Duplicate key error while renaming table. Possible reasons:\n"
         "Table rename would cause two FOREIGN KEY constraints to have the"
         " same internal name in case-insensitive comparison. trying to"
-        " rename table. If table ", new_name, " is a temporary table,"
+        " rename table. If table ",
+        new_name,
+        " is a temporary table,"
         " then it can be that there are still queries running on the table,"
         " and it will be dropped automatically  when the queries end."
       );
@@ -1058,7 +1069,9 @@ db_err DDL::rename_table(const char *old_name, const char *new_name, Trx *trx) n
 
     if (err != DB_SUCCESS) {
       log_err(
-        "RENAME TABLE table ", new_name, "is referenced in foreign key constraints which are not compatible"
+        "RENAME TABLE table ",
+        new_name,
+        "is referenced in foreign key constraints which are not compatible"
         " with the new table definition.\n"
       );
 
@@ -1179,7 +1192,8 @@ db_err DDL::drop_all_foreign_keys_in_db(const char *name, Trx *trx) noexcept {
     "    FETCH cur INTO foreign_id, for_name;\n"
     "    IF (SQL % NOTFOUND) THEN\n"
     "      found := 0;\n"
-    "    ELSIF (" TABLE_NOT_IN_THIS_DB ") THEN\n"
+    "    ELSIF (" TABLE_NOT_IN_THIS_DB
+    ") THEN\n"
     "      found := 0;\n"
     "    ELSIF (1=1) THEN\n"
     "      DELETE FROM SYS_FOREIGN_COLS\n"
@@ -1221,7 +1235,7 @@ db_err DDL::drop_database(const char *name, Trx *trx) noexcept {
       if (table->m_n_handles_opened > 0) {
         m_dict->unlock_data_dictionary(trx);
 
-        log_warn("The client is trying to drop database ", name , " though there are still open handles to table ", table_name);
+        log_warn("The client is trying to drop database ", name, " though there are still open handles to table ", table_name);
 
         os_thread_sleep(1000000);
 
@@ -1234,7 +1248,7 @@ db_err DDL::drop_database(const char *name, Trx *trx) noexcept {
         auto err = drop_table(table_name, trx, true);
 
         if (err != DB_SUCCESS) {
-          log_err("DROP DATABASE ", name , " failed with error ", err , " for table ", table_name);
+          log_err("DROP DATABASE ", name, " failed with error ", err, " for table ", table_name);
           mem_free(table_name);
           table_name = nullptr;
         } else {
@@ -1245,7 +1259,7 @@ db_err DDL::drop_database(const char *name, Trx *trx) noexcept {
           err = drop_all_foreign_keys_in_db(name, trx);
 
           if (err != DB_SUCCESS) {
-            log_err("DROP DATABASE ", name , " failed with error ", err , " while dropping all foreign keys");
+            log_err("DROP DATABASE ", name, " failed with error ", err, " while dropping all foreign keys");
           }
         }
       }
@@ -1282,7 +1296,7 @@ void DDL::drop_all_temp_indexes(ib_recovery_t recovery) noexcept {
   pcur.open_at_index_side(true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
-    (void) pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(&mtr);
 
     if (!pcur.is_on_user_rec()) {
       break;
@@ -1324,7 +1338,7 @@ void DDL::drop_all_temp_indexes(ib_recovery_t recovery) noexcept {
       for (auto index : table->m_indexes) {
         if (*index->m_name == TEMP_INDEX_PREFIX) {
           if (auto err = drop_index(table, index, trx); err != DB_SUCCESS) {
-            log_warn("DROP DATABASE failed with error ", err , " while dropping temporaryindex ", index->m_name);
+            log_warn("DROP DATABASE failed with error ", err, " while dropping temporaryindex ", index->m_name);
           }
           auto err_commit = trx->commit();
           ut_a(err_commit == DB_SUCCESS);
@@ -1334,7 +1348,7 @@ void DDL::drop_all_temp_indexes(ib_recovery_t recovery) noexcept {
 
     mtr.start();
 
-    (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+    (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
   }
 
   pcur.close();
@@ -1373,7 +1387,7 @@ void DDL::drop_all_temp_tables(ib_recovery_t recovery) noexcept {
 
   for (;;) {
 
-    (void) pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(&mtr);
 
     if (!pcur.is_on_user_rec()) {
       break;
@@ -1420,7 +1434,7 @@ void DDL::drop_all_temp_tables(ib_recovery_t recovery) noexcept {
 
     if (table != nullptr) {
       if (auto err = drop_table(table_name, trx, false); err != DB_SUCCESS) {
-        log_warn("DROP DATABASE failed with error ", err , " while dropping table ", table_name);
+        log_warn("DROP DATABASE failed with error ", err, " while dropping table ", table_name);
       }
       const auto err_commit = trx->commit();
       ut_a(err_commit == DB_SUCCESS);
@@ -1428,7 +1442,7 @@ void DDL::drop_all_temp_tables(ib_recovery_t recovery) noexcept {
 
     mtr.start();
 
-    (void) pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+    (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
   }
 
   pcur.close();

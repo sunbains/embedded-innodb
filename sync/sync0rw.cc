@@ -171,7 +171,7 @@ mutex_t rw_lock_debug_mutex;
 
 /** If deadlock detection does not get immediately the mutex,
 it may wait for this event */
-Cond_var* rw_lock_debug_event;
+Cond_var *rw_lock_debug_event;
 
 /** This is set to true, if there may be waiters for the event */
 bool rw_lock_debug_waiters;
@@ -653,7 +653,8 @@ void rw_lock_remove_debug_info(rw_lock_t *lock, ulint pass, ulint lock_type) {
   auto info = UT_LIST_GET_FIRST(lock->m_debug_list);
 
   while (info != nullptr) {
-    if ((pass == info->pass) && ((pass != 0) || os_thread_eq(info->thread_id, os_thread_get_curr_id())) && (info->lock_type == lock_type)) {
+    if ((pass == info->pass) && ((pass != 0) || os_thread_eq(info->thread_id, os_thread_get_curr_id())) &&
+        (info->lock_type == lock_type)) {
 
       /* Found! */
       UT_LIST_REMOVE(list, lock->m_debug_list, info);

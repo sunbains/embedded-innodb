@@ -24,15 +24,28 @@ Created 4/20/1996 Heikki Tuuri
 
 #pragma once
 
+#include "btr0types.h"
+#include "buf0types.h"
 #include "data0data.h"
 #include "dict0types.h"
+#include "mem0types.h"
+#include "mtr0types.h"
 #include "que0types.h"
+#include "rem0types.h"
 #include "row0types.h"
 #include "trx0types.h"
 
 const ulint INS_NODE_MAGIC_N = 15849075;
 
 struct Row_update;
+struct Lock_sys;
+struct Btree_cursor;
+struct Btree_pcursor;
+struct mtr_t;
+struct Buf_block;
+struct big_rec_t;
+struct Index;
+struct Foreign;
 
 struct Row_insert {
 
@@ -82,7 +95,9 @@ struct Row_insert {
    * 
    * @return DB_SUCCESS, DB_LOCK_WAIT, DB_NO_REFERENCED_ROW, or DB_ROW_IS_REFERENCED.
    */
-  [[nodiscard]] db_err check_foreign_constraint(bool check_ref, const Foreign *foreign, const Table *table, DTuple *entry, que_thr_t *thr) noexcept;
+  [[nodiscard]] db_err check_foreign_constraint(
+    bool check_ref, const Foreign *foreign, const Table *table, DTuple *entry, que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief Creates an insert node struct.
@@ -142,9 +157,9 @@ struct Row_insert {
    */
   void create_entry_list(ins_node_t *node) noexcept;
 
-  #ifdef UNIT_TEST
-  private:
-  #endif /* UNIT_TEST */
+#ifdef UNIT_TEST
+ private:
+#endif /* UNIT_TEST */
   /**
    * @brief Does an insert operation by updating a delete-marked existing record
    * in the index. This situation can occur if the delete-marked record is
@@ -158,7 +173,9 @@ struct Row_insert {
    * @param[in] mtr               Must be committed before latching any further pages
    * @return DB_SUCCESS or error code
    */
-  [[nodiscard]] db_err sec_index_entry_by_modify(ulint mode, Btree_cursor *btr_cur, const DTuple *entry, que_thr_t *thr, mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err sec_index_entry_by_modify(
+    ulint mode, Btree_cursor *btr_cur, const DTuple *entry, que_thr_t *thr, mtr_t *mtr
+  ) noexcept;
 
   /**
    * @brief Does an insert operation by delete unmarking and updating a delete marked
@@ -175,7 +192,9 @@ struct Row_insert {
    * 
    * @return DB_SUCCESS, DB_FAIL, or error code
    */
-  [[nodiscard]] db_err clust_index_entry_by_modify(ulint mode, Btree_cursor *btr_cur, mem_heap_t **heap, big_rec_t **big_rec, const DTuple *entry, que_thr_t *thr, mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err clust_index_entry_by_modify(
+    ulint mode, Btree_cursor *btr_cur, mem_heap_t **heap, big_rec_t **big_rec, const DTuple *entry, que_thr_t *thr, mtr_t *mtr
+  ) noexcept;
 
   /**
    * @brief Checks if an ancestor node of the given node updates the table in a cascaded update/delete.
@@ -232,7 +251,9 @@ struct Row_insert {
    * @param[in] rec A matching index record in the child table.
    * @param[in] entry Index entry in the parent table.
    */
-  void foreign_report_err(const char *errstr, que_thr_t *thr, const Foreign *foreign, const rec_t *rec, const DTuple *entry) noexcept;
+  void foreign_report_err(
+    const char *errstr, que_thr_t *thr, const Foreign *foreign, const rec_t *rec, const DTuple *entry
+  ) noexcept;
 
   /**
    * @brief Reports a foreign key error to ib_stream when trying to add an index entry to a child table.
@@ -271,7 +292,9 @@ struct Row_insert {
    * 
    * @return DB_SUCCESS, DB_LOCK_WAIT, or error code
    */
-  [[nodiscard]] db_err foreign_check_on_constraint(que_thr_t *thr, const Foreign *foreign, Btree_pcursor *pcur, DTuple *entry, mtr_t *mtr) noexcept;
+  [[nodiscard]] db_err foreign_check_on_constraint(
+    que_thr_t *thr, const Foreign *foreign, Btree_pcursor *pcur, DTuple *entry, mtr_t *mtr
+  ) noexcept;
 
   /**
    * @brief Sets a shared lock on a record.
@@ -287,7 +310,9 @@ struct Row_insert {
    * 
    * @return DB_SUCCESS if successful, or an error code.
    */
-  [[nodiscard]] db_err set_shared_rec_lock(ulint type, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr) noexcept;
+  [[nodiscard]] db_err set_shared_rec_lock(
+    ulint type, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief Sets an exclusive lock on a record.
@@ -303,7 +328,9 @@ struct Row_insert {
    * 
    * @return DB_SUCCESS if successful, or an error code.
    */
-  [[nodiscard]] db_err set_exclusive_rec_lock(ulint type, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr) noexcept;
+  [[nodiscard]] db_err set_exclusive_rec_lock(
+    ulint type, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr
+  ) noexcept;
 
   /**
    * @brief Checks if foreign key constraints fail for an index entry.
@@ -455,7 +482,7 @@ struct Row_insert {
    */
   void alloc_sys_fields(ins_node_t *node) noexcept;
 
-public:
+ public:
   /** Data dictionary */
   Dict *m_dict{};
 

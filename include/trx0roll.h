@@ -66,10 +66,10 @@ of this undo record, it must be released with trx_undo_rec_release.
 @return undo log record copied to heap, nullptr if none left, or if the
 undo number of the top record would be less than the limit */
 trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(
-  Trx *trx,           /*!< in: transaction */
+  Trx *trx,             /*!< in: transaction */
   undo_no_t limit,      /*!< in: least undo number we need */
   roll_ptr_t *roll_ptr, /*!< out: roll pointer to undo record */
-  mem_heap_t *heap /*!< in: memory heap where copied */
+  mem_heap_t *heap      /*!< in: memory heap where copied */
 );
 
 /** Reserves an undo log record for a query thread to undo. This should be
@@ -78,7 +78,8 @@ function above.
 @return	true if succeeded */
 bool trx_undo_rec_reserve(
   Trx *trx, /*!< in/out: transaction */
-  undo_no_t undo_no); /*!< in: undo number of the record */
+  undo_no_t undo_no
+); /*!< in: undo number of the record */
 
 /** Releases a reserved undo record. */
 void trx_undo_rec_release(
@@ -88,12 +89,12 @@ void trx_undo_rec_release(
 
 /** Starts a rollback operation. */
 void trx_rollback(
-  Trx *trx,     /*!< in: transaction */
-  trx_sig_t *sig, /*!< in: signal starting the rollback */
+  Trx *trx,            /*!< in: transaction */
+  trx_sig_t *sig,      /*!< in: signal starting the rollback */
   que_thr_t **next_thr /*!< in/out: next query thread to run; if the value
 			 which is passed in is a pointer to a nullptr pointer, then
 			 the calling function can start running a new query thread */
-  );
+);
 
 /** Rollback or clean up any incomplete transactions which were
 encountered in crash recovery.  If the transaction already was
@@ -112,12 +113,12 @@ void *trx_rollback_or_clean_all_recovered(void *);
 
 /** Finishes a transaction rollback. */
 void trx_finish_rollback_off_kernel(
-  que_t *graph, /*!< in: undo graph which can now be freed */
-  Trx *trx,   /*!< in: transaction */
+  que_t *graph,        /*!< in: undo graph which can now be freed */
+  Trx *trx,            /*!< in: transaction */
   que_thr_t **next_thr /*!< in/out: next query thread to run; if the value which is passed
 			 in is a pointer to a nullptr pointer, then the calling function can
 			 start running a new query thread; if this parameter is nullptr, it is ignored */
-  );
+);
 
 /** Builds an undo 'query' graph for a transaction. The actual rollback is
 performed by executing this query graph like a query subprocedure call.
@@ -137,17 +138,17 @@ que_thr_t *trx_rollback_step(que_thr_t *thr); /*!< in: query thread */
 /** Rollback a user transaction.
 @return	error code or DB_SUCCESS */
 db_err trx_general_rollback(
-  Trx *trx,   /*!< in: transaction handle */
-  bool partial, /*!< in: true if partial rollback requested */
+  Trx *trx,            /*!< in: transaction handle */
+  bool partial,        /*!< in: true if partial rollback requested */
   trx_savept_t *savept /*!< in: pointer to savepoint undo number, if partial rollback requested */
-  );
+);
 
 /** Frees savepoint structs starting from savep, if savep == nullptr then
 free all savepoints. */
 void trx_roll_savepoints_free(
-  Trx *trx, /*!< in: transaction handle */
+  Trx *trx,                 /*!< in: transaction handle */
   trx_named_savept_t *savep /*!< in: free all savepoints > this one; if this is nullptr, free all savepoints of trx */
-  );
+);
 
 /** A cell of trx_undo_arr_t; used during a rollback and a purge */
 struct trx_undo_inf_t {
