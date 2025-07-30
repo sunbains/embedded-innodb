@@ -67,7 +67,7 @@ struct Row_vers {
 
   /**
    * @brief Constructor.
-   * 
+   *
    * @param[in] trx_sys The transaction system.
    * @param[in] lock_sys The lock system.
    */
@@ -75,7 +75,7 @@ struct Row_vers {
 
   /**
    * @brief Creates a Row_vers.
-   * 
+   *
    * @param[in] trx_sys The transaction system.
    * @param[in] lock_sys The lock system.
    */
@@ -83,31 +83,31 @@ struct Row_vers {
 
   /**
    * @brief Destroys a Row_vers.
-   * 
+   *
    * @param[in,out] row_vers The Row_vers to destroy.
    */
   static void destroy(Row_vers *&row_vers) noexcept;
 
   /**
    * @brief Finds out if an active transaction has inserted or modified a secondary index record.
-   * 
-   * NOTE: the kernel mutex is temporarily released in this function!
-   * 
+   *
+   * NOTE: the trx system mutex is temporarily released in this function!
+   *
    * @param[in] rec Record in a secondary index.
    * @param[in] index The secondary index.
    * @param[in] offsets Phy_rec::get_col_offsets(rec, index).
-   * 
+   *
    * @return nullptr if committed, else the active transaction.
    */
-  [[nodiscard]] Trx *impl_x_locked_off_kernel(const rec_t *rec, const Index *index, const ulint *offsets) noexcept;
+  [[nodiscard]] Trx *impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *index, const ulint *offsets) noexcept;
 
   /**
    * @brief  Finds out if we must preserve a delete marked earlier version of a clustered
    * index record, because it is >= the purge view.
-   * 
+   *
    * @param[in] trx_id Transaction id in the version.
    * @param[in] mtr Mtr holding the latch on the clustered index record. It will also hold the latch on purge_view.
-   * 
+   *
    * @return true if earlier version should be preserved.
    */
   [[nodiscard]] bool must_preserve_del_marked(trx_id_t trx_id, mtr_t *mtr) noexcept;
@@ -118,13 +118,13 @@ struct Row_vers {
    * if there is any not delete marked version of the record where the trx
    * id >= purge view, and the secondary index entry == ientry; exactly in
    * this case we return true.
-   * 
+   *
    * @param[in] also_curr true if also rec is included in the versions to search; otherwise only versions prior to rec are searched.
    * @param[in] rec Record in a clustered index; the caller must have a latch on the page.
    * @param[in] mtr Mtr holding the latch on the clustered index record. It will also hold the latch on purge_view.
    * @param[in] index The secondary index.
    * @param[in] entry The secondary index entry.
-   * 
+   *
    * @return true if earlier version should have ientry as its secondary index entry.
    */
   [[nodiscard]] bool old_has_index_entry(bool also_curr, const rec_t *rec, mtr_t *mtr, Index *index, const DTuple *entry) noexcept;
@@ -132,9 +132,9 @@ struct Row_vers {
   /**
    * @brief Constructs the version of a clustered index record which a consistent
    * read should see.
-   * 
+   *
    * @param[in,out] row Version of a clustered index record.
-   * 
+   *
    * @return DB_SUCCESS or DB_MISSING_HISTORY
    */
   [[nodiscard]] db_err build_for_consistent_read(Row &row) noexcept;
@@ -142,9 +142,9 @@ struct Row_vers {
   /**
    * @brief Constructs the last committed version of a clustered index record,
    * which should be seen by a semi-consistent read.
-   * 
+   *
    * @param[in,out] row  Version of a clustered index record.
-   * 
+   *
    * @return DB_SUCCESS or DB_MISSING_HISTORY
    */
   [[nodiscard]] db_err build_for_semi_consistent_read(Row &row) noexcept;

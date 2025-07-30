@@ -38,7 +38,9 @@ Created 3/26/1996 Heikki Tuuri
 /** The transaction system */
 Trx_sys *srv_trx_sys{};
 
-Trx_sys::Trx_sys(FSP *fsp) noexcept : m_fsp(fsp) {}
+Trx_sys::Trx_sys(FSP *fsp) noexcept : m_fsp(fsp) {
+  mutex_create(&m_mutex, IF_DEBUG("trx_sys_mutex", ) IF_SYNC_DEBUG(TRX_SYS_MUTEX, ) Current_location());
+}
 
 Trx_sys::~Trx_sys() noexcept {
   /* Check that all read views are closed except read view owned
@@ -57,7 +59,7 @@ Trx_sys::~Trx_sys() noexcept {
 
   /* This is required only because it's a pre-condition for many
   of the functions that we need to call. */
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_mutex);
 
   /* There can't be any active transactions. */
   auto rseg = m_rseg_list.front();
@@ -89,7 +91,9 @@ Trx_sys::~Trx_sys() noexcept {
   ut_a(m_view_list.empty());
   ut_a(m_client_trx_list.empty());
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_mutex);
+
+  mutex_free(&m_mutex);
 }
 
 dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
@@ -101,7 +105,7 @@ dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
 
   mtr.start();
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_mutex);
 
   auto sys_header = read_header(&mtr);
 
@@ -153,7 +157,7 @@ dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
     m_purge = new (ptr) Purge_sys(purge_trx);
   }
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_mutex);
 
   mtr.commit();
 
@@ -161,7 +165,7 @@ dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
 }
 
 bool Trx_sys::in_trx_list(Trx *in_trx) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_mutex));
 
   for (auto trx : m_trx_list) {
     if (trx == in_trx) {
@@ -174,7 +178,7 @@ bool Trx_sys::in_trx_list(Trx *in_trx) noexcept {
 }
 
 void Trx_sys::flush_max_trx_id() noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_mutex));
 
   mtr_t mtr;
 
@@ -188,7 +192,7 @@ void Trx_sys::flush_max_trx_id() noexcept {
 }
 
 ulint Trx_sys::frseg_find_free(mtr_t *mtr) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_mutex));
 
   auto sys_header = read_header(mtr);
 
@@ -216,7 +220,7 @@ dberr_t Trx_sys::create_system_tablespace() noexcept {
 
   mtr_x_lock(m_fsp->m_fil->space_get_latch(TRX_SYS_SPACE), &mtr);
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_mutex);
 
   /* Create the trx sys file block in a new allocated file segment */
   auto block = m_fsp->fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER, &mtr);
@@ -261,7 +265,7 @@ dberr_t Trx_sys::create_system_tablespace() noexcept {
   ut_a(slot_no == TRX_SYS_SYSTEM_RSEG_ID);
   ut_a(page_no != FIL_NULL);
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_mutex);
 
   mtr.commit();
 
@@ -295,19 +299,19 @@ void Trx_sys::destroy_trx(Trx *&trx) noexcept {
 Trx *Trx_sys::create_user_trx(void *arg) noexcept {
   auto trx = create_trx(arg);
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_mutex);
 
   ++m_n_user_trx;
 
   m_client_trx_list.push_front(trx);
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_mutex);
 
   return trx;
 }
 
 void Trx_sys::destroy_user_trx(Trx *&trx) noexcept {
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_mutex);
 
   m_client_trx_list.remove(trx);
 
@@ -316,34 +320,34 @@ void Trx_sys::destroy_user_trx(Trx *&trx) noexcept {
   ut_a(m_n_user_trx > 0);
   --m_n_user_trx;
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_mutex);
 }
 
 Trx *Trx_sys::create_background_trx(void *arg) noexcept {
   auto trx = create_trx(arg);
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_mutex);
 
   ++m_n_background_trx;
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_mutex);
 
   return trx;
 }
 
 void Trx_sys::destroy_background_trx(Trx *&trx) noexcept {
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_mutex);
 
   destroy_trx(trx);
 
   ut_a(m_n_background_trx > 0);
   --m_n_background_trx;
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_mutex);
 }
 
 void Trx_sys::trx_list_insert_ordered(Trx *in_trx) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_mutex));
 
   Trx *prev_trx{};
 
@@ -369,7 +373,7 @@ void Trx_sys::trx_list_insert_ordered(Trx *in_trx) noexcept {
 }
 
 ulint Trx_sys::trx_assign_rseg() noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_mutex));
 
   auto rseg = m_latest_rseg;
   const auto n_rsegs = m_rseg_list.size();
@@ -393,7 +397,7 @@ ulint Trx_sys::trx_assign_rseg() noexcept {
 }
 
 void Trx_sys::init_at_db_start(ib_recovery_t recovery) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_mutex));
 
   /* Look from the rollback segments if there exist undo logs for
   transactions */
@@ -538,7 +542,7 @@ int Trx_sys::recover(XID *xid_list, ulint len) noexcept {
 
   int count{};
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_mutex);
 
   for (const auto trx : m_trx_list) {
     if (trx->m_conc_state == TRX_PREPARED) {
@@ -560,7 +564,7 @@ int Trx_sys::recover(XID *xid_list, ulint len) noexcept {
     }
   }
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_mutex);
 
   if (count > 0) {
     log_info(std::format("{} transactions in prepared state after recovery", count));
@@ -573,7 +577,7 @@ int Trx_sys::recover(XID *xid_list, ulint len) noexcept {
 Trx *Trx_sys::get_trx_by_xid(XID *xid) noexcept {
   ut_a(xid != nullptr);
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_mutex);
 
   Trx *xid_trx{};
 
@@ -590,7 +594,7 @@ Trx *Trx_sys::get_trx_by_xid(XID *xid) noexcept {
     }
   }
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_mutex);
 
   return xid_trx == nullptr ? nullptr : (xid_trx->m_conc_state != TRX_PREPARED ? nullptr : xid_trx);
 }

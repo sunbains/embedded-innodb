@@ -108,7 +108,7 @@ struct Trx_sys {
 
   /**
    * Constructor
-   * 
+   *
    * @param[in] fsp               File space management instance
    */
   explicit Trx_sys(FSP *fsp) noexcept;
@@ -120,52 +120,52 @@ struct Trx_sys {
 
   /**
    * Create an instance of the transaction system.
-   * 
+   *
    * @param[in] fsp             File management instance to use
-   * 
+   *
    * @return new Trx_sys instance.
    */
   [[nodiscard]] static Trx_sys *create(FSP *fsp) noexcept;
 
-  /** 
+  /**
    * Destroy a transaction system instance.
-   * 
+   *
    * @param[in] recovery        Recovery flag
    */
   static void destroy(Trx_sys *&srv_trx_sys) noexcept;
 
   /** Start the transaction system.
-   * 
+   *
    * @return DB_SUCCESS or error code.
   */
   [[nodiscard]] dberr_t start(ib_recovery_t recovery) noexcept;
 
   /**
    * Create a new system tablespace.
-   * 
+   *
    * @return DB_SUCCESS or error code.
    */
   [[nodiscard]] db_err create_system_tablespace() noexcept;
 
   /**
    * Open an existing database instance.
-   * 
+   *
    * @return DB_SUCCESS or error code.
    */
   [[nodiscard]] db_err open_system_tablespace() noexcept;
 
   /**
    * Looks for a free slot for a rollback segment in the trx system file copy.
-   * 
+   *
    * @param[in] mtr               Mini-transaction handle
-   * 
+   *
    * @return	slot index or ULINT_UNDEFINED if not found
    */
   [[nodiscard]] ulint frseg_find_free(mtr_t *mtr) noexcept;
 
   /**
    * Checks that trx is in the trx list.
-   * 
+   *
    * @return	true if is in
    */
   [[nodiscard]] bool in_trx_list(Trx *in_trx) noexcept;
@@ -177,13 +177,13 @@ struct Trx_sys {
 
   /**
    * Looks for the trx handle with the given id in trx_list.
-   * 
+   *
    * @param[in] trx_id	Trx id to search for
-   * 
+   *
    * @return	the trx handle or NULL if not found
    */
   [[nodiscard]] Trx *get_on_id(trx_id_t trx_id) noexcept {
-    ut_ad(mutex_own(&kernel_mutex));
+    ut_ad(mutex_own(&m_mutex));
 
     for (const auto trx : m_trx_list) {
       if (trx_id == trx->m_id) {
@@ -200,11 +200,11 @@ struct Trx_sys {
    * the trx can possibly be active. (But, you must look at the trx->conc_state to
    * find out if the minimum trx id transaction itself is active, or already
    * committed.)
-   * 
+   *
    * @return	the minimum trx id, or Trx_sys::max_trx_id if the trx list is empty
    */
   [[nodiscard]] trx_id_t get_min_trx_id() const noexcept {
-    ut_ad(mutex_own(&kernel_mutex));
+    ut_ad(mutex_own(&m_mutex));
 
     auto trx = UT_LIST_GET_LAST(m_trx_list);
 
@@ -213,9 +213,9 @@ struct Trx_sys {
 
   /**
    * Checks if a transaction with the given id is active.
-   * 
+   *
    * @param[in] trx_id	Trx id of the transaction
-   * 
+   *
    * @return	true if active
    */
   [[nodiscard]] bool is_active(trx_id_t trx_id) const noexcept {
@@ -243,11 +243,11 @@ struct Trx_sys {
 
   /**
    * Allocates a new transaction id.
-   * 
+   *
    * @return	new, allocated trx id
    */
   [[nodiscard]] trx_id_t get_new_trx_id() noexcept {
-    ut_ad(mutex_own(&kernel_mutex));
+    ut_ad(mutex_own(&m_mutex));
 
     /* VERY important: after the database is started, max_trx_id value is
     divisible by TRX_SYS_TRX_ID_WRITE_MARGIN, and the following if
@@ -270,11 +270,11 @@ struct Trx_sys {
 
   /**
    * Allocates a new transaction number.
-   * 
+   *
    * @return	new, allocated trx number
    */
   [[nodiscard]] trx_id_t get_new_trx_no() noexcept {
-    ut_ad(mutex_own(&kernel_mutex));
+    ut_ad(mutex_own(&m_mutex));
 
     return get_new_trx_id();
   }
@@ -293,9 +293,9 @@ struct Trx_sys {
 
   /**
    * Gets a pointer to the transaction system header and x-latches its page.
-   * 
+   *
    * @param[in]	mtr	mtr
-   * 
+   *
    * @return	pointer to system header, page x-latched.
    */
   [[nodiscard]] trx_sysf_t *read_header(mtr_t *mtr) noexcept {
@@ -317,14 +317,14 @@ struct Trx_sys {
   }
 
   /** Gets the pointer in the nth slot of the rseg array.
-   * 
+   *
    * @param[in] sys	Trx system
    * @param[in] n	Index of slot
-   * 
+   *
    * @return	pointer to rseg object, NULL if slot not in use
    */
   [[nodiscard]] trx_rseg_t *get_nth_rseg(ulint n) noexcept {
-    ut_ad(mutex_own(&kernel_mutex));
+    ut_ad(mutex_own(&m_mutex));
     ut_ad(n < m_rsegs.size());
 
     return m_rsegs[n];
@@ -332,7 +332,7 @@ struct Trx_sys {
 
   /**
    * Sets the pointer in the nth slot of the rseg array.
-   * 
+   *
    * @param[in] sys	Trx system
    * @param[in] n	Index of slot
    * @param[in] rseg	Pointer to rseg object, NULL if slot not in use
@@ -365,7 +365,7 @@ struct Trx_sys {
   /**
    * Assigns a rollback segment to a transaction in a round-robin fashion.
    * Skips the SYSTEM rollback segment if another is available.
-   * 
+   *
    * @return	assigned rollback segment id
    */
   [[nodiscard]] ulint trx_assign_rseg() noexcept;
@@ -374,7 +374,7 @@ struct Trx_sys {
    * Creates a background transaction instance.
    *
    * @param[in] arg	Any context that needs to be passed to the trx.
-   * 
+   *
    * @return own: transaction object
    */
   [[nodiscard]] Trx *create_background_trx(void *arg) noexcept;
@@ -390,7 +390,7 @@ struct Trx_sys {
    * Creates a user transaction instance.
    *
    * @param[in] arg	Any context that needs to be passed to the trx.
-   * 
+   *
    * @return own: transaction object
    */
   [[nodiscard]] Trx *create_user_trx(void *arg) noexcept;
@@ -404,10 +404,10 @@ struct Trx_sys {
 
   /**
    * Checks if a page address is the trx sys header page.
-   * 
+   *
    * @param[in] space	Tablespace ID
    * @param[in] page_no	Page number
-   * 
+   *
    * @return	true if trx sys header page
    */
   [[nodiscard]] static bool is_hdr_page(space_id_t space_id, page_no_t page_no) noexcept {
@@ -415,32 +415,34 @@ struct Trx_sys {
   }
 
   /** Gets the space of the nth rollback segment slot in the trx system file copy.
-   * 
+   *
    * @param[in]	sys_header	Trx sys header
    * @param[in]	i	Slot index == rseg id
    * @param[in]	mtr	mtr
-   * 
+   *
    * @return	space id
    */
   [[nodiscard]] static space_id_t frseg_get_space(trx_sysf_t *sys_header, ulint i, mtr_t *mtr) noexcept {
     ut_ad(i < TRX_SYS_N_RSEGS);
-    ut_ad(mutex_own(&kernel_mutex));
+    // TODO: Remove this once we have a proper mutex for the trx system.
+    // ut_ad(mutex_own(&m_mutex));
 
     return mtr->read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE, MLOG_4BYTES);
   }
 
   /**
    * Gets the page number of the nth rollback segment slot in the trx system header.
-   * 
+   *
    * @param[in]	sys_header	Trx sys header
    * @param[in]	i	Slot index == rseg id
    * @param[in]	mtr	mtr
-   * 
+   *
    * @return	page number, FIL_NULL if slot unused
    */
   [[nodiscard]] static page_no_t frseg_get_page_no(trx_sysf_t *sys_header, ulint i, mtr_t *mtr) noexcept {
     ut_ad(i < TRX_SYS_N_RSEGS);
-    ut_ad(mutex_own(&kernel_mutex));
+    // TODO: Remove this once we have a proper mutex for the trx system.
+    // ut_ad(mutex_own(&m_mutex));
 
     return mtr->read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_PAGE_NO, MLOG_4BYTES);
   }
@@ -448,7 +450,7 @@ struct Trx_sys {
   /**
    * Sets the space id of the nth rollback segment slot in the trx system
    * file copy.
-   * 
+   *
    * @param[in]	sys_header	Trx sys file copy
    * @param[in]	i	Slot index == rseg id
    * @param[in]	space	Space id
@@ -456,14 +458,15 @@ struct Trx_sys {
    */
   static void frseg_set_space(trx_sysf_t *sys_header, ulint i, space_id_t space, mtr_t *mtr) noexcept {
     ut_ad(i < TRX_SYS_N_RSEGS);
-    ut_ad(mutex_own(&kernel_mutex));
+    // TODO: Remove this once we have a proper mutex for the trx system.
+    // ut_ad(mutex_own(&m_mutex));
 
     mlog_write_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE, space, MLOG_4BYTES, mtr);
   }
 
   /**
    * Sets the page number of the nth rollback segment slot in the trx system header.
-   * 
+   *
    * @param[in]	sys_header	Trx sys header
    * @param[in]	i	Slot index == rseg id
    * @param[in]	page_no	Page number, FIL_NULL if the slot is reset to unused
@@ -472,7 +475,8 @@ struct Trx_sys {
 
   static void frseg_set_page_no(trx_sysf_t *sys_header, ulint i, page_no_t page_no, mtr_t *mtr) noexcept {
     ut_ad(i < TRX_SYS_N_RSEGS);
-    ut_ad(mutex_own(&kernel_mutex));
+    // TODO: Remove this once we have a proper mutex for the trx system.
+    // ut_ad(mutex_own(&m_mutex));
 
     mlog_write_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_PAGE_NO, page_no, MLOG_4BYTES, mtr);
   }
@@ -481,7 +485,7 @@ struct Trx_sys {
    * Writes a trx id to an index page. In case that the id size changes in
    * some future version, this function should be used instead of
    * mach_write_...
-   * 
+   *
    * @param[in]	ptr	Pointer to memory where written
    * @param[in]	id	transaction id to write
   */
@@ -495,9 +499,9 @@ struct Trx_sys {
    * Reads a trx id from an index page. In case that the id size changes in
    * some future version, this function should be used instead of
    * mach_read_...
-   * 
+   *
    * @param[in]	ptr	Pointer to memory from where to rckgrouneadestroy_background_trxd
-   * 
+   *
    * @return	id
    * */
   [[nodiscard]] static trx_id_t read_trx_id(const byte *ptr) noexcept {
@@ -510,9 +514,9 @@ struct Trx_sys {
   /**
    * This function is used to find one X/Open XA distributed transaction
    * which is in the prepared state
-   * 
+   *
    * @param[in] xid X/Open XA transaction identification
-   * 
+   *
    * @return trx or nullptr
    */
   [[nodiscard]] Trx *get_trx_by_xid(XID *xid) noexcept;
@@ -525,7 +529,7 @@ struct Trx_sys {
   /**
    * Creates the file page for the transaction system. This function is called
    * only at the database creation, before init().
-   * 
+   *
    * @param[in,out] mtr              Mini-transaction covering the operation.
    */
   void create_new_instance(mtr_t *mtr) noexcept;
@@ -543,7 +547,7 @@ struct Trx_sys {
    * Creates a transaction instance.
    *
    * @param[in] arg Any context that needs to be passed to the trx.
-   * 
+   *
    * @return own: transaction object
    */
   [[nodiscard]] Trx *create_trx(void *arg) noexcept;
@@ -556,22 +560,27 @@ struct Trx_sys {
   void destroy_trx(Trx *&trx) noexcept;
 
  public:
+  /** Currently serves the purpose of the old kernel mutex.
+   * TODO: Split it over a few patches.
+   */
+  mutex_t m_mutex{};
+
   /** The smallest number not yet assigned as a transaction
   id or transaction number */
   trx_id_t m_max_trx_id{};
 
   /** List of read views sorted on trx no, biggest first */
-  UT_LIST_BASE_NODE_T_EXTERN(read_view_t, view_list) m_view_list{};
+  UT_LIST_BASE_NODE_T_EXTERN(read_view_t, view_list) m_view_list {};
 
   /** List of active and committed in memory transactions,
   sorted on trx id, biggest first */
-  UT_LIST_BASE_NODE_T_EXTERN(Trx, m_trx_list) m_trx_list{};
+  UT_LIST_BASE_NODE_T_EXTERN(Trx, m_trx_list) m_trx_list {};
 
   /** List of transactions created for users */
-  UT_LIST_BASE_NODE_T_EXTERN(Trx, m_client_trx_list) m_client_trx_list{};
+  UT_LIST_BASE_NODE_T_EXTERN(Trx, m_client_trx_list) m_client_trx_list {};
 
   /** List of rollback segment objects */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_rseg_t, rseg_list) m_rseg_list{};
+  UT_LIST_BASE_NODE_T_EXTERN(trx_rseg_t, rseg_list) m_rseg_list {};
 
   /** Latest rollback segment in the round-robin assignment
   of rollback segments to transactions */

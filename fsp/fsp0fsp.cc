@@ -34,6 +34,7 @@ Created 11/29/1995 Heikki Tuuri
 #include "page0page.h"
 #include "srv0srv.h"
 #include "sync0sync.h"
+#include "trx0sys.h"
 #include "ut0byte.h"
 
 /** Offset of the space header within a file page */
@@ -1975,7 +1976,7 @@ Buf_block *FSP::fseg_create_general(space_id_t space_id, page_no_t page_no, ulin
     header = byte_offset + block->get_frame();
   }
 
-  ut_ad(!mutex_own(&kernel_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
+  ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
 
   mtr_x_lock(latch, mtr);
 
@@ -2069,7 +2070,7 @@ ulint FSP::fseg_n_reserved_pages(fseg_header_t *header, ulint *used, mtr_t *mtr)
   const auto space = page_get_space_id(page_align(header));
   auto latch = m_fil->space_get_latch(space);
 
-  ut_ad(!mutex_own(&kernel_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
+  ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
 
   mtr_x_lock(latch, mtr);
 
@@ -2084,7 +2085,7 @@ page_no_t FSP::fseg_alloc_free_page_general(
   space_id_t space = page_get_space_id(page_align(seg_header));
   auto latch = m_fil->space_get_latch(space);
 
-  ut_ad(!mutex_own(&kernel_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
+  ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
 
   mtr_x_lock(latch, mtr);
 
@@ -2119,7 +2120,7 @@ bool FSP::reserve_free_extents(ulint *n_reserved, space_id_t space, ulint n_ext,
 
   auto latch = m_fil->space_get_latch(space);
 
-  ut_ad(!mutex_own(&kernel_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
+  ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
 
   mtr_x_lock(latch, mtr);
 
@@ -2208,7 +2209,7 @@ bool FSP::reserve_free_extents(ulint *n_reserved, space_id_t space, ulint n_ext,
 uint64_t FSP::get_available_space_in_free_extents(space_id_t space) noexcept {
   mtr_t mtr;
 
-  ut_ad(!mutex_own(&kernel_mutex));
+  ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex));
 
   mtr.start();
 
@@ -2298,7 +2299,7 @@ void FSP::fseg_mark_page_used(fseg_inode_t *seg_inode, space_id_t space, page_no
 void FSP::fseg_free_page(fseg_header_t *seg_header, space_id_t space, page_no_t page, mtr_t *mtr) noexcept {
   auto latch = m_fil->space_get_latch(space);
 
-  ut_ad(!mutex_own(&kernel_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
+  ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
 
   mtr_x_lock(latch, mtr);
 
@@ -2314,7 +2315,7 @@ bool FSP::fseg_free_step(fseg_header_t *header, mtr_t *mtr) noexcept {
   auto header_page = page_get_page_no(page_align(header));
   auto latch = m_fil->space_get_latch(space);
 
-  ut_ad(!mutex_own(&kernel_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
+  ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
 
   mtr_x_lock(latch, mtr);
 
@@ -2323,7 +2324,7 @@ bool FSP::fseg_free_step(fseg_header_t *header, mtr_t *mtr) noexcept {
   /* Check that the header resides on a page which has not been
   freed yet */
 
-  ut_a(descr);
+  ut_a(descr != nullptr);
   ut_a(xdes_get_bit(descr, XDES_FREE_BIT, header_page % FSP_EXTENT_SIZE, mtr) == false);
 
   const auto inode = fseg_inode_try_get(header, space, mtr);
@@ -2374,7 +2375,7 @@ bool FSP::fseg_free_step_not_header(fseg_header_t *header, mtr_t *mtr) noexcept 
   const auto space = page_get_space_id(page_align(header));
   auto latch = m_fil->space_get_latch(space);
 
-  ut_ad(!mutex_own(&kernel_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
+  ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
 
   mtr_x_lock(latch, mtr);
 

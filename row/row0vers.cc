@@ -44,14 +44,14 @@ void Row_vers::destroy(Row_vers *&row_vers) noexcept {
   row_vers = nullptr;
 }
 
-Trx *Row_vers::impl_x_locked_off_kernel(const rec_t *rec, const Index *index, const ulint *offsets) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *index, const ulint *offsets) noexcept {
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(!rw_lock_own(&purge_sys->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_trx_sys->m_mutex);
 
   auto func_exit = [](mtr_t &mtr, mem_heap_t *heap, Trx *trx) -> auto {
     mtr.commit();

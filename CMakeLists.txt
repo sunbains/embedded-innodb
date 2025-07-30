@@ -209,7 +209,7 @@ SET(INNODB_SOURCES
       fut/fut0lst.cc
       pars/lexyy.cc pars/pars0grm.cc pars/pars0opt.cc
       pars/pars0pars.cc pars/pars0sym.cc
-      lock/lock0lock.cc lock/lock0iter.cc
+      lock/lock0lock.cc lock/lock0iter.cc lock/lock0deadlock.cc lock/lock0validator.cc
       log/log0log.cc log/log0recv.cc
       log/log_buffer.cc log/log_checkpoint.cc log/log_core.cc 
       log/log_group.cc log/log_write.cc log/log_io.cc log/log_io_uring.cc

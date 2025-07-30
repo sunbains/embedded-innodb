@@ -253,21 +253,21 @@ struct Lock {
   /**
    * @brief Checks if a lock request for a new lock has to wait for another lock.
    *
-   * This function determines whether a new lock request by a transaction (trx) 
-   * has to wait for an existing lock (this) to be removed. The decision is 
-   * based on the type and mode of the new lock, the characteristics of the 
-   * existing lock, and whether the lock is on the 'supremum' record of an 
+   * This function determines whether a new lock request by a transaction (trx)
+   * has to wait for an existing lock (this) to be removed. The decision is
+   * based on the type and mode of the new lock, the characteristics of the
+   * existing lock, and whether the lock is on the 'supremum' record of an
    * index page.
    *
    * @param[in] trx                  The transaction requesting the new lock.
-   * @param[in] type_mode            The requested precise mode of the new lock to set: 
+   * @param[in] type_mode            The requested precise mode of the new lock to set:
    *                                 LOCK_S or LOCK_X, possibly ORed with LOCK_GAP,
    *                                 LOCK_REC_NOT_GAP, or LOCK_INSERT_INTENTION.
-   * @param[in] lock_is_on_supremum  True if the lock is being set on the 
-   *                                 'supremum' record of an index page, 
-   *                                 indicating that the lock request is 
+   * @param[in] lock_is_on_supremum  True if the lock is being set on the
+   *                                 'supremum' record of an index page,
+   *                                 indicating that the lock request is
    *                                 really for a 'gap' type lock.
-   * 
+   *
    * @return true if the new lock has to wait for lock to be removed, false otherwise.
    */
   [[nodiscard]] inline bool rec_blocks(const Trx *trx, Lock_mode_type type_mode, bool lock_is_on_supremum) const noexcept;
@@ -281,7 +281,7 @@ struct Lock {
    * @param[in] lock  Another lock. It is assumed that this lock has a lock bit
    *                  set on the same record as in lock1 if the locks are record locks.
    * @param[in] heap_no The heap number of the record if the lock is a record lock, otherwise ULINT_UNDEFINED.
-   * 
+   *
    * @return true if lock1 has to wait for lock2 to be removed.
    */
   [[nodiscard]] bool has_to_wait_for(const Lock *lock, ulint heap_no) const noexcept;
@@ -410,7 +410,7 @@ struct Lock {
 
     ut_ad((rec_get_n_bits() % 8) == 0);
 
-    memset(reinterpret_cast<byte *>(&this[1]), 0, n_bytes);
+    std::memset(reinterpret_cast<byte *>(&this[1]), 0, n_bytes);
   }
 
   /**
@@ -426,7 +426,7 @@ struct Lock {
   /**
    * @brief Gets the type of a lock in a human readable string.
    *
-   * This function retrieves the type of the specified lock and returns it as a 
+   * This function retrieves the type of the specified lock and returns it as a
    * human-readable string. The returned string should not be free()'d or modified.
    *
    * @return The lock type as a human-readable string.
@@ -526,7 +526,7 @@ struct Lock {
    * The copied lock includes the lock structure and its associated bitmap.
    *
    * @param[in] heap The memory heap where the lock copy will be stored.
-   * 
+   *
    * @return A pointer to the copied lock.
    */
   [[nodiscard]] inline Lock *rec_clone(mem_heap_t *heap) const noexcept;
@@ -534,7 +534,7 @@ struct Lock {
   /**
    * @brief Gets the mode of a lock in a human readable string.
    *
-   * This function retrieves the mode of the specified lock and returns it as a 
+   * This function retrieves the mode of the specified lock and returns it as a
    * human-readable string. The returned string should not be free()'d or modified.
    *
    * @return The lock mode as a human-readable string.
@@ -560,7 +560,7 @@ struct Lock {
    * of the table lock object. The string includes details such as the table ID.
    *
    * @param[in] buf_pool The buffer pool to use for page retrieval.
-   * 
+   *
    * @return A string representation of the table lock object.
    */
   std::string table_to_string() const noexcept;
@@ -573,7 +573,7 @@ struct Lock {
    * space ID and page number.
    *
    * @param[in] buf_pool The buffer pool to use for page retrieval.
-   * 
+   *
    * @return A string representation of the record lock object.
    */
   std::string rec_to_string(Buf_pool *buf_pool) const noexcept;
@@ -622,8 +622,8 @@ struct Lock {
    *
    * @param[in] lhs The first lock mode to compare.
    * @param[in] rhs The second lock mode to compare.
-   * 
-   * @return true if lhs stronger or equal to rhs 
+   *
+   * @return true if lhs stronger or equal to rhs
    */
   [[nodiscard]] static bool mode_stronger_or_eq(Lock_mode lhs, Lock_mode rhs) noexcept;
 
@@ -636,7 +636,7 @@ struct Lock {
    *
    * @param[in] lhs The first lock mode to compare.
    * @param[in] rhs The second lock mode to compare.
-   * 
+   *
    * @return true if lhs is compatible with rhs , falseotherwise.
    */
   [[nodiscard]] static inline bool mode_compatible(Lock_mode lhs, Lock_mode rhs) noexcept;
@@ -687,7 +687,7 @@ struct Rec_lock_get_node;
 
 /**
  * @brief List of locks that different transactions have acquired on a record.
- * 
+ *
  * This type is used to store a list of locks that different transactions have
  * acquired on a record. The list has a list node that is embedded in a nested
  * union/structure. We have to generate a specific template for it. See lock0lock.cc

@@ -37,6 +37,9 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "sync0rw.h"
 #include "ut0mem.h"
 
+/** Transaction system. */
+struct Trx_sys;
+
 /** Mini-transaction. */
 struct mtr_t;
 
@@ -571,6 +574,8 @@ struct Buf_pool {
 
   [[nodiscard]] bool open(uint64_t pool_size);
 
+  void set_trx_sys(Trx_sys *trx_sys) { m_trx_sys = trx_sys; }
+
   /** Returns the number of pending buf pool ios.
   @return number of pending I/O operations */
   [[nodiscard]] ulint get_n_pending_ios();
@@ -923,6 +928,9 @@ struct Buf_pool {
   void page_init_low(Buf_page *bpage);
 
  public:
+  /** The transaction system. */
+  Trx_sys *m_trx_sys{};
+
   /** mutex protecting the buffer pool struct and control blocks, except the
   read-write lock in them */
   mutable mutex_t m_mutex{};
@@ -1006,10 +1014,10 @@ struct Buf_pool {
   /* @{ */
 
   /** base node of the free block list */
-  UT_LIST_BASE_NODE_T(Buf_page, m_list) m_free_list{};
+  UT_LIST_BASE_NODE_T(Buf_page, m_list) m_free_list {};
 
   /** base node of the LRU list */
-  UT_LIST_BASE_NODE_T(Buf_page, m_LRU_list) m_LRU_list{};
+  UT_LIST_BASE_NODE_T(Buf_page, m_LRU_list) m_LRU_list {};
 
   /** pointer to the about m_LRU->old_ratio/BUF_LRU_RATIO_DIV oldest
   blocks in the LRU list; nullptr if LRU length less than BUF_LRU_MIN_LEN;

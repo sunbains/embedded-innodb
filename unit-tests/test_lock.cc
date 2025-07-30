@@ -15,16 +15,6 @@ constexpr int N_TRXS = 8;
 constexpr int N_ROW_LOCKS = 1;
 constexpr int REC_BITMAP_SIZE = 104;
 
-#define kernel_mutex_enter()        \
-  do {                              \
-    mutex_enter(kernel_mutex_temp); \
-  } while (false)
-
-#define kernel_mutex_exit()        \
-  do {                             \
-    mutex_exit(kernel_mutex_temp); \
-  } while (false)
-
 namespace test {
 
 /** Creates and initializes a transaction instance
@@ -61,15 +51,15 @@ void trx_setup(Trx *trx, int n_row_locks) {
     if (!(i % 50)) {
       mode = LOCK_X;
     }
+    ut_a(trx->m_trx_sys == srv_lock_sys->m_trx_sys);
 
-    kernel_mutex_enter();
-
+    mutex_enter(&srv_lock_sys->m_trx_sys->m_mutex);
     std::cout << "REC LOCK CREATE: " << i << "\n";
 
     /* Pass nullptr index handle. */
     (void)srv_lock_sys->rec_create_low({space, page_no}, mode, heap_no, REC_BITMAP_SIZE, nullptr, trx);
 
-    kernel_mutex_exit();
+    mutex_exit(&srv_lock_sys->m_trx_sys->m_mutex);
   }
 }
 
@@ -109,11 +99,11 @@ void run_1() {
 
   for (auto &trx : trxs) {
 
-    kernel_mutex_enter();
+    mutex_enter(&srv_lock_sys->m_trx_sys->m_mutex);
 
-    srv_lock_sys->release_off_kernel(trx);
+    srv_lock_sys->release_off_trx_sys_mutex(trx);
 
-    kernel_mutex_exit();
+    mutex_exit(&srv_lock_sys->m_trx_sys->m_mutex);
 
     trx_free(trx);
   }
@@ -138,10 +128,6 @@ int main() {
 
   sync_init();
 
-  kernel_mutex_temp = static_cast<mutex_t *>(mem_alloc(sizeof(mutex_t)));
-
-  mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex", ) IF_SYNC_DEBUG(SYNC_KERNEL, ) Current_location());
-
   {
     srv_config.m_buf_pool_size = 64 * 1024 * 1024;
 
@@ -158,11 +144,7 @@ int main() {
 
   srv_lock_sys = Lock_sys::create(srv_trx_sys, 1024 * 1024);
 
-  kernel_mutex_enter();
-
   UT_LIST_INIT(srv_trx_sys->m_client_trx_list);
-
-  kernel_mutex_exit();
 
   // Run the test
   test::run_1();
@@ -171,11 +153,6 @@ int main() {
   Lock_sys::destroy(srv_lock_sys);
 
   Trx_sys::destroy(srv_trx_sys);
-
-  mutex_free(&kernel_mutex);
-
-  mem_free(kernel_mutex_temp);
-  kernel_mutex_temp = nullptr;
 
   os_event_free(srv_lock_timeout_thread_event);
   srv_lock_timeout_thread_event = nullptr;

@@ -30,6 +30,7 @@ Created 4/24/1996 Heikki Tuuri
 #include "page0page.h"
 #include "rem0cmp.h"
 #include "srv0srv.h"
+#include "trx0sys.h"
 
 bool Dict_load::name_of_col_is(const Table *table, const Index *index, ulint i, const char *name) const noexcept {
   ulint tmp = index->get_nth_field(i)->get_col()->get_no();
@@ -116,9 +117,9 @@ std::string Dict_load::to_string() noexcept {
   /* Enlarge the fatal semaphore wait timeout during the InnoDB table
   monitor printout */
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
   srv_fatal_semaphore_wait_threshold += 7200; /* 2 hours */
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   m_dict->mutex_acquire();
 
@@ -147,9 +148,9 @@ std::string Dict_load::to_string() noexcept {
 
       /* Restore the fatal semaphore wait timeout */
 
-      mutex_enter(&kernel_mutex);
+      mutex_enter(&srv_trx_sys->m_mutex);
       srv_fatal_semaphore_wait_threshold -= 7200; /* 2 hours */
-      mutex_exit(&kernel_mutex);
+      mutex_exit(&srv_trx_sys->m_mutex);
 
       return str;
     }

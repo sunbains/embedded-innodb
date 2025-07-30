@@ -174,112 +174,127 @@ the corresponding file data structure. In the latching order below, these
 file page object latches are placed immediately below the corresponding
 central memory object latch or mutex.
 
-Synchronization object			Notes
-----------------------			-----
+Synchronization object			      Notes
+──────────────────────────────		────────────────────────────────────
 
-Dictionary mutex			If we have a pointer to a dictionary
-|					object, e.g., a table, it can be
-|					accessed without reserving the
-|					dictionary mutex. We must have a
-|					reservation, a memoryfix, to the
-|					appropriate table object in this case,
-|					and the table must be explicitly
-|					released later.
+Dictionary mutex			            If we have a pointer to a dictionary
+│					                        object, e.g., a table, it can be
+│					                        accessed without reserving the
+│					                        dictionary mutex. We must have a
+│					                        reservation, a memoryfix, to the
+│					                        appropriate table object in this case,
+│					                        and the table must be explicitly
+│					                        released later.
+▼
+Dictionary header                 (To be removed)
+│
+▼
+Secondary index tree latch		    The tree latch protects also all
+│					                        the B-tree non-leaf pages. These
+▼					                        can be read with the page only
+Secondary index non-leaf		      bufferfixed to save CPU time,
+│					                        no s-latch is needed on the page.
+│					                        Modification of a page requires an
+│					                        x-latch on the page, however. If a
+│					                        thread owns an x-latch to the tree,
+│					                        it is allowed to latch non-leaf pages
+│					                        even after it has acquired the fsp
+│					                        latch.
+▼
+Secondary index leaf			        The latch on the secondary index leaf
+│					                        can be kept while accessing the
+│					                        clustered index, to save CPU time.
+▼
+Clustered index tree latch		    To increase concurrency, the tree
+│					                        latch is usually released when the
+│					                        leaf page latch has been acquired.
+▼
+Clustered index non-leaf          (Probably something Heikki had considered)
+│
+▼
+Clustered index leaf              (Probably something Heikki had considered)
+│
+▼
+Transaction system header         Transaction system mutex.
+│
+▼
+Transaction undo mutex			      The undo log entry must be written
+│					                        before any index page is modified.
+│					                        Transaction undo mutex is for the undo
+│					                        logs the analogue of the tree latch
+│					                        for a B-tree. If a thread has the
+│					                        trx undo mutex reserved, it is allowed
+│					                        to latch the undo log pages in any
+│					                        order, and also after it has acquired
+│					                        the fsp latch.
+▼
+Rollback segment mutex			      The rollback segment mutex must be
+│					                        reserved, if, e.g., a new page must
+│					                        be added to an undo log. The rollback
+│					                        segment and the undo logs in its
+│					                        history list can be seen as an
+│					                        analogue of a B-tree, and the latches
+│					                        reserved similarly, using a version of
+│					                        lock-coupling. If an undo log must be
+│					                        extended by a page when inserting an
+│					                        undo log record, this corresponds to
+│					                        a pessimistic insert in a B-tree.
+▼
+Rollback segment header           Rollback system mutex.
+│
+▼
+Purge system latch                Purge system mutex.
+│
+▼
+Undo log pages				            If a thread owns the trx undo mutex,
+│					                        or for a log in the history list, the
+│					                        rseg mutex, it is allowed to latch
+│					                        undo log pages in any order, and even
+│					                        after it has acquired the fsp latch.
+│					                        If a thread does not have the
+│					                        appropriate mutex, it is allowed to
+│					                        latch only a single undo log page in
+│					                        a mini-transaction.
+▼
+File space management latch		    If a mini-transaction must allocate
+│					                        several file pages, it can do that,
+│					                        because it keeps the x-latch to the
+│					                        file space management in its memo.
+▼
+File system pages                 FSP mutex
+│
+▼
+Kernel mutex				              If a kernel operation needs a file
+│					                        page allocation, it must reserve the
+│					                        fsp x-latch before acquiring the kernel
+│					                        mutex.
+│
+Lock mutex				                Used by the lock manager for managing
+│					                        transaction locks, deadlock detection
+│					                        and resolution when a transaction acquires
+│					                        a lock or is waiting for a lock.
 V
-Dictionary header
 |
-V
-Secondary index tree latch		The tree latch protects also all
-|					the B-tree non-leaf pages. These
-V					can be read with the page only
-Secondary index non-leaf		bufferfixed to save CPU time,
-|					no s-latch is needed on the page.
-|					Modification of a page requires an
-|					x-latch on the page, however. If a
-|					thread owns an x-latch to the tree,
-|					it is allowed to latch non-leaf pages
-|					even after it has acquired the fsp
-|					latch.
-V
-Secondary index leaf			The latch on the secondary index leaf
-|					can be kept while accessing the
-|					clustered index, to save CPU time.
-V
-Clustered index tree latch		To increase concurrency, the tree
-|					latch is usually released when the
-|					leaf page latch has been acquired.
-V
-Clustered index non-leaf
 |
-V
-Clustered index leaf
+Trx sys mutex                     Transaction system mutex.
 |
-V
-Transaction system header
 |
-V
-Transaction undo mutex			The undo log entry must be written
-|					before any index page is modified.
-|					Transaction undo mutex is for the undo
-|					logs the analogue of the tree latch
-|					for a B-tree. If a thread has the
-|					trx undo mutex reserved, it is allowed
-|					to latch the undo log pages in any
-|					order, and also after it has acquired
-|					the fsp latch.
-V
-Rollback segment mutex			The rollback segment mutex must be
-|					reserved, if, e.g., a new page must
-|					be added to an undo log. The rollback
-|					segment and the undo logs in its
-|					history list can be seen as an
-|					analogue of a B-tree, and the latches
-|					reserved similarly, using a version of
-|					lock-coupling. If an undo log must be
-|					extended by a page when inserting an
-|					undo log record, this corresponds to
-|					a pessimistic insert in a B-tree.
-V
-Rollback segment header
+Trx mutex                         Transaction mutex.
 |
-V
-Purge system latch
 |
-V
-Undo log pages				If a thread owns the trx undo mutex,
-|					or for a log in the history list, the
-|					rseg mutex, it is allowed to latch
-|					undo log pages in any order, and even
-|					after it has acquired the fsp latch.
-|					If a thread does not have the
-|					appropriate mutex, it is allowed to
-|					latch only a single undo log page in
-|					a mini-transaction.
-V
-File space management latch		If a mini-transaction must allocate
-|					several file pages, it can do that,
-|					because it keeps the x-latch to the
-|					file space management in its memo.
-V
-File system pages
-|
-V
-Kernel mutex				If a kernel operation needs a file
-|					page allocation, it must reserve the
-|					fsp x-latch before acquiring the kernel
-|					mutex.
-V
-Search system mutex
-|
-V
+▼
+Search system mutex (removed)
+│
+▼
 Buffer pool mutex
-|
-V
+│
+▼
 Log mutex
-|
+│
+▼
 Any other latch
-|
-V
+│
+▼
 Memory pool mutex */
 
 /* Latching order levels */
@@ -331,16 +346,17 @@ constexpr ulint SYNC_EXTERN_STORAGE = 500;
 constexpr ulint SYNC_FSP = 400;
 constexpr ulint SYNC_FSP_PAGE = 395;
 
-/*------------------------------------- Insert buffer headers */
+/*-------------------------------*/
 
-/*------------------------------------- ibuf_mutex */
+constexpr ulint SYNC_TRX_SYS = 300;
+constexpr ulint SYNC_LOCK = 298;
+constexpr ulint SYNC_TRX = 297;
+constexpr ulint SYNC_REC_LOCK = 296;
+constexpr ulint SYNC_TRX_LOCK_HEAP = 295;
+constexpr ulint SYNC_TRX_SYS_HEADER = 294;
 
 /*-------------------------------*/
 
-constexpr ulint SYNC_KERNEL = 300;
-constexpr ulint SYNC_REC_LOCK = 299;
-constexpr ulint SYNC_TRX_LOCK_HEAP = 298;
-constexpr ulint SYNC_TRX_SYS_HEADER = 290;
 constexpr ulint SYNC_LOG = 170;
 constexpr ulint SYNC_RECV = 168;
 constexpr ulint SYNC_WORK_QUEUE = 162;

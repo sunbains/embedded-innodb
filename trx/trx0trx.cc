@@ -298,7 +298,7 @@ void Trx::commit_off_kernel() noexcept {
 
   m_is_recovered = false;
 
-  srv_lock_sys->release_off_kernel(this);
+  srv_lock_sys->release_off_trx_sys_mutex(this);
 
   if (m_global_read_view != nullptr) {
     read_view_close(m_global_read_view);

@@ -317,7 +317,7 @@ extern ulint srv_dml_needed_delay;
  * other hotspot semaphores */
 extern mutex_t *kernel_mutex_temp;
 
-#define kernel_mutex (*kernel_mutex_temp)
+#define kernel_mutex (srv_trx_sys->m_mutex)
 
 /**
  * Returns the number of IO operations that is X percent of the
@@ -408,7 +408,7 @@ extern srv_shutdown_state srv_shutdown_state;
 struct InnoDB {
   /**
   * Boots Innobase server.
-  * 
+  *
   * @return	DB_SUCCESS or error code
   */
   [[nodiscard]] static db_err boot() noexcept;
@@ -431,7 +431,7 @@ struct InnoDB {
 
   /**
    * Gets the number of threads in the system.
-   * 
+   *
    * @return	sum of srv_n_threads[]
    */
   [[nodiscard]] static ulint get_n_threads() noexcept;
@@ -439,10 +439,10 @@ struct InnoDB {
   /**
    * Releases threads of the type given from suspension in the thread table.
    * NOTE! The server mutex has to be reserved by the caller!
-   * 
+   *
    * @param[in] type	thread type
    * @param[in] n	number of threads to release
-   * 
+   *
    * @return number of threads released: this may be less than n if not
    *  enough threads were suspended at the moment
    */
@@ -450,9 +450,9 @@ struct InnoDB {
 
   /**
    * The master thread controlling the server.
-   * 
+   *
    * @param[in,out] arg	callback argument
-   * 
+   *
    * @return	a dummy parameter
    */
   static os_thread_ret_t master_thread(void *) noexcept;
@@ -477,7 +477,7 @@ struct InnoDB {
    * != DB_SUCCESS when we return. DB_LOCK_WAIT_TIMEOUT and DB_DEADLOCK
    * are possible errors. DB_DEADLOCK is returned if selective deadlock
    * resolution chose this transaction as a victim.
-   * 
+   *
    * @param[in,out] thr	query thread associated with the client OS thread
    */
   static void suspend_user_thread(que_thr_t *thr) noexcept;
@@ -485,25 +485,25 @@ struct InnoDB {
   /**
    * Releases a user OS thread waiting for a lock to be released, if the
    * thread is already suspended.
-   * 
+   *
    * @param[in,out] thr	query thread associated with the client OS thread
    */
   static void release_user_thread_if_suspended(que_thr_t *thr) noexcept;
 
   /**
    * A thread which wakes up threads whose lock wait may have lasted too long.
-   * 
+   *
    * @param[in,out] arg	Callback argument
-   * 
+   *
    * @return	a dummy parameter
    */
   static os_thread_ret_t lock_timeout_thread(void *arg) noexcept;
 
   /**
    * A thread which prints the info output by various InnoDB monitors.
-   * 
+   *
    * @param[in,out] arg	Callback argument
-   * 
+   *
    * @return	a dummy parameter
    */
   static os_thread_ret_t monitor_thread(void *arg) noexcept;
@@ -511,22 +511,22 @@ struct InnoDB {
   /**
    * A thread which prints warnings about semaphore waits which have lasted
    * too long. These can be used to track bugs which cause hangs.
-   * 
+   *
    * @param[in,out] arg	Callback argument
-   * 
+   *
    * @return	a dummy parameter
    */
   static os_thread_ret_t error_monitor_thread(void *arg) noexcept;
 
   /**
    * Outputs to a file the output of the InnoDB Monitor.
-   * 
+   *
    * @param[in] ib_stream	output stream
    * @param[in] nowait	whether to wait for kernel mutex
    * @param[out] trx_start	file position of the start of the list of active
    *  transactions
    * @param[out] trx_end	file position of the end of the list of active
-   * 
+   *
    * @return false if not all information printed due to failure to obtain
    *  necessary mutex
    */
@@ -554,16 +554,16 @@ struct InnoDB {
 
   /**
    * Enquey a task to the queue
-   * 
+   *
    * @param[in] thr	query thread.
    */
   static void que_task_enqueue_low(que_thr_t *thr) noexcept;
 
   /**
    * Reads log group home directories from a character string.
-   * 
+   *
    * @param[in] str	the log group home directories
-   * 
+   *
    * @return	true if ok, false on parse error */
   [[nodiscard]] static bool parse_log_group_home_dirs(const char *str) noexcept;
 
@@ -576,7 +576,7 @@ struct InnoDB {
   /**
    * Starts Innobase and creates a new database if database files
    * are not found and the user wants.
-   * 
+   *
    * @return	DB_SUCCESS or error code
    */
   [[nodiscard]] static ib_err_t start() noexcept;
@@ -588,9 +588,9 @@ struct InnoDB {
 
   /**
    * Shuts down the Innobase database.
-   * 
+   *
    * @param[in] shutdown	shutdown flag
-   * 
+   *
    * @return	DB_SUCCESS or error code
    */
   [[nodiscard]] static db_err shutdown(ib_shutdown_t shutdown) noexcept;

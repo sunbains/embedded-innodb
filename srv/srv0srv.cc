@@ -479,9 +479,6 @@ static srv_sys_t *srv_sys = nullptr;
 the same memory cache line */
 byte srv_pad1[64];
 
-/** Mutex protecting the server, trx structs, query threads, and lock table */
-mutex_t *kernel_mutex_temp;
-
 /* padding to prevent other memory update hotspots from residing on the same
  * memory cache line */
 byte srv_pad2[64];
@@ -720,7 +717,6 @@ void InnoDB::var_init() noexcept {
   srv_shutdown_lsn = 0;
   srv_client_table = nullptr;
   srv_lock_timeout_thread_event = nullptr;
-  kernel_mutex_temp = nullptr;
 
   memset(srv_n_threads_active, 0x0, sizeof(srv_n_threads_active));
   memset(srv_n_threads, 0x0, sizeof(srv_n_threads));
@@ -849,10 +845,6 @@ ulint InnoDB::release_threads(srv_thread_type type, ulint n) noexcept {
 void InnoDB::init() noexcept {
   srv_sys = static_cast<srv_sys_t *>(mem_alloc(sizeof(srv_sys_t)));
 
-  kernel_mutex_temp = static_cast<mutex_t *>(mem_alloc(sizeof(mutex_t)));
-
-  mutex_create(&kernel_mutex, IF_DEBUG("kernel_mutex", ) IF_SYNC_DEBUG(SYNC_KERNEL, ) Current_location());
-
   mutex_create(&srv_innodb_monitor_mutex, IF_DEBUG("monitor_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Current_location());
 
   srv_sys->m_threads = static_cast<srv_slot_t *>(mem_alloc(OS_THREAD_MAX_N * sizeof(srv_slot_t)));
@@ -925,9 +917,6 @@ void InnoDB::free() noexcept {
 
   mutex_free(&srv_innodb_monitor_mutex);
   mutex_free(&kernel_mutex);
-
-  mem_free(kernel_mutex_temp);
-  kernel_mutex_temp = nullptr;
 
   mem_free(srv_sys);
   srv_sys = nullptr;

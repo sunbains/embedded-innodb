@@ -233,7 +233,7 @@ static db_err open_log_file(const std::string &filename) noexcept {
 
 /**
  * @brief Creates the system tablespace.
- * 
+ *
  * @return DB_SUCCESS or error code
  */
 static db_err create_system_tablespace(const std::string &path) noexcept {
@@ -284,10 +284,10 @@ static db_err create_system_tablespace(const std::string &path) noexcept {
 
 /**
  * @brief Opens the system tablespce, it must exist and be readable and writeable.
- * 
+ *
  * @param[in] path Path to the system tablespace
  * @param[out] flushed_lsn  Max of flushed lsn values in data files
- * 
+ *
  * @return DB_SUCCESS or error code
  */
 static db_err open_system_tablespace(const std::string &path, lsn_t &flushed_lsn) noexcept {
@@ -339,7 +339,7 @@ static db_err open_system_tablespace(const std::string &path, lsn_t &flushed_lsn
 /**
  * @brief Abort the startup process and shutdown the minimum set of
  * sub-systems required to create files and.
- * 
+ *
  * @param err Current error code
  */
 static void srv_startup_abort(db_err err) noexcept {
@@ -507,6 +507,8 @@ ib_err_t InnoDB::start() noexcept {
 
   ut_a(srv_trx_sys == nullptr);
   srv_trx_sys = Trx_sys::create(srv_fsp);
+
+  srv_buf_pool->set_trx_sys(srv_trx_sys);
 
   ut_a(srv_lock_sys == nullptr);
   srv_lock_sys = Lock_sys::create(srv_trx_sys, srv_config.m_lock_table_size);
@@ -928,7 +930,7 @@ ib_err_t InnoDB::start() noexcept {
 
 /**
  * Try to shutdown the InnoDB threads.
- * 
+ *
  * @return	true if all threads exited.
  */
 static bool srv_threads_try_shutdown(Cond_var *lock_timeout_thread_event) noexcept {
@@ -957,7 +959,7 @@ static bool srv_threads_try_shutdown(Cond_var *lock_timeout_thread_event) noexce
  * All threads end up waiting for certain events. Put those events
  * to the signaled state. Then the threads will exit themselves in
  * os_thread_event_wait().
- * 
+ *
  * @return	true if all threads exited.
  */
 static bool srv_threads_shutdown() noexcept {

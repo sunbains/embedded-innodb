@@ -51,7 +51,7 @@ extern ib_stream_t lock_latest_err_stream;
 struct Lock_sys {
   /**
    * Creates the lock system at database start.
-   * 
+   *
    * @param[in] trx_sys The transaction system.
    * @param[in] n_cells Number of slots in the lock hash table.
    */
@@ -64,7 +64,7 @@ struct Lock_sys {
 
   /**
    * Gets the size of a lock struct.
-   * 
+   *
    * @return	size in bytes
    */
   [[nodiscard]] ulint get_size() const noexcept;
@@ -335,8 +335,8 @@ struct Lock_sys {
    *
    * @param[in] flags If BTR_NO_LOCKING_FLAG bit is set, does nothing.
    * @param[in,out] block The buffer block of the record.
-   * @param[in] rec The record which should be modified. Note that as this is a 
-   *                secondary index, the clustered index record must always be 
+   * @param[in] rec The record which should be modified. Note that as this is a
+   *                secondary index, the clustered index record must always be
    *                modified first.
    * @param[in] index The secondary index.
    * @param[in] thr The query thread.
@@ -494,7 +494,7 @@ struct Lock_sys {
    *
    * @param[in] trx The transaction whose locks are to be released.
    */
-  void release_off_kernel(Trx *trx) noexcept;
+  void release_off_trx_sys_mutex(Trx *trx) noexcept;
 
   /**
    * @brief Cancels a waiting lock request and releases possible other transactions waiting behind it.
@@ -528,7 +528,7 @@ struct Lock_sys {
    * @param[in] trx The transaction.
    * @param[in] dest The destination of the ALTER TABLE.
    * @param[out] mode The lock mode of the source table.
-   * 
+   *
    * @return The source table of the transaction if it is covered by an IX or IS table lock;
    *         dest if there is no source table;
    *         NULL if the transaction is locking more than two tables or an inconsistency is found.
@@ -543,7 +543,7 @@ struct Lock_sys {
    *
    * @param[in] table The table to check.
    * @param[in] trx The transaction to check.
-   * 
+   *
    * @return true if the table is only locked by the transaction with LOCK_IX and possibly LOCK_AUTO_INC.
    */
   [[nodiscard]] bool is_table_exclusive(Table *table, Trx *trx) noexcept;
@@ -557,12 +557,12 @@ struct Lock_sys {
    * @param[in] rec The user record.
    * @param[in] index The clustered index.
    * @param[in] offsets The column offsets obtained from Phy_rec::get_col_offsets(rec, index).
-   * @param[in] has_kernel_mutex True if the caller owns the kernel mutex.
-   * 
+   * @param[in] has_trx_sys_mutex True if the caller owns the trx system mutex.
+   *
    * @return true if the transaction id is sensible, false otherwise.
    */
   [[nodiscard]] bool check_trx_id_sanity(
-    trx_id_t trx_id, const rec_t *rec, const Index *index, const ulint *offsets, bool has_kernel_mutex
+    trx_id_t trx_id, const rec_t *rec, const Index *index, const ulint *offsets, bool has_trx_sys_mutex
   ) noexcept;
 
   /**
@@ -581,7 +581,7 @@ struct Lock_sys {
    * This function outputs details of a record lock to the specified stream.
    *
    * @param[in] lock The record type lock whose information is to be printed.
-   * 
+   *
    * @return A string representation of the record lock.
    */
   [[nodiscard]] std::string lock_to_string(const Lock *lock) noexcept;
@@ -590,12 +590,12 @@ struct Lock_sys {
    * @brief Prints information of locks for all transactions.
    *
    * This function outputs details of locks held by all transactions to the specified stream.
-   * If the kernel mutex cannot be obtained, the function exits without printing any information.
+   * If the trx system mutex cannot be obtained, the function exits without printing any information.
    *
    * @param[in] ib_stream The stream where the lock information will be printed.
-   * @param[in] nowait Whether to wait for the kernel mutex.
-   * 
-   * @return false if not able to obtain kernel mutex and exits without printing info.
+   * @param[in] nowait Whether to wait for the trx system mutex.
+   *
+   * @return false if not able to obtain trx system mutex and exits without printing info.
    */
   [[nodiscard]] bool print_info_summary(bool nowait) const noexcept;
 
@@ -618,12 +618,12 @@ struct Lock_sys {
    *
    * @return A pointer to the transaction that holds the implicit x-lock, or NULL if no such transaction exists
    *
-   * @note This function assumes that the kernel mutex is held by the caller.
+   * @note This function assumes that the trx system mutex is held by the caller.
    * @note The index must be a clustered index.
    * @note The record must be a user record (not a supremum/infinimum record).
    */
   [[nodiscard]] inline const Trx *clust_rec_some_has_impl(const rec_t *rec, const Index *index, const ulint *offsets) noexcept {
-    ut_ad(mutex_own(&kernel_mutex));
+    ut_ad(mutex_own(&m_trx_sys->m_mutex));
     ut_ad(index->is_clustered());
     ut_ad(page_rec_is_user_rec(rec));
 
@@ -640,9 +640,9 @@ struct Lock_sys {
 
   /**
    * Gets the heap_no of the smallest user record on a page.
-   * 
+   *
    * @param[in] block buffer block
-   * 
+   *
    * @return	heap_no of smallest user record, or PAGE_HEAP_NO_SUPREMUM
    */
   [[nodiscard]] inline ulint get_min_heap_no(const Buf_block *block) noexcept {
@@ -667,7 +667,7 @@ struct Lock_sys {
    * LOCK_TABLE or LOCK_REC.
    *
    * @param[in] lock The lock for which to get the type.
-   * 
+   *
    * @return The type of the lock, which can be LOCK_TABLE or LOCK_REC.
    */
   [[nodiscard]] inline ulint get_type_low(const Lock *lock) const noexcept { return lock->type(); }
@@ -680,7 +680,7 @@ struct Lock_sys {
    *
    * @param[in] page_id The page id.
    * @param[in] heap_no The heap number.
-   * 
+   *
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
   const Lock *rec_exists(const Rec_locks &rec_locks, ulint heap_no) const noexcept;
@@ -713,8 +713,8 @@ struct Lock_sys {
    *
    * @param[in] trx_sys The transaction system.
    * @param[in] n_cells The number of cells to initialize in the lock system.
-   * 
-   * @return A pointer to the newly created Lock_sys object, or nullptr if the 
+   *
+   * @return A pointer to the newly created Lock_sys object, or nullptr if the
    *         allocation fails.
    */
   [[nodiscard]] static Lock_sys *create(Trx_sys *trx_sys, ulint n_cells) noexcept;
@@ -722,11 +722,11 @@ struct Lock_sys {
   /**
    * @brief Destroys the Lock_sys instance and deallocates its memory.
    *
-   * This function deallocates the memory associated with the given Lock_sys 
+   * This function deallocates the memory associated with the given Lock_sys
    * instance and sets the pointer to nullptr to prevent dangling references.
    *
-   * @param[in,out] lock_sys A reference to the pointer of the Lock_sys instance 
-   *                         to be destroyed. The pointer will be set to nullptr 
+   * @param[in,out] lock_sys A reference to the pointer of the Lock_sys instance
+   *                         to be destroyed. The pointer will be set to nullptr
    *                         after the instance is destroyed.
    */
   static void destroy(Lock_sys *&lock_sys) noexcept;
@@ -738,8 +738,8 @@ struct Lock_sys {
   /**
    * @brief Creates a new record lock and inserts it into the lock queue.
    *
-   * This function creates a new record lock for the specified transaction and 
-   * inserts it into the lock queue. The lock mode and wait flag are specified 
+   * This function creates a new record lock for the specified transaction and
+   * inserts it into the lock queue. The lock mode and wait flag are specified
    * by the type_mode parameter, but the type is ignored and replaced by LOCK_REC.
    * It does not perform any checks for deadlocks or lock compatibility.
    *
@@ -750,7 +750,7 @@ struct Lock_sys {
    * @param[in] n_bits Number of bits in the lock bitmap.
    * @param[in] index Index of the record.
    * @param[in,out] trx Transaction that wants to create the record lock.
-   * 
+   *
    * @return A pointer to the created lock.
    */
   [[nodiscard]] Lock *rec_create_low(
@@ -795,7 +795,7 @@ struct Lock_sys {
    * @param[in] wait     LOCK_WAIT if waiting locks should be considered, or 0 if not.
    * @param[in] heap_no  The heap number of the record.
    * @param[in] trx      The transaction to check against, or nullptr to check requests by all transactions.
-   * 
+   *
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
   [[nodiscard]] const Lock *rec_other_has_expl_req(
@@ -814,7 +814,7 @@ struct Lock_sys {
    *
    * @param[in] lock Lock transaction is requesting.
    * @param[in] trx Transaction requesting the lock.
-   * 
+   *
    * @return true if a deadlock was detected and the requesting transaction
    *         was chosen as the victim; false if no deadlock was detected, or
    *         if a deadlock was detected but other transaction(s) were chosen
@@ -851,7 +851,7 @@ struct Lock_sys {
    * This function checks if the specified lock has the wait flag set.
    *
    * @param[in] lock The lock to check.
-   * 
+   *
    * @return true if the lock is waiting, false otherwise.
    */
   [[nodiscard]] inline bool get_wait(const Lock *lock) noexcept;
@@ -866,7 +866,7 @@ struct Lock_sys {
    *
    * @param[in] page_id The page id.
    * @param[in] heap_no The heap number of the record.
-   * 
+   *
    * @return The first lock on the specified record, or nullptr if none exists.
    */
   [[nodiscard]] inline Lock *rec_get_first(Page_id page_id, ulint heap_no) noexcept;
@@ -881,7 +881,7 @@ struct Lock_sys {
    * @param[in] trx The transaction to check for the lock.
    * @param[in] table The table on which the lock is held.
    * @param[in] mode The lock mode to check for, or stronger.
-   * 
+   *
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
   [[nodiscard]] inline Lock *table_has(Trx *trx, Table *table, Lock_mode mode) noexcept;
@@ -897,7 +897,7 @@ struct Lock_sys {
    * @param[in] precise_mode The precise lock mode to check for, which can be LOCK_S or LOCK_X, possibly ORed with LOCK_GAP or LOCK_REC_NOT_GAP.
    * @param[in] heap_no The heap number of the record.
    * @param[in] trx The transaction to check for the lock.
-   * 
+   *
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
   [[nodiscard]] inline const Lock *rec_has_expl(Page_id page_id, ulint precise_mode, ulint heap_no, const Trx *trx) const noexcept;
@@ -912,7 +912,7 @@ struct Lock_sys {
    * @param[in] page_id  The page id containing the record.
    * @param[in] heap_no  The heap number of the record.
    * @param[in] trx      The transaction to check against.
-   * 
+   *
    * @return A pointer to the conflicting lock if found, or nullptr if no such lock exists.
    */
   [[nodiscard]] Lock *rec_other_has_conflicting(Page_id page_id, Lock_mode mode, ulint heap_no, Trx *trx) noexcept;
@@ -928,7 +928,7 @@ struct Lock_sys {
    * @param[in] heap_no The gap number of the record.
    * @param[in] lock The first lock on the page.
    * @param[in] trx The transaction to check for.
-   * 
+   *
    * @return A pointer to the similar lock if found, or nullptr if no such lock exists.
    */
   [[nodiscard]] inline Lock *rec_find_similar_on_page(Lock_mode type_mode, ulint heap_no, Lock *lock, const Trx *trx) noexcept;
@@ -943,16 +943,16 @@ struct Lock_sys {
    * @param[in] rec      The user record to check.
    * @param[in] index    The secondary index containing the record.
    * @param[in] offsets  Column offsets obtained from Phy_rec::get_col_offsets(rec, index).
-   * 
+   *
    * @return A pointer to the transaction that has the x-lock, or nullptr if no such transaction exists.
    */
-  [[nodiscard]] Trx *sec_rec_some_has_impl_off_kernel(const rec_t *rec, const Index *index, const ulint *offsets) noexcept;
+  [[nodiscard]] Trx *sec_rec_some_has_impl_off_trx_sys_mutex(const rec_t *rec, const Index *index, const ulint *offsets) noexcept;
 
   /**
    * @brief Creates a new record lock and inserts it into the lock queue.
    *
-   * This function creates a new record lock for the specified transaction and 
-   * inserts it into the lock queue. The lock mode and wait flag are specified 
+   * This function creates a new record lock for the specified transaction and
+   * inserts it into the lock queue. The lock mode and wait flag are specified
    * by the type_mode parameter, but the type is ignored and replaced by LOCK_REC.
    *
    * @param[in] type_mode Lock mode and wait flag, type is ignored and replaced by LOCK_REC.
@@ -960,7 +960,7 @@ struct Lock_sys {
    * @param[in] heap_no Heap number of the record.
    * @param[in] index Index of the record.
    * @param[in] trx Transaction requesting the lock.
-   * 
+   *
    * @return The created lock.
    */
   [[nodiscard]] Lock *rec_create(
@@ -980,7 +980,7 @@ struct Lock_sys {
    * @param[in] heap_no Heap number of the record.
    * @param[in] index Index of the record.
    * @param[in] thr Query thread.
-   * 
+   *
    * @return DB_LOCK_WAIT if the lock request is enqueued and waiting.
    * @return DB_DEADLOCK if a deadlock is detected and the lock request is removed.
    * @return DB_QUE_THR_SUSPENDED if the query thread should be stopped.
@@ -994,7 +994,7 @@ struct Lock_sys {
    * @brief Adds a record lock request in the record queue.
    *
    * The request is normally added as the last in the queue, but if there are no waiting lock requests
-   * on the record, and the request to be added is not a waiting request, we can reuse a suitable 
+   * on the record, and the request to be added is not a waiting request, we can reuse a suitable
    * record lock object already existing on the same page, just setting the appropriate bit in its bitmap.
    * This is a low-level function which does NOT check for deadlocks or lock compatibility!
    *
@@ -1003,7 +1003,7 @@ struct Lock_sys {
    * @param[in] heap_no Heap number of the record.
    * @param[in] index Index of the record.
    * @param[in] trx Transaction.
-   * 
+   *
    * @return Lock where the bit was set.
    */
   [[nodiscard]] Lock *rec_add_to_queue(
@@ -1026,7 +1026,7 @@ struct Lock_sys {
    * @param[in] heap_no Heap number of the record.
    * @param[in] index Index of the record.
    * @param[in] thr   Query thread.
-   * 
+   *
    * @return true if locking succeeded.
    */
   [[nodiscard]] inline bool rec_lock_fast(
@@ -1036,19 +1036,19 @@ struct Lock_sys {
   /**
    * @brief General, slower routine for locking a record.
    *
-   * This is a low-level function which does NOT look at implicit locks. It checks 
-   * lock compatibility within explicit locks and sets a normal next-key lock, or 
+   * This is a low-level function which does NOT look at implicit locks. It checks
+   * lock compatibility within explicit locks and sets a normal next-key lock, or
    * in the case of a page supremum record, a gap type lock.
    *
-   * @param[in] impl   If true, no lock is set if no wait is necessary. It is assumed 
+   * @param[in] impl   If true, no lock is set if no wait is necessary. It is assumed
    *                   that the caller will set an implicit lock.
-   * @param[in] mode   Lock mode: LOCK_X or LOCK_S possibly ORed with either LOCK_GAP 
+   * @param[in] mode   Lock mode: LOCK_X or LOCK_S possibly ORed with either LOCK_GAP
    *                   or LOCK_REC_NOT_GAP.
    * @param[in] block  Buffer block containing the record.
    * @param[in] heap_no Heap number of the record.
    * @param[in] index  Index of the record.
    * @param[in] thr    Query thread.
-   * 
+   *
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
   [[nodiscard]] db_err rec_lock_slow(
@@ -1058,9 +1058,9 @@ struct Lock_sys {
   /**
    * @brief Tries to lock the specified record in the mode requested.
    *
-   * If not immediately possible, enqueues a waiting lock request. This is a 
-   * low-level function which does NOT look at implicit locks! Checks lock 
-   * compatibility within explicit locks. This function sets a normal next-key 
+   * If not immediately possible, enqueues a waiting lock request. This is a
+   * low-level function which does NOT look at implicit locks! Checks lock
+   * compatibility within explicit locks. This function sets a normal next-key
    * lock, or in the case of a page supremum record, a gap type lock.
    *
    * @param[in] impl   If true, no lock is set if no wait is necessary:
@@ -1071,7 +1071,7 @@ struct Lock_sys {
    * @param[in] heap_no Heap number of the record.
    * @param[in] index  Index of the record.
    * @param[in] thr    Query thread.
-   * 
+   *
    * @return DB_SUCCESS, DB_LOCK_WAIT, or an error code.
    */
   [[nodiscard]] db_err rec_lock(
@@ -1081,14 +1081,14 @@ struct Lock_sys {
   /**
    * @brief Checks if a waiting record lock request still has to wait in a queue.
    *
-   * This function determines whether a waiting record lock request still needs 
-   * to wait in the lock queue. It iterates through the locks on the same page 
+   * This function determines whether a waiting record lock request still needs
+   * to wait in the lock queue. It iterates through the locks on the same page
    * and checks if any of them require the waiting lock to wait.
    *
    * @param[in] rec_locks The record locks to check.
    * @param[in] wait_lock The lock request that is waiting.
    * @param[in] heap_no The heap number of the record.
-   * 
+   *
    * @return true if the lock request still has to wait, false otherwise.
    */
   [[nodiscard]] bool rec_has_to_wait_in_queue(const Rec_locks &rec_locks, Lock *wait_lock, ulint heap_no) const noexcept;
@@ -1096,8 +1096,8 @@ struct Lock_sys {
   /**
    * @brief Grants a lock to a waiting lock request and releases the waiting transaction.
    *
-   * This function grants a lock to a waiting lock request and releases the 
-   * transaction that was waiting for the lock. It resets the wait flag and 
+   * This function grants a lock to a waiting lock request and releases the
+   * transaction that was waiting for the lock. It resets the wait flag and
    * the back pointer in the transaction to indicate that the lock wait has ended.
    *
    * @param[in] lock The lock request to be granted.
@@ -1108,7 +1108,7 @@ struct Lock_sys {
    * @brief Cancels a waiting record lock request and releases the waiting transaction.
    *
    * This function cancels a waiting record lock request and releases the transaction
-   * that requested it. It does not check if waiting lock requests behind this one 
+   * that requested it. It does not check if waiting lock requests behind this one
    * can now be granted.
    *
    * @param[in] lock The lock request to be canceled.
@@ -1119,12 +1119,12 @@ struct Lock_sys {
    * @brief Removes a record lock request from the queue and grants locks to other transactions.
    *
    * This function removes a record lock request, whether waiting or granted, from the queue.
-   * It also checks if other transactions waiting behind this lock request are now entitled 
-   * to a lock and grants it to them if they qualify. Note that all record locks contained 
+   * It also checks if other transactions waiting behind this lock request are now entitled
+   * to a lock and grants it to them if they qualify. Note that all record locks contained
    * in the provided lock object are removed.
    *
-   * @param[in] in_lock The record lock object. All record locks contained in this lock object 
-   *                    are removed. Transactions waiting behind will get their lock requests 
+   * @param[in] in_lock The record lock object. All record locks contained in this lock object
+   *                    are removed. Transactions waiting behind will get their lock requests
    *                    granted if they are now qualified.
    */
   void rec_dequeue_from_page(Lock *in_lock) noexcept;
@@ -1132,11 +1132,11 @@ struct Lock_sys {
   /**
    * @brief Removes a record lock request, waiting or granted, from the queue.
    *
-   * This function removes a record lock request from the queue, whether it is 
-   * currently waiting or has already been granted. All record locks contained 
+   * This function removes a record lock request from the queue, whether it is
+   * currently waiting or has already been granted. All record locks contained
    * in the provided lock object are removed.
    *
-   * @param[in,out] in_lock The record lock object. All record locks contained 
+   * @param[in,out] in_lock The record lock object. All record locks contained
    *                        in this lock object are removed.
    */
   void rec_discard(Lock *in_lock) noexcept;
@@ -1268,7 +1268,7 @@ struct Lock_sys {
    * to continue waiting.
    *
    * @param[in] wait_lock The lock request that is currently waiting.
-   * 
+   *
    * @return true if the lock request still has to wait, false otherwise.
    */
   [[nodiscard]] bool table_has_to_wait_in_queue(Lock *wait_lock) noexcept;
@@ -1300,10 +1300,10 @@ struct Lock_sys {
 
   /**
    * @brief Calculates the number of record lock structs in the record lock hash table.
-   * 
+   *
    * This function iterates through the record lock hash table and counts the number
    * of record lock structures present.
-   * 
+   *
    * @return ulint The number of record locks.
    */
   [[nodiscard]] ulint get_n_rec_locks() noexcept;
@@ -1356,8 +1356,8 @@ struct Lock_sys {
    * @brief Converts an implicit x-lock to an explicit x-lock on a record.
    *
    * If a transaction has an implicit x-lock on a record but no explicit x-lock
-   * set on the record, this function sets one for it. Note that in the case of 
-   * a secondary index, the kernel mutex may get temporarily released.
+   * set on the record, this function sets one for it. Note that in the case of
+   * a secondary index, the trx system mutex may get temporarily released.
    *
    * @param[in] block   The buffer block of the record.
    * @param[in] rec     The user record on the page.
@@ -1374,7 +1374,7 @@ struct Lock_sys {
    * the transaction and checks for any waiting locks.
    *
    * @param[in] trx The transaction to check for waiting transactions.
-   * 
+   *
    * @return true if no other transaction is waiting on its locks, false otherwise.
    */
   [[nodiscard]] bool trx_has_no_waiters(const Trx *trx) noexcept;
@@ -1397,6 +1397,9 @@ struct Lock_sys {
    * This pointer holds the buffer pool, which manages the buffer pool. The pointer
    * is not owned by the lock system, but by the buffer pool. We extract the buffer pool
    * pointer from Trx_sys::Fil::m_buf_pool to simplify the calls.
+   *
+   * FIXME: This needs to be fixed, reduce these dependencies. We let it go for now
+   * to simplify the changes.
    */
   Buf_pool *m_buf_pool{};
 
@@ -1414,6 +1417,32 @@ struct Lock_sys {
    * about lock requests and waits.
    */
   bool m_print_lock_monitor{false};
+
+  /**
+   * @brief Whether a deadlock was found during the latest deadlock detection.
+   *
+   * This flag indicates whether a deadlock was detected during the most recent
+   * deadlock detection cycle. It is used for logging and monitoring purposes.
+   */
+  bool m_deadlock_found{false};
+
+  /**
+   * @brief Sets the deadlock found flag.
+   *
+   * This function sets the deadlock found flag to true, indicating that a deadlock
+   * was detected during the latest deadlock detection cycle.
+   */
+  void set_deadlock_found() noexcept { m_deadlock_found = true; }
+
+  /**
+   * @brief Checks if a deadlock was found.
+   *
+   * This function returns true if a deadlock was detected during the latest
+   * deadlock detection cycle, false otherwise.
+   *
+   * @return true if a deadlock was found, false otherwise.
+   */
+  [[nodiscard]] bool is_deadlock_found() const noexcept { return m_deadlock_found; }
 };
 
 UT_LIST_NODE_GETTER_DEFINITION(Lock, m_trx_locks);
