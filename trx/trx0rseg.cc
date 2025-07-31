@@ -22,26 +22,21 @@ Rollback segment
 Created 3/26/1996 Heikki Tuuri
 *******************************************************/
 
-#include "trx0rseg.h"
-
-#include "fut0lst.h"
 #include "srv0srv.h"
 #include "trx0purge.h"
+#include "trx0rseg.h"
 #include "trx0undo.h"
 
-trx_rseg_t *trx_rseg_get_on_id(ulint id) {
-  auto rseg = UT_LIST_GET_FIRST(srv_trx_sys->m_rseg_list);
-  ut_ad(rseg != nullptr);
-
-  while (rseg->id != id) {
-    rseg = UT_LIST_GET_NEXT(rseg_list, rseg);
-    ut_ad(rseg != nullptr);
+Trx_rseg *Trx_rseg::get_on_id(ulint id) {
+  for (auto rseg : srv_trx_sys->m_rseg_list) {
+    if (rseg->m_id == id) {
+      return rseg;
+    }
   }
-
-  return rseg;
+  return nullptr;
 }
 
-page_no_t trx_rseg_header_create(space_id_t space, ulint max_size, ulint *slot_no, mtr_t *mtr) {
+page_no_t Trx_rseg::header_create(space_id_t space, ulint max_size, ulint *slot_no, mtr_t *mtr) {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
   ut_ad(mtr->memo_contains(srv_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
 
@@ -93,38 +88,38 @@ page_no_t trx_rseg_header_create(space_id_t space, ulint max_size, ulint *slot_n
   return page_no;
 }
 
-void trx_rseg_mem_free(trx_rseg_t *rseg) {
-  mutex_free(&rseg->mutex);
+void Trx_rseg::memory_free() {
+  mutex_free(&m_mutex);
 
   /* There can't be any active transactions. */
-  ut_a(UT_LIST_GET_LEN(rseg->update_undo_list) == 0);
-  ut_a(UT_LIST_GET_LEN(rseg->insert_undo_list) == 0);
+  ut_a(m_update_undo_list.empty());
+  ut_a(m_insert_undo_list.empty());
 
-  auto undo = UT_LIST_GET_FIRST(rseg->update_undo_cached);
-
-  while (undo != nullptr) {
-    auto prev_undo = undo;
-
-    undo = UT_LIST_GET_NEXT(m_undo_list, undo);
-    UT_LIST_REMOVE(rseg->update_undo_cached, prev_undo);
-
-    Undo::delete_undo(prev_undo);
-  }
-
-  undo = UT_LIST_GET_FIRST(rseg->insert_undo_cached);
+  auto undo = UT_LIST_GET_FIRST(m_update_undo_cached);
 
   while (undo != nullptr) {
     auto prev_undo = undo;
 
     undo = UT_LIST_GET_NEXT(m_undo_list, undo);
-    UT_LIST_REMOVE(rseg->insert_undo_cached, prev_undo);
+    UT_LIST_REMOVE(m_update_undo_cached, prev_undo);
 
     Undo::delete_undo(prev_undo);
   }
 
-  srv_trx_sys->set_nth_rseg(rseg->id, nullptr);
+  undo = UT_LIST_GET_FIRST(m_insert_undo_cached);
 
-  mem_free(rseg);
+  while (undo != nullptr) {
+    auto prev_undo = undo;
+
+    undo = UT_LIST_GET_NEXT(m_undo_list, undo);
+    UT_LIST_REMOVE(m_insert_undo_cached, prev_undo);
+
+    Undo::delete_undo(prev_undo);
+  }
+
+  srv_trx_sys->set_nth_rseg(m_id, nullptr);
+
+  mem_free(this);
 }
 
 /** Creates and initializes a rollback segment object. The values for the
@@ -132,7 +127,7 @@ fields are read from the header. The object is inserted to the rseg
 list of the trx system object and a pointer is inserted in the rseg
 array in the trx system object.
 @return	own: rollback segment object */
-static trx_rseg_t *trx_rseg_mem_create(
+Trx_rseg *Trx_rseg::mem_create(
   ib_recovery_t recovery, /*!< in: recovery flag */
   ulint id,               /*!< in: rollback segment id */
   ulint space,            /*!< in: space where the segment placed */
@@ -142,13 +137,13 @@ static trx_rseg_t *trx_rseg_mem_create(
 {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
-  auto rseg = static_cast<trx_rseg_t *>(mem_alloc(sizeof(trx_rseg_t)));
+  auto rseg = static_cast<Trx_rseg *>(mem_alloc(sizeof(Trx_rseg)));
 
-  rseg->id = id;
-  rseg->space = space;
-  rseg->page_no = page_no;
+  rseg->m_id = id;
+  rseg->m_space = space;
+  rseg->m_page_no = page_no;
 
-  mutex_create(&rseg->mutex, IF_DEBUG("rseg_mutex", ) IF_SYNC_DEBUG(SYNC_RSEG, ) Current_location());
+  mutex_create(&rseg->m_mutex, IF_DEBUG("rseg_mutex", ) IF_SYNC_DEBUG(SYNC_RSEG, ) Current_location());
 
   UT_LIST_ADD_LAST(srv_trx_sys->m_rseg_list, rseg);
 
@@ -156,13 +151,13 @@ static trx_rseg_t *trx_rseg_mem_create(
 
   auto rseg_header = trx_rsegf_get_new(space, page_no, mtr);
 
-  rseg->max_size = mtr->read_ulint(rseg_header + TRX_RSEG_MAX_SIZE, MLOG_4BYTES);
+  rseg->m_max_size = mtr->read_ulint(rseg_header + TRX_RSEG_MAX_SIZE, MLOG_4BYTES);
 
   /* Initialize the undo log lists according to the rseg header */
 
   auto sum_of_undo_sizes = srv_undo->lists_init(recovery, rseg);
 
-  rseg->curr_size = mtr->read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES) + 1 + sum_of_undo_sizes;
+  rseg->m_curr_size = mtr->read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES) + 1 + sum_of_undo_sizes;
 
   auto len = flst_get_len(rseg_header + TRX_RSEG_HISTORY, mtr);
 
@@ -171,21 +166,21 @@ static trx_rseg_t *trx_rseg_mem_create(
 
     auto node_addr = trx_purge_get_log_from_hist(flst_get_last(rseg_header + TRX_RSEG_HISTORY, mtr));
 
-    rseg->last_page_no = node_addr.m_page_no;
-    rseg->last_offset = node_addr.m_boffset;
+    rseg->m_last_page_no = node_addr.m_page_no;
+    rseg->m_last_offset = node_addr.m_boffset;
 
-    auto undo_log_hdr = srv_undo->page_get(rseg->space, node_addr.m_page_no, mtr) + node_addr.m_boffset;
+    auto undo_log_hdr = srv_undo->page_get(rseg->m_space, node_addr.m_page_no, mtr) + node_addr.m_boffset;
 
-    rseg->last_trx_no = mtr->read_uint64(undo_log_hdr + TRX_UNDO_TRX_NO);
-    rseg->last_del_marks = mtr->read_ulint(undo_log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES);
+    rseg->m_last_trx_no = mtr->read_uint64(undo_log_hdr + TRX_UNDO_TRX_NO);
+    rseg->m_last_del_marks = mtr->read_ulint(undo_log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES);
   } else {
-    rseg->last_page_no = FIL_NULL;
+    rseg->m_last_page_no = FIL_NULL;
   }
 
   return rseg;
 }
 
-void trx_rseg_list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header, mtr_t *mtr) {
+void Trx_rseg::list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header, mtr_t *mtr) {
   UT_LIST_INIT(srv_trx_sys->m_rseg_list);
 
   srv_trx_sys->m_rseg_history_len = 0;
@@ -201,7 +196,7 @@ void trx_rseg_list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header
     } else {
       const auto space = srv_trx_sys->frseg_get_space(sys_header, i, mtr);
 
-      trx_rseg_mem_create(recovery, i, space, page_no, mtr);
+      mem_create(recovery, i, space, page_no, mtr);
     }
   }
 }

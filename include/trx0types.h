@@ -53,7 +53,7 @@ struct DBLWR;
 struct trx_sig_t;
 
 /** Rollback segment */
-struct trx_rseg_t;
+struct Trx_rseg;
 
 /** Transaction undo log */
 struct trx_undo_t;

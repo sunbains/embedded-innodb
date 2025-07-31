@@ -1030,7 +1030,7 @@ db_err trx_undo_report_row_operation(
 
       mutex_exit(&trx->m_undo_mutex);
 
-      *roll_ptr = trx_undo_build_roll_ptr(op_type == TRX_UNDO_INSERT_OP, rseg->id, page_no, offset);
+      *roll_ptr = trx_undo_build_roll_ptr(op_type == TRX_UNDO_INSERT_OP, rseg->m_id, page_no, offset);
 
       if (likely_null(heap)) {
         mem_heap_free(heap);
@@ -1049,11 +1049,11 @@ db_err trx_undo_report_row_operation(
     a pessimistic insert in a B-tree, and we must reserve the
     counterpart of the tree latch, which is the rseg mutex. */
 
-    mutex_enter(&rseg->mutex);
+    mutex_enter(&rseg->m_mutex);
 
     page_no = srv_undo->add_page(trx, undo, &mtr);
 
-    mutex_exit(&rseg->mutex);
+    mutex_exit(&rseg->m_mutex);
 
     if (unlikely(page_no == FIL_NULL)) {
       /* Did not succeed: out of space */
@@ -1078,13 +1078,13 @@ trx_undo_rec_t *trx_undo_get_undo_rec_low(roll_ptr_t roll_ptr, mem_heap_t *heap)
   page_no_t page_no;
 
   trx_undo_decode_roll_ptr(roll_ptr, &is_insert, &rseg_id, &page_no, &offset);
-  auto rseg = trx_rseg_get_on_id(rseg_id);
+  auto rseg = Trx_rseg::get_on_id(rseg_id);
 
   mtr_t mtr;
 
   mtr.start();
 
-  auto undo_page = srv_undo->page_get_s_latched(rseg->space, page_no, &mtr);
+  auto undo_page = srv_undo->page_get_s_latched(rseg->m_space, page_no, &mtr);
 
   auto undo_rec = trx_undo_rec_copy(undo_page + offset, heap);
 

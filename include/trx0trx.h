@@ -656,7 +656,7 @@ struct Trx {
   trx_savept_t m_last_sql_stat_start{};
 
   /*!< rollback segment assigned to the transaction, or nullptr if not assigned yet */
-  trx_rseg_t *m_rseg{};
+  Trx_rseg *m_rseg{};
 
   /** Pointer to the insert undo log, or nullptr if no inserts performed yet */
   trx_undo_t *m_insert_undo{};

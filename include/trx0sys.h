@@ -37,6 +37,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "read0types.h"
 #include "srv0srv.h"
 #include "sync0sync.h"
+#include "trx0rseg.h"
 #include "trx0trx.h"
 #include "trx0types.h"
 #include "ut0byte.h"
@@ -323,7 +324,7 @@ struct Trx_sys {
    *
    * @return	pointer to rseg object, NULL if slot not in use
    */
-  [[nodiscard]] trx_rseg_t *get_nth_rseg(ulint n) noexcept {
+  [[nodiscard]] Trx_rseg *get_nth_rseg(ulint n) noexcept {
     ut_ad(mutex_own(&m_mutex));
     ut_ad(n < m_rsegs.size());
 
@@ -337,7 +338,7 @@ struct Trx_sys {
    * @param[in] n	Index of slot
    * @param[in] rseg	Pointer to rseg object, NULL if slot not in use
    */
-  void set_nth_rseg(ulint n, trx_rseg_t *rseg) noexcept {
+  void set_nth_rseg(ulint n, Trx_rseg *rseg) noexcept {
     ut_ad(n < m_rsegs.size());
 
     m_rsegs[n] = rseg;
@@ -642,14 +643,14 @@ struct Trx_sys {
   UT_LIST_BASE_NODE_T_EXTERN(Trx, m_client_trx_list) m_client_trx_list {};
 
   /** List of rollback segment objects */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_rseg_t, rseg_list) m_rseg_list {};
+  UT_LIST_BASE_NODE_T_EXTERN(Trx_rseg, m_rseg_list) m_rseg_list {};
 
   /** Latest rollback segment in the round-robin assignment
   of rollback segments to transactions */
-  trx_rseg_t *m_latest_rseg{};
+  Trx_rseg *m_latest_rseg{};
 
   /** Pointer array to rollback segments; NULL if slot not in use */
-  std::array<trx_rseg_t *, TRX_SYS_N_RSEGS> m_rsegs{};
+  std::array<Trx_rseg *, TRX_SYS_N_RSEGS> m_rsegs{};
 
   /** Length of the TRX_RSEG_HISTORY list (update undo logs for
   committed transactions), protected by rseg->mutex */
@@ -673,3 +674,4 @@ struct Trx_sys {
   /** Purge system. */
   Purge_sys *m_purge{};
 };
+

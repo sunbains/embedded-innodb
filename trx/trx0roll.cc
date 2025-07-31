@@ -451,7 +451,7 @@ static undo_no_t trx_undo_arr_get_biggest(trx_undo_arr_t *arr) /*!< in: undo num
 
 void Trx_rollback::try_truncate(Trx *trx) {
   ut_ad(mutex_own(&trx->m_undo_mutex));
-  ut_ad(mutex_own(&trx->m_rseg->mutex));
+  ut_ad(mutex_own(&trx->m_rseg->m_mutex));
 
   trx->m_pages_undone = 0;
 
@@ -528,11 +528,11 @@ try_again:
   mutex_enter(&trx->m_undo_mutex);
 
   if (trx->m_pages_undone >= TRX_ROLL_TRUNC_THRESHOLD) {
-    mutex_enter(&rseg->mutex);
+    mutex_enter(&rseg->m_mutex);
 
     trx_roll_try_truncate(trx);
 
-    mutex_exit(&rseg->mutex);
+    mutex_exit(&rseg->m_mutex);
   }
 
   auto ins_undo = trx->m_insert_undo;
@@ -553,11 +553,11 @@ try_again:
     if (trx->m_undo_no_arr->n_used == 0) {
       /* Rollback is ending */
 
-      mutex_enter(&rseg->mutex);
+      mutex_enter(&rseg->m_mutex);
 
       trx_roll_try_truncate(trx);
 
-      mutex_exit(&rseg->mutex);
+      mutex_exit(&rseg->m_mutex);
     }
 
     mutex_exit(&trx->m_undo_mutex);
@@ -571,7 +571,7 @@ try_again:
     is_insert = false;
   }
 
-  *roll_ptr = trx_undo_build_roll_ptr(is_insert, undo->m_rseg->id, undo->m_top_page_no, undo->m_top_offset);
+  *roll_ptr = trx_undo_build_roll_ptr(is_insert, undo->m_rseg->m_id, undo->m_top_page_no, undo->m_top_offset);
 
   mtr.start();
 

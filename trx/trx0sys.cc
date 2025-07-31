@@ -67,11 +67,11 @@ Trx_sys::~Trx_sys() noexcept {
   while (rseg != nullptr) {
     auto prev_rseg = rseg;
 
-    rseg = UT_LIST_GET_NEXT(rseg_list, prev_rseg);
+    rseg = UT_LIST_GET_NEXT(m_rseg_list, prev_rseg);
 
     m_rseg_list.remove(prev_rseg);
 
-    trx_rseg_mem_free(prev_rseg);
+    prev_rseg->memory_free();
   }
 
   auto view = m_view_list.front();
@@ -109,7 +109,7 @@ dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
 
   auto sys_header = read_header(&mtr);
 
-  trx_rseg_list_and_array_init(recovery, sys_header, &mtr);
+  Trx_rseg::list_and_array_init(recovery, sys_header, &mtr);
 
   m_latest_rseg = m_rseg_list.front();
 
@@ -260,7 +260,7 @@ dberr_t Trx_sys::create_system_tablespace() noexcept {
 
   /* Create the first rollback segment in the SYSTEM tablespace */
   ulint slot_no;
-  auto page_no = trx_rseg_header_create(TRX_SYS_SPACE, ULINT_MAX, &slot_no, &mtr);
+  auto page_no = Trx_rseg::header_create(TRX_SYS_SPACE, ULINT_MAX, &slot_no, &mtr);
 
   ut_a(slot_no == TRX_SYS_SYSTEM_RSEG_ID);
   ut_a(page_no != FIL_NULL);
@@ -381,7 +381,7 @@ ulint Trx_sys::trx_assign_rseg() noexcept {
   for (;;) {
     /* Get next rseg in a round-robin fashion */
 
-    rseg = UT_LIST_GET_NEXT(rseg_list, rseg);
+    rseg = UT_LIST_GET_NEXT(m_rseg_list, rseg);
 
     if (rseg == nullptr) {
       rseg = m_rseg_list.front();
@@ -389,9 +389,9 @@ ulint Trx_sys::trx_assign_rseg() noexcept {
 
     /* If it is the SYSTEM rollback segment, and there exist others, skip it */
 
-    if ((rseg->id != TRX_SYS_SYSTEM_RSEG_ID) || n_rsegs == 1) {
+    if ((rseg->m_id != TRX_SYS_SYSTEM_RSEG_ID) || n_rsegs == 1) {
       m_latest_rseg = rseg;
-      return rseg->id;
+      return rseg->m_id;
     }
   }
 }
@@ -403,7 +403,7 @@ void Trx_sys::init_at_db_start(ib_recovery_t recovery) noexcept {
   transactions */
 
   for (auto rseg : m_rseg_list) {
-    for (auto undo : rseg->insert_undo_list) {
+    for (auto undo : rseg->m_insert_undo_list) {
 
       auto trx = create_trx(nullptr);
 
@@ -461,7 +461,7 @@ void Trx_sys::init_at_db_start(ib_recovery_t recovery) noexcept {
       trx_list_insert_ordered(trx);
     }
 
-    for (auto undo : rseg->update_undo_list) {
+    for (auto undo : rseg->m_update_undo_list) {
 
       auto trx = get_on_id(undo->m_trx_id);
 

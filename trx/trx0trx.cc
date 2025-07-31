@@ -211,7 +211,7 @@ void Trx::commit_off_kernel() noexcept {
     based world, at the serialization point of the log sequence
     number lsn obtained below. */
 
-    mutex_enter(&rseg->mutex);
+    mutex_enter(&rseg->m_mutex);
 
     if (m_insert_undo != nullptr) {
       srv_undo->set_state_at_finish(rseg, this, m_insert_undo, &mtr);
@@ -239,7 +239,7 @@ void Trx::commit_off_kernel() noexcept {
       srv_undo->update_cleanup(this, update_hdr_page, &mtr);
     }
 
-    mutex_exit(&rseg->mutex);
+    mutex_exit(&rseg->m_mutex);
 
     /* The following call commits the mini-transaction, making the
     whole transaction committed in the file-based world, at this
@@ -914,7 +914,7 @@ void Trx::prepare_for_commit() noexcept {
     structure define the transaction as prepared in the
     file-based world, at the serialization point of lsn. */
 
-    mutex_enter(&rseg->mutex);
+    mutex_enter(&rseg->m_mutex);
 
     if (m_insert_undo != nullptr) {
 
@@ -929,7 +929,7 @@ void Trx::prepare_for_commit() noexcept {
       srv_undo->set_state_at_prepare(this, m_update_undo, &mtr);
     }
 
-    mutex_exit(&rseg->mutex);
+    mutex_exit(&rseg->m_mutex);
 
     /* This mtr commit makes the transaction prepared in the file-based world */
     mtr.commit();

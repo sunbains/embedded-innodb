@@ -110,7 +110,7 @@ Undo *srv_undo{};
  * @return A pointer to the newly created trx_undo_t object.
  */
 static trx_undo_t *trx_undo_mem_create(
-  trx_rseg_t *rseg, ulint id, ulint type, trx_id_t trx_id, const XID *xid, page_no_t page_no, ulint offset
+  Trx_rseg *rseg, ulint id, ulint type, trx_id_t trx_id, const XID *xid, page_no_t page_no, ulint offset
 );
 
 /**
@@ -215,9 +215,9 @@ void trx_undo_page_init(page_t *undo_page, ulint type, mtr_t *mtr) noexcept {
  *  (DB_TOO_MANY_CONCURRENT_TRXS DB_OUT_OF_FILE_SPACE)
  */
 static db_err trx_undo_seg_create(
-  trx_rseg_t *rseg __attribute__((unused)), trx_rsegf_t *rseg_hdr, ulint type, ulint *id, page_t **undo_page, mtr_t *mtr
+  Trx_rseg *rseg __attribute__((unused)), trx_rsegf_t *rseg_hdr, ulint type, ulint *id, page_t **undo_page, mtr_t *mtr
 ) noexcept {
-  ut_ad(mutex_own(&rseg->mutex));
+  ut_ad(mutex_own(&rseg->m_mutex));
 
   auto slot_no = trx_rsegf_undo_find_free(rseg_hdr, mtr);
 
@@ -539,11 +539,11 @@ static void trx_undo_discard_latest_update_undo(page_t *undo_page, mtr_t *mtr) {
 }
 
 ulint Undo::free_page(
-  trx_rseg_t *rseg, bool in_history, space_id_t space, page_no_t hdr_page_no, page_no_t page_no, mtr_t *mtr
+  Trx_rseg *rseg, bool in_history, space_id_t space, page_no_t hdr_page_no, page_no_t page_no, mtr_t *mtr
 ) noexcept {
   ut_a(hdr_page_no != page_no);
   ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
-  ut_ad(mutex_own(&rseg->mutex));
+  ut_ad(mutex_own(&rseg->m_mutex));
 
   auto undo_page = page_get(space, page_no, mtr);
   auto header_page = page_get(space, hdr_page_no, mtr);
@@ -554,10 +554,10 @@ ulint Undo::free_page(
 
   auto last_addr = flst_get_last(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST, mtr);
 
-  --rseg->curr_size;
+  --rseg->m_curr_size;
 
   if (in_history) {
-    auto rseg_header = trx_rsegf_get(space, rseg->page_no, mtr);
+    auto rseg_header = trx_rsegf_get(space, rseg->m_page_no, mtr);
     auto hist_size = mtr->read_ulint(rseg_header + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES);
     ut_ad(hist_size > 0);
 
@@ -596,7 +596,7 @@ void Undo::seg_free(trx_undo_t *undo) noexcept {
 
     ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
 
-    mutex_enter(&rseg->mutex);
+    mutex_enter(&rseg->m_mutex);
 
     auto seg_header = page_get(undo->m_space, undo->m_hdr_page_no, &mtr) + TRX_UNDO_SEG_HDR;
     auto file_seg = seg_header + TRX_UNDO_FSEG_HEADER;
@@ -605,19 +605,19 @@ void Undo::seg_free(trx_undo_t *undo) noexcept {
 
     if (finished) {
       /* Update the rseg header */
-      auto rseg_header = trx_rsegf_get(rseg->space, rseg->page_no, &mtr);
+      auto rseg_header = trx_rsegf_get(rseg->m_space, rseg->m_page_no, &mtr);
 
       trx_rsegf_set_nth_undo(rseg_header, undo->m_id, FIL_NULL, &mtr);
     }
 
-    mutex_exit(&rseg->mutex);
+    mutex_exit(&rseg->m_mutex);
 
     mtr.commit();
 
   } while (!finished);
 }
 
-trx_undo_t *Undo::mem_create_at_db_start(trx_rseg_t *rseg, ulint id, page_no_t page_no, mtr_t *mtr) noexcept {
+trx_undo_t *Undo::mem_create_at_db_start(Trx_rseg *rseg, ulint id, page_no_t page_no, mtr_t *mtr) noexcept {
   page_t *last_page;
   Fil_addr last_addr;
 
@@ -630,7 +630,7 @@ trx_undo_t *Undo::mem_create_at_db_start(trx_rseg_t *rseg, ulint id, page_no_t p
     log_fatal("undo->m_id is ", id);
   }
 
-  auto undo_page = page_get(rseg->space, page_no, mtr);
+  auto undo_page = page_get(rseg->m_space, page_no, mtr);
   auto page_header = undo_page + TRX_UNDO_PAGE_HDR;
   auto type = mtr->read_ulint(page_header + TRX_UNDO_PAGE_TYPE, MLOG_2BYTES);
   auto seg_header = undo_page + TRX_UNDO_SEG_HDR;
@@ -653,7 +653,7 @@ trx_undo_t *Undo::mem_create_at_db_start(trx_rseg_t *rseg, ulint id, page_no_t p
   }
 #endif /* WITH_XOPEN */
 
-  mutex_enter(&rseg->mutex);
+  mutex_enter(&rseg->m_mutex);
 
 #ifdef WITH_XOPEN
   auto undo = trx_undo_mem_create(rseg, id, type, trx_id, &xid, page_no, offset);
@@ -661,7 +661,7 @@ trx_undo_t *Undo::mem_create_at_db_start(trx_rseg_t *rseg, ulint id, page_no_t p
   auto undo = trx_undo_mem_create(rseg, id, type, trx_id, nullptr, page_no, offset);
 #endif /* WITH_XOPEN */
 
-  mutex_exit(&rseg->mutex);
+  mutex_exit(&rseg->m_mutex);
 
   undo->m_dict_operation = mtr->read_ulint(undo_header + TRX_UNDO_DICT_TRANS, MLOG_1BYTE);
 
@@ -678,7 +678,7 @@ trx_undo_t *Undo::mem_create_at_db_start(trx_rseg_t *rseg, ulint id, page_no_t p
     undo->m_last_page_no = last_addr.m_page_no;
     undo->m_top_page_no = last_addr.m_page_no;
 
-    last_page = page_get(rseg->space, undo->m_last_page_no, mtr);
+    last_page = page_get(rseg->m_space, undo->m_last_page_no, mtr);
 
     rec = trx_undo_page_get_last_rec(last_page, page_no, offset);
 
@@ -693,16 +693,16 @@ trx_undo_t *Undo::mem_create_at_db_start(trx_rseg_t *rseg, ulint id, page_no_t p
 
   if (type == TRX_UNDO_INSERT) {
     if (state != TRX_UNDO_CACHED) {
-      UT_LIST_ADD_LAST(rseg->insert_undo_list, undo);
+      UT_LIST_ADD_LAST(rseg->m_insert_undo_list, undo);
     } else {
-      UT_LIST_ADD_LAST(rseg->insert_undo_cached, undo);
+      UT_LIST_ADD_LAST(rseg->m_insert_undo_cached, undo);
     }
   } else {
     ut_ad(type == TRX_UNDO_UPDATE);
     if (state != TRX_UNDO_CACHED) {
-      UT_LIST_ADD_LAST(rseg->update_undo_list, undo);
+      UT_LIST_ADD_LAST(rseg->m_update_undo_list, undo);
     } else {
-      UT_LIST_ADD_LAST(rseg->update_undo_cached, undo);
+      UT_LIST_ADD_LAST(rseg->m_update_undo_cached, undo);
     }
   }
 
@@ -723,9 +723,9 @@ trx_undo_t *Undo::mem_create_at_db_start(trx_rseg_t *rseg, ulint id, page_no_t p
  * @return	own: the undo log memory object
  */
 static trx_undo_t *trx_undo_mem_create(
-  trx_rseg_t *rseg, ulint id, ulint type, trx_id_t trx_id, const XID *xid, page_no_t page_no, ulint offset
+  Trx_rseg *rseg, ulint id, ulint type, trx_id_t trx_id, const XID *xid, page_no_t page_no, ulint offset
 ) {
-  ut_ad(mutex_own(&rseg->mutex));
+  ut_ad(mutex_own(&rseg->m_mutex));
 
   if (id >= TRX_RSEG_N_SLOTS) {
     log_fatal("undo->m_id is ", id);
@@ -751,7 +751,7 @@ static trx_undo_t *trx_undo_mem_create(
 
   undo->m_rseg = rseg;
 
-  undo->m_space = rseg->space;
+  undo->m_space = rseg->m_space;
   undo->m_hdr_page_no = page_no;
   undo->m_hdr_offset = offset;
   undo->m_last_page_no = page_no;
@@ -779,7 +779,7 @@ static void trx_undo_mem_init_for_reuse(
 #endif /* WITH_XOPEN */
   ulint offset
 ) {
-  ut_ad(mutex_own(&undo->m_rseg->mutex));
+  ut_ad(mutex_own(&undo->m_rseg->m_mutex));
 
   if (unlikely(undo->m_id >= TRX_RSEG_N_SLOTS)) {
     log_fatal("undo->m_id is ", undo->m_id);
@@ -813,26 +813,26 @@ static void trx_undo_mem_init_for_reuse(
  *  or DB_OUT_OF_MEMORY
  */
 static db_err trx_undo_create(
-  Trx *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, const XID *xid, trx_undo_t **undo, mtr_t *mtr
+  Trx *trx, Trx_rseg *rseg, ulint type, trx_id_t trx_id, const XID *xid, trx_undo_t **undo, mtr_t *mtr
 ) {
-  ut_ad(mutex_own(&rseg->mutex));
+  ut_ad(mutex_own(&rseg->m_mutex));
 
-  if (rseg->curr_size == rseg->max_size) {
+  if (rseg->m_curr_size == rseg->m_max_size) {
 
     return DB_OUT_OF_FILE_SPACE;
   }
 
-  ++rseg->curr_size;
+  ++rseg->m_curr_size;
 
   ulint id;
   page_t *undo_page;
-  auto rseg_header = trx_rsegf_get(rseg->space, rseg->page_no, mtr);
+  auto rseg_header = trx_rsegf_get(rseg->m_space, rseg->m_page_no, mtr);
   auto err = trx_undo_seg_create(rseg, rseg_header, type, &id, &undo_page, mtr);
 
   if (err != DB_SUCCESS) {
     /* Did not succeed */
 
-    --rseg->curr_size;
+    --rseg->m_curr_size;
 
     return err;
   }
@@ -857,33 +857,33 @@ static db_err trx_undo_create(
 }
 
 trx_undo_t *Undo::reuse_cached(
-  Trx *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid, ) mtr_t *mtr
+  Trx *trx, Trx_rseg *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid, ) mtr_t *mtr
 ) noexcept {
-  ut_ad(mutex_own(&rseg->mutex));
+  ut_ad(mutex_own(&rseg->m_mutex));
 
   trx_undo_t *undo;
 
   if (type == TRX_UNDO_INSERT) {
 
-    undo = UT_LIST_GET_FIRST(rseg->insert_undo_cached);
+    undo = UT_LIST_GET_FIRST(rseg->m_insert_undo_cached);
 
     if (undo == nullptr) {
 
       return nullptr;
     }
 
-    UT_LIST_REMOVE(rseg->insert_undo_cached, undo);
+    UT_LIST_REMOVE(rseg->m_insert_undo_cached, undo);
   } else {
     ut_ad(type == TRX_UNDO_UPDATE);
 
-    undo = UT_LIST_GET_FIRST(rseg->update_undo_cached);
+    undo = UT_LIST_GET_FIRST(rseg->m_update_undo_cached);
 
     if (undo == nullptr) {
 
       return nullptr;
     }
 
-    UT_LIST_REMOVE(rseg->update_undo_cached, undo);
+    UT_LIST_REMOVE(rseg->m_update_undo_cached, undo);
   }
 
   ut_ad(undo->m_size == 1);
@@ -957,7 +957,7 @@ db_err Undo::assign_undo(Trx *trx, ulint type) noexcept {
 
   ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
 
-  mutex_enter(&rseg->mutex);
+  mutex_enter(&rseg->m_mutex);
 
 #ifdef WITH_XOPEN
   auto undo = reuse_cached(trx, rseg, type, trx->m_id, &trx->m_xid, &mtr);
@@ -974,7 +974,7 @@ db_err Undo::assign_undo(Trx *trx, ulint type) noexcept {
 
     if (err != DB_SUCCESS) {
 
-      mutex_exit(&rseg->mutex);
+      mutex_exit(&rseg->m_mutex);
       mtr.commit();
 
       return err;
@@ -982,11 +982,11 @@ db_err Undo::assign_undo(Trx *trx, ulint type) noexcept {
   }
 
   if (type == TRX_UNDO_INSERT) {
-    UT_LIST_ADD_FIRST(rseg->insert_undo_list, undo);
+    UT_LIST_ADD_FIRST(rseg->m_insert_undo_list, undo);
     ut_ad(trx->m_insert_undo == nullptr);
     trx->m_insert_undo = undo;
   } else {
-    UT_LIST_ADD_FIRST(rseg->update_undo_list, undo);
+    UT_LIST_ADD_FIRST(rseg->m_update_undo_list, undo);
     ut_ad(trx->m_update_undo == nullptr);
     trx->m_update_undo = undo;
   }
@@ -995,15 +995,15 @@ db_err Undo::assign_undo(Trx *trx, ulint type) noexcept {
     mark_as_dict_operation(trx, undo, &mtr);
   }
 
-  mutex_exit(&rseg->mutex);
+  mutex_exit(&rseg->m_mutex);
 
   mtr.commit();
 
   return DB_SUCCESS;
 }
 
-page_t *Undo::set_state_at_finish(trx_rseg_t *rseg, Trx *trx __attribute__((unused)), trx_undo_t *undo, mtr_t *mtr) noexcept {
-  ut_ad(mutex_own(&rseg->mutex));
+page_t *Undo::set_state_at_finish(Trx_rseg *rseg, Trx *trx __attribute__((unused)), trx_undo_t *undo, mtr_t *mtr) noexcept {
+  ut_ad(mutex_own(&rseg->m_mutex));
 
   if (undo->m_id >= TRX_RSEG_N_SLOTS) {
     log_fatal("undo->m_id is ", undo->m_id);
@@ -1021,7 +1021,7 @@ page_t *Undo::set_state_at_finish(trx_rseg_t *rseg, Trx *trx __attribute__((unus
     transactions that required the slots of a different type
     would fail for lack of slots. */
 
-    if (UT_LIST_GET_LEN(rseg->update_undo_list) < 500 && UT_LIST_GET_LEN(rseg->insert_undo_list) < 500) {
+    if (UT_LIST_GET_LEN(rseg->m_update_undo_list) < 500 && UT_LIST_GET_LEN(rseg->m_insert_undo_list) < 500) {
       undo->m_state = TRX_UNDO_CACHED;
     } else {
       undo->m_state = TRX_UNDO_TO_FREE;
@@ -1071,16 +1071,16 @@ void Undo::update_cleanup(Trx *trx, page_t *undo_page, mtr_t *mtr) noexcept {
   auto undo = trx->m_update_undo;
   auto rseg = trx->m_rseg;
 
-  ut_ad(mutex_own(&rseg->mutex));
+  ut_ad(mutex_own(&rseg->m_mutex));
 
   srv_trx_sys->m_purge->add_update_undo_to_history(trx, undo_page, mtr);
 
-  UT_LIST_REMOVE(rseg->update_undo_list, undo);
+  UT_LIST_REMOVE(rseg->m_update_undo_list, undo);
 
   trx->m_update_undo = nullptr;
 
   if (undo->m_state == TRX_UNDO_CACHED) {
-    UT_LIST_ADD_FIRST(rseg->update_undo_cached, undo);
+    UT_LIST_ADD_FIRST(rseg->m_update_undo_cached, undo);
   } else {
     ut_ad(undo->m_state == TRX_UNDO_TO_PURGE);
 
@@ -1094,33 +1094,33 @@ void Undo::insert_cleanup(Trx *trx) noexcept {
 
   auto rseg = trx->m_rseg;
 
-  mutex_enter(&rseg->mutex);
+  mutex_enter(&rseg->m_mutex);
 
-  UT_LIST_REMOVE(rseg->insert_undo_list, undo);
+  UT_LIST_REMOVE(rseg->m_insert_undo_list, undo);
 
   trx->m_insert_undo = nullptr;
 
   if (undo->m_state == TRX_UNDO_CACHED) {
-    UT_LIST_ADD_FIRST(rseg->insert_undo_cached, undo);
+    UT_LIST_ADD_FIRST(rseg->m_insert_undo_cached, undo);
   } else {
     ut_ad(undo->m_state == TRX_UNDO_TO_FREE);
 
     /* Delete first the undo log segment in the file */
 
-    mutex_exit(&rseg->mutex);
+    mutex_exit(&rseg->m_mutex);
 
     seg_free(undo);
 
-    mutex_enter(&rseg->mutex);
+    mutex_enter(&rseg->m_mutex);
 
-    ut_ad(rseg->curr_size > undo->m_size);
+    ut_ad(rseg->m_curr_size > undo->m_size);
 
-    rseg->curr_size -= undo->m_size;
+    rseg->m_curr_size -= undo->m_size;
 
     delete_undo(undo);
   }
 
-  mutex_exit(&rseg->mutex);
+  mutex_exit(&rseg->m_mutex);
 }
 
 trx_undo_rec_t *Undo::get_prev_rec_from_prev_page(trx_undo_rec_t *rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept {
@@ -1211,11 +1211,11 @@ byte *Undo::parse_page_header(ulint type, byte *ptr, byte *end_ptr, page_t *page
 ulint Undo::add_page(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
   ut_ad(mutex_own(&trx->m_undo_mutex));
   ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
-  ut_ad(mutex_own(&trx->m_rseg->mutex));
+  ut_ad(mutex_own(&trx->m_rseg->m_mutex));
 
   auto rseg = trx->m_rseg;
 
-  if (rseg->curr_size == rseg->max_size) {
+  if (rseg->m_curr_size == rseg->m_max_size) {
 
     return FIL_NULL;
   }
@@ -1245,7 +1245,7 @@ ulint Undo::add_page(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
     flst_add_last(header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_PAGE_LIST, new_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
 
     ++undo->m_size;
-    ++rseg->curr_size;
+    ++rseg->m_curr_size;
   }
 
   return page_no;
@@ -1253,7 +1253,7 @@ ulint Undo::add_page(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
 
 void Undo::truncate_end(Trx *trx, trx_undo_t *undo, undo_no_t limit) noexcept {
   ut_ad(mutex_own(&trx->m_undo_mutex));
-  ut_ad(mutex_own(&trx->m_rseg->mutex));
+  ut_ad(mutex_own(&trx->m_rseg->m_mutex));
 
   trx_undo_rec_t *trunc_here;
 
@@ -1288,8 +1288,8 @@ void Undo::truncate_end(Trx *trx, trx_undo_t *undo, undo_no_t limit) noexcept {
   } while (trunc_here != nullptr);
 }
 
-void Undo::truncate_start(trx_rseg_t *rseg, space_id_t space, page_no_t hdr_page_no, ulint hdr_offset, undo_no_t limit) noexcept {
-  ut_ad(mutex_own(&rseg->mutex));
+void Undo::truncate_start(Trx_rseg *rseg, space_id_t space, page_no_t hdr_page_no, ulint hdr_offset, undo_no_t limit) noexcept {
+  ut_ad(mutex_own(&rseg->m_mutex));
 
   if (limit == 0) {
 
@@ -1334,17 +1334,17 @@ void Undo::truncate_start(trx_rseg_t *rseg, space_id_t space, page_no_t hdr_page
   }
 }
 
-ulint Undo::lists_init(ib_recovery_t recovery, trx_rseg_t *rseg) noexcept {
-  UT_LIST_INIT(rseg->update_undo_list);
-  UT_LIST_INIT(rseg->update_undo_cached);
-  UT_LIST_INIT(rseg->insert_undo_list);
-  UT_LIST_INIT(rseg->insert_undo_cached);
+ulint Undo::lists_init(ib_recovery_t recovery, Trx_rseg *rseg) noexcept {
+  UT_LIST_INIT(rseg->m_update_undo_list);
+  UT_LIST_INIT(rseg->m_update_undo_cached);
+  UT_LIST_INIT(rseg->m_insert_undo_list);
+  UT_LIST_INIT(rseg->m_insert_undo_cached);
 
   mtr_t mtr;
 
   mtr.start();
 
-  auto rseg_header = trx_rsegf_get_new(rseg->space, rseg->page_no, &mtr);
+  auto rseg_header = trx_rsegf_get_new(rseg->m_space, rseg->m_page_no, &mtr);
 
   ulint size = 0;
 
@@ -1365,7 +1365,7 @@ ulint Undo::lists_init(ib_recovery_t recovery, trx_rseg_t *rseg) noexcept {
 
       mtr.start();
 
-      rseg_header = trx_rsegf_get(rseg->space, rseg->page_no, &mtr);
+      rseg_header = trx_rsegf_get(rseg->m_space, rseg->m_page_no, &mtr);
     }
   }
 

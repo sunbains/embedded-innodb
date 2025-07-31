@@ -25,49 +25,10 @@ Created 3/26/1996 Heikki Tuuri
 #pragma once
 
 #include "innodb0types.h"
+#include "fut0lst.h"
 #include "mtr0log.h"
 #include "srv0srv.h"
-#include "trx0sys.h"
 #include "trx0types.h"
-
-/**
- * Looks for a rollback segment, based on the rollback segment id.
- * 
- * @param[in] id The rollback segment id.
- * 
- * @return	rollback segment
- */
-trx_rseg_t *trx_rseg_get_on_id(ulint id);
-
-/**
- * Creates a rollback segment header. This function is called only when
- * a new rollback segment is created in the database.
- * 
- * @param[in] space The space id.
- * @param[in] max_size The maximum size in pages.
- * @param[out] slot_no The rollback segment id == slot number in trx sys.
- * @param[in] mtr The mini-transaction handle.
- * 
- * @return	page number of the created segment, FIL_NULL if fail
- */
-page_no_t trx_rseg_header_create(space_id_t space, ulint max_size, ulint *slot_no, mtr_t *mtr);
-
-/**
- * Creates the memory copies for rollback segments and initializes the
- * rseg list and array in srv_trx_sys at a database startup.
- * 
- * @param[in] recovery Recovery flag.
- * @param[in] sys_header The trx system header.
- * @param[in] mtr The mini-transaction handle.
- */
-void trx_rseg_list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header, mtr_t *mtr);
-
-/**
- * Free's an instance of the rollback segment in memory.
- * 
- * @param[in] rseg The instance to free.
- */
-void trx_rseg_mem_free(trx_rseg_t *rseg);
 
 /** Number of undo log slots in a rollback segment file copy */
 constexpr auto TRX_RSEG_N_SLOTS = UNIV_PAGE_SIZE / 16;
@@ -75,62 +36,103 @@ constexpr auto TRX_RSEG_N_SLOTS = UNIV_PAGE_SIZE / 16;
 /** Maximum number of transactions supported by a single rollback segment */
 constexpr auto TRX_RSEG_MAX_N_TRXS = TRX_RSEG_N_SLOTS / 2;
 
-/* The rollback segment memory object */
-struct trx_rseg_t {
+struct Trx_rseg {
+  /**
+   * Looks for a rollback segment, based on the rollback segment id.
+   * 
+   * @param[in] id The rollback segment id.
+   * 
+   * @return	rollback segment
+   */
+  static Trx_rseg *get_on_id(ulint id);
+
+  /**
+   * Creates a rollback segment header. This function is called only when
+   * a new rollback segment is created in the database.
+   * 
+   * @param[in] space The space id.
+   * @param[in] max_size The maximum size in pages.
+   * @param[out] slot_no The rollback segment id == slot number in trx sys.
+   * @param[in] mtr The mini-transaction handle.
+   * 
+   * @return	page number of the created segment, FIL_NULL if fail
+   */
+  static page_no_t header_create(space_id_t space, ulint max_size, ulint *slot_no, mtr_t *mtr);
+
+  /**
+   * Creates the memory copies for rollback segments and initializes the
+   * rseg list and array in srv_trx_sys at a database startup.
+   * 
+   * @param[in] recovery Recovery flag.
+   * @param[in] sys_header The trx system header.
+   * @param[in] mtr The mini-transaction handle.
+   */
+  static void list_and_array_init(ib_recovery_t recovery, trx_sysf_t *sys_header, mtr_t *mtr);
+
+  /**
+   * Free's an instance of the rollback segment in memory.
+   */
+  void memory_free();
+
+private:
+  /**
+   * Creates and initializes a rollback segment object.
+   */
+  static Trx_rseg *mem_create(ib_recovery_t recovery, ulint id, ulint space, ulint page_no, mtr_t *mtr);
+
+public:
   /** Rollback segment id == the index of its slot in the trx
    * system file copy */
-  ulint id;
+  ulint m_id;
 
   /** mutex protecting the fields in this struct except id;
-   * NOTE that the latching order must always be kernel mutex -> rseg mutex */
-  mutex_t mutex;
+   * NOTE that the latching order must always be Trx_sys mutex -> rseg mutex */
+  mutex_t m_mutex;
 
   /** Space where the rollback segment is header is placed */
-  space_id_t space;
+  space_id_t m_space;
 
   /** Page number of the rollback segment header */
-  page_no_t page_no;
+  page_no_t m_page_no;
 
   /**Maximum allowed size in pages */
-  ulint max_size;
+  ulint m_max_size;
 
   /** Current size in pages */
-  ulint curr_size;
+  ulint m_curr_size;
 
   /** List of update undo logs */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) update_undo_list;
+  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) m_update_undo_list;
 
   /* List of update undo log segments cached for fast reuse */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) update_undo_cached;
+  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) m_update_undo_cached;
 
   /** List of insert undo logs */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) insert_undo_list;
+  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) m_insert_undo_list;
 
   /** List of insert undo log segments cached for fast reuse */
-  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) insert_undo_cached;
+  UT_LIST_BASE_NODE_T_EXTERN(trx_undo_t, m_undo_list) m_insert_undo_cached;
 
   /* Fields for insert undo logs */
 
   /** Page number of the last not yet purged log header i
    * the history list; FIL_NULL if all list purged */
-  page_no_t last_page_no;
+  page_no_t m_last_page_no;
 
   /** Byte offset of the last not yet purged log header */
-  ulint last_offset;
+  ulint m_last_offset;
 
   /** Transaction number of the last not yet purged log */
-  trx_id_t last_trx_no;
+  trx_id_t m_last_trx_no;
 
   /** true if the last not yet purged log needs purging */
-  bool last_del_marks;
+  bool m_last_del_marks;
 
   /* the list of the rollback segment memory objects */
-  UT_LIST_NODE_T(trx_rseg_t) rseg_list;
+  UT_LIST_NODE_T(Trx_rseg) m_rseg_list;
 };
 
-UT_LIST_NODE_GETTER_DEFINITION(trx_rseg_t, rseg_list);
-
-/* Undo log segment slot in a rollback segment header */
+UT_LIST_NODE_GETTER_DEFINITION(Trx_rseg, m_rseg_list);
 
 /** Page number of the header page of an undo log segment */
 constexpr page_no_t TRX_RSEG_SLOT_PAGE_NO = 0;

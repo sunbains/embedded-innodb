@@ -230,7 +230,7 @@ struct trx_undo_t {
   uint64_t m_table_id;
 
   /** rseg where the undo log belongs */
-  trx_rseg_t *m_rseg;
+  Trx_rseg *m_rseg;
 
   /** Space id where the undo log placed */
   space_id_t m_space;
@@ -403,7 +403,7 @@ struct Undo {
    *  NOTE that the function only frees whole pages; the header page is not freed, but
    *  emptied, if all the records there are < limit
    */
-  void truncate_start(trx_rseg_t *rseg, space_id_t space, page_no_t hdr_page_no, ulint hdr_offset, undo_no_t limit) noexcept;
+  void truncate_start(Trx_rseg *rseg, space_id_t space, page_no_t hdr_page_no, ulint hdr_offset, undo_no_t limit) noexcept;
 
   /**
    * Truncates an undo log from the end. This function is used during a rollback
@@ -425,7 +425,7 @@ struct Undo {
    * 
    * @return	the combined size of undo log segments in pages
    */
-  ulint lists_init(ib_recovery_t recovery, trx_rseg_t *rseg) noexcept;
+  ulint lists_init(ib_recovery_t recovery, Trx_rseg *rseg) noexcept;
 
   /**
    * Assigns an undo log for a transaction. A new undo log is created or a cached
@@ -449,7 +449,7 @@ struct Undo {
    * 
    * @return	undo log segment header page, x-latched
    */
-  page_t *set_state_at_finish(trx_rseg_t *rseg, Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
+  page_t *set_state_at_finish(Trx_rseg *rseg, Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
 
   /**
    * Sets the state of the undo log segment at a transaction prepare.
@@ -568,7 +568,7 @@ struct Undo {
    * @return	last page number in remaining log
    */
   ulint free_page(
-    trx_rseg_t *rseg, bool in_history, space_id_t space, page_no_t hdr_page_no, page_no_t page_no, mtr_t *mtr
+    Trx_rseg *rseg, bool in_history, space_id_t space, page_no_t hdr_page_no, page_no_t page_no, mtr_t *mtr
   ) noexcept;
 
   /**
@@ -611,7 +611,7 @@ struct Undo {
    * 
    * @return	own: the undo log memory object
    */
-  trx_undo_t *mem_create_at_db_start(trx_rseg_t *rseg, ulint id, page_no_t page_no, mtr_t *mtr) noexcept;
+  trx_undo_t *mem_create_at_db_start(Trx_rseg *rseg, ulint id, page_no_t page_no, mtr_t *mtr) noexcept;
 
   /**
    * Reuses a cached undo log.
@@ -625,7 +625,7 @@ struct Undo {
    * 
    * @return	the undo log memory object, nullptr if none cached
    */
-  trx_undo_t *reuse_cached(Trx *trx, trx_rseg_t *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid, ) mtr_t *mtr) noexcept;
+  trx_undo_t *reuse_cached(Trx *trx, Trx_rseg *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid, ) mtr_t *mtr) noexcept;
 
   /**
    * Marks an undo log header as a header of a data dictionary operation

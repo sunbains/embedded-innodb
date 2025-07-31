@@ -168,7 +168,7 @@ struct Purge_sys {
    * @param[in] n_removed_logs    Count of how many undo logs we will cut off from the
    *                              end of the history list.
    */
-  void free_segment(trx_rseg_t *rseg, Fil_addr hdr_addr, ulint n_removed_logs) noexcept;
+  void free_segment(Trx_rseg *rseg, Fil_addr hdr_addr, ulint n_removed_logs) noexcept;
 
   /**
    * Removes unnecessary history data from a rollback segment.
@@ -180,7 +180,7 @@ struct Purge_sys {
    *                              limit_trx_no, truncate undo records
    *                              with undo mumber < limit_undo_no
    */
-  void truncate_rseg_history(trx_rseg_t *rseg, trx_id_t limit_trx_no, undo_no_t limit_undo_no) noexcept;
+  void truncate_rseg_history(Trx_rseg *rseg, trx_id_t limit_trx_no, undo_no_t limit_undo_no) noexcept;
 
   /**
    * Removes unnecessary history data from rollback segments. NOTE that when this
@@ -203,7 +203,7 @@ struct Purge_sys {
    * @param[in] rseg              Rollback segment.
    *
    */
-  void rseg_get_next_history_log(trx_rseg_t *rseg) noexcept;
+  void rseg_get_next_history_log(Trx_rseg *rseg) noexcept;
 
   /**
    * Chooses the next undo log to purge and updates the info in purge_sys. This
@@ -268,7 +268,7 @@ struct Purge_sys {
   bool m_next_stored{};
 
   /** Rollback segment for the next undo record to purge */
-  trx_rseg_t *m_rseg{};
+  Trx_rseg *m_rseg{};
 
   /** Page number for the next undo record to purge, page number
    * of the log header, if dummy record */
