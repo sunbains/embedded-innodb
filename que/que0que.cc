@@ -383,7 +383,7 @@ void que_graph_free_recursive(que_node_t *node) {
   upd_node_t *upd;
   Table_node *cre_tab;
   Index_node *cre_ind;
-  purge_node_t *purge;
+  Row_purge *purge;
 
   if (node == nullptr) {
 
@@ -447,9 +447,9 @@ void que_graph_free_recursive(que_node_t *node) {
 
       break;
     case QUE_NODE_PURGE:
-      purge = static_cast<purge_node_t *>(node);
+      purge = static_cast<Row_purge *>(node);
 
-      mem_heap_free(purge->heap);
+      mem_heap_free(purge->m_heap);
 
       break;
 

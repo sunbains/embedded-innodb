@@ -51,9 +51,9 @@ struct Read_view {
    * @return trx id
    */
   inline trx_id_t get_nth_trx_id(ulint n) const {
-    ut_ad(n < n_trx_ids);
+    ut_ad(n < m_n_trx_ids);
 
-    return trx_ids[n];
+    return m_trx_ids[n];
   }
 
   /**
@@ -63,9 +63,9 @@ struct Read_view {
    * @param trx_id in: trx id to set
    */
   inline void set_nth_trx_id(ulint n, trx_id_t trx_id) {
-    ut_ad(n < n_trx_ids);
+    ut_ad(n < m_n_trx_ids);
 
-    trx_ids[n] = trx_id;
+    m_trx_ids[n] = trx_id;
   }
 
   /**
@@ -75,12 +75,12 @@ struct Read_view {
    * @return true if sees
    */
   inline bool sees_trx_id(trx_id_t trx_id) const {
-    if (trx_id < up_limit_id) {
+    if (trx_id < m_up_limit_id) {
 
       return true;
     }
 
-    if (trx_id >= low_limit_id) {
+    if (trx_id >= m_low_limit_id) {
 
       return false;
     }
@@ -90,7 +90,7 @@ struct Read_view {
     transaction in the trx id array, its trx id is looked at first, and
     the first two comparisons may well decide the visibility of trx_id. */
 
-    const auto n_ids = n_trx_ids;
+    const auto n_ids = m_n_trx_ids;
 
     for (ulint i = 0; i < n_ids; ++i) {
 
@@ -105,43 +105,43 @@ struct Read_view {
   }
 
   /** Read view type */
-  Read_view_type type;
+  Read_view_type m_type;
 
-  /** 0 or if type is HIGH_GRANULARITY transaction undo_no when
+  /** 0 or if m_type is HIGH_GRANULARITY transaction undo_no when
   this high-granularity consistent read view was created */
-  undo_no_t undo_no;
+  undo_no_t m_undo_no;
 
   /** The view does not need to see the undo logs for transactions
   whose transaction number is strictly smaller (<) than this value:
   they can be removed in purge if not needed by other views */
-  trx_id_t low_limit_no;
+  trx_id_t m_low_limit_no;
 
   /** The read should not see any transaction with trx id >= this value.
   In other words, this is the "high water mark". */
-  trx_id_t low_limit_id;
+  trx_id_t m_low_limit_id;
 
   /** The read should see all trx ids which are strictly smaller (<) than
   this value.  In other words, this is the "low water mark". */
-  trx_id_t up_limit_id;
+  trx_id_t m_up_limit_id;
 
-  /** Number of cells in the trx_ids array */
-  ulint n_trx_ids;
+  /** Number of cells in the m_trx_ids array */
+  ulint m_n_trx_ids;
 
   /** Additional trx ids which the read should not see: typically, these are
   the active transactions at the time when the read is serialized, except the
   reading transaction itself; the trx ids in this array are in a descending
-  order. These trx_ids should be between the "low" and "high" water marks,
-  that is, up_limit_id and low_limit_id. */
-  trx_id_t *trx_ids;
+  order. These m_trx_ids should be between the "low" and "high" water marks,
+  that is, m_up_limit_id and m_low_limit_id. */
+  trx_id_t *m_trx_ids;
 
   /** trx id of creating transaction, or 0 used in purge */
-  trx_id_t creator_trx_id;
+  trx_id_t m_creator_trx_id;
 
   /** List of read views in srv_trx_sys */
-  UT_LIST_NODE_T(Read_view) view_list;
+  UT_LIST_NODE_T(Read_view) m_view_list;
 };
 
-UT_LIST_NODE_GETTER_DEFINITION(Read_view, view_list);
+UT_LIST_NODE_GETTER_DEFINITION(Read_view, m_view_list);
 
 /** Read view types @{ */
 

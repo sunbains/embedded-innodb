@@ -310,12 +310,12 @@ void Purge_sys::truncate_history() noexcept {
   /* We play safe and set the truncate limit at most to the purge view
   low_limit number, though this is not necessary */
 
-  if (limit_trx_no >= m_view->low_limit_no) {
-    limit_trx_no = m_view->low_limit_no;
+  if (limit_trx_no >= m_view->m_low_limit_no) {
+    limit_trx_no = m_view->m_low_limit_no;
     limit_undo_no = 0;
   }
 
-  ut_ad(limit_trx_no <= m_view->low_limit_no);
+  ut_ad(limit_trx_no <= m_view->m_low_limit_no);
 
   for (auto rseg : srv_trx_sys->m_rseg_list) {
     truncate_rseg_history(rseg, limit_trx_no, limit_undo_no);
@@ -848,7 +848,7 @@ trx_undo_rec_t *Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
     return nullptr;
   }
 
-  if (m_purge_trx_no >= m_view->low_limit_no) {
+  if (m_purge_trx_no >= m_view->m_low_limit_no) {
     m_state = PURGE_STATE_OFF;
 
     truncate_if_arr_empty();
@@ -862,7 +862,7 @@ trx_undo_rec_t *Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
 
   *cell = arr_store_info(m_purge_trx_no, m_purge_undo_no);
 
-  ut_ad(m_purge_trx_no < m_view->low_limit_no);
+  ut_ad(m_purge_trx_no < m_view->m_low_limit_no);
 
   /* The following call will advance the stored values of purge_trx_no
   and purge_undo_no, therefore we had to store them first */

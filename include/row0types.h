@@ -29,7 +29,7 @@ struct Plan;
 struct Prebuilt;
 struct Undo_node;
 struct Insert_node;
-struct purge_node_t;
+struct Row_purge;
 
 struct upd_t;
 struct upd_field_t;

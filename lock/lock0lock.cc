@@ -740,7 +740,7 @@ bool Lock_sys::sec_rec_cons_read_sees(const rec_t *rec, Read_view *view) const n
   const auto max_trx_id = page_get_max_trx_id(page_align(rec));
   ut_ad(max_trx_id > 0);
 
-  return max_trx_id < view->up_limit_id;
+  return max_trx_id < view->m_up_limit_id;
 }
 
 Table *Lock_sys::get_src_table(Trx *trx, Table *dest, Lock_mode *mode) noexcept {
@@ -2582,7 +2582,7 @@ void Lock_sys::print_info_all_transactions() noexcept {
 
       if (trx->m_read_view) {
         log_info(std::format(
-          "Trx read view will not see trx with id >= {}, sees < {}", trx->m_read_view->low_limit_id, trx->m_read_view->up_limit_id
+          "Trx read view will not see trx with id >= {}, sees < {}", trx->m_read_view->m_low_limit_id, trx->m_read_view->m_up_limit_id
         ));
       }
 

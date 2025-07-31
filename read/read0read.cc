@@ -123,21 +123,21 @@ consistent read semantics. Q. E. D.
 std::string Read_view::to_string() const noexcept {
   std::string str{};
 
-  if (type == Read_view_type::HIGH_GRANULARITY) {
-    str = std::format("High-granularity read view undo_n:o {} {}\n", undo_no, undo_no);
+  if (m_type == Read_view_type::HIGH_GRANULARITY) {
+    str = std::format("High-granularity read view undo_n:o {} {}\n", m_undo_no, m_undo_no);
   } else {
     str = "Normal read view\n";
   }
 
-  str += std::format("Read view low limit trx n:o {} {}\n", low_limit_no, low_limit_no);
+  str += std::format("Read view low limit trx n:o {} {}\n", m_low_limit_no, m_low_limit_no);
 
-  str += std::format("Read view up limit trx id {}\n", up_limit_id);
+  str += std::format("Read view up limit trx id {}\n", m_up_limit_id);
 
-  str += std::format("Read view low limit trx id {}\n", low_limit_id);
+  str += std::format("Read view low limit trx id {}\n", m_low_limit_id);
 
   str += "Read view individually stored trx ids:\n";
 
-  const auto n_ids = n_trx_ids;
+  const auto n_ids = m_n_trx_ids;
 
   for (ulint i{}; i < n_ids; ++i) {
     str += std::format("Read view trx id {}\n", get_nth_trx_id(i));

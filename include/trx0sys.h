@@ -632,7 +632,7 @@ struct Trx_sys {
   trx_id_t m_max_trx_id{};
 
   /** List of read views sorted on trx no, biggest first */
-  UT_LIST_BASE_NODE_T_EXTERN(Read_view, view_list) m_view_list {};
+  UT_LIST_BASE_NODE_T_EXTERN(Read_view, m_view_list) m_view_list {};
 
   /** List of active and committed in memory transactions,
   sorted on trx id, biggest first */
