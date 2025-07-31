@@ -81,7 +81,7 @@ struct Row_sel {
    * This is a high-level function used in SQL execution graphs.
    *
    * @param[in] thr The query thread.
-   * 
+   *
    * @return The query thread to run next or nullptr.
    */
   [[nodiscard]] que_thr_t *step(que_thr_t *thr) noexcept;
@@ -93,7 +93,7 @@ struct Row_sel {
    * statement node within a query execution graph.
    *
    * @param[in] thr The query thread.
-   * 
+   *
    * @return The query thread to run next or nullptr.
    */
   [[nodiscard]] inline que_thr_t *open_step(que_thr_t *thr) noexcept;
@@ -112,7 +112,7 @@ struct Row_sel {
    * This function is a sample callback used during a fetch operation. It prints each row.
    *
    * @param[in] row The row to be printed (of type sel_node_t*).
-   * 
+   *
    * @return Always returns a non-nullptr.
    */
   [[nodiscard]] void *fetch_print(void *row) noexcept;
@@ -121,12 +121,12 @@ struct Row_sel {
    * @brief Callback function for fetch that stores an unsigned 4-byte integer to the location pointed.
    *
    * This function is used as a callback during a fetch operation. It stores an unsigned 4-byte integer
-   * to the location pointed by the user argument. The column's type must be DATA_INT, DATA_UNSIGNED, 
+   * to the location pointed by the user argument. The column's type must be DATA_INT, DATA_UNSIGNED,
    * with a length of 4.
    *
    * @param[in] row The row to be processed (of type sel_node_t*).
    * @param[in] user_arg Pointer to the location where the data will be stored.
-   * 
+   *
    * @return Always returns nullptr.
    */
   [[nodiscard]] void *fetch_store_uint4(void *row, void *user_arg) noexcept;
@@ -137,25 +137,25 @@ struct Row_sel {
    * This function prints a row in the result of a select query.
    *
    * @param[in] thr The query thread.
-   * 
+   *
    * @return The query thread to run next or nullptr.
    */
   [[nodiscard]] que_thr_t *printf_step(que_thr_t *thr) noexcept;
 
   /**
    * @brief This function performs multiple operations including:
-   * 
+   *
    * 1. Move to/Search for a record
    * 2. Fetch the next record
    * 3. Fetch the previous record
    * 4. Set appropriate locks (gap and table locks)
    * 5. Handle rollback
-   * 
+   *
    * This function opens a cursor and also implements fetch next and fetch
    * previous operations. Note that if a search is performed with a full key value
    * from a unique index (ROW_SEL_EXACT), the cursor position will not be stored,
    * and fetch next or fetch previous operations must not be attempted on the cursor.
-   * 
+   *
    * @param[in] recovery Recovery flag.
    * @param[in] mode Search mode.
    * @param[in] prebuilt Prebuilt struct for the table handle; this contains the info
@@ -165,7 +165,7 @@ struct Row_sel {
    * @param[in] direction Cursor operation. Note: if this is not ROW_SEL_MOVETO, then
    *  prebuilt must have a pcur with stored position! In opening of a cursor
    *  'direction' should be ROW_SEL_MOVETO.
-   * 
+   *
    * @return DB_SUCCESS, DB_RECORD_NOT_FOUND, DB_END_OF_INDEX, DB_DEADLOCK,
    *         DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD.
    */
@@ -234,7 +234,7 @@ struct Row_sel {
   /**
    * Retrieves the clustered index record corresponding to a record in a non-clustered
    * index. Does the necessary locking.
-   * 
+   *
    * @param[in] prebuilt prebuilt struct in the handle
    * @param[in] sec_index secondary index where rec resides
    * @param[in] rec record in a non-clustered index; if this is a locking read,
@@ -247,7 +247,7 @@ struct Row_sel {
    * @param[in] offset_heap memory heap from which the offsets are allocated
    * @param[in] mtr mtr used to get access to the non-clustered record; the same mtr is
    *    used to access the clustered index
-   * 
+   *
    * @return DB_SUCCESS or error code
    */
   [[nodiscard]] db_err get_clust_rec_with_prebuilt(
@@ -259,14 +259,14 @@ struct Row_sel {
    * @brief Restores cursor position after it has been stored. We have to take into
    * account that the record cursor was positioned on may have been deleted.
    * Then we may have to move the cursor one step up or down.
-   * 
+   *
    * @param[out] same_user_rec true if we were able to restore the cursor on a user
    * record with the same ordering prefix in the B-tree index
    * @param[in] latch_mode latch mode wished in restoration
    * @param[in] pcur cursor whose position has been stored
    * @param[in] moves_up true if the cursor moves up in the index
    * @param[in] mtr mtr; CAUTION: may commit mtr temporarily!
-   * 
+   *
    * @return true if we may need to process the record the cursor is now positioned on
    * (i.e. we should not go to the next record yet)
    */
@@ -278,7 +278,7 @@ struct Row_sel {
      * Builds a previous version of a clustered index record for a consistent read
      *
      * @param[in,out] row Row_vers::Row.
-     * 
+     *
      * @return DB_SUCCESS or error code
      */
   [[nodiscard]] db_err build_prev_vers(Row_vers::Row &row) noexcept;
@@ -294,7 +294,7 @@ struct Row_sel {
    * @param[in] sec_index  secondary index
    * @param[in] clust_rec  clustered index record; must be protected by a lock or
    *  a page latch against deletion in rollback or purge
-   * 
+   *
    * @param[in] clust_index clustered index
    *
    * @return true if the secondary record is equal to the corresponding fields in the
@@ -469,7 +469,7 @@ struct Plan {
    *  old version did not exist in the read view, i.e., it was a fresh inserted version
    * @param[in] mtr mtr used to get access to the non-clustered record; the same
    *  mtr is used to access the clustered index
-   * 
+   *
    * @return          DB_SUCCESS or error code
    */
   [[nodiscard]] db_err get_clust_rec(
@@ -558,10 +558,10 @@ struct Plan {
    * when one of these fails, the result set has been exhausted for the cursor in this index;
    * these conditions are normalized so that in a comparison the column for this table is the
    * first argument */
-  UT_LIST_BASE_NODE_T_EXTERN(func_node_t, cond_list) m_end_conds{};
+  UT_LIST_BASE_NODE_T_EXTERN(func_node_t, cond_list) m_end_conds {};
 
   /** the rest of search conditions we can test at this table in a join */
-  UT_LIST_BASE_NODE_T_EXTERN(func_node_t, func_node_list) m_other_conds{};
+  UT_LIST_BASE_NODE_T_EXTERN(func_node_t, func_node_list) m_other_conds {};
 
   /** true if index is a non-clustered index and we must also fetch the clustered index record;
    * this is the case if the non-clustered record does not contain all the needed columns,
@@ -620,7 +620,7 @@ struct sel_node_t {
    * This function allocates and initializes a select node struct using the provided memory heap.
    *
    * @param[in] heap The memory heap where the select node struct will be created.
-   * 
+   *
    * @return A pointer to the newly created select node struct.
    */
   [[nodiscard]] static sel_node_t *create(mem_heap_t *heap) noexcept;
@@ -629,7 +629,7 @@ struct sel_node_t {
    * This function retrieves the plan node for the specified table index in a join.
    *
    * @param[in] i The index of the table in the join.
-   * 
+   *
    * @return A pointer to the plan node for the nth table.
    */
   inline Plan *get_nth_plan(ulint i) {
@@ -713,7 +713,7 @@ struct sel_node_t {
   que_node_t *m_search_cond{};
 
   /** if the query is a non-locking consistent read, its read view is placed here, otherwise nullptr */
-  read_view_t *m_read_view{};
+  Read_view *m_read_view{};
 
   /** true if the select is a consistent, non-locking read */
   bool m_consistent_read{};
@@ -737,7 +737,7 @@ struct sel_node_t {
 
   /** variables whose values we have to copy when an explicit cursor is opened, so that they do not
    * change between fetches */
-  UT_LIST_BASE_NODE_T(sym_node_t, sym_list) m_copy_variables{};
+  UT_LIST_BASE_NODE_T(sym_node_t, sym_list) m_copy_variables {};
 };
 
 /** Fetch statement node */

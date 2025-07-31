@@ -32,7 +32,7 @@ struct Trx;
 struct mtr_t;
 struct Index;
 struct DTuple;
-struct read_view_t;
+struct Read_view;
 struct Lock_sys;
 
 struct Row_vers {
@@ -52,7 +52,7 @@ struct Row_vers {
     ulint *&m_cluster_offsets;
 
     /** The consistent read view */
-    read_view_t *m_consistent_read_view{};
+    Read_view *m_consistent_read_view{};
 
     /** Memory heap from which the offsets are allocated */
     mem_heap_t *&m_cluster_offset_heap;

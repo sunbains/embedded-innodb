@@ -33,7 +33,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "usr0types.h"
 
 struct Lock;
-struct read_view_t;
+struct Read_view;
 
 /*
  * The transaction handle; every session has a trx object which is freed only
@@ -274,7 +274,7 @@ struct Trx {
    *
    * @return Consistent read view.
    */
-  [[nodiscard]] read_view_t *assign_read_view() noexcept;
+  [[nodiscard]] Read_view *assign_read_view() noexcept;
 
   /**
    * The transaction must be in the TRX_QUE_LOCK_WAIT state. Puts it to
@@ -631,12 +631,12 @@ struct Trx {
   mem_heap_t *m_global_read_view_heap;
 
   /** Consistent read view associated to a transaction or nullptr */
-  read_view_t *m_global_read_view{};
+  Read_view *m_global_read_view{};
 
   /** Consistent read view used in the transaction or nullptr, this
   read view if defined can be normal read view associated to a transaction
   (i.e.  same as global_read_view) or read view associated to a cursor */
-  read_view_t *m_read_view{};
+  Read_view *m_read_view{};
 
   /** Savepoints set with SAVEPOINT ..., oldest first */
   UT_LIST_BASE_NODE_T_EXTERN(trx_named_savept_t, trx_savepoints) m_trx_savepoints;

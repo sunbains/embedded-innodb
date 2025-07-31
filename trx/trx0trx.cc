@@ -301,7 +301,7 @@ void Trx::commit_off_kernel() noexcept {
   srv_lock_sys->release_off_trx_sys_mutex(this);
 
   if (m_global_read_view != nullptr) {
-    read_view_close(m_global_read_view);
+    srv_trx_sys->close_read_view(m_global_read_view);
     mem_heap_empty(m_global_read_view_heap);
     m_global_read_view = nullptr;
   }
@@ -402,7 +402,7 @@ void Trx::cleanup_at_db_startup() noexcept {
   m_trx_sys->m_trx_list.remove(this);
 }
 
-read_view_t *Trx::assign_read_view() noexcept {
+Read_view *Trx::assign_read_view() noexcept {
   ut_ad(m_conc_state == TRX_ACTIVE);
 
   if (m_read_view != nullptr) {
@@ -412,7 +412,7 @@ read_view_t *Trx::assign_read_view() noexcept {
   mutex_enter(&m_trx_sys->m_mutex);
 
   if (m_read_view == nullptr) {
-    m_read_view = read_view_open_now(m_id, m_global_read_view_heap);
+    m_read_view = srv_trx_sys->open_read_view_now(m_id, m_global_read_view_heap);
     m_global_read_view = m_read_view;
   }
 

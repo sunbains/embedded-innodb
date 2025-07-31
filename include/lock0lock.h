@@ -38,7 +38,7 @@ Created 5/7/1996 Heikki Tuuri
 struct Trx_sys;
 struct Buf_block;
 struct Index;
-struct read_view_t;
+struct Read_view;
 struct que_thr_t;
 
 #ifdef UNIV_DEBUG
@@ -438,8 +438,7 @@ struct Lock_sys {
    *
    * @return true if the record is visible, or false if an earlier version of the record should be retrieved.
    */
-  [[nodiscard]] bool clust_rec_cons_read_sees(const rec_t *rec, Index *index, const ulint *offsets, read_view_t *view)
-    const noexcept;
+  [[nodiscard]] bool clust_rec_cons_read_sees(const rec_t *rec, Index *index, const ulint *offsets, Read_view *view) const noexcept;
 
   /**
    * @brief Checks that a non-clustered index record is seen in a consistent read.
@@ -455,7 +454,7 @@ struct Lock_sys {
    * @return true if certainly sees, or false if an earlier version of the
    * clustered index record might be needed.
    */
-  [[nodiscard]] bool sec_rec_cons_read_sees(const rec_t *rec, read_view_t *view) const noexcept;
+  [[nodiscard]] bool sec_rec_cons_read_sees(const rec_t *rec, Read_view *view) const noexcept;
 
   /**
    * @brief Locks the specified database table in the given mode.

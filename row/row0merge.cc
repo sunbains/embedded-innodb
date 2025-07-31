@@ -138,12 +138,12 @@ typedef struct merge_file_struct merge_file_t;
 
 /**
  * @brief Allocate a sort buffer.
- * 
+ *
  * @param[in] heap Memory heap where allocated.
  * @param[in] index Secondary index.
  * @param[in] max_tuples Maximum number of data rows.
  * @param[in] buf_size Size of the buffer, in bytes.
- * 
+ *
  * @return Pointer to the allocated sort buffer.
  */
 static row_merge_buf_t *row_merge_buf_create_low(mem_heap_t *heap, Index *index, ulint max_tuples, ulint buf_size) {
@@ -164,9 +164,9 @@ static row_merge_buf_t *row_merge_buf_create_low(mem_heap_t *heap, Index *index,
 
 /**
  * @brief Allocate a sort buffer.
- * 
+ *
  * @param[in] index Secondary index.
- * 
+ *
  * @return Pointer to the allocated sort buffer.
  */
 static row_merge_buf_t *row_merge_buf_create(Index *index) noexcept {
@@ -180,9 +180,9 @@ static row_merge_buf_t *row_merge_buf_create(Index *index) noexcept {
 
 /**
  * @brief Empty a sort buffer.
- * 
+ *
  * @param[in] buf The sort buffer to empty.
- * 
+ *
  * @return Pointer to the emptied sort buffer.
  */
 static row_merge_buf_t *row_merge_buf_empty(row_merge_buf_t *buf) {
@@ -210,7 +210,7 @@ static void row_merge_buf_free(row_merge_buf_t *buf) /*!< in,own: sort buffer, t
  * @param buf[in,out] The sort buffer to add the row to.
  * @param row[in] The row in the clustered index to add.
  * @param ext[in] Cache of externally stored column prefixes, or NULL.
- * 
+ *
  * @return True if the row was successfully added, false if the sort buffer is full.
  */
 static bool row_merge_buf_add(row_merge_buf_t *buf, const DTuple *row, const row_ext_t *ext) {
@@ -578,7 +578,7 @@ static bool row_merge_write(
 
 /**
  * Reads a record from the specified file buffer and returns a pointer to the merge record.
- * 
+ *
  * @param block The file buffer.
  * @param buf The secondary buffer.
  * @param b Pointer to the record.
@@ -1256,7 +1256,7 @@ done1:
  * @param[in,out] block The 3 buffers.
  * @param[in,out] foffs0 The input file offset.
  * @param[in,out] of The output file.
- * 
+ *
  * @return true on success, false on failure.
  */
 static bool row_merge_blocks_copy(
@@ -1500,13 +1500,13 @@ static void row_merge_copy_blobs(
 
 /**
  * @brief Read sorted file containing index data rows and insert these data rows to the index.
- * 
+ *
  * @param[in] trx Transaction.
  * @param[in] index Index.
  * @param[in] table New table.
  * @param[in] fd File descriptor.
  * @param[in] block File buffer.
- * 
+ *
  * @return DB_SUCCESS or error number.
  */
 static db_err row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table, int fd, row_merge_block_t *block) {
@@ -1862,7 +1862,7 @@ Index *row_merge_create_index(Trx *trx, Table *table, const merge_index_def_t *i
 }
 
 bool row_merge_is_index_usable(const Trx *trx, const Index *index) {
-  return !trx->m_read_view || read_view_sees_trx_id(trx->m_read_view, index->m_trx_id);
+  return !trx->m_read_view || trx->m_read_view->sees_trx_id(index->m_trx_id);
 }
 
 db_err row_merge_drop_table(Trx *trx, Table *table) {

@@ -522,6 +522,68 @@ struct Trx_sys {
   [[nodiscard]] Trx *get_trx_by_xid(XID *xid) noexcept;
 #endif /* WITH_XOPEN */
 
+  /** Closes a read view.
+   * @param view read view
+   */
+  void close_read_view(Read_view *view);
+
+  /** Closes a consistent read view for client. This function is called at an SQL
+   * statement end if the trx isolation level is <= TRX_ISO_READ_COMMITTED.
+   * @param trx trx which has a read view
+   */
+  void close_read_view_for_read_committed(Trx *trx);
+
+  /**
+   * This function sets a given consistent cursor view to a transaction
+   * read view if given consistent cursor view is not nullptr. Otherwise, function
+   * restores a global read view to a transaction read view.
+   *
+   * @param trx in: transaction where cursor is set
+   * @param cursor_view in: consistent cursor view to be set
+   */
+  void set_cursor_view(Trx *trx, Cursor_view *cursor_view);
+
+  /** Create a consistent cursor view to be used in cursors. In this
+   * consistent read view modifications done by the creating transaction or future
+   * transactions are not visible.
+   * @param cr_trx trx where cursor view is created
+   * @return cursor view
+   */
+  Cursor_view *create_cursor_view(Trx *cr_trx);
+
+  /** Close a given consistent cursor view and restore global read view
+   * back to a transaction read view.
+   * @param trx trx
+   * @param curview cursor view to be closed
+   */
+  void close_cursor_view(Trx *trx, Cursor_view *curview);
+
+  /** Creates a read view object.
+  @param[in] n                    Number of cells in the trx_ids array.
+  @param[in,out] heap             Memory heap to use for allocation.
+  @return	own: read view struct */
+  Read_view *create_read_view_low(ulint n, mem_heap_t *heap);
+
+  /**
+   * Makes a copy of the oldest existing read view, or opens a new. The view
+   * must be closed with ..._close.
+   *
+   * @param cr_trx_id trx_id of creating transaction, or 0 used in purge
+   * @param heap memory heap from which allocated
+   * @return own: read view struct
+   */
+  Read_view *oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *heap);
+
+  /**
+   * Opens a read view where exactly the transactions serialized before this
+   * point in time are seen in the view.
+   *
+   * @param cr_trx_id trx_id of creating transaction, or 0 used in purge
+   * @param heap memory heap from which allocated
+   * @return own: read view struct
+   */
+  Read_view *open_read_view_now(trx_id_t cr_trx_id, mem_heap_t *heap);
+
 #ifdef UNIT_TEST
  private:
 #endif /* UNIT_TEST */
@@ -570,7 +632,7 @@ struct Trx_sys {
   trx_id_t m_max_trx_id{};
 
   /** List of read views sorted on trx no, biggest first */
-  UT_LIST_BASE_NODE_T_EXTERN(read_view_t, view_list) m_view_list {};
+  UT_LIST_BASE_NODE_T_EXTERN(Read_view, view_list) m_view_list {};
 
   /** List of active and committed in memory transactions,
   sorted on trx id, biggest first */

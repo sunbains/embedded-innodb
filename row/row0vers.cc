@@ -404,7 +404,7 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
 
   auto trx_id = row_get_rec_trx_id(row.m_cluster_rec, row.m_cluster_index, row.m_cluster_offsets);
 
-  ut_ad(!read_view_sees_trx_id(row.m_consistent_read_view, trx_id));
+  ut_ad(!row.m_consistent_read_view->sees_trx_id(trx_id));
 
   rw_lock_s_lock(&m_trx_sys->m_purge->m_latch);
 
@@ -420,7 +420,8 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
     /* If we have high-granularity consistent read view and creating transaction of the view is the same as trx_id in
     the record we see this record only in the case when undo_no of the record is < undo_no in the view. */
 
-    if (row.m_consistent_read_view->type == VIEW_HIGH_GRANULARITY && row.m_consistent_read_view->creator_trx_id == trx_id) {
+    if (row.m_consistent_read_view->type == Read_view_type::HIGH_GRANULARITY &&
+        row.m_consistent_read_view->creator_trx_id == trx_id) {
 
       auto roll_ptr = row_get_rec_roll_ptr(version, row.m_cluster_index, row.m_cluster_offsets);
       auto undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap);
@@ -473,7 +474,7 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
 
     trx_id = row_get_rec_trx_id(prev_version, row.m_cluster_index, row.m_cluster_offsets);
 
-    if (read_view_sees_trx_id(row.m_consistent_read_view, trx_id)) {
+    if (row.m_consistent_read_view->sees_trx_id(trx_id)) {
 
       /* The view already sees this version: we can copy it to in_heap and return */
 

@@ -84,7 +84,7 @@ struct Lock;
 
 struct Session;
 struct Index;
-struct read_view_t;
+struct Read_view;
 
 /** Rollback contexts */
 enum trx_rb_ctx {

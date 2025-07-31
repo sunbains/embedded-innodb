@@ -712,7 +712,7 @@ bool Lock_sys::check_trx_id_sanity(
   return is_ok;
 }
 
-bool Lock_sys::clust_rec_cons_read_sees(const rec_t *rec, Index *index, const ulint *offsets, read_view_t *view) const noexcept {
+bool Lock_sys::clust_rec_cons_read_sees(const rec_t *rec, Index *index, const ulint *offsets, Read_view *view) const noexcept {
   ut_ad(index->is_clustered());
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
@@ -723,10 +723,10 @@ bool Lock_sys::clust_rec_cons_read_sees(const rec_t *rec, Index *index, const ul
 
   const auto trx_id = row_get_rec_trx_id(rec, index, offsets);
 
-  return read_view_sees_trx_id(view, trx_id);
+  return view->sees_trx_id(trx_id);
 }
 
-bool Lock_sys::sec_rec_cons_read_sees(const rec_t *rec, read_view_t *view) const noexcept {
+bool Lock_sys::sec_rec_cons_read_sees(const rec_t *rec, Read_view *view) const noexcept {
   ut_ad(page_rec_is_user_rec(rec));
 
   /* NOTE that we might call this function while holding the search

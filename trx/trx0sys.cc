@@ -111,7 +111,7 @@ dberr_t Trx_sys::start(ib_recovery_t recovery) noexcept {
 
   trx_rseg_list_and_array_init(recovery, sys_header, &mtr);
 
-  m_latest_rseg = UT_LIST_GET_FIRST(m_rseg_list);
+  m_latest_rseg = m_rseg_list.front();
 
   /* VERY important: after the database is started, max_trx_id value is
    * divisible by TRX_SYS_TRX_ID_WRITE_MARGIN, and the 'if' in
@@ -402,12 +402,8 @@ void Trx_sys::init_at_db_start(ib_recovery_t recovery) noexcept {
   /* Look from the rollback segments if there exist undo logs for
   transactions */
 
-  auto rseg = m_rseg_list.front();
-
-  while (rseg != nullptr) {
-    auto undo = rseg->insert_undo_list.front();
-
-    while (undo != nullptr) {
+  for (auto rseg : m_rseg_list) {
+    for (auto undo : rseg->insert_undo_list) {
 
       auto trx = create_trx(nullptr);
 
@@ -463,13 +459,10 @@ void Trx_sys::init_at_db_start(ib_recovery_t recovery) noexcept {
       }
 
       trx_list_insert_ordered(trx);
-
-      undo = UT_LIST_GET_NEXT(m_undo_list, undo);
     }
 
-    undo = rseg->update_undo_list.front();
+    for (auto undo : rseg->update_undo_list) {
 
-    while (undo != nullptr) {
       auto trx = get_on_id(undo->m_trx_id);
 
       if (trx == nullptr) {
@@ -526,11 +519,7 @@ void Trx_sys::init_at_db_start(ib_recovery_t recovery) noexcept {
 
         trx->m_undo_no = undo->m_top_undo_no + 1;
       }
-
-      undo = UT_LIST_GET_NEXT(m_undo_list, undo);
     }
-
-    rseg = UT_LIST_GET_NEXT(rseg_list, rseg);
   }
 }
 
@@ -599,6 +588,237 @@ Trx *Trx_sys::get_trx_by_xid(XID *xid) noexcept {
   return xid_trx == nullptr ? nullptr : (xid_trx->m_conc_state != TRX_PREPARED ? nullptr : xid_trx);
 }
 #endif /* WITH_XOPEN */
+
+void Trx_sys::close_read_view(Read_view *view) {
+  ut_ad(mutex_own(&m_mutex));
+
+  m_view_list.remove(view);
+}
+
+void Trx_sys::close_read_view_for_read_committed(Trx *trx) {
+  ut_a(trx->m_global_read_view != nullptr);
+
+  mutex_enter(&m_mutex);
+
+  close_read_view(trx->m_global_read_view);
+
+  mem_heap_empty(trx->m_global_read_view_heap);
+
+  trx->m_read_view = nullptr;
+  trx->m_global_read_view = nullptr;
+
+  mutex_exit(&m_mutex);
+}
+
+void Trx_sys::set_cursor_view(Trx *trx, Cursor_view *cursor_view) {
+  mutex_enter(&m_mutex);
+
+  if (likely(cursor_view != nullptr)) {
+    trx->m_read_view = cursor_view->read_view;
+  } else {
+    trx->m_read_view = trx->m_global_read_view;
+  }
+
+  mutex_exit(&m_mutex);
+}
+
+Cursor_view *Trx_sys::create_cursor_view(Trx *cr_trx) {
+  /* Use larger heap than in trx_create when creating a read_view because cursors are quite big. */
+
+  auto heap = mem_heap_create(512);
+
+  auto curview = reinterpret_cast<Cursor_view *>(mem_heap_alloc(heap, sizeof(Cursor_view)));
+
+  curview->heap = heap;
+
+  /* Drop cursor tables from consideration when evaluating the need of
+  auto-commit */
+  curview->n_client_tables_in_use = cr_trx->m_n_client_tables_in_use;
+  cr_trx->m_n_client_tables_in_use = 0;
+
+  mutex_enter(&m_mutex);
+
+  curview->read_view = create_read_view_low(m_trx_list.size(), curview->heap);
+
+  auto view = curview->read_view;
+  view->creator_trx_id = cr_trx->m_id;
+  view->type = Read_view_type::HIGH_GRANULARITY;
+  view->undo_no = cr_trx->m_undo_no;
+
+  /* No future transactions should be visible in the view */
+
+  view->low_limit_no = m_max_trx_id;
+  view->low_limit_id = view->low_limit_no;
+
+  ulint n = 0;
+  /* No active transaction should be visible */
+
+  for (auto trx : m_trx_list) {
+    if (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED) {
+
+      view->set_nth_trx_id(n, trx->m_id);
+
+      n++;
+
+      /* NOTE that a transaction whose trx number is <
+      srv_trx_sys->m_max_trx_id can still be active, if it is
+      in the middle of its commit! Note that when a
+      transaction starts, we initialize trx->no to
+      LSN_MAX. */
+
+      if (view->low_limit_no > trx->m_no) {
+
+        view->low_limit_no = trx->m_no;
+      }
+    }
+  }
+
+  view->n_trx_ids = n;
+
+  if (n > 0) {
+    /* The last active transaction has the smallest id: */
+    view->up_limit_id = view->get_nth_trx_id(n - 1);
+  } else {
+    view->up_limit_id = view->low_limit_id;
+  }
+
+  m_view_list.push_front(view);
+
+  mutex_exit(&m_mutex);
+
+  return curview;
+}
+
+void Trx_sys::close_cursor_view(Trx *trx, Cursor_view *curview) {
+  ut_a(curview->read_view);
+  ut_a(curview->heap);
+
+  /* Add cursor's tables to the global count of active tables that
+  belong to this transaction */
+  trx->m_n_client_tables_in_use += curview->n_client_tables_in_use;
+
+  mutex_enter(&m_mutex);
+
+  close_read_view(curview->read_view);
+  trx->m_read_view = trx->m_global_read_view;
+
+  mutex_exit(&m_mutex);
+
+  mem_heap_free(curview->heap);
+}
+
+Read_view *Trx_sys::create_read_view_low(ulint n, mem_heap_t *heap) {
+  auto view = reinterpret_cast<Read_view *>(mem_heap_alloc(heap, sizeof(Read_view)));
+
+  view->n_trx_ids = n;
+  view->trx_ids = reinterpret_cast<trx_id_t *>(mem_heap_alloc(heap, n * sizeof *view->trx_ids));
+
+  return view;
+}
+
+Read_view *Trx_sys::oldest_copy_or_open_new(trx_id_t cr_trx_id, mem_heap_t *heap) {
+  ut_ad(mutex_own(&m_mutex));
+
+  auto old_view = m_view_list.back();
+
+  if (old_view == nullptr) {
+
+    return open_read_view_now(cr_trx_id, heap);
+  }
+
+  auto n = old_view->n_trx_ids;
+
+  if (old_view->creator_trx_id > 0) {
+    ++n;
+  } else {
+    n = 0;
+  }
+
+  auto view_copy = create_read_view_low(n, heap);
+
+  /* Insert the id of the creator in the right place of the descending
+  array of ids, if needs_insert is true: */
+
+  ulint insert_done{0};
+  bool needs_insert{true};
+
+  for (ulint i{}; i < n; ++i) {
+    if (needs_insert && (i >= old_view->n_trx_ids || old_view->creator_trx_id > old_view->get_nth_trx_id(i))) {
+
+      view_copy->set_nth_trx_id(i, old_view->creator_trx_id);
+      needs_insert = false;
+      insert_done = 1;
+    } else {
+      view_copy->set_nth_trx_id(i, old_view->get_nth_trx_id(i - insert_done));
+    }
+  }
+
+  view_copy->creator_trx_id = cr_trx_id;
+
+  view_copy->low_limit_no = old_view->low_limit_no;
+  view_copy->low_limit_id = old_view->low_limit_id;
+
+  if (n > 0) {
+    /* The last active transaction has the smallest id: */
+    view_copy->up_limit_id = view_copy->get_nth_trx_id(n - 1);
+  } else {
+    view_copy->up_limit_id = old_view->up_limit_id;
+  }
+
+  m_view_list.push_back(view_copy);
+
+  return view_copy;
+}
+
+Read_view *Trx_sys::open_read_view_now(trx_id_t cr_trx_id, mem_heap_t *heap) {
+  ut_ad(mutex_own(&m_mutex));
+
+  auto view = create_read_view_low(m_trx_list.size(), heap);
+
+  view->creator_trx_id = cr_trx_id;
+  view->type = Read_view_type::NORMAL;
+  view->undo_no = 0;
+
+  /* No future transactions should be visible in the view */
+
+  view->low_limit_no = m_max_trx_id;
+  view->low_limit_id = view->low_limit_no;
+
+  ulint n{};
+
+  /* No active transaction should be visible, except cr_trx */
+  for (auto trx : m_trx_list) {
+    ut_ad(trx->m_magic_n == TRX_MAGIC_N);
+
+    if (trx->m_id != cr_trx_id && (trx->m_conc_state == TRX_ACTIVE || trx->m_conc_state == TRX_PREPARED)) {
+
+      view->set_nth_trx_id(n, trx->m_id);
+
+      ++n;
+
+      /* NOTE that a transaction whose trx number is < srv_trx_sys->m_max_trx_id can still be active, if it is
+      in the middle of its commit! Note that when a transaction starts, we initialize trx->no to LSN_MAX. */
+
+      if (view->low_limit_no > trx->m_no) {
+
+        view->low_limit_no = trx->m_no;
+      }
+    }
+  }
+
+  view->n_trx_ids = n;
+
+  if (n > 0) {
+    /* The last active transaction has the smallest id: */
+    view->up_limit_id = view->get_nth_trx_id(n - 1);
+  } else {
+    view->up_limit_id = view->low_limit_id;
+  }
+
+  m_view_list.push_front(view);
+
+  return view;
+}
 
 Trx_sys *Trx_sys::create(FSP *fsp) noexcept {
   auto ptr = ut_new(sizeof(Trx_sys));

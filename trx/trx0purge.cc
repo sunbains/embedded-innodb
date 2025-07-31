@@ -622,7 +622,7 @@ Purge_sys::Purge_sys(Trx *trx) noexcept : m_trx(trx) {
 
   m_query = graph_build();
 
-  m_view = read_view_oldest_copy_or_open_new(0, m_heap);
+  m_view = srv_trx_sys->oldest_copy_or_open_new(0, m_heap);
 }
 
 Purge_sys::~Purge_sys() noexcept {
@@ -638,7 +638,7 @@ Purge_sys::~Purge_sys() noexcept {
     of read_view_close(). We don't really need it here. */
     mutex_enter(&srv_trx_sys->m_mutex);
 
-    read_view_close(m_view);
+    srv_trx_sys->close_read_view(m_view);
     m_view = nullptr;
 
     mutex_exit(&srv_trx_sys->m_mutex);
@@ -657,7 +657,7 @@ bool Purge_sys::update_undo_must_exist(trx_id_t trx_id) noexcept {
   ut_ad(rw_lock_own(&m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
-  return !read_view_sees_trx_id(m_view, trx_id);
+  return !m_view->sees_trx_id(trx_id);
 }
 
 void Purge_sys::add_update_undo_to_history(Trx *trx, page_t *undo_page, mtr_t *mtr) noexcept {
@@ -742,7 +742,7 @@ ulint Purge_sys::run() noexcept {
 
   /* Close and free the old purge view */
 
-  read_view_close(m_view);
+  srv_trx_sys->close_read_view(m_view);
   m_view = nullptr;
   mem_heap_empty(m_heap);
 
@@ -768,7 +768,7 @@ ulint Purge_sys::run() noexcept {
     }
   }
 
-  m_view = read_view_oldest_copy_or_open_new(0, m_heap);
+  m_view = srv_trx_sys->oldest_copy_or_open_new(0, m_heap);
 
   mutex_exit(&srv_trx_sys->m_mutex);
 
@@ -875,7 +875,7 @@ trx_undo_rec_t *Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
 }
 
 std::string Purge_sys::to_string() noexcept {
-  auto str = ::to_string(m_view);
+  auto str = m_view->to_string();
 
   str += std::format("Purge trx n:o {} undo n:o {}\n", m_purge_trx_no, m_purge_undo_no);
 
