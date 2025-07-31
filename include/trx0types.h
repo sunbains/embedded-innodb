@@ -68,7 +68,8 @@ struct trx_undo_inf_t;
 struct Purge_sys;
 
 /** Rollback command node in a query graph */
-struct roll_node_t;
+class Trx_rollback;
+using Trx_rollback = Trx_rollback;
 
 /** Commit command node in a query graph */
 struct Commit_node;

@@ -23,6 +23,7 @@ Created 1/8/1997 Heikki Tuuri
 *******************************************************/
 
 #include "row0undo.h"
+
 #include "fsp0fsp.h"
 #include "mach0data.h"
 #include "que0que.h"

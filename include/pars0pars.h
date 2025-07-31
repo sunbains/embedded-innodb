@@ -404,9 +404,9 @@ Commit_node *pars_commit_statement();
 /**
  * @brief Parses a rollback statement.
  * 
- * @return roll_node_t* Rollback statement node.
+ * @return Trx_rollback* Rollback statement node.
  */
-roll_node_t *pars_rollback_statement();
+Trx_rollback *pars_rollback_statement();
 
 /**
  * @brief Parses a column definition at a table creation.

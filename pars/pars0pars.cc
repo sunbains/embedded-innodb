@@ -1250,7 +1250,7 @@ Commit_node *pars_commit_statement() {
   return Trx::commit_node_create(pars_sym_tab_global->heap);
 }
 
-roll_node_t *pars_rollback_statement() {
+Trx_rollback *pars_rollback_statement() {
   return roll_node_create(pars_sym_tab_global->heap);
 }
 
