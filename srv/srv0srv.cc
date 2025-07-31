@@ -741,14 +741,14 @@ static srv_slot_t *srv_table_get_nth_slot(ulint index) {
 ulint srv_get_n_threads() {
   ulint n_threads = 0;
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   for (ulint i = SRV_COM; i < SRV_MASTER + 1; i++) {
 
     n_threads += srv_n_threads[i];
   }
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   return n_threads;
 }
@@ -791,7 +791,7 @@ static ulint srv_table_reserve_slot(srv_thread_type type) {
  * @return	event for the calling thread to wait
  */
 static Cond_var *srv_suspend_thread(srv_slot_t *slot) {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   auto type = slot->m_type;
 
@@ -815,7 +815,7 @@ ulint InnoDB::release_threads(srv_thread_type type, ulint n) noexcept {
   ut_ad(type >= SRV_WORKER);
   ut_ad(type <= SRV_MASTER);
   ut_ad(n > 0);
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   ulint count = 0;
 
@@ -916,7 +916,6 @@ void InnoDB::free() noexcept {
   srv_conc_slots = nullptr;
 
   mutex_free(&srv_innodb_monitor_mutex);
-  mutex_free(&kernel_mutex);
 
   mem_free(srv_sys);
   srv_sys = nullptr;
@@ -989,7 +988,7 @@ db_err InnoDB::boot() noexcept {
  * @return	reserved slot
  */
 static srv_slot_t *srv_table_reserve_slot_for_user_thread() {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   ulint i{};
   auto slot = srv_client_table + i;
@@ -1048,13 +1047,13 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
   ulint ms;
   ulong lock_wait_timeout;
 
-  ut_ad(!mutex_own(&kernel_mutex));
+  ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
 
   auto trx = thr_get_trx(thr);
 
   os_event_set(srv_lock_timeout_thread_event);
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   trx->m_error_state = DB_SUCCESS;
 
@@ -1071,7 +1070,7 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
       trx->m_was_chosen_as_deadlock_victim = false;
     }
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
 
     return;
   }
@@ -1101,7 +1100,7 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
 
   os_event_set(srv_lock_timeout_thread_event);
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   had_dict_lock = trx->m_dict_operation_lock_mode;
 
@@ -1134,7 +1133,7 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
       break;
   }
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   /* Release the slot for others to use */
 
@@ -1168,7 +1167,7 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
     trx->m_was_chosen_as_deadlock_victim = false;
   }
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   /* InnoDB system transactions (such as the purge, and
   incomplete transactions that are being rolled back after crash
@@ -1183,7 +1182,7 @@ void InnoDB::suspend_user_thread(que_thr_t *thr) noexcept {
 }
 
 void InnoDB::release_user_thread_if_suspended(que_thr_t *thr) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   for (ulint i{}; i < OS_THREAD_MAX_N; ++i) {
 
@@ -1477,7 +1476,7 @@ loop:
     if (srv_print_innodb_monitor) {
       /* Reset mutex_skipped counter everytime
       srv_print_innodb_monitor changes. This is to
-      ensure we will not be blocked by kernel_mutex
+      ensure we will not be blocked by srv_trx_sys->m_mutex
       for short duration information printing,
       such as requested by sync_array_print_long_waits() */
       if (!last_srv_print_monitor) {
@@ -1587,7 +1586,7 @@ void *InnoDB::lock_timeout_thread(void *) noexcept {
 
     srv_lock_timeout_active = true;
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&srv_trx_sys->m_mutex);
 
     auto some_waits = false;
 
@@ -1620,7 +1619,7 @@ void *InnoDB::lock_timeout_thread(void *) noexcept {
 
     os_event_reset(srv_lock_timeout_thread_event);
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
 
     if (srv_shutdown_state >= SRV_SHUTDOWN_CLEANUP) {
       srv_lock_timeout_active = false;
@@ -1720,22 +1719,22 @@ void InnoDB::active_wake_master_thread() noexcept {
 
   if (srv_n_threads_active[SRV_MASTER] == 0) {
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&srv_trx_sys->m_mutex);
 
     release_threads(SRV_MASTER, 1);
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
   }
 }
 
 void InnoDB::wake_master_thread() noexcept {
   ++srv_activity_count;
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   release_threads(SRV_MASTER, 1);
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 }
 
 /**
@@ -1776,11 +1775,11 @@ void *InnoDB::master_thread(void *) noexcept {
 
   auto slot_no = srv_table_reserve_slot(SRV_MASTER);
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   srv_n_threads_active[SRV_MASTER]++;
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
 loop:
   /* When there is database activity by users, we cycle in this loop */
@@ -1788,12 +1787,12 @@ loop:
   srv_main_thread_op_info = "reserving kernel mutex";
 
   n_ios_very_old = log_sys->m_n_log_ios + srv_buf_pool->m_stat.n_pages_read + srv_buf_pool->m_stat.n_pages_written;
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   /* Store the user activity counter at the start of this loop */
   old_activity_count = srv_activity_count;
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   if (srv_config.m_force_recovery >= IB_RECOVERY_NO_BACKGROUND) {
 
@@ -1965,17 +1964,17 @@ loop:
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   /* When there is database activity, we jump from here back to
   the start of loop */
 
   if (srv_activity_count != old_activity_count) {
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
     goto loop;
   }
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   /* If the database is quiet, we enter the background loop */
 
@@ -2020,23 +2019,23 @@ background_loop:
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
   if (srv_activity_count != old_activity_count) {
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
     goto loop;
   }
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   if (srv_activity_count != old_activity_count) {
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
     goto loop;
   }
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
 flush_loop:
   srv_main_thread_op_info = "flushing buffer pool pages";
@@ -2052,12 +2051,12 @@ flush_loop:
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
   if (srv_activity_count != old_activity_count) {
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
     goto loop;
   }
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   srv_main_thread_op_info = "waiting for buffer pool flush to end";
   srv_buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);
@@ -2085,12 +2084,12 @@ flush_loop:
 
   srv_main_thread_op_info = "reserving kernel mutex";
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
   if (srv_activity_count != old_activity_count) {
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
     goto loop;
   }
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   /* Keep looping in the background loop if still work to do */
 
@@ -2116,10 +2115,10 @@ flush_loop:
 suspend_thread:
   srv_main_thread_op_info = "suspending";
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   if (srv_dict_sys->m_ddl.get_background_drop_list_len() > 0) {
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
 
     goto loop;
   }
@@ -2127,7 +2126,7 @@ suspend_thread:
   auto slot = srv_table_get_nth_slot(slot_no);
   event = srv_suspend_thread(slot);
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   /* DO NOT CHANGE THIS STRING. innobase_start_or_create()
   waits for database activity to die down when converting < 4.1.x
@@ -2152,7 +2151,7 @@ suspend_thread:
 }
 
 void InnoDB::que_task_enqueue_low(que_thr_t *thr) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   UT_LIST_ADD_LAST(srv_sys->m_tasks, thr);
 

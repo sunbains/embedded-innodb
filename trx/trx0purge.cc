@@ -44,7 +44,7 @@ trx_undo_rec_t trx_purge_dummy_rec;
 
 /**
  * Gets the biggest pair of a trx number and an undo number in a purge array.
- * 
+ *
  * @param[in] arr               Purge array
  * @param[out] trx_no           Transaction number: 0 if array is empty.
  * @param[out] undo_no          Undo number.
@@ -180,12 +180,12 @@ void Purge_sys::free_segment(trx_rseg_t *rseg, Fil_addr hdr_addr, ulint n_remove
 
   flst_cut_end(rseg_hdr + TRX_RSEG_HISTORY, log_hdr + TRX_UNDO_HISTORY_NODE, n_removed_logs, &mtr);
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   ut_ad(srv_trx_sys->m_rseg_history_len >= n_removed_logs);
   srv_trx_sys->m_rseg_history_len -= n_removed_logs;
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   do {
     /* Here we assume that a file segment with just the header
@@ -242,12 +242,12 @@ void Purge_sys::truncate_rseg_history(trx_rseg_t *rseg, trx_id_t limit_trx_no, u
     }
 
     if (cmp >= 0) {
-      mutex_enter(&kernel_mutex);
+      mutex_enter(&srv_trx_sys->m_mutex);
 
       ut_a(srv_trx_sys->m_rseg_history_len >= n_removed_logs);
       srv_trx_sys->m_rseg_history_len -= n_removed_logs;
 
-      mutex_exit(&kernel_mutex);
+      mutex_exit(&srv_trx_sys->m_mutex);
 
       flst_truncate_end(rseg_hdr + TRX_RSEG_HISTORY, log_hdr + TRX_UNDO_HISTORY_NODE, n_removed_logs, &mtr);
 
@@ -372,7 +372,7 @@ void Purge_sys::rseg_get_next_history_log(trx_rseg_t *rseg) noexcept {
 
     mtr.commit();
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&srv_trx_sys->m_mutex);
 
     /* Add debug code to track history list corruption reported
     on the MySQL mailing list on Nov 9, 2004. The fut0lst.c
@@ -390,7 +390,7 @@ void Purge_sys::rseg_get_next_history_log(trx_rseg_t *rseg) noexcept {
       ));
     }
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
 
     return;
   }
@@ -603,7 +603,7 @@ trx_undo_rec_t *Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
 }
 
 Purge_sys::Purge_sys(Trx *trx) noexcept : m_trx(trx) {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   m_state = PURGE_STATE_OFF;
 
@@ -626,7 +626,7 @@ Purge_sys::Purge_sys(Trx *trx) noexcept : m_trx(trx) {
 }
 
 Purge_sys::~Purge_sys() noexcept {
-  ut_ad(!mutex_own(&kernel_mutex));
+  ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
 
   que_graph_free(m_query);
 
@@ -636,12 +636,12 @@ Purge_sys::~Purge_sys() noexcept {
   if (m_view != nullptr) {
     /* Because acquiring the kernel mutex is a pre-condition
     of read_view_close(). We don't really need it here. */
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&srv_trx_sys->m_mutex);
 
     read_view_close(m_view);
     m_view = nullptr;
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
   }
 
   trx_undo_arr_free(m_arr);
@@ -690,9 +690,9 @@ void Purge_sys::add_update_undo_to_history(Trx *trx, page_t *undo_page, mtr_t *m
   /* Add the log as the first in the history list */
   flst_add_first(rseg_header + TRX_RSEG_HISTORY, undo_header + TRX_UNDO_HISTORY_NODE, mtr);
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
   ++srv_trx_sys->m_rseg_history_len;
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   /* Write the trx number to the undo log header */
   mlog_write_uint64(undo_header + TRX_UNDO_TRX_NO, trx->m_no, mtr);
@@ -738,7 +738,7 @@ ulint Purge_sys::run() noexcept {
 
   rw_lock_x_lock(&m_latch);
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   /* Close and free the old purge view */
 
@@ -770,7 +770,7 @@ ulint Purge_sys::run() noexcept {
 
   m_view = read_view_oldest_copy_or_open_new(0, m_heap);
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   rw_lock_x_unlock(&m_latch);
 
@@ -784,7 +784,7 @@ ulint Purge_sys::run() noexcept {
 
   mutex_exit(&m_mutex);
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   thr = que_fork_start_command(m_query);
 
@@ -796,7 +796,7 @@ ulint Purge_sys::run() noexcept {
     ut_ad(thr2);
   */
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   /*	srv_que_task_enqueue(thr2); */
 

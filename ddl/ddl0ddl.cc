@@ -60,12 +60,12 @@ ulint DDL::drop_tables_in_background() noexcept {
   ulint n_tables_dropped{};
 
   for (;;) {
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&srv_trx_sys->m_mutex);
 
     auto drop = m_drop_list.front();
     const auto n_tables = m_drop_list.size();
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
 
     if (drop == nullptr) {
       /* All tables dropped */
@@ -89,7 +89,7 @@ ulint DDL::drop_tables_in_background() noexcept {
       ++n_tables_dropped;
     }
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&srv_trx_sys->m_mutex);
 
     m_drop_list.remove(drop);
 
@@ -99,24 +99,24 @@ ulint DDL::drop_tables_in_background() noexcept {
 
     mem_free(drop);
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
   }
 }
 
 ulint DDL::get_background_drop_list_len() noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   return m_drop_list.size();
 }
 
 bool DDL::add_table_to_background_drop_list(const char *name) noexcept {
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&srv_trx_sys->m_mutex);
 
   for (auto drop : m_drop_list) {
     if (strcmp(drop->m_table_name, name) == 0) {
       /* Already in the list */
 
-      mutex_exit(&kernel_mutex);
+      mutex_exit(&srv_trx_sys->m_mutex);
 
       return false;
     }
@@ -128,7 +128,7 @@ bool DDL::add_table_to_background_drop_list(const char *name) noexcept {
 
   m_drop_list.push_back(drop);
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&srv_trx_sys->m_mutex);
 
   return true;
 }

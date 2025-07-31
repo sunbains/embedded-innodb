@@ -80,7 +80,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *in
     has modified the secondary index record has also modified the clustered index record. And in a rollback
     we always undo the modifications to secondary index records before the clustered index record. */
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&m_trx_sys->m_mutex);
 
     mtr.commit();
 
@@ -100,7 +100,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *in
 
   mtr_s_lock(&m_trx_sys->m_purge->m_latch, &mtr);
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_trx_sys->m_mutex);
 
   Trx *trx{};
 
@@ -135,7 +135,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *in
     row_ext_t *ext;
     rec_t *prev_version;
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&m_trx_sys->m_mutex);
 
     /* While we retrieve an earlier version of clust_rec, we
     release the kernel mutex, because it may take time to access
@@ -153,7 +153,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *in
     mem_heap_free(heap2); /* free version and clust_offsets */
 
     if (prev_version == nullptr) {
-      mutex_enter(&kernel_mutex);
+      mutex_enter(&m_trx_sys->m_mutex);
 
       if (!m_trx_sys->is_active(trx_id)) {
         /* Transaction no longer active: no implicit x-lock */
@@ -188,7 +188,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *in
     cannot hold any implicit lock. */
     if (vers_del != 0 && trx_id != prev_trx_id) {
 
-      mutex_enter(&kernel_mutex);
+      mutex_enter(&m_trx_sys->m_mutex);
 
       break;
     }
@@ -203,7 +203,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *in
     record were not initialized yet.  But in that case, prev_version should be NULL. */
     ut_a(entry != nullptr);
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&m_trx_sys->m_mutex);
 
     if (!m_trx_sys->is_active(trx_id)) {
       /* Transaction no longer active: no implicit x-lock */
@@ -528,11 +528,11 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
       rec_trx_id = version_trx_id;
     }
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&m_trx_sys->m_mutex);
 
     auto version_trx = m_trx_sys->get_on_id(version_trx_id);
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&m_trx_sys->m_mutex);
 
     if (version_trx == nullptr || version_trx->m_conc_state == TRX_NOT_STARTED ||
         version_trx->m_conc_state == TRX_COMMITTED_IN_MEMORY) {

@@ -219,7 +219,7 @@ struct Trx_sys {
    * @return	true if active
    */
   [[nodiscard]] bool is_active(trx_id_t trx_id) const noexcept {
-    ut_ad(mutex_own(&kernel_mutex));
+    ut_ad(mutex_own(&m_mutex));
 
     if (trx_id < get_min_trx_id()) {
 

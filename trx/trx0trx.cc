@@ -60,7 +60,7 @@ Trx::Trx(Trx_sys *trx_sys, Session *sess, void *arg) noexcept : m_client_ctx(arg
 }
 
 Trx::~Trx() noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   if (m_n_client_tables_in_use != 0 || m_client_n_tables_locked != 0) {
     log_err(std::format(
@@ -127,7 +127,7 @@ bool Trx::is_interrupted() const noexcept {
 }
 
 bool Trx::start_low(ulint rseg_id) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   ut_ad(m_magic_n == TRX_MAGIC_N);
 
@@ -182,24 +182,24 @@ bool Trx::start(ulint rseg_id) noexcept {
   /* FIXME: This requires an API change to support */
   /* trx->m_support_xa = ib_supports_xa(trx->m_client_ctx); */
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_trx_sys->m_mutex);
 
   auto ret = start_low(rseg_id);
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_trx_sys->m_mutex);
 
   return ret;
 }
 
 void Trx::commit_off_kernel() noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   lsn_t lsn{};
   auto rseg{m_rseg};
 
   if (m_insert_undo != nullptr || m_update_undo != nullptr) {
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&m_trx_sys->m_mutex);
 
     mtr_t mtr;
 
@@ -220,10 +220,10 @@ void Trx::commit_off_kernel() noexcept {
     auto undo = m_update_undo;
 
     if (undo != nullptr) {
-      mutex_enter(&kernel_mutex);
+      mutex_enter(&m_trx_sys->m_mutex);
       m_no = m_trx_sys->get_new_trx_no();
 
-      mutex_exit(&kernel_mutex);
+      mutex_exit(&m_trx_sys->m_mutex);
 
       /* It is not necessary to obtain trx->undo_mutex here
       because only a single OS thread is allowed to do the
@@ -262,11 +262,11 @@ void Trx::commit_off_kernel() noexcept {
 
     lsn = mtr.m_end_lsn;
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&m_trx_sys->m_mutex);
   }
 
   ut_ad(m_conc_state == TRX_ACTIVE || m_conc_state == TRX_PREPARED);
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   /* The following assignment makes the transaction committed in memory
   and makes its changes to data visible to other transactions.
@@ -284,7 +284,7 @@ void Trx::commit_off_kernel() noexcept {
 
   m_conc_state = TRX_COMMITTED_IN_MEMORY;
 
-  /* If we release kernel_mutex below and we are still doing
+  /* If we release m_trx_sys->m_mutex below and we are still doing
   recovery i.e.: back ground rollback thread is still active
   then there is a chance that the rollback thread may see
   this trx as COMMITTED_IN_MEMORY and goes adhead to clean it
@@ -310,7 +310,7 @@ void Trx::commit_off_kernel() noexcept {
 
   if (lsn > 0) {
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&m_trx_sys->m_mutex);
 
     if (m_insert_undo != nullptr) {
       srv_undo->insert_cleanup(this);
@@ -371,7 +371,7 @@ void Trx::commit_off_kernel() noexcept {
 
     /*-------------------------------------*/
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&m_trx_sys->m_mutex);
   }
 
   /* Free all savepoints */
@@ -409,20 +409,20 @@ read_view_t *Trx::assign_read_view() noexcept {
     return m_read_view;
   }
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_trx_sys->m_mutex);
 
   if (m_read_view == nullptr) {
     m_read_view = read_view_open_now(m_id, m_global_read_view_heap);
     m_global_read_view = m_read_view;
   }
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_trx_sys->m_mutex);
 
   return m_read_view;
 }
 
 void Trx::handle_commit_sig_off_kernel(que_thr_t *&next_thr) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   m_que_state = TRX_QUE_COMMITTING;
 
@@ -450,7 +450,7 @@ void Trx::handle_commit_sig_off_kernel(que_thr_t *&next_thr) noexcept {
 }
 
 void Trx::end_lock_wait() noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
   ut_ad(m_que_state == TRX_QUE_LOCK_WAIT);
 
   for (auto thr = m_wait_thrs.front(); thr != nullptr; thr = m_wait_thrs.front()) {
@@ -462,7 +462,7 @@ void Trx::end_lock_wait() noexcept {
 }
 
 void Trx::lock_wait_to_suspended() noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
   ut_ad(m_que_state == TRX_QUE_LOCK_WAIT);
 
   for (auto thr = m_wait_thrs.front(); thr != nullptr; thr = m_wait_thrs.front()) {
@@ -475,7 +475,7 @@ void Trx::lock_wait_to_suspended() noexcept {
 }
 
 void Trx::sig_reply_wait_to_suspended() noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   for (auto sig = m_reply_signals.front(); sig != nullptr; sig = m_reply_signals.front()) {
     auto thr = sig->receiver;
@@ -491,7 +491,7 @@ void Trx::sig_reply_wait_to_suspended() noexcept {
 }
 
 bool Trx::sig_is_compatible(ulint type, ulint sender) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   if (m_signals.empty()) {
 
@@ -537,7 +537,7 @@ bool Trx::sig_is_compatible(ulint type, ulint sender) noexcept {
 }
 
 void Trx::sig_send(ulint type, ulint sender, que_thr_t *receiver_thr, trx_savept_t *savept, que_thr_t *&next_thr) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   trx_sig_t *sig;
   Trx *receiver_trx;
@@ -596,7 +596,7 @@ void Trx::sig_send(ulint type, ulint sender, que_thr_t *receiver_thr, trx_savept
 }
 
 void Trx::end_signal_handling() noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
   ut_ad(m_handling_signals == true);
 
   m_handling_signals = false;
@@ -614,7 +614,7 @@ void Trx::sig_start_handling(que_thr_t *&next_thr) noexcept {
     /* We loop in this function body as long as there are queued signals
     we can process immediately */
 
-    ut_ad(mutex_own(&kernel_mutex));
+    ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
     if (m_handling_signals && m_signals.empty()) {
 
@@ -695,7 +695,7 @@ void Trx::sig_start_handling(que_thr_t *&next_thr) noexcept {
 }
 
 void Trx::sig_reply(trx_sig_t *sig, que_thr_t *&next_thr) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   if (sig->receiver != nullptr) {
     ut_ad(sig->receiver->state == QUE_THR_SIG_REPLY_WAIT);
@@ -712,7 +712,7 @@ void Trx::sig_reply(trx_sig_t *sig, que_thr_t *&next_thr) noexcept {
 }
 
 void Trx::sig_remove(trx_sig_t *&sig) noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
   ut_ad(sig->receiver == nullptr);
 
   m_signals.remove(sig);
@@ -745,7 +745,9 @@ que_thr_t *Trx::commit_step(que_thr_t *thr) noexcept {
   }
 
   if (node->state == COMMIT_NODE_SEND) {
-    mutex_enter(&kernel_mutex);
+    auto trx = thr_get_trx(thr);
+
+    mutex_enter(&trx->m_trx_sys->m_mutex);
 
     node->state = COMMIT_NODE_WAIT;
 
@@ -755,11 +757,9 @@ que_thr_t *Trx::commit_step(que_thr_t *thr) noexcept {
 
     /* Send the commit signal to the transaction */
 
-    auto trx = thr_get_trx(thr);
-
     trx->sig_send(TRX_SIG_COMMIT, TRX_SIG_SELF, thr, nullptr, next_thr);
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&trx->m_trx_sys->m_mutex);
 
     return next_thr;
   }
@@ -780,11 +780,11 @@ db_err Trx::commit() noexcept {
 
   m_op_info = "committing";
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_trx_sys->m_mutex);
 
   commit_off_kernel();
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_trx_sys->m_mutex);
 
   m_op_info = "";
 
@@ -897,13 +897,13 @@ int Trx::weight_cmp(const Trx *lhs, const Trx *rhs) noexcept {
 }
 
 void Trx::prepare_for_commit() noexcept {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   lsn_t lsn{};
   auto rseg = m_rseg;
 
   if (m_insert_undo != nullptr || m_update_undo != nullptr) {
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&m_trx_sys->m_mutex);
 
     mtr_t mtr;
 
@@ -936,10 +936,10 @@ void Trx::prepare_for_commit() noexcept {
 
     lsn = mtr.m_end_lsn;
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&m_trx_sys->m_mutex);
   }
 
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   m_conc_state = TRX_PREPARED;
 
@@ -958,7 +958,7 @@ void Trx::prepare_for_commit() noexcept {
     there are > 2 users in the database. Then at least 2 users can
     gather behind one doing the physical log write to disk. */
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&m_trx_sys->m_mutex);
 
     auto log = m_trx_sys->m_fsp->m_log;
 
@@ -979,7 +979,7 @@ void Trx::prepare_for_commit() noexcept {
       ut_error;
     }
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&m_trx_sys->m_mutex);
   }
 }
 
@@ -990,11 +990,11 @@ ulint Trx::prepare() noexcept {
 
   m_op_info = "preparing";
 
-  mutex_enter(&kernel_mutex);
+  mutex_enter(&m_trx_sys->m_mutex);
 
   prepare_for_commit();
 
-  mutex_exit(&kernel_mutex);
+  mutex_exit(&m_trx_sys->m_mutex);
 
   m_op_info = "";
 

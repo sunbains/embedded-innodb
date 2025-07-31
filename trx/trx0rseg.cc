@@ -42,7 +42,7 @@ trx_rseg_t *trx_rseg_get_on_id(ulint id) {
 }
 
 page_no_t trx_rseg_header_create(space_id_t space, ulint max_size, ulint *slot_no, mtr_t *mtr) {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
   ut_ad(mtr->memo_contains(srv_fil->space_get_latch(space), MTR_MEMO_X_LOCK));
 
   auto sys_header = srv_trx_sys->read_header(mtr);
@@ -140,7 +140,7 @@ static trx_rseg_t *trx_rseg_mem_create(
   mtr_t *mtr
 ) /*!< in: mtr */
 {
-  ut_ad(mutex_own(&kernel_mutex));
+  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   auto rseg = static_cast<trx_rseg_t *>(mem_alloc(sizeof(trx_rseg_t)));
 

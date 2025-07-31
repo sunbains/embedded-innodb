@@ -998,7 +998,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
   for (;;) {
     os_thread_sleep(100000);
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&srv_trx_sys->m_mutex);
 
     /* We need the monitor threads to stop before we proceed with a
     normal shutdown. In case of very fast shutdown, however, we can
@@ -1006,7 +1006,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
 
     if (shutdown != IB_SHUTDOWN_NO_BUFPOOL_FLUSH && (srv_error_monitor_active || srv_lock_timeout_active || srv_monitor_active)) {
 
-      mutex_exit(&kernel_mutex);
+      mutex_exit(&srv_trx_sys->m_mutex);
       continue;
     }
 
@@ -1016,7 +1016,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
 
     if (srv_trx_sys != nullptr && (srv_trx_sys->m_n_user_trx > 0 || !srv_trx_sys->m_trx_list.empty())) {
 
-      mutex_exit(&kernel_mutex);
+      mutex_exit(&srv_trx_sys->m_mutex);
 
       continue;
     }
@@ -1032,7 +1032,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
 
       log_sys->buffer_flush_to_disk();
 
-      mutex_exit(&kernel_mutex);
+      mutex_exit(&srv_trx_sys->m_mutex);
 
       return; /* We SKIP ALL THE REST !! */
     }
@@ -1040,12 +1040,12 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
     /* Check that the master thread is suspended */
     if (srv_n_threads_active[SRV_MASTER] != 0) {
 
-      mutex_exit(&kernel_mutex);
+      mutex_exit(&srv_trx_sys->m_mutex);
 
       continue;
     }
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
 
     log_sys->acquire();
 
@@ -1078,18 +1078,18 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
 
     log_sys->release();
 
-    mutex_enter(&kernel_mutex);
+    mutex_enter(&srv_trx_sys->m_mutex);
 
     /* Check that the master thread has stayed suspended */
     if (srv_n_threads_active[SRV_MASTER] != 0) {
       log_warn("The master thread woke up during shutdown");
 
-      mutex_exit(&kernel_mutex);
+      mutex_exit(&srv_trx_sys->m_mutex);
 
       continue;
     }
 
-    mutex_exit(&kernel_mutex);
+    mutex_exit(&srv_trx_sys->m_mutex);
 
     srv_fil->flush_file_spaces(FIL_TABLESPACE);
     srv_fil->flush_file_spaces(FIL_LOG);

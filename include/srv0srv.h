@@ -312,13 +312,6 @@ extern ulint srv_activity_count;
 extern ulint srv_fatal_semaphore_wait_threshold;
 extern ulint srv_dml_needed_delay;
 
-/** Mutex protecting the server, trx structs, query threads, and lock table:
- * we allocate it from dynamic memory to get it to the same DRAM page as
- * other hotspot semaphores */
-extern mutex_t *kernel_mutex_temp;
-
-#define kernel_mutex (srv_trx_sys->m_mutex)
-
 /**
  * Returns the number of IO operations that is X percent of the
  * capacity. PCT_IO(5) -> returns the number of IO operations that

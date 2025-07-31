@@ -194,7 +194,7 @@ bool Lock_validator::rec_validate_page(Page_id page_id) noexcept {
           }
         }
 
-        // mutex_exit(&kernel_mutex); // Mutex not used in current codebase
+        mutex_exit(&m_lock_sys->m_trx_sys->m_mutex);
       }
     }
   }
