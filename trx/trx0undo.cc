@@ -24,12 +24,14 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "trx0undo.h"
 
+#include "trx0undo_rec.h"
+
 #include "fsp0fsp.h"
 #include "mach0data.h"
 #include "mtr0log.h"
 #include "srv0srv.h"
 #include "trx0purge.h"
-#include "trx0rec.h"
+
 #include "trx0rseg.h"
 #include "trx0trx.h"
 
@@ -687,7 +689,7 @@ trx_undo_t *Undo::mem_create_at_db_start(Trx_rseg *rseg, ulint id, page_no_t pag
     } else {
       undo->m_empty = false;
       undo->m_top_offset = rec - last_page;
-      undo->m_top_undo_no = trx_undo_rec_get_undo_no(rec);
+      undo->m_top_undo_no = Trx_undo_record::get_undo_no(rec);
     }
   }
 
@@ -856,9 +858,7 @@ static db_err trx_undo_create(
   return err;
 }
 
-trx_undo_t *Undo::reuse_cached(
-  Trx *trx, Trx_rseg *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid, ) mtr_t *mtr
-) noexcept {
+trx_undo_t *Undo::reuse_cached(Trx *trx, Trx_rseg *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid, ) mtr_t *mtr) noexcept {
   ut_ad(mutex_own(&rseg->m_mutex));
 
   trx_undo_t *undo;
@@ -1268,7 +1268,7 @@ void Undo::truncate_end(Trx *trx, trx_undo_t *undo, undo_no_t limit) noexcept {
     const auto undo_page = page_get(undo->m_space, last_page_no, &mtr);
     auto rec = trx_undo_page_get_last_rec(undo_page, undo->m_hdr_page_no, undo->m_hdr_offset);
 
-    while (rec != nullptr && trx_undo_rec_get_undo_no(rec) < limit) {
+    while (rec != nullptr && Trx_undo_record::get_undo_no(rec) < limit) {
       trunc_here = rec;
       rec = trx_undo_page_get_prev_rec(trunc_here, undo->m_hdr_page_no, undo->m_hdr_offset);
     }
@@ -1315,7 +1315,7 @@ void Undo::truncate_start(Trx_rseg *rseg, space_id_t space, page_no_t hdr_page_n
     auto undo_page = page_align(rec);
     auto last_rec = trx_undo_page_get_last_rec(undo_page, hdr_page_no, hdr_offset);
 
-    if (trx_undo_rec_get_undo_no(last_rec) >= limit) {
+    if (Trx_undo_record::get_undo_no(last_rec) >= limit) {
 
       mtr.commit();
 

@@ -198,10 +198,13 @@ SET(CMAKE_EXTRA_INCLUDE_FILES)
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include)
 
 SET(INNODB_SOURCES
+      api/api0api.cc api/api0misc.cc api/api0ucode.cc
+      api/api0cfg.cc api/api0status.cc api/api0sql.cc
       btr/btr0blob.cc btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       buf/buf0buf.cc buf/buf0dblwr.cc
       buf/buf0flu.cc buf/buf0lru.cc buf/buf0rea.cc
       data/data0data.cc data/data0type.cc
+      ddl/ddl0ddl.cc
       dict/dict0dict.cc dict/dict0fk.cc dict/dict0load.cc dict/dict0store.cc
       eval/eval0eval.cc eval/eval0proc.cc
       fil/fil0fil.cc
@@ -228,14 +231,11 @@ SET(INNODB_SOURCES
       row/row0sel.cc row/row0undo.cc row/row0upd.cc row/row0vers.cc
       srv/srv0srv.cc srv/srv0start.cc
       sync/sync0arr.cc sync/sync0rw.cc sync/sync0sync.cc
-      trx/trx0purge.cc trx/trx0rec.cc
+      trx/trx0purge.cc trx/trx0rec.cc trx/trx0undo_rec.cc
       trx/trx0roll.cc trx/trx0rseg.cc
       trx/trx0sys.cc trx/trx0trx.cc trx/trx0undo.cc
       usr/usr0sess.cc ut/ut0dbg.cc ut/ut0mem.cc
-      ut/ut0rnd.cc ut/ut0ut.cc
-        ddl/ddl0ddl.cc
-      api/api0api.cc api/api0misc.cc api/api0ucode.cc
-      api/api0cfg.cc api/api0status.cc api/api0sql.cc)
+      ut/ut0rnd.cc ut/ut0ut.cc)
 
 IF(CMAKE_BUILD_TYPE MATCHES Debug)
   ADD_DEFINITIONS(-O0 -g -Wall -DUNIV_DEBUG -Werror -Wno-interference-size)

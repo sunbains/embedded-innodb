@@ -26,8 +26,9 @@ Recovery log parsing
 #include "mtr0log.h"
 #include "page0cur.h"
 #include "srv0srv.h"
-#include "trx0rec.h"
+
 #include "trx0undo.h"
+#include "trx0undo_rec.h"
 
 static ulint recv_previous_parsed_rec_type;
 static ulint recv_previous_parsed_rec_offset;
@@ -171,11 +172,11 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
       break;
     case MLOG_UNDO_INSERT:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
-      ptr = trx_undo_parse_add_undo_rec(ptr, end_ptr, page);
+      ptr = Trx_undo_record::parse_add_undo_rec(ptr, end_ptr, page);
       break;
     case MLOG_UNDO_ERASE_END:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
-      ptr = trx_undo_parse_erase_page_end(ptr, end_ptr, page, mtr);
+      ptr = Trx_undo_record::parse_erase_page_end(ptr, end_ptr, page, mtr);
       break;
     case MLOG_UNDO_INIT:
       ptr = Undo::parse_page_init(ptr, end_ptr, page, mtr);

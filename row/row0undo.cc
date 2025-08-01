@@ -24,6 +24,8 @@ Created 1/8/1997 Heikki Tuuri
 
 #include "row0undo.h"
 
+#include "trx0undo_rec.h"
+
 #include "fsp0fsp.h"
 #include "mach0data.h"
 #include "que0que.h"
@@ -32,7 +34,7 @@ Created 1/8/1997 Heikki Tuuri
 #include "row0vers.h"
 #include "srv0srv.h"
 #include "trx0purge.h"
-#include "trx0rec.h"
+
 #include "trx0roll.h"
 #include "trx0rseg.h"
 #include "trx0trx.h"
@@ -373,7 +375,7 @@ db_err Undo_node::fetch_undo_log_and_undo(que_thr_t *thr) noexcept {
     }
 
     m_roll_ptr = roll_ptr;
-    m_undo_no = trx_undo_rec_get_undo_no(m_undo_rec);
+    m_undo_no = Trx_undo_record::get_undo_no(m_undo_rec);
 
     m_state = trx_undo_roll_ptr_is_insert(roll_ptr) ? UNDO_NODE_INSERT : UNDO_NODE_MODIFY;
 
@@ -384,9 +386,9 @@ db_err Undo_node::fetch_undo_log_and_undo(que_thr_t *thr) noexcept {
 
     auto roll_ptr = m_new_roll_ptr;
 
-    m_undo_rec = trx_undo_get_undo_rec_low(roll_ptr, m_heap);
+    m_undo_rec = Trx_undo_record::get_undo_rec_low(roll_ptr, m_heap);
     m_roll_ptr = roll_ptr;
-    m_undo_no = trx_undo_rec_get_undo_no(m_undo_rec);
+    m_undo_no = Trx_undo_record::get_undo_no(m_undo_rec);
 
     m_state = trx_undo_roll_ptr_is_insert(roll_ptr) ? UNDO_NODE_INSERT : UNDO_NODE_MODIFY;
   }
@@ -484,9 +486,9 @@ inline bool Undo_node::undo_previous_version(undo_no_t *undo_no) noexcept {
 
   } else {
 
-    auto undo_rec = trx_undo_get_undo_rec_low(m_new_roll_ptr, m_heap);
+    auto undo_rec = Trx_undo_record::get_undo_rec_low(m_new_roll_ptr, m_heap);
 
-    *undo_no = trx_undo_rec_get_undo_no(undo_rec);
+    *undo_no = Trx_undo_record::get_undo_no(undo_rec);
 
     return trx->m_roll_limit <= *undo_no;
   }
@@ -944,8 +946,8 @@ db_err Undo_node::undo_update_of_secondary_indexes(que_thr_t *thr) noexcept {
 }
 
 void Undo_node::parse_insert_undo_rec(ib_recovery_t recovery) noexcept {
-  Undo_rec_pars pars;
-  auto ptr = trx_undo_rec_get_pars(m_undo_rec, pars);
+  Trx_undo_record::Parsed pars;
+  auto ptr = Trx_undo_record::get_pars(m_undo_rec, pars);
 
   ut_ad(pars.m_type == TRX_UNDO_INSERT_REC);
   m_rec_type = pars.m_type;
@@ -963,7 +965,7 @@ void Undo_node::parse_insert_undo_rec(ib_recovery_t recovery) noexcept {
     auto clust_index = m_table->get_clustered_index();
 
     if (clust_index != nullptr) {
-      ptr = trx_undo_rec_get_row_ref(ptr, clust_index, &m_ref, m_heap);
+      ptr = Trx_undo_record::get_row_ref(ptr, clust_index, &m_ref, m_heap);
     } else {
       log_err("  table ", m_table->m_name, " has no indexes, ignoring the table");
 
@@ -973,9 +975,9 @@ void Undo_node::parse_insert_undo_rec(ib_recovery_t recovery) noexcept {
 }
 
 void Undo_node::parse_update_undo_rec(ib_recovery_t recovery, que_thr_t *thr) noexcept {
-  Undo_rec_pars pars;
+  Trx_undo_record::Parsed pars;
   auto trx = thr_get_trx(thr);
-  auto ptr = trx_undo_rec_get_pars(m_undo_rec, pars);
+  auto ptr = Trx_undo_record::get_pars(m_undo_rec, pars);
 
   m_rec_type = pars.m_type;
 
@@ -1001,11 +1003,11 @@ void Undo_node::parse_update_undo_rec(ib_recovery_t recovery, que_thr_t *thr) no
   ulint info_bits;
   roll_ptr_t roll_ptr;
 
-  ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
+  ptr = Trx_undo_record::update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
 
-  ptr = trx_undo_rec_get_row_ref(ptr, clust_index, &m_ref, m_heap);
+  ptr = Trx_undo_record::get_row_ref(ptr, clust_index, &m_ref, m_heap);
 
-  trx_undo_update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
+  Trx_undo_record::update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
 
   m_new_trx_id = trx_id;
   m_new_roll_ptr = roll_ptr;

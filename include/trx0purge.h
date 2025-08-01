@@ -32,6 +32,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0sys.h"
 #include "trx0types.h"
 #include "trx0undo.h"
+#include "trx0undo_rec.h"
 #include "usr0sess.h"
 
 /**
@@ -113,7 +114,7 @@ struct Purge_sys {
    * @return copy of an undo log record or pointer to trx_purge_dummy_rec,
    *  if the whole undo log can skipped in purge; nullptr if none left
    */
-  trx_undo_rec_t *fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t **cell, mem_heap_t *heap) noexcept;
+  Trx_undo_record fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t **cell, mem_heap_t *heap) noexcept;
 
   /**
    * Releases a reserved purge undo record.
@@ -220,7 +221,7 @@ struct Purge_sys {
    *
    * @return	copy of an undo log record or pointer to the dummy undo log record
    */
-  trx_undo_rec_t *get_next_rec(mem_heap_t *heap) noexcept;
+  Trx_undo_record get_next_rec(mem_heap_t *heap) noexcept;
 
  public:
   /** Purge system state */

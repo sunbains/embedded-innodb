@@ -25,9 +25,10 @@ Created 2/6/1997 Heikki Tuuri
 #include "row0vers.h"
 #include "lock0lock.h"
 #include "trx0purge.h"
-#include "trx0rec.h"
+
 #include "trx0trx.h"
 #include "trx0undo.h"
+#include "trx0undo_rec.h"
 
 Row_vers *srv_row_vers;
 
@@ -148,7 +149,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *in
 
     heap = mem_heap_create(1024);
 
-    auto err = trx_undo_prev_version_build(clust_rec, &mtr, version, clust_index, clust_offsets, heap, &prev_version);
+    auto err = Trx_undo_record::prev_version_build(clust_rec, &mtr, version, clust_index, clust_offsets, heap, &prev_version);
 
     mem_heap_free(heap2); /* free version and clust_offsets */
 
@@ -343,7 +344,7 @@ bool Row_vers::old_has_index_entry(bool also_curr, const rec_t *rec, mtr_t *mtr,
 
     heap = mem_heap_create(1024);
 
-    auto err = trx_undo_prev_version_build(rec, mtr, version, clust_index, clust_offsets, heap, &prev_version);
+    auto err = Trx_undo_record::prev_version_build(rec, mtr, version, clust_index, clust_offsets, heap, &prev_version);
 
     mem_heap_free(heap2); /* free version and clust_offsets */
 
@@ -424,8 +425,8 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
         row.m_consistent_read_view->m_creator_trx_id == trx_id) {
 
       auto roll_ptr = row_get_rec_roll_ptr(version, row.m_cluster_index, row.m_cluster_offsets);
-      auto undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap);
-      auto undo_no = trx_undo_rec_get_undo_no(undo_rec);
+      auto undo_rec = Trx_undo_record::get_undo_rec_low(roll_ptr, heap);
+      auto undo_no = Trx_undo_record::get_undo_no(undo_rec);
 
       mem_heap_empty(heap);
 
@@ -446,7 +447,7 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
 
     rec_t *prev_version;
 
-    err = trx_undo_prev_version_build(
+    err = Trx_undo_record::prev_version_build(
       row.m_cluster_rec, row.m_mtr, version, row.m_cluster_index, row.m_cluster_offsets, heap, &prev_version
     );
 
@@ -578,7 +579,7 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
 
     heap = mem_heap_create(1024);
 
-    err = trx_undo_prev_version_build(
+    err = Trx_undo_record::prev_version_build(
       row.m_cluster_rec, row.m_mtr, version, row.m_cluster_index, row.m_cluster_offsets, heap, &prev_version
     );
 

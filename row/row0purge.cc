@@ -33,11 +33,12 @@ Created 3/14/1997 Heikki Tuuri
 #include "row0upd.h"
 #include "row0vers.h"
 #include "trx0purge.h"
-#include "trx0rec.h"
+
 #include "trx0roll.h"
 #include "trx0rseg.h"
 #include "trx0trx.h"
 #include "trx0undo.h"
+#include "trx0undo_rec.h"
 
 Row_purge *Row_purge::node_create(que_thr_t *parent, mem_heap_t *heap) {
   ut_ad(parent != nullptr);
@@ -333,7 +334,7 @@ skip_secondaries:
       can calculate from node->roll_ptr the file
       address of the new_val data */
 
-      internal_offset = ((const byte *)dfield_get_data(&ufield->m_new_val)) - m_undo_rec;
+      internal_offset = ((const byte *)dfield_get_data(&ufield->m_new_val)) - m_undo_rec.raw();
 
       ut_a(internal_offset < UNIV_PAGE_SIZE);
 
@@ -385,10 +386,10 @@ skip_secondaries:
 }
 
 bool Row_purge::parse_undo_rec(bool *updated_extern, que_thr_t *thr) {
-  Undo_rec_pars pars;
+  Trx_undo_record::Parsed pars;
   auto trx = thr_get_trx(thr);
 
-  auto ptr = trx_undo_rec_get_pars(m_undo_rec, pars);
+  auto ptr = m_undo_rec.get_pars(pars);
 
   m_rec_type = pars.m_type;
 
@@ -403,7 +404,7 @@ bool Row_purge::parse_undo_rec(bool *updated_extern, que_thr_t *thr) {
   ulint info_bits;
   roll_ptr_t roll_ptr;
 
-  ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
+  ptr = Trx_undo_record::update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
 
   m_table = nullptr;
 
@@ -444,14 +445,14 @@ bool Row_purge::parse_undo_rec(bool *updated_extern, que_thr_t *thr) {
     return false;
   }
 
-  ptr = trx_undo_rec_get_row_ref(ptr, clust_index, &m_ref, m_heap);
+  ptr = Trx_undo_record::get_row_ref(ptr, clust_index, &m_ref, m_heap);
 
-  ptr = trx_undo_update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
+  ptr = Trx_undo_record::update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
 
   /* Read to the partial row the fields that occur in indexes */
 
   if (!(pars.m_cmpl_info & UPD_NODE_NO_ORD_CHANGE)) {
-    ptr = trx_undo_rec_get_partial_row(ptr, clust_index, &m_row, pars.m_type == TRX_UNDO_UPD_DEL_REC, m_heap);
+    ptr = Trx_undo_record::get_partial_row(ptr, clust_index, &m_row, pars.m_type == TRX_UNDO_UPD_DEL_REC, m_heap);
   }
 
   return true;
@@ -467,7 +468,7 @@ ulint Row_purge::purge(que_thr_t *thr) {
 
   m_undo_rec = srv_trx_sys->m_purge->fetch_next_rec(&roll_ptr_val, &m_reservation, m_heap);
 
-  if (m_undo_rec == nullptr) {
+  if (!m_undo_rec.is_valid()) {
     /* Purge completed for this query thread */
 
     thr->run_node = que_node_get_parent(this);

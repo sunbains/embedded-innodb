@@ -38,9 +38,10 @@ Created 9/20/1997 Heikki Tuuri
 #include "page0cur.h"
 #include "srv0srv.h"
 #include "sync0sync.h"
-#include "trx0rec.h"
+
 #include "trx0roll.h"
 #include "trx0undo.h"
+#include "trx0undo_rec.h"
 
 /** Log records are stored in the hash table in chunks at most of this size;
 this must be less than UNIV_PAGE_SIZE as it is stored in the buffer pool */
@@ -584,11 +585,11 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
       break;
     case MLOG_UNDO_INSERT:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
-      ptr = trx_undo_parse_add_undo_rec(ptr, end_ptr, page);
+      ptr = Trx_undo_record::parse_add_undo_rec(ptr, end_ptr, page);
       break;
     case MLOG_UNDO_ERASE_END:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_UNDO_LOG);
-      ptr = trx_undo_parse_erase_page_end(ptr, end_ptr, page, mtr);
+      ptr = Trx_undo_record::parse_erase_page_end(ptr, end_ptr, page, mtr);
       break;
     case MLOG_UNDO_INIT:
       /* Allow anything in page_type when creating a page. */

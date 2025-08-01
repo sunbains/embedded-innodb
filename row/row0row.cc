@@ -35,7 +35,7 @@ Created 4/20/1996 Heikki Tuuri
 #include "row0ext.h"
 #include "row0upd.h"
 #include "trx0purge.h"
-#include "trx0rec.h"
+
 #include "trx0roll.h"
 #include "trx0rseg.h"
 #include "trx0trx.h"

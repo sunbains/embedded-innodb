@@ -56,8 +56,9 @@ Created 10/16/1994 Heikki Tuuri
 #include "row0row.h"
 #include "row0upd.h"
 #include "srv0srv.h"
-#include "trx0rec.h"
+
 #include "trx0roll.h"
+#include "trx0undo_rec.h"
 
 /** In the optimistic insert, if the insert does not fit, but this much space
 can be released by page reorganize, then it is reorganized */
@@ -587,7 +588,7 @@ inline db_err Btree_cursor::ins_lock_and_undo(
 
   if (index->is_clustered()) {
 
-    err = trx_undo_report_row_operation(flags, TRX_UNDO_INSERT_OP, thr, index, entry, nullptr, 0, nullptr, &roll_ptr);
+    err = Trx_undo_record::report_row_operation(flags, TRX_UNDO_INSERT_OP, thr, index, entry, nullptr, 0, nullptr, &roll_ptr);
 
     if (err != DB_SUCCESS) {
 
@@ -889,7 +890,7 @@ db_err Btree_cursor::upd_lock_and_undo(
 
   /* Append the info about the update in the undo log */
 
-  err = trx_undo_report_row_operation(flags, TRX_UNDO_MODIFY_OP, thr, index, nullptr, update, cmpl_info, rec, roll_ptr);
+  err = Trx_undo_record::report_row_operation(flags, TRX_UNDO_MODIFY_OP, thr, index, nullptr, update, cmpl_info, rec, roll_ptr);
 
   return err;
 }
@@ -1575,7 +1576,7 @@ db_err Btree_cursor::del_mark_set_clust_rec(ulint flags, bool val, que_thr_t *th
   if (err == DB_SUCCESS) {
     roll_ptr_t roll_ptr;
 
-    err = trx_undo_report_row_operation(flags, TRX_UNDO_MODIFY_OP, thr, index, nullptr, nullptr, 0, rec, &roll_ptr);
+    err = Trx_undo_record::report_row_operation(flags, TRX_UNDO_MODIFY_OP, thr, index, nullptr, nullptr, 0, rec, &roll_ptr);
 
     if (err == DB_SUCCESS) {
       set_deleted_flag(rec, val > 0);

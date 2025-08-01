@@ -30,6 +30,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0sys.h"
 #include "trx0trx.h"
 #include "trx0types.h"
+#include "trx0undo_rec.h"
 
 /** A cell of trx_undo_arr_t; used during a rollback and a purge */
 struct trx_undo_inf_t {
@@ -113,7 +114,7 @@ struct Trx_rollback {
    * @return undo log record copied to heap, nullptr if none left, or if the
    * undo number of the top record would be less than the limit
    */
-  static trx_undo_rec_t *pop_top_rec_of_trx(Trx *trx, undo_no_t limit, 
+  static Trx_undo_record pop_top_rec_of_trx(Trx *trx, undo_no_t limit, 
                                            roll_ptr_t *roll_ptr, mem_heap_t *heap);
 
   /**
@@ -262,7 +263,7 @@ inline trx_undo_arr_t *trx_undo_arr_create(void) { return Trx_rollback::undo_arr
 inline void trx_undo_arr_free(trx_undo_arr_t *arr) { Trx_rollback::undo_arr_free(arr); }
 inline void trx_roll_try_truncate(Trx *trx) { Trx_rollback::try_truncate(trx); }
 
-inline trx_undo_rec_t *trx_roll_pop_top_rec_of_trx(Trx *trx, undo_no_t limit, roll_ptr_t *roll_ptr, mem_heap_t *heap) {
+inline Trx_undo_record trx_roll_pop_top_rec_of_trx(Trx *trx, undo_no_t limit, roll_ptr_t *roll_ptr, mem_heap_t *heap) {
   return Trx_rollback::pop_top_rec_of_trx(trx, limit, roll_ptr, heap);
 }
 

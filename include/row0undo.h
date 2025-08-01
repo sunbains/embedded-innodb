@@ -36,6 +36,7 @@ struct Index;
 struct Btree;
 struct que_thr_t;
 struct Row_update;
+#include "trx0undo_rec.h"
 
 struct Row_undo {
   /**
@@ -393,7 +394,7 @@ struct Undo_node {
   roll_ptr_t m_roll_ptr{};
 
   /** undo log record */
-  trx_undo_rec_t *m_undo_rec{};
+  Trx_undo_record m_undo_rec{};
 
   /** undo number of the record */
   undo_no_t m_undo_no{};

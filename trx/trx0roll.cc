@@ -24,6 +24,8 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "trx0roll.h"
 
+#include "trx0undo_rec.h"
+
 #include "ddl0ddl.h"
 #include "fsp0fsp.h"
 #include "lock0lock.h"
@@ -32,7 +34,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "pars0pars.h"
 #include "que0que.h"
 #include "row0undo.h"
-#include "trx0rec.h"
+
 #include "trx0rseg.h"
 #include "trx0trx.h"
 #include "trx0undo.h"
@@ -135,16 +137,14 @@ in crash recovery.
 @return true if trx is an incomplete transaction that is being rolled
 back in crash recovery */
 
-bool Trx_rollback::is_recv_trx(const Trx *trx)
-{
+bool Trx_rollback::is_recv_trx(const Trx *trx) {
   return trx == trx_roll_crash_recv_trx;
 }
 
 /** Returns a transaction savepoint taken at this point in time.
 @return	savepoint */
 
-trx_savept_t Trx_rollback::savept_take(Trx *trx)
-{
+trx_savept_t Trx_rollback::savept_take(Trx *trx) {
   trx_savept_t savept;
 
   savept.least_undo_no = trx->m_undo_no;
@@ -486,7 +486,7 @@ void Trx_rollback::try_truncate(Trx *trx) {
  *
  * @return Pointer to the undo log record, the page s-latched.
  */
-static trx_undo_rec_t *trx_roll_pop_top_rec(Trx *trx, trx_undo_t *undo, mtr_t *mtr) {
+static Trx_undo_record trx_roll_pop_top_rec(Trx *trx, trx_undo_t *undo, mtr_t *mtr) {
   ut_ad(mutex_own(&trx->m_undo_mutex));
 
   auto undo_page = srv_undo->page_get_s_latched(undo->m_space, undo->m_top_page_no, mtr);
@@ -506,16 +506,16 @@ static trx_undo_rec_t *trx_roll_pop_top_rec(Trx *trx, trx_undo_t *undo, mtr_t *m
 
     undo->m_top_page_no = page_get_page_no(prev_rec_page);
     undo->m_top_offset = prev_rec - prev_rec_page;
-    undo->m_top_undo_no = trx_undo_rec_get_undo_no(prev_rec);
+    undo->m_top_undo_no = Trx_undo_record::get_undo_no(prev_rec);
   }
 
-  return undo_page + offset;
+  return Trx_undo_record(undo_page + offset);
 }
 
-trx_undo_rec_t *Trx_rollback::pop_top_rec_of_trx(Trx *trx, undo_no_t limit, roll_ptr_t *roll_ptr, mem_heap_t *heap) {
+Trx_undo_record Trx_rollback::pop_top_rec_of_trx(Trx *trx, undo_no_t limit, roll_ptr_t *roll_ptr, mem_heap_t *heap) {
   trx_undo_t *undo;
   trx_undo_rec_t *undo_rec;
-  trx_undo_rec_t *undo_rec_copy;
+  Trx_undo_record undo_rec_copy;
   undo_no_t undo_no;
   bool is_insert;
   ulint progress_pct;
@@ -562,7 +562,7 @@ try_again:
 
     mutex_exit(&trx->m_undo_mutex);
 
-    return nullptr;
+    return Trx_undo_record{};
   }
 
   if (undo == ins_undo) {
@@ -575,9 +575,10 @@ try_again:
 
   mtr.start();
 
-  undo_rec = trx_roll_pop_top_rec(trx, undo, &mtr);
+  auto undo_rec_obj = trx_roll_pop_top_rec(trx, undo, &mtr);
+  undo_rec = undo_rec_obj.raw();
 
-  undo_no = trx_undo_rec_get_undo_no(undo_rec);
+  undo_no = undo_rec_obj.get_undo_no();
 
   log_info(retry, ". trx_id: ", trx->m_id, " undo_no: ", undo_no, " trx->m_undo_no: ", trx->m_undo_no);
   ut_ad(undo_no + 1 == trx->m_undo_no);
@@ -618,7 +619,7 @@ try_again:
     goto try_again;
   }
 
-  undo_rec_copy = trx_undo_rec_copy(undo_rec, heap);
+  undo_rec_copy = Trx_undo_record(undo_rec).copy(heap);
 
   mutex_exit(&(trx->m_undo_mutex));
 
@@ -727,8 +728,7 @@ que_t *Trx_rollback::roll_graph_build(Trx *trx) {
 
 /** Finishes error processing after the necessary partial rollback has been
 done. */
-void Trx_rollback::finish_error_processing(Trx *trx)
-{
+void Trx_rollback::finish_error_processing(Trx *trx) {
   ut_ad(mutex_own(&srv_trx_sys->m_mutex));
 
   auto sig = UT_LIST_GET_FIRST(trx->m_signals);
@@ -810,7 +810,6 @@ void Trx_rollback::finish_rollback_off_kernel(que_t *graph, Trx *trx, que_thr_t 
     sig = next_sig;
   }
 }
-
 
 que_thr_t *Trx_rollback::rollback_step(que_thr_t *thr) {
   trx_savept_t *savept;

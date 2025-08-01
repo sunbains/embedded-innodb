@@ -24,6 +24,8 @@ Created 3/26/1996 Heikki Tuuri
 
 #include "trx0purge.h"
 
+#include "trx0undo_rec.h"
+
 #include "fsp0fsp.h"
 #include "fut0fut.h"
 #include "mach0data.h"
@@ -33,7 +35,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "read0read.h"
 #include "row0purge.h"
 #include "row0upd.h"
-#include "trx0rec.h"
+
 #include "trx0roll.h"
 #include "trx0rseg.h"
 #include "trx0trx.h"
@@ -495,7 +497,7 @@ void Purge_sys::choose_next_log() noexcept {
 
   } else {
 
-    m_purge_undo_no = trx_undo_rec_get_undo_no(rec);
+    m_purge_undo_no = Trx_undo_record::get_undo_no(rec);
     m_page_no = page_get_page_no(page_align(rec));
     m_offset = page_offset(rec);
   }
@@ -503,11 +505,11 @@ void Purge_sys::choose_next_log() noexcept {
   mtr.commit();
 }
 
-trx_undo_rec_t *Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
+Trx_undo_record Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
   ulint type;
   page_t *page;
   ulint cmpl_info;
-  trx_undo_rec_t *next_rec;
+  Trx_undo_record next_rec;
 
   ut_ad(mutex_own(&m_mutex));
   ut_ad(m_next_stored);
@@ -526,7 +528,7 @@ trx_undo_rec_t *Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
 
     choose_next_log();
 
-    return (&trx_purge_dummy_rec);
+    return Trx_undo_record(&trx_purge_dummy_rec);
   }
 
   mtr_t mtr;
@@ -541,25 +543,25 @@ trx_undo_rec_t *Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
     /* Try first to find the next record which requires a purge
     operation from the same page of the same undo log */
 
-    next_rec = trx_undo_page_get_next_rec(rec2, m_hdr_page_no, m_hdr_offset);
+    auto next_rec_raw = trx_undo_page_get_next_rec(rec2, m_hdr_page_no, m_hdr_offset);
 
-    if (next_rec == nullptr) {
+    if (next_rec_raw == nullptr) {
       rec2 = srv_undo->get_next_rec(rec2, m_hdr_page_no, m_hdr_offset, &mtr);
       break;
     }
 
-    rec2 = next_rec;
+    rec2 = next_rec_raw;
 
-    type = trx_undo_rec_get_type(rec2);
+    type = Trx_undo_record::get_type(rec2);
 
     if (type == TRX_UNDO_DEL_MARK_REC) {
 
       break;
     }
 
-    cmpl_info = trx_undo_rec_get_cmpl_info(rec2);
+    cmpl_info = Trx_undo_record::get_cmpl_info(rec2);
 
-    if (trx_undo_rec_get_extern_storage(rec2)) {
+    if (Trx_undo_record::get_extern_storage(rec2)) {
       break;
     }
 
@@ -585,7 +587,7 @@ trx_undo_rec_t *Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
   } else {
     page = page_align(rec2);
 
-    m_purge_undo_no = trx_undo_rec_get_undo_no(rec2);
+    m_purge_undo_no = Trx_undo_record::get_undo_no(rec2);
     m_page_no = page_get_page_no(page);
     m_offset = rec2 - page;
 
@@ -595,7 +597,7 @@ trx_undo_rec_t *Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
     }
   }
 
-  auto rec_copy = trx_undo_rec_copy(rec, heap);
+  auto rec_copy = Trx_undo_record(rec).copy(heap);
 
   mtr.commit();
 
@@ -810,8 +812,8 @@ ulint Purge_sys::run() noexcept {
   return m_n_pages_handled - old_pages_handled;
 }
 
-trx_undo_rec_t *Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t **cell, mem_heap_t *heap) noexcept {
-  trx_undo_rec_t *undo_rec;
+Trx_undo_record Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t **cell, mem_heap_t *heap) noexcept {
+  Trx_undo_record undo_rec;
 
   mutex_enter(&m_mutex);
 
@@ -820,7 +822,7 @@ trx_undo_rec_t *Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
 
     mutex_exit(&m_mutex);
 
-    return nullptr;
+    return Trx_undo_record{};
   }
 
   if (!m_next_stored) {
@@ -833,7 +835,7 @@ trx_undo_rec_t *Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
 
       mutex_exit(&m_mutex);
 
-      return nullptr;
+      return Trx_undo_record{};
     }
   }
 
@@ -845,7 +847,7 @@ trx_undo_rec_t *Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
 
     mutex_exit(&m_mutex);
 
-    return nullptr;
+    return Trx_undo_record{};
   }
 
   if (m_purge_trx_no >= m_view->m_low_limit_no) {
@@ -855,7 +857,7 @@ trx_undo_rec_t *Purge_sys::fetch_next_rec(roll_ptr_t *roll_ptr, trx_undo_inf_t *
 
     mutex_exit(&m_mutex);
 
-    return nullptr;
+    return Trx_undo_record{};
   }
 
   *roll_ptr = trx_undo_build_roll_ptr(false, m_rseg->m_id, m_page_no, m_offset);

@@ -32,6 +32,7 @@ Created 3/14/1997 Heikki Tuuri
 #include "que0types.h"
 #include "row0types.h"
 #include "trx0types.h"
+#include "trx0undo_rec.h"
 
 /**
  * @brief Row purge node for removing obsolete records.
@@ -182,7 +183,7 @@ struct Row_purge {
   roll_ptr_t m_roll_ptr;
 
   /** undo log record */
-  trx_undo_rec_t *m_undo_rec;
+  Trx_undo_record m_undo_rec;
 
   /** reservation for the undo log record in the purge array */
   trx_undo_inf_t *m_reservation;
