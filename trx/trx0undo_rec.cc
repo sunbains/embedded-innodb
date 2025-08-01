@@ -39,20 +39,20 @@ Transaction undo log record class implementation
 
 // FIXME: There must be a better way
 // Forward declarations to avoid circular dependency
-extern byte *trx_undo_parse_add_undo_rec(byte *ptr, byte *end_ptr, page_t *page);
+extern byte *trx_undo_parse_add_undo_rec(byte *ptr, byte *end_ptr, Raw_page page);
 
-extern byte *trx_undo_parse_erase_page_end(byte *ptr, byte *end_ptr, page_t *page, mtr_t *mtr);
+extern byte *trx_undo_parse_erase_page_end(byte *ptr, byte *end_ptr, Raw_page page, mtr_t *mtr);
 
 extern db_err trx_undo_report_row_operation(
   ulint flags, ulint op_type, que_thr_t *thr, const Index *index, const DTuple *clust_entry, const upd_t *update, ulint cmpl_info,
-  const rec_t *rec, roll_ptr_t *roll_ptr
+  const Rec rec, roll_ptr_t *roll_ptr
 );
 
 byte *Trx_undo_record::get_pars(Trx_undo_record::Parsed &undo_rec_pars) const noexcept {
   return get_pars(m_undo_rec, undo_rec_pars);
 }
 
-byte *Trx_undo_record::get_pars(trx_undo_rec_t *undo_rec, Trx_undo_record::Parsed &undo_rec_pars) noexcept {
+byte *Trx_undo_record::get_pars(trx_undo_rec_t undo_rec, Trx_undo_record::Parsed &undo_rec_pars) noexcept {
 
   auto ptr = undo_rec + 2;
   ulint type_cmpl = mach_read_from_1(ptr);
@@ -203,10 +203,7 @@ byte *Trx_undo_record::update_rec_get_sys_cols(byte *ptr, trx_id_t *trx_id, roll
  *
  * @return Remaining part of undo log record after reading this value.
  */
-inline byte *trx_undo_update_rec_get_n_upd_fields(
-  byte *ptr,
-  ulint *n
-) /*!< out: number of fields */
+inline byte *trx_undo_update_rec_get_n_upd_fields(byte *ptr, ulint *n) /*!< out: number of fields */
 {
   *n = mach_read_compressed(ptr);
   ptr += mach_get_compressed_size(*n);
@@ -414,15 +411,14 @@ db_err Trx_undo_record::get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, Trx_u
 }
 
 db_err Trx_undo_record::prev_version_build(
-  const rec_t *index_rec, mtr_t *index_mtr __attribute__((unused)), const rec_t *rec, Index *index, ulint *offsets,
-  mem_heap_t *heap, rec_t **old_vers
+  const Rec index_rec, mtr_t *index_mtr __attribute__((unused)), const Rec rec, Index *index, ulint *offsets,
+  mem_heap_t *heap, Rec *old_vers
 ) {
   byte *buf;
   upd_t *update;
   DTuple *entry;
   ulint info_bits;
   trx_id_t trx_id;
-  trx_id_t rec_trx_id;
   roll_ptr_t roll_ptr;
   roll_ptr_t old_roll_ptr;
   Trx_undo_record undo_rec{};
@@ -435,7 +431,7 @@ db_err Trx_undo_record::prev_version_build(
     index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_S_FIX) || index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_X_FIX)
   );
 
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(rec.offs_validate(index, offsets));
 
   if (!index->is_clustered()) {
     log_err(std::format(
@@ -444,9 +440,9 @@ db_err Trx_undo_record::prev_version_build(
       "index record ",
       index->m_name
     ));
-    log_err(rec_to_string(index_rec));
+    log_err(index_rec.to_string());
     log_err("record version ");
-    log_err(rec_to_string(rec));
+    log_err(rec.to_string());
 
     return DB_ERROR;
   }
@@ -463,7 +459,7 @@ db_err Trx_undo_record::prev_version_build(
     return DB_SUCCESS;
   }
 
-  rec_trx_id = row_get_rec_trx_id(rec, index, offsets);
+  auto rec_trx_id = row_get_rec_trx_id(rec, index, offsets);
 
   auto err = get_undo_rec(roll_ptr, rec_trx_id, &undo_rec, heap);
 
@@ -536,9 +532,9 @@ db_err Trx_undo_record::prev_version_build(
 
     log_warn_buf(undo_rec, 150);
     log_warn("index record ");
-    log_warn(rec_to_string(index_rec));
+    log_warn(index_rec.to_string());
     log_warn("record version ");
-    log_warn(rec_to_string(rec));
+    log_warn(rec.to_string());
     log_warn(std::format(
       "Record trx id {}, update rec trx id {} Roll ptr in rec {}, in update rec {}", rec_trx_id, trx_id, old_roll_ptr, roll_ptr
     ));
@@ -570,13 +566,13 @@ db_err Trx_undo_record::prev_version_build(
 
     buf = mem_heap_alloc(heap, rec_get_converted_size(index, entry, n_ext));
 
-    *old_vers = rec_convert_dtuple_to_rec(buf, index, entry, n_ext);
+    *old_vers = Rec::convert_dtuple_to_rec(buf, index, entry, n_ext);
 
   } else {
 
     buf = mem_heap_alloc(heap, rec_offs_size(offsets));
-    *old_vers = rec_copy(buf, rec, offsets);
-    ut_d(rec_offs_make_valid(*old_vers, index, offsets));
+    *old_vers = rec.copy(buf, offsets);
+    ut_d(old_vers->offs_make_valid(index, offsets));
     srv_row_upd->rec_in_place(*old_vers, index, offsets, update);
   }
 
@@ -588,7 +584,7 @@ db_err Trx_undo_record::prev_version_build(
 
 db_err Trx_undo_record::report_row_operation(
   ulint flags, ulint op_type, que_thr_t *thr, const Index *index, const DTuple *clust_entry, const upd_t *update, ulint cmpl_info,
-  const rec_t *rec, roll_ptr_t *roll_ptr
+  const Rec rec, roll_ptr_t *roll_ptr
 ) {
   return ::trx_undo_report_row_operation(flags, op_type, thr, index, clust_entry, update, cmpl_info, rec, roll_ptr);
 }

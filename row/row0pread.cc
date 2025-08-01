@@ -396,23 +396,23 @@ dberr_t PCursor::move_to_next_block(Index *index) {
   }
 }
 
-bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr) {
+bool Parallel_reader::Scan_ctx::check_visibility(Rec &rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr) {
   ut_ad(m_trx == nullptr || m_trx->m_read_view != nullptr);
 
   if (m_trx != nullptr && m_trx->m_read_view != nullptr) {
     auto view = m_trx->m_read_view;
 
     if (m_config.m_index->is_clustered()) {
-      trx_id_t rec_trx_id;
+      trx_id_t trx_id;
 
       if (m_config.m_index->m_trx_id_offset > 0) {
-        rec_trx_id = srv_trx_sys->read_trx_id(rec + m_config.m_index->m_trx_id_offset);
+        trx_id = srv_trx_sys->read_trx_id(rec + m_config.m_index->m_trx_id_offset);
       } else {
-        rec_trx_id = row_get_rec_trx_id(rec, m_config.m_index, offsets);
+        trx_id = row_get_rec_trx_id(rec, m_config.m_index, offsets);
       }
 
-      if (m_trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !view->changes_visible(rec_trx_id)) {
-        const rec_t *old_vers;
+      if (m_trx->m_isolation_level > TRX_ISO_READ_UNCOMMITTED && !view->changes_visible(trx_id)) {
+        Rec old_vers;
 
         Row_vers::Row row{
           .m_cluster_rec = rec,
@@ -430,7 +430,7 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
 
         rec = old_vers;
 
-        if (rec == nullptr) {
+        if (rec.is_null()) {
           return false;
         }
       }
@@ -440,18 +440,18 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec, ulint *&offs
     }
   }
 
-  if (rec_get_deleted_flag(rec)) {
+  if (rec.get_deleted_flag()) {
     /* This record was deleted in the latest committed version, or it was
     deleted and then reinserted-by-update before purge kicked in. Skip it. */
     return false;
   }
 
-  ut_ad(m_trx == nullptr || m_trx->m_isolation_level == TRX_ISO_READ_UNCOMMITTED || !rec_offs_any_null_extern(rec, offsets));
+  ut_ad(m_trx == nullptr || m_trx->m_isolation_level == TRX_ISO_READ_UNCOMMITTED || !rec_offs_any_extern(offsets));
 
   return true;
 }
 
-void Parallel_reader::Scan_ctx::copy_row(const rec_t *rec, Iter *iter) const {
+void Parallel_reader::Scan_ctx::copy_row(const Rec rec, Iter *iter) const {
   {
     Phy_rec record{m_config.m_index, rec};
 
@@ -462,9 +462,9 @@ void Parallel_reader::Scan_ctx::copy_row(const rec_t *rec, Iter *iter) const {
   memory from the iterator heap because the scan iterator owns the copy. */
   auto rec_len = rec_offs_size(iter->m_offsets);
 
-  auto copy_rec = static_cast<rec_t *>(mem_heap_alloc(iter->m_heap, rec_len));
+  auto copy_rec = static_cast<Rec>(mem_heap_alloc(iter->m_heap, rec_len));
 
-  memcpy(copy_rec, rec, rec_len);
+  memcpy(copy_rec, rec.get(), rec_len);
 
   iter->m_rec = copy_rec;
 
@@ -647,7 +647,7 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
 
     rec_offs_init(offsets_);
 
-    const rec_t *rec = cur->get_rec();
+    Rec rec = cur->get_rec();
 
     {
       Phy_rec record{index, rec};
@@ -656,7 +656,7 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
     }
 
     if (end_tuple != nullptr) {
-      ut_ad(rec != nullptr);
+      ut_ad(!rec.is_null());
 
       /* Key value of a record can change only if the record is deleted or if
       it's updated. An update is essentially a delete + insert. So in both
@@ -1068,7 +1068,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(
 
       /* Since we are already at the requested level use the current page
        cursor. */
-      memcpy(&level_page_cursor, &page_cursor, sizeof(level_page_cursor));
+      level_page_cursor = page_cursor;
     }
 
     if (!page_rec_is_supremum(level_page_cursor.get_rec())) {

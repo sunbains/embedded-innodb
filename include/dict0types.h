@@ -26,16 +26,17 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #pragma once
 
 #include "data0type.h"
+#include "data0types.h"
 #include "fsp0types.h"
 #include "lock0types.h"
 #include "mem0types.h"
-#include "que0types.h"
-#include "rem0types.h"
 #include "sync0rw.h"
 
 #include <string>
 
 struct Table;
+struct Rec;
+struct que_common_t;
 
 /* A cluster is a table with the type field set to DICT_CLUSTERED */
 using dict_cluster_t = Table;
@@ -254,7 +255,7 @@ struct Column {
 
   /**
    * @brief Gets the fixed size of the column.
-   * 
+   *
    * @return The fixed size of the column.
    */
   [[nodiscard]] inline ulint get_fixed_size() const noexcept {
@@ -263,7 +264,7 @@ struct Column {
 
   /**
    * @brief Gets the column number/position.
-   * 
+   *
    * @return The column number.
    */
   [[nodiscard]] inline ulint get_no() const noexcept { return m_ind; }
@@ -271,7 +272,7 @@ struct Column {
   /**
    * Returns the ROW_FORMAT=REDUNDANT stored SQL NULL size of a column.
    * For fixed length types it is the fixed length of the type, otherwise 0.
-   * 
+   *
    * @return SQL null storage size in ROW_FORMAT=REDUNDANT
    */
   [[nodiscard]] inline ulint get_sql_null_size() const noexcept { return get_fixed_size(); }
@@ -279,7 +280,7 @@ struct Column {
 
   /**
    * Gets the column data type.
-   * 
+   *
    * @param[in,out] type data type
    */
   inline void copy_type(dtype_t *type) const noexcept {
@@ -292,10 +293,10 @@ struct Column {
 
   /**
    * Assert that a column and a data type match.
-   * 
+   *
    * @param[in] col column
    * @param[in] type data type
-   * 
+   *
    * @return true
    */
   [[nodiscard]] inline bool assert_equal(const dtype_t *type) const noexcept {
@@ -310,7 +311,7 @@ struct Column {
 
   /**
    * @brief Gets the minimum size of the column.
-   * 
+   *
    * @return The minimum size of the column.
    */
   [[nodiscard]] inline ulint get_min_size() const noexcept {
@@ -319,7 +320,7 @@ struct Column {
 
   /**
    * Returns the maximum size of the column.
-   * 
+   *
    * @return maximum size
    */
   [[nodiscard]] inline ulint get_max_size() const noexcept { return dtype_get_max_size_low(mtype, len); }
@@ -356,18 +357,18 @@ IF_DEBUG(const ulint DICT_INDEX_MAGIC_N = 76789786;)
 struct Field {
   /**
    * Gets the field column.
-   * 
+   *
    * @param[in] field index field
-   * 
+   *
    * @return field->col, pointer to the table column
    */
   [[nodiscard]] inline const Column *get_col() const noexcept { return m_col; }
 
   /**
    * Gets the field column.
-   * 
+   *
    * @param[in] field index field
-   * 
+   *
    * @return field->col, pointer to the table column
    */
   [[nodiscard]] inline Column *get_col() noexcept { return const_cast<Column *>(static_cast<const Field *>(this)->get_col()); }
@@ -394,7 +395,7 @@ struct Index {
 
   /**
    * @brief Constructor for an index instance.
-   * 
+   *
    * @param[in] heap The memory heap.
    * @param[in] table The parent table.
    * @param[in] index_name The index name.
@@ -406,26 +407,26 @@ struct Index {
 
   /**
    * @brief Creates an index memory object.
-   * 
+   *
    * @param[in] table Parent table.
    * @param[in] index_name The index name.
    * @param[in] page_id The page id where the index tree is placed, ignored if the index is of the clustered type.
    * @param[in] type The index type (DICT_UNIQUE, DICT_CLUSTERED, ... ORed).
    * @param[in] n_fields The number of fields.
-   * 
+   *
    * @return The created index object.
    */
   [[nodiscard]] static Index *create(Table *table, const char *index_name, Page_id page_id, ulint type, ulint n_fields) noexcept;
 
   /**
    * @brief Creates an instance of an index without a parent table. Used in the SQL parser.
-   * 
+   *
    * @param[in] table_name Parent table name
    * @param[in] index_name The index name.
    * @param[in] page_id The page id where the index tree is placed, ignored if the index is of the clustered type.
    * @param[in] type The index type (DICT_UNIQUE, DICT_CLUSTERED, ... ORed).
    * @param[in] n_fields The number of fields.
-   * 
+   *
    * @return The created index object.
    */
   [[nodiscard]] static Index *create(
@@ -434,7 +435,7 @@ struct Index {
 
   /**
    * @brief Destroys an index instance.
-   * 
+   *
    * @param[in,out] index The index instance to destroy.
    */
   static void destroy(Index *&index, Source_location loc) noexcept {
@@ -457,7 +458,7 @@ struct Index {
 
   /**
    * @brief Gets the name of the table.
-   * 
+   *
    * @return The name of the table.
    */
   [[nodiscard]] inline const char *get_table_name() const noexcept;
@@ -468,7 +469,7 @@ struct Index {
   * ONLINE_INDEX_CREATION to ONLINE_INDEX_COMPLETE (or ONLINE_INDEX_ABORTED) in
   * row_log_apply() once log application is done. So to make sure the status
   * is ONLINE_INDEX_CREATION or ONLINE_INDEX_COMPLETE you should always do
-  * the recheck after acquiring index->lock 
+  * the recheck after acquiring index->lock
   *
   * @return The status.
   */
@@ -485,7 +486,7 @@ struct Index {
 
   /**
    * Gets the page number of the root of the index tree.
-   * 
+   *
    * @return page number
    */
   [[nodiscard]] inline space_id_t get_space_id() const noexcept {
@@ -496,7 +497,7 @@ struct Index {
 
   /**
    * Gets the page number of the root of the index tree.
-   * 
+   *
    * @return page number
    */
   [[nodiscard]] inline page_no_t get_page_no() const noexcept {
@@ -508,7 +509,7 @@ struct Index {
   /**
    * Gets the number of fields in the internal representation of an index,
    * including fields added by the dictionary system.
-   * 
+   *
    * @return number of fields
    */
   [[nodiscard]] inline ulint get_n_fields() const noexcept {
@@ -522,7 +523,7 @@ struct Index {
    * that uniquely determine the position of an index entry in the index, if
    * we do not take multiversioning into account: in the B-tree use the value
    * returned by get_n_unique_in_tree.
-   * 
+   *
    * @return number of fields
    */
   [[nodiscard]] inline ulint get_n_unique() const noexcept {
@@ -536,7 +537,7 @@ struct Index {
    * Gets the number of fields in the internal representation of an index
    * which uniquely determine the position of an index entry in the index, if
    * we also take multiversioning into account.
-   * 
+   *
    * @return number of fields
    */
   [[nodiscard]] inline ulint get_n_unique_in_tree() const noexcept {
@@ -551,16 +552,16 @@ struct Index {
    * internal representation of clustered indexes we add the row id to the ordering
    * fields to make a clustered index unique, but this function returns the number of
    * fields the user defined in the index as ordering fields.
-   * 
+   *
    * @return number of fields
    */
   [[nodiscard]] inline ulint get_n_ordering_defined_by_user() const noexcept { return m_n_user_defined_cols; }
 
   /**
    * Gets the nth field of an index.
-   * 
+   *
    * @param[in] pos position of field
-   * 
+   *
   * @return pointer to field object
    */
   [[nodiscard]] inline const Field *get_nth_field(ulint pos) const noexcept {
@@ -572,9 +573,9 @@ struct Index {
 
   /**
    * Gets the nth field of an index.
-   * 
+   *
    * @param[in] pos position of field
-   * 
+   *
   * @return pointer to field object
    */
   [[nodiscard]] inline Field *get_nth_field(ulint pos) noexcept {
@@ -584,18 +585,18 @@ struct Index {
   /**
    * Looks for column n in an index and returns its position in the internal
    * representation of the index ie. ordinal value in m_fields[].
-   * 
+   *
    * @param[in] n field number
-   * 
+   *
    * @return position in internal representation of the index; ULINT_UNDEFINED if not found.
    */
   [[nodiscard]] ulint get_nth_field_pos(ulint n) const noexcept;
 
   /**
    * Returns true if the index contains a column or a prefix of that column.
-   * 
+   *
    * @param[in] n column number
-   * 
+   *
    * @return true if contains the column or its prefix
    */
   [[nodiscard]] bool contains_col_or_prefix(ulint n) const noexcept;
@@ -605,17 +606,17 @@ struct Index {
    * The column in index must be complete, or must contain a prefix longer
    * than the column in index. That is, we must be able to construct the
    * prefix in given index from the prefix in this checked index.
-   * 
+   *
    * @param[in] index index to match
    * @param[in] n field number in inde2
-   * 
+   *
    * @return position in internal representation of the index; ULINT_UNDEFINED if not contained
    */
   [[nodiscard]] ulint get_nth_field_pos(const Index *index, ulint n) const noexcept;
 
   /**
    * Gets the next index on the table.
-   * 
+   *
    * @return index, nullptr if none left
    */
   [[nodiscard]] inline const Index *get_next() const noexcept {
@@ -626,16 +627,16 @@ struct Index {
 
   /**
    * Gets the next index on the table.
-   * 
+   *
    * @return index, nullptr if none left
    */
   [[nodiscard]] inline Index *get_next() noexcept { return const_cast<Index *>(static_cast<const Index *>(this)->get_next()); }
 
   /**
    * Returns the minimum size of the column.
-   * 
+   *
    * @param[in] col column
-   * 
+   *
    * @return minimum size
    */
   [[nodiscard]] static inline ulint col_get_min_size(const Column *col) noexcept {
@@ -644,9 +645,9 @@ struct Index {
 
   /**
    * Returns the minimum data size of an index record.
-   * 
+   *
    * @param[in] col column
-   * 
+   *
    * @return minimum data size in bytes
    */
   [[nodiscard]] inline ulint get_min_size() const noexcept;
@@ -655,7 +656,7 @@ struct Index {
    * Gets the column position in the clustered index.
    *
    * @param[in] col table column
-   * 
+   *
    * @return column position in the clustered index
    */
   [[nodiscard]] inline ulint get_clustered_field_pos(const Column *col) const noexcept {
@@ -675,30 +676,30 @@ struct Index {
 
   /**
    * Gets the clustered index of the table.
-   * 
+   *
    * @return the clustered index
    */
   [[nodiscard]] inline const Index *get_clustered_index() const noexcept;
 
   /**
    * Gets the clustered index of the table.
-   * 
+   *
    * @return the clustered index
    */
   [[nodiscard]] inline Index *get_clustered_index() noexcept;
 
   /**
    * Returns the position of a system column in an index.
-   * 
+   *
    * @param[in] type DATA_ROW_ID, ...
-   * 
+   *
    * @return position, ULINT_UNDEFINED if not contained
    */
   [[nodiscard]] inline ulint get_sys_col_field_pos(ulint type) const noexcept;
 
   /**
    * Check whether the index is unique.
-   * 
+   *
    * @return nonzero for unique index, zero for other indexes
    */
   [[nodiscard]] inline bool is_unique() const noexcept {
@@ -709,26 +710,26 @@ struct Index {
 
   /**
    * Gets the column number in the owning table using the nth field in an index.
-   * 
+   *
    * @param[in] pos position of the field
-   * 
+   *
    * @return column number
    */
   [[nodiscard]] inline ulint get_nth_table_col_no(ulint pos) const noexcept { return m_fields[pos].m_col->m_ind; }
 
   /**
    * @brief Converts an index to a string representation.
-   * 
+   *
    * @return The string.
    */
   [[nodiscard]] std::string to_string() const noexcept;
 
   /**
   * @brief Adds a field definition to an index.
-  * 
+  *
   * @param[in] name The column name.
   * @param[in] prefix_len The column prefix length in a column prefix index like INDEX (textcol(25)).
-  * 
+  *
   * @return The field.
   */
   [[nodiscard]] Field *add_field(const char *name, ulint prefix_len) noexcept {
@@ -743,17 +744,17 @@ struct Index {
   }
 
   /** Gets the nth column of a table.
-   * 
+   *
    * @param[in] pos position of column
-   * 
+   *
    * @return pointer to column object
    */
   [[nodiscard]] inline const Column *get_nth_col(ulint pos) const noexcept;
 
   /** Gets the nth column of a table.
-   * 
+   *
    * @param[in] pos position of column
-   * 
+   *
    * @return pointer to column object
    */
   [[nodiscard]] inline Column *get_nth_col(ulint pos) noexcept;
@@ -767,7 +768,7 @@ struct Index {
 
   /**
    * @brief Copies the types of the fields in the index to a tuple.
-   * 
+   *
    * @param[in] tuple The tuple.
    * @param[in] n_fields The number of fields.
    */
@@ -775,7 +776,7 @@ struct Index {
 
   /**
    * @brief Adds a column to the index.
-   * 
+   *
    * @param[in] table The table.
    * @param[in] col The column.
    * @param[in] prefix_len The prefix length.
@@ -784,71 +785,71 @@ struct Index {
 
   /**
    * @brief Adds an index to the cache.
-   * 
+   *
    * @param[in] table The table.
    * @param[in] page_no The page number.
    * @param[in] strict The strict flag.
-   * 
+   *
    * @return The error code.
    */
   [[nodiscard]] db_err add_to_cache(Table *table, page_no_t page_no, bool strict) noexcept;
 
   /**
    * Calculates the minimum record length in an index.
-   * 
+   *
    * @return minimum record length
    */
   [[nodiscard]] ulint calc_min_rec_len() const noexcept;
 
   /**
    * @brief Gets the read-write lock of the index.
-   * 
+   *
    * @return The read-write lock.
    */
   [[nodiscard]] inline rw_lock_t *get_lock() const noexcept { return &m_lock; }
 
   /**
    * Builds a typed data tuple out of a physical record.
-   * 
+   *
    * @param[in] rec record for which to build data tuple
    * @param[in] n_fields number of data fields
    * @param[in] heap memory heap where tuple created
-   * 
+   *
    * @return own: data tuple
    */
-  [[nodiscard]] DTuple *build_data_tuple(rec_t *rec, ulint n_fields, mem_heap_t *heap) const noexcept;
+  [[nodiscard]] DTuple *build_data_tuple(Rec rec, ulint n_fields, mem_heap_t *heap) const noexcept;
 
   /**
    * Copies an initial segment of a physical record, long enough to specify an index entry uniquely.
-   * 
+   *
    * @param[in] rec record for which to copy prefix
    * @param[in,out] n_fields number of fields copied
    * @param[in,out] buf memory buffer for the copied prefix, or NULL.
    * @param[in,out] buf_size buffer size
-   * 
+   *
    * @return pointer to the prefix record
    */
-  [[nodiscard]] rec_t *copy_rec_order_prefix(const rec_t *rec, ulint *n_fields, byte *&buf, ulint &buf_size) const noexcept;
+  [[nodiscard]] Rec copy_rec_order_prefix(const Rec rec, ulint *n_fields, byte *&buf, ulint &buf_size) const noexcept;
 
   /**
    * Builds a node pointer out of a physical record and a page number.
-   * 
+   *
    * @param[in] rec record for which to build node pointer
    * @param[in] page_no page number to put in node pointer
    * @param[in] heap memory heap where pointer created
    * @param[in] level level of rec in tree: 0 means leaf level
-   * 
+   *
    * @return own: node pointer
    */
-  [[nodiscard]] DTuple *build_node_ptr(const rec_t *rec, ulint page_no, mem_heap_t *heap, ulint level) const noexcept;
+  [[nodiscard]] DTuple *build_node_ptr(const Rec rec, ulint page_no, mem_heap_t *heap, ulint level) const noexcept;
 
 #ifdef UNIV_DEBUG
   /**
    * Checks that a tuple has n_fields_cmp value in a sensible range,
    * so that no comparison can occur with the page number field in a node pointer.
-   * 
+   *
    * @param[in] tuple tuple used in a search
-   * 
+   *
    * @return true if ok
    */
   [[nodiscard]] bool index_check_search_tuple(const Index *index, const DTuple *tuple) noexcept;
@@ -965,7 +966,7 @@ initialized to 0, nullptr or false in dict_mem_foreign_create(). */
 struct Foreign {
   /**
    * @brief Creates a foreign key constraint memory object.
-   * 
+   *
    * @param[in] heap The memory heap.
    */
   Foreign(mem_heap_t *heap) noexcept : m_heap(heap) {}
@@ -977,14 +978,14 @@ struct Foreign {
 
   /**
    * @brief Creates a foreign key constraint memory object.
-   * 
+   *
    * @return The created foreign key constraint object.
    */
   [[nodiscard]] static Foreign *create() noexcept;
 
   /**
    * @brief Destroys a foreign key constraint memory instance.
-   * 
+   *
    * @param[in, out] foreign The foreign key constraint object to be destroyed.
    */
   static void destroy(Foreign *&foreign) noexcept;
@@ -996,14 +997,14 @@ struct Foreign {
 
   /**
    * @brief Finds an equivalent index in the foreign table.
-   * 
+   *
    * @return The equivalent index.
    */
   [[nodiscard]] Index *find_equiv_index() const noexcept;
 
   /**
    * @brief Converts a foreign key constraint to a string representation.
-   * 
+   *
    * @return The string.
    */
   [[nodiscard]] std::string to_string() const noexcept;
@@ -1056,10 +1057,10 @@ struct Foreign {
   Index *m_referenced_index{};
 
   /** List node for foreign keys of the table */
-  UT_LIST_NODE_T(Foreign) m_foreign_list{};
+  UT_LIST_NODE_T(Foreign) m_foreign_list {};
 
   /** List node for referenced keys of the table */
-  UT_LIST_NODE_T(Foreign) m_referenced_list{};
+  UT_LIST_NODE_T(Foreign) m_referenced_list {};
 };
 
 /** List of locks that different transactions have acquired on a table. This
@@ -1074,14 +1075,14 @@ struct Table {
 
   /**
    * @brief Creates a table memory object.
-   * 
+   *
    * @param[in] heap The memory heap.
    * @param[in] name The table name.
    * @param[in] space The space where the clustered index of the table is placed; this parameter is ignored if the table is made a member of a cluster.
    * @param[in] n_cols The number of columns.
    * @param[in] flags The table flags.
    * @param[in] ibd_file_missing True if the ibd file is missing, false otherwise.
-   * 
+   *
     * @return The created table object.
    */
   Table(mem_heap_t *heap, const char *name, space_id_t space, ulint n_cols, ulint flags, bool ibd_file_missing) noexcept;
@@ -1093,13 +1094,13 @@ struct Table {
 
   /**
    * @brief Creates a table memory object.
-   * 
+   *
    * @param[in] name The table name.
    * @param[in] space The space where the clustered index of the table is placed; this parameter is ignored if the table is made a member of a cluster.
    * @param[in] n_cols The number of columns.
    * @param[in] flags The table flags.
    * @param[in] ibd_file_missing True if the ibd file is missing, false otherwise.
-   * 
+   *
     * @return The created table object.
    */
   [[nodiscard]] static Table *create(
@@ -1108,16 +1109,16 @@ struct Table {
 
   /**
    * @brief Destroys a table memory instance.
-   * 
+   *
    * @param[in] table The table object to be destroyed.
    */
   static void destroy(Table *&table, Source_location loc) noexcept;
 
   /**
    * Gets the name of a column.
-   * 
+   *
    * @param[in] col_nr The column number.
-   * 
+   *
    * @return The column name.
    */
   [[nodiscard]] inline const char *get_col_name(ulint col_no) const noexcept {
@@ -1128,9 +1129,9 @@ struct Table {
 
   /**
    * Gets the number of a column.
-   * 
+   *
    * @param[in] name The column name.
-   * 
+   *
    * @return The column number.
    */
   [[nodiscard]] inline int get_col_no(const char *name) const noexcept {
@@ -1147,9 +1148,9 @@ struct Table {
 
   /**
    * Gets an index by its id.
-   * 
+   *
    * @param[in] id The index id.
-   * 
+   *
    * @return The index.
    */
   [[nodiscard]] inline Index *index_get_on_id(Dict_id id) noexcept {
@@ -1164,7 +1165,7 @@ struct Table {
 
   /**
    * Gets the first index on the table (the clustered index).
-   * 
+   *
    * @return index, nullptr if none exists
    */
   [[nodiscard]] inline const Index *get_first_index() const noexcept {
@@ -1178,7 +1179,7 @@ struct Table {
 
   /**
    * Gets the first index on the table (the clustered index).
-   * 
+   *
    * @return index, nullptr if none exists
    */
   [[nodiscard]] inline Index *get_first_index() noexcept {
@@ -1187,7 +1188,7 @@ struct Table {
 
   /**
    * Gets the clustered index on the table.
-   * 
+   *
    * @return clustered index, nullptr if none exists
    */
   [[nodiscard]] inline const Index *get_clustered_index() const noexcept {
@@ -1197,7 +1198,7 @@ struct Table {
 
   /**
    * Gets the first index on the table (the clustered index).
-   * 
+   *
    * @return index, nullptr if none exists
    */
   [[nodiscard]] inline Index *get_clustered_index() noexcept {
@@ -1207,7 +1208,7 @@ struct Table {
 
   /**
    * Gets the first secondary index on the table.
-   * 
+   *
    * @return secondary index, nullptr if none exists
    */
   [[nodiscard]] inline const Index *get_first_secondary_index() const noexcept {
@@ -1218,7 +1219,7 @@ struct Table {
 
   /**
    * Gets the first secondary index on the table.
-   * 
+   *
    * @return secondary index, nullptr if none exists
    */
   [[nodiscard]] inline Index *get_first_secondary_index() noexcept {
@@ -1228,9 +1229,9 @@ struct Table {
 
   /**
    * Looks for column n position in the clustered index.
-   * 
+   *
    * @param[in] n column number
-   * 
+   *
    * @return position in internal representation of the clustered index
    */
   [[nodiscard]] ulint get_nth_col_pos(ulint n) const noexcept {
@@ -1247,16 +1248,16 @@ struct Table {
 
   /**
    * @brief Converts a table to a string representation.
-   * 
+   *
    * @param[in] dict The dictionary object.
-   * 
+   *
    * @return The string.
    */
   [[nodiscard]] std::string to_string(Dict *dict) noexcept;
 
   /**
    * Gets the number of user-defined columns in a table in the dictionary cache.
-   * 
+   *
    * @return number of user-defined (e.g., not ROW_ID) columns of a table
    */
   [[nodiscard]] inline ulint get_n_user_cols() const noexcept {
@@ -1267,15 +1268,15 @@ struct Table {
 
   /**
    * Gets the number of system columns in a table in the dictionary cache.
-   * 
+   *
    * @return number of system (e.g., ROW_ID) columns of a table
    */
   [[nodiscard]] constexpr inline ulint get_n_sys_cols() const noexcept { return DATA_N_SYS_COLS; }
 
   /** Gets the nth column of a table.
-   * 
+   *
    * @param[in] pos position of column
-   * 
+   *
    * @return pointer to column object
    */
   [[nodiscard]] inline const Column *get_nth_col(ulint pos) const noexcept {
@@ -1286,9 +1287,9 @@ struct Table {
   }
 
   /** Gets the nth column of a table.
-   * 
+   *
    * @param[in] pos position of column
-   * 
+   *
    * @return pointer to column object
    */
   [[nodiscard]] inline Column *get_nth_col(ulint pos) noexcept {
@@ -1296,9 +1297,9 @@ struct Table {
   }
 
   /** Gets the given system column number of a table.
-   * 
+   *
    * @param[in] sys DATA_ROW_ID, ...
-   * 
+   *
    * @return column number
    */
   [[nodiscard]] inline ulint get_sys_col_no(ulint sys_col_no) const noexcept {
@@ -1309,9 +1310,9 @@ struct Table {
   }
 
   /** Gets the given system column of a table.
-   * 
+   *
    * @param[in] sys DATA_ROW_ID, ...
-   * 
+   *
    * @return pointer to column object
    */
   [[nodiscard]] inline const Column *get_sys_col(ulint sys_col_no) const noexcept {
@@ -1327,9 +1328,9 @@ struct Table {
   }
 
   /** Gets the given system column of a table.
-   * 
+   *
    * @param[in] sys DATA_ROW_ID, ...
-   * 
+   *
    * @return pointer to column object
    */
   [[nodiscard]] inline Column *get_sys_col(ulint sys_col_no) noexcept {
@@ -1338,21 +1339,21 @@ struct Table {
 
   /**
    * Determine the file format of a table.
-   * 
+   *
    * @return file format version
    */
   [[nodiscard]] inline ulint get_format() const noexcept { return (m_flags & DICT_TF_FORMAT_MASK) >> DICT_TF_FORMAT_SHIFT; }
 
   /**
    * Sets the file format of a table.
-   * 
+   *
    * @param[in] format file format version
    */
   inline void set_format(ulint format) noexcept { m_flags = (m_flags & ~DICT_TF_FORMAT_MASK) | (format << DICT_TF_FORMAT_SHIFT); }
 
   /**
    * @brief Adds a column definition to a table.
-   * 
+   *
    * @param[in] name The column name, or nullptr.
    * @param[in] mtype The main datatype.
    * @param[in] prtype The precise type.
@@ -1362,16 +1363,16 @@ struct Table {
 
   /**
    * @brief Checks if a table is referenced by a foreign key.
-   * 
+   *
    * @return True if the table is referenced by a foreign key, false otherwise.
    */
   [[nodiscard]] inline bool is_referenced_by_foreign_key() const noexcept { return !m_referenced_list.empty(); }
 
   /**
    * @brief Gets the referenced constraint for an index.
-   * 
+   *
    * @param[in] index The index.
-   * 
+   *
    * @return The referenced constraint, or nullptr if not found.
    */
   [[nodiscard]] inline Foreign *find_referenced_constraint(Index *index) noexcept {
@@ -1388,9 +1389,9 @@ struct Table {
 
   /**
    * @brief Gets the foreign constraint for an index.
-   * 
+   *
    * @param[in] index The index.
-   * 
+   *
    * @return The foreign constraint, or nullptr if not found.
    */
   [[nodiscard]] inline Foreign *find_foreign_constraint(Index *index) noexcept {
@@ -1407,9 +1408,9 @@ struct Table {
 
   /**
    * @brief Looks for the foreign constraint from the foreign and referenced lists of a table.
-   * 
+   *
    * @param[in] id The foreign constraint id.
-   * 
+   *
    * @return The foreign constraint.
    */
   [[nodiscard]] inline Foreign *find_foreign_constraint(const char *id) noexcept {
@@ -1433,11 +1434,11 @@ struct Table {
   /**
    * @brief Returns an index object by matching on the name and column names, and if more than
    * one index matches, returns the index with the max id.
-   * 
+   *
    * @param[in] name The index name to find.
    * @param[in] columns The array of column names.
    * @param[in] n_cols The number of columns.
-   * 
+   *
    * @return The matching index, or NULL if not found.
    */
   [[nodiscard]] Index *get_index_by_max_id(const char *name, const char **columns, ulint n_cols) noexcept;
@@ -1446,13 +1447,13 @@ struct Table {
    * @brief Tries to find an index whose first fields are the columns in the array,
    * in the same order and is not marked for deletion and is not the same
    * as types_idx.
-   * 
+   *
    * @param[in] columns The array of column names.
    * @param[in] n_cols The number of columns.
    * @param[in] types_idx The index to whose types the column types must match, or nullptr.
    * @param[in] check_charsets Whether to check charsets. Only has an effect if types_idx != nullptr.
    * @param[in] check_null Nonzero if none of the columns must be declared NOT nullptr.
-   * 
+   *
    * @return The matching index, or nullptr if not found.
    */
   [[nodiscard]] Index *foreign_find_index(
@@ -1461,9 +1462,9 @@ struct Table {
 
   /**
    * @brief Gets an index by its name.
-   * 
+   *
    * @param[in] name The index name.
-   * 
+   *
    * @return The index, or nullptr if not found.
    */
   [[nodiscard]] inline Index *get_index_on_name(const char *name) noexcept {
@@ -1478,7 +1479,7 @@ struct Table {
 
   /**
    * @brief Replaces an index in the foreign list.
-   * 
+   *
    * @param[in] index The index to replace.
    */
   void replace_index_in_foreign_list(Index *index) noexcept {
@@ -1494,9 +1495,9 @@ struct Table {
 
   /**
    * @brief Gets the foreign constraint for an index.
-   * 
+   *
    * @param[in] index The index.
-   * 
+   *
    * @return The foreign constraint, or nullptr if not found.
    */
   [[nodiscard]] inline Foreign *get_foreign_constraint(Index *index) noexcept {
@@ -1513,9 +1514,9 @@ struct Table {
 
   /**
    * @brief Gets the index with the matching name and the minimum id.
-   * 
+   *
    * @param[in] name The index name.
-   * 
+   *
    * @return The index, or nullptr if not found.
    */
   [[nodiscard]] Index *get_index_on_name_and_min_id(const char *name) noexcept {
@@ -1535,14 +1536,14 @@ struct Table {
 
   /**
    * @brief Gets the number of columns in a table.
-   * 
+   *
    * @return The number of columns.
    */
   [[nodiscard]] inline ulint get_n_cols() const noexcept { return m_n_cols; }
 
   /**
    * Finds all the columns of the index in the table and links the
-   * 
+   *
    *  Index::Field[N]:Column  = Table::Column.
    *
    * @param[in] index Index
@@ -1554,7 +1555,7 @@ struct Table {
   /**
    * Copies types of columns contained in table to tuple and sets all fields of the
    * tuple to the SQL NULL value. This function should be called right after dtuple_create().
-   * 
+   *
    * @param[in] tuple The data tuple.
    */
   void copy_types(DTuple *tuple) const noexcept;
@@ -1753,18 +1754,18 @@ inline void Foreign::drop_constraint() noexcept {
 struct Table_node {
   /**
    * Creates a new table node.
-   * 
+   *
    * @param[in] dict The dictionary.
    * @param[in] table The table.
    * @param[in] heap The memory heap.
    * @param[in] commit Whether to commit the work.
-   * 
+   *
    * @return The table node.
    */
   [[nodiscard]] static Table_node *create(Dict *dict, Table *table, mem_heap_t *heap, bool commit) noexcept;
 
   /** Node type: QUE_NODE_TABLE_CREATE */
-  que_common_t m_common;
+  que_common_t *m_common;
 
   /** Table to create, built as a memory data structure
     * with dict_mem_... functions */
@@ -1803,20 +1804,20 @@ constexpr ulint TABLE_COMPLETED = 5;
 
 /* Index create node struct */
 struct Index_node {
-  /** 
+  /**
    * Creates a new index node.
-   * 
+   *
    * @param[in] dict The dictionary.
    * @param[in] index The index.
    * @param[in] heap The memory heap.
    * @param[in] commit Whether to commit the work.
-   * 
+   *
    * @return The index node.
    */
   [[nodiscard]] static Index_node *create(Dict *dict, Index *index, mem_heap_t *heap, bool commit) noexcept;
 
   /** Node type: QUE_NODE_INDEX_CREATE */
-  que_common_t m_common;
+  que_common_t *m_common;
 
   /** Index to create, built as a memory data structure with dict_mem_... functions */
   Index *m_index{};

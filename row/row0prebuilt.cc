@@ -102,7 +102,7 @@ Prebuilt::~Prebuilt() noexcept {
   for (ulint i{}; i < m_row_cache.m_n_max; ++i) {
     auto &cached_row = m_row_cache.m_cached_rows[i];
 
-    if (cached_row.m_ptr != nullptr) {
+    if (!cached_row.m_ptr.is_null()) {
       mem_free(cached_row.m_ptr);
     }
   }

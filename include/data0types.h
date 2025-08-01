@@ -26,11 +26,11 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "innodb0types.h"
 #include "mem0mem.h"
-#include "rem0types.h"
 #include "ut0lst.h"
 #include "ut0ut.h"
 
 struct Index;
+struct Rec;
 
 constexpr ulint DATA_CLIENT_LATIN1_SWEDISH_CHARSET_COLL = 8;
 
@@ -249,7 +249,7 @@ struct DTuple {
   @retval 0 if dtuple is equal to rec
   @retval negative if dtuple is less than rec
   @retval positive if dtuple is greater than rec */
-  int compare(const rec_t *rec, const Index *index, const ulint *offsets, ulint *matched_fields) const;
+  int compare(const Rec &rec, const Index *index, const ulint *offsets, ulint *matched_fields) const;
 
   /** Compare a data tuple to a physical record.
   @param[in]    rec             record
@@ -259,7 +259,7 @@ struct DTuple {
   @retval 0 if dtuple is equal to rec
   @retval negative if dtuple is less than rec
   @retval positive if dtuple is greater than rec */
-  inline int compare(const rec_t *rec, const Index *index, const ulint *offsets) const {
+  inline int compare(const Rec &rec, const Index *index, const ulint *offsets) const {
     ulint matched_fields{};
 
     return compare(rec, index, offsets, &matched_fields);
@@ -320,3 +320,5 @@ struct big_rec_t {
   /** Stored fields */
   big_rec_field_t *fields;
 };
+
+#include "rem0types.h"

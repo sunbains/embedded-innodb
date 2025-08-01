@@ -455,7 +455,7 @@ std::ostream &DTuple::print(std::ostream &o) const {
   return o;
 }
 
-big_rec_t *dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ext) {
+big_rec_t* dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ext) {
   mem_heap_t *heap;
   big_rec_t *vector;
   ulint n_fields;
@@ -619,7 +619,7 @@ std::ostream &dfield_t::print(std::ostream &out) const {
   return out;
 }
 
-int DTuple::compare(const rec_t *rec, const Index *, const ulint *offsets, ulint *matched_fields) const {
+int DTuple::compare(const Rec &rec, const Index *, const ulint *offsets, ulint *matched_fields) const {
   ulint matched_bytes{};
 
   return cmp_dtuple_rec_with_match(nullptr, this, rec, offsets, matched_fields, &matched_bytes);

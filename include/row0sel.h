@@ -201,7 +201,7 @@ struct Row_sel {
    * @return DB_SUCCESS or error code
    */
   [[nodiscard]] db_err set_rec_lock(
-    const Buf_block *block, const rec_t *rec, Index *index, const ulint *offsets, Lock_mode mode, ulint type, que_thr_t *thr
+    const Buf_block *block, const Rec rec, Index *index, const ulint *offsets, Lock_mode mode, ulint type, que_thr_t *thr
   ) noexcept;
 
   /**
@@ -212,7 +212,7 @@ struct Row_sel {
    * @param[in] offsets Phy_rec::get_col_offsets(index, rec)
    * @param[in] column first column in a column list, or NULL
    */
-  void fetch_columns(Index *index, const rec_t *rec, const ulint *offsets, sym_node_t *column) noexcept;
+  void fetch_columns(Index *index, const Rec rec, const ulint *offsets, sym_node_t *column) noexcept;
 
   /**
    * @brief Allocates a prefetch buffer for a column when prefetch is first time done.
@@ -251,7 +251,7 @@ struct Row_sel {
    * @return DB_SUCCESS or error code
    */
   [[nodiscard]] db_err get_clust_rec_with_prebuilt(
-    Prebuilt *prebuilt, Index *sec_index, const rec_t *rec, que_thr_t *thr, const rec_t **out_rec, ulint **offsets,
+    Prebuilt *prebuilt, Index *sec_index, const Rec rec, que_thr_t *thr, Rec *out_rec, ulint **offsets,
     mem_heap_t **offset_heap, mtr_t *mtr
   ) noexcept;
 
@@ -302,7 +302,7 @@ struct Row_sel {
    * clustered record has been marked for deletion
    */
   [[nodiscard]] bool sec_rec_is_for_clust_rec(
-    const rec_t *sec_rec, Index *sec_index, const rec_t *clust_rec, Index *clust_index
+    const Rec sec_rec, Index *sec_index, const Rec clust_rec, Index *clust_index
   ) noexcept;
 
   /**
@@ -343,7 +343,7 @@ struct Row_sel {
    * @return Search_status::FOUND, Search_status::EXHAUSTED, Search_status::RETRY
    */
   [[nodiscard]] Search_status try_search_shortcut_for_prebuilt(
-    const rec_t **out_rec, Prebuilt *prebuilt, ulint **offsets, mem_heap_t **heap, mtr_t *mtr
+    Rec *out_rec, Prebuilt *prebuilt, ulint **offsets, mem_heap_t **heap, mtr_t *mtr
   ) noexcept;
 
  public:
@@ -473,7 +473,7 @@ struct Plan {
    * @return          DB_SUCCESS or error code
    */
   [[nodiscard]] db_err get_clust_rec(
-    sel_node_t *sel_node, const rec_t *rec, que_thr_t *thr, const rec_t *&out_rec, mtr_t *mtr
+    sel_node_t *sel_node, const Rec rec, que_thr_t *thr, Rec &out_rec, mtr_t *mtr
   ) noexcept;
 
   /**

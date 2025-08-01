@@ -68,7 +68,7 @@ struct Page_cursor {
    * @param mtr Mini-transaction handle, or NULL.
    * @return Pointer to record if succeed, NULL otherwise.
    */
-  rec_t *insert_rec_low(rec_t *current_rec, const Index *index, const rec_t *rec, ulint *offsets, mtr_t *mtr);
+  Rec insert_rec_low(Rec current_rec, const Index *index, const Rec rec, ulint *offsets, mtr_t *mtr);
 
   /**
    * @brief Copies records from page to a newly created page, from a given record
@@ -79,7 +79,7 @@ struct Page_cursor {
    * @param index Record descriptor.
    * @param mtr MTR.
    */
-  static void copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const Index *index, mtr_t *mtr);
+  static void copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, const Index *index, mtr_t *mtr);
 
   /**
    * @brief Deletes a record at the page cursor. The cursor is moved to the
@@ -159,9 +159,9 @@ struct Page_cursor {
    * @return Page.
    */
   inline page_t *get_page() {
-    ut_ad(page_align(m_rec) == m_block->get_frame());
+    ut_ad(m_rec.page_align() == m_block->get_frame());
 
-    return page_align(m_rec);
+    return m_rec.page_align();
   }
 
   /**
@@ -170,7 +170,7 @@ struct Page_cursor {
    * @return Buffer block.
    */
   inline Buf_block *get_block() {
-    ut_ad(page_align(m_rec) == m_block->get_frame());
+    ut_ad(m_rec.page_align() == m_block->get_frame());
 
     return m_block;
   }
@@ -180,8 +180,8 @@ struct Page_cursor {
    *
    * @return Record.
    */
-  inline rec_t *get_rec() {
-    ut_ad(page_align(m_rec) == m_block->get_frame());
+  inline Rec get_rec() {
+    ut_ad(m_rec.page_align() == m_block->get_frame());
 
     return m_rec;
   }
@@ -226,7 +226,7 @@ struct Page_cursor {
    * @return True if at start.
    */
   inline bool is_before_first() const {
-    ut_ad(page_align(m_rec) == m_block->get_frame());
+    ut_ad(m_rec.page_align() == m_block->get_frame());
     return page_rec_is_infimum(m_rec);
   }
 
@@ -236,7 +236,7 @@ struct Page_cursor {
    * @return True if at end.
    */
   inline bool is_after_last() const {
-    ut_ad(page_align(m_rec) == m_block->get_frame());
+    ut_ad(m_rec.page_align() == m_block->get_frame());
     return page_rec_is_supremum(m_rec);
   }
 
@@ -246,10 +246,10 @@ struct Page_cursor {
    * @param rec In: Record on a page.
    * @param block In: Buffer block containing the record.
    */
-  inline void position(const rec_t *rec, const Buf_block *block) {
-    ut_ad(page_align(rec) == block->get_frame());
+  inline void position(const Rec rec, const Buf_block *block) {
+    ut_ad(rec.page_align() == block->get_frame());
 
-    m_rec = const_cast<rec_t *>(rec);
+    m_rec = rec;
     m_block = const_cast<Buf_block *>(block);
   }
 
@@ -318,10 +318,10 @@ struct Page_cursor {
    * @param mtr In: Mini-transaction handle, or NULL.
    * @return Pointer to the inserted record if successful, NULL otherwise.
    */
-  inline rec_t *tuple_insert(const DTuple *tuple, const Index *index, ulint n_ext, mtr_t *mtr) {
+  inline Rec tuple_insert(const DTuple *tuple, const Index *index, ulint n_ext, mtr_t *mtr) {
     const auto size = rec_get_converted_size(index, tuple, n_ext);
     auto heap = mem_heap_create(size + (4 + REC_OFFS_HEADER_SIZE + dtuple_get_n_fields(tuple)) * sizeof(ulint));
-    auto rec = rec_convert_dtuple_to_rec((byte *)mem_heap_alloc(heap, size), index, tuple, n_ext);
+    auto rec = Rec::convert_dtuple_to_rec((byte *)mem_heap_alloc(heap, size), index, tuple, n_ext);
 
     {
       Phy_rec record(index, rec);
@@ -348,7 +348,7 @@ struct Page_cursor {
    * @param mtr In: Mini-transaction handle, or NULL.
    * @return Pointer to the inserted record if successful, NULL otherwise.
    */
-  inline rec_t *rec_insert(const rec_t *rec, Index *index, ulint *offsets, mtr_t *mtr) {
+  inline Rec rec_insert(const Rec rec, Index *index, ulint *offsets, mtr_t *mtr) {
     return insert_rec_low(m_rec, index, rec, offsets, mtr);
   }
 
@@ -402,7 +402,7 @@ struct Page_cursor {
    * @param[in] n Compare nth field
    * @return true if rec field extends tuple field
    */
-  bool rec_field_extends(const dtuple_t *tuple, const rec_t *rec, const ulint *offsets, ulint n);
+  bool rec_field_extends(const dtuple_t *tuple, const Rec rec, const ulint *offsets, ulint n);
 
   /**
    * @brief Writes the log record of a record insert on a page.
@@ -413,7 +413,7 @@ struct Page_cursor {
    * @param[in] index Record descriptor.
    * @param[in] mtr Mini-transaction handle.
    */
-  static void insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec_t *cursor_rec, const Index *index, mtr_t *mtr);
+  static void insert_rec_write_log(Rec insert_rec, ulint rec_size, Rec cursor_rec, const Index *index, mtr_t *mtr);
 
   /**
    * @brief Writes log record of a record delete on a page.
@@ -421,7 +421,7 @@ struct Page_cursor {
    * @param[in] rec Record to be deleted.
    * @param[in] mtr Mini-transaction handle.
    */
-  void delete_rec_write_log(rec_t *rec, mtr_t *mtr);
+  void delete_rec_write_log(Rec rec, mtr_t *mtr);
 
 #ifdef PAGE_CUR_ADAPT
 #ifdef UNIV_SEARCH_PERF_STAT
@@ -434,7 +434,7 @@ struct Page_cursor {
   const Index *m_index{};
 
   /** pointer to a record on page */
-  rec_t *m_rec{};
+  Rec m_rec{};
 
   /** Current offsets of the record. */
   ulint *m_offsets{};

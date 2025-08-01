@@ -77,9 +77,11 @@ char *Dict_load::get_first_table_name_in_db(const char *name) noexcept {
     }
 
     ulint len;
-    const auto field = rec_get_nth_field(rec, 0, &len);
+    Phy_rec record(sys_index, rec);
+    auto offsets = record.get_col_offsets(nullptr, 1, &heap, Current_location());
+    const auto field = rec.get_nth_field(offsets, 0, &len);
 
-    if (len < strlen(name) || memcmp(name, field, strlen(name)) != 0) {
+    if (len < strlen(name) || memcmp(name, field.get(), strlen(name)) != 0) {
       /* Not found */
 
       pcur.close();
@@ -91,9 +93,9 @@ char *Dict_load::get_first_table_name_in_db(const char *name) noexcept {
       return nullptr;
     }
 
-    if (!rec_get_deleted_flag(rec)) {
+    if (!rec.get_deleted_flag()) {
       /* We found one */
-      auto table_name = mem_strdupl(reinterpret_cast<char *>(field), len);
+      auto table_name = mem_strdupl(const_cast<char *>(reinterpret_cast<const char *>(field.get())), len);
 
       pcur.close();
 
@@ -124,6 +126,7 @@ std::string Dict_load::to_string() noexcept {
   m_dict->mutex_acquire();
 
   mtr_t mtr;
+  auto heap = mem_heap_create(1000);
 
   mtr.start();
 
@@ -156,11 +159,13 @@ std::string Dict_load::to_string() noexcept {
     }
 
     ulint len;
-    const auto field = rec_get_nth_field(rec, 0, &len);
+    Phy_rec record(sys_index, rec);
+    auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
+    const auto field = rec.get_nth_field(offsets, 0, &len);
 
-    if (!rec_get_deleted_flag(rec)) {
+    if (!rec.get_deleted_flag()) {
       /* We found one */
-      auto table_name = mem_strdupl(reinterpret_cast<char *>(field), len);
+      auto table_name = mem_strdupl(const_cast<char *>(reinterpret_cast<const char *>(field.get())), len);
 
       pcur.store_position(&mtr);
 
@@ -171,7 +176,7 @@ std::string Dict_load::to_string() noexcept {
       mem_free(table_name);
 
       if (table == nullptr) {
-        std::string name{reinterpret_cast<const char *>(field), len};
+        std::string name(reinterpret_cast<const char *>(field.get()), len);
         log_err("Failed to load table ", name);
       } else {
         /* The table definition was corrupt if there is no index */
@@ -192,10 +197,10 @@ std::string Dict_load::to_string() noexcept {
   ut_a(false);
 }
 
-ulint Dict_load::sys_tables_get_flags(const rec_t *rec) const noexcept {
+ulint Dict_load::sys_tables_get_flags(const Rec rec, const ulint *offsets) const noexcept {
   ulint len;
 
-  auto field = rec_get_nth_field(rec, 5, &len);
+  auto field = rec.get_nth_field(offsets, 5, &len);
   ut_a(len == 4);
 
   auto flags = mach_read_from_4(field);
@@ -204,7 +209,7 @@ ulint Dict_load::sys_tables_get_flags(const rec_t *rec) const noexcept {
     return 0;
   }
 
-  field = rec_get_nth_field(rec, 4 /*N_COLS*/, &len);
+  field = rec.get_nth_field(offsets, 4 /*N_COLS*/, &len);
   auto n_cols = mach_read_from_4(field);
 
   if (unlikely(!(n_cols & 0x80000000UL))) {
@@ -233,6 +238,7 @@ db_err Dict_load::open(bool in_crash_recovery) noexcept {
   load_system_tables();
 
   mtr_t mtr;
+  auto heap = mem_heap_create(1000);
 
   mtr.start();
 
@@ -261,16 +267,18 @@ db_err Dict_load::open(bool in_crash_recovery) noexcept {
 
       return DB_SUCCESS;
 
-    } else if (!rec_get_deleted_flag(rec)) {
+    } else if (!rec.get_deleted_flag()) {
       /* We found one */
       ulint len;
-      auto field = rec_get_nth_field(rec, 0, &len);
-      auto name = mem_strdupl(reinterpret_cast<char *>(field), len);
-      auto flags = sys_tables_get_flags(rec);
+      Phy_rec record(sys_index, rec);
+      auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
+      auto field = rec.get_nth_field(offsets, 0, &len);
+      auto name = mem_strdupl(const_cast<char *>(reinterpret_cast<const char *>(field.get())), len);
+      auto flags = sys_tables_get_flags(rec, offsets);
 
       if (flags == ULINT_UNDEFINED) {
 
-        field = rec_get_nth_field(rec, 5, &len);
+        field = rec.get_nth_field(offsets, 5, &len);
         flags = mach_read_from_4(field);
 
         std::string str{};
@@ -281,7 +289,7 @@ db_err Dict_load::open(bool in_crash_recovery) noexcept {
 
       } else {
 
-        field = rec_get_nth_field(rec, 9, &len);
+        field = rec.get_nth_field(offsets, 9, &len);
         ut_a(len == 4);
 
         const auto space_id = mach_read_from_4(field);
@@ -295,12 +303,12 @@ db_err Dict_load::open(bool in_crash_recovery) noexcept {
         } else if (in_crash_recovery) {
           /* Check that the tablespace (the .ibd file) really exists; print a warning
            if not. Do not print warnings for temporary tables. */
-          field = rec_get_nth_field(rec, 4, &len);
+          field = rec.get_nth_field(offsets, 4, &len);
 
           /* Don't support any other format than V1 */
           ut_a((mach_read_from_4(field) & 0x80000000UL) != 0);
 
-          field = rec_get_nth_field(rec, 7, &len);
+          field = rec.get_nth_field(offsets, 7, &len);
           auto is_temp = (mach_read_from_4(field) & DICT_TF2_TEMPORARY) != 0;
 
           fil->space_for_table_exists_in_mem(space_id, name, is_temp, true, !is_temp);
@@ -358,27 +366,29 @@ db_err Dict_load::load_columns(Table *table, mem_heap_t *heap) noexcept {
 
     ut_a(pcur.is_on_user_rec());
 
-    ut_a(!rec_get_deleted_flag(rec));
+    ut_a(!rec.get_deleted_flag());
 
     ulint len;
-    auto field = rec_get_nth_field(rec, 0, &len);
+    Phy_rec record(sys_index, rec);
+    auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
+    auto field = rec.get_nth_field(offsets, 0, &len);
     ut_ad(len == 8);
-    ut_a(table->m_id == mach_read_from_8(field));
+    ut_a(table->m_id == mach_read_from_8(field.get()));
 
-    field = rec_get_nth_field(rec, 1, &len);
+    field = rec.get_nth_field(offsets, 1, &len);
     ut_ad(len == 4);
-    ut_a(i == mach_read_from_4(field));
+    ut_a(i == mach_read_from_4(field.get()));
 
     ut_a(name_of_col_is(sys_columns, sys_index, 4, "NAME"));
 
-    field = rec_get_nth_field(rec, 4, &len);
-    auto name = mem_heap_strdupl(heap, (char *)field, len);
+    field = rec.get_nth_field(offsets, 4, &len);
+    auto name = mem_heap_strdupl(heap, (char *)field.get(), len);
 
-    field = rec_get_nth_field(rec, 5, &len);
-    auto mtype = mach_read_from_4(field);
+    field = rec.get_nth_field(offsets, 5, &len);
+    auto mtype = mach_read_from_4(field.get());
 
-    field = rec_get_nth_field(rec, 6, &len);
-    auto prtype = mach_read_from_4(field);
+    field = rec.get_nth_field(offsets, 6, &len);
+    auto prtype = mach_read_from_4(field.get());
 
     if (dtype_get_charset_coll(prtype) == 0 && dtype_is_string_type(mtype)) {
       /* The table was created with < 4.1.2. */
@@ -396,8 +406,8 @@ db_err Dict_load::load_columns(Table *table, mem_heap_t *heap) noexcept {
       }
     }
 
-    field = rec_get_nth_field(rec, 7, &len);
-    auto col_len = mach_read_from_4(field);
+    field = rec.get_nth_field(offsets, 7, &len);
+    auto col_len = mach_read_from_4(field.get());
 
     ut_a(name_of_col_is(sys_columns, sys_index, 8, "PREC"));
 
@@ -449,15 +459,17 @@ db_err Dict_load::load_fields(Index *index, mem_heap_t *heap) noexcept {
     because SYS_FIELDS.INDEX_ID can be updated
     by ALTER TABLE ADD INDEX. */
 
-    if (rec_get_deleted_flag(rec)) {
+    if (rec.get_deleted_flag()) {
       (void)pcur.move_to_next_user_rec(&mtr);
       continue;
     }
 
-    auto field = rec_get_nth_field(rec, 0, &len);
+    Phy_rec record(sys_index, rec);
+    auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
+    auto field = rec.get_nth_field(offsets, 0, &len);
     ut_ad(len == 8);
 
-    field = rec_get_nth_field(rec, 1, &len);
+    field = rec.get_nth_field(offsets, 1, &len);
     ut_a(len == 4);
 
     /* The next field stores the field position in the index
@@ -482,9 +494,9 @@ db_err Dict_load::load_fields(Index *index, mem_heap_t *heap) noexcept {
 
     ut_a(name_of_col_is(sys_fields, sys_index, 4, "COL_NAME"));
 
-    field = rec_get_nth_field(rec, 4, &len);
+    field = rec.get_nth_field(offsets, 4, &len);
 
-    (void)index->add_field(mem_heap_strdupl(heap, reinterpret_cast<char *>(field), len), prefix_len);
+    (void)index->add_field(mem_heap_strdupl(heap, reinterpret_cast<char *>(field.get()), len), prefix_len);
 
     (void)pcur.move_to_next_user_rec(&mtr);
   }
@@ -537,41 +549,43 @@ db_err Dict_load::load_indexes(Table *table, mem_heap_t *heap) noexcept {
     const auto rec = pcur.get_rec();
 
     ulint len;
-    auto field = rec_get_nth_field(rec, 0, &len);
+    Phy_rec record(sys_index, rec);
+    auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
+    auto field = rec.get_nth_field(offsets, 0, &len);
     ut_ad(len == 8);
 
-    if (memcmp(buf, field, len) != 0) {
+    if (memcmp(buf, field.get(), len) != 0) {
       break;
-    } else if (rec_get_deleted_flag(rec)) {
+    } else if (rec.get_deleted_flag()) {
       /* Skip delete marked records */
       (void)pcur.move_to_next_user_rec(&mtr);
       continue;
     }
 
-    field = rec_get_nth_field(rec, 1, &len);
+    field = rec.get_nth_field(offsets, 1, &len);
     ut_ad(len == 8);
-    auto id = mach_read_from_8(field);
+    auto id = mach_read_from_8(field.get());
 
     ut_a(name_of_col_is(sys_indexes, sys_index, 4, "NAME"));
 
     ulint name_len;
 
-    field = rec_get_nth_field(rec, 4, &name_len);
-    const auto name_buf = mem_heap_strdupl(heap, reinterpret_cast<char *>(field), name_len);
+    field = rec.get_nth_field(offsets, 4, &name_len);
+    const auto name_buf = mem_heap_strdupl(heap, reinterpret_cast<char *>(field.get()), name_len);
 
-    field = rec_get_nth_field(rec, 5, &len);
+    field = rec.get_nth_field(offsets, 5, &len);
     const auto n_fields = mach_read_from_4(field);
 
-    field = rec_get_nth_field(rec, 6, &len);
-    const auto type = mach_read_from_4(field);
+    field = rec.get_nth_field(offsets, 6, &len);
+    const auto type = mach_read_from_4(field.get());
 
-    field = rec_get_nth_field(rec, 7, &len);
-    const space_id_t space = mach_read_from_4(field);
+    field = rec.get_nth_field(offsets, 7, &len);
+    const space_id_t space = mach_read_from_4(field.get());
 
     ut_a(name_of_col_is(sys_indexes, sys_index, 8, "PAGE_NO"));
 
-    field = rec_get_nth_field(rec, 8, &len);
-    const page_no_t page_no = mach_read_from_4(field);
+    field = rec.get_nth_field(offsets, 8, &len);
+    const page_no_t page_no = mach_read_from_4(field.get());
 
     /* We check for unsupported types first, so that the
     subsequent checks are relevant for the supported types. */
@@ -666,34 +680,36 @@ Table *Dict_load::load_table(ib_recovery_t recovery, const char *name) noexcept 
     mem_heap_free(heap);
   };
 
-  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec)) {
+  if (!pcur.is_on_user_rec() || rec.get_deleted_flag()) {
     /* Not found */
     cleanup();
     return nullptr;
   }
 
   ulint len;
-  auto field = rec_get_nth_field(rec, 0, &len);
+  Phy_rec record(sys_index, rec);
+  auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
+  auto field = rec.get_nth_field(offsets, 0, &len);
 
   /* Check if the table name in record is the searched one */
-  if (len != strlen(name) || memcmp(name, field, len) != 0) {
+  if (len != strlen(name) || memcmp(name, field.get(), len) != 0) {
     cleanup();
     return nullptr;
   }
 
   ut_a(name_of_col_is(sys_tables, sys_index, 9, "SPACE"));
 
-  field = rec_get_nth_field(rec, 9, &len);
-  space_id_t space = mach_read_from_4(field);
+  field = rec.get_nth_field(offsets, 9, &len);
+  space_id_t space = mach_read_from_4(field.get());
 
   ulint flags;
 
   /* Check if the tablespace exists and has the right name */
   if (space != DICT_HDR_SPACE) {
-    flags = sys_tables_get_flags(rec);
+    flags = sys_tables_get_flags(rec, offsets);
 
     if (unlikely(flags == ULINT_UNDEFINED)) {
-      const auto field = rec_get_nth_field(rec, 5, &len);
+      const auto field = rec.get_nth_field(offsets, 5, &len);
 
       flags = mach_read_from_4(field);
       log_err(std::format("Table {} in InnoDB data dictionary has unknown type {}", name, flags));
@@ -708,11 +724,11 @@ Table *Dict_load::load_table(ib_recovery_t recovery, const char *name) noexcept 
 
   ut_a(name_of_col_is(sys_tables, sys_index, 4, "N_COLS"));
 
-  field = rec_get_nth_field(rec, 4, &len);
+  field = rec.get_nth_field(offsets, 4, &len);
 
   bool ibd_file_missing{};
   auto fil = m_dict->m_store.m_fsp->m_fil;
-  auto n_cols = mach_read_from_4(field);
+  auto n_cols = mach_read_from_4(field.get());
 
   /* See if the tablespace is available. */
   if (space == DICT_HDR_SPACE) {
@@ -737,9 +753,9 @@ Table *Dict_load::load_table(ib_recovery_t recovery, const char *name) noexcept 
 
   ut_a(name_of_col_is(sys_tables, sys_index, 3, "ID"));
 
-  field = rec_get_nth_field(rec, 3, &len);
+  field = rec.get_nth_field(offsets, 3, &len);
 
-  table->m_id = mach_read_from_8(field);
+  table->m_id = mach_read_from_8(field.get());
 
   pcur.close();
 
@@ -829,7 +845,7 @@ Table *Dict_load::load_table_on_id(ib_recovery_t recovery, Dict_id table_id) noe
     mem_heap_free(heap);
   };
 
-  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec)) {
+  if (!pcur.is_on_user_rec() || rec.get_deleted_flag()) {
     /* Not found */
     cleanup();
     return nullptr;
@@ -841,19 +857,21 @@ Table *Dict_load::load_table_on_id(ib_recovery_t recovery, Dict_id table_id) noe
   rec = pcur.get_rec();
 
   ulint len;
-  auto field = rec_get_nth_field(rec, 0, &len);
+  Phy_rec record(sys_table_ids, rec);
+  auto offsets = record.get_col_offsets(nullptr, sys_table_ids->get_n_fields(), &heap, Current_location());
+  auto field = rec.get_nth_field(offsets, 0, &len);
   ut_ad(len == 8);
 
   /* Check if the table id in record is the one searched for */
-  if (table_id != mach_read_from_8(field)) {
+  if (table_id != mach_read_from_8(field.get())) {
     cleanup();
     return nullptr;
   }
 
   /* Now we get the table name from the record */
-  field = rec_get_nth_field(rec, 1, &len);
+  field = rec.get_nth_field(offsets, 1, &len);
   /* Load the table definition to memory */
-  auto table = load_table(recovery, mem_heap_strdupl(heap, reinterpret_cast<char *>(field), len));
+  auto table = load_table(recovery, mem_heap_strdupl(heap, reinterpret_cast<char *>(field.get()), len));
 
   cleanup();
 
@@ -910,23 +928,25 @@ db_err Dict_load::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
     auto rec = pcur.get_rec();
 
     ut_a(pcur.is_on_user_rec());
-    ut_a(!rec_get_deleted_flag(rec));
+    ut_a(!rec.get_deleted_flag());
 
     ulint len;
+    Phy_rec record(sys_index, rec);
+    auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &foreign->m_heap, Current_location());
 
-    auto field = rec_get_nth_field(rec, 0, &len);
+    auto field = rec.get_nth_field(offsets, 0, &len);
     ut_a(len == strlen(id));
-    ut_a(memcmp(id, field, len) == 0);
+    ut_a(memcmp(id, field.get(), len) == 0);
 
-    field = rec_get_nth_field(rec, 1, &len);
+    field = rec.get_nth_field(offsets, 1, &len);
     ut_a(len == 4);
-    ut_a(i == mach_read_from_4(field));
+    ut_a(i == mach_read_from_4(field.get()));
 
-    field = rec_get_nth_field(rec, 4, &len);
-    foreign->m_foreign_col_names[i] = mem_heap_strdupl(foreign->m_heap, (char *)field, len);
+    field = rec.get_nth_field(offsets, 4, &len);
+    foreign->m_foreign_col_names[i] = mem_heap_strdupl(foreign->m_heap, (char *)field.get(), len);
 
-    field = rec_get_nth_field(rec, 5, &len);
-    foreign->m_referenced_col_names[i] = mem_heap_strdupl(foreign->m_heap, (char *)field, len);
+    field = rec.get_nth_field(offsets, 5, &len);
+    foreign->m_referenced_col_names[i] = mem_heap_strdupl(foreign->m_heap, (char *)field.get(), len);
 
     (void)pcur.move_to_next_user_rec(&mtr);
   }
@@ -968,7 +988,7 @@ db_err Dict_load::load_foreign(const char *id, bool check_charsets) noexcept {
     mem_heap_free(heap2);
   };
 
-  if (!pcur.is_on_user_rec() || rec_get_deleted_flag(rec)) {
+  if (!pcur.is_on_user_rec() || rec.get_deleted_flag()) {
     /* Not found */
 
     log_err("A: cannot load foreign constraint ", id);
@@ -979,10 +999,12 @@ db_err Dict_load::load_foreign(const char *id, bool check_charsets) noexcept {
   }
 
   ulint len;
-  auto field = rec_get_nth_field(rec, 0, &len);
+  Phy_rec record(sys_index, rec);
+  auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap2, Current_location());
+  auto field = rec.get_nth_field(offsets, 0, &len);
 
   /* Check if the id in record is the searched one */
-  if (len != strlen(id) || memcmp(id, field, len) != 0) {
+  if (len != strlen(id) || memcmp(id, field.get(), len) != 0) {
 
     log_err("B: cannot load foreign constraint ", id);
 
@@ -997,7 +1019,7 @@ db_err Dict_load::load_foreign(const char *id, bool check_charsets) noexcept {
   mem_heap_free(heap2);
 
   auto foreign = Foreign::create();
-  auto n_fields_and_type = mach_read_from_4(rec_get_nth_field(rec, 5, &len));
+  auto n_fields_and_type = mach_read_from_4(rec.get_nth_field(offsets, 5, &len).get());
 
   ut_a(len == 4);
 
@@ -1008,11 +1030,11 @@ db_err Dict_load::load_foreign(const char *id, bool check_charsets) noexcept {
 
   foreign->m_id = mem_heap_strdup(foreign->m_heap, id);
 
-  field = rec_get_nth_field(rec, 3, &len);
-  foreign->m_foreign_table_name = mem_heap_strdupl(foreign->m_heap, (char *)field, len);
+  field = rec.get_nth_field(offsets, 3, &len);
+  foreign->m_foreign_table_name = mem_heap_strdupl(foreign->m_heap, (char *)field.get(), len);
 
-  field = rec_get_nth_field(rec, 4, &len);
-  foreign->m_referenced_table_name = mem_heap_strdupl(foreign->m_heap, (char *)field, len);
+  field = rec.get_nth_field(offsets, 4, &len);
+  foreign->m_referenced_table_name = mem_heap_strdupl(foreign->m_heap, (char *)field.get(), len);
 
   pcur.close();
 
@@ -1076,8 +1098,10 @@ db_err Dict_load::load_foreigns(const char *table_name, bool check_charsets) noe
       /* Now we have the record in the secondary index containing a table
       name and a foreign constraint ID */
 
+      Phy_rec record(sec_index, rec);
+      auto offsets = record.get_col_offsets(nullptr, sec_index->get_n_fields(), &heap, Current_location());
       ulint len;
-      auto field = rec_get_nth_field(rec, 0, &len);
+      auto field = rec.get_nth_field(offsets, 0, &len);
 
       const auto data = reinterpret_cast<const byte *>(dfield_get_data(dfield));
       const auto data_len = dfield_get_len(dfield);
@@ -1097,14 +1121,14 @@ db_err Dict_load::load_foreigns(const char *table_name, bool check_charsets) noe
 
       /* FIXME: On Unix, allow table names that only differ in character case. */
 
-      if (memcmp(field, table_name, len) != 0 || rec_get_deleted_flag(rec)) {
+      if (memcmp(field.get(), table_name, len) != 0 || rec.get_deleted_flag()) {
         continue;
       }
 
       /* Now we get a foreign key constraint id */
-      field = rec_get_nth_field(rec, 1, &len);
+      field = rec.get_nth_field(offsets, 1, &len);
 
-      auto id = mem_heap_strdupl(heap, (char *)field, len);
+      auto id = mem_heap_strdupl(heap, (char *)field.get(), len);
 
       pcur.store_position(&mtr);
 

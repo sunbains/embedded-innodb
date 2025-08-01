@@ -39,7 +39,7 @@ Created 9/20/1997 Heikki Tuuri
  * Applies the hashed log records to the page, if the page lsn is less than
  * the lsn of a log record. This can be called when a buffer page has just been
  * read in, or also for a page already in the buffer pool.
- * 
+ *
  * @param[in] just_read_in      true if the i/o handler calls this for a
                                 freshly read page
  * @param[in,out] block         buffer block
@@ -51,18 +51,18 @@ void recv_recover_page(bool just_read_in, Buf_block *block) noexcept;
  * to start processing of new user transactions, but the function
  * recv_recovery_from_checkpoint_finish should be called later to complete
  * the recovery and free the resources used in it.
- * 
+ *
  * @param[in,out] dblwr         Doublewrite buffer for recovering pages
  * @param[in] recovery          Recovery flag
- * @param[in] max_flushed_lsn   Max flushed lsn read from system.idb 
- * 
+ * @param[in] max_flushed_lsn   Max flushed lsn read from system.idb
+ *
  * @return	error code or DB_SUCCESS
  */
 db_err recv_recovery_from_checkpoint_start(DBLWR *dblwr, ib_recovery_t recovery, lsn_t max_flushed_lsn) noexcept;
 
 /**
  * Completes recovery from a checkpoint.
- * 
+ *
  * @param[in,out] dblwr         Doublewrite buffer to use
  * @param[in] recovery          Recovery flag
  */
@@ -75,7 +75,7 @@ void recv_recovery_rollback_active() noexcept;
 
 /**
  * Resets the logs. The contents of log files will be lost!
- * 
+ *
  * @param[in] lsn               reset to this lsn rounded up to be divisible by
  *                              IB_FILE_BLOCK_SIZE, after which we add
  *		                          LOG_BLOCK_HDR_SIZE
@@ -193,7 +193,7 @@ struct Recv_sys {
 
   /**
   * Inits the recovery system for a recovery operation
-  * 
+  *
   * @param[in] size              Available memory in bytes
   */
   void open(ulint size) noexcept;
@@ -220,7 +220,7 @@ struct Recv_sys {
 
   /**
   * Adds a new log record to the map of log records.
-  * 
+  *
   * @param type The type of the log record.
   * @param space The space id.
   * @param page_no The page number.

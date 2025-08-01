@@ -57,7 +57,7 @@ bool Page_cursor::try_search_shortcut(
 ) {
   bool success{};
   mem_heap_t *heap{};
-  const rec_t *next_rec{};
+  Rec next_rec{};
   auto page = block->get_frame();
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   auto offsets = offsets_.data();
@@ -149,15 +149,15 @@ exit_func:
 #endif
 
 #ifdef PAGE_CUR_LE_OR_EXTENDS
-bool Page_cursor::rec_field_extends(const dtuple_t *tuple, const rec_t *rec, const ulint *offsets, ulint n) {
+bool Page_cursor::rec_field_extends(const dtuple_t *tuple, const Rec rec, const ulint *offsets, ulint n) {
   ulint rec_f_len;
 
-  ut_ad(rec_offs_validate(rec, nullptr, offsets));
+  ut_ad(rec.offs_validate(rec, nullptr, offsets));
   auto dfield = dtuple_get_nth_field(tuple, n);
 
   auto type = dfield_get_type(dfield);
 
-  rec_f = rec_get_nth_field(rec, offsets, n, &rec_f_len);
+  rec_f = rec.get_nth_field(rec, offsets, n, &rec_f_len);
 
   if (type->mtype == DATA_VARCHAR || type->mtype == DATA_CHAR || type->mtype == DATA_FIXBINARY || type->mtype == DATA_BINARY ||
       type->mtype == DATA_BLOB || type->mtype == DATA_VARCLIENT || type->mtype == DATA_CLIENT) {
@@ -179,8 +179,8 @@ void Page_cursor::search_with_match(
   const Buf_block *block, const Index *index, const DTuple *tuple, ulint mode, ulint *iup_matched_fields, ulint *iup_matched_bytes,
   ulint *ilow_matched_fields, ulint *ilow_matched_bytes
 ) {
-  const rec_t *up_rec;
-  const rec_t *low_rec;
+  Rec up_rec;
+  Rec low_rec;
   ulint cur_matched_fields;
   ulint cur_matched_bytes;
   const page_dir_slot_t *slot;
@@ -451,12 +451,12 @@ void Page_cursor::open_on_rnd_user_rec(Buf_block *block) {
   }
 }
 
-void Page_cursor::insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec_t *cursor_rec, const Index *index, mtr_t *mtr) {
+void Page_cursor::insert_rec_write_log(Rec insert_rec, ulint rec_size, Rec cursor_rec, const Index *index, mtr_t *mtr) {
   byte *log_ptr;
   const byte *log_end;
 
   ut_a(rec_size < UNIV_PAGE_SIZE);
-  ut_ad(page_align(insert_rec) == page_align(cursor_rec));
+  ut_ad(insert_rec.page_align() == cursor_rec.page_align());
 
   ulint extra_size{};
   ulint cur_rec_size{};
@@ -553,7 +553,7 @@ void Page_cursor::insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec_t 
     log_end = &log_ptr[5 + 1 + 5 + 5 + MLOG_BUF_MARGIN];
   }
 
-  if (unlikely(rec_get_info_and_status_bits(insert_rec) != rec_get_info_and_status_bits(cursor_rec))) {
+  if (unlikely(insert_rec.get_info_and_status_bits() != cursor_rec.get_info_and_status_bits())) {
 
     goto need_extra_info;
   }
@@ -565,7 +565,7 @@ void Page_cursor::insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec_t 
     log_ptr += mach_write_compressed(log_ptr, 2 * (rec_size - i) + 1);
 
     /* Write the info bits */
-    mach_write_to_1(log_ptr, rec_get_info_and_status_bits(insert_rec));
+    mach_write_to_1(log_ptr, insert_rec.get_info_and_status_bits());
     ++log_ptr;
 
     /* Write the record origin offset */
@@ -600,7 +600,7 @@ void Page_cursor::insert_rec_write_log(rec_t *insert_rec, ulint rec_size, rec_t 
 byte *Page_cursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf_block *block, Index *index, mtr_t *mtr) {
   byte *buf;
   auto ptr2 = ptr;
-  rec_t *cursor_rec;
+  Rec cursor_rec;
   mem_heap_t *heap{};
   ulint info_and_status_bits{};
   std::array<byte, 1024> buf_{};
@@ -705,7 +705,7 @@ byte *Page_cursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf
   }
 
   if (!(end_seg_len & 0x1UL)) {
-    info_and_status_bits = rec_get_info_and_status_bits(cursor_rec);
+    info_and_status_bits = cursor_rec.get_info_and_status_bits();
     origin_offset = rec_offs_extra_size(offsets);
     mismatch_index = rec_offs_size(offsets) - (end_seg_len >> 1);
   }
@@ -742,10 +742,13 @@ byte *Page_cursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf
     ut_error;
   }
 
-  memcpy(buf, rec_get_start(cursor_rec, offsets), mismatch_index);
+  memcpy(buf, cursor_rec.get_start(offsets).get(), mismatch_index);
   memcpy(buf + mismatch_index, ptr, end_seg_len);
 
-  rec_set_info_bits(buf + origin_offset, info_and_status_bits);
+  {
+    Rec temp_rec(buf + origin_offset);
+    temp_rec.set_info_bits(info_and_status_bits);
+  }
 
   Page_cursor cursor;
 
@@ -775,15 +778,15 @@ byte *Page_cursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf
   return ptr + end_seg_len;
 }
 
-rec_t *Page_cursor::insert_rec_low(rec_t *current_rec, const Index *index, const rec_t *rec, ulint *offsets, mtr_t *mtr) {
+Rec Page_cursor::insert_rec_low(Rec current_rec, const Index *index, const Rec rec, ulint *offsets, mtr_t *mtr) {
   byte *insert_buf;
-  rec_t *last_insert; /* Cursor position at previous insert */
-  rec_t *insert_rec;  /* Inserted record */
-  ulint heap_no;      /* Heap number of the inserted record */
+  Rec last_insert; /* Cursor position at previous insert */
+  Rec insert_rec;  /* Inserted record */
+  ulint heap_no;       /* Heap number of the inserted record */
 
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(rec.offs_validate(index, offsets));
 
-  auto page = page_align(current_rec);
+  auto page = current_rec.page_align();
 
   ut_ad(!page_rec_is_supremum(current_rec));
 
@@ -805,9 +808,9 @@ rec_t *Page_cursor::insert_rec_low(rec_t *current_rec, const Index *index, const
   /* 2. Try to find suitable space from page memory management
   A free record that was reused, or nullptr */
 
-  auto free_rec = page_header_get_ptr(page, PAGE_FREE);
+  auto free_rec_ptr = page_header_get_ptr(page, PAGE_FREE);
 
-  if (likely_null(free_rec)) {
+  if (likely_null(free_rec_ptr)) {
     mem_heap_t *heap{};
     std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
     auto offsets = offsets_.data();
@@ -816,6 +819,7 @@ rec_t *Page_cursor::insert_rec_low(rec_t *current_rec, const Index *index, const
 
     /* Try to allocate from the head of the free list. */
     {
+      Rec free_rec(free_rec_ptr);
       Phy_rec record{index, free_rec};
 
       offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
@@ -829,10 +833,13 @@ rec_t *Page_cursor::insert_rec_low(rec_t *current_rec, const Index *index, const
       goto use_heap;
     }
 
-    insert_buf = free_rec - rec_offs_extra_size(offsets);
+    insert_buf = free_rec_ptr - rec_offs_extra_size(offsets);
 
-    heap_no = rec_get_heap_no(free_rec);
-    page_mem_alloc_free(page, rec_get_next_ptr(free_rec), rec_size);
+    {
+      Rec free_rec(free_rec_ptr);
+      heap_no = free_rec.get_heap_no();
+      page_mem_alloc_free(page, free_rec.get_next_ptr(), rec_size);
+    }
 
     if (likely_null(heap)) {
       mem_heap_free(heap);
@@ -841,7 +848,7 @@ rec_t *Page_cursor::insert_rec_low(rec_t *current_rec, const Index *index, const
 
   use_heap:
 
-    free_rec = nullptr;
+    free_rec_ptr = nullptr;
     insert_buf = page_mem_alloc_heap(page, rec_size, &heap_no);
 
     if (unlikely(insert_buf == nullptr)) {
@@ -850,15 +857,15 @@ rec_t *Page_cursor::insert_rec_low(rec_t *current_rec, const Index *index, const
   }
 
   /* 3. Create the record */
-  insert_rec = rec_copy(insert_buf, rec, offsets);
-  ut_d(rec_offs_make_valid(insert_rec, index, offsets));
+  insert_rec = rec.copy(insert_buf, offsets);
+  ut_d(insert_rec.offs_make_valid(index, offsets));
 
   /* 4. Insert the record in the linked list of records */
   ut_ad(current_rec != insert_rec);
 
   {
     /* next record after current before the insertion */
-    rec_t *next_rec = page_rec_get_next(current_rec);
+    Rec next_rec = page_rec_get_next(current_rec);
     page_rec_set_next(insert_rec, next_rec);
     page_rec_set_next(current_rec, insert_rec);
   }
@@ -867,24 +874,25 @@ rec_t *Page_cursor::insert_rec_low(rec_t *current_rec, const Index *index, const
 
   /* 5. Set the n_owned field in the inserted record to zero,
   and set the heap_no field */
-  rec_set_n_owned(insert_rec, 0);
-  rec_set_heap_no(insert_rec, heap_no);
+  insert_rec.set_n_owned(0);
+  insert_rec.set_heap_no(heap_no);
 
   UNIV_MEM_ASSERT_RW(rec_get_start(insert_rec, offsets), rec_offs_size(offsets));
   /* 6. Update the last insertion info in page header */
 
-  last_insert = page_header_get_ptr(page, PAGE_LAST_INSERT);
+  auto last_insert_ptr = page_header_get_ptr(page, PAGE_LAST_INSERT);
 
-  if (unlikely(last_insert == nullptr)) {
+  if (unlikely(last_insert_ptr == nullptr)) {
     page_header_set_field(page, PAGE_DIRECTION, PAGE_NO_DIRECTION);
     page_header_set_field(page, PAGE_N_DIRECTION, 0);
 
-  } else if ((last_insert == current_rec) && (page_header_get_field(page, PAGE_DIRECTION) != PAGE_LEFT)) {
+  } else if ((Rec(last_insert_ptr) == current_rec) && (page_header_get_field(page, PAGE_DIRECTION) != PAGE_LEFT)) {
 
     page_header_set_field(page, PAGE_DIRECTION, PAGE_RIGHT);
     page_header_set_field(page, PAGE_N_DIRECTION, page_header_get_field(page, PAGE_N_DIRECTION) + 1);
 
-  } else if ((page_rec_get_next(insert_rec) == last_insert) && (page_header_get_field(page, PAGE_DIRECTION) != PAGE_RIGHT)) {
+  } else if ((page_rec_get_next(insert_rec) == Rec(last_insert_ptr)) &&
+             (page_header_get_field(page, PAGE_DIRECTION) != PAGE_RIGHT)) {
 
     page_header_set_field(page, PAGE_DIRECTION, PAGE_LEFT);
     page_header_set_field(page, PAGE_N_DIRECTION, page_header_get_field(page, PAGE_N_DIRECTION) + 1);
@@ -897,10 +905,10 @@ rec_t *Page_cursor::insert_rec_low(rec_t *current_rec, const Index *index, const
 
   /* 7. It remains to update the owner record. */
   {
-    rec_t *owner_rec = page_rec_find_owner_rec(insert_rec);
-    auto n_owned = rec_get_n_owned(owner_rec);
+    Rec owner_rec = page_rec_find_owner_rec(insert_rec);
+    auto n_owned = owner_rec.get_n_owned();
 
-    rec_set_n_owned(owner_rec, n_owned + 1);
+    owner_rec.set_n_owned(n_owned + 1);
 
     /* 8. Now we have incremented the n_owned field of the owner
     record. If the number exceeds PAGE_DIR_SLOT_MAX_N_OWNED,
@@ -977,7 +985,7 @@ byte *Page_cursor::parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr,
   return rec_end;
 }
 
-void Page_cursor::copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec, const Index *index, mtr_t *mtr) {
+void Page_cursor::copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, const Index *index, mtr_t *mtr) {
   page_dir_slot_t *slot{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   auto offsets = offsets_.data();
@@ -985,7 +993,7 @@ void Page_cursor::copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec
   rec_offs_init(offsets_);
 
   ut_ad(page_dir_get_n_heap(new_page) == PAGE_HEAP_NO_USER_LOW);
-  ut_ad(page_align(rec) != new_page);
+  ut_ad(rec.page_align() != new_page);
 
   if (page_rec_is_infimum(rec)) {
 
@@ -1020,19 +1028,19 @@ void Page_cursor::copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec
   auto heap_top = new_page + PAGE_SUPREMUM_END;
 
   mem_heap_t *heap{};
-  rec_t *insert_rec{};
+  Rec insert_rec{};
 
   do {
     Phy_rec record{index, rec};
 
     offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
 
-    insert_rec = rec_copy(heap_top, rec, offsets);
+    insert_rec = rec.copy(heap_top, offsets);
 
-    rec_set_next_offs(prev_rec, page_offset(insert_rec));
+    prev_rec.set_next_offs(page_offset(insert_rec));
 
-    rec_set_n_owned(insert_rec, 0);
-    rec_set_heap_no(insert_rec, PAGE_HEAP_NO_USER_LOW + n_recs);
+    insert_rec.set_n_owned(0);
+    insert_rec.set_heap_no(PAGE_HEAP_NO_USER_LOW + n_recs);
 
     ++count;
     ++n_recs;
@@ -1088,7 +1096,7 @@ void Page_cursor::copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec
     mach_write_to_4(log_ptr, log_data_len);
   }
 
-  rec_set_next_offs(insert_rec, PAGE_SUPREMUM);
+  insert_rec.set_next_offs(PAGE_SUPREMUM);
 
   slot = page_dir_get_nth_slot(new_page, 1 + slot_index);
 
@@ -1111,7 +1119,7 @@ void Page_cursor::copy_rec_list_end_to_created_page(page_t *new_page, rec_t *rec
   }
 }
 
-void Page_cursor::delete_rec_write_log(rec_t *rec, mtr_t *mtr) {
+void Page_cursor::delete_rec_write_log(Rec rec, mtr_t *mtr) {
   auto log_ptr = mlog_open_and_write_index(mtr, rec, MLOG_REC_DELETE, 2);
 
   if (unlikely(log_ptr == nullptr)) {
@@ -1172,7 +1180,7 @@ void Page_cursor::delete_rec(const Index *index, const ulint *offsets, mtr_t *mt
   auto page = get_page();
   auto current_rec = m_rec;
 
-  ut_ad(rec_offs_validate(current_rec, index, offsets));
+  ut_ad(current_rec.offs_validate(index, offsets));
 
   /* The record must not be the supremum or infimum record. */
   ut_ad(page_rec_is_user_rec(current_rec));
@@ -1201,12 +1209,12 @@ void Page_cursor::delete_rec(const Index *index, const ulint *offsets, mtr_t *mt
   ut_ad(cur_slot_no > 0);
 
   auto prev_slot = page_dir_get_nth_slot(page, cur_slot_no - 1);
-  auto rec = const_cast<rec_t *>(page_dir_slot_get_rec(prev_slot));
+  auto rec = page_dir_slot_get_rec(prev_slot);
 
   /* rec now points to the record of the previous directory slot. Look
   for the immediate predecessor of current_rec in a loop. */
 
-  rec_t *prev_rec{};
+  Rec prev_rec{};
 
   while (current_rec != rec) {
     prev_rec = rec;

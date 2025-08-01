@@ -175,7 +175,7 @@ bool Lock_validator::rec_validate_page(Page_id page_id) noexcept {
             rec_offs_init(offsets_);
 
             {
-              Phy_rec record{index, reinterpret_cast<const rec_t *>(rec_cursor)};
+              Phy_rec record{index, Rec(rec_cursor)};
               offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
             }
 
@@ -184,7 +184,7 @@ bool Lock_validator::rec_validate_page(Page_id page_id) noexcept {
             /* If this thread is holding the file space latch (fil_space_t::latch), the following
               check WILL break the latching order and may cause a deadlock of threads. */
 
-            (void)rec_queue_validate(block, rec_cursor, index, offsets);
+            (void)rec_queue_validate(block, Rec(rec_cursor), index, offsets);
 
             mutex_enter(&m_lock_sys->m_trx_sys->m_mutex);
 
@@ -218,10 +218,10 @@ bool Lock_validator::table_queue_validate(Table *table) noexcept {
 }
 
 bool Lock_validator::rec_queue_validate(
-  const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets
+  const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets
 ) noexcept {
-  ut_ad(block->get_frame() == page_align(rec));
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(block->get_frame() == rec.page_align());
+  ut_ad(rec.offs_validate(index, offsets));
 
   mutex_enter(&m_lock_sys->m_trx_sys->m_mutex);
 

@@ -70,8 +70,8 @@ constexpr ulint BTR_CUR_PAGE_REORGANIZE_LIMIT = UNIV_PAGE_SIZE / 32;
  * @param[in,out] rec The physical record.
  * @param[in] flag true  to delete mark the record
  */
-inline void set_deleted_flag(rec_t *rec, bool set_flag) noexcept {
-  rec_set_deleted_flag(rec, set_flag);
+inline void set_deleted_flag(Rec rec, bool set_flag) noexcept {
+  rec.set_deleted_flag(set_flag);
 }
 
 void Btree_cursor::latch_leaves(page_t *page, space_id_t space, page_no_t page_no, ulint latch_mode, mtr_t *mtr) noexcept {
@@ -142,7 +142,7 @@ void Btree_cursor::search_to_nth_level(
   Paths *paths, const Index *index, ulint level, const DTuple *tuple, ulint mode, ulint latch_mode, mtr_t *mtr, Source_location loc
 ) noexcept {
   page_t *page;
-  rec_t *node_ptr;
+  Rec node_ptr;
   page_no_t page_no;
   space_id_t space;
   ulint up_match;
@@ -469,7 +469,7 @@ void Btree_cursor::open_at_index_side(
 }
 
 void Btree_cursor::open_at_rnd_pos(const Index *index, ulint latch_mode, mtr_t *mtr, Source_location loc) noexcept {
-  rec_t *node_ptr;
+  Rec node_ptr;
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   auto offsets = offsets_.data();
@@ -545,7 +545,7 @@ void Btree_cursor::open_at_rnd_pos(const Index *index, ulint latch_mode, mtr_t *
   }
 }
 
-rec_t *Btree_cursor::insert_if_possible(const DTuple *tuple, ulint n_ext, mtr_t *mtr) noexcept {
+Rec Btree_cursor::insert_if_possible(const DTuple *tuple, ulint n_ext, mtr_t *mtr) noexcept {
   ut_ad(dtuple_check_typed(tuple));
 
   auto block = get_block();
@@ -556,7 +556,7 @@ rec_t *Btree_cursor::insert_if_possible(const DTuple *tuple, ulint n_ext, mtr_t 
   /* Now, try the insert */
   auto rec = page_cursor->tuple_insert(tuple, m_index, n_ext, mtr);
 
-  if (unlikely(rec == nullptr)) {
+  if (unlikely(rec.is_null())) {
     /* If record did not fit, reorganize */
 
     if (m_btree->page_reorganize(block, m_index, mtr)) {
@@ -613,18 +613,18 @@ void Btree_cursor::trx_report(Trx *trx, const Index *index, const char *op) noex
 #endif /* UNIV_DEBUG */
 
 db_err Btree_cursor::optimistic_insert(
-  ulint flags, DTuple *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
+  ulint flags, DTuple *entry, Rec *rec, big_rec_t *big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
 ) noexcept {
-  big_rec_t *big_rec_vec = nullptr;
+  big_rec_t big_rec_vec{};
   ulint max_size;
-  rec_t *dummy_rec;
+  Rec dummy_rec;
   bool leaf;
   bool reorg;
   bool inherit;
   ulint rec_size;
   db_err err;
 
-  *big_rec = nullptr;
+  *big_rec = big_rec_t{};
 
   auto block = get_block();
   auto page = block->get_frame();
@@ -651,9 +651,9 @@ db_err Btree_cursor::optimistic_insert(
   if (page_rec_needs_ext(rec_size)) {
     /* The record is so big that we have to store some fields
     externally on separate database pages */
-    big_rec_vec = dtuple_convert_big_rec(index, entry, &n_ext);
+    big_rec_vec = *dtuple_convert_big_rec(index, entry, &n_ext);
 
-    if (unlikely(big_rec_vec == nullptr)) {
+    if (unlikely(big_rec_vec.n_fields == 0)) {
 
       return DB_TOO_BIG_RECORD;
     }
@@ -667,10 +667,10 @@ db_err Btree_cursor::optimistic_insert(
 
   if (index->is_clustered() && page_get_n_recs(page) >= 2 && likely(leaf) &&
       Dict::index_get_space_reserve() + rec_size > max_size &&
-      (m_btree->page_get_split_rec_to_right(this, dummy_rec) || m_btree->page_get_split_rec_to_left(this, dummy_rec))) {
+      (m_btree->page_get_split_rec_right(this, dummy_rec) || m_btree->page_get_split_rec_left(this, dummy_rec))) {
 
-    if (big_rec_vec != nullptr) {
-      dtuple_convert_back_big_rec(entry, big_rec_vec);
+    if (big_rec_vec.n_fields > 0) {
+      dtuple_convert_back_big_rec(entry, &big_rec_vec);
     }
 
     return DB_FAIL;
@@ -679,8 +679,8 @@ db_err Btree_cursor::optimistic_insert(
   if (unlikely(max_size < BTR_CUR_PAGE_REORGANIZE_LIMIT || max_size < rec_size) && likely(page_get_n_recs(page) > 1) &&
       page_get_max_insert_size(page, 1) < rec_size) {
 
-    if (big_rec_vec != nullptr) {
-      dtuple_convert_back_big_rec(entry, big_rec_vec);
+    if (big_rec_vec.n_fields > 0) {
+      dtuple_convert_back_big_rec(entry, &big_rec_vec);
     }
 
     return DB_FAIL;
@@ -691,8 +691,8 @@ db_err Btree_cursor::optimistic_insert(
 
   if (unlikely(err != DB_SUCCESS)) {
 
-    if (big_rec_vec) {
-      dtuple_convert_back_big_rec(entry, big_rec_vec);
+    if (big_rec_vec.n_fields > 0) {
+      dtuple_convert_back_big_rec(entry, &big_rec_vec);
     }
 
     return err;
@@ -743,7 +743,7 @@ db_err Btree_cursor::optimistic_insert(
 }
 
 db_err Btree_cursor::pessimistic_insert(
-  ulint flags, DTuple *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
+  ulint flags, DTuple *entry, Rec *rec, big_rec_t *big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
 ) noexcept {
   db_err err;
   bool success;
@@ -752,11 +752,11 @@ db_err Btree_cursor::pessimistic_insert(
   ulint n_reserved{};
   mem_heap_t *heap{};
   auto index = m_index;
-  big_rec_t *big_rec_vec{};
+  big_rec_t big_rec_vec{};
 
   ut_ad(dtuple_check_typed(entry));
 
-  *big_rec = nullptr;
+  *big_rec = big_rec_t{};
 
   ut_ad(mtr->memo_contains(get_index()->get_lock(), MTR_MEMO_X_LOCK));
   ut_ad(mtr->memo_contains(get_block(), MTR_MEMO_PAGE_X_FIX));
@@ -801,15 +801,15 @@ db_err Btree_cursor::pessimistic_insert(
     /* The record is so big that we have to store some fields
     externally on separate database pages */
 
-    if (likely_null(big_rec_vec)) {
+    if (big_rec_vec.n_fields == 0) {
       /* This should never happen, but we handle the situation in a robust manner. */
       ut_ad(0);
-      dtuple_convert_back_big_rec(entry, big_rec_vec);
+      dtuple_convert_back_big_rec(entry, &big_rec_vec);
     }
 
-    big_rec_vec = dtuple_convert_big_rec(index, entry, &n_ext);
+    big_rec_vec = *dtuple_convert_big_rec(index, entry, &n_ext);
 
-    if (big_rec_vec == nullptr) {
+    if (big_rec_vec.n_fields == 0) {
 
       if (n_extents > 0) {
         m_fsp->m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
@@ -896,7 +896,7 @@ db_err Btree_cursor::upd_lock_and_undo(
 }
 
 void Btree_cursor::update_in_place_log(
-  ulint flags, rec_t *rec, const Index *index, const upd_t *update, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr
+  ulint flags, Rec rec, const Index *index, const upd_t *update, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr
 ) noexcept {
   ut_ad(flags < 256);
 
@@ -1001,7 +1001,7 @@ db_err Btree_cursor::update_in_place(ulint flags, const upd_t *update, ulint cmp
 #ifdef UNIV_DEBUG
   if (m_print_record_ops && thr != nullptr) {
     trx_report(trx, index, "update ");
-    log_err(rec_to_string(rec));
+    log_err(rec.to_string());
   }
 #endif /* UNIV_DEBUG */
 
@@ -1020,13 +1020,13 @@ db_err Btree_cursor::update_in_place(ulint flags, const upd_t *update, ulint cmp
     Row_update::rec_sys_fields(rec, index, offsets, trx, roll_ptr);
   }
 
-  was_delete_marked = rec_get_deleted_flag(rec);
+  was_delete_marked = rec.get_deleted_flag();
 
   srv_row_upd->rec_in_place(rec, index, offsets, update);
 
   update_in_place_log(flags, rec, index, update, trx, roll_ptr, mtr);
 
-  if (was_delete_marked && !rec_get_deleted_flag(rec)) {
+  if (was_delete_marked && !rec.get_deleted_flag()) {
     /* The new updated record owns its possible externally stored fields */
 
     Blob blob{m_fsp, m_btree};
@@ -1071,7 +1071,7 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
 #ifdef UNIV_DEBUG
   if (m_print_record_ops && thr != nullptr) {
     trx_report(thr_get_trx(thr), index, "update ");
-    log_err(rec_to_string(rec));
+    log_err(rec.to_string());
   }
 #endif /* UNIV_DEBUG */
 
@@ -1160,8 +1160,8 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
   /* The call to row_rec_to_index_entry(ROW_COPY_DATA, ...) above
   invokes rec_offs_make_valid() to point to the copied record that
   the fields of new_entry point to.  We have to undo it here. */
-  ut_ad(rec_offs_validate(nullptr, index, offsets));
-  ut_d(rec_offs_make_valid(page_cursor->get_rec(), index, offsets));
+  ut_ad(rec.offs_validate(index, offsets));
+  ut_d(page_cursor->get_rec().offs_make_valid(index, offsets));
 
   page_cursor->delete_rec(index, offsets, mtr);
 
@@ -1178,7 +1178,7 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
   rec = insert_if_possible(new_entry, 0 /*n_ext*/, mtr);
 
   /* We calculated above the insert would fit */
-  ut_a(rec != nullptr);
+  ut_a(!rec.is_null());
 
   /* Restore the old explicit lock state on the record */
 
@@ -1191,7 +1191,7 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
   return DB_SUCCESS;
 }
 
-void Btree_cursor::pess_upd_restore_supremum(Buf_block *block, const rec_t *rec, mtr_t *mtr) noexcept {
+void Btree_cursor::pess_upd_restore_supremum(Buf_block *block, const Rec rec, mtr_t *mtr) noexcept {
   auto page = block->get_frame();
 
   if (page_rec_get_next(page_get_infimum_rec(page)) != rec) {
@@ -1227,11 +1227,11 @@ void Btree_cursor::pess_upd_restore_supremum(Buf_block *block, const rec_t *rec,
 }
 
 db_err Btree_cursor::pessimistic_update(
-  ulint flags, mem_heap_t **heap, big_rec_t **big_rec, const upd_t *update, ulint cmpl_info, que_thr_t *thr, mtr_t *mtr
+  ulint flags, mem_heap_t **heap, big_rec_t *big_rec, const upd_t *update, ulint cmpl_info, que_thr_t *thr, mtr_t *mtr
 ) noexcept {
 
-  big_rec_t *big_rec_vec = nullptr;
-  big_rec_t *dummy_big_rec;
+  big_rec_t big_rec_vec{};
+  big_rec_t dummy_big_rec;
   roll_ptr_t roll_ptr;
   bool was_first;
   ulint n_extents{};
@@ -1239,7 +1239,7 @@ db_err Btree_cursor::pessimistic_update(
   ulint n_ext;
   ulint *offsets{};
 
-  *big_rec = nullptr;
+  *big_rec = big_rec_t{};
 
   auto index = m_index;
   auto block = get_block();
@@ -1298,8 +1298,8 @@ db_err Btree_cursor::pessimistic_update(
   /* The call to row_rec_to_index_entry(ROW_COPY_DATA, ...) above
   invokes rec_offs_make_valid() to point to the copied record that
   the fields of new_entry point to.  We have to undo it here. */
-  ut_ad(rec_offs_validate(nullptr, index, offsets));
-  ut_d(rec_offs_make_valid(rec, index, offsets));
+  ut_ad(rec.offs_validate(index, offsets));
+  ut_d(rec.offs_make_valid(index, offsets));
 
   /* The page containing the clustered index record
   corresponding to new_entry is latched in mtr.  If the
@@ -1324,7 +1324,7 @@ db_err Btree_cursor::pessimistic_update(
     updated the primary key to another value, and then
     update it back again. */
 
-    ut_ad(big_rec_vec == nullptr);
+    ut_ad(big_rec_vec.n_fields == 0);
 
     blob.free_updated_extern_fields(index, rec, offsets, update, trx_is_recv(trx) ? RB_RECOVERY : RB_NORMAL, mtr);
   }
@@ -1343,9 +1343,9 @@ db_err Btree_cursor::pessimistic_update(
   n_ext += blob.push_update_extern_fields(new_entry, update, *heap);
 
   if (page_rec_needs_ext(rec_get_converted_size(index, new_entry, n_ext))) {
-    big_rec_vec = dtuple_convert_big_rec(index, new_entry, &n_ext);
+    big_rec_vec = *dtuple_convert_big_rec(index, new_entry, &n_ext);
 
-    if (unlikely(big_rec_vec == nullptr)) {
+    if (unlikely(big_rec_vec.n_fields == 0)) {
 
       err = DB_TOO_BIG_RECORD;
       goto return_after_reservations;
@@ -1371,7 +1371,7 @@ db_err Btree_cursor::pessimistic_update(
 
   rec = insert_if_possible(new_entry, n_ext, mtr);
 
-  if (rec != nullptr) {
+  if (!rec.is_null()) {
     m_lock_sys->rec_restore_from_page_infimum(get_block(), rec, block);
 
     {
@@ -1380,7 +1380,7 @@ db_err Btree_cursor::pessimistic_update(
       offsets = record.get_all_col_offsets(offsets, heap, Current_location());
     }
 
-    if (!rec_get_deleted_flag(rec)) {
+    if (!rec.get_deleted_flag()) {
       /* The new inserted record owns its possible externally
       stored fields */
       Blob blob{m_fsp, m_btree};
@@ -1405,9 +1405,9 @@ db_err Btree_cursor::pessimistic_update(
     BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG, new_entry, &rec, &dummy_big_rec, n_ext, nullptr, mtr
   );
 
-  ut_a(rec != nullptr);
+  ut_a(!rec.is_null());
   ut_a(err == DB_SUCCESS);
-  ut_a(dummy_big_rec == nullptr);
+  ut_a(dummy_big_rec.n_fields == 0);
 
   if (!index->is_clustered()) {
     /* Update PAGE_MAX_TRX_ID in the index page header.
@@ -1418,7 +1418,7 @@ db_err Btree_cursor::pessimistic_update(
     page_update_max_trx_id(rec_block, trx->m_id, mtr);
   }
 
-  if (!rec_get_deleted_flag(rec)) {
+  if (!rec.get_deleted_flag()) {
     /* The new inserted record owns its possible externally
     stored fields */
 
@@ -1456,7 +1456,7 @@ return_after_reservations:
 }
 
 void Btree_cursor::del_mark_set_clust_rec_log(
-  ulint flags, rec_t *rec, const Index *index, bool val, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr
+  ulint flags, Rec rec, const Index *index, bool val, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr
 ) noexcept {
   ut_ad(flags < 256);
 
@@ -1564,12 +1564,12 @@ db_err Btree_cursor::del_mark_set_clust_rec(ulint flags, bool val, que_thr_t *th
 #ifdef UNIV_DEBUG
   if (m_print_record_ops && thr != nullptr) {
     trx_report(thr_get_trx(thr), index, "del mark ");
-    log_err(rec_to_string(rec));
+    log_err(rec.to_string());
   }
 #endif /* UNIV_DEBUG */
 
   ut_ad(index->is_clustered());
-  ut_ad(!rec_get_deleted_flag(rec));
+  ut_ad(!rec.get_deleted_flag());
 
   auto err = m_lock_sys->clust_rec_modify_check_and_lock(flags, get_block(), rec, index, offsets, thr);
 
@@ -1598,7 +1598,7 @@ db_err Btree_cursor::del_mark_set_clust_rec(ulint flags, bool val, que_thr_t *th
   return err;
 }
 
-void Btree_cursor::del_mark_set_sec_rec_log(rec_t *rec, bool val, mtr_t *mtr) noexcept {
+void Btree_cursor::del_mark_set_sec_rec_log(Rec rec, bool val, mtr_t *mtr) noexcept {
   auto log_ptr = mlog_open(mtr, 11 + 1 + 2);
 
   if (log_ptr == nullptr) {
@@ -1647,7 +1647,7 @@ db_err Btree_cursor::del_mark_set_sec_rec(ulint flags, bool val, que_thr_t *thr,
 #ifdef UNIV_DEBUG
   if (m_print_record_ops && thr != nullptr) {
     trx_report(thr_get_trx(thr), m_index, "del mark ");
-    log_err(rec_to_string(rec));
+    log_err(rec.to_string());
   }
 #endif /* UNIV_DEBUG */
 
@@ -1830,7 +1830,7 @@ void Btree_cursor::add_path_info(Paths *path, ulint height, ulint root_height) n
   auto slot = path->begin() + (root_height - height);
 
   slot->m_nth_rec = page_rec_get_n_recs_before(rec);
-  slot->m_n_recs = page_get_n_recs(page_align(rec));
+  slot->m_n_recs = page_get_n_recs(rec.page_align());
 }
 
 int64_t Btree_cursor::estimate_n_rows_in_range(
@@ -1953,7 +1953,7 @@ int64_t Btree_cursor::estimate_n_rows_in_range(
 
 void Btree_cursor::estimate_number_of_different_key_vals(const Index *index) noexcept {
   page_t *page;
-  rec_t *rec;
+  Rec rec;
   ulint n_cols;
   ulint matched_fields;
   ulint matched_bytes;
@@ -1994,7 +1994,7 @@ void Btree_cursor::estimate_number_of_different_key_vals(const Index *index) noe
   Blob blob(m_fsp, m_btree);
 
   for (ulint i = 0; i < n_sample_pages; i++) {
-    rec_t *supremum;
+    Rec supremum;
     mtr.start();
 
     open_at_rnd_pos(index, BTR_SEARCH_LEAF, &mtr, Current_location());

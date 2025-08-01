@@ -119,7 +119,7 @@ inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfiel
  *    the first externally stored field in rec
  */
 int cmp_dtuple_rec_with_match(
-  void *cmp_ctx, const DTuple *dtuple, const rec_t *rec, const ulint *offsets, ulint *matched_fields, ulint *matched_bytes
+  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const ulint *offsets, ulint *matched_fields, ulint *matched_bytes
 ) noexcept;
 
 /**
@@ -133,7 +133,7 @@ int cmp_dtuple_rec_with_match(
  * 
  * @return 1, 0, -1, if dtuple is greater, equal, less than rec, respectively
  */
-int cmp_dtuple_rec(void *cmp_ctx, const DTuple *dtuple, const rec_t *rec, const ulint *offsets) noexcept;
+int cmp_dtuple_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const ulint *offsets) noexcept;
 
 /**
  * Checks if a dtuple is a prefix of a record. The last field in dtuple
@@ -146,7 +146,7 @@ int cmp_dtuple_rec(void *cmp_ctx, const DTuple *dtuple, const rec_t *rec, const 
  * 
  * @return	true if prefix
  */
-bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const rec_t *rec, const ulint *offsets) noexcept;
+bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const ulint *offsets) noexcept;
 
 /**
  * Compare two physical records that contain the same number of columns,
@@ -161,7 +161,7 @@ bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const rec_
  * @return	1, 0, -1 if rec1 is greater, equal, less, respectively, than rec2
  */
 int cmp_rec_rec_simple(
-  const rec_t *rec1, const rec_t *rec2, const ulint *offsets1, const ulint *offsets2, const Index *index
+  const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index
 ) noexcept;
 
 /**
@@ -184,7 +184,7 @@ int cmp_rec_rec_simple(
  * @return 1, 0, -1 if rec1 is greater, equal, less, respectively
  */
 int cmp_rec_rec_with_match(
-  const rec_t *rec1, const rec_t *rec2, const ulint *offsets1, const ulint *offsets2, const Index *index, ulint *matched_fields,
+  const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index, ulint *matched_fields,
   ulint *matched_bytes
 ) noexcept;
 
@@ -202,7 +202,7 @@ int cmp_rec_rec_with_match(
  *  rec2; only the common first fields are compared
  */
 inline int cmp_rec_rec(
-  const rec_t *rec1, const rec_t *rec2, const ulint *offsets1, const ulint *offsets2, const Index *index
+  const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index
 ) noexcept;
 
 /**
@@ -265,7 +265,7 @@ inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfiel
  *    rec2; only the common first fields are compared
  */
 inline int cmp_rec_rec(
-  const rec_t *rec1, const rec_t *rec2, const ulint *offsets1, const ulint *offsets2, const Index *index
+  const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index
 ) noexcept {
   ulint match_f{};
   ulint match_b{};

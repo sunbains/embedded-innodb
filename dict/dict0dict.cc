@@ -955,7 +955,7 @@ bool Table::link_cols(Index *index) noexcept {
   return n_found == index->get_n_fields();
 }
 
-DTuple *Index::build_node_ptr(const rec_t *rec, ulint page_no, mem_heap_t *heap, ulint level) const noexcept {
+DTuple *Index::build_node_ptr(const Rec rec, ulint page_no, mem_heap_t *heap, ulint level) const noexcept {
   const auto n_unique = get_n_unique_in_tree();
   auto tuple = dtuple_create(heap, n_unique + 1);
 
@@ -979,7 +979,7 @@ DTuple *Index::build_node_ptr(const rec_t *rec, ulint page_no, mem_heap_t *heap,
 
   dtype_set(dfield_get_type(field), DATA_SYS_CHILD, DATA_NOT_NULL, 4);
 
-  rec_copy_prefix_to_dtuple(tuple, rec, this, n_unique, heap);
+  rec.copy_prefix_to_dtuple(tuple, this, n_unique, heap);
 
   dtuple_set_info_bits(tuple, dtuple_get_info_bits(tuple) | REC_STATUS_NODE_PTR);
 
@@ -1018,24 +1018,24 @@ void Index::add_col(const Table *table, Column *col, ulint prefix_len) noexcept 
   }
 }
 
-rec_t *Index::copy_rec_order_prefix(const rec_t *rec, ulint *n_fields, byte *&buf, ulint &buf_size) const noexcept {
+Rec Index::copy_rec_order_prefix(const Rec rec, ulint *n_fields, byte *&buf, ulint &buf_size) const noexcept {
   prefetch_r(rec);
 
   auto n = get_n_unique_in_tree();
 
   *n_fields = n;
 
-  return rec_copy_prefix_to_buf(rec, this, n, buf, buf_size);
+  return rec.copy_prefix_to_buf(this, n, buf, buf_size);
 }
 
-DTuple *Index::build_data_tuple(rec_t *rec, ulint n_fields, mem_heap_t *heap) const noexcept {
-  ut_ad(n_fields <= rec_get_n_fields(rec));
+DTuple *Index::build_data_tuple(Rec rec, ulint n_fields, mem_heap_t *heap) const noexcept {
+  ut_ad(n_fields <= rec.get_n_fields());
 
   auto tuple = dtuple_create(heap, n_fields);
 
   copy_types(tuple, n_fields);
 
-  rec_copy_prefix_to_dtuple(tuple, rec, this, n_fields, heap);
+  rec.copy_prefix_to_dtuple(tuple, this, n_fields, heap);
 
   ut_ad(dtuple_check_typed(tuple));
 

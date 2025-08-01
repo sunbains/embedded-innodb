@@ -618,27 +618,32 @@ db_err Dict_store::create_index_tree_step(Index_node *node) noexcept {
   return DB_SUCCESS;
 }
 
-void Dict_store::drop_index_tree(rec_t *rec, mtr_t *mtr) noexcept {
+void Dict_store::drop_index_tree(Rec rec, mtr_t *mtr) noexcept {
   ut_ad(mutex_own(&m_dict->m_mutex));
 
+  auto sys_indexes = m_dict->table_get("SYS_INDEXES");
+  auto sys_index = sys_indexes->m_indexes.front();
+  auto heap = mem_heap_create(1000);
+  Phy_rec record(sys_index, rec);
+  auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
   ulint len;
 
-  auto ptr = rec_get_nth_field(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
+  auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
 
   ut_ad(len == 4);
 
-  auto root_page_no = mtr->read_ulint(ptr, MLOG_4BYTES);
+  auto root_page_no = mtr->read_ulint(field.get(), MLOG_4BYTES);
 
   if (root_page_no == FIL_NULL) {
     /* The tree has already been freed */
     return;
   }
 
-  ptr = rec_get_nth_field(rec, DICT_SYS_INDEXES_SPACE_NO_FIELD, &len);
+  field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_SPACE_NO_FIELD, &len);
 
   ut_ad(len == 4);
 
-  auto space_id = static_cast<space_id_t>(mtr->read_ulint(ptr, MLOG_4BYTES));
+  auto space_id = static_cast<space_id_t>(mtr->read_ulint(field.get(), MLOG_4BYTES));
 
   if (m_fsp->m_fil->space_get_flags(space_id) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
@@ -666,12 +671,17 @@ page_no_t Dict_store::truncate_index_tree(Table *table, space_id_t space_id, Btr
   /* We never drop the system tablespace. */
   bool drop = space_id != SYS_TABLESPACE;
 
-  ulint len;
+  auto sys_indexes = m_dict->table_get("SYS_INDEXES");
+  auto sys_index = sys_indexes->m_indexes.front();
+  auto heap = mem_heap_create(1000);
   auto rec = pcur->get_rec();
-  auto ptr = rec_get_nth_field(rec, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
+  Phy_rec record(sys_index, rec);
+  auto offsets = record.get_col_offsets(nullptr, sys_index->get_n_fields(), &heap, Current_location());
+  ulint len;
+  auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
   ut_ad(len == 4);
 
-  auto root_page_no = mtr->read_ulint(ptr, MLOG_4BYTES);
+  auto root_page_no = mtr->read_ulint(field.get(), MLOG_4BYTES);
 
   if (drop && root_page_no == FIL_NULL) {
     /* The tree has been freed. */
@@ -680,12 +690,12 @@ page_no_t Dict_store::truncate_index_tree(Table *table, space_id_t space_id, Btr
     drop = false;
   }
 
-  ptr = rec_get_nth_field(rec, DICT_SYS_INDEXES_SPACE_NO_FIELD, &len);
+  field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_SPACE_NO_FIELD, &len);
 
   ut_ad(len == 4);
 
   if (drop) {
-    space_id = mtr->read_ulint(ptr, MLOG_4BYTES);
+    space_id = mtr->read_ulint(field.get(), MLOG_4BYTES);
   }
 
   auto fil = m_fsp->m_fil;
@@ -699,14 +709,14 @@ page_no_t Dict_store::truncate_index_tree(Table *table, space_id_t space_id, Btr
     return FIL_NULL;
   }
 
-  ptr = rec_get_nth_field(rec, DICT_SYS_INDEXES_TYPE_FIELD, &len);
+  field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_TYPE_FIELD, &len);
   ut_ad(len == 4);
 
-  auto type = mach_read_from_4(ptr);
+  auto type = mach_read_from_4(field.get());
 
-  ptr = rec_get_nth_field(rec, 1, &len);
+  field = rec.get_nth_field(offsets, 1, &len);
   ut_ad(len == 8);
-  auto index_id = mach_read_from_8(ptr);
+  auto index_id = mach_read_from_8(field.get());
 
   if (drop) {
     /* We free all the pages but the root page first; this operation
@@ -1221,7 +1231,7 @@ Table_node *Table_node::create(Dict *dict, Table *table, mem_heap_t *heap, bool 
   auto ptr = mem_heap_alloc(heap, sizeof(Table_node));
   auto node = new (ptr) Table_node();
 
-  node->m_common.type = QUE_NODE_CREATE_TABLE;
+  node->m_common->type = QUE_NODE_CREATE_TABLE;
 
   node->m_table = table;
 
@@ -1248,7 +1258,7 @@ Index_node *Index_node::create(Dict *dict, Index *index, mem_heap_t *heap, bool 
   auto ptr = mem_heap_alloc(heap, sizeof(Index_node));
   auto node = new (ptr) Index_node();
 
-  node->m_common.type = QUE_NODE_CREATE_INDEX;
+  node->m_common->type = QUE_NODE_CREATE_INDEX;
 
   node->m_index = index;
 

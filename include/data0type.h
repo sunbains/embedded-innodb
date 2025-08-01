@@ -379,7 +379,7 @@ inline void dtype_new_read_for_order_and_null_size(dtype_t *type, const byte *bu
  * @param[in] len       length
  * @param[in] mbminlen  minimum length of a multibyte char
  * @param[in] mbmaxlen  maximum length of a multibyte char
- * 
+ *
  * @return fixed size, or 0
  */
 inline ulint dtype_get_fixed_size_low(ulint mtype, ulint prtype, ulint len, ulint mbminlen, ulint mbmaxlen) {

@@ -414,7 +414,7 @@ inline ulint xdes_calc_descriptor_index(page_no_t page_no) noexcept {
  * @return offset of the first page in extent
  */
 inline ulint xdes_get_offset(FSP::xdes_t *descr) noexcept {
-  return page_get_page_no(page_align(descr)) + ((page_offset(descr) - XDES_ARR_OFFSET) / XDES_SIZE) * FSP_EXTENT_SIZE;
+  return page_get_page_no(Rec(descr).page_align()) + ((page_offset(descr) - XDES_ARR_OFFSET) / XDES_SIZE) * FSP_EXTENT_SIZE;
 }
 
 /**
@@ -521,7 +521,7 @@ static ulint fsp_seg_inode_page_find_free(page_t *page, ulint i, mtr_t *mtr) noe
  * @param[in] mtr               Mini-transaction handle.
  */
 void FSP::free_seg_inode(space_id_t space, fseg_inode_t *inode, mtr_t *mtr) noexcept {
-  auto page = page_align(inode);
+  auto page = Rec(inode).page_align();
   auto space_header = get_space_header(space, mtr);
 
   ut_ad(mach_read_from_4(inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);
@@ -695,8 +695,8 @@ static void fseg_print_low(FSP::fseg_inode_t *inode, mtr_t *mtr) noexcept {
   ut_ad(mtr->memo_contains_page(inode, MTR_MEMO_PAGE_X_FIX));
 
   ulint used{};
-  auto space = page_get_space_id(page_align(inode));
-  auto page_no = page_get_page_no(page_align(inode));
+  auto space = page_get_space_id(Rec(inode).page_align());
+  auto page_no = page_get_page_no(Rec(inode).page_align());
   auto reserved = fseg_n_reserved_pages_low(inode, &used, mtr);
   auto d_var = mtr->read_uint64(inode + FSEG_ID);
   auto seg_id_low = d_var;
@@ -1105,7 +1105,7 @@ void FSP::fseg_free_extent(fseg_inode_t *seg_inode, space_id_t space, page_no_t 
 }
 
 FSP::xdes_t *FSP::fseg_get_first_extent(fseg_inode_t *inode, space_id_t space, mtr_t *mtr) noexcept {
-  ut_ad(space == page_get_space_id(page_align(inode)));
+  ut_ad(space == page_get_space_id(Rec(inode).page_align()));
   ut_ad(mach_read_from_4(inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);
 
   auto first = fil_addr_null;
@@ -1139,7 +1139,7 @@ bool FSP::fseg_validate_low(fseg_inode_t *inode, mtr_t *mtr2) noexcept {
   ut_ad(mtr2->memo_contains_page(inode, MTR_MEMO_PAGE_X_FIX));
   ut_ad(mach_read_from_4(inode + FSEG_MAGIC_N) == FSEG_MAGIC_N_VALUE);
 
-  auto space = page_get_space_id(page_align(inode));
+  auto space = page_get_space_id(Rec(inode).page_align());
   auto seg_id = mtr2->read_uint64(inode + FSEG_ID);
   const auto n_used = mtr2->read_ulint(inode + FSEG_NOT_FULL_N_USED, MLOG_4BYTES);
 
@@ -1511,7 +1511,7 @@ FSP::xdes_t *FSP::xdes_get_descriptor_with_space_hdr(fsp_header_t *sp_header, sp
   if (descr_page_no == 0) {
     /* It is on the space header page */
 
-    descr_page = page_align(sp_header);
+    descr_page = Rec(sp_header).page_align();
   } else {
 
     Buf_pool::Request req{
@@ -1550,7 +1550,7 @@ FSP::xdes_t *FSP::xdes_get_descriptor(space_id_t space_id, page_no_t page_no, mt
 bool FSP::alloc_seg_inode_page(fsp_header_t *space_header, mtr_t *mtr) noexcept {
   ut_ad(page_offset(space_header) == FSP_HEADER_OFFSET);
 
-  space_id_t space = page_get_space_id(page_align(space_header));
+  space_id_t space = page_get_space_id(Rec(space_header).page_align());
   page_no_t page_no = alloc_free_page(space, 0, mtr);
 
   if (page_no == FIL_NULL) {
@@ -1598,12 +1598,12 @@ FSP::fseg_inode_t *FSP::alloc_seg_inode(fsp_header_t *space_header, mtr_t *mtr) 
     }
   }
 
-  auto ptr = page_align(space_header);
+  auto ptr = Rec(space_header).page_align();
   auto page_ptr = space_header + FSP_SEG_INODES_FREE;
 
   Buf_pool::Request req{
     .m_rw_latch = RW_X_LATCH,
-    .m_page_id = {page_get_space_id(ptr), flst_get_first(page_ptr, mtr).m_page_no},
+    .m_page_id = Page_id{page_get_space_id(ptr), flst_get_first(page_ptr, mtr).m_page_no},
     .m_mode = BUF_GET,
     .m_file = __FILE__,
     .m_line = __LINE__,
@@ -2049,7 +2049,7 @@ Buf_block *FSP::fseg_create_general(space_id_t space_id, page_no_t page_no, ulin
 
     mlog_write_ulint(header + FSEG_HDR_OFFSET, page_offset(inode), MLOG_2BYTES, mtr);
 
-    mlog_write_ulint(header + FSEG_HDR_PAGE_NO, page_get_page_no(page_align(inode)), MLOG_4BYTES, mtr);
+    mlog_write_ulint(header + FSEG_HDR_PAGE_NO, page_get_page_no(Rec(inode).page_align()), MLOG_4BYTES, mtr);
 
     mlog_write_ulint(header + FSEG_HDR_SPACE, space_id, MLOG_4BYTES, mtr);
   }
@@ -2067,7 +2067,7 @@ Buf_block *FSP::fseg_create(space_id_t space, page_no_t page, ulint byte_offset,
 }
 
 ulint FSP::fseg_n_reserved_pages(fseg_header_t *header, ulint *used, mtr_t *mtr) noexcept {
-  const auto space = page_get_space_id(page_align(header));
+  const auto space = page_get_space_id(Rec(header).page_align());
   auto latch = m_fil->space_get_latch(space);
 
   ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
@@ -2082,7 +2082,7 @@ ulint FSP::fseg_n_reserved_pages(fseg_header_t *header, ulint *used, mtr_t *mtr)
 page_no_t FSP::fseg_alloc_free_page_general(
   fseg_header_t *seg_header, page_no_t hint, byte direction, bool reserved, mtr_t *mtr
 ) noexcept {
-  space_id_t space = page_get_space_id(page_align(seg_header));
+  space_id_t space = page_get_space_id(Rec(seg_header).page_align());
   auto latch = m_fil->space_get_latch(space);
 
   ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
@@ -2311,8 +2311,8 @@ void FSP::fseg_free_page(fseg_header_t *seg_header, space_id_t space, page_no_t 
 }
 
 bool FSP::fseg_free_step(fseg_header_t *header, mtr_t *mtr) noexcept {
-  const auto space = page_get_space_id(page_align(header));
-  auto header_page = page_get_page_no(page_align(header));
+  const auto space = page_get_space_id(Rec(header).page_align());
+  auto header_page = page_get_page_no(Rec(header).page_align());
   auto latch = m_fil->space_get_latch(space);
 
   ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
@@ -2372,7 +2372,7 @@ bool FSP::fseg_free_step(fseg_header_t *header, mtr_t *mtr) noexcept {
 }
 
 bool FSP::fseg_free_step_not_header(fseg_header_t *header, mtr_t *mtr) noexcept {
-  const auto space = page_get_space_id(page_align(header));
+  const auto space = page_get_space_id(Rec(header).page_align());
   auto latch = m_fil->space_get_latch(space);
 
   ut_ad(!mutex_own(&m_buf_pool->m_trx_sys->m_mutex) || mtr->memo_contains(latch, MTR_MEMO_X_LOCK));
@@ -2401,7 +2401,7 @@ bool FSP::fseg_free_step_not_header(fseg_header_t *header, mtr_t *mtr) noexcept 
 
   const auto page_no = fseg_get_nth_frag_page_no(inode, n, mtr);
 
-  if (page_no == page_get_page_no(page_align(header))) {
+  if (page_no == page_get_page_no(Rec(header).page_align())) {
 
     return true;
 
@@ -2414,7 +2414,7 @@ bool FSP::fseg_free_step_not_header(fseg_header_t *header, mtr_t *mtr) noexcept 
 
 #ifdef UNIV_DEBUG
 bool FSP::fseg_validate(fseg_header_t *header, mtr_t *mtr) noexcept {
-  auto space = page_get_space_id(page_align(header));
+  auto space = page_get_space_id(Rec(header).page_align());
 
   mtr_x_lock(m_fil->space_get_latch(space), mtr);
 
@@ -2425,7 +2425,7 @@ bool FSP::fseg_validate(fseg_header_t *header, mtr_t *mtr) noexcept {
 #endif /* UNIV_DEBUG */
 
 void FSP::fseg_print(fseg_header_t *header, mtr_t *mtr) noexcept {
-  auto space = page_get_space_id(page_align(header));
+  auto space = page_get_space_id(Rec(header).page_align());
 
   mtr_x_lock(m_fil->space_get_latch(space), mtr);
 

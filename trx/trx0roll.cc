@@ -497,7 +497,7 @@ static Trx_undo_record trx_roll_pop_top_rec(Trx *trx, trx_undo_t *undo, mtr_t *m
 
     undo->m_empty = true;
   } else {
-    auto prev_rec_page = page_align(prev_rec);
+    auto prev_rec_page = Rec(prev_rec).page_align();
 
     if (prev_rec_page != undo_page) {
 
@@ -514,7 +514,7 @@ static Trx_undo_record trx_roll_pop_top_rec(Trx *trx, trx_undo_t *undo, mtr_t *m
 
 Trx_undo_record Trx_rollback::pop_top_rec_of_trx(Trx *trx, undo_no_t limit, roll_ptr_t *roll_ptr, mem_heap_t *heap) {
   trx_undo_t *undo;
-  trx_undo_rec_t *undo_rec;
+  trx_undo_rec_t undo_rec;
   Trx_undo_record undo_rec_copy;
   undo_no_t undo_no;
   bool is_insert;

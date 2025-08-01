@@ -479,7 +479,7 @@ class Parallel_reader::Scan_ctx {
     const ulint *m_offsets{};
 
     /** Start scanning from this key. Raw data of the row. */
-    const rec_t *m_rec{};
+    Rec m_rec{};
 
     /** Tuple representation inside m_rec, for two Iter instances in a range
     m_tuple will be [first->m_tuple, second->m_tuple). */
@@ -558,10 +558,10 @@ class Parallel_reader::Scan_ctx {
     const Scan_range &scan_range, page_no_t page_no, size_t depth, const size_t split_level, Ranges &ranges, mtr_t *mtr
   );
 
-  /** Build a dtuple_t from rec_t.
+  /** Build a dtuple_t from Rec .
   @param[in]      rec           Build the dtuple from this record.
   @param[in,out]  iter          Build in this iterator. */
-  void copy_row(const rec_t *rec, Iter *iter) const;
+  void copy_row(const Rec rec, Iter *iter) const;
 
   /** Create the persistent cursor that will be used to traverse the
   partition and position on the the start row.
@@ -579,7 +579,7 @@ class Parallel_reader::Scan_ctx {
                                 built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
-  [[nodiscard]] bool check_visibility(const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr);
+  [[nodiscard]] bool check_visibility(Rec &rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr);
 
   /** Create an execution context for a range and add it to
   the Parallel_reader's run queue.
@@ -689,7 +689,7 @@ class Parallel_reader::Ctx {
                                 built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
-  bool is_rec_visible(const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr) {
+  bool is_rec_visible(Rec &rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr) {
     return m_scan_ctx->check_visibility(rec, offsets, heap, mtr);
   }
 
@@ -737,7 +737,7 @@ class Parallel_reader::Ctx {
   const Buf_block *m_block{};
 
   /** Current row. */
-  const rec_t *m_rec{};
+  Rec m_rec{};
 
   /** Number of pages traversed by the context. */
   size_t m_n_pages{};

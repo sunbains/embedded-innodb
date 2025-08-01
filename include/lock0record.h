@@ -29,7 +29,7 @@ struct Buf_block;
 struct Index;
 struct Lock;
 struct que_thr_t;
-struct rec_t;
+struct Rec ;
 
 /** Safety margin when creating a new record lock: this many extra records
 can be inserted to the page without need to create a lock with a bigger
@@ -62,7 +62,7 @@ struct Record_lock_manager {
    * @param[in] rec Record for which the lock is set.
    * @param[in] lock_mode Lock mode, either LOCK_S or LOCK_X.
    */
-  void unlock(Trx *trx, const Buf_block *block, const rec_t *rec, Lock_mode lock_mode) noexcept;
+  void unlock(Trx *trx, const Buf_block *block, const Rec rec, Lock_mode lock_mode) noexcept;
 
   /**
    * @brief Checks if there are explicit record locks on a page.

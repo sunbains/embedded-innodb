@@ -153,7 +153,7 @@ struct Dict_load {
    *
    * @return Compressed page size in kilobytes; or 0 if the tablespace is uncompressed, ULINT_UNDEFINED on error.
    */
-  [[nodiscard]] ulint sys_tables_get_flags(const rec_t *rec) const noexcept;
+  [[nodiscard]] ulint sys_tables_get_flags(const Rec rec, const ulint *offsets) const noexcept;
 
   /**
    * @brief Loads definitions for table columns.

@@ -107,7 +107,7 @@ bool Row_sel::sec_rec_is_for_blob(
 }
 
 bool Row_sel::sec_rec_is_for_clust_rec(
-  const rec_t *sec_rec, Index *sec_index, const rec_t *clust_rec, Index *clust_index
+  const Rec sec_rec, Index *sec_index, const Rec clust_rec, Index *clust_index
 ) noexcept {
   std::array<ulint, REC_OFFS_SMALL_SIZE> sec_offsets{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> clust_offsets{};
@@ -117,7 +117,7 @@ bool Row_sel::sec_rec_is_for_clust_rec(
   rec_offs_set_n_alloc(sec_offs, sec_offsets.size());
   rec_offs_set_n_alloc(clust_offs, clust_offsets.size());
 
-  if (unlikely(rec_get_deleted_flag(clust_rec))) {
+  if (unlikely(clust_rec.get_deleted_flag())) {
 
     /* The clustered index record is delete-marked;
     it is not visible in the read view.  Besides,
@@ -149,8 +149,8 @@ bool Row_sel::sec_rec_is_for_clust_rec(
 
     ulint sec_len;
     ulint clust_len;
-    const auto sec_field = rec_get_nth_field(sec_rec, sec_offs, i, &sec_len);
-    const auto clust_field = rec_get_nth_field(clust_rec, clust_offs, clust_pos, &clust_len);
+    const auto sec_field = sec_rec.get_nth_field(sec_offs, i, &sec_len);
+    const auto clust_field = clust_rec.get_nth_field(clust_offs, clust_pos, &clust_len);
 
     auto len = clust_len;
 
@@ -160,7 +160,9 @@ bool Row_sel::sec_rec_is_for_clust_rec(
         len -= BTR_EXTERN_FIELD_REF_SIZE;
       }
 
-      len = dtype_get_at_most_n_mbchars(col->prtype, col->mbminlen, col->mbmaxlen, ifield->m_prefix_len, len, (char *)clust_field);
+      len = dtype_get_at_most_n_mbchars(
+        col->prtype, col->mbminlen, col->mbmaxlen, ifield->m_prefix_len, len, (char *)clust_field.get()
+      );
 
       if (rec_offs_nth_extern(clust_offs, clust_pos) && len < sec_len) {
         if (!sec_rec_is_for_blob(
@@ -257,8 +259,8 @@ void sel_node_t::copy_input_variable_vals() noexcept {
   }
 }
 
-void Row_sel::fetch_columns(Index *index, const rec_t *rec, const ulint *offsets, sym_node_t *column) noexcept {
-  ut_ad(rec_offs_validate(rec, index, offsets));
+void Row_sel::fetch_columns(Index *index, const Rec rec, const ulint *offsets, sym_node_t *column) noexcept {
+  ut_ad(rec.offs_validate(index, offsets));
 
   const auto index_type = index->is_clustered() ? SYM_CLUST_FIELD_NO : SYM_SEC_FIELD_NO;
 
@@ -287,7 +289,7 @@ void Row_sel::fetch_columns(Index *index, const rec_t *rec, const ulint *offsets
 
       } else {
 
-        data = rec_get_nth_field(rec, offsets, field_no, &len);
+        data = rec.get_nth_field(offsets, field_no, &len);
 
         needs_copy = column->copy_val;
       }
@@ -458,7 +460,7 @@ inline bool Plan::test_other_conds() noexcept {
   return srv_row_vers->build_for_consistent_read(row);
 }
 
-db_err Plan::get_clust_rec(sel_node_t *sel_node, const rec_t *rec, que_thr_t *thr, const rec_t *&out_rec, mtr_t *mtr) noexcept {
+db_err Plan::get_clust_rec(sel_node_t *sel_node, const Rec rec, que_thr_t *thr, Rec &out_rec, mtr_t *mtr) noexcept {
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets{};
 
@@ -488,14 +490,14 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const rec_t *rec, que_thr_t *th
 
   m_clust_pcur.open_with_no_init(index, m_clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Current_location());
 
-  const rec_t *clust_rec = m_clust_pcur.get_rec();
+  Rec clust_rec = m_clust_pcur.get_rec();
 
   /* Note: only if the search ends up on a non-infimum record is the
   low_match value the real match to the search tuple */
 
   if (!page_rec_is_user_rec(clust_rec) || m_clust_pcur.get_low_match() < index->get_n_unique()) {
 
-    ut_a(rec_get_deleted_flag(rec));
+    ut_a(rec.get_deleted_flag());
     ut_a(sel_node->m_read_view);
 
     /* In a rare case it is possible that no clust rec is found for a delete-marked
@@ -531,7 +533,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const rec_t *rec, que_thr_t *th
   } else {
     /* This is a non-locking consistent read: if necessary, fetch a previous version of the record */
 
-    const rec_t *old_vers{};
+    Rec old_vers{};
 
     if (!m_lock_sys->clust_rec_cons_read_sees(clust_rec, index, offsets, sel_node->m_read_view)) {
 
@@ -555,7 +557,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const rec_t *rec, que_thr_t *th
 
       clust_rec = old_vers;
 
-      if (clust_rec == nullptr) {
+      if (clust_rec.is_null()) {
         return func_exit(DB_SUCCESS);
       }
     }
@@ -567,7 +569,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const rec_t *rec, que_thr_t *th
     the secondary index value is in some interval would return a wrong result if we would not drop rows which we come to
     visit through secondary index records that would not really exist in our snapshot. */
 
-    if ((old_vers != nullptr || rec_get_deleted_flag(rec)) && !m_sel->sec_rec_is_for_clust_rec(rec, m_index, clust_rec, index)) {
+    if ((!old_vers.is_null() || rec.get_deleted_flag()) && !m_sel->sec_rec_is_for_clust_rec(rec, m_index, clust_rec, index)) {
       return func_exit(DB_SUCCESS);
     }
   }
@@ -587,7 +589,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const rec_t *rec, que_thr_t *th
 }
 
 inline db_err Row_sel::set_rec_lock(
-  const Buf_block *block, const rec_t *rec, Index *index, const ulint *offsets, Lock_mode mode, ulint type, que_thr_t *thr
+  const Buf_block *block, const Rec rec, Index *index, const ulint *offsets, Lock_mode mode, ulint type, que_thr_t *thr
 ) noexcept {
   auto trx = thr_get_trx(thr);
   auto buf_pool = m_dict->m_store.m_btree->m_buf_pool;
@@ -771,7 +773,7 @@ Search_status Plan::try_search_shortcut(sel_node_t *sel_node, mtr_t *mtr) noexce
     return func_exit(Search_status::RETRY);
   }
 
-  if (rec_get_deleted_flag(rec)) {
+  if (rec.get_deleted_flag()) {
     /* Test the deleted flag. */
     return func_exit(Search_status::EXHAUSTED);
   }
@@ -801,9 +803,9 @@ db_err Row_sel::select(sel_node_t *sel_node, que_thr_t *thr) noexcept {
   Plan *plan;
   bool moved;
   Index *index;
-  const rec_t *rec;
-  const rec_t *old_vers;
-  const rec_t *clust_rec;
+  Rec rec;
+  Rec old_vers;
+  Rec clust_rec;
 
   /* The following flag becomes true when we are doing a
   consistent read from a non-clustered index and we must look
@@ -1116,7 +1118,7 @@ skip_lock:
           goto lock_wait_or_error;
         }
 
-        if (old_vers == nullptr) {
+        if (old_vers.is_null()) {
           {
             Phy_rec record{index, rec};
 
@@ -1165,7 +1167,7 @@ skip_lock:
     goto table_exhausted;
   }
 
-  if (rec_get_deleted_flag(rec) && !cons_read_requires_clust_rec) {
+  if (rec.get_deleted_flag() && !cons_read_requires_clust_rec) {
 
     /* The record is delete marked: we can skip it if this is not a consistent read which might see an earlier version
     of a non-clustered index record */
@@ -1198,14 +1200,14 @@ skip_lock:
 
     ++cost_counter;
 
-    if (clust_rec == nullptr) {
+    if (clust_rec.is_null()) {
       /* The record did not exist in the read view */
       ut_ad(consistent_read);
 
       goto next_rec;
     }
 
-    if (rec_get_deleted_flag(clust_rec)) {
+    if (rec.get_deleted_flag()) {
 
       /* The record is delete marked: we can skip it */
 
@@ -1685,13 +1687,13 @@ void Prebuilt::prebuild_graph() noexcept {
 }
 
 db_err Row_sel::get_clust_rec_with_prebuilt(
-  Prebuilt *prebuilt, Index *sec_index, const rec_t *rec, que_thr_t *thr, const rec_t **out_rec, ulint **offsets,
+  Prebuilt *prebuilt, Index *sec_index, const Rec rec, que_thr_t *thr, Rec *out_rec, ulint **offsets,
   mem_heap_t **offset_heap, mtr_t *mtr
 ) noexcept {
 
   *out_rec = nullptr;
 
-  auto func_exit = [this](Prebuilt *prebuilt, const rec_t **out_rec, const rec_t *clust_rec, mtr_t *mtr) noexcept {
+  auto func_exit = [this](Prebuilt *prebuilt, Rec *out_rec, const Rec clust_rec, mtr_t *mtr) noexcept {
     *out_rec = clust_rec;
 
     if (prebuilt->m_select_lock_type != LOCK_NONE) {
@@ -1713,7 +1715,7 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
     clust_index, prebuilt->m_clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Current_location()
   );
 
-  const rec_t *clust_rec = prebuilt->m_clust_pcur->get_rec();
+  Rec clust_rec = prebuilt->m_clust_pcur->get_rec();
 
   prebuilt->m_clust_pcur->m_trx_if_known = trx;
 
@@ -1731,13 +1733,13 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
     clustered index record did not exist in the read view of
     trx. */
 
-    if (!rec_get_deleted_flag(rec) || prebuilt->m_select_lock_type != LOCK_NONE) {
+    if (!rec.get_deleted_flag() || prebuilt->m_select_lock_type != LOCK_NONE) {
       log_err("Clustered record for sec rec not found");
       m_dict->index_name_print(trx, sec_index);
       log_err("sec index record ");
-      log_err(rec_to_string(rec));
+      log_err(rec.to_string());
       log_err("clust index record\nclust index record ");
-      log_err(rec_to_string(clust_rec));
+      log_err(clust_rec.to_string());
       log_err(trx->to_string(600));
 
       log_err("Submit a detailed bug report, check the Embedded InnoDB website for details");
@@ -1773,7 +1775,7 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
     /* This is a non-locking consistent read: if necessary, fetch
     a previous version of the record */
 
-    const rec_t *old_vers{};
+    Rec old_vers{};
 
     /* If the isolation level allows reading of uncommitted data,
     then we never look for an earlier version */
@@ -1795,7 +1797,7 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
       /* The following call returns 'offsets' associated with 'old_vers' */
       const auto err = build_prev_vers(row);
 
-      if (err != DB_SUCCESS || old_vers == nullptr) {
+      if (err != DB_SUCCESS || old_vers.is_null()) {
 
         return err;
       }
@@ -1810,11 +1812,11 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
     the secondary index value is in some interval would return a wrong result if we would not drop rows which we come to
     visit through secondary index records that would not really exist in our snapshot. */
 
-    if (clust_rec != nullptr &&
-        (old_vers != nullptr || trx->m_isolation_level <= TRX_ISO_READ_UNCOMMITTED || rec_get_deleted_flag(rec)) &&
+    if (!clust_rec.is_null() &&
+        (!old_vers.is_null() || trx->m_isolation_level <= TRX_ISO_READ_UNCOMMITTED || rec.get_deleted_flag()) &&
         !sec_rec_is_for_clust_rec(rec, sec_index, clust_rec, clust_index)) {
 
-      clust_rec = nullptr;
+      clust_rec = Rec{};
     }
   }
 
@@ -1858,10 +1860,10 @@ bool Row_sel::restore_position(bool *same_user_rec, ulint latch_mode, Btree_pcur
   return true;
 }
 
-inline void Prebuilt::Row_cache::add_row(const rec_t *rec, const ulint *offsets) noexcept {
+inline void Prebuilt::Row_cache::add_row(const Rec rec, const ulint *offsets) noexcept {
   ut_a(m_first == 0);
   ut_ad(!is_cache_full());
-  ut_ad(rec_offs_validate(rec, nullptr, offsets));
+  ut_ad(rec.offs_validate(nullptr, offsets));
 
   ut_a(m_n_cached < m_n_size - 1);
   m_cached_rows[m_n_cached++].add_row(rec, offsets);
@@ -1882,7 +1884,7 @@ inline void Prebuilt::Row_cache::add_row(const rec_t *rec, const ulint *offsets)
  * @return Search_status::FOUND, Search_status::EXHAUSTED, Search_status::RETRY
  */
 Search_status Row_sel::try_search_shortcut_for_prebuilt(
-  const rec_t **out_rec, Prebuilt *prebuilt, ulint **offsets, mem_heap_t **heap, mtr_t *mtr
+  Rec *out_rec, Prebuilt *prebuilt, ulint **offsets, mem_heap_t **heap, mtr_t *mtr
 ) noexcept {
   auto trx = prebuilt->m_trx;
   auto pcur = prebuilt->m_pcur;
@@ -1893,7 +1895,7 @@ Search_status Row_sel::try_search_shortcut_for_prebuilt(
 
   pcur->open_with_no_init(index, search_tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, RW_S_LATCH, mtr, Current_location());
 
-  auto rec = pcur->get_rec();
+  Rec rec = pcur->get_rec();
 
   if (!page_rec_is_user_rec(rec)) {
 
@@ -1922,7 +1924,7 @@ Search_status Row_sel::try_search_shortcut_for_prebuilt(
 
     return Search_status::RETRY;
 
-  } else if (rec_get_deleted_flag(rec)) {
+  } else if (rec.get_deleted_flag()) {
 
     return Search_status::EXHAUSTED;
   }
@@ -2010,9 +2012,9 @@ db_err Row_sel::mvcc_fetch(
 
   Index *clust_index;
   que_thr_t *thr;
-  const rec_t *rec;
-  const rec_t *result_rec;
-  const rec_t *clust_rec;
+  Rec rec;
+  Rec result_rec;
+  Rec clust_rec;
   db_err err = DB_SUCCESS;
   bool moves_up = false;
   bool unique_search{};
@@ -2260,7 +2262,7 @@ db_err Row_sel::mvcc_fetch(
         prebuilt->m_select_lock_type != LOCK_NONE) {
 
       /* Try to place a gap lock on the next index record to prevent phantoms in ORDER BY ... DESC queries */
-      const rec_t *next = page_rec_get_next_const(rec);
+      const Rec next = page_rec_get_next_const(rec);
 
       {
         Phy_rec record{index, next};
@@ -2356,7 +2358,7 @@ rec_loop:
   /*-------------------------------------------------------------*/
   /* Do sanity checks in case our cursor has bumped into page corruption */
 
-  next_offs = rec_get_next_offs(rec);
+  next_offs = rec.get_next_offs();
 
   if (unlikely(next_offs < PAGE_SUPREMUM)) {
 
@@ -2368,12 +2370,12 @@ rec_loop:
   wrong_offs:
     if (recovery == IB_RECOVERY_DEFAULT || moves_up == false) {
 
-      buf_page_print(page_align(rec), 0);
+      buf_page_print(rec.page_align(), 0);
       log_err(
         std::format("\nrec address {}, buf block with fix count {}", (void *)rec, (int)pcur->get_block()->m_page.m_buf_fix_count)
       );
       log_err(std::format(
-        "Index corruption: rec offs {} next offs {}, page no {},", page_offset(rec), next_offs, page_get_page_no(page_align(rec))
+        "Index corruption: rec offs {} next offs {}, page no {},", page_offset(rec), next_offs, page_get_page_no(rec.page_align())
       ));
       m_dict->index_name_print(trx, index);
       log_err(". Run CHECK TABLE. You may need to restore from a backup, or dump + drop + reimport the table.");
@@ -2386,7 +2388,7 @@ rec_loop:
       /* The user may be dumping a corrupt table. Jump over the corruption to recover as much as possible. */
 
       log_err(std::format(
-        "Index corruption: rec offs {} next offs {}, page no {},", page_offset(rec), next_offs, page_get_page_no(page_align(rec))
+        "Index corruption: rec offs {} next offs {}, page no {},", page_offset(rec), next_offs, page_get_page_no(rec.page_align())
       ));
       m_dict->index_name_print(trx, index);
       log_err(". We try to skip the rest of the page.");
@@ -2409,9 +2411,9 @@ rec_loop:
   if (unlikely(recovery != IB_RECOVERY_DEFAULT)) {
     auto btree = m_dict->m_store.m_btree;
 
-    if (!rec_validate(rec, offsets) || !btree->index_rec_validate(rec, index, false)) {
+    if (!rec.validate(offsets) || !btree->index_rec_validate(rec, index, false)) {
       log_err(std::format(
-        "Index corruption: rec offs {} next offs {}, page no {} ", page_offset(rec), next_offs, page_get_page_no(page_align(rec))
+        "Index corruption: rec offs {} next offs {}, page no {} ", page_offset(rec), next_offs, page_get_page_no(rec.page_align())
       ));
       m_dict->index_name_print(trx, index);
       log_err(". We try to skip the record.");
@@ -2481,7 +2483,7 @@ rec_loop:
     ulint lock_type;
 
     if (!set_also_gap_locks || trx->m_isolation_level == TRX_ISO_READ_COMMITTED ||
-        (unique_search && !unlikely(rec_get_deleted_flag(rec)))) {
+        (unique_search && !unlikely(rec.get_deleted_flag()))) {
 
       goto no_gap_lock;
     } else {
@@ -2530,7 +2532,7 @@ rec_loop:
       if (likely(recovery < IB_RECOVERY_NO_UNDO_LOG_SCAN) &&
           !srv_lock_sys->clust_rec_cons_read_sees(rec, index, offsets, trx->m_read_view)) {
 
-        const rec_t *old_vers;
+        Rec old_vers;
 
         Row_vers::Row row{
           .m_cluster_rec = rec,
@@ -2551,7 +2553,7 @@ rec_loop:
           goto lock_wait_or_error;
         }
 
-        if (old_vers == nullptr) {
+        if (old_vers.is_null()) {
           /* The row did not exist yet in the read view */
 
           goto next_rec;
@@ -2579,7 +2581,7 @@ rec_loop:
   index record built for a consistent read. We cannot assume after this
   point that rec is on a buffer pool page. */
 
-  if (unlikely(rec_get_deleted_flag(rec))) {
+  if (unlikely(rec.get_deleted_flag())) {
 
     /* The record is delete-marked: we can skip it */
 
@@ -2620,7 +2622,7 @@ rec_loop:
     read of a secondary index record requires us to look up old
     versions of the associated clustered index record. */
 
-    ut_ad(rec_offs_validate(rec, index, offsets));
+    ut_ad(rec.offs_validate(index, offsets));
 
     /* It was a non-clustered index and we must fetch also the
     clustered index record */
@@ -2638,7 +2640,7 @@ rec_loop:
       goto lock_wait_or_error;
     }
 
-    if (clust_rec == nullptr) {
+    if (clust_rec.is_null()) {
       /* The record did not exist in the read view */
       ut_ad(prebuilt->m_select_lock_type == LOCK_NONE);
 
@@ -2652,7 +2654,7 @@ rec_loop:
       prebuilt->m_new_rec_locks = 2;
     }
 
-    if (unlikely(rec_get_deleted_flag(clust_rec))) {
+    if (unlikely(clust_rec.get_deleted_flag())) {
 
       /* The record is delete marked: we can skip it */
 
@@ -2676,7 +2678,7 @@ rec_loop:
 
       result_rec = clust_rec;
 
-      ut_ad(rec_offs_validate(result_rec, clust_index, offsets));
+      ut_ad(result_rec.offs_validate(clust_index, offsets));
 
     } else {
       /* We used 'offsets' for the clust rec, recalculate them for 'rec' */
@@ -2699,7 +2701,7 @@ rec_loop:
   /* We found a qualifying record 'result_rec'. At this point,
   'offsets' are associated with 'result_rec'. */
 
-  ut_ad(rec_offs_validate(result_rec, result_rec != rec ? clust_index : index, offsets));
+  ut_ad(result_rec.offs_validate(result_rec != rec ? clust_index : index, offsets));
 
   /* At this point, the clustered index record is protected by a page latch that was acquired when
   pcur was positioned.  The latch will not be released until mtr_commit(&mtr). */

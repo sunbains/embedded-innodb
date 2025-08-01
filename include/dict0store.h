@@ -353,7 +353,7 @@ struct Dict_store {
    * @param[in,out] rec Record in the clustered index of SYS_INDEXES table.
    * @param[in] mtr Mini-transaction having the latch on the record page.
    */
-  void drop_index_tree(rec_t *rec, mtr_t *mtr) noexcept;
+  void drop_index_tree(Rec rec, mtr_t *mtr) noexcept;
 
   /** The dictionary . */
   Dict *m_dict{};

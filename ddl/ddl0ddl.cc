@@ -760,14 +760,16 @@ db_err DDL::truncate_table(Table *table, Trx *trx) noexcept {
 
     ulint len{ULINT_UNDEFINED};
     auto rec = pcur.get_rec();
-    const auto field = rec_get_nth_field(rec, 0, &len);
+    Phy_rec record(sys_index, rec);
+    auto offsets = record.get_col_offsets(nullptr, 1, &heap, Current_location());
+    const auto field = rec.get_nth_field(offsets, 0, &len);
     ut_ad(len == 8);
 
     if (memcmp(buf, field, len) != 0) {
       /* End of indexes for the table (TABLE_ID mismatch). */
       break;
 
-    } else if (!rec_get_deleted_flag(rec)) {
+    } else if (!rec.get_deleted_flag()) {
 
       /* This call may commit and restart mtr and reposition pcur. */
       const auto root_page_no = m_dict->m_store.truncate_index_tree(table, recreate_space, &pcur, &mtr);
@@ -1288,6 +1290,7 @@ void DDL::drop_all_temp_indexes(ib_recovery_t recovery) noexcept {
   m_dict->lock_data_dictionary(trx);
 
   mtr_t mtr;
+  auto heap = mem_heap_create(1000);
 
   mtr.start();
 
@@ -1304,8 +1307,10 @@ void DDL::drop_all_temp_indexes(ib_recovery_t recovery) noexcept {
 
     ulint len;
     const auto rec = pcur.get_rec();
+    Phy_rec record(sys_clustered_index, rec);
+    auto offsets = record.get_col_offsets(nullptr, sys_clustered_index->get_n_fields(), &heap, Current_location());
     {
-      const auto field = rec_get_nth_field(rec, DICT_SYS_INDEXES_NAME_FIELD, &len);
+      const auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_NAME_FIELD, &len);
 
       if (len == UNIV_SQL_NULL || len == 0 || mach_read_from_1(field) != (ulint)TEMP_INDEX_PREFIX) {
         continue;
@@ -1317,7 +1322,7 @@ void DDL::drop_all_temp_indexes(ib_recovery_t recovery) noexcept {
     Dict_id table_id;
 
     {
-      const auto field = rec_get_nth_field(rec, 0 /*TABLE_ID*/, &len);
+      const auto field = rec.get_nth_field(offsets, 0 /*TABLE_ID*/, &len);
 
       if (len != 8) {
         /* Corrupted TABLE_ID */
@@ -1395,9 +1400,11 @@ void DDL::drop_all_temp_tables(ib_recovery_t recovery) noexcept {
 
     ulint len;
     const auto rec = pcur.get_rec();
+    Phy_rec record(sys_clustered_index, rec);
+    auto offsets = record.get_col_offsets(nullptr, sys_clustered_index->get_n_fields(), &heap, Current_location());
 
     {
-      const auto field = rec_get_nth_field(rec, 4 /*N_COLS*/, &len);
+      const auto field = rec.get_nth_field(offsets, 4 /*N_COLS*/, &len);
 
       if (len != 4 || !(mach_read_from_4(field) & 0x80000000UL)) {
         continue;
@@ -1406,7 +1413,7 @@ void DDL::drop_all_temp_tables(ib_recovery_t recovery) noexcept {
 
     {
       /* Check value of the MIX_LEN field. */
-      const auto field = rec_get_nth_field(rec, 7 /*MIX_LEN*/, &len);
+      const auto field = rec.get_nth_field(offsets, 7 /*MIX_LEN*/, &len);
 
       if (len != 4 || !(mach_read_from_4(field) & DICT_TF2_TEMPORARY)) {
         continue;
@@ -1417,14 +1424,14 @@ void DDL::drop_all_temp_tables(ib_recovery_t recovery) noexcept {
 
     {
       /* This is a temporary table. */
-      const auto field = rec_get_nth_field(rec, 0 /*NAME*/, &len);
+      const auto field = rec.get_nth_field(offsets, 0 /*NAME*/, &len);
 
       if (len == UNIV_SQL_NULL || len == 0) {
         /* Corrupted SYS_TABLES.NAME */
         continue;
       }
 
-      table_name = mem_heap_strdupl(heap, reinterpret_cast<const char *>(field), len);
+      table_name = mem_heap_strdupl(heap, reinterpret_cast<const char *>(field.get()), len);
     }
 
     pcur.store_position(&mtr);

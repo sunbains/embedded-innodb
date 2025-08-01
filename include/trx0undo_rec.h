@@ -61,49 +61,49 @@ constexpr ulint TRX_UNDO_MODIFY_OP = 2;
 /**
  * @brief Transaction undo record wrapper class
  *
- * This class wraps trx_undo_rec_t* providing a clean interface for parsing, building, 
+ * This class wraps trx_undo_rec_t  providing a clean interface for parsing, building,
  * and manipulating undo records. It eliminates the need for raw byte pointer manipulation.
  */
 struct Trx_undo_record {
-    struct Parsed {
-      /** TRX_UNDO_INSERT_REC, TRX_UNDO_UPD_EXIST_REC, TRX_UNDO_UPD_DEL_REC, TRX_UNDO_DEL_MARK_REC */
-      ulint m_type{ULINT_UNDEFINED};
+  struct Parsed {
+    /** TRX_UNDO_INSERT_REC, TRX_UNDO_UPD_EXIST_REC, TRX_UNDO_UPD_DEL_REC, TRX_UNDO_DEL_MARK_REC */
+    ulint m_type{ULINT_UNDEFINED};
 
-       /** Compiler info, relevant only for update type records */
-       ulint m_cmpl_info{ULINT_UNDEFINED};
+    /** Compiler info, relevant only for update type records */
+    ulint m_cmpl_info{ULINT_UNDEFINED};
 
-       /** Table id */
-       Dict_id m_table_id{DICT_ID_NULL};
+    /** Table id */
+    Dict_id m_table_id{DICT_ID_NULL};
 
-       /** Undo log record number */
-       undo_no_t m_undo_no{TRX_ID_UNDEFINED};
+    /** Undo log record number */
+    undo_no_t m_undo_no{TRX_ID_UNDEFINED};
 
-       /** True if we updated an externally stored field */
-       bool m_extern{false};
+    /** True if we updated an externally stored field */
+    bool m_extern{false};
   };
 
   /** Default constructor */
   Trx_undo_record() : m_undo_rec() {}
-  
+
   /** Implicit constructor.
   * @param[in] undo_rec - Undo record to wrap
   */
-  Trx_undo_record(trx_undo_rec_t *undo_rec) : m_undo_rec(undo_rec) {}
-  
-  /** Constructor from trx_undo_rec_t* */
-  // explicit Trx_undo_record(trx_undo_rec_t *undo_rec) : m_undo_rec(undo_rec) {}
-  
+  Trx_undo_record(trx_undo_rec_t undo_rec) : m_undo_rec(undo_rec) {}
+
+  /** Constructor from trx_undo_rec_t  */
+  // explicit Trx_undo_record(trx_undo_rec_t undo_rec) : m_undo_rec(undo_rec) {}
+
   /** Get the raw pointer */
-  trx_undo_rec_t *raw() const noexcept { return m_undo_rec; }
-  
+  trx_undo_rec_t raw() const noexcept { return m_undo_rec; }
+
   /** Set the raw pointer */
-  void set(trx_undo_rec_t *undo_rec) noexcept { m_undo_rec = undo_rec; }
-  
+  void set(trx_undo_rec_t undo_rec) noexcept { m_undo_rec = undo_rec; }
+
   /** Check if valid */
   bool is_valid() const noexcept { return m_undo_rec != nullptr; }
-  
+
   /** Implicit conversion to raw pointer for compatibility */
-  operator trx_undo_rec_t*() const noexcept { return m_undo_rec; }
+  operator trx_undo_rec_t() const noexcept { return m_undo_rec; }
 
   /**
    * @brief Writes information to an undo log about an insert, update, or a delete
@@ -123,7 +123,7 @@ struct Trx_undo_record {
    */
   static db_err report_row_operation(
     ulint flags, ulint op_type, que_thr_t *thr, const Index *index, const DTuple *clust_entry, const upd_t *update, ulint cmpl_info,
-    const rec_t *rec, roll_ptr_t *roll_ptr
+    const Rec rec, roll_ptr_t *roll_ptr
   );
 
   /**
@@ -165,7 +165,7 @@ struct Trx_undo_record {
    * DB_ERROR if corrupted record
    */
   static db_err prev_version_build(
-    const rec_t *index_rec, mtr_t *index_mtr, const rec_t *rec, Index *index, ulint *offsets, mem_heap_t *heap, rec_t **old_vers
+    const Rec index_rec, mtr_t *index_mtr, const Rec rec, Index *index, ulint *offsets, mem_heap_t *heap, Rec *old_vers
   );
 
   /**
@@ -176,7 +176,7 @@ struct Trx_undo_record {
    * @return Pointer to the remaining part of the undo log record after reading these values.
    */
   byte *get_pars(Parsed &undo_rec_pars) const noexcept;
-  
+
   /**
    * @brief Static version for compatibility - reads from an undo log record the general parameters.
    *
@@ -185,7 +185,7 @@ struct Trx_undo_record {
    *
    * @return Pointer to the remaining part of the undo log record after reading these values.
    */
-  static byte *get_pars(trx_undo_rec_t *undo_rec, Parsed &undo_rec_pars) noexcept;
+  static byte *get_pars(trx_undo_rec_t undo_rec, Parsed &undo_rec_pars) noexcept;
 
   /**
    * @brief Builds a row reference from an undo log record.
@@ -280,19 +280,19 @@ struct Trx_undo_record {
    */
   Trx_undo_record copy(mem_heap_t *heap) const {
     const auto len = mach_read_from_2(m_undo_rec) - ut_align_offset(m_undo_rec, UNIV_PAGE_SIZE);
-    auto copied = reinterpret_cast<trx_undo_rec_t *>(mem_heap_dup(heap, m_undo_rec, len));
+    auto copied = reinterpret_cast<trx_undo_rec_t>(mem_heap_dup(heap, m_undo_rec, len));
     return Trx_undo_record(copied);
   }
-  
+
   /**
    * @brief Static version for compatibility - copies the undo record to the heap.
    * @param[in] undo_rec   Undo log record.
    * @param[in,out] heap Heap to use for storing the copy.
    * @return own: copy of undo log record
    */
-  static trx_undo_rec_t *copy(const trx_undo_rec_t *undo_rec, mem_heap_t *heap) {
+  static trx_undo_rec_t copy(const trx_undo_rec_t undo_rec, mem_heap_t *heap) {
     const auto len = mach_read_from_2(undo_rec) - ut_align_offset(undo_rec, UNIV_PAGE_SIZE);
-    return reinterpret_cast<trx_undo_rec_t *>(mem_heap_dup(heap, undo_rec, len));
+    return reinterpret_cast<trx_undo_rec_t>(mem_heap_dup(heap, undo_rec, len));
   }
 
   // Inline utility functions
@@ -302,41 +302,39 @@ struct Trx_undo_record {
    * @return record type
    */
   ulint get_type() const { return mach_read_from_1(m_undo_rec + 2) & (TRX_UNDO_CMPL_INFO_MULT - 1); }
-  
+
   /**
    * @brief Static version for compatibility - reads from an undo log record the record type.
    * @param[in] undo_rec undo log record
    * @return record type
    */
-  static ulint get_type(const trx_undo_rec_t *undo_rec) { return mach_read_from_1(undo_rec + 2) & (TRX_UNDO_CMPL_INFO_MULT - 1); }
+  static ulint get_type(const trx_undo_rec_t undo_rec) { return mach_read_from_1(undo_rec + 2) & (TRX_UNDO_CMPL_INFO_MULT - 1); }
 
   /**
    * @brief Reads from this undo log record the record compiler info.
    * @return compiler info
    */
   ulint get_cmpl_info() const { return mach_read_from_1(m_undo_rec + 2) / TRX_UNDO_CMPL_INFO_MULT; }
-  
+
   /**
    * @brief Static version for compatibility - reads from an undo log record the record compiler info.
    * @param[in] undo_rec undo log record
    * @return compiler info
    */
-  static ulint get_cmpl_info(const trx_undo_rec_t *undo_rec) { return mach_read_from_1(undo_rec + 2) / TRX_UNDO_CMPL_INFO_MULT; }
+  static ulint get_cmpl_info(const trx_undo_rec_t undo_rec) { return mach_read_from_1(undo_rec + 2) / TRX_UNDO_CMPL_INFO_MULT; }
 
   /**
    * @brief Returns true if this undo log record contains an extern storage field.
    * @return true if extern
    */
-  bool get_extern_storage() const {
-    return (mach_read_from_1(m_undo_rec + 2) & TRX_UNDO_UPD_EXTERN) != 0;
-  }
-  
+  bool get_extern_storage() const { return (mach_read_from_1(m_undo_rec + 2) & TRX_UNDO_UPD_EXTERN) != 0; }
+
   /**
    * @brief Static version for compatibility - returns true if an undo log record contains an extern storage field.
    * @param[in] undo_rec undo log record
    * @return true if extern
    */
-  static bool get_extern_storage(const trx_undo_rec_t *undo_rec) {
+  static bool get_extern_storage(const trx_undo_rec_t undo_rec) {
     return (mach_read_from_1(undo_rec + 2) & TRX_UNDO_UPD_EXTERN) != 0;
   }
 
@@ -345,13 +343,13 @@ struct Trx_undo_record {
    * @return undo no
    */
   undo_no_t get_undo_no() const { return mach_uint64_read_much_compressed(m_undo_rec + 3); }
-  
+
   /**
    * @brief Static version for compatibility - reads the undo log record number.
    * @param[in] undo_rec undo log record
    * @return undo no
    */
-  static undo_no_t get_undo_no(const trx_undo_rec_t *undo_rec) { return mach_uint64_read_much_compressed(undo_rec + 3); }
+  static undo_no_t get_undo_no(const trx_undo_rec_t undo_rec) { return mach_uint64_read_much_compressed(undo_rec + 3); }
 
   /**
    * @brief Returns the start of the undo record data area.
@@ -360,6 +358,6 @@ struct Trx_undo_record {
    */
   static ulint get_offset(undo_no_t undo_no) { return mach_uint64_get_much_compressed_size(undo_no) + 3; }
 
-private:
-  trx_undo_rec_t *m_undo_rec{};
+ private:
+  trx_undo_rec_t m_undo_rec{};
 };

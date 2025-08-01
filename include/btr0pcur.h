@@ -249,7 +249,7 @@ struct Btree_pcursor {
    *
    * @return Pointer to the record.
    */
-  [[nodiscard]] rec_t *get_rec() noexcept;
+  [[nodiscard]] Rec get_rec() noexcept;
 
   /**
    * @brief Gets the up_match value for a pcur after a search.
@@ -507,7 +507,7 @@ struct Btree_pcursor {
 
   /** if cursor position is stored, contains an initial segment of the
   latest record cursor was positioned either on, before, or after */
-  rec_t *m_old_rec{};
+  Rec m_old_rec{};
 
   /** number of fields in old_rec */
   ulint m_old_n_fields{};
@@ -552,7 +552,7 @@ struct Btree_pcursor {
 };
 
 inline Btree_cursor_pos Btree_pcursor::get_rel_pos() const noexcept {
-  ut_ad(m_old_rec != nullptr);
+  ut_ad(!m_old_rec.is_null());
   ut_ad(m_old_stored);
 
   ut_ad(m_pos_state == Btr_pcur_positioned::WAS_POSITIONED || m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
@@ -596,7 +596,7 @@ inline Buf_block *Btree_pcursor::get_block() noexcept {
   return m_btr_cur.get_block();
 }
 
-inline rec_t *Btree_pcursor::get_rec() noexcept {
+inline Rec Btree_pcursor::get_rec() noexcept {
   ut_ad(m_pos_state == Btr_pcur_positioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -879,13 +879,13 @@ inline void Btree_pcursor::set_random_position(const Index *index, ulint latch_m
 inline void Btree_pcursor::close() noexcept {
   if (m_old_rec_buf != nullptr) {
     mem_free(m_old_rec_buf);
-    m_old_rec = nullptr;
+    m_old_rec = Rec{};
     m_old_rec_buf = nullptr;
   }
 
   m_btr_cur.m_page_cur.m_rec = nullptr;
   m_btr_cur.m_page_cur.m_block = nullptr;
-  m_old_rec = nullptr;
+  m_old_rec = Rec{};
   m_old_stored = false;
   m_latch_mode = BTR_NO_LATCHES;
   m_pos_state = Btr_pcur_positioned::UNSET;

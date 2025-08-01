@@ -40,7 +40,7 @@ struct Row_vers {
   /** A version of a clustered index record */
   struct Row {
     /** Record in a clustered index */
-    const rec_t *m_cluster_rec{};
+    const Rec m_cluster_rec{};
 
     /** Mtr holding the latch on m_cluster_rec */
     mtr_t *m_mtr{};
@@ -62,7 +62,7 @@ struct Row_vers {
 
     /** Old version, or nullptr if the record does not exist in the view,
      * that is, it was freshly inserted afterwards */
-    const rec_t *&m_old_rec;
+    Rec &m_old_rec;
   };
 
   /**
@@ -99,7 +99,7 @@ struct Row_vers {
    *
    * @return nullptr if committed, else the active transaction.
    */
-  [[nodiscard]] Trx *impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *index, const ulint *offsets) noexcept;
+  [[nodiscard]] Trx *impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index, const ulint *offsets) noexcept;
 
   /**
    * @brief  Finds out if we must preserve a delete marked earlier version of a clustered
@@ -127,7 +127,7 @@ struct Row_vers {
    *
    * @return true if earlier version should have ientry as its secondary index entry.
    */
-  [[nodiscard]] bool old_has_index_entry(bool also_curr, const rec_t *rec, mtr_t *mtr, Index *index, const DTuple *entry) noexcept;
+  [[nodiscard]] bool old_has_index_entry(bool also_curr, const Rec rec, mtr_t *mtr, Index *index, const DTuple *entry) noexcept;
 
   /**
    * @brief Constructs the version of a clustered index record which a consistent

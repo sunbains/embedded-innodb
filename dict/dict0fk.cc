@@ -1230,7 +1230,7 @@ db_err Dict::foreign_parse_drop_constraints(
   return DB_CANNOT_DROP_CONSTRAINT;
 }
 
-DTuple *Dict::index_build_node_ptr(const Index *index, const rec_t *rec, ulint page_no, mem_heap_t *heap, ulint level) noexcept {
+DTuple *Dict::index_build_node_ptr(const Index *index, const Rec rec, ulint page_no, mem_heap_t *heap, ulint level) noexcept {
   const auto n_unique = index->get_n_unique_in_tree();
   auto tuple = dtuple_create(heap, n_unique + 1);
 
@@ -1254,7 +1254,7 @@ DTuple *Dict::index_build_node_ptr(const Index *index, const rec_t *rec, ulint p
 
   dtype_set(dfield_get_type(field), DATA_SYS_CHILD, DATA_NOT_NULL, 4);
 
-  rec_copy_prefix_to_dtuple(tuple, rec, index, n_unique, heap);
+  rec.copy_prefix_to_dtuple(tuple, index, n_unique, heap);
 
   dtuple_set_info_bits(tuple, dtuple_get_info_bits(tuple) | REC_STATUS_NODE_PTR);
 

@@ -28,8 +28,8 @@ Lock system validation and debugging
 struct Buf_block;
 struct Index;
 struct Table;
+struct Rec;
 struct Lock_sys;
-using rec_t = byte;
 
 /**
  * @brief Lock system validator for debugging and integrity checking
@@ -96,7 +96,7 @@ struct Lock_validator {
    * @return true if the lock queue is valid, false otherwise.
    */
   [[nodiscard]] bool rec_queue_validate(
-    const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets
+    const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets
   ) noexcept;
 
   /**

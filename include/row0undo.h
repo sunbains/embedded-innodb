@@ -50,7 +50,7 @@ struct Row_undo {
    * @brief Creates a row undo.
    *
    * @param[in] dict The data dictionary.
-   * 
+   *
    * @return A pointer to the newly created row undo.
    */
   [[nodiscard]] static Row_undo *create(Dict *dict) noexcept;
@@ -68,7 +68,7 @@ struct Row_undo {
    * @param[in] trx The transaction.
    * @param[in] parent The parent node, i.e., a thr node.
    * @param[in] heap The memory heap where the node is created.
-   * 
+   *
    * @return A pointer to the newly created undo node.
    */
   [[nodiscard]] Undo_node *create_undo_node(Trx *trx, que_thr_t *parent, mem_heap_t *heap) noexcept;
@@ -79,7 +79,7 @@ struct Row_undo {
    * This is a high-level function used in SQL execution graphs.
    *
    * @param[in,out] thr Query thread.
-   * 
+   *
    * @return Query thread to run next or nullptr.
    */
   [[nodiscard]] que_thr_t *step(que_thr_t *thr) noexcept;
@@ -144,7 +144,7 @@ struct Undo_node {
    * @param[in] trx The transaction.
    * @param[in] parent The parent node, i.e., a thr node.
    * @param[in] heap The memory heap where the node is created.
-   * 
+   *
    * @return A pointer to the newly created undo node.
    */
   [[nodiscard]] static Undo_node *create(Dict *dict, Trx *trx, que_thr_t *parent, mem_heap_t *heap) noexcept;
@@ -168,7 +168,7 @@ struct Undo_node {
    * to the parent node, which is always a query thread node.
    *
    * @param[in,out] thr Query thread.
-   * 
+   *
    * @return DB_SUCCESS if the operation is successfully completed, otherwise an error code.
    */
   [[nodiscard]] db_err fetch_undo_log_and_undo(que_thr_t *thr) noexcept;
@@ -179,7 +179,7 @@ struct Undo_node {
    * The persistent cursor (pcur) in the node was positioned on the record, now it is detached.
    *
    * @param[in] dict The data dictionary.
-   * 
+   *
    * @return DB_SUCCESS if the operation is successful, otherwise DB_OUT_OF_FILE_SPACE.
    */
   [[nodiscard]] db_err remove_cluster_rec() noexcept;
@@ -212,7 +212,7 @@ struct Undo_node {
    * that it should be undone in the same rollback.
    *
    * @param[out] undo_no The undo number.
-   * 
+   *
    * @return true if also previous modify or insert of this row should be undone
    */
   [[nodiscard]] inline bool undo_previous_version(undo_no_t *undo_no) noexcept;
@@ -223,40 +223,40 @@ struct Undo_node {
  * @param[in,out] thr           Query thread.
  * @param[in,out] mtr           Must be committed before latching any further pages.
  * @param[in] mode              BTR_MODIFY_LEAF or BTR_MODIFY_TREE.
- * 
+ *
  * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
   [[nodiscard]] db_err undo_clustered_index_modification(que_thr_t *thr, mtr_t *mtr, ulint mode) noexcept;
 
   /**
    * @brief Removes a clustered index record after undo if possible.
-   * 
+   *
    * This is attempted when the record was inserted by updating a
    * delete-marked record and there no longer exist transactions
    * that would see the delete-marked record. In other words, we
    * roll back the insert by purging the record.
-   * 
+   *
    * @param[in,out] thr         Query thread.
    * @param[in,out] mtr         Must be committed before latching any further pages.
    * @param[in] mode            BTR_MODIFY_LEAF or BTR_MODIFY_TREE.
-   * 
+   *
    * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
   [[nodiscard]] db_err remove_clustered_index_record(que_thr_t *thr, mtr_t *mtr, ulint mode) noexcept;
 
   /**
    * @brief Removes a clustered index record after undo if possible.
-   * 
+   *
    * This is attempted when the record was inserted by updating a
    * delete-marked record and there no longer exist transactions
    * that would see the delete-marked record. In other words, we
    * roll back the insert by purging the record.
-   * 
+   *
    * @param[in,out] node Row undo node.
    * @param[in,out] thr Query thread.
    * @param[in,out] mtr Must be committed before latching any further pages.
    * @param[in] mode BTR_MODIFY_LEAF or BTR_MODIFY_TREE.
-   * 
+   *
    * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
   [[nodiscard]] db_err remove_clustered_index_record_low(que_thr_t *thr, mtr_t *mtr, ulint mode) noexcept;
@@ -268,7 +268,7 @@ struct Undo_node {
    * @param[in,out] index       Index
    * @param[in] entry           Index entry
    * @param[in] mode            Latch mode BTR_MODIFY_LEAF or BTR_MODIFY_TREE
-   * 
+   *
    * @return DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE
    */
   [[nodiscard]] db_err delete_mark_or_remove_secondary_index_entry(
@@ -278,17 +278,17 @@ struct Undo_node {
   /**
    * @brief Delete marks or removes a secondary index entry if found.
    *
-   * If the fields of a delete-marked secondary index record are updated such that 
-   * they remain alphabetically the same (e.g., 'abc' -> 'aBc'), the original values 
-   * cannot be restored because they are unknown. This should not cause issues 
-   * because in row0sel.c, queries always retrieve the clustered index record or 
-   * an earlier version of it if the secondary index record used for the search is 
+   * If the fields of a delete-marked secondary index record are updated such that
+   * they remain alphabetically the same (e.g., 'abc' -> 'aBc'), the original values
+   * cannot be restored because they are unknown. This should not cause issues
+   * because in row0sel.c, queries always retrieve the clustered index record or
+   * an earlier version of it if the secondary index record used for the search is
    * delete-marked.
    *
    * @param[in,out] thr         Query thread
    * @param[in,out] index       Index
    * @param[in] entry           Index entry
-   * 
+   *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
      */
   [[nodiscard]] db_err delete_mark_or_remove_secondary_index_entry(que_thr_t *thr, Index *index, DTuple *entry) noexcept;
@@ -298,12 +298,12 @@ struct Undo_node {
  * delete-marked at the moment, but it does not harm to unmark it anyway. We also
  * need to update the fields of the secondary index record if we updated its
  * fields but alphabetically they stayed the same, e.g., 'abc' -> 'aBc'.
- * 
+ *
  * @param[in] mode              Search mode: BTR_MODIFY_LEAF or BTR_MODIFY_TREE
  * @param[in,out] thr           Query thread
  * @param[in,out] index         Secondary index in which to unmark the entry
  * @param[in] entry             Index entry to unmark.
- * 
+ *
  * @return DB_FAIL or DB_SUCCESS or DB_OUT_OF_FILE_SPACE
  */
   [[nodiscard]] db_err del_unmark_secondary_index_and_undo_update(
@@ -312,59 +312,59 @@ struct Undo_node {
 
   /**
    * @brief Undoes a modify in a clustered index record.
-   * 
+   *
    * Sets also the node state for the next round of undo.
-   * 
+   *
    * @param[in,out] thr         Query thread.
-   * 
+   *
    * @return DB_SUCCESS or error code: we may run out of file space.
    */
   [[nodiscard]] db_err undo_clustered_index_modification(que_thr_t *thr) noexcept;
 
   /**
    * Undoes a modify in secondary indexes when undo record type is UPD_DEL.
-   * 
+   *
    * @param[in,out] thr         Query thread
-   * 
+   *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
   [[nodiscard]] db_err undo_delete_in_secondary_indexes(que_thr_t *thr) noexcept;
 
   /**
    * @brief Undoes a modify in secondary indexes when undo record type is DEL_MARK.
-   * 
+   *
    * @param[in,out] thr         Query thread
-   * 
+   *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
   [[nodiscard]] db_err undo_del_mark_secondary_indexes(que_thr_t *thr) noexcept;
 
   /**
    * Undoes a modify in secondary indexes when undo record type is UPD_EXIST.
-   * 
+   *
    * @param[in,out] thr              Query thread
-   * 
+   *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
   [[nodiscard]] db_err undo_update_of_secondary_indexes(que_thr_t *thr) noexcept;
 
   /**
    * @brief Undoes a modify operation on a row of a table.
-   * 
+   *
    * @param[in,out] thr Query thread.
-   * 
+   *
    * @return	DB_SUCCESS or error code */
   [[nodiscard]] db_err undo_update(que_thr_t *thr) noexcept;
 
   /**
    * Removes a secondary index entry if found.
-   * 
+   *
    * @param[in,out] mode          BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
    *                              depending on whether we wish optimistic or
    *                              pessimistic descent down the index tree
    * @param[in] index             Remove entry from this index
    * @param[in] entry             Index entry to remove
-   * 
+   *
    * @return	DB_SUCCESS, DB_FAIL, or DB_OUT_OF_FILE_SPACE
    */
   [[nodiscard]] db_err remove_secondary_index_entry(ulint mode, Index *index, DTuple *entry) noexcept;
@@ -376,7 +376,7 @@ struct Undo_node {
    *
    * @param[in,out] index Remove entry from this secondary index.
    * @param[in] entry Entry to remove.
-   * 
+   *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
   [[nodiscard]] db_err remove_secondary_index_entry(Index *index, DTuple *entry) noexcept;

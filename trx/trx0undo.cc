@@ -135,9 +135,9 @@ static ulint trx_undo_insert_header_reuse(page_t *undo_page, trx_id_t trx_id, mt
  * @param undo_page The undo log page to be reset.
  * @param mtr The mini-transaction handle.
  */
-static void trx_undo_discard_latest_update_undo(page_t *undo_page, mtr_t *mtr);
+static void trx_undo_discard_latest_update_undo(Raw_page undo_page, mtr_t *mtr);
 
-trx_undo_rec_t *Undo::get_next_rec_from_next_page(
+trx_undo_rec_t Undo::get_next_rec_from_next_page(
   space_id_t space, page_t *undo_page, page_no_t page_no, ulint offset, ulint mode, mtr_t *mtr
 ) noexcept {
   if (page_no == page_get_page_no(undo_page)) {
@@ -233,7 +233,7 @@ static db_err trx_undo_seg_create(
   }
 
   ulint n_reserved;
-  auto space = page_get_space_id(page_align(rseg_hdr));
+  auto space = page_get_space_id(Rec(rseg_hdr).page_align());
   auto success = srv_fsp->reserve_free_extents(&n_reserved, space, 2, FSP_UNDO, mtr);
 
   if (!success) {
@@ -499,7 +499,7 @@ inline void trx_undo_discard_latest_log(page_t *undo_page, mtr_t *mtr) {
   mlog_write_initial_log_record(undo_page, MLOG_UNDO_HDR_DISCARD, mtr);
 }
 
-byte *Undo::parse_discard_latest(byte *ptr, IF_DEBUG(byte *end_ptr, ) page_t *page, mtr_t *mtr) noexcept {
+byte *Undo::parse_discard_latest(byte *ptr, IF_DEBUG(byte *end_ptr, ) Raw_page page, mtr_t *mtr) noexcept {
   ut_ad(end_ptr != nullptr);
 
   if (page != nullptr) {
@@ -516,7 +516,7 @@ byte *Undo::parse_discard_latest(byte *ptr, IF_DEBUG(byte *end_ptr, ) page_t *pa
  * @param[in] undo_page Header page of an undo log of size 1.
  * @param[in] mtr The mini-transaction handle.
  */
-static void trx_undo_discard_latest_update_undo(page_t *undo_page, mtr_t *mtr) {
+static void trx_undo_discard_latest_update_undo(Raw_page undo_page, mtr_t *mtr) {
   auto seg_hdr = undo_page + TRX_UNDO_SEG_HDR;
   auto page_hdr = undo_page + TRX_UNDO_PAGE_HDR;
   auto free = mach_read_from_2(seg_hdr + TRX_UNDO_LAST_LOG);
@@ -671,7 +671,7 @@ trx_undo_t *Undo::mem_create_at_db_start(Trx_rseg *rseg, ulint id, page_no_t pag
   undo->m_state = state;
   undo->m_size = flst_get_len(seg_header + TRX_UNDO_PAGE_LIST, mtr);
 
-  rec_t *rec;
+  Rec rec;
 
   /* If the log segment is being freed, the page list is inconsistent! */
   if (state != TRX_UNDO_TO_FREE) {
@@ -684,7 +684,7 @@ trx_undo_t *Undo::mem_create_at_db_start(Trx_rseg *rseg, ulint id, page_no_t pag
 
     rec = trx_undo_page_get_last_rec(last_page, page_no, offset);
 
-    if (rec == nullptr) {
+    if (rec.is_null()) {
       undo->m_empty = true;
     } else {
       undo->m_empty = false;
@@ -1002,7 +1002,7 @@ db_err Undo::assign_undo(Trx *trx, ulint type) noexcept {
   return DB_SUCCESS;
 }
 
-page_t *Undo::set_state_at_finish(Trx_rseg *rseg, Trx *trx __attribute__((unused)), trx_undo_t *undo, mtr_t *mtr) noexcept {
+Raw_page Undo::set_state_at_finish(Trx_rseg *rseg, Trx *trx __attribute__((unused)), trx_undo_t *undo, mtr_t *mtr) noexcept {
   ut_ad(mutex_own(&rseg->m_mutex));
 
   if (undo->m_id >= TRX_RSEG_N_SLOTS) {
@@ -1038,7 +1038,7 @@ page_t *Undo::set_state_at_finish(Trx_rseg *rseg, Trx *trx __attribute__((unused
   return undo_page;
 }
 
-page_t *Undo::set_state_at_prepare(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
+Raw_page Undo::set_state_at_prepare(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept {
   if (undo->m_id >= TRX_RSEG_N_SLOTS) {
     log_fatal("undo->m_id is ", undo->m_id);
   }
@@ -1123,8 +1123,8 @@ void Undo::insert_cleanup(Trx *trx) noexcept {
   mutex_exit(&rseg->m_mutex);
 }
 
-trx_undo_rec_t *Undo::get_prev_rec_from_prev_page(trx_undo_rec_t *rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept {
-  auto undo_page = page_align(rec);
+trx_undo_rec_t Undo::get_prev_rec_from_prev_page(trx_undo_rec_t rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept {
+  auto undo_page = Rec(rec).page_align();
   auto prev_page_no = flst_get_prev_addr(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr).m_page_no;
 
   if (prev_page_no == FIL_NULL) {
@@ -1137,7 +1137,7 @@ trx_undo_rec_t *Undo::get_prev_rec_from_prev_page(trx_undo_rec_t *rec, page_no_t
   }
 }
 
-trx_undo_rec_t *Undo::get_prev_rec(trx_undo_rec_t *rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept {
+trx_undo_rec_t Undo::get_prev_rec(trx_undo_rec_t rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept {
   const auto prev_rec = trx_undo_page_get_prev_rec(rec, page_no, offset);
 
   if (prev_rec != nullptr) {
@@ -1148,19 +1148,19 @@ trx_undo_rec_t *Undo::get_prev_rec(trx_undo_rec_t *rec, page_no_t page_no, ulint
   }
 }
 
-trx_undo_rec_t *Undo::get_next_rec(trx_undo_rec_t *rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept {
+trx_undo_rec_t Undo::get_next_rec(trx_undo_rec_t rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept {
   auto next_rec = trx_undo_page_get_next_rec(rec, page_no, offset);
 
   if (next_rec != nullptr) {
     return next_rec;
   } else {
-    const auto space = page_get_space_id(page_align(rec));
+    const auto space = page_get_space_id(Rec(rec).page_align());
 
-    return get_next_rec_from_next_page(space, page_align(rec), page_no, offset, RW_S_LATCH, mtr);
+    return get_next_rec_from_next_page(space, Rec(rec).page_align(), page_no, offset, RW_S_LATCH, mtr);
   }
 }
 
-trx_undo_rec_t *Undo::get_first_rec(space_id_t space, page_no_t page_no, ulint offset, ulint mode, mtr_t *mtr) noexcept {
+trx_undo_rec_t Undo::get_first_rec(space_id_t space, page_no_t page_no, ulint offset, ulint mode, mtr_t *mtr) noexcept {
   auto undo_page = mode == RW_S_LATCH ? page_get_s_latched(space, page_no, mtr) : page_get(space, page_no, mtr);
   auto rec = trx_undo_page_get_first_rec(undo_page, page_no, offset);
 
@@ -1255,7 +1255,7 @@ void Undo::truncate_end(Trx *trx, trx_undo_t *undo, undo_no_t limit) noexcept {
   ut_ad(mutex_own(&trx->m_undo_mutex));
   ut_ad(mutex_own(&trx->m_rseg->m_mutex));
 
-  trx_undo_rec_t *trunc_here;
+  trx_undo_rec_t trunc_here;
 
   do {
     mtr_t mtr;
@@ -1312,7 +1312,7 @@ void Undo::truncate_start(Trx_rseg *rseg, space_id_t space, page_no_t hdr_page_n
       return;
     }
 
-    auto undo_page = page_align(rec);
+    auto undo_page = Rec(rec).page_align();
     auto last_rec = trx_undo_page_get_last_rec(undo_page, hdr_page_no, hdr_offset);
 
     if (Trx_undo_record::get_undo_no(last_rec) >= limit) {

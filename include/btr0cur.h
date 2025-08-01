@@ -195,7 +195,7 @@ struct Btree_cursor {
    * @return DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number
    */
   [[nodiscard]] db_err optimistic_insert(
-    ulint flags, DTuple *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
+    ulint flags, DTuple *entry, Rec *rec, big_rec_t *big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
   ) noexcept;
 
   /**
@@ -216,7 +216,7 @@ struct Btree_cursor {
    * @return          DB_SUCCESS or error number
    */
   [[nodiscard]] db_err pessimistic_insert(
-    ulint flags, DTuple *entry, rec_t **rec, big_rec_t **big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
+    ulint flags, DTuple *entry, Rec *rec, big_rec_t *big_rec, ulint n_ext, que_thr_t *thr, mtr_t *mtr
   ) noexcept;
 
   /**
@@ -267,7 +267,7 @@ struct Btree_cursor {
    * @return DB_SUCCESS or error code
    */
   [[nodiscard]] db_err pessimistic_update(
-    ulint flags, mem_heap_t **heap, big_rec_t **big_rec, const upd_t *update, ulint cmpl_info, que_thr_t *thr, mtr_t *mtr
+    ulint flags, mem_heap_t **heap, big_rec_t *big_rec, const upd_t *update, ulint cmpl_info, que_thr_t *thr, mtr_t *mtr
   ) noexcept;
 
   /**
@@ -414,7 +414,7 @@ struct Btree_cursor {
    *
    * @return Pointer to the record.
    */
-  [[nodiscard]] inline rec_t *get_rec() noexcept { return m_page_cur.get_rec(); }
+  [[nodiscard]] inline Rec get_rec() noexcept { return m_page_cur.get_rec(); }
 
   /**
    * Invalidates a tree cursor by setting the record pointer to nullptr.
@@ -426,7 +426,7 @@ struct Btree_cursor {
    *
    * @return Pointer to the page.
    */
-  [[nodiscard]] inline page_t *get_page_no() noexcept { return page_align(m_page_cur.get_rec()); }
+  [[nodiscard]] inline page_t *get_page_no() noexcept { return page_align(m_page_cur.get_rec().get()); }
 
   /**
    * Returns the index of a cursor.
@@ -442,8 +442,8 @@ struct Btree_cursor {
    * @param[in] rec             The record in the tree.
    * @param[in] block           The buffer block of the record.
    */
-  inline void position(const Index *index, rec_t *rec, Buf_block *block) noexcept {
-    ut_ad(page_align(rec) == block->m_frame);
+  inline void position(const Index *index, Rec rec, Buf_block *block) noexcept {
+    ut_ad(rec.page_align() == block->m_frame);
 
     m_page_cur.position(rec, block);
 
@@ -538,7 +538,7 @@ struct Btree_cursor {
      *
      * @return Pointer to inserted record if succeed, else nullptr
      */
-  [[nodiscard]] rec_t *insert_if_possible(const DTuple *tuple, ulint n_ext, mtr_t *mtr) noexcept;
+  [[nodiscard]] Rec insert_if_possible(const DTuple *tuple, ulint n_ext, mtr_t *mtr) noexcept;
 
   /**
    * For an insert, checks the locks and does the undo logging if desired.
@@ -594,7 +594,7 @@ struct Btree_cursor {
    * @param[in] mtr             The mini-transaction handle.
    */
   inline void update_in_place_log(
-    ulint flags, rec_t *rec, const Index *index, const upd_t *update, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr
+    ulint flags, Rec rec, const Index *index, const upd_t *update, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr
   ) noexcept;
 
   /**
@@ -610,7 +610,7 @@ struct Btree_cursor {
    * @param[in] rec             Updated record.
    * @param[in] mtr             Mini-transaction handle.
    */
-  void pess_upd_restore_supremum(Buf_block *block, const rec_t *rec, mtr_t *mtr) noexcept;
+  void pess_upd_restore_supremum(Buf_block *block, const Rec rec, mtr_t *mtr) noexcept;
 
   /**
    * Writes the redo log record for delete marking or unmarking of an index record.
@@ -624,7 +624,7 @@ struct Btree_cursor {
    * @param[in] mtr             The mini-transaction handle.
    */
   inline void del_mark_set_clust_rec_log(
-    ulint flags, rec_t *rec, const Index *index, bool val, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr
+    ulint flags, Rec rec, const Index *index, bool val, Trx *trx, roll_ptr_t roll_ptr, mtr_t *mtr
   ) noexcept;
 
   /**
@@ -635,7 +635,7 @@ struct Btree_cursor {
    * @param[in] val             The value to set for the delete mark.
    * @param[in] mtr             The mini-transaction handle.
    */
-  inline void del_mark_set_sec_rec_log(rec_t *rec, bool val, mtr_t *mtr) noexcept;
+  inline void del_mark_set_sec_rec_log(Rec rec, bool val, mtr_t *mtr) noexcept;
 
   /**
    * Gets the file interface.

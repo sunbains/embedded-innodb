@@ -459,7 +459,7 @@ static ulint ib_get_max_row_len(Index *index) {
  * @param[in] rec           Record to read
  * @param[in] tuple         Tuple to read into
  */
-static void ib_read_tuple(const rec_t *rec, ib_tuple_t *tuple) noexcept {
+static void ib_read_tuple(const Rec &rec, ib_tuple_t *tuple) noexcept {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   auto offsets = offsets_.data();
   DTuple *dtuple = tuple->ptr;
@@ -473,15 +473,15 @@ static void ib_read_tuple(const rec_t *rec, ib_tuple_t *tuple) noexcept {
     offsets = record.get_all_col_offsets(offsets, &tuple->heap, Current_location());
   }
 
-  auto rec_meta_data = rec_get_info_bits(rec);
+  auto rec_meta_data = rec.get_info_bits();
   dtuple_set_info_bits(dtuple, rec_meta_data);
 
   /* Make a copy of the rec. */
   auto ptr = reinterpret_cast<void *>(mem_heap_alloc(tuple->heap, rec_offs_size(offsets)));
-  auto copy = rec_copy(ptr, rec, offsets);
+  auto copy = rec.copy(ptr, offsets);
 
-  /* Avoid a debug assertion in rec_offs_validate(). */
-  ut_d(rec_offs_make_valid(rec, dindex, (ulint *)offsets));
+  /* Avoid a debug assertion in rec.offs_validate(). */
+  ut_d(rec.offs_make_valid(dindex, (ulint *)offsets));
 
   auto n_index_fields = std::min<ulint>(rec_offs_n_fields(offsets), dtuple_get_n_fields(dtuple));
 
@@ -500,7 +500,7 @@ static void ib_read_tuple(const rec_t *rec, ib_tuple_t *tuple) noexcept {
     }
 
     ulint len;
-    auto data = rec_get_nth_field(copy, offsets, i, &len);
+    auto data = copy.get_nth_field(offsets, i, &len);
 
     /* Fetch and copy any externally stored column. */
     if (rec_offs_nth_extern(offsets, i)) {
@@ -512,7 +512,7 @@ static void ib_read_tuple(const rec_t *rec, ib_tuple_t *tuple) noexcept {
       ut_a(len != UNIV_SQL_NULL);
     }
 
-    dfield_set_data(dfield, data, len);
+    dfield_set_data(dfield, data.get(), len);
   }
 }
 
@@ -2915,7 +2915,7 @@ ib_err_t ib_cursor_update_row(ib_crsr_t ib_crsr, const ib_tpl_t ib_old_tpl, cons
  *
  * @return DB_SUCCESS or err code
  */
-static ib_err_t ib_delete_row(ib_cursor_t *cursor, Btree_pcursor *pcur, const rec_t *rec) {
+static ib_err_t ib_delete_row(ib_cursor_t *cursor, Btree_pcursor *pcur, const Rec &rec) {
   auto table = cursor->prebuilt->m_table;
   auto index = table->get_first_index();
 
@@ -2982,11 +2982,11 @@ ib_err_t ib_cursor_delete_row(ib_crsr_t ib_crsr) {
   }
 
   if (ib_btr_cursor_is_positioned(pcur)) {
-    const rec_t *rec;
+    Rec rec;
 
     if (!prebuilt->m_row_cache.is_cache_empty()) {
       rec = prebuilt->m_row_cache.cache_get_row();
-      ut_a(rec != nullptr);
+      ut_a(!rec.is_null());
     } else {
       mtr_t mtr;
 
@@ -2996,14 +2996,14 @@ ib_err_t ib_cursor_delete_row(ib_crsr_t ib_crsr) {
 
         rec = pcur->get_rec();
       } else {
-        rec = nullptr;
+        rec = Rec();
       }
 
       mtr.commit();
     }
 
-    if (rec && !rec_get_deleted_flag(rec)) {
-      err = ib_delete_row(cursor, pcur, rec);
+    if (rec.is_valid() && !rec.get_deleted_flag()) {
+      err = ib_delete_row(cursor, pcur, Rec(rec));
     } else {
       err = DB_RECORD_NOT_FOUND;
     }
@@ -3030,10 +3030,10 @@ ib_err_t ib_cursor_read_row(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl) {
     err = DB_RECORD_NOT_FOUND;
   } else if (!cursor->prebuilt->m_row_cache.is_cache_empty()) {
     auto rec = cursor->prebuilt->m_row_cache.cache_get_row();
-    ut_a(rec != nullptr);
+    ut_a(!rec.is_null());
 
-    if (!rec_get_deleted_flag(rec)) {
-      ib_read_tuple(rec, tuple);
+    if (!rec.get_deleted_flag()) {
+      ib_read_tuple(Rec(rec), tuple);
       err = DB_SUCCESS;
     } else {
       err = DB_RECORD_NOT_FOUND;
@@ -3058,8 +3058,8 @@ ib_err_t ib_cursor_read_row(ib_crsr_t ib_crsr, ib_tpl_t ib_tpl) {
     if (pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Current_location())) {
       auto rec = pcur->get_rec();
 
-      if (!rec_get_deleted_flag(rec)) {
-        ib_read_tuple(rec, tuple);
+      if (!rec.get_deleted_flag()) {
+        ib_read_tuple(Rec(rec), tuple);
         err = DB_SUCCESS;
       } else {
         err = DB_RECORD_NOT_FOUND;
@@ -4821,7 +4821,7 @@ static dberr_t check_table(Trx *trx, Index *index, size_t n_threads) {
 
         n_corrupt.inc(1, id);
         prev_tuple->print(dtuple_os);
-        rec_os << rec_to_string(rec);
+        rec_os << rec.to_string();
 
         log_err(std::format(
           "Index records in a wrong order in index {} of table {}: {}, {}",
@@ -4838,7 +4838,7 @@ static dberr_t check_table(Trx *trx, Index *index, size_t n_threads) {
         std::ostringstream dtuple_os{};
 
         n_dups.inc(1, id);
-        rec_os << rec_to_string(rec);
+        rec_os << rec.to_string();
         prev_tuple->print(dtuple_os);
 
         log_err(std::format(

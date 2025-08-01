@@ -171,7 +171,7 @@ constexpr ulint PAGE_DIR_SLOT_MIN_N_OWNED = 4;
  */
 void page_set_max_trx_id(Buf_block *block, trx_id_t trx_id, mtr_t *mtr);
 
-#define page_get_infimum_rec(page) ((page) + page_get_infimum_offset(page))
+#define page_get_infimum_rec(page) (Rec(((page) + page_get_infimum_offset(page))))
 
 /**
  * Reads the given header field.
@@ -222,7 +222,7 @@ inline bool page_is_leaf(const page_t *page) {
   return *reinterpret_cast<const uint16_t *>(page + (PAGE_HEADER + PAGE_LEVEL)) == 0;
 }
 
-#define page_get_supremum_rec(page) ((page) + page_get_supremum_offset(page))
+#define page_get_supremum_rec(page) (Rec(((page) + page_get_supremum_offset(page))))
 
 /**
  * Returns the middle record of record list. If there are an even number
@@ -231,7 +231,7 @@ inline bool page_is_leaf(const page_t *page) {
  * @param[in] page page to read from
  *
  * @return	middle record */
-rec_t *page_get_middle_rec(page_t *page);
+Rec page_get_middle_rec(page_t *page);
 
 /**
  * Returns the number of records before the given record in chain.
@@ -241,7 +241,7 @@ rec_t *page_get_middle_rec(page_t *page);
  *
  * @return        number of records
  */
-ulint page_rec_get_n_recs_before(const rec_t *rec);
+ulint page_rec_get_n_recs_before(const Rec rec);
 
 #ifndef UNIV_DEBUG
 #define page_dir_get_nth_slot(page, n) ((page) + UNIV_PAGE_SIZE - PAGE_DIR - (n + 1) * PAGE_DIR_SLOT_SIZE)
@@ -254,7 +254,7 @@ ulint page_rec_get_n_recs_before(const rec_t *rec);
  *
  * @return	the directory slot number
  */
-ulint page_dir_find_owner_slot(const rec_t *rec);
+ulint page_dir_find_owner_slot(const Rec rec);
 
 /**
  * This is a low-level operation which is used in a database index creation
@@ -265,7 +265,7 @@ ulint page_dir_find_owner_slot(const rec_t *rec);
  * @param[in] page_no value to write
  * @param[im,out] mtr mini-transaction
  */
-void page_rec_write_index_page_no(rec_t *rec, ulint i, ulint page_no, mtr_t *mtr);
+void page_rec_write_index_page_no(Rec rec, ulint i, ulint page_no, mtr_t *mtr);
 
 /**
  * Allocates a block of memory from the heap of an index page.
@@ -297,7 +297,7 @@ page_t *page_create(const Index *index, Buf_block *block, mtr_t *mtr);
  * @param[in] index index that contains the record
  * @param[in,out] mtr mini-transaction
  */
-void page_copy_rec_list_end_no_locks(Buf_block *new_block, Buf_block *block, rec_t *rec, const Index *index, mtr_t *mtr);
+void page_copy_rec_list_end_no_locks(Buf_block *new_block, Buf_block *block, Rec rec, const Index *index, mtr_t *mtr);
 
 /**
  * Copies records from page to new_page, from the given record onward,
@@ -311,7 +311,7 @@ void page_copy_rec_list_end_no_locks(Buf_block *new_block, Buf_block *block, rec
  * @param[in, out] mtr mini-transaction
  * @return pointer to the original successor of the infimum record on new_page.
  */
-rec_t *page_copy_rec_list_end(Buf_block *new_block, Buf_block *block, rec_t *rec, const Index *index, mtr_t *mtr);
+Rec page_copy_rec_list_end(Buf_block *new_block, Buf_block *block, Rec rec, const Index *index, mtr_t *mtr);
 
 /**
  * Copies records from page to new_page, up to the given record, NOT
@@ -326,7 +326,7 @@ rec_t *page_copy_rec_list_end(Buf_block *new_block, Buf_block *block, rec_t *rec
  *
  * @return pointer to the original predecessor of the supremum record on new_page
  */
-rec_t *page_copy_rec_list_start(Buf_block *new_block, Buf_block *block, rec_t *rec, Index *index, mtr_t *mtr);
+Rec page_copy_rec_list_start(Buf_block *new_block, Buf_block *block, Rec rec, Index *index, mtr_t *mtr);
 
 /**
  * Deletes records from a page from a given record onward, including that
@@ -339,7 +339,7 @@ rec_t *page_copy_rec_list_start(Buf_block *new_block, Buf_block *block, rec_t *r
  * @param[in] size the sum of the sizes of the records in the end of the chain to delete, or ULINT_UNDEFINED if not known
  * @param[in,out] mtr mini-transaction
  */
-void page_delete_rec_list_end(rec_t *rec, Buf_block *block, Index *index, ulint n_recs, ulint size, mtr_t *mtr);
+void page_delete_rec_list_end(Rec rec, Buf_block *block, Index *index, ulint n_recs, ulint size, mtr_t *mtr);
 
 /**
  * Deletes records from page, up to the given record, NOT including
@@ -350,7 +350,7 @@ void page_delete_rec_list_end(rec_t *rec, Buf_block *block, Index *index, ulint 
  * @param[in] index containing the record
  * @param[in,out] mtr mini-transaction
  */
-void page_delete_rec_list_start(rec_t *rec, Buf_block *block, Index *index, mtr_t *mtr);
+void page_delete_rec_list_start(Rec rec, Buf_block *block, Index *index, mtr_t *mtr);
 
 /**
  * Moves record list end to another page. Moved records include split_rec.
@@ -363,7 +363,7 @@ void page_delete_rec_list_start(rec_t *rec, Buf_block *block, Index *index, mtr_
  *
  * @return true on success
  */
-bool page_move_rec_list_end(Buf_block *new_block, Buf_block *block, rec_t *split_rec, Index *index, mtr_t *mtr);
+bool page_move_rec_list_end(Buf_block *new_block, Buf_block *block, Rec split_rec, Index *index, mtr_t *mtr);
 
 /**
  * Moves record list start to another page. Moved records do not include
@@ -377,7 +377,7 @@ bool page_move_rec_list_end(Buf_block *new_block, Buf_block *block, rec_t *split
  *
  * @return	true on success
  */
-bool page_move_rec_list_start(Buf_block *new_block, Buf_block *block, rec_t *split_rec, Index *index, mtr_t *mtr);
+bool page_move_rec_list_start(Buf_block *new_block, Buf_block *block, Rec split_rec, Index *index, mtr_t *mtr);
 
 /**
  * Splits a directory slot which owns too many records.
@@ -430,7 +430,7 @@ byte *page_parse_create(byte *ptr, byte *end_ptr, Buf_block *block, Index *index
  * @param[in] rec physical record
  * @param[in] offsets array returned by Phy_rec::get_col_offsets()
  */
-void page_rec_print(const rec_t *rec, const ulint *offsets);
+void page_rec_print(const Rec rec, const ulint *offsets);
 
 /**
  * This is used to print the contents of the directory for
@@ -477,7 +477,7 @@ void page_print(Buf_block *block, Index *index, ulint dn, ulint rn);
  * @param[in] rec physical record
  * @param[in] offsets array returned by Phy_rec::get_col_offsets()
  * @return	true if ok */
-bool page_rec_validate(rec_t *rec, const ulint *offsets);
+bool page_rec_validate(Rec rec, const ulint *offsets);
 
 /**
  * Checks that the first directory slot points to the infimum record and
@@ -517,37 +517,17 @@ bool page_validate(page_t *page, Index *index);
  *
  * @return	record, NULL if not found
  */
-const rec_t *page_find_rec_with_heap_no(const page_t *page, ulint heap_no);
-
-/**
- * Determine if a record is so big that it needs to be stored externally.
- *
- * @param[in] rec_size length of the record in bytes
- *
- * @return	false if the entire record can be stored locally on the page
- */
-inline bool page_rec_needs_ext(ulint rec_size);
-
-/**
- * Gets the start of a page.
- *
- * @param[in] ptr pointer to page frame
- *
- * @return	start of the page
- */
-inline page_t *page_align(const void *ptr) {
-  return reinterpret_cast<page_t *>(ut_align_down(ptr, UNIV_PAGE_SIZE));
-}
+const Rec page_find_rec_with_heap_no(const page_t *page, ulint heap_no);
 
 /**
  * Gets the offset within a page.
  *
- * @param[in] ptr pointer to page frame
+ * @param[in] rec Rec pointer to page frame
  *
  * @return	offset from the start of the page
  */
-inline ulint page_offset(const void *ptr) {
-  return ut_align_offset(ptr, UNIV_PAGE_SIZE);
+inline ulint page_offset(const Rec rec) noexcept {
+  return page_offset(rec.get());
 }
 
 /**
@@ -633,8 +613,8 @@ inline void page_header_reset_last_insert(page_t *page, mtr_t *mtr) {
  *
  * @return	heap number
  */
-inline ulint page_rec_get_heap_no(const rec_t *rec) {
-  return rec_get_heap_no(rec);
+inline ulint page_rec_get_heap_no(const Rec rec) {
+  return rec.get_heap_no();
 }
 
 /**
@@ -710,7 +690,7 @@ inline bool page_rec_is_infimum_low(ulint offset) {
  *
  * @return	true if a user record
  */
-inline bool page_rec_is_user_rec(const rec_t *rec) {
+inline bool page_rec_is_user_rec(const Rec rec) {
   return page_rec_is_user_rec_low(page_offset(rec));
 }
 
@@ -721,7 +701,7 @@ inline bool page_rec_is_user_rec(const rec_t *rec) {
  *
  * @return	true if the supremum record
  */
-inline bool page_rec_is_supremum(const rec_t *rec) {
+inline bool page_rec_is_supremum(const Rec rec) {
   return page_rec_is_supremum_low(page_offset(rec));
 }
 
@@ -732,7 +712,7 @@ inline bool page_rec_is_supremum(const rec_t *rec) {
  *
  * @return	true if the infimum record
  */
-inline bool page_rec_is_infimum(const rec_t *rec) {
+inline bool page_rec_is_infimum(const Rec rec) {
   return page_rec_is_infimum_low(page_offset(rec));
 }
 
@@ -758,10 +738,10 @@ inline bool page_rec_is_infimum(const rec_t *rec) {
  *  respectively, when only the common first fields are compared
  */
 inline int page_cmp_dtuple_rec_with_match(
-  void *cmp_ctx, const DTuple *dtuple, const rec_t *rec, const ulint *offsets, ulint *matched_fields, ulint *matched_bytes
+  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const ulint *offsets, ulint *matched_fields, ulint *matched_bytes
 ) {
   ut_ad(dtuple_check_typed(dtuple));
-  ut_ad(rec_offs_validate(rec, nullptr, offsets));
+  ut_ad(rec.offs_validate(nullptr, offsets));
 
   const auto rec_offset = page_offset(rec);
 
@@ -878,10 +858,10 @@ inline page_dir_slot_t *page_dir_get_nth_slot(const page_t *page, ulint n) {
  *
  * @return	true if succeed
  */
-inline bool page_rec_check(const rec_t *rec) {
-  const page_t *page = page_align(rec);
+inline bool page_rec_check(const Rec rec) {
+  const page_t *page = rec.page_align();
 
-  ut_a(rec);
+  ut_a(rec.is_valid());
 
   ut_a(page_offset(rec) <= page_header_get_field(page, PAGE_HEAP_TOP));
   ut_a(page_offset(rec) >= PAGE_DATA);
@@ -896,7 +876,7 @@ inline bool page_rec_check(const rec_t *rec) {
  *
  * @return	pointer to record
  */
-inline const rec_t *page_dir_slot_get_rec(const page_dir_slot_t *slot) {
+inline const Rec page_dir_slot_get_rec(const page_dir_slot_t *slot) {
   return page_align(slot) + mach_read_from_2(slot);
 }
 
@@ -907,7 +887,7 @@ inline const rec_t *page_dir_slot_get_rec(const page_dir_slot_t *slot) {
  * @param[in] rec record on the page
  *
  */
-inline void page_dir_slot_set_rec(page_dir_slot_t *slot, rec_t *rec) {
+inline void page_dir_slot_set_rec(page_dir_slot_t *slot, Rec rec) {
   ut_ad(page_rec_check(rec));
 
   mach_write_to_2(slot, page_offset(rec));
@@ -921,9 +901,9 @@ inline void page_dir_slot_set_rec(page_dir_slot_t *slot, rec_t *rec) {
  * @return	number of records
  */
 inline ulint page_dir_slot_get_n_owned(const page_dir_slot_t *slot) {
-  const rec_t *rec = page_dir_slot_get_rec(slot);
+  const Rec rec = page_dir_slot_get_rec(slot);
 
-  return rec_get_n_owned(rec);
+  return rec.get_n_owned();
 }
 
 /**
@@ -933,10 +913,9 @@ inline ulint page_dir_slot_get_n_owned(const page_dir_slot_t *slot) {
  * @param[in] n number of records owned by the slot
  */
 inline void page_dir_slot_set_n_owned(page_dir_slot_t *slot, ulint n) {
-  auto ptr = const_cast<byte *>(page_dir_slot_get_rec(slot));
-  auto rec = reinterpret_cast<rec_t *>(ptr);
+  auto rec = Rec(page_dir_slot_get_rec(slot));
 
-  rec_set_n_owned(rec, n);
+  rec.set_n_owned(n);
 }
 
 /**
@@ -957,11 +936,11 @@ inline ulint page_dir_calc_reserved_space(ulint n_recs) {
  *
  * @return	pointer to next record
  */
-inline const rec_t *page_rec_get_next_low(const rec_t *rec) {
+inline const Rec page_rec_get_next_low(const Rec rec) {
   ut_ad(page_rec_check(rec));
 
-  auto page = page_align(rec);
-  auto offs = rec_get_next_offs(rec);
+  auto page = rec.page_align();
+  auto offs = rec.get_next_offs();
 
   if (unlikely(offs >= UNIV_PAGE_SIZE)) {
     log_err(std::format(
@@ -969,7 +948,7 @@ inline const rec_t *page_rec_get_next_low(const rec_t *rec) {
       "rec address {}, space id {}, page {}",
       offs,
       page_offset(rec),
-      (void *)rec,
+      (void *)rec.get(),
       page_get_space_id(page),
       page_get_page_no(page)
     ));
@@ -979,7 +958,7 @@ inline const rec_t *page_rec_get_next_low(const rec_t *rec) {
     ut_error;
   }
 
-  return offs == 0 ? nullptr : page + offs;
+  return offs == 0 ? Rec{} : Rec(page + offs);
 }
 
 /**
@@ -989,9 +968,8 @@ inline const rec_t *page_rec_get_next_low(const rec_t *rec) {
  *
  * @return	pointer to next record
  */
-inline rec_t *page_rec_get_next(const rec_t *rec) {
-  auto ptr = const_cast<rec_t *>(page_rec_get_next_low(rec));
-  return reinterpret_cast<rec_t *>(ptr);
+inline Rec page_rec_get_next(const Rec rec) {
+  return Rec(page_rec_get_next_low(rec));
 }
 
 /**
@@ -1001,7 +979,7 @@ inline rec_t *page_rec_get_next(const rec_t *rec) {
  *
  * @return	pointer to next record
  */
-inline const rec_t *page_rec_get_next_const(const rec_t *rec) {
+inline const Rec page_rec_get_next_const(const Rec rec) {
   return page_rec_get_next_low(rec);
 }
 
@@ -1011,17 +989,17 @@ inline const rec_t *page_rec_get_next_const(const rec_t *rec) {
  * @param[in] rec pointer to record, must not be page supremum
  * @param[in] next pointer to next record, must not be page infimum
  */
-inline void page_rec_set_next(rec_t *rec, rec_t *next) {
+inline void page_rec_set_next(Rec rec, Rec next) {
   ut_ad(page_rec_check(rec));
   ut_ad(!page_rec_is_supremum(rec));
   ut_ad(rec != next);
 
-  ut_ad(next == nullptr || !page_rec_is_infimum(next));
-  ut_ad(next == nullptr || page_align(rec) == page_align(next));
+  ut_ad(next.is_null() || !page_rec_is_infimum(next));
+  ut_ad(next.is_null() || rec.page_align() == next.page_align());
 
-  auto offs = likely(next != nullptr) ? page_offset(next) : 0;
+  auto offs = likely(next.is_valid()) ? page_offset(next) : 0;
 
-  rec_set_next_offs(rec, offs);
+  rec.set_next_offs(offs);
 }
 
 /**
@@ -1031,10 +1009,10 @@ inline void page_rec_set_next(rec_t *rec, rec_t *next) {
  *
  * @return	pointer to previous record
  */
-inline const rec_t *page_rec_get_prev_const(const rec_t *rec) {
+inline const Rec page_rec_get_prev_const(const Rec rec) {
   ut_ad(page_rec_check(rec));
 
-  auto page = page_align(rec);
+  auto page = rec.page_align();
 
   ut_ad(!page_rec_is_infimum(rec));
 
@@ -1046,14 +1024,14 @@ inline const rec_t *page_rec_get_prev_const(const rec_t *rec) {
 
   auto rec2 = page_dir_slot_get_rec(slot);
 
-  const rec_t *prev_rec{};
+  Rec prev_rec{};
 
   while (rec != rec2) {
     prev_rec = rec2;
     rec2 = page_rec_get_next_low(rec2);
   }
 
-  ut_a(prev_rec != nullptr);
+  ut_a(prev_rec.is_valid());
 
   return prev_rec;
 }
@@ -1065,9 +1043,8 @@ inline const rec_t *page_rec_get_prev_const(const rec_t *rec) {
  *
  * @return	pointer to previous record
  */
-inline rec_t *page_rec_get_prev(rec_t *rec) {
-  auto ptr = const_cast<byte *>(page_rec_get_prev_const(rec));
-  return reinterpret_cast<rec_t *>(ptr);
+inline Rec page_rec_get_prev(Rec rec) {
+  return Rec(page_rec_get_prev_const(rec));
 }
 
 /**
@@ -1077,10 +1054,10 @@ inline rec_t *page_rec_get_prev(rec_t *rec) {
  *
  * @return	the owner record
  */
-inline rec_t *page_rec_find_owner_rec(rec_t *rec) {
+inline Rec page_rec_find_owner_rec(Rec rec) {
   ut_ad(page_rec_check(rec));
 
-  while (rec_get_n_owned(rec) == 0) {
+  while (rec.get_n_owned() == 0) {
     rec = page_rec_get_next(rec);
   }
 
@@ -1095,7 +1072,7 @@ inline rec_t *page_rec_find_owner_rec(rec_t *rec) {
  *
  * @return	REC_N_EXTRA_BYTES
  */
-constexpr inline ulint page_rec_get_base_extra_size(const rec_t *rec) {
+constexpr inline ulint page_rec_get_base_extra_size(const Rec rec) {
   return REC_N_EXTRA_BYTES;
 }
 
@@ -1123,13 +1100,14 @@ inline ulint page_get_data_size(const page_t *page) {
  * @param[in] next_rec pointer to the new head of the free record list
  * @param[in] need number of bytes allocated
  */
-inline void page_mem_alloc_free(page_t *page, rec_t *next_rec, ulint need) {
+inline void page_mem_alloc_free(page_t *page, Rec next_rec, ulint need) {
 #ifdef UNIV_DEBUG
-  auto old_rec = page_header_get_ptr(page, PAGE_FREE);
+  auto old_rec_ptr = page_header_get_ptr(page, PAGE_FREE);
+  Rec old_rec(old_rec_ptr);
 
-  ut_ad(old_rec != nullptr);
-  auto next_offs = rec_get_next_offs(old_rec);
-  ut_ad(next_rec == (next_offs > 0 ? page + next_offs : nullptr));
+  ut_ad(old_rec_ptr != nullptr);
+  auto next_offs = old_rec.get_next_offs();
+  ut_ad(next_rec == (next_offs > 0 ? Rec(page + next_offs) : Rec{}));
 #endif /* UNIV_DEBUG */
 
   page_header_set_ptr(page, PAGE_FREE, next_rec);
@@ -1200,8 +1178,8 @@ inline ulint page_get_max_insert_size_after_reorganize(const page_t *page, ulint
  * @param[in] index index of rec
  * @param[in] offsets array returned by Phy_rec::get_col_offsets()
  */
-inline void page_mem_free(page_t *page, rec_t *rec, const Index *index, const ulint *offsets) {
-  ut_ad(rec_offs_validate(rec, index, offsets));
+inline void page_mem_free(page_t *page, Rec rec, const Index *index, const ulint *offsets) {
+  ut_ad(rec.offs_validate(index, offsets));
 
   auto free_rec = page_header_get_ptr(page, PAGE_FREE);
 

@@ -462,14 +462,14 @@ void Purge_sys::choose_next_log() noexcept {
     return;
   }
 
-  trx_undo_rec_t *rec;
+  trx_undo_rec_t rec;
 
   mtr.start();
 
   if (!min_rseg->m_last_del_marks) {
     /* No need to purge this log */
 
-    rec = &trx_purge_dummy_rec;
+    rec = trx_purge_dummy_rec;
 
   } else {
 
@@ -477,7 +477,7 @@ void Purge_sys::choose_next_log() noexcept {
 
     if (rec == nullptr) {
       /* Undo log empty */
-      rec = &trx_purge_dummy_rec;
+      rec = trx_purge_dummy_rec;
     }
   }
 
@@ -489,7 +489,7 @@ void Purge_sys::choose_next_log() noexcept {
 
   m_purge_trx_no = min_trx_no;
 
-  if (rec == &trx_purge_dummy_rec) {
+  if (rec == trx_purge_dummy_rec) {
 
     m_purge_undo_no = 0;
     m_page_no = page_no;
@@ -498,7 +498,7 @@ void Purge_sys::choose_next_log() noexcept {
   } else {
 
     m_purge_undo_no = Trx_undo_record::get_undo_no(rec);
-    m_page_no = page_get_page_no(page_align(rec));
+    m_page_no = page_get_page_no(Rec(rec).page_align());
     m_offset = page_offset(rec);
   }
 
@@ -528,7 +528,7 @@ Trx_undo_record Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
 
     choose_next_log();
 
-    return Trx_undo_record(&trx_purge_dummy_rec);
+    return Trx_undo_record(trx_purge_dummy_rec);
   }
 
   mtr_t mtr;
@@ -585,7 +585,7 @@ Trx_undo_record Purge_sys::get_next_rec(mem_heap_t *heap) noexcept {
 
     rec = undo_page + offset;
   } else {
-    page = page_align(rec2);
+    page = Rec(rec2).page_align();
 
     m_purge_undo_no = Trx_undo_record::get_undo_no(rec2);
     m_page_no = page_get_page_no(page);

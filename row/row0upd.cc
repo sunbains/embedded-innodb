@@ -144,7 +144,7 @@ db_err Row_update::check_references_constraints(
 
   auto trx = thr_get_trx(thr);
   auto rec = pcur->get_rec();
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(rec.offs_validate(index, offsets));
 
   auto heap = mem_heap_create(500);
   auto entry = row_rec_to_index_entry(ROW_COPY_DATA, rec, index, offsets, &n_ext, heap);
@@ -228,16 +228,16 @@ upd_node_t *Row_update::node_create(mem_heap_t *heap) noexcept {
 }
 
 void Row_update::rec_sys_fields_in_recovery(
-  rec_t *rec, const ulint *offsets, ulint pos, trx_id_t trx_id, roll_ptr_t roll_ptr
+  Rec rec, const ulint *offsets, ulint pos, trx_id_t trx_id, roll_ptr_t roll_ptr
 ) noexcept {
-  ut_ad(rec_offs_validate(rec, nullptr, offsets));
+  ut_ad(rec.offs_validate(nullptr, offsets));
 
   ulint len;
 
   auto col_offset = rec_get_nth_field_offs(offsets, pos, &len);
   ut_ad(len == DATA_TRX_ID_LEN);
 
-  auto field = rec + col_offset;
+  auto field = rec.get() + col_offset;
 
   static_assert(DATA_TRX_ID + 1 == DATA_ROLL_PTR, "error DATA_TRX_ID + 1 != DATA_ROLL_PTR");
 
@@ -262,7 +262,7 @@ void Row_update::index_entry_sys_field(const DTuple *entry, const Index *index, 
 }
 
 bool Row_update::changes_field_size_or_external(const Index *index, const ulint *offsets, const upd_t *update) noexcept {
-  ut_ad(rec_offs_validate(nullptr, index, offsets));
+  ut_ad(Rec{}.offs_validate(index, offsets));
   const auto n_fields = upd_get_n_fields(update);
 
   for (ulint i{}; i < n_fields; i++) {
@@ -286,10 +286,10 @@ bool Row_update::changes_field_size_or_external(const Index *index, const ulint 
   return false;
 }
 
-void Row_update::rec_in_place(rec_t *rec, const Index *index, const ulint *offsets, const upd_t *update) noexcept {
-  ut_ad(rec_offs_validate(rec, index, offsets));
+void Row_update::rec_in_place(Rec rec, const Index *index, const ulint *offsets, const upd_t *update) noexcept {
+  ut_ad(rec.offs_validate(index, offsets));
 
-  rec_set_info_bits(rec, update->m_info_bits);
+  rec.set_info_bits(update->m_info_bits);
 
   const auto n_fields = upd_get_n_fields(update);
 
@@ -299,7 +299,7 @@ void Row_update::rec_in_place(rec_t *rec, const Index *index, const ulint *offse
 
     ut_ad(!dfield_is_ext(new_val) == !rec_offs_nth_extern(offsets, upd_field->m_field_no));
 
-    rec_set_nth_field(rec, offsets, upd_field->m_field_no, dfield_get_data(new_val), dfield_get_len(new_val));
+    rec.set_nth_field(offsets, upd_field->m_field_no, dfield_get_data(new_val), dfield_get_len(new_val));
   }
 }
 
@@ -443,7 +443,7 @@ byte *Row_update::index_parse(byte *ptr, byte *end_ptr, mem_heap_t *heap, upd_t 
 }
 
 upd_t *Row_update::build_sec_rec_difference_binary(
-  const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap
+  const Index *index, const DTuple *entry, const Rec rec, Trx *trx, mem_heap_t *heap
 ) noexcept {
   /* This function is used only for a secondary index */
   ut_a(!index->is_clustered());
@@ -465,7 +465,7 @@ upd_t *Row_update::build_sec_rec_difference_binary(
   for (ulint i{}; i < dtuple_get_n_fields(entry); ++i) {
 
     ulint len;
-    const auto data = rec_get_nth_field(rec, offsets, i, &len);
+    const auto data = rec.get_nth_field(offsets, i, &len);
     const auto dfield = dtuple_get_nth_field(entry, i);
 
     /* NOTE that it may be that len != dfield_get_len(dfield) if we
@@ -497,7 +497,7 @@ upd_t *Row_update::build_sec_rec_difference_binary(
 }
 
 upd_t *Row_update::build_difference_binary(
-  const Index *index, const DTuple *entry, const rec_t *rec, Trx *trx, mem_heap_t *heap
+  const Index *index, const DTuple *entry, const Rec rec, Trx *trx, mem_heap_t *heap
 ) noexcept {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 
@@ -523,7 +523,7 @@ upd_t *Row_update::build_difference_binary(
   for (ulint i{}; i < dtuple_get_n_fields(entry); ++i) {
 
     ulint len;
-    const auto data = rec_get_nth_field(rec, offsets, i, &len);
+    const auto data = rec.get_nth_field(offsets, i, &len);
     const auto dfield = dtuple_get_nth_field(entry, i);
 
     /* NOTE: we compare the fields as binary strings!
@@ -787,7 +787,7 @@ bool Row_update::changes_first_fields_binary(DTuple *entry, const Index *index, 
   return false;
 }
 
-inline void Row_update::copy_columns(rec_t *rec, const ulint *offsets, sym_node_t *column) noexcept {
+inline void Row_update::copy_columns(Rec rec, const ulint *offsets, sym_node_t *column) noexcept {
   while (column != nullptr) {
     ulint len;
     auto col_offset = rec_get_nth_field_offs(offsets, column->field_nos[SYM_CLUST_FIELD_NO], &len);
@@ -883,7 +883,7 @@ db_err Row_update::sec_index_entry(upd_node_t *node, que_thr_t *thr) noexcept {
     log_err("\ntuple ");
     dtuple_print(ib_stream, entry);
     log_err("record ");
-    log_err(rec_to_string(rec));
+    log_err(rec.to_string());
     log_info(trx->to_string(0));
     log_err("Submit a detailed bug report");
   } else {
@@ -891,7 +891,7 @@ db_err Row_update::sec_index_entry(upd_node_t *node, que_thr_t *thr) noexcept {
     delete marked if we return after a lock wait in
     row_ins_index_entry below */
 
-    if (!rec_get_deleted_flag(rec)) {
+    if (!rec.get_deleted_flag()) {
 
       err = btr_cur->del_mark_set_sec_rec(0, true, thr, &mtr);
 
@@ -954,7 +954,7 @@ db_err Row_update::clust_rec_by_insert(
   Blob blob(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
   if (upd_node->m_state != UPD_NODE_INSERT_CLUSTERED) {
-    rec_t *rec;
+    Rec rec;
     Index *index;
 
     err = btr_cur->del_mark_set_clust_rec(BTR_NO_LOCKING_FLAG, true, thr, mtr);
@@ -1033,7 +1033,7 @@ db_err Row_update::clust_rec_by_insert(
 
 db_err Row_update::clust_rec(upd_node_t *upd_node, const Index *index, que_thr_t *thr, mtr_t *mtr) noexcept {
   mem_heap_t *heap = nullptr;
-  big_rec_t *big_rec = nullptr;
+  big_rec_t big_rec{};
   db_err err;
 
   ut_ad(index->is_clustered());
@@ -1041,7 +1041,7 @@ db_err Row_update::clust_rec(upd_node_t *upd_node, const Index *index, que_thr_t
   auto pcur = upd_node->m_pcur;
   auto btr_cur = pcur->get_btr_cur();
 
-  ut_ad(!rec_get_deleted_flag(pcur->get_rec()));
+  ut_ad(!pcur->get_rec().get_deleted_flag());
 
   /* Try optimistic updating of the record, keeping changes within
   the page; we do not check locks because we assume the x-lock on the
@@ -1077,14 +1077,14 @@ db_err Row_update::clust_rec(upd_node_t *upd_node, const Index *index, que_thr_t
 
   ut_a(pcur->restore_position(BTR_MODIFY_TREE, mtr, Current_location()));
 
-  ut_ad(!rec_get_deleted_flag(pcur->get_rec()));
+  ut_ad(!pcur->get_rec().get_deleted_flag());
 
   err = btr_cur->pessimistic_update(BTR_NO_LOCKING_FLAG, &heap, &big_rec, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
 
   mtr->commit();
 
-  if (err == DB_SUCCESS && big_rec) {
-    rec_t *rec;
+  if (err == DB_SUCCESS && big_rec.n_fields > 0) {
+    Rec rec;
 
     mtr->start();
 
@@ -1112,7 +1112,7 @@ db_err Row_update::clust_rec(upd_node_t *upd_node, const Index *index, que_thr_t
     mem_heap_free(heap);
   }
 
-  if (big_rec != nullptr) {
+  if (big_rec.n_fields > 0) {
     dtuple_big_rec_free(big_rec);
   }
 
@@ -1153,7 +1153,7 @@ db_err Row_update::del_mark_clust_rec(
 
 db_err Row_update::clust_step(upd_node_t *node, que_thr_t *thr) noexcept {
   db_err err;
-  rec_t *rec;
+  Rec rec;
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 

@@ -150,7 +150,7 @@ using trx_ulogf_t = byte;
 using trx_upagef_t = byte;
 
 /** Undo log record */
-using trx_undo_rec_t = byte;
+using trx_undo_rec_t = byte*;
 
 /** Maximum number of concurrent threads running a single operation of a
 transaction, e.g., a parallel query */

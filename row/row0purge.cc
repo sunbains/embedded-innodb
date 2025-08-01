@@ -478,7 +478,7 @@ ulint Row_purge::purge(que_thr_t *thr) {
 
   m_roll_ptr = roll_ptr_val;
 
-  if (m_undo_rec == &trx_purge_dummy_rec) {
+  if (m_undo_rec.raw() == trx_purge_dummy_rec) {
     purge_needed = false;
   } else {
     purge_needed = parse_undo_rec(&updated_extern, thr);

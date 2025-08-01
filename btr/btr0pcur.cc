@@ -55,7 +55,7 @@ void Btree_pcursor::store_position(mtr_t *mtr) noexcept {
   auto page_cursor = get_page_cur();
 
   auto rec = page_cursor->get_rec();
-  auto page = page_align(rec);
+  auto page = rec.page_align();
   auto offs = page_offset(rec);
 
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_S_FIX) || mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
@@ -154,7 +154,7 @@ bool Btree_pcursor::restore_position(ulint latch_mode, mtr_t *mtr, Source_locati
     return false;
   }
 
-  ut_a(m_old_rec != nullptr);
+  ut_a(!m_old_rec.is_null());
   ut_a(m_old_n_fields > 0);
 
   if (likely(latch_mode == BTR_SEARCH_LEAF) || likely(latch_mode == BTR_MODIFY_LEAF)) {

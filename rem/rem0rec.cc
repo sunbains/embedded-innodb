@@ -104,7 +104,6 @@ the corresponding canonical strings have the same property. */
  *
  * @return true if the record is valid, false otherwise.
  */
-static bool rec_validate(const rec_t *rec) noexcept;
 
 void Phy_rec::get_col_offsets(ulint *offsets) const noexcept {
   ulint offs{};
@@ -114,7 +113,7 @@ void Phy_rec::get_col_offsets(ulint *offsets) const noexcept {
   auto lens = nulls - UT_BITS_IN_BYTES(m_index->m_n_nullable);
 
 #ifdef UNIV_DEBUG
-  offsets[2] = reinterpret_cast<uintptr_t>(m_rec);
+  offsets[2] = reinterpret_cast<uintptr_t>(m_rec.get());
   offsets[3] = reinterpret_cast<uintptr_t>(m_index);
 #endif /* UNIV_DEBUG */
 
@@ -191,7 +190,7 @@ void Phy_rec::get_col_offsets(ulint *offsets) const noexcept {
 }
 
 ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **heap, Source_location sl) const noexcept {
-  auto n = rec_get_n_fields(m_rec);
+  auto n = m_rec.get_n_fields();
 
   if (unlikely(n_fields < n)) {
     n = n_fields;
@@ -228,7 +227,7 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
   high-order bit of the offset at [i+1] is set (REC_OFFS_EXTERNAL), the
   field i is being stored externally.  */
 
-  ut_d(rec_offs_make_valid(m_rec, m_index, offsets));
+  ut_d(m_rec.offs_make_valid(m_index, offsets));
 
   ut_a(n == rec_offs_n_fields(offsets));
 
@@ -236,13 +235,13 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
 
   /* Determine extra size and end offsets */
 
-  if (rec_get_1byte_offs_flag(m_rec)) {
+  if (m_rec.get_1byte_offs_flag()) {
 
     *rec_offs_base(offsets) = REC_N_EXTRA_BYTES + n;
 
     for (ulint i{}; i < n; ++i) {
       /* Determine offsets to fields */
-      auto offs = rec_1_get_field_end_info(m_rec, i);
+      auto offs = m_rec.get_1_field_end_info(i);
 
       if (offs & REC_1BYTE_SQL_NULL_MASK) {
         offs &= ~REC_1BYTE_SQL_NULL_MASK;
@@ -258,7 +257,7 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
 
     for (ulint i{}; i < n; ++i) {
       /* Determine offsets to fields */
-      auto offs = rec_2_get_field_end_info(m_rec, i);
+      auto offs = m_rec.get_2_field_end_info(i);
 
       if (offs & REC_2BYTE_SQL_NULL_MASK) {
         offs &= ~REC_2BYTE_SQL_NULL_MASK;
@@ -278,7 +277,7 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
   return offsets;
 }
 
-void Phy_rec::encode(Index *index, rec_t *rec, ulint status, const DFields &dfields) noexcept {
+void Phy_rec::encode(Index *index, Rec rec, ulint status, const DFields &dfields) noexcept {
   ulint null_mask = 1;
   ulint n_node_ptr_field;
 
@@ -304,8 +303,8 @@ void Phy_rec::encode(Index *index, rec_t *rec, ulint status, const DFields &dfie
       return;
   }
 
-  auto end = rec;
-  auto nulls = rec - 1;
+  auto end = rec.get();
+  auto nulls = rec.get() - 1;
   auto lens = nulls - UT_BITS_IN_BYTES(index->m_n_nullable);
 
   /* Clear the SQL-null flags */
@@ -443,16 +442,16 @@ Phy_rec::Size Phy_rec::get_encoded_size(Index *index, ulint, const DFields &dfie
   return size;
 }
 
-ulint rec_get_nth_field_offs(const rec_t *rec, ulint n, ulint *len) noexcept {
+ulint rec_get_nth_field_offs(const Rec &rec, ulint n, ulint *len) noexcept {
   ulint os;
   ulint next_os;
 
-  ut_a(n < rec_get_n_fields(rec));
+  ut_a(n < rec.get_n_fields());
 
-  if (rec_get_1byte_offs_flag(rec)) {
-    os = rec_1_get_field_start_offs(rec, n);
+  if (rec.get_1byte_offs_flag()) {
+    os = rec.get_1_field_start_offs(n);
 
-    next_os = rec_1_get_field_end_info(rec, n);
+    next_os = rec.get_1_field_end_info(n);
 
     if (next_os & REC_1BYTE_SQL_NULL_MASK) {
       *len = UNIV_SQL_NULL;
@@ -462,9 +461,9 @@ ulint rec_get_nth_field_offs(const rec_t *rec, ulint n, ulint *len) noexcept {
 
     next_os = next_os & ~REC_1BYTE_SQL_NULL_MASK;
   } else {
-    os = rec_2_get_field_start_offs(rec, n);
+    os = rec.get_2_field_start_offs(n);
 
-    next_os = rec_2_get_field_end_info(rec, n);
+    next_os = rec.get_2_field_end_info(n);
 
     if (next_os & REC_2BYTE_SQL_NULL_MASK) {
       *len = UNIV_SQL_NULL;
@@ -482,10 +481,10 @@ ulint rec_get_nth_field_offs(const rec_t *rec, ulint n, ulint *len) noexcept {
   return os;
 }
 
-void rec_set_nth_field_null_bit(rec_t *rec, ulint i, bool val) noexcept {
-  if (rec_get_1byte_offs_flag(rec)) {
+void rec_set_nth_field_null_bit(Rec &rec, ulint i, bool val) noexcept {
+  if (rec.get_1byte_offs_flag()) {
 
-    auto info = rec_1_get_field_end_info(rec, i);
+    auto info = rec.get_1_field_end_info(i);
 
     if (val) {
       info = info | REC_1BYTE_SQL_NULL_MASK;
@@ -493,11 +492,11 @@ void rec_set_nth_field_null_bit(rec_t *rec, ulint i, bool val) noexcept {
       info = info & ~REC_1BYTE_SQL_NULL_MASK;
     }
 
-    rec_1_set_field_end_info(rec, i, info);
+    rec.set_1_field_end_info(i, info);
 
   } else {
 
-    auto info = rec_2_get_field_end_info(rec, i);
+    auto info = rec.get_2_field_end_info(i);
 
     if (val) {
       info = info | REC_2BYTE_SQL_NULL_MASK;
@@ -505,19 +504,19 @@ void rec_set_nth_field_null_bit(rec_t *rec, ulint i, bool val) noexcept {
       info = info & ~REC_2BYTE_SQL_NULL_MASK;
     }
 
-    rec_2_set_field_end_info(rec, i, info);
+    rec.set_2_field_end_info(i, info);
   }
 }
 
-void rec_set_nth_field_sql_null(rec_t *rec, ulint n) noexcept {
-  auto offset = rec_get_field_start_offs(rec, n);
+void rec_set_nth_field_sql_null(Rec &rec, ulint n) noexcept {
+  auto offset = rec.get_field_start_offs(n);
 
-  data_write_sql_null(rec + offset, rec_get_nth_field_size(rec, n));
+  data_write_sql_null(rec.get() + offset, rec.get_nth_field_size(n));
 
   rec_set_nth_field_null_bit(rec, n, true);
 }
 
-rec_t *rec_convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dtuple, ulint n_ext) noexcept {
+Rec rec_convert_dtuple_to_rec(rec_t *buf, const Index *index, const DTuple *dtuple, ulint n_ext) noexcept {
 
   ut_ad(dtuple_validate(dtuple));
   ut_ad(dtuple_check_typed(dtuple));
@@ -530,17 +529,18 @@ rec_t *rec_convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dt
   ut_ad(n_fields > 0);
 
   /* Calculate the offset of the origin in the physical record */
-  auto rec = buf + rec_get_converted_extra_size(data_size, n_fields, n_ext);
+  auto rec_ptr = buf + rec_get_converted_extra_size(data_size, n_fields, n_ext);
+  Rec rec(rec_ptr);
 
   /* Suppress Valgrind warnings of ut_ad()
   in mach_write_to_1(), mach_write_to_2() et al. */
-  ut_d(memset(buf, 0xff, rec - buf + data_size));
+  ut_d(memset(buf, 0xff, rec_ptr - buf + data_size));
 
   /* Store the number of fields */
-  rec_set_n_fields(rec, n_fields);
+  rec.set_n_fields(n_fields);
 
   /* Set the info bits of the record */
-  rec_set_info_bits(rec, dtuple_get_info_bits(dtuple) & REC_INFO_BITS_MASK);
+  rec.set_info_bits(dtuple_get_info_bits(dtuple) & REC_INFO_BITS_MASK);
 
   /* Store the data and the offsets */
 
@@ -548,7 +548,7 @@ rec_t *rec_convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dt
 
   if (n_ext == 0 && data_size <= REC_1BYTE_OFFS_LIMIT) {
 
-    rec_set_1byte_offs_flag(rec, true);
+    rec.set_1byte_offs_flag(true);
 
     for (ulint i = 0; i < n_fields; i++) {
       ulint ored_offset;
@@ -570,10 +570,10 @@ rec_t *rec_convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dt
         ored_offset = end_offset;
       }
 
-      rec_1_set_field_end_info(rec, i, ored_offset);
+      rec.set_1_field_end_info(i, ored_offset);
     }
   } else {
-    rec_set_1byte_offs_flag(rec, false);
+    rec.set_1byte_offs_flag(false);
 
     for (ulint i = 0; i < n_fields; i++) {
       ulint ored_offset;
@@ -600,7 +600,7 @@ rec_t *rec_convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dt
         }
       }
 
-      rec_2_set_field_end_info(rec, i, ored_offset);
+      rec.set_2_field_end_info(i, ored_offset);
     }
   }
 
@@ -618,7 +618,7 @@ rec_t *rec_convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dt
       offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
     }
 
-    ut_ad(rec_validate(rec, offsets));
+    ut_ad(rec.validate(offsets));
     ut_ad(dtuple_get_n_fields(dtuple) == rec_offs_n_fields(offsets));
 
     for (ulint i{}; i < rec_offs_n_fields(offsets); ++i) {
@@ -634,7 +634,7 @@ rec_t *rec_convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dt
   return rec;
 }
 
-void rec_copy_prefix_to_dtuple(DTuple *tuple, const rec_t *rec, const Index *index, ulint n_fields, mem_heap_t *heap) noexcept {
+void rec_copy_prefix_to_dtuple(DTuple *tuple, const Rec &rec, const Index *index, ulint n_fields, mem_heap_t *heap) noexcept {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   auto offsets = offsets_.data();
 
@@ -646,16 +646,16 @@ void rec_copy_prefix_to_dtuple(DTuple *tuple, const rec_t *rec, const Index *ind
     offsets = record.get_col_offsets(offsets, n_fields, &heap, Current_location());
   }
 
-  ut_ad(rec_validate(rec, offsets));
+  ut_ad(rec.validate(offsets));
   ut_ad(dtuple_check_typed(tuple));
 
-  dtuple_set_info_bits(tuple, rec_get_info_bits(rec));
+  dtuple_set_info_bits(tuple, rec.get_info_bits());
 
   for (ulint i = 0; i < n_fields; i++) {
     ulint len;
 
     auto field = dtuple_get_nth_field(tuple, i);
-    auto data = rec_get_nth_field(rec, offsets, i, &len);
+    auto data = rec.get_nth_field(offsets, i, &len);
 
     if (len != UNIV_SQL_NULL) {
       dfield_set_data(field, mem_heap_dup(heap, data, len), len);
@@ -666,15 +666,15 @@ void rec_copy_prefix_to_dtuple(DTuple *tuple, const rec_t *rec, const Index *ind
   }
 }
 
-rec_t *rec_copy_prefix_to_buf(const rec_t *rec, const Index *index, ulint n_fields, byte *&buf, ulint &buf_size) noexcept {
+Rec rec_copy_prefix_to_buf(const Rec &rec, const Index *index, ulint n_fields, byte *&buf, ulint &buf_size) noexcept {
   prefetch_rw(buf);
 
-  ut_ad(rec_validate(rec));
+  ut_ad(rec.validate(nullptr));
 
   ulint area_start;
-  const auto area_end = rec_get_field_start_offs(rec, n_fields);
+  const auto area_end = rec.get_field_start_offs(n_fields);
 
-  if (rec_get_1byte_offs_flag(rec)) {
+  if (rec.get_1byte_offs_flag()) {
     area_start = REC_N_EXTRA_BYTES + n_fields;
   } else {
     area_start = REC_N_EXTRA_BYTES + 2 * n_fields;
@@ -690,64 +690,17 @@ rec_t *rec_copy_prefix_to_buf(const rec_t *rec, const Index *index, ulint n_fiel
     buf = static_cast<byte *>(mem_alloc2(prefix_len, &buf_size));
   }
 
-  memcpy(buf, rec - area_start, prefix_len);
+  memcpy(buf, rec.get() - area_start, prefix_len);
 
-  auto copy_rec = buf + area_start;
+  auto copy_rec_ptr = buf + area_start;
+  Rec copy_rec(copy_rec_ptr);
 
-  rec_set_n_fields(copy_rec, n_fields);
+  copy_rec.set_n_fields(n_fields);
 
   return copy_rec;
 }
 
-/**
- * Validates the consistency of a physical record.
- *
- * @param[in] rec  Record to validate.
- *
- * @return	true if ok
- */
-static bool rec_validate(const rec_t *rec) noexcept {
-  ulint len_sum = 0;
-
-  auto n_fields = rec_get_n_fields(rec);
-
-  if (n_fields == 0 || n_fields > REC_MAX_N_FIELDS) {
-    log_err(std::format("Record has {} fields", n_fields));
-    return false;
-  }
-
-  for (ulint i{}; i < n_fields; i++) {
-    ulint len;
-    auto data = rec_get_nth_field(rec, i, &len);
-
-    if (!(len < UNIV_PAGE_SIZE || len == UNIV_SQL_NULL)) {
-      log_err(std::format("Record field {} len {}", i, len));
-      return false;
-    }
-
-    if (len != UNIV_SQL_NULL) {
-      ulint sum{};
-
-      len_sum += len;
-
-      /* Dereference the end of the field to cause a memory trap if possible */
-      sum += *(data + len - 1);
-      (void)sum;
-
-    } else {
-      len_sum += rec_get_nth_field_size(rec, i);
-    }
-  }
-
-  if (len_sum != rec_get_data_size(rec)) {
-    log_err(std::format("Record len should be {}, len {}", len_sum, rec_get_data_size(rec)));
-    return false;
-  } else {
-    return true;
-  }
-}
-
-bool rec_validate(const rec_t *rec, const ulint *offsets) noexcept {
+bool rec_validate(const Rec &rec, const ulint *offsets) noexcept {
   ulint len_sum{};
   const auto n_fields = rec_offs_n_fields(offsets);
 
@@ -756,11 +709,11 @@ bool rec_validate(const rec_t *rec, const ulint *offsets) noexcept {
     return false;
   }
 
-  ut_a(n_fields <= rec_get_n_fields(rec));
+  ut_a(n_fields <= rec.get_n_fields());
 
-  for (ulint i = 0; i < n_fields; i++) {
+  for (ulint i = 0; i < n_fields; ++i) {
     ulint len;
-    auto data = rec_get_nth_field(rec, offsets, i, &len);
+    auto data = rec.get_nth_field(offsets, i, &len);
 
     if (!((len < UNIV_PAGE_SIZE) || (len == UNIV_SQL_NULL))) {
       log_err(std::format("Record field {} len {}", i, len));
@@ -773,11 +726,11 @@ bool rec_validate(const rec_t *rec, const ulint *offsets) noexcept {
       len_sum += len;
 
       /* Dereference the end of the field to cause a memory trap if possible */
-      sum += *(data + len - 1);
+      sum += *(data.get() + len - 1);
       (void)sum;
 
     } else {
-      len_sum += rec_get_nth_field_size(rec, i);
+      len_sum += rec.get_nth_field_size(i);
     }
   }
 
@@ -786,41 +739,156 @@ bool rec_validate(const rec_t *rec, const ulint *offsets) noexcept {
     return false;
   }
 
-  ut_a(rec_validate(rec));
+  ut_a(rec.validate(offsets));
 
   return true;
 }
 
-std::string rec_to_string(const rec_t *rec) noexcept {
-  auto n = rec_get_n_fields(rec);
+std::string rec_to_string(const Rec &rec) noexcept {
+  auto n = rec.get_n_fields();
 
   auto str = std::format(
-    "PHYSICAL RECORD: n_fields {}; {}-byte offsets; info bits {}", n, (rec_get_1byte_offs_flag(rec) ? 1 : 2), rec_get_info_bits(rec)
+    "PHYSICAL RECORD: n_fields {}; {}-byte offsets; info bits {}", n, (rec.get_1byte_offs_flag() ? 1 : 2), rec.get_info_bits()
   );
 
   for (ulint i{}; i < n; ++i) {
     str += std::format(" {}:", i);
 
     ulint len;
-    auto data = rec_get_nth_field(rec, i, &len);
+    auto data = rec.get_nth_field(i, &len);
 
     if (len != UNIV_SQL_NULL) {
       std::ostringstream os{};
 
-      buf_to_hex_string(os, data, std::max(len, 30UL));
+      buf_to_hex_string(os, data.get(), std::max(len, 30UL));
 
       str += os.str();
       str += std::format("; len: {} ", len);
     } else {
-      str += std::format(" SQL NULL, size {} ", rec_get_nth_field_size(rec, i));
+      str += std::format(" SQL NULL, size {} ", rec.get_nth_field_size(i));
     }
   }
 
-  IF_DEBUG(rec_validate(rec));
+  IF_DEBUG(rec.validate(nullptr));
 
   return str;
 }
 
-void rec_info_info(const rec_t *rec) noexcept {
-  log_info("{}", rec_to_string(rec));
+void rec_info_info(const Rec &rec) noexcept {
+  log_info(rec.to_string());
 }
+
+// Rec method implementations
+ulint Rec::get_nth_field_offs(ulint n, ulint *len) const noexcept {
+  ulint os;
+  ulint next_os;
+
+  ut_a(n < get_n_fields());
+
+  if (get_1byte_offs_flag()) {
+    os = get_1_field_start_offs(n);
+    next_os = get_1_field_end_info(n);
+
+    if (next_os & REC_1BYTE_SQL_NULL_MASK) {
+      *len = UNIV_SQL_NULL;
+      return os;
+    }
+
+    next_os = next_os & ~REC_1BYTE_SQL_NULL_MASK;
+  } else {
+    os = get_2_field_start_offs(n);
+    next_os = get_2_field_end_info(n);
+
+    if (next_os & REC_2BYTE_SQL_NULL_MASK) {
+      *len = UNIV_SQL_NULL;
+      return os;
+    }
+
+    next_os = next_os & ~(REC_2BYTE_SQL_NULL_MASK | REC_2BYTE_EXTERN_MASK);
+  }
+
+  *len = next_os - os;
+  ut_ad(*len < UNIV_PAGE_SIZE);
+  return os;
+}
+
+void Rec::set_nth_field_null_bit(ulint i, bool val) noexcept {
+  if (get_1byte_offs_flag()) {
+    auto info = get_1_field_end_info(i);
+    if (val) {
+      info |= REC_1BYTE_SQL_NULL_MASK;
+    } else {
+      info &= ~REC_1BYTE_SQL_NULL_MASK;
+    }
+    set_1_field_end_info(i, info);
+  } else {
+    auto info = get_2_field_end_info(i);
+    if (val) {
+      info |= REC_2BYTE_SQL_NULL_MASK;
+    } else {
+      info &= ~REC_2BYTE_SQL_NULL_MASK;
+    }
+    set_2_field_end_info(i, info);
+  }
+}
+
+void Rec::set_nth_field_sql_null(ulint n) noexcept {
+  set_nth_field_null_bit(n, true);
+}
+
+void Rec::log_record_info() const noexcept {
+  rec_info_info(*this);
+}
+
+bool Rec::validate(const ulint *offsets) const noexcept {
+  return rec_validate(*this, offsets);
+}
+
+bool Rec::offs_validate(const Index *index, const ulint *offsets) const noexcept {
+  ulint last = ULINT_MAX;
+  ulint i = rec_offs_n_fields(offsets);
+
+  if (!is_null()) {
+    ut_ad((ulint)m_rec == offsets[2]);
+    ut_a(get_n_fields() >= i);
+  }
+  if (index != nullptr) {
+    ut_ad((ulint)index == offsets[3]);
+
+    const auto max_n_fields = ut_max(index->get_n_fields(), index->get_n_unique_in_tree() + 1);
+
+    ut_a(index->m_n_defined == 0 || i <= max_n_fields);
+  }
+
+  while (i--) {
+    const auto curr = rec_offs_base(offsets)[i + 1] & REC_OFFS_MASK;
+    ut_a(curr <= last);
+    last = curr;
+  }
+
+  return true;
+}
+
+Rec Rec::copy_prefix_to_buf(const Index *index, ulint n_fields, byte *&buf, ulint &buf_size) const noexcept {
+  return rec_copy_prefix_to_buf(*this, index, n_fields, buf, buf_size);
+}
+
+void Rec::copy_prefix_to_dtuple(DTuple *tuple, const Index *index, ulint n_fields, mem_heap_t *heap) const noexcept {
+  rec_copy_prefix_to_dtuple(tuple, *this, index, n_fields, heap);
+}
+
+Rec Rec::convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dtuple, ulint n_ext) noexcept {
+  return rec_convert_dtuple_to_rec(buf, index, dtuple, n_ext);
+}
+
+// Bit field operations - implementations moved to rem0types.h as inline functions
+
+// Record navigation - implementations moved to rem0types.h as inline functions
+
+// Record properties - implementations moved to rem0types.h as inline functions
+
+// Field operations - implementations moved to rem0types.h as inline functions
+
+// Record operations - implementations moved to rem0types.h as inline functions
+
+// Offset operations - implementations moved to rem0types.h as inline functions

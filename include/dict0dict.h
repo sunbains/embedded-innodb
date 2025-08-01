@@ -377,7 +377,7 @@ struct Dict {
    * @return own: node pointer
    */
   [[nodiscard]] DTuple *index_build_node_ptr(
-    const Index *index, const rec_t *rec, ulint page_no, mem_heap_t *heap, ulint level
+    const Index *index, const Rec rec, ulint page_no, mem_heap_t *heap, ulint level
   ) noexcept;
 
   /**
@@ -391,8 +391,8 @@ struct Dict {
    * 
    * @return pointer to the prefix record
    */
-  [[nodiscard]] rec_t *index_copy_rec_order_prefix(
-    const Index *index, const rec_t *rec, ulint *n_fields, byte *&buf, ulint &buf_size
+  [[nodiscard]] Rec index_copy_rec_order_prefix(
+    const Index *index, const Rec rec, ulint *n_fields, byte *&buf, ulint &buf_size
   ) noexcept;
 
   /**
@@ -405,7 +405,7 @@ struct Dict {
    * 
    * @return own: data tuple
    */
-  [[nodiscard]] DTuple *index_build_data_tuple(Index *index, rec_t *rec, ulint n_fields, mem_heap_t *heap) noexcept;
+  [[nodiscard]] DTuple *index_build_data_tuple(Index *index, Rec rec, ulint n_fields, mem_heap_t *heap) noexcept;
 
   /**
    * Calculates the minimum record length in an index.

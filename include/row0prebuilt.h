@@ -52,7 +52,7 @@ struct Prebuilt {
 
   /**
    * Constructor.
-   * 
+   *
    * @param[in] fsp File space manager
    * @param[in] btree Btree instance
    * @param[in] table Table handle
@@ -71,7 +71,7 @@ struct Prebuilt {
    * @param[in] fsp File space manager
    * @param[in] btree Btree instance
    * @param[in] table Table handle
-   * 
+   *
    * @return own: a prebuilt struct
    */
   [[nodiscard]] static Prebuilt *create(FSP *fsp, Btree *btree, Table *table) noexcept;
@@ -98,10 +98,10 @@ struct Prebuilt {
   /**
    * @brief Gets a row from the fetch cache.
    *
-   * 
+   *
    * @return a pointer to the row.
    */
-  [[nodiscard]] const rec_t *cache_get_row() noexcept;
+  [[nodiscard]] const Rec cache_get_row() noexcept;
 
   /**
    * @brief Moves to the next row in the fetch cache.
@@ -111,8 +111,8 @@ struct Prebuilt {
 
   /**
    * Updates the transaction pointers in query graphs stored in the prebuilt struct.
-   * Used by DDL to externalize the new index, see @m_index_is_usable. 
-   * 
+   * Used by DDL to externalize the new index, see @m_index_is_usable.
+   *
    * @param[in] trx transaction handle
    */
   void update_trx(Trx *trx) noexcept;
@@ -121,31 +121,31 @@ struct Prebuilt {
   struct Cached_row {
     /**
      * Add a row to the cache.
-     * 
+     *
      * @param[in] rec record
      * @param[in] offsets offsets
      */
-    void add_row(const rec_t *rec, const ulint *offsets) noexcept {
+    void add_row(const Rec rec, const ulint *offsets) noexcept {
       /* Get the size of the physical record in the page */
       const auto rec_len = rec_offs_size(offsets);
 
       /* Check if there is enough space for the record being added to the cache. Free existing memory if it won't fit. */
       if (m_max_len < rec_len) {
-        if (m_ptr != nullptr) {
+        if (m_ptr.is_valid()) {
 
           ut_a(m_max_len > 0);
           ut_a(m_rec_len > 0);
-          mem_free(m_ptr);
+          mem_free(m_ptr.get());
 
-          m_ptr = nullptr;
-          m_rec = nullptr;
+          m_ptr = Rec();
+          m_rec = Rec();
           m_max_len = 0;
           m_rec_len = 0;
 
         } else {
 
-          ut_a(m_ptr == nullptr);
-          ut_a(m_rec == nullptr);
+          ut_a(m_ptr.is_null());
+          ut_a(m_rec.is_null());
           ut_a(m_max_len == 0);
           ut_a(m_rec_len == 0);
         }
@@ -153,15 +153,15 @@ struct Prebuilt {
 
       m_rec_len = rec_len;
 
-      if (m_ptr == nullptr) {
+      if (m_ptr.is_null()) {
         m_max_len = m_rec_len * 2;
-        m_ptr = static_cast<byte *>(mem_alloc(m_max_len));
+        m_ptr = Rec(static_cast<byte *>(mem_alloc(m_max_len)));
       }
 
       ut_a(m_max_len >= m_rec_len);
 
       /* Note that the pointer returned by rec_copy() is actually an offset into cache->ptr, to the start of the record data. */
-      m_rec = rec_copy(m_ptr, rec, offsets);
+      m_rec = rec.copy(m_ptr.get(), offsets);
     }
 
     /** Max len of rec if not nullptr */
@@ -171,10 +171,10 @@ struct Prebuilt {
     uint32_t m_rec_len{};
 
     /** Cached record, pointer into the start of the record data */
-    rec_t *m_rec{};
+    Rec m_rec{};
 
     /** Pointer to start of record */
-    rec_t *m_ptr{};
+    Rec m_ptr{};
   };
 
   /** Cache for rows fetched when positioning the cursor. */
@@ -189,21 +189,21 @@ struct Prebuilt {
 
     /**
      * Check if the cache is empty.
-     * 
+     *
      * @return true if the cache is empty.
      */
     [[nodiscard]] inline bool is_cache_empty() const noexcept { return m_n_cached == 0; }
 
     /**
      * Check if the cache is fetching in progress.
-     * 
+     *
      * @return true if the cache is fetching in progress.
      */
     [[nodiscard]] inline bool is_cache_fetch_in_progress() const noexcept { return m_first > 0 && m_first < m_n_size; }
 
     /**
      * Check if the cache is full.
-     * 
+     *
      * @return true if the cache is full.
      */
     [[nodiscard]] inline bool is_cache_full() const noexcept {
@@ -213,10 +213,10 @@ struct Prebuilt {
 
     /**
      * Get the row from the cache.
-     * 
+     *
      * @return pointer to the row.
      */
-    [[nodiscard]] inline const rec_t *cache_get_row() const noexcept {
+    [[nodiscard]] inline const Rec cache_get_row() const noexcept {
       ut_ad(!is_cache_empty());
       return m_cached_rows[m_first].m_rec;
     }
@@ -237,12 +237,12 @@ struct Prebuilt {
 
     /**
     * Add a row to the cache.
-    *  
-    * 
+    *
+    *
     * @param[in] rec record
     * @param[in] offsets offsets
     */
-    inline void add_row(const rec_t *rec, const ulint *offsets) noexcept;
+    inline void add_row(const Rec rec, const ulint *offsets) noexcept;
 
     /** Memory heap for cached rows */
     mem_heap_t *m_heap{};

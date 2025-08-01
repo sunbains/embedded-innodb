@@ -687,7 +687,7 @@ Buf_block *Buf_pool::block_align(const byte *ptr) {
 
       /* The function buf_chunk_init() invokes block_init() so that
       block[n].frame == block->frame + n * UNIV_PAGE_SIZE.  Check it. */
-      ut_ad(block->m_frame == page_align(ptr));
+      ut_ad(block->m_frame == Rec(ptr).page_align());
 
 #ifdef UNIV_DEBUG
       /* A thread that updates these fields must hold buf_pool_mutex and
@@ -704,12 +704,12 @@ Buf_block *Buf_pool::block_align(const byte *ptr) {
         case BUF_BLOCK_REMOVE_HASH:
           /* Buf_pool::m_LRU->block_remove_hashed_page() will overwrite the FIL_PAGE_OFFSET and
           FIL_PAGE_SPACE_ID with 0xff and set the state to BUF_BLOCK_REMOVE_HASH. */
-          ut_ad(page_get_space_id(page_align(ptr)) == 0xffffffff);
-          ut_ad(page_get_page_no(page_align(ptr)) == 0xffffffff);
+          ut_ad(page_get_space_id(Rec(ptr).page_align()) == 0xffffffff);
+          ut_ad(page_get_page_no(Rec(ptr).page_align()) == 0xffffffff);
           break;
         case BUF_BLOCK_FILE_PAGE:
-          ut_ad(block->get_space() == page_get_space_id(page_align(ptr)));
-          ut_ad(block->get_page_no() == page_get_page_no(page_align(ptr)));
+          ut_ad(block->get_space() == page_get_space_id(Rec(ptr).page_align()));
+          ut_ad(block->get_page_no() == page_get_page_no(Rec(ptr).page_align()));
           break;
       }
 

@@ -94,7 +94,7 @@ typedef byte mrec_buf_t[UNIV_PAGE_SIZE];
 
 The format is the same as a record in ROW_FORMAT=COMPACT with the
 exception that the REC_N_NEW_EXTRA_BYTES are omitted. */
-typedef byte mrec_t;
+typedef byte *mrec_t;
 
 /** Buffer for sorting in main memory. */
 struct row_merge_buf_struct {
@@ -368,7 +368,7 @@ static void row_merge_dup_report(
   auto tuple = dtuple_from_fields(&tuple_store, entry, n_fields);
   auto n_ext = index->is_clustered() ? dtuple_get_n_ext(tuple) : 0;
 
-  rec_convert_dtuple_to_rec(buf, index, tuple, n_ext);
+  Rec::convert_dtuple_to_rec(buf, index, tuple, n_ext);
 }
 
 /** Compare two rows.
@@ -590,8 +590,7 @@ static bool row_merge_write(
  * @return Pointer to the next record, or nullptr on end of list (non-NULL on I/O error).
  */
 static const byte *row_merge_read_rec(
-  row_merge_block_t *block, mrec_buf_t *buf, const byte *b, const Index *index, int fd, ulint *foffs, const mrec_t **mrec,
-  ulint *offsets
+  row_merge_block_t *block, mrec_buf_t *buf, const byte *b, const Index *index, int fd, ulint *foffs, mrec_t *mrec, ulint *offsets
 ) {
   ulint extra_size;
   ulint avail_size;
@@ -616,7 +615,7 @@ static const byte *row_merge_read_rec(
       if (!row_merge_read(fd, ++(*foffs), block)) {
       err_exit:
         /* Signal I/O error. */
-        *mrec = b;
+        *mrec = const_cast<byte *>(b);
         return nullptr;
       }
 
@@ -677,7 +676,7 @@ static const byte *row_merge_read_rec(
     return b;
   }
 
-  *mrec = b + extra_size;
+  *mrec = const_cast<byte *>(b + extra_size);
 
   {
     Phy_rec rec{index, *mrec};
@@ -704,7 +703,7 @@ static const byte *row_merge_read_rec(
 #ifdef UNIV_DEBUG
   /* We cannot invoke rec_offs_make_valid() here, because there
   are no REC_N_NEW_EXTRA_BYTES between extra_size and data_size.
-  Similarly, rec_offs_validate() would fail, because it invokes
+  Similarly, rec.offs_validate() would fail, because it invokes
   rec_get_status(). */
   offsets[2] = (ulint)*mrec;
   offsets[3] = (ulint)index;
@@ -730,11 +729,11 @@ static void row_merge_write_rec_low(
   byte *b, /*!< out: buffer */
   ulint e, /*!< in: encoded extra_size */
 #ifdef UNIV_DEBUG
-  ulint size,         /*!< in: total size to write */
-  int fd,             /*!< in: file descriptor */
-  ulint foffs,        /*!< in: file offset */
-#endif                /* UNIV_DEBUG */
-  const mrec_t *mrec, /*!< in: record to write */
+  ulint size,        /*!< in: total size to write */
+  int fd,            /*!< in: file descriptor */
+  ulint foffs,       /*!< in: file offset */
+#endif               /* UNIV_DEBUG */
+  const mrec_t mrec, /*!< in: record to write */
   const ulint *offsets
 ) /*!< in: offsets of mrec */
 #ifndef UNIV_DEBUG
@@ -760,7 +759,7 @@ static byte *row_merge_write_rec(
   byte *b,                  /*!< in: pointer to end of block */
   int fd,                   /*!< in: file descriptor */
   ulint *foffs,             /*!< in/out: file offset */
-  const mrec_t *mrec,       /*!< in: record to write */
+  const mrec_t mrec,        /*!< in: record to write */
   const ulint *offsets
 ) /*!< in: offsets of mrec */
 {
@@ -849,9 +848,9 @@ static byte *row_merge_write_eof(
 /** Compare two merge records.
 @return	1, 0, -1 if mrec1 is greater, equal, less, respectively, than mrec2 */
 static int row_merge_cmp(
-  const mrec_t *mrec1,   /*!< in: first merge
+  const mrec_t mrec1,    /*!< in: first merge
                                          record to be compared */
-  const mrec_t *mrec2,   /*!< in: second merge
+  const mrec_t mrec2,    /*!< in: second merge
                                          record to be compared */
   const ulint *offsets1, /*!< in: first record offsets */
   const ulint *offsets2, /*!< in: second record offsets */
@@ -860,14 +859,14 @@ static int row_merge_cmp(
 {
   int cmp;
 
-  cmp = cmp_rec_rec_simple(mrec1, mrec2, offsets1, offsets2, index);
+  cmp = cmp_rec_rec_simple(Rec(mrec1), Rec(mrec2), offsets1, offsets2, index);
 
 #ifdef UNIV_DEBUG
   if (row_merge_print_cmp) {
     log_err("row_merge_cmp1 ");
-    log_err(rec_to_string(mrec1));
+    log_err(Rec(mrec1).to_string());
     log_err("row_merge_cmp2 ");
-    log_err(rec_to_string(mrec2));
+    log_err(Rec(mrec2).to_string());
     log_err("row_merge_cmp=%d", cmp);
   }
 #endif /* UNIV_DEBUG */
@@ -981,7 +980,7 @@ static db_err row_merge_read_clustered_index(
   };
   /* Scan the clustered index. */
   for (;;) {
-    const rec_t *rec;
+    Rec rec;
     ulint *offsets;
     DTuple *row{};
     row_ext_t *ext;
@@ -1023,7 +1022,7 @@ static db_err row_merge_read_clustered_index(
       }
 
       /* Skip delete marked records. */
-      if (rec_get_deleted_flag(rec)) {
+      if (rec.get_deleted_flag()) {
         continue;
       }
 
@@ -1161,14 +1160,14 @@ static db_err row_merge_blocks(
 {
   mem_heap_t *heap; /*!< memory heap for offsets0, offsets1 */
 
-  mrec_buf_t buf[3];   /*!< buffer for handling split mrec in block[] */
-  const byte *b0;      /*!< pointer to block[0] */
-  const byte *b1;      /*!< pointer to block[1] */
-  byte *b2;            /*!< pointer to block[2] */
-  const mrec_t *mrec0; /*!< merge rec, points to block[0] or buf[0] */
-  const mrec_t *mrec1; /*!< merge rec, points to block[1] or buf[1] */
-  ulint *offsets0;     /* offsets of mrec0 */
-  ulint *offsets1;     /* offsets of mrec1 */
+  mrec_buf_t buf[3]; /*!< buffer for handling split mrec in block[] */
+  const byte *b0;    /*!< pointer to block[0] */
+  const byte *b1;    /*!< pointer to block[1] */
+  byte *b2;          /*!< pointer to block[2] */
+  mrec_t mrec0;      /*!< merge rec, points to block[0] or buf[0] */
+  mrec_t mrec1;      /*!< merge rec, points to block[1] or buf[1] */
+  ulint *offsets0;   /* offsets of mrec0 */
+  ulint *offsets1;   /* offsets of mrec1 */
 
 #ifdef UNIV_DEBUG
   if (row_merge_print_block) {
@@ -1264,13 +1263,13 @@ static bool row_merge_blocks_copy(
 ) {
   mem_heap_t *heap; /*!< memory heap for offsets0, offsets1 */
 
-  mrec_buf_t buf[3];   /*!< buffer for handling
+  mrec_buf_t buf[3]; /*!< buffer for handling
                        split mrec in block[] */
-  const byte *b0;      /*!< pointer to block[0] */
-  byte *b2;            /*!< pointer to block[2] */
-  const mrec_t *mrec0; /*!< merge rec, points to block[0] */
-  ulint *offsets0;     /* offsets of mrec0 */
-  ulint *offsets1;     /* dummy offsets */
+  const byte *b0;    /*!< pointer to block[0] */
+  byte *b2;          /*!< pointer to block[2] */
+  mrec_t mrec0;      /*!< merge rec, points to block[0] */
+  ulint *offsets0;   /* offsets of mrec0 */
+  ulint *offsets1;   /* dummy offsets */
 
 #ifdef UNIV_DEBUG
   if (row_merge_print_block) {
@@ -1466,7 +1465,7 @@ static db_err row_merge_sort(
 
 /** Copy externally stored columns to the data tuple. */
 static void row_merge_copy_blobs(
-  const mrec_t *mrec,   /*!< in: merge record */
+  const mrec_t mrec,    /*!< in: merge record */
   const ulint *offsets, /*!< in: offsets of mrec */
   DTuple *tuple,        /*!< in/out: data tuple */
   mem_heap_t *heap
@@ -1492,7 +1491,7 @@ static void row_merge_copy_blobs(
     be freed between the time the BLOB pointers are read
     (row_merge_read_clustered_index()) and dereferenced
     (below). */
-    data = blob.copy_externally_stored_field(mrec, offsets, i, &len, heap);
+    data = blob.copy_externally_stored_field(Rec(mrec), offsets, i, &len, heap);
 
     dfield_set_data(field, data, len);
   }
@@ -1551,7 +1550,7 @@ static db_err row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table
     err = DB_CORRUPTION;
   } else {
     for (;;) {
-      const mrec_t *mrec;
+      mrec_t mrec;
       DTuple *dtuple;
       ulint n_ext;
 
@@ -1564,7 +1563,7 @@ static db_err row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table
         break;
       }
 
-      dtuple = row_rec_to_index_entry_low(mrec, index, offsets, &n_ext, tuple_heap);
+      dtuple = row_rec_to_index_entry_low(Rec(mrec), index, offsets, &n_ext, tuple_heap);
 
       if (unlikely(n_ext)) {
         row_merge_copy_blobs(mrec, offsets, dtuple, tuple_heap);

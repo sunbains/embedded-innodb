@@ -27,7 +27,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 const byte field_ref_zero[BTR_EXTERN_FIELD_REF_SIZE] = {};
 
-ulint Blob::get_externally_stored_len(rec_t *rec, const ulint *offsets) noexcept {
+ulint Blob::get_externally_stored_len(Rec rec, const ulint *offsets) noexcept {
   ulint local_len{};
   ulint total_extern_len{};
 
@@ -36,7 +36,7 @@ ulint Blob::get_externally_stored_len(rec_t *rec, const ulint *offsets) noexcept
   for (ulint i = 0; i < n_fields; ++i) {
     if (rec_offs_nth_extern(offsets, i)) {
 
-      auto data = (byte *)rec_get_nth_field(rec, offsets, i, &local_len);
+      auto data = (byte *)rec.get_nth_field(offsets, i, &local_len).get();
 
       local_len -= BTR_EXTERN_FIELD_REF_SIZE;
 
@@ -50,11 +50,11 @@ ulint Blob::get_externally_stored_len(rec_t *rec, const ulint *offsets) noexcept
 }
 
 void Blob::set_ownership_of_extern_field(
-  rec_t *rec, const Index *index, const ulint *offsets, ulint i, bool val, mtr_t *mtr
+  Rec rec, const Index *index, const ulint *offsets, ulint i, bool val, mtr_t *mtr
 ) noexcept {
   ulint local_len;
 
-  auto data = (byte *)rec_get_nth_field(rec, offsets, i, &local_len);
+  auto data = (byte *)rec.get_nth_field(offsets, i, &local_len).get();
 
   ut_a(local_len >= BTR_EXTERN_FIELD_REF_SIZE);
 
@@ -75,8 +75,8 @@ void Blob::set_ownership_of_extern_field(
   }
 }
 
-void Blob::mark_extern_inherited_fields(rec_t *rec, Index *index, const ulint *offsets, const upd_t *update, mtr_t *mtr) noexcept {
-  ut_ad(rec_offs_validate(rec, nullptr, offsets));
+void Blob::mark_extern_inherited_fields(Rec rec, Index *index, const ulint *offsets, const upd_t *update, mtr_t *mtr) noexcept {
+  ut_ad(rec.offs_validate(nullptr, offsets));
 
   if (!rec_offs_any_extern(offsets)) {
 
@@ -128,7 +128,7 @@ void Blob::mark_dtuple_inherited_extern(DTuple *entry, const upd_t *update) noex
   }
 }
 
-void Blob::unmark_extern_fields(rec_t *rec, const Index *index, const ulint *offsets, mtr_t *mtr) noexcept {
+void Blob::unmark_extern_fields(Rec rec, const Index *index, const ulint *offsets, mtr_t *mtr) noexcept {
   const auto n = rec_offs_n_fields(offsets);
 
   if (!rec_offs_any_extern(offsets)) {
@@ -245,33 +245,33 @@ void Blob::blob_free(Buf_block *block, mtr_t *mtr) noexcept {
 }
 
 db_err Blob::store_big_rec_extern_fields(
-  const Index *index, Buf_block *rec_block, rec_t *rec, const ulint *offsets, big_rec_t *big_rec_vec,
+  const Index *index, Buf_block *rec_block, Rec rec, const ulint *offsets, big_rec_t big_rec_vec,
   mtr_t *local_mtr __attribute__((unused))
 ) noexcept {
 
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(rec.offs_validate(index, offsets));
   ut_ad(local_mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
   ut_ad(local_mtr->memo_contains(rec_block, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(rec_block->get_frame() == page_align(rec));
+  ut_ad(rec_block->get_frame() == rec.page_align());
   ut_a(index->is_clustered());
 
   const auto space_id = rec_block->get_space();
   const auto rec_page_no = rec_block->get_page_no();
 
-  ut_a(m_fsp->m_fil->page_get_type(page_align(rec)) == FIL_PAGE_TYPE_INDEX);
+  ut_a(m_fsp->m_fil->page_get_type(rec.page_align()) == FIL_PAGE_TYPE_INDEX);
 
   /* We have to create a file segment to the tablespace
   for each field and put the pointer to the field in rec */
 
-  for (ulint i = 0; i < big_rec_vec->n_fields; i++) {
-    rec_t *field_ref;
+  for (ulint i = 0; i < big_rec_vec.n_fields; i++) {
+    Rec field_ref;
 
-    ut_ad(rec_offs_nth_extern(offsets, big_rec_vec->fields[i].field_no));
+    ut_ad(rec_offs_nth_extern(offsets, big_rec_vec.fields[i].field_no));
 
     {
       ulint local_len;
 
-      auto col_offset = rec_get_nth_field_offs(offsets, big_rec_vec->fields[i].field_no, &local_len);
+      auto col_offset = rec_get_nth_field_offs(offsets, big_rec_vec.fields[i].field_no, &local_len);
 
       field_ref = rec + col_offset;
 
@@ -279,10 +279,10 @@ db_err Blob::store_big_rec_extern_fields(
 
       local_len -= BTR_EXTERN_FIELD_REF_SIZE;
 
-      field_ref += local_len;
+      field_ref = Rec(field_ref.get() + local_len);
     }
 
-    auto extern_len = big_rec_vec->fields[i].len;
+    auto extern_len = big_rec_vec.fields[i].len;
 
     ut_a(extern_len > 0);
 
@@ -344,7 +344,7 @@ db_err Blob::store_big_rec_extern_fields(
 
       mlog_write_string(
         page + FIL_PAGE_DATA + BTR_BLOB_HDR_SIZE,
-        (const byte *)big_rec_vec->fields[i].data + big_rec_vec->fields[i].len - extern_len,
+        (const byte *)big_rec_vec.fields[i].data + big_rec_vec.fields[i].len - extern_len,
         store_len,
         &mtr
       );
@@ -370,7 +370,7 @@ db_err Blob::store_big_rec_extern_fields(
 
       mlog_write_ulint(field_ref + BTR_EXTERN_LEN, 0, MLOG_4BYTES, &mtr);
 
-      mlog_write_ulint(field_ref + BTR_EXTERN_LEN + 4, big_rec_vec->fields[i].len - extern_len, MLOG_4BYTES, &mtr);
+      mlog_write_ulint(field_ref + BTR_EXTERN_LEN + 4, big_rec_vec.fields[i].len - extern_len, MLOG_4BYTES, &mtr);
 
       if (prev_page_no == FIL_NULL) {
         mlog_write_ulint(field_ref + BTR_EXTERN_SPACE_ID, space_id, MLOG_4BYTES, &mtr);
@@ -417,18 +417,18 @@ void Blob::check_blob_fil_page_type(space_id_t space_id, page_no_t page_no, cons
 }
 
 void Blob::free_externally_stored_field(
-  const Index *index, byte *field_ref, const rec_t *rec, const ulint *offsets, ulint i, trx_rb_ctx rb_ctx,
+  const Index *index, byte *field_ref, const Rec rec, const ulint *offsets, ulint i, trx_rb_ctx rb_ctx,
   mtr_t *local_mtr __attribute__((unused))
 ) noexcept {
 
 #ifdef UNIV_DEBUG
   ut_ad(local_mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
   ut_ad(local_mtr->memo_contains_page(field_ref, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(!rec || rec_offs_validate(rec, index, offsets));
+  ut_ad(!rec || rec.offs_validate(index, offsets));
 
-  if (rec != nullptr) {
+  if (!rec.is_null()) {
     ulint local_len;
-    const byte *f = rec_get_nth_field(rec, offsets, i, &local_len);
+    const byte *f = rec.get_nth_field(offsets, i, &local_len).get();
 
     ut_a(local_len >= BTR_EXTERN_FIELD_REF_SIZE);
 
@@ -455,7 +455,7 @@ void Blob::free_externally_stored_field(
     that is, in row_purge_upd_exist_or_extern().
     Currently, externally stored records are stored in the
     same tablespace as the referring records. */
-    ut_ad(!page_get_space_id(page_align(field_ref)));
+    ut_ad(!page_get_space_id(Rec(field_ref).page_align()));
     ut_ad(!rec);
   }
 
@@ -464,7 +464,7 @@ void Blob::free_externally_stored_field(
   for (;;) {
     mtr.start();
 
-    auto ptr{page_align(field_ref)};
+    auto ptr{Rec(field_ref).page_align()};
 
     Buf_pool::Request req{
       .m_rw_latch = RW_X_LATCH,
@@ -529,8 +529,8 @@ void Blob::free_externally_stored_field(
   }
 }
 
-void Blob::free_externally_stored_fields(Index *index, rec_t *rec, const ulint *offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept {
-  ut_ad(rec_offs_validate(rec, index, offsets));
+void Blob::free_externally_stored_fields(Index *index, Rec rec, const ulint *offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept {
+  ut_ad(rec.offs_validate(index, offsets));
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
   /* Free possible externally stored fields in the record */
 
@@ -539,7 +539,7 @@ void Blob::free_externally_stored_fields(Index *index, rec_t *rec, const ulint *
   for (ulint i = 0; i < n_fields; i++) {
     if (rec_offs_nth_extern(offsets, i)) {
       ulint len;
-      auto data = const_cast<byte *>(reinterpret_cast<const byte *>(rec_get_nth_field(rec, offsets, i, &len)));
+      auto data = const_cast<byte *>(rec.get_nth_field(offsets, i, &len).get());
 
       ut_a(len >= BTR_EXTERN_FIELD_REF_SIZE);
 
@@ -549,9 +549,9 @@ void Blob::free_externally_stored_fields(Index *index, rec_t *rec, const ulint *
 }
 
 void Blob::free_updated_extern_fields(
-  const Index *index, rec_t *rec, const ulint *offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr
+  const Index *index, Rec rec, const ulint *offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr
 ) noexcept {
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(rec.offs_validate(index, offsets));
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
 
   /* Free possible externally stored fields in the record */
@@ -563,7 +563,7 @@ void Blob::free_updated_extern_fields(
 
     if (rec_offs_nth_extern(offsets, ufield->m_field_no)) {
       ulint len;
-      auto data = (byte *)rec_get_nth_field(rec, offsets, ufield->m_field_no, &len);
+      auto data = (byte *)rec.get_nth_field(offsets, ufield->m_field_no, &len).get();
       ut_a(len >= BTR_EXTERN_FIELD_REF_SIZE);
 
       free_externally_stored_field(index, data + len - BTR_EXTERN_FIELD_REF_SIZE, rec, offsets, ufield->m_field_no, rb_ctx, mtr);
@@ -683,7 +683,7 @@ byte *Blob::copy_externally_stored_field(ulint *len, const byte *data, ulint loc
   return buf;
 }
 
-byte *Blob::copy_externally_stored_field(const rec_t *rec, const ulint *offsets, ulint no, ulint *len, mem_heap_t *heap) noexcept {
+byte *Blob::copy_externally_stored_field(const Rec rec, const ulint *offsets, ulint no, ulint *len, mem_heap_t *heap) noexcept {
   ut_a(rec_offs_nth_extern(offsets, no));
 
   /* An externally stored field can contain some initial
@@ -697,7 +697,7 @@ byte *Blob::copy_externally_stored_field(const rec_t *rec, const ulint *offsets,
 
   ulint local_len;
 
-  auto data = static_cast<const byte *>(rec_get_nth_field(rec, offsets, no, &local_len));
+  auto data = static_cast<const byte *>(rec.get_nth_field(offsets, no, &local_len).get());
 
   return copy_externally_stored_field(len, data, local_len, heap);
 }

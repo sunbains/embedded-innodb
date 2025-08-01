@@ -135,12 +135,12 @@ void dtuple_print(ib_stream_t ib_stream, const DTuple *tuple);
  * shorten the entry enough, i.e., if there are too many fixed-length or
  * short fields in entry or the index is clustered
  */
-big_rec_t *dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ext);
+big_rec_t* dtuple_convert_big_rec(const Index *index, DTuple *entry, ulint *n_ext);
 
 /** Puts back to entry the data stored in vector. Note that to ensure the
  * fields in entry can accommodate the data, vector must have been created
  * from entry with dtuple_convert_big_rec.
- * 
+ *
  * @param index - index
  * @param entry - entry whose data was put to vector
  * @param vector - big rec vector; it is freed in this function
@@ -592,8 +592,8 @@ inline bool dtuple_contains_null(const DTuple *tuple) {
  *
  * @param vector The big rec vector to free. (in, own)
  */
-inline void dtuple_big_rec_free(big_rec_t *vector) {
-  mem_heap_free(vector->heap);
+inline void dtuple_big_rec_free(big_rec_t vector) {
+  mem_heap_free(vector.heap);
 }
 
 inline size_t DTuple::get_n_ext() const {

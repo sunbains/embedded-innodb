@@ -510,13 +510,13 @@ db_err Undo_node::undo_clustered_index_modification(que_thr_t *thr, mtr_t *mtr, 
   } else {
 
     mem_heap_t *heap{};
-    big_rec_t *dummy_big_rec;
+    big_rec_t dummy_big_rec;
 
     ut_ad(mode == BTR_MODIFY_TREE);
 
     err = btr_cur->pessimistic_update(flags, &heap, &dummy_big_rec, m_update, m_cmpl_info, thr, mtr);
 
-    ut_a(dummy_big_rec == nullptr);
+    ut_a(dummy_big_rec.n_fields == 0);
 
     if (likely_null(heap)) {
       mem_heap_free(heap);
@@ -772,7 +772,7 @@ db_err Undo_node::del_unmark_secondary_index_and_undo_update(
     log_err("Sec index del undo failed in ", index->m_name, " tuple: ");
     dtuple_print(ib_stream, entry);
     log_err("\nrecord ");
-    log_err("\nrec: ", rec_to_string(pcur.get_rec()));
+    log_err("\nrec: ", pcur.get_rec().to_string());
     log_err("\ntrx: ", trx->to_string(0));
     log_err("\nSubmit a detailed bug report, check the Embedded InnoDB website for details");
 
@@ -808,10 +808,10 @@ db_err Undo_node::del_unmark_secondary_index_and_undo_update(
           break;
       }
     } else {
-      big_rec_t *dummy_big_rec{};
+      big_rec_t dummy_big_rec{};
 
       err = btr_cur->pessimistic_update(flags, &heap, &dummy_big_rec, update, 0, thr, &mtr);
-      ut_a(!dummy_big_rec);
+      ut_a(dummy_big_rec.n_fields == 0);
     }
 
     mem_heap_free(heap);

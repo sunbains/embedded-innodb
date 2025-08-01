@@ -184,7 +184,7 @@ db_err Row_insert::sec_index_entry_by_modify(
   auto rec = btr_cur->get_rec();
 
   ut_ad(!btr_cur->m_index->is_clustered());
-  ut_ad(rec_get_deleted_flag(rec));
+  ut_ad(rec.get_deleted_flag());
 
   /* We know that in the alphabetical ordering, entry and rec are
   identified. But in their binary form there may be differences if
@@ -216,10 +216,10 @@ db_err Row_insert::sec_index_entry_by_modify(
     if (unlikely(buf_pool->m_LRU->buf_pool_running_out())) {
       err = DB_LOCK_TABLE_FULL;
     } else {
-      big_rec_t *dummy_big_rec;
+      big_rec_t dummy_big_rec;
 
       err = btr_cur->pessimistic_update(BTR_KEEP_SYS_FLAG, &heap, &dummy_big_rec, update, 0, thr, mtr);
-      ut_ad(!dummy_big_rec);
+      ut_ad(dummy_big_rec.n_fields == 0);
     }
   }
 
@@ -229,15 +229,15 @@ db_err Row_insert::sec_index_entry_by_modify(
 }
 
 db_err Row_insert::clust_index_entry_by_modify(
-  ulint mode, Btree_cursor *btr_cur, mem_heap_t **heap, big_rec_t **big_rec, const DTuple *entry, que_thr_t *thr, mtr_t *mtr
+  ulint mode, Btree_cursor *btr_cur, mem_heap_t **heap, big_rec_t *big_rec, const DTuple *entry, que_thr_t *thr, mtr_t *mtr
 ) noexcept {
   ut_ad(btr_cur->m_index->is_clustered());
 
-  *big_rec = nullptr;
+  *big_rec = big_rec_t{};
 
   auto rec = btr_cur->get_rec();
 
-  ut_ad(rec_get_deleted_flag(rec));
+  ut_ad(rec.get_deleted_flag());
 
   if (*heap == nullptr) {
     *heap = mem_heap_create(1024);
@@ -460,7 +460,7 @@ void Row_insert::set_detailed(Trx *trx, const Foreign *foreign) noexcept {
 }
 
 void Row_insert::foreign_report_err(
-  const char *errstr, que_thr_t *thr, const Foreign *foreign, const rec_t *rec, const DTuple *entry
+  const char *errstr, que_thr_t *thr, const Foreign *foreign, const Rec rec, const DTuple *entry
 ) noexcept {
   auto trx = thr_get_trx(thr);
 
@@ -482,9 +482,9 @@ void Row_insert::foreign_report_err(
 
   log_err("\nBut in child table ", foreign->m_foreign_table_name, ", in index ", foreign->m_foreign_index->m_name);
 
-  if (rec != nullptr) {
+  if (!rec.is_null()) {
     log_err(", there is a record:");
-    log_err(rec_to_string(rec));
+    log_err(rec.to_string());
   } else {
     log_err(", the record is not available");
   }
@@ -492,7 +492,7 @@ void Row_insert::foreign_report_err(
   mutex_exit(&m_dict->m_foreign_err_mutex);
 }
 
-void Row_insert::foreign_report_add_err(Trx *trx, const Foreign *foreign, const rec_t *rec, const DTuple *entry) noexcept {
+void Row_insert::foreign_report_add_err(Trx *trx, const Foreign *foreign, Rec rec, const DTuple *entry) noexcept {
   set_detailed(trx, foreign);
 
   mutex_enter(&m_dict->m_foreign_err_mutex);
@@ -513,15 +513,15 @@ void Row_insert::foreign_report_add_err(Trx *trx, const Foreign *foreign, const 
   log_err("But in parent table ", foreign->m_referenced_table_name, ", in index ", foreign->m_referenced_index->m_name);
   log_err(", the closest match we can find is record:");
 
-  if (rec != nullptr && page_rec_is_supremum(rec)) {
+  if (!rec.is_null() && page_rec_is_supremum(rec)) {
     /* If the btr_cur ended on a supremum record, it is better
     to report the previous record in the error message, so that
     the user gets a more descriptive error message. */
     rec = page_rec_get_prev_const(rec);
   }
 
-  if (rec != nullptr) {
-    log_err(rec_to_string(rec));
+  if (!rec.is_null()) {
+    log_err(rec.to_string());
   }
   log_err("\n");
 
@@ -591,8 +591,8 @@ db_err Row_insert::foreign_check_on_constraint(
   const Index *clust_index;
   DTuple *ref;
   mem_heap_t *upd_vec_heap = nullptr;
-  const rec_t *rec;
-  const rec_t *clust_rec;
+  Rec rec;
+  Rec clust_rec;
   const Buf_block *clust_block;
   upd_t *update;
   ulint n_to_update;
@@ -719,9 +719,9 @@ db_err Row_insert::foreign_check_on_constraint(
       m_dict->index_name_print(trx, index);
 
       log_err("record ");
-      log_err(rec_to_string(rec));
+      log_err(rec.to_string());
       log_err("clustered record ");
-      log_err(rec_to_string(clust_rec));
+      log_err(clust_rec.to_string());
       log_err("Submit a detailed bug report, check the Embedded InnoDB website for details");
 
       err = DB_SUCCESS;
@@ -747,7 +747,7 @@ db_err Row_insert::foreign_check_on_constraint(
     goto nonstandard_exit_func;
   }
 
-  if (rec_get_deleted_flag(clust_rec)) {
+  if (clust_rec.get_deleted_flag()) {
     /* This can happen if there is a circular reference of
     rows such that cascading delete comes to delete a row
     already in the process of being delete marked */
@@ -884,9 +884,9 @@ nonstandard_exit_func:
 }
 
 db_err Row_insert::set_shared_rec_lock(
-  ulint type, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr
+  ulint type, const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets, que_thr_t *thr
 ) noexcept {
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(rec.offs_validate(index, offsets));
 
   if (index->is_clustered()) {
     return m_lock_sys->clust_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_S, type, thr);
@@ -896,9 +896,9 @@ db_err Row_insert::set_shared_rec_lock(
 }
 
 db_err Row_insert::set_exclusive_rec_lock(
-  ulint type, const Buf_block *block, const rec_t *rec, const Index *index, const ulint *offsets, que_thr_t *thr
+  ulint type, const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets, que_thr_t *thr
 ) noexcept {
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(rec.offs_validate(index, offsets));
 
   if (index->is_clustered()) {
     return m_lock_sys->clust_rec_read_check_and_lock(0, block, rec, index, offsets, LOCK_X, type, thr);
@@ -1027,7 +1027,7 @@ run_again:
   /* Scan index records and check if there is a matching record */
 
   for (;;) {
-    const rec_t *rec = pcur.get_rec();
+    Rec rec = pcur.get_rec();
     const Buf_block *block = pcur.get_block();
 
     if (page_rec_is_infimum(rec)) {
@@ -1056,7 +1056,7 @@ run_again:
     cmp = cmp_dtuple_rec(check_index->m_cmp_ctx, entry, rec, offsets);
 
     if (cmp == 0) {
-      if (rec_get_deleted_flag(rec)) {
+      if (rec.get_deleted_flag()) {
         err = set_shared_rec_lock(LOCK_ORDINARY, block, rec, check_index, offsets, thr);
         if (err != DB_SUCCESS) {
 
@@ -1223,8 +1223,8 @@ db_err Row_insert::check_foreign_constraints(const Table *table, const Index *in
   return DB_SUCCESS;
 }
 
-bool Row_insert::dupl_error_with_rec(const rec_t *rec, const DTuple *entry, const Index *index, const ulint *offsets) noexcept {
-  ut_ad(rec_offs_validate(rec, index, offsets));
+bool Row_insert::dupl_error_with_rec(const Rec rec, const DTuple *entry, const Index *index, const ulint *offsets) noexcept {
+  ut_ad(rec.offs_validate(index, offsets));
 
   const auto n_unique = index->get_n_unique();
 
@@ -1251,7 +1251,7 @@ bool Row_insert::dupl_error_with_rec(const rec_t *rec, const DTuple *entry, cons
     }
   }
 
-  return !rec_get_deleted_flag(rec);
+  return !rec.get_deleted_flag();
 }
 
 db_err Row_insert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry, que_thr_t *thr) noexcept {
@@ -1293,7 +1293,7 @@ db_err Row_insert::scan_sec_index_for_duplicate(const Index *index, DTuple *entr
   /* Scan index records and check if there is a duplicate */
 
   do {
-    const rec_t *rec = pcur.get_rec();
+    Rec rec = pcur.get_rec();
     const Buf_block *block = pcur.get_block();
 
     if (page_rec_is_infimum(rec)) {
@@ -1363,7 +1363,7 @@ db_err Row_insert::scan_sec_index_for_duplicate(const Index *index, DTuple *entr
 
 db_err Row_insert::duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *entry, que_thr_t *thr, mtr_t *mtr) noexcept {
   db_err err;
-  rec_t *rec;
+  Rec rec;
   Trx *trx = thr_get_trx(thr);
   mem_heap_t *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
@@ -1502,11 +1502,11 @@ inline ulint Row_insert::must_modify(Btree_cursor *btr_cur) noexcept {
 
 db_err Row_insert::index_entry_low(ulint mode, const Index *index, DTuple *entry, ulint n_ext, que_thr_t *thr) noexcept {
   ulint modify{};
-  rec_t *insert_rec;
-  rec_t *rec;
+  Rec insert_rec;
+  Rec rec;
   db_err err;
   mem_heap_t *heap = nullptr;
-  big_rec_t *big_rec = nullptr;
+  big_rec_t big_rec{};
   Btree_cursor btr_cur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
 
   log_sys->free_check();
@@ -1524,7 +1524,7 @@ db_err Row_insert::index_entry_low(ulint mode, const Index *index, DTuple *entry
     auto page = btr_cur.get_page_no();
     auto first_rec = page_rec_get_next(page_get_infimum_rec(page));
 
-    ut_ad(page_rec_is_supremum(first_rec) || rec_get_n_fields(first_rec, index) == dtuple_get_n_fields(entry));
+    ut_ad(page_rec_is_supremum(first_rec) || first_rec.get_n_fields() == dtuple_get_n_fields(entry));
   }
 #endif /* UNIV_DEBUG */
 
@@ -1606,7 +1606,7 @@ db_err Row_insert::index_entry_low(ulint mode, const Index *index, DTuple *entry
 function_exit:
   mtr.commit();
 
-  if (likely_null(big_rec)) {
+  if (big_rec.n_fields == 0) {
     mtr.start();
 
     btr_cur.search_to_nth_level(nullptr, index, 0, entry, PAGE_CUR_LE, BTR_MODIFY_TREE, &mtr, Current_location());
@@ -1627,7 +1627,7 @@ function_exit:
     if (modify) {
       dtuple_big_rec_free(big_rec);
     } else {
-      dtuple_convert_back_big_rec(entry, big_rec);
+      dtuple_convert_back_big_rec(entry, &big_rec);
     }
 
     mtr.commit();

@@ -274,32 +274,32 @@ UT_LIST_NODE_GETTER_DEFINITION(trx_undo_t, m_undo_list);
 
 struct Undo {
   /** Constructor
-   * 
+   *
    * @param[in] fsp Use this for file space management.
    */
   explicit Undo(FSP *fsp) : m_fsp(fsp) {}
 
   /**
    * Create an undo instance.
-   * 
+   *
    * @param[in] fsp File space management.
    */
   static Undo *create(FSP *fsp) noexcept;
 
-  /** 
+  /**
    * Destroy the undo instance.
-   * 
+   *
    * @param[in,owm] undo Undo instance.
    */
   static void destroy(Undo *&undo) noexcept;
 
   /**
    * Gets an undo log page and x-latches it.
-   * 
+   *
    * @param[in] space_id Tablspace ID.
    * @param[in] page_no Page number
    * @param[in,out] mtr Mini-transaction covering the page get.
-   * 
+   *
    * @return	pointer to page x-latched
    */
   inline page_t *page_get(space_id_t space_id, page_no_t page_no, mtr_t *mtr) noexcept {
@@ -320,11 +320,11 @@ struct Undo {
 
   /**
    * Gets an undo log page and s-latches it.
-   * 
+   *
    * @param[in] space_id Tablspace ID.
    * @param[in] page_no Page number
    * @param[in,out] mtr Mini-transaction covering the page get.
-   * 
+   *
    * @return	pointer to page s-latched
    */
   inline page_t *page_get_s_latched(space_id_t space_id, page_no_t page_no, mtr_t *mtr) noexcept {
@@ -345,48 +345,48 @@ struct Undo {
 
   /**
    * Gets the next record in an undo log.
-   * 
+   *
    * @param[in] rec undo record
    * @param[in] page_no undo log header page number
    * @param[in] offset undo log header offset on page
    * @param[in] mtr mini-transaction handle
-   * 
+   *
    * @return	undo log record, the page s-latched, NULL if none
    */
-  trx_undo_rec_t *get_next_rec(trx_undo_rec_t *rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept;
+  trx_undo_rec_t get_next_rec(trx_undo_rec_t rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept;
 
   /**
    * Gets the previous record in an undo log.
-   * 
+   *
    * @param[in] rec Undo record
    * @param[in] page_no Undo log header page number
    * @param[in] offset Undo log header offset on page
    * @param[in] mtr Mini-transaction handle
-   * 
+   *
    * @return	undo log record, the page s-latched, NULL if none
    */
-  trx_undo_rec_t *get_prev_rec(trx_undo_rec_t *rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept;
+  trx_undo_rec_t get_prev_rec(trx_undo_rec_t rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept;
 
   /**
    * Gets the first record in an undo log.
-   * 
+   *
    * @param[in] space Undo log header space
    * @param[in] page_no Undo log header page number
    * @param[in] offset Undo log header offset on page
    * @param[in] mode Latching mode: RW_S_LATCH or RW_X_LATCH
-   * 
+   *
    * @return	undo log record, the page latched, NULL if none
    */
-  trx_undo_rec_t *get_first_rec(space_id_t space, page_no_t page_no, ulint offset, ulint mode, mtr_t *mtr) noexcept;
+  trx_undo_rec_t get_first_rec(space_id_t space, page_no_t page_no, ulint offset, ulint mode, mtr_t *mtr) noexcept;
 
   /**
    * Tries to add a page to the undo log segment where the undo log is placed.
-   * 
+   *
    * @param[in] trx Transaction
    * @param[in] undo Undo log memory object
    * @param[in] mtr MTR which does not have a latch to any undo log page; the caller
    *  must have reserved the rollback segment mutex
-   * 
+   *
    * @return	page number if success, else FIL_NULL
    */
   ulint add_page(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
@@ -394,12 +394,12 @@ struct Undo {
   /**
    * Truncates an undo log from the start. This function is used during a purge
    * operation.
-   * 
+   *
    * @param[in] rseg Rollback segment
    * @param[in] space Space id of the log
    * @param[in] hdr_page_no Header page number
    * @param[in] hdr_offset Header offset on the page
-   * @param[in] limit All undo pages with undo numbers < this value should be truncated; 
+   * @param[in] limit All undo pages with undo numbers < this value should be truncated;
    *  NOTE that the function only frees whole pages; the header page is not freed, but
    *  emptied, if all the records there are < limit
    */
@@ -408,7 +408,7 @@ struct Undo {
   /**
    * Truncates an undo log from the end. This function is used during a rollback
    * to free space from an undo log.
-   * 
+   *
    * @param[in] trx Transaction whose undo log it is
    * @param[in] undo Undo log
    * @param[in] limit All undo records with undo number >= this value should be truncated
@@ -419,10 +419,10 @@ struct Undo {
    * Initializes the undo log lists for a rollback segment memory copy.
    * This function is only called when the database is started or a new
    * rollback segment created.
-   * 
+   *
    * @param[in] recovery Recovery flag
    * @param[in] rseg Rollback segment memory object
-   * 
+   *
    * @return	the combined size of undo log segments in pages
    */
   ulint lists_init(ib_recovery_t recovery, Trx_rseg *rseg) noexcept;
@@ -430,10 +430,10 @@ struct Undo {
   /**
    * Assigns an undo log for a transaction. A new undo log is created or a cached
    * undo log reused.
-   * 
+   *
    * @param[in] trx Transaction
    * @param[in] type TRX_UNDO_INSERT or TRX_UNDO_UPDATE
-   * 
+   *
    * @return DB_SUCCESS if undo log assign successful, possible error codes
    *  are: DB_TOO_MANY_CONCURRENT_TRXS DB_OUT_OF_FILE_SPACE DB_OUT_OF_MEMORY
    */
@@ -441,32 +441,32 @@ struct Undo {
 
   /**
    * Sets the state of the undo log segment at a transaction finish.
-   * 
+   *
    * @param[in] rseg Rollback segment memory object
    * @param[in] trx Transaction
    * @param[in] undo Undo log memory copy
    * @param[in] mtr Mini-transaction handle
-   * 
+   *
    * @return	undo log segment header page, x-latched
    */
-  page_t *set_state_at_finish(Trx_rseg *rseg, Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
+  Raw_page set_state_at_finish(Trx_rseg *rseg, Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
 
   /**
    * Sets the state of the undo log segment at a transaction prepare.
-   * 
+   *
    * @param[in] trx Transaction
    * @param[in] undo Undo log memory copy
    * @param[in] mtr Mini-transaction handle
-   * 
+   *
    * @return	undo log segment header page, x-latched
    */
-  page_t *set_state_at_prepare(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
+  Raw_page set_state_at_prepare(Trx *trx, trx_undo_t *undo, mtr_t *mtr) noexcept;
 
   /**
    * Adds the update undo log header as the first in the history list, and
    * frees the memory object, or puts it to the list of cached update undo log
    * segments.
-   * 
+   *
    * @param[in] trx Transaction
    * @param[in] undo_page Update undo log header page, x-latched
    * @param[in] mtr Mini-transaction handle
@@ -477,51 +477,51 @@ struct Undo {
    * Frees or caches an insert undo log after a transaction commit or rollback.
    * Knowledge of inserts is not needed after a commit or rollback, therefore
    * the data can be discarded.
-   * 
+   *
    * @param[in] trx Transaction
    */
   void insert_cleanup(Trx *trx) noexcept;
 
   /**
    * Parses the redo log entry of an undo log page initialization.
-   * 
+   *
    * @param[in] ptr Buffer
    * @param[in] end_ptr Buffer end
    * @param[in] page Page or NULL
    * @param[in] mtr Mini-transaction handle, cane be nullptr
-   * 
+   *
    * @return	end of log record or NULL
    */
   static byte *parse_page_init(byte *ptr, byte *end_ptr, page_t *page, mtr_t *mtr) noexcept;
 
   /**
    * Parses the redo log entry of an undo log page header create or reuse.
-   * 
+   *
    * @param[in] type MLOG_UNDO_HDR_CREATE or MLOG_UNDO_HDR_REUSE
    * @param[in] ptr Buffer
    * @param[in] end_ptr Buffer end
    * @param[in] page Page or NULL
    * @param[in] mtr Mini-transaction handle, can be nullptr
-   * 
+   *
    * @return	end of log record or NULL
    */
   static byte *parse_page_header(ulint type, byte *ptr, byte *end_ptr, page_t *page, mtr_t *mtr) noexcept;
 
   /**
    * Parses the redo log entry of an undo log page header discard.
-   * 
+   *
    * @param[in] ptr Buffer
    * @param[in] end_ptr Buffer end
    * @param[in] page Page or NULL
    * @param[in] mtr Mini-transaction handle, can be nullptr
-   * 
+   *
    * @return	end of log record or NULL
    */
-  static byte *parse_discard_latest(byte *ptr, IF_DEBUG(byte *end_ptr, ) page_t *page, mtr_t *mtr) noexcept;
+  static byte *parse_discard_latest(byte *ptr, IF_DEBUG(byte *end_ptr, ) Raw_page page, mtr_t *mtr) noexcept;
 
   /**
    * Frees an undo log memory copy.
-   * 
+   *
    * @param[in,own] undo Undo log memory object to be freed
    */
   static void delete_undo(trx_undo_t *&undo) noexcept;
@@ -529,51 +529,49 @@ struct Undo {
  private:
   /**
    * Gets the previous record in an undo log from the previous page.
-   * 
+   *
    * @param[in] rec The undo record.
    * @param[in] page_no The undo log header page number.
    * @param[in] offset The undo log header offset on page.
    * @param[in] mtr The mini-transaction handle.
-   * 
+   *
    * @return	undo log record, the page s-latched, nullptr if none
    */
-  trx_undo_rec_t *get_prev_rec_from_prev_page(trx_undo_rec_t *rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept;
+  trx_undo_rec_t get_prev_rec_from_prev_page(trx_undo_rec_t rec, page_no_t page_no, ulint offset, mtr_t *mtr) noexcept;
 
   /**
    * Gets the next record in an undo log from the next page.
-   * 
+   *
    * @param[in] space The undo log header space.
    * @param[in] undo_page The undo log page.
    * @param[in] page_no The undo log header page number.
    * @param[in] offset The undo log header offset on page.
    * @param[in] mode The latch mode: RW_S_LATCH or RW_X_LATCH.
    * @param[in] mtr The mini-transaction handle.
-   * 
+   *
    * @return	undo log record, the page latched, nullptr if none
    */
-  trx_undo_rec_t *get_next_rec_from_next_page(
+  trx_undo_rec_t get_next_rec_from_next_page(
     space_id_t space, page_t *undo_page, page_no_t page_no, ulint offset, ulint mode, mtr_t *mtr
   ) noexcept;
 
   /**
    * Frees an undo log page that is not the header page.
-   * 
+   *
    * @param[in] rseg The rollback segment.
    * @param[in] in_history True if the undo log is in the history list.
    * @param[in] space The undo log header space.
    * @param[in] hdr_page_no The undo log header page number.
    * @param[in] page_no The page number to free: must not be the header page.
    * @param[in] mtr The mini-transaction handle. The caller must have reserved the rollback segment mutex.
-   * 
+   *
    * @return	last page number in remaining log
    */
-  ulint free_page(
-    Trx_rseg *rseg, bool in_history, space_id_t space, page_no_t hdr_page_no, page_no_t page_no, mtr_t *mtr
-  ) noexcept;
+  ulint free_page(Trx_rseg *rseg, bool in_history, space_id_t space, page_no_t hdr_page_no, page_no_t page_no, mtr_t *mtr) noexcept;
 
   /**
    * Frees an undo log page when there is also the memory object for the undo log.
-   * 
+   *
    * @param[in] trx The transaction.
    * @param[in] undo The undo log memory copy.
    * @param[in] page_no The page number to free: must not be the header page.
@@ -584,7 +582,7 @@ struct Undo {
   /**
    * Empties an undo log header page of undo records for that undo log. Other
    * undo logs may still have records on that page, if it is an update undo log.
-   * 
+   *
    * @param[in] space The undo log header space.
    * @praam[in] hdr_page_no The undo log header page number.
    * @param[in] hdr_offset The undo log header offset on page.
@@ -594,7 +592,7 @@ struct Undo {
 
   /**
    * Frees an undo log segment which is not in the history list.
-   * 
+   *
    * @param[in] undo The undo log memory object.
    */
   void seg_free(trx_undo_t *undo) noexcept;
@@ -603,26 +601,26 @@ struct Undo {
    * Creates and initializes an undo log memory object according to the values
    * in the header in file, when the database is started. The memory object is
    * inserted in the appropriate list of rseg.
-   * 
+   *
    * @param[in] rseg The rollback segment.
    * @param[in] id The slot index within rseg.
    * @param[in] page_no The undo log segment page number.
    * @param[in] mtr The mini-transaction handle.
-   * 
+   *
    * @return	own: the undo log memory object
    */
   trx_undo_t *mem_create_at_db_start(Trx_rseg *rseg, ulint id, page_no_t page_no, mtr_t *mtr) noexcept;
 
   /**
    * Reuses a cached undo log.
-   * 
+   *
    * @param[in] trx The transaction.
    * @param[in] rseg The rollback segment memory copy.
    * @param[in] type The type of the log: TRX_UNDO_INSERT or TRX_UNDO_UPDATE.
    * @param[in] trx_id The transaction id for which the undo log is used.
    * @param[in] xid The X/Open transaction identification.
    * @param[in] mtr The mini-transaction handle.
-   * 
+   *
    * @return	the undo log memory object, nullptr if none cached
    */
   trx_undo_t *reuse_cached(Trx *trx, Trx_rseg *rseg, ulint type, trx_id_t trx_id, IF_XA(const XID *xid, ) mtr_t *mtr) noexcept;
@@ -646,12 +644,12 @@ static_assert(DATA_ROLL_PTR_LEN == 7, "error DATA_ROLL_PTR_LEN != 7");
 
 /**
  * Builds a roll pointer.
- * 
+ *
  * @param[in] is_insert true if insert undo log
  * @param[in] rseg_id Rollback segment id
  * @param[in] page_no Page number
- * 
- * 
+ *
+ *
  * @return	roll pointer
  */
 inline roll_ptr_t trx_undo_build_roll_ptr(bool is_insert, ulint rseg_id, space_id_t page_no, ulint offset) {
@@ -663,7 +661,7 @@ inline roll_ptr_t trx_undo_build_roll_ptr(bool is_insert, ulint rseg_id, space_i
 
 /**
  * Decodes a roll pointer.
- * 
+ *
  * @param[in] roll_ptr Roll pointer
  * @param[out] is_insert true if insert undo log
  * @param[out] rseg_id Rollback segment id
@@ -685,9 +683,9 @@ inline void trx_undo_decode_roll_ptr(roll_ptr_t roll_ptr, bool *is_insert, ulint
 
 /**
  * Returns true if the roll pointer is of the insert type.
- * 
+ *
  * @param[in] roll_ptr Roll pointer
- * 
+ *
  * @return	true if insert undo log
  */
 inline bool trx_undo_roll_ptr_is_insert(roll_ptr_t roll_ptr) {
@@ -702,7 +700,7 @@ inline bool trx_undo_roll_ptr_is_insert(roll_ptr_t roll_ptr) {
  * Writes a roll ptr to an index page. In case that the size changes in
  * some future version, this function should be used instead of
  * mach_write_...
- * 
+ *
  * @param[in] ptr Pointer to memory where written
  * @param[in] roll_ptr Roll ptr
  */
@@ -716,9 +714,9 @@ inline void trx_write_roll_ptr(byte *ptr, roll_ptr_t roll_ptr) {
  * Reads a roll ptr from an index page. In case that the roll ptr size
  * changes in some future version, this function should be used instead of
  * mach_read_...
- * 
+ *
  * @param[in] ptr Pointer to memory from where to read
- * 
+ *
  * @return	roll ptr
  */
 inline roll_ptr_t trx_read_roll_ptr(const byte *ptr) {
@@ -730,11 +728,11 @@ inline roll_ptr_t trx_read_roll_ptr(const byte *ptr) {
 /**
  * Returns the start offset of the undo log records of the specified undo
  * log on the page.
- * 
+ *
  * @param[in] undo_page Undo log page
  * @param[in] page_no Undo log header page number
  * @param[in] offset Undo log header offset on page
- * 
+ *
  * @return	start offset
  */
 inline ulint trx_undo_page_get_start(page_t *undo_page, page_no_t page_no, ulint offset) {
@@ -748,11 +746,11 @@ inline ulint trx_undo_page_get_start(page_t *undo_page, page_no_t page_no, ulint
 /**
  * Returns the end offset of the undo log records of the specified undo
  * log on the page.
- * 
+ *
  * @param[in] undo_page Undo log page
  * @param[in] page_no Undo log header page number
  * @param[in] offset Undo log header offset on page
- * 
+ *
  * @return	end offset
  */
 inline ulint trx_undo_page_get_end(page_t *undo_page, page_no_t page_no, ulint offset) {
@@ -771,42 +769,35 @@ inline ulint trx_undo_page_get_end(page_t *undo_page, page_no_t page_no, ulint o
     end = mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_FREE);
   }
 
-  return (end);
+  return end;
 }
 
 /** Returns the previous undo record on the page in the specified log, or
-NULL if none exists.
-@return	pointer to record, NULL if none */
-inline trx_undo_rec_t *trx_undo_page_get_prev_rec(
-  trx_undo_rec_t *rec, /*!< in: undo log record */
-  ulint page_no,       /*!< in: undo log header page number */
-  ulint offset
-) /*!< in: undo log header offset on page */
-{
-  page_t *undo_page;
-  ulint start;
+ * NULL if none exists.
+ * @param rec undo log record
+ * @param page_no undo log header page number
+ * @param offset undo log header offset on page
+ * @return	pointer to record, NULL if none */
+inline trx_undo_rec_t trx_undo_page_get_prev_rec(trx_undo_rec_t rec, page_no_t page_no, ulint offset) {
+  auto undo_page = (page_t *)ut_align_down(rec, UNIV_PAGE_SIZE);
 
-  undo_page = (page_t *)ut_align_down(rec, UNIV_PAGE_SIZE);
-
-  start = trx_undo_page_get_start(undo_page, page_no, offset);
+  auto start = trx_undo_page_get_start(undo_page, page_no, offset);
 
   if (start + undo_page == rec) {
 
-    return (nullptr);
+    return nullptr;
   }
 
-  return (undo_page + mach_read_from_2(rec - 2));
+  return undo_page + mach_read_from_2(rec - 2);
 }
 
 /** Returns the next undo log record on the page in the specified log, or
-NULL if none exists.
-@return	pointer to record, NULL if none */
-inline trx_undo_rec_t *trx_undo_page_get_next_rec(
-  trx_undo_rec_t *rec, /*!< in: undo log record */
-  ulint page_no,       /*!< in: undo log header page number */
-  ulint offset
-) /*!< in: undo log header offset on page */
-{
+ * NULL if none exists.
+ * @param rec undo log record
+ * @param page_no undo log header page number
+ * @param offset undo log header offset on page
+ * @return	pointer to record, NULL if none */
+inline trx_undo_rec_t trx_undo_page_get_next_rec(trx_undo_rec_t rec, page_no_t page_no, ulint offset) {
   auto undo_page = (page_t *)ut_align_down(rec, UNIV_PAGE_SIZE);
   auto end = trx_undo_page_get_end(undo_page, page_no, offset);
   auto next = mach_read_from_2(rec);
@@ -815,14 +806,12 @@ inline trx_undo_rec_t *trx_undo_page_get_next_rec(
 }
 
 /** Returns the last undo record on the page in the specified undo log, or
-NULL if none exists.
-@return	pointer to record, NULL if none */
-inline trx_undo_rec_t *trx_undo_page_get_last_rec(
-  page_t *undo_page, /*!< in: undo log page */
-  ulint page_no,     /*!< in: undo log header page number */
-  ulint offset
-) /*!< in: undo log header offset on page */
-{
+ * NULL if none exists.
+ * @param undo_page undo log page
+ * @param page_no undo log header page number
+ * @param offset undo log header offset on page
+ * @return	pointer to record, NULL if none */
+inline trx_undo_rec_t trx_undo_page_get_last_rec(page_t *undo_page, page_no_t page_no, ulint offset) {
   auto start = trx_undo_page_get_start(undo_page, page_no, offset);
   auto end = trx_undo_page_get_end(undo_page, page_no, offset);
 
@@ -830,14 +819,12 @@ inline trx_undo_rec_t *trx_undo_page_get_last_rec(
 }
 
 /** Returns the first undo record on the page in the specified undo log, or
-NULL if none exists.
-@return	pointer to record, NULL if none */
-inline trx_undo_rec_t *trx_undo_page_get_first_rec(
-  page_t *undo_page, /*!< in: undo log page */
-  ulint page_no,     /*!< in: undo log header page number */
-  ulint offset
-) /*!< in: undo log header offset on page */
-{
+ * NULL if none exists.
+ * @param undo_page undo log page
+ * @param page_no undo log header page number
+ * @param offset undo log header offset on page
+ * @return	pointer to record, NULL if none */
+inline trx_undo_rec_t trx_undo_page_get_first_rec(page_t *undo_page, page_no_t page_no, ulint offset) {
   auto start = trx_undo_page_get_start(undo_page, page_no, offset);
   auto end = trx_undo_page_get_end(undo_page, page_no, offset);
 

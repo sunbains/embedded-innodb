@@ -84,7 +84,7 @@ void flst_add_last(flst_base_node_t *base, flst_node_t *node, mtr_t *mtr) {
   /* If the list is not empty, call flst_insert_after */
   if (len != 0) {
     if (last_addr.m_page_no == node_addr.m_page_no) {
-      last_node = page_align(node) + last_addr.m_boffset;
+      last_node = Rec(node).page_align() + last_addr.m_boffset;
     } else {
       last_node = fut_get_ptr(space, last_addr, RW_X_LATCH, mtr);
     }
@@ -115,7 +115,7 @@ void flst_add_first(flst_base_node_t *base, flst_node_t *node, mtr_t *mtr) {
   /* If the list is not empty, call flst_insert_before */
   if (len != 0) {
     if (first_addr.m_page_no == node_addr.m_page_no) {
-      first_node = page_align(node) + first_addr.m_boffset;
+      first_node = Rec(node).page_align() + first_addr.m_boffset;
     } else {
       first_node = fut_get_ptr(space, first_addr, RW_X_LATCH, mtr);
     }
@@ -233,7 +233,7 @@ void flst_remove(flst_base_node_t *base, flst_node_t *node2, mtr_t *mtr) {
 
     if (node1_addr.m_page_no == node2_addr.m_page_no) {
 
-      node1 = page_align(node2) + node1_addr.m_boffset;
+      node1 = Rec(node2).page_align() + node1_addr.m_boffset;
     } else {
       node1 = fut_get_ptr(space, node1_addr, RW_X_LATCH, mtr);
     }
@@ -251,7 +251,7 @@ void flst_remove(flst_base_node_t *base, flst_node_t *node2, mtr_t *mtr) {
 
     if (node3_addr.m_page_no == node2_addr.m_page_no) {
 
-      node3 = page_align(node2) + node3_addr.m_boffset;
+      node3 = Rec(node2).page_align() + node3_addr.m_boffset;
     } else {
       node3 = fut_get_ptr(space, node3_addr, RW_X_LATCH, mtr);
     }
@@ -292,7 +292,7 @@ void flst_cut_end(flst_base_node_t *base, flst_node_t *node2, ulint n_nodes, mtr
 
     if (node1_addr.m_page_no == node2_addr.m_page_no) {
 
-      node1 = page_align(node2) + node1_addr.m_boffset;
+      node1 = Rec(node2).page_align() + node1_addr.m_boffset;
     } else {
       node1 = fut_get_ptr(space, node1_addr, RW_X_LATCH, mtr);
     }
@@ -395,7 +395,7 @@ bool flst_validate(const flst_base_node_t *base, mtr_t *mtr1) {
 void flst_print(const flst_base_node_t *base, mtr_t *mtr) {
   ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
 
-  auto frame = page_align((byte *)base);
+  auto frame = Rec((byte *)base).page_align();
   auto len = flst_get_len(base, mtr);
 
   log_info(std::format(

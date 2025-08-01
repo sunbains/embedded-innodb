@@ -45,7 +45,7 @@ void Row_vers::destroy(Row_vers *&row_vers) noexcept {
   row_vers = nullptr;
 }
 
-Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *index, const ulint *offsets) noexcept {
+Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index, const ulint *offsets) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
 #ifdef UNIV_SYNC_DEBUG
@@ -73,7 +73,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *in
 
   auto clust_rec = row_get_clust_rec(BTR_SEARCH_LEAF, rec, index, &clust_index, &mtr);
 
-  if (clust_rec == nullptr) {
+  if (clust_rec.is_null()) {
     /* In a rare case it is possible that no clust rec is found for a secondary index record: if in row0undo.cc
     row_undo_mod_remove_clust_low() we have already removed the clust rec, while purge is still cleaning and
     removing secondary index records associated with earlier versions of the clustered index record. In that
@@ -130,11 +130,11 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *in
   trx = nullptr;
 
   auto version = clust_rec;
-  auto rec_del = rec_get_deleted_flag(rec);
+  auto rec_del = rec.get_deleted_flag();
 
   for (;;) {
     row_ext_t *ext;
-    rec_t *prev_version;
+    Rec prev_version;
 
     mutex_exit(&m_trx_sys->m_mutex);
 
@@ -153,7 +153,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *in
 
     mem_heap_free(heap2); /* free version and clust_offsets */
 
-    if (prev_version == nullptr) {
+    if (prev_version.is_null()) {
       mutex_enter(&m_trx_sys->m_mutex);
 
       if (!m_trx_sys->is_active(trx_id)) {
@@ -181,7 +181,7 @@ Trx *Row_vers::impl_x_locked_off_trx_sys_mutex(const rec_t *rec, const Index *in
       clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
     }
 
-    auto vers_del = rec_get_deleted_flag(prev_version);
+    auto vers_del = prev_version.get_deleted_flag();
     auto prev_trx_id = row_get_rec_trx_id(prev_version, clust_index, clust_offsets);
 
     /* If the trx_id and prev_trx_id are different and if the prev_version is marked deleted then the
@@ -278,8 +278,8 @@ bool Row_vers::must_preserve_del_marked(trx_id_t trx_id, mtr_t *mtr) noexcept {
   return m_trx_sys->m_purge->update_undo_must_exist(trx_id);
 }
 
-bool Row_vers::old_has_index_entry(bool also_curr, const rec_t *rec, mtr_t *mtr, Index *index, const DTuple *ientry) noexcept {
-  //const rec_t *version;
+bool Row_vers::old_has_index_entry(bool also_curr, const Rec rec, mtr_t *mtr, Index *index, const DTuple *ientry) noexcept {
+  //const Rec version;
   //mem_heap_t *heap2;
   //const DTuple *row;
   //const DTuple *entry;
@@ -304,7 +304,7 @@ bool Row_vers::old_has_index_entry(bool also_curr, const rec_t *rec, mtr_t *mtr,
     clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
   }
 
-  if (also_curr && !rec_get_deleted_flag(rec)) {
+  if (also_curr && !rec.get_deleted_flag()) {
     row_ext_t *ext;
 
     /* The stack of versions is locked by mtr.  Thus, it is safe to fetch the prefixes for
@@ -340,7 +340,7 @@ bool Row_vers::old_has_index_entry(bool also_curr, const rec_t *rec, mtr_t *mtr,
 
   for (;;) {
     auto heap2 = heap;
-    rec_t *prev_version;
+    Rec prev_version;
 
     heap = mem_heap_create(1024);
 
@@ -348,7 +348,7 @@ bool Row_vers::old_has_index_entry(bool also_curr, const rec_t *rec, mtr_t *mtr,
 
     mem_heap_free(heap2); /* free version and clust_offsets */
 
-    if (err != DB_SUCCESS || prev_version == nullptr) {
+    if (err != DB_SUCCESS || prev_version.is_null()) {
       /* Versions end here */
 
       mem_heap_free(heap);
@@ -362,7 +362,7 @@ bool Row_vers::old_has_index_entry(bool also_curr, const rec_t *rec, mtr_t *mtr,
       clust_offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
     }
 
-    if (rec_get_deleted_flag(prev_version) == 0) {
+    if (prev_version.get_deleted_flag() == 0) {
       row_ext_t *ext;
 
       /* The stack of versions is locked by mtr.  Thus, it is safe to fetch the prefixes for
@@ -401,7 +401,7 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
   ut_ad(!rw_lock_own(&m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
-  ut_ad(rec_offs_validate(row.m_cluster_rec, row.m_cluster_index, row.m_cluster_offsets));
+  ut_ad(row.m_cluster_rec.offs_validate(row.m_cluster_index, row.m_cluster_offsets));
 
   auto trx_id = row_get_rec_trx_id(row.m_cluster_rec, row.m_cluster_index, row.m_cluster_offsets);
 
@@ -435,9 +435,9 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
 
         auto buf = mem_heap_alloc(row.m_old_row_heap, rec_offs_size(row.m_cluster_offsets));
 
-        row.m_old_rec = rec_copy(buf, version, row.m_cluster_offsets);
+        row.m_old_rec = version.copy(buf, row.m_cluster_offsets);
 
-        ut_d(rec_offs_make_valid(row.m_old_rec, row.m_cluster_index, row.m_cluster_offsets));
+        ut_d(row.m_old_rec.offs_make_valid(row.m_cluster_index, row.m_cluster_offsets));
 
         err = DB_SUCCESS;
 
@@ -445,7 +445,7 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
       }
     }
 
-    rec_t *prev_version;
+    Rec prev_version;
 
     err = Trx_undo_record::prev_version_build(
       row.m_cluster_rec, row.m_mtr, version, row.m_cluster_index, row.m_cluster_offsets, heap, &prev_version
@@ -459,9 +459,9 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
       break;
     }
 
-    if (prev_version == nullptr) {
+    if (prev_version.is_null()) {
       /* It was a freshly inserted version */
-      row.m_old_rec = nullptr;
+      row.m_old_rec = Rec{};
       err = DB_SUCCESS;
       break;
     }
@@ -481,9 +481,9 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
 
       auto buf = mem_heap_alloc(row.m_old_row_heap, rec_offs_size(row.m_cluster_offsets));
 
-      row.m_old_rec = rec_copy(buf, prev_version, row.m_cluster_offsets);
+      row.m_old_rec = prev_version.copy(buf, row.m_cluster_offsets);
 
-      ut_d(rec_offs_make_valid(row.m_old_rec, row.m_cluster_index, row.m_cluster_offsets));
+      ut_d(row.m_old_rec.offs_make_valid(row.m_cluster_index, row.m_cluster_offsets));
 
       err = DB_SUCCESS;
 
@@ -510,7 +510,7 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
   ut_ad(!rw_lock_own(&m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
-  ut_ad(rec_offs_validate(row.m_cluster_rec, row.m_cluster_index, row.m_cluster_offsets));
+  ut_ad(row.m_cluster_rec.offs_validate(row.m_cluster_index, row.m_cluster_offsets));
 
   rw_lock_s_lock(&m_trx_sys->m_purge->m_latch);
 
@@ -519,16 +519,11 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
 
   mem_heap_t *heap{};
   db_err err{DB_SUCCESS};
-  rec_t *prev_version{};
+  Rec prev_version{};
   auto version = row.m_cluster_rec;
 
   for (;;) {
-    trx_id_t rec_trx_id{};
     auto version_trx_id = row_get_rec_trx_id(version, row.m_cluster_index, row.m_cluster_offsets);
-
-    if (row.m_cluster_rec == version) {
-      rec_trx_id = version_trx_id;
-    }
 
     mutex_enter(&m_trx_sys->m_mutex);
 
@@ -550,7 +545,7 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
       /* We assume that a rolled-back transaction stays in TRX_ACTIVE state until all the changes have been
       rolled back and the transaction is removed from the global list of transactions. */
 
-      if (rec_trx_id == version_trx_id) {
+      if (row_get_rec_trx_id(version, row.m_cluster_index, row.m_cluster_offsets) == version_trx_id) {
         /* The transaction was committed while we searched for earlier versions.  Return the current version
         as a semi-consistent read. */
 
@@ -566,9 +561,9 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
 
       auto buf = mem_heap_alloc(row.m_old_row_heap, rec_offs_size(row.m_cluster_offsets));
 
-      row.m_old_rec = rec_copy(buf, version, row.m_cluster_offsets);
+      row.m_old_rec = version.copy(buf, row.m_cluster_offsets);
 
-      ut_d(rec_offs_make_valid(row.m_old_rec, row.m_cluster_index, row.m_cluster_offsets));
+      ut_d(row.m_old_rec.offs_make_valid(row.m_cluster_index, row.m_cluster_offsets));
 
       err = DB_SUCCESS;
 
@@ -591,9 +586,9 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
       break;
     }
 
-    if (prev_version == nullptr) {
+    if (prev_version.is_null()) {
       /* It was a freshly inserted version */
-      row.m_old_rec = nullptr;
+      row.m_old_rec = Rec{};
 
       err = DB_SUCCESS;
 
