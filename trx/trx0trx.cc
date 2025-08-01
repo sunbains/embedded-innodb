@@ -745,9 +745,9 @@ que_thr_t *Trx::commit_step(que_thr_t *thr) noexcept {
   }
 
   if (node->state == COMMIT_NODE_SEND) {
-    auto trx = thr_get_trx(thr);
+    mutex_enter(&srv_trx_sys->m_mutex);
 
-    mutex_enter(&trx->m_trx_sys->m_mutex);
+    auto trx = thr_get_trx(thr);
 
     node->state = COMMIT_NODE_WAIT;
 
