@@ -14,17 +14,17 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 # This is the CMakeLists for Embedded InnoDB
-CMAKE_MINIMUM_REQUIRED(VERSION 3.5 FATAL_ERROR)
-
 PROJECT (TESTS)
 
-SET(LIBS innodb pthread m uring)
+SET(LIBS innodb pthread m)
 
 # Set binary output directory to bin/
 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
 
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/../include)
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/../)
+
+# The innodb library already includes liburing dependency
 
 ADD_EXECUTABLE(ib_cfg ib_cfg.cc test0aux.cc test_logger.cc)
 ADD_EXECUTABLE(ib_cursor ib_cursor.cc test0aux.cc test_logger.cc)
@@ -85,12 +85,12 @@ SET(CMAKE_CXX_STANDARD 20)
 SET(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 ADD_EXECUTABLE(test_log0core_simple
-    test_log0core_simple.cc 
-    test_logger.cc
+  test_log0core_simple.cc 
+  test_logger.cc
 )
 
 # Simple Log_core integration test using the public API
-TARGET_LINK_LIBRARIES(test_log0core_simple PRIVATE ${CMAKE_SOURCE_DIR}/../lib/libinnodb.a pthread m uring)
+TARGET_LINK_LIBRARIES(test_log0core_simple PRIVATE ${LIBS})
 
 # Enable testing
 ENABLE_TESTING()
@@ -104,6 +104,3 @@ ADD_CUSTOM_TARGET(test_logcore
     DEPENDS test_log0core_simple
 )
 
-# Note: The previous standalone Log_core implementation has been removed
-# Tests should work against the real production code, not reimplemented stubs
-# For proper Log_core testing, use integration tests that exercise the full system

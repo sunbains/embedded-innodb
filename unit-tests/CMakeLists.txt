@@ -1,4 +1,4 @@
-# Copyright (C) 2009 Oracle/Innobase Oy
+# Copyright (C) 2025 Sunny Bains
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -13,15 +13,13 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.5 FATAL_ERROR)
-
 PROJECT (UNIT_TESTS)
 
 # Add debug definitions
 add_definitions(-DUNIV_BTR_PRINT -DUNIT_TESTING)
 
 # Set up libraries
-SET(LIBS innodb pthread m uring)
+SET(LIBS innodb pthread m)
 
 # Set up include directories
 INCLUDE_DIRECTORIES(
@@ -29,6 +27,8 @@ INCLUDE_DIRECTORIES(
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/../include
 )
+
+# The innodb library already includes liburing dependency
 
 # Set up dyn0dyn-t test
 add_executable(dyn0dyn-t dyn0dyn-t.cc unit_test_logger.cc)

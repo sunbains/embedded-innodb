@@ -1,4 +1,5 @@
 # Copyright (C) 2009 Oracle/Innobase Oy
+# Copyright (C) 2025 Sunny Bains
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,7 +15,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 # This is the CMakeLists for Embedded InnoDB
-CMAKE_MINIMUM_REQUIRED(VERSION 3.5 FATAL_ERROR)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
 
 PROJECT (EMBEDDED_INNODB)
 
@@ -26,8 +27,12 @@ SET(CMAKE_CXX_STANDARD_REQUIRED True)
 SET (LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/lib)
 SET (EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
+# Include required modules before git-submodule-init.cmake
 INCLUDE(ExternalProject)
 INCLUDE(FetchContent)
+
+# Include git submodule initialization to set up dependency variables
+INCLUDE(deps/git-submodule-init.cmake)
 
 SET(UNIT_TESTING true)
 
@@ -248,8 +253,8 @@ IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
   ADD_DEFINITIONS(-DUNIV_LINUX)
   # Static build for now
   ADD_LIBRARY(innodb STATIC ${INNODB_SOURCES})
-  # Link with liburing
-  TARGET_LINK_LIBRARIES(innodb uring)
+  # Link with liburing using the variable from git-submodule-init.cmake
+  TARGET_LINK_LIBRARIES(innodb ${LIBURING_LIB_DIR}/liburing.a)
 ENDIF(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
 # Configure Google Test if unit testing is enabled
@@ -329,8 +334,6 @@ INSTALL(TARGETS innodb
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
 )
-
-INCLUDE(deps/git-submodule-init.cmake)
 
 ADD_DEPENDENCIES(innodb liburing)
 

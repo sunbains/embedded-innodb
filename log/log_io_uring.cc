@@ -30,13 +30,39 @@ Implementation of simplified I/O system specifically for WAL operations.
 #include <unistd.h>
 #include <chrono>
 #include <cstring>
+#include <liburing.h>
 #include "mem0mem.h"
 #include "ut0logger.h"
+
+// Custom deleter function for io_uring that ensures proper cleanup
+void log_aio_deleter(struct io_uring* ring) {
+  if (ring == nullptr) {
+    return;
+  }
+  
+  // Log cleanup for debugging
+  log_info("Cleaning up io_uring instance");
+  
+  // Ensure io_uring is properly shut down before deletion
+  io_uring_queue_exit(ring);
+  delete ring;
+}
+
+// Custom allocator function for io_uring that provides logging and error handling
+struct io_uring* log_aio_allocator() {
+  auto* ring = new struct io_uring();
+  if (ring == nullptr) {
+    // Log allocation failure
+    log_err("Failed to allocate io_uring instance");
+    return nullptr;
+  }
+  return ring;
+}
 
 // Global WAL I/O system instance
 WAL_IO_System *g_wal_io_system = nullptr;
 
-WAL_IO_System::WAL_IO_System() {
+WAL_IO_System::WAL_IO_System() : m_ring(nullptr, log_aio_deleter) {
   mutex_create(&m_mutex, IF_DEBUG("WAL_IO_System::mutex", ) IF_SYNC_DEBUG(SYNC_ANY_LATCH, ) Current_location());
 }
 
@@ -52,10 +78,17 @@ bool WAL_IO_System::initialize(uint32_t queue_depth, uint32_t max_files) {
     return false;
   }
 
-  // Initialize io_uring
-  int ret = io_uring_queue_init(queue_depth, &m_ring, 0);
+  // Allocate and initialize io_uring instance using custom allocator
+  m_ring = Log_aio(log_aio_allocator(), log_aio_deleter);
+  if (!m_ring) {
+    log_err("Failed to allocate io_uring instance");
+    return false;
+  }
+  
+  int ret = io_uring_queue_init(queue_depth, m_ring.get(), 0);
   if (ret != 0) {
     log_err("Failed to initialize io_uring: ", strerror(-ret));
+    m_ring.reset();
     return false;
   }
 
@@ -115,8 +148,8 @@ void WAL_IO_System::shutdown() {
 
   mutex_exit(&m_mutex);
 
-  // Cleanup io_uring
-  io_uring_queue_exit(&m_ring);
+  // Cleanup io_uring (handled automatically by custom deleter)
+  m_ring.reset();
 
   m_initialized.store(false);
 
@@ -356,7 +389,7 @@ int WAL_IO_System::async_read(int file_index, void *buffer, size_t length, off_t
 
   ctx->bytes_requested = length;
 
-  struct io_uring_sqe *sqe = io_uring_get_sqe(&m_ring);
+  struct io_uring_sqe *sqe = io_uring_get_sqe(m_ring.get());
   if (!sqe) {
     log_err("Failed to get io_uring SQE for async read");
     return -1;
@@ -368,7 +401,7 @@ int WAL_IO_System::async_read(int file_index, void *buffer, size_t length, off_t
   io_uring_prep_read(sqe, file.m_fd, buffer, length, offset);
   io_uring_sqe_set_data(sqe, ctx);
 
-  int ret = io_uring_submit(&m_ring);
+  int ret = io_uring_submit(m_ring.get());
   if (ret < 0) {
     file.m_pending_ops.fetch_sub(1);
     log_err("Failed to submit async read: ", strerror(-ret));
@@ -390,7 +423,7 @@ int WAL_IO_System::async_write(int file_index, const void *buffer, size_t length
 
   ctx->bytes_requested = length;
 
-  struct io_uring_sqe *sqe = io_uring_get_sqe(&m_ring);
+  struct io_uring_sqe *sqe = io_uring_get_sqe(m_ring.get());
   if (!sqe) {
     log_err("Failed to get io_uring SQE for async write");
     return -1;
@@ -402,7 +435,7 @@ int WAL_IO_System::async_write(int file_index, const void *buffer, size_t length
   io_uring_prep_write(sqe, file.m_fd, buffer, length, offset);
   io_uring_sqe_set_data(sqe, ctx);
 
-  int ret = io_uring_submit(&m_ring);
+  int ret = io_uring_submit(m_ring.get());
   if (ret < 0) {
     file.m_pending_ops.fetch_sub(1);
     log_err("Failed to submit async write: ", strerror(-ret));
@@ -443,7 +476,7 @@ int WAL_IO_System::scatter_read(int file_index, const WAL_iovec_t *iovec, size_t
     }
     ctx->bytes_requested = total_bytes;
 
-    struct io_uring_sqe *sqe = io_uring_get_sqe(&m_ring);
+    struct io_uring_sqe *sqe = io_uring_get_sqe(m_ring.get());
     if (!sqe) {
       log_err("Failed to get io_uring SQE for scatter read");
       return -1;
@@ -462,7 +495,7 @@ int WAL_IO_System::scatter_read(int file_index, const WAL_iovec_t *iovec, size_t
     io_uring_prep_readv(sqe, file.m_fd, iovecs.data(), iovec_count, iovec[0].offset);
     io_uring_sqe_set_data(sqe, ctx);
 
-    int ret = io_uring_submit(&m_ring);
+    int ret = io_uring_submit(m_ring.get());
     if (ret < 0) {
       file.m_pending_ops.fetch_sub(1);
       log_err("Failed to submit scatter read: ", strerror(-ret));
@@ -486,7 +519,7 @@ int WAL_IO_System::scatter_read(int file_index, const WAL_iovec_t *iovec, size_t
       }
       contexts[i]->bytes_requested = iovec[i].length;
 
-      sqes[i] = io_uring_get_sqe(&m_ring);
+      sqes[i] = io_uring_get_sqe(m_ring.get());
       if (!sqes[i]) {
         log_err("Failed to get io_uring SQE for scatter read operation ", i);
         return -1;
@@ -504,7 +537,7 @@ int WAL_IO_System::scatter_read(int file_index, const WAL_iovec_t *iovec, size_t
     }
 
     // Submit all operations in a single batch
-    int ret = io_uring_submit(&m_ring);
+    int ret = io_uring_submit(m_ring.get());
     if (ret < 0) {
       file.m_pending_ops.fetch_sub(iovec_count);
       log_err("Failed to submit scatter read batch: ", strerror(-ret));
@@ -546,7 +579,7 @@ int WAL_IO_System::gather_write(int file_index, const WAL_iovec_t *iovec, size_t
     }
     ctx->bytes_requested = total_bytes;
 
-    struct io_uring_sqe *sqe = io_uring_get_sqe(&m_ring);
+    struct io_uring_sqe *sqe = io_uring_get_sqe(m_ring.get());
     if (!sqe) {
       log_err("Failed to get io_uring SQE for gather write");
       return -1;
@@ -565,7 +598,7 @@ int WAL_IO_System::gather_write(int file_index, const WAL_iovec_t *iovec, size_t
     io_uring_prep_writev(sqe, file.m_fd, iovecs.data(), iovec_count, iovec[0].offset);
     io_uring_sqe_set_data(sqe, ctx);
 
-    int ret = io_uring_submit(&m_ring);
+    int ret = io_uring_submit(m_ring.get());
     if (ret < 0) {
       file.m_pending_ops.fetch_sub(1);
       log_err("Failed to submit gather write: ", strerror(-ret));
@@ -589,7 +622,7 @@ int WAL_IO_System::gather_write(int file_index, const WAL_iovec_t *iovec, size_t
       }
       contexts[i]->bytes_requested = iovec[i].length;
 
-      sqes[i] = io_uring_get_sqe(&m_ring);
+      sqes[i] = io_uring_get_sqe(m_ring.get());
       if (!sqes[i]) {
         log_err("Failed to get io_uring SQE for gather write operation ", i);
         return -1;
@@ -607,7 +640,7 @@ int WAL_IO_System::gather_write(int file_index, const WAL_iovec_t *iovec, size_t
     }
 
     // Submit all operations in a single batch
-    int ret = io_uring_submit(&m_ring);
+    int ret = io_uring_submit(m_ring.get());
     if (ret < 0) {
       file.m_pending_ops.fetch_sub(iovec_count);
       log_err("Failed to submit gather write batch: ", strerror(-ret));
@@ -657,7 +690,7 @@ int WAL_IO_System::async_flush(int file_index, bool sync_metadata, void *callbac
 
   ctx->bytes_requested = 0;  // Flush doesn't transfer bytes
 
-  struct io_uring_sqe *sqe = io_uring_get_sqe(&m_ring);
+  struct io_uring_sqe *sqe = io_uring_get_sqe(m_ring.get());
   if (!sqe) {
     log_err("Failed to get io_uring SQE for async flush");
     return -1;
@@ -671,7 +704,7 @@ int WAL_IO_System::async_flush(int file_index, bool sync_metadata, void *callbac
   io_uring_prep_fsync(sqe, file.m_fd, fsync_flags);
   io_uring_sqe_set_data(sqe, ctx);
 
-  int ret = io_uring_submit(&m_ring);
+  int ret = io_uring_submit(m_ring.get());
   if (ret < 0) {
     file.m_pending_ops.fetch_sub(1);
     log_err("Failed to submit async flush: ", strerror(-ret));
@@ -696,9 +729,9 @@ int WAL_IO_System::process_completions(uint32_t max_events, uint32_t timeout_ms)
   for (uint32_t i = 0; i < max_events; ++i) {
     int ret;
     if (timeout_ms > 0) {
-      ret = io_uring_wait_cqe_timeout(&m_ring, &cqe, &ts);
+      ret = io_uring_wait_cqe_timeout(m_ring.get(), &cqe, &ts);
     } else {
-      ret = io_uring_peek_cqe(&m_ring, &cqe);
+      ret = io_uring_peek_cqe(m_ring.get(), &cqe);
     }
 
     if (ret < 0) {
@@ -721,7 +754,7 @@ int WAL_IO_System::process_completions(uint32_t max_events, uint32_t timeout_ms)
         complete_io_context(reinterpret_cast<uint64_t>(ctx) % m_next_op_id.load(), cqe->res);
       }
 
-      io_uring_cqe_seen(&m_ring, cqe);
+      io_uring_cqe_seen(m_ring.get(), cqe);
       processed++;
     }
   }

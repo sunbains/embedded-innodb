@@ -25,7 +25,6 @@ capabilities, removing dependencies on the general file system (fil0fil.cc).
 
 #pragma once
 
-#include <liburing.h>
 #include <atomic>
 #include <unordered_map>
 #include <vector>
@@ -33,6 +32,14 @@ capabilities, removing dependencies on the general file system (fil0fil.cc).
 #include "log0types.h"
 #include "os0aio.h"
 #include "sync0sync.h"
+// Forward declaration for io_uring
+struct io_uring;
+
+// Function pointer type for io_uring deleter
+using Log_aio_deleter_func = void(*)(struct io_uring*);
+
+// Alias for io_uring using unique_ptr with function pointer deleter
+using Log_aio = std::unique_ptr<struct io_uring, Log_aio_deleter_func>;
 
 // Forward declarations
 struct log_group_t;
@@ -338,8 +345,8 @@ struct WAL_IO_System {
   } stats;
 
  private:
-  /** io_uring instance */
-  struct io_uring m_ring;
+  /** io_uring instance (managed by unique_ptr) */
+  Log_aio m_ring;
 
   /** Initialization flag */
   std::atomic<bool> m_initialized{false};
