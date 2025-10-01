@@ -829,3 +829,256 @@ a character may take at most 3 bytes.
 This constant MUST NOT BE CHANGED, or the compatibility of InnoDB data
 files will be at risk! */
 constexpr ulint REC_MAX_INDEX_COL_LEN = 768;
+
+/**
+ * The following function returns the number of allocated elements
+ * for an array of offsets.
+ *
+ * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
+ *
+ * @return	number of elements
+ */
+inline ulint rec_offs_get_n_alloc(const ulint *offsets) noexcept {
+  ut_ad(offsets != nullptr);
+
+  auto n_alloc = offsets[0];
+
+  ut_ad(n_alloc > REC_OFFS_HEADER_SIZE);
+  UNIV_MEM_ASSERT_W(offsets, n_alloc * sizeof(*offsets));
+
+  return n_alloc;
+}
+
+/**
+ * The following function sets the number of allocated elements
+ * for an array of offsets.
+ *
+ * @param[out] offsets	array for Phy_rec::get_col_offsets(), must be allocated
+ * @param[in] n_alloc	number of elements
+ */
+inline void rec_offs_set_n_alloc(ulint *offsets, ulint n_alloc) noexcept {
+  ut_ad(offsets != nullptr);
+  ut_ad(n_alloc > REC_OFFS_HEADER_SIZE);
+
+  UNIV_MEM_ASSERT_AND_ALLOC(offsets, n_alloc * sizeof *offsets);
+
+  offsets[0] = n_alloc;
+}
+
+template <size_t N>
+inline void rec_offs_init(std::array<ulint, N> &offsets) noexcept {
+  rec_offs_set_n_alloc(offsets.data(), N);
+}
+
+/**
+ * The following function returns the number of fields in a record.
+ *
+ * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
+ *
+ * @return	number of fields */
+inline ulint rec_offs_n_fields(const ulint *offsets) noexcept {
+  const auto n_fields = offsets[1];
+
+  ut_ad(n_fields > 0);
+  ut_ad(n_fields <= REC_MAX_N_FIELDS);
+  ut_ad(n_fields + REC_OFFS_HEADER_SIZE <= rec_offs_get_n_alloc(offsets));
+
+  return n_fields;
+}
+
+/**
+ * Get the base address of offsets.  The extra_size is stored at
+ * this position, and following positions hold the end offsets of
+ * the fields.
+ *
+ * @param[in] offsets	Column offsets within some record
+ *
+ * @return base address of offsets as a const pointer
+ */
+template <typename T>
+inline T rec_offs_base(T offsets) noexcept {
+  return offsets + REC_OFFS_HEADER_SIZE;
+}
+
+/**
+ * The following function is used to get an offset to the nth
+ * data field in a record.
+ *
+ * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
+ * @param[in] n	field index
+ * @param[out] len	length of the field; UNIV_SQL_NULL if SQL null
+ *
+ * @return	offset from the origin of rec
+ */
+inline ulint rec_get_nth_field_offs(const ulint *offsets, ulint n, ulint *len) noexcept {
+  ulint offs;
+
+  ut_ad(n < rec_offs_n_fields(offsets));
+
+  if (unlikely(n == 0)) {
+    offs = 0;
+  } else {
+    offs = rec_offs_base(offsets)[n] & REC_OFFS_MASK;
+  }
+
+  auto length = rec_offs_base(offsets)[n + 1];
+
+  if (length & REC_OFFS_SQL_NULL) {
+    length = UNIV_SQL_NULL;
+  } else {
+    length &= REC_OFFS_MASK;
+    length -= offs;
+  }
+
+  *len = length;
+
+  return offs;
+}
+
+/**
+ * Determine if the offsets are for a record containing externally stored columns.
+ *
+ * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
+ *
+ * @return	nonzero if externally stored
+ */
+inline ulint rec_offs_any_extern(const ulint *offsets) noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, offsets));
+
+  return *rec_offs_base(offsets) & REC_OFFS_EXTERNAL;
+}
+
+/**
+ * Returns nonzero if the extern bit is set in nth field of rec.
+ *
+ * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
+ * @param[in] n	field index
+ *
+ * @return	nonzero if externally stored */
+inline ulint rec_offs_nth_extern(const ulint *offsets, ulint n) noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, offsets));
+  ut_ad(n < rec_offs_n_fields(offsets));
+
+  return rec_offs_base(offsets)[n + 1] & REC_OFFS_EXTERNAL;
+}
+
+/**
+ * Returns nonzero if the SQL nullptr bit is set in nth field of rec.
+ *
+ * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
+ * @param[in] n	field index
+ *
+ * @return	nonzero if SQL nullptr
+ */
+inline ulint rec_offs_nth_sql_null(const ulint *offsets, ulint n) noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, offsets));
+  ut_ad(n < rec_offs_n_fields(offsets));
+
+  return rec_offs_base(offsets)[n + 1] & REC_OFFS_SQL_NULL;
+}
+
+/**
+ * Gets the physical size of a field.
+ *
+ * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
+ * @param[in] n	field index
+ *
+ * @return	length of field
+ */
+inline ulint rec_offs_nth_size(const ulint *offsets, ulint n) noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, offsets));
+  ut_ad(n < rec_offs_n_fields(offsets));
+
+  if (n == 0) {
+    return rec_offs_base(offsets)[n + 1] & REC_OFFS_MASK;
+  } else {
+    return rec_offs_base(offsets)[n + 1] - (rec_offs_base(offsets)[n] & REC_OFFS_MASK);
+  }
+}
+
+/**
+ * Returns the number of extern bits set in a record.
+ *
+ * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
+ *
+ * @return	number of externally stored fields
+ */
+inline ulint rec_offs_n_extern(const ulint *offsets) noexcept {
+  ulint n = 0;
+
+  if (rec_offs_any_extern(offsets)) {
+    for (ulint i = rec_offs_n_fields(offsets); i--;) {
+      if (rec_offs_nth_extern(offsets, i)) {
+        ++n;
+      }
+    }
+  }
+
+  return n;
+}
+
+/**
+ * The following function sets the number of fields in offsets.
+ *
+ * @param[out] offsets	array returned by Phy_rec::get_col_offsets()
+ * @param[in] n_fields	number of fields
+ *
+ */
+inline void rec_offs_set_n_fields(ulint *offsets, ulint n_fields) noexcept {
+  ut_ad(offsets);
+  ut_ad(n_fields > 0);
+  ut_ad(n_fields <= REC_MAX_N_FIELDS);
+  ut_ad(n_fields + REC_OFFS_HEADER_SIZE <= rec_offs_get_n_alloc(offsets));
+
+  offsets[1] = n_fields;
+}
+
+/**
+ * The following function returns the data size of a physical
+ * record, that is the sum of field lengths. SQL null fields
+ * are counted as length 0 fields. The value returned by the function
+ * is the distance from record origin to record end in bytes.
+ *
+ * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
+ *
+ * @return	size
+ */
+inline ulint rec_offs_data_size(const ulint *offsets) noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, offsets));
+
+  const auto size = rec_offs_base(offsets)[rec_offs_n_fields(offsets)] & REC_OFFS_MASK;
+
+  ut_ad(size < UNIV_PAGE_SIZE);
+
+  return size;
+}
+
+/**
+ * Returns the total size of record minus data size of record. The value
+ * returned by the function is the distance from record start to record origin
+ * in bytes.
+ *
+ * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
+ *
+ * @return	size
+ */
+inline ulint rec_offs_extra_size(const ulint *offsets) noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, offsets));
+
+  const auto size = *rec_offs_base(offsets) & ~REC_OFFS_EXTERNAL;
+
+  ut_ad(size < UNIV_PAGE_SIZE);
+
+  return size;
+}
+
+/**
+ * Returns the total size of a physical record.
+ *
+ * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
+ *
+ * @return	size
+ */
+inline ulint rec_offs_size(const ulint *offsets) noexcept {
+  return rec_offs_data_size(offsets) + rec_offs_extra_size(offsets);
+}
