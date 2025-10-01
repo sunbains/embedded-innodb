@@ -880,15 +880,3 @@ void Rec::copy_prefix_to_dtuple(DTuple *tuple, const Index *index, ulint n_field
 Rec Rec::convert_dtuple_to_rec(byte *buf, const Index *index, const DTuple *dtuple, ulint n_ext) noexcept {
   return rec_convert_dtuple_to_rec(buf, index, dtuple, n_ext);
 }
-
-// Bit field operations - implementations moved to rem0types.h as inline functions
-
-// Record navigation - implementations moved to rem0types.h as inline functions
-
-// Record properties - implementations moved to rem0types.h as inline functions
-
-// Field operations - implementations moved to rem0types.h as inline functions
-
-// Record operations - implementations moved to rem0types.h as inline functions
-
-// Offset operations - implementations moved to rem0types.h as inline functions
