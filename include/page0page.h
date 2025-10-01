@@ -430,7 +430,7 @@ byte *page_parse_create(byte *ptr, byte *end_ptr, Buf_block *block, Index *index
  * @param[in] rec physical record
  * @param[in] offsets array returned by Phy_rec::get_col_offsets()
  */
-void page_rec_print(const Rec rec, const ulint *offsets);
+void page_rec_print(const Rec rec, const Rec_offs &offsets);
 
 /**
  * This is used to print the contents of the directory for
@@ -1178,7 +1178,7 @@ inline ulint page_get_max_insert_size_after_reorganize(const page_t *page, ulint
  * @param[in] index index of rec
  * @param[in] offsets array returned by Phy_rec::get_col_offsets()
  */
-inline void page_mem_free(page_t *page, Rec rec, const Index *index, const ulint *offsets) {
+inline void page_mem_free(page_t *page, Rec rec, const Index *index, const Rec_offs &offsets) {
   ut_ad(rec.offs_validate(index, offsets));
 
   auto free_rec = page_header_get_ptr(page, PAGE_FREE);
@@ -1188,7 +1188,7 @@ inline void page_mem_free(page_t *page, Rec rec, const Index *index, const ulint
 
   const auto garbage = page_header_get_field(page, PAGE_GARBAGE);
 
-  page_header_set_field(page, PAGE_GARBAGE, garbage + rec_offs_size(offsets));
+  page_header_set_field(page, PAGE_GARBAGE, garbage + offsets.size());
 
   page_header_set_field(page, PAGE_N_RECS, page_get_n_recs(page) - 1);
 }

@@ -165,7 +165,7 @@ struct Trx_undo_record {
    * DB_ERROR if corrupted record
    */
   static db_err prev_version_build(
-    const Rec index_rec, mtr_t *index_mtr, const Rec rec, Index *index, ulint *offsets, mem_heap_t *heap, Rec *old_vers
+    const Rec index_rec, mtr_t *index_mtr, const Rec rec, Index *index, Rec_offs offsets, mem_heap_t *heap, Rec *old_vers
   );
 
   /**

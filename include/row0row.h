@@ -116,7 +116,7 @@ DTuple *row_build_index_entry(const DTuple *row, row_ext_t *ext, const Index *in
  * @return own: row built; see the NOTE below!
  */
 DTuple *row_build(
-  ulint type, const Index *index, Rec rec, const ulint *offsets, const Table *col_table, row_ext_t **ext, mem_heap_t *heap
+  ulint type, const Index *index, Rec rec, const Rec_offs &offsets, const Table *col_table, row_ext_t **ext, mem_heap_t *heap
 );
 
 /**
@@ -130,7 +130,7 @@ DTuple *row_build(
  *
  * @return Index entry built; does not set info_bits, and the data fields in the entry will point directly to rec.
  */
-DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const ulint *offsets, ulint *n_ext, mem_heap_t *heap);
+DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const Rec_offs &offsets, ulint *n_ext, mem_heap_t *heap);
 
 /**
  * @brief Converts an index record to a typed data tuple.
@@ -151,7 +151,9 @@ DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const ulin
  *
  * @return Index entry built; see the NOTE below!
  */
-DTuple *row_rec_to_index_entry(ulint type, const Rec rec, const Index *index, ulint *offsets, ulint *n_ext, mem_heap_t *heap);
+DTuple *row_rec_to_index_entry(
+  ulint type, const Rec rec, const Index *index, const Rec_offs &offsets, ulint *n_ext, mem_heap_t *heap
+);
 
 /**
  * @brief Builds from a secondary index record a row reference with which we can
@@ -186,7 +188,7 @@ DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, mem_heap_t *h
  * @param[in] offsets Phy_rec::get_col_offsets(rec, index) or NULL
  * @param[in] trx Transaction
  */
-void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, ulint *offsets, Trx *trx);
+void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const Rec_offs *offsets, Trx *trx);
 
 /**
  * @brief Builds from a secondary index record a row reference with which we can
@@ -320,9 +322,9 @@ inline roll_ptr_t row_get_rec_roll_ptr(const Rec rec, Index *index, const ulint 
  * @param[in] rec        Record in the index; must be preserved while ref is used, as we do not copy field values to heap
  * @param[in] offsets    Array returned by Phy_rec::get_col_offsets()
  */
-inline void row_build_row_ref_fast(DTuple *ref, const ulint *map, const Rec rec, const ulint *offsets) {
+inline void row_build_row_ref_fast(DTuple *ref, const ulint *map, const Rec rec, const Rec_offs &offsets) {
   ut_ad(rec.offs_validate(nullptr, offsets));
-  ut_ad(!rec_offs_any_extern(offsets));
+  ut_ad(!offsets.any_extern());
 
   const auto ref_len = dtuple_get_n_fields(ref);
 

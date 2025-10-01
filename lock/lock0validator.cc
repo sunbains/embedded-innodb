@@ -171,8 +171,7 @@ bool Lock_validator::rec_validate_page(Page_id page_id) noexcept {
             }
 
             std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-            auto offsets = offsets_.data();
-            rec_offs_init(offsets_);
+            Rec_offs offsets(offsets_.data());
 
             {
               Phy_rec record{index, Rec(rec_cursor)};
@@ -217,9 +216,7 @@ bool Lock_validator::table_queue_validate(Table *table) noexcept {
   return true;
 }
 
-bool Lock_validator::rec_queue_validate(
-  const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets
-) noexcept {
+bool Lock_validator::rec_queue_validate(const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets) noexcept {
   ut_ad(block->get_frame() == rec.page_align());
   ut_ad(rec.offs_validate(index, offsets));
 

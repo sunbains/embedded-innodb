@@ -630,8 +630,7 @@ std::string Lock::rec_to_string(Buf_pool *buf_pool) const noexcept {
 
   if (block != nullptr) {
     std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-    auto offsets = offsets_.data();
-    rec_offs_init(offsets_);
+    Rec_offs offsets(offsets_.data());
 
     for (ulint i{}; i < rec_get_n_bits(); ++i) {
 
@@ -1655,9 +1654,7 @@ void Lock_sys::move_rec_list_end(const Buf_block *new_block, const Buf_block *bl
   ut_ad(rec_validate_page(new_block->get_page_id()));
 }
 
-void Lock_sys::move_rec_list_start(
-  const Buf_block *new_block, const Buf_block *block, const Rec rec, const Rec old_end
-) noexcept {
+void Lock_sys::move_rec_list_start(const Buf_block *new_block, const Buf_block *block, const Rec rec, const Rec old_end) noexcept {
   ut_ad(block->m_frame == rec.page_align());
   ut_ad(new_block->m_frame == old_end.page_align());
 
@@ -3000,8 +2997,7 @@ db_err Lock_sys::rec_insert_check_and_lock(
   {
     mem_heap_t *heap{};
     std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-    auto offsets = offsets_.data();
-    rec_offs_init(offsets_);
+    Rec_offs offsets(offsets_.data());
 
     {
       Phy_rec record{index, next_rec};
@@ -3020,9 +3016,7 @@ db_err Lock_sys::rec_insert_check_and_lock(
   return err;
 }
 
-void Lock_sys::rec_convert_impl_to_expl(
-  const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets
-) noexcept {
+void Lock_sys::rec_convert_impl_to_expl(const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec.offs_validate(index, offsets));
@@ -3107,8 +3101,7 @@ db_err Lock_sys::sec_rec_modify_check_and_lock(
   {
     mem_heap_t *heap{};
     std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-    auto offsets = offsets_.data();
-    rec_offs_init(offsets_);
+    Rec_offs offsets(offsets_.data());
 
     {
       Phy_rec record{index, rec};
@@ -3173,8 +3166,8 @@ db_err Lock_sys::sec_rec_read_check_and_lock(
 }
 
 db_err Lock_sys::clust_rec_read_check_and_lock(
-  ulint flags, const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets, enum Lock_mode mode,
-  ulint gap_mode, que_thr_t *thr
+  ulint flags, const Buf_block *block, const Rec rec, const Index *index, const ulint *offsets, enum Lock_mode mode, ulint gap_mode,
+  que_thr_t *thr
 ) noexcept {
   ut_ad(index->is_clustered());
   ut_ad(block->m_frame == rec.page_align());

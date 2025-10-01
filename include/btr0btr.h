@@ -517,11 +517,11 @@ struct Btree {
    * @param[in] offsets            Array returned by Phy_rec::get_col_offsets()
    * @return	child node address
    */
-  [[nodiscard]] inline ulint node_ptr_get_child_page_no(const Rec rec, const ulint *offsets) noexcept {
+  [[nodiscard]] inline ulint node_ptr_get_child_page_no(const Rec rec, const Rec_offs &offsets) noexcept {
     ulint len;
 
     /* The child address is in the last field */
-    auto field = rec.get_nth_field(offsets, rec_offs_n_fields(offsets) - 1, &len);
+    auto field = rec.get_nth_field(offsets, offsets.n_fields() - 1, &len);
 
     ut_ad(len == 4);
 
@@ -614,7 +614,7 @@ struct Btree {
    * @param[in] page_no         child node address
    * @param[in,out] mtr         Mini-transaction covering the operation.
    */
-  void node_ptr_set_child_page_no(Rec rec, const ulint *offsets, ulint page_no, mtr_t *mtr) noexcept;
+  void node_ptr_set_child_page_no(Rec rec, const Rec_offs &offsets, ulint page_no, mtr_t *mtr) noexcept;
 
   /**
    * Returns the child page of a node pointer and x-latches it.
@@ -626,7 +626,7 @@ struct Btree {
    *
    * @return child page, x-latched
    */
-  [[nodiscard]] Buf_block *node_ptr_get_child(const Rec node_ptr, Index *index, const ulint *offsets, mtr_t *mtr) noexcept;
+  [[nodiscard]] Buf_block *node_ptr_get_child(const Rec node_ptr, Index *index, const Rec_offs &offsets, mtr_t *mtr) noexcept;
 
   /**
    * Returns the upper level node pointer to a page. It is assumed that mtr holds
@@ -736,9 +736,7 @@ struct Btree {
    * @param[in] direction       FSP_UP or FSP_DOWN.
    * @param[in] mtr             Mini-transaction handle.
    */
-  void attach_half_pages(
-    Index *index, Buf_block *block, Rec split_rec, Buf_block *new_block, ulint direction, mtr_t *mtr
-  ) noexcept;
+  void attach_half_pages(Index *index, Buf_block *block, Rec split_rec, Buf_block *new_block, ulint direction, mtr_t *mtr) noexcept;
 
   /**
    * Determine if a tuple is smaller than any record on the page.

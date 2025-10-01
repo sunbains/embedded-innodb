@@ -106,16 +106,14 @@ bool Row_sel::sec_rec_is_for_blob(
   return cmp_data_data(nullptr, mtype, prtype, buf.data(), len, sec_field, sec_len) == 0;
 }
 
-bool Row_sel::sec_rec_is_for_clust_rec(
-  const Rec sec_rec, Index *sec_index, const Rec clust_rec, Index *clust_index
-) noexcept {
+bool Row_sel::sec_rec_is_for_clust_rec(const Rec sec_rec, Index *sec_index, const Rec clust_rec, Index *clust_index) noexcept {
   std::array<ulint, REC_OFFS_SMALL_SIZE> sec_offsets{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> clust_offsets{};
   auto sec_offs = sec_offsets.data();
   auto clust_offs = clust_offsets.data();
 
-  rec_offs_set_n_alloc(sec_offs, sec_offsets.size());
-  rec_offs_set_n_alloc(clust_offs, clust_offsets.size());
+  Rec_offs(sec_offs).set_n_alloc(sec_offsets.size());
+  Rec_offs(clust_offs).set_n_alloc(clust_offsets.size());
 
   if (unlikely(clust_rec.get_deleted_flag())) {
 
@@ -464,7 +462,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const Rec rec, que_thr_t *thr, 
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets{};
 
-  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   out_rec = nullptr;
 
@@ -476,7 +474,7 @@ db_err Plan::get_clust_rec(sel_node_t *sel_node, const Rec rec, que_thr_t *thr, 
     return DB_SUCCESS;
   };
 
-  ulint *offsets;
+  Rec_offs offsets;
 
   {
     Phy_rec record{m_pcur.get_btr_cur()->m_index, rec};
@@ -718,7 +716,7 @@ Search_status Plan::try_search_shortcut(sel_node_t *sel_node, mtr_t *mtr) noexce
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets{};
 
-  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   ut_ad(m_unique_search);
   ut_ad(m_must_get_clust);
@@ -824,9 +822,9 @@ db_err Row_sel::select(sel_node_t *sel_node, que_thr_t *thr) noexcept {
 
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets{};
-  ulint *offsets = rec_offsets.data();
+  Rec_offs offsets(rec_offsets.data());
 
-  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   ut_ad(thr->run_node == sel_node);
 
@@ -1687,8 +1685,8 @@ void Prebuilt::prebuild_graph() noexcept {
 }
 
 db_err Row_sel::get_clust_rec_with_prebuilt(
-  Prebuilt *prebuilt, Index *sec_index, const Rec rec, que_thr_t *thr, Rec *out_rec, ulint **offsets,
-  mem_heap_t **offset_heap, mtr_t *mtr
+  Prebuilt *prebuilt, Index *sec_index, const Rec rec, que_thr_t *thr, Rec *out_rec, Rec_offs *offsets, mem_heap_t **offset_heap,
+  mtr_t *mtr
 ) noexcept {
 
   *out_rec = nullptr;
@@ -1707,7 +1705,7 @@ db_err Row_sel::get_clust_rec_with_prebuilt(
 
   auto trx = thr_get_trx(thr);
 
-  row_build_row_ref_in_tuple(prebuilt->m_clust_ref, rec, sec_index, *offsets, trx);
+  row_build_row_ref_in_tuple(prebuilt->m_clust_ref, rec, sec_index, offsets, trx);
 
   auto clust_index = sec_index->m_table->get_clustered_index();
 
@@ -1860,7 +1858,7 @@ bool Row_sel::restore_position(bool *same_user_rec, ulint latch_mode, Btree_pcur
   return true;
 }
 
-inline void Prebuilt::Row_cache::add_row(const Rec rec, const ulint *offsets) noexcept {
+inline void Prebuilt::Row_cache::add_row(const Rec rec, const Rec_offs &offsets) noexcept {
   ut_a(m_first == 0);
   ut_ad(!is_cache_full());
   ut_ad(rec.offs_validate(nullptr, offsets));
@@ -1884,7 +1882,7 @@ inline void Prebuilt::Row_cache::add_row(const Rec rec, const ulint *offsets) no
  * @return Search_status::FOUND, Search_status::EXHAUSTED, Search_status::RETRY
  */
 Search_status Row_sel::try_search_shortcut_for_prebuilt(
-  Rec *out_rec, Prebuilt *prebuilt, ulint **offsets, mem_heap_t **heap, mtr_t *mtr
+  Rec *out_rec, Prebuilt *prebuilt, Rec_offs *offsets, mem_heap_t **heap, mtr_t *mtr
 ) noexcept {
   auto trx = prebuilt->m_trx;
   auto pcur = prebuilt->m_pcur;
@@ -2028,7 +2026,7 @@ db_err Row_sel::mvcc_fetch(
   mtr_t mtr;
   mem_heap_t *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
   void *cmp_ctx = index->m_cmp_ctx;
 
   rec_offs_init(offsets_);

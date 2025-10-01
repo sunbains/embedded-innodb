@@ -50,7 +50,7 @@ struct Row_vers {
     Index *m_cluster_index{};
 
     /** Offsets returned by Phy_rec::get_col_offsets(rec, index) */
-    ulint *&m_cluster_offsets;
+    Rec_offs &m_cluster_offsets;
 
     /** The consistent read view */
     Read_view *m_consistent_read_view{};

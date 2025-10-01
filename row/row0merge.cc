@@ -590,7 +590,7 @@ static bool row_merge_write(
  * @return Pointer to the next record, or nullptr on end of list (non-NULL on I/O error).
  */
 static const byte *row_merge_read_rec(
-  row_merge_block_t *block, mrec_buf_t *buf, const byte *b, const Index *index, int fd, ulint *foffs, mrec_t *mrec, ulint *offsets
+  row_merge_block_t *block, mrec_buf_t *buf, const byte *b, const Index *index, int fd, ulint *foffs, mrec_t *mrec, Rec_offs offsets
 ) {
   ulint extra_size;
   ulint avail_size;
@@ -661,7 +661,7 @@ static const byte *row_merge_read_rec(
       rec.get_col_offsets(offsets);
     }
 
-    auto data_size = rec_offs_data_size(offsets);
+    auto data_size = offsets.data_size();
 
     /* These overflows should be impossible given that
     records are much smaller than either buffer, and
@@ -683,7 +683,7 @@ static const byte *row_merge_read_rec(
     rec.get_col_offsets(offsets);
   }
 
-  auto data_size = rec_offs_data_size(offsets);
+  auto data_size = offsets.data_size();
   ut_ad(extra_size + data_size < sizeof *buf);
 
   b += extra_size + data_size;
@@ -734,7 +734,7 @@ static void row_merge_write_rec_low(
   ulint foffs,       /*!< in: file offset */
 #endif               /* UNIV_DEBUG */
   const mrec_t mrec, /*!< in: record to write */
-  const ulint *offsets
+  const Rec_offs &offsets
 ) /*!< in: offsets of mrec */
 #ifndef UNIV_DEBUG
 #define row_merge_write_rec_low(b, e, size, fd, foffs, mrec, offsets) row_merge_write_rec_low(b, e, mrec, offsets)
@@ -747,8 +747,8 @@ static void row_merge_write_rec_low(
     *b++ = (byte)e;
   }
 
-  memcpy(b, mrec - rec_offs_extra_size(offsets), rec_offs_size(offsets));
-  ut_ad(b + rec_offs_size(offsets) == b + size);
+  memcpy(b, mrec - offsets.extra_size(), offsets.size());
+  ut_ad(b + offsets.size() == b + size);
 }
 
 /** Write a merge record.
@@ -760,7 +760,7 @@ static byte *row_merge_write_rec(
   int fd,                   /*!< in: file descriptor */
   ulint *foffs,             /*!< in/out: file offset */
   const mrec_t mrec,        /*!< in: record to write */
-  const ulint *offsets
+  const Rec_offs &offsets
 ) /*!< in: offsets of mrec */
 {
   ut_ad(block);
@@ -773,9 +773,9 @@ static byte *row_merge_write_rec(
   ut_ad(mrec < buf[0] || mrec > buf[1]);
 
   /* Normalize extra_size.  Value 0 signals "end of list". */
-  auto extra_size = rec_offs_extra_size(offsets);
+  auto extra_size = offsets.extra_size();
 
-  auto size = extra_size + (extra_size >= 0x80) + rec_offs_data_size(offsets);
+  auto size = extra_size + (extra_size >= 0x80) + offsets.data_size();
 
   ++extra_size;
 

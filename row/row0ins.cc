@@ -922,10 +922,8 @@ db_err Row_insert::check_foreign_constraint(
   Trx *trx = thr_get_trx(thr);
   mem_heap_t *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
   Btree_pcursor pcur(m_dict->m_store.m_fsp, m_dict->m_store.m_btree);
-
-  rec_offs_init(offsets_);
 
 run_again:
 
@@ -1262,10 +1260,8 @@ db_err Row_insert::scan_sec_index_for_duplicate(const Index *index, DTuple *entr
   mtr_t mtr;
   mem_heap_t *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
   const auto n_unique = index->get_n_unique();
-
-  rec_offs_init(offsets_);
 
   /* If the secondary index is unique, but one of the fields in the
   n_unique first fields is NULL, a unique key violation cannot occur,
@@ -1367,9 +1363,7 @@ db_err Row_insert::duplicate_error_in_clust(Btree_cursor *btr_cur, DTuple *entry
   Trx *trx = thr_get_trx(thr);
   mem_heap_t *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
-
-  rec_offs_init(offsets_);
+  Rec_offs offsets(offsets_.data());
 
   UT_NOT_USED(mtr);
 

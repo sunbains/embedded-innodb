@@ -332,21 +332,21 @@ void Btree::page_free(const Index *index, Buf_block *block, mtr_t *mtr) noexcept
   page_free_low(index, block, level, mtr);
 }
 
-void Btree::node_ptr_set_child_page_no(Rec rec, const ulint *offsets, ulint page_no, mtr_t *mtr) noexcept {
+void Btree::node_ptr_set_child_page_no(Rec rec, const Rec_offs &offsets, ulint page_no, mtr_t *mtr) noexcept {
   ut_ad(rec.offs_validate(nullptr, offsets));
   ut_ad(!page_is_leaf(rec.page_align()));
 
   ulint len;
 
   /* The child address is in the last field */
-  auto offset = rec_offs_get_nth_field(offsets, rec_offs_n_fields(offsets) - 1, &len);
+  auto offset = offsets.get_nth_field(offsets.n_fields() - 1, &len);
 
   ut_ad(len == REC_NODE_PTR_SIZE);
 
   mlog_write_ulint(rec + offset, page_no, MLOG_4BYTES, mtr);
 }
 
-Buf_block *Btree::node_ptr_get_child(const Rec node_ptr, Index *index, const ulint *offsets, mtr_t *mtr) noexcept {
+Buf_block *Btree::node_ptr_get_child(const Rec node_ptr, Index *index, const Rec_offs &offsets, mtr_t *mtr) noexcept {
   ut_ad(node_ptr.offs_validate(index, offsets));
   const auto space = page_get_space_id(node_ptr.page_align());
   const auto page_no = node_ptr_get_child_page_no(node_ptr, offsets);
@@ -804,7 +804,8 @@ Rec Btree::page_get_split_rec(Btree_cursor *btr_cur, const DTuple *tuple, ulint 
 
   ulint n{};
   ulint incl_data{};
-  ulint *offsets{};
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
+  Rec_offs offsets(offsets_.data());
   mem_heap_t *heap{};
   auto ins_rec = btr_cur->get_rec();
   auto rec = page_get_infimum_rec(page);
@@ -835,9 +836,9 @@ Rec Btree::page_get_split_rec(Btree_cursor *btr_cur, const DTuple *tuple, ulint 
     } else {
       Phy_rec record{btr_cur->get_index(), rec};
 
-      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
 
-      incl_data += rec_offs_size(offsets);
+      incl_data += offsets.size();
     }
 
     ++n;
@@ -931,7 +932,7 @@ bool Btree::page_insert_fits(
 
     offs = record.get_all_col_offsets(offs, &heap, Current_location());
 
-    total_data -= rec_offs_size(offs);
+    total_data -= Rec_offs(offs).size();
     --total_n_recs;
 
     if (total_data + page_dir_calc_reserved_space(total_n_recs) <= free_space) {
@@ -1823,7 +1824,7 @@ bool Btree::index_rec_validate(const Rec rec, const Index *index, bool dump_on_e
   ulint len;
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
 
   rec_offs_init(offsets_);
 
@@ -1847,13 +1848,13 @@ bool Btree::index_rec_validate(const Rec rec, const Index *index, bool dump_on_e
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
   }
 
   for (ulint i{}; i < n; ++i) {
     const ulint fixed_size = index->get_nth_col(i)->get_fixed_size();
 
-    rec_offs_get_nth_field(offsets, i, &len);
+    offsets.get_nth_field(i, &len);
 
     /* Note that if fixed_size != 0, it equals the length of a fixed-size column in the clustered index.
     A prefix index of the column is of fixed, but different length.  When fixed_size == 0, prefix_len is the maximum

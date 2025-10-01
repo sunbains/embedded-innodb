@@ -68,7 +68,7 @@ struct Page_cursor {
    * @param mtr Mini-transaction handle, or NULL.
    * @return Pointer to record if succeed, NULL otherwise.
    */
-  Rec insert_rec_low(Rec current_rec, const Index *index, const Rec rec, ulint *offsets, mtr_t *mtr);
+  Rec insert_rec_low(Rec current_rec, const Index *index, const Rec rec, Rec_offs offsets, mtr_t *mtr);
 
   /**
    * @brief Copies records from page to a newly created page, from a given record

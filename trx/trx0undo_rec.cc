@@ -411,8 +411,8 @@ db_err Trx_undo_record::get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, Trx_u
 }
 
 db_err Trx_undo_record::prev_version_build(
-  const Rec index_rec, mtr_t *index_mtr __attribute__((unused)), const Rec rec, Index *index, ulint *offsets,
-  mem_heap_t *heap, Rec *old_vers
+  const Rec index_rec, mtr_t *index_mtr __attribute__((unused)), const Rec rec, Index *index, Rec_offs offsets, mem_heap_t *heap,
+  Rec *old_vers
 ) {
   byte *buf;
   upd_t *update;
@@ -570,7 +570,7 @@ db_err Trx_undo_record::prev_version_build(
 
   } else {
 
-    buf = mem_heap_alloc(heap, rec_offs_size(offsets));
+    buf = mem_heap_alloc(heap, offsets.size());
     *old_vers = rec.copy(buf, offsets);
     ut_d(old_vers->offs_make_valid(index, offsets));
     srv_row_upd->rec_in_place(*old_vers, index, offsets, update);

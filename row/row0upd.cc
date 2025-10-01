@@ -228,13 +228,13 @@ upd_node_t *Row_update::node_create(mem_heap_t *heap) noexcept {
 }
 
 void Row_update::rec_sys_fields_in_recovery(
-  Rec rec, const ulint *offsets, ulint pos, trx_id_t trx_id, roll_ptr_t roll_ptr
+  Rec rec, const Rec_offs &offsets, ulint pos, trx_id_t trx_id, roll_ptr_t roll_ptr
 ) noexcept {
   ut_ad(rec.offs_validate(nullptr, offsets));
 
   ulint len;
 
-  auto col_offset = rec_offs_get_nth_field(offsets, pos, &len);
+  auto col_offset = offsets.get_nth_field(pos, &len);
   ut_ad(len == DATA_TRX_ID_LEN);
 
   auto field = rec.get() + col_offset;
@@ -454,7 +454,7 @@ upd_t *Row_update::build_sec_rec_difference_binary(
   ulint *offsets;
   std::array<ulint, REC_OFFS_SMALL_SIZE> rec_offsets;
 
-  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   {
     Phy_rec record{index, rec};
@@ -501,7 +501,7 @@ upd_t *Row_update::build_difference_binary(
 ) noexcept {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 
-  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   /* This function is used only for a clustered index */
   ut_a(index->is_clustered());
@@ -827,11 +827,11 @@ void Row_update::store_row(upd_node_t *node) noexcept {
 
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 
-  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   ulint *offsets;
 
-  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   {
     Phy_rec record{clust_index, rec};
@@ -978,7 +978,7 @@ db_err Row_update::clust_rec_by_insert(
     {
       Phy_rec record{index, rec};
 
-      rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+      Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
       offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
     }
 
@@ -1157,7 +1157,7 @@ db_err Row_update::clust_step(upd_node_t *node, que_thr_t *thr) noexcept {
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
 
-  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+  Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
   auto index = node->m_table->get_first_index();
   auto check_ref = index_is_referenced(index, thr_get_trx(thr));
@@ -1213,7 +1213,7 @@ db_err Row_update::clust_step(upd_node_t *node, que_thr_t *thr) noexcept {
   {
     Phy_rec record{index, rec};
 
-    rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+    Rec_offs(rec_offsets.data()).set_n_alloc(rec_offsets.size());
 
     offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
   }

@@ -118,7 +118,7 @@ DTuple *row_build_index_entry(const DTuple *row, row_ext_t *ext, const Index *in
 }
 
 DTuple *row_build(
-  ulint type, const Index *index, Rec rec, const ulint *offsets, const Table *col_table, row_ext_t **ext, mem_heap_t *heap
+  ulint type, const Index *index, Rec rec, const Rec_offs &offsets, const Table *col_table, row_ext_t **ext, mem_heap_t *heap
 ) {
   mem_heap_t *tmp_heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
@@ -128,22 +128,25 @@ DTuple *row_build(
   ut_ad(index->is_clustered());
   ut_ad(!rec.is_null() && heap != nullptr);
 
+  Rec_offs local_offsets;
   if (offsets == nullptr) {
     Phy_rec record{index, rec};
 
-    offsets = record.get_all_col_offsets(offsets_.data(), &tmp_heap, Current_location());
+    local_offsets = record.get_all_col_offsets(offsets_.data(), &tmp_heap, Current_location());
   } else {
-    ut_ad(rec.offs_validate(index, offsets));
+    local_offsets = offsets;
+    ut_ad(rec.offs_validate(index, local_offsets));
   }
 
   if (type != ROW_COPY_POINTERS) {
     /* Take a copy of rec to heap */
-    auto buf = mem_heap_alloc(heap, rec_offs_size(offsets));
+    auto buf = mem_heap_alloc(heap, local_offsets.size());
 
-    rec = rec.copy(buf, offsets);
+    rec = rec.copy(buf, local_offsets);
 
     /* Avoid a debug assertion in rec.offs_validate(). */
-    ut_d(rec.offs_make_valid(index, (ulint *)offsets));
+    Rec_offs rec_offs(const_cast<ulint *>(local_offsets.get()));
+    ut_d(rec.offs_make_valid(index, rec_offs));
   }
 
   auto table = index->m_table;
@@ -154,8 +157,8 @@ DTuple *row_build(
 
   dtuple_set_info_bits(row, rec.get_info_bits());
 
-  const auto n_fields = rec_offs_n_fields(offsets);
-  const auto n_ext_cols = rec_offs_n_extern(offsets);
+  const auto n_fields = local_offsets.n_fields();
+  const auto n_ext_cols = rec_offs_n_extern(local_offsets);
 
   ulint *ext_cols;
 
@@ -211,7 +214,7 @@ DTuple *row_build(
   return row;
 }
 
-DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const ulint *offsets, ulint *n_ext, mem_heap_t *heap) {
+DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const Rec_offs &offsets, ulint *n_ext, mem_heap_t *heap) {
   /* Because this function may be invoked by row0merge.c
   on a record whose header is in different format, the check
   rec.offs_validate(rec, index, offsets) must be avoided here. */
@@ -219,7 +222,7 @@ DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const ulin
 
   *n_ext = 0;
 
-  const auto rec_len = rec_offs_n_fields(offsets);
+  const auto rec_len = offsets.n_fields();
   auto entry = dtuple_create(heap, rec_len);
 
   dtuple_set_n_fields_cmp(entry, index->get_n_unique_in_tree());
@@ -245,17 +248,17 @@ DTuple *row_rec_to_index_entry_low(const Rec rec, const Index *index, const ulin
   return entry;
 }
 
-DTuple *row_rec_to_index_entry(ulint type, Rec rec, const Index *index, ulint *offsets, ulint *n_ext, mem_heap_t *heap) {
+DTuple *row_rec_to_index_entry(ulint type, Rec rec, const Index *index, const Rec_offs &offsets, ulint *n_ext, mem_heap_t *heap) {
   ut_ad(rec.offs_validate(index, offsets));
 
   if (type == ROW_COPY_DATA) {
     /* Take a copy of rec to heap */
-    auto buf = mem_heap_alloc(heap, rec_offs_size(offsets));
+    auto buf = mem_heap_alloc(heap, offsets.size());
 
     rec = rec.copy(buf, offsets);
 
     /* Avoid a debug assertion in rec.offs_validate(). */
-    ut_d(rec.offs_make_valid(index, offsets));
+    ut_d(rec.offs_make_valid(index, const_cast<Rec_offs &>(offsets)));
   }
 
   auto entry = row_rec_to_index_entry_low(rec, index, offsets, n_ext, heap);
@@ -267,7 +270,7 @@ DTuple *row_rec_to_index_entry(ulint type, Rec rec, const Index *index, ulint *o
 
 DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, mem_heap_t *heap) {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
 
   rec_offs_init(offsets_);
 
@@ -279,16 +282,16 @@ DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, mem_heap_t *h
   {
     Phy_rec record{index, rec};
 
-    offsets = record.get_all_col_offsets(offsets, &tmp_heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets.get(), &tmp_heap, Current_location());
   }
 
   /* Secondary indexes must not contain externally stored columns. */
-  ut_ad(!rec_offs_any_extern(offsets));
+  ut_ad(!offsets.any_extern());
 
   if (type == ROW_COPY_DATA) {
     /* Take a copy of rec to heap */
 
-    auto buf = mem_heap_alloc(heap, rec_offs_size(offsets));
+    auto buf = mem_heap_alloc(heap, offsets.size());
 
     rec = rec.copy(buf, offsets);
     /* Avoid a debug assertion in rec.offs_validate(). */
@@ -342,7 +345,7 @@ DTuple *row_build_row_ref(ulint type, const Index *index, Rec rec, mem_heap_t *h
   return dtuple;
 }
 
-void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, ulint *offsets, Trx *trx) {
+void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const Rec_offs *offsets, Trx *trx) {
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
 
@@ -367,16 +370,19 @@ void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, ulint 
     goto notfound;
   }
 
+  Rec_offs local_offsets(offsets_.data());
+
   if (offsets == nullptr) {
     Phy_rec record{index, rec};
 
-    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
-  } else {
-    ut_ad(rec.offs_validate(index, offsets));
+    local_offsets = record.get_all_col_offsets(local_offsets.get(), &heap, Current_location());
+    offsets = &local_offsets;
   }
 
+  ut_ad(rec.offs_validate(index, *offsets));
+
   /* Secondary indexes must not contain externally stored columns. */
-  ut_ad(!rec_offs_any_extern(offsets));
+  ut_ad(!offsets->any_extern());
   auto n_unique = clust_index->get_n_unique();
 
   ut_ad(n_unique == dtuple_get_n_fields(ref));
@@ -390,7 +396,7 @@ void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, ulint 
     ut_a(pos != ULINT_UNDEFINED);
 
     ulint len;
-    const auto field = rec.get_nth_field(offsets, pos, &len);
+    const auto field = rec.get_nth_field(*offsets, pos, &len);
 
     dfield_set_data(dfield, field, len);
 

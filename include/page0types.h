@@ -28,6 +28,7 @@ Created 2/2/1994 Heikki Tuuri
 
 struct Trx;
 struct Index;
+struct Rec_offs;
 struct DTuple;
 struct upd_t;
 struct mtr_t;
@@ -114,7 +115,7 @@ struct Undo_page {
   ulint set_next_prev_and_add(byte *ptr, mtr_t *mtr) noexcept;
   ulint report_insert(Trx *trx, const Index *index, const DTuple *clust_entry, mtr_t *mtr);
   ulint report_modify(
-    Trx *trx, const Index *index, const Rec &rec, const ulint *offsets, const upd_t *update, ulint cmpl_info, mtr_t *mtr
+    Trx *trx, const Index *index, const Rec &rec, const Rec_offs &offsets, const upd_t *update, ulint cmpl_info, mtr_t *mtr
   );
   void erase_page_end(mtr_t *mtr);
 
@@ -132,7 +133,9 @@ struct Page_cursor;
  *
  * @return	offset from the start of the page
  */
-inline ulint page_offset(const void *p) { return Raw_page::offset(p); }
+inline ulint page_offset(const void *p) {
+  return Raw_page::offset(p);
+}
 
 /**
  * Gets the start of a page.
@@ -141,4 +144,6 @@ inline ulint page_offset(const void *p) { return Raw_page::offset(p); }
  *
  * @return	start of the page
  */
-inline page_t *page_align(const void *p) { return Raw_page::align(p); }
+inline page_t *page_align(const void *p) {
+  return Raw_page::align(p);
+}

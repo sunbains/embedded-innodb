@@ -251,8 +251,8 @@ struct Row_sel {
    * @return DB_SUCCESS or error code
    */
   [[nodiscard]] db_err get_clust_rec_with_prebuilt(
-    Prebuilt *prebuilt, Index *sec_index, const Rec rec, que_thr_t *thr, Rec *out_rec, ulint **offsets,
-    mem_heap_t **offset_heap, mtr_t *mtr
+    Prebuilt *prebuilt, Index *sec_index, const Rec rec, que_thr_t *thr, Rec *out_rec, Rec_offs *offsets, mem_heap_t **offset_heap,
+    mtr_t *mtr
   ) noexcept;
 
   /**
@@ -343,7 +343,7 @@ struct Row_sel {
    * @return Search_status::FOUND, Search_status::EXHAUSTED, Search_status::RETRY
    */
   [[nodiscard]] Search_status try_search_shortcut_for_prebuilt(
-    Rec *out_rec, Prebuilt *prebuilt, ulint **offsets, mem_heap_t **heap, mtr_t *mtr
+    Rec *out_rec, Prebuilt *prebuilt, Rec_offs *offsets, mem_heap_t **heap, mtr_t *mtr
   ) noexcept;
 
  public:
@@ -472,9 +472,7 @@ struct Plan {
    *
    * @return          DB_SUCCESS or error code
    */
-  [[nodiscard]] db_err get_clust_rec(
-    sel_node_t *sel_node, const Rec rec, que_thr_t *thr, Rec &out_rec, mtr_t *mtr
-  ) noexcept;
+  [[nodiscard]] db_err get_clust_rec(sel_node_t *sel_node, const Rec rec, que_thr_t *thr, Rec &out_rec, mtr_t *mtr) noexcept;
 
   /**
    * Tries to do a shortcut to fetch a clustered index record with a unique key,

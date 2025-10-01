@@ -273,7 +273,7 @@ static byte *trx_undo_page_report_modify_ext(byte *ptr, byte *ext_buf, const byt
  * @return byte offset of the inserted undo log entry on the page if succeed, 0 if fail
  */
 ulint Undo_page::report_modify(
-  Trx *trx, const Index *index, const Rec &rec, const ulint *offsets, const upd_t *update, ulint cmpl_info, mtr_t *mtr
+  Trx *trx, const Index *index, const Rec &rec, const Rec_offs &offsets, const upd_t *update, ulint cmpl_info, mtr_t *mtr
 ) {
   byte *ptr;
   ulint flen;
@@ -365,7 +365,7 @@ ulint Undo_page::report_modify(
     field = rec.get_nth_field(offsets, i, &flen);
 
     /* The ordering columns must not be stored externally. */
-    ut_ad(!rec_offs_nth_extern(offsets, i));
+    ut_ad(!offsets.nth_extern(i));
     ut_ad(index->get_nth_col(i)->m_ord_part);
 
     if (trx_undo_left(*this, ptr) < 5) {
@@ -417,7 +417,7 @@ ulint Undo_page::report_modify(
         return 0;
       }
 
-      if (rec_offs_nth_extern(offsets, pos)) {
+      if (offsets.nth_extern(pos)) {
         ptr = trx_undo_page_report_modify_ext(
           ptr,
           index->get_nth_col(pos)->m_ord_part && !ignore_prefix && flen < REC_MAX_INDEX_COL_LEN ? ext_buf : nullptr,
@@ -494,7 +494,7 @@ ulint Undo_page::report_modify(
         /* Save the old value of field */
         field = rec.get_nth_field(offsets, pos, &flen);
 
-        if (rec_offs_nth_extern(offsets, pos)) {
+        if (offsets.nth_extern(pos)) {
           ptr =
             trx_undo_page_report_modify_ext(ptr, flen < REC_MAX_INDEX_COL_LEN && !ignore_prefix ? ext_buf : nullptr, &field, &flen);
         } else {
@@ -602,9 +602,7 @@ db_err trx_undo_report_row_operation(
   db_err err = DB_SUCCESS;
   mem_heap_t *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
-
-  rec_offs_init(offsets_);
+  Rec_offs offsets(offsets_.data());
 
   ut_a(index->is_clustered());
 

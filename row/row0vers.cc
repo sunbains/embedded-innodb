@@ -433,11 +433,12 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
       if (row.m_consistent_read_view->m_undo_no > undo_no) {
         /* The view already sees this version: we can copy it to in_heap and return */
 
-        auto buf = mem_heap_alloc(row.m_old_row_heap, rec_offs_size(row.m_cluster_offsets));
+        auto buf = mem_heap_alloc(row.m_old_row_heap, row.m_cluster_offsets.size());
 
         row.m_old_rec = version.copy(buf, row.m_cluster_offsets);
 
-        ut_d(row.m_old_rec.offs_make_valid(row.m_cluster_index, row.m_cluster_offsets));
+        Rec_offs rec_offs(row.m_cluster_offsets);
+        ut_d(row.m_old_rec.offs_make_valid(row.m_cluster_index, rec_offs));
 
         err = DB_SUCCESS;
 
@@ -479,7 +480,7 @@ db_err Row_vers::build_for_consistent_read(Row &row) noexcept {
 
       /* The view already sees this version: we can copy it to in_heap and return */
 
-      auto buf = mem_heap_alloc(row.m_old_row_heap, rec_offs_size(row.m_cluster_offsets));
+      auto buf = mem_heap_alloc(row.m_old_row_heap, row.m_cluster_offsets.size());
 
       row.m_old_rec = prev_version.copy(buf, row.m_cluster_offsets);
 
@@ -559,11 +560,12 @@ db_err Row_vers::build_for_semi_consistent_read(Row &row) noexcept {
         }
       }
 
-      auto buf = mem_heap_alloc(row.m_old_row_heap, rec_offs_size(row.m_cluster_offsets));
+      auto buf = mem_heap_alloc(row.m_old_row_heap, row.m_cluster_offsets.size());
 
       row.m_old_rec = version.copy(buf, row.m_cluster_offsets);
 
-      ut_d(row.m_old_rec.offs_make_valid(row.m_cluster_index, row.m_cluster_offsets));
+      Rec_offs rec_offs(row.m_cluster_offsets);
+      ut_d(row.m_old_rec.offs_make_valid(row.m_cluster_index, rec_offs));
 
       err = DB_SUCCESS;
 

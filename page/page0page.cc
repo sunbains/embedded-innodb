@@ -244,7 +244,7 @@ page_t *page_create(const Index *index, Buf_block *block, mtr_t *mtr) {
   infimum_rec.set_n_owned(1);
   infimum_rec.set_heap_no(0);
 
-  ulint *offsets;
+  Rec_offs offsets;
 
   {
     Phy_rec record{index, infimum_rec};
@@ -273,7 +273,7 @@ page_t *page_create(const Index *index, Buf_block *block, mtr_t *mtr) {
   {
     Phy_rec record{index, supremum_rec};
 
-    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
 
     heap_top = supremum_rec.get_end(offsets).get();
   }
@@ -319,7 +319,7 @@ page_t *page_create(const Index *index, Buf_block *block, mtr_t *mtr) {
 void page_copy_rec_list_end_no_locks(Buf_block *new_block, Buf_block *block, Rec rec, const Index *index, mtr_t *mtr) {
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto *offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
   auto new_page = new_block->get_frame();
 
   rec_offs_init(offsets_);
@@ -344,7 +344,7 @@ void page_copy_rec_list_end_no_locks(Buf_block *new_block, Buf_block *block, Rec
     {
       Phy_rec record{index, cursor_rec};
 
-      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
     }
 
     auto ins_rec = cursor.insert_rec_low(last_rec, index, cursor_rec, offsets, mtr);
@@ -404,7 +404,7 @@ Rec page_copy_rec_list_start(Buf_block *new_block, Buf_block *block, Rec rec, In
   page_t *new_page = new_block->get_frame();
   auto first_rec = page_rec_get_prev(page_get_supremum_rec(new_page));
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto *offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
 
   rec_offs_init(offsets_);
 
@@ -430,7 +430,7 @@ Rec page_copy_rec_list_start(Buf_block *new_block, Buf_block *block, Rec rec, In
     {
       Phy_rec record{index, cursor.get_rec()};
 
-      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
     }
 
     cur_rec = cursor.insert_rec_low(cur_rec, index, cursor.get_rec(), offsets, mtr);
@@ -514,7 +514,7 @@ void page_delete_rec_list_end(Rec rec, Buf_block *block, Index *index, ulint n_r
   mem_heap_t *heap{};
 
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto *offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
 
   rec_offs_init(offsets_);
 
@@ -555,12 +555,12 @@ void page_delete_rec_list_end(Rec rec, Buf_block *block, Index *index, ulint n_r
       {
         Phy_rec record{index, rec2};
 
-        offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+        offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
       }
 
-      auto s = rec_offs_size(offsets);
+      auto s = offsets.size();
 
-      ut_ad(rec2 - page + s - rec_offs_extra_size(offsets) < UNIV_PAGE_SIZE);
+      ut_ad(rec2 - page + s - offsets.extra_size() < UNIV_PAGE_SIZE);
       ut_ad(size + s < UNIV_PAGE_SIZE);
       size += s;
       n_recs++;
@@ -614,7 +614,7 @@ void page_delete_rec_list_end(Rec rec, Buf_block *block, Index *index, ulint n_r
 
 void page_delete_rec_list_start(Rec rec, Buf_block *block, Index *index, mtr_t *mtr) {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto *offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
 
   rec_offs_init(offsets_);
 
@@ -639,7 +639,7 @@ void page_delete_rec_list_start(Rec rec, Buf_block *block, Index *index, mtr_t *
     {
       Phy_rec record{index, cursor.get_rec()};
 
-      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
     }
     cursor.delete_rec(index, offsets, mtr);
   }
@@ -916,7 +916,7 @@ ulint page_rec_get_n_recs_before(const Rec rec) {
   return ulint(n);
 }
 
-void page_rec_print(const Rec rec, const ulint *offsets) {
+void page_rec_print(const Rec rec, const Rec_offs &offsets) {
   log_info(std::format("n_owned: {}; heap_no: {}; next rec: {}", rec.get_n_owned(), rec.get_heap_no(), rec.get_next_offs()));
 
   page_rec_check(rec);
@@ -963,7 +963,7 @@ void page_print_list(Buf_block *block, Index *index, ulint pr_n) {
   auto page = block->m_frame;
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto *offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
 
   rec_offs_init(offsets_);
 
@@ -986,7 +986,7 @@ void page_print_list(Buf_block *block, Index *index, ulint pr_n) {
     {
       Phy_rec record{index, cursor.get_rec()};
 
-      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
     }
 
     page_rec_print(cursor.get_rec(), offsets);
@@ -1012,7 +1012,7 @@ void page_print_list(Buf_block *block, Index *index, ulint pr_n) {
       {
         Phy_rec record{index, cursor.get_rec()};
 
-        offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+        offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
       }
 
       page_rec_print(cursor.get_rec(), offsets);
@@ -1060,7 +1060,7 @@ void page_print(Buf_block *block, Index *index, ulint dn, ulint rn) {
   page_print_list(block, index, rn);
 }
 
-bool page_rec_validate(Rec rec, const ulint *offsets) {
+bool page_rec_validate(Rec rec, const Rec_offs &offsets) {
 
   auto page = rec.page_align();
 
@@ -1272,8 +1272,8 @@ bool page_validate(page_t *page, Index *index) {
   ulint n_slots;
   bool ret = false;
   ulint i;
-  ulint *offsets = nullptr;
-  ulint *old_offsets = nullptr;
+  Rec_offs offsets;
+  Rec_offs old_offsets;
 
   if (unlikely(!page_simple_validate(page))) {
     goto func_exit2;
@@ -1319,7 +1319,7 @@ bool page_validate(page_t *page, Index *index) {
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
     }
 
     if (unlikely(!page_rec_validate(rec, offsets))) {
@@ -1345,11 +1345,11 @@ bool page_validate(page_t *page, Index *index) {
 
     if (page_rec_is_user_rec(rec)) {
 
-      data_size += rec_offs_size(offsets);
+      data_size += offsets.size();
     }
 
     offs = page_offset(rec.get_start(offsets).get());
-    i = rec_offs_size(offsets);
+    i = offsets.size();
     if (unlikely(offs + i >= UNIV_PAGE_SIZE)) {
       log_err("record offset out of bounds\n");
       goto func_exit;
@@ -1433,7 +1433,7 @@ bool page_validate(page_t *page, Index *index) {
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
     }
 
     if (unlikely(!page_rec_validate(rec, offsets))) {
@@ -1443,7 +1443,7 @@ bool page_validate(page_t *page, Index *index) {
 
     count++;
     offs = page_offset(rec.get_start(offsets).get());
-    i = rec_offs_size(offsets);
+    i = offsets.size();
     if (unlikely(offs + i >= UNIV_PAGE_SIZE)) {
       log_info("record offset out of bounds");
       goto func_exit;

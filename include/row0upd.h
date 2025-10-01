@@ -496,7 +496,7 @@ struct Row_update {
    * @param[in] trx_id       Transaction id.
    * @param[in] roll_ptr     Roll ptr of the undo log record.
    */
-  void rec_sys_fields_in_recovery(Rec rec, const ulint *offsets, ulint pos, trx_id_t trx_id, roll_ptr_t roll_ptr) noexcept;
+  void rec_sys_fields_in_recovery(Rec rec, const Rec_offs &offsets, ulint pos, trx_id_t trx_id, roll_ptr_t roll_ptr) noexcept;
 
   /**
    * @brief Parses the log data written by row_upd_index_write_log.

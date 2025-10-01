@@ -144,7 +144,7 @@ struct Blob {
    * @param[in] mtr             The mini-transaction handle which contains an X-latch to the record page and to the tree.
    */
   void free_updated_extern_fields(
-    const Index *index, Rec rec, const ulint *offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr
+    const Index *index, Rec rec, const Rec_offs &offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr
   ) noexcept;
 
   /**
@@ -156,7 +156,7 @@ struct Blob {
    * @param[in] rb_ctx          The rollback context.
    * @param[in] mtr             The mini-transaction handle which contains an X-latch to record page and to the index tree
    */
-  void free_externally_stored_fields(Index *index, Rec rec, const ulint *offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept;
+  void free_externally_stored_fields(Index *index, Rec rec, const Rec_offs &offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept;
 
   /**
    * Gets the externally stored size of a record, in units of a database page.
@@ -166,7 +166,7 @@ struct Blob {
    *
    * @return externally stored part, in units of a database page
    */
-  [[nodiscard]] ulint get_externally_stored_len(Rec rec, const ulint *offsets) noexcept;
+  [[nodiscard]] ulint get_externally_stored_len(Rec rec, const Rec_offs &offsets) noexcept;
 
   /**
    * Check the FIL_PAGE_TYPE on a BLOB page.
@@ -240,7 +240,7 @@ struct Blob {
    * @return The whole field copied to heap
    */
   [[nodiscard]] byte *copy_externally_stored_field(
-    const Rec rec, const ulint *offsets, ulint no, ulint *len, mem_heap_t *heap
+    const Rec rec, const Rec_offs &offsets, ulint no, ulint *len, mem_heap_t *heap
   ) noexcept;
 
   /**
@@ -255,7 +255,7 @@ struct Blob {
    * @param[in] update          Update entry
    * @param[in] mtr             Mtr
    */
-  void mark_extern_inherited_fields(Rec rec, Index *index, const ulint *offsets, const upd_t *update, mtr_t *mtr) noexcept;
+  void mark_extern_inherited_fields(Rec rec, Index *index, const Rec_offs &offsets, const upd_t *update, mtr_t *mtr) noexcept;
 
   /**
    * The complement of the previous function: in an update entry may inherit
@@ -290,7 +290,7 @@ struct Blob {
    * @return  DB_SUCCESS or error
    */
   [[nodiscard]] db_err store_big_rec_extern_fields(
-    const Index *index, Buf_block *rec_block, Rec rec, const ulint *offsets, big_rec_t big_rec_vec, mtr_t *local_mtr
+    const Index *index, Buf_block *rec_block, Rec rec, const Rec_offs &offsets, big_rec_t big_rec_vec, mtr_t *local_mtr
   ) noexcept;
 
   /**
@@ -361,7 +361,7 @@ struct Blob {
    * @param[in] offsets         The array returned by Phy_rec::get_col_offsets().
    * @param[in] mtr             The mtr, or nullptr if not logged.
    */
-  void unmark_extern_fields(Rec rec, const Index *index, const ulint *offsets, mtr_t *mtr) noexcept;
+  void unmark_extern_fields(Rec rec, const Index *index, const Rec_offs &offsets, mtr_t *mtr) noexcept;
 
   /**
    * The file space handler.

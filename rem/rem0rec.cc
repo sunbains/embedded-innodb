@@ -105,7 +105,7 @@ the corresponding canonical strings have the same property. */
  * @return true if the record is valid, false otherwise.
  */
 
-void Phy_rec::get_col_offsets(ulint *offsets) const noexcept {
+void Phy_rec::get_col_offsets(Rec_offs offsets) const noexcept {
   ulint offs{};
   ulint any_ext{};
   ulint null_mask{1};
@@ -118,11 +118,11 @@ void Phy_rec::get_col_offsets(ulint *offsets) const noexcept {
 #endif /* UNIV_DEBUG */
 
   auto set_field_len = [&](ulint i, ulint len) {
-    rec_offs_base(offsets)[i + 1] = len;
+    offsets[i + 1] = len;
   };
 
   /* Read the lengths of fields 0..n */
-  for (ulint i{}; i < rec_offs_n_fields(offsets); ++i) {
+  for (ulint i{}; i < offsets.n_fields(); ++i) {
     const auto field = m_index->get_nth_field(i);
 
     if (!(field->get_col()->prtype & DATA_NOT_NULL)) {
@@ -186,10 +186,10 @@ void Phy_rec::get_col_offsets(ulint *offsets) const noexcept {
     }
   }
 
-  *rec_offs_base(offsets) = (m_rec - (lens + 1)) | any_ext;
+  offsets[0] = (m_rec - (lens + 1)) | any_ext;
 }
 
-ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **heap, Source_location sl) const noexcept {
+Rec_offs Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **heap, Source_location sl) const noexcept {
   auto n = m_rec.get_n_fields();
 
   if (unlikely(n_fields < n)) {
@@ -203,14 +203,14 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
       *heap = mem_heap_create_func(size * sizeof(ulint), MEM_HEAP_DYNAMIC, std::move(sl));
     }
     offsets = reinterpret_cast<ulint *>(mem_heap_alloc(*heap, size * sizeof(ulint)));
-    rec_offs_set_n_alloc(offsets, size);
+    Rec_offs(offsets).set_n_alloc(size);
   }
 
-  rec_offs_set_n_fields(offsets, n);
+  Rec_offs(offsets).set_n_fields(n);
 
   /* The following sets the offsets to each field in the record in the offsets
   array. The offsets are written to a previously allocated array of ulint,
-  where rec_offs_n_fields(offsets) has been initialized to the number of fields
+  where offsets.n_fields() has been initialized to the number of fields
   in the record:
 
      offsets[1] == n_fields.
@@ -227,17 +227,18 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
   high-order bit of the offset at [i+1] is set (REC_OFFS_EXTERNAL), the
   field i is being stored externally.  */
 
-  ut_d(m_rec.offs_make_valid(m_index, offsets));
+  Rec_offs rec_offs(offsets);
+  ut_d(m_rec.offs_make_valid(m_index, rec_offs));
 
-  ut_a(n == rec_offs_n_fields(offsets));
+  ut_a(n == Rec_offs(offsets).n_fields());
 
-  auto col_offsets{rec_offs_base(offsets)};
+  auto col_offsets{offsets};
 
   /* Determine extra size and end offsets */
 
   if (m_rec.get_1byte_offs_flag()) {
 
-    *rec_offs_base(offsets) = REC_N_EXTRA_BYTES + n;
+    offsets[0] = REC_N_EXTRA_BYTES + n;
 
     for (ulint i{}; i < n; ++i) {
       /* Determine offsets to fields */
@@ -253,7 +254,7 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
 
   } else {
 
-    *rec_offs_base(offsets) = REC_N_EXTRA_BYTES + 2 * n;
+    offsets[0] = REC_N_EXTRA_BYTES + 2 * n;
 
     for (ulint i{}; i < n; ++i) {
       /* Determine offsets to fields */
@@ -267,14 +268,14 @@ ulint *Phy_rec::get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **hea
       if (offs & REC_2BYTE_EXTERN_MASK) {
         offs &= ~REC_2BYTE_EXTERN_MASK;
         offs |= REC_OFFS_EXTERNAL;
-        *rec_offs_base(offsets) |= REC_OFFS_EXTERNAL;
+        offsets[0] |= REC_OFFS_EXTERNAL;
       }
 
       col_offsets[i + 1] = offs;
     }
   }
 
-  return offsets;
+  return Rec_offs(offsets);
 }
 
 void Phy_rec::encode(Index *index, Rec rec, ulint status, const DFields &dfields) noexcept {
@@ -619,10 +620,10 @@ Rec rec_convert_dtuple_to_rec(rec_t *buf, const Index *index, const DTuple *dtup
     }
 
     ut_ad(rec.validate(offsets));
-    ut_ad(dtuple_get_n_fields(dtuple) == rec_offs_n_fields(offsets));
+    ut_ad(dtuple_get_n_fields(dtuple) == Rec_offs(offsets).n_fields());
 
-    for (ulint i{}; i < rec_offs_n_fields(offsets); ++i) {
-      ut_ad(!dfield_is_ext(dtuple_get_nth_field(dtuple, i)) == !rec_offs_nth_extern(offsets, i));
+    for (ulint i{}; i < Rec_offs(offsets).n_fields(); ++i) {
+      ut_ad(!dfield_is_ext(dtuple_get_nth_field(dtuple, i)) == !Rec_offs(offsets).nth_extern(i));
     }
 
     if (unlikely(heap != nullptr)) {
@@ -700,9 +701,9 @@ Rec rec_copy_prefix_to_buf(const Rec &rec, const Index *index, ulint n_fields, b
   return copy_rec;
 }
 
-bool rec_validate(const Rec &rec, const ulint *offsets) noexcept {
+bool rec_validate(const Rec &rec, const Rec_offs &offsets) noexcept {
   ulint len_sum{};
-  const auto n_fields = rec_offs_n_fields(offsets);
+  const auto n_fields = offsets.n_fields();
 
   if (n_fields == 0 || n_fields > REC_MAX_N_FIELDS) {
     log_err(std::format("Record has {} fields", n_fields));
@@ -734,8 +735,8 @@ bool rec_validate(const Rec &rec, const ulint *offsets) noexcept {
     }
   }
 
-  if (len_sum != rec_offs_data_size(offsets)) {
-    log_err("Record len should be %lu, len %lu\n", len_sum, rec_offs_data_size(offsets));
+  if (len_sum != offsets.data_size()) {
+    log_err("Record len should be %lu, len %lu\n", len_sum, offsets.data_size());
     return false;
   }
 
@@ -840,13 +841,13 @@ void Rec::log_record_info() const noexcept {
   rec_info_info(*this);
 }
 
-bool Rec::validate(const ulint *offsets) const noexcept {
+bool Rec::validate(const Rec_offs &offsets) const noexcept {
   return rec_validate(*this, offsets);
 }
 
-bool Rec::offs_validate(const Index *index, const ulint *offsets) const noexcept {
+bool Rec::offs_validate(const Index *index, const Rec_offs &offsets) const noexcept {
   ulint last = ULINT_MAX;
-  ulint i = rec_offs_n_fields(offsets);
+  ulint i = offsets.n_fields();
 
   if (!is_null()) {
     ut_ad((ulint)m_rec == offsets[2]);
@@ -861,7 +862,7 @@ bool Rec::offs_validate(const Index *index, const ulint *offsets) const noexcept
   }
 
   while (i--) {
-    const auto curr = rec_offs_base(offsets)[i + 1] & REC_OFFS_MASK;
+    const auto curr = offsets[i + 1] & REC_OFFS_MASK;
     ut_a(curr <= last);
     last = curr;
   }

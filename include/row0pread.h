@@ -476,7 +476,7 @@ class Parallel_reader::Scan_ctx {
     mem_heap_t *m_heap{};
 
     /** m_rec column offsets. */
-    const ulint *m_offsets{};
+    Rec_offs m_offsets{};
 
     /** Start scanning from this key. Raw data of the row. */
     Rec m_rec{};
@@ -579,7 +579,7 @@ class Parallel_reader::Scan_ctx {
                                 built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
-  [[nodiscard]] bool check_visibility(Rec &rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr);
+  [[nodiscard]] bool check_visibility(Rec &rec, Rec_offs &offsets, mem_heap_t *&heap, mtr_t *mtr);
 
   /** Create an execution context for a range and add it to
   the Parallel_reader's run queue.
@@ -690,7 +690,8 @@ class Parallel_reader::Ctx {
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
   bool is_rec_visible(Rec &rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr) {
-    return m_scan_ctx->check_visibility(rec, offsets, heap, mtr);
+    Rec_offs rec_offsets(offsets);
+    return m_scan_ctx->check_visibility(rec, rec_offsets, heap, mtr);
   }
 
  private:
@@ -745,7 +746,7 @@ class Parallel_reader::Ctx {
   /** True if m_rec is the first record in the page. */
   bool m_first_rec{true};
 
-  ulint *m_offsets{};
+  Rec_offs m_offsets{};
 
   /** Start of a new range to scan. */
   bool m_start{};

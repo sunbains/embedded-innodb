@@ -461,7 +461,7 @@ static ulint ib_get_max_row_len(Index *index) {
  */
 static void ib_read_tuple(const Rec &rec, ib_tuple_t *tuple) noexcept {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
   DTuple *dtuple = tuple->ptr;
   const Index *dindex = tuple->index;
 
@@ -477,13 +477,13 @@ static void ib_read_tuple(const Rec &rec, ib_tuple_t *tuple) noexcept {
   dtuple_set_info_bits(dtuple, rec_meta_data);
 
   /* Make a copy of the rec. */
-  auto ptr = reinterpret_cast<void *>(mem_heap_alloc(tuple->heap, rec_offs_size(offsets)));
+  auto ptr = reinterpret_cast<void *>(mem_heap_alloc(tuple->heap, offsets.size()));
   auto copy = rec.copy(ptr, offsets);
 
   /* Avoid a debug assertion in rec.offs_validate(). */
-  ut_d(rec.offs_make_valid(dindex, (ulint *)offsets));
+  ut_d(rec.offs_make_valid(dindex, offsets));
 
-  auto n_index_fields = std::min<ulint>(rec_offs_n_fields(offsets), dtuple_get_n_fields(dtuple));
+  auto n_index_fields = std::min<ulint>(offsets.n_fields(), dtuple_get_n_fields(dtuple));
 
   for (ulint i{}; i < n_index_fields; ++i) {
     dfield_t *dfield;

@@ -27,11 +27,11 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 const byte field_ref_zero[BTR_EXTERN_FIELD_REF_SIZE] = {};
 
-ulint Blob::get_externally_stored_len(Rec rec, const ulint *offsets) noexcept {
+ulint Blob::get_externally_stored_len(Rec rec, const Rec_offs &offsets) noexcept {
   ulint local_len{};
   ulint total_extern_len{};
 
-  auto n_fields = rec_offs_n_fields(offsets);
+  auto n_fields = offsets.n_fields();
 
   for (ulint i = 0; i < n_fields; ++i) {
     if (rec_offs_nth_extern(offsets, i)) {
@@ -75,15 +75,15 @@ void Blob::set_ownership_of_extern_field(
   }
 }
 
-void Blob::mark_extern_inherited_fields(Rec rec, Index *index, const ulint *offsets, const upd_t *update, mtr_t *mtr) noexcept {
+void Blob::mark_extern_inherited_fields(Rec rec, Index *index, const Rec_offs &offsets, const upd_t *update, mtr_t *mtr) noexcept {
   ut_ad(rec.offs_validate(nullptr, offsets));
 
-  if (!rec_offs_any_extern(offsets)) {
+  if (!offsets.any_extern()) {
 
     return;
   }
 
-  auto n = rec_offs_n_fields(offsets);
+  auto n = offsets.n_fields();
 
   for (ulint i = 0; i < n; i++) {
     if (rec_offs_nth_extern(offsets, i)) {
@@ -128,10 +128,10 @@ void Blob::mark_dtuple_inherited_extern(DTuple *entry, const upd_t *update) noex
   }
 }
 
-void Blob::unmark_extern_fields(Rec rec, const Index *index, const ulint *offsets, mtr_t *mtr) noexcept {
-  const auto n = rec_offs_n_fields(offsets);
+void Blob::unmark_extern_fields(Rec rec, const Index *index, const Rec_offs &offsets, mtr_t *mtr) noexcept {
+  const auto n = offsets.n_fields();
 
-  if (!rec_offs_any_extern(offsets)) {
+  if (!offsets.any_extern()) {
 
     return;
   }
@@ -245,7 +245,7 @@ void Blob::blob_free(Buf_block *block, mtr_t *mtr) noexcept {
 }
 
 db_err Blob::store_big_rec_extern_fields(
-  const Index *index, Buf_block *rec_block, Rec rec, const ulint *offsets, big_rec_t big_rec_vec,
+  const Index *index, Buf_block *rec_block, Rec rec, const Rec_offs &offsets, big_rec_t big_rec_vec,
   mtr_t *local_mtr __attribute__((unused))
 ) noexcept {
 
@@ -271,7 +271,7 @@ db_err Blob::store_big_rec_extern_fields(
     {
       ulint local_len;
 
-      auto col_offset = rec_offs_get_nth_field(offsets, big_rec_vec.fields[i].field_no, &local_len);
+      auto col_offset = offsets.get_nth_field(big_rec_vec.fields[i].field_no, &local_len);
 
       field_ref = rec + col_offset;
 
@@ -529,12 +529,12 @@ void Blob::free_externally_stored_field(
   }
 }
 
-void Blob::free_externally_stored_fields(Index *index, Rec rec, const ulint *offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept {
+void Blob::free_externally_stored_fields(Index *index, Rec rec, const Rec_offs &offsets, trx_rb_ctx rb_ctx, mtr_t *mtr) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
   /* Free possible externally stored fields in the record */
 
-  const auto n_fields = rec_offs_n_fields(offsets);
+  const auto n_fields = offsets.n_fields();
 
   for (ulint i = 0; i < n_fields; i++) {
     if (rec_offs_nth_extern(offsets, i)) {
@@ -549,7 +549,7 @@ void Blob::free_externally_stored_fields(Index *index, Rec rec, const ulint *off
 }
 
 void Blob::free_updated_extern_fields(
-  const Index *index, Rec rec, const ulint *offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr
+  const Index *index, Rec rec, const Rec_offs &offsets, const upd_t *update, trx_rb_ctx rb_ctx, mtr_t *mtr
 ) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
@@ -683,8 +683,8 @@ byte *Blob::copy_externally_stored_field(ulint *len, const byte *data, ulint loc
   return buf;
 }
 
-byte *Blob::copy_externally_stored_field(const Rec rec, const ulint *offsets, ulint no, ulint *len, mem_heap_t *heap) noexcept {
-  ut_a(rec_offs_nth_extern(offsets, no));
+byte *Blob::copy_externally_stored_field(const Rec rec, const Rec_offs &offsets, ulint no, ulint *len, mem_heap_t *heap) noexcept {
+  ut_a(offsets.nth_extern(no));
 
   /* An externally stored field can contain some initial
   data from the field, and in the last 20 bytes it has the

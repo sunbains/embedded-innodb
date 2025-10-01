@@ -77,8 +77,7 @@ bool Row_purge::remove_clust_if_poss_low(ulint mode) {
   db_err err;
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-
-  rec_offs_init(offsets_);
+  Rec_offs offsets(offsets_.data());
 
   auto btr_cur = m_pcur.get_btr_cur();
   auto index = m_table->get_first_index();
@@ -96,7 +95,6 @@ bool Row_purge::remove_clust_if_poss_low(ulint mode) {
   }
 
   auto rec = m_pcur.get_rec();
-  auto offsets = offsets_.data();
 
   {
     Phy_rec record{index, rec};

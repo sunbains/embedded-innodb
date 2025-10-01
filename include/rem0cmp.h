@@ -39,7 +39,7 @@ Created 7/1/1994 Heikki Tuuri
  * @param[in] col1 Pointer to the first column.
  * @param[in] col2 Pointer to the second column.
  * @param[in] check_charsets Flag indicating whether to check the character sets of the columns.
- * 
+ *
  * @return True if the columns are equal, false otherwise.
  */
 bool cmp_cols_are_equal(const Column *col1, const Column *col2, bool check_charsets) noexcept;
@@ -54,7 +54,7 @@ bool cmp_cols_are_equal(const Column *col1, const Column *col2, bool check_chars
  * @param[in] len1      Length of the first data field or UNIV_SQL_NULL.
  * @param[in] data2     Pointer to the second data field.
  * @param[in] len2      Length of the second data field or UNIV_SQL_NULL.
- * 
+ *
  * @return	1, 0, -1, if data1 is greater, equal, less than data2, respectively
  */
 inline int cmp_data_data(
@@ -64,7 +64,7 @@ inline int cmp_data_data(
 /**
  * This function is used to compare two data fields for which we know the
  * data type.
- * 
+ *
  * @param[in] cmp_ctx   Client compare context.
  * @param[in] mtype     Main type.
  * @param[in] prtype    Precise type.
@@ -72,7 +72,7 @@ inline int cmp_data_data(
  * @param[in] len1      Length of the first data field or UNIV_SQL_NULL.
  * @param[in] data2     Pointer to the second data field.
  * @param[in] len2      Length of the second data field or UNIV_SQL_NULL.
- * 
+ *
  * @return	1, 0, -1, if data1 is greater, equal, less than data2, respectively
  */
 int cmp_data_data_slow(
@@ -82,11 +82,11 @@ int cmp_data_data_slow(
 /**
  * This function is used to compare two dfields where at least the first
  * has its data type field set.
- * 
+ *
  * @param[in] cmp_ctx   Client compare context.
  * @param[in] dfield1   Pointer to the first data field.
  * @param[in] dfield2   Pointer to the second data field.
- * 
+ *
  * @return 1, 0, -1, if dfield1 is greater, equal, less than dfield2, respectively
  */
 inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfield_t *dfield2) noexcept;
@@ -99,7 +99,7 @@ inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfiel
  * the m fields rec has. If rec has an externally stored field we do not
  * compare it but return with value 0 if such a comparison should be
  * made.
- * 
+ *
  * @param[in] cmp_ctx          Client compare context.
  * @param[in] dtuple           Pointer to the data tuple.
  * @param[in] rec              Pointer to the physical record which differs
@@ -113,24 +113,24 @@ inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfiel
  * @param[in] matched_bytes    Number of already matched bytes within the first
  *                             field not completely matched when the function returns,
  *                             contains the value for current comparison.
- * 
+ *
  * @return 1, 0, -1, if dtuple is greater, equal, less than rec,
  *    respectively, when only the common first fields are compared, or until
  *    the first externally stored field in rec
  */
 int cmp_dtuple_rec_with_match(
-  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const ulint *offsets, ulint *matched_fields, ulint *matched_bytes
+  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets, ulint *matched_fields, ulint *matched_bytes
 ) noexcept;
 
 /**
  * Compares a data tuple to a physical record.
  * @see cmp_dtuple_rec_with_match
- * 
+ *
  * @param[in] cmp_ctx          Client compare context.
  * @param[in] dtuple           Pointer to the data tuple.
  * @param[in] rec              Pointer to the physical record which differs
  * @param[in] offsets          Array returned by Phy_rec::get_col_offsets().
- * 
+ *
  * @return 1, 0, -1, if dtuple is greater, equal, less than rec, respectively
  */
 int cmp_dtuple_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const ulint *offsets) noexcept;
@@ -138,37 +138,37 @@ int cmp_dtuple_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const uli
 /**
  * Checks if a dtuple is a prefix of a record. The last field in dtuple
  * is allowed to be a prefix of the corresponding field in the record.
- * 
+ *
  * @param[in] cmp_ctx          Client compare context.
  * @param[in] dtuple           Pointer to the data tuple.
  * @param[in] rec              Pointer to the physical record.
  * @param[in] offsets          Array returned by Phy_rec::get_col_offsets().
- * 
+ *
  * @return	true if prefix
  */
-bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const ulint *offsets) noexcept;
+bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets) noexcept;
 
 /**
  * Compare two physical records that contain the same number of columns,
  * none of which are stored externally.
- * 
+ *
  * @param[in] rec1             Pointer to the first physical record.
  * @param[in] rec2             Pointer to the second physical record.
  * @param[in] offsets1         Array returned by Phy_rec::get_col_offsets().
  * @param[in] offsets2         Array returned by Phy_rec::get_col_offsets().
  * @param[in] index            Data dictionary index.
- * 
+ *
  * @return	1, 0, -1 if rec1 is greater, equal, less, respectively, than rec2
  */
 int cmp_rec_rec_simple(
-  const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index
+  const Rec rec1, const Rec rec2, const Rec_offs &offsets1, const Rec_offs &offsets2, const Index *index
 ) noexcept;
 
 /**
  * This function is used to compare two physical records. Only the common
  * first fields are compared, and if an externally stored field is
  * encountered, then 0 is returned.
- * 
+ *
  * @param[in] rec1             Pointer to the first physical record.
  * @param[in] rec2             Pointer to the second physical record.
  * @param[in] offsets1         Array returned by Phy_rec::get_col_offsets().
@@ -180,35 +180,33 @@ int cmp_rec_rec_simple(
  * @param[out] matched_bytes   Number of already matched bytes within the first
  *                             field not completely matched when the function returns,
  *                             contains the value for current comparison.
- * 
+ *
  * @return 1, 0, -1 if rec1 is greater, equal, less, respectively
  */
 int cmp_rec_rec_with_match(
-  const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index, ulint *matched_fields,
+  const Rec rec1, const Rec rec2, const Rec_offs &offsets1, const Rec_offs &offsets2, const Index *index, ulint *matched_fields,
   ulint *matched_bytes
 ) noexcept;
 
 /**
  * This function is used to compare two physical records. Only the common
  * first fields are compared.
- * 
+ *
  * @param[in] rec1             Pointer to the first physical record.
  * @param[in] rec2             Pointer to the second physical record.
  * @param[in] offsets1         Array returned by Phy_rec::get_col_offsets().
  * @param[in] offsets2         Array returned by Phy_rec::get_col_offsets().
  * @param[in] index            Data dictionary index.
- * 
+ *
  * @return 1, 0 , -1 if rec1 is greater, equal, less, respectively, than
  *  rec2; only the common first fields are compared
  */
-inline int cmp_rec_rec(
-  const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index
-) noexcept;
+inline int cmp_rec_rec(const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index) noexcept;
 
 /**
  * This function is used to compare two data fields for which we know the
  * data type.
- * 
+ *
  * @param[in] cmp_ctx   Client compare context.
  * @param[in] mtype     Main type.
  * @param[in] prtype    Precise type.
@@ -216,7 +214,7 @@ inline int cmp_rec_rec(
  * @param[in] len1      Length of the first data field or UNIV_SQL_NULL.
  * @param[in] data2     Pointer to the second data field.
  * @param[in] len2      Length of the second data field or UNIV_SQL_NULL.
- * 
+ *
  * @return	1, 0, -1, if data1 is greater, equal, less than data2, respectively
  */
 inline int cmp_data_data(
@@ -228,11 +226,11 @@ inline int cmp_data_data(
 /**
  * This function is used to compare two dfields where at least the first
  * has its data type field set.
- * 
+ *
  * @param[in] cmp_ctx   Client compare context.
  * @param[in] dfield1   Pointer to the first data field.
  * @param[in] dfield2   Pointer to the second data field.
- * 
+ *
  * @return 1, 0, -1, if dfield1 is greater, equal, less than dfield2, respectively
  */
 inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfield_t *dfield2) noexcept {
@@ -254,19 +252,17 @@ inline int cmp_dfield_dfield(void *cmp_ctx, const dfield_t *dfield1, const dfiel
 /**
  * This function is used to compare two physical records. Only the common
  * first fields are compared.
- * 
+ *
  * @param[in] rec1             Pointer to the first physical record.
  * @param[in] rec2             Pointer to the second physical record.
  * @param[in] offsets1         Array returned by Phy_rec::get_col_offsets().
  * @param[in] offsets2         Array returned by Phy_rec::get_col_offsets().
  * @param[in] index            Data dictionary index.
- * 
+ *
  * @return 1, 0 , -1 if rec1 is greater, equal, less, respectively, than
  *    rec2; only the common first fields are compared
  */
-inline int cmp_rec_rec(
-  const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index
-) noexcept {
+inline int cmp_rec_rec(const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index) noexcept {
   ulint match_f{};
   ulint match_b{};
 

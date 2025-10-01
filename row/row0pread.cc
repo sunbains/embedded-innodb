@@ -396,7 +396,7 @@ dberr_t PCursor::move_to_next_block(Index *index) {
   }
 }
 
-bool Parallel_reader::Scan_ctx::check_visibility(Rec &rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr) {
+bool Parallel_reader::Scan_ctx::check_visibility(Rec &rec, Rec_offs &offsets, mem_heap_t *&heap, mtr_t *mtr) {
   ut_ad(m_trx == nullptr || m_trx->m_read_view != nullptr);
 
   if (m_trx != nullptr && m_trx->m_read_view != nullptr) {
@@ -460,7 +460,7 @@ void Parallel_reader::Scan_ctx::copy_row(const Rec rec, Iter *iter) const {
 
   /* Copy the row from the page to the scan iterator. The copy should use
   memory from the iterator heap because the scan iterator owns the copy. */
-  auto rec_len = rec_offs_size(iter->m_offsets);
+  auto rec_len = iter->m_offsets.size();
 
   auto copy_rec = static_cast<Rec>(mem_heap_alloc(iter->m_heap, rec_len));
 
@@ -678,7 +678,8 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
     bool skip{};
 
     if (page_is_leaf(cur->m_block->get_frame())) {
-      skip = !m_scan_ctx->check_visibility(rec, offsets, heap, mtr);
+      Rec_offs rec_offsets(offsets);
+      skip = !m_scan_ctx->check_visibility(rec, rec_offsets, heap, mtr);
     }
 
     if (!skip) {

@@ -230,9 +230,9 @@ Undo_node *Undo_node::create(Dict *dict, Trx *trx, que_thr_t *parent, mem_heap_t
 }
 
 bool Undo_node::search_cluster_index_and_persist_position() noexcept {
-  std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets;
-
-  rec_offs_set_n_alloc(rec_offsets.data(), rec_offsets.size());
+  std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets_;
+  Rec_offs rec_offsets(rec_offsets_.data());
+  rec_offsets.set_n_alloc(rec_offsets_.size());
 
   mtr_t mtr;
 
@@ -248,7 +248,7 @@ bool Undo_node::search_cluster_index_and_persist_position() noexcept {
   {
     Phy_rec record{clust_index, rec};
 
-    offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &offs_heap, Current_location());
+    offsets = record.get_col_offsets(rec_offsets.get(), ULINT_UNDEFINED, &offs_heap, Current_location());
   }
 
   bool success{};

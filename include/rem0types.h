@@ -41,15 +41,6 @@ extern const byte field_ref_zero[BTR_EXTERN_FIELD_REF_SIZE_LOCAL];
 class Index;
 class DTuple;
 
-// Function declarations for offset operations
-ulint rec_offs_n_fields(const ulint *offsets) noexcept;
-ulint rec_offs_data_size(const ulint *offsets) noexcept;
-ulint rec_offs_extra_size(const ulint *offsets) noexcept;
-ulint rec_offs_any_extern(const ulint *offsets) noexcept;
-ulint rec_offs_nth_extern(const ulint *offsets, ulint n) noexcept;
-ulint rec_offs_nth_sql_null(const ulint *offsets, ulint n) noexcept;
-ulint rec_offs_get_nth_field(const ulint *offsets, ulint n, ulint *len) noexcept;
-
 /* We define the physical record simply as an array of bytes */
 /* Maximum values for various fields (for non-blob tuples) */
 constexpr ulint REC_MAX_N_FIELDS = 1024 - 1;
@@ -178,6 +169,146 @@ static_assert(
   "#error sum of masks != 0xFFFFFFFFUL"
 );
 
+/** Record offsets wrapper for type safety and easy refactoring */
+struct Rec_offs {
+  Rec_offs() : m_offs(nullptr) {}
+
+  Rec_offs(std::nullptr_t) : m_offs(nullptr) {}
+
+  Rec_offs(ulint *offs) : m_offs(offs) {}
+
+  Rec_offs(const ulint *offs) : m_offs(const_cast<ulint *>(offs)) {}
+
+  Rec_offs(Rec_offs &&other) : m_offs(other.m_offs) { other.m_offs = nullptr; }
+
+  Rec_offs(const Rec_offs &other) : m_offs(other.m_offs) {}
+
+  Rec_offs &operator=(const Rec_offs &rhs) {
+    if (this == &rhs) {
+      return *this;
+    } else {
+      m_offs = rhs.m_offs;
+      return *this;
+    }
+  }
+
+  Rec_offs &operator=(Rec_offs &&rhs) {
+    if (this == &rhs) {
+      return *this;
+    } else {
+      m_offs = rhs.m_offs;
+      rhs.m_offs = nullptr;
+      return *this;
+    }
+  }
+
+  ulint &operator[](ulint i) { return m_offs[i]; }
+
+  const ulint &operator[](ulint i) const { return m_offs[i]; }
+
+  bool operator==(const Rec_offs &rhs) const { return m_offs == rhs.m_offs; }
+
+  bool operator!=(const Rec_offs &rhs) const { return m_offs != rhs.m_offs; }
+
+  bool operator==(std::nullptr_t) const { return m_offs == nullptr; }
+
+  bool operator!=(std::nullptr_t) const { return m_offs != nullptr; }
+
+  ulint *get() { return m_offs; }
+
+  const ulint *get() const { return m_offs; }
+
+  operator ulint *() { return m_offs; }
+
+  operator const ulint *() const { return m_offs; }
+
+  bool is_valid() const { return !is_null(); }
+
+  bool is_null() const noexcept { return m_offs == nullptr; }
+
+  inline ulint get_n_alloc() const noexcept;
+
+  inline void set_n_alloc(ulint n_alloc) noexcept;
+
+  inline ulint n_fields() const noexcept;
+
+  inline void set_n_fields(ulint n_fields) noexcept;
+
+  inline ulint data_size() const noexcept;
+
+  inline ulint extra_size() const noexcept;
+
+  inline ulint size() const noexcept;
+
+  inline ulint any_extern() const noexcept;
+
+  inline ulint nth_extern(ulint n) const noexcept;
+
+  inline ulint nth_sql_null(ulint n) const noexcept;
+
+  inline ulint get_nth_field(ulint n, ulint *len) const noexcept;
+
+  inline ulint nth_size(ulint n) const noexcept;
+
+  inline ulint n_extern() const noexcept;
+
+ private:
+  ulint *m_offs;
+};
+
+// Temnorary: Overloaded versions for Rec_offs
+inline ulint rec_offs_n_fields(const Rec_offs &offsets) noexcept {
+  return offsets.n_fields();
+}
+
+inline ulint rec_offs_data_size(const Rec_offs &offsets) noexcept {
+  return offsets.data_size();
+}
+
+inline ulint rec_offs_extra_size(const Rec_offs &offsets) noexcept {
+  return offsets.extra_size();
+}
+
+inline ulint rec_offs_any_extern(const Rec_offs &offsets) noexcept {
+  return offsets.any_extern();
+}
+
+inline ulint rec_offs_nth_extern(const Rec_offs &offsets, ulint n) noexcept {
+  return offsets.nth_extern(n);
+}
+
+inline ulint rec_offs_nth_sql_null(const Rec_offs &offsets, ulint n) noexcept {
+  return offsets.nth_sql_null(n);
+}
+
+inline ulint rec_offs_get_nth_field(const Rec_offs &offsets, ulint n, ulint *len) noexcept {
+  return offsets.get_nth_field(n, len);
+}
+
+inline ulint rec_offs_nth_size(const Rec_offs &offsets, ulint n) noexcept {
+  return offsets.nth_size(n);
+}
+
+inline ulint rec_offs_n_extern(const Rec_offs &offsets) noexcept {
+  return offsets.n_extern();
+}
+
+inline ulint rec_offs_size(const Rec_offs &offsets) noexcept {
+  return offsets.size();
+}
+
+inline ulint rec_offs_get_n_alloc(const Rec_offs &offsets) noexcept {
+  return offsets.get_n_alloc();
+}
+
+inline void rec_offs_set_n_alloc(Rec_offs &offsets, ulint n_alloc) noexcept {
+  offsets.set_n_alloc(n_alloc);
+}
+
+inline void rec_offs_set_n_fields(Rec_offs &offsets, ulint n_fields) noexcept {
+  offsets.set_n_fields(n_fields);
+}
+
 using rec_t = byte;
 
 /** Raw record wrapper for type safety and easy refactoring */
@@ -270,7 +401,7 @@ struct Rec {
    * @param offsets The array returned by Phy_rec::get_col_offsets().
    * @return True if the record is valid, false otherwise.
    */
-  bool validate(const ulint *offsets) const noexcept;
+  bool validate(const Rec_offs &offsets) const noexcept;
 
   /** Prints the contents of a physical record to log_info(). */
   void log_record_info() const noexcept;
@@ -291,7 +422,7 @@ struct Rec {
    * @param len Pointer to store the length of the field.
    * @return The nth field as a Rec.
    */
-  Rec get_nth_field(ulint n, ulint *len) const noexcept { return m_rec + get_nth_field_offs(n, len); }
+  Rec get_nth_field(ulint n, ulint *len) const noexcept;
 
   /** Gets the nth field of a record with offsets.
    * @param offsets The array returned by Phy_rec::get_col_offsets().
@@ -299,9 +430,7 @@ struct Rec {
    * @param len Pointer to store the length of the field.
    * @return The nth field as a Rec.
    */
-  Rec get_nth_field(const ulint *offsets, ulint i, ulint *len) const noexcept {
-    return m_rec + rec_offs_get_nth_field(offsets, i, len);
-  }
+  Rec get_nth_field(const Rec_offs &offsets, ulint i, ulint *len) const noexcept { return m_rec + offsets.get_nth_field(i, len); }
 
   // Bit field operations
   /** Retrieves a bit field from a record.
@@ -380,7 +509,7 @@ struct Rec {
   /** Gets the pointer of the next chained record on the same page.
    * @return	pointer to the next chained record, or nullptr if none
    */
-  Rec get_next_ptr() const noexcept { return get_next_ptr_const(); }
+  Rec get_next_ptr() const noexcept;
 
   /** Calculates the offset of the next record in a physical record.
    * @return	the page offset of the next chained record, or 0 if none
@@ -434,7 +563,7 @@ struct Rec {
   /** Gets the number of records owned by the previous directory record.
    * @return	number of owned records
    */
-  ulint get_n_owned() const noexcept { return get_bit_field_1(REC_N_OWNED, REC_N_OWNED_MASK, REC_N_OWNED_SHIFT); }
+  ulint get_n_owned() const noexcept;
 
   /** Sets the number of owned records.
    * @param n_owned number of owned.
@@ -444,7 +573,7 @@ struct Rec {
   /** Retrieves the info bits of a record.
    * @return	info bits
    */
-  ulint get_info_bits() const noexcept { return get_bit_field_1(REC_INFO_BITS, REC_INFO_BITS_MASK, REC_INFO_BITS_SHIFT); }
+  ulint get_info_bits() const noexcept;
 
   /** Sets the info bits of a record.
    * @param bits The info bits to set.
@@ -487,7 +616,7 @@ struct Rec {
   /** Gets the heap number of a record.
    * @return The heap number.
    */
-  ulint get_heap_no() const noexcept { return get_bit_field_2(REC_HEAP_NO, REC_HEAP_NO_MASK, REC_HEAP_NO_SHIFT); }
+  ulint get_heap_no() const noexcept;
 
   /** Sets the heap number of a record.
    * @param heap_no The heap number.
@@ -497,7 +626,7 @@ struct Rec {
   /** Gets the 1-byte offsets flag of a record.
    * @return The 1-byte offsets flag.
    */
-  bool get_1byte_offs_flag() const noexcept { return get_bit_field_1(REC_SHORT, REC_SHORT_MASK, REC_SHORT_SHIFT); }
+  bool get_1byte_offs_flag() const noexcept;
 
   /** Sets the 1-byte offsets flag of a record.
    * @param flag The 1-byte offsets flag.
@@ -636,11 +765,11 @@ struct Rec {
    * @param data The data to set.
    * @param len The length of the data.
    */
-  void set_nth_field(const ulint *offsets, ulint n, const void *data, ulint len) noexcept {
+  void set_nth_field(const Rec_offs &offsets, ulint n, const void *data, ulint len) noexcept {
     ut_ad(offs_validate(nullptr, offsets));
 
     if (unlikely(len == UNIV_SQL_NULL)) {
-      if (!rec_offs_nth_sql_null(offsets, n)) {
+      if (!offsets.nth_sql_null(n)) {
         set_nth_field_sql_null(n);
       }
 
@@ -663,27 +792,27 @@ struct Rec {
   /** Gets the data size of a record.
    * @return The data size of the record.
    */
-  ulint get_data_size() const noexcept { return get_field_start_offs(get_n_fields()); }
+  ulint get_data_size() const noexcept;
 
   // Record operations
   /** Gets the end of a record.
    * @param offsets The array returned by Phy_rec::get_col_offsets().
    * @return The end of the record.
    */
-  Rec get_end(const ulint *offsets) const noexcept {
+  Rec get_end(const Rec_offs &offsets) const noexcept {
     ut_ad(offs_validate(nullptr, offsets));
 
-    return Rec(m_rec + rec_offs_data_size(offsets));
+    return Rec(m_rec + offsets.data_size());
   }
 
   /** Gets the start of a record.
    * @param offsets The array returned by Phy_rec::get_col_offsets().
    * @return The start of the record.
    */
-  Rec get_start(const ulint *offsets) const noexcept {
+  Rec get_start(const Rec_offs &offsets) const noexcept {
     ut_ad(offs_validate(nullptr, offsets));
 
-    return Rec(m_rec - rec_offs_extra_size(offsets));
+    return Rec(m_rec - offsets.extra_size());
   }
 
   /** Copies a record to a buffer.
@@ -691,13 +820,13 @@ struct Rec {
    * @param offsets The array returned by Phy_rec::get_col_offsets().
    * @return The copied record.
    */
-  Rec copy(void *buf, const ulint *offsets) const noexcept {
+  Rec copy(void *buf, const Rec_offs &offsets) const noexcept {
     ut_ad(buf != nullptr);
     ut_ad(offs_validate(nullptr, offsets));
     ut_ad(validate(offsets));
 
-    const auto extra_len = rec_offs_extra_size(offsets);
-    const auto data_len = rec_offs_data_size(offsets);
+    const auto extra_len = offsets.extra_size();
+    const auto data_len = offsets.data_size();
 
     memcpy(buf, m_rec - extra_len, extra_len + data_len);
 
@@ -711,12 +840,12 @@ struct Rec {
    * @param tree_id The tree ID.
    * @return The folded value.
    */
-  ulint fold(const ulint *offsets, ulint n_fields, ulint n_bytes, uint64_t tree_id) const noexcept {
+  ulint fold(const Rec_offs &offsets, ulint n_fields, ulint n_bytes, uint64_t tree_id) const noexcept {
     ut_ad(offs_validate(nullptr, offsets));
     ut_ad(validate(offsets));
     ut_ad(n_fields + n_bytes > 0);
 
-    const auto n_fields_rec = rec_offs_n_fields(offsets);
+    const auto n_fields_rec = offsets.n_fields();
 
     ut_ad(n_fields <= n_fields_rec);
     ut_ad(n_fields < n_fields_rec || n_bytes == 0);
@@ -760,15 +889,15 @@ struct Rec {
    * @param offsets The array returned by Phy_rec::get_col_offsets().
    * @return Pointer to the first null or extern field, or nullptr if none.
    */
-  const byte *offs_any_null_extern(const ulint *offsets) const noexcept {
+  const byte *offs_any_null_extern(const Rec_offs &offsets) const noexcept {
     ut_ad(offs_validate(nullptr, offsets));
 
-    if (!rec_offs_any_extern(offsets)) {
+    if (!offsets.any_extern()) {
       return nullptr;
     }
 
-    for (ulint i = 0; i < rec_offs_n_fields(offsets); i++) {
-      if (rec_offs_nth_extern(offsets, i)) {
+    for (ulint i = 0; i < offsets.n_fields(); i++) {
+      if (offsets.nth_extern(i)) {
         ulint len;
         const byte *field = get_nth_field(offsets, i, &len);
 
@@ -788,14 +917,14 @@ struct Rec {
    * @param offsets The array returned by Phy_rec::get_col_offsets().
    * @return True if the offsets are valid, false otherwise.
    */
-  bool offs_validate(const Index *index, const ulint *offsets) const noexcept;
+  bool offs_validate(const Index *index, const Rec_offs &offsets) const noexcept;
 
   /** Makes the offsets of a record valid.
    * @param index The index descriptor.
    * @param offsets The array to make valid.
    */
-  void offs_make_valid(const Index *index, ulint *offsets) const noexcept {
-    ut_ad(get_n_fields() >= rec_offs_n_fields(offsets));
+  void offs_make_valid(const Index *index, Rec_offs &offsets) const noexcept {
+    ut_ad(get_n_fields() >= offsets.n_fields());
 
     offsets[2] = reinterpret_cast<uintptr_t>(m_rec);
     offsets[3] = reinterpret_cast<uintptr_t>(index);
@@ -849,41 +978,21 @@ inline ulint rec_offs_get_n_alloc(const ulint *offsets) noexcept {
   return n_alloc;
 }
 
-/**
- * The following function sets the number of allocated elements
- * for an array of offsets.
- *
- * @param[out] offsets	array for Phy_rec::get_col_offsets(), must be allocated
- * @param[in] n_alloc	number of elements
- */
-inline void rec_offs_set_n_alloc(ulint *offsets, ulint n_alloc) noexcept {
-  ut_ad(offsets != nullptr);
-  ut_ad(n_alloc > REC_OFFS_HEADER_SIZE);
+template <size_t N>
+inline void rec_offs_init(std::array<ulint, N> &offsets) noexcept {
+  Rec_offs(offsets.data()).set_n_alloc(N);
+}
 
-  UNIV_MEM_ASSERT_AND_ALLOC(offsets, n_alloc * sizeof *offsets);
-
-  offsets[0] = n_alloc;
+// Helper functions for Rec_offs
+template <size_t N>
+inline Rec_offs rec_offs_from_array(std::array<ulint, N> &offsets) noexcept {
+  rec_offs_init(offsets);
+  return Rec_offs(offsets.data());
 }
 
 template <size_t N>
-inline void rec_offs_init(std::array<ulint, N> &offsets) noexcept {
-  rec_offs_set_n_alloc(offsets.data(), N);
-}
-
-/**
- * The following function returns the number of fields in a record.
- *
- * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
- *
- * @return	number of fields */
-inline ulint rec_offs_n_fields(const ulint *offsets) noexcept {
-  const auto n_fields = offsets[1];
-
-  ut_ad(n_fields > 0);
-  ut_ad(n_fields <= REC_MAX_N_FIELDS);
-  ut_ad(n_fields + REC_OFFS_HEADER_SIZE <= rec_offs_get_n_alloc(offsets));
-
-  return n_fields;
+inline Rec_offs rec_offs_from_array(const std::array<ulint, N> &offsets) noexcept {
+  return Rec_offs(offsets.data());
 }
 
 /**
@@ -900,28 +1009,123 @@ inline T rec_offs_base(T offsets) noexcept {
   return offsets + REC_OFFS_HEADER_SIZE;
 }
 
-/**
- * The following function is used to get an offset to the nth
- * data field in a record.
- *
- * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
- * @param[in] n	field index
- * @param[out] len	length of the field; UNIV_SQL_NULL if SQL null
- *
- * @return	offset from the origin of rec
- */
-inline ulint rec_offs_get_nth_field(const ulint *offsets, ulint n, ulint *len) noexcept {
+// Inline definitions for original Rec methods
+inline Rec Rec::get_nth_field(ulint n, ulint *len) const noexcept {
+  return m_rec + get_nth_field_offs(n, len);
+}
+
+inline Rec Rec::get_next_ptr() const noexcept {
+  return get_next_ptr_const();
+}
+
+inline ulint Rec::get_n_owned() const noexcept {
+  return get_bit_field_1(REC_N_OWNED, REC_N_OWNED_MASK, REC_N_OWNED_SHIFT);
+}
+
+inline ulint Rec::get_info_bits() const noexcept {
+  return get_bit_field_1(REC_INFO_BITS, REC_INFO_BITS_MASK, REC_INFO_BITS_SHIFT);
+}
+
+inline ulint Rec::get_heap_no() const noexcept {
+  return get_bit_field_2(REC_HEAP_NO, REC_HEAP_NO_MASK, REC_HEAP_NO_SHIFT);
+}
+
+inline bool Rec::get_1byte_offs_flag() const noexcept {
+  return get_bit_field_1(REC_SHORT, REC_SHORT_MASK, REC_SHORT_SHIFT);
+}
+
+inline ulint Rec::get_data_size() const noexcept {
+  return get_field_start_offs(get_n_fields());
+}
+
+inline ulint Rec_offs::get_n_alloc() const noexcept {
+  return rec_offs_get_n_alloc(m_offs);
+}
+
+inline void Rec_offs::set_n_alloc(ulint n_alloc) noexcept {
+  ut_ad(m_offs != nullptr);
+  ut_ad(n_alloc > REC_OFFS_HEADER_SIZE);
+
+  UNIV_MEM_ASSERT_AND_ALLOC(m_offs, n_alloc * sizeof *m_offs);
+
+  m_offs[0] = n_alloc;
+}
+
+inline ulint Rec_offs::n_fields() const noexcept {
+  const auto n_fields = m_offs[1];
+
+  ut_ad(n_fields > 0);
+  ut_ad(n_fields <= REC_MAX_N_FIELDS);
+  ut_ad(n_fields + REC_OFFS_HEADER_SIZE <= rec_offs_get_n_alloc(m_offs));
+
+  return n_fields;
+}
+
+inline void Rec_offs::set_n_fields(ulint n_fields) noexcept {
+  ut_ad(m_offs);
+  ut_ad(n_fields > 0);
+  ut_ad(n_fields <= REC_MAX_N_FIELDS);
+  ut_ad(n_fields + REC_OFFS_HEADER_SIZE <= rec_offs_get_n_alloc(m_offs));
+
+  m_offs[1] = n_fields;
+}
+
+inline ulint Rec_offs::data_size() const noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, m_offs));
+
+  const auto size = rec_offs_base(m_offs)[n_fields()] & REC_OFFS_MASK;
+
+  ut_ad(size < UNIV_PAGE_SIZE);
+
+  return size;
+}
+
+inline ulint Rec_offs::extra_size() const noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, m_offs));
+
+  const auto size = *rec_offs_base(m_offs) & ~REC_OFFS_EXTERNAL;
+
+  ut_ad(size < UNIV_PAGE_SIZE);
+
+  return size;
+}
+
+inline ulint Rec_offs::size() const noexcept {
+  return data_size() + extra_size();
+}
+
+inline ulint Rec_offs::any_extern() const noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, m_offs));
+
+  return *rec_offs_base(m_offs) & REC_OFFS_EXTERNAL;
+}
+
+inline ulint Rec_offs::nth_extern(ulint n) const noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, m_offs));
+  ut_ad(n < n_fields());
+
+  return rec_offs_base(m_offs)[n + 1] & REC_OFFS_EXTERNAL;
+}
+
+inline ulint Rec_offs::nth_sql_null(ulint n) const noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, m_offs));
+  ut_ad(n < n_fields());
+
+  return rec_offs_base(m_offs)[n + 1] & REC_OFFS_SQL_NULL;
+}
+
+inline ulint Rec_offs::get_nth_field(ulint n, ulint *len) const noexcept {
   ulint offs;
 
-  ut_ad(n < rec_offs_n_fields(offsets));
+  ut_ad(n < n_fields());
 
   if (unlikely(n == 0)) {
     offs = 0;
   } else {
-    offs = rec_offs_base(offsets)[n] & REC_OFFS_MASK;
+    offs = rec_offs_base(m_offs)[n] & REC_OFFS_MASK;
   }
 
-  auto length = rec_offs_base(offsets)[n + 1];
+  auto length = rec_offs_base(m_offs)[n + 1];
 
   if (length & REC_OFFS_SQL_NULL) {
     length = UNIV_SQL_NULL;
@@ -935,150 +1139,27 @@ inline ulint rec_offs_get_nth_field(const ulint *offsets, ulint n, ulint *len) n
   return offs;
 }
 
-/**
- * Determine if the offsets are for a record containing externally stored columns.
- *
- * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
- *
- * @return	nonzero if externally stored
- */
-inline ulint rec_offs_any_extern(const ulint *offsets) noexcept {
-  ut_ad(Rec{}.offs_validate(nullptr, offsets));
-
-  return *rec_offs_base(offsets) & REC_OFFS_EXTERNAL;
-}
-
-/**
- * Returns nonzero if the extern bit is set in nth field of rec.
- *
- * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
- * @param[in] n	field index
- *
- * @return	nonzero if externally stored */
-inline ulint rec_offs_nth_extern(const ulint *offsets, ulint n) noexcept {
-  ut_ad(Rec{}.offs_validate(nullptr, offsets));
-  ut_ad(n < rec_offs_n_fields(offsets));
-
-  return rec_offs_base(offsets)[n + 1] & REC_OFFS_EXTERNAL;
-}
-
-/**
- * Returns nonzero if the SQL nullptr bit is set in nth field of rec.
- *
- * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
- * @param[in] n	field index
- *
- * @return	nonzero if SQL nullptr
- */
-inline ulint rec_offs_nth_sql_null(const ulint *offsets, ulint n) noexcept {
-  ut_ad(Rec{}.offs_validate(nullptr, offsets));
-  ut_ad(n < rec_offs_n_fields(offsets));
-
-  return rec_offs_base(offsets)[n + 1] & REC_OFFS_SQL_NULL;
-}
-
-/**
- * Gets the physical size of a field.
- *
- * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
- * @param[in] n	field index
- *
- * @return	length of field
- */
-inline ulint rec_offs_nth_size(const ulint *offsets, ulint n) noexcept {
-  ut_ad(Rec{}.offs_validate(nullptr, offsets));
-  ut_ad(n < rec_offs_n_fields(offsets));
+inline ulint Rec_offs::nth_size(ulint n) const noexcept {
+  ut_ad(Rec{}.offs_validate(nullptr, m_offs));
+  ut_ad(n < n_fields());
 
   if (n == 0) {
-    return rec_offs_base(offsets)[n + 1] & REC_OFFS_MASK;
+    return rec_offs_base(m_offs)[n + 1] & REC_OFFS_MASK;
   } else {
-    return rec_offs_base(offsets)[n + 1] - (rec_offs_base(offsets)[n] & REC_OFFS_MASK);
+    return rec_offs_base(m_offs)[n + 1] - (rec_offs_base(m_offs)[n] & REC_OFFS_MASK);
   }
 }
 
-/**
- * Returns the number of extern bits set in a record.
- *
- * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
- *
- * @return	number of externally stored fields
- */
-inline ulint rec_offs_n_extern(const ulint *offsets) noexcept {
+inline ulint Rec_offs::n_extern() const noexcept {
   ulint n = 0;
 
-  if (rec_offs_any_extern(offsets)) {
-    for (ulint i = rec_offs_n_fields(offsets); i--;) {
-      if (rec_offs_nth_extern(offsets, i)) {
+  if (any_extern()) {
+    for (ulint i = n_fields(); i--;) {
+      if (nth_extern(i)) {
         ++n;
       }
     }
   }
 
   return n;
-}
-
-/**
- * The following function sets the number of fields in offsets.
- *
- * @param[out] offsets	array returned by Phy_rec::get_col_offsets()
- * @param[in] n_fields	number of fields
- *
- */
-inline void rec_offs_set_n_fields(ulint *offsets, ulint n_fields) noexcept {
-  ut_ad(offsets);
-  ut_ad(n_fields > 0);
-  ut_ad(n_fields <= REC_MAX_N_FIELDS);
-  ut_ad(n_fields + REC_OFFS_HEADER_SIZE <= rec_offs_get_n_alloc(offsets));
-
-  offsets[1] = n_fields;
-}
-
-/**
- * The following function returns the data size of a physical
- * record, that is the sum of field lengths. SQL null fields
- * are counted as length 0 fields. The value returned by the function
- * is the distance from record origin to record end in bytes.
- *
- * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
- *
- * @return	size
- */
-inline ulint rec_offs_data_size(const ulint *offsets) noexcept {
-  ut_ad(Rec{}.offs_validate(nullptr, offsets));
-
-  const auto size = rec_offs_base(offsets)[rec_offs_n_fields(offsets)] & REC_OFFS_MASK;
-
-  ut_ad(size < UNIV_PAGE_SIZE);
-
-  return size;
-}
-
-/**
- * Returns the total size of record minus data size of record. The value
- * returned by the function is the distance from record start to record origin
- * in bytes.
- *
- * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
- *
- * @return	size
- */
-inline ulint rec_offs_extra_size(const ulint *offsets) noexcept {
-  ut_ad(Rec{}.offs_validate(nullptr, offsets));
-
-  const auto size = *rec_offs_base(offsets) & ~REC_OFFS_EXTERNAL;
-
-  ut_ad(size < UNIV_PAGE_SIZE);
-
-  return size;
-}
-
-/**
- * Returns the total size of a physical record.
- *
- * @param[in] offsets	array returned by Phy_rec::get_col_offsets()
- *
- * @return	size
- */
-inline ulint rec_offs_size(const ulint *offsets) noexcept {
-  return rec_offs_data_size(offsets) + rec_offs_extra_size(offsets);
 }

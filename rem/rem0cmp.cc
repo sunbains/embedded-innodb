@@ -64,10 +64,11 @@ has more fields than the other. */
  * @return 1, 0, -1, if dtuple is greater, equal, less than rec,
  *  respectively, when only the common first fields are compared
  */
-static int cmp_debug_dtuple_rec_with_match(
-  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const ulint *offsets, ulint *matched_fields
-) noexcept;
 #endif /* UNIV_DEBUG */
+
+static int cmp_debug_dtuple_rec_with_match(
+  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets, ulint *matched_fields
+) noexcept;
 
 /**
  * Transforms the character code so that it is ordered appropriately for the
@@ -370,7 +371,7 @@ int cmp_data_data_slow(
 }
 
 int cmp_dtuple_rec_with_match(
-  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const ulint *offsets, ulint *matched_fields, ulint *matched_bytes
+  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets, ulint *matched_fields, ulint *matched_bytes
 ) noexcept {
   const dfield_t *dtuple_field;
   ulint dtuple_f_len;
@@ -391,7 +392,7 @@ int cmp_dtuple_rec_with_match(
   cur_bytes = *matched_bytes;
 
   ut_ad(cur_field <= dtuple_get_n_fields_cmp(dtuple));
-  ut_ad(cur_field <= rec_offs_n_fields(offsets));
+  ut_ad(cur_field <= offsets.n_fields());
 
   if (cur_bytes == 0 && cur_field == 0) {
     const auto rec_info = rec.get_info_bits();
@@ -574,7 +575,7 @@ int cmp_dtuple_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const uli
   return cmp_dtuple_rec_with_match(cmp_ctx, dtuple, rec, offsets, &matched_fields, &matched_bytes);
 }
 
-bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const ulint *offsets) noexcept {
+bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets) noexcept {
   ulint n_fields;
   ulint matched_fields = 0;
   ulint matched_bytes = 0;
@@ -582,7 +583,7 @@ bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec 
   ut_ad(rec.offs_validate(nullptr, offsets));
   n_fields = dtuple_get_n_fields(dtuple);
 
-  if (n_fields > rec_offs_n_fields(offsets)) {
+  if (n_fields > offsets.n_fields()) {
 
     return false;
   }
@@ -602,7 +603,7 @@ bool cmp_dtuple_is_prefix_of_rec(void *cmp_ctx, const DTuple *dtuple, const Rec 
 }
 
 int cmp_rec_rec_simple(
-  const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index
+  const Rec rec1, const Rec rec2, const Rec_offs &offsets1, const Rec_offs &offsets2, const Index *index
 ) noexcept {
   ulint rec1_f_len;
   const byte *rec1_b_ptr;
@@ -614,8 +615,8 @@ int cmp_rec_rec_simple(
 
   auto n_uniq = index->get_n_unique();
 
-  ut_ad(rec_offs_n_fields(offsets1) >= n_uniq);
-  ut_ad(rec_offs_n_fields(offsets2) >= n_uniq);
+  ut_ad(offsets1.n_fields() >= n_uniq);
+  ut_ad(offsets2.n_fields() >= n_uniq);
 
   ut_ad(rec_offs_base(offsets1) == rec_offs_base(offsets2));
 
@@ -727,7 +728,7 @@ int cmp_rec_rec_simple(
 }
 
 int cmp_rec_rec_with_match(
-  const Rec rec1, const Rec rec2, const ulint *offsets1, const ulint *offsets2, const Index *index, ulint *matched_fields,
+  const Rec rec1, const Rec rec2, const Rec_offs &offsets1, const Rec_offs &offsets2, const Index *index, ulint *matched_fields,
   ulint *matched_bytes
 ) noexcept {
   ulint rec1_f_len;
@@ -741,8 +742,8 @@ int cmp_rec_rec_with_match(
   ut_ad(rec1.offs_validate(index, offsets1));
   ut_ad(rec2.offs_validate(index, offsets2));
 
-  auto rec1_n_fields = rec_offs_n_fields(offsets1);
-  auto rec2_n_fields = rec_offs_n_fields(offsets2);
+  auto rec1_n_fields = offsets1.n_fields();
+  auto rec2_n_fields = offsets2.n_fields();
 
   auto cur_field = *matched_fields;
   auto cur_bytes = *matched_bytes;
@@ -924,7 +925,7 @@ order_resolved:
  * @return 1, 0, -1, if dtuple is greater, equal, less than rec,
  *  respectively, when only the common first fields are compared */
 static int cmp_debug_dtuple_rec_with_match(
-  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const ulint *offsets, ulint *matched_fields
+  void *cmp_ctx, const DTuple *dtuple, const Rec rec, const Rec_offs &offsets, ulint *matched_fields
 ) noexcept {
   const dfield_t *dtuple_field;
   ulint dtuple_f_len;
@@ -938,7 +939,7 @@ static int cmp_debug_dtuple_rec_with_match(
   ut_ad(rec.offs_validate(nullptr, offsets));
 
   ut_ad(*matched_fields <= dtuple_get_n_fields_cmp(dtuple));
-  ut_ad(*matched_fields <= rec_offs_n_fields(offsets));
+  ut_ad(*matched_fields <= offsets.n_fields());
 
   auto cur_field = *matched_fields;
 

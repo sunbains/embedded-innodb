@@ -1060,7 +1060,7 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
 
   auto heap = mem_heap_create(1024);
 
-  ulint *offsets{};
+  Rec_offs offsets{};
 
   {
     Phy_rec record{index, rec};
@@ -1086,7 +1086,7 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
     return update_in_place(flags, update, cmpl_info, thr, mtr);
   }
 
-  if (rec_offs_any_extern(offsets)) {
+  if (offsets.any_extern()) {
   any_extern:
     /* Externally stored fields are treated in pessimistic
     update */
@@ -1111,7 +1111,7 @@ db_err Btree_cursor::optimistic_update(ulint flags, const upd_t *update, ulint c
   corresponding to new_entry is latched in mtr.
   Thus the following call is safe. */
   srv_row_upd->index_replace_new_col_vals_index_pos(new_entry, index, update, false, heap);
-  old_rec_size = rec_offs_size(offsets);
+  old_rec_size = offsets.size();
   new_rec_size = rec_get_converted_size(index, new_entry, 0);
 
   if (unlikely(new_rec_size >= page_get_free_space_of_empty() / 2)) {
@@ -1237,7 +1237,7 @@ db_err Btree_cursor::pessimistic_update(
   ulint n_extents{};
   ulint n_reserved;
   ulint n_ext;
-  ulint *offsets{};
+  Rec_offs offsets{};
 
   *big_rec = big_rec_t{};
 
@@ -1316,7 +1316,7 @@ db_err Btree_cursor::pessimistic_update(
 
   Blob blob{m_fsp, m_btree};
 
-  if ((flags & BTR_NO_UNDO_LOG_FLAG) && rec_offs_any_extern(offsets)) {
+  if ((flags & BTR_NO_UNDO_LOG_FLAG) && offsets.any_extern()) {
     /* We are in a transaction rollback undoing a row
     update: we must free possible externally stored fields
     which got new values in the update, if they are not
@@ -1668,7 +1668,7 @@ db_err Btree_cursor::del_mark_set_sec_rec(ulint flags, bool val, que_thr_t *thr,
 bool Btree_cursor::optimistic_delete(mtr_t *mtr) noexcept {
   mem_heap_t *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
 
   rec_offs_init(offsets_);
 
@@ -1684,12 +1684,12 @@ bool Btree_cursor::optimistic_delete(mtr_t *mtr) noexcept {
   {
     Phy_rec record{m_index, rec};
 
-    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
   }
 
   bool deleted{};
 
-  if (!rec_offs_any_extern(offsets) && delete_will_underflow(rec_offs_size(offsets), mtr)) {
+  if (!offsets.any_extern() && delete_will_underflow(offsets.size(), mtr)) {
     auto page = block->get_frame();
 
     m_lock_sys->update_delete(block, rec);
@@ -1738,7 +1738,7 @@ db_err Btree_cursor::pessimistic_delete(bool has_reserved_extents, trx_rb_ctx rb
   auto rec = get_rec();
   auto heap = mem_heap_create(1024);
 
-  ulint *offsets{};
+  Rec_offs offsets{};
 
   {
     Phy_rec record{index, rec};
@@ -1746,7 +1746,7 @@ db_err Btree_cursor::pessimistic_delete(bool has_reserved_extents, trx_rb_ctx rb
     offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
   }
 
-  if (rec_offs_any_extern(offsets)) {
+  if (offsets.any_extern()) {
     Blob blob{m_fsp, m_btree};
 
     blob.free_externally_stored_fields(index, rec, offsets, rb_ctx, mtr);

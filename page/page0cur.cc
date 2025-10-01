@@ -372,7 +372,7 @@ void Page_cursor::search_with_match(
   {
     Phy_rec record{index, low_rec};
 
-    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
   }
 
   dbg_cmp = page_cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, low_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
@@ -399,7 +399,7 @@ void Page_cursor::search_with_match(
   {
     Phy_rec record{index, up_rec};
 
-    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
   }
 
   dbg_cmp = page_cmp_dtuple_rec_with_match(index->m_cmp_ctx, tuple, up_rec, offsets, &dbg_matched_fields, &dbg_matched_bytes);
@@ -470,27 +470,27 @@ void Page_cursor::insert_rec_write_log(Rec insert_rec, ulint rec_size, Rec curso
     rec_offs_init(cur_offs_);
     rec_offs_init(ins_offs_);
 
-    auto cur_offs = cur_offs_.data();
-    auto ins_offs = ins_offs_.data();
+    Rec_offs cur_offs(cur_offs_.data());
+    Rec_offs ins_offs(ins_offs_.data());
 
     rec_offs_init(cur_offs_);
 
     {
       Phy_rec record{index, cursor_rec};
 
-      cur_offs = record.get_all_col_offsets(cur_offs, &heap, Current_location());
+      cur_offs = record.get_all_col_offsets(cur_offs.get(), &heap, Current_location());
     }
 
     {
       Phy_rec record{index, insert_rec};
 
-      ins_offs = record.get_all_col_offsets(ins_offs, &heap, Current_location());
+      ins_offs = record.get_all_col_offsets(ins_offs.get(), &heap, Current_location());
     }
 
-    extra_size = rec_offs_extra_size(ins_offs);
-    cur_extra_size = rec_offs_extra_size(cur_offs);
-    ut_ad(rec_size == rec_offs_size(ins_offs));
-    cur_rec_size = rec_offs_size(cur_offs);
+    extra_size = ins_offs.extra_size();
+    cur_extra_size = cur_offs.extra_size();
+    ut_ad(rec_size == ins_offs.size());
+    cur_rec_size = cur_offs.size();
 
     if (likely_null(heap)) {
       mem_heap_free(heap);
@@ -605,7 +605,7 @@ byte *Page_cursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf
   ulint info_and_status_bits{};
   std::array<byte, 1024> buf_{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
 
   rec_offs_init(offsets_);
 
@@ -701,13 +701,13 @@ byte *Page_cursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf
   {
     Phy_rec record{index, cursor_rec};
 
-    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
   }
 
   if (!(end_seg_len & 0x1UL)) {
     info_and_status_bits = cursor_rec.get_info_and_status_bits();
-    origin_offset = rec_offs_extra_size(offsets);
-    mismatch_index = rec_offs_size(offsets) - (end_seg_len >> 1);
+    origin_offset = offsets.extra_size();
+    mismatch_index = offsets.size() - (end_seg_len >> 1);
   }
 
   end_seg_len >>= 1;
@@ -757,7 +757,7 @@ byte *Page_cursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf
   {
     Phy_rec record{index, buf + origin_offset};
 
-    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
   }
 
   if (unlikely(!cursor.rec_insert(buf + origin_offset, index, offsets, mtr))) {
@@ -778,11 +778,11 @@ byte *Page_cursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, Buf
   return ptr + end_seg_len;
 }
 
-Rec Page_cursor::insert_rec_low(Rec current_rec, const Index *index, const Rec rec, ulint *offsets, mtr_t *mtr) {
+Rec Page_cursor::insert_rec_low(Rec current_rec, const Index *index, const Rec rec, Rec_offs offsets, mtr_t *mtr) {
   byte *insert_buf;
   Rec last_insert; /* Cursor position at previous insert */
   Rec insert_rec;  /* Inserted record */
-  ulint heap_no;       /* Heap number of the inserted record */
+  ulint heap_no;   /* Heap number of the inserted record */
 
   ut_ad(rec.offs_validate(index, offsets));
 
@@ -791,15 +791,15 @@ Rec Page_cursor::insert_rec_low(Rec current_rec, const Index *index, const Rec r
   ut_ad(!page_rec_is_supremum(current_rec));
 
   /* 1. Get the size of the physical record in the page */
-  auto rec_size = rec_offs_size(offsets);
+  auto rec_size = offsets.size();
 
 #ifdef UNIV_DEBUG_VALGRIND
   {
-    const void *rec_start = rec - rec_offs_extra_size(offsets);
-    ulint extra_size = rec_offs_extra_size(offsets) - REC_N_EXTRA_BYTES;
+    const void *rec_start = rec - offsets.extra_size();
+    ulint extra_size = offsets.extra_size() - REC_N_EXTRA_BYTES;
 
     /* All data bytes of the record must be valid. */
-    UNIV_MEM_ASSERT_RW(rec, rec_offs_data_size(offsets));
+    UNIV_MEM_ASSERT_RW(rec, offsets.data_size());
     /* The variable-length header must be valid. */
     UNIV_MEM_ASSERT_RW(rec_start, extra_size);
   }
@@ -813,7 +813,7 @@ Rec Page_cursor::insert_rec_low(Rec current_rec, const Index *index, const Rec r
   if (likely_null(free_rec_ptr)) {
     mem_heap_t *heap{};
     std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-    auto offsets = offsets_.data();
+    Rec_offs local_offsets(offsets_.data());
 
     rec_offs_init(offsets_);
 
@@ -822,10 +822,10 @@ Rec Page_cursor::insert_rec_low(Rec current_rec, const Index *index, const Rec r
       Rec free_rec(free_rec_ptr);
       Phy_rec record{index, free_rec};
 
-      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+      local_offsets = record.get_all_col_offsets(local_offsets.get(), &heap, Current_location());
     }
 
-    if (rec_offs_size(offsets) < rec_size) {
+    if (local_offsets.size() < rec_size) {
       if (likely_null(heap)) {
         mem_heap_free(heap);
       }
@@ -833,7 +833,7 @@ Rec Page_cursor::insert_rec_low(Rec current_rec, const Index *index, const Rec r
       goto use_heap;
     }
 
-    insert_buf = free_rec_ptr - rec_offs_extra_size(offsets);
+    insert_buf = free_rec_ptr - local_offsets.extra_size();
 
     {
       Rec free_rec(free_rec_ptr);
@@ -877,7 +877,7 @@ Rec Page_cursor::insert_rec_low(Rec current_rec, const Index *index, const Rec r
   insert_rec.set_n_owned(0);
   insert_rec.set_heap_no(heap_no);
 
-  UNIV_MEM_ASSERT_RW(rec_get_start(insert_rec, offsets), rec_offs_size(offsets));
+  UNIV_MEM_ASSERT_RW(rec_get_start(insert_rec, offsets), offsets.size());
   /* 6. Update the last insertion info in page header */
 
   auto last_insert_ptr = page_header_get_ptr(page, PAGE_LAST_INSERT);
@@ -988,7 +988,7 @@ byte *Page_cursor::parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr,
 void Page_cursor::copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, const Index *index, mtr_t *mtr) {
   page_dir_slot_t *slot{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-  auto offsets = offsets_.data();
+  Rec_offs offsets(offsets_.data());
 
   rec_offs_init(offsets_);
 
@@ -1033,7 +1033,7 @@ void Page_cursor::copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, c
   do {
     Phy_rec record{index, rec};
 
-    offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+    offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
 
     insert_rec = rec.copy(heap_top, offsets);
 
@@ -1057,7 +1057,7 @@ void Page_cursor::copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, c
       count = 0;
     }
 
-    auto rec_size = rec_offs_size(offsets);
+    auto rec_size = offsets.size();
 
     ut_ad(heap_top < new_page + UNIV_PAGE_SIZE);
 
@@ -1150,7 +1150,7 @@ byte *Page_cursor::parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, 
     mem_heap_t *heap{};
     auto page = block->get_frame();
     std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
-    auto offsets = offsets_.data();
+    Rec_offs offsets(offsets_.data());
     auto rec = page + offset;
 
     rec_offs_init(offsets_);
@@ -1161,7 +1161,7 @@ byte *Page_cursor::parse_delete_rec(byte *ptr, byte *end_ptr, Buf_block *block, 
     {
       Phy_rec record{index, rec};
 
-      offsets = record.get_all_col_offsets(offsets, &heap, Current_location());
+      offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
     }
 
     cursor.delete_rec(index, offsets, mtr);

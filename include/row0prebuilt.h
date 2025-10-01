@@ -125,9 +125,9 @@ struct Prebuilt {
      * @param[in] rec record
      * @param[in] offsets offsets
      */
-    void add_row(const Rec rec, const ulint *offsets) noexcept {
+    void add_row(const Rec rec, const Rec_offs &offsets) noexcept {
       /* Get the size of the physical record in the page */
-      const auto rec_len = rec_offs_size(offsets);
+      const auto rec_len = offsets.size();
 
       /* Check if there is enough space for the record being added to the cache. Free existing memory if it won't fit. */
       if (m_max_len < rec_len) {
@@ -242,7 +242,7 @@ struct Prebuilt {
     * @param[in] rec record
     * @param[in] offsets offsets
     */
-    inline void add_row(const Rec rec, const ulint *offsets) noexcept;
+    inline void add_row(const Rec rec, const Rec_offs &offsets) noexcept;
 
     /** Memory heap for cached rows */
     mem_heap_t *m_heap{};

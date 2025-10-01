@@ -37,8 +37,6 @@ Created 5/30/1994 Heikki Tuuri
 #include "rem0types.h"
 #include "ut0byte.h"
 
-
-
 /**
  * Returns the extra size of a physical record if we know its
  * data size and number of fields.
@@ -133,9 +131,9 @@ struct Phy_rec {
    * Determine the offset to each field in a leaf-page record.
    *
    * @param offsets The array of offsets. On input, it should contain
-   *   the number of fields (n=rec_offs_n_fields(offsets)).
+   *   the number of fields (n=Rec_offs::n_fields(offsets)).
    */
-  void get_col_offsets(ulint *offsets) const noexcept;
+  void get_col_offsets(Rec_offs offsets) const noexcept;
 
   /**
    * Retrieves the offsets of fields in a physical record. It can reuse
@@ -151,7 +149,7 @@ struct Phy_rec {
    *
    * @return the new offsets representing the fields in the record.
    */
-  ulint *get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **heap, Source_location sl) const noexcept;
+  Rec_offs get_col_offsets(ulint *offsets, ulint n_fields, mem_heap_t **heap, Source_location sl) const noexcept;
 
   /**
    * Retrieves the offsets of all fields in a physical record. It can reuse
