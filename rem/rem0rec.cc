@@ -442,7 +442,7 @@ Phy_rec::Size Phy_rec::get_encoded_size(Index *index, ulint, const DFields &dfie
   return size;
 }
 
-ulint rec_get_nth_field_offs(const Rec &rec, ulint n, ulint *len) noexcept {
+ulint rec_offs_get_nth_field(const Rec &rec, ulint n, ulint *len) noexcept {
   ulint os;
   ulint next_os;
 

@@ -48,7 +48,7 @@ ulint rec_offs_extra_size(const ulint *offsets) noexcept;
 ulint rec_offs_any_extern(const ulint *offsets) noexcept;
 ulint rec_offs_nth_extern(const ulint *offsets, ulint n) noexcept;
 ulint rec_offs_nth_sql_null(const ulint *offsets, ulint n) noexcept;
-ulint rec_get_nth_field_offs(const ulint *offsets, ulint n, ulint *len) noexcept;
+ulint rec_offs_get_nth_field(const ulint *offsets, ulint n, ulint *len) noexcept;
 
 /* We define the physical record simply as an array of bytes */
 /* Maximum values for various fields (for non-blob tuples) */
@@ -300,7 +300,7 @@ struct Rec {
    * @return The nth field as a Rec.
    */
   Rec get_nth_field(const ulint *offsets, ulint i, ulint *len) const noexcept {
-    return m_rec + rec_get_nth_field_offs(offsets, i, len);
+    return m_rec + rec_offs_get_nth_field(offsets, i, len);
   }
 
   // Bit field operations
@@ -648,7 +648,7 @@ struct Rec {
     }
 
     ulint dst_len;
-    auto dst = m_rec + rec_get_nth_field_offs(offsets, n, &dst_len);
+    auto dst = m_rec + rec_offs_get_nth_field(offsets, n, &dst_len);
 
     if (dst_len == UNIV_SQL_NULL) {
       set_nth_field_null_bit(n, false);
@@ -910,7 +910,7 @@ inline T rec_offs_base(T offsets) noexcept {
  *
  * @return	offset from the origin of rec
  */
-inline ulint rec_get_nth_field_offs(const ulint *offsets, ulint n, ulint *len) noexcept {
+inline ulint rec_offs_get_nth_field(const ulint *offsets, ulint n, ulint *len) noexcept {
   ulint offs;
 
   ut_ad(n < rec_offs_n_fields(offsets));

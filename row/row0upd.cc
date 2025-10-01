@@ -234,7 +234,7 @@ void Row_update::rec_sys_fields_in_recovery(
 
   ulint len;
 
-  auto col_offset = rec_get_nth_field_offs(offsets, pos, &len);
+  auto col_offset = rec_offs_get_nth_field(offsets, pos, &len);
   ut_ad(len == DATA_TRX_ID_LEN);
 
   auto field = rec.get() + col_offset;
@@ -790,7 +790,7 @@ bool Row_update::changes_first_fields_binary(DTuple *entry, const Index *index, 
 inline void Row_update::copy_columns(Rec rec, const ulint *offsets, sym_node_t *column) noexcept {
   while (column != nullptr) {
     ulint len;
-    auto col_offset = rec_get_nth_field_offs(offsets, column->field_nos[SYM_CLUST_FIELD_NO], &len);
+    auto col_offset = rec_offs_get_nth_field(offsets, column->field_nos[SYM_CLUST_FIELD_NO], &len);
     auto data = rec + col_offset;
 
     eval_node_copy_and_alloc_val(column, data, len);

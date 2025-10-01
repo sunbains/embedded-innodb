@@ -271,7 +271,7 @@ db_err Blob::store_big_rec_extern_fields(
     {
       ulint local_len;
 
-      auto col_offset = rec_get_nth_field_offs(offsets, big_rec_vec.fields[i].field_no, &local_len);
+      auto col_offset = rec_offs_get_nth_field(offsets, big_rec_vec.fields[i].field_no, &local_len);
 
       field_ref = rec + col_offset;
 

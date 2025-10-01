@@ -339,7 +339,7 @@ void Btree::node_ptr_set_child_page_no(Rec rec, const ulint *offsets, ulint page
   ulint len;
 
   /* The child address is in the last field */
-  auto offset = rec_get_nth_field_offs(offsets, rec_offs_n_fields(offsets) - 1, &len);
+  auto offset = rec_offs_get_nth_field(offsets, rec_offs_n_fields(offsets) - 1, &len);
 
   ut_ad(len == REC_NODE_PTR_SIZE);
 
@@ -1853,7 +1853,7 @@ bool Btree::index_rec_validate(const Rec rec, const Index *index, bool dump_on_e
   for (ulint i{}; i < n; ++i) {
     const ulint fixed_size = index->get_nth_col(i)->get_fixed_size();
 
-    rec_get_nth_field_offs(offsets, i, &len);
+    rec_offs_get_nth_field(offsets, i, &len);
 
     /* Note that if fixed_size != 0, it equals the length of a fixed-size column in the clustered index.
     A prefix index of the column is of fixed, but different length.  When fixed_size == 0, prefix_len is the maximum

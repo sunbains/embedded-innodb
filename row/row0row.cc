@@ -50,7 +50,7 @@ ulint row_get_trx_id_offset(const Rec rec __attribute__((unused)), const Index *
   const auto pos = index->get_sys_col_field_pos(DATA_TRX_ID);
 
   ulint len;
-  const auto offset = rec_get_nth_field_offs(offsets, pos, &len);
+  const auto offset = rec_offs_get_nth_field(offsets, pos, &len);
 
   ut_ad(len == DATA_TRX_ID_LEN);
 
