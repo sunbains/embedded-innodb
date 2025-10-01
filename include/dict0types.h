@@ -27,6 +27,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "data0type.h"
 #include "data0types.h"
+#include "rem0types.h"
 #include "fsp0types.h"
 #include "lock0types.h"
 #include "mem0types.h"

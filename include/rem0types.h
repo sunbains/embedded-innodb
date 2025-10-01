@@ -120,15 +120,15 @@ most significant bytes and bits are written below less significant.
               Phy_rec header
   Byte offset		 Bit usage within byte
   -------------+-------------------------------------
-  1	             [0..7] bits pointer to next record
-  2	             [0..7] bits pointer to next record
-  3	             [0]    bit short flag
-                 [1..7] bits number of fields
-  4	             [0..2] 3 bits number of fields
-                 [3..7] 5 bits heap number
-  5	             [0..7] 8 bits heap number
-  6	             [0..3] 4 bits n_owned
-                 [0..3] 4 bits info bits
+  1                      [0..7] bits pointer to next record
+  2                      [0..7] bits pointer to next record
+  3                      [0]    bit short flag
+                         [1..7] bits number of fields
+  4                      [0..2] 3 bits number of fields
+                         [3..7] 5 bits heap number
+  5                      [0..7] 8 bits heap number
+  6                      [0..3] 4 bits n_owned
+                         [0..3] 4 bits info bits
 
   [msb.....................................................................................................lsb]
   [info bits (u4), n_owned (u4), heap number (u13), n_fields (u10), short flag (u1), next record pointer (u16)]

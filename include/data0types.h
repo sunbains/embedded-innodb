@@ -321,4 +321,3 @@ struct big_rec_t {
   big_rec_field_t *fields;
 };
 
-#include "rem0types.h"

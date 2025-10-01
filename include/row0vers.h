@@ -26,6 +26,7 @@ Created 2/6/1997 Heikki Tuuri
 
 #include "innodb0types.h"
 #include "mem0types.h"
+#include "rem0types.h"
 #include "trx0types.h"
 
 struct Trx;
