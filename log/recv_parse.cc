@@ -228,13 +228,13 @@ byte *recv_parse_or_apply_log_rec_body(mlog_type_t type, byte *ptr, byte *end_pt
 }
 
 static lsn_t recv_calc_lsn_on_data_add(lsn_t lsn, uint64_t len) noexcept {
-  auto frag_len = (ulint(lsn) % IB_FILE_BLOCK_SIZE) - LOG_BLOCK_HDR_SIZE;
+  auto frag_len = (ulint(lsn) % sizeof(Log_phy_block)) - Log_phy_block::HEADER_SIZE;
 
-  ut_ad(frag_len < IB_FILE_BLOCK_SIZE - LOG_BLOCK_HDR_SIZE - LOG_BLOCK_TRL_SIZE);
+  ut_ad(frag_len < sizeof(Log_phy_block) - Log_phy_block::HEADER_SIZE - Log_phy_block::TRAILER_SIZE);
   auto lsn_len = ulint(len);
 
-  lsn_len += (lsn_len + frag_len) / (IB_FILE_BLOCK_SIZE - LOG_BLOCK_HDR_SIZE - LOG_BLOCK_TRL_SIZE) *
-             (LOG_BLOCK_HDR_SIZE + LOG_BLOCK_TRL_SIZE);
+  lsn_len += (lsn_len + frag_len) / (sizeof(Log_phy_block) - Log_phy_block::HEADER_SIZE - Log_phy_block::TRAILER_SIZE) *
+             (Log_phy_block::HEADER_SIZE + Log_phy_block::TRAILER_SIZE);
 
   return lsn + lsn_len;
 }

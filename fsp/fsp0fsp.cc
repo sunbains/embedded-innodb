@@ -1273,7 +1273,8 @@ void FSP::fill_free_list(bool init_space, space_id_t space, fsp_header_t *header
 
     /* Update the free limit info in the log system and make a checkpoint */
     if (space == SYS_TABLESPACE) {
-      m_log->fsp_current_free_limit_set_and_checkpoint((i + FSP_EXTENT_SIZE) / ((1024 * 1024) / UNIV_PAGE_SIZE));
+      // FIXME: Implement this
+      // m_log->fsp_current_free_limit_set_and_checkpoint((i + FSP_EXTENT_SIZE) / ((1024 * 1024) / UNIV_PAGE_SIZE));
     }
 
     if (unlikely(init_xdes)) {
@@ -1930,7 +1931,8 @@ ulint FSP::init_system_space_free_limit() noexcept {
 
   limit /= ((1024 * 1024) / UNIV_PAGE_SIZE);
 
-  m_log->fsp_current_free_limit_set_and_checkpoint(limit);
+  // FIXME: Implement this
+  // m_log->fsp_current_free_limit_set_and_checkpoint(limit);
 
   mtr.commit();
 

@@ -15,7 +15,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/** @file log/recv_scan.cc 
+/** @file log/recv_scan.cc
 Recovery scanning operations
 
 *******************************************************/
@@ -204,7 +204,7 @@ static bool recv_scan_log_recs(
 }
 
 [[maybe_unused]] static void recv_group_scan_log_recs(
-  DBLWR *dblwr, ib_recovery_t recovery, log_group_t *group, lsn_t *contiguous_lsn, lsn_t *group_scanned_lsn
+  DBLWR *dblwr, ib_recovery_t recovery, Log_vfile *group, lsn_t *contiguous_lsn, lsn_t *group_scanned_lsn
 ) noexcept {
 
   bool finished = false;
@@ -213,7 +213,7 @@ static bool recv_scan_log_recs(
   while (!finished) {
     auto end_lsn = start_lsn + RECV_SCAN_SIZE;
 
-    log_sys->group_read_log_seg(LOG_RECOVER, log_sys->m_buf, group, start_lsn, end_lsn);
+    log_sys->group_read_log_seg(IO_request::Sync_log_read, log_sys->m_buf, *group, start_lsn, end_lsn);
 
     finished = recv_scan_log_recs(
       dblwr,

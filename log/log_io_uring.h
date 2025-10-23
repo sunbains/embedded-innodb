@@ -28,21 +28,23 @@ capabilities, removing dependencies on the general file system (fil0fil.cc).
 #include <atomic>
 #include <unordered_map>
 #include <vector>
+
 #include "innodb0types.h"
 #include "log0types.h"
 #include "os0aio.h"
 #include "sync0sync.h"
+
 // Forward declaration for io_uring
 struct io_uring;
 
 // Function pointer type for io_uring deleter
-using Log_aio_deleter_func = void(*)(struct io_uring*);
+using Log_aio_deleter_func = void (*)(struct io_uring *);
 
 // Alias for io_uring using unique_ptr with function pointer deleter
 using Log_aio = std::unique_ptr<struct io_uring, Log_aio_deleter_func>;
 
 // Forward declarations
-struct log_group_t;
+struct Log_vfile;
 
 /** WAL file descriptor structure */
 struct WAL_file {
@@ -117,74 +119,53 @@ struct WAL_file {
 /** Scatter-gather I/O vector */
 struct WAL_iovec_t {
   /** Buffer pointer */
-  void *buffer;
+  void *m_buffer;
 
   /** Buffer length */
-  size_t length;
+  size_t m_length;
 
   /** File offset */
-  off_t offset;
+  off_t m_offset;
 };
 
 /** WAL I/O completion context */
 struct WAL_io_ctx_t {
-  /** I/O request type */
-  IO_request req_type;
-
-  /** Completion callback data */
-  void *callback_data;
-
-  /** File descriptor index */
-  uint32_t file_index;
-
-  /** Operation start time for latency tracking */
-  uint64_t start_time;
-
-  /** Number of bytes requested */
-  size_t bytes_requested;
-
-  /** Result code */
-  std::atomic<int> result{0};
-
-  /** Completion flag */
-  std::atomic<bool> completed{false};
-
   /** Default constructor */
   WAL_io_ctx_t() = default;
 
   /** Copy constructor */
   WAL_io_ctx_t(const WAL_io_ctx_t &other)
-      : req_type(other.req_type),
-        callback_data(other.callback_data),
-        file_index(other.file_index),
-        start_time(other.start_time),
-        bytes_requested(other.bytes_requested) {
-    result.store(other.result.load());
-    completed.store(other.completed.load());
+      : m_req_type(other.m_req_type),
+        m_callback_data(other.m_callback_data),
+        m_file_index(other.m_file_index),
+        m_start_time(other.m_start_time),
+        m_bytes_requested(other.m_bytes_requested) {
+    m_result.store(other.m_result.load());
+    m_completed.store(other.m_completed.load());
   }
 
   /** Move constructor */
   WAL_io_ctx_t(WAL_io_ctx_t &&other) noexcept
-      : req_type(other.req_type),
-        callback_data(other.callback_data),
-        file_index(other.file_index),
-        start_time(other.start_time),
-        bytes_requested(other.bytes_requested) {
-    result.store(other.result.load());
-    completed.store(other.completed.load());
-    other.callback_data = nullptr;
+      : m_req_type(other.m_req_type),
+        m_callback_data(other.m_callback_data),
+        m_file_index(other.m_file_index),
+        m_start_time(other.m_start_time),
+        m_bytes_requested(other.m_bytes_requested) {
+    m_result.store(other.m_result.load());
+    m_completed.store(other.m_completed.load());
+    other.m_callback_data = nullptr;
   }
 
   /** Copy assignment operator */
   WAL_io_ctx_t &operator=(const WAL_io_ctx_t &other) {
     if (this != &other) {
-      req_type = other.req_type;
-      callback_data = other.callback_data;
-      file_index = other.file_index;
-      start_time = other.start_time;
-      bytes_requested = other.bytes_requested;
-      result.store(other.result.load());
-      completed.store(other.completed.load());
+      m_req_type = other.m_req_type;
+      m_callback_data = other.m_callback_data;
+      m_file_index = other.m_file_index;
+      m_start_time = other.m_start_time;
+      m_bytes_requested = other.m_bytes_requested;
+      m_result.store(other.m_result.load());
+      m_completed.store(other.m_completed.load());
     }
     return *this;
   }
@@ -192,17 +173,38 @@ struct WAL_io_ctx_t {
   /** Move assignment operator */
   WAL_io_ctx_t &operator=(WAL_io_ctx_t &&other) noexcept {
     if (this != &other) {
-      req_type = other.req_type;
-      callback_data = other.callback_data;
-      file_index = other.file_index;
-      start_time = other.start_time;
-      bytes_requested = other.bytes_requested;
-      result.store(other.result.load());
-      completed.store(other.completed.load());
-      other.callback_data = nullptr;
+      m_req_type = other.m_req_type;
+      m_callback_data = other.m_callback_data;
+      m_file_index = other.m_file_index;
+      m_start_time = other.m_start_time;
+      m_bytes_requested = other.m_bytes_requested;
+      m_result.store(other.m_result.load());
+      m_completed.store(other.m_completed.load());
+      other.m_callback_data = nullptr;
     }
     return *this;
   }
+
+  /** I/O request type */
+  IO_request m_req_type;
+
+  /** Completion callback data */
+  void *m_callback_data{};
+
+  /** File descriptor index */
+  uint32_t m_file_index{UINT32_MAX};
+
+  /** Operation start time for latency tracking */
+  uint64_t m_start_time{0};
+
+  /** Number of bytes requested */
+  size_t m_bytes_requested{0};
+
+  /** Result code */
+  std::atomic<int> m_result{0};
+
+  /** Completion flag */
+  std::atomic<bool> m_completed{false};
 };
 
 /** Simplified WAL I/O system using io_uring */
@@ -218,7 +220,7 @@ struct WAL_IO_System {
    * @param max_files maximum number of WAL files
    * @return true on success
    */
-  bool initialize(uint32_t queue_depth = 256, uint32_t max_files = 16);
+  bool initialize(uint32_t queue_depth, uint32_t max_files);
 
   /** Shutdown the WAL I/O system */
   void shutdown();
@@ -228,7 +230,7 @@ struct WAL_IO_System {
    * @param file_size expected file size (0 for auto-detect)
    * @return file index on success, -1 on error
    */
-  int open_wal_file(const char *file_path, uint64_t file_size = 0);
+  int open_wal_file(const char *file_path, off_t file_size);
 
   /** Close a WAL file
    * @param file_index file index returned by open_wal_file
@@ -333,6 +335,18 @@ struct WAL_IO_System {
    */
   bool is_file_open(int file_index) const;
 
+  int allocate_file_index();
+
+  void release_file_index(int index);
+
+  bool validate_file_index(int index) const;
+
+  uint64_t get_timestamp() const;
+
+  WAL_io_ctx_t *create_io_context(IO_request req_type, uint32_t file_index, void *callback_data);
+
+  void complete_io_context(uint64_t op_id, int result);
+
   /** Get I/O statistics */
   struct {
     std::atomic<uint64_t> total_reads{0};
@@ -368,14 +382,6 @@ struct WAL_IO_System {
 
   /** Next operation ID */
   std::atomic<uint64_t> m_next_op_id{1};
-
-  /** Helper functions */
-  int allocate_file_index();
-  void release_file_index(int index);
-  bool validate_file_index(int index) const;
-  uint64_t get_timestamp() const;
-  WAL_io_ctx_t *create_io_context(IO_request req_type, uint32_t file_index, void *callback_data);
-  void complete_io_context(uint64_t op_id, int result);
 };
 
 /** Global WAL I/O system instance */

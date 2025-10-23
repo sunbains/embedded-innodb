@@ -35,39 +35,14 @@ constexpr ulint LOG_POOL_CHECKPOINT_RATIO_ASYNC = 32;
 extern bool log_has_printed_chkp_warning;
 extern time_t log_last_warning_time;
 
-ulint Log::calc_where_lsn_is(
-  off_t *log_file_offset, lsn_t first_header_lsn, lsn_t lsn, ulint n_log_files, off_t log_file_size
-) noexcept {
-  const int64_t capacity = log_file_size - LOG_FILE_HDR_SIZE;
-
-  if (lsn < first_header_lsn) {
-    auto add_this_many = 1 + (first_header_lsn - lsn) / (capacity * (int64_t)n_log_files);
-    lsn += add_this_many * capacity * (int64_t)n_log_files;
-  }
-
-  ut_a(lsn >= first_header_lsn);
-
-  auto file_no = ((ulint)((lsn - first_header_lsn) / capacity)) % n_log_files;
-  *log_file_offset = (lsn - first_header_lsn) % capacity;
-
-  *log_file_offset = *log_file_offset + LOG_FILE_HDR_SIZE;
-
-  return file_no;
-}
-
 bool Log::calc_max_ages() noexcept {
   acquire();
 
   auto smallest_capacity = ULINT_MAX;
 
-  ut_a(UT_LIST_GET_FIRST(m_log_groups) != nullptr);
+  auto capacity = m_vfile.get_capacity();
 
-  for (auto group : m_log_groups) {
-    auto capacity = group_get_capacity(group);
-    smallest_capacity = std::min<ulint>(smallest_capacity, capacity);
-  }
-
-  smallest_capacity = smallest_capacity - smallest_capacity / 10;
+  capacity = capacity - smallest_capacity / 10;
 
   auto free = LOG_CHECKPOINT_FREE_PER_THREAD * 10 + LOG_CHECKPOINT_EXTRA_FREE;
 
@@ -77,17 +52,16 @@ bool Log::calc_max_ages() noexcept {
   if (free >= smallest_capacity / 2) {
     success = false;
   } else {
-    margin = smallest_capacity - free;
+    margin = capacity - free;
   }
 
-  margin = std::min<ulint>(margin, m_adm_checkpoint_interval);
+  margin = std::min<ulint>(margin, m_checkpoint.m_adm_interval);
   margin = margin - margin / 10;
 
-  m_log_group_capacity = smallest_capacity;
-  m_max_modified_age_async = margin - margin / LOG_POOL_PREFLUSH_RATIO_ASYNC;
-  m_max_modified_age_sync = margin - margin / LOG_POOL_PREFLUSH_RATIO_SYNC;
-  m_max_checkpoint_age_async = margin - margin / LOG_POOL_CHECKPOINT_RATIO_ASYNC;
-  m_max_checkpoint_age = margin;
+  m_checkpoint.m_max_modified_age_async = margin - margin / LOG_POOL_PREFLUSH_RATIO_ASYNC;
+  m_checkpoint.m_max_modified_age_sync = margin - margin / LOG_POOL_PREFLUSH_RATIO_SYNC;
+  m_checkpoint.m_max_age_async = margin - margin / LOG_POOL_CHECKPOINT_RATIO_ASYNC;
+  m_checkpoint.m_max_age = margin;
 
   release();
 
@@ -105,23 +79,23 @@ bool Log::calc_max_ages() noexcept {
 }
 
 lsn_t Log::close(ib_recovery_t recovery) noexcept {
-  auto log_block = static_cast<byte *>(ut_align_down(m_buf + m_buf_free, IB_FILE_BLOCK_SIZE));
-  auto first_rec_group = block_get_first_rec_group(log_block);
+  auto log_block = static_cast<Log_phy_block *>(ut_align_down(m_buf + m_buf_free, IB_FILE_BLOCK_SIZE));
+  auto first_rec_group = log_block->get_first_rec_group();
   auto lsn = m_lsn;
-  auto checkpoint_age = lsn - m_last_checkpoint_lsn;
+  auto checkpoint_age = lsn - m_checkpoint.m_last_lsn;
   auto oldest_lsn = srv_buf_pool->get_oldest_modification();
 
   ut_ad(mutex_own(&m_mutex));
 
   if (first_rec_group == 0) {
-    block_set_first_rec_group(log_block, block_get_data_len(log_block));
+    log_block->set_first_rec_group(log_block->get_data_len());
   }
 
   if (m_buf_free > m_max_buf_free) {
     m_check_flush_or_checkpoint = true;
   }
 
-  if (checkpoint_age >= m_log_group_capacity) {
+  if (checkpoint_age >= m_vfile.get_capacity()) {
     if (!log_has_printed_chkp_warning || difftime(time(nullptr), log_last_warning_time) > 15) {
       log_has_printed_chkp_warning = true;
       log_last_warning_time = time(nullptr);
@@ -132,13 +106,14 @@ lsn_t Log::close(ib_recovery_t recovery) noexcept {
         " combined size of log files at least 10 times bigger than the largest"
         " such row.",
         checkpoint_age,
-        m_log_group_capacity
+        m_vfile.get_capacity()
       ));
     }
   }
 
-  if (checkpoint_age > m_max_modified_age_async || (oldest_lsn > 0 && lsn - oldest_lsn > m_max_modified_age_async) ||
-      checkpoint_age > m_max_checkpoint_age_async) {
+  if (checkpoint_age > m_checkpoint.m_max_modified_age_async ||
+      (oldest_lsn > 0 && lsn - oldest_lsn > m_checkpoint.m_max_modified_age_async) ||
+      checkpoint_age > m_checkpoint.m_max_age_async) {
     m_check_flush_or_checkpoint = true;
   }
 
@@ -194,8 +169,8 @@ void Log::free_check() noexcept {
   }
 }
 
-void Log::block_store_checksum(byte *block) noexcept {
-  block_set_checksum(block, block_calc_checksum(block));
+void Log::block_store_checksum(Log_phy_block *phy_block) noexcept {
+  phy_block->set_checksum(log_calc_checksum(phy_block->data(), phy_block->get_data_len()));
 }
 
 bool Log::peek_lsn(lsn_t *lsn) noexcept {
@@ -217,7 +192,7 @@ void Log::print() noexcept {
     "Last checkpoint at  {}\n",
     m_lsn,
     m_flushed_to_disk_lsn,
-    m_last_checkpoint_lsn
+    m_checkpoint.m_last_lsn
   ));
 
   auto current_time = time(nullptr);
@@ -227,7 +202,7 @@ void Log::print() noexcept {
     "{} pending log writes, {} pending chkp writes"
     " {} log i/o's done, {:2} log i/o's/second",
     m_n_pending_writes,
-    m_n_pending_checkpoint_writes,
+    m_checkpoint.m_n_pending_writes,
     m_n_log_ios,
     double((m_n_log_ios - m_n_log_ios_old) / time_elapsed)
   ));

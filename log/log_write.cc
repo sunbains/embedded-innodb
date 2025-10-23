@@ -27,8 +27,7 @@ Log write operations
 constexpr ulint LOG_UNLOCK_NONE_FLUSHED_LOCK = 1;
 constexpr ulint LOG_UNLOCK_FLUSH_LOCK = 2;
 
-void Log::write_up_to(lsn_t lsn, ulint wait, bool flush_to_disk) noexcept {
-  log_group_t *group;
+void Log::write_up_to(lsn_t lsn, bool async, bool flush_to_disk) noexcept {
   ulint start_offset;
   ulint end_offset;
   ulint area_start;
@@ -37,20 +36,9 @@ void Log::write_up_to(lsn_t lsn, ulint wait, bool flush_to_disk) noexcept {
 
   IF_DEBUG(ulint loop_count = 0;)
 
-  auto do_waits = [this](ulint wait) {
-    switch (wait) {
-      case LOG_WAIT_ONE_GROUP:
-        os_event_wait(m_one_flushed_event);
-        break;
-      case LOG_WAIT_ALL_GROUPS:
-        os_event_wait(m_no_flush_event);
-        break;
-#ifdef UNIV_DEBUG
-      case LOG_NO_WAIT:
-        break;
-      default:
-        ut_error;
-#endif
+  auto do_waits = [this](bool async) {
+    if (!async) {
+      os_event_wait(m_no_flush_event);
     }
   };
 
@@ -64,7 +52,7 @@ void Log::write_up_to(lsn_t lsn, ulint wait, bool flush_to_disk) noexcept {
       return;
     }
 
-    if (!flush_to_disk && (m_written_to_all_lsn >= lsn || (m_written_to_some_lsn >= lsn && wait != LOG_WAIT_ALL_GROUPS))) {
+    if (!flush_to_disk && (m_written_to_all_lsn >= lsn || (m_written_to_some_lsn >= lsn && async))) {
       release();
       return;
     }
@@ -72,13 +60,13 @@ void Log::write_up_to(lsn_t lsn, ulint wait, bool flush_to_disk) noexcept {
     if (m_n_pending_writes > 0) {
       if (flush_to_disk && m_current_flush_lsn >= lsn) {
         release();
-        do_waits(wait);
+        do_waits(async);
         break;
       }
 
       if (!flush_to_disk && m_write_lsn >= lsn) {
         release();
-        do_waits(wait);
+        do_waits(async);
         break;
       }
 
@@ -94,8 +82,7 @@ void Log::write_up_to(lsn_t lsn, ulint wait, bool flush_to_disk) noexcept {
 
     ++m_n_pending_writes;
 
-    group = UT_LIST_GET_FIRST(m_log_groups);
-    ++group->n_pending_writes;
+    ++m_vfile.m_n_pending_writes;
 
     os_event_reset(m_no_flush_event);
     os_event_reset(m_one_flushed_event);
@@ -116,47 +103,40 @@ void Log::write_up_to(lsn_t lsn, ulint wait, bool flush_to_disk) noexcept {
 
     m_one_flushed = false;
 
-    block_set_flush_bit(m_buf + area_start, true);
-    block_set_checkpoint_no(m_buf + area_end - IB_FILE_BLOCK_SIZE, m_next_checkpoint_no);
+    auto log_block = static_cast<Log_phy_block *>(ut_align_down(m_buf + area_start, sizeof(Log_phy_block)));
+
+    log_block->set_flush_bit(true);
+    log_block->set_checkpoint_no(m_checkpoint.m_next_no);
 
     memcpy(m_buf + area_end, m_buf + area_end - IB_FILE_BLOCK_SIZE, IB_FILE_BLOCK_SIZE);
 
     m_buf_free += IB_FILE_BLOCK_SIZE;
     m_write_end_offset = m_buf_free;
 
-    for (auto group : m_log_groups) {
-      group_write_buf(
-        group,
-        m_buf + area_start,
-        area_end - area_start,
-        ut_uint64_align_down(m_written_to_all_lsn, IB_FILE_BLOCK_SIZE),
-        start_offset - area_start
-      );
+    ut_a(m_vfile.write_segment(
+      m_buf + area_start, area_end - area_start, ut_uint64_align_down(m_written_to_all_lsn, sizeof(Log_phy_block))
+    ));
 
-      group_set_fields(group, m_write_lsn);
-    }
+    m_vfile.set_fields(m_write_lsn);
 
     release();
 
     if (srv_config.m_unix_file_flush_method == SRV_UNIX_O_DSYNC) {
       m_flushed_to_disk_lsn = m_write_lsn;
     } else if (flush_to_disk) {
-      group = UT_LIST_GET_FIRST(m_log_groups);
-      srv_fil->flush(group->space_id);
+      // FIXME: Sync the log group to disk
       m_flushed_to_disk_lsn = m_write_lsn;
     }
 
     acquire();
 
-    group = UT_LIST_GET_FIRST(m_log_groups);
-
-    ut_a(group->n_pending_writes == 1);
+    ut_a(m_vfile.m_n_pending_writes == 1);
     ut_a(m_n_pending_writes == 1);
 
-    --group->n_pending_writes;
+    --m_vfile.m_n_pending_writes;
     --m_n_pending_writes;
 
-    unlock = group_check_flush_completion(group);
+    unlock = m_vfile.check_flush_completion();
     unlock |= sys_check_flush_completion();
 
     flush_do_unlocks(unlock);

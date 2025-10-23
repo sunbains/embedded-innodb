@@ -13,20 +13,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-PROJECT (UNIT_TESTS)
+# Inherit configuration from parent project - no need to redefine PROJECT()
 
 # Add debug definitions
 add_definitions(-DUNIV_BTR_PRINT -DUNIT_TESTING)
 
-# Set up libraries
+# Set up libraries - use parent project's innodb target
 SET(LIBS innodb pthread m)
 
-# Set up include directories
-INCLUDE_DIRECTORIES(
-    ${CMAKE_SOURCE_DIR}/../include
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/../include
-)
+# Include directories are inherited from parent project
 
 # The innodb library already includes liburing dependency
 
@@ -90,3 +85,23 @@ target_link_libraries(test_log_io_uring PRIVATE
 
 # Add test to CTest
 add_test(NAME test_log_io_uring COMMAND test_log_io_uring)
+
+# Set up test_log_buffer test - standalone with minimal dependencies
+add_executable(test_log_buffer test_log_buffer.cc)
+
+SET(MINIMAL_SRC global_vars.cc ../ut/ut0dbg.cc ../ut/ut0ut.cc ../os/os0thread.cc)
+
+# Link test_log_buffer with minimal dependencies
+target_link_libraries(test_log_buffer PRIVATE pthread)
+
+# Add test_log_buffer to CTest
+add_test(NAME test_log_buffer COMMAND test_log_buffer)
+
+# Add test_log_vfile executable
+add_executable(test_log_vfile test_log_vfile.cc ../log/log_vfile.cc ${MINIMAL_SRC})
+
+# Link test_log_vfile with minimal dependencies
+target_link_libraries(test_log_vfile PRIVATE pthread)
+
+# Add test_log_vfile to CTest
+add_test(NAME test_log_vfile COMMAND test_log_vfile)

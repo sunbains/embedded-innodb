@@ -4,136 +4,428 @@
 
 #include "innodb0types.h"
 #include "log0config.h"
-
 #include "sync0rw.h"
 #include "sync0sync.h"
 
 #ifdef UNIV_DEBUG
-/** Flag: write to log file? */
-extern bool log_do_write;
-
 /** Flag: enable debug output when writing to the log? */
 extern bool log_debug_writes;
-
-#else  /* UNIV_DEBUG */
-/** Write to log */
-constexpr bool log_do_write = true;
 #endif /* UNIV_DEBUG */
 
 #define LOG_BUFFER_SIZE (srv_config.m_log_buffer_size * UNIV_PAGE_SIZE)
-constexpr ulint LOG_CHECKPOINT_OFFSET = 16;
-constexpr ulint LOG_CHECKPOINT_LOG_BUF_SIZE = 20;
-constexpr ulint LOG_CHECKPOINT_UNUSED_LSN = 24;
-constexpr ulint LOG_CHECKPOINT_GROUP_ARRAY = 32;
-/*@} */
 
-/* For each value smaller than LOG_MAX_N_GROUPS the following 8 bytes: @{*/
-constexpr ulint LOG_CHECKPOINT_UNUSED_FILE_NO = 0;
-constexpr ulint LOG_CHECKPOINT_UNUSED_OFFSET = 4;
-constexpr ulint LOG_CHECKPOINT_ARRAY_END = LOG_CHECKPOINT_GROUP_ARRAY + LOG_MAX_N_GROUPS * 8;
-constexpr ulint LOG_CHECKPOINT_CHECKSUM_1 = LOG_CHECKPOINT_ARRAY_END;
-constexpr ulint LOG_CHECKPOINT_CHECKSUM_2 = 4 + LOG_CHECKPOINT_ARRAY_END;
-constexpr ulint LOG_CHECKPOINT_FSP_FREE_LIMIT = 8 + LOG_CHECKPOINT_ARRAY_END;
-/* @} */
+// Forward declarations
+struct Log;
+struct Checkpoint;
+struct Log_buffer;
 
-/** current fsp free limit in tablespace 0, in units of one megabyte; this information is only used
-by ibbackup to decide if it can truncate unused ends of non-auto-extending data files in space 0 */
-constexpr ulint LOG_CHECKPOINT_FSP_MAGIC_N = 12 + LOG_CHECKPOINT_ARRAY_END;
+struct Log_file {
+  Log_file() = default;
 
-/** This magic number tells if the checkpoint contains the above field: the field was added to InnoDB-3.23.50 */
-constexpr ulint LOG_CHECKPOINT_SIZE = 16 + LOG_CHECKPOINT_ARRAY_END;
+  /** Constructor
+   * @param path Path to the log file
+   * @param max_size Maximum size of the log file in bytes
+  */
+  Log_file(const std::string &path, off_t max_size) noexcept;
 
-constexpr ulint LOG_CHECKPOINT_FSP_MAGIC_N_VAL = 1441231243;
+  /** Move constructor */
+  Log_file(Log_file &&other) noexcept;
 
-/* Offsets of a log file header */
+  /** Move assignment */
+  Log_file &operator=(Log_file &&other) noexcept;
 
-/** log group number */
-constexpr ulint LOG_GROUP_ID = 0;
+  /** Copy constructor - deleted */
+  Log_file(const Log_file &) = delete;
 
-/* lsn of the start of data in this log file */
-constexpr ulint LOG_FILE_START_LSN = 4;
+  /** Copy assignment - deleted */
+  Log_file &operator=(const Log_file &) = delete;
 
-/* 4-byte archived log file number; this field is only defined in an archived log file */
-constexpr ulint LOG_FILE_NO = 12;
+  ~Log_file() noexcept;
 
-constexpr ulint LOG_FILE_WAS_CREATED_BY_HOT_BACKUP = 16;
+  /** Convert the log file to a string.
+   *
+   * @return The log file as a string.
+  */
+  [[nodiscard]] std::string to_string() const noexcept;
 
-/** a 32-byte field which contains the string 'ibbackup' and the
-creation time if the log file was created by ibbackup --restore;
-when the application is started for the first time on the restored
-database, it can print helpful info for the user */
-constexpr ulint LOG_FILE_ARCH_COMPLETED = IB_FILE_BLOCK_SIZE;
+  /** File descriptor */
+  int m_fd{-1};
 
-/** This 4-byte field is true when the writing of an archived log file
-has been completed; this field is only defined in an archived log file */
-constexpr ulint LOG_FILE_END_LSN = IB_FILE_BLOCK_SIZE + 4;
+  /** Size in bytes, including the log file header */
+  off_t m_max_size{};
 
-/** LSN where the archived log file at least extends: actually the
-archived log file may extend to a later lsn, as long as it is within the
-same log block as this lsn; this field is defined only when an archived log
-file has been completely written */
-constexpr ulint LOG_CHECKPOINT_1 = IB_FILE_BLOCK_SIZE;
+  /** Path to the log file */
+  std::string m_path{};
 
-/** First checkpoint field in the log header; we write alternately to the
-checkpoint fields when we make new checkpoints; this field is only defined
-in the first log file of a log group */
-constexpr ulint LOG_CHECKPOINT_2 = 3 * IB_FILE_BLOCK_SIZE;
+  /** Number of pending operations */
+  std::atomic<uint32_t> m_pending_ops{0};
 
-/* Second checkpoint field in the log header */
-constexpr ulint LOG_FILE_HDR_SIZE = 4 * IB_FILE_BLOCK_SIZE;
-
-constexpr ulint LOG_GROUP_OK = 301;
-
-constexpr ulint LOG_GROUP_CORRUPTED = 302;
-
-/** Log group consists of a number of log files, each of the same size; a log
-group is implemented as a space in the sense of the module fil0fil. */
-struct log_group_t {
-  /* The following fields are protected by log_sys->mutex */
-
-  /** Log group id */
-  ulint id;
-
-  /** Number of files in the group */
-  ulint n_files;
-
-  /** Individual log file size in bytes, including the log
-  file header */
-  ulint file_size;
-
-  /** File space which implements the log group */
-  ulint space_id;
-
-  /** LOG_GROUP_OK or LOG_GROUP_CORRUPTED */
-  ulint state;
-
-  /** LSN used to fix coordinates within the log group */
-  lsn_t lsn;
-
-  /** The offset of the above lsn */
-  ulint lsn_offset;
-
-  /** Number of currently pending flush writes for this log group */
-  ulint n_pending_writes;
-
-  /** Unaligned buffers */
-  byte **file_header_bufs_ptr;
-
-  /** Buffers for each file header in the group */
-  byte **file_header_bufs;
-
-  /** Used only in recovery: recovery scan succeeded up to
-  this lsn in this log group */
-  lsn_t scanned_lsn;
-
-  /** unaligned checkpoint header */
-  byte *checkpoint_buf_ptr;
-
-  /** checkpoint header is written from this buffer to the group */
-  byte *checkpoint_buf;
-
-  /** list of log groups */
-  UT_LIST_NODE_T(log_group_t) log_groups;
+  /** Every file has a header. */
+  alignas(LOG_METADATA_PAGE_SIZE) Log_phy_file_header m_header{};
 };
 
-UT_LIST_NODE_GETTER_DEFINITION(log_group_t, log_groups);
+/**
+ * Log virtual file consists of a number of physical files. The idea is to have
+ * multiple files, currently all the same size. It hides the details of the
+ * virtual offset of the file from the user's perspective and provides a unified
+ * interface for read, write and fsync.
+ *
+ * It maps the virtual offset and LSN to a physical file and offset for both
+ * read and write.
+ */
+struct Log_vfile {
+  enum class State : ulint { OK = 301, CORRUPTED = 302 };
+
+  /* Forbidden copy and move constructors and operators. */
+  Log_vfile(Log_vfile &&) = delete;
+  Log_vfile(const Log_vfile &) = delete;
+  Log_vfile &operator=(Log_vfile &&) = delete;
+  Log_vfile &operator=(const Log_vfile &) = delete;
+
+  Log_vfile() = default;
+
+  /** Constructor
+   * @param directory Directory to store the log files
+   * @param n_files Number of files that make up the vfile.
+   * @param max_file_size Maximum size of the log file in bytes
+   *
+   * @throws std::invalid_argument if the arguments are invalid.
+  */
+  Log_vfile(std::string directory, size_t n_files, off_t max_file_size);
+
+  ~Log_vfile() noexcept;
+
+  /** Convert to a string.
+   *
+   * @return The vfile as a string.
+  */
+  [[nodiscard]] std::string to_string() const noexcept;
+
+  /**
+   * Opens the files.
+   *
+   * @return True if the files are opened successfully, false otherwise.
+   */
+  [[nodiscard]] bool open() noexcept;
+
+  /**
+   * Closes the files.
+   *
+   * @return True if the files are closed successfully, false otherwise.
+   */
+  [[nodiscard]] bool close() noexcept;
+
+  /**
+   * Prepares the checkpoint buffer for a write..
+   *
+   * @param[in] checkpoint_no The checkpoint number.
+   * @param[in] checkpoint_lsn The checkpoint lsn.
+   */
+  void prepare_checkpoint(ulint checkpoint_no, lsn_t checkpoint_lsn) noexcept;
+
+  /**
+   * Sync reads from the files.
+   *
+   * @param[out] buf The buffer to read into.
+   * @param[in] len The length of the data to read.
+   * @param[in] off The offset to read from.
+   *
+   * @return True if the data is read successfully, false otherwise. */
+  [[nodiscard]] bool sync_read(void *buf, size_t len, off_t off) const noexcept;
+
+  /**
+   * Sync writes to the files.
+   *
+   * @param[in] buf The buffer to write from.
+   * @param[in] len The length of the data to write.
+   * @param[in] off The offset to write to.
+   *
+   * @return True if the data is written successfully, false otherwise. */
+  [[nodiscard]] bool sync_write(const void *buf, size_t len, off_t off) noexcept;
+
+  /**
+   * Asynchronously writes to the files.
+   *
+   * @param[in] buf The buffer to write from.
+   * @param[in] len The length of the data to write.
+   * @param[in] off The offset to write to.
+   *
+   * @return True if the data is written successfully, false otherwise.
+   */
+  [[nodiscard]] bool async_write(const void *buf, size_t len, off_t off) noexcept;
+
+  /**
+   * Force a sync of the files.
+   *
+   * @return True if the files are synced successfully, false otherwise.
+   */
+  [[nodiscard]] bool sync() noexcept;
+
+  /**
+   * Gets the checkpoint information.
+   *
+   * @return The checkpoint information.
+   */
+  [[nodiscard]] std::pair<lsn_t, uint64_t> checkpoint_get() const noexcept;
+
+  /**
+   * Writes the checkpoint information to the files.
+   *
+   * @param[in] checkpoint The checkpoint information.
+   * @param[in] off The offset to write the checkpoint information to.
+   *
+   * @return True if the checkpoint information is written successfully, false otherwise. */
+  [[nodiscard]] bool write_checkpoint(Log_phy_checkpoint *checkpoint, off_t off) noexcept;
+
+  /**
+   * Reads the checkpoint information from the files.
+   *
+   * @param[out] phy_checkpoint The checkpoint information.
+   * @param[in] off The offset to read the checkpoint information from.
+   *
+   * @return True if the checkpoint information is read successfully, false otherwise. */
+  [[nodiscard]] bool read(Log_phy_checkpoint &phy_checkpoint, off_t off) const noexcept;
+
+  /**
+   * Reads the checkpoint information from the files.
+   *
+   * @param[out] lsn The lsn of the checkpoint.
+   * @param[out] no The number of the checkpoint.
+   *
+   * @return True if the checkpoint information is read successfully, false otherwise. */
+  [[nodiscard]] bool read_checkpoint(lsn_t &lsn, uint64_t &no) noexcept;
+
+  /**
+   * Reads the log buffer from the files.
+   *
+   * @param[out] buffer The log buffer to read into.
+   * @param[in] start_lsn The start lsn of the log buffer to read.
+   * @param[in] end_lsn The end lsn of the log buffer to read.
+   *
+   * @return True if the log buffer is read successfully, false otherwise. */
+  [[nodiscard]] bool read(Log_buffer &buffer, lsn_t start_lsn, lsn_t end_lsn) noexcept;
+
+  /**
+   * Writes the log buffer to the files.
+   *
+   * @param[in] buffer The log buffer to write from.
+   * @param[in] write_lsn The lsn to write the log buffer to.
+   *
+   * @return True if the log buffer is written successfully, false otherwise.
+   */
+  [[nodiscard]] bool write(Log_buffer &buffer, lsn_t write_lsn) noexcept;
+
+  /**
+   * Flushes the header of the files.
+   *
+   * @param[in] header The header to flush.
+   * @param[in] offset The offset to flush the header to.
+   * @param[in] start_lsn The start lsn of the log buffer to flush.
+   *
+   * @return True if the header is flushed successfully, false otherwise. */
+  [[nodiscard]] bool flush_header(byte *header, off_t offset, lsn_t start_lsn) noexcept;
+
+  /**
+   * Sets the checkpoint information.
+   *
+   * @param[in] file_no The file number.
+   * @param[in] offset The offset to set the checkpoint information to.
+   *
+   * @return True if the checkpoint information is set successfully, false otherwise. */
+  void checkpoint_set(ulint file_no, off_t offset) noexcept;
+
+  /**
+   * Sets the fields of the files.
+   *
+   * @param[in] lsn The lsn to set the fields to.
+   */
+  void set_fields(lsn_t lsn) noexcept;
+
+  /**
+   * Gets the capacity of the files.
+   *
+   * @return The capacity of the files.
+   */
+  [[nodiscard]] off_t get_capacity() const noexcept;
+
+  /** Calculate the real offset of a given offset in the vfile.
+   *
+   * @param[in] offset The offset to calculate the real offset for.
+   *
+   * @return The real offset of the offset in the log vfile.
+   */
+  [[nodiscard]] off_t calc_real_offset(off_t offset) noexcept;
+
+  /** Calculate the offset of a given lsn in the vfile.
+   *
+   * @param[in]  lsn The lsn to calculate the offset for.
+   *
+   * @return The offset of the lsn in the vfile.
+   */
+  [[nodiscard]] off_t calc_lsn_offset(lsn_t lsn) noexcept;
+
+  /**
+   * Gets the file number and offset to write to for a given lsn.
+   *
+   * @param[in] first_header_lsn The lsn of the first header in the vfile.
+   * @param[in] lsn The lsn to get the write coordinates for.
+   *
+   * @return <file number, offset to write to within file number>.
+   */
+  [[nodiscard]] std::pair<const Log_file *, off_t> get_io_coordinates(lsn_t first_header_lsn, lsn_t lsn) const noexcept;
+
+  /**
+   * Converts a lsn to a log block number.
+   *
+   * @param[in]  lsn The lsn of a byte within the block.
+   * @return The log block number, it is > 0 and <= 1G.
+   */
+  [[nodiscard]] static ulint convert_lsn_to_block_no(lsn_t lsn) noexcept {
+    return ulint((lsn / LOG_DATA_PAGE_SIZE) & 0x3FFFFFFFUL) + 1;
+  }
+
+  /**
+   * Calculates the size offset of a given offset in the vfile.
+   *
+   * @param[in] offset The offset to calculate the size offset for.
+   *
+   * @return The size offset of the offset in the vfile.
+   */
+  [[nodiscard]] off_t calc_size_offset(off_t offset) const noexcept;
+
+  /**
+   * Calculates the offset of a given lsn in the vfile.
+   *
+   * @param[in] lsn The lsn to calculate the offset for.
+   *
+   * @return The offset of the lsn in the vfile.
+   */
+  [[nodiscard]] off_t calc_lsn_offset(lsn_t lsn) const noexcept;
+
+  /* FIXME: The following fields are protected by log_sys->mutex */
+
+  /** Directory path for the vfile */
+  std::string m_directory{};
+
+  /** Number of files in the vfile */
+  std::vector<Log_file> m_files{};
+
+  /** LOG_VFILE_OK or LOG_VFILE_CORRUPTED */
+  State m_state{State::OK};
+
+  /** LSN used to fix coordinates within the vfile */
+  lsn_t m_lsn{LOG_START_LSN};
+
+  /** The offset of the above lsn */
+  ulint m_lsn_offset{Log_phy_file_header::HEADER_SIZE};
+
+  /** Number of currently pending flush writes for this vfile */
+  ulint m_n_pending_writes{};
+
+  /** Used only in recovery: recovery scan succeeded up to
+  this lsn in this vfile */
+  lsn_t m_recovered_upto_lsn{};
+
+  /** Maximum file size in bytes. */
+  off_t m_max_file_size{};
+
+  /** Whether the directory was created on startup. */
+  bool m_created_directory{false};
+};
+
+struct Log_checkpoint {
+
+  Log_checkpoint() = default;
+
+  /* Forbidden copy and move constructors and operators. */
+  Log_checkpoint(Log_checkpoint &&) = delete;
+  Log_checkpoint(const Log_checkpoint &) = delete;
+  Log_checkpoint &operator=(Log_checkpoint &&) = delete;
+  Log_checkpoint &operator=(const Log_checkpoint &) = delete;
+
+  ~Log_checkpoint() noexcept;
+
+  /** Prepare the checkpoint buffer.
+   *
+   * @param log The log instance.
+   *
+   * @return LOG_CHECKPOINT_1 or LOG_CHECKPOINT_2
+  */
+  [[nodiscard]] ulint prepare(Log &log) noexcept;
+
+  /** Persist the checkpoint buffer to the vfile.
+   *
+   * @param vfile The vfile.
+   * @param write_offset The write offset (LOG_CHECKPOINT_1 or LOG_CHECKPOINT_2)
+   *
+   * @return True if the checkpoint buffer is persisted successfully, false otherwise.
+  */
+  [[nodiscard]] bool persist(Log_vfile &vfile, off_t write_offset) noexcept;
+
+  /** Check if the checkpoint is consistent.
+   *
+   * @return True if the checkpoint is consistent, false otherwise.
+  */
+  [[nodiscard]] bool is_consistent() const noexcept;
+
+  /** Read the checkpoint from the log file.
+   *
+   * @param offset The offset of the checkpoint in the log file.
+   *
+   * @return True if the checkpoint is read successfully, false otherwise.
+  */
+  [[nodiscard]] bool read(off_t offset) noexcept;
+
+  /**
+   * Completes a checkpoint.
+   */
+  void complete() noexcept;
+
+  /**
+   * Completes an asynchronous checkpoint info write i/o to a log file.
+   */
+  void io_complete() noexcept;
+
+  /** Convert the checkpoint to a string.
+   *
+   * @return The checkpoint as a string.
+  */
+  [[nodiscard]] std::string to_string() const noexcept;
+
+  /** When this recommended value for lsn - srv_buf_pool->get_oldest_modification()
+  s exceeded, we start an asynchronous preflush of pool pages */
+  ulint m_max_modified_age_async{};
+
+  /** When this recommended value for lsn - srv_buf_pool->get_oldest_modification()
+  is exceeded, we start a synchronous preflush of pool pages */
+  ulint m_max_modified_age_sync{};
+
+  /** Administrator-specified checkpoint interval in terms of log growth in
+  bytes; the interval actually used by the database can be smaller */
+  ulint m_adm_interval{};
+
+  /** When this checkpoint age is exceeded we start an asynchronous writing
+  of a new checkpoint */
+  ulint m_max_age_async{};
+
+  /** This is the maximum allowed value for lsn - last_checkpoint_lsn when a new query step is started */
+  ulint m_max_age{};
+
+  /** Next checkpoint number */
+  lsn_t m_next_no{};
+
+  /** Latest checkpoint lsn */
+  lsn_t m_last_lsn{};
+
+  /** Next checkpoint lsn */
+  lsn_t m_next_lsn{};
+
+  /** Number of currently pending checkpoint writes */
+  ulint m_n_pending_writes{};
+
+  /** This latch is x-locked when a checkpoint write is running; a thread should wait for this without owning the log mutex */
+  rw_lock_t m_lock{};
+
+  /** Checkpoint data. */
+  alignas(LOG_METADATA_PAGE_SIZE) Log_phy_checkpoint m_phy_checkpoint{};
+};

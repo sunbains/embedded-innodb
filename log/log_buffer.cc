@@ -15,11 +15,6 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/** @file log/log_buffer.cc
-Log buffer management
-
-*******************************************************/
-
 #include "buf0buf.h"
 #include "log0log.h"
 #include "mem0mem.h"
@@ -60,34 +55,36 @@ void Log::write_low(const byte *str, ulint str_len) noexcept {
   ut_ad(mutex_own(&m_mutex));
 
   while (str_len > 0) {
-    auto data_len = (m_buf_free % IB_FILE_BLOCK_SIZE) + str_len;
+    auto data_len = (m_buf_free % sizeof(Log_phy_block)) + str_len;
 
     ulint len;
 
-    if (data_len <= IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE) {
+    if (data_len <= IB_FILE_BLOCK_SIZE - Log_phy_block::TRAILER_SIZE) {
       len = str_len;
     } else {
-      data_len = IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE;
-      len = IB_FILE_BLOCK_SIZE - (m_buf_free % IB_FILE_BLOCK_SIZE) - LOG_BLOCK_TRL_SIZE;
+      data_len = Log_phy_block::DATA_SIZE;
+      len = sizeof(Log_phy_block) - (m_buf_free % sizeof(Log_phy_block)) - Log_phy_block::TRAILER_SIZE;
     }
 
-    memcpy(m_buf + m_buf_free, str, len);
+    auto log_block = static_cast<Log_phy_block *>(ut_align_down(m_buf + m_buf_free, sizeof(Log_phy_block)));
+
+    log_block->copy(m_buf_free, str, len);
 
     str_len -= len;
     str += len;
 
-    auto log_block = static_cast<byte *>(ut_align_down(m_buf + m_buf_free, IB_FILE_BLOCK_SIZE));
+    log_block->set_data_len(data_len);
 
-    block_set_data_len(log_block, data_len);
-
-    if (data_len == IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE) {
-      block_set_data_len(log_block, IB_FILE_BLOCK_SIZE);
-      block_set_checkpoint_no(log_block, m_next_checkpoint_no);
-      len += LOG_BLOCK_HDR_SIZE + LOG_BLOCK_TRL_SIZE;
+    if (data_len == IB_FILE_BLOCK_SIZE - Log_phy_block::TRAILER_SIZE) {
+      log_block->set_data_len(Log_phy_block::DATA_SIZE);
+      log_block->set_checkpoint_no(m_checkpoint.m_next_no);
+      len += Log_phy_block::HEADER_SIZE + Log_phy_block::TRAILER_SIZE;
 
       m_lsn += len;
 
-      block_init(log_block + IB_FILE_BLOCK_SIZE, m_lsn);
+      log_block->set_block_no(Log_vfile::convert_lsn_to_block_no(m_lsn));
+      log_block->set_first_rec_group(0);
+      log_block->set_data_len(Log_phy_block::HEADER_SIZE);
     } else {
       m_lsn += len;
     }
@@ -107,7 +104,7 @@ void Log::buffer_flush_to_disk() noexcept {
 
   release();
 
-  write_up_to(lsn, LOG_WAIT_ALL_GROUPS, true);
+  write_up_to(lsn, false, true);
 }
 
 void Log::buffer_sync_in_background(bool flush) noexcept {
@@ -117,7 +114,7 @@ void Log::buffer_sync_in_background(bool flush) noexcept {
 
   mutex_exit(&m_mutex);
 
-  write_up_to(lsn, LOG_NO_WAIT, flush);
+  write_up_to(lsn, true, flush);
 }
 
 void Log::flush_margin() noexcept {
@@ -137,7 +134,7 @@ void Log::flush_margin() noexcept {
   release();
 
   if (lsn != 0) {
-    write_up_to(lsn, LOG_NO_WAIT, false);
+    write_up_to(lsn, true, false);
   }
 }
 

@@ -299,6 +299,50 @@ constexpr std::size_t hardware_destructive_interference_size = 64;
 /** OS file handle */
 using os_file_t = int;
 
+/** For Direct IO we need aligned allocations. */
+template <typename T, std::size_t Alignment = IB_FILE_BLOCK_SIZE>
+struct Aligned_allocator {
+  using value_type = T;
+  using size_type = std::size_t;
+  using difference_type = std::ptrdiff_t;
+  using propagate_on_container_copy_assignment = std::false_type;
+  using propagate_on_container_move_assignment = std::false_type;
+  using propagate_on_container_swap = std::false_type;
+
+  Aligned_allocator() noexcept {}
+
+  template <class U>
+  Aligned_allocator(const Aligned_allocator<U, Alignment> &) noexcept {}
+
+  template <class U>
+  struct rebind {
+    using other = Aligned_allocator<U, Alignment>;
+  };
+
+  T *allocate(std::size_t n) {
+    if (n > std::size_t(-1) / sizeof(T)) {
+      throw std::bad_array_new_length();
+    }
+    void *p = ::operator new(n * sizeof(T), std::align_val_t(Alignment));
+    return static_cast<T *>(p);
+  }
+
+  void deallocate(T *p, std::size_t n) noexcept { ::operator delete(p, n * sizeof(T), std::align_val_t(Alignment)); }
+
+  template <class U>
+  bool operator==(const Aligned_allocator<U, Alignment> &) const noexcept {
+    return true;
+  }
+
+  template <class U>
+  bool operator!=(const Aligned_allocator<U, Alignment> &) const noexcept {
+    return false;
+  }
+};
+
+template <typename T, std::size_t Alignment = IB_FILE_BLOCK_SIZE>
+using IO_allocator = Aligned_allocator<T, Alignment>;
+
 #include "innodb0valgrind.h"
 #include "ut0dbg.h"
 #include "ut0ut.h"

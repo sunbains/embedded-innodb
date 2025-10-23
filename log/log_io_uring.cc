@@ -21,36 +21,37 @@ WAL I/O operations using io_uring with scatter-gather support
 Implementation of simplified I/O system specifically for WAL operations.
 *******************************************************/
 
-#include "log_io_uring.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <liburing.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <unistd.h>
 #include <chrono>
 #include <cstring>
-#include <liburing.h>
+
+#include "log_io_uring.h"
 #include "mem0mem.h"
 #include "ut0logger.h"
 
 // Custom deleter function for io_uring that ensures proper cleanup
-void log_aio_deleter(struct io_uring* ring) {
+void log_aio_deleter(io_uring *ring) {
   if (ring == nullptr) {
     return;
   }
-  
+
   // Log cleanup for debugging
   log_info("Cleaning up io_uring instance");
-  
+
   // Ensure io_uring is properly shut down before deletion
   io_uring_queue_exit(ring);
   delete ring;
 }
 
 // Custom allocator function for io_uring that provides logging and error handling
-struct io_uring* log_aio_allocator() {
-  auto* ring = new struct io_uring();
+io_uring *log_aio_allocator() {
+  auto *ring = new io_uring();
   if (ring == nullptr) {
     // Log allocation failure
     log_err("Failed to allocate io_uring instance");
@@ -59,7 +60,7 @@ struct io_uring* log_aio_allocator() {
   return ring;
 }
 
-// Global WAL I/O system instance
+// FIXME: Global WAL I/O system instance
 WAL_IO_System *g_wal_io_system = nullptr;
 
 WAL_IO_System::WAL_IO_System() : m_ring(nullptr, log_aio_deleter) {
@@ -80,12 +81,14 @@ bool WAL_IO_System::initialize(uint32_t queue_depth, uint32_t max_files) {
 
   // Allocate and initialize io_uring instance using custom allocator
   m_ring = Log_aio(log_aio_allocator(), log_aio_deleter);
-  if (!m_ring) {
+
+  if (m_ring == nullptr) {
     log_err("Failed to allocate io_uring instance");
     return false;
   }
-  
+
   int ret = io_uring_queue_init(queue_depth, m_ring.get(), 0);
+
   if (ret != 0) {
     log_err("Failed to initialize io_uring: ", strerror(-ret));
     m_ring.reset();
@@ -180,7 +183,7 @@ uint64_t WAL_IO_System::get_timestamp() const {
   return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-int WAL_IO_System::open_wal_file(const char *file_path, uint64_t file_size) {
+int WAL_IO_System::open_wal_file(const char *file_path, off_t file_size) {
   if (!m_initialized.load() || m_shutdown.load()) {
     return -1;
   }
@@ -188,14 +191,18 @@ int WAL_IO_System::open_wal_file(const char *file_path, uint64_t file_size) {
   mutex_enter(&m_mutex);
 
   int index = allocate_file_index();
+
   if (index < 0) {
     mutex_exit(&m_mutex);
     log_err("No free file slots available for ", file_path);
     return -1;
   }
 
-  int flags = O_RDWR | O_CREAT;
-  int fd = open(file_path, flags, 0644);
+  const int flags = O_RDWR | O_CREAT;
+
+  // FIXME: 0644 is hardcoded for now
+  int fd = ::open(file_path, flags, 0644);
+
   if (fd < 0) {
     release_file_index(index);
     mutex_exit(&m_mutex);
@@ -205,6 +212,7 @@ int WAL_IO_System::open_wal_file(const char *file_path, uint64_t file_size) {
 
   // Get file statistics
   struct stat st;
+
   if (fstat(fd, &st) != 0) {
     close(fd);
     release_file_index(index);
@@ -215,6 +223,7 @@ int WAL_IO_System::open_wal_file(const char *file_path, uint64_t file_size) {
 
   // Initialize file structure
   auto &file = m_files[index];
+
   file.m_fd = fd;
   file.m_path = mem_strdup(file_path);
   file.m_size.store(file_size > 0 ? file_size : st.st_size);
@@ -225,6 +234,7 @@ int WAL_IO_System::open_wal_file(const char *file_path, uint64_t file_size) {
   mutex_exit(&m_mutex);
 
   log_info("Opened WAL file ", file_path, " with index ", index, " size ", file.m_size.load());
+
   return index;
 }
 
@@ -325,13 +335,13 @@ WAL_io_ctx_t *WAL_IO_System::create_io_context(IO_request req_type, uint32_t fil
   uint64_t op_id = m_next_op_id.fetch_add(1);
 
   WAL_io_ctx_t ctx;
-  ctx.req_type = req_type;
-  ctx.callback_data = callback_data;
-  ctx.file_index = file_index;
-  ctx.start_time = get_timestamp();
-  ctx.bytes_requested = 0;
-  ctx.result.store(0);
-  ctx.completed.store(false);
+  ctx.m_req_type = req_type;
+  ctx.m_callback_data = callback_data;
+  ctx.m_file_index = file_index;
+  ctx.m_start_time = get_timestamp();
+  ctx.m_bytes_requested = 0;
+  ctx.m_result.store(0);
+  ctx.m_completed.store(false);
 
   mutex_enter(&m_mutex);
   m_io_contexts[op_id] = ctx;
@@ -345,11 +355,11 @@ void WAL_IO_System::complete_io_context(uint64_t op_id, int result) {
 
   auto it = m_io_contexts.find(op_id);
   if (it != m_io_contexts.end()) {
-    it->second.result.store(result);
-    it->second.completed.store(true);
+    it->second.m_result.store(result);
+    it->second.m_completed.store(true);
 
     if (result >= 0) {
-      switch (it->second.req_type) {
+      switch (it->second.m_req_type) {
         case IO_request::Async_log_read:
           stats.total_reads.fetch_add(1);
           if (result > 0) {
@@ -387,7 +397,7 @@ int WAL_IO_System::async_read(int file_index, void *buffer, size_t length, off_t
     return -1;
   }
 
-  ctx->bytes_requested = length;
+  ctx->m_bytes_requested = length;
 
   struct io_uring_sqe *sqe = io_uring_get_sqe(m_ring.get());
   if (!sqe) {
@@ -421,7 +431,7 @@ int WAL_IO_System::async_write(int file_index, const void *buffer, size_t length
     return -1;
   }
 
-  ctx->bytes_requested = length;
+  ctx->m_bytes_requested = length;
 
   struct io_uring_sqe *sqe = io_uring_get_sqe(m_ring.get());
   if (!sqe) {
@@ -452,14 +462,14 @@ int WAL_IO_System::scatter_read(int file_index, const WAL_iovec_t *iovec, size_t
 
   // Check if we can use vectored I/O (all buffers must be contiguous)
   bool can_use_vectored = (iovec_count > 1);
-  off_t expected_offset = iovec[0].offset;
+  off_t expected_offset = iovec[0].m_offset;
 
   for (size_t i = 0; i < iovec_count && can_use_vectored; ++i) {
-    if (iovec[i].offset != expected_offset) {
+    if (iovec[i].m_offset != expected_offset) {
       can_use_vectored = false;
       break;
     }
-    expected_offset += iovec[i].length;
+    expected_offset += iovec[i].m_length;
   }
 
   if (can_use_vectored && iovec_count <= IOV_MAX) {
@@ -472,9 +482,9 @@ int WAL_IO_System::scatter_read(int file_index, const WAL_iovec_t *iovec, size_t
     // Calculate total bytes for statistics
     size_t total_bytes = 0;
     for (size_t i = 0; i < iovec_count; ++i) {
-      total_bytes += iovec[i].length;
+      total_bytes += iovec[i].m_length;
     }
-    ctx->bytes_requested = total_bytes;
+    ctx->m_bytes_requested = total_bytes;
 
     struct io_uring_sqe *sqe = io_uring_get_sqe(m_ring.get());
     if (!sqe) {
@@ -488,11 +498,11 @@ int WAL_IO_System::scatter_read(int file_index, const WAL_iovec_t *iovec, size_t
     // Convert WAL_iovec_t to struct iovec
     std::vector<struct iovec> iovecs(iovec_count);
     for (size_t i = 0; i < iovec_count; ++i) {
-      iovecs[i].iov_base = iovec[i].buffer;
-      iovecs[i].iov_len = iovec[i].length;
+      iovecs[i].iov_base = iovec[i].m_buffer;
+      iovecs[i].iov_len = iovec[i].m_length;
     }
 
-    io_uring_prep_readv(sqe, file.m_fd, iovecs.data(), iovec_count, iovec[0].offset);
+    io_uring_prep_readv(sqe, file.m_fd, iovecs.data(), iovec_count, iovec[0].m_offset);
     io_uring_sqe_set_data(sqe, ctx);
 
     int ret = io_uring_submit(m_ring.get());
@@ -517,7 +527,7 @@ int WAL_IO_System::scatter_read(int file_index, const WAL_iovec_t *iovec, size_t
       if (!contexts[i]) {
         return -1;
       }
-      contexts[i]->bytes_requested = iovec[i].length;
+      contexts[i]->m_bytes_requested = iovec[i].m_length;
 
       sqes[i] = io_uring_get_sqe(m_ring.get());
       if (!sqes[i]) {
@@ -531,7 +541,7 @@ int WAL_IO_System::scatter_read(int file_index, const WAL_iovec_t *iovec, size_t
 
     // Prepare all operations
     for (size_t i = 0; i < iovec_count; ++i) {
-      io_uring_prep_read(sqes[i], file.m_fd, iovec[i].buffer, iovec[i].length, iovec[i].offset);
+      io_uring_prep_read(sqes[i], file.m_fd, iovec[i].m_buffer, iovec[i].m_length, iovec[i].m_offset);
       io_uring_sqe_set_data(sqes[i], contexts[i]);
       op_ids.push_back(m_next_op_id.load() - (iovec_count - i));
     }
@@ -555,14 +565,14 @@ int WAL_IO_System::gather_write(int file_index, const WAL_iovec_t *iovec, size_t
 
   // Check if we can use vectored I/O (all buffers must be contiguous)
   bool can_use_vectored = (iovec_count > 1);
-  off_t expected_offset = iovec[0].offset;
+  off_t expected_offset = iovec[0].m_offset;
 
   for (size_t i = 0; i < iovec_count && can_use_vectored; ++i) {
-    if (iovec[i].offset != expected_offset) {
+    if (iovec[i].m_offset != expected_offset) {
       can_use_vectored = false;
       break;
     }
-    expected_offset += iovec[i].length;
+    expected_offset += iovec[i].m_length;
   }
 
   if (can_use_vectored && iovec_count <= IOV_MAX) {
@@ -575,9 +585,9 @@ int WAL_IO_System::gather_write(int file_index, const WAL_iovec_t *iovec, size_t
     // Calculate total bytes for statistics
     size_t total_bytes = 0;
     for (size_t i = 0; i < iovec_count; ++i) {
-      total_bytes += iovec[i].length;
+      total_bytes += iovec[i].m_length;
     }
-    ctx->bytes_requested = total_bytes;
+    ctx->m_bytes_requested = total_bytes;
 
     struct io_uring_sqe *sqe = io_uring_get_sqe(m_ring.get());
     if (!sqe) {
@@ -591,11 +601,11 @@ int WAL_IO_System::gather_write(int file_index, const WAL_iovec_t *iovec, size_t
     // Convert WAL_iovec_t to struct iovec
     std::vector<struct iovec> iovecs(iovec_count);
     for (size_t i = 0; i < iovec_count; ++i) {
-      iovecs[i].iov_base = iovec[i].buffer;
-      iovecs[i].iov_len = iovec[i].length;
+      iovecs[i].iov_base = iovec[i].m_buffer;
+      iovecs[i].iov_len = iovec[i].m_length;
     }
 
-    io_uring_prep_writev(sqe, file.m_fd, iovecs.data(), iovec_count, iovec[0].offset);
+    io_uring_prep_writev(sqe, file.m_fd, iovecs.data(), iovec_count, iovec[0].m_offset);
     io_uring_sqe_set_data(sqe, ctx);
 
     int ret = io_uring_submit(m_ring.get());
@@ -620,7 +630,7 @@ int WAL_IO_System::gather_write(int file_index, const WAL_iovec_t *iovec, size_t
       if (!contexts[i]) {
         return -1;
       }
-      contexts[i]->bytes_requested = iovec[i].length;
+      contexts[i]->m_bytes_requested = iovec[i].m_length;
 
       sqes[i] = io_uring_get_sqe(m_ring.get());
       if (!sqes[i]) {
@@ -634,7 +644,7 @@ int WAL_IO_System::gather_write(int file_index, const WAL_iovec_t *iovec, size_t
 
     // Prepare all operations
     for (size_t i = 0; i < iovec_count; ++i) {
-      io_uring_prep_write(sqes[i], file.m_fd, iovec[i].buffer, iovec[i].length, iovec[i].offset);
+      io_uring_prep_write(sqes[i], file.m_fd, iovec[i].m_buffer, iovec[i].m_length, iovec[i].m_offset);
       io_uring_sqe_set_data(sqes[i], contexts[i]);
       op_ids.push_back(m_next_op_id.load() - (iovec_count - i));
     }
@@ -688,7 +698,7 @@ int WAL_IO_System::async_flush(int file_index, bool sync_metadata, void *callbac
     return -1;
   }
 
-  ctx->bytes_requested = 0;  // Flush doesn't transfer bytes
+  ctx->m_bytes_requested = 0;  // Flush doesn't transfer bytes
 
   struct io_uring_sqe *sqe = io_uring_get_sqe(m_ring.get());
   if (!sqe) {
@@ -746,8 +756,8 @@ int WAL_IO_System::process_completions(uint32_t max_events, uint32_t timeout_ms)
       WAL_io_ctx_t *ctx = static_cast<WAL_io_ctx_t *>(io_uring_cqe_get_data(cqe));
       if (ctx) {
         // Update file pending ops counter
-        if (ctx->file_index < m_files.size()) {
-          m_files[ctx->file_index].m_pending_ops.fetch_sub(1);
+        if (ctx->m_file_index < m_files.size()) {
+          m_files[ctx->m_file_index].m_pending_ops.fetch_sub(1);
         }
 
         // Complete the context
@@ -773,8 +783,8 @@ bool WAL_IO_System::wait_for_completion(int op_id, uint32_t timeout_ms) {
   while ((get_timestamp() - start_time) < timeout_us) {
     mutex_enter(&m_mutex);
     auto it = m_io_contexts.find(op_id);
-    if (it != m_io_contexts.end() && it->second.completed.load()) {
-      bool success = it->second.result.load() >= 0;
+    if (it != m_io_contexts.end() && it->second.m_completed.load()) {
+      bool success = it->second.m_result.load() >= 0;
       m_io_contexts.erase(it);
       mutex_exit(&m_mutex);
       return success;
@@ -804,14 +814,15 @@ bool WAL_IO_System::is_file_open(int file_index) const {
   return m_files[file_index].m_is_open.load();
 }
 
-// Global functions
 bool wal_io_system_init() {
-  if (g_wal_io_system) {
+  if (g_wal_io_system != nullptr) {
     return false;  // Already initialized
   }
 
   g_wal_io_system = new WAL_IO_System();
-  if (!g_wal_io_system->initialize()) {
+
+  // FIXME: These values are hardcoded for now
+  if (!g_wal_io_system->initialize(256, 16)) {
     delete g_wal_io_system;
     g_wal_io_system = nullptr;
     return false;
@@ -821,7 +832,7 @@ bool wal_io_system_init() {
 }
 
 void wal_io_system_shutdown() {
-  if (g_wal_io_system) {
+  if (g_wal_io_system != nullptr) {
     delete g_wal_io_system;
     g_wal_io_system = nullptr;
   }

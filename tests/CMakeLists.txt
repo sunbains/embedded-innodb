@@ -3,26 +3,29 @@
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; version 2 of the License.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-# This is the CMakeLists for Embedded InnoDB
-PROJECT (TESTS)
+# This is the CMakeLists for Embedded InnoDB Tests
+# Inherit configuration from parent project - no need to redefine PROJECT()
 
+# Use parent project's C++ standard and compiler settings
+# (inherited automatically from parent CMakeLists.txt)
+
+# Set up libraries - use parent project's innodb target
 SET(LIBS innodb pthread m)
 
-# Set binary output directory to bin/
-SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
+# Set binary output directory to match parent project
+SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/../include)
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/../)
+# Include directories are inherited from parent project
 
 # The innodb library already includes liburing dependency
 
@@ -52,7 +55,7 @@ ADD_EXECUTABLE(ib_mt_drv ib_mt_drv.cc ib_mt_base.cc ib_mt_t1.cc ib_mt_t2.cc test
 ADD_EXECUTABLE(ib_mt_stress ib_mt_stress.cc test0aux.cc test_logger.cc)
 ADD_EXECUTABLE(ib_perf1 ib_perf1.cc test0aux.cc test_logger.cc)
 
-LINK_DIRECTORIES(${EMBEDDED_INNODB})
+LINK_DIRECTORIES(${CMAKE_SOURCE_DIR}/../lib)
 
 TARGET_LINK_LIBRARIES(ib_cfg PRIVATE ${LIBS})
 TARGET_LINK_LIBRARIES(ib_cursor PRIVATE ${LIBS})
@@ -81,11 +84,9 @@ TARGET_LINK_LIBRARIES(ib_mt_stress PRIVATE ${LIBS})
 TARGET_LINK_LIBRARIES(ib_perf1 PRIVATE ${LIBS})
 
 # Log_core unit tests - minimal dependencies
-SET(CMAKE_CXX_STANDARD 20)
-SET(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 ADD_EXECUTABLE(test_log0core_simple
-  test_log0core_simple.cc 
+  test_log0core_simple.cc
   test_logger.cc
 )
 

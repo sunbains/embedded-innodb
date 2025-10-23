@@ -232,232 +232,6 @@ void Recv_sys::close() noexcept {
 }
 
 /**
- * Truncates a log group by erasing log records up to a specified limit.
- *
- * @param group The log group.
- * @param recovered_lsn The LSN up to which recovery has succeeded.
- * @param limit_lsn The limit LSN for recovery. If set to IB_UINT64_T_MAX, erase as much as possible.
- * @param checkpoint_lsn The LSN of the checkpoint from which recovery was started.
- */
-static void recv_truncate_group(log_group_t *group, lsn_t recovered_lsn, lsn_t limit_lsn, lsn_t checkpoint_lsn) noexcept {
-  auto finish_lsn1 = ut_uint64_align_down(checkpoint_lsn, IB_FILE_BLOCK_SIZE) + log_sys->group_get_capacity(group);
-  auto finish_lsn2 = ut_uint64_align_up(recovered_lsn, IB_FILE_BLOCK_SIZE) + recv_sys->m_last_log_buf_size;
-
-  lsn_t finish_lsn;
-
-  if (limit_lsn != IB_UINT64_T_MAX) {
-    /* We do not know how far we should erase log records: erase
-    as much as possible */
-
-    finish_lsn = finish_lsn1;
-
-  } else {
-    /* It is enough to erase the length of the log buffer */
-    finish_lsn = finish_lsn1 < finish_lsn2 ? finish_lsn1 : finish_lsn2;
-  }
-
-  ut_a(RECV_SCAN_SIZE <= log_sys->m_buf_size);
-
-  memset(log_sys->m_buf, '\0', RECV_SCAN_SIZE);
-
-  auto start_lsn = ut_uint64_align_down(recovered_lsn, IB_FILE_BLOCK_SIZE);
-
-  if (start_lsn != recovered_lsn) {
-    /* Copy the last incomplete log block to the log buffer and
-    edit its data length: */
-
-    memcpy(log_sys->m_buf, recv_sys->m_last_block, IB_FILE_BLOCK_SIZE);
-
-    log_sys->block_set_data_len(log_sys->m_buf, ulint(recovered_lsn - start_lsn));
-  }
-
-  if (start_lsn < finish_lsn) {
-    for (;;) {
-      const auto end_lsn = std::min(start_lsn + RECV_SCAN_SIZE, finish_lsn);
-
-      auto len = ulint(end_lsn - start_lsn);
-
-      log_sys->group_write_buf(group, log_sys->m_buf, len, start_lsn, 0);
-
-      if (end_lsn >= finish_lsn) {
-        return;
-      }
-
-      memset(log_sys->m_buf, '\0', RECV_SCAN_SIZE);
-
-      start_lsn = end_lsn;
-    }
-  }
-}
-
-/**
- * Copies the log segment between group->recovered_lsn and recovered_lsn from
- * the most up-to-date log group to group, so that it contains the latest log data.
- *
- * @param up_to_date_group The most up-to-date log group.
- * @param group The log group to copy to.
- * @param recovered_lsn The LSN up to which recovery has succeeded.
- */
-static void recv_copy_group(log_group_t *up_to_date_group, log_group_t *group, lsn_t recovered_lsn) noexcept {
-  if (group->scanned_lsn >= recovered_lsn) {
-
-    return;
-  }
-
-  ut_a(RECV_SCAN_SIZE <= log_sys->m_buf_size);
-
-  auto start_lsn = ut_uint64_align_down(group->scanned_lsn, IB_FILE_BLOCK_SIZE);
-
-  for (;;) {
-    auto end_lsn = std::min(start_lsn + RECV_SCAN_SIZE, recovered_lsn);
-    if (end_lsn > recovered_lsn) {
-      end_lsn = ut_uint64_align_up(recovered_lsn, IB_FILE_BLOCK_SIZE);
-    }
-
-    log_sys->group_read_log_seg(LOG_RECOVER, log_sys->m_buf, up_to_date_group, start_lsn, end_lsn);
-
-    auto len = (ulint)(end_lsn - start_lsn);
-
-    log_sys->group_write_buf(group, log_sys->m_buf, len, start_lsn, 0);
-
-    if (end_lsn >= recovered_lsn) {
-      return;
-    }
-
-    start_lsn = end_lsn;
-  }
-}
-
-/**
- * Copies a log segment from the most up-to-date log group to the other log
- * groups, so that they all contain the latest log data. Also writes the info
- * about the latest checkpoint to the groups, and inits the fields in the group
- * memory structs to up-to-date values.
- *
- * @param up_to_date_group The most up-to-date log group.
- */
-static void recv_synchronize_groups(log_group_t *up_to_date_group) noexcept {
-  auto recovered_lsn = recv_sys->m_recovered_lsn;
-
-  /* Read the last recovered log block to the recovery system buffer:
-  the block is always incomplete */
-
-  auto start_lsn = ut_uint64_align_down(recovered_lsn, IB_FILE_BLOCK_SIZE);
-  auto end_lsn = ut_uint64_align_up(recovered_lsn, IB_FILE_BLOCK_SIZE);
-
-  ut_a(start_lsn != end_lsn);
-
-  log_sys->group_read_log_seg(LOG_RECOVER, recv_sys->m_last_block, up_to_date_group, start_lsn, end_lsn);
-
-  for (auto group : log_sys->m_log_groups) {
-    if (group != up_to_date_group) {
-
-      /* Copy log data if needed */
-
-      recv_copy_group(group, up_to_date_group, recovered_lsn);
-    }
-
-    /* Update the fields in the group struct to correspond to
-    recovered_lsn */
-
-    log_sys->group_set_fields(group, recovered_lsn);
-  }
-
-  /* Copy the checkpoint info to the groups; remember that we have
-  incremented checkpoint_no by one, and the info will not be written
-  over the max checkpoint info, thus making the preservation of max
-  checkpoint info on disk certain */
-
-  log_sys->groups_write_checkpoint_info();
-
-  log_sys->release();
-
-  /* Wait for the checkpoint write to complete */
-  rw_lock_s_lock(&log_sys->m_checkpoint_lock);
-  rw_lock_s_unlock(&log_sys->m_checkpoint_lock);
-
-  log_sys->acquire();
-}
-
-/**
- * Checks if the given buffer containing checkpoint information is consistent.
- *
- * @param buf The buffer containing the checkpoint info.
- *
- * @return true if the checkpoint is consistent, false otherwise.
- */
-static bool recv_check_cp_is_consistent(const byte *buf) noexcept {
-  auto fold = ut_fold_binary(buf, LOG_CHECKPOINT_CHECKSUM_1);
-
-  if ((fold & 0xFFFFFFFFUL) != mach_read_from_4(buf + LOG_CHECKPOINT_CHECKSUM_1)) {
-    return false;
-  }
-
-  fold = ut_fold_binary(buf + LOG_CHECKPOINT_LSN, LOG_CHECKPOINT_CHECKSUM_2 - LOG_CHECKPOINT_LSN);
-
-  if ((fold & 0xFFFFFFFFUL) != mach_read_from_4(buf + LOG_CHECKPOINT_CHECKSUM_2)) {
-    return false;
-  }
-
-  return true;
-}
-
-/**
- * Finds the maximum checkpoint in the log groups and returns the corresponding group and field.
- *
- * @param[out] max_group Pointer to the maximum group found
- * @param[out] max_field Pointer to the maximum field found (LOG_CHECKPOINT_1 or LOG_CHECKPOINT_2)
- *
- * @return DB_SUCCESS if a valid checkpoint is found, DB_ERROR otherwise
- */
-static db_err recv_find_max_checkpoint(log_group_t **max_group, ulint *max_field) noexcept {
-  *max_field = 0;
-  *max_group = nullptr;
-
-  uint64_t max_no{};
-  auto buf = log_sys->m_checkpoint_buf;
-
-  for (auto group : log_sys->m_log_groups) {
-    group->state = LOG_GROUP_CORRUPTED;
-
-    for (auto field = LOG_CHECKPOINT_1; field <= LOG_CHECKPOINT_2; field += LOG_CHECKPOINT_2 - LOG_CHECKPOINT_1) {
-
-      log_sys->group_read_checkpoint_info(group, field);
-
-      if (recv_check_cp_is_consistent(buf)) {
-        group->state = LOG_GROUP_OK;
-
-        group->lsn = mach_read_from_8(buf + LOG_CHECKPOINT_LSN);
-        group->lsn_offset = mach_read_from_4(buf + LOG_CHECKPOINT_OFFSET);
-
-        auto checkpoint_no = mach_read_from_8(buf + LOG_CHECKPOINT_NO);
-
-        if (checkpoint_no >= max_no) {
-          *max_group = group;
-          *max_field = field;
-          max_no = checkpoint_no;
-        }
-      }
-    }
-  }
-
-  if (*max_group == nullptr) {
-
-    log_err(
-      "No valid checkpoint found. If this error appears when you are"
-      " creating an InnoDB database, the problem may be that during"
-      " an earlier attempt you managed to create the InnoDB data files,"
-      " but log file creation failed. If that is the case, please refer"
-      " to the InnoDB website for details"
-    );
-
-    return DB_ERROR;
-  } else {
-    return DB_SUCCESS;
-  }
-}
-
-/**
  * Checks if the log block checksum is valid.
  *
  * @param block Pointer to a log block
@@ -1101,13 +875,13 @@ static ulint recv_parse_log_rec(
  * @param len The length of the data added, excluding log block headers.
  */
 static lsn_t recv_calc_lsn_on_data_add(lsn_t lsn, uint64_t len) noexcept {
-  auto frag_len = (ulint(lsn) % IB_FILE_BLOCK_SIZE) - LOG_BLOCK_HDR_SIZE;
+  auto frag_len = (ulint(lsn) % IB_FILE_BLOCK_SIZE) - Log_phy_block::HEADER_SIZE;
 
-  ut_ad(frag_len < IB_FILE_BLOCK_SIZE - LOG_BLOCK_HDR_SIZE - LOG_BLOCK_TRL_SIZE);
+  ut_ad(frag_len < IB_FILE_BLOCK_SIZE - Log_phy_block::HEADER_SIZE - Log_phy_block::TRAILER_SIZE);
   auto lsn_len = ulint(len);
 
-  lsn_len += (lsn_len + frag_len) / (IB_FILE_BLOCK_SIZE - LOG_BLOCK_HDR_SIZE - LOG_BLOCK_TRL_SIZE) *
-             (LOG_BLOCK_HDR_SIZE + LOG_BLOCK_TRL_SIZE);
+  lsn_len += (lsn_len + frag_len) / (IB_FILE_BLOCK_SIZE - Log_phy_block::HEADER_SIZE - Log_phy_block::TRAILER_SIZE) *
+             (Log_phy_block::HEADER_SIZE + Log_phy_block::TRAILER_SIZE);
 
   return lsn + lsn_len;
 }
@@ -1330,7 +1104,7 @@ bool recv_parse_log_recs(bool store_to_hash) noexcept {
  *
  * @return	true if more data added
  */
-static bool recv_sys_add_to_parsing_buf(const byte *log_block, lsn_t scanned_lsn) noexcept {
+static bool recv_sys_add_to_parsing_buf(const Log_phy_block *log_block, lsn_t scanned_lsn) noexcept {
   ulint more_len;
 
   ut_ad(scanned_lsn >= recv_sys->m_scanned_lsn);
@@ -1342,7 +1116,7 @@ static bool recv_sys_add_to_parsing_buf(const byte *log_block, lsn_t scanned_lsn
     return false;
   }
 
-  auto data_len = Log::block_get_data_len(log_block);
+  auto data_len = log_block->get_data_len();
 
   if (recv_sys->m_parse_start_lsn >= scanned_lsn) {
 
@@ -1367,14 +1141,14 @@ static bool recv_sys_add_to_parsing_buf(const byte *log_block, lsn_t scanned_lsn
 
   auto start_offset = data_len - more_len;
 
-  if (start_offset < LOG_BLOCK_HDR_SIZE) {
-    start_offset = LOG_BLOCK_HDR_SIZE;
+  if (start_offset < Log_phy_block::HEADER_SIZE) {
+    start_offset = Log_phy_block::HEADER_SIZE;
   }
 
   auto end_offset = data_len;
 
-  if (end_offset > IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE) {
-    end_offset = IB_FILE_BLOCK_SIZE - LOG_BLOCK_TRL_SIZE;
+  if (end_offset > IB_FILE_BLOCK_SIZE - Log_phy_block::TRAILER_SIZE) {
+    end_offset = IB_FILE_BLOCK_SIZE - Log_phy_block::TRAILER_SIZE;
   }
 
   ut_ad(start_offset <= end_offset);
@@ -1419,13 +1193,13 @@ static void recv_sys_justify_left_parsing_buf() noexcept {
  * @param[in] start_lsn         Buffer start lsn
  * @param[in,out] contiguous_lsn It is known that all log groups contain
  *                              contiguouslog data up to this lsn
- * @param[out] group_scanned_lsn Scanning succeeded up to this lsn
+ * @param[out] scanned_upto_lsn Scanning succeeded up to this lsn
  *
  * @return true if limit_lsn has been reached, or not able to scan any more in this log group.
  */
 static bool recv_scan_log_recs(
-  DBLWR *dblwr, ib_recovery_t recovery, ulint available_memory, bool store_to_hash, const byte *buf, ulint len, lsn_t start_lsn,
-  lsn_t *contiguous_lsn, lsn_t *group_scanned_lsn
+  DBLWR *dblwr, ib_recovery_t recovery, ulint available_memory, bool store_to_hash, const Log_phy_block *buf, ulint len,
+  lsn_t start_lsn, lsn_t *contiguous_lsn, lsn_t *scanned_upto_lsn
 ) noexcept {
 
   ut_ad(len >= IB_FILE_BLOCK_SIZE);
@@ -1435,58 +1209,59 @@ static bool recv_scan_log_recs(
   auto log_block = buf;
   bool finished = false;
   auto more_data = false;
-  auto scanned_lsn = start_lsn;
+  auto start_scan_lsn = start_lsn;
 
   do {
-    auto no = Log::block_get_hdr_no(log_block);
-    const auto checksum_ok{is_log_block_checksum_ok(log_block)};
-    const auto block_no{Log::block_convert_lsn_to_no(scanned_lsn)};
+    auto no = log_block->get_block_no();
+    const auto checksum_ok{log_block->is_checksum_ok()};
+    const auto block_no{Log_vfile::convert_lsn_to_no(start_scan_lsn)};
 
     if (no != block_no || !checksum_ok) {
       if (no == block_no && !checksum_ok) {
         log_warn(std::format(
           "Log block no {} at lsn {} has ok header, but checksum field contains {}, should be {}",
           no,
-          scanned_lsn,
-          Log::block_get_checksum(log_block),
-          Log::block_calc_checksum(log_block)
+          start_scan_lsn,
+          log_block->get_checksum(),
+          log_calc_checksum(log_block->data(), log_block->get_data_len())
         ));
       }
       finished = true;
       break;
     }
-    if (Log::block_get_flush_bit(log_block)) {
+    if (log_block->get_flush_bit()) {
       /* This block was a start of a log flush operation: we know that the previous flush
       operation must have been completed for all log groups before this block can have been
       flushed to any of the groups. Therefore, we know that log data is contiguous up to
       scanned_lsn in all non-corrupt log groups. */
 
-      if (scanned_lsn > *contiguous_lsn) {
-        *contiguous_lsn = scanned_lsn;
+      if (start_scan_lsn > *contiguous_lsn) {
+        *contiguous_lsn = start_scan_lsn;
       }
     }
 
-    auto data_len = Log::block_get_data_len(log_block);
+    auto data_len = log_block->get_data_len();
 
-    if ((store_to_hash || data_len == IB_FILE_BLOCK_SIZE) && scanned_lsn + data_len > recv_sys->m_scanned_lsn &&
-        recv_sys->m_scanned_checkpoint_no > 0 && Log::block_get_checkpoint_no(log_block) < recv_sys->m_scanned_checkpoint_no &&
-        recv_sys->m_scanned_checkpoint_no - Log::block_get_checkpoint_no(log_block) > 0x80000000UL) {
+    if ((store_to_hash || data_len == IB_FILE_BLOCK_SIZE) && start_scan_lsn + data_len > recv_sys->m_scanned_lsn &&
+        recv_sys->m_scanned_checkpoint_no > 0 && log_block->get_checkpoint_no() < recv_sys->m_scanned_checkpoint_no &&
+        recv_sys->m_scanned_checkpoint_no - log_block->get_checkpoint_no() > 0x80000000UL) {
 
       finished = true;
       break;
     }
 
-    if (recv_sys->m_parse_start_lsn == 0 && Log::block_get_first_rec_group(log_block) > 0) {
+    if (recv_sys->m_parse_start_lsn == 0 && log_block->get_first_rec_group() > 0) {
 
-      const auto parse_start_lsn = scanned_lsn + Log::block_get_first_rec_group(log_block);
+      const auto parse_start_lsn = start_scan_lsn + log_block->get_first_rec_group();
+
       recv_sys->m_parse_start_lsn = parse_start_lsn;
       recv_sys->m_scanned_lsn = parse_start_lsn;
       recv_sys->m_recovered_lsn = parse_start_lsn;
     }
 
-    scanned_lsn += data_len;
+    start_scan_lsn += data_len;
 
-    if (scanned_lsn > recv_sys->m_scanned_lsn) {
+    if (start_scan_lsn > recv_sys->m_scanned_lsn) {
 
       /* We have found more entries. If this scan is of startup type, we must initiate crash recovery
       environment before parsing these log records. */
@@ -1509,11 +1284,11 @@ static bool recv_scan_log_recs(
         }
 
       } else if (!recv_sys->m_found_corrupt_log) {
-        more_data = recv_sys_add_to_parsing_buf(log_block, scanned_lsn);
+        more_data = recv_sys_add_to_parsing_buf(log_block, start_scan_lsn);
       }
 
-      recv_sys->m_scanned_lsn = scanned_lsn;
-      recv_sys->m_scanned_checkpoint_no = Log::block_get_checkpoint_no(log_block);
+      recv_sys->m_scanned_lsn = start_scan_lsn;
+      recv_sys->m_scanned_checkpoint_no = log_block->get_checkpoint_no();
     }
 
     if (data_len < IB_FILE_BLOCK_SIZE) {
@@ -1524,13 +1299,13 @@ static bool recv_scan_log_recs(
     }
   } while (log_block < buf + len && !finished);
 
-  *group_scanned_lsn = scanned_lsn;
+  *scanned_upto_lsn = start_scan_lsn;
 
   if (recv_needed_recovery) {
     recv_scan_print_counter++;
 
     if (finished || (recv_scan_print_counter % 80 == 0)) {
-      log_info("Doing recovery: scanned up to log sequence number ", *group_scanned_lsn);
+      log_info("Doing recovery: scanned up to log sequence number ", *scanned_upto_lsn);
     }
   }
 
@@ -1559,31 +1334,29 @@ static bool recv_scan_log_recs(
  * @param[in] recovery The recovery flag.
  * @param[in] group The log group.
  * @param[in] contiguous_lsn The LSN up to which the log data is known to be contiguous.
- * @param[in] group_scanned_lsn The LSN up to which the log data has been scanned.
  *
  */
-static void recv_group_scan_log_recs(
-  DBLWR *dblwr, ib_recovery_t recovery, log_group_t *group, lsn_t *contiguous_lsn, lsn_t *group_scanned_lsn
-) noexcept {
+static void recv_group_scan_log_recs(DBLWR *dblwr, ib_recovery_t recovery, lsn_t *contiguous_lsn) noexcept {
 
-  bool finished = false;
+  bool finished{};
+  lsn_t scanned_lsn{};
   auto start_lsn = *contiguous_lsn;
 
   while (!finished) {
     auto end_lsn = start_lsn + RECV_SCAN_SIZE;
 
-    log_sys->group_read_log_seg(LOG_RECOVER, log_sys->m_buf, group, start_lsn, end_lsn);
+    log_sys->read_log_segment(log_sys->m_buf, start_lsn, end_lsn, &scanned_lsn);
 
     finished = recv_scan_log_recs(
       dblwr,
       recovery,
       (srv_buf_pool->m_curr_size - recv_n_pool_free_frames) * UNIV_PAGE_SIZE,
       true,
-      log_sys->m_buf,
+      reinterpret_cast<const Log_phy_block *>(log_sys->m_buf),
       RECV_SCAN_SIZE,
       start_lsn,
       contiguous_lsn,
-      group_scanned_lsn
+      &scanned_lsn
     );
     start_lsn = end_lsn;
   }
@@ -1663,26 +1436,26 @@ db_err recv_recovery_from_checkpoint_start(DBLWR *dblwr, ib_recovery_t recovery,
 
   log_sys->acquire();
 
+  lsn_t checkpoint_lsn{};
+  uint64_t checkpoint_no{};
+
   /* Look for the latest checkpoint from any of the log groups */
-
-  ulint max_cp_field;
-  log_group_t *max_cp_group;
-
-  auto err = recv_find_max_checkpoint(&max_cp_group, &max_cp_field);
-
-  if (err != DB_SUCCESS) {
+  if (!log_sys->read_checkpoint(checkpoint_lsn, checpoint_no)) {
 
     log_sys->release();
 
-    return err;
+    log_err(
+      "No valid checkpoint found. If this error appears when you are"
+      " creating an InnoDB database, the problem may be that during"
+      " an earlier attempt you managed to create the InnoDB data files,"
+      " but log file creation failed."
+    );
+
+    return DB_ERROR;
   }
 
-  log_sys->group_read_checkpoint_info(max_cp_group, max_cp_field);
-
-  auto buf = log_sys->m_checkpoint_buf;
-
-  lsn_t checkpoint_lsn = mach_read_from_8(buf + LOG_CHECKPOINT_LSN);
-  auto checkpoint_no = mach_read_from_8(buf + LOG_CHECKPOINT_NO);
+  // lsn_t checkpoint_lsn = mach_read_from_8(buf + LOG_CHECKPOINT_LSN);
+  // auto checkpoint_no = mach_read_from_8(buf + LOG_CHECKPOINT_NO);
 
   log_info(std::format("Found max checkpoint lsn: {}, checkpoint no: {}", checkpoint_lsn, checkpoint_no));
 
@@ -1690,33 +1463,20 @@ db_err recv_recovery_from_checkpoint_start(DBLWR *dblwr, ib_recovery_t recovery,
   variable contiguous_lsn contains an lsn up to which the log is
   known to be contiguously written to all log groups. */
 
-  recv_sys->m_parse_start_lsn = checkpoint_lsn;
-  recv_sys->m_scanned_lsn = checkpoint_lsn;
   recv_sys->m_scanned_checkpoint_no = 0;
+  recv_sys->m_scanned_lsn = checkpoint_lsn;
   recv_sys->m_recovered_lsn = checkpoint_lsn;
+  recv_sys->m_parse_start_lsn = checkpoint_lsn;
 
   srv_start_lsn = checkpoint_lsn;
 
-  auto up_to_date_group = max_cp_group;
   auto contiguous_lsn = ut_uint64_align_down(recv_sys->m_scanned_lsn, IB_FILE_BLOCK_SIZE);
 
   ut_ad(RECV_SCAN_SIZE <= log_sys->m_buf_size);
 
-  lsn_t group_scanned_lsn{};
+  auto old_scanned_lsn = recv_sys->m_scanned_lsn;
 
-  for (auto group : log_sys->m_log_groups) {
-    auto old_scanned_lsn = recv_sys->m_scanned_lsn;
-
-    recv_group_scan_log_recs(dblwr, recovery, group, &contiguous_lsn, &group_scanned_lsn);
-
-    group->scanned_lsn = group_scanned_lsn;
-
-    if (old_scanned_lsn < group_scanned_lsn) {
-      /* We found a more up-to-date group */
-
-      up_to_date_group = group;
-    }
-  }
+  recv_group_scan_log_recs(dblwr, recovery, &contiguous_lsn);
 
   recv_init_crash_recovery(dblwr, recovery, checkpoint_lsn, max_flushed_lsn);
 
@@ -1870,27 +1630,28 @@ void recv_reset_logs(lsn_t lsn, bool new_logs_created) noexcept {
 
   log_sys->m_lsn = ut_uint64_align_up(lsn, IB_FILE_BLOCK_SIZE);
 
-  for (auto group : log_sys->m_log_groups) {
-    group->lsn = log_sys->m_lsn;
-    group->lsn_offset = LOG_FILE_HDR_SIZE;
+  log_sys->m_vfile.m_lsn = log_sys->m_lsn;
+  log_sys->m_vfile.m_lsn_offset = LOG_FILE_HDR_SIZE;
 
-    if (!new_logs_created) {
-      recv_truncate_group(group, group->lsn, group->lsn, group->lsn);
-    }
+  if (!new_logs_created) {
+    recv_truncate_group(&log_sys->m_vfile, log_sys->m_vfile.m_lsn, log_sys->m_vfile.m_lsn, log_sys->m_vfile.m_lsn);
   }
 
   log_sys->m_buf_next_to_write = 0;
   log_sys->m_written_to_some_lsn = log_sys->m_lsn;
   log_sys->m_written_to_all_lsn = log_sys->m_lsn;
 
-  log_sys->m_next_checkpoint_no = 0;
-  log_sys->m_last_checkpoint_lsn = 0;
+  log_sys->m_checkpoint.m_next_no = 0;
+  log_sys->m_checkpoint.m_last_lsn = 0;
 
-  log_sys->block_init(log_sys->m_buf, log_sys->m_lsn);
-  log_sys->block_set_first_rec_group(log_sys->m_buf, LOG_BLOCK_HDR_SIZE);
+  auto log_block = reinterpret_cast<Log_phy_block *>(ut_align_down(log_sys->m_buf, sizeof(Log_phy_block)));
 
-  log_sys->m_buf_free = LOG_BLOCK_HDR_SIZE;
-  log_sys->m_lsn += LOG_BLOCK_HDR_SIZE;
+  log_block->set_block_no(Log_vfile::convert_lsn_to_block_no(log_sys->m_lsn));
+  log_block->set_first_rec_group(0);
+  log_block->set_data_len(Log_phy_block::HEADER_SIZE);
+
+  log_sys->m_buf_free = Log_phy_block::HEADER_SIZE;
+  log_sys->m_lsn += Log_phy_block::HEADER_SIZE;
 
   log_sys->release();
 

@@ -351,7 +351,7 @@ static void srv_startup_abort(db_err err) noexcept {
   if (err != DB_FATAL) {
 
     /* Only if the redo log systemhas been initialized. */
-    if (log_sys != nullptr && UT_LIST_GET_LEN(log_sys->m_log_groups) > 0) {
+    if (log_sys != nullptr) {
       srv_prepare_for_shutdown(srv_config.m_force_recovery, srv_config.m_fast_shutdown);
     }
 
@@ -400,7 +400,8 @@ ib_err_t InnoDB::start() noexcept {
     log_warn("The InnoDB memory heap is disabled");
   }
 
-  ut_d(log_do_write = true);
+  // FIXME: Make this a configurable option
+  ut_d(log_sys->m_disable_writes = false);
 
   /*	yydebug = true; */
 
@@ -501,6 +502,11 @@ ib_err_t InnoDB::start() noexcept {
 
   ut_a(log_sys == nullptr);
   log_sys = Log::create();
+
+  if (!wal_io_system_init()) {
+    log_err("Failed to initialize the redo log");
+    return DB_ERROR;
+  }
 
   ut_a(srv_fsp == nullptr);
   srv_fsp = FSP::create(log_sys, srv_fil, srv_buf_pool);
@@ -982,7 +988,6 @@ static bool srv_threads_shutdown() noexcept {
 
 static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutdown) noexcept {
   ut_a(log_sys != nullptr);
-  ut_a(UT_LIST_GET_LEN(log_sys->m_log_groups) > 0);
 
   if (srv_print_verbose_log) {
     log_info("Starting shutdown...");
@@ -1049,7 +1054,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
 
     log_sys->acquire();
 
-    if (log_sys->m_n_pending_checkpoint_writes || log_sys->m_n_pending_writes) {
+    if (log_sys->m_checkpoint.m_n_pending_writes || log_sys->m_n_pending_writes) {
 
       log_sys->release();
 
@@ -1069,7 +1074,7 @@ static void srv_prepare_for_shutdown(ib_recovery_t recovery, ib_shutdown_t shutd
 
     lsn = log_sys->m_lsn;
 
-    if (lsn != log_sys->m_last_checkpoint_lsn) {
+    if (lsn != log_sys->m_checkpoint.m_last_lsn) {
 
       log_sys->release();
 
@@ -1150,7 +1155,7 @@ db_err InnoDB::shutdown(ib_shutdown_t shutdown) noexcept {
   }
 
   /* Only if the redo log systemhas been initialized. */
-  if (log_sys != nullptr && UT_LIST_GET_LEN(log_sys->m_log_groups) > 0) {
+  if (log_sys != nullptr) {
     srv_prepare_for_shutdown(srv_config.m_force_recovery, shutdown);
   }
 

@@ -538,7 +538,8 @@ void Buf_flush::write_block_low(DBLWR *dblwr, Buf_page *bpage) {
   ut_ad(bpage->m_newest_modification != 0);
 
   /* Force the log to the disk before writing the modified block */
-  log_sys->write_up_to(bpage->m_newest_modification, LOG_WAIT_ALL_GROUPS, true);
+  // FIXME: Implement this
+  // log_sys->write_up_to(bpage->m_newest_modification, LOG_WAIT_ALL_GROUPS, true);
 
   switch (bpage->get_state()) {
     case BUF_BLOCK_NOT_USED:
@@ -964,8 +965,9 @@ void Buf_flush::stat_update() {
 }
 
 ulint Buf_flush::get_desired_flush_rate() {
-  auto lsn = log_sys->get_lsn();
-  auto log_capacity = log_sys->get_capacity();
+  // FIXME: Implement this
+  auto lsn = 0;           // log_sys->get_lsn();
+  auto log_capacity = 0;  // log_sys->get_capacity();
 
   /* log_capacity should never be zero after the initialization of log subsystem. */
   ut_ad(log_capacity != 0);
