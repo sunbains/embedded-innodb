@@ -248,6 +248,56 @@ bool test_sync_write_operations(WAL_IO_System &wal_io_system, std::vector<WAL_fi
   return true;
 }
 
+bool test_async_write_operations(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+  log_info("Testing asynchronous write...");
+
+  auto ctx = wal_io_system.async_write(test_files[2], test_data, data_len, 0, [](WAL_io_ctx_t *ctx) {
+    log_info("  Write completed : result = ", ctx->m_result.load());
+    ut_a(ctx->m_result.load() == int(data_len));
+  });
+
+  if (ctx == nullptr) {
+    log_err("Failed to submit asynchronous write");
+    return false;
+  }
+
+  while (ctx != nullptr && !wal_io_system.wait_for_completion(ctx)) {
+    ::usleep(1000);
+  }
+
+  ut_a(ctx == nullptr);
+
+  return true;
+}
+
+bool test_async_read_operations(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+  log_info("Testing asynchronous read...");
+
+  char *test_read = new char[data_len];
+
+  auto ctx = wal_io_system.async_read(test_files[2], test_read, data_len, 0, [](WAL_io_ctx_t *ctx) {
+    log_info("  Read completed : result = ", ctx->m_result.load());
+  });
+
+  if (ctx == nullptr) {
+    log_err("Failed to submit asynchronous read");
+    delete[] test_read;
+    return false;
+  }
+
+  while (ctx != nullptr && !wal_io_system.wait_for_completion(ctx)) {
+    ::usleep(1000);
+  }
+
+  ut_a(ctx == nullptr);
+
+  ut_a(strncmp(test_read, test_data, data_len) == 0);
+
+  delete[] test_read;
+
+  return true;
+}
+
 bool test_wal_io_file_operations(const std::string &test_dir) {
   log_info("Testing WAL_IO_System structure...");
   std::vector<WAL_file *> test_files;
@@ -308,6 +358,8 @@ bool test_wal_io_file_operations(const std::string &test_dir) {
         success &= test_async_scatter_reads(wal_io_system, test_files);
         success &= test_sync_write_operations(wal_io_system, test_files);
         success &= test_sync_read_operations(wal_io_system, test_files);
+        success &= test_async_write_operations(wal_io_system, test_files);
+        success &= test_async_read_operations(wal_io_system, test_files);
       }
 
       return cleanup(wal_io_system, test_files) & success;
