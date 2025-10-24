@@ -30,7 +30,6 @@ capabilities.
 #include <atomic>
 #include <vector>
 
-#include "innodb0types.h"
 #include "log0types.h"
 #include "os0aio.h"
 #include "ut0mpmcbq.h"
@@ -344,19 +343,41 @@ struct WAL_IO_System {
    */
   [[nodiscard]] bool wait_for_completion(WAL_io_ctx_t *&ctx, uint32_t timeout_ms = 5000) noexcept;
 
-  /** Get file size
-   * @param[in] file file returned by open_wal_file
-   * @return file size in bytes, 0 on error
-   */
-  [[nodiscard]] off_t get_file_size(WAL_file *file) const noexcept;
+  /** Get the current timestamp */
+  [[nodiscard]] uint64_t get_timestamp() const noexcept;
 
-  /** Check if file is open
-   * @param[in] file file returned by open_w ==)
-   *
-   * @return true if file is open
-   */
-  [[nodiscard]] bool is_file_open(WAL_file *file) const noexcept;
+  /** I/O statistics */
+  struct {
+    std::atomic<uint64_t> m_total_reads{0};
+    std::atomic<uint64_t> m_total_writes{0};
+    std::atomic<uint64_t> m_total_bytes_read{0};
+    std::atomic<uint64_t> m_total_bytes_written{0};
+    std::atomic<uint64_t> m_total_sync_ops{0};
+    std::atomic<uint64_t> m_total_async_ops{0};
+    std::atomic<uint64_t> m_total_errors{0};
+  } stats;
 
+  /**
+   * Check if a file exists
+   * @param[in] file_path path to the file
+   * @return true if the file exists
+   */
+  static bool file_exists(std::string_view file_path) noexcept;
+
+  /**
+   * Check if a file is read and write compatible
+   * @param[in] file_path path to the file
+   * @return true if the file is read and write compatible
+   */
+  static bool is_file_rw_compatible(std::string_view file_path) noexcept;
+
+  /** Get the size of a file
+   * @param[in] file_path path to the file
+   * @return file size in bytes, -1 on error
+   */
+  static off_t get_file_size(std::string_view file_path) noexcept;
+
+ private:
   /** Allocate a file
    *
    * @return allocated file, nullptr if no free files are available
@@ -369,9 +390,6 @@ struct WAL_IO_System {
    * @note The file is set to nullptr after release
   */
   void release_file(WAL_file *&file) noexcept;
-
-  /** Get the current timestamp */
-  [[nodiscard]] uint64_t get_timestamp() const noexcept;
 
   /** Create an I/O context
    *
@@ -400,38 +418,6 @@ struct WAL_IO_System {
    * @note The I/O context is set to nullptr after release
    */
   void release_io_context(WAL_io_ctx_t *&ctx) noexcept;
-
-  /** I/O statistics */
-  struct {
-    std::atomic<uint64_t> m_total_reads{0};
-    std::atomic<uint64_t> m_total_writes{0};
-    std::atomic<uint64_t> m_total_bytes_read{0};
-    std::atomic<uint64_t> m_total_bytes_written{0};
-    std::atomic<uint64_t> m_total_sync_ops{0};
-    std::atomic<uint64_t> m_total_async_ops{0};
-    std::atomic<uint64_t> m_total_errors{0};
-  } stats;
-
-  /**
-   * Check if a file exists
-   * @param[in] file_path path to the file
-   * @return true if the file exists
-   */
-  static bool file_exists(std::string_view file_path) noexcept;
-
-  /**
-   * Check if a file is read and write compatible
-   * @param[in] file_path path to the file
-   * @return true if the file is read and write compatible
-   */
-  static bool is_file_rw_compatible(std::string_view file_path) noexcept;
-
-  /**
-   * Get the size of a file
-   * @param[in] file_path path to the file
-   * @return file size in bytes, -1 on error
-   */
-  static off_t file_size(std::string_view file_path) noexcept;
 
  private:
   /** io_uring instance (managed by unique_ptr) */

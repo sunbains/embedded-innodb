@@ -229,7 +229,7 @@ bool WAL_IO_System::is_file_rw_compatible(std::string_view file_path) noexcept {
   return false;
 }
 
-off_t WAL_IO_System::file_size(std::string_view file_path) noexcept {
+off_t WAL_IO_System::get_file_size(std::string_view file_path) noexcept {
   struct stat st;
 
   if (::stat(file_path.data(), &st) != 0) {
@@ -250,7 +250,6 @@ WAL_file *WAL_IO_System::create_wal_file(const std::string &file_path, off_t fil
 
   bool success{true};
 
-  // FIXME: 0644 is hardcoded for now
   int fd = ::open(file_path.c_str(), O_RDWR | O_CREAT, CREATE_FILE_MASK);
 
   if (fd < 0) {
@@ -265,10 +264,24 @@ WAL_file *WAL_IO_System::create_wal_file(const std::string &file_path, off_t fil
     log_dbg("Resized WAL file ", file_path, " to ", file_size, " bytes");
   }
 
+  /* Get file size to verify it was resized */
+  auto stat_file_size = get_file_size(file_path);
+
+  if (file_size != stat_file_size) {
+    log_err("File size mismatch for WAL file", file_path, ": ", file_size, "specified != stat ", stat_file_size, "reported");
+    success = false;
+  }
+
+  if (::fsync(fd) != 0) {
+    log_err("Failed to fsync WAL file ", file_path, ": ", strerror(errno));
+    success = false;
+  }
+
   const auto ret = ::close(fd);
 
   if (ret != 0) {
     log_err("Failed to close WAL file ", file_path, " after create : ", strerror(errno));
+    success = false;
   }
 
   return success ? open_wal_file(file_path, file_size) : nullptr;
@@ -810,14 +823,6 @@ bool WAL_IO_System::wait_for_completion(WAL_io_ctx_t *&ctx, uint32_t timeout_ms)
 
   /* Timeout */
   return ctx != nullptr ? false : true;
-}
-
-off_t WAL_IO_System::get_file_size(WAL_file *file) const noexcept {
-  return file->m_size;
-}
-
-bool WAL_IO_System::is_file_open(WAL_file *file) const noexcept {
-  return file->m_fd != -1;
 }
 
 bool wal_io_system_init() noexcept {

@@ -161,7 +161,7 @@ bool test_WAL_io_ctx_construction(const std::string &) {
 static const char *test_data = "Async WAL scatter-gather I/O test";
 static size_t data_len = strlen(test_data);
 
-bool test_scatter_reads(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+bool test_async_scatter_reads(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
   log_info("Testing scatter reads...");
 
   char *test_read = new char[data_len];
@@ -196,7 +196,7 @@ bool test_scatter_reads(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &t
   return true;
 }
 
-bool test_gather_writes(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+bool test_async_gather_writes(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
   log_info("Testing gather writes...");
 
   std::vector<WAL_iovec_t> iovecs(2);
@@ -225,7 +225,30 @@ bool test_gather_writes(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &t
   return true;
 }
 
-bool test_wal_io_system_initialization(const std::string &test_dir) {
+bool test_sync_read_operations(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+  log_info("Testing synchronous read...");
+
+  char *test_read = new char[data_len];
+
+  auto ret = wal_io_system.sync_read(test_files[1], test_read, data_len, 0);
+  TEST_ASSERT(ret == ssize_t(data_len));
+  TEST_ASSERT(strncmp(test_read, test_data, data_len) == 0);
+
+  delete[] test_read;
+
+  return true;
+}
+
+bool test_sync_write_operations(WAL_IO_System &wal_io_system, std::vector<WAL_file *> &test_files) {
+  log_info("Testing synchronous write...");
+
+  auto ret = wal_io_system.sync_write(test_files[1], test_data, data_len, 0);
+  TEST_ASSERT(ret == ssize_t(data_len));
+
+  return true;
+}
+
+bool test_wal_io_file_operations(const std::string &test_dir) {
   log_info("Testing WAL_IO_System structure...");
   std::vector<WAL_file *> test_files;
 
@@ -245,7 +268,7 @@ bool test_wal_io_system_initialization(const std::string &test_dir) {
 
   try {
     {
-      WAL_IO_System wal_io_system(32, 32);
+      WAL_IO_System wal_io_system(4, 4);
 
       if (!wal_io_system.initialize(16)) {
         log_err("Failed to initialize WAL_IO_System");
@@ -274,12 +297,17 @@ bool test_wal_io_system_initialization(const std::string &test_dir) {
           success = false;
           break;
         }
+
+        ut_a(WAL_IO_System::get_file_size(test_file_path) == 1024 * 1024);
+
         test_files.push_back(file);
       }
 
       if (success) {
-        success &= test_gather_writes(wal_io_system, test_files);
-        success &= test_scatter_reads(wal_io_system, test_files);
+        success &= test_async_gather_writes(wal_io_system, test_files);
+        success &= test_async_scatter_reads(wal_io_system, test_files);
+        success &= test_sync_write_operations(wal_io_system, test_files);
+        success &= test_sync_read_operations(wal_io_system, test_files);
       }
 
       return cleanup(wal_io_system, test_files) & success;
@@ -290,58 +318,6 @@ bool test_wal_io_system_initialization(const std::string &test_dir) {
     return false;
   }
 
-  return true;
-}
-
-bool test_wal_file_operations(const std::string &test_dir) {
-  log_info("Testing WAL file structure...");
-
-  return true;
-}
-
-bool test_wal_iovec_operations(const std::string &) {
-  log_info("Testing WAL_iovec_t operations...");
-
-  return true;
-}
-
-bool test_sync_io_operations(const std::string &test_dir) {
-  log_info("Testing synchronous I/O operations structure...");
-
-  try {
-    // Test that we can reference the sync I/O methods
-    log_info("  sync_read, sync_write, flush_file methods are declared");
-
-    // Test that we can create test data
-    const char *test_data = "Hello, WAL I/O!";
-    size_t data_len = strlen(test_data);
-    TEST_ASSERT(data_len > 0);
-
-    log_info("  Test data creation successful");
-
-  } catch (const std::exception &e) {
-    std::cerr << "Synchronous I/O operations test failed: " << e.what() << std::endl;
-    return false;
-  }
-
-  return true;
-}
-
-bool test_async_io_operations(const std::string &test_dir) {
-  log_info("Testing asynchronous I/O operations structure...");
-
-  log_info("  async_read, async_write, gather_write, scatter_read methods are declared");
-
-  const char *test_data = "Async WAL I/O test";
-  size_t data_len = strlen(test_data);
-  std::vector<WAL_iovec_t> iovecs(2);
-
-  iovecs[0].iov_base = const_cast<void *>(static_cast<const void *>(reinterpret_cast<const char *>(test_data)));
-  iovecs[0].iov_len = data_len / 2;
-  iovecs[1].iov_base = const_cast<void *>(static_cast<const void *>(test_data + data_len / 2));
-  iovecs[1].iov_len = data_len - (data_len / 2);
-
-  log_info("  Scatter-gather structure test successful");
   return true;
 }
 
@@ -371,11 +347,7 @@ int main() {
 
   all_passed &= test_WAL_file_construction(test_dir);
   all_passed &= test_WAL_io_ctx_construction(test_dir);
-  all_passed &= test_wal_io_system_initialization(test_dir);
-  all_passed &= test_wal_file_operations(test_dir);
-  all_passed &= test_wal_iovec_operations(test_dir);
-  all_passed &= test_sync_io_operations(test_dir);
-  all_passed &= test_async_io_operations(test_dir);
+  all_passed &= test_wal_io_file_operations(test_dir);
 
   cleanup_test_directories(test_dir);
 
