@@ -54,7 +54,7 @@ constexpr ulint LOG_METADATA_PAGE_SIZE = 4096;
 
  Second file and onwards layout.
 +----------------------------------------------------------------------------+
-| File header  |  data     | data   | data   | data   | data  | data  | data |
+|  data | data |  data | data | data | data  | data | data | data | .........|
 +----------------------------------------------------------------------------+
 */
 

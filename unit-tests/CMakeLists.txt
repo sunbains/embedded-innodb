@@ -20,6 +20,7 @@ add_definitions(-DUNIV_BTR_PRINT -DUNIT_TESTING)
 
 # Set up libraries - use parent project's innodb target
 SET(LIBS innodb pthread m)
+SET(MINIMAL_SRC global_vars.cc ut0new.cc ut0dbg.cc ut0ut.cc)
 
 # Include directories are inherited from parent project
 
@@ -73,23 +74,17 @@ target_link_libraries(test_log_io PRIVATE
 # Add test to CTest
 add_test(NAME test_log_io COMMAND test_log_io)
 
-# Set up test_log_io_uring test
-add_executable(test_log_io_uring test_log_io_uring.cc unit_test_logger.cc)
+# Set up test_log_io_uring test with minimal dependencies
+add_executable(test_log_io_uring test_log_io_uring.cc global_vars.cc ../log/log_io_uring.cc ${MINIMAL_SRC})
 
-# Link against Google Test and InnoDB
-target_link_libraries(test_log_io_uring PRIVATE
-    GTest::gtest_main
-    GTest::gtest
-    ${LIBS}
-)
+# Link with minimal dependencies
+target_link_libraries(test_log_io_uring PRIVATE pthread uring)
 
 # Add test to CTest
 add_test(NAME test_log_io_uring COMMAND test_log_io_uring)
 
 # Set up test_log_buffer test - standalone with minimal dependencies
 add_executable(test_log_buffer test_log_buffer.cc)
-
-SET(MINIMAL_SRC global_vars.cc ../ut/ut0dbg.cc ../ut/ut0ut.cc ../os/os0thread.cc)
 
 # Link test_log_buffer with minimal dependencies
 target_link_libraries(test_log_buffer PRIVATE pthread)

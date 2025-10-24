@@ -26,20 +26,8 @@ WAL IO operations - file reading and writing operations
 #include "os0aio.h"
 #include "srv0srv.h"
 
-void Log::io_complete(Log_vfile *group) noexcept {
-  ut_a(uintptr_t(group) & 0x1UL);
-
-  group = reinterpret_cast<Log_vfile *>(uintptr_t(&group) - 1);
-
-  if (srv_config.m_unix_file_flush_method != SRV_UNIX_O_DSYNC && srv_config.m_unix_file_flush_method != SRV_UNIX_NOSYNC) {
-    // Use WAL I/O system flush instead of srv_fil->flush
-    if (g_wal_io_system != nullptr) {
-      int file_index = static_cast<int>(group->m_id);
-      g_wal_io_system->flush_file(file_index, true);
-    }
-  }
-
-  io_complete_checkpoint();
+void Log::io_complete(std::function<void ()> callback) noexcept {
+  callback();
 }
 
 db_err log_io(IO_request io_request, int fd, void *buf, size_t len, off_t offset, bool batched, void *message) {
