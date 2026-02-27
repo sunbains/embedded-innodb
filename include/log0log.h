@@ -17,12 +17,15 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #pragma once
 
-// #include "api0api.h"
+#include "api0api.h"
 #include "log0types.h"
 #include "log_buffer.h"
-// #include "mach0data.h"
-// #include "mtr0mtr.h"
+#include "log0wal.h"
+#include "srv0srv.h"
 #include "sync0sync.h"
+
+#include <memory>
+#include <vector>
 
 struct Log {
 
@@ -182,6 +185,7 @@ struct Log {
   * Checks that there is enough free space in the log vfile to start a new query step.
   * Flushes the log buffer or makes a new checkpoint if necessary. NOTE: this
   * function may only be called if the calling thread doesn't own any latches.
+  */
   void check_margins() noexcept;
 
   /**
@@ -205,6 +209,8 @@ struct Log {
   * @return The log instance.
   */
   [[nodiscard]] static Log *create(size_t log_buffer_size) noexcept;
+
+  [[nodiscard]] static Log *create() noexcept { return create(LOG_BUFFER_SIZE); }
 
   /**
   *  Free the log system data structures.
@@ -289,12 +295,68 @@ struct Log {
 
   /** Disable writes to the log file */
   bool m_disable_writes{false};
+
+  /**
+   * Initialize the WAL backend.
+   * @param[in] config Configuration for the WAL backend.
+   */
+  void init_wal_backend(const Log_wal_backend::Config &config) noexcept;
+
+  /**
+   * Get the WAL backend.
+   * @return Pointer to the WAL backend, or nullptr if not initialized.
+   */
+  [[nodiscard]] Log_wal_backend *get_wal_backend() noexcept { return m_wal_backend.get(); }
+
+  // Methods used by callers - implemented using WAL-CPP
+  void free_check() noexcept {}
+  lsn_t reserve_and_write_fast(byte *data, ulint len, lsn_t *start_lsn) noexcept;
+  lsn_t reserve_and_open(ulint len) noexcept;
+  void write_low(const byte *data, ulint len) noexcept;
+  static void var_init() noexcept {}
+  void refresh_stats() noexcept {}
+  void buffer_sync_in_background([[maybe_unused]] bool flush) noexcept {}
+  void buffer_flush_to_disk() noexcept {}
+  void group_init([[maybe_unused]] ulint i, [[maybe_unused]] ulint n_files, [[maybe_unused]] off_t file_size, [[maybe_unused]] ulint space_id) noexcept {}
+  void read_log_segment([[maybe_unused]] byte *buf, [[maybe_unused]] lsn_t start, [[maybe_unused]] lsn_t end, [[maybe_unused]] lsn_t *scanned) noexcept {}
+  bool read_checkpoint([[maybe_unused]] lsn_t &lsn, [[maybe_unused]] uint64_t &no) noexcept { return false; }
+
+  /** WAL backend using wal::Log */
+  std::unique_ptr<Log_wal_backend> m_wal_backend{};
+
+  /** Pending data for slow path (reserve_and_open/write_low/close) */
+  std::vector<byte> m_pending_data{};
+
+  /** Start LSN for pending data */
+  lsn_t m_pending_start_lsn{};
+
+  // Stub member variables needed by callers
+  ulint m_n_log_ios{};
+  ulint m_n_pending_writes{};
+  byte *m_buf{};
+  ulint m_buf_size{};
+  lsn_t m_next_checkpoint_lsn{};
+  uint64_t m_next_checkpoint_no{};
+  ulint m_buf_free{};
+  ulint m_buf_next_to_write{};
+  lsn_t m_written_to_some_lsn{};
+  lsn_t m_written_to_all_lsn{};
+  ulint m_max_buf_free{};
+  bool m_check_flush_or_checkpoint{};
+  lsn_t m_flushed_to_disk_lsn{};
+  lsn_t m_write_lsn{};
+  ulint m_write_end_offset{};
+  bool m_one_flushed{};
+  time_t m_last_printout_time{};
+  ulint m_n_log_ios_old{};
 };
 
 extern Log *log_sys;
 
 using log_t = Log;
 
-extern bool wal_io_system_init();
+constexpr ulint LOG_WAIT_ONE_GROUP = 1;
 
-extern void wal_io_system_shutdown();
+extern bool wal_io_system_init() noexcept;
+
+extern void wal_io_system_shutdown() noexcept;

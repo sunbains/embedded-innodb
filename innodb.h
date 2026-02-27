@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <cstdint>
 #include <cstdio>
 
+#include <format>
 #include <functional>
 #include <vector>
 
@@ -234,6 +235,14 @@ enum db_err {
 };
 
 using dberr_t = db_err;
+
+/** std::formatter specialization for db_err to enable use with std::format */
+template <>
+struct std::formatter<db_err> : std::formatter<int> {
+  auto format(db_err e, std::format_context& ctx) const {
+    return std::formatter<int>::format(static_cast<int>(e), ctx);
+  }
+};
 
 /* Basic types used by the InnoDB API. */
 

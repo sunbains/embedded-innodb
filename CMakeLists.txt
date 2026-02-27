@@ -34,6 +34,13 @@ INCLUDE(FetchContent)
 # Include git submodule initialization to set up dependency variables
 INCLUDE(deps/git-submodule-init.cmake)
 
+# Add WAL-CPP library for redo logging
+SET(WAL_BUILD_TESTS OFF CACHE BOOL "Disable WAL tests" FORCE)
+SET(WAL_BUILD_LIB ON CACHE BOOL "Build WAL library" FORCE)
+SET(WAL_ENABLE_ASAN OFF CACHE BOOL "Disable ASAN for WAL" FORCE)
+ADD_SUBDIRECTORY(${CMAKE_SOURCE_DIR}/../wal-cpp ${CMAKE_BINARY_DIR}/wal-cpp)
+MESSAGE(STATUS "Add external dependency wal-cpp")
+
 SET(UNIT_TESTING true)
 
 # Increment if interfaces have been added, removed or changed
@@ -201,6 +208,8 @@ CHECK_TYPE_SIZE(pthread_t SIZEOF_PTHREAD_T)
 SET(CMAKE_EXTRA_INCLUDE_FILES)
 
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include)
+# WAL-CPP includes (SYSTEM to avoid strict warning conflicts)
+INCLUDE_DIRECTORIES(SYSTEM ${CMAKE_SOURCE_DIR}/../wal-cpp/include)
 
 SET(INNODB_SOURCES
       api/api0api.cc api/api0misc.cc api/api0ucode.cc
@@ -218,8 +227,8 @@ SET(INNODB_SOURCES
       pars/lexyy.cc pars/pars0grm.cc pars/pars0opt.cc
       pars/pars0pars.cc pars/pars0sym.cc
       lock/lock0lock.cc lock/lock0iter.cc lock/lock0deadlock.cc lock/lock0validator.cc
-      log/log0log.cc log/log0recv.cc
-      log/log_buffer.cc log/log_checkpoint.cc log/log_core.cc 
+      log/log0log.cc log/log0recv.cc log/log0wal.cc
+      log/log_buffer.cc log/log_checkpoint.cc log/log_core.cc
       log/log_vfile.cc log/log_write.cc log/log_io.cc log/log_io_uring.cc
       log/recv_parse.cc log/recv_recovery.cc log/recv_scan.cc
       mach/mach0data.cc
@@ -255,6 +264,8 @@ IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
   ADD_LIBRARY(innodb STATIC ${INNODB_SOURCES})
   # Link with liburing using the variable from git-submodule-init.cmake
   TARGET_LINK_LIBRARIES(innodb ${LIBURING_LIB_DIR}/liburing.a)
+  # Link with WAL-CPP library
+  TARGET_LINK_LIBRARIES(innodb wal)
 ENDIF(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
 # Configure Google Test if unit testing is enabled
@@ -335,5 +346,5 @@ INSTALL(TARGETS innodb
   ARCHIVE DESTINATION lib
 )
 
-ADD_DEPENDENCIES(innodb liburing)
+ADD_DEPENDENCIES(innodb liburing wal)
 

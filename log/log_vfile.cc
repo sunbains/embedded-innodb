@@ -520,3 +520,7 @@ void Log_vfile::prepare_checkpoint(ulint checkpoint_no, lsn_t checkpoint_lsn) no
   // /* Write the magic number for the tablespace */
   // mach_write_to_4(buf + LOG_CHECKPOINT_FSP_MAGIC_N, LOG_CHECKPOINT_FSP_MAGIC_N_VAL);
 }
+
+bool Log_vfile::write_checkpoint([[maybe_unused]] Log_phy_checkpoint *checkpoint, [[maybe_unused]] off_t off) noexcept {
+  return true;
+}

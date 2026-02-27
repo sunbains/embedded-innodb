@@ -2168,8 +2168,11 @@ void InnoDB::panic(int panic_ib_error, char *fmt, ...) noexcept {
     ib_panic(ib_panic_data, panic_ib_error, fmt, ap);
     return;
   } else {
-    log_warn("Database forced shutdown! err: ", panic_ib_error);
-    log_warn(fmt, ap);
+    log_warn("Database forced shutdown! err: {}", panic_ib_error);
+    // Note: va_list cannot be used with std::format-based logging
+    // Output the format string directly for now
+    std::vfprintf(stderr, fmt, ap);
+    std::fputc('\n', stderr);
     exit(EXIT_FAILURE);
   }
 
