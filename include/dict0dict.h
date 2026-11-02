@@ -880,7 +880,7 @@ struct Dict {
     /** Constructor */
     StatsMutex() noexcept {
       for (auto &mutex : m_mutexes) {
-        mutex_create(&mutex, IF_DEBUG("Dict::StatsMutex", ) IF_SYNC_DEBUG(SYNC_INDEX_TREE, ) Current_location());
+        mutex_create(&mutex, IF_DEBUG("Dict::StatsMutex", )  Current_location());
       }
     }
 

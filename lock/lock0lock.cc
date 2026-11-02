@@ -2793,7 +2793,7 @@ bool LockSys::rec_validate_page(PageId page_id) noexcept {
 
   auto block = m_sys.m_buf_pool->get(req, nullptr);
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
+  buf_block_dbg_add_level();
 
   const auto page = block->get_frame();
 
@@ -2845,13 +2845,6 @@ bool LockSys::rec_validate_page(PageId page_id) noexcept {
 
     validate_trx_state(lock->m_trx);
 
-#ifdef UNIV_SYNC_DEBUG
-    /* Only validate the record queues when this thread is not
-    holding a space->latch.  Deadlocks are possible due to
-    latching order violation when UNIV_DEBUG is defined while
-    UNIV_SYNC_DEBUG is not. */
-    if (!sync_thread_levels_contains(SYNC_FSP))
-#endif /* UNIV_SYNC_DEBUG */
 
       ulint i{};
     const auto n_bits = lock->rec_get_n_bits();

@@ -482,14 +482,6 @@ struct BufBlock {
 
   /* @} */
 
-#ifdef UNIV_SYNC_DEBUG
-  /** @name Debug fields */
-  /* @{ */
-  /** in the debug version, each thread which bufferfixes the block
-  acquires an s-latch here; so we can use the debug utilities in sync0rw */
-  RwLock debug_latch;
-  /* @} */
-#endif /* UNIV_SYNC_DEBUG */
 };
 
 /** Check if a buf_block_t object is in a valid state

@@ -178,11 +178,6 @@ constexpr ulint IB_FILE_BLOCK_SIZE = 512;
 #define IF_DEBUG(...)
 #endif /* UNIV_DEBUG */
 
-#ifdef UNIV_SYNC_DEBUG
-#define IF_SYNC_DEBUG(...) __VA_ARGS__
-#else
-#define IF_SYNC_DEBUG(...)
-#endif /* UNIV_SYNC_DEBUG */
 
 #ifdef WITH_XOPEN
 #define IF_XA(...) __VA_ARGS__

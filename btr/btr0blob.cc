@@ -325,7 +325,7 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
 
         auto prev_block = sys.m_buf_pool->get(req, nullptr);
 
-        buf_block_dbg_add_level(IF_SYNC_DEBUG(prev_block, SYNC_EXTERN_STORAGE));
+        buf_block_dbg_add_level();
 
         auto prev_page = prev_block->get_frame();
 
@@ -366,7 +366,7 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
 
       rec_block = sys.m_buf_pool->get(req, nullptr);
 
-      buf_block_dbg_add_level(IF_SYNC_DEBUG(rec_block, SYNC_NO_ORDER_CHECK));
+      buf_block_dbg_add_level();
 
       mlog_write_ulint(field_ref + BTR_EXTERN_LEN, 0, MLOG_4BYTES, &mtr);
 
@@ -475,10 +475,7 @@ void Blob::free_externally_stored_field(System &sys,
       .m_mtr = &mtr
     };
 
-    IF_SYNC_DEBUG({
-      auto rec_block = sys.m_buf_pool->get(req, nullptr);
-      buf_block_dbg_add_level(rec_block, SYNC_NO_ORDER_CHECK)
-    });
+    ;
 
     auto page_no = mach_read_from_4(field_ref + BTR_EXTERN_PAGE_NO);
 
@@ -502,7 +499,7 @@ void Blob::free_externally_stored_field(System &sys,
 
     auto ext_block = sys.m_buf_pool->get(req, nullptr);
 
-    buf_block_dbg_add_level(IF_SYNC_DEBUG(ext_block, SYNC_EXTERN_STORAGE));
+    buf_block_dbg_add_level();
 
     auto page = ext_block->get_frame();
 
@@ -591,7 +588,7 @@ ulint Blob::copy_blob_prefix(System &sys, byte *buf, ulint len, space_id_t space
     auto block = sys.m_buf_pool->get(req, nullptr);
     const auto page = block->get_frame();
 
-    buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_EXTERN_STORAGE));
+    buf_block_dbg_add_level();
 
     check_blob_fil_page_type(sys, space_id, page_no, page, true);
 

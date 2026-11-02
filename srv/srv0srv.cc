@@ -361,12 +361,11 @@ ulint Srv::release_threads(SrvThreadType type, ulint n) noexcept {
 
 Srv::Srv(System &sys) noexcept
     : m_sys(sys),
-      m_fatal_semaphore_wait_threshold(sys.m_config.m_srv.m_fatal_semaphore_wait_threshold),
       m_threads(sys.m_config.m_srv.m_max_n_threads),
       m_client_table(sys.m_config.m_srv.m_max_n_threads) {
 
-  mutex_create(&m_innodb_monitor_mutex, IF_DEBUG("monitor_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Current_location());
-  mutex_create(&m_monitor_file_mutex, IF_DEBUG("monitor_file_mutex", ) IF_SYNC_DEBUG(SYNC_NO_ORDER_CHECK, ) Current_location());
+  mutex_create(&m_innodb_monitor_mutex, IF_DEBUG("monitor_mutex", )  Current_location());
+  mutex_create(&m_monitor_file_mutex, IF_DEBUG("monitor_file_mutex", )  Current_location());
 
   for (auto &slot : m_threads) {
     slot.m_event = os_event_create(nullptr);
@@ -665,13 +664,6 @@ bool Srv::printf_innodb_monitor(FILE *ib_stream, bool nowait, ulint *trx_start, 
 
   print_master_thread_info();
 
-  log_warn(
-    "----------\n"
-    "SEMAPHORES\n"
-    "----------\n"
-  );
-
-  sync_print(ib_stream);
 
 #ifdef WITH_FOREIGN_KEY
   /* Conceptually, m_innodb_monitor_mutex has a very high latching
@@ -1046,8 +1038,6 @@ void Srv::lock_timeout_thread() noexcept {
 }
 
 void Srv::error_monitor_thread() noexcept {
-  /* Number of successive fatal timeouts observed */
-  ulint fatal_cnt = 0;
   auto old_lsn = m_start_lsn;
 
 loop:
@@ -1081,28 +1071,6 @@ loop:
 
   /* Update the statistics collected for flush rate policy. */
   m_sys.m_buf_pool->m_flusher->stat_update();
-
-  /* In case mutex_exit is not a memory barrier, it is
-  theoretically possible some threads are left waiting though
-  the semaphore is already released. Wake up those threads: */
-
-  sync_arr_wake_threads_if_sema_free();
-
-  if (sync_array_print_long_waits(m_sys)) {
-    fatal_cnt++;
-    if (fatal_cnt > 10) {
-
-      log_warn(std::format(
-        "Semaphore wait has lasted > {} seconds. We intentionally crash the"
-        " server, because it appears to be hung.",
-        (ulong)m_fatal_semaphore_wait_threshold
-      ));
-
-      ut_error;
-    }
-  } else {
-    fatal_cnt = 0;
-  }
 
   os_thread_sleep(1000000);
 

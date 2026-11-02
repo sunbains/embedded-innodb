@@ -27,7 +27,7 @@ Created 2024-09-25 by Sunny Bains. */
 
 Dblwr::Dblwr(System &sys) noexcept : m_sys(sys), m_block1(ULINT32_UNDEFINED), m_block2(ULINT32_UNDEFINED) {
 
-  mutex_create(&m_mutex, IF_DEBUG("Dblwr::m_mutex", ) IF_SYNC_DEBUG(SYNC_DOUBLEWRITE, ) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("Dblwr::m_mutex", )  Current_location());
 
   m_ptr = static_cast<byte *>(ut_new((1 + 2 * SYS_DOUBLEWRITE_BLOCK_SIZE) * UNIV_PAGE_SIZE));
 
@@ -73,7 +73,7 @@ DbErr Dblwr::initialize() noexcept {
 
   auto block = m_sys.m_buf_pool->get(req, nullptr);
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
+  buf_block_dbg_add_level();
 
   auto dblwr = block->get_frame() + SYS_DOUBLEWRITE;
 
@@ -96,7 +96,7 @@ DbErr Dblwr::initialize() noexcept {
 
   /* fseg_create acquires a second latch on the page, therefore we must declare it: */
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block2, SYNC_NO_ORDER_CHECK));
+  buf_block_dbg_add_level();
 
   if (block2 == nullptr) {
     log_err(
@@ -133,18 +133,7 @@ DbErr Dblwr::initialize() noexcept {
     are the same as the page position in the tablespace, then the page has not been written to in
     doublewrite. */
 
-    IF_SYNC_DEBUG({
-      BufPool::Request req{
-        .m_rw_lock = RW_X_LATCH,
-        .m_page_id = {SYS_TABLESPACE, page_no},
-        .m_mode = BUF_GET,
-        .m_file = __FILE__,
-        .m_line = __LINE__,
-        .m_mtr = &mtr
-      };
-      auto new_block = buf_pool->get(req, nullptr);
-      buf_block_dbg_add_level(IF_SYNC_DEBUG(new_block, SYNC_NO_ORDER_CHECK));
-    })
+    
 
     if (i == FSP_EXTENT_SIZE / 2) {
       ut_a(page_no == FSP_EXTENT_SIZE);

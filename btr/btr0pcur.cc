@@ -173,7 +173,7 @@ bool BtreePcursor::restore_position(System &sys, ulint latch_mode, Mtr *mtr, Sou
     if (likely(sys.m_buf_pool->try_get(req))) {
       m_pos_state = BtrPcurPositioned::IS_POSITIONED;
 
-      buf_block_dbg_add_level(IF_SYNC_DEBUG(get_block(), SYNC_TREE_NODE));
+      buf_block_dbg_add_level();
 
       if (m_rel_pos == BtreeCursorPos::ON) {
         m_latch_mode = latch_mode;

@@ -294,7 +294,7 @@ void BufPool::release(BufBlock *block, ulint rw_latch, Mtr *mtr) {
 
   mutex_enter(&block->m_mutex);
 
-  IF_SYNC_DEBUG(rw_lock_s_unlock(&(block->m_debug_latch));)
+  
 
   --block->m_page.m_buf_fix_count;
 
@@ -423,14 +423,11 @@ void BufPool::block_init(BufBlock *block, byte *frame) {
   ut_d(block->m_page.m_in_free_list = false);
   ut_d(block->m_page.m_in_LRU_list = false);
 
-  mutex_create(&block->m_mutex, IF_DEBUG("block_mutex", ) IF_SYNC_DEBUG(SYNC_BUF_BLOCK, ) Current_location());
+  mutex_create(&block->m_mutex, IF_DEBUG("block_mutex", )  Current_location());
 
   rw_lock_create(&block->m_rw_lock, SYNC_LEVEL_VARYING);
   ut_ad(rw_lock_validate(&(block->m_rw_lock)));
 
-#ifdef UNIV_SYNC_DEBUG
-  rw_lock_create(&block->m_debug_latch, SYNC_NO_ORDER_CHECK);
-#endif /* UNIV_SYNC_DEBUG */
 }
 
 BufChunk *BufPool::chunk_init(BufChunk *chunk, ulint mem_size) {
@@ -534,7 +531,7 @@ bool BufPool::open(uint64_t pool_size) {
 
   /* 1. Initialize general fields
   ------------------------------- */
-  mutex_create(&m_mutex, IF_DEBUG("buffer_pool", ) IF_SYNC_DEBUG(SYNC_BUF_POOL, ) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("buffer_pool", )  Current_location());
 
   mutex_acquire();
 
@@ -605,7 +602,7 @@ BufPool::~BufPool() {
 
       mutex_free(&block->m_mutex);
       rw_lock_free(&block->m_rw_lock);
-      IF_SYNC_DEBUG(rw_lock_free(&block->m_debug_latch);)
+      
     }
 
     /* Bypass the checks of buf_chunk_free(), since they fail at shutdown. */
@@ -962,7 +959,7 @@ bool BufPool::try_get(Request &req) {
 
   } else if (unlikely(req.m_modify_clock != req.m_guess->m_modify_clock)) {
 
-    buf_block_dbg_add_level(IF_SYNC_DEBUG(lock, SYNC_NO_ORDER_CHECK));
+    buf_block_dbg_add_level();
 
     if (req.m_rw_latch == RW_S_LATCH) {
 
@@ -1147,7 +1144,7 @@ const BufBlock *BufPool::try_get_by_page_id(Request &req) {
   ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
   ut_ad(!block->m_page.m_file_page_was_freed);
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
+  buf_block_dbg_add_level();
 
   ++m_stat.n_page_gets;
 

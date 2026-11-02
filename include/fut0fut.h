@@ -56,7 +56,7 @@ inline byte *fut_get_ptr(System &sys, space_id_t space_id, FilAddr addr, ulint r
   auto block = sys.m_buf_pool->get(req, nullptr);
   auto ptr = block->get_frame() + addr.m_boffset;
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
+  buf_block_dbg_add_level();
 
   return ptr;
 }

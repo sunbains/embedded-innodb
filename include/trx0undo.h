@@ -314,7 +314,7 @@ struct Undo {
     };
 
     auto block = m_sys.m_buf_pool->get(req, nullptr);
-    buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
+    buf_block_dbg_add_level();
 
     return block->get_frame();
   }
@@ -339,7 +339,7 @@ struct Undo {
     };
 
     auto block = m_sys.m_buf_pool->get(req, nullptr);
-    buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
+    buf_block_dbg_add_level();
 
     return block->get_frame();
   }

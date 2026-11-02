@@ -1221,7 +1221,7 @@ Fsp::fsp_header_t *Fsp::get_space_header(space_id_t id, Mtr *mtr) noexcept {
   auto block = m_sys.m_buf_pool->get(req, nullptr);
   auto header = FSP_HEADER_OFFSET + block->get_frame();
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
+  buf_block_dbg_add_level();
 
   ut_ad(id == mach_read_from_4(FSP_SPACE_ID + header));
 
@@ -1289,7 +1289,7 @@ void Fsp::fill_free_list(bool init_space, space_id_t space, fsp_header_t *header
           ut_a(block == b);
         }
 
-        buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
+        buf_block_dbg_add_level();
 
         fsp_init_file_page(block, mtr);
 
@@ -1464,7 +1464,7 @@ ulint Fsp::alloc_free_page(space_id_t space, page_no_t hint, Mtr *mtr) noexcept 
     ut_a(block == b);
   }
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
+  buf_block_dbg_add_level();
 
   /* Prior contents of the page should be ignored */
   fsp_init_file_page(block, mtr);
@@ -1514,7 +1514,7 @@ Fsp::xdes_t *Fsp::xdes_get_descriptor_with_space_hdr(fsp_header_t *sp_header, sp
 
     auto block = m_sys.m_buf_pool->get(req, nullptr);
 
-    buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
+    buf_block_dbg_add_level();
 
     descr_page = block->get_frame();
   }
@@ -1529,7 +1529,7 @@ Fsp::xdes_t *Fsp::xdes_get_descriptor(space_id_t space_id, page_no_t page_no, Mt
 
   auto block = m_sys.m_buf_pool->get(req, nullptr);
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
+  buf_block_dbg_add_level();
 
   auto sp_header = FSP_HEADER_OFFSET + block->get_frame();
 
@@ -1553,7 +1553,7 @@ bool Fsp::alloc_seg_inode_page(fsp_header_t *space_header, Mtr *mtr) noexcept {
 
   auto block = m_sys.m_buf_pool->get(req, nullptr);
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
+  buf_block_dbg_add_level();
 
   block->m_check_index_page_at_flush = false;
 
@@ -1601,7 +1601,7 @@ Fsp::fseg_inode_t *Fsp::alloc_seg_inode(fsp_header_t *space_header, Mtr *mtr) no
 
   auto block = m_sys.m_buf_pool->get(req, nullptr);
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
+  buf_block_dbg_add_level();
 
   auto page = block->get_frame();
   auto n = fsp_seg_inode_page_find_free(page, 0, mtr);
@@ -1795,7 +1795,7 @@ page_no_t Fsp::fseg_alloc_free_page_low(
 
     auto block = m_sys.m_buf_pool->create(PageId(space, ret_page), mtr);
 
-    buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
+    buf_block_dbg_add_level();
 
     BufPool::Request req{
       .m_rw_latch = RW_X_LATCH,
@@ -1858,7 +1858,7 @@ void Fsp::header_init(space_id_t space, ulint size, Mtr *mtr) noexcept {
     ut_a(b == block);
   }
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_FSP_PAGE));
+  buf_block_dbg_add_level();
 
   /* The prior contents of the file page should be ignored */
 

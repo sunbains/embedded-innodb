@@ -166,9 +166,6 @@ struct SrvConfig {
   /** Print extra information during startup and shutdown. */
   bool m_verbose_log{true};
 
-  /** Seconds a thread may wait for a latch before the server is
-  considered hung and crashed on purpose. */
-  ulint m_fatal_semaphore_wait_threshold{600};
 };
 
 struct Config {

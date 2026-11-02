@@ -251,7 +251,7 @@ static DbErr trx_undo_seg_create(System &sys,
     return DB_OUT_OF_FILE_SPACE;
   }
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
+  buf_block_dbg_add_level();
 
   *undo_page = block->get_frame();
 

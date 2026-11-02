@@ -28,11 +28,11 @@ Created 1/30/1994 Heikki Tuuri
 
 #include "ut0dbg.h"
 
-#if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
+#if !defined(UT_DBG_USE_ABORT)
 /** If this is set to true by ut_dbg_assertion_failed(), all threads
 will stop at the next ut_a() or ut_ad(). */
 bool ut_dbg_stop_threads = false;
-#endif /* UNIV_SYNC_DEBUG || !UT_DBG_USE_ABORT */
+#endif /* !UT_DBG_USE_ABORT */
 
 #if !defined(UT_DBG_USE_ABORT)
 /** A null pointer that will be dereferenced to trigger a memory trap */
@@ -58,16 +58,16 @@ void ut_dbg_assertion_failed(const char *expr, const char *file, ulint line) {
     stderr,
     " We intentionally generate a memory trap. Please submit a detailed bug report on the Embedded InnoDB GitHub repository: "
   );
-#if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
+#if !defined(UT_DBG_USE_ABORT)
   ut_dbg_stop_threads = true;
-#endif /* UNIV_SYNC_DEBUG || !UT_DBG_USE_ABORT */
+#endif /* !UT_DBG_USE_ABORT */
 }
 
-#if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
+#if !defined(UT_DBG_USE_ABORT)
 void ut_dbg_stop_thread(const char *file, ulint line) {
   ib_logger(
     stderr, "Thread %lu stopped in file %s line %lu\n", os_thread_pf(os_thread_get_curr_id()), basename((char *)file), line
   );
   os_thread_sleep(1000000000);
 }
-#endif /* UNIV_SYNC_DEBUG || !UT_DBG_USE_ABORT */
+#endif /* !UT_DBG_USE_ABORT */

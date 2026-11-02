@@ -35,16 +35,11 @@ Created 9/5/1995 Heikki Tuuri
 
 #include "os0sync.h"
 #include "os0thread.h"
-#include "sync0arr.h"
 #include "sync0mutex.h"
 #include "ut0counter.h"
 #include "ut0mem.h"
 
-/** Initializes the synchronization data structures. */
-void sync_init(ulint max_n_threads);
 
-/** Frees the resources in synchronization data structures. */
-void sync_close();
 
 /** Creates, or rather, initializes a mutex object to a specified memory
 location (which must be appropriately aligned). The mutex is initialized
@@ -55,7 +50,7 @@ necessary only if the memory block containing it is freed. */
 location (which must be appropriately aligned). The mutex is initialized
 in the reset state. Explicit freeing of the mutex with mutex_free is
 necessary only if the memory block containing it is freed. */
-void mutex_create(Mutex *mutex, IF_DEBUG(const char *cmutex_name, ) IF_SYNC_DEBUG(ulint level, ) SourceLocation loc);
+void mutex_create(Mutex *mutex, IF_DEBUG(const char *cmutex_name, )  SourceLocation loc);
 
 /** Calling this function is obligatory only if the memory buffer containing
 the mutex is freed. Removes a mutex object from the mutex list. The mutex
@@ -75,28 +70,18 @@ corresponding function. */
 
 /** NOTE! The following macro should be used in mutex locking, not the
 corresponding function. */
-#define mutex_enter_nowait(M) mutex_enter_nowait_func((M)IF_SYNC_DEBUG(, __FILE__, __LINE__))
+#define mutex_enter_nowait(M) mutex_enter_nowait_func((M))
 
 /** NOTE! Use the corresponding macro in the header file, not this function
 directly. Tries to lock the mutex for the current thread. If the lock is not
 acquired immediately, returns with return value 1.
 @return	0 if succeed, 1 if not */
-ulint mutex_enter_nowait_func(Mutex *mutex IF_SYNC_DEBUG(, const char *file_name, ulint line));
+ulint mutex_enter_nowait_func(Mutex *mutex );
 
-#ifdef UNIV_SYNC_DEBUG
-/** Returns true if no mutex or rw-lock is currently locked.
-Works only in the debug version.
-@return	true if no mutexes and rw-locks reserved */
-bool sync_all_freed(void);
-#endif /* UNIV_SYNC_DEBUG */
 
 /*#####################################################################
 FUNCTION PROTOTYPES FOR DEBUGGING */
-/** Prints wait info of the sync system. */
-void sync_print_wait_info(FILE *ib_stream); /** in: stream where to print */
 
-/** Prints info of the sync system. */
-void sync_print(FILE *ib_stream); /** in: stream where to print */
 
 #ifdef UNIV_DEBUG
 /** Checks that the mutex has been initialized.
@@ -110,59 +95,7 @@ bool mutex_own(const Mutex *mutex) /** in: mutex */
   __attribute__((warn_unused_result));
 
 #endif /* UNIV_DEBUG */
-#ifdef UNIV_SYNC_DEBUG
 
-/** Adds a latch and its level in the thread level array. Allocates the memory
-for the array if called first time for this OS thread. Makes the checks
-against other latch levels stored in the array for this thread. */
-void sync_thread_add_level(
-  void *latch, /** in: pointer to a mutex or an rw-lock */
-  ulint level
-); /** in: level in the latching order; if
-                  SYNC_LEVEL_VARYING, nothing is done */
-
-/** Removes a latch from the thread level array if it is found there.
-@return true if found in the array; it is no error if the latch is
-not found, as we presently are not able to determine the level for
-every latch reservation the program does */
-bool sync_thread_reset_level(void *latch); /** in: pointer to a mutex or an rw-lock */
-
-/** Checks that the level array for the current thread is empty.
-@return	true if empty */
-bool sync_thread_levels_empty(void);
-
-/** Checks if the level array for the current thread contains a
-mutex or rw-latch at the specified level.
-@return	a matching latch, or nullptr if not found */
-void *sync_thread_levels_contains(ulint level); /** in: latching order level
-                                                (SYNC_DICT, ...)*/
-
-/** Checks if the level array for the current thread is empty.
-@return	a latch, or nullptr if empty except the exceptions specified below */
-void *sync_thread_levels_nonempty_gen(bool dict_mutex_allowed); /** in: true if dictionary mutex is
-                               allowed to be owned by the thread,
-                               also purge_is_running mutex is
-                               allowed */
-
-#define sync_thread_levels_empty_gen(d) (!sync_thread_levels_nonempty_gen(d))
-
-/** Gets the debug information for a reserved mutex. */
-void mutex_get_debug_info(
-  Mutex *mutex,         /** in: mutex */
-  const char **file_name, /** out: file where requested */
-  ulint *line,            /** out: line where requested */
-  os_thread_id_t *thread_id
-); /** out: id of the thread which owns
-                                the mutex */
-
-/** Counts currently reserved mutexes. Works only in the debug version.
-@return	number of reserved mutexes */
-ulint mutex_n_reserved(void);
-
-#endif /* UNIV_SYNC_DEBUG */
-
-/** Reset variables. */
-void sync_var_init();
 
 /*
                 LATCHING ORDER WITHIN THE DATABASE
@@ -392,9 +325,6 @@ implementation of a mutual exclusion semaphore. */
 
 /* Appears here for debugging purposes only! */
 
-/** The global array of wait cells for implementation of the databases own
-mutexes and read-write locks. */
-extern SyncCheck *sync_primary_wait_array;
 
 /** Constant determining how long spin wait is continued before suspending
 the thread. A value 600 rounds on a 1995 100 MHz Pentium seems to correspond
@@ -408,24 +338,13 @@ constexpr ulint SYNC_SPIN_WAIT_DELAY = 6;
 
 /** The number of mutex_exit calls. Intended for performance monitoring. */
 using counter_t = ut::CPU_sharded_counter<8>;
-extern counter_t mutex_exit_count;
 
-#ifdef UNIV_SYNC_DEBUG
-/** Latching order checks start when this is set true */
-extern bool sync_order_checks_on;
-#endif /* UNIV_SYNC_DEBUG */
 
-/** This variable is set to true when sync_init is called */
-extern bool sync_initialized;
 
 /** Global list of database mutexes (not OS mutexes) created. */
 using ut_mutex_list_base_node_t = UT_LIST_BASE_NODE_T(Mutex, list);
 
-/** Global list of database mutexes (not OS mutexes) created. */
-extern ut_mutex_list_base_node_t mutex_list;
 
-/** Mutex protecting the mutex_list variable */
-extern Mutex mutex_list_mutex;
 
 /**
  * Sets the waiters field in a mutex.
@@ -446,16 +365,6 @@ void mutex_set_waiters(Mutex *mutex, ulint n);
  */
 void mutex_spin_wait(Mutex *mutex, const char *file_name, ulint line);
 
-#ifdef UNIV_SYNC_DEBUG
-/**
- * Sets the debug information for a reserved mutex.
- *
- * @param mutex - mutex
- * @param file_name - file where requested
- * @param line - line where requested
- */
-void mutex_set_debug_info(Mutex *mutex, const char *file_name, ulint line);
-#endif /* UNIV_SYNC_DEBUG */
 
 /**
  * Releases the threads waiting in the primary wait array for this mutex.
@@ -508,7 +417,7 @@ inline void mutex_exit(Mutex *mutex) {
   ut_ad(mutex_own(mutex));
   ut_d(mutex->thread_id = (os_thread_id_t)ULINT_UNDEFINED);
 
-  IF_SYNC_DEBUG(sync_thread_reset_level(mutex);)
+  
 
   mutex_reset_lock_word(mutex);
 
@@ -550,7 +459,7 @@ inline void mutex_enter_func(Mutex *mutex, const char *file_name, ulint line) {
 
   if (!mutex_test_and_set(mutex)) {
     ut_d(mutex->thread_id = os_thread_get_curr_id());
-    IF_SYNC_DEBUG(mutex_set_debug_info(mutex, file_name, line);)
+    
 
     /* Succeeded! */
     return;

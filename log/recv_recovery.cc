@@ -96,7 +96,7 @@ void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept
   auto success = sys.m_buf_pool->try_get_known_nowait(req);
   ut_a(success);
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(lock, SYNC_NO_ORDER_CHECK));
+  buf_block_dbg_add_level();
 
   lsn_t page_lsn = mach_read_from_8(page + FIL_PAGE_LSN);
   auto page_newest_lsn = buf_page_get_newest_modification(&block->m_page);
@@ -252,7 +252,7 @@ void recv_apply_log_recs(System &sys, Dblwr *dblwr, bool flush_and_free_pages) n
           };
 
           auto block = sys.m_buf_pool->get(req, nullptr);
-          buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
+          buf_block_dbg_add_level();
 
           recv_recover_page(sys, false, block);
 

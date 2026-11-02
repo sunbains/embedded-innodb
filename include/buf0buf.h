@@ -491,9 +491,7 @@ inline lsn_t buf_page_get_newest_modification(const BufPage *bpage) {
  */
 inline void buf_block_modify_clock_inc(BufBlock *block) {
 
-  IF_SYNC_DEBUG(
-    ut_ad((mutex_own(&m_mutex) && block->m_page.buf_fix_count == 0) || rw_lock_own(&block->m_rw_lock, RW_LOCK_EXCLUSIVE));
-  )
+  
 
   ++block->m_modify_clock;
 }
@@ -507,7 +505,7 @@ inline void buf_block_modify_clock_inc(BufBlock *block) {
  */
 inline uint64_t buf_block_get_modify_clock(BufBlock *block) {
 
-  IF_SYNC_DEBUG(ut_ad(rw_lock_own(&(block->m_rw_lock), RW_LOCK_SHARED) || rw_lock_own(&(block->m_rw_lock), RW_LOCK_EXCLUSIVE));)
+  
 
   return block->m_modify_clock;
 }
@@ -519,22 +517,22 @@ inline uint64_t buf_block_get_modify_clock(BufBlock *block) {
  * @param line Line number.
  * @param block Pointer to the buffer block.
  */
-inline void buf_block_buf_fix_inc_func(IF_SYNC_DEBUG(const char *file, ulint line, ) BufBlock *block) {
-  IF_SYNC_DEBUG(auto ret = rw_lock_s_lock_nowait(&(block->m_debug_latch), file, line); ut_a(ret););
+inline void buf_block_buf_fix_inc_func( BufBlock *block) {
+  ;
 
   ut_ad(mutex_own(&block->m_mutex));
 
   ++block->m_page.m_buf_fix_count;
 }
 
-#define buf_block_buf_fix_inc(b, f, l) buf_block_buf_fix_inc_func(IF_SYNC_DEBUG(f, l, ) b)
+#define buf_block_buf_fix_inc(b, f, l) buf_block_buf_fix_inc_func( b)
 
 inline void BufBlock::fix_dec() {
   ut_ad(mutex_own(&m_mutex));
 
   --m_page.m_buf_fix_count;
 
-  IF_SYNC_DEBUG(rw_lock_s_unlock(&m_debug_latch));
+  ;
 }
 
 /**
@@ -612,8 +610,8 @@ inline buf_frame_t *BufBlock::get_frame() const {
  * @param block The buffer page where we have acquired latch.
  * @param level The latching order level.
  */
-inline void buf_block_dbg_add_level(IF_SYNC_DEBUG(BufBlock *block, ulint level)) {
-  IF_SYNC_DEBUG(sync_thread_add_level(&block->m_rw_lock, level));
+inline void buf_block_dbg_add_level() {
+  ;
 }
 
 /** Releases a latch, if specified.

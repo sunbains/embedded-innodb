@@ -37,7 +37,7 @@ Created 3/26/1996 Heikki Tuuri
 
 
 TrxSys::TrxSys(System &sys) noexcept : m_sys(sys) {
-  mutex_create(&m_mutex, IF_DEBUG("trx_sys_mutex", ) IF_SYNC_DEBUG(TRX_SYS_MUTEX, ) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("trx_sys_mutex", )  Current_location());
 }
 
 TrxSys::~TrxSys() noexcept {
@@ -223,7 +223,7 @@ DbErr TrxSys::create_system_tablespace() noexcept {
   /* Create the trx sys file block in a new allocated file segment */
   auto block = m_sys.m_fsp->fseg_create(TRX_SYS_SPACE, 0, TRX_SYS + TRX_SYS_FSEG_HEADER, &mtr);
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_SYS_HEADER));
+  buf_block_dbg_add_level();
 
   ut_a(block->get_page_no() == TRX_SYS_PAGE_NO);
 

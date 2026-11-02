@@ -112,12 +112,6 @@ std::string DictLoad::to_string() noexcept {
   std::string str;
   BtreePcursor pcur{};
 
-  /* Enlarge the fatal semaphore wait timeout during the InnoDB table
-  monitor printout */
-
-  mutex_enter(&m_sys.m_trx_sys->m_mutex);
-  m_sys.m_srv->m_fatal_semaphore_wait_threshold += 7200; /* 2 hours */
-  mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   m_sys.m_dict->mutex_acquire();
 
@@ -145,11 +139,6 @@ std::string DictLoad::to_string() noexcept {
 
       m_sys.m_dict->mutex_release();
 
-      /* Restore the fatal semaphore wait timeout */
-
-      mutex_enter(&m_sys.m_trx_sys->m_mutex);
-      m_sys.m_srv->m_fatal_semaphore_wait_threshold -= 7200; /* 2 hours */
-      mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
       return str;
     }

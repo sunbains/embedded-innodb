@@ -467,9 +467,6 @@ struct Srv {
   /** Incremented whenever there is some user activity in the server */
   ulint m_activity_count{};
 
-  /** Seconds a thread may wait for a latch before the server is
-  considered hung; temporarily raised during long dictionary loads. */
-  ulint m_fatal_semaphore_wait_threshold{};
 
   /** How much data manipulation language (DML) statements need to be
   delayed, in microseconds, in order to reduce the lagging of the purge

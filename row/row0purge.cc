@@ -370,7 +370,7 @@ skip_secondaries:
       };
 
       block = sys.m_buf_pool->get(req, nullptr);
-      buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_UNDO_PAGE));
+      buf_block_dbg_add_level();
 
       data_field = block->get_frame() + offset + internal_offset;
 

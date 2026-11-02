@@ -30,7 +30,7 @@ Created 1/8/1996 Heikki Tuuri
 
 
 Dict::Dict(System &sys) noexcept : m_sys(sys), m_store(sys), m_loader(sys), m_ddl(sys) {
-  mutex_create(&m_mutex, IF_DEBUG("dict_mutex", ) IF_SYNC_DEBUG(SYNC_DICT, ) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("dict_mutex", )  Current_location());
 
   m_size = 0;
 
@@ -38,7 +38,7 @@ Dict::Dict(System &sys) noexcept : m_sys(sys), m_store(sys), m_loader(sys), m_dd
 
   rw_lock_create(&m_lock, SYNC_DICT_OPERATION);
 
-  mutex_create(&m_foreign_err_mutex, IF_DEBUG("dict_foreign_mutex", ) IF_SYNC_DEBUG(SYNC_ANY_LATCH, ) Current_location());
+  mutex_create(&m_foreign_err_mutex, IF_DEBUG("dict_foreign_mutex", )  Current_location());
 
   /* The infimum and supremum records of every index page are built with
   this index, including the pages of the system tables at bootstrap. */

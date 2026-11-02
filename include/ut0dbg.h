@@ -49,14 +49,14 @@ void ut_dbg_assertion_failed(
 extern ulint *ut_dbg_null_ptr;
 #endif /* UT_DBG_USE_ABORT */
 
-#if defined(UNIV_SYNC_DEBUG) || !defined(UT_DBG_USE_ABORT)
+#if !defined(UT_DBG_USE_ABORT)
 /** If this is set to true by ut_dbg_assertion_failed(), all threads
 will stop at the next ut_a() or ut_ad(). */
 extern bool ut_dbg_stop_threads;
 
 /** Stop a thread after assertion failure. */
 void ut_dbg_stop_thread(const char *file, ulint line);
-#endif /* UNIV_SYNC_DEBUG || !UT_DBG_USE_ABORT */
+#endif /* !UT_DBG_USE_ABORT */
 
 #ifdef UT_DBG_USE_ABORT
 

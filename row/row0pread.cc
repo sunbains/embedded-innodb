@@ -178,7 +178,7 @@ ParallelReader::ParallelReader(size_t max_threads)
     : m_max_threads(max_threads), m_n_threads(max_threads), m_ctxs(), m_sync(max_threads == 0) {
   m_n_completed = 0;
 
-  mutex_create(&m_mutex, IF_DEBUG("parallel_read_mutex", ) IF_SYNC_DEBUG(SYNC_PARALLEL_READ, ) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("parallel_read_mutex", )  Current_location());
 
   m_event = CondVar::create("parallel_reader");
   m_sig_count = m_event->reset();
@@ -289,7 +289,7 @@ BufBlock *ParallelReader::ScanCtx::block_get_s_latched(System &sys, const PageId
 
   auto block = sys.m_buf_pool->get(req, nullptr);
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
+  buf_block_dbg_add_level();
 
   return block;
 }
@@ -342,7 +342,7 @@ DbErr PCursor::move_to_user_rec(System &sys) noexcept {
 
   block = sys.m_buf_pool->get(req, nullptr);
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
+  buf_block_dbg_add_level();
 
   if (page_is_leaf(block->get_frame())) {
     sys.m_btree->leaf_page_release(cur->get_block(), RW_S_LATCH, m_mtr);

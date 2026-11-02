@@ -109,7 +109,7 @@ Fil::Fil(System &sys) noexcept : m_sys(sys), m_file_per_table(sys.m_config.m_fil
 
   ut_a(config.m_max_n_open_files > 0);
 
-  mutex_create(&m_mutex, IF_DEBUG("Fil::mutex", ) IF_SYNC_DEBUG(SYNC_ANY_LATCH, ) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("Fil::mutex", )  Current_location());
 
   m_max_n_open = config.m_max_n_open_files;
 

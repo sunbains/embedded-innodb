@@ -761,7 +761,7 @@ ulint BufFlush::batch(BufFlushType flush_type, ulint min_n, uint64_t lsn_limit) 
   page_no_t page_no;
 
   ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
-  IF_SYNC_DEBUG(ut_ad(flush_type != BUF_FLUSH_LIST || sync_thread_levels_empty_gen(true));)
+  
 
   m_sys.m_buf_pool->mutex_acquire();
 

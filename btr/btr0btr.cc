@@ -264,7 +264,7 @@ BufBlock *Btree::page_alloc(const Index *index, page_no_t hint_page_no, byte fil
 
     auto new_block = m_sys.m_buf_pool->get(req, nullptr);
 
-    buf_block_dbg_add_level(IF_SYNC_DEBUG(new_block, SYNC_TREE_NODE_NEW));
+    buf_block_dbg_add_level();
 
     return new_block;
   }
@@ -447,7 +447,7 @@ page_no_t Btree::create(ulint type, space_id_t space, uint64_t index_id, Index *
 
   const auto page_no = block->get_page_no();
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE_NEW));
+  buf_block_dbg_add_level();
 
   if (!m_sys.m_fsp->fseg_create(space, page_no, PAGE_HEADER + PAGE_BTR_SEG_LEAF, mtr)) {
     /* Not enough space for new segment, free root segment before return. */
@@ -457,7 +457,7 @@ page_no_t Btree::create(ulint type, space_id_t space, uint64_t index_id, Index *
 
   /* The fseg create acquires a second latch on the page,
   therefore we must declare it: */
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE_NEW));
+  buf_block_dbg_add_level();
 
   /* Create a new index page on the allocated segment page */
   auto page = ::page_create(index, block, mtr);
@@ -1096,9 +1096,6 @@ Rec Btree::page_split_and_insert(BtreeCursor *btr_cur, const DTuple *tuple, ulin
 
     ut_ad(mtr->memo_contains(btr_cur->get_index()->get_lock(), MTR_MEMO_X_LOCK));
 
-#ifdef UNIV_SYNC_DEBUG
-    ut_ad(rw_lock_own(btr_cur->get_index()->get_lock(), RW_LOCK_EX));
-#endif /* UNIV_SYNC_DEBUG */
 
     auto block = btr_cur->get_block();
     auto page = block->get_frame();

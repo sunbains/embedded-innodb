@@ -181,9 +181,6 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
 
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&m_sys.m_dict->m_lock, RW_LOCK_EX));
-#endif /* UNIV_SYNC_DEBUG */
 
   auto func_exit = [this, trx](DbErr err) -> auto {
     trx->m_op_info = "";
@@ -409,7 +406,7 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
   ((str1_len) == sizeof(str2_onstack) && memcmp(str1, str2_onstack, sizeof(str2_onstack)) == 0)
 
 DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
-  IF_SYNC_DEBUG(ut_ad(rw_lock_own(&m_sys.m_dict->m_lock, RW_LOCK_EX));)
+  
 
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
   ut_ad(trx->m_dict_operation_lock_mode == RW_X_LATCH);
@@ -540,9 +537,6 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
 }
 
 DbErr Ddl::create_index(Index *index, Trx *trx) noexcept {
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&m_sys.m_dict->m_lock, RW_LOCK_EX));
-#endif /* UNIV_SYNC_DEBUG */
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
   /* This heap is destroyed when the query graph is freed. */
@@ -610,9 +604,6 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
   /* Prevent foreign key checks etc. while we are truncating the table */
   ut_ad(mutex_own(&m_sys.m_dict->m_mutex));
 
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&m_sys.m_dict->m_lock, RW_LOCK_EX));
-#endif /* UNIV_SYNC_DEBUG */
 
   auto func_exit = [this, trx](DbErr err) -> auto {
     trx->m_op_info = "";

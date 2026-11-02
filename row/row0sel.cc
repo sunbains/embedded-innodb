@@ -1383,9 +1383,6 @@ stop_for_a_while:
 
   mtr.commit(m_sys);
 
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(sync_thread_levels_empty_gen(true));
-#endif /* UNIV_SYNC_DEBUG */
   err = DB_SUCCESS;
   goto func_exit;
 
@@ -1403,9 +1400,6 @@ commit_mtr_for_a_while:
 
   mtr_has_extra_clust_latch = false;
 
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(sync_thread_levels_empty_gen(true));
-#endif /* UNIV_SYNC_DEBUG */
 
   goto table_loop;
 
@@ -1420,9 +1414,6 @@ lock_wait_or_error:
 
   mtr.commit(m_sys);
 
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(sync_thread_levels_empty_gen(true));
-#endif /* UNIV_SYNC_DEBUG */
 
 func_exit:
   if (likely_null(heap)) {

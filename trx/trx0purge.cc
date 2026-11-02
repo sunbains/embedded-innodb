@@ -608,7 +608,7 @@ PurgeSys::PurgeSys(System &sys, Trx *trx) noexcept : m_sys(sys), m_trx(trx) {
 
   rw_lock_create(&m_latch, SYNC_PURGE_LATCH);
 
-  mutex_create(&m_mutex, IF_DEBUG("PurgeSys::m_mutex", ) IF_SYNC_DEBUG(SYNC_PURGE_SYS, ) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("PurgeSys::m_mutex", )  Current_location());
 
   m_heap = mem_heap_create(256);
 
@@ -652,9 +652,6 @@ PurgeSys::~PurgeSys() noexcept {
 }
 
 bool PurgeSys::update_undo_must_exist(trx_id_t trx_id) noexcept {
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&m_latch, RW_LOCK_SHARED));
-#endif /* UNIV_SYNC_DEBUG */
 
   return !m_view->sees_trx_id(trx_id);
 }

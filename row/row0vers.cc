@@ -35,9 +35,6 @@ Created 2/6/1997 Heikki Tuuri
 Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index, const ulint *offsets) noexcept {
   ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(!rw_lock_own(&purge_sys->m_latch, RW_LOCK_SHARED));
-#endif /* UNIV_SYNC_DEBUG */
 
   mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
@@ -255,9 +252,6 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
 bool RowVers::must_preserve_del_marked(trx_id_t trx_id, Mtr *mtr) noexcept {
 
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(!rw_lock_own(&m_sys.m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
-#endif /* UNIV_SYNC_DEBUG */
 
   mtr_s_lock(&m_sys.m_trx_sys->m_purge->m_latch, mtr);
 
@@ -274,9 +268,6 @@ bool RowVers::old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index
 
   ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(rec, MTR_MEMO_PAGE_S_FIX));
 
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(!rw_lock_own(&m_sys.m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
-#endif /* UNIV_SYNC_DEBUG */
 
   mtr_s_lock(&m_sys.m_trx_sys->m_purge->m_latch, mtr);
 
@@ -384,9 +375,6 @@ DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
     row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX)
   );
 
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(!rw_lock_own(&m_sys.m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
-#endif /* UNIV_SYNC_DEBUG */
 
   ut_ad(row.m_cluster_rec.offs_validate(row.m_cluster_index, row.m_cluster_offsets));
 
@@ -494,9 +482,6 @@ DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
     row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX)
   );
 
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(!rw_lock_own(&m_sys.m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
-#endif /* UNIV_SYNC_DEBUG */
 
   ut_ad(row.m_cluster_rec.offs_validate(row.m_cluster_index, row.m_cluster_offsets));
 

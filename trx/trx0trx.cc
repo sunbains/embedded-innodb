@@ -44,7 +44,7 @@ Trx::Trx(Session *sess, void *arg) noexcept : m_client_ctx(arg), m_sess(sess) {
   m_op_info = "";
   m_start_time = ::time(nullptr);
 
-  mutex_create(&m_undo_mutex, IF_DEBUG("trx_undo_mutex", ) IF_SYNC_DEBUG(SYNC_TRX_UNDO, ) Current_location());
+  mutex_create(&m_undo_mutex, IF_DEBUG("trx_undo_mutex", )  Current_location());
 
   m_lock_heap = mem_heap_create_in_buffer(256);
 

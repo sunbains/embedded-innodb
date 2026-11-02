@@ -148,17 +148,6 @@ bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
 
             validate_trx_state(lock->m_trx);
 
-#ifdef UNIV_SYNC_DEBUG
-            /* Only validate the record queues when this thread is not
-            holding a space->latch.  Deadlocks are possible due to
-            latching order violation when UNIV_DEBUG is defined while
-            UNIV_SYNC_DEBUG is not. */
-            const FilSpace *space = fil_space_get_by_id(space_id);
-            if (space != nullptr && mutex_own(&space->m_latch)) {
-              mutex_exit(&m_sys.m_lock_sys->m_trx_sys->m_mutex);
-              return clean_up(mtr, heap);
-            }
-#endif /* UNIV_SYNC_DEBUG */
 
             if (!lock->rec_is_nth_bit_set(heap_no)) {
               continue;

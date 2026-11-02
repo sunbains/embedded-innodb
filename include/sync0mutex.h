@@ -81,16 +81,6 @@ struct Mutex {
   ulint magic_n{MUTEX_MAGIC_N};
 #endif /* UNIV_DEBUG */
 
-#ifdef UNIV_SYNC_DEBUG
-  /** File where the mutex was locked */
-  const char *file_name{};
-
-  /** Line where the mutex was locked */
-  ulint line{};
-
-  /** Level in the global latching order */
-  ulint level{};
-#endif /* UNIV_SYNC_DEBUG */
 };
 
 static_assert(std::is_standard_layout<Mutex>::value, "Mutex must have standard layout");

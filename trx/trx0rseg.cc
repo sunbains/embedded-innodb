@@ -58,7 +58,7 @@ page_no_t TrxRseg::header_create(System &sys, space_id_t space, ulint max_size, 
     return FIL_NULL;
   }
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER_NEW));
+  buf_block_dbg_add_level();
 
   auto page_no = block->get_page_no();
 
@@ -143,7 +143,7 @@ TrxRseg *TrxRseg::mem_create(System &sys,
   rseg->m_space = space;
   rseg->m_page_no = page_no;
 
-  mutex_create(&rseg->m_mutex, IF_DEBUG("rseg_mutex", ) IF_SYNC_DEBUG(SYNC_RSEG, ) Current_location());
+  mutex_create(&rseg->m_mutex, IF_DEBUG("rseg_mutex", )  Current_location());
 
   UT_LIST_ADD_LAST(sys.m_trx_sys->m_rseg_list, rseg);
 

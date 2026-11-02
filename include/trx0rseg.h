@@ -182,7 +182,7 @@ inline trx_rsegf_t *trx_rsegf_get(System &sys, space_id_t space_id, page_no_t pa
   };
 
   auto block = sys.m_buf_pool->get(req, nullptr);
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER));
+  buf_block_dbg_add_level();
 
   auto header = TRX_RSEG + block->get_frame();
 
@@ -209,7 +209,7 @@ inline trx_rsegf_t *trx_rsegf_get_new(System &sys, space_id_t space_id, page_no_
   };
 
   auto block = sys.m_buf_pool->get(req, nullptr);
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER_NEW));
+  buf_block_dbg_add_level();
 
   auto header = TRX_RSEG + block->get_frame();
 

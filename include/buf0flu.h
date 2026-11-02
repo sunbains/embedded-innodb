@@ -195,9 +195,6 @@ struct BufFlush {
   void note_modification(BufBlock *block, Mtr *mtr) {
     ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
     ut_ad(block->m_page.m_buf_fix_count > 0);
-#ifdef UNIV_SYNC_DEBUG
-    ut_ad(rw_lock_own(&block->m_lock, RW_LOCK_EX));
-#endif /* UNIV_SYNC_DEBUG */
     ut_ad(mutex_own(&m_sys.m_buf_pool->m_mutex));
 
     ut_ad(mtr->m_start_lsn != 0);
@@ -231,9 +228,6 @@ struct BufFlush {
     ut_ad(block->get_state() == BUF_BLOCK_FILE_PAGE);
     ut_ad(block->m_page.m_buf_fix_count > 0);
 
-#ifdef UNIV_SYNC_DEBUG
-    ut_ad(rw_lock_own(&(block->lock), RW_LOCK_EX));
-#endif /* UNIV_SYNC_DEBUG */
 
     m_sys.m_buf_pool->mutex_acquire();
 

@@ -271,7 +271,7 @@ void BtreeCursor::search_to_nth_level(System &sys,
 
     if (rw_latch != RW_NO_LATCH) {
 
-      buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
+      buf_block_dbg_add_level();
     }
 
     ut_ad(index->m_id == sys.m_btree->page_get_index_id(page));

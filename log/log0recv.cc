@@ -119,7 +119,7 @@ void RecvSys::cleanup_resources() noexcept {
 }
 
 RecvSys::RecvSys(System &sys) noexcept : m_sys(sys) {
-  mutex_create(&m_mutex, IF_DEBUG("RecvSys::m_mutex", ) IF_SYNC_DEBUG(SYNC_RECV, ) Current_location());
+  mutex_create(&m_mutex, IF_DEBUG("RecvSys::m_mutex", )  Current_location());
 }
 
 void RecvSys::open(ulint available_memory) noexcept {
@@ -520,7 +520,7 @@ void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept
   auto success = sys.m_buf_pool->try_get_known_nowait(req);
   ut_a(success);
 
-  buf_block_dbg_add_level(IF_SYNC_DEBUG(lock, SYNC_NO_ORDER_CHECK));
+  buf_block_dbg_add_level();
 
   /* Read the newest modification lsn from the page */
   lsn_t page_lsn = mach_read_from_8(page + FIL_PAGE_LSN);
@@ -698,7 +698,7 @@ void recv_apply_log_recs(System &sys, bool flush_and_free_pages) noexcept {
           };
 
           auto block = sys.m_buf_pool->get(req, nullptr);
-          buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
+          buf_block_dbg_add_level();
 
           recv_recover_page(sys, false, block);
 
@@ -1325,14 +1325,6 @@ void recv_recovery_from_checkpoint_finish(System &sys) noexcept {
 }
 
 void recv_recovery_rollback_active(System &sys) noexcept {
-#ifdef UNIV_SYNC_DEBUG
-  /* Wait for a while so that created threads have time to suspend
-  themselves before we switch the latching order checks on */
-  os_thread_sleep(1000000);
-
-  /* Switch latching order checks on in sync0sync.c */
-  sync_order_checks_on = true;
-#endif
 
   (void)sys.m_dict->m_ddl.drop_all_temp_indexes(IbRecovery(sys.m_config.m_recv.m_force_recovery));
   (void)sys.m_dict->m_ddl.drop_all_temp_tables(IbRecovery(sys.m_config.m_recv.m_force_recovery));

@@ -392,9 +392,6 @@ TrxUndoRecord TrxUndoRecord::get_undo_rec_low(System &sys, roll_ptr_t roll_ptr, 
 }
 
 DbErr TrxUndoRecord::get_undo_rec(System &sys, roll_ptr_t roll_ptr, trx_id_t trx_id, TrxUndoRecord *undo_rec, MemHeap *heap) {
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&purge_sys->latch, RW_LOCK_SHARED));
-#endif /* UNIV_SYNC_DEBUG */
 
   if (!sys.m_trx_sys->m_purge->update_undo_must_exist(trx_id)) {
 
@@ -422,9 +419,6 @@ DbErr TrxUndoRecord::prev_version_build(System &sys,
   roll_ptr_t old_roll_ptr;
   TrxUndoRecord undo_rec{};
 
-#ifdef UNIV_SYNC_DEBUG
-  ut_ad(rw_lock_own(&purge_sys->m_latch, RW_LOCK_SHARED));
-#endif /* UNIV_SYNC_DEBUG */
 
   ut_ad(
     index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_S_FIX) || index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_X_FIX)

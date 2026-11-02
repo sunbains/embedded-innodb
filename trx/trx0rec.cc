@@ -679,7 +679,7 @@ DbErr trx_undo_report_row_operation(System &sys,
 
     auto undo_block = sys.m_buf_pool->get(req, undo->m_guess_block);
 
-    buf_block_dbg_add_level(IF_SYNC_DEBUG(undo_block, SYNC_TRX_UNDO_PAGE));
+    buf_block_dbg_add_level();
 
     UndoPage undo_page(undo_block->get_frame());
 

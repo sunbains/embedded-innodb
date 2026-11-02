@@ -388,7 +388,7 @@ struct Btree {
 
     if (rw_latch != RW_NO_LATCH) {
 
-      buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TREE_NODE));
+      buf_block_dbg_add_level();
     }
 
     return block;
