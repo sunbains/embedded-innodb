@@ -24,7 +24,7 @@ int ib_create_tempfile(const char *filename); /*!< in: temp filename prefix */
 thread */
 
 bool ib_handle_errors(
-  enum DbErr *new_err, /*!< out: possible new error
+  System &sys, enum DbErr *new_err, /*!< out: possible new error
                                               encountered in lock wait, or if
                                               no new error, the value of
                                               trx->error_state at the entry of

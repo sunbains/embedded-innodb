@@ -36,7 +36,7 @@ Created September 2006 Marko Makela
 @return	own: column prefix cache */
 
 RowExt *row_ext_create(
-  ulint n_ext,         /*!< in: number of externally stored columns */
+  System &sys, ulint n_ext,         /*!< in: number of externally stored columns */
   const ulint *ext,    /*!< in: col_no's of externally stored columns
                            in the InnoDB table object, as reported by
                            dict_col_get_no(); NOT relative to the records

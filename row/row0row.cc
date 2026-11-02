@@ -117,7 +117,7 @@ DTuple *row_build_index_entry(const DTuple *row, RowExt *ext, const Index *index
   return entry;
 }
 
-DTuple *row_build(
+DTuple *row_build(System &sys, 
   ulint type, const Index *index, Rec rec, const RecOffs &offsets, const Table *col_table, RowExt **ext, MemHeap *heap
 ) {
   MemHeap *tmp_heap{};
@@ -202,7 +202,7 @@ DTuple *row_build(
   ut_ad(dtuple_check_typed(row));
 
   if (j > 0) {
-    *ext = row_ext_create(j, ext_cols, row, heap);
+    *ext = row_ext_create(sys, j, ext_cols, row, heap);
   } else {
     *ext = nullptr;
   }

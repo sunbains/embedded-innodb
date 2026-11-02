@@ -106,7 +106,7 @@ void flst_remove(System &sys,
 nodes which will be removed must be provided by the caller, as this function
 does not measure the length of the tail. */
 void flst_cut_end(
-  flst_base_node_t *base, /** in: pointer to base node of list */
+  System &sys, flst_base_node_t *base, /** in: pointer to base node of list */
   flst_node_t *node2,     /** in: first node to remove */
   ulint n_nodes,          /** in: number of nodes to remove,
                             must be >= 1 */

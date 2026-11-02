@@ -292,7 +292,7 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
 
   pars_info_add_str_literal(info, "table_name", in_name);
 
-  auto err = que_eval_sql(
+  auto err = que_eval_sql(m_sys, 
     info,
     "PROCEDURE DROP_TABLE_PROC () IS sys_foreign_id CHAR;\n"
     " table_id CHAR;\n"
@@ -352,7 +352,7 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
 
     err = DB_MUST_GET_MORE_FILE_SPACE;
 
-    ib_handle_errors(&err, trx, nullptr, nullptr);
+    ib_handle_errors(m_sys, &err, trx, nullptr, nullptr);
 
     ut_error;
 
@@ -774,7 +774,7 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
   pars_info_add_uint64_literal(info, "old_id", table->m_id);
   pars_info_add_int4_literal(info, "space", (lint)table->m_space_id);
 
-  auto err = que_eval_sql(
+  auto err = que_eval_sql(m_sys, 
     info,
     "PROCEDURE RENUMBER_TABLESPACE_PROC () IS\n"
     "  BEGIN\n"
@@ -840,7 +840,7 @@ DbErr Ddl::drop_index(Table *table, Index *index, Trx *trx) noexcept {
 
   ut_a(trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
-  auto err = que_eval_sql(info, str1, false, trx);
+  auto err = que_eval_sql(m_sys, info, str1, false, trx);
 
   ut_a(err == DB_SUCCESS);
 
@@ -859,7 +859,7 @@ DbErr Ddl::delete_foreign_constraint(const char *id, Trx *trx) noexcept {
 
   pars_info_add_str_literal(info, "id", id);
 
-  return que_eval_sql(
+  return que_eval_sql(m_sys, 
     info,
     "PROCEDURE DELETE_CONSTRAINT () IS\n"
     "BEGIN\n"
@@ -927,7 +927,7 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
   pars_info_add_str_literal(info, "new_table_name", new_name);
   pars_info_add_str_literal(info, "old_table_name", old_name);
 
-  auto err = que_eval_sql(
+  auto err = que_eval_sql(m_sys, 
     info,
     "PROCEDURE RENAME_TABLE () IS\n"
     "BEGIN\n"
@@ -945,7 +945,7 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
     pars_info_add_str_literal(info, "new_table_name", new_name);
     pars_info_add_str_literal(info, "old_table_name", old_name);
 
-    err = que_eval_sql(
+    err = que_eval_sql(m_sys, 
       info,
       "PROCEDURE RENAME_CONSTRAINT_IDS () IS\n"
       "  gen_constr_prefix CHAR;\n"
@@ -1093,7 +1093,7 @@ DbErr Ddl::rename_index(const char *table_name, const char *old_name, const char
   pars_info_add_str_literal(info, "new_index_name", new_name);
   pars_info_add_str_literal(info, "old_index_name", old_name);
 
-  auto err = que_eval_sql(
+  auto err = que_eval_sql(m_sys, 
     info,
     "PROCEDURE RENAME_TABLE () IS\n"
     "  table_id CHAR;\n"
@@ -1143,7 +1143,7 @@ DbErr Ddl::drop_all_foreign_keys_in_db(const char *name, Trx *trx) noexcept {
 /* true if for_name is not prefixed with dbname */
 #define TABLE_NOT_IN_THIS_DB "SUBSTR(for_name, 0, LENGTH(:dbname)) <> :dbname"
 
-  auto err = que_eval_sql(
+  auto err = que_eval_sql(m_sys, 
     info,
     "PROCEDURE DROP_ALL_FOREIGN_KEYS_PROC () IS\n"
     "  foreign_id CHAR;\n"

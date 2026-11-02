@@ -434,7 +434,7 @@ struct RowUpdate {
    * @param[in] update     An update vector built for the clustered index.
    * @param[in] heap       Memory heap.
    */
-  static void replace(DTuple *row, RowExt **ext, const Index *index, const Upd *update, MemHeap *heap) noexcept;
+  static void replace(System &sys, DTuple *row, RowExt **ext, const Index *index, const Upd *update, MemHeap *heap) noexcept;
 
   /**
    * @brief Checks if an update vector changes an ordering field of an index record.

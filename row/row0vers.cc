@@ -183,7 +183,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
     /* The stack of versions is locked by mtr. Thus, it is safe to fetch the prefixes for
     externally stored columns. */
-    auto row = row_build(ROW_COPY_POINTERS, clust_index, prev_version, clust_offsets, nullptr, &ext, heap);
+    auto row = row_build(m_sys, ROW_COPY_POINTERS, clust_index, prev_version, clust_offsets, nullptr, &ext, heap);
 
     auto entry = row_build_index_entry(row, ext, index, heap);
 
@@ -296,7 +296,7 @@ bool RowVers::old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index
 
     /* The stack of versions is locked by mtr.  Thus, it is safe to fetch the prefixes for
     externally stored columns. */
-    auto row = row_build(ROW_COPY_POINTERS, clust_index, rec, clust_offsets, nullptr, &ext, heap);
+    auto row = row_build(m_sys, ROW_COPY_POINTERS, clust_index, rec, clust_offsets, nullptr, &ext, heap);
 
     auto entry = row_build_index_entry(row, ext, index, heap);
 
@@ -354,7 +354,7 @@ bool RowVers::old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index
 
       /* The stack of versions is locked by mtr.  Thus, it is safe to fetch the prefixes for
       externally stored columns. */
-      auto row = row_build(ROW_COPY_POINTERS, clust_index, prev_version, clust_offsets, nullptr, &ext, heap);
+      auto row = row_build(m_sys, ROW_COPY_POINTERS, clust_index, prev_version, clust_offsets, nullptr, &ext, heap);
       auto entry = row_build_index_entry(row, ext, index, heap);
 
       /* If entry == NULL, the record contains unset BLOB pointers.  This must be a freshly

@@ -182,6 +182,10 @@ lsn_t Log::reserve_and_write_fast(byte *data, ulint len, lsn_t *start_lsn) noexc
 }
 
 lsn_t Log::reserve_and_open(ulint len) noexcept {
+  /* The caller releases the log mutex after close(), as before the WAL-CPP
+  integration. */
+  acquire();
+
   if (!m_wal_backend) {
     return m_lsn;
   }

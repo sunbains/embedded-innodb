@@ -588,7 +588,7 @@ inline DbErr BtreeCursor::ins_lock_and_undo(System &sys,
 
   if (index->is_clustered()) {
 
-    err = TrxUndoRecord::report_row_operation(flags, TRX_UNDO_INSERT_OP, thr, index, entry, nullptr, 0, nullptr, &roll_ptr);
+    err = TrxUndoRecord::report_row_operation(sys, flags, TRX_UNDO_INSERT_OP, thr, index, entry, nullptr, 0, nullptr, &roll_ptr);
 
     if (err != DB_SUCCESS) {
 
@@ -890,7 +890,7 @@ DbErr BtreeCursor::upd_lock_and_undo(System &sys,
 
   /* Append the info about the update in the undo log */
 
-  err = TrxUndoRecord::report_row_operation(flags, TRX_UNDO_MODIFY_OP, thr, index, nullptr, update, cmpl_info, rec, roll_ptr);
+  err = TrxUndoRecord::report_row_operation(sys, flags, TRX_UNDO_MODIFY_OP, thr, index, nullptr, update, cmpl_info, rec, roll_ptr);
 
   return err;
 }
@@ -1576,7 +1576,7 @@ DbErr BtreeCursor::del_mark_set_clust_rec(System &sys, ulint flags, bool val, Qu
   if (err == DB_SUCCESS) {
     roll_ptr_t roll_ptr;
 
-    err = TrxUndoRecord::report_row_operation(flags, TRX_UNDO_MODIFY_OP, thr, index, nullptr, nullptr, 0, rec, &roll_ptr);
+    err = TrxUndoRecord::report_row_operation(sys, flags, TRX_UNDO_MODIFY_OP, thr, index, nullptr, nullptr, 0, rec, &roll_ptr);
 
     if (err == DB_SUCCESS) {
       set_deleted_flag(rec, val > 0);

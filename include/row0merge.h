@@ -138,7 +138,7 @@ Table *row_merge_create_temporary_table(System &sys, const char *table_name, con
  *
  * @return DB_SUCCESS if all OK
  */
-DbErr row_merge_rename_indexes(Trx *trx, Table *table);
+DbErr row_merge_rename_indexes(System &sys, Trx *trx, Table *table);
 
 /**
  * Create the index and load in to the dictionary.

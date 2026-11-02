@@ -646,7 +646,7 @@ void RowUpdate::index_replace_new_col_vals(DTuple *entry, Index *index, const Up
   }
 }
 
-void RowUpdate::replace(DTuple *row, RowExt **ext, const Index *index, const Upd *update, MemHeap *heap) noexcept {
+void RowUpdate::replace(System &sys, DTuple *row, RowExt **ext, const Index *index, const Upd *update, MemHeap *heap) noexcept {
   ut_ad(index->is_clustered());
 
   const auto table = index->m_table;
@@ -689,7 +689,7 @@ void RowUpdate::replace(DTuple *row, RowExt **ext, const Index *index, const Upd
   }
 
   if (n_ext_cols) {
-    *ext = row_ext_create(n_ext_cols, ext_cols, row, heap);
+    *ext = row_ext_create(sys, n_ext_cols, ext_cols, row, heap);
   } else {
     *ext = nullptr;
   }
@@ -825,14 +825,14 @@ void RowUpdate::store_row(UpdNode *node) noexcept {
     offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
   }
 
-  node->m_row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr, &node->m_ext, node->m_heap);
+  node->m_row = row_build(m_sys, ROW_COPY_DATA, clust_index, rec, offsets, nullptr, &node->m_ext, node->m_heap);
 
   if (node->m_is_delete) {
     node->m_upd_row = nullptr;
     node->m_upd_ext = nullptr;
   } else {
     node->m_upd_row = dtuple_copy(node->m_row, node->m_heap);
-    replace(node->m_upd_row, &node->m_upd_ext, clust_index, node->m_update, node->m_heap);
+    replace(m_sys, node->m_upd_row, &node->m_upd_ext, clust_index, node->m_update, node->m_heap);
   }
 
   if (likely_null(heap)) {

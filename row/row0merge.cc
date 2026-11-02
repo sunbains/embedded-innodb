@@ -1030,7 +1030,7 @@ static DbErr row_merge_read_clustered_index(System &sys,
 
       /* Build a row based on the clustered index. */
 
-      row = row_build(ROW_COPY_POINTERS, clust_index, rec, offsets, new_table, &ext, row_heap);
+      row = row_build(sys, ROW_COPY_POINTERS, clust_index, rec, offsets, new_table, &ext, row_heap);
 
       if (likely_null(nonnull)) {
         for (ulint i = 0; i < n_nonnull; i++) {
@@ -1590,7 +1590,7 @@ static DbErr row_merge_insert_index_tuples(System &sys, Trx *trx, Index *index, 
         trx->m_error_state = err;
         que_thr_stop_client(sys, thr);
         thr->lock_state = QUE_THR_LOCK_NOLOCK;
-      } while (ib_handle_errors(&err, trx, thr, nullptr));
+      } while (ib_handle_errors(sys, &err, trx, thr, nullptr));
 
       goto err_exit;
     next_rec:
@@ -1722,7 +1722,7 @@ Table *row_merge_create_temporary_table(System &sys, const char *table_name, con
   return (new_table);
 }
 
-DbErr row_merge_rename_indexes(Trx *trx, Table *table) {
+DbErr row_merge_rename_indexes(System &sys, Trx *trx, Table *table) {
   DbErr err = DB_SUCCESS;
   ParsInfo *info = pars_info_create();
 
@@ -1745,7 +1745,7 @@ DbErr row_merge_rename_indexes(Trx *trx, Table *table) {
 
   pars_info_add_uint64_literal(info, "tableid", table->m_id);
 
-  err = que_eval_sql(info, rename_indexes, false, trx);
+  err = que_eval_sql(sys, info, rename_indexes, false, trx);
 
   if (err == DB_SUCCESS) {
     for (auto index : table->m_indexes) {
@@ -1781,7 +1781,7 @@ DbErr row_merge_rename_tables(System &sys, Table *old_table, Table *new_table, c
   pars_info_add_str_literal(info, "old_name", old_name);
   pars_info_add_str_literal(info, "tmp_name", tmp_name);
 
-  err = que_eval_sql(
+  err = que_eval_sql(sys, 
     info,
     "PROCEDURE RENAME_TABLES () IS\n"
     "BEGIN\n"

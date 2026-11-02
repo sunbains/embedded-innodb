@@ -180,7 +180,7 @@ void PurgeSys::free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_log
   history list: otherwise, in case of a database crash, the segment
   could become inaccessible garbage in the file space. */
 
-  flst_cut_end(rseg_hdr + TRX_RSEG_HISTORY, log_hdr + TRX_UNDO_HISTORY_NODE, n_removed_logs, &mtr);
+  flst_cut_end(m_sys, rseg_hdr + TRX_RSEG_HISTORY, log_hdr + TRX_UNDO_HISTORY_NODE, n_removed_logs, &mtr);
 
   mutex_enter(&m_sys.m_trx_sys->m_mutex);
 

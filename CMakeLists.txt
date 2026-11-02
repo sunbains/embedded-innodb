@@ -211,6 +211,15 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include)
 # WAL-CPP includes (SYSTEM to avoid strict warning conflicts)
 INCLUDE_DIRECTORIES(SYSTEM ${CMAKE_SOURCE_DIR}/../wal-cpp/include)
 
+# Struct layouts depend on this, so it must be set before any target or
+# subdirectory that includes the engine headers.
+IF(NOT DISABLE_XA)
+  MESSAGE(STATUS "XA is enabled")
+  ADD_DEFINITIONS("-DWITH_XOPEN")
+ELSE(NOT DISABLE_XA)
+  MESSAGE(STATUS "XA is disabled")
+ENDIF(NOT DISABLE_XA)
+
 SET(INNODB_SOURCES
       btr/btr0blob.cc btr/btr0btr.cc btr/btr0cur.cc btr/btr0pcur.cc
       buf/buf0buf.cc buf/buf0dblwr.cc
@@ -294,12 +303,6 @@ ELSE(UNIT_TESTING)
   MESSAGE(STATUS "UNIT_TESTING is disabled")
 ENDIF(UNIT_TESTING)
 
-IF(NOT DISABLE_XA)
-  MESSAGE(STATUS "XA is enabled")
-  ADD_DEFINITIONS("-DWITH_XOPEN")
-ELSE(NOT DISABLE_XA)
-  MESSAGE(STATUS "XA is disabled")
-ENDIF(NOT DISABLE_XA)
 
 CONFIGURE_FILE(
   ${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.cmake

@@ -249,11 +249,11 @@ bool UndoNode::search_cluster_index_and_persist_position(System &sys) noexcept {
 
   } else {
 
-    m_row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr, &m_ext, m_heap);
+    m_row = row_build(sys, ROW_COPY_DATA, clust_index, rec, offsets, nullptr, &m_ext, m_heap);
 
     if (m_update != nullptr) {
       m_undo_row = dtuple_copy(m_row, m_heap);
-      RowUpdate::replace(m_undo_row, &m_undo_ext, clust_index, m_update, m_heap);
+      RowUpdate::replace(sys, m_undo_row, &m_undo_ext, clust_index, m_update, m_heap);
     } else {
       m_undo_row = nullptr;
       m_undo_ext = nullptr;

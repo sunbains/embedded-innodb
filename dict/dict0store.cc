@@ -1042,7 +1042,7 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
   /* NOTE: in dict_load_foreigns we use the fact that there are 2 secondary indexes on SYS_FOREIGN, and they
   are defined just like below */
 
-  auto err = que_eval_sql(
+  auto err = que_eval_sql(m_sys, 
     nullptr,
     "PROCEDURE CREATE_FOREIGN_SYS_TABLES_PROC () IS\n"
     "BEGIN\n"
@@ -1088,7 +1088,7 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
 DbErr DictStore::foreign_eval_sql(ParsInfo *info, const char *sql, Table *table, Foreign *foreign, Trx *trx) noexcept {
   (void)trx->start_if_not_started();
 
-  auto err = que_eval_sql(info, sql, false, trx);
+  auto err = que_eval_sql(m_sys, info, sql, false, trx);
 
   if (err == DB_DUPLICATE_KEY) {
     mutex_enter(&m_sys.m_dict->m_foreign_err_mutex);

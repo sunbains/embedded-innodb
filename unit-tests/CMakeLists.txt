@@ -53,6 +53,14 @@ target_link_libraries(ut0slst-t PRIVATE
 add_test(NAME ut0slst-t COMMAND ut0slst-t)
 
 # Set up test_lock test
+add_executable(test_system test_system.cc unit_test_logger.cc)
+target_link_libraries(test_system PRIVATE
+    GTest::gtest_main
+    GTest::gtest
+    ${LIBS}
+)
+add_test(NAME test_system COMMAND test_system)
+
 add_executable(test_lock test_lock.cc unit-test.cc unit_test_logger.cc)
 
 # Link test_lock

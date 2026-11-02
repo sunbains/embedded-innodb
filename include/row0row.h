@@ -117,7 +117,7 @@ DTuple *row_build_index_entry(const DTuple *row, RowExt *ext, const Index *index
  *
  * @return own: row built; see the NOTE below!
  */
-DTuple *row_build(
+DTuple *row_build(System &sys, 
   ulint type, const Index *index, Rec rec, const RecOffs &offsets, const Table *col_table, RowExt **ext, MemHeap *heap
 );
 

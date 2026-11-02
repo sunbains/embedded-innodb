@@ -168,7 +168,7 @@ DbErr ib_trx_lock_table_with_retry(System &sys, Trx *trx, Table *table, enum Loc
       que_thr_stop_client(sys, thr);
 
       if (err != DB_QUE_THR_SUSPENDED) {
-        auto was_lock_wait = ib_handle_errors(&err, trx, thr, nullptr);
+        auto was_lock_wait = ib_handle_errors(sys, &err, trx, thr, nullptr);
 
         if (was_lock_wait) {
           continue;

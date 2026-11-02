@@ -44,7 +44,7 @@ extern byte *trx_undo_parse_add_undo_rec(byte *ptr, byte *end_ptr, RawPage page)
 extern byte *trx_undo_parse_erase_page_end(byte *ptr, byte *end_ptr, RawPage page, Mtr *mtr);
 
 extern DbErr trx_undo_report_row_operation(
-  ulint flags, ulint op_type, QueThr *thr, const Index *index, const DTuple *clust_entry, const Upd *update, ulint cmpl_info,
+  System &sys, ulint flags, ulint op_type, QueThr *thr, const Index *index, const DTuple *clust_entry, const Upd *update, ulint cmpl_info,
   const Rec rec, roll_ptr_t *roll_ptr
 );
 
@@ -581,11 +581,11 @@ DbErr TrxUndoRecord::prev_version_build(System &sys,
 // Note: These functions delegate to the original implementations in trx0rec.cc
 // as they deal with page-level operations and are closely tied to existing undo log page management
 
-DbErr TrxUndoRecord::report_row_operation(
+DbErr TrxUndoRecord::report_row_operation(System &sys, 
   ulint flags, ulint op_type, QueThr *thr, const Index *index, const DTuple *clust_entry, const Upd *update, ulint cmpl_info,
   const Rec rec, roll_ptr_t *roll_ptr
 ) {
-  return ::trx_undo_report_row_operation(flags, op_type, thr, index, clust_entry, update, cmpl_info, rec, roll_ptr);
+  return ::trx_undo_report_row_operation(sys, flags, op_type, thr, index, clust_entry, update, cmpl_info, rec, roll_ptr);
 }
 
 byte *TrxUndoRecord::parse_add_undo_rec(byte *ptr, byte *end_ptr, page_t *page) {

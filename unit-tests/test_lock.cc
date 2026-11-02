@@ -9,6 +9,7 @@
 
 #include "lock0lock.h"
 #include "srv0srv.h"
+#include "srv0sys.h"
 #include "trx0trx.h"
 
 constexpr int N_TRXS = 8;
@@ -19,29 +20,21 @@ namespace test {
 
 /** Creates and initializes a transaction instance
 @return	own: the transaction */
-Trx *trx_create() {
-#if 0
-  auto trx = reinterpret_cast<Trx*>(::malloc(sizeof(Trx)));
-
-  trx_init(trx);
-#else
-  auto trx = srv_trx_sys->create_user_trx(nullptr);
-#endif
-
-  return trx;
+Trx *trx_create(System &sys) {
+  return sys.m_trx_sys->create_user_trx(nullptr);
 }
 
 /** Free the transaction object.
 @param[in,own] trx              Free the transaction. */
-void trx_free(Trx *&trx) {
-  srv_trx_sys->destroy_user_trx(trx);
+void trx_free(System &sys, Trx *&trx) {
+  sys.m_trx_sys->destroy_user_trx(trx);
   ut_a(trx == nullptr);
 }
 
 /** Setup the test transaction for the simulation.
 @param[in,out] trx              Transaction to setup.
 @param[in] n_row_locks          Number of row locks to create. */
-void trx_setup(Trx *trx, int n_row_locks) {
+void trx_setup(System &sys, Trx *trx, int n_row_locks) {
   for (int i = 0; i < n_row_locks; ++i) {
     auto mode = LOCK_S;
     space_id_t space = random() % 100;
@@ -51,15 +44,15 @@ void trx_setup(Trx *trx, int n_row_locks) {
     if (!(i % 50)) {
       mode = LOCK_X;
     }
-    ut_a(trx->m_trx_sys == srv_lock_sys->m_trx_sys);
+    ut_a(trx->m_trx_sys == sys.m_trx_sys.get());
 
-    mutex_enter(&srv_lock_sys->m_trx_sys->m_mutex);
+    mutex_enter(&sys.m_trx_sys->m_mutex);
     std::cout << "REC LOCK CREATE: " << i << "\n";
 
     /* Pass nullptr index handle. */
-    (void)srv_lock_sys->rec_create_low({space, page_no}, mode, heap_no, REC_BITMAP_SIZE, nullptr, trx);
+    (void)sys.m_lock_sys->rec_create_low({space, page_no}, mode, heap_no, REC_BITMAP_SIZE, nullptr, trx);
 
-    mutex_exit(&srv_lock_sys->m_trx_sys->m_mutex);
+    mutex_exit(&sys.m_trx_sys->m_mutex);
   }
 }
 
@@ -67,7 +60,7 @@ void trx_setup(Trx *trx, int n_row_locks) {
 random space/page_no/heap_no. Set the wait bit for locks that
 clash. Select a random transaction and check if there are any
 other transactions that are waiting on its locks. */
-void run_1() {
+void run_1(System &sys) {
 
   std::cout << "Creating " << N_TRXS << " trxs with " << N_ROW_LOCKS << " random row locks\n";
 
@@ -77,8 +70,8 @@ void run_1() {
   trxs.resize(N_TRXS);
 
   for (auto &trx : trxs) {
-    trx = trx_create();
-    trx_setup(trx, N_ROW_LOCKS);
+    trx = trx_create(sys);
+    trx_setup(sys, trx, N_ROW_LOCKS);
   }
 
   size_t no_waiters{};
@@ -89,7 +82,7 @@ void run_1() {
   start = time(nullptr);
 
   for (auto &trx : trxs) {
-    if (srv_lock_sys->trx_has_no_waiters(trx)) {
+    if (sys.m_lock_sys->trx_has_no_waiters(trx)) {
       ++no_waiters;
       std::cout << "Trx " << trx->m_id << " has no waiters\n";
     }
@@ -99,13 +92,13 @@ void run_1() {
 
   for (auto &trx : trxs) {
 
-    mutex_enter(&srv_lock_sys->m_trx_sys->m_mutex);
+    mutex_enter(&sys.m_trx_sys->m_mutex);
 
-    srv_lock_sys->release_off_trx_sys_mutex(trx);
+    sys.m_lock_sys->release_off_trx_sys_mutex(trx);
 
-    mutex_exit(&srv_lock_sys->m_trx_sys->m_mutex);
+    mutex_exit(&sys.m_trx_sys->m_mutex);
 
-    trx_free(trx);
+    trx_free(sys, trx);
   }
 
   std::cout << no_waiters << " trx had no waiters. Total time to check: " << int(end - start) << "secs avg"
@@ -117,55 +110,20 @@ void run_1() {
 int main() {
   srandom(time(nullptr));
 
-  /* Note: The order of initializing and close of the sub-systems is very important. */
+  Config config;
 
-  // Startup
-  ut_mem_init();
+  config.m_srv.m_max_n_threads = N_TRXS;
+  config.m_buf_pool.m_size = 64 * 1024 * 1024;
+  config.m_lock.m_table_size = 1024 * 1024;
 
-  os_sync_init();
+  /* init() creates the sub-systems; nothing touches the disk until startup(),
+  which this test doesn't need. */
+  System sys;
 
-  srv_config.m_max_n_threads = N_TRXS;
+  auto err = sys.init(config);
+  ut_a(err == DB_SUCCESS);
 
-  sync_init();
-
-  {
-    srv_config.m_buf_pool_size = 64 * 1024 * 1024;
-
-    srv_buf_pool = new (std::nothrow) BufPool();
-    ut_a(srv_buf_pool != nullptr);
-
-    auto success = srv_buf_pool->open(srv_config.m_buf_pool_size);
-    ut_a(success);
-  }
-
-  srv_lock_timeout_thread_event = os_event_create(nullptr);
-
-  srv_trx_sys = TrxSys::create(srv_fsp);
-
-  srv_lock_sys = LockSys::create(srv_trx_sys, 1024 * 1024);
-
-  UT_LIST_INIT(srv_trx_sys->m_client_trx_list);
-
-  // Run the test
-  test::run_1();
-
-  // Shutdown
-  LockSys::destroy(srv_lock_sys);
-
-  TrxSys::destroy(srv_trx_sys);
-
-  os_event_free(srv_lock_timeout_thread_event);
-  srv_lock_timeout_thread_event = nullptr;
-
-  srv_buf_pool->close();
-
-  sync_close();
-
-  os_sync_free();
-
-  delete srv_buf_pool;
-
-  ut_delete_all_mem();
+  test::run_1(sys);
 
   exit(EXIT_SUCCESS);
 }

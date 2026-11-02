@@ -2782,7 +2782,7 @@ lock_wait_or_error:
 
   thr->lock_state = QUE_THR_LOCK_ROW;
 
-  if (ib_handle_errors(&err, trx, thr, nullptr)) {
+  if (ib_handle_errors(m_sys, &err, trx, thr, nullptr)) {
     /* It was a lock wait, and it ended */
 
     thr->lock_state = QUE_THR_LOCK_NOLOCK;

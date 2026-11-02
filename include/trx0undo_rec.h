@@ -123,7 +123,7 @@ struct TrxUndoRecord {
    *
    * @return DB_SUCCESS or error code
    */
-  static DbErr report_row_operation(
+  static DbErr report_row_operation(System &sys, 
     ulint flags, ulint op_type, QueThr *thr, const Index *index, const DTuple *clust_entry, const Upd *update, ulint cmpl_info,
     const Rec rec, roll_ptr_t *roll_ptr
   );
