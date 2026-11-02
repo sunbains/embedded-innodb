@@ -334,7 +334,7 @@ struct LogVfile {
 
 struct LogCheckpoint {
 
-  LogCheckpoint() = default;
+  LogCheckpoint() noexcept;
 
   /* Forbidden copy and move constructors and operators. */
   LogCheckpoint(LogCheckpoint &&) = delete;

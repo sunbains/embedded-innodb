@@ -126,6 +126,11 @@ class System {
   /** Destroy the sub-systems, in reverse creation order. */
   void destroy() noexcept;
 
+  /** Start writing redo to the WAL, from the log's current LSN. Called once
+  that LSN is known: after creating a database or after reading the
+  checkpoint of an existing one. */
+  void start_wal() noexcept;
+
   /** Arguments of the i/o handler threads, one per Aio segment. */
   std::vector<IoHandler> m_io_handlers;
 };

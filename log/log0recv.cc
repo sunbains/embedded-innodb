@@ -1233,8 +1233,15 @@ DbErr recv_recovery_from_checkpoint_start(System &sys, lsn_t max_flushed_lsn) no
   lsn_t checkpoint_lsn{};
   uint64_t checkpoint_no{};
 
-  /* Look for the latest checkpoint from any of the log groups */
+  /* The WAL does not store checkpoints yet. The data files are stamped at a
+  clean shutdown with the LSN up to which they were flushed: start from there.
+  FIXME: Replay the WAL from the last checkpoint after a crash. */
   if (!sys.m_log->read_checkpoint(checkpoint_lsn, checkpoint_no)) {
+    checkpoint_lsn = max_flushed_lsn;
+    checkpoint_no = 0;
+  }
+
+  if (checkpoint_lsn == 0) {
 
     sys.m_log->release();
 

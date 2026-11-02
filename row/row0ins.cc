@@ -1585,7 +1585,7 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
 function_exit:
   mtr.commit(m_sys);
 
-  if (big_rec.n_fields == 0) {
+  if (big_rec.n_fields != 0) {
     mtr.start();
 
     btr_cur.search_to_nth_level(m_sys, nullptr, index, 0, entry, PAGE_CUR_LE, BTR_MODIFY_TREE, &mtr, Current_location());

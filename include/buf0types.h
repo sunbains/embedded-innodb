@@ -612,8 +612,6 @@ struct BufPool {
   @return	modified page percentage ratio */
   ulint get_modified_ratio_pct();
 
-  /** Reset the buffer variables. */
-  void init();
 
   /** Prepares the buffer pool for shutdown. */
   void close();

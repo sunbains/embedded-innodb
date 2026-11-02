@@ -600,6 +600,16 @@ BufPool::~BufPool() {
   auto chunk = chunks + m_n_chunks;
 
   while (--chunk >= chunks) {
+    /* The block latches are registered with the sync system: unregister them
+    before the memory they live in goes away. */
+    for (ulint i{}; i < chunk->size; ++i) {
+      auto block = &chunk->blocks[i];
+
+      mutex_free(&block->m_mutex);
+      rw_lock_free(&block->m_rw_lock);
+      IF_SYNC_DEBUG(rw_lock_free(&block->m_debug_latch);)
+    }
+
     /* Bypass the checks of buf_chunk_free(), since they fail at shutdown. */
     os_mem_free_large(chunk->mem, chunk->mem_size);
   }
@@ -607,6 +617,8 @@ BufPool::~BufPool() {
   m_n_chunks = 0;
 
   mem_free(m_chunks);
+
+  mutex_free(&m_mutex);
 }
 
 void BufPool::make_young(BufPage *bpage) {
@@ -1841,37 +1853,6 @@ void BufPool::refresh_io_stats() {
   m_old_stat = m_stat;
 
   mutex_release();
-}
-
-void BufPool::init() {
-  mutex_create(&m_mutex, IF_DEBUG("buffer_pool", ) IF_SYNC_DEBUG(SYNC_BUF_POOL, ) Current_location());
-
-  m_n_chunks = 0;
-  m_chunks = nullptr;
-  m_curr_size = 0;
-  m_page_hash = nullptr;
-  m_n_pend_reads = 0;
-  m_last_printout_time = time(nullptr);
-
-  m_stat = BufPoolStat{};
-  m_old_stat = BufPoolStat{};
-
-  UT_LIST_INIT(m_flush_list);
-
-  for (ulint i = 0; i < BUF_FLUSH_N_TYPES; i++) {
-    m_init_flush[i] = false;
-    m_n_flush[i] = 0;
-    m_no_flush[i] = nullptr;
-  }
-
-  m_recovery_flush_list = nullptr;
-  m_freed_page_clock = 0;
-  m_LRU_flush_ended = 0;
-
-  UT_LIST_INIT(m_LRU_list);
-  UT_LIST_INIT(m_free_list);
-  m_LRU_old = nullptr;
-  m_LRU_old_len = 0;
 }
 
 BufPage *BufPool::set_file_page_was_freed(const PageId &page_id) {

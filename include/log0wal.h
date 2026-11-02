@@ -20,9 +20,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "innodb0types.h"
 #include "log0types.h"
 
-#include <wal/wal.h>
-#include <util/thread_pool.h>
-
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
@@ -46,14 +44,14 @@ struct LogWalBackend {
     /** Number of buffers in the pool */
     size_t m_pool_size{32};
 
-    /** Number of I/O threads */
-    size_t m_n_io_threads{2};
-
     /** Log directory path */
     std::string m_log_dir{"."};
 
     /** Log file name */
-    std::string m_log_file{"ib_logfile0"};
+    std::string m_log_file{"redo.wal"};
+
+    /** Size of the WAL file in bytes; it is reused circularly. */
+    off_t m_max_file_size{64 * 1024 * 1024};
   };
 
   /**
@@ -63,6 +61,17 @@ struct LogWalBackend {
    * @param[in] start_lsn Starting LSN for the log.
    */
   explicit LogWalBackend(const Config &config, lsn_t start_lsn) noexcept;
+
+  /**
+   * WAL-CPP requires the log to start at a block boundary: a buffer created at
+   * an LSN inside a block miscounts the bytes of that partial block.
+   *
+   * @param[in] config          WAL configuration.
+   * @param[in] lsn             Desired start LSN.
+   *
+   * @return the first block-aligned LSN >= lsn.
+   */
+  [[nodiscard]] static lsn_t align_start_lsn(const Config &config, lsn_t lsn) noexcept;
 
   /**
    * Destructor.
@@ -144,30 +153,12 @@ struct LogWalBackend {
   void wait_for_io_idle() noexcept;
 
 private:
-  /**
-   * Callback for writing data to the log file.
-   *
-   * @param[in] iovecs I/O vectors to write.
-   *
-   * @return The new low water mark LSN on success, or error.
-   */
-  wal::Result<lsn_t> write_callback(std::span<struct iovec> iovecs) noexcept;
-
-  /**
-   * Callback for syncing the log file.
-   *
-   * @return true on success, or error.
-   */
-  wal::Result<bool> sync_callback() noexcept;
+  /** The WAL-CPP state. WAL-CPP's headers are only included by the
+  implementation: they define logging macros that clash with the engine's. */
+  struct Impl;
 
   /** Configuration */
   Config m_config;
-
-  /** Log file descriptor */
-  int m_fd{-1};
-
-  /** Current write offset in the file */
-  off_t m_write_offset{0};
 
   /** Current LSN (end of appended data) */
   std::atomic<lsn_t> m_lsn{0};
@@ -178,12 +169,8 @@ private:
   /** Synced LSN (data synced to disk) */
   std::atomic<lsn_t> m_synced_lsn{0};
 
-  /** Thread pool for I/O operations */
-  std::unique_ptr<util::Thread_pool> m_thread_pool;
-
-  /** WAL log instance */
-  std::unique_ptr<wal::Log> m_wal;
-
   /** Whether I/O is running */
   std::atomic<bool> m_io_running{false};
+
+  std::unique_ptr<Impl> m_impl;
 };

@@ -967,9 +967,8 @@ void BufFlush::stat_update() {
 }
 
 ulint BufFlush::get_desired_flush_rate() {
-  // FIXME: Implement this
-  auto lsn = 0;           // log_sys->get_lsn();
-  auto log_capacity = 0;  // log_sys->get_capacity();
+  const auto lsn = m_sys.m_log->get_lsn();
+  const auto log_capacity = m_sys.m_log->get_capacity();
 
   /* log_capacity should never be zero after the initialization of log subsystem. */
   ut_ad(log_capacity != 0);

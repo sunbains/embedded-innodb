@@ -236,7 +236,7 @@ SET(INNODB_SOURCES
       lock/lock0lock.cc lock/lock0iter.cc lock/lock0deadlock.cc lock/lock0validator.cc
       log/log0log.cc log/log0recv.cc log/log0wal.cc
       log/log_buffer.cc log/log_checkpoint.cc log/log_core.cc
-      log/log_vfile.cc log/log_write.cc log/log_io.cc log/log_io_uring.cc
+      log/log_vfile.cc log/log_write.cc log/log_io.cc
       log/recv_parse.cc log/recv_recovery.cc log/recv_scan.cc
       mach/mach0data.cc
       mem/mem0mem.cc

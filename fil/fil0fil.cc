@@ -861,7 +861,7 @@ DbErr Fil::write_lsn_and_arch_no_to_file(ulint sum_of_sizes, lsn_t lsn) {
 
   mach_write_to_8(buf + FIL_PAGE_FILE_FLUSH_LSN, lsn);
 
-  data_io(IoRequest::Sync_read, false, PageId(SYS_TABLESPACE, sum_of_sizes), 0, UNIV_PAGE_SIZE, buf, nullptr);
+  data_io(IoRequest::Sync_write, false, PageId(SYS_TABLESPACE, sum_of_sizes), 0, UNIV_PAGE_SIZE, buf, nullptr);
 
   mem_free(ptr);
 

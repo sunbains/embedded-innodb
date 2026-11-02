@@ -50,6 +50,7 @@ Created 2/16/1996 Heikki Tuuri
 #include "lock0lock.h"
 #include "log0log.h"
 #include "log0recv.h"
+#include "log0wal.h"
 #include "mtr0mtr.h"
 #include "os0aio.h"
 #include "os0file.h"
@@ -186,11 +187,6 @@ DbErr System::init(const Config &config) noexcept {
 
   m_log = std::make_unique<Log>(*this);
 
-  if (!wal_io_system_init()) {
-    log_err("Failed to initialize the redo log");
-    destroy();
-    return DB_ERROR;
-  }
 
   m_recv = std::make_unique<RecvSys>(*this);
   m_fsp = std::make_unique<Fsp>(*this);
@@ -210,6 +206,17 @@ DbErr System::init(const Config &config) noexcept {
   return DB_SUCCESS;
 }
 
+/** Destroy a sub-system. Unlike unique_ptr::reset(), the pointer stays set
+while the destructor runs, so the sub-system can still reach itself and its
+parts through m_sys. */
+template <typename T>
+static void destroy_subsystem(std::unique_ptr<T> &ptr) noexcept {
+  if (ptr != nullptr) {
+    std::default_delete<T>{}(ptr.get());
+    (void)ptr.release();
+  }
+}
+
 void System::destroy() noexcept {
   if (m_srv == nullptr && m_aio == nullptr) {
     return;
@@ -217,20 +224,20 @@ void System::destroy() noexcept {
 
   /* Reverse creation order. The dictionary must go before the buffer pool
   is closed. */
-  m_srv.reset();
-  m_row_vers.reset();
-  m_row_undo.reset();
-  m_row_sel.reset();
-  m_row_ins.reset();
-  m_row_upd.reset();
-  m_dblwr.reset();
-  m_dict.reset();
-  m_undo.reset();
-  m_btree.reset();
-  m_lock_sys.reset();
-  m_trx_sys.reset();
-  m_fsp.reset();
-  m_recv.reset();
+  destroy_subsystem(m_srv);
+  destroy_subsystem(m_row_vers);
+  destroy_subsystem(m_row_undo);
+  destroy_subsystem(m_row_sel);
+  destroy_subsystem(m_row_ins);
+  destroy_subsystem(m_row_upd);
+  destroy_subsystem(m_dblwr);
+  destroy_subsystem(m_dict);
+  destroy_subsystem(m_undo);
+  destroy_subsystem(m_btree);
+  destroy_subsystem(m_lock_sys);
+  destroy_subsystem(m_trx_sys);
+  destroy_subsystem(m_fsp);
+  destroy_subsystem(m_recv);
 
   if (m_buf_pool != nullptr) {
     m_buf_pool->close();
@@ -240,10 +247,10 @@ void System::destroy() noexcept {
     m_aio->shutdown();
   }
 
-  m_fil.reset();
-  m_log.reset();
-  m_aio.reset();
-  m_buf_pool.reset();
+  destroy_subsystem(m_fil);
+  destroy_subsystem(m_log);
+  destroy_subsystem(m_aio);
+  destroy_subsystem(m_buf_pool);
 
   os_file_free();
   sync_close();
@@ -632,6 +639,18 @@ static void prepare_for_shutdown(System &sys, ib_shutdown_t shutdown) noexcept {
   ut_a(lsn == log.m_lsn);
 }
 
+void System::start_wal() noexcept {
+  LogWalBackend::Config config;
+
+  config.m_log_dir = m_config.m_log.m_group_home_dir;
+  config.m_log_file = "redo.wal";
+  config.m_pool_size = 4;
+  config.m_max_file_size = off_t(m_config.m_log.m_n_files * m_config.m_log.m_file_size);
+  config.m_n_blocks = std::max<size_t>(16, m_config.m_log.m_buffer_size / config.m_block_size);
+
+  m_log->init_wal_backend(config);
+}
+
 void System::startup_abort(DbErr err) noexcept {
   m_srv->m_fast_shutdown = IB_SHUTDOWN_NORMAL;
 
@@ -792,6 +811,10 @@ DbErr System::startup() noexcept {
   const auto force_recovery = m_config.m_recv.m_force_recovery;
 
   if (create_new_db) {
+    start_wal();
+
+    srv.m_start_lsn = m_log->get_lsn();
+
     Mtr mtr;
 
     mtr.start();
@@ -870,6 +893,8 @@ DbErr System::startup() noexcept {
       startup_abort(err);
       return DB_ERROR;
     }
+
+    start_wal();
 
     err = m_trx_sys->start(force_recovery);
 

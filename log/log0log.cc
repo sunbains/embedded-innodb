@@ -31,6 +31,8 @@ Created 12/9/1995 Heikki Tuuri
 
 #include "log0log.h"
 #include "buf0buf.h"
+#include "buf0dblwr.h"
+#include "buf0flu.h"
 #include "mem0mem.h"
 #include "srv0srv.h"
 
@@ -126,10 +128,18 @@ bool Log::peek_lsn(lsn_t *lsn) noexcept {
 }
 
 void Log::shutdown() noexcept {
-  (void)m_vfile.close();
+  if (m_wal_backend != nullptr) {
+    write_up_to(get_lsn(), false, true);
 
-  os_event_free(m_no_flush_event);
-  os_event_free(m_one_flushed_event);
+    m_wal_backend->stop_io();
+    m_wal_backend.reset();
+  }
+
+  (void)m_vfile.close();
+}
+
+ulint Log::get_capacity() const noexcept {
+  return m_sys.m_config.m_log.m_n_files * m_sys.m_config.m_log.m_file_size;
 }
 
 lsn_t Log::close([[maybe_unused]] IbRecovery recovery) noexcept {
@@ -145,11 +155,40 @@ lsn_t Log::close([[maybe_unused]] IbRecovery recovery) noexcept {
   return m_lsn;
 }
 
-bool Log::checkpoint([[maybe_unused]] bool sync, [[maybe_unused]] bool write_always) noexcept {
+bool Log::checkpoint(bool, bool) noexcept {
+  /* Everything below the oldest modification in the buffer pool is in the
+  data files. Make the log durable up to there and move the checkpoint. */
+  acquire();
+
+  const auto oldest = buf_pool_get_oldest_modification();
+
+  release();
+
+  write_up_to(oldest, false, true);
+
+  acquire();
+
+  if (oldest > m_checkpoint.m_last_lsn) {
+    m_checkpoint.m_last_lsn = oldest;
+  }
+
+  release();
+
   return true;
 }
 
-void Log::make_checkpoint_at([[maybe_unused]] lsn_t lsn, [[maybe_unused]] bool write_always) noexcept {
+void Log::make_checkpoint_at(lsn_t lsn, bool write_always) noexcept {
+  auto &flusher = *m_sys.m_buf_pool->m_flusher;
+
+  /* Flush the pages modified below lsn. batch() returns ULINT_UNDEFINED
+  when another batch of the same type is running: wait for it and retry. */
+  while (flusher.batch(m_sys.m_dblwr.get(), BUF_FLUSH_LIST, ULINT_MAX, lsn) == ULINT_UNDEFINED) {
+    flusher.wait_batch_end(BUF_FLUSH_LIST);
+  }
+
+  flusher.wait_batch_end(BUF_FLUSH_LIST);
+
+  (void)checkpoint(true, write_always);
 }
 
 void Log::write_up_to([[maybe_unused]] lsn_t lsn, [[maybe_unused]] bool async, [[maybe_unused]] bool sync_to_disk) noexcept {
@@ -159,6 +198,8 @@ void Log::write_up_to([[maybe_unused]] lsn_t lsn, [[maybe_unused]] bool async, [
 }
 
 void Log::init_wal_backend(const LogWalBackend::Config &config) noexcept {
+  m_lsn.store(LogWalBackend::align_start_lsn(config, m_lsn.load()));
+
   m_wal_backend = std::make_unique<LogWalBackend>(config, m_lsn.load());
   (void) m_wal_backend->open();
   m_wal_backend->start_io();

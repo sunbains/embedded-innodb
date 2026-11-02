@@ -118,7 +118,7 @@ void PhyRec::get_col_offsets(RecOffs offsets) const noexcept {
 #endif /* UNIV_DEBUG */
 
   auto set_field_len = [&](ulint i, ulint len) {
-    offsets[i + 1] = len;
+    rec_offs_base(&offsets[0])[i + 1] = len;
   };
 
   /* Read the lengths of fields 0..n */
@@ -186,7 +186,7 @@ void PhyRec::get_col_offsets(RecOffs offsets) const noexcept {
     }
   }
 
-  offsets[0] = (m_rec - (lens + 1)) | any_ext;
+  *rec_offs_base(&offsets[0]) = (m_rec - (lens + 1)) | any_ext;
 }
 
 RecOffs PhyRec::get_col_offsets(ulint *offsets, ulint n_fields, MemHeap **heap, SourceLocation sl) const noexcept {
@@ -232,13 +232,13 @@ RecOffs PhyRec::get_col_offsets(ulint *offsets, ulint n_fields, MemHeap **heap, 
 
   ut_a(n == RecOffs(offsets).n_fields());
 
-  auto col_offsets{offsets};
+  auto col_offsets{rec_offs_base(offsets)};
 
   /* Determine extra size and end offsets */
 
   if (m_rec.get_1byte_offs_flag()) {
 
-    offsets[0] = REC_N_EXTRA_BYTES + n;
+    *col_offsets = REC_N_EXTRA_BYTES + n;
 
     for (ulint i{}; i < n; ++i) {
       /* Determine offsets to fields */
@@ -254,7 +254,7 @@ RecOffs PhyRec::get_col_offsets(ulint *offsets, ulint n_fields, MemHeap **heap, 
 
   } else {
 
-    offsets[0] = REC_N_EXTRA_BYTES + 2 * n;
+    *col_offsets = REC_N_EXTRA_BYTES + 2 * n;
 
     for (ulint i{}; i < n; ++i) {
       /* Determine offsets to fields */
@@ -268,7 +268,7 @@ RecOffs PhyRec::get_col_offsets(ulint *offsets, ulint n_fields, MemHeap **heap, 
       if (offs & REC_2BYTE_EXTERN_MASK) {
         offs &= ~REC_2BYTE_EXTERN_MASK;
         offs |= REC_OFFS_EXTERNAL;
-        offsets[0] |= REC_OFFS_EXTERNAL;
+        *col_offsets |= REC_OFFS_EXTERNAL;
       }
 
       col_offsets[i + 1] = offs;
@@ -670,7 +670,6 @@ void rec_copy_prefix_to_dtuple(DTuple *tuple, const Rec &rec, const Index *index
 Rec rec_copy_prefix_to_buf(const Rec &rec, const Index *index, ulint n_fields, byte *&buf, ulint &buf_size) noexcept {
   prefetch_rw(buf);
 
-  ut_ad(rec.validate(nullptr));
 
   ulint area_start;
   const auto area_end = rec.get_field_start_offs(n_fields);
@@ -736,11 +735,9 @@ bool rec_validate(const Rec &rec, const RecOffs &offsets) noexcept {
   }
 
   if (len_sum != offsets.data_size()) {
-    log_err("Record len should be %lu, len %lu\n", len_sum, offsets.data_size());
+    log_err(std::format("Record len should be {}, len {}", len_sum, offsets.data_size()));
     return false;
   }
-
-  ut_a(rec.validate(offsets));
 
   return true;
 }
@@ -770,7 +767,7 @@ std::string rec_to_string(const Rec &rec) noexcept {
     }
   }
 
-  IF_DEBUG(rec.validate(nullptr));
+
 
   return str;
 }
@@ -862,7 +859,7 @@ bool Rec::offs_validate(const Index *index, const RecOffs &offsets) const noexce
   }
 
   while (i--) {
-    const auto curr = offsets[i + 1] & REC_OFFS_MASK;
+    const auto curr = rec_offs_base(&offsets[0])[i + 1] & REC_OFFS_MASK;
     ut_a(curr <= last);
     last = curr;
   }

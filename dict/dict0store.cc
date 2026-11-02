@@ -1230,7 +1230,7 @@ TableNode *TableNode::create(System &sys, Table *table, MemHeap *heap, bool comm
   auto ptr = mem_heap_alloc(heap, sizeof(TableNode));
   auto node = new (ptr) TableNode();
 
-  node->m_common->type = QUE_NODE_CREATE_TABLE;
+  node->m_common.type = QUE_NODE_CREATE_TABLE;
 
   node->m_table = table;
 
@@ -1257,7 +1257,7 @@ IndexNode *IndexNode::create(System &sys, Index *index, MemHeap *heap, bool comm
   auto ptr = mem_heap_alloc(heap, sizeof(IndexNode));
   auto node = new (ptr) IndexNode();
 
-  node->m_common->type = QUE_NODE_CREATE_INDEX;
+  node->m_common.type = QUE_NODE_CREATE_INDEX;
 
   node->m_index = index;
 

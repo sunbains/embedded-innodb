@@ -314,8 +314,14 @@ struct Log {
   void write_low(const byte *data, ulint len) noexcept;
   static void var_init() noexcept {}
   void refresh_stats() noexcept {}
-  void buffer_sync_in_background([[maybe_unused]] bool flush) noexcept {}
-  void buffer_flush_to_disk() noexcept {}
+  /** Write the log buffer to the WAL in the background, and sync it if flush is set. */
+  void buffer_sync_in_background(bool flush) noexcept { write_up_to(get_lsn(), true, flush); }
+
+  /** Write and sync the whole log buffer to the WAL. */
+  void buffer_flush_to_disk() noexcept { write_up_to(get_lsn(), false, true); }
+
+  /** @return the redo log capacity in bytes, used to pace the page flushing. */
+  [[nodiscard]] ulint get_capacity() const noexcept;
   void group_init([[maybe_unused]] ulint i, [[maybe_unused]] ulint n_files, [[maybe_unused]] off_t file_size, [[maybe_unused]] ulint space_id) noexcept {}
   void read_log_segment([[maybe_unused]] byte *buf, [[maybe_unused]] lsn_t start, [[maybe_unused]] lsn_t end, [[maybe_unused]] lsn_t *scanned) noexcept {}
   bool read_checkpoint([[maybe_unused]] lsn_t &lsn, [[maybe_unused]] uint64_t &no) noexcept { return false; }
@@ -354,6 +360,4 @@ struct Log;
 
 constexpr ulint LOG_WAIT_ONE_GROUP = 1;
 
-extern bool wal_io_system_init() noexcept;
 
-extern void wal_io_system_shutdown() noexcept;

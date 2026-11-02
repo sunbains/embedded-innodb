@@ -39,6 +39,10 @@ Dict::Dict(System &sys) noexcept : m_sys(sys), m_store(sys), m_loader(sys), m_dd
   rw_lock_create(&m_lock, SYNC_DICT_OPERATION);
 
   mutex_create(&m_foreign_err_mutex, IF_DEBUG("dict_foreign_mutex", ) IF_SYNC_DEBUG(SYNC_ANY_LATCH, ) Current_location());
+
+  /* The infimum and supremum records of every index page are built with
+  this index, including the pages of the system tables at bootstrap. */
+  m_dummy_index = create_dummy_index();
 }
 
 Dict::~Dict() noexcept {
@@ -56,9 +60,7 @@ Dict::~Dict() noexcept {
     table_remove_from_cache(table);
   }
 
-  if (m_dummy_index != nullptr) {
-    Index::destroy(m_dummy_index, Current_location());
-  }
+  destroy_dummy_index(m_dummy_index);
 
   mutex_release();
 

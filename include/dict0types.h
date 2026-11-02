@@ -33,13 +33,13 @@ class System;
 #include "fsp0types.h"
 #include "lock0types.h"
 #include "mem0types.h"
+#include "que0types.h"
 #include "sync0rw.h"
 
 #include <string>
 
 struct Table;
 struct Rec;
-struct QueCommon;
 
 /* A cluster is a table with the type field set to DICT_CLUSTERED */
 struct Table;
@@ -1768,7 +1768,7 @@ struct TableNode {
   [[nodiscard]] static TableNode *create(System &sys, Table *table, MemHeap *heap, bool commit) noexcept;
 
   /** Node type: QUE_NODE_TABLE_CREATE */
-  QueCommon *m_common;
+  QueCommon m_common{};
 
   /** Table to create, built as a memory data structure
     * with dict_mem_... functions */
@@ -1820,7 +1820,7 @@ struct IndexNode {
   [[nodiscard]] static IndexNode *create(System &sys, Index *index, MemHeap *heap, bool commit) noexcept;
 
   /** Node type: QUE_NODE_INDEX_CREATE */
-  QueCommon *m_common;
+  QueCommon m_common{};
 
   /** Index to create, built as a memory data structure with dict_mem_... functions */
   Index *m_index{};

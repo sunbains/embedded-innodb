@@ -19,6 +19,10 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "log0recv.h"
 #include "srv0srv.h"
 
+LogCheckpoint::LogCheckpoint() noexcept {
+  rw_lock_create(&m_lock, SYNC_NO_ORDER_CHECK);
+}
+
 LogCheckpoint::~LogCheckpoint() noexcept {
   rw_lock_free(&m_lock);
 }
