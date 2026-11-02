@@ -967,7 +967,7 @@ void BufLru::print() {
         ib_logger(
           stderr,
           "\ntype %lu index id %lu\n",
-          (ulong)m_sys.m_fil->page_get_type(frame),
+          (ulong)Fil::page_get_type(frame),
           (ulong)m_sys.m_btree->page_get_index_id(frame)
         );
         break;

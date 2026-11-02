@@ -69,7 +69,7 @@ Dict_id DictStore::hdr_get_new_id(DictIdType type) noexcept {
 
   auto hdr = hdr_get(&mtr);
 
-  const Dict_id id = mtr.read_uint64(m_sys, hdr + ulint(type)) + 1;
+  const Dict_id id = mtr.read_uint64(hdr + ulint(type)) + 1;
 
   mlog_write_uint64(hdr + ulint(type), id, &mtr);
 
@@ -599,7 +599,7 @@ DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
 
   pcur.open(m_sys, sys_indexes->m_indexes.front(), search_tuple, PAGE_CUR_L, BTR_MODIFY_LEAF, &mtr, Current_location());
 
-  (void)pcur.move_to_next_user_rec(&mtr);
+  (void)pcur.move_to_next_user_rec(m_sys, &mtr);
 
   node->m_page_no = m_sys.m_btree->create(index->m_type, index->m_page_id.m_space_id, index->m_id, index, &mtr);
 
@@ -631,7 +631,7 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
 
   ut_ad(len == 4);
 
-  auto root_page_no = mtr->read_ulint(m_sys, field.get(), MLOG_4BYTES);
+  auto root_page_no = mtr->read_ulint(field.get(), MLOG_4BYTES);
 
   if (root_page_no == FIL_NULL) {
     /* The tree has already been freed */
@@ -642,7 +642,7 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
 
   ut_ad(len == 4);
 
-  auto space_id = static_cast<space_id_t>(mtr->read_ulint(m_sys, field.get(), MLOG_4BYTES));
+  auto space_id = static_cast<space_id_t>(mtr->read_ulint(field.get(), MLOG_4BYTES));
 
   if (m_sys.m_fil->space_get_flags(space_id) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
@@ -680,7 +680,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
   auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
   ut_ad(len == 4);
 
-  auto root_page_no = mtr->read_ulint(m_sys, field.get(), MLOG_4BYTES);
+  auto root_page_no = mtr->read_ulint(field.get(), MLOG_4BYTES);
 
   if (drop && root_page_no == FIL_NULL) {
     /* The tree has been freed. */
@@ -694,7 +694,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
   ut_ad(len == 4);
 
   if (drop) {
-    space_id = mtr->read_ulint(m_sys, field.get(), MLOG_4BYTES);
+    space_id = mtr->read_ulint(field.get(), MLOG_4BYTES);
   }
 
   auto fil = m_sys.m_fil;
@@ -742,7 +742,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
   /* We will need to commit the mini-transaction in order to avoid
   deadlocks in the btr_create() call, because otherwise we would
   be freeing and allocating pages in the same mini-transaction. */
-  pcur->store_position(mtr);
+  pcur->store_position(m_sys, mtr);
 
   mtr->commit(m_sys);
 

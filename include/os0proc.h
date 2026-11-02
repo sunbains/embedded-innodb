@@ -34,10 +34,8 @@ typedef void *os_process_t;
 
 typedef unsigned long int os_process_id_t;
 
-extern bool os_use_large_pages;
 
 /* Large page size. This may be a boot-time option on some platforms */
-extern ulint os_large_page_size;
 
 /** Converts the current process id to a number. It is not guaranteed that the
 number is unique. In Linux returns the 'process number' of the current
@@ -58,5 +56,3 @@ void os_mem_free_large(
 ); /*!< in: size returned by
                                     os_mem_alloc_large() */
 
-/** Reset the variables. */
-void os_proc_var_init();

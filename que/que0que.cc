@@ -639,7 +639,7 @@ static void que_thr_dec_refer_count(System &sys, QueThr *thr, QueThr **next_thr)
 
   if (thr->state == QUE_THR_RUNNING) {
 
-    auto stopped = que_thr_stop(thr);
+    auto stopped = que_thr_stop(sys, thr);
 
     if (!stopped) {
       /* The reason for the thr suspension or wait was already canceled
@@ -691,7 +691,7 @@ static void que_thr_dec_refer_count(System &sys, QueThr *thr, QueThr **next_thr)
         ut_ad(!trx->m_signals.empty());
         ut_ad(trx->m_handling_signals);
 
-        trx_finish_rollback_off_kernel(fork, trx, next_thr);
+        trx_finish_rollback_off_kernel(sys, fork, trx, next_thr);
         break;
 
       case QUE_FORK_PURGE:
@@ -716,7 +716,7 @@ static void que_thr_dec_refer_count(System &sys, QueThr *thr, QueThr **next_thr)
 
   if (trx->m_handling_signals && trx->m_signals.empty()) {
 
-    trx->end_signal_handling();
+    trx->end_signal_handling(sys);
   }
 
   mutex_exit(&sys.m_trx_sys->m_mutex);
@@ -973,19 +973,19 @@ inline QueThr *que_thr_step(System &sys, QueThr *thr) {
     thr = que_lock_step(thr);
     */
   } else if (type == QUE_NODE_THR) {
-    thr = que_thr_node_step(thr);
+    thr = que_thr_node_step(sys, thr);
   } else if (type == QUE_NODE_COMMIT) {
     thr = Trx::commit_step(sys, thr);
   } else if (type == QUE_NODE_UNDO) {
     thr = sys.m_row_undo->step(thr);
   } else if (type == QUE_NODE_PURGE) {
-    thr = row_purge_step(thr);
+    thr = row_purge_step(sys, thr);
   } else if (type == QUE_NODE_RETURN) {
     thr = return_step(thr);
   } else if (type == QUE_NODE_EXIT) {
     thr = exit_step(thr);
   } else if (type == QUE_NODE_ROLLBACK) {
-    thr = trx_rollback_step(thr);
+    thr = trx_rollback_step(sys, thr);
   } else if (type == QUE_NODE_CREATE_TABLE) {
     thr = sys.m_dict->m_store.create_table_step(thr);
   } else if (type == QUE_NODE_CREATE_INDEX) {
@@ -1030,7 +1030,7 @@ static void que_run_threads_low(System &sys, QueThr *thr) {
     may change if, e.g., a subprocedure call is made */
 
     /*-------------------------*/
-    next_thr = que_thr_step(thr);
+    next_thr = que_thr_step(sys, thr);
     /*-------------------------*/
 
     ut_a(!next_thr || (thr_get_trx(next_thr)->m_error_state == DB_SUCCESS));
@@ -1040,7 +1040,7 @@ static void que_run_threads_low(System &sys, QueThr *thr) {
 
       /* This can change next_thr to a non-nullptr value if there was
       a lock wait that already completed. */
-      que_thr_dec_refer_count(thr, &next_thr);
+      que_thr_dec_refer_count(sys, thr, &next_thr);
 
       if (next_thr == nullptr) {
 
@@ -1055,7 +1055,7 @@ static void que_run_threads_low(System &sys, QueThr *thr) {
 void que_run_threads(System &sys, QueThr *thr) {
 loop:
   ut_a(thr_get_trx(thr)->m_error_state == DB_SUCCESS);
-  que_run_threads_low(thr);
+  que_run_threads_low(sys, thr);
 
   mutex_enter(&sys.m_trx_sys->m_mutex);
 
@@ -1081,7 +1081,7 @@ loop:
         /* thr was chosen as a deadlock victim or there was
       a lock wait timeout */
 
-        que_thr_dec_refer_count(thr, nullptr);
+        que_thr_dec_refer_count(sys, thr, nullptr);
 
         return;
       }
@@ -1110,7 +1110,7 @@ DbErr que_eval_sql(System &sys, ParsInfo *info, const char *sql, bool reserve_di
     sys.m_dict->mutex_acquire();
   }
 
-  graph = pars_sql(info, sql);
+  graph = pars_sql(sys, info, sql);
 
   if (reserve_dict_mutex) {
     sys.m_dict->mutex_release();
@@ -1127,7 +1127,7 @@ DbErr que_eval_sql(System &sys, ParsInfo *info, const char *sql, bool reserve_di
 
   ut_a(thr != nullptr);
 
-  que_run_threads(thr);
+  que_run_threads(sys, thr);
 
   que_graph_free(graph);
 

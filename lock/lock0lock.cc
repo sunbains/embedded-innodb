@@ -578,7 +578,7 @@ std::string Lock::table_to_string() const noexcept {
 }
 
 std::string Lock::rec_to_string(System &sys, BufPool *buf_pool) const noexcept {
-  ut_ad(mutex_own(&buf_pool->m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
   ut_a(type() == LOCK_REC);
 
   MemHeap *heap{};
@@ -977,7 +977,7 @@ Trx *LockSys::sec_rec_some_has_impl_off_trx_sys_mutex(const Rec rec, const Index
   implicit x-lock. We have to look in the clustered index. */
 
   if (!check_trx_id_sanity(page_get_max_trx_id(page), rec, index, offsets, true)) {
-    buf_page_print(page, 0);
+    buf_page_print(m_sys, page, 0);
 
     /* The page is corrupt: try to avoid a crash by returning
     nullptr */
@@ -1066,7 +1066,7 @@ DbErr LockSys::rec_enqueue_waiting(
   we do not enqueue a lock request if the query thread should be
   stopped anyway */
 
-  if (unlikely(que_thr_stop(thr))) {
+  if (unlikely(que_thr_stop(m_sys, thr))) {
 
     ut_error;
 
@@ -1115,7 +1115,7 @@ DbErr LockSys::rec_enqueue_waiting(
     trx->m_que_state = TRX_QUE_LOCK_WAIT;
     trx->m_was_chosen_as_deadlock_victim = false;
 
-    const auto success = que_thr_stop(thr);
+    const auto success = que_thr_stop(m_sys, thr);
     ut_a(success);
 
     return DB_LOCK_WAIT;
@@ -1340,7 +1340,7 @@ void LockSys::grant(Lock *lock) noexcept {
   for it */
 
   if (lock->m_trx->m_que_state == TRX_QUE_LOCK_WAIT) {
-    lock->m_trx->end_lock_wait();
+    lock->m_trx->end_lock_wait(m_sys);
   }
 }
 
@@ -1355,7 +1355,7 @@ void LockSys::rec_cancel(Lock *lock) noexcept {
   lock->reset();
 
   /* The following function releases the trx from lock wait */
-  lock->m_trx->end_lock_wait();
+  lock->m_trx->end_lock_wait(m_sys);
 }
 
 void LockSys::rec_dequeue_from_page(Lock *lock) noexcept {
@@ -1573,8 +1573,8 @@ void LockSys::move_reorganize_page(const BufBlock *block, const BufBlock *oblock
         break;
       }
 
-      cur1.move_to_next();
-      cur2.move_to_next();
+      cur1.move_to_next(m_sys);
+      cur2.move_to_next(m_sys);
     }
 
 #ifdef UNIV_DEBUG
@@ -1615,11 +1615,11 @@ void LockSys::move_rec_list_end(const BufBlock *new_block, const BufBlock *block
       cur1.position(rec, block);
 
       if (cur1.is_before_first()) {
-        cur1.move_to_next();
+        cur1.move_to_next(m_sys);
       }
 
       cur2.set_before_first(new_block);
-      cur2.move_to_next();
+      cur2.move_to_next(m_sys);
 
       /* Copy lock requests on user records to new page and
       reset the lock bits on the old */
@@ -1641,8 +1641,8 @@ void LockSys::move_rec_list_end(const BufBlock *new_block, const BufBlock *block
           (void)rec_add_to_queue(type_mode, new_block, heap_no, lock->m_rec.m_index, lock->m_trx);
         }
 
-        cur1.move_to_next();
-        cur2.move_to_next();
+        cur1.move_to_next(m_sys);
+        cur2.move_to_next(m_sys);
       }
     }
   }
@@ -1667,10 +1667,10 @@ void LockSys::move_rec_list_start(const BufBlock *new_block, const BufBlock *blo
       const auto type_mode = lock->m_type_mode;
 
       cur1.set_before_first(block);
-      cur1.move_to_next();
+      cur1.move_to_next(m_sys);
 
       cur2.position(old_end, new_block);
-      cur2.move_to_next();
+      cur2.move_to_next(m_sys);
 
       /* Copy lock requests on user records to new page and
       reset the lock bits on the old */
@@ -1692,8 +1692,8 @@ void LockSys::move_rec_list_start(const BufBlock *new_block, const BufBlock *blo
           (void)rec_add_to_queue(type_mode, new_block, heap_no, lock->m_rec.m_index, lock->m_trx);
         }
 
-        cur1.move_to_next();
-        cur2.move_to_next();
+        cur1.move_to_next(m_sys);
+        cur2.move_to_next(m_sys);
       }
 
       IF_DEBUG(if (page_rec_is_supremum(rec)) {
@@ -1789,7 +1789,7 @@ void LockSys::update_merge_left(const BufBlock *left_block, const Rec orig_pred,
 
   mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
-  left_next_rec = page_rec_get_next_const(orig_pred);
+  left_next_rec = page_rec_get_next_const(m_sys, orig_pred);
 
   if (!page_rec_is_supremum(left_next_rec)) {
 
@@ -1869,7 +1869,7 @@ void LockSys::update_insert(const BufBlock *block, const Rec rec) noexcept {
   record */
 
   const auto receiver_heap_no = rec.get_heap_no();
-  const auto donator_heap_no = page_rec_get_heap_no(page_rec_get_next_low(rec));
+  const auto donator_heap_no = page_rec_get_heap_no(page_rec_get_next_low(m_sys, rec));
 
   mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
@@ -2155,7 +2155,7 @@ void LockSys::table_remove_low(Lock *lock) noexcept {
   we do not enqueue a lock request if the query thread should be
   stopped anyway */
 
-  if (que_thr_stop(thr)) {
+  if (que_thr_stop(m_sys, thr)) {
     ut_error;
 
     return DB_QUE_THR_SUSPENDED;
@@ -2204,7 +2204,7 @@ void LockSys::table_remove_low(Lock *lock) noexcept {
   trx->m_was_chosen_as_deadlock_victim = false;
   trx->m_wait_started = time(nullptr);
 
-  const auto success = que_thr_stop(thr);
+  const auto success = que_thr_stop(m_sys, thr);
   ut_a(success);
 
   return DB_LOCK_WAIT;
@@ -2413,7 +2413,7 @@ void LockSys::cancel_waiting_and_release(Lock *lock) noexcept {
 
   /* The following function releases the trx from lock wait */
 
-  lock->m_trx->end_lock_wait();
+  lock->m_trx->end_lock_wait(m_sys);
 }
 
 /* True if a lock mode is S or X */
@@ -2624,7 +2624,7 @@ void LockSys::print_info_all_transactions() noexcept {
 
     if (lock->type() == LOCK_REC) {
       if (load_page_first) {
-        const auto size = m_sys.m_trx_sys->m_fsp->m_fil->space_get_flags(lock->rec_space_id());
+        const auto size = m_sys.m_fil->space_get_flags(lock->rec_space_id());
 
         if (unlikely(size == ULINT_UNDEFINED)) {
 
@@ -2936,7 +2936,7 @@ DbErr LockSys::rec_insert_check_and_lock(
   }
 
   auto trx = thr_get_trx(thr);
-  auto next_rec = page_rec_get_next_const(rec);
+  auto next_rec = page_rec_get_next_const(m_sys, rec);
   auto next_rec_heap_no = page_rec_get_heap_no(next_rec);
 
   mutex_enter(&m_sys.m_trx_sys->m_mutex);

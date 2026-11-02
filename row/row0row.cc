@@ -460,7 +460,7 @@ Rec row_get_clust_rec(System &sys, ulint mode, const Rec rec, const Index *index
 
   auto ref = row_build_row_ref(ROW_COPY_POINTERS, index, rec, heap);
 
-  auto found = row_search_on_row_ref(&pcur, mode, table, ref, mtr);
+  auto found = row_search_on_row_ref(sys, &pcur, mode, table, ref, mtr);
 
   auto clust_rec = found ? pcur.get_rec() : nullptr;
 

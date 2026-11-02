@@ -133,15 +133,15 @@ version has become obsolete at the time the undo is started. */
 DbErr UndoNode::remove_secondary_index_entry(System &sys, ulint mode, Index *index, DTuple *entry) noexcept {
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
-  sys.m_dict->m_store.m_fsp->m_log->free_check();
+  sys.m_log->free_check();
 
-  BtreePcursor pcur(sys.m_dict->m_store.m_fsp, sys.m_dict->m_store.m_btree);
+  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
 
   Mtr mtr;
 
   mtr.start();
 
-  auto found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
+  auto found = row_search_index_entry(sys, index, entry, mode, &pcur, &mtr);
   auto btr_cur = pcur.get_btr_cur();
 
   if (unlikely(!found)) {
@@ -227,7 +227,7 @@ bool UndoNode::search_cluster_index_and_persist_position(System &sys) noexcept {
   mtr.start();
 
   auto clust_index = m_table->get_clustered_index();
-  const auto found = row_search_on_row_ref(&m_pcur, BTR_MODIFY_LEAF, m_table, m_ref, &mtr);
+  const auto found = row_search_on_row_ref(sys, &m_pcur, BTR_MODIFY_LEAF, m_table, m_ref, &mtr);
   auto rec = m_pcur.get_rec();
 
   ulint *offsets{};
@@ -259,7 +259,7 @@ bool UndoNode::search_cluster_index_and_persist_position(System &sys) noexcept {
       m_undo_ext = nullptr;
     }
 
-    m_pcur.store_position(&mtr);
+    m_pcur.store_position(sys, &mtr);
 
     success = true;
   }
@@ -352,7 +352,7 @@ DbErr UndoNode::fetch_undo_log_and_undo(System &sys, QueThr *thr) noexcept {
   if (m_state == UNDO_NODE_FETCH_NEXT) {
     roll_ptr_t roll_ptr;
 
-    m_undo_rec = trx_roll_pop_top_rec_of_trx(trx, trx->m_roll_limit, &roll_ptr, m_heap);
+    m_undo_rec = trx_roll_pop_top_rec_of_trx(sys, trx, trx->m_roll_limit, &roll_ptr, m_heap);
 
     if (!m_undo_rec) {
       /* Rollback completed for this query thread */
@@ -660,16 +660,16 @@ DbErr UndoNode::undo_clustered_index_modification(System &sys, QueThr *thr) noex
 DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(System &sys, QueThr *thr, Index *index, DTuple *entry, ulint mode) noexcept {
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
-  BtreePcursor pcur(sys.m_dict->m_store.m_fsp, sys.m_dict->m_store.m_btree);
+  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
 
-  sys.m_dict->m_store.m_fsp->m_log->free_check();
+  sys.m_log->free_check();
 
   Mtr mtr;
   DbErr err;
 
   mtr.start();
 
-  if (likely(row_search_index_entry(index, entry, mode, &pcur, &mtr))) {
+  if (likely(row_search_index_entry(sys, index, entry, mode, &pcur, &mtr))) {
     /* We should remove the index record if no prior version of the row, which cannot be purged yet, requires
     its existence. If some requires, we should delete mark the record. */
 
@@ -741,7 +741,7 @@ DbErr UndoNode::del_unmark_secondary_index_and_undo_update(System &sys,
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
   auto trx = thr_get_trx(thr);
-  BtreePcursor pcur(sys.m_dict->m_store.m_fsp, sys.m_dict->m_store.m_btree);
+  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
 
   /* Ignore indexes that are being created. */
   if (unlikely(*index->m_name == TEMP_INDEX_PREFIX)) {
@@ -749,14 +749,14 @@ DbErr UndoNode::del_unmark_secondary_index_and_undo_update(System &sys,
     return DB_SUCCESS;
   }
 
-  sys.m_dict->m_store.m_fsp->m_log->free_check();
+  sys.m_log->free_check();
 
   Mtr mtr;
   DbErr err;
 
   mtr.start();
 
-  if (unlikely(!row_search_index_entry(index, entry, mode, &pcur, &mtr))) {
+  if (unlikely(!row_search_index_entry(sys, index, entry, mode, &pcur, &mtr))) {
     log_err("Sec index del undo failed in ", index->m_name, " tuple: ");
     dtuple_print(stderr, entry);
     log_err("\nrecord ");

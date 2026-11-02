@@ -26,8 +26,6 @@ Created 5/30/1994 Heikki Tuuri
 
 #include "innodb0types.h"
 
-/** Initializes the mem block list at database startup. */
-void ut_mem_init(System &sys);
 
 #define ut_new(n) ut_new_func(n, SourceLocation(std::source_location::current()))
 #define ut_delete(ptr) ut_delete_func(ptr, SourceLocation(std::source_location::current()))
@@ -81,20 +79,7 @@ void ut_delete_func(void *ptr, SourceLocation location);
  */
 void *ut_realloc_func(void *ptr, ulint size, SourceLocation location);
 
-/** Frees in shutdown all allocated memory not freed yet. */
-void ut_delete_all_mem();
 
-/** Reset the variables. */
-void ut_mem_var_init();
 
-/** The total amount of memory currently allocated from the operating
-system with os_mem_alloc_large() or malloc().  Does not count malloc()
-if srv_use_sys_malloc is set.  Protected by ut_list_mutex.
-@return the total memory allocated. */
-ulint ut_total_allocated_memory();
 
-/** Memory was allocated externally, @see os0proc.cc */
-void ut_allocated_memory(ulint size);
 
-/** Memory was deallocated externally, @see os0proc.cc */
-void ut_deallocated_memory(ulint size);

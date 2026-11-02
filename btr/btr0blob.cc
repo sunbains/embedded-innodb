@@ -258,7 +258,7 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
   const auto space_id = rec_block->get_space();
   const auto rec_page_no = rec_block->get_page_no();
 
-  ut_a(sys.m_fil->page_get_type(rec.page_align()) == FIL_PAGE_TYPE_INDEX);
+  ut_a(Fil::page_get_type(rec.page_align()) == FIL_PAGE_TYPE_INDEX);
 
   /* We have to create a file segment to the tablespace
   for each field and put the pointer to the field in rec */
@@ -394,7 +394,7 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
 }
 
 void Blob::check_blob_fil_page_type(System &sys, space_id_t space_id, page_no_t page_no, const page_t *page, bool read) noexcept {
-  auto type = sys.m_fil->page_get_type(page);
+  auto type = Fil::page_get_type(page);
 
   ut_a(space_id == page_get_space_id(page));
   ut_a(page_no == page_get_page_no(page));
@@ -423,7 +423,7 @@ void Blob::free_externally_stored_field(System &sys,
 
 #ifdef UNIV_DEBUG
   ut_ad(local_mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
-  ut_ad(local_mtr->memo_contains_page(sys, field_ref, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(local_mtr->memo_contains_page(field_ref, MTR_MEMO_PAGE_X_FIX));
   ut_ad(!rec || rec.offs_validate(index, offsets));
 
   if (!rec.is_null()) {
@@ -531,7 +531,7 @@ void Blob::free_externally_stored_field(System &sys,
 
 void Blob::free_externally_stored_fields(System &sys, Index *index, Rec rec, const RecOffs &offsets, TrxRbCtx rb_ctx, Mtr *mtr) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
-  ut_ad(mtr->memo_contains_page(sys, rec, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
   /* Free possible externally stored fields in the record */
 
   const auto n_fields = offsets.n_fields();
@@ -552,7 +552,7 @@ void Blob::free_updated_extern_fields(System &sys,
   const Index *index, Rec rec, const RecOffs &offsets, const Upd *update, TrxRbCtx rb_ctx, Mtr *mtr
 ) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
-  ut_ad(mtr->memo_contains_page(sys, rec, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
 
   /* Free possible externally stored fields in the record */
 

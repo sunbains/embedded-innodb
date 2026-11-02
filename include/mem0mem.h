@@ -133,14 +133,7 @@ struct MemHeap {
   /** the value of the struct field 'free' at the creation of the block */
   ulint start;
 
-  /** If the MEM_HEAP_BTR_SEARCH bit is set in type, and this is the heap
-  root, this can contain an allocated buffer frame, which can be appended
-  as a free block to the heap, if we need more space; otherwise, this is NULL */
-  void *free_block;
 
-  /** if this block has been allocated from the buffer pool, this contains
-  the BufBlock handle; otherwise, this is NULL */
-  void *buf_block;
 
   /* List of all mem blocks allocated; protected by the mem_comm_pool mutex */
   IF_DEBUG(UT_LIST_NODE_T(MemHeap) mem_block_list;)
@@ -170,7 +163,7 @@ constexpr ulint MEM_FREED_BLOCK_MAGIC_N = 547711122;
  * 
  * @return own: memory heap block, NULL if did not succeed (only possible for MEM_HEAP_BTR_SEARCH type heaps)
  */
-[[nodiscard]] MemHeap *mem_heap_create_block(System &sys, MemHeap *heap, ulint n, ulint type, SourceLocation loc);
+[[nodiscard]] MemHeap *mem_heap_create_block(MemHeap *heap, ulint n, ulint type, SourceLocation loc);
 
 /**
  * Frees a block from a memory heap.
@@ -178,14 +171,8 @@ constexpr ulint MEM_FREED_BLOCK_MAGIC_N = 547711122;
  * @param[in] heap heap
  * @param[in] block block to free
  */
-void mem_heap_block_free(System &sys, MemHeap *heap, MemHeap *block);
+void mem_heap_block_free(MemHeap *heap, MemHeap *block);
 
-/**
- * Frees the free_block field from a memory heap.
- *
- * @param[in] heap heap
- */
-void mem_heap_free_block_free(System &sys, MemHeap *heap);
 
 /**
  * Adds a new block to a memory heap.
@@ -349,9 +336,6 @@ inline void mem_heap_free_heap_top(MemHeap *heap, byte *old_top) {
 inline void mem_heap_empty(MemHeap *heap) {
   mem_heap_free_heap_top(heap, reinterpret_cast<byte *>(heap) + mem_block_get_start(heap));
 
-  if (heap->free_block) {
-    mem_heap_free_block_free(heap);
-  }
 }
 
 /**
@@ -440,9 +424,6 @@ inline void mem_heap_free_func(MemHeap *heap, SourceLocation loc) {
 
   auto block = UT_LIST_GET_LAST(heap->base);
 
-  if (heap->free_block) {
-    mem_heap_free_block_free(heap);
-  }
 
   while (block != nullptr) {
     auto prev_block = UT_LIST_GET_PREV(list, block);
@@ -507,9 +488,6 @@ inline void mem_free_func(void *ptr, SourceLocation loc) {
 
   auto size = heap->total_size;
 
-  if (heap->free_block) {
-    size += UNIV_PAGE_SIZE;
-  }
 
   return size;
 }

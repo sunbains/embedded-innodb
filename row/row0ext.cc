@@ -54,7 +54,7 @@ static void row_ext_cache_fill(System &sys, RowExt *ext, ulint i, const Dfield *
   }
 }
 
-RowExt *row_ext_create(ulint n_ext, const ulint *ext, const DTuple *tuple, MemHeap *heap) {
+RowExt *row_ext_create(System &sys, ulint n_ext, const ulint *ext, const DTuple *tuple, MemHeap *heap) {
   auto row_ext = reinterpret_cast<RowExt *>(mem_heap_alloc(heap, (sizeof(RowExt)) + (n_ext - 1) * sizeof(RowExt::len)));
 
   row_ext->n_ext = n_ext;
@@ -69,7 +69,7 @@ RowExt *row_ext_create(ulint n_ext, const ulint *ext, const DTuple *tuple, MemHe
   /* Fetch the BLOB prefixes */
   for (ulint i = 0; i < n_ext; i++) {
     auto dfield = dtuple_get_nth_field(tuple, ext[i]);
-    row_ext_cache_fill(row_ext, i, dfield);
+    row_ext_cache_fill(sys, row_ext, i, dfield);
   }
 
   return row_ext;

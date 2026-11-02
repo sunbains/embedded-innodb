@@ -142,7 +142,7 @@ void PurgeSys::free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_log
 
     mutex_enter(&rseg->m_mutex);
 
-    rseg_hdr = trx_rsegf_get(rseg->m_space, rseg->m_page_no, &mtr);
+    rseg_hdr = trx_rsegf_get(rseg->m_sys, m_space, rseg->m_page_no, &mtr);
 
     auto undo_page = m_sys.m_undo->page_get(rseg->m_space, hdr_addr.m_page_no, &mtr);
 
@@ -196,7 +196,7 @@ void PurgeSys::free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_log
     fsp0fsp.c. */
   } while (m_sys.m_fsp->fseg_free_step(seg_hdr + TRX_UNDO_FSEG_HEADER, &mtr));
 
-  auto hist_size = mtr.read_ulint(m_sys, rseg_hdr + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES);
+  auto hist_size = mtr.read_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES);
   ut_ad(hist_size >= seg_size);
 
   mlog_write_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, hist_size - seg_size, MLOG_4BYTES, &mtr);
@@ -221,7 +221,7 @@ void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_
 
   mutex_enter(&rseg->m_mutex);
 
-  auto rseg_hdr = trx_rsegf_get(rseg->m_space, rseg->m_page_no, &mtr);
+  auto rseg_hdr = trx_rsegf_get(rseg->m_sys, m_space, rseg->m_page_no, &mtr);
   auto hdr_addr = trx_purge_get_log_from_hist(flst_get_last(rseg_hdr + TRX_RSEG_HISTORY, &mtr));
 
   for (;;) {
@@ -289,7 +289,7 @@ void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_
 
     mutex_enter(&rseg->m_mutex);
 
-    rseg_hdr = trx_rsegf_get(rseg->m_space, rseg->m_page_no, &mtr);
+    rseg_hdr = trx_rsegf_get(rseg->m_sys, m_space, rseg->m_page_no, &mtr);
 
     hdr_addr = prev_hdr_addr;
   }
@@ -670,7 +670,7 @@ void PurgeSys::add_update_undo_to_history(Trx *trx, page_t *undo_page, Mtr *mtr)
 
   ut_ad(mutex_own(&rseg->m_mutex));
 
-  auto rseg_header = trx_rsegf_get(rseg->m_space, rseg->m_page_no, mtr);
+  auto rseg_header = trx_rsegf_get(rseg->m_sys, m_space, rseg->m_page_no, mtr);
   auto undo_header = undo_page + undo->m_hdr_offset;
   auto seg_header = undo_page + TRX_UNDO_SEG_HDR;
 
@@ -807,7 +807,7 @@ ulint PurgeSys::run() noexcept {
     log_info("Starting purge");
   }
 
-  que_run_threads(thr);
+  que_run_threads(m_sys, thr);
 
   return m_n_pages_handled - old_pages_handled;
 }

@@ -70,8 +70,8 @@ bool RowSel::sec_rec_is_for_blob(
   ulint sec_len
 ) noexcept {
 
-  auto fsp = m_sys.m_dict->m_store.m_fsp;
-  auto btree = m_sys.m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_fsp;
+  auto btree = m_sys.m_btree;
   Blob blob(fsp, btree);
   std::array<byte, DICT_MAX_INDEX_COL_LEN> buf{};
 
@@ -249,8 +249,8 @@ void RowSel::fetch_columns(Index *index, const Rec rec, const ulint *offsets, Sy
 
   const auto index_type = index->is_clustered() ? SYM_CLUST_FIELD_NO : SYM_SEC_FIELD_NO;
 
-  auto fsp = m_sys.m_dict->m_store.m_fsp;
-  auto btree = m_sys.m_dict->m_store.m_btree;
+  auto fsp = m_sys.m_fsp;
+  auto btree = m_sys.m_btree;
   Blob blob(fsp, btree);
 
   while (column != nullptr) {
@@ -577,7 +577,7 @@ inline DbErr RowSel::set_rec_lock(
   const BufBlock *block, const Rec rec, Index *index, const ulint *offsets, LockMode mode, ulint type, QueThr *thr
 ) noexcept {
   auto trx = thr_get_trx(thr);
-  auto buf_pool = m_sys.m_dict->m_store.m_btree->m_buf_pool;
+  auto buf_pool = m_sys.m_buf_pool;
 
   if (trx->m_trx_locks.size() > 10000 && buf_pool->m_LRU->buf_pool_running_out()) {
     return DB_LOCK_TABLE_FULL;
@@ -931,7 +931,7 @@ rec_loop:
       level, we lock only the record, i.e., next-key
       locking is not used. */
 
-      auto next_rec = page_rec_get_next(rec);
+      auto next_rec = page_rec_get_next(m_sys, rec);
       auto trx = thr_get_trx(thr);
 
       {
@@ -1201,7 +1201,7 @@ skip_lock:
 
     if (sel_node->m_can_get_updated) {
 
-      plan->m_clust_pcur.store_position(&mtr);
+      plan->m_clust_pcur.store_position(m_sys, &mtr);
     }
   }
 
@@ -1257,7 +1257,7 @@ next_rec:
   }
 
   if (sel_node->m_asc) {
-    moved = plan->m_pcur.move_to_next(&mtr);
+    moved = plan->m_pcur.move_to_next(m_sys, &mtr);
   } else {
     moved = plan->m_pcur.move_to_prev(m_sys, &mtr);
   }
@@ -1288,7 +1288,7 @@ next_table:
 
     plan->m_stored_cursor_rec_processed = true;
 
-    plan->m_pcur.store_position(&mtr);
+    plan->m_pcur.store_position(m_sys, &mtr);
   }
 
   mtr.commit(m_sys);
@@ -1383,7 +1383,7 @@ stop_for_a_while:
   ut_ad(!search_latch_locked);
 
   plan->m_stored_cursor_rec_processed = false;
-  plan->m_pcur.store_position(&mtr);
+  plan->m_pcur.store_position(m_sys, &mtr);
 
   mtr.commit(m_sys);
 
@@ -1401,7 +1401,7 @@ commit_mtr_for_a_while:
   plan->m_stored_cursor_rec_processed = true;
 
   ut_ad(!search_latch_locked);
-  plan->m_pcur.store_position(&mtr);
+  plan->m_pcur.store_position(m_sys, &mtr);
 
   mtr.commit(m_sys);
 
@@ -1420,7 +1420,7 @@ lock_wait_or_error:
   ut_ad(!search_latch_locked);
 
   plan->m_stored_cursor_rec_processed = false;
-  plan->m_pcur.store_position(&mtr);
+  plan->m_pcur.store_position(m_sys, &mtr);
 
   mtr.commit(m_sys);
 
@@ -1684,7 +1684,7 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
     if (prebuilt->m_select_lock_type != LOCK_NONE) {
       /* We may use the cursor in update or in unlock_row(): store its position */
 
-      prebuilt->m_clust_pcur->store_position(mtr);
+      prebuilt->m_clust_pcur->store_position(m_sys, mtr);
     }
 
     return DB_SUCCESS;
@@ -1820,7 +1820,7 @@ bool RowSel::restore_position(bool *same_user_rec, ulint latch_mode, BtreePcurso
     }
 
     if (moves_up) {
-      (void)pcur->move_to_next(mtr);
+      (void)pcur->move_to_next(m_sys, mtr);
     }
 
   } else if (relative_position == BtreeCursorPos::AFTER || relative_position == BtreeCursorPos::AFTER_LAST_IN_TREE) {
@@ -1838,7 +1838,7 @@ bool RowSel::restore_position(bool *same_user_rec, ulint latch_mode, BtreePcurso
     ut_ad(relative_position == BtreeCursorPos::BEFORE || relative_position == BtreeCursorPos::BEFORE_FIRST_IN_TREE);
 
     if (moves_up && pcur->is_on_user_rec()) {
-      (void)pcur->move_to_next(mtr);
+      (void)pcur->move_to_next(m_sys, mtr);
     }
   }
 
@@ -2247,7 +2247,7 @@ DbErr RowSel::mvcc_fetch(
         prebuilt->m_select_lock_type != LOCK_NONE) {
 
       /* Try to place a gap lock on the next index record to prevent phantoms in ORDER BY ... DESC queries */
-      const Rec next = page_rec_get_next_const(rec);
+      const Rec next = page_rec_get_next_const(m_sys, rec);
 
       {
         PhyRec record{index, next};
@@ -2355,7 +2355,7 @@ rec_loop:
   wrong_offs:
     if (recovery == IB_RECOVERY_DEFAULT || moves_up == false) {
 
-      buf_page_print(rec.page_align(), 0);
+      buf_page_print(rec.page_alignm_sys, (), 0);
       log_err(
         std::format("\nrec address {}, buf block with fix count {}", (void *)rec, (int)pcur->get_block()->m_page.m_buf_fix_count)
       );
@@ -2394,7 +2394,7 @@ rec_loop:
   }
 
   if (unlikely(recovery != IB_RECOVERY_DEFAULT)) {
-    auto btree = m_sys.m_dict->m_store.m_btree;
+    auto btree = m_sys.m_btree;
 
     if (!rec.validate(offsets) || !btree->index_rec_validate(rec, index, false)) {
       log_err(std::format(
@@ -2446,7 +2446,7 @@ rec_loop:
         }
       }
 
-      pcur->store_position(&mtr);
+      pcur->store_position(m_sys, &mtr);
 
       err = DB_RECORD_NOT_FOUND;
 
@@ -2725,7 +2725,7 @@ got_row:
 
     /* Inside an update always store the cursor position */
 
-    pcur->store_position(&mtr);
+    pcur->store_position(m_sys, &mtr);
   }
 
   err = DB_SUCCESS;
@@ -2742,7 +2742,7 @@ next_rec:
     /* We must commit mtr if we are moving to the next non-clustered index record, because we could break the
     latching order if we would access a different clustered index page right away without releasing the previous. */
 
-    pcur->store_position(&mtr);
+    pcur->store_position(m_sys, &mtr);
 
     mtr.commit(m_sys);
     mtr_has_extra_clust_latch = false;
@@ -2756,9 +2756,9 @@ next_rec:
   }
 
   if (moves_up) {
-    if (unlikely(!pcur->move_to_next(&mtr))) {
+    if (unlikely(!pcur->move_to_next(m_sys, &mtr))) {
     not_moved:
-      pcur->store_position(&mtr);
+      pcur->store_position(m_sys, &mtr);
 
       err = match_mode != ROW_SEL_DEFAULT ? DB_RECORD_NOT_FOUND : DB_END_OF_INDEX;
 
@@ -2774,7 +2774,7 @@ next_rec:
 lock_wait_or_error:
 
   /*-------------------------------------------------------------*/
-  pcur->store_position(&mtr);
+  pcur->store_position(m_sys, &mtr);
 
   mtr.commit(m_sys);
   mtr_has_extra_clust_latch = false;
@@ -2782,7 +2782,7 @@ lock_wait_or_error:
   trx->m_error_state = err;
 
   /* Stop the dummy thread we created for this query. */
-  que_thr_stop_client(thr);
+  que_thr_stop_client(m_sys, thr);
 
   thr->lock_state = QUE_THR_LOCK_ROW;
 

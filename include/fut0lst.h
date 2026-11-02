@@ -66,15 +66,13 @@ constexpr ulint FLST_LAST = 4 + FIL_ADDR_SIZE;
 constexpr ulint FLST_NODE_SIZE = 2 * FIL_ADDR_SIZE;
 
 /** Adds a node as the last node in a list. */
-void flst_add_last(System &sys, 
-  flst_base_node_t *base, /** in: pointer to base node of list */
+void flst_add_last(System &sys, flst_base_node_t *base, /** in: pointer to base node of list */
   flst_node_t *node,      /** in: node to add */
   Mtr *mtr
 ); /** in: mini-transaction handle */
 
 /** Adds a node as the first node in a list. */
-void flst_add_first(System &sys, 
-  flst_base_node_t *base, /** in: pointer to base node of list */
+void flst_add_first(System &sys, flst_base_node_t *base, /** in: pointer to base node of list */
   flst_node_t *node,      /** in: node to add */
   Mtr *mtr
 ); /** in: mini-transaction handle */
@@ -131,8 +129,7 @@ bool flst_validate(System &sys,
 ); /** in: mtr */
 
 /** Prints info of a file-based list. */
-void flst_print(System &sys, 
-  const flst_base_node_t *base, /** in: pointer to base node of list */
+void flst_print(const flst_base_node_t *base, /** in: pointer to base node of list */
   Mtr *mtr
 ); /** in: mtr */
 
@@ -144,7 +141,7 @@ inline void flst_write_addr(
 ) /** in: mini-transaction handle */
 {
   ut_ad(faddr && mtr);
-  ut_ad(mtr->memo_contains_page(sys, faddr, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(faddr, MTR_MEMO_PAGE_X_FIX));
   ut_a(addr.m_page_no == FIL_NULL || addr.m_boffset >= FIL_PAGE_DATA);
   ut_a(ut_align_offset(faddr, UNIV_PAGE_SIZE) >= FIL_PAGE_DATA);
 
@@ -156,13 +153,13 @@ inline void flst_write_addr(
 @param[in] faddr                Pointer to file faddress
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	file address */
-inline FilAddr flst_read_addr(System &sys, const fil_faddr_t *faddr, Mtr *mtr) {
+inline FilAddr flst_read_addr(const fil_faddr_t *faddr, Mtr *mtr) {
   FilAddr addr;
 
   ut_ad(faddr && mtr);
 
-  addr.m_page_no = mtr->read_ulint(sys, faddr + FIL_ADDR_PAGE, MLOG_4BYTES);
-  addr.m_boffset = mtr->read_ulint(sys, faddr + FIL_ADDR_BYTE, MLOG_2BYTES);
+  addr.m_page_no = mtr->read_ulint(faddr + FIL_ADDR_PAGE, MLOG_4BYTES);
+  addr.m_boffset = mtr->read_ulint(faddr + FIL_ADDR_BYTE, MLOG_2BYTES);
   ut_a(addr.m_page_no == FIL_NULL || addr.m_boffset >= FIL_PAGE_DATA);
   ut_a(ut_align_offset(faddr, UNIV_PAGE_SIZE) >= FIL_PAGE_DATA);
 
@@ -172,8 +169,8 @@ inline FilAddr flst_read_addr(System &sys, const fil_faddr_t *faddr, Mtr *mtr) {
 /** Initializes a list base node.
 @param[in] base                 Pointer to the base node
 @param[in,out] mtr              Mini-transaction that covers the operation. */
-inline void flst_init(System &sys, flst_base_node_t *base, Mtr *mtr) {
-  ut_ad(mtr->memo_contains_page(sys, base, MTR_MEMO_PAGE_X_FIX));
+inline void flst_init(flst_base_node_t *base, Mtr *mtr) {
+  ut_ad(mtr->memo_contains_page(base, MTR_MEMO_PAGE_X_FIX));
 
   mlog_write_ulint(base + FLST_LEN, 0, MLOG_4BYTES, mtr);
   flst_write_addr(base + FLST_FIRST, fil_addr_null, mtr);
@@ -184,8 +181,8 @@ inline void flst_init(System &sys, flst_base_node_t *base, Mtr *mtr) {
 @param[in] base                 Pointer to base node
 @param[in,out] mtr              Mini-transaction that covers the operation.
 @return	length */
-inline ulint flst_get_len(System &sys, const flst_base_node_t *base, Mtr *mtr) {
-  return mtr->read_ulint(sys, base + FLST_LEN, MLOG_4BYTES);
+inline ulint flst_get_len(const flst_base_node_t *base, Mtr *mtr) {
+  return mtr->read_ulint(base + FLST_LEN, MLOG_4BYTES);
 }
 
 /** Gets list first node address.

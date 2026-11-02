@@ -1291,9 +1291,9 @@ void Dict::update_statistics(Table *table) noexcept {
     return;
   }
 
-  auto fsp = m_store.m_fsp;
+  auto fsp = m_sys.m_fsp;
   auto &stats = table->m_stats;
-  auto btree = m_store.m_btree;
+  auto btree = m_sys.m_btree;
   ulint sum_of_index_sizes{};
   BtreeCursor btr_cur{};
 

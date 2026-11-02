@@ -69,7 +69,7 @@ struct Mtr {
    *
    * @param[in] savepoint       The savepoint.
    */
-  void rollback_to_savepoint(ulint savepoint) noexcept;
+  void rollback_to_savepoint(System &sys, ulint savepoint) noexcept;
 
   /**
    * @brief Reads 1 - 4 bytes from a file page buffered in the buffer pool.
@@ -79,7 +79,7 @@ struct Mtr {
    *
    * @return The value read.
    */
-  [[nodiscard]] ulint read_ulint(System &sys, const byte *ptr, ulint type) const noexcept;
+  [[nodiscard]] ulint read_ulint(const byte *ptr, ulint type) const noexcept;
 
   /**
    * @brief Reads 8 bytes from a file page buffered in the buffer pool.
@@ -88,7 +88,7 @@ struct Mtr {
    *
    * @return The value read.
    */
-  [[nodiscard]] uint64_t read_uint64(System &sys, const byte *ptr) const noexcept;
+  [[nodiscard]] uint64_t read_uint64(const byte *ptr) const noexcept;
 
   /**
    * Releases the block in an mtr memo after a savepoint.
@@ -104,7 +104,7 @@ struct Mtr {
    * @param[in] object          The object to release.
    * @param[in] type            The object type: MTR_MEMO_S_LOCK, ...
    */
-  void memo_release(void *object, ulint type) noexcept;
+  void memo_release(System &sys, void *object, ulint type) noexcept;
 
   /**
    * @brief Pushes an object to an mtr memo stack.
@@ -242,7 +242,16 @@ struct Mtr {
    *
    * @return	true if contains
    */
-  bool memo_contains_page(System &sys, const byte *ptr, ulint type) const noexcept;
+  bool memo_contains_page(const byte *ptr, ulint type) const noexcept;
+
+  /**
+   * Find the buffer-fixed block in the memo whose frame contains ptr.
+   *
+   * @param[in] ptr             Pointer into a page frame.
+   *
+   * @return the block, or nullptr if no block in the memo contains ptr.
+   */
+  [[nodiscard]] BufBlock *memo_find_block(const byte *ptr) const noexcept;
 
   /**
    * Prints info of an mtr handle.

@@ -374,7 +374,7 @@ void buf_page_print(System &sys, const byte *read_buf, ulint) {
     log_info("Page may be an update undo log page\n");
   }
 
-  switch (sys.m_fil->page_get_type(read_buf)) {
+  switch (Fil::page_get_type(read_buf)) {
     case FIL_PAGE_TYPE_INDEX:
       log_warn(std::format("Page may be an index page where index id is {}", sys.m_btree->page_get_index_id(read_buf)));
 
@@ -784,7 +784,7 @@ BufBlock *BufPool::get(Request &req, BufBlock *guess) {
         return nullptr;
       }
 
-      if (buf_read_page(page_id)) {
+      if (buf_read_page(m_sys, page_id)) {
 
         n_retries = 0;
 
@@ -902,7 +902,7 @@ BufBlock *BufPool::get(Request &req, BufBlock *guess) {
   if (access_time == 0) {
     /* In the case of a first access, try to apply linear read-ahead */
 
-    buf_read_ahead_linear(this, page_id);
+    buf_read_ahead_linear(m_sys, this, page_id);
   }
 
   return block;
@@ -995,7 +995,7 @@ bool BufPool::try_get(Request &req) {
     if (unlikely(!access_time)) {
 
       /* In the case of a first access, try to apply linear read-ahead */
-      buf_read_ahead_linear(this, req.m_guess->get_page_id());
+      buf_read_ahead_linear(m_sys, this, req.m_guess->get_page_id());
     }
 
     ++m_stat.n_page_gets;
@@ -1406,7 +1406,7 @@ void BufPool::io_complete(BufPage *bpage) {
         bpage->m_page_no
       ));
 
-      buf_page_print(frame, 0);
+      buf_page_print(m_sys, frame, 0);
 
       log_err(std::format(
         "Database page corruption on disk or a failed file read of page {}."
@@ -1428,7 +1428,7 @@ void BufPool::io_complete(BufPage *bpage) {
 
     if (recv_recovery_on) {
       /* Pages must be uncompressed for crash recovery. */
-      recv_recover_page(true, (BufBlock *)bpage);
+      recv_recover_page(m_sys, true, (BufBlock *)bpage);
     }
   }
 
@@ -1674,7 +1674,7 @@ void BufPool::print() {
     for (; n_blocks--; block++) {
       const buf_frame_t *frame = block->m_frame;
 
-      if (m_sys.m_fil->page_get_type(frame) == FIL_PAGE_TYPE_INDEX) {
+      if (Fil::page_get_type(frame) == FIL_PAGE_TYPE_INDEX) {
 
         id = m_sys.m_btree->page_get_index_id(frame);
 

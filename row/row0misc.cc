@@ -53,7 +53,7 @@ bool trx_is_interrupted(const Trx *) {
   return false;
 }
 
-bool ib_handle_errors(DbErr *new_err, Trx *trx, QueThr *thr, TrxSavept *savept) {
+bool ib_handle_errors(System &sys, DbErr *new_err, Trx *trx, QueThr *thr, TrxSavept *savept) {
   for (;;) {
     auto err = trx->m_error_state;
     ut_a(err != DB_SUCCESS);
@@ -63,7 +63,7 @@ bool ib_handle_errors(DbErr *new_err, Trx *trx, QueThr *thr, TrxSavept *savept) 
     switch (err) {
       case DB_LOCK_WAIT_TIMEOUT:
         if (ses_rollback_on_timeout) {
-          trx_general_rollback(trx, false, nullptr);
+          trx_general_rollback(sys, trx, false, nullptr);
           break;
         }
         /* fall through */
@@ -79,14 +79,14 @@ bool ib_handle_errors(DbErr *new_err, Trx *trx, QueThr *thr, TrxSavept *savept) 
           /* Roll back the latest, possibly incomplete
           insertion or update */
 
-          trx_general_rollback(trx, true, savept);
+          trx_general_rollback(sys, trx, true, savept);
         }
         break;
       case DB_LOCK_WAIT:
         InnoDB::suspend_user_thread(thr);
 
         if (trx->m_error_state != DB_SUCCESS) {
-          que_thr_stop_client(thr);
+          que_thr_stop_client(sys, thr);
 
           continue;
         }
@@ -101,7 +101,7 @@ bool ib_handle_errors(DbErr *new_err, Trx *trx, QueThr *thr, TrxSavept *savept) 
         /* Roll back the whole transaction; this resolution was added
         to version 3.23.43 */
 
-        trx_general_rollback(trx, false, nullptr);
+        trx_general_rollback(sys, trx, false, nullptr);
         break;
 
       case DB_MUST_GET_MORE_FILE_SPACE:
@@ -165,7 +165,7 @@ DbErr ib_trx_lock_table_with_retry(System &sys, Trx *trx, Table *table, enum Loc
     if (likely(err == DB_SUCCESS)) {
       que_thr_stop_for_client_no_error(thr, trx);
     } else {
-      que_thr_stop_client(thr);
+      que_thr_stop_client(sys, thr);
 
       if (err != DB_QUE_THR_SUSPENDED) {
         auto was_lock_wait = ib_handle_errors(&err, trx, thr, nullptr);

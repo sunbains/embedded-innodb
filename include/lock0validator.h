@@ -55,7 +55,7 @@ struct LockValidator {
    *
    * @return true if the lock system is valid, false otherwise.
    */
-  [[nodiscard]] bool validate() noexcept;
+  [[nodiscard]] bool validate(System &sys) noexcept;
 
   /**
    * @brief Validates the record lock queues on a page.
@@ -79,7 +79,7 @@ struct LockValidator {
    * @param[in] table The table whose lock queue is to be validated.
    * @return true if the lock queue is valid, false otherwise.
    */
-  [[nodiscard]] bool table_queue_validate(Table *table) noexcept;
+  [[nodiscard]] bool table_queue_validate(System &sys, Table *table) noexcept;
 
   /**
    * @brief Validates the lock queue on a single record.
@@ -95,7 +95,7 @@ struct LockValidator {
    * @param[in] offsets Column offsets obtained from PhyRec::get_col_offsets(rec, index).
    * @return true if the lock queue is valid, false otherwise.
    */
-  [[nodiscard]] bool rec_queue_validate(
+  [[nodiscard]] bool rec_queue_validate(System &sys, 
     const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets
   ) noexcept;
 
@@ -115,7 +115,7 @@ struct LockValidator {
    * 
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] const Lock *rec_other_has_expl_req(
+  [[nodiscard]] const Lock *rec_other_has_expl_req(System &sys, 
     PageId page_id, LockMode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx
   ) const noexcept;
 
@@ -129,7 +129,7 @@ struct LockValidator {
    * 
    * @return A pointer to the lock if found, or nullptr if no such lock exists.
    */
-  [[nodiscard]] const Lock *rec_exists(const Rec_locks &rec_locks, ulint heap_no) const noexcept;
+  [[nodiscard]] const Lock *rec_exists(System &sys, const Rec_locks &rec_locks, ulint heap_no) const noexcept;
 #endif /* UNIV_DEBUG */
 
   /**

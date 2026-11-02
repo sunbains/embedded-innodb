@@ -474,7 +474,7 @@ struct Btree {
    * @return	next page number
    */
   [[nodiscard]] static inline page_no_t page_get_next(const page_t *page, Mtr *mtr) noexcept {
-    ut_ad(mtr->memo_contains_page(m_sys, page, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(m_sys, page, MTR_MEMO_PAGE_S_FIX));
+    ut_ad(mtr->memo_contains_page(page, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(page, MTR_MEMO_PAGE_S_FIX));
 
     return mach_read_from_4(page + FIL_PAGE_NEXT);
   }
@@ -534,7 +534,7 @@ struct Btree {
 
     if (unlikely(page_no == 0)) {
       ib_logger(stderr, "a nonsensical page number 0 in a node ptr record at offset %lun", (ulong)page_offset(rec.get()));
-      buf_page_print(rec.page_align(), 0);
+      buf_page_print(rec.page_alignm_sys, (), 0);
     }
 
     return page_no;
@@ -551,7 +551,7 @@ struct Btree {
     ut_ad(!mtr->memo_contains(block, MTR_MEMO_MODIFY));
     ut_ad(latch_mode == BTR_SEARCH_LEAF || latch_mode == BTR_MODIFY_LEAF);
 
-    mtr->memo_release(block, latch_mode == BTR_SEARCH_LEAF ? MTR_MEMO_PAGE_S_FIX : MTR_MEMO_PAGE_X_FIX);
+    mtr->memo_release(m_sys, block, latch_mode == BTR_SEARCH_LEAF ? MTR_MEMO_PAGE_S_FIX : MTR_MEMO_PAGE_X_FIX);
   }
 
   /**

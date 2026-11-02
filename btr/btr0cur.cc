@@ -90,12 +90,12 @@ void BtreeCursor::latch_leaves(System &sys, page_t *page, space_id_t space, page
 
     case BTR_MODIFY_TREE:
       /* x-latch also brothers from left to right */
-      left_page_no = sys.m_btree->page_get_prev(page, mtr);
+      left_page_no = Btree::page_get_prev(page, mtr);
 
       if (left_page_no != FIL_NULL) {
         block = sys.m_btree->block_get(space, left_page_no, RW_X_LATCH, mtr);
 #ifdef UNIV_BTR_DEBUG
-        ut_a(sys.m_btree->page_get_next(block->get_frame(), mtr) == page_get_page_no(page));
+        ut_a(Btree::page_get_next(block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
         block->m_check_index_page_at_flush = true;
       }
@@ -103,12 +103,12 @@ void BtreeCursor::latch_leaves(System &sys, page_t *page, space_id_t space, page
       block = sys.m_btree->block_get(space, page_no, RW_X_LATCH, mtr);
       block->m_check_index_page_at_flush = true;
 
-      right_page_no = sys.m_btree->page_get_next(page, mtr);
+      right_page_no = Btree::page_get_next(page, mtr);
 
       if (right_page_no != FIL_NULL) {
         block = sys.m_btree->block_get(space, right_page_no, RW_X_LATCH, mtr);
 #ifdef UNIV_BTR_DEBUG
-        ut_a(sys.m_btree->page_get_prev(block->get_frame(), mtr) == page_get_page_no(page));
+        ut_a(Btree::page_get_prev(block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
         block->m_check_index_page_at_flush = true;
       }
@@ -119,13 +119,13 @@ void BtreeCursor::latch_leaves(System &sys, page_t *page, space_id_t space, page
     case BTR_MODIFY_PREV:
       mode = latch_mode == BTR_SEARCH_PREV ? RW_S_LATCH : RW_X_LATCH;
       /* latch also left brother */
-      left_page_no = sys.m_btree->page_get_prev(page, mtr);
+      left_page_no = Btree::page_get_prev(page, mtr);
 
       if (left_page_no != FIL_NULL) {
         block = sys.m_btree->block_get(space, left_page_no, mode, mtr);
         m_left_block = block;
 #ifdef UNIV_BTR_DEBUG
-        ut_a(sys.m_btree->page_get_next(m_left_block->get_frame(), mtr) == page_get_page_no(page));
+        ut_a(Btree::page_get_next(m_left_block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
         m_left_block->m_check_index_page_at_flush = true;
       }
@@ -300,7 +300,7 @@ void BtreeCursor::search_to_nth_level(System &sys,
       page_mode = mode;
     }
 
-    page_cursor->search_with_match(block, index, tuple, page_mode, &up_match, &up_bytes, &low_match, &low_bytes);
+    page_cursor->search_with_match(sys, block, index, tuple, page_mode, &up_match, &up_bytes, &low_match, &low_bytes);
 
     if (estimate) {
       add_path_info(paths, height, root_height);
@@ -440,9 +440,9 @@ void BtreeCursor::open_at_index_side(System &sys,
     ut_ad(height > 0);
 
     if (from_left) {
-      page_cursor->move_to_next();
+      page_cursor->move_to_next(sys);
     } else {
-      page_cursor->move_to_prev();
+      page_cursor->move_to_prev(sys);
     }
 
     if (estimate) {
@@ -517,7 +517,7 @@ void BtreeCursor::open_at_rnd_pos(System &sys, const Index *index, ulint latch_m
       latch_leaves(sys, page, space, page_no, latch_mode, mtr);
     }
 
-    page_cursor->open_on_rnd_user_rec(block);
+    page_cursor->open_on_rnd_user_rec(sys, block);
 
     if (height == 0) {
 
@@ -554,16 +554,16 @@ Rec BtreeCursor::insert_if_possible(System &sys, const DTuple *tuple, ulint n_ex
   auto page_cursor = get_page_cur();
 
   /* Now, try the insert */
-  auto rec = page_cursor->tuple_insert(tuple, m_index, n_ext, mtr);
+  auto rec = page_cursor->tuple_insert(sys, tuple, m_index, n_ext, mtr);
 
   if (unlikely(rec.is_null())) {
     /* If record did not fit, reorganize */
 
     if (sys.m_btree->page_reorganize(block, m_index, mtr)) {
 
-      page_cursor->search(block, m_index, tuple, PAGE_CUR_LE);
+      page_cursor->search(sys, block, m_index, tuple, PAGE_CUR_LE);
 
-      rec = page_cursor->tuple_insert(tuple, m_index, n_ext, mtr);
+      rec = page_cursor->tuple_insert(sys, tuple, m_index, n_ext, mtr);
     }
   }
 
@@ -705,7 +705,7 @@ DbErr BtreeCursor::optimistic_insert(System &sys,
   {
     const auto page_cursor_rec = page_cursor->get_rec();
 
-    *rec = page_cursor->tuple_insert(entry, index, n_ext, mtr);
+    *rec = page_cursor->tuple_insert(sys, entry, index, n_ext, mtr);
 
     reorg = page_cursor_rec != page_cursor->get_rec();
 
@@ -721,9 +721,9 @@ DbErr BtreeCursor::optimistic_insert(System &sys,
 
     reorg = true;
 
-    page_cursor->search(block, index, entry, PAGE_CUR_LE);
+    page_cursor->search(sys, block, index, entry, PAGE_CUR_LE);
 
-    *rec = page_cursor->tuple_insert(entry, index, n_ext, mtr);
+    *rec = page_cursor->tuple_insert(sys, entry, index, n_ext, mtr);
 
     if (unlikely(!*rec)) {
       log_err(std::format("Cannot insert tuple into {}: ", index->m_name));
@@ -830,7 +830,7 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
     mem_heap_free(heap);
   }
 
-  ut_ad(page_rec_get_next(get_rec()) == *rec);
+  ut_ad(page_rec_get_next(get_recsys, ()) == *rec);
 
   if (!(flags & BTR_NO_LOCKING_FLAG)) {
 
@@ -1163,9 +1163,9 @@ DbErr BtreeCursor::optimistic_update(System &sys, ulint flags, const Upd *update
   ut_ad(rec.offs_validate(index, offsets));
   ut_d(page_cursor->get_rec().offs_make_valid(index, offsets));
 
-  page_cursor->delete_rec(index, offsets, mtr);
+  page_cursor->delete_rec(sys, index, offsets, mtr);
 
-  page_cursor->move_to_prev();
+  page_cursor->move_to_prev(sys);
 
   trx = thr_get_trx(thr);
 
@@ -1184,7 +1184,7 @@ DbErr BtreeCursor::optimistic_update(System &sys, ulint flags, const Upd *update
 
   sys.m_lock_sys->rec_restore_from_page_infimum(block, rec, block);
 
-  page_cursor->move_to_next();
+  page_cursor->move_to_next(sys);
 
   mem_heap_free(heap);
 
@@ -1201,7 +1201,7 @@ void BtreeCursor::pess_upd_restore_supremum(System &sys, BufBlock *block, const 
   }
 
   const auto space = block->get_space();
-  const auto prev_page_no = sys.m_btree->page_get_prev(page, mtr);
+  const auto prev_page_no = Btree::page_get_prev(page, mtr);
 
   ut_ad(prev_page_no != FIL_NULL);
 
@@ -1217,7 +1217,7 @@ void BtreeCursor::pess_upd_restore_supremum(System &sys, BufBlock *block, const 
   auto prev_block = sys.m_buf_pool->get(req, nullptr);
 
 #ifdef UNIV_BTR_DEBUG
-  ut_a(sys.m_btree->page_get_next(prev_block->get_frame(), mtr) == page_get_page_no(page));
+  ut_a(Btree::page_get_next(prev_block->get_frame(), mtr) == page_get_page_no(page));
 #endif /* UNIV_BTR_DEBUG */
 
   /* We must already have an x-latch on prev_block! */
@@ -1365,9 +1365,9 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
 
   page_cursor = get_page_cur();
 
-  page_cursor->delete_rec(index, offsets, mtr);
+  page_cursor->delete_rec(sys, index, offsets, mtr);
 
-  page_cursor->move_to_prev();
+  page_cursor->move_to_prev(sys);
 
   rec = insert_if_possible(sys, new_entry, n_ext, mtr);
 
@@ -1696,7 +1696,7 @@ bool BtreeCursor::optimistic_delete(System &sys, Mtr *mtr) noexcept {
 
     page_get_max_insert_size_after_reorganize(page, 1);
 
-    get_page_cur()->delete_rec(m_index, offsets, mtr);
+    get_page_cur()->delete_rec(sys, m_index, offsets, mtr);
 
     deleted = true;
   }
@@ -1768,9 +1768,9 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
 
     if (level > 0 && rec == page_rec_get_next(page_get_infimum_rec(page))) {
 
-      auto next_rec = page_rec_get_next(rec);
+      auto next_rec = page_rec_get_next(sys, rec);
 
-      if (sys.m_btree->page_get_prev(page, mtr) == FIL_NULL) {
+      if (Btree::page_get_prev(page, mtr) == FIL_NULL) {
 
         /* If we delete the leftmost node pointer on a
         non-leaf level, we must mark the new leftmost node
@@ -1793,7 +1793,7 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
       }
     }
 
-    get_page_cur()->delete_rec(index, offsets, mtr);
+    get_page_cur()->delete_rec(sys, index, offsets, mtr);
 
     ut_ad(sys.m_btree->check_node_ptr(index, block, mtr));
 
@@ -2020,7 +2020,7 @@ void BtreeCursor::estimate_number_of_different_key_vals(System &sys, const Index
     }
 
     while (rec != supremum) {
-      auto next_rec = page_rec_get_next(rec);
+      auto next_rec = page_rec_get_next(sys, rec);
 
       if (next_rec == supremum) {
         break;
@@ -2068,7 +2068,7 @@ void BtreeCursor::estimate_number_of_different_key_vals(System &sys, const Index
       algorithm grossly underestimated the number of rows
       in the table. */
 
-      if (sys.m_btree->page_get_prev(page, &mtr) != FIL_NULL || sys.m_btree->page_get_next(page, &mtr) != FIL_NULL) {
+      if (Btree::page_get_prev(page, &mtr) != FIL_NULL || Btree::page_get_next(page, &mtr) != FIL_NULL) {
 
         ++n_diff[n_cols];
       }

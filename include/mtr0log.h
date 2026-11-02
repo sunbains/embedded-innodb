@@ -104,7 +104,7 @@ void mlog_catenate_string(Mtr *mtr, const byte *str, ulint len);
  * @param mtr Mini-transaction handle.
  * @return New value of log_ptr.
  */
-byte *mlog_write_initial_log_record_fast(System &sys, const byte *ptr, MlogType type, byte *log_ptr, Mtr *mtr);
+byte *mlog_write_initial_log_record_fast(const byte *ptr, MlogType type, byte *log_ptr, Mtr *mtr);
 
 /**
  * @brief Parses an initial log record written by mlog_write_initial_log_record.

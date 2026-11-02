@@ -540,7 +540,7 @@ Upd *RowUpdate::build_difference_binary(
 
 byte *RowUpdate::ext_fetch(const byte *data, ulint local_len, ulint *len, MemHeap *heap) noexcept {
   auto buf = mem_heap_alloc(heap, *len);
-  Blob blob(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
+  Blob blob(m_sys.m_fsp, m_sys.m_btree);
 
   *len = blob.copy_externally_stored_field_prefix(m_sys, buf, *len, data, local_len);
   /* We should never update records containing a half-deleted BLOB. */
@@ -843,7 +843,7 @@ void RowUpdate::store_row(UpdNode *node) noexcept {
 DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
   DbErr err = DB_SUCCESS;
   auto trx = thr_get_trx(thr);
-  BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
 
   auto index = node->m_index;
   auto heap = mem_heap_create(1024);
@@ -857,7 +857,7 @@ DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
 
   mtr.start();
 
-  auto found = row_search_index_entry(index, entry, BTR_MODIFY_LEAF, &pcur, &mtr);
+  auto found = row_search_index_entry(m_sys, index, entry, BTR_MODIFY_LEAF, &pcur, &mtr);
 
   auto btr_cur = pcur.get_btr_cur();
 
@@ -937,7 +937,7 @@ DbErr RowUpdate::clust_rec_by_insert(
   auto pcur = upd_node->m_pcur;
   auto btr_cur = pcur->get_btr_cur();
 
-  Blob blob(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
+  Blob blob(m_sys.m_fsp, m_sys.m_btree);
 
   if (upd_node->m_state != UPD_NODE_INSERT_CLUSTERED) {
     Rec rec;
@@ -1046,7 +1046,7 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
     return DB_SUCCESS;
   }
 
-  if (m_sys.m_dict->m_store.m_fsp->m_buf_pool->m_LRU->buf_pool_running_out()) {
+  if (m_sys.m_buf_pool->m_LRU->buf_pool_running_out()) {
 
     return DB_LOCK_TABLE_FULL;
   }
@@ -1087,7 +1087,7 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
       offsets = record.get_col_offsets(rec_offsets.data(), ULINT_UNDEFINED, &heap, Current_location());
     }
 
-    Blob blob(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
+    Blob blob(m_sys.m_fsp, m_sys.m_btree);
 
     err = blob.store_big_rec_extern_fields(m_sys, index, btr_cur->get_block(), rec, offsets, big_rec, mtr);
 
@@ -1453,7 +1453,7 @@ UpdNode *RowUpdate::create_update_node(Table *table, MemHeap *heap) noexcept {
 
   node->m_table = table;
   node->m_in_client_interface = true;
-  node->m_pcur = new BtreePcursor(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
+  node->m_pcur = new BtreePcursor(m_sys.m_fsp, m_sys.m_btree);
 
   node->m_has_clust_rec_x_lock = true;
   node->m_update_n_fields = table->get_n_cols();

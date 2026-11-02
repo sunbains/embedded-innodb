@@ -68,7 +68,7 @@ struct PageCursor {
    * @param mtr Mini-transaction handle, or NULL.
    * @return Pointer to record if succeed, NULL otherwise.
    */
-  Rec insert_rec_low(Rec current_rec, const Index *index, const Rec rec, RecOffs offsets, Mtr *mtr);
+  Rec insert_rec_low(System &sys, Rec current_rec, const Index *index, const Rec rec, RecOffs offsets, Mtr *mtr);
 
   /**
    * @brief Copies records from page to a newly created page, from a given record
@@ -79,7 +79,7 @@ struct PageCursor {
    * @param index Record descriptor.
    * @param mtr MTR.
    */
-  static void copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, const Index *index, Mtr *mtr);
+  static void copy_rec_list_end_to_created_page(System &sys, page_t *new_page, Rec rec, const Index *index, Mtr *mtr);
 
   /**
    * @brief Deletes a record at the page cursor. The cursor is moved to the
@@ -89,7 +89,7 @@ struct PageCursor {
    * @param offsets In: PhyRec::get_col_offsets(rec, index).
    * @param mtr Mini-transaction handle.
    */
-  void delete_rec(const Index *index, const ulint *offsets, Mtr *mtr);
+  void delete_rec(System &sys, const Index *index, const ulint *offsets, Mtr *mtr);
 
   /**
    * @brief Searches the right position for a page cursor.
@@ -103,7 +103,7 @@ struct PageCursor {
    * @param ilow_matched_fields In/out: Already matched fields in lower limit record.
    * @param ilow_matched_bytes In/out: Already matched bytes in a field not yet completely matched.
    */
-  void search_with_match(
+  void search_with_match(System &sys, 
     const BufBlock *block, const Index *index, const DTuple *tuple, ulint mode, ulint *iup_matched_fields,
     ulint *iup_matched_bytes, ulint *ilow_matched_fields, ulint *ilow_matched_bytes
   );
@@ -114,7 +114,7 @@ struct PageCursor {
    *
    * @param block In: Page.
    */
-  void open_on_rnd_user_rec(BufBlock *block);
+  void open_on_rnd_user_rec(System &sys, BufBlock *block);
 
   /**
    * @brief Parses a log record of a record insert on a page.
@@ -151,7 +151,7 @@ struct PageCursor {
    * @param mtr In: MTR or NULL.
    * @return Pointer to record end or NULL.
    */
-  static byte *parse_delete_rec(byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr);
+  static byte *parse_delete_rec(System &sys, byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr);
 
   /**
    * @brief Gets pointer to the page frame where the cursor is positioned.
@@ -267,10 +267,10 @@ struct PageCursor {
    *
    * @param cur In/Out: Cursor; must not be after last.
    */
-  inline void move_to_next() {
+  inline void move_to_next(System &sys) {
     ut_ad(!is_after_last());
 
-    m_rec = page_rec_get_next(m_rec);
+    m_rec = page_rec_get_next(sys, m_rec);
   }
 
   /**
@@ -278,10 +278,10 @@ struct PageCursor {
    *
    * @param cur In/Out: Cursor; must not be before the first.
    */
-  inline void move_to_prev() {
+  inline void move_to_prev(System &sys) {
     ut_ad(!is_before_first());
 
-    m_rec = page_rec_get_prev(m_rec);
+    m_rec = page_rec_get_prev(sys, m_rec);
   }
 
   /**
@@ -293,7 +293,7 @@ struct PageCursor {
    * @param mode In: Search mode (PAGE_CUR_L, PAGE_CUR_LE, PAGE_CUR_G, or PAGE_CUR_GE).
    * @return Number of matched fields on the left.
    */
-  inline ulint search(const BufBlock *block, const Index *index, const DTuple *tuple, ulint mode) {
+  inline ulint search(System &sys, const BufBlock *block, const Index *index, const DTuple *tuple, ulint mode) {
     ulint low_matched_fields{};
     ulint low_matched_bytes{};
     ulint up_matched_fields{};
@@ -301,7 +301,7 @@ struct PageCursor {
 
     ut_ad(dtuple_check_typed(tuple));
 
-    search_with_match(block, index, tuple, mode, &up_matched_fields, &up_matched_bytes, &low_matched_fields, &low_matched_bytes);
+    search_with_match(System &sys, block, index, tuple, mode, &up_matched_fields, &up_matched_bytes, &low_matched_fields, &low_matched_bytes);
 
     return low_matched_fields;
   }
@@ -318,7 +318,7 @@ struct PageCursor {
    * @param mtr In: Mini-transaction handle, or NULL.
    * @return Pointer to the inserted record if successful, NULL otherwise.
    */
-  inline Rec tuple_insert(const DTuple *tuple, const Index *index, ulint n_ext, Mtr *mtr) {
+  inline Rec tuple_insert(System &sys, const DTuple *tuple, const Index *index, ulint n_ext, Mtr *mtr) {
     const auto size = rec_get_converted_size(index, tuple, n_ext);
     auto heap = mem_heap_create(size + (4 + REC_OFFS_HEADER_SIZE + dtuple_get_n_fields(tuple)) * sizeof(ulint));
     auto rec = Rec::convert_dtuple_to_rec((byte *)mem_heap_alloc(heap, size), index, tuple, n_ext);
@@ -328,7 +328,7 @@ struct PageCursor {
 
       auto offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
 
-      rec = insert_rec_low(m_rec, index, rec, offsets, mtr);
+      rec = insert_rec_low(sys, m_rec, index, rec, offsets, mtr);
     }
 
     mem_heap_free(heap);
@@ -348,8 +348,8 @@ struct PageCursor {
    * @param mtr In: Mini-transaction handle, or NULL.
    * @return Pointer to the inserted record if successful, NULL otherwise.
    */
-  inline Rec rec_insert(const Rec rec, Index *index, ulint *offsets, Mtr *mtr) {
-    return insert_rec_low(m_rec, index, rec, offsets, mtr);
+  inline Rec rec_insert(System &sys, const Rec rec, Index *index, ulint *offsets, Mtr *mtr) {
+    return insert_rec_low(sys, m_rec, index, rec, offsets, mtr);
   }
 
  private:
@@ -384,7 +384,7 @@ struct PageCursor {
    * @param[in,out] ilow_matched_bytes Already matched bytes in a field not yet completely matched
    * @return true on success
    */
-  bool try_search_shortcut(
+  bool try_search_shortcut(System &sys, 
     const BufBlock *block, const Index *index, const DTuple *tuple, ulint *iup_matched_fields, ulint *iup_matched_bytes,
     ulint *ilow_matched_fields, ulint *ilow_matched_bytes
   );

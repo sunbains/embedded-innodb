@@ -51,7 +51,7 @@ uint64_t PageCursor::lcg_prng() {
   return lcg_current;
 }
 
-bool PageCursor::try_search_shortcut(
+bool PageCursor::try_search_shortcut(System &sys, 
   const BufBlock *block, const Index *index, const DTuple *tuple, ulint *iup_matched_fields, ulint *iup_matched_bytes,
   ulint *ilow_matched_fields, ulint *ilow_matched_bytes
 ) {
@@ -90,7 +90,7 @@ bool PageCursor::try_search_shortcut(
     goto exit_func;
   }
 
-  next_rec = page_rec_get_next_const(rec);
+  next_rec = page_rec_get_next_const(sys, rec);
 
   {
     PhyRec record{index, next_rec};
@@ -175,7 +175,7 @@ bool PageCursor::rec_field_extends(const Dtuple *tuple, const Rec rec, const uli
 }
 #endif /* PAGE_CUR_LE_OR_EXTENDS */
 
-void PageCursor::search_with_match(
+void PageCursor::search_with_match(System &sys, 
   const BufBlock *block, const Index *index, const DTuple *tuple, ulint mode, ulint *iup_matched_fields, ulint *iup_matched_bytes,
   ulint *ilow_matched_fields, ulint *ilow_matched_bytes
 ) {
@@ -216,13 +216,13 @@ void PageCursor::search_with_match(
 
   auto page = block->get_frame();
 
-  page_check_dir(page);
+  page_check_dir(sys, page);
 
 #ifdef PAGE_CUR_ADAPT
   if (page_is_leaf(page) && mode == PAGE_CUR_LE && page_header_get_field(page, PAGE_N_DIRECTION) > 3 &&
       page_header_get_ptr(page, PAGE_LAST_INSERT) && page_header_get_field(page, PAGE_DIRECTION) == PAGE_RIGHT) {
 
-    if (try_search_shortcut(block, index, tuple, iup_matched_fields, iup_matched_bytes, ilow_matched_fields, ilow_matched_bytes)) {
+    if (try_search_shortcut(sys, block, index, tuple, iup_matched_fields, iup_matched_bytes, ilow_matched_fields, ilow_matched_bytes)) {
       return;
     }
   }
@@ -316,9 +316,9 @@ void PageCursor::search_with_match(
   /* Perform linear search until the upper and lower records come to
   distance 1 of each other. */
 
-  while (page_rec_get_next_const(low_rec) != up_rec) {
+  while (page_rec_get_next_const(sys, low_rec) != up_rec) {
 
-    auto mid_rec = page_rec_get_next_const(low_rec);
+    auto mid_rec = page_rec_get_next_const(sys, low_rec);
 
     ut_pair_min(
       &cur_matched_fields, &cur_matched_bytes, low_matched_fields, low_matched_bytes, up_matched_fields, up_matched_bytes
@@ -437,7 +437,7 @@ void PageCursor::search_with_match(
   }
 }
 
-void PageCursor::open_on_rnd_user_rec(BufBlock *block) {
+void PageCursor::open_on_rnd_user_rec(System &sys, BufBlock *block) {
   const ulint n_recs = page_get_n_recs(block->get_frame());
 
   set_before_first(block);
@@ -446,7 +446,7 @@ void PageCursor::open_on_rnd_user_rec(BufBlock *block) {
     auto rnd = (ulint)(lcg_prng() % n_recs);
 
     do {
-      move_to_next();
+      move_to_next(sys);
     } while (rnd--);
   }
 }
@@ -737,7 +737,7 @@ byte *PageCursor::parse_insert_rec(System &sys, bool is_short, byte *ptr, byte *
 
     log_warn_buf(ptr2, 300);
 
-    buf_page_print(page, 0);
+    buf_page_print(sys, page, 0);
 
     ut_error;
   }
@@ -760,7 +760,7 @@ byte *PageCursor::parse_insert_rec(System &sys, bool is_short, byte *ptr, byte *
     offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
   }
 
-  if (unlikely(!cursor.rec_insert(buf + origin_offset, index, offsets, mtr))) {
+  if (unlikely(!cursor.rec_insert(sys, buf + origin_offset, index, offsets, mtr))) {
     /* The redo log record should only have been written
     after the write was successful. */
     ut_error;
@@ -778,7 +778,7 @@ byte *PageCursor::parse_insert_rec(System &sys, bool is_short, byte *ptr, byte *
   return ptr + end_seg_len;
 }
 
-Rec PageCursor::insert_rec_low(Rec current_rec, const Index *index, const Rec rec, RecOffs offsets, Mtr *mtr) {
+Rec PageCursor::insert_rec_low(System &sys, Rec current_rec, const Index *index, const Rec rec, RecOffs offsets, Mtr *mtr) {
   byte *insert_buf;
   Rec last_insert; /* Cursor position at previous insert */
   Rec insert_rec;  /* Inserted record */
@@ -865,7 +865,7 @@ Rec PageCursor::insert_rec_low(Rec current_rec, const Index *index, const Rec re
 
   {
     /* next record after current before the insertion */
-    Rec next_rec = page_rec_get_next(current_rec);
+    Rec next_rec = page_rec_get_next(sys, current_rec);
     page_rec_set_next(insert_rec, next_rec);
     page_rec_set_next(current_rec, insert_rec);
   }
@@ -891,7 +891,7 @@ Rec PageCursor::insert_rec_low(Rec current_rec, const Index *index, const Rec re
     page_header_set_field(page, PAGE_DIRECTION, PAGE_RIGHT);
     page_header_set_field(page, PAGE_N_DIRECTION, page_header_get_field(page, PAGE_N_DIRECTION) + 1);
 
-  } else if ((page_rec_get_next(insert_rec) == Rec(last_insert_ptr)) &&
+  } else if ((page_rec_get_next(sys, insert_rec) == Rec(last_insert_ptr)) &&
              (page_header_get_field(page, PAGE_DIRECTION) != PAGE_RIGHT)) {
 
     page_header_set_field(page, PAGE_DIRECTION, PAGE_LEFT);
@@ -905,7 +905,7 @@ Rec PageCursor::insert_rec_low(Rec current_rec, const Index *index, const Rec re
 
   /* 7. It remains to update the owner record. */
   {
-    Rec owner_rec = page_rec_find_owner_rec(insert_rec);
+    Rec owner_rec = page_rec_find_owner_rec(sys, insert_rec);
     auto n_owned = owner_rec.get_n_owned();
 
     owner_rec.set_n_owned(n_owned + 1);
@@ -915,7 +915,7 @@ Rec PageCursor::insert_rec_low(Rec current_rec, const Index *index, const Rec re
     we have to split the corresponding directory slot in two. */
 
     if (unlikely(n_owned == PAGE_DIR_SLOT_MAX_N_OWNED)) {
-      page_dir_split_slot(page, page_dir_find_owner_slot(owner_rec));
+      page_dir_split_slot(sys, page, page_dir_find_owner_slot(sys, owner_rec));
     }
   }
 
@@ -985,7 +985,7 @@ byte *PageCursor::parse_copy_rec_list_to_created_page(System &sys, byte *ptr, by
   return rec_end;
 }
 
-void PageCursor::copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, const Index *index, Mtr *mtr) {
+void PageCursor::copy_rec_list_end_to_created_page(System &sys, page_t *new_page, Rec rec, const Index *index, Mtr *mtr) {
   page_dir_slot_t *slot{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   RecOffs offsets(offsets_.data());
@@ -997,7 +997,7 @@ void PageCursor::copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, co
 
   if (page_rec_is_infimum(rec)) {
 
-    rec = page_rec_get_next(rec);
+    rec = page_rec_get_next(sys, rec);
   }
 
   if (page_rec_is_supremum(rec)) {
@@ -1065,7 +1065,7 @@ void PageCursor::copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, co
 
     insert_rec_write_log(insert_rec, rec_size, prev_rec, index, mtr);
     prev_rec = insert_rec;
-    rec = page_rec_get_next(rec);
+    rec = page_rec_get_next(sys, rec);
 
   } while (!page_rec_is_supremum(rec));
 
@@ -1134,7 +1134,7 @@ void PageCursor::delete_rec_write_log(Rec rec, Mtr *mtr) {
   mlog_close(mtr, log_ptr + 2);
 }
 
-byte *PageCursor::parse_delete_rec(byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr) {
+byte *PageCursor::parse_delete_rec(System &sys, byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr) {
   if (end_ptr < ptr + 2) {
 
     return nullptr;
@@ -1164,7 +1164,7 @@ byte *PageCursor::parse_delete_rec(byte *ptr, byte *end_ptr, BufBlock *block, In
       offsets = record.get_all_col_offsets(offsets.get(), &heap, Current_location());
     }
 
-    cursor.delete_rec(index, offsets, mtr);
+    cursor.delete_rec(sys, index, offsets, mtr);
 
     if (unlikely(heap != nullptr)) {
       mem_heap_free(heap);
@@ -1174,7 +1174,7 @@ byte *PageCursor::parse_delete_rec(byte *ptr, byte *end_ptr, BufBlock *block, In
   return ptr;
 }
 
-void PageCursor::delete_rec(const Index *index, const ulint *offsets, Mtr *mtr) {
+void PageCursor::delete_rec(System &sys, const Index *index, const ulint *offsets, Mtr *mtr) {
   ut_ad(mtr != nullptr);
 
   auto page = get_page();
@@ -1186,7 +1186,7 @@ void PageCursor::delete_rec(const Index *index, const ulint *offsets, Mtr *mtr) 
   ut_ad(page_rec_is_user_rec(current_rec));
 
   /* Save to local variables some data associated with current_rec */
-  auto cur_slot_no = page_dir_find_owner_slot(current_rec);
+  auto cur_slot_no = page_dir_find_owner_slot(sys, current_rec);
   auto cur_dir_slot = page_dir_get_nth_slot(page, cur_slot_no);
   auto cur_n_owned = page_dir_slot_get_n_owned(cur_dir_slot);
 
@@ -1218,10 +1218,10 @@ void PageCursor::delete_rec(const Index *index, const ulint *offsets, Mtr *mtr) 
 
   while (current_rec != rec) {
     prev_rec = rec;
-    rec = page_rec_get_next(rec);
+    rec = page_rec_get_next(sys, rec);
   }
 
-  move_to_next();
+  move_to_next(sys);
   auto next_rec = m_rec;
 
   /* 3. Remove the record from the linked list of records */

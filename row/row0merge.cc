@@ -986,7 +986,7 @@ static DbErr row_merge_read_clustered_index(System &sys,
     RowExt *ext;
     bool has_next = true;
 
-    pcur.move_to_next_on_page();
+    pcur.move_to_next_on_page(sys);
 
     /* When switching pages, commit the mini-transaction
     in order to release the latch on the old page. */
@@ -1000,14 +1000,14 @@ static DbErr row_merge_read_clustered_index(System &sys,
         return func_exit(DB_INTERRUPTED);
       }
 
-      pcur.store_position(&mtr);
+      pcur.store_position(sys, &mtr);
 
       mtr.commit(sys);
 
       mtr.start();
 
       (void)pcur.restore_position(sys, BTR_SEARCH_LEAF, &mtr, Current_location());
-      has_next = pcur.move_to_next_user_rec(&mtr);
+      has_next = pcur.move_to_next_user_rec(sys, &mtr);
     }
 
     RowMergeBuf *buf;
@@ -1588,7 +1588,7 @@ static DbErr row_merge_insert_index_tuples(System &sys, Trx *trx, Index *index, 
 
         thr->lock_state = QUE_THR_LOCK_ROW;
         trx->m_error_state = err;
-        que_thr_stop_client(thr);
+        que_thr_stop_client(sys, thr);
         thr->lock_state = QUE_THR_LOCK_NOLOCK;
       } while (ib_handle_errors(&err, trx, thr, nullptr));
 
@@ -1814,7 +1814,7 @@ DbErr row_merge_rename_tables(System &sys, Table *old_table, Table *new_table, c
   if (err != DB_SUCCESS) {
   err_exit:
     trx->m_error_state = DB_SUCCESS;
-    trx_general_rollback(trx, false, nullptr);
+    trx_general_rollback(sys, trx, false, nullptr);
     trx->m_error_state = DB_SUCCESS;
   }
 
@@ -1875,7 +1875,7 @@ DbErr row_merge_drop_table(System &sys, Trx *trx, Table *table) {
   return err;
 }
 
-DbErr row_merge_build_indexes(
+DbErr row_merge_build_indexes(System &sys, 
   Trx *trx, Table *old_table, Table *new_table, Index **indexes, ulint n_indexes, table_handle_t table
 ) {
   ut_ad(trx);
@@ -1901,7 +1901,7 @@ DbErr row_merge_build_indexes(
   /* Read clustered index of the table and create files for
   secondary index entries for merge sort */
 
-  auto err = row_merge_read_clustered_index(trx, table, old_table, new_table, indexes, merge_files, n_indexes, block);
+  auto err = row_merge_read_clustered_index(sys, trx, table, old_table, new_table, indexes, merge_files, n_indexes, block);
 
   if (err != DB_SUCCESS) {
 
@@ -1915,7 +1915,7 @@ DbErr row_merge_build_indexes(
     err = row_merge_sort(trx, indexes[i], &merge_files[i], block, &tmpfd, table);
 
     if (err == DB_SUCCESS) {
-      err = row_merge_insert_index_tuples(trx, indexes[i], new_table, merge_files[i].fd, block);
+      err = row_merge_insert_index_tuples(sys, trx, indexes[i], new_table, merge_files[i].fd, block);
     }
 
     /* Close the temporary file to free up space. */

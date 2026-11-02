@@ -141,7 +141,7 @@ struct Dblwr {
    * @note offsets.first and offsets.second will be set to ULINT32_UNDEFINED
    * if the doublewrite buffer has not been created yet.
    */
-  static bool check_if_exists(Fil *fil, std::pair<page_no_t, page_no_t> &offsets) noexcept;
+  [[nodiscard]] bool check_if_exists(std::pair<page_no_t, page_no_t> &offsets) noexcept;
 
 
   /** mutex protecting the first_free field and write_buf */

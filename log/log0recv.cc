@@ -264,7 +264,7 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
 
   if (block != nullptr) {
     page = block->m_frame;
-    ut_d(page_type = sys.m_fil->page_get_type(page));
+    ut_d(page_type = Fil::page_get_type(page));
   }
 
   switch (type) {
@@ -301,7 +301,7 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
         }
       }
 #endif /* UNIV_DEBUG */
-      ptr = mlog_parse_nbytes(type, ptr, end_ptr, page);
+      ptr = mlog_parse_nbytes(sys, type, ptr, end_ptr, page);
       break;
     case MLOG_REC_INSERT:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
@@ -332,7 +332,7 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = page_parse_delete_rec_list(type, ptr, end_ptr, block, index, mtr);
+        ptr = page_parse_delete_rec_list(sys, type, ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_LIST_END_COPY_CREATED:
@@ -384,7 +384,7 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
       ut_ad(!page || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = PageCursor::parse_delete_rec(ptr, end_ptr, block, index, mtr);
+        ptr = PageCursor::parse_delete_rec(sys, ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_INIT_FILE_PAGE:
@@ -393,7 +393,7 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
       break;
     case MLOG_WRITE_STRING:
       ut_ad(!page || page_type != FIL_PAGE_TYPE_ALLOCATED);
-      ptr = mlog_parse_string(ptr, end_ptr, page);
+      ptr = mlog_parse_string(sys, ptr, end_ptr, page);
       break;
     case MLOG_FILE_CREATE:
     case MLOG_FILE_RENAME:
@@ -455,7 +455,7 @@ void RecvSys::add_log_record(
   recv->m_len = rec_end - body;
   recv->m_start_lsn = start_lsn;
 
-  auto log_record = recv_get_log_record(space, page_no);
+  auto log_record = recv_get_log_record(m_sys, space, page_no);
 
   if (log_record == nullptr) {
     log_record = reinterpret_cast<PageLogRecords *>(mem_heap_alloc(m_heap, sizeof(PageLogRecords)));
@@ -525,7 +525,7 @@ void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept
     return;
   }
 
-  auto log_record = recv_get_log_record(block->get_space(), block->get_page_no());
+  auto log_record = recv_get_log_record(block->get_spacesys, (), block->get_page_no());
 
   if (log_record == nullptr || log_record->m_state == RECV_BEING_PROCESSED || log_record->m_state == RECV_PROCESSED) {
 
@@ -668,7 +668,7 @@ static ulint recv_read_in_area(System &sys, space_id_t space, page_no_t start_pa
   ulint n = 0;
 
   for (auto page_no = low_limit; page_no < low_limit + RECV_READ_AHEAD_AREA; ++page_no) {
-    auto log_record = recv_get_log_record(space, page_no);
+    auto log_record = recv_get_log_record(sys, space, page_no);
 
     if (log_record != nullptr && !sys.m_buf_pool->peek(PageId(space, page_no))) {
 
@@ -686,7 +686,7 @@ static ulint recv_read_in_area(System &sys, space_id_t space, page_no_t start_pa
     }
   }
 
-  buf_read_recv_pages(false, PageId(space, 0), page_nos.data(), n);
+  buf_read_recv_pages(sys, false, PageId(space, 0), page_nos.data(), n);
 
   return n;
 }
@@ -744,11 +744,11 @@ void recv_apply_log_recs(System &sys, Dblwr *dblwr, bool flush_and_free_pages) n
           auto block = sys.m_buf_pool->get(req, nullptr);
           buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
 
-          recv_recover_page(false, block);
+          recv_recover_page(sys, false, block);
 
           mtr.commit(sys);
         } else {
-          recv_read_in_area(space_id, page_no);
+          recv_read_in_area(sys, space_id, page_no);
         }
 
         mutex_enter(&sys.m_recv->m_mutex);
@@ -818,7 +818,7 @@ void recv_apply_log_recs(System &sys, Dblwr *dblwr, bool flush_and_free_pages) n
  *
  * @return	length of the record, or 0 if the record was not complete
  */
-static ulint recv_parse_log_rec(
+static ulint recv_parse_log_rec(System &sys, 
   byte *ptr, byte *end_ptr, MlogType *type, space_id_t *space, page_no_t *page_no, byte **body
 ) noexcept {
   *body = nullptr;
@@ -852,7 +852,7 @@ static ulint recv_parse_log_rec(
     return 0;
   }
 
-  new_ptr = recv_parse_or_apply_log_rec_body(*type, new_ptr, end_ptr, nullptr, nullptr);
+  new_ptr = recv_parse_or_apply_log_rec_body(sys, *type, new_ptr, end_ptr, nullptr, nullptr);
 
   if (unlikely(new_ptr == nullptr)) {
 
@@ -974,11 +974,11 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
       /* Try to parse a log record, fetching its type, space id,
       page no, and a pointer to the body of the log record */
 
-      len = recv_parse_log_rec(ptr, end_ptr, &type, &space, &page_no, &body);
+      len = recv_parse_log_rec(sys, ptr, end_ptr, &type, &space, &page_no, &body);
 
       if (len == 0 || sys.m_recv->m_found_corrupt_log) {
         if (sys.m_recv->m_found_corrupt_log) {
-          recv_report_corrupt_log(ptr, type, space, page_no);
+          recv_report_corrupt_log(sys, ptr, type, space, page_no);
         }
         return false;
       }
@@ -1022,11 +1022,11 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
       total_len = 0;
 
       for (;;) {
-        auto len = recv_parse_log_rec(ptr, end_ptr, &type, &space, &page_no, &body);
+        auto len = recv_parse_log_rec(sys, ptr, end_ptr, &type, &space, &page_no, &body);
 
         if (len == 0 || sys.m_recv->m_found_corrupt_log) {
           if (sys.m_recv->m_found_corrupt_log) {
-            recv_report_corrupt_log(ptr, type, space, page_no);
+            recv_report_corrupt_log(sys, ptr, type, space, page_no);
           }
           return false;
         }
@@ -1064,10 +1064,10 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
       for (;;) {
         old_lsn = sys.m_recv->m_recovered_lsn;
 
-        len = recv_parse_log_rec(ptr, end_ptr, &type, &space, &page_no, &body);
+        len = recv_parse_log_rec(sys, ptr, end_ptr, &type, &space, &page_no, &body);
 
         if (sys.m_recv->m_found_corrupt_log) {
-          recv_report_corrupt_log(ptr, type, space, page_no);
+          recv_report_corrupt_log(sys, ptr, type, space, page_no);
         }
 
         ut_a(len != 0);
@@ -1349,7 +1349,7 @@ void recv_recovery_from_checkpoint_finish(System &sys, Dblwr *dblwr, IbRecovery 
 
   if (recovery < IB_RECOVERY_NO_LOG_REDO) {
 
-    recv_apply_log_recs(dblwr, false);
+    recv_apply_log_recs(sys, dblwr, false);
   }
 
   if (sys.m_recv->m_found_corrupt_log) {
@@ -1372,7 +1372,7 @@ void recv_recovery_from_checkpoint_finish(System &sys, Dblwr *dblwr, IbRecovery 
 
   sys.m_recv->close();
 
-  call_destructor(sys.m_recv);
+  call_destructor(.m_recv);
 
   mem_free(sys.m_recv);
 
@@ -1385,7 +1385,7 @@ void recv_recovery_from_checkpoint_finish(System &sys, Dblwr *dblwr, IbRecovery 
   that the data dictionary tables will be free of any locks.
   The data dictionary latch should guarantee that there is at
   most one data dictionary transaction active at a time. */
-  trx_rollback_or_clean_recovered(false);
+  trx_rollback_or_clean_recovered(sys, false);
 }
 
 void recv_recovery_rollback_active(System &sys) noexcept {

@@ -62,10 +62,10 @@ bool RowPurge::reposition_pcur(System &sys, ulint latch_mode, Mtr *mtr) {
   if (m_found_clust) {
     return m_pcur.restore_position(sys, latch_mode, mtr, Current_location());
   } else {
-    m_found_clust = row_search_on_row_ref(&m_pcur, latch_mode, m_table, m_ref, mtr);
+    m_found_clust = row_search_on_row_ref(sys, &m_pcur, latch_mode, m_table, m_ref, mtr);
 
     if (m_found_clust) {
-      m_pcur.store_position(mtr);
+      m_pcur.store_position(sys, mtr);
     }
 
     return m_found_clust;
@@ -178,7 +178,7 @@ bool RowPurge::remove_sec_if_poss_low(System &sys, Index *index, const DTuple *e
 
   mtr.start();
 
-  auto found = row_search_index_entry(index, entry, mode, &pcur, &mtr);
+  auto found = row_search_index_entry(sys, index, entry, mode, &pcur, &mtr);
 
   if (!found) {
     /* Not found.  This is a legitimate condition.  In a
@@ -304,7 +304,7 @@ void RowPurge::upd_exist_or_extern(System &sys) {
   for (; m_index != nullptr; m_index = m_index->get_next()) {
     auto idx = m_index;
 
-    if (sys.m_row_upd->changes_ord_field_binary(nullptr, m_index, m_update)) {
+    if (RowUpdate::changes_ord_field_binary(nullptr, m_index, m_update)) {
       /* Build the older version of the index entry */
       auto entry = row_build_index_entry(m_row, nullptr, idx, heap);
       ut_a(entry);
@@ -445,7 +445,7 @@ bool RowPurge::parse_undo_rec(System &sys, bool *updated_extern, QueThr *thr) {
 
   ptr = TrxUndoRecord::get_row_ref(ptr, clust_index, &m_ref, m_heap);
 
-  ptr = TrxUndoRecord::update_rec_get_update(sys, ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
+  ptr = TrxUndoRecord::update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
 
   /* Read to the partial row the fields that occur in indexes */
 

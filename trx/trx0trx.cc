@@ -342,7 +342,7 @@ void Trx::commit_off_kernel(System &sys) noexcept {
     mutex would serialize all commits and prevent a group of
     transactions from gathering. */
 
-    auto log = m_trx_sys->m_fsp->m_log;
+    auto log = sys.m_log;
 
 #ifdef WITH_XOPEN
     if (m_flush_log_later) {
@@ -449,12 +449,12 @@ void Trx::handle_commit_sig_off_kernel(System &sys, QueThr *&next_thr) noexcept 
   m_que_state = TRX_QUE_RUNNING;
 }
 
-void Trx::end_lock_wait() noexcept {
+void Trx::end_lock_wait(System &sys) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
   ut_ad(m_que_state == TRX_QUE_LOCK_WAIT);
 
   for (auto thr = m_wait_thrs.front(); thr != nullptr; thr = m_wait_thrs.front()) {
-    que_thr_end_wait_no_next_thr(thr);
+    que_thr_end_wait_no_next_thr(sys, thr);
     m_wait_thrs.remove(thr);
   }
 
@@ -595,7 +595,7 @@ void Trx::sig_send(System &sys, ulint type, ulint sender, QueThr *receiver_thr, 
   }
 }
 
-void Trx::end_signal_handling() noexcept {
+void Trx::end_signal_handling(System &sys) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
   ut_ad(m_handling_signals == true);
 
@@ -605,7 +605,7 @@ void Trx::end_signal_handling() noexcept {
 
   if (m_graph != nullptr && m_sess->m_state == Session::State::ERROR) {
 
-    que_fork_error_handle(this, m_graph);
+    que_fork_error_handle(sys, this, m_graph);
   }
 }
 
@@ -618,7 +618,7 @@ void Trx::sig_start_handling(System &sys, QueThr *&next_thr) noexcept {
 
     if (m_handling_signals && m_signals.empty()) {
 
-      end_signal_handling();
+      end_signal_handling(sys);
 
       return;
     }
@@ -671,14 +671,14 @@ void Trx::sig_start_handling(System &sys, QueThr *&next_thr) noexcept {
 
     } else if (type == TRX_SIG_TOTAL_ROLLBACK || type == TRX_SIG_ROLLBACK_TO_SAVEPT) {
 
-      trx_rollback(this, sig, &next_thr);
+      trx_rollback(sys, this, sig, &next_thr);
 
       /* No further signals can be handled until the rollback
       completes, therefore we return */
 
     } else if (type == TRX_SIG_ERROR_OCCURRED) {
 
-      trx_rollback(this, sig, &next_thr);
+      trx_rollback(sys, this, sig, &next_thr);
 
       /* No further signals can be handled until the rollback
       completes, therefore we return */
@@ -705,7 +705,7 @@ void Trx::sig_reply(System &sys, TrxSig *sig, QueThr *&next_thr) noexcept {
     receiver_trx->m_reply_signals.remove(sig);
     ut_ad(receiver_trx->m_sess->m_state != Session::State::ERROR);
 
-    que_thr_end_wait(sig->receiver, &next_thr);
+    que_thr_end_wait(sig->sys, receiver, &next_thr);
 
     sig->receiver = nullptr;
   }
@@ -960,7 +960,7 @@ void Trx::prepare_for_commit(System &sys) noexcept {
 
     mutex_exit(&m_trx_sys->m_mutex);
 
-    auto log = m_trx_sys->m_fsp->m_log;
+    auto log = sys.m_log;
 
     if (sys.m_config.m_log.m_flush_at_trx_commit == 0) {
       /* Do nothing */
@@ -1004,7 +1004,7 @@ ulint Trx::prepare(System &sys) noexcept {
 #ifdef WITH_XOPEN
 ulint Trx::commit_flush_log(System &sys) noexcept {
   const auto lsn = m_commit_lsn;
-  auto log = m_trx_sys->m_fsp->m_log;
+  auto log = sys.m_log;
 
   m_op_info = "flushing log";
 

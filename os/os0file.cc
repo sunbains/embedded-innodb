@@ -100,19 +100,14 @@ void os_file_var_init() {
   os_n_pending_reads = 0;
 }
 
-ulint os_file_get_last_error(System &sys, bool report_all_errors) {
+ulint os_file_get_last_error(bool report_all_errors) {
   if (report_all_errors || (errno != ENOSPC && errno != EEXIST)) {
     log_err("Operating system error number ", errno, " in a file operation.");
 
     if (errno == ENOENT) {
       log_err("The error means the system cannot find the path specified.");
 
-      if (sys.m_srv->m_is_being_started) {
-        log_err(
-          "If you are installing InnoDB, remember that you must create"
-          " directories yourself, InnoDB does not create them."
-        );
-      }
+      log_err("Remember that you must create directories yourself, InnoDB does not create them.");
 
     } else if (errno == EACCES) {
 
@@ -409,7 +404,7 @@ void os_file_set_nocache(int fd, const char *file_name, const char *operation_na
   }
 }
 
-os_file_t os_file_create(System &sys, const char *name, ulint create_mode, ulint purpose, ulint type, bool *success) {
+os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, ulint type, FlushMethod flush_method, bool *success) {
   bool retry;
 
   for (;;) {
@@ -438,7 +433,7 @@ os_file_t os_file_create(System &sys, const char *name, ulint create_mode, ulint
     /* We let O_SYNC only affect log files; note that we map O_DSYNC to
     O_SYNC because the datasync options seemed to corrupt files in 2001
     in both Linux and Solaris */
-    if (type == OS_LOG_FILE && sys.m_config.m_fil.m_flush_method == SRV_UNIX_O_DSYNC) {
+    if (type == OS_LOG_FILE && flush_method == SRV_UNIX_O_DSYNC) {
       create_flag = create_flag | O_SYNC;
     }
 #endif /* O_SYNC */
@@ -448,14 +443,9 @@ os_file_t os_file_create(System &sys, const char *name, ulint create_mode, ulint
     if (file == -1) {
       *success = false;
 
-      /* When srv_file_per_table is on, file creation failure may not
-      be critical to the whole instance. Do not crash the server in
-      case of unknown errors. */
-      if (srv_config.m_file_per_table) {
-        retry = os_file_handle_error_no_exit(name, create_mode == OS_FILE_CREATE ? "create" : "open");
-      } else {
-        retry = os_file_handle_error(name, create_mode == OS_FILE_CREATE ? "create" : "open");
-      }
+      /* File creation failure may not be critical to the whole
+      instance: report it to the caller instead of crashing. */
+      retry = os_file_handle_error_no_exit(name, create_mode == OS_FILE_CREATE ? "create" : "open");
 
       if (retry) {
         continue;
@@ -467,7 +457,7 @@ os_file_t os_file_create(System &sys, const char *name, ulint create_mode, ulint
     *success = true;
 
     /* We disable OS caching (O_DIRECT) only on data files */
-    if (type != OS_LOG_FILE && sys.m_config.m_fil.m_flush_method == SRV_UNIX_O_DIRECT) {
+    if (type != OS_LOG_FILE && flush_method == SRV_UNIX_O_DIRECT) {
       os_file_set_nocache(file, name, mode_str);
     }
 
@@ -634,14 +624,6 @@ bool os_file_flush(os_file_t file) {
   int ret = os_file_fsync(file);
 
   if (ret == 0) {
-    return true;
-  }
-
-  /* Since Linux returns EINVAL if the 'file' is actually a raw device,
-  we choose to ignore that error if we are using raw disks */
-
-  if (srv_start_raw_disk_in_use && errno == EINVAL) {
-
     return true;
   }
 
@@ -947,56 +929,6 @@ bool os_file_create_subdirs_if_needed(const char *path) {
   mem_free(subdir);
 
   return success;
-}
-
-void os_file_print(System &sys, FILE *ib_stream) {
-  ib_logger(ib_stream, "\n");
-  auto current_time = time(nullptr);
-  auto time_elapsed = 0.001 + difftime(current_time, os_last_printout);
-
-  ib_logger(
-    ib_stream,
-    "Pending flushes (fsync) log: %lu; buffer pool: %lu\n"
-    "%lu OS file reads, %lu OS file writes, %lu OS fsyncs\n",
-    (ulong)sys.m_fil->get_pending_log_flushes(),
-    (ulong)sys.m_fil->get_pending_tablespace_flushes(),
-    (ulong)os_n_file_reads,
-    (ulong)os_n_file_writes,
-    (ulong)os_n_fsyncs
-  );
-
-  if (os_file_n_pending_preads != 0 || os_file_n_pending_pwrites != 0) {
-    ib_logger(
-      ib_stream,
-      "%lu pending preads, %lu pending pwrites\n",
-      (ulong)os_file_n_pending_preads.load(),
-      (ulong)os_file_n_pending_pwrites
-    );
-  }
-
-  double avg_bytes_read;
-
-  if (os_n_file_reads == os_n_file_reads_old) {
-    avg_bytes_read = 0.0;
-  } else {
-    avg_bytes_read = (double)os_bytes_read_since_printout / (os_n_file_reads - os_n_file_reads_old);
-  }
-
-  ib_logger(
-    ib_stream,
-    "%.2f reads/s, %lu avg bytes/read, %.2f writes/s, %.2f fsyncs/s\n",
-    (os_n_file_reads - os_n_file_reads_old) / time_elapsed,
-    (ulong)avg_bytes_read,
-    (os_n_file_writes - os_n_file_writes_old) / time_elapsed,
-    (os_n_fsyncs - os_n_fsyncs_old) / time_elapsed
-  );
-
-  os_n_file_reads_old = os_n_file_reads;
-  os_n_file_writes_old = os_n_file_writes;
-  os_n_fsyncs_old = os_n_fsyncs;
-  os_bytes_read_since_printout = 0;
-
-  os_last_printout = current_time;
 }
 
 void os_file_refresh_stats() {

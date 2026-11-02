@@ -143,7 +143,7 @@ struct BtreePcursor {
    *
    * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void store_position(Mtr *mtr) noexcept;
+  void store_position(System &sys, Mtr *mtr) noexcept;
 
   /**
    * @brief Restores the stored position of a persistent cursor.
@@ -176,7 +176,7 @@ struct BtreePcursor {
    *
    * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void release_leaf(Mtr *mtr) noexcept;
+  void release_leaf(System &sys, Mtr *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the first record on the next page.
@@ -186,7 +186,7 @@ struct BtreePcursor {
    *
    * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void move_to_next_page(Mtr *mtr) noexcept;
+  void move_to_next_page(System &sys, Mtr *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor backward if it is on the first record of the page.
@@ -306,13 +306,13 @@ struct BtreePcursor {
   /**
    * @brief Moves the persistent cursor to the next record on the same page.
    */
-  void move_to_next_on_page() noexcept;
+  void move_to_next_on_page(System &sys) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the previous record on the same page.
    *
    */
-  void move_to_prev_on_page() noexcept;
+  void move_to_prev_on_page(System &sys) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the last record on the same page.
@@ -329,7 +329,7 @@ struct BtreePcursor {
    *
    * @return True if the cursor moved forward, ending on a user record.
    */
-  [[nodiscard]] bool move_to_next_user_rec(Mtr *mtr) noexcept;
+  [[nodiscard]] bool move_to_next_user_rec(System &sys, Mtr *mtr) noexcept;
 
   /**
    * @brief Moves the persistent cursor to the previous user record in the tree. If no
@@ -350,7 +350,7 @@ struct BtreePcursor {
    *
    * @return True if the cursor was not after last in tree
    */
-  [[nodiscard]] bool move_to_next(Mtr *mtr) noexcept;
+  [[nodiscard]] bool move_to_next(System &sys, Mtr *mtr) noexcept;
 
   /**
    * Moves the persistent cursor to the previous record in the tree. If no
@@ -668,20 +668,20 @@ inline bool BtreePcursor::is_after_last_in_tree(Mtr *m) noexcept {
   }
 }
 
-inline void BtreePcursor::move_to_next_on_page() noexcept {
+inline void BtreePcursor::move_to_next_on_page(System &sys) noexcept {
   ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  get_page_cur()->move_to_next();
+  get_page_cur()->move_to_next(sys);
 
   m_old_stored = false;
 }
 
-inline void BtreePcursor::move_to_prev_on_page() noexcept {
+inline void BtreePcursor::move_to_prev_on_page(System &sys) noexcept {
   ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  get_page_cur()->move_to_prev();
+  get_page_cur()->move_to_prev(sys);
 
   m_old_stored = false;
 }
@@ -694,7 +694,7 @@ inline void BtreePcursor::move_to_last_on_page(Mtr *mtr) noexcept {
   m_old_stored = false;
 }
 
-inline bool BtreePcursor::move_to_next_user_rec(Mtr *mtr) noexcept {
+inline bool BtreePcursor::move_to_next_user_rec(System &sys, Mtr *mtr) noexcept {
   ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -705,9 +705,9 @@ inline bool BtreePcursor::move_to_next_user_rec(Mtr *mtr) noexcept {
       if (is_after_last_in_tree(mtr)) {
         return false;
       }
-      move_to_next_page(mtr);
+      move_to_next_page(sys, mtr);
     } else {
-      move_to_next_on_page();
+      move_to_next_on_page(sys);
     }
     if (is_on_user_rec()) {
       return true;
@@ -728,7 +728,7 @@ inline bool BtreePcursor::move_to_prev_user_rec(System &sys, Mtr *mtr) noexcept 
       }
       move_backward_from_page(sys, mtr);
     } else {
-      move_to_prev_on_page();
+      move_to_prev_on_page(sys);
     }
 
     if (is_on_user_rec()) {
@@ -737,7 +737,7 @@ inline bool BtreePcursor::move_to_prev_user_rec(System &sys, Mtr *mtr) noexcept 
   }
 }
 
-inline bool BtreePcursor::move_to_next(Mtr *mtr) noexcept {
+inline bool BtreePcursor::move_to_next(System &sys, Mtr *mtr) noexcept {
   ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -750,12 +750,12 @@ inline bool BtreePcursor::move_to_next(Mtr *mtr) noexcept {
       return false;
     }
 
-    move_to_next_page(mtr);
+    move_to_next_page(sys, mtr);
 
     return true;
   }
 
-  move_to_next_on_page();
+  move_to_next_on_page(sys);
 
   return true;
 }
@@ -778,7 +778,7 @@ inline bool BtreePcursor::move_to_prev(System &sys, Mtr *mtr) noexcept {
     return true;
   }
 
-  move_to_prev_on_page();
+  move_to_prev_on_page(sys);
 
   return true;
 }

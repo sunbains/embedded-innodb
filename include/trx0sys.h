@@ -429,7 +429,7 @@ struct TrxSys {
     // TODO: Remove this once we have a proper mutex for the trx system.
     // ut_ad(mutex_own(&m_mutex));
 
-    return mtr->read_ulint(m_sys, sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE, MLOG_4BYTES);
+    return mtr->read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE, MLOG_4BYTES);
   }
 
   /**
@@ -446,7 +446,7 @@ struct TrxSys {
     // TODO: Remove this once we have a proper mutex for the trx system.
     // ut_ad(mutex_own(&m_mutex));
 
-    return mtr->read_ulint(m_sys, sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_PAGE_NO, MLOG_4BYTES);
+    return mtr->read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_PAGE_NO, MLOG_4BYTES);
   }
 
   /**

@@ -24,249 +24,38 @@ Created 5/11/1994 Heikki Tuuri
 
 #include "ut0mem.h"
 
-#include <errno.h>
-
-#include "os0thread.h"
-#include "srv0srv.h"
 #include "ut0logger.h"
 
-#include <stdlib.h>
-#include <algorithm>
-
-/** The value of ut_mem_block_struct::magic_n.  Used in detecting
-memory corruption. */
-constexpr uint32_t UT_MEM_MAGIC_N = 1601650166;
-
-/** Dynamically allocated memory block */
-struct MemBlock {
-  MemBlock(uint32_t size) : m_size(size), m_magic_n(UT_MEM_MAGIC_N) {}
-
-  /** mem block list node */
-  UT_LIST_NODE_T(MemBlock) m_mem_block_list;
-
-  /** Size of allocated memory */
-  uint32_t m_size;
-
-  /** magic number (UT_MEM_MAGIC_N) */
-  uint32_t m_magic_n;
-
-  /** List of all memory blocks allocated from the operating system
-  with malloc.  Protected by s_mutex. */
-  using Blocks = UT_LIST_BASE_NODE_T(MemBlock, m_mem_block_list);
-
-  /** Mutex protecting ut_total_allocated_memory and ut_mem_block_list */
-  static std::mutex s_mutex;
-
-  /** Total blocks allocated. */
-  static Blocks s_blocks;
-
-  /** Total number of bytes allocated. Disabled if srv_use_sys_malloc is set. */
-  static std::atomic<ulint> s_total_memory;
-};
-
-/** We need this to alias a BufBlock from a BufPage. */
-static_assert(std::is_standard_layout<MemBlock>::value, "MemBlock must have a standard layout");
-
-std::mutex MemBlock::s_mutex{};
-std::atomic<ulint> MemBlock::s_total_memory{};
-MemBlock::Blocks MemBlock::s_blocks{};
-
-/** Flag: has ut_mem_block_list been initialized? */
-static bool ut_mem_block_list_inited = false;
-
-void ut_mem_var_init() {
-  MemBlock::s_total_memory.store(0, std::memory_order_release);
-
-  ut_mem_block_list_inited = false;
-}
-
-void ut_mem_init(System &sys) {
-  ut_a(!sys.m_srv->m_was_started);
-
-  if (!ut_mem_block_list_inited) {
-    UT_LIST_INIT(MemBlock::s_blocks);
-    ut_mem_block_list_inited = true;
-  }
-}
-
-static void *allocate(ulint n, bool set_to_zero, bool assert_on_error) {
-  if (srv_config.m_use_sys_malloc) {
-    auto ptr = new char[n];
-    ut_a(ptr != nullptr || !assert_on_error);
-    return ptr;
-  }
-
-  /* check alignment ok */
-  ut_ad((sizeof(MemBlock) % 8) == 0);
-  ut_a(ut_mem_block_list_inited);
-
-  ulint retry_count{};
-  const auto size = sizeof(MemBlock) + n;
-
-  for (;;) {
-    MemBlock::s_mutex.lock();
-
-    auto ptr = new (std::nothrow) char[size];
-
-    if (ptr == nullptr && retry_count < 60) {
-      if (retry_count == 0) {
-        log_err(
-          "Cannot allocate",
-          n,
-          " bytes of memory with malloc!"
-          " Total allocated memory by InnoDB ",
-          MemBlock::s_total_memory.load(std::memory_order_acquire),
-          " bytes. Operating system errno:",
-          errno,
-          " '",
-          strerror(errno),
-          "'."
-        );
-      }
-
-      MemBlock::s_mutex.unlock();
-
-      /* Sleep for a second and retry the allocation; maybe this is
-      just a temporary shortage of memory */
-
-      os_thread_sleep(1000000);
-
-      ++retry_count;
-
-      continue;
-
-    } else if (ptr == nullptr) {
-
-      MemBlock::s_mutex.unlock();
-
-      /* Make an intentional seg fault so that we get a stack trace */
-      /* Intentional segfault on NetWare causes an abend. Avoid this
-      by graceful exit handling in ut_a(). */
-
-      if (assert_on_error) {
-        ut_error;
-      } else {
-        return nullptr;
-      }
-    }
-
-    auto mem_block = new (ptr) MemBlock(size);
-
-    UNIV_MEM_ALLOC(ret, n + sizeof(MemBlock));
-
-    MemBlock::s_total_memory += size;
-
-    UT_LIST_ADD_FIRST(MemBlock::s_blocks, mem_block);
-
-    MemBlock::s_mutex.unlock();
-
-    ptr = reinterpret_cast<char *>(mem_block + 1);
-
-    if (set_to_zero) {
-      memset(ptr, 0x0, n);
-    }
-
-    return ptr;
-  }
-}
+#include <cstdlib>
+#include <cstring>
 
 void *ut_new_func(ulint n, SourceLocation location) {
-  auto ptr = allocate(n, true, true);
+  auto ptr = std::calloc(1, n);
+
+  if (ptr == nullptr) {
+    log_fatal(std::format("Cannot allocate {} bytes of memory at {}: {}", n, location.to_string(), std::strerror(errno)));
+  }
+
   return ptr;
 }
 
-void ut_delete_func(void *p, SourceLocation location) {
-  auto ptr = reinterpret_cast<char *>(p);
-
-  if (ptr == nullptr) {
-    return;
-  } else if (srv_config.m_use_sys_malloc) {
-    delete[] ptr;
-    return;
-  }
-
-  auto block = reinterpret_cast<MemBlock *>(ptr - sizeof(MemBlock));
-
-  ut_a(MemBlock::s_total_memory.load(std::memory_order_acquire) >= block->m_size + sizeof(MemBlock));
-
-  MemBlock::s_total_memory.fetch_sub(block->m_size, std::memory_order_relaxed);
-
-  std::lock_guard<std::mutex> lock(MemBlock::s_mutex);
-
-  UT_LIST_REMOVE(MemBlock::s_blocks, block);
-
-  call_destructor(block);
-  delete[] reinterpret_cast<char *>(block);
+void ut_delete_func(void *ptr, SourceLocation) {
+  std::free(ptr);
 }
 
-void *ut_realloc_func(void *p, ulint n, SourceLocation location) {
-  auto ptr = reinterpret_cast<char *>(p);
-
-  if (ptr == nullptr) {
-    return ut_new(n);
-  }
-
+void *ut_realloc_func(void *ptr, ulint n, SourceLocation location) {
   if (n == 0) {
-    ut_delete(p);
+    std::free(ptr);
     return nullptr;
-  } else if (srv_config.m_use_sys_malloc) {
-    delete[] ptr;
-    return ut_new_func(n, location);
   }
 
-  auto block = reinterpret_cast<MemBlock *>(ptr - sizeof(MemBlock));
-
-  ut_a(block->m_magic_n == UT_MEM_MAGIC_N);
-
-  auto old_size = block->m_size - sizeof(MemBlock);
-  auto min_size = n < old_size ? n : old_size;
-
-  auto new_ptr = ut_new(n);
+  auto new_ptr = std::realloc(ptr, n);
 
   if (new_ptr == nullptr) {
-
-    return nullptr;
+    log_fatal(std::format("Cannot reallocate {} bytes of memory at {}: {}", n, location.to_string(), std::strerror(errno)));
   }
-
-  memcpy(new_ptr, ptr, min_size);
-
-  ut_delete(ptr);
 
   return new_ptr;
-}
-
-void ut_delete_all_mem() {
-  /* If the sub-system hasn't been initialized, then ignore request. */
-  if (!ut_mem_block_list_inited) {
-    return;
-  }
-
-  while (auto block = UT_LIST_GET_FIRST(MemBlock::s_blocks)) {
-    ut_a(block->m_magic_n == UT_MEM_MAGIC_N);
-    ut_a(MemBlock::s_total_memory.load(std::memory_order_acquire) >= block->m_size);
-
-    MemBlock::s_total_memory.fetch_sub(block->m_size, std::memory_order_relaxed);
-
-    UT_LIST_REMOVE(MemBlock::s_blocks, block);
-
-    call_destructor(block);
-
-    delete[] reinterpret_cast<char *>(block);
-  }
-
-  if (MemBlock::s_total_memory != 0) {
-    log_warn("After shutdown total allocated memory is ", MemBlock::s_total_memory.load(std::memory_order_acquire), " bytes");
-  }
-
-  ut_mem_block_list_inited = false;
-}
-
-void ut_allocated_memory(ulint size) {
-  MemBlock::s_total_memory.fetch_add(size, std::memory_order_relaxed);
-}
-
-void ut_deallocated_memory(ulint size) {
-  MemBlock::s_total_memory.fetch_sub(size, std::memory_order_relaxed);
 }
 
 ulint ut_strlcpy(char *dst, const char *src, ulint size) noexcept {

@@ -32,18 +32,18 @@ Deadlock detection and resolution
 
 DeadlockDetector::DeadlockDetector(LockSys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
 
-bool DeadlockDetector::check_deadlock(Lock *lock, Trx *trx) noexcept {
+bool DeadlockDetector::check_deadlock(System &sys, Lock *lock, Trx *trx) noexcept {
   ulint ret;
   ulint cost{};
 
-  ut_ad(mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
 retry:
   /* We check that adding this trx to the waits-for graph
   does not produce a cycle. First mark all active transactions
   with 0: */
 
-  for (auto mark_trx : m_lock_sys->m_trx_sys->m_trx_list) {
+  for (auto mark_trx : sys.m_trx_sys->m_trx_list) {
     mark_trx->m_deadlock_mark = 0;
   }
 
@@ -78,8 +78,8 @@ retry:
   return true;
 }
 
-ulint DeadlockDetector::search_iterative(Trx *start, Trx *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept {
-  ut_ad(mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
+ulint DeadlockDetector::search_iterative(System &sys, Trx *start, Trx *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept {
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
   // Clear the stack before starting
   while (!m_search_stack.empty()) {
@@ -210,7 +210,7 @@ ulint DeadlockDetector::search_iterative(Trx *start, Trx *trx, Lock *wait_lock, 
           return LOCK_VICTIM_IS_OTHER;
         }
 
-        if (m_lock_sys->m_trx_sys->in_trx_list(lock_trx)) {
+        if (sys.m_trx_sys->in_trx_list(lock_trx)) {
           /* If lock_trx is not committed, then check if it is waiting for some lock */
 
           if (lock_trx->m_que_state == TRX_QUE_LOCK_WAIT) {

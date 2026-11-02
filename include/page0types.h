@@ -114,8 +114,7 @@ struct UndoPage {
   void add_undo_rec_log(ulint old_free, ulint new_free, Mtr *mtr) noexcept;
   ulint set_next_prev_and_add(byte *ptr, Mtr *mtr) noexcept;
   ulint report_insert(Trx *trx, const Index *index, const DTuple *clust_entry, Mtr *mtr);
-  ulint report_modify(System &sys, 
-    Trx *trx, const Index *index, const Rec &rec, const RecOffs &offsets, const Upd *update, ulint cmpl_info, Mtr *mtr
+  ulint report_modify(System &sys, Trx *trx, const Index *index, const Rec &rec, const RecOffs &offsets, const Upd *update, ulint cmpl_info, Mtr *mtr
   );
   void erase_page_end(Mtr *mtr);
 

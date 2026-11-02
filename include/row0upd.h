@@ -574,7 +574,7 @@ struct RowUpdate {
 
     static_assert(DATA_TRX_ID + 1 == DATA_ROLL_PTR, "error DATA_TRX_ID + 1 != DATA_ROLL_PTR");
 
-    m_sys.m_trx_sys->write_trx_id(rec.get() + offset, trx->m_id);
+    TrxSys::write_trx_id(rec.get() + offset, trx->m_id);
 
     trx_write_roll_ptr(rec.get() + offset + DATA_TRX_ID_LEN, roll_ptr);
   }

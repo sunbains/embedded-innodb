@@ -246,7 +246,7 @@ void mlog_log_string(byte *ptr, ulint len, Mtr *mtr) {
 }
 
 byte *mlog_parse_string(System &sys, byte *ptr, byte *end_ptr, byte *page) {
-  ut_a(page == nullptr || sys.m_fil->page_get_type(page) != FIL_PAGE_TYPE_INDEX);
+  ut_a(page == nullptr || Fil::page_get_type(page) != FIL_PAGE_TYPE_INDEX);
 
   if (end_ptr < ptr + 4) {
 
@@ -312,8 +312,8 @@ byte *mlog_parse_index(byte *ptr, const byte *end_ptr, Index *&index) {
   return ptr;
 }
 
-byte *mlog_write_initial_log_record_fast(System &sys, const byte *ptr, MlogType type, byte *log_ptr, Mtr *mtr) {
-  ut_ad(mtr->memo_contains_page(sys, ptr, MTR_MEMO_PAGE_X_FIX));
+byte *mlog_write_initial_log_record_fast(const byte *ptr, MlogType type, byte *log_ptr, Mtr *mtr) {
+  ut_ad(mtr->memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
   ut_ad(type <= MLOG_BIGGEST_TYPE);
 
   auto page = static_cast<const byte *>(ut_align_down(ptr, UNIV_PAGE_SIZE));
@@ -335,7 +335,7 @@ byte *mlog_write_initial_log_record_fast(System &sys, const byte *ptr, MlogType 
 
 #ifdef UNIV_DEBUG
   /* We now assume that all x-latched pages have been modified! */
-  auto block = sys.m_buf_pool->block_align(ptr);
+  auto block = mtr->memo_find_block(ptr);
 
   if (!mtr->memo_contains(block, MTR_MEMO_MODIFY)) {
 

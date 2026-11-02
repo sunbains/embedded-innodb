@@ -118,7 +118,7 @@ DbErr TrxSys::start(IbRecovery recovery) noexcept {
    * to the disk-based header! Thus trx id values will not overlap when
    * the database is repeatedly started! */
 
-  m_max_trx_id = ut_uint64_align_up(mtr.read_uint64(m_sys, sys_header + TRX_SYS_TRX_ID_STORE), TRX_SYS_TRX_ID_WRITE_MARGIN) +
+  m_max_trx_id = ut_uint64_align_up(mtr.read_uint64(sys_header + TRX_SYS_TRX_ID_STORE), TRX_SYS_TRX_ID_WRITE_MARGIN) +
                  2 * TRX_SYS_TRX_ID_WRITE_MARGIN;
 
   init_at_db_start(recovery);

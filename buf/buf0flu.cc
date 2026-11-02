@@ -367,8 +367,8 @@ void BufFlush::buffered_writes(Dblwr *dblwr) {
       );
     }
 
-    if (block->m_check_index_page_at_flush && unlikely(!page_simple_validate(block->m_frame))) {
-      buf_page_print(block->m_frame, 0);
+    if (block->m_check_index_page_at_flush && unlikely(!page_simple_validate(block->m_sys, m_frame))) {
+      buf_page_print(block->m_sys, m_frame, 0);
 
       log_fatal(std::format(
         "Apparent corruption of an index page n:o {} in space {}"
@@ -712,7 +712,7 @@ ulint BufFlush::try_neighbors(Dblwr *dblwr, space_id_t space, page_no_t page_no,
 
       mutex_enter(block_mutex);
 
-      if (free_page_if_truncated(m_sys.m_buf_pool, bpage)) {
+      if (free_page_if_truncated(m_sys.m_sys, m_buf_pool, bpage)) {
         mutex_exit(block_mutex);
         continue;
       }
@@ -812,7 +812,7 @@ ulint BufFlush::batch(Dblwr *dblwr, BufFlushType flush_type, ulint min_n, uint64
       ut_a(bpage->in_file());
 
       mutex_enter(block_mutex);
-      if (!free_page_if_truncated(m_sys.m_buf_pool, bpage)) {
+      if (!free_page_if_truncated(m_sys.m_sys, m_buf_pool, bpage)) {
         ready = ready_for_flush(bpage, flush_type);
       }
       mutex_exit(block_mutex);

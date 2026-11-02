@@ -65,7 +65,7 @@ void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept
     return;
   }
 
-  auto log_record = recv_get_log_record(block->get_space(), block->get_page_no());
+  auto log_record = recv_get_log_record(block->get_spacesys, (), block->get_page_no());
 
   if (log_record == nullptr || log_record->m_state == RECV_BEING_PROCESSED || log_record->m_state == RECV_PROCESSED) {
     mutex_exit(&sys.m_recv->m_mutex);
@@ -180,7 +180,7 @@ static ulint recv_read_in_area(System &sys, space_id_t space, page_no_t start_pa
   ulint n = 0;
 
   for (auto page_no = low_limit; page_no < low_limit + RECV_READ_AHEAD_AREA; ++page_no) {
-    auto log_record = recv_get_log_record(space, page_no);
+    auto log_record = recv_get_log_record(sys, space, page_no);
 
     if (log_record != nullptr && !sys.m_buf_pool->peek(PageId(space, page_no))) {
 
@@ -197,7 +197,7 @@ static ulint recv_read_in_area(System &sys, space_id_t space, page_no_t start_pa
     }
   }
 
-  buf_read_recv_pages(false, PageId(space, 0), page_nos.data(), n);
+  buf_read_recv_pages(sys, false, PageId(space, 0), page_nos.data(), n);
 
   return n;
 }
@@ -255,11 +255,11 @@ void recv_apply_log_recs(System &sys, Dblwr *dblwr, bool flush_and_free_pages) n
           auto block = sys.m_buf_pool->get(req, nullptr);
           buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
 
-          recv_recover_page(false, block);
+          recv_recover_page(sys, false, block);
 
           mtr.commit(sys);
         } else {
-          recv_read_in_area(space_id, page_no);
+          recv_read_in_area(sys, space_id, page_no);
         }
 
         mutex_enter(&sys.m_recv->m_mutex);

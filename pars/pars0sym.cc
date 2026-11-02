@@ -45,14 +45,14 @@ SymTab *sym_tab_create(MemHeap *heap) {
   return (sym_tab);
 }
 
-void sym_tab_free_private(System &sys, SymTab *sym_tab) {
+void sym_tab_free_private(SymTab *sym_tab) {
   auto sym = UT_LIST_GET_FIRST(sym_tab->sym_list);
 
   while (sym) {
     eval_node_free_val_buf(sym);
 
     if (sym->prefetch_buf) {
-      sys.m_row_sel->free_prefetch_buf(sym->prefetch_buf);
+      RowSel::free_prefetch_buf(sym->prefetch_buf);
     }
 
     if (sym->cursor_def) {

@@ -63,7 +63,7 @@ page_no_t TrxRseg::header_create(System &sys, space_id_t space, ulint max_size, 
   auto page_no = block->get_page_no();
 
   /* Get the rollback segment file page */
-  auto rsegf = trx_rsegf_get_new(space, page_no, mtr);
+  auto rsegf = trx_rsegf_get_new(sys, space, page_no, mtr);
 
   /* Initialize max size field */
   mlog_write_ulint(rsegf + TRX_RSEG_MAX_SIZE, max_size, MLOG_4BYTES, mtr);
@@ -82,8 +82,8 @@ page_no_t TrxRseg::header_create(System &sys, space_id_t space, ulint max_size, 
   /* Add the rollback segment info to the free slot in the trx system
   header */
 
-  sys.m_trx_sys->frseg_set_space(sys_header, *slot_no, space, mtr);
-  sys.m_trx_sys->frseg_set_page_no(sys_header, *slot_no, page_no, mtr);
+  TrxSys::frseg_set_space(sys_header, *slot_no, space, mtr);
+  TrxSys::frseg_set_page_no(sys_header, *slot_no, page_no, mtr);
 
   return page_no;
 }
@@ -149,7 +149,7 @@ TrxRseg *TrxRseg::mem_create(
 
   sys.m_trx_sys->set_nth_rseg(id, rseg);
 
-  auto rseg_header = trx_rsegf_get_new(space, page_no, mtr);
+  auto rseg_header = trx_rsegf_get_new(sys, space, page_no, mtr);
 
   rseg->m_max_size = mtr->read_ulint(rseg_header + TRX_RSEG_MAX_SIZE, MLOG_4BYTES);
 
@@ -187,14 +187,14 @@ void TrxRseg::list_and_array_init(System &sys, IbRecovery recovery, trx_sysf_t *
 
   for (ulint i{}; i < TRX_SYS_N_RSEGS; ++i) {
 
-    const auto page_no = sys.m_trx_sys->frseg_get_page_no(sys_header, i, mtr);
+    const auto page_no = TrxSys::frseg_get_page_no(sys_header, i, mtr);
 
     if (page_no == FIL_NULL) {
 
       sys.m_trx_sys->set_nth_rseg(i, nullptr);
 
     } else {
-      const auto space = sys.m_trx_sys->frseg_get_space(sys_header, i, mtr);
+      const auto space = TrxSys::frseg_get_space(sys_header, i, mtr);
 
       mem_create(recovery, i, space, page_no, mtr);
     }

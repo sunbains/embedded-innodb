@@ -177,7 +177,7 @@ DbErr RowInsert::sec_index_entry_by_modify(
   difference. */
 
   auto heap = mem_heap_create(1024);
-  auto update = m_sys.m_row_upd->build_sec_rec_difference_binary(btr_cur->m_index, entry, rec, thr_get_trx(thr), heap);
+  auto update = RowUpdate::build_sec_rec_difference_binary(btr_cur->m_index, entry, rec, thr_get_trx(thr), heap);
 
   if (likely(mode == BTR_MODIFY_LEAF)) {
     /* Try an optimistic updating of the record, keeping changes
@@ -196,7 +196,7 @@ DbErr RowInsert::sec_index_entry_by_modify(
   } else {
     ut_a(mode == BTR_MODIFY_TREE);
 
-    auto buf_pool = m_sys.m_dict->m_store.m_fsp->m_buf_pool;
+    auto buf_pool = m_sys.m_buf_pool;
 
     if (unlikely(buf_pool->m_LRU->buf_pool_running_out())) {
       err = DB_LOCK_TABLE_FULL;
@@ -252,7 +252,7 @@ DbErr RowInsert::clust_index_entry_by_modify(
 
     ut_a(mode == BTR_MODIFY_TREE);
 
-    auto buf_pool = m_sys.m_dict->m_store.m_fsp->m_buf_pool;
+    auto buf_pool = m_sys.m_buf_pool;
 
     if (unlikely(buf_pool->m_LRU->buf_pool_running_out())) {
 
@@ -502,7 +502,7 @@ void RowInsert::foreign_report_add_err(Trx *trx, const Foreign *foreign, Rec rec
     /* If the btr_cur ended on a supremum record, it is better
     to report the previous record in the error message, so that
     the user gets a more descriptive error message. */
-    rec = page_rec_get_prev_const(rec);
+    rec = page_rec_get_prev_const(m_sys, rec);
   }
 
   if (!rec.is_null()) {
@@ -537,7 +537,7 @@ DbErr RowInsert::update_cascade_client(QueThr *thr, UpdNode *node, Table *table)
 
     /* Handle lock wait here */
 
-    que_thr_stop_client(thr);
+    que_thr_stop_client(m_sys, thr);
 
     InnoDB::suspend_user_thread(thr);
 
@@ -563,7 +563,7 @@ DbErr RowInsert::update_cascade_client(QueThr *thr, UpdNode *node, Table *table)
     ++m_sys.m_srv->m_stats.m_n_rows_updated;
   }
 
-  ib_update_statistics_if_needed(table);
+  ib_update_statistics_if_needed(m_sys, table);
 
   return DB_SUCCESS;
 }
@@ -801,12 +801,12 @@ DbErr RowInsert::foreign_check_on_constraint(
   /* Store pcur position and initialize or store the cascade node
   pcur stored position */
 
-  pcur->store_position(mtr);
+  pcur->store_position(m_sys, mtr);
 
   if (index == clust_index) {
     cascade->m_pcur->copy_stored_position(pcur);
   } else {
-    cascade->m_pcur->store_position(mtr);
+    cascade->m_pcur->store_position(m_sys, mtr);
   }
 
   mtr->commit(m_sys);
@@ -857,7 +857,7 @@ nonstandard_exit_func:
     mem_heap_free(upd_vec_heap);
   }
 
-  pcur->store_position(mtr);
+  pcur->store_position(m_sys, mtr);
 
   mtr->commit(m_sys);
 
@@ -908,7 +908,7 @@ DbErr RowInsert::check_foreign_constraint(
   MemHeap *heap = nullptr;
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   RecOffs offsets(offsets_.data());
-  BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
 
 run_again:
 
@@ -1107,7 +1107,7 @@ run_again:
 
     ut_a(cmp == 0);
   next_rec:
-    moved = pcur.move_to_next(&mtr);
+    moved = pcur.move_to_next(m_sys, &mtr);
 
     if (!moved) {
       if (check_ref) {
@@ -1133,7 +1133,7 @@ do_possible_lock_wait:
   if (err == DB_LOCK_WAIT) {
     trx->m_error_state = static_cast<DbErr>(err);
 
-    que_thr_stop_client(thr);
+    que_thr_stop_client(m_sys, thr);
 
     InnoDB::suspend_user_thread(thr);
 
@@ -1239,7 +1239,7 @@ bool RowInsert::dupl_error_with_rec(const Rec rec, const DTuple *entry, const In
 
 DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry, QueThr *thr) noexcept {
   int cmp;
-  BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
   DbErr err = DB_SUCCESS;
   unsigned allow_duplicates;
   Mtr mtr;
@@ -1328,7 +1328,7 @@ DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry,
     }
 
     ut_a(cmp == 0);
-  } while (pcur.move_to_next(&mtr));
+  } while (pcur.move_to_next(m_sys, &mtr));
 
   if (likely_null(heap)) {
     mem_heap_free(heap);
@@ -1413,7 +1413,7 @@ DbErr RowInsert::duplicate_error_in_clust(BtreeCursor *btr_cur, DTuple *entry, Q
 
   if (btr_cur->m_up_match >= n_unique) {
 
-    rec = page_rec_get_next(btr_cur->get_rec());
+    rec = page_rec_get_next(btr_cur->get_recm_sys, ());
 
     if (!page_rec_is_supremum(rec)) {
       {
@@ -1549,7 +1549,7 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
     existing record */
 
     if (modify == ROW_INS_NEXT) {
-      rec = page_rec_get_next(btr_cur.get_rec());
+      rec = page_rec_get_next(btr_cur.get_recm_sys, ());
 
       btr_cur.position(index, rec, btr_cur.get_block());
     }
@@ -1569,7 +1569,7 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
     } else {
       ut_a(mode == BTR_MODIFY_TREE);
 
-      auto buf_pool = m_sys.m_dict->m_store.m_fsp->m_buf_pool;
+      auto buf_pool = m_sys.m_buf_pool;
 
       if (unlikely(buf_pool->m_LRU->buf_pool_running_out())) {
 
@@ -1599,7 +1599,7 @@ function_exit:
       offsets = record.get_all_col_offsets(nullptr, &heap, Current_location());
     }
 
-    Blob blob(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
+    Blob blob(m_sys.m_fsp, m_sys.m_btree);
 
     err = blob.store_big_rec_extern_fields(m_sys, index, btr_cur.get_block(), rec, offsets, big_rec, &mtr);
 

@@ -60,10 +60,10 @@ static inline void validate_trx_state(const Trx *trx) noexcept {
 LockValidator::LockValidator(LockSys *lock_sys) noexcept : m_lock_sys(lock_sys) {}
 
 #ifdef UNIV_DEBUG
-bool LockValidator::validate() noexcept {
-  mutex_enter(&m_lock_sys->m_trx_sys->m_mutex);
+bool LockValidator::validate(System &sys) noexcept {
+  mutex_enter(&sys.m_trx_sys->m_mutex);
 
-  auto trx_sys = m_lock_sys->m_trx_sys;
+  auto trx_sys = sys.m_trx_sys;
 
   for (auto trx : trx_sys->m_trx_list) {
 
@@ -78,14 +78,14 @@ bool LockValidator::validate() noexcept {
   /* Iterate over all record locks and validate each page */
   for (auto &[page_id, rec_locks] : m_lock_sys->m_rec_locks) {
 
-    mutex_exit(&m_lock_sys->m_trx_sys->m_mutex);
+    mutex_exit(&sys.m_trx_sys->m_mutex);
 
     (void)rec_validate_page(page_id);
 
-    mutex_enter(&m_lock_sys->m_trx_sys->m_mutex);
+    mutex_enter(&sys.m_trx_sys->m_mutex);
   }
 
-  mutex_exit(&m_lock_sys->m_trx_sys->m_mutex);
+  mutex_exit(&sys.m_trx_sys->m_mutex);
 
   return true;
 }
@@ -201,8 +201,8 @@ bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
   return clean_up(mtr, heap);
 }
 
-bool LockValidator::table_queue_validate(Table *table) noexcept {
-  ut_ad(mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
+bool LockValidator::table_queue_validate(System &sys, Table *table) noexcept {
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
   for (auto lock : table->m_locks) {
     validate_trx_state(lock->m_trx);
@@ -216,11 +216,11 @@ bool LockValidator::table_queue_validate(Table *table) noexcept {
   return true;
 }
 
-bool LockValidator::rec_queue_validate(const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets) noexcept {
+bool LockValidator::rec_queue_validate(System &sys, const BufBlock *block, const Rec rec, const Index *index, const ulint *offsets) noexcept {
   ut_ad(block->get_frame() == rec.page_align());
   ut_ad(rec.offs_validate(index, offsets));
 
-  mutex_enter(&m_lock_sys->m_trx_sys->m_mutex);
+  mutex_enter(&sys.m_trx_sys->m_mutex);
 
   auto page_id = block->get_page_id();
   auto heap_no = page_rec_get_heap_no(rec);
@@ -234,10 +234,10 @@ bool LockValidator::rec_queue_validate(const BufBlock *block, const Rec rec, con
         continue;
       }
 
-      ut_ad(lock->m_trx->m_trx_sys == m_lock_sys->m_trx_sys);
+      ut_ad(lock->m_trx->m_trx_sys == sys.m_trx_sys);
 
       validate_trx_state(lock->m_trx);
-      ut_ad(m_lock_sys->m_trx_sys->in_trx_list(lock->m_trx));
+      ut_ad(sys.m_trx_sys->in_trx_list(lock->m_trx));
 
       if (lock->is_waiting()) {
 
@@ -254,7 +254,7 @@ bool LockValidator::rec_queue_validate(const BufBlock *block, const Rec rec, con
       }
 
       validate_trx_state(lock->m_trx);
-      ut_ad(m_lock_sys->m_trx_sys->in_trx_list(lock->m_trx));
+      ut_ad(sys.m_trx_sys->in_trx_list(lock->m_trx));
 
       if (index != nullptr) {
 
@@ -263,15 +263,15 @@ bool LockValidator::rec_queue_validate(const BufBlock *block, const Rec rec, con
     }
   }
 
-  mutex_exit(&m_lock_sys->m_trx_sys->m_mutex);
+  mutex_exit(&sys.m_trx_sys->m_mutex);
 
   return true;
 }
 
-const Lock *LockValidator::rec_other_has_expl_req(
+const Lock *LockValidator::rec_other_has_expl_req(System &sys, 
   PageId page_id, LockMode mode, ulint gap, ulint wait, ulint heap_no, const Trx *trx
 ) const noexcept {
-  ut_ad(mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
   ut_ad(mode == LOCK_X || mode == LOCK_S);
   ut_ad(gap == 0 || gap == LOCK_GAP);
   ut_ad(wait == 0 || wait == LOCK_WAIT);
@@ -294,8 +294,8 @@ const Lock *LockValidator::rec_other_has_expl_req(
   return nullptr;
 }
 
-const Lock *LockValidator::rec_exists(const Rec_locks &rec_locks, ulint heap_no) const noexcept {
-  ut_ad(mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
+const Lock *LockValidator::rec_exists(System &sys, const Rec_locks &rec_locks, ulint heap_no) const noexcept {
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
   for (auto lock : rec_locks) {
     if (lock->rec_is_nth_bit_set(heap_no)) {

@@ -218,7 +218,7 @@ class PCursor {
     switch (relative) {
       case BtreeCursorPos::ON:
         if (!equal) {
-          m_pcur->get_page_cur()->move_to_next();
+          m_pcur->get_page_cur()->move_to_next(sys);
         }
         break;
 
@@ -246,7 +246,7 @@ class PCursor {
 
           case BtrPcurPositioned::IS_POSITIONED:
             if (m_pcur->is_on_user_rec()) {
-              (void)m_pcur->move_to_next(m_mtr);
+              (void)m_pcur->move_to_next(sys, m_mtr);
             }
             break;
 
@@ -298,9 +298,9 @@ BufBlock *ParallelReader::ScanCtx::block_get_s_latched(System &sys, const PageId
 
 void PCursor::savepoint(System &sys) noexcept {
   /* Store the cursor position on the previous user record on the page. */
-  m_pcur->move_to_prev_on_page();
+  m_pcur->move_to_prev_on_page(sys);
 
-  m_pcur->store_position(m_mtr);
+  m_pcur->store_position(sys, m_mtr);
 
   m_mtr->commit(sys);
 }
@@ -317,13 +317,13 @@ void PCursor::resume(System &sys) noexcept {
 
   if (!m_pcur->is_after_last_on_page()) {
     /* Move to the successor of the saved record. */
-    m_pcur->move_to_next_on_page();
+    m_pcur->move_to_next_on_page(sys);
   }
 }
 
 DbErr PCursor::move_to_user_rec(System &sys) noexcept {
   auto cur = m_pcur->get_page_cur();
-  const auto next_page_no = sys.m_btree->page_get_next(cur->get_page(), m_mtr);
+  const auto next_page_no = Btree::page_get_next(cur->get_page(), m_mtr);
 
   if (next_page_no == FIL_NULL) {
     m_mtr->commit(sys);
@@ -353,7 +353,7 @@ DbErr PCursor::move_to_user_rec(System &sys) noexcept {
   cur->set_before_first(block);
 
   /* Skip the infimum record. */
-  cur->move_to_next();
+  cur->move_to_next(sys);
 
   /* Page can't be empty unless it is a root page. */
   ut_ad(!cur->is_after_last());
@@ -406,7 +406,7 @@ bool ParallelReader::ScanCtx::check_visibility(System &sys, Rec &rec, RecOffs &o
       trx_id_t trx_id;
 
       if (m_config.m_index->m_trx_id_offset > 0) {
-        trx_id = sys.m_trx_sys->read_trx_id(rec + m_config.m_index->m_trx_id_offset);
+        trx_id = TrxSys::read_trx_id(rec + m_config.m_index->m_trx_id_offset);
       } else {
         trx_id = row_get_rec_trx_id(rec, m_config.m_index, offsets);
       }
@@ -579,7 +579,7 @@ DbErr ParallelReader::Ctx::traverse(System &sys) {
   return err;
 }
 
-DbErr ParallelReader::Ctx::traverse_recs(PCursor *pcursor, Mtr *mtr) {
+DbErr ParallelReader::Ctx::traverse_recs(System &sys, PCursor *pcursor, Mtr *mtr) {
   const auto &end_tuple = m_range.second->m_tuple;
   auto heap = mem_heap_create(UNIV_PAGE_SIZE / 4);
   auto index = m_scan_ctx->m_config.m_index;
@@ -698,7 +698,7 @@ DbErr ParallelReader::Ctx::traverse_recs(PCursor *pcursor, Mtr *mtr) {
 
     m_first_rec = false;
 
-    cur->move_to_next();
+    cur->move_to_next(sys);
   }
 
   if (err != DB_SUCCESS) {

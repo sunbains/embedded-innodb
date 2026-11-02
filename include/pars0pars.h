@@ -227,7 +227,7 @@ que_node_t *pars_function_declaration(SymNode *sym_node);
  * 
  * @return SelNode* Select node in a query tree.
  */
-SelNode *pars_select_statement(
+SelNode *pars_select_statement(System &sys, 
   SelNode *select_node, SymNode *table_list, que_node_t *search_cond, ParsResWord *for_update,
   ParsResWord *consistent_read, OrderNode *order_by
 );
@@ -261,7 +261,7 @@ UpdNode *pars_update_statement_start(System &sys, bool is_delete, SymNode *table
  * 
  * @return UpdNode* Update node in a query tree.
  */
-UpdNode *pars_update_statement(UpdNode *node, SymNode *cursor_sym, que_node_t *search_cond);
+UpdNode *pars_update_statement(System &sys, UpdNode *node, SymNode *cursor_sym, que_node_t *search_cond);
 
 /**
  * @brief Parses an insert statement.
@@ -433,7 +433,7 @@ SymNode *pars_column_def(SymNode *sym_node, ParsResWord *type, SymNode *len, voi
  * 
  * @return TableNode* Table create subgraph.
  */
-TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_defs, void *not_fit_in_memory);
+TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs, void *not_fit_in_memory);
 
 /**
  * @brief Parses an index creation operation.
@@ -446,8 +446,7 @@ TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_de
  * 
  * @return IndexNode* Index create subgraph.
  */
-IndexNode *pars_create_index(System &sys, 
-  ParsResWord *unique_def, ParsResWord *clustered_def, SymNode *index_sym, SymNode *table_sym, SymNode *column_list
+IndexNode *pars_create_index(ParsResWord *unique_def, ParsResWord *clustered_def, SymNode *index_sym, SymNode *table_sym, SymNode *column_list
 );
 
 /**

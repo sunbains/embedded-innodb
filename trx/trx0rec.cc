@@ -238,7 +238,7 @@ static byte *trx_undo_page_fetch_ext(System &sys, byte *ext_buf, const byte *fie
  *
  * @return ptr
  */
-static byte *trx_undo_page_report_modify_ext(byte *ptr, byte *ext_buf, const byte **field, ulint *len) {
+static byte *trx_undo_page_report_modify_ext(System &sys, byte *ptr, byte *ext_buf, const byte **field, ulint *len) {
   if (ext_buf != nullptr) {
     /* If an ordering column is externally stored, we will
     have to store a longer prefix of the field.  In this
@@ -248,7 +248,7 @@ static byte *trx_undo_page_report_modify_ext(byte *ptr, byte *ext_buf, const byt
 
     ptr += mach_write_compressed(ptr, *len);
 
-    *field = trx_undo_page_fetch_ext(ext_buf, *field, len);
+    *field = trx_undo_page_fetch_ext(sys, ext_buf, *field, len);
 
     ptr += mach_write_compressed(ptr, *len);
   } else {
@@ -272,8 +272,7 @@ static byte *trx_undo_page_report_modify_ext(byte *ptr, byte *ext_buf, const byt
  *
  * @return byte offset of the inserted undo log entry on the page if succeed, 0 if fail
  */
-ulint UndoPage::report_modify(System &sys, 
-  Trx *trx, const Index *index, const Rec &rec, const RecOffs &offsets, const Upd *update, ulint cmpl_info, Mtr *mtr
+ulint UndoPage::report_modify(System &sys, Trx *trx, const Index *index, const Rec &rec, const RecOffs &offsets, const Upd *update, ulint cmpl_info, Mtr *mtr
 ) {
   byte *ptr;
   ulint flen;
@@ -337,7 +336,7 @@ ulint UndoPage::report_modify(System &sys,
   field = rec.get_nth_field(offsets, index->get_sys_col_field_pos(DATA_TRX_ID), &flen);
   ut_ad(flen == DATA_TRX_ID_LEN);
 
-  trx_id = sys.m_trx_sys->read_trx_id(field);
+  trx_id = TrxSys::read_trx_id(field);
 
   /* If it is an update of a delete marked record, then we are
      * allowed to ignore blob prefixes if the delete marking was done
@@ -419,7 +418,7 @@ ulint UndoPage::report_modify(System &sys,
 
       if (offsets.nth_extern(pos)) {
         ptr = trx_undo_page_report_modify_ext(
-          ptr,
+          sys, ptr,
           index->get_nth_col(pos)->m_ord_part && !ignore_prefix && flen < REC_MAX_INDEX_COL_LEN ? ext_buf : nullptr,
           &field,
           &flen
@@ -496,7 +495,7 @@ ulint UndoPage::report_modify(System &sys,
 
         if (offsets.nth_extern(pos)) {
           ptr =
-            trx_undo_page_report_modify_ext(ptr, flen < REC_MAX_INDEX_COL_LEN && !ignore_prefix ? ext_buf : nullptr, &field, &flen);
+            trx_undo_page_report_modify_ext(sys, ptr, flen < REC_MAX_INDEX_COL_LEN && !ignore_prefix ? ext_buf : nullptr, &field, &flen);
         } else {
           ptr += mach_write_compressed(ptr, flen);
         }

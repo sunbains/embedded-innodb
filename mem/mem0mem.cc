@@ -232,7 +232,7 @@ char *mem_heap_printf(MemHeap *heap, const char *format, ...) {
   return (str);
 }
 
-MemHeap *mem_heap_create_block(System &sys, MemHeap *heap, ulint n, ulint type, SourceLocation loc) {
+MemHeap *mem_heap_create_block(MemHeap *heap, ulint n, ulint type, SourceLocation loc) {
   ut_ad((type == MEM_HEAP_DYNAMIC) || (type == MEM_HEAP_BUFFER) || (type == MEM_HEAP_BUFFER + MEM_HEAP_BTR_SEARCH));
 
   if (heap && heap->magic_n != MEM_BLOCK_MAGIC_N) {
@@ -241,41 +241,18 @@ MemHeap *mem_heap_create_block(System &sys, MemHeap *heap, ulint n, ulint type, 
 
   /* In dynamic allocation, calculate the size: block header + data. */
 
-  MemHeap *block;
-  BufBlock *buf_block{};
-
   auto len = mem_block_header_size() + MEM_SPACE_NEEDED(n);
 
-  if (type == MEM_HEAP_DYNAMIC || len < UNIV_PAGE_SIZE / 2) {
-
-    ut_a(type == MEM_HEAP_DYNAMIC || n <= MEM_MAX_ALLOC_IN_BUF);
-
-    block = (MemHeap *)malloc(len);
-  } else {
-
+  if (type != MEM_HEAP_DYNAMIC && len >= UNIV_PAGE_SIZE / 2) {
+    ut_a(n <= MEM_MAX_ALLOC_IN_BUF);
     len = UNIV_PAGE_SIZE;
-
-    if ((type & MEM_HEAP_BTR_SEARCH) && heap) {
-      /* We cannot allocate the block from the
-      buffer pool, but must get the free block from
-      the heap header free block field */
-
-      buf_block = reinterpret_cast<BufBlock *>(heap->free_block);
-      heap->free_block = nullptr;
-
-      if (unlikely(buf_block == nullptr)) {
-
-        return nullptr;
-      }
-    } else {
-      buf_block = sys.m_buf_pool->block_alloc();
-    }
-
-    block = reinterpret_cast<MemHeap *>(buf_block->m_frame);
   }
 
-  block->buf_block = buf_block;
-  block->free_block = nullptr;
+  auto block = static_cast<MemHeap *>(malloc(len));
+
+  if (block == nullptr) {
+    return nullptr;
+  }
 
   block->magic_n = MEM_BLOCK_MAGIC_N;
   block->m_loc = loc;
@@ -344,9 +321,7 @@ MemHeap *mem_heap_add_block(MemHeap *heap, ulint n) {
   return new_block;
 }
 
-void mem_heap_block_free(System &sys, MemHeap *heap, MemHeap *block) {
-  auto buf_block = reinterpret_cast<BufBlock *>(block->buf_block);
-
+void mem_heap_block_free(MemHeap *heap, MemHeap *block) {
   if (block->magic_n != MEM_BLOCK_MAGIC_N) {
     ut_error;
   }
@@ -356,27 +331,9 @@ void mem_heap_block_free(System &sys, MemHeap *heap, MemHeap *block) {
   ut_ad(heap->total_size >= block->len);
   heap->total_size -= block->len;
 
-  auto type = heap->type;
-  auto len = block->len;
-
   block->magic_n = MEM_FREED_BLOCK_MAGIC_N;
 
-  if (!srv_config.m_use_sys_malloc) {
-    UNIV_MEM_ASSERT_AND_FREE(block, len);
-  }
-  if (type == MEM_HEAP_DYNAMIC || len < UNIV_PAGE_SIZE / 2) {
-
-    free(block);
-  } else {
-    sys.m_buf_pool->block_free(buf_block);
-  }
-}
-
-void mem_heap_free_block_free(System &sys, MemHeap *heap) {
-  if (likely_null(heap->free_block)) {
-    sys.m_buf_pool->block_free(static_cast<BufBlock *>(heap->free_block));
-    heap->free_block = nullptr;
-  }
+  free(block);
 }
 
 #ifdef UNIV_DEBUG

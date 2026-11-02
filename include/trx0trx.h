@@ -282,7 +282,7 @@ struct Trx {
    * waiting for a lock in the wait_thrs list.
    *
    */
-  void end_lock_wait() noexcept;
+  void end_lock_wait(System &sys) noexcept;
 
   /**
    * Sends a signal to a trx object.
@@ -330,7 +330,7 @@ struct Trx {
    * graph root which then sends an error message to the client).
    *
    */
-  void end_signal_handling() noexcept;
+  void end_signal_handling(System &sys) noexcept;
 
   /**
    * Creates a commit command node struct.

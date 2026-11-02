@@ -69,7 +69,7 @@ void Mtr::disable_redo_logging() noexcept {
   m_log_mode = MTR_LOG_NONE;
 }
 
-static void mtr_memo_pop_all(Mtr *mtr) noexcept {
+static void mtr_memo_pop_all(System &sys, Mtr *mtr) noexcept {
   ut_ad(mtr->m_magic_n == MTR_MAGIC_N);
 
   /* Currently only used in commit */
@@ -81,7 +81,7 @@ static void mtr_memo_pop_all(Mtr *mtr) noexcept {
     offset -= sizeof(MtrMemoSlot);
     auto slot = static_cast<MtrMemoSlot *>(mtr->m_memo.get_element(offset));
 
-    mtr_memo_slot_release(mtr, slot);
+    mtr_memo_slot_release(sys, mtr, slot);
   }
 }
 
@@ -157,7 +157,7 @@ void Mtr::commit(System &sys) noexcept {
   required when we insert modified buffer pages in to the flush list
   which must be sorted on oldest_modification. */
 
-  mtr_memo_pop_all(this);
+  mtr_memo_pop_all(sys, this);
 
   if (write_log) {
     sys.m_log->release();
@@ -166,7 +166,7 @@ void Mtr::commit(System &sys) noexcept {
   m_state = MTR_COMMITTED;
 }
 
-void Mtr::rollback_to_savepoint(ulint savepoint) noexcept {
+void Mtr::rollback_to_savepoint(System &sys, ulint savepoint) noexcept {
   ut_ad(m_magic_n == MTR_MAGIC_N);
   ut_ad(is_active());
 
@@ -179,11 +179,11 @@ void Mtr::rollback_to_savepoint(ulint savepoint) noexcept {
     auto slot = static_cast<MtrMemoSlot *>(m_memo.get_element(offset));
     ut_ad(slot->m_type != MTR_MEMO_MODIFY);
 
-    mtr_memo_slot_release(this, slot);
+    mtr_memo_slot_release(sys, this, slot);
   }
 }
 
-void Mtr::memo_release(void *object, ulint type) noexcept {
+void Mtr::memo_release(System &sys, void *object, ulint type) noexcept {
   ut_ad(m_magic_n == MTR_MAGIC_N);
   ut_ad(is_active());
 
@@ -196,16 +196,16 @@ void Mtr::memo_release(void *object, ulint type) noexcept {
 
     if (object == slot->m_object && type == slot->m_type) {
 
-      mtr_memo_slot_release(this, slot);
+      mtr_memo_slot_release(sys, this, slot);
 
       break;
     }
   }
 }
 
-ulint Mtr::read_ulint(System &sys, const byte *ptr, ulint type) const noexcept {
+ulint Mtr::read_ulint(const byte *ptr, ulint type) const noexcept {
   ut_ad(is_active());
-  ut_ad(memo_contains_page(sys, ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(sys, ptr, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(memo_contains_page(ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
   if (type == MLOG_1BYTE) {
     return mach_read_from_1(ptr);
   } else if (type == MLOG_2BYTES) {
@@ -216,15 +216,38 @@ ulint Mtr::read_ulint(System &sys, const byte *ptr, ulint type) const noexcept {
   }
 }
 
-uint64_t Mtr::read_uint64(System &sys, const byte *ptr) const noexcept {
+uint64_t Mtr::read_uint64(const byte *ptr) const noexcept {
   ut_ad(is_active());
-  ut_ad(memo_contains_page(sys, ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(sys, ptr, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(memo_contains_page(ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
   return mach_read_from_8(ptr);
 }
 
 #ifdef UNIV_DEBUG
-bool Mtr::memo_contains_page(System &sys, const byte *ptr, ulint type) const noexcept {
-  return memo_contains(sys.m_buf_pool->block_align(ptr), type);
+BufBlock *Mtr::memo_find_block(const byte *ptr) const noexcept {
+  auto offset = m_memo.get_data_size();
+
+  while (offset > 0) {
+    offset -= sizeof(MtrMemoSlot);
+
+    auto slot = static_cast<const MtrMemoSlot *>(m_memo.get_element(offset));
+
+    if (slot->m_type == MTR_MEMO_PAGE_S_FIX || slot->m_type == MTR_MEMO_PAGE_X_FIX || slot->m_type == MTR_MEMO_BUF_FIX) {
+      auto block = static_cast<BufBlock *>(slot->m_object);
+      auto frame = block->get_frame();
+
+      if (ptr >= frame && ptr < frame + UNIV_PAGE_SIZE) {
+        return block;
+      }
+    }
+  }
+
+  return nullptr;
+}
+
+bool Mtr::memo_contains_page(const byte *ptr, ulint type) const noexcept {
+  auto block = memo_find_block(ptr);
+
+  return block != nullptr && memo_contains(block, type);
 }
 
 std::string Mtr::to_string() const noexcept {

@@ -176,7 +176,7 @@ DbErr Dblwr::initialize() noexcept {
   return DB_SUCCESS;
 }
 
-bool Dblwr::check_if_exists(Fil *fil, std::pair<page_no_t, page_no_t> &offsets) noexcept {
+bool Dblwr::check_if_exists(std::pair<page_no_t, page_no_t> &offsets) noexcept {
 
   offsets.first = ULINT32_UNDEFINED;
   offsets.second = ULINT32_UNDEFINED;
@@ -187,7 +187,7 @@ bool Dblwr::check_if_exists(Fil *fil, std::pair<page_no_t, page_no_t> &offsets) 
 
   /* Read the trx sys header to check if we are using the doublewrite buffer */
 
-  fil->data_io(IoRequest::Sync_read, false, PageId(SYS_TABLESPACE, TRX_SYS_PAGE_NO), 0, UNIV_PAGE_SIZE, page, nullptr);
+  m_sys.m_fil->data_io(IoRequest::Sync_read, false, PageId(SYS_TABLESPACE, TRX_SYS_PAGE_NO), 0, UNIV_PAGE_SIZE, page, nullptr);
 
   auto dblwr = page + SYS_DOUBLEWRITE;
   auto exists = mach_read_from_4(dblwr + SYS_DOUBLEWRITE_MAGIC) == SYS_DOUBLEWRITE_MAGIC_N;
@@ -281,9 +281,9 @@ void Dblwr::recover_pages() noexcept {
 
         if (m_sys.m_buf_pool->is_corrupted(page)) {
           log_info("Dump of the page:");
-          buf_page_print(read_buf, 0);
+          buf_page_print(m_sys, read_buf, 0);
           log_warn("Dump of corresponding page in doublewrite buffer:");
-          buf_page_print(page, 0);
+          buf_page_print(m_sys, page, 0);
 
           log_fatal(
             "The page in the doublewrite buffer is corrupt too."

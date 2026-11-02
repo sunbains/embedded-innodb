@@ -549,7 +549,7 @@ static void pars_retrieve_table_def(System &sys, SymNode *sym_node) noexcept {
  *
  * @return Number of tables.
  */
-static ulint pars_retrieve_table_list_defs(SymNode *sym_node) noexcept {
+static ulint pars_retrieve_table_list_defs(System &sys, SymNode *sym_node) noexcept {
   if (sym_node == nullptr) {
     return 0;
   }
@@ -557,7 +557,7 @@ static ulint pars_retrieve_table_list_defs(SymNode *sym_node) noexcept {
   ulint count{};
 
   while (sym_node != nullptr) {
-    pars_retrieve_table_def(sym_node);
+    pars_retrieve_table_def(sys, sym_node);
 
     ++count;
 
@@ -645,7 +645,7 @@ static void pars_check_aggregate(SelNode *sel_node) noexcept {
   }
 }
 
-SelNode *pars_select_statement(SelNode *sel_node, SymNode *table_list,
+SelNode *pars_select_statement(System &sys, SelNode *sel_node, SymNode *table_list,
                                   que_node_t *search_cond,
                                   ParsResWord *for_update,
                                   ParsResWord *lock_shared,
@@ -653,7 +653,7 @@ SelNode *pars_select_statement(SelNode *sel_node, SymNode *table_list,
   sel_node->m_state = SEL_NODE_OPEN;
 
   sel_node->m_table_list = table_list;
-  sel_node->m_n_tables = pars_retrieve_table_list_defs(table_list);
+  sel_node->m_n_tables = pars_retrieve_table_list_defs(sys, table_list);
 
   if (sel_node->m_select_list == &pars_star_denoter) {
 
@@ -712,7 +712,7 @@ SelNode *pars_select_statement(SelNode *sel_node, SymNode *table_list,
   sel_node->m_can_get_updated = false;
   sel_node->m_explicit_cursor = nullptr;
 
-  opt_search_plan(sel_node);
+  opt_search_plan(sys, sel_node);
 
   return sel_node;
 }
@@ -835,11 +835,11 @@ static void pars_process_assign_list(System &sys, UpdNode *node) noexcept {
   node->m_cmpl_info = changes_ord_field | changes_field_size;
 }
 
-UpdNode *pars_update_statement(UpdNode *node, SymNode *cursor_sym,
+UpdNode *pars_update_statement(System &sys, UpdNode *node, SymNode *cursor_sym,
                                   que_node_t *search_cond) {
   auto table_sym = node->m_table_sym;
 
-  pars_retrieve_table_def(table_sym);
+  pars_retrieve_table_def(sys, table_sym);
   node->m_table = table_sym->table;
 
   UT_LIST_INIT(node->m_columns);
@@ -859,7 +859,7 @@ UpdNode *pars_update_statement(UpdNode *node, SymNode *cursor_sym,
   } else {
     sel_node = pars_select_list(nullptr, nullptr);
 
-    pars_select_statement(sel_node, table_sym, search_cond, nullptr,
+    pars_select_statement(sys, sel_node, table_sym, search_cond, nullptr,
                           &pars_share_token, nullptr);
     node->m_searched_update = true;
     sel_node->m_common.parent = node;
@@ -873,7 +873,7 @@ UpdNode *pars_update_statement(UpdNode *node, SymNode *cursor_sym,
   if (node->m_is_delete) {
     node->m_cmpl_info = 0;
   } else {
-    pars_process_assign_list(node);
+    pars_process_assign_list(sys, node);
   }
 
   if (node->m_searched_update) {
@@ -915,7 +915,7 @@ InsertNode *pars_insert_statement(System &sys, SymNode *table_sym,
 
   auto ins_type = values_list != nullptr ? INS_VALUES : INS_SEARCHED;
 
-  pars_retrieve_table_def(table_sym);
+  pars_retrieve_table_def(sys, table_sym);
 
   auto ins_node = reinterpret_cast<InsertNode *>(sys.m_row_ins->node_create(
       ins_type, table_sym->table, pars_sym_tab_global->heap));
@@ -1265,7 +1265,7 @@ SymNode *pars_column_def(SymNode *sym_node, ParsResWord *type,
   return sym_node;
 }
 
-TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_defs,
+TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs,
                               void *not_fit_in_memory __attribute__((unused))) {
   const auto n_cols = que_node_list_get_len(column_defs);
   auto table = Table::create(table_sym->name, DICT_HDR_SPACE, n_cols, 0, false,
@@ -1291,7 +1291,7 @@ TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_de
   }
 
   auto node =
-      TableNode::create(sys.m_dict, table, pars_sym_tab_global->heap, true);
+      TableNode::create(.m_dict, table, pars_sym_tab_global->heap, true);
 
   table_sym->table = table;
   table_sym->resolved = true;
@@ -1300,7 +1300,7 @@ TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_de
   return node;
 }
 
-IndexNode *pars_create_index(System &sys, ParsResWord *unique_def,
+IndexNode *pars_create_index(ParsResWord *unique_def,
                               ParsResWord *clustered_def,
                               SymNode *index_sym, SymNode *table_sym,
                               SymNode *column_list) {
@@ -1329,7 +1329,7 @@ IndexNode *pars_create_index(System &sys, ParsResWord *unique_def,
   }
 
   auto node =
-      IndexNode::create(sys.m_dict, index, pars_sym_tab_global->heap, true);
+      IndexNode::create(.m_dict, index, pars_sym_tab_global->heap, true);
 
   table_sym->resolved = true;
   table_sym->token_type = SYM_TABLE;

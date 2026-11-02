@@ -230,8 +230,7 @@ inline byte *trx_undo_update_rec_get_field_no(
   return ptr;
 }
 
-byte *TrxUndoRecord::update_rec_get_update(System &sys, 
-  byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, MemHeap *heap,
+byte *TrxUndoRecord::update_rec_get_update(byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, MemHeap *heap,
   Upd **upd
 ) {
   ulint n_fields;
@@ -253,7 +252,7 @@ byte *TrxUndoRecord::update_rec_get_update(System &sys,
 
   auto upd_field = update->get_nth_field(n_fields);
   buf = mem_heap_alloc(heap, DATA_TRX_ID_LEN);
-  sys.m_trx_sys->write_trx_id(buf, trx_id);
+  TrxSys::write_trx_id(buf, trx_id);
 
   upd_field->set_field_no(index->get_sys_col_field_pos(DATA_TRX_ID), index, trx);
   dfield_set_data(&upd_field->m_new_val, buf, DATA_TRX_ID_LEN);
@@ -428,7 +427,7 @@ DbErr TrxUndoRecord::prev_version_build(System &sys,
 #endif /* UNIV_SYNC_DEBUG */
 
   ut_ad(
-    index_mtr->memo_contains_page(sys, index_rec, MTR_MEMO_PAGE_S_FIX) || index_mtr->memo_contains_page(sys, index_rec, MTR_MEMO_PAGE_X_FIX)
+    index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_S_FIX) || index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_X_FIX)
   );
 
   ut_ad(rec.offs_validate(index, offsets));
@@ -499,7 +498,7 @@ DbErr TrxUndoRecord::prev_version_build(System &sys,
 
   ptr = skip_row_ref(ptr, index);
 
-  ptr = update_rec_get_update(sys, ptr, index, pars.m_type, trx_id, roll_ptr, info_bits, nullptr, heap, &update);
+  ptr = update_rec_get_update(ptr, index, pars.m_type, trx_id, roll_ptr, info_bits, nullptr, heap, &update);
 
   if (pars.m_table_id != index->m_table->m_id) {
     ptr = nullptr;

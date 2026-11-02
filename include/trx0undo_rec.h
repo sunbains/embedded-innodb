@@ -234,8 +234,7 @@ struct TrxUndoRecord {
    * @return remaining part of the record, nullptr if an error detected, which
    * means that the record is corrupted
    */
-  static byte *update_rec_get_update(System &sys, 
-    byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, MemHeap *heap,
+  static byte *update_rec_get_update(byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, MemHeap *heap,
     Upd **upd
   );
 

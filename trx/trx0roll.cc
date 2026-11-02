@@ -86,7 +86,7 @@ DbErr TrxRollback::general_rollback(System &sys, Trx *trx, bool partial, TrxSave
 
   ut_a(thr == que_fork_start_command(static_cast<QueFork *>(que_node_get_parent(thr))));
 
-  que_run_threads(thr);
+  que_run_threads(sys, thr);
 
   mutex_enter(&sys.m_trx_sys->m_mutex);
 
@@ -204,7 +204,7 @@ void TrxRollback::rollback_active(
     dictionary_locked = true;
   }
 
-  que_run_threads(thr);
+  que_run_threads(sys, thr);
 
   mutex_enter(&sys.m_trx_sys->m_mutex);
 
@@ -302,8 +302,8 @@ leave_function:
   mutex_exit(&sys.m_trx_sys->m_mutex);
 }
 
-void *TrxRollback::rollback_or_clean_all_recovered(void *) {
-  trx_rollback_or_clean_recovered(true);
+void *TrxRollback::rollback_or_clean_all_recovered(System &sys, void *) {
+  trx_rollback_or_clean_recovered(sys, true);
 
   /* We count the number of threads in os_thread_exit(). A created
   thread should always use that to exit and not use return() to exit. */
@@ -530,7 +530,7 @@ try_again:
   if (trx->m_pages_undone >= TRX_ROLL_TRUNC_THRESHOLD) {
     mutex_enter(&rseg->m_mutex);
 
-    trx_roll_try_truncate(trx);
+    trx_roll_try_truncate(sys, trx);
 
     mutex_exit(&rseg->m_mutex);
   }
@@ -555,7 +555,7 @@ try_again:
 
       mutex_enter(&rseg->m_mutex);
 
-      trx_roll_try_truncate(trx);
+      trx_roll_try_truncate(sys, trx);
 
       mutex_exit(&rseg->m_mutex);
     }
@@ -575,7 +575,7 @@ try_again:
 
   mtr.start();
 
-  auto undo_rec_obj = trx_roll_pop_top_rec(trx, undo, &mtr);
+  auto undo_rec_obj = trx_roll_pop_top_rec(sys, trx, undo, &mtr);
   undo_rec = undo_rec_obj.raw();
 
   undo_no = undo_rec_obj.get_undo_no();
@@ -685,7 +685,7 @@ void TrxRollback::rollback(System &sys, Trx *trx, TrxSig *sig, QueThr **next_thr
 
   /* Build a 'query' graph which will perform the undo operations */
 
-  auto roll_graph = trx_roll_graph_build(trx);
+  auto roll_graph = trx_roll_graph_build(sys, trx);
 
   trx->m_graph = roll_graph;
   trx->m_que_state = TRX_QUE_ROLLING_BACK;

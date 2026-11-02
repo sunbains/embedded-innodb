@@ -223,12 +223,12 @@ inline trx_rsegf_t *trx_rsegf_get_new(System &sys, space_id_t space_id, page_no_
  * 
  * @return	page number of the undo log segment
  */
-inline ulint trx_rsegf_get_nth_undo(System &sys, trx_rsegf_t *rsegf, ulint n, Mtr *mtr) noexcept {
+inline ulint trx_rsegf_get_nth_undo(trx_rsegf_t *rsegf, ulint n, Mtr *mtr) noexcept {
   if (unlikely(n >= TRX_RSEG_N_SLOTS)) {
     log_fatal(std::format("Trying to get slot {} of rseg", n));
   }
 
-  return mtr->read_ulint(sys, rsegf + TRX_RSEG_UNDO_SLOTS + n * TRX_RSEG_SLOT_SIZE, MLOG_4BYTES);
+  return mtr->read_ulint(rsegf + TRX_RSEG_UNDO_SLOTS + n * TRX_RSEG_SLOT_SIZE, MLOG_4BYTES);
 }
 
 /**

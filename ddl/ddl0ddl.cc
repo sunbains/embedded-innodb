@@ -163,13 +163,13 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
 
     /* Table name equals "innodb_monitor": stop monitor prints */
     m_sys.m_srv->m_print_innodb_monitor = false;
-    m_sys.m_dict->m_store.m_btree->m_lock_sys->unset_print_lock_monitor();
+    m_sys.m_lock_sys->unset_print_lock_monitor();
 
   } else if (namelen == sizeof(S_innodb_lock_monitor) &&
              memcmp(table_name, S_innodb_lock_monitor, sizeof(S_innodb_lock_monitor)) == 0) {
 
     m_sys.m_srv->m_print_innodb_monitor = false;
-    m_sys.m_dict->m_store.m_btree->m_lock_sys->unset_print_lock_monitor();
+    m_sys.m_lock_sys->unset_print_lock_monitor();
 
   } else if (namelen == sizeof(S_innodb_tablespace_monitor) &&
              memcmp(table_name, S_innodb_tablespace_monitor, sizeof(S_innodb_tablespace_monitor)) == 0) {
@@ -288,7 +288,7 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
 
   /* Remove any locks there are on the table or its records */
 
-  m_sys.m_dict->m_store.m_btree->m_lock_sys->remove_all_on_table(table, true);
+  m_sys.m_lock_sys->remove_all_on_table(table, true);
 
   trx->set_dict_operation(TRX_DICT_OP_TABLE);
   trx->m_table_id = table->m_id;
@@ -396,7 +396,7 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
     wrong: we do not want to delete valuable data of the user */
 
     if (err == DB_SUCCESS && space_id != SYS_TABLESPACE) {
-      auto fil = m_sys.m_dict->m_store.m_fsp->m_fil;
+      auto fil = m_sys.m_fil;
 
       if (!fil->space_for_table_exists_in_mem(space_id, name_or_path, is_path, false, true)) {
         err = DB_SUCCESS;
@@ -476,7 +476,7 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
 
     m_sys.m_srv->m_print_innodb_monitor = true;
 
-    m_sys.m_dict->m_store.m_btree->m_lock_sys->set_print_lock_monitor();
+    m_sys.m_lock_sys->set_print_lock_monitor();
 
     os_event_set(m_sys.m_srv->m_lock_timeout_thread_event);
 
@@ -690,9 +690,9 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
     return func_exit(DB_ERROR);
   }
 
-  auto fsp = m_sys.m_dict->m_store.m_fsp;
+  auto fsp = m_sys.m_fsp;
   space_id_t recreate_space{NULL_SPACE_ID};
-  auto lock_sys = m_sys.m_dict->m_store.m_btree->m_lock_sys;
+  auto lock_sys = m_sys.m_lock_sys;
 
   /* Remove all locks except the table-level S and X locks. */
   lock_sys->remove_all_on_table(table, false);
@@ -702,12 +702,12 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
   if (table->m_space_id > 0 && !table->m_dir_path_of_temp_table) {
     /* Discard and create the single-table tablespace. */
     auto space_id = table->m_space_id;
-    const auto flags = fsp->m_fil->space_get_flags(space_id);
+    const auto flags = m_sys.m_fil->space_get_flags(space_id);
 
-    if (flags != ULINT_UNDEFINED && fsp->m_fil->discard_tablespace(space_id)) {
+    if (flags != ULINT_UNDEFINED && m_sys.m_fil->discard_tablespace(space_id)) {
       space_id = SYS_TABLESPACE;
 
-      if (fsp->m_fil->create_new_single_table_tablespace(&space_id, table->m_name, false, flags, FIL_IBD_FILE_INITIAL_SIZE) !=
+      if (m_sys.m_fil->create_new_single_table_tablespace(&space_id, table->m_name, false, flags, FIL_IBD_FILE_INITIAL_SIZE) !=
           DB_SUCCESS) {
         log_err(std::format("TRUNCATE TABLE {} failed to create a new tablespace", table->m_name));
         table->m_ibd_file_missing = true;
@@ -751,7 +751,7 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
 
   mtr.start();
 
-  BtreePcursor pcur(fsp, m_sys.m_dict->m_store.m_btree);
+  BtreePcursor pcur(fsp, m_sys.m_btree);
 
   /* Scan SYS_INDEXES for all indexes of the table */
   pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &mtr, Current_location());
@@ -790,7 +790,7 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
       }
     }
 
-    (void)pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
   }
 
   pcur.close();
@@ -824,7 +824,7 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
 
     trx->m_error_state = DB_SUCCESS;
 
-    trx_general_rollback(trx, false, nullptr);
+    trx_general_rollback(m_sys, trx, false, nullptr);
 
     trx->m_error_state = DB_SUCCESS;
 
@@ -1046,7 +1046,7 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
 
     trx->m_error_state = DB_SUCCESS;
 
-    trx_general_rollback(trx, false, nullptr);
+    trx_general_rollback(m_sys, trx, false, nullptr);
 
     trx->m_error_state = DB_SUCCESS;
 
@@ -1057,7 +1057,7 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
     if (!m_sys.m_dict->table_rename_in_cache(table, new_name, true)) {
       trx->m_error_state = DB_SUCCESS;
 
-      trx_general_rollback(trx, false, nullptr);
+      trx_general_rollback(m_sys, trx, false, nullptr);
 
       trx->m_error_state = DB_SUCCESS;
 
@@ -1082,7 +1082,7 @@ DbErr Ddl::rename_table(const char *old_name, const char *new_name, Trx *trx) no
 
       trx->m_error_state = DB_SUCCESS;
 
-      trx_general_rollback(trx, false, nullptr);
+      trx_general_rollback(m_sys, trx, false, nullptr);
 
       trx->m_error_state = DB_SUCCESS;
     }
@@ -1158,7 +1158,7 @@ DbErr Ddl::rename_index(const char *table_name, const char *old_name, const char
     }
   } else {
     trx->m_error_state = DB_SUCCESS;
-    trx_general_rollback(trx, false, nullptr);
+    trx_general_rollback(m_sys, trx, false, nullptr);
   }
 
   trx->m_op_info = "";
@@ -1278,7 +1278,7 @@ DbErr Ddl::drop_database(const char *name, Trx *trx) noexcept {
 }
 
 void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
-  BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
 
   /* Load the table definitions that contain partially defined indexes, so that the data dictionary
   information can be checked * when accessing the tablename.ibd files. */
@@ -1299,7 +1299,7 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
   pcur.open_at_index_side(m_sys, true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
-    (void)pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
 
     if (!pcur.is_on_user_rec()) {
       break;
@@ -1332,7 +1332,7 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
       table_id = mach_read_from_8(field);
     }
 
-    pcur.store_position(&mtr);
+    pcur.store_position(m_sys, &mtr);
 
     pcur.commit_specify_mtr(m_sys, &mtr);
 
@@ -1385,14 +1385,14 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
 
   mtr.start();
 
-  BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
+  BtreePcursor pcur(m_sys.m_fsp, m_sys.m_btree);
 
   auto sys_clustered_index = m_sys.m_dict->m_sys_tables->get_clustered_index();
   pcur.open_at_index_side(m_sys, true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
 
-    (void)pcur.move_to_next_user_rec(&mtr);
+    (void)pcur.move_to_next_user_rec(m_sys, &mtr);
 
     if (!pcur.is_on_user_rec()) {
       break;
@@ -1434,7 +1434,7 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
       table_name = mem_heap_strdupl(heap, reinterpret_cast<const char *>(field.get()), len);
     }
 
-    pcur.store_position(&mtr);
+    pcur.store_position(m_sys, &mtr);
     pcur.commit_specify_mtr(m_sys, &mtr);
 
     auto table = m_sys.m_dict->m_loader.load_table(recovery, table_name);

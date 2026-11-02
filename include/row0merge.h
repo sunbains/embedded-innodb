@@ -185,6 +185,6 @@ DbErr row_merge_drop_table(System &sys, Trx *trx, Table *table);
  *
  * @return DB_SUCCESS or error code
  */
-DbErr row_merge_build_indexes(
+DbErr row_merge_build_indexes(System &sys, 
   Trx *trx, Table *old_table, Table *new_table, Index **indexes, ulint n_indexes, table_handle_t table
 );

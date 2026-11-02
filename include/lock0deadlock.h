@@ -74,7 +74,7 @@ struct DeadlockDetector {
    *         if a deadlock was detected but other transaction(s) were chosen
    *         as victim(s).
    */
-  [[nodiscard]] bool check_deadlock(Lock *lock, Trx *trx) noexcept;
+  [[nodiscard]] bool check_deadlock(System &sys, Lock *lock, Trx *trx) noexcept;
 
   /**
    * @brief Looks iteratively for a deadlock using an explicit stack.
@@ -98,7 +98,7 @@ struct DeadlockDetector {
    *         In this case, the search must be repeated as there may be another deadlock.
    * @return LOCK_EXCEED_MAX_DEPTH if the lock search exceeds the maximum steps or depth.
    */
-  [[nodiscard]] ulint search_iterative(Trx *start, Trx *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept;
+  [[nodiscard]] ulint search_iterative(System &sys, Trx *start, Trx *trx, Lock *wait_lock, ulint *cost, ulint depth) noexcept;
 
  private:
   /**

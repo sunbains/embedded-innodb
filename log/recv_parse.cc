@@ -36,7 +36,7 @@ static ulint recv_previous_parsed_rec_is_multi;
 
 byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, byte *end_ptr, BufBlock *block, Mtr *mtr) noexcept;
 
-static ulint recv_parse_log_rec(
+static ulint recv_parse_log_rec(System &sys, 
   byte *ptr, byte *end_ptr, MlogType *type, space_id_t *space, page_no_t *page_no, byte **body
 ) noexcept {
   *body = nullptr;
@@ -64,7 +64,7 @@ static ulint recv_parse_log_rec(
     return 0;
   }
 
-  new_ptr = recv_parse_or_apply_log_rec_body(*type, new_ptr, end_ptr, nullptr, nullptr);
+  new_ptr = recv_parse_or_apply_log_rec_body(sys, *type, new_ptr, end_ptr, nullptr, nullptr);
 
   if (unlikely(new_ptr == nullptr)) {
     return 0;
@@ -86,7 +86,7 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
 
   if (block != nullptr) {
     page = block->m_frame;
-    ut_d(page_type = sys.m_fil->page_get_type(page));
+    ut_d(page_type = Fil::page_get_type(page));
   }
 
   switch (type) {
@@ -117,7 +117,7 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
         }
       }
 #endif
-      ptr = mlog_parse_nbytes(type, ptr, end_ptr, page);
+      ptr = mlog_parse_nbytes(sys, type, ptr, end_ptr, page);
       break;
     case MLOG_REC_INSERT:
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
@@ -148,7 +148,7 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
       ut_ad(page == nullptr || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = page_parse_delete_rec_list(type, ptr, end_ptr, block, index, mtr);
+        ptr = page_parse_delete_rec_list(sys, type, ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_LIST_END_COPY_CREATED:
@@ -198,7 +198,7 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
       ut_ad(!page || page_type == FIL_PAGE_TYPE_INDEX);
 
       if ((ptr = mlog_parse_index(ptr, end_ptr, index)) != nullptr) {
-        ptr = PageCursor::parse_delete_rec(ptr, end_ptr, block, index, mtr);
+        ptr = PageCursor::parse_delete_rec(sys, ptr, end_ptr, block, index, mtr);
       }
       break;
     case MLOG_INIT_FILE_PAGE:
@@ -206,7 +206,7 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
       break;
     case MLOG_WRITE_STRING:
       ut_ad(!page || page_type != FIL_PAGE_TYPE_ALLOCATED);
-      ptr = mlog_parse_string(ptr, end_ptr, page);
+      ptr = mlog_parse_string(sys, ptr, end_ptr, page);
       break;
     case MLOG_FILE_CREATE:
     case MLOG_FILE_RENAME:
@@ -307,11 +307,11 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
     if (single_rec || *ptr == MLOG_DUMMY_RECORD) {
       old_lsn = sys.m_recv->m_recovered_lsn;
 
-      len = recv_parse_log_rec(ptr, end_ptr, &type, &space, &page_no, &body);
+      len = recv_parse_log_rec(sys, ptr, end_ptr, &type, &space, &page_no, &body);
 
       if (len == 0 || sys.m_recv->m_found_corrupt_log) {
         if (sys.m_recv->m_found_corrupt_log) {
-          recv_report_corrupt_log(ptr, type, space, page_no);
+          recv_report_corrupt_log(sys, ptr, type, space, page_no);
         }
         return false;
       }
@@ -344,11 +344,11 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
       total_len = 0;
 
       for (;;) {
-        auto len = recv_parse_log_rec(ptr, end_ptr, &type, &space, &page_no, &body);
+        auto len = recv_parse_log_rec(sys, ptr, end_ptr, &type, &space, &page_no, &body);
 
         if (len == 0 || sys.m_recv->m_found_corrupt_log) {
           if (sys.m_recv->m_found_corrupt_log) {
-            recv_report_corrupt_log(ptr, type, space, page_no);
+            recv_report_corrupt_log(sys, ptr, type, space, page_no);
           }
           return false;
         }
@@ -377,10 +377,10 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
       for (;;) {
         old_lsn = sys.m_recv->m_recovered_lsn;
 
-        len = recv_parse_log_rec(ptr, end_ptr, &type, &space, &page_no, &body);
+        len = recv_parse_log_rec(sys, ptr, end_ptr, &type, &space, &page_no, &body);
 
         if (sys.m_recv->m_found_corrupt_log) {
-          recv_report_corrupt_log(ptr, type, space, page_no);
+          recv_report_corrupt_log(sys, ptr, type, space, page_no);
         }
 
         ut_a(len != 0);
