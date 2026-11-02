@@ -56,7 +56,7 @@ ulint ut_get_high32(ulint a) noexcept {
   return (ulint)i;
 }
 
-ib_time_t ut_time() noexcept {
+time_t ut_time() noexcept {
   return time(nullptr);
 }
 
@@ -110,11 +110,11 @@ ulint ut_time_ms() noexcept {
   return (ulint)tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
-double ut_difftime(ib_time_t time2, ib_time_t time1) noexcept {
+double ut_difftime(time_t time2, time_t time1) noexcept {
   return difftime(time2, time1);
 }
 
-void ut_print_timestamp(FILE *ib_stream) noexcept {
+void ut_print_timestamp(FILE *stream) noexcept {
   time_t tm;
   struct tm cal_tm;
   struct tm *cal_tm_ptr;
@@ -129,7 +129,7 @@ void ut_print_timestamp(FILE *ib_stream) noexcept {
 #endif /* HAVE_LOCALTIME_R */
 
   ib_logger(
-    ib_stream,
+    stream,
     "%02d%02d%02d %2d:%02d:%02d",
     cal_tm_ptr->tm_year % 100,
     cal_tm_ptr->tm_mon + 1,

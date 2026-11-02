@@ -173,10 +173,11 @@ std::ostream &write(std::string &&now, std::string &&func, const char *level, bo
     }                                                                            \
   } while (false)
 
+/* A fatal error always terminates the process, the level only suppresses the message. */
 #define log_fatal(args...)                                                       \
   do {                                                                           \
     if (logger::level <= (int)logger::Fatal) {                                   \
       logger::write(std::move(NOW), std::move(FUNC), "fatal", true, true, args); \
-      ::abort();                                                                 \
     }                                                                            \
+    ::abort();                                                                   \
   } while (false)

@@ -589,7 +589,11 @@ void Srv::suspend_user_thread(QueThr *thr) noexcept {
   innodb_lock_wait_timeout, because trx->m_client_ctx == nullptr. */
   lock_wait_timeout = ulong(m_sys.m_config.m_lock.m_wait_timeout.count());
 
-  if (trx->is_interrupted() || (lock_wait_timeout < 100000000 && wait_time > (double)lock_wait_timeout)) {
+  if (trx->is_interrupted()) {
+
+    trx->m_error_state = DB_INTERRUPTED;
+
+  } else if (lock_wait_timeout < 100000000 && wait_time > (double)lock_wait_timeout) {
 
     trx->m_error_state = DB_LOCK_WAIT_TIMEOUT;
   }
@@ -632,7 +636,7 @@ void Srv::refresh_innodb_monitor_stats() noexcept {
   mutex_exit(&m_innodb_monitor_mutex);
 }
 
-bool Srv::printf_innodb_monitor(FILE *ib_stream, bool nowait, ulint *trx_start, ulint *trx_end) noexcept {
+bool Srv::printf_innodb_monitor(FILE *stream, bool nowait, ulint *trx_start, ulint *trx_end) noexcept {
   mutex_enter(&m_innodb_monitor_mutex);
 
   auto current_time = time(nullptr);
@@ -679,7 +683,7 @@ bool Srv::printf_innodb_monitor(FILE *ib_stream, bool nowait, ulint *trx_start, 
       "LATEST FOREIGN KEY ERROR\n"
       "------------------------\n"
     );
-    ut_copy_file(ib_stream, dict_foreign_err_file);
+    ut_copy_file(stream, dict_foreign_err_file);
   }
 
   mutex_exit(&dict_foreign_err_mutex);
@@ -702,7 +706,7 @@ bool Srv::printf_innodb_monitor(FILE *ib_stream, bool nowait, ulint *trx_start, 
 
   if (ret) {
     if (trx_start) {
-      auto t = ftell(ib_stream);
+      auto t = ftell(stream);
 
       if (t < 0) {
         *trx_start = ULINT_UNDEFINED;
@@ -714,7 +718,7 @@ bool Srv::printf_innodb_monitor(FILE *ib_stream, bool nowait, ulint *trx_start, 
     m_sys.m_lock_sys->print_info_all_transactions();
 
     if (trx_end) {
-      auto t = ftell(ib_stream);
+      auto t = ftell(stream);
       if (t < 0) {
         *trx_end = ULINT_UNDEFINED;
       } else {
@@ -730,7 +734,7 @@ bool Srv::printf_innodb_monitor(FILE *ib_stream, bool nowait, ulint *trx_start, 
   );
   log_warn("Dictionary memory allocated ", m_sys.m_dict->m_size);
 
-  m_sys.m_buf_pool->print_io(ib_stream);
+  m_sys.m_buf_pool->print_io(stream);
 
   log_warn(
     "--------------\n"

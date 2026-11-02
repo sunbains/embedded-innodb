@@ -24,6 +24,8 @@ Created 3/26/1996 Heikki Tuuri
 
 #pragma once
 
+#include <atomic>
+
 class System;
 
 #include "dict0types.h"
@@ -365,7 +367,16 @@ struct Trx {
    *
    * @return True if interrupted.
    */
-  [[nodiscard]] bool is_interrupted() const noexcept;
+  [[nodiscard]] bool is_interrupted() const noexcept { return m_interrupted.load(std::memory_order_acquire); }
+
+  /**
+   * Interrupts the transaction: a lock wait in progress ends within the lock
+   * timeout thread's interval with DB_INTERRUPTED, and so does a later one.
+   * The flag is cleared when the transaction starts.
+   *
+   * Can be called from any thread.
+   */
+  void interrupt() noexcept { m_interrupted.store(true, std::memory_order_release); }
 
   /**
    * Compares the "weight" (or size) of two transactions. Transactions that
@@ -550,6 +561,9 @@ struct Trx {
 
   /** Client thread handle corresponding to this trx, or nullptr */
   void *m_client_ctx{};
+
+  /** Set by interrupt(), the transaction should stop what it waits for. */
+  std::atomic<bool> m_interrupted{};
 
   /** Pointer to the SQL query string */
   char **m_client_query_str{};

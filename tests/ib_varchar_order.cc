@@ -18,6 +18,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 ************************************************************************/
 
+/** @file tests/ib_varchar_order.cc
+VARCHAR keys of a secondary index compare in binary order: scans return the
+rows in ascending order, and iterating forward from a key visits all its
+duplicates. This replaces the client compare callback test, the callback is
+no longer part of the API. */
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -194,7 +200,8 @@ static DbErr update_a_row(System &sys, Cursor * crsr) {
   /* Search for the key using the cluster index (PK) */
   err = crsr->moveto(sys, key_tpl, IB_CUR_GE, &res);
   assert(err == DB_SUCCESS);
-  /* Must be positioned on a record that's greater than search key. */
+  /* Positioned on the first record whose c1 is "a": the one field search
+  key is a prefix of it and compares less than the full record. */
   assert(res == -1);
 
   if (key_tpl != nullptr) {
@@ -223,11 +230,12 @@ static DbErr update_a_row(System &sys, Cursor * crsr) {
     assert(err == DB_SUCCESS);
 
     /* Get the c1 column value. */
-    c1 = old_tpl->get_value(0);
+    c1 = static_cast<const char *>(old_tpl->get_value(0));
     c1_len = old_tpl->get_meta(0, &col_meta);
 
-    /* There are no SQL_NULL values in our test data. */
+    /* There are no SQL_NULL values in our test data, all c1 are one character. */
     assert(c1 != nullptr);
+    assert(c1_len == 1);
 
     /* Only update c1 values that are == "a". */
     if (strncmp(c1, "a", 1) != 0) {
@@ -251,11 +259,9 @@ static DbErr update_a_row(System &sys, Cursor * crsr) {
     err = crsr->update_row(sys, old_tpl, new_tpl);
     assert(err == DB_SUCCESS);
 
-    /* NOTE: we go in *REVERSE* order since we are using custom
-       compare function that does in reverse binary order.
-       i.e. 'a' is *LAST*, not first */
+    /* Keys compare in binary order: the "a" rows come first. */
     /* Move to the next record to update. */
-    err = crsr->prev(sys);
+    err = crsr->next(sys);
     /* Since we are searching for "a" it must always succeed. */
     assert(err == DB_SUCCESS);
 
@@ -322,7 +328,7 @@ static DbErr do_query(System &sys, Cursor * crsr) {
   err = crsr->first(sys);
   assert(err == DB_SUCCESS);
 
-  char last_char = 'z';
+  char last_char = '\0';
 
   while (err == DB_SUCCESS) {
     err = crsr->read_row(sys, tpl);
@@ -336,9 +342,10 @@ static DbErr do_query(System &sys, Cursor * crsr) {
 
     const char *ptr;
 
-    ptr = tpl->get_value(0);
+    ptr = static_cast<const char *>(tpl->get_value(0));
     fprintf(stdout, "COL 0:%s\tlast %c this %c", ptr, last_char, ptr[0]);
-    assert(ptr[0] <= last_char);
+    /* The rows come back in ascending binary order of c1. */
+    assert(ptr[0] >= last_char);
     last_char = ptr[0];
 
     print_tuple(stdout, tpl);
@@ -362,31 +369,6 @@ static DbErr do_query(System &sys, Cursor * crsr) {
   return (err);
 }
 
-#define min(x, y) (x < y ? x : y)
-
-/* the same as default_compare, but in reverse! */
-int reverse_compare(
-    /*!< out: 1, 0, -1, if a is greater,
-    equal, less than b, respectively */
-    const ColMeta *col_meta, /*!< in: column meta data */
-    const byte *p1,           /*!< in: key */
-    ulint p1_len,                  /*!< in: key length */
-    const byte *p2,           /*!< in: key */
-    ulint p2_len)                  /*!< in: key length */
-{
-  int ret;
-
-  (void)col_meta;
-
-  ret = memcmp(p1, p2, min(p1_len, p2_len));
-
-  if (ret == 0) {
-    ret = p1_len - p2_len;
-  }
-
-  return (ret < 0 ? 1 : ((ret > 0) ? -1 : 0));
-}
-
 int main(int argc, char *argv[]) {
   DbErr err;
   Cursor * crsr;
@@ -404,8 +386,6 @@ int main(int argc, char *argv[]) {
   Config config;
 
   test_configure(config);
-
-  ib_set_client_compare(reverse_compare);
 
   System sys;
 

@@ -691,9 +691,8 @@ inline void trx_undo_decode_roll_ptr(roll_ptr_t roll_ptr, bool *is_insert, ulint
 inline bool trx_undo_roll_ptr_is_insert(roll_ptr_t roll_ptr) {
   static_assert(DATA_ROLL_PTR_LEN == 7, "error DATA_ROLL_PTR_LEN != 7");
 
-  auto high = roll_ptr;
-
-  return high / (256 * 256 * 128);
+  /* The insert flag is the top bit of the 7 byte roll pointer. */
+  return (roll_ptr >> 55) & 1;
 }
 
 /**

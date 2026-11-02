@@ -1790,7 +1790,7 @@ func_exit:
   mem_free(filepath);
 }
 
-DbErr Fil::scan_and_load_tablespaces(const std::string &dir, IbRecovery recovery, ulint max_depth, ulint depth) {
+DbErr Fil::scan_and_load_tablespaces(const std::string &dir, const std::string &dbname, IbRecovery recovery, ulint max_depth, ulint depth) {
   namespace fs = std::filesystem;
 
   if (depth >= max_depth) {
@@ -1798,55 +1798,29 @@ DbErr Fil::scan_and_load_tablespaces(const std::string &dir, IbRecovery recovery
     return DB_SUCCESS;
   }
 
-  /* The datadir of the server is always the default directory. */
-  fs::path path(dir);
-  auto dir_name = path.parent_path().string();
+  const fs::path path(dir);
 
-  auto check_directory = [dir_name](const fs::path &path) -> DbErr {
-    if (fs::status(path).type() != fs::file_type::directory) {
-      log_err(std::format("The datadir is not a directory: '{}'", dir_name));
-      return DB_ERROR;
-    }
-
-    auto p = fs::status(path).permissions();
-
-    if ((p & fs::perms::owner_all) != fs::perms::none || (p & fs::perms::group_all) != fs::perms::none ||
-        (p & fs::perms::others_all) != fs::perms::none) {
-      return DB_SUCCESS;
-    } else {
-      log_err(std::format("The datadir '{}' perms should be at least 'rwxr-xr-x', they are '{}'", dir_name, to_string(p)));
-      return DB_ERROR;
-    }
-  };
-
-  if (check_directory(path) != DB_SUCCESS) {
+  if (fs::status(path).type() != fs::file_type::directory) {
+    log_err(std::format("The datadir is not a directory: '{}'", dir));
     return DB_ERROR;
   }
 
   const std::string ext = ".ibd";
 
   for (auto it{fs::directory_iterator(path)}; it != fs::directory_iterator(); ++it) {
-    auto filename = it->path().filename().string();
+    const auto filename = it->path().filename().string();
 
-    if (filename == "system.ibd") {
-      continue;
-    } else if (it->is_directory()) {
+    if (it->is_directory()) {
+      /* A directory directly under the data home is a database. */
+      const auto db = dbname.empty() ? filename : dbname + SRV_PATH_SEPARATOR + filename;
 
-      if (check_directory(it->path()) != DB_SUCCESS) {
-        return DB_ERROR;
+      if (scan_and_load_tablespaces(it->path().string(), db, recovery, max_depth, depth + 1) != DB_SUCCESS) {
+        log_err(std::format("Failed to scan and load tablespaces in directory: '{}'", it->path().string()));
       }
 
-      /* Recursively load tablespaces. */
-      auto err = scan_and_load_tablespaces(filename, recovery, max_depth, depth + 1);
-
-      if (err != DB_SUCCESS) {
-        log_err(std::format("Failed to scan and load tablespaces in directory: '{}'", filename));
-      }
-
-    } else if (it->is_regular_file() && it->path().filename().has_extension() &&
-               it->path().filename().extension().string() == ext) {
-
-      load_single_table_tablespace(recovery, dir_name.c_str(), filename.c_str());
+    } else if (!dbname.empty() && it->is_regular_file() && it->path().extension().string() == ext) {
+      /* Single-table tablespaces live in their database directory. */
+      load_single_table_tablespace(recovery, dbname.c_str(), filename.c_str());
     }
   }
 
@@ -1854,7 +1828,7 @@ DbErr Fil::scan_and_load_tablespaces(const std::string &dir, IbRecovery recovery
 }
 
 DbErr Fil::load_single_table_tablespaces(const std::string &dir, IbRecovery recovery, ulint max_depth) {
-  return scan_and_load_tablespaces(dir, recovery, max_depth, 0);
+  return scan_and_load_tablespaces(dir, "", recovery, max_depth, 0);
 }
 
 void Fil::print_orphaned_tablespaces() {

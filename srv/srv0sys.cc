@@ -98,22 +98,27 @@ static void *io_handler_thread(void *arg) noexcept {
 DbErr Config::normalize() noexcept {
   if (m_log.m_n_files < 2) {
     log_err("There must be at least two log files");
-    return DB_ERROR;
+    return DB_INVALID_INPUT;
   }
 
   if (m_log.m_n_files * (m_log.m_file_size / UNIV_PAGE_SIZE) >= 262144) {
     log_err("Combined size of log files must be < 4 GB");
-    return DB_ERROR;
+    return DB_INVALID_INPUT;
   }
 
   if (1 + m_aio.m_n_read_threads + m_aio.m_n_write_threads > SRV_MAX_N_IO_THREADS) {
     log_err(std::format("At most {} i/o threads are supported", SRV_MAX_N_IO_THREADS));
-    return DB_ERROR;
+    return DB_INVALID_INPUT;
+  }
+
+  if (m_buf_pool.m_lru_old_blocks_pct < 5 || m_buf_pool.m_lru_old_blocks_pct > 95) {
+    log_err(std::format("The old LRU sublist must be 5..95% of the LRU list, it is {}%", m_buf_pool.m_lru_old_blocks_pct));
+    return DB_INVALID_INPUT;
   }
 
   if (m_fil.m_data_home.empty()) {
     log_err("Data home directory is not set");
-    return DB_ERROR;
+    return DB_INVALID_INPUT;
   }
 
   if (m_fil.m_data_home.back() != SRV_PATH_SEPARATOR) {

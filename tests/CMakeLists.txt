@@ -44,6 +44,7 @@ SET(IB_TESTS
   ib_test5
   ib_types
   ib_update
+  ib_varchar_order
 )
 
 FOREACH(test ${IB_TESTS})

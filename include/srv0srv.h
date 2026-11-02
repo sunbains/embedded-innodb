@@ -273,7 +273,7 @@ struct SrvSlot {
   bool m_suspended{};
 
   /** time when the thread was suspended */
-  ib_time_t m_suspend_time{};
+  time_t m_suspend_time{};
 
   /** event used in suspending the thread when it has nothing to do */
   CondVar *m_event{};

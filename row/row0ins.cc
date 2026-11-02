@@ -563,7 +563,7 @@ DbErr RowInsert::update_cascade_client(QueThr *thr, UpdNode *node, Table *table)
     ++m_sys.m_srv->m_stats.m_n_rows_updated;
   }
 
-  ib_update_statistics_if_needed(m_sys, table);
+  row_update_statistics_if_needed(m_sys, table);
 
   return DB_SUCCESS;
 }

@@ -48,12 +48,15 @@ TrxSys::~TrxSys() noexcept {
     log_err(std::format("All read views were not closed before shutdown: {} read views open", m_view_list.size() - 1));
   }
 
-  auto purge_trx = m_purge->m_trx;
+  /* Purge is created late in startup: an aborted startup has none. */
+  if (m_purge != nullptr) {
+    auto purge_trx = m_purge->m_trx;
 
-  call_destructor(m_purge);
-  ut_delete(m_purge);
+    call_destructor(m_purge);
+    ut_delete(m_purge);
 
-  destroy_background_trx(purge_trx);
+    destroy_background_trx(purge_trx);
+  }
 
   /* This is required only because it's a pre-condition for many
   of the functions that we need to call. */

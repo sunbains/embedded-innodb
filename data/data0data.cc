@@ -437,11 +437,11 @@ std::ostream &dtuple_print(std::ostream &o, const DTuple *tuple) {
   return o;
 }
 
-void dtuple_print(FILE *ib_stream, const DTuple *tuple) {
+void dtuple_print(FILE *stream, const DTuple *tuple) {
   std::ostringstream os{};
 
   dtuple_print(os, tuple);
-  ib_logger(ib_stream, "%s", os.str().c_str());
+  ib_logger(stream, "%s", os.str().c_str());
 }
 
 std::ostream &DTuple::print(std::ostream &o) const {

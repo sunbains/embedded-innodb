@@ -55,3 +55,31 @@ TEST(MachTest, ReadDoesNotLookPastTheField) {
   mach_write_to_7(buf.data(), 0x01020304050607ULL);
   EXPECT_EQ(mach_read_from_7(buf.data()), 0x01020304050607ULL);
 }
+
+#include "trx0undo.h"
+
+TEST(RollPtrTest, BuildDecodeAndInsertFlag) {
+  for (const bool is_insert : {false, true}) {
+    const auto roll_ptr = trx_undo_build_roll_ptr(is_insert, 5, 0x12345678, 0x9ABC);
+
+    EXPECT_EQ(trx_undo_roll_ptr_is_insert(roll_ptr), is_insert);
+
+    bool decoded_insert;
+    ulint rseg_id;
+    page_no_t page_no;
+    ulint offset;
+
+    trx_undo_decode_roll_ptr(roll_ptr, &decoded_insert, &rseg_id, &page_no, &offset);
+
+    EXPECT_EQ(decoded_insert, is_insert);
+    EXPECT_EQ(rseg_id, 5UL);
+    EXPECT_EQ(page_no, 0x12345678U);
+    EXPECT_EQ(offset, 0x9ABCUL);
+
+    /* A roll pointer survives the trip through a record. */
+    std::array<byte, 8> buf{};
+
+    trx_write_roll_ptr(buf.data(), roll_ptr);
+    EXPECT_EQ(trx_read_roll_ptr(buf.data()), roll_ptr);
+  }
+}

@@ -183,6 +183,6 @@ struct Config {
   /** Check that the values are consistent with each other, eg. the
   combined log file size limit, and fill in the derived ones (e.g.
   m_srv.m_max_n_threads).
-  @return DB_SUCCESS or an error code, and a message is logged. */
+  @return DB_SUCCESS, or DB_INVALID_INPUT and a message is logged. */
   [[nodiscard]] DbErr normalize() noexcept;
 };

@@ -120,12 +120,10 @@ void Trx::destroy(Trx *&trx) noexcept {
   trx = nullptr;
 }
 
-bool Trx::is_interrupted() const noexcept {
-  return trx_is_interrupted(this);
-}
-
 bool Trx::start_low(System &sys, ulint rseg_id) noexcept {
   ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
+
+  m_interrupted.store(false, std::memory_order_release);
 
   ut_ad(m_magic_n == TRX_MAGIC_N);
 

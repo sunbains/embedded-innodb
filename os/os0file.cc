@@ -213,7 +213,7 @@ void os_file_free() { /* Do Nothing. */ }
 
 FILE *os_file_create_tmpfile() {
   FILE *file = nullptr;
-  auto fd = ib_create_tempfile("ib");
+  auto fd = row_create_tempfile("ib");
 
   if (fd >= 0) {
     file = fdopen(fd, "w+b");

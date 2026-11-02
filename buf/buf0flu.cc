@@ -561,6 +561,16 @@ void BufFlush::write_block_low(BufPage *bpage) {
   }
 }
 
+/**
+ * Frees a page of a tablespace that was dropped or truncated: it is never
+ * written.
+ *
+ * @param[in] sys               The instance.
+ * @param[in] bpage             Page, its block mutex and the buffer pool mutex are held.
+ *
+ * @return true if the page was freed, false if it belongs to a live
+ *  tablespace or is buffer- or I/O-fixed and must be skipped for now.
+ */
 inline static bool free_page_if_truncated(System &sys, BufPage *bpage) {
   auto buf_pool = sys.m_buf_pool.get();
 
@@ -569,24 +579,19 @@ inline static bool free_page_if_truncated(System &sys, BufPage *bpage) {
   ut_ad(buf_pool->mutex_is_owned());
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
 
-  auto space = bpage->get_space();
-  bool table_truncated = sys.m_fil->tablespace_deleted_or_being_deleted_in_mem(space, -1);
-
-  bool page_from_flush_list = bpage->m_oldest_modification != 0;
-
-  if (table_truncated) {
-    log_err(std::format("freeing a page from truncated table, tablespace_id: {}, page_no: {}", space, bpage->m_page_no));
-    // free up the page.
-    buf_pool->m_LRU->free_block(bpage, nullptr);
-
-    if (page_from_flush_list) {
-      buf_pool->m_flusher->remove(bpage);
-    }
-
-    return true;
+  if (!sys.m_fil->tablespace_deleted_or_being_deleted_in_mem(bpage->get_space(), -1) || !buf_page_can_relocate(bpage)) {
+    return false;
   }
 
-  return false;
+  /* A dirty page must leave the flush list before it can be freed. */
+  if (bpage->m_oldest_modification != 0) {
+    buf_pool->m_flusher->remove(bpage);
+  }
+
+  const auto status = buf_pool->m_LRU->free_block(bpage, nullptr);
+  ut_a(status == BufLru::BlockStatus::FREED);
+
+  return true;
 }
 
 void BufFlush::page(BufPage *bpage, BufFlushType flush_type) {

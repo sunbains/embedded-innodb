@@ -44,9 +44,6 @@ Created 1/20/1994 Heikki Tuuri
 /** Index name prefix in fast index creation, as a string constant */
 #define TEMP_INDEX_PREFIX_STR "\377"
 
-/** Time stamp */
-using ib_time_t = time_t;
-
 // FIXME: Use proper C++ streams
 #define ib_logger(s, f, ...)                       \
   do {                                             \
@@ -132,7 +129,7 @@ store the given number of bits.
 /** Returns system time. We do not specify the format of the time returned:
  * the only way to manipulate it is to use the function ut_difftime.
  * @return	system time */
-ib_time_t ut_time() noexcept;
+time_t ut_time() noexcept;
 
 /** Returns system time.
  * Upon successful completion, the value 0 is returned; otherwise the
@@ -164,7 +161,7 @@ ulint ut_time_ms() noexcept;
  * @param[in] time2 Second time value
  * @param[in] time1 First time value
  * @return time2 - time1 expressed in seconds */
-double ut_difftime(ib_time_t time2, ib_time_t time1) noexcept;
+double ut_difftime(time_t time2, time_t time1) noexcept;
 
 /** Prints a timestamp to a file.
  *

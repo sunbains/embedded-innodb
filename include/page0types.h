@@ -36,9 +36,6 @@ struct Upd;
 struct Mtr;
 struct Rec;
 
-/** Eliminates a name collision on HP-UX */
-#define page_t ib_page_t
-
 /** Type of the index page */
 using page_t = byte;
 

@@ -978,7 +978,7 @@ static DbErr row_merge_read_clustered_index(System &sys,
     const Index *index{};
 
     if (pcur.is_after_last_on_page()) {
-      if (unlikely(trx_is_interrupted(trx))) {
+      if (unlikely(trx->is_interrupted())) {
         trx->m_error_key_num = ULINT_UNDEFINED;
         return func_exit(DB_INTERRUPTED);
       }
@@ -1318,7 +1318,7 @@ static __attribute__((nonnull)) DbErr row_merge(
   for (; foffs0 < ihalf && foffs1 < file->offset; foffs0++, foffs1++) {
     ulint ahalf; /*!< arithmetic half the input file */
 
-    if (unlikely(trx_is_interrupted(trx))) {
+    if (unlikely(trx->is_interrupted())) {
       return (DB_INTERRUPTED);
     }
 
@@ -1348,7 +1348,7 @@ static __attribute__((nonnull)) DbErr row_merge(
   /* Copy the last blocks, if there are any. */
 
   while (foffs0 < ihalf) {
-    if (unlikely(trx_is_interrupted(trx))) {
+    if (unlikely(trx->is_interrupted())) {
       return (DB_INTERRUPTED);
     }
 
@@ -1360,7 +1360,7 @@ static __attribute__((nonnull)) DbErr row_merge(
   ut_ad(foffs0 == ihalf);
 
   while (foffs1 < file->offset) {
-    if (unlikely(trx_is_interrupted(trx))) {
+    if (unlikely(trx->is_interrupted())) {
       return (DB_INTERRUPTED);
     }
 
@@ -1549,7 +1549,7 @@ static DbErr row_merge_insert_index_tuples(System &sys, Trx *trx, Index *index, 
         trx->m_error_state = err;
         que_thr_stop_client(sys, thr);
         thr->lock_state = QUE_THR_LOCK_NOLOCK;
-      } while (ib_handle_errors(sys, &err, trx, thr, nullptr));
+      } while (row_handle_errors(sys, &err, trx, thr, nullptr));
 
       goto err_exit;
     next_rec:
@@ -1607,7 +1607,7 @@ void row_merge_drop_indexes(System &sys, Trx *trx,      /*!< in: transaction */
 /** Create a merge file. */
 static void row_merge_file_create(MergeFile *merge_file) /*!< out: merge file structure */
 {
-  merge_file->fd = ib_create_tempfile("ibmrg");
+  merge_file->fd = row_create_tempfile("ibmrg");
   merge_file->offset = 0;
   merge_file->n_rec = 0;
 }
@@ -1854,7 +1854,7 @@ DbErr row_merge_build_indexes(System &sys,
     row_merge_file_create(&merge_files[i]);
   }
 
-  auto tmpfd = ib_create_tempfile("mrg");
+  auto tmpfd = row_create_tempfile("mrg");
 
   /* Read clustered index of the table and create files for
   secondary index entries for merge sort */

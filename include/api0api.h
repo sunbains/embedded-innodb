@@ -567,7 +567,7 @@ struct Cursor {
    *
    * @ingroup cursor
    * @param tpl is a key to search for
-   * @param ib_srch_mode is the search mode
+   * @param srch_mode is the search mode
    * @param[out] result is -1, 0 or 1 depending on tuple eq or gt than the current row
    * @return  DB_SUCCESS or err code */
   [[nodiscard]] DbErr moveto(System &sys, Tuple *tpl, SearchMode srch_mode, int *result) noexcept;
@@ -756,13 +756,13 @@ struct IndexSchema {
   /** Create an index schema instance.
    *
    * @ingroup ddl
-   * @param ib_usr_trx is the current user transaction
+   * @param usr_trx is the current user transaction
    * @param name is the name of the index to create
    * @param table_name is the name of the table the index belongs to
    * @param[out] idx_sch is the newly created index schema instance
    * @return  DB_SUCCESS or err code */
   [[nodiscard]] static DbErr create(
-    System &sys, Trx *ib_usr_trx, const char *name, const char *table_name, IndexSchema **idx_sch
+    System &sys, Trx *usr_trx, const char *name, const char *table_name, IndexSchema **idx_sch
   ) noexcept;
 
   /** Heap used to build this and all its columns in the list */
@@ -818,8 +818,8 @@ struct TableSchema {
   /** Destroy a schema. The handle is freed by this function.
   *
   * @ingroup ddl
-  * @param ib_tbl_sch is the table schema to delte*/
-  static void destroy(System &sys, TableSchema *ib_tbl_sch) noexcept;
+  * @param tbl_sch is the table schema to delte*/
+  static void destroy(System &sys, TableSchema *tbl_sch) noexcept;
 
   /** Create a table schema.
    *
@@ -865,7 +865,7 @@ struct TableSchema {
  * @param trx is the transaction to restart
  * @param trx_level is the transaction isolation level
  * @return  innobase txn handle */
-[[nodiscard]] DbErr trx_start(System &sys, Trx *ib_trx, TrxLevel ib_trx_level) noexcept;
+[[nodiscard]] DbErr trx_start(System &sys, Trx *trx, TrxLevel trx_level) noexcept;
 
 /** Begin a transaction. This will allocate a new transaction handle and
  * put the transaction in the active state.
@@ -873,16 +873,26 @@ struct TableSchema {
  * @ingroup trx
  * @param trx_level is the transaction isolation level
  * @return  innobase txn handle */
-[[nodiscard]] Trx *trx_begin(System &sys, TrxLevel ib_trx_level) noexcept;
+[[nodiscard]] Trx *trx_begin(System &sys, TrxLevel trx_level) noexcept;
+
+/**
+ * Interrupt a transaction from any thread: a lock wait it is in, or starts
+ * later, ends with DB_INTERRUPTED and the statement is rolled back. The
+ * transaction itself stays active, the client commits or rolls it back.
+ *
+ * @ingroup trx
+ * @param[in,out] trx           The transaction to interrupt.
+ */
+void trx_interrupt(Trx *trx) noexcept;
 
 /** Set client data for a transaction. This is passed back to the client
- * in the trx_is_interrupted callback. InnoDB will only ever pass this
- * around, it will never dereference it.
+ * in callbacks. InnoDB will only ever pass this around, it will never
+ * dereference it.
  *
  * @ingroup trx
  * @param trx is the transaction to set the client data for
  * @param client_data is client program's data about this transaction */
-void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
+void trx_set_client_data(Trx *trx, void *client_data) noexcept;
 
 /** Query the transaction's state. This function can be used to check for
 * the state of the transaction in case it has been rolled back by the
@@ -894,7 +904,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
 * @ingroup trx
 * @param trx is the transaction handle
 * @return  transaction state */
-[[nodiscard]] TrxState trx_state(Trx *ib_trx) noexcept;
+[[nodiscard]] TrxState trx_state(Trx *trx) noexcept;
 
 /** Release the resources of the transaction. If the transaction was
 * selected as a victim by InnoDB and rolled back then use this function
@@ -903,7 +913,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
 * @ingroup trx
 * @param trx is the transaction handle
 * @return  DB_SUCCESS or err code */
-[[nodiscard]] DbErr trx_release(System &sys, Trx *ib_trx) noexcept;
+[[nodiscard]] DbErr trx_release(System &sys, Trx *trx) noexcept;
 
 /** Commit a transaction. This function will release the schema latches too.
 * It will also free the transaction handle.
@@ -911,7 +921,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
 * @ingroup trx
 * @param trx is thr transaction handle
 * @return  DB_SUCCESS or err code */
-[[nodiscard]] DbErr trx_commit(System &sys, Trx *ib_trx) noexcept;
+[[nodiscard]] DbErr trx_commit(System &sys, Trx *trx) noexcept;
 
 /** Rollback a transaction. This function will release the schema latches too.
 * It will also free the transaction handle.
@@ -919,7 +929,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
 * @ingroup trx
 * @param trx is the transaction handle
 * @return  DB_SUCCESS or err code */
-[[nodiscard]] DbErr trx_rollback(System &sys, Trx *ib_trx) noexcept;
+[[nodiscard]] DbErr trx_rollback(System &sys, Trx *trx) noexcept;
 
 /** Create a table in the InnoDB data dictionary using the schema definition.
 * If the table exists in the database then this function will return
@@ -930,7 +940,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
 * @param tbl_sch the the schema for the table to create
 * @param[out] id table id that was created
 * @return  DB_SUCCESS or err code */
-[[nodiscard]] DbErr table_create(System &sys, Trx *ib_trx, const TableSchema *ib_tbl_sch, uint64_t *id) noexcept;
+[[nodiscard]] DbErr table_create(System &sys, Trx *trx, const TableSchema *tbl_sch, uint64_t *id) noexcept;
 
 /** Rename a table. Ensure that you have acquired the schema lock in
  * exclusive mode.
@@ -940,7 +950,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @param old_name the current name of the table
  * @param new_name the new name for the table
  * @return  DB_SUCCESS or err code */
-[[nodiscard]] DbErr table_rename(System &sys, Trx *ib_trx, const char *old_name, const char *new_name) noexcept;
+[[nodiscard]] DbErr table_rename(System &sys, Trx *trx, const char *old_name, const char *new_name) noexcept;
 
 /** Drop a table. Ensure that you have acquired the schema lock in
  * exclusive mode.
@@ -949,7 +959,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @param trx is the covering transaction.
  * @param name is the name of the table to drop
  * @return  DB_SUCCESS or err code */
-[[nodiscard]] DbErr table_drop(System &sys, Trx *ib_trx, const char *name) noexcept;
+[[nodiscard]] DbErr table_drop(System &sys, Trx *trx, const char *name) noexcept;
 
 /** Drop a secondary index. Ensure that you have acquired the schema lock in
  * exclusive mode.
@@ -958,7 +968,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @param trx is the covering transaction.
  * @param index_id is the id of the index to drop
  * @return  DB_SUCCESS or err code */
-[[nodiscard]] DbErr index_drop(System &sys, Trx *ib_trx, uint64_t index_id) noexcept;
+[[nodiscard]] DbErr index_drop(System &sys, Trx *trx, uint64_t index_id) noexcept;
 
 /** Open an InnoDB table and return a cursor handle to it.
  *
@@ -967,7 +977,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @param trx is the current transaction handle, can be nullptr
  * @param[out] crsr is the new cursor
  * @return  DB_SUCCESS or err code */
-[[nodiscard]] DbErr cursor_open_table_using_id(System &sys, uint64_t table_id, Trx *ib_trx, Cursor **ib_crsr) noexcept;
+[[nodiscard]] DbErr cursor_open_table_using_id(System &sys, uint64_t table_id, Trx *trx, Cursor **crsr) noexcept;
 
 /** Open an InnoDB index and return a cursor handle to it.
  *
@@ -976,7 +986,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @param trx is the current transaction handlem can be nullptr
  * @param[out] crsr is the new cursor
  * @return  DB_SUCCESS or err code */
-[[nodiscard]] DbErr cursor_open_index_using_id(System &sys, uint64_t index_id, Trx *ib_trx, Cursor **ib_crsr) noexcept;
+[[nodiscard]] DbErr cursor_open_index_using_id(System &sys, uint64_t index_id, Trx *trx, Cursor **crsr) noexcept;
 
 /** Open an InnoDB table by name and return a cursor handle to it.
  *
@@ -985,7 +995,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @param trx is the current transactionm, can be nullptr
  * @param crsr is the new cursor
  * @return  DB_SUCCESS or err code */
-[[nodiscard]] DbErr cursor_open_table(System &sys, const char *name, Trx *ib_trx, Cursor **ib_crsr) noexcept;
+[[nodiscard]] DbErr cursor_open_table(System &sys, const char *name, Trx *trx, Cursor **crsr) noexcept;
 
 /** Truncate a table. The cursor handle will be closed and set to nullptr
  * on success.
@@ -994,7 +1004,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @param[out] crsr is the cursor for table to truncate
  * @param[out] table_id is the new table id
  * @return  DB_SUCCESS or error code */
-[[nodiscard]] DbErr cursor_truncate(System &sys, Cursor **ib_crsr, uint64_t *table_id) noexcept;
+[[nodiscard]] DbErr cursor_truncate(System &sys, Cursor **crsr, uint64_t *table_id) noexcept;
 
 /** Truncate a table.
  *
@@ -1041,14 +1051,14 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @ingroup ddl
  * @param trx is the transaction instance
  * @return  DB_SUCCESS or error code */
-[[nodiscard]] DbErr schema_lock_shared(System &sys, Trx *ib_trx) noexcept;
+[[nodiscard]] DbErr schema_lock_shared(System &sys, Trx *trx) noexcept;
 
 /** Latches the data dictionary in exclusive mode.
  *
  * @ingroup ddl
  * @param trx is the transaction instance
  * @return  DB_SUCCESS or error code */
-[[nodiscard]] DbErr schema_lock_exclusive(System &sys, Trx *ib_trx) noexcept;
+[[nodiscard]] DbErr schema_lock_exclusive(System &sys, Trx *trx) noexcept;
 
 /** Checks if the data dictionary is latched in exclusive mode by a
  * user transaction.
@@ -1056,19 +1066,19 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @ingroup ddl
  * @param trx is a transaction instance
  * @return  true if exclusive latch */
-[[nodiscard]] bool schema_lock_is_exclusive(const Trx *ib_trx) noexcept;
+[[nodiscard]] bool schema_lock_is_exclusive(const Trx *trx) noexcept;
 
 /** Checks if the data dictionary is latched in shared mode.
  * @param trx is a transaction instance
  * @return  true if shared latch */
-[[nodiscard]] bool schema_lock_is_shared(const Trx *ib_trx) noexcept;
+[[nodiscard]] bool schema_lock_is_shared(const Trx *trx) noexcept;
 
 /** Unlocks the data dictionary.
  *
  * @ingroup ddl
  * @param trx is a transaction instance
  * @return  DB_SUCCESS or error code */
-[[nodiscard]] DbErr schema_unlock(System &sys, Trx *ib_trx) noexcept;
+[[nodiscard]] DbErr schema_unlock(System &sys, Trx *trx) noexcept;
 
 /** Set the Lock an InnoDB table using the table id.
  *
@@ -1077,7 +1087,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @param table_id is the table to lock
  * @param lck_mode is the lock mode
  * @return  DB_SUCCESS or error code */
-[[nodiscard]] DbErr table_lock(System &sys, Trx *ib_trx, uint64_t table_id, CursorLockMode ib_lck_mode) noexcept;
+[[nodiscard]] DbErr table_lock(System &sys, Trx *trx, uint64_t table_id, CursorLockMode lck_mode) noexcept;
 
 /** Read a table's schema using the visitor pattern. It will make the
  * following sequence of calls:
@@ -1096,7 +1106,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @param visitor visitor functions to invoke on each definition
  * @param arg is the argument passed to the visitor functions.
  * @return  DB_SUCCESS or DB_ERROR */
-[[nodiscard]] DbErr table_schema_visit(System &sys, Trx *ib_trx, const char *name, const SchemaVisitor *visitor, void *arg) noexcept;
+[[nodiscard]] DbErr table_schema_visit(System &sys, Trx *trx, const char *name, const SchemaVisitor *visitor, void *arg) noexcept;
 
 /** List all the tables in the InnoDB's data dictionary. It will abort
  * if visitor returns a non-zero value.
@@ -1111,7 +1121,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @param visitor is the visitor function
  * @param arg argument passed to the visitor function
  * @return DB_SUCCESS if successful */
-[[nodiscard]] DbErr schema_tables_iterate(System &sys, Trx *ib_trx, SchemaVisitorTableAll visitor, void *arg) noexcept;
+[[nodiscard]] DbErr schema_tables_iterate(System &sys, Trx *trx, SchemaVisitorTableAll visitor, void *arg) noexcept;
 
 /** Creates a named savepoint. The transaction must be started. If there is
  * already a savepoint of the same name, this call erases that old savepoint
@@ -1122,7 +1132,7 @@ void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept;
  * @param trx is the transaction instance
  * @param name is the name of the savepoint
  * @param name_len is the length of name in bytes */
-void savepoint_take(Trx *ib_trx, const void *name, ulint name_len) noexcept;
+void savepoint_take(Trx *trx, const void *name, ulint name_len) noexcept;
 
 /** Releases only the named savepoint. Savepoints which were set after this
  * savepoint are left as is.
@@ -1133,7 +1143,7 @@ void savepoint_take(Trx *ib_trx, const void *name, ulint name_len) noexcept;
  * @param name_len is the length of name in bytes
  * @return  if no savepoint of the name found then DB_NO_SAVEPOINT,
  * otherwise DB_SUCCESS */
-[[nodiscard]] DbErr savepoint_release(Trx *ib_trx, const void *name, ulint name_len) noexcept;
+[[nodiscard]] DbErr savepoint_release(Trx *trx, const void *name, ulint name_len) noexcept;
 
 /** Rolls back a transaction back to a named savepoint. Modifications after the
  * savepoint are undone but InnoDB does NOT release the corresponding locks
@@ -1149,7 +1159,7 @@ void savepoint_take(Trx *ib_trx, const void *name, ulint name_len) noexcept;
  * @param name_len is the length of name in bytes
  * @return  if no savepoint of the name found then DB_NO_SAVEPOINT,
  *         otherwise DB_SUCCESS */
-[[nodiscard]] DbErr savepoint_rollback(System &sys, Trx *ib_trx, const void *name, ulint name_len) noexcept;
+[[nodiscard]] DbErr savepoint_rollback(System &sys, Trx *trx, const void *name, ulint name_len) noexcept;
 
 /** Get which key caused a duplicate key error.
  *
@@ -1159,18 +1169,18 @@ void savepoint_take(Trx *ib_trx, const void *name, ulint name_len) noexcept;
  *
  * @ingroup trx
  * @param trx Transaction where error occured
- * @param table_name pointer to be set to table_name. Valid until next ib_ function
+ * @param table_name pointer to be set to table_name. Valid until the next API call
  * call. If you would like to keep it, make a copy.
- * @param index_name pointer to be set to the index name. Valid until next ib_ function
+ * @param index_name pointer to be set to the index name. Valid until the next API call
  * all. If you would like to keep it, make a copy.  */
-[[nodiscard]] DbErr get_duplicate_key(Trx *ib_trx, const char **table_name, const char **index_name) noexcept;
+[[nodiscard]] DbErr get_duplicate_key(Trx *trx, const char **table_name, const char **index_name) noexcept;
 
 /** Do a parallel select count(*) from T;
  * @param[in] trx InnoDB transaction
  * @param[in] crsrs InnoDB cursors
  * @param[in] n_threads Number of threads to use
  * @param[out] n_rows Number of rows in the table */
-[[nodiscard]] DbErr parallel_select_count_star(System &sys, Trx *ib_trx, std::vector<Cursor *> &ib_crsrs, size_t n_threads, uint64_t &n_rows) noexcept;
+[[nodiscard]] DbErr parallel_select_count_star(System &sys, Trx *trx, std::vector<Cursor *> &crsrs, size_t n_threads, uint64_t &n_rows) noexcept;
 
 /**
  * Checks the table for errors using the given transaction and cursor.
@@ -1180,7 +1190,7 @@ void savepoint_take(Trx *ib_trx, const void *name, ulint name_len) noexcept;
  * @param n_threads The number of threads to use for checking the table.
  * @return The error code indicating the result of the table check.
  */
-[[nodiscard]] DbErr check_table(System &sys, Trx **ib_trx, Cursor *ib_crsr, size_t n_threads) noexcept;
+[[nodiscard]] DbErr check_table(System &sys, Trx *trx, Cursor *crsr, size_t n_threads) noexcept;
 
 /** Return the API version number, the version number format is:
 | 16 bits future use | 16 bits current | 16 bits revision | 16 bits age |

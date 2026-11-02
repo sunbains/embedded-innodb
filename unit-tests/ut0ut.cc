@@ -26,7 +26,7 @@ ulint ut_get_high32(ulint a) noexcept {
   return (ulint)i;
 }
 
-ib_time_t ut_time() noexcept {
+time_t ut_time() noexcept {
   return time(nullptr);
 }
 
@@ -79,7 +79,7 @@ ulint ut_time_ms() noexcept {
   return (ulint)tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
-double ut_difftime(ib_time_t time2, ib_time_t time1) noexcept {
+double ut_difftime(time_t time2, time_t time1) noexcept {
   return ::difftime(time2, time1);
 }
 

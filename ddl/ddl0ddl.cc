@@ -349,7 +349,7 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
 
     err = DB_MUST_GET_MORE_FILE_SPACE;
 
-    ib_handle_errors(m_sys, &err, trx, nullptr, nullptr);
+    row_handle_errors(m_sys, &err, trx, nullptr, nullptr);
 
     ut_error;
 

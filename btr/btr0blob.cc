@@ -236,8 +236,9 @@ void Blob::blob_free(System &sys, BufBlock *block, Mtr *mtr) noexcept {
 
   if (block->get_state() == BUF_BLOCK_FILE_PAGE && block->get_space() == space && block->get_page_no() == page_no) {
 
-    auto block_status = sys.m_buf_pool->m_LRU->free_block(&block->m_page, nullptr);
-    ut_a(block_status == BufLru::BlockStatus::FREED);
+    /* The page was just modified: a dirty or fixed block stays in the
+    buffer pool until it is flushed, freeing it is only an attempt. */
+    (void)sys.m_buf_pool->m_LRU->free_block(&block->m_page, nullptr);
   }
 
   mutex_exit(&sys.m_buf_pool->m_mutex);
@@ -475,7 +476,10 @@ void Blob::free_externally_stored_field(System &sys,
       .m_mtr = &mtr
     };
 
-    ;
+    /* X-latch the page of the record in this mini-transaction: field_ref
+    is written below. */
+    (void)sys.m_buf_pool->get(req, nullptr);
+    buf_block_dbg_add_level();
 
     auto page_no = mach_read_from_4(field_ref + BTR_EXTERN_PAGE_NO);
 

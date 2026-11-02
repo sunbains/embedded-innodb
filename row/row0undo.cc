@@ -1004,11 +1004,13 @@ void UndoNode::parse_update_undo_rec(System &sys, IbRecovery recovery, QueThr *t
 
 DbErr UndoNode::undo_update(System &sys, QueThr *thr) noexcept {
   DbErr err;
-  ut_a(m_rec_type == TRX_UNDO_UPD_EXIST_REC || m_rec_type == TRX_UNDO_DEL_MARK_REC || m_rec_type == TRX_UNDO_UPD_DEL_REC);
 
   ut_ad(m_state == UNDO_NODE_MODIFY);
 
   parse_update_undo_rec(sys, sys.m_config.m_recv.m_force_recovery, thr);
+
+  /* m_rec_type is the type of the record just parsed. */
+  ut_a(m_rec_type == TRX_UNDO_UPD_EXIST_REC || m_rec_type == TRX_UNDO_DEL_MARK_REC || m_rec_type == TRX_UNDO_UPD_DEL_REC);
 
   if (m_table == nullptr || !search_cluster_index_and_persist_position(sys)) {
     /* It is already undone, or will be undone by another query thread, or table was dropped */

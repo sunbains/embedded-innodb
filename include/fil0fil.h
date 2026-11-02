@@ -671,11 +671,12 @@ struct Fil {
    * to their names that are stored in the data dictionary.
    *
    * @param dir The directory to scan
+   * @param dbname The database the directory holds, relative to the data home; empty for the data home
    * @param recovery The recovery flag
    * @param max_depth The maximum depth of the directory tree to scan
    * @param depth The current depth of the directory tree
    */
-  DbErr scan_and_load_tablespaces(const std::string &dir, IbRecovery recovery, ulint max_depth, ulint depth);
+  DbErr scan_and_load_tablespaces(const std::string &dir, const std::string &dbname, IbRecovery recovery, ulint max_depth, ulint depth);
 
   /**
   * @brief Prepares a file node for i/o. Opens the file if it is closed. Updates the

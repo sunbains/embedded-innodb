@@ -70,13 +70,13 @@ constexpr ulint INNOBASE_WAKE_INTERVAL = 32;
  *
  * @return	true if positioned
  */
-static bool ib_btr_cursor_is_positioned(const BtreePcursor *pcur) noexcept {
+static bool btr_cursor_is_positioned(const BtreePcursor *pcur) noexcept {
   return pcur->m_old_stored &&
          (pcur->m_pos_state == BtrPcurPositioned::IS_POSITIONED || pcur->m_pos_state == BtrPcurPositioned::WAS_POSITIONED);
 }
 
 /** Delays an INSERT, DELETE or UPDATE operation if the purge is lagging. */
-static void ib_delay_dml_if_needed(System &sys) {
+static void delay_dml_if_needed(System &sys) {
   if (sys.m_srv->m_dml_needed_delay) {
     os_thread_sleep(sys.m_srv->m_dml_needed_delay);
   }
@@ -89,7 +89,7 @@ static void ib_delay_dml_if_needed(System &sys) {
  * @param locked - true if own dict mutex
  * @return table instance if found
  */
-static Table *ib_open_table_by_id(System &sys, uint64_t tid, bool locked) noexcept {
+static Table *open_table_by_id(System &sys, uint64_t tid, bool locked) noexcept {
   /* We only return the lower 32 bits of the uint64_t. */
   ut_a(tid < 0xFFFFFFFFULL);
   auto table_id = tid;
@@ -122,7 +122,7 @@ static Table *ib_open_table_by_id(System &sys, uint64_t tid, bool locked) noexce
  * @param[in] name  Table name
  *
  * @return	table instance if found */
-static Table *ib_open_table_by_name(System &sys, const char *name) {
+static Table *open_table_by_name(System &sys, const char *name) {
   auto table = sys.m_dict->table_get(name, true);
 
   if (table != nullptr && table->m_ibd_file_missing) {
@@ -144,7 +144,7 @@ static Table *ib_open_table_by_name(System &sys, const char *name) {
  *
  * @return table instance if found
  */
-static Table *ib_lookup_table_by_name(System &sys, const char *name) {
+static Table *lookup_table_by_name(System &sys, const char *name) {
   ut_ad(mutex_own(&sys.m_dict->m_mutex));
 
   auto table = sys.m_dict->table_get(name);
@@ -165,7 +165,7 @@ static Table *ib_lookup_table_by_name(System &sys, const char *name) {
  * when a single database operation may introduce a small need for
  * server utility activity, like checkpointing.
  */
-static void ib_wake_master_thread(System &sys) noexcept {
+static void wake_master_thread(System &sys) noexcept {
   if ((++sys.m_srv->m_n_api_ops % INNOBASE_WAKE_INTERVAL) == 0) {
     sys.m_srv->active_wake_master_thread();
   }
@@ -175,39 +175,12 @@ static void ib_wake_master_thread(System &sys) noexcept {
 
 /** Calculate the length of the column data less trailing space. */
 static
-ulint ib_varchar_len(const Dtype*	dtype, byte*	ptr, ulint len) {
-	/* Handle UCS2 strings differently. */
-	ulint		mbminlen = dtype_get_mbminlen(dtype);
-
-	if (mbminlen == 2) {
-		/* SPACE = 0x0020. */
-		/* Trim "half-chars", just in case. */
-		len &= ~1;
-
-		while (len >= 2 && ptr[len - 2] == 0x00 && ptr[len - 1] == 0x20) {
-
-			len -= 2;
-		}
-
-	} else {
-		ut_a(mbminlen == 1);
-
-		/* SPACE = 0x20. */
-		while (len > 0 && ptr[len - 1] == 0x20) {
-
-			--len;
-		}
-	}
-
-	return len;
-}
-
 /**
  * Calculate the max row size of the columns in a cluster index.
  *
  * @return	max row length
  */
-static ulint ib_get_max_row_len(Index *index) {
+static ulint get_max_row_len(Index *index) {
   ut_a(index->is_clustered());
 
   ulint max_len{};
@@ -234,7 +207,7 @@ static ulint ib_get_max_row_len(Index *index) {
  * @param[in] rec           Record to read
  * @param[in] tuple         Tuple to read into
  */
-static void ib_read_tuple(System &sys, const Rec &rec, Tuple *tuple) noexcept {
+static void read_tuple(System &sys, const Rec &rec, Tuple *tuple) noexcept {
   std::array<ulint, REC_OFFS_NORMAL_SIZE> offsets_{};
   RecOffs offsets(offsets_.data());
   DTuple *dtuple = tuple->m_ptr;
@@ -299,7 +272,7 @@ static void ib_read_tuple(System &sys, const Rec &rec, Tuple *tuple) noexcept {
  * @param heap The memory heap.
  * @return Tuple instance created, or nullptr.
  */
-static Tuple *ib_key_tuple_new_low(const Index *index, ulint n_cols, MemHeap *heap) {
+static Tuple *key_tuple_new_low(const Index *index, ulint n_cols, MemHeap *heap) {
 
   auto tuple = reinterpret_cast<Tuple *>(mem_heap_alloc(heap, sizeof(Tuple)));
 
@@ -334,7 +307,7 @@ static Tuple *ib_key_tuple_new_low(const Index *index, ulint n_cols, MemHeap *he
 
   dtuple_set_n_fields_cmp(tuple->m_ptr, n_cmp_cols);
 
-  return (Tuple *)tuple;
+  return tuple;
 }
 
 /**
@@ -345,14 +318,14 @@ static Tuple *ib_key_tuple_new_low(const Index *index, ulint n_cols, MemHeap *he
  *
  * @return Tuple instance created, or nullptr.
  */
-static Tuple *ib_key_tuple_new(const Index *index, ulint n_cols) noexcept {
+static Tuple *key_tuple_new(const Index *index, ulint n_cols) noexcept {
   auto heap = mem_heap_create(64);
 
   if (heap == nullptr) {
     return nullptr;
   }
 
-  return ib_key_tuple_new_low(index, n_cols, heap);
+  return key_tuple_new_low(index, n_cols, heap);
 }
 
 /**
@@ -364,7 +337,7 @@ static Tuple *ib_key_tuple_new(const Index *index, ulint n_cols) noexcept {
  *
  * @return Tuple instance created, or nullptr.
  */
-static Tuple *ib_row_tuple_new_low(const Index *index, ulint n_cols, MemHeap *heap) noexcept {
+static Tuple *row_tuple_new_low(const Index *index, ulint n_cols, MemHeap *heap) noexcept {
   auto tuple = reinterpret_cast<Tuple *>(mem_heap_alloc(heap, sizeof(Tuple)));
 
   if (tuple == nullptr) {
@@ -381,7 +354,7 @@ static Tuple *ib_row_tuple_new_low(const Index *index, ulint n_cols, MemHeap *he
   /* Copy types and set to SQL_NULL. */
   index->m_table->copy_types(tuple->m_ptr);
 
-  return (Tuple *)tuple;
+  return tuple;
 }
 
 /**
@@ -392,32 +365,31 @@ static Tuple *ib_row_tuple_new_low(const Index *index, ulint n_cols, MemHeap *he
  *
  * @return Tuple instance created, or nullptr.
  */
-static Tuple *ib_row_tuple_new(const Index *index, ulint n_cols) noexcept {
+static Tuple *row_tuple_new(const Index *index, ulint n_cols) noexcept {
   auto heap = mem_heap_create(64);
 
   if (heap == nullptr) {
     return nullptr;
   }
 
-  return ib_row_tuple_new_low(index, n_cols, heap);
+  return row_tuple_new_low(index, n_cols, heap);
 }
 
 uint64_t api_version() noexcept {
   return ((uint64_t)IB_API_VERSION_CURRENT << 32 | (IB_API_VERSION_REVISION << 16) | IB_API_VERSION_AGE);
 }
 
-DbErr trx_start(System &sys, Trx *ib_trx, TrxLevel ib_trx_level) noexcept {
+DbErr trx_start(System &sys, Trx *trx, TrxLevel trx_level) noexcept {
   DbErr err = DB_SUCCESS;
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
-  ut_a(ib_trx_level >= IB_TRX_READ_UNCOMMITTED);
-  ut_a(ib_trx_level <= IB_TRX_SERIALIZABLE);
+  ut_a(trx_level >= IB_TRX_READ_UNCOMMITTED);
+  ut_a(trx_level <= IB_TRX_SERIALIZABLE);
 
   if (trx->m_conc_state == TRX_NOT_STARTED) {
     auto started = trx->start(sys, ULINT_UNDEFINED);
     ut_a(started);
 
-    trx->m_isolation_level = static_cast<TrxIsolation>(ib_trx_level);
+    trx->m_isolation_level = static_cast<TrxIsolation>(trx_level);
   } else {
     err = DB_ERROR;
   }
@@ -427,29 +399,30 @@ DbErr trx_start(System &sys, Trx *ib_trx, TrxLevel ib_trx_level) noexcept {
   return err;
 }
 
-void trx_set_client_data(Trx *ib_trx, void *client_data) noexcept {
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+void trx_interrupt(Trx *trx) noexcept {
+  trx->interrupt();
+}
+
+void trx_set_client_data(Trx *trx, void *client_data) noexcept {
 
   trx->m_client_ctx = client_data;
 }
 
-Trx *trx_begin(System &sys, TrxLevel ib_trx_level) noexcept {
+Trx *trx_begin(System &sys, TrxLevel trx_level) noexcept {
   auto trx = sys.m_trx_sys->create_user_trx(nullptr);
-  auto started = trx_start(sys, (Trx *)trx, ib_trx_level);
+  auto started = trx_start(sys, trx, trx_level);
 
   ut_a(started);
 
-  return reinterpret_cast<Trx *>(trx);
+  return trx;
 }
 
-TrxState trx_state(Trx *ib_trx) noexcept {
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+TrxState trx_state(Trx *trx) noexcept {
 
   return static_cast<TrxState>(trx->m_conc_state);
 }
 
-DbErr trx_release(System &sys, Trx *ib_trx) noexcept {
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+DbErr trx_release(System &sys, Trx *trx) noexcept {
 
   ut_ad(trx != nullptr);
   sys.m_trx_sys->destroy_user_trx(trx);
@@ -457,38 +430,36 @@ DbErr trx_release(System &sys, Trx *ib_trx) noexcept {
   return DB_SUCCESS;
 }
 
-DbErr trx_commit(System &sys, Trx *ib_trx) noexcept {
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+DbErr trx_commit(System &sys, Trx *trx) noexcept {
 
   auto err = trx->commit(sys);
   ut_a(err == DB_SUCCESS);
 
-  err = schema_unlock(sys, ib_trx);
+  err = schema_unlock(sys, trx);
   ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
 
-  err = trx_release(sys, ib_trx);
+  err = trx_release(sys, trx);
   ut_a(err == DB_SUCCESS);
 
-  ib_wake_master_thread(sys);
+  wake_master_thread(sys);
 
   return DB_SUCCESS;
 }
 
-DbErr trx_rollback(System &sys, Trx *ib_trx) noexcept {
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+DbErr trx_rollback(System &sys, Trx *trx) noexcept {
 
   auto err = trx_general_rollback(sys, trx, false, nullptr);
 
   /* It should always succeed */
   ut_a(err == DB_SUCCESS);
 
-  err = schema_unlock(sys, ib_trx);
+  err = schema_unlock(sys, trx);
   ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
 
-  err = trx_release(sys, ib_trx);
+  err = trx_release(sys, trx);
   ut_a(err == DB_SUCCESS);
 
-  ib_wake_master_thread(sys);
+  wake_master_thread(sys);
 
   return err;
 }
@@ -497,18 +468,18 @@ DbErr trx_rollback(System &sys, Trx *ib_trx) noexcept {
  * Check that the combination of values and name makes sense.
  *
  * @param[in] name The column name.
- * @param[in] ib_col_type The column type.
- * @param[in] ib_col_attr The column attribute.
+ * @param[in] col_type The column type.
+ * @param[in] col_attr The column attribute.
  * @param[in] len The length of the column.
  *
  * @return True if the combination is valid, false otherwise.
  */
-static bool ib_check_col_is_ok(const char *name, ColType ib_col_type, ColAttr ib_col_attr, ulint len) {
+static bool check_col_is_ok(const char *name, ColType col_type, ColAttr col_attr, ulint len) {
   if (strlen(name) > IB_MAX_COL_NAME_LEN) {
     return false;
-  } else if ((ib_col_type == IB_VARCHAR || ib_col_type == IB_CHAR || ib_col_type == IB_BINARY) && len == 0) {
+  } else if ((col_type == IB_VARCHAR || col_type == IB_CHAR || col_type == IB_BINARY) && len == 0) {
     return false;
-  } else if (ib_col_type == IB_INT) {
+  } else if (col_type == IB_INT) {
     switch (len) {
       case 1:
       case 2:
@@ -518,9 +489,9 @@ static bool ib_check_col_is_ok(const char *name, ColType ib_col_type, ColAttr ib
       default:
         return false;
     }
-  } else if (ib_col_type == IB_FLOAT && len != 4) {
+  } else if (col_type == IB_FLOAT && len != 4) {
     return false;
-  } else if (ib_col_type == IB_DOUBLE && len != 8) {
+  } else if (col_type == IB_DOUBLE && len != 8) {
     return false;
   }
 
@@ -535,7 +506,7 @@ static bool ib_check_col_is_ok(const char *name, ColType ib_col_type, ColAttr ib
  *
  * @return Index definition if found, else nullptr.
  */
-static const IndexSchema *ib_table_find_index(const std::vector<IndexSchema *> &indexes, const char *name) {
+static const IndexSchema *table_find_index(const std::vector<IndexSchema *> &indexes, const char *name) {
   for (const auto index_def : indexes) {
     if (ib_utf8_strcasecmp(name, index_def->m_name) == 0) {
       return index_def;
@@ -548,32 +519,32 @@ static const IndexSchema *ib_table_find_index(const std::vector<IndexSchema *> &
 /**
  * Get the InnoDB internal precise type from the schema column definition.
  *
- * @param[in] ib_col The column definition.
+ * @param[in] schema_col The column definition.
  *
  * @return The precise type in API format.
  */
-static ulint ib_col_get_prtype(const Col *ib_col) {
+static ulint col_get_prtype(const Col *col) {
   ulint prtype = 0;
 
-  if (ib_col->m_col_attr & IB_COL_UNSIGNED) {
+  if (col->m_col_attr & IB_COL_UNSIGNED) {
     prtype |= DATA_UNSIGNED;
 
-    ut_a(ib_col->m_col_type == IB_INT);
+    ut_a(col->m_col_type == IB_INT);
   }
 
-  if (ib_col->m_col_attr & IB_COL_NOT_NULL) {
+  if (col->m_col_attr & IB_COL_NOT_NULL) {
     prtype |= DATA_NOT_NULL;
   }
 
-  if (ib_col->m_col_attr & IB_COL_CUSTOM1) {
+  if (col->m_col_attr & IB_COL_CUSTOM1) {
     prtype |= DATA_CUSTOM_TYPE;
   }
 
-  if (ib_col->m_col_attr & IB_COL_CUSTOM2) {
+  if (col->m_col_attr & IB_COL_CUSTOM2) {
     prtype |= (DATA_CUSTOM_TYPE << 1);
   }
 
-  if (ib_col->m_col_attr & IB_COL_CUSTOM3) {
+  if (col->m_col_attr & IB_COL_CUSTOM3) {
     prtype |= (DATA_CUSTOM_TYPE << 2);
   }
 
@@ -583,13 +554,13 @@ static ulint ib_col_get_prtype(const Col *ib_col) {
 /**
  * Get the InnoDB internal main type from the schema column definition.
  *
- * @param[in] ib_col The column list head
+ * @param[in] schema_col The column list head
  *
  * @return The main type.
  */
-static ulint ib_col_get_mtype(const Col *ib_col) noexcept {
+static ulint col_get_mtype(const Col *col) noexcept {
   /* Note: The api0api.h types should map directly to the internal numeric codes. */
-  return ib_col->m_col_type;
+  return col->m_col_type;
 }
 
 /**
@@ -601,11 +572,11 @@ static ulint ib_col_get_mtype(const Col *ib_col) noexcept {
  * @return The column definition if found, else nullptr.
  * @return	col. def. if found else nullptr
  */
-static const Col *ib_table_find_col(const std::vector<Col *> &cols, const char *name) noexcept {
-  for (const auto ib_col : cols) {
+static const Col *table_find_col(const std::vector<Col *> &cols, const char *name) noexcept {
+  for (const auto col : cols) {
 
-    if (ib_utf8_strcasecmp(ib_col->m_name, name) == 0) {
-      return ib_col;
+    if (ib_utf8_strcasecmp(col->m_name, name) == 0) {
+      return col;
     }
   }
 
@@ -619,53 +590,51 @@ static const Col *ib_table_find_col(const std::vector<Col *> &cols, const char *
  * @param name The column name to find.
  * @return Column definition if found, else nullptr.
  */
-static const KeyCol *ib_index_find_col(const std::vector<KeyCol *> &cols, const char *name) noexcept {
-  for (auto ib_col : cols) {
+static const KeyCol *index_find_col(const std::vector<KeyCol *> &cols, const char *name) noexcept {
+  for (auto col : cols) {
 
-    if (ib_utf8_strcasecmp(ib_col->m_name, name) == 0) {
-      return ib_col;
+    if (ib_utf8_strcasecmp(col->m_name, name) == 0) {
+      return col;
     }
   }
 
   return nullptr;
 }
 
-DbErr TableSchema::add_col(const char *name, ColType ib_col_type, ColAttr ib_col_attr, uint16_t client_type, ulint len) noexcept {
-  auto ib_tbl_sch = this;
+DbErr TableSchema::add_col(const char *name, ColType col_type, ColAttr col_attr, uint16_t client_type, ulint len) noexcept {
+  auto table_def = this;
   DbErr err = DB_SUCCESS;
-  TableSchema *table_def = (TableSchema *)ib_tbl_sch;
 
   if (table_def->m_table != nullptr) {
     err = DB_ERROR;
-  } else if (ib_table_find_col(*table_def->m_cols, name) != nullptr) {
+  } else if (table_find_col(*table_def->m_cols, name) != nullptr) {
     err = DB_DUPLICATE_KEY;
-  } else if (!ib_check_col_is_ok(name, ib_col_type, ib_col_attr, len)) {
+  } else if (!check_col_is_ok(name, col_type, col_attr, len)) {
     err = DB_ERROR;
   } else {
     auto heap = table_def->m_heap;
 
-    auto ib_col = reinterpret_cast<Col *>(mem_heap_zalloc(heap, sizeof(Col)));
+    auto col = reinterpret_cast<Col *>(mem_heap_zalloc(heap, sizeof(Col)));
 
-    if (ib_col == nullptr) {
+    if (col == nullptr) {
       err = DB_OUT_OF_MEMORY;
     } else {
-      ib_col->m_name = mem_heap_strdup(heap, name);
-      ib_col->m_col_type = ib_col_type;
-      ib_col->m_col_attr = ib_col_attr;
+      col->m_name = mem_heap_strdup(heap, name);
+      col->m_col_type = col_type;
+      col->m_col_attr = col_attr;
 
-      ib_col->m_len = len;
+      col->m_len = len;
 
-      table_def->m_cols->emplace_back(ib_col);
+      table_def->m_cols->emplace_back(col);
     }
   }
 
   return err;
 }
 
-DbErr TableSchema::add_index(const char *name, IndexSchema **ib_idx_sch) noexcept {
-  auto ib_tbl_sch = this;
+DbErr TableSchema::add_index(const char *name, IndexSchema **idx_sch) noexcept {
+  auto table_def = this;
   DbErr err = DB_SUCCESS;
-  auto table_def = reinterpret_cast<TableSchema *>(ib_tbl_sch);
 
   if (table_def->m_table != nullptr) {
     err = DB_ERROR;
@@ -674,7 +643,7 @@ DbErr TableSchema::add_index(const char *name, IndexSchema **ib_idx_sch) noexcep
   } else if (name[0] == TEMP_INDEX_PREFIX) {
     return DB_INVALID_INPUT;
   }
-  if (ib_table_find_index(*table_def->m_indexes, name) != nullptr) {
+  if (table_find_index(*table_def->m_indexes, name) != nullptr) {
     err = DB_DUPLICATE_KEY;
   } else {
     auto heap = table_def->m_heap;
@@ -694,15 +663,14 @@ DbErr TableSchema::add_index(const char *name, IndexSchema **ib_idx_sch) noexcep
 
       table_def->m_indexes->emplace_back(index_def);
 
-      *ib_idx_sch = (IndexSchema *)index_def;
+      *idx_sch = index_def;
     }
   }
 
   return err;
 }
 
-void TableSchema::destroy(System &sys, TableSchema *ib_tbl_sch) noexcept {
-  TableSchema *table_def = (TableSchema *)ib_tbl_sch;
+void TableSchema::destroy(System &sys, TableSchema *table_def) noexcept {
 
   /* Check that all indexes are owned by the table schema. */
   for (auto index_def : *table_def->m_indexes) {
@@ -719,7 +687,7 @@ void TableSchema::destroy(System &sys, TableSchema *ib_tbl_sch) noexcept {
   mem_heap_free(table_def->m_heap);
 }
 
-static DbErr ib_table_schema_check(TableFormat ib_tbl_fmt, ulint *page_size) {
+static DbErr table_schema_check(TableFormat tbl_fmt, ulint *page_size) {
   DbErr err = DB_SUCCESS;
 
   *page_size = 0;
@@ -756,7 +724,7 @@ static DbErr ib_table_schema_check(TableFormat ib_tbl_fmt, ulint *page_size) {
  * @param[out] norm_name Normalized name as a null-terminated string.
  * @param[in] name Table name string.
  */
-static void ib_normalize_table_name(char *norm_name, const char *name) {
+static void normalize_table_name(char *norm_name, const char *name) {
   const char *ptr = name;
 
   /* Scan name from the end */
@@ -797,7 +765,7 @@ static void ib_normalize_table_name(char *norm_name, const char *name) {
  *
  * @return DB_SUCCESS or err code.
  */
-static DbErr ib_table_name_check(const char *name) noexcept {
+static DbErr table_name_check(const char *name) noexcept {
   const char *slash = nullptr;
   ulint len = strlen(name);
 
@@ -819,15 +787,15 @@ static DbErr ib_table_name_check(const char *name) noexcept {
   return slash ? DB_SUCCESS : DB_DATA_MISMATCH;
 }
 
-DbErr TableSchema::create(const char *name, TableSchema **ib_tbl_sch, TableFormat ib_tbl_fmt, ulint page_size) noexcept {
+DbErr TableSchema::create(const char *name, TableSchema **tbl_sch, TableFormat tbl_fmt, ulint page_size) noexcept {
 
-  auto err = ib_table_name_check(name);
+  auto err = table_name_check(name);
 
   if (err != DB_SUCCESS) {
     return err;
   }
 
-  err = ib_table_schema_check(ib_tbl_fmt, &page_size);
+  err = table_schema_check(tbl_fmt, &page_size);
 
   if (err != DB_SUCCESS) {
     return err;
@@ -838,7 +806,7 @@ DbErr TableSchema::create(const char *name, TableSchema **ib_tbl_sch, TableForma
   if (heap == nullptr) {
     err = DB_OUT_OF_MEMORY;
   } else {
-    auto table_def = (TableSchema *)mem_heap_zalloc(heap, sizeof(TableSchema));
+    auto table_def = reinterpret_cast<TableSchema *>(mem_heap_zalloc(heap, sizeof(TableSchema)));
 
     if (table_def == nullptr) {
       err = DB_OUT_OF_MEMORY;
@@ -849,19 +817,19 @@ DbErr TableSchema::create(const char *name, TableSchema **ib_tbl_sch, TableForma
 
       auto normalized_name = mem_heap_strdup(heap, name);
 
-      ib_normalize_table_name(normalized_name, name);
+      normalize_table_name(normalized_name, name);
 
       table_def->m_name = normalized_name;
 
       table_def->m_page_size = page_size;
 
-      table_def->m_tbl_fmt = ib_tbl_fmt;
+      table_def->m_tbl_fmt = tbl_fmt;
 
       table_def->m_cols = new std::vector<Col *>();
 
       table_def->m_indexes = new std::vector<IndexSchema *>();
 
-      *ib_tbl_sch = (TableSchema *)table_def;
+      *tbl_sch = table_def;
     }
   }
 
@@ -871,21 +839,21 @@ DbErr TableSchema::create(const char *name, TableSchema **ib_tbl_sch, TableForma
 /**
  * Get the column number within the index definition.
  *
- * @param[in] ib_index_def The index definition.
+ * @param[in] index_schema The index definition.
  * @param[in] name The column name to search.
  *
  * @return -1 or column number.
  */
-static int ib_index_get_col_no(const IndexSchema *ib_index_def, const char *name) {
+static int index_get_col_no(const IndexSchema *index_def, const char *name) {
   int col_no;
 
   /* Is this column definition for an existing table ? */
-  if (ib_index_def->m_table != nullptr) {
-    col_no = ib_index_def->m_table->get_col_no(name);
+  if (index_def->m_table != nullptr) {
+    col_no = index_def->m_table->get_col_no(name);
   } else {
-    const auto ib_col = ib_table_find_col(*ib_index_def->m_schema->m_cols, name);
+    const auto col = table_find_col(*index_def->m_schema->m_cols, name);
 
-    if (ib_col != nullptr) {
+    if (col != nullptr) {
       /* We simply note that we've found the column. */
       col_no = 0;
     } else {
@@ -899,18 +867,18 @@ static int ib_index_get_col_no(const IndexSchema *ib_index_def, const char *name
 /**
  * Check whether a prefix length index is allowed on the column.
  *
- * @param[in] ib_index_def The index definition.
+ * @param[in] index_schema The index definition.
  * @param[in] name The column name to check.
  *
  * @return True if allowed.
  */
-static int ib_index_is_prefix_allowed(const IndexSchema *ib_index_def, const char *name) noexcept {
+static int index_is_prefix_allowed(const IndexSchema *index_def, const char *name) noexcept {
   bool allowed = true;
   ulint mtype = ULINT_UNDEFINED;
 
   /* Is this column definition for an existing table ? */
-  if (ib_index_def->m_table != nullptr) {
-    auto table = ib_index_def->m_table;
+  if (index_def->m_table != nullptr) {
+    auto table = index_def->m_table;
     auto col_no = table->get_col_no(name);
     ut_a(col_no != -1);
 
@@ -919,13 +887,13 @@ static int ib_index_is_prefix_allowed(const IndexSchema *ib_index_def, const cha
 
     mtype = col->mtype;
   } else {
-    const Col *ib_col;
+    const Col *schema_col;
 
-    ib_col = ib_table_find_col(*ib_index_def->m_schema->m_cols, name);
+    schema_col = table_find_col(*index_def->m_schema->m_cols, name);
 
-    ut_a(ib_col != nullptr);
+    ut_a(schema_col != nullptr);
 
-    mtype = (ulint)ib_col->m_col_type;
+    mtype = (ulint)schema_col->m_col_type;
   }
 
   /* The following column types can't have prefix column indexes. */
@@ -945,30 +913,29 @@ static int ib_index_is_prefix_allowed(const IndexSchema *ib_index_def, const cha
 }
 
 DbErr IndexSchema::add_col(const char *name, ulint prefix_len) noexcept {
-  auto ib_idx_sch = this;
+  auto index_def = this;
   DbErr err = DB_SUCCESS;
-  IndexSchema *index_def = (IndexSchema *)ib_idx_sch;
 
   /* Check for duplicates. */
-  if (ib_index_find_col(*index_def->m_cols, name) != nullptr) {
+  if (index_find_col(*index_def->m_cols, name) != nullptr) {
     err = DB_COL_APPEARS_TWICE_IN_INDEX;
     /* Check if the column exists in the table definition. */
-  } else if (ib_index_get_col_no(index_def, name) == -1) {
+  } else if (index_get_col_no(index_def, name) == -1) {
     err = DB_NOT_FOUND;
     /* Some column types can't have prefix length indexes. */
-  } else if (prefix_len > 0 && !ib_index_is_prefix_allowed(index_def, name)) {
+  } else if (prefix_len > 0 && !index_is_prefix_allowed(index_def, name)) {
     err = DB_SCHEMA_ERROR;
   } else {
     auto heap = index_def->m_heap;
-    auto ib_col = reinterpret_cast<KeyCol *>(mem_heap_zalloc(heap, sizeof(KeyCol)));
+    auto col = reinterpret_cast<KeyCol *>(mem_heap_zalloc(heap, sizeof(KeyCol)));
 
-    if (ib_col == nullptr) {
+    if (col == nullptr) {
       err = DB_OUT_OF_MEMORY;
     } else {
-      ib_col->m_name = mem_heap_strdup(heap, name);
-      ib_col->m_prefix_len = prefix_len;
+      col->m_name = mem_heap_strdup(heap, name);
+      col->m_prefix_len = prefix_len;
 
-      index_def->m_cols->emplace_back(ib_col);
+      index_def->m_cols->emplace_back(col);
     }
   }
 
@@ -976,11 +943,11 @@ DbErr IndexSchema::add_col(const char *name, ulint prefix_len) noexcept {
 }
 
 DbErr IndexSchema::create(
-  System &sys, Trx *ib_usr_trx, const char *name, const char *table_name, IndexSchema **ib_idx_sch
+  System &sys, Trx *usr_trx, const char *name, const char *table_name, IndexSchema **idx_sch
 ) noexcept {
   DbErr err = DB_SUCCESS;
 
-  if (!schema_lock_is_exclusive(ib_usr_trx)) {
+  if (!schema_lock_is_exclusive(usr_trx)) {
     return DB_SCHEMA_NOT_LOCKED;
   } else if (name[0] == TEMP_INDEX_PREFIX) {
     return DB_INVALID_INPUT;
@@ -989,9 +956,9 @@ DbErr IndexSchema::create(
   }
 
   auto normalized_name = static_cast<char *>(mem_alloc(strlen(table_name) + 1));
-  ib_normalize_table_name(normalized_name, table_name);
+  normalize_table_name(normalized_name, table_name);
 
-  auto table = ib_lookup_table_by_name(sys, normalized_name);
+  auto table = lookup_table_by_name(sys, normalized_name);
 
   mem_free(normalized_name);
   normalized_name = nullptr;
@@ -1021,9 +988,9 @@ DbErr IndexSchema::create(
 
         index_def->m_cols = new std::vector<KeyCol *>();
 
-        index_def->m_usr_trx = reinterpret_cast<Trx *>(ib_usr_trx);
+        index_def->m_usr_trx = usr_trx;
 
-        *ib_idx_sch = reinterpret_cast<IndexSchema *>(index_def);
+        *idx_sch = index_def;
       }
     }
   }
@@ -1038,10 +1005,10 @@ DbErr IndexSchema::create(
  *
  * @return Cluster index schema.
  */
-static IndexSchema *ib_find_clustered_index(const std::vector<IndexSchema *> &indexes) {
-  for (const auto ib_index_def : indexes) {
-    if (ib_index_def->m_clustered) {
-      return ib_index_def;
+static IndexSchema *find_clustered_index(const std::vector<IndexSchema *> &indexes) {
+  for (const auto index_def : indexes) {
+    if (index_def->m_clustered) {
+      return index_def;
     }
   }
 
@@ -1049,20 +1016,18 @@ static IndexSchema *ib_find_clustered_index(const std::vector<IndexSchema *> &in
 }
 
 DbErr IndexSchema::set_clustered() noexcept {
-  auto ib_idx_sch = this;
+  auto index_def = this;
   DbErr err = DB_SUCCESS;
-
-  auto index_def = reinterpret_cast<IndexSchema *>(ib_idx_sch);
 
   /* If this index schema is part of a table schema then we need
   to check the state of the other indexes. */
 
   if (index_def->m_schema != nullptr) {
-    auto ib_clust_index_def = ib_find_clustered_index(*index_def->m_schema->m_indexes);
+    auto clust_index_def = find_clustered_index(*index_def->m_schema->m_indexes);
 
-    if (ib_clust_index_def != nullptr) {
-      ut_a(ib_clust_index_def->m_clustered);
-      ib_clust_index_def->m_clustered = false;
+    if (clust_index_def != nullptr) {
+      ut_a(clust_index_def->m_clustered);
+      clust_index_def->m_clustered = false;
     }
   }
 
@@ -1073,17 +1038,14 @@ DbErr IndexSchema::set_clustered() noexcept {
 }
 
 DbErr IndexSchema::set_unique() noexcept {
-  auto ib_idx_sch = this;
+  auto index_def = this;
   DbErr err = DB_SUCCESS;
-
-  auto index_def = (IndexSchema *)ib_idx_sch;
   index_def->m_unique = true;
 
   return err;
 }
 
-void IndexSchema::destroy(IndexSchema *ib_idx_sch) noexcept {
-  auto index_def = (IndexSchema *)ib_idx_sch;
+void IndexSchema::destroy(IndexSchema *index_def) noexcept {
 
   ut_a(index_def->m_schema == nullptr);
 
@@ -1098,7 +1060,7 @@ void IndexSchema::destroy(IndexSchema *ib_idx_sch) noexcept {
  *
  * @return Flags.
  */
-static ulint ib_table_def_get_flags(const TableSchema *table_def) {
+static ulint table_def_get_flags(const TableSchema *table_def) {
   ulint flags = 0;
 
   switch (table_def->m_tbl_fmt) {
@@ -1114,31 +1076,31 @@ static ulint ib_table_def_get_flags(const TableSchema *table_def) {
 /**
  * Copy the index definition to row0merge.c format.
  *
- * @param[in] ib_index_def Key definition for index.
+ * @param[in] index_schema Key definition for index.
  * @param[in] clustered True if clustered index.
  *
  * @return Converted index definition.
  */
-static const index_def_t *ib_copy_index_definition(IndexSchema *ib_index_def, bool clustered) {
-  auto index_def = reinterpret_cast<index_def_t *>(mem_heap_zalloc(ib_index_def->m_heap, sizeof(index_def_t)));
-  auto name_len = strlen(ib_index_def->m_name);
-  auto index_name = reinterpret_cast<char *>(mem_heap_zalloc(ib_index_def->m_heap, name_len + 2));
+static const index_def_t *copy_index_definition(IndexSchema *index_schema, bool clustered) {
+  auto index_def = reinterpret_cast<index_def_t *>(mem_heap_zalloc(index_schema->m_heap, sizeof(index_def_t)));
+  auto name_len = strlen(index_schema->m_name);
+  auto index_name = reinterpret_cast<char *>(mem_heap_zalloc(index_schema->m_heap, name_len + 2));
 
   /* The TEMP_INDEX_PREFIX is only needed if we are rebuilding an
   index or creating a new index on a table that has records. If
   the definition is owned by a table schema then we can be sure that
   this index definition is part of a CREATE TABLE. */
-  if (ib_index_def->m_schema == nullptr) {
+  if (index_schema->m_schema == nullptr) {
     *index_name = TEMP_INDEX_PREFIX;
-    memcpy(index_name + 1, ib_index_def->m_name, name_len + 1);
+    memcpy(index_name + 1, index_schema->m_name, name_len + 1);
   } else {
-    memcpy(index_name, ib_index_def->m_name, name_len);
+    memcpy(index_name, index_schema->m_name, name_len);
   }
 
   index_def->name = index_name;
-  index_def->n_fields = ib_index_def->m_cols->size();
+  index_def->n_fields = index_schema->m_cols->size();
 
-  if (ib_index_def->m_unique) {
+  if (index_schema->m_unique) {
     index_def->ind_type = DICT_UNIQUE;
   } else {
     index_def->ind_type = 0;
@@ -1148,13 +1110,13 @@ static const index_def_t *ib_copy_index_definition(IndexSchema *ib_index_def, bo
     index_def->ind_type |= DICT_CLUSTERED;
   }
 
-  index_def->fields = (index_field_t *)mem_heap_zalloc(ib_index_def->m_heap, sizeof(index_field_t) * index_def->n_fields);
+  index_def->fields = (index_field_t *)mem_heap_zalloc(index_schema->m_heap, sizeof(index_field_t) * index_def->n_fields);
 
-  for (ulint i = 0; i < ib_index_def->m_cols->size(); ++i) {
-    auto ib_col = ib_index_def->m_cols->at(i);
+  for (ulint i = 0; i < index_schema->m_cols->size(); ++i) {
+    auto col = index_schema->m_cols->at(i);
 
-    index_def->fields[i].field_name = ib_col->m_name;
-    index_def->fields[i].prefix_len = ib_col->m_prefix_len;
+    index_def->fields[i].field_name = col->m_name;
+    index_def->fields[i].prefix_len = col->m_prefix_len;
   }
 
   return index_def;
@@ -1165,14 +1127,14 @@ static const index_def_t *ib_copy_index_definition(IndexSchema *ib_index_def, bo
  *
  * @param[in] usr_trx The transaction.
  * @param[in] table The parent table of the index.
- * @param[in] ib_index_def The index definition.
+ * @param[in] index_schema The index definition.
  * @param[in] create True if part of table create.
  * @param[out] index The index created.
  *
  * @return DB_SUCCESS or err code.
  */
-static DbErr ib_build_secondary_index(
-  System &sys, Trx *usr_trx, Table *table, IndexSchema *ib_index_def, bool create, Index **index
+static DbErr build_secondary_index(
+  System &sys, Trx *usr_trx, Table *table, IndexSchema *index_schema, bool create, Index **index
 ) noexcept {
   DbErr err;
   Trx *ddl_trx;
@@ -1188,13 +1150,13 @@ static DbErr ib_build_secondary_index(
   }
 
   /* Set the CLUSTERED flag to false. */
-  const auto index_def = ib_copy_index_definition(ib_index_def, false);
+  const auto index_def = copy_index_definition(index_schema, false);
 
   ut_a(!(index_def->ind_type & DICT_CLUSTERED));
 
   ddl_trx->m_op_info = "creating secondary index";
 
-  auto trx{reinterpret_cast<Trx *>(usr_trx)};
+  auto trx = usr_trx;
 
   if (!(create || schema_lock_is_exclusive(trx))) {
     err = schema_lock_exclusive(sys, trx);
@@ -1215,7 +1177,7 @@ static DbErr ib_build_secondary_index(
   if (!create) {
     /* Even if the user locked the schema, we release it here and
     build the index without holding the dictionary lock. */
-    err = schema_unlock(sys, (Trx *)usr_trx);
+    err = schema_unlock(sys, usr_trx);
     ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
   }
 
@@ -1253,7 +1215,7 @@ static DbErr ib_build_secondary_index(
  *
  * @return Temporary tablename.
  */
-static char *ib_table_create_temp_name(MemHeap *heap, char id, const char *table_name) noexcept {
+static char *table_create_temp_name(MemHeap *heap, char id, const char *table_name) noexcept {
   static const char suffix[] = "# ";
 
   const auto len = strlen(table_name);
@@ -1273,7 +1235,7 @@ static char *ib_table_create_temp_name(MemHeap *heap, char id, const char *table
  * @param[out] index_def The index definition.
  * @param[in] heap The heap where allocated.
  */
-static void ib_index_create_def(const Index *index, index_def_t *index_def, MemHeap *heap) noexcept {
+static void index_create_def(const Index *index, index_def_t *index_def, MemHeap *heap) noexcept {
   const auto n_fields = index->m_n_user_defined_cols;
 
   index_def->fields = (MergeIndexField *)mem_heap_zalloc(heap, n_fields * sizeof(*index_def->fields));
@@ -1304,10 +1266,10 @@ static void ib_index_create_def(const Index *index, index_def_t *index_def, MemH
  *
  * @return index definitions or nullptr
  */
-static index_def_t *ib_table_create_index_defs(System &sys, Trx *trx, const Table *table, MemHeap *heap, ulint *n_indexes) noexcept {
+static index_def_t *table_create_index_defs(System &sys, Trx *trx, const Table *table, MemHeap *heap, ulint *n_indexes) noexcept {
   auto sz = sizeof(index_def_t) * UT_LIST_GET_LEN(table->m_indexes);
   auto index_defs = reinterpret_cast<index_def_t *>(mem_heap_zalloc(heap, sz));
-  auto err = schema_lock_exclusive(sys, (Trx *)trx);
+  auto err = schema_lock_exclusive(sys, trx);
 
   ut_a(err == DB_SUCCESS);
 
@@ -1320,11 +1282,11 @@ static index_def_t *ib_table_create_index_defs(System &sys, Trx *trx, const Tabl
   }
 
   while (index != nullptr) {
-    ib_index_create_def(index, index_defs++, heap);
+    index_create_def(index, index_defs++, heap);
     index = index->get_next();
   }
 
-  err = schema_unlock(sys, (Trx *)trx);
+  err = schema_unlock(sys, trx);
   ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
 
   return index_defs;
@@ -1336,23 +1298,23 @@ static index_def_t *ib_table_create_index_defs(System &sys, Trx *trx, const Tabl
  *
  * @param[in] trx in: transaction
  * @param[in] table in: parent table of index
- * @param[in] ib_index_def in: index definition
+ * @param[in] index_schema in: index definition
  * @param[out] index out: index created
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr ib_create_cluster_index(System &sys, Trx *trx, Table *table, IndexSchema *ib_index_def, Index **index) noexcept {
+static DbErr create_cluster_index(System &sys, Trx *trx, Table *table, IndexSchema *index_schema, Index **index) noexcept {
 
-  ut_a(!ib_index_def->m_cols->empty());
+  ut_a(!index_schema->m_cols->empty());
 
   /* Set the CLUSTERED flag to true. */
-  auto index_def = ib_copy_index_definition(ib_index_def, true);
+  auto index_def = copy_index_definition(index_schema, true);
 
   trx->m_op_info = "creating clustered index";
 
   trx->set_dict_operation(TRX_DICT_OP_TABLE);
 
-  auto err = ib_trx_lock_table_with_retry(sys, trx, table, LOCK_X);
+  auto err = row_lock_table_with_retry(sys, trx, table, LOCK_X);
 
   if (err == DB_SUCCESS) {
     *index = row_merge_create_index(sys, trx, table, index_def);
@@ -1378,9 +1340,9 @@ static DbErr ib_create_cluster_index(System &sys, Trx *trx, Table *table, IndexS
  *
  * @return DB_SUCCESS or error code
  */
-static DbErr ib_table_clone_indexes(System &sys, Trx *trx, Table *src_table, Table *new_table, MemHeap *heap) noexcept {
+static DbErr table_clone_indexes(System &sys, Trx *trx, Table *src_table, Table *new_table, MemHeap *heap) noexcept {
   ulint n_index_defs = 0;
-  auto index_defs = ib_table_create_index_defs(sys, trx, src_table, heap, &n_index_defs);
+  auto index_defs = table_create_index_defs(sys, trx, src_table, heap, &n_index_defs);
 
   ut_a(index_defs != nullptr);
 
@@ -1405,23 +1367,23 @@ static DbErr ib_table_clone_indexes(System &sys, Trx *trx, Table *src_table, Tab
  * @param[in] trx in: transaction
  * @param[in] src_table in: table to clone from
  * @param[out] new_table out: cloned table
- * @param[in] ib_index_def in: new cluster index definition
+ * @param[in] index_schema in: new cluster index definition
  * @param[in] heap in: memory heap to use
  *
  * @return DB_SUCCESS or error code
  */
-static DbErr ib_table_clone(
-  System &sys, Trx *trx, Table *src_table, Table **new_table, IndexSchema *ib_index_def, MemHeap *heap
+static DbErr table_clone(
+  System &sys, Trx *trx, Table *src_table, Table **new_table, IndexSchema *index_schema, MemHeap *heap
 ) noexcept {
-  auto new_table_name = ib_table_create_temp_name(heap, '1', src_table->m_name);
-  auto err = schema_lock_exclusive(sys, (Trx *)trx);
+  auto new_table_name = table_create_temp_name(heap, '1', src_table->m_name);
+  auto err = schema_lock_exclusive(sys, trx);
 
   if (err != DB_SUCCESS) {
     return err;
   }
 
   /* Set the CLUSTERED flag to true. */
-  auto index_def = ib_copy_index_definition(ib_index_def, true);
+  auto index_def = copy_index_definition(index_schema, true);
 
   /* Create the new table and the cluster index. */
   *new_table = row_merge_create_temporary_table(sys, new_table_name, index_def, src_table, trx);
@@ -1431,10 +1393,10 @@ static DbErr ib_table_clone(
   } else {
     trx->m_table_id = (*new_table)->m_id;
 
-    err = ib_table_clone_indexes(sys, trx, src_table, *new_table, heap);
+    err = table_clone_indexes(sys, trx, src_table, *new_table, heap);
   }
 
-  err = schema_unlock(sys, (Trx *)trx);
+  err = schema_unlock(sys, trx);
   ut_a(err == DB_SUCCESS);
 
   return err;
@@ -1450,8 +1412,8 @@ static DbErr ib_table_clone(
  *
  * @return DB_SUCCESS or error code
  */
-static DbErr ib_table_copy(System &sys, Trx *trx, Table *src_table, Table *dst_table, MemHeap *heap) noexcept {
-  auto err = schema_lock_exclusive(sys, (Trx *)trx);
+static DbErr table_copy(System &sys, Trx *trx, Table *src_table, Table *dst_table, MemHeap *heap) noexcept {
+  auto err = schema_lock_exclusive(sys, trx);
 
   if (err != DB_SUCCESS) {
     return err;
@@ -1470,7 +1432,7 @@ static DbErr ib_table_copy(System &sys, Trx *trx, Table *src_table, Table *dst_t
   }
   ut_a(n_indexes == dst_table->m_indexes.size());
 
-  err = schema_unlock(sys, (Trx *)trx);
+  err = schema_unlock(sys, trx);
   ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
 
   /* Build the actual indexes. */
@@ -1487,7 +1449,7 @@ static DbErr ib_table_copy(System &sys, Trx *trx, Table *src_table, Table *dst_t
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr ib_create_default_cluster_index(System &sys, Trx *trx, Table *table, Index **index) noexcept {
+static DbErr create_default_cluster_index(System &sys, Trx *trx, Table *table, Index **index) noexcept {
   index_def_t index_def;
 
   index_def.n_fields = 0;
@@ -1499,9 +1461,9 @@ static DbErr ib_create_default_cluster_index(System &sys, Trx *trx, Table *table
 
   trx->set_dict_operation(TRX_DICT_OP_TABLE);
 
-  ut_a(schema_lock_is_exclusive((Trx *)trx));
+  ut_a(schema_lock_is_exclusive(trx));
 
-  auto err = ib_trx_lock_table_with_retry(sys, trx, table, LOCK_X);
+  auto err = row_lock_table_with_retry(sys, trx, table, LOCK_X);
 
   if (err == DB_SUCCESS) {
     *index = row_merge_create_index(sys, trx, table, &index_def);
@@ -1524,38 +1486,38 @@ static DbErr ib_create_default_cluster_index(System &sys, Trx *trx, Table *table
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr ib_create_indexes(System &sys, Trx *ddl_trx, Table *table, const std::vector<IndexSchema *> &indexes) noexcept {
+static DbErr create_indexes(System &sys, Trx *ddl_trx, Table *table, const std::vector<IndexSchema *> &indexes) noexcept {
   DbErr err = DB_ERROR;
   Index *index = nullptr;
-  IndexSchema *ib_clust_index_def = nullptr;
+  IndexSchema *clust_index_def = nullptr;
 
   auto n_indexes = indexes.size();
 
   if (n_indexes > 0) {
-    ib_clust_index_def = ib_find_clustered_index(indexes);
+    clust_index_def = find_clustered_index(indexes);
 
-    if (ib_clust_index_def != nullptr) {
-      ut_a(ib_clust_index_def->m_clustered);
+    if (clust_index_def != nullptr) {
+      ut_a(clust_index_def->m_clustered);
 
-      err = ib_create_cluster_index(sys, ddl_trx, table, ib_clust_index_def, &index);
+      err = create_cluster_index(sys, ddl_trx, table, clust_index_def, &index);
     }
   }
 
-  if (ib_clust_index_def == nullptr) {
-    err = ib_create_default_cluster_index(sys, ddl_trx, table, &index);
+  if (clust_index_def == nullptr) {
+    err = create_default_cluster_index(sys, ddl_trx, table, &index);
   }
 
   for (ulint i{}; err == DB_SUCCESS && i < n_indexes; ++i) {
-    auto ib_index_def = indexes.at(i);
+    auto index_def = indexes.at(i);
 
-    ut_a(!ib_index_def->m_cols->empty());
+    ut_a(!index_def->m_cols->empty());
 
-    if (!ib_index_def->m_clustered) {
+    if (!index_def->m_clustered) {
       /* Since this is part of CREATE TABLE, set the create flag to true. */
-      err = ib_build_secondary_index(sys, ddl_trx, table, ib_index_def, true, &index);
+      err = build_secondary_index(sys, ddl_trx, table, index_def, true, &index);
     } else {
       /* There can be at most one cluster definition. */
-      ut_a(ib_clust_index_def == ib_index_def);
+      ut_a(clust_index_def == index_def);
     }
   }
 
@@ -1570,12 +1532,12 @@ static DbErr ib_create_indexes(System &sys, Trx *ddl_trx, Table *table, const st
  *
  * @return DB_SUCCESS if found
  */
-static DbErr ib_table_get_id_low(System &sys, const char *table_name, uint64_t *table_id) noexcept {
+static DbErr table_get_id_low(System &sys, const char *table_name, uint64_t *table_id) noexcept {
   DbErr err = DB_TABLE_NOT_FOUND;
 
   *table_id = 0;
 
-  auto table = ib_lookup_table_by_name(sys, table_name);
+  auto table = lookup_table_by_name(sys, table_name);
 
   if (table != nullptr) {
     *table_id = table->m_id;
@@ -1586,19 +1548,17 @@ static DbErr ib_table_get_id_low(System &sys, const char *table_name, uint64_t *
   return err;
 }
 
-DbErr table_create(System &sys, Trx *ib_trx, const TableSchema *ib_tbl_sch, uint64_t *id) noexcept {
-  auto ddl_trx = (Trx *)ib_trx;
-  const auto table_def = (const TableSchema *)ib_tbl_sch;
+DbErr table_create(System &sys, Trx *ddl_trx, const TableSchema *table_def, uint64_t *id) noexcept {
 
   /* Another thread may have created the table already when we get
   here. We need to search the data dictionary before we attempt to
   create the table. */
 
-  if (!schema_lock_is_exclusive((Trx *)ddl_trx)) {
+  if (!schema_lock_is_exclusive(ddl_trx)) {
     return DB_SCHEMA_NOT_LOCKED;
   }
 
-  auto err = ib_table_get_id_low(sys, table_def->m_name, id);
+  auto err = table_get_id_low(sys, table_def->m_name, id);
 
   if (err == DB_SUCCESS) {
     return DB_TABLE_EXISTS;
@@ -1615,15 +1575,15 @@ DbErr table_create(System &sys, Trx *ib_trx, const TableSchema *ib_tbl_sch, uint
   ulint n_cluster{};
 
   /* Check that all index definitions are valid. */
-  for (auto ib_index_def : *table_def->m_indexes) {
+  for (auto index_schema : *table_def->m_indexes) {
 
     /* Check that the index definition has at least one column. */
-    if (ib_index_def->m_cols->empty()) {
+    if (index_schema->m_cols->empty()) {
       return DB_SCHEMA_ERROR;
     }
 
     /* Check for duplicate cluster definitions. */
-    if (ib_index_def->m_clustered) {
+    if (index_schema->m_clustered) {
       ++n_cluster;
 
       if (n_cluster > 1) {
@@ -1634,13 +1594,13 @@ DbErr table_create(System &sys, Trx *ib_trx, const TableSchema *ib_tbl_sch, uint
 
   /* Create the table prototype. */
   auto table =
-    Table::create(table_def->m_name, SYS_TABLESPACE, n_cols, ib_table_def_get_flags(table_def), false, Current_location());
+    Table::create(table_def->m_name, SYS_TABLESPACE, n_cols, table_def_get_flags(table_def), false, Current_location());
 
   /* Create the columns defined by the user. */
   for (ulint i{}; i < n_cols; ++i) {
-    auto ib_col = table_def->m_cols->at(i);
+    auto col = table_def->m_cols->at(i);
 
-    table->add_col(ib_col->m_name, ib_col_get_mtype(ib_col), ib_col_get_prtype(ib_col), ib_col->m_len);
+    table->add_col(col->m_name, col_get_mtype(col), col_get_prtype(col), col->m_len);
   }
 
   /* Create the table using the prototype in the data dictionary. */
@@ -1650,17 +1610,17 @@ DbErr table_create(System &sys, Trx *ib_trx, const TableSchema *ib_tbl_sch, uint
 
   if (err == DB_SUCCESS) {
 
-    table = ib_lookup_table_by_name(sys, table_def->m_name);
+    table = lookup_table_by_name(sys, table_def->m_name);
     ut_a(table != nullptr);
 
     /* Bump up the reference count, so that another transaction
     doesn't delete it behind our back. */
     sys.m_dict->table_increment_handle_count(table, true);
 
-    err = ib_create_indexes(sys, ddl_trx, table, *table_def->m_indexes);
+    err = create_indexes(sys, ddl_trx, table, *table_def->m_indexes);
   }
 
-  /* FIXME: If ib_create_indexes() fails, it's unclear what state
+  /* FIXME: If create_indexes() fails, it's unclear what state
   the data dictionary is in. */
 
   if (err == DB_SUCCESS) {
@@ -1674,12 +1634,11 @@ DbErr table_create(System &sys, Trx *ib_trx, const TableSchema *ib_tbl_sch, uint
   return err;
 }
 
-DbErr table_rename(System &sys, Trx *ib_trx, const char *old_name, const char *new_name) noexcept {
+DbErr table_rename(System &sys, Trx *trx, const char *old_name, const char *new_name) noexcept {
   DbErr err;
-  Trx *trx = (Trx *)ib_trx;
 
-  if (!schema_lock_is_exclusive(ib_trx)) {
-    err = schema_lock_exclusive(sys, ib_trx);
+  if (!schema_lock_is_exclusive(trx)) {
+    err = schema_lock_exclusive(sys, trx);
 
     if (err != DB_SUCCESS) {
       return err;
@@ -1687,10 +1646,10 @@ DbErr table_rename(System &sys, Trx *ib_trx, const char *old_name, const char *n
   }
 
   auto normalized_old_name = static_cast<char *>(mem_alloc(strlen(old_name) + 1));
-  ib_normalize_table_name(normalized_old_name, old_name);
+  normalize_table_name(normalized_old_name, old_name);
 
   auto normalized_new_name = static_cast<char *>(mem_alloc(strlen(new_name) + 1));
-  ib_normalize_table_name(normalized_new_name, new_name);
+  normalize_table_name(normalized_new_name, new_name);
 
   err = sys.m_dict->m_ddl.rename_table(normalized_old_name, normalized_new_name, trx);
 
@@ -1705,20 +1664,19 @@ DbErr table_rename(System &sys, Trx *ib_trx, const char *old_name, const char *n
  *
  * The index id encodes the table id in the high 4 bytes and the index id in the lower 4 bytes.
  *
- * @param[in] ib_idx_sch in: key definition for index
+ * @param[in] idx_sch in: key definition for index
  * @param[out] index_id out: index id
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr ib_create_primary_index(System &sys, IndexSchema *ib_idx_sch, uint64_t *index_id) {
-  auto ib_index_def = (IndexSchema *)ib_idx_sch;
-  auto usr_trx = ib_index_def->m_usr_trx;
-  auto table = ib_index_def->m_table;
+static DbErr create_primary_index(System &sys, IndexSchema *index_def, uint64_t *index_id) {
+  auto usr_trx = index_def->m_usr_trx;
+  auto table = index_def->m_table;
 
   /* This should only be called on index schema instances
   created outside of table schemas. */
-  ut_a(ib_index_def->m_schema == nullptr);
-  ut_a(ib_index_def->m_clustered);
+  ut_a(index_def->m_schema == nullptr);
+  ut_a(index_def->m_clustered);
 
   /* Recreate the cluster index and all the secondary indexes
   on a table. If there was a user defined cluster index on the
@@ -1734,31 +1692,31 @@ static DbErr ib_create_primary_index(System &sys, IndexSchema *ib_idx_sch, uint6
 
   usr_trx->set_dict_operation(TRX_DICT_OP_TABLE);
 
-  ut_a(!ib_index_def->m_cols->empty());
+  ut_a(!index_def->m_cols->empty());
 
   /* Set the CLUSTERED flag to true. */
-  ib_copy_index_definition(ib_index_def, true);
+  copy_index_definition(index_def, true);
 
   Table *new_table{};
-  auto err = ib_trx_lock_table_with_retry(sys, usr_trx, table, LOCK_X);
+  auto err = row_lock_table_with_retry(sys, usr_trx, table, LOCK_X);
 
   if (err == DB_SUCCESS) {
-    err = ib_table_clone(sys, usr_trx, table, &new_table, ib_index_def, heap);
+    err = table_clone(sys, usr_trx, table, &new_table, index_def, heap);
   }
 
   if (err == DB_SUCCESS) {
-    err = ib_trx_lock_table_with_retry(sys, usr_trx, new_table, LOCK_X);
+    err = row_lock_table_with_retry(sys, usr_trx, new_table, LOCK_X);
   }
 
   if (err == DB_SUCCESS) {
-    err = ib_table_copy(sys, usr_trx, table, new_table, heap);
+    err = table_copy(sys, usr_trx, table, new_table, heap);
   }
 
   if (err == DB_SUCCESS) {
     /* Swap the cloned table with the original table. On success drop
     the original table. */
     auto old_name = table->m_name;
-    auto tmp_name = ib_table_create_temp_name(heap, '2', old_name);
+    auto tmp_name = table_create_temp_name(heap, '2', old_name);
 
     err = row_merge_rename_tables(sys, table, new_table, tmp_name, usr_trx);
 
@@ -1777,31 +1735,30 @@ static DbErr ib_create_primary_index(System &sys, IndexSchema *ib_idx_sch, uint6
 /**
  * Create a secondary index.
  *
- * @param[in] ib_idx_sch in: key definition for index
+ * @param[in] idx_sch in: key definition for index
  * @param[out] index_id out: index id
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr ib_create_secondary_index(System &sys, IndexSchema *ib_idx_sch, uint64_t *index_id) {
+static DbErr create_secondary_index(System &sys, IndexSchema *index_def, uint64_t *index_id) {
   Trx *ddl_trx{};
   Index *index{};
-  auto ib_index_def = reinterpret_cast<IndexSchema *>(ib_idx_sch);
-  auto usr_trx = ib_index_def->m_usr_trx;
-  auto table = ib_index_def->m_table;
+  auto usr_trx = index_def->m_usr_trx;
+  auto table = index_def->m_table;
 
   /* This should only be called on index schema instances
   created outside of table schemas. */
-  ut_a(ib_index_def->m_schema == nullptr);
-  ut_a(!ib_index_def->m_clustered);
+  ut_a(index_def->m_schema == nullptr);
+  ut_a(!index_def->m_clustered);
 
-  auto err = ib_trx_lock_table_with_retry(sys, usr_trx, table, LOCK_S);
+  auto err = row_lock_table_with_retry(sys, usr_trx, table, LOCK_S);
 
   if (err == DB_SUCCESS) {
 
     /* Since this is part of ALTER TABLE set the create flag to false. */
-    err = ib_build_secondary_index(sys, usr_trx, table, ib_index_def, false, &index);
+    err = build_secondary_index(sys, usr_trx, table, index_def, false, &index);
 
-    err = schema_lock_exclusive(sys, (Trx *)usr_trx);
+    err = schema_lock_exclusive(sys, usr_trx);
     ut_a(err == DB_SUCCESS);
 
     if (index != nullptr && err != DB_SUCCESS) {
@@ -1853,31 +1810,28 @@ static DbErr ib_create_secondary_index(System &sys, IndexSchema *ib_idx_sch, uin
 }
 
 DbErr IndexSchema::create_index(System &sys, uint64_t *index_id) noexcept {
-  auto ib_idx_sch = this;
+  auto index_def = this;
   DbErr err;
-  IndexSchema *ib_index_def = (IndexSchema *)ib_idx_sch;
 
-  if (!schema_lock_is_exclusive((Trx *)ib_index_def->m_usr_trx)) {
+  if (!schema_lock_is_exclusive(index_def->m_usr_trx)) {
     return DB_SCHEMA_NOT_LOCKED;
-  } else if (ib_index_def->m_clustered) {
-    err = ib_create_primary_index(sys, ib_idx_sch, index_id);
+  } else if (index_def->m_clustered) {
+    err = create_primary_index(sys, index_def, index_id);
   } else {
-    err = ib_create_secondary_index(sys, ib_idx_sch, index_id);
+    err = create_secondary_index(sys, index_def, index_id);
   }
 
   return err;
 }
 
-DbErr table_drop(System &sys, Trx *ib_trx, const char *name) noexcept {
+DbErr table_drop(System &sys, Trx *trx, const char *name) noexcept {
 
-  if (!schema_lock_is_exclusive(ib_trx)) {
+  if (!schema_lock_is_exclusive(trx)) {
     return DB_SCHEMA_NOT_LOCKED;
   }
 
   auto normalized_name = static_cast<char *>(mem_alloc(strlen(name) + 1));
-  ib_normalize_table_name(normalized_name, name);
-
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+  normalize_table_name(normalized_name, name);
 
   DbErr err;
 
@@ -1890,14 +1844,14 @@ DbErr table_drop(System &sys, Trx *ib_trx, const char *name) noexcept {
   return err;
 }
 
-DbErr index_drop(System &sys, Trx *ib_trx, uint64_t index_id) noexcept {
+DbErr index_drop(System &sys, Trx *trx, uint64_t index_id) noexcept {
   ulint table_id = (ulint)(index_id >> 32);
 
-  if (!schema_lock_is_exclusive(ib_trx)) {
+  if (!schema_lock_is_exclusive(trx)) {
     return DB_SCHEMA_NOT_LOCKED;
   }
 
-  auto table = ib_open_table_by_id(sys, table_id, true);
+  auto table = open_table_by_id(sys, table_id, true);
 
   if (table == nullptr) {
     return DB_TABLE_NOT_FOUND;
@@ -1911,7 +1865,7 @@ DbErr index_drop(System &sys, Trx *ib_trx, uint64_t index_id) noexcept {
   DbErr err;
 
   if (index != nullptr) {
-    err = sys.m_dict->m_ddl.drop_index(table, index, (Trx *)ib_trx);
+    err = sys.m_dict->m_ddl.drop_index(table, index, trx);
   } else {
     err = DB_TABLE_NOT_FOUND;
   }
@@ -1924,14 +1878,14 @@ DbErr index_drop(System &sys, Trx *ib_trx, uint64_t index_id) noexcept {
 /**
  * Create an internal cursor instance.
  *
- * @param[out] ib_crsr out: InnoDB cursor
+ * @param[out] crsr out: InnoDB cursor
  * @param[in] table in: table instance
  * @param[in] index_id in: index id or 0
  * @param[in] trx in: transaction
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr ib_create_cursor(System &sys, Cursor **ib_crsr, Table *table, uint64_t index_id, Trx *trx) noexcept {
+static DbErr create_cursor(System &sys, Cursor **crsr, Table *table, uint64_t index_id, Trx *trx) noexcept {
   DbErr err = DB_SUCCESS;
   const Dict_id id = index_id;
 
@@ -1980,18 +1934,18 @@ static DbErr ib_create_cursor(System &sys, Cursor **ib_crsr, Table *table, uint6
     ut_a(rv != nullptr);
   }
 
-  *ib_crsr = (Cursor *)cursor;
+  *crsr = cursor;
 
   return err;
 }
 
-DbErr cursor_open_table_using_id(System &sys, uint64_t table_id, Trx *ib_trx, Cursor **ib_crsr) noexcept {
+DbErr cursor_open_table_using_id(System &sys, uint64_t table_id, Trx *trx, Cursor **crsr) noexcept {
   Table *table;
 
-  if (ib_trx == nullptr || !schema_lock_is_exclusive(ib_trx)) {
-    table = ib_open_table_by_id(sys, table_id, false);
+  if (trx == nullptr || !schema_lock_is_exclusive(trx)) {
+    table = open_table_by_id(sys, table_id, false);
   } else {
-    table = ib_open_table_by_id(sys, table_id, true);
+    table = open_table_by_id(sys, table_id, true);
   }
 
   if (table == nullptr) {
@@ -1999,17 +1953,17 @@ DbErr cursor_open_table_using_id(System &sys, uint64_t table_id, Trx *ib_trx, Cu
     return DB_TABLE_NOT_FOUND;
   }
 
-  return ib_create_cursor(sys, ib_crsr, table, 0, (Trx *)ib_trx);
+  return create_cursor(sys, crsr, table, 0, trx);
 }
 
-DbErr cursor_open_index_using_id(System &sys, uint64_t index_id, Trx *ib_trx, Cursor **ib_crsr) noexcept {
+DbErr cursor_open_index_using_id(System &sys, uint64_t index_id, Trx *trx, Cursor **crsr) noexcept {
   Table *table;
   ulint table_id = (ulint)(index_id >> 32);
 
-  if (ib_trx == nullptr || !schema_lock_is_exclusive(ib_trx)) {
-    table = ib_open_table_by_id(sys, table_id, false);
+  if (trx == nullptr || !schema_lock_is_exclusive(trx)) {
+    table = open_table_by_id(sys, table_id, false);
   } else {
-    table = ib_open_table_by_id(sys, table_id, true);
+    table = open_table_by_id(sys, table_id, true);
   }
 
   if (table == nullptr) {
@@ -2018,31 +1972,30 @@ DbErr cursor_open_index_using_id(System &sys, uint64_t index_id, Trx *ib_trx, Cu
   }
 
   /* We only return the lower 32 bits of the uint64_t. */
-  auto err = ib_create_cursor(sys, ib_crsr, table, index_id & 0xFFFFFFFFULL, (Trx *)ib_trx);
+  auto err = create_cursor(sys, crsr, table, index_id & 0xFFFFFFFFULL, trx);
 
-  if (ib_crsr != nullptr) {
-    auto cursor = *(Cursor **)ib_crsr;
+  if (crsr != nullptr) {
+    auto cursor = *(Cursor **)crsr;
 
     if (cursor->m_prebuilt->m_index == nullptr) {
-      auto crsr_err = Cursor::close(sys, *ib_crsr);
+      auto crsr_err = Cursor::close(sys, *crsr);
       ut_a(crsr_err == DB_SUCCESS);
 
-      *ib_crsr = nullptr;
+      *crsr = nullptr;
     }
   }
 
   return err;
 }
 
-DbErr Cursor::open_index(System &sys, const char *index_name, Cursor **ib_crsr) noexcept {
-  auto ib_open_crsr = this;
+DbErr Cursor::open_index(System &sys, const char *index_name, Cursor **crsr) noexcept {
+  auto cursor = this;
   Table *table;
   uint64_t index_id = 0;
   DbErr err = DB_TABLE_NOT_FOUND;
-  auto cursor = reinterpret_cast<Cursor *>(ib_open_crsr);
   auto trx = cursor->m_prebuilt->m_trx;
 
-  if (trx != nullptr && !schema_lock_is_exclusive((Trx *)trx)) {
+  if (trx != nullptr && !schema_lock_is_exclusive(trx)) {
     sys.m_dict->mutex_acquire();
   }
 
@@ -2050,7 +2003,7 @@ DbErr Cursor::open_index(System &sys, const char *index_name, Cursor **ib_crsr) 
   table = sys.m_dict->table_get_using_id(sys.m_config.m_recv.m_force_recovery, cursor->m_prebuilt->m_table->m_id, true);
   ut_a(table != nullptr);
 
-  if (trx != nullptr && !schema_lock_is_exclusive((Trx *)trx)) {
+  if (trx != nullptr && !schema_lock_is_exclusive(trx)) {
     sys.m_dict->mutex_release();
   }
 
@@ -2061,21 +2014,21 @@ DbErr Cursor::open_index(System &sys, const char *index_name, Cursor **ib_crsr) 
     }
   }
 
-  *ib_crsr = nullptr;
+  *crsr = nullptr;
 
   if (index_id > 0) {
-    err = ib_create_cursor(sys, ib_crsr, table, index_id, cursor->m_prebuilt->m_trx);
+    err = create_cursor(sys, crsr, table, index_id, cursor->m_prebuilt->m_trx);
   }
 
-  if (*ib_crsr != nullptr) {
+  if (*crsr != nullptr) {
     const Cursor *cursor;
 
-    cursor = *(Cursor **)ib_crsr;
+    cursor = *(Cursor **)crsr;
 
     if (cursor->m_prebuilt->m_index == nullptr) {
-      err = Cursor::close(sys, *ib_crsr);
+      err = Cursor::close(sys, *crsr);
       ut_a(err == DB_SUCCESS);
-      *ib_crsr = nullptr;
+      *crsr = nullptr;
     }
   } else {
     /* The dictionary mutex is held here only under the exclusive schema lock. */
@@ -2085,25 +2038,25 @@ DbErr Cursor::open_index(System &sys, const char *index_name, Cursor **ib_crsr) 
   return err;
 }
 
-DbErr cursor_open_table(System &sys, const char *name, Trx *ib_trx, Cursor **ib_crsr) noexcept {
+DbErr cursor_open_table(System &sys, const char *name, Trx *trx, Cursor **crsr) noexcept {
   DbErr err;
   Table *table;
 
   auto normalized_name = static_cast<char *>(mem_alloc(strlen(name) + 1));
-  ib_normalize_table_name(normalized_name, name);
+  normalize_table_name(normalized_name, name);
 
-  if (ib_trx != nullptr) {
-    if (!schema_lock_is_exclusive(ib_trx)) {
-      table = ib_open_table_by_name(sys, normalized_name);
+  if (trx != nullptr) {
+    if (!schema_lock_is_exclusive(trx)) {
+      table = open_table_by_name(sys, normalized_name);
     } else {
-      table = ib_lookup_table_by_name(sys, normalized_name);
+      table = lookup_table_by_name(sys, normalized_name);
 
       if (table != nullptr) {
         sys.m_dict->table_increment_handle_count(table, true);
       }
     }
   } else {
-    table = ib_open_table_by_name(sys, normalized_name);
+    table = open_table_by_name(sys, normalized_name);
   }
 
   mem_free(normalized_name);
@@ -2118,7 +2071,7 @@ DbErr cursor_open_table(System &sys, const char *name, Trx *ib_trx, Cursor **ib_
   }
 
   if (table != nullptr) {
-    err = ib_create_cursor(sys, ib_crsr, table, 0, (Trx *)ib_trx);
+    err = create_cursor(sys, crsr, table, 0, trx);
   } else {
     err = DB_TABLE_NOT_FOUND;
   }
@@ -2131,7 +2084,7 @@ DbErr cursor_open_table(System &sys, const char *name, Trx *ib_trx, Cursor **ib_
  *
  * @param[in] q_proc in, own: qproc struct
  */
-static void ib_qry_proc_free(QueryProc *q_proc) {
+static void qry_proc_free(QueryProc *q_proc) {
   que_graph_free_recursive(q_proc->m_grph.m_ins);
   que_graph_free_recursive(q_proc->m_grph.m_upd);
   que_graph_free_recursive(q_proc->m_grph.m_sel);
@@ -2140,8 +2093,7 @@ static void ib_qry_proc_free(QueryProc *q_proc) {
 }
 
 DbErr Cursor::reset(System &sys) noexcept {
-  auto ib_crsr = this;
-  Cursor *cursor = (Cursor *)ib_crsr;
+  auto cursor = this;
   Prebuilt *prebuilt = cursor->m_prebuilt;
 
   if (prebuilt->m_trx != nullptr && prebuilt->m_trx->m_n_client_tables_in_use > 0) {
@@ -2151,7 +2103,7 @@ DbErr Cursor::reset(System &sys) noexcept {
 
   /* The fields in this data structure are allocated from
   the query heap and so need to be reset too. */
-  ib_qry_proc_free(&cursor->m_q_proc);
+  qry_proc_free(&cursor->m_q_proc);
 
   mem_heap_empty(cursor->m_query_heap);
 
@@ -2160,19 +2112,18 @@ DbErr Cursor::reset(System &sys) noexcept {
   return DB_SUCCESS;
 }
 
-DbErr Cursor::close(System &sys, Cursor *ib_crsr) noexcept {
-  Cursor *cursor = (Cursor *)ib_crsr;
+DbErr Cursor::close(System &sys, Cursor *cursor) noexcept {
   Prebuilt *prebuilt = cursor->m_prebuilt;
   Trx *trx = prebuilt->m_trx;
 
-  ib_qry_proc_free(&cursor->m_q_proc);
+  qry_proc_free(&cursor->m_q_proc);
 
   /* The transaction could have been detached from the cursor. */
   if (trx != nullptr && trx->m_n_client_tables_in_use > 0) {
     --trx->m_n_client_tables_in_use;
   }
 
-  if (trx != nullptr && schema_lock_is_exclusive((Trx *)trx)) {
+  if (trx != nullptr && schema_lock_is_exclusive(trx)) {
     Prebuilt::destroy(sys, cursor->m_prebuilt, true);
   } else {
     Prebuilt::destroy(sys, cursor->m_prebuilt, false);
@@ -2193,7 +2144,7 @@ DbErr Cursor::close(System &sys, Cursor *ib_crsr) noexcept {
  *
  * @return DB_SUCCESS or error code
  */
-static DbErr ib_insert_row_with_lock_retry(System &sys, QueThr *thr, InsertNode *node, TrxSavept *savept) noexcept {
+static DbErr insert_row_with_lock_retry(System &sys, QueThr *thr, InsertNode *node, TrxSavept *savept) noexcept {
   DbErr err;
   bool lock_wait;
 
@@ -2211,7 +2162,7 @@ static DbErr ib_insert_row_with_lock_retry(System &sys, QueThr *thr, InsertNode 
       que_thr_stop_client(sys, thr);
 
       thr->lock_state = QUE_THR_LOCK_ROW;
-      lock_wait = ib_handle_errors(sys, &err, trx, thr, savept);
+      lock_wait = row_handle_errors(sys, &err, trx, thr, savept);
       thr->lock_state = QUE_THR_LOCK_NOLOCK;
     } else {
       lock_wait = false;
@@ -2230,9 +2181,9 @@ static DbErr ib_insert_row_with_lock_retry(System &sys, QueThr *thr, InsertNode 
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr ib_execute_insert_query_graph(System &sys, Table *table, QueFork *ins_graph, InsertNode *node) noexcept {
+static DbErr execute_insert_query_graph(System &sys, Table *table, QueFork *ins_graph, InsertNode *node) noexcept {
   /* This is a short term solution to fix the purge lag. */
-  ib_delay_dml_if_needed(sys);
+  delay_dml_if_needed(sys);
 
   auto trx = ins_graph->trx;
   auto savept = trx_savept_take(trx);
@@ -2240,7 +2191,7 @@ static DbErr ib_execute_insert_query_graph(System &sys, Table *table, QueFork *i
 
   que_thr_move_to_run_state(thr);
 
-  auto err = ib_insert_row_with_lock_retry(sys, thr, node, &savept);
+  auto err = insert_row_with_lock_retry(sys, thr, node, &savept);
 
   if (err == DB_SUCCESS) {
     que_thr_stop_for_client_no_error(thr, trx);
@@ -2249,9 +2200,9 @@ static DbErr ib_execute_insert_query_graph(System &sys, Table *table, QueFork *i
 
     sys.m_srv->m_stats.m_n_rows_inserted++;
 
-    ib_update_statistics_if_needed(sys, table);
+    row_update_statistics_if_needed(sys, table);
 
-    ib_wake_master_thread(sys);
+    wake_master_thread(sys);
   }
 
   trx->m_op_info = "";
@@ -2264,7 +2215,7 @@ static DbErr ib_execute_insert_query_graph(System &sys, Table *table, QueFork *i
  *
  * @param[in] cursor in: Cursor instance
  */
-static void ib_insert_query_graph_create(System &sys, Cursor *cursor) noexcept {
+static void insert_query_graph_create(System &sys, Cursor *cursor) noexcept {
   auto q_proc = &cursor->m_q_proc;
   auto node = &q_proc->m_node;
   auto trx = cursor->m_prebuilt->m_trx;
@@ -2292,17 +2243,15 @@ static void ib_insert_query_graph_create(System &sys, Cursor *cursor) noexcept {
   }
 }
 
-DbErr Cursor::insert_row(System &sys, const Tuple *ib_tpl) noexcept {
-  auto ib_crsr = this;
+DbErr Cursor::insert_row(System &sys, const Tuple *src_tuple) noexcept {
+  auto cursor = this;
   ulint n_fields;
   QueryNode *node;
   QueryProc *q_proc;
   DTuple *dst_dtuple;
   DbErr err = DB_SUCCESS;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
-  const auto src_tuple = reinterpret_cast<const Tuple *>(ib_tpl);
 
-  ib_insert_query_graph_create(sys, cursor);
+  insert_query_graph_create(sys, cursor);
 
   ut_ad(src_tuple->m_type == TPL_ROW);
 
@@ -2343,7 +2292,7 @@ DbErr Cursor::insert_row(System &sys, const Tuple *ib_tpl) noexcept {
   }
 
   if (err == DB_SUCCESS) {
-    err = ib_execute_insert_query_graph(sys, src_tuple->m_index->m_table, q_proc->m_grph.m_ins, node->m_ins);
+    err = execute_insert_query_graph(sys, src_tuple->m_index->m_table, q_proc->m_grph.m_ins, node->m_ins);
   }
 
   return err;
@@ -2356,7 +2305,7 @@ DbErr Cursor::insert_row(System &sys, const Tuple *ib_tpl) noexcept {
  *
  * @return update vector
  */
-static Upd *ib_update_vector_create(System &sys, Cursor *cursor) {
+static Upd *update_vector_create(System &sys, Cursor *cursor) {
   auto trx = cursor->m_prebuilt->m_trx;
   auto heap = cursor->m_query_heap;
   auto table = cursor->m_prebuilt->m_table;
@@ -2385,7 +2334,7 @@ static Upd *ib_update_vector_create(System &sys, Cursor *cursor) {
  * @param[in] col_no in: column number
  * @param[in] dfield in: updated dfield
  */
-static void ib_update_col(Cursor *cursor, UpdField *upd_field, ulint col_no, Dfield *dfield) {
+static void update_col(Cursor *cursor, UpdField *upd_field, ulint col_no, Dfield *dfield) {
   auto table = cursor->m_prebuilt->m_table;
   auto index = table->get_first_index();
 
@@ -2415,7 +2364,7 @@ static void ib_update_col(Cursor *cursor, UpdField *upd_field, ulint col_no, Dfi
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr ib_calc_diff(Cursor *cursor, Upd *upd, const Tuple *old_tuple, const Tuple *new_tuple) noexcept {
+static DbErr calc_diff(Cursor *cursor, Upd *upd, const Tuple *old_tuple, const Tuple *new_tuple) noexcept {
   ulint n_changed = 0;
   DbErr err = DB_SUCCESS;
   const auto n_fields = dtuple_get_n_fields(new_tuple->m_ptr);
@@ -2447,7 +2396,7 @@ static DbErr ib_calc_diff(Cursor *cursor, Upd *upd, const Tuple *old_tuple, cons
 
       auto upd_field = &upd->m_fields[n_changed];
 
-      ib_update_col(cursor, upd_field, i, new_dfield);
+      update_col(cursor, upd_field, i, new_dfield);
 
       ++n_changed;
     }
@@ -2470,7 +2419,7 @@ static DbErr ib_calc_diff(Cursor *cursor, Upd *upd, const Tuple *old_tuple, cons
  *
  * @return DB_SUCCESS or error code
  */
-static DbErr ib_update_row_with_lock_retry(System &sys, QueThr *thr, UpdNode *node, TrxSavept *savept) noexcept {
+static DbErr update_row_with_lock_retry(System &sys, QueThr *thr, UpdNode *node, TrxSavept *savept) noexcept {
   DbErr err;
   bool lock_wait;
 
@@ -2490,7 +2439,7 @@ static DbErr ib_update_row_with_lock_retry(System &sys, QueThr *thr, UpdNode *no
       if (err != DB_RECORD_NOT_FOUND) {
         thr->lock_state = QUE_THR_LOCK_ROW;
 
-        lock_wait = ib_handle_errors(sys, &err, trx, thr, savept);
+        lock_wait = row_handle_errors(sys, &err, trx, thr, savept);
 
         thr->lock_state = QUE_THR_LOCK_NOLOCK;
       } else {
@@ -2512,7 +2461,7 @@ static DbErr ib_update_row_with_lock_retry(System &sys, QueThr *thr, UpdNode *no
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr ib_execute_update_query_graph(System &sys, Cursor *cursor, BtreePcursor *pcur) noexcept {
+static DbErr execute_update_query_graph(System &sys, Cursor *cursor, BtreePcursor *pcur) noexcept {
   auto trx = cursor->m_prebuilt->m_trx;
   auto table = cursor->m_prebuilt->m_table;
   auto q_proc = &cursor->m_q_proc;
@@ -2523,7 +2472,7 @@ static DbErr ib_execute_update_query_graph(System &sys, Cursor *cursor, BtreePcu
   auto node = q_proc->m_node.m_upd;
 
   /* This is a short term solution to fix the purge lag. */
-  ib_delay_dml_if_needed(sys);
+  delay_dml_if_needed(sys);
 
   ut_a(pcur->get_index()->is_clustered());
   node->m_pcur->copy_stored_position(pcur);
@@ -2538,7 +2487,7 @@ static DbErr ib_execute_update_query_graph(System &sys, Cursor *cursor, BtreePcu
 
   que_thr_move_to_run_state(thr);
 
-  auto err = ib_update_row_with_lock_retry(sys, thr, node, &savept);
+  auto err = update_row_with_lock_retry(sys, thr, node, &savept);
 
   if (err == DB_SUCCESS) {
 
@@ -2555,25 +2504,22 @@ static DbErr ib_execute_update_query_graph(System &sys, Cursor *cursor, BtreePcu
       ++sys.m_srv->m_stats.m_n_rows_updated;
     }
 
-    ib_update_statistics_if_needed(sys, table);
+    row_update_statistics_if_needed(sys, table);
 
   } else if (err == DB_RECORD_NOT_FOUND) {
     trx->m_error_state = DB_SUCCESS;
   }
 
-  ib_wake_master_thread(sys);
+  wake_master_thread(sys);
 
   trx->m_op_info = "";
 
   return err;
 }
 
-DbErr Cursor::update_row(System &sys, const Tuple *ib_old_tpl, const Tuple *ib_new_tpl) noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+DbErr Cursor::update_row(System &sys, const Tuple *old_tuple, const Tuple *new_tuple) noexcept {
+  auto cursor = this;
   auto prebuilt = cursor->m_prebuilt;
-  const auto old_tuple = reinterpret_cast<const Tuple *>(ib_old_tpl);
-  const auto new_tuple = reinterpret_cast<const Tuple *>(ib_new_tpl);
 
   BtreePcursor *pcur;
 
@@ -2588,14 +2534,14 @@ DbErr Cursor::update_row(System &sys, const Tuple *ib_old_tpl, const Tuple *ib_n
   ut_a(old_tuple->m_type == TPL_ROW);
   ut_a(new_tuple->m_type == TPL_ROW);
 
-  auto upd = ib_update_vector_create(sys, cursor);
-  auto err = ib_calc_diff(cursor, upd, old_tuple, new_tuple);
+  auto upd = update_vector_create(sys, cursor);
+  auto err = calc_diff(cursor, upd, old_tuple, new_tuple);
 
   if (err == DB_SUCCESS) {
     /* Note that this is not a delete. */
     cursor->m_q_proc.m_node.m_upd->m_is_delete = false;
 
-    err = ib_execute_update_query_graph(sys, cursor, pcur);
+    err = execute_update_query_graph(sys, cursor, pcur);
   }
 
   return err;
@@ -2610,23 +2556,23 @@ DbErr Cursor::update_row(System &sys, const Tuple *ib_old_tpl, const Tuple *ib_n
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr ib_delete_row(System &sys, Cursor *cursor, BtreePcursor *pcur, const Rec &rec) {
+static DbErr delete_row_low(System &sys, Cursor *cursor, BtreePcursor *pcur, const Rec &rec) {
   auto table = cursor->m_prebuilt->m_table;
   auto index = table->get_first_index();
 
   auto n_cols = index->get_n_ordering_defined_by_user();
-  auto ib_tpl = ib_key_tuple_new(index, n_cols);
+  auto tpl = key_tuple_new(index, n_cols);
 
-  if (ib_tpl == nullptr) {
+  if (tpl == nullptr) {
     return DB_OUT_OF_MEMORY;
   }
 
-  auto tuple = ib_tpl;
-  auto upd = ib_update_vector_create(sys, cursor);
+  auto tuple = tpl;
+  auto upd = update_vector_create(sys, cursor);
 
-  ib_read_tuple(sys, rec, tuple);
+  read_tuple(sys, rec, tuple);
 
-  upd->m_n_fields = ib_tpl->get_n_cols();
+  upd->m_n_fields = tpl->get_n_cols();
 
   for (ulint i{}; i < upd->m_n_fields; ++i) {
     auto upd_field = &upd->m_fields[i];
@@ -2646,16 +2592,15 @@ static DbErr ib_delete_row(System &sys, Cursor *cursor, BtreePcursor *pcur, cons
   /* Note that this is a delete. */
   cursor->m_q_proc.m_node.m_upd->m_is_delete = true;
 
-  auto err = ib_execute_update_query_graph(sys, cursor, pcur);
+  auto err = execute_update_query_graph(sys, cursor, pcur);
 
   return err;
 }
 
 DbErr Cursor::delete_row(System &sys) noexcept {
-  auto ib_crsr = this;
+  auto cursor = this;
   DbErr err;
   BtreePcursor *pcur;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
   auto prebuilt = cursor->m_prebuilt;
 
   auto index = prebuilt->m_index->m_table->get_first_index();
@@ -2671,7 +2616,7 @@ DbErr Cursor::delete_row(System &sys) noexcept {
     pcur = prebuilt->m_pcur;
   }
 
-  if (ib_btr_cursor_is_positioned(pcur)) {
+  if (btr_cursor_is_positioned(pcur)) {
     Rec rec;
 
     if (!prebuilt->m_row_cache.is_cache_empty()) {
@@ -2693,7 +2638,7 @@ DbErr Cursor::delete_row(System &sys) noexcept {
     }
 
     if (rec.is_valid() && !rec.get_deleted_flag()) {
-      err = ib_delete_row(sys, cursor, pcur, Rec(rec));
+      err = delete_row_low(sys, cursor, pcur, Rec(rec));
     } else {
       err = DB_RECORD_NOT_FOUND;
     }
@@ -2704,25 +2649,24 @@ DbErr Cursor::delete_row(System &sys) noexcept {
   return err;
 }
 
-DbErr Cursor::read_row(System &sys, Tuple *ib_tpl) noexcept {
-  auto ib_crsr = this;
+DbErr Cursor::read_row(System &sys, Tuple *tpl) noexcept {
+  auto cursor = this;
   DbErr err;
-  auto tuple = ib_tpl;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto tuple = tpl;
 
   ut_a(cursor->m_prebuilt->m_trx->m_conc_state != TRX_NOT_STARTED);
 
   /* When searching with IB_EXACT_MATCH set, row_search_mvcc()
   will not position the persistent cursor but will copy the record
   found into the row cache. It should be the only entry. */
-  if (!ib_crsr->is_positioned() && cursor->m_prebuilt->m_row_cache.is_cache_empty()) {
+  if (!cursor->is_positioned() && cursor->m_prebuilt->m_row_cache.is_cache_empty()) {
     err = DB_RECORD_NOT_FOUND;
   } else if (!cursor->m_prebuilt->m_row_cache.is_cache_empty()) {
     auto rec = cursor->m_prebuilt->m_row_cache.cache_get_row();
     ut_a(!rec.is_null());
 
     if (!rec.get_deleted_flag()) {
-      ib_read_tuple(sys, Rec(rec), tuple);
+      read_tuple(sys, Rec(rec), tuple);
       err = DB_SUCCESS;
     } else {
       err = DB_RECORD_NOT_FOUND;
@@ -2748,7 +2692,7 @@ DbErr Cursor::read_row(System &sys, Tuple *ib_tpl) noexcept {
       auto rec = pcur->get_rec();
 
       if (!rec.get_deleted_flag()) {
-        ib_read_tuple(sys, Rec(rec), tuple);
+        read_tuple(sys, Rec(rec), tuple);
         err = DB_SUCCESS;
       } else {
         err = DB_RECORD_NOT_FOUND;
@@ -2764,8 +2708,7 @@ DbErr Cursor::read_row(System &sys, Tuple *ib_tpl) noexcept {
 }
 
 DbErr Cursor::prev(System &sys) noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
   auto prebuilt = cursor->m_prebuilt;
 
   /* We want to move to the next record */
@@ -2777,8 +2720,7 @@ DbErr Cursor::prev(System &sys) noexcept {
 }
 
 DbErr Cursor::next(System &sys) noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
   auto prebuilt = cursor->m_prebuilt;
 
   /* We want to move to the next record */
@@ -2797,7 +2739,7 @@ DbErr Cursor::next(System &sys) noexcept {
  *
  * @return DB_SUCCESS or err code
  */
-static DbErr ib_cursor_position(System &sys, Cursor *cursor, SearchMode mode) {
+static DbErr cursor_position(System &sys, Cursor *cursor, SearchMode mode) {
   auto prebuilt = cursor->m_prebuilt;
 
   /* We want to position at one of the ends, row_search_mvcc()
@@ -2808,23 +2750,20 @@ static DbErr ib_cursor_position(System &sys, Cursor *cursor, SearchMode mode) {
 }
 
 DbErr Cursor::first(System &sys) noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
 
-  return ib_cursor_position(sys, cursor, IB_CUR_G);
+  return cursor_position(sys, cursor, IB_CUR_G);
 }
 
 DbErr Cursor::last(System &sys) noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
 
-  return ib_cursor_position(sys, cursor, IB_CUR_L);
+  return cursor_position(sys, cursor, IB_CUR_L);
 }
 
-DbErr Cursor::moveto(System &sys, Tuple *ib_tpl, SearchMode ib_srch_mode, int *result) noexcept {
-  auto ib_crsr = this;
-  auto tuple = ib_tpl;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+DbErr Cursor::moveto(System &sys, Tuple *tpl, SearchMode srch_mode, int *result) noexcept {
+  auto cursor = this;
+  auto tuple = tpl;
   auto prebuilt = cursor->m_prebuilt;
   auto search_tuple = prebuilt->m_search_tuple;
 
@@ -2843,7 +2782,7 @@ DbErr Cursor::moveto(System &sys, Tuple *ib_tpl, SearchMode ib_srch_mode, int *r
   ut_a(prebuilt->m_select_lock_type <= LOCK_NUM);
 
   auto err = sys.m_row_sel->mvcc_fetch(
-    sys.m_config.m_recv.m_force_recovery, ib_srch_mode, prebuilt, (IbMatch)cursor->m_match_mode, ROW_SEL_MOVETO
+    sys.m_config.m_recv.m_force_recovery, srch_mode, prebuilt, (IbMatch)cursor->m_match_mode, ROW_SEL_MOVETO
   );
 
   *result = prebuilt->m_result;
@@ -2851,16 +2790,15 @@ DbErr Cursor::moveto(System &sys, Tuple *ib_tpl, SearchMode ib_srch_mode, int *r
   return err;
 }
 
-void Cursor::attach_trx(System &sys, Trx *ib_trx) noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+void Cursor::attach_trx(System &sys, Trx *trx) noexcept {
+  auto cursor = this;
   auto prebuilt = cursor->m_prebuilt;
 
-  ut_a(ib_trx != nullptr);
+  ut_a(trx != nullptr);
   ut_a(prebuilt->m_trx == nullptr);
 
   prebuilt->clear();
-  prebuilt->update_trx((Trx *)ib_trx);
+  prebuilt->update_trx(trx);
 
   /* Assign a read view if the transaction does not have it yet */
   auto rv = prebuilt->m_trx->assign_read_view(sys);
@@ -2872,8 +2810,7 @@ void Cursor::attach_trx(System &sys, Trx *ib_trx) noexcept {
 }
 
 void Cursor::set_match_mode(MatchMode match_mode) noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
 
   cursor->m_match_mode = match_mode;
 }
@@ -2886,12 +2823,12 @@ void Cursor::set_match_mode(MatchMode match_mode) noexcept {
  *
  * @return Dfield* dfield instance in the tuple.
  */
-static const Dfield *ib_col_get_dfield(const Tuple *tuple, ulint col_no) noexcept {
+static const Dfield *col_get_dfield(const Tuple *tuple, ulint col_no) noexcept {
   return dtuple_get_nth_field(tuple->m_ptr, col_no);
 }
 
-/** @copydoc ib_col_get_dfield(const Tuple *, ulint) */
-static Dfield *ib_col_get_dfield(Tuple *tuple, ulint col_no) noexcept {
+/** @copydoc col_get_dfield(const Tuple *, ulint) */
+static Dfield *col_get_dfield(Tuple *tuple, ulint col_no) noexcept {
   return dtuple_get_nth_field(tuple->m_ptr, col_no);
 }
 
@@ -2902,20 +2839,20 @@ static Dfield *ib_col_get_dfield(Tuple *tuple, ulint col_no) noexcept {
  *
  * @return true if the column type contains variable length data, false otherwise.
  */
-static bool ib_col_is_capped(const Dtype *dtype) noexcept {
+static bool col_is_capped(const Dtype *dtype) noexcept {
   return dtype_get_len(dtype) > 0 && (dtype_get_mtype(dtype) == DATA_VARCHAR || dtype_get_mtype(dtype) == DATA_CHAR ||
                                       dtype_get_mtype(dtype) == DATA_CLIENT || dtype_get_mtype(dtype) == DATA_VARCLIENT ||
                                       dtype_get_mtype(dtype) == DATA_FIXBINARY || dtype_get_mtype(dtype) == DATA_BINARY);
 }
 
 DbErr Tuple::set_value(ulint col_no, const void *s, ulint len) noexcept {
-  auto ib_tpl = this;
+  auto tpl = this;
   auto src = static_cast<const byte *>(s);
-  auto tuple = ib_tpl;
+  auto tuple = tpl;
 
   ut_d(mem_heap_verify(tuple->m_heap));
 
-  auto dfield = ib_col_get_dfield(tuple, col_no);
+  auto dfield = col_get_dfield(tuple, col_no);
 
   /* User wants to set the column to nullptr. */
   if (len == IB_SQL_NULL) {
@@ -2935,7 +2872,7 @@ DbErr Tuple::set_value(ulint col_no, const void *s, ulint len) noexcept {
   /* Since TEXT/CLOB also map to DATA_VARCHAR we need to make an
   exception. Perhaps we need to set the precise type and check
   for that. */
-  if (ib_col_is_capped(dtype)) {
+  if (col_is_capped(dtype)) {
 
     len = std::min<ulint>(len, dtype_get_len(dtype));
 
@@ -3025,10 +2962,10 @@ DbErr Tuple::set_value(ulint col_no, const void *s, ulint len) noexcept {
 }
 
 ulint Tuple::get_len(ulint i) const noexcept {
-  auto ib_tpl = this;
-  auto tuple = ib_tpl;
+  auto tpl = this;
+  auto tuple = tpl;
 
-  auto dfield = ib_col_get_dfield(tuple, i);
+  auto dfield = col_get_dfield(tuple, i);
   auto data_len = dfield_get_len(dfield);
 
   return data_len == UNIV_SQL_NULL ? IB_SQL_NULL : data_len;
@@ -3037,17 +2974,17 @@ ulint Tuple::get_len(ulint i) const noexcept {
 /**
  * Copy a column value from the tuple.
  *
- * @param[in] ib_tpl Tuple instance.
+ * @param[in] tpl Tuple instance.
  * @param[in] i Column index in tuple.
  * @param[out] dst Copied data value.
  * @param[in] len Max data value len to copy.
  *
  * @return bytes copied or IB_SQL_NULL
  */
-static ulint ib_col_copy_value_low(const Tuple *ib_tpl, ulint i, void *dst, ulint len) noexcept {
-  auto tuple = ib_tpl;
+static ulint col_copy_value_low(const Tuple *tpl, ulint i, void *dst, ulint len) noexcept {
+  auto tuple = tpl;
 
-  auto dfield = ib_col_get_dfield(tuple, i);
+  auto dfield = col_get_dfield(tuple, i);
   auto data = static_cast<const byte *>(dfield_get_data(dfield));
   auto data_len = dfield_get_len(dfield);
 
@@ -3099,8 +3036,8 @@ static ulint ib_col_copy_value_low(const Tuple *ib_tpl, ulint i, void *dst, ulin
 }
 
 ulint Tuple::copy_value(ulint i, void *dst, ulint len) const noexcept {
-  auto ib_tpl = this;
-  return ib_col_copy_value_low(ib_tpl, i, dst, len);
+  auto tpl = this;
+  return col_copy_value_low(tpl, i, dst, len);
 }
 
 /**
@@ -3110,7 +3047,7 @@ ulint Tuple::copy_value(ulint i, void *dst, ulint len) const noexcept {
  *
  * @return Precise type in API format.
  */
-static ColAttr ib_col_get_attr(ulint prtype) {
+static ColAttr col_get_attr(ulint prtype) {
   ColAttr col_attr = IB_COL_NONE;
   auto attr = to_int(col_attr);
 
@@ -3140,27 +3077,27 @@ static ColAttr ib_col_get_attr(ulint prtype) {
 /**
  * Get a column type, length and attributes from the tuple.
  *
- * @param[in] ib_tpl Tuple instance.
+ * @param[in] tpl Tuple instance.
  * @param[in] i Column index in tuple.
- * @param[out] ib_col_meta Column meta data.
+ * @param[out] col_meta Column meta data.
  *
  * @return Length of column data.
  */
-static ulint ib_col_get_meta_low(const Tuple *ib_tpl, ulint i, ColMeta *ib_col_meta) noexcept {
-  auto tuple = ib_tpl;
+static ulint col_get_meta_low(const Tuple *tpl, ulint i, ColMeta *col_meta) noexcept {
+  auto tuple = tpl;
 
-  auto dfield = ib_col_get_dfield(tuple, i);
+  auto dfield = col_get_dfield(tuple, i);
   auto data_len = dfield_get_len(dfield);
 
   /* We assume 1-1 mapping between the ENUM and internal type codes. */
-  ib_col_meta->type = static_cast<ColType>(dtype_get_mtype(dfield_get_type(dfield)));
+  col_meta->type = static_cast<ColType>(dtype_get_mtype(dfield_get_type(dfield)));
 
-  ib_col_meta->type_len = dtype_get_len(dfield_get_type(dfield));
+  col_meta->type_len = dtype_get_len(dfield_get_type(dfield));
 
   auto prtype = (uint16_t)dtype_get_prtype(dfield_get_type(dfield));
 
-  ib_col_meta->attr = ib_col_get_attr(prtype);
-  ib_col_meta->client_type = prtype & DATA_CLIENT_TYPE_MASK;
+  col_meta->attr = col_get_attr(prtype);
+  col_meta->client_type = prtype & DATA_CLIENT_TYPE_MASK;
 
   return data_len;
 }
@@ -3168,25 +3105,25 @@ static ulint ib_col_get_meta_low(const Tuple *ib_tpl, ulint i, ColMeta *ib_col_m
 /**
  * Read a signed int 8 bit column from an InnoDB tuple.
  *
- * @param[in] ib_tpl Tuple instance.
+ * @param[in] tpl Tuple instance.
  * @param[in] i Column number.
  * @param[in] usign True if unsigned.
  * @param[in] size Size of integer.
  *
  * @return DB_SUCCESS or error.
  */
-static DbErr ib_tuple_check_int(const Tuple *ib_tpl, ulint i, bool usign, ulint size) noexcept {
-  ColMeta ib_col_meta;
+static DbErr tuple_check_int(const Tuple *tpl, ulint i, bool usign, ulint size) noexcept {
+  ColMeta col_meta;
 
-  ib_col_get_meta_low(ib_tpl, i, &ib_col_meta);
+  col_get_meta_low(tpl, i, &col_meta);
 
-  if (ib_col_meta.type != IB_INT) {
+  if (col_meta.type != IB_INT) {
     return DB_DATA_MISMATCH;
-  } else if (ib_col_meta.type_len == IB_SQL_NULL) {
+  } else if (col_meta.type_len == IB_SQL_NULL) {
     return DB_UNDERFLOW;
-  } else if (ib_col_meta.type_len != size) {
+  } else if (col_meta.type_len != size) {
     return DB_DATA_MISMATCH;
-  } else if ((ib_col_meta.attr & IB_COL_UNSIGNED) && !usign) {
+  } else if ((col_meta.attr & IB_COL_UNSIGNED) && !usign) {
     return DB_DATA_MISMATCH;
   }
 
@@ -3194,119 +3131,119 @@ static DbErr ib_tuple_check_int(const Tuple *ib_tpl, ulint i, bool usign, ulint 
 }
 
 DbErr Tuple::read_i8(ulint i, int8_t *ival) const noexcept {
-  auto ib_tpl = this;
+  auto tpl = this;
 
-  const auto err = ib_tuple_check_int(ib_tpl, i, false, sizeof(*ival));
+  const auto err = tuple_check_int(tpl, i, false, sizeof(*ival));
 
   if (err == DB_SUCCESS) {
-    ib_col_copy_value_low(ib_tpl, i, ival, sizeof(*ival));
+    col_copy_value_low(tpl, i, ival, sizeof(*ival));
   }
 
   return err;
 }
 
 DbErr Tuple::read_u8(ulint i, uint8_t *ival) const noexcept {
-  auto ib_tpl = this;
+  auto tpl = this;
 
-  const auto err = ib_tuple_check_int(ib_tpl, i, true, sizeof(*ival));
+  const auto err = tuple_check_int(tpl, i, true, sizeof(*ival));
 
   if (err == DB_SUCCESS) {
-    ib_col_copy_value_low(ib_tpl, i, ival, sizeof(*ival));
+    col_copy_value_low(tpl, i, ival, sizeof(*ival));
   }
 
   return err;
 }
 
 DbErr Tuple::read_i16(ulint i, int16_t *ival) const noexcept {
-  auto ib_tpl = this;
+  auto tpl = this;
 
-  const auto err = ib_tuple_check_int(ib_tpl, i, false, sizeof(*ival));
+  const auto err = tuple_check_int(tpl, i, false, sizeof(*ival));
 
   if (err == DB_SUCCESS) {
-    ib_col_copy_value_low(ib_tpl, i, ival, sizeof(*ival));
+    col_copy_value_low(tpl, i, ival, sizeof(*ival));
   }
 
   return err;
 }
 
 DbErr Tuple::read_u16(ulint i, uint16_t *ival) const noexcept {
-  auto ib_tpl = this;
+  auto tpl = this;
 
-  const auto err = ib_tuple_check_int(ib_tpl, i, true, sizeof(*ival));
+  const auto err = tuple_check_int(tpl, i, true, sizeof(*ival));
 
   if (err == DB_SUCCESS) {
-    ib_col_copy_value_low(ib_tpl, i, ival, sizeof(*ival));
+    col_copy_value_low(tpl, i, ival, sizeof(*ival));
   }
 
   return err;
 }
 
 DbErr Tuple::read_i32(ulint i, int32_t *ival) const noexcept {
-  auto ib_tpl = this;
+  auto tpl = this;
 
-  const auto err = ib_tuple_check_int(ib_tpl, i, false, sizeof(*ival));
+  const auto err = tuple_check_int(tpl, i, false, sizeof(*ival));
 
   if (err == DB_SUCCESS) {
-    ib_col_copy_value_low(ib_tpl, i, ival, sizeof(*ival));
+    col_copy_value_low(tpl, i, ival, sizeof(*ival));
   }
 
   return err;
 }
 
 DbErr Tuple::read_u32(ulint i, uint32_t *ival) const noexcept {
-  auto ib_tpl = this;
+  auto tpl = this;
 
-  const auto err = ib_tuple_check_int(ib_tpl, i, true, sizeof(*ival));
+  const auto err = tuple_check_int(tpl, i, true, sizeof(*ival));
 
   if (err == DB_SUCCESS) {
-    ib_col_copy_value_low(ib_tpl, i, ival, sizeof(*ival));
+    col_copy_value_low(tpl, i, ival, sizeof(*ival));
   }
 
   return err;
 }
 
 DbErr Tuple::read_i64(ulint i, int64_t *ival) const noexcept {
-  auto ib_tpl = this;
+  auto tpl = this;
 
-  const auto err = ib_tuple_check_int(ib_tpl, i, false, sizeof(*ival));
+  const auto err = tuple_check_int(tpl, i, false, sizeof(*ival));
 
   if (err == DB_SUCCESS) {
-    ib_col_copy_value_low(ib_tpl, i, ival, sizeof(*ival));
+    col_copy_value_low(tpl, i, ival, sizeof(*ival));
   }
 
   return err;
 }
 
 DbErr Tuple::read_u64(ulint i, uint64_t *ival) const noexcept {
-  auto ib_tpl = this;
+  auto tpl = this;
 
-  const auto err = ib_tuple_check_int(ib_tpl, i, true, sizeof(*ival));
+  const auto err = tuple_check_int(tpl, i, true, sizeof(*ival));
 
   if (err == DB_SUCCESS) {
-    ib_col_copy_value_low(ib_tpl, i, ival, sizeof(*ival));
+    col_copy_value_low(tpl, i, ival, sizeof(*ival));
   }
 
   return err;
 }
 
 const void *Tuple::get_value(ulint i) const noexcept {
-  auto ib_tpl = this;
-  auto tuple = ib_tpl;
-  auto dfield = ib_col_get_dfield(tuple, i);
+  auto tpl = this;
+  auto tuple = tpl;
+  auto dfield = col_get_dfield(tuple, i);
   auto data = dfield_get_data(dfield);
   auto data_len = dfield_get_len(dfield);
 
   return data_len != UNIV_SQL_NULL ? data : nullptr;
 }
 
-ulint Tuple::get_meta(ulint i, ColMeta *ib_col_meta) const noexcept {
-  auto ib_tpl = this;
-  return ib_col_get_meta_low(ib_tpl, i, ib_col_meta);
+ulint Tuple::get_meta(ulint i, ColMeta *col_meta) const noexcept {
+  auto tpl = this;
+  return col_get_meta_low(tpl, i, col_meta);
 }
 
 Tuple *Tuple::clear() noexcept {
-  auto ib_tpl = this;
-  auto tuple = ib_tpl;
+  auto tpl = this;
+  auto tuple = tpl;
   const auto type = tuple->m_type;
   auto heap = tuple->m_heap;
 
@@ -3316,16 +3253,15 @@ Tuple *Tuple::clear() noexcept {
   mem_heap_empty(heap);
 
   if (type == TPL_ROW) {
-    return ib_row_tuple_new_low(index, n_cols, heap);
+    return row_tuple_new_low(index, n_cols, heap);
   } else {
-    return ib_key_tuple_new_low(index, n_cols, heap);
+    return key_tuple_new_low(index, n_cols, heap);
   }
 }
 
-DbErr Cursor::get_cluster_key(Tuple **ib_dst_tpl, const Tuple *ib_src_tpl) noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
-  auto src_tuple = ib_src_tpl;
+DbErr Cursor::get_cluster_key(Tuple **dst_tpl, const Tuple *src_tpl) noexcept {
+  auto cursor = this;
+  auto src_tuple = src_tpl;
 
   auto clust_index = cursor->m_prebuilt->m_table->get_clustered_index();
 
@@ -3340,13 +3276,13 @@ DbErr Cursor::get_cluster_key(Tuple **ib_dst_tpl, const Tuple *ib_src_tpl) noexc
   }
 
   /* Create the cluster index key search tuple. */
-  *ib_dst_tpl = ib_crsr->clust_search_tuple_create();
+  *dst_tpl = cursor->clust_search_tuple_create();
 
-  if (!*ib_dst_tpl) {
+  if (!*dst_tpl) {
     return DB_OUT_OF_MEMORY;
   }
 
-  auto dst_tuple = (Tuple *)*ib_dst_tpl;
+  auto dst_tuple = *dst_tpl;
   ut_a(dst_tuple->m_index == clust_index);
 
   const auto n_fields = dst_tuple->m_index->get_n_unique();
@@ -3374,10 +3310,8 @@ DbErr Cursor::get_cluster_key(Tuple **ib_dst_tpl, const Tuple *ib_src_tpl) noexc
   return DB_SUCCESS;
 }
 
-DbErr Tuple::copy(const Tuple *ib_src_tpl) noexcept {
-  auto ib_dst_tpl = this;
-  const Tuple *src_tuple = (const Tuple *)ib_src_tpl;
-  Tuple *dst_tuple = (Tuple *)ib_dst_tpl;
+DbErr Tuple::copy(const Tuple *src_tuple) noexcept {
+  auto dst_tuple = this;
 
   /* Make sure src and dst are not the same. */
   ut_a(src_tuple != dst_tuple);
@@ -3411,45 +3345,41 @@ DbErr Tuple::copy(const Tuple *ib_src_tpl) noexcept {
 }
 
 Tuple *Cursor::sec_search_tuple_create() noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
   auto index = cursor->m_prebuilt->m_index;
 
   const auto n_cols = index->get_n_unique_in_tree();
-  return ib_key_tuple_new(index, n_cols);
+  return key_tuple_new(index, n_cols);
 }
 
 Tuple *Cursor::sec_read_tuple_create() noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
   auto index = cursor->m_prebuilt->m_index;
   const auto n_cols = index->get_n_fields();
 
-  return ib_row_tuple_new(index, n_cols);
+  return row_tuple_new(index, n_cols);
 }
 
 Tuple *Cursor::clust_search_tuple_create() noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
   auto index = cursor->m_prebuilt->m_table->get_clustered_index();
   const auto n_cols = index->get_n_ordering_defined_by_user();
 
-  return ib_key_tuple_new(index, n_cols);
+  return key_tuple_new(index, n_cols);
 }
 
 Tuple *Cursor::clust_read_tuple_create() noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
 
   auto index = cursor->m_prebuilt->m_table->get_clustered_index();
 
   const auto n_cols = cursor->m_prebuilt->m_table->get_n_cols();
-  return ib_row_tuple_new(index, n_cols);
+  return row_tuple_new(index, n_cols);
 }
 
 ulint Tuple::get_n_user_cols() const noexcept {
-  auto ib_tpl = this;
-  const auto tuple = ib_tpl;
+  auto tpl = this;
+  const auto tuple = tpl;
 
   if (tuple->m_type == TPL_ROW) {
     return tuple->m_index->m_table->get_n_user_cols();
@@ -3459,27 +3389,26 @@ ulint Tuple::get_n_user_cols() const noexcept {
 }
 
 ulint Tuple::get_n_cols() const noexcept {
-  auto ib_tpl = this;
-  const auto tuple = ib_tpl;
+  auto tpl = this;
+  const auto tuple = tpl;
 
   return dtuple_get_n_fields(tuple->m_ptr);
 }
 
-void Tuple::destroy(Tuple *ib_tpl) noexcept {
-  Tuple *tuple = (Tuple *)ib_tpl;
+void Tuple::destroy(Tuple *tuple) noexcept {
 
   mem_heap_free(tuple->m_heap);
 }
 
-DbErr cursor_truncate(System &sys, Cursor **ib_crsr, uint64_t *table_id) noexcept {
-  auto cursor = *reinterpret_cast<Cursor **>(ib_crsr);
+DbErr cursor_truncate(System &sys, Cursor **crsr, uint64_t *table_id) noexcept {
+  auto cursor = *reinterpret_cast<Cursor **>(crsr);
   auto prebuilt = cursor->m_prebuilt;
 
-  ut_a(schema_lock_is_exclusive((Trx *)prebuilt->m_trx));
+  ut_a(schema_lock_is_exclusive(prebuilt->m_trx));
 
   *table_id = 0;
 
-  auto err = (*ib_crsr)->lock(sys, IB_LOCK_X);
+  auto err = (*crsr)->lock(sys, IB_LOCK_X);
 
   if (err == DB_SUCCESS) {
     Trx *trx;
@@ -3488,10 +3417,10 @@ DbErr cursor_truncate(System &sys, Cursor **ib_crsr, uint64_t *table_id) noexcep
     /* We are going to free the cursor and the prebuilt. Store
     the transaction handle locally. */
     trx = prebuilt->m_trx;
-    err = Cursor::close(sys, *ib_crsr);
+    err = Cursor::close(sys, *crsr);
     ut_a(err == DB_SUCCESS);
 
-    *ib_crsr = nullptr;
+    *crsr = nullptr;
 
     /* This function currently commits the transaction
     on success. */
@@ -3507,18 +3436,18 @@ DbErr cursor_truncate(System &sys, Cursor **ib_crsr, uint64_t *table_id) noexcep
 
 DbErr table_truncate(System &sys, const char *table_name, uint64_t *table_id) noexcept {
 
-  auto ib_trx = trx_begin(sys, IB_TRX_SERIALIZABLE);
+  auto trx = trx_begin(sys, IB_TRX_SERIALIZABLE);
 
   sys.m_dict->mutex_acquire();
 
   auto table = sys.m_dict->table_get(table_name);
 
   DbErr err;
-  Cursor *ib_crsr{};
+  Cursor *crsr{};
 
   if (table != nullptr && table->get_first_index()) {
     sys.m_dict->table_increment_handle_count(table, true);
-    err = ib_create_cursor(sys, &ib_crsr, table, 0, reinterpret_cast<Trx *>(ib_trx));
+    err = create_cursor(sys, &crsr, table, 0, trx);
   } else {
     err = DB_TABLE_NOT_FOUND;
   }
@@ -3526,33 +3455,33 @@ DbErr table_truncate(System &sys, const char *table_name, uint64_t *table_id) no
   sys.m_dict->mutex_release();
 
   if (err == DB_SUCCESS) {
-    err = schema_lock_exclusive(sys, ib_trx);
+    err = schema_lock_exclusive(sys, trx);
   }
 
   DbErr trunc_err;
 
   if (err == DB_SUCCESS) {
-    trunc_err = cursor_truncate(sys, &ib_crsr, table_id);
+    trunc_err = cursor_truncate(sys, &crsr, table_id);
     ut_a(err == DB_SUCCESS);
   } else {
     trunc_err = err;
   }
 
-  if (ib_crsr != nullptr) {
-    err = Cursor::close(sys, ib_crsr);
+  if (crsr != nullptr) {
+    err = Cursor::close(sys, crsr);
     ut_a(err == DB_SUCCESS);
   }
 
   if (trunc_err == DB_SUCCESS) {
-    ut_a(trx_state(ib_trx) == IB_TRX_NOT_STARTED);
+    ut_a(trx_state(trx) == IB_TRX_NOT_STARTED);
 
-    err = schema_unlock(sys, ib_trx);
+    err = schema_unlock(sys, trx);
     ut_a(err == DB_SUCCESS || err == DB_SCHEMA_NOT_LOCKED);
 
-    err = trx_release(sys, ib_trx);
+    err = trx_release(sys, trx);
     ut_a(err == DB_SUCCESS);
   } else {
-    err = trx_rollback(sys, ib_trx);
+    err = trx_rollback(sys, trx);
     ut_a(err == DB_SUCCESS);
   }
 
@@ -3563,7 +3492,7 @@ DbErr table_get_id(System &sys, const char *table_name, uint64_t *table_id) noex
 
   sys.m_dict->mutex_acquire();
 
-  auto err = ib_table_get_id_low(sys, table_name, table_id);
+  auto err = table_get_id_low(sys, table_name, table_id);
 
   sys.m_dict->mutex_release();
 
@@ -3576,9 +3505,9 @@ DbErr index_get_id(System &sys, const char *table_name, const char *index_name, 
   *index_id = 0;
 
   auto normalized_name = static_cast<char *>(mem_alloc(strlen(table_name) + 1));
-  ib_normalize_table_name(normalized_name, table_name);
+  normalize_table_name(normalized_name, table_name);
 
-  auto table = ib_lookup_table_by_name(sys, normalized_name);
+  auto table = lookup_table_by_name(sys, normalized_name);
 
   mem_free(normalized_name);
   normalized_name = nullptr;
@@ -3621,7 +3550,7 @@ bool database_create(System &sys, const char *dbname) noexcept {
 }
 
 DbErr database_drop(System &sys, const char *dbname) noexcept {
-  Trx *ib_trx;
+  Trx *trx;
   ulint len = strlen(dbname);
 
   if (len == 0) {
@@ -3633,7 +3562,7 @@ DbErr database_drop(System &sys, const char *dbname) noexcept {
   memset(ptr, 0x0, len + 2);
   strcpy(ptr, dbname);
 
-  ib_trx = trx_begin(sys, IB_TRX_SERIALIZABLE);
+  trx = trx_begin(sys, IB_TRX_SERIALIZABLE);
 
   /* Drop all the tables in the database first. */
   /* ddl_drop_database() expects a string that ends in '/'. */
@@ -3641,7 +3570,7 @@ DbErr database_drop(System &sys, const char *dbname) noexcept {
     ptr[len] = '/';
   }
 
-  auto err = sys.m_dict->m_ddl.drop_database(ptr, (Trx *)ib_trx);
+  auto err = sys.m_dict->m_ddl.drop_database(ptr, trx);
 
   /* Only necessary if file per table is set. */
   if (err == DB_SUCCESS && sys.m_config.m_fil.m_file_per_table) {
@@ -3651,10 +3580,10 @@ DbErr database_drop(System &sys, const char *dbname) noexcept {
   mem_free(ptr);
 
   if (err == DB_SUCCESS) {
-    auto trx_err = trx_commit(sys, ib_trx);
+    auto trx_err = trx_commit(sys, trx);
     ut_a(trx_err == DB_SUCCESS);
   } else {
-    auto trx_err = trx_rollback(sys, ib_trx);
+    auto trx_err = trx_rollback(sys, trx);
     ut_a(trx_err == DB_SUCCESS);
   }
 
@@ -3662,16 +3591,14 @@ DbErr database_drop(System &sys, const char *dbname) noexcept {
 }
 
 bool Cursor::is_positioned() const noexcept {
-  auto ib_crsr = this;
-  const Cursor *cursor = (const Cursor *)ib_crsr;
+  auto cursor = this;
   const Prebuilt *prebuilt = cursor->m_prebuilt;
 
-  return ib_btr_cursor_is_positioned(prebuilt->m_pcur);
+  return btr_cursor_is_positioned(prebuilt->m_pcur);
 }
 
-DbErr schema_lock_shared(System &sys, Trx *ib_trx) noexcept {
+DbErr schema_lock_shared(System &sys, Trx *trx) noexcept {
   DbErr err = DB_SUCCESS;
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   if (trx->m_dict_operation_lock_mode == 0 || trx->m_dict_operation_lock_mode == RW_S_LATCH) {
 
@@ -3681,9 +3608,8 @@ DbErr schema_lock_shared(System &sys, Trx *ib_trx) noexcept {
   return err;
 }
 
-DbErr schema_lock_exclusive(System &sys, Trx *ib_trx) noexcept {
+DbErr schema_lock_exclusive(System &sys, Trx *trx) noexcept {
   DbErr err = DB_SUCCESS;
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   if (trx->m_dict_operation_lock_mode == 0 || trx->m_dict_operation_lock_mode == RW_X_LATCH) {
 
@@ -3695,21 +3621,18 @@ DbErr schema_lock_exclusive(System &sys, Trx *ib_trx) noexcept {
   return err;
 }
 
-bool schema_lock_is_exclusive(const Trx *ib_trx) noexcept {
-  const auto trx = reinterpret_cast<const Trx *>(ib_trx);
+bool schema_lock_is_exclusive(const Trx *trx) noexcept {
 
   return trx->m_dict_operation_lock_mode == RW_X_LATCH;
 }
 
-bool schema_lock_is_shared(const Trx *ib_trx) noexcept {
-  const auto trx = reinterpret_cast<const Trx *>(ib_trx);
+bool schema_lock_is_shared(const Trx *trx) noexcept {
 
   return trx->m_dict_operation_lock_mode == RW_S_LATCH;
 }
 
-DbErr schema_unlock(System &sys, Trx *ib_trx) noexcept {
+DbErr schema_unlock(System &sys, Trx *trx) noexcept {
   DbErr err = DB_SUCCESS;
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
 
   if (trx->m_dict_operation_lock_mode == RW_X_LATCH) {
     sys.m_dict->unlock_data_dictionary(trx);
@@ -3722,28 +3645,26 @@ DbErr schema_unlock(System &sys, Trx *ib_trx) noexcept {
   return err;
 }
 
-DbErr Cursor::lock(System &sys, CursorLockMode ib_lck_mode) noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+DbErr Cursor::lock(System &sys, CursorLockMode lck_mode) noexcept {
+  auto cursor = this;
   auto prebuilt = cursor->m_prebuilt;
   auto trx = prebuilt->m_trx;
   auto table = prebuilt->m_table;
 
-  return ib_trx_lock_table_with_retry(sys, trx, table, LockMode(ib_lck_mode));
+  return row_lock_table_with_retry(sys, trx, table, LockMode(lck_mode));
 }
 
-DbErr table_lock(System &sys, Trx *ib_trx, uint64_t table_id, CursorLockMode ib_lck_mode) noexcept {
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+DbErr table_lock(System &sys, Trx *trx, uint64_t table_id, CursorLockMode lck_mode) noexcept {
 
   ut_a(trx->m_conc_state != TRX_NOT_STARTED);
 
-  auto table = ib_open_table_by_id(sys, table_id, false);
+  auto table = open_table_by_id(sys, table_id, false);
 
   if (table == nullptr) {
     return DB_TABLE_NOT_FOUND;
   }
 
-  ut_a(ib_lck_mode <= (CursorLockMode)LOCK_NUM);
+  ut_a(lck_mode <= (CursorLockMode)LOCK_NUM);
 
   auto heap = mem_heap_create(128);
 
@@ -3758,9 +3679,9 @@ DbErr table_lock(System &sys, Trx *ib_trx, uint64_t table_id, CursorLockMode ib_
 
   trx->m_op_info = "setting table lock";
 
-  ut_a(ib_lck_mode == IB_LOCK_IS || ib_lck_mode == IB_LOCK_IX);
+  ut_a(lck_mode == IB_LOCK_IS || lck_mode == IB_LOCK_IX);
 
-  auto err = sys.m_lock_sys->lock_table(0, table, (enum LockMode)ib_lck_mode, thr);
+  auto err = sys.m_lock_sys->lock_table(0, table, (enum LockMode)lck_mode, thr);
 
   trx->m_error_state = err;
 
@@ -3771,37 +3692,21 @@ DbErr table_lock(System &sys, Trx *ib_trx, uint64_t table_id, CursorLockMode ib_
   return err;
 }
 
-DbErr ib_cursor_unlock(Cursor *ib_crsr) {
-  DbErr err;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
-  auto prebuilt = cursor->m_prebuilt;
-
-  if (prebuilt->m_trx->m_client_n_tables_locked > 0) {
-    --prebuilt->m_trx->m_client_n_tables_locked;
-    err = DB_SUCCESS;
-  } else {
-    err = DB_ERROR;
-  }
-
-  return err;
-}
-
-DbErr Cursor::set_lock_mode(System &sys, CursorLockMode ib_lck_mode) noexcept {
-  auto ib_crsr = this;
+DbErr Cursor::set_lock_mode(System &sys, CursorLockMode lck_mode) noexcept {
+  auto cursor = this;
   DbErr err = DB_SUCCESS;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
   auto prebuilt = cursor->m_prebuilt;
 
-  ut_a(ib_lck_mode <= (CursorLockMode)LOCK_NUM);
+  ut_a(lck_mode <= (CursorLockMode)LOCK_NUM);
 
-  if (ib_lck_mode == IB_LOCK_X) {
-    err = ib_crsr->lock(sys, IB_LOCK_IX);
+  if (lck_mode == IB_LOCK_X) {
+    err = cursor->lock(sys, IB_LOCK_IX);
   } else {
-    err = ib_crsr->lock(sys, IB_LOCK_IS);
+    err = cursor->lock(sys, IB_LOCK_IS);
   }
 
   if (err == DB_SUCCESS) {
-    prebuilt->m_select_lock_type = (enum LockMode)ib_lck_mode;
+    prebuilt->m_select_lock_type = (enum LockMode)lck_mode;
     ut_a(prebuilt->m_trx->m_conc_state != TRX_NOT_STARTED);
   }
 
@@ -3809,23 +3714,20 @@ DbErr Cursor::set_lock_mode(System &sys, CursorLockMode ib_lck_mode) noexcept {
 }
 
 void Cursor::set_cluster_access() noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
   auto prebuilt = cursor->m_prebuilt;
 
   prebuilt->m_need_to_access_clustered = true;
 }
 
 void Cursor::set_simple_select() noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
   auto prebuilt = cursor->m_prebuilt;
 
   prebuilt->m_simple_select = true;
 }
 
-void savepoint_take(Trx *ib_trx, const void *name, ulint name_len) noexcept {
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+void savepoint_take(Trx *trx, const void *name, ulint name_len) noexcept {
 
   ut_a(trx);
   ut_a(name != nullptr);
@@ -3856,8 +3758,7 @@ void savepoint_take(Trx *ib_trx, const void *name, ulint name_len) noexcept {
   trx->m_trx_savepoints.push_back(savep);
 }
 
-DbErr savepoint_release(Trx *ib_trx, const void *name, ulint name_len) noexcept {
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+DbErr savepoint_release(Trx *trx, const void *name, ulint name_len) noexcept {
 
   auto it = std::find_if(trx->m_trx_savepoints.begin(), trx->m_trx_savepoints.end(), [name, name_len](const auto &savep) {
     return name_len == savep->name_len && memcmp(savep->name, name, name_len) == 0;
@@ -3873,8 +3774,7 @@ DbErr savepoint_release(Trx *ib_trx, const void *name, ulint name_len) noexcept 
   }
 }
 
-DbErr savepoint_rollback(System &sys, Trx *ib_trx, const void *name, ulint name_len) noexcept {
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+DbErr savepoint_rollback(System &sys, Trx *trx, const void *name, ulint name_len) noexcept {
 
   if (trx->m_conc_state == TRX_NOT_STARTED) {
     ut_print_timestamp(stderr);
@@ -3930,7 +3830,7 @@ DbErr savepoint_rollback(System &sys, Trx *ib_trx, const void *name, ulint name_
  * @param[out] tbl_fmt - out: table format
  * @param[out] page_size - out: page size
  */
-static void ib_table_get_format(const Table *table, TableFormat *tbl_fmt, ulint *page_size) noexcept {
+static void table_get_format(const Table *table, TableFormat *tbl_fmt, ulint *page_size) noexcept {
   *page_size = 0;
 
   if (table->m_flags == DICT_TF_FORMAT_V1) {
@@ -3949,12 +3849,12 @@ static void ib_table_get_format(const Table *table, TableFormat *tbl_fmt, ulint 
  *
  * @return return value from index_col
  */
-static int ib_table_schema_visit_table_columns(const Table *table, SchemaVisitor::table_col_t table_col, void *arg) {
+static int table_schema_visit_table_columns(const Table *table, SchemaVisitor::table_col_t table_col, void *arg) {
   for (ulint i{}; i < table->get_n_cols(); ++i) {
     auto col = table->get_nth_col(i);
     auto col_no = col->get_no();
     auto name = table->get_col_name(col_no);
-    auto attr = ib_col_get_attr(col->prtype);
+    auto attr = col_get_attr(col->prtype);
     auto user_err = table_col(arg, name, (ColType)col->mtype, col->len, attr);
 
     if (user_err) {
@@ -3974,7 +3874,7 @@ static int ib_table_schema_visit_table_columns(const Table *table, SchemaVisitor
  *
  * @return return value from index_col
  */
-static int ib_table_schema_visit_index_columns(const Index *index, SchemaVisitor::index_col_t index_col, void *arg) noexcept {
+static int table_schema_visit_index_columns(const Index *index, SchemaVisitor::index_col_t index_col, void *arg) noexcept {
   auto n_index_cols = index->m_n_user_defined_cols;
 
   for (ulint i{}; i < n_index_cols; ++i) {
@@ -3989,17 +3889,17 @@ static int ib_table_schema_visit_index_columns(const Index *index, SchemaVisitor
   return 0;
 }
 
-DbErr table_schema_visit(System &sys, Trx *ib_trx, const char *name, const SchemaVisitor *visitor, void *arg) noexcept {
+DbErr table_schema_visit(System &sys, Trx *trx, const char *name, const SchemaVisitor *visitor, void *arg) noexcept {
   int user_err{};
 
-  if (!schema_lock_is_exclusive(ib_trx)) {
+  if (!schema_lock_is_exclusive(trx)) {
     return DB_SCHEMA_NOT_LOCKED;
   }
 
   auto normalized_name = static_cast<char *>(mem_alloc(strlen(name) + 1));
-  ib_normalize_table_name(normalized_name, name);
+  normalize_table_name(normalized_name, name);
 
-  auto table = ib_lookup_table_by_name(sys, normalized_name);
+  auto table = lookup_table_by_name(sys, normalized_name);
 
   mem_free(normalized_name);
   normalized_name = nullptr;
@@ -4013,7 +3913,7 @@ DbErr table_schema_visit(System &sys, Trx *ib_trx, const char *name, const Schem
   ulint page_size;
   TableFormat tbl_fmt;
 
-  ib_table_get_format(table, &tbl_fmt, &page_size);
+  table_get_format(table, &tbl_fmt, &page_size);
 
   /* We need the count of user defined indexes only. */
   auto n_indexes = table->m_indexes.size();
@@ -4043,7 +3943,7 @@ DbErr table_schema_visit(System &sys, Trx *ib_trx, const char *name, const Schem
     goto func_exit;
 
   } else if (visitor->table_col) {
-    user_err = ib_table_schema_visit_table_columns(table, visitor->table_col, arg);
+    user_err = table_schema_visit_table_columns(table, visitor->table_col, arg);
 
     if (user_err > 0) {
       goto func_exit;
@@ -4068,7 +3968,7 @@ DbErr table_schema_visit(System &sys, Trx *ib_trx, const char *name, const Schem
       }
 
       if (visitor->version >= SchemaVisitor::Version::TABLE_AND_INDEX_COL && visitor->index_col) {
-        user_err = ib_table_schema_visit_index_columns(index, visitor->index_col, arg);
+        user_err = table_schema_visit_index_columns(index, visitor->index_col, arg);
 
         if (user_err > 0) {
           break;
@@ -4081,62 +3981,62 @@ DbErr table_schema_visit(System &sys, Trx *ib_trx, const char *name, const Schem
   } while (index != nullptr);
 
 func_exit:
-  ut_a(schema_lock_is_exclusive(ib_trx));
+  ut_a(schema_lock_is_exclusive(trx));
   sys.m_dict->table_decrement_handle_count(table, true);
 
   return user_err != 0 ? DB_ERROR : DB_SUCCESS;
 }
 
-DbErr schema_tables_iterate(System &sys, Trx *ib_trx, SchemaVisitorTableAll visitor, void *arg) noexcept {
+DbErr schema_tables_iterate(System &sys, Trx *trx, SchemaVisitorTableAll visitor, void *arg) noexcept {
   DbErr err;
-  Cursor *ib_crsr;
+  Cursor *crsr;
   DbErr crsr_err;
-  Tuple *ib_tpl{};
+  Tuple *tpl{};
 
-  if (!schema_lock_is_exclusive(ib_trx)) {
+  if (!schema_lock_is_exclusive(trx)) {
     return DB_SCHEMA_NOT_LOCKED;
   }
 
-  auto table = ib_lookup_table_by_name(sys, "SYS_TABLES");
+  auto table = lookup_table_by_name(sys, "SYS_TABLES");
 
   if (table != nullptr) {
     sys.m_dict->table_increment_handle_count(table, true);
-    err = ib_create_cursor(sys, &ib_crsr, table, 0, (Trx *)ib_trx);
+    err = create_cursor(sys, &crsr, table, 0, trx);
   } else {
     return DB_TABLE_NOT_FOUND;
   }
 
   if (err == DB_SUCCESS) {
-    err = ib_crsr->first(sys);
+    err = crsr->first(sys);
   }
 
-  ib_tpl = ib_crsr->clust_read_tuple_create();
+  tpl = crsr->clust_read_tuple_create();
 
   while (err == DB_SUCCESS) {
     const void *ptr;
-    ColMeta ib_col_meta;
+    ColMeta col_meta;
 
-    err = ib_crsr->read_row(sys, ib_tpl);
+    err = crsr->read_row(sys, tpl);
 
     if (err == DB_SUCCESS) {
       ulint len;
 
-      ptr = ib_tpl->get_value(0);
+      ptr = tpl->get_value(0);
       /* Can't have nullptr columns. */
       ut_a(ptr != nullptr);
 
-      len = ib_col_get_meta_low(ib_tpl, 0, &ib_col_meta);
+      len = col_get_meta_low(tpl, 0, &col_meta);
       ut_a(len != UNIV_SQL_NULL);
 
       if (visitor(arg, (const char *)ptr, len)) {
         break;
       }
 
-      err = ib_crsr->next(sys);
+      err = crsr->next(sys);
     }
   }
 
-  crsr_err = Cursor::close(sys, ib_crsr);
+  crsr_err = Cursor::close(sys, crsr);
   ut_a(crsr_err == DB_SUCCESS);
 
   if (err == DB_END_OF_INDEX) {
@@ -4179,17 +4079,16 @@ DbErr Tuple::write_u64(int col_no, uint64_t val) noexcept {
 }
 
 void Cursor::stmt_begin() noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
 
   cursor->m_prebuilt->m_sql_stat_start = true;
 }
 
 DbErr Tuple::write_double(int col_no, double val) noexcept {
-  auto ib_tpl = this;
-  auto tuple = ib_tpl;
+  auto tpl = this;
+  auto tuple = tpl;
 
-  const auto dfield = ib_col_get_dfield(tuple, col_no);
+  const auto dfield = col_get_dfield(tuple, col_no);
 
   if (dtype_get_mtype(dfield_get_type(dfield)) == DATA_DOUBLE) {
     return set_value(col_no, &val, sizeof(val));
@@ -4199,13 +4098,13 @@ DbErr Tuple::write_double(int col_no, double val) noexcept {
 }
 
 DbErr Tuple::read_double(ulint col_no, double *dval) const noexcept {
-  auto ib_tpl = this;
+  auto tpl = this;
   DbErr err;
-  auto tuple = ib_tpl;
-  const auto dfield = ib_col_get_dfield(tuple, col_no);
+  auto tuple = tpl;
+  const auto dfield = col_get_dfield(tuple, col_no);
 
   if (dtype_get_mtype(dfield_get_type(dfield)) == DATA_DOUBLE) {
-    ib_col_copy_value_low(ib_tpl, col_no, dval, sizeof(*dval));
+    col_copy_value_low(tpl, col_no, dval, sizeof(*dval));
     err = DB_SUCCESS;
   } else {
     err = DB_DATA_MISMATCH;
@@ -4215,9 +4114,9 @@ DbErr Tuple::read_double(ulint col_no, double *dval) const noexcept {
 }
 
 DbErr Tuple::write_float(int col_no, float val) noexcept {
-  auto ib_tpl = this;
-  auto tuple = ib_tpl;
-  const auto dfield = ib_col_get_dfield(tuple, col_no);
+  auto tpl = this;
+  auto tuple = tpl;
+  const auto dfield = col_get_dfield(tuple, col_no);
 
   if (dtype_get_mtype(dfield_get_type(dfield)) == DATA_FLOAT) {
     return set_value(col_no, &val, sizeof(val));
@@ -4227,14 +4126,14 @@ DbErr Tuple::write_float(int col_no, float val) noexcept {
 }
 
 DbErr Tuple::read_float(ulint col_no, float *fval) const noexcept {
-  auto ib_tpl = this;
+  auto tpl = this;
   DbErr err;
-  auto tuple = ib_tpl;
+  auto tuple = tpl;
 
-  const auto dfield = ib_col_get_dfield(tuple, col_no);
+  const auto dfield = col_get_dfield(tuple, col_no);
 
   if (dtype_get_mtype(dfield_get_type(dfield)) == DATA_FLOAT) {
-    ib_col_copy_value_low(ib_tpl, col_no, fval, sizeof(*fval));
+    col_copy_value_low(tpl, col_no, fval, sizeof(*fval));
     err = DB_SUCCESS;
   } else {
     err = DB_DATA_MISMATCH;
@@ -4243,8 +4142,7 @@ DbErr Tuple::read_float(ulint col_no, float *fval) const noexcept {
   return err;
 }
 
-DbErr get_duplicate_key(Trx *ib_trx, const char **table_name, const char **index_name) noexcept {
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+DbErr get_duplicate_key(Trx *trx, const char **table_name, const char **index_name) noexcept {
 
   if (trx->m_error_info == nullptr) {
     return DB_ERROR;
@@ -4257,8 +4155,7 @@ DbErr get_duplicate_key(Trx *ib_trx, const char **table_name, const char **index
 }
 
 DbErr Cursor::get_table_statistics(System &sys, TableStats *table_stats) noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
   auto table = cursor->m_prebuilt->m_table;
 
   if (!table->m_stats.m_initialized) {
@@ -4274,8 +4171,7 @@ DbErr Cursor::get_table_statistics(System &sys, TableStats *table_stats) noexcep
 }
 
 DbErr Cursor::get_index_stat_n_diff_key_vals(System &sys, const char *index_name, uint64_t *ncols, int64_t **n_diff) noexcept {
-  auto ib_crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  auto cursor = this;
   auto table = cursor->m_prebuilt->m_table;
 
   if (!table->m_stats.m_initialized) {
@@ -4302,8 +4198,7 @@ DbErr Cursor::get_index_stat_n_diff_key_vals(System &sys, const char *index_name
 }
 
 DbErr Cursor::update_table_statistics(System &sys) noexcept {
-  auto crsr = this;
-  auto cursor = reinterpret_cast<Cursor *>(crsr);
+  auto cursor = this;
   auto table = cursor->m_prebuilt->m_table;
 
   sys.m_dict->update_statistics(table);
@@ -4312,12 +4207,10 @@ DbErr Cursor::update_table_statistics(System &sys) noexcept {
 }
 
 DbErr parallel_select_count_star(
-  System &sys, Trx *ib_trx, std::vector<Cursor *> &ib_crsrs, size_t n_threads, uint64_t &n_rows
+  System &sys, Trx *trx, std::vector<Cursor *> &crsrs, size_t n_threads, uint64_t &n_rows
 ) noexcept {
   ut_a(n_threads > 1);
-  ut_a(!ib_crsrs.empty());
-
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
+  ut_a(!crsrs.empty());
 
   ut::Sharded_counter<ParallelReader::MAX_THREADS> n_recs{};
 
@@ -4329,8 +4222,7 @@ DbErr parallel_select_count_star(
   ParallelReader reader(n_threads);
   std::vector<Table *> tables{};
 
-  for (auto &ib_crsr : ib_crsrs) {
-    auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+  for (auto cursor : crsrs) {
     ParallelReader::Config config(full_scan, cursor->m_prebuilt->m_index);
 
     err = reader.add_scan(sys, trx, config, [&](const ParallelReader::Ctx *ctx) {
@@ -4524,9 +4416,8 @@ static DbErr check_table(System &sys, Trx *trx, Index *index, size_t n_threads) 
   return err;
 }
 
-DbErr check_table(System &sys, Trx **ib_trx, Cursor *ib_crsr, size_t n_threads) noexcept {
-  auto trx = reinterpret_cast<Trx *>(ib_trx);
-  auto cursor = reinterpret_cast<Cursor *>(ib_crsr);
+DbErr check_table(System &sys, Trx *trx, Cursor *crsr, size_t n_threads) noexcept {
+  auto cursor = crsr;
   auto prebuilt = cursor->m_prebuilt;
   auto index = prebuilt->m_index;
 

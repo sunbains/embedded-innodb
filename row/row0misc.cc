@@ -35,7 +35,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "trx0roll.h"
 
 
-int ib_create_tempfile(const char *) {
+int row_create_tempfile(const char *) {
   int fh = -1;
   auto file = tmpfile();
 
@@ -47,11 +47,7 @@ int ib_create_tempfile(const char *) {
   return fh;
 }
 
-bool trx_is_interrupted(const Trx *) {
-  return false;
-}
-
-bool ib_handle_errors(System &sys, DbErr *new_err, Trx *trx, QueThr *thr, TrxSavept *savept) {
+bool row_handle_errors(System &sys, DbErr *new_err, Trx *trx, QueThr *thr, TrxSavept *savept) {
   for (;;) {
     auto err = trx->m_error_state;
     ut_a(err != DB_SUCCESS);
@@ -65,6 +61,7 @@ bool ib_handle_errors(System &sys, DbErr *new_err, Trx *trx, QueThr *thr, TrxSav
           break;
         }
         /* fall through */
+      case DB_INTERRUPTED:
       case DB_DUPLICATE_KEY:
       case DB_FOREIGN_DUPLICATE_KEY:
       case DB_TOO_BIG_RECORD:
@@ -136,7 +133,7 @@ bool ib_handle_errors(System &sys, DbErr *new_err, Trx *trx, QueThr *thr, TrxSav
   }
 }
 
-DbErr ib_trx_lock_table_with_retry(System &sys, Trx *trx, Table *table, enum LockMode mode) {
+DbErr row_lock_table_with_retry(System &sys, Trx *trx, Table *table, enum LockMode mode) {
   auto heap = mem_heap_create(512);
 
   trx->m_op_info = "setting table lock";
@@ -166,7 +163,7 @@ DbErr ib_trx_lock_table_with_retry(System &sys, Trx *trx, Table *table, enum Loc
       que_thr_stop_client(sys, thr);
 
       if (err != DB_QUE_THR_SUSPENDED) {
-        auto was_lock_wait = ib_handle_errors(sys, &err, trx, thr, nullptr);
+        auto was_lock_wait = row_handle_errors(sys, &err, trx, thr, nullptr);
 
         if (was_lock_wait) {
           continue;
@@ -194,7 +191,7 @@ DbErr ib_trx_lock_table_with_retry(System &sys, Trx *trx, Table *table, enum Loc
   ut_error;
 }
 
-void ib_update_statistics_if_needed(System &sys, Table *table) {
+void row_update_statistics_if_needed(System &sys, Table *table) {
   auto counter = table->m_stats.m_modified_counter++;
 
   /* Calculate new statistics if 1 / 16 of table has been modified
