@@ -84,13 +84,13 @@ void BtreePcursor::store_position(System &sys, Mtr *mtr) noexcept {
 
   if (page_rec_is_supremum_low(offs)) {
 
-    rec = page_rec_get_prev(sys, rec);
+    rec = page_rec_get_prev(rec);
 
     m_rel_pos = BtreeCursorPos::AFTER;
 
   } else if (page_rec_is_infimum_low(offs)) {
 
-    rec = page_rec_get_next(sys, rec);
+    rec = page_rec_get_next(rec);
 
     m_rel_pos = BtreeCursorPos::BEFORE;
   } else {
@@ -303,7 +303,7 @@ void BtreePcursor::move_to_next_page(System &sys, Mtr *mtr) noexcept {
 
   get_page_cur()->set_before_first(next_block);
 
-  page_check_dir(sys, next_page);
+  page_check_dir(next_page);
 }
 
 void BtreePcursor::move_backward_from_page(System &sys, Mtr *mtr) noexcept {

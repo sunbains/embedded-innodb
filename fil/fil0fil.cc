@@ -104,7 +104,7 @@ the count drops to zero. */
 /** The null file address */
 constexpr FilAddr fil_addr_null = {FIL_NULL, 0};
 
-Fil::Fil(System &sys) noexcept : m_sys(sys), m_file_per_table(sys.m_config.m_fil.m_file_per_table) {
+Fil::Fil(System &sys) noexcept : m_sys(), m_file_per_table(sys.m_config.m_fil.m_file_per_table) {
   const auto &config = m_sys.m_config.m_fil;
 
   ut_a(config.m_max_n_open_files > 0);

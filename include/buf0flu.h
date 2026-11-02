@@ -52,7 +52,7 @@ struct BufFlush {
    * 
    * @param buf_pool The buffer pool.
    */
-  explicit BufFlush(System &sys) noexcept : m_sys(sys) {}
+  explicit BufFlush(System &sys) noexcept : m_sys() {}
 
   /**
   * Remove a block from the flush list of modified blocks.

@@ -49,7 +49,7 @@ struct RowUndo {
    *
    * @param[in] dict The data dictionary.
    */
-  explicit RowUndo(System &sys) noexcept : m_sys(sys) {}
+  explicit RowUndo(System &sys) noexcept : m_sys() {}
 
   /**
    * @brief Creates a row undo.

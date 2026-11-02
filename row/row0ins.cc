@@ -502,7 +502,7 @@ void RowInsert::foreign_report_add_err(Trx *trx, const Foreign *foreign, Rec rec
     /* If the btr_cur ended on a supremum record, it is better
     to report the previous record in the error message, so that
     the user gets a more descriptive error message. */
-    rec = page_rec_get_prev_const(m_sys, rec);
+    rec = page_rec_get_prev_const(rec);
   }
 
   if (!rec.is_null()) {
@@ -1413,7 +1413,7 @@ DbErr RowInsert::duplicate_error_in_clust(BtreeCursor *btr_cur, DTuple *entry, Q
 
   if (btr_cur->m_up_match >= n_unique) {
 
-    rec = page_rec_get_next(btr_cur->get_recm_sys, ());
+    rec = page_rec_get_next(btr_cur->get_rec());
 
     if (!page_rec_is_supremum(rec)) {
       {
@@ -1549,7 +1549,7 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
     existing record */
 
     if (modify == ROW_INS_NEXT) {
-      rec = page_rec_get_next(btr_cur.get_recm_sys, ());
+      rec = page_rec_get_next(btr_cur.get_rec());
 
       btr_cur.position(index, rec, btr_cur.get_block());
     }

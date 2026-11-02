@@ -53,7 +53,7 @@ struct RowSel {
   /*  *
    * @brief Constructor.
    */
-  explicit RowSel(System &sys) noexcept : m_sys(sys) {}
+  explicit RowSel(System &sys) noexcept : m_sys() {}
 
   /**
    * @brief Destructor.

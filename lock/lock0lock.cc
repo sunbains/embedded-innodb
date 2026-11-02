@@ -673,7 +673,7 @@ std::string Lock::to_string(System &sys, BufPool *buf_pool) const noexcept {
   );
 }
 
-LockSys::LockSys(System &sys) noexcept : m_sys(sys) {}
+LockSys::LockSys(System &sys) noexcept : m_sys() {}
 
 LockSys::~LockSys() noexcept {}
 
@@ -977,7 +977,7 @@ Trx *LockSys::sec_rec_some_has_impl_off_trx_sys_mutex(const Rec rec, const Index
   implicit x-lock. We have to look in the clustered index. */
 
   if (!check_trx_id_sanity(page_get_max_trx_id(page), rec, index, offsets, true)) {
-    buf_page_print(m_sys, page, 0);
+    buf_page_print(page, 0);
 
     /* The page is corrupt: try to avoid a crash by returning
     nullptr */
@@ -1789,7 +1789,7 @@ void LockSys::update_merge_left(const BufBlock *left_block, const Rec orig_pred,
 
   mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
-  left_next_rec = page_rec_get_next_const(m_sys, orig_pred);
+  left_next_rec = page_rec_get_next_const(orig_pred);
 
   if (!page_rec_is_supremum(left_next_rec)) {
 
@@ -1869,7 +1869,7 @@ void LockSys::update_insert(const BufBlock *block, const Rec rec) noexcept {
   record */
 
   const auto receiver_heap_no = rec.get_heap_no();
-  const auto donator_heap_no = page_rec_get_heap_no(page_rec_get_next_low(m_sys, rec));
+  const auto donator_heap_no = page_rec_get_heap_no(page_rec_get_next_low(rec));
 
   mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
@@ -2936,7 +2936,7 @@ DbErr LockSys::rec_insert_check_and_lock(
   }
 
   auto trx = thr_get_trx(thr);
-  auto next_rec = page_rec_get_next_const(m_sys, rec);
+  auto next_rec = page_rec_get_next_const(rec);
   auto next_rec_heap_no = page_rec_get_heap_no(next_rec);
 
   mutex_enter(&m_sys.m_trx_sys->m_mutex);

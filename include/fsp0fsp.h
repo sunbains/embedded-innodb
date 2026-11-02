@@ -74,7 +74,7 @@ struct Fsp {
    * @param[in] fil             Fil instance
    * @param[in] buf_pool        Buffer pool instance
    */
-  explicit Fsp(System &sys) noexcept : m_sys(sys) {}
+  explicit Fsp(System &sys) noexcept : m_sys() {}
 
   /**
    * Create an instance of the Fsp class.

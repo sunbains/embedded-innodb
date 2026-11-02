@@ -40,7 +40,7 @@ IF_DEBUG(bool log_debug_writes = false;)
 
 IF_DEBUG(bool log_do_write = true;)
 
-Log::Log(System &sys) noexcept : m_sys(sys), m_buffer(sys.m_config.m_log.m_buffer_size) {
+Log::Log(System &sys) noexcept : m_sys(), m_buffer(sys.m_config.m_log.m_buffer_size) {
   mutex_create(&m_mutex, IF_DEBUG("log_sys_mutex", ) IF_SYNC_DEBUG(SYNC_LOG, ) Current_location());
 
   m_lsn = LOG_START_LSN;

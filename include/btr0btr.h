@@ -48,7 +48,7 @@ struct Btree {
    * @param[in] fsp             File space.
    * @param[in] buf_pool        Buffer pool.
    */
-  explicit Btree(System &sys) noexcept : m_sys(sys) {}
+  explicit Btree(System &sys) noexcept : m_sys() {}
 
   /**
    * Destructor.
@@ -534,7 +534,7 @@ struct Btree {
 
     if (unlikely(page_no == 0)) {
       ib_logger(stderr, "a nonsensical page number 0 in a node ptr record at offset %lun", (ulong)page_offset(rec.get()));
-      buf_page_print(rec.page_alignm_sys, (), 0);
+      buf_page_print(rec.page_align(), 0);
     }
 
     return page_no;

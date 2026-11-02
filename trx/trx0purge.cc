@@ -604,7 +604,7 @@ TrxUndoRecord PurgeSys::get_next_rec(MemHeap *heap) noexcept {
   return rec_copy;
 }
 
-PurgeSys::PurgeSys(System &sys, Trx *trx) noexcept : m_sys(sys), m_trx(trx) {
+PurgeSys::PurgeSys(System &sys, Trx *trx) noexcept : m_sys(), m_trx(trx) {
   ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
 
   m_state = PURGE_STATE_OFF;

@@ -73,7 +73,7 @@ extern ulint buf_pool_mutex_exit_forbidden;
  * @param read_buf  in: a database page
  * @param ulint
  */
-void buf_page_print(System &sys, const byte *read_buf, ulint);
+void buf_page_print(const byte *read_buf, ulint);
 
 /*** Let us list the consistency conditions for different control block states.
 

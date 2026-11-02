@@ -282,7 +282,7 @@ struct Undo {
    *
    * @param[in] fsp Use this for file space management.
    */
-  explicit Undo(System &sys) noexcept : m_sys(sys) {}
+  explicit Undo(System &sys) noexcept : m_sys() {}
 
   /**
    * Create an undo instance.

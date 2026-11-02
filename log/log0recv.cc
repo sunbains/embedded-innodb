@@ -160,7 +160,7 @@ void RecvSys::cleanup_resources() noexcept {
   }
 }
 
-RecvSys::RecvSys(System &sys) noexcept : m_sys(sys) {
+RecvSys::RecvSys(System &sys) noexcept : m_sys() {
   mutex_create(&m_mutex, IF_DEBUG("RecvSys::m_mutex", ) IF_SYNC_DEBUG(SYNC_RECV, ) Current_location());
 }
 
@@ -525,7 +525,7 @@ void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept
     return;
   }
 
-  auto log_record = recv_get_log_record(block->get_spacesys, (), block->get_page_no());
+  auto log_record = recv_get_log_record(sys, block->get_space(), block->get_page_no());
 
   if (log_record == nullptr || log_record->m_state == RECV_BEING_PROCESSED || log_record->m_state == RECV_PROCESSED) {
 
@@ -612,7 +612,7 @@ void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept
         start_lsn = recv->m_start_lsn;
       }
 
-      recv_parse_or_apply_log_rec_body(recv->m_type, buf, buf + recv->m_len, block, &mtr);
+      recv_parse_or_apply_log_rec_body(recv->sys, m_type, buf, buf + recv->m_len, block, &mtr);
 
       end_lsn = recv->m_start_lsn + recv->m_len;
 

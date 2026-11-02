@@ -554,7 +554,7 @@ Rec BtreeCursor::insert_if_possible(System &sys, const DTuple *tuple, ulint n_ex
   auto page_cursor = get_page_cur();
 
   /* Now, try the insert */
-  auto rec = page_cursor->tuple_insert(sys, tuple, m_index, n_ext, mtr);
+  auto rec = page_cursor->tuple_insert(tuple, m_index, n_ext, mtr);
 
   if (unlikely(rec.is_null())) {
     /* If record did not fit, reorganize */
@@ -563,7 +563,7 @@ Rec BtreeCursor::insert_if_possible(System &sys, const DTuple *tuple, ulint n_ex
 
       page_cursor->search(sys, block, m_index, tuple, PAGE_CUR_LE);
 
-      rec = page_cursor->tuple_insert(sys, tuple, m_index, n_ext, mtr);
+      rec = page_cursor->tuple_insert(tuple, m_index, n_ext, mtr);
     }
   }
 
@@ -705,7 +705,7 @@ DbErr BtreeCursor::optimistic_insert(System &sys,
   {
     const auto page_cursor_rec = page_cursor->get_rec();
 
-    *rec = page_cursor->tuple_insert(sys, entry, index, n_ext, mtr);
+    *rec = page_cursor->tuple_insert(entry, index, n_ext, mtr);
 
     reorg = page_cursor_rec != page_cursor->get_rec();
 
@@ -723,7 +723,7 @@ DbErr BtreeCursor::optimistic_insert(System &sys,
 
     page_cursor->search(sys, block, index, entry, PAGE_CUR_LE);
 
-    *rec = page_cursor->tuple_insert(sys, entry, index, n_ext, mtr);
+    *rec = page_cursor->tuple_insert(entry, index, n_ext, mtr);
 
     if (unlikely(!*rec)) {
       log_err(std::format("Cannot insert tuple into {}: ", index->m_name));
@@ -830,7 +830,7 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
     mem_heap_free(heap);
   }
 
-  ut_ad(page_rec_get_next(get_recsys, ()) == *rec);
+  ut_ad(page_rec_get_next(get_rec()) == *rec);
 
   if (!(flags & BTR_NO_LOCKING_FLAG)) {
 
@@ -1768,7 +1768,7 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
 
     if (level > 0 && rec == page_rec_get_next(page_get_infimum_rec(page))) {
 
-      auto next_rec = page_rec_get_next(sys, rec);
+      auto next_rec = page_rec_get_next(rec);
 
       if (Btree::page_get_prev(page, mtr) == FIL_NULL) {
 
@@ -2020,7 +2020,7 @@ void BtreeCursor::estimate_number_of_different_key_vals(System &sys, const Index
     }
 
     while (rec != supremum) {
-      auto next_rec = page_rec_get_next(sys, rec);
+      auto next_rec = page_rec_get_next(rec);
 
       if (next_rec == supremum) {
         break;

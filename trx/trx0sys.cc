@@ -36,7 +36,7 @@ Created 3/26/1996 Heikki Tuuri
 #include "trx0undo.h"
 
 
-TrxSys::TrxSys(System &sys) noexcept : m_sys(sys) {
+TrxSys::TrxSys(System &sys) noexcept : m_sys() {
   mutex_create(&m_mutex, IF_DEBUG("trx_sys_mutex", ) IF_SYNC_DEBUG(TRX_SYS_MUTEX, ) Current_location());
 }
 

@@ -29,7 +29,7 @@ Created 1/8/1996 Heikki Tuuri
 #include <ctype.h>
 
 
-Dict::Dict(System &sys) noexcept : m_sys(sys), m_store(sys), m_loader(sys), m_ddl(sys) {
+Dict::Dict(System &sys) noexcept : m_sys(), m_store(sys), m_loader(sys), m_ddl(sys) {
   mutex_create(&m_mutex, IF_DEBUG("dict_mutex", ) IF_SYNC_DEBUG(SYNC_DICT, ) Current_location());
 
   m_size = 0;

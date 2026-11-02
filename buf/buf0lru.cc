@@ -800,7 +800,7 @@ void BufLru::block_free_hashed_page(BufBlock *block) {
   block_free_non_file_page(block);
 }
 
-BufLru::BufLru(System &sys) noexcept : m_sys(sys), m_old_threshold_ms(sys.m_config.m_buf_pool.m_lru_block_access_recency) {
+BufLru::BufLru(System &sys) noexcept : m_sys(), m_old_threshold_ms(sys.m_config.m_buf_pool.m_lru_block_access_recency) {
   old_ratio_update(m_sys.m_config.m_buf_pool.m_lru_old_blocks_pct, false);
 }
 

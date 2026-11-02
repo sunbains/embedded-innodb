@@ -350,8 +350,7 @@ bool BufPool::is_corrupted(const byte *read_buf) {
   return false;
 }
 
-void buf_page_print(System &sys, const byte *read_buf, ulint) {
-  Index *index;
+void buf_page_print(const byte *read_buf, ulint) {
   auto size = UNIV_PAGE_SIZE;
 
   log_info("  Page dump in ascii and hex ({}):\n", size);
@@ -376,15 +375,7 @@ void buf_page_print(System &sys, const byte *read_buf, ulint) {
 
   switch (Fil::page_get_type(read_buf)) {
     case FIL_PAGE_TYPE_INDEX:
-      log_warn(std::format("Page may be an index page where index id is {}", sys.m_btree->page_get_index_id(read_buf)));
-
-      index = sys.m_dict->index_find_on_id(sys.m_btree->page_get_index_id(read_buf));
-
-      if (index != nullptr) {
-        log_info("(");
-        sys.m_dict->index_name_print(nullptr, index);
-        log_info(")");
-      }
+      log_warn(std::format("Page may be an index page where index id is {}", mach_read_from_8(read_buf + PAGE_HEADER + PAGE_INDEX_ID)));
       break;
     case FIL_PAGE_TYPE_INODE:
       log_warn("Page may be an 'inode' page");
@@ -534,7 +525,7 @@ const BufBlock *BufPool::chunk_not_freed(BufChunk *chunk) {
   return nullptr;
 }
 
-BufPool::BufPool(System &sys) noexcept : m_sys(sys), m_LRU(std::make_unique<BufLru>(sys)), m_flusher(std::make_unique<BufFlush>(sys)) {}
+BufPool::BufPool(System &sys) noexcept : m_sys(), m_LRU(std::make_unique<BufLru>(sys)), m_flusher(std::make_unique<BufFlush>(sys)) {}
 
 bool BufPool::open(uint64_t pool_size) {
 
@@ -1406,7 +1397,7 @@ void BufPool::io_complete(BufPage *bpage) {
         bpage->m_page_no
       ));
 
-      buf_page_print(m_sys, frame, 0);
+      buf_page_print(frame, 0);
 
       log_err(std::format(
         "Database page corruption on disk or a failed file read of page {}."

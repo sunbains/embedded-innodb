@@ -49,7 +49,7 @@ struct DictStore {
    * @param[in] dict The dictionary object.
    * @param[in] btree The b-tree object.
    */
-  explicit DictStore(System &sys) noexcept : m_sys(sys) {}
+  explicit DictStore(System &sys) noexcept : m_sys() {}
 
   /** Destructor. */
   ~DictStore() = default;

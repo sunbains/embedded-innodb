@@ -233,7 +233,7 @@ inline bool page_is_leaf(const page_t *page) {
  * @param[in] page page to read from
  *
  * @return	middle record */
-Rec page_get_middle_rec(System &sys, page_t *page);
+Rec page_get_middle_rec(page_t *page);
 
 /**
  * Returns the number of records before the given record in chain.
@@ -256,7 +256,7 @@ ulint page_rec_get_n_recs_before(const Rec rec);
  *
  * @return	the directory slot number
  */
-ulint page_dir_find_owner_slot(System &sys, const Rec rec);
+ulint page_dir_find_owner_slot(const Rec rec);
 
 /**
  * This is a low-level operation which is used in a database index creation
@@ -341,7 +341,7 @@ Rec page_copy_rec_list_start(System &sys, BufBlock *new_block, BufBlock *block, 
  * @param[in] size the sum of the sizes of the records in the end of the chain to delete, or ULINT_UNDEFINED if not known
  * @param[in,out] mtr mini-transaction
  */
-void page_delete_rec_list_end(System &sys, Rec rec, BufBlock *block, Index *index, ulint n_recs, ulint size, Mtr *mtr);
+void page_delete_rec_list_end(Rec rec, BufBlock *block, Index *index, ulint n_recs, ulint size, Mtr *mtr);
 
 /**
  * Deletes records from page, up to the given record, NOT including
@@ -387,7 +387,7 @@ bool page_move_rec_list_start(System &sys, BufBlock *new_block, BufBlock *block,
  * @param[in] page index page
  * @param[in] slot_no the directory slot
  */
-void page_dir_split_slot(System &sys, page_t *page, ulint slot_no);
+void page_dir_split_slot(page_t *page, ulint slot_no);
 
 /**
  * Tries to balance the given directory slot with too few records
@@ -488,7 +488,7 @@ bool page_rec_validate(Rec rec, const ulint *offsets);
  *
  * @param[in] page index page
  */
-void page_check_dir(System &sys, const page_t *page);
+void page_check_dir(const page_t *page);
 
 /**
  * This function checks the consistency of an index page when we do not
@@ -499,7 +499,7 @@ void page_check_dir(System &sys, const page_t *page);
  *
  * @return	true if ok
  */
-bool page_simple_validate(System &sys, page_t *page);
+bool page_simple_validate(page_t *page);
 
 /**
  * This function checks the consistency of an index page.
@@ -509,7 +509,7 @@ bool page_simple_validate(System &sys, page_t *page);
  *
  * @return	true if ok
  */
-bool page_validate(System &sys, page_t *page, Index *index);
+bool page_validate(page_t *page, Index *index);
 
 /**
  * Looks in the page record list for a record with the given heap number.
@@ -938,7 +938,7 @@ inline ulint page_dir_calc_reserved_space(ulint n_recs) {
  *
  * @return	pointer to next record
  */
-inline const Rec page_rec_get_next_low(System &sys, const Rec rec) {
+inline const Rec page_rec_get_next_low(const Rec rec) {
   ut_ad(page_rec_check(rec));
 
   auto page = rec.page_align();
@@ -955,7 +955,7 @@ inline const Rec page_rec_get_next_low(System &sys, const Rec rec) {
       page_get_page_no(page)
     ));
 
-    buf_page_print(sys, page, 0);
+    buf_page_print(page, 0);
 
     ut_error;
   }
@@ -970,8 +970,8 @@ inline const Rec page_rec_get_next_low(System &sys, const Rec rec) {
  *
  * @return	pointer to next record
  */
-inline Rec page_rec_get_next(System &sys, const Rec rec) {
-  return Rec(page_rec_get_next_low(sys, rec));
+inline Rec page_rec_get_next(const Rec rec) {
+  return Rec(page_rec_get_next_low(rec));
 }
 
 /**
@@ -981,8 +981,8 @@ inline Rec page_rec_get_next(System &sys, const Rec rec) {
  *
  * @return	pointer to next record
  */
-inline const Rec page_rec_get_next_const(System &sys, const Rec rec) {
-  return page_rec_get_next_low(sys, rec);
+inline const Rec page_rec_get_next_const(const Rec rec) {
+  return page_rec_get_next_low(rec);
 }
 
 /**
@@ -1011,14 +1011,14 @@ inline void page_rec_set_next(Rec rec, Rec next) {
  *
  * @return	pointer to previous record
  */
-inline const Rec page_rec_get_prev_const(System &sys, const Rec rec) {
+inline const Rec page_rec_get_prev_const(const Rec rec) {
   ut_ad(page_rec_check(rec));
 
   auto page = rec.page_align();
 
   ut_ad(!page_rec_is_infimum(rec));
 
-  auto slot_no = page_dir_find_owner_slot(sys, rec);
+  auto slot_no = page_dir_find_owner_slot(rec);
 
   ut_a(slot_no != 0);
 
@@ -1030,7 +1030,7 @@ inline const Rec page_rec_get_prev_const(System &sys, const Rec rec) {
 
   while (rec != rec2) {
     prev_rec = rec2;
-    rec2 = page_rec_get_next_low(sys, rec2);
+    rec2 = page_rec_get_next_low(rec2);
   }
 
   ut_a(prev_rec.is_valid());
@@ -1045,8 +1045,8 @@ inline const Rec page_rec_get_prev_const(System &sys, const Rec rec) {
  *
  * @return	pointer to previous record
  */
-inline Rec page_rec_get_prev(System &sys, Rec rec) {
-  return Rec(page_rec_get_prev_const(sys, rec));
+inline Rec page_rec_get_prev(Rec rec) {
+  return Rec(page_rec_get_prev_const(rec));
 }
 
 /**
@@ -1056,11 +1056,11 @@ inline Rec page_rec_get_prev(System &sys, Rec rec) {
  *
  * @return	the owner record
  */
-inline Rec page_rec_find_owner_rec(System &sys, Rec rec) {
+inline Rec page_rec_find_owner_rec(Rec rec) {
   ut_ad(page_rec_check(rec));
 
   while (rec.get_n_owned() == 0) {
-    rec = page_rec_get_next(sys, rec);
+    rec = page_rec_get_next(rec);
   }
 
   return rec;

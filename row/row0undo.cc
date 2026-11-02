@@ -995,7 +995,7 @@ void UndoNode::parse_update_undo_rec(System &sys, IbRecovery recovery, QueThr *t
 
   ptr = TrxUndoRecord::get_row_ref(ptr, clust_index, &m_ref, m_heap);
 
-  TrxUndoRecord::update_rec_get_update(sys, ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
+  TrxUndoRecord::update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
 
   m_new_trx_id = trx_id;
   m_new_roll_ptr = roll_ptr;

@@ -931,7 +931,7 @@ rec_loop:
       level, we lock only the record, i.e., next-key
       locking is not used. */
 
-      auto next_rec = page_rec_get_next(m_sys, rec);
+      auto next_rec = page_rec_get_next(rec);
       auto trx = thr_get_trx(thr);
 
       {
@@ -2247,7 +2247,7 @@ DbErr RowSel::mvcc_fetch(
         prebuilt->m_select_lock_type != LOCK_NONE) {
 
       /* Try to place a gap lock on the next index record to prevent phantoms in ORDER BY ... DESC queries */
-      const Rec next = page_rec_get_next_const(m_sys, rec);
+      const Rec next = page_rec_get_next_const(rec);
 
       {
         PhyRec record{index, next};
@@ -2355,7 +2355,7 @@ rec_loop:
   wrong_offs:
     if (recovery == IB_RECOVERY_DEFAULT || moves_up == false) {
 
-      buf_page_print(rec.page_alignm_sys, (), 0);
+      buf_page_print(rec.page_align(), 0);
       log_err(
         std::format("\nrec address {}, buf block with fix count {}", (void *)rec, (int)pcur->get_block()->m_page.m_buf_fix_count)
       );

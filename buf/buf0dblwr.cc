@@ -25,7 +25,7 @@ Created 2024-09-25 by Sunny Bains. */
 #include "trx0sys.h"
 
 
-Dblwr::Dblwr(System &sys) noexcept : m_sys(sys), m_block1(ULINT32_UNDEFINED), m_block2(ULINT32_UNDEFINED) {
+Dblwr::Dblwr(System &sys) noexcept : m_sys(), m_block1(ULINT32_UNDEFINED), m_block2(ULINT32_UNDEFINED) {
 
   mutex_create(&m_mutex, IF_DEBUG("Dblwr::m_mutex", ) IF_SYNC_DEBUG(SYNC_DOUBLEWRITE, ) Current_location());
 
@@ -281,9 +281,9 @@ void Dblwr::recover_pages() noexcept {
 
         if (m_sys.m_buf_pool->is_corrupted(page)) {
           log_info("Dump of the page:");
-          buf_page_print(m_sys, read_buf, 0);
+          buf_page_print(read_buf, 0);
           log_warn("Dump of corresponding page in doublewrite buffer:");
-          buf_page_print(m_sys, page, 0);
+          buf_page_print(page, 0);
 
           log_fatal(
             "The page in the doublewrite buffer is corrupt too."

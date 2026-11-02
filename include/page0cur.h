@@ -70,7 +70,7 @@ struct PageCursor {
    * @param mtr Mini-transaction handle, or NULL.
    * @return Pointer to record if succeed, NULL otherwise.
    */
-  Rec insert_rec_low(System &sys, Rec current_rec, const Index *index, const Rec rec, RecOffs offsets, Mtr *mtr);
+  Rec insert_rec_low(Rec current_rec, const Index *index, const Rec rec, RecOffs offsets, Mtr *mtr);
 
   /**
    * @brief Copies records from page to a newly created page, from a given record
@@ -81,7 +81,7 @@ struct PageCursor {
    * @param index Record descriptor.
    * @param mtr MTR.
    */
-  static void copy_rec_list_end_to_created_page(System &sys, page_t *new_page, Rec rec, const Index *index, Mtr *mtr);
+  static void copy_rec_list_end_to_created_page(page_t *new_page, Rec rec, const Index *index, Mtr *mtr);
 
   /**
    * @brief Deletes a record at the page cursor. The cursor is moved to the
@@ -269,10 +269,10 @@ struct PageCursor {
    *
    * @param cur In/Out: Cursor; must not be after last.
    */
-  inline void move_to_next(System &sys) {
+  inline void move_to_next() {
     ut_ad(!is_after_last());
 
-    m_rec = page_rec_get_next(sys, m_rec);
+    m_rec = page_rec_get_next(m_rec);
   }
 
   /**
@@ -280,10 +280,10 @@ struct PageCursor {
    *
    * @param cur In/Out: Cursor; must not be before the first.
    */
-  inline void move_to_prev(System &sys) {
+  inline void move_to_prev() {
     ut_ad(!is_before_first());
 
-    m_rec = page_rec_get_prev(sys, m_rec);
+    m_rec = page_rec_get_prev(m_rec);
   }
 
   /**
@@ -320,7 +320,7 @@ struct PageCursor {
    * @param mtr In: Mini-transaction handle, or NULL.
    * @return Pointer to the inserted record if successful, NULL otherwise.
    */
-  inline Rec tuple_insert(System &sys, const DTuple *tuple, const Index *index, ulint n_ext, Mtr *mtr) {
+  inline Rec tuple_insert(const DTuple *tuple, const Index *index, ulint n_ext, Mtr *mtr) {
     const auto size = rec_get_converted_size(index, tuple, n_ext);
     auto heap = mem_heap_create(size + (4 + REC_OFFS_HEADER_SIZE + dtuple_get_n_fields(tuple)) * sizeof(ulint));
     auto rec = Rec::convert_dtuple_to_rec((byte *)mem_heap_alloc(heap, size), index, tuple, n_ext);
@@ -330,7 +330,7 @@ struct PageCursor {
 
       auto offsets = record.get_col_offsets(nullptr, ULINT_UNDEFINED, &heap, Current_location());
 
-      rec = insert_rec_low(sys, m_rec, index, rec, offsets, mtr);
+      rec = insert_rec_low(m_rec, index, rec, offsets, mtr);
     }
 
     mem_heap_free(heap);
@@ -350,8 +350,8 @@ struct PageCursor {
    * @param mtr In: Mini-transaction handle, or NULL.
    * @return Pointer to the inserted record if successful, NULL otherwise.
    */
-  inline Rec rec_insert(System &sys, const Rec rec, Index *index, ulint *offsets, Mtr *mtr) {
-    return insert_rec_low(sys, m_rec, index, rec, offsets, mtr);
+  inline Rec rec_insert(const Rec rec, Index *index, ulint *offsets, Mtr *mtr) {
+    return insert_rec_low(m_rec, index, rec, offsets, mtr);
   }
 
  private:
@@ -386,8 +386,7 @@ struct PageCursor {
    * @param[in,out] ilow_matched_bytes Already matched bytes in a field not yet completely matched
    * @return true on success
    */
-  bool try_search_shortcut(System &sys, 
-    const BufBlock *block, const Index *index, const DTuple *tuple, ulint *iup_matched_fields, ulint *iup_matched_bytes,
+  bool try_search_shortcut(const BufBlock *block, const Index *index, const DTuple *tuple, ulint *iup_matched_fields, ulint *iup_matched_bytes,
     ulint *ilow_matched_fields, ulint *ilow_matched_bytes
   );
 
