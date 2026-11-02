@@ -181,7 +181,7 @@ std::string DictLoad::to_string() noexcept {
           m_sys.m_dict->update_statistics(table);
         }
 
-        str += table->to_string(m_sys.m_dict.get());
+        str += table->to_string(m_sys);
       }
 
       mtr.start();

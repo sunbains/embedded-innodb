@@ -327,33 +327,33 @@ void BufFlush::sync_datafiles() {
   return;
 }
 
-void BufFlush::buffered_writes(Dblwr *dblwr) {
+void BufFlush::buffered_writes() {
   ulint len;
   ulint len2;
   byte *write_buf;
 
-  if (!m_sys.m_config.m_dblwr.m_enabled || dblwr == nullptr) {
+  if (!m_sys.m_config.m_dblwr.m_enabled || !m_sys.m_dblwr->is_ready()) {
     /* Sync the writes to the disk. */
     sync_datafiles();
     return;
   }
 
-  mutex_enter(&dblwr->m_mutex);
+  mutex_enter(&m_sys.m_dblwr->m_mutex);
 
   /* Write first to doublewrite buffer blocks. We use synchronous
   aio and thus know that file write has been completed when the
   control returns. */
 
-  if (dblwr->m_first_free == 0) {
+  if (m_sys.m_dblwr->m_first_free == 0) {
 
-    mutex_exit(&dblwr->m_mutex);
+    mutex_exit(&m_sys.m_dblwr->m_mutex);
 
     return;
   }
 
-  for (ulint i{}; i < dblwr->m_first_free; ++i) {
+  for (ulint i{}; i < m_sys.m_dblwr->m_first_free; ++i) {
 
-    auto block = reinterpret_cast<const BufBlock *>(dblwr->m_bpages[i]);
+    auto block = reinterpret_cast<const BufBlock *>(m_sys.m_dblwr->m_bpages[i]);
 
     if (block->get_state() != BUF_BLOCK_FILE_PAGE) {
       /* No simple validate for compressed pages exists. */
@@ -381,19 +381,19 @@ void BufFlush::buffered_writes(Dblwr *dblwr) {
   }
 
   /* Increment the doublewrite flushed pages counter */
-  m_sys.m_srv->m_stats.m_dblwr_pages_written += dblwr->m_first_free;
+  m_sys.m_srv->m_stats.m_dblwr_pages_written += m_sys.m_dblwr->m_first_free;
   ++m_sys.m_srv->m_stats.m_dblwr_writes;
 
-  len = std::min<ulint>(SYS_DOUBLEWRITE_BLOCK_SIZE, dblwr->m_first_free) * UNIV_PAGE_SIZE;
+  len = std::min<ulint>(SYS_DOUBLEWRITE_BLOCK_SIZE, m_sys.m_dblwr->m_first_free) * UNIV_PAGE_SIZE;
 
-  write_buf = dblwr->m_write_buf;
+  write_buf = m_sys.m_dblwr->m_write_buf;
 
   ulint i{};
 
-  m_sys.m_fil->data_io(IoRequest::Sync_write, false, PageId(TRX_SYS_SPACE, dblwr->m_block1), 0, len, write_buf, nullptr);
+  m_sys.m_fil->data_io(IoRequest::Sync_write, false, PageId(TRX_SYS_SPACE, m_sys.m_dblwr->m_block1), 0, len, write_buf, nullptr);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
-    const BufBlock *block = reinterpret_cast<BufBlock *>(dblwr->m_bpages[i]);
+    const BufBlock *block = reinterpret_cast<BufBlock *>(m_sys.m_dblwr->m_bpages[i]);
 
     if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
         unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4)
@@ -406,19 +406,19 @@ void BufFlush::buffered_writes(Dblwr *dblwr) {
     }
   }
 
-  if (dblwr->m_first_free <= SYS_DOUBLEWRITE_BLOCK_SIZE) {
+  if (m_sys.m_dblwr->m_first_free <= SYS_DOUBLEWRITE_BLOCK_SIZE) {
     goto flush;
   }
 
-  len = (dblwr->m_first_free - SYS_DOUBLEWRITE_BLOCK_SIZE) * UNIV_PAGE_SIZE;
+  len = (m_sys.m_dblwr->m_first_free - SYS_DOUBLEWRITE_BLOCK_SIZE) * UNIV_PAGE_SIZE;
 
-  write_buf = dblwr->m_write_buf + SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE;
+  write_buf = m_sys.m_dblwr->m_write_buf + SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE;
   ut_ad(i == SYS_DOUBLEWRITE_BLOCK_SIZE);
 
-  m_sys.m_fil->data_io(IoRequest::Sync_write, false, PageId(TRX_SYS_SPACE, dblwr->m_block2), 0, len, (void *)write_buf, nullptr);
+  m_sys.m_fil->data_io(IoRequest::Sync_write, false, PageId(TRX_SYS_SPACE, m_sys.m_dblwr->m_block2), 0, len, (void *)write_buf, nullptr);
 
   for (len2 = 0; len2 + UNIV_PAGE_SIZE <= len; len2 += UNIV_PAGE_SIZE, i++) {
-    const BufBlock *block = reinterpret_cast<BufBlock *>(dblwr->m_bpages[i]);
+    const BufBlock *block = reinterpret_cast<BufBlock *>(m_sys.m_dblwr->m_bpages[i]);
 
     if (likely(block->get_state() == BUF_BLOCK_FILE_PAGE) &&
         unlikely(memcmp(write_buf + len2 + (FIL_PAGE_LSN + 4), write_buf + len2 + (UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM + 4), 4)
@@ -439,8 +439,8 @@ flush:
   and in recovery we will find them in the doublewrite buffer
   blocks. Next do the writes to the intended positions. */
 
-  for (i = 0; i < dblwr->m_first_free; ++i) {
-    const BufBlock *block = reinterpret_cast<BufBlock *>(dblwr->m_bpages[i]);
+  for (i = 0; i < m_sys.m_dblwr->m_first_free; ++i) {
+    const BufBlock *block = reinterpret_cast<BufBlock *>(m_sys.m_dblwr->m_bpages[i]);
 
     ut_a(block->m_page.in_file());
 
@@ -467,39 +467,39 @@ flush:
   sync_datafiles();
 
   /* We can now reuse the doublewrite memory buffer: */
-  dblwr->m_first_free = 0;
+  m_sys.m_dblwr->m_first_free = 0;
 
-  mutex_exit(&dblwr->m_mutex);
+  mutex_exit(&m_sys.m_dblwr->m_mutex);
 }
 
-void BufFlush::post_to_doublewrite_buf(Dblwr *dblwr, BufPage *bpage) {
+void BufFlush::post_to_doublewrite_buf(BufPage *bpage) {
   for (;;) {
-    mutex_enter(&dblwr->m_mutex);
+    mutex_enter(&m_sys.m_dblwr->m_mutex);
 
     ut_a(bpage->in_file());
 
-    if (dblwr->m_first_free < 2 * SYS_DOUBLEWRITE_BLOCK_SIZE) {
+    if (m_sys.m_dblwr->m_first_free < 2 * SYS_DOUBLEWRITE_BLOCK_SIZE) {
       break;
     }
 
-    mutex_exit(&dblwr->m_mutex);
+    mutex_exit(&m_sys.m_dblwr->m_mutex);
 
-    buffered_writes(dblwr);
+    buffered_writes();
   }
 
   ut_a(bpage->get_state() == BUF_BLOCK_FILE_PAGE);
 
-  memcpy(dblwr->m_write_buf + UNIV_PAGE_SIZE * dblwr->m_first_free, reinterpret_cast<BufBlock *>(bpage)->m_frame, UNIV_PAGE_SIZE);
+  memcpy(m_sys.m_dblwr->m_write_buf + UNIV_PAGE_SIZE * m_sys.m_dblwr->m_first_free, reinterpret_cast<BufBlock *>(bpage)->m_frame, UNIV_PAGE_SIZE);
 
-  dblwr->m_bpages[dblwr->m_first_free] = bpage;
+  m_sys.m_dblwr->m_bpages[m_sys.m_dblwr->m_first_free] = bpage;
 
-  ++dblwr->m_first_free;
+  ++m_sys.m_dblwr->m_first_free;
 
-  if (dblwr->m_first_free >= 2 * SYS_DOUBLEWRITE_BLOCK_SIZE) {
-    mutex_exit(&dblwr->m_mutex);
-    buffered_writes(dblwr);
+  if (m_sys.m_dblwr->m_first_free >= 2 * SYS_DOUBLEWRITE_BLOCK_SIZE) {
+    mutex_exit(&m_sys.m_dblwr->m_mutex);
+    buffered_writes();
   } else {
-    mutex_exit(&dblwr->m_mutex);
+    mutex_exit(&m_sys.m_dblwr->m_mutex);
   }
 }
 
@@ -521,7 +521,7 @@ void BufFlush::init_for_writing(byte *page, lsn_t newest_lsn) {
   mach_write_to_4(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM, BUF_NO_CHECKSUM_MAGIC);
 }
 
-void BufFlush::write_block_low(Dblwr *dblwr, BufPage *bpage) {
+void BufFlush::write_block_low(BufPage *bpage) {
   page_t *frame = nullptr;
 
   ut_ad(bpage->in_file());
@@ -554,10 +554,10 @@ void BufFlush::write_block_low(Dblwr *dblwr, BufPage *bpage) {
       break;
   }
 
-  if (!m_sys.m_config.m_dblwr.m_enabled || dblwr == nullptr) {
+  if (!m_sys.m_config.m_dblwr.m_enabled || !m_sys.m_dblwr->is_ready()) {
     m_sys.m_fil->data_io(IoRequest::Async_write, true, bpage->get_page_id(), 0, UNIV_PAGE_SIZE, frame, bpage);
   } else {
-    post_to_doublewrite_buf(dblwr, bpage);
+    post_to_doublewrite_buf(bpage);
   }
 }
 
@@ -589,7 +589,7 @@ inline static bool free_page_if_truncated(System &sys, BufPage *bpage) {
   return false;
 }
 
-void BufFlush::page(Dblwr *dblwr, BufPage *bpage, BufFlushType flush_type) {
+void BufFlush::page(BufPage *bpage, BufFlushType flush_type) {
   ut_ad(m_sys.m_buf_pool->mutex_is_owned());
   ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
   ut_ad(bpage->in_file());
@@ -632,7 +632,7 @@ void BufFlush::page(Dblwr *dblwr, BufPage *bpage, BufFlushType flush_type) {
       m_flush_list or LRU_list. */
 
       if (!is_s_latched) {
-        buffered_writes(dblwr);
+        buffered_writes();
 
         rw_lock_s_lock_gen(&((BufBlock *)bpage)->m_rw_lock, BUF_IO_WRITE);
       }
@@ -666,10 +666,10 @@ void BufFlush::page(Dblwr *dblwr, BufPage *bpage, BufFlushType flush_type) {
   m_oldest_modification != 0.  Thus, it cannot be relocated in the
   buffer pool or removed from m_flush_list or LRU_list. */
 
-  write_block_low(dblwr, bpage);
+  write_block_low(bpage);
 }
 
-ulint BufFlush::try_neighbors(Dblwr *dblwr, space_id_t space, page_no_t page_no, BufFlushType flush_type) {
+ulint BufFlush::try_neighbors(space_id_t space, page_no_t page_no, BufFlushType flush_type) {
   ulint count{};
   page_no_t low;
   page_no_t high;
@@ -738,7 +738,7 @@ ulint BufFlush::try_neighbors(Dblwr *dblwr, space_id_t space, page_no_t page_no,
         Semaphore waits are expensive because we must flush the doublewrite buffer before
         we start waiting. */
 
-        page(dblwr, bpage, flush_type);
+        page(bpage, flush_type);
         ut_ad(!mutex_own(block_mutex));
         ++count;
 
@@ -754,7 +754,7 @@ ulint BufFlush::try_neighbors(Dblwr *dblwr, space_id_t space, page_no_t page_no,
   return count;
 }
 
-ulint BufFlush::batch(Dblwr *dblwr, BufFlushType flush_type, ulint min_n, uint64_t lsn_limit) {
+ulint BufFlush::batch(BufFlushType flush_type, ulint min_n, uint64_t lsn_limit) {
   BufPage *bpage;
   ulint page_count = 0;
   space_id_t space;
@@ -826,7 +826,7 @@ ulint BufFlush::batch(Dblwr *dblwr, BufFlushType flush_type, ulint min_n, uint64
         m_sys.m_buf_pool->mutex_release();
 
         /* Try to flush also all the neighbors */
-        page_count += try_neighbors(dblwr, space, page_no, flush_type);
+        page_count += try_neighbors(space, page_no, flush_type);
 
         m_sys.m_buf_pool->mutex_acquire();
         goto flush_next;
@@ -857,7 +857,7 @@ ulint BufFlush::batch(Dblwr *dblwr, BufFlushType flush_type, ulint min_n, uint64
 
   m_sys.m_buf_pool->mutex_release();
 
-  buffered_writes(dblwr);
+  buffered_writes();
 
   m_sys.m_srv->m_stats.m_buf_pool_flushed += page_count;
 
@@ -918,12 +918,12 @@ ulint BufFlush::LRU_recommendation() {
   }
 }
 
-void BufFlush::free_margin(Dblwr *dblwr) {
+void BufFlush::free_margin() {
   auto n_to_flush = LRU_recommendation();
 
   if (n_to_flush > 0) {
 
-    const auto n_flushed = batch(dblwr, BUF_FLUSH_LRU, n_to_flush, 0);
+    const auto n_flushed = batch(BUF_FLUSH_LRU, n_to_flush, 0);
 
     if (n_flushed == ULINT_UNDEFINED) {
       /* There was an LRU type flush batch already running;

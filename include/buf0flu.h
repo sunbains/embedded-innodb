@@ -81,9 +81,8 @@ struct BufFlush {
    * Flushes pages from the end of the LRU list if there is too small
    * a margin of replaceable pages there.
    * 
-   * @param[in,out] dblwr The doublewrite buffer to use
    */
-  void free_margin(Dblwr *dblwr);
+  void free_margin();
 
   /**
    * Initializes a page for writing to the tablespace.
@@ -103,7 +102,6 @@ struct BufFlush {
    * NOTE 2: in the case of a flush list flush, the calling thread is not allowed to
    *         own any latches on pages!
    *
-   * @param[in,out] dblwr       Doublewrite buffer to use
    * 
    * @param flush_type          BUF_FLUSH_LRU or BUF_FLUSH_LIST; if BUF_FLUSH_LIST,
    *                            then the caller must not own any latches on pages
@@ -118,7 +116,7 @@ struct BufFlush {
    * @return number of blocks for which the write request was queued; ULINT_UNDEFINED if
    *         there was a flush of the same type already running
    */
-  ulint batch(Dblwr *dblwr, BufFlushType flush_type, ulint min_n, uint64_t lsn_limit);
+  ulint batch(BufFlushType flush_type, ulint min_n, uint64_t lsn_limit);
 
   /**
    * Waits until a flush batch of the given type ends.
@@ -327,9 +325,8 @@ struct BufFlush {
    * It is very important to call this function after a batch of writes has been posted,
    * and also when we may have to wait for a page latch! Otherwise a deadlock of threads can occur.
    * 
-   * @param[in,out] dblwr 
    */
-  void buffered_writes(Dblwr *dblwr);
+  void buffered_writes();
 
   /**
    * @brief Posts a buffer page for writing. If the doublewrite memory buffer is full,
@@ -337,38 +334,35 @@ struct BufFlush {
    *
    * @param bpage The buffer block to write.
    */
-  void post_to_doublewrite_buf(Dblwr *dblwr, BufPage *bpage);
+  void post_to_doublewrite_buf(BufPage *bpage);
 
   /**
    * @brief Does an asynchronous write of a buffer page.
    * NOTE: in simulated aio and also when the doublewrite buffer is used, we must call buf_pool->m_flusher->buffered_writes after we have posted a batch of writes!
    * 
-   * @param[in,out] dblwr The doublewrite buffer to use
    * @param bpage The buffer block to write.
    */
-  void write_block_low(Dblwr *dblwr, BufPage *bpage);
+  void write_block_low(BufPage *bpage);
 
   /**
    * @brief Writes a flushable page asynchronously from the buffer pool to a file.
    * NOTE: in simulated aio we must call os_aio_simulated_wake_handler_threads after we have posted a batch of writes!
    * NOTE: buf_pool_mutex and buf_page_get_mutex(bpage) must be held upon entering this function, and they will be released by this function.
    * 
-   * @param[in,out] dblwr Doublewrite buffer to use
    * @param bpage The buffer control block.
    * @param flush_type The flush type.
    */
-  void page(Dblwr *dblwr, BufPage *bpage, BufFlushType flush_type);
+  void page(BufPage *bpage, BufFlushType flush_type);
 
   /**
    * @brief Flushes to disk all flushable pages within the flush area.
    * 
-   * @param[in,out] dblwr The doublewrite buffer
    * @param space The space id.
    * @param offset The page offset.
    * @param flush_type The flush type (BUF_FLUSH_LRU or BUF_FLUSH_LIST).
    * @return Number of pages flushed.
    */
-  ulint try_neighbors(Dblwr *dblwr, page_no_t space, page_no_t offset, BufFlushType flush_type);
+  ulint try_neighbors(page_no_t space, page_no_t offset, BufFlushType flush_type);
 
   /**
    * @brief Gives a recommendation of how many blocks should be flushed to establish

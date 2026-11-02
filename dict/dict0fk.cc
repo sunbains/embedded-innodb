@@ -1348,7 +1348,7 @@ void Dict::foreign_print(Foreign *foreign) noexcept {
 void Dict::table_print(Table *table) noexcept {
   mutex_enter(&m_mutex);
 
-  log_err(table->to_string(this));
+  log_err(table->to_string(m_sys));
 
   mutex_exit(&m_mutex);
 }
@@ -1375,11 +1375,11 @@ std::string Foreign::to_string() const noexcept {
   return str;
 }
 
-std::string Table::to_string(Dict *dict) noexcept {
+std::string Table::to_string(System &sys) noexcept {
   std::string str;
-  ut_ad(mutex_own(&dict->m_mutex));
+  ut_ad(mutex_own(&sys.m_dict->m_mutex));
 
-  dict->update_statistics(this);
+  sys.m_dict->update_statistics(this);
 
   str = std::format(
     "--------------------------------------\n"
@@ -1395,7 +1395,7 @@ std::string Table::to_string(Dict *dict) noexcept {
   );
 
   for (ulint i{}; i < (ulint)m_n_cols; ++i) {
-    dict->col_print(this, get_nth_col(i));
+    sys.m_dict->col_print(this, get_nth_col(i));
     str += "; ";
   }
 

@@ -902,7 +902,7 @@ BufBlock *BufPool::get(Request &req, BufBlock *guess) {
   if (access_time == 0) {
     /* In the case of a first access, try to apply linear read-ahead */
 
-    buf_read_ahead_linear(m_sys, this, page_id);
+    buf_read_ahead_linear(m_sys, page_id);
   }
 
   return block;
@@ -995,7 +995,7 @@ bool BufPool::try_get(Request &req) {
     if (unlikely(!access_time)) {
 
       /* In the case of a first access, try to apply linear read-ahead */
-      buf_read_ahead_linear(m_sys, this, req.m_guess->get_page_id());
+      buf_read_ahead_linear(m_sys, req.m_guess->get_page_id());
     }
 
     ++m_stat.n_page_gets;
@@ -1335,7 +1335,7 @@ BufBlock *BufPool::create(const PageId &page_id, Mtr *mtr) {
   such can exist if the page belonged to an index which was dropped */
 
   /* Flush pages from the end of the LRU list if necessary */
-  m_flusher->free_margin(m_sys.m_dblwr.get());
+  m_flusher->free_margin();
 
   auto frame = block->m_frame;
 

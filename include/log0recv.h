@@ -368,4 +368,4 @@ byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, by
  * @param[in,out] dblwr Doublewrite instance to use for recovery
  * @param[in] recovery The recovery flag
  */
-void recv_start_crash_recovery(Dblwr *dblwr, IbRecovery recovery) noexcept;
+void recv_start_crash_recovery(System &sys) noexcept;

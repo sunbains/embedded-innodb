@@ -53,12 +53,10 @@ struct Prebuilt {
   /**
    * Constructor.
    *
-   * @param[in] fsp File space manager
-   * @param[in] btree Btree instance
    * @param[in] table Table handle
    * @param[in] heap Memory heap from which the prebuilt struct is allocated
    */
-  Prebuilt(Fsp *fsp, Btree *btree, Table *table, MemHeap *heap) noexcept;
+  Prebuilt(Table *table, MemHeap *heap) noexcept;
 
   /**
    * Destructor.
@@ -68,13 +66,11 @@ struct Prebuilt {
   /**
    * Create a prebuilt struct for a user table handle.
    *
-   * @param[in] fsp File space manager
-   * @param[in] btree Btree instance
    * @param[in] table Table handle
    *
    * @return own: a prebuilt struct
    */
-  [[nodiscard]] static Prebuilt *create(Fsp *fsp, Btree *btree, Table *table) noexcept;
+  [[nodiscard]] static Prebuilt *create(Table *table) noexcept;
 
   /**
    * Free a prebuilt struct for a user table handle.
@@ -83,7 +79,7 @@ struct Prebuilt {
    * @param[in] prebuilt Prebuilt struct
    * @param[in] dict_locked true if dict was locked
    */
-  static void destroy(Dict *dict, Prebuilt *prebuilt, bool dict_locked) noexcept;
+  static void destroy(System &sys, Prebuilt *prebuilt, bool dict_locked) noexcept;
 
   /**
    * Reset a prebuilt struct for a user table handle.

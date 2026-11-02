@@ -125,7 +125,7 @@ bool buf_read_page(System &sys, const PageId &page_id) {
   }
 
   /* Flush pages from the end of the LRU list if necessary */
-  sys.m_buf_pool->m_flusher->free_margin(sys.m_dblwr.get());
+  sys.m_buf_pool->m_flusher->free_margin();
 
   /* Increment number of I/O operations used for LRU policy. */
   sys.m_buf_pool->m_LRU->stat_inc_io();
@@ -133,7 +133,9 @@ bool buf_read_page(System &sys, const PageId &page_id) {
   return err == DB_SUCCESS;
 }
 
-ulint buf_read_ahead_linear(System &sys, BufPool *buf_pool, const PageId &page_id) {
+ulint buf_read_ahead_linear(System &sys, const PageId &page_id) {
+  auto buf_pool = sys.m_buf_pool.get();
+
   BufPage *bpage;
   buf_frame_t *frame;
   BufPage *pred_bpage = nullptr;
@@ -331,7 +333,7 @@ ulint buf_read_ahead_linear(System &sys, BufPool *buf_pool, const PageId &page_i
   }
 
   /* Flush pages from the end of the LRU list if necessary */
-  sys.m_buf_pool->m_flusher->free_margin(sys.m_dblwr.get());
+  sys.m_buf_pool->m_flusher->free_margin();
 
   /* Read ahead is considered one I/O operation for the purpose of LRU policy decision. */
   sys.m_buf_pool->m_LRU->stat_inc_io();
@@ -379,5 +381,5 @@ void buf_read_recv_pages(System &sys, bool sync, const PageId &page_id, const pa
   }
 
   /* Flush pages from the end of the LRU list if necessary */
-  sys.m_buf_pool->m_flusher->free_margin(sys.m_dblwr.get());
+  sys.m_buf_pool->m_flusher->free_margin();
 }

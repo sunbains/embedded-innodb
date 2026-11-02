@@ -34,7 +34,7 @@ Created 02/03/2009 Sunny Bains
 #include "row0ins.h"
 #include "row0merge.h"
 
-Prebuilt::Prebuilt(Fsp *fsp, Btree *btree, Table *table, MemHeap *heap) noexcept : m_table(table) {
+Prebuilt::Prebuilt(Table *table, MemHeap *heap) noexcept : m_table(table) {
 
   m_magic_n = ROW_PREBUILT_ALLOCATED;
   m_heap = heap;
@@ -110,16 +110,16 @@ Prebuilt::~Prebuilt() noexcept {
   mem_heap_free(m_row_cache.m_heap);
 }
 
-Prebuilt *Prebuilt::create(Fsp *fsp, Btree *btree, Table *table) noexcept {
+Prebuilt *Prebuilt::create(Table *table) noexcept {
   auto heap = mem_heap_create(128);
   auto ptr = reinterpret_cast<Prebuilt *>(mem_heap_zalloc(heap, sizeof(Prebuilt)));
 
-  return new (ptr) Prebuilt(fsp, btree, table, heap);
+  return new (ptr) Prebuilt(table, heap);
 }
 
-void Prebuilt::destroy(Dict *dict, Prebuilt *prebuilt, bool dict_locked) noexcept {
+void Prebuilt::destroy(System &sys, Prebuilt *prebuilt, bool dict_locked) noexcept {
   if (prebuilt->m_table != nullptr) {
-    dict->table_decrement_handle_count(prebuilt->m_table, dict_locked);
+    sys.m_dict->table_decrement_handle_count(prebuilt->m_table, dict_locked);
   }
 
   call_destructor(prebuilt);

@@ -68,7 +68,7 @@ bool buf_read_page(System &sys, const PageId &page_id);
  *  want access to this page (see NOTE 3 above).
  * @return The number of page read requests issued.
  */
-ulint buf_read_ahead_linear(System &sys, BufPool *buf_pool, const PageId &page_id);
+ulint buf_read_ahead_linear(System &sys, const PageId &page_id);
 
 /**
  * @brief Issues read requests for pages which recovery wants to read in.

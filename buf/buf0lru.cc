@@ -367,7 +367,7 @@ loop:
 
   /* No free block was found: try to flush the LRU list */
 
-  m_sys.m_buf_pool->m_flusher->free_margin(m_sys.m_dblwr.get());
+  m_sys.m_buf_pool->m_flusher->free_margin();
   ++m_sys.m_srv->m_stats.m_buf_pool_wait_free;
 
   m_sys.m_buf_pool->mutex_acquire();

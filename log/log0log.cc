@@ -182,7 +182,7 @@ void Log::make_checkpoint_at(lsn_t lsn, bool write_always) noexcept {
 
   /* Flush the pages modified below lsn. batch() returns ULINT_UNDEFINED
   when another batch of the same type is running: wait for it and retry. */
-  while (flusher.batch(m_sys.m_dblwr.get(), BUF_FLUSH_LIST, ULINT_MAX, lsn) == ULINT_UNDEFINED) {
+  while (flusher.batch(BUF_FLUSH_LIST, ULINT_MAX, lsn) == ULINT_UNDEFINED) {
     flusher.wait_batch_end(BUF_FLUSH_LIST);
   }
 

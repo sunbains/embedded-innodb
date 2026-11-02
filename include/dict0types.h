@@ -1256,7 +1256,7 @@ struct Table {
    *
    * @return The string.
    */
-  [[nodiscard]] std::string to_string(Dict *dict) noexcept;
+  [[nodiscard]] std::string to_string(System &sys) noexcept;
 
   /**
    * Gets the number of user-defined columns in a table in the dictionary cache.

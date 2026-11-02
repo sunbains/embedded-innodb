@@ -739,7 +739,7 @@ void recv_apply_log_recs(System &sys, bool flush_and_free_pages) noexcept {
     mutex_exit(&sys.m_recv->m_mutex);
     sys.m_log->release();
 
-    auto n_pages = sys.m_buf_pool->m_flusher->batch(sys.m_dblwr.get(), BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
+    auto n_pages = sys.m_buf_pool->m_flusher->batch(BUF_FLUSH_LIST, ULINT_MAX, IB_UINT64_T_MAX);
     ut_a(n_pages != ULINT_UNDEFINED);
 
     sys.m_buf_pool->m_flusher->wait_batch_end(BUF_FLUSH_LIST);

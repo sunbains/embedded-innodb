@@ -141,6 +141,10 @@ struct Dblwr {
    * @note offsets.first and offsets.second will be set to ULINT32_UNDEFINED
    * if the doublewrite buffer has not been created yet.
    */
+  /** @return true once the doublewrite buffer has been created or found on
+  disk, and pages can be written through it. */
+  [[nodiscard]] bool is_ready() const noexcept { return m_block1 != ULINT32_UNDEFINED; }
+
   [[nodiscard]] bool check_if_exists(std::pair<page_no_t, page_no_t> &offsets) noexcept;
 
 
