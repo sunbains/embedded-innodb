@@ -485,8 +485,6 @@ struct RowInsert {
 
  public:
 
-  /** Lock system */
-
   /** Row update system */
 };
 

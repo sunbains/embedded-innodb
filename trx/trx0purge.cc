@@ -166,7 +166,7 @@ void PurgeSys::free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_log
 
     mutex_exit(&rseg->m_mutex);
 
-    mtr.commit();
+    mtr.commit(m_sys);
   }
 
   /* The page list may now be inconsistent, but the length field
@@ -196,7 +196,7 @@ void PurgeSys::free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_log
     fsp0fsp.c. */
   } while (m_sys.m_fsp->fseg_free_step(seg_hdr + TRX_UNDO_FSEG_HEADER, &mtr));
 
-  auto hist_size = mtr.read_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES);
+  auto hist_size = mtr.read_ulint(m_sys, rseg_hdr + TRX_RSEG_HISTORY_SIZE, MLOG_4BYTES);
   ut_ad(hist_size >= seg_size);
 
   mlog_write_ulint(rseg_hdr + TRX_RSEG_HISTORY_SIZE, hist_size - seg_size, MLOG_4BYTES, &mtr);
@@ -207,7 +207,7 @@ void PurgeSys::free_segment(TrxRseg *rseg, FilAddr hdr_addr, ulint n_removed_log
 
   mutex_exit(&rseg->m_mutex);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 }
 
 void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_no_t limit_undo_no) noexcept {
@@ -230,7 +230,7 @@ void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_
 
       mutex_exit(&rseg->m_mutex);
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       return;
     }
@@ -255,7 +255,7 @@ void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_
 
       mutex_exit(&rseg->m_mutex);
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       return;
     }
@@ -272,7 +272,7 @@ void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_
 
       mutex_exit(&rseg->m_mutex);
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       free_segment(rseg, hdr_addr, n_removed_logs);
 
@@ -282,7 +282,7 @@ void PurgeSys::truncate_rseg_history(TrxRseg *rseg, trx_id_t limit_trx_no, undo_
 
       mutex_exit(&rseg->m_mutex);
 
-      mtr.commit();
+      mtr.commit(m_sys);
     }
 
     mtr.start();
@@ -372,7 +372,7 @@ void PurgeSys::rseg_get_next_history_log(TrxRseg *rseg) noexcept {
 
     mutex_exit(&rseg->m_mutex);
 
-    mtr.commit();
+    mtr.commit(m_sys);
 
     mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
@@ -399,7 +399,7 @@ void PurgeSys::rseg_get_next_history_log(TrxRseg *rseg) noexcept {
 
   mutex_exit(&rseg->m_mutex);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   /* Read the trx number and del marks from the previous log header */
   mtr.start();
@@ -410,7 +410,7 @@ void PurgeSys::rseg_get_next_history_log(TrxRseg *rseg) noexcept {
 
   auto del_marks = mach_read_from_2(log_hdr + TRX_UNDO_DEL_MARKS);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   mutex_enter(&rseg->m_mutex);
 
@@ -502,7 +502,7 @@ void PurgeSys::choose_next_log() noexcept {
     m_offset = page_offset(rec);
   }
 
-  mtr.commit();
+  mtr.commit(m_sys);
 }
 
 TrxUndoRecord PurgeSys::get_next_rec(MemHeap *heap) noexcept {
@@ -571,7 +571,7 @@ TrxUndoRecord PurgeSys::get_next_rec(MemHeap *heap) noexcept {
   }
 
   if (rec2 == nullptr) {
-    mtr.commit();
+    mtr.commit(m_sys);
 
     rseg_get_next_history_log(m_rseg);
 
@@ -599,7 +599,7 @@ TrxUndoRecord PurgeSys::get_next_rec(MemHeap *heap) noexcept {
 
   auto rec_copy = TrxUndoRecord(rec).copy(heap);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   return rec_copy;
 }
@@ -624,11 +624,11 @@ PurgeSys::PurgeSys(System &sys, Trx *trx) noexcept : m_sys(sys), m_trx(trx) {
 
   m_query = graph_build();
 
-  m_view = srv_trx_sys->oldest_copy_or_open_new(0, m_heap);
+  m_view = sys.m_trx_sys->oldest_copy_or_open_new(0, m_heap);
 }
 
-PurgeSys::~PurgeSys() noexcept {
-  ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
+PurgeSys::~PurgeSys(System &sys) noexcept {
+  ut_ad(!mutex_own(&sys.m_trx_sys->m_mutex));
 
   que_graph_free(m_query);
 
@@ -638,12 +638,12 @@ PurgeSys::~PurgeSys() noexcept {
   if (m_view != nullptr) {
     /* Because acquiring the kernel mutex is a pre-condition
     of read_view_close(). We don't really need it here. */
-    mutex_enter(&srv_trx_sys->m_mutex);
+    mutex_enter(&sys.m_trx_sys->m_mutex);
 
-    srv_trx_sys->close_read_view(m_view);
+    sys.m_trx_sys->close_read_view(m_view);
     m_view = nullptr;
 
-    mutex_exit(&srv_trx_sys->m_mutex);
+    mutex_exit(&sys.m_trx_sys->m_mutex);
   }
 
   trx_undo_arr_free(m_arr);
@@ -751,7 +751,7 @@ ulint PurgeSys::run() noexcept {
   /* Determine how much data manipulation language (DML) statements
   need to be delayed in order to reduce the lagging of the purge
   thread. */
-  srv_dml_needed_delay = 0; /* in microseconds; default: no delay */
+  m_sys.m_srv->m_dml_needed_delay = 0; /* in microseconds; default: no delay */
 
   /* If we cannot advance the 'purge view' because of an old
   'consistent read view', then the DML statements cannot be delayed.
@@ -760,13 +760,13 @@ ulint PurgeSys::run() noexcept {
     float ratio = (float)m_sys.m_trx_sys->m_rseg_history_len / m_sys.m_config.m_trx.m_max_purge_lag;
     if (ratio > (float)ULINT_MAX / 10000) {
       /* Avoid overflow: maximum delay is 4295 seconds */
-      srv_dml_needed_delay = ULINT_MAX;
+      m_sys.m_srv->m_dml_needed_delay = ULINT_MAX;
     } else if (ratio > 1) {
       /* If the history list length exceeds the
       innodb_max_purge_lag, the
       data manipulation statements are delayed
       by at least 5000 microseconds. */
-      srv_dml_needed_delay = (ulint)((ratio - .5) * 10000);
+      m_sys.m_srv->m_dml_needed_delay = (ulint)((ratio - .5) * 10000);
     }
   }
 

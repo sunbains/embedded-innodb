@@ -251,7 +251,7 @@ void BtreeCursor::search_to_nth_level(System &sys,
       .m_mtr = mtr
     };
 
-    block = get_buf_pool()->get(req, nullptr);
+    block = sys.m_buf_pool->get(req, nullptr);
 
     if (block == nullptr) {
 
@@ -287,7 +287,7 @@ void BtreeCursor::search_to_nth_level(System &sys,
     if (height == 0) {
       if (rw_latch == RW_NO_LATCH) {
 
-        latch_leaves(page, space, page_no, latch_mode, mtr);
+        latch_leaves(sys, page, space, page_no, latch_mode, mtr);
       }
 
       if ((latch_mode != BTR_MODIFY_TREE) && (latch_mode != BTR_CONT_MODIFY_TREE)) {
@@ -352,7 +352,7 @@ void BtreeCursor::search_to_nth_level(System &sys,
   }
 }
 
-void BtreeCursor::open_at_index_side(
+void BtreeCursor::open_at_index_side(System &sys, 
   Paths *paths, bool from_left, const Index *index, ulint latch_mode, ulint level, Mtr *mtr, SourceLocation loc
 ) noexcept {
   ulint root_height{};
@@ -398,22 +398,22 @@ void BtreeCursor::open_at_index_side(
       .m_mtr = mtr
     };
 
-    auto block = get_buf_pool()->get(req, nullptr);
+    auto block = sys.m_buf_pool->get(req, nullptr);
     auto page = block->get_frame();
 
-    ut_ad(index->m_id == get_btree()->page_get_index_id(page));
+    ut_ad(index->m_id == sys.m_btree->page_get_index_id(page));
 
     block->m_check_index_page_at_flush = true;
 
     if (height == ULINT_UNDEFINED) {
       /* We are in the root node */
 
-      height = get_btree()->page_get_level(page, mtr);
+      height = sys.m_btree->page_get_level(page, mtr);
       root_height = height;
     }
 
     if (height == 0) {
-      latch_leaves(page, space, page_no, latch_mode, mtr);
+      latch_leaves(sys, page, space, page_no, latch_mode, mtr);
 
       if (latch_mode != BTR_MODIFY_TREE && latch_mode != BTR_CONT_MODIFY_TREE) {
 
@@ -460,7 +460,7 @@ void BtreeCursor::open_at_index_side(
     }
 
     /* Go to the child node */
-    page_no = get_btree()->node_ptr_get_child_page_no(node_ptr, offsets);
+    page_no = sys.m_btree->node_ptr_get_child_page_no(node_ptr, offsets);
   }
 
   if (likely_null(heap)) {
@@ -502,7 +502,7 @@ void BtreeCursor::open_at_rnd_pos(System &sys, const Index *index, ulint latch_m
       .m_mtr = mtr
     };
 
-    auto block = get_buf_pool()->get(req, nullptr);
+    auto block = sys.m_buf_pool->get(req, nullptr);
     auto page = block->get_frame();
 
     ut_ad(index->m_id == sys.m_btree->page_get_index_id(page));
@@ -514,7 +514,7 @@ void BtreeCursor::open_at_rnd_pos(System &sys, const Index *index, ulint latch_m
     }
 
     if (height == 0) {
-      latch_leaves(page, space, page_no, latch_mode, mtr);
+      latch_leaves(sys, page, space, page_no, latch_mode, mtr);
     }
 
     page_cursor->open_on_rnd_user_rec(block);
@@ -687,7 +687,7 @@ DbErr BtreeCursor::optimistic_insert(System &sys,
   }
 
   /* Check locks and write to the undo log, if specified */
-  err = ins_lock_and_undo(flags, entry, thr, mtr, &inherit);
+  err = ins_lock_and_undo(sys, flags, entry, thr, mtr, &inherit);
 
   if (unlikely(err != DB_SUCCESS)) {
 
@@ -766,7 +766,7 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
 
   m_flag = BTR_CUR_BINARY;
 
-  err = optimistic_insert(flags, entry, rec, big_rec, n_ext, thr, mtr);
+  err = optimistic_insert(sys, flags, entry, rec, big_rec, n_ext, thr, mtr);
   if (err != DB_FAIL) {
 
     return err;
@@ -775,7 +775,7 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
   /* Retry with a pessimistic insert. Check locks and write to undo log,
   if specified */
 
-  err = ins_lock_and_undo(flags, entry, thr, mtr, &dummy_inh);
+  err = ins_lock_and_undo(sys, flags, entry, thr, mtr, &dummy_inh);
 
   if (err != DB_SUCCESS) {
 
@@ -812,7 +812,7 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
     if (big_rec_vec.n_fields == 0) {
 
       if (n_extents > 0) {
-        sys.m_fsp->m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
+        sys.m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
       }
       return DB_TOO_BIG_RECORD;
     }
@@ -838,7 +838,7 @@ DbErr BtreeCursor::pessimistic_insert(System &sys,
   }
 
   if (n_extents > 0) {
-    sys.m_fsp->m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
+    sys.m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
   }
 
   *big_rec = big_rec_vec;
@@ -1006,7 +1006,7 @@ DbErr BtreeCursor::update_in_place(System &sys, ulint flags, const Upd *update, 
 #endif /* UNIV_DEBUG */
 
   /* Do lock checking and undo logging */
-  auto err = upd_lock_and_undo(flags, update, cmpl_info, thr, mtr, &roll_ptr);
+  auto err = upd_lock_and_undo(sys, flags, update, cmpl_info, thr, mtr, &roll_ptr);
 
   if (unlikely(err != DB_SUCCESS)) {
 
@@ -1024,7 +1024,7 @@ DbErr BtreeCursor::update_in_place(System &sys, ulint flags, const Upd *update, 
 
   sys.m_row_upd->rec_in_place(rec, index, offsets, update);
 
-  update_in_place_log(flags, rec, index, update, trx, roll_ptr, mtr);
+  update_in_place_log(sys, flags, rec, index, update, trx, roll_ptr, mtr);
 
   if (was_delete_marked && !rec.get_deleted_flag()) {
     /* The new updated record owns its possible externally stored fields */
@@ -1083,7 +1083,7 @@ DbErr BtreeCursor::optimistic_update(System &sys, ulint flags, const Upd *update
 
     mem_heap_free(heap);
 
-    return update_in_place(flags, update, cmpl_info, thr, mtr);
+    return update_in_place(sys, flags, update, cmpl_info, thr, mtr);
   }
 
   if (offsets.any_extern()) {
@@ -1141,7 +1141,7 @@ DbErr BtreeCursor::optimistic_update(System &sys, ulint flags, const Upd *update
   }
 
   /* Do lock checking and undo logging */
-  err = upd_lock_and_undo(flags, update, cmpl_info, thr, mtr, &roll_ptr);
+  err = upd_lock_and_undo(sys, flags, update, cmpl_info, thr, mtr, &roll_ptr);
 
   if (err != DB_SUCCESS) {
   err_exit:
@@ -1175,7 +1175,7 @@ DbErr BtreeCursor::optimistic_update(System &sys, ulint flags, const Upd *update
   }
 
   /* There are no externally stored columns in new_entry */
-  rec = insert_if_possible(new_entry, 0 /*n_ext*/, mtr);
+  rec = insert_if_possible(sys, new_entry, 0 /*n_ext*/, mtr);
 
   /* We calculated above the insert would fit */
   ut_a(!rec.is_null());
@@ -1214,7 +1214,7 @@ void BtreeCursor::pess_upd_restore_supremum(System &sys, BufBlock *block, const 
     .m_mtr = mtr
   };
 
-  auto prev_block = sys.m_btree->m_buf_pool->get(req, nullptr);
+  auto prev_block = sys.m_buf_pool->get(req, nullptr);
 
 #ifdef UNIV_BTR_DEBUG
   ut_a(sys.m_btree->page_get_next(prev_block->get_frame(), mtr) == page_get_page_no(page));
@@ -1247,7 +1247,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
   ut_ad(mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
-  auto optim_err = optimistic_update(flags, update, cmpl_info, thr, mtr);
+  auto optim_err = optimistic_update(sys, flags, update, cmpl_info, thr, mtr);
 
   switch (optim_err) {
     case DB_UNDERFLOW:
@@ -1258,7 +1258,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
   }
 
   /* Do lock checking and undo logging */
-  auto err = upd_lock_and_undo(flags, update, cmpl_info, thr, mtr, &roll_ptr);
+  auto err = upd_lock_and_undo(sys, flags, update, cmpl_info, thr, mtr, &roll_ptr);
 
   if (err != DB_SUCCESS) {
 
@@ -1326,7 +1326,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
 
     ut_ad(big_rec_vec.n_fields == 0);
 
-    blob.free_updated_extern_fields(index, rec, offsets, update, trx_is_recv(trx) ? RB_RECOVERY : RB_NORMAL, mtr);
+    blob.free_updated_extern_fields(sys, index, rec, offsets, update, trx_is_recv(trx) ? RB_RECOVERY : RB_NORMAL, mtr);
   }
 
   /* We have to set appropriate extern storage bits in the new
@@ -1369,7 +1369,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
 
   page_cursor->move_to_prev();
 
-  rec = insert_if_possible(new_entry, n_ext, mtr);
+  rec = insert_if_possible(sys, new_entry, n_ext, mtr);
 
   if (!rec.is_null()) {
     sys.m_lock_sys->rec_restore_from_page_infimum(get_block(), rec, block);
@@ -1401,7 +1401,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
   /* The first parameter means that no lock checking and undo logging
   is made in the insert */
 
-  err = pessimistic_insert(
+  err = pessimistic_insert(sys, 
     BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG, new_entry, &rec, &dummy_big_rec, n_ext, nullptr, mtr
   );
 
@@ -1441,13 +1441,13 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
   from a wrong record. */
 
   if (!was_first) {
-    pess_upd_restore_supremum(get_block(), rec, mtr);
+    pess_upd_restore_supremum(sys, get_block(), rec, mtr);
   }
 
 return_after_reservations:
 
   if (n_extents > 0) {
-    sys.m_fsp->m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
+    sys.m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
   }
 
   *big_rec = big_rec_vec;
@@ -1587,7 +1587,7 @@ DbErr BtreeCursor::del_mark_set_clust_rec(System &sys, ulint flags, bool val, Qu
         RowUpdate::rec_sys_fields(rec, index, offsets, trx, roll_ptr);
       }
 
-      del_mark_set_clust_rec_log(flags, rec, index, val, trx, roll_ptr, mtr);
+      del_mark_set_clust_rec_log(sys, flags, rec, index, val, trx, roll_ptr, mtr);
     }
   }
 
@@ -1749,7 +1749,7 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
   if (offsets.any_extern()) {
     Blob blob{sys.m_fsp, sys.m_btree};
 
-    blob.free_externally_stored_fields(index, rec, offsets, rb_ctx, mtr);
+    blob.free_externally_stored_fields(sys, index, rec, offsets, rb_ctx, mtr);
   }
 
   if (page_get_n_recs(page) < 2 && index->get_page_no() != block->get_page_no()) {
@@ -1803,7 +1803,7 @@ DbErr BtreeCursor::pessimistic_delete(System &sys, bool has_reserved_extents, Tr
   mem_heap_free(heap);
 
   if (n_extents > 0) {
-    sys.m_fsp->m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
+    sys.m_fil->space_release_free_extents(index->get_space_id(), n_reserved);
   }
 
   return err;
@@ -1833,7 +1833,7 @@ void BtreeCursor::add_path_info(Paths *path, ulint height, ulint root_height) no
   slot->m_n_recs = page_get_n_recs(rec.page_align());
 }
 
-int64_t BtreeCursor::estimate_n_rows_in_range(
+int64_t BtreeCursor::estimate_n_rows_in_range(System &sys, 
   Index *index, const DTuple *tuple1, ulint mode1, const DTuple *tuple2, ulint mode2
 ) noexcept {
   Paths path1;
@@ -1843,24 +1843,24 @@ int64_t BtreeCursor::estimate_n_rows_in_range(
   mtr.start();
 
   if (dtuple_get_n_fields(tuple1) > 0) {
-    search_to_nth_level(&path1, index, 0, tuple1, mode1, BTR_SEARCH_LEAF | BTR_ESTIMATE, &mtr, Current_location());
+    search_to_nth_level(sys, &path1, index, 0, tuple1, mode1, BTR_SEARCH_LEAF | BTR_ESTIMATE, &mtr, Current_location());
   } else {
-    open_at_index_side(&path1, true, index, BTR_SEARCH_LEAF | BTR_ESTIMATE, 0, &mtr, Current_location());
+    open_at_index_side(sys, &path1, true, index, BTR_SEARCH_LEAF | BTR_ESTIMATE, 0, &mtr, Current_location());
   }
 
-  mtr.commit();
+  mtr.commit(sys);
 
   Paths path2;
 
   mtr.start();
 
   if (dtuple_get_n_fields(tuple2) > 0) {
-    search_to_nth_level(&path2, index, 0, tuple2, mode2, BTR_SEARCH_LEAF | BTR_ESTIMATE, &mtr, Current_location());
+    search_to_nth_level(sys, &path2, index, 0, tuple2, mode2, BTR_SEARCH_LEAF | BTR_ESTIMATE, &mtr, Current_location());
   } else {
-    open_at_index_side(&path2, false, index, BTR_SEARCH_LEAF | BTR_ESTIMATE, 0, &mtr, Current_location());
+    open_at_index_side(sys, &path2, false, index, BTR_SEARCH_LEAF | BTR_ESTIMATE, 0, &mtr, Current_location());
   }
 
-  mtr.commit();
+  mtr.commit(sys);
 
   /* We have the path information for the range in path1 and path2 */
 
@@ -1997,7 +1997,7 @@ void BtreeCursor::estimate_number_of_different_key_vals(System &sys, const Index
     Rec supremum;
     mtr.start();
 
-    open_at_rnd_pos(index, BTR_SEARCH_LEAF, &mtr, Current_location());
+    open_at_rnd_pos(sys, index, BTR_SEARCH_LEAF, &mtr, Current_location());
 
     /* Count the number of different key values for each prefix of
     the key on this index page. If the prefix does not determine
@@ -2082,7 +2082,7 @@ void BtreeCursor::estimate_number_of_different_key_vals(System &sys, const Index
 
     total_external_size += blob.get_externally_stored_len(rec, offsets_rec);
 
-    mtr.commit();
+    mtr.commit(sys);
   }
 
   /* If we saw k borders between different key values on

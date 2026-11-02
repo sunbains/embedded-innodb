@@ -576,7 +576,7 @@ struct Lock {
    *
    * @return A string representation of the record lock object.
    */
-  std::string rec_to_string(BufPool *buf_pool) const noexcept;
+  std::string rec_to_string(System &sys, BufPool *buf_pool) const noexcept;
 
   /**
    * @brief Converts the lock object to a string representation.
@@ -587,7 +587,7 @@ struct Lock {
    *
    * @return A string representation of the lock object.
    */
-  [[nodiscard]] std::string to_string(BufPool *buf_pool) const noexcept;
+  [[nodiscard]] std::string to_string(System &sys, BufPool *buf_pool) const noexcept;
 
   /**
    * @brief Gets the next lock in the list.

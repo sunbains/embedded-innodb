@@ -96,7 +96,7 @@ struct CondVar {
   *
   * Where such a scenario is possible, to avoid infinite wait, the
   * value returned by reset() should be passed in as reset_sig_count. */
-  void wait(int64_t reset_sig_count);
+  void wait(System &sys, int64_t reset_sig_count);
 
   /**
    * Waits for an event object until it is in the signaled state or
@@ -104,7 +104,7 @@ struct CondVar {
    * @param[in] timeout              Timeout, or std::chrono::microseconds::max()
    * @param[in] reset_sig_count      Zero or the value returned by previous call of reset().
    * @return 0 if success, OS_SYNC_TIME_EXCEEDED if timeout was exceeded */
-  ulint wait_time(std::chrono::microseconds timeout, int64_t reset_sig_count);
+  ulint wait_time(System &sys, std::chrono::microseconds timeout, int64_t reset_sig_count);
 
   /**
    * Creates an event semaphore, i.e., a semaphore which may just have two

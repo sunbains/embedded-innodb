@@ -428,14 +428,14 @@ void row_build_row_ref_in_tuple(DTuple *ref, Rec rec, const Index *index, const 
   }
 }
 
-bool row_search_on_row_ref(BtreePcursor *pcur, ulint mode, const Table *table, const DTuple *ref, Mtr *mtr) {
+bool row_search_on_row_ref(System &sys, BtreePcursor *pcur, ulint mode, const Table *table, const DTuple *ref, Mtr *mtr) {
   ut_ad(dtuple_check_typed(ref));
 
   auto index = table->get_first_index();
 
   ut_a(dtuple_get_n_fields(ref) == index->get_n_unique());
 
-  pcur->open(index, ref, PAGE_CUR_LE, mode, mtr, Current_location());
+  pcur->open(sys, index, ref, PAGE_CUR_LE, mode, mtr, Current_location());
 
   auto low_match = pcur->get_low_match();
 
@@ -449,8 +449,8 @@ bool row_search_on_row_ref(BtreePcursor *pcur, ulint mode, const Table *table, c
   return low_match == dtuple_get_n_fields(ref);
 }
 
-Rec row_get_clust_rec(ulint mode, const Rec rec, const Index *index, Index **clust_index, Mtr *mtr) {
-  BtreePcursor pcur(srv_fsp, srv_btree_sys);
+Rec row_get_clust_rec(System &sys, ulint mode, const Rec rec, const Index *index, Index **clust_index, Mtr *mtr) {
+  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
 
   ut_ad(!index->is_clustered());
 
@@ -473,10 +473,10 @@ Rec row_get_clust_rec(ulint mode, const Rec rec, const Index *index, Index **clu
   return clust_rec;
 }
 
-bool row_search_index_entry(Index *index, const DTuple *entry, ulint mode, BtreePcursor *pcur, Mtr *mtr) {
+bool row_search_index_entry(System &sys, Index *index, const DTuple *entry, ulint mode, BtreePcursor *pcur, Mtr *mtr) {
   ut_ad(dtuple_check_typed(entry));
 
-  pcur->open(index, entry, PAGE_CUR_LE, mode, mtr, Current_location());
+  pcur->open(sys, index, entry, PAGE_CUR_LE, mode, mtr, Current_location());
 
   auto low_match = pcur->get_low_match();
 

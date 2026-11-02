@@ -474,7 +474,7 @@ struct Btree {
    * @return	next page number
    */
   [[nodiscard]] static inline page_no_t page_get_next(const page_t *page, Mtr *mtr) noexcept {
-    ut_ad(mtr->memo_contains_page(page, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(page, MTR_MEMO_PAGE_S_FIX));
+    ut_ad(mtr->memo_contains_page(m_sys, page, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(m_sys, page, MTR_MEMO_PAGE_S_FIX));
 
     return mach_read_from_4(page + FIL_PAGE_NEXT);
   }
@@ -875,8 +875,6 @@ struct Btree {
    */
   [[nodiscard]] bool validate_level(Index *index, Trx *trx, ulint level) noexcept;
 
-
-  /** File segment manager to use */
 
 
   /** Buffer pool to use */

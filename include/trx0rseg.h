@@ -44,7 +44,7 @@ struct TrxRseg {
    * 
    * @return	rollback segment
    */
-  static TrxRseg *get_on_id(ulint id);
+  static TrxRseg *get_on_id(System &sys, ulint id);
 
   /**
    * Creates a rollback segment header. This function is called only when
@@ -57,7 +57,7 @@ struct TrxRseg {
    * 
    * @return	page number of the created segment, FIL_NULL if fail
    */
-  static page_no_t header_create(space_id_t space, ulint max_size, ulint *slot_no, Mtr *mtr);
+  static page_no_t header_create(System &sys, space_id_t space, ulint max_size, ulint *slot_no, Mtr *mtr);
 
   /**
    * Creates the memory copies for rollback segments and initializes the
@@ -67,12 +67,12 @@ struct TrxRseg {
    * @param[in] sys_header The trx system header.
    * @param[in] mtr The mini-transaction handle.
    */
-  static void list_and_array_init(IbRecovery recovery, trx_sysf_t *sys_header, Mtr *mtr);
+  static void list_and_array_init(System &sys, IbRecovery recovery, trx_sysf_t *sys_header, Mtr *mtr);
 
   /**
    * Free's an instance of the rollback segment in memory.
    */
-  void memory_free();
+  void memory_free(System &sys);
 
 private:
   /**
@@ -169,7 +169,7 @@ constexpr ulint TRX_RSEG_UNDO_SLOTS = 8 + FLST_BASE_NODE_SIZE + FSEG_HEADER_SIZE
  * 
  * @return	rollback segment header, page x-latched
  */
-inline trx_rsegf_t *trx_rsegf_get(space_id_t space_id, page_no_t page_no, Mtr *mtr) noexcept {
+inline trx_rsegf_t *trx_rsegf_get(System &sys, space_id_t space_id, page_no_t page_no, Mtr *mtr) noexcept {
   BufPool::Request req{
     .m_rw_latch = RW_X_LATCH,
     .m_page_id = {space_id, page_no},
@@ -179,7 +179,7 @@ inline trx_rsegf_t *trx_rsegf_get(space_id_t space_id, page_no_t page_no, Mtr *m
     .m_mtr = mtr
   };
 
-  auto block = srv_buf_pool->get(req, nullptr);
+  auto block = sys.m_buf_pool->get(req, nullptr);
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER));
 
   auto header = TRX_RSEG + block->get_frame();
@@ -196,7 +196,7 @@ inline trx_rsegf_t *trx_rsegf_get(space_id_t space_id, page_no_t page_no, Mtr *m
  * 
  * @return	rollback segment header, page x-latched
  */
-inline trx_rsegf_t *trx_rsegf_get_new(space_id_t space_id, page_no_t page_no, Mtr *mtr) noexcept {
+inline trx_rsegf_t *trx_rsegf_get_new(System &sys, space_id_t space_id, page_no_t page_no, Mtr *mtr) noexcept {
   BufPool::Request req{
     .m_rw_latch = RW_X_LATCH,
     .m_page_id = {space_id, page_no},
@@ -206,7 +206,7 @@ inline trx_rsegf_t *trx_rsegf_get_new(space_id_t space_id, page_no_t page_no, Mt
     .m_mtr = mtr
   };
 
-  auto block = srv_buf_pool->get(req, nullptr);
+  auto block = sys.m_buf_pool->get(req, nullptr);
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_RSEG_HEADER_NEW));
 
   auto header = TRX_RSEG + block->get_frame();
@@ -223,12 +223,12 @@ inline trx_rsegf_t *trx_rsegf_get_new(space_id_t space_id, page_no_t page_no, Mt
  * 
  * @return	page number of the undo log segment
  */
-inline ulint trx_rsegf_get_nth_undo(trx_rsegf_t *rsegf, ulint n, Mtr *mtr) noexcept {
+inline ulint trx_rsegf_get_nth_undo(System &sys, trx_rsegf_t *rsegf, ulint n, Mtr *mtr) noexcept {
   if (unlikely(n >= TRX_RSEG_N_SLOTS)) {
     log_fatal(std::format("Trying to get slot {} of rseg", n));
   }
 
-  return mtr->read_ulint(rsegf + TRX_RSEG_UNDO_SLOTS + n * TRX_RSEG_SLOT_SIZE, MLOG_4BYTES);
+  return mtr->read_ulint(sys, rsegf + TRX_RSEG_UNDO_SLOTS + n * TRX_RSEG_SLOT_SIZE, MLOG_4BYTES);
 }
 
 /**

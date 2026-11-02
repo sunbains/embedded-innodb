@@ -110,7 +110,7 @@ struct Trx {
   /**
    * Commits a transaction.
    */
-  void commit_off_kernel() noexcept;
+  void commit_off_kernel(System &sys) noexcept;
 
   /**
    * Cleans up a transaction at database startup. The cleanup is needed if
@@ -119,14 +119,14 @@ struct Trx {
    *
    * @param[in] trx The transaction.
    */
-  void cleanup_at_db_startup() noexcept;
+  void cleanup_at_db_startup(System &sys) noexcept;
 
   /**
    * Does the transaction prepare.
    *
    * @return 0 or error number.
    */
-  [[nodiscard]] ulint prepare() noexcept;
+  [[nodiscard]] ulint prepare(System &sys) noexcept;
 
   /**
    * Calculates the "weight" of a transaction. The weight of one transaction
@@ -251,7 +251,7 @@ struct Trx {
    *
    * @return 0 or error number.
    */
-  [[nodiscard]] ulint commit_flush_log() noexcept;
+  [[nodiscard]] ulint commit_flush_log(System &sys) noexcept;
 #endif /* WITH_XOPEN */
 
   /**
@@ -274,7 +274,7 @@ struct Trx {
    *
    * @return Consistent read view.
    */
-  [[nodiscard]] ReadView *assign_read_view() noexcept;
+  [[nodiscard]] ReadView *assign_read_view(System &sys) noexcept;
 
   /**
    * The transaction must be in the TRX_QUE_LOCK_WAIT state. Puts it to
@@ -296,7 +296,7 @@ struct Trx {
    *   passed in is a pointer to a nullptr pointer, then the calling function can
    *   start running a new query thread; if the parameter is nullptr, it is ignored.
    */
-  void sig_send(ulint type, ulint sender, QueThr *receiver_thr, TrxSavept *savept, QueThr *&next_thr) noexcept;
+  void sig_send(System &sys, ulint type, ulint sender, QueThr *receiver_thr, TrxSavept *savept, QueThr *&next_thr) noexcept;
 
   /**
    * Send the reply message when a signal in the queue of the trx has
@@ -306,7 +306,7 @@ struct Trx {
    * @param[in,out] next_thr Next query thread to run; if the value which is passed in is
    *   a pointer to a nullptr pointer, then the calling function can start running a new query thread.
    */
-  static void sig_reply(TrxSig *sig, QueThr *&next_thr) noexcept;
+  static void sig_reply(System &sys, TrxSig *sig, QueThr *&next_thr) noexcept;
 
   /**
    * Removes the signal object from a trx signal queue.
@@ -321,7 +321,7 @@ struct Trx {
    * @param[in,out] next_thr Next query thread to run; if the value which is passed in is
    *   a pointer to a nullptr pointer, then the calling function can start running a new query thread.
    */
-  void sig_start_handling(QueThr *&next_thr) noexcept;
+  void sig_start_handling(System &sys, QueThr *&next_thr) noexcept;
 
   /**
    * Ends signal handling. If the session is in the error state, and
@@ -348,7 +348,7 @@ struct Trx {
    *
    * @return Query thread to run next, or nullptr.
    */
-  [[nodiscard]] static QueThr *commit_step(QueThr *thr) noexcept;
+  [[nodiscard]] static QueThr *commit_step(System &sys, QueThr *thr) noexcept;
 
   /**
    * Prints info about a transaction to the given file. The caller must own the
@@ -384,7 +384,7 @@ struct Trx {
    *
    * @return DB_SUCCESS or error number.
    */
-  [[nodiscard]] DbErr commit() noexcept;
+  [[nodiscard]] DbErr commit(System &sys) noexcept;
 
   /**
    * Frees a transaction object for client.
@@ -413,7 +413,7 @@ struct Trx {
    * @param[in,out] next_thr Next query thread to run. If the value passed in is a pointer to
    *  a nullptr pointer, then the calling function can start running a new query thread.
    */
-  void handle_commit_sig_off_kernel(QueThr *&next_thr) noexcept;
+  void handle_commit_sig_off_kernel(System &sys, QueThr *&next_thr) noexcept;
 
   /**
    * @brief checks the compatibility of a new signal with the other signals in the queue.
@@ -457,7 +457,7 @@ struct Trx {
   /**
    * @brief Prepares a transaction for commit.
    */
-  void prepare_for_commit() noexcept;
+  void prepare_for_commit(System &sys) noexcept;
 
  public:
   IF_DEBUG(ulint m_magic_n{TRX_MAGIC_N};)

@@ -134,7 +134,7 @@ struct UndoNode {
   * @param[in] trx The transaction.
   * @param[in] parent The parent node, i.e., a thr node.
   */
-  UndoNode(Dict *dict, Trx *trx, QueThr *parent) noexcept;
+  UndoNode(Trx *trx, QueThr *parent) noexcept;
 
   /**
    * @brief Creates a row undo node to a query graph.
@@ -158,7 +158,7 @@ struct UndoNode {
    * @return true if found; NOTE the node->pcur must be closed by the
    * caller, regardless of the return value.
    */
-  [[nodiscard]] bool search_cluster_index_and_persist_position() noexcept;
+  [[nodiscard]] bool search_cluster_index_and_persist_position(System &sys) noexcept;
 
   /**
    * @brief Fetches an undo log record and performs the undo for the recorded operation.
@@ -214,7 +214,7 @@ struct UndoNode {
    *
    * @return true if also previous modify or insert of this row should be undone
    */
-  [[nodiscard]] inline bool undo_previous_version(undo_no_t *undo_no) noexcept;
+  [[nodiscard]] inline bool undo_previous_version(System &sys, undo_no_t *undo_no) noexcept;
 
   /**
  * @brief Undoes a modify in a clustered index record.
@@ -225,7 +225,7 @@ struct UndoNode {
  *
  * @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space.
    */
-  [[nodiscard]] DbErr undo_clustered_index_modification(QueThr *thr, Mtr *mtr, ulint mode) noexcept;
+  [[nodiscard]] DbErr undo_clustered_index_modification(System &sys, QueThr *thr, Mtr *mtr, ulint mode) noexcept;
 
   /**
    * @brief Removes a clustered index record after undo if possible.
@@ -318,7 +318,7 @@ struct UndoNode {
    *
    * @return DB_SUCCESS or error code: we may run out of file space.
    */
-  [[nodiscard]] DbErr undo_clustered_index_modification(QueThr *thr) noexcept;
+  [[nodiscard]] DbErr undo_clustered_index_modification(System &sys, QueThr *thr) noexcept;
 
   /**
    * Undoes a modify in secondary indexes when undo record type is UPD_DEL.
@@ -327,7 +327,7 @@ struct UndoNode {
    *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] DbErr undo_delete_in_secondary_indexes(QueThr *thr) noexcept;
+  [[nodiscard]] DbErr undo_delete_in_secondary_indexes(System &sys, QueThr *thr) noexcept;
 
   /**
    * @brief Undoes a modify in secondary indexes when undo record type is DEL_MARK.
@@ -336,7 +336,7 @@ struct UndoNode {
    *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] DbErr undo_del_mark_secondary_indexes(QueThr *thr) noexcept;
+  [[nodiscard]] DbErr undo_del_mark_secondary_indexes(System &sys, QueThr *thr) noexcept;
 
   /**
    * Undoes a modify in secondary indexes when undo record type is UPD_EXIST.
@@ -345,7 +345,7 @@ struct UndoNode {
    *
    * @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE
    */
-  [[nodiscard]] DbErr undo_update_of_secondary_indexes(QueThr *thr) noexcept;
+  [[nodiscard]] DbErr undo_update_of_secondary_indexes(System &sys, QueThr *thr) noexcept;
 
   /**
    * @brief Undoes a modify operation on a row of a table.

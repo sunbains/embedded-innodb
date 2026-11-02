@@ -42,7 +42,7 @@ extern bool que_trace_on;
 
 /** Adds a query graph to the session's list of graphs. */
 
-void que_graph_publish(
+void que_graph_publish(System &sys, 
   QueFork *graph, /*!< in: graph */
   Session *sess
 ); /*!< in: session */
@@ -80,7 +80,7 @@ void que_graph_free(QueFork *graph); /*!< in: query graph; we assume that the
 conditions are tested in the order (1) graph, (2) trx. The kernel mutex has
 to be reserved.
 @return	true if stopped */
-bool que_thr_stop(QueThr *thr); /*!< in: query thread */
+bool que_thr_stop(System &sys, QueThr *thr); /*!< in: query thread */
 
 /** Moves a thread from another state to the QUE_THR_RUNNING state. Increments
 the n_active_thrs counters of the query graph and transaction if thr was
@@ -93,15 +93,15 @@ void que_thr_move_to_run_state_for_client(
 /** The query thread is stopped and made inactive, except in the case where
 it was put to the lock wait state in lock0lock.c, but the lock has already
 been granted or the transaction chosen as a victim in deadlock resolution. */
-void que_thr_stop_client(QueThr *thr); /*!< in: query thread */
+void que_thr_stop_client(System &sys, QueThr *thr); /*!< in: query thread */
 
 /** Run a query thread. Handles lock waits. */
-void que_run_threads(QueThr *thr); /*!< in: query thread */
+void que_run_threads(System &sys, QueThr *thr); /*!< in: query thread */
 
 /** After signal handling is finished, returns control to a query graph error
 handling routine. (Currently, just returns the control to the root of the
 graph so that the graph can communicate an error message to the client.) */
-void que_fork_error_handle(
+void que_fork_error_handle(System &sys, 
   Trx *trx, /*!< in: trx */
   QueFork *fork
 ); /*!< in: query graph which was run before signal
@@ -111,7 +111,7 @@ void que_fork_error_handle(
 a single worker thread to execute it. This function should be used to end
 the wait state of a query thread waiting for a lock or a stored procedure
 completion. */
-void que_thr_end_wait(
+void que_thr_end_wait(System &sys, 
   QueThr *thr, /*!< in: query thread in the
                                              QUE_THR_LOCK_WAIT,
                                              or QUE_THR_PROCEDURE_WAIT, or
@@ -124,7 +124,7 @@ void que_thr_end_wait(
                                              running a new query thread */
 
 /** Same as que_thr_end_wait, but no parameter next_thr available. */
-void que_thr_end_wait_no_next_thr(QueThr *thr); /*!< in: query thread in the
+void que_thr_end_wait_no_next_thr(System &sys, QueThr *thr); /*!< in: query thread in the
                      QUE_THR_LOCK_WAIT,
                      or QUE_THR_PROCEDURE_WAIT, or
                      QUE_THR_SIG_REPLY_WAIT state */

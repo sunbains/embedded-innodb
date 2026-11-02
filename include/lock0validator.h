@@ -67,7 +67,7 @@ struct LockValidator {
    * @param[in] page_id The page ID to validate.
    * @return true if the record lock queues on the page are valid, false otherwise.
    */
-  [[nodiscard]] bool rec_validate_page(PageId page_id) noexcept;
+  [[nodiscard]] bool rec_validate_page(System &sys, PageId page_id) noexcept;
 
   /**
    * @brief Validates the lock queue on a table.

@@ -27,7 +27,7 @@ Created 5/30/1994 Heikki Tuuri
 #include "innodb0types.h"
 
 /** Initializes the mem block list at database startup. */
-void ut_mem_init();
+void ut_mem_init(System &sys);
 
 #define ut_new(n) ut_new_func(n, SourceLocation(std::source_location::current()))
 #define ut_delete(ptr) ut_delete_func(ptr, SourceLocation(std::source_location::current()))

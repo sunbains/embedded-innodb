@@ -42,7 +42,7 @@ SymTab *sym_tab_create(MemHeap *heap);
 /** Frees the memory allocated dynamically AFTER parsing phase for variables
 etc. in the symbol table. Does not free the mem heap where the table was
 originally created. Frees also SQL explicit cursor definitions. */
-void sym_tab_free_private(SymTab *sym_tab); /** in, own: symbol table */
+void sym_tab_free_private(System &sys, SymTab *sym_tab); /** in, own: symbol table */
 
 /**
  * @brief Adds an integer literal to a symbol table.

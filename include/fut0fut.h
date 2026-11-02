@@ -38,7 +38,7 @@ Created 12/13/1995 Heikki Tuuri
 @param[in,out] mtr              Mini-transaction to track block fetch.
 @return pointer to a byte in a frame; the file page in the frame is
 bufferfixed and latched */
-inline byte *fut_get_ptr(space_id_t space_id, FilAddr addr, ulint rw_latch, Mtr *mtr) {
+inline byte *fut_get_ptr(System &sys, space_id_t space_id, FilAddr addr, ulint rw_latch, Mtr *mtr) {
   ut_ad(addr.m_boffset < UNIV_PAGE_SIZE);
   ut_ad(rw_latch == RW_S_LATCH || rw_latch == RW_X_LATCH);
 
@@ -51,7 +51,7 @@ inline byte *fut_get_ptr(space_id_t space_id, FilAddr addr, ulint rw_latch, Mtr 
     .m_mtr = mtr
   };
 
-  auto block = srv_buf_pool->get(req, nullptr);
+  auto block = sys.m_buf_pool->get(req, nullptr);
   auto ptr = block->get_frame() + addr.m_boffset;
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));

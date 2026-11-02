@@ -1295,7 +1295,7 @@ void Dict::update_statistics(Table *table) noexcept {
   auto &stats = table->m_stats;
   auto btree = m_store.m_btree;
   ulint sum_of_index_sizes{};
-  BtreeCursor btr_cur(fsp, btree);
+  BtreeCursor btr_cur{};
 
   for (auto index : table->m_indexes) {
     auto size = btree->get_size(index, BTR_TOTAL_SIZE);
@@ -1313,7 +1313,7 @@ void Dict::update_statistics(Table *table) noexcept {
 
     index->m_stats.m_n_leaf_pages = size;
 
-    btr_cur.estimate_number_of_different_key_vals(index);
+    btr_cur.estimate_number_of_different_key_vals(m_sys, index);
   }
 
   auto index = table->m_indexes.front();

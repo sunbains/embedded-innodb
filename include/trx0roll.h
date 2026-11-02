@@ -102,7 +102,7 @@ struct TrxRollback {
    * @brief Tries to truncate the undo logs.
    * @param[in,out] trx Transaction
    */
-  static void try_truncate(Trx *trx);
+  static void try_truncate(System &sys, Trx *trx);
 
   /**
    * @brief Pops the topmost record when the two undo logs of a transaction are seen
@@ -114,7 +114,7 @@ struct TrxRollback {
    * @return undo log record copied to heap, nullptr if none left, or if the
    * undo number of the top record would be less than the limit
    */
-  static TrxUndoRecord pop_top_rec_of_trx(Trx *trx, undo_no_t limit, 
+  static TrxUndoRecord pop_top_rec_of_trx(System &sys, Trx *trx, undo_no_t limit, 
                                            roll_ptr_t *roll_ptr, MemHeap *heap);
 
   /**
@@ -140,7 +140,7 @@ struct TrxRollback {
    * which is passed in is a pointer to a nullptr pointer, then
    * the calling function can start running a new query thread
    */
-  static void rollback(Trx *trx, TrxSig *sig, QueThr **next_thr);
+  static void rollback(System &sys, Trx *trx, TrxSig *sig, QueThr **next_thr);
 
   /**
    * @brief Rollback or clean up any incomplete transactions which were
@@ -148,7 +148,7 @@ struct TrxRollback {
    * @param[in] all false=roll back dictionary transactions;
    * true=roll back all non-PREPARED transactions
    */
-  static void rollback_or_clean_recovered(bool all);
+  static void rollback_or_clean_recovered(System &sys, bool all);
 
   /**
    * @brief Rollback or clean up any incomplete transactions which were
@@ -165,14 +165,14 @@ struct TrxRollback {
    * in is a pointer to a nullptr pointer, then the calling function can
    * start running a new query thread; if this parameter is nullptr, it is ignored
    */
-  static void finish_rollback_off_kernel(QueFork *graph, Trx *trx, QueThr **next_thr);
+  static void finish_rollback_off_kernel(System &sys, QueFork *graph, Trx *trx, QueThr **next_thr);
 
   /**
    * @brief Builds an undo 'query' graph for a transaction.
    * @param[in] trx Transaction handle
    * @return own: the query graph
    */
-  static QueFork *roll_graph_build(Trx *trx);
+  static QueFork *roll_graph_build(System &sys, Trx *trx);
 
   /**
    * @brief Rollback a user transaction.
@@ -181,7 +181,7 @@ struct TrxRollback {
    * @param[in] savept Pointer to savepoint undo number, if partial rollback requested
    * @return error code or DB_SUCCESS
    */
-  static DbErr general_rollback(Trx *trx, bool partial, TrxSavept *savept);
+  static DbErr general_rollback(System &sys, Trx *trx, bool partial, TrxSavept *savept);
 
   /**
    * @brief Frees savepoint structs starting from savep.
@@ -195,7 +195,7 @@ struct TrxRollback {
    * @param[in] thr Query thread
    * @return query thread to run next, or nullptr
    */
-  QueThr *rollback_step(QueThr *thr);
+  QueThr *rollback_step(System &sys, QueThr *thr);
 
   // Data members (merged from TrxRollback)
   QueCommon m_common;      /*!< node type: QUE_NODE_ROLLBACK */
@@ -215,14 +215,14 @@ private:
    * @brief Finishes error processing after the necessary partial rollback has been done.
    * @param[in] trx Transaction
    */
-  static void finish_error_processing(Trx *trx);
+  static void finish_error_processing(System &sys, Trx *trx);
 
   /**
    * @brief Finishes a partial rollback operation.
    * @param[in] trx Transaction
    * @param[in,out] next_thr Next query thread to run
    */
-  static void finish_partial_rollback_off_kernel(Trx *trx, QueThr **next_thr) noexcept;
+  static void finish_partial_rollback_off_kernel(System &sys, Trx *trx, QueThr **next_thr) noexcept;
 };
 
 /** A savepoint set with SQL's "SAVEPOINT savepoint_id" command */
@@ -261,31 +261,31 @@ inline bool trx_is_recv(const Trx *trx) { return TrxRollback::is_recv_trx(trx); 
 inline TrxSavept trx_savept_take(Trx *trx) { return TrxRollback::savept_take(trx); }
 inline TrxUndoArr *trx_undo_arr_create(void) { return TrxRollback::undo_arr_create(); }
 inline void trx_undo_arr_free(TrxUndoArr *arr) { TrxRollback::undo_arr_free(arr); }
-inline void trx_roll_try_truncate(Trx *trx) { TrxRollback::try_truncate(trx); }
+inline void trx_roll_try_truncate(System &sys, Trx *trx) { TrxRollback::try_truncate(sys, trx); }
 
-inline TrxUndoRecord trx_roll_pop_top_rec_of_trx(Trx *trx, undo_no_t limit, roll_ptr_t *roll_ptr, MemHeap *heap) {
-  return TrxRollback::pop_top_rec_of_trx(trx, limit, roll_ptr, heap);
+inline TrxUndoRecord trx_roll_pop_top_rec_of_trx(System &sys, Trx *trx, undo_no_t limit, roll_ptr_t *roll_ptr, MemHeap *heap) {
+  return TrxRollback::pop_top_rec_of_trx(sys, trx, limit, roll_ptr, heap);
 }
 
 inline bool trx_undo_rec_reserve(Trx *trx, undo_no_t undo_no) { return TrxRollback::undo_rec_reserve(trx, undo_no); }
 inline void trx_undo_rec_release(Trx *trx, undo_no_t undo_no) { TrxRollback::undo_rec_release(trx, undo_no); }
-inline void trx_rollback(Trx *trx, TrxSig *sig, QueThr **next_thr) { TrxRollback::rollback(trx, sig, next_thr); }
-inline void trx_rollback_or_clean_recovered(bool all) { TrxRollback::rollback_or_clean_recovered(all); }
+inline void trx_rollback(System &sys, Trx *trx, TrxSig *sig, QueThr **next_thr) { TrxRollback::rollback(sys, trx, sig, next_thr); }
+inline void trx_rollback_or_clean_recovered(System &sys, bool all) { TrxRollback::rollback_or_clean_recovered(sys, all); }
 inline void *trx_rollback_or_clean_all_recovered(void *arg) { return TrxRollback::rollback_or_clean_all_recovered(arg); }
 
-inline void trx_finish_rollback_off_kernel(QueFork *graph, Trx *trx, QueThr **next_thr) {
-  TrxRollback::finish_rollback_off_kernel(graph, trx, next_thr);
+inline void trx_finish_rollback_off_kernel(System &sys, QueFork *graph, Trx *trx, QueThr **next_thr) {
+  TrxRollback::finish_rollback_off_kernel(sys, graph, trx, next_thr);
 }
 
-inline QueFork *trx_roll_graph_build(Trx *trx) { return TrxRollback::roll_graph_build(trx); }
+inline QueFork *trx_roll_graph_build(System &sys, Trx *trx) { return TrxRollback::roll_graph_build(sys, trx); }
 inline TrxRollback *roll_node_create(MemHeap *heap) { return new (mem_heap_alloc(heap, sizeof(TrxRollback))) TrxRollback(heap); }
-inline QueThr *trx_rollback_step(QueThr *thr) { 
+inline QueThr *trx_rollback_step(System &sys, QueThr *thr) { 
 
-  return static_cast<TrxRollback*>(thr->run_node)->rollback_step(thr); 
+  return static_cast<TrxRollback*>(thr->run_node)->rollback_step(sys, thr); 
 }
 
-inline DbErr trx_general_rollback(Trx *trx, bool partial, TrxSavept *savept) {
-  return TrxRollback::general_rollback(trx, partial, savept);
+inline DbErr trx_general_rollback(System &sys, Trx *trx, bool partial, TrxSavept *savept) {
+  return TrxRollback::general_rollback(sys, trx, partial, savept);
 }
 
 inline void trx_roll_savepoints_free(Trx *trx, TrxNamedSavept *savep) { TrxRollback::savepoints_free(trx, savep); }

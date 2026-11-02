@@ -42,7 +42,7 @@ Created 3/14/1997 Heikki Tuuri
  * undo log records to determine which records need to be purged.
  */
 struct RowPurge {
-  RowPurge() : m_pcur(sys.m_fsp, sys.m_btree) {}
+  RowPurge() = default;
 
   /**
    * @brief Repositions the persistent cursor to the clustered index record.
@@ -55,7 +55,7 @@ struct RowPurge {
    * @param mtr Mini-transaction for the operation
    * @return true if the record was found and cursor positioned, false otherwise
    */
-  bool reposition_pcur(ulint latch_mode, Mtr *mtr);
+  bool reposition_pcur(System &sys, ulint latch_mode, Mtr *mtr);
 
   /**
    * @brief Attempts to remove a clustered index record with specified mode.
@@ -68,7 +68,7 @@ struct RowPurge {
    * @param mode Deletion mode (BTR_MODIFY_LEAF or BTR_MODIFY_TREE)
    * @return true if successful or record already removed, false if operation failed
    */
-  bool remove_clust_if_poss_low(ulint mode);
+  bool remove_clust_if_poss_low(System &sys, ulint mode);
 
   /**
    * @brief Removes a clustered index record if possible.
@@ -77,7 +77,7 @@ struct RowPurge {
    * retries with pessimistic deletion (tree-level). Includes retry logic
    * for handling temporary failures due to file space constraints.
    */
-  void remove_clust_if_poss();
+  void remove_clust_if_poss(System &sys);
 
   /**
    * @brief Attempts to remove a secondary index record with specified mode.
@@ -103,7 +103,7 @@ struct RowPurge {
    * @param index Secondary index from which to remove the record
    * @param entry Index entry tuple representing the record to remove
    */
-  void remove_sec_if_poss(Index *index, DTuple *entry);
+  void remove_sec_if_poss(System &sys, Index *index, DTuple *entry);
 
   /**
    * @brief Purges records marked for deletion.
@@ -112,7 +112,7 @@ struct RowPurge {
    * secondary indexes and attempting to remove them, followed by removal
    * of the clustered index record.
    */
-  void del_mark();
+  void del_mark(System &sys);
 
   /**
    * @brief Purges records affected by updates or with external storage.
@@ -171,7 +171,7 @@ struct RowPurge {
    * @param thr Query execution thread
    * @return Query thread to run next
    */
-  static QueThr *step(QueThr *thr);
+  static QueThr *step(System &sys, QueThr *thr);
 
   /** node type: QUE_NODE_PURGE */
   QueCommon m_common;
@@ -245,4 +245,4 @@ RowPurge *row_purge_node_create(QueThr *parent, MemHeap *heap);
  * @param thr Query execution thread
  * @return Query thread to run next, or nullptr if no more work
  */
-QueThr *row_purge_step(QueThr *thr);
+QueThr *row_purge_step(System &sys, QueThr *thr);

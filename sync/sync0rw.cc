@@ -313,28 +313,13 @@ lock_loop:
 
   /* Spin waiting for the writer field to become free */
   while (i < SYNC_SPIN_ROUNDS && lock->m_lock_word <= 0) {
-    if (srv_spin_wait_delay) {
-      ut_delay(ut_rnd_interval(0, srv_spin_wait_delay));
-    }
+    ut_delay(ut_rnd_interval(0, SYNC_SPIN_WAIT_DELAY));
 
     i++;
   }
 
   if (i == SYNC_SPIN_ROUNDS) {
     os_thread_yield();
-  }
-
-  if (srv_print_latch_waits) {
-    ib_logger(
-      stderr,
-      "Thread %lu spin wait rw-s-lock at %p"
-      " cfile %s cline %lu rnds %lu\n",
-      (ulong)os_thread_pf(os_thread_get_curr_id()),
-      (void *)lock,
-      lock->m_cfile_name,
-      (ulong)lock->m_cline,
-      (ulong)i
-    );
   }
 
   /* We try once again to obtain the lock */
@@ -359,18 +344,6 @@ lock_loop:
     if (true == rw_lock_s_lock_low(lock, pass, file_name, line)) {
       sync_array_free_cell(sync_primary_wait_array, index);
       return; /* Success */
-    }
-
-    if (srv_print_latch_waits) {
-      ib_logger(
-        stderr,
-        "Thread %lu OS wait rw-s-lock at %p"
-        " cfile %s cline %lu\n",
-        os_thread_pf(os_thread_get_curr_id()),
-        (void *)lock,
-        lock->m_cfile_name,
-        (ulong)lock->m_cline
-      );
     }
 
     /* these stats may not be accurate */
@@ -410,9 +383,7 @@ inline void rw_lock_x_lock_wait(
   ut_ad(lock->m_lock_word <= 0);
 
   while (lock->m_lock_word < 0) {
-    if (srv_spin_wait_delay) {
-      ut_delay(ut_rnd_interval(0, srv_spin_wait_delay));
-    }
+    ut_delay(ut_rnd_interval(0, SYNC_SPIN_WAIT_DELAY));
 
     if (i < SYNC_SPIN_ROUNDS) {
       i++;
@@ -528,9 +499,7 @@ lock_loop:
 
     /* Spin waiting for the lock_word to become free */
     while (i < SYNC_SPIN_ROUNDS && lock->m_lock_word <= 0) {
-      if (srv_spin_wait_delay) {
-        ut_delay(ut_rnd_interval(0, srv_spin_wait_delay));
-      }
+      ut_delay(ut_rnd_interval(0, SYNC_SPIN_WAIT_DELAY));
 
       i++;
     }
@@ -543,19 +512,6 @@ lock_loop:
 
   rw_x_spin_round_count += i;
 
-  if (srv_print_latch_waits) {
-    ib_logger(
-      stderr,
-      "Thread %lu spin wait rw-x-lock at %p"
-      " cfile %s cline %lu rnds %lu\n",
-      os_thread_pf(os_thread_get_curr_id()),
-      (void *)lock,
-      lock->m_cfile_name,
-      (ulong)lock->m_cline,
-      (ulong)i
-    );
-  }
-
   sync_array_reserve_cell(sync_primary_wait_array, lock, RW_LOCK_EX, file_name, line, &index);
 
   /* Waiters must be set before checking lock_word, to ensure signal
@@ -565,18 +521,6 @@ lock_loop:
   if (rw_lock_x_lock_low(lock, pass, file_name, line)) {
     sync_array_free_cell(sync_primary_wait_array, index);
     return; /* Locking succeeded */
-  }
-
-  if (srv_print_latch_waits) {
-    ib_logger(
-      stderr,
-      "Thread %lu OS wait for rw-x-lock at %p"
-      " cfile %s cline %lu\n",
-      os_thread_pf(os_thread_get_curr_id()),
-      (void *)lock,
-      lock->m_cfile_name,
-      (ulong)lock->m_cline
-    );
   }
 
   /* these stats may not be accurate */

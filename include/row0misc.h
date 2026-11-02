@@ -44,4 +44,4 @@ enum DbErr ib_trx_lock_table_with_retry(
 
 /** Updates the table modification counter and calculates new estimates
 for table and index statistics if necessary. */
-void ib_update_statistics_if_needed(Table *table); /*!< in/out: table */
+void ib_update_statistics_if_needed(System &sys, Table *table); /*!< in/out: table */

@@ -104,7 +104,7 @@ void mlog_catenate_string(Mtr *mtr, const byte *str, ulint len);
  * @param mtr Mini-transaction handle.
  * @return New value of log_ptr.
  */
-byte *mlog_write_initial_log_record_fast(const byte *ptr, MlogType type, byte *log_ptr, Mtr *mtr);
+byte *mlog_write_initial_log_record_fast(System &sys, const byte *ptr, MlogType type, byte *log_ptr, Mtr *mtr);
 
 /**
  * @brief Parses an initial log record written by mlog_write_initial_log_record.
@@ -127,7 +127,7 @@ byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, MlogType *type, sp
  * @param page Page where to apply the log record, or nullptr.
  * @return Parsed record end, nullptr if not a complete record.
  */
-byte *mlog_parse_nbytes(MlogType type, byte *ptr, byte *end_ptr, byte *page);
+byte *mlog_parse_nbytes(System &sys, MlogType type, byte *ptr, byte *end_ptr, byte *page);
 
 /**
  * @brief Parses a log record written by mlog_write_string.
@@ -137,7 +137,7 @@ byte *mlog_parse_nbytes(MlogType type, byte *ptr, byte *end_ptr, byte *page);
  * @param page Page where to apply the log record, or nullptr.
  * @return Parsed record end, nullptr if not a complete record.
  */
-byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page);
+byte *mlog_parse_string(System &sys, byte *ptr, byte *end_ptr, byte *page);
 
 /**
  *  @brief Opens a buffer for mlog, writes the initial log record

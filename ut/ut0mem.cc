@@ -80,8 +80,8 @@ void ut_mem_var_init() {
   ut_mem_block_list_inited = false;
 }
 
-void ut_mem_init() {
-  ut_a(!srv_was_started);
+void ut_mem_init(System &sys) {
+  ut_a(!sys.m_srv->m_was_started);
 
   if (!ut_mem_block_list_inited) {
     UT_LIST_INIT(MemBlock::s_blocks);

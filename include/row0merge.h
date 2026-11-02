@@ -111,7 +111,7 @@ void row_merge_drop_temp_indexes(IbRecovery recovery);
  *
  * @return error code or DB_SUCCESS
  */
-DbErr row_merge_rename_tables(Table *old_table, Table *new_table, const char *tmp_name, Trx *trx);
+DbErr row_merge_rename_tables(System &sys, Table *old_table, Table *new_table, const char *tmp_name, Trx *trx);
 
 /**
  * Create a temporary table for creating a primary key, using the definition
@@ -124,7 +124,7 @@ DbErr row_merge_rename_tables(Table *old_table, Table *new_table, const char *tm
  *
  * @return table, or nullptr on error
  */
-Table *row_merge_create_temporary_table(const char *table_name, const MergeIndexDef *index_def, const Table *table, Trx *trx);
+Table *row_merge_create_temporary_table(System &sys, const char *table_name, const MergeIndexDef *index_def, const Table *table, Trx *trx);
 
 /**
  * Rename the temporary indexes in the dictionary to permanent ones. The
@@ -147,7 +147,7 @@ DbErr row_merge_rename_indexes(Trx *trx, Table *table);
  *
  * @return index, or nullptr on error
  */
-Index *row_merge_create_index(Trx *trx, Table *table, const MergeIndexDef *index_def);
+Index *row_merge_create_index(System &sys, Trx *trx, Table *table, const MergeIndexDef *index_def);
 
 /**
  * Check if a transaction can use an index.
@@ -168,7 +168,7 @@ bool row_merge_is_index_usable(const Trx *trx, const Index *index);
  *
  * @return DB_SUCCESS or error code
  */
-DbErr row_merge_drop_table(Trx *trx, Table *table);
+DbErr row_merge_drop_table(System &sys, Trx *trx, Table *table);
 
 /**
  * Build indexes on a table by reading a clustered index,

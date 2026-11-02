@@ -282,7 +282,7 @@ struct RowSel {
      *
      * @return DB_SUCCESS or error code
      */
-  [[nodiscard]] DbErr build_prev_vers(RowVers::Row &row) noexcept;
+  [[nodiscard]] DbErr build_prev_vers(System &sys, RowVers::Row &row) noexcept;
 
   /**
    * @brief Returns true if the user-defined column values in a secondary index record
@@ -396,8 +396,7 @@ struct Plan {
    * @param[in] fsp The file space.
    * @param[in] btree The B-tree.
    */
-  Plan(Fsp *fsp, Btree *btree, LockSys *lock_sys, RowSel *row_sel) noexcept
-      : m_pcur{fsp, btree}, m_clust_pcur{fsp, btree}, sys.m_lock_sys{lock_sys}, m_sel{row_sel} {}
+  Plan() = default;
 
   /**
    * Pops the column values for a prefetched, cached row from the column prefetch
@@ -432,7 +431,7 @@ struct Plan {
    * @param[in] search_latch_locked   true if the thread currently has the search latch locked in s-mode
    * @param[in] mtr mini-transaction
    */
-  void open_pcur(bool search_latch_locked, Mtr *mtr) noexcept;
+  void open_pcur(System &sys, bool search_latch_locked, Mtr *mtr) noexcept;
 
   /**
    * Restores a stored pcur position to a table index.
@@ -444,7 +443,7 @@ struct Plan {
    * descending cursor) without processing again the current cursor
    * record
    */
-  bool restore_pcur_pos(Mtr *mtr) noexcept;
+  bool restore_pcur_pos(System &sys, Mtr *mtr) noexcept;
 
   /**
    * Resets a plan cursor to a closed state.
@@ -481,7 +480,7 @@ struct Plan {
    *
    * @return SEL_FOUND, SEL_EXHAUSTED, SEL_RETRY
    */
-  [[nodiscard]] SearchStatus try_search_shortcut(SelNode *sel_node, Mtr *mtr) noexcept;
+  [[nodiscard]] SearchStatus try_search_shortcut(System &sys, SelNode *sel_node, Mtr *mtr) noexcept;
 
   /**
    * Closes cursor and free the old version heap.
@@ -502,7 +501,7 @@ struct Plan {
   Index *m_index{};
 
   /** persistent cursor used to search the index */
-  BtreePcursor m_pcur{srv_fsp, srv_btree_sys};
+  BtreePcursor m_pcur{sys.m_fsp, sys.m_btree};
 
   /** true if cursor traveling upwards */
   bool m_asc{};
@@ -571,15 +570,11 @@ struct Plan {
   DTuple *m_clust_ref{};
 
   /** if index is non-clustered, we use this pcur to search the clustered index */
-  BtreePcursor m_clust_pcur{srv_fsp, srv_btree_sys};
+  BtreePcursor m_clust_pcur{sys.m_fsp, sys.m_btree};
 
   /** memory heap used in building an old version of a row, or nullptr */
   MemHeap *m_old_row_heap{};
 
-  /** lock system */
-
-  /** row selector */
-  RowSel *m_sel{};
 };
 
 /** Select node states */

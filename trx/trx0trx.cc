@@ -191,7 +191,7 @@ bool Trx::start(ulint rseg_id) noexcept {
   return ret;
 }
 
-void Trx::commit_off_kernel() noexcept {
+void Trx::commit_off_kernel(System &sys) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   lsn_t lsn{};
@@ -214,7 +214,7 @@ void Trx::commit_off_kernel() noexcept {
     mutex_enter(&rseg->m_mutex);
 
     if (m_insert_undo != nullptr) {
-      srv_undo->set_state_at_finish(rseg, this, m_insert_undo, &mtr);
+      sys.m_undo->set_state_at_finish(rseg, this, m_insert_undo, &mtr);
     }
 
     auto undo = m_update_undo;
@@ -229,14 +229,14 @@ void Trx::commit_off_kernel() noexcept {
       because only a single OS thread is allowed to do the
       transaction commit for this transaction. */
 
-      auto update_hdr_page = srv_undo->set_state_at_finish(rseg, this, undo, &mtr);
+      auto update_hdr_page = sys.m_undo->set_state_at_finish(rseg, this, undo, &mtr);
 
       /* We have to do the cleanup for the update log while
       holding the rseg mutex because update log headers
       have to be put to the history list in the order of
       the trx number. */
 
-      srv_undo->update_cleanup(this, update_hdr_page, &mtr);
+      sys.m_undo->update_cleanup(this, update_hdr_page, &mtr);
     }
 
     mutex_exit(&rseg->m_mutex);
@@ -258,7 +258,7 @@ void Trx::commit_off_kernel() noexcept {
     a transaction T1, T2 will always get a bigger transaction
     number and a bigger commit lsn than T1. */
 
-    mtr.commit();
+    mtr.commit(sys);
 
     lsn = mtr.m_end_lsn;
 
@@ -298,10 +298,10 @@ void Trx::commit_off_kernel() noexcept {
 
   m_is_recovered = false;
 
-  srv_lock_sys->release_off_trx_sys_mutex(this);
+  sys.m_lock_sys->release_off_trx_sys_mutex(this);
 
   if (m_global_read_view != nullptr) {
-    srv_trx_sys->close_read_view(m_global_read_view);
+    sys.m_trx_sys->close_read_view(m_global_read_view);
     mem_heap_empty(m_global_read_view_heap);
     m_global_read_view = nullptr;
   }
@@ -313,7 +313,7 @@ void Trx::commit_off_kernel() noexcept {
     mutex_exit(&m_trx_sys->m_mutex);
 
     if (m_insert_undo != nullptr) {
-      srv_undo->insert_cleanup(this);
+      sys.m_undo->insert_cleanup(this);
     }
 
     /* NOTE that we could possibly make a group commit more
@@ -350,17 +350,17 @@ void Trx::commit_off_kernel() noexcept {
       m_must_flush_log_later = true;
     } else
 #endif /* WITH_XOPEN */
-      if (srv_config.m_flush_log_at_trx_commit == 0) {
+      if (sys.m_config.m_log.m_flush_at_trx_commit == 0) {
         /* Do nothing */
-      } else if (srv_config.m_flush_log_at_trx_commit == 1) {
-        if (srv_config.m_unix_file_flush_method == SRV_UNIX_NOSYNC) {
+      } else if (sys.m_config.m_log.m_flush_at_trx_commit == 1) {
+        if (sys.m_config.m_fil.m_flush_method == SRV_UNIX_NOSYNC) {
           /* Write the log but do not flush it to disk */
           log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
         } else {
           /* Write the log to the log files AND flush them to disk */
           log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
         }
-      } else if (srv_config.m_flush_log_at_trx_commit == 2) {
+      } else if (sys.m_config.m_log.m_flush_at_trx_commit == 2) {
         /* Write the log but do not flush it to disk */
         log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
       } else {
@@ -389,9 +389,9 @@ void Trx::commit_off_kernel() noexcept {
   m_trx_sys->m_trx_list.remove(this);
 }
 
-void Trx::cleanup_at_db_startup() noexcept {
+void Trx::cleanup_at_db_startup(System &sys) noexcept {
   if (m_insert_undo != nullptr) {
-    srv_undo->insert_cleanup(this);
+    sys.m_undo->insert_cleanup(this);
   }
 
   m_undo_no = 0;
@@ -402,7 +402,7 @@ void Trx::cleanup_at_db_startup() noexcept {
   m_trx_sys->m_trx_list.remove(this);
 }
 
-ReadView *Trx::assign_read_view() noexcept {
+ReadView *Trx::assign_read_view(System &sys) noexcept {
   ut_ad(m_conc_state == TRX_ACTIVE);
 
   if (m_read_view != nullptr) {
@@ -412,7 +412,7 @@ ReadView *Trx::assign_read_view() noexcept {
   mutex_enter(&m_trx_sys->m_mutex);
 
   if (m_read_view == nullptr) {
-    m_read_view = srv_trx_sys->open_read_view_now(m_id, m_global_read_view_heap);
+    m_read_view = sys.m_trx_sys->open_read_view_now(m_id, m_global_read_view_heap);
     m_global_read_view = m_read_view;
   }
 
@@ -421,12 +421,12 @@ ReadView *Trx::assign_read_view() noexcept {
   return m_read_view;
 }
 
-void Trx::handle_commit_sig_off_kernel(QueThr *&next_thr) noexcept {
+void Trx::handle_commit_sig_off_kernel(System &sys, QueThr *&next_thr) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   m_que_state = TRX_QUE_COMMITTING;
 
-  commit_off_kernel();
+  commit_off_kernel(sys);
 
   ut_ad(m_wait_thrs.empty());
 
@@ -439,7 +439,7 @@ void Trx::handle_commit_sig_off_kernel(QueThr *&next_thr) noexcept {
     auto next_sig = sig->next();
 
     if (sig->type == TRX_SIG_COMMIT) {
-      sig_reply(sig, next_thr);
+      sig_reply(sys, sig, next_thr);
       sig_remove(sig);
     }
 
@@ -536,7 +536,7 @@ bool Trx::sig_is_compatible(ulint type, ulint sender) noexcept {
   }
 }
 
-void Trx::sig_send(ulint type, ulint sender, QueThr *receiver_thr, TrxSavept *savept, QueThr *&next_thr) noexcept {
+void Trx::sig_send(System &sys, ulint type, ulint sender, QueThr *receiver_thr, TrxSavept *savept, QueThr *&next_thr) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   TrxSig *sig;
@@ -591,7 +591,7 @@ void Trx::sig_send(ulint type, ulint sender, QueThr *receiver_thr, TrxSavept *sa
 
   if (m_signals.front() == sig) {
 
-    sig_start_handling(next_thr);
+    sig_start_handling(sys, next_thr);
   }
 }
 
@@ -609,7 +609,7 @@ void Trx::end_signal_handling() noexcept {
   }
 }
 
-void Trx::sig_start_handling(QueThr *&next_thr) noexcept {
+void Trx::sig_start_handling(System &sys, QueThr *&next_thr) noexcept {
   for (;;) {
     /* We loop in this function body as long as there are queued signals
     we can process immediately */
@@ -667,7 +667,7 @@ void Trx::sig_start_handling(QueThr *&next_thr) noexcept {
 
     if (type == TRX_SIG_COMMIT) {
 
-      handle_commit_sig_off_kernel(next_thr);
+      handle_commit_sig_off_kernel(sys, next_thr);
 
     } else if (type == TRX_SIG_TOTAL_ROLLBACK || type == TRX_SIG_ROLLBACK_TO_SAVEPT) {
 
@@ -685,7 +685,7 @@ void Trx::sig_start_handling(QueThr *&next_thr) noexcept {
 
     } else if (type == TRX_SIG_BREAK_EXECUTION) {
 
-      sig_reply(sig, next_thr);
+      sig_reply(sys, sig, next_thr);
       sig_remove(sig);
 
     } else {
@@ -694,8 +694,8 @@ void Trx::sig_start_handling(QueThr *&next_thr) noexcept {
   }
 }
 
-void Trx::sig_reply(TrxSig *sig, QueThr *&next_thr) noexcept {
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+void Trx::sig_reply(System &sys, TrxSig *sig, QueThr *&next_thr) noexcept {
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
   if (sig->receiver != nullptr) {
     ut_ad(sig->receiver->state == QUE_THR_SIG_REPLY_WAIT);
@@ -735,7 +735,7 @@ CommitNode *Trx::commit_node_create(MemHeap *heap) noexcept {
   return node;
 }
 
-QueThr *Trx::commit_step(QueThr *thr) noexcept {
+QueThr *Trx::commit_step(System &sys, QueThr *thr) noexcept {
   auto node = static_cast<CommitNode *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_COMMIT);
@@ -745,7 +745,7 @@ QueThr *Trx::commit_step(QueThr *thr) noexcept {
   }
 
   if (node->state == COMMIT_NODE_SEND) {
-    mutex_enter(&srv_trx_sys->m_mutex);
+    mutex_enter(&sys.m_trx_sys->m_mutex);
 
     auto trx = thr_get_trx(thr);
 
@@ -757,7 +757,7 @@ QueThr *Trx::commit_step(QueThr *thr) noexcept {
 
     /* Send the commit signal to the transaction */
 
-    trx->sig_send(TRX_SIG_COMMIT, TRX_SIG_SELF, thr, nullptr, next_thr);
+    trx->sig_send(sys, TRX_SIG_COMMIT, TRX_SIG_SELF, thr, nullptr, next_thr);
 
     mutex_exit(&trx->m_trx_sys->m_mutex);
 
@@ -773,7 +773,7 @@ QueThr *Trx::commit_step(QueThr *thr) noexcept {
   return thr;
 }
 
-DbErr Trx::commit() noexcept {
+DbErr Trx::commit(System &sys) noexcept {
   /* Because we do not do the commit by sending an Innobase
   sig to the transaction, we must here make sure that trx has been
   started. */
@@ -782,7 +782,7 @@ DbErr Trx::commit() noexcept {
 
   mutex_enter(&m_trx_sys->m_mutex);
 
-  commit_off_kernel();
+  commit_off_kernel(sys);
 
   mutex_exit(&m_trx_sys->m_mutex);
 
@@ -896,7 +896,7 @@ int Trx::weight_cmp(const Trx *lhs, const Trx *rhs) noexcept {
   return lhs->weight() - rhs->weight();
 }
 
-void Trx::prepare_for_commit() noexcept {
+void Trx::prepare_for_commit(System &sys) noexcept {
   ut_ad(mutex_own(&m_trx_sys->m_mutex));
 
   lsn_t lsn{};
@@ -922,17 +922,17 @@ void Trx::prepare_for_commit() noexcept {
       because only a single OS thread is allowed to do the
       transaction prepare for this transaction. */
 
-      srv_undo->set_state_at_prepare(this, m_insert_undo, &mtr);
+      sys.m_undo->set_state_at_prepare(this, m_insert_undo, &mtr);
     }
 
     if (m_update_undo != nullptr) {
-      srv_undo->set_state_at_prepare(this, m_update_undo, &mtr);
+      sys.m_undo->set_state_at_prepare(this, m_update_undo, &mtr);
     }
 
     mutex_exit(&rseg->m_mutex);
 
     /* This mtr commit makes the transaction prepared in the file-based world */
-    mtr.commit();
+    mtr.commit(sys);
 
     lsn = mtr.m_end_lsn;
 
@@ -962,17 +962,17 @@ void Trx::prepare_for_commit() noexcept {
 
     auto log = m_trx_sys->m_fsp->m_log;
 
-    if (srv_config.m_flush_log_at_trx_commit == 0) {
+    if (sys.m_config.m_log.m_flush_at_trx_commit == 0) {
       /* Do nothing */
-    } else if (srv_config.m_flush_log_at_trx_commit == 1) {
-      if (srv_config.m_unix_file_flush_method == SRV_UNIX_NOSYNC) {
+    } else if (sys.m_config.m_log.m_flush_at_trx_commit == 1) {
+      if (sys.m_config.m_fil.m_flush_method == SRV_UNIX_NOSYNC) {
         /* Write the log but do not flush it to disk */
         log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
       } else {
         /* Write the log to the log files AND flush them to disk */
         log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
       }
-    } else if (srv_config.m_flush_log_at_trx_commit == 2) {
+    } else if (sys.m_config.m_log.m_flush_at_trx_commit == 2) {
       /* Write the log but do not flush it to disk */
       log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
     } else {
@@ -983,7 +983,7 @@ void Trx::prepare_for_commit() noexcept {
   }
 }
 
-ulint Trx::prepare() noexcept {
+ulint Trx::prepare(System &sys) noexcept {
   /* Because we do not do the prepare by sending an Innobase
   sig to the transaction, we must here make sure that trx has been
   started. */
@@ -992,7 +992,7 @@ ulint Trx::prepare() noexcept {
 
   mutex_enter(&m_trx_sys->m_mutex);
 
-  prepare_for_commit();
+  prepare_for_commit(sys);
 
   mutex_exit(&m_trx_sys->m_mutex);
 
@@ -1002,7 +1002,7 @@ ulint Trx::prepare() noexcept {
 }
 
 #ifdef WITH_XOPEN
-ulint Trx::commit_flush_log() noexcept {
+ulint Trx::commit_flush_log(System &sys) noexcept {
   const auto lsn = m_commit_lsn;
   auto log = m_trx_sys->m_fsp->m_log;
 
@@ -1010,17 +1010,17 @@ ulint Trx::commit_flush_log() noexcept {
 
   if (!m_must_flush_log_later) {
     /* Do nothing */
-  } else if (srv_config.m_flush_log_at_trx_commit == 0) {
+  } else if (sys.m_config.m_log.m_flush_at_trx_commit == 0) {
     /* Do nothing */
-  } else if (srv_config.m_flush_log_at_trx_commit == 1) {
-    if (srv_config.m_unix_file_flush_method == SRV_UNIX_NOSYNC) {
+  } else if (sys.m_config.m_log.m_flush_at_trx_commit == 1) {
+    if (sys.m_config.m_fil.m_flush_method == SRV_UNIX_NOSYNC) {
       /* Write the log but do not flush it to disk */
       log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
     } else {
       /* Write the log to the log files AND flush them to disk */
       log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
     }
-  } else if (srv_config.m_flush_log_at_trx_commit == 2) {
+  } else if (sys.m_config.m_log.m_flush_at_trx_commit == 2) {
     /* Write the log but do not flush it to disk */
     log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
   } else {

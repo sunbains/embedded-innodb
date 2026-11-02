@@ -38,13 +38,13 @@ Created 11/26/1995 Heikki Tuuri
  * @param[in,out] mtr           Release slot in this mtr.
  * @param[in] slot              Slot to release.
  * */
-inline void mtr_memo_slot_release(Mtr *mtr, MtrMemoSlot *slot) noexcept {
+inline void mtr_memo_slot_release(System &sys, Mtr *mtr, MtrMemoSlot *slot) noexcept {
   auto object = slot->m_object;
   auto type = slot->m_type;
 
   if (likely(object != nullptr)) {
     if (type <= MTR_MEMO_BUF_FIX) {
-      srv_buf_pool->release(static_cast<BufBlock *>(object), type, mtr);
+      sys.m_buf_pool->release(static_cast<BufBlock *>(object), type, mtr);
     } else if (type == MTR_MEMO_S_LOCK) {
       rw_lock_s_unlock(static_cast<RwLock *>(object));
 #ifndef UNIV_DEBUG
@@ -137,7 +137,7 @@ static void mtr_log_reserve_and_write(Mtr *mtr, Log *log, ulint recovery) noexce
   mtr->m_end_lsn = log->close(IbRecovery(recovery));
 }
 
-void Mtr::commit() noexcept {
+void Mtr::commit(System &sys) noexcept {
   ut_ad(is_active());
   ut_ad(m_magic_n == MTR_MAGIC_N);
 
@@ -146,7 +146,7 @@ void Mtr::commit() noexcept {
   const auto write_log = m_modifications > 0 && m_n_log_recs > 0;
 
   if (write_log) {
-    mtr_log_reserve_and_write(this, log_sys, srv_config.m_force_recovery);
+    mtr_log_reserve_and_write(this, sys.m_log, sys.m_config.m_recv.m_force_recovery);
   }
 
   /* We first update the modification info to buffer pages, and only
@@ -160,7 +160,7 @@ void Mtr::commit() noexcept {
   mtr_memo_pop_all(this);
 
   if (write_log) {
-    log_sys->release();
+    sys.m_log->release();
   }
 
   m_state = MTR_COMMITTED;
@@ -203,9 +203,9 @@ void Mtr::memo_release(void *object, ulint type) noexcept {
   }
 }
 
-ulint Mtr::read_ulint(const byte *ptr, ulint type) const noexcept {
+ulint Mtr::read_ulint(System &sys, const byte *ptr, ulint type) const noexcept {
   ut_ad(is_active());
-  ut_ad(memo_contains_page(ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(memo_contains_page(sys, ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(sys, ptr, MTR_MEMO_PAGE_X_FIX));
   if (type == MLOG_1BYTE) {
     return mach_read_from_1(ptr);
   } else if (type == MLOG_2BYTES) {
@@ -216,15 +216,15 @@ ulint Mtr::read_ulint(const byte *ptr, ulint type) const noexcept {
   }
 }
 
-uint64_t Mtr::read_uint64(const byte *ptr) const noexcept {
+uint64_t Mtr::read_uint64(System &sys, const byte *ptr) const noexcept {
   ut_ad(is_active());
-  ut_ad(memo_contains_page(ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(memo_contains_page(sys, ptr, MTR_MEMO_PAGE_S_FIX) || memo_contains_page(sys, ptr, MTR_MEMO_PAGE_X_FIX));
   return mach_read_from_8(ptr);
 }
 
 #ifdef UNIV_DEBUG
-bool Mtr::memo_contains_page(const byte *ptr, ulint type) const noexcept {
-  return memo_contains(srv_buf_pool->block_align(ptr), type);
+bool Mtr::memo_contains_page(System &sys, const byte *ptr, ulint type) const noexcept {
+  return memo_contains(sys.m_buf_pool->block_align(ptr), type);
 }
 
 std::string Mtr::to_string() const noexcept {

@@ -227,20 +227,20 @@ void Blob::blob_free(System &sys, BufBlock *block, Mtr *mtr) noexcept {
 
   ut_ad(mtr->memo_contains(block, MTR_MEMO_PAGE_X_FIX));
 
-  mtr->commit();
+  mtr->commit(sys);
 
-  mutex_enter(&sys.m_fsp->m_buf_pool->m_mutex);
+  mutex_enter(&sys.m_buf_pool->m_mutex);
   mutex_enter(&block->m_mutex);
 
   /* Only free the block if it is still allocated to the same file page. */
 
   if (block->get_state() == BUF_BLOCK_FILE_PAGE && block->get_space() == space && block->get_page_no() == page_no) {
 
-    auto block_status = sys.m_fsp->m_buf_pool->m_LRU->free_block(&block->m_page, nullptr);
+    auto block_status = sys.m_buf_pool->m_LRU->free_block(&block->m_page, nullptr);
     ut_a(block_status == BufLru::BlockStatus::FREED);
   }
 
-  mutex_exit(&sys.m_fsp->m_buf_pool->m_mutex);
+  mutex_exit(&sys.m_buf_pool->m_mutex);
   mutex_exit(&block->m_mutex);
 }
 
@@ -258,7 +258,7 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
   const auto space_id = rec_block->get_space();
   const auto rec_page_no = rec_block->get_page_no();
 
-  ut_a(sys.m_fsp->m_fil->page_get_type(rec.page_align()) == FIL_PAGE_TYPE_INDEX);
+  ut_a(sys.m_fil->page_get_type(rec.page_align()) == FIL_PAGE_TYPE_INDEX);
 
   /* We have to create a file segment to the tablespace
   for each field and put the pointer to the field in rec */
@@ -304,7 +304,7 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
 
       if (unlikely(block == nullptr)) {
 
-        mtr.commit();
+        mtr.commit(sys);
 
         return DB_OUT_OF_FILE_SPACE;
       }
@@ -323,7 +323,7 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
           .m_mtr = &mtr
         };
 
-        auto prev_block = sys.m_fsp->m_buf_pool->get(req, nullptr);
+        auto prev_block = sys.m_buf_pool->get(req, nullptr);
 
         buf_block_dbg_add_level(IF_SYNC_DEBUG(prev_block, SYNC_EXTERN_STORAGE));
 
@@ -364,7 +364,7 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
         .m_mtr = &mtr
       };
 
-      rec_block = sys.m_fsp->m_buf_pool->get(req, nullptr);
+      rec_block = sys.m_buf_pool->get(req, nullptr);
 
       buf_block_dbg_add_level(IF_SYNC_DEBUG(rec_block, SYNC_NO_ORDER_CHECK));
 
@@ -382,7 +382,7 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
 
       prev_page_no = page_no;
 
-      mtr.commit();
+      mtr.commit(sys);
 
       if (extern_len == 0) {
         break;
@@ -394,13 +394,13 @@ DbErr Blob::store_big_rec_extern_fields(System &sys,
 }
 
 void Blob::check_blob_fil_page_type(System &sys, space_id_t space_id, page_no_t page_no, const page_t *page, bool read) noexcept {
-  auto type = sys.m_fsp->m_fil->page_get_type(page);
+  auto type = sys.m_fil->page_get_type(page);
 
   ut_a(space_id == page_get_space_id(page));
   ut_a(page_no == page_get_page_no(page));
 
   if (unlikely(type != FIL_PAGE_TYPE_BLOB)) {
-    ulint flags = sys.m_fsp->m_fil->space_get_flags(space_id);
+    ulint flags = sys.m_fil->space_get_flags(space_id);
 
     if (likely((flags & DICT_TF_FORMAT_MASK) == DICT_TF_FORMAT_51)) {
       /* Old versions of InnoDB did not initialize
@@ -423,7 +423,7 @@ void Blob::free_externally_stored_field(System &sys,
 
 #ifdef UNIV_DEBUG
   ut_ad(local_mtr->memo_contains(index->get_lock(), MTR_MEMO_X_LOCK));
-  ut_ad(local_mtr->memo_contains_page(field_ref, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(local_mtr->memo_contains_page(sys, field_ref, MTR_MEMO_PAGE_X_FIX));
   ut_ad(!rec || rec.offs_validate(index, offsets));
 
   if (!rec.is_null()) {
@@ -476,7 +476,7 @@ void Blob::free_externally_stored_field(System &sys,
     };
 
     IF_SYNC_DEBUG({
-      auto rec_block = sys.m_fsp->m_buf_pool->get(req, nullptr);
+      auto rec_block = sys.m_buf_pool->get(req, nullptr);
       buf_block_dbg_add_level(rec_block, SYNC_NO_ORDER_CHECK)
     });
 
@@ -491,7 +491,7 @@ void Blob::free_externally_stored_field(System &sys,
             (mach_read_from_1(field_ref + BTR_EXTERN_LEN) & BTR_EXTERN_INHERITED_FLAG))) {
 
       /* Do not free */
-      mtr.commit();
+      mtr.commit(sys);
 
       return;
     }
@@ -500,13 +500,13 @@ void Blob::free_externally_stored_field(System &sys,
     req.m_page_id.m_page_no = page_no;
     req.m_line = __LINE__;
 
-    auto ext_block = sys.m_fsp->m_buf_pool->get(req, nullptr);
+    auto ext_block = sys.m_buf_pool->get(req, nullptr);
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(ext_block, SYNC_EXTERN_STORAGE));
 
     auto page = ext_block->get_frame();
 
-    check_blob_fil_page_type(space_id, page_no, page, false);
+    check_blob_fil_page_type(sys, space_id, page_no, page, false);
 
     auto next_page_no = mach_read_from_4(page + FIL_PAGE_DATA + BTR_BLOB_HDR_NEXT_PAGE_NO);
 
@@ -525,13 +525,13 @@ void Blob::free_externally_stored_field(System &sys,
     mlog_write_ulint(field_ref + BTR_EXTERN_LEN + 4, 0, MLOG_4BYTES, &mtr);
 
     /* Commit mtr and release the BLOB block to save memory. */
-    blob_free(ext_block, &mtr);
+    blob_free(sys, ext_block, &mtr);
   }
 }
 
-void Blob::free_externally_stored_fields(Index *index, Rec rec, const RecOffs &offsets, TrxRbCtx rb_ctx, Mtr *mtr) noexcept {
+void Blob::free_externally_stored_fields(System &sys, Index *index, Rec rec, const RecOffs &offsets, TrxRbCtx rb_ctx, Mtr *mtr) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
-  ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(sys, rec, MTR_MEMO_PAGE_X_FIX));
   /* Free possible externally stored fields in the record */
 
   const auto n_fields = offsets.n_fields();
@@ -543,16 +543,16 @@ void Blob::free_externally_stored_fields(Index *index, Rec rec, const RecOffs &o
 
       ut_a(len >= BTR_EXTERN_FIELD_REF_SIZE);
 
-      free_externally_stored_field(index, data + len - BTR_EXTERN_FIELD_REF_SIZE, rec, offsets, i, rb_ctx, mtr);
+      free_externally_stored_field(sys, index, data + len - BTR_EXTERN_FIELD_REF_SIZE, rec, offsets, i, rb_ctx, mtr);
     }
   }
 }
 
-void Blob::free_updated_extern_fields(
+void Blob::free_updated_extern_fields(System &sys, 
   const Index *index, Rec rec, const RecOffs &offsets, const Upd *update, TrxRbCtx rb_ctx, Mtr *mtr
 ) noexcept {
   ut_ad(rec.offs_validate(index, offsets));
-  ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(mtr->memo_contains_page(sys, rec, MTR_MEMO_PAGE_X_FIX));
 
   /* Free possible externally stored fields in the record */
 
@@ -566,7 +566,7 @@ void Blob::free_updated_extern_fields(
       auto data = (byte *)rec.get_nth_field(offsets, ufield->m_field_no, &len).get();
       ut_a(len >= BTR_EXTERN_FIELD_REF_SIZE);
 
-      free_externally_stored_field(index, data + len - BTR_EXTERN_FIELD_REF_SIZE, rec, offsets, ufield->m_field_no, rb_ctx, mtr);
+      free_externally_stored_field(sys, index, data + len - BTR_EXTERN_FIELD_REF_SIZE, rec, offsets, ufield->m_field_no, rb_ctx, mtr);
     }
   }
 }
@@ -588,12 +588,12 @@ ulint Blob::copy_blob_prefix(System &sys, byte *buf, ulint len, space_id_t space
       .m_mtr = &mtr
     };
 
-    auto block = sys.m_fsp->m_buf_pool->get(req, nullptr);
+    auto block = sys.m_buf_pool->get(req, nullptr);
     const auto page = block->get_frame();
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_EXTERN_STORAGE));
 
-    check_blob_fil_page_type(space_id, page_no, page, true);
+    check_blob_fil_page_type(sys, space_id, page_no, page, true);
 
     const auto blob_header = page + offset;
     auto part_len = blob_get_part_len(blob_header);
@@ -604,7 +604,7 @@ ulint Blob::copy_blob_prefix(System &sys, byte *buf, ulint len, space_id_t space
 
     page_no = blob_get_next_page_no(blob_header);
 
-    mtr.commit();
+    mtr.commit(sys);
 
     if (page_no == FIL_NULL || copy_len != part_len) {
       return copied_len;
@@ -619,17 +619,17 @@ ulint Blob::copy_blob_prefix(System &sys, byte *buf, ulint len, space_id_t space
   }
 }
 
-ulint Blob::copy_externally_stored_field_prefix_low(
+ulint Blob::copy_externally_stored_field_prefix_low(System &sys, 
   byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset
 ) noexcept {
   if (unlikely(len == 0)) {
     return 0;
   }
 
-  return copy_blob_prefix(buf, len, space_id, page_no, offset);
+  return copy_blob_prefix(sys, buf, len, space_id, page_no, offset);
 }
 
-ulint Blob::copy_externally_stored_field_prefix(byte *buf, ulint len, const byte *data, ulint local_len) noexcept {
+ulint Blob::copy_externally_stored_field_prefix(System &sys, byte *buf, ulint len, const byte *data, ulint local_len) noexcept {
   ut_a(local_len >= BTR_EXTERN_FIELD_REF_SIZE);
 
   local_len -= BTR_EXTERN_FIELD_REF_SIZE;
@@ -656,11 +656,11 @@ ulint Blob::copy_externally_stored_field_prefix(byte *buf, ulint len, const byte
     const page_no_t page_no = mach_read_from_4(data + BTR_EXTERN_PAGE_NO);
     const ulint offset = mach_read_from_4(data + BTR_EXTERN_OFFSET);
 
-    return local_len + copy_externally_stored_field_prefix_low(buf + local_len, len - local_len, space_id, page_no, offset);
+    return local_len + copy_externally_stored_field_prefix_low(sys, buf + local_len, len - local_len, space_id, page_no, offset);
   }
 }
 
-byte *Blob::copy_externally_stored_field(ulint *len, const byte *data, ulint local_len, MemHeap *heap) noexcept {
+byte *Blob::copy_externally_stored_field(System &sys, ulint *len, const byte *data, ulint local_len, MemHeap *heap) noexcept {
   ut_a(local_len >= BTR_EXTERN_FIELD_REF_SIZE);
 
   local_len -= BTR_EXTERN_FIELD_REF_SIZE;
@@ -678,12 +678,12 @@ byte *Blob::copy_externally_stored_field(ulint *len, const byte *data, ulint loc
 
   memcpy(buf, data, local_len);
 
-  *len = local_len + copy_externally_stored_field_prefix_low(buf + local_len, extern_len, space_id, page_no, offset);
+  *len = local_len + copy_externally_stored_field_prefix_low(sys, buf + local_len, extern_len, space_id, page_no, offset);
 
   return buf;
 }
 
-byte *Blob::copy_externally_stored_field(const Rec rec, const RecOffs &offsets, ulint no, ulint *len, MemHeap *heap) noexcept {
+byte *Blob::copy_externally_stored_field(System &sys, const Rec rec, const RecOffs &offsets, ulint no, ulint *len, MemHeap *heap) noexcept {
   ut_a(offsets.nth_extern(no));
 
   /* An externally stored field can contain some initial
@@ -699,5 +699,5 @@ byte *Blob::copy_externally_stored_field(const Rec rec, const RecOffs &offsets, 
 
   auto data = static_cast<const byte *>(rec.get_nth_field(offsets, no, &local_len).get());
 
-  return copy_externally_stored_field(len, data, local_len, heap);
+  return copy_externally_stored_field(sys, len, data, local_len, heap);
 }

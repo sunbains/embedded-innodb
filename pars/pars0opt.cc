@@ -981,7 +981,7 @@ static void opt_clust_access(SelNode *sel_node, ulint n) {
   }
 }
 
-void opt_search_plan(SelNode *sel_node) {
+void opt_search_plan(System &sys, SelNode *sel_node) {
   OrderNode *order_by;
 
   auto ptr = mem_heap_alloc(pars_sym_tab_global->heap,
@@ -990,7 +990,7 @@ void opt_search_plan(SelNode *sel_node) {
 
   for (ulint i{}; i < sel_node->m_n_tables; ++i) {
     new (&sel_node->m_plans[i])
-        Plan(srv_fsp, srv_btree_sys, srv_lock_sys, srv_row_sel);
+        Plan(sys.m_fsp, sys.m_btree, sys.m_lock_sys, sys.m_row_sel);
   }
 
   /* Analyze the search condition to find out what we know at each

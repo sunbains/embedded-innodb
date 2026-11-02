@@ -75,7 +75,7 @@ bool RowSel::sec_rec_is_for_blob(
   Blob blob(fsp, btree);
   std::array<byte, DICT_MAX_INDEX_COL_LEN> buf{};
 
-  auto len = blob.copy_externally_stored_field_prefix(buf.data(), buf.size(), clust_field, clust_len);
+  auto len = blob.copy_externally_stored_field_prefix(m_sys, buf.data(), buf.size(), clust_field, clust_len);
 
   if (unlikely(len == 0)) {
     /* The BLOB was being deleted as the server crashed.
@@ -266,7 +266,7 @@ void RowSel::fetch_columns(Index *index, const Rec rec, const ulint *offsets, Sy
         /* Copy an externally stored field to the temporary heap */
         heap = mem_heap_create(1);
 
-        data = blob.copy_externally_stored_field(rec, offsets, field_no, &len, heap);
+        data = blob.copy_externally_stored_field(m_sys, rec, offsets, field_no, &len, heap);
 
         ut_a(len != UNIV_SQL_NULL);
 
@@ -435,14 +435,14 @@ inline bool Plan::test_other_conds() noexcept {
   return true;
 }
 
-[[nodiscard]] DbErr RowSel::build_prev_vers(RowVers::Row &row) noexcept {
+[[nodiscard]] DbErr RowSel::build_prev_vers(System &sys, RowVers::Row &row) noexcept {
   if (row.m_old_row_heap != nullptr) {
     mem_heap_empty(row.m_old_row_heap);
   } else {
     row.m_old_row_heap = mem_heap_create(512);
   }
 
-  return srv_row_vers->build_for_consistent_read(row);
+  return sys.m_row_vers->build_for_consistent_read(row);
 }
 
 DbErr Plan::get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr *thr, Rec &out_rec, Mtr *mtr) noexcept {
@@ -473,7 +473,7 @@ DbErr Plan::get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr 
 
   auto index = m_table->get_clustered_index();
 
-  m_clust_pcur.open_with_no_init(index, m_clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Current_location());
+  m_clust_pcur.open_with_no_init(sys, index, m_clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Current_location());
 
   Rec clust_rec = m_clust_pcur.get_rec();
 
@@ -533,7 +533,7 @@ DbErr Plan::get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr 
         .m_old_rec = old_vers
       };
 
-      const auto err = m_sel->build_prev_vers(row);
+      const auto err = sys.m_row_sel->build_prev_vers(sys, row);
 
       if (unlikely(err != DB_SUCCESS)) {
 
@@ -554,7 +554,7 @@ DbErr Plan::get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr 
     the secondary index value is in some interval would return a wrong result if we would not drop rows which we come to
     visit through secondary index records that would not really exist in our snapshot. */
 
-    if ((!old_vers.is_null() || rec.get_deleted_flag()) && !m_sel->sec_rec_is_for_clust_rec(rec, m_index, clust_rec, index)) {
+    if ((!old_vers.is_null() || rec.get_deleted_flag()) && !sys.m_row_sel->sec_rec_is_for_clust_rec(rec, m_index, clust_rec, index)) {
       return func_exit(DB_SUCCESS);
     }
   }
@@ -562,7 +562,7 @@ DbErr Plan::get_clust_rec(System &sys, SelNode *sel_node, const Rec rec, QueThr 
   /* Fetch the columns needed in test conditions.  The clustered index record is protected by a page latch that was acquired
   when plan->clust_pcur was positioned.  The latch will not be released until mtr_commit(mtr). */
 
-  m_sel->fetch_columns(index, clust_rec, offsets, m_columns.front());
+  sys.m_row_sel->fetch_columns(index, clust_rec, offsets, m_columns.front());
 
   out_rec = clust_rec;
 
@@ -588,7 +588,7 @@ inline DbErr RowSel::set_rec_lock(
   }
 }
 
-void Plan::open_pcur(bool search_latch_locked, Mtr *mtr) noexcept {
+void Plan::open_pcur(System &sys, bool search_latch_locked, Mtr *mtr) noexcept {
   ulint has_search_latch{}; /* RW_S_LATCH or 0 */
 
   if (search_latch_locked) {
@@ -621,11 +621,11 @@ void Plan::open_pcur(bool search_latch_locked, Mtr *mtr) noexcept {
 
     /* Open pcur to the index */
 
-    m_pcur.open_with_no_init(m_index, m_tuple, m_mode, BTR_SEARCH_LEAF, has_search_latch, mtr, Current_location());
+    m_pcur.open_with_no_init(sys, m_index, m_tuple, m_mode, BTR_SEARCH_LEAF, has_search_latch, mtr, Current_location());
 
   } else {
     /* Open the cursor to the start or the end of the index (false: no init) */
-    m_pcur.open_at_index_side(m_asc, m_index, BTR_SEARCH_LEAF, false, 0, mtr);
+    m_pcur.open_at_index_side(sys, m_asc, m_index, BTR_SEARCH_LEAF, false, 0, mtr);
   }
 
   ut_ad(!m_cursor_at_end);
@@ -635,11 +635,11 @@ void Plan::open_pcur(bool search_latch_locked, Mtr *mtr) noexcept {
   m_pcur_is_open = true;
 }
 
-bool Plan::restore_pcur_pos(Mtr *mtr) noexcept {
+bool Plan::restore_pcur_pos(System &sys, Mtr *mtr) noexcept {
   ut_ad(!m_cursor_at_end);
 
   auto relative_position = m_pcur.get_rel_pos();
-  auto equal_position = m_pcur.restore_position(BTR_SEARCH_LEAF, mtr, Current_location());
+  auto equal_position = m_pcur.restore_position(sys, BTR_SEARCH_LEAF, mtr, Current_location());
 
   /* If the cursor is traveling upwards, and relative_position is
 
@@ -699,7 +699,7 @@ bool Plan::restore_pcur_pos(Mtr *mtr) noexcept {
   return true;
 }
 
-SearchStatus Plan::try_search_shortcut(SelNode *sel_node, Mtr *mtr) noexcept {
+SearchStatus Plan::try_search_shortcut(System &sys, SelNode *sel_node, Mtr *mtr) noexcept {
   MemHeap *heap{};
   std::array<ulint, REC_OFFS_NORMAL_SIZE> rec_offsets{};
 
@@ -717,7 +717,7 @@ SearchStatus Plan::try_search_shortcut(SelNode *sel_node, Mtr *mtr) noexcept {
     return status;
   };
 
-  open_pcur(true, mtr);
+  open_pcur(sys, true, mtr);
 
   auto rec = m_pcur.get_rec();
 
@@ -748,7 +748,7 @@ SearchStatus Plan::try_search_shortcut(SelNode *sel_node, Mtr *mtr) noexcept {
     offsets = record.get_all_col_offsets(rec_offsets.data(), &heap, Current_location());
   }
 
-  auto lock_sys = m_sel->m_lock_sys;
+  auto lock_sys = sys.m_lock_sys;
 
   if (m_index->is_clustered()) {
     if (!lock_sys->clust_rec_cons_read_sees(rec, m_index, offsets, sel_node->m_read_view)) {
@@ -768,7 +768,7 @@ SearchStatus Plan::try_search_shortcut(SelNode *sel_node, Mtr *mtr) noexcept {
   plan->pcur was positioned.  The latch will not be released
   until mtr_commit(mtr). */
 
-  m_sel->fetch_columns(m_index, rec, offsets, m_columns.front());
+  sys.m_row_sel->fetch_columns(m_index, rec, offsets, m_columns.front());
 
   /* Test the rest of search conditions */
 
@@ -852,7 +852,7 @@ table_loop:
 
   if (consistent_read && plan->m_unique_search && !plan->m_pcur_is_open && !plan->m_must_get_clust && !plan->m_table->m_big_rows) {
 
-    const auto found_flag = plan->try_search_shortcut(sel_node, &mtr);
+    const auto found_flag = plan->try_search_shortcut(m_sys, sel_node, &mtr);
 
     if (found_flag == SearchStatus::FOUND) {
 
@@ -867,7 +867,7 @@ table_loop:
 
     plan->reset_cursor();
 
-    mtr.commit();
+    mtr.commit(m_sys);
 
     mtr.start();
   }
@@ -876,7 +876,7 @@ table_loop:
     /* Evaluate the expressions to build the search tuple and
     open the cursor */
 
-    plan->open_pcur(search_latch_locked, &mtr);
+    plan->open_pcur(m_sys, search_latch_locked, &mtr);
 
     cursor_just_opened = true;
 
@@ -886,7 +886,7 @@ table_loop:
   } else {
     /* Restore pcur position to the index */
 
-    const auto must_go_to_next = plan->restore_pcur_pos(&mtr);
+    const auto must_go_to_next = plan->restore_pcur_pos(m_sys, &mtr);
 
     cursor_just_opened = false;
 
@@ -1096,7 +1096,7 @@ skip_lock:
           .m_old_rec = old_vers
         };
 
-        err = build_prev_vers(row);
+        err = build_prev_vers(m_sys, row);
 
         if (err != DB_SUCCESS) {
 
@@ -1172,7 +1172,7 @@ skip_lock:
 
     /* It was a non-clustered index and we must fetch also the clustered index record */
 
-    err = plan->get_clust_rec(sel_node, rec, thr, clust_rec, &mtr);
+    err = plan->get_clust_rec(m_sys, sel_node, rec, thr, clust_rec, &mtr);
 
     mtr_has_extra_clust_latch = true;
 
@@ -1259,7 +1259,7 @@ next_rec:
   if (sel_node->m_asc) {
     moved = plan->m_pcur.move_to_next(&mtr);
   } else {
-    moved = plan->m_pcur.move_to_prev(&mtr);
+    moved = plan->m_pcur.move_to_prev(m_sys, &mtr);
   }
 
   if (!moved) {
@@ -1291,7 +1291,7 @@ next_table:
     plan->m_pcur.store_position(&mtr);
   }
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   mtr_has_extra_clust_latch = false;
 
@@ -1333,7 +1333,7 @@ table_exhausted:
 
   plan->m_cursor_at_end = true;
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   mtr_has_extra_clust_latch = false;
 
@@ -1385,7 +1385,7 @@ stop_for_a_while:
   plan->m_stored_cursor_rec_processed = false;
   plan->m_pcur.store_position(&mtr);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(sync_thread_levels_empty_gen(true));
@@ -1403,7 +1403,7 @@ commit_mtr_for_a_while:
   ut_ad(!search_latch_locked);
   plan->m_pcur.store_position(&mtr);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   mtr_has_extra_clust_latch = false;
 
@@ -1422,7 +1422,7 @@ lock_wait_or_error:
   plan->m_stored_cursor_rec_processed = false;
   plan->m_pcur.store_position(&mtr);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(sync_thread_levels_empty_gen(true));
@@ -1460,7 +1460,7 @@ QueThr *RowSel::step(QueThr *thr) noexcept {
 
     if (sel_node->m_consistent_read) {
       /* Assign a read view for the query */
-      sel_node->m_read_view = thr_get_trx(thr)->assign_read_view();
+      sel_node->m_read_view = thr_get_trx(thr)->assign_read_view(m_sys);
 
     } else {
 
@@ -1696,7 +1696,7 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
 
   auto clust_index = sec_index->m_table->get_clustered_index();
 
-  prebuilt->m_clust_pcur->open_with_no_init(
+  prebuilt->m_clust_pcur->open_with_no_init(m_sys, 
     clust_index, prebuilt->m_clust_ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, 0, mtr, Current_location()
   );
 
@@ -1780,7 +1780,7 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
       };
 
       /* The following call returns 'offsets' associated with 'old_vers' */
-      const auto err = build_prev_vers(row);
+      const auto err = build_prev_vers(m_sys, row);
 
       if (err != DB_SUCCESS || old_vers.is_null()) {
 
@@ -1810,7 +1810,7 @@ DbErr RowSel::get_clust_rec_with_prebuilt(
 
 bool RowSel::restore_position(bool *same_user_rec, ulint latch_mode, BtreePcursor *pcur, bool moves_up, Mtr *mtr) noexcept {
   const auto relative_position = pcur->get_rel_pos();
-  const auto success = pcur->restore_position(latch_mode, mtr, Current_location());
+  const auto success = pcur->restore_position(m_sys, latch_mode, mtr, Current_location());
 
   *same_user_rec = success;
 
@@ -1830,7 +1830,7 @@ bool RowSel::restore_position(bool *same_user_rec, ulint latch_mode, BtreePcurso
     }
 
     if (pcur->is_on_user_rec()) {
-      (void)pcur->move_to_prev(mtr);
+      (void)pcur->move_to_prev(m_sys, mtr);
     }
 
   } else {
@@ -1878,7 +1878,7 @@ SearchStatus RowSel::try_search_shortcut_for_prebuilt(
 
   ut_ad(index->is_clustered());
 
-  pcur->open_with_no_init(index, search_tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, RW_S_LATCH, mtr, Current_location());
+  pcur->open_with_no_init(m_sys, index, search_tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, RW_S_LATCH, mtr, Current_location());
 
   Rec rec = pcur->get_rec();
 
@@ -1941,14 +1941,14 @@ DbErr RowSel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) no
     /* Restore the cursor position and find the record */
 
     if (!has_latches_on_recs) {
-      (void)pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)pcur->restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
     }
 
     auto rec = pcur->get_rec();
 
     m_sys.m_lock_sys->rec_unlock(trx, pcur->get_block(), rec, prebuilt->m_select_lock_type);
 
-    mtr.commit();
+    mtr.commit(m_sys);
 
     /* If the search was done through the clustered index, then
     we have not used clust_pcur at all, and we must NOT try to
@@ -1972,14 +1972,14 @@ DbErr RowSel::unlock_for_client(Prebuilt *prebuilt, bool has_latches_on_recs) no
     /* Restore the cursor position and find the record */
 
     if (!has_latches_on_recs) {
-      (void)clust_pcur->restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)clust_pcur->restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
     }
 
     auto rec = clust_pcur->get_rec();
 
     m_sys.m_lock_sys->rec_unlock(trx, clust_pcur->get_block(), rec, prebuilt->m_select_lock_type);
 
-    mtr.commit();
+    mtr.commit(m_sys);
   }
 
   trx->m_op_info = "";
@@ -2100,7 +2100,7 @@ DbErr RowSel::mvcc_fetch(
     } else if (likely(!prebuilt->m_row_cache.is_cache_empty())) {
       err = DB_SUCCESS;
 
-      ++srv_n_rows_read;
+      ++m_sys.m_srv->m_stats.m_n_rows_read;
 
       goto func_exit;
 
@@ -2171,9 +2171,9 @@ DbErr RowSel::mvcc_fetch(
             prebuilt->m_row_cache.add_row(rec, offsets);
           }
 
-          mtr.commit();
+          mtr.commit(m_sys);
 
-          ++srv_n_rows_read;
+          ++m_sys.m_srv->m_stats.m_n_rows_read;
 
           prebuilt->m_result = 0;
 
@@ -2182,7 +2182,7 @@ DbErr RowSel::mvcc_fetch(
           goto func_exit;
 
         case SearchStatus::EXHAUSTED:
-          mtr.commit();
+          mtr.commit(m_sys);
 
           err = DB_RECORD_NOT_FOUND;
           goto func_exit;
@@ -2194,7 +2194,7 @@ DbErr RowSel::mvcc_fetch(
           ut_ad(0);
       }
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       mtr.start();
     }
@@ -2237,7 +2237,7 @@ DbErr RowSel::mvcc_fetch(
 
   } else if (dtuple_get_n_fields(search_tuple) > 0) {
 
-    pcur->open_with_no_init(index, search_tuple, mode, BTR_SEARCH_LEAF, 0, &mtr, Current_location());
+    pcur->open_with_no_init(m_sys, index, search_tuple, mode, BTR_SEARCH_LEAF, 0, &mtr, Current_location());
 
     pcur->m_trx_if_known = trx;
 
@@ -2263,9 +2263,9 @@ DbErr RowSel::mvcc_fetch(
       }
     }
   } else if (mode == IB_CUR_G) {
-    pcur->open_at_index_side(true, index, BTR_SEARCH_LEAF, false, 0, &mtr);
+    pcur->open_at_index_side(m_sys, true, index, BTR_SEARCH_LEAF, false, 0, &mtr);
   } else if (mode == IB_CUR_L) {
-    pcur->open_at_index_side(false, index, BTR_SEARCH_LEAF, false, 0, &mtr);
+    pcur->open_at_index_side(m_sys, false, index, BTR_SEARCH_LEAF, false, 0, &mtr);
   }
 
   if (!prebuilt->m_sql_stat_start) {
@@ -2280,7 +2280,7 @@ DbErr RowSel::mvcc_fetch(
   } else if (prebuilt->m_select_lock_type == LOCK_NONE) {
     /* This is a consistent read,  assign a read view for the query */
 
-    auto rv = trx->assign_read_view();
+    auto rv = trx->assign_read_view(m_sys);
     ut_a(rv != nullptr);
 
     prebuilt->m_sql_stat_start = false;
@@ -2531,7 +2531,7 @@ rec_loop:
         };
 
         /* The following call returns 'offsets' associated with 'old_vers' */
-        err = build_prev_vers(row);
+        err = build_prev_vers(m_sys, row);
 
         if (err != DB_SUCCESS) {
 
@@ -2744,7 +2744,7 @@ next_rec:
 
     pcur->store_position(&mtr);
 
-    mtr.commit();
+    mtr.commit(m_sys);
     mtr_has_extra_clust_latch = false;
 
     mtr.start();
@@ -2765,7 +2765,7 @@ next_rec:
       prebuilt->m_result = -1;
       goto normal_return;
     }
-  } else if (unlikely(!pcur->move_to_prev(&mtr))) {
+  } else if (unlikely(!pcur->move_to_prev(m_sys, &mtr))) {
     goto not_moved;
   }
 
@@ -2776,7 +2776,7 @@ lock_wait_or_error:
   /*-------------------------------------------------------------*/
   pcur->store_position(&mtr);
 
-  mtr.commit();
+  mtr.commit(m_sys);
   mtr_has_extra_clust_latch = false;
 
   trx->m_error_state = err;
@@ -2822,14 +2822,14 @@ normal_return:
   /*-------------------------------------------------------------*/
   que_thr_stop_for_client_no_error(thr, trx);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   if (prebuilt->m_row_cache.m_n_cached > 0) {
     err = DB_SUCCESS;
   }
 
   if (err == DB_SUCCESS) {
-    srv_n_rows_read++;
+    m_sys.m_srv->m_stats.m_n_rows_read++;
   }
 
 func_exit:

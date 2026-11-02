@@ -229,7 +229,7 @@ void os_file_set_nocache(int fd, const char *file_name, const char *operation_na
  * @return os_file_t    Own handle to the file, not defined if error, error number can be
  *                      retrieved with os_file_get_last_error.
  */
-os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, ulint type, bool *success);
+os_file_t os_file_create(System &sys, const char *name, ulint create_mode, ulint purpose, ulint type, bool *success);
 
 /**
  * @brief Deletes a file. The file has to be closed before calling this.
@@ -319,7 +319,7 @@ bool os_file_flush(os_file_t file);
  * @param report_all_errors True if we want an error message printed of all errors.
  * @return Error number, or OS error number + 100.
  */
-ulint os_file_get_last_error(bool report_all_errors);
+ulint os_file_get_last_error(System &sys, bool report_all_errors);
 
 /**
  * @brief Reads data from a file.
@@ -427,7 +427,7 @@ void os_file_free();
  *
  * @param stderr Stream where to print.
  */
-void os_file_print(FILE *out);
+void os_file_print(System &sys, FILE *out);
 
 /**
  * @brief Returns information about the specified file.

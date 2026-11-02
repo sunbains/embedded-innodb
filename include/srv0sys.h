@@ -82,7 +82,7 @@ class System {
   /** Open or create the tablespaces and redo log, run crash recovery and
   start the background threads.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] DbErr startup() noexcept;
+  [[nodiscard]] DbErr startup(System &sys) noexcept;
 
   /** Stop the background threads, flush, and destroy the sub-systems in
   reverse creation order.

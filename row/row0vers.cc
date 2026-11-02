@@ -42,7 +42,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
   mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   auto func_exit = [](Mtr &mtr, MemHeap *heap, Trx *trx) -> auto {
-    mtr.commit();
+    mtr.commit(m_sys);
     mem_heap_free(heap);
 
     return trx;
@@ -70,7 +70,7 @@ Trx *RowVers::impl_x_locked_off_trx_sys_mutex(const Rec rec, const Index *index,
 
     mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
-    mtr.commit();
+    mtr.commit(m_sys);
 
     return nullptr;
   }
@@ -272,7 +272,7 @@ bool RowVers::old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index
   //const DTuple *entry;
   //DbErr err;
 
-  ut_ad(mtr->memo_contains_page(rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(rec, MTR_MEMO_PAGE_S_FIX));
+  ut_ad(mtr->memo_contains_page(m_sys, rec, MTR_MEMO_PAGE_X_FIX) || mtr->memo_contains_page(m_sys, rec, MTR_MEMO_PAGE_S_FIX));
 
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(!rw_lock_own(&m_sys.m_trx_sys->m_purge->m_latch, RW_LOCK_SHARED));
@@ -331,7 +331,7 @@ bool RowVers::old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index
 
     heap = mem_heap_create(1024);
 
-    auto err = TrxUndoRecord::prev_version_build(rec, mtr, version, clust_index, clust_offsets, heap, &prev_version);
+    auto err = TrxUndoRecord::prev_version_build(m_sys, rec, mtr, version, clust_index, clust_offsets, heap, &prev_version);
 
     mem_heap_free(heap2); /* free version and clust_offsets */
 
@@ -380,8 +380,8 @@ bool RowVers::old_has_index_entry(bool also_curr, const Rec rec, Mtr *mtr, Index
 DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
   ut_ad(row.m_cluster_index->is_clustered());
   ut_ad(
-    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) ||
-    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX)
+    row.m_mtr->memo_contains_page(m_sys, row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) ||
+    row.m_mtr->memo_contains_page(m_sys, row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX)
   );
 
 #ifdef UNIV_SYNC_DEBUG
@@ -412,7 +412,7 @@ DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
         row.m_consistent_read_view->m_creator_trx_id == trx_id) {
 
       auto roll_ptr = row_get_rec_roll_ptr(version, row.m_cluster_index, row.m_cluster_offsets);
-      auto undo_rec = TrxUndoRecord::get_undo_rec_low(roll_ptr, heap);
+      auto undo_rec = TrxUndoRecord::get_undo_rec_low(m_sys, roll_ptr, heap);
       auto undo_no = TrxUndoRecord::get_undo_no(undo_rec);
 
       mem_heap_empty(heap);
@@ -435,7 +435,7 @@ DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
 
     Rec prev_version;
 
-    err = TrxUndoRecord::prev_version_build(
+    err = TrxUndoRecord::prev_version_build(m_sys, 
       row.m_cluster_rec, row.m_mtr, version, row.m_cluster_index, row.m_cluster_offsets, heap, &prev_version
     );
 
@@ -490,8 +490,8 @@ DbErr RowVers::build_for_consistent_read(Row &row) noexcept {
 DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
   ut_ad(row.m_cluster_index->is_clustered());
   ut_ad(
-    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) ||
-    row.m_mtr->memo_contains_page(row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX)
+    row.m_mtr->memo_contains_page(m_sys, row.m_cluster_rec, MTR_MEMO_PAGE_X_FIX) ||
+    row.m_mtr->memo_contains_page(m_sys, row.m_cluster_rec, MTR_MEMO_PAGE_S_FIX)
   );
 
 #ifdef UNIV_SYNC_DEBUG
@@ -563,7 +563,7 @@ DbErr RowVers::build_for_semi_consistent_read(Row &row) noexcept {
 
     heap = mem_heap_create(1024);
 
-    err = TrxUndoRecord::prev_version_build(
+    err = TrxUndoRecord::prev_version_build(m_sys, 
       row.m_cluster_rec, row.m_mtr, version, row.m_cluster_index, row.m_cluster_offsets, heap, &prev_version
     );
 

@@ -98,7 +98,7 @@ void sync_arr_wake_threads_if_sema_free();
 
 /** Prints warnings of long semaphore waits to stderr.
 @return	true if fatal semaphore wait threshold was exceeded */
-bool sync_array_print_long_waits(void);
+bool sync_array_print_long_waits(System &sys);
 
 /** Prints info of the wait array. */
 void sync_array_print_info(

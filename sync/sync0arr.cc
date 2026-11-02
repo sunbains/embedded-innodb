@@ -713,12 +713,12 @@ void sync_arr_wake_threads_if_sema_free() {
   arr->release();
 }
 
-bool sync_array_print_long_waits() {
+bool sync_array_print_long_waits(System &sys) {
   auto arr = sync_primary_wait_array;
 
   bool fatal{};
   bool noticed{};
-  const auto fatal_timeout = srv_fatal_semaphore_wait_threshold;
+  const auto fatal_timeout = sys.m_srv->m_fatal_semaphore_wait_threshold;
 
   for (auto &cell : arr->m_cells) {
 
@@ -737,7 +737,7 @@ bool sync_array_print_long_waits() {
 
     ib_logger(stderr, "###### Starts InnoDB Monitor for 30 secs to print diagnostic info:");
 
-    auto old_val = srv_print_innodb_monitor;
+    auto old_val = sys.m_srv->m_print_innodb_monitor;
 
     /* If some crucial semaphore is reserved, then also the InnoDB
     Monitor can hang, and we do not get diagnostics. Since in
@@ -747,13 +747,13 @@ bool sync_array_print_long_waits() {
 
     ib_logger(stderr, "Pending preads %lu, pwrites %lu\n", (ulong)os_file_n_pending_preads, (ulong)os_file_n_pending_pwrites);
 
-    srv_print_innodb_monitor = true;
+    sys.m_srv->m_print_innodb_monitor = true;
 
-    os_event_set(srv_lock_timeout_thread_event);
+    os_event_set(sys.m_srv->m_lock_timeout_thread_event);
 
     os_thread_sleep(30000000);
 
-    srv_print_innodb_monitor = old_val;
+    sys.m_srv->m_print_innodb_monitor = old_val;
     ib_logger(
       stderr,
       "###### Diagnostic info printed to the "

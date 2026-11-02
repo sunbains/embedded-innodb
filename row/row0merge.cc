@@ -888,14 +888,14 @@ static int row_merge_cmp(
  * @param block File buffer
  * @return DB_SUCCESS or error
  */
-static DbErr row_merge_read_clustered_index(
+static DbErr row_merge_read_clustered_index(System &sys, 
   Trx *trx, table_handle_t table, const Table *old_table, const Table *new_table, Index **index, MergeFile *files, ulint n_index,
   row_merge_block_t *block
 ) noexcept {
   ulint *nonnull{};
   ulint n_nonnull{};
   DbErr err = DB_SUCCESS;
-  BtreePcursor pcur(srv_fsp, srv_btree_sys);
+  BtreePcursor pcur(sys.m_fsp, sys.m_btree);
 
   trx->m_op_info = "reading clustered index";
 
@@ -922,7 +922,7 @@ static DbErr row_merge_read_clustered_index(
 
   auto clust_index = old_table->get_clustered_index();
 
-  pcur.open_at_index_side(true, clust_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.open_at_index_side(sys, true, clust_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   if (unlikely(old_table != new_table)) {
     ulint n_cols = old_table->get_n_cols();
@@ -960,7 +960,7 @@ static DbErr row_merge_read_clustered_index(
   auto func_exit = [&](DbErr err) -> auto {
     pcur.close();
 
-    mtr.commit();
+    mtr.commit(sys);
 
     mem_heap_free(row_heap);
 
@@ -1002,11 +1002,11 @@ static DbErr row_merge_read_clustered_index(
 
       pcur.store_position(&mtr);
 
-      mtr.commit();
+      mtr.commit(sys);
 
       mtr.start();
 
-      (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)pcur.restore_position(sys, BTR_SEARCH_LEAF, &mtr, Current_location());
       has_next = pcur.move_to_next_user_rec(&mtr);
     }
 
@@ -1026,7 +1026,7 @@ static DbErr row_merge_read_clustered_index(
         continue;
       }
 
-      ++srv_n_rows_inserted;
+      ++sys.m_srv->m_stats.m_n_rows_inserted;
 
       /* Build a row based on the clustered index. */
 
@@ -1472,7 +1472,7 @@ static void row_merge_copy_blobs(
 ) /*!< in/out: memory heap */
 {
   ulint i;
-  Blob blob(srv_fsp, srv_btree_sys);
+  Blob blob(sys.m_fsp, sys.m_btree);
   ulint n_fields = dtuple_get_n_fields(tuple);
 
   for (i = 0; i < n_fields; i++) {
@@ -1491,7 +1491,7 @@ static void row_merge_copy_blobs(
     be freed between the time the BLOB pointers are read
     (row_merge_read_clustered_index()) and dereferenced
     (below). */
-    data = blob.copy_externally_stored_field(Rec(mrec), offsets, i, &len, heap);
+    data = blob.copy_externally_stored_field(sys, Rec(mrec), offsets, i, &len, heap);
 
     dfield_set_data(field, data, len);
   }
@@ -1508,7 +1508,7 @@ static void row_merge_copy_blobs(
  *
  * @return DB_SUCCESS or error number.
  */
-static DbErr row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table, int fd, row_merge_block_t *block) {
+static DbErr row_merge_insert_index_tuples(System &sys, Trx *trx, Index *index, Table *table, int fd, row_merge_block_t *block) {
   mrec_buf_t buf;
   const byte *b;
   QueThr *thr;
@@ -1529,7 +1529,7 @@ static DbErr row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table,
   trx->m_op_info = "inserting index entries";
 
   graph_heap = mem_heap_create(500);
-  node = srv_row_ins->node_create(INS_DIRECT, table, graph_heap);
+  node = sys.m_row_ins->node_create(INS_DIRECT, table, graph_heap);
 
   thr = pars_complete_graph_for_exec(node, trx, graph_heap);
 
@@ -1579,7 +1579,7 @@ static DbErr row_merge_insert_index_tuples(Trx *trx, Index *index, Table *table,
         thr->run_node = thr;
         thr->prev_node = thr->common.parent;
 
-        err = srv_row_ins->index_entry(index, dtuple, 0, false, thr);
+        err = sys.m_row_ins->index_entry(index, dtuple, 0, false, thr);
 
         if (likely(err == DB_SUCCESS)) {
 
@@ -1621,7 +1621,7 @@ void row_merge_drop_index(
 ) /*!< in: transaction handle */
 {
   if (index != nullptr) {
-    if (auto err = srv_dict_sys->m_ddl.drop_index(table, index, trx); err != DB_SUCCESS) {
+    if (auto err = sys.m_dict->m_ddl.drop_index(table, index, trx); err != DB_SUCCESS) {
       log_warn("DROP INDEX failed with error ", err, " while dropping index ", index->m_name);
     }
   }
@@ -1694,14 +1694,14 @@ inline ulint row_merge_col_prtype(
   return prtype;
 }
 
-Table *row_merge_create_temporary_table(const char *table_name, const MergeIndexDef *index_def, const Table *table, Trx *trx) {
+Table *row_merge_create_temporary_table(System &sys, const char *table_name, const MergeIndexDef *index_def, const Table *table, Trx *trx) {
   DbErr err;
   const auto n_cols = table->get_n_user_cols();
 
   ut_ad(table);
   ut_ad(index_def);
   ut_ad(table_name);
-  ut_ad(mutex_own(&srv_dict_sys->m_mutex));
+  ut_ad(mutex_own(&sys.m_dict->m_mutex));
 
   auto new_table = Table::create(table_name, DICT_HDR_SPACE, n_cols, table->m_flags, false, Current_location());
 
@@ -1712,7 +1712,7 @@ Table *row_merge_create_temporary_table(const char *table_name, const MergeIndex
     new_table->add_col(col_name, col->mtype, row_merge_col_prtype(col, col_name, index_def), col->len);
   }
 
-  err = srv_dict_sys->m_ddl.create_table(new_table, trx);
+  err = sys.m_dict->m_ddl.create_table(new_table, trx);
 
   if (err != DB_SUCCESS) {
     trx->m_error_state = err;
@@ -1760,13 +1760,13 @@ DbErr row_merge_rename_indexes(Trx *trx, Table *table) {
   return err;
 }
 
-DbErr row_merge_rename_tables(Table *old_table, Table *new_table, const char *tmp_name, Trx *trx) {
+DbErr row_merge_rename_tables(System &sys, Table *old_table, Table *new_table, const char *tmp_name, Trx *trx) {
   DbErr err = DB_ERROR;
   ParsInfo *info;
   const char *old_name = old_table->m_name;
 
   ut_ad(old_table != new_table);
-  ut_ad(mutex_own(&srv_dict_sys->m_mutex));
+  ut_ad(mutex_own(&sys.m_dict->m_mutex));
 
   ut_a(trx->m_dict_operation_lock_mode == RW_X_LATCH);
 
@@ -1802,14 +1802,14 @@ DbErr row_merge_rename_tables(Table *old_table, Table *new_table, const char *tm
   /* The following calls will also rename the .ibd data files if
   the tables are stored in a single-table tablespace */
 
-  if (!srv_dict_sys->table_rename_in_cache(old_table, tmp_name, false) ||
-      !srv_dict_sys->table_rename_in_cache(new_table, old_name, false)) {
+  if (!sys.m_dict->table_rename_in_cache(old_table, tmp_name, false) ||
+      !sys.m_dict->table_rename_in_cache(new_table, old_name, false)) {
 
     err = DB_ERROR;
     goto err_exit;
   }
 
-  err = srv_dict_sys->m_loader.load_foreigns(old_name, true);
+  err = sys.m_dict->m_loader.load_foreigns(old_name, true);
 
   if (err != DB_SUCCESS) {
   err_exit:
@@ -1823,7 +1823,7 @@ DbErr row_merge_rename_tables(Table *old_table, Table *new_table, const char *tm
   return (err);
 }
 
-Index *row_merge_create_index(Trx *trx, Table *table, const MergeIndexDef *index_def) {
+Index *row_merge_create_index(System &sys, Trx *trx, Table *table, const MergeIndexDef *index_def) {
   const auto n_fields = index_def->n_fields;
 
   /* Create the index prototype, using the passed in def, this is not
@@ -1842,7 +1842,7 @@ Index *row_merge_create_index(Trx *trx, Table *table, const MergeIndexDef *index
   /* Add the index to SYS_INDEXES, using the index prototype. */
   index->m_table = table;
 
-  auto err = srv_dict_sys->m_ddl.create_index(index, trx);
+  auto err = sys.m_dict->m_ddl.create_index(index, trx);
 
   if (err == DB_SUCCESS) {
 
@@ -1864,12 +1864,12 @@ bool row_merge_is_index_usable(const Trx *trx, const Index *index) {
   return !trx->m_read_view || trx->m_read_view->sees_trx_id(index->m_trx_id);
 }
 
-DbErr row_merge_drop_table(Trx *trx, Table *table) {
+DbErr row_merge_drop_table(System &sys, Trx *trx, Table *table) {
   /* There must be no open transactions on the table. */
   ut_a(table->m_n_handles_opened == 0);
 
-  auto err = srv_dict_sys->m_ddl.drop_table(table->m_name, trx, false);
-  auto err_commit = trx->commit();
+  auto err = sys.m_dict->m_ddl.drop_table(table->m_name, trx, false);
+  auto err_commit = trx->commit(sys);
   ut_a(err_commit == DB_SUCCESS);
 
   return err;

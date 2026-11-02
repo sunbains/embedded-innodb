@@ -381,8 +381,8 @@ void BufFlush::buffered_writes(Dblwr *dblwr) {
   }
 
   /* Increment the doublewrite flushed pages counter */
-  srv_dblwr_pages_written += dblwr->m_first_free;
-  ++srv_dblwr_writes;
+  m_sys.m_srv->m_stats.m_dblwr_pages_written += dblwr->m_first_free;
+  ++m_sys.m_srv->m_stats.m_dblwr_writes;
 
   len = std::min<ulint>(SYS_DOUBLEWRITE_BLOCK_SIZE, dblwr->m_first_free) * UNIV_PAGE_SIZE;
 
@@ -561,14 +561,14 @@ void BufFlush::write_block_low(Dblwr *dblwr, BufPage *bpage) {
   }
 }
 
-inline static bool free_page_if_truncated(BufPool *buf_pool, BufPage *bpage) {
+inline static bool free_page_if_truncated(System &sys, BufPool *buf_pool, BufPage *bpage) {
   ut_a(bpage != nullptr);
 
   ut_ad(buf_pool->mutex_is_owned());
   ut_ad(mutex_own(buf_page_get_mutex(bpage)));
 
   auto space = bpage->get_space();
-  bool table_truncated = srv_fil->tablespace_deleted_or_being_deleted_in_mem(space, -1);
+  bool table_truncated = sys.m_fil->tablespace_deleted_or_being_deleted_in_mem(space, -1);
 
   bool page_from_flush_list = bpage->m_oldest_modification != 0;
 
@@ -857,7 +857,7 @@ ulint BufFlush::batch(Dblwr *dblwr, BufFlushType flush_type, ulint min_n, uint64
 
   buffered_writes(dblwr);
 
-  srv_buf_pool_flushed += page_count;
+  m_sys.m_srv->m_stats.m_buf_pool_flushed += page_count;
 
   /* We keep track of all flushes happening as part of LRU
   flush. When estimating the desired rate at which m_flush_list

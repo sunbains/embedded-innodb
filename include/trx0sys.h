@@ -122,7 +122,7 @@ struct TrxSys {
   /**
    * Destructor
    */
-  ~TrxSys() noexcept;
+  ~TrxSys(System &sys) noexcept;
 
   /**
    * Create an instance of the transaction system.
@@ -184,7 +184,7 @@ struct TrxSys {
    *
    * @return	the trx handle or NULL if not found
    */
-  [[nodiscard]] Trx *get_on_id(trx_id_t trx_id) noexcept {
+  [[nodiscard]] Trx *get_on_id(trx_id_t trx_id) const noexcept {
     ut_ad(mutex_own(&m_mutex));
 
     for (const auto trx : m_trx_list) {
@@ -312,7 +312,7 @@ struct TrxSys {
       .m_mtr = mtr
     };
 
-    auto block = m_sys.m_fsp->m_buf_pool->get(req, nullptr);
+    auto block = m_sys.m_buf_pool->get(req, nullptr);
     buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_TRX_SYS_HEADER));
 
     return TRX_SYS + block->get_frame();
@@ -429,7 +429,7 @@ struct TrxSys {
     // TODO: Remove this once we have a proper mutex for the trx system.
     // ut_ad(mutex_own(&m_mutex));
 
-    return mtr->read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE, MLOG_4BYTES);
+    return mtr->read_ulint(m_sys, sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_SPACE, MLOG_4BYTES);
   }
 
   /**
@@ -446,7 +446,7 @@ struct TrxSys {
     // TODO: Remove this once we have a proper mutex for the trx system.
     // ut_ad(mutex_own(&m_mutex));
 
-    return mtr->read_ulint(sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_PAGE_NO, MLOG_4BYTES);
+    return mtr->read_ulint(m_sys, sys_header + TRX_SYS_RSEGS + i * TRX_SYS_RSEG_SLOT_SIZE + TRX_SYS_RSEG_PAGE_NO, MLOG_4BYTES);
   }
 
   /**

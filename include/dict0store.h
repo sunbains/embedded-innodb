@@ -368,7 +368,5 @@ struct DictStore {
    */
   Dict_id m_row_id{};
 
-  /** File space manager.*/
-
   /** B-tree system.*/
 };

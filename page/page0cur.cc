@@ -597,7 +597,7 @@ void PageCursor::insert_rec_write_log(Rec insert_rec, ulint rec_size, Rec cursor
   }
 }
 
-byte *PageCursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr) {
+byte *PageCursor::parse_insert_rec(System &sys, bool is_short, byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr) {
   byte *buf;
   auto ptr2 = ptr;
   Rec cursor_rec;
@@ -630,7 +630,7 @@ byte *PageCursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, BufB
 
     if (unlikely(offset >= UNIV_PAGE_SIZE)) {
 
-      recv_sys->m_found_corrupt_log = true;
+      sys.m_recv->m_found_corrupt_log = true;
 
       return nullptr;
     }
@@ -644,7 +644,7 @@ byte *PageCursor::parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, BufB
   }
 
   if (unlikely(end_seg_len >= UNIV_PAGE_SIZE << 1)) {
-    recv_sys->m_found_corrupt_log = true;
+    sys.m_recv->m_found_corrupt_log = true;
 
     return nullptr;
   }
@@ -945,7 +945,7 @@ static byte *page_copy_rec_list_to_created_page_write_log(page_t *page, Mtr *mtr
   return log_ptr;
 }
 
-byte *PageCursor::parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr) {
+byte *PageCursor::parse_copy_rec_list_to_created_page(System &sys, byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr) {
   byte *rec_end;
   ulint log_data_len;
   page_t *page;
@@ -971,7 +971,7 @@ byte *PageCursor::parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, 
   }
 
   while (ptr < rec_end) {
-    ptr = parse_insert_rec(true, ptr, end_ptr, block, index, mtr);
+    ptr = parse_insert_rec(sys, true, ptr, end_ptr, block, index, mtr);
   }
 
   ut_a(ptr == rec_end);

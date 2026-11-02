@@ -133,7 +133,7 @@ struct TrxUndoRecord {
    * @param[in] heap memory heap where copied
    * @return own: copy of the record
    */
-  static TrxUndoRecord get_undo_rec_low(roll_ptr_t roll_ptr, MemHeap *heap);
+  static TrxUndoRecord get_undo_rec_low(System &sys, roll_ptr_t roll_ptr, MemHeap *heap);
 
   /**
    * @brief Copies an undo record to heap.
@@ -149,7 +149,7 @@ struct TrxUndoRecord {
    * @return DB_SUCCESS, or DB_MISSING_HISTORY if the undo log has been
    * truncated and we cannot fetch the old version
    */
-  static DbErr get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, TrxUndoRecord *undo_rec, MemHeap *heap);
+  static DbErr get_undo_rec(System &sys, roll_ptr_t roll_ptr, trx_id_t trx_id, TrxUndoRecord *undo_rec, MemHeap *heap);
 
   /**
    * @brief Build a previous version of a clustered index record.
@@ -164,7 +164,7 @@ struct TrxUndoRecord {
    * earlier than purge_view, which means that it may have been removed,
    * DB_ERROR if corrupted record
    */
-  static DbErr prev_version_build(
+  static DbErr prev_version_build(System &sys, 
     const Rec index_rec, Mtr *index_mtr, const Rec rec, Index *index, RecOffs offsets, MemHeap *heap, Rec *old_vers
   );
 
@@ -234,7 +234,7 @@ struct TrxUndoRecord {
    * @return remaining part of the record, nullptr if an error detected, which
    * means that the record is corrupted
    */
-  static byte *update_rec_get_update(
+  static byte *update_rec_get_update(System &sys, 
     byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, MemHeap *heap,
     Upd **upd
   );

@@ -64,10 +64,10 @@ constexpr ulint BUF_READ_AHEAD_PEND_LIMIT = 2;
  * @return DB_SUCCESS if a request was posted to the IO layer, DB_FAIL the request was not posted
  *  or error code from the IO layer.
  */
-static DbErr buf_read_page(IoRequest io_request, bool batch, const PageId &page_id, int64_t tablespace_version) {
+static DbErr buf_read_page(System &sys, IoRequest io_request, bool batch, const PageId &page_id, int64_t tablespace_version) {
   ut_a(io_request == IoRequest::Async_read || io_request == IoRequest::Sync_read);
 
-  if (srv_dblwr != nullptr && page_id.space_id() == TRX_SYS_SPACE && srv_dblwr->is_page_inside(page_id.page_no())) {
+  if (sys.m_dblwr != nullptr && page_id.space_id() == TRX_SYS_SPACE && sys.m_dblwr->is_page_inside(page_id.page_no())) {
 
     log_warn(std::format("Trying to read the doublewrite buffer page {}", page_id.page_no()));
 
@@ -80,7 +80,7 @@ static DbErr buf_read_page(IoRequest io_request, bool batch, const PageId &page_
   or is being dropped; if we succeed in initing the page in the buffer
   pool for read, then DISCARD cannot proceed until the read has
   completed */
-  auto bpage = srv_buf_pool->init_for_read(&err, page_id, tablespace_version);
+  auto bpage = sys.m_buf_pool->init_for_read(&err, page_id, tablespace_version);
 
   if (bpage == nullptr) {
     /* The bpage can be nullptr if the page is already in the buffer pool. */
@@ -92,13 +92,13 @@ static DbErr buf_read_page(IoRequest io_request, bool batch, const PageId &page_
 
   ut_a(bpage->get_state() == BUF_BLOCK_FILE_PAGE);
 
-  err = srv_fil->data_io(io_request, batch, page_id, 0, UNIV_PAGE_SIZE, buf_page_get_block(bpage)->get_frame(), bpage);
+  err = sys.m_fil->data_io(io_request, batch, page_id, 0, UNIV_PAGE_SIZE, buf_page_get_block(bpage)->get_frame(), bpage);
 
   ut_a(err == DB_SUCCESS);
 
   if (io_request == IoRequest::Sync_read) {
     /* The i/o is already completed when we arrive from srv_fil->read */
-    srv_buf_pool->io_complete(bpage);
+    sys.m_buf_pool->io_complete(bpage);
   } else {
     ut_a(io_request == IoRequest::Async_read);
   }
@@ -106,13 +106,13 @@ static DbErr buf_read_page(IoRequest io_request, bool batch, const PageId &page_
   return DB_SUCCESS;
 }
 
-bool buf_read_page(const PageId &page_id) {
-  auto tablespace_version = srv_fil->space_get_version(page_id.space_id());
-  auto err = buf_read_page(IoRequest::Sync_read, false, page_id, tablespace_version);
+bool buf_read_page(System &sys, const PageId &page_id) {
+  auto tablespace_version = sys.m_fil->space_get_version(page_id.space_id());
+  auto err = buf_read_page(sys, IoRequest::Sync_read, false, page_id, tablespace_version);
 
   if (err == DB_SUCCESS) {
 
-    ++srv_buf_pool_reads;
+    ++sys.m_srv->m_stats.m_buf_pool_reads;
 
   } else if (err == DB_TABLESPACE_DELETED) {
 
@@ -125,15 +125,15 @@ bool buf_read_page(const PageId &page_id) {
   }
 
   /* Flush pages from the end of the LRU list if necessary */
-  srv_buf_pool->m_flusher->free_margin(srv_dblwr);
+  sys.m_buf_pool->m_flusher->free_margin(sys.m_dblwr);
 
   /* Increment number of I/O operations used for LRU policy. */
-  srv_buf_pool->m_LRU->stat_inc_io();
+  sys.m_buf_pool->m_LRU->stat_inc_io();
 
   return err == DB_SUCCESS;
 }
 
-ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id) {
+ulint buf_read_ahead_linear(System &sys, BufPool *buf_pool, const PageId &page_id) {
   BufPage *bpage;
   buf_frame_t *frame;
   BufPage *pred_bpage = nullptr;
@@ -145,12 +145,12 @@ ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id) {
   ulint fail_count;
   DbErr err;
   ulint i;
-  const ulint buf_read_ahead_linear_area = srv_buf_pool->get_read_ahead_area();
+  const ulint buf_read_ahead_linear_area = sys.m_buf_pool->get_read_ahead_area();
   ulint threshold;
   auto space = page_id.space_id();
   auto offset = page_id.page_no();
 
-  if (unlikely(srv_startup_is_before_trx_rollback_phase)) {
+  if (unlikely(sys.m_srv->m_startup_is_before_trx_rollback_phase)) {
     /* No read-ahead to avoid thread deadlocks */
     return 0;
   }
@@ -173,18 +173,18 @@ ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id) {
   below: if DISCARD + IMPORT changes the actual .ibd file meanwhile, we
   do not try to read outside the bounds of the tablespace! */
 
-  auto tablespace_version = srv_fil->space_get_version(space);
+  auto tablespace_version = sys.m_fil->space_get_version(space);
 
   buf_pool->mutex_acquire();
 
-  if (high > srv_fil->space_get_size(space)) {
+  if (high > sys.m_fil->space_get_size(space)) {
     buf_pool->mutex_release();
     /* The area is not whole, return */
 
     return 0;
   }
 
-  if (srv_buf_pool->m_n_pend_reads > srv_buf_pool->m_curr_size / BUF_READ_AHEAD_PEND_LIMIT) {
+  if (sys.m_buf_pool->m_n_pend_reads > sys.m_buf_pool->m_curr_size / BUF_READ_AHEAD_PEND_LIMIT) {
     buf_pool->mutex_release();
 
     return 0;
@@ -202,7 +202,7 @@ ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id) {
 
   /* How many out of order accessed pages can we ignore
   when working out the access pattern for linear readahead */
-  threshold = std::min<ulint>((64 - srv_config.m_read_ahead_threshold), srv_buf_pool->get_read_ahead_area());
+  threshold = std::min<ulint>((64 - sys.m_config.m_buf_pool.m_read_ahead_threshold), sys.m_buf_pool->get_read_ahead_area());
 
   fail_count = 0;
 
@@ -211,7 +211,7 @@ ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id) {
   for (i = low; i < high; i++) {
     current_page_id.set_page_no(i);
 
-    bpage = srv_buf_pool->hash_get_page(current_page_id);
+    bpage = sys.m_buf_pool->hash_get_page(current_page_id);
 
     if (bpage == nullptr || !buf_page_is_accessed(bpage)) {
       /* Not accessed */
@@ -246,7 +246,7 @@ ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id) {
   /* If we got this far, we know that enough pages in the area have
   been accessed in the right order: linear read-ahead can be sensible */
 
-  bpage = srv_buf_pool->hash_get_page(page_id);
+  bpage = sys.m_buf_pool->hash_get_page(page_id);
 
   if (bpage == nullptr) {
     buf_pool->mutex_release();
@@ -269,8 +269,8 @@ ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id) {
   prevent deadlocks. Even if we read values which are nonsense, the
   algorithm will work. */
 
-  pred_offset = srv_fil->page_get_prev(frame);
-  succ_offset = srv_fil->page_get_next(frame);
+  pred_offset = sys.m_fil->page_get_prev(frame);
+  succ_offset = sys.m_fil->page_get_next(frame);
 
   buf_pool->mutex_release();
 
@@ -297,7 +297,7 @@ ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id) {
 
     return 0;
 
-  } else if (high > srv_fil->space_get_size(space)) {
+  } else if (high > sys.m_fil->space_get_size(space)) {
 
     /* The area is not whole, return */
 
@@ -310,7 +310,7 @@ ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id) {
     /* It is only sensible to do read-ahead in the non-sync
     aio mode: hence false as the first parameter */
 
-    err = buf_read_page(IoRequest::Async_read, true, PageId(space, i), tablespace_version);
+    err = buf_read_page(sys, IoRequest::Async_read, true, PageId(space, i), tablespace_version);
 
     if (err == DB_SUCCESS) {
 
@@ -331,30 +331,30 @@ ulint buf_read_ahead_linear(BufPool *buf_pool, const PageId &page_id) {
   }
 
   /* Flush pages from the end of the LRU list if necessary */
-  srv_buf_pool->m_flusher->free_margin(srv_dblwr);
+  sys.m_buf_pool->m_flusher->free_margin(sys.m_dblwr);
 
   /* Read ahead is considered one I/O operation for the purpose of LRU policy decision. */
-  srv_buf_pool->m_LRU->stat_inc_io();
+  sys.m_buf_pool->m_LRU->stat_inc_io();
 
-  srv_buf_pool->m_stat.n_ra_pages_read += count;
+  sys.m_buf_pool->m_stat.n_ra_pages_read += count;
 
   return count;
 }
 
-void buf_read_recv_pages(bool sync, const PageId &page_id, const page_no_t *page_nos, ulint n_stored) {
+void buf_read_recv_pages(System &sys, bool sync, const PageId &page_id, const page_no_t *page_nos, ulint n_stored) {
   auto space = page_id.space_id();
-  if (srv_fil->space_get_size(space) == ULINT_UNDEFINED) {
+  if (sys.m_fil->space_get_size(space) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
     return;
   }
 
-  auto tablespace_version = srv_fil->space_get_version(space);
+  auto tablespace_version = sys.m_fil->space_get_version(space);
 
   for (ulint i = 0; i < n_stored; i++) {
     ulint count{};
 
-    while (srv_buf_pool->m_n_pend_reads >= recv_n_pool_free_frames / 2) {
+    while (sys.m_buf_pool->m_n_pend_reads >= recv_n_pool_free_frames / 2) {
 
       os_thread_sleep(10000);
 
@@ -365,19 +365,19 @@ void buf_read_recv_pages(bool sync, const PageId &page_id, const page_no_t *page
         log_err(std::format(
           "Waited for 10 seconds for pending reads to the buffer pool to"
           " be finished. Number of pending reads {}. pending pread calls {}",
-          srv_buf_pool->m_n_pend_reads,
+          sys.m_buf_pool->m_n_pend_reads,
           os_file_n_pending_preads.load()
         ));
       }
     }
 
     if ((i + 1 == n_stored) && sync) {
-      buf_read_page(IoRequest::Sync_read, false, PageId(space, page_nos[i]), tablespace_version);
+      buf_read_page(sys, IoRequest::Sync_read, false, PageId(space, page_nos[i]), tablespace_version);
     } else {
-      buf_read_page(IoRequest::Async_read, true, PageId(space, page_nos[i]), tablespace_version);
+      buf_read_page(sys, IoRequest::Async_read, true, PageId(space, page_nos[i]), tablespace_version);
     }
   }
 
   /* Flush pages from the end of the LRU list if necessary */
-  srv_buf_pool->m_flusher->free_margin(srv_dblwr);
+  sys.m_buf_pool->m_flusher->free_margin(sys.m_dblwr);
 }

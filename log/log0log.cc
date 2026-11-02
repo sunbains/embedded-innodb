@@ -45,7 +45,7 @@ Log::Log(System &sys) noexcept : m_sys(sys), m_buffer(sys.m_config.m_log.m_buffe
 
   m_lsn = LOG_START_LSN;
 
-  ut_a(LOG_BUFFER_SIZE >= 16 * sizeof(LogPhyBlock));
+  ut_a(m_sys.m_config.m_log.m_buffer_size >= 16 * sizeof(LogPhyBlock));
 
   m_no_flush_event = os_event_create(nullptr);
 

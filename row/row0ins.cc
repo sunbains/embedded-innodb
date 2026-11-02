@@ -183,7 +183,7 @@ DbErr RowInsert::sec_index_entry_by_modify(
     /* Try an optimistic updating of the record, keeping changes
     within the page */
 
-    err = btr_cur->optimistic_update(BTR_KEEP_SYS_FLAG, update, 0, thr, mtr);
+    err = btr_cur->optimistic_update(m_sys, BTR_KEEP_SYS_FLAG, update, 0, thr, mtr);
 
     switch (err) {
       case DB_OVERFLOW:
@@ -203,7 +203,7 @@ DbErr RowInsert::sec_index_entry_by_modify(
     } else {
       BigRec dummy_big_rec;
 
-      err = btr_cur->pessimistic_update(BTR_KEEP_SYS_FLAG, &heap, &dummy_big_rec, update, 0, thr, mtr);
+      err = btr_cur->pessimistic_update(m_sys, BTR_KEEP_SYS_FLAG, &heap, &dummy_big_rec, update, 0, thr, mtr);
       ut_ad(dummy_big_rec.n_fields == 0);
     }
   }
@@ -238,7 +238,7 @@ DbErr RowInsert::clust_index_entry_by_modify(
     /* Try optimistic updating of the record, keeping changes
     within the page */
 
-    const auto err = btr_cur->optimistic_update(0, update, 0, thr, mtr);
+    const auto err = btr_cur->optimistic_update(m_sys, 0, update, 0, thr, mtr);
 
     switch (err) {
       case DB_OVERFLOW:
@@ -260,7 +260,7 @@ DbErr RowInsert::clust_index_entry_by_modify(
 
     } else {
 
-      return btr_cur->pessimistic_update(0, heap, big_rec, update, 0, thr, mtr);
+      return btr_cur->pessimistic_update(m_sys, 0, heap, big_rec, update, 0, thr, mtr);
     }
   }
 }
@@ -558,9 +558,9 @@ DbErr RowInsert::update_cascade_client(QueThr *thr, UpdNode *node, Table *table)
       --table->m_stats.m_n_rows;
     }
 
-    ++srv_n_rows_deleted;
+    ++m_sys.m_srv->m_stats.m_n_rows_deleted;
   } else {
-    ++srv_n_rows_updated;
+    ++m_sys.m_srv->m_stats.m_n_rows_updated;
   }
 
   ib_update_statistics_if_needed(table);
@@ -693,7 +693,7 @@ DbErr RowInsert::foreign_check_on_constraint(
 
     ref = row_build_row_ref(ROW_COPY_POINTERS, index, rec, tmp_heap);
 
-    cascade->m_pcur->open_with_no_init(clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, false, mtr, Current_location());
+    cascade->m_pcur->open_with_no_init(m_sys, clust_index, ref, PAGE_CUR_LE, BTR_SEARCH_LEAF, false, mtr, Current_location());
 
     clust_rec = cascade->m_pcur->get_rec();
     clust_block = cascade->m_pcur->get_block();
@@ -809,7 +809,7 @@ DbErr RowInsert::foreign_check_on_constraint(
     cascade->m_pcur->store_position(mtr);
   }
 
-  mtr->commit();
+  mtr->commit(m_sys);
 
   ut_a(cascade->m_pcur->get_rel_pos() == BtreeCursorPos::ON);
 
@@ -836,7 +836,7 @@ DbErr RowInsert::foreign_check_on_constraint(
 
   /* Restore pcur position */
 
-  (void)pcur->restore_position(BTR_SEARCH_LEAF, mtr, Current_location());
+  (void)pcur->restore_position(m_sys, BTR_SEARCH_LEAF, mtr, Current_location());
 
   if (tmp_heap != nullptr) {
     mem_heap_free(tmp_heap);
@@ -859,11 +859,11 @@ nonstandard_exit_func:
 
   pcur->store_position(mtr);
 
-  mtr->commit();
+  mtr->commit(m_sys);
 
   mtr->start();
 
-  (void)pcur->restore_position(BTR_SEARCH_LEAF, mtr, Current_location());
+  (void)pcur->restore_position(m_sys, BTR_SEARCH_LEAF, mtr, Current_location());
 
   return err;
 }
@@ -1005,7 +1005,7 @@ run_again:
 
   dtuple_set_n_fields_cmp(entry, foreign->m_n_fields);
 
-  pcur.open(check_index, entry, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.open(m_sys, check_index, entry, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
   /* Scan index records and check if there is a matching record */
 
@@ -1124,7 +1124,7 @@ run_again:
 
   pcur.close();
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   /* Restore old value */
   dtuple_set_n_fields_cmp(entry, n_fields_cmp);
@@ -1267,7 +1267,7 @@ DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry,
 
   dtuple_set_n_fields_cmp(entry, index->get_n_unique());
 
-  pcur.open(index, entry, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.open(m_sys, index, entry, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
   allow_duplicates = thr_get_trx(thr)->m_duplicates & TRX_DUP_IGNORE;
 
@@ -1334,7 +1334,7 @@ DbErr RowInsert::scan_sec_index_for_duplicate(const Index *index, DTuple *entry,
     mem_heap_free(heap);
   }
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   /* Restore old value */
   dtuple_set_n_fields_cmp(entry, n_fields_cmp);
@@ -1486,7 +1486,7 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
   DbErr err;
   MemHeap *heap = nullptr;
   BigRec big_rec{};
-  BtreeCursor btr_cur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
+  BtreeCursor btr_cur{};
 
   m_sys.m_log->free_check();
 
@@ -1496,7 +1496,7 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
 
   btr_cur.m_thr = thr;
 
-  btr_cur.search_to_nth_level(nullptr, index, 0, entry, PAGE_CUR_LE, mode | BTR_INSERT, &mtr, Current_location());
+  btr_cur.search_to_nth_level(m_sys, nullptr, index, 0, entry, PAGE_CUR_LE, mode | BTR_INSERT, &mtr, Current_location());
 
 #ifdef UNIV_DEBUG
   {
@@ -1522,7 +1522,7 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
         goto function_exit;
       }
     } else {
-      mtr.commit();
+      mtr.commit(m_sys);
       err = scan_sec_index_for_duplicate(index, entry, thr);
       mtr.start();
 
@@ -1537,7 +1537,7 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
       transaction. Let us now reposition the cursor and
       continue the insertion. */
 
-      btr_cur.search_to_nth_level(nullptr, index, 0, entry, PAGE_CUR_LE, mode | BTR_INSERT, &mtr, Current_location());
+      btr_cur.search_to_nth_level(m_sys, nullptr, index, 0, entry, PAGE_CUR_LE, mode | BTR_INSERT, &mtr, Current_location());
     }
   }
 
@@ -1564,7 +1564,7 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
 
     if (mode == BTR_MODIFY_LEAF) {
 
-      err = btr_cur.optimistic_insert(0, entry, &insert_rec, &big_rec, n_ext, thr, &mtr);
+      err = btr_cur.optimistic_insert(m_sys, 0, entry, &insert_rec, &big_rec, n_ext, thr, &mtr);
 
     } else {
       ut_a(mode == BTR_MODIFY_TREE);
@@ -1578,17 +1578,17 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
         goto function_exit;
       }
 
-      err = btr_cur.pessimistic_insert(0, entry, &insert_rec, &big_rec, n_ext, thr, &mtr);
+      err = btr_cur.pessimistic_insert(m_sys, 0, entry, &insert_rec, &big_rec, n_ext, thr, &mtr);
     }
   }
 
 function_exit:
-  mtr.commit();
+  mtr.commit(m_sys);
 
   if (big_rec.n_fields == 0) {
     mtr.start();
 
-    btr_cur.search_to_nth_level(nullptr, index, 0, entry, PAGE_CUR_LE, BTR_MODIFY_TREE, &mtr, Current_location());
+    btr_cur.search_to_nth_level(m_sys, nullptr, index, 0, entry, PAGE_CUR_LE, BTR_MODIFY_TREE, &mtr, Current_location());
 
     ulint *offsets;
     auto rec = btr_cur.get_rec();
@@ -1601,7 +1601,7 @@ function_exit:
 
     Blob blob(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
-    err = blob.store_big_rec_extern_fields(index, btr_cur.get_block(), rec, offsets, big_rec, &mtr);
+    err = blob.store_big_rec_extern_fields(m_sys, index, btr_cur.get_block(), rec, offsets, big_rec, &mtr);
 
     if (modify) {
       dtuple_big_rec_free(big_rec);
@@ -1609,7 +1609,7 @@ function_exit:
       dtuple_convert_back_big_rec(entry, &big_rec);
     }
 
-    mtr.commit();
+    mtr.commit(m_sys);
   }
 
   if (likely_null(heap)) {

@@ -44,7 +44,7 @@ DbErr Ddl::drop_table_in_background(const char *name) noexcept {
 
   auto err = drop_table(name, trx, false);
 
-  auto err_commit = trx->commit();
+  auto err_commit = trx->commit(m_sys);
   ut_a(err_commit == DB_SUCCESS);
 
   m_sys.m_dict->unlock_data_dictionary(trx);
@@ -162,24 +162,24 @@ DbErr Ddl::drop_table(const char *in_name, Trx *trx, bool drop_db) noexcept {
   if (namelen == sizeof(S_innodb_monitor) && memcmp(table_name, S_innodb_monitor, sizeof S_innodb_monitor) == 0) {
 
     /* Table name equals "innodb_monitor": stop monitor prints */
-    srv_print_innodb_monitor = false;
+    m_sys.m_srv->m_print_innodb_monitor = false;
     m_sys.m_dict->m_store.m_btree->m_lock_sys->unset_print_lock_monitor();
 
   } else if (namelen == sizeof(S_innodb_lock_monitor) &&
              memcmp(table_name, S_innodb_lock_monitor, sizeof(S_innodb_lock_monitor)) == 0) {
 
-    srv_print_innodb_monitor = false;
+    m_sys.m_srv->m_print_innodb_monitor = false;
     m_sys.m_dict->m_store.m_btree->m_lock_sys->unset_print_lock_monitor();
 
   } else if (namelen == sizeof(S_innodb_tablespace_monitor) &&
              memcmp(table_name, S_innodb_tablespace_monitor, sizeof(S_innodb_tablespace_monitor)) == 0) {
 
-    srv_print_innodb_tablespace_monitor = false;
+    m_sys.m_srv->m_print_innodb_tablespace_monitor = false;
 
   } else if (namelen == sizeof(S_innodb_table_monitor) &&
              memcmp(table_name, S_innodb_table_monitor, sizeof(S_innodb_table_monitor)) == 0) {
 
-    srv_print_innodb_table_monitor = false;
+    m_sys.m_srv->m_print_innodb_table_monitor = false;
   }
 
   /* Serialize data dictionary operations with dictionary mutex:
@@ -465,32 +465,32 @@ DbErr Ddl::create_table(Table *table, Trx *trx) noexcept {
 
     /* Table equals "innodb_monitor": start monitor prints */
 
-    srv_print_innodb_monitor = true;
+    m_sys.m_srv->m_print_innodb_monitor = true;
 
     /* The lock timeout monitor thread also takes care
     of InnoDB monitor prints */
 
-    os_event_set(srv_lock_timeout_thread_event);
+    os_event_set(m_sys.m_srv->m_lock_timeout_thread_event);
 
   } else if (STR_EQ(table_name, table_name_len, S_innodb_lock_monitor)) {
 
-    srv_print_innodb_monitor = true;
+    m_sys.m_srv->m_print_innodb_monitor = true;
 
     m_sys.m_dict->m_store.m_btree->m_lock_sys->set_print_lock_monitor();
 
-    os_event_set(srv_lock_timeout_thread_event);
+    os_event_set(m_sys.m_srv->m_lock_timeout_thread_event);
 
   } else if (STR_EQ(table_name, table_name_len, S_innodb_tablespace_monitor)) {
 
-    srv_print_innodb_tablespace_monitor = true;
+    m_sys.m_srv->m_print_innodb_tablespace_monitor = true;
 
-    os_event_set(srv_lock_timeout_thread_event);
+    os_event_set(m_sys.m_srv->m_lock_timeout_thread_event);
 
   } else if (STR_EQ(table_name, table_name_len, S_innodb_table_monitor)) {
 
-    srv_print_innodb_table_monitor = true;
+    m_sys.m_srv->m_print_innodb_table_monitor = true;
 
-    os_event_set(srv_lock_timeout_thread_event);
+    os_event_set(m_sys.m_srv->m_lock_timeout_thread_event);
 
   } else if (STR_EQ(table_name, table_name_len, S_innodb_mem_validate)) {
     /* We define here a debugging feature intended for developers */
@@ -732,7 +732,7 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
 
       fsp->header_init(space_id, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
 
-      mtr.commit();
+      mtr.commit(m_sys);
     }
   }
 
@@ -754,7 +754,7 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
   BtreePcursor pcur(fsp, m_sys.m_dict->m_store.m_btree);
 
   /* Scan SYS_INDEXES for all indexes of the table */
-  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &mtr, Current_location());
+  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_MODIFY_LEAF, &mtr, Current_location());
 
   while (pcur.is_on_user_rec()) {
 
@@ -782,11 +782,11 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
         /* We will need to commit and restart the mini-transaction in order to avoid deadlocks.
         The dict_truncate_index_tree() call has allocated a page in this mini-transaction, and the rest of
         this loop could latch another index page. */
-        mtr.commit();
+        mtr.commit(m_sys);
 
         mtr.start();
 
-        (void)pcur.restore_position(BTR_MODIFY_LEAF, &mtr, Current_location());
+        (void)pcur.restore_position(m_sys, BTR_MODIFY_LEAF, &mtr, Current_location());
       }
     }
 
@@ -795,7 +795,7 @@ DbErr Ddl::truncate_table(Table *table, Trx *trx) noexcept {
 
   pcur.close();
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   mem_heap_free(heap);
 
@@ -1296,7 +1296,7 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
 
   auto sys_clustered_index = m_sys.m_dict->m_sys_tables->get_clustered_index();
 
-  pcur.open_at_index_side(true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.open_at_index_side(m_sys, true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
     (void)pcur.move_to_next_user_rec(&mtr);
@@ -1334,7 +1334,7 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
 
     pcur.store_position(&mtr);
 
-    pcur.commit_specify_mtr(&mtr);
+    pcur.commit_specify_mtr(m_sys, &mtr);
 
     auto table = m_sys.m_dict->m_loader.load_table_on_id(recovery, table_id);
 
@@ -1345,7 +1345,7 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
           if (auto err = drop_index(table, index, trx); err != DB_SUCCESS) {
             log_warn("DROP DATABASE failed with error ", err, " while dropping temporaryindex ", index->m_name);
           }
-          auto err_commit = trx->commit();
+          auto err_commit = trx->commit(m_sys);
           ut_a(err_commit == DB_SUCCESS);
         }
       }
@@ -1353,16 +1353,16 @@ void Ddl::drop_all_temp_indexes(IbRecovery recovery) noexcept {
 
     mtr.start();
 
-    (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+    (void)pcur.restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
   }
 
   pcur.close();
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   m_sys.m_dict->unlock_data_dictionary(trx);
 
-  auto err_commit = trx->commit();
+  auto err_commit = trx->commit(m_sys);
   ut_a(err_commit == DB_SUCCESS);
 
   m_sys.m_trx_sys->destroy_background_trx(trx);
@@ -1388,7 +1388,7 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
   BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
   auto sys_clustered_index = m_sys.m_dict->m_sys_tables->get_clustered_index();
-  pcur.open_at_index_side(true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.open_at_index_side(m_sys, true, sys_clustered_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
 
@@ -1435,7 +1435,7 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
     }
 
     pcur.store_position(&mtr);
-    pcur.commit_specify_mtr(&mtr);
+    pcur.commit_specify_mtr(m_sys, &mtr);
 
     auto table = m_sys.m_dict->m_loader.load_table(recovery, table_name);
 
@@ -1443,24 +1443,24 @@ void Ddl::drop_all_temp_tables(IbRecovery recovery) noexcept {
       if (auto err = drop_table(table_name, trx, false); err != DB_SUCCESS) {
         log_warn("DROP DATABASE failed with error ", err, " while dropping table ", table_name);
       }
-      const auto err_commit = trx->commit();
+      const auto err_commit = trx->commit(m_sys);
       ut_a(err_commit == DB_SUCCESS);
     }
 
     mtr.start();
 
-    (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+    (void)pcur.restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
   }
 
   pcur.close();
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   mem_heap_free(heap);
 
   m_sys.m_dict->unlock_data_dictionary(trx);
 
-  auto err_commit = trx->commit();
+  auto err_commit = trx->commit(m_sys);
   ut_a(err_commit == DB_SUCCESS);
 
   m_sys.m_trx_sys->destroy_background_trx(trx);

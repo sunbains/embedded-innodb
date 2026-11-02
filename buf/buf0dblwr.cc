@@ -71,7 +71,7 @@ DbErr Dblwr::initialize() noexcept {
 
   mtr.dblwr_create_in_progresss();
 
-  auto block = m_sys.m_fsp->m_buf_pool->get(req, nullptr);
+  auto block = m_sys.m_buf_pool->get(req, nullptr);
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_NO_ORDER_CHECK));
 
@@ -82,13 +82,13 @@ DbErr Dblwr::initialize() noexcept {
 
   log_info("Doublewrite buffer not found: creating new");
 
-  if (m_sys.m_fsp->m_buf_pool->get_curr_size() < ((2 * SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2 + 100) * UNIV_PAGE_SIZE)) {
+  if (m_sys.m_buf_pool->get_curr_size() < ((2 * SYS_DOUBLEWRITE_BLOCK_SIZE + FSP_EXTENT_SIZE / 2 + 100) * UNIV_PAGE_SIZE)) {
     log_err(
       "Cannot create doublewrite buffer: you must increase your buffer pool size."
       " Cannot continue operation."
     );
 
-    mtr.commit();
+    mtr.commit(m_sys);
     return DB_FATAL;
   }
 
@@ -107,7 +107,7 @@ DbErr Dblwr::initialize() noexcept {
     /* We need to exit without committing the mtr to prevent its modifications to
     the database getting to disk */
 
-    mtr.commit();
+    mtr.commit(m_sys);
     return DB_FATAL;
   }
 
@@ -123,7 +123,7 @@ DbErr Dblwr::initialize() noexcept {
         " Cannot continue operation."
       );
 
-      mtr.commit();
+      mtr.commit(m_sys);
       return DB_FATAL;
     }
 
@@ -169,7 +169,7 @@ DbErr Dblwr::initialize() noexcept {
 
   mlog_write_ulint(dblwr + SYS_DOUBLEWRITE_SPACE_ID_STORED, SYS_DOUBLEWRITE_SPACE_ID_STORED_N, MLOG_4BYTES, &mtr);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   log_info("Doublewrite buffer created");
 
@@ -212,7 +212,7 @@ void Dblwr::recover_pages() noexcept {
   /* Read the trx sys header to check if we are using the doublewrite buffer.
    * Note: We bypass the buffer pool here.*/
 
-  m_sys.m_fsp->m_fil->data_io(
+  m_sys.m_fil->data_io(
     IoRequest::Sync_read, false, PageId(SYS_TABLESPACE, TRX_SYS_PAGE_NO), 0, UNIV_PAGE_SIZE, read_buf, nullptr
   );
 
@@ -227,11 +227,11 @@ void Dblwr::recover_pages() noexcept {
 
   /* Read the pages from both the doublewrite buffers into memory */
 
-  m_sys.m_fsp->m_fil->data_io(
+  m_sys.m_fil->data_io(
     IoRequest::Sync_read, false, PageId(SYS_TABLESPACE, m_block1), 0, SYS_DOUBLEWRITE_BLOCK_SIZE * UNIV_PAGE_SIZE, buf, nullptr
   );
 
-  m_sys.m_fsp->m_fil->data_io(
+  m_sys.m_fil->data_io(
     IoRequest::Sync_read,
     false,
     PageId(SYS_TABLESPACE, m_block2),
@@ -250,10 +250,10 @@ void Dblwr::recover_pages() noexcept {
     const auto page_no = mach_read_from_4(page + FIL_PAGE_OFFSET);
     const auto space_id = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
 
-    if (!m_sys.m_fsp->m_fil->tablespace_exists_in_mem(space_id)) {
+    if (!m_sys.m_fil->tablespace_exists_in_mem(space_id)) {
       /* Maybe we have dropped the single-table tablespace
       and this page once belonged to it: do nothing */
-    } else if (!m_sys.m_fsp->m_fil->check_adress_in_tablespace(space_id, page_no)) {
+    } else if (!m_sys.m_fil->check_adress_in_tablespace(space_id, page_no)) {
       log_warn(std::format(
         "A page in the doublewrite buffer is not within space bounds; space id {}"
         " page number {}, page {} in doublewrite buf.",
@@ -266,11 +266,11 @@ void Dblwr::recover_pages() noexcept {
       /* It is an unwritten doublewrite buffer page: do nothing */
     } else {
       /* Read in the actual page from the file */
-      m_sys.m_fsp->m_fil->data_io(IoRequest::Sync_read, false, PageId(space_id, page_no), 0, UNIV_PAGE_SIZE, read_buf, nullptr);
+      m_sys.m_fil->data_io(IoRequest::Sync_read, false, PageId(space_id, page_no), 0, UNIV_PAGE_SIZE, read_buf, nullptr);
 
       /* Check if the page is corrupt */
 
-      if (unlikely(m_sys.m_fsp->m_buf_pool->is_corrupted(read_buf))) {
+      if (unlikely(m_sys.m_buf_pool->is_corrupted(read_buf))) {
 
         log_warn(std::format(
           "Database page corruption or a failed file read of space {} page {}."
@@ -279,7 +279,7 @@ void Dblwr::recover_pages() noexcept {
           page_no
         ));
 
-        if (m_sys.m_fsp->m_buf_pool->is_corrupted(page)) {
+        if (m_sys.m_buf_pool->is_corrupted(page)) {
           log_info("Dump of the page:");
           buf_page_print(read_buf, 0);
           log_warn("Dump of corresponding page in doublewrite buffer:");
@@ -295,7 +295,7 @@ void Dblwr::recover_pages() noexcept {
         /* Write the good page from the doublewrite buffer to the intended
          * position */
 
-        m_sys.m_fsp->m_fil->data_io(IoRequest::Sync_write, false, PageId(space_id, page_no), 0, UNIV_PAGE_SIZE, page, nullptr);
+        m_sys.m_fil->data_io(IoRequest::Sync_write, false, PageId(space_id, page_no), 0, UNIV_PAGE_SIZE, page, nullptr);
 
         log_info("Recovered the page from the doublewrite buffer.");
       }
@@ -304,7 +304,7 @@ void Dblwr::recover_pages() noexcept {
     page += UNIV_PAGE_SIZE;
   }
 
-  m_sys.m_fsp->m_fil->flush_file_spaces(FIL_TABLESPACE);
+  m_sys.m_fil->flush_file_spaces(FIL_TABLESPACE);
 
   ut_delete(ptr);
 }

@@ -230,7 +230,7 @@ inline byte *trx_undo_update_rec_get_field_no(
   return ptr;
 }
 
-byte *TrxUndoRecord::update_rec_get_update(
+byte *TrxUndoRecord::update_rec_get_update(System &sys, 
   byte *ptr, Index *index, ulint type, trx_id_t trx_id, roll_ptr_t roll_ptr, ulint info_bits, Trx *trx, MemHeap *heap,
   Upd **upd
 ) {
@@ -253,7 +253,7 @@ byte *TrxUndoRecord::update_rec_get_update(
 
   auto upd_field = update->get_nth_field(n_fields);
   buf = mem_heap_alloc(heap, DATA_TRX_ID_LEN);
-  srv_trx_sys->write_trx_id(buf, trx_id);
+  sys.m_trx_sys->write_trx_id(buf, trx_id);
 
   upd_field->set_field_no(index->get_sys_col_field_pos(DATA_TRX_ID), index, trx);
   dfield_set_data(&upd_field->m_new_val, buf, DATA_TRX_ID_LEN);
@@ -370,34 +370,34 @@ byte *TrxUndoRecord::get_partial_row(byte *ptr, Index *index, DTuple **row, bool
   return ptr;
 }
 
-TrxUndoRecord TrxUndoRecord::get_undo_rec_low(roll_ptr_t roll_ptr, MemHeap *heap) {
+TrxUndoRecord TrxUndoRecord::get_undo_rec_low(System &sys, roll_ptr_t roll_ptr, MemHeap *heap) {
   ulint offset;
   ulint rseg_id;
   bool is_insert;
   page_no_t page_no;
 
   trx_undo_decode_roll_ptr(roll_ptr, &is_insert, &rseg_id, &page_no, &offset);
-  auto rseg = TrxRseg::get_on_id(rseg_id);
+  auto rseg = TrxRseg::get_on_id(sys, rseg_id);
 
   Mtr mtr;
 
   mtr.start();
 
-  auto undo_page = srv_undo->page_get_s_latched(rseg->m_space, page_no, &mtr);
+  auto undo_page = sys.m_undo->page_get_s_latched(rseg->m_space, page_no, &mtr);
 
   auto undo_rec = TrxUndoRecord(undo_page + offset).copy(heap);
 
-  mtr.commit();
+  mtr.commit(sys);
 
   return undo_rec;
 }
 
-DbErr TrxUndoRecord::get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, TrxUndoRecord *undo_rec, MemHeap *heap) {
+DbErr TrxUndoRecord::get_undo_rec(System &sys, roll_ptr_t roll_ptr, trx_id_t trx_id, TrxUndoRecord *undo_rec, MemHeap *heap) {
 #ifdef UNIV_SYNC_DEBUG
   ut_ad(rw_lock_own(&purge_sys->latch, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
-  if (!srv_trx_sys->m_purge->update_undo_must_exist(trx_id)) {
+  if (!sys.m_trx_sys->m_purge->update_undo_must_exist(trx_id)) {
 
     /* It may be that the necessary undo log has already been
     deleted */
@@ -405,12 +405,12 @@ DbErr TrxUndoRecord::get_undo_rec(roll_ptr_t roll_ptr, trx_id_t trx_id, TrxUndoR
     return DB_MISSING_HISTORY;
   }
 
-  *undo_rec = get_undo_rec_low(roll_ptr, heap);
+  *undo_rec = get_undo_rec_low(sys, roll_ptr, heap);
 
   return DB_SUCCESS;
 }
 
-DbErr TrxUndoRecord::prev_version_build(
+DbErr TrxUndoRecord::prev_version_build(System &sys, 
   const Rec index_rec, Mtr *index_mtr __attribute__((unused)), const Rec rec, Index *index, RecOffs offsets, MemHeap *heap,
   Rec *old_vers
 ) {
@@ -428,7 +428,7 @@ DbErr TrxUndoRecord::prev_version_build(
 #endif /* UNIV_SYNC_DEBUG */
 
   ut_ad(
-    index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_S_FIX) || index_mtr->memo_contains_page(index_rec, MTR_MEMO_PAGE_X_FIX)
+    index_mtr->memo_contains_page(sys, index_rec, MTR_MEMO_PAGE_S_FIX) || index_mtr->memo_contains_page(sys, index_rec, MTR_MEMO_PAGE_X_FIX)
   );
 
   ut_ad(rec.offs_validate(index, offsets));
@@ -461,7 +461,7 @@ DbErr TrxUndoRecord::prev_version_build(
 
   auto rec_trx_id = row_get_rec_trx_id(rec, index, offsets);
 
-  auto err = get_undo_rec(roll_ptr, rec_trx_id, &undo_rec, heap);
+  auto err = get_undo_rec(sys, roll_ptr, rec_trx_id, &undo_rec, heap);
 
   if (unlikely(err != DB_SUCCESS)) {
     /* The undo record may already have been purged.
@@ -499,7 +499,7 @@ DbErr TrxUndoRecord::prev_version_build(
 
   ptr = skip_row_ref(ptr, index);
 
-  ptr = update_rec_get_update(ptr, index, pars.m_type, trx_id, roll_ptr, info_bits, nullptr, heap, &update);
+  ptr = update_rec_get_update(sys, ptr, index, pars.m_type, trx_id, roll_ptr, info_bits, nullptr, heap, &update);
 
   if (pars.m_table_id != index->m_table->m_id) {
     ptr = nullptr;
@@ -539,12 +539,12 @@ DbErr TrxUndoRecord::prev_version_build(
       "Record trx id {}, update rec trx id {} Roll ptr in rec {}, in update rec {}", rec_trx_id, trx_id, old_roll_ptr, roll_ptr
     ));
 
-    log_info(srv_trx_sys->m_purge->to_string());
+    log_info(sys.m_trx_sys->m_purge->to_string());
 
     return DB_ERROR;
   }
 
-  if (srv_row_upd->changes_field_size_or_external(index, offsets, update)) {
+  if (sys.m_row_upd->changes_field_size_or_external(index, offsets, update)) {
     ulint n_ext;
 
     /* We have to set the appropriate extern storage bits in the
@@ -555,14 +555,14 @@ DbErr TrxUndoRecord::prev_version_build(
 
     entry = row_rec_to_index_entry(ROW_COPY_DATA, rec, index, offsets, &n_ext, heap);
 
-    Blob blob(srv_fsp, srv_btree_sys);
+    Blob blob(sys.m_fsp, sys.m_btree);
 
     n_ext += blob.push_update_extern_fields(entry, update, heap);
 
     /* The page containing the clustered index record
     corresponding to entry is latched in mtr.  Thus the
     following call is safe. */
-    srv_row_upd->index_replace_new_col_vals(entry, index, update, heap);
+    sys.m_row_upd->index_replace_new_col_vals(entry, index, update, heap);
 
     buf = mem_heap_alloc(heap, rec_get_converted_size(index, entry, n_ext));
 
@@ -573,7 +573,7 @@ DbErr TrxUndoRecord::prev_version_build(
     buf = mem_heap_alloc(heap, offsets.size());
     *old_vers = rec.copy(buf, offsets);
     ut_d(old_vers->offs_make_valid(index, offsets));
-    srv_row_upd->rec_in_place(*old_vers, index, offsets, update);
+    sys.m_row_upd->rec_in_place(*old_vers, index, offsets, update);
   }
 
   return DB_SUCCESS;

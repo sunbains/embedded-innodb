@@ -199,21 +199,21 @@ class PCursor {
   PCursor(BtreePcursor *pcur, Mtr *mtr, size_t read_level) : m_mtr(mtr), m_pcur(pcur), m_read_level(read_level) {}
 
   /** Create a savepoint and commit the mini-transaction.*/
-  void savepoint() noexcept;
+  void savepoint(System &sys) noexcept;
 
   /** Resume from savepoint. */
-  void resume() noexcept;
+  void resume(System &sys) noexcept;
 
   /** Move to the next block.
   @param[in]  index             Index being traversed.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] DbErr move_to_next_block(Index *index);
+  [[nodiscard]] DbErr move_to_next_block(System &sys, Index *index);
 
   /** Restore the cursor position. */
-  void restore_position() noexcept {
+  void restore_position(System &sys) noexcept {
     constexpr auto MODE = BTR_SEARCH_LEAF;
     const auto relative = m_pcur->m_rel_pos;
-    auto equal = m_pcur->restore_position(MODE, m_mtr, Current_location());
+    auto equal = m_pcur->restore_position(sys, MODE, m_mtr, Current_location());
 
     switch (relative) {
       case BtreeCursorPos::ON:
@@ -263,7 +263,7 @@ class PCursor {
 
   /** Restore from a saved position.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] DbErr restore_from_savepoint() noexcept;
+  [[nodiscard]] DbErr restore_from_savepoint(System &sys) noexcept;
 
   /** Move to the first user rec on the restored page. */
   [[nodiscard]] DbErr move_to_user_rec(System &sys) noexcept;
@@ -296,16 +296,16 @@ BufBlock *ParallelReader::ScanCtx::block_get_s_latched(System &sys, const PageId
   return block;
 }
 
-void PCursor::savepoint() noexcept {
+void PCursor::savepoint(System &sys) noexcept {
   /* Store the cursor position on the previous user record on the page. */
   m_pcur->move_to_prev_on_page();
 
   m_pcur->store_position(m_mtr);
 
-  m_mtr->commit();
+  m_mtr->commit(sys);
 }
 
-void PCursor::resume() noexcept {
+void PCursor::resume(System &sys) noexcept {
   m_mtr->start();
 
   m_mtr->disable_redo_logging();
@@ -313,7 +313,7 @@ void PCursor::resume() noexcept {
   /* Restore position on the record, or its predecessor if the record
   was purged meanwhile. */
 
-  restore_position();
+  restore_position(sys);
 
   if (!m_pcur->is_after_last_on_page()) {
     /* Move to the successor of the saved record. */
@@ -326,7 +326,7 @@ DbErr PCursor::move_to_user_rec(System &sys) noexcept {
   const auto next_page_no = sys.m_btree->page_get_next(cur->get_page(), m_mtr);
 
   if (next_page_no == FIL_NULL) {
-    m_mtr->commit();
+    m_mtr->commit(sys);
     return DB_END_OF_INDEX;
   }
 
@@ -361,20 +361,20 @@ DbErr PCursor::move_to_user_rec(System &sys) noexcept {
   return DB_SUCCESS;
 }
 
-DbErr PCursor::restore_from_savepoint() noexcept {
-  resume();
-  return m_pcur->is_on_user_rec() ? DB_SUCCESS : move_to_user_rec();
+DbErr PCursor::restore_from_savepoint(System &sys) noexcept {
+  resume(sys);
+  return m_pcur->is_on_user_rec() ? DB_SUCCESS : move_to_user_rec(sys);
 }
 
-DbErr ParallelReader::ThreadCtx::restore_from_savepoint() noexcept {
-  return m_pcursor->restore_from_savepoint();
+DbErr ParallelReader::ThreadCtx::restore_from_savepoint(System &sys) noexcept {
+  return m_pcursor->restore_from_savepoint(sys);
 }
 
-void ParallelReader::ThreadCtx::savepoint() noexcept {
-  m_pcursor->savepoint();
+void ParallelReader::ThreadCtx::savepoint(System &sys) noexcept {
+  m_pcursor->savepoint(sys);
 }
 
-DbErr PCursor::move_to_next_block(Index *index) {
+DbErr PCursor::move_to_next_block(System &sys, Index *index) {
   ut_ad(m_pcur->is_after_last_on_page());
 
   if (rw_lock_get_waiters(index->get_lock())) {
@@ -385,14 +385,14 @@ DbErr PCursor::move_to_next_block(Index *index) {
     /* We should always yield on a block boundary. */
     ut_ad(m_pcur->is_after_last_on_page());
 
-    savepoint();
+    savepoint(sys);
 
     /* Yield so that another thread can proceed. */
     std::this_thread::yield();
 
-    return restore_from_savepoint();
+    return restore_from_savepoint(sys);
   } else {
-    return move_to_user_rec();
+    return move_to_user_rec(sys);
   }
 }
 
@@ -526,10 +526,10 @@ std::shared_ptr<ParallelReader::ScanCtx::Iter> ParallelReader::ScanCtx::create_p
   return iter;
 }
 
-bool ParallelReader::Ctx::move_to_next_node(PCursor *pcursor) {
+bool ParallelReader::Ctx::move_to_next_node(System &sys, PCursor *pcursor) {
   IF_DEBUG(auto cur = m_range.first->m_pcur->get_page_cur();)
 
-  auto err = pcursor->move_to_next_block(const_cast<Index *>(index()));
+  auto err = pcursor->move_to_next_block(sys, const_cast<Index *>(index()));
 
   if (err != DB_SUCCESS) {
     ut_a(err == DB_END_OF_INDEX);
@@ -542,7 +542,7 @@ bool ParallelReader::Ctx::move_to_next_node(PCursor *pcursor) {
   }
 }
 
-DbErr ParallelReader::Ctx::traverse() {
+DbErr ParallelReader::Ctx::traverse(System &sys) {
   /* Take index lock if the requested read level is on a non-leaf level as the
   index lock is required to access non-leaf page.  */
   if (m_scan_ctx->m_config.m_read_level != 0) {
@@ -558,7 +558,7 @@ DbErr ParallelReader::Ctx::traverse() {
   auto &from = m_range.first;
 
   PCursor pcursor(from->m_pcur, &mtr, m_scan_ctx->m_config.m_read_level);
-  pcursor.restore_position();
+  pcursor.restore_position(sys);
 
   DbErr err{DB_SUCCESS};
 
@@ -567,7 +567,7 @@ DbErr ParallelReader::Ctx::traverse() {
   err = traverse_recs(&pcursor, &mtr);
 
   if (mtr.is_active()) {
-    mtr.commit();
+    mtr.commit(sys);
   }
 
   m_thread_ctx->m_pcursor = nullptr;
@@ -1110,7 +1110,7 @@ DbErr ParallelReader::ScanCtx::create_ranges(System &sys,
   return DB_SUCCESS;
 }
 
-DbErr ParallelReader::ScanCtx::partition(
+DbErr ParallelReader::ScanCtx::partition(System &sys, 
   const ScanRange &scan_range, ParallelReader::ScanCtx::Ranges &ranges, size_t split_level
 ) {
   ut_ad(index_s_own());
@@ -1140,7 +1140,7 @@ DbErr ParallelReader::ScanCtx::partition(
     }
   }
 
-  mtr.commit();
+  mtr.commit(sys);
 
   return err;
 }

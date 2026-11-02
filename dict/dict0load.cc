@@ -59,7 +59,7 @@ char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
   dfield_set_data(dfield, name, strlen(name));
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
   for (;;) {
     const auto rec = pcur.get_rec();
@@ -69,7 +69,7 @@ char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
 
       pcur.close();
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       mem_heap_free(heap);
 
@@ -86,7 +86,7 @@ char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
 
       pcur.close();
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       mem_heap_free(heap);
 
@@ -99,7 +99,7 @@ char *DictLoad::get_first_table_name_in_db(const char *name) noexcept {
 
       pcur.close();
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       mem_heap_free(heap);
 
@@ -120,7 +120,7 @@ std::string DictLoad::to_string() noexcept {
   monitor printout */
 
   mutex_enter(&m_sys.m_trx_sys->m_mutex);
-  srv_fatal_semaphore_wait_threshold += 7200; /* 2 hours */
+  m_sys.m_srv->m_fatal_semaphore_wait_threshold += 7200; /* 2 hours */
   mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
   m_sys.m_dict->mutex_acquire();
@@ -133,7 +133,7 @@ std::string DictLoad::to_string() noexcept {
   auto sys_tables = m_sys.m_dict->table_get("SYS_TABLES");
   auto sys_index = sys_tables->m_indexes.front();
 
-  pcur.open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.open_at_index_side(m_sys, true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (;;) {
     (void)pcur.move_to_next_user_rec(&mtr);
@@ -145,14 +145,14 @@ std::string DictLoad::to_string() noexcept {
 
       pcur.close();
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       m_sys.m_dict->mutex_release();
 
       /* Restore the fatal semaphore wait timeout */
 
       mutex_enter(&m_sys.m_trx_sys->m_mutex);
-      srv_fatal_semaphore_wait_threshold -= 7200; /* 2 hours */
+      m_sys.m_srv->m_fatal_semaphore_wait_threshold -= 7200; /* 2 hours */
       mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
       return str;
@@ -169,7 +169,7 @@ std::string DictLoad::to_string() noexcept {
 
       pcur.store_position(&mtr);
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       auto table = m_sys.m_dict->table_get(table_name);
 
@@ -190,7 +190,7 @@ std::string DictLoad::to_string() noexcept {
 
       mtr.start();
 
-      (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)pcur.restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
     }
   }
 
@@ -245,7 +245,7 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
   auto sys_tables = m_sys.m_dict->table_get("SYS_TABLES");
   auto sys_index = sys_tables->m_indexes.front();
 
-  pcur.open_at_index_side(true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
+  pcur.open_at_index_side(m_sys, true, sys_index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   auto fil = fsp->m_fil;
 
@@ -258,7 +258,7 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
       /* End of index */
       pcur.close();
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       /* We must make the tablespace cache aware of the biggest known space id */
       fil->set_max_space_id_if_bigger(max_space_id);
@@ -296,7 +296,7 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
 
         pcur.store_position(&mtr);
 
-        mtr.commit();
+        mtr.commit(m_sys);
 
         if (space_id == DICT_HDR_SPACE) {
           /* The system tablespace always exists. */
@@ -328,7 +328,7 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
 
         mtr.start();
 
-        (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+        (void)pcur.restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
       }
     }
   }
@@ -358,7 +358,7 @@ DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
 
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
   for (ulint i{}; i + DATA_N_SYS_COLS < ulint(table->m_n_cols); i++) {
 
@@ -418,7 +418,7 @@ DbErr DictLoad::load_columns(Table *table, MemHeap *heap) noexcept {
 
   pcur.close();
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   return DB_SUCCESS;
 }
@@ -447,7 +447,7 @@ DbErr DictLoad::load_fields(Index *index, MemHeap *heap) noexcept {
   dfield_set_data(dfield, buf, 8);
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
   for (ulint i{}; i < index->m_n_fields; ++i) {
 
@@ -503,7 +503,7 @@ DbErr DictLoad::load_fields(Index *index, MemHeap *heap) noexcept {
 
   pcur.close();
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   return DB_SUCCESS;
 }
@@ -534,11 +534,11 @@ DbErr DictLoad::load_indexes(Table *table, MemHeap *heap) noexcept {
   dfield_set_data(dfield, buf, 8);
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
   auto cleanup = [&]() noexcept {
     pcur.close();
-    mtr.commit();
+    mtr.commit(m_sys);
   };
 
   for (;;) {
@@ -670,13 +670,13 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
 
   BtreePcursor pcur(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
-  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
   const auto rec = pcur.get_rec();
 
   auto cleanup = [&]() noexcept {
     pcur.close();
-    mtr.commit();
+    mtr.commit(m_sys);
     mem_heap_free(heap);
   };
 
@@ -759,7 +759,7 @@ Table *DictLoad::load_table(IbRecovery recovery, const char *name) noexcept {
 
   pcur.close();
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   auto err = load_columns(table, heap);
 
@@ -835,13 +835,13 @@ Table *DictLoad::load_table_on_id(IbRecovery recovery, Dict_id table_id) noexcep
   dfield_set_data(dfield, id_buf, 8);
   sys_table_ids->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(sys_table_ids, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.open_on_user_rec(m_sys, sys_table_ids, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
   auto rec = pcur.get_rec();
 
   auto cleanup = [&]() noexcept {
     pcur.close();
-    mtr.commit();
+    mtr.commit(m_sys);
     mem_heap_free(heap);
   };
 
@@ -922,7 +922,7 @@ DbErr DictLoad::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
   dfield_set_data(dfield, id, strlen(id));
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
   for (ulint i{}; i < foreign->m_n_fields; ++i) {
     auto rec = pcur.get_rec();
@@ -953,7 +953,7 @@ DbErr DictLoad::load_foreign_cols(const char *id, Foreign *foreign) noexcept {
 
   pcur.close();
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   return DB_SUCCESS;
 }
@@ -979,12 +979,12 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
   dfield_set_data(dfield, id, strlen(id));
   sys_index->copy_types(tuple, 1);
 
-  pcur.open_on_user_rec(sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+  pcur.open_on_user_rec(m_sys, sys_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
   auto rec = pcur.get_rec();
 
   auto cleanup = [&]() noexcept {
     pcur.close();
-    mtr.commit();
+    mtr.commit(m_sys);
     mem_heap_free(heap2);
   };
 
@@ -1038,7 +1038,7 @@ DbErr DictLoad::load_foreign(const char *id, bool check_charsets) noexcept {
 
   pcur.close();
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   auto err = load_foreign_cols(id, foreign);
 
@@ -1091,7 +1091,7 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
 
     mtr.start();
 
-    pcur.open_on_user_rec(sec_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
+    pcur.open_on_user_rec(m_sys, sec_index, tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF, &mtr, Current_location());
 
     for (auto rec = pcur.get_rec();; !pcur.is_on_user_rec(), (void)pcur.move_to_next_user_rec(&mtr)) {
 
@@ -1132,7 +1132,7 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
 
       pcur.store_position(&mtr);
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       /* Load the foreign constraint definition to the dictionary cache */
 
@@ -1147,14 +1147,14 @@ DbErr DictLoad::load_foreigns(const char *table_name, bool check_charsets) noexc
 
       mtr.start();
 
-      (void)pcur.restore_position(BTR_SEARCH_LEAF, &mtr, Current_location());
+      (void)pcur.restore_position(m_sys, BTR_SEARCH_LEAF, &mtr, Current_location());
     }
 
     mem_heap_free(heap);
 
     pcur.close();
 
-    mtr.commit();
+    mtr.commit(m_sys);
   }
 
   return DB_SUCCESS;
@@ -1180,7 +1180,7 @@ DbErr DictLoad::load_system_tables() noexcept {
   it will immediately be updated to the disk-based header. */
 
   store.m_row_id =
-    ut_uint64_align_up(mtr.read_uint64(hdr + DICT_HDR_ROW_ID), DICT_HDR_ROW_ID_WRITE_MARGIN) + DICT_HDR_ROW_ID_WRITE_MARGIN;
+    ut_uint64_align_up(mtr.read_uint64(m_sys, hdr + DICT_HDR_ROW_ID), DICT_HDR_ROW_ID_WRITE_MARGIN) + DICT_HDR_ROW_ID_WRITE_MARGIN;
 
   /* Insert into the dictionary cache the descriptions of the basic system tables */
 
@@ -1216,7 +1216,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_TABLES_ID;
 
-  auto err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_TABLES, MLOG_4BYTES), false);
+  auto err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(m_sys, hdr + DICT_HDR_TABLES, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1226,7 +1226,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_TABLE_IDS_ID;
 
-  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(m_sys, hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1253,7 +1253,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_COLUMNS_ID;
 
-  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_COLUMNS, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(m_sys, hdr + DICT_HDR_COLUMNS, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1290,7 +1290,7 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_INDEXES_ID;
 
-  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_INDEXES, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(m_sys, hdr + DICT_HDR_INDEXES, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
   /*-------------------------*/
@@ -1313,10 +1313,10 @@ DbErr DictLoad::load_system_tables() noexcept {
 
   index->m_id = DICT_FIELDS_ID;
 
-  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(hdr + DICT_HDR_FIELDS, MLOG_4BYTES), false);
+  err = m_sys.m_dict->index_add_to_cache(index, mtr.read_ulint(m_sys, hdr + DICT_HDR_FIELDS, MLOG_4BYTES), false);
   ut_a(err == DB_SUCCESS);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   /* Load definitions of other indexes on system tables */
   err = load_system_table(m_sys.m_dict->m_sys_tables);

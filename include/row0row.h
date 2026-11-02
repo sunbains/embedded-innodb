@@ -212,7 +212,7 @@ inline void row_build_row_ref_fast(DTuple *ref, const ulint *map, const Rec rec,
  *
  * @return true if found.
  */
-bool row_search_on_row_ref(BtreePcursor *pcur, ulint mode, const Table *table, const DTuple *ref, Mtr *mtr);
+bool row_search_on_row_ref(System &sys, BtreePcursor *pcur, ulint mode, const Table *table, const DTuple *ref, Mtr *mtr);
 
 /**
  * @brief Fetches the clustered index record for a secondary index record.
@@ -226,7 +226,7 @@ bool row_search_on_row_ref(BtreePcursor *pcur, ulint mode, const Table *table, c
  *
  * @return Rec  Record or NULL, if no record found
  */
-Rec row_get_clust_rec(ulint mode, const Rec rec, const Index *index, Index **clust_index, Mtr *mtr);
+Rec row_get_clust_rec(System &sys, ulint mode, const Rec rec, const Index *index, Index **clust_index, Mtr *mtr);
 
 /**
  * @brief Searches an index record.
@@ -239,7 +239,7 @@ Rec row_get_clust_rec(ulint mode, const Rec rec, const Index *index, Index **clu
  *
  * @return true if found
  */
-bool row_search_index_entry(Index *index, const DTuple *entry, ulint mode, BtreePcursor *pcur, Mtr *mtr);
+bool row_search_index_entry(System &sys, Index *index, const DTuple *entry, ulint mode, BtreePcursor *pcur, Mtr *mtr);
 
 /**
  * @brief The allowed latching order of index records is the following:

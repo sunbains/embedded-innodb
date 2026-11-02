@@ -102,15 +102,7 @@ struct BtreeCursor {
 
   using Paths = std::array<Path, BTR_PATH_ARRAY_N_SLOTS>;
 
-  BtreeCursor() = delete;
-
-  /**
-   * Constructor.
-   *
-   * @param[in] fsp             The file segment manager.
-   * @param[in] btree           The B-tree.
-   */
-  BtreeCursor(Fsp *fsp, Btree *btree) : sys.m_fsp(fsp), sys.m_btree(btree), sys.m_lock_sys(btree->m_lock_sys) {}
+  BtreeCursor() = default;
 
   /**
    * Searches to the nth level of the index tree.
@@ -159,7 +151,7 @@ struct BtreeCursor {
    * @param[in] mtr             the mini-transaction handle
    * @param[in] loc             the source location
    */
-  void open_at_index_side(
+  void open_at_index_side(System &sys, 
     Paths *paths, bool from_left, const Index *index, ulint latch_mode, ulint level, Mtr *mtr, SourceLocation source_location
   ) noexcept;
 
@@ -376,7 +368,7 @@ struct BtreeCursor {
    *
    * @return         estimated number of rows
    */
-  [[nodiscard]] int64_t estimate_n_rows_in_range(
+  [[nodiscard]] int64_t estimate_n_rows_in_range(System &sys, 
     Index *index, const DTuple *tuple1, ulint mode1, const DTuple *tuple2, ulint mode2
   ) noexcept;
 
@@ -637,33 +629,6 @@ struct BtreeCursor {
    */
   inline void del_mark_set_sec_rec_log(Rec rec, bool val, Mtr *mtr) noexcept;
 
-  /**
-   * Gets the file interface.
-   *
-   * @return File interface
-   */
-  inline Fil *get_fil(System &sys) noexcept { return sys.m_fsp->m_fil; }
-
-  /**
-   * Gets the buffer pool.
-   *
-   * @return Buffer pool
-   */
-  inline BufPool *get_buf_pool(System &sys) noexcept { return sys.m_fsp->m_buf_pool; }
-
-  /**
-   * Gets the B-tree system.
-   *
-   * @return B-tree system
-   */
-  inline Btree *get_btree(System &sys) noexcept { return sys.m_btree; }
-
-  /**
-   * Gets the lock system.
-   *
-   * @return Lock system
-   */
-  inline LockSys *get_lock_sys(System &sys) noexcept { return sys.m_lock_sys; }
 
 #ifndef UNIT_TESTING
  private:
@@ -726,8 +691,6 @@ struct BtreeCursor {
   /** If the following is set to true, this module prints a lot of
   trace information of individual record operations */
   IF_DEBUG(bool m_print_record_ops{};)
-
-  /** The file segment manager */
 
   /** The B-tree system */
 

@@ -123,8 +123,8 @@ void que_var_init() {
 #endif /* UNIV_DEBUG */
 }
 
-void que_graph_publish(QueFork *graph, Session *sess) {
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+void que_graph_publish(System &sys, QueFork *graph, Session *sess) {
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
   UT_LIST_ADD_LAST(sess->m_graphs, graph);
 }
@@ -185,10 +185,10 @@ QueThr *que_thr_create(QueFork *parent, MemHeap *heap) {
   return thr;
 }
 
-void que_thr_end_wait(QueThr *thr, QueThr **next_thr) {
+void que_thr_end_wait(System &sys, QueThr *thr, QueThr **next_thr) {
   bool was_active;
 
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
   ut_ad(thr);
   ut_ad((thr->state == QUE_THR_LOCK_WAIT) || (thr->state == QUE_THR_PROCEDURE_WAIT) || (thr->state == QUE_THR_SIG_REPLY_WAIT));
   ut_ad(thr->run_node);
@@ -212,11 +212,11 @@ void que_thr_end_wait(QueThr *thr, QueThr **next_thr) {
   }
 }
 
-void que_thr_end_wait_no_next_thr(QueThr *thr) {
+void que_thr_end_wait_no_next_thr(System &sys, QueThr *thr) {
   bool was_active;
 
   ut_a(thr->state == QUE_THR_LOCK_WAIT);
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
   ut_ad(thr);
   ut_ad((thr->state == QUE_THR_LOCK_WAIT) || (thr->state == QUE_THR_PROCEDURE_WAIT) || (thr->state == QUE_THR_SIG_REPLY_WAIT));
 
@@ -320,8 +320,8 @@ QueThr *que_fork_start_command(QueFork *fork) {
   return thr;
 }
 
-void que_fork_error_handle(Trx *trx __attribute__((unused)), QueFork *fork) {
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+void que_fork_error_handle(System &sys, Trx *trx __attribute__((unused)), QueFork *fork) {
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
   ut_ad(trx->m_wait_thrs.empty());
   ut_ad(trx->m_reply_signals.empty());
   ut_ad(trx->m_sess->m_state == Session::State::ERROR);
@@ -567,7 +567,7 @@ void que_graph_free(QueFork *graph) {
  *
  * @return Query thread to run next, or nullptr if none.
  */
-static QueThr *que_thr_node_step(QueThr *thr) {
+static QueThr *que_thr_node_step(System &sys, QueThr *thr) {
   ut_ad(thr->run_node == thr);
 
   if (thr->prev_node == thr->common.parent) {
@@ -578,11 +578,11 @@ static QueThr *que_thr_node_step(QueThr *thr) {
     return thr;
   }
 
-  mutex_enter(&srv_trx_sys->m_mutex);
+  mutex_enter(&sys.m_trx_sys->m_mutex);
 
   if (que_thr_peek_stop(thr)) {
 
-    mutex_exit(&srv_trx_sys->m_mutex);
+    mutex_exit(&sys.m_trx_sys->m_mutex);
 
     return thr;
   }
@@ -591,7 +591,7 @@ static QueThr *que_thr_node_step(QueThr *thr) {
 
   thr->state = QUE_THR_COMPLETED;
 
-  mutex_exit(&srv_trx_sys->m_mutex);
+  mutex_exit(&sys.m_trx_sys->m_mutex);
 
   return nullptr;
 }
@@ -629,11 +629,11 @@ void que_thr_move_to_run_state(QueThr *thr) {
  * @param[in,out] next_thr Next query thread to run. If the value which is passed in is a pointer to a nullptr pointer,
  *   then the calling function can start running a new query thread.
  */
-static void que_thr_dec_refer_count(QueThr *thr, QueThr **next_thr) {
+static void que_thr_dec_refer_count(System &sys, QueThr *thr, QueThr **next_thr) {
   auto fork = static_cast<QueFork *>(thr->common.parent);
   auto trx = thr_get_trx(thr);
 
-  mutex_enter(&srv_trx_sys->m_mutex);
+  mutex_enter(&sys.m_trx_sys->m_mutex);
 
   ut_a(thr->is_active);
 
@@ -656,7 +656,7 @@ static void que_thr_dec_refer_count(QueThr *thr, QueThr **next_thr) {
         ut_error;
       }
 
-      mutex_exit(&srv_trx_sys->m_mutex);
+      mutex_exit(&sys.m_trx_sys->m_mutex);
 
       return;
     }
@@ -672,7 +672,7 @@ static void que_thr_dec_refer_count(QueThr *thr, QueThr **next_thr) {
 
   if (trx->m_n_active_thrs > 0) {
 
-    mutex_exit(&srv_trx_sys->m_mutex);
+    mutex_exit(&sys.m_trx_sys->m_mutex);
 
     return;
   }
@@ -711,7 +711,7 @@ static void que_thr_dec_refer_count(QueThr *thr, QueThr **next_thr) {
     zero, then we start processing a signal; from it we may get
     a new query thread to run */
 
-    trx->sig_start_handling(*next_thr);
+    trx->sig_start_handling(sys, *next_thr);
   }
 
   if (trx->m_handling_signals && trx->m_signals.empty()) {
@@ -719,13 +719,13 @@ static void que_thr_dec_refer_count(QueThr *thr, QueThr **next_thr) {
     trx->end_signal_handling();
   }
 
-  mutex_exit(&srv_trx_sys->m_mutex);
+  mutex_exit(&sys.m_trx_sys->m_mutex);
 }
 
-bool que_thr_stop(QueThr *thr) {
+bool que_thr_stop(System &sys, QueThr *thr) {
   bool ret = true;
 
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
   auto graph = thr->graph;
   auto trx = graph->trx;
@@ -791,10 +791,10 @@ void que_thr_move_to_run_state_for_client(QueThr *thr, Trx *trx) {
   thr->state = QUE_THR_RUNNING;
 }
 
-void que_thr_stop_client(QueThr *thr) {
+void que_thr_stop_client(System &sys, QueThr *thr) {
   auto trx = thr_get_trx(thr);
 
-  mutex_enter(&srv_trx_sys->m_mutex);
+  mutex_enter(&sys.m_trx_sys->m_mutex);
 
   if (thr->state == QUE_THR_RUNNING) {
 
@@ -805,7 +805,7 @@ void que_thr_stop_client(QueThr *thr) {
       /* It must have been a lock wait but the lock was already released, or this
       transaction was chosen as a victim in selective deadlock resolution */
 
-      mutex_exit(&srv_trx_sys->m_mutex);
+      mutex_exit(&sys.m_trx_sys->m_mutex);
 
       return;
     }
@@ -819,7 +819,7 @@ void que_thr_stop_client(QueThr *thr) {
   --thr->graph->n_active_thrs;
   --trx->m_n_active_thrs;
 
-  mutex_exit(&srv_trx_sys->m_mutex);
+  mutex_exit(&sys.m_trx_sys->m_mutex);
 }
 
 que_node_t *que_node_get_containing_loop_node(que_node_t *node) {
@@ -903,7 +903,7 @@ void que_node_print_info(que_node_t *node) {
 @return query thread to run next: it may differ from the input
 parameter if, e.g., a subprocedure call is made
 @param[in,out] thr              Query thread. */
-inline QueThr *que_thr_step(QueThr *thr) {
+inline QueThr *que_thr_step(System &sys, QueThr *thr) {
   auto trx = thr_get_trx(thr);
 
   ut_ad(thr->state == QUE_THR_RUNNING);
@@ -954,13 +954,13 @@ inline QueThr *que_thr_step(QueThr *thr) {
   } else if (type == QUE_NODE_ASSIGNMENT) {
     assign_step(thr);
   } else if (type == QUE_NODE_SELECT) {
-    thr = srv_row_sel->step(thr);
+    thr = sys.m_row_sel->step(thr);
   } else if (type == QUE_NODE_INSERT) {
-    thr = srv_row_ins->step(thr);
+    thr = sys.m_row_ins->step(thr);
   } else if (type == QUE_NODE_UPDATE) {
-    thr = srv_row_upd->step(thr);
+    thr = sys.m_row_upd->step(thr);
   } else if (type == QUE_NODE_FETCH) {
-    thr = srv_row_sel->fetch_step(thr);
+    thr = sys.m_row_sel->fetch_step(thr);
   } else if (type == QUE_NODE_OPEN) {
     thr = open_step(thr);
   } else if (type == QUE_NODE_FUNC) {
@@ -975,9 +975,9 @@ inline QueThr *que_thr_step(QueThr *thr) {
   } else if (type == QUE_NODE_THR) {
     thr = que_thr_node_step(thr);
   } else if (type == QUE_NODE_COMMIT) {
-    thr = Trx::commit_step(thr);
+    thr = Trx::commit_step(sys, thr);
   } else if (type == QUE_NODE_UNDO) {
-    thr = srv_row_undo->step(thr);
+    thr = sys.m_row_undo->step(thr);
   } else if (type == QUE_NODE_PURGE) {
     thr = row_purge_step(thr);
   } else if (type == QUE_NODE_RETURN) {
@@ -987,11 +987,11 @@ inline QueThr *que_thr_step(QueThr *thr) {
   } else if (type == QUE_NODE_ROLLBACK) {
     thr = trx_rollback_step(thr);
   } else if (type == QUE_NODE_CREATE_TABLE) {
-    thr = srv_dict_sys->m_store.create_table_step(thr);
+    thr = sys.m_dict->m_store.create_table_step(thr);
   } else if (type == QUE_NODE_CREATE_INDEX) {
-    thr = srv_dict_sys->m_store.create_index_step(thr);
+    thr = sys.m_dict->m_store.create_index_step(thr);
   } else if (type == QUE_NODE_ROW_PRINTF) {
-    thr = srv_row_sel->printf_step(thr);
+    thr = sys.m_row_sel->printf_step(thr);
   } else {
     ut_error;
   }
@@ -1011,12 +1011,12 @@ inline QueThr *que_thr_step(QueThr *thr) {
 
 /** Run a query thread until it finishes or encounters e.g. a lock wait.
 @param[in,out thr               Query thread. */
-static void que_run_threads_low(QueThr *thr) {
+static void que_run_threads_low(System &sys, QueThr *thr) {
   QueThr *next_thr;
 
   ut_ad(thr->state == QUE_THR_RUNNING);
   ut_a(thr_get_trx(thr)->m_error_state == DB_SUCCESS);
-  ut_ad(!mutex_own(&srv_trx_sys->m_mutex));
+  ut_ad(!mutex_own(&sys.m_trx_sys->m_mutex));
 
   for (;;) {
     /* Check that there is enough space in the log to accommodate
@@ -1024,7 +1024,7 @@ static void que_run_threads_low(QueThr *thr) {
     more than about 4 pages, checks must be made also within the query
     step! */
 
-    log_sys->free_check();
+    sys.m_log->free_check();
 
     /* Perform the actual query step: note that the query thread
     may change if, e.g., a subprocedure call is made */
@@ -1052,12 +1052,12 @@ static void que_run_threads_low(QueThr *thr) {
   }
 }
 
-void que_run_threads(QueThr *thr) {
+void que_run_threads(System &sys, QueThr *thr) {
 loop:
   ut_a(thr_get_trx(thr)->m_error_state == DB_SUCCESS);
   que_run_threads_low(thr);
 
-  mutex_enter(&srv_trx_sys->m_mutex);
+  mutex_enter(&sys.m_trx_sys->m_mutex);
 
   switch (thr->state) {
 
@@ -1065,12 +1065,12 @@ loop:
       /* There probably was a lock wait, but it already ended
     before we came here: continue running thr */
 
-      mutex_exit(&srv_trx_sys->m_mutex);
+      mutex_exit(&sys.m_trx_sys->m_mutex);
 
       goto loop;
 
     case QUE_THR_LOCK_WAIT:
-      mutex_exit(&srv_trx_sys->m_mutex);
+      mutex_exit(&sys.m_trx_sys->m_mutex);
 
       /* The ..._user_... function works also for InnoDB's
     internal threads. Let us wait that the lock wait ends. */
@@ -1097,23 +1097,23 @@ loop:
       ut_error;
   }
 
-  mutex_exit(&srv_trx_sys->m_mutex);
+  mutex_exit(&sys.m_trx_sys->m_mutex);
 }
 
-DbErr que_eval_sql(ParsInfo *info, const char *sql, bool reserve_dict_mutex, Trx *trx) {
+DbErr que_eval_sql(System &sys, ParsInfo *info, const char *sql, bool reserve_dict_mutex, Trx *trx) {
   QueThr *thr;
   QueFork *graph;
 
   ut_a(trx->m_error_state == DB_SUCCESS);
 
   if (reserve_dict_mutex) {
-    srv_dict_sys->mutex_acquire();
+    sys.m_dict->mutex_acquire();
   }
 
   graph = pars_sql(info, sql);
 
   if (reserve_dict_mutex) {
-    srv_dict_sys->mutex_release();
+    sys.m_dict->mutex_release();
   }
 
   ut_a(graph);

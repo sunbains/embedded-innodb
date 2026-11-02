@@ -350,7 +350,7 @@ bool BufPool::is_corrupted(const byte *read_buf) {
   return false;
 }
 
-void buf_page_print(const byte *read_buf, ulint) {
+void buf_page_print(System &sys, const byte *read_buf, ulint) {
   Index *index;
   auto size = UNIV_PAGE_SIZE;
 
@@ -374,15 +374,15 @@ void buf_page_print(const byte *read_buf, ulint) {
     log_info("Page may be an update undo log page\n");
   }
 
-  switch (srv_fil->page_get_type(read_buf)) {
+  switch (sys.m_fil->page_get_type(read_buf)) {
     case FIL_PAGE_TYPE_INDEX:
-      log_warn(std::format("Page may be an index page where index id is {}", srv_btree_sys->page_get_index_id(read_buf)));
+      log_warn(std::format("Page may be an index page where index id is {}", sys.m_btree->page_get_index_id(read_buf)));
 
-      index = srv_dict_sys->index_find_on_id(srv_btree_sys->page_get_index_id(read_buf));
+      index = sys.m_dict->index_find_on_id(sys.m_btree->page_get_index_id(read_buf));
 
       if (index != nullptr) {
         log_info("(");
-        srv_dict_sys->index_name_print(nullptr, index);
+        sys.m_dict->index_name_print(nullptr, index);
         log_info(")");
       }
       break;

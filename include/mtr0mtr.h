@@ -79,7 +79,7 @@ struct Mtr {
    *
    * @return The value read.
    */
-  [[nodiscard]] ulint read_ulint(const byte *ptr, ulint type) const noexcept;
+  [[nodiscard]] ulint read_ulint(System &sys, const byte *ptr, ulint type) const noexcept;
 
   /**
    * @brief Reads 8 bytes from a file page buffered in the buffer pool.
@@ -88,7 +88,7 @@ struct Mtr {
    *
    * @return The value read.
    */
-  [[nodiscard]] uint64_t read_uint64(const byte *ptr) const noexcept;
+  [[nodiscard]] uint64_t read_uint64(System &sys, const byte *ptr) const noexcept;
 
   /**
    * Releases the block in an mtr memo after a savepoint.
@@ -242,7 +242,7 @@ struct Mtr {
    *
    * @return	true if contains
    */
-  bool memo_contains_page(const byte *ptr, ulint type) const noexcept;
+  bool memo_contains_page(System &sys, const byte *ptr, ulint type) const noexcept;
 
   /**
    * Prints info of an mtr handle.
@@ -282,7 +282,7 @@ struct Mtr {
    *
    * @param mtr The mini-transaction to commit.
    */
-  void commit() noexcept;
+  void commit(System &sys) noexcept;
 
   /**
    * Disable redo loggin.

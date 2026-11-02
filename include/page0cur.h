@@ -127,7 +127,7 @@ struct PageCursor {
    * @param mtr In: MTR or NULL.
    * @return End of log record or NULL.
    */
-  static byte *parse_insert_rec(bool is_short, byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr);
+  static byte *parse_insert_rec(System &sys, bool is_short, byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr);
 
   /**
    * @brief Parses a log record of copying a record list end to a new created page.
@@ -139,7 +139,7 @@ struct PageCursor {
    * @param mtr In: MTR or NULL.
    * @return End of log record or NULL.
    */
-  static byte *parse_copy_rec_list_to_created_page(byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr);
+  static byte *parse_copy_rec_list_to_created_page(System &sys, byte *ptr, byte *end_ptr, BufBlock *block, Index *index, Mtr *mtr);
 
   /**
    * @brief Parses log record of a record delete on a page.

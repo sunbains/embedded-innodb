@@ -54,10 +54,7 @@ struct Runnable {
 
     std::atomic_thread_fence(std::memory_order_release);
 
-    {
-      const auto old = os_thread_count.fetch_add(1, std::memory_order_relaxed);
-      ut_a(old <= static_cast<int>(srv_config.m_max_n_threads) - 1);
-    }
+    os_thread_count.fetch_add(1, std::memory_order_relaxed);
 
     task();
 

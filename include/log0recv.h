@@ -46,7 +46,7 @@ Created 9/20/1997 Heikki Tuuri
                                 freshly read page
  * @param[in,out] block         buffer block
 */
-void recv_recover_page(bool just_read_in, BufBlock *block) noexcept;
+void recv_recover_page(System &sys, bool just_read_in, BufBlock *block) noexcept;
 
 /**
  * Recovers from a checkpoint. When this function returns, the database is able
@@ -60,7 +60,7 @@ void recv_recover_page(bool just_read_in, BufBlock *block) noexcept;
  *
  * @return	error code or DB_SUCCESS
  */
-DbErr recv_recovery_from_checkpoint_start(Dblwr *dblwr, IbRecovery recovery, lsn_t max_flushed_lsn) noexcept;
+DbErr recv_recovery_from_checkpoint_start(System &sys, Dblwr *dblwr, IbRecovery recovery, lsn_t max_flushed_lsn) noexcept;
 
 /**
  * Completes recovery from a checkpoint.
@@ -68,12 +68,12 @@ DbErr recv_recovery_from_checkpoint_start(Dblwr *dblwr, IbRecovery recovery, lsn
  * @param[in,out] dblwr         Doublewrite buffer to use
  * @param[in] recovery          Recovery flag
  */
-void recv_recovery_from_checkpoint_finish(Dblwr *dblwr, IbRecovery recovery) noexcept;
+void recv_recovery_from_checkpoint_finish(System &sys, Dblwr *dblwr, IbRecovery recovery) noexcept;
 
 /**
  * Initiates the rollback of active transactions.
  */
-void recv_recovery_rollback_active() noexcept;
+void recv_recovery_rollback_active(System &sys) noexcept;
 
 /**
  * Resets the logs. The contents of log files will be lost!
@@ -90,7 +90,7 @@ void recv_reset_logs(lsn_t lsn, bool new_logs_created) noexcept;
 /**
  * Reset the state of the recovery system variables.
  */
-void recv_sys_var_init() noexcept;
+void recv_sys_var_init(System &sys) noexcept;
 
 /**
  * Empties the log record storage, applying them to appropriate pages.
@@ -101,7 +101,7 @@ void recv_sys_var_init() noexcept;
  * means that no new log records can be generated during the application;
  * the caller must in this case own the log mutex;
 */
-void recv_apply_log_recs(Dblwr *dblwr, bool flush_and_free_pages) noexcept;
+void recv_apply_log_recs(System &sys, Dblwr *dblwr, bool flush_and_free_pages) noexcept;
 
 /**
  * Block of log record data, variable size struct, see note.
@@ -342,7 +342,7 @@ constexpr ulint RECV_SCAN_SIZE = 4 * UNIV_PAGE_SIZE;
  * @param[in] store_to_hash  Whether to store parsed records to hash table
  * @return true if successful
  */
-bool recv_parse_log_recs(bool store_to_hash) noexcept;
+bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept;
 
 /** Parse or apply a log record body
  * @param[in] type  Log record type
@@ -352,7 +352,7 @@ bool recv_parse_log_recs(bool store_to_hash) noexcept;
  * @param[in] mtr  Mini-transaction for applying (nullptr for parsing only)
  * @return next position in buffer or nullptr on error
  */
-byte *recv_parse_or_apply_log_rec_body(MlogType type, byte *ptr, byte *end_ptr, BufBlock *block, Mtr *mtr) noexcept;
+byte *recv_parse_or_apply_log_rec_body(System &sys, MlogType type, byte *ptr, byte *end_ptr, BufBlock *block, Mtr *mtr) noexcept;
 
 /** Start crash recovery
  * @param[in,out] dblwr Doublewrite instance to use for recovery

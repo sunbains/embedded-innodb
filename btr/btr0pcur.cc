@@ -26,7 +26,7 @@ Created 2/23/1996 Heikki Tuuri
 #include "btr0types.h"
 #include "trx0trx.h"
 
-BtreePcursor::BtreePcursor(Fsp *fsp, Btree *btree) noexcept : m_btr_cur(fsp, btree) {
+BtreePcursor::BtreePcursor() noexcept {
   m_btr_cur.m_index = nullptr;
   init(0);
 }
@@ -145,7 +145,7 @@ bool BtreePcursor::restore_position(System &sys, ulint latch_mode, Mtr *mtr, Sou
 
     /* In these cases we do not try an optimistic restoration, but always do a search */
 
-    m_btr_cur.open_at_index_side(
+    m_btr_cur.open_at_index_side(sys, 
       nullptr, m_rel_pos == BtreeCursorPos::BEFORE_FIRST_IN_TREE, index, latch_mode, m_read_level, mtr, loc
     );
 
@@ -222,7 +222,7 @@ bool BtreePcursor::restore_position(System &sys, ulint latch_mode, Mtr *mtr, Sou
     search_mode = PAGE_CUR_L;
   }
 
-  open_with_no_init(index, tuple, search_mode, latch_mode, 0, mtr, loc);
+  open_with_no_init(sys, index, tuple, search_mode, latch_mode, 0, mtr, loc);
 
   /* Restore the old search mode */
   m_search_mode = old_search_mode;
@@ -306,7 +306,7 @@ void BtreePcursor::move_to_next_page(Mtr *mtr) noexcept {
   page_check_dir(next_page);
 }
 
-void BtreePcursor::move_backward_from_page(Mtr *mtr) noexcept {
+void BtreePcursor::move_backward_from_page(System &sys, Mtr *mtr) noexcept {
   ut_a(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
   ut_ad(is_before_first_on_page());
@@ -331,11 +331,11 @@ void BtreePcursor::move_backward_from_page(Mtr *mtr) noexcept {
 
   store_position(mtr);
 
-  mtr->commit();
+  mtr->commit(sys);
 
   mtr->start();
 
-  (void)restore_position(latch_mode2, mtr, Current_location());
+  (void)restore_position(sys, latch_mode2, mtr, Current_location());
 
   auto page = get_page_no();
   auto prev_page_no = m_btr_cur.m_btree->page_get_prev(page, mtr);
@@ -365,10 +365,10 @@ void BtreePcursor::move_backward_from_page(Mtr *mtr) noexcept {
   m_old_stored = false;
 }
 
-void BtreePcursor::open_on_user_rec(
+void BtreePcursor::open_on_user_rec(System &sys, 
   Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
 ) noexcept {
-  open(index, tuple, search_mode, latch_mode, mtr, loc);
+  open(sys, index, tuple, search_mode, latch_mode, mtr, loc);
 
   if (search_mode == PAGE_CUR_GE || search_mode == PAGE_CUR_G) {
 

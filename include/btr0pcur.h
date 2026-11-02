@@ -87,7 +87,7 @@ struct BtreePcursor {
    * @param[in] fsp             The file segment manager.
    * @param[in] btree           The B-tree.
    */
-  BtreePcursor(Fsp *fsp, Btree *btree) noexcept;
+  BtreePcursor() noexcept;
 
   /**
    * @brief Destructor.
@@ -118,7 +118,7 @@ struct BtreePcursor {
    * @param[in] mtr             The mtr (mini-transaction) object.
    * @param[in] loc             The callers location
    */
-  void open_on_user_rec(
+  void open_on_user_rec(System &sys, 
     Index *index, const DTuple *tuple, ib_srch_mode_t mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
   ) noexcept;
 
@@ -200,7 +200,7 @@ struct BtreePcursor {
    *
    * @param[in] mtr             The mtr (mini-transaction) object.
    */
-  void move_backward_from_page(Mtr *mtr) noexcept;
+  void move_backward_from_page(System &sys, Mtr *mtr) noexcept;
 
   /**
    * @brief Gets the rel_pos field for a cursor whose position has been stored.
@@ -340,7 +340,7 @@ struct BtreePcursor {
    *
    * @return True if the cursor moved backward, ending on a user record.
    */
-  [[nodiscard]] bool move_to_prev_user_rec(Mtr *mtr) noexcept;
+  [[nodiscard]] bool move_to_prev_user_rec(System &sys, Mtr *mtr) noexcept;
 
   /**
    * Moves the persistent cursor to the next record in the tree. If no records
@@ -360,7 +360,7 @@ struct BtreePcursor {
    *
    * @return True if the cursor was not before first in tree.
    */
-  [[nodiscard]] bool move_to_prev(Mtr *mtr) noexcept;
+  [[nodiscard]] bool move_to_prev(System &sys, Mtr *mtr) noexcept;
 
   /**
    * Commits the mtr and sets the pcur latch mode to BTR_NO_LATCHES,
@@ -371,7 +371,7 @@ struct BtreePcursor {
    *
    * @param[in] mtr             The mtr to commit.
    */
-  void commit_specify_mtr(Mtr *mtr) noexcept;
+  void commit_specify_mtr(System &sys, Mtr *mtr) noexcept;
 
   /**
    * Sets the persistent cursor latch mode to BTR_NO_LATCHES.
@@ -416,7 +416,7 @@ struct BtreePcursor {
    * @param[in] mtr             The mtr.
    * @param[in] loc             The source location.
    */
-  void open(
+  void open(System &sys, 
     const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
   ) noexcept;
 
@@ -431,7 +431,7 @@ struct BtreePcursor {
    * @param[in] mtr             The mtr.
    * @param[in] loc             The source location.
    */
-  void open_with_no_init(
+  void open_with_no_init(System &sys, 
     const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, ulint has_search_latch, Mtr *mtr,
     SourceLocation loc
   ) noexcept;
@@ -446,7 +446,7 @@ struct BtreePcursor {
    * @param[in] level           read level where the cursor would be positioned or re-positioned.
    * @param[in] mtr             The mtr.
    */
-  void open_at_index_side(bool from_left, const Index *index, ulint latch_mode, bool do_init, ulint level, Mtr *mtr) noexcept;
+  void open_at_index_side(System &sys, bool from_left, const Index *index, ulint latch_mode, bool do_init, ulint level, Mtr *mtr) noexcept;
 
   /**
    * @brief Positions a cursor at a randomly chosen position within a B-tree.
@@ -456,7 +456,7 @@ struct BtreePcursor {
    * @param[in] mtr             The mtr.
    * @param[in] loc             The source location.
    */
-  void set_random_position(const Index *index, ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept;
+  void set_random_position(System &sys, const Index *index, ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept;
 
   /**
    * @brief Frees the possible memory heap of a persistent cursor and sets the latch mode of the persistent cursor to BTR_NO_LATCHES.
@@ -715,7 +715,7 @@ inline bool BtreePcursor::move_to_next_user_rec(Mtr *mtr) noexcept {
   }
 }
 
-inline bool BtreePcursor::move_to_prev_user_rec(Mtr *mtr) noexcept {
+inline bool BtreePcursor::move_to_prev_user_rec(System &sys, Mtr *mtr) noexcept {
   ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -726,7 +726,7 @@ inline bool BtreePcursor::move_to_prev_user_rec(Mtr *mtr) noexcept {
       if (is_before_first_in_tree(mtr)) {
         return false;
       }
-      move_backward_from_page(mtr);
+      move_backward_from_page(sys, mtr);
     } else {
       move_to_prev_on_page();
     }
@@ -760,7 +760,7 @@ inline bool BtreePcursor::move_to_next(Mtr *mtr) noexcept {
   return true;
 }
 
-inline bool BtreePcursor::move_to_prev(Mtr *mtr) noexcept {
+inline bool BtreePcursor::move_to_prev(System &sys, Mtr *mtr) noexcept {
   ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
@@ -773,7 +773,7 @@ inline bool BtreePcursor::move_to_prev(Mtr *mtr) noexcept {
       return false;
     }
 
-    move_backward_from_page(mtr);
+    move_backward_from_page(sys, mtr);
 
     return true;
   }
@@ -783,12 +783,12 @@ inline bool BtreePcursor::move_to_prev(Mtr *mtr) noexcept {
   return true;
 }
 
-inline void BtreePcursor::commit_specify_mtr(Mtr *mtr) noexcept {
+inline void BtreePcursor::commit_specify_mtr(System &sys, Mtr *mtr) noexcept {
   ut_a(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
 
   m_latch_mode = BTR_NO_LATCHES;
 
-  mtr->commit();
+  mtr->commit(sys);
 
   m_pos_state = BtrPcurPositioned::WAS_POSITIONED;
 }
@@ -811,7 +811,7 @@ inline void BtreePcursor::init(ulint read_level) noexcept {
   m_read_level = read_level;
 }
 
-inline void BtreePcursor::open(
+inline void BtreePcursor::open(System &sys, 
   const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, Mtr *mtr, SourceLocation loc
 ) noexcept {
 
@@ -821,14 +821,14 @@ inline void BtreePcursor::open(
   m_search_mode = search_mode;
 
   /* Search with the tree cursor */
-  m_btr_cur.search_to_nth_level(nullptr, index, m_read_level, tuple, search_mode, latch_mode, mtr, loc);
+  m_btr_cur.search_to_nth_level(sys, nullptr, index, m_read_level, tuple, search_mode, latch_mode, mtr, loc);
 
   m_pos_state = BtrPcurPositioned::IS_POSITIONED;
 
   m_trx_if_known = nullptr;
 }
 
-inline void BtreePcursor::open_with_no_init(
+inline void BtreePcursor::open_with_no_init(System &sys, 
   const Index *index, const DTuple *tuple, ib_srch_mode_t search_mode, ulint latch_mode, ulint has_search_latch, Mtr *mtr,
   SourceLocation loc
 ) noexcept {
@@ -838,14 +838,14 @@ inline void BtreePcursor::open_with_no_init(
 
   /* Search with the tree cursor */
 
-  m_btr_cur.search_to_nth_level(nullptr, index, m_read_level, tuple, search_mode, latch_mode, mtr, loc);
+  m_btr_cur.search_to_nth_level(sys, nullptr, index, m_read_level, tuple, search_mode, latch_mode, mtr, loc);
 
   m_old_stored = false;
   m_trx_if_known = nullptr;
   m_pos_state = BtrPcurPositioned::IS_POSITIONED;
 }
 
-inline void BtreePcursor::open_at_index_side(
+inline void BtreePcursor::open_at_index_side(System &sys, 
   bool from_left, const Index *index, ulint latch_mode, bool do_init, ulint level, Mtr *mtr
 ) noexcept {
   m_latch_mode = latch_mode;
@@ -855,21 +855,21 @@ inline void BtreePcursor::open_at_index_side(
     init(level);
   }
 
-  m_btr_cur.open_at_index_side(nullptr, from_left, index, latch_mode, m_read_level, mtr, Current_location());
+  m_btr_cur.open_at_index_side(sys, nullptr, from_left, index, latch_mode, m_read_level, mtr, Current_location());
 
   m_pos_state = BtrPcurPositioned::IS_POSITIONED;
   m_old_stored = false;
   m_trx_if_known = nullptr;
 }
 
-inline void BtreePcursor::set_random_position(const Index *index, ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept {
+inline void BtreePcursor::set_random_position(System &sys, const Index *index, ulint latch_mode, Mtr *mtr, SourceLocation loc) noexcept {
 
   m_latch_mode = latch_mode;
   m_search_mode = PAGE_CUR_G;
 
   init(0);
 
-  m_btr_cur.open_at_rnd_pos(index, latch_mode, mtr, loc);
+  m_btr_cur.open_at_rnd_pos(sys, index, latch_mode, mtr, loc);
 
   m_pos_state = BtrPcurPositioned::IS_POSITIONED;
   m_old_stored = false;

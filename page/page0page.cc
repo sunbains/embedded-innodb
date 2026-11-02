@@ -206,7 +206,7 @@ byte *page_parse_create(byte *ptr, byte *, BufBlock *block, Index *index, Mtr *m
   return ptr;
 }
 
-page_t *page_create(const Index *index, BufBlock *block, Mtr *mtr) {
+page_t *page_create(System &sys, const Index *index, BufBlock *block, Mtr *mtr) {
   ut_ad(block != nullptr);
 
   page_create_write_log(block->get_frame(), mtr);
@@ -219,7 +219,7 @@ page_t *page_create(const Index *index, BufBlock *block, Mtr *mtr) {
 
   auto page = block->get_frame();
 
-  srv_fil->page_set_type(page, FIL_PAGE_TYPE_INDEX);
+  sys.m_fil->page_set_type(page, FIL_PAGE_TYPE_INDEX);
 
   auto heap = mem_heap_create(200);
 
@@ -371,7 +371,7 @@ void page_copy_rec_list_end_no_locks(BufBlock *new_block, BufBlock *block, Rec r
   }
 }
 
-Rec page_copy_rec_list_end(BufBlock *new_block, BufBlock *block, Rec rec, const Index *index, Mtr *mtr) {
+Rec page_copy_rec_list_end(System &sys, BufBlock *new_block, BufBlock *block, Rec rec, const Index *index, Mtr *mtr) {
   page_t *new_page = new_block->get_frame();
   page_t *page = rec.page_align();
   Rec ret = page_rec_get_next(page_get_infimum_rec(new_page));
@@ -394,12 +394,12 @@ Rec page_copy_rec_list_end(BufBlock *new_block, BufBlock *block, Rec rec, const 
 
   /* Update the lock table and possible hash index */
 
-  srv_lock_sys->move_rec_list_end(new_block, block, rec);
+  sys.m_lock_sys->move_rec_list_end(new_block, block, rec);
 
   return ret;
 }
 
-Rec page_copy_rec_list_start(BufBlock *new_block, BufBlock *block, Rec rec, Index *index, Mtr *mtr) {
+Rec page_copy_rec_list_start(System &sys, BufBlock *new_block, BufBlock *block, Rec rec, Index *index, Mtr *mtr) {
   MemHeap *heap{};
   page_t *new_page = new_block->get_frame();
   auto first_rec = page_rec_get_prev(page_get_supremum_rec(new_page));
@@ -449,7 +449,7 @@ Rec page_copy_rec_list_start(BufBlock *new_block, BufBlock *block, Rec rec, Inde
 
   /* Update the lock table and possible hash index */
 
-  srv_lock_sys->move_rec_list_start(new_block, block, rec, first_rec);
+  sys.m_lock_sys->move_rec_list_start(new_block, block, rec, first_rec);
 
   return first_rec;
 }

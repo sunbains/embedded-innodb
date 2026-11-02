@@ -170,7 +170,7 @@ constexpr ulint MEM_FREED_BLOCK_MAGIC_N = 547711122;
  * 
  * @return own: memory heap block, NULL if did not succeed (only possible for MEM_HEAP_BTR_SEARCH type heaps)
  */
-[[nodiscard]] MemHeap *mem_heap_create_block(MemHeap *heap, ulint n, ulint type, SourceLocation loc);
+[[nodiscard]] MemHeap *mem_heap_create_block(System &sys, MemHeap *heap, ulint n, ulint type, SourceLocation loc);
 
 /**
  * Frees a block from a memory heap.
@@ -178,14 +178,14 @@ constexpr ulint MEM_FREED_BLOCK_MAGIC_N = 547711122;
  * @param[in] heap heap
  * @param[in] block block to free
  */
-void mem_heap_block_free(MemHeap *heap, MemHeap *block);
+void mem_heap_block_free(System &sys, MemHeap *heap, MemHeap *block);
 
 /**
  * Frees the free_block field from a memory heap.
  *
  * @param[in] heap heap
  */
-void mem_heap_free_block_free(MemHeap *heap);
+void mem_heap_free_block_free(System &sys, MemHeap *heap);
 
 /**
  * Adds a new block to a memory heap.

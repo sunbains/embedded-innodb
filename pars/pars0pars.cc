@@ -528,7 +528,7 @@ static void pars_resolve_exp_list_columns(SymNode *table_node,
  *
  * @param[in] sym_node Table node.
  */
-static void pars_retrieve_table_def(SymNode *sym_node) noexcept {
+static void pars_retrieve_table_def(System &sys, SymNode *sym_node) noexcept {
   ut_a(sym_node != nullptr);
   ut_a(que_node_get_type(sym_node) == QUE_NODE_SYMBOL);
 
@@ -537,7 +537,7 @@ static void pars_retrieve_table_def(SymNode *sym_node) noexcept {
 
   auto table_name = const_cast<char *>(sym_node->name);
 
-  sym_node->table = srv_dict_sys->table_get(table_name);
+  sym_node->table = sys.m_dict->table_get(table_name);
 
   ut_a(sym_node->table != nullptr);
 }
@@ -739,9 +739,9 @@ que_node_t *pars_function_declaration(SymNode *sym_node) {
   return sym_node;
 }
 
-UpdNode *pars_update_statement_start(bool is_delete, SymNode *table_sym,
+UpdNode *pars_update_statement_start(System &sys, bool is_delete, SymNode *table_sym,
                                         ColAssignNode *col_assign_list) {
-  auto node = srv_row_upd->node_create(pars_sym_tab_global->heap);
+  auto node = sys.m_row_upd->node_create(pars_sym_tab_global->heap);
 
   node->m_is_delete = is_delete;
   node->m_table_sym = table_sym;
@@ -771,7 +771,7 @@ ColAssignNode *pars_column_assignment(SymNode *column, que_node_t *exp) {
  *
  * @param[in] node The update node containing the assignment list.
  */
-static void pars_process_assign_list(UpdNode *node) noexcept {
+static void pars_process_assign_list(System &sys, UpdNode *node) noexcept {
   auto table_sym = node->m_table_sym;
   auto col_assign_list =
       reinterpret_cast<ColAssignNode *>(node->m_col_assign_list);
@@ -827,7 +827,7 @@ static void pars_process_assign_list(UpdNode *node) noexcept {
 
   auto changes_ord_field = UPD_NODE_NO_ORD_CHANGE;
 
-  if (srv_row_upd->changes_some_index_ord_field_binary(node->m_table,
+  if (sys.m_row_upd->changes_some_index_ord_field_binary(node->m_table,
                                                        node->m_update)) {
     changes_ord_field = 0;
   }
@@ -907,7 +907,7 @@ UpdNode *pars_update_statement(UpdNode *node, SymNode *cursor_sym,
   return node;
 }
 
-InsertNode *pars_insert_statement(SymNode *table_sym,
+InsertNode *pars_insert_statement(System &sys, SymNode *table_sym,
                                   que_node_t *values_list,
                                   SelNode *sel_node) {
   ut_a(values_list != nullptr || sel_node != nullptr);
@@ -917,14 +917,14 @@ InsertNode *pars_insert_statement(SymNode *table_sym,
 
   pars_retrieve_table_def(table_sym);
 
-  auto ins_node = reinterpret_cast<InsertNode *>(srv_row_ins->node_create(
+  auto ins_node = reinterpret_cast<InsertNode *>(sys.m_row_ins->node_create(
       ins_type, table_sym->table, pars_sym_tab_global->heap));
   auto row =
       dtuple_create(pars_sym_tab_global->heap, ins_node->m_table->get_n_cols());
 
   table_sym->table->copy_types(row);
 
-  srv_row_ins->set_new_row(ins_node, row);
+  sys.m_row_ins->set_new_row(ins_node, row);
 
   ins_node->m_select = sel_node;
 
@@ -1265,7 +1265,7 @@ SymNode *pars_column_def(SymNode *sym_node, ParsResWord *type,
   return sym_node;
 }
 
-TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs,
+TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_defs,
                               void *not_fit_in_memory __attribute__((unused))) {
   const auto n_cols = que_node_list_get_len(column_defs);
   auto table = Table::create(table_sym->name, DICT_HDR_SPACE, n_cols, 0, false,
@@ -1291,7 +1291,7 @@ TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs,
   }
 
   auto node =
-      TableNode::create(srv_dict_sys, table, pars_sym_tab_global->heap, true);
+      TableNode::create(sys.m_dict, table, pars_sym_tab_global->heap, true);
 
   table_sym->table = table;
   table_sym->resolved = true;
@@ -1300,7 +1300,7 @@ TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs,
   return node;
 }
 
-IndexNode *pars_create_index(ParsResWord *unique_def,
+IndexNode *pars_create_index(System &sys, ParsResWord *unique_def,
                               ParsResWord *clustered_def,
                               SymNode *index_sym, SymNode *table_sym,
                               SymNode *column_list) {
@@ -1329,7 +1329,7 @@ IndexNode *pars_create_index(ParsResWord *unique_def,
   }
 
   auto node =
-      IndexNode::create(srv_dict_sys, index, pars_sym_tab_global->heap, true);
+      IndexNode::create(sys.m_dict, index, pars_sym_tab_global->heap, true);
 
   table_sym->resolved = true;
   table_sym->token_type = SYM_TABLE;
@@ -1404,11 +1404,11 @@ void yyerror(const char *p) {
   log_fatal("PARSER ERROR: Syntax error in SQL string: ", p);
 }
 
-QueFork *pars_sql(ParsInfo *info, const char *str) {
+QueFork *pars_sql(System &sys, ParsInfo *info, const char *str) {
   auto heap = mem_heap_create(256);
 
   /* Currently, the parser is not reentrant: */
-  ut_ad(mutex_own(&srv_dict_sys->m_mutex));
+  ut_ad(mutex_own(&sys.m_dict->m_mutex));
 
   pars_sym_tab_global = sym_tab_create(heap);
 

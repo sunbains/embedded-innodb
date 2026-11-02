@@ -135,7 +135,7 @@ DbErr RowUpdate::check_references_constraints(
   auto heap = mem_heap_create(500);
   auto entry = row_rec_to_index_entry(ROW_COPY_DATA, rec, index, offsets, &n_ext, heap);
 
-  mtr->commit();
+  mtr->commit(m_sys);
 
   mtr->start();
 
@@ -542,7 +542,7 @@ byte *RowUpdate::ext_fetch(const byte *data, ulint local_len, ulint *len, MemHea
   auto buf = mem_heap_alloc(heap, *len);
   Blob blob(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
-  *len = blob.copy_externally_stored_field_prefix(buf, *len, data, local_len);
+  *len = blob.copy_externally_stored_field_prefix(m_sys, buf, *len, data, local_len);
   /* We should never update records containing a half-deleted BLOB. */
   ut_a(*len);
 
@@ -879,7 +879,7 @@ DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
 
     if (!rec.get_deleted_flag()) {
 
-      err = btr_cur->del_mark_set_sec_rec(0, true, thr, &mtr);
+      err = btr_cur->del_mark_set_sec_rec(m_sys, 0, true, thr, &mtr);
 
       if (err == DB_SUCCESS && check_ref) {
         PhyRec record{index, rec};
@@ -892,7 +892,7 @@ DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
   }
 
   pcur.close();
-  mtr.commit();
+  mtr.commit(m_sys);
 
   if (node->m_is_delete || err != DB_SUCCESS) {
 
@@ -943,10 +943,10 @@ DbErr RowUpdate::clust_rec_by_insert(
     Rec rec;
     Index *index;
 
-    err = btr_cur->del_mark_set_clust_rec(BTR_NO_LOCKING_FLAG, true, thr, mtr);
+    err = btr_cur->del_mark_set_clust_rec(m_sys, BTR_NO_LOCKING_FLAG, true, thr, mtr);
 
     if (err != DB_SUCCESS) {
-      mtr->commit();
+      mtr->commit(m_sys);
       return err;
     }
 
@@ -975,7 +975,7 @@ DbErr RowUpdate::clust_rec_by_insert(
       err = check_references_constraints(upd_node, pcur, table, index, offsets, thr, mtr);
 
       if (err != DB_SUCCESS) {
-        mtr->commit();
+        mtr->commit(m_sys);
 
         if (likely_null(heap)) {
           mem_heap_free(heap);
@@ -985,7 +985,7 @@ DbErr RowUpdate::clust_rec_by_insert(
     }
   }
 
-  mtr->commit();
+  mtr->commit(m_sys);
 
   if (likely(heap == nullptr)) {
     heap = mem_heap_create(500);
@@ -1034,12 +1034,12 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
   record to update */
 
   if (upd_node->m_cmpl_info & UPD_NODE_NO_SIZE_CHANGE) {
-    err = btr_cur->update_in_place(BTR_NO_LOCKING_FLAG, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
+    err = btr_cur->update_in_place(m_sys, BTR_NO_LOCKING_FLAG, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
   } else {
-    err = btr_cur->optimistic_update(BTR_NO_LOCKING_FLAG, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
+    err = btr_cur->optimistic_update(m_sys, BTR_NO_LOCKING_FLAG, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
   }
 
-  mtr->commit();
+  mtr->commit(m_sys);
 
   if (likely(err == DB_SUCCESS)) {
 
@@ -1061,20 +1061,20 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
   the same transaction do not modify the record in the meantime.
   Therefore we can assert that the restoration of the cursor succeeds. */
 
-  ut_a(pcur->restore_position(BTR_MODIFY_TREE, mtr, Current_location()));
+  ut_a(pcur->restore_position(m_sys, BTR_MODIFY_TREE, mtr, Current_location()));
 
   ut_ad(!pcur->get_rec().get_deleted_flag());
 
-  err = btr_cur->pessimistic_update(BTR_NO_LOCKING_FLAG, &heap, &big_rec, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
+  err = btr_cur->pessimistic_update(m_sys, BTR_NO_LOCKING_FLAG, &heap, &big_rec, upd_node->m_update, upd_node->m_cmpl_info, thr, mtr);
 
-  mtr->commit();
+  mtr->commit(m_sys);
 
   if (err == DB_SUCCESS && big_rec.n_fields > 0) {
     Rec rec;
 
     mtr->start();
 
-    ut_a(pcur->restore_position(BTR_MODIFY_TREE, mtr, Current_location()));
+    ut_a(pcur->restore_position(m_sys, BTR_MODIFY_TREE, mtr, Current_location()));
 
     rec = btr_cur->get_rec();
 
@@ -1089,9 +1089,9 @@ DbErr RowUpdate::clust_rec(UpdNode *upd_node, const Index *index, QueThr *thr, M
 
     Blob blob(m_sys.m_dict->m_store.m_fsp, m_sys.m_dict->m_store.m_btree);
 
-    err = blob.store_big_rec_extern_fields(index, btr_cur->get_block(), rec, offsets, big_rec, mtr);
+    err = blob.store_big_rec_extern_fields(m_sys, index, btr_cur->get_block(), rec, offsets, big_rec, mtr);
 
-    mtr->commit();
+    mtr->commit(m_sys);
   }
 
   if (likely_null(heap)) {
@@ -1124,7 +1124,7 @@ DbErr RowUpdate::del_mark_clust_rec(
   /* Mark the clustered index record deleted; we do not have to check
   locks, because we assume that we have an x-lock on the record */
 
-  err = btr_cur->del_mark_set_clust_rec(BTR_NO_LOCKING_FLAG, true, thr, mtr);
+  err = btr_cur->del_mark_set_clust_rec(m_sys, BTR_NO_LOCKING_FLAG, true, thr, mtr);
 
   if (err == DB_SUCCESS && check_ref) {
     /* NOTE that the following call loses the position of pcur ! */
@@ -1132,7 +1132,7 @@ DbErr RowUpdate::del_mark_clust_rec(
     err = check_references_constraints(node, pcur, index->m_table, index, offsets, thr, mtr);
   }
 
-  mtr->commit();
+  mtr->commit(m_sys);
 
   return err;
 }
@@ -1165,10 +1165,10 @@ DbErr RowUpdate::clust_step(UpdNode *node, QueThr *thr) noexcept {
 
   ut_a(pcur->m_rel_pos == BtreeCursorPos::ON);
 
-  auto success = pcur->restore_position(BTR_MODIFY_LEAF, mtr, Current_location());
+  auto success = pcur->restore_position(m_sys, BTR_MODIFY_LEAF, mtr, Current_location());
 
   if (!success) {
-    mtr->commit();
+    mtr->commit(m_sys);
     return DB_RECORD_NOT_FOUND;
   }
 
@@ -1180,14 +1180,14 @@ DbErr RowUpdate::clust_step(UpdNode *node, QueThr *thr) noexcept {
 
     m_sys.m_dict->m_store.drop_index_tree(pcur->get_rec(), mtr);
 
-    mtr->commit();
+    mtr->commit(m_sys);
 
     mtr->start();
 
-    success = pcur->restore_position(BTR_MODIFY_LEAF, mtr, Current_location());
+    success = pcur->restore_position(m_sys, BTR_MODIFY_LEAF, mtr, Current_location());
 
     if (!success) {
-      mtr->commit();
+      mtr->commit(m_sys);
       return DB_ERROR;
     }
   }
@@ -1209,7 +1209,7 @@ DbErr RowUpdate::clust_step(UpdNode *node, QueThr *thr) noexcept {
     err = m_sys.m_lock_sys->clust_rec_modify_check_and_lock(0, pcur->get_block(), rec, index, offsets, thr);
 
     if (err != DB_SUCCESS) {
-      mtr->commit();
+      mtr->commit(m_sys);
       goto exit_func;
     }
   }

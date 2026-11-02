@@ -176,12 +176,12 @@ void CondVar::destroy(CondVar *event) {
   delete event;
 }
 
-void CondVar::wait(int64_t reset_sig_count) {
+void CondVar::wait(System &sys, int64_t reset_sig_count) {
   std::unique_lock<std::mutex> lk(m_mutex);
   auto old_sig_count = reset_sig_count != 0 ? reset_sig_count : m_signal_count;
 
   m_cond_var.wait(lk, [this, old_sig_count] {
-    if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
+    if (sys.m_srv->m_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
       log_info("srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS");
       os_thread_exit();
     }
@@ -189,7 +189,7 @@ void CondVar::wait(int64_t reset_sig_count) {
   });
 }
 
-ulint CondVar::wait_time(std::chrono::microseconds timeout, int64_t reset_sig_count) {
+ulint CondVar::wait_time(System &sys, std::chrono::microseconds timeout, int64_t reset_sig_count) {
   std::chrono::time_point<std::chrono::system_clock> timepoint;
 
   if (timeout != std::chrono::microseconds::max()) {
@@ -205,7 +205,7 @@ ulint CondVar::wait_time(std::chrono::microseconds timeout, int64_t reset_sig_co
   }
 
   auto ret = m_cond_var.wait_until(lk, timepoint, [this, reset_sig_count] {
-    if (srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
+    if (sys.m_srv->m_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS) {
       log_err("srv_shutdown_state == SRV_SHUTDOWN_EXIT_THREADS");
       os_thread_exit();
     }

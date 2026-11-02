@@ -60,7 +60,7 @@ TrxRollback::TrxRollback(MemHeap *heap) {
   m_partial = false;
 }
 
-DbErr TrxRollback::general_rollback(Trx *trx, bool partial, TrxSavept *savept) {
+DbErr TrxRollback::general_rollback(System &sys, Trx *trx, bool partial, TrxSavept *savept) {
   MemHeap *heap;
   QueThr *thr;
   TrxRollback *roll_node;
@@ -88,18 +88,18 @@ DbErr TrxRollback::general_rollback(Trx *trx, bool partial, TrxSavept *savept) {
 
   que_run_threads(thr);
 
-  mutex_enter(&srv_trx_sys->m_mutex);
+  mutex_enter(&sys.m_trx_sys->m_mutex);
 
   while (trx->m_que_state != TRX_QUE_RUNNING) {
 
-    mutex_exit(&srv_trx_sys->m_mutex);
+    mutex_exit(&sys.m_trx_sys->m_mutex);
 
     os_thread_sleep(100000);
 
-    mutex_enter(&srv_trx_sys->m_mutex);
+    mutex_enter(&sys.m_trx_sys->m_mutex);
   }
 
-  mutex_exit(&srv_trx_sys->m_mutex);
+  mutex_exit(&sys.m_trx_sys->m_mutex);
 
   mem_heap_free(heap);
 
@@ -179,7 +179,7 @@ void TrxRollback::rollback_active(
   thr->child = roll_node;
   roll_node->m_common.parent = thr;
 
-  mutex_enter(&srv_trx_sys->m_mutex);
+  mutex_enter(&sys.m_trx_sys->m_mutex);
 
   trx->m_graph = fork;
 
@@ -197,28 +197,28 @@ void TrxRollback::rollback_active(
 
   log_info(std::format("Rolling back trx with id {}, {} rows to undo", TRX_ID_PREP_PRINTF(trx->m_id), rows_to_undo, unit));
 
-  mutex_exit(&srv_trx_sys->m_mutex);
+  mutex_exit(&sys.m_trx_sys->m_mutex);
 
   if (trx->get_dict_operation() != TRX_DICT_OP_NONE) {
-    srv_dict_sys->lock_data_dictionary(trx);
+    sys.m_dict->lock_data_dictionary(trx);
     dictionary_locked = true;
   }
 
   que_run_threads(thr);
 
-  mutex_enter(&srv_trx_sys->m_mutex);
+  mutex_enter(&sys.m_trx_sys->m_mutex);
 
   while (trx->m_que_state != TRX_QUE_RUNNING) {
 
-    mutex_exit(&srv_trx_sys->m_mutex);
+    mutex_exit(&sys.m_trx_sys->m_mutex);
 
     log_info(std::format("Waiting for rollback of trx id {} to end", trx->m_id));
     os_thread_sleep(100000);
 
-    mutex_enter(&srv_trx_sys->m_mutex);
+    mutex_enter(&sys.m_trx_sys->m_mutex);
   }
 
-  mutex_exit(&srv_trx_sys->m_mutex);
+  mutex_exit(&sys.m_trx_sys->m_mutex);
 
   if (trx->get_dict_operation() != TRX_DICT_OP_NONE && trx->m_table_id != 0) {
 
@@ -227,22 +227,22 @@ void TrxRollback::rollback_active(
 
     log_info(std::format("Dropping table with id {} {} in recovery if it exists", trx->m_table_id, trx->m_table_id));
 
-    table = srv_dict_sys->table_get_on_id(recovery, trx->m_table_id);
+    table = sys.m_dict->table_get_on_id(recovery, trx->m_table_id);
 
     if (table != nullptr) {
       log_info(std::format("Table found: dropping table {} in recovery", table->m_name));
 
-      if (auto err = srv_dict_sys->m_ddl.drop_table(table->m_name, trx, true); err != DB_SUCCESS) {
+      if (auto err = sys.m_dict->m_ddl.drop_table(table->m_name, trx, true); err != DB_SUCCESS) {
         log_fatal("DROP table failed with error ", err, " while dropping table ", table->m_name);
       }
 
-      auto err_commit = trx->commit();
+      auto err_commit = trx->commit(sys);
       ut_a(err_commit == DB_SUCCESS);
     }
   }
 
   if (dictionary_locked) {
-    srv_dict_sys->unlock_data_dictionary(trx);
+    sys.m_dict->unlock_data_dictionary(trx);
   }
 
   log_info(std::format("Rolling back of trx id {} completed", TRX_ID_PREP_PRINTF(trx->m_id)));
@@ -252,10 +252,10 @@ void TrxRollback::rollback_active(
   trx_roll_crash_recv_trx = nullptr;
 }
 
-void TrxRollback::rollback_or_clean_recovered(bool all) {
-  mutex_enter(&srv_trx_sys->m_mutex);
+void TrxRollback::rollback_or_clean_recovered(System &sys, bool all) {
+  mutex_enter(&sys.m_trx_sys->m_mutex);
 
-  if (!UT_LIST_GET_FIRST(srv_trx_sys->m_trx_list)) {
+  if (!UT_LIST_GET_FIRST(sys.m_trx_sys->m_trx_list)) {
     goto leave_function;
   }
 
@@ -263,12 +263,12 @@ void TrxRollback::rollback_or_clean_recovered(bool all) {
     log_info("Starting in background the rollback of uncommitted transactions");
   }
 
-  mutex_exit(&srv_trx_sys->m_mutex);
+  mutex_exit(&sys.m_trx_sys->m_mutex);
 
 loop:
-  mutex_enter(&srv_trx_sys->m_mutex);
+  mutex_enter(&sys.m_trx_sys->m_mutex);
 
-  for (auto trx : srv_trx_sys->m_trx_list) {
+  for (auto trx : sys.m_trx_sys->m_trx_list) {
     if (!trx->m_is_recovered) {
       continue;
     }
@@ -279,16 +279,16 @@ loop:
         continue;
 
       case TRX_COMMITTED_IN_MEMORY:
-        mutex_exit(&srv_trx_sys->m_mutex);
+        mutex_exit(&sys.m_trx_sys->m_mutex);
         log_info("Cleaning up trx with id ", TRX_ID_PREP_PRINTF(trx->m_id));
-        trx->cleanup_at_db_startup();
+        trx->cleanup_at_db_startup(sys);
         goto loop;
 
       case TRX_ACTIVE:
         if (all || trx->get_dict_operation() != TRX_DICT_OP_NONE) {
-          mutex_exit(&srv_trx_sys->m_mutex);
+          mutex_exit(&sys.m_trx_sys->m_mutex);
           // FIXME: Need to get rid of this global access
-          TrxRollback::rollback_active(srv_config.m_force_recovery, trx);
+          TrxRollback::rollback_active(sys.m_config.m_recv.m_force_recovery, trx);
           goto loop;
         }
     }
@@ -299,7 +299,7 @@ loop:
   }
 
 leave_function:
-  mutex_exit(&srv_trx_sys->m_mutex);
+  mutex_exit(&sys.m_trx_sys->m_mutex);
 }
 
 void *TrxRollback::rollback_or_clean_all_recovered(void *) {
@@ -449,7 +449,7 @@ static undo_no_t trx_undo_arr_get_biggest(TrxUndoArr *arr) /*!< in: undo number 
   }
 }
 
-void TrxRollback::try_truncate(Trx *trx) {
+void TrxRollback::try_truncate(System &sys, Trx *trx) {
   ut_ad(mutex_own(&trx->m_undo_mutex));
   ut_ad(mutex_own(&trx->m_rseg->m_mutex));
 
@@ -468,11 +468,11 @@ void TrxRollback::try_truncate(Trx *trx) {
   }
 
   if (trx->m_insert_undo) {
-    srv_undo->truncate_end(trx, trx->m_insert_undo, limit);
+    sys.m_undo->truncate_end(trx, trx->m_insert_undo, limit);
   }
 
   if (trx->m_update_undo) {
-    srv_undo->truncate_end(trx, trx->m_update_undo, limit);
+    sys.m_undo->truncate_end(trx, trx->m_update_undo, limit);
   }
 }
 
@@ -486,12 +486,12 @@ void TrxRollback::try_truncate(Trx *trx) {
  *
  * @return Pointer to the undo log record, the page s-latched.
  */
-static TrxUndoRecord trx_roll_pop_top_rec(Trx *trx, TrxUndo *undo, Mtr *mtr) {
+static TrxUndoRecord trx_roll_pop_top_rec(System &sys, Trx *trx, TrxUndo *undo, Mtr *mtr) {
   ut_ad(mutex_own(&trx->m_undo_mutex));
 
-  auto undo_page = srv_undo->page_get_s_latched(undo->m_space, undo->m_top_page_no, mtr);
+  auto undo_page = sys.m_undo->page_get_s_latched(undo->m_space, undo->m_top_page_no, mtr);
   auto offset = undo->m_top_offset;
-  auto prev_rec = srv_undo->get_prev_rec(undo_page + offset, undo->m_hdr_page_no, undo->m_hdr_offset, mtr);
+  auto prev_rec = sys.m_undo->get_prev_rec(undo_page + offset, undo->m_hdr_page_no, undo->m_hdr_offset, mtr);
 
   if (prev_rec == nullptr) {
 
@@ -512,7 +512,7 @@ static TrxUndoRecord trx_roll_pop_top_rec(Trx *trx, TrxUndo *undo, Mtr *mtr) {
   return TrxUndoRecord(undo_page + offset);
 }
 
-TrxUndoRecord TrxRollback::pop_top_rec_of_trx(Trx *trx, undo_no_t limit, roll_ptr_t *roll_ptr, MemHeap *heap) {
+TrxUndoRecord TrxRollback::pop_top_rec_of_trx(System &sys, Trx *trx, undo_no_t limit, roll_ptr_t *roll_ptr, MemHeap *heap) {
   TrxUndo *undo;
   trx_undo_rec_t undo_rec;
   TrxUndoRecord undo_rec_copy;
@@ -612,7 +612,7 @@ try_again:
 
     mutex_exit(&trx->m_undo_mutex);
 
-    mtr.commit();
+    mtr.commit(sys);
 
     ++retry;
 
@@ -623,7 +623,7 @@ try_again:
 
   mutex_exit(&(trx->m_undo_mutex));
 
-  mtr.commit();
+  mtr.commit(sys);
 
   return undo_rec_copy;
 }
@@ -652,10 +652,10 @@ void TrxRollback::undo_rec_release(Trx *trx, undo_no_t undo_no) {
   mutex_exit(&(trx->m_undo_mutex));
 }
 
-void TrxRollback::rollback(Trx *trx, TrxSig *sig, QueThr **next_thr) {
+void TrxRollback::rollback(System &sys, Trx *trx, TrxSig *sig, QueThr **next_thr) {
   /*	QueThr*	thr2; */
 
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
   ut_ad((trx->m_undo_no_arr == nullptr) || ((trx->m_undo_no_arr)->n_used == 0));
 
   /* Initialize the rollback field in the transaction */
@@ -707,10 +707,10 @@ void TrxRollback::rollback(Trx *trx, TrxSig *sig, QueThr **next_thr) {
   }
 }
 
-QueFork *TrxRollback::roll_graph_build(Trx *trx) {
+QueFork *TrxRollback::roll_graph_build(System &sys, Trx *trx) {
   /*	QueThr*	thr2; */
 
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
   auto heap = mem_heap_create(512);
   auto fork = que_fork_create(nullptr, nullptr, QUE_FORK_ROLLBACK, heap);
@@ -720,7 +720,7 @@ QueFork *TrxRollback::roll_graph_build(Trx *trx) {
   auto thr = que_thr_create(fork, heap);
   /*	thr2 = que_thr_create(fork, heap); */
 
-  thr->child = srv_row_undo->create_undo_node(trx, thr, heap);
+  thr->child = sys.m_row_undo->create_undo_node(trx, thr, heap);
   /*	thr2->child = row_undo_node_create(trx, thr2, heap); */
 
   return fork;
@@ -728,8 +728,8 @@ QueFork *TrxRollback::roll_graph_build(Trx *trx) {
 
 /** Finishes error processing after the necessary partial rollback has been
 done. */
-void TrxRollback::finish_error_processing(Trx *trx) {
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+void TrxRollback::finish_error_processing(System &sys, Trx *trx) {
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
   auto sig = UT_LIST_GET_FIRST(trx->m_signals);
 
@@ -756,21 +756,21 @@ void TrxRollback::finish_error_processing(Trx *trx) {
  *   function can start running a new query thread; if this parameter is nullptr,
  *   it is ignored.
  */
-void TrxRollback::finish_partial_rollback_off_kernel(Trx *trx, QueThr **next_thr) noexcept {
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+void TrxRollback::finish_partial_rollback_off_kernel(System &sys, Trx *trx, QueThr **next_thr) noexcept {
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
 
   auto sig = UT_LIST_GET_FIRST(trx->m_signals);
 
   /* Remove the signal from the signal queue and send reply message to it */
 
-  Trx::sig_reply(sig, *next_thr);
+  Trx::sig_reply(sys, sig, *next_thr);
   trx->sig_remove(sig);
 
   trx->m_que_state = TRX_QUE_RUNNING;
 }
 
-void TrxRollback::finish_rollback_off_kernel(QueFork *graph, Trx *trx, QueThr **next_thr) {
-  ut_ad(mutex_own(&srv_trx_sys->m_mutex));
+void TrxRollback::finish_rollback_off_kernel(System &sys, QueFork *graph, Trx *trx, QueThr **next_thr) {
+  ut_ad(mutex_own(&sys.m_trx_sys->m_mutex));
   ut_a(trx->m_undo_no_arr == nullptr || trx->m_undo_no_arr->n_used == 0);
 
   /* Free the memory reserved by the undo graph */
@@ -780,18 +780,18 @@ void TrxRollback::finish_rollback_off_kernel(QueFork *graph, Trx *trx, QueThr **
 
   if (sig->type == TRX_SIG_ROLLBACK_TO_SAVEPT) {
 
-    TrxRollback::finish_partial_rollback_off_kernel(trx, next_thr);
+    TrxRollback::finish_partial_rollback_off_kernel(sys, trx, next_thr);
 
     return;
 
   } else if (sig->type == TRX_SIG_ERROR_OCCURRED) {
 
-    TrxRollback::finish_error_processing(trx);
+    TrxRollback::finish_error_processing(sys, trx);
 
     return;
   }
 
-  trx->commit_off_kernel();
+  trx->commit_off_kernel(sys);
 
   /* Remove all TRX_SIG_TOTAL_ROLLBACK signals from the signal queue and
   send reply messages to them */
@@ -803,7 +803,7 @@ void TrxRollback::finish_rollback_off_kernel(QueFork *graph, Trx *trx, QueThr **
 
     if (sig->type == TRX_SIG_TOTAL_ROLLBACK) {
 
-      Trx::sig_reply(sig, *next_thr);
+      Trx::sig_reply(sys, sig, *next_thr);
       trx->sig_remove(sig);
     }
 
@@ -811,7 +811,7 @@ void TrxRollback::finish_rollback_off_kernel(QueFork *graph, Trx *trx, QueThr **
   }
 }
 
-QueThr *TrxRollback::rollback_step(QueThr *thr) {
+QueThr *TrxRollback::rollback_step(System &sys, QueThr *thr) {
   TrxSavept *savept;
 
   ut_ad(que_node_get_type(this) == QUE_NODE_ROLLBACK);
@@ -823,7 +823,7 @@ QueThr *TrxRollback::rollback_step(QueThr *thr) {
   if (m_state == ROLL_NODE_SEND) {
     ulint sig_no;
 
-    mutex_enter(&srv_trx_sys->m_mutex);
+    mutex_enter(&sys.m_trx_sys->m_mutex);
 
     m_state = ROLL_NODE_WAIT;
 
@@ -839,11 +839,11 @@ QueThr *TrxRollback::rollback_step(QueThr *thr) {
 
     QueThr *dummy{};
 
-    thr_get_trx(thr)->sig_send(sig_no, TRX_SIG_SELF, thr, savept, dummy);
+    thr_get_trx(thr)->sig_send(sys, sig_no, TRX_SIG_SELF, thr, savept, dummy);
 
     thr->state = QUE_THR_SIG_REPLY_WAIT;
 
-    mutex_exit(&srv_trx_sys->m_mutex);
+    mutex_exit(&sys.m_trx_sys->m_mutex);
 
     return nullptr;
   }

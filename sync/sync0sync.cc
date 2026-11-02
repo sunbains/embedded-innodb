@@ -355,9 +355,7 @@ spin_loop:
   ut_d(mutex->count_spin_loop++);
 
   while (mutex_get_lock_word(mutex) != 0 && i < SYNC_SPIN_ROUNDS) {
-    if (srv_spin_wait_delay) {
-      ut_delay(ut_rnd_interval(0, srv_spin_wait_delay));
-    }
+    ut_delay(ut_rnd_interval(0, SYNC_SPIN_WAIT_DELAY));
 
     i++;
   }

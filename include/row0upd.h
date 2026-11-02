@@ -565,7 +565,7 @@ struct RowUpdate {
    * @param[in] trx           Transaction.
    * @param[in] roll_ptr      Roll pointer of the undo log record.
    */
-  inline static void rec_sys_fields(Rec rec, const Index *index, const ulint *offsets, Trx *trx, roll_ptr_t roll_ptr) {
+  inline void rec_sys_fields(Rec rec, const Index *index, const ulint *offsets, Trx *trx, roll_ptr_t roll_ptr) {
     ulint offset = index->m_trx_id_offset;
 
     if (offset == 0) {

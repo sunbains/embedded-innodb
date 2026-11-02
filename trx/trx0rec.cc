@@ -215,10 +215,10 @@ ulint UndoPage::report_insert(Trx *trx, const Index *index, const DTuple *clust_
  *
  * @return ext_buf
  */
-static byte *trx_undo_page_fetch_ext(byte *ext_buf, const byte *field, ulint *len) {
+static byte *trx_undo_page_fetch_ext(System &sys, byte *ext_buf, const byte *field, ulint *len) {
   /* Fetch the BLOB. */
-  Blob blob(srv_fsp, srv_btree_sys);
-  ulint ext_len = blob.copy_externally_stored_field_prefix(ext_buf, REC_MAX_INDEX_COL_LEN, field, *len);
+  Blob blob(sys.m_fsp, sys.m_btree);
+  ulint ext_len = blob.copy_externally_stored_field_prefix(sys, ext_buf, REC_MAX_INDEX_COL_LEN, field, *len);
   /* BLOBs should always be nonempty. */
   ut_a(ext_len);
   /* Append the BLOB pointer to the prefix. */
@@ -272,7 +272,7 @@ static byte *trx_undo_page_report_modify_ext(byte *ptr, byte *ext_buf, const byt
  *
  * @return byte offset of the inserted undo log entry on the page if succeed, 0 if fail
  */
-ulint UndoPage::report_modify(
+ulint UndoPage::report_modify(System &sys, 
   Trx *trx, const Index *index, const Rec &rec, const RecOffs &offsets, const Upd *update, ulint cmpl_info, Mtr *mtr
 ) {
   byte *ptr;
@@ -337,7 +337,7 @@ ulint UndoPage::report_modify(
   field = rec.get_nth_field(offsets, index->get_sys_col_field_pos(DATA_TRX_ID), &flen);
   ut_ad(flen == DATA_TRX_ID_LEN);
 
-  trx_id = srv_trx_sys->read_trx_id(field);
+  trx_id = sys.m_trx_sys->read_trx_id(field);
 
   /* If it is an update of a delete marked record, then we are
      * allowed to ignore blob prefixes if the delete marking was done
@@ -594,7 +594,7 @@ byte *trx_undo_parse_erase_page_end(byte *ptr, byte *end_ptr __attribute__((unus
   return ptr;
 }
 
-DbErr trx_undo_report_row_operation(
+DbErr trx_undo_report_row_operation(System &sys, 
   ulint flags, ulint op_type, QueThr *thr, const Index *index, const DTuple *clust_entry, const Upd *update, ulint cmpl_info,
   const Rec rec, roll_ptr_t *roll_ptr
 ) {
@@ -627,7 +627,7 @@ DbErr trx_undo_report_row_operation(
 
     if (trx->m_insert_undo == nullptr) {
 
-      err = srv_undo->assign_undo(trx, TRX_UNDO_INSERT);
+      err = sys.m_undo->assign_undo(trx, TRX_UNDO_INSERT);
     }
 
     undo = trx->m_insert_undo;
@@ -643,7 +643,7 @@ DbErr trx_undo_report_row_operation(
 
     if (trx->m_update_undo == nullptr) {
 
-      err = srv_undo->assign_undo(trx, TRX_UNDO_UPDATE);
+      err = sys.m_undo->assign_undo(trx, TRX_UNDO_UPDATE);
     }
 
     undo = trx->m_update_undo;
@@ -678,7 +678,7 @@ DbErr trx_undo_report_row_operation(
       .m_mtr = &mtr
     };
 
-    auto undo_block = srv_buf_pool->get(req, undo->m_guess_block);
+    auto undo_block = sys.m_buf_pool->get(req, undo->m_guess_block);
 
     buf_block_dbg_add_level(IF_SYNC_DEBUG(undo_block, SYNC_TRX_UNDO_PAGE));
 
@@ -700,11 +700,11 @@ DbErr trx_undo_report_row_operation(
       records stays identical to the original page */
 
       undo_page.erase_page_end(&mtr);
-      mtr.commit();
+      mtr.commit(sys);
     } else {
       /* Success */
 
-      mtr.commit();
+      mtr.commit(sys);
 
       undo->m_empty = false;
       undo->m_top_page_no = page_no;
@@ -737,7 +737,7 @@ DbErr trx_undo_report_row_operation(
 
     mutex_enter(&rseg->m_mutex);
 
-    page_no = srv_undo->add_page(trx, undo, &mtr);
+    page_no = sys.m_undo->add_page(trx, undo, &mtr);
 
     mutex_exit(&rseg->m_mutex);
 
@@ -746,7 +746,7 @@ DbErr trx_undo_report_row_operation(
 
       mutex_exit(&trx->m_undo_mutex);
 
-      mtr.commit();
+      mtr.commit(sys);
 
       if (likely_null(heap)) {
         mem_heap_free(heap);

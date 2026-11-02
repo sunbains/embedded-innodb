@@ -30,8 +30,8 @@ Created September 2006 Marko Makela
 @param[in,out] ext              Column prefix cache
 @param[in] i                    Index of ext->extp[]
 @paramp[in] dfield              Data field. */
-static void row_ext_cache_fill(RowExt *ext, ulint i, const Dfield *dfield) {
-  Blob blob(srv_fsp, srv_btree_sys);
+static void row_ext_cache_fill(System &sys, RowExt *ext, ulint i, const Dfield *dfield) {
+  Blob blob(sys.m_fsp, sys.m_btree);
   auto field = (const byte *)dfield_get_data(dfield);
   auto f_len = dfield_get_len(dfield);
   auto buf = ext->buf + i * REC_MAX_INDEX_COL_LEN;
@@ -50,7 +50,7 @@ static void row_ext_cache_fill(RowExt *ext, ulint i, const Dfield *dfield) {
     access a half-deleted BLOB if the server previously
     crashed during the execution of
     btr_free_externally_stored_field(). */
-    ext->len[i] = blob.copy_externally_stored_field_prefix(buf, REC_MAX_INDEX_COL_LEN, field, f_len);
+    ext->len[i] = blob.copy_externally_stored_field_prefix(sys, buf, REC_MAX_INDEX_COL_LEN, field, f_len);
   }
 }
 

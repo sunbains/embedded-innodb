@@ -687,6 +687,4 @@ struct Fsp {
 
  public:
 
-  /** File interface. */
-
 };

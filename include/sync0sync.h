@@ -400,7 +400,11 @@ extern SyncCheck *sync_primary_wait_array;
 the thread. A value 600 rounds on a 1995 100 MHz Pentium seems to correspond
 to 20 microseconds. */
 
-#define SYNC_SPIN_ROUNDS srv_n_spin_wait_rounds
+/** Number of spin rounds before a thread waits on a latch. */
+constexpr ulint SYNC_SPIN_ROUNDS = 30;
+
+/** Maximum delay between spin rounds, in ut_delay() units. */
+constexpr ulint SYNC_SPIN_WAIT_DELAY = 6;
 
 /** The number of mutex_exit calls. Intended for performance monitoring. */
 using counter_t = ut::CPU_sharded_counter<8>;

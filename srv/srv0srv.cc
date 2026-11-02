@@ -1096,7 +1096,7 @@ loop:
 
   sync_arr_wake_threads_if_sema_free();
 
-  if (sync_array_print_long_waits()) {
+  if (sync_array_print_long_waits(m_sys)) {
     fatal_cnt++;
     if (fatal_cnt > 10) {
 

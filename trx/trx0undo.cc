@@ -215,7 +215,7 @@ void trx_undo_page_init(page_t *undo_page, ulint type, Mtr *mtr) noexcept {
  * @return A DbErr indicating the success or failure of the operation.
  *  (DB_TOO_MANY_CONCURRENT_TRXS DB_OUT_OF_FILE_SPACE)
  */
-static DbErr trx_undo_seg_create(
+static DbErr trx_undo_seg_create(System &sys, 
   TrxRseg *rseg __attribute__((unused)), trx_rsegf_t *rseg_hdr, ulint type, ulint *id, page_t **undo_page, Mtr *mtr
 ) noexcept {
   ut_ad(mutex_own(&rseg->m_mutex));
@@ -233,7 +233,7 @@ static DbErr trx_undo_seg_create(
 
   ulint n_reserved;
   auto space = page_get_space_id(Rec(rseg_hdr).page_align());
-  auto success = srv_fsp->reserve_free_extents(&n_reserved, space, 2, FSP_UNDO, mtr);
+  auto success = sys.m_fsp->reserve_free_extents(&n_reserved, space, 2, FSP_UNDO, mtr);
 
   if (!success) {
 
@@ -241,9 +241,9 @@ static DbErr trx_undo_seg_create(
   }
 
   /* Allocate a new file segment for the undo log */
-  auto block = srv_fsp->fseg_create_general(space, 0, TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, true, mtr);
+  auto block = sys.m_fsp->fseg_create_general(space, 0, TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, true, mtr);
 
-  srv_fil->space_release_free_extents(space, n_reserved);
+  sys.m_fil->space_release_free_extents(space, n_reserved);
 
   if (block == nullptr) {
     /* No space left */
@@ -613,7 +613,7 @@ void Undo::seg_free(TrxUndo *undo) noexcept {
 
     mutex_exit(&rseg->m_mutex);
 
-    mtr.commit();
+    mtr.commit(m_sys);
 
   } while (!finished);
 }
@@ -633,15 +633,15 @@ TrxUndo *Undo::mem_create_at_db_start(TrxRseg *rseg, ulint id, page_no_t page_no
 
   auto undo_page = page_get(rseg->m_space, page_no, mtr);
   auto page_header = undo_page + TRX_UNDO_PAGE_HDR;
-  auto type = mtr->read_ulint(page_header + TRX_UNDO_PAGE_TYPE, MLOG_2BYTES);
+  auto type = mtr->read_ulint(m_sys, page_header + TRX_UNDO_PAGE_TYPE, MLOG_2BYTES);
   auto seg_header = undo_page + TRX_UNDO_SEG_HDR;
   auto state = mach_read_from_2(seg_header + TRX_UNDO_STATE);
   auto offset = mach_read_from_2(seg_header + TRX_UNDO_LAST_LOG);
   auto undo_header = undo_page + offset;
-  auto trx_id = mtr->read_uint64(undo_header + TRX_UNDO_TRX_ID);
+  auto trx_id = mtr->read_uint64(m_sys, undo_header + TRX_UNDO_TRX_ID);
 
 #ifdef WITH_XOPEN
-  xid_exists = mtr->read_ulint(undo_header + TRX_UNDO_XID_EXISTS, MLOG_1BYTE);
+  xid_exists = mtr->read_ulint(m_sys, undo_header + TRX_UNDO_XID_EXISTS, MLOG_1BYTE);
 
   /* Read X/Open XA transaction identification if it exists, or
   set it to nullptr. */
@@ -664,9 +664,9 @@ TrxUndo *Undo::mem_create_at_db_start(TrxRseg *rseg, ulint id, page_no_t page_no
 
   mutex_exit(&rseg->m_mutex);
 
-  undo->m_dict_operation = mtr->read_ulint(undo_header + TRX_UNDO_DICT_TRANS, MLOG_1BYTE);
+  undo->m_dict_operation = mtr->read_ulint(m_sys, undo_header + TRX_UNDO_DICT_TRANS, MLOG_1BYTE);
 
-  undo->m_table_id = mtr->read_uint64(undo_header + TRX_UNDO_TABLE_ID);
+  undo->m_table_id = mtr->read_uint64(m_sys, undo_header + TRX_UNDO_TABLE_ID);
   undo->m_state = state;
   undo->m_size = flst_get_len(seg_header + TRX_UNDO_PAGE_LIST, mtr);
 
@@ -974,7 +974,7 @@ DbErr Undo::assign_undo(Trx *trx, ulint type) noexcept {
     if (err != DB_SUCCESS) {
 
       mutex_exit(&rseg->m_mutex);
-      mtr.commit();
+      mtr.commit(m_sys);
 
       return err;
     }
@@ -996,7 +996,7 @@ DbErr Undo::assign_undo(Trx *trx, ulint type) noexcept {
 
   mutex_exit(&rseg->m_mutex);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   return DB_SUCCESS;
 }
@@ -1232,7 +1232,7 @@ ulint Undo::add_page(Trx *trx, TrxUndo *undo, Mtr *mtr) noexcept {
     header_page + TRX_UNDO_SEG_HDR + TRX_UNDO_FSEG_HEADER, undo->m_top_page_no + 1, FSP_UP, true, mtr
   );
 
-  m_sys.m_fsp->m_fil->space_release_free_extents(undo->m_space, n_reserved);
+  m_sys.m_fil->space_release_free_extents(undo->m_space, n_reserved);
 
   if (page_no != FIL_NULL) {
     undo->m_last_page_no = page_no;
@@ -1282,7 +1282,7 @@ void Undo::truncate_end(Trx *trx, TrxUndo *undo, undo_no_t limit) noexcept {
       trunc_here = nullptr;
     }
 
-    mtr.commit();
+    mtr.commit(m_sys);
 
   } while (trunc_here != nullptr);
 }
@@ -1306,7 +1306,7 @@ void Undo::truncate_start(TrxRseg *rseg, space_id_t space, page_no_t hdr_page_no
     if (rec == nullptr) {
       /* Already empty */
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       return;
     }
@@ -1316,7 +1316,7 @@ void Undo::truncate_start(TrxRseg *rseg, space_id_t space, page_no_t hdr_page_no
 
     if (TrxUndoRecord::get_undo_no(last_rec) >= limit) {
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       return;
     }
@@ -1329,7 +1329,7 @@ void Undo::truncate_start(TrxRseg *rseg, space_id_t space, page_no_t hdr_page_no
       free_page(rseg, true, space, hdr_page_no, page_no, &mtr);
     }
 
-    mtr.commit();
+    mtr.commit(m_sys);
   }
 }
 
@@ -1360,7 +1360,7 @@ ulint Undo::lists_init(IbRecovery recovery, TrxRseg *rseg) noexcept {
       auto undo = mem_create_at_db_start(rseg, i, page_no, &mtr);
       size += undo->m_size;
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       mtr.start();
 
@@ -1368,7 +1368,7 @@ ulint Undo::lists_init(IbRecovery recovery, TrxRseg *rseg) noexcept {
     }
   }
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   return size;
 }

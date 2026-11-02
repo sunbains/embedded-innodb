@@ -100,14 +100,14 @@ void os_file_var_init() {
   os_n_pending_reads = 0;
 }
 
-ulint os_file_get_last_error(bool report_all_errors) {
+ulint os_file_get_last_error(System &sys, bool report_all_errors) {
   if (report_all_errors || (errno != ENOSPC && errno != EEXIST)) {
     log_err("Operating system error number ", errno, " in a file operation.");
 
     if (errno == ENOENT) {
       log_err("The error means the system cannot find the path specified.");
 
-      if (srv_is_being_started) {
+      if (sys.m_srv->m_is_being_started) {
         log_err(
           "If you are installing InnoDB, remember that you must create"
           " directories yourself, InnoDB does not create them."
@@ -409,7 +409,7 @@ void os_file_set_nocache(int fd, const char *file_name, const char *operation_na
   }
 }
 
-os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, ulint type, bool *success) {
+os_file_t os_file_create(System &sys, const char *name, ulint create_mode, ulint purpose, ulint type, bool *success) {
   bool retry;
 
   for (;;) {
@@ -438,7 +438,7 @@ os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, uli
     /* We let O_SYNC only affect log files; note that we map O_DSYNC to
     O_SYNC because the datasync options seemed to corrupt files in 2001
     in both Linux and Solaris */
-    if (type == OS_LOG_FILE && srv_config.m_unix_file_flush_method == SRV_UNIX_O_DSYNC) {
+    if (type == OS_LOG_FILE && sys.m_config.m_fil.m_flush_method == SRV_UNIX_O_DSYNC) {
       create_flag = create_flag | O_SYNC;
     }
 #endif /* O_SYNC */
@@ -467,7 +467,7 @@ os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, uli
     *success = true;
 
     /* We disable OS caching (O_DIRECT) only on data files */
-    if (type != OS_LOG_FILE && srv_config.m_unix_file_flush_method == SRV_UNIX_O_DIRECT) {
+    if (type != OS_LOG_FILE && sys.m_config.m_fil.m_flush_method == SRV_UNIX_O_DIRECT) {
       os_file_set_nocache(file, name, mode_str);
     }
 
@@ -949,7 +949,7 @@ bool os_file_create_subdirs_if_needed(const char *path) {
   return success;
 }
 
-void os_file_print(FILE *ib_stream) {
+void os_file_print(System &sys, FILE *ib_stream) {
   ib_logger(ib_stream, "\n");
   auto current_time = time(nullptr);
   auto time_elapsed = 0.001 + difftime(current_time, os_last_printout);
@@ -958,8 +958,8 @@ void os_file_print(FILE *ib_stream) {
     ib_stream,
     "Pending flushes (fsync) log: %lu; buffer pool: %lu\n"
     "%lu OS file reads, %lu OS file writes, %lu OS fsyncs\n",
-    (ulong)srv_fil->get_pending_log_flushes(),
-    (ulong)srv_fil->get_pending_tablespace_flushes(),
+    (ulong)sys.m_fil->get_pending_log_flushes(),
+    (ulong)sys.m_fil->get_pending_tablespace_flushes(),
     (ulong)os_n_file_reads,
     (ulong)os_n_file_writes,
     (ulong)os_n_fsyncs

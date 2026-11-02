@@ -126,7 +126,7 @@ int yyparse();
  * 
  * @return The query graph.
  */
-QueFork *pars_sql(ParsInfo *info, const char *str);
+QueFork *pars_sql(System &sys, ParsInfo *info, const char *str);
 
 /**
  * @brief Retrieves characters to the lexical analyzer.
@@ -251,7 +251,7 @@ ColAssignNode *pars_column_assignment(SymNode *column, que_node_t *exp);
  * 
  * @return UpdNode* Update node in a query tree.
  */
-UpdNode *pars_update_statement_start(bool is_delete, SymNode *table_sym, ColAssignNode *col_assign_list);
+UpdNode *pars_update_statement_start(System &sys, bool is_delete, SymNode *table_sym, ColAssignNode *col_assign_list);
 
 /**
  * @brief Parses an update or delete statement.
@@ -272,7 +272,7 @@ UpdNode *pars_update_statement(UpdNode *node, SymNode *cursor_sym, que_node_t *s
  * 
  * @return InsertNode* Insert node in a query tree.
  */
-InsertNode *pars_insert_statement(SymNode *table_sym, que_node_t *values_list, SelNode *select);
+InsertNode *pars_insert_statement(System &sys, SymNode *table_sym, que_node_t *values_list, SelNode *select);
 
 /**
  * @brief Parses a procedure parameter declaration.
@@ -433,7 +433,7 @@ SymNode *pars_column_def(SymNode *sym_node, ParsResWord *type, SymNode *len, voi
  * 
  * @return TableNode* Table create subgraph.
  */
-TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs, void *not_fit_in_memory);
+TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_defs, void *not_fit_in_memory);
 
 /**
  * @brief Parses an index creation operation.
@@ -446,7 +446,7 @@ TableNode *pars_create_table(SymNode *table_sym, SymNode *column_defs, void *not
  * 
  * @return IndexNode* Index create subgraph.
  */
-IndexNode *pars_create_index(
+IndexNode *pars_create_index(System &sys, 
   ParsResWord *unique_def, ParsResWord *clustered_def, SymNode *index_sym, SymNode *table_sym, SymNode *column_list
 );
 

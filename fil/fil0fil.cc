@@ -1132,7 +1132,7 @@ bool Fil::delete_tablespace(space_id_t id) {
 
       op_write_log(MLOG_FILE_DELETE, id, 0, 0, path, nullptr, &mtr);
 
-      mtr.commit();
+      mtr.commit(m_sys);
 
       success = os_file_delete(path);
 
@@ -1383,7 +1383,7 @@ retry:
     mtr.start();
 
     op_write_log(MLOG_FILE_RENAME, id, 0, 0, old_name, new_name, &mtr);
-    mtr.commit();
+    mtr.commit(m_sys);
   }
 
   return success;
@@ -1523,7 +1523,7 @@ DbErr Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *
 
     op_write_log(MLOG_FILE_CREATE, *space_id, is_temp ? MLOG_FILE_FLAG_TEMP : 0, flags, tablename, nullptr, &mtr);
 
-    mtr.commit();
+    mtr.commit(m_sys);
   }
 
   mem_free(path);
@@ -2229,14 +2229,14 @@ DbErr Fil::data_io(
       is_sync_request = true;
       // falthrough
     case IoRequest::Async_read:
-      srv_data_read += len;
+      m_sys.m_srv->m_stats.m_data_read += len;
       break;
 
     case IoRequest::Sync_write:
       is_sync_request = true;
       // falthrough
     case IoRequest::Async_write:
-      srv_data_written += len;
+      m_sys.m_srv->m_stats.m_data_written += len;
       break;
   }
 

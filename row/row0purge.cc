@@ -58,9 +58,9 @@ RowPurge *row_purge_node_create(QueThr *parent, MemHeap *heap) {
   return static_cast<RowPurge *>(RowPurge::node_create(parent, heap));
 }
 
-bool RowPurge::reposition_pcur(ulint latch_mode, Mtr *mtr) {
+bool RowPurge::reposition_pcur(System &sys, ulint latch_mode, Mtr *mtr) {
   if (m_found_clust) {
-    return m_pcur.restore_position(latch_mode, mtr, Current_location());
+    return m_pcur.restore_position(sys, latch_mode, mtr, Current_location());
   } else {
     m_found_clust = row_search_on_row_ref(&m_pcur, latch_mode, m_table, m_ref, mtr);
 
@@ -72,7 +72,7 @@ bool RowPurge::reposition_pcur(ulint latch_mode, Mtr *mtr) {
   }
 }
 
-bool RowPurge::remove_clust_if_poss_low(ulint mode) {
+bool RowPurge::remove_clust_if_poss_low(System &sys, ulint mode) {
   Mtr mtr;
   DbErr err;
   MemHeap *heap{};
@@ -84,12 +84,12 @@ bool RowPurge::remove_clust_if_poss_low(ulint mode) {
 
   mtr.start();
 
-  auto success = reposition_pcur(mode, &mtr);
+  auto success = reposition_pcur(sys, mode, &mtr);
 
   if (!success) {
     /* The record is already removed */
 
-    m_pcur.commit_specify_mtr(&mtr);
+    m_pcur.commit_specify_mtr(sys, &mtr);
 
     return (true);
   }
@@ -108,7 +108,7 @@ bool RowPurge::remove_clust_if_poss_low(ulint mode) {
       mem_heap_free(heap);
     }
     /* Someone else has modified the record later: do not remove */
-    m_pcur.commit_specify_mtr(&mtr);
+    m_pcur.commit_specify_mtr(sys, &mtr);
 
     return (true);
   }
@@ -118,10 +118,10 @@ bool RowPurge::remove_clust_if_poss_low(ulint mode) {
   }
 
   if (mode == BTR_MODIFY_LEAF) {
-    success = btr_cur->optimistic_delete(&mtr);
+    success = btr_cur->optimistic_delete(sys, &mtr);
   } else {
     ut_ad(mode == BTR_MODIFY_TREE);
-    err = btr_cur->pessimistic_delete(false, RB_NONE, &mtr);
+    err = btr_cur->pessimistic_delete(sys, false, RB_NONE, &mtr);
 
     if (err == DB_SUCCESS) {
       success = true;
@@ -132,24 +132,24 @@ bool RowPurge::remove_clust_if_poss_low(ulint mode) {
     }
   }
 
-  m_pcur.commit_specify_mtr(&mtr);
+  m_pcur.commit_specify_mtr(sys, &mtr);
 
   return (success);
 }
 
-void RowPurge::remove_clust_if_poss() {
+void RowPurge::remove_clust_if_poss(System &sys) {
   ulint n_tries{};
 
   /*	ib_logger(stderr, "Purge: Removing clustered record\n"); */
 
-  auto success = remove_clust_if_poss_low(BTR_MODIFY_LEAF);
+  auto success = remove_clust_if_poss_low(sys, BTR_MODIFY_LEAF);
 
   if (success) {
 
     return;
   }
 retry:
-  success = remove_clust_if_poss_low(BTR_MODIFY_TREE);
+  success = remove_clust_if_poss_low(sys, BTR_MODIFY_TREE);
   /* The delete operation may fail if we have little
   file space left: TODO: easiest to crash the database
   and restart with more file space */
@@ -197,7 +197,7 @@ bool RowPurge::remove_sec_if_poss_low(System &sys, Index *index, const DTuple *e
 
     pcur.close();
 
-    mtr.commit();
+    mtr.commit(sys);
 
     return (true);
   }
@@ -210,39 +210,39 @@ bool RowPurge::remove_sec_if_poss_low(System &sys, Index *index, const DTuple *e
 
   mtr_vers.start();
 
-  success = reposition_pcur(BTR_SEARCH_LEAF, &mtr_vers);
+  success = reposition_pcur(sys, BTR_SEARCH_LEAF, &mtr_vers);
 
   if (success) {
     old_has = sys.m_row_vers->old_has_index_entry(true, pcur.get_rec(), &mtr_vers, index, entry);
   }
 
-  pcur.commit_specify_mtr(&mtr_vers);
+  pcur.commit_specify_mtr(sys, &mtr_vers);
 
   if (!success || !old_has) {
     /* Remove the index record */
 
     if (mode == BTR_MODIFY_LEAF) {
-      success = btr_cur->optimistic_delete(&mtr);
+      success = btr_cur->optimistic_delete(sys, &mtr);
     } else {
       ut_ad(mode == BTR_MODIFY_TREE);
-      err = btr_cur->pessimistic_delete(false, RB_NONE, &mtr);
+      err = btr_cur->pessimistic_delete(sys, false, RB_NONE, &mtr);
       success = err == DB_SUCCESS;
       ut_a(success || err == DB_OUT_OF_FILE_SPACE);
     }
   }
 
   pcur.close();
-  mtr.commit();
+  mtr.commit(sys);
 
   return (success);
 }
 
-void RowPurge::remove_sec_if_poss(Index *index, DTuple *entry) {
+void RowPurge::remove_sec_if_poss(System &sys, Index *index, DTuple *entry) {
   ulint n_tries{};
 
   /* ib_logger(stderr, "Purge: Removing secondary record\n"); */
 
-  auto success = remove_sec_if_poss_low(index, entry, BTR_MODIFY_LEAF);
+  auto success = remove_sec_if_poss_low(sys, index, entry, BTR_MODIFY_LEAF);
 
   if (success) {
 
@@ -250,7 +250,7 @@ void RowPurge::remove_sec_if_poss(Index *index, DTuple *entry) {
   }
 
 retry:
-  success = remove_sec_if_poss_low(index, entry, BTR_MODIFY_TREE);
+  success = remove_sec_if_poss_low(sys, index, entry, BTR_MODIFY_TREE);
   /* The delete operation may fail if we have little
   file space left: TODO: easiest to crash the database
   and restart with more file space */
@@ -267,7 +267,7 @@ retry:
   ut_a(success);
 }
 
-void RowPurge::del_mark() {
+void RowPurge::del_mark(System &sys) {
   auto heap = mem_heap_create(1024);
 
   for (; m_index != nullptr; m_index = m_index->get_next()) {
@@ -277,12 +277,12 @@ void RowPurge::del_mark() {
     auto entry = row_build_index_entry(m_row, nullptr, idx, heap);
     ut_a(entry != nullptr);
 
-    remove_sec_if_poss(idx, entry);
+    remove_sec_if_poss(sys, idx, entry);
   }
 
   mem_heap_free(heap);
 
-  remove_clust_if_poss();
+  remove_clust_if_poss(sys);
 }
 
 void RowPurge::upd_exist_or_extern(System &sys) {
@@ -309,7 +309,7 @@ void RowPurge::upd_exist_or_extern(System &sys) {
       auto entry = row_build_index_entry(m_row, nullptr, idx, heap);
       ut_a(entry);
 
-      remove_sec_if_poss(idx, entry);
+      remove_sec_if_poss(sys, idx, entry);
     }
   }
 
@@ -375,10 +375,10 @@ skip_secondaries:
       data_field = block->get_frame() + offset + internal_offset;
 
       ut_a(dfield_get_len(&ufield->m_new_val) >= BTR_EXTERN_FIELD_REF_SIZE);
-      blob.free_externally_stored_field(
+      blob.free_externally_stored_field(sys, 
         idx, data_field + dfield_get_len(&ufield->m_new_val) - BTR_EXTERN_FIELD_REF_SIZE, nullptr, nullptr, 0, RB_NONE, &mtr
       );
-      mtr.commit();
+      mtr.commit(sys);
     }
   }
 }
@@ -445,7 +445,7 @@ bool RowPurge::parse_undo_rec(System &sys, bool *updated_extern, QueThr *thr) {
 
   ptr = TrxUndoRecord::get_row_ref(ptr, clust_index, &m_ref, m_heap);
 
-  ptr = TrxUndoRecord::update_rec_get_update(ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
+  ptr = TrxUndoRecord::update_rec_get_update(sys, ptr, clust_index, pars.m_type, trx_id, roll_ptr, info_bits, trx, m_heap, &m_update);
 
   /* Read to the partial row the fields that occur in indexes */
 
@@ -479,7 +479,7 @@ ulint RowPurge::purge(System &sys, QueThr *thr) {
   if (m_undo_rec.raw() == trx_purge_dummy_rec) {
     purge_needed = false;
   } else {
-    purge_needed = parse_undo_rec(&updated_extern, thr);
+    purge_needed = parse_undo_rec(sys, &updated_extern, thr);
     /* If purge_needed == true, we must also remember to unfreeze
     data dictionary! */
   }
@@ -492,11 +492,11 @@ ulint RowPurge::purge(System &sys, QueThr *thr) {
     m_index = clust_index->get_next();
 
     if (m_rec_type == TRX_UNDO_DEL_MARK_REC) {
-      del_mark();
+      del_mark(sys);
 
     } else if (updated_extern || m_rec_type == TRX_UNDO_UPD_EXIST_REC) {
 
-      upd_exist_or_extern();
+      upd_exist_or_extern(sys);
     }
 
     if (m_found_clust) {
@@ -516,18 +516,18 @@ ulint RowPurge::purge(System &sys, QueThr *thr) {
   return (DB_SUCCESS);
 }
 
-QueThr *RowPurge::step(QueThr *thr) {
+QueThr *RowPurge::step(System &sys, QueThr *thr) {
   auto node = static_cast<RowPurge *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_PURGE);
 
-  auto err = node->purge(thr);
+  auto err = node->purge(sys, thr);
 
   ut_a(err == DB_SUCCESS);
 
   return thr;
 }
 
-QueThr *row_purge_step(QueThr *thr) {
-  return RowPurge::step(thr);
+QueThr *row_purge_step(System &sys, QueThr *thr) {
+  return RowPurge::step(sys, thr);
 }

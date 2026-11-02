@@ -40,7 +40,7 @@ Created 12/21/1997 Heikki Tuuri
  *
  * @param[in] sel_node Parsed select node.
  */
-void opt_search_plan(SelNode *sel_node);
+void opt_search_plan(System &sys, SelNode *sel_node);
 
 /**
  * @brief Looks for occurrences of the columns of the table in the query subgraph and

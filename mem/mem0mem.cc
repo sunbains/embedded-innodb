@@ -232,7 +232,7 @@ char *mem_heap_printf(MemHeap *heap, const char *format, ...) {
   return (str);
 }
 
-MemHeap *mem_heap_create_block(MemHeap *heap, ulint n, ulint type, SourceLocation loc) {
+MemHeap *mem_heap_create_block(System &sys, MemHeap *heap, ulint n, ulint type, SourceLocation loc) {
   ut_ad((type == MEM_HEAP_DYNAMIC) || (type == MEM_HEAP_BUFFER) || (type == MEM_HEAP_BUFFER + MEM_HEAP_BTR_SEARCH));
 
   if (heap && heap->magic_n != MEM_BLOCK_MAGIC_N) {
@@ -268,7 +268,7 @@ MemHeap *mem_heap_create_block(MemHeap *heap, ulint n, ulint type, SourceLocatio
         return nullptr;
       }
     } else {
-      buf_block = srv_buf_pool->block_alloc();
+      buf_block = sys.m_buf_pool->block_alloc();
     }
 
     block = reinterpret_cast<MemHeap *>(buf_block->m_frame);
@@ -344,7 +344,7 @@ MemHeap *mem_heap_add_block(MemHeap *heap, ulint n) {
   return new_block;
 }
 
-void mem_heap_block_free(MemHeap *heap, MemHeap *block) {
+void mem_heap_block_free(System &sys, MemHeap *heap, MemHeap *block) {
   auto buf_block = reinterpret_cast<BufBlock *>(block->buf_block);
 
   if (block->magic_n != MEM_BLOCK_MAGIC_N) {
@@ -368,13 +368,13 @@ void mem_heap_block_free(MemHeap *heap, MemHeap *block) {
 
     free(block);
   } else {
-    srv_buf_pool->block_free(buf_block);
+    sys.m_buf_pool->block_free(buf_block);
   }
 }
 
-void mem_heap_free_block_free(MemHeap *heap) {
+void mem_heap_free_block_free(System &sys, MemHeap *heap) {
   if (likely_null(heap->free_block)) {
-    srv_buf_pool->block_free(static_cast<BufBlock *>(heap->free_block));
+    sys.m_buf_pool->block_free(static_cast<BufBlock *>(heap->free_block));
     heap->free_block = nullptr;
   }
 }

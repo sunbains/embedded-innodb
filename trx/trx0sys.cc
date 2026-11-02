@@ -40,7 +40,7 @@ TrxSys::TrxSys(System &sys) noexcept : m_sys(sys) {
   mutex_create(&m_mutex, IF_DEBUG("trx_sys_mutex", ) IF_SYNC_DEBUG(TRX_SYS_MUTEX, ) Current_location());
 }
 
-TrxSys::~TrxSys() noexcept {
+TrxSys::~TrxSys(System &sys) noexcept {
   /* Check that all read views are closed except read view owned
   by a purge. */
 
@@ -69,7 +69,7 @@ TrxSys::~TrxSys() noexcept {
 
     m_rseg_list.remove(prev_rseg);
 
-    prev_rseg->memory_free();
+    prev_rseg->memory_free(sys);
   }
 
   auto view = m_view_list.front();
@@ -107,7 +107,7 @@ DbErr TrxSys::start(IbRecovery recovery) noexcept {
 
   auto sys_header = read_header(&mtr);
 
-  TrxRseg::list_and_array_init(recovery, sys_header, &mtr);
+  TrxRseg::list_and_array_init(m_sys, recovery, sys_header, &mtr);
 
   m_latest_rseg = m_rseg_list.front();
 
@@ -118,7 +118,7 @@ DbErr TrxSys::start(IbRecovery recovery) noexcept {
    * to the disk-based header! Thus trx id values will not overlap when
    * the database is repeatedly started! */
 
-  m_max_trx_id = ut_uint64_align_up(mtr.read_uint64(sys_header + TRX_SYS_TRX_ID_STORE), TRX_SYS_TRX_ID_WRITE_MARGIN) +
+  m_max_trx_id = ut_uint64_align_up(mtr.read_uint64(m_sys, sys_header + TRX_SYS_TRX_ID_STORE), TRX_SYS_TRX_ID_WRITE_MARGIN) +
                  2 * TRX_SYS_TRX_ID_WRITE_MARGIN;
 
   init_at_db_start(recovery);
@@ -155,9 +155,9 @@ DbErr TrxSys::start(IbRecovery recovery) noexcept {
     m_purge = new (ptr) PurgeSys(purge_trx);
   }
 
-  mutex_exit(&m_mutex);
+  mutex_exit(m_sys, &m_mutex);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   return DB_SUCCESS;
 }
@@ -186,7 +186,7 @@ void TrxSys::flush_max_trx_id() noexcept {
 
   mlog_write_uint64(sys_header + TRX_SYS_TRX_ID_STORE, m_max_trx_id, &mtr);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 }
 
 ulint TrxSys::frseg_find_free(Mtr *mtr) noexcept {
@@ -216,7 +216,7 @@ DbErr TrxSys::create_system_tablespace() noexcept {
   then enter the kernel: we must do it in this order to conform
   to the latching order rules. */
 
-  mtr_x_lock(m_sys.m_fsp->m_fil->space_get_latch(TRX_SYS_SPACE), &mtr);
+  mtr_x_lock(m_sys.m_fil->space_get_latch(TRX_SYS_SPACE), &mtr);
 
   mutex_enter(&m_mutex);
 
@@ -258,14 +258,14 @@ DbErr TrxSys::create_system_tablespace() noexcept {
 
   /* Create the first rollback segment in the SYSTEM tablespace */
   ulint slot_no;
-  auto page_no = TrxRseg::header_create(TRX_SYS_SPACE, ULINT_MAX, &slot_no, &mtr);
+  auto page_no = TrxRseg::header_create(m_sys, TRX_SYS_SPACE, ULINT_MAX, &slot_no, &mtr);
 
   ut_a(slot_no == TRX_SYS_SYSTEM_RSEG_ID);
   ut_a(page_no != FIL_NULL);
 
   mutex_exit(&m_mutex);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   return DB_SUCCESS;
 }

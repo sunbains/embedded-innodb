@@ -138,7 +138,7 @@ bool ib_handle_errors(DbErr *new_err, Trx *trx, QueThr *thr, TrxSavept *savept) 
   }
 }
 
-DbErr ib_trx_lock_table_with_retry(Trx *trx, Table *table, enum LockMode mode) {
+DbErr ib_trx_lock_table_with_retry(System &sys, Trx *trx, Table *table, enum LockMode mode) {
   auto heap = mem_heap_create(512);
 
   trx->m_op_info = "setting table lock";
@@ -158,7 +158,7 @@ DbErr ib_trx_lock_table_with_retry(Trx *trx, Table *table, enum LockMode mode) {
     thr->run_node = thr;
     thr->prev_node = thr->common.parent;
 
-    auto err = srv_lock_sys->lock_table(0, table, mode, thr);
+    auto err = sys.m_lock_sys->lock_table(0, table, mode, thr);
 
     trx->m_error_state = err;
 
@@ -196,7 +196,7 @@ DbErr ib_trx_lock_table_with_retry(Trx *trx, Table *table, enum LockMode mode) {
   ut_error;
 }
 
-void ib_update_statistics_if_needed(Table *table) {
+void ib_update_statistics_if_needed(System &sys, Table *table) {
   auto counter = table->m_stats.m_modified_counter++;
 
   /* Calculate new statistics if 1 / 16 of table has been modified
@@ -207,7 +207,7 @@ void ib_update_statistics_if_needed(Table *table) {
 
   if (counter > 2000000000 || ((int64_t)counter > 16 + table->m_stats.m_n_rows / 16)) {
 
-    srv_dict_sys->update_statistics(table);
+    sys.m_dict->update_statistics(table);
   }
 }
 

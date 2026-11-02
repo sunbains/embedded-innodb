@@ -285,7 +285,7 @@ byte *page_mem_alloc_heap(page_t *page, ulint need, ulint *heap_no);
  *
  * @return	pointer to the page
  */
-page_t *page_create(const Index *index, BufBlock *block, Mtr *mtr);
+page_t *page_create(System &sys, const Index *index, BufBlock *block, Mtr *mtr);
 
 /**
  * Differs from page_copy_rec_list_end, because this function does not
@@ -311,7 +311,7 @@ void page_copy_rec_list_end_no_locks(BufBlock *new_block, BufBlock *block, Rec r
  * @param[in, out] mtr mini-transaction
  * @return pointer to the original successor of the infimum record on new_page.
  */
-Rec page_copy_rec_list_end(BufBlock *new_block, BufBlock *block, Rec rec, const Index *index, Mtr *mtr);
+Rec page_copy_rec_list_end(System &sys, BufBlock *new_block, BufBlock *block, Rec rec, const Index *index, Mtr *mtr);
 
 /**
  * Copies records from page to new_page, up to the given record, NOT
@@ -326,7 +326,7 @@ Rec page_copy_rec_list_end(BufBlock *new_block, BufBlock *block, Rec rec, const 
  *
  * @return pointer to the original predecessor of the supremum record on new_page
  */
-Rec page_copy_rec_list_start(BufBlock *new_block, BufBlock *block, Rec rec, Index *index, Mtr *mtr);
+Rec page_copy_rec_list_start(System &sys, BufBlock *new_block, BufBlock *block, Rec rec, Index *index, Mtr *mtr);
 
 /**
  * Deletes records from a page from a given record onward, including that

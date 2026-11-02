@@ -90,7 +90,7 @@ bool LockValidator::validate() noexcept {
   return true;
 }
 
-bool LockValidator::rec_validate_page(PageId page_id) noexcept {
+bool LockValidator::rec_validate_page(System &sys, PageId page_id) noexcept {
   ut_ad(!mutex_own(&m_lock_sys->m_trx_sys->m_mutex));
 
   Mtr mtr;
@@ -102,7 +102,7 @@ bool LockValidator::rec_validate_page(PageId page_id) noexcept {
       mem_heap_free(heap);
     }
 
-    mtr.commit();
+    mtr.commit(sys);
 
     clean_up_called = true;
 

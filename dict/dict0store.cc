@@ -52,7 +52,7 @@ DictStore::hdr_t *DictStore::hdr_get(Mtr *mtr) noexcept {
     .m_mtr = mtr
   };
 
-  auto block = m_sys.m_fsp->m_buf_pool->get(req, nullptr);
+  auto block = m_sys.m_buf_pool->get(req, nullptr);
   auto header = DICT_HDR + block->get_frame();
 
   buf_block_dbg_add_level(IF_SYNC_DEBUG(block, SYNC_DICT_HEADER));
@@ -69,11 +69,11 @@ Dict_id DictStore::hdr_get_new_id(DictIdType type) noexcept {
 
   auto hdr = hdr_get(&mtr);
 
-  const Dict_id id = mtr.read_uint64(hdr + ulint(type)) + 1;
+  const Dict_id id = mtr.read_uint64(m_sys, hdr + ulint(type)) + 1;
 
   mlog_write_uint64(hdr + ulint(type), id, &mtr);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   return id;
 }
@@ -91,7 +91,7 @@ void DictStore::hdr_flush_row_id() noexcept {
 
   mlog_write_uint64(hdr + DICT_HDR_ROW_ID, id, &mtr);
 
-  mtr.commit();
+  mtr.commit(m_sys);
 }
 
 bool DictStore::bootstrap_system_tables(Mtr *mtr) noexcept {
@@ -346,7 +346,7 @@ DbErr DictStore::build_table_def_step(QueThr *thr, TableNode *node) noexcept {
 
     auto flags = table->m_flags & ~(~0UL << DICT_TF_BITS);
 
-    auto fil = m_sys.m_fsp->m_fil;
+    auto fil = m_sys.m_fil;
 
     auto err = fil->create_new_single_table_tablespace(&space_id, path_or_name, is_path, flags, FIL_IBD_FILE_INITIAL_SIZE);
 
@@ -361,7 +361,7 @@ DbErr DictStore::build_table_def_step(QueThr *thr, TableNode *node) noexcept {
 
     m_sys.m_fsp->header_init(table->m_space_id, FIL_IBD_FILE_INITIAL_SIZE, &mtr);
 
-    mtr.commit();
+    mtr.commit(m_sys);
 
   } else {
     /* Create in the system tablespace: disallow new features */
@@ -597,7 +597,7 @@ DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
 
   auto search_tuple = create_search_tuple(node->m_ind_row, node->m_heap);
 
-  pcur.open(sys_indexes->m_indexes.front(), search_tuple, PAGE_CUR_L, BTR_MODIFY_LEAF, &mtr, Current_location());
+  pcur.open(m_sys, sys_indexes->m_indexes.front(), search_tuple, PAGE_CUR_L, BTR_MODIFY_LEAF, &mtr, Current_location());
 
   (void)pcur.move_to_next_user_rec(&mtr);
 
@@ -607,7 +607,7 @@ DbErr DictStore::create_index_tree_step(IndexNode *node) noexcept {
 
   pcur.close();
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   if (node->m_page_no == FIL_NULL) {
 
@@ -631,7 +631,7 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
 
   ut_ad(len == 4);
 
-  auto root_page_no = mtr->read_ulint(field.get(), MLOG_4BYTES);
+  auto root_page_no = mtr->read_ulint(m_sys, field.get(), MLOG_4BYTES);
 
   if (root_page_no == FIL_NULL) {
     /* The tree has already been freed */
@@ -642,9 +642,9 @@ void DictStore::drop_index_tree(Rec rec, Mtr *mtr) noexcept {
 
   ut_ad(len == 4);
 
-  auto space_id = static_cast<space_id_t>(mtr->read_ulint(field.get(), MLOG_4BYTES));
+  auto space_id = static_cast<space_id_t>(mtr->read_ulint(m_sys, field.get(), MLOG_4BYTES));
 
-  if (m_sys.m_fsp->m_fil->space_get_flags(space_id) == ULINT_UNDEFINED) {
+  if (m_sys.m_fil->space_get_flags(space_id) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
     missing: do nothing */
     return;
@@ -680,7 +680,7 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
   auto field = rec.get_nth_field(offsets, DICT_SYS_INDEXES_PAGE_NO_FIELD, &len);
   ut_ad(len == 4);
 
-  auto root_page_no = mtr->read_ulint(field.get(), MLOG_4BYTES);
+  auto root_page_no = mtr->read_ulint(m_sys, field.get(), MLOG_4BYTES);
 
   if (drop && root_page_no == FIL_NULL) {
     /* The tree has been freed. */
@@ -694,10 +694,10 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
   ut_ad(len == 4);
 
   if (drop) {
-    space_id = mtr->read_ulint(field.get(), MLOG_4BYTES);
+    space_id = mtr->read_ulint(m_sys, field.get(), MLOG_4BYTES);
   }
 
-  auto fil = m_sys.m_fsp->m_fil;
+  auto fil = m_sys.m_fil;
 
   if (fil->space_get_flags(space_id) == ULINT_UNDEFINED) {
     /* It is a single table tablespace and the .ibd file is
@@ -744,11 +744,11 @@ page_no_t DictStore::truncate_index_tree(Table *table, space_id_t space_id, Btre
   be freeing and allocating pages in the same mini-transaction. */
   pcur->store_position(mtr);
 
-  mtr->commit();
+  mtr->commit(m_sys);
 
   mtr->start();
 
-  (void)pcur->restore_position(BTR_MODIFY_LEAF, mtr, Current_location());
+  (void)pcur->restore_position(m_sys, BTR_MODIFY_LEAF, mtr, Current_location());
 
   /* Find the index corresponding to this SYS_INDEXES record. */
   for (auto index : table->m_indexes) {
@@ -1022,7 +1022,7 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
     if (auto err = m_sys.m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true); err != DB_SUCCESS) {
       log_warn("DROP table failed with error ", err, " while dropping table SYS_FOREIGN");
     }
-    auto err_commit = trx->commit();
+    auto err_commit = trx->commit(m_sys);
     ut_a(err_commit == DB_SUCCESS);
   }
 
@@ -1031,7 +1031,7 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
     if (auto err = m_sys.m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true); err != DB_SUCCESS) {
       log_warn("DROP table failed with error ", err, " while dropping table SYS_FOREIGN_COLS");
     }
-    auto err_commit = trx->commit();
+    auto err_commit = trx->commit(m_sys);
     ut_a(err_commit == DB_SUCCESS);
   }
 
@@ -1068,7 +1068,7 @@ DbErr DictStore::create_or_check_foreign_constraint_tables() noexcept {
     (void)m_sys.m_dict->m_ddl.drop_table("SYS_FOREIGN", trx, true);
     (void)m_sys.m_dict->m_ddl.drop_table("SYS_FOREIGN_COLS", trx, true);
 
-    auto err_commit = trx->commit();
+    auto err_commit = trx->commit(m_sys);
     ut_a(err_commit == DB_SUCCESS);
 
     err = DB_MUST_GET_MORE_FILE_SPACE;
@@ -1288,7 +1288,7 @@ DbErr DictStore::create_instance() noexcept {
 
   const auto err = !bootstrap_system_tables(&mtr) ? DB_ERROR : DB_SUCCESS;
 
-  mtr.commit();
+  mtr.commit(m_sys);
 
   return err;
 }

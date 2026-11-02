@@ -86,7 +86,7 @@ byte *mlog_parse_initial_log_record(byte *ptr, byte *end_ptr, MlogType *type, sp
   return ptr;
 }
 
-byte *mlog_parse_nbytes(MlogType type, byte *ptr, byte *end_ptr, byte *page) {
+byte *mlog_parse_nbytes(System &sys, MlogType type, byte *ptr, byte *end_ptr, byte *page) {
   ulint val;
   uint64_t dval;
 
@@ -102,7 +102,7 @@ byte *mlog_parse_nbytes(MlogType type, byte *ptr, byte *end_ptr, byte *page) {
   ptr += 2;
 
   if (offset >= UNIV_PAGE_SIZE) {
-    recv_sys->m_found_corrupt_log = true;
+    sys.m_recv->m_found_corrupt_log = true;
 
     return nullptr;
   }
@@ -153,7 +153,7 @@ byte *mlog_parse_nbytes(MlogType type, byte *ptr, byte *end_ptr, byte *page) {
       break;
     default:
     corrupt:
-      recv_sys->m_found_corrupt_log = true;
+      sys.m_recv->m_found_corrupt_log = true;
       ptr = nullptr;
   }
 
@@ -245,8 +245,8 @@ void mlog_log_string(byte *ptr, ulint len, Mtr *mtr) {
   mlog_catenate_string(mtr, ptr, len);
 }
 
-byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
-  ut_a(page == nullptr || srv_fil->page_get_type(page) != FIL_PAGE_TYPE_INDEX);
+byte *mlog_parse_string(System &sys, byte *ptr, byte *end_ptr, byte *page) {
+  ut_a(page == nullptr || sys.m_fil->page_get_type(page) != FIL_PAGE_TYPE_INDEX);
 
   if (end_ptr < ptr + 4) {
 
@@ -260,7 +260,7 @@ byte *mlog_parse_string(byte *ptr, byte *end_ptr, byte *page) {
   ptr += 2;
 
   if (offset >= UNIV_PAGE_SIZE || len + offset > UNIV_PAGE_SIZE) {
-    recv_sys->m_found_corrupt_log = true;
+    sys.m_recv->m_found_corrupt_log = true;
 
     return nullptr;
   }
@@ -312,8 +312,8 @@ byte *mlog_parse_index(byte *ptr, const byte *end_ptr, Index *&index) {
   return ptr;
 }
 
-byte *mlog_write_initial_log_record_fast(const byte *ptr, MlogType type, byte *log_ptr, Mtr *mtr) {
-  ut_ad(mtr->memo_contains_page(ptr, MTR_MEMO_PAGE_X_FIX));
+byte *mlog_write_initial_log_record_fast(System &sys, const byte *ptr, MlogType type, byte *log_ptr, Mtr *mtr) {
+  ut_ad(mtr->memo_contains_page(sys, ptr, MTR_MEMO_PAGE_X_FIX));
   ut_ad(type <= MLOG_BIGGEST_TYPE);
 
   auto page = static_cast<const byte *>(ut_align_down(ptr, UNIV_PAGE_SIZE));
@@ -335,7 +335,7 @@ byte *mlog_write_initial_log_record_fast(const byte *ptr, MlogType type, byte *l
 
 #ifdef UNIV_DEBUG
   /* We now assume that all x-latched pages have been modified! */
-  auto block = srv_buf_pool->block_align(ptr);
+  auto block = sys.m_buf_pool->block_align(ptr);
 
   if (!mtr->memo_contains(block, MTR_MEMO_MODIFY)) {
 

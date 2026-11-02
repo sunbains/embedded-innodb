@@ -288,9 +288,9 @@ loop:
 
       m_switched_on_monitor = true;
 
-      srv_print_innodb_monitor = true;
+      m_sys.m_srv->m_print_innodb_monitor = true;
 
-      os_event_set(srv_lock_timeout_thread_event);
+      os_event_set(m_sys.m_srv->m_lock_timeout_thread_event);
     }
 
   } else if (m_switched_on_monitor) {
@@ -301,7 +301,7 @@ loop:
     monitor! */
 
     m_switched_on_monitor = false;
-    srv_print_innodb_monitor = false;
+    m_sys.m_srv->m_print_innodb_monitor = false;
   }
 
   /* If there is a block in the free list, take it */
@@ -311,7 +311,7 @@ loop:
     m_sys.m_buf_pool->mutex_release();
 
     if (started_monitor) {
-      srv_print_innodb_monitor = mon_value_was;
+      m_sys.m_srv->m_print_innodb_monitor = mon_value_was;
     }
 
     return block;
@@ -359,16 +359,16 @@ loop:
       (ulong)os_n_fsyncs
     );
 
-    mon_value_was = srv_print_innodb_monitor;
+    mon_value_was = m_sys.m_srv->m_print_innodb_monitor;
     started_monitor = true;
-    srv_print_innodb_monitor = true;
-    os_event_set(srv_lock_timeout_thread_event);
+    m_sys.m_srv->m_print_innodb_monitor = true;
+    os_event_set(m_sys.m_srv->m_lock_timeout_thread_event);
   }
 
   /* No free block was found: try to flush the LRU list */
 
   m_sys.m_buf_pool->m_flusher->free_margin(m_sys.m_dblwr);
-  ++srv_buf_pool_wait_free;
+  ++m_sys.m_srv->m_stats.m_buf_pool_wait_free;
 
   m_sys.m_buf_pool->mutex_acquire();
 

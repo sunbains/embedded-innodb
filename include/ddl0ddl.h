@@ -234,8 +234,6 @@ struct Ddl {
   };
 
 
-  /** Log. */
-
   /** List of tables we should drop in background. */
   UT_LIST_BASE_NODE_T(DropList, m_node) m_drop_list;
 };

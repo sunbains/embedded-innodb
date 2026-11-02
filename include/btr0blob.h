@@ -98,7 +98,7 @@ struct Blob {
    *
    * @param[in] fsp             File space handler.
    */
-  explicit Blob(Fsp *fsp, Btree *btree) : sys.m_fsp{fsp}, sys.m_btree(btree) {}
+  Blob() = default;
 
   /**
    * Sets the ownership bit of an externally stored field in a record.
@@ -143,7 +143,7 @@ struct Blob {
    * @param[in] rb_ctx          The rollback context.
    * @param[in] mtr             The mini-transaction handle which contains an X-latch to the record page and to the tree.
    */
-  void free_updated_extern_fields(
+  void free_updated_extern_fields(System &sys, 
     const Index *index, Rec rec, const RecOffs &offsets, const Upd *update, TrxRbCtx rb_ctx, Mtr *mtr
   ) noexcept;
 
@@ -156,7 +156,7 @@ struct Blob {
    * @param[in] rb_ctx          The rollback context.
    * @param[in] mtr             The mini-transaction handle which contains an X-latch to record page and to the index tree
    */
-  void free_externally_stored_fields(Index *index, Rec rec, const RecOffs &offsets, TrxRbCtx rb_ctx, Mtr *mtr) noexcept;
+  void free_externally_stored_fields(System &sys, Index *index, Rec rec, const RecOffs &offsets, TrxRbCtx rb_ctx, Mtr *mtr) noexcept;
 
   /**
    * Gets the externally stored size of a record, in units of a database page.
@@ -209,7 +209,7 @@ struct Blob {
    *
    * @return Number of bytes written to buf.
    */
-  [[nodiscard]] ulint copy_externally_stored_field_prefix_low(
+  [[nodiscard]] ulint copy_externally_stored_field_prefix_low(System &sys, 
     byte *buf, ulint len, space_id_t space_id, page_no_t page_no, ulint offset
   ) noexcept;
 
@@ -225,7 +225,7 @@ struct Blob {
    *
    * @return The whole field copied to heap
    */
-  [[nodiscard]] byte *copy_externally_stored_field(ulint *len, const byte *data, ulint local_len, MemHeap *heap) noexcept;
+  [[nodiscard]] byte *copy_externally_stored_field(System &sys, ulint *len, const byte *data, ulint local_len, MemHeap *heap) noexcept;
 
   /**
    * Copies an externally stored field of a record to mem heap.
@@ -239,7 +239,7 @@ struct Blob {
    *
    * @return The whole field copied to heap
    */
-  [[nodiscard]] byte *copy_externally_stored_field(
+  [[nodiscard]] byte *copy_externally_stored_field(System &sys, 
     const Rec rec, const RecOffs &offsets, ulint no, ulint *len, MemHeap *heap
   ) noexcept;
 
@@ -322,7 +322,7 @@ struct Blob {
    *
    * @return the length of the copied field, or 0 if the column was being or has been deleted
    */
-  [[nodiscard]] ulint copy_externally_stored_field_prefix(byte *buf, ulint len, const byte *data, ulint local_len) noexcept;
+  [[nodiscard]] ulint copy_externally_stored_field_prefix(System &sys, byte *buf, ulint len, const byte *data, ulint local_len) noexcept;
 
   /**
    * Copies an externally stored field of a record to mem heap.

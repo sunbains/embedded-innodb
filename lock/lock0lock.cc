@@ -577,7 +577,7 @@ std::string Lock::table_to_string() const noexcept {
   return str;
 }
 
-std::string Lock::rec_to_string(BufPool *buf_pool) const noexcept {
+std::string Lock::rec_to_string(System &sys, BufPool *buf_pool) const noexcept {
   ut_ad(mutex_own(&buf_pool->m_trx_sys->m_mutex));
   ut_a(type() == LOCK_REC);
 
@@ -654,7 +654,7 @@ std::string Lock::rec_to_string(BufPool *buf_pool) const noexcept {
   }
   str += "\n";
 
-  mtr.commit();
+  mtr.commit(sys);
 
   if (likely_null(heap)) {
     mem_heap_free(heap);
@@ -663,13 +663,13 @@ std::string Lock::rec_to_string(BufPool *buf_pool) const noexcept {
   return str;
 }
 
-std::string Lock::to_string(BufPool *buf_pool) const noexcept {
+std::string Lock::to_string(System &sys, BufPool *buf_pool) const noexcept {
   return std::format(
     "Lock {} type: {} mode: {}, - {}",
     (void *)this,
     get_type_str(),
     get_mode_str(),
-    type() == LOCK_REC ? rec_to_string(buf_pool) : table_to_string()
+    type() == LOCK_REC ? rec_to_string(sys, buf_pool) : table_to_string()
   );
 }
 
@@ -2655,7 +2655,7 @@ void LockSys::print_info_all_transactions() noexcept {
           /* We are simply trying to force a read here. */
           (void)m_sys.m_buf_pool->get(req, nullptr);
 
-          mtr.commit();
+          mtr.commit(m_sys);
 
           load_page_first = false;
 
@@ -2800,7 +2800,7 @@ bool LockSys::rec_validate_page(PageId page_id) noexcept {
   auto clean_up = [this](Mtr &mtr, MemHeap *heap) -> bool {
     mutex_exit(&m_sys.m_trx_sys->m_mutex);
 
-    mtr.commit();
+    mtr.commit(m_sys);
 
     if (likely_null(heap)) {
       mem_heap_free(heap);

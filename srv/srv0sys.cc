@@ -645,7 +645,7 @@ void System::startup_abort(DbErr err) noexcept {
   destroy();
 }
 
-DbErr System::startup() noexcept {
+DbErr System::startup(System &sys) noexcept {
   ut_a(m_srv != nullptr);
   ut_a(!m_srv->m_was_started);
 
@@ -795,7 +795,7 @@ DbErr System::startup() noexcept {
 
     m_fsp->header_init(SYS_TABLESPACE, SYSTEM_IBD_FILE_INITIAL_SIZE / UNIV_PAGE_SIZE, &mtr);
 
-    mtr.commit();
+    mtr.commit(sys);
 
     err = m_trx_sys->create_system_tablespace();
 

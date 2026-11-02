@@ -12,7 +12,6 @@
 extern bool log_debug_writes;
 #endif /* UNIV_DEBUG */
 
-#define LOG_BUFFER_SIZE (srv_config.m_log_buffer_size * UNIV_PAGE_SIZE)
 
 // Forward declarations
 struct Log;
