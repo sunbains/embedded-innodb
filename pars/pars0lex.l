@@ -50,77 +50,42 @@ Created 12/14/1997 Heikki Tuuri
 %option noyy_scan_string
 %option nounistd
 %option c++
+%option yyclass="ParsLexer"
 
 %{
-#define YYSTYPE que_node_t*
-
 #include "pars0pars.h"
 #include "pars0grm.h"
+#include "pars0lex.h"
 #include "pars0sym.h"
 #include "mem0mem.h"
-#include "os0proc.h"
+#include "srv0sys.h"
 
 #define malloc(A)      ut_new(A)
 #define free(A)        ut_delete(A)
 #define realloc(P, A)  ut_realloc(P, A)
 #define exit(A)        ut_error
 
-/* Note: We cast result from int to yy_size_t */
-#define YY_INPUT(buf, result, max_size) ((result) = pars_get_lex_chars(buf, max_size))
-
-/* String buffer for removing quotes */
-
-/* Allocated length */
-static ulint stringbuf_len_alloc = 0;
-
-/* Current length */
-static ulint stringbuf_len = 0;
-
-/* Start of buffer */
-static char* stringbuf;
-
-static yyFlexLexer *pars_scanner{};
-
-/**
- * Appends a string to the buffer.
- *
- * @param[in] str String to be appended
- * @param[in] len Length of string.
- */
-static void string_append(const char* str, ulint len) {
-
-  // Disable compiler warning about unused variable.
-  (void) yyleng;
-
-  if (stringbuf == NULL) {
-    stringbuf = (char*) ut_new(1);
-    stringbuf_len_alloc = 1;
+void ParsLexer::string_append(const char *str, ulint len) noexcept {
+  if (m_stringbuf == nullptr) {
+    m_stringbuf = static_cast<char *>(ut_new(1));
+    m_stringbuf_len_alloc = 1;
   }
 
-  if (stringbuf_len + len > stringbuf_len_alloc) {
-    while (stringbuf_len + len > stringbuf_len_alloc) {
-      stringbuf_len_alloc <<= 1;
+  if (m_stringbuf_len + len > m_stringbuf_len_alloc) {
+    while (m_stringbuf_len + len > m_stringbuf_len_alloc) {
+      m_stringbuf_len_alloc <<= 1;
     }
-    stringbuf = (char*) ut_realloc(stringbuf, stringbuf_len_alloc);
+    m_stringbuf = static_cast<char *>(ut_realloc(m_stringbuf, m_stringbuf_len_alloc));
   }
 
-  memcpy(stringbuf + stringbuf_len, str, len);
-  stringbuf_len += len;
+  memcpy(m_stringbuf + m_stringbuf_len, str, len);
+  m_stringbuf_len += len;
 }
 
-void pars_lexer_var_init() {
-  stringbuf_len = 0;
-  stringbuf_len_alloc = 0;
+Parser::~Parser() noexcept = default;
 
-  if (stringbuf != NULL) {
-    ut_delete(stringbuf);
-    stringbuf = NULL;
-  }
-}
-
-void create_pars_scanner() {
- ut_a(pars_scanner == nullptr);
- pars_scanner = new yyFlexLexer();
+int ParsLexer::LexerInput(char *buf, int max_size) {
+  return m_sys.m_parser->get_lex_chars(buf, max_size);
 }
 
 %}
@@ -136,7 +101,7 @@ BOUND_ID  \$[a-z_A-Z0-9]+
 %%
 
 {DIGIT}+  {
-      yylval = sym_tab_add_int_lit(pars_sym_tab_global, atoi(YYText()));
+      *m_lval = sym_tab_add_int_lit(m_sys.m_parser->m_sym_tab, atoi(YYText()));
       return(PARS_INT_LIT);
 }
 
@@ -149,13 +114,13 @@ BOUND_ID  \$[a-z_A-Z0-9]+
 {BOUND_LIT}  {
       ulint  type;
 
-      yylval = sym_tab_add_bound_lit(pars_sym_tab_global, YYText() + 1, &type);
+      *m_lval = sym_tab_add_bound_lit(m_sys.m_parser->m_sym_tab, YYText() + 1, &type);
 
       return((int) type);
 }
 
 {BOUND_ID}  {
-      yylval = sym_tab_add_bound_id(pars_sym_tab_global, YYText() + 1);
+      *m_lval = sym_tab_add_bound_id(m_sys.m_parser->m_sym_tab, YYText() + 1);
 
       return(PARS_ID_TOKEN);
 }
@@ -167,7 +132,7 @@ the scanned string is emptied upon encountering a starting quote.
 
 In the state 'quoted', only two actions are possible (defined below). */
       BEGIN(quoted);
-      stringbuf_len = 0;
+      m_stringbuf_len = 0;
 }
 <quoted>[^\']+  {
       /* Got a sequence of characters other than "'":
@@ -191,9 +156,9 @@ In the state 'quoted', only two actions are possible (defined below). */
 
       if (YYLeng() % 2) {
         BEGIN(INITIAL);
-        yylval = sym_tab_add_str_lit(
-          pars_sym_tab_global,
-          (byte*) stringbuf, stringbuf_len);
+        *m_lval = sym_tab_add_str_lit(
+          m_sys.m_parser->m_sym_tab,
+          (byte*) m_stringbuf, m_stringbuf_len);
         return(PARS_STR_LIT);
       }
 }
@@ -205,7 +170,7 @@ upon encountering a starting quote.
 
 In the state 'id', only two actions are possible (defined below). */
       BEGIN(id);
-      stringbuf_len = 0;
+      m_stringbuf_len = 0;
 }
 <id>[^\"]+  {
       /* Got a sequence of characters other than '"':
@@ -229,23 +194,23 @@ In the state 'id', only two actions are possible (defined below). */
 
       if (YYLeng() % 2) {
         BEGIN(INITIAL);
-        yylval = sym_tab_add_id(
-          pars_sym_tab_global,
-          (byte*) stringbuf, stringbuf_len);
+        *m_lval = sym_tab_add_id(
+          m_sys.m_parser->m_sym_tab,
+          (byte*) m_stringbuf, m_stringbuf_len);
 
         return(PARS_ID_TOKEN);
       }
 }
 
 "NULL"    {
-      yylval = sym_tab_add_null_lit(pars_sym_tab_global);
+      *m_lval = sym_tab_add_null_lit(m_sys.m_parser->m_sym_tab);
 
       return(PARS_NULL_LIT);
 }
 
 "SQL"    {
       /* Implicit cursor name */
-      yylval = sym_tab_add_str_lit(pars_sym_tab_global, (byte*) YYText(), YYLeng());
+      *m_lval = sym_tab_add_str_lit(m_sys.m_parser->m_sym_tab, (byte*) YYText(), YYLeng());
       return(PARS_SQL_TOKEN);
 }
 
@@ -566,7 +531,7 @@ In the state 'id', only two actions are possible (defined below). */
 }
 
 {ID}    {
-      yylval = sym_tab_add_id(pars_sym_tab_global,
+      *m_lval = sym_tab_add_id(m_sys.m_parser->m_sym_tab,
               (byte*)YYText(),
               strlen(YYText()));
       return(PARS_ID_TOKEN);
@@ -685,30 +650,15 @@ In the state 'id', only two actions are possible (defined below). */
 }
 
 <<EOF>> {
-  pars_lexer_close();
   return 0;
 }
 
 %%
 
-extern "C" int yylex() {
-  if (pars_scanner == nullptr) {
-    create_pars_scanner();
-  }
-  return pars_scanner->yylex();
-}
+int yylex(que_node_t **lval, System &sys) {
+  auto &lexer = *sys.m_parser->m_lexer;
 
-/**
- * Release any resources used by the lexer.
- */
-void pars_lexer_close() {
-  delete pars_scanner;
-  pars_scanner = nullptr;
+  lexer.m_lval = lval;
 
-  if (stringbuf != nullptr) {
-    free(stringbuf);
-    stringbuf = nullptr;
-  }
-
-  stringbuf_len_alloc = stringbuf_len = 0;
+  return lexer.yylex();
 }

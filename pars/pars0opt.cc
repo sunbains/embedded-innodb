@@ -500,7 +500,7 @@ static void opt_check_order_by(SelNode *sel_node) noexcept {
  * @param[in] i The index of the current table in the select statement.
  * @param[in] table The table for which the index is being optimized.
  */
-static void opt_search_plan_for_table(SelNode *sel_node, ulint i,
+static void opt_search_plan_for_table(System &sys, SelNode *sel_node, ulint i,
                                       Table *table) noexcept {
   using Que_nodes = std::array<que_node_t *, 256>;
   ulint last_op{}; /* Eliminate a Purify warning */
@@ -544,11 +544,11 @@ static void opt_search_plan_for_table(SelNode *sel_node, ulint i,
     plan->m_tuple = nullptr;
     plan->m_n_exact_match = 0;
   } else {
-    plan->m_tuple = dtuple_create(pars_sym_tab_global->heap, n_fields);
+    plan->m_tuple = dtuple_create(sys.m_parser->m_sym_tab->heap, n_fields);
     plan->m_index->copy_types(plan->m_tuple, n_fields);
 
     plan->m_tuple_exps = reinterpret_cast<que_node_t **>(
-        mem_heap_alloc(pars_sym_tab_global->heap, n_fields * sizeof(void *)));
+        mem_heap_alloc(sys.m_parser->m_sym_tab->heap, n_fields * sizeof(void *)));
 
     memcpy(plan->m_tuple_exps, best_index_plan.data(),
            n_fields * sizeof(void *));
@@ -935,7 +935,7 @@ static void opt_classify_cols(SelNode *sel_node, ulint i) noexcept {
  * @param[in] sel_node The select node containing the query.
  * @param[in] n The index of the current table in the select statement.
  */
-static void opt_clust_access(SelNode *sel_node, ulint n) {
+static void opt_clust_access(System &sys, SelNode *sel_node, ulint n) {
   auto plan = sel_node->get_nth_plan(n);
   auto index = plan->m_index;
 
@@ -954,7 +954,7 @@ static void opt_clust_access(SelNode *sel_node, ulint n) {
   auto table = index->m_table;
   auto clust_index = table->get_clustered_index();
   const auto n_fields = clust_index->get_n_unique();
-  auto heap = pars_sym_tab_global->heap;
+  auto heap = sys.m_parser->m_sym_tab->heap;
 
   plan->m_clust_ref = dtuple_create(heap, n_fields);
 
@@ -984,7 +984,7 @@ static void opt_clust_access(SelNode *sel_node, ulint n) {
 void opt_search_plan(System &sys, SelNode *sel_node) {
   OrderNode *order_by;
 
-  auto ptr = mem_heap_alloc(pars_sym_tab_global->heap,
+  auto ptr = mem_heap_alloc(sys.m_parser->m_sym_tab->heap,
                             sel_node->m_n_tables * sizeof(Plan));
   sel_node->m_plans = reinterpret_cast<Plan *>(ptr);
 
@@ -1013,7 +1013,7 @@ void opt_search_plan(System &sys, SelNode *sel_node) {
 
     /* Choose index through which to access the table */
 
-    opt_search_plan_for_table(sel_node, i, table);
+    opt_search_plan_for_table(sys, sel_node, i, table);
 
     /* Determine the search condition conjuncts we can test at
     this table; normalize the end conditions */
@@ -1035,7 +1035,7 @@ void opt_search_plan(System &sys, SelNode *sel_node) {
     /* Calculate possible info for accessing the clustered index
     record */
 
-    opt_clust_access(sel_node, i);
+    opt_clust_access(sys, sel_node, i);
 
     table_node = static_cast<SymNode *>(que_node_get_next(table_node));
   }

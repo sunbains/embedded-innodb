@@ -58,6 +58,7 @@ Created 2/16/1996 Heikki Tuuri
 #include "os0thread.h"
 #include "page0page.h"
 #include "pars0pars.h"
+#include "pars0lex.h"
 #include "row0ins.h"
 #include "row0sel.h"
 #include "row0undo.h"
@@ -197,6 +198,7 @@ DbErr System::init(const Config &config) noexcept {
   m_row_sel = std::make_unique<RowSel>(*this);
   m_row_undo = std::make_unique<RowUndo>(*this);
   m_row_vers = std::make_unique<RowVers>(*this);
+  m_parser = std::make_unique<Parser>(*this);
   m_srv = std::make_unique<Srv>(*this);
 
   return DB_SUCCESS;
@@ -221,6 +223,7 @@ void System::destroy() noexcept {
   /* Reverse creation order. The dictionary must go before the buffer pool
   is closed. */
   destroy_subsystem(m_srv);
+  destroy_subsystem(m_parser);
   destroy_subsystem(m_row_vers);
   destroy_subsystem(m_row_undo);
   destroy_subsystem(m_row_sel);
@@ -249,7 +252,6 @@ void System::destroy() noexcept {
   destroy_subsystem(m_buf_pool);
 
   os_file_free();
-  pars_close();
 }
 
 /**

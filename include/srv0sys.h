@@ -51,6 +51,7 @@ struct Fil;
 struct Fsp;
 struct LockSys;
 struct Log;
+struct Parser;
 struct RecvSys;
 struct RowInsert;
 struct RowSel;
@@ -113,6 +114,9 @@ class System {
   std::unique_ptr<RowSel> m_row_sel;
   std::unique_ptr<RowUndo> m_row_undo;
   std::unique_ptr<RowVers> m_row_vers;
+
+  /** The SQL parser, used for the internal SQL of the dictionary. */
+  std::unique_ptr<Parser> m_parser;
 
   /** Server threads (master, lock timeout, monitors), their state and
   the status counters. */

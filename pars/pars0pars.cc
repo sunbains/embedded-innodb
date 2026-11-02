@@ -33,107 +33,13 @@ Created 11/19/1996 Heikki Tuuri
 #include "pars0grm.h"
 #include "pars0opt.h"
 #include "pars0pars.h"
+#include "pars0lex.h"
 #include "que0que.h"
 #include "row0sel.h"
 #include "row0ins.h"
 #include "row0upd.h"
 #include "trx0trx.h"
 #include "trx0roll.h"
-
-#ifdef UNIV_SQL_DEBUG
-/** If the following is set true, the lexer will print the SQL string
-as it tokenizes it */
-bool pars_print_lexed = false;
-#endif /* UNIV_SQL_DEBUG */
-
-/* Global variable used while parsing a single procedure or query : the code is
-NOT re-entrant */
-SymTab *pars_sym_tab_global;
-
-/* Global variables used to denote certain reserved words, used in
-constructing the parsing tree */
-
-ParsResWord pars_to_char_token = {PARS_TO_CHAR_TOKEN};
-ParsResWord pars_to_number_token = {PARS_TO_NUMBER_TOKEN};
-ParsResWord pars_to_binary_token = {PARS_TO_BINARY_TOKEN};
-ParsResWord pars_binary_to_number_token = {PARS_BINARY_TO_NUMBER_TOKEN};
-ParsResWord pars_substr_token = {PARS_SUBSTR_TOKEN};
-ParsResWord pars_replstr_token = {PARS_REPLSTR_TOKEN};
-ParsResWord pars_concat_token = {PARS_CONCAT_TOKEN};
-ParsResWord pars_instr_token = {PARS_INSTR_TOKEN};
-ParsResWord pars_length_token = {PARS_LENGTH_TOKEN};
-ParsResWord pars_sysdate_token = {PARS_SYSDATE_TOKEN};
-ParsResWord pars_printf_token = {PARS_PRINTF_TOKEN};
-ParsResWord pars_assert_token = {PARS_ASSERT_TOKEN};
-ParsResWord pars_rnd_token = {PARS_RND_TOKEN};
-ParsResWord pars_rnd_str_token = {PARS_RND_STR_TOKEN};
-ParsResWord pars_count_token = {PARS_COUNT_TOKEN};
-ParsResWord pars_sum_token = {PARS_SUM_TOKEN};
-ParsResWord pars_distinct_token = {PARS_DISTINCT_TOKEN};
-ParsResWord pars_binary_token = {PARS_BINARY_TOKEN};
-ParsResWord pars_blob_token = {PARS_BLOB_TOKEN};
-ParsResWord pars_int_token = {PARS_INT_TOKEN};
-ParsResWord pars_char_token = {PARS_CHAR_TOKEN};
-ParsResWord pars_float_token = {PARS_FLOAT_TOKEN};
-ParsResWord pars_update_token = {PARS_UPDATE_TOKEN};
-ParsResWord pars_asc_token = {PARS_ASC_TOKEN};
-ParsResWord pars_desc_token = {PARS_DESC_TOKEN};
-ParsResWord pars_open_token = {PARS_OPEN_TOKEN};
-ParsResWord pars_close_token = {PARS_CLOSE_TOKEN};
-ParsResWord pars_share_token = {PARS_SHARE_TOKEN};
-ParsResWord pars_unique_token = {PARS_UNIQUE_TOKEN};
-ParsResWord pars_clustered_token = {PARS_CLUSTERED_TOKEN};
-
-/** Global variable used to denote the '*' in SELECT * FROM.. */
-#define PARS_STAR_DENOTER 12345678
-ulint pars_star_denoter = PARS_STAR_DENOTER;
-
-/** Reset and check parser variables. */
-
-void pars_var_init(void) {
-#ifdef UNIV_SQL_DEBUG
-  pars_print_lexed = false;
-#endif /* UNIV_SQL_DEBUG */
-
-  pars_lexer_var_init();
-
-  pars_sym_tab_global = nullptr;
-
-  /* These should really be const, so we simply check that they
-  are set to the correct value. */
-  ut_a(pars_to_char_token.code == PARS_TO_CHAR_TOKEN);
-  ut_a(pars_to_number_token.code == PARS_TO_NUMBER_TOKEN);
-  ut_a(pars_to_binary_token.code == PARS_TO_BINARY_TOKEN);
-  ut_a(pars_binary_to_number_token.code == PARS_BINARY_TO_NUMBER_TOKEN);
-  ut_a(pars_substr_token.code == PARS_SUBSTR_TOKEN);
-  ut_a(pars_replstr_token.code == PARS_REPLSTR_TOKEN);
-  ut_a(pars_concat_token.code == PARS_CONCAT_TOKEN);
-  ut_a(pars_instr_token.code == PARS_INSTR_TOKEN);
-  ut_a(pars_length_token.code == PARS_LENGTH_TOKEN);
-  ut_a(pars_sysdate_token.code == PARS_SYSDATE_TOKEN);
-  ut_a(pars_printf_token.code == PARS_PRINTF_TOKEN);
-  ut_a(pars_assert_token.code == PARS_ASSERT_TOKEN);
-  ut_a(pars_rnd_token.code == PARS_RND_TOKEN);
-  ut_a(pars_rnd_str_token.code == PARS_RND_STR_TOKEN);
-  ut_a(pars_count_token.code == PARS_COUNT_TOKEN);
-  ut_a(pars_sum_token.code == PARS_SUM_TOKEN);
-  ut_a(pars_distinct_token.code == PARS_DISTINCT_TOKEN);
-  ut_a(pars_binary_token.code == PARS_BINARY_TOKEN);
-  ut_a(pars_blob_token.code == PARS_BLOB_TOKEN);
-  ut_a(pars_int_token.code == PARS_INT_TOKEN);
-  ut_a(pars_char_token.code == PARS_CHAR_TOKEN);
-  ut_a(pars_float_token.code == PARS_FLOAT_TOKEN);
-  ut_a(pars_update_token.code == PARS_UPDATE_TOKEN);
-  ut_a(pars_asc_token.code == PARS_ASC_TOKEN);
-  ut_a(pars_desc_token.code == PARS_DESC_TOKEN);
-  ut_a(pars_open_token.code == PARS_OPEN_TOKEN);
-  ut_a(pars_close_token.code == PARS_CLOSE_TOKEN);
-  ut_a(pars_share_token.code == PARS_SHARE_TOKEN);
-  ut_a(pars_unique_token.code == PARS_UNIQUE_TOKEN);
-  ut_a(pars_clustered_token.code == PARS_CLUSTERED_TOKEN);
-
-  pars_star_denoter = PARS_STAR_DENOTER;
-}
 
 /**
  * @brief Determines the class of a function code.
@@ -197,9 +103,9 @@ static ulint pars_func_get_class(int func) noexcept {
  *
  * @return FuncNode* Function node in a query tree.
  */
-static FuncNode *pars_func_low(int func, que_node_t *arg) {
+static FuncNode *pars_func_low(System &sys, int func, que_node_t *arg) {
   auto node = reinterpret_cast<FuncNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(FuncNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(FuncNode)));
 
   node->common.type = QUE_NODE_FUNC;
   dfield_set_data(&(node->common.val), nullptr, 0);
@@ -211,29 +117,29 @@ static FuncNode *pars_func_low(int func, que_node_t *arg) {
 
   node->args = arg;
 
-  pars_sym_tab_global->func_node_list.push_back(node);
+  sys.m_parser->m_sym_tab->func_node_list.push_back(node);
 
   return node;
 }
 
-FuncNode *pars_func(que_node_t *res_word, que_node_t *arg) {
-  return pars_func_low((reinterpret_cast<ParsResWord *>(res_word))->code,
+FuncNode *pars_func(System &sys, que_node_t *res_word, que_node_t *arg) {
+  return pars_func_low(sys, (reinterpret_cast<const ParsResWord *>(res_word))->code,
                        arg);
 }
 
-FuncNode *pars_op(int func, que_node_t *arg1, que_node_t *arg2) {
+FuncNode *pars_op(System &sys, int func, que_node_t *arg1, que_node_t *arg2) {
   que_node_list_add_last(nullptr, arg1);
 
   if (arg2 != nullptr) {
     que_node_list_add_last(arg1, arg2);
   }
 
-  return pars_func_low(func, arg1);
+  return pars_func_low(sys, func, arg1);
 }
 
-OrderNode *pars_order_by(SymNode *column, ParsResWord *asc) {
+OrderNode *pars_order_by(System &sys, SymNode *column, const ParsResWord *asc) {
   auto node = reinterpret_cast<OrderNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(OrderNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(OrderNode)));
 
   node->common.type = QUE_NODE_ORDER;
 
@@ -367,7 +273,7 @@ static void pars_resolve_func_data_type(FuncNode *node) {
  * variable sym nodes are added to the copy_variables list of sel_node.
  * @param[in] exp_node Expression node.
  */
-static void pars_resolve_exp_variables_and_types(SelNode *sel_node,
+static void pars_resolve_exp_variables_and_types(System &sys, SelNode *sel_node,
                                                  que_node_t *exp_node) {
   ut_a(exp_node != nullptr);
 
@@ -376,7 +282,7 @@ static void pars_resolve_exp_variables_and_types(SelNode *sel_node,
     auto arg = func_node->args;
 
     while (arg != nullptr) {
-      pars_resolve_exp_variables_and_types(sel_node, arg);
+      pars_resolve_exp_variables_and_types(sys, sel_node, arg);
 
       arg = que_node_get_next(arg);
     }
@@ -399,8 +305,8 @@ static void pars_resolve_exp_variables_and_types(SelNode *sel_node,
    * function with the same name */
 
   auto it = std::find_if(
-      pars_sym_tab_global->sym_list.begin(),
-      pars_sym_tab_global->sym_list.end(), [sym_node](const auto &node) {
+      sys.m_parser->m_sym_tab->sym_list.begin(),
+      sys.m_parser->m_sym_tab->sym_list.end(), [sym_node](const auto &node) {
         return node->resolved &&
                (node->token_type == SYM_VAR || node->token_type == SYM_CURSOR ||
                 node->token_type == SYM_FUNCTION) &&
@@ -408,7 +314,7 @@ static void pars_resolve_exp_variables_and_types(SelNode *sel_node,
                memcmp(sym_node->name, node->name, node->name_len) == 0;
       });
 
-  if (it == pars_sym_tab_global->sym_list.end()) {
+  if (it == sys.m_parser->m_sym_tab->sym_list.end()) {
     log_err("PARSER ERROR: Unresolved identifier ", sym_node->name);
   }
 
@@ -435,10 +341,10 @@ static void pars_resolve_exp_variables_and_types(SelNode *sel_node,
  * @param[in] exp_node The expression list first node, or nullptr.
  */
 static void
-pars_resolve_exp_list_variables_and_types(SelNode *sel_node,
+pars_resolve_exp_list_variables_and_types(System &sys, SelNode *sel_node,
                                           que_node_t *exp_node) noexcept {
   while (exp_node != nullptr) {
-    pars_resolve_exp_variables_and_types(sel_node, exp_node);
+    pars_resolve_exp_variables_and_types(sys, sel_node, exp_node);
 
     exp_node = que_node_get_next(exp_node);
   }
@@ -572,7 +478,7 @@ static ulint pars_retrieve_table_list_defs(System &sys, SymNode *sym_node) noexc
  *
  * @param[in] sel_node The select node already containing the table list.
  */
-static void pars_select_all_columns(SelNode *sel_node) noexcept {
+static void pars_select_all_columns(System &sys, SelNode *sel_node) noexcept {
   sel_node->m_select_list = nullptr;
 
   auto table_node = sel_node->m_table_list;
@@ -583,7 +489,7 @@ static void pars_select_all_columns(SelNode *sel_node) noexcept {
     for (ulint i{}; i < table->get_n_user_cols(); ++i) {
       const auto col_name = table->get_col_name(i);
 
-      auto col_node = sym_tab_add_id(pars_sym_tab_global, (byte *)col_name,
+      auto col_node = sym_tab_add_id(sys.m_parser->m_sym_tab, (byte *)col_name,
                                      strlen(col_name));
 
       sel_node->m_select_list =
@@ -594,13 +500,13 @@ static void pars_select_all_columns(SelNode *sel_node) noexcept {
   }
 }
 
-SelNode *pars_select_list(que_node_t *select_list, SymNode *into_list) {
-  auto sel_node = SelNode::create(pars_sym_tab_global->heap);
+SelNode *pars_select_list(System &sys, que_node_t *select_list, SymNode *into_list) {
+  auto sel_node = SelNode::create(sys.m_parser->m_sym_tab->heap);
 
   sel_node->m_select_list = select_list;
   sel_node->m_into_list = into_list;
 
-  pars_resolve_exp_list_variables_and_types(nullptr, into_list);
+  pars_resolve_exp_list_variables_and_types(sys, nullptr, into_list);
 
   return sel_node;
 }
@@ -647,8 +553,8 @@ static void pars_check_aggregate(SelNode *sel_node) noexcept {
 
 SelNode *pars_select_statement(System &sys, SelNode *sel_node, SymNode *table_list,
                                   que_node_t *search_cond,
-                                  ParsResWord *for_update,
-                                  ParsResWord *lock_shared,
+                                  const ParsResWord *for_update,
+                                  const ParsResWord *lock_shared,
                                   OrderNode *order_by) {
   sel_node->m_state = SEL_NODE_OPEN;
 
@@ -658,7 +564,7 @@ SelNode *pars_select_statement(System &sys, SelNode *sel_node, SymNode *table_li
   if (sel_node->m_select_list == &pars_star_denoter) {
 
     /* SELECT * FROM ... */
-    pars_select_all_columns(sel_node);
+    pars_select_all_columns(sys, sel_node);
   }
 
   if (sel_node->m_into_list) {
@@ -669,14 +575,14 @@ SelNode *pars_select_statement(System &sys, SelNode *sel_node, SymNode *table_li
   UT_LIST_INIT(sel_node->m_copy_variables);
 
   pars_resolve_exp_list_columns(table_list, sel_node->m_select_list);
-  pars_resolve_exp_list_variables_and_types(sel_node, sel_node->m_select_list);
+  pars_resolve_exp_list_variables_and_types(sys, sel_node, sel_node->m_select_list);
   pars_check_aggregate(sel_node);
 
   sel_node->m_search_cond = search_cond;
 
   if (search_cond != nullptr) {
     pars_resolve_exp_columns(table_list, search_cond);
-    pars_resolve_exp_variables_and_types(sel_node, search_cond);
+    pars_resolve_exp_variables_and_types(sys, sel_node, search_cond);
   }
 
   if (for_update != nullptr) {
@@ -729,19 +635,19 @@ que_node_t *pars_cursor_declaration(SymNode *sym_node,
   return sym_node;
 }
 
-que_node_t *pars_function_declaration(SymNode *sym_node) {
+que_node_t *pars_function_declaration(System &sys, SymNode *sym_node) {
   sym_node->resolved = true;
   sym_node->token_type = SYM_FUNCTION;
 
   /* Check that the function exists. */
-  ut_a(pars_info_get_user_func(pars_sym_tab_global->info, sym_node->name));
+  ut_a(pars_info_get_user_func(sys.m_parser->m_sym_tab->info, sym_node->name));
 
   return sym_node;
 }
 
 UpdNode *pars_update_statement_start(System &sys, bool is_delete, SymNode *table_sym,
                                         ColAssignNode *col_assign_list) {
-  auto node = sys.m_row_upd->node_create(pars_sym_tab_global->heap);
+  auto node = sys.m_row_upd->node_create(sys.m_parser->m_sym_tab->heap);
 
   node->m_is_delete = is_delete;
   node->m_table_sym = table_sym;
@@ -750,9 +656,9 @@ UpdNode *pars_update_statement_start(System &sys, bool is_delete, SymNode *table
   return node;
 }
 
-ColAssignNode *pars_column_assignment(SymNode *column, que_node_t *exp) {
+ColAssignNode *pars_column_assignment(System &sys, SymNode *column, que_node_t *exp) {
   auto node = reinterpret_cast<ColAssignNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(ColAssignNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(ColAssignNode)));
 
   node->common.type = QUE_NODE_COL_ASSIGNMENT;
 
@@ -783,7 +689,7 @@ static void pars_process_assign_list(System &sys, UpdNode *node) noexcept {
   while (assign_node != nullptr) {
     pars_resolve_exp_columns(table_sym, assign_node->col);
     pars_resolve_exp_columns(table_sym, assign_node->val);
-    pars_resolve_exp_variables_and_types(nullptr, assign_node->val);
+    pars_resolve_exp_variables_and_types(sys, nullptr, assign_node->val);
 
 #if 0
 		ut_a(dtype_get_mtype(dfield_get_type(que_node_get_val(assign_node->col))) == dtype_get_mtype( dfield_get_type(que_node_get_val(assign_node->val))));
@@ -800,7 +706,7 @@ static void pars_process_assign_list(System &sys, UpdNode *node) noexcept {
         reinterpret_cast<ColAssignNode *>(que_node_get_next(assign_node));
   }
 
-  node->m_update = RowUpdate::upd_create(n_assigns, pars_sym_tab_global->heap);
+  node->m_update = RowUpdate::upd_create(n_assigns, sys.m_parser->m_sym_tab->heap);
 
   assign_node = col_assign_list;
 
@@ -851,13 +757,13 @@ UpdNode *pars_update_statement(System &sys, UpdNode *node, SymNode *cursor_sym,
   SelNode *sel_node;
 
   if (cursor_sym != nullptr) {
-    pars_resolve_exp_variables_and_types(nullptr, cursor_sym);
+    pars_resolve_exp_variables_and_types(sys, nullptr, cursor_sym);
 
     sel_node = cursor_sym->alias->cursor_def;
 
     node->m_searched_update = false;
   } else {
-    sel_node = pars_select_list(nullptr, nullptr);
+    sel_node = pars_select_list(sys, nullptr, nullptr);
 
     pars_select_statement(sys, sel_node, table_sym, search_cond, nullptr,
                           &pars_share_token, nullptr);
@@ -918,9 +824,9 @@ InsertNode *pars_insert_statement(System &sys, SymNode *table_sym,
   pars_retrieve_table_def(sys, table_sym);
 
   auto ins_node = reinterpret_cast<InsertNode *>(sys.m_row_ins->node_create(
-      ins_type, table_sym->table, pars_sym_tab_global->heap));
+      ins_type, table_sym->table, sys.m_parser->m_sym_tab->heap));
   auto row =
-      dtuple_create(pars_sym_tab_global->heap, ins_node->m_table->get_n_cols());
+      dtuple_create(sys.m_parser->m_sym_tab->heap, ins_node->m_table->get_n_cols());
 
   table_sym->table->copy_types(row);
 
@@ -938,7 +844,7 @@ InsertNode *pars_insert_statement(System &sys, SymNode *table_sym,
   ins_node->m_values_list = values_list;
 
   if (values_list != nullptr) {
-    pars_resolve_exp_list_variables_and_types(nullptr, values_list);
+    pars_resolve_exp_list_variables_and_types(sys, nullptr, values_list);
 
     ut_a(que_node_list_get_len(values_list) ==
          table_sym->table->get_n_user_cols());
@@ -956,7 +862,7 @@ InsertNode *pars_insert_statement(System &sys, SymNode *table_sym,
  * @param[in] is_unsigned if true, column is UNSIGNED
  * @param[in] is_not_null if true, column is NOT nullptr
  */
-static void pars_set_dfield_type(Dfield *dfield, ParsResWord *type,
+static void pars_set_dfield_type(Dfield *dfield, const ParsResWord *type,
                                  ulint len, bool is_unsigned,
                                  bool is_not_null) noexcept {
   ulint flags{};
@@ -992,7 +898,7 @@ static void pars_set_dfield_type(Dfield *dfield, ParsResWord *type,
   }
 }
 
-SymNode *pars_variable_declaration(SymNode *node, ParsResWord *type) {
+SymNode *pars_variable_declaration(SymNode *node, const ParsResWord *type) {
   node->resolved = true;
   node->token_type = SYM_VAR;
 
@@ -1004,7 +910,7 @@ SymNode *pars_variable_declaration(SymNode *node, ParsResWord *type) {
 }
 
 SymNode *pars_parameter_declaration(SymNode *node, ulint param_type,
-                                       ParsResWord *type) {
+                                       const ParsResWord *type) {
   ut_a((param_type == PARS_INPUT) || (param_type == PARS_OUTPUT));
 
   pars_variable_declaration(node, type);
@@ -1031,33 +937,33 @@ static void pars_set_parent_in_list(que_node_t *node_list,
   }
 }
 
-ElsifNode *pars_elsif_element(que_node_t *cond, que_node_t *stat_list) {
+ElsifNode *pars_elsif_element(System &sys, que_node_t *cond, que_node_t *stat_list) {
   auto node = reinterpret_cast<ElsifNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(ElsifNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(ElsifNode)));
 
   node->common.type = QUE_NODE_ELSIF;
 
   node->cond = cond;
 
-  pars_resolve_exp_variables_and_types(nullptr, cond);
+  pars_resolve_exp_variables_and_types(sys, nullptr, cond);
 
   node->stat_list = stat_list;
 
   return node;
 }
 
-IfNode *pars_if_statement(que_node_t *cond, que_node_t *stat_list,
+IfNode *pars_if_statement(System &sys, que_node_t *cond, que_node_t *stat_list,
                              que_node_t *else_part) {
   ElsifNode *elsif_node;
 
   auto node = reinterpret_cast<IfNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(IfNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(IfNode)));
 
   node->common.type = QUE_NODE_IF;
 
   node->cond = cond;
 
-  pars_resolve_exp_variables_and_types(nullptr, cond);
+  pars_resolve_exp_variables_and_types(sys, nullptr, cond);
 
   node->stat_list = stat_list;
 
@@ -1087,15 +993,15 @@ IfNode *pars_if_statement(que_node_t *cond, que_node_t *stat_list,
   return node;
 }
 
-WhileNode *pars_while_statement(que_node_t *cond, que_node_t *stat_list) {
+WhileNode *pars_while_statement(System &sys, que_node_t *cond, que_node_t *stat_list) {
   auto node = reinterpret_cast<WhileNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(WhileNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(WhileNode)));
 
   node->common.type = QUE_NODE_WHILE;
 
   node->cond = cond;
 
-  pars_resolve_exp_variables_and_types(nullptr, cond);
+  pars_resolve_exp_variables_and_types(sys, nullptr, cond);
 
   node->stat_list = stat_list;
 
@@ -1104,18 +1010,18 @@ WhileNode *pars_while_statement(que_node_t *cond, que_node_t *stat_list) {
   return (node);
 }
 
-ForNode *pars_for_statement(SymNode *loop_var,
+ForNode *pars_for_statement(System &sys, SymNode *loop_var,
                                que_node_t *loop_start_limit,
                                que_node_t *loop_end_limit,
                                que_node_t *stat_list) {
   auto node = reinterpret_cast<ForNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(ForNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(ForNode)));
 
   node->common.type = QUE_NODE_FOR;
 
-  pars_resolve_exp_variables_and_types(nullptr, loop_var);
-  pars_resolve_exp_variables_and_types(nullptr, loop_start_limit);
-  pars_resolve_exp_variables_and_types(nullptr, loop_end_limit);
+  pars_resolve_exp_variables_and_types(sys, nullptr, loop_var);
+  pars_resolve_exp_variables_and_types(sys, nullptr, loop_start_limit);
+  pars_resolve_exp_variables_and_types(sys, nullptr, loop_end_limit);
 
   node->loop_var = loop_var->indirection;
 
@@ -1131,35 +1037,35 @@ ForNode *pars_for_statement(SymNode *loop_var,
   return node;
 }
 
-ExitNode *pars_exit_statement() {
+ExitNode *pars_exit_statement(System &sys) {
   auto node = reinterpret_cast<ExitNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(ExitNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(ExitNode)));
 
   node->common.type = QUE_NODE_EXIT;
 
   return node;
 }
 
-ReturnNode *pars_return_statement() {
+ReturnNode *pars_return_statement(System &sys) {
   auto node = reinterpret_cast<ReturnNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(ReturnNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(ReturnNode)));
 
   node->common.type = QUE_NODE_RETURN;
 
   return node;
 }
 
-AssignNode *pars_assignment_statement(SymNode *var, que_node_t *val) {
+AssignNode *pars_assignment_statement(System &sys, SymNode *var, que_node_t *val) {
   auto node = reinterpret_cast<AssignNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(AssignNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(AssignNode)));
 
   node->common.type = QUE_NODE_ASSIGNMENT;
 
   node->var = var;
   node->val = val;
 
-  pars_resolve_exp_variables_and_types(nullptr, var);
-  pars_resolve_exp_variables_and_types(nullptr, val);
+  pars_resolve_exp_variables_and_types(sys, nullptr, var);
+  pars_resolve_exp_variables_and_types(sys, nullptr, val);
 
   ut_a(dtype_get_mtype(dfield_get_type(que_node_get_val(var))) ==
        dtype_get_mtype(dfield_get_type(que_node_get_val(val))));
@@ -1167,35 +1073,35 @@ AssignNode *pars_assignment_statement(SymNode *var, que_node_t *val) {
   return node;
 }
 
-FuncNode *pars_procedure_call(que_node_t *res_word, que_node_t *args) {
-  auto node = pars_func(res_word, args);
+FuncNode *pars_procedure_call(System &sys, que_node_t *res_word, que_node_t *args) {
+  auto node = pars_func(sys, res_word, args);
 
-  pars_resolve_exp_list_variables_and_types(nullptr, args);
+  pars_resolve_exp_list_variables_and_types(sys, nullptr, args);
 
   return node;
 }
 
-FetchNode *pars_fetch_statement(SymNode *cursor, SymNode *into_list,
+FetchNode *pars_fetch_statement(System &sys, SymNode *cursor, SymNode *into_list,
                                    SymNode *user_func) {
   /* Logical XOR. */
   ut_a(!into_list != !user_func);
 
-  auto ptr = mem_heap_alloc(pars_sym_tab_global->heap, sizeof(FetchNode));
+  auto ptr = mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(FetchNode));
   auto fetch_node = new (ptr) FetchNode();
 
   fetch_node->m_common.type = QUE_NODE_FETCH;
 
-  pars_resolve_exp_variables_and_types(nullptr, cursor);
+  pars_resolve_exp_variables_and_types(sys, nullptr, cursor);
 
   if (into_list != nullptr) {
-    pars_resolve_exp_list_variables_and_types(nullptr, into_list);
+    pars_resolve_exp_list_variables_and_types(sys, nullptr, into_list);
     fetch_node->m_into_list = into_list;
     fetch_node->m_func = nullptr;
   } else {
-    pars_resolve_exp_variables_and_types(nullptr, user_func);
+    pars_resolve_exp_variables_and_types(sys, nullptr, user_func);
 
     fetch_node->m_func =
-        pars_info_get_user_func(pars_sym_tab_global->info, user_func->name);
+        pars_info_get_user_func(sys.m_parser->m_sym_tab->info, user_func->name);
     ut_a(fetch_node->m_func);
 
     fetch_node->m_into_list = nullptr;
@@ -1215,13 +1121,13 @@ FetchNode *pars_fetch_statement(SymNode *cursor, SymNode *into_list,
   return fetch_node;
 }
 
-OpenNode *pars_open_statement(ulint type, SymNode *cursor) {
+OpenNode *pars_open_statement(System &sys, ulint type, SymNode *cursor) {
   auto open_node = reinterpret_cast<OpenNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(OpenNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(OpenNode)));
 
   open_node->m_common.type = QUE_NODE_OPEN;
 
-  pars_resolve_exp_variables_and_types(nullptr, cursor);
+  pars_resolve_exp_variables_and_types(sys, nullptr, cursor);
 
   auto cursor_decl = cursor->alias;
 
@@ -1233,9 +1139,9 @@ OpenNode *pars_open_statement(ulint type, SymNode *cursor) {
   return open_node;
 }
 
-RowPrintfNode *pars_row_printf_statement(SelNode *sel_node) {
+RowPrintfNode *pars_row_printf_statement(System &sys, SelNode *sel_node) {
   auto row_printf_node = reinterpret_cast<RowPrintfNode *>(
-      mem_heap_alloc(pars_sym_tab_global->heap, sizeof(RowPrintfNode)));
+      mem_heap_alloc(sys.m_parser->m_sym_tab->heap, sizeof(RowPrintfNode)));
 
   row_printf_node->m_common.type = QUE_NODE_ROW_PRINTF;
 
@@ -1246,15 +1152,15 @@ RowPrintfNode *pars_row_printf_statement(SelNode *sel_node) {
   return row_printf_node;
 }
 
-CommitNode *pars_commit_statement() {
-  return Trx::commit_node_create(pars_sym_tab_global->heap);
+CommitNode *pars_commit_statement(System &sys) {
+  return Trx::commit_node_create(sys.m_parser->m_sym_tab->heap);
 }
 
-TrxRollback *pars_rollback_statement() {
-  return roll_node_create(pars_sym_tab_global->heap);
+TrxRollback *pars_rollback_statement(System &sys) {
+  return roll_node_create(sys.m_parser->m_sym_tab->heap);
 }
 
-SymNode *pars_column_def(SymNode *sym_node, ParsResWord *type,
+SymNode *pars_column_def(SymNode *sym_node, const ParsResWord *type,
                             SymNode *len, void *is_unsigned,
                             void *is_not_null) {
   auto len2 = len != nullptr ? eval_node_get_int_val(len) : 0;
@@ -1291,7 +1197,7 @@ TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_de
   }
 
   auto node =
-      TableNode::create(sys, table, pars_sym_tab_global->heap, true);
+      TableNode::create(sys, table, sys.m_parser->m_sym_tab->heap, true);
 
   table_sym->table = table;
   table_sym->resolved = true;
@@ -1300,8 +1206,8 @@ TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_de
   return node;
 }
 
-IndexNode *pars_create_index(System &sys, ParsResWord *unique_def,
-                              ParsResWord *clustered_def,
+IndexNode *pars_create_index(System &sys, const ParsResWord *unique_def,
+                              const ParsResWord *clustered_def,
                               SymNode *index_sym, SymNode *table_sym,
                               SymNode *column_list) {
   ulint ind_type{};
@@ -1329,7 +1235,7 @@ IndexNode *pars_create_index(System &sys, ParsResWord *unique_def,
   }
 
   auto node =
-      IndexNode::create(sys, index, pars_sym_tab_global->heap, true);
+      IndexNode::create(sys, index, sys.m_parser->m_sym_tab->heap, true);
 
   table_sym->resolved = true;
   table_sym->token_type = SYM_TABLE;
@@ -1340,10 +1246,10 @@ IndexNode *pars_create_index(System &sys, ParsResWord *unique_def,
   return node;
 }
 
-QueFork *pars_procedure_definition(SymNode *sym_node,
+QueFork *pars_procedure_definition(System &sys, SymNode *sym_node,
                                       SymNode *param_list,
                                       que_node_t *stat_list) {
-  auto heap = pars_sym_tab_global->heap;
+  auto heap = sys.m_parser->m_sym_tab->heap;
   auto fork = que_fork_create(nullptr, nullptr, QUE_FORK_PROCEDURE, heap);
 
   fork->trx = nullptr;
@@ -1365,11 +1271,11 @@ QueFork *pars_procedure_definition(SymNode *sym_node,
 
   pars_set_parent_in_list(stat_list, node);
 
-  node->sym_tab = pars_sym_tab_global;
+  node->sym_tab = sys.m_parser->m_sym_tab;
 
   thr->child = node;
 
-  pars_sym_tab_global->query_graph = fork;
+  sys.m_parser->m_sym_tab->query_graph = fork;
 
   return fork;
 }
@@ -1379,9 +1285,10 @@ QueFork *pars_stored_procedure_call(SymNode *) {
   return nullptr;
 }
 
-int pars_get_lex_chars(char *buf, int max_size) {
-  auto len =
-      pars_sym_tab_global->string_len - pars_sym_tab_global->next_char_pos;
+Parser::Parser(System &sys) noexcept : m_sys(sys) {}
+
+int Parser::get_lex_chars(char *buf, int max_size) noexcept {
+  auto len = m_sym_tab->string_len - m_sym_tab->next_char_pos;
 
   if (len == 0) {
     return 0;
@@ -1391,11 +1298,9 @@ int pars_get_lex_chars(char *buf, int max_size) {
     len = max_size;
   }
 
-  memcpy(buf,
-         pars_sym_tab_global->sql_string + pars_sym_tab_global->next_char_pos,
-         len);
+  memcpy(buf, m_sym_tab->sql_string + m_sym_tab->next_char_pos, len);
 
-  pars_sym_tab_global->next_char_pos += len;
+  m_sym_tab->next_char_pos += len;
 
   return static_cast<int>(len);
 }
@@ -1410,26 +1315,30 @@ QueFork *pars_sql(System &sys, ParsInfo *info, const char *str) {
   /* Currently, the parser is not reentrant: */
   ut_ad(mutex_own(&sys.m_dict->m_mutex));
 
-  pars_sym_tab_global = sym_tab_create(heap);
+  sys.m_parser->m_sym_tab = sym_tab_create(heap);
 
-  pars_sym_tab_global->string_len = strlen(str);
+  sys.m_parser->m_sym_tab->string_len = strlen(str);
 
-  pars_sym_tab_global->sql_string = static_cast<char *>(
-      mem_heap_dup(heap, str, pars_sym_tab_global->string_len + 1));
+  sys.m_parser->m_sym_tab->sql_string = static_cast<char *>(
+      mem_heap_dup(heap, str, sys.m_parser->m_sym_tab->string_len + 1));
 
-  pars_sym_tab_global->next_char_pos = 0;
-  pars_sym_tab_global->info = info;
+  sys.m_parser->m_sym_tab->next_char_pos = 0;
+  sys.m_parser->m_sym_tab->info = info;
+
+  sys.m_parser->m_lexer = std::make_unique<ParsLexer>(sys);
 
   yyparse(sys);
 
-  for (auto sym_node : pars_sym_tab_global->sym_list) {
+  sys.m_parser->m_lexer.reset();
+
+  for (auto sym_node : sys.m_parser->m_sym_tab->sym_list) {
     ut_a(sym_node->resolved);
   }
 
-  auto graph = pars_sym_tab_global->query_graph;
+  auto graph = sys.m_parser->m_sym_tab->query_graph;
 
   graph->info = info;
-  graph->sym_tab = pars_sym_tab_global;
+  graph->sym_tab = sys.m_parser->m_sym_tab;
 
   return graph;
 }

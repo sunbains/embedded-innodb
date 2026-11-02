@@ -45,11 +45,13 @@
 extern int yydebug;
 #endif
 /* "%code requires" blocks.  */
-#line 53 "pars0grm.y"
+#line 51 "pars0grm.y"
+
+#include "que0types.h"
 
 class System;
 
-#line 53 "pars0grm.cc.tab.hh"
+#line 55 "pars0grm.cc.tab.hh"
 
 /* Token kinds.  */
 #ifndef YYTOKENTYPE
@@ -159,13 +161,12 @@ class System;
 
 /* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
-typedef int YYSTYPE;
+typedef que_node_t * YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define YYSTYPE_IS_DECLARED 1
 #endif
 
 
-extern YYSTYPE yylval;
 
 
 int yyparse (System &sys);

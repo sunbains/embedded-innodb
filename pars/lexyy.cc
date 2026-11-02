@@ -165,7 +165,7 @@ typedef struct yy_buffer_state *YY_BUFFER_STATE;
 typedef size_t yy_size_t;
 #endif
 
-static int yyleng;
+extern int yyleng;
 
 #define EOB_ACT_CONTINUE_SCAN 0
 #define EOB_ACT_END_OF_FILE 1
@@ -269,9 +269,9 @@ struct yy_buffer_state
  */
 #define YY_CURRENT_BUFFER_LVALUE (yy_buffer_stack)[(yy_buffer_stack_top)]
 
-static void *yyalloc ( yy_size_t  );
-static void *yyrealloc ( void *, yy_size_t  );
-static void yyfree ( void *  );
+void *yyalloc ( yy_size_t  );
+void *yyrealloc ( void *, yy_size_t  );
+void yyfree ( void *  );
 
 #define yy_new_buffer yy_create_buffer
 #define yy_set_interactive(is_interactive) \
@@ -303,6 +303,13 @@ typedef flex_uint8_t YY_CHAR;
 #include <FlexLexer.h>
 
 int yyFlexLexer::yywrap() { return 1; }
+int yyFlexLexer::yylex()
+	{
+	LexerError( "yyFlexLexer::yylex invoked but %option yyclass used" );
+	return 0;
+	}
+
+#define YY_DECL int ParsLexer::yylex()
 
 /* Done after the current pattern has been matched and before the
  * corresponding action - sets up yytext.
@@ -673,81 +680,45 @@ Created 12/14/1997 Heikki Tuuri
 *******************************************************/
 #define YY_NO_INPUT 1
 #define YY_NO_UNISTD_H 1
-#line 55 "pars0lex.l"
-#define YYSTYPE que_node_t*
-
+#line 56 "pars0lex.l"
 #include "pars0pars.h"
 #include "pars0grm.h"
+#include "pars0lex.h"
 #include "pars0sym.h"
 #include "mem0mem.h"
-#include "os0proc.h"
+#include "srv0sys.h"
 
 #define malloc(A)      ut_new(A)
 #define free(A)        ut_delete(A)
 #define realloc(P, A)  ut_realloc(P, A)
 #define exit(A)        ut_error
 
-/* Note: We cast result from int to yy_size_t */
-#define YY_INPUT(buf, result, max_size) ((result) = pars_get_lex_chars(buf, max_size))
-
-/* String buffer for removing quotes */
-
-/* Allocated length */
-static ulint stringbuf_len_alloc = 0;
-
-/* Current length */
-static ulint stringbuf_len = 0;
-
-/* Start of buffer */
-static char* stringbuf;
-
-static yyFlexLexer *pars_scanner{};
-
-/**
- * Appends a string to the buffer.
- *
- * @param[in] str String to be appended
- * @param[in] len Length of string.
- */
-static void string_append(const char* str, ulint len) {
-
-  // Disable compiler warning about unused variable.
-  (void) yyleng;
-
-  if (stringbuf == NULL) {
-    stringbuf = (char*) ut_new(1);
-    stringbuf_len_alloc = 1;
+void ParsLexer::string_append(const char *str, ulint len) noexcept {
+  if (m_stringbuf == nullptr) {
+    m_stringbuf = static_cast<char *>(ut_new(1));
+    m_stringbuf_len_alloc = 1;
   }
 
-  if (stringbuf_len + len > stringbuf_len_alloc) {
-    while (stringbuf_len + len > stringbuf_len_alloc) {
-      stringbuf_len_alloc <<= 1;
+  if (m_stringbuf_len + len > m_stringbuf_len_alloc) {
+    while (m_stringbuf_len + len > m_stringbuf_len_alloc) {
+      m_stringbuf_len_alloc <<= 1;
     }
-    stringbuf = (char*) ut_realloc(stringbuf, stringbuf_len_alloc);
+    m_stringbuf = static_cast<char *>(ut_realloc(m_stringbuf, m_stringbuf_len_alloc));
   }
 
-  memcpy(stringbuf + stringbuf_len, str, len);
-  stringbuf_len += len;
+  memcpy(m_stringbuf + m_stringbuf_len, str, len);
+  m_stringbuf_len += len;
 }
 
-void pars_lexer_var_init() {
-  stringbuf_len = 0;
-  stringbuf_len_alloc = 0;
+Parser::~Parser() noexcept = default;
 
-  if (stringbuf != NULL) {
-    ut_delete(stringbuf);
-    stringbuf = NULL;
-  }
+int ParsLexer::LexerInput(char *buf, int max_size) {
+  return m_sys.m_parser->get_lex_chars(buf, max_size);
 }
 
-void create_pars_scanner() {
- ut_a(pars_scanner == nullptr);
- pars_scanner = new yyFlexLexer();
-}
+#line 720 "lexyy.cc"
 
-#line 749 "lexyy.cc"
-
-#line 751 "lexyy.cc"
+#line 722 "lexyy.cc"
 
 #define INITIAL 0
 #define comment 1
@@ -882,10 +853,10 @@ YY_DECL
 		}
 
 	{
-#line 136 "pars0lex.l"
+#line 101 "pars0lex.l"
 
 
-#line 889 "lexyy.cc"
+#line 860 "lexyy.cc"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -940,15 +911,15 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 138 "pars0lex.l"
+#line 103 "pars0lex.l"
 {
-      yylval = sym_tab_add_int_lit(pars_sym_tab_global, atoi(YYText()));
+      *m_lval = sym_tab_add_int_lit(m_sys.m_parser->m_sym_tab, atoi(YYText()));
       return(PARS_INT_LIT);
 }
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 143 "pars0lex.l"
+#line 108 "pars0lex.l"
 {
       ut_error;  /* not implemented */
 
@@ -957,27 +928,27 @@ YY_RULE_SETUP
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 149 "pars0lex.l"
+#line 114 "pars0lex.l"
 {
       ulint  type;
 
-      yylval = sym_tab_add_bound_lit(pars_sym_tab_global, YYText() + 1, &type);
+      *m_lval = sym_tab_add_bound_lit(m_sys.m_parser->m_sym_tab, YYText() + 1, &type);
 
       return((int) type);
 }
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 157 "pars0lex.l"
+#line 122 "pars0lex.l"
 {
-      yylval = sym_tab_add_bound_id(pars_sym_tab_global, YYText() + 1);
+      *m_lval = sym_tab_add_bound_id(m_sys.m_parser->m_sym_tab, YYText() + 1);
 
       return(PARS_ID_TOKEN);
 }
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 163 "pars0lex.l"
+#line 128 "pars0lex.l"
 {
 /* Quoted character string literals are handled in an explicit
 start state 'quoted'.  This state is entered and the buffer for
@@ -985,13 +956,13 @@ the scanned string is emptied upon encountering a starting quote.
 
 In the state 'quoted', only two actions are possible (defined below). */
       BEGIN(quoted);
-      stringbuf_len = 0;
+      m_stringbuf_len = 0;
 }
 	YY_BREAK
 case 6:
 /* rule 6 can match eol */
 YY_RULE_SETUP
-#line 172 "pars0lex.l"
+#line 137 "pars0lex.l"
 {
       /* Got a sequence of characters other than "'":
       append to string buffer */
@@ -1000,7 +971,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 177 "pars0lex.l"
+#line 142 "pars0lex.l"
 {
       /* Got a sequence of "'" characters:
       append half of them to string buffer,
@@ -1018,16 +989,16 @@ YY_RULE_SETUP
 
       if (YYLeng() % 2) {
         BEGIN(INITIAL);
-        yylval = sym_tab_add_str_lit(
-          pars_sym_tab_global,
-          (byte*) stringbuf, stringbuf_len);
+        *m_lval = sym_tab_add_str_lit(
+          m_sys.m_parser->m_sym_tab,
+          (byte*) m_stringbuf, m_stringbuf_len);
         return(PARS_STR_LIT);
       }
 }
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 201 "pars0lex.l"
+#line 166 "pars0lex.l"
 {
 /* Quoted identifiers are handled in an explicit start state 'id'.
 This state is entered and the buffer for the scanned string is emptied
@@ -1035,13 +1006,13 @@ upon encountering a starting quote.
 
 In the state 'id', only two actions are possible (defined below). */
       BEGIN(id);
-      stringbuf_len = 0;
+      m_stringbuf_len = 0;
 }
 	YY_BREAK
 case 9:
 /* rule 9 can match eol */
 YY_RULE_SETUP
-#line 210 "pars0lex.l"
+#line 175 "pars0lex.l"
 {
       /* Got a sequence of characters other than '"':
       append to string buffer */
@@ -1050,7 +1021,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 215 "pars0lex.l"
+#line 180 "pars0lex.l"
 {
       /* Got a sequence of '"' characters:
       append half of them to string buffer,
@@ -1068,9 +1039,9 @@ YY_RULE_SETUP
 
       if (YYLeng() % 2) {
         BEGIN(INITIAL);
-        yylval = sym_tab_add_id(
-          pars_sym_tab_global,
-          (byte*) stringbuf, stringbuf_len);
+        *m_lval = sym_tab_add_id(
+          m_sys.m_parser->m_sym_tab,
+          (byte*) m_stringbuf, m_stringbuf_len);
 
         return(PARS_ID_TOKEN);
       }
@@ -1078,580 +1049,580 @@ YY_RULE_SETUP
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 240 "pars0lex.l"
+#line 205 "pars0lex.l"
 {
-      yylval = sym_tab_add_null_lit(pars_sym_tab_global);
+      *m_lval = sym_tab_add_null_lit(m_sys.m_parser->m_sym_tab);
 
       return(PARS_NULL_LIT);
 }
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 246 "pars0lex.l"
+#line 211 "pars0lex.l"
 {
       /* Implicit cursor name */
-      yylval = sym_tab_add_str_lit(pars_sym_tab_global, (byte*) YYText(), YYLeng());
+      *m_lval = sym_tab_add_str_lit(m_sys.m_parser->m_sym_tab, (byte*) YYText(), YYLeng());
       return(PARS_SQL_TOKEN);
 }
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 252 "pars0lex.l"
+#line 217 "pars0lex.l"
 {
       return(PARS_AND_TOKEN);
 }
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 256 "pars0lex.l"
+#line 221 "pars0lex.l"
 {
       return(PARS_OR_TOKEN);
 }
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 260 "pars0lex.l"
+#line 225 "pars0lex.l"
 {
       return(PARS_NOT_TOKEN);
 }
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 264 "pars0lex.l"
+#line 229 "pars0lex.l"
 {
       return(PARS_PROCEDURE_TOKEN);
 }
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 268 "pars0lex.l"
+#line 233 "pars0lex.l"
 {
       return(PARS_IN_TOKEN);
 }
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 272 "pars0lex.l"
+#line 237 "pars0lex.l"
 {
       return(PARS_OUT_TOKEN);
 }
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 276 "pars0lex.l"
+#line 241 "pars0lex.l"
 {
        return(PARS_BINARY_TOKEN);
 }
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 280 "pars0lex.l"
+#line 245 "pars0lex.l"
 {
        return(PARS_BLOB_TOKEN);
 }
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
-#line 284 "pars0lex.l"
+#line 249 "pars0lex.l"
 {
        return(PARS_INT_TOKEN);
 }
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 288 "pars0lex.l"
+#line 253 "pars0lex.l"
 {
        return(PARS_INT_TOKEN);
 }
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
-#line 292 "pars0lex.l"
+#line 257 "pars0lex.l"
 {
        return(PARS_FLOAT_TOKEN);
 }
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
-#line 296 "pars0lex.l"
+#line 261 "pars0lex.l"
 {
        return(PARS_CHAR_TOKEN);
 }
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
-#line 300 "pars0lex.l"
+#line 265 "pars0lex.l"
 {
       return(PARS_IS_TOKEN);
 }
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
-#line 304 "pars0lex.l"
+#line 269 "pars0lex.l"
 {
       return(PARS_BEGIN_TOKEN);
 }
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
-#line 308 "pars0lex.l"
+#line 273 "pars0lex.l"
 {
       return(PARS_END_TOKEN);
 }
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
-#line 312 "pars0lex.l"
+#line 277 "pars0lex.l"
 {
       return(PARS_IF_TOKEN);
 }
 	YY_BREAK
 case 29:
 YY_RULE_SETUP
-#line 316 "pars0lex.l"
+#line 281 "pars0lex.l"
 {
       return(PARS_THEN_TOKEN);
 }
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
-#line 320 "pars0lex.l"
+#line 285 "pars0lex.l"
 {
       return(PARS_ELSE_TOKEN);
 }
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
-#line 324 "pars0lex.l"
+#line 289 "pars0lex.l"
 {
       return(PARS_ELSIF_TOKEN);
 }
 	YY_BREAK
 case 32:
 YY_RULE_SETUP
-#line 328 "pars0lex.l"
+#line 293 "pars0lex.l"
 {
       return(PARS_LOOP_TOKEN);
 }
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
-#line 332 "pars0lex.l"
+#line 297 "pars0lex.l"
 {
       return(PARS_WHILE_TOKEN);
 }
 	YY_BREAK
 case 34:
 YY_RULE_SETUP
-#line 336 "pars0lex.l"
+#line 301 "pars0lex.l"
 {
       return(PARS_RETURN_TOKEN);
 }
 	YY_BREAK
 case 35:
 YY_RULE_SETUP
-#line 340 "pars0lex.l"
+#line 305 "pars0lex.l"
 {
       return(PARS_SELECT_TOKEN);
 }
 	YY_BREAK
 case 36:
 YY_RULE_SETUP
-#line 344 "pars0lex.l"
+#line 309 "pars0lex.l"
 {
       return(PARS_SUM_TOKEN);
 }
 	YY_BREAK
 case 37:
 YY_RULE_SETUP
-#line 348 "pars0lex.l"
+#line 313 "pars0lex.l"
 {
       return(PARS_COUNT_TOKEN);
 }
 	YY_BREAK
 case 38:
 YY_RULE_SETUP
-#line 352 "pars0lex.l"
+#line 317 "pars0lex.l"
 {
       return(PARS_DISTINCT_TOKEN);
 }
 	YY_BREAK
 case 39:
 YY_RULE_SETUP
-#line 356 "pars0lex.l"
+#line 321 "pars0lex.l"
 {
       return(PARS_FROM_TOKEN);
 }
 	YY_BREAK
 case 40:
 YY_RULE_SETUP
-#line 360 "pars0lex.l"
+#line 325 "pars0lex.l"
 {
       return(PARS_WHERE_TOKEN);
 }
 	YY_BREAK
 case 41:
 YY_RULE_SETUP
-#line 364 "pars0lex.l"
+#line 329 "pars0lex.l"
 {
       return(PARS_FOR_TOKEN);
 }
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
-#line 368 "pars0lex.l"
+#line 333 "pars0lex.l"
 {
       return(PARS_READ_TOKEN);
 }
 	YY_BREAK
 case 43:
 YY_RULE_SETUP
-#line 372 "pars0lex.l"
+#line 337 "pars0lex.l"
 {
       return(PARS_ORDER_TOKEN);
 }
 	YY_BREAK
 case 44:
 YY_RULE_SETUP
-#line 376 "pars0lex.l"
+#line 341 "pars0lex.l"
 {
       return(PARS_BY_TOKEN);
 }
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
-#line 380 "pars0lex.l"
+#line 345 "pars0lex.l"
 {
       return(PARS_ASC_TOKEN);
 }
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
-#line 384 "pars0lex.l"
+#line 349 "pars0lex.l"
 {
       return(PARS_DESC_TOKEN);
 }
 	YY_BREAK
 case 47:
 YY_RULE_SETUP
-#line 388 "pars0lex.l"
+#line 353 "pars0lex.l"
 {
       return(PARS_INSERT_TOKEN);
 }
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
-#line 392 "pars0lex.l"
+#line 357 "pars0lex.l"
 {
       return(PARS_INTO_TOKEN);
 }
 	YY_BREAK
 case 49:
 YY_RULE_SETUP
-#line 396 "pars0lex.l"
+#line 361 "pars0lex.l"
 {
       return(PARS_VALUES_TOKEN);
 }
 	YY_BREAK
 case 50:
 YY_RULE_SETUP
-#line 400 "pars0lex.l"
+#line 365 "pars0lex.l"
 {
       return(PARS_UPDATE_TOKEN);
 }
 	YY_BREAK
 case 51:
 YY_RULE_SETUP
-#line 404 "pars0lex.l"
+#line 369 "pars0lex.l"
 {
       return(PARS_SET_TOKEN);
 }
 	YY_BREAK
 case 52:
 YY_RULE_SETUP
-#line 408 "pars0lex.l"
+#line 373 "pars0lex.l"
 {
       return(PARS_DELETE_TOKEN);
 }
 	YY_BREAK
 case 53:
 YY_RULE_SETUP
-#line 412 "pars0lex.l"
+#line 377 "pars0lex.l"
 {
       return(PARS_CURRENT_TOKEN);
 }
 	YY_BREAK
 case 54:
 YY_RULE_SETUP
-#line 416 "pars0lex.l"
+#line 381 "pars0lex.l"
 {
       return(PARS_OF_TOKEN);
 }
 	YY_BREAK
 case 55:
 YY_RULE_SETUP
-#line 420 "pars0lex.l"
+#line 385 "pars0lex.l"
 {
       return(PARS_CREATE_TOKEN);
 }
 	YY_BREAK
 case 56:
 YY_RULE_SETUP
-#line 424 "pars0lex.l"
+#line 389 "pars0lex.l"
 {
       return(PARS_TABLE_TOKEN);
 }
 	YY_BREAK
 case 57:
 YY_RULE_SETUP
-#line 428 "pars0lex.l"
+#line 393 "pars0lex.l"
 {
        return(PARS_INDEX_TOKEN);
 }
 	YY_BREAK
 case 58:
 YY_RULE_SETUP
-#line 432 "pars0lex.l"
+#line 397 "pars0lex.l"
 {
        return(PARS_UNIQUE_TOKEN);
 }
 	YY_BREAK
 case 59:
 YY_RULE_SETUP
-#line 436 "pars0lex.l"
+#line 401 "pars0lex.l"
 {
        return(PARS_CLUSTERED_TOKEN);
 }
 	YY_BREAK
 case 60:
 YY_RULE_SETUP
-#line 440 "pars0lex.l"
+#line 405 "pars0lex.l"
 {
       return(PARS_DOES_NOT_FIT_IN_MEM_TOKEN);
 }
 	YY_BREAK
 case 61:
 YY_RULE_SETUP
-#line 444 "pars0lex.l"
+#line 409 "pars0lex.l"
 {
        return(PARS_ON_TOKEN);
 }
 	YY_BREAK
 case 62:
 YY_RULE_SETUP
-#line 448 "pars0lex.l"
+#line 413 "pars0lex.l"
 {
       return(PARS_DECLARE_TOKEN);
 }
 	YY_BREAK
 case 63:
 YY_RULE_SETUP
-#line 452 "pars0lex.l"
+#line 417 "pars0lex.l"
 {
       return(PARS_CURSOR_TOKEN);
 }
 	YY_BREAK
 case 64:
 YY_RULE_SETUP
-#line 456 "pars0lex.l"
+#line 421 "pars0lex.l"
 {
       return(PARS_OPEN_TOKEN);
 }
 	YY_BREAK
 case 65:
 YY_RULE_SETUP
-#line 460 "pars0lex.l"
+#line 425 "pars0lex.l"
 {
       return(PARS_FETCH_TOKEN);
 }
 	YY_BREAK
 case 66:
 YY_RULE_SETUP
-#line 464 "pars0lex.l"
+#line 429 "pars0lex.l"
 {
       return(PARS_CLOSE_TOKEN);
 }
 	YY_BREAK
 case 67:
 YY_RULE_SETUP
-#line 468 "pars0lex.l"
+#line 433 "pars0lex.l"
 {
       return(PARS_NOTFOUND_TOKEN);
 }
 	YY_BREAK
 case 68:
 YY_RULE_SETUP
-#line 472 "pars0lex.l"
+#line 437 "pars0lex.l"
 {
       return(PARS_TO_CHAR_TOKEN);
 }
 	YY_BREAK
 case 69:
 YY_RULE_SETUP
-#line 476 "pars0lex.l"
+#line 441 "pars0lex.l"
 {
       return(PARS_TO_NUMBER_TOKEN);
 }
 	YY_BREAK
 case 70:
 YY_RULE_SETUP
-#line 480 "pars0lex.l"
+#line 445 "pars0lex.l"
 {
       return(PARS_TO_BINARY_TOKEN);
 }
 	YY_BREAK
 case 71:
 YY_RULE_SETUP
-#line 484 "pars0lex.l"
+#line 449 "pars0lex.l"
 {
       return(PARS_BINARY_TO_NUMBER_TOKEN);
 }
 	YY_BREAK
 case 72:
 YY_RULE_SETUP
-#line 488 "pars0lex.l"
+#line 453 "pars0lex.l"
 {
       return(PARS_SUBSTR_TOKEN);
 }
 	YY_BREAK
 case 73:
 YY_RULE_SETUP
-#line 492 "pars0lex.l"
+#line 457 "pars0lex.l"
 {
       return(PARS_REPLSTR_TOKEN);
 }
 	YY_BREAK
 case 74:
 YY_RULE_SETUP
-#line 496 "pars0lex.l"
+#line 461 "pars0lex.l"
 {
       return(PARS_CONCAT_TOKEN);
 }
 	YY_BREAK
 case 75:
 YY_RULE_SETUP
-#line 500 "pars0lex.l"
+#line 465 "pars0lex.l"
 {
       return(PARS_INSTR_TOKEN);
 }
 	YY_BREAK
 case 76:
 YY_RULE_SETUP
-#line 504 "pars0lex.l"
+#line 469 "pars0lex.l"
 {
       return(PARS_LENGTH_TOKEN);
 }
 	YY_BREAK
 case 77:
 YY_RULE_SETUP
-#line 508 "pars0lex.l"
+#line 473 "pars0lex.l"
 {
       return(PARS_SYSDATE_TOKEN);
 }
 	YY_BREAK
 case 78:
 YY_RULE_SETUP
-#line 512 "pars0lex.l"
+#line 477 "pars0lex.l"
 {
       return(PARS_PRINTF_TOKEN);
 }
 	YY_BREAK
 case 79:
 YY_RULE_SETUP
-#line 516 "pars0lex.l"
+#line 481 "pars0lex.l"
 {
       return(PARS_ASSERT_TOKEN);
 }
 	YY_BREAK
 case 80:
 YY_RULE_SETUP
-#line 520 "pars0lex.l"
+#line 485 "pars0lex.l"
 {
       return(PARS_RND_TOKEN);
 }
 	YY_BREAK
 case 81:
 YY_RULE_SETUP
-#line 524 "pars0lex.l"
+#line 489 "pars0lex.l"
 {
       return(PARS_RND_STR_TOKEN);
 }
 	YY_BREAK
 case 82:
 YY_RULE_SETUP
-#line 528 "pars0lex.l"
+#line 493 "pars0lex.l"
 {
       return(PARS_ROW_PRINTF_TOKEN);
 }
 	YY_BREAK
 case 83:
 YY_RULE_SETUP
-#line 532 "pars0lex.l"
+#line 497 "pars0lex.l"
 {
       return(PARS_COMMIT_TOKEN);
 }
 	YY_BREAK
 case 84:
 YY_RULE_SETUP
-#line 536 "pars0lex.l"
+#line 501 "pars0lex.l"
 {
       return(PARS_ROLLBACK_TOKEN);
 }
 	YY_BREAK
 case 85:
 YY_RULE_SETUP
-#line 540 "pars0lex.l"
+#line 505 "pars0lex.l"
 {
       return(PARS_WORK_TOKEN);
 }
 	YY_BREAK
 case 86:
 YY_RULE_SETUP
-#line 544 "pars0lex.l"
+#line 509 "pars0lex.l"
 {
       return(PARS_UNSIGNED_TOKEN);
 }
 	YY_BREAK
 case 87:
 YY_RULE_SETUP
-#line 548 "pars0lex.l"
+#line 513 "pars0lex.l"
 {
       return(PARS_EXIT_TOKEN);
 }
 	YY_BREAK
 case 88:
 YY_RULE_SETUP
-#line 552 "pars0lex.l"
+#line 517 "pars0lex.l"
 {
       return(PARS_FUNCTION_TOKEN);
 }
 	YY_BREAK
 case 89:
 YY_RULE_SETUP
-#line 556 "pars0lex.l"
+#line 521 "pars0lex.l"
 {
       return(PARS_LOCK_TOKEN);
 }
 	YY_BREAK
 case 90:
 YY_RULE_SETUP
-#line 560 "pars0lex.l"
+#line 525 "pars0lex.l"
 {
       return(PARS_SHARE_TOKEN);
 }
 	YY_BREAK
 case 91:
 YY_RULE_SETUP
-#line 564 "pars0lex.l"
+#line 529 "pars0lex.l"
 {
       return(PARS_MODE_TOKEN);
 }
 	YY_BREAK
 case 92:
 YY_RULE_SETUP
-#line 568 "pars0lex.l"
+#line 533 "pars0lex.l"
 {
-      yylval = sym_tab_add_id(pars_sym_tab_global,
+      *m_lval = sym_tab_add_id(m_sys.m_parser->m_sym_tab,
               (byte*)YYText(),
               strlen(YYText()));
       return(PARS_ID_TOKEN);
@@ -1659,42 +1630,42 @@ YY_RULE_SETUP
 	YY_BREAK
 case 93:
 YY_RULE_SETUP
-#line 575 "pars0lex.l"
+#line 540 "pars0lex.l"
 {
       return(PARS_DDOT_TOKEN);
 }
 	YY_BREAK
 case 94:
 YY_RULE_SETUP
-#line 579 "pars0lex.l"
+#line 544 "pars0lex.l"
 {
       return(PARS_ASSIGN_TOKEN);
 }
 	YY_BREAK
 case 95:
 YY_RULE_SETUP
-#line 583 "pars0lex.l"
+#line 548 "pars0lex.l"
 {
       return(PARS_LE_TOKEN);
 }
 	YY_BREAK
 case 96:
 YY_RULE_SETUP
-#line 587 "pars0lex.l"
+#line 552 "pars0lex.l"
 {
       return(PARS_GE_TOKEN);
 }
 	YY_BREAK
 case 97:
 YY_RULE_SETUP
-#line 591 "pars0lex.l"
+#line 556 "pars0lex.l"
 {
       return(PARS_NE_TOKEN);
 }
 	YY_BREAK
 case 98:
 YY_RULE_SETUP
-#line 595 "pars0lex.l"
+#line 560 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1702,7 +1673,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 99:
 YY_RULE_SETUP
-#line 600 "pars0lex.l"
+#line 565 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1710,7 +1681,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 100:
 YY_RULE_SETUP
-#line 605 "pars0lex.l"
+#line 570 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1718,7 +1689,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 101:
 YY_RULE_SETUP
-#line 610 "pars0lex.l"
+#line 575 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1726,7 +1697,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 102:
 YY_RULE_SETUP
-#line 615 "pars0lex.l"
+#line 580 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1734,7 +1705,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 103:
 YY_RULE_SETUP
-#line 620 "pars0lex.l"
+#line 585 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1742,7 +1713,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 104:
 YY_RULE_SETUP
-#line 625 "pars0lex.l"
+#line 590 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1750,7 +1721,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 105:
 YY_RULE_SETUP
-#line 630 "pars0lex.l"
+#line 595 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1758,7 +1729,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 106:
 YY_RULE_SETUP
-#line 635 "pars0lex.l"
+#line 600 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1766,7 +1737,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 107:
 YY_RULE_SETUP
-#line 640 "pars0lex.l"
+#line 605 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1774,7 +1745,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 108:
 YY_RULE_SETUP
-#line 645 "pars0lex.l"
+#line 610 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1782,7 +1753,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 109:
 YY_RULE_SETUP
-#line 650 "pars0lex.l"
+#line 615 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1790,7 +1761,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 110:
 YY_RULE_SETUP
-#line 655 "pars0lex.l"
+#line 620 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1798,7 +1769,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 111:
 YY_RULE_SETUP
-#line 660 "pars0lex.l"
+#line 625 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1806,7 +1777,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 112:
 YY_RULE_SETUP
-#line 665 "pars0lex.l"
+#line 630 "pars0lex.l"
 {
 
       return((int)(*YYText()));
@@ -1814,35 +1785,35 @@ YY_RULE_SETUP
 	YY_BREAK
 case 113:
 YY_RULE_SETUP
-#line 670 "pars0lex.l"
+#line 635 "pars0lex.l"
 BEGIN(comment); /* eat up comment */
 	YY_BREAK
 case 114:
 /* rule 114 can match eol */
 YY_RULE_SETUP
-#line 672 "pars0lex.l"
+#line 637 "pars0lex.l"
 
 	YY_BREAK
 case 115:
 /* rule 115 can match eol */
 YY_RULE_SETUP
-#line 673 "pars0lex.l"
+#line 638 "pars0lex.l"
 
 	YY_BREAK
 case 116:
 YY_RULE_SETUP
-#line 674 "pars0lex.l"
+#line 639 "pars0lex.l"
 BEGIN(INITIAL);
 	YY_BREAK
 case 117:
 /* rule 117 can match eol */
 YY_RULE_SETUP
-#line 676 "pars0lex.l"
+#line 641 "pars0lex.l"
 /* eat up whitespace */
 	YY_BREAK
 case 118:
 YY_RULE_SETUP
-#line 679 "pars0lex.l"
+#line 644 "pars0lex.l"
 {
       log_err(std::format("Unrecognized character: {:x}\n", *YYText()));
 
@@ -1855,18 +1826,17 @@ case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(comment):
 case YY_STATE_EOF(quoted):
 case YY_STATE_EOF(id):
-#line 687 "pars0lex.l"
+#line 652 "pars0lex.l"
 {
-  pars_lexer_close();
   return 0;
 }
 	YY_BREAK
 case 119:
 YY_RULE_SETUP
-#line 692 "pars0lex.l"
+#line 656 "pars0lex.l"
 YY_FATAL_ERROR( "flex scanner jammed" );
 	YY_BREAK
-#line 1870 "lexyy.cc"
+#line 1840 "lexyy.cc"
 
 	case YY_END_OF_BUFFER:
 		{
@@ -2803,12 +2773,12 @@ static int yy_flex_strlen (const char * s )
 }
 #endif
 
-static void *yyalloc (yy_size_t  size )
+void *yyalloc (yy_size_t  size )
 {
 			return malloc(size);
 }
 
-static void *yyrealloc  (void * ptr, yy_size_t  size )
+void *yyrealloc  (void * ptr, yy_size_t  size )
 {
 		
 	/* The cast to (char *) in the following accommodates both
@@ -2821,35 +2791,21 @@ static void *yyrealloc  (void * ptr, yy_size_t  size )
 	return realloc(ptr, size);
 }
 
-static void yyfree (void * ptr )
+void yyfree (void * ptr )
 {
 			free( (char *) ptr );	/* see yyrealloc() for (char *) cast */
 }
 
 #define YYTABLES_NAME "yytables"
 
-#line 692 "pars0lex.l"
+#line 656 "pars0lex.l"
 
 
-extern "C" int yylex() {
-  if (pars_scanner == nullptr) {
-    create_pars_scanner();
-  }
-  return pars_scanner->yylex();
-}
+int yylex(que_node_t **lval, System &sys) {
+  auto &lexer = *sys.m_parser->m_lexer;
 
-/**
- * Release any resources used by the lexer.
- */
-void pars_lexer_close() {
-  delete pars_scanner;
-  pars_scanner = nullptr;
+  lexer.m_lval = lval;
 
-  if (stringbuf != nullptr) {
-    free(stringbuf);
-    stringbuf = nullptr;
-  }
-
-  stringbuf_len_alloc = stringbuf_len = 0;
+  return lexer.yylex();
 }
 

@@ -26,12 +26,14 @@ Created 11/19/1996 Heikki Tuuri
 
 class System;
 
+#include "pars0grm.h"
 #include "pars0types.h"
 #include "que0types.h"
 #include "row0types.h"
 #include "trx0types.h"
 #include "usr0types.h"
 
+#include <memory>
 #include <vector>
 
 struct IndexNode;
@@ -42,53 +44,6 @@ and varies in type, while 'user_arg' is a user-supplied argument. The
 meaning of the return type also varies. See the individual use cases, e.g.
 the FETCH statement, for details on them. */
 typedef void *(*pars_user_func_cb_t)(void *arg, void *user_arg);
-
-/** If the following is set true, the parser will emit debugging
-information */
-extern int yydebug;
-
-#ifdef UNIV_SQL_DEBUG
-/** If the following is set true, the lexer will print the SQL string
-as it tokenizes it */
-extern bool pars_print_lexed;
-#endif /* UNIV_SQL_DEBUG */
-
-/* Global variable used while parsing a single procedure or query : the code is
-NOT re-entrant */
-extern SymTab *pars_sym_tab_global;
-
-extern ParsResWord pars_to_char_token;
-extern ParsResWord pars_to_number_token;
-extern ParsResWord pars_to_binary_token;
-extern ParsResWord pars_binary_to_number_token;
-extern ParsResWord pars_substr_token;
-extern ParsResWord pars_replstr_token;
-extern ParsResWord pars_concat_token;
-extern ParsResWord pars_length_token;
-extern ParsResWord pars_instr_token;
-extern ParsResWord pars_sysdate_token;
-extern ParsResWord pars_printf_token;
-extern ParsResWord pars_assert_token;
-extern ParsResWord pars_rnd_token;
-extern ParsResWord pars_rnd_str_token;
-extern ParsResWord pars_count_token;
-extern ParsResWord pars_sum_token;
-extern ParsResWord pars_distinct_token;
-extern ParsResWord pars_binary_token;
-extern ParsResWord pars_blob_token;
-extern ParsResWord pars_int_token;
-extern ParsResWord pars_char_token;
-extern ParsResWord pars_float_token;
-extern ParsResWord pars_update_token;
-extern ParsResWord pars_asc_token;
-extern ParsResWord pars_desc_token;
-extern ParsResWord pars_open_token;
-extern ParsResWord pars_close_token;
-extern ParsResWord pars_share_token;
-extern ParsResWord pars_unique_token;
-extern ParsResWord pars_clustered_token;
-
-extern ulint pars_star_denoter;
 
 /* Procedure parameter types */
 constexpr ulint PARS_INPUT = 0;
@@ -130,15 +85,6 @@ int yyparse();
  */
 QueFork *pars_sql(System &sys, ParsInfo *info, const char *str);
 
-/**
- * @brief Retrieves characters to the lexical analyzer.
- * 
- * @param[in,out] buf Buffer where to copy characters.
- * @param[in] max_size Maximum number of characters which fit in the buffer.
- * 
- * @return Number of characters copied.
- */
-int pars_get_lex_chars(char *buf, int max_size);
 
 /**
  * @brief Called by yyparse on error.
@@ -155,7 +101,7 @@ void yyerror(System &sys, const char *s);
  * 
  * @return Symbol table node of type SYM_VAR.
  */
-SymNode *pars_variable_declaration(SymNode *node, ParsResWord *type);
+SymNode *pars_variable_declaration(SymNode *node, const ParsResWord *type);
 
 /**
  * @brief Parses a function expression.
@@ -165,7 +111,7 @@ SymNode *pars_variable_declaration(SymNode *node, ParsResWord *type);
  * 
  * @return Function node in a query tree.
  */
-FuncNode *pars_func(que_node_t *res_word, que_node_t *arg);
+FuncNode *pars_func(System &sys, que_node_t *res_word, que_node_t *arg);
 
 /**
  * @brief Parses an operator expression.
@@ -176,7 +122,7 @@ FuncNode *pars_func(que_node_t *res_word, que_node_t *arg);
  * 
  * @return Function node in a query tree.
  */
-FuncNode *pars_op(int func, que_node_t *arg1, que_node_t *arg2);
+FuncNode *pars_op(System &sys, int func, que_node_t *arg1, que_node_t *arg2);
 
 /**
  * @brief Parses an ORDER BY clause. Order by a single column only is supported.
@@ -186,7 +132,7 @@ FuncNode *pars_op(int func, que_node_t *arg1, que_node_t *arg2);
  * 
  * @return Order-by node in a query tree.
  */
-OrderNode *pars_order_by(SymNode *column, ParsResWord *asc);
+OrderNode *pars_order_by(System &sys, SymNode *column, const ParsResWord *asc);
 
 /**
  * @brief Parses a select list and creates a query graph node for the whole SELECT statement.
@@ -196,7 +142,7 @@ OrderNode *pars_order_by(SymNode *column, ParsResWord *asc);
  * 
  * @return SelNode* The select node in a query tree.
  */
-SelNode *pars_select_list(que_node_t *select_list, SymNode *into_list);
+SelNode *pars_select_list(System &sys, que_node_t *select_list, SymNode *into_list);
 
 /**
  * @brief Parses a cursor declaration.
@@ -215,7 +161,7 @@ que_node_t *pars_cursor_declaration(SymNode *sym_node, SelNode *select_node);
  * 
  * @return que_node_t* The function declaration node.
  */
-que_node_t *pars_function_declaration(SymNode *sym_node);
+que_node_t *pars_function_declaration(System &sys, SymNode *sym_node);
 
 /**
  * @brief Parses a select statement.
@@ -230,8 +176,8 @@ que_node_t *pars_function_declaration(SymNode *sym_node);
  * @return SelNode* Select node in a query tree.
  */
 SelNode *pars_select_statement(System &sys, 
-  SelNode *select_node, SymNode *table_list, que_node_t *search_cond, ParsResWord *for_update,
-  ParsResWord *consistent_read, OrderNode *order_by
+  SelNode *select_node, SymNode *table_list, que_node_t *search_cond, const ParsResWord *for_update,
+  const ParsResWord *consistent_read, OrderNode *order_by
 );
 
 /**
@@ -242,7 +188,7 @@ SelNode *pars_select_statement(System &sys,
  * 
  * @return ColAssignNode* Column assignment node.
  */
-ColAssignNode *pars_column_assignment(SymNode *column, que_node_t *exp);
+ColAssignNode *pars_column_assignment(System &sys, SymNode *column, que_node_t *exp);
 
 /**
  * @brief Parses a delete or update statement start.
@@ -285,7 +231,7 @@ InsertNode *pars_insert_statement(System &sys, SymNode *table_sym, que_node_t *v
  * 
  * @return SymNode* Symbol table node of type SYM_VAR.
  */
-SymNode *pars_parameter_declaration(SymNode *node, ulint param_type, ParsResWord *type);
+SymNode *pars_parameter_declaration(SymNode *node, ulint param_type, const ParsResWord *type);
 
 /**
  * @brief Parses an elsif element.
@@ -295,7 +241,7 @@ SymNode *pars_parameter_declaration(SymNode *node, ulint param_type, ParsResWord
  * 
  * @return ElsifNode* Elsif node.
  */
-ElsifNode *pars_elsif_element(que_node_t *cond, que_node_t *stat_list);
+ElsifNode *pars_elsif_element(System &sys, que_node_t *cond, que_node_t *stat_list);
 
 /**
  * @brief Parses an if-statement.
@@ -306,7 +252,7 @@ ElsifNode *pars_elsif_element(que_node_t *cond, que_node_t *stat_list);
  * 
  * @return IfNode* If-statement node.
  */
-IfNode *pars_if_statement(que_node_t *cond, que_node_t *stat_list, que_node_t *else_part);
+IfNode *pars_if_statement(System &sys, que_node_t *cond, que_node_t *stat_list, que_node_t *else_part);
 
 /**
  * @brief Parses a for-loop-statement.
@@ -318,7 +264,7 @@ IfNode *pars_if_statement(que_node_t *cond, que_node_t *stat_list, que_node_t *e
  * 
  * @return ForNode* For-statement node.
  */
-ForNode *pars_for_statement(
+ForNode *pars_for_statement(System &sys, 
   SymNode *loop_var, que_node_t *loop_start_limit, que_node_t *loop_end_limit, que_node_t *stat_list
 );
 
@@ -330,21 +276,21 @@ ForNode *pars_for_statement(
  * 
  * @return WhileNode* While-statement node.
  */
-WhileNode *pars_while_statement(que_node_t *cond, que_node_t *stat_list);
+WhileNode *pars_while_statement(System &sys, que_node_t *cond, que_node_t *stat_list);
 
 /**
  * @brief Parses an exit statement.
  * 
  * @return ExitNode* Exit statement node.
  */
-ExitNode *pars_exit_statement();
+ExitNode *pars_exit_statement(System &sys);
 
 /**
  * @brief Parses a return-statement.
  * 
  * @return ReturnNode* Return statement node.
  */
-ReturnNode *pars_return_statement();
+ReturnNode *pars_return_statement(System &sys);
 
 /**
  * @brief Parses a procedure call.
@@ -354,7 +300,7 @@ ReturnNode *pars_return_statement();
  * 
  * @return FuncNode* Function node.
  */
-FuncNode *pars_procedure_call(que_node_t *res_word, que_node_t *args);
+FuncNode *pars_procedure_call(System &sys, que_node_t *res_word, que_node_t *args);
 
 /**
  * @brief Parses an assignment statement.
@@ -364,7 +310,7 @@ FuncNode *pars_procedure_call(que_node_t *res_word, que_node_t *args);
  * 
  * @return AssignNode* Assignment statement node.
  */
-AssignNode *pars_assignment_statement(SymNode *var, que_node_t *val);
+AssignNode *pars_assignment_statement(System &sys, SymNode *var, que_node_t *val);
 
 /**
  * @brief Parses a fetch statement.
@@ -375,7 +321,7 @@ AssignNode *pars_assignment_statement(SymNode *var, que_node_t *val);
  * 
  * @return FetchNode* Fetch statement node.
  */
-FetchNode *pars_fetch_statement(SymNode *cursor, SymNode *into_list, SymNode *user_func);
+FetchNode *pars_fetch_statement(System &sys, SymNode *cursor, SymNode *into_list, SymNode *user_func);
 
 /**
  * @brief Parses an open or close cursor statement.
@@ -385,7 +331,7 @@ FetchNode *pars_fetch_statement(SymNode *cursor, SymNode *into_list, SymNode *us
  * 
  * @return OpenNode* Open or close cursor statement node.
  */
-OpenNode *pars_open_statement(ulint type, SymNode *cursor);
+OpenNode *pars_open_statement(System &sys, ulint type, SymNode *cursor);
 
 /**
  * @brief Parses a row_printf-statement.
@@ -394,21 +340,21 @@ OpenNode *pars_open_statement(ulint type, SymNode *cursor);
  * 
  * @return RowPrintfNode* Row_printf-statement node.
  */
-RowPrintfNode *pars_row_printf_statement(SelNode *sel_node);
+RowPrintfNode *pars_row_printf_statement(System &sys, SelNode *sel_node);
 
 /**
  * @brief Parses a commit statement.
  * 
  * @return commit_node_t* Commit statement node.
  */
-CommitNode *pars_commit_statement();
+CommitNode *pars_commit_statement(System &sys);
 
 /**
  * @brief Parses a rollback statement.
  * 
  * @return TrxRollback* Rollback statement node.
  */
-TrxRollback *pars_rollback_statement();
+TrxRollback *pars_rollback_statement(System &sys);
 
 /**
  * @brief Parses a column definition at a table creation.
@@ -421,7 +367,7 @@ TrxRollback *pars_rollback_statement();
  * 
  * @return SymNode* Column symbol table node.
  */
-SymNode *pars_column_def(SymNode *sym_node, ParsResWord *type, SymNode *len, void *is_unsigned, void *is_not_null);
+SymNode *pars_column_def(SymNode *sym_node, const ParsResWord *type, SymNode *len, void *is_unsigned, void *is_not_null);
 
 /**
  * @brief Parses a table creation operation.
@@ -448,7 +394,7 @@ TableNode *pars_create_table(System &sys, SymNode *table_sym, SymNode *column_de
  * 
  * @return IndexNode* Index create subgraph.
  */
-IndexNode *pars_create_index(System &sys, ParsResWord *unique_def, ParsResWord *clustered_def, SymNode *index_sym, SymNode *table_sym, SymNode *column_list
+IndexNode *pars_create_index(System &sys, const ParsResWord *unique_def, const ParsResWord *clustered_def, SymNode *index_sym, SymNode *table_sym, SymNode *column_list
 );
 
 /**
@@ -460,7 +406,7 @@ IndexNode *pars_create_index(System &sys, ParsResWord *unique_def, ParsResWord *
  * 
  * @return QueFork* Query fork node.
  */
-QueFork *pars_procedure_definition(SymNode *sym_node, SymNode *param_list, que_node_t *stat_list);
+QueFork *pars_procedure_definition(System &sys, SymNode *sym_node, SymNode *param_list, que_node_t *stat_list);
 
 /**
  * @brief Parses a stored procedure call, when this is not within another stored
@@ -617,25 +563,9 @@ ParsBoundLit *pars_info_get_bound_lit(ParsInfo *info, const char *name);
  */
 ParsBoundId *pars_info_get_bound_id(ParsInfo *info, const char *name);
 
-/**
- * @brief Release any resources used by the parser and lexer.
- */
-void pars_close();
 
-/**
- * @brief Reset and check parser variables.
- */
-void pars_var_init(void);
 
-/**
- * @brief Reset the lexing variables.
- */
-void pars_lexer_var_init(void);
 
-/**
- * @brief Release any resources used by the lexer.
- */
-void pars_lexer_close(void);
 
 /**
  * @brief Extra information supplied for pars_sql().
@@ -700,6 +630,79 @@ struct ParsBoundId {
 struct ParsResWord {
   /** the token code for the reserved word from pars0grm.h */
   int code;
+};
+
+/* The reserved words: identified by their address, never written to. */
+inline constexpr ParsResWord pars_to_char_token{PARS_TO_CHAR_TOKEN};
+inline constexpr ParsResWord pars_to_number_token{PARS_TO_NUMBER_TOKEN};
+inline constexpr ParsResWord pars_to_binary_token{PARS_TO_BINARY_TOKEN};
+inline constexpr ParsResWord pars_binary_to_number_token{PARS_BINARY_TO_NUMBER_TOKEN};
+inline constexpr ParsResWord pars_substr_token{PARS_SUBSTR_TOKEN};
+inline constexpr ParsResWord pars_replstr_token{PARS_REPLSTR_TOKEN};
+inline constexpr ParsResWord pars_concat_token{PARS_CONCAT_TOKEN};
+inline constexpr ParsResWord pars_length_token{PARS_LENGTH_TOKEN};
+inline constexpr ParsResWord pars_instr_token{PARS_INSTR_TOKEN};
+inline constexpr ParsResWord pars_sysdate_token{PARS_SYSDATE_TOKEN};
+inline constexpr ParsResWord pars_printf_token{PARS_PRINTF_TOKEN};
+inline constexpr ParsResWord pars_assert_token{PARS_ASSERT_TOKEN};
+inline constexpr ParsResWord pars_rnd_token{PARS_RND_TOKEN};
+inline constexpr ParsResWord pars_rnd_str_token{PARS_RND_STR_TOKEN};
+inline constexpr ParsResWord pars_count_token{PARS_COUNT_TOKEN};
+inline constexpr ParsResWord pars_sum_token{PARS_SUM_TOKEN};
+inline constexpr ParsResWord pars_distinct_token{PARS_DISTINCT_TOKEN};
+inline constexpr ParsResWord pars_binary_token{PARS_BINARY_TOKEN};
+inline constexpr ParsResWord pars_blob_token{PARS_BLOB_TOKEN};
+inline constexpr ParsResWord pars_int_token{PARS_INT_TOKEN};
+inline constexpr ParsResWord pars_char_token{PARS_CHAR_TOKEN};
+inline constexpr ParsResWord pars_float_token{PARS_FLOAT_TOKEN};
+inline constexpr ParsResWord pars_update_token{PARS_UPDATE_TOKEN};
+inline constexpr ParsResWord pars_asc_token{PARS_ASC_TOKEN};
+inline constexpr ParsResWord pars_desc_token{PARS_DESC_TOKEN};
+inline constexpr ParsResWord pars_open_token{PARS_OPEN_TOKEN};
+inline constexpr ParsResWord pars_close_token{PARS_CLOSE_TOKEN};
+inline constexpr ParsResWord pars_share_token{PARS_SHARE_TOKEN};
+inline constexpr ParsResWord pars_unique_token{PARS_UNIQUE_TOKEN};
+inline constexpr ParsResWord pars_clustered_token{PARS_CLUSTERED_TOKEN};
+
+/** Denotes '*' in a select list, identified by its address. */
+inline constexpr ulint pars_star_denoter{12345678};
+
+/** @return a reserved word or the star denoter as a query graph node. */
+template <typename T>
+inline que_node_t *pars_token(const T &token) noexcept {
+  return const_cast<T *>(&token);
+}
+
+struct ParsLexer;
+
+/** The SQL parser of an instance. Parsing is serialized by the dictionary
+mutex, so one parser state per instance suffices. */
+struct Parser {
+  explicit Parser(System &sys) noexcept;
+
+  ~Parser() noexcept;
+
+  Parser(const Parser &) = delete;
+  Parser &operator=(const Parser &) = delete;
+
+  /**
+   * Copy the next chunk of the statement being parsed to the lexer.
+   *
+   * @param[out] buf            Where to copy the characters.
+   * @param[in] max_size        Size of buf.
+   *
+   * @return number of characters copied, 0 at the end of the statement.
+   */
+  [[nodiscard]] int get_lex_chars(char *buf, int max_size) noexcept;
+
+  /** The instance this sub-system belongs to. */
+  System &m_sys;
+
+  /** Symbol table of the statement being parsed. */
+  SymTab *m_sym_tab{};
+
+  /** Lexer of the statement being parsed. */
+  std::unique_ptr<ParsLexer> m_lexer;
 };
 
 /** A predefined function or operator node in a parsing tree; this construct
