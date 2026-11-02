@@ -277,7 +277,7 @@ struct RowUpdate {
    *
    * @param[in] dict_sys Dictionary system.
    */
-  explicit RowUpdate(System &sys) noexcept : m_sys() {}
+  explicit RowUpdate(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * @brief Destructor.

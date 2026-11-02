@@ -673,7 +673,7 @@ std::string Lock::to_string(System &sys, BufPool *buf_pool) const noexcept {
   );
 }
 
-LockSys::LockSys(System &sys) noexcept : m_sys() {}
+LockSys::LockSys(System &sys) noexcept : m_sys(sys) {}
 
 LockSys::~LockSys() noexcept {}
 
@@ -1573,8 +1573,8 @@ void LockSys::move_reorganize_page(const BufBlock *block, const BufBlock *oblock
         break;
       }
 
-      cur1.move_to_next(m_sys);
-      cur2.move_to_next(m_sys);
+      cur1.move_to_next();
+      cur2.move_to_next();
     }
 
 #ifdef UNIV_DEBUG
@@ -1615,11 +1615,11 @@ void LockSys::move_rec_list_end(const BufBlock *new_block, const BufBlock *block
       cur1.position(rec, block);
 
       if (cur1.is_before_first()) {
-        cur1.move_to_next(m_sys);
+        cur1.move_to_next();
       }
 
       cur2.set_before_first(new_block);
-      cur2.move_to_next(m_sys);
+      cur2.move_to_next();
 
       /* Copy lock requests on user records to new page and
       reset the lock bits on the old */
@@ -1641,8 +1641,8 @@ void LockSys::move_rec_list_end(const BufBlock *new_block, const BufBlock *block
           (void)rec_add_to_queue(type_mode, new_block, heap_no, lock->m_rec.m_index, lock->m_trx);
         }
 
-        cur1.move_to_next(m_sys);
-        cur2.move_to_next(m_sys);
+        cur1.move_to_next();
+        cur2.move_to_next();
       }
     }
   }
@@ -1667,10 +1667,10 @@ void LockSys::move_rec_list_start(const BufBlock *new_block, const BufBlock *blo
       const auto type_mode = lock->m_type_mode;
 
       cur1.set_before_first(block);
-      cur1.move_to_next(m_sys);
+      cur1.move_to_next();
 
       cur2.position(old_end, new_block);
-      cur2.move_to_next(m_sys);
+      cur2.move_to_next();
 
       /* Copy lock requests on user records to new page and
       reset the lock bits on the old */
@@ -1692,8 +1692,8 @@ void LockSys::move_rec_list_start(const BufBlock *new_block, const BufBlock *blo
           (void)rec_add_to_queue(type_mode, new_block, heap_no, lock->m_rec.m_index, lock->m_trx);
         }
 
-        cur1.move_to_next(m_sys);
-        cur2.move_to_next(m_sys);
+        cur1.move_to_next();
+        cur2.move_to_next();
       }
 
       IF_DEBUG(if (page_rec_is_supremum(rec)) {

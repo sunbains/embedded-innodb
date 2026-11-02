@@ -329,7 +329,7 @@ void page_copy_rec_list_end_no_locks(System &sys, BufBlock *new_block, BufBlock 
 
   if (cursor.is_before_first()) {
 
-    cursor.move_to_next(sys);
+    cursor.move_to_next();
   }
 
   ut_a(mach_read_from_2(new_page + UNIV_PAGE_SIZE - 10) == PAGE_INFIMUM);
@@ -362,7 +362,7 @@ void page_copy_rec_list_end_no_locks(System &sys, BufBlock *new_block, BufBlock 
       ut_error;
     }
 
-    cursor.move_to_next(sys);
+    cursor.move_to_next();
     last_rec = ins_rec;
   }
 
@@ -419,7 +419,7 @@ Rec page_copy_rec_list_start(System &sys, BufBlock *new_block, BufBlock *block, 
   PageCursor cursor{};
 
   cursor.set_before_first(block);
-  cursor.move_to_next(sys);
+  cursor.move_to_next();
 
   auto cur_rec = first_rec;
 
@@ -436,7 +436,7 @@ Rec page_copy_rec_list_start(System &sys, BufBlock *new_block, BufBlock *block, 
     cur_rec = cursor.insert_rec_low(cur_rec, index, cursor.get_rec(), offsets, mtr);
     ut_a(!cur_rec.is_null());
 
-    cursor.move_to_next(sys);
+    cursor.move_to_next();
   }
 
   if (likely_null(heap)) {
@@ -628,7 +628,7 @@ void page_delete_rec_list_start(System &sys, Rec rec, BufBlock *block, Index *in
   PageCursor cursor{};
 
   cursor.set_before_first(block);
-  cursor.move_to_next(sys);
+  cursor.move_to_next();
 
   /* Individual deletes are not logged */
 
@@ -997,7 +997,7 @@ void page_print_list(System &sys, BufBlock *block, Index *index, ulint pr_n) {
     if (cursor.is_after_last()) {
       break;
     }
-    cursor.move_to_next(sys);
+    cursor.move_to_next();
     ++count;
   }
 
@@ -1006,7 +1006,7 @@ void page_print_list(System &sys, BufBlock *block, Index *index, ulint pr_n) {
   }
 
   while (!cursor.is_after_last()) {
-    cursor.move_to_next(sys);
+    cursor.move_to_next();
 
     if (count + pr_n >= n_recs) {
       {

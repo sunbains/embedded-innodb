@@ -160,7 +160,7 @@ void RecvSys::cleanup_resources() noexcept {
   }
 }
 
-RecvSys::RecvSys(System &sys) noexcept : m_sys() {
+RecvSys::RecvSys(System &sys) noexcept : m_sys(sys) {
   mutex_create(&m_mutex, IF_DEBUG("RecvSys::m_mutex", ) IF_SYNC_DEBUG(SYNC_RECV, ) Current_location());
 }
 

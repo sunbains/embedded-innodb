@@ -221,7 +221,7 @@ void PageCursor::search_with_match(System &sys,
   if (page_is_leaf(page) && mode == PAGE_CUR_LE && page_header_get_field(page, PAGE_N_DIRECTION) > 3 &&
       page_header_get_ptr(page, PAGE_LAST_INSERT) && page_header_get_field(page, PAGE_DIRECTION) == PAGE_RIGHT) {
 
-    if (try_search_shortcut(sys, block, index, tuple, iup_matched_fields, iup_matched_bytes, ilow_matched_fields, ilow_matched_bytes)) {
+    if (try_search_shortcut(block, index, tuple, iup_matched_fields, iup_matched_bytes, ilow_matched_fields, ilow_matched_bytes)) {
       return;
     }
   }
@@ -445,7 +445,7 @@ void PageCursor::open_on_rnd_user_rec(System &sys, BufBlock *block) {
     auto rnd = (ulint)(lcg_prng() % n_recs);
 
     do {
-      move_to_next(sys);
+      move_to_next();
     } while (rnd--);
   }
 }
@@ -1220,7 +1220,7 @@ void PageCursor::delete_rec(System &sys, const Index *index, const ulint *offset
     rec = page_rec_get_next(rec);
   }
 
-  move_to_next(sys);
+  move_to_next();
   auto next_rec = m_rec;
 
   /* 3. Remove the record from the linked list of records */

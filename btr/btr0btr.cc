@@ -1065,7 +1065,7 @@ bool Btree::page_tuple_smaller(
   auto block = btr_cur->get_block();
 
   page_cursor.set_before_first(block);
-  page_cursor.move_to_next(m_sys);
+  page_cursor.move_to_next();
 
   auto first_rec = page_cursor.get_rec();
 
@@ -1891,7 +1891,7 @@ bool Btree::index_page_validate(BufBlock *block, Index *index) noexcept {
   PageCursor page_cursor;
 
   page_cursor.set_before_first(block);
-  page_cursor.move_to_next(m_sys);
+  page_cursor.move_to_next();
 
   for (;;) {
     if (page_cursor.is_after_last()) {
@@ -1904,7 +1904,7 @@ bool Btree::index_page_validate(BufBlock *block, Index *index) noexcept {
       return false;
     }
 
-    page_cursor.move_to_next(m_sys);
+    page_cursor.move_to_next();
   }
 
   return true;
@@ -1954,7 +1954,7 @@ bool Btree::validate_level(Index *index, Trx *trx, ulint level) noexcept {
     ut_a(!page_is_leaf(page));
 
     page_cursor.set_before_first(block);
-    page_cursor.move_to_next(m_sys);
+    page_cursor.move_to_next();
 
     auto node_ptr = page_cursor.get_rec();
 

@@ -674,7 +674,7 @@ inline void BtreePcursor::move_to_next_on_page(System &sys) noexcept {
   ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  get_page_cur()->move_to_next(sys);
+  get_page_cur()->move_to_next();
 
   m_old_stored = false;
 }
@@ -683,7 +683,7 @@ inline void BtreePcursor::move_to_prev_on_page(System &sys) noexcept {
   ut_ad(m_pos_state == BtrPcurPositioned::IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
 
-  get_page_cur()->move_to_prev(sys);
+  get_page_cur()->move_to_prev();
 
   m_old_stored = false;
 }

@@ -525,7 +525,7 @@ const BufBlock *BufPool::chunk_not_freed(BufChunk *chunk) {
   return nullptr;
 }
 
-BufPool::BufPool(System &sys) noexcept : m_sys(), m_LRU(std::make_unique<BufLru>(sys)), m_flusher(std::make_unique<BufFlush>(sys)) {}
+BufPool::BufPool(System &sys) noexcept : m_sys(sys), m_LRU(std::make_unique<BufLru>(sys)), m_flusher(std::make_unique<BufFlush>(sys)) {}
 
 bool BufPool::open(uint64_t pool_size) {
 

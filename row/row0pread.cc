@@ -218,7 +218,7 @@ class PCursor {
     switch (relative) {
       case BtreeCursorPos::ON:
         if (!equal) {
-          m_pcur->get_page_cur()->move_to_next(sys);
+          m_pcur->get_page_cur()->move_to_next();
         }
         break;
 
@@ -353,7 +353,7 @@ DbErr PCursor::move_to_user_rec(System &sys) noexcept {
   cur->set_before_first(block);
 
   /* Skip the infimum record. */
-  cur->move_to_next(sys);
+  cur->move_to_next();
 
   /* Page can't be empty unless it is a root page. */
   ut_ad(!cur->is_after_last());

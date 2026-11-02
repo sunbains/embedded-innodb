@@ -360,7 +360,7 @@ ulint Srv::release_threads(SrvThreadType type, ulint n) noexcept {
 }
 
 Srv::Srv(System &sys) noexcept
-    : m_sys(),
+    : m_sys(sys),
       m_fatal_semaphore_wait_threshold(sys.m_config.m_srv.m_fatal_semaphore_wait_threshold),
       m_threads(sys.m_config.m_srv.m_max_n_threads),
       m_client_table(sys.m_config.m_srv.m_max_n_threads) {

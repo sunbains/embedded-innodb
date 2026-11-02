@@ -77,7 +77,7 @@ struct RowVers {
    * @param[in] trx_sys The transaction system.
    * @param[in] lock_sys The lock system.
    */
-  explicit RowVers(System &sys) noexcept : m_sys() {}
+  explicit RowVers(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * @brief Creates a RowVers.

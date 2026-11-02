@@ -27,7 +27,7 @@ struct Ddl {
    *
    * @param[in] dict Data dictionary.
    */
-  explicit Ddl(System &sys) noexcept : m_sys() {}
+  explicit Ddl(System &sys) noexcept : m_sys(sys) {}
 
   /** Get the background drop list length. NOTE: the caller must own the kernel mutex!
    * @return	how many tables in list

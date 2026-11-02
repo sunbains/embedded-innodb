@@ -48,7 +48,7 @@ struct Btree {
    * @param[in] fsp             File space.
    * @param[in] buf_pool        Buffer pool.
    */
-  explicit Btree(System &sys) noexcept : m_sys() {}
+  explicit Btree(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * Destructor.

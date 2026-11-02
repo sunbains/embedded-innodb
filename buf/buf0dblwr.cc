@@ -25,7 +25,7 @@ Created 2024-09-25 by Sunny Bains. */
 #include "trx0sys.h"
 
 
-Dblwr::Dblwr(System &sys) noexcept : m_sys(), m_block1(ULINT32_UNDEFINED), m_block2(ULINT32_UNDEFINED) {
+Dblwr::Dblwr(System &sys) noexcept : m_sys(sys), m_block1(ULINT32_UNDEFINED), m_block2(ULINT32_UNDEFINED) {
 
   mutex_create(&m_mutex, IF_DEBUG("Dblwr::m_mutex", ) IF_SYNC_DEBUG(SYNC_DOUBLEWRITE, ) Current_location());
 

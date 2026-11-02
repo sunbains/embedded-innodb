@@ -440,9 +440,9 @@ void BtreeCursor::open_at_index_side(System &sys,
     ut_ad(height > 0);
 
     if (from_left) {
-      page_cursor->move_to_next(sys);
+      page_cursor->move_to_next();
     } else {
-      page_cursor->move_to_prev(sys);
+      page_cursor->move_to_prev();
     }
 
     if (estimate) {
@@ -1165,7 +1165,7 @@ DbErr BtreeCursor::optimistic_update(System &sys, ulint flags, const Upd *update
 
   page_cursor->delete_rec(sys, index, offsets, mtr);
 
-  page_cursor->move_to_prev(sys);
+  page_cursor->move_to_prev();
 
   trx = thr_get_trx(thr);
 
@@ -1184,7 +1184,7 @@ DbErr BtreeCursor::optimistic_update(System &sys, ulint flags, const Upd *update
 
   sys.m_lock_sys->rec_restore_from_page_infimum(block, rec, block);
 
-  page_cursor->move_to_next(sys);
+  page_cursor->move_to_next();
 
   mem_heap_free(heap);
 
@@ -1367,7 +1367,7 @@ DbErr BtreeCursor::pessimistic_update(System &sys,
 
   page_cursor->delete_rec(sys, index, offsets, mtr);
 
-  page_cursor->move_to_prev(sys);
+  page_cursor->move_to_prev();
 
   rec = insert_if_possible(sys, new_entry, n_ext, mtr);
 

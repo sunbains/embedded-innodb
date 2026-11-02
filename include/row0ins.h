@@ -61,7 +61,7 @@ struct RowInsert {
    * @param[in] lock_sys Lock system.
    * @param[in] row_upd Row update system.
    */
-  explicit RowInsert(System &sys) noexcept : m_sys() {}
+  explicit RowInsert(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * @brief Destructor for RowInsert.

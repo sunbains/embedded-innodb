@@ -35,7 +35,7 @@ struct DictLoad {
   /** The instance this sub-system belongs to. */
   System &m_sys;
 
-  explicit DictLoad(System &sys) noexcept : m_sys() {}
+  explicit DictLoad(System &sys) noexcept : m_sys(sys) {}
 
   /**
    * In a crash recovery we already have all the tablespace objects created.
