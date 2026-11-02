@@ -76,23 +76,6 @@ void recv_recovery_from_checkpoint_finish(System &sys) noexcept;
 void recv_recovery_rollback_active(System &sys) noexcept;
 
 /**
- * Resets the logs. The contents of log files will be lost!
- *
- * @param[in] lsn               reset to this lsn rounded up to be divisible by
- *                              IB_FILE_BLOCK_SIZE, after which we add
- *		                          LOG_BLOCK_HDR_SIZE
- * @param[in] new_logs_created  true if resetting logs is done at the log
- *                              creation; false if it is done after archive
-*		                            recovery
- */
-void recv_reset_logs(lsn_t lsn, bool new_logs_created) noexcept;
-
-/**
- * Reset the state of the recovery system variables.
- */
-void recv_sys_var_init(System &sys) noexcept;
-
-/**
  * Empties the log record storage, applying them to appropriate pages.
  *
  * @param[in,out] dblwr         The doublewrite buffer to use
@@ -252,18 +235,6 @@ struct RecvSys {
   /** this is true when a log rec application batch is running */
   bool m_apply_batch_on{};
 
-  /** log sequence number */
-  lsn_t m_lsn{};
-
-  /** size of the log buffer when the database last time wrote to the log */
-  ulint m_last_log_buf_size{};
-
-  /** possible incomplete last recovered log block */
-  byte *m_last_block{};
-
-  /** the nonaligned start address of the preceding buffer */
-  byte *m_last_block_buf_start{};
-
   /** buffer for parsing log records */
   byte *m_buf{};
 
@@ -278,17 +249,11 @@ struct RecvSys {
   /** the log data has been scanned up to this lsn */
   lsn_t m_scanned_lsn{};
 
-  /** the log data has been scanned up to this checkpoint number (lowest 4 bytes) */
-  ulint m_scanned_checkpoint_no{};
-
   /** start offset of non-parsed log records in buf */
   ulint m_recovered_offset{};
 
   /** the log records have been parsed up to this lsn */
   lsn_t m_recovered_lsn{};
-
-  /** recovery should be made at most up to this lsn */
-  lsn_t m_limit_lsn{};
 
   /** this is set to true if we during log scan find a corrupt log block, or a corrupt
   log record, or there is a log parsing buffer overflow */
@@ -317,7 +282,6 @@ struct RecvSys {
   /** Number of buffer pool frames to keep free during the log scan */
   ulint m_n_pool_free_frames{};
 
-  ulint m_scan_print_counter{};
 
   /* For reporting a corrupt log: the previously parsed record. */
   ulint m_previous_parsed_rec_type{};
@@ -342,11 +306,8 @@ struct RecvSys {
 
 
 
-/** Size of the parsing buffer; it must accommodate RECV_SCAN_SIZE many times! */
+/** Size of the parsing buffer: a record group, the log of one mini-transaction, must fit. */
 constexpr ulint RECV_PARSING_BUF_SIZE = 2 * 1024 * 1024;
-
-/** Size of block reads when the log groups are scanned forward to do a roll-forward */
-constexpr ulint RECV_SCAN_SIZE = 4 * UNIV_PAGE_SIZE;
 
 /** Parse log records from buffer
  * @param[in] store_to_hash  Whether to store parsed records to hash table

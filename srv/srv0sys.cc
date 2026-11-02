@@ -96,13 +96,8 @@ static void *io_handler_thread(void *arg) noexcept {
 }
 
 DbErr Config::normalize() noexcept {
-  if (m_log.m_n_files < 2) {
-    log_err("There must be at least two log files");
-    return DB_INVALID_INPUT;
-  }
-
-  if (m_log.m_n_files * (m_log.m_file_size / UNIV_PAGE_SIZE) >= 262144) {
-    log_err("Combined size of log files must be < 4 GB");
+  if (m_log.m_checkpoint_age < 1024 * 1024) {
+    log_err(std::format("The checkpoint age must be at least 1 MB, it is {} bytes", m_log.m_checkpoint_age));
     return DB_INVALID_INPUT;
   }
 
@@ -260,90 +255,6 @@ void System::destroy() noexcept {
 }
 
 /**
- * @brief Creates a log file in the log group.
- *
- * @param[in] sys               The instance.
- * @param[in] filename          Log file name to create
- *
- * @return DB_SUCCESS or error code
- */
-static DbErr create_log_file(System &sys, const std::string &filename) noexcept {
-  ut_a(!filename.empty());
-
-  const auto &config = sys.m_config.m_log;
-
-  bool success{};
-  auto fh = os_file_create(filename.c_str(), OS_FILE_CREATE, OS_FILE_NORMAL, OS_LOG_FILE, sys.m_config.m_fil.m_flush_method, &success);
-
-  if (!success) {
-    return os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS ? DB_ERROR : DB_TABLE_EXISTS;
-  }
-
-  log_warn(std::format("Log file {} did not exist: creating a new log file", filename));
-
-  log_info(std::format("Setting log file {} size to {} MB", filename, config.m_file_size / (1024 * 1024)));
-
-  log_info("Database physically writes the file full: wait...");
-
-  success = os_file_set_size(filename.c_str(), fh, config.m_file_size);
-
-  {
-    auto success = os_file_close(fh);
-    ut_a(success);
-  }
-
-  if (!success) {
-    log_err(std::format("Can't create {}: probably out of disk space", filename));
-    return DB_ERROR;
-  }
-
-  sys.m_fil->node_create(filename.c_str(), config.m_file_size / UNIV_PAGE_SIZE, SRV_LOG_SPACE_FIRST_ID, false);
-
-  return DB_SUCCESS;
-}
-
-/**
- * @brief Opens a log file.
- *
- * @param[in] sys               The instance.
- * @param[in] filename          Log file name to open
- *
- * @return DB_SUCCESS or error code
- */
-static DbErr open_log_file(System &sys, const std::string &filename) noexcept {
-  ut_a(!filename.empty());
-
-  const auto &config = sys.m_config.m_log;
-
-  bool success{};
-  auto fh = os_file_create(filename.c_str(), OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, sys.m_config.m_fil.m_flush_method, &success);
-
-  if (!success) {
-    log_err("Cannot open log file ", filename);
-
-    return DB_ERROR;
-  }
-
-  off_t size{};
-  success = os_file_get_size(fh, &size);
-  ut_a(success);
-
-  if (size != off_t(config.m_file_size)) {
-
-    log_err(std::format("Log file {} is of different size {} bytes than the configured {} bytes!", filename, size, config.m_file_size));
-
-    return DB_ERROR;
-  }
-
-  success = os_file_close(fh);
-  ut_a(success);
-
-  sys.m_fil->node_create(filename.c_str(), config.m_file_size / UNIV_PAGE_SIZE, SRV_LOG_SPACE_FIRST_ID, false);
-
-  return DB_SUCCESS;
-}
-
-/**
  * @brief Creates the system tablespace.
  *
  * @param[in] sys               The instance.
@@ -380,7 +291,7 @@ static DbErr create_system_tablespace(System &sys, const std::string &path) noex
   log_info(std::format("Creating the system tablespace: 'system.idb' of size {} MB ", SYSTEM_IBD_FILE_INITIAL_SIZE / (1024 * 1024)));
 
   bool success{};
-  auto fh = os_file_create(filename.c_str(), OS_FILE_CREATE, OS_FILE_NORMAL, OS_DATA_FILE, sys.m_config.m_fil.m_flush_method, &success);
+  auto fh = os_file_create(filename.c_str(), OS_FILE_CREATE, OS_FILE_NORMAL, sys.m_config.m_fil.m_flush_method, &success);
 
   if (!success && os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
     log_err(std::format("Can't create {}", filename.generic_string()));
@@ -416,7 +327,7 @@ static DbErr open_system_tablespace(System &sys, const std::string &path, lsn_t 
   ut_a(fs::status(filename).type() == fs::file_type::regular);
 
   bool success{};
-  auto fh = os_file_create(filename.c_str(), OS_FILE_OPEN, OS_FILE_NORMAL, OS_DATA_FILE, sys.m_config.m_fil.m_flush_method, &success);
+  auto fh = os_file_create(filename.c_str(), OS_FILE_OPEN, OS_FILE_NORMAL, sys.m_config.m_fil.m_flush_method, &success);
 
   if (!success && os_file_get_last_error(false) != OS_FILE_ALREADY_EXISTS) {
     log_err(std::format("Can't open {}", filename.generic_string()));
@@ -441,7 +352,7 @@ static DbErr open_system_tablespace(System &sys, const std::string &path, lsn_t 
   }
 
   {
-    auto success = sys.m_fil->space_create(filename.c_str(), SYS_TABLESPACE, 0, FIL_TABLESPACE);
+    auto success = sys.m_fil->space_create(filename.c_str(), SYS_TABLESPACE, 0);
     ut_a(success);
     ut_a(sys.m_fil->validate());
   }
@@ -558,17 +469,6 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
 
     mutex_exit(&trx_sys.m_mutex);
 
-    log.acquire();
-
-    if (log.m_checkpoint.m_n_pending_writes || log.m_n_pending_writes) {
-
-      log.release();
-
-      continue;
-    }
-
-    log.release();
-
     if (buf_pool.is_io_pending()) {
 
       continue;
@@ -580,7 +480,7 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
 
     lsn = log.m_lsn;
 
-    if (lsn != log.m_checkpoint.m_last_lsn) {
+    if (lsn != log.m_last_checkpoint_lsn) {
 
       log.release();
 
@@ -602,8 +502,7 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
 
     mutex_exit(&trx_sys.m_mutex);
 
-    sys.m_fil->flush_file_spaces(FIL_TABLESPACE);
-    sys.m_fil->flush_file_spaces(FIL_LOG);
+    sys.m_fil->flush_file_spaces();
 
     /* The call Fil::write_flushed_lsn_to_data_files() will pass the buffer
     pool: therefore it is essential that the buffer pool has been completely
@@ -630,7 +529,7 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
 
   sys.m_fil->write_flushed_lsn_to_data_files(lsn);
 
-  sys.m_fil->flush_file_spaces(FIL_TABLESPACE);
+  sys.m_fil->flush_file_spaces();
 
   sys.m_fil->close_all_files();
 
@@ -641,15 +540,7 @@ static void prepare_for_shutdown(System &sys, ShutdownMode shutdown) noexcept {
 }
 
 void System::start_wal() noexcept {
-  LogWalBackend::Config config;
-
-  config.m_log_dir = m_config.m_log.m_group_home_dir;
-  config.m_log_file = "redo.wal";
-  config.m_pool_size = 4;
-  config.m_max_file_size = off_t(m_config.m_log.m_n_files * m_config.m_log.m_file_size);
-  config.m_n_blocks = std::max<size_t>(16, m_config.m_log.m_buffer_size / config.m_block_size);
-
-  m_log->init_wal_backend(config);
+  m_log->init_wal_backend(m_log->wal_config());
 }
 
 void System::startup_abort(DbErr err) noexcept {
@@ -680,9 +571,6 @@ DbErr System::startup() noexcept {
   const auto file_per_table = m_fil->m_file_per_table;
 
   m_fil->m_file_per_table = false;
-
-  // FIXME: Make this a configurable option
-  ut_d(m_log->m_disable_writes = false);
 
   srv.m_is_being_started = true;
 
@@ -735,77 +623,8 @@ DbErr System::startup() noexcept {
     }
   }
 
-  bool log_opened{};
-  bool log_created{};
-
-  /* Note: Currently we support a single log group (0). */
-  const auto &log_dir = m_config.m_log.m_group_home_dir;
-
-  {
-    auto success = m_fil->space_create(log_dir.c_str(), SRV_LOG_SPACE_FIRST_ID, 0, FIL_LOG);
-    ut_a(success);
-    ut_a(m_fil->validate());
-  }
-
-  for (ulint i{}; i < m_config.m_log.m_n_files; ++i) {
-    namespace fs = std::filesystem;
-
-    fs::path filename(fs::path(log_dir) / std::format("ib_logfile{}", i));
-
-    if (fs::exists(filename) && fs::status(filename).type() == fs::file_type::regular) {
-      err = open_log_file(*this, filename.generic_string());
-      log_opened = true;
-    } else {
-      err = create_log_file(*this, filename.generic_string());
-      log_created = true;
-    }
-
-    if (err != DB_SUCCESS) {
-      startup_abort(err);
-      return err;
-    }
-
-    if (i == 0) {
-      m_log->group_init(i, m_config.m_log.m_n_files, m_config.m_log.m_file_size, SRV_LOG_SPACE_FIRST_ID);
-    }
-
-    if ((log_opened && create_new_db) || (log_opened && log_created)) {
-      log_err(
-        "All log files must be created at the same time. All log files must be"
-        " created also in database creation. If you want bigger or smaller"
-        " log files, shut down the database and make sure there were no errors"
-        " in shutdown. Then delete the existing log files. Reconfigure InnoDB"
-        " and start the database again."
-      );
-
-      startup_abort(DB_ERROR);
-      return DB_ERROR;
-    }
-  }
-
-  /* Open all log files and the system tablespace: we keep them open
-  until database shutdown */
-
-  m_fil->open_log_and_system_tablespace();
-
-  if (log_created && !create_new_db) {
-    if (max_flushed_lsn < lsn_t(1000)) {
-      log_err(
-        "Cannot initialize created log files because data files are corrupt,"
-        " or new data files were created when the database was started previous"
-        " time but the database was not shut down normally after that."
-      );
-
-      startup_abort(DB_ERROR);
-      return DB_ERROR;
-    }
-
-    m_log->acquire();
-
-    recv_reset_logs(max_flushed_lsn, true);
-
-    m_log->release();
-  }
+  /* Keep the system tablespace open until database shutdown. */
+  m_fil->open_system_tablespace();
 
   const auto force_recovery = m_config.m_recv.m_force_recovery;
 
@@ -967,9 +786,9 @@ DbErr System::shutdown(ShutdownMode shutdown) noexcept {
   /* Tell the master thread how much work to do. */
   m_srv->m_fast_shutdown = shutdown;
 
-  /* 1. Flush the buffer pool to disk, write the current lsn to the
-  tablespace header(s), and copy all log data to archive. The step 1 is the
-  real InnoDB shutdown. The remaining steps just free data structures after
+  /* 1. Flush the buffer pool to disk, make a checkpoint and write the
+  current lsn to the tablespace header(s). The step 1 is the real InnoDB
+  shutdown. The remaining steps just free data structures after
   the shutdown. */
 
   if (shutdown == IB_SHUTDOWN_NO_BUFPOOL_FLUSH) {

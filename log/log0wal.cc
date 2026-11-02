@@ -19,6 +19,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <wal/io.h>
 #include <wal/wal.h>
+#include "mach0data.h"
 #include "ut0ut.h"
 
 #include <fcntl.h>
@@ -26,48 +27,53 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include <sys/uio.h>
 #include <unistd.h>
 
+#include <array>
 #include <filesystem>
 #include <iostream>
+#include <mutex>
 
+#include <util/checksum.h>
 #include <util/logger.h>
 
-/** Global logger for WAL-CPP library */
+/** The logger wal-cpp declares extern; the library requires this definition. */
 util::Logger<util::MT_logger_writer> g_logger(util::MT_logger_writer{std::cerr}, util::Log_level::Info);
 
 struct LogWalBackend::Impl {
   /**
    * Write blocks to the WAL file. Log_file::write() places each block at its
-   * own offset and returns the number of payload bytes written, which is what
-   * WAL-CPP expects.
+   * own offset. flush() tracks how far the log is written and synced: the
+   * byte count returned here does not tell.
    */
-  wal::Result<lsn_t> write(LogWalBackend &backend, std::span<struct iovec> iovecs) noexcept {
+  wal::Result<lsn_t> write(std::span<struct iovec> iovecs) noexcept {
     if (m_file == nullptr || iovecs.empty()) {
       return std::unexpected(wal::Status::IO_error);
     }
 
-    auto result = m_file->write(iovecs);
-
-    if (result.has_value()) {
-      backend.m_flushed_lsn.fetch_add(result.value());
-    }
-
-    return result;
+    return m_file->write(iovecs);
   }
 
-  /** Make the written blocks durable. */
-  wal::Result<bool> sync(LogWalBackend &backend) noexcept {
+  /** Make the written blocks durable. Out of space, wait until space is made available. */
+  wal::Result<bool> sync() noexcept {
     if (m_file == nullptr) {
       return std::unexpected(wal::Status::IO_error);
     }
 
-    if (::fdatasync(m_file->m_fd) != 0) {
-      return std::unexpected(wal::Status::IO_error);
+    while (::fdatasync(m_file->m_fd) != 0) {
+      if (errno == ENOSPC || errno == EDQUOT) {
+        wal::Log_file::wait_for_space("fdatasync");
+      } else if (errno != EINTR) {
+        return std::unexpected(wal::Status::IO_error);
+      }
     }
-
-    backend.m_synced_lsn.store(backend.m_flushed_lsn.load());
 
     return true;
   }
+
+  /** Serializes flush(), which writes all buffered log and moves the flushed and synced LSNs. */
+  std::mutex m_flush_mutex;
+
+  /** Serializes appends with the write of the active buffer. Order: m_flush_mutex, then this. */
+  std::mutex m_append_mutex;
 
   /** The WAL file: blocks are written at block_no * block_size, wrapping at the configured size. */
   std::unique_ptr<wal::Log_file> m_file;
@@ -132,17 +138,34 @@ lsn_t LogWalBackend::append(const byte *data, ulint len) noexcept {
   }
 
   /* Synchronous mode: when the active buffer fills up it is written inline
-  through the callback registered by start_io(). */
-  auto result = m_impl->m_wal->append(std::span<const std::byte>(reinterpret_cast<const std::byte *>(data), len));
+  through the callback registered by start_io(). The caller holds the log
+  mutex, so the pieces of a big record group stay contiguous. */
+  lsn_t new_lsn{};
 
-  if (result.has_value()) {
-    auto slot = result.value();
-    lsn_t new_lsn = slot.m_lsn + slot.m_len;
-    m_lsn.store(new_lsn);
-    return new_lsn;
+  std::lock_guard<std::mutex> guard(m_impl->m_append_mutex);
+
+  m_stats.m_n_bytes += len;
+
+  while (len > 0) {
+    const auto n = std::min(len, MAX_APPEND);
+    auto result = m_impl->m_wal->append(std::span<const std::byte>(reinterpret_cast<const std::byte *>(data), n));
+
+    if (!result.has_value()) {
+      return 0;
+    }
+
+    const auto slot = result.value();
+
+    new_lsn = slot.m_lsn + slot.m_len;
+    data += n;
+    len -= n;
   }
 
-  return 0;
+  m_lsn.store(new_lsn);
+
+  ++m_stats.m_n_appends;
+
+  return new_lsn;
 }
 
 bool LogWalBackend::flush(lsn_t lsn, bool sync_to_disk) noexcept {
@@ -150,28 +173,232 @@ bool LogWalBackend::flush(lsn_t lsn, bool sync_to_disk) noexcept {
     return false;
   }
 
-  // Create write callback
-  auto write_cb = [this](std::span<struct iovec> iovecs) -> wal::Result<lsn_t> {
-    return m_impl->write(*this, iovecs);
-  };
+  std::lock_guard<std::mutex> guard(m_impl->m_flush_mutex);
 
-  // Flush to storage
-  auto result = m_impl->m_wal->write_to_store(write_cb);
-
-  if (!result.has_value()) {
-    return false;
+  if ((sync_to_disk ? m_synced_lsn.load() : m_flushed_lsn.load()) >= std::min(lsn, m_lsn.load())) {
+    return true;
   }
 
-  // Sync to disk if requested
-  if (sync_to_disk) {
-    auto sync_cb = [this]() -> wal::Result<bool> {
-      return m_impl->sync(*this);
-    };
+  auto write_cb = [this](std::span<struct iovec> iovecs) -> wal::Result<lsn_t> {
+    return m_impl->write(iovecs);
+  };
 
-    m_impl->m_wal->request_sync(wal::Sync_type::Fdatasync, &sync_cb);
+  lsn_t target{};
+
+  {
+    /* Write the full buffers waiting for I/O, then the active buffer: that
+    is all the log appended up to target. */
+    std::lock_guard<std::mutex> append_guard(m_impl->m_append_mutex);
+
+    target = m_lsn.load();
+
+    if (!m_impl->m_wal->write_to_store(write_cb).has_value() || !m_impl->m_wal->write_active(write_cb).has_value()) {
+      log_err("Writing the WAL buffers failed");
+      return false;
+    }
+  }
+
+  m_flushed_lsn.store(std::max(m_flushed_lsn.load(), target));
+
+  ++m_stats.m_n_writes;
+
+  /* wal::Log::request_sync() syncs only through a thread pool, which the
+  engine does not give it: sync here. */
+  if (sync_to_disk) {
+    if (!m_impl->sync().has_value()) {
+      log_err("fdatasync() of the WAL file failed");
+      return false;
+    }
+
+    m_synced_lsn.store(std::max(m_synced_lsn.load(), target));
+
+    ++m_stats.m_n_syncs;
   }
 
   return true;
+}
+
+void LogWalBackend::discard_up_to(lsn_t lsn) noexcept {
+  if (m_config.m_max_file_size != 0 || m_impl->m_file == nullptr) {
+    return;
+  }
+
+  const wal::Buffer::Config buffer_config(m_config.m_n_blocks, m_config.m_block_size);
+  const auto block_no = lsn / buffer_config.get_data_size_in_block();
+  const auto off = off_t(block_no * m_config.m_block_size);
+
+  /* The block that holds lsn stays: recovery reads from it. */
+  if (off <= m_discarded_off) {
+    return;
+  }
+
+  if (::fallocate(m_impl->m_file->m_fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, m_discarded_off, off - m_discarded_off) == 0) {
+    m_discarded_off = off;
+  } else if (errno != EOPNOTSUPP) {
+    log_warn(std::format("Cannot give back the space of the WAL before LSN {}: {}", lsn, strerror(errno)));
+  }
+}
+
+lsn_t LogWalBackend::read(const Config &config, lsn_t start_lsn, const Consumer &consume) noexcept {
+  const auto path = std::filesystem::path(config.m_log_dir) / config.m_log_file;
+  const auto fd = ::open(path.c_str(), O_RDONLY);
+
+  if (fd == -1) {
+    return start_lsn;
+  }
+
+  /* On disk a block is its header, its data area and the CRC32C of the data
+  area. Block n is at n * block_size, modulo the file size if the log wraps.
+  The header is in host byte order. */
+  const wal::Buffer::Config buffer_config(config.m_n_blocks, config.m_block_size);
+  const auto data_size = lsn_t(buffer_config.get_data_size_in_block());
+  const auto header_size = sizeof(wal::Block_header::Data);
+  const auto wraps = config.m_max_file_size != 0;
+  const auto n_file_blocks = wraps ? static_cast<lsn_t>(config.m_max_file_size) / config.m_block_size : LSN_MAX;
+  constexpr auto BLOCK_NO_MASK = ~wal::Block_header::FLUSH_BIT_MASK;
+
+  std::vector<byte> block(config.m_block_size);
+  util::Checksum checksum(util::ChecksumAlgorithm::CRC32C);
+
+  auto lsn = start_lsn;
+  auto block_no = lsn / data_size;
+  auto offset = lsn % data_size;
+
+  for (lsn_t n{}; n < n_file_blocks; ++n, ++block_no, offset = 0) {
+    const auto pos = block_no * config.m_block_size;
+    const auto off = off_t(wraps ? pos % lsn_t(config.m_max_file_size) : pos);
+
+    if (::pread(fd, block.data(), block.size(), off) != ssize_t(block.size())) {
+      break;
+    }
+
+    wal::Block_header::Data header;
+
+    memcpy(&header, block.data(), header_size);
+
+    /* A block of an earlier lap through the file, or one never written. */
+    if ((header.m_block_no & BLOCK_NO_MASK) != (wal::block_no_t(block_no) & BLOCK_NO_MASK)) {
+      break;
+    }
+
+    const auto len = lsn_t(header.m_len);
+
+    if (len > data_size || len < offset) {
+      break;
+    }
+
+    const auto data = block.data() + header_size;
+    wal::crc32_t crc;
+
+    memcpy(&crc, data + data_size, sizeof(crc));
+
+    checksum.reset();
+    checksum.update(data, data_size);
+
+    if (checksum.value() != crc) {
+      break;
+    }
+
+    if (len > offset) {
+      if (!consume(data + offset, ulint(len - offset))) {
+        break;
+      }
+
+      lsn += len - offset;
+    }
+
+    if (len < data_size) {
+      break;
+    }
+  }
+
+  ::close(fd);
+
+  return lsn;
+}
+
+namespace {
+
+/** A checkpoint slot: number, LSN, then the CRC32C of both, big endian. */
+constexpr ulint CHECKPOINT_SLOT_SIZE = 512;
+constexpr ulint CHECKPOINT_NO = 0;
+constexpr ulint CHECKPOINT_LSN = 8;
+constexpr ulint CHECKPOINT_CRC = 16;
+
+uint32_t checkpoint_crc(const byte *slot) noexcept {
+  util::Checksum checksum(util::ChecksumAlgorithm::CRC32C);
+
+  checksum.update(slot, CHECKPOINT_CRC);
+
+  return checksum.value();
+}
+
+std::filesystem::path checkpoint_path(const LogWalBackend::Config &config) noexcept {
+  return std::filesystem::path(config.m_log_dir) / LogWalBackend::CHECKPOINT_FILE;
+}
+
+}  // namespace
+
+bool LogWalBackend::write_checkpoint(const Config &config, uint64_t no, lsn_t lsn) noexcept {
+  const auto path = checkpoint_path(config);
+  const auto fd = ::open(path.c_str(), O_RDWR | O_CREAT, 0644);
+
+  if (fd == -1) {
+    log_err(std::format("Cannot open the checkpoint file {}", path.string()));
+    return false;
+  }
+
+  std::array<byte, CHECKPOINT_SLOT_SIZE> slot{};
+
+  mach_write_to_8(slot.data() + CHECKPOINT_NO, no);
+  mach_write_to_8(slot.data() + CHECKPOINT_LSN, lsn);
+  mach_write_to_4(slot.data() + CHECKPOINT_CRC, checkpoint_crc(slot.data()));
+
+  const auto off = off_t((no % 2) * CHECKPOINT_SLOT_SIZE);
+  const auto ok = ::pwrite(fd, slot.data(), slot.size(), off) == ssize_t(slot.size()) && ::fdatasync(fd) == 0;
+
+  ::close(fd);
+
+  if (!ok) {
+    log_err(std::format("Cannot write the checkpoint file {}", path.string()));
+  }
+
+  return ok;
+}
+
+bool LogWalBackend::read_checkpoint(const Config &config, uint64_t &no, lsn_t &lsn) noexcept {
+  const auto path = checkpoint_path(config);
+  const auto fd = ::open(path.c_str(), O_RDONLY);
+
+  if (fd == -1) {
+    return false;
+  }
+
+  bool found{};
+
+  for (ulint i{}; i < 2; ++i) {
+    std::array<byte, CHECKPOINT_SLOT_SIZE> slot{};
+
+    if (::pread(fd, slot.data(), slot.size(), off_t(i * CHECKPOINT_SLOT_SIZE)) != ssize_t(slot.size())) {
+      continue;
+    }
+
+    if (mach_read_from_4(slot.data() + CHECKPOINT_CRC) != checkpoint_crc(slot.data())) {
+      continue;
+    }
+
+    const auto slot_no = mach_read_from_8(slot.data() + CHECKPOINT_NO);
+
+    if (!found || slot_no > no) {
+      no = slot_no;
+      lsn = mach_read_from_8(slot.data() + CHECKPOINT_LSN);
+      found = true;
+    }
+  }
+
+  ::close(fd);
+
+  return found;
 }
 
 void LogWalBackend::start_io() noexcept {
@@ -180,7 +407,7 @@ void LogWalBackend::start_io() noexcept {
   }
 
   auto write_cb = [this](std::span<struct iovec> iovecs) -> wal::Result<lsn_t> {
-    return m_impl->write(*this, iovecs);
+    return m_impl->write(iovecs);
   };
 
   m_impl->m_wal->start_io(write_cb, nullptr);
@@ -192,14 +419,18 @@ void LogWalBackend::stop_io() noexcept {
   }
 
   auto write_cb = [this](std::span<struct iovec> iovecs) -> wal::Result<lsn_t> {
-    return m_impl->write(*this, iovecs);
+    return m_impl->write(iovecs);
   };
 
   auto sync_cb = [this]() -> wal::Result<bool> {
-    return m_impl->sync(*this);
+    return m_impl->sync();
   };
 
   (void) m_impl->m_wal->shutdown(write_cb, &sync_cb);
+}
+
+ulint LogWalBackend::get_n_buffer_waits() const noexcept {
+  return m_impl->m_wal == nullptr ? 0 : m_impl->m_wal->get_sync_write_count();
 }
 
 void LogWalBackend::wait_for_io_idle() noexcept {
@@ -207,4 +438,3 @@ void LogWalBackend::wait_for_io_idle() noexcept {
     m_impl->m_wal->wait_for_io_idle();
   }
 }
-

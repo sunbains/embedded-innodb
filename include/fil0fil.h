@@ -75,11 +75,6 @@ struct Fil {
   @return	latch protecting storage allocation */
   RwLock *space_get_latch(space_id_t space_id);
 
-  /** Returns the type of a file space.
-  @param[in] space_id             Tablespace ID
-  @return	FIL_TABLESPACE or FIL_LOG */
-  ulint space_get_type(space_id_t space_id);
-
   /** Appends a new file to the chain of files of a space. File must be closed.
   @param[in] name                File name (file must be closed)
   @param[in] size                File size in database blocks, rounded
@@ -93,9 +88,8 @@ struct Fil {
   @param[in] name                 Tablespace name
   @param[in] space_id             Tablespace ID
   @param[in] flags                Tablespace flags
-  @param[in] purpose              FIL_TABLESPACE, or FIL_LOG if log
   @return	true if success */
-  bool space_create(const char *name, space_id_t space_id, ulint flags, FilType type);
+  bool space_create(const char *name, space_id_t space_id, ulint flags);
 
   /** Returns the size of the space in pages. The tablespace must be cached in the
   memory cache.
@@ -116,12 +110,10 @@ struct Fil {
   @return	true if the address is meaningful */
   bool check_adress_in_tablespace(space_id_t space_id, page_no_t page_no);
 
-  /** Opens all log files and system tablespace data files. They stay open until
-  the database server shutdown. This should be called at a server startup after
-  the space objects for the log and the system tablespace have been created. The
-  purpose of this operation is to make sure we never run out of file descriptors
-  if we need to read from the insert buffer or to write to the log. */
-  void open_log_and_system_tablespace();
+  /** Opens the system tablespace data files. They stay open until the database
+  server shutdown. This should be called at a server startup after the space
+  object for the system tablespace has been created. */
+  void open_system_tablespace();
 
   /** Closes all open files. There must not be any pending i/o's or not flushed
   modifications in the files. */
@@ -132,8 +124,8 @@ struct Fil {
   @param[in] max_id               Maximum known tablespace ID.  */
   void set_max_space_id_if_bigger(space_id_t max_id);
 
-  /** Writes the flushed lsn and the latest archived log number to the page
-  header of the first page of each data file in the system tablespace.
+  /** Writes the flushed lsn to the page header of the first page of each data
+  file in the system tablespace.
   @param[in] lsn                  LSN to write.
   @return	DB_SUCCESS or error number */
   DbErr write_flushed_lsn_to_data_files(lsn_t lsn);
@@ -395,18 +387,12 @@ struct Fil {
    * Flushes to disk possible writes cached by the OS. If the space does not
    * exist or is being dropped, does not do anything.
    *
-   * @param[in] space_id          File space id (this can be a group of log files or
-   *  a tablespace of the database)
+   * @param[in] space_id          Tablespace id
    */
   void flush(space_id_t space_id);
 
-  /**
-   * Flushes to disk writes in file spaces of the given type possibly cached by
-   * the OS.
-   *
-   * @param[in] purpose           FIL_TABLESPACE, FIL_LOG
-   */
-  void flush_file_spaces(ulint purpose);
+  /** Flushes to disk the writes to the tablespaces possibly cached by the OS. */
+  void flush_file_spaces();
 
   /**
    * Checks the consistency of the tablespace cache.
@@ -474,14 +460,11 @@ struct Fil {
    */
   bool mkdir(const char *dbname); /** in: database name */
 
-  /** @return Number of pending redo log flushes */
-  ulint get_pending_log_flushes() const { return m_n_pending_log_flushes; }
-
   /** @return Number of pending tablespace flushes */
-  ulint get_pending_tablespace_flushes() const { return m_n_pending_tablespace_flushes; }
+  ulint get_pending_flushes() const { return m_n_pending_flushes; }
 
-  /** @return The number of fsyncs done to the log */
-  ulint get_log_flushes() const { return m_n_log_flushes; }
+  /** @return The number of fsyncs done to the tablespaces */
+  ulint get_flushes() const { return m_n_flushes; }
 
  private:
   /**
@@ -603,8 +586,8 @@ struct Fil {
   ulint assign_new_space_id();
 
   /**
-  * @brief Writes the flushed lsn and the latest archived log number to the page header
-  * of the first page of a data file of the system tablespace (space 0),
+  * @brief Writes the flushed lsn to the page header of the first page of a data
+  * file of the system tablespace (space 0),
   * which is uncompressed.
   *
   * @param sum_of_sizes in: combined size of previous files in space, in database pages
@@ -703,14 +686,11 @@ struct Fil {
   );
 
  private:
-  /** The number of fsyncs done to the log */
-  ulint m_n_log_flushes{};
-
-  /** Number of pending redo log flushes */
-  ulint m_n_pending_log_flushes{};
+  /** The number of fsyncs done to the tablespaces */
+  ulint m_n_flushes{};
 
   /** Number of pending tablespace flushes */
-  ulint m_n_pending_tablespace_flushes{};
+  ulint m_n_pending_flushes{};
 
   /** When program is run, the default directory "." is the current datadir,
   but in ibbackup we must set it explicitly; the path must NOT contain the

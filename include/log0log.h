@@ -20,344 +20,178 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include "srv0sys.h"
 
 #include "innodb0types.h"
-#include "log0types.h"
-#include "log_buffer.h"
 #include "log0wal.h"
 #include "srv0srv.h"
 #include "sync0sync.h"
 
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include <vector>
 
+/** The redo log. Mini-transactions append their log to the WAL (redo.wal),
+whose LSN counts log bytes. A checkpoint (redo.ckpt) says where recovery
+starts reading: every page modified below it is in the tablespaces. */
 struct Log {
   /** The instance this sub-system belongs to. */
   System &m_sys;
 
-
-  /**
-   * Constructor
-   *
-   * @param[in] size The size of the log buffer in bytes. Must be a multiple of sizeof(LogPhyBlock).
-   */
   explicit Log(System &sys) noexcept;
 
-  /**
-   * Destructor */
   ~Log() noexcept;
 
-  /** Opens the files that make up the log virtual file.
-   *
-   * @param[in] n_files The number of files to open.
-   * @param[in] file_size The size of each file in bytes.
-   *
-   * @return True if the files are opened successfully, false otherwise.
-   */
-  [[nodiscard]] bool open(ulint n_files, off_t file_size) noexcept;
-
-  /**
-   * Closes the files that make up the log virtual file.
-   *
-   * @param[in] recovery Recovery flag.
-   *
-   * @return True if the files are closed successfully, false otherwise.
-   */
-  [[nodiscard]] lsn_t close(IbRecovery recovery) noexcept;
-
-  /**
-   * Acquire the log mutex.
-   */
+  /** Acquire the log mutex. */
   void acquire() const noexcept {
     ut_ad(!mutex_own(&m_mutex));
     mutex_enter(&m_mutex);
   }
 
-  /**
-   * Releases the log mutex.
-   */
+  /** Releases the log mutex. */
   void release() const noexcept {
     ut_ad(mutex_own(&m_mutex));
     mutex_exit(&m_mutex);
   }
 
-  /**
-   * Reads a log segment to a buffer.
-   *
-   * @param[in, out] buffer The buffer where the log segment will be read into.
-   * @param[in] start_lsn The start lsn of the log segment to read.
-   * @param[in] end_lsn The end lsn of the log segment to read.
-   * @param[out] scanned_lsn The lsn up to which the log segment has been read.
-   *
-   * @return True if the log segment is read successfully, false otherwise.
-   */
-  [[nodiscard]] bool read(LogBuffer &buffer, lsn_t start_lsn, lsn_t end_lsn, lsn_t *scanned_lsn) noexcept;
-
-  /** Gets the current lsn.
-  *
-  * @return	current lsn
-  */
+  /** @return the current LSN: the end of the log appended so far. */
   [[nodiscard]] lsn_t get_lsn() const noexcept { return m_lsn.load(); }
 
   /**
-  * @brief Completes an i/o to a log file.
-  */
-  void io_complete(std::function<void()> callback) noexcept;
-
-  /**
-  * @brief Sets the global variable log_fsp_current_free_limit.
-  * Also makes a checkpoint, so that we know that the limit has been written to a log checkpoint field on disk.
-  */
-  void do_checkpoint() noexcept;
-
-  /**
-  * @brief Appemd to the log buffer.
-  * It is assumed that the caller holds the log mutex.
-  *
-  * @param[in] ptr Data to append
-  * @param[in] len Length of the data to append.
-  */
-  void append(const byte *ptr, ulint len) noexcept;
-
-  /**
-  * @brief Checks that the log has been written to the log
-  * file up to the last log entry written to the buffer. If there is
-  * a flush running, it waits and checks if the flush flushed enough.
-  * If not, starts a new flush.
-  *
-  * @param[in] lsn The log sequence number up to which the log should be
-  *   written. Use IB_UINT64_T_MAX if not specified.
-  * @param[in] async True if the operation should be asynchronous.
-  * @param[in]  sync_to_disk True if we want the written log also to be forced to disk.
-  */
-  void write_up_to(lsn_t lsn, bool async, bool sync_to_disk) noexcept;
-
-  /**
-  * @brief Does a synchronous flush of the log buffer to disk.
-  */
-  void write() noexcept;
-
-  /**
-  * @brief Writes the log buffer to the log file and if 'flush' is set
-  * it forces a flush of the log file as well. This is meant to be
-  * called from background master thread only as it does not wait
-  * for the write (+ possible flush) to finish.
-  *
-  * @param[in] flush True if the logs should be flushed to disk.
-  */
-  void background_write(bool sync_to_disk) noexcept;
-
-  /**
-  * @brief Advances the smallest lsn for which there are unflushed
-  * dirty blocks in the buffer pool and also may make a new checkpoint.
-  * Note: This function may only be called if the calling thread
-  * owns no synchronization objects!
-  *
-  * @param[in] new_oldest Try to advance oldest_modified_lsn at least to this lsn.
-  * @param[in] sync True if synchronous operation is desired.
-  *
-  * @return False if there was a flush batch of the same type running,
-  * which means that we could not start this flush batch.
-  */
-  [[nodiscard]] bool preflush_pool_modified_pages(lsn_t new_oldest, bool sync) noexcept;
-
-  /**
-  * @brief Makes a checkpoint.
-  * Note: This function does not flush dirty blocks from the buffer pool,
-  * it only checks the lsn of the oldest modification in the pool and
-  * writes information about the lsn in log files.
-  *
-  * @param[in] sync True if synchronous operation is desired.
-  * @param[in] write_always The function normally checks if the new
-  *   checkpoint would have a greater lsn than the previous one:
-  *   if not, then no physical write is done. By setting this parameter
-  *   true, a physical write will always be made to log files.
-  *
-  * @return True if success, false if a checkpoint write was already running.
-  */
-  [[nodiscard]] bool checkpoint(bool sync, bool write_always) noexcept;
-
-  /**
-  * @brief Makes a checkpoint at a given lsn or later.
-  *
-  * @param[in] lsn Make a checkpoint at this or a later lsn. Use IB_UINT64_T_MAX
-  * to make a checkpoint at the latest lsn.
-  * @param[in] write_always The function normally checks if the new checkpoint would
-  * have a greater lsn than the previous one: if not, then no physical write is done.
-  * By setting this parameter true, a physical write will always be made to log files.
-  */
-  void make_checkpoint_at(lsn_t lsn, bool write_always) noexcept;
-
-  /**
-  * Checks that there is enough free space in the log vfile to start a new query step.
-  * Flushes the log buffer or makes a new checkpoint if necessary. NOTE: this
-  * function may only be called if the calling thread doesn't own any latches.
-  */
-  void check_margins() noexcept;
-
-  /**
-  * @brief Peeks the current lsn.
-  *
-  * @param lsn The output parameter where the current lsn will be stored if the function returns true.
-  * @return True if success, false if could not get the log system mutex.
-  */
+   * Peeks the current LSN.
+   *
+   * @param[out] lsn            The current LSN, if the function returns true.
+   *
+   * @return true on success, false if the log mutex was taken.
+   */
   [[nodiscard]] bool peek_lsn(lsn_t *lsn) noexcept;
 
   /**
-  * Shutdown log system but doesn't release all the memory.
-  */
-  void shutdown() noexcept;
+   * Writes the log up to lsn to the WAL file.
+   *
+   * @param[in] lsn             Write up to this LSN; IB_UINT64_T_MAX: all.
+   * @param[in] sync_to_disk    Also make it durable.
+   */
+  void write_up_to(lsn_t lsn, bool sync_to_disk) noexcept;
+
+  /** Write the whole log to the WAL, and sync it if flush is set. */
+  void buffer_sync_in_background(bool flush) noexcept { write_up_to(get_lsn(), flush); }
+
+  /** Write and sync the whole log to the WAL. */
+  void buffer_flush_to_disk() noexcept { write_up_to(get_lsn(), true); }
 
   /**
-  * Create the log instance.
-  *
-  * @param[in] log_buffer_size The size of the log buffer in bytes.
-  *
-  * @return The log instance.
-  */
-  /**
-  *  Free the log system data structures.
-  *
-  * @param[in,own] log Log instance to destroy.
-  */
-  /**
-   * Returns the oldest modified block LSN in the pool, or m_lsn if none exists.
+   * Makes a checkpoint at the oldest modification in the buffer pool. Does not
+   * flush pages.
    *
-   * @return LSN of oldest modification
+   * @param[in] write_always    Write it even if it would not move.
+   *
+   * @return true on success.
    */
+  [[nodiscard]] bool checkpoint(bool write_always) noexcept;
+
+  /**
+   * Flushes the pages modified below lsn and makes a checkpoint.
+   *
+   * @param[in] lsn             Flush up to here; IB_UINT64_T_MAX: all.
+   * @param[in] write_always    Write the checkpoint even if it would not move.
+   */
+  void make_checkpoint_at(lsn_t lsn, bool write_always) noexcept;
+
+  /**
+   * Writes a checkpoint at lsn. The log up to lsn is made durable and the
+   * tablespaces are synced first: every page modified below lsn must be
+   * written. Then the WAL before lsn gives its space back.
+   *
+   * @param[in] lsn             Recovery starts reading the log here.
+   *
+   * @return true if the checkpoint was written.
+   */
+  [[nodiscard]] bool write_checkpoint(lsn_t lsn) noexcept;
+
+  /**
+   * Reads the latest checkpoint and sets the number of the next one.
+   *
+   * @param[out] lsn            Checkpoint LSN.
+   * @param[out] no             Checkpoint number.
+   *
+   * @return false if there is no checkpoint file: a database created before
+   *  the WAL kept checkpoints.
+   */
+  [[nodiscard]] bool read_checkpoint(lsn_t &lsn, uint64_t &no) noexcept;
+
+  /** @return the oldest modification LSN in the buffer pool, or m_lsn if no page is dirty. */
   [[nodiscard]] lsn_t buf_pool_get_oldest_modification() noexcept;
 
-  /**
-    * Calculates the recommended highest values for lsn - last_checkpoint_lsn,
-    * lsn - buf_get_oldest_modification(), and lsn - max_archive_lsn_age.
-    *
-    * @return error value false if the smallest vfile is too small to
-    *  accommodate the number of OS threads in the database server */
-  [[nodiscard]] bool calc_max_ages() noexcept;
+  /** @return the configuration of the WAL: its directory, file and buffers. */
+  [[nodiscard]] LogWalBackend::Config wal_config() const noexcept;
 
   /**
-   * Completes a checkpoint.
-   */
-  void sync_checkpoint_complete() noexcept;
-
-  /**
-   * Completes an asynchronous checkpoint info write i/o to a log file.
-   */
-  void async_checkpoint_complete() noexcept;
-
-  /**
-   * Writes the checkpoint info to a vfile header.
+   * Initialize the WAL backend and write a checkpoint at its start LSN. The
+   * WAL starts at a block boundary, past the end of the log recovery read:
+   * the checkpoint makes the next recovery read from there. The buffer pool
+   * must be clean, the log before the start LSN is then no longer needed.
    *
-   */
-  void checkpoint() noexcept;
-
-  /** Current log sequence number. */
-  std::atomic<lsn_t> m_lsn{};
-
-  /** Log buffer for reading and writing log records. */
-  LogBuffer m_buffer;
-
-  /** Mutex protecting the log */
-  mutable Mutex m_mutex{};
-
-  /** Log virtual file */
-  LogVfile m_vfile;
-
-  /** First LSN not yet written to the log file; for this
-  to be advanced, it is enough that the write I/O has been completed. */
-  lsn_t m_lwm{};
-
-  /** End LSN for the current running write */
-  lsn_t m_current_write_lsn{};
-
-  /** End LSN for the current running write + flush operation */
-  lsn_t m_current_flush_lsn{};
-
-  /** How far we have written the log AND forced to disk */
-  lsn_t m_forced_to_disk_lsn{};
-
-  /** This event is in the reset state when a sync or a write is
-  running; a thread should wait for this without owning the log
-  mutex, but NOTE that to set or reset this event, the thread MUST
-  own the log mutex! */
-  CondVar *m_no_flush_event{};
-
-  /** This event is reset when the flush or write has not yet completed.
-  When this is set; a thread should wait for this without owning
-  the log mutex, but NOTE that to set or reset this event, the thread
-  MUST own the log mutex! */
-  CondVar *m_one_flushed_event{};
-
-  /** Total number of calls to append() */
-  size_t m_log_write_requests{};
-
-  /** Fields involved in checkpoints @{ */
-  LogCheckpoint m_checkpoint{};
-
-  /** Disable writes to the log file */
-  bool m_disable_writes{false};
-
-  /**
-   * Initialize the WAL backend.
    * @param[in] config Configuration for the WAL backend.
    */
   void init_wal_backend(const LogWalBackend::Config &config) noexcept;
 
+  /** Writes and syncs the log and stops the WAL. */
+  void shutdown() noexcept;
+
   /**
-   * Get the WAL backend.
-   * @return Pointer to the WAL backend, or nullptr if not initialized.
+   * Appends the log of a mini-transaction that fits in one block of its log
+   * buffer. The caller holds the log mutex.
+   *
+   * @param[in] data            The log.
+   * @param[in] len             Its length.
+   * @param[out] start_lsn      LSN of the start of the log.
+   *
+   * @return LSN of the end of the log, 0 if the WAL is not started.
    */
-  [[nodiscard]] LogWalBackend *get_wal_backend() noexcept { return m_wal_backend.get(); }
+  [[nodiscard]] lsn_t reserve_and_write_fast(byte *data, ulint len, lsn_t *start_lsn) noexcept;
 
-  // Methods used by callers - implemented using WAL-CPP
-  void free_check() noexcept {}
-  lsn_t reserve_and_write_fast(byte *data, ulint len, lsn_t *start_lsn) noexcept;
-  lsn_t reserve_and_open(ulint len) noexcept;
+  /**
+   * Starts appending the log of a mini-transaction in pieces: acquires the
+   * log mutex, which the caller releases after close().
+   *
+   * @param[in] len             Length of the log.
+   *
+   * @return LSN of the start of the log.
+   */
+  [[nodiscard]] lsn_t reserve_and_open(ulint len) noexcept;
+
+  /**
+   * Adds a piece of the log that reserve_and_open() started.
+   *
+   * @param[in] data            The piece.
+   * @param[in] len             Its length.
+   */
   void write_low(const byte *data, ulint len) noexcept;
-  static void var_init() noexcept {}
-  void refresh_stats() noexcept {}
-  /** Write the log buffer to the WAL in the background, and sync it if flush is set. */
-  void buffer_sync_in_background(bool flush) noexcept { write_up_to(get_lsn(), true, flush); }
 
-  /** Write and sync the whole log buffer to the WAL. */
-  void buffer_flush_to_disk() noexcept { write_up_to(get_lsn(), false, true); }
+  /**
+   * Appends the log that reserve_and_open() started.
+   *
+   * @return LSN of the end of the log.
+   */
+  [[nodiscard]] lsn_t close() noexcept;
 
-  /** @return the redo log capacity in bytes, used to pace the page flushing. */
-  [[nodiscard]] ulint get_capacity() const noexcept;
-  void group_init([[maybe_unused]] ulint i, [[maybe_unused]] ulint n_files, [[maybe_unused]] off_t file_size, [[maybe_unused]] ulint space_id) noexcept {}
-  void read_log_segment([[maybe_unused]] byte *buf, [[maybe_unused]] lsn_t start, [[maybe_unused]] lsn_t end, [[maybe_unused]] lsn_t *scanned) noexcept {}
-  bool read_checkpoint([[maybe_unused]] lsn_t &lsn, [[maybe_unused]] uint64_t &no) noexcept { return false; }
+  /** Current log sequence number. */
+  std::atomic<lsn_t> m_lsn{};
 
-  /** WAL backend using wal::Log */
+  /** Mutex protecting the log */
+  mutable Mutex m_mutex{};
+
+  /** LSN of the last checkpoint, protected by m_mutex. */
+  lsn_t m_last_checkpoint_lsn{};
+
+  /** Number of the next checkpoint. */
+  uint64_t m_next_checkpoint_no{};
+
+  /** Serializes checkpoints. */
+  std::mutex m_checkpoint_mutex{};
+
+  /** The WAL, created when the log LSN is known: see init_wal_backend(). */
   std::unique_ptr<LogWalBackend> m_wal_backend{};
 
-  /** Pending data for slow path (reserve_and_open/write_low/close) */
+  /** Log of the mini-transaction being appended in pieces. */
   std::vector<byte> m_pending_data{};
-
-  /** Start LSN for pending data */
-  lsn_t m_pending_start_lsn{};
-
-  // Stub member variables needed by callers
-  ulint m_n_log_ios{};
-  ulint m_n_pending_writes{};
-  byte *m_buf{};
-  ulint m_buf_size{};
-  lsn_t m_next_checkpoint_lsn{};
-  uint64_t m_next_checkpoint_no{};
-  ulint m_buf_free{};
-  ulint m_buf_next_to_write{};
-  lsn_t m_written_to_some_lsn{};
-  lsn_t m_written_to_all_lsn{};
-  ulint m_max_buf_free{};
-  bool m_check_flush_or_checkpoint{};
-  lsn_t m_flushed_to_disk_lsn{};
-  lsn_t m_write_lsn{};
-  ulint m_write_end_offset{};
-  bool m_one_flushed{};
-  time_t m_last_printout_time{};
-  ulint m_n_log_ios_old{};
 };
-
-struct Log;
-
-constexpr ulint LOG_WAIT_ONE_GROUP = 1;
-
-

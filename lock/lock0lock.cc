@@ -1398,11 +1398,19 @@ void LockSys::rec_discard(Lock *in_lock) noexcept {
   ut_ad(mutex_own(&m_sys.m_trx_sys->m_mutex));
   ut_ad(in_lock->type() == LOCK_REC);
 
-  auto trx = in_lock->m_trx;
-  const auto n = m_rec_locks.erase(in_lock->page_id());
-  ut_a(n == 1);
+  auto it = m_rec_locks.find(in_lock->page_id());
+  ut_a(it != m_rec_locks.end());
 
-  trx->m_trx_locks.remove(in_lock);
+  /* Other locks on the page stay: drop the page entry only with its last lock. */
+  auto &rec_locks = it->second;
+
+  rec_locks.remove(in_lock);
+
+  if (rec_locks.empty()) {
+    m_rec_locks.erase(it);
+  }
+
+  in_lock->m_trx->m_trx_locks.remove(in_lock);
 }
 
 void LockSys::rec_free_all_from_discard_page(PageId page_id) noexcept {

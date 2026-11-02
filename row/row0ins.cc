@@ -1485,8 +1485,6 @@ DbErr RowInsert::index_entry_low(ulint mode, const Index *index, DTuple *entry, 
   BigRec big_rec{};
   BtreeCursor btr_cur{};
 
-  m_sys.m_log->free_check();
-
   Mtr mtr;
 
   mtr.start();

@@ -39,7 +39,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define COMMENT '#'
 
 /* Runtime config */
-static const char log_group_home_dir[] = "log";
+static const char log_dir[] = "log";
 
 static void create_directory(const char *path) {
   /* Try and create the log sub-directory */
@@ -244,18 +244,16 @@ void print_tuple(FILE *stream, const Tuple * tpl) {
 void test_configure(Config &config) {
   using namespace std::chrono_literals;
 
-  create_directory(log_group_home_dir);
+  create_directory(log_dir);
 
   config.m_fil.m_flush_method = SRV_UNIX_O_DIRECT;
   config.m_fil.m_max_n_open_files = 300;
   config.m_fil.m_file_per_table = true;
   config.m_fil.m_data_home = "./";
 
-  config.m_log.m_n_files = 2;
-  config.m_log.m_file_size = 32 * 1024 * 1024;
   config.m_log.m_buffer_size = 24 * 16384;
   config.m_log.m_flush_at_trx_commit = 1;
-  config.m_log.m_group_home_dir = log_group_home_dir;
+  config.m_log.m_log_dir = log_dir;
 
   config.m_buf_pool.m_size = 8 * 1024 * 1024;
   config.m_buf_pool.m_use_checksums = true;
@@ -294,7 +292,7 @@ int gen_rand_text(char *ptr, int max_size) {
 /** The ids of the common command line options. */
 enum Option : int {
   OPT_BUFFER_POOL_SIZE = 1,
-  OPT_LOG_FILE_SIZE,
+  OPT_CHECKPOINT_AGE,
   OPT_IO_CAPACITY,
   OPT_LRU_OLD_RATIO,
   OPT_LRU_ACCESS_THRESHOLD,
@@ -314,7 +312,7 @@ enum Option : int {
 
 const struct option ib_longopts[] = {
   {"ib-buffer-pool-size", required_argument, nullptr, OPT_BUFFER_POOL_SIZE},
-  {"ib-log-file-size", required_argument, nullptr, OPT_LOG_FILE_SIZE},
+  {"ib-checkpoint-age", required_argument, nullptr, OPT_CHECKPOINT_AGE},
   {"ib-io-capacity", required_argument, nullptr, OPT_IO_CAPACITY},
   {"ib-lru-old-ratio", required_argument, nullptr, OPT_LRU_OLD_RATIO},
   {"ib-lru-access-threshold", required_argument, nullptr, OPT_LRU_ACCESS_THRESHOLD},
@@ -338,7 +336,7 @@ void print_usage(const char *progname) {
   fprintf(stderr,
           "usage: %s "
           "[--ib-buffer-pool-size size in mb]\n"
-          "[--ib-log-file-size size in mb]\n"
+          "[--ib-checkpoint-age size in mb]\n"
           "[--ib-io-capacity number of records]\n"
                     "[--ib-lru-old-ratio as %% e.g. 38]\n"
           "[--ib-lru-access-threshold in ms]\n"
@@ -366,8 +364,6 @@ void print_usage(const char *progname) {
 static bool flush_method_from_name(std::string_view name, FlushMethod &method) {
   static constexpr std::pair<std::string_view, FlushMethod> methods[] = {
     {"fsync", SRV_UNIX_FSYNC},
-    {"O_DSYNC", SRV_UNIX_O_DSYNC},
-    {"littlesync", SRV_UNIX_LITTLESYNC},
     {"nosync", SRV_UNIX_NOSYNC},
     {"O_DIRECT", SRV_UNIX_O_DIRECT}
   };
@@ -391,8 +387,8 @@ DbErr set_global_option(Config &config, int opt, const char *arg) {
     case OPT_BUFFER_POOL_SIZE:
       config.m_buf_pool.m_size = number() * 1024UL * 1024UL;
       break;
-    case OPT_LOG_FILE_SIZE:
-      config.m_log.m_file_size = number() * 1024UL * 1024UL;
+    case OPT_CHECKPOINT_AGE:
+      config.m_log.m_checkpoint_age = number() * 1024UL * 1024UL;
       break;
     case OPT_IO_CAPACITY:
       config.m_buf_pool.m_io_capacity = number();
@@ -407,7 +403,7 @@ DbErr set_global_option(Config &config, int opt, const char *arg) {
       config.m_recv.m_force_recovery = IbRecovery(number());
       break;
     case OPT_LOG_DIR:
-      config.m_log.m_group_home_dir = arg;
+      config.m_log.m_log_dir = arg;
       break;
     case OPT_DATA_DIR:
       config.m_fil.m_data_home = arg;

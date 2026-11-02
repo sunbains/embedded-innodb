@@ -196,7 +196,7 @@ static int os_file_lock(int fd, const char *name) {
       ib_logger(
         stderr,
         "Check that you do not already have another instance of your application is"
-        " using the same InnoDB data or log files.\n"
+        " using the same InnoDB data files.\n"
       );
     }
 
@@ -351,7 +351,7 @@ void os_file_set_nocache(int fd, const char *file_name, const char *operation_na
   }
 }
 
-os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, ulint type, FlushMethod flush_method, bool *success) {
+os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, FlushMethod flush_method, bool *success) {
   bool retry;
 
   for (;;) {
@@ -372,18 +372,7 @@ os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, uli
       ut_error;
     }
 
-    ut_a(type == OS_LOG_FILE || type == OS_DATA_FILE);
-
     ut_a(purpose == OS_FILE_AIO || purpose == OS_FILE_NORMAL);
-
-#ifdef O_SYNC
-    /* We let O_SYNC only affect log files; note that we map O_DSYNC to
-    O_SYNC because the datasync options seemed to corrupt files in 2001
-    in both Linux and Solaris */
-    if (type == OS_LOG_FILE && flush_method == SRV_UNIX_O_DSYNC) {
-      create_flag = create_flag | O_SYNC;
-    }
-#endif /* O_SYNC */
 
     auto file = open(name, create_flag, CREATE_MASK);
 
@@ -403,8 +392,8 @@ os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, uli
 
     *success = true;
 
-    /* We disable OS caching (O_DIRECT) only on data files */
-    if (type != OS_LOG_FILE && flush_method == SRV_UNIX_O_DIRECT) {
+    /* We disable OS caching (O_DIRECT) on data files */
+    if (flush_method == SRV_UNIX_O_DIRECT) {
       os_file_set_nocache(file, name, mode_str);
     }
 

@@ -136,7 +136,7 @@ static void mtr_log_reserve_and_write(System &sys, Mtr *mtr) noexcept {
     /* Do nothing */
   }
 
-  mtr->m_end_lsn = log.close(sys.m_config.m_recv.m_force_recovery);
+  mtr->m_end_lsn = log.close();
 }
 
 void Mtr::commit(System &sys) noexcept {

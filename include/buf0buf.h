@@ -35,10 +35,6 @@ class System;
 #include "page0types.h"
 #include "ut0crc32.h"
 
-/** mutex protecting the buffer pool struct and control blocks, except the
-read-write lock in them */
-extern Mutex buf_pool_mutex;
-
 #ifdef UNIV_DEBUG
 /**
  * Sets file_page_was_freed true if the page is found in the buffer pool.

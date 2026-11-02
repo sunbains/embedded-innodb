@@ -236,9 +236,6 @@ SET(INNODB_SOURCES
       pars/pars0pars.cc pars/pars0sym.cc
       lock/lock0lock.cc lock/lock0iter.cc lock/lock0deadlock.cc lock/lock0validator.cc
       log/log0log.cc log/log0recv.cc log/log0wal.cc
-      log/log_buffer.cc log/log_checkpoint.cc log/log_core.cc
-      log/log_vfile.cc log/log_write.cc log/log_io.cc
-      log/recv_parse.cc log/recv_recovery.cc log/recv_scan.cc
       mach/mach0data.cc
       mem/mem0mem.cc
       mtr/mtr0log.cc mtr/mtr0mtr.cc
@@ -258,6 +255,12 @@ SET(INNODB_SOURCES
       trx/trx0sys.cc trx/trx0trx.cc trx/trx0undo.cc
       usr/usr0sess.cc ut/ut0dbg.cc ut/ut0mem.cc
       ut/ut0ucode.cc ut/ut0rnd.cc ut/ut0ut.cc)
+
+# The WAL reader checks block checksums with the wal-cpp checksum, whose inline
+# SSE4.2 path needs the flag; it picks hardware or software at run time.
+IF(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+  SET_SOURCE_FILES_PROPERTIES(log/log0wal.cc PROPERTIES COMPILE_OPTIONS -msse4.2)
+ENDIF()
 
 IF(CMAKE_BUILD_TYPE MATCHES Debug)
   ADD_DEFINITIONS(-O0 -g -Wall -DUNIV_DEBUG -Werror -Wno-interference-size)

@@ -126,14 +126,6 @@ enum FilPageType {
 
 /* @} */
 
-enum FilType {
-  /** Tablespace */
-  FIL_TABLESPACE = 501,
-
-  /** Redo log */
-  FIL_LOG = 502
-};
-
 /** Value of FilSpace::magic_n */
 constexpr uint32_t FIL_SPACE_MAGIC_N = 89472;
 
@@ -216,9 +208,6 @@ struct FilSpace {
   be placed on this space, though there may be such requests still being
   processed on this space */
   bool m_is_being_deleted;
-
-  /** FIL_TABLESPACE or FIL_LOG */
-  FilType m_type;
 
   /** base node for the file chain */
   UT_LIST_BASE_NODE_T(FilNode, m_chain) m_chain;

@@ -53,13 +53,6 @@ struct FilNode;
 @return		native file handle */
 #define OS_FILE_FROM_FD(fd) fd
 
-/** The next value should be smaller or equal to the smallest sector size used
-on any disk. A log block is required to be a portion of disk which is written
-so that if the start and the end of a block get written to disk, then the
-whole block gets written. This should be true even in most cases of a crash:
-if this fails for a log block, then it is equivalent to a media failure in the
-log. */
-
 /** Options for file_create @{ */
 constexpr ulint OS_FILE_OPEN = 51;
 constexpr ulint OS_FILE_CREATE = 52;
@@ -76,11 +69,6 @@ constexpr ulint OS_FILE_READ_WRITE = 444;
 constexpr ulint OS_FILE_AIO = 61;
 constexpr ulint OS_FILE_NORMAL = 62;
 
-/* @} */
-
-/** Types for file create @{ */
-constexpr ulint OS_DATA_FILE = 100;
-constexpr ulint OS_LOG_FILE = 101;
 /* @} */
 
 /** Error codes from os_file_get_last_error @{ */
@@ -214,12 +202,11 @@ void os_file_set_nocache(int fd, const char *file_name, const char *operation_na
  *                           NOTE that it also depends on type, os_aio_.. and srv_.. variables
  *                           whether we really use
  *                           async i/o or unbuffered i/o: look in the function source code for the exact rules.
- * @param type          [in] OS_DATA_FILE or OS_LOG_FILE.
  * @param success       [out] True if succeed, false if error.
  * @return os_file_t    Own handle to the file, not defined if error, error number can be
  *                      retrieved with os_file_get_last_error.
  */
-os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, ulint type, FlushMethod flush_method, bool *success);
+os_file_t os_file_create(const char *name, ulint create_mode, ulint purpose, FlushMethod flush_method, bool *success);
 
 /**
  * @brief Deletes a file. The file has to be closed before calling this.

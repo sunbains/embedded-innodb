@@ -53,7 +53,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 namespace api {
 
-static const char *GEN_CLUST_INDEX = "GEN_CLUST_INDEX";
+static constexpr const char *GEN_CLUST_INDEX = "GEN_CLUST_INDEX";
 
 using index_def_t = MergeIndexDef;
 using index_field_t = MergeIndexField;

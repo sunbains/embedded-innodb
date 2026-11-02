@@ -56,7 +56,3 @@ ADD_EXECUTABLE(ib_mt_drv ib_mt_drv.cc ib_mt_base.cc ib_mt_t1.cc ib_mt_t2.cc test
 TARGET_LINK_LIBRARIES(ib_mt_drv PRIVATE innodb pthread m)
 
 ADD_CUSTOM_TARGET(ib_tests DEPENDS ${IB_TESTS} ib_mt_drv)
-
-# Startup and shutdown through the redo log.
-ADD_EXECUTABLE(test_log0core_simple test_log0core_simple.cc test_logger.cc)
-TARGET_LINK_LIBRARIES(test_log0core_simple PRIVATE innodb pthread m)

@@ -133,8 +133,6 @@ version has become obsolete at the time the undo is started. */
 DbErr UndoNode::remove_secondary_index_entry(System &sys, ulint mode, Index *index, DTuple *entry) noexcept {
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
-  sys.m_log->free_check();
-
   BtreePcursor pcur{};
 
   Mtr mtr;
@@ -662,8 +660,6 @@ DbErr UndoNode::delete_mark_or_remove_secondary_index_entry(System &sys, QueThr 
 
   BtreePcursor pcur{};
 
-  sys.m_log->free_check();
-
   Mtr mtr;
   DbErr err;
 
@@ -748,8 +744,6 @@ DbErr UndoNode::del_unmark_secondary_index_and_undo_update(System &sys,
 
     return DB_SUCCESS;
   }
-
-  sys.m_log->free_check();
 
   Mtr mtr;
   DbErr err;

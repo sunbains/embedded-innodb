@@ -851,8 +851,6 @@ DbErr RowUpdate::sec_index_entry(UpdNode *node, QueThr *thr) noexcept {
   auto entry = row_build_index_entry(node->m_row, node->m_ext, index, heap);
   ut_a(entry != nullptr);
 
-  m_sys.m_log->free_check();
-
   Mtr mtr;
 
   mtr.start();

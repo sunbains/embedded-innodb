@@ -331,6 +331,16 @@ struct BufFlush {
   void post_to_doublewrite_buf(BufPage *bpage);
 
   /**
+   * Starts the asynchronous write of a page to its place in the tablespace. If
+   * the tablespace was dropped meanwhile the write is skipped and completed at
+   * once, so the page leaves the flush list and loses its I/O fix.
+   *
+   * @param[in] bpage           Page, I/O-fixed for writing.
+   * @param[in] frame           The page contents to write.
+   */
+  void write_page(BufPage *bpage, const byte *frame);
+
+  /**
    * @brief Does an asynchronous write of a buffer page.
    * NOTE: in simulated aio and also when the doublewrite buffer is used, we must call buf_pool->m_flusher->buffered_writes after we have posted a batch of writes!
    * 

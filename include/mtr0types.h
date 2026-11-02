@@ -133,7 +133,7 @@ enum MlogType : byte {
    * log record ends the sequence of these records */
   MLOG_MULTI_REC_END = 31,
 
-  /** Dummy log record used to pad a log block full */
+  /** Dummy log record: changes no page */
   MLOG_DUMMY_RECORD = 32,
 
   /** Log record about an .ibd file creation */

@@ -102,7 +102,8 @@ enum SrvThreadType {
 
 constexpr ulint SRV_MAX_N_IO_THREADS = 32;
 
-constexpr ulint SRV_LOG_SPACE_FIRST_ID = 0xFFFFFFF0UL;
+/** Tablespace ids are below this. */
+constexpr ulint SRV_SPACE_ID_LIMIT = 0xFFFFFFF0UL;
 
 /** In this structure we store status variables to be passed to the client. */
 struct ExportVars {
@@ -289,21 +290,6 @@ struct SrvStats {
 
   /** Amount of data written in total (in bytes) */
   ulint m_data_written{};
-
-  /** Number of log write requests done */
-  ulint m_log_write_requests{};
-
-  /** Number of physical writes to the log performed */
-  ulint m_log_writes{};
-
-  /** Amount of data written to the log files in bytes */
-  ulint m_os_log_written{};
-
-  /** Number of writes being done to the log files */
-  ulint m_os_log_pending_writes{};
-
-  /** Times we didn't have enough space in the log buffer and had to flush it */
-  ulint m_log_waits{};
 
   /** Times the doublewrite buffer was flushed */
   ulint m_dblwr_writes{};
@@ -533,6 +519,10 @@ struct Srv {
   than one second of transactions is lost in a crash when
   flush_at_trx_commit != 1. */
   void sync_log_buffer_in_background() noexcept;
+
+  /** @return the number of writes to the WAL: with the page I/O it tells the
+  master thread whether the server is busy. */
+  [[nodiscard]] ulint log_writes() const noexcept;
 
   [[nodiscard]] SrvSlot *table_get_nth_slot(ulint index) noexcept;
 

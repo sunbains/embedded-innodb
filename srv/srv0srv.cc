@@ -624,7 +624,6 @@ void Srv::refresh_innodb_monitor_stats() noexcept {
   m_last_monitor_time = time(nullptr);
 
 
-  m_sys.m_log->refresh_stats();
 
   m_sys.m_buf_pool->refresh_io_stats();
 
@@ -799,8 +798,8 @@ void Srv::export_innodb_status() noexcept {
 
   m_export_vars.m_data_pending_reads = m_sys.m_buf_pool->m_n_pend_reads;
   m_export_vars.m_data_pending_writes = m_sys.m_buf_pool->get_n_pending_ios() - m_sys.m_buf_pool->m_n_pend_reads;
-  m_export_vars.m_data_pending_fsyncs = m_sys.m_fil->get_pending_log_flushes() + m_sys.m_fil->get_pending_tablespace_flushes();
-  m_export_vars.m_data_fsyncs = m_sys.m_fil->get_log_flushes();
+  m_export_vars.m_data_pending_fsyncs = m_sys.m_fil->get_pending_flushes();
+  m_export_vars.m_data_fsyncs = m_sys.m_fil->get_flushes();
   m_export_vars.m_data_read = m_stats.m_data_read;
   m_export_vars.m_data_reads = m_sys.m_buf_pool->m_stat.n_pages_read;
   m_export_vars.m_data_writes = m_sys.m_buf_pool->m_stat.n_pages_written;
@@ -825,13 +824,17 @@ void Srv::export_innodb_status() noexcept {
 
   m_export_vars.m_have_atomic_builtins = 1;
   m_export_vars.m_page_size = UNIV_PAGE_SIZE;
-  m_export_vars.m_log_waits = m_stats.m_log_waits;
-  m_export_vars.m_os_log_written = m_stats.m_os_log_written;
-  m_export_vars.m_os_log_fsyncs = m_sys.m_fil->get_log_flushes();
-  m_export_vars.m_os_log_pending_fsyncs = m_sys.m_fil->get_pending_log_flushes();
-  m_export_vars.m_os_log_pending_writes = m_stats.m_os_log_pending_writes;
-  m_export_vars.m_log_write_requests = m_stats.m_log_write_requests;
-  m_export_vars.m_log_writes = m_stats.m_log_writes;
+  /* The WAL writes and syncs synchronously: nothing is ever pending. */
+  if (const auto wal = m_sys.m_log->m_wal_backend.get(); wal != nullptr) {
+    m_export_vars.m_log_waits = wal->get_n_buffer_waits();
+    m_export_vars.m_os_log_written = wal->m_stats.m_n_bytes;
+    m_export_vars.m_os_log_fsyncs = wal->m_stats.m_n_syncs;
+    m_export_vars.m_log_write_requests = wal->m_stats.m_n_appends;
+    m_export_vars.m_log_writes = wal->m_stats.m_n_writes;
+  }
+
+  m_export_vars.m_os_log_pending_fsyncs = 0;
+  m_export_vars.m_os_log_pending_writes = 0;
   m_export_vars.m_dblwr_pages_written = m_stats.m_dblwr_pages_written;
   m_export_vars.m_dblwr_writes = m_stats.m_dblwr_writes;
   m_export_vars.m_pages_created = m_sys.m_buf_pool->m_stat.n_pages_created;
@@ -1114,8 +1117,8 @@ void Srv::wake_master_thread() noexcept {
 }
 
 /**
- * The master thread is tasked to ensure that flush of log file happens
- * once every second in the background. This is to ensure that not more
+ * The master thread is tasked to ensure that the log is synced once every
+ * second in the background. This is to ensure that not more
  * than one second of trxs are lost in case of crash when
  * innodb_flush_logs_at_trx_commit != 1
  */
@@ -1129,6 +1132,12 @@ void Srv::sync_log_buffer_in_background() noexcept {
     m_last_log_flush_time = current_time;
     m_log_writes_and_flush++;
   }
+}
+
+ulint Srv::log_writes() const noexcept {
+  const auto wal = m_sys.m_log->m_wal_backend.get();
+
+  return wal == nullptr ? 0 : wal->m_stats.m_n_writes.load();
 }
 
 void Srv::master_thread() noexcept {
@@ -1162,7 +1171,7 @@ loop:
 
   m_main_thread_op_info = "reserving kernel mutex";
 
-  n_ios_very_old = m_sys.m_log->m_n_log_ios + m_sys.m_buf_pool->m_stat.n_pages_read + m_sys.m_buf_pool->m_stat.n_pages_written;
+  n_ios_very_old = log_writes() + m_sys.m_buf_pool->m_stat.n_pages_read + m_sys.m_buf_pool->m_stat.n_pages_written;
   mutex_enter(&m_sys.m_trx_sys->m_mutex);
 
   /* Store the user activity counter at the start of this loop */
@@ -1215,12 +1224,9 @@ loop:
     /* Flush logs if needed */
     sync_log_buffer_in_background();
 
-    m_main_thread_op_info = "making checkpoint";
-    m_sys.m_log->free_check();
+    n_pend_ios = m_sys.m_buf_pool->get_n_pending_ios();
 
-    n_pend_ios = m_sys.m_buf_pool->get_n_pending_ios() + m_sys.m_log->m_n_pending_writes;
-
-    n_ios = m_sys.m_log->m_n_log_ios + m_sys.m_buf_pool->m_stat.n_pages_read + m_sys.m_buf_pool->m_stat.n_pages_written;
+    n_ios = log_writes() + m_sys.m_buf_pool->m_stat.n_pages_read + m_sys.m_buf_pool->m_stat.n_pages_written;
 
     if (unlikely(m_sys.m_buf_pool->get_modified_ratio_pct() > m_sys.m_config.m_buf_pool.m_max_modified_pct)) {
 
@@ -1273,8 +1279,8 @@ loop:
   loop above requests writes for that case. The writes done here
   are not required, and may be disabled. */
 
-  n_pend_ios = m_sys.m_buf_pool->get_n_pending_ios() + m_sys.m_log->m_n_pending_writes;
-  n_ios = m_sys.m_log->m_n_log_ios + m_sys.m_buf_pool->m_stat.n_pages_read + m_sys.m_buf_pool->m_stat.n_pages_written;
+  n_pend_ios = m_sys.m_buf_pool->get_n_pending_ios();
+  n_ios = log_writes() + m_sys.m_buf_pool->m_stat.n_pages_read + m_sys.m_buf_pool->m_stat.n_pages_written;
 
   ++m_main_10_second_loops;
 
@@ -1331,7 +1337,7 @@ loop:
   /* Make a new checkpoint about once in 10 seconds */
 
   {
-    auto success = m_sys.m_log->checkpoint(true, false);
+    auto success = m_sys.m_log->checkpoint(false);
 
     if (!success) {
       log_info("Checkpoint already running");
@@ -1443,7 +1449,7 @@ flush_loop:
   m_main_thread_op_info = "making checkpoint";
 
   {
-    auto success = m_sys.m_log->checkpoint(true, false);
+    auto success = m_sys.m_log->checkpoint(false);
 
     if (!success) {
       log_info("Checkpoint already running");

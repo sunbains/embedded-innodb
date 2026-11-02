@@ -277,6 +277,11 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
 
         const auto space_id = mach_read_from_4(field);
 
+        /* Read the record while the page is latched. */
+        field = rec.get_nth_field(offsets, 7, &len);
+
+        const auto is_temp = (mach_read_from_4(field) & DICT_TF2_TEMPORARY) != 0;
+
         pcur.store_position(m_sys, &mtr);
 
         mtr.commit(m_sys);
@@ -286,14 +291,6 @@ DbErr DictLoad::open(bool in_crash_recovery) noexcept {
         } else if (in_crash_recovery) {
           /* Check that the tablespace (the .ibd file) really exists; print a warning
            if not. Do not print warnings for temporary tables. */
-          field = rec.get_nth_field(offsets, 4, &len);
-
-          /* Don't support any other format than V1 */
-          ut_a((mach_read_from_4(field) & 0x80000000UL) != 0);
-
-          field = rec.get_nth_field(offsets, 7, &len);
-          auto is_temp = (mach_read_from_4(field) & DICT_TF2_TEMPORARY) != 0;
-
           fil->space_for_table_exists_in_mem(space_id, name, is_temp, true, !is_temp);
 
         } else {

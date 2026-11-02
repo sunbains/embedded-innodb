@@ -929,8 +929,8 @@ static void set_options(Config &config, int argc, char *argv[]) {
     ++count;
   }
 
-  /* Add one of our options and a spot for the sentinel. */
-  size = sizeof(struct option) * (count + 2);
+  /* Add our two options and a spot for the sentinel. */
+  size = sizeof(struct option) * (count + 3);
   longopts = (struct option *)malloc(size);
   memset(longopts, 0x0, size);
   memcpy(longopts, ib_longopts, sizeof(struct option) * count);
@@ -942,10 +942,21 @@ static void set_options(Config &config, int argc, char *argv[]) {
   longopts[count].val = USER_OPT + 1;
   ++count;
 
+  /* Test duration in seconds. */
+  longopts[count].name = "test-time";
+  longopts[count].has_arg = required_argument;
+  longopts[count].flag = nullptr;
+  longopts[count].val = USER_OPT + 2;
+  ++count;
+
   while ((opt = getopt_long(argc, argv, "", longopts, nullptr)) != -1) {
     switch (opt) {
 
     case USER_OPT + 1:
+      break;
+
+    case USER_OPT + 2:
+      test_time = atoi(optarg);
       break;
 
     default:

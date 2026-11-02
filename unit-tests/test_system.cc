@@ -42,7 +42,7 @@ class SystemTest : public ::testing::Test {
     Config config;
 
     config.m_fil.m_data_home = m_dir.string();
-    config.m_log.m_group_home_dir = m_dir.string();
+    config.m_log.m_log_dir = m_dir.string();
     config.m_buf_pool.m_size = 32 * 1024 * 1024;
 
     return config;
@@ -75,7 +75,7 @@ TEST_F(SystemTest, CreateShutdownReopen) {
 TEST_F(SystemTest, InvalidConfigIsRejected) {
   auto config = make_config();
 
-  config.m_log.m_n_files = 1;
+  config.m_log.m_checkpoint_age = 0;
 
   System sys;
 

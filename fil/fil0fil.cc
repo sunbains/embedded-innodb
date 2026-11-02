@@ -87,9 +87,8 @@ if it really adds speed. We measured on the Pentium 100 MHz + NT + NTFS file
 system + EIDE Conner disk only a negligible difference in speed when reading
 from a file, versus reading from a raw disk.
 
-To have fast access to a tablespace or a log file, we put the data structures
-to a hash table. Each tablespace and log file is given an unique 32-bit
-identifier.
+To have fast access to a tablespace, we put the data structures to a hash
+table. Each tablespace is given an unique 32-bit identifier.
 
 Some operating systems do not support many open files at the same time,
 though NT seems to tolerate at least 900 open files. Therefore, we put the
@@ -205,16 +204,6 @@ RwLock *Fil::space_get_latch(space_id_t id) {
   return &space->m_latch;
 }
 
-ulint Fil::space_get_type(space_id_t id) {
-  mutex_enter(&m_mutex);
-
-  auto space = space_get_by_id(id);
-
-  mutex_exit(&m_mutex);
-
-  return space->m_type;
-}
-
 bool Fil::space_is_flushed(FilSpace *space) {
   ut_ad(mutex_own(&m_mutex));
 
@@ -263,9 +252,9 @@ void Fil::node_create(const char *name, ulint size, space_id_t id, bool is_raw) 
     node->m_space = space;
 
     UT_LIST_ADD_LAST(space->m_chain, node);
-    ut_a(UT_LIST_GET_LEN(space->m_chain) == 1 || space->m_type == FIL_LOG);
+    ut_a(UT_LIST_GET_LEN(space->m_chain) == 1);
 
-    if (id < SRV_LOG_SPACE_FIRST_ID && m_max_assigned_id < id) {
+    if (id < SRV_SPACE_ID_LIMIT && m_max_assigned_id < id) {
 
       m_max_assigned_id = id;
     }
@@ -303,8 +292,7 @@ void Fil::node_open_file(FilNode *node, FilSpace *space, bool startup) {
     success = os_file_get_size(node->m_fh, &size);
     ut_a(success);
 
-    /* These are opened at the start and closed at shutdown. */
-    ut_a(space->m_type != FIL_LOG);
+    /* The system tablespace is opened at the start and closed at shutdown. */
     ut_a(space->m_id != SYS_TABLESPACE || startup);
 
     auto size_bytes = size;
@@ -364,12 +352,10 @@ void Fil::node_open_file(FilNode *node, FilSpace *space, bool startup) {
 
   bool ret;
 
-  if (space->m_type == FIL_LOG) {
-    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN, OS_FILE_AIO, OS_LOG_FILE, m_sys.m_config.m_fil.m_flush_method, &ret);
-  } else if (node->m_is_raw_disk) {
-    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN_RAW, OS_FILE_AIO, OS_DATA_FILE, m_sys.m_config.m_fil.m_flush_method, &ret);
+  if (node->m_is_raw_disk) {
+    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN_RAW, OS_FILE_AIO, m_sys.m_config.m_fil.m_flush_method, &ret);
   } else {
-    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN, OS_FILE_AIO, OS_DATA_FILE, m_sys.m_config.m_fil.m_flush_method, &ret);
+    node->m_fh = os_file_create(node->m_file_name, OS_FILE_OPEN, OS_FILE_AIO, m_sys.m_config.m_fil.m_flush_method, &ret);
   }
 
   ut_a(ret);
@@ -402,8 +388,8 @@ void Fil::mutex_enter_and_prepare_for_io(space_id_t space_id) {
   for (;;) {
     mutex_enter(&m_mutex);
 
-    if (space_id == SYS_TABLESPACE || space_id >= SRV_LOG_SPACE_FIRST_ID) {
-      /* We keep log files and system tablespace files always open;
+    if (space_id == SYS_TABLESPACE) {
+      /* We keep system tablespace files always open;
       this is important in preventing deadlocks in this module, as
       a page read completion often performs another read from the
       insert buffer. The insert buffer is in tablespace 0, and we
@@ -463,7 +449,7 @@ void Fil::mutex_enter_and_prepare_for_io(space_id_t space_id) {
     if (!space->m_stop_ios) {
 
       /* Flush tablespaces so that we can close modified files in the LRU list */
-      flush_file_spaces(FIL_TABLESPACE);
+      flush_file_spaces();
 
       ++n_retries;
     }
@@ -499,7 +485,7 @@ void Fil::node_free(FilNode *node, FilSpace *space) {
   mem_free(node);
 }
 
-bool Fil::space_create(const char *name, space_id_t id, ulint flags, FilType fil_type) {
+bool Fil::space_create(const char *name, space_id_t id, ulint flags) {
   FilSpace *space;
 
   /* FIXME: This is redundant now. */
@@ -522,7 +508,7 @@ try_again:
       space->m_id
     ));
 
-    if (id == SYS_TABLESPACE || fil_type != FIL_TABLESPACE) {
+    if (id == SYS_TABLESPACE) {
 
       mutex_exit(&m_mutex);
 
@@ -578,13 +564,12 @@ try_again:
   space->m_tablespace_version = m_tablespace_version;
   space->m_mark = false;
 
-  if (fil_type == FIL_TABLESPACE && id > m_max_assigned_id) {
+  if (id > m_max_assigned_id) {
     m_max_assigned_id = id;
   }
 
   space->m_stop_ios = false;
   space->m_is_being_deleted = false;
-  space->m_type = fil_type;
   space->m_size_in_pages = 0;
   space->m_flags = flags;
 
@@ -623,18 +608,18 @@ ulint Fil::assign_new_space_id() {
 
   auto id = m_max_assigned_id;
 
-  if (id > (SRV_LOG_SPACE_FIRST_ID / 2) && (id % 1000000UL) == 0) {
+  if (id > (SRV_SPACE_ID_LIMIT / 2) && (id % 1000000UL) == 0) {
     log_warn(std::format(
       "You are running out of new single-table tablespace id's."
       " Current counter is {} and it must not exceed {}!"
       " To reset the counter to zero you have to dump all your tables and"
       " recreate the whole InnoDB installation.",
       id,
-      SRV_LOG_SPACE_FIRST_ID
+      SRV_SPACE_ID_LIMIT
     ));
   }
 
-  if (id >= SRV_LOG_SPACE_FIRST_ID) {
+  if (id >= SRV_SPACE_ID_LIMIT) {
     log_warn(std::format(
       "You have run out of single-table tablespace id's!"
       " Current counter is {}. To reset the counter to zero you"
@@ -733,7 +718,7 @@ ulint Fil::space_get_size(space_id_t id) {
     return 0;
   }
 
-  if (space->m_size_in_pages == 0 && space->m_type == FIL_TABLESPACE) {
+  if (space->m_size_in_pages == 0) {
     ut_a(id != SYS_TABLESPACE);
 
     ut_a(UT_LIST_GET_LEN(space->m_chain) == 1);
@@ -771,7 +756,7 @@ ulint Fil::space_get_flags(space_id_t id) {
     return ULINT_UNDEFINED;
   }
 
-  if (space->m_size_in_pages == 0 && space->m_type == FIL_TABLESPACE) {
+  if (space->m_size_in_pages == 0) {
     ut_a(id != SYS_TABLESPACE);
 
     ut_a(UT_LIST_GET_LEN(space->m_chain) == 1);
@@ -797,12 +782,12 @@ bool Fil::check_adress_in_tablespace(space_id_t id, page_no_t page_no) {
   return space_get_size(id) > page_no;
 }
 
-void Fil::open_log_and_system_tablespace() {
+void Fil::open_system_tablespace() {
   mutex_enter(&m_mutex);
 
   for (auto space : m_space_list) {
-    if (space->m_type == FIL_LOG || space->m_id == SYS_TABLESPACE) {
-      ut_a(UT_LIST_GET_LEN(space->m_chain) == 1 || space->m_type == FIL_LOG);
+    if (space->m_id == SYS_TABLESPACE) {
+      ut_a(UT_LIST_GET_LEN(space->m_chain) == 1);
 
       auto node = UT_LIST_GET_FIRST(space->m_chain);
 
@@ -823,7 +808,7 @@ void Fil::close_all_files() {
   while (space != nullptr) {
     FilSpace *prev_space = space;
 
-    ut_a(UT_LIST_GET_LEN(space->m_chain) == 1 || space->m_type == FIL_LOG);
+    ut_a(UT_LIST_GET_LEN(space->m_chain) == 1);
     auto node = UT_LIST_GET_FIRST(space->m_chain);
 
     if (node->open) {
@@ -839,7 +824,7 @@ void Fil::close_all_files() {
 }
 
 void Fil::set_max_space_id_if_bigger(space_id_t max_id) {
-  if (max_id >= SRV_LOG_SPACE_FIRST_ID) {
+  if (max_id >= SRV_SPACE_ID_LIMIT) {
     log_fatal("Max tablespace id is too high, ", max_id);
   }
 
@@ -882,7 +867,7 @@ DbErr Fil::write_flushed_lsn_to_data_files(lsn_t lsn) {
     cache. Note that all data files in the system tablespace 0 are
     always open. */
 
-    if (space->m_type == FIL_TABLESPACE && space->m_id == 0) {
+    if (space->m_id == 0) {
       sum_of_sizes = 0;
 
       auto node = UT_LIST_GET_FIRST(space->m_chain);
@@ -1397,7 +1382,7 @@ DbErr Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *
 
   bool ret{};
   auto path = make_ibd_name(tablename, is_temp);
-  auto file = os_file_create(path, OS_FILE_CREATE, OS_FILE_NORMAL, OS_DATA_FILE, m_sys.m_config.m_fil.m_flush_method, &ret);
+  auto file = os_file_create(path, OS_FILE_CREATE, OS_FILE_NORMAL, m_sys.m_config.m_fil.m_flush_method, &ret);
 
   if (!ret) {
     log_err(std::format("Unable to create file {}.", path));
@@ -1508,7 +1493,7 @@ DbErr Fil::create_new_single_table_tablespace(space_id_t *space_id, const char *
     return err_exit(path, -1);
   }
 
-  success = space_create(path, *space_id, flags, FIL_TABLESPACE);
+  success = space_create(path, *space_id, flags);
 
   if (!success) {
     return err_exit(path, -1);
@@ -1599,7 +1584,7 @@ bool Fil::open_single_table_tablespace(bool check_space_id, space_id_t id, ulint
     }
   }
 
-  if (space_create(filepath, space_id, flags, FIL_TABLESPACE)) {
+  if (space_create(filepath, space_id, flags)) {
     /* We do not measure the size of the file, that is why we pass the 0 below
      */
 
@@ -1760,7 +1745,7 @@ void Fil::load_single_table_tablespace(IbRecovery recovery, const char *dbname, 
 
     goto func_exit;
   }
-  success = space_create(filepath, space_id, flags, FIL_TABLESPACE);
+  success = space_create(filepath, space_id, flags);
 
   if (!success) {
 
@@ -1835,7 +1820,7 @@ void Fil::print_orphaned_tablespaces() {
   mutex_enter(&m_mutex);
 
   for (auto space : m_space_list) {
-    if (space->m_type == FIL_TABLESPACE && space->m_id != SYS_TABLESPACE && !space->m_mark) {
+    if (space->m_id != SYS_TABLESPACE && !space->m_mark) {
       log_warn(std::format(
         "Tablespace {} of id {} has no matching table in"
         " the InnoDB data dictionary.",
@@ -2248,7 +2233,7 @@ DbErr Fil::data_io(
 
   /* Check that at least the start offset is within the bounds of a
   single-table tablespace */
-  if (fil_node->m_size_in_pages <= page_id.page_no() && space->m_id != SYS_TABLESPACE && space->m_type == FIL_TABLESPACE) {
+  if (fil_node->m_size_in_pages <= page_id.page_no() && space->m_id != SYS_TABLESPACE) {
 
     report_invalid_page_access(page_id, space->m_name, byte_offset, len, io_request);
   }
@@ -2316,7 +2301,6 @@ bool Fil::aio_wait(ulint segment) {
   deadlocks in the i/o system. We keep tablespace 0 data files always
   open, and use a special i/o thread to serve insert buffer requests. */
 
-  ut_ad(io_ctx.m_fil_node->m_space->m_type == FIL_TABLESPACE);
   m_sys.m_buf_pool->io_complete(reinterpret_cast<BufPage *>(io_ctx.m_msg));
 
   return true;
@@ -2349,12 +2333,8 @@ void Fil::flush(space_id_t space_id) {
       old_mod_counter */
       old_mod_counter = node->m_modification_counter;
 
-      if (space->m_type == FIL_TABLESPACE) {
-        ++m_n_pending_tablespace_flushes;
-      } else {
-        ++m_n_pending_log_flushes;
-        ++m_n_log_flushes;
-      }
+      ++m_n_pending_flushes;
+      ++m_n_flushes;
     retry:
       if (node->m_n_pending_flushes > 0) {
         /* We want to avoid calling os_file_flush() on
@@ -2400,11 +2380,7 @@ void Fil::flush(space_id_t space_id) {
         }
       }
 
-      if (space->m_type == FIL_TABLESPACE) {
-        --m_n_pending_tablespace_flushes;
-      } else {
-        --m_n_pending_log_flushes;
-      }
+      --m_n_pending_flushes;
     }
 
     node = UT_LIST_GET_NEXT(m_chain, node);
@@ -2415,7 +2391,7 @@ void Fil::flush(space_id_t space_id) {
   mutex_exit(&m_mutex);
 }
 
-void Fil::flush_file_spaces(ulint purpose) {
+void Fil::flush_file_spaces() {
   mutex_enter(&m_mutex);
 
   auto n_space_ids = UT_LIST_GET_LEN(m_unflushed_spaces);
@@ -2435,7 +2411,7 @@ void Fil::flush_file_spaces(ulint purpose) {
   space_ids.reserve(n_space_ids + 1);
 
   for (auto space : m_unflushed_spaces) {
-    if (space->m_type == purpose && !space->m_is_being_deleted) {
+    if (!space->m_is_being_deleted) {
       space_ids.push_back(space->m_id);
     }
   }

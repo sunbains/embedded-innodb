@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <array>
 #include <vector>
 
 #include "innodb0types.h"
@@ -104,6 +105,45 @@ void run_1(System &sys) {
             << (int((end - start) * 1000) / N_TRXS) << "\n";
 }
 
+/** Discard a page that holds record locks of two transactions: every lock
+goes and so does the page entry. rec_discard() used to erase the whole
+page entry with the first lock, then assert on the second. */
+void DiscardPage(System &sys) {
+  const PageId page_id{7, 42};
+  auto lock_sys = sys.m_lock_sys.get();
+
+  std::array<Trx *, 2> trxs{trx_create(sys), trx_create(sys)};
+
+  mutex_enter(&sys.m_trx_sys->m_mutex);
+
+  ulint heap_no{PAGE_HEAP_NO_USER_LOW};
+
+  for (auto trx : trxs) {
+    auto lock = lock_sys->rec_create_low(page_id, LOCK_S, heap_no, REC_BITMAP_SIZE, nullptr, trx);
+    ut_a(lock != nullptr);
+
+    /* A discarded page has no records left: the locks carry no bits. */
+    lock->rec_reset_nth_bit(heap_no);
+    ++heap_no;
+  }
+
+  lock_sys->rec_free_all_from_discard_page(page_id);
+
+  ut_a(!lock_sys->m_rec_locks.contains(page_id));
+
+  for (auto trx : trxs) {
+    ut_a(trx->m_trx_locks.empty());
+  }
+
+  mutex_exit(&sys.m_trx_sys->m_mutex);
+
+  for (auto &trx : trxs) {
+    trx_free(sys, trx);
+  }
+
+  std::cout << "DiscardPage passed\n";
+}
+
 }  // namespace test
 
 int main() {
@@ -123,6 +163,7 @@ int main() {
   ut_a(err == DB_SUCCESS);
 
   test::run_1(sys);
+  test::DiscardPage(sys);
 
   exit(EXIT_SUCCESS);
 }

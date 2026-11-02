@@ -594,8 +594,8 @@ struct BufPool {
   @return true if there is pending I/O */
   [[nodiscard]] bool is_io_pending();
 
-  /** Invalidates the file pages in the buffer pool when an archive recovery is
-  completed. All the file pages buffered must be in a replaceable state when
+  /** Invalidates the file pages in the buffer pool when a batch of crash
+  recovery is applied and written. All the file pages buffered must be in a replaceable state when
   this function is called: not latched and not modified. */
   void invalidate();
 

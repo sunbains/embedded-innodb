@@ -20,7 +20,6 @@ add_definitions(-DUNIV_BTR_PRINT -DUNIT_TESTING)
 
 # Set up libraries - use parent project's innodb target
 SET(LIBS innodb pthread m)
-SET(MINIMAL_SRC global_vars.cc ut0new.cc ut0dbg.cc ut0ut.cc)
 
 # Include directories are inherited from parent project
 
@@ -77,6 +76,14 @@ target_link_libraries(test_api PRIVATE
 )
 add_test(NAME test_api COMMAND test_api)
 
+add_executable(test_wal test_wal.cc unit_test_logger.cc)
+target_link_libraries(test_wal PRIVATE
+    GTest::gtest_main
+    GTest::gtest
+    ${LIBS}
+)
+add_test(NAME test_wal COMMAND test_wal)
+
 add_executable(test_lock test_lock.cc unit-test.cc unit_test_logger.cc)
 
 # Link test_lock
@@ -84,43 +91,3 @@ target_link_libraries(test_lock PRIVATE ${LIBS})
 
 # Add test_lock to CTest
 add_test(NAME test_lock COMMAND test_lock)
-
-# Set up test_log_io test
-add_executable(test_log_io test_log_io.cc unit_test_logger.cc)
-
-# Link against Google Test and InnoDB
-target_link_libraries(test_log_io PRIVATE
-    GTest::gtest_main
-    GTest::gtest
-    ${LIBS}
-)
-
-# Add test to CTest
-add_test(NAME test_log_io COMMAND test_log_io)
-
-# Set up test_log_io_uring test with minimal dependencies
-add_executable(test_log_io_uring test_log_io_uring.cc global_vars.cc ../log/log_io_uring.cc ${MINIMAL_SRC})
-
-# Link with minimal dependencies
-target_link_libraries(test_log_io_uring PRIVATE pthread uring)
-
-# Add test to CTest
-add_test(NAME test_log_io_uring COMMAND test_log_io_uring)
-
-# Set up test_log_buffer test - standalone with minimal dependencies
-add_executable(test_log_buffer test_log_buffer.cc)
-
-# Link test_log_buffer with minimal dependencies
-target_link_libraries(test_log_buffer PRIVATE pthread)
-
-# Add test_log_buffer to CTest
-add_test(NAME test_log_buffer COMMAND test_log_buffer)
-
-# Add test_log_vfile executable
-add_executable(test_log_vfile test_log_vfile.cc ../log/log_vfile.cc ${MINIMAL_SRC})
-
-# Link test_log_vfile with minimal dependencies
-target_link_libraries(test_log_vfile PRIVATE pthread)
-
-# Add test_log_vfile to CTest
-add_test(NAME test_log_vfile COMMAND test_log_vfile)

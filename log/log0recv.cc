@@ -91,11 +91,6 @@ static std::string to_string(const RecvSys::Tablespace_map &log_records) noexcep
   return str;
 }
 
-void recv_sys_var_init(System &sys) noexcept {
-  ut_a(sys.m_recv == nullptr);
-
-}
-
 RecvSys::~RecvSys() noexcept {
   mutex_free(&m_mutex);
   cleanup_resources();
@@ -111,11 +106,6 @@ void RecvSys::cleanup_resources() noexcept {
     ut_delete(m_buf);
     m_buf = nullptr;
   }
-
-  if (m_last_block_buf_start != nullptr) {
-    mem_free(m_last_block_buf_start);
-    m_last_block_buf_start = nullptr;
-  }
 }
 
 RecvSys::RecvSys(System &sys) noexcept : m_sys(sys) {
@@ -130,19 +120,17 @@ void RecvSys::open(ulint available_memory) noexcept {
 
   m_heap = mem_heap_create_in_buffer(256);
 
-  /* Set appropriate value of m_n_pool_free_frames. */
+  /* Frames kept free for the pages that records are applied to: reads of
+  those pages wait while half of them are taken by pending reads. */
+  m_n_pool_free_frames = 256;
+
   if (m_sys.m_buf_pool->get_curr_size() >= (10 * 1024 * 1024)) {
     /* Buffer pool of size greater than 10 MB. */
+    m_n_pool_free_frames = 512;
   }
 
   ut_a(m_buf == nullptr);
   m_buf = static_cast<byte *>(ut_new(RECV_PARSING_BUF_SIZE));
-
-  ut_a(m_last_block_buf_start == nullptr);
-  m_last_block_buf_start = static_cast<byte *>(mem_alloc(2 * IB_FILE_BLOCK_SIZE));
-
-  ut_a(m_last_block_buf_start != nullptr);
-  m_last_block = static_cast<byte *>(ut_align(m_last_block_buf_start, IB_FILE_BLOCK_SIZE));
 
   mutex_exit(&m_mutex);
 }
@@ -184,17 +172,6 @@ void RecvSys::close() noexcept {
   cleanup_resources();
   clear_log_records();
   mutex_exit(&m_mutex);
-}
-
-/**
- * Checks if the log block checksum is valid.
- *
- * @param block Pointer to a log block
- *
- * @return true if the checksum is valid or if the block is in an old format, false otherwise
- */
-[[maybe_unused]] static bool is_log_block_checksum_ok([[maybe_unused]] const byte *block) noexcept {
-  return true;
 }
 
 /**
@@ -825,18 +802,11 @@ static ulint recv_parse_log_rec(System &sys,
  * Calculates the new value for lsn when more data is added to the log.
  *
  * @param lsn The old lsn.
- * @param len The length of the data added, excluding log block headers.
+ * @param len The length of the data added.
  */
 static lsn_t recv_calc_lsn_on_data_add(lsn_t lsn, uint64_t len) noexcept {
-  auto frag_len = (ulint(lsn) % IB_FILE_BLOCK_SIZE) - LogPhyBlock::HEADER_SIZE;
-
-  ut_ad(frag_len < IB_FILE_BLOCK_SIZE - LogPhyBlock::HEADER_SIZE - LogPhyBlock::TRAILER_SIZE);
-  auto lsn_len = ulint(len);
-
-  lsn_len += (lsn_len + frag_len) / (IB_FILE_BLOCK_SIZE - LogPhyBlock::HEADER_SIZE - LogPhyBlock::TRAILER_SIZE) *
-             (LogPhyBlock::HEADER_SIZE + LogPhyBlock::TRAILER_SIZE);
-
-  return lsn + lsn_len;
+  /* A WAL LSN counts log bytes only: the block headers are not part of it. */
+  return lsn + len;
 }
 
 /**
@@ -882,7 +852,7 @@ static void recv_report_corrupt_log(System &sys, byte *ptr, byte type, space_id_
   }
 
   log_warn(
-    "The log file may have been corrupt and it s possible that the log scan did not proceed"
+    "The log may have been corrupt and it is possible that the log scan did not proceed"
     " far enough in recovery! Please run CHECK TABLE on your InnoDB tables to check that"
     " they are ok! If the engine crashes after this recovery, check the InnoDB website"
     " for details about forcing recovery."
@@ -941,9 +911,7 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
       new_recovered_lsn = recv_calc_lsn_on_data_add(old_lsn, len);
 
       if (new_recovered_lsn > sys.m_recv->m_scanned_lsn) {
-        /* The log record filled a log block, and we require
-        that also the next log block should have been scanned
-        in */
+        /* The record group continues past the log read so far. */
 
         return false;
       }
@@ -999,9 +967,7 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
       new_recovered_lsn = recv_calc_lsn_on_data_add(sys.m_recv->m_recovered_lsn, total_len);
 
       if (new_recovered_lsn > sys.m_recv->m_scanned_lsn) {
-        /* The log record filled a log block, and we require
-        that also the next log block should have been scanned
-        in */
+        /* The record group continues past the log read so far. */
 
         return false;
       }
@@ -1043,78 +1009,9 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
 }
 
 /**
- * Adds data from a new log block to the parsing buffer of recv_sys if
- * recv_sys->m_parse_start_lsn is non-zero.
- *
- * @param log_block Pointer to the log block.
- * @param scanned_lsn The LSN up to which the data has been scanned.
- *
- * @return	true if more data added
- */
-[[maybe_unused]] static bool recv_sys_add_to_parsing_buf(System &sys, const LogPhyBlock *log_block, lsn_t scanned_lsn) noexcept {
-  ulint more_len;
-
-  ut_ad(scanned_lsn >= sys.m_recv->m_scanned_lsn);
-
-  if (!sys.m_recv->m_parse_start_lsn) {
-    /* Cannot start parsing yet because no start point for
-    it found */
-
-    return false;
-  }
-
-  auto data_len = log_block->get_data_len();
-
-  if (sys.m_recv->m_parse_start_lsn >= scanned_lsn) {
-
-    return false;
-
-  } else if (sys.m_recv->m_scanned_lsn >= scanned_lsn) {
-
-    return false;
-
-  } else if (sys.m_recv->m_parse_start_lsn > sys.m_recv->m_scanned_lsn) {
-    more_len = (ulint)(scanned_lsn - sys.m_recv->m_parse_start_lsn);
-  } else {
-    more_len = (ulint)(scanned_lsn - sys.m_recv->m_scanned_lsn);
-  }
-
-  if (more_len == 0) {
-
-    return false;
-  }
-
-  ut_ad(data_len >= more_len);
-
-  auto start_offset = data_len - more_len;
-
-  if (start_offset < LogPhyBlock::HEADER_SIZE) {
-    start_offset = LogPhyBlock::HEADER_SIZE;
-  }
-
-  auto end_offset = data_len;
-
-  if (end_offset > IB_FILE_BLOCK_SIZE - LogPhyBlock::TRAILER_SIZE) {
-    end_offset = IB_FILE_BLOCK_SIZE - LogPhyBlock::TRAILER_SIZE;
-  }
-
-  ut_ad(start_offset <= end_offset);
-
-  if (start_offset < end_offset) {
-    memcpy(sys.m_recv->m_buf + sys.m_recv->m_len, log_block + start_offset, end_offset - start_offset);
-
-    sys.m_recv->m_len += end_offset - start_offset;
-
-    ut_a(sys.m_recv->m_len <= RECV_PARSING_BUF_SIZE);
-  }
-
-  return true;
-}
-
-/**
  * Moves the parsing buffer data left to the buffer start.
  */
-[[maybe_unused]] static void recv_sys_justify_left_parsing_buf(System &sys) noexcept {
+static void recv_sys_justify_left_parsing_buf(System &sys) noexcept {
   memmove(sys.m_recv->m_buf, sys.m_recv->m_buf + sys.m_recv->m_recovered_offset, sys.m_recv->m_len - sys.m_recv->m_recovered_offset);
 
   sys.m_recv->m_len -= sys.m_recv->m_recovered_offset;
@@ -1122,96 +1019,66 @@ bool recv_parse_log_recs(System &sys, bool store_to_hash) noexcept {
   sys.m_recv->m_recovered_offset = 0;
 }
 
-/**
- * Scans log from a buffer and stores new log data to the parsing buffer.
- * Parses and stores the log records if new data found.  This function will
- * apply log records automatically when the stored records table becomes full.
- *
- *
- * @param[in] dblwr             Doublewrite buffer to use
- * @param[in] recovery          Recovery flag
- * @param[in] available_memory  We let the storage of recs to grow to this
- *                              size, at the maximum
- * @param[in] store_to_hash     true if the records should be stored;
- *                              this is set to false if just debug
- * 				                      checking is needed
- * @param[in] buf               Buffer containing a log segment or garbage
- * @param[in] len               Buffer length
- * @param[in] start_lsn         Buffer start lsn
- * @param[in,out] contiguous_lsn It is known that all log groups contain
- *                              contiguouslog data up to this lsn
- * @param[out] scanned_upto_lsn Scanning succeeded up to this lsn
- *
- * @return true if limit_lsn has been reached, or not able to scan any more in this log group.
- */
-[[maybe_unused]] static bool recv_scan_log_recs(
-  [[maybe_unused]] Dblwr *dblwr, [[maybe_unused]] IbRecovery recovery, [[maybe_unused]] ulint available_memory,
-  [[maybe_unused]] bool store_to_hash, [[maybe_unused]] const LogPhyBlock *buf, [[maybe_unused]] ulint len,
-  [[maybe_unused]] lsn_t start_lsn, [[maybe_unused]] lsn_t *contiguous_lsn, lsn_t *scanned_upto_lsn
-) noexcept {
-  *scanned_upto_lsn = start_lsn;
-  return true;
-}
-
-/**
- * Scans log from a buffer and stores new log data to the parsing buffer.
- * Parses and hashes the log records if new data found.
- *
- * @param[in] dblwr Doublewrite buffer to use
- * @param[in] recovery The recovery flag.
- * @param[in] group The log group.
- * @param[in] contiguous_lsn The LSN up to which the log data is known to be contiguous.
- *
- */
-
 void recv_start_crash_recovery(System &sys) noexcept {
   ut_a(!sys.m_recv->m_needed_recovery);
 
+  sys.m_recv->m_needed_recovery = true;
 
   log_warn("Database was not shut down normally! Starting crash recovery.");
 }
 
 /**
- * Compare the checkpoint lsn with the lsn recorded in the data files
- * and start crash recovery if required.
+ * Takes log read from the WAL: adds it to the parsing buffer, parses the
+ * complete records in it and stores them for applying. Applies the stored
+ * records when they take more memory than recovery may use.
  *
- * @param recovery The recovery flag.
- * @param checkpoint_lsn The checkpoint LSN.
- * @param max_flushed_lsn The maximum flushed LSN from data files.
+ * @param[in] data              Log bytes, they follow the bytes passed before.
+ * @param[in] len               Number of bytes.
+ * @param[in] available_memory  The stored records may use this much memory.
+ *
+ * @return false if the log is corrupt: stop reading.
  */
-[[maybe_unused]] static void recv_init_crash_recovery(System &sys, lsn_t checkpoint_lsn, lsn_t max_flushed_lsn) noexcept {
-  /* NOTE: we always do a 'recovery' at startup, but only if there is something wrong we
-  will print a message to the user about recovery: */
+static bool recv_scan_log(System &sys, const byte *data, ulint len, ulint available_memory) noexcept {
+  auto &recv = *sys.m_recv;
 
-  if (checkpoint_lsn != max_flushed_lsn) {
-
-    if (checkpoint_lsn < max_flushed_lsn) {
-      log_warn(std::format(
-        "##########################################################\n"
-        "                         WARNING!\n"
-        " The log sequence number in 'system.idb' file is higher than\n"
-        " the log sequence number in the ib_logfiles! Are you sure you\n"
-        " are using the right ib_logfiles to start up the database?\n"
-        " Log sequence number in ib_logfiles is {}, max log sequence\n"
-        " number stamped in 'system.idb; file header is and {}\n"
-        "##########################################################",
-        checkpoint_lsn,
-        max_flushed_lsn
-      ));
-    }
-
-    if (!sys.m_recv->m_needed_recovery) {
-      log_err(
-        "The log sequence number in 'system.idb' file does not match"
-        " the log sequence number in the ib_logfiles! Checkooint LSN: ",
-        checkpoint_lsn,
-        ", max_flushed_LSN: ",
-        max_flushed_lsn
-      );
-
-      recv_start_crash_recovery(sys);
-    }
+  if (!recv.m_needed_recovery) {
+    log_info("Log scan progressed past the checkpoint lsn ", recv.m_scanned_lsn);
+    recv_start_crash_recovery(sys);
   }
+
+  if (recv.m_len + len > RECV_PARSING_BUF_SIZE) {
+    recv_sys_justify_left_parsing_buf(sys);
+  }
+
+  /* A record group, an mtr's log, is at most a few pages. */
+  if (recv.m_len + len > RECV_PARSING_BUF_SIZE) {
+    log_err("Log parsing buffer overflow. Recovery may have failed!");
+
+    recv.m_found_corrupt_log = true;
+
+    return false;
+  }
+
+  memcpy(recv.m_buf + recv.m_len, data, len);
+
+  recv.m_len += len;
+  recv.m_scanned_lsn += len;
+
+  (void) recv_parse_log_recs(sys, true);
+
+  if (recv.m_found_corrupt_log) {
+    return false;
+  }
+
+  if (mem_heap_get_size(recv.m_heap) > available_memory) {
+    recv_apply_log_recs(sys, true);
+  }
+
+  if (recv.m_recovered_offset > RECV_PARSING_BUF_SIZE / 4) {
+    recv_sys_justify_left_parsing_buf(sys);
+  }
+
+  return true;
 }
 
 DbErr recv_recovery_from_checkpoint_start(System &sys, lsn_t max_flushed_lsn) noexcept {
@@ -1225,31 +1092,27 @@ DbErr recv_recovery_from_checkpoint_start(System &sys, lsn_t max_flushed_lsn) no
 
   log_info("Check if we need to do recovery, max flushed LSN is ", max_flushed_lsn);
 
-
-  sys.m_recv->m_limit_lsn = IB_UINT64_T_MAX;
-
-  sys.m_log->acquire();
+  auto &recv = *sys.m_recv;
+  auto &log = *sys.m_log;
 
   lsn_t checkpoint_lsn{};
   uint64_t checkpoint_no{};
 
-  /* The WAL does not store checkpoints yet. The data files are stamped at a
-  clean shutdown with the LSN up to which they were flushed: start from there.
-  FIXME: Replay the WAL from the last checkpoint after a crash. */
-  if (!sys.m_log->read_checkpoint(checkpoint_lsn, checkpoint_no)) {
+  /* A database whose WAL kept no checkpoints can only have been shut down
+  cleanly: its data files are stamped with the LSN they were flushed to, and
+  its WAL is not readable. */
+  const auto have_checkpoint = log.read_checkpoint(checkpoint_lsn, checkpoint_no);
+
+  if (!have_checkpoint) {
     checkpoint_lsn = max_flushed_lsn;
-    checkpoint_no = 0;
   }
 
   if (checkpoint_lsn == 0) {
-
-    sys.m_log->release();
-
     log_err(
       "No valid checkpoint found. If this error appears when you are"
       " creating an InnoDB database, the problem may be that during"
       " an earlier attempt you managed to create the InnoDB data files,"
-      " but log file creation failed."
+      " but the WAL was not created."
     );
 
     return DB_ERROR;
@@ -1257,30 +1120,57 @@ DbErr recv_recovery_from_checkpoint_start(System &sys, lsn_t max_flushed_lsn) no
 
   log_info(std::format("Found max checkpoint lsn: {}, checkpoint no: {}", checkpoint_lsn, checkpoint_no));
 
-  sys.m_recv->m_scanned_checkpoint_no = 0;
-  sys.m_recv->m_scanned_lsn = checkpoint_lsn;
-  sys.m_recv->m_recovered_lsn = checkpoint_lsn;
-  sys.m_recv->m_parse_start_lsn = checkpoint_lsn;
+  recv.m_recovery_on = true;
+  recv.m_scanned_lsn = checkpoint_lsn;
+  recv.m_recovered_lsn = checkpoint_lsn;
+  recv.m_parse_start_lsn = checkpoint_lsn;
 
   sys.m_srv->m_start_lsn = checkpoint_lsn;
 
-  sys.m_log->m_lsn = sys.m_recv->m_recovered_lsn;
-  sys.m_log->m_buf_free = ulint(sys.m_log->m_lsn % IB_FILE_BLOCK_SIZE);
-  sys.m_log->m_buf_next_to_write = sys.m_log->m_buf_free;
-  sys.m_log->m_written_to_some_lsn = sys.m_log->m_lsn;
-  sys.m_log->m_written_to_all_lsn = sys.m_log->m_lsn;
+  log.acquire();
 
-  sys.m_log->m_next_checkpoint_lsn = checkpoint_lsn;
-  sys.m_log->m_next_checkpoint_no = checkpoint_no + 1;
+  if (have_checkpoint) {
+    /* The parsed records may use the buffer pool but for the frames kept
+    free for the pages they are applied to. */
+    const auto available_memory = (sys.m_buf_pool->m_curr_size - recv.m_n_pool_free_frames) * UNIV_PAGE_SIZE;
 
-  mutex_enter(&sys.m_recv->m_mutex);
+    const auto end_lsn = LogWalBackend::read(log.wal_config(), checkpoint_lsn, [&](const byte *data, ulint len) {
+      return recv_scan_log(sys, data, len, available_memory);
+    });
 
-  sys.m_recv->m_apply_log_recs = true;
+    if (recv.m_needed_recovery) {
+      log_info(std::format(
+        "Doing recovery: scanned up to log sequence number {}, recovered up to {}", end_lsn, recv.m_recovered_lsn
+      ));
+    }
 
-  mutex_exit(&sys.m_recv->m_mutex);
+    if (recv.m_found_corrupt_log && sys.m_config.m_recv.m_force_recovery == IB_RECOVERY_DEFAULT) {
+      log.release();
 
-  sys.m_log->release();
+      log_err("The log is corrupt: set force_recovery to recover up to the corruption.");
 
+      return DB_ERROR;
+    }
+  }
+
+  /* The log continues after the last complete record group. */
+  log.m_lsn = recv.m_recovered_lsn;
+
+  if (recv.m_needed_recovery) {
+    sys.m_srv->m_start_lsn = recv.m_recovered_lsn;
+
+    /* Apply all the records and write the pages: the WAL starts at the next
+    block boundary with a new checkpoint, recovery never reads this log again. */
+    recv_apply_log_recs(sys, true);
+  }
+
+  mutex_enter(&recv.m_mutex);
+
+  recv.m_apply_log_recs = true;
+
+  mutex_exit(&recv.m_mutex);
+
+  log.release();
 
   /* The database is now ready to start almost normal processing of user
   transactions: transaction rollbacks and the application of the log
@@ -1300,7 +1190,7 @@ void recv_recovery_from_checkpoint_finish(System &sys) noexcept {
   if (sys.m_recv->m_found_corrupt_log) {
 
     log_warn(
-      "WARNING: the log file may have been corrupt and it"
+      "WARNING: the log may have been corrupt and it"
       " is possible that the log scan or parsing did not proceed"
       " far enough in recovery. Please run CHECK TABLE"
       " on your InnoDB tables to check that they are ok!"
@@ -1311,6 +1201,7 @@ void recv_recovery_from_checkpoint_finish(System &sys) noexcept {
 
   /* Free the resources of the recovery system */
 
+  sys.m_recv->m_recovery_on = false;
 
   sys.m_recv->close();
 
@@ -1335,10 +1226,6 @@ void recv_recovery_rollback_active(System &sys) noexcept {
 
     sys.m_srv->create_thread(trx_rollback_or_clean_all_recovered, &sys);
   }
-}
-
-void recv_reset_logs([[maybe_unused]] lsn_t lsn, [[maybe_unused]] bool new_logs_created) noexcept {
-  /* Stub implementation */
 }
 
 std::string to_string(RecvAddrState s) noexcept {
@@ -1387,16 +1274,14 @@ std::string PageLogRecords::to_string() const noexcept {
 
 std::string RecvSys::to_string() const noexcept {
   std::string str = std::format(
-    "m_parse_start_lsn: {}, m_scanned_lsn: {}, m_recovered_lsn: {}, m_scanned_checkpoint_no: {},"
-    " m_recovered_offset: {}, m_len: {}, m_limit_lsn: {}, m_apply_log_recs: {}, m_apply_batch_on:"
+    "m_parse_start_lsn: {}, m_scanned_lsn: {}, m_recovered_lsn: {},"
+    " m_recovered_offset: {}, m_len: {}, m_apply_log_recs: {}, m_apply_batch_on:"
     " {}, m_found_corrupt_log: {}, m_n_log_records: {}",
     m_parse_start_lsn,
     m_scanned_lsn,
     m_recovered_lsn,
-    m_scanned_checkpoint_no,
     m_recovered_offset,
     m_len,
-    m_limit_lsn,
     m_apply_log_recs,
     m_apply_batch_on,
     m_found_corrupt_log,

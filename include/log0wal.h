@@ -18,7 +18,6 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #pragma once
 
 #include "innodb0types.h"
-#include "log0types.h"
 
 #include <atomic>
 #include <functional>
@@ -50,8 +49,10 @@ struct LogWalBackend {
     /** Log file name */
     std::string m_log_file{"redo.wal"};
 
-    /** Size of the WAL file in bytes; it is reused circularly. */
-    off_t m_max_file_size{64 * 1024 * 1024};
+    /** 0: the log is linear, block n is at n * block size and the file grows;
+    discard_up_to() gives back the space of the log recovery no longer needs.
+    Otherwise the log wraps around a file of this size. */
+    off_t m_max_file_size{0};
   };
 
   /**
@@ -137,6 +138,55 @@ struct LogWalBackend {
    */
   [[nodiscard]] lsn_t get_synced_lsn() const noexcept { return m_synced_lsn.load(); }
 
+  /** Receives the log bytes read by read(), in LSN order: returns false to stop. */
+  using Consumer = std::function<bool(const byte *data, ulint len)>;
+
+  /**
+   * Reads the WAL file from start_lsn up to the end of the valid log: a block
+   * belongs to the log if it is at its place for the LSN, has the expected
+   * block number and its checksum matches. The log ends after the first block
+   * that is not full.
+   *
+   * @param[in] config          WAL configuration, names the file.
+   * @param[in] start_lsn       Read from this LSN.
+   * @param[in] consume         Gets the bytes.
+   *
+   * @return the LSN up to which the log was read.
+   */
+  [[nodiscard]] static lsn_t read(const Config &config, lsn_t start_lsn, const Consumer &consume) noexcept;
+
+  /**
+   * Gives the disk space of the log before lsn back to the file system: a
+   * checkpoint at lsn means recovery never reads it again. Only a linear log
+   * gives space back; the file keeps its size, the blocks become holes.
+   *
+   * @param[in] lsn             The checkpoint LSN.
+   */
+  void discard_up_to(lsn_t lsn) noexcept;
+
+  /**
+   * Writes a checkpoint durably. The checkpoint file has two slots, written
+   * alternately so that a torn write leaves the previous checkpoint intact.
+   *
+   * @param[in] config          WAL configuration, names the directory.
+   * @param[in] no              Checkpoint number, picks the slot.
+   * @param[in] lsn             Recovery starts reading the log here.
+   *
+   * @return true on success.
+   */
+  [[nodiscard]] static bool write_checkpoint(const Config &config, uint64_t no, lsn_t lsn) noexcept;
+
+  /**
+   * Reads the latest valid checkpoint.
+   *
+   * @param[in] config          WAL configuration, names the directory.
+   * @param[out] no             Checkpoint number.
+   * @param[out] lsn            Checkpoint LSN.
+   *
+   * @return false if there is no valid checkpoint.
+   */
+  [[nodiscard]] static bool read_checkpoint(const Config &config, uint64_t &no, lsn_t &lsn) noexcept;
+
   /**
    * Start background I/O processing.
    */
@@ -152,6 +202,32 @@ struct LogWalBackend {
    */
   void wait_for_io_idle() noexcept;
 
+  /** Counters for the status variables. */
+  struct Stats {
+    /** Calls to append(): mini-transaction logs and pieces of them. */
+    std::atomic<ulint> m_n_appends{};
+
+    /** flush() calls that wrote log. */
+    std::atomic<ulint> m_n_writes{};
+
+    /** fdatasync() calls. */
+    std::atomic<ulint> m_n_syncs{};
+
+    /** Log bytes appended. */
+    std::atomic<ulint> m_n_bytes{};
+  };
+
+  /** @return the number of appends that found no free buffer and wrote one first. */
+  [[nodiscard]] ulint get_n_buffer_waits() const noexcept;
+
+  Stats m_stats;
+
+  /** Bytes wal::Log::append() takes at most in one call. */
+  static constexpr ulint MAX_APPEND = 32 * 1024;
+
+  /** Name of the checkpoint file in the log directory. */
+  static constexpr const char *CHECKPOINT_FILE = "redo.ckpt";
+
 private:
   /** The WAL-CPP state. WAL-CPP's headers are only included by the
   implementation: they define logging macros that clash with the engine's. */
@@ -163,11 +239,14 @@ private:
   /** Current LSN (end of appended data) */
   std::atomic<lsn_t> m_lsn{0};
 
-  /** Flushed LSN (data written to file) */
+  /** Flushed LSN: the log up to here is written to the file. */
   std::atomic<lsn_t> m_flushed_lsn{0};
 
-  /** Synced LSN (data synced to disk) */
+  /** Synced LSN: the log up to here is durable. */
   std::atomic<lsn_t> m_synced_lsn{0};
+
+  /** File offset up to which discard_up_to() gave the space back. */
+  off_t m_discarded_off{0};
 
   /** Whether I/O is running */
   std::atomic<bool> m_io_running{false};

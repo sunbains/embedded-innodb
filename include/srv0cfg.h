@@ -32,14 +32,15 @@ owns it. */
 #include <chrono>
 #include <string>
 
-/** How data and log files are flushed to disk; see the InnoDB manual. */
+/** How data files are written and the log is synced. */
 enum FlushMethod : ulint {
+  /** Data files through the file system cache, synced with fsync(). */
   SRV_UNIX_FSYNC = 1,
-  SRV_UNIX_O_DSYNC,
-  /** Do not call os_file_flush() when writing data files, but do flush
-  after writing to log files */
-  SRV_UNIX_LITTLESYNC,
+
+  /** A commit does not sync the log. */
   SRV_UNIX_NOSYNC,
+
+  /** Data files bypass the file system cache. */
   SRV_UNIX_O_DIRECT
 };
 
@@ -112,12 +113,13 @@ struct DblwrConfig {
 
 /** Redo log. */
 struct LogConfig {
-  std::string m_group_home_dir{"."};
+  /** Directory of the WAL (redo.wal) and its checkpoint (redo.ckpt). */
+  std::string m_log_dir{"."};
 
-  ulint m_n_files{2};
-
-  /** Size of each log file in bytes. */
-  ulint m_file_size{16 * 1024 * 1024};
+  /** Redo in bytes that the checkpoint may trail the current LSN by: the
+  page flushing keeps up with the redo at this distance. It bounds the redo
+  that recovery reads and the disk space of the WAL. */
+  ulint m_checkpoint_age{64 * 1024 * 1024};
 
   /** Size of the log buffer in bytes. */
   ulint m_buffer_size{384 * 1024};
@@ -181,7 +183,7 @@ struct Config {
   SrvConfig m_srv{};
 
   /** Check that the values are consistent with each other, eg. the
-  combined log file size limit, and fill in the derived ones (e.g.
+  checkpoint age, and fill in the derived ones (e.g.
   m_srv.m_max_n_threads).
   @return DB_SUCCESS, or DB_INVALID_INPUT and a message is logged. */
   [[nodiscard]] DbErr normalize() noexcept;

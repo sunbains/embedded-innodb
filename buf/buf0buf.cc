@@ -323,7 +323,7 @@ bool BufPool::is_corrupted(const byte *read_buf) {
       log_err(std::format(
         "Page {}::{} log sequence number {} is in the future! Current system"
         " log sequence number is {}. Your database may be corrupt or you may have copied"
-        " the InnoDB tablespace but not the InnoDB log files.",
+        " the InnoDB tablespace but not the WAL (redo.wal, redo.ckpt).",
         mach_read_from_4(read_buf + FIL_PAGE_SPACE_ID),
         mach_read_from_4(read_buf + FIL_PAGE_OFFSET),
         mach_read_from_8(read_buf + FIL_PAGE_LSN),
@@ -1342,7 +1342,7 @@ BufBlock *BufPool::create(const PageId &page_id, Mtr *mtr) {
   page of an ibdata file is 'created' in this function into the buffer
   pool then we lose the original contents of the file flush lsn stamp.
   Then InnoDB could in a crash recovery print a big, false, corruption
-  warning if the stamp contains an lsn bigger than the ib_logfile lsn. */
+  warning if the stamp contains an lsn bigger than the log lsn. */
 
   memset(frame + FIL_PAGE_FILE_FLUSH_LSN, 0, 8);
 
@@ -1510,7 +1510,8 @@ void BufPool::invalidate() {
 
   m_stat = BufPoolStat{};
 
-  refresh_io_stats();
+  /* The mutex is held: refresh_io_stats() would take it again. */
+  m_old_stat = m_stat;
 
   mutex_release();
 }

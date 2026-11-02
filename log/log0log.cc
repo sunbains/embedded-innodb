@@ -23,7 +23,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 *****************************************************************************/
 
-/** @file log/log0log.c
+/** @file log/log0log.cc
 Database log
 
 Created 12/9/1995 Heikki Tuuri
@@ -31,39 +31,22 @@ Created 12/9/1995 Heikki Tuuri
 
 #include "log0log.h"
 #include "buf0buf.h"
-#include "buf0dblwr.h"
 #include "buf0flu.h"
-#include "mem0mem.h"
+#include "fil0fil.h"
 #include "srv0srv.h"
 
+/** LSN of a new database; the WAL aligns it to a block boundary. */
+constexpr lsn_t LOG_START_LSN = 8192;
 
-/* Global log system variable */
-
-
-Log::Log(System &sys) noexcept : m_sys(sys), m_buffer(sys.m_config.m_log.m_buffer_size) {
+Log::Log(System &sys) noexcept : m_sys(sys) {
   mutex_create(&m_mutex, IF_DEBUG("log_sys_mutex", )  Current_location());
 
   m_lsn = LOG_START_LSN;
-
-  ut_a(m_sys.m_config.m_log.m_buffer_size >= 16 * sizeof(LogPhyBlock));
-
-  m_no_flush_event = os_event_create(nullptr);
-
-  os_event_set(m_no_flush_event);
-
-  m_one_flushed_event = os_event_create(nullptr);
-
-  os_event_set(m_one_flushed_event);
-
-  m_checkpoint.m_last_lsn = m_lsn;
-
-  m_lsn = LOG_START_LSN + LogPhyBlock::HEADER_SIZE;
+  m_last_checkpoint_lsn = LOG_START_LSN;
 }
 
 Log::~Log() noexcept {
   mutex_free(&m_mutex);
-  os_event_free(m_no_flush_event);
-  os_event_free(m_one_flushed_event);
 }
 
 lsn_t Log::buf_pool_get_oldest_modification() noexcept {
@@ -76,41 +59,6 @@ lsn_t Log::buf_pool_get_oldest_modification() noexcept {
   }
 
   return lsn;
-}
-
-bool Log::calc_max_ages() noexcept {
-  acquire();
-
-  auto capacity = m_vfile.get_capacity();
-
-  capacity = capacity - capacity / 10;
-
-  ulint margin{};
-
-  auto free = 4 * UNIV_PAGE_SIZE * 10 + 8 * UNIV_PAGE_SIZE;
-
-  if (free >= static_cast<ulint>(capacity / 2)) {
-    log_fatal("Redo log files are too small");
-  } else {
-    margin = capacity - free;
-  }
-
-  margin = std::min<ulint>(margin, m_checkpoint.m_adm_interval);
-
-  margin = margin - margin / 10;
-
-  m_checkpoint.m_max_modified_age_async = margin - margin / 6;
-  m_checkpoint.m_max_modified_age_sync = margin - margin / 32;
-  m_checkpoint.m_max_age_async = margin - margin / 32;
-  m_checkpoint.m_max_age = margin;
-
-  release();
-
-  return true;
-}
-
-bool Log::open(ulint n_files, off_t file_size) noexcept {
-  return false;
 }
 
 bool Log::peek_lsn(lsn_t *lsn) noexcept {
@@ -127,52 +75,100 @@ bool Log::peek_lsn(lsn_t *lsn) noexcept {
 
 void Log::shutdown() noexcept {
   if (m_wal_backend != nullptr) {
-    write_up_to(get_lsn(), false, true);
+    write_up_to(get_lsn(), true);
 
     m_wal_backend->stop_io();
     m_wal_backend.reset();
   }
-
-  (void)m_vfile.close();
 }
 
-ulint Log::get_capacity() const noexcept {
-  return m_sys.m_config.m_log.m_n_files * m_sys.m_config.m_log.m_file_size;
-}
-
-lsn_t Log::close([[maybe_unused]] IbRecovery recovery) noexcept {
+lsn_t Log::close() noexcept {
   if (m_wal_backend && !m_pending_data.empty()) {
-    // Flush accumulated data from slow path
-    auto end_lsn = m_wal_backend->append(m_pending_data.data(), m_pending_data.size());
+    const auto end_lsn = m_wal_backend->append(m_pending_data.data(), m_pending_data.size());
+
     if (end_lsn > 0) {
       m_lsn.store(end_lsn);
     }
+
     m_pending_data.clear();
+
     return end_lsn > 0 ? end_lsn : m_lsn.load();
   }
+
   return m_lsn;
 }
 
-bool Log::checkpoint(bool, bool) noexcept {
-  /* Everything below the oldest modification in the buffer pool is in the
-  data files. Make the log durable up to there and move the checkpoint. */
+bool Log::checkpoint(bool write_always) noexcept {
+  /* No log is written before the WAL starts: recovery flushes its pages
+  without moving the checkpoint, init_wal_backend() writes the first one. */
+  if (!m_wal_backend) {
+    return true;
+  }
+
+  std::lock_guard<std::mutex> guard(m_checkpoint_mutex);
+
+  /* Every page modified below the oldest modification in the buffer pool
+  has been written: the checkpoint can move there. Pages that are being
+  written are still in the flush list. */
   acquire();
 
   const auto oldest = buf_pool_get_oldest_modification();
+  const auto last = m_last_checkpoint_lsn;
 
   release();
 
-  write_up_to(oldest, false, true);
+  if (oldest < last || (oldest == last && !write_always)) {
+    return true;
+  }
+
+  return write_checkpoint(oldest);
+}
+
+bool Log::write_checkpoint(lsn_t lsn) noexcept {
+  /* Recovery reads the log from lsn: the log up to there must be durable,
+  and so must the pages written to the tablespaces, which may still be in
+  the file system cache. */
+  write_up_to(lsn, true);
+
+  m_sys.m_fil->flush_file_spaces();
+
+  if (!LogWalBackend::write_checkpoint(wal_config(), m_next_checkpoint_no, lsn)) {
+    return false;
+  }
+
+  ++m_next_checkpoint_no;
 
   acquire();
 
-  if (oldest > m_checkpoint.m_last_lsn) {
-    m_checkpoint.m_last_lsn = oldest;
-  }
+  m_last_checkpoint_lsn = lsn;
 
   release();
 
+  m_wal_backend->discard_up_to(lsn);
+
   return true;
+}
+
+bool Log::read_checkpoint(lsn_t &lsn, uint64_t &no) noexcept {
+  if (!LogWalBackend::read_checkpoint(wal_config(), no, lsn)) {
+    return false;
+  }
+
+  m_next_checkpoint_no = no + 1;
+  m_last_checkpoint_lsn = lsn;
+
+  return true;
+}
+
+LogWalBackend::Config Log::wal_config() const noexcept {
+  LogWalBackend::Config config;
+
+  config.m_log_dir = m_sys.m_config.m_log.m_log_dir;
+  config.m_log_file = "redo.wal";
+  config.m_pool_size = 4;
+  config.m_n_blocks = std::max<size_t>(16, m_sys.m_config.m_log.m_buffer_size / config.m_block_size);
+
+  return config;
 }
 
 void Log::make_checkpoint_at(lsn_t lsn, bool write_always) noexcept {
@@ -186,10 +182,10 @@ void Log::make_checkpoint_at(lsn_t lsn, bool write_always) noexcept {
 
   flusher.wait_batch_end(BUF_FLUSH_LIST);
 
-  (void)checkpoint(true, write_always);
+  (void)checkpoint(write_always);
 }
 
-void Log::write_up_to([[maybe_unused]] lsn_t lsn, [[maybe_unused]] bool async, [[maybe_unused]] bool sync_to_disk) noexcept {
+void Log::write_up_to(lsn_t lsn, bool sync_to_disk) noexcept {
   if (m_wal_backend) {
     (void) m_wal_backend->flush(lsn, sync_to_disk);
   }
@@ -199,8 +195,27 @@ void Log::init_wal_backend(const LogWalBackend::Config &config) noexcept {
   m_lsn.store(LogWalBackend::align_start_lsn(config, m_lsn.load()));
 
   m_wal_backend = std::make_unique<LogWalBackend>(config, m_lsn.load());
-  (void) m_wal_backend->open();
+
+  if (!m_wal_backend->open()) {
+    log_fatal("Cannot open the WAL");
+  }
+
   m_wal_backend->start_io();
+
+  /* The WAL continues at a block boundary, past where the log of the last
+  run ended: recovery must start reading here. Nothing is dirty yet, the
+  log before here is no longer needed. */
+  ut_a(m_sys.m_buf_pool->get_oldest_modification() == 0);
+
+  if (m_next_checkpoint_no == 0) {
+    m_next_checkpoint_no = 1;
+  }
+
+  std::lock_guard<std::mutex> guard(m_checkpoint_mutex);
+
+  if (!write_checkpoint(m_lsn.load())) {
+    log_fatal("Cannot write the first checkpoint of the WAL");
+  }
 }
 
 lsn_t Log::reserve_and_write_fast(byte *data, ulint len, lsn_t *start_lsn) noexcept {
@@ -210,31 +225,28 @@ lsn_t Log::reserve_and_write_fast(byte *data, ulint len, lsn_t *start_lsn) noexc
   }
 
   *start_lsn = m_wal_backend->get_lsn();
-  auto end_lsn = m_wal_backend->append(data, len);
+
+  const auto end_lsn = m_wal_backend->append(data, len);
 
   if (end_lsn > 0) {
     m_lsn.store(end_lsn);
-    return end_lsn;
   }
 
-  return 0;
+  return end_lsn;
 }
 
 lsn_t Log::reserve_and_open(ulint len) noexcept {
-  /* The caller releases the log mutex after close(), as before the WAL-CPP
-  integration. */
+  /* The caller releases the log mutex after close(). */
   acquire();
 
   if (!m_wal_backend) {
     return m_lsn;
   }
 
-  // Clear pending data for slow path
   m_pending_data.clear();
   m_pending_data.reserve(len);
-  m_pending_start_lsn = m_wal_backend->get_lsn();
 
-  return m_pending_start_lsn;
+  return m_wal_backend->get_lsn();
 }
 
 void Log::write_low(const byte *data, ulint len) noexcept {
@@ -242,6 +254,5 @@ void Log::write_low(const byte *data, ulint len) noexcept {
     return;
   }
 
-  // Accumulate data for slow path
   m_pending_data.insert(m_pending_data.end(), data, data + len);
 }

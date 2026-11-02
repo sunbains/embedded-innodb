@@ -1011,13 +1011,6 @@ static void que_run_threads_low(System &sys, QueThr *thr) {
   ut_ad(!mutex_own(&sys.m_trx_sys->m_mutex));
 
   for (;;) {
-    /* Check that there is enough space in the log to accommodate
-    possible log entries by this query step; if the operation can touch
-    more than about 4 pages, checks must be made also within the query
-    step! */
-
-    sys.m_log->free_check();
-
     /* Perform the actual query step: note that the query thread
     may change if, e.g., a subprocedure call is made */
 

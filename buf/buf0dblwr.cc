@@ -293,7 +293,7 @@ void Dblwr::recover_pages() noexcept {
     page += UNIV_PAGE_SIZE;
   }
 
-  m_sys.m_fil->flush_file_spaces(FIL_TABLESPACE);
+  m_sys.m_fil->flush_file_spaces();
 
   ut_delete(ptr);
 }

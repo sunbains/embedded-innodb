@@ -322,7 +322,7 @@ void BufFlush::sync_datafiles() {
   m_sys.m_aio->wait_for_pending_ops(aio::WRITE);
 
   /* Now we flush the data to disk (for example, with fsync) */
-  m_sys.m_fil->flush_file_spaces(FIL_TABLESPACE);
+  m_sys.m_fil->flush_file_spaces();
 
   return;
 }
@@ -456,7 +456,7 @@ flush:
       ));
     }
 
-    m_sys.m_fil->data_io(IoRequest::Async_write, true, block->get_page_id(), 0, UNIV_PAGE_SIZE, (void *)block->m_frame, (void *)block);
+    write_page(m_sys.m_dblwr->m_bpages[i], block->m_frame);
 
     /* Increment the counter of I/O operations used
     for selecting LRU policy. */
@@ -521,6 +521,19 @@ void BufFlush::init_for_writing(byte *page, lsn_t newest_lsn) {
   mach_write_to_4(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_CHKSUM, BUF_NO_CHECKSUM_MAGIC);
 }
 
+void BufFlush::write_page(BufPage *bpage, const byte *frame) {
+  ut_ad(buf_page_get_io_fix(bpage) == BUF_IO_WRITE);
+
+  const auto err = m_sys.m_fil->data_io(IoRequest::Async_write, true, bpage->get_page_id(), 0, UNIV_PAGE_SIZE, const_cast<byte *>(frame), bpage);
+
+  if (err == DB_TABLESPACE_DELETED) {
+    /* No I/O was queued, so nothing else will complete the write. */
+    m_sys.m_buf_pool->io_complete(bpage);
+  } else {
+    ut_a(err == DB_SUCCESS);
+  }
+}
+
 void BufFlush::write_block_low(BufPage *bpage) {
   page_t *frame = nullptr;
 
@@ -538,8 +551,10 @@ void BufFlush::write_block_low(BufPage *bpage) {
   ut_ad(bpage->m_newest_modification != 0);
 
   /* Force the log to the disk before writing the modified block */
-  // FIXME: Implement this
-  // log_sys->write_up_to(bpage->m_newest_modification, LOG_WAIT_ALL_GROUPS, true);
+  /* Write ahead: the redo of every change to the page must be durable before
+  the page is, or recovery could not redo the changes of other pages that the
+  same mini-transactions made. */
+  m_sys.m_log->write_up_to(bpage->m_newest_modification, true);
 
   switch (bpage->get_state()) {
     case BUF_BLOCK_NOT_USED:
@@ -555,7 +570,7 @@ void BufFlush::write_block_low(BufPage *bpage) {
   }
 
   if (!m_sys.m_config.m_dblwr.m_enabled || !m_sys.m_dblwr->is_ready()) {
-    m_sys.m_fil->data_io(IoRequest::Async_write, true, bpage->get_page_id(), 0, UNIV_PAGE_SIZE, frame, bpage);
+    write_page(bpage, frame);
   } else {
     post_to_doublewrite_buf(bpage);
   }
@@ -819,9 +834,16 @@ ulint BufFlush::batch(BufFlushType flush_type, ulint min_n, uint64_t lsn_limit) 
       ut_a(bpage->in_file());
 
       mutex_enter(block_mutex);
-      if (!free_page_if_truncated(m_sys, bpage)) {
-        ready = ready_for_flush(bpage, flush_type);
+
+      if (free_page_if_truncated(m_sys, bpage)) {
+        mutex_exit(block_mutex);
+
+        /* The page left both lists: its list node is no longer valid, so start again from the end of the list. */
+        goto flush_next;
       }
+
+      ready = ready_for_flush(bpage, flush_type);
+
       mutex_exit(block_mutex);
 
       if (ready) {
@@ -973,10 +995,11 @@ void BufFlush::stat_update() {
 
 ulint BufFlush::get_desired_flush_rate() {
   const auto lsn = m_sys.m_log->get_lsn();
-  const auto log_capacity = m_sys.m_log->get_capacity();
+  /* Flush so that the checkpoint keeps up with the redo: it should trail
+  the current LSN by at most this much. */
+  const auto checkpoint_age = m_sys.m_config.m_log.m_checkpoint_age;
 
-  /* log_capacity should never be zero after the initialization of log subsystem. */
-  ut_ad(log_capacity != 0);
+  ut_ad(checkpoint_age != 0);
 
   /* Get total number of dirty pages. It is OK to access m_flush_list without holding
   any mtex as we are using this only for heuristics. */
@@ -999,7 +1022,7 @@ ulint BufFlush::get_desired_flush_rate() {
 
   auto lru_flush_avg = m_stat_sum.m_n_flushed / STAT_N_INTERVAL + (m_LRU_flush_page_count - m_stat_cur.m_n_flushed);
 
-  auto n_flush_req = (n_dirty * redo_avg) / log_capacity;
+  auto n_flush_req = (n_dirty * redo_avg) / checkpoint_age;
 
   /* The number of pages that we want to flush from the flush
   list is the difference between the required rate and the

@@ -115,22 +115,15 @@ TEST(ConfigTest, DerivedValuesAreFilledIn) {
   EXPECT_EQ(config.m_srv.m_max_n_threads, 99UL);
 }
 
-TEST(ConfigTest, LogLimitsAreChecked) {
-  {
-    Config config;
+TEST(ConfigTest, CheckpointAgeIsChecked) {
+  Config config;
 
-    config.m_log.m_n_files = 1;
-    EXPECT_EQ(config.normalize(), DB_INVALID_INPUT);
-  }
+  /* The page flushing paces itself by the checkpoint age: it must not be tiny. */
+  config.m_log.m_checkpoint_age = 1024;
+  EXPECT_EQ(config.normalize(), DB_INVALID_INPUT);
 
-  {
-    Config config;
-
-    /* The combined size of the log files must stay below 4 GB. */
-    config.m_log.m_n_files = 2;
-    config.m_log.m_file_size = 2UL * 1024 * 1024 * 1024;
-    EXPECT_EQ(config.normalize(), DB_INVALID_INPUT);
-  }
+  config.m_log.m_checkpoint_age = 1024 * 1024;
+  EXPECT_EQ(config.normalize(), DB_SUCCESS);
 }
 
 TEST(ConfigTest, TooManyIoThreadsAreRejected) {
@@ -169,7 +162,7 @@ class ApiTest : public ::testing::Test {
     fs::create_directories(m_dir);
 
     m_config.m_fil.m_data_home = m_dir.string();
-    m_config.m_log.m_group_home_dir = m_dir.string();
+    m_config.m_log.m_log_dir = m_dir.string();
     m_config.m_buf_pool.m_size = 32 * 1024 * 1024;
 
     /* Lock waits must end by interruption, not by timeout. */

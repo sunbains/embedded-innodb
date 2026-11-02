@@ -174,8 +174,6 @@ bool RowPurge::remove_sec_if_poss_low(System &sys, Index *index, const DTuple *e
   Mtr mtr;
   Mtr mtr_vers;
 
-  sys.m_log->free_check();
-
   mtr.start();
 
   auto found = row_search_index_entry(sys, index, entry, mode, &pcur, &mtr);

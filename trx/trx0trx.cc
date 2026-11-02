@@ -317,14 +317,14 @@ void Trx::commit_off_kernel(System &sys) noexcept {
     trxs to come to commit! */
 
     /* Depending on the config options, we may now write the log
-    buffer to the log files, making the transaction durable if
-    the OS does not crash. We may also flush the log files to
+    buffer to the WAL, making the transaction durable if
+    the OS does not crash. We may also sync the WAL to
     disk, making the transaction durable also at an OS crash or a
     power outage.
 
     The idea in InnoDB's group commit is that a group of
     transactions gather behind a trx doing a physical disk write
-    to log files, and when that physical write has been completed,
+    to the WAL, and when that physical write has been completed,
     one of those transactions does a write which commits the whole
     group. Note that this group commit will only bring benefit if
     there are > 2 users in the database. Then at least 2 users can
@@ -351,14 +351,14 @@ void Trx::commit_off_kernel(System &sys) noexcept {
       } else if (sys.m_config.m_log.m_flush_at_trx_commit == 1) {
         if (sys.m_config.m_fil.m_flush_method == SRV_UNIX_NOSYNC) {
           /* Write the log but do not flush it to disk */
-          log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
+          log->write_up_to(lsn, false);
         } else {
-          /* Write the log to the log files AND flush them to disk */
-          log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
+          /* Write the log to the WAL AND sync it */
+          log->write_up_to(lsn, true);
         }
       } else if (sys.m_config.m_log.m_flush_at_trx_commit == 2) {
         /* Write the log but do not flush it to disk */
-        log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
+        log->write_up_to(lsn, false);
       } else {
         ut_error;
       }
@@ -941,14 +941,14 @@ void Trx::prepare_for_commit(System &sys) noexcept {
 
   if (lsn > 0) {
     /* Depending on the config options, we may now write the log
-    buffer to the log files, making the prepared state of the
+    buffer to the WAL, making the prepared state of the
     transaction durable if the OS does not crash. We may also
-    flush the log files to disk, making the prepared state of the
+    sync the WAL, making the prepared state of the
     transaction durable also at an OS crash or a power outage.
 
     The idea in InnoDB's group prepare is that a group of
     transactions gather behind a trx doing a physical disk write
-    to log files, and when that physical write has been completed,
+    to the WAL, and when that physical write has been completed,
     one of those transactions does a write which prepares the whole
     group. Note that this group prepare will only bring benefit if
     there are > 2 users in the database. Then at least 2 users can
@@ -963,14 +963,14 @@ void Trx::prepare_for_commit(System &sys) noexcept {
     } else if (sys.m_config.m_log.m_flush_at_trx_commit == 1) {
       if (sys.m_config.m_fil.m_flush_method == SRV_UNIX_NOSYNC) {
         /* Write the log but do not flush it to disk */
-        log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
+        log->write_up_to(lsn, false);
       } else {
-        /* Write the log to the log files AND flush them to disk */
-        log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
+        /* Write the log to the WAL AND sync it */
+        log->write_up_to(lsn, true);
       }
     } else if (sys.m_config.m_log.m_flush_at_trx_commit == 2) {
       /* Write the log but do not flush it to disk */
-      log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
+      log->write_up_to(lsn, false);
     } else {
       ut_error;
     }
@@ -1011,14 +1011,14 @@ ulint Trx::commit_flush_log(System &sys) noexcept {
   } else if (sys.m_config.m_log.m_flush_at_trx_commit == 1) {
     if (sys.m_config.m_fil.m_flush_method == SRV_UNIX_NOSYNC) {
       /* Write the log but do not flush it to disk */
-      log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
+      log->write_up_to(lsn, false);
     } else {
-      /* Write the log to the log files AND flush them to disk */
-      log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, true);
+      /* Write the log to the WAL AND sync it */
+      log->write_up_to(lsn, true);
     }
   } else if (sys.m_config.m_log.m_flush_at_trx_commit == 2) {
     /* Write the log but do not flush it to disk */
-    log->write_up_to(lsn, LOG_WAIT_ONE_GROUP, false);
+    log->write_up_to(lsn, false);
   } else {
     ut_error;
   }
